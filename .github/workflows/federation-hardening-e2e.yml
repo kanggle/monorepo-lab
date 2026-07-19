@@ -69,12 +69,13 @@ jobs:
         uses: ./.github/actions/setup-java-gradle
 
       - name: Build federation hardening e2e boot jars
-        # 11 boot jars: IAM (auth/account/admin) + finance-account + wms-master
+        # 12 boot jars: IAM (auth/account/admin) + finance-account + wms-master
         # + wms-admin + scm-procurement + scm-inventory-visibility
-        # + scm-demand-planning + erp-masterdata + console-bff. wms-admin +
-        # scm-inventory-visibility added TASK-MONO-162 (the producers the
-        # operator-overview wms/scm legs call); scm-demand-planning added
-        # TASK-SCM-INT-002 leg 2 (ADR-027 replenishment overlay consumer).
+        # + scm-demand-planning + erp-masterdata + console-bff + wms-inbound.
+        # wms-admin + scm-inventory-visibility added TASK-MONO-162 (the producers
+        # the operator-overview wms/scm legs call); scm-demand-planning added
+        # TASK-SCM-INT-002 leg 2 (ADR-027 replenishment overlay consumer);
+        # wms-inbound added TASK-MONO-432 (ADR-050 inbound-expected live leg).
         # console-web is a Next.js standalone build (handled in e2e job).
         run: >-
           ./gradlew
@@ -89,6 +90,7 @@ jobs:
           :projects:scm-platform:apps:demand-planning-service:bootJar
           :projects:erp-platform:apps:masterdata-service:bootJar
           :projects:platform-console:apps:console-bff:bootJar
+          :projects:wms-platform:apps:inbound-service:bootJar
           --no-daemon --stacktrace
 
       - name: Upload federation hardening e2e boot jars
@@ -105,6 +107,7 @@ jobs:
             projects/finance-platform/apps/account-service/build/libs/account-service.jar
             projects/wms-platform/apps/master-service/build/libs/master-service.jar
             projects/wms-platform/apps/admin-service/build/libs/admin-service.jar
+            projects/wms-platform/apps/inbound-service/build/libs/inbound-service.jar
             projects/scm-platform/apps/procurement-service/build/libs/procurement-service.jar
             projects/scm-platform/apps/inventory-visibility-service/build/libs/inventory-visibility-service.jar
             projects/scm-platform/apps/demand-planning-service/build/libs/demand-planning-service.jar
@@ -181,6 +184,10 @@ jobs:
           mkdir -p projects/wms-platform/apps/admin-service/build/libs/
           mv artifact-staging/wms-platform/apps/admin-service/build/libs/admin-service.jar \
              projects/wms-platform/apps/admin-service/build/libs/admin-service.jar
+          # inbound-service (TASK-MONO-432 — ADR-050 scm -> wms inbound-expected consumer)
+          mkdir -p projects/wms-platform/apps/inbound-service/build/libs/
+          mv artifact-staging/wms-platform/apps/inbound-service/build/libs/inbound-service.jar \
+             projects/wms-platform/apps/inbound-service/build/libs/inbound-service.jar
 
           # scm-platform (procurement-service + inventory-visibility-service — TASK-MONO-162)
           mkdir -p projects/scm-platform/apps/procurement-service/build/libs/
@@ -219,7 +226,7 @@ jobs:
       - name: Start docker compose Phase 1 (mysql + redis + kafka + victoriatraces + IAM services)
         working-directory: tests/federation-hardening-e2e/docker
         run: |
-          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml up -d --build \
+          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml up -d --build \
             mysql redis kafka victoriatraces auth-service account-service admin-service \
             redpanda
 
@@ -231,7 +238,7 @@ jobs:
         run: |
           echo "Waiting for admin-service health (up to ~5 min)..."
           for i in $(seq 1 30); do
-            if docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml ps admin-service \
+            if docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml ps admin-service \
                 | grep -q "healthy"; then
               echo "admin-service healthy after $((i * 10))s"
               exit 0
@@ -239,7 +246,7 @@ jobs:
             sleep 10
           done
           echo "admin-service did not become healthy in time"
-          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml logs --tail=50 admin-service
+          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml logs --tail=50 admin-service
           exit 1
 
       # --- Phase 1.5: Apply IAM + schema seed ---
@@ -249,18 +256,19 @@ jobs:
         # + auth_db.credentials + admin_db.admin_operators / roles.
         working-directory: tests/federation-hardening-e2e/docker
         run: |
-          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml exec -T mysql \
+          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml exec -T mysql \
             mysql -uroot -prootpass < ../fixtures/seed.sql
 
       # --- Phase 2: Start producer services + console ---
       - name: Start docker compose Phase 2 (producers + console-bff + console-web)
         working-directory: tests/federation-hardening-e2e/docker
         run: |
-          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml up -d --build \
+          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml up -d --build \
             wms-postgres wms-admin-postgres scm-postgres scm-inv-postgres \
             wms-master-service wms-admin-service \
             scm-procurement-service scm-inventory-visibility-service \
             scm-dp-postgres scm-demand-planning-service \
+            wms-inbound-postgres wms-inbound-service \
             finance-account-service erp-masterdata-service \
             console-bff console-web
 
@@ -269,7 +277,7 @@ jobs:
         run: |
           echo "Waiting for finance-account-service health (up to ~5 min)..."
           for i in $(seq 1 30); do
-            if docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml ps finance-account-service \
+            if docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml ps finance-account-service \
                 | grep -q "healthy"; then
               echo "finance-account-service healthy after $((i * 10))s"
               exit 0
@@ -277,7 +285,7 @@ jobs:
             sleep 10
           done
           echo "finance-account-service did not become healthy in time"
-          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml logs --tail=50 finance-account-service
+          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml logs --tail=50 finance-account-service
           exit 1
 
       - name: Wait for wms-master-service health
@@ -285,7 +293,7 @@ jobs:
         run: |
           echo "Waiting for wms-master-service health (up to ~5 min)..."
           for i in $(seq 1 30); do
-            if docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml ps wms-master-service \
+            if docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml ps wms-master-service \
                 | grep -q "healthy"; then
               echo "wms-master-service healthy after $((i * 10))s"
               exit 0
@@ -293,7 +301,7 @@ jobs:
             sleep 10
           done
           echo "wms-master-service did not become healthy in time"
-          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml logs --tail=50 wms-master-service
+          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml logs --tail=50 wms-master-service
           exit 1
 
       - name: Wait for scm-procurement-service health
@@ -301,7 +309,7 @@ jobs:
         run: |
           echo "Waiting for scm-procurement-service health (up to ~5 min)..."
           for i in $(seq 1 30); do
-            if docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml ps scm-procurement-service \
+            if docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml ps scm-procurement-service \
                 | grep -q "healthy"; then
               echo "scm-procurement-service healthy after $((i * 10))s"
               exit 0
@@ -309,7 +317,7 @@ jobs:
             sleep 10
           done
           echo "scm-procurement-service did not become healthy in time"
-          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml logs --tail=50 scm-procurement-service
+          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml logs --tail=50 scm-procurement-service
           exit 1
 
       - name: Wait for scm-demand-planning-service health
@@ -319,7 +327,7 @@ jobs:
         run: |
           echo "Waiting for scm-demand-planning-service health (up to ~5 min)..."
           for i in $(seq 1 30); do
-            if docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml ps scm-demand-planning-service \
+            if docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml ps scm-demand-planning-service \
                 | grep -q "healthy"; then
               echo "scm-demand-planning-service healthy after $((i * 10))s"
               exit 0
@@ -327,7 +335,7 @@ jobs:
             sleep 10
           done
           echo "scm-demand-planning-service did not become healthy in time"
-          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml logs --tail=80 scm-demand-planning-service redpanda
+          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml logs --tail=80 scm-demand-planning-service redpanda
           exit 1
 
       - name: Wait for wms-admin-service health
@@ -336,7 +344,7 @@ jobs:
         run: |
           echo "Waiting for wms-admin-service health (up to ~5 min)..."
           for i in $(seq 1 30); do
-            if docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml ps wms-admin-service \
+            if docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml ps wms-admin-service \
                 | grep -q "healthy"; then
               echo "wms-admin-service healthy after $((i * 10))s"
               exit 0
@@ -344,7 +352,7 @@ jobs:
             sleep 10
           done
           echo "wms-admin-service did not become healthy in time"
-          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml logs --tail=50 wms-admin-service
+          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml logs --tail=50 wms-admin-service
           exit 1
 
       - name: Wait for scm-inventory-visibility-service health
@@ -353,7 +361,7 @@ jobs:
         run: |
           echo "Waiting for scm-inventory-visibility-service health (up to ~5 min)..."
           for i in $(seq 1 30); do
-            if docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml ps scm-inventory-visibility-service \
+            if docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml ps scm-inventory-visibility-service \
                 | grep -q "healthy"; then
               echo "scm-inventory-visibility-service healthy after $((i * 10))s"
               exit 0
@@ -361,7 +369,7 @@ jobs:
             sleep 10
           done
           echo "scm-inventory-visibility-service did not become healthy in time"
-          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml logs --tail=50 scm-inventory-visibility-service
+          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml logs --tail=50 scm-inventory-visibility-service
           exit 1
 
       - name: Wait for erp-masterdata-service health
@@ -369,7 +377,7 @@ jobs:
         run: |
           echo "Waiting for erp-masterdata-service health (up to ~5 min)..."
           for i in $(seq 1 30); do
-            if docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml ps erp-masterdata-service \
+            if docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml ps erp-masterdata-service \
                 | grep -q "healthy"; then
               echo "erp-masterdata-service healthy after $((i * 10))s"
               exit 0
@@ -377,7 +385,25 @@ jobs:
             sleep 10
           done
           echo "erp-masterdata-service did not become healthy in time"
-          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml logs --tail=50 erp-masterdata-service
+          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml logs --tail=50 erp-masterdata-service
+          exit 1
+
+      - name: Wait for wms-inbound-service health
+        # ADR-MONO-050 SCM-INT-004 live leg (TASK-MONO-432) — the REAL wms consumer
+        # of scm.procurement.inbound-expected.v1 (inbound-expected overlay).
+        working-directory: tests/federation-hardening-e2e/docker
+        run: |
+          echo "Waiting for wms-inbound-service health (up to ~5 min)..."
+          for i in $(seq 1 30); do
+            if docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml ps wms-inbound-service \
+                | grep -q "healthy"; then
+              echo "wms-inbound-service healthy after $((i * 10))s"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "wms-inbound-service did not become healthy in time"
+          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml logs --tail=50 wms-inbound-service
           exit 1
 
       # --- Phase 2.5: Apply per-domain producer seed data ---
@@ -386,22 +412,32 @@ jobs:
         # (finance-account-service + erp-masterdata-service Flyway complete).
         working-directory: tests/federation-hardening-e2e/docker
         run: |
-          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml exec -T mysql \
+          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml exec -T mysql \
             mysql -uroot -prootpass < ../fixtures/seed-domains.sql
 
       - name: Apply seed-wms.sql (wms warehouse test data, post-Flyway)
         # Applied against wms-postgres (PostgreSQL) after wms-master-service healthy.
         working-directory: tests/federation-hardening-e2e/docker
         run: |
-          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml exec -T wms-postgres \
+          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml exec -T wms-postgres \
             psql -U master -d master_db < ../fixtures/seed-wms.sql
 
       - name: Apply seed-scm.sql (scm purchase order test data, post-Flyway)
         # Applied against scm-postgres (PostgreSQL) after scm-procurement-service healthy.
         working-directory: tests/federation-hardening-e2e/docker
         run: |
-          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml exec -T scm-postgres \
+          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml exec -T scm-postgres \
             psql -U scm -d scm_procurement < ../fixtures/seed-scm.sql
+
+      - name: Apply seed-wms-inbound.sql (wms inbound warehouse/supplier/sku codes, post-Flyway)
+        # ADR-MONO-050 SCM-INT-004 live leg (TASK-MONO-432) — seeds the shared CODES
+        # (warehouse/supplier/sku) into inbound_db so the codes the scm event carries
+        # resolve on the wms side (D9). Applied against wms-inbound-postgres after
+        # wms-inbound-service is healthy (Flyway complete).
+        working-directory: tests/federation-hardening-e2e/docker
+        run: |
+          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml exec -T wms-inbound-postgres \
+            psql -U inbound -d inbound_db < ../fixtures/seed-wms-inbound.sql
 
       - name: Apply seed-wms-admin.sql (wms admin_inventory_snapshot, post-Flyway)
         # TASK-MONO-162 — applied against wms-admin-postgres (admin_db, PostgreSQL)
@@ -409,7 +445,7 @@ jobs:
         # wms card (GET /api/v1/admin/dashboard/inventory).
         working-directory: tests/federation-hardening-e2e/docker
         run: |
-          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml exec -T wms-admin-postgres \
+          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml exec -T wms-admin-postgres \
             psql -U admin -d admin_db < ../fixtures/seed-wms-admin.sql
 
       - name: Apply seed-scm-inv.sql (scm inventory-visibility read-model, post-Flyway)
@@ -418,7 +454,7 @@ jobs:
         # Feeds the operator-overview scm card (GET /api/inventory-visibility/snapshot).
         working-directory: tests/federation-hardening-e2e/docker
         run: |
-          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml exec -T scm-inv-postgres \
+          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml exec -T scm-inv-postgres \
             psql -U scm -d scm_inventory_visibility < ../fixtures/seed-scm-inv.sql
 
       - name: Wait for console-web health
@@ -433,7 +469,7 @@ jobs:
             sleep 10
           done
           echo "console-web did not become healthy in time"
-          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml logs --tail=80 console-web console-bff
+          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml logs --tail=80 console-web console-bff
           exit 1
 
       - name: Install Playwright chromium (with system deps)
@@ -460,6 +496,9 @@ jobs:
           E2E_SCM_BASE_URL: http://localhost:18092
           E2E_FINANCE_BASE_URL: http://localhost:18086
           E2E_ERP_BASE_URL: http://localhost:18093
+          # ADR-MONO-050 SCM-INT-004 live leg (TASK-MONO-432) — the wms inbound-service
+          # AsnController the inbound-expected spec polls for the SCM_PROCUREMENT ASN.
+          E2E_WMS_INBOUND_BASE_URL: http://localhost:18101
           # TASK-SCM-INT-002 leg 2 — demand-planning host port + redpanda external
           # listener (the replenishment overlay). The spec PUTs policy/mapping +
           # reads suggestions on SCM_DP, and publishes the canonical wms alert to
@@ -475,12 +514,12 @@ jobs:
         # sufficient boot + first-request coverage without overwhelming the log.
         if: failure()
         working-directory: tests/federation-hardening-e2e/docker
-        run: docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml logs --tail=500
+        run: docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml logs --tail=500
 
       - name: Stop docker compose stack
         if: always()
         working-directory: tests/federation-hardening-e2e/docker
-        run: docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml down -v
+        run: docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml down -v
 
       - name: Upload Playwright report + trace
         # TASK-MONO-133 pattern — `if: always()` (not `if: failure()`) so

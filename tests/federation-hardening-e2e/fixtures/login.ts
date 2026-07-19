@@ -42,9 +42,17 @@ const DEFAULTS = {
   superAdminPassword: 'devpassword123!',
   // SUPER_ADMIN has tenant_id='*' (platform-scope sentinel). The cross-product
   // harness does not set console_active_tenant to a specific domain — the
-  // wildcard token is accepted by all 5 producers (TenantClaimValidator accepts
-  // '*' in addition to the domain-specific value, per seed.sql TASK-BE-312
-  // note). Domain-specific navigation is done by the spec directly.
+  // wildcard token is accepted by the domain gateways that opt into the wildcard
+  // (TenantClaimValidator accepts '*' in addition to the domain-specific value,
+  // per seed.sql TASK-BE-312 note). Domain-specific navigation is done by the
+  // spec directly.
+  //
+  // ⚠️ NOT universal — wms is the deliberate exception (ADR-MONO-019/048 § D5):
+  // its gate is `allowWildcard=false`, so a DIRECT bearer read against a wms
+  // service with this wildcard token 403s at the tenant gate. UI navigation to
+  // /wms goes through console-web (not a direct wms bearer), so it never hit this;
+  // a spec that reads a wms service by bearer must assume-tenant into a wms-entitled
+  // tenant instead (see scm-inbound-expected-loop.spec.ts, TASK-MONO-432).
   defaultTenant: '*',
   // TASK-MONO-154 — real-customer acme-corp operator. Credential matches
   // seed.sql section 6/7 (auth_db.credentials tenant_id='acme-corp' +
