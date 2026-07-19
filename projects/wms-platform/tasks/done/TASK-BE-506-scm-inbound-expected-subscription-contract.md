@@ -8,7 +8,7 @@ wms inbound-service — scm inbound-expected 구독 컨트랙트 (`scm-inbound-e
 
 # Status
 
-ready
+done
 
 # Owner
 

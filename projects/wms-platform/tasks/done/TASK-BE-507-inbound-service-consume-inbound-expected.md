@@ -8,7 +8,7 @@ wms inbound-service — scm inbound-expected 소비 → InboundExpectation(ASN) 
 
 # Status
 
-ready
+done
 
 # Owner
 
