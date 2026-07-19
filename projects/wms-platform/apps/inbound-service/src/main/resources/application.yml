@@ -126,6 +126,10 @@ inbound:
         batch-size: 50
   kafka:
     dlt-suffix: .DLT
+    # ADR-MONO-050: first scm -> wms coupling. Independent consumer group so it never
+    # disturbs the wms.master.* projection offsets.
+    scm-expected:
+      group-id: wms-inbound-scm-expected-v1
     topics:
       master-warehouse: wms.master.warehouse.v1
       master-zone: wms.master.zone.v1
@@ -133,3 +137,5 @@ inbound:
       master-sku: wms.master.sku.v1
       master-lot: wms.master.lot.v1
       master-partner: wms.master.partner.v1
+      scm-inbound-expected: scm.procurement.inbound-expected.v1
+      scm-inbound-expected-cancelled: scm.procurement.inbound-expected.cancelled.v1

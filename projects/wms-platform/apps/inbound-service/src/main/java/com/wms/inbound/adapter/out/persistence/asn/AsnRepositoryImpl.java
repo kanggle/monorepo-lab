@@ -46,6 +46,7 @@ public class AsnRepositoryImpl implements AsnPersistencePort, AsnNoSequencePort 
             entity = new AsnJpaEntity(asn.getId(), asn.getAsnNo(), asn.getSource().name(),
                     asn.getSupplierPartnerId(), asn.getWarehouseId(),
                     asn.getExpectedArriveDate(), asn.getNotes(),
+                    asn.getPoNumber(), asn.getPoId(),
                     asn.getStatus().name(), asn.getVersion(),
                     asn.getCreatedAt(), asn.getCreatedBy(),
                     asn.getUpdatedAt(), asn.getUpdatedBy());
@@ -127,12 +128,26 @@ public class AsnRepositoryImpl implements AsnPersistencePort, AsnNoSequencePort 
         return prefix + String.format("%04d", seq);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public boolean existsOpenByPoNumber(String poNumber) {
+        return asnRepo.existsOpenByPoNumber(poNumber);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Asn> findOpenByPoNumber(String poNumber) {
+        return asnRepo.findOpenByPoNumber(poNumber, PageRequest.of(0, 1)).stream()
+                .findFirst().map(this::toDomainWithLines);
+    }
+
     private Asn toDomainWithLines(AsnJpaEntity e) {
         List<AsnLine> lines = lineRepo.findByAsnIdOrderByLineNoAsc(e.getId()).stream()
                 .map(AsnRepositoryImpl::toLineDomain).toList();
         return new Asn(e.getId(), e.getAsnNo(), AsnSource.valueOf(e.getSource()),
                 e.getSupplierPartnerId(), e.getWarehouseId(),
                 e.getExpectedArriveDate(), e.getNotes(),
+                e.getPoNumber(), e.getPoId(),
                 AsnStatus.valueOf(e.getStatus()), e.getVersion(),
                 e.getCreatedAt(), e.getCreatedBy(), e.getUpdatedAt(), e.getUpdatedBy(), lines);
     }
@@ -141,6 +156,7 @@ public class AsnRepositoryImpl implements AsnPersistencePort, AsnNoSequencePort 
         return new Asn(e.getId(), e.getAsnNo(), AsnSource.valueOf(e.getSource()),
                 e.getSupplierPartnerId(), e.getWarehouseId(),
                 e.getExpectedArriveDate(), e.getNotes(),
+                e.getPoNumber(), e.getPoId(),
                 AsnStatus.valueOf(e.getStatus()), e.getVersion(),
                 e.getCreatedAt(), e.getCreatedBy(), e.getUpdatedAt(), e.getUpdatedBy(),
                 e.getLines().stream().map(AsnRepositoryImpl::toLineDomain).toList());
