@@ -115,14 +115,6 @@ public class Payment {
         return this.status == PaymentStatus.VOIDED;
     }
 
-    public boolean isPending() {
-        return this.status == PaymentStatus.PENDING;
-    }
-
-    public boolean isCompleted() {
-        return this.status == PaymentStatus.COMPLETED;
-    }
-
     public void fail() {
         if (this.status != PaymentStatus.PENDING) {
             throw new InvalidPaymentException("PENDING 상태에서만 FAILED로 전이할 수 있습니다: " + status);
