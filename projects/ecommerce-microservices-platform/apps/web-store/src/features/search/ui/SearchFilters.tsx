@@ -27,15 +27,21 @@ export function SearchFilters({ categories, priceRanges }: SearchFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  function updateParam(key: string, value: string | undefined) {
+  function updateParams(entries: Array<[string, string | undefined]>) {
     const params = new URLSearchParams(searchParams.toString());
-    if (value) {
-      params.set(key, value);
-    } else {
-      params.delete(key);
+    for (const [key, value] of entries) {
+      if (value) {
+        params.set(key, value);
+      } else {
+        params.delete(key);
+      }
     }
     params.delete('page');
     router.push(`/products?${params.toString()}`);
+  }
+
+  function updateParam(key: string, value: string | undefined) {
+    updateParams([[key, value]]);
   }
 
   const currentCategoryId = searchParams.get('categoryId') ?? undefined;
@@ -65,15 +71,12 @@ export function SearchFilters({ categories, priceRanges }: SearchFiltersProps) {
           {priceRanges.map((range) => (
             <button
               key={`${range.min ?? 'min'}-${range.max ?? 'max'}`}
-              onClick={() => {
-                const params = new URLSearchParams(searchParams.toString());
-                if (range.min != null) params.set('minPrice', String(range.min));
-                else params.delete('minPrice');
-                if (range.max != null) params.set('maxPrice', String(range.max));
-                else params.delete('maxPrice');
-                params.delete('page');
-                router.push(`/products?${params.toString()}`);
-              }}
+              onClick={() =>
+                updateParams([
+                  ['minPrice', range.min != null ? String(range.min) : undefined],
+                  ['maxPrice', range.max != null ? String(range.max) : undefined],
+                ])
+              }
               className="btn"
               style={{ fontSize: 'var(--font-size-xs)', padding: 'var(--space-1) var(--space-2)' }}
             >
