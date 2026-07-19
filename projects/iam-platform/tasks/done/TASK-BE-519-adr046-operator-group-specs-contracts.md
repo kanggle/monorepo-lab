@@ -8,7 +8,7 @@ ADR-046 step 1 — operator-group specs & contracts (rbac.md `group.manage` + da
 
 # Status
 
-review
+done
 
 # Owner
 
