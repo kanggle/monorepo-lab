@@ -8,7 +8,7 @@ inbound-expected 폐루프 cross-service E2E — scm PO CONFIRMED → wms Inboun
 
 # Status
 
-ready
+done
 
 # Owner
 

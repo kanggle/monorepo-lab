@@ -8,7 +8,7 @@ scm procurement — PO CONFIRMED/취소 시 inbound-expected 이벤트 발행 (o
 
 # Status
 
-ready
+done
 
 # Owner
 

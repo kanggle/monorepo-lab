@@ -8,7 +8,7 @@ scm demand-planning — alert warehouseCode 는 additive(선택), 부재 시 DLT
 
 # Status
 
-ready
+done
 
 # Owner
 

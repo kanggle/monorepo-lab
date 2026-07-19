@@ -8,7 +8,7 @@ ADR-MONO-050 PROPOSED → ACCEPTED 전환 — scm→wms inbound-expected 폐루�
 
 # Status
 
-ready
+done
 
 # Owner
 
