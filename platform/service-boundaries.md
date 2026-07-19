@@ -84,6 +84,7 @@ The catalog of service types lives in `service-types/INDEX.md`.
   - A published HTTP or event contract, OR
   - A local projection built from consumed events (read-model cache)
 - Master/reference data (catalog-style data that multiple services need to read) is owned by exactly one service and distributed via events for local caching.
+- **Identity that crosses a project boundary is a business code, not an internal primary key.** Published contracts carry the stable, human-meaningful identifier the owning service assigns — an entity code, document number, or equivalent natural key. Internal surrogate keys (UUID PKs) stay inside the owning project. The **consumer** resolves the code to its own primary key at consume time; the producer keeps no per-consumer identifier mapping and no knowledge of who consumes it. Rationale: a code is a contract that survives the counterpart system being absent, re-seeded, or extracted as a standalone deployment, whereas a surrogate key is an implementation detail whose stability the producer never promised. Decided repo-wide in [`ADR-MONO-051`](../docs/adr/ADR-MONO-051-master-data-stays-federated.md) §D2; first established for a single leg in [`ADR-MONO-050`](../docs/adr/ADR-MONO-050-scm-procurement-wms-inbound-expected.md) §7 D9.
 
 ---
 
