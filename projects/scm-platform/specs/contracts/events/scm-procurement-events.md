@@ -24,7 +24,7 @@ Canonical Kafka topic names. Topic naming convention =
 | `scm.procurement.po.submitted` | `scm.procurement.po.submitted.v1` | `purchase_order` | live | DRAFT → SUBMITTED transition (after supplier dispatch succeeds) |
 | `scm.procurement.po.acknowledged` | `scm.procurement.po.acknowledged.v1` | `purchase_order` | live | SUBMITTED → ACKNOWLEDGED via supplier-ack webhook |
 | `scm.procurement.po.confirmed` | `scm.procurement.po.confirmed.v1` | `purchase_order` | live | ACKNOWLEDGED → CONFIRMED (operator action) |
-| `scm.procurement.po.canceled` | `scm.procurement.po.canceled.v1` | `purchase_order` | live | DRAFT/SUBMITTED/ACKNOWLEDGED → CANCELED (BUYER or OPERATOR) |
+| `scm.procurement.po.canceled` | `scm.procurement.po.canceled.v1` | `purchase_order` | live | DRAFT/SUBMITTED/ACKNOWLEDGED/CONFIRMED → CANCELED (BUYER or OPERATOR); CONFIRMED only while not-yet-received (ADR-MONO-050 D6.3) |
 | `scm.procurement.po.received` | `scm.procurement.po.received.v1` | `purchase_order` | live | (CONFIRMED \| PARTIALLY_RECEIVED) → RECEIVED via ASN application |
 | `scm.procurement.po.closed` | `scm.procurement.po.closed.v1` | `purchase_order` | **v2-deferred** | SETTLED → CLOSED (driven by `settlement-service`, not yet bootstrapped) |
 | `scm.procurement.asn.received` | `scm.procurement.asn.received.v1` | `asn` | live | Supplier-issued ASN webhook accepted |
@@ -210,9 +210,14 @@ value is the actor's `sub`.
 
 ### scm.procurement.po.canceled
 
-Triggered when a BUYER or OPERATOR cancels a PO (`DRAFT/SUBMITTED/ACKNOWLEDGED → CANCELED`).
-Once `CONFIRMED`, cancellation requires a v2 corrective task and does NOT
-fire this event.
+Triggered when a BUYER or OPERATOR cancels a PO
+(`DRAFT/SUBMITTED/ACKNOWLEDGED/CONFIRMED → CANCELED`). A `CONFIRMED` PO may be
+cancelled **only while not-yet-received** (ADR-MONO-050 D6.3); once any goods
+have arrived (`PARTIALLY_RECEIVED` / `RECEIVED`) cancellation is forbidden and
+belongs to the return/reverse-logistics domain (out of v1 scope). A
+warehouse-addressed CONFIRMED cancellation additionally fires
+`scm.procurement.inbound-expected.cancelled.v1` so wms drops the now-stranded
+inbound expectation (see that event).
 
 **Additional payload fields:**
 
@@ -440,16 +445,18 @@ Companion event so wms can mark a not-yet-received inbound expectation
 `CANCELLED` instead of stranding a phantom expectation. Emitted when a
 warehouse-addressed (`WMS_WAREHOUSE`) PO is cancelled while **non-terminal**.
 
-> **v1 reachability note.** The PO state machine currently allows `CANCELED`
-> only from `DRAFT / SUBMITTED / ACKNOWLEDGED` (a `CONFIRMED` PO cannot be
-> cancelled in v1 — see the `po.canceled` note). Because `inbound-expected.v1`
-> fires on `CONFIRMED`, the case that actually strands a wms expectation
-> (cancel **after** confirm) is **not reachable in v1**; enabling
-> `CONFIRMED → CANCELED` is a deferred follow-up. In v1 this event therefore
-> fires only for pre-`CONFIRMED` cancellations of warehouse-addressed
-> replenishment POs — a harmless no-op on the wms side (no matching open
-> expectation → ignored), and the wiring is already in place for the day the
-> post-confirm cancel transition is enabled.
+> **Reachability (ADR-MONO-050 D6.3, TASK-SCM-BE-036).** The PO state machine
+> allows `CANCELED` from `DRAFT / SUBMITTED / ACKNOWLEDGED / CONFIRMED` — a
+> `CONFIRMED` PO may be cancelled **only while not-yet-received** (`RECEIVED` /
+> `PARTIALLY_RECEIVED` remain terminal-for-cancel). Since `inbound-expected.v1`
+> fires on `CONFIRMED`, the case that actually strands a wms expectation (cancel
+> **after** confirm) is now reachable, and this event carries the cancellation to
+> wms (mark the open expectation `CANCELLED`). It is emitted for **every**
+> warehouse-addressed PO cancellation regardless of prior state — for a
+> pre-`CONFIRMED` cancel no expectation was ever created, so it is a harmless
+> no-op on the wms side (no matching open expectation → ignored); wms is the
+> authority on whether an expectation exists to cancel. The producer therefore
+> emits the cancellation fact unconditionally rather than tracking wms state.
 
 **Payload fields:**
 
