@@ -1,7 +1,7 @@
 # TASK-MONO-438 — shard the iam integration lane across 2 runners (stop at the next bottleneck)
 
 - **Type**: TASK-MONO (CI wall-clock — measurement-driven)
-- **Status**: review
+- **Status**: done
 - **Scope**: root `.github/workflows/ci.yml` (`iam-integration-tests` caller)
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (must not undo the MONO-393 reliability fix)
 
