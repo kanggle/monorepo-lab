@@ -11,6 +11,7 @@ import com.wms.inventory.domain.event.InventoryReserveFailedEvent;
 import com.wms.inventory.domain.event.InventoryReservedEvent;
 import com.wms.inventory.domain.exception.DuplicateRequestException;
 import com.wms.inventory.domain.exception.InventoryNotFoundException;
+import com.wms.inventory.domain.exception.MasterRefInactiveException;
 import com.wms.inventory.domain.model.Inventory;
 import com.wms.inventory.domain.model.InventoryMovement;
 import com.wms.inventory.domain.model.ReasonCode;
@@ -64,6 +65,7 @@ public class ReserveStockService implements ReserveStockUseCase {
     private final InventoryRepository inventoryRepository;
     private final InventoryMovementRepository movementRepository;
     private final OutboxWriter outboxWriter;
+    private final MasterRefValidator masterRefValidator;
     private final TransactionTemplate transactionTemplate;
     private final Clock clock;
     private final Counter reserveCounter;
@@ -73,6 +75,7 @@ public class ReserveStockService implements ReserveStockUseCase {
                                InventoryRepository inventoryRepository,
                                InventoryMovementRepository movementRepository,
                                OutboxWriter outboxWriter,
+                               MasterRefValidator masterRefValidator,
                                TransactionTemplate transactionTemplate,
                                Clock clock,
                                MeterRegistry meterRegistry) {
@@ -80,6 +83,7 @@ public class ReserveStockService implements ReserveStockUseCase {
         this.inventoryRepository = inventoryRepository;
         this.movementRepository = movementRepository;
         this.outboxWriter = outboxWriter;
+        this.masterRefValidator = masterRefValidator;
         this.transactionTemplate = transactionTemplate;
         this.clock = clock;
         this.reserveCounter = Counter.builder("inventory.mutation.count")
@@ -205,6 +209,36 @@ public class ReserveStockService implements ReserveStockUseCase {
             Inventory inv = inventoryRepository.findById(id)
                     .orElseThrow(() -> new InventoryNotFoundException("Inventory not found: " + id));
             loadedById.put(id, inv);
+        }
+
+        // Master-ref guard (TASK-BE-521): every line's SKU / lot / location must be
+        // ACTIVE (and the lot non-EXPIRED) per the MasterReadModel BEFORE any
+        // Inventory.reserve mutation — the same guard the sibling stock-mutation
+        // services (Adjust / Receive / Transfer) enforce via MasterRefValidator.
+        // Treated exactly like INSUFFICIENT_STOCK: on the event path a failure
+        // emits inventory.reserve.failed{reason=SKU_INACTIVE|LOT_INACTIVE|LOT_EXPIRED
+        // |LOCATION_INACTIVE} and returns null (→ BACKORDERED) so the shared consumer
+        // TX still commits its dedupe row; on the REST path the domain exception
+        // propagates (→ 422). Snapshot absence is "no opinion" (allowed) per
+        // MasterRefValidator — startup-race tolerance.
+        for (UUID id : orderedIds) {
+            Inventory inv = loadedById.get(id);
+            try {
+                masterRefValidator.validate(inv.locationId(), inv.skuId(), inv.lotId());
+            } catch (MasterRefInactiveException ex) {
+                if (!signalShortfall) {
+                    throw ex;
+                }
+                outboxWriter.write(new InventoryReserveFailedEvent(
+                        command.pickingRequestId(), ex.errorCode(),
+                        List.of(new InventoryReserveFailedEvent.Line(
+                                inv.id(), inv.skuId(), inv.lotId(), inv.locationId(),
+                                qtyByInventory.getOrDefault(id, 0), inv.availableQty())),
+                        now, command.actorId()));
+                log.info("inventory.reserve.failed emitted (master-ref) pickingRequestId={} reason={}",
+                        command.pickingRequestId(), ex.errorCode());
+                return null;
+            }
         }
 
         // Event path (TASK-MONO-196): pre-check availability BEFORE any mutation so

@@ -16,6 +16,7 @@ import com.wms.inventory.domain.model.ReasonCode;
 import com.wms.inventory.domain.model.ReleasedReason;
 import com.wms.inventory.domain.model.Reservation;
 import com.wms.inventory.domain.model.ReservationLine;
+import com.wms.inventory.domain.model.ReservationStatus;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
@@ -76,6 +77,21 @@ public class ReleaseReservationService implements ReleaseReservationUseCase {
         Reservation reservation = reservationRepository.findById(command.reservationId())
                 .orElseThrow(() -> new ReservationNotFoundException(
                         "Reservation not found: " + command.reservationId()));
+
+        // Terminal-state pre-check (TASK-BE-521 sibling / TASK-BE-522): a release
+        // on an already-RELEASED reservation is an idempotent 200 no-op per
+        // reservation-saga.md §8 (L125/141/233) — return the stored reservation
+        // WITHOUT re-running the per-line inv.release(...) loop (which would throw
+        // InsufficientStockException on the now-drained RESERVED bucket) and
+        // WITHOUT re-emitting inventory.released. Mirrors the terminal-state guard
+        // the PickingCancelledConsumer / ShippingConfirmedConsumer siblings run
+        // before entering their use-case. The optimistic-lock version check below
+        // still guards the genuine concurrent-release race on a RESERVED row.
+        if (reservation.status() == ReservationStatus.RELEASED) {
+            log.info("Release for reservation {} already RELEASED — idempotent no-op", reservation.id());
+            return ReservationView.from(reservation);
+        }
+
         if (command.expectedVersion() != null
                 && reservation.version() != command.expectedVersion()) {
             throw new ObjectOptimisticLockingFailureException(
