@@ -187,11 +187,13 @@ export const CONSOLE_MENUS: ConsoleMenu[] = [
   {
     label: '운영자 그룹',
     href: '/operator-groups',
-    purpose: '여러 운영자를 묶어 역할을 한 번에 부여합니다.',
-    actions: '준비 중 — 아직 기능이 없습니다.',
-    gate: '—',
-    mutates: false,
-    stub: true,
+    purpose:
+      '여러 운영자를 named 그룹으로 묶어 역할·테넌트 배정을 한 번에 부여합니다 (ADR-MONO-046).',
+    actions:
+      '그룹 생성 · 이름/설명 변경 · 삭제 · 멤버 추가/제거 · 그룹 grant(역할/tenant-assignment) 추가/회수',
+    gate: 'group.manage',
+    mutates: true,
+    note: '그룹 grant 는 각 현재 멤버의 평범한 직접 권한 행으로 fan-out 되며(group_origin 마커), 그룹 멤버십 자체는 평가·격리 축이 아닙니다. 조회에도 group.manage 가 필요하고, 모든 변경은 사유가 필수입니다. 자기가 가진 것보다 높은 역할·스코프 밖 테넌트는 그룹에도 부여할 수 없습니다 (no-escalation).',
   },
   {
     label: '조직 계층',

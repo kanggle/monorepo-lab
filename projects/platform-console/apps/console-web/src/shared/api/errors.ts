@@ -760,6 +760,41 @@ export class OrgNodesUnavailableError extends Error {
   }
 }
 
+/**
+ * ADR-MONO-046 operator-group surface degrade signal (TASK-PC-FE-250 /
+ * admin-api.md § Operator Group Management). Sibling of
+ * {@link OrgNodesUnavailableError} / {@link TenantsUnavailableError} —
+ * identical resilience posture for the `group.manage`-gated group CRUD +
+ * membership + group-grant surface (`/api/admin/groups`, reads gated too): a
+ * `503 DOWNSTREAM_ERROR`/`503 CIRCUIT_OPEN`/timeout on a group call degrades
+ * ONLY the 운영자 그룹 section (the console shell + every other IAM surface
+ * stay intact). Auth failures (401) are raised as {@link ApiError} so the
+ * caller forces a clean re-login (no partial authed state). Inline-recoverable
+ * producer errors (`403 PERMISSION_DENIED` — lacks `group.manage`,
+ * `403 TENANT_SCOPE_DENIED`, `403 ROLE_GRANT_FORBIDDEN`,
+ * `404 GROUP_NOT_FOUND`/`GROUP_MEMBER_NOT_FOUND`/`OPERATOR_NOT_FOUND`,
+ * `400 VALIDATION_ERROR`/`REASON_REQUIRED`/`ROLE_NOT_FOUND`,
+ * `409 GROUP_NAME_CONFLICT`/`GROUP_MEMBER_ALREADY_EXISTS`/
+ * `GROUP_GRANT_ALREADY_EXISTS`,
+ * `422 GROUP_MEMBER_TENANT_MISMATCH`/`GROUP_GRANT_NO_ESCALATION`) are raised as
+ * {@link ApiError} so the UI renders an inline actionable message without
+ * crashing. No token / group PII is ever placed in this error.
+ */
+export class GroupsUnavailableError extends Error {
+  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
+  readonly code: string;
+  constructor(
+    reason: GroupsUnavailableError['reason'],
+    code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'GroupsUnavailableError';
+    this.reason = reason;
+    this.code = code;
+  }
+}
+
 const MESSAGES: Record<string, string> = {
   TOKEN_INVALID: '세션이 만료되었습니다. 다시 로그인해주세요.',
   TOKEN_REVOKED: '세션이 종료되었습니다. 다시 로그인해주세요.',
@@ -1002,6 +1037,31 @@ const MESSAGES: Record<string, string> = {
     '이 노드의 유효 상한이 비어 있어(어떤 도메인도 허용하지 않음) 관리자를 배정할 수 없습니다. 상위 노드의 상한을 확인하세요.',
   ORG_MANAGE_REQUIRED:
     '조직 계층 관리는 org.manage 권한이 필요합니다 (SUPER_ADMIN 또는 상위 노드의 ORG_ADMIN).',
+  // --- operator groups (TASK-PC-FE-250 / ADR-MONO-046) ---------------------
+  // (`VALIDATION_ERROR` / `REASON_REQUIRED` / `PERMISSION_DENIED` /
+  // `TENANT_SCOPE_DENIED` / `NO_ACTIVE_TENANT` / `ROLE_NOT_FOUND` /
+  // `OPERATOR_NOT_FOUND` are already mapped above and reused verbatim — the
+  // producer codes are identical.)
+  GROUP_MANAGE_REQUIRED:
+    '운영자 그룹 관리는 group.manage 권한이 필요합니다 (SUPER_ADMIN 또는 자기 테넌트 TENANT_ADMIN, 서브트리 ORG_ADMIN).',
+  GROUP_NOT_FOUND:
+    '대상 그룹을 찾을 수 없습니다. (권한 범위 밖일 수도 있습니다.) 목록을 새로고침하세요.',
+  GROUP_MEMBER_NOT_FOUND:
+    '이 그룹에 대상 운영자의 멤버십이 없습니다. 목록을 새로고침하세요.',
+  GROUP_GRANT_NOT_FOUND:
+    '대상 grant 템플릿을 찾을 수 없습니다 (다른 그룹의 grant 이거나 이미 회수됨). 목록을 새로고침하세요.',
+  GROUP_NAME_CONFLICT:
+    '같은 테넌트에 동일한 이름의 그룹이 이미 있습니다. 다른 이름을 사용하세요.',
+  GROUP_MEMBER_ALREADY_EXISTS:
+    '이미 이 그룹의 멤버인 운영자입니다. 목록을 새로고침하세요.',
+  GROUP_GRANT_ALREADY_EXISTS:
+    '동일한 grant(역할 또는 tenant-assignment)가 이 그룹에 이미 있습니다.',
+  GROUP_MEMBER_TENANT_MISMATCH:
+    '대상 운영자가 이 그룹의 테넌트 소속이 아닙니다. 그룹은 자기 테넌트 소속 운영자만 멤버로 추가할 수 있습니다.',
+  GROUP_GRANT_NO_ESCALATION:
+    'tenant-assignment grant 가 본인이 관리할 수 있는 테넌트 범위를 초과합니다. 자기 스코프 이내 테넌트만 부여할 수 있습니다.',
+  ROLE_GRANT_FORBIDDEN:
+    '본인이 보유하지 않은 역할은 그룹에 부여할 수 없습니다 (no-escalation). SUPER_ADMIN 은 그룹 grant 로 부여할 수 없습니다.',
 };
 
 export function messageForCode(code: string, fallback?: string): string {
