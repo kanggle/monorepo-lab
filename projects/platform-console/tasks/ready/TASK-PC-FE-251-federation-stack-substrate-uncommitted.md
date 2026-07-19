@@ -1,4 +1,4 @@
-# TASK-PC-FE-250 — the federation e2e stack's ecommerce + omni substrate is uncommitted (capability gap + doc drift)
+# TASK-PC-FE-251 — the federation e2e stack's ecommerce + omni substrate is uncommitted (capability gap + doc drift)
 
 - **Type**: TASK-PC-FE (CI stack / e2e capability — decision-gated)
 - **Status**: ready

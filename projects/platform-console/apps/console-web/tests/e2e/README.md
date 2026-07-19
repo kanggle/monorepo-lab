@@ -51,7 +51,7 @@ stack, and the parts of that stack they depend on are **intentionally uncommitte
 
 So enabling them was not a matter of setting the flag: their entire runtime substrate is
 absent from the repo. Standing up an ecommerce-inclusive nightly stack is a separate
-epic, tracked as **TASK-PC-FE-250**.
+epic, tracked as **TASK-PC-FE-251**.
 
 **Coverage that remains — and what is genuinely uncovered.**
 
@@ -67,4 +67,4 @@ epic, tracked as **TASK-PC-FE-250**.
   status"): its body is MVP-relaxed to URL + page-title + first-heading-visible
   (TASK-MONO-140 cycle 5). Do not read that title as a coverage claim.
 - **No spec anywhere asserts the `ecommerce` overview card**, because no CI stack runs
-  an ecommerce backend. That gap is real and is what TASK-PC-FE-250 owns.
+  an ecommerce backend. That gap is real and is what TASK-PC-FE-251 owns.
