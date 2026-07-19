@@ -59,62 +59,67 @@ function applyMockUpdate(addressId: string, data: UpdateAddressRequest): { id: s
   return { id: addressId };
 }
 
-export async function getMyAddresses(): Promise<AddressListResponse> {
-  if (mockAddressState.useMock) {
-    return { addresses: [...mockAddressState.addresses] };
-  }
+/**
+ * Run the real API call; on any failure flip to the in-memory mock and serve
+ * the mock result instead (network-outage fallback). Once flipped, subsequent
+ * calls skip the network entirely. `mockFn` owns the mock-state mutation.
+ */
+async function withMockFallback<T>(
+  mockFn: () => T,
+  realFn: () => Promise<T>,
+): Promise<T> {
+  if (mockAddressState.useMock) return mockFn();
   try {
-    const data = await userApi.getAddresses();
-    data.addresses = data.addresses.map((addr) => {
-      const a = addr as unknown as Record<string, unknown>;
-      return {
-        ...addr,
-        isDefault: a.isDefault ?? a.is_default ?? false,
-        recipientName: a.recipientName ?? a.recipient_name ?? '',
-        zipCode: a.zipCode ?? a.zip_code ?? '',
-      } as Address;
-    });
-    return data;
+    return await realFn();
   } catch {
     mockAddressState.useMock = true;
-    return { addresses: [...mockAddressState.addresses] };
+    return mockFn();
   }
+}
+
+export async function getMyAddresses(): Promise<AddressListResponse> {
+  return withMockFallback(
+    () => ({ addresses: [...mockAddressState.addresses] }),
+    async () => {
+      const data = await userApi.getAddresses();
+      data.addresses = data.addresses.map((addr) => {
+        const a = addr as unknown as Record<string, unknown>;
+        return {
+          ...addr,
+          isDefault: a.isDefault ?? a.is_default ?? false,
+          recipientName: a.recipientName ?? a.recipient_name ?? '',
+          zipCode: a.zipCode ?? a.zip_code ?? '',
+        } as Address;
+      });
+      return data;
+    },
+  );
 }
 
 export async function createAddress(
   data: CreateAddressRequest,
 ): Promise<CreateAddressResponse> {
-  if (mockAddressState.useMock) return pushMockAddress(data);
-  try {
-    return await userApi.createAddress(data);
-  } catch {
-    mockAddressState.useMock = true;
-    return pushMockAddress(data);
-  }
+  return withMockFallback(
+    () => pushMockAddress(data),
+    () => userApi.createAddress(data),
+  );
 }
 
 export async function updateAddress(
   addressId: string,
   data: UpdateAddressRequest,
 ): Promise<{ id: string }> {
-  if (mockAddressState.useMock) return applyMockUpdate(addressId, data);
-  try {
-    return await userApi.updateAddress(addressId, data);
-  } catch {
-    mockAddressState.useMock = true;
-    return applyMockUpdate(addressId, data);
-  }
+  return withMockFallback(
+    () => applyMockUpdate(addressId, data),
+    () => userApi.updateAddress(addressId, data),
+  );
 }
 
 export async function deleteAddress(addressId: string): Promise<void> {
-  if (mockAddressState.useMock) {
-    mockAddressState.addresses = mockAddressState.addresses.filter((a) => a.id !== addressId);
-    return;
-  }
-  try {
-    return await userApi.deleteAddress(addressId);
-  } catch {
-    mockAddressState.useMock = true;
-    mockAddressState.addresses = mockAddressState.addresses.filter((a) => a.id !== addressId);
-  }
+  return withMockFallback<void>(
+    () => {
+      mockAddressState.addresses = mockAddressState.addresses.filter((a) => a.id !== addressId);
+    },
+    () => userApi.deleteAddress(addressId),
+  );
 }
