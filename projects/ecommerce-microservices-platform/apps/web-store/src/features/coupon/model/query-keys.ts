@@ -1,5 +1,3 @@
-export const couponKeys = {
-  all: ['coupons'] as const,
-  lists: () => [...couponKeys.all, 'list'] as const,
-  list: (params: Record<string, unknown>) => [...couponKeys.lists(), params] as const,
-};
+import { createListQueryKeys } from '@/shared/lib/query-keys';
+
+export const couponKeys = createListQueryKeys('coupons');
