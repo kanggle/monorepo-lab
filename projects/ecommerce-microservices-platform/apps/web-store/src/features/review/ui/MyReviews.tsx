@@ -52,18 +52,16 @@ export function MyReviews() {
           {reviews.map((review) => (
             <ReviewCard
               key={review.reviewId}
-              reviewId={review.reviewId}
-              rating={review.rating}
-              title={review.title}
-              content={review.content}
-              createdAt={review.createdAt}
+              review={review}
               isEditing={editingReview?.reviewId === review.reviewId}
               showActions={true}
               isUpdatePending={isUpdatePending}
-              onEdit={() => setEditingReview(review)}
-              onDelete={() => handleDelete(review.reviewId)}
-              onUpdate={handleUpdate}
-              onCancelEdit={() => setEditingReview(null)}
+              actions={{
+                onEdit: () => setEditingReview(review),
+                onDelete: () => handleDelete(review.reviewId),
+                onUpdate: handleUpdate,
+                onCancelEdit: () => setEditingReview(null),
+              }}
               productLink={
                 <Link
                   href={`/products/${review.productId}`}

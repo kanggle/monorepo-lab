@@ -123,18 +123,16 @@ export function ReviewList({ productId }: ReviewListProps) {
             {reviews.map((review) => (
               <ReviewCard
                 key={review.reviewId}
-                reviewId={review.reviewId}
-                rating={review.rating}
-                title={review.title}
-                content={review.content}
-                createdAt={review.createdAt}
+                review={review}
                 isEditing={editingReview?.reviewId === review.reviewId}
                 showActions={!!(user && user.userId === review.userId)}
                 isUpdatePending={isUpdatePending}
-                onEdit={() => setEditingReview(review)}
-                onDelete={() => handleDelete(review.reviewId)}
-                onUpdate={handleUpdate}
-                onCancelEdit={() => setEditingReview(null)}
+                actions={{
+                  onEdit: () => setEditingReview(review),
+                  onDelete: () => handleDelete(review.reviewId),
+                  onUpdate: handleUpdate,
+                  onCancelEdit: () => setEditingReview(null),
+                }}
               />
             ))}
           </div>
