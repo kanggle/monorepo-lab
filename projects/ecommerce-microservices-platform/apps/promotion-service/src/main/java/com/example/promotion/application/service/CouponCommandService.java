@@ -3,7 +3,6 @@ package com.example.promotion.application.service;
 import com.example.promotion.application.command.ApplyCouponCommand;
 import com.example.promotion.application.command.IssueCouponsCommand;
 import com.example.promotion.application.event.CouponUsedEvent;
-import com.example.web.exception.AccessDeniedException;
 import com.example.promotion.application.port.PromotionEventPublisher;
 import com.example.promotion.application.result.ApplyCouponResult;
 import com.example.promotion.application.result.IssueCouponsResult;
@@ -36,7 +35,7 @@ public class CouponCommandService {
 
     @Transactional
     public IssueCouponsResult issueCoupons(IssueCouponsCommand command) {
-        validateAdminRole(command.userRole());
+        OperatorRoleGuard.requireOperator(command.userRole());
         Promotion promotion = promotionRepository.findByIdForUpdate(command.promotionId())
                 .orElseThrow(() -> new PromotionNotFoundException(command.promotionId()));
 
@@ -85,24 +84,6 @@ public class CouponCommandService {
         log.info("Coupon applied: couponId={}, orderId={}, discount={}",
                 coupon.getCouponId(), command.orderId(), discountAmount);
         return new ApplyCouponResult(coupon.getCouponId(), discountAmount, finalAmount);
-    }
-
-    private void validateAdminRole(String userRole) {
-        if (!hasAdminRole(userRole)) {
-            throw new AccessDeniedException();
-        }
-    }
-
-    private static boolean hasAdminRole(String userRole) {
-        if (userRole == null || userRole.isBlank()) {
-            return false;
-        }
-        for (String role : userRole.split(",")) {
-            if ("ECOMMERCE_OPERATOR".equalsIgnoreCase(role.trim())) {
-                return true;
-            }
-        }
-        return false;
     }
 
     @Transactional

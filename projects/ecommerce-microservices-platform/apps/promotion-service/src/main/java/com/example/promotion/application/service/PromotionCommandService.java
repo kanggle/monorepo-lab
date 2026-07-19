@@ -2,7 +2,6 @@ package com.example.promotion.application.service;
 
 import com.example.promotion.application.command.CreatePromotionCommand;
 import com.example.promotion.application.command.UpdatePromotionCommand;
-import com.example.web.exception.AccessDeniedException;
 import com.example.promotion.application.result.CreatePromotionResult;
 import com.example.promotion.application.result.UpdatePromotionResult;
 import com.example.promotion.domain.coupon.CouponRepository;
@@ -29,7 +28,7 @@ public class PromotionCommandService {
 
     @Transactional
     public CreatePromotionResult createPromotion(CreatePromotionCommand command) {
-        validateAdminRole(command.userRole());
+        OperatorRoleGuard.requireOperator(command.userRole());
         DiscountType discountType = DiscountType.valueOf(command.discountType());
 
         Promotion promotion = Promotion.create(
@@ -46,7 +45,7 @@ public class PromotionCommandService {
 
     @Transactional
     public UpdatePromotionResult updatePromotion(UpdatePromotionCommand command) {
-        validateAdminRole(command.userRole());
+        OperatorRoleGuard.requireOperator(command.userRole());
         Promotion promotion = promotionRepository.findById(command.promotionId())
                 .orElseThrow(() -> new PromotionNotFoundException(command.promotionId()));
 
@@ -66,7 +65,7 @@ public class PromotionCommandService {
 
     @Transactional
     public void deletePromotion(String promotionId, String userRole) {
-        validateAdminRole(userRole);
+        OperatorRoleGuard.requireOperator(userRole);
         Promotion promotion = promotionRepository.findById(promotionId)
                 .orElseThrow(() -> new PromotionNotFoundException(promotionId));
 
@@ -76,23 +75,5 @@ public class PromotionCommandService {
 
         promotionRepository.deleteById(promotionId);
         log.info("Promotion deleted: promotionId={}", promotionId);
-    }
-
-    private void validateAdminRole(String userRole) {
-        if (!hasAdminRole(userRole)) {
-            throw new AccessDeniedException();
-        }
-    }
-
-    private static boolean hasAdminRole(String userRole) {
-        if (userRole == null || userRole.isBlank()) {
-            return false;
-        }
-        for (String role : userRole.split(",")) {
-            if ("ECOMMERCE_OPERATOR".equalsIgnoreCase(role.trim())) {
-                return true;
-            }
-        }
-        return false;
     }
 }
