@@ -174,8 +174,11 @@ class AdjustmentTransferIntegrationTest extends InventoryServiceIntegrationBase 
                 "actor-1", UUID.randomUUID().toString()));
 
         try (KafkaConsumer<String, String> consumer = newConsumer(TOPIC_ADJUSTED)) {
-            JsonNode payload = pollOne(consumer, TOPIC_ADJUSTED, 30).get("payload");
-            assertThat(payload.get("warehouseCode").asText()).isEqualTo("WH01");
+            // Match THIS test's inventory row — the topic also replays earlier tests' events.
+            JsonNode envelope = pollMatching(consumer, TOPIC_ADJUSTED,
+                    p -> inventoryId.toString().equals(p.path("inventoryId").asText()), 30);
+            assertThat(envelope).as("inventory.adjusted for inventory %s", inventoryId).isNotNull();
+            assertThat(envelope.get("payload").get("warehouseCode").asText()).isEqualTo("WH01");
         }
 
         UUID source = UUID.randomUUID();
@@ -191,8 +194,11 @@ class AdjustmentTransferIntegrationTest extends InventoryServiceIntegrationBase 
                 "actor-1", UUID.randomUUID().toString()));
 
         try (KafkaConsumer<String, String> consumer = newConsumer(TOPIC_TRANSFERRED)) {
-            JsonNode payload = pollOne(consumer, TOPIC_TRANSFERRED, 30).get("payload");
-            assertThat(payload.get("warehouseCode").asText()).isEqualTo("WH01");
+            // Match THIS test's sku — the topic also replays earlier tests' events.
+            JsonNode envelope = pollMatching(consumer, TOPIC_TRANSFERRED,
+                    p -> sku.toString().equals(p.path("skuId").asText()), 30);
+            assertThat(envelope).as("inventory.transferred for sku %s", sku).isNotNull();
+            assertThat(envelope.get("payload").get("warehouseCode").asText()).isEqualTo("WH01");
         }
     }
 
@@ -212,7 +218,12 @@ class AdjustmentTransferIntegrationTest extends InventoryServiceIntegrationBase 
                 "actor-1", UUID.randomUUID().toString()));
 
         try (KafkaConsumer<String, String> consumer = newConsumer(TOPIC_ADJUSTED)) {
-            JsonNode payload = pollOne(consumer, TOPIC_ADJUSTED, 30).get("payload");
+            // Match THIS test's inventory row — otherwise the first replayed event (from
+            // another test) could satisfy "code is null" and green this for the wrong reason.
+            JsonNode envelope = pollMatching(consumer, TOPIC_ADJUSTED,
+                    p -> inventoryId.toString().equals(p.path("inventoryId").asText()), 30);
+            assertThat(envelope).as("inventory.adjusted for inventory %s", inventoryId).isNotNull();
+            JsonNode payload = envelope.get("payload");
             assertThat(payload.has("warehouseCode")).isTrue();
             assertThat(payload.get("warehouseCode").isNull()).isTrue();
             // The mutation itself still applied.
@@ -277,6 +288,36 @@ class AdjustmentTransferIntegrationTest extends InventoryServiceIntegrationBase 
             for (ConsumerRecord<String, String> r : records) {
                 if (topic.equals(r.topic())) {
                     return objectMapper.readTree(r.value());
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Like {@link #pollOne} but returns the first envelope whose payload satisfies
+     * {@code match}, instead of the first envelope on the topic.
+     *
+     * <p>These consumers use a fresh group with {@code auto.offset.reset=earliest}, so a poll
+     * replays the topic from the beginning — including events published by EARLIER tests in
+     * this class. "First record on the topic" is therefore not "the event this test just
+     * caused"; asserting on it makes a test pass or fail based on execution order. Match on an
+     * id this test generated instead.
+     */
+    private JsonNode pollMatching(KafkaConsumer<String, String> consumer, String topic,
+                                  java.util.function.Predicate<JsonNode> match,
+                                  long maxSeconds) throws Exception {
+        long deadline = System.currentTimeMillis() + maxSeconds * 1_000L;
+        while (System.currentTimeMillis() < deadline) {
+            ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));
+            for (ConsumerRecord<String, String> r : records) {
+                if (!topic.equals(r.topic())) {
+                    continue;
+                }
+                JsonNode envelope = objectMapper.readTree(r.value());
+                JsonNode payload = envelope.get("payload");
+                if (payload != null && match.test(payload)) {
+                    return envelope;
                 }
             }
         }
