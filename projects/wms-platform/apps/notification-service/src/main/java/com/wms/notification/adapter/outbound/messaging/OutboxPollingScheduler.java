@@ -44,6 +44,14 @@ public class OutboxPollingScheduler {
     private static final long INITIAL_BACKOFF_MS = 1_000L;
     private static final long MAX_BACKOFF_MS = 30_000L;
     private static final double BACKOFF_MULTIPLIER = 2.0;
+    /**
+     * The only event type forwarded to Kafka in v1. The outbox also stores
+     * {@code notification.delivery.scheduled} rows, but the contract
+     * ({@code notification-events.md} § Out of Scope) says those are NOT
+     * published in v1 — the publisher's topic resolver forwards only
+     * {@code notification.delivered}. (May be relaxed in v2.)
+     */
+    private static final String EVENT_DELIVERED = "notification.delivered";
 
     private final NotificationOutboxJpaRepository repository;
     private final KafkaTemplate<String, String> kafkaTemplate;
@@ -57,6 +65,7 @@ public class OutboxPollingScheduler {
 
     private final Counter publishSuccessCounter;
     private final Counter publishFailureCounter;
+    private final Counter outboxSkippedCounter;
 
     public OutboxPollingScheduler(NotificationOutboxJpaRepository repository,
                                        KafkaTemplate<String, String> kafkaTemplate,
@@ -77,6 +86,9 @@ public class OutboxPollingScheduler {
                 .register(meterRegistry);
         this.publishFailureCounter = Counter.builder("notification.outbox.publish.failure.total")
                 .description("Outbox rows whose Kafka publish call failed")
+                .register(meterRegistry);
+        this.outboxSkippedCounter = Counter.builder("notification.outbox.skipped.total")
+                .description("Outbox rows drained without Kafka forwarding (out-of-scope event types in v1)")
                 .register(meterRegistry);
         Gauge.builder("notification.outbox.pending.count", repository,
                         NotificationOutboxJpaRepository::countByPublishedAtIsNull)
@@ -117,17 +129,29 @@ public class OutboxPollingScheduler {
     }
 
     private void publishOne(NotificationOutboxJpaEntity row) {
-        ProducerRecord<String, String> record =
-                new ProducerRecord<>(publishedTopic, row.getPartitionKey(), row.getPayload());
-        record.headers().add("eventId", row.getId().toString().getBytes());
-        record.headers().add("eventType", row.getEventType().getBytes());
-        try {
-            kafkaTemplate.send(record).get(10, TimeUnit.SECONDS);
-        } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Interrupted while waiting for Kafka ACK", ie);
-        } catch (ExecutionException | TimeoutException e) {
-            throw new RuntimeException("Kafka send failed for outbox row " + row.getId(), e);
+        // Topic resolver (notification-events.md § Out of Scope): v1 forwards ONLY
+        // `notification.delivered`. `notification.delivery.scheduled` rows are written
+        // to the outbox but must NOT reach Kafka in v1 — drain them (mark published so
+        // they are not re-polled forever) without sending. Relaxed in v2 by adding the
+        // type here.
+        boolean forwardToKafka = EVENT_DELIVERED.equals(row.getEventType());
+
+        if (forwardToKafka) {
+            ProducerRecord<String, String> record =
+                    new ProducerRecord<>(publishedTopic, row.getPartitionKey(), row.getPayload());
+            record.headers().add("eventId", row.getId().toString().getBytes());
+            record.headers().add("eventType", row.getEventType().getBytes());
+            try {
+                kafkaTemplate.send(record).get(10, TimeUnit.SECONDS);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("Interrupted while waiting for Kafka ACK", ie);
+            } catch (ExecutionException | TimeoutException e) {
+                throw new RuntimeException("Kafka send failed for outbox row " + row.getId(), e);
+            }
+        } else {
+            log.debug("Outbox row {} ({}) drained without Kafka forwarding — not published in v1",
+                    row.getId(), row.getEventType());
         }
 
         transactionTemplate.executeWithoutResult(status -> {
@@ -137,7 +161,12 @@ public class OutboxPollingScheduler {
             managed.markPublished(clock.instant());
             repository.save(managed);
         });
-        publishSuccessCounter.increment();
+
+        if (forwardToKafka) {
+            publishSuccessCounter.increment();
+        } else {
+            outboxSkippedCounter.increment();
+        }
     }
 
     private void registerFailure() {
