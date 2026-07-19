@@ -1,29 +1,19 @@
 package com.example.finance.ledger.presentation.controller;
 
-import com.example.finance.ledger.application.ActorContext;
-import com.example.finance.ledger.application.GetFxRateHistoryUseCase;
-import com.example.finance.ledger.application.GetFxRatesUseCase;
-import com.example.finance.ledger.application.RefreshFxRateQuotesUseCase;
-import com.example.finance.ledger.application.port.outbound.FxRateFeedSettings;
 import com.example.finance.ledger.application.view.FxRateHistorySummaryView;
 import com.example.finance.ledger.application.view.FxRateHistoryView;
 import com.example.finance.ledger.presentation.advice.GlobalExceptionHandler;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.security.authentication.TestingAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
-import java.util.Set;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -45,35 +35,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(FxRateController.class)
 @AutoConfigureMockMvc(addFilters = false)
 @Import(GlobalExceptionHandler.class)
-class FxRateHistoryControllerSliceTest {
-
-    private static final ActorContext ACTOR =
-            new ActorContext("operator-1", "finance", Set.of("finance.read"));
+class FxRateHistoryControllerSliceTest extends AbstractFxRateControllerSliceTest {
 
     private static final Instant T1 = Instant.parse("2026-06-15T06:00:00Z");
     private static final Instant T2 = Instant.parse("2026-06-15T07:00:00Z"); // newer
 
     @Autowired
     MockMvc mockMvc;
-
-    @MockitoBean
-    GetFxRatesUseCase getFxRates;
-
-    @MockitoBean
-    GetFxRateHistoryUseCase getFxRateHistory;
-
-    @MockitoBean
-    RefreshFxRateQuotesUseCase refreshFxRateQuotes;
-
-    @MockitoBean
-    FxRateFeedSettings fxRateFeedSettings;
-
-    @BeforeEach
-    void setUp() {
-        TestingAuthenticationToken auth = new TestingAuthenticationToken(ACTOR, "creds");
-        auth.setAuthenticated(true);
-        SecurityContextHolder.getContext().setAuthentication(auth);
-    }
 
     @Test
     @DisplayName("GET /fx-rates/USD/history → 200 with two quotes newest-first, rate as string")

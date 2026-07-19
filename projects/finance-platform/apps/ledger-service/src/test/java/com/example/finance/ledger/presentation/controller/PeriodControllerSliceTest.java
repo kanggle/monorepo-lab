@@ -16,7 +16,6 @@ import com.example.finance.ledger.domain.period.PeriodAccountTotal;
 import com.example.finance.ledger.domain.period.PeriodBalanceSnapshot;
 import com.example.finance.ledger.domain.period.PeriodStatus;
 import com.example.finance.ledger.presentation.advice.GlobalExceptionHandler;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -25,8 +24,6 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.security.authentication.TestingAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -51,10 +48,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(PeriodController.class)
 @AutoConfigureMockMvc(addFilters = false)
 @Import(GlobalExceptionHandler.class)
-class PeriodControllerSliceTest {
+class PeriodControllerSliceTest extends AbstractLedgerControllerSliceTest {
 
-    private static final ActorContext ACTOR =
-            new ActorContext("user-1", "finance", java.util.Set.of("finance.read"));
     private static final Instant FROM = Instant.parse("2026-01-01T00:00:00Z");
     private static final Instant TO = Instant.parse("2026-02-01T00:00:00Z");
 
@@ -65,11 +60,9 @@ class PeriodControllerSliceTest {
     @MockitoBean CloseAccountingPeriodUseCase closePeriod;
     @MockitoBean QueryAccountingPeriodUseCase queryPeriod;
 
-    @BeforeEach
-    void setUp() {
-        TestingAuthenticationToken auth = new TestingAuthenticationToken(ACTOR, "creds");
-        auth.setAuthenticated(true);
-        SecurityContextHolder.getContext().setAuthentication(auth);
+    @Override
+    protected ActorContext actor() {
+        return new ActorContext("user-1", "finance", java.util.Set.of("finance.read"));
     }
 
     private static Money krw(long m) {
