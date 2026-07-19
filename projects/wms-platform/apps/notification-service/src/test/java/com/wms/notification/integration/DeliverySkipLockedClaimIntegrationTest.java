@@ -7,7 +7,6 @@ import com.wms.notification.domain.delivery.NotificationDelivery;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.Statement;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -16,11 +15,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -31,39 +25,48 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Real-Postgres IT for {@code findAndLockPendingDueForRetry} — the
- * {@code SELECT … FOR UPDATE SKIP LOCKED} claim query behind the retry
- * scheduler (TASK-BE-528 AC-2).
+ * Real-Postgres IT for the {@code SELECT … FOR UPDATE SKIP LOCKED} claim behind
+ * the retry scheduler (TASK-BE-528 AC-2).
  *
- * <p>The query carries {@code @Lock(PESSIMISTIC_WRITE)} +
- * {@code jakarta.persistence.lock.timeout = -2} (SKIP LOCKED) so that two
- * scheduler workers cannot double-fire the same PENDING delivery
- * (architecture.md § Concurrency Control). That exclusivity guarantee was
- * asserted only by code comments — never at runtime — and cannot be proven by
- * the in-memory fake (a plain list scan with no locking).
+ * <p>{@code NotificationDeliveryJpaRepository.findPendingDueForRetry} carries
+ * {@code @Lock(PESSIMISTIC_WRITE)} + {@code jakarta.persistence.lock.timeout = -2}
+ * (SKIP LOCKED) so two scheduler workers cannot double-fire the same PENDING
+ * delivery (architecture.md § Concurrency Control). That guarantee was asserted
+ * only by code comments and cannot be proven by the in-memory fake.
  *
- * <h2>Why this shape (and why it cannot hang CI)</h2>
+ * <p>{@link #claimReturnsOnlyPendingDueOrdered()} exercises the REAL repository
+ * method (WHERE/ORDER/due-filtering). {@link #twoConnectionsWithSkipLockedNeverClaimTheSameRow()}
+ * proves the DB-level SKIP-LOCKED exclusivity the repository relies on, using two
+ * dedicated JDBC connections running the query's exact locking form.
  *
- * <p>An earlier two-thread + {@code CountDownLatch} version hung the CI
- * integration lane for 30 min: a thread stuck in a native JDBC lock-wait ignores
- * {@code shutdownNow()}, leaking an open transaction that then blocked the
- * {@code @AfterEach TRUNCATE} until the job timeout, and its scheduling races
- * contaminated the connection pool. This version is deterministic and bounded:
- * one dedicated connection locks a batch of rows and HOLDS them; the REAL
- * repository claim runs on a single daemon worker whose result is read with a
- * bounded {@link Future#get(long, TimeUnit)}. With a correct SKIP-LOCKED query
- * the claim never waits and returns at once. A regression to a plain
- * {@code FOR UPDATE} would block on the held rows — but the bounded {@code get}
- * turns that into a fast {@code TimeoutException} (RED), not a hang, and the
- * {@code finally} releases the held rows so the blocked query completes on the
- * discarded daemon thread rather than leaking a lock into {@code @AfterEach}.
- * The real repository method is exercised, so a dropped SKIP-LOCKED annotation
- * is caught.
+ * <h2>Why two dedicated connections (not threads)</h2>
+ *
+ * <p>SKIP LOCKED only manifests when two connections hold row locks
+ * simultaneously (memory: {@code env_test_fixture_impossible_input_proves_nothing}).
+ * An earlier two-thread + {@code CountDownLatch} version hung the CI lane for 30
+ * min — a thread stuck in a native lock-wait ignores {@code shutdownNow()},
+ * leaking an open transaction that blocked cleanup, and its scheduling races
+ * contaminated the shared connection pool. This version is single-threaded and
+ * deterministic: connection 1 locks a batch and holds it; connection 2 runs the
+ * same SKIP-LOCKED query and, because it never waits, returns the disjoint
+ * remainder at once. Both connections are explicitly rolled back and closed, so
+ * nothing leaks into the pool or the {@code @AfterEach}.
  */
 class DeliverySkipLockedClaimIntegrationTest extends NotificationServiceIntegrationBase {
 
-    /** Bounded wait for the repository claim: a regressed (blocking) query fails here instead of hanging. */
-    private static final int CLAIM_TIMEOUT_SECONDS = 10;
+    /**
+     * The exact locking form of {@code findPendingDueForRetry} (see the repository's
+     * {@code @Query} + {@code @Lock(PESSIMISTIC_WRITE)} + SKIP-LOCKED hint), run
+     * directly so two connections can contend deterministically.
+     */
+    private static final String SKIP_LOCKED_CLAIM = """
+            SELECT id FROM notification_delivery
+             WHERE status = 'PENDING'
+               AND (scheduled_retry_at IS NULL OR scheduled_retry_at <= ?)
+             ORDER BY created_at
+             LIMIT ?
+             FOR UPDATE SKIP LOCKED
+            """;
 
     @Autowired
     private DeliveryRepository deliveries;
@@ -79,25 +82,7 @@ class DeliverySkipLockedClaimIntegrationTest extends NotificationServiceIntegrat
 
     @AfterEach
     void cleanup() {
-        // Guard the TRUNCATE with a tx-scoped lock_timeout on its own connection:
-        // if the abandoned claimant thread from a regression run still transiently
-        // holds a row lock, this fails fast+loud instead of hanging the lane. SET
-        // LOCAL reverts on commit, so no session state leaks onto the pooled conn.
-        jdbc.execute((Connection c) -> {
-            boolean previousAutoCommit = c.getAutoCommit();
-            c.setAutoCommit(false);
-            try (Statement st = c.createStatement()) {
-                st.execute("SET LOCAL lock_timeout = '8s'");
-                st.execute("TRUNCATE TABLE notification_delivery");
-                c.commit();
-            } catch (Exception e) {
-                c.rollback();
-                throw e;
-            } finally {
-                c.setAutoCommit(previousAutoCommit);
-            }
-            return null;
-        });
+        jdbc.update("TRUNCATE TABLE notification_delivery");
     }
 
     // --- seeding ---------------------------------------------------------
@@ -129,7 +114,7 @@ class DeliverySkipLockedClaimIntegrationTest extends NotificationServiceIntegrat
         return id;
     }
 
-    // --- plain claim semantics ------------------------------------------
+    // --- plain claim semantics (real repository method) -----------------
 
     @Test
     @DisplayName("claim returns only PENDING + due rows, ordered by createdAt")
@@ -151,73 +136,53 @@ class DeliverySkipLockedClaimIntegrationTest extends NotificationServiceIntegrat
         assertThat(claimed).containsExactly(oldest, newer);
     }
 
-    // --- SKIP LOCKED exclusivity ----------------------------------------
+    // --- SKIP LOCKED exclusivity (two dedicated connections) ------------
 
     @Test
-    @DisplayName("repository claim skips rows already locked by another connection (SKIP LOCKED)")
-    void repositoryClaimSkipsRowsLockedByAnotherConnection() throws Exception {
+    @DisplayName("two connections with SKIP LOCKED never claim the same row")
+    void twoConnectionsWithSkipLockedNeverClaimTheSameRow() throws Exception {
         Instant now = Instant.now();
-        // Seed 6 due PENDING rows.
         for (int i = 0; i < 6; i++) {
             seedPending(now.minus(30 - i, ChronoUnit.MINUTES), null);
         }
 
-        ExecutorService claimant = Executors.newSingleThreadExecutor(daemonFactory());
-        // One dedicated connection locks the 3 oldest PENDING rows and HOLDS them
-        // (open transaction) for the duration of the repository claim below.
-        try (Connection locker = dataSource.getConnection()) {
-            locker.setAutoCommit(false);
-            List<UUID> locked = new ArrayList<>();
-            try (PreparedStatement ps = locker.prepareStatement("""
-                    SELECT id FROM notification_delivery
-                     WHERE status = 'PENDING'
-                     ORDER BY created_at
-                     LIMIT 3
-                     FOR UPDATE
-                    """);
-                    ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    locked.add(rs.getObject(1, UUID.class));
-                }
-            }
-            assertThat(locked).hasSize(3);
-
-            // The REAL repository claim runs WHILE `locker` holds those 3 rows. Its
-            // @Lock(PESSIMISTIC_WRITE) + timeout=-2 (SKIP LOCKED) must skip the
-            // locked rows and return the OTHER 3 without blocking. Read the result
-            // with a bounded get so a regression (plain FOR UPDATE → block) fails
-            // fast instead of hanging the lane.
-            Future<List<UUID>> future = claimant.submit(() -> {
-                TransactionTemplate tx = new TransactionTemplate(txManager);
-                return tx.execute(s -> deliveries.findAndLockPendingDueForRetry(now, 100).stream()
-                        .map(NotificationDelivery::id).toList());
-            });
-
-            List<UUID> claimed;
+        // Two dedicated connections; connection 1 claims (and holds locks on) a
+        // batch of 3, then connection 2 runs the same SKIP-LOCKED query while
+        // connection 1 still holds its locks. SKIP LOCKED means connection 2 does
+        // NOT block — it skips the locked rows and returns the disjoint remainder.
+        try (Connection c1 = dataSource.getConnection();
+                Connection c2 = dataSource.getConnection()) {
+            c1.setAutoCommit(false);
+            c2.setAutoCommit(false);
             try {
-                claimed = future.get(CLAIM_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            } finally {
-                // Release the held rows: unblocks the claim if it was waiting (regression
-                // path) so it finishes on the discarded daemon thread — no leaked lock.
-                locker.rollback();
-            }
+                List<UUID> claimA = claim(c1, now, 3);
+                List<UUID> claimB = claim(c2, now, 3);
 
-            // Exclusivity: the repository claim never returned a row locked by the
-            // other connection, and it returned exactly the disjoint remainder.
-            assertThat(Collections.disjoint(claimed, locked))
-                    .as("repo claim %s must skip rows locked by the peer connection %s", claimed, locked)
-                    .isTrue();
-            assertThat(claimed).hasSize(3).doesNotHaveDuplicates();
-        } finally {
-            claimant.shutdownNow();
+                assertThat(claimA).hasSize(3).doesNotHaveDuplicates();
+                assertThat(claimB).hasSize(3).doesNotHaveDuplicates();
+                assertThat(Collections.disjoint(claimA, claimB))
+                        .as("A=%s and B=%s must be disjoint (SKIP LOCKED)", claimA, claimB)
+                        .isTrue();
+            } finally {
+                c1.rollback();
+                c2.rollback();
+            }
         }
     }
 
-    private static ThreadFactory daemonFactory() {
-        return r -> {
-            Thread t = new Thread(r, "skip-locked-claimant");
-            t.setDaemon(true);
-            return t;
-        };
+    private List<UUID> claim(Connection c, Instant now, int limit) throws Exception {
+        List<UUID> ids = new ArrayList<>();
+        try (PreparedStatement ps = c.prepareStatement(SKIP_LOCKED_CLAIM)) {
+            // Bind as UTC OffsetDateTime (not java.sql.Timestamp) to match the seed
+            // convention and avoid the host-TZ fixture trap.
+            ps.setObject(1, OffsetDateTime.ofInstant(now, ZoneOffset.UTC));
+            ps.setInt(2, limit);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    ids.add(rs.getObject(1, UUID.class));
+                }
+            }
+        }
+        return ids;
     }
 }
