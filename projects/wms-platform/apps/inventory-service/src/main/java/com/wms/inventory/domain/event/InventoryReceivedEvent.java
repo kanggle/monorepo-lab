@@ -11,9 +11,15 @@ import java.util.UUID;
  * <p>One event per consumed putaway — covers all lines. {@link #aggregateId()}
  * is the first affected Inventory row's id (per
  * {@code inventory-events.md} §1).
+ *
+ * @param warehouseCode business code of {@code warehouseId}, resolved best-effort from the
+ *                      warehouse master read-model (ADR-MONO-050 D9 / TASK-SCM-BE-037).
+ *                      {@code null} when the snapshot is not yet populated — the event
+ *                      still fires; downstream simply omits the inbound-expected addressing.
  */
 public record InventoryReceivedEvent(
         UUID warehouseId,
+        String warehouseCode,
         UUID sourceEventId,
         UUID asnId,
         List<Line> lines,

@@ -63,7 +63,7 @@ class EventDedupeTest {
         when(clock.now()).thenReturn(now);
         // First time: not a duplicate
         when(eventDedupePort.isDuplicate(eventId)).thenReturn(false);
-        InventoryNode node = InventoryNode.autoRegisterWmsWarehouse(nodeId, "scm", "WH-001", now);
+        InventoryNode node = InventoryNode.autoRegisterWmsWarehouse(nodeId, "scm", "WH-001", null, now);
         when(nodeRepository.findByTenantIdAndExternalId("scm", "WH-001"))
                 .thenReturn(Optional.of(node));
         when(snapshotRepository.findByNodeIdAndSku(eq(nodeId), any(Sku.class), eq("scm")))
@@ -72,7 +72,7 @@ class EventDedupeTest {
         when(stalenessRepository.findByNodeId(nodeId)).thenReturn(Optional.empty());
         when(stalenessRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        service.applyInventoryReceived("WH-001", "SKU-001", 50L, eventId, now, "scm",
+        service.applyInventoryReceived("WH-001", "SKU-001", 50L, null, eventId, now, "scm",
                 "wms.inventory.received.v1");
 
         verify(snapshotRepository).save(any(InventorySnapshot.class));
@@ -85,7 +85,7 @@ class EventDedupeTest {
         // Duplicate: isDuplicate returns true
         when(eventDedupePort.isDuplicate(eventId)).thenReturn(true);
 
-        service.applyInventoryReceived("WH-001", "SKU-001", 50L, eventId, now, "scm",
+        service.applyInventoryReceived("WH-001", "SKU-001", 50L, null, eventId, now, "scm",
                 "wms.inventory.received.v1");
 
         // No snapshot mutation
@@ -98,7 +98,7 @@ class EventDedupeTest {
         when(clock.now()).thenReturn(now);
         // First call: not duplicate
         when(eventDedupePort.isDuplicate(eventId)).thenReturn(false);
-        InventoryNode node = InventoryNode.autoRegisterWmsWarehouse(nodeId, "scm", "WH-001", now);
+        InventoryNode node = InventoryNode.autoRegisterWmsWarehouse(nodeId, "scm", "WH-001", null, now);
         when(nodeRepository.findByTenantIdAndExternalId("scm", "WH-001"))
                 .thenReturn(Optional.of(node));
         when(snapshotRepository.findByNodeIdAndSku(eq(nodeId), any(Sku.class), eq("scm")))
@@ -107,12 +107,12 @@ class EventDedupeTest {
         when(stalenessRepository.findByNodeId(nodeId)).thenReturn(Optional.empty());
         when(stalenessRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        service.applyInventoryReceived("WH-001", "SKU-001", 50L, eventId, now, "scm",
+        service.applyInventoryReceived("WH-001", "SKU-001", 50L, null, eventId, now, "scm",
                 "wms.inventory.received.v1");
 
         // Second call: now duplicate
         when(eventDedupePort.isDuplicate(eventId)).thenReturn(true);
-        service.applyInventoryReceived("WH-001", "SKU-001", 50L, eventId, now, "scm",
+        service.applyInventoryReceived("WH-001", "SKU-001", 50L, null, eventId, now, "scm",
                 "wms.inventory.received.v1");
 
         // snapshotRepository.save called exactly once

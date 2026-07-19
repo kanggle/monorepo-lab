@@ -46,6 +46,10 @@ public class InventoryNodeJpaEntity {
     @Column(name = "contact_info", columnDefinition = "jsonb")
     private String contactInfo;
 
+    /** Nullable business warehouse code from wms mutation events (ADR-MONO-050 D9). */
+    @Column(name = "warehouse_code", length = 100)
+    private String warehouseCode;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 

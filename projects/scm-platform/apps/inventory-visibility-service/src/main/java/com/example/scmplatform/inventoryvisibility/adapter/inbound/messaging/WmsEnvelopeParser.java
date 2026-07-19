@@ -32,6 +32,18 @@ final class WmsEnvelopeParser {
     }
 
     /**
+     * Extracts an optional string value from {@code map} at {@code key}.
+     * Returns {@code null} when the key is absent or its value is null — used for
+     * additive, nullable payload fields such as {@code warehouseCode}
+     * (ADR-MONO-050 D9 / TASK-SCM-BE-037), whose absence must never fail the envelope
+     * (older wms producers do not emit it at all).
+     */
+    static String getNullableStringField(Map<String, Object> map, String key) {
+        Object val = map.get(key);
+        return val == null ? null : val.toString();
+    }
+
+    /**
      * Extracts a long value from {@code map} at {@code key}.
      * Returns {@code 0} if the key is absent or the value is null.
      */

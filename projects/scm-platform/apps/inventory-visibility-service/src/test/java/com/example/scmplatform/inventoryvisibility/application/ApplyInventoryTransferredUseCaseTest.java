@@ -66,8 +66,8 @@ class ApplyInventoryTransferredUseCaseTest {
 
     @Test
     void applyTransfer_decrementsSourceAndIncrementsDestination() {
-        InventoryNode srcNode = InventoryNode.autoRegisterWmsWarehouse(srcNodeId, "scm", "WH-SRC", now);
-        InventoryNode dstNode = InventoryNode.autoRegisterWmsWarehouse(dstNodeId, "scm", "WH-DST", now);
+        InventoryNode srcNode = InventoryNode.autoRegisterWmsWarehouse(srcNodeId, "scm", "WH-SRC", null, now);
+        InventoryNode dstNode = InventoryNode.autoRegisterWmsWarehouse(dstNodeId, "scm", "WH-DST", null, now);
 
         when(nodeRepository.findByTenantIdAndExternalId("scm", "WH-SRC"))
                 .thenReturn(Optional.of(srcNode));
@@ -87,7 +87,7 @@ class ApplyInventoryTransferredUseCaseTest {
         when(stalenessRepository.findByNodeId(any())).thenReturn(Optional.empty());
         when(stalenessRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        service.applyInventoryTransferred("WH-SRC", "WH-DST", "SKU-001", 30L,
+        service.applyInventoryTransferred("WH-SRC", "WH-DST", "SKU-001", 30L, null,
                 eventId, now, "scm", "wms.inventory.transferred.v1");
 
         // Source should have been decremented: 100 - 30 = 70
@@ -108,10 +108,10 @@ class ApplyInventoryTransferredUseCaseTest {
         when(nodeRepository.findByTenantIdAndExternalId("scm", "WH-NEW-SRC"))
                 .thenReturn(Optional.empty());
         InventoryNode newSrcNode = InventoryNode.autoRegisterWmsWarehouse(
-                NodeId.of(UUID.randomUUID()), "scm", "WH-NEW-SRC", now);
+                NodeId.of(UUID.randomUUID()), "scm", "WH-NEW-SRC", null, now);
         when(nodeRepository.save(any())).thenReturn(newSrcNode);
 
-        InventoryNode dstNode = InventoryNode.autoRegisterWmsWarehouse(dstNodeId, "scm", "WH-DST", now);
+        InventoryNode dstNode = InventoryNode.autoRegisterWmsWarehouse(dstNodeId, "scm", "WH-DST", null, now);
         when(nodeRepository.findByTenantIdAndExternalId("scm", "WH-DST"))
                 .thenReturn(Optional.of(dstNode));
 
@@ -121,7 +121,7 @@ class ApplyInventoryTransferredUseCaseTest {
         when(stalenessRepository.findByNodeId(any())).thenReturn(Optional.empty());
         when(stalenessRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        service.applyInventoryTransferred("WH-NEW-SRC", "WH-DST", "SKU-001", 10L,
+        service.applyInventoryTransferred("WH-NEW-SRC", "WH-DST", "SKU-001", 10L, null,
                 eventId, now, "scm", "wms.inventory.transferred.v1");
 
         // Two snapshots created (src with ZERO base, dst with transfer quantity)

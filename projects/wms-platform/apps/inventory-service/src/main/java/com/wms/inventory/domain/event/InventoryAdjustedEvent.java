@@ -12,11 +12,19 @@ import java.util.UUID;
  *
  * <p>Authoritative payload shape:
  * {@code specs/contracts/events/inventory-events.md} §2.
+ *
+ * @param warehouseCode business code of the warehouse the adjusted inventory belongs to.
+ *                      This payload carries no {@code warehouseId}, so the code is resolved
+ *                      best-effort from the warehouse master read-model via the
+ *                      {@code Inventory} aggregate's {@code warehouseId}
+ *                      (ADR-MONO-050 D9 / TASK-SCM-BE-037). {@code null} when the snapshot
+ *                      is not yet populated.
  */
 public record InventoryAdjustedEvent(
         UUID adjustmentId,
         UUID inventoryId,
         UUID locationId,
+        String warehouseCode,
         UUID skuId,
         UUID lotId,
         Bucket bucket,

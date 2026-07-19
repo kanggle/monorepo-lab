@@ -23,7 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -65,14 +67,15 @@ public class InventoryVisibilityApplicationService {
      */
     @Transactional
     public void applyInventoryReceived(String warehouseId, String skuId,
-                                        long qtyReceived, UUID eventId,
+                                        long qtyReceived, String warehouseCode,
+                                        UUID eventId,
                                         Instant occurredAt, String tenantId,
                                         String sourceTopic) {
         if (eventDedupePort.isDuplicate(eventId)) {
             log.debug("Duplicate event skipped: eventId={} topic={}", eventId, sourceTopic);
             return;
         }
-        InventoryNode node = resolveOrCreateNode(warehouseId, NodeType.WMS_WAREHOUSE, tenantId);
+        InventoryNode node = resolveOrCreateNode(warehouseId, NodeType.WMS_WAREHOUSE, tenantId, warehouseCode);
         applySnapshotDelta(node.getId(), Sku.of(skuId),
                 Quantity.of(BigDecimal.valueOf(qtyReceived)), true,
                 eventId, occurredAt, tenantId);
@@ -87,14 +90,14 @@ public class InventoryVisibilityApplicationService {
      */
     @Transactional
     public void applyInventoryAdjusted(String warehouseId, String skuId,
-                                        long delta, UUID eventId,
+                                        long delta, String warehouseCode, UUID eventId,
                                         Instant occurredAt, String tenantId,
                                         String sourceTopic) {
         if (eventDedupePort.isDuplicate(eventId)) {
             log.debug("Duplicate event skipped: eventId={} topic={}", eventId, sourceTopic);
             return;
         }
-        InventoryNode node = resolveOrCreateNode(warehouseId, NodeType.WMS_WAREHOUSE, tenantId);
+        InventoryNode node = resolveOrCreateNode(warehouseId, NodeType.WMS_WAREHOUSE, tenantId, warehouseCode);
         Quantity absDelta = Quantity.of(BigDecimal.valueOf(Math.abs(delta)));
         boolean isAddition = delta >= 0;
 
@@ -115,14 +118,16 @@ public class InventoryVisibilityApplicationService {
     @Transactional
     public void applyInventoryTransferred(String sourceWarehouseId, String destWarehouseId,
                                            String skuId, long quantity,
+                                           String warehouseCode,
                                            UUID eventId, Instant occurredAt,
                                            String tenantId, String sourceTopic) {
         if (eventDedupePort.isDuplicate(eventId)) {
             log.debug("Duplicate event skipped: eventId={} topic={}", eventId, sourceTopic);
             return;
         }
-        InventoryNode srcNode = resolveOrCreateNode(sourceWarehouseId, NodeType.WMS_WAREHOUSE, tenantId);
-        InventoryNode dstNode = resolveOrCreateNode(destWarehouseId, NodeType.WMS_WAREHOUSE, tenantId);
+        // Transfers are intra-warehouse, so both endpoints carry the same warehouse code.
+        InventoryNode srcNode = resolveOrCreateNode(sourceWarehouseId, NodeType.WMS_WAREHOUSE, tenantId, warehouseCode);
+        InventoryNode dstNode = resolveOrCreateNode(destWarehouseId, NodeType.WMS_WAREHOUSE, tenantId, warehouseCode);
         Quantity qty = Quantity.of(BigDecimal.valueOf(quantity));
         Sku sku = Sku.of(skuId);
 
@@ -159,6 +164,43 @@ public class InventoryVisibilityApplicationService {
     @Transactional(readOnly = true)
     public List<InventorySnapshot> getAllSnapshotsAcrossTenants() {
         return snapshotRepository.findAllAcrossTenants();
+    }
+
+    /**
+     * As {@link #getAllSnapshotsAcrossTenants()}, but each snapshot is paired with its
+     * node's business {@code warehouseCode} (ADR-MONO-050 D9 / TASK-SCM-BE-037) so the
+     * demand-planning batch sweep can address a replenishment PO by code rather than uuid.
+     *
+     * <p>The code is nullable: the owning node may not have learned one yet (wms emits it
+     * best-effort). A null code never omits the row — it only means the downstream
+     * inbound-expected addressing is skipped for that warehouse.
+     */
+    @Transactional(readOnly = true)
+    public List<SnapshotWithWarehouseCode> getAllSnapshotsAcrossTenantsWithWarehouseCode() {
+        // Snapshots are keyed per (node, sku), so ONE warehouse node backs many rows and a
+        // naive per-row lookup re-reads the same node repeatedly. Memoise for the duration of
+        // this read: the projection then costs one lookup per DISTINCT node instead of one per
+        // snapshot row (the sweep reads every row). Deliberately local — no batch-fetch method
+        // is added to the node port for a read concern, and a call-scoped map cannot go stale.
+        // NOTE: containsKey/put, not computeIfAbsent — computeIfAbsent does NOT record a null
+        // result, so it would re-query on every row for exactly the nodes whose code is still
+        // null (the initial / fail-closed state). Caching the null is the whole point here.
+        Map<NodeId, String> warehouseCodeByNode = new HashMap<>();
+        return snapshotRepository.findAllAcrossTenants().stream()
+                .map(s -> {
+                    NodeId nodeId = s.getNodeId();
+                    if (!warehouseCodeByNode.containsKey(nodeId)) {
+                        warehouseCodeByNode.put(nodeId, nodeRepository.findById(nodeId)
+                                .map(InventoryNode::getWarehouseCode)
+                                .orElse(null));
+                    }
+                    return new SnapshotWithWarehouseCode(s, warehouseCodeByNode.get(nodeId));
+                })
+                .toList();
+    }
+
+    /** Read-projection pairing a snapshot with its node's nullable warehouse code. */
+    public record SnapshotWithWarehouseCode(InventorySnapshot snapshot, String warehouseCode) {
     }
 
     @Transactional(readOnly = true)
@@ -246,15 +288,34 @@ public class InventoryVisibilityApplicationService {
         }
     }
 
-    private InventoryNode resolveOrCreateNode(String externalId, NodeType type, String tenantId) {
-        return nodeRepository.findByTenantIdAndExternalId(tenantId, externalId)
-                .orElseGet(() -> {
-                    // Edge Case 3: auto-register node on first event
-                    log.info("auto-registering node: externalId={} type={} tenant={}", externalId, type, tenantId);
-                    InventoryNode newNode = InventoryNode.autoRegisterWmsWarehouse(
-                            NodeId.of(UUID.randomUUID()), tenantId, externalId, clock.now());
-                    return nodeRepository.save(newNode);
-                });
+    /**
+     * Resolve the node for {@code externalId}, auto-registering it on first event
+     * (Edge Case 3).
+     *
+     * <p>ADR-MONO-050 D9: an existing node learns the wms {@code warehouseCode}
+     * set-if-present — a {@code null} incoming code (wms's warehouse master snapshot
+     * not yet populated) is ignored rather than wiping a previously stored code, and
+     * the extra write is skipped when the value is unchanged.
+     */
+    private InventoryNode resolveOrCreateNode(String externalId, NodeType type,
+                                              String tenantId, String warehouseCode) {
+        Optional<InventoryNode> existing =
+                nodeRepository.findByTenantIdAndExternalId(tenantId, externalId);
+        if (existing.isPresent()) {
+            InventoryNode node = existing.get();
+            if (node.applyWarehouseCodeIfPresent(warehouseCode, clock.now())) {
+                log.info("node warehouseCode updated: externalId={} tenant={} warehouseCode={}",
+                        externalId, tenantId, warehouseCode);
+                return nodeRepository.save(node);
+            }
+            return node;
+        }
+        // Edge Case 3: auto-register node on first event
+        log.info("auto-registering node: externalId={} type={} tenant={} warehouseCode={}",
+                externalId, type, tenantId, warehouseCode);
+        InventoryNode newNode = InventoryNode.autoRegisterWmsWarehouse(
+                NodeId.of(UUID.randomUUID()), tenantId, externalId, warehouseCode, clock.now());
+        return nodeRepository.save(newNode);
     }
 
     private void updateStaleness(NodeId nodeId, String tenantId, UUID eventId, Instant eventAt) {

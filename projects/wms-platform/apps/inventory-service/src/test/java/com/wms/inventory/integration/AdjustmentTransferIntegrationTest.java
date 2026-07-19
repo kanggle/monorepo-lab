@@ -62,6 +62,7 @@ class AdjustmentTransferIntegrationTest extends InventoryServiceIntegrationBase 
         jdbc.update("TRUNCATE TABLE inventory_movement");
         jdbc.update("DELETE FROM inventory");
         jdbc.update("DELETE FROM location_snapshot");
+        jdbc.update("DELETE FROM warehouse_snapshot");
         if (thresholdPort instanceof InMemoryLowStockThresholdAdapter adapter) {
             adapter.clearAll();
         }
@@ -153,6 +154,79 @@ class AdjustmentTransferIntegrationTest extends InventoryServiceIntegrationBase 
             assertThat(payload.get("availableQty").asInt()).isEqualTo(15);
             assertThat(payload.get("triggeringEventType").asText()).isEqualTo("inventory.adjusted");
         }
+    }
+
+    /**
+     * ADR-MONO-050 D9 / TASK-SCM-BE-037: the mutation events carry the warehouse CODE so
+     * the cross-project scm batch replenishment leg can address a PO by code. Resolved from
+     * the warehouse master read-model, exactly like the §7 alert path.
+     */
+    @Test
+    @DisplayName("adjusted/transferred payloads carry warehouseCode when the master snapshot exists")
+    void mutationEventsCarryWarehouseCode() throws Exception {
+        UUID warehouse = UUID.randomUUID();
+        seedWarehouseSnapshot(warehouse, "WH01");
+        UUID inventoryId = seedInventoryRow(warehouse, 100);
+
+        adjustStock.adjust(new AdjustStockCommand(
+                AdjustOperation.REGULAR, inventoryId, Bucket.AVAILABLE, -10,
+                ReasonCode.ADJUSTMENT_LOSS, "lost in cycle count",
+                "actor-1", UUID.randomUUID().toString()));
+
+        try (KafkaConsumer<String, String> consumer = newConsumer(TOPIC_ADJUSTED)) {
+            JsonNode payload = pollOne(consumer, TOPIC_ADJUSTED, 30).get("payload");
+            assertThat(payload.get("warehouseCode").asText()).isEqualTo("WH01");
+        }
+
+        UUID source = UUID.randomUUID();
+        UUID target = UUID.randomUUID();
+        UUID sku = UUID.randomUUID();
+        seedLocationSnapshot(source, warehouse);
+        seedLocationSnapshot(target, warehouse);
+        seedInventoryRowAt(warehouse, source, sku, 100);
+
+        transferStock.transfer(new TransferStockCommand(
+                source, target, sku, null, 30,
+                TransferReasonCode.TRANSFER_INTERNAL, "rebalance",
+                "actor-1", UUID.randomUUID().toString()));
+
+        try (KafkaConsumer<String, String> consumer = newConsumer(TOPIC_TRANSFERRED)) {
+            JsonNode payload = pollOne(consumer, TOPIC_TRANSFERRED, 30).get("payload");
+            assertThat(payload.get("warehouseCode").asText()).isEqualTo("WH01");
+        }
+    }
+
+    /**
+     * The code is best-effort: with no warehouse snapshot (startup race) the payload must
+     * still be emitted with a null code — a missing code never blocks the mutation.
+     */
+    @Test
+    @DisplayName("adjusted payload warehouseCode is null (not absent, not fatal) without a snapshot")
+    void adjustedEventWarehouseCodeNullWithoutSnapshot() throws Exception {
+        UUID warehouse = UUID.randomUUID();  // deliberately NOT seeded into warehouse_snapshot
+        UUID inventoryId = seedInventoryRow(warehouse, 100);
+
+        adjustStock.adjust(new AdjustStockCommand(
+                AdjustOperation.REGULAR, inventoryId, Bucket.AVAILABLE, -10,
+                ReasonCode.ADJUSTMENT_LOSS, "lost in cycle count",
+                "actor-1", UUID.randomUUID().toString()));
+
+        try (KafkaConsumer<String, String> consumer = newConsumer(TOPIC_ADJUSTED)) {
+            JsonNode payload = pollOne(consumer, TOPIC_ADJUSTED, 30).get("payload");
+            assertThat(payload.has("warehouseCode")).isTrue();
+            assertThat(payload.get("warehouseCode").isNull()).isTrue();
+            // The mutation itself still applied.
+            assertThat(payload.get("inventory").get("availableQty").asInt()).isEqualTo(90);
+        }
+    }
+
+    private void seedWarehouseSnapshot(UUID warehouseId, String warehouseCode) {
+        java.time.OffsetDateTime now = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC);
+        jdbc.update("""
+                INSERT INTO warehouse_snapshot
+                (id, warehouse_code, status, cached_at, master_version)
+                VALUES (?, ?, 'ACTIVE', ?, 1)
+                """, warehouseId, warehouseCode, now);
     }
 
     private void seedLocationSnapshot(UUID locationId, UUID warehouseId) {

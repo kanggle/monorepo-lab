@@ -35,6 +35,7 @@ import com.wms.inventory.domain.model.StockAdjustment;
 import com.wms.inventory.domain.model.masterref.LocationSnapshot;
 import com.wms.inventory.domain.model.masterref.LotSnapshot;
 import com.wms.inventory.domain.model.masterref.SkuSnapshot;
+import com.wms.inventory.domain.model.masterref.WarehouseSnapshot;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
@@ -81,7 +82,7 @@ class AdjustStockServiceTest {
                 thresholdAdapter, debounceAdapter, masterReadModel, outbox);
         service = new AdjustStockService(
                 invRepo, movementRepo, adjustmentRepo, outbox,
-                new MasterRefValidator(masterReadModel),
+                new MasterRefValidator(masterReadModel), masterReadModel,
                 lowStockDetection, Clock.fixed(NOW, ZoneOffset.UTC),
                 new SimpleMeterRegistry());
     }
@@ -277,6 +278,57 @@ class AdjustStockServiceTest {
         assertThat(secondAlertCount).isEqualTo(1);  // unchanged
     }
 
+    // ---- ADR-MONO-050 D9: warehouseCode on the mutation event -----------------
+
+    @Test
+    void adjustedEventCarriesWarehouseCodeWhenMasterSnapshotPresent() {
+        masterReadModel.putWarehouse(WAREHOUSE, "WH01");
+        UUID invId = seed(100, 0, 0);
+
+        service.adjust(new AdjustStockCommand(
+                AdjustOperation.REGULAR, invId, Bucket.AVAILABLE, -10,
+                ReasonCode.ADJUSTMENT_LOSS, "lost", "actor", "idem-wc-1"));
+
+        assertThat(adjustedEvent().warehouseCode()).isEqualTo("WH01");
+    }
+
+    @Test
+    void adjustedEventWarehouseCodeNullWhenMasterSnapshotAbsent() {
+        // No putWarehouse(..) — startup race. The event must still be emitted.
+        UUID invId = seed(100, 0, 0);
+
+        service.adjust(new AdjustStockCommand(
+                AdjustOperation.REGULAR, invId, Bucket.AVAILABLE, -10,
+                ReasonCode.ADJUSTMENT_LOSS, "lost", "actor", "idem-wc-2"));
+
+        assertThat(adjustedEvent().warehouseCode()).isNull();
+    }
+
+    @Test
+    void markDamagedAndWriteOffEventsAlsoCarryWarehouseCode() {
+        masterReadModel.putWarehouse(WAREHOUSE, "WH02");
+        UUID invId = seed(100, 0, 0);
+
+        service.adjust(new AdjustStockCommand(
+                AdjustOperation.MARK_DAMAGED, invId, null, 5,
+                null, "broken", "actor", "idem-wc-3"));
+        service.adjust(new AdjustStockCommand(
+                AdjustOperation.WRITE_OFF_DAMAGED, invId, null, 5,
+                null, "scrapped", "actor", "idem-wc-4"));
+
+        assertThat(outbox.events.stream()
+                .filter(e -> e instanceof InventoryAdjustedEvent)
+                .map(e -> ((InventoryAdjustedEvent) e).warehouseCode()))
+                .containsExactly("WH02", "WH02");
+    }
+
+    private InventoryAdjustedEvent adjustedEvent() {
+        return outbox.events.stream()
+                .filter(e -> e instanceof InventoryAdjustedEvent)
+                .map(InventoryAdjustedEvent.class::cast)
+                .findFirst().orElseThrow();
+    }
+
     private UUID seed(int available, int reserved, int damaged) {
         UUID id = UUID.randomUUID();
         Inventory inv = Inventory.restore(id, WAREHOUSE, LOCATION, SKU, null,
@@ -321,9 +373,18 @@ class AdjustStockServiceTest {
     }
 
     private static class FakeMasterReadModel implements MasterReadModelPort {
+        final Map<UUID, WarehouseSnapshot> warehouses = new HashMap<>();
+
+        void putWarehouse(UUID id, String warehouseCode) {
+            warehouses.put(id, new WarehouseSnapshot(
+                    id, warehouseCode, WarehouseSnapshot.Status.ACTIVE, NOW, 1L));
+        }
+
         @Override public Optional<LocationSnapshot> findLocation(UUID id) { return Optional.empty(); }
         @Override public Optional<SkuSnapshot> findSku(UUID id) { return Optional.empty(); }
         @Override public Optional<LotSnapshot> findLot(UUID id) { return Optional.empty(); }
-        @Override public Optional<com.wms.inventory.domain.model.masterref.WarehouseSnapshot> findWarehouse(UUID id) { return Optional.empty(); }
+        @Override public Optional<WarehouseSnapshot> findWarehouse(UUID id) {
+            return Optional.ofNullable(warehouses.get(id));
+        }
     }
 }

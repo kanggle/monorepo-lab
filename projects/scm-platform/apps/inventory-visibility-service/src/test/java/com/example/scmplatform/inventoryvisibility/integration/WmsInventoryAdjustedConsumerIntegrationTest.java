@@ -67,6 +67,48 @@ class WmsInventoryAdjustedConsumerIntegrationTest extends AbstractInventoryVisib
     }
 
     @Test
+    @DisplayName("adjusted with warehouseCode → node persists warehouse_code (ADR-MONO-050 D9)")
+    void adjusted_persistsWarehouseCodeOnNode() {
+        String warehouseExternalId = "wh-it-adjusted-code-" + UUID.randomUUID();
+        String skuId = "sku-it-adjusted-code-" + UUID.randomUUID();
+        UUID eventId = UUID.randomUUID();
+
+        publish(TOPIC_INVENTORY_ADJUSTED, eventId.toString(),
+                adjustedEnvelope(eventId, Instant.now(), warehouseExternalId, skuId, 10, "WH02"));
+
+        await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
+            Optional<InventoryNodeJpaEntity> node =
+                    nodeJpa.findByTenantIdAndNodeExternalId(TENANT_SCM, warehouseExternalId);
+            assertThat(node).as("InventoryNode auto-created").isPresent();
+            assertThat(node.get().getWarehouseCode()).isEqualTo("WH02");
+        });
+    }
+
+    @Test
+    @DisplayName("adjusted without warehouseCode → node still created, code null (additive field)")
+    void adjusted_withoutWarehouseCode_nodeStillCreated() {
+        String warehouseExternalId = "wh-it-adjusted-nocode-" + UUID.randomUUID();
+        String skuId = "sku-it-adjusted-nocode-" + UUID.randomUUID();
+        UUID eventId = UUID.randomUUID();
+
+        // Field omitted entirely — exactly what an older wms producer emits.
+        publish(TOPIC_INVENTORY_ADJUSTED, eventId.toString(),
+                adjustedEnvelope(eventId, Instant.now(), warehouseExternalId, skuId, 10, null));
+
+        await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
+            assertThat(dedupeJpa.findById(eventId.toString())).isPresent();
+            InventoryNodeJpaEntity node = nodeJpa
+                    .findByTenantIdAndNodeExternalId(TENANT_SCM, warehouseExternalId).orElseThrow();
+            assertThat(node.getWarehouseCode()).isNull();
+            // A missing code must never block the projection.
+            BigDecimal qty = snapshotJpa.findAll().stream()
+                    .filter(s -> s.getNodeId().equals(node.getId()) && s.getSku().equals(skuId))
+                    .findFirst().orElseThrow().getQuantity();
+            assertThat(qty).isEqualByComparingTo(BigDecimal.TEN);
+        });
+    }
+
+    @Test
     @DisplayName("adjusted (delta=-3) on existing snapshot subtracts quantity")
     void adjusted_negativeDelta_onExistingSnapshot_subtractsQuantity() {
         String warehouseExternalId = "wh-it-neg-" + UUID.randomUUID();

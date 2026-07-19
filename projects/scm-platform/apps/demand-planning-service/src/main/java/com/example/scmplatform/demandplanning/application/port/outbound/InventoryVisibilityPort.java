@@ -16,5 +16,16 @@ public interface InventoryVisibilityPort {
      */
     List<SkuWarehouseQty> findAllBelowReorderPoint(String tenantId);
 
-    record SkuWarehouseQty(String skuCode, UUID warehouseId, int availableQty) {}
+    /**
+     * A batch sweep candidate.
+     *
+     * @param warehouseId   the IVS node id — the dedup-key dimension only, never emitted downstream
+     * @param warehouseCode the node's business warehouse CODE (ADR-MONO-050 D9 /
+     *                      TASK-SCM-BE-037). <b>Nullable</b>: wms resolves it best-effort, so
+     *                      IVS may not have learned one yet. A null code never suppresses the
+     *                      suggestion — it only omits the wms inbound-expected addressing on
+     *                      the materialized PO (fail-closed, no uuid leak).
+     */
+    record SkuWarehouseQty(String skuCode, UUID warehouseId, int availableQty,
+                           String warehouseCode) {}
 }

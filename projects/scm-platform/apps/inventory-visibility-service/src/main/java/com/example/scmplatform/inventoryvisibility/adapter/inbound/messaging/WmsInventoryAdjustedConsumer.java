@@ -52,9 +52,11 @@ public class WmsInventoryAdjustedConsumer {
             String locationId = WmsEnvelopeParser.getStringField(payload, "locationId");
             String skuId = WmsEnvelopeParser.getStringField(payload, "skuId");
             long delta = WmsEnvelopeParser.getLongField(payload, "delta");
+            // ADR-MONO-050 D9: additive + nullable — absent from older wms producers.
+            String warehouseCode = WmsEnvelopeParser.getNullableStringField(payload, "warehouseCode");
 
             applicationService.applyInventoryAdjusted(
-                    locationId, skuId, delta,
+                    locationId, skuId, delta, warehouseCode,
                     envelope.eventId(), envelope.occurredAt(),
                     TENANT_ID, TOPIC);
 

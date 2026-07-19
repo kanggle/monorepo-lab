@@ -56,4 +56,29 @@ class InventoryNodeAutoCreateIntegrationTest extends AbstractInventoryVisibility
             assertThat(dedupeJpa.findById(eventId.toString())).isPresent();
         });
     }
+
+    /**
+     * ADR-MONO-050 D9 / TASK-SCM-BE-037: the auto-register path must persist the incoming
+     * warehouse code on the brand-new node, so a warehouse first seen by the batch sweep
+     * is already addressable by code. Also exercises the V2 migration's nullable
+     * {@code warehouse_code} column round-trip.
+     */
+    @Test
+    @DisplayName("새 node 자동 생성 시 warehouse_code 도 함께 저장된다")
+    void newNodeExternalId_autoCreatesNode_withWarehouseCode() {
+        String warehouseId = "wh-code-autocreate-" + UUID.randomUUID();
+        String skuId = "sku-code-autocreate-" + UUID.randomUUID();
+        UUID eventId = UUID.randomUUID();
+
+        publish(TOPIC_INVENTORY_ADJUSTED, eventId.toString(),
+                adjustedEnvelope(eventId, Instant.now(), warehouseId, skuId, 1, "WH03"));
+
+        await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
+            Optional<InventoryNodeJpaEntity> node =
+                    nodeJpa.findByTenantIdAndNodeExternalId(TENANT_SCM, warehouseId);
+            assertThat(node).as("auto-created InventoryNode").isPresent();
+            assertThat(node.get().getWarehouseCode()).isEqualTo("WH03");
+            assertThat(node.get().getContactInfo()).isNull();
+        });
+    }
 }

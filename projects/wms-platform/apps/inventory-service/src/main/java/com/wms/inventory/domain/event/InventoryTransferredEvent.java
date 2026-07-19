@@ -10,10 +10,16 @@ import java.util.UUID;
  *
  * <p>Authoritative payload shape:
  * {@code specs/contracts/events/inventory-events.md} §3.
+ *
+ * @param warehouseCode business code of {@code warehouseId} (both endpoints share it —
+ *                      transfers are intra-warehouse), resolved best-effort from the
+ *                      warehouse master read-model (ADR-MONO-050 D9 / TASK-SCM-BE-037).
+ *                      {@code null} when the snapshot is not yet populated.
  */
 public record InventoryTransferredEvent(
         UUID transferId,
         UUID warehouseId,
+        String warehouseCode,
         UUID skuId,
         UUID lotId,
         int quantity,

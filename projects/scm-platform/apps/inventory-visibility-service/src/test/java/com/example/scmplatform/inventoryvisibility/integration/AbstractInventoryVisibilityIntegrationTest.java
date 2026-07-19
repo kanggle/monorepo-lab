@@ -187,12 +187,27 @@ public abstract class AbstractInventoryVisibilityIntegrationTest {
      */
     protected String adjustedEnvelope(UUID eventId, Instant occurredAt,
                                       String locationId, String skuId, long delta) {
+        return adjustedEnvelope(eventId, occurredAt, locationId, skuId, delta, null);
+    }
+
+    /**
+     * As {@link #adjustedEnvelope(UUID, Instant, String, String, long)}, with the additive
+     * {@code warehouseCode} (ADR-MONO-050 D9 / TASK-SCM-BE-037). Pass {@code null} to omit
+     * the field entirely — that is exactly what an older wms producer emits, so the
+     * consumer must tolerate its absence.
+     */
+    protected String adjustedEnvelope(UUID eventId, Instant occurredAt,
+                                      String locationId, String skuId, long delta,
+                                      String warehouseCode) {
         Map<String, Object> env = baseEnvelope(eventId, "inventory.adjusted",
                 occurredAt, "inventory", locationId);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("locationId", locationId);
         payload.put("skuId", skuId);
         payload.put("delta", delta);
+        if (warehouseCode != null) {
+            payload.put("warehouseCode", warehouseCode);
+        }
         env.put("payload", payload);
         return toJson(env);
     }
@@ -203,10 +218,24 @@ public abstract class AbstractInventoryVisibilityIntegrationTest {
      */
     protected String receivedEnvelope(UUID eventId, Instant occurredAt,
                                       String warehouseId, String skuId, long qtyReceived) {
+        return receivedEnvelope(eventId, occurredAt, warehouseId, skuId, qtyReceived, null);
+    }
+
+    /**
+     * As {@link #receivedEnvelope(UUID, Instant, String, String, long)}, with the additive
+     * {@code warehouseCode} (ADR-MONO-050 D9 / TASK-SCM-BE-037). Pass {@code null} to omit
+     * the field entirely, mirroring an older wms producer.
+     */
+    protected String receivedEnvelope(UUID eventId, Instant occurredAt,
+                                      String warehouseId, String skuId, long qtyReceived,
+                                      String warehouseCode) {
         Map<String, Object> env = baseEnvelope(eventId, "inventory.received",
                 occurredAt, "inventory", warehouseId);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("warehouseId", warehouseId);
+        if (warehouseCode != null) {
+            payload.put("warehouseCode", warehouseCode);
+        }
         Map<String, Object> line = new LinkedHashMap<>();
         line.put("skuId", skuId);
         line.put("qtyReceived", qtyReceived);

@@ -56,9 +56,16 @@ class InternalSnapshotControllerTest {
                 now);
     }
 
+    private InventoryVisibilityApplicationService.SnapshotWithWarehouseCode row(
+            String sku, BigDecimal qty, String warehouseCode) {
+        return new InventoryVisibilityApplicationService.SnapshotWithWarehouseCode(
+                snapshot(sku, qty), warehouseCode);
+    }
+
     @Test
     void internalSnapshot_withoutAuth_returns200_permitAll() throws Exception {
-        when(applicationService.getAllSnapshotsAcrossTenants()).thenReturn(List.of());
+        when(applicationService.getAllSnapshotsAcrossTenantsWithWarehouseCode())
+                .thenReturn(List.of());
 
         // No Authorization header — the internal endpoint is permitAll.
         mockMvc.perform(get("/internal/inventory-visibility/snapshot"))
@@ -68,8 +75,8 @@ class InternalSnapshotControllerTest {
 
     @Test
     void internalSnapshot_returnsCrossTenantRows_mapped() throws Exception {
-        when(applicationService.getAllSnapshotsAcrossTenants())
-                .thenReturn(List.of(snapshot("SKU-001", new BigDecimal("7"))));
+        when(applicationService.getAllSnapshotsAcrossTenantsWithWarehouseCode())
+                .thenReturn(List.of(row("SKU-001", new BigDecimal("7"), "WH01")));
 
         mockMvc.perform(get("/internal/inventory-visibility/snapshot"))
                 .andExpect(status().isOk())
@@ -77,5 +84,36 @@ class InternalSnapshotControllerTest {
                 .andExpect(jsonPath("$.data[0].sku").value("SKU-001"))
                 .andExpect(jsonPath("$.data[0].nodeId").value(nodeId.toString()))
                 .andExpect(jsonPath("$.data[0].availableQty").value(7));
+    }
+
+    /**
+     * ADR-MONO-050 D9 / TASK-SCM-BE-037: the internal read surface must serve the node's
+     * warehouse CODE — it is the field demand-planning's batch sweep threads onto the
+     * suggestion so a batch-origin PO can address a wms inbound-expected.
+     */
+    @Test
+    void internalSnapshot_servesWarehouseCode() throws Exception {
+        when(applicationService.getAllSnapshotsAcrossTenantsWithWarehouseCode())
+                .thenReturn(List.of(row("SKU-001", new BigDecimal("7"), "WH01")));
+
+        mockMvc.perform(get("/internal/inventory-visibility/snapshot"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].warehouseCode").value("WH01"));
+    }
+
+    /**
+     * The code is best-effort in wms, so a node may not have learned one. The row must
+     * still be served (with a null code) — a null must never drop the sweep candidate.
+     */
+    @Test
+    void internalSnapshot_nullWarehouseCode_rowStillServed() throws Exception {
+        when(applicationService.getAllSnapshotsAcrossTenantsWithWarehouseCode())
+                .thenReturn(List.of(row("SKU-001", new BigDecimal("7"), null)));
+
+        mockMvc.perform(get("/internal/inventory-visibility/snapshot"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.meta.count").value(1))
+                .andExpect(jsonPath("$.data[0].sku").value("SKU-001"))
+                .andExpect(jsonPath("$.data[0].warehouseCode").doesNotExist());
     }
 }

@@ -94,7 +94,8 @@ public class SweepReorderUseCase {
             int availableQty = candidate.availableQty();
 
             try {
-                raised += evaluateBatchCandidate(skuCode, warehouseId, availableQty, now);
+                raised += evaluateBatchCandidate(skuCode, warehouseId, availableQty,
+                        candidate.warehouseCode(), now);
             } catch (Exception e) {
                 log.warn("Batch sweep: error evaluating skuCode={} warehouseId={}: {}",
                         skuCode, warehouseId, e.getMessage());
@@ -106,7 +107,14 @@ public class SweepReorderUseCase {
         return raised;
     }
 
-    private int evaluateBatchCandidate(String skuCode, UUID warehouseId, int availableQty, Instant now) {
+    /**
+     * @param warehouseCode ADR-MONO-050 D9 / TASK-SCM-BE-037 — the IVS node's business
+     *                      warehouse code, threaded onto the suggestion so a batch-origin
+     *                      PO addresses its wms inbound-expected by code. Nullable; a null
+     *                      never suppresses the suggestion (fail-closed addressing only).
+     */
+    private int evaluateBatchCandidate(String skuCode, UUID warehouseId, int availableQty,
+                                       String warehouseCode, Instant now) {
         // Resolve mapping — skip unmapped SKU (logged, not DLT'd in batch — no event to route)
         Optional<SkuSupplierMapping> mappingOpt = mappingPort.findBySkuCode(TENANT_ID, skuCode);
         if (mappingOpt.isEmpty()) {
@@ -143,7 +151,7 @@ public class SweepReorderUseCase {
         }
 
         ReorderSuggestion suggestion = ReorderSuggestion.raiseFromBatch(
-                UUID.randomUUID(), skuCode, warehouseId, mapping.getSupplierId(),
+                UUID.randomUUID(), skuCode, warehouseId, warehouseCode, mapping.getSupplierId(),
                 reorderQty, availableQty, TENANT_ID, now);
 
         suggestionPort.save(suggestion);

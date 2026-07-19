@@ -21,6 +21,7 @@ import com.wms.inventory.domain.model.MovementType;
 import com.wms.inventory.domain.model.masterref.LocationSnapshot;
 import com.wms.inventory.domain.model.masterref.LotSnapshot;
 import com.wms.inventory.domain.model.masterref.SkuSnapshot;
+import com.wms.inventory.domain.model.masterref.WarehouseSnapshot;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
@@ -163,6 +164,32 @@ class ReceiveStockServiceTest {
         assertThat(event.lines()).hasSize(2);
     }
 
+    // ---- ADR-MONO-050 D9: warehouseCode on the mutation event -----------------
+
+    @Test
+    void receivedEventCarriesWarehouseCodeWhenMasterSnapshotPresent() {
+        masterRefs.putWarehouse(WAREHOUSE_ID, "WH01");
+        ReceiveStockLineCommand line = new ReceiveStockLineCommand(LOCATION_ID, SKU_ID, null, 50);
+
+        service.receive(new ReceiveStockCommand(
+                UUID.randomUUID(), WAREHOUSE_ID, UUID.randomUUID(), List.of(line), "system:test"));
+
+        assertThat(((InventoryReceivedEvent) outbox.events.get(0)).warehouseCode())
+                .isEqualTo("WH01");
+    }
+
+    @Test
+    void receivedEventWarehouseCodeNullWhenMasterSnapshotAbsent() {
+        // No putWarehouse(..) — startup race. The event must still be emitted.
+        ReceiveStockLineCommand line = new ReceiveStockLineCommand(LOCATION_ID, SKU_ID, null, 50);
+
+        service.receive(new ReceiveStockCommand(
+                UUID.randomUUID(), WAREHOUSE_ID, UUID.randomUUID(), List.of(line), "system:test"));
+
+        assertThat(outbox.events).hasSize(1);
+        assertThat(((InventoryReceivedEvent) outbox.events.get(0)).warehouseCode()).isNull();
+    }
+
     // ---- Fakes ---------------------------------------------------------------
 
     private static class FakeInventoryRepo implements InventoryRepository {
@@ -233,6 +260,12 @@ class ReceiveStockServiceTest {
         final Map<UUID, LocationSnapshot> locations = new HashMap<>();
         final Map<UUID, SkuSnapshot> skus = new HashMap<>();
         final Map<UUID, LotSnapshot> lots = new HashMap<>();
+        final Map<UUID, WarehouseSnapshot> warehouses = new HashMap<>();
+
+        void putWarehouse(UUID id, String warehouseCode) {
+            warehouses.put(id, new WarehouseSnapshot(
+                    id, warehouseCode, WarehouseSnapshot.Status.ACTIVE, NOW, 1L));
+        }
 
         @Override public Optional<LocationSnapshot> findLocation(UUID id) {
             return Optional.ofNullable(locations.get(id));
@@ -243,8 +276,8 @@ class ReceiveStockServiceTest {
         @Override public Optional<LotSnapshot> findLot(UUID id) {
             return Optional.ofNullable(lots.get(id));
         }
-        @Override public Optional<com.wms.inventory.domain.model.masterref.WarehouseSnapshot> findWarehouse(UUID id) {
-            return Optional.empty();
+        @Override public Optional<WarehouseSnapshot> findWarehouse(UUID id) {
+            return Optional.ofNullable(warehouses.get(id));
         }
     }
 }

@@ -52,6 +52,9 @@ public class WmsInventoryTransferredConsumer {
             Map<String, Object> payload = envelope.payload();
             String skuId = WmsEnvelopeParser.getStringField(payload, "skuId");
             long quantity = WmsEnvelopeParser.getLongField(payload, "quantity");
+            // ADR-MONO-050 D9: additive + nullable — absent from older wms producers.
+            // Transfers are intra-warehouse, so one code covers both endpoints.
+            String warehouseCode = WmsEnvelopeParser.getNullableStringField(payload, "warehouseCode");
 
             @SuppressWarnings("unchecked")
             Map<String, Object> source = (Map<String, Object>) payload.get("source");
@@ -68,7 +71,7 @@ public class WmsInventoryTransferredConsumer {
 
             applicationService.applyInventoryTransferred(
                     sourceLocationId, targetLocationId,
-                    skuId, quantity,
+                    skuId, quantity, warehouseCode,
                     envelope.eventId(), envelope.occurredAt(),
                     TENANT_ID, TOPIC);
 

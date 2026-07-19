@@ -93,6 +93,7 @@ Topic: `wms.inventory.received.v1`
 ```json
 "payload": {
   "warehouseId": "uuid",
+  "warehouseCode": "WH01",
   "sourceEventId": "uuid-of-inbound.putaway.completed-event",
   "asnId": "uuid",
   "lines": [
@@ -109,10 +110,15 @@ Topic: `wms.inventory.received.v1`
 }
 ```
 
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `warehouseCode` | string | yes | **Additive (ADR-MONO-050 D9 / TASK-SCM-BE-037).** Business code of `warehouseId`, resolved from the warehouse master read-model (`inventory-service` consumes `wms.master.warehouse.v1`). Mirrors the §7 alert field so the **batch** replenishment leg can address a warehouse by code, not uuid: scm `inventory-visibility-service` persists it on its node read-model and scm `demand-planning-service`'s batch sweep routes the resulting PO by it. Best-effort — `null` if the warehouse snapshot has not been populated yet (startup race); the event still fires and the batch leg simply omits the wms inbound-expected addressing (fail-closed, no uuid leak). Existing consumers that ignore the field are unaffected. |
+
 Consumer expectations:
 
 - `notification-service`: triggers low-stock re-evaluation (not applicable here — stock increased)
 - `admin-service`: projects received quantities into `InboundSummary` and `InventorySnapshot`
+- `scm-platform inventory-visibility-service` (cross-project): projects into its cross-node read-model, persisting `warehouseCode` on the node (ADR-MONO-050 D9 batch leg). Additive / backward-compatible — same `eventVersion` (v1).
 
 ### 2. `inventory.adjusted`
 
@@ -127,6 +133,7 @@ Topic: `wms.inventory.adjusted.v1`
   "adjustmentId": "uuid",
   "inventoryId": "uuid",
   "locationId": "uuid",
+  "warehouseCode": "WH01",
   "skuId": "uuid",
   "lotId": "uuid-or-null",
   "bucket": "AVAILABLE",
@@ -146,10 +153,15 @@ Topic: `wms.inventory.adjusted.v1`
 
 `movementType` values for this event: `ADJUSTMENT | DAMAGE_MARK | DAMAGE_WRITE_OFF`
 
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `warehouseCode` | string | yes | **Additive (ADR-MONO-050 D9 / TASK-SCM-BE-037).** Business code of the warehouse the adjusted inventory belongs to — resolved from the warehouse master read-model via the `Inventory` aggregate's `warehouseId` (this payload carries no `warehouseId`; the code is the cross-service identifier). Same purpose + best-effort/`null` semantics as §1 and §7. |
+
 Consumer expectations:
 
 - `admin-service`: projects into `AdjustmentAudit` and `InventorySnapshot`
 - `notification-service`: may alert on large negative adjustments (threshold in `admin.settings`)
+- `scm-platform inventory-visibility-service` (cross-project): projects into its cross-node read-model, persisting `warehouseCode` on the node (ADR-MONO-050 D9 batch leg). Additive / backward-compatible — same `eventVersion` (v1).
 
 Also fires `inventory.low-stock-detected` (on `wms.inventory.alert.v1`) when the mutation
 reduces `availableQty` below the configured threshold. See §7.
@@ -166,6 +178,7 @@ Topic: `wms.inventory.transferred.v1`
 "payload": {
   "transferId": "uuid",
   "warehouseId": "uuid",
+  "warehouseCode": "WH01",
   "skuId": "uuid",
   "lotId": "uuid-or-null",
   "quantity": 10,
@@ -188,9 +201,14 @@ Topic: `wms.inventory.transferred.v1`
 
 `target.wasCreated`: `true` if the target Inventory row was upserted (first stock at that location).
 
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `warehouseCode` | string | yes | **Additive (ADR-MONO-050 D9 / TASK-SCM-BE-037).** Business code of `warehouseId` (an intra-warehouse transfer — both endpoints share it), resolved from the warehouse master read-model. Same purpose + best-effort/`null` semantics as §1 and §7. |
+
 Consumer expectations:
 
 - `admin-service`: projects into `InventorySnapshot` for both locations
+- `scm-platform inventory-visibility-service` (cross-project): projects into its cross-node read-model, persisting `warehouseCode` on the node (ADR-MONO-050 D9 batch leg). Additive / backward-compatible — same `eventVersion` (v1).
 
 ### 4. `inventory.reserved`
 

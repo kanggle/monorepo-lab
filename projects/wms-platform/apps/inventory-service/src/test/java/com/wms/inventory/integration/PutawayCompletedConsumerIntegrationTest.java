@@ -62,6 +62,68 @@ class PutawayCompletedConsumerIntegrationTest extends InventoryServiceIntegratio
         jdbc.update("TRUNCATE TABLE inventory_movement");
         jdbc.update("DELETE FROM inventory");
         jdbc.update("DELETE FROM inventory_event_dedupe");
+        jdbc.update("DELETE FROM warehouse_snapshot");
+    }
+
+    /**
+     * ADR-MONO-050 D9 / TASK-SCM-BE-037: {@code inventory.received} carries the warehouse
+     * CODE resolved from the warehouse master read-model, so the cross-project scm batch
+     * replenishment leg can address a PO by code rather than uuid.
+     */
+    @Test
+    @DisplayName("putaway → inventory.received payload carries warehouseCode")
+    void receivedEventCarriesWarehouseCode() throws Exception {
+        UUID warehouseId = UUID.randomUUID();
+        UUID locationId = UUID.randomUUID();
+        UUID skuId = UUID.randomUUID();
+        seedWarehouseSnapshot(warehouseId, "WH01");
+
+        publish(INBOUND_TOPIC, buildPutawayEvent(UUID.randomUUID(), warehouseId,
+                UUID.randomUUID(), locationId, skuId, null, 50));
+
+        await().atMost(45, TimeUnit.SECONDS).pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> assertThat(
+                        inventoryRepository.findByKey(locationId, skuId, null)).isPresent());
+
+        try (KafkaConsumer<String, String> consumer = newConsumer(OUTBOUND_TOPIC)) {
+            JsonNode payload = pollOne(consumer, OUTBOUND_TOPIC, 30).get("payload");
+            assertThat(payload.get("warehouseCode").asText()).isEqualTo("WH01");
+        }
+    }
+
+    /**
+     * Best-effort resolution: with no warehouse snapshot the event must still be emitted
+     * with a null code — a missing code never blocks the receive.
+     */
+    @Test
+    @DisplayName("putaway without a warehouse snapshot → warehouseCode null, event still emitted")
+    void receivedEventWarehouseCodeNullWithoutSnapshot() throws Exception {
+        UUID warehouseId = UUID.randomUUID();  // deliberately NOT seeded
+        UUID locationId = UUID.randomUUID();
+        UUID skuId = UUID.randomUUID();
+
+        publish(INBOUND_TOPIC, buildPutawayEvent(UUID.randomUUID(), warehouseId,
+                UUID.randomUUID(), locationId, skuId, null, 50));
+
+        await().atMost(45, TimeUnit.SECONDS).pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> assertThat(
+                        inventoryRepository.findByKey(locationId, skuId, null)).isPresent());
+
+        try (KafkaConsumer<String, String> consumer = newConsumer(OUTBOUND_TOPIC)) {
+            JsonNode payload = pollOne(consumer, OUTBOUND_TOPIC, 30).get("payload");
+            assertThat(payload.has("warehouseCode")).isTrue();
+            assertThat(payload.get("warehouseCode").isNull()).isTrue();
+            assertThat(payload.get("lines").get(0).get("availableQtyAfter").asInt()).isEqualTo(50);
+        }
+    }
+
+    private void seedWarehouseSnapshot(UUID warehouseId, String warehouseCode) {
+        java.time.OffsetDateTime now = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC);
+        jdbc.update("""
+                INSERT INTO warehouse_snapshot
+                (id, warehouse_code, status, cached_at, master_version)
+                VALUES (?, ?, 'ACTIVE', ?, 1)
+                """, warehouseId, warehouseCode, now);
     }
 
     @Test

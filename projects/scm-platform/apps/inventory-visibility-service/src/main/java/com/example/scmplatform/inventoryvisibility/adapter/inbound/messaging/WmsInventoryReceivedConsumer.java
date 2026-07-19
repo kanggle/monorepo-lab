@@ -57,6 +57,8 @@ public class WmsInventoryReceivedConsumer {
             // wms v1 is single-tenant, but add safety guard
             Map<String, Object> payload = envelope.payload();
             String warehouseId = WmsEnvelopeParser.getStringField(payload, "warehouseId");
+            // ADR-MONO-050 D9: additive + nullable — absent from older wms producers.
+            String warehouseCode = WmsEnvelopeParser.getNullableStringField(payload, "warehouseCode");
 
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> lines = (List<Map<String, Object>>) payload.get("lines");
@@ -73,7 +75,7 @@ public class WmsInventoryReceivedConsumer {
                 long qtyReceived = WmsEnvelopeParser.getLongField(line, "qtyReceived");
 
                 applicationService.applyInventoryReceived(
-                        warehouseId, skuId, qtyReceived,
+                        warehouseId, skuId, qtyReceived, warehouseCode,
                         envelope.eventId(), envelope.occurredAt(),
                         TENANT_ID, TOPIC);
             }

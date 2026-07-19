@@ -19,11 +19,13 @@ import java.util.UUID;
  *       stable dedup-key dimension {@code (tenantId, skuCode, warehouseId)} (the
  *       open-suggestion guard, D6). Never emitted downstream.</li>
  *   <li>{@code warehouseCode} (String) — the wms warehouse <em>business code</em>
- *       (e.g. {@code "WH-SEOUL-01"}) carried additively on the alert. This is the
- *       value that flows to the PO {@code destinationWarehouseId} so wms's
- *       {@code findWarehouseByCode} resolves it. NULL for BATCH-sourced suggestions
- *       (the IVS read-model carries no warehouse code — see {@code SweepReorderUseCase};
- *       such POs simply do not emit a wms inbound-expected, fail-closed).</li>
+ *       (e.g. {@code "WH-SEOUL-01"}). This is the value that flows to the PO
+ *       {@code destinationWarehouseId} so wms's {@code findWarehouseByCode} resolves it.
+ *       Both sources now carry it: the ALERT path reads it off the alert payload, and the
+ *       BATCH path reads it off the IVS node read-model, which learns it from wms's
+ *       inventory mutation events (TASK-SCM-BE-037). Still <b>nullable</b> on either path —
+ *       wms resolves the code best-effort — and a null code never blocks the suggestion;
+ *       it only means the materialized PO emits no wms inbound-expected (fail-closed).</li>
  * </ul>
  * {@code supplierId} is likewise a supplier <em>code</em> (String) — the value wms
  * resolves via {@code findPartnerByCode}, sourced from {@code sku_supplier_map.supplier_id}.
@@ -33,7 +35,7 @@ public class ReorderSuggestion {
     private final UUID id;
     private final String skuCode;
     private final UUID warehouseId;          // dedup-key dimension (wms locationId)
-    private final String warehouseCode;      // ADR-050 D9: warehouse CODE → PO destination (nullable for BATCH)
+    private final String warehouseCode;      // ADR-050 D9: warehouse CODE → PO destination (nullable on both paths)
     private final String supplierId;         // ADR-050 D9: supplier CODE (was UUID)
     private final int suggestedQty;
     private SuggestionStatus status;
@@ -54,7 +56,7 @@ public class ReorderSuggestion {
         this.id = Objects.requireNonNull(id, "id");
         this.skuCode = Objects.requireNonNull(skuCode, "skuCode");
         this.warehouseId = Objects.requireNonNull(warehouseId, "warehouseId");
-        this.warehouseCode = warehouseCode; // nullable — BATCH suggestions carry none
+        this.warehouseCode = warehouseCode; // nullable — wms resolves the code best-effort
         this.supplierId = Objects.requireNonNull(supplierId, "supplierId");
         this.suggestedQty = suggestedQty;
         this.status = Objects.requireNonNull(status, "status");
@@ -83,15 +85,19 @@ public class ReorderSuggestion {
 
     /**
      * Factory — raise a new SUGGESTED reorder suggestion from the batch sweep.
-     * The IVS read-model carries no warehouse code (ADR-050 D9 batch-path limitation),
-     * so {@code warehouseCode} is null — a materialized PO from a BATCH suggestion does
-     * not address a wms inbound-expected (fail-closed; follow-up: IVS carry warehouseCode).
+     *
+     * <p>Since TASK-SCM-BE-037 the IVS read-model carries the warehouse CODE (learned from
+     * wms's inventory mutation events), so a BATCH suggestion addresses its PO by code
+     * exactly like the ALERT path. {@code warehouseCode} remains <b>nullable</b> — wms
+     * resolves it best-effort, and IVS may not have learned one for this node yet; such a
+     * PO simply emits no wms inbound-expected (fail-closed, no uuid leak).
      */
     public static ReorderSuggestion raiseFromBatch(UUID id, String skuCode, UUID warehouseId,
+                                                    String warehouseCode,
                                                     String supplierId, int suggestedQty,
                                                     int triggerAvailableQty,
                                                     String tenantId, Instant now) {
-        return new ReorderSuggestion(id, skuCode, warehouseId, null, supplierId, suggestedQty,
+        return new ReorderSuggestion(id, skuCode, warehouseId, warehouseCode, supplierId, suggestedQty,
                 SuggestionStatus.SUGGESTED, SuggestionSource.BATCH,
                 null, triggerAvailableQty, null, tenantId, 0, now, now);
     }
