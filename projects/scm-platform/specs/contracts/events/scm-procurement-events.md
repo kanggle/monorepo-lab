@@ -28,6 +28,8 @@ Canonical Kafka topic names. Topic naming convention =
 | `scm.procurement.po.received` | `scm.procurement.po.received.v1` | `purchase_order` | live | (CONFIRMED \| PARTIALLY_RECEIVED) → RECEIVED via ASN application |
 | `scm.procurement.po.closed` | `scm.procurement.po.closed.v1` | `purchase_order` | **v2-deferred** | SETTLED → CLOSED (driven by `settlement-service`, not yet bootstrapped) |
 | `scm.procurement.asn.received` | `scm.procurement.asn.received.v1` | `asn` | live | Supplier-issued ASN webhook accepted |
+| `scm.procurement.inbound-expected` | `scm.procurement.inbound-expected.v1` | `purchase_order` | live | ACKNOWLEDGED → CONFIRMED, **only** for a `WMS_WAREHOUSE`-addressed replenishment PO (ADR-MONO-050 D1/D2/D4) |
+| `scm.procurement.inbound-expected.cancelled` | `scm.procurement.inbound-expected.cancelled.v1` | `purchase_order` | live | A non-terminal (not-yet-received) `WMS_WAREHOUSE`-addressed PO is cancelled/withdrawn (ADR-MONO-050 D6.3) |
 
 > **v1 reachability note**: The `po.closed` topic constant + event type are
 > declared in `ProcurementEventPublisher` and `ProcurementOutboxPollingScheduler`
@@ -346,6 +348,133 @@ the PO id.
 
 ---
 
+### scm.procurement.inbound-expected (ADR-MONO-050)
+
+Triggered when an operator confirms an ACKNOWLEDGED PO (`ACKNOWLEDGED → CONFIRMED`)
+**and** that PO is a warehouse-addressed replenishment PO
+(`destinationNodeType = WMS_WAREHOUSE` with a non-null `destinationWarehouseId`).
+It is published in the **same transaction** as the `CONFIRMED` state change
+(alongside `scm.procurement.po.confirmed`) via the transactional outbox, so wms
+never loses the arrival expectation on the publisher side (ADR-MONO-050 D1/D2).
+
+**Producer-side filter (D4)**: a PO whose `destinationNodeType != WMS_WAREHOUSE`
+(e.g. a `THIRD_PARTY_LOGISTICS` destination) — or an operator-authored PO with no
+destination warehouse at all — does **not** emit this event. v1 turns confirmed
+POs into wms inbound expectations only for own warehouses. This is enforced
+producer-side; wms additionally rejects a non-`WMS_WAREHOUSE` payload defensively.
+
+**Payload does NOT re-use the common PO base** — it is built as an ordered map
+(like `asn.received`), carrying only the fields wms `inbound-service` needs.
+
+> **Envelope reconciliation (ADR-MONO-050 §D1 illustration vs the live envelope).**
+> ADR-MONO-050 §D1 sketched `eventId` + `occurredAt` inside the payload. Per this
+> file's **Common Envelope** convention (and TASK-SCM-BE-034 Edge Case #1 — "add in
+> the same shape, introduce no new format"), those two fields live in the standard
+> envelope, **not** duplicated in the payload. The idempotency key consumers dedupe
+> on (T8 / ADR-050 D6.1) is the **envelope** `eventId` (a UUID v7), exactly as for
+> every other event in this contract.
+
+**Payload fields:**
+
+| Field | Type | Nullable | Description |
+|---|---|---|---|
+| `poId` | string (UUID v7) | no | Purchase order aggregate id (matches `partitionKey`). |
+| `poNumber` | string | no | Business dedup key on the wms side, combined with the line (ADR-050 D6.2 `(poNumber, line)`). |
+| `supplierId` | string (UUID) | no | Reference to `suppliers.id` (no cross-service FK). |
+| `destinationWarehouseId` | string (UUID) | no | ★ **Addressed, not assumed** (ADR-050 D3). Sourced from the `warehouseId` that seeded the reorder suggestion (the wms low-stock alert named the warehouse whose stock dropped). Single- and multi-warehouse deployments are the same code path. |
+| `destinationNodeType` | string enum | no | v1 emits only `WMS_WAREHOUSE`. The field exists for forward-compat (ADR-050 D4: a future `THIRD_PARTY_LOGISTICS` value routes elsewhere and is never emitted here in v1). |
+| `expectedArrivalDate` | string (ISO 8601 date, `YYYY-MM-DD`) | no | `confirmedAt` (UTC date) + `sku_supplier_map.lead_time_days`. Computed at confirm time so it is relative to supplier acknowledgement, not draft. |
+| `currency` | string (ISO 4217) | no | PO currency (from `sku_supplier_map.currency` at materialization). |
+| `lines` | array | no | One entry per PO line — see below. |
+
+**`lines[]` element:**
+
+| Field | Type | Nullable | Description |
+|---|---|---|---|
+| `skuCode` | string | no | `purchase_order_lines.sku`. |
+| `expectedQty` | string (BigDecimal plain) | no | Ordered quantity as a plain decimal string (e.g. `"100"`); avoid float parsing — same convention as `totalAmount`. |
+| `uom` | string | no | Unit of measure. **v1 constant `"EA"`** — `purchase_order_lines` carries no per-line uom yet; a real uom column is v2. |
+
+**Example:**
+
+```json
+{
+  "eventId": "0192d4e0-1a2b-7c3d-8e4f-5a6b7c8d9e0f",
+  "eventType": "scm.procurement.inbound-expected",
+  "source": "scm-platform-procurement-service",
+  "occurredAt": "2026-07-19T04:12:00.000Z",
+  "schemaVersion": 1,
+  "partitionKey": "01HZWX12345678901234567890",
+  "payload": {
+    "poId": "01HZWX12345678901234567890",
+    "poNumber": "PO-A1B2C3D4",
+    "supplierId": "9b1d4a8c-1f2c-7a90-b1d4-3e6f8a2c9d10",
+    "destinationWarehouseId": "0192cccc-0000-0000-0000-000000000002",
+    "destinationNodeType": "WMS_WAREHOUSE",
+    "expectedArrivalDate": "2026-07-24",
+    "currency": "KRW",
+    "lines": [
+      { "skuCode": "SKU-APPLE-001", "expectedQty": "100", "uom": "EA" }
+    ]
+  }
+}
+```
+
+---
+
+### scm.procurement.inbound-expected.cancelled (ADR-MONO-050 D6.3)
+
+Companion event so wms can mark a not-yet-received inbound expectation
+`CANCELLED` instead of stranding a phantom expectation. Emitted when a
+warehouse-addressed (`WMS_WAREHOUSE`) PO is cancelled while **non-terminal**.
+
+> **v1 reachability note.** The PO state machine currently allows `CANCELED`
+> only from `DRAFT / SUBMITTED / ACKNOWLEDGED` (a `CONFIRMED` PO cannot be
+> cancelled in v1 — see the `po.canceled` note). Because `inbound-expected.v1`
+> fires on `CONFIRMED`, the case that actually strands a wms expectation
+> (cancel **after** confirm) is **not reachable in v1**; enabling
+> `CONFIRMED → CANCELED` is a deferred follow-up. In v1 this event therefore
+> fires only for pre-`CONFIRMED` cancellations of warehouse-addressed
+> replenishment POs — a harmless no-op on the wms side (no matching open
+> expectation → ignored), and the wiring is already in place for the day the
+> post-confirm cancel transition is enabled.
+
+**Payload fields:**
+
+| Field | Type | Nullable | Description |
+|---|---|---|---|
+| `poId` | string (UUID v7) | no | Purchase order aggregate id (matches `partitionKey`). |
+| `poNumber` | string | no | Business dedup key (with line) wms uses to locate the open expectation. |
+| `lines` | array | no | The cancelled lines — see below. |
+
+**`lines[]` element:**
+
+| Field | Type | Nullable | Description |
+|---|---|---|---|
+| `skuCode` | string | no | `purchase_order_lines.sku` — identifies the expectation line to cancel. |
+
+**Example:**
+
+```json
+{
+  "eventId": "0192d4e0-9f8e-7d6c-8b5a-4c3d2e1f0a9b",
+  "eventType": "scm.procurement.inbound-expected.cancelled",
+  "source": "scm-platform-procurement-service",
+  "occurredAt": "2026-07-19T05:00:00.000Z",
+  "schemaVersion": 1,
+  "partitionKey": "01HZWX12345678901234567890",
+  "payload": {
+    "poId": "01HZWX12345678901234567890",
+    "poNumber": "PO-A1B2C3D4",
+    "lines": [
+      { "skuCode": "SKU-APPLE-001" }
+    ]
+  }
+}
+```
+
+---
+
 ## Consumer Rules
 
 - **Idempotency (T8)**: dedupe on `eventId` (UUID v7). The same `eventId`
@@ -385,7 +514,14 @@ topics:
 - v2 `notification-service` will consume `po.canceled` and `po.received`
   for operator alerts.
 
-Cross-project subscribers may exist outside scm-platform but are not
+**Sanctioned cross-project consumer (ADR-MONO-050 D7)**: wms `inbound-service`
+consumes `scm.procurement.inbound-expected.v1` (+ `.cancelled.v1`) to create /
+cancel an `InboundExpectation` (ASN) — the first `scm → wms` runtime coupling.
+Its consumer-driven subscription doc (`projects/wms-platform/specs/contracts/events/scm-inbound-expected-subscriptions.md`)
+reproduces only the subset it reads and defers to **this** file as the
+authoritative payload owner.
+
+Other cross-project subscribers may exist outside scm-platform but are not
 catalogued here — see each consuming project's
 `specs/contracts/events/<*-subscriptions>.md` for cross-project consumer
 declarations.
