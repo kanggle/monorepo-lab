@@ -70,8 +70,9 @@ export const GROUPS: NavGroup[] = [
           { href: '/iam', label: '개요', testid: 'nav-iam-overview' },
           { href: '/iam/guide', label: '가이드', testid: 'nav-iam-guide' },
           { href: '/operators', label: '운영자 관리', testid: 'nav-operators' },
-          // 운영자 그룹 (TASK-PC-FE-225 stub; real feature = ADR-MONO-046
-          // execution roadmap) — IAM User Group / Google Group equivalent.
+          // 운영자 그룹 (TASK-PC-FE-250 / ADR-MONO-046) — IAM User Group /
+          // Google Group equivalent: bundle operators + bulk-grant roles /
+          // tenant-assignments (fan-out).
           {
             href: '/operator-groups',
             label: '운영자 그룹',

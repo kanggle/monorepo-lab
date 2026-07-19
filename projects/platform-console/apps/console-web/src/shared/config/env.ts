@@ -144,6 +144,14 @@ const ServerEnvSchema = z.object({
    *  org-nodes...` (admin-service, gated `org.manage`) — request/response/error
    *  owned by IAM `admin-api.md` § org-node (authoritative, consumed only). */
   ORG_NODES_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  /** Outbound timeout (ms) for IAM operator-group calls (TASK-PC-FE-250 /
+   *  ADR-MONO-046 — integration-heavy I1, same convention as
+   *  ORG_NODES_TIMEOUT_MS). The group CRUD + `/{id}/members` + `/{id}/grants`
+   *  endpoints hang off `${IAM_ADMIN_API_BASE}/api/admin/groups...`
+   *  (admin-service, gated `group.manage` — reads too) — request/response/error
+   *  owned by IAM `admin-api.md` § Operator Group Management (authoritative,
+   *  consumed only). */
+  GROUPS_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   /** wms `admin-service` base for the operations surface (TASK-PC-FE-007 /
    *  § 2.4.5). The dashboard read-model + alert-ack endpoints hang off
    *  `${WMS_ADMIN_BASE_URL}/dashboard/...` (+ `/operations/...`) —
@@ -338,6 +346,7 @@ export function getServerEnv(): ServerEnv {
     PARTNERSHIPS_TIMEOUT_MS: process.env.PARTNERSHIPS_TIMEOUT_MS,
     TENANTS_TIMEOUT_MS: process.env.TENANTS_TIMEOUT_MS,
     ORG_NODES_TIMEOUT_MS: process.env.ORG_NODES_TIMEOUT_MS,
+    GROUPS_TIMEOUT_MS: process.env.GROUPS_TIMEOUT_MS,
     WMS_ADMIN_BASE_URL: process.env.WMS_ADMIN_BASE_URL,
     WMS_TIMEOUT_MS: process.env.WMS_TIMEOUT_MS,
     WMS_OUTBOUND_BASE_URL: process.env.WMS_OUTBOUND_BASE_URL,

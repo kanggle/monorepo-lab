@@ -1,27 +1,109 @@
+import Link from 'next/link';
+import {
+  getOperatorGroupsState,
+  OperatorGroupsScreen,
+} from '@/features/operator-groups';
+import { getGrantableRolesOrNull } from '@/features/operators/api/operators-api';
+
+export const dynamic = 'force-dynamic';
+
 /**
- * 운영자 그룹 스텁 라우트 (TASK-PC-FE-225 — IAM nav 정석 재편성).
+ * ADR-MONO-046 운영자 그룹 route (TASK-PC-FE-250) — the IAM ▸ 운영자 그룹 menu
+ * destination, replacing the TASK-PC-FE-225 stub. Groups bundle operators into
+ * a named unit and bulk-grant roles / tenant-assignments (fan-out, D2-A), gated
+ * by `group.manage` (SUPER_ADMIN, self-tenant TENANT_ADMIN, subtree ORG_ADMIN).
  *
- * 정석 IAM taxonomy의 워크포스 평면 중 「운영자 그룹」(IAM User Group / Google
- * Group 대응) 메뉴 항목의 목적지. 이 태스크는 nav 배치 + 스텁 라우트만
- * 담당한다 — 실제 목록/상세/CRUD 기능은 ADR-MONO-046 실행 로드맵에서 구현된다.
+ * Server component: the initial group page is fetched server-side via the IAM
+ * admin-service client with the HttpOnly operator token + active tenant
+ * (`getOperatorGroupsState()`). Resilience is handled there (mirrors
+ * `org-hierarchy/page.tsx`):
+ *   - 401 → `redirect('/login')` (inside `getOperatorGroupsState`).
+ *   - no active tenant → a "select a tenant" gate (a SUPER_ADMIN selects `*`).
+ *   - 403 (lacks `group.manage`) → an inline "group.manage required" notice.
+ *   - 503 / timeout → a degraded notice; the console shell stays intact.
  *
- * 정적 서버 컴포넌트: 데이터 로딩·권한 게이트 없음(스텁이므로 `(console)`
- * 레이아웃의 인증 가드만 적용된다).
+ * The group-grant role picker is pre-filtered by the caller's grantable roles
+ * (`getGrantableRolesOrNull` — the SAME operator convention; no group-specific
+ * grantable-roles endpoint exists). Fired concurrently with the list state to
+ * avoid an SSR waterfall; already fail-graceful (never throws) so a failure
+ * resolves to `null` and the screen falls back to the full role set (the
+ * producer 403 stays the authoritative no-escalation gate).
  */
-export default function OperatorGroupsPage() {
+export default async function OperatorGroupsPage() {
+  const statePromise = getOperatorGroupsState();
+  const grantableRolesPromise = getGrantableRolesOrNull();
+  const state = await statePromise;
+
+  if (state.noTenant) {
+    return (
+      <section aria-labelledby="operator-groups-heading">
+        <h1 id="operator-groups-heading" className="mb-6 text-2xl font-semibold">
+          운영자 그룹
+        </h1>
+        <div
+          role="status"
+          data-testid="operator-groups-no-tenant"
+          className="rounded-md border border-border bg-muted px-4 py-6 text-sm text-muted-foreground"
+        >
+          <p className="mb-2 font-medium text-foreground">
+            테넌트를 먼저 선택하세요.
+          </p>
+          <p>
+            운영자 그룹 관리는 활성 테넌트가 선택되어 있어야 합니다. 상단의
+            테넌트 스위처에서 테넌트(SUPER_ADMIN 은 플랫폼 스코프 *)를 선택한 뒤
+            다시 시도하세요.
+          </p>
+          <Link
+            href="/console"
+            className="mt-4 inline-block text-sm underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            카탈로그로 이동
+          </Link>
+        </div>
+      </section>
+    );
+  }
+
+  if (state.permissionError) {
+    return (
+      <section aria-labelledby="operator-groups-heading">
+        <h1 id="operator-groups-heading" className="mb-6 text-2xl font-semibold">
+          운영자 그룹
+        </h1>
+        <div
+          role="status"
+          data-testid="operator-groups-permission-denied"
+          className="rounded-md border border-border bg-muted px-4 py-6 text-sm text-muted-foreground"
+        >
+          {state.permissionError.code === 'TENANT_SCOPE_DENIED'
+            ? '선택한 테넌트에 대한 운영자 그룹 관리 권한이 없습니다.'
+            : '운영자 그룹 관리는 group.manage 권한이 필요합니다 (SUPER_ADMIN, 자기 테넌트 TENANT_ADMIN, 서브트리 ORG_ADMIN). 이 화면을 조회·변경할 권한이 없습니다.'}
+        </div>
+      </section>
+    );
+  }
+
+  if (state.degraded || !state.page) {
+    return (
+      <section aria-labelledby="operator-groups-heading">
+        <h1 id="operator-groups-heading" className="mb-6 text-2xl font-semibold">
+          운영자 그룹
+        </h1>
+        <div
+          role="status"
+          data-testid="operator-groups-degraded"
+          className="rounded-md border border-border bg-muted px-4 py-6 text-sm text-muted-foreground"
+        >
+          운영자 그룹 서비스를 일시적으로 불러올 수 없습니다. 콘솔의 다른 기능은
+          계속 사용할 수 있습니다. 잠시 후 다시 시도하세요.
+        </div>
+      </section>
+    );
+  }
+
+  const grantableRoles = await grantableRolesPromise;
+
   return (
-    <section aria-labelledby="operator-groups-heading">
-      <h1 id="operator-groups-heading" className="mb-6 text-2xl font-semibold">
-        운영자 그룹
-      </h1>
-      <div
-        role="status"
-        data-testid="operator-groups-stub"
-        className="rounded-md border border-border bg-muted px-4 py-6 text-sm text-muted-foreground"
-      >
-        운영자 그룹 관리 화면은 준비 중입니다. 후속 태스크(ADR-MONO-046 실행
-        로드맵)에서 구현됩니다.
-      </div>
-    </section>
+    <OperatorGroupsScreen initial={state.page} grantableRoles={grantableRoles} />
   );
 }

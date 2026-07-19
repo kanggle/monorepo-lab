@@ -64,12 +64,13 @@ describe('IamGuideScreen', () => {
     }
   });
 
-  it('marks each menu as 준비 중 / 변경 가능 / 조회 전용', () => {
+  it('marks each menu as 변경 가능 / 조회 전용 (no stubs remain)', () => {
     render(<IamGuideScreen />);
-    // /operator-groups is the only stub today.
+    // /operator-groups graduated to a real write surface (TASK-PC-FE-250 /
+    // ADR-MONO-046) — it is no longer a 준비 중 stub.
     expect(
       screen.getByTestId('iam-guide-menu-/operator-groups'),
-    ).toHaveTextContent('준비 중');
+    ).toHaveTextContent('변경 가능');
     // A write surface and a read surface, respectively.
     expect(screen.getByTestId('iam-guide-menu-/operators')).toHaveTextContent(
       '변경 가능',
@@ -77,8 +78,8 @@ describe('IamGuideScreen', () => {
     expect(screen.getByTestId('iam-guide-menu-/audit')).toHaveTextContent(
       '조회 전용',
     );
-    // The stub carries no permission gate — it opens for any console entrant.
-    expect(CONSOLE_MENUS.find((m) => m.stub)?.gate).toBe('—');
+    // Every IAM menu now graduated to a real screen — no stub remains.
+    expect(CONSOLE_MENUS.some((m) => m.stub)).toBe(false);
   });
 
   it('renders the onboarding delegation chain and the three reach axes', () => {
