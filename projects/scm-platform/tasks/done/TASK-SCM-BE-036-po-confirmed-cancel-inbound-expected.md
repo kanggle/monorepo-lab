@@ -8,7 +8,7 @@ scm procurement — CONFIRMED→CANCELED 상태 전이 허용 + 확정후취소 
 
 # Status
 
-ready
+done
 
 # Owner
 
