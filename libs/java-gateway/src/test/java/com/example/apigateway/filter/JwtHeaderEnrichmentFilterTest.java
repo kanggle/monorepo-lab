@@ -3,20 +3,18 @@ package com.example.apigateway.filter;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.apigateway.security.JwtClaims;
+import com.example.apigateway.testfixtures.RecordingGatewayFilterChain;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.http.HttpHeaders;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.web.server.ServerWebExchange;
-import reactor.core.publisher.Mono;
 
 /**
  * The enrichment mechanism. <em>Which</em> headers each gateway injects is asserted in that
@@ -116,12 +114,13 @@ class JwtHeaderEnrichmentFilterTest {
     void writesNothingWithoutASecurityContext() {
         JwtHeaderEnrichmentFilter filter = new JwtHeaderEnrichmentFilter(
                 List.of(JwtHeaderMapping.always("X-User-Role", JwtClaims::role)));
-        CapturingChain chain = new CapturingChain();
+        RecordingGatewayFilterChain chain = new RecordingGatewayFilterChain();
 
         filter.filter(MockServerWebExchange.from(MockServerHttpRequest.get("/public").build()), chain)
                 .block();
 
-        assertThat(chain.captured.getRequest().getHeaders().containsKey("X-User-Role")).isFalse();
+        assertThat(chain.capturedExchange().getRequest().getHeaders().containsKey("X-User-Role"))
+                .isFalse();
     }
 
     @Test
@@ -148,22 +147,12 @@ class JwtHeaderEnrichmentFilterTest {
     }
 
     private static HttpHeaders enrich(List<JwtHeaderMapping> mappings, Jwt jwt) {
-        CapturingChain chain = new CapturingChain();
+        RecordingGatewayFilterChain chain = new RecordingGatewayFilterChain();
         new JwtHeaderEnrichmentFilter(mappings)
                 .filter(MockServerWebExchange.from(MockServerHttpRequest.get("/api/x").build()), chain)
                 .contextWrite(ReactiveSecurityContextHolder.withAuthentication(
                         new JwtAuthenticationToken(jwt)))
                 .block();
-        return chain.captured.getRequest().getHeaders();
-    }
-
-    private static final class CapturingChain implements GatewayFilterChain {
-        ServerWebExchange captured;
-
-        @Override
-        public Mono<Void> filter(ServerWebExchange exchange) {
-            this.captured = exchange;
-            return Mono.empty();
-        }
+        return chain.capturedExchange().getRequest().getHeaders();
     }
 }

@@ -3,21 +3,19 @@ package com.example.apigateway.filter;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.apigateway.error.GatewayErrorHandler;
+import com.example.apigateway.testfixtures.RecordingGatewayFilterChain;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.web.server.ServerWebExchange;
-import reactor.core.publisher.Mono;
 
 /**
  * {@link RoleAdmissionFilter} with the {@link RoleAdmissions#roleOrScope()} predicate every
@@ -34,36 +32,36 @@ class RoleAdmissionFilterTest {
     @Test
     @DisplayName("roles 배열이 있으면 통과")
     void admitsRoleArrayToken() {
-        CapturingChain chain = runAuthenticated(jwt(Map.of("roles", List.of("SCM_OPERATOR"))));
-        assertThat(chain.called).isTrue();
+        RecordingGatewayFilterChain chain = runAuthenticated(jwt(Map.of("roles", List.of("SCM_OPERATOR"))));
+        assertThat(chain.wasCalled()).isTrue();
     }
 
     @Test
     @DisplayName("단수 role claim 만 있어도 통과 (JwtClaims.role fallback)")
     void admitsSingularRoleClaim() {
-        CapturingChain chain = runAuthenticated(jwt(Map.of("role", "BUYER")));
-        assertThat(chain.called).isTrue();
+        RecordingGatewayFilterChain chain = runAuthenticated(jwt(Map.of("role", "BUYER")));
+        assertThat(chain.wasCalled()).isTrue();
     }
 
     @Test
     @DisplayName("scope 만 있는 머신 토큰(client_credentials)은 통과 — role 없어도")
     void admitsScopeOnlyMachineToken() {
-        CapturingChain chain = runAuthenticated(jwt(Map.of("scope", "scm.read scm.write")));
-        assertThat(chain.called).isTrue();
+        RecordingGatewayFilterChain chain = runAuthenticated(jwt(Map.of("scope", "scm.read scm.write")));
+        assertThat(chain.wasCalled()).isTrue();
     }
 
     @Test
     @DisplayName("role 도 scope 도 없으면 403 (인증됐지만 인가 실패)")
     void rejectsNoRoleNoScopeWith403() {
         MockServerWebExchange exchange = get();
-        CapturingChain chain = new CapturingChain();
+        RecordingGatewayFilterChain chain = new RecordingGatewayFilterChain();
 
         filter.filter(exchange, chain)
                 .contextWrite(ReactiveSecurityContextHolder.withAuthentication(
                         new JwtAuthenticationToken(jwt(Map.of()))))
                 .block();
 
-        assertThat(chain.called).isFalse();
+        assertThat(chain.wasCalled()).isFalse();
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
 
@@ -71,14 +69,14 @@ class RoleAdmissionFilterTest {
     @DisplayName("빈 roles + scope 없음 → 403")
     void rejectsEmptyRolesNoScopeWith403() {
         MockServerWebExchange exchange = get();
-        CapturingChain chain = new CapturingChain();
+        RecordingGatewayFilterChain chain = new RecordingGatewayFilterChain();
 
         filter.filter(exchange, chain)
                 .contextWrite(ReactiveSecurityContextHolder.withAuthentication(
                         new JwtAuthenticationToken(jwt(Map.of("roles", List.of())))))
                 .block();
 
-        assertThat(chain.called).isFalse();
+        assertThat(chain.wasCalled()).isFalse();
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
 
@@ -87,11 +85,11 @@ class RoleAdmissionFilterTest {
     void passesWhenNoSecurityContext() {
         MockServerWebExchange exchange =
                 MockServerWebExchange.from(MockServerHttpRequest.get("/actuator/health"));
-        CapturingChain chain = new CapturingChain();
+        RecordingGatewayFilterChain chain = new RecordingGatewayFilterChain();
 
         filter.filter(exchange, chain).block();
 
-        assertThat(chain.called).isTrue();
+        assertThat(chain.wasCalled()).isTrue();
     }
 
     @Test
@@ -106,8 +104,8 @@ class RoleAdmissionFilterTest {
 
     // --- helpers ---
 
-    private CapturingChain runAuthenticated(Jwt jwt) {
-        CapturingChain chain = new CapturingChain();
+    private RecordingGatewayFilterChain runAuthenticated(Jwt jwt) {
+        RecordingGatewayFilterChain chain = new RecordingGatewayFilterChain();
         filter.filter(get(), chain)
                 .contextWrite(ReactiveSecurityContextHolder.withAuthentication(
                         new JwtAuthenticationToken(jwt)))
@@ -119,6 +117,8 @@ class RoleAdmissionFilterTest {
         return MockServerWebExchange.from(MockServerHttpRequest.get("/api/resource"));
     }
 
+    // Deliberately UNSIGNED (alg="none"): admission runs after signature verification, so it must
+    // exercise a token the resource server would have rejected on its own (ADR-MONO-049 § D5-8).
     private static Jwt jwt(Map<String, Object> claims) {
         Jwt.Builder b = Jwt.withTokenValue("token")
                 .header("alg", "none")
@@ -128,15 +128,5 @@ class RoleAdmissionFilterTest {
                 .expiresAt(Instant.now().plusSeconds(300));
         claims.forEach(b::claim);
         return b.build();
-    }
-
-    private static final class CapturingChain implements GatewayFilterChain {
-        boolean called = false;
-
-        @Override
-        public Mono<Void> filter(ServerWebExchange exchange) {
-            this.called = true;
-            return Mono.empty();
-        }
     }
 }

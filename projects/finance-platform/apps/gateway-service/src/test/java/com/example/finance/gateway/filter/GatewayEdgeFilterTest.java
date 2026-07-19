@@ -2,25 +2,24 @@ package com.example.finance.gateway.filter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import static com.example.apigateway.testfixtures.GatewayTestJwts.jwt;
+
 import com.example.apigateway.filter.IdentityHeaderStripFilter;
 import com.example.apigateway.filter.JwtHeaderEnrichmentFilter;
 import com.example.apigateway.filter.JwtHeaderMapping;
 import com.example.apigateway.filter.RequestIdFilter;
 import com.example.apigateway.filter.RetryAfterFilter;
+import com.example.apigateway.testfixtures.RecordingGatewayFilterChain;
 import com.example.finance.gateway.config.GatewayIdentityConfig;
-import java.time.Instant;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.http.HttpHeaders;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.web.server.ServerWebExchange;
-import reactor.core.publisher.Mono;
 
 /**
  * finance's edge-filter policy, asserted against the beans this gateway actually registers.
@@ -56,11 +55,11 @@ class GatewayEdgeFilterTest {
                 .header("X-Account-Type", "OPERATOR")
                 .header("Authorization", "Bearer xyz")
                 .build();
-        CapturingChain chain = new CapturingChain();
+        RecordingGatewayFilterChain chain = new RecordingGatewayFilterChain();
 
         strip.filter(MockServerWebExchange.from(request), chain).block();
 
-        HttpHeaders forwarded = chain.captured.getRequest().getHeaders();
+        HttpHeaders forwarded = chain.capturedExchange().getRequest().getHeaders();
         IdentityHeaderStripFilter.BASELINE_HEADERS.forEach(
                 h -> assertThat(forwarded.getFirst(h)).as(h).isNull());
         assertThat(forwarded.getFirst("Authorization"))
@@ -131,7 +130,7 @@ class GatewayEdgeFilterTest {
     // --- helpers ---
 
     private HttpHeaders enrich(Jwt jwt) {
-        CapturingChain chain = new CapturingChain();
+        RecordingGatewayFilterChain chain = new RecordingGatewayFilterChain();
         enrich.filter(
                         MockServerWebExchange.from(
                                 MockServerHttpRequest.get("/api/finance/accounts/1").build()),
@@ -139,27 +138,6 @@ class GatewayEdgeFilterTest {
                 .contextWrite(ReactiveSecurityContextHolder.withAuthentication(
                         new JwtAuthenticationToken(jwt)))
                 .block();
-        return chain.captured.getRequest().getHeaders();
-    }
-
-    private static Jwt jwt(Map<String, Object> claims) {
-        Jwt.Builder b = Jwt.withTokenValue("token")
-                .header("alg", "RS256")
-                .issuer("http://iam.local")
-                .subject("user-1")
-                .issuedAt(Instant.now())
-                .expiresAt(Instant.now().plusSeconds(60));
-        claims.forEach(b::claim);
-        return b.build();
-    }
-
-    private static final class CapturingChain implements GatewayFilterChain {
-        ServerWebExchange captured;
-
-        @Override
-        public Mono<Void> filter(ServerWebExchange exchange) {
-            this.captured = exchange;
-            return Mono.empty();
-        }
+        return chain.capturedExchange().getRequest().getHeaders();
     }
 }

@@ -1,4 +1,6 @@
 plugins {
+    id 'java-library'
+    id 'java-test-fixtures'
     id 'io.spring.dependency-management'
 }
 
@@ -75,12 +77,30 @@ dependencies {
     // Jackson — ApiErrorEnvelope serialization + the hand-rolled escape fallback.
     implementation 'com.fasterxml.jackson.core:jackson-databind'
 
+    // -------------------------------------------------------------------------
+    // testFixtures — shared gateway filter-test scaffolding (TASK-MONO-429).
+    //
+    // RecordingGatewayFilterChain (a GatewayFilterChain double) and GatewayTestJwts
+    // (the minimal Jwt builder) collapse ~6 + 3 private copies that had drifted
+    // across the gateway suites. The fixtures need the SAME reactive / oauth2 types
+    // the filters use, and this module declares its main deps with `implementation`
+    // (never `api` — ADR-MONO-048 § D1), so those types do NOT transit to the
+    // testFixtures compile classpath. They are declared here explicitly:
+    //   - spring-cloud-starter-gateway → GatewayFilterChain, ServerWebExchange, Mono
+    //   - oauth2-resource-server        → Jwt / Jwt.Builder
+    // -------------------------------------------------------------------------
+    testFixturesImplementation 'org.springframework.cloud:spring-cloud-starter-gateway'
+    testFixturesImplementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-webflux'
     testImplementation 'io.projectreactor:reactor-test'
     testImplementation 'org.assertj:assertj-core'
     testImplementation 'org.mockito:mockito-junit-jupiter'
+
+    // This module's own filter suites consume the fixtures above.
+    testImplementation testFixtures(project(':libs:java-gateway'))
 
     // JWKS stand-in for JwksHealthProbeTest (TASK-MONO-357).
     testImplementation 'com.squareup.okhttp3:okhttp:4.12.0'
