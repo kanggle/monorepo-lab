@@ -338,6 +338,23 @@ class PurchaseOrderApplicationServiceTest {
     }
 
     @Test
+    @DisplayName("cancel() of a CONFIRMED warehouse PO is now allowed and emits inbound-expected.cancelled (ADR-050 D6.3 / SCM-BE-036)")
+    void cancelConfirmedWarehousePoEmitsInboundExpectedCancelled() {
+        PurchaseOrder po = confirmedFromSuggestionPo("wh-01", "WMS_WAREHOUSE", 7);
+        when(poRepository.findById(po.getId(), TENANT)).thenReturn(Optional.of(po));
+
+        service.cancel(new CancelPurchaseOrderCommand(OPERATOR, po.getId(), "confirmed order withdrawn"));
+
+        // The now-reachable CONFIRMED→CANCELED transition succeeded (no exception) …
+        assertThat(po.getStatus())
+                .isEqualTo(com.example.scmplatform.procurement.domain.po.status.PoStatus.CANCELED);
+        // … and both the generic cancel and the wms-directed cancellation fired — this
+        // is the case that actually strands a wms expectation (cancel after confirm).
+        verify(eventPublisher, times(1)).publishPoCanceled(any(), any(), eq(OPERATOR_ACCOUNT));
+        verify(eventPublisher, times(1)).publishInboundExpectedCancelled(any());
+    }
+
+    @Test
     @DisplayName("cancel() of an operator-authored PO does NOT emit inbound-expected.cancelled")
     void cancelOperatorPoDoesNotEmitInboundExpectedCancelled() {
         PurchaseOrder po = freshDraftPo(); // createDraft → no destination
@@ -468,6 +485,12 @@ class PurchaseOrderApplicationServiceTest {
         PurchaseOrder po = draftFromSuggestionPo(warehouseId, nodeType, leadTimeDays);
         po.submit(com.example.scmplatform.procurement.domain.po.status.ActorType.BUYER);
         po.acknowledge(com.example.scmplatform.procurement.domain.po.status.ActorType.SUPPLIER);
+        return po;
+    }
+
+    private PurchaseOrder confirmedFromSuggestionPo(String warehouseId, String nodeType, Integer leadTimeDays) {
+        PurchaseOrder po = acknowledgedFromSuggestionPo(warehouseId, nodeType, leadTimeDays);
+        po.confirm(com.example.scmplatform.procurement.domain.po.status.ActorType.OPERATOR);
         return po;
     }
 }

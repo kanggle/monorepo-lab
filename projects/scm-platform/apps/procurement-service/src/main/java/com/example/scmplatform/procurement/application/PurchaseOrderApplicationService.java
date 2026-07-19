@@ -327,12 +327,14 @@ public class PurchaseOrderApplicationService {
                 "{\"status\":\"CANCELED\",\"reason\":\""
                         + (cmd.reason() == null ? "" : cmd.reason()) + "\"}"));
         eventPublisher.publishPoCanceled(saved, cmd.reason(), actor.accountId());
-        // ADR-MONO-050 D6.3: cancel the wms inbound expectation for a
+        // ADR-MONO-050 D6.3 (SCM-BE-036): cancel the wms inbound expectation for a
         // warehouse-addressed replenishment PO so it is not stranded as a phantom.
-        // v1 note: the state machine only permits CANCELED from pre-CONFIRMED
-        // states, so in v1 this fires before any inbound-expected existed — a
-        // harmless no-op on the wms side; the wiring is ready for the day
-        // post-CONFIRMED cancellation is enabled (deferred, see contract doc).
+        // Emitted unconditionally for any warehouse-addressed cancellation: when the
+        // PO was CONFIRMED (`previous == CONFIRMED`) an inbound-expected exists and wms
+        // marks it CANCELLED; when cancelled pre-CONFIRMED none was ever created, so it
+        // is a harmless no-op on the wms side (wms is the authority on existence). The
+        // now-reachable CONFIRMED→CANCELED transition (PoStatusMachine) is what makes
+        // the meaningful post-confirm cancel drive this event.
         if (saved.isWmsWarehouseDestination()) {
             eventPublisher.publishInboundExpectedCancelled(saved);
         }

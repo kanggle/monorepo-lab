@@ -29,8 +29,8 @@ class PoStatusMachineTest {
         }
 
         @ParameterizedTest
-        @EnumSource(value = PoStatus.class, names = {"DRAFT", "SUBMITTED", "ACKNOWLEDGED"})
-        @DisplayName("BUYER: cancel from DRAFT/SUBMITTED/ACKNOWLEDGED")
+        @EnumSource(value = PoStatus.class, names = {"DRAFT", "SUBMITTED", "ACKNOWLEDGED", "CONFIRMED"})
+        @DisplayName("BUYER: cancel from DRAFT/SUBMITTED/ACKNOWLEDGED/CONFIRMED (CONFIRMED = ADR-050 D6.3)")
         void buyerCancelAllowed(PoStatus from) {
             PoStatusMachine.ensureTransitionAllowed(from, PoStatus.CANCELED, ActorType.BUYER);
         }
@@ -48,8 +48,8 @@ class PoStatusMachineTest {
         }
 
         @ParameterizedTest
-        @EnumSource(value = PoStatus.class, names = {"DRAFT", "SUBMITTED", "ACKNOWLEDGED"})
-        @DisplayName("OPERATOR: cancel from DRAFT/SUBMITTED/ACKNOWLEDGED")
+        @EnumSource(value = PoStatus.class, names = {"DRAFT", "SUBMITTED", "ACKNOWLEDGED", "CONFIRMED"})
+        @DisplayName("OPERATOR: cancel from DRAFT/SUBMITTED/ACKNOWLEDGED/CONFIRMED (CONFIRMED = ADR-050 D6.3)")
         void operatorCancelAllowed(PoStatus from) {
             PoStatusMachine.ensureTransitionAllowed(from, PoStatus.CANCELED, ActorType.OPERATOR);
         }
@@ -158,14 +158,18 @@ class PoStatusMachineTest {
                     .isInstanceOf(PoStatusTransitionInvalidException.class);
         }
 
-        @Test
-        @DisplayName("Cannot cancel after CONFIRMED — no buyer / operator path")
-        void cannotCancelOnceConfirmed() {
+        @ParameterizedTest
+        @EnumSource(value = PoStatus.class, names = {"PARTIALLY_RECEIVED", "RECEIVED"})
+        @DisplayName("Cannot cancel once goods arrive — PARTIALLY_RECEIVED/RECEIVED reject cancel (ADR-050 D6.3: not-yet-received only)")
+        void cannotCancelAfterGoodsArrive(PoStatus from) {
+            // CONFIRMED → CANCELED is now allowed (ADR-050 D6.3), but only while
+            // not-yet-received. Once any goods have arrived the PO is a returns-domain
+            // concern (out of v1 scope), so cancel stays forbidden for both actors.
             assertThatThrownBy(() -> PoStatusMachine.ensureTransitionAllowed(
-                    PoStatus.CONFIRMED, PoStatus.CANCELED, ActorType.BUYER))
+                    from, PoStatus.CANCELED, ActorType.BUYER))
                     .isInstanceOf(PoStatusTransitionInvalidException.class);
             assertThatThrownBy(() -> PoStatusMachine.ensureTransitionAllowed(
-                    PoStatus.CONFIRMED, PoStatus.CANCELED, ActorType.OPERATOR))
+                    from, PoStatus.CANCELED, ActorType.OPERATOR))
                     .isInstanceOf(PoStatusTransitionInvalidException.class);
         }
 
@@ -271,9 +275,11 @@ class PoStatusMachineTest {
         @CsvSource({
                 "DRAFT, BUYER",
                 "SUBMITTED, BUYER",
-                "ACKNOWLEDGED, OPERATOR"
+                "ACKNOWLEDGED, OPERATOR",
+                "CONFIRMED, BUYER",
+                "CONFIRMED, OPERATOR"
         })
-        @DisplayName("Cancel branches reachable from any pre-CONFIRMED status")
+        @DisplayName("Cancel branches reachable from DRAFT/SUBMITTED/ACKNOWLEDGED/CONFIRMED (CONFIRMED = ADR-050 D6.3)")
         void cancelBranches(PoStatus from, ActorType actor) {
             PoStatusMachine.ensureTransitionAllowed(from, PoStatus.CANCELED, actor);
         }

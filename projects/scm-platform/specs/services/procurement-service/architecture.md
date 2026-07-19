@@ -231,7 +231,7 @@ external `/api/v1/procurement/**` namespace and rewrites the prefix (see
 | `GET` | `/api/procurement/po/{poId}` | JWT | n/a | fetch one PO |
 | `POST` | `/api/procurement/po/{poId}/submit` | JWT | `Idempotency-Key` required | DRAFT → SUBMITTED + supplier dispatch |
 | `POST` | `/api/procurement/po/{poId}/confirm` | JWT (operator) | `Idempotency-Key` required | ACKNOWLEDGED → CONFIRMED |
-| `POST` | `/api/procurement/po/{poId}/cancel` | JWT | `Idempotency-Key` required | DRAFT/SUBMITTED/ACK → CANCELED |
+| `POST` | `/api/procurement/po/{poId}/cancel` | JWT | `Idempotency-Key` required | DRAFT/SUBMITTED/ACK/CONFIRMED → CANCELED (CONFIRMED only while not-yet-received) |
 | `POST` | `/api/procurement/webhooks/supplier-ack` | HMAC-SHA256 + timestamp + replay | `(tenantId, poId)` natural | supplier acknowledgement (SUBMITTED → ACK) |
 | `POST` | `/api/procurement/webhooks/asn` | HMAC-SHA256 + timestamp + replay | `(tenantId, supplierAsnRef)` UNIQUE | supplier ASN delivery (CONFIRMED → PARTIAL/RECEIVED) |
 | `GET` | `/actuator/health` | none | n/a | liveness/readiness |
@@ -283,7 +283,8 @@ ACKNOWLEDGED
   └─(BUYER/OPERATOR cancel)→ CANCELED ★
 CONFIRMED
   ├─(SYSTEM apply ASN, partial)→ PARTIALLY_RECEIVED
-  └─(SYSTEM apply ASN, full in one shot)→ RECEIVED
+  ├─(SYSTEM apply ASN, full in one shot)→ RECEIVED
+  └─(BUYER/OPERATOR cancel, not-yet-received)→ CANCELED ★   ← ADR-MONO-050 D6.3 (SCM-BE-036)
 PARTIALLY_RECEIVED
   └─(SYSTEM apply ASN, complete)→ RECEIVED
 RECEIVED
@@ -301,9 +302,11 @@ SETTLED
 | BUYER | DRAFT | SUBMITTED, CANCELED |
 | BUYER | SUBMITTED | CANCELED |
 | BUYER | ACKNOWLEDGED | CANCELED |
+| BUYER | CONFIRMED | CANCELED (not-yet-received; ADR-MONO-050 D6.3) |
 | OPERATOR | DRAFT | SUBMITTED, CANCELED |
 | OPERATOR | SUBMITTED | CANCELED |
 | OPERATOR | ACKNOWLEDGED | CONFIRMED, CANCELED |
+| OPERATOR | CONFIRMED | CANCELED (not-yet-received; ADR-MONO-050 D6.3) |
 | SUPPLIER | SUBMITTED | ACKNOWLEDGED |
 | SYSTEM | CONFIRMED | PARTIALLY_RECEIVED, RECEIVED |
 | SYSTEM | PARTIALLY_RECEIVED | RECEIVED |
