@@ -2,6 +2,7 @@ package com.example.finance.account.integration;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -64,176 +65,204 @@ class ScopeEnforcementHttpIntegrationTest extends AbstractAccountIntegrationTest
     private static final String OPEN_BODY =
             "{\"ownerRef\":\"scope-probe\",\"currency\":\"KRW\"}";
 
-    // ---- deny: read scope cannot write (the fix) -------------------------------------------------
+    @Nested
+    @DisplayName("deny: read scope cannot write (the fix)")
+    class ReadScopeCannotWrite {
 
-    @Test
-    @DisplayName("finance.read token → POST /accounts → 403 PERMISSION_DENIED (write requires finance.write)")
-    void readScopeCannotOpenAccount() throws Exception {
-        mockMvc.perform(post("/api/finance/accounts")
-                        .header("Authorization", "Bearer " + token(List.of("finance.read"), null))
-                        .header("Idempotency-Key", "scope-read-open")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(OPEN_BODY))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        @Test
+        @DisplayName("finance.read token → POST /accounts → 403 PERMISSION_DENIED (write requires finance.write)")
+        void readScopeCannotOpenAccount() throws Exception {
+            mockMvc.perform(post("/api/finance/accounts")
+                            .header("Authorization", "Bearer " + token(List.of("finance.read"), null))
+                            .header("Idempotency-Key", "scope-read-open")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(OPEN_BODY))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        }
+
+        @Test
+        @DisplayName("finance.read token → POST /accounts/{id}/transfers → 403 (fund movement blocked at authz)")
+        void readScopeCannotTransfer() throws Exception {
+            mockMvc.perform(post("/api/finance/accounts/acc-x/transfers")
+                            .header("Authorization", "Bearer " + token(List.of("finance.read"), null))
+                            .header("Idempotency-Key", "scope-read-xfer")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"toAccountId\":\"acc-y\",\"money\":{\"amount\":\"100\",\"currency\":\"KRW\"}}"))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        }
     }
 
-    @Test
-    @DisplayName("finance.read token → POST /accounts/{id}/transfers → 403 (fund movement blocked at authz)")
-    void readScopeCannotTransfer() throws Exception {
-        mockMvc.perform(post("/api/finance/accounts/acc-x/transfers")
-                        .header("Authorization", "Bearer " + token(List.of("finance.read"), null))
-                        .header("Idempotency-Key", "scope-read-xfer")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"toAccountId\":\"acc-y\",\"money\":{\"amount\":\"100\",\"currency\":\"KRW\"}}"))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+    @Nested
+    @DisplayName("allow: read scope can read")
+    class ReadScopeCanRead {
+
+        @Test
+        @DisplayName("finance.read token → GET /accounts/{unknown} → 404 (read admitted, gate open)")
+        void readScopeCanRead() throws Exception {
+            mockMvc.perform(get("/api/finance/accounts/does-not-exist")
+                            .header("Authorization", "Bearer " + token(List.of("finance.read"), null)))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"));
+        }
     }
 
-    // ---- allow: read scope can read --------------------------------------------------------------
+    @Nested
+    @DisplayName("allow: write scope can write (and read)")
+    class WriteScopeCanWriteAndRead {
 
-    @Test
-    @DisplayName("finance.read token → GET /accounts/{unknown} → 404 (read admitted, gate open)")
-    void readScopeCanRead() throws Exception {
-        mockMvc.perform(get("/api/finance/accounts/does-not-exist")
-                        .header("Authorization", "Bearer " + token(List.of("finance.read"), null)))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"));
+        @Test
+        @DisplayName("finance.write token → POST /accounts → 201 (write admitted)")
+        void writeScopeCanOpenAccount() throws Exception {
+            mockMvc.perform(post("/api/finance/accounts")
+                            .header("Authorization", "Bearer " + token(List.of("finance.write"), null))
+                            .header("Idempotency-Key", "scope-write-open")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(OPEN_BODY))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.data.accountId").exists())
+                    .andExpect(jsonPath("$.data.status").value("PENDING_KYC"));
+        }
+
+        @Test
+        @DisplayName("finance.write token → GET /accounts/{unknown} → 404 (write implies read)")
+        void writeScopeCanRead() throws Exception {
+            mockMvc.perform(get("/api/finance/accounts/does-not-exist")
+                            .header("Authorization", "Bearer " + token(List.of("finance.write"), null)))
+                    .andExpect(status().isNotFound());
+        }
     }
 
-    // ---- allow: write scope can write (and read) -------------------------------------------------
+    @Nested
+    @DisplayName("allow: operator role admits without any finance scope (console read consumer)")
+    class OperatorRoleReadsWithoutScope {
 
-    @Test
-    @DisplayName("finance.write token → POST /accounts → 201 (write admitted)")
-    void writeScopeCanOpenAccount() throws Exception {
-        mockMvc.perform(post("/api/finance/accounts")
-                        .header("Authorization", "Bearer " + token(List.of("finance.write"), null))
-                        .header("Idempotency-Key", "scope-write-open")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(OPEN_BODY))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.data.accountId").exists())
-                .andExpect(jsonPath("$.data.status").value("PENDING_KYC"));
+        @Test
+        @DisplayName("operator role, NO finance scope → GET → 404 (role-OR-scope; console read consumer preserved)")
+        void operatorRoleCanReadWithoutScope() throws Exception {
+            mockMvc.perform(get("/api/finance/accounts/does-not-exist")
+                            .header("Authorization", "Bearer " + token(null, List.of("OPERATOR"))))
+                    .andExpect(status().isNotFound());
+        }
     }
 
-    @Test
-    @DisplayName("finance.write token → GET /accounts/{unknown} → 404 (write implies read)")
-    void writeScopeCanRead() throws Exception {
-        mockMvc.perform(get("/api/finance/accounts/does-not-exist")
-                        .header("Authorization", "Bearer " + token(List.of("finance.write"), null)))
-                .andExpect(status().isNotFound());
+    /**
+     * entitlement-trust READ authority (TASK-FIN-BE-048). The runtime-confirmed scenario
+     * (federation run 29632072800): a platform-console-federated customer operator carries
+     * tenant_id=acme, entitled_domains=[finance,wms], NO finance scope, NO roles. Layer-1
+     * (the tenant gate) admits it via trustEntitledDomains(); before this fix layer-2 (this
+     * authz gate) 403'd its READS because it held none of readAuthorities. The converter now
+     * grants ROLE_FINANCE_VIEWER (READ only), so its READS pass while its WRITES stay gated —
+     * the finance analogue of the WMS ROLE_WMS_VIEWER synthesis (TASK-MONO-162).
+     */
+    @Nested
+    @DisplayName("entitlement-trust READ authority (TASK-FIN-BE-048)")
+    class EntitlementTrustReadAuthority {
+
+        @Test
+        @DisplayName("entitled operator (tenant=acme, entitled_domains=[finance], no scope/role) → GET → 404 (read gate open)")
+        void entitledNoScopeNoRoleCanRead() throws Exception {
+            mockMvc.perform(get("/api/finance/accounts/does-not-exist")
+                            .header("Authorization", "Bearer "
+                                    + token("acme", null, null, List.of("finance", "wms"))))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"));
+        }
+
+        @Test
+        @DisplayName("entitled operator (no scope/role) → POST /accounts → 403 (write gate intact — VIEWER is read-only)")
+        void entitledNoScopeNoRoleCannotWrite() throws Exception {
+            mockMvc.perform(post("/api/finance/accounts")
+                            .header("Authorization", "Bearer "
+                                    + token("acme", null, null, List.of("finance", "wms")))
+                            .header("Idempotency-Key", "entitled-viewer-open")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(OPEN_BODY))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        }
+
+        @Test
+        @DisplayName("entitled operator (no scope/role) → POST transfer → 403 (fund movement blocked; entitlement widens READ only)")
+        void entitledNoScopeNoRoleCannotTransfer() throws Exception {
+            mockMvc.perform(post("/api/finance/accounts/acc-x/transfers")
+                            .header("Authorization", "Bearer "
+                                    + token("acme", null, null, List.of("finance", "wms")))
+                            .header("Idempotency-Key", "entitled-viewer-xfer")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"toAccountId\":\"acc-y\",\"money\":{\"amount\":\"100\",\"currency\":\"KRW\"}}"))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        }
     }
 
-    // ---- allow: operator role admits without any finance scope (console read consumer) -----------
+    /**
+     * platform super-admin wildcard READ authority (TASK-FIN-BE-049). The runtime-confirmed
+     * scenario (nightly-e2e run 29635409302, console super-admin persona): a platform
+     * super-admin's base OIDC domain-facing token carries tenant_id="*", NO finance scope, NO
+     * domain role (ADR-033 S2 / ADR-034 U5 keep SUPER_ADMIN off the domain token), and
+     * entitled_domains=[]. Layer-1 (the tenant gate) admits it via allowSuperAdminWildcard();
+     * before this fix layer-2 (this authz gate) 403'd its READS (finance overview card
+     * forbidden, reason=PERMISSION_DENIED). The converter now grants
+     * ROLE_FINANCE_SUPERADMIN_READ (READ only), so its READS pass while its WRITES stay gated
+     * — the wildcard sibling of FIN-BE-048.
+     */
+    @Nested
+    @DisplayName("platform super-admin wildcard READ authority (TASK-FIN-BE-049)")
+    class SuperAdminWildcardReadAuthority {
 
-    @Test
-    @DisplayName("operator role, NO finance scope → GET → 404 (role-OR-scope; console read consumer preserved)")
-    void operatorRoleCanReadWithoutScope() throws Exception {
-        mockMvc.perform(get("/api/finance/accounts/does-not-exist")
-                        .header("Authorization", "Bearer " + token(null, List.of("OPERATOR"))))
-                .andExpect(status().isNotFound());
+        @Test
+        @DisplayName("super-admin wildcard (tenant_id='*', no scope/role/entitlement) → GET → 404 (read gate open)")
+        void wildcardSuperadminCanRead() throws Exception {
+            mockMvc.perform(get("/api/finance/accounts/does-not-exist")
+                            .header("Authorization", "Bearer " + token("*", null, null, null)))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"));
+        }
+
+        @Test
+        @DisplayName("super-admin wildcard (no scope/role) → POST /accounts → 403 (write gate intact — wildcard READ is read-only)")
+        void wildcardSuperadminCannotWrite() throws Exception {
+            mockMvc.perform(post("/api/finance/accounts")
+                            .header("Authorization", "Bearer " + token("*", null, null, null))
+                            .header("Idempotency-Key", "wildcard-superadmin-open")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(OPEN_BODY))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        }
+
+        @Test
+        @DisplayName("super-admin wildcard (no scope/role) → POST transfer → 403 (fund movement blocked; wildcard widens READ only)")
+        void wildcardSuperadminCannotTransfer() throws Exception {
+            mockMvc.perform(post("/api/finance/accounts/acc-x/transfers")
+                            .header("Authorization", "Bearer " + token("*", null, null, null))
+                            .header("Idempotency-Key", "wildcard-superadmin-xfer")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"toAccountId\":\"acc-y\",\"money\":{\"amount\":\"100\",\"currency\":\"KRW\"}}"))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        }
     }
 
-    // ---- entitlement-trust READ authority (TASK-FIN-BE-048) --------------------------------------
-    // The runtime-confirmed scenario (federation run 29632072800): a platform-console-federated
-    // customer operator carries tenant_id=acme, entitled_domains=[finance,wms], NO finance scope,
-    // NO roles. Layer-1 (the tenant gate) admits it via trustEntitledDomains(); before this fix
-    // layer-2 (this authz gate) 403'd its READS because it held none of readAuthorities. The
-    // converter now grants ROLE_FINANCE_VIEWER (READ only), so its READS pass while its WRITES stay
-    // gated — the finance analogue of the WMS ROLE_WMS_VIEWER synthesis (TASK-MONO-162).
+    @Nested
+    @DisplayName("deny: no scope and no role is fully unprivileged")
+    class NoScopeNoRoleFullyUnprivileged {
 
-    @Test
-    @DisplayName("entitled operator (tenant=acme, entitled_domains=[finance], no scope/role) → GET → 404 (read gate open)")
-    void entitledNoScopeNoRoleCanRead() throws Exception {
-        mockMvc.perform(get("/api/finance/accounts/does-not-exist")
-                        .header("Authorization", "Bearer "
-                                + token("acme", null, null, List.of("finance", "wms"))))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"));
-    }
-
-    @Test
-    @DisplayName("entitled operator (no scope/role) → POST /accounts → 403 (write gate intact — VIEWER is read-only)")
-    void entitledNoScopeNoRoleCannotWrite() throws Exception {
-        mockMvc.perform(post("/api/finance/accounts")
-                        .header("Authorization", "Bearer "
-                                + token("acme", null, null, List.of("finance", "wms")))
-                        .header("Idempotency-Key", "entitled-viewer-open")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(OPEN_BODY))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
-    }
-
-    @Test
-    @DisplayName("entitled operator (no scope/role) → POST transfer → 403 (fund movement blocked; entitlement widens READ only)")
-    void entitledNoScopeNoRoleCannotTransfer() throws Exception {
-        mockMvc.perform(post("/api/finance/accounts/acc-x/transfers")
-                        .header("Authorization", "Bearer "
-                                + token("acme", null, null, List.of("finance", "wms")))
-                        .header("Idempotency-Key", "entitled-viewer-xfer")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"toAccountId\":\"acc-y\",\"money\":{\"amount\":\"100\",\"currency\":\"KRW\"}}"))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
-    }
-
-    // ---- platform super-admin wildcard READ authority (TASK-FIN-BE-049) --------------------------
-    // The runtime-confirmed scenario (nightly-e2e run 29635409302, console super-admin persona): a
-    // platform super-admin's base OIDC domain-facing token carries tenant_id="*", NO finance scope,
-    // NO domain role (ADR-033 S2 / ADR-034 U5 keep SUPER_ADMIN off the domain token), and
-    // entitled_domains=[]. Layer-1 (the tenant gate) admits it via allowSuperAdminWildcard(); before
-    // this fix layer-2 (this authz gate) 403'd its READS (finance overview card forbidden,
-    // reason=PERMISSION_DENIED). The converter now grants ROLE_FINANCE_SUPERADMIN_READ (READ only),
-    // so its READS pass while its WRITES stay gated — the wildcard sibling of FIN-BE-048.
-
-    @Test
-    @DisplayName("super-admin wildcard (tenant_id='*', no scope/role/entitlement) → GET → 404 (read gate open)")
-    void wildcardSuperadminCanRead() throws Exception {
-        mockMvc.perform(get("/api/finance/accounts/does-not-exist")
-                        .header("Authorization", "Bearer " + token("*", null, null, null)))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"));
-    }
-
-    @Test
-    @DisplayName("super-admin wildcard (no scope/role) → POST /accounts → 403 (write gate intact — wildcard READ is read-only)")
-    void wildcardSuperadminCannotWrite() throws Exception {
-        mockMvc.perform(post("/api/finance/accounts")
-                        .header("Authorization", "Bearer " + token("*", null, null, null))
-                        .header("Idempotency-Key", "wildcard-superadmin-open")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(OPEN_BODY))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
-    }
-
-    @Test
-    @DisplayName("super-admin wildcard (no scope/role) → POST transfer → 403 (fund movement blocked; wildcard widens READ only)")
-    void wildcardSuperadminCannotTransfer() throws Exception {
-        mockMvc.perform(post("/api/finance/accounts/acc-x/transfers")
-                        .header("Authorization", "Bearer " + token("*", null, null, null))
-                        .header("Idempotency-Key", "wildcard-superadmin-xfer")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"toAccountId\":\"acc-y\",\"money\":{\"amount\":\"100\",\"currency\":\"KRW\"}}"))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
-    }
-
-    // ---- deny: no scope and no role is fully unprivileged ----------------------------------------
-
-    @Test
-    @DisplayName("finance token with NO scope and NO role → POST → 403, GET → 403 (defense in depth)")
-    void unprivilegedFinanceTokenDenied() throws Exception {
-        String bare = token(null, null);
-        mockMvc.perform(post("/api/finance/accounts")
-                        .header("Authorization", "Bearer " + bare)
-                        .header("Idempotency-Key", "scope-bare-open")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(OPEN_BODY))
-                .andExpect(status().isForbidden());
-        mockMvc.perform(get("/api/finance/accounts/does-not-exist")
-                        .header("Authorization", "Bearer " + bare))
-                .andExpect(status().isForbidden());
+        @Test
+        @DisplayName("finance token with NO scope and NO role → POST → 403, GET → 403 (defense in depth)")
+        void unprivilegedFinanceTokenDenied() throws Exception {
+            String bare = token(null, null);
+            mockMvc.perform(post("/api/finance/accounts")
+                            .header("Authorization", "Bearer " + bare)
+                            .header("Idempotency-Key", "scope-bare-open")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(OPEN_BODY))
+                    .andExpect(status().isForbidden());
+            mockMvc.perform(get("/api/finance/accounts/does-not-exist")
+                            .header("Authorization", "Bearer " + bare))
+                    .andExpect(status().isForbidden());
+        }
     }
 }
