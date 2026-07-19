@@ -87,9 +87,7 @@ public class UserProfileService {
     }
 
     public UserListPageResult listUsers(ProfileStatus status, String email, int page, int size) {
-        int safePage = Math.max(page, 0);
-        int safeSize = Math.max(Math.min(size, 100), 1);
-        PageQuery pageQuery = new PageQuery(safePage, safeSize, "createdAt", "DESC");
+        PageQuery pageQuery = PageQuery.of(page, size, "createdAt", "DESC");
 
         PageResult<UserProfile> profiles;
 
