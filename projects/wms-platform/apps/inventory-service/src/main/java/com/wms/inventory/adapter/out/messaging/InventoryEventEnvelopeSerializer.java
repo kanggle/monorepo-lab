@@ -234,6 +234,7 @@ public class InventoryEventEnvelopeSerializer {
         payload.put("inventoryId", e.inventoryId().toString());
         payload.put("locationId", e.locationId().toString());
         payload.put("locationCode", e.locationCode());
+        payload.put("warehouseCode", e.warehouseCode());
         payload.put("skuId", e.skuId().toString());
         payload.put("skuCode", e.skuCode());
         payload.put("lotId", e.lotId() == null ? null : e.lotId().toString());

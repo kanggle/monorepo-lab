@@ -5,6 +5,7 @@ import com.wms.inventory.application.port.out.MasterReadModelWriterPort;
 import com.wms.inventory.domain.model.masterref.LocationSnapshot;
 import com.wms.inventory.domain.model.masterref.LotSnapshot;
 import com.wms.inventory.domain.model.masterref.SkuSnapshot;
+import com.wms.inventory.domain.model.masterref.WarehouseSnapshot;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.util.Optional;
@@ -33,16 +34,19 @@ public class MasterReadModelRepositoryImpl
     private final LocationSnapshotJpaRepository locationRepo;
     private final SkuSnapshotJpaRepository skuRepo;
     private final LotSnapshotJpaRepository lotRepo;
+    private final WarehouseSnapshotJpaRepository warehouseRepo;
 
     @PersistenceContext
     private EntityManager entityManager;
 
     public MasterReadModelRepositoryImpl(LocationSnapshotJpaRepository locationRepo,
                                              SkuSnapshotJpaRepository skuRepo,
-                                             LotSnapshotJpaRepository lotRepo) {
+                                             LotSnapshotJpaRepository lotRepo,
+                                             WarehouseSnapshotJpaRepository warehouseRepo) {
         this.locationRepo = locationRepo;
         this.skuRepo = skuRepo;
         this.lotRepo = lotRepo;
+        this.warehouseRepo = warehouseRepo;
     }
 
     // ---- Read side -----------------------------------------------------------
@@ -63,6 +67,12 @@ public class MasterReadModelRepositoryImpl
     @Transactional(readOnly = true)
     public Optional<LotSnapshot> findLot(UUID id) {
         return lotRepo.findById(id).map(MasterReadModelRepositoryImpl::toDomain);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<WarehouseSnapshot> findWarehouse(UUID id) {
+        return warehouseRepo.findById(id).map(MasterReadModelRepositoryImpl::toDomain);
     }
 
     // ---- Write side ----------------------------------------------------------
@@ -150,6 +160,28 @@ public class MasterReadModelRepositoryImpl
         return rows > 0;
     }
 
+    @Override
+    public boolean upsertWarehouse(WarehouseSnapshot s) {
+        int rows = entityManager.createNativeQuery("""
+                INSERT INTO warehouse_snapshot
+                    (id, warehouse_code, status, cached_at, master_version)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT (id) DO UPDATE SET
+                    warehouse_code = EXCLUDED.warehouse_code,
+                    status = EXCLUDED.status,
+                    cached_at = EXCLUDED.cached_at,
+                    master_version = EXCLUDED.master_version
+                WHERE warehouse_snapshot.master_version < EXCLUDED.master_version
+                """)
+                .setParameter(1, s.id())
+                .setParameter(2, s.warehouseCode())
+                .setParameter(3, s.status().name())
+                .setParameter(4, s.cachedAt())
+                .setParameter(5, s.masterVersion())
+                .executeUpdate();
+        return rows > 0;
+    }
+
     // ---- Mappers -------------------------------------------------------------
 
     private static LocationSnapshot toDomain(LocationSnapshotJpaEntity e) {
@@ -182,6 +214,15 @@ public class MasterReadModelRepositoryImpl
                 e.getLotNo(),
                 e.getExpiryDate(),
                 LotSnapshot.Status.valueOf(e.getStatus()),
+                e.getCachedAt(),
+                e.getMasterVersion());
+    }
+
+    private static WarehouseSnapshot toDomain(WarehouseSnapshotJpaEntity e) {
+        return new WarehouseSnapshot(
+                e.getId(),
+                e.getWarehouseCode(),
+                WarehouseSnapshot.Status.valueOf(e.getStatus()),
                 e.getCachedAt(),
                 e.getMasterVersion());
     }

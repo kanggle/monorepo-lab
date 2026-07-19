@@ -243,5 +243,8 @@ class ReceiveStockServiceTest {
         @Override public Optional<LotSnapshot> findLot(UUID id) {
             return Optional.ofNullable(lots.get(id));
         }
+        @Override public Optional<com.wms.inventory.domain.model.masterref.WarehouseSnapshot> findWarehouse(UUID id) {
+            return Optional.empty();
+        }
     }
 }

@@ -24,6 +24,9 @@ public class Asn {
     private final UUID warehouseId;
     private final LocalDate expectedArriveDate;
     private final String notes;
+    // ADR-MONO-050 — traceability back to the originating scm PO (null for MANUAL / WEBHOOK_ERP).
+    private final String poNumber;
+    private final UUID poId;
     private AsnStatus status;
     private long version;
     private final Instant createdAt;
@@ -40,6 +43,18 @@ public class Asn {
                Instant createdAt, String createdBy,
                Instant updatedAt, String updatedBy,
                List<AsnLine> lines) {
+        this(id, asnNo, source, supplierPartnerId, warehouseId, expectedArriveDate, notes,
+                null, null, status, version, createdAt, createdBy, updatedAt, updatedBy, lines);
+    }
+
+    public Asn(UUID id, String asnNo, AsnSource source,
+               UUID supplierPartnerId, UUID warehouseId,
+               LocalDate expectedArriveDate, String notes,
+               String poNumber, UUID poId,
+               AsnStatus status, long version,
+               Instant createdAt, String createdBy,
+               Instant updatedAt, String updatedBy,
+               List<AsnLine> lines) {
         this.id = id;
         this.asnNo = asnNo;
         this.source = source;
@@ -47,6 +62,8 @@ public class Asn {
         this.warehouseId = warehouseId;
         this.expectedArriveDate = expectedArriveDate;
         this.notes = notes;
+        this.poNumber = poNumber;
+        this.poId = poId;
         this.status = status;
         this.version = version;
         this.createdAt = createdAt;
@@ -54,6 +71,15 @@ public class Asn {
         this.updatedAt = updatedAt;
         this.updatedBy = updatedBy;
         this.lines = new ArrayList<>(lines);
+    }
+
+    /**
+     * Whether this ASN can still be cancelled — i.e. it has not yet been physically
+     * received (goods not yet in putaway). Used by the scm cancel handler (ADR-MONO-050
+     * D6.3) to distinguish "mark CANCELLED" from "no-op, already received".
+     */
+    public boolean isCancellable() {
+        return CANCELLABLE_STATUSES.contains(status);
     }
 
     public void startInspection(Instant now, String actorId) {
@@ -120,6 +146,8 @@ public class Asn {
     public UUID getWarehouseId() { return warehouseId; }
     public LocalDate getExpectedArriveDate() { return expectedArriveDate; }
     public String getNotes() { return notes; }
+    public String getPoNumber() { return poNumber; }
+    public UUID getPoId() { return poId; }
     public AsnStatus getStatus() { return status; }
     public long getVersion() { return version; }
     public Instant getCreatedAt() { return createdAt; }

@@ -15,6 +15,7 @@ public record InventoryLowStockDetectedEvent(
         UUID inventoryId,
         UUID locationId,
         String locationCode,
+        String warehouseCode,
         UUID skuId,
         String skuCode,
         UUID lotId,

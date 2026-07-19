@@ -12,11 +12,14 @@ import com.wms.inventory.domain.model.Inventory;
 import com.wms.inventory.domain.model.masterref.LocationSnapshot;
 import com.wms.inventory.domain.model.masterref.LotSnapshot;
 import com.wms.inventory.domain.model.masterref.SkuSnapshot;
+import com.wms.inventory.domain.model.masterref.WarehouseSnapshot;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -87,6 +90,34 @@ class LowStockDetectionServiceTest {
         assertThat(fired.triggeringEventType()).isEqualTo("inventory.transferred");
     }
 
+    @Test
+    void payloadCarriesWarehouseCode() {
+        // ADR-MONO-050 D9: the alert must carry the warehouse CODE (resolved from the
+        // warehouse master read-model), not just the uuid, so scm can address the PO.
+        thresholdAdapter.setDefaultThreshold(20);
+        masterReadModel.putWarehouse(WAREHOUSE, "WH-SEOUL-01");
+        Inventory inv = sample(5);
+        service.evaluate(inv, "inventory.adjusted", null, NOW, "actor");
+        InventoryLowStockDetectedEvent fired = outbox.events.stream()
+                .filter(e -> e instanceof InventoryLowStockDetectedEvent)
+                .map(e -> (InventoryLowStockDetectedEvent) e)
+                .findFirst().orElseThrow();
+        assertThat(fired.warehouseCode()).isEqualTo("WH-SEOUL-01");
+    }
+
+    @Test
+    void warehouseCodeNullWhenSnapshotAbsent() {
+        // Best-effort enrichment: a missing warehouse snapshot must not suppress the alert.
+        thresholdAdapter.setDefaultThreshold(20);
+        Inventory inv = sample(5);
+        service.evaluate(inv, "inventory.adjusted", null, NOW, "actor");
+        InventoryLowStockDetectedEvent fired = outbox.events.stream()
+                .filter(e -> e instanceof InventoryLowStockDetectedEvent)
+                .map(e -> (InventoryLowStockDetectedEvent) e)
+                .findFirst().orElseThrow();
+        assertThat(fired.warehouseCode()).isNull();
+    }
+
     private static Inventory sample(int available) {
         return Inventory.restore(UUID.randomUUID(), WAREHOUSE, UUID.randomUUID(), SKU, null,
                 available, 0, 0, NOW, 0L, NOW, "seed", NOW, "seed");
@@ -98,8 +129,19 @@ class LowStockDetectionServiceTest {
     }
 
     private static class FakeMasterReadModel implements MasterReadModelPort {
+        private final Map<UUID, String> warehouseCodes = new HashMap<>();
+
+        void putWarehouse(UUID id, String warehouseCode) {
+            warehouseCodes.put(id, warehouseCode);
+        }
+
         @Override public Optional<LocationSnapshot> findLocation(UUID id) { return Optional.empty(); }
         @Override public Optional<SkuSnapshot> findSku(UUID id) { return Optional.empty(); }
         @Override public Optional<LotSnapshot> findLot(UUID id) { return Optional.empty(); }
+        @Override public Optional<WarehouseSnapshot> findWarehouse(UUID id) {
+            return Optional.ofNullable(warehouseCodes.get(id))
+                    .map(code -> new WarehouseSnapshot(
+                            id, code, WarehouseSnapshot.Status.ACTIVE, NOW, 0L));
+        }
     }
 }

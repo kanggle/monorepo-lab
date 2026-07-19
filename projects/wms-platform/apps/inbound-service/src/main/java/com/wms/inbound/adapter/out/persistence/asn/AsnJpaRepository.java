@@ -22,4 +22,13 @@ interface AsnJpaRepository extends JpaRepository<AsnJpaEntity, UUID> {
     long countFiltered(
             @Param("status") String status,
             @Param("warehouseId") UUID warehouseId);
+
+    // ADR-MONO-050 D6.2 — an "open" expectation is any ASN for this PO not yet terminal.
+    @Query("SELECT COUNT(a) > 0 FROM AsnJpaEntity a WHERE a.poNumber = :poNumber AND a.status NOT IN ('CLOSED', 'CANCELLED')")
+    boolean existsOpenByPoNumber(@Param("poNumber") String poNumber);
+
+    @Query("SELECT a FROM AsnJpaEntity a WHERE a.poNumber = :poNumber AND a.status NOT IN ('CLOSED', 'CANCELLED') ORDER BY a.createdAt DESC")
+    java.util.List<AsnJpaEntity> findOpenByPoNumber(
+            @Param("poNumber") String poNumber,
+            org.springframework.data.domain.Pageable pageable);
 }
