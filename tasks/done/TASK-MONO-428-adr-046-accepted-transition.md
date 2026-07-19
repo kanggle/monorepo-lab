@@ -8,7 +8,7 @@ ADR-MONO-046 PROPOSED → ACCEPTED transition (doc-only governance flip) + § 4 
 
 # Status
 
-ready
+done
 
 # Owner
 

@@ -8,7 +8,7 @@ ADR-046 step 3 — 운영자 그룹 console screen (`features/operator-groups/`)
 
 # Status
 
-review
+done
 
 # Owner
 
