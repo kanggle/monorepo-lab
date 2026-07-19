@@ -59,6 +59,10 @@ dependencies {
     testImplementation 'io.projectreactor:reactor-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'org.assertj:assertj-core'
+
+    // Shared gateway filter-test scaffolding — RecordingGatewayFilterChain +
+    // GatewayTestJwts (TASK-MONO-429).
+    testImplementation testFixtures(project(':libs:java-gateway'))
 }
 
 dependencyManagement {

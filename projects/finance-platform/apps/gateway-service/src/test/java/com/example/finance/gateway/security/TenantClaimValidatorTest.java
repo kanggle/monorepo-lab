@@ -2,10 +2,12 @@ package com.example.finance.gateway.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.apigateway.testfixtures.GatewayTestJwts;
 import com.example.security.oauth2.TenantClaimValidator;
 import com.example.finance.gateway.config.OAuth2ResourceServerConfig;
-import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
@@ -28,20 +30,17 @@ class TenantClaimValidatorTest {
     private final TenantClaimValidator validator = new OAuth2ResourceServerConfig(
             "http://iam.local/oauth2/jwks", "http://iam.local,iam", "finance").tenantGate();
 
+    // Delegates to the shared RS256 / 60s builder (TASK-MONO-429); only the claim-selection logic
+    // is finance's, so it stays here while the token shape is shared.
     private static Jwt jwt(Object tenantId, Object entitledDomains) {
-        Jwt.Builder b = Jwt.withTokenValue("token")
-                .header("alg", "RS256")
-                .issuer("http://iam.local")
-                .subject("user-1")
-                .issuedAt(Instant.now())
-                .expiresAt(Instant.now().plusSeconds(60));
+        Map<String, Object> claims = new HashMap<>();
         if (tenantId != null) {
-            b.claim(TenantClaimValidator.CLAIM_TENANT_ID, tenantId);
+            claims.put(TenantClaimValidator.CLAIM_TENANT_ID, tenantId);
         }
         if (entitledDomains != null) {
-            b.claim(TenantClaimValidator.CLAIM_ENTITLED_DOMAINS, entitledDomains);
+            claims.put(TenantClaimValidator.CLAIM_ENTITLED_DOMAINS, entitledDomains);
         }
-        return b.build();
+        return GatewayTestJwts.jwt(claims);
     }
 
     private boolean accepts(Object tenantId, Object entitled) {

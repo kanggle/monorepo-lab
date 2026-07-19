@@ -2,17 +2,15 @@ package com.example.apigateway.filter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.apigateway.testfixtures.RecordingGatewayFilterChain;
 import java.lang.reflect.Constructor;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.core.Ordered;
 import org.springframework.http.HttpHeaders;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
-import org.springframework.web.server.ServerWebExchange;
-import reactor.core.publisher.Mono;
 
 @DisplayName("IdentityHeaderStripFilter — baseline 은 바닥이며, 오직 더할 수만 있다")
 class IdentityHeaderStripFilterTest {
@@ -75,11 +73,11 @@ class IdentityHeaderStripFilterTest {
                 .header("Authorization", "Bearer xyz")
                 .header("X-Request-Id", "req-1")
                 .build();
-        CapturingChain chain = new CapturingChain();
+        RecordingGatewayFilterChain chain = new RecordingGatewayFilterChain();
 
         filter.filter(MockServerWebExchange.from(request), chain).block();
 
-        HttpHeaders forwarded = chain.captured.getRequest().getHeaders();
+        HttpHeaders forwarded = chain.capturedExchange().getRequest().getHeaders();
         assertThat(forwarded.getFirst("X-User-Id")).isNull();
         assertThat(forwarded.getFirst("X-Tenant-Id")).isNull();
         assertThat(forwarded.getFirst("X-Scopes")).isNull();
@@ -94,7 +92,7 @@ class IdentityHeaderStripFilterTest {
     @Test
     @DisplayName("JWT 없는 라우트(웹훅)에서도 위조 헤더를 제거한다 — 여기선 strip 이 유일한 방어다")
     void stripsForgedHeadersOnRoutesThatCarryNoJwt() {
-        CapturingChain chain = new CapturingChain();
+        RecordingGatewayFilterChain chain = new RecordingGatewayFilterChain();
         MockServerHttpRequest request = MockServerHttpRequest.post("/webhooks/erp/inbound")
                 .header("X-Actor-Id", "victim-operator-uuid")
                 .header("X-Tenant-Id", "victim-tenant")
@@ -102,7 +100,7 @@ class IdentityHeaderStripFilterTest {
 
         new IdentityHeaderStripFilter().filter(MockServerWebExchange.from(request), chain).block();
 
-        HttpHeaders forwarded = chain.captured.getRequest().getHeaders();
+        HttpHeaders forwarded = chain.capturedExchange().getRequest().getHeaders();
         assertThat(forwarded.getFirst("X-Actor-Id")).isNull();
         assertThat(forwarded.getFirst("X-Tenant-Id")).isNull();
     }
@@ -112,15 +110,5 @@ class IdentityHeaderStripFilterTest {
     void runsAtHighestPrecedence() {
         assertThat(new IdentityHeaderStripFilter().getOrder())
                 .isEqualTo(Ordered.HIGHEST_PRECEDENCE);
-    }
-
-    private static final class CapturingChain implements GatewayFilterChain {
-        ServerWebExchange captured;
-
-        @Override
-        public Mono<Void> filter(ServerWebExchange exchange) {
-            this.captured = exchange;
-            return Mono.empty();
-        }
     }
 }

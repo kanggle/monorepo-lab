@@ -4,22 +4,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.apigateway.error.GatewayErrorHandler;
 import com.example.apigateway.filter.RoleAdmissionFilter;
+import com.example.apigateway.testfixtures.GatewayTestJwts;
+import com.example.apigateway.testfixtures.RecordingGatewayFilterChain;
 import com.example.finance.gateway.config.GatewayIdentityConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.time.Instant;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.web.server.ServerWebExchange;
-import reactor.core.publisher.Mono;
 
 /**
  * finance's rule-6 admission (TASK-MONO-416), asserted against the {@link RoleAdmissionFilter}
@@ -40,43 +39,43 @@ class RoleAdmissionFilterTest {
     @Test
     @DisplayName("operator 역할 토큰은 통과")
     void admitsOperatorRoleToken() {
-        assertThat(runAuthenticated(jwt(Map.of("roles", List.of("OPERATOR")))).called).isTrue();
+        assertThat(runAuthenticated(jwt(Map.of("roles", List.of("OPERATOR")))).wasCalled()).isTrue();
     }
 
     @Test
     @DisplayName("scope 만 있는 머신 토큰은 통과")
     void admitsScopeOnlyMachineToken() {
-        assertThat(runAuthenticated(jwt(Map.of("scope", "finance.read"))).called).isTrue();
+        assertThat(runAuthenticated(jwt(Map.of("scope", "finance.read"))).wasCalled()).isTrue();
     }
 
     @Test
     @DisplayName("역할도 scope 도 없으면 403")
     void rejectsNoRoleNoScopeWith403() {
         MockServerWebExchange exchange = get();
-        CapturingChain chain = new CapturingChain();
+        RecordingGatewayFilterChain chain = new RecordingGatewayFilterChain();
 
         filter.filter(exchange, chain)
                 .contextWrite(ReactiveSecurityContextHolder.withAuthentication(
                         new JwtAuthenticationToken(jwt(Map.of()))))
                 .block();
 
-        assertThat(chain.called).isFalse();
+        assertThat(chain.wasCalled()).isFalse();
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
 
     @Test
     @DisplayName("security context 없음(공개 경로) → 통과")
     void passesPublicRoute() {
-        CapturingChain chain = new CapturingChain();
+        RecordingGatewayFilterChain chain = new RecordingGatewayFilterChain();
         filter.filter(MockServerWebExchange.from(
                 MockServerHttpRequest.get("/actuator/health")), chain).block();
-        assertThat(chain.called).isTrue();
+        assertThat(chain.wasCalled()).isTrue();
     }
 
     // --- helpers ---
 
-    private CapturingChain runAuthenticated(Jwt jwt) {
-        CapturingChain chain = new CapturingChain();
+    private RecordingGatewayFilterChain runAuthenticated(Jwt jwt) {
+        RecordingGatewayFilterChain chain = new RecordingGatewayFilterChain();
         filter.filter(get(), chain)
                 .contextWrite(ReactiveSecurityContextHolder.withAuthentication(
                         new JwtAuthenticationToken(jwt)))
@@ -89,24 +88,10 @@ class RoleAdmissionFilterTest {
                 MockServerHttpRequest.get("/api/finance/accounts/1"));
     }
 
+    // Deliberately UNSIGNED (alg="none", +300s): admission runs after signature verification, so
+    // it must exercise a token the resource server would have rejected on its own. The alg/ttl
+    // deltas are passed explicitly to the shared builder rather than flattened to its RS256 default.
     private static Jwt jwt(Map<String, Object> claims) {
-        Jwt.Builder b = Jwt.withTokenValue("token")
-                .header("alg", "none")
-                .issuer("http://iam.local")
-                .subject("user-1")
-                .issuedAt(Instant.now())
-                .expiresAt(Instant.now().plusSeconds(300));
-        claims.forEach(b::claim);
-        return b.build();
-    }
-
-    private static final class CapturingChain implements GatewayFilterChain {
-        boolean called = false;
-
-        @Override
-        public Mono<Void> filter(ServerWebExchange exchange) {
-            this.called = true;
-            return Mono.empty();
-        }
+        return GatewayTestJwts.jwt("none", Duration.ofSeconds(300), claims);
     }
 }
