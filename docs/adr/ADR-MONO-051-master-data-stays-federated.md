@@ -206,7 +206,13 @@ Re-run these before citing this ADR as current. Per repo practice, a prior count
 
   Measuring before promoting narrowed the work: **D1 and D3 were already canonical** in that same section ("Master/reference data … is owned by exactly one service and distributed via events for local caching") — propagated, not divergent, so restating them would have split the canon. Only D2 was genuinely absent; nothing in `platform/` declared what *form* an identifier takes when it crosses a boundary.
 
-  **D6 was deliberately not promoted.** It constrains deployment and extraction strategy rather than service boundaries, so its natural home is [`TEMPLATE.md`](../../TEMPLATE.md) § Discovery → Distribution. TASK-MONO-435 left that unadjudicated rather than forcing it into the wrong file; until it moves, D6 binds from this ADR alone.
+  **D6 was deliberately not promoted here.** It constrains deployment and extraction strategy rather than service boundaries, so TASK-MONO-435 left its home unadjudicated rather than forcing it into the wrong file. Resolved below.
+
+- **✅ Done (TASK-MONO-437, 2026-07-20):** D6 is promoted into [`TEMPLATE.md`](../../TEMPLATE.md) § Cross-Project Runtime Coupling (Extraction Constraint), placed as the sibling of § Library vs Project Boundary (Strict). The two now stand together as the pair of rules protecting extractability — one governing *where content lives*, the other *what one project may require another to be running*.
+
+  The section this ADR originally named — § Discovery → Distribution — **does not exist as a heading** in `TEMPLATE.md`. The string occurs only in the document preamble and as a sub-step of the standalone-repo import procedure, and that sub-step would have been the wrong home (it reconciles shared-layer duplicates during an import, not architectural proposals). TASK-MONO-437 selected a concrete anchor and recorded the reasoning rather than following the name literally into the wrong subsection.
+
+  With this, §7 carries no remaining promotion follow-ups: D1 and D3 were already canonical, D2 landed under TASK-MONO-435, D6 under TASK-MONO-437, and D4/D5 are not promotion candidates (D4 is a conditional acceptance that expires at its own tripwire; D5 *is* the tripwire).
 
 ---
 

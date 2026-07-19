@@ -72,6 +72,23 @@ This is the single most important rule for keeping the template-extraction path 
 
 ---
 
+## Cross-Project Runtime Coupling (Extraction Constraint)
+
+The boundary rule above keeps the library layer extractable by governing **where content lives**. This section governs the other axis: **what one project may require another to be running.**
+
+Every project here is extractable to its own standalone repository via `scripts/sync-portfolio.sh`. That property is load-bearing, and it is what the *Standalone-publish degradation* section of every cross-project event contract defends: with the counterpart project absent, the consumer degrades to an empty or default state rather than failing. No cross-project contract creates a hard dependency.
+
+**Rule**: A proposal that introduces a component **every project must call to resolve identity** must first demonstrate that both of the following survive it:
+
+1. **Standalone extraction** — `scripts/sync-portfolio.sh` still produces a repository that builds and runs on its own.
+2. **Degradation clauses** — each cross-project contract's "no hard dependency" guarantee still holds with the new component absent.
+
+Failing that demonstration is **sufficient grounds for rejection without further architectural argument**.
+
+Rationale: a component every project must reach to resolve identity is by construction a hard dependency for all of them — the exact property the distribution strategy exists to prevent. Decided repo-wide in [`ADR-MONO-051`](docs/adr/ADR-MONO-051-master-data-stays-federated.md) §D6.
+
+---
+
 ## Phase Timeline
 
 ### Phase 1 — Single Project ✅ (completed)
