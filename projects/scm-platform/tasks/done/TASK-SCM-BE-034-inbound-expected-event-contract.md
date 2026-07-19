@@ -8,7 +8,7 @@ scm procurement inbound-expected 이벤트 컨트랙트 — `scm.procurement.inb
 
 # Status
 
-ready
+done
 
 # Owner
 

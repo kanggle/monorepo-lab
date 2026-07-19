@@ -8,7 +8,7 @@ ADR-MONO-050 작성 (PROPOSED) — scm 발주(CONFIRMED PO) → wms inbound-expe
 
 # Status
 
-ready
+done
 
 # Owner
 
