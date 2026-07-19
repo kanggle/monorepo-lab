@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -28,7 +27,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.listener.MessageListenerContainer;
-import org.springframework.kafka.test.utils.ContainerTestUtils;
 import org.springframework.test.context.TestPropertySource;
 
 /**
@@ -68,10 +66,13 @@ import org.springframework.test.context.TestPropertySource;
         "spring.kafka.consumer.properties.metadata.max.age.ms=2000",
         // Keep the OTHER inbound listeners out of the group churn — only the scm
         // containers this IT explicitly starts should join (mirrors
-        // OutboundServiceIntegrationBase / TASK-MONO-376). Without this, every
-        // auto-started sibling listener joining/leaving revokes the container under
-        // test's assignment and waitForAssignment never converges on a loaded runner.
-        "spring.kafka.listener.auto-startup=false"
+        // OutboundServiceIntegrationBase / TASK-MONO-376).
+        "spring.kafka.listener.auto-startup=false",
+        // Eager (Range) assignment: on a loaded CI runner the default cooperative-sticky
+        // assignor's incremental revoke/reassign churned the 2-member group without ever
+        // converging (consumer instances climbed to -11). Eager rebalance settles a stable
+        // membership in a single shot.
+        "spring.kafka.consumer.properties.partition.assignment.strategy=org.apache.kafka.clients.consumer.RangeAssignor"
 })
 class ScmInboundExpectedConsumerIT extends InboundServiceIntegrationBase {
 
@@ -89,7 +90,7 @@ class ScmInboundExpectedConsumerIT extends InboundServiceIntegrationBase {
     @BeforeEach
     void setUp() {
         createTopics();
-        waitForScmListenerAssignment();
+        startScmListeners();
         // asn / asn_line are ordinary tables; inbound_event_dedupe + inbound_outbox
         // are append-only (W2) → TRUNCATE bypasses the BEFORE DELETE triggers.
         jdbc.execute("TRUNCATE TABLE asn CASCADE");
@@ -283,7 +284,9 @@ class ScmInboundExpectedConsumerIT extends InboundServiceIntegrationBase {
     // ==================================================================
 
     private Map<String, Object> awaitAsn(String poNumber) {
-        await().atMost(Duration.ofSeconds(30)).pollInterval(Duration.ofMillis(500))
+        // Generous: absorbs slow group convergence on a loaded CI runner (no pre-wait for
+        // assignment; earliest offset guarantees the pre-published message is read once joined).
+        await().atMost(Duration.ofSeconds(60)).pollInterval(Duration.ofMillis(500))
                 .untilAsserted(() -> assertThat(asnCount(poNumber))
                         .as("an Asn exists for poNumber %s", poNumber).isEqualTo(1));
         return jdbc.queryForMap("SELECT * FROM asn WHERE po_number = ?", poNumber);
@@ -408,34 +411,27 @@ class ScmInboundExpectedConsumerIT extends InboundServiceIntegrationBase {
     }
 
     /**
-     * Blocks until both scm-inbound-expected listener containers hold their partition.
+     * Starts the two scm-inbound-expected listener containers (auto-startup is off) without
+     * blocking on partition assignment.
      *
-     * <p>Both listeners share group {@code wms-inbound-scm-expected-v1}, so all needed
-     * containers must be <b>started first</b> and only then awaited: starting-then-awaiting
-     * one at a time makes the second member's join revoke the first's assignment, which never
-     * converges on a loaded CI runner (the failure mode documented in
-     * {@code OutboundServiceIntegrationBase}). Combined with {@code auto-startup=false}, the
-     * group forms once with exactly these two members and a single rebalance settles both.
+     * <p>We deliberately do <b>not</b> {@code waitForAssignment} here: a blocking wait FAILS the
+     * test outright if the group hasn't converged inside its window, whereas the group's
+     * convergence on a loaded CI runner is merely slow, not absent. The tests don't need a
+     * pre-established assignment — {@code auto-offset-reset=earliest} means a message published
+     * before the consumer joins is still read once it does, positive assertions poll via
+     * {@link #awaitAsn}, and the negative tests use a downstream good-event barrier. So we start
+     * the containers and let the polling absorb whatever convergence latency the runner imposes.
      */
-    private void waitForScmListenerAssignment() {
-        List<MessageListenerContainer> scmContainers = new ArrayList<>();
+    private void startScmListeners() {
         for (MessageListenerContainer c : listenerRegistry.getListenerContainers()) {
             String[] topics = c.getContainerProperties().getTopics();
             if (topics == null) {
                 continue;
             }
             List<String> t = Arrays.asList(topics);
-            if (t.contains(TOPIC) || t.contains(TOPIC_CANCELLED)) {
-                scmContainers.add(c);
-            }
-        }
-        for (MessageListenerContainer c : scmContainers) {
-            if (!c.isRunning()) {
+            if ((t.contains(TOPIC) || t.contains(TOPIC_CANCELLED)) && !c.isRunning()) {
                 c.start();
             }
-        }
-        for (MessageListenerContainer c : scmContainers) {
-            ContainerTestUtils.waitForAssignment(c, 1);
         }
     }
 
