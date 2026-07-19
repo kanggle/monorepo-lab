@@ -162,14 +162,16 @@ class OrgNodeAdminIntegrationTest extends AbstractIntegrationTest {
     // ── V0041 seed (AC-1) ────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("V0041: ORG_ADMIN → exactly {org.manage, operator.manage, tenant.admin.delegate}")
+    @DisplayName("V0041: ORG_ADMIN → exactly {org.manage, operator.manage, tenant.admin.delegate, group.manage}")
     void orgAdminSeededWithExactPermissions() {
         List<String> perms = jdbcTemplate.queryForList("""
                 SELECT p.permission_key FROM admin_role_permissions p
                 JOIN admin_roles r ON r.id = p.role_id
                 WHERE r.name = 'ORG_ADMIN' ORDER BY p.permission_key
                 """, String.class);
-        assertThat(perms).containsExactlyInAnyOrder("org.manage", "operator.manage", "tenant.admin.delegate");
+        // group.manage added by TASK-BE-520 / ADR-MONO-046 V0045 (operator-group
+        // management — ORG_ADMIN already holds operator.manage, so it mirrors that reach).
+        assertThat(perms).containsExactlyInAnyOrder("org.manage", "operator.manage", "tenant.admin.delegate", "group.manage");
 
         // v1 plane separation, deliberate: the entitlement plane stays with TENANT_BILLING_ADMIN,
         // and partnership.manage is a customer-tenant relationship key (ADR-045 D2) that not even
