@@ -1,5 +1,4 @@
 import { chromium, type FullConfig } from '@playwright/test';
-import { shouldSkipFederation } from './federation';
 import { loginAsSuperAdmin } from './login';
 
 /**
@@ -27,18 +26,12 @@ export default async function globalSetup(config: FullConfig) {
   const browser = await chromium.launch();
   const context = await browser.newContext();
 
-  // TASK-PC-FE-113 — in federation mode (PC_FEDERATION_E2E=1) the SUPER_ADMIN
-  // (e2e-super-admin) is not provisioned on the federation demo stack and its
-  // callback would fail with `operator_exchange_unavailable`. The
-  // federation-gated specs log in fresh per-spec (overriding storageState), so
-  // skip the SUPER_ADMIN mint and persist an empty state so the config's
-  // storageState path still exists. Normal runs (flag unset) are unchanged.
-  if (!shouldSkipFederation()) {
-    await context.storageState({ path: storageStatePath });
-    await browser.close();
-    return;
-  }
-
+  // TASK-PC-FE-248 removed the `PC_FEDERATION_E2E` branch that skipped this mint:
+  // it existed only for the two federation-stack specs, which were deleted because
+  // their stack (the ecommerce backend overlay + the omni-corp seed) is gitignored
+  // and so can never exist in CI. Every remaining spec runs against the committed
+  // `docker-compose.e2e.yml` stack, where the SUPER_ADMIN mint always applies.
+  // See `tests/e2e/README.md`.
   await loginAsSuperAdmin(context);
   await context.storageState({ path: storageStatePath });
   await browser.close();
