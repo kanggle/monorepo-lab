@@ -82,4 +82,21 @@ class OrderDashboardControllerWebMvcTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
     }
+
+    // A role OUTSIDE the WMS hierarchy (SUPERADMIN>ADMIN>OPERATOR>VIEWER) cannot satisfy
+    // hasRole('WMS_VIEWER'); WMS_OPERATOR would be allowed (it is above VIEWER), so a
+    // non-hierarchy role is used to prove the deny path.
+    @Test
+    void list_roleOutsideWmsHierarchy_returns403() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/dashboard/orders")
+                        .with(jwt().jwt(j -> j.claim("tenant_id", "wms"))
+                                .authorities(new SimpleGrantedAuthority("ROLE_WMS_GUEST"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void list_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/dashboard/orders"))
+                .andExpect(status().isUnauthorized());
+    }
 }
