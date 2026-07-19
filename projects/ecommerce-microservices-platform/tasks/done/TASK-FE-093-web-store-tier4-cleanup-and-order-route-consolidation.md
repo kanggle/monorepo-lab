@@ -8,7 +8,7 @@ web-store Tier 4 polish + ProductDetail dead-code removal + /orders → /my/orde
 
 # Status
 
-in-progress
+done
 
 # Owner
 
