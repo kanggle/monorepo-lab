@@ -8,7 +8,7 @@ federation-hardening-e2e nightly 워크플로에 inbound-expected live leg 배�
 
 # Status
 
-ready
+done
 
 # Owner
 
