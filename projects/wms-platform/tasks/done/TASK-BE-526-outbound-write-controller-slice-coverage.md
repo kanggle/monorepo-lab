@@ -1,7 +1,7 @@
 # TASK-BE-526 — outbound-service: write-controller HTTP-layer slice coverage
 
 - **Type**: TASK-BE (test-coverage hardening — no production behavior change)
-- **Status**: review
+- **Status**: done
 - **Service**: outbound-service (wms-platform)
 - **Domain/traits**: wms / [transactional, event-driven, multi-tenant]
 - **Analysis model**: Opus 4.8 · **Impl model**: Sonnet (mechanical @WebMvcTest slice authoring — no domain reasoning)
