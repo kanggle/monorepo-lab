@@ -166,7 +166,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-433-adr-051-master-data-federation-proposed.md` — **🟣 REVIEW (doc-only, small — ADR 본문 자체가 리뷰 대상; ACCEPT 는 별건)** — 사용자 질문(2026-07-20 "mdm 있어? 도입 vs 유지")의 답을 ADR 로 못박는다. **저장소에 `mdm` 문자열은 0건이지만 연합형 MDM 은 이미 동작 중이다** — wms `master-service` 단일 정본 + `skuCode` **코드**로 경계 통과 + 소비자 소유 프로젝션(ecommerce `WmsSkuSnapshot`, scm `inventory_nodes`), 생산자는 매핑 테이블 없음("No wms↔ecommerce id map is stored"). **[ADR-MONO-050](../docs/adr/ADR-MONO-050-scm-procurement-wms-inbound-expected.md) §7 D9 가 이미 자기 leg 에 한해 결정화한 것을 전역 일반화**(D2). **진짜 갈라진 유일 실체 = 거래처/공급자 3벌**(erp `BusinessPartner` / scm `suppliers` / wms `Partner` — 필드 실측 대조 완료) **그러나 런타임 조인 0**: FK 미선언 · erp v1 "no real integration" · `erp.masterdata.businesspartner.changed.v1` **구독자 0** · scm→wms `supplierId` 는 `sku_supplier_map` stand-in ⇒ **중복은 있으나 아직 아프지 않다**(D4, 조건부). **결론이 "변경 없음"이라 산출물이 안 남고 재조사를 부르는 것이 이 티켓이 막는 실패 모드** — 그래서 핵심 가치는 결론이 아니라 **D5 트리거(재개 조건 + *그때의 답*)** + **D6 구속 조항**(허브는 5개 프로젝트 전부에 hard dependency ⇒ `sync-portfolio.sh` standalone 추출과 컨트랙트별 "no hard dependency" 조항을 깬다; 미실증 시 추가 논증 없이 기각) + **§6 검증표**. 셋 중 하나라도 빠지면 "대화로만 답하기"(§4 A4)와 동치. **AC-0 = 재측정** — 구독자 0 / FK 미선언이 뒤집혔으면 D5 가 이미 발화한 것이므로 D4 를 다시 쓴다(**선행 숫자는 출처가 아니라 가설**). **범위 밖: ACCEPT 전환**(user-explicit ADR-naming intent 필요, "해줘"는 작성 승인이지 인가 아님) **· supplier 스키마 통합**(없는 병에 대한 수술) **· `libs/` 공유 마스터**(HARDSTOP-03). 분석·구현=Opus 4.8. [[project_adr_accept_gate_exact_intent]] [[feedback_repo_knows_what_it_does_not_say]] [[feedback_recount_population_dont_inherit_scope]]
 
 ## done
 
