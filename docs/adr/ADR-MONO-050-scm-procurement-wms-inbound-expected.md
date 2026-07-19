@@ -1,7 +1,7 @@
 # ADR-MONO-050 — scm → wms Inbound-Expected Loop (confirmed PO → warehouse inbound expectation)
 
-**Status:** PROPOSED
-**Date:** 2026-07-19 (PROPOSED 2026-07-19 — awaiting user review of §2 before ACCEPTED)
+**Status:** ACCEPTED
+**Date:** 2026-07-19 (PROPOSED 2026-07-19 · ACCEPTED 2026-07-19 — user-explicit ADR-naming intent "ADR-MONO-050 ACCEPTED"; see §6)
 **Decision driver:** User request (2026-07-19) — close the leg that [ADR-MONO-027](ADR-MONO-027-wms-scm-replenishment-loop.md) §1.3/§D5 deliberately left open: after scm procurement confirms a replenishment PO, the incoming goods should pre-create an **inbound expectation (ASN)** in wms so receiving is no longer a blind manual entry. Explicit scope constraint from the user: **must work for a single warehouse AND for multiple warehouses** (warehouse-addressed routing, not a single hard-coded destination).
 **Supersedes:** none.
 **Related:** [ADR-MONO-027](ADR-MONO-027-wms-scm-replenishment-loop.md) (the wms → scm *replenishment* loop this closes the return leg of — 027 §D5 terminates at an scm-internal DRAFT PO and explicitly does **not** connect back to wms; this ADR adds that connection), [ADR-MONO-022](ADR-MONO-022-ecommerce-wms-fulfillment-integration.md) (the ecommerce → wms *forward* fulfillment loop — the precedent for a cross-project runtime coupling that **is** closed end-to-end when both systems are in-repo), [ADR-MONO-004](ADR-MONO-004-shared-messaging-scaffolding.md) (shared `libs/java-messaging` outbox/consumer scaffolding — the transport this rides on), [`platform/service-boundaries.md`](../../platform/service-boundaries.md) §「Asynchronous (Events) — cross-project allowed」, the live precedent **scm `inventory-visibility-service` ← wms inventory events**.
@@ -205,4 +205,5 @@ PR shape per each project's `tasks/INDEX.md`: spec PR ↔ impl PR ↔ chore PR s
 
 ## 6. Status history
 
-- **2026-07-19 PROPOSED** — authored for user review of §2 (D1 event transport, D2 fire-on-CONFIRMED, D3 warehouse-addressed single+multi, D4 3PL-out-of-scope, D5 wms InboundExpectation reuse, D6 idempotency/cancel/amend, D7 contract ownership, D8 standalone degradation). Awaiting explicit user intent ("진행"/accept of the §2 decisions) to transition to ACCEPTED (TASK-MONO-431). Per `project_adr_accept_gate_exact_intent` + `platform/architecture-decision-rule.md` § The ACCEPTED Gate — self-ACCEPT is prohibited; the user directs the transition. Phase 1/2 tasks stay blocked until then.
+- **2026-07-19 PROPOSED** (TASK-MONO-430) — authored for user review of §2 (D1 event transport, D2 fire-on-CONFIRMED, D3 warehouse-addressed single+multi, D4 3PL-out-of-scope, D5 wms InboundExpectation reuse, D6 idempotency/cancel/amend, D7 contract ownership, D8 standalone degradation).
+- **2026-07-19 ACCEPTED** (TASK-MONO-431) — user reviewed the PROPOSED document and gave explicit ADR-naming intent **"ADR-MONO-050 ACCEPTED"**, accepting the §2 decisions as authored. **NOT self-ACCEPT**: the user directed the transition (a bare "진행" was correctly rejected first per `platform/architecture-decision-rule.md` § The ACCEPTED Gate — the exact-form, ADR-naming intent arrived on the next turn). Phase 1 parallel tasks (SCM-BE-034/035 ∥ BE-506/507) and Phase 2 (SCM-INT-004) are now unblocked.
