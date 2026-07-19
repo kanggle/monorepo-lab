@@ -1,5 +1,6 @@
 package com.example.review.infrastructure.persistence;
 
+import com.example.review.application.ReviewSortFields;
 import com.example.review.application.port.ReviewQueryPort;
 import com.example.review.application.result.MyReviewListResult;
 import com.example.review.application.result.ReviewListResult;
@@ -153,17 +154,12 @@ class ReviewRepositoryImpl implements ReviewRepository, ReviewQueryPort {
         return Math.round(value * 10.0) / 10.0;
     }
 
-    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("createdAt", "rating");
-
     private Sort parseSort(String sort) {
         if (sort == null || sort.isBlank()) {
             return Sort.by(Sort.Direction.DESC, "createdAt");
         }
+        String field = ReviewSortFields.requireValid(sort);
         String[] parts = sort.split(",");
-        String field = parts[0].trim();
-        if (!ALLOWED_SORT_FIELDS.contains(field)) {
-            throw new IllegalArgumentException("Invalid sort field: " + field);
-        }
         Sort.Direction direction = parts.length > 1 && "asc".equalsIgnoreCase(parts[1].trim())
                 ? Sort.Direction.ASC : Sort.Direction.DESC;
         return Sort.by(direction, field);
