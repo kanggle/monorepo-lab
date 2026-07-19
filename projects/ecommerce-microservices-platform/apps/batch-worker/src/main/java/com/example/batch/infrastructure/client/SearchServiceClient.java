@@ -3,7 +3,6 @@ package com.example.batch.infrastructure.client;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -30,15 +29,10 @@ public class SearchServiceClient {
     private final RestClient restClient;
 
     public SearchServiceClient(@Value("${search-service.base-url}") String baseUrl) {
-        // WARNING fix: explicit timeouts prevent a hung search-service from blocking the
-        // scheduler thread for the entire ShedLock window. 5s connect / 10s read mirrors
-        // the values used in ProductServiceClient for consistency.
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(Duration.ofSeconds(5));
-        factory.setReadTimeout(Duration.ofSeconds(10));
-        this.restClient = RestClient.builder()
+        // Explicit timeouts prevent a hung search-service from blocking the scheduler thread
+        // for the entire ShedLock window. 5s connect / 10s read.
+        this.restClient = RestClients.timed(Duration.ofSeconds(5), Duration.ofSeconds(10))
                 .baseUrl(baseUrl)
-                .requestFactory(factory)
                 .build();
     }
 
