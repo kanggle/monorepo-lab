@@ -4,7 +4,7 @@ import { useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { getErrorMessage, isApiError, ERROR_MESSAGES } from '@repo/types/guards';
-import { useAuth } from '@/features/auth';
+import { useAuth } from '@/shared/lib/auth-context';
 import { HeartIcon } from '@/shared/ui/HeartIcon';
 import { useWishlistCheck } from '../model/use-wishlist-check';
 import { addToWishlist, removeFromWishlist } from '../api/wishlist-api';

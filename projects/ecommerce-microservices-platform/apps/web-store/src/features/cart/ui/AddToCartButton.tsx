@@ -3,7 +3,7 @@
 import { useCallback, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCart } from '../model/cart-context';
-import { useAuth } from '@/features/auth';
+import { useAuth } from '@/shared/lib/auth-context';
 import { Toast } from '@/shared/ui';
 
 interface AddToCartButtonProps {
