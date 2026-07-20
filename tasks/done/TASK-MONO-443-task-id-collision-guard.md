@@ -5,7 +5,7 @@ TASK-MONO-443
 # TASK-MONO-443 — the task-ID allocation rule has no mechanical check, and two collisions have landed
 
 - **Type**: TASK-MONO (CI guard)
-- **Status**: review
+- **Status**: done
 - **Scope**: `scripts/`, `.github/workflows/ci.yml`, `tasks/INDEX.md`
 - **Analysis model**: Opus 4.8 · **Impl model**: Sonnet (small script + one CI job; the judgement is in the predicate, and it is specified below)
 
