@@ -88,6 +88,52 @@ Key domain concepts:
 - One shipping record per order
 - Duplicate OrderConfirmed events must not create duplicate shipping records (idempotency)
 
+### 상태 기계는 순차 재생만 막는다 — 동시 전이는 막지 못한다 (TASK-BE-537, 2026-07-20 측정)
+
+**이 절은 재조사를 막기 위한 기록이다. 아래는 추론이 아니라 실제 Testcontainers Postgres 에서 관측된 값이다.**
+
+`ShippingStatus.ALLOWED_TRANSITIONS` 는 상태당 후속이 하나뿐인
+`Map<status,status>` 이고 자기 전이 항목이 없으므로, `Shipping.transitionTo`
+(`Shipping.java:87-89`) 는 **순차** 재생 `SHIPPED` 를 결정론적으로 거부한다. 이것은
+확인된 사실이다(ADR-002 D3 census / TASK-BE-538).
+
+그러나 이 가드는 **인메모리**이고, 이 서비스에는 낙관적 락이 없다 —
+`@Version` 은 `shipping-service` 전체에 **0건**이다(같은 패턴이 저장소의 다른 103개
+파일에는 걸리므로 이 0 은 패턴 오류가 아니라 실제 부재다). 유효 격리 수준은
+**`read committed`** 이다 — 서비스 어디에도 격리 설정이 없어(`application.yml` 무설정,
+`@Transactional(isolation=…)` 0건, Hikari 미설정) Postgres 서버 기본값이 그대로 쓰이며,
+이 값은 `updateStatus` 가 실제로 도는 트랜잭션 안에서 `SHOW transaction_isolation`
+으로 직접 측정했다. 조회 경로에는 `@Lock` / `PESSIMISTIC_WRITE` / `SELECT … FOR UPDATE`
+가 **없다**(전수 grep 0건).
+
+**결과 (재현됨)**: 두 개의 동시 `SHIPPED` 전이는 **둘 다** 상태 기계를 통과하고
+**둘 다** 커밋한다. `ManualShipConfirmRequested` 아웃박스 행이 **2건** 생긴다.
+`shippings` 행에는 last-writer-wins 로스트 업데이트가 남는다. 재현 테스트 =
+`ConcurrentStatusTransitionIntegrationTest`. 필요한 인터리빙은
+read-A → read-B → commit-A → commit-B 이며, 읽기가 잠금을 잡지 않으므로 창(window)은
+트랜잭션 전 구간이다.
+
+**실제 피해 범위 (티켓의 최초 가정보다 작다)**:
+
+- **wms 재고 이중 차감은 일어나지 않는다.** 두 중복 이벤트는 `partition_key` 가 null
+  이라 `aggregate_id`(= `orderId`)를 Kafka 키로 쓰므로(`AbstractOutboxPublisher.java:116`)
+  같은 파티션에 순서대로 들어가고 한 컨슈머 스레드가 차례로 처리한다. 두 번째는
+  saga 가 이미 `SHIPPED` 이므로 `ManualShipConfirmConsumer.java:181-184` 의
+  terminal no-op 에 걸린다(추가로 `ConfirmShippingService.java:176` 의 `PACKED` 불변식이
+  3차 방어). **주의: wms 의 `eventId` 중복 제거는 이 경우를 잡지 못한다** — 두 발행이
+  각각 새 `UUID.randomUUID()` 를 만들기 때문이다(`SpringShippingEventPublisher.java:100`).
+  즉 이것을 막는 것은 dedupe 가 아니라 **saga 상태 가드 + 파티션 순서**다.
+- **방어되지 않는 쪽은 `ShippingStatusChanged` 다.** 이것도 2건 발행되며,
+  `ShippingStatusChangedEventConsumer` 는 이벤트를 그대로 발송으로 넘긴다. 두 이벤트의
+  `event_id` 가 서로 다르므로 어떤 `eventId` 기반 dedupe 도 이 중복을 잡지 못한다 ⇒
+  고객에게 배송 알림이 두 번 갈 수 있다. 현재로서는 이것이 이 창의 **유일한 실사용 피해**다.
+
+**아직 고치지 않은 이유**: `@Version` 은 경합을 없애는 게 아니라 실패 모드를 바꾼다 —
+두 번째 커밋이 `OptimisticLockException` 이 되고, 지금 그대로면 `GlobalExceptionHandler`
+를 통과해 **500** 으로 새어나간다. 즉 최소 가드가 아니라 **에러 응답 계약 변경**
+(409 + 에러 코드 등록)을 동반하며, 계약은 구현보다 먼저 갱신되어야 한다. 마이그레이션
+(`shippings.version` 컬럼)도 필요하다. 후속 티켓에서 계약 먼저 처리할 것.
+
 ## Outbox
 
 - Pattern: Transactional Outbox (**v2** — shared `AbstractOutboxPublisher`, ADR-MONO-004 § 5; migrated from v1 in TASK-BE-446)

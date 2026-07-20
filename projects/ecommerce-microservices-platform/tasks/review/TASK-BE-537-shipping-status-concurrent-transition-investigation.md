@@ -1,6 +1,6 @@
 # TASK-BE-537 — Investigate whether concurrent `PUT /api/shippings/{id}/status` double-publishes and double-deducts WMS inventory
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (a reproduction test first; the fix, if warranted, is a small one)
