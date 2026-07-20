@@ -8,7 +8,7 @@ ADR-MONO-052 PROPOSED → ACCEPTED 전환 — 운송(transport)은 scm 컨텍스
 
 # Status
 
-ready
+review
 
 # Owner
 
