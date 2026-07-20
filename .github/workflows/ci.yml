@@ -247,6 +247,13 @@ jobs:
       code-changed: ${{ steps.filter.outputs.code-changed }}
     steps:
       - uses: actions/checkout@v4
+      # TASK-MONO-445 AC-0 SECOND SAMPLE — REMOVE BEFORE MERGE.
+      # An independent runner instance, so the correction rests on two
+      # observations rather than the single one from run 29716982256.
+      - name: PROBE — runner shape (second sample)
+        run: |
+          echo "nproc : $(nproc)"
+          free -h | awk '/^Mem:/ {print "Mem   : total="$2" available="$7}'
       - uses: dorny/paths-filter@v3
         id: filter
         with:
