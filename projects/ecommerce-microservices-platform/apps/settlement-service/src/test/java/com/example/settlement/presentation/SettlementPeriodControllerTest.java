@@ -8,6 +8,7 @@ import com.example.settlement.application.service.QuerySettlementPeriodUseCase;
 import com.example.settlement.application.view.PayoutView;
 import com.example.settlement.application.view.PeriodView;
 import com.example.settlement.domain.period.PeriodAlreadyClosedException;
+import com.example.settlement.domain.period.PeriodAlreadyOpenException;
 import com.example.settlement.domain.period.PeriodNotClosedException;
 import com.example.settlement.domain.period.PeriodNotFoundException;
 import com.example.settlement.domain.period.PeriodWindowInvalidException;
@@ -71,6 +72,20 @@ class SettlementPeriodControllerTest {
                 .andExpect(jsonPath("$.periodId").value("p-1"))
                 .andExpect(jsonPath("$.status").value("OPEN"))
                 .andExpect(jsonPath("$.closedAt").doesNotExist());
+    }
+
+    /** TASK-BE-535 AC-4 — duplicate window → 409 PERIOD_ALREADY_OPEN (not a 500). */
+    @Test
+    void open_duplicateWindow_returns409_PERIOD_ALREADY_OPEN() throws Exception {
+        given(openPeriod.open(anyString(), any(), any()))
+                .willThrow(new PeriodAlreadyOpenException(
+                        "an OPEN settlement period already covers this window", null));
+
+        mockMvc.perform(post("/api/admin/settlements/periods")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .contentType(MediaType.APPLICATION_JSON).content(OPEN_BODY))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PERIOD_ALREADY_OPEN"));
     }
 
     @Test

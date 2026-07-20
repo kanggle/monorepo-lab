@@ -3,6 +3,7 @@ package com.example.settlement.presentation;
 import com.example.settlement.application.exception.SellerScopeForbiddenException;
 import com.example.settlement.domain.model.InvalidCommissionRateException;
 import com.example.settlement.domain.period.PeriodAlreadyClosedException;
+import com.example.settlement.domain.period.PeriodAlreadyOpenException;
 import com.example.settlement.domain.period.PeriodNotClosedException;
 import com.example.settlement.domain.period.PeriodNotFoundException;
 import com.example.settlement.domain.period.PeriodWindowInvalidException;
@@ -51,6 +52,15 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handlePeriodWindow(PeriodWindowInvalidException e) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
                 .body(ErrorResponse.of("PERIOD_WINDOW_INVALID", e.getMessage()));
+    }
+
+    @ExceptionHandler(PeriodAlreadyOpenException.class)
+    public ResponseEntity<ErrorResponse> handlePeriodAlreadyOpen(PeriodAlreadyOpenException e) {
+        // 409 PERIOD_ALREADY_OPEN — duplicate POST /periods for a window an OPEN period
+        // already covers exactly (TASK-BE-535). Only exact duplicates; overlapping
+        // windows and a re-open after close remain allowed.
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("PERIOD_ALREADY_OPEN", e.getMessage()));
     }
 
     @ExceptionHandler(PeriodAlreadyClosedException.class)

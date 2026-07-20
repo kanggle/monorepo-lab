@@ -2,6 +2,8 @@ package com.example.payment.adapter.in.rest;
 
 import com.example.web.dto.ErrorResponse;
 import com.example.payment.application.exception.AmountMismatchException;
+import com.example.payment.application.exception.IdempotencyKeyRequiredException;
+import com.example.payment.application.exception.IdempotencyKeyConflictException;
 import com.example.payment.application.exception.PaymentAlreadyCompletedException;
 import com.example.payment.application.exception.PgConfirmFailedException;
 import com.example.payment.application.exception.PgGatewayUnavailableException;
@@ -68,6 +70,22 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleAlreadyCompleted(PaymentAlreadyCompletedException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ErrorResponse.of("PAYMENT_ALREADY_COMPLETED", e.getMessage()));
+    }
+
+    @ExceptionHandler(IdempotencyKeyRequiredException.class)
+    public ResponseEntity<ErrorResponse> handleIdempotencyKeyRequired(IdempotencyKeyRequiredException e) {
+        // 400 IDEMPOTENCY_KEY_REQUIRED — funds-out path refuses a keyless request rather
+        // than serving it non-idempotently (TASK-BE-535).
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of("IDEMPOTENCY_KEY_REQUIRED", e.getMessage()));
+    }
+
+    @ExceptionHandler(IdempotencyKeyConflictException.class)
+    public ResponseEntity<ErrorResponse> handleIdempotencyKeyConflict(IdempotencyKeyConflictException e) {
+        // 409 IDEMPOTENCY_KEY_CONFLICT — same key replayed with a different amount, or the
+        // loser of a concurrent same-key insert race (TASK-BE-535).
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("IDEMPOTENCY_KEY_CONFLICT", e.getMessage()));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)

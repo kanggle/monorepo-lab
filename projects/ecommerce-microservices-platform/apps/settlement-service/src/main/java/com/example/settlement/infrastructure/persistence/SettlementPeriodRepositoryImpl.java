@@ -25,6 +25,15 @@ public class SettlementPeriodRepositoryImpl implements SettlementPeriodRepositor
     }
 
     @Override
+    public SettlementPeriod insertOpen(SettlementPeriod period) {
+        // saveAndFlush, not save: the INSERT must hit Postgres inside the use case's
+        // try-block so the V6 partial-unique violation arrives as a
+        // DataIntegrityViolationException it can translate to 409 PERIOD_ALREADY_OPEN.
+        // A plain save() would defer the INSERT to commit-time flush, past the catch.
+        return jpaRepository.saveAndFlush(period);
+    }
+
+    @Override
     public Optional<SettlementPeriod> findById(String periodId, String tenantId) {
         return jpaRepository.findByPeriodIdAndTenantId(periodId, tenantId);
     }

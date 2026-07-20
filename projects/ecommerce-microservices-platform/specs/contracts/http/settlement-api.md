@@ -136,6 +136,13 @@ window — grain-agnostic).
 ```
 - `from` / `to` are ISO-8601 instants; the window is half-open `[from, to)`. Empty /
   inverted window (`from ≥ to`) → **422 `PERIOD_WINDOW_INVALID`**.
+- A replay of the **exact same window** while an OPEN period already covers it →
+  **409 `PERIOD_ALREADY_OPEN`**. Enforced by a partial unique index
+  `(tenant_id, period_from, period_to) WHERE status = 'OPEN'`, so it holds for two
+  simultaneous in-flight duplicates too. Only *exact duplicates* are refused:
+  genuinely **overlapping** (non-identical) windows remain permitted by design, and
+  re-opening the same window after the earlier one is CLOSED is permitted so a
+  correction re-run is not blocked.
 
 **Response 201**
 ```json
@@ -258,6 +265,7 @@ statuses (PAID rows now carry a `payoutReference` + `paidAt`).
 |---|---|---|
 | `COMMISSION_RATE_INVALID` | 422 | `rateBps` outside `[0, 10000]` on `PUT /commission-rates/{sellerId}` |
 | `PERIOD_WINDOW_INVALID` | 422 | empty / inverted window (`from ≥ to`) on `POST /periods` |
+| `PERIOD_ALREADY_OPEN` | 409 | `POST /periods` for a window an OPEN period already covers exactly (same `tenant_id`, `from`, `to`) |
 | `PERIOD_ALREADY_CLOSED` | 409 | `POST /periods/{id}/close` on an already-CLOSED period |
 | `PERIOD_NOT_CLOSED` | 409 | `POST /periods/{id}/payouts/execute` on a still-OPEN period |
 | `SETTLEMENT_NOT_FOUND` | 404 | seller / accrual / order / period / payout not found in the caller's tenant **or** outside the caller's seller scope (M3 — 404-over-403, no cross-tenant/cross-seller existence disclosure) |

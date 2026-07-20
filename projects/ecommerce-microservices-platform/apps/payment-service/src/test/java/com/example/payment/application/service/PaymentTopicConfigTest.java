@@ -39,6 +39,9 @@ class PaymentTopicConfigTest {
     @Mock
     private PaymentRefundStrandedRecorder paymentRefundStrandedRecorder;
 
+    @Mock
+    private com.example.payment.application.port.out.RefundRequestRepository refundRequestRepository;
+
     @Test
     @DisplayName("PaymentConfirmService는 PaymentEventPublisher.publishPaymentCompleted를 호출한다")
     void confirmPayment_delegatesToEventPublisher() {
@@ -64,8 +67,12 @@ class PaymentTopicConfigTest {
     @Test
     @DisplayName("PaymentRefundService는 PaymentEventPublisher.publishPaymentRefunded를 호출한다")
     void refundPayment_delegatesToEventPublisher() {
+        // The full-refund (OrderCancelled) path needs no idempotency key and never touches
+        // the partial-refund dedupe store (TASK-BE-535 AC-3) — the collaborator is supplied
+        // only to satisfy the constructor.
         PaymentRefundService service = new PaymentRefundService(
-                paymentRepository, paymentEventPublisher, paymentMetrics, paymentGateway
+                paymentRepository, paymentEventPublisher, paymentMetrics, paymentGateway,
+                refundRequestRepository, java.time.Clock.systemUTC()
         );
 
         Payment payment = Payment.create("order-1", "user-1", 10000L);

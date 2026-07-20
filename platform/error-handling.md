@@ -324,6 +324,8 @@ Owned by `payment-service`. See `rules/domains/ecommerce.md` rule E2.
 | PAYMENT_ALREADY_COMPLETED | 409 | Payment is not in PENDING status |
 | PG_CONFIRM_FAILED | 502 | Payment Gateway confirmation API returned a definitive error (4xx) — PG processed the request and rejected it. Payment row transitions to `FAILED`. |
 | PG_GATEWAY_UNAVAILABLE | 503 | Payment Gateway unreachable after Resilience4j retry / circuit-breaker / bulkhead exhaustion (5xx, timeout, circuit open). Distinct from `PG_CONFIRM_FAILED` — PG actual state is unknown, so the payment row is NOT transitioned to `FAILED` and the caller may idempotently retry. ADR-MONO-005 § D4 Category B (TASK-BE-139). |
+| IDEMPOTENCY_KEY_REQUIRED | 400 | `Idempotency-Key` header missing or blank on `POST /api/payments/{paymentId}/refund` (`IdempotencyKeyRequiredException`). The key is mandatory rather than optional because this is a funds-out path — ADR-002 Decision-3's literal reading (TASK-BE-535). |
+| IDEMPOTENCY_KEY_CONFLICT | 409 | The same `Idempotency-Key` was replayed against one payment with a **different** refund `amount`, or lost the concurrent insert race on `UNIQUE (payment_id, idempotency_key)` (`IdempotencyKeyConflictException`). A same-key + same-amount replay is NOT an error — it returns 200 with the unchanged payment (TASK-BE-535). |
 
 ## User  `[domain: ecommerce]`
 
@@ -411,6 +413,7 @@ Owned by `settlement-service` (ADR-MONO-030 marketplace settlement / commission,
 | SETTLEMENT_NOT_FOUND | 404 | Settlement record does not exist. Also returned when a seller-scope / cross-tenant access is rejected, so existence is not leaked (`SettlementNotFoundException` / `SellerScopeForbiddenException`). |
 | COMMISSION_RATE_INVALID | 422 | Commission rate value is outside the allowed range on `PUT /commission-rates/{sellerId}` (`InvalidCommissionRateException`). |
 | PERIOD_WINDOW_INVALID | 422 | The settlement period window is malformed (`from >= to`, or it overlaps an existing period). |
+| PERIOD_ALREADY_OPEN | 409 | An OPEN settlement period already covers exactly this `(tenant, from, to)` window, so a duplicate `POST /api/admin/settlements/periods` is refused (`PeriodAlreadyOpenException`). Enforced by a partial unique index scoped to `status = 'OPEN'`, so re-opening the same window after a close (correction re-run) stays allowed (TASK-BE-535). |
 | PERIOD_ALREADY_CLOSED | 409 | The settlement period is already CLOSED — it cannot be closed or re-settled again. |
 | PERIOD_NOT_CLOSED | 409 | The operation requires a CLOSED period (e.g. payout) but the period is still open. |
 

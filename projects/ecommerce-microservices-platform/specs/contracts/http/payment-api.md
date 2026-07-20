@@ -125,12 +125,32 @@ Only the payment owner (userId matching X-User-Id) may access.
 ### POST /api/payments/{paymentId}/refund
 Refund a payment, in full or in part. A partial refund returns the requested `amount`
 (must be `> 0` and `≤` the remaining refundable = captured `amount − totalRefunded`);
-repeated calls accumulate until the payment is fully refunded. Each call publishes a
-`PaymentRefunded` event (see `events/payment-events.md`). Only the payment owner
-(`userId` matching `X-User-Id`) may refund.
+repeated calls with **distinct** `Idempotency-Key`s accumulate until the payment is
+fully refunded. Each *performed* refund publishes a `PaymentRefunded` event (see
+`events/payment-events.md`). Only the payment owner (`userId` matching `X-User-Id`)
+may refund.
+
+**Idempotency (required on this endpoint)**
+
+This is a funds-out path, so the client key is **mandatory** (ADR-002 Decision-3):
+a missing or blank `Idempotency-Key` is refused with **400 `IDEMPOTENCY_KEY_REQUIRED`**
+rather than falling back to a non-idempotent write. The key is scoped to
+`{paymentId}` — the same key value may be reused against a different payment.
+
+| Replay shape | Behaviour |
+|---|---|
+| Same key, same `amount` | **Replay.** Returns **200** with the payment's current state. `refundedAmount` is NOT increased a second time, the PG is NOT re-called, and NO second `PaymentRefunded` is published. |
+| Same key, different `amount` | **409 `IDEMPOTENCY_KEY_CONFLICT`** — the key is bound to the first request's amount; it is never silently replayed for a different one. |
+| Different key, same payment | A **genuine second partial refund**. Proceeds normally and accumulates (subject to the remaining-refundable check). |
+
+Records are retained indefinitely (no TTL), so a replay window never expires into a
+second payout. Under two simultaneous duplicates the loser of the
+`UNIQUE (payment_id, idempotency_key)` insert also receives **409
+`IDEMPOTENCY_KEY_CONFLICT`**; retrying that request hits the replay row and returns 200.
 
 **Request Headers**
 - `X-User-Id: string` (required)
+- `Idempotency-Key: string` (**required**) — client-supplied, scoped to `{paymentId}`
 
 **Request Body**
 ```json
@@ -158,9 +178,11 @@ repeated calls accumulate until the payment is fully refunded. Each call publish
 | Status | Code | Reason |
 |---|---|---|
 | 400 | INVALID_PAYMENT_REQUEST | `amount` ≤ 0 or > remaining refundable, or payment not in a refundable state |
+| 400 | IDEMPOTENCY_KEY_REQUIRED | `Idempotency-Key` header missing or blank |
 | 401 | UNAUTHORIZED | Missing or invalid access token |
 | 403 | ACCESS_DENIED | Not the payment owner |
 | 404 | PAYMENT_NOT_FOUND | Payment does not exist |
+| 409 | IDEMPOTENCY_KEY_CONFLICT | The same `Idempotency-Key` was replayed for this payment with a different `amount`, or lost a concurrent same-key insert race |
 
 ---
 
