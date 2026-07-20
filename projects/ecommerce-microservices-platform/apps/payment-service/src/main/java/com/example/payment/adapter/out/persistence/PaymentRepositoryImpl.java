@@ -28,6 +28,17 @@ public class PaymentRepositoryImpl implements PaymentRepository {
     }
 
     /**
+     * Synchronous INSERT so a {@code payments.order_id} unique violation is catchable by
+     * the caller — see {@link PaymentRepository#saveAndFlush}.
+     */
+    @Override
+    public Payment saveAndFlush(Payment payment) {
+        PaymentJpaEntity entity = mapper.toEntity(payment);
+        PaymentJpaEntity saved = jpaRepository.saveAndFlush(entity);
+        return mapper.toDomain(saved);
+    }
+
+    /**
      * Tenant-scoped lookup by payment id (M2 layer 3, M3 404-over-403).
      * A payment belonging to a different tenant resolves to empty → 404.
      */
@@ -69,5 +80,13 @@ public class PaymentRepositoryImpl implements PaymentRepository {
                     entityManager.refresh(entity);
                     return mapper.toDomain(entity);
                 });
+    }
+
+    /**
+     * Deliberately global — see {@link PaymentRepository#existsByOrderIdAcrossTenants}.
+     */
+    @Override
+    public boolean existsByOrderIdAcrossTenants(String orderId) {
+        return jpaRepository.existsByOrderId(orderId);
     }
 }
