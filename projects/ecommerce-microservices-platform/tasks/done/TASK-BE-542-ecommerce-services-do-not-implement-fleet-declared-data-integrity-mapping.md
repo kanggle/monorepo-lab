@@ -211,13 +211,13 @@ notification **123** · order **383** · promotion **90** · payment **210** · 
 
 ### AC-3 / AC-4 — 경계 준수
 
-- **AC-3**: 판정이 "libs 공통 기반" 이 아니라 정지 조건 미발동. 다만 **판별식이 8벌 중복**이고 승격 후보다 → `TASK-MONO-446` AC-5.
-- **AC-4**: 선별은 `error-handling.md:137` 의 *"Generic DB constraint violation"* 과 **어긋난다**(FK·NOT NULL 도 문자 그대로는 409). 공유 파일을 여기서 고치지 않고 **`TASK-MONO-446`** 을 루트에 세웠다(별도 spec PR — `tasks/INDEX.md` § PR Separation Rule).
+- **AC-3**: 판정이 "libs 공통 기반" 이 아니라 정지 조건 미발동. 다만 **판별식이 8벌 중복**이고 승격 후보다 → `TASK-MONO-450` AC-5.
+- **AC-4**: 선별은 `error-handling.md:137` 의 *"Generic DB constraint violation"* 과 **어긋난다**(FK·NOT NULL 도 문자 그대로는 409). 공유 파일을 여기서 고치지 않고 **`TASK-MONO-450`** 을 루트에 세웠다(별도 spec PR — `tasks/INDEX.md` § PR Separation Rule).
 
 ### 정직한 한계
 
 - **Layer 2 는 단일 로컬 표본**이고 이 호스트 Testcontainers 는 FLAKY 다. **CI Linux 가 권위.**
-- ecommerce 8곳은 이제 다른 4개 프로젝트와 **의도적으로 다른 모양**이다. 수렴 전까지 함대는 **가장 올바른 상태가 아니라 가장 일관되지 않은 상태**이며, `TASK-MONO-446` 이 그 부채의 소유자다.
+- ecommerce 8곳은 이제 다른 4개 프로젝트와 **의도적으로 다른 모양**이다. 수렴 전까지 함대는 **가장 올바른 상태가 아니라 가장 일관되지 않은 상태**이며, `TASK-MONO-450` 이 그 부채의 소유자다.
 
 ---
 
