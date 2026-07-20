@@ -1,6 +1,6 @@
 # TASK-BE-541 — 중복 방어 `catch (DataIntegrityViolationException)` 이 발화할 수 없다: plain `save()` 는 커밋 시점에 flush 된다
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus 4.8 (트랜잭션 경계·flush 타이밍 판단. 수정 자체는 작지만 어디가 죽었는지 가리는 게 실질)
