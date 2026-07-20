@@ -1,7 +1,7 @@
 # TASK-MONO-441 — audit which agent-memory rules are genuinely absent from canon (promote only those)
 
 - **Type**: TASK-MONO (canon hygiene — audit-first, mostly-negative expected)
-- **Status**: ready
+- **Status**: review
 - **Scope**: `platform/testing-strategy.md`, `platform/git-workflow-policy.md`, `CLAUDE.md`, `rules/`
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (judgement per candidate; the work is verification, not writing)
 
@@ -73,6 +73,34 @@ result"*).
 - `platform/git-workflow-policy.md` §§ Concurrent-Session Worktree Isolation / A PR whose
   base is not `main` / CI Path-Filter Constraint.
 - Precedent for canon promotion: TASK-MONO-423, TASK-MONO-425, TASK-MONO-437.
+
+## AC-0/AC-1 Result — classification (2026-07-20)
+
+Method: **all four candidate destinations read in full** (`platform/testing-strategy.md` 324L,
+`git-workflow-policy.md` 133L, `security-rules.md` 117L, `rules/README.md` 133L, `refactoring-policy.md`
+111L, `CLAUDE.md` 228L = ~1,050L). No heading-pattern grep was used to decide presence — that is precisely
+what produced the false negative recorded in AC-0.
+
+| # | verdict | canonical text found (or the gap) | action |
+|---|---|---|---|
+| 1 | **PARTIAL** | `security-rules.md`: *"Enumerate the callers and verify each one; do not infer it from configuration"* + *"Fleet services re-created this exact defect on four separate occasions, each time by **mirroring a sibling**"*. The sibling-audit method is canon **as an instance**. Genuinely absent: *"a test that bypasses the enforcement layer proves nothing"* + *"infrastructure existing ≠ mechanism consumed"* | promoted the **absent half only** → `testing-strategy.md`; sibling-line-up method **not** promoted (duplication risk) |
+| 2 | **ABSENT** | § CI Path-Filter Constraint has negation/outputs-AND/backfill but **not** the `!= 'false'` fail-safe, and not "the consuming `if:` can override a correct filter" | promoted → same section |
+| 3 | **ABSENT** | § *A PR whose base is not `main`* covers 0-checks and base-ref-deletion auto-close, but **not** that `--base main` retargeting fails to retrigger | promoted → new `###` under that `##` |
+| 4 | **NOT PROMOTED** | shared-file task-series serialisation is workflow ergonomics for concurrent agent sessions, not a repo invariant; § Concurrent-Session Worktree Isolation already owns the hazard it prevents | closed, no edit |
+| 5 | **ABSENT** | `refactoring-policy.md` rates *Remove Dead Code* **"Low"** risk and § Verification never asks who consumes what a removal leaves behind | promoted → § Rules / Mandatory #6 (also corrects the "Low" framing) |
+| 6 | **PARTIAL → no edit** | G7 (*"Don't re-enumerate the source of truth. Derive from it."*) owns the guard case; `CLAUDE.md` § Recommending Tasks owns the stale-local-state case (*"recommending against stale local state duplicates already-closed work"*). Residual generalisation overlaps #5 | closed, no edit |
+| 7 | **PARTIAL** | G4 owns *host*-dependence (*"a threshold calibrated on your host is a proposition about your host"*, *printed not asserted*). It says nothing about **sample count** | one paragraph appended to G4 |
+| 8 | **ABSENT — and canon actively prescribed the inverse** | `rules/README.md` § Index File Rule says *"중복 발견 시 이 파일에서 삭제"*. Correct for an index; read as a general dedup rule it inverts the prescription | promoted → scoping caveat in that section |
+| 9 | **NOT PROMOTED** | as the ticket predicted: `tasks/INDEX.md` + `ci.yml` comments own the detail, and the method is one week old with a single application | closed, no edit |
+| 10–14 | **UNVERIFIABLE** | the audit report never enumerated these; the list was not captured before context rolled. Judged from the memories themselves: the e2e/bootstrap topics map onto § E2E Smoke vs Full and § Integration-test bootstrap pitfalls, both of which exist | closed, no edit — **recorded as unverified rather than assumed covered** |
+
+**Score: 4 ABSENT + 2 PARTIAL promoted, 8 closed with no edit.** The mostly-negative outcome AC-0 predicted
+held: **9 of 14 candidates needed nothing.**
+
+**Incidental fix (out of the candidate list, found while reading):** `testing-strategy.md` § Integration lane
+serialisation ended with a copy-pasted fragment duplicated verbatim from § Integration-test bootstrap
+pitfalls (a 2-constructor `@Autowired` explanation appended to an unrelated paragraph about `ci.yml`).
+Removed. No rule content lost — the fragment's real copy remains at its own bullet.
 
 ## Edge Cases / Failure Scenarios
 
