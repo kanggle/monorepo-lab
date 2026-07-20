@@ -732,7 +732,11 @@ mutation that reduces `availableQty` below the configured threshold.
 
 - Bulk adjustment (`POST /adjustments/bulk`, CSV upload)
 - Inventory count export (XLSX / CSV)
-- Cross-warehouse atomic transfer (modeled as outbound + inbound in v2)
+- Cross-warehouse atomic transfer — absent by design rather than deferred, and no
+  endpoint is planned at any version. A move between two facilities is an outbound
+  leg plus an inbound leg, with the journey between them owned outside wms
+  ([ADR-MONO-052](../../../../../docs/adr/ADR-MONO-052-transport-context-map.md)
+  §D1/§D3). The `POST /transfers` validation above is unchanged.
 - Lot allocation strategy endpoint (FEFO selection — v2)
 - Serial-number tracking
 - Cycle-count scheduling endpoint (v2)

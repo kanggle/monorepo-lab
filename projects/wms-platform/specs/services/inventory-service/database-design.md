@@ -438,8 +438,10 @@ CREATE INDEX idx_transfer_target_location
 self-loop). The domain layer rejects same-source-and-target requests
 before this constraint fires, but the constraint protects against any
 out-of-band INSERT path. Cross-warehouse transfer is folded into
-`VALIDATION_ERROR` at the domain layer (v1 simplification per § 5
-StockTransfer invariants in [`domain-model.md`](domain-model.md)).
+`VALIDATION_ERROR` at the domain layer — a permanent context boundary per
+[ADR-MONO-052](../../../../../docs/adr/ADR-MONO-052-transport-context-map.md)
+§D3, recorded under § 5 StockTransfer invariants in
+[`domain-model.md`](domain-model.md).
 
 ---
 

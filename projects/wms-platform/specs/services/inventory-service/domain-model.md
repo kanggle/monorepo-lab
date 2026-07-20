@@ -144,9 +144,13 @@ appending Movement, writing Outbox, then saving with version-check UPDATE.
 - A row is "alive" while any bucket > 0. Empty rows are kept (not deleted) for
   ~30 days to keep Movement history joinable; archived after that. (Operational
   detail; not enforced by domain.)
-- v1 simplification: no cross-warehouse atomic transfers. `transferOut` /
-  `transferIn` pairs require equal `warehouse_id`. Cross-warehouse moves are
-  modeled as outbound + inbound in the saga.
+- No cross-warehouse atomic transfers — permanently, not as a v1 simplification.
+  `transferOut` / `transferIn` pairs require equal `warehouse_id`. Moving stock
+  between two facilities is an outbound leg out of A plus an inbound leg into B;
+  the journey between the two legs belongs to scm's transport context, so no wms
+  component holds all three
+  ([ADR-MONO-052](../../../../../docs/adr/ADR-MONO-052-transport-context-map.md)
+  §D1/§D3).
 
 ### Relationships
 
@@ -639,7 +643,9 @@ optionally Outbox.
 - ❌ Reservation status updated bypassing `confirm()` / `release()` domain methods
 - ❌ Adjustment without `reason_note` (`ADJUSTMENT_REASON_REQUIRED`)
 - ❌ Transfer with `source_location_id == target_location_id` (`TRANSFER_SAME_LOCATION`)
-- ❌ Transfer across warehouses (v1 simplification — `VALIDATION_ERROR`)
+- ❌ Transfer across warehouses (`VALIDATION_ERROR`) — a context boundary per
+  [ADR-MONO-052](../../../../../docs/adr/ADR-MONO-052-transport-context-map.md)
+  §D3, not a v1 simplification awaiting removal
 - ❌ Quantity mutation of a row whose Location / SKU / Lot snapshot is
   `INACTIVE` / `EXPIRED` (`LOCATION_INACTIVE` / `SKU_INACTIVE` / `LOT_INACTIVE`
   / `LOT_EXPIRED`)

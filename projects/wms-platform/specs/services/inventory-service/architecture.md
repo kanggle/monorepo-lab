@@ -76,9 +76,13 @@ Every `(location, sku, lot)` row exposes:
 - ASN lifecycle (`inbound-service`)
 - Order, picking-request, packing, shipping lifecycle (`outbound-service`)
 - Notification delivery (`notification-service`)
-- Multi-warehouse transfer (a transfer that crosses warehouse boundaries is modeled
-  as **outbound-from-A + inbound-to-B**, not as a single `inventory-service`
-  transaction; out of v1)
+- Cross-warehouse movement of stock. A move between two facilities is **not** a
+  transfer: it is an **outbound leg out of A** plus a separate **inbound leg into
+  B**, and the journey between those legs is owned by scm's Logistics Coordination
+  context
+  ([ADR-MONO-052](../../../../../docs/adr/ADR-MONO-052-transport-context-map.md)
+  §D1/§D3). This is a context boundary, not a deferred wms feature — wms holds the
+  two legs it already implements and nothing between them
 
 If a change request introduces any of the above, promote it to the owning service.
 
@@ -400,10 +404,13 @@ Enforced at the domain layer, surfaced via dedicated error codes from
 | Movement records are append-only (no UPDATE / DELETE) | wms.md W2 | enforced via DB grant + repo design |
 | Quantity buckets sum invariant: `available + reserved + damaged ≥ 0` | derived | structural |
 
-> **v1 simplification**: cross-warehouse transfer is rejected — both source and
-> target locations must share the same `warehouse_id` (looked up from the local
-> read-model). Cross-warehouse moves are modeled as outbound-from-A + inbound-to-B
-> in v2.
+> **Boundary enforcement** (not a v1 simplification): cross-warehouse transfer is
+> rejected — both source and target locations must share the same `warehouse_id`
+> (looked up from the local read-model). Moving stock between two facilities is an
+> outbound leg out of A plus an inbound leg into B, and the journey between the two
+> legs is owned outside wms
+> ([ADR-MONO-052](../../../../../docs/adr/ADR-MONO-052-transport-context-map.md)
+> §D1/§D3). This rejection is permanent; it is not scheduled for removal.
 
 ---
 
@@ -586,8 +593,6 @@ Diagram in:
 
 Known evolution paths (not part of v1 — documented to guide v2 decisions):
 
-- **Multi-warehouse transfer**: model as outbound-from-A + inbound-to-B saga in
-  `outbound-service` orchestration. Inventory itself stays single-warehouse-only.
 - **Serial-number tracking**: requires new aggregate `SerialNumberInventory` and a
   new SKU `tracking_type=SERIAL` value. Current row keying assumes batch quantities.
 - **Lot allocation strategy (FEFO)**: v1 picking specifies the Lot from outside
@@ -597,6 +602,26 @@ Known evolution paths (not part of v1 — documented to guide v2 decisions):
   with reason `CYCLE_COUNT`. Architecturally a special case of adjustment.
 - **Damaged-bucket workflow**: v1 only allows `INVENTORY_ADMIN` manual write-off.
   v2 may introduce a damage-claim sub-flow with photographs / approvals.
+
+### Not an evolution path — cross-warehouse movement
+
+Cross-warehouse movement is deliberately **absent from the list above**, and its
+absence is the point. It is not a wms extension awaiting a later version:
+[ADR-MONO-052](../../../../../docs/adr/ADR-MONO-052-transport-context-map.md) §D1
+places everything between two facilities — carrier selection, custody in transit,
+tracking — in scm's Logistics Coordination context, and §D3 records that **no atomic
+cross-warehouse transfer will exist**, in wms or anywhere else.
+
+wms's share is the two legs it already ships: an `outbound-service` shipment out of
+A and an `inbound-service` receipt into B, each a complete flow in its own right and
+neither aware of the other. Nothing in wms joins them — per §D5 the seam to the
+transport context is a **fact event** wms publishes and does not wait on, never a
+synchronous call and never a wms-side coordinator driving the far side. Stock leaves
+A before it exists at B, and that interval is real rather than a modelling gap.
+
+`inventory-service` therefore stays single-warehouse-only permanently, and the
+cross-warehouse guard is the enforcement of this boundary rather than a limitation
+awaiting removal (§D3).
 
 ---
 
