@@ -126,7 +126,7 @@ Edge 1 이 옳았다. `TASK-BE-542` 백스톱이 이 경로를 409 로 만들지
 
 **부수 변경 1건**: `incrementPaymentCreated()` 를 저장 **성공 이후**로 옮겼다. 새 거부 경로가 생겼으므로 그대로 두면 거부된 요청이 "생성됨" 으로 계수된다.
 
-### AC-2 — `wishlist_items` 는 **별 티켓으로 분리** → `TASK-BE-545`
+### AC-2 — `wishlist_items` 는 **별 티켓으로 분리** → `TASK-BE-546`
 
 여기서 함께 고치지 않은 근거: (1) **도달 불가**(BE-540 `user_id` 축 판정)라 런타임 사고가 없고 정합성 결함이라 우선순위가 낮다 · (2) 이 PR 을 **payment 범위로 유지**해야 리뷰 가능하다 · (3) `user-service` 마이그레이션을 **다른 task 가 동시에 `user-service` 를 편집 중**일 때 얹으면 직렬화 규율을 깬다.
 
@@ -160,7 +160,7 @@ Edge 1 이 옳았다. `TASK-BE-542` 백스톱이 이 경로를 409 로 만들지
 
 - [x] AC-0 `order_id` 전역 유일성 배선 확인 (BE-540 close chore 기록 선행 확인 — 머지됨 `eaed87080`, 인용과 모순 없음)
 - [x] AC-1 payment 정렬 + **409 기각 → 404 채택**, 동시 경로까지 배선(`saveAndFlush` + DIVE 번역)
-- [x] AC-2 `wishlist_items` 분리 → `TASK-BE-545` (근거 기록)
+- [x] AC-2 `wishlist_items` 분리 → `TASK-BE-546` (근거 기록)
 - [x] AC-3 MONO-450 입력 기록 — payment 백스톱 결정적 경로 1개 감소
 
 ---
@@ -168,6 +168,6 @@ Edge 1 이 옳았다. `TASK-BE-542` 백스톱이 이 경로를 409 로 만들지
 ## Notes
 
 - **분량**: small. 원래 medium 이었으나 2/3 이 이미 답이 나와 축소됐다.
-- **dependency**: `선행` = `TASK-BE-540`(impl 머지 `9112d5ff8`; **close chore 도 머지됨 `eaed87080` — `tasks/done/` 에 있다**). `하류` = `TASK-MONO-450` · `TASK-BE-545`(AC-2 분리분).
+- **dependency**: `선행` = `TASK-BE-540`(impl 머지 `9112d5ff8`; **close chore 도 머지됨 `eaed87080` — `tasks/done/` 에 있다**). `하류` = `TASK-MONO-450` · `TASK-BE-546`(AC-2 분리분).
 - **축소 경위**: 이 티켓은 `TASK-BE-542` 의 backstop IT 가 **불가능한 픽스처**였음을 내가 뒤늦게 인정하며(PR #2781 철회) 세 사이트 판정용으로 냈다. 그런데 `TASK-BE-540` 세션이 **같은 문제를 먼저, 더 정확하게** 풀었다 — 그쪽은 픽스처의 인위성을 스스로 찾았고(구매 게이트를 목킹으로 치워야만 성립했다는 점까지), 트리거를 **실제 경합 창**으로 바꿔 23505 전달 증명을 보존했으며, AC-0 으로 `user_id` 축을 확정했다. **내가 세 사이트라고 적은 것 중 둘은 이미 답이 있었다.**
 - **이 task 가 방어하는 실패 모드**: **한 번 잰 것을 다시 재지 않는 것과, 남이 잰 것을 검증 없이 믿는 것은 다른 실패다.** 이 티켓은 전자를 피하려고 축소됐지만 F3 로 후자를 막는다 — 인용의 출처가 **자바 주석 두 줄**이라는 사실을 숨기지 않는 이유다. [[feedback_recount_population_dont_inherit_scope]] [[env_test_fixture_impossible_input_proves_nothing]] [[feedback_repo_knows_what_it_does_not_say]]

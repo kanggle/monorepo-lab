@@ -1,4 +1,4 @@
-# TASK-BE-545 — `uq_wishlist_items_user_product` 가 테넌트를 모른다 (도달 불가이지만 결함)
+# TASK-BE-546 — `uq_wishlist_items_user_product` 가 테넌트를 모른다 (도달 불가이지만 결함)
 
 **Status:** ready
 
@@ -87,5 +87,6 @@
 ## Notes
 
 - **분량**: small.
+- **번호 경위**: 처음 `TASK-BE-545` 로 냈다가 **546 으로 재번호**했다. 동시 세션의 `TASK-BE-533` 작업이 같은 번호로 *다른* 티켓(`TASK-BE-545-audit-withdrawn-not-cancelled-dlq-backlog`, PR #2798)을 먼저 열었다. 두 브랜치가 각자 `ready/` 에 같은 ID 를 만들면 머지 시 한쪽이 조용히 이긴다 — **번호를 적기 전 `gh pr list --state all` 과 열린 브랜치를 함께 확인할 것.**
 - **dependency**: `선행` = `TASK-BE-540`(done, `user_id` 축 판정) · `TASK-BE-543`(review, 분리 출처). 실제 코드 의존은 없다.
 - **이 task 가 방어하는 실패 모드**: **"지금 도달 불가" 는 제약이 옳다는 뜻이 아니다.** 도달 불가의 이유가 제약 밖(다른 테이블의 `user_id` 발급 규칙)에 있으면, 그 규칙이 바뀌는 날 이 제약은 아무 경고 없이 틀린 것이 된다.
