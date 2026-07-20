@@ -71,5 +71,9 @@
 
 - Master data identity — `master-service`.
 - ASN / order lifecycle — `inbound-service` / `outbound-service`.
-- Multi-warehouse cross-boundary transfer — v2.
+- Cross-warehouse stock movement — not a wms capability at any version. The two
+  legs are `outbound-service` / `inbound-service`; the journey between facilities
+  belongs to scm's transport context
+  ([ADR-MONO-052](../../../../../docs/adr/ADR-MONO-052-transport-context-map.md)
+  §D1/§D3).
 - Lot identity management — `master-service`.

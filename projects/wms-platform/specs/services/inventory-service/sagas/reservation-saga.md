@@ -400,9 +400,18 @@ compensation) are fully specified. Potential v2 candidates:
 2. **Partial confirm / partial release** — v1 is aggregate-whole only. v2 may
    introduce line-level status tracking (`ReservationLine.status`), which would
    require a new intermediate state (e.g., `PARTIALLY_CONFIRMED`).
-3. **Cross-warehouse allocation** — v1 forbids mixed `warehouse_id` lines. A
-   v2 multi-warehouse reservation would need a split-saga pattern (one
-   child-reservation per warehouse, one parent coordinator).
+3. **Cross-warehouse allocation** — mixed `warehouse_id` lines are forbidden. A
+   reservation spanning two warehouses would need a split pattern (one
+   child-reservation per warehouse, plus something that joins them), and **that
+   joining role has no owner today**.
+   [ADR-MONO-052](../../../../../../docs/adr/ADR-MONO-052-transport-context-map.md)
+   §D2 allocates the five transport capabilities and does **not** allocate
+   allocation-across-facilities, so nothing here should be read as assigning that
+   role to wms. What §D1/§D3 do settle: if such a flow ever moves stock between
+   facilities, that movement is two independent wms legs with an scm-owned journey
+   between them — never one transaction — and per §D5 the seam to that context is a
+   fact event, so a synchronous wms-side coordinator driving the far side is already
+   rejected. Designing the remainder is outside this spec.
 4. **RMA inbound compensation** — post-ship reversal is out of scope for v1
    (`reservation-saga.md § 4 Compensation` documents the `CONFIRMED → irreversible`
    rule). v2 path: new inbound RMA saga that fires `inventory.received`
