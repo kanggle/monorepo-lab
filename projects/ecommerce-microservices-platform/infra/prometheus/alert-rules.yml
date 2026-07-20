@@ -205,9 +205,9 @@ groups:
           description: "{{ $labels.job }}의 커넥션 풀 대기 요청이 {{ $value }}건입니다."
 
   # ──────────────────────────────────────────────
-  # 카테고리 6: 알림 발송 실패 (notification-service 전용)
-  # specs/services/notification-service/observability.md:
-  #   notification_failed_total{channel, reason} 기반
+  # 카테고리 6: notification-service 스크레이프 상태 (전용)
+  # 현재 이 그룹은 Prometheus 자체의 up{} 지표만 사용한다.
+  # notification_failed_total{channel, reason} 기반 규칙은 아래 사유로 제거된 상태다.
   #
   # NotificationDeliveryFailureRateHigh / NotificationDeliveryFailureRateCritical removed (TASK-BE-532,
   # 2026-07-20): notification-service emits neither notification_failed_total nor notification_sent_total —
