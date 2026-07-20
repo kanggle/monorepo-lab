@@ -1,6 +1,6 @@
 # TASK-BE-539 — `uq_notifications_event_id` 가 코드가 쓰는 모양과 다르다: 정상 이벤트가 DLQ 로 조용히 사라진다
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus 4.8 (인덱스 재정의 + 마이그레이션 + 다채널 전송 IT. 재고·금전은 아니지만 데이터 유실 경로다)
