@@ -41,7 +41,11 @@
 
 ## Key invariants
 
-1. **Idempotent on `event_id`** — duplicate event consumption 시 한 번만 발송; dedupe table 또는 unique constraint 강제.
+1. **Idempotent per `(tenant_id, event_id, channel)`** — duplicate event consumption 시 **채널당** 한 번만 발송; unique
+   constraint 로 강제 (`uq_notifications_tenant_event_channel`). **"한 번만 발송" 은 이벤트당 한 행이 아니라 채널당 한 행이다** —
+   한 이벤트는 invariant 2 에 따라 발송 가능한 채널마다 독립 팬아웃하고 그 행들은 같은 `event_id` 를 공유한다. `event_id` 단독
+   unique 는 정상 최초 전송을 거부한다 (TASK-BE-539). `tenant_id` 가 키에 포함되는 이유는 `event_id` 가 producer 단위로만
+   고유하기 때문이다.
 2. **Respect user opt-out** — `email_enabled = false` 인 사용자에게 email 발송 금지 (channel-별 독립 적용).
 3. **Failed delivery retried per policy** — provider 5xx / timeout → retry; 4xx → terminal failure + 로깅 (포기).
 4. **No user / order / payment ownership** — notification-service 는 notification meta + 전달 결과만 저장; 다른 service 데이터 직접 cache 금지.
