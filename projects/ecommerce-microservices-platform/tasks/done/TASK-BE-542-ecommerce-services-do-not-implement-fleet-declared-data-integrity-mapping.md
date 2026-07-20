@@ -1,6 +1,6 @@
 # TASK-BE-542 — 레지스트리가 함대 전체에 선언한 `DATA_INTEGRITY_VIOLATION` 409 를 ecommerce 9개 서비스가 구현하지 않는다
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus 4.8 (배선 자체는 기계적이나 **어떤 모양을 표준으로 삼을지**가 판정이고, 무조건 409 는 틀렸다)
