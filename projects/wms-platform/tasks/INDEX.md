@@ -67,7 +67,10 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-523-admin-read-path-authz-decision.md` — **READY (판정 선행)** — admin-service 읽기 경로(`GET` users/roles/assignments)가 미게이팅. 스펙↔코드 판정이 선행하는 INVESTIGATION-first 보안 동작 변경.
+- `TASK-BE-529-notification-skip-locked-exclusivity-it-ci-robust.md` — **READY** — notification-service SKIP-LOCKED 배타성 IT(두 클레이머 이중청구 없음). `TASK-BE-528` AC-2 에서 이월된 테스트 커버리지.
+
+> 2026-07-20 (`TASK-MONO-451`): 위 두 행은 **디스크에는 `ready/` 에 있는데 이 섹션이 `(empty)` 라고 선언**하고 있었다 — 아래 2026-07-12 노트와 정반대 방향의 같은 결함이다. 그때는 표가 끝난 일을 가리켰고, 이번엔 표가 **살아있는 일을 숨겼다**. 큐를 표로 고르는 사람에게 후자는 **일이 없다는 거짓 보고**다. 이제 `scripts/check-index-queue-drift.sh` 가 양방향으로 대조한다.
 
 > 2026-07-12: `TASK-BE-438`(outbox v1→v2) 과 `TASK-BE-458`(prometheus IT 재활성화) 이 **이미 `done/` 에 있는데도 이 표에 `**READY**` 로 남아 있었다** — 두 close chore 가 파일만 옮기고 표를 안 지웠다. 표를 읽고 큐를 고르는 사람에게 이건 **이미 끝난 일을 집어들라는 지시**다. 제거함(`TASK-MONO-363` 곁다리, 같은 "손-유지 목록이 조용히 틀린다" 클래스).
 
