@@ -1,6 +1,6 @@
 # TASK-MONO-451 — `INDEX.md` 큐 표가 큐 디렉터리와 어긋나도 아무도 모른다: 하루 세 번 났고 매번 사람이 잡았다
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-MONO (shared — `scripts/` + `.github/workflows/ci.yml`)
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet (스크립트 + CI 잡 배선. 판정 요소가 거의 없다)
