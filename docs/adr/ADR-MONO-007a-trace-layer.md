@@ -72,6 +72,18 @@ console-web (Node OTel)  ──OTLP/HTTP :4318──▶  Vector (otlp source)  �
 - Vector gains an `otlp` source (binds the `:4318` the producers already target — closing the "no listener" gap) + a VictoriaTraces sink. No producer config change (they already export to `:4318`).
 - Rationale over direct OTLP: one telemetry spine to operate, one place to add sampling / redaction transforms later, consistent with the logs + metrics pipelines already in Vector.
 
+> **⚠️ ADDITIVE NOTE — as-built deviation (recorded 2026-07-20, `TASK-MONO-448`; the deviation itself predates this note).**
+>
+> **The shipped topology is the one § 3.2 rejected: producers export OTLP directly to VictoriaTraces, bypassing Vector.** Traces do not flow through the spine.
+>
+> **Cause — a tool limitation found at implementation time, not a change of mind.** Vector 0.45 has an `opentelemetry` **source** but **no** `opentelemetry` **sink**, so the diagram above is not expressible in the pinned version. Rather than bump Vector mid-implementation, traces were routed direct. `infra/observability/vector.toml` records this in-place ("Vector stays the spine for logs + metrics"; "No VictoriaTraces sink here"), and `tests/federation-hardening-e2e/docker/docker-compose.federation-e2e.yml` sets `OTEL_EXPORTER_OTLP_ENDPOINT` to VictoriaTraces' own `:10428/insert/opentelemetry`.
+>
+> **Status of D2:** the decision is **not** reversed — logs and metrics still flow through Vector, and the single-spine rationale still holds for them. What is suspended is D2's trace leg, blocked on a Vector release that ships an OTLP sink. **D2's § 3.2 rejection of direct-OTLP therefore describes the target state, not the current one.** Anyone reading § 3.2 to settle a design argument must read this note with it.
+>
+> **Why this note exists at all:** the deviation was real and reasonable, but nothing recorded it against the decision, so three artifacts went on asserting the Vector-mediated topology — this ADR, `.claude/skills/cross-cutting/observability-query/SKILL.md`, and the `otel-node.ts` comment that cites "ADR-007a D2" for an endpoint it no longer uses. Correcting those two consumers is **out of scope here** (one is a skill file, one is project code) and is tracked as follow-up; this note fixes the decision record itself so they can be corrected against something true. Format follows [ADR-MONO-007](ADR-MONO-007-worktree-ephemeral-observability-stack.md) § D1's additive-note precedent.
+>
+> **Re-open condition:** Vector ships an `opentelemetry` sink → re-point producers at `:4318` and delete this note.
+
 ### 2.3 D3 — Trace origination: console-web `@opentelemetry` Node SDK
 
 console-web MUST originate the root span so the tree has a top. The server-side BFF-calling routes (`operator-overview/route.ts`, `domain-health/route.ts`) run under a Node OTel SDK (`@opentelemetry/sdk-node` + HTTP/fetch auto-instrumentation) that:
