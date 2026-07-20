@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -298,6 +299,31 @@ class MultiTenantIsolationIntegrationTest {
         Integer rows = jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM push_subscriptions WHERE endpoint = ?", Integer.class, endpoint);
         assertThat(rows).isEqualTo(1);
+    }
+
+    /**
+     * TASK-BE-540 case A, delete side — tenant B unsubscribing must not remove tenant A's row.
+     *
+     * <p>{@code deleteByEndpoint} was global too, and this half is not named in the task. It is
+     * NOT fixed by tenant-scoping the delete: the send-path prune runs on a Kafka thread with no
+     * {@code TenantContext}, so a context-scoped delete there resolves to the default tenant and
+     * removes the wrong row. The lookup is tenant-scoped and the delete now goes by row identity.
+     */
+    @Test
+    @DisplayName("BE-540: 다른 테넌트의 구독 해지가 앞 테넌트의 행을 지우지 않는다")
+    void unregisterInSecondTenant_doesNotDeleteFirstTenantRow() throws Exception {
+        String endpoint = "https://push.example/ep-" + UUID.randomUUID();
+        registerPush(TENANT_A, "user-a", endpoint, "p256dh-A", "auth-A")
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(delete("/api/notifications/me/push-subscriptions")
+                        .header(TENANT_HEADER, TENANT_B)
+                        .header("X-User-Id", "user-b")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("endpoint", endpoint))))
+                .andExpect(status().isNoContent());
+
+        assertThat(keysOf(TENANT_A, endpoint)).containsExactly("p256dh-A", "auth-A");
     }
 
     private ResultActions registerPush(String tenantId, String userId, String endpoint,
