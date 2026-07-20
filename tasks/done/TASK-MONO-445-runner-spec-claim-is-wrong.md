@@ -5,7 +5,7 @@ TASK-MONO-445
 # TASK-MONO-445 — the runner spec quoted in testing-strategy.md is wrong, and it is the stated rationale for lane serialisation
 
 - **Type**: TASK-MONO (canon correction — one measured number)
-- **Status**: review
+- **Status**: done
 - **Scope**: `platform/testing-strategy.md`
 - **Analysis model**: Opus 4.8 · **Impl model**: Haiku or Sonnet (one sentence; the measurement is already done)
 
