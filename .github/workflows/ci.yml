@@ -190,6 +190,12 @@ jobs:
       # change has code-changed == 'false', so AND-combining would disable the
       # guard exactly on the change it exists to police.
       service-map: ${{ steps.filter.outputs.service-map }}
+      # TASK-MONO-443: raw filter, NOT AND-combined with `code-changed`, for the
+      # sharpest possible version of the same reason. A duplicate task ID arrives
+      # as ONE new `.md` file and nothing else — `code-changed` is false on exactly
+      # the diff this guard exists to catch, so AND-combining would switch it off
+      # for its only defect class (the MONO-389 failure mode).
+      task-ids: ${{ steps.filter.outputs.task-ids }}
       # Same reasoning as service-map above: deleting a row from error-handling.md is a
       # docs-only diff, and that is precisely the change the guard must catch.
       error-registry: ${{ steps.filter.outputs.error-registry }}
@@ -365,6 +371,18 @@ jobs:
               - 'settings.gradle'
               - 'docs/project-overview.md'
               - 'scripts/check-service-map-drift.sh'
+            # TASK-MONO-443: task-ID collisions. The trigger follows the defect's
+            # arrival path (§ G1) — a colliding ID arrives as a new file in an
+            # active lifecycle directory, so those directories ARE the trigger.
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            task-ids:
+              - 'tasks/ready/**'
+              - 'tasks/review/**'
+              - 'tasks/in-progress/**'
+              - 'projects/*/tasks/ready/**'
+              - 'projects/*/tasks/review/**'
+              - 'projects/*/tasks/in-progress/**'
+              - 'scripts/check-task-id-collision.sh'
             # TASK-MONO-352: platform/error-handling.md declares itself "the single
             # authoritative registry" and mandates that every new error code be added
             # to it — but nothing enforced that, and 37 live codes had drifted out.
@@ -550,6 +568,36 @@ jobs:
 
       - name: Guard — settings.gradle <-> docs/project-overview.md
         run: bash scripts/check-service-map-drift.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-443 — task-ID collision guard.
+  #
+  # tasks/INDEX.md § Task ID Allocation already names this failure and prescribes
+  # the remedy; nothing enforced it, and two collisions landed on main (MONO-415,
+  # MONO-435) while a third was caught by hand pre-merge (PC-FE-250). Rule 4 only
+  # works if somebody notices before the second branch merges — this job is the
+  # somebody.
+  #
+  # Guards the ACTIVE queues only. All existing collisions are frozen in done/,
+  # so the guard starts green (§ G2: a guard RED on day one gets switched off,
+  # and a switched-off job's skip reports green). The script header records what
+  # it does not cover (§ G8) and why each predicate choice was measured, not
+  # assumed — the ticket's own predicate was refuted by re-counting the tree.
+  # ---------------------------------------------------------------------------
+  task-id-collision:
+    name: Task ID collision (duplicate IDs in active queues)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.task-ids == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-task-id-collision.sh
+
+      - name: Guard — no duplicate task IDs within a project namespace
+        run: bash scripts/check-task-id-collision.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-360 — gateway declaration / exposure drift guard.
