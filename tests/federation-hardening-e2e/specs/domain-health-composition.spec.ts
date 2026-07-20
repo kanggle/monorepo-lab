@@ -17,7 +17,14 @@ import { test, expect } from '@playwright/test';
  * out-of-scope per ADR-018 D3 (note AC-5: "degrade path = MVP 외").
  */
 test.describe('Domain Health composition (5-domain health attribution)', () => {
-  test('renders 5-domain health attribution with all 5 domains UP', async ({
+  // TASK-PC-FE-251 AC-4 — renamed to what this body actually asserts. AC-4 named
+  // only operator-overview-composition.spec.ts; this file carries the identical
+  // defect from the same TASK-MONO-140 cycle-5 relaxation, and was found by
+  // re-counting the suite rather than inheriting the ticket's scope. Unlike the
+  // overview card grid, the 5-domain health attribution has **no** sibling spec
+  // asserting it — so this rename records a real coverage hole rather than
+  // papering over one.
+  test('health route resolves and renders for an authenticated operator (URL + title + heading only)', async ({
     page,
   }) => {
     await page.goto('/dashboards/health');

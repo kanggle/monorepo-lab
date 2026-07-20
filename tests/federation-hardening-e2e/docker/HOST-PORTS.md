@@ -37,8 +37,9 @@ host port is load-bearing, not arbitrary.
 | `15435` | `5432` | `scm-inv-postgres` (`scm_inventory_visibility`) | base |
 | `15436` | `5432` | `scm-dp-postgres` (demand-planning) | `…replenishment.yml` |
 | `19092` | `19092` | `redpanda` (replenishment Kafka) | `…replenishment.yml` |
+| `15437` | `5432` | `wms-inbound-postgres` | `…inbound-expected.yml` |
 
-Next free datastore port: **`15437`** (then `15438`, …).
+Next free datastore port: **`15438`** (then `15439`, …).
 
 ## Application services (debug-only host ports)
 
@@ -58,6 +59,7 @@ Next free datastore port: **`15437`** (then `15438`, …).
 | `18098` | `8080` | `erp-approval-service` | erp | `…erp-fullstack.yml` |
 | `18099` | `80` | `erp-gateway` (nginx fan-out) | erp | `…erp-fullstack.yml` |
 | `18100` | `8080` | `scm-demand-planning-service` | scm | `…replenishment.yml` |
+| `18101` | `8080` | `wms-inbound-service` | wms | `…inbound-expected.yml` |
 | `18197` | `8080` | `erp-read-model-service` | erp | `…erp-fullstack.yml` (moved off `18097` — see incident) |
 
 > **ecommerce publishes NO host ports — not even `ecommerce-gateway`.** Every ecommerce service
@@ -67,10 +69,47 @@ Next free datastore port: **`15437`** (then `15438`, …).
 > only host-facing path is the standalone web-store `socat` proxy on `8080` — an ad-hoc container,
 > not a compose binding. Verified via `docker compose config` merge (TASK-MONO-293).
 
-Allocated app block: `18082`–`18100` (dense) + `18197`. **Next free app port: `18101`** (continue
-`18101`–`18196`; `18197`–`18199` is the tail band, `18197` already used).
+Allocated app block: `18082`–`18101` (dense) + `18197`. **Next free app port: `18102`** (continue
+`18102`–`18196`; `18197`–`18199` is the tail band, `18197` already used).
+
+## Which overlays are committed (TASK-PC-FE-251)
+
+**Only four of the eight overlay files are in git.** The registry below covers all of them, so a
+reader can otherwise conclude that the CI stack includes ecommerce. It does not.
+
+| Overlay file | In git? | Runs in CI? |
+|---|---|---|
+| `docker-compose.federation-e2e.yml` (base) | ✅ | ✅ nightly + `workflow_dispatch` |
+| `…replenishment.yml` | ✅ | ✅ |
+| `…inbound-expected.yml` | ✅ | ✅ |
+| `…demo.yml` | ✅ | ❌ local demo only |
+| `…ecommerce.yml` / `…ecommerce-extra.yml` | ❌ **gitignored** | ❌ |
+| `…erp-fullstack.yml` | ❌ **gitignored** | ❌ |
+| `…ledger.yml` | ❌ **gitignored** | ❌ |
+
+The gitignore also excludes `docker/zz-*.yml`, `erp-gateway.nginx.conf`, `toss-mock.nginx.conf`,
+`fixtures/seed-{ecommerce,erp,fe,omni}-*.sql`, `fixtures/seed-ledger.sql`, `fixtures/*.sh`, and
+`specs/{wms-outbound-*,verify-*}.spec.ts` — deliberately, per the comment in `.gitignore` itself.
+
+**Consequence for coverage**: the CI stack boots **24 containers** and runs **no ecommerce
+backend**, so nothing in CI asserts the `ecommerce` overview card or `/ecommerce/sellers` in a
+browser. That is a known, accepted gap — see `TASK-PC-FE-251` for the sizing decision behind it,
+and `console-web/tests/e2e/README.md` for why the two specs that pretended otherwise were deleted
+rather than env-gated.
+
+> ⚠️ The port rows below sourced from a **gitignored** overlay (`…ecommerce*`, `…erp-fullstack`,
+> `…ledger`) are recorded so the numbers stay reserved and a future overlay does not reuse them.
+> They are *not* evidence that those services exist in this repository.
 
 ## Verified collision-free
+
+> **Scope of this verification (TASK-PC-FE-251).** It was performed at TASK-MONO-293, which
+> **predates the `…inbound-expected.yml` overlay** — that overlay's `15437` and `18101` were
+> therefore never part of the checked set, and this section's list does not name it. They are
+> registered in the tables above now. The count below is left as MONO-293 measured it rather than
+> restated, because re-verifying the *full* set requires the four gitignored overlays and so
+> cannot be reproduced from this repository; only the committed subset can. Treat the number as a
+> dated observation, not a current invariant.
 
 As of TASK-MONO-293, the full overlay set
 (`base` + `.demo` + `.ledger` + `.erp-fullstack` + `.replenishment` + `.ecommerce` + `.ecommerce-extra`)
