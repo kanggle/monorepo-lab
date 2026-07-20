@@ -53,7 +53,7 @@ public class WebPushSender implements NotificationSender {
         try {
             WebPushSendResult result = webPushGateway.send(subscription, payload);
             if (result.isExpired()) {
-                subscriptionRepository.deleteByEndpoint(subscription.getEndpoint());
+                subscriptionRepository.delete(subscription);
                 log.info("Pruned expired push subscription (status {}) for user {}",
                         result.statusCode(), subscription.getUserId());
             } else if (!result.isSuccess()) {

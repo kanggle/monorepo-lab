@@ -97,7 +97,7 @@ class PushSubscriptionServiceTest {
 
         service.unregister("user-1", "https://push/ep");
 
-        verify(subscriptionRepository).deleteByEndpoint("https://push/ep");
+        verify(subscriptionRepository).delete(sub);
     }
 
     @Test
@@ -108,7 +108,7 @@ class PushSubscriptionServiceTest {
 
         service.unregister("intruder", "https://push/ep");
 
-        verify(subscriptionRepository, never()).deleteByEndpoint(any());
+        verify(subscriptionRepository, never()).delete(any());
     }
 
     @Test
@@ -118,7 +118,7 @@ class PushSubscriptionServiceTest {
 
         service.unregister("user-1", "https://push/gone");
 
-        verify(subscriptionRepository, never()).deleteByEndpoint(any());
+        verify(subscriptionRepository, never()).delete(any());
     }
 
     @Test

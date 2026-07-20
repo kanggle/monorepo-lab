@@ -58,7 +58,7 @@ public class PushSubscriptionService implements ManagePushSubscriptionUseCase {
         // Only the owner may remove their endpoint; absent/foreign endpoint → no-op (idempotent 204).
         subscriptionRepository.findByEndpoint(endpoint)
                 .filter(subscription -> subscription.getUserId().equals(userId))
-                .ifPresent(subscription -> subscriptionRepository.deleteByEndpoint(endpoint));
+                .ifPresent(subscriptionRepository::delete);
     }
 
     @Override

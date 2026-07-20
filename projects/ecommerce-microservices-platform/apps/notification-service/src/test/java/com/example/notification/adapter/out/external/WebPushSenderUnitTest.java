@@ -17,6 +17,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -82,7 +83,7 @@ class WebPushSenderUnitTest {
         sender.send("user-1", "제목", "본문");
 
         verify(webPushGateway, org.mockito.Mockito.times(2)).send(any(), any());
-        verify(subscriptionRepository, never()).deleteByEndpoint(any());
+        verify(subscriptionRepository, never()).delete(any());
     }
 
     @Test
@@ -94,7 +95,7 @@ class WebPushSenderUnitTest {
 
         sender.send("user-1", "제목", "본문");
 
-        verify(subscriptionRepository).deleteByEndpoint("https://push/dead");
+        verify(subscriptionRepository).delete(argThat(s -> s.getEndpoint().equals("https://push/dead")));
     }
 
     @Test

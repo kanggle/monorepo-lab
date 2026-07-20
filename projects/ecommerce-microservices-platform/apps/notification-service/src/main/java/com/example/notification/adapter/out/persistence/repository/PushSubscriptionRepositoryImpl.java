@@ -3,6 +3,7 @@ package com.example.notification.adapter.out.persistence.repository;
 import com.example.notification.adapter.out.persistence.mapper.PushSubscriptionPersistenceMapper;
 import com.example.notification.application.port.out.PushSubscriptionRepository;
 import com.example.notification.domain.model.PushSubscription;
+import com.example.notification.domain.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -31,11 +32,16 @@ public class PushSubscriptionRepositoryImpl implements PushSubscriptionRepositor
 
     @Override
     public Optional<PushSubscription> findByEndpoint(String endpoint) {
-        return jpaRepository.findByEndpoint(endpoint).map(mapper::toDomain);
+        return jpaRepository.findByTenantIdAndEndpoint(TenantContext.currentTenant(), endpoint)
+                .map(mapper::toDomain);
     }
 
     @Override
-    public void deleteByEndpoint(String endpoint) {
-        jpaRepository.deleteByEndpoint(endpoint);
+    public void delete(PushSubscription subscription) {
+        // Deletes by row identity, not by endpoint. The send-path prune runs on a Kafka
+        // thread with no TenantContext, so a context-scoped delete would resolve to the
+        // default tenant and remove the wrong row; the caller already holds the row it
+        // means to remove (TASK-BE-540).
+        jpaRepository.deleteById(subscription.getSubscriptionId());
     }
 }
