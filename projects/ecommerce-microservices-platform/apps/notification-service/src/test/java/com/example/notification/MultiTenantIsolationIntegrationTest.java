@@ -19,17 +19,22 @@ import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.http.MediaType;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -130,6 +135,7 @@ class MultiTenantIsolationIntegrationTest {
     void cleanTemplatesAndNotifications() {
         jdbcTemplate.update("DELETE FROM notifications");
         jdbcTemplate.update("DELETE FROM notification_templates");
+        jdbcTemplate.update("DELETE FROM push_subscriptions");
     }
 
     /** Seeds an ORDER_PLACED/EMAIL template for a tenant; returns the template id. */
@@ -244,5 +250,109 @@ class MultiTenantIsolationIntegrationTest {
         Integer count = jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM notifications WHERE event_id = ?", Integer.class, eventId);
         assertThat(count).isEqualTo(1);
+    }
+
+    /**
+     * TASK-BE-540 case A — a second tenant registering the SAME endpoint must not touch the
+     * first tenant's row.
+     *
+     * <p>An endpoint is issued per (browser, origin, VAPID key). This deployment has one
+     * storefront origin and one VAPID keypair, and the tenant comes from the JWT claim rather
+     * than the hostname — so the same browser signing in as a user of another tenant produces
+     * the SAME endpoint string. The register upsert used to look the endpoint up globally, so
+     * it found the other tenant's row and rotated that tenant's keys, returning 200. The
+     * per-tenant constraint {@code uq_push_subscriptions_tenant_endpoint} never caught it
+     * because the INSERT branch was never taken.
+     *
+     * <p>Asserted on the stored keys, not on the row count: a count of 2 would also pass if
+     * tenant B had inserted its row *and* clobbered tenant A's keys on the way.
+     */
+    @Test
+    @DisplayName("BE-540: 다른 테넌트가 같은 endpoint 를 등록해도 앞 테넌트의 키를 회전시키지 않는다")
+    void sameEndpointInSecondTenant_doesNotMutateFirstTenantRow() throws Exception {
+        String endpoint = "https://push.example/ep-" + UUID.randomUUID();
+
+        registerPush(TENANT_A, "user-a", endpoint, "p256dh-A", "auth-A")
+                .andExpect(status().isCreated());
+        registerPush(TENANT_B, "user-b", endpoint, "p256dh-B", "auth-B")
+                .andExpect(status().isCreated());
+
+        assertThat(keysOf(TENANT_A, endpoint)).containsExactly("p256dh-A", "auth-A");
+        assertThat(keysOf(TENANT_B, endpoint)).containsExactly("p256dh-B", "auth-B");
+    }
+
+    /**
+     * TASK-BE-540 case A — re-registering within one tenant must still rotate keys (the upsert
+     * this fix must not break). F1-style guard: scoping the lookup is not the same as removing it.
+     */
+    @Test
+    @DisplayName("BE-540: 같은 테넌트에서 재등록하면 키가 회전한다(업서트 유지)")
+    void sameEndpointSameTenant_stillRotatesKeys() throws Exception {
+        String endpoint = "https://push.example/ep-" + UUID.randomUUID();
+
+        registerPush(TENANT_A, "user-a", endpoint, "p256dh-1", "auth-1")
+                .andExpect(status().isCreated());
+        registerPush(TENANT_A, "user-a", endpoint, "p256dh-2", "auth-2")
+                .andExpect(status().isOk());
+
+        assertThat(keysOf(TENANT_A, endpoint)).containsExactly("p256dh-2", "auth-2");
+        Integer rows = jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM push_subscriptions WHERE endpoint = ?", Integer.class, endpoint);
+        assertThat(rows).isEqualTo(1);
+    }
+
+    /**
+     * Characterisation, NOT a guard for TASK-BE-540 — this passes with or without the fix.
+     *
+     * <p>I claimed the HTTP unregister path had the same cross-tenant defect as the lookup. The
+     * AC-2 mutation refuted it: with the global lookup restored this test still passed, because
+     * {@code PushSubscriptionService.unregister} filters on
+     * {@code subscription.getUserId().equals(userId)} — tenant B's user never matches tenant A's
+     * owner, so the delete is a no-op regardless of the lookup's scope.
+     *
+     * <p>The delete defect is real but lives on the SEND path, which has no owner filter:
+     * {@code WebPushSender} pruned a dead subscription with {@code deleteByEndpoint}, removing
+     * every tenant's row on that endpoint. That is what the identity-based delete fixes, and it
+     * is covered by {@code WebPushSenderUnitTest}, not here — driving a 410 from the real gateway
+     * through this Testcontainers stack is not something this class can do.
+     *
+     * <p>Kept because the ownership filter is worth pinning, and relabelled because a test whose
+     * name claims tenant isolation while its body measures owner matching is the more expensive
+     * mistake.
+     */
+    @Test
+    @DisplayName("구독 해지는 소유자 필터로 남의 행을 지우지 않는다 (BE-540 가드 아님 — 소유권 특성화)")
+    void unregisterInSecondTenant_doesNotDeleteFirstTenantRow() throws Exception {
+        String endpoint = "https://push.example/ep-" + UUID.randomUUID();
+        registerPush(TENANT_A, "user-a", endpoint, "p256dh-A", "auth-A")
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(delete("/api/notifications/me/push-subscriptions")
+                        .header(TENANT_HEADER, TENANT_B)
+                        .header("X-User-Id", "user-b")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("endpoint", endpoint))))
+                .andExpect(status().isNoContent());
+
+        assertThat(keysOf(TENANT_A, endpoint)).containsExactly("p256dh-A", "auth-A");
+    }
+
+    private ResultActions registerPush(String tenantId, String userId, String endpoint,
+                                       String p256dh, String auth) throws Exception {
+        return mockMvc.perform(post("/api/notifications/me/push-subscriptions")
+                .header(TENANT_HEADER, tenantId)
+                .header("X-User-Id", userId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "endpoint", endpoint,
+                        "keys", Map.of("p256dh", p256dh, "auth", auth)))));
+    }
+
+    /** The stored (p256dh, auth) pair for one tenant's row on this endpoint. */
+    private List<String> keysOf(String tenantId, String endpoint) {
+        return jdbcTemplate.queryForObject(
+                "SELECT p256dh, auth FROM push_subscriptions WHERE tenant_id = ? AND endpoint = ?",
+                (rs, n) -> List.of(rs.getString("p256dh"), rs.getString("auth")),
+                tenantId, endpoint);
     }
 }

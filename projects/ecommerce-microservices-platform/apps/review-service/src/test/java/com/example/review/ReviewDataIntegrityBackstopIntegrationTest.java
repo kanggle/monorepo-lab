@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -34,25 +35,24 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p><b>Why this path reaches the backstop deterministically.</b> Across the eight wired
  * services, nearly every unique violation is pre-empted — either by a pre-check or by a
  * local {@code catch (DataIntegrityViolationException)} that rethrows a domain exception —
- * so the backstop is normally reachable only under concurrency. review-service is the
- * exception, because its pre-check and its constraint disagree in scope:
+ * so the backstop is reachable only under concurrency: the losing writer passes the
+ * pre-check, then collides at INSERT.
  *
- * <ul>
- *   <li>pre-check {@code existsByUserIdAndProductIdAndStatusAndTenantId(…)} is
- *       <b>tenant-scoped</b>;</li>
- *   <li>the constraint {@code uq_reviews_user_product_active} — created in V2 and never
- *       rebuilt when V5 added {@code tenant_id} — is {@code (user_id, product_id) WHERE
- *       status='ACTIVE'}, with <b>no tenant column</b>.</li>
- * </ul>
+ * <p><b>This test previously used a cross-tenant duplicate as its trigger</b>, which was
+ * deterministic only because {@code uq_reviews_user_product_active} disagreed in scope with
+ * the tenant-scoped pre-check. Its author recorded the dependency here and predicted this
+ * edit: {@code TASK-BE-540} has since rebuilt the index as
+ * {@code (tenant_id, user_id, product_id) WHERE status='ACTIVE'}, so a second tenant now
+ * legitimately succeeds with 201 and that trigger is gone. Two reasons not to simply widen
+ * the assertion: the cross-tenant state was also an <b>impossible production input</b>
+ * (product ids are per-tenant UUIDs and one user id resolves to one tenant — TASK-BE-540
+ * AC-0), and it required mocking away the purchase gate that would have blocked it.
  *
- * <p>So the same (user, product) pair reviewed under a second tenant passes the pre-check
- * deterministically and then violates the global index. This is the defect described by
- * {@code TASK-BE-540}; this test pins the CURRENT behaviour (the backstop converts what was
- * a 500 into a 409) and is deliberately NOT a statement that the scope mismatch is correct.
- *
- * <p><b>If TASK-BE-540 rebuilds the index to include {@code tenant_id}, this test must
- * change</b> — the second insert would then legitimately succeed with 201. That is expected
- * and is the point of recording the dependency here rather than in a commit message.
+ * <p>The trigger is now the real one — the concurrency window itself. A competing ACTIVE row
+ * is inserted from inside the mocked {@link PurchaseVerificationPort}, which
+ * {@code ReviewCommandService} calls <em>after</em> the pre-check and <em>before</em>
+ * {@code save}. That is exactly where the losing writer of a real race lands, so the 23505
+ * this asserts is the one production can actually produce.
  *
  * <p>The assertion on {@code code} — not merely on status 409 — is what proves the response
  * came from the backstop: the pre-check path returns 409 {@code REVIEW_ALREADY_EXISTS}, so a
@@ -64,6 +64,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @DisplayName("DataIntegrityViolation 백스톱 실제 DB 통합 테스트 (TASK-BE-542 AC-5)")
 class ReviewDataIntegrityBackstopIntegrationTest {
+
+    private static final String TENANT = "tenant-a";
 
     @SuppressWarnings("resource")
     @Container
@@ -91,31 +93,42 @@ class ReviewDataIntegrityBackstopIntegrationTest {
     @Autowired
     private MockMvc mockMvc;
 
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
     @Test
-    @DisplayName("테넌트가 다른 동일 (user, product) 리뷰는 전역 유니크 인덱스를 위반해 409 DATA_INTEGRITY_VIOLATION 이 된다")
-    void crossTenantDuplicate_hitsBackstop_returns409DataIntegrityViolation() throws Exception {
+    @DisplayName("경합에서 진 쓰기는 선체크를 통과한 뒤 실제 23505 를 만나 409 DATA_INTEGRITY_VIOLATION 이 된다")
+    void lostRace_hitsBackstop_returns409DataIntegrityViolation() throws Exception {
         UUID userId = UUID.randomUUID();
         UUID productId = UUID.randomUUID();
-        given(purchaseVerificationPort.hasUserPurchasedProduct(userId, productId)).willReturn(true);
 
-        // Tenant A: ordinary successful create.
+        // The competing writer commits inside the purchase-verification call, i.e. after the
+        // pre-check has already returned "absent" and before save() runs. This is the real
+        // race window, not a simulation of a different defect.
+        given(purchaseVerificationPort.hasUserPurchasedProduct(userId, productId))
+                .willAnswer(invocation -> {
+                    insertCompetingActiveReview(TENANT, userId, productId);
+                    return true;
+                });
+
         mockMvc.perform(post("/api/reviews")
                         .header("X-User-Id", userId.toString())
-                        .header("X-Tenant-Id", "tenant-a")
+                        .header("X-Tenant-Id", TENANT)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(reviewJson(productId, 5, "좋은 상품", "매우 만족합니다")))
-                .andExpect(status().isCreated());
-
-        // Tenant B: the tenant-scoped pre-check finds nothing, so the insert proceeds and
-        // collides with the tenant-agnostic partial unique index → real Postgres 23505.
-        mockMvc.perform(post("/api/reviews")
-                        .header("X-User-Id", userId.toString())
-                        .header("X-Tenant-Id", "tenant-b")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(reviewJson(productId, 4, "다른 테넌트 리뷰", "다른 테넌트에서 작성")))
+                        .content(reviewJson(productId, 4, "경합 리뷰", "경합에서 진 쓰기")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("DATA_INTEGRITY_VIOLATION"))
                 .andExpect(jsonPath("$.message").value("Data integrity violation"));
+    }
+
+    /** Commits a row the pre-check could not have seen — the winner of the race. */
+    private void insertCompetingActiveReview(String tenantId, UUID userId, UUID productId) {
+        jdbcTemplate.update("""
+                INSERT INTO reviews (id, tenant_id, user_id, product_id, product_name, rating,
+                                     title, content, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', now(), now())
+                """,
+                UUID.randomUUID(), tenantId, userId, productId, "상품", 5, "먼저 쓴 리뷰", "경합에서 이긴 쓰기");
     }
 
     @Test
