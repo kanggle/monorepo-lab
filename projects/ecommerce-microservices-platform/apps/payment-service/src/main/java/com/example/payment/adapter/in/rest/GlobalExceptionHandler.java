@@ -11,6 +11,7 @@ import com.example.payment.application.exception.UnauthorizedPaymentAccessExcept
 import com.example.payment.domain.exception.InvalidPaymentException;
 import com.example.payment.domain.exception.PaymentNotFoundException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import java.sql.SQLException;
 import java.util.Set;
 
 @Slf4j
@@ -124,10 +126,41 @@ public class GlobalExceptionHandler {
                         "Request Content-Type is not supported by this endpoint"));
     }
 
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException e) {
+        if (isUniqueViolation(e)) {
+            // A duplicate is a client-visible conflict: the registry's declared catch-all.
+            log.warn("Unique constraint violation → 409", e);
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ErrorResponse.of("DATA_INTEGRITY_VIOLATION", "Data integrity violation"));
+        }
+        // FK / NOT NULL / CHECK violations are SERVER defects, not client conflicts.
+        // Deliberately left as 500 so they stay loud in logs and alerting (TASK-BE-542 AC-1).
+        log.error("Non-unique data integrity violation", e);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ErrorResponse.of("INTERNAL_ERROR", "An internal server error occurred"));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleException(Exception e) {
         log.error("Unhandled exception", e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ErrorResponse.of("INTERNAL_ERROR", "An internal server error occurred"));
+    }
+
+    /**
+     * SQLSTATE 23505 = unique_violation (Postgres, H2). Walks the cause chain rather than
+     * matching on the exception message: Spring maps EVERY Hibernate ConstraintViolationException
+     * to a plain DataIntegrityViolationException (verified in spring-orm 6.2.1 —
+     * DuplicateKeyException comes only from NonUniqueObjectException, never from a DB unique
+     * violation), so the exception TYPE cannot discriminate and the message is vendor-dependent.
+     */
+    private static boolean isUniqueViolation(Throwable e) {
+        for (Throwable t = e; t != null && t != t.getCause(); t = t.getCause()) {
+            if (t instanceof SQLException sql && "23505".equals(sql.getSQLState())) {
+                return true;
+            }
+        }
+        return false;
     }
 }
