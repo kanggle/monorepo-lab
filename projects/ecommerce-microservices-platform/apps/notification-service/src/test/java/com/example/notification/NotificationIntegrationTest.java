@@ -259,10 +259,18 @@ class NotificationIntegrationTest {
     @DisplayName("BE-539 AC-4: 서로 다른 테넌트의 동일 event_id 는 각자 자기 행을 갖는다")
     void sameEventIdAcrossTenants_eachTenantKeepsItsOwnRows() throws Exception {
         String otherTenant = "omni-corp";
-        seedTemplateFor(TenantContext.DEFAULT_TENANT_ID, TemplateType.PAYMENT_COMPLETED,
-                NotificationChannel.EMAIL, "Payment {{orderId}}", "Paid {{amount}}.");
-        seedTemplateFor(otherTenant, TemplateType.PAYMENT_COMPLETED,
-                NotificationChannel.EMAIL, "Payment {{orderId}}", "Paid {{amount}}.");
+        // Both channels are seeded for both tenants deliberately. An earlier revision seeded
+        // only EMAIL and asserted one row per tenant, which made the expectation depend on
+        // whether a sibling test had already seeded the default tenant's PUSH template —
+        // it had, so the assertion read 2 and the test failed for a reason that had nothing
+        // to do with tenant isolation. Asserting the channel *set* is order-independent and
+        // also proves the fan-out happens per tenant rather than once globally.
+        for (String tenant : List.of(TenantContext.DEFAULT_TENANT_ID, otherTenant)) {
+            seedTemplateFor(tenant, TemplateType.PAYMENT_COMPLETED,
+                    NotificationChannel.EMAIL, "Payment {{orderId}}", "Paid {{amount}}.");
+            seedTemplateFor(tenant, TemplateType.PAYMENT_COMPLETED,
+                    NotificationChannel.PUSH, "결제 완료", "{{amount}} 결제 완료.");
+        }
 
         String userId = "user-crosstenant-" + UUID.randomUUID();
         String sharedEventId = UUID.randomUUID().toString();
@@ -272,8 +280,12 @@ class NotificationIntegrationTest {
         paymentCompletedEventConsumer.onMessage(
                 paymentCompletedEventJson(sharedEventId, userId, otherTenant));
 
-        assertThat(notificationsOfTenant(TenantContext.DEFAULT_TENANT_ID, userId)).hasSize(1);
-        assertThat(notificationsOfTenant(otherTenant, userId)).hasSize(1);
+        for (String tenant : List.of(TenantContext.DEFAULT_TENANT_ID, otherTenant)) {
+            assertThat(notificationsOfTenant(tenant, userId))
+                    .as("tenant %s keeps its own rows for the shared event id", tenant)
+                    .extracting(Notification::getChannel)
+                    .containsExactlyInAnyOrder(NotificationChannel.EMAIL, NotificationChannel.PUSH);
+        }
     }
 
     private String paymentCompletedEventJson(String eventId, String userId, String tenantId)
