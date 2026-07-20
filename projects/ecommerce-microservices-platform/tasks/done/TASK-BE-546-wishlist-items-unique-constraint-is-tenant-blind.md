@@ -1,6 +1,6 @@
 # TASK-BE-546 — `uq_wishlist_items_user_product` 가 테넌트를 모른다 (도달 불가이지만 결함)
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet (마이그레이션 1개 + 회귀 확인. 판정은 이미 끝났다)
