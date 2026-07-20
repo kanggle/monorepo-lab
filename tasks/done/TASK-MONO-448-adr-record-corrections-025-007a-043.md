@@ -1,6 +1,6 @@
 # TASK-MONO-448 — Correct three ADR decision records the drift audit found asserting untrue things
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-MONO
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus 4.8 (one is a security-semantics correction; the other two are deviation notes whose wording must avoid both over- and under-claiming)
