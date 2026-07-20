@@ -27,6 +27,7 @@ knowledge/
 ├── database/         # DB design decisions and references
 ├── messaging/        # Event-driven design references
 ├── security/         # Security pattern references
+├── runbooks/         # On-call recovery procedures (TASK-BE-533 / ADR-006)
 └── README.md
 ```
 

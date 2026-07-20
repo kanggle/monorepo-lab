@@ -205,19 +205,67 @@ groups:
           description: "{{ $labels.job }}의 커넥션 풀 대기 요청이 {{ $value }}건입니다."
 
   # ──────────────────────────────────────────────
-  # 카테고리 6: notification-service 스크레이프 상태 (전용)
-  # 현재 이 그룹은 Prometheus 자체의 up{} 지표만 사용한다.
-  # notification_failed_total{channel, reason} 기반 규칙은 아래 사유로 제거된 상태다.
+  # 카테고리 6: 알림 발송 실패 (notification-service 전용)
+  # specs/services/notification-service/observability.md:
+  #   notification_failed_total{channel, reason} / notification_sent_total{channel} 기반
   #
-  # NotificationDeliveryFailureRateHigh / NotificationDeliveryFailureRateCritical removed (TASK-BE-532,
-  # 2026-07-20): notification-service emits neither notification_failed_total nor notification_sent_total —
-  # zero Micrometer registration anywhere in notification-service/src/main. The rules were permanently
-  # no-data (could never fire at any failure rate), which is worse than no rule: a reader would conclude
-  # notification-delivery failure is monitored when it is not. TASK-BE-533 wires the counters; once they
-  # exist, restore both rules against the demonstrated emitters.
+  # TASK-BE-532 (2026-07-20) removed the two rate rules below because notification-service emitted
+  # neither metric — they were permanently no-data. TASK-BE-533 restored them together with the
+  # emitters, so each rule below now names a metric with a demonstrated increment path:
+  #
+  #   notification_sent_total{channel}          <- MicrometerNotificationMetrics.recordSent(...),
+  #                                                called from NotificationSendService#renderAndSend
+  #                                                on the success branch.
+  #   notification_failed_total{channel,reason} <- MicrometerNotificationMetrics.recordFailed(...),
+  #                                                called from the SAME method's catch branch.
+  #
+  # Both increments are covered by tests that drive a real send outcome and read the counter back
+  # out of a SimpleMeterRegistry (NotificationSendServiceTest, MicrometerNotificationMetricsTest) —
+  # a registered-but-never-incremented counter would reproduce the no-data defect one layer deeper.
+  # NotificationSenderDown is unchanged; it is backed by Prometheus's own up{} scrape metric.
   # ──────────────────────────────────────────────
   - name: notification_delivery
     rules:
+      - alert: NotificationDeliveryFailureRateHigh
+        expr: |
+          (
+            sum(rate(notification_failed_total[5m]))
+            /
+            (
+              sum(rate(notification_failed_total[5m]))
+              +
+              sum(rate(notification_sent_total[5m]))
+            )
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          category: notification
+          service: notification-service
+        annotations:
+          summary: "notification-service 발송 실패율 10% 초과"
+          description: "최근 5분간 알림 발송 실패율이 {{ $value | humanizePercentage }}입니다. (임계값: 10%)"
+
+      - alert: NotificationDeliveryFailureRateCritical
+        expr: |
+          (
+            sum(rate(notification_failed_total[5m]))
+            /
+            (
+              sum(rate(notification_failed_total[5m]))
+              +
+              sum(rate(notification_sent_total[5m]))
+            )
+          ) > 0.3
+        for: 5m
+        labels:
+          severity: critical
+          category: notification
+          service: notification-service
+        annotations:
+          summary: "notification-service 발송 실패율 30% 초과"
+          description: "최근 5분간 알림 발송 실패율이 {{ $value | humanizePercentage }}입니다. 외부 채널 연동 장애 가능성이 있습니다."
+
       - alert: NotificationSenderDown
         expr: up{job="notification-service"} == 0
         for: 1m
@@ -228,3 +276,45 @@ groups:
         annotations:
           summary: "notification-service 다운"
           description: "notification-service가 1분 이상 응답하지 않아 알림 발송이 중단되었습니다."
+
+  # ──────────────────────────────────────────────
+  # 카테고리 7: 이벤트 발행 실패 (user-service Scenario B — TASK-BE-533)
+  #
+  # ADR-006 § user-service Scenario B gates its own ACCEPT on this alert. user-service publishes
+  # user.user.withdrawn best-effort (KafkaTemplate.send inside @TransactionalEventListener
+  # AFTER_COMMIT), so a broker-send failure after a committed withdrawal leaves the user WITHDRAWN
+  # in user-service while order-service never cancels their active orders. There is no retry row —
+  # this counter is the ONLY signal that it happened.
+  #
+  # order-service is the sole live consumer. ADR-006's prose also names auth-service, but ecommerce's
+  # auth-service was decommissioned by TASK-BE-132 (out of settings.gradle, out of docker-compose);
+  # its consumer is preserved-history dead code. Verified 2026-07-20 (TASK-BE-533).
+  #
+  # 🔴 Metric-name divergence, deliberate: ADR-006 writes the expression as
+  #   user_event_publish_failure_total{event_type="UserWithdrawn"}
+  # but no such series exists. The emitter is UserMetrics#incrementEventPublishFailure, which uses
+  # the SHARED name from libs/java-observability EventMetricNames:
+  #   event_publish_failure_total{service="user-service", event_type="UserWithdrawn"}
+  # called from KafkaUserProfileEventPublisher on both the async-callback and synchronous-throw
+  # failure paths, and covered by UserMetricsTest. The rule is written against the metric that is
+  # actually emitted — writing the ADR's literal string would restore the ADR's letter and leave
+  # the alert permanently no-data, which is the exact defect TASK-BE-532 had to clean up.
+  #
+  # "> 0 in any 5-minute window" is expressed as increase(...[5m]) > 0 with `for: 0m`: a single
+  # lost withdrawal event is already actionable, so there is nothing to debounce.
+  # ──────────────────────────────────────────────
+  - name: event_publish_failure
+    rules:
+      - alert: UserWithdrawnEventPublishFailure
+        expr: increase(event_publish_failure_total{service="user-service", event_type="UserWithdrawn"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: event_publish
+          service: user-service
+        annotations:
+          summary: "user-service UserWithdrawn 이벤트 발행 실패"
+          description: >-
+            최근 5분간 UserWithdrawn 이벤트 발행이 {{ $value }}건 실패했습니다. 탈퇴는 커밋됐지만
+            order-service 의 주문 취소가 실행되지 않았을 수 있습니다.
+            복구 절차: knowledge/runbooks/user-withdrawn-not-cancelled.md
