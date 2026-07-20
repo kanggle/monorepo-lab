@@ -39,11 +39,13 @@ No body.
 | 400 | INVALID_PAYMENT_REQUEST | Missing or invalid field, missing `X-User-Id` header |
 | 400 | VALIDATION_ERROR | Malformed request body |
 | 401 | UNAUTHORIZED | Missing or invalid access token |
-| 403 | ACCESS_DENIED | A payment for this `orderId` already exists and belongs to a different user |
+| 403 | ACCESS_DENIED | A payment for this `orderId` already exists and belongs to a different user **in the caller's own tenant** |
+| 404 | PAYMENT_NOT_FOUND | No payment for this `orderId` in the caller's own tenant, **and** either none exists at all or one exists under a **different tenant** — the two cases are indistinguishable to the caller (TASK-BE-543 AC-1; cross-tenant existence is masked, not confirmed with 403/409) |
 
 > Notes
 > - Any `userId` field present in the request body is rejected (unknown property) — the server uses the `X-User-Id` header exclusively.
-> - Ownership of the underlying order is verified against the existing payment record's `userId` when one exists. The first payment for an `orderId` cannot be cross-checked at this layer; downstream order-service correlation is the source of truth.
+> - Ownership of the underlying order is verified against the existing payment record's `userId` when one exists **for the caller's own tenant**. The first payment for an `orderId` cannot be cross-checked against order-service at this layer; downstream order-service correlation is the source of truth for `orderId` → `userId` ownership.
+> - `orderId` is globally unique (order-service assigns it once via `UUID.randomUUID()`, no tenant-partitioned scheme), so `payments.order_id` is a global `UNIQUE` constraint. A request referencing an `orderId` that already has a payment under a **different** tenant is rejected with 404 before any write is attempted — this both prevents hitting that global constraint and avoids confirming cross-tenant existence (M3).
 
 ---
 

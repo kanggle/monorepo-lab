@@ -3,9 +3,11 @@ package com.example.payment.application.service;
 import com.example.payment.application.exception.UnauthorizedPaymentAccessException;
 import com.example.payment.application.port.out.PaymentMetricRecorder;
 import com.example.payment.application.port.out.PaymentRepository;
+import com.example.payment.domain.exception.PaymentNotFoundException;
 import com.example.payment.domain.model.Payment;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +39,18 @@ public class PaymentProcessingService {
      *   path using the event's {@code userId}, so the REST entry point becomes a
      *   no-op or a 403 by the time an attacker tries to hijack it.</li>
      * </ul>
+     *
+     * <p><b>Tenant axis (TASK-BE-543 AC-1).</b> {@code orderId} is globally unique
+     * (single generation site, {@code UUID.randomUUID()}, in {@code Order.create} —
+     * no tenant-partitioned scheme), so the {@code payments.order_id UNIQUE} constraint
+     * is correctly global (V1). The own-tenant lookup above only sees a same-tenant row,
+     * so a caller in a DIFFERENT tenant than the row's true owner would fall through to
+     * the create branch below and hit that global constraint at insert time — surfacing
+     * as a 409 that also leaks "this orderId already exists somewhere" across the tenant
+     * boundary (M3 requires masking cross-tenant existence, not a bare 409). Before
+     * inserting, a global existence check rejects that case with 404 instead — the same
+     * status this endpoint already returns for "no such payment", so cross-tenant and
+     * genuinely-nonexistent orders are indistinguishable to the caller.
      */
     @Transactional
     public void processPayment(String orderId, String userId, long amount) {
@@ -52,9 +66,33 @@ public class PaymentProcessingService {
             return;
         }
 
+        if (paymentRepository.existsByOrderIdAcrossTenants(orderId)) {
+            // orderId already has a payment under a different tenant. Reject before the
+            // insert would otherwise hit the global order_id UNIQUE constraint — masking
+            // cross-tenant existence as PAYMENT_NOT_FOUND (404) rather than a 409/500 that
+            // confirms something exists (TASK-BE-543 AC-1, M3).
+            log.warn("processPayment: orderId={} already exists under a different tenant — "
+                    + "rejecting as not found", orderId);
+            throw new PaymentNotFoundException(orderId);
+        }
+
         Payment payment = Payment.create(orderId, userId, amount);
+        try {
+            // saveAndFlush, not save: Payment has an assigned @Id, so a plain save() would
+            // defer this INSERT to the commit-time flush — past this catch and past the
+            // controller — and the catch below would be dead code (TASK-BE-541).
+            paymentRepository.saveAndFlush(payment);
+        } catch (DataIntegrityViolationException e) {
+            // The concurrent twin of the precheck above: two cross-tenant requests can both
+            // pass existsByOrderIdAcrossTenants before either commits, so the global
+            // payments.order_id UNIQUE constraint is the real arbiter. Translate it to the
+            // same 404 the sequential path returns — otherwise the loser gets the 409 that
+            // the precheck exists to avoid, and cross-tenant existence leaks after all (M3).
+            log.warn("processPayment: concurrent insert lost the race on orderId={} — "
+                    + "rejecting as not found", orderId, e);
+            throw new PaymentNotFoundException(orderId);
+        }
         paymentMetricRecorder.incrementPaymentCreated();
-        paymentRepository.save(payment);
 
         log.info("Payment created (PENDING): paymentId={}, orderId={}", payment.getPaymentId(), orderId);
     }
