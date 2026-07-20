@@ -27,6 +27,17 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
 
+  # TASK-FIN-BE-059: this key was absent. The outbox relay
+  # (AccountOutboxPublisher, account.outbox.polling.enabled defaults ON) sends
+  # through KafkaTemplate, so with no bootstrap-servers configured Spring fell
+  # back to `localhost:9092` — inside the container, that is the service
+  # itself. Rows accumulated at `published_at IS NULL` while the relay backed
+  # off, and nothing surfaced it: /actuator/health does not probe Kafka, so the
+  # container stayed healthy with its event chain severed. Mirrors
+  # ledger-service's application.yml, which already had this key.
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:kafka:9092}
+
   data:
     redis:
       host: ${REDIS_HOST:redis}

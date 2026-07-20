@@ -8,7 +8,7 @@
 
 `docker compose` 의 `include:` 와 `-f` 는 **같은 서비스 키를 조용히 하나로 병합**한다
 (실측: `include`=첫째 승, `-f`=마지막 승, 에러 없음). 8개 프로젝트는 서로 다른
-컨테이너인데도 제네릭 키를 공유한다 — `redis`×7, `kafka`×6, `postgres`×3, `mysql`×3,
+컨테이너인데도 제네릭 키를 공유한다 — `redis`×7, `kafka`×7, `postgres`×3, `mysql`×3,
 `grafana`×3, `notification-service`×3. 따라서 단일 병합 파일은 7개 redis 중 6개를
 소리없이 잃어 대부분 도메인이 뜨지 않는다.
 
