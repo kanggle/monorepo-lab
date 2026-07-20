@@ -1,5 +1,6 @@
 package com.example.product.presentation.controller;
 
+import java.util.UUID;
 import com.example.product.ProductServiceApplication;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -95,6 +96,9 @@ class SellerScopeIsolationIntegrationTest {
 
     private String registerProduct(String tenantId, String sellerId, String name) throws Exception {
         var request = post("/api/admin/products")
+                // TASK-BE-536: POST /api/admin/products now requires an Idempotency-Key.
+                // A fresh key per call — each helper invocation is a distinct product.
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .header(ROLE_HEADER, "ECOMMERCE_OPERATOR")
                 .header(TENANT_HEADER, tenantId)
                 .contentType(MediaType.APPLICATION_JSON)
