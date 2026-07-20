@@ -1,6 +1,6 @@
 # TASK-BE-538 — ADR-002 Decision-3 의 문자적 요구를 만족하는 구현이 하나도 없다: 문구를 판정한다
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus 4.8 (ADR 문구 판정 + 20 엔드포인트 분류 재검. 구현이 아니라 판단이 실질이다)

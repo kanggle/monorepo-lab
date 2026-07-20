@@ -1,6 +1,6 @@
 # TASK-BE-543 — `payments.order_id`: 선체크는 테넌트 스코프인데 제약은 전역이다 (`user_id` 축은 `TASK-BE-540` 이 이미 판정했다)
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet (측정 1건 + 판정. 원래 3 사이트였으나 2건이 이미 답이 나와 축소됨)
