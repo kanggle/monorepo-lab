@@ -79,7 +79,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | TASK-BE-537 | **조사 티켓(수정 티켓 아님)**. ADR-002 D3 전수조사 후속 — `PUT /shippings/{id}/status` 는 순차 재전송을 상태머신이 확실히 막지만(NATURAL-KEY 확인), `@Version` 이 shipping-service 전체 0건(패턴 자기검증 완료: 저장소 타 위치 10개 파일서 히트)이라 **동시** SHIPPED 2건이 이중 `ManualShipConfirmRequested` 발행 → WMS 재고 이중차감 가능성. **관측된 바 없음 — 재현이 첫 산출물이고 재현 실패도 수확(AC-5)**. | shipping-service | investigation, concurrency |
 | TASK-BE-390 | **READY — ⏳ 2026-08-01 게이트 (그 전 구현 금지)**. D2-b deprecation window(~2026-08-01) 종료 후 gateway `allowed-issuers`에서 레거시 `iam` issuer 제거 + 테스트 정리. AC-0 verify-then-act(live `iss=iam` 토큰 0 확인) 선행. | gateway-service | code, security, test |
 | TASK-BE-533 | ADR↔구현 드리프트 감사 산물 ②. ADR-006 이 **자기 ACCEPT 의 게이트로 선언한** 4개 mitigation(notification 실패 카운터, user-service `UserWithdrawn` 알림, runbook 2종)이 미이행인 채 ACCEPTED(2026-05-11). 메트릭 실배선 + 알림 복원 + `knowledge/runbooks/` 신설. **BE-532 이후 착수.** | notification-service, user-service | code, observability, docs |
-| TASK-BE-534 | ADR↔구현 드리프트 감사 산물 ③. 프로젝트 ADR-003(frontend dual strategy)이 `Accepted` 인 채 방치 — ADR-MONO-031(ACCEPTED·집행완료)이 admin-dashboard 를 sunset 시켰고 스펙엔 RETIRED 마커가 있으나 **ADR 레벨 마커만 없어 SoT 사슬이 한 링크 끊김**. + ADR-004 의 `multi-tenant` 미선언 주장이 `PROJECT.md` 와 불일치(ADR-MONO-030 결과). | docs/adr | docs |
 
 ## in-progress
 
@@ -87,7 +86,9 @@ _(없음)_
 
 ## review
 
-_(없음)_
+| ID | Title | Service | Tags |
+|---|---|---|---|
+| TASK-BE-534 | ADR↔구현 드리프트 감사 산물 ③. 프로젝트 ADR-003(frontend dual strategy)이 `Accepted` 인 채 방치 — ADR-MONO-031(ACCEPTED·집행완료)이 admin-dashboard 를 sunset 시켰고 스펙엔 RETIRED 마커가 있으나 **ADR 레벨 마커만 없어 SoT 사슬이 한 링크 끊김**. + ADR-004 의 `multi-tenant` 미선언 주장이 `PROJECT.md` 와 불일치(ADR-MONO-030 결과). AC-0 재검증 완료(4전제 전부 유지) — ADR-003 `Superseded by ADR-MONO-031`(admin-dashboard 절반만, web-store FSD 유효) + README 행 갱신 + ADR-004 trait 예시 정정(ADR-MONO-030 인용). | docs/adr | docs |
 
 ## done
 

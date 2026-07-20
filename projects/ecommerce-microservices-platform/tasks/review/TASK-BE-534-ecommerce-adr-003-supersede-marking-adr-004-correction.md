@@ -1,6 +1,6 @@
 # TASK-BE-534 — Mark ecommerce ADR-003 superseded by ADR-MONO-031, and correct ADR-004's stale trait claim
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Haiku 4.5 (two ADR header/prose edits + one index row)

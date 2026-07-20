@@ -1,8 +1,18 @@
 # ADR-003: web-store / admin-dashboard 아키텍처 이원화
 
-- **Status**: Accepted
+- **Status**: Superseded by ADR-MONO-031
 - **Date**: 2026-03
 - **Tags**: frontend, architecture, nextjs
+
+> **부분 supersede 안내 (2026-07-20).** 이 ADR은 두 가지를 결정했다: ① `web-store` → FSD, ② `admin-dashboard` → Layered by
+> Feature. [`ADR-MONO-031`](../../../../docs/adr/ADR-MONO-031-ecommerce-operator-ui-console-consolidation.md)
+> (repo-root, **ACCEPTED 2026-06-13**)이 그중 **②만** 뒤집었다 — 독립 `admin-dashboard` 앱을 폐기하고 운영자 UI를
+> platform-console로 흡수하는 결정으로, `TASK-MONO-259`에서 이미 실행 완료됐다.
+> `specs/services/admin-dashboard/architecture.md`는 그 결과로 **RETIRED** 헤더("Absorbed into platform-console… Do not
+> implement new features against this spec")를 달고 있다. **①(web-store → FSD)은 이 supersede의 영향을 받지 않고
+> 그대로 유효하다** — ADR-MONO-031은 web-store를 다루지 않았으며, web-store는 여전히 독립 스토어프런트로 남아
+> FSD 아키텍처를 따른다. 아래 본문의 admin-dashboard 관련 서술(§ Decision 후반부, § Consequences 일부)은 역사적
+> 기록으로만 읽을 것 — 새 작업의 근거로 삼지 말 것.
 
 ## Context
 

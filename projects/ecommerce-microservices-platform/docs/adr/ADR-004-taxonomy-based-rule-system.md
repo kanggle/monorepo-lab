@@ -59,7 +59,12 @@ service_types: [rest-api, event-consumer, batch-job, frontend-app]
 ## Consequences
 
 ### Positive
-- **규칙의 과잉 적용 차단**: 본 프로젝트는 `regulated`·`audit-heavy`·`multi-tenant`를 선언하지 않음. 이들 trait 파일이 존재해도 로딩되지 않음.
+- **규칙의 과잉 적용 차단**: 본 프로젝트는 `regulated`·`audit-heavy`를 선언하지 않음. 이들 trait 파일이 존재해도 로딩되지 않음.
+  *(2026-07-20 정정: 원문은 이 목록에 `multi-tenant`도 포함했으나, 이후 [ADR-MONO-030](../../../../docs/adr/ADR-MONO-030-ecommerce-multivendor-marketplace-saas.md)
+  (멀티벤더 마켓플레이스 SaaS 결정)에 따라 `PROJECT.md`가 `multi-tenant`를 선언했고, 이제 [`rules/traits/multi-tenant.md`](../../../../rules/traits/multi-tenant.md)가
+  실제로 로딩된다 — 이 예시 하나만 갱신한다. 예시가 보여주려던 원칙("미선언 trait는 로딩되지 않는다")은 여전히 유효하며,
+  이는 이 taxonomy 메커니즘이 선언 변화에 맞춰 올바르게 반응했다는 방증이기도 하다. `regulated`·`audit-heavy`는 지금도
+  미선언 상태로 남아 원칙을 계속 증명한다.)*
 - **"왜 이 규칙이 적용되나?" 질문에 기계적 답**: `PROJECT.md`의 tag → [specs/rules/taxonomy.md](../../specs/rules/taxonomy.md) 의 정의 → `traits/<trait>.md`의 구체 규칙.
 - **재사용성**: 같은 `taxonomy.md`를 다음 프로젝트에도 그대로 복사 가능. 거기서 선언하는 tag만 바꾸면 규칙 세트가 자동 교체.
 - **drift 방지 메커니즘 내장**: `.claude/config/`와 `specs/rules/`의 동기화가 PR 정책으로 강제.
