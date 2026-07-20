@@ -1,6 +1,6 @@
 # TASK-BE-547 — 동시 배송 상태 전이가 고객에게 배송 알림을 두 번 보낸다 (`ShippingStatusChanged` 소비자 dedup 이 무력화됨)
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus 4.8 (event_id 채번 규약 판정 + 계약/아웃박스 상호작용. "가드 하나 추가"가 아니다)
