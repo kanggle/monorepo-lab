@@ -6,7 +6,7 @@
 |---|---|---|
 | [ADR-001](ADR-001-microservices-over-monolith.md) | 단일 판매자 B2C에서 모놀리식이 아닌 MSA를 택한 이유 | Accepted |
 | [ADR-002](ADR-002-saga-over-distributed-transaction.md) | Order + Payment + Inventory에 Saga + Outbox를 택한 이유 | Accepted |
-| [ADR-003](ADR-003-frontend-architecture-dual-strategy.md) | web-store(FSD) / admin-dashboard(Layered-by-Feature) 이원화 | Accepted |
+| [ADR-003](ADR-003-frontend-architecture-dual-strategy.md) | web-store(FSD) / admin-dashboard(Layered-by-Feature) 이원화 | Superseded by ADR-MONO-031 (admin-dashboard 절반만 — web-store FSD는 유효) |
 | [ADR-004](ADR-004-taxonomy-based-rule-system.md) | 분류(domain/trait) 기반 규칙 시스템을 도입한 이유 | Accepted |
 | [ADR-005](ADR-005-korean-search-analyzer.md) | Elasticsearch 한국어 analyzer로 nori 채택 | Accepted |
 | [ADR-006](ADR-006-at-least-once-delivery-policy.md) | At-Least-Once Delivery Policy (서비스별 outbox vs best-effort 결정) | Accepted |
