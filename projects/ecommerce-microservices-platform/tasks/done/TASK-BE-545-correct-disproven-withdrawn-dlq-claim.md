@@ -1,6 +1,6 @@
 # TASK-BE-545 — Correct the disproven "UserWithdrawn consume-side DLQ outage" claim that landed on main via TASK-BE-533
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus 4.8 (a correctness/record correction whose whole point is not to inherit the disproven claim — measure, don't assume)
