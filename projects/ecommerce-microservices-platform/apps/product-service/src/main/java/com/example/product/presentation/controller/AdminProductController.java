@@ -29,6 +29,7 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -126,11 +127,19 @@ public class AdminProductController {
      * (Step 2 / M6) enforces tenant isolation. The platform-console operator
      * carries the {@code ECOMMERCE_OPERATOR} domain role via the ADR-MONO-035 4a assume-tenant
      * derivation; the service applies no additional ecommerce-local RBAC.
+     *
+     * <p><b>{@code Idempotency-Key} is required</b> (TASK-BE-536): a replayed
+     * registration must not create a second product with a second stock ledger.
+     * Declared {@code required = false} at the binding so a missing header is
+     * answered by the service's own 400 {@code IDEMPOTENCY_KEY_REQUIRED} (a single
+     * enforcement point, reached by every caller) rather than Spring's generic
+     * missing-header error.
      */
     @PostMapping
     public ResponseEntity<RegisterProductResponse> register(
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody RegisterProductRequest request) {
-        UUID id = registerProductService.register(request.toCommand());
+        UUID id = registerProductService.register(request.toCommand(idempotencyKey));
         return ResponseEntity.status(HttpStatus.CREATED).body(RegisterProductResponse.from(id));
     }
 
@@ -205,12 +214,19 @@ public class AdminProductController {
      * Operator-plane stock adjustment — authorization at the gateway
      * ({@code roles ∋ ECOMMERCE_OPERATOR} + {@code tenant_id} + {@code WHERE tenant_id}); the
      * service applies no additional ecommerce-local RBAC. See {@link #register}.
+     *
+     * <p><b>{@code Idempotency-Key} is required</b> (TASK-BE-536): two identical
+     * stock deltas can both be genuine (a real second "+10" receipt), so no natural
+     * key can separate a retry from a real second adjustment — only the client
+     * knows which it is. See {@link #register} for the {@code required = false}
+     * binding rationale.
      */
     @PatchMapping("/{productId}/stock")
     public ResponseEntity<AdjustStockResponse> adjustStock(
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @PathVariable UUID productId,
             @Valid @RequestBody AdjustStockRequest request) {
-        AdjustStockResult result = adjustStockService.adjust(request.toCommand(productId));
+        AdjustStockResult result = adjustStockService.adjust(request.toCommand(productId, idempotencyKey));
         return ResponseEntity.ok(AdjustStockResponse.from(result));
     }
 }

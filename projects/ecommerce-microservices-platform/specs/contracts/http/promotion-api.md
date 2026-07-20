@@ -170,6 +170,26 @@ Delete a promotion.
 ### POST /api/promotions/{promotionId}/coupons/issue (Admin)
 Issue coupons for a promotion to specified users.
 
+**Idempotency (required on this endpoint, TASK-BE-536)**
+
+`Promotion.validateCanIssue` caps only the TOTAL issued count, not "this exact
+batch was already issued" — a replay mints an entire second batch of coupons
+until the cap is hit. A missing or blank `Idempotency-Key` is refused with
+**400 `IDEMPOTENCY_KEY_REQUIRED`**. The key is scoped to `promotionId`.
+
+| Replay shape | Behaviour |
+|---|---|
+| Same key, same `userIds` | **Replay.** Returns **201** with the ALREADY-issued count. No second batch is minted. |
+| Same key, different `userIds` | **409 `IDEMPOTENCY_KEY_CONFLICT`** — the key is bound to the first request's user batch (order-sensitive). |
+| Different key, same promotion | A **genuine second issuance batch** (even to the same users). Proceeds normally, composing with the issuance cap. |
+
+Records are retained indefinitely (no TTL). Under two simultaneous duplicates the
+loser of the `UNIQUE (promotion_id, idempotency_key)` insert also receives **409
+`IDEMPOTENCY_KEY_CONFLICT`**; retrying that request hits the replay row.
+
+**Request Headers**
+- `Idempotency-Key: string` (**required**) — client-supplied, scoped to `promotionId`
+
 **Request Body**
 ```json
 {
@@ -187,9 +207,11 @@ Issue coupons for a promotion to specified users.
 **Error responses**
 | Status | Code | Reason |
 |---|---|---|
+| 400 | IDEMPOTENCY_KEY_REQUIRED | `Idempotency-Key` header missing or blank |
 | 401 | UNAUTHORIZED | Missing or invalid access token |
 | 403 | ACCESS_DENIED | Not an admin user |
 | 404 | PROMOTION_NOT_FOUND | Promotion does not exist |
+| 409 | IDEMPOTENCY_KEY_CONFLICT | The same `Idempotency-Key` was replayed for this promotion with a different `userIds` batch, or lost a concurrent same-key insert race |
 | 422 | PROMOTION_NOT_ACTIVE | Promotion is not currently active |
 | 422 | COUPON_LIMIT_EXCEEDED | Issuance would exceed max issuance count |
 

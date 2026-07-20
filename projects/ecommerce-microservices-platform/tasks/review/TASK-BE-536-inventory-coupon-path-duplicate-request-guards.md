@@ -1,6 +1,6 @@
 # TASK-BE-536 — Close the four stock/coupon endpoints that have no duplicate-request protection
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (four narrow guards following an existing in-repo pattern)

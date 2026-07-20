@@ -21,10 +21,11 @@ public record RegisterProductRequest(
         String sellerId,
         @NotEmpty(message = "variants는 하나 이상 필요합니다") @Valid List<RegisterVariantRequest> variants
 ) {
-    public RegisterProductCommand toCommand() {
+    public RegisterProductCommand toCommand(String idempotencyKey) {
         List<VariantCommand> variantCommands = variants.stream()
                 .map(v -> new VariantCommand(v.optionName(), v.stock(), v.additionalPrice()))
                 .toList();
-        return new RegisterProductCommand(name, description, price, categoryId, thumbnailUrl, sellerId, variantCommands);
+        return new RegisterProductCommand(
+                name, description, price, categoryId, thumbnailUrl, sellerId, variantCommands, idempotencyKey);
     }
 }

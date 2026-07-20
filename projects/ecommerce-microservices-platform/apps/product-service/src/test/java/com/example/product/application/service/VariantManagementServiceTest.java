@@ -1,6 +1,7 @@
 package com.example.product.application.service;
 
 import com.example.product.application.dto.VariantDetail;
+import com.example.product.domain.exception.DuplicateVariantOptionException;
 import com.example.product.domain.exception.ProductNotFoundException;
 import com.example.product.domain.model.Price;
 import com.example.product.domain.model.Product;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.util.List;
 import java.util.Optional;
@@ -55,7 +57,7 @@ class VariantManagementServiceTest {
         void addVariant_success_returnsVariantDetail() {
             UUID productId = existingProduct.getId();
             given(productRepository.findById(productId)).willReturn(Optional.of(existingProduct));
-            given(productRepository.save(any(Product.class))).willAnswer(inv -> inv.getArgument(0));
+            given(productRepository.saveAndFlush(any(Product.class))).willAnswer(inv -> inv.getArgument(0));
 
             VariantDetail result = variantManagementService.addVariant(productId, "레드", 5, 2000L);
 
@@ -64,7 +66,7 @@ class VariantManagementServiceTest {
             assertThat(result.optionName()).isEqualTo("레드");
             assertThat(result.stock()).isEqualTo(5);
             assertThat(result.additionalPrice()).isEqualTo(2000L);
-            verify(productRepository).save(existingProduct);
+            verify(productRepository).saveAndFlush(existingProduct);
         }
 
         @Test
@@ -72,7 +74,7 @@ class VariantManagementServiceTest {
         void addVariant_success_productHasMoreVariants() {
             UUID productId = existingProduct.getId();
             given(productRepository.findById(productId)).willReturn(Optional.of(existingProduct));
-            given(productRepository.save(any(Product.class))).willAnswer(inv -> inv.getArgument(0));
+            given(productRepository.saveAndFlush(any(Product.class))).willAnswer(inv -> inv.getArgument(0));
 
             int beforeCount = existingProduct.getVariants().size();
             variantManagementService.addVariant(productId, "블루", 3, 1000L);
@@ -114,6 +116,18 @@ class VariantManagementServiceTest {
                     .isInstanceOf(IllegalArgumentException.class);
 
             verify(productRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("TASK-BE-536 AC-0/AC-4 동일 productId+optionName 유니크 제약 위반 → DuplicateVariantOptionException, 이중 재고 없음")
+        void addVariant_duplicateOptionName_translatesConstraintViolation() {
+            UUID productId = existingProduct.getId();
+            given(productRepository.findById(productId)).willReturn(Optional.of(existingProduct));
+            given(productRepository.saveAndFlush(any(Product.class)))
+                    .willThrow(new DataIntegrityViolationException("uq_product_variants_option"));
+
+            assertThatThrownBy(() -> variantManagementService.addVariant(productId, "기본", 5, 2000L))
+                    .isInstanceOf(DuplicateVariantOptionException.class);
         }
     }
 

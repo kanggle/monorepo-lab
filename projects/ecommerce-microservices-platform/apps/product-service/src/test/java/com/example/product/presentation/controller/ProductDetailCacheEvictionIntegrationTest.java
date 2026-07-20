@@ -95,9 +95,12 @@ class ProductDetailCacheEvictionIntegrationTest {
     private QueryProductService queryProductService;
 
     private UUID registerProduct(String name, int stock) {
+        // A fresh random Idempotency-Key per call — each call in this file registers
+        // a genuinely distinct product, so no replay semantics are exercised here
+        // (TASK-BE-536; the idempotency guard itself is covered elsewhere).
         return registerProductService.register(new RegisterProductCommand(
-                name, "설명", 10000L, null,
-                List.of(new VariantCommand("기본", stock, 0))));
+                name, "설명", 10000L, null, null, null,
+                List.of(new VariantCommand("기본", stock, 0)), UUID.randomUUID().toString()));
     }
 
     @Test
@@ -106,7 +109,8 @@ class ProductDetailCacheEvictionIntegrationTest {
         UUID productId = registerProduct("재고 캐시 상품", 10);
         UUID variantId = queryProductService.findById(productId).variants().get(0).id(); // populate cache (stock 10)
 
-        adjustStockService.adjust(new AdjustStockCommand(productId, variantId, 5, "RESTOCK"));
+        adjustStockService.adjust(
+                new AdjustStockCommand(productId, variantId, 5, "RESTOCK", UUID.randomUUID().toString()));
 
         // Pre-fix: stale cache returns 10; post-fix: 15.
         int stockAfter = queryProductService.findById(productId).variants().get(0).stock();

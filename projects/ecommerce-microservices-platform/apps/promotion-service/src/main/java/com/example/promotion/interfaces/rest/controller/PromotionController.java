@@ -118,13 +118,23 @@ public class PromotionController {
         return ResponseEntity.noContent().build();
     }
 
+    /**
+     * <p><b>{@code Idempotency-Key} is required</b> (TASK-BE-536): a replayed
+     * issuance must not mint a second batch of coupons. Declared
+     * {@code required = false} at the binding so a missing header is answered by
+     * the service's own 400 {@code IDEMPOTENCY_KEY_REQUIRED} (a single enforcement
+     * point, reached by every caller) rather than Spring's generic missing-header
+     * error — mirrors product-service's {@code AdminProductController} (same task).
+     */
     @PostMapping("/{promotionId}/coupons/issue")
     public ResponseEntity<IssueCouponsResponse> issueCoupons(
             @RequestHeader("X-User-Role") @NotBlank(message = "X-User-Role 헤더는 필수입니다") String role,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @PathVariable String promotionId,
             @Valid @RequestBody IssueCouponsRequest request
     ) {
-        IssueCouponsCommand command = new IssueCouponsCommand(promotionId, request.userIds(), role);
+        IssueCouponsCommand command = new IssueCouponsCommand(
+                promotionId, request.userIds(), role, idempotencyKey);
         IssueCouponsResult result = couponCommandService.issueCoupons(command);
         return ResponseEntity.status(HttpStatus.CREATED).body(IssueCouponsResponse.from(result));
     }

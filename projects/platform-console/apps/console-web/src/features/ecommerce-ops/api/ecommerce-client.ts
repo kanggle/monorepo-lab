@@ -57,6 +57,8 @@ export interface EcommerceCallOptions {
   path: string;
   /** Typed mutation body; `undefined` for reads / DELETE. */
   body?: unknown;
+  /** Opt-in `Idempotency-Key` (TASK-BE-536) — see {@link import('@/shared/api/ecommerce-gateway').EcommerceGatewayRequest.idempotencyKey}. */
+  idempotencyKey?: string;
 }
 
 /**
@@ -94,7 +96,13 @@ export function callEcommerce<T>(
   label: EcommerceCallLabel,
 ): Promise<T> {
   return callEcommerceGateway(
-    { method: opts.method, base: opts.base, path: opts.path, body: opts.body },
+    {
+      method: opts.method,
+      base: opts.base,
+      path: opts.path,
+      body: opts.body,
+      idempotencyKey: opts.idempotencyKey,
+    },
     parse,
     ecommerceProfile(label),
   );

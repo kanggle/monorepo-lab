@@ -47,6 +47,22 @@ class ProductRepositoryImpl implements ProductRepository, ProductQueryPort {
     }
 
     @Override
+    public Product saveAndFlush(Product product) {
+        // Only ever called on an existing (non-new) product — VariantManagementService
+        // loads the product first. Same tenant-scoped load-then-update shape as save(),
+        // but jpaRepository.saveAndFlush forces the INSERT/UPDATE to Postgres inside
+        // this call, so a UNIQUE (product_id, option_name) violation on the child
+        // variant surfaces here as DataIntegrityViolationException (TASK-BE-536).
+        String tenantId = TenantContext.currentTenant();
+        ProductJpaEntity entity = jpaRepository
+                .findWithVariantsById(product.getId(), tenantId, false, null)
+                .orElseThrow(() -> new IllegalStateException("Product not found: " + product.getId()));
+        entity.update(product);
+        jpaRepository.saveAndFlush(entity);
+        return product;
+    }
+
+    @Override
     public Optional<Product> findById(UUID id) {
         // Read path: tenant filter + (when bound) seller-scope filter, always
         // nested after the tenant filter (isolate-then-attribute, AC-6). Absent /

@@ -81,13 +81,13 @@ class StockAdjustmentIntegrationTest {
     @DisplayName("재고 증가 후 DB에 반영된다")
     void adjustStock_increase_reflectedInDb() {
         RegisterProductCommand command = new RegisterProductCommand(
-                "재고 증가 상품", "설명", 10000L, null,
-                List.of(new VariantCommand("기본", 10, 0)));
+                "재고 증가 상품", "설명", 10000L, null, null, null,
+                List.of(new VariantCommand("기본", 10, 0)), "reg-key-1");
         UUID productId = registerProductService.register(command);
         UUID variantId = queryProductService.findById(productId).variants().get(0).id();
 
         AdjustStockResult result = adjustStockService.adjust(
-                new AdjustStockCommand(productId, variantId, 5, "RESTOCK"));
+                new AdjustStockCommand(productId, variantId, 5, "RESTOCK", "adj-key-1"));
 
         assertThat(result.currentStock()).isEqualTo(15);
         int dbStock = queryProductService.findById(productId).variants().get(0).stock();
@@ -98,13 +98,13 @@ class StockAdjustmentIntegrationTest {
     @DisplayName("재고 감소 후 DB에 반영된다")
     void adjustStock_decrease_reflectedInDb() {
         RegisterProductCommand command = new RegisterProductCommand(
-                "재고 감소 상품", "설명", 10000L, null,
-                List.of(new VariantCommand("기본", 10, 0)));
+                "재고 감소 상품", "설명", 10000L, null, null, null,
+                List.of(new VariantCommand("기본", 10, 0)), "reg-key-2");
         UUID productId = registerProductService.register(command);
         UUID variantId = queryProductService.findById(productId).variants().get(0).id();
 
         AdjustStockResult result = adjustStockService.adjust(
-                new AdjustStockCommand(productId, variantId, -3, "ADMIN_ADJUSTMENT"));
+                new AdjustStockCommand(productId, variantId, -3, "ADMIN_ADJUSTMENT", "adj-key-2"));
 
         assertThat(result.currentStock()).isEqualTo(7);
         int dbStock = queryProductService.findById(productId).variants().get(0).stock();
@@ -115,12 +115,12 @@ class StockAdjustmentIntegrationTest {
     @DisplayName("재고 조정 성공 시 StockChanged 이벤트가 발행된다")
     void adjustStock_success_publishesStockChangedEvent() {
         RegisterProductCommand command = new RegisterProductCommand(
-                "이벤트 재고 상품", "설명", 10000L, null,
-                List.of(new VariantCommand("기본", 10, 0)));
+                "이벤트 재고 상품", "설명", 10000L, null, null, null,
+                List.of(new VariantCommand("기본", 10, 0)), "reg-key-3");
         UUID productId = registerProductService.register(command);
         UUID variantId = queryProductService.findById(productId).variants().get(0).id();
 
-        adjustStockService.adjust(new AdjustStockCommand(productId, variantId, 5, "RESTOCK"));
+        adjustStockService.adjust(new AdjustStockCommand(productId, variantId, 5, "RESTOCK", "adj-key-3"));
 
         // StockChanged is published via Kafka (mocked); events accumulate on the
         // context-shared mock across methods, so filter to this product's change.
@@ -145,12 +145,12 @@ class StockAdjustmentIntegrationTest {
     @DisplayName("재고가 0이 되면 상품 status가 SOLD_OUT으로 변경된다")
     void adjustStock_toZero_productBecomeSoldOut() {
         RegisterProductCommand command = new RegisterProductCommand(
-                "품절 상품", "설명", 10000L, null,
-                List.of(new VariantCommand("기본", 5, 0)));
+                "품절 상품", "설명", 10000L, null, null, null,
+                List.of(new VariantCommand("기본", 5, 0)), "reg-key-4");
         UUID productId = registerProductService.register(command);
         UUID variantId = queryProductService.findById(productId).variants().get(0).id();
 
-        adjustStockService.adjust(new AdjustStockCommand(productId, variantId, -5, "ADMIN_ADJUSTMENT"));
+        adjustStockService.adjust(new AdjustStockCommand(productId, variantId, -5, "ADMIN_ADJUSTMENT", "adj-key-4"));
 
         assertThat(queryProductService.findById(productId).status()).isEqualTo(ProductStatus.SOLD_OUT);
     }
@@ -159,15 +159,15 @@ class StockAdjustmentIntegrationTest {
     @DisplayName("RESTOCK으로 stock이 0 초과가 되면 SOLD_OUT 상품이 ON_SALE로 변경된다")
     void adjustStock_restockFromSoldOut_productBecomesOnSale() {
         RegisterProductCommand command = new RegisterProductCommand(
-                "재입고 상품", "설명", 10000L, null,
-                List.of(new VariantCommand("기본", 5, 0)));
+                "재입고 상품", "설명", 10000L, null, null, null,
+                List.of(new VariantCommand("기본", 5, 0)), "reg-key-5");
         UUID productId = registerProductService.register(command);
         UUID variantId = queryProductService.findById(productId).variants().get(0).id();
 
-        adjustStockService.adjust(new AdjustStockCommand(productId, variantId, -5, "ADMIN_ADJUSTMENT"));
+        adjustStockService.adjust(new AdjustStockCommand(productId, variantId, -5, "ADMIN_ADJUSTMENT", "adj-key-5a"));
         assertThat(queryProductService.findById(productId).status()).isEqualTo(ProductStatus.SOLD_OUT);
 
-        adjustStockService.adjust(new AdjustStockCommand(productId, variantId, 10, "RESTOCK"));
+        adjustStockService.adjust(new AdjustStockCommand(productId, variantId, 10, "RESTOCK", "adj-key-5b"));
         assertThat(queryProductService.findById(productId).status()).isEqualTo(ProductStatus.ON_SALE);
     }
 
@@ -175,13 +175,13 @@ class StockAdjustmentIntegrationTest {
     @DisplayName("재고보다 많이 감소 시 InsufficientStockException 발생")
     void adjustStock_exceedsStock_throws() {
         RegisterProductCommand command = new RegisterProductCommand(
-                "부족 재고 상품", "설명", 10000L, null,
-                List.of(new VariantCommand("기본", 3, 0)));
+                "부족 재고 상품", "설명", 10000L, null, null, null,
+                List.of(new VariantCommand("기본", 3, 0)), "reg-key-6");
         UUID productId = registerProductService.register(command);
         UUID variantId = queryProductService.findById(productId).variants().get(0).id();
 
         assertThatThrownBy(() ->
-                adjustStockService.adjust(new AdjustStockCommand(productId, variantId, -5, "ADMIN_ADJUSTMENT")))
+                adjustStockService.adjust(new AdjustStockCommand(productId, variantId, -5, "ADMIN_ADJUSTMENT", "adj-key-6")))
                 .isInstanceOf(InsufficientStockException.class);
     }
 
@@ -192,7 +192,7 @@ class StockAdjustmentIntegrationTest {
         UUID variantId = UUID.randomUUID();
 
         assertThatThrownBy(() ->
-                adjustStockService.adjust(new AdjustStockCommand(fakeProductId, variantId, 5, "RESTOCK")))
+                adjustStockService.adjust(new AdjustStockCommand(fakeProductId, variantId, 5, "RESTOCK", "adj-key-7")))
                 .isInstanceOf(ProductNotFoundException.class);
     }
 
@@ -200,13 +200,13 @@ class StockAdjustmentIntegrationTest {
     @DisplayName("존재하지 않는 variantId 요청 시 VariantNotFoundException 발생")
     void adjustStock_invalidVariantId_throws() {
         RegisterProductCommand command = new RegisterProductCommand(
-                "상품", "설명", 10000L, null,
-                List.of(new VariantCommand("기본", 10, 0)));
+                "상품", "설명", 10000L, null, null, null,
+                List.of(new VariantCommand("기본", 10, 0)), "reg-key-7");
         UUID productId = registerProductService.register(command);
         UUID fakeVariantId = UUID.randomUUID();
 
         assertThatThrownBy(() ->
-                adjustStockService.adjust(new AdjustStockCommand(productId, fakeVariantId, 5, "RESTOCK")))
+                adjustStockService.adjust(new AdjustStockCommand(productId, fakeVariantId, 5, "RESTOCK", "adj-key-8")))
                 .isInstanceOf(VariantNotFoundException.class);
     }
 }

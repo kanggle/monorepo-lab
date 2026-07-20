@@ -278,6 +278,9 @@ Owned by `product-service`. See `rules/domains/ecommerce.md`.
 | MEDIA_NOT_FOUND | 404 | Media object not found in object storage by key (product-service `MediaNotFoundException`) |
 | MEDIA_VALIDATION_FAILED | 400 | Media upload payload fails format, size, or MIME-type validation (product-service `MediaValidationException`) |
 | STORAGE_UNAVAILABLE | 503 | Object storage service is unreachable or returned an error (product-service `StorageUnavailableException`) |
+| DUPLICATE_VARIANT_OPTION | 409 | `POST /api/admin/products/{productId}/variants` would create a second variant with an `optionName` that already exists on this product — natural-key guard, `uq_product_variants_option UNIQUE (product_id, option_name)` (product-service `DuplicateVariantOptionException`, TASK-BE-536) |
+| IDEMPOTENCY_KEY_REQUIRED | 400 | `Idempotency-Key` header missing or blank on `PATCH /api/admin/products/{productId}/stock` or `POST /api/admin/products` (product-service `IdempotencyKeyRequiredException`, TASK-BE-536) |
+| IDEMPOTENCY_KEY_CONFLICT | 409 | The same `Idempotency-Key` was replayed with a different `quantity` (stock) or `name` (product create), or lost the concurrent insert race on the respective `UNIQUE` dedupe table (product-service `IdempotencyKeyConflictException`, TASK-BE-536). A same-key + same-payload replay is NOT an error — it returns the current/prior result without a second mutation. |
 
 ## Search  `[domain: ecommerce]`
 
@@ -356,6 +359,8 @@ Owned by `promotion-service`. See `rules/domains/ecommerce.md` rule E7.
 | COUPON_NOT_OWNED | 422 | Coupon does not belong to the user |
 | COUPON_LIMIT_EXCEEDED | 422 | Issuance would exceed max issuance count |
 | COUPON_RESTORE_NOT_ALLOWED | 422 | Coupon cannot be restored (e.g. coupon is not in a used state) |
+| IDEMPOTENCY_KEY_REQUIRED | 400 | `Idempotency-Key` header missing or blank on `POST /api/promotions/{promotionId}/coupons/issue` (promotion-service `IdempotencyKeyRequiredException`, TASK-BE-536) |
+| IDEMPOTENCY_KEY_CONFLICT | 409 | The same `Idempotency-Key` was replayed against one promotion with a **different** user-id batch, or lost the concurrent insert race on `UNIQUE (promotion_id, idempotency_key)` (promotion-service `IdempotencyKeyConflictException`, TASK-BE-536). A same-key + same-batch replay is NOT an error — it returns the already-issued count without minting a second batch. |
 
 ## Notification  `[domain: ecommerce]`
 

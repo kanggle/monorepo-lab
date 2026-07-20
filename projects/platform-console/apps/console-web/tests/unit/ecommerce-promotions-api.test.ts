@@ -13,8 +13,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *     so a future blanket-apply refactor cannot break it);
  *   - the console sends NO `X-Tenant-Id` (ecommerce resolves tenant from the
  *     JWT `tenant_id` claim producer-side);
- *   - NO `Idempotency-Key` on any mutation (the producer defines none —
- *     § 2.4.10);
+ *   - `issueCoupons` sends an `Idempotency-Key` (TASK-BE-536, the producer now
+ *     requires it there); every other mutation still sends none (producer
+ *     defines none — § 2.4.10);
  *   - the ecommerce FLAT error envelope `{ code, message, timestamp }` is
  *     parsed (NOT wms's nested `{ error: { code } }`);
  *   - 401 → ApiError(401); 403 → ApiError(403); 404/422 → ApiError inline;
@@ -279,6 +280,9 @@ describe('promotions-api — endpoint wiring + base URL (ECOMMERCE_PUBLIC_BASE_U
     expect((init as RequestInit).method).toBe('POST');
     const body = JSON.parse((init as RequestInit).body as string);
     expect(body.userIds).toEqual(['u-1', 'u-2', 'u-3']);
+    // TASK-BE-536: the producer now requires Idempotency-Key on this endpoint.
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers['Idempotency-Key']).toBeTruthy();
   });
 });
 

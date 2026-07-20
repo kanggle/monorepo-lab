@@ -47,7 +47,8 @@ import {
  * the base access token — net-zero; ADR-MONO-020 D4). NEVER `getOperatorToken()`
  * (that is the IAM-domain credential — wrong issuer/type for ecommerce).
  * Tenant rides in the JWT `tenant_id` claim — the console sends NO `X-Tenant-Id`.
- * NO `Idempotency-Key` (producer defines none — § 2.4.10).
+ * `issueCoupons` REQUIRES `Idempotency-Key` (TASK-BE-536); every other mutation
+ * here still sends none (producer defines none for those — § 2.4.10).
  *
  * ── ERROR ENVELOPE (flat { code, message, timestamp } — same as products) ────
  *
@@ -175,7 +176,16 @@ export function deletePromotion(id: string): Promise<void> {
   );
 }
 
-/** POST /api/promotions/{id}/coupons/issue (issue coupons to user list). Returns { issuedCount }. */
+/**
+ * POST /api/promotions/{id}/coupons/issue (issue coupons to user list). Returns
+ * { issuedCount }. The producer now REQUIRES `Idempotency-Key` (TASK-BE-536 —
+ * `Promotion.validateCanIssue` caps only the total issued count, not "this exact
+ * batch was already issued", so a replay would mint a second batch of coupons).
+ *
+ * <p>Key-generation-location note: no client-side confirm/retry dialog state
+ * exists for this mutation (see `products-api.ts#registerProduct` for the same
+ * reasoning) — minted here, once per BFF proxy invocation.
+ */
 export function issueCoupons(
   id: string,
   body: IssueCouponBody,
@@ -187,6 +197,7 @@ export function issueCoupons(
       base: env.ECOMMERCE_PUBLIC_BASE_URL,
       path: `/promotions/${encodeURIComponent(id)}/coupons/issue`,
       body,
+      idempotencyKey: crypto.randomUUID(),
     },
     (j) => IssueCouponResponseSchema.parse(j),
     PROMOTION_LABEL,

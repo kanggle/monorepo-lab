@@ -103,9 +103,11 @@ class ProductUpdateDeleteIntegrationTest {
     }
 
     private UUID registerProduct(String name) {
+        // Fresh random Idempotency-Key per call (TASK-BE-536) — each call here
+        // registers a genuinely distinct product.
         return registerProductService.register(new RegisterProductCommand(
-                name, "설명", 10000L, null,
-                List.of(new VariantCommand("기본", 10, 0))));
+                name, "설명", 10000L, null, null, null,
+                List.of(new VariantCommand("기본", 10, 0)), UUID.randomUUID().toString()));
     }
 
     @Test

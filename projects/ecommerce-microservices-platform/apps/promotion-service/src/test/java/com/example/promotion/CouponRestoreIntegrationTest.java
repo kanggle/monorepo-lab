@@ -147,8 +147,11 @@ class CouponRestoreIntegrationTest {
     }
 
     private void issueCoupon(String promotionId, String userId) throws Exception {
+        // A fresh random Idempotency-Key per call (TASK-BE-536) — each call here is
+        // a genuinely distinct issuance request.
         mockMvc.perform(post("/api/promotions/" + promotionId + "/coupons/issue")
                         .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .header("Idempotency-Key", java.util.UUID.randomUUID().toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userIds\": [\"" + userId + "\"]}"))
                 .andExpect(status().isCreated());

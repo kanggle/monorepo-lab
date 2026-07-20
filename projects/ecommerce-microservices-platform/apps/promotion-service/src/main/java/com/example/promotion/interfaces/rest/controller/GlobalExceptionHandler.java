@@ -1,5 +1,7 @@
 package com.example.promotion.interfaces.rest.controller;
 
+import com.example.promotion.application.exception.IdempotencyKeyConflictException;
+import com.example.promotion.application.exception.IdempotencyKeyRequiredException;
 import com.example.promotion.application.exception.InvalidCouponStatusException;
 import com.example.promotion.application.exception.InvalidPromotionStatusException;
 import com.example.web.dto.ErrorResponse;
@@ -138,6 +140,22 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleInvalidStatus(RuntimeException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of("INVALID_PROMOTION_REQUEST", e.getMessage()));
+    }
+
+    @ExceptionHandler(IdempotencyKeyRequiredException.class)
+    public ResponseEntity<ErrorResponse> handleIdempotencyKeyRequired(IdempotencyKeyRequiredException e) {
+        // 400 IDEMPOTENCY_KEY_REQUIRED — a keyless request is refused rather than
+        // served non-idempotently (TASK-BE-536).
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of("IDEMPOTENCY_KEY_REQUIRED", e.getMessage()));
+    }
+
+    @ExceptionHandler(IdempotencyKeyConflictException.class)
+    public ResponseEntity<ErrorResponse> handleIdempotencyKeyConflict(IdempotencyKeyConflictException e) {
+        // 409 IDEMPOTENCY_KEY_CONFLICT — same key replayed with a different user
+        // batch, or the loser of a concurrent same-key insert race (TASK-BE-536).
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("IDEMPOTENCY_KEY_CONFLICT", e.getMessage()));
     }
 
     @ExceptionHandler(DateTimeParseException.class)
