@@ -117,7 +117,15 @@ The consumer is idempotent, so re-publishing is safe even if you are unsure whet
 Because order-service dedupes on `eventId`, the replacement event needs a **fresh `eventId`** — a
 re-send carrying the original id would be discarded as a duplicate and silently do nothing.
 
-Build one message per affected user. Field names and shape come from `UserWithdrawnEvent`:
+Build one message per affected user.
+
+> **The envelope is `snake_case`; the payload is `camelCase`.** This is not a typo — it is what
+> `specs/contracts/events/user-events.md` specifies and what user-service's `UserWithdrawnEvent`
+> emits (`@JsonProperty("event_id")` … with a plain `Payload(userId, withdrawnAt)`). Do not
+> "normalise" it. order-service's consumer carries `@JsonAlias("eventId")` so an all-camelCase
+> envelope would happen to deserialise there, but that is one consumer's tolerance, not the
+> contract — a message hand-built that way is off-contract and will break any consumer that
+> follows the spec.
 
 ```bash
 USER_ID=00000000-0000-0000-0000-000000000000   # from step 2b
@@ -126,7 +134,7 @@ EVENT_ID=$(cat /proc/sys/kernel/random/uuid)   # MUST be new — see above
 WITHDRAWN_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 cat > /tmp/withdrawn-replay.tsv <<EOF
-${USER_ID}	{"eventId":"${EVENT_ID}","eventType":"UserWithdrawn","occurredAt":"${WITHDRAWN_AT}","source":"user-service","tenantId":"${TENANT_ID}","payload":{"userId":"${USER_ID}","withdrawnAt":"${WITHDRAWN_AT}"}}
+${USER_ID}	{"event_id":"${EVENT_ID}","event_type":"UserWithdrawn","occurred_at":"${WITHDRAWN_AT}","source":"user-service","tenant_id":"${TENANT_ID}","payload":{"userId":"${USER_ID}","withdrawnAt":"${WITHDRAWN_AT}"}}
 EOF
 ```
 
