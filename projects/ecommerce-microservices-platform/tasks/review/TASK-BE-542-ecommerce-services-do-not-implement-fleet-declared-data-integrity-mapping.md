@@ -1,6 +1,6 @@
 # TASK-BE-542 — 레지스트리가 함대 전체에 선언한 `DATA_INTEGRITY_VIOLATION` 409 를 ecommerce 9개 서비스가 구현하지 않는다
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus 4.8 (배선 자체는 기계적이나 **어떤 모양을 표준으로 삼을지**가 판정이고, 무조건 409 는 틀렸다)
@@ -146,6 +146,78 @@ return ... INTERNAL_SERVER_ERROR ... "INTERNAL_ERROR" ...
 - [ ] AC-4 레지스트리 어긋남 기록 + 루트 후속 티켓 제기 (해당 시)
 - [ ] AC-5 배선 IT (모킹 아닌 실제 도달 확인)
 - [ ] 계약 문서 대조 및 필요 시 선행 갱신
+
+---
+
+## 구현 결과 (2026-07-20)
+
+### AC-0 — 재측정이 이 티켓의 프레이밍을 반증했다
+
+티켓은 *"ecommerce 만 뒤처진 straggler"* 로 썼다. **틀렸다 — 표준이 아예 없다.**
+
+| 프로젝트 / 서비스 | 모양 | emit 코드 |
+|---|---|---|
+| wms `outbound` · scm `procurement` · fan-platform 4개 | 무조건 409 | `CONFLICT` |
+| finance `account` | 무조건 409 | `CONCURRENT_MODIFICATION` |
+| ecommerce `user` | 무조건 409 | `DATA_INTEGRITY_VIOLATION` |
+
+**홀더 5곳이 코드 3종**이고, 레지스트리(`error-handling.md:137`)가 정경으로 적은 코드는 **5곳 중 1곳만** 낸다. **선별 방식을 쓰는 곳은 하나도 없었다.**
+
+**티켓의 "미보유 9곳" 도 틀렸다 — 실제 8곳.** `search-service` 는 컨트롤러 3개지만 **JPA 리포지터리 0**(Elasticsearch, `db/` 없음)이라 필요 없음. AC-6 분류 근거: `gateway-service`(컨트롤러·JPA 0, 순수 라우팅) · `batch-worker`(컨트롤러 0 = HTTP 표면 없음) · `search-service`(관계형 쓰기 경로 없음). `auth-service` 는 RETIRED 라 집계 제외.
+
+**🔴 탐지식이 두 번 깨졌다.** ① `@ExceptionHandler(DataIntegrityViolationException.class)` 를 그냥 grep 하니 `JpaWebhookDeliveryStore` 의 **Javadoc 언급**이 hit — `TASK-BE-541` 에서 내가 쓴 주석이 내 탐지식을 오염시켰다. `^\s*@ExceptionHandler` 앵커로 해소. ② 서비스별 핸들러 수 스크립트가 `bc` 부재로 **전 서비스 0** 반환 — 믿었으면 "배선이 하나도 안 됐다" 로 오독했다. `wc -l` 로 교체 + `search`/`gateway` known-negative 대조군으로 재확인.
+
+### AC-1 — 판정: 선별. 첫 판별식 안은 물 수 없는 가드였다
+
+**무조건 409 를 거부한다.** DIVE 는 FK·NOT NULL·CHECK 위반도 싣고 그것들은 **서버 결함**이다. 409 로 매핑하면 서버 버그를 클라 잘못으로 보고하고 **500 이 사라져 모니터링에서도 사라진다.**
+
+**🔴 `DuplicateKeyException` 판별 안은 발화 불가였다.** `spring-orm 6.2.1` 바이트코드 확인:
+
+- `HibernateJpaDialect` 는 Hibernate `ConstraintViolationException` → **평범한 `DataIntegrityViolationException`**(오프셋 267 → 278)
+- `DuplicateKeyException` 은 **`NonUniqueObjectException`**(세션 레벨)에서만 생성(380 → 386) — DB 유니크 위반과 무관
+- ⇒ **예외 타입은 판별식이 될 수 없다**
+
+채택: **cause 체인의 SQLState `23505`**. 웹 계층에 Hibernate 미유입, 메시지 문자열 매칭(은퇴한 `auth-service` 방식 — 벤더 버전에 조용히 깨짐) 회피. 대안 Hibernate 6.6.4 `getKind()==UNIQUE` 는 결합도 때문에 불채택.
+
+### AC-2 — 배선 8곳
+
+unique → **409 `DATA_INTEGRITY_VIOLATION`** / 그 외 → **500 `INTERNAL_ERROR` + `log.error`**(각 서비스 기존 `Exception.class` 핸들러와 **바이트 동일**이라 비-unique 위반 거동은 오늘과 구분 불가). 도메인 예외가 더 구체적이라 여전히 우선(`DuplicateOrderPlacementException` → `DUPLICATE_ORDER_REQUEST` 확인). 핸들러 수 1/1 × 9, 중복 0 → 기동 ambiguity 없음.
+
+`product-service` 만 `ResponseEntity` 사용 — 상태가 런타임에 갈려(409/500) 컴파일 상수인 `@ResponseStatus` 로 표현 불가. 같은 파일 `handleMethodNotSupported` 가 같은 이유로 이미 쓰는 탈출구.
+
+### AC-5 — 배선 도달성: 두 층 + 핵심 발견
+
+**Layer 1 (8곳)** — `MockMvc` + `setControllerAdvice` 로 Spring 실제 예외 해소 경로를 태운다. 기존 `GlobalExceptionHandler*Test` 는 **핸들러를 직접 호출**(AC-5 가 거부하는 기법)이라 확장 대신 신설.
+
+**가드가 무는지 실측** — notification 애노테이션 임시 제거 시 2건 중 1건 실패(복원 확인). **어느 것이 실패했는지가 중요**: `23505→409` 만 배선을 증명하고, **`23503→500` 은 핸들러가 없어도 통과**한다(DIVE 가 catch-all 로 떨어져 바이트 동일한 500). 후자는 구조상 부재 탐지가 불가능하며 그게 옳다 — 그 테스트의 일은 **과잉 매핑 안 했음**을 고정하는 non-regression 이지 배선 증거가 아니다.
+
+**Layer 2 (실 DB 1건)** — `review-service` 에서 **결정적 도달 경로**를 찾았다: 선체크는 테넌트 스코프인데 `uq_reviews_user_product_active` 에 `tenant_id` 가 없어, 두 번째 테넌트의 같은 `(user, product)` 가 선체크를 통과한 뒤 전역 인덱스를 위반. 로컬 Postgres 실행·통과(`tests=2 F=0`). 409 만이 아니라 **`code == DATA_INTEGRITY_VIOLATION`** 을 단언 — 안 그러면 선체크의 409 `REVIEW_ALREADY_EXISTS` 와 구분되지 않아 어느 경로가 돌았는지 증명하지 못한다.
+
+**🔴 나머지 7개 서비스에서는 결정적 도달이 불가하다.** 모든 유니크 위반 경로가 이미 선점됨 — **지역 catch → 도메인 예외**(order `:66` · promotion `:111` · payment `:254` · product ×3 · settlement `:63`) 또는 **선체크 후 삽입**(shipping `existsByOrderId` · notification 템플릿/푸시).
+
+⇒ **정직한 범위는 "결정적 경로 1개 + 나머지는 경합 시에만"** 이다. *"8개 서비스가 이제 409 를 낸다"* 가 아니다. 실질 수확은 `JpaWebhookDeliveryStore` 의 동시 중복 500 이 **부하에서 409 가 되는 것** — `TASK-BE-541` 이 "이 계층에서 못 고친다" 고 명시한 바로 그 건이다.
+
+### 🔴 이 배선이 `TASK-BE-540` 의 결함을 조용하게 만든다 — 반드시 읽을 것
+
+Layer 2 가 찾은 결정적 경로는 **`TASK-BE-540` 사례 B 그 자체**다. 그 티켓은 도달성을 **미측정**으로 남겼는데 **이제 측정됐다 — 도달 가능하다.** 사례 B 는 정합성 결함이 아니라 **실재하는 결정적 결함**이고 우선순위가 올라간다.
+
+그리고 이 배선이 증상을 **500 → 409 `DATA_INTEGRITY_VIOLATION`** 으로 바꾼다. **올바른 응답은 201 이다**(다른 테넌트의 정당한 리뷰). 기능적으로 더 나빠지진 않지만 **더 조용해진다** — 500 은 알림에 남고 409 는 안 남는다. `TASK-BE-540` § F1 이 경고한 시나리오를 알면서 밟은 것이다. **백스톱이 BE-540 을 가려 준다고 읽지 말 것.**
+
+또한 **BE-540 이 review 인덱스를 `tenant_id` 포함으로 재정의하면 이 IT 는 바뀌어야 하고**(두 번째 삽입이 정당하게 201), 그러면 함대에 **결정적 백스톱 경로가 0 개**가 된다. 테스트 Javadoc 에도 기록했다.
+
+### 테스트 계수 (로컬, XML 집계)
+
+notification **123** · order **383** · promotion **90** · payment **210** · product **366** · review **108** · shipping **187** · settlement **133** — 합계 **1,600**, F/E/S 모두 0. Layer-2 `integrationTest` 2건. **8/8 신규 Layer-1 클래스가 XML 에 `tests=2` 로 존재함을 개별 확인** — 레인 초록만으로는 내 파일이 실행됐다는 증거가 못 된다.
+
+### AC-3 / AC-4 — 경계 준수
+
+- **AC-3**: 판정이 "libs 공통 기반" 이 아니라 정지 조건 미발동. 다만 **판별식이 8벌 중복**이고 승격 후보다 → `TASK-MONO-446` AC-5.
+- **AC-4**: 선별은 `error-handling.md:137` 의 *"Generic DB constraint violation"* 과 **어긋난다**(FK·NOT NULL 도 문자 그대로는 409). 공유 파일을 여기서 고치지 않고 **`TASK-MONO-446`** 을 루트에 세웠다(별도 spec PR — `tasks/INDEX.md` § PR Separation Rule).
+
+### 정직한 한계
+
+- **Layer 2 는 단일 로컬 표본**이고 이 호스트 Testcontainers 는 FLAKY 다. **CI Linux 가 권위.**
+- ecommerce 8곳은 이제 다른 4개 프로젝트와 **의도적으로 다른 모양**이다. 수렴 전까지 함대는 **가장 올바른 상태가 아니라 가장 일관되지 않은 상태**이며, `TASK-MONO-446` 이 그 부채의 소유자다.
 
 ---
 
