@@ -1,6 +1,6 @@
 # TASK-BE-532 — Remove (or explicitly disable) the notification alert rules that watch metrics no code emits
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Haiku 4.5 (delete/annotate a YAML rule group; no application code)
