@@ -48,6 +48,21 @@ public class OrderRepositoryImpl implements OrderRepository {
     }
 
     @Override
+    public Order saveAndFlush(Order order) {
+        // New-order branch only: the caller (OrderPlacementService) needs the
+        // uq_orders_idempotency violation to surface INSIDE its try-block. A plain save()
+        // queues the INSERT until the commit-time flush, past the catch, which is why the
+        // concurrent-duplicate case returned 500 instead of 409 (TASK-BE-541). Kept
+        // separate from save() so the update path and the saga/batch writers keep their
+        // deferred-flush batching.
+        if (order.getVersion() == null) {
+            OrderJpaEntity saved = jpaRepository.saveAndFlush(mapper.toEntity(order));
+            return mapper.toDomain(saved);
+        }
+        return save(order);
+    }
+
+    @Override
     public List<Order> saveAll(List<Order> orders) {
         Map<String, OrderJpaEntity> existingMap = loadExistingEntities(orders);
         List<OrderJpaEntity> entities = toEntities(orders, existingMap);

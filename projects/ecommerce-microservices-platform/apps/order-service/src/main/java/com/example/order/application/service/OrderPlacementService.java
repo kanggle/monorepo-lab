@@ -56,7 +56,13 @@ public class OrderPlacementService {
         }
 
         try {
-            orderRepository.save(order);
+            // saveAndFlush, not save: Order has an assigned @Id, so a plain save() would
+            // queue the INSERT until the commit-time flush — after this method returns and
+            // past this catch — and the concurrent-duplicate case would surface as a 500
+            // instead of the 409 below (TASK-BE-541). Translating-and-throwing is what
+            // makes catching here correct: the transaction rolls back rather than
+            // continuing on a session already marked rollback-only.
+            orderRepository.saveAndFlush(order);
         } catch (DataIntegrityViolationException e) {
             // Concurrent same-key race: the (tenant, user, key) unique index already
             // prevented the duplicate row. Surface a conflict; no OrderPlaced is

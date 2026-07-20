@@ -23,7 +23,11 @@
 | scm-platform | ✅ `procurement-service` |
 | finance-platform | ✅ `account-service` |
 | fan-platform | ✅ 4개 서비스 (`AbstractDomainExceptionHandler` 공통 기반) |
-| ecommerce | ⚠️ `auth-service`·`user-service` **둘뿐** |
+| ecommerce | ⚠️ `user-service` **하나뿐** (아래 정정 참조) |
+
+> **🔴 2026-07-20 정정 (`TASK-BE-541` 착수 중 발견)** — 이 티켓의 최초 본문은 *"보유 = `auth-service`·`user-service` 둘뿐"* 이라고 적었다. **틀렸다.** `PROJECT.md:53` 이 `auth-service` 를 **RETIRED** 로 선언한다(`settings.gradle` include 제외, IAM OIDC 로 대체, 소스는 이력 보존 목적으로만 잔존). 빌드·배포되지 않는 서비스를 함대 준수 집계에 넣을 수 없다.
+>
+> ⇒ **실질 보유는 `user-service` 하나**이며, 결함은 최초 서술보다 **크다.** 다만 `auth-service` 의 핸들러(`GlobalExceptionHandler.java:71-82`)는 **설계 참조로는 여전히 유효**하다 — 아래 § 무조건 409 는 틀렸다 가 인용하는 "제약 이름 선별" 모양이 그것이다. **참조로는 읽되 준수 집계에서는 뺄 것.** AC-0 재측정은 은퇴 서비스를 모집단에서 제외하는 것부터 시작한다.
 
 ecommerce 의 **나머지 9개** — `product`·`order`·`payment`·`promotion`·`settlement`·`shipping`·`review`·`notification`·`search` — 는 없다. 각자 자기 `GlobalExceptionHandler` 에 `@ExceptionHandler(Exception.class)` 를 두고 있어(예: `product:189`, `order:171`, `settlement:160`, `review:122`, `notification:129`, `shipping:145`) **잡히지 않은 제약 위반은 전부 500 `INTERNAL_ERROR`** 로 나간다.
 

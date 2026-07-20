@@ -8,7 +8,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataIntegrityViolationException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -46,15 +45,31 @@ class EventDeduplicationCheckerUnitTest {
         verify(processedEventJpaRepository, never()).save(any());
     }
 
+    /*
+     * TASK-BE-541 removed the test that used to sit here
+     * ("동시 INSERT로 UNIQUE 제약 위반 시 중복으로 판단한다"). It stubbed
+     * processedEventJpaRepository.save(...) to throw DataIntegrityViolationException and
+     * asserted the checker returned true — but the real repository never throws from
+     * save(): ProcessedEventJpaEntity has an assigned @Id, so the INSERT is queued until
+     * the commit-time flush, which runs after isDuplicate() returns. The production catch
+     * it exercised was unreachable, and this test is the reason nobody noticed.
+     *
+     * The catch is gone (see EventDeduplicationChecker). The concurrent-duplicate case is
+     * now documented as being resolved by consumer retry, not by a catch, and that is a
+     * transaction-boundary behaviour a Mockito unit test cannot express — asserting it
+     * requires a real database and a real commit. It belongs in the integration lane, not
+     * here. A replacement unit test would only re-create the same false confidence.
+     */
+
     @Test
-    @DisplayName("동시 INSERT로 UNIQUE 제약 위반 시 중복으로 판단한다")
-    void isDuplicate_concurrentInsert_returnsTrue() {
+    @DisplayName("새 event_id는 중복이 아니고 처리 기록을 남긴다")
+    void isDuplicate_newEventId_returnsFalseAndRecords() {
         when(processedEventJpaRepository.existsByEventId("evt-1")).thenReturn(false);
-        when(processedEventJpaRepository.save(any())).thenThrow(new DataIntegrityViolationException("duplicate"));
 
         boolean result = checker.isDuplicate("evt-1", "PaymentCompleted");
 
-        assertThat(result).isTrue();
+        assertThat(result).isFalse();
+        verify(processedEventJpaRepository).save(any());
     }
 
     @Test

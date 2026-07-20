@@ -3,6 +3,7 @@ package com.example.product.application.service;
 import com.example.product.application.command.RegisterProductCommand;
 import com.example.product.domain.event.ProductCreatedPayload;
 import com.example.product.domain.event.ProductEvent;
+import com.example.product.domain.exception.DuplicateVariantOptionException;
 import com.example.product.domain.exception.IdempotencyKeyConflictException;
 import com.example.product.domain.exception.IdempotencyKeyRequiredException;
 import com.example.product.domain.model.Price;
@@ -27,8 +28,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -111,6 +114,21 @@ public class RegisterProductService {
         String sellerId = sellerOwnershipResolver.resolveForRegister(command.sellerId());
         if (Seller.DEFAULT_SELLER_ID.equals(sellerId)) {
             sellerRepository.ensureDefaultSeller();
+        }
+
+        // Reject a duplicate optionName WITHIN this create request before persisting
+        // (TASK-BE-541). uq_product_variants_option UNIQUE (product_id, option_name) also
+        // covers this, but only at the commit-time flush — which happens after this
+        // method returns, past the catch below, so it escaped as a raw 500. Here the
+        // collision is entirely visible in the request payload, so there is nothing to
+        // leave to the database. Exact (case-sensitive) comparison on purpose: it must
+        // match the constraint's own predicate, or this guard would reject inputs
+        // Postgres accepts.
+        Set<String> seenOptionNames = new HashSet<>();
+        for (var v : command.variants()) {
+            if (!seenOptionNames.add(v.optionName())) {
+                throw new DuplicateVariantOptionException(v.optionName());
+            }
         }
 
         List<ProductVariant> variants = command.variants().stream()
