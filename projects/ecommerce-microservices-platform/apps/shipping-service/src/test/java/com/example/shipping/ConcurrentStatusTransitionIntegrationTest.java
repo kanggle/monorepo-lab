@@ -69,13 +69,23 @@ import static org.assertj.core.api.Assertions.fail;
  * 다만 이 테스트는 창이 <b>존재한다</b>는 것과 창에 들어갔을 때의 <b>결과</b>를 증명할 뿐,
  * 프로덕션에서 얼마나 <b>자주</b> 들어가는지는 측정하지 않는다.
  *
- * <h2>가드가 물 수 있는가 (bite)</h2>
+ * <h2>가드가 물 수 있는가 (bite) — TASK-BE-547 로 채택된 매개자</h2>
  *
- * <p>{@code shippings} 에 {@code @Version} 이 붙으면 T2 의 UPDATE 는
- * {@code WHERE version=?} 술어를 갖게 되어 0행 갱신 → {@code OptimisticLockException} 으로
- * 롤백되고, T2 의 아웃박스 행도 함께 사라져 결과는 1건이 된다. 즉
- * {@link #concurrentShippedTransitions_bothPassGuard_doublePublish()} 의 단언은
- * 가드 유무에 따라 값이 실제로 달라진다 — 항상 참인 단언이 아니다.
+ * <p>이 테스트는 TASK-BE-537 에서 결함을 <b>특성화</b>(발행 2건)했고, TASK-BE-547 이 그
+ * 결함을 고치면서 이제 <b>회귀 가드</b>가 됐다. 채택된 가드는 {@code @Version}(root 경합
+ * 제거)이 아니라 <b>발행 측 결정적 event_id 채번</b>이다: {@code ShippingStatusChanged} 의
+ * {@code event_id} 를 {@code (shippingId, newStatus)} 에서 결정적으로 유도하고, 그 id 가
+ * {@code shipping_outbox} 행 PK 이기도 하므로 <b>두 번째 동시 발행의 아웃박스 INSERT 가 PK
+ * 에서 충돌</b>한다. 그 트랜잭션 전체가 롤백되어 {@code ShippingStatusChanged} 도
+ * {@code ManualShipConfirmRequested} 도 1건씩만 남고, 패배 스레드는
+ * {@code DataIntegrityViolationException}(SQLSTATE 23505) 으로 튕겨 실제 HTTP 경로에서는
+ * {@code GlobalExceptionHandler} 의 DIVE 백스톱(TASK-BE-542)을 통해 {@code 409} 로 매핑된다.
+ *
+ * <p>따라서 매개자는 read-then-write 애플리케이션 검사가 아니라 <b>DB 가 강제하는 아웃박스
+ * PK 유니크 제약</b>이다 — 동시성에서도 성립한다(AC-4). {@code @Version} 을 쓰지 않으므로 root
+ * 이중 UPDATE(둘 다 status=SHIPPED, 같은 값이라 무해)는 남지만, 티켓이 방어하는 <b>피해</b>
+ * (중복 이벤트 → 중복 알림, 그리고 덤으로 중복 {@code ManualShipConfirmRequested})는 사라진다.
+ * root 경합 자체를 없애려면 {@code @Version} + 409 계약(별 티켓)이 필요하다.
  *
  * <p><b>권위</b>: 로컬 Windows Testcontainers 는 이 저장소에서 FLAKY 하므로 권위가 아니다.
  * CI Linux 가 권위다.
@@ -87,7 +97,7 @@ import static org.assertj.core.api.Assertions.fail;
 @Testcontainers
 @EmbeddedKafka(partitions = 1)
 @Import(ConcurrentStatusTransitionIntegrationTest.HookClockConfig.class)
-@DisplayName("동시 상태 전이 조사 (TASK-BE-537) — PUT /shippings/{id}/status")
+@DisplayName("동시 상태 전이 (TASK-BE-537 특성화 → TASK-BE-547 회귀 가드) — PUT /shippings/{id}/status")
 class ConcurrentStatusTransitionIntegrationTest {
 
     private static final String ROLE_OPERATOR = "ECOMMERCE_OPERATOR";
@@ -192,6 +202,28 @@ class ConcurrentStatusTransitionIntegrationTest {
         return n == null ? 0 : n;
     }
 
+    /** ShippingStatusChanged 아웃박스 행 수 — aggregate_id = shippingId (이 이벤트의 BE-547 피해 지표). */
+    private int statusChangedRowCount(String shippingId) {
+        Integer n = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM shipping_outbox "
+                        + "WHERE aggregate_id = ? AND event_type = 'ShippingStatusChanged'",
+                Integer.class, shippingId);
+        return n == null ? 0 : n;
+    }
+
+    /** 예외 원인 사슬에 유니크 위반(SQLSTATE 23505 또는 DataIntegrityViolationException)이 있는가. */
+    private static boolean isUniqueViolation(Throwable e) {
+        for (Throwable t = e; t != null && t != t.getCause(); t = t.getCause()) {
+            if (t instanceof org.springframework.dao.DataIntegrityViolationException) {
+                return true;
+            }
+            if (t instanceof java.sql.SQLException sql && "23505".equals(sql.getSQLState())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // ---------------------------------------------------------------------
     // AC-1 — 유효 격리 수준을 "추론"이 아니라 "측정"으로 확정한다.
     // ---------------------------------------------------------------------
@@ -257,8 +289,8 @@ class ConcurrentStatusTransitionIntegrationTest {
     // ---------------------------------------------------------------------
 
     @Test
-    @DisplayName("AC-2: 동시 SHIPPED 두 건이 모두 가드를 통과하는가 / 발행이 몇 건인가")
-    void concurrentShippedTransitions_bothPassGuard_doublePublish() throws Exception {
+    @DisplayName("AC-2/AC-4 (BE-547): 동시 SHIPPED 두 건이 겹쳐도 발행은 정확히 1건 (아웃박스 PK 가 매개)")
+    void concurrentShippedTransitions_deterministicEventId_collapsesToSinglePublish() throws Exception {
         String orderId = "ord-cc-" + System.nanoTime();
         String shippingId = seedWmsRoutedPreparing(orderId);
 
@@ -318,37 +350,45 @@ class ConcurrentStatusTransitionIntegrationTest {
         assertThat(t1.isAlive()).as("T1 이 종료되지 않음").isFalse();
         assertThat(t2.isAlive()).as("T2 가 종료되지 않음").isFalse();
 
-        int published = manualConfirmRowCount(orderId);
+        int statusChanged = statusChangedRowCount(shippingId);
+        int manualConfirm = manualConfirmRowCount(orderId);
         String finalStatus = jdbcTemplate.queryForObject(
                 "SELECT status FROM shippings WHERE shipping_id = ?", String.class, shippingId);
 
-        // 진단용 출력: 재현 여부와 무관하게 "무엇이 관측됐는지"가 이 티켓의 산출물이다.
+        // 진단용 출력: 무엇이 관측됐는지 남긴다.
         System.out.printf(
-                "[TASK-BE-537] ManualShipConfirmRequested 발행=%d, 최종 status=%s, "
-                        + "t1Error=%s, t2Error=%s%n",
-                published, finalStatus,
+                "[TASK-BE-547] ShippingStatusChanged 발행=%d, ManualShipConfirmRequested 발행=%d, "
+                        + "최종 status=%s, t1Error=%s, t2Error=%s%n",
+                statusChanged, manualConfirm, finalStatus,
                 t1Error.get() == null ? "none" : t1Error.get().toString(),
                 t2Error.get() == null ? "none" : t2Error.get().toString());
 
-        assertThat(t1Error.get()).as("T1 은 정상 커밋되어야 한다").isNull();
+        // ── 매개자 검증 (AC-4): 정확히 한 스레드가 커밋하고, 다른 하나는 아웃박스 PK
+        //    유니크 위반(23505)으로 롤백됐다. 어느 스레드가 이기는지는 커밋 경합 타이밍에
+        //    달려 있으므로 특정 스레드를 승자로 못박지 않는다 — XOR 로만 단언한다.
+        boolean t1Failed = t1Error.get() != null;
+        boolean t2Failed = t2Error.get() != null;
+        assertThat(t1Failed ^ t2Failed)
+                .as("동시 이중 SHIPPED 중 정확히 한 트랜잭션만 실패해야 한다 "
+                        + "(t1Error=%s, t2Error=%s)", t1Error.get(), t2Error.get())
+                .isTrue();
+        Throwable loser = t1Failed ? t1Error.get() : t2Error.get();
+        assertThat(isUniqueViolation(loser))
+                .as("패배 트랜잭션은 아웃박스 PK 유니크 위반(23505/DataIntegrityViolation)이어야 한다: %s", loser)
+                .isTrue();
 
-        // ┌───────────────────────────────────────────────────────────────────────┐
-        // │ 이것은 CHARACTERIZATION(특성화) 단언이지 회귀 가드가 아니다.          │
-        // │                                                                       │
-        // │ 2 = "결함이 현재 존재한다"는 관측치를 고정한 것이다. 두 트랜잭션 모두 │
-        // │ 인메모리 상태 기계를 통과하고 각각 아웃박스 행을 남긴다.              │
-        // │                                                                       │
-        // │ 낙관적 락을 도입하는 후속 티켓은 이 값을 2 -> 1 로 **뒤집어야 한다**  │
-        // │ (T2 가 OptimisticLockException 으로 롤백되면서 아웃박스 행도 함께     │
-        // │ 사라지므로). 그때 이 테스트가 RED 가 되는 것은 정상이며, 그 RED 가    │
-        // │ 곧 가드가 실제로 물었다는 증거다. 값을 고치지 않고 테스트를 지우면    │
-        // │ 증거가 사라진다.                                                      │
-        // │                                                                       │
-        // │ 즉 이 단언은 가드 유무에 따라 값이 달라진다 — 항상 참인 단언이 아니다.│
-        // └───────────────────────────────────────────────────────────────────────┘
-        assertThat(published)
+        // ── 부수효과 검증 (AC-2): 결정적 event_id = 아웃박스 PK 덕분에 동시 이중 전이가
+        //    남기는 이벤트는 각 유형당 정확히 1건이다. ShippingStatusChanged 1건 = 고객
+        //    알림이 (notification 의 event_id dedup 을 통해) 한 번만 발생함을 발행 원천에서
+        //    보장한다. ManualShipConfirmRequested 1건 = wms 이중 차감 위험도 함께 접힌다.
+        assertThat(statusChanged)
+                .as("동시 SHIPPED 전이가 남긴 ShippingStatusChanged 아웃박스 행 수 "
+                        + "(1 = BE-547 가드가 중복 이벤트를 발행 원천에서 접음 / 2 = 회귀)")
+                .isEqualTo(1);
+        assertThat(manualConfirm)
                 .as("동시 SHIPPED 전이가 남긴 ManualShipConfirmRequested 아웃박스 행 수 "
-                        + "(2 = 낙관적 락 부재로 이중 발행 재현됨 / 1 = 가드 도입 후 기대값)")
-                .isEqualTo(2);
+                        + "(1 = 패배 트랜잭션 전체 롤백으로 함께 접힘 / 2 = 회귀)")
+                .isEqualTo(1);
+        assertThat(finalStatus).as("최종 상태는 SHIPPED").isEqualTo("SHIPPED");
     }
 }

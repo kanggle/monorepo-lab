@@ -122,13 +122,24 @@
 
 ## Definition of Done
 
-- [ ] AC-0 재측정 (채번·두 소비자 dedup·notification 무방비 재확인, 탐지식 자기검증)
-- [ ] AC-1 (A)/(B)/(C) 판정 + 근거 (+(A) 면 아웃박스 PK 경로 실측, (C) 면 STOP)
-- [ ] AC-2 동시 이중 전이 → 알림 1회 (부수효과 단언)
-- [ ] AC-3 정당한 서로 다른 전이는 각각 알림
-- [ ] AC-4 동시 중재자 명시
-- [ ] AC-5 계약 표면 변경 시 선행 갱신
-- [ ] AC-6 GREEN (CI Linux 권위)
+- [x] AC-0 재측정 (채번·두 소비자 dedup·notification 무방비 재확인, 탐지식 자기검증) — 전제 전부 그대로 확인: `SpringShippingEventPublisher:56` 여전히 `UUID.randomUUID()`; order 소비자 event_id dedup+상태기계, notification 소비자엔 dedup 부재이고 downstream `NotificationSendService:57` 이 `existsByEventId(eventId, tenantId)` 로 dedup(무조건 발송 `:59`); `ShippingStatus.ALLOWED_TRANSITIONS` 선형·self-transition 없음; event_id = `shipping_outbox` PK(`:70`).
+- [x] AC-1 (A)/(B)/(C) 판정 + 근거 — **(A) 채택** (아래 § Implementation Decision). (A) 아웃박스 PK 경로 실측: 결정적 채번 → 두 번째 동시 발행 PK(23505) 충돌 → 롤백 → **기존** BE-542 DIVE 백스톱(`GlobalExceptionHandler:147-160`)이 이미 409 매핑. 새 마이그레이션/예외/에러코드 불필요.
+- [x] AC-2 동시 이중 전이 → 알림 1회 (부수효과 단언) — `ConcurrentStatusTransitionIntegrationTest` 가 `ShippingStatusChanged` 아웃박스 행 **1** 단언(발행 원천에서 접힘 ⇒ notification event_id dedup 로 1회). `ManualShipConfirmRequested` 도 1(패자 전체 롤백 — wms 이중 차감 위험 덤 해소).
+- [x] AC-3 정당한 서로 다른 전이는 각각 알림 — 결정적 키가 `(shippingId, newStatus)` 라 SHIPPED·DELIVERED 서로 다른 event_id(publisher 단위 `..._isDeterministicPerTransition`); notification 은 event_id(shippingId 아님)로 dedup(기존 `sendNotification_duplicateEvent_skips`) ⇒ F4 회귀 없음. notification-service 무변경.
+- [x] AC-4 동시 중재자 명시 — read-then-write 앱 검사가 아니라 **DB 강제 아웃박스 PK 유니크 제약**(보존 outbox 행 ⇒ 영구 idempotency 키). IT 가 XOR(정확히 한 스레드 23505 롤백)로 단언.
+- [x] AC-5 계약 표면 변경 시 선행 갱신 — `specs/contracts/events/shipping-events.md`(event_id 채번 규약) + `specs/contracts/http/shipping-api.md`(PUT status 409 DATA_INTEGRITY_VIOLATION on concurrent conflict).
+- [ ] AC-6 GREEN (CI Linux 권위) — 로컬: 전체 컴파일 + `SpringShippingEventPublisherTest`(결정론 포함) GREEN. 동시성 IT 는 Testcontainers(로컬 Windows FLAKY) ⇒ **CI Linux 가 권위.**
+
+---
+
+## Implementation Decision (AC-1)
+
+**채택 = (A) — `ShippingStatusChanged` event_id 를 `(shippingId, newStatus)` 에서 결정적 채번, 아웃박스 PK = event_id 결합 유지** (`UUID.nameUUIDFromBytes("ShippingStatusChanged:"+shippingId+":"+newStatus)`).
+
+- **근거**: 결함을 **발행 원천**에서 고쳐 두 소비자의 기존 event_id dedup 을 동시에 되살린다(한쪽만 우회하는 (B) 아님). 선형·forward-only 상태기계라 한 shipment 은 각 status 에 한 번만 진입 ⇒ 같은 `(shippingId, newStatus)` 재발은 동시/재시도 중복일 때뿐 ⇒ 정당한 전이는 안 건드림. 매개자 = DB 강제 아웃박스 PK(보존 행 ⇒ 영구 idempotency 키) ⇒ 동시성 성립(AC-4).
+- **아웃박스 PK / 409 판정**: 두 번째 동시 발행 PK(23505) 충돌 → 롤백 → 이벤트가 토픽 미도달. 패자 → 기존 DIVE 백스톱 → **409**. 409 는 정당한 경합 충돌 응답이며 (C) 의 `@Version` OptimisticLock 이 낼 계약과 **동일**하되 version 컬럼·마이그레이션·새 예외 없이 **이미 등록된** 에러코드 재사용 ⇒ (C) 의 무거운 계약 작업을 끌어오지 않음. 조용히 흡수(200)는 중단 트랜잭션 재도출이 필요하고 실제 충돌을 운영자에게 숨기므로 기각.
+- **기각 (B)**: order 소비자에 동일 event_id 결함 방치(상태기계가 우연히 가림 — 다음 소비자에서 재발). F1 / [[feedback_workaround_becomes_the_contract]]. 매개자도 약함(read-then-write).
+- **기각 (C)**: 가장 옳지만 가장 비쌈(version+마이그레이션+새 예외). 범위 밖. (A) 가 같은 클라이언트 계약을 더 싸게 달성. (A) 는 root 이중 UPDATE(같은 값, 무해)는 남기나 **피해**(중복 이벤트/알림/wms 차감)는 완전 종결. root 경합 제거가 필요하면 별 티켓.
 
 ---
 

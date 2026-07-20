@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
@@ -35,6 +36,20 @@ import java.util.UUID;
  * UUID is minted for the row PK; the wms outbound-service dedupes on the payload's
  * {@code eventId} (via its {@code EventEnvelopeParser}), not the Kafka header, so
  * this is wire-safe.
+ *
+ * <p>{@code ShippingStatusChanged} derives its {@code event_id} <b>deterministically</b>
+ * from {@code (shippingId, newStatus)} rather than a random UUID (TASK-BE-547). Both
+ * downstream consumers dedupe on {@code event_id}; a random id per publish makes that
+ * dedup a no-op, so two concurrent transitions of the same shipment to the same status
+ * (or an at-least-once retry) leak through as two distinct events — and the customer is
+ * notified twice. The status machine is strictly linear and forward-only
+ * ({@code ShippingStatus.ALLOWED_TRANSITIONS}), so a shipment enters each status at most
+ * once and the same {@code (shippingId, newStatus)} recurs <i>only</i> under such a race.
+ * Because that {@code event_id} is also the {@code shipping_outbox} row PK, the second
+ * concurrent publish collides on the PK and its transaction rolls back — the duplicate
+ * never reaches the topic, and the losing caller surfaces {@code 409} via the
+ * {@code DataIntegrityViolationException} backstop (TASK-BE-542). See the event_id
+ * semantics in {@code specs/contracts/events/shipping-events.md}.
  */
 @Slf4j
 @Component
@@ -53,7 +68,7 @@ public class SpringShippingEventPublisher implements ShippingEventPublisher {
                                              ShippingStatus previousStatus, ShippingStatus newStatus,
                                              String trackingNumber, String carrier) {
         ShippingStatusChangedMessage message = new ShippingStatusChangedMessage(
-                UUID.randomUUID().toString(),
+                deterministicStatusChangedEventId(shippingId, newStatus),
                 "ShippingStatusChanged",
                 Instant.now(clock).toString(),
                 "shipping-service",
@@ -114,6 +129,18 @@ public class SpringShippingEventPublisher implements ShippingEventPublisher {
                 null, // partition_key: publisher falls back to aggregateId (orderId)
                 serialize(message),
                 Instant.parse(message.occurredAt())));
+    }
+
+    /**
+     * Deterministic {@code event_id} for a {@code ShippingStatusChanged} publish, derived from
+     * {@code (shippingId, newStatus)} (TASK-BE-547). Idempotent across retries and collapses a
+     * concurrent double-transition to a single event: same inputs → same UUID → same
+     * {@code shipping_outbox} PK → the second concurrent insert PK-collides and rolls back.
+     * {@code shippingId} is a globally-unique aggregate id, so the pair needs no tenant component.
+     */
+    static String deterministicStatusChangedEventId(String shippingId, ShippingStatus newStatus) {
+        String seed = "ShippingStatusChanged:" + shippingId + ":" + newStatus.name();
+        return UUID.nameUUIDFromBytes(seed.getBytes(StandardCharsets.UTF_8)).toString();
     }
 
     private String serialize(Object event) {

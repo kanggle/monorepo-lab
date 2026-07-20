@@ -76,6 +76,7 @@ Update shipping status. Only forward transitions are allowed.
 | 401 | UNAUTHORIZED | Missing or invalid access token |
 | 403 | ACCESS_DENIED | Not an admin user |
 | 404 | SHIPPING_NOT_FOUND | Shipping record does not exist |
+| 409 | DATA_INTEGRITY_VIOLATION | Concurrent conflict: another request transitioned this shipment to the same status at the same instant. The transition is idempotent on `(shippingId, newStatus)` via the `ShippingStatusChanged` event id (= `shipping_outbox` PK), so the race loser rolls back and the winner's transition stands. A retry observes the shipment already in the target status (TASK-BE-547). |
 | 422 | INVALID_STATUS_TRANSITION | Status transition is not allowed |
 
 ---
