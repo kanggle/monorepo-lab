@@ -1,6 +1,6 @@
 # TASK-FIN-BE-059 (finance) — finance-platform compose has no Kafka broker: account→ledger event chain is dead in the local stack
 
-**Status:** in-progress
+**Status:** review
 
 **Type:** TASK-FIN-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet (compose + application.yml wiring; no domain logic, no schema change — but the live bring-up verification in AC-4 is the substance of the task, not the edit)
