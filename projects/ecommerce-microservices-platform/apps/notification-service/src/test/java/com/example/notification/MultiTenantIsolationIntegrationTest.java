@@ -302,15 +302,26 @@ class MultiTenantIsolationIntegrationTest {
     }
 
     /**
-     * TASK-BE-540 case A, delete side — tenant B unsubscribing must not remove tenant A's row.
+     * Characterisation, NOT a guard for TASK-BE-540 — this passes with or without the fix.
      *
-     * <p>{@code deleteByEndpoint} was global too, and this half is not named in the task. It is
-     * NOT fixed by tenant-scoping the delete: the send-path prune runs on a Kafka thread with no
-     * {@code TenantContext}, so a context-scoped delete there resolves to the default tenant and
-     * removes the wrong row. The lookup is tenant-scoped and the delete now goes by row identity.
+     * <p>I claimed the HTTP unregister path had the same cross-tenant defect as the lookup. The
+     * AC-2 mutation refuted it: with the global lookup restored this test still passed, because
+     * {@code PushSubscriptionService.unregister} filters on
+     * {@code subscription.getUserId().equals(userId)} — tenant B's user never matches tenant A's
+     * owner, so the delete is a no-op regardless of the lookup's scope.
+     *
+     * <p>The delete defect is real but lives on the SEND path, which has no owner filter:
+     * {@code WebPushSender} pruned a dead subscription with {@code deleteByEndpoint}, removing
+     * every tenant's row on that endpoint. That is what the identity-based delete fixes, and it
+     * is covered by {@code WebPushSenderUnitTest}, not here — driving a 410 from the real gateway
+     * through this Testcontainers stack is not something this class can do.
+     *
+     * <p>Kept because the ownership filter is worth pinning, and relabelled because a test whose
+     * name claims tenant isolation while its body measures owner matching is the more expensive
+     * mistake.
      */
     @Test
-    @DisplayName("BE-540: 다른 테넌트의 구독 해지가 앞 테넌트의 행을 지우지 않는다")
+    @DisplayName("구독 해지는 소유자 필터로 남의 행을 지우지 않는다 (BE-540 가드 아님 — 소유권 특성화)")
     void unregisterInSecondTenant_doesNotDeleteFirstTenantRow() throws Exception {
         String endpoint = "https://push.example/ep-" + UUID.randomUUID();
         registerPush(TENANT_A, "user-a", endpoint, "p256dh-A", "auth-A")

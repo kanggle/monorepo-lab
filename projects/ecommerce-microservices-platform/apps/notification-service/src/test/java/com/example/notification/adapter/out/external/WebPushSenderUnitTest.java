@@ -18,6 +18,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -84,6 +85,33 @@ class WebPushSenderUnitTest {
 
         verify(webPushGateway, org.mockito.Mockito.times(2)).send(any(), any());
         verify(subscriptionRepository, never()).delete(any());
+    }
+
+    /**
+     * TASK-BE-540 — the send-path prune is where the endpoint-keyed delete actually did damage.
+     *
+     * <p>Unlike the HTTP unregister path there is NO owner filter here, so
+     * {@code deleteByEndpoint(endpoint)} removed every tenant's row on that endpoint — and with
+     * one VAPID key behind one origin, two tenants sharing an endpoint is the reachable case
+     * (TASK-BE-540 AC-0). It also cannot be fixed by tenant-scoping: this runs on a Kafka thread
+     * with no {@code TenantContext}, so a context-scoped delete resolves to the default tenant
+     * and removes the wrong row. The fix deletes by row identity.
+     *
+     * <p>Asserted on the identity of the argument, not on its endpoint: an endpoint-keyed delete
+     * would carry the same endpoint string and pass a laxer assertion.
+     */
+    @Test
+    @DisplayName("BE-540: prune 은 endpoint 가 아니라 그 행 자체를 지운다 (같은 endpoint 의 다른 행 보존)")
+    void expired_prunesThatRowOnly_notTheEndpoint() {
+        PushSubscription dead = sub("https://push/shared");
+        given(webPushGateway.isConfigured()).willReturn(true);
+        given(subscriptionRepository.findByUserId("user-1")).willReturn(List.of(dead));
+        given(webPushGateway.send(any(), any())).willReturn(new WebPushSendResult(410));
+
+        sender.send("user-1", "제목", "본문");
+
+        // Same object identity — the row the sender resolved, not "whatever holds this endpoint".
+        verify(subscriptionRepository).delete(same(dead));
     }
 
     @Test
