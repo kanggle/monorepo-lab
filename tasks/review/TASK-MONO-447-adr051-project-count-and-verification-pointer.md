@@ -1,6 +1,6 @@
 # TASK-MONO-447 — Correct ADR-MONO-051's project count (five → eight) and its § 6 verification pointer
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-MONO
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Haiku 4.5 (two textual corrections in one ADR file)
