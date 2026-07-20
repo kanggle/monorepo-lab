@@ -198,7 +198,9 @@ class GlobalExceptionHandlerTest {
                 handler.handleMissingHeader(missingHeader("Idempotency-Key")),
                 handler.handleMissingHeader(missingHeader("X-Custom")),
                 handler.handleOptimisticLock(new OptimisticLockException("version stale")),
-                handler.handleIntegrity(new DataIntegrityViolationException("unique violation")),
+                handler.handleIntegrity(new DataIntegrityViolationException(
+                        "duplicate key", new java.sql.SQLException("dup", "23505"))),
+                handler.handleIntegrity(new DataIntegrityViolationException("fk violation")),
                 handler.handleUnsupportedCurrency(new Currency.UnsupportedCurrencyException("XYZ")),
                 handler.handleMoneyCurrencyMismatch(new Money.CurrencyMismatchException("KRW vs USD")),
                 handler.handleDomain(new DomainErrors.AccountNotFoundException("nope")),
@@ -216,6 +218,70 @@ class GlobalExceptionHandlerTest {
         assertThat(statusesByCode).allSatisfy((code, statuses) -> assertThat(statuses)
                 .as("code %s is emitted at more than one status: %s", code, statuses)
                 .hasSize(1));
+    }
+
+    // ---------------- TASK-MONO-450: selective DataIntegrityViolation mapping ----------------
+
+    /**
+     * A UNIQUE violation is the one client-visible integrity conflict. PostgreSQL / H2 signal it
+     * with SQLSTATE 23505 (the shared {@code DataIntegrityViolations} discriminant). Kept at
+     * 409 {@code CONCURRENT_MODIFICATION} — finance's registered duplicate/concurrency code,
+     * deliberately not the fleet {@code DATA_INTEGRITY_VIOLATION}.
+     */
+    @Test
+    @DisplayName("unique violation (SQLSTATE 23505) → 409 CONCURRENT_MODIFICATION")
+    void uniqueViolationPostgresH2() {
+        assertStatus(handler.handleIntegrity(new DataIntegrityViolationException(
+                        "duplicate key value violates unique constraint",
+                        new java.sql.SQLException("dup", "23505"))),
+                HttpStatus.CONFLICT, "CONCURRENT_MODIFICATION");
+    }
+
+    /**
+     * This service runs on MySQL, which reports EVERY integrity class under SQLSTATE 23000 and
+     * identifies a duplicate only by the vendor error code 1062 (ER_DUP_ENTRY). The shared 23505
+     * check misses it, so the handler OR-s in a MySQL arm — without it a real MySQL duplicate
+     * would wrongly fall through to 500. This is the load-bearing finance-specific case.
+     */
+    @Test
+    @DisplayName("MySQL duplicate (SQLSTATE 23000, vendor code 1062) → 409 CONCURRENT_MODIFICATION")
+    void uniqueViolationMysqlVendorCode() {
+        java.sql.SQLException mysqlDup = new java.sql.SQLException("Duplicate entry", "23000", 1062);
+        assertStatus(handler.handleIntegrity(new DataIntegrityViolationException(
+                        "could not execute statement", mysqlDup)),
+                HttpStatus.CONFLICT, "CONCURRENT_MODIFICATION");
+    }
+
+    /**
+     * FK / NOT NULL / CHECK violations are SERVER defects, not client conflicts. They stay a loud
+     * 500 so they remain visible to alerting instead of being hidden as a 409 (TASK-MONO-450 §
+     * "왜 무조건 409 가 틀렸다"). Covers a Postgres FK SQLSTATE (23503) and a MySQL NOT NULL vendor
+     * code (1048), and the bare exception with no SQL cause.
+     */
+    @Test
+    @DisplayName("FK violation (23503) → 500 INTERNAL_ERROR — server defect stays loud")
+    void foreignKeyViolationStays500() {
+        assertStatus(handler.handleIntegrity(new DataIntegrityViolationException(
+                        "insert or update violates foreign key constraint",
+                        new java.sql.SQLException("fk", "23503"))),
+                HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR");
+    }
+
+    @Test
+    @DisplayName("MySQL NOT NULL (vendor code 1048) → 500 INTERNAL_ERROR — server defect stays loud")
+    void notNullViolationStays500() {
+        java.sql.SQLException mysqlNotNull =
+                new java.sql.SQLException("Column cannot be null", "23000", 1048);
+        assertStatus(handler.handleIntegrity(new DataIntegrityViolationException(
+                        "could not execute statement", mysqlNotNull)),
+                HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR");
+    }
+
+    @Test
+    @DisplayName("integrity violation with no SQL cause → 500 INTERNAL_ERROR (cannot prove unique)")
+    void unclassifiableIntegrityStays500() {
+        assertStatus(handler.handleIntegrity(new DataIntegrityViolationException("opaque")),
+                HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR");
     }
 
     // ---------------- helpers ----------------

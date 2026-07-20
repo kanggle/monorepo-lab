@@ -1,5 +1,6 @@
 package com.example.fanplatform.artist.adapter.in.web.advice;
 
+import com.example.common.persistence.DataIntegrityViolations;
 import com.example.fanplatform.artist.adapter.in.web.dto.response.ApiErrorBody;
 import jakarta.persistence.OptimisticLockException;
 import java.util.Set;
@@ -37,8 +38,16 @@ abstract class AbstractDomainExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiErrorBody> handleIntegrity(DataIntegrityViolationException e) {
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ApiErrorBody.of("CONFLICT", "Data integrity violation"));
+        if (DataIntegrityViolations.isUniqueViolation(e)) {
+            // Unique violation = client-visible conflict → 409 (the registry catch-all).
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorBody.of("CONFLICT", "Data integrity violation"));
+        }
+        // FK / NOT NULL / CHECK violations are SERVER defects, not client conflicts.
+        // Kept as 500 so they stay loud in logs + alerting (TASK-MONO-450 / TASK-BE-542).
+        log.error("Non-unique data integrity violation", e);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiErrorBody.of("INTERNAL_ERROR", "An unexpected error occurred"));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

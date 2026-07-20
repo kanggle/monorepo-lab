@@ -1,6 +1,6 @@
 # TASK-MONO-450 — `DataIntegrityViolationException` 매핑에 함대 표준이 없다: 홀더 5곳이 코드 3종, 레지스트리는 1곳만 쓰는 코드를 정경으로 적는다
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-MONO (monorepo-level — `platform/error-handling.md` + 잠재적 `libs/java-web-servlet` 변경)
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus 4.8 (판정이 실질. 5개 프로젝트의 사용자 가시 계약을 바꾸는 결정이다)

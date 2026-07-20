@@ -1,5 +1,6 @@
 package com.example.user.presentation.exception;
 
+import com.example.common.persistence.DataIntegrityViolations;
 import com.example.web.dto.ErrorResponse;
 import com.example.web.exception.AccessDeniedException;
 import com.example.user.domain.exception.AddressLimitExceededException;
@@ -126,9 +127,19 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException e) {
-        log.warn("Data integrity violation", e);
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ErrorResponse.of("DATA_INTEGRITY_VIOLATION", "Data integrity violation"));
+        if (DataIntegrityViolations.isUniqueViolation(e)) {
+            // A duplicate is a client-visible conflict: the registry's declared catch-all
+            // (the wishlist concurrent-duplicate-insert backstop, wishlist-api.md:49).
+            log.warn("Unique constraint violation → 409", e);
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ErrorResponse.of("DATA_INTEGRITY_VIOLATION", "Data integrity violation"));
+        }
+        // FK / NOT NULL / CHECK violations are SERVER defects, not client conflicts.
+        // Deliberately left as 500 so they stay loud in logs and alerting (TASK-MONO-450 AC-1,
+        // converging user-service onto the selective mapping TASK-BE-542 wired into the other eight).
+        log.error("Non-unique data integrity violation", e);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ErrorResponse.of("INTERNAL_ERROR", "An internal server error occurred"));
     }
 
     @ExceptionHandler(NoResourceFoundException.class)

@@ -1,5 +1,7 @@
 package com.wms.outbound.adapter.in.web.advice;
 
+import static com.example.common.persistence.DataIntegrityViolations.isUniqueViolation;
+
 import com.wms.outbound.adapter.in.web.dto.response.ApiErrorEnvelope;
 import com.wms.outbound.domain.exception.ExternalServiceUnavailableException;
 import com.wms.outbound.domain.exception.OrderNoDuplicateException;
@@ -89,12 +91,34 @@ public class GlobalExceptionHandler {
                 "Optimistic lock conflict — retry with fresh state");
     }
 
+    /**
+     * DB constraint-violation backstop (no domain-specific handler claimed it). The status is
+     * decided at runtime, so the mapping is selective (TASK-MONO-450 / TASK-BE-542):
+     *
+     * <ul>
+     *   <li><b>Unique violation</b> (SQLSTATE 23505) → 409 CONFLICT: a duplicate is a
+     *       client-visible conflict (e.g. a re-sent {@code orderNo}).</li>
+     *   <li><b>FK / NOT NULL / CHECK violation</b> → 500 INTERNAL_ERROR: these are
+     *       <em>server</em> defects, not client conflicts. Deliberately left at 500 with
+     *       {@code log.error} so they stay loud in logs and alerting rather than being masked
+     *       as a 409 that monitoring never sees.</li>
+     * </ul>
+     *
+     * <p>The discriminant is {@link com.example.common.persistence.DataIntegrityViolations}
+     * (SQLSTATE-based, pure JDK): the exception <em>type</em> cannot distinguish a unique
+     * violation and message matching breaks on driver upgrade.
+     */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiErrorEnvelope> handleIntegrity(DataIntegrityViolationException e) {
-        // Unique constraint violations on orderNo etc. surface as 409 CONFLICT.
-        log.debug("data integrity violation: {}", e.getMessage());
-        return body(HttpStatus.CONFLICT, "CONFLICT",
-                "Resource already exists or violates a constraint");
+        if (isUniqueViolation(e)) {
+            log.debug("unique constraint violation → 409: {}", e.getMessage());
+            return body(HttpStatus.CONFLICT, "CONFLICT",
+                    "Resource already exists or violates a unique constraint");
+        }
+        // FK / NOT NULL / CHECK violations are server defects — keep them loud (500), not a 409.
+        log.error("Non-unique data integrity violation", e);
+        return body(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
+                "Internal server error");
     }
 
     @ExceptionHandler({AccessDeniedException.class, AuthorizationDeniedException.class})

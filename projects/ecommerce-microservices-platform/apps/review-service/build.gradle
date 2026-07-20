@@ -7,6 +7,11 @@ dependencies {
     // Shared Web
     implementation project(':libs:java-web')
 
+    // Shared persistence utilities — DataIntegrityViolations.isUniqueViolation, the
+    // SQLSTATE-23505 discriminant the GlobalExceptionHandler backstop delegates to
+    // (TASK-MONO-450; other ecommerce services already declare java-common).
+    implementation project(':libs:java-common')
+
     // API Documentation
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.7.0'
 
