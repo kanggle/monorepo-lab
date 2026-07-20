@@ -1,6 +1,6 @@
 # TASK-BE-540 — 선체크의 범위와 유니크 제약의 범위가 서로 다른 곳 2건: 어느 쪽이 옳은지 판정하고 정렬한다
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus 4.8 (판정이 실질. 코드 변경은 작지만 어느 쪽을 정답으로 삼느냐가 테넌트 격리 의미를 바꾼다)
