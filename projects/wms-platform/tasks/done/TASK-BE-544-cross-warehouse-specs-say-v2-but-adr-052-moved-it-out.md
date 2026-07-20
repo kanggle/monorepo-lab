@@ -8,7 +8,7 @@ wms 스펙이 창고 간 이동을 "v2 진화 경로"로 서술 — ADR-MONO-052
 
 # Status
 
-review
+done
 
 # Owner
 
