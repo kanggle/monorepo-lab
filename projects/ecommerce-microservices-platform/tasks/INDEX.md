@@ -75,7 +75,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | ID | Title | Service | Tags |
 |---|---|---|---|
 | TASK-BE-390 | **READY — ⏳ 2026-08-01 게이트 (그 전 구현 금지)**. D2-b deprecation window(~2026-08-01) 종료 후 gateway `allowed-issuers`에서 레거시 `iam` issuer 제거 + 테스트 정리. AC-0 verify-then-act(live `iss=iam` 토큰 0 확인) 선행. | gateway-service | code, security, test |
-| TASK-BE-545 | **정정 티켓(구 감사 티켓 폐기)**. 원래 BE-545 는 *"order-service `UserWithdrawnEvent` 미인식필드 결함으로 실 `UserWithdrawn` 메시지 전량이 `user.user.withdrawn.dlq` 직행 → 탈퇴미취소 주문 감사"* 였다 — **그 전제가 반증됐다.** 근거였던 프로브 테스트가 `new ObjectMapper()`(strict)를 썼을 뿐, 컨슈머가 주입받는 Spring 자동설정 mapper 는 `FAIL_ON_UNKNOWN_PROPERTIES=false`(실 `OrderServiceApplication` 컨텍스트 bean 실측: feature off, tenant_id envelope ACCEPTED). 실 메시지는 어노테이션 유무와 무관하게 항상 역직렬화됐고 **DLQ 직행은 없었다** — 존재하지 않는 백로그를 감사하러 보내는 티켓이었다. **정정 내용**: `@JsonIgnoreProperties` 는 형제 일관성·미래 strict-mapper 대비로 유지, `UserWithdrawnEvent` Javadoc·INDEX·티켓 본문의 "프로덕션 DLQ 장애" 서사 제거, 회귀 테스트를 진짜 술어로 재구성(기본 mapper=어노테이션 없이도 GREEN=결함 없었음 증거 / strict mapper=어노테이션 있어야 GREEN=어노테이션이 지키는 유일한 경우, mutation 으로 후자만 RED 확인). **F1 자기적용**: 이 티켓의 "장애 없음" 도 가설로 두고 AC-0 에서 실 bean 재측정 선행함. 전형적 픽스처-≠-프로덕션 사례. 분석·구현=Opus 4.8. [[env_test_fixture_impossible_input_proves_nothing]] [[feedback_guard_predicate_wrong_verify_the_artifact]] [[feedback_recount_population_dont_inherit_scope]] | order-service (docs/test) | correction, correctness |
 | TASK-BE-547 | **NEW (READY)** — 동시 `PUT /shippings/{id}/status`(→SHIPPED) 두 건이 상태기계를 둘 다 통과·둘 다 커밋해 `ShippingStatusChanged` 아웃박스 행 2개 ⇒ **고객이 배송 알림을 두 번 받는다**(`TASK-BE-537` 조사의 유일한 실사용 피해, 별 티켓 분리). 원인: `SpringShippingEventPublisher:56` 이 발행마다 `UUID.randomUUID()` 채번 ⇒ 동시 이중 발행이 **서로 다른 event_id** 를 갖고 **두 소비자의 event_id dedup 을 둘 다 통과**한다(order `:40` · notification `:49`). **그런데 order 는 `Order.ship()` 상태기계로 살고 notification 은 무방비**(`:59` 무조건 발송) — 같은 결함을 공유하는데 한쪽만 증상. 후보: **(A)** event_id 를 `(shippingId,newStatus)` 로 결정적 채번(선형 상태기계라 같은 키=경합-중복뿐) — 🔴 단 event_id=아웃박스 PK 라 **PK 충돌→DIVE→409** 로 계약 질문이 옮겨올 수 있음(무변경 아님, 실측 필수) · **(B)** notification 에 전이 가드(공급원 결함 방치 = workaround-becomes-contract) · **(C)** BE-537 `@Version`(가장 옳지만 500→409 계약변경+마이그레이션, 범위 초과 시 STOP). **AC-0=재측정**(채번·두 dedup·notification 무방비). **AC-2=부수효과 1회 단언**(행 존재 아님), **AC-3=정당한 SHIPPED→DELIVERED 는 각각 알림**(순진한 shippingId dedup 회귀), **AC-4=동시 중재자 명시**. 로컬 Testcontainers FLAKY, **CI Linux 권위**. 분석·구현=Opus 4.8. [[feedback_workaround_becomes_the_contract]] [[project_enforcement_straggler_sibling_parity]] | shipping-service, notification-service | concurrency, idempotency, notification |
 
 ## in-progress
@@ -84,7 +83,9 @@ _(없음)_
 
 ## review
 
-_(없음)_
+| ID | Title | Service | Tags |
+|---|---|---|---|
+| TASK-BE-545 | **정정 티켓(구 감사 티켓 폐기)**. 원래 BE-545 는 *"order-service `UserWithdrawnEvent` 미인식필드 결함으로 실 `UserWithdrawn` 메시지 전량이 `user.user.withdrawn.dlq` 직행 → 탈퇴미취소 주문 감사"* 였다 — **그 전제가 반증됐다.** 근거였던 프로브 테스트가 `new ObjectMapper()`(strict)를 썼을 뿐, 컨슈머가 주입받는 Spring 자동설정 mapper 는 `FAIL_ON_UNKNOWN_PROPERTIES=false`(실 `OrderServiceApplication` 컨텍스트 bean 실측: feature off, tenant_id envelope ACCEPTED). 실 메시지는 어노테이션 유무와 무관하게 항상 역직렬화됐고 **DLQ 직행은 없었다** — 존재하지 않는 백로그를 감사하러 보내는 티켓이었다. **정정 내용**: `@JsonIgnoreProperties` 는 형제 일관성·미래 strict-mapper 대비로 유지, `UserWithdrawnEvent` Javadoc·INDEX·티켓 본문의 "프로덕션 DLQ 장애" 서사 제거, 회귀 테스트를 진짜 술어로 재구성(기본 mapper=어노테이션 없이도 GREEN=결함 없었음 증거 / strict mapper=어노테이션 있어야 GREEN=어노테이션이 지키는 유일한 경우, mutation 으로 후자만 RED 확인). **F1 자기적용**: 이 티켓의 "장애 없음" 도 가설로 두고 AC-0 에서 실 bean 재측정 선행함. 전형적 픽스처-≠-프로덕션 사례. 분석·구현=Opus 4.8. [[env_test_fixture_impossible_input_proves_nothing]] [[feedback_guard_predicate_wrong_verify_the_artifact]] [[feedback_recount_population_dont_inherit_scope]] | order-service (docs/test) | correction, correctness |
 
 ## done
 
