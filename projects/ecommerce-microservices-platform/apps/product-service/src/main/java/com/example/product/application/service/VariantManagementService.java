@@ -47,9 +47,11 @@ public class VariantManagementService {
         // 500 INTERNAL_ERROR instead of a clean 409. saveAndFlush forces the INSERT
         // synchronously so the violation is catchable here (same shape as
         // RefundRequestRepositoryImpl.insert, TASK-BE-535). The constraint itself is
-        // also the AC-4 concurrency arbiter — two simultaneous adds of the same
-        // optionName both pass the in-memory addVariant() check, but only one INSERT
-        // commits; the loser lands in this catch.
+        // also the arbiter for BOTH the sequential and the concurrent duplicate here:
+        // Product.addVariant performs no optionName check at all (it only rejects null),
+        // so every duplicate — not just a concurrent one — is detected by the INSERT.
+        // Corrected in TASK-BE-541: the original comment claimed an "in-memory
+        // addVariant() check" that does not exist.
         try {
             productRepository.saveAndFlush(product);
         } catch (DataIntegrityViolationException e) {

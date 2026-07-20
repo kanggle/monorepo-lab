@@ -62,13 +62,13 @@ class OrderPlacementServiceTest {
                 List.of(new PlaceOrderCommand.OrderItemCommand("p1", "v1", "노트북", "블랙", 1, 1000000L)),
                 ADDRESS
         );
-        given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+        given(orderRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
         given(clock.instant()).willReturn(FIXED_NOW);
 
         PlaceOrderResult result = orderPlacementService.placeOrder(command);
 
         assertThat(result.orderId()).isNotNull();
-        verify(orderRepository).save(any(Order.class));
+        verify(orderRepository).saveAndFlush(any(Order.class));
 
         ArgumentCaptor<OrderPlacedEvent> eventCaptor = ArgumentCaptor.forClass(OrderPlacedEvent.class);
         verify(orderEventPublisher).publishOrderPlaced(eventCaptor.capture());
@@ -87,7 +87,7 @@ class OrderPlacementServiceTest {
                 ),
                 ADDRESS
         );
-        given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+        given(orderRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
         given(clock.instant()).willReturn(FIXED_NOW);
 
         orderPlacementService.placeOrder(command);
@@ -107,7 +107,7 @@ class OrderPlacementServiceTest {
                 List.of(new PlaceOrderCommand.OrderItemCommand("p1", "v1", "노트북", "블랙", 1, 1000000L)),
                 ADDRESS
         );
-        given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+        given(orderRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
         given(clock.instant()).willReturn(FIXED_NOW);
 
         orderPlacementService.placeOrder(command);
@@ -125,7 +125,7 @@ class OrderPlacementServiceTest {
         assertThatThrownBy(() -> orderPlacementService.placeOrder(command))
                 .isInstanceOf(InvalidOrderException.class);
 
-        verify(orderRepository, never()).save(any());
+        verify(orderRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -140,7 +140,7 @@ class OrderPlacementServiceTest {
         assertThatThrownBy(() -> orderPlacementService.placeOrder(command))
                 .isInstanceOf(InvalidOrderException.class);
 
-        verify(orderRepository, never()).save(any());
+        verify(orderRepository, never()).saveAndFlush(any());
     }
 
     private static List<PlaceOrderCommand.OrderItemCommand> oneItem() {
@@ -159,7 +159,7 @@ class OrderPlacementServiceTest {
         PlaceOrderResult result = orderPlacementService.placeOrder(command);
 
         assertThat(result.orderId()).isEqualTo("existing-1");
-        verify(orderRepository, never()).save(any());
+        verify(orderRepository, never()).saveAndFlush(any());
         verify(orderEventPublisher, never()).publishOrderPlaced(any());
         verify(orderMetrics, never()).recordOrderPlaced();
     }
@@ -169,24 +169,37 @@ class OrderPlacementServiceTest {
     void placeOrder_newIdempotencyKey_createsOrderWithKey() {
         given(orderRepository.findByUserIdAndIdempotencyKey("user1", "key-2"))
                 .willReturn(Optional.empty());
-        given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+        given(orderRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
         given(clock.instant()).willReturn(FIXED_NOW);
         PlaceOrderCommand command = new PlaceOrderCommand("user1", oneItem(), ADDRESS, "key-2");
 
         orderPlacementService.placeOrder(command);
 
         ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
-        verify(orderRepository).save(orderCaptor.capture());
+        verify(orderRepository).saveAndFlush(orderCaptor.capture());
         assertThat(orderCaptor.getValue().getIdempotencyKey()).isEqualTo("key-2");
         verify(orderEventPublisher).publishOrderPlaced(any());
     }
 
+    /**
+     * TASK-BE-541: this test's premise used to be impossible. It stubbed
+     * {@code orderRepository.save(...)} to throw, but the real repository never does —
+     * {@code Order} has an assigned {@code @Id}, so a plain {@code save()} queues the
+     * INSERT until the commit-time flush, long after the service's catch has been passed.
+     * The test was green while the production catch was unreachable and the concurrent
+     * duplicate actually returned 500.
+     *
+     * <p>It now stubs {@code saveAndFlush}, which is the method the service calls and the
+     * one that genuinely raises the violation inside the try-block. The premise is real.
+     * The end-to-end proof that Postgres rejects the second row lives in the integration
+     * lane; this unit test only pins the translation and the no-event guarantee.
+     */
     @Test
-    @DisplayName("동시 동일 멱등키 race: unique 위반 → DuplicateOrderPlacementException, 이벤트 미발행 (TASK-BE-430)")
+    @DisplayName("동시 동일 멱등키 race: unique 위반 → DuplicateOrderPlacementException, 이벤트 미발행 (TASK-BE-430, 전제 수정 TASK-BE-541)")
     void placeOrder_concurrentDuplicate_throwsAndNoEvent() {
         given(orderRepository.findByUserIdAndIdempotencyKey("user1", "key-3"))
                 .willReturn(Optional.empty());
-        given(orderRepository.save(any()))
+        given(orderRepository.saveAndFlush(any()))
                 .willThrow(new DataIntegrityViolationException("uq_orders_idempotency"));
         given(clock.instant()).willReturn(FIXED_NOW);
         PlaceOrderCommand command = new PlaceOrderCommand("user1", oneItem(), ADDRESS, "key-3");
@@ -200,7 +213,7 @@ class OrderPlacementServiceTest {
     @Test
     @DisplayName("멱등키 미전송: dedup 조회 없이 기존(비멱등) 동작 (TASK-BE-430 하위호환)")
     void placeOrder_noIdempotencyKey_legacyBehaviorNoDedupLookup() {
-        given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+        given(orderRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
         given(clock.instant()).willReturn(FIXED_NOW);
         PlaceOrderCommand command = new PlaceOrderCommand("user1", oneItem(), ADDRESS); // 3-arg = null key
 
@@ -218,7 +231,7 @@ class OrderPlacementServiceTest {
                 List.of(new PlaceOrderCommand.OrderItemCommand("p1", "v1", "노트북", "블랙", 1, 1000000L)),
                 ADDRESS
         );
-        given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+        given(orderRepository.saveAndFlush(any())).willAnswer(inv -> inv.getArgument(0));
         given(clock.instant()).willReturn(FIXED_NOW);
 
         orderPlacementService.placeOrder(command);

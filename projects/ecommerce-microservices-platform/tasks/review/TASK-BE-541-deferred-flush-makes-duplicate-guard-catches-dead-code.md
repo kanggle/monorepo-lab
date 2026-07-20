@@ -1,6 +1,6 @@
 # TASK-BE-541 — 중복 방어 `catch (DataIntegrityViolationException)` 이 발화할 수 없다: plain `save()` 는 커밋 시점에 flush 된다
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus 4.8 (트랜잭션 경계·flush 타이밍 판단. 수정 자체는 작지만 어디가 죽었는지 가리는 게 실질)
@@ -129,6 +129,59 @@ try {
 - [ ] 불가능 전제 테스트 2건 이상 제거/이관 (AC-4)
 - [ ] CI Linux GREEN
 - [ ] 계약 문서 대조
+
+---
+
+## 구현 결과 (2026-07-20)
+
+### AC-0 전수 훑기 — 13 지점 (티켓 추정 "6곳 이상" 의 두 배)
+
+**🔴 판별식이 티켓이 적은 것과 다르다.** `save()` 대 `saveAndFlush()` 라는 *이름*이 아니라 **`@Id` 생성 전략**이 공동 결정 인자다. `@GeneratedValue(IDENTITY)` 면 Hibernate 가 ID 를 얻으려 INSERT 를 즉시 실행하므로 plain `save()` 라도 catch 가 산다. 훑기 대상 dedupe 엔티티는 **전부 할당식 `@Id`**(`event_id` String / UUID, `delivery_id`, `order_id`) 여서 지연이 확정이었다 — 각 엔티티를 직접 열어 확인했다.
+
+**죽음 7 / 삶 6:**
+
+| 지점 | 판정 | 근거 |
+|---|---|---|
+| order `EventDeduplicationChecker:33` | 죽음 | MANDATORY + plain save + 할당식 `@Id` |
+| shipping `EventDeduplicationChecker:33` | 죽음 | 동일 |
+| settlement `ProcessedEventStoreImpl:37` | 죽음 | 동일 |
+| product `ReservationEventDedupe:40` | 죽음 | 동일 (UUID `@Id`) |
+| product `WmsReconciliationDedupe:40` | 죽음 | 동일 (UUID `@Id`) |
+| shipping `JpaWebhookDeliveryStore:38` | 죽음 | 호출자 트랜잭션 + plain save. **HTTP 도달 → 500** |
+| order `OrderPlacementService:60` | 죽음 | `OrderRepositoryImpl:39` plain save. **HTTP 도달 → 500** |
+| payment `PaymentRefundService:254` | 삶 | `RefundRequestRepositoryImpl:29` `saveAndFlush` |
+| settlement `OpenSettlementPeriodUseCase:63` | 삶 | `SettlementPeriodRepositoryImpl:33` `saveAndFlush` |
+| promotion `CouponCommandService:111` | 삶 | `CouponIssueRequestRepositoryImpl:29` `saveAndFlush` |
+| product `AdjustStockService:120` | 삶 | `StockAdjustmentRequestRepositoryImpl:32` `saveAndFlush` |
+| product `RegisterProductService:140` | 삶 | `ProductCreateRequestRepositoryImpl:31` `saveAndFlush` (**단 키 청구만 감쌈**) |
+| product `VariantManagementService:55` | 삶 | `ProductRepositoryImpl:61` `saveAndFlush` |
+
+### 🔴 훑기가 티켓의 처방을 뒤집었다 — "죽은 곳을 살린다" 는 대부분 틀린 답이다
+
+티켓은 죽은 7곳을 전부 `saveAndFlush` 로 **살리라**고 적었다. 실제로는 **catch 의 모양에 따라 답이 갈린다**:
+
+- **catch 후 `throw`(중단)** — 살릴 수 있다. 위반이 flush 되면 트랜잭션이 롤백되고 번역된 예외가 4xx 로 나간다. `OrderPlacementService` 가 이 모양이라 `saveAndFlush` 로 고쳤다(409 복구).
+- **catch 후 `return`(계속 진행)** — **살릴 수 없다.** flush 된 제약 위반은 세션을 rollback-only 로 만들어, catch 해도 커밋 시점에 다시 실패한다. dedupe 5곳 + webhook store 가 이 모양이다.
+
+그래서 그 6곳은 **catch 를 제거**하고 진짜 중재자를 문서화했다: **재시도**다. 컨슈머가 롤백 후 재전달되면 `existsBy` 선체크가 커밋된 승자 행을 보고 중복으로 처리한다 — 결과는 이미 옳았고, catch 만 거짓이었다. `REQUIRES_NEW` 는 각 클래스가 의도적으로 보장하는 원자성(dedupe 행과 업무 쓰기가 함께 커밋)을 깨므로 채택하지 않았다.
+
+### 변경 요약
+
+- **order**: `OrderRepository.saveAndFlush` 신설(포트+impl) → `OrderPlacementService` 가 사용. 동시 동일 멱등키가 500 → **409 `DUPLICATE_ORDER_REQUEST`**.
+- **product**: `POST /admin/products` 가 요청 내 동일 `optionName` 을 **저장 전에** 거부(`DuplicateVariantOptionException`, 409). 충돌이 페이로드에 전부 보이므로 DB 에 맡길 이유가 없다. 술어는 제약과 같게 **대소문자 구분**.
+- **죽은 catch 6곳 제거** + 주석을 진실로 교체. `JpaWebhookDeliveryStore` 는 **동시 중복 시 500 이 남는다는 사실을 Javadoc 에 명시**했다 — 4xx 번역은 `TASK-BE-542` 이고 이 계층에서 못 고친다.
+- **거짓 주석 정정**: `VariantManagementService` 가 존재하지 않는 *"in-memory addVariant() check"* 를 근거로 삼고 있었다(`Product.addVariant` 는 null 검사만 한다).
+
+### 테스트 (AC-2 / AC-4)
+
+- **수정 전 RED 확인**: 새 AC-3 테스트를 가드 비활성 상태에서 먼저 돌려 **정확히 1건만 실패**함을 확인. 대소문자 테스트는 그 상태에서도 통과 — 술어가 과잉이 아님도 같이 확인됐다.
+- **불가능 전제 제거**: `OrderPlacementServiceTest` 는 `save` 스텁 → `saveAndFlush` 스텁으로 전환해 **전제를 실재하게** 만들었다. `EventDeduplicationCheckerUnitTest` 의 동시-INSERT 케이스는 **삭제**했다 — 트랜잭션 경계 거동은 Mockito 로 표현할 수 없고, 대체 유닛 테스트를 쓰면 같은 거짓 확신을 재생산한다. 삭제 이유를 코드에 남겼다.
+- **단위 레인 (로컬, XML 집계)**: product **364** / order **381** / shipping **185** / settlement **131** — failures 0, errors 0, skipped 0. `--rerun-tasks` 로 stale 캐시 배제.
+
+### 🔴 남긴 것 (정직하게)
+
+- **동시성 IT 없음.** 위 RED 확인은 **유닛 레벨**이다. "두 요청이 실제로 경합해 하나가 Postgres 제약에 걸린다" 는 로컬 Windows 에서 Testcontainers 가 FLAKY 라 신뢰 있게 재현하지 못했다. `OrderPlacementService` 의 409 복구는 **논리적으로 확인**했지 실 DB 경합으로 증명하지 못했다 — 이 한계를 리뷰에서 지울 것.
+- **`JpaWebhookDeliveryStore` 의 500 은 그대로다.** 제거한 것은 그것을 막는다는 *주장*이지 500 자체가 아니다.
 
 ---
 

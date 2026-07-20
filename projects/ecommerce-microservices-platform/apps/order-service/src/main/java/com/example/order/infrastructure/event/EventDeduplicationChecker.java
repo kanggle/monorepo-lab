@@ -4,7 +4,6 @@ import com.example.order.infrastructure.persistence.ProcessedEventJpaEntity;
 import com.example.order.infrastructure.persistence.ProcessedEventJpaRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,13 +27,19 @@ public class EventDeduplicationChecker {
             return true;
         }
 
-        try {
-            processedEventJpaRepository.save(ProcessedEventJpaEntity.create(eventId, eventType));
-        } catch (DataIntegrityViolationException e) {
-            log.warn("Duplicate event detected (concurrent insert), skipping. eventId={}, eventType={}", eventId, eventType);
-            return true;
-        }
-
+        // No try/catch here, deliberately (TASK-BE-541). ProcessedEventJpaEntity uses an
+        // assigned @Id, so Hibernate queues this INSERT until the commit-time flush — which
+        // runs after this method returns. A catch around save() could never fire; the one
+        // that used to sit here was dead code, and its unit test only passed because it
+        // stubbed save() to throw, which the real repository never does.
+        //
+        // The concurrent-duplicate case is still handled correctly, by retry rather than by
+        // catch: the loser's flush fails, the consumer transaction rolls back, and on
+        // redelivery the existsByEventId check above sees the winner's committed row and
+        // returns true. Catching here could not improve on that — MANDATORY propagation
+        // means we are inside the consumer's transaction, and a flushed constraint violation
+        // marks it rollback-only, so "catch and carry on" is not available at this layer.
+        processedEventJpaRepository.save(ProcessedEventJpaEntity.create(eventId, eventType));
         return false;
     }
 }

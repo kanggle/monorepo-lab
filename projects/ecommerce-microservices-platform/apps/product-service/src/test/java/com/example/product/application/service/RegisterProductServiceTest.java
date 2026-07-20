@@ -4,6 +4,7 @@ import com.example.product.application.command.RegisterProductCommand;
 import com.example.product.application.command.VariantCommand;
 import com.example.product.domain.event.ProductEvent;
 import com.example.product.domain.event.ProductEventPublisher;
+import com.example.product.domain.exception.DuplicateVariantOptionException;
 import com.example.product.domain.exception.IdempotencyKeyConflictException;
 import com.example.product.domain.exception.IdempotencyKeyRequiredException;
 import com.example.product.domain.exception.InvalidCategoryException;
@@ -299,6 +300,46 @@ class RegisterProductServiceTest {
 
         verify(productRepository, never()).save(any());
         verify(productEventPublisher, never()).publish(any());
+    }
+
+    /**
+     * TASK-BE-541 AC-3. {@code uq_product_variants_option UNIQUE (product_id, option_name)}
+     * has two write paths; the add-variant endpoint translated it to 409, but this one did
+     * not. A create request carrying two variants with the same optionName violated the
+     * constraint at the commit-time flush — after this service returned and past its
+     * catch (which only wraps the idempotency-key claim) — so it escaped as a raw 500.
+     *
+     * <p>Rejected up-front now: the collision is entirely visible in the request payload,
+     * so nothing is left to the database. No claim insert, no product row, no event.
+     */
+    @Test
+    @DisplayName("AC-3 한 등록 요청 안에 같은 optionName variant 2개 → DuplicateVariantOptionException(409), 저장·발행 없음")
+    void register_duplicateOptionNameWithinOneRequest_isConflict() {
+        RegisterProductCommand command = new RegisterProductCommand(
+                "상품", "상품 설명", 10000L, null, null, null,
+                List.of(new VariantCommand("기본", 10, 0), new VariantCommand("기본", 5, 500)),
+                "idem-dup-option");
+
+        assertThatThrownBy(() -> registerProductService.register(command))
+                .isInstanceOf(DuplicateVariantOptionException.class);
+
+        verify(productCreateRequestRepository, never()).insert(any());
+        verify(productRepository, never()).save(any());
+        verify(productEventPublisher, never()).publish(any());
+    }
+
+    @Test
+    @DisplayName("AC-3 대소문자가 다른 optionName 은 중복이 아니다 — 가드 술어가 DB 제약과 일치해야 한다")
+    void register_optionNamesDifferingOnlyByCase_areNotDuplicates() {
+        given(productRepository.save(any(Product.class))).willAnswer(inv -> inv.getArgument(0));
+        RegisterProductCommand command = new RegisterProductCommand(
+                "상품", "상품 설명", 10000L, null, null, null,
+                List.of(new VariantCommand("Red", 10, 0), new VariantCommand("red", 5, 500)),
+                "idem-case");
+
+        registerProductService.register(command);
+
+        verify(productRepository).save(any());
     }
 
     @Test

@@ -14,6 +14,24 @@ public interface OrderRepository {
 
     Order save(Order order);
 
+    /**
+     * Same as {@link #save(Order)} for a NEW order, but forces the INSERT to Postgres
+     * inside this call instead of deferring it to the commit-time flush (TASK-BE-541).
+     *
+     * <p>{@code Order} uses an assigned {@code @Id} (no {@code @GeneratedValue}), so
+     * Hibernate has no reason to execute the INSERT eagerly and queues it until flush —
+     * which happens AFTER the calling {@code @Transactional} method returns. A
+     * {@code catch (DataIntegrityViolationException)} around a plain {@code save()} can
+     * therefore never fire, and a concurrent {@code uq_orders_idempotency} collision
+     * escapes as a 500 instead of the intended 409.
+     *
+     * <p>Only correct for a caller that ABORTS on the violation (translates it into an
+     * exception and lets the transaction roll back). A caller that catches and then
+     * CONTINUES in the same transaction would still fail at commit — the session is
+     * marked rollback-only once a constraint violation is flushed.
+     */
+    Order saveAndFlush(Order order);
+
     List<Order> saveAll(List<Order> orders);
 
     /**
