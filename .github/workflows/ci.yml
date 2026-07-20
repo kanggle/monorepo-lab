@@ -196,6 +196,13 @@ jobs:
       # the diff this guard exists to catch, so AND-combining would switch it off
       # for its only defect class (the MONO-389 failure mode).
       task-ids: ${{ steps.filter.outputs.task-ids }}
+      # TASK-MONO-451: raw filter, NOT AND-combined with `code-changed`. Every
+      # instance of the drift this guard exists to catch (BE-535, BE-536, BE-539,
+      # 2026-07-20) arrived in a close-chore PR that touched nothing but `.md`
+      # files — an INDEX edit plus a `git mv` between lifecycle directories. On
+      # those PRs `code-changed` is false by construction, so AND-combining would
+      # give the guard a green skip on 100% of its defect class (§ F1).
+      index-queue: ${{ steps.filter.outputs.index-queue }}
       # Same reasoning as service-map above: deleting a row from error-handling.md is a
       # docs-only diff, and that is precisely the change the guard must catch.
       error-registry: ${{ steps.filter.outputs.error-registry }}
@@ -383,6 +390,27 @@ jobs:
               - 'projects/*/tasks/review/**'
               - 'projects/*/tasks/in-progress/**'
               - 'scripts/check-task-id-collision.sh'
+            # TASK-MONO-451: INDEX queue listing vs queue directory drift.
+            # The trigger follows the defect's ARRIVAL PATH (§ G1). This drift is
+            # produced by close chores, whose diff is exactly: an edit to a
+            # `tasks/INDEX.md` plus a `git mv` of one `.md` file between two
+            # lifecycle directories. So both halves are triggers — the INDEX files
+            # AND every lifecycle directory, `done/` included, because
+            # `git mv ready/X done/X` touches `done/` and is precisely the move
+            # whose step-3 INDEX edit gets skipped.
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            index-queue:
+              - 'tasks/INDEX.md'
+              - 'tasks/ready/**'
+              - 'tasks/review/**'
+              - 'tasks/in-progress/**'
+              - 'tasks/done/**'
+              - 'projects/*/tasks/INDEX.md'
+              - 'projects/*/tasks/ready/**'
+              - 'projects/*/tasks/review/**'
+              - 'projects/*/tasks/in-progress/**'
+              - 'projects/*/tasks/done/**'
+              - 'scripts/check-index-queue-drift.sh'
             # TASK-MONO-352: platform/error-handling.md declares itself "the single
             # authoritative registry" and mandates that every new error code be added
             # to it — but nothing enforced that, and 37 live codes had drifted out.
@@ -598,6 +626,51 @@ jobs:
 
       - name: Guard — no duplicate task IDs within a project namespace
         run: bash scripts/check-task-id-collision.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-451 — INDEX queue listing / queue directory drift guard.
+  #
+  # `tasks/INDEX.md` § PR Separation Rule already requires a close chore to move
+  # the file, edit its Status and move the INDEX row in ONE commit, and already
+  # warns (citing PR #375) that skipping a step "produces silent drift". On
+  # 2026-07-20 that drift happened three times in one day — BE-535, BE-536 and
+  # BE-539 — and a human caught all three by eye. Every one of those PRs was
+  # green. Same day, two concurrent sessions moved rows in the root and ecommerce
+  # INDEX files and a merge conflict in the root `## review` section nearly
+  # deleted a third session's TASK-MONO-452 row: still green.
+  #
+  # The `Task ID collision` job above did not fire and could not have. Its
+  # predicate is "does an ID appear twice in the active queues"; this one is
+  # "does the listing match the directory". A guard existed on the neighbouring
+  # axis, which is exactly why nobody noticed this axis was unguarded.
+  #
+  # The filter is NOT AND-combined with `code-changed` — see the outputs block.
+  # A close chore is a markdown-only diff, so the code gate would skip this job
+  # on every PR that can produce the defect.
+  #
+  # `--selftest` runs FIRST and is a required step, not a courtesy: the parser
+  # has to read nine INDEX files in three different formats, and a parser that
+  # quietly stops matching reports "no drift" and "did not look" with the same
+  # green tick. The fixture asserts the ID pattern and every row/section shape,
+  # including the two that gave wrong answers during development.
+  # ---------------------------------------------------------------------------
+  index-queue-drift:
+    name: INDEX queue drift (INDEX.md tables vs queue directories)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.index-queue == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-index-queue-drift.sh
+
+      - name: Self-test the parser against known positives
+        run: bash scripts/check-index-queue-drift.sh --selftest
+
+      - name: Guard — every INDEX queue listing matches its queue directory
+        run: bash scripts/check-index-queue-drift.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-360 — gateway declaration / exposure drift guard.
