@@ -5,6 +5,8 @@ import com.example.payment.application.service.PaymentConfirmService;
 import com.example.payment.application.service.PaymentProcessingService;
 import com.example.payment.application.service.PaymentQueryService;
 import com.example.payment.application.service.PaymentRefundService;
+import com.example.payment.application.exception.IdempotencyKeyRequiredException;
+import com.example.payment.application.exception.IdempotencyKeyConflictException;
 import com.example.payment.application.exception.UnauthorizedPaymentAccessException;
 import com.example.payment.domain.exception.InvalidPaymentException;
 import com.example.payment.domain.exception.PaymentNotFoundException;
@@ -24,6 +26,7 @@ import java.time.LocalDateTime;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
@@ -261,14 +264,18 @@ class PaymentControllerTest {
             );
         }
 
+        /** TASK-BE-535: Idempotency-Key is required on this funds-out endpoint. */
+        private static final String KEY = "idem-key-1";
+
         @Test
         @DisplayName("부분 환불 성공 시 200과 누적 환불액/상태를 반환한다")
         void refund_partialSuccess_returns200() throws Exception {
-            given(paymentRefundService.refundPayment(eq("pay-1"), eq("user-1"), eq(10000L)))
+            given(paymentRefundService.refundPayment(eq("pay-1"), eq("user-1"), eq(10000L), eq(KEY)))
                     .willReturn(partiallyRefundedPayment());
 
             mockMvc.perform(post("/api/payments/pay-1/refund")
                             .header("X-User-Id", "user-1")
+                            .header("Idempotency-Key", KEY)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
                                     {"amount":10000}
@@ -279,17 +286,20 @@ class PaymentControllerTest {
                     .andExpect(jsonPath("$.refundedAmount").value(10000))
                     .andExpect(jsonPath("$.status").value("PARTIALLY_REFUNDED"));
 
-            verify(paymentRefundService).refundPayment("pay-1", "user-1", 10000L);
+            // The header must reach the service — it is the whole guard.
+            verify(paymentRefundService).refundPayment("pay-1", "user-1", 10000L, KEY);
         }
 
         @Test
         @DisplayName("초과 환불 시 400 / INVALID_PAYMENT_REQUEST 반환")
         void refund_overRefund_returns400() throws Exception {
             doThrow(new InvalidPaymentException("over-refund"))
-                    .when(paymentRefundService).refundPayment(eq("pay-1"), eq("user-1"), eq(40000L));
+                    .when(paymentRefundService)
+                    .refundPayment(eq("pay-1"), eq("user-1"), eq(40000L), eq(KEY));
 
             mockMvc.perform(post("/api/payments/pay-1/refund")
                             .header("X-User-Id", "user-1")
+                            .header("Idempotency-Key", KEY)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
                                     {"amount":40000}
@@ -302,10 +312,12 @@ class PaymentControllerTest {
         @DisplayName("존재하지 않는 paymentId이면 404 / PAYMENT_NOT_FOUND 반환")
         void refund_notFound_returns404() throws Exception {
             doThrow(new PaymentNotFoundException("missing"))
-                    .when(paymentRefundService).refundPayment(eq("missing"), eq("user-1"), eq(10000L));
+                    .when(paymentRefundService)
+                    .refundPayment(eq("missing"), eq("user-1"), eq(10000L), eq(KEY));
 
             mockMvc.perform(post("/api/payments/missing/refund")
                             .header("X-User-Id", "user-1")
+                            .header("Idempotency-Key", KEY)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
                                     {"amount":10000}
@@ -318,10 +330,12 @@ class PaymentControllerTest {
         @DisplayName("소유자가 아니면 403 / ACCESS_DENIED 반환")
         void refund_nonOwner_returns403() throws Exception {
             doThrow(new UnauthorizedPaymentAccessException())
-                    .when(paymentRefundService).refundPayment(eq("pay-1"), eq("attacker"), eq(10000L));
+                    .when(paymentRefundService)
+                    .refundPayment(eq("pay-1"), eq("attacker"), eq(10000L), eq(KEY));
 
             mockMvc.perform(post("/api/payments/pay-1/refund")
                             .header("X-User-Id", "attacker")
+                            .header("Idempotency-Key", KEY)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
                                     {"amount":10000}
@@ -334,12 +348,50 @@ class PaymentControllerTest {
         @DisplayName("X-User-Id 헤더 누락 시 400 / INVALID_PAYMENT_REQUEST 반환")
         void refund_missingUserId_returns400() throws Exception {
             mockMvc.perform(post("/api/payments/pay-1/refund")
+                            .header("Idempotency-Key", KEY)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
                                     {"amount":10000}
                                     """))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code").value("INVALID_PAYMENT_REQUEST"));
+        }
+
+        // ── TASK-BE-535 ──────────────────────────────────────────────────────
+
+        @Test
+        @DisplayName("Idempotency-Key 헤더 누락 시 400 / IDEMPOTENCY_KEY_REQUIRED 반환")
+        void refund_missingIdempotencyKey_returns400() throws Exception {
+            doThrow(new IdempotencyKeyRequiredException("Idempotency-Key 헤더는 필수입니다"))
+                    .when(paymentRefundService)
+                    .refundPayment(eq("pay-1"), eq("user-1"), eq(10000L), isNull());
+
+            mockMvc.perform(post("/api/payments/pay-1/refund")
+                            .header("X-User-Id", "user-1")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"amount":10000}
+                                    """))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REQUIRED"));
+        }
+
+        @Test
+        @DisplayName("같은 키를 다른 금액으로 재사용하면 409 / IDEMPOTENCY_KEY_CONFLICT 반환")
+        void refund_reusedIdempotencyKey_returns409() throws Exception {
+            doThrow(new IdempotencyKeyConflictException("key bound to a different amount"))
+                    .when(paymentRefundService)
+                    .refundPayment(eq("pay-1"), eq("user-1"), eq(20000L), eq(KEY));
+
+            mockMvc.perform(post("/api/payments/pay-1/refund")
+                            .header("X-User-Id", "user-1")
+                            .header("Idempotency-Key", KEY)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"amount":20000}
+                                    """))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_CONFLICT"));
         }
     }
 }

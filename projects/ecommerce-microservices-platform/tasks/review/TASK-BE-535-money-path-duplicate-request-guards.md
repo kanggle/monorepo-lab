@@ -1,6 +1,6 @@
 # TASK-BE-535 — Close the two money-path endpoints where a duplicate request moves real money
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus 4.8 (refund idempotency has a partial/full interaction — this is not a "add a guard" edit)

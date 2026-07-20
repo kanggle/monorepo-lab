@@ -111,11 +111,13 @@ class PaymentApiContractTest {
                 LocalDateTime.of(2026, 4, 6, 12, 0, 0),
                 LocalDateTime.of(2026, 4, 6, 13, 0, 0),
                 "pk_test_123", "CARD", null);
-        given(paymentRefundService.refundPayment(eq("pay-1"), eq("user-1"), eq(10000L)))
+        given(paymentRefundService.refundPayment(
+                eq("pay-1"), eq("user-1"), eq(10000L), eq("idem-key-1")))
                 .willReturn(refunded);
 
         MvcResult result = mockMvc.perform(post("/api/payments/pay-1/refund")
                         .header("X-User-Id", "user-1")
+                        .header("Idempotency-Key", "idem-key-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"amount":10000}

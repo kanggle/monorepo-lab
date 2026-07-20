@@ -66,14 +66,26 @@ public class PaymentController {
         return ResponseEntity.ok(PaymentConfirmResponse.from(result));
     }
 
+    /**
+     * Partial (or full) refund. {@code Idempotency-Key} is <b>required</b> on this
+     * funds-out path (TASK-BE-535): a same-key + same-amount replay returns 200 with the
+     * unchanged payment, a same-key + different-amount replay is 409
+     * {@code IDEMPOTENCY_KEY_CONFLICT}, and a different key is a genuine second partial
+     * refund. Declared {@code required = false} at the binding so the missing-header case
+     * is answered by the service's own 400 {@code IDEMPOTENCY_KEY_REQUIRED} (a single
+     * enforcement point, reached by every caller) rather than by Spring's generic
+     * missing-header error.
+     */
     @PostMapping("/{paymentId}/refund")
     public ResponseEntity<PaymentRefundResponse> refundPayment(
             @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @PathVariable String paymentId,
             @Valid @RequestBody PaymentRefundRequest request
     ) {
         requireUserId(userId);
-        Payment payment = paymentRefundService.refundPayment(paymentId, userId, request.amount());
+        Payment payment = paymentRefundService.refundPayment(
+                paymentId, userId, request.amount(), idempotencyKey);
         return ResponseEntity.ok(PaymentRefundResponse.from(payment));
     }
 

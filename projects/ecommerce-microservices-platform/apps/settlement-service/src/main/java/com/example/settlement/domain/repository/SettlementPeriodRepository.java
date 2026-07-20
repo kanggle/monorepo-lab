@@ -15,6 +15,15 @@ public interface SettlementPeriodRepository {
     /** Persists a new or mutated period (open / close). */
     SettlementPeriod save(SettlementPeriod period);
 
+    /**
+     * Inserts a newly-opened period and <b>flushes immediately</b>, so a violation of
+     * the partial unique index {@code (tenant_id, period_from, period_to) WHERE status
+     * = 'OPEN'} (Flyway V6) is raised as a {@code DataIntegrityViolationException} at
+     * this call rather than being deferred to transaction commit — where the caller's
+     * {@code catch} could no longer translate it to a 409 (TASK-BE-535).
+     */
+    SettlementPeriod insertOpen(SettlementPeriod period);
+
     /** Loads a period by id within the given tenant ({@code empty} if absent / cross-tenant). */
     Optional<SettlementPeriod> findById(String periodId, String tenantId);
 
