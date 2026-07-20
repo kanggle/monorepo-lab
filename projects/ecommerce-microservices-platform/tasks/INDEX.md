@@ -75,7 +75,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | ID | Title | Service | Tags |
 |---|---|---|---|
 | TASK-BE-390 | **READY — ⏳ 2026-08-01 게이트 (그 전 구현 금지)**. D2-b deprecation window(~2026-08-01) 종료 후 gateway `allowed-issuers`에서 레거시 `iam` issuer 제거 + 테스트 정리. AC-0 verify-then-act(live `iss=iam` 토큰 0 확인) 선행. | gateway-service | code, security, test |
-| TASK-BE-546 | **NEW (READY)** — `uq_wishlist_items_user_product` 가 `(user_id, product_id)` 로 **테넌트를 모른다**(`V3:8`)는데 선체크는 `...AndTenantId` 로 테넌트 스코프다. `V4__add_tenant_id.sql:6` 이 *"unique constraints are unchanged"* 라고 **적어 두고 그 상태로 남겼다.** **도달 불가**(BE-540 이 `user_id` 축을 확정 — 한 user 는 한 테넌트) ⇒ 런타임 사고 없음, **정합성 결함**이고 우선순위 낮음. 그래도 고치는 이유: 제약이 표현하려는 불변식을 표현하지 못하고, `user_id` 전역성이 미래에 바뀌면 **조용히** 교차 테넌트 충돌이 되며, **형제(review)는 BE-540 `V7` 로 이미 정렬됐는데 이쪽만 남았다.** AC-1=무손실 가정 금지(충돌 그룹 세고 `RAISE`), AC-2=교차 테넌트 허용 + **동일 테넌트 중복은 여전히 거부**(이게 진짜 불변식), Edge 1=`migration-h2` 이중 관리 확인. `TASK-BE-543` AC-2 에서 분리. 분석=Opus 4.8 / 구현 권장=Sonnet. | user-service | tenancy, constraint, migration |
 | TASK-BE-545 | **TASK-BE-533 이 낳은 감사 티켓**. order-service `UserWithdrawnEvent` 의 미인식 필드 역직렬화 결함(533 에서 수정 완료)이 최초 머지 이후 무변경이었다는 것은 **실 프로덕션 `UserWithdrawn` 메시지가 그동안 전량 `user.user.withdrawn.dlq` 로 직행했을 수 있다**는 뜻 — 코드는 고쳤지만 이미 발생했을 피해(탈퇴했는데 취소 안 된 주문)의 실측·복구는 안 했다. `notification-dlq-replay.md` §1 방법을 `user.user.withdrawn.dlq` 에 적용해 배포 환경마다 실 잔존량을 재고, 있으면 `user-withdrawn-not-cancelled.md` §3/§4 로 복구. 0건도 유효한 결과(음성 결과 = 성공, `TASK-BE-537` 과 같은 틀). | order-service, user-service | investigation, data-integrity, ops |
 
 ## in-progress
@@ -84,7 +83,9 @@ _(없음)_
 
 ## review
 
-_(없음)_
+| ID | Title | Service | Tags |
+|---|---|---|---|
+| TASK-BE-546 | **REVIEW (impl PR open)** — `wishlist_items` 유니크 제약을 `(user_id, product_id)` → `(tenant_id, user_id, product_id)` 로 재스코프(V6). V4 가 tenant_id 를 격리축으로 추가하며 제약은 *"unchanged"* 로 남겨 선체크(`...AndTenantId`)와 축이 어긋나 있었다. **🔴 AC-0 재측정으로 도달불가 메커니즘을 산문이 아니라 구조로 확정**: `wishlist_items.user_id` 가 `user_profiles(user_id)` 로 **FK**(V3), 그 컬럼은 globally unique ⇒ 한 wishlist 행은 한 프로필=한 tenant, **두 컬럼 키와 세 컬럼 키가 이 테이블에서 정확히 같은 집합을 거부**. 그래서 런타임 사고 0, **표현력/정합성 결함**(제약 밖에 있는 user_id 발급 규칙이 미래에 바뀌면 조용히 틀림). AC-1=무손실 가정 금지(`RAISE EXCEPTION` 선행, review-service V7 선례). **🔴 AC-2 정직하게**: 진짜 불변식(동일 테넌트 중복 거부 + 다른 상품 허용)은 Testcontainers IT 로 고정(로컬 단독 2/2 GREEN; 전체 스위트는 **호스트 도커 데몬 포화**로 실패 — 내 변경 무관, CI Linux 가 권위 AC-4). **교차 테넌트 허용 케이스는 의도적으로 미테스트** — FK 때문에 그 행을 만들 수 없어 픽스처가 곧 impossible input(`env_test_fixture_impossible_input_proves_nothing`), IT Javadoc 에 사유 기록. Edge 1=`migration-h2` 부재 확인(단일 트리). `TASK-BE-543` AC-2 에서 분리. 분석=Opus 4.8 / 구현=Opus 4.8. [[env_test_fixture_impossible_input_proves_nothing]] [[project_enforcement_straggler_sibling_parity]] | user-service | tenancy, constraint, migration |
 
 ## done
 
