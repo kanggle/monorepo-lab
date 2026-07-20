@@ -24,7 +24,13 @@ import { test, expect } from '@playwright/test';
  * real-customer acme-corp operator. This SUPER_ADMIN spec is left unchanged.
  */
 test.describe('Operator Overview composition (5-domain fan-out)', () => {
-  test('renders 5-card grid with all 5 domains showing ok status', async ({
+  // TASK-PC-FE-251 AC-4 — renamed to what this body actually asserts. The old
+  // title ('renders 5-card grid with all 5 domains showing ok status') described
+  // the MVP-deferred assertion, not the three checks below, so anyone counting
+  // coverage by test name would credit this suite with card-status coverage it
+  // does not have. The per-card `data-status` discriminator IS covered, for the
+  // acme-corp persona, by entitlement-trust-crossdomain.spec.ts.
+  test('overview route resolves and renders for an authenticated SUPER_ADMIN (URL + title + heading only)', async ({
     page,
   }) => {
     await page.goto('/dashboards/overview');
