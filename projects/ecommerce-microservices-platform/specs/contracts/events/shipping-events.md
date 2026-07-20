@@ -17,6 +17,33 @@ Consumers must not depend on fields not defined in this contract.
 }
 ```
 
+### `event_id` semantics (idempotency key)
+
+`event_id` is the consumer-facing idempotency key: both consumers dedupe on it
+(order-service `EventDeduplicationChecker`, notification-service
+`existsByEventId(event_id, tenant_id)`). For `event_id` to actually *be* a
+dedup key it must be **deterministic for one logical transition** — a fresh
+random UUID per publish makes every consumer's dedup a no-op, so two concurrent
+publishes of the same transition slip through as two distinct events
+(TASK-BE-547).
+
+- **`ShippingStatusChanged`** derives `event_id` deterministically from
+  `(shippingId, newStatus)` — `UUID.nameUUIDFromBytes("ShippingStatusChanged:" +
+  shippingId + ":" + newStatus)`. The shipping status machine is strictly linear
+  and forward-only (`PREPARING → SHIPPED → IN_TRANSIT → DELIVERED`, no
+  self-transition, no regression), so a given shipment enters each status **at
+  most once** and each `newStatus` appears in **at most one legitimate event**.
+  Two publishes carrying the same `(shippingId, newStatus)` therefore only ever
+  arise from a concurrent double-transition or an at-least-once retry — exactly
+  the cases dedup must collapse. Since `event_id` is also the `shipping_outbox`
+  row PK, the second concurrent publish collides on that PK and its whole
+  transaction rolls back (surfacing `409 DATA_INTEGRITY_VIOLATION` to the losing
+  caller — see `shipping-api.md`), so the duplicate never even reaches the topic.
+- The two wms-bound fulfillment legs (`FulfillmentRequested`,
+  `ManualShipConfirmRequested`) are unaffected by this convention; their
+  idempotency is defended downstream by the wms consumer (see
+  `fulfillment-events.md`).
+
 ---
 
 ## ShippingStatusChanged

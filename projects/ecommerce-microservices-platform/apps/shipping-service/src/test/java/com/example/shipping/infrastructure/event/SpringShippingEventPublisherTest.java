@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 
 /**
@@ -67,6 +68,55 @@ class SpringShippingEventPublisherTest {
         assertThat(payload).contains("\"tenant_id\":\"tenant-a\"");
         // row event_id reuses the envelope event_id (header == payload id)
         assertThat(payload).contains("\"event_id\":\"" + row.getEventId() + "\"");
+    }
+
+    /**
+     * TASK-BE-547 — the event_id must be a deterministic function of
+     * {@code (shippingId, newStatus)}, not a fresh random UUID. This is what makes the
+     * downstream {@code event_id} dedup actually collapse a concurrent double-transition
+     * (and, because event_id == the outbox PK, what makes the second concurrent publish
+     * PK-collide). A random id per call silently defeats both.
+     */
+    @Test
+    @DisplayName("BE-547: ShippingStatusChanged event_id 는 (shippingId, newStatus) 에서 결정적으로 채번된다")
+    void publishShippingStatusChanged_eventId_isDeterministicPerTransition() {
+        publisher.publishShippingStatusChanged(
+                "tenant-a", "ship-1", "order-1", "user-1",
+                ShippingStatus.PREPARING, ShippingStatus.SHIPPED, "TRK-001", "CJ");
+        String firstId = capturedRow().getEventId().toString();
+
+        // same (shippingId, newStatus) — even with different previousStatus/tracking/carrier/tenant —
+        // must reproduce the same id (a concurrent retry of the SAME transition).
+        reset(outboxRepository);
+        publisher.publishShippingStatusChanged(
+                "tenant-b", "ship-1", "order-1", "user-1",
+                ShippingStatus.SHIPPED, ShippingStatus.SHIPPED, "OTHER-TRK", "HANJIN");
+        String sameTransitionId = capturedRow().getEventId().toString();
+
+        // a genuinely different transition of the same shipment must get a DIFFERENT id
+        // (SHIPPED-notification and DELIVERED-notification must both go through — AC-3).
+        reset(outboxRepository);
+        publisher.publishShippingStatusChanged(
+                "tenant-a", "ship-1", "order-1", "user-1",
+                ShippingStatus.IN_TRANSIT, ShippingStatus.DELIVERED, "TRK-001", "CJ");
+        String differentTransitionId = capturedRow().getEventId().toString();
+
+        // a different shipment reaching the same status must also get a different id
+        reset(outboxRepository);
+        publisher.publishShippingStatusChanged(
+                "tenant-a", "ship-2", "order-2", "user-2",
+                ShippingStatus.PREPARING, ShippingStatus.SHIPPED, "TRK-002", "CJ");
+        String otherShipmentSameStatusId = capturedRow().getEventId().toString();
+
+        assertThat(sameTransitionId)
+                .as("same (shippingId, newStatus) must reproduce the same event_id")
+                .isEqualTo(firstId);
+        assertThat(differentTransitionId)
+                .as("a different newStatus on the same shipment must get a different event_id")
+                .isNotEqualTo(firstId);
+        assertThat(otherShipmentSameStatusId)
+                .as("a different shipment reaching the same status must get a different event_id")
+                .isNotEqualTo(firstId);
     }
 
     @Test

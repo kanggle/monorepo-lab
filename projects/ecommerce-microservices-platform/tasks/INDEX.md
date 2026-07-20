@@ -75,7 +75,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | ID | Title | Service | Tags |
 |---|---|---|---|
 | TASK-BE-390 | **READY — ⏳ 2026-08-01 게이트 (그 전 구현 금지)**. D2-b deprecation window(~2026-08-01) 종료 후 gateway `allowed-issuers`에서 레거시 `iam` issuer 제거 + 테스트 정리. AC-0 verify-then-act(live `iss=iam` 토큰 0 확인) 선행. | gateway-service | code, security, test |
-| TASK-BE-547 | **NEW (READY)** — 동시 `PUT /shippings/{id}/status`(→SHIPPED) 두 건이 상태기계를 둘 다 통과·둘 다 커밋해 `ShippingStatusChanged` 아웃박스 행 2개 ⇒ **고객이 배송 알림을 두 번 받는다**(`TASK-BE-537` 조사의 유일한 실사용 피해, 별 티켓 분리). 원인: `SpringShippingEventPublisher:56` 이 발행마다 `UUID.randomUUID()` 채번 ⇒ 동시 이중 발행이 **서로 다른 event_id** 를 갖고 **두 소비자의 event_id dedup 을 둘 다 통과**한다(order `:40` · notification `:49`). **그런데 order 는 `Order.ship()` 상태기계로 살고 notification 은 무방비**(`:59` 무조건 발송) — 같은 결함을 공유하는데 한쪽만 증상. 후보: **(A)** event_id 를 `(shippingId,newStatus)` 로 결정적 채번(선형 상태기계라 같은 키=경합-중복뿐) — 🔴 단 event_id=아웃박스 PK 라 **PK 충돌→DIVE→409** 로 계약 질문이 옮겨올 수 있음(무변경 아님, 실측 필수) · **(B)** notification 에 전이 가드(공급원 결함 방치 = workaround-becomes-contract) · **(C)** BE-537 `@Version`(가장 옳지만 500→409 계약변경+마이그레이션, 범위 초과 시 STOP). **AC-0=재측정**(채번·두 dedup·notification 무방비). **AC-2=부수효과 1회 단언**(행 존재 아님), **AC-3=정당한 SHIPPED→DELIVERED 는 각각 알림**(순진한 shippingId dedup 회귀), **AC-4=동시 중재자 명시**. 로컬 Testcontainers FLAKY, **CI Linux 권위**. 분석·구현=Opus 4.8. [[feedback_workaround_becomes_the_contract]] [[project_enforcement_straggler_sibling_parity]] | shipping-service, notification-service | concurrency, idempotency, notification |
 
 ## in-progress
 
@@ -83,7 +82,9 @@ _(없음)_
 
 ## review
 
-_(없음)_
+| ID | Title | Service | Tags |
+|---|---|---|---|
+| TASK-BE-547 | **REVIEW (impl PR #2811)** — 동시 `PUT /shippings/{id}/status`(→SHIPPED) 두 건이 `ShippingStatusChanged` 아웃박스 2행을 남겨 고객 알림 2회. **판정 = (A)**: `SpringShippingEventPublisher` 가 event_id 를 `(shippingId,newStatus)` 에서 **결정적 채번**(`UUID.nameUUIDFromBytes`). 선형 상태기계라 같은 키 재발 = 경합/재시도 중복뿐 ⇒ 두 소비자의 기존 event_id dedup 이 되살아남. event_id=아웃박스 PK 라 두 번째 동시 발행이 **PK(23505) 충돌→롤백**(매개자=DB 유니크, 보존 outbox 행=영구 idempotency 키), 패자는 **기존 BE-542 DIVE 백스톱으로 이미 409**(= (C) `@Version` 이 낼 계약과 동일, version/마이그레이션/새 예외 없이). `ManualShipConfirmRequested`(wms 이중 차감)도 덤으로 접힘. **(B) 기각**(order 소비자 결함 방치=workaround-becomes-contract), **(C) 기각**(무겁고 불필요, root 경합 제거는 별 티켓). notification-service 무변경. 계약 선행 갱신(shipping-events.md event_id 규약 + shipping-api.md 409). 테스트: publisher 결정론 단위 + `ConcurrentStatusTransitionIntegrationTest` 특성화 2→1 회귀 가드 전환. 로컬 컴파일+단위 GREEN, 동시성 IT=**CI Linux 권위**. 분석·구현=Opus 4.8. [[feedback_workaround_becomes_the_contract]] [[project_enforcement_straggler_sibling_parity]] | shipping-service | concurrency, idempotency, notification |
 
 ## done
 
