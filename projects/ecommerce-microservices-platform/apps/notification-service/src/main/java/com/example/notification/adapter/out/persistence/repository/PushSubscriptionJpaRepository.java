@@ -22,7 +22,4 @@ interface PushSubscriptionJpaRepository extends JpaRepository<PushSubscriptionJp
      * at most one row; the constraint declared the opposite, and the constraint was right.
      */
     Optional<PushSubscriptionJpaEntity> findByTenantIdAndEndpoint(String tenantId, String endpoint);
-
-    // MUTATION (TASK-BE-540 AC-2 proof) — reverted in the next commit.
-    Optional<PushSubscriptionJpaEntity> findByEndpoint(String endpoint);
 }

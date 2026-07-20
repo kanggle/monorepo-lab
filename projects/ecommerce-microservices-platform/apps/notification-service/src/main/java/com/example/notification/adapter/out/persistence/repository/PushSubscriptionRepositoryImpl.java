@@ -32,8 +32,8 @@ public class PushSubscriptionRepositoryImpl implements PushSubscriptionRepositor
 
     @Override
     public Optional<PushSubscription> findByEndpoint(String endpoint) {
-        // MUTATION (TASK-BE-540 AC-2 proof) — the pre-fix global lookup. Reverted next commit.
-        return jpaRepository.findByEndpoint(endpoint).map(mapper::toDomain);
+        return jpaRepository.findByTenantIdAndEndpoint(TenantContext.currentTenant(), endpoint)
+                .map(mapper::toDomain);
     }
 
     @Override
