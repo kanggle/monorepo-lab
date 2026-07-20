@@ -96,6 +96,56 @@
 
 ---
 
+## Edge 3 수행 결과 (2026-07-20 — 선행 완료)
+
+Edge 3(*"unique 제약이 있다"* ≠ *"중복이 실제로 거부된다"*)를 **표본이 아니라 전수**로 수행했다. ecommerce `apps/**` 의 유니크 제약 전부를 열거하고 각 쓰기 경로를 추적했다. **이 task 의 가장 큰 수확이 맞았고, 남은 (A)/(B)/(C) 판정에 직접 영향을 준다.**
+
+### 결정적 발견 — 중복 거부의 종착지가 대부분 500 이다
+
+`@ExceptionHandler(DataIntegrityViolationException.class)` 보유 현황(형제 대조):
+
+- **보유**: wms `outbound` · scm `procurement` · finance `account` · fan-platform 4개 · ecommerce `auth`·`user`
+- **미보유**: ecommerce 나머지 **9개 서비스** — 잡히지 않은 제약 위반은 각 서비스 자기 `@ExceptionHandler(Exception.class)` 로 낙하해 **500 `INTERNAL_ERROR`**
+
+이 서비스들의 `ConstraintViolationException` 핸들러는 **전부 `jakarta.validation`**(빈 검증)이라 DB 제약과 무관하다. 이름 유사성이 "이미 처리됨" 처럼 보이게 한다.
+
+### 분류 결과
+
+| 제약 | 서비스 | 판정 |
+|---|---|---|
+| `uq_product_variants_option` (`POST /{id}/variants`) | product | **SAFE** — `saveAndFlush`+catch → 409 |
+| `uq_product_variants_option` (`POST /admin/products`) | product | **LEAKS-500** — 같은 제약의 두 번째 쓰기 경로, plain `save`, 미방어 |
+| `uq_orders_idempotency` | order | **RACE-ONLY→500** — catch 가 plain `save` 를 감싸 **죽은 코드** |
+| `uq_seller_commission_rate_tenant_seller` | settlement | **RACE-ONLY→500** |
+| `uq_seller_payout_period_seller` | settlement | **RACE-ONLY→500** |
+| `uq_reviews_user_product_active` | review | **RACE-ONLY→500** + 선체크/제약 범위 불일치 |
+| `uq_template_tenant_type_channel` | notification | **RACE-ONLY→500** (선체크 컬럼=제약 컬럼, 가장 정합) |
+| `uq_push_subscriptions_tenant_endpoint` | notification | **제약에 도달 불가** — 조회가 제약보다 넓어 INSERT 분기에 안 감 |
+| `uq_notifications_event_id` | notification | **제약이 쓰기 모양과 어긋남** — 정상 최초 전송이 위반 → DLQ |
+| `uq_stranded_refund_open_payment` | payment | **SAFE** — `REQUIRES_NEW` 라 flush 가 호출자 try 안에서 일어남 |
+| `uq_wishlist_items_user_product` | user | **SAFE** — 선체크 409 + DIVE 핸들러가 경합까지 커버 |
+| `uq_shippings_order_id` / `uq_stock_reservations_order_id` / `uq_user_profiles_user_id` | shipping·product·user | HTTP 미도달(컨슈머 전용), 컨슈머 내 경합은 재시도/DLQ |
+| `uq_product_variants_sku` | product | **NOT-REACHABLE** — `sku` 를 쓰는 코드 없음 |
+
+### Edge 3 가 (A)/(B)/(C) 판정에 주는 것
+
+**"13 건은 실제로 안전하다" 는 전제가 무너졌다.** 안전한 것은 소수이고, 다수는 **순차 요청에 대해서만** 안전하며 동시 요청에서는 500 이다. 즉 D3 의 *"중복 요청을 결정적으로 거부"* 를 **자연키·상태기계도 만족한다고 인정하는 (A) 안**을 그대로 쓰면, **실제로는 500 을 내는 경로들까지 규정 준수로 인정**하게 된다.
+
+⇒ **(A) 를 고르더라도 "자연키·상태기계"만으로는 부족하고, "동시 요청에서도 4xx 로 거부된다" 는 조건이 문장에 들어가야 한다.** 그래야 Edge 2("아무것도 거부하지 못하는 문장") 를 피한다. 이것이 Edge 3 의 판정 기여다.
+
+### 파생 티켓 (이 task 는 여전히 코드 변경 0)
+
+Edge 3 의 수확은 **전부 별 task 로 분리**했다 — 이 task 는 판정 문서로 남는다:
+
+- `TASK-BE-539` — `uq_notifications_event_id` 모양 오류 → 정상 이벤트 DLQ 유실
+- `TASK-BE-540` — 선체크 범위 ≠ 제약 범위 2건 (review · notification push)
+- `TASK-BE-541` — 지연 flush 로 죽은 중복 방어 catch + 이를 가려 온 불가능 픽스처 테스트
+- `TASK-BE-542` — 레지스트리가 선언한 `DATA_INTEGRITY_VIOLATION` 409 를 ecommerce 9개 서비스가 미구현
+
+**미검증으로 남긴 것**: review 사례의 교차 테넌트 도달성(같은 `(user_id, product_id)` 가 두 테넌트에 존재 가능한지)은 재지 않았다 — `TASK-BE-540` AC-0 이 가른다. 도달 불가면 그 건은 "500 결함" 이 아니라 "정합성 결함" 으로 강등된다.
+
+---
+
 ## Failure Scenarios
 
 - **F1 — 이 task 가 조용히 ADR 을 고친다.** ACCEPT 게이트 위반. 제안까지가 범위다.
@@ -119,7 +169,7 @@
 - [ ] (A)/(B)/(C) 판정 + 근거
 - [ ] (A)/(C) 시 제안 문장 확정 형태
 - [ ] 제안 문장을 20 개 전부에 대조 (AC-3)
-- [ ] NATURAL-KEY 표본 3 건 실거동 확인 (Edge 3)
+- [x] **NATURAL-KEY 표본 실거동 확인 (Edge 3) — 2026-07-20 선행 수행 완료. 아래 § Edge 3 수행 결과 참조.**
 - [ ] 후속 개정 task 형태 기록 (ACCEPT 게이트 절차 포함)
 - [ ] 문서만 — 코드·ADR 본문 diff 0
 
