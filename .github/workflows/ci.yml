@@ -1512,7 +1512,10 @@ jobs:
     #
     # A SEPARATE job from the 4-module WMS lane above so the per-stack
     # Testcontainers footprint is contention-isolated: MONO-331's flake was
-    # intra-runner (all stacks booting on one 2-CPU/7GB runner). Same gating as the
+    # intra-runner (all stacks booting on one runner — measured 4 CPU / 15 GiB,
+    # 2026-07-20, TASK-MONO-445). The box size was never the argument: contention is
+    # several Testcontainers stacks racing at once, so the measured runner is not
+    # grounds to un-isolate this lane. Same gating as the
     # WMS lane (push / libs / workflows / wms).
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&

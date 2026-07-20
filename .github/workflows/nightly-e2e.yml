@@ -214,7 +214,10 @@ jobs:
     # webServer starts web-store via `pnpm start` pointing at the gateway on
     # localhost:18080 via the docker-compose.ci.yml overlay (TASK-MONO-024).
     # Observability services (Jaeger, Prometheus, AlertManager, Grafana, Loki,
-    # Promtail) are excluded to fit within the runner's 7 GB RAM. OTEL
+    # Promtail) are excluded to keep the stack inside the runner's RAM (measured
+    # 4 CPU / 15 GiB, 2026-07-20, TASK-MONO-445). The exclusion stands on its own
+    # regardless of the box: the observability set buys nothing for these
+    # assertions. OTEL
     # exporters in the backend services will log connection errors against the
     # absent Jaeger endpoint; these are non-blocking and do not affect test
     # correctness.
@@ -872,7 +875,8 @@ jobs:
   # frontend-e2e-fullstack pattern (TASK-MONO-014 / TASK-MONO-024 /
   # TASK-MONO-045 reference).
   #
-  # Service set (within the 7 GB runner budget):
+  # Service set (kept deliberately minimal; runner measured 4 CPU / 15 GiB,
+  # 2026-07-20, TASK-MONO-445 — a larger box is not a reason to widen the set):
   #   IAM auth-service + account-service + admin-service
   #   finance-platform account-service
   #   console-bff + console-web

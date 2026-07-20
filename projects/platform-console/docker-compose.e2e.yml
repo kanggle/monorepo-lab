@@ -37,8 +37,9 @@
 #     (GAP community / membership-service used to be listed here as "not
 #      federated by the console v1." — both were RETIRED by TASK-MONO-394.)
 #   - Observability stack  (Jaeger / Prometheus / Grafana / Loki / Promtail —
-#                           7 GB runner memory budget; OTEL exporter errors are
-#                           non-blocking.)
+#                           kept out of the runner's memory budget; runner
+#                           measured 4 CPU / 15 GiB, 2026-07-20, TASK-MONO-445.
+#                           OTEL exporter errors are non-blocking.)
 #
 # Usage:
 #   docker compose -f docker-compose.e2e.yml up -d --build
@@ -151,8 +152,10 @@ services:
   # canonical reference for image + env wiring).
   # We chose against that to honor the overlay's documented scope discipline
   # (the comment block at the top of this file: `Excluded (deliberately —
-  # mirrors ecommerce CI overlay scope discipline)`) and the 7 GB runner memory
-  # budget — paying ~256 MB RAM + ~30–60 s boot for an unused broker on every
+  # mirrors ecommerce CI overlay scope discipline)`) and the runner memory
+  # budget (measured 4 CPU / 15 GiB, 2026-07-20, TASK-MONO-445). The argument
+  # rests on the broker being *unused*, not on the box being small
+  # — paying ~256 MB RAM + ~30–60 s boot for an unused broker on every
   # nightly is dead weight. The day an e2e spec needs event observation, swap
   # the `image:` + `command:` lines below for the GAP KRaft config and flip
   # `KAFKA_BOOTSTRAP_SERVERS` from `127.0.0.1:9999` to `kafka:9092`. One file,
