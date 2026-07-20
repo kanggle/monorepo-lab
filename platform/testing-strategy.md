@@ -194,7 +194,11 @@ These two failures are invisible to Docker-free `:check` (unit + slice load no S
 
 ## Integration lane serialisation (CI resource contention)
 
-A CI job that runs the `integrationTest` task of **several modules in one Gradle invocation** boots several Testcontainers stacks at once, because the root `gradle.properties` sets `org.gradle.parallel=true`. On a small runner (2 CPU / 7 GB) that can exhaust memory and CPU and **sever the containers' DB / cache connections mid-run**. Whichever module loses the race then fails — as a *cluster* of unrelated-looking assertion failures, which is why the failure does not look like contention at all.
+A CI job that runs the `integrationTest` task of **several modules in one Gradle invocation** boots several Testcontainers stacks at once, because the root `gradle.properties` sets `org.gradle.parallel=true`. That can exhaust memory and CPU and **sever the containers' DB / cache connections mid-run**. Whichever module loses the race then fails — as a *cluster* of unrelated-looking assertion failures, which is why the failure does not look like contention at all.
+
+**The runner, measured** (2026-07-20, `TASK-MONO-445` — two independent runs, one `ci.yml` job and one `federation-hardening-e2e.yml` job): **4 CPU / 15 GiB** on `ubuntu-latest`. **Quote it with its date.** A runner spec is an observation about a fleet at a point in time, not a constant — this paragraph previously read *"On a small runner (2 CPU / 7 GB)"*, which is the **private**-repo figure. This repository is public. The wrong number had gone unchecked long enough to be repeated in five other files, while three other files simultaneously said 16 GB; nothing reconciled them because no job ever printed `nproc`.
+
+**The size was never the argument, and the corrected — larger — figure is not grounds to unserialise a lane.** Serialisation is earned by the starvation signature in a lane's *own* history (see the rule below), not by arithmetic against the box. If anything a bigger box makes the contention story more legible: at the same date the committed federation stack measured 24 containers / 6.87 GiB with 7.1 GiB still available — i.e. ~45% of the machine already spent before a Gradle lane starts.
 
 Serialising the lane (`--no-parallel`, exposed as the `gradle-args` input of `.github/workflows/_integration.yml`) runs one stack at a time and removes the contention.
 
