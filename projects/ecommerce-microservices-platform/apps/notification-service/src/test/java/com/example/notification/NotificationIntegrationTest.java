@@ -1,6 +1,8 @@
 package com.example.notification;
 
 import com.example.notification.adapter.in.event.OrderPlacedEventConsumer;
+import com.example.notification.adapter.in.event.PaymentCompletedEventConsumer;
+import com.example.notification.domain.tenant.TenantContext;
 import com.example.notification.application.port.out.NotificationRepository;
 import com.example.notification.application.port.out.NotificationSender;
 import com.example.notification.application.port.out.TemplateRepository;
@@ -85,6 +87,9 @@ class NotificationIntegrationTest {
 
     @Autowired
     private OrderPlacedEventConsumer orderPlacedEventConsumer;
+
+    @Autowired
+    private PaymentCompletedEventConsumer paymentCompletedEventConsumer;
 
     @Autowired
     private NotificationRepository notificationRepository;
@@ -173,6 +178,157 @@ class NotificationIntegrationTest {
                 .filter(n -> n.getEventId().equals(orderEventId))
                 .count();
         assertThat(orderPlacedCount).isEqualTo(1);
+    }
+
+    /**
+     * TASK-BE-539 AC-1/AC-2 — a single event fans out to one row per <em>sendable</em> channel.
+     *
+     * <p>{@code NotificationSendService} loops {@code NotificationChannel.values()} and saves one
+     * {@code Notification} per channel that has both a template and a registered sender, all
+     * carrying the same {@code event_id}. {@code uq_notifications_event_id} as defined by V4
+     * permits only one row per {@code event_id}, so the <em>second</em> channel's insert violates
+     * it at commit-time flush — on a first delivery, not a redelivery. The whole transaction rolls
+     * back, {@code existsByEventId} is therefore still empty on every retry, and the event burns
+     * all three attempts before landing in the DLQ with no send record.
+     *
+     * <p>This test must be RED against the V4 index shape (AC-2). If it passes before the V8
+     * migration, it has failed to reproduce the firing condition — most likely because only one
+     * channel actually resolved a sender or a template.
+     */
+    @Test
+    @DisplayName("BE-539: 한 이벤트가 발송 가능한 채널마다 1행씩 커밋한다 (V8 인덱스 이전에는 RED)")
+    void multiChannelEvent_commitsOneRowPerSendableChannel() throws Exception {
+        seedTemplate(TemplateType.PAYMENT_COMPLETED, NotificationChannel.EMAIL,
+                "Payment {{orderId}}", "Paid {{amount}}.");
+        seedTemplate(TemplateType.PAYMENT_COMPLETED, NotificationChannel.PUSH,
+                "결제 완료", "{{amount}} 결제 완료.");
+
+        String userId = "user-multichannel-" + UUID.randomUUID();
+        String eventId = UUID.randomUUID().toString();
+
+        paymentCompletedEventConsumer.onMessage(paymentCompletedEventJson(eventId, userId, null));
+
+        PageResult<Notification> notifications =
+                notificationRepository.findByUserId(userId, new PageQuery(0, 100, null, null));
+
+        // Asserted as a set, not a count: a count of 2 would also pass if both rows were EMAIL.
+        assertThat(notifications.content())
+                .extracting(Notification::getChannel)
+                .containsExactlyInAnyOrder(NotificationChannel.EMAIL, NotificationChannel.PUSH);
+        assertThat(notifications.content())
+                .allSatisfy(n -> assertThat(n.getEventId()).isEqualTo(eventId));
+    }
+
+    /**
+     * TASK-BE-539 AC-3 — the V8 index must not weaken redelivery dedup.
+     *
+     * <p>F1 in the task: widening the index is not the same as dropping it. The pre-check at
+     * {@code NotificationSendService:52} still has to short-circuit a redelivered event, and the
+     * row count has to stay at one-per-channel rather than doubling.
+     */
+    @Test
+    @DisplayName("BE-539 AC-3: 동일 event_id 재전송은 채널당 1행을 유지한다")
+    void multiChannelEvent_redelivery_doesNotAddRows() throws Exception {
+        seedTemplate(TemplateType.PAYMENT_COMPLETED, NotificationChannel.EMAIL,
+                "Payment {{orderId}}", "Paid {{amount}}.");
+        seedTemplate(TemplateType.PAYMENT_COMPLETED, NotificationChannel.PUSH,
+                "결제 완료", "{{amount}} 결제 완료.");
+
+        String userId = "user-redelivery-" + UUID.randomUUID();
+        String eventId = UUID.randomUUID().toString();
+
+        paymentCompletedEventConsumer.onMessage(paymentCompletedEventJson(eventId, userId, null));
+        paymentCompletedEventConsumer.onMessage(paymentCompletedEventJson(eventId, userId, null));
+
+        PageResult<Notification> notifications =
+                notificationRepository.findByUserId(userId, new PageQuery(0, 100, null, null));
+        assertThat(notifications.content())
+                .extracting(Notification::getChannel)
+                .containsExactlyInAnyOrder(NotificationChannel.EMAIL, NotificationChannel.PUSH);
+    }
+
+    /**
+     * TASK-BE-539 AC-4 — the same {@code event_id} arriving for two tenants must not collide.
+     *
+     * <p>F2 in the task: adding {@code channel} but not {@code tenant_id} leaves the pre-check
+     * (tenant-scoped, {@code NotificationSendService:52}) and the constraint (global under V4)
+     * disagreeing about scope — the same defect class as TASK-BE-540. Event ids are only unique
+     * per producer, so two tenants can legitimately carry the same one.
+     */
+    @Test
+    @DisplayName("BE-539 AC-4: 서로 다른 테넌트의 동일 event_id 는 각자 자기 행을 갖는다")
+    void sameEventIdAcrossTenants_eachTenantKeepsItsOwnRows() throws Exception {
+        String otherTenant = "omni-corp";
+        // Both channels are seeded for both tenants deliberately. An earlier revision seeded
+        // only EMAIL and asserted one row per tenant, which made the expectation depend on
+        // whether a sibling test had already seeded the default tenant's PUSH template —
+        // it had, so the assertion read 2 and the test failed for a reason that had nothing
+        // to do with tenant isolation. Asserting the channel *set* is order-independent and
+        // also proves the fan-out happens per tenant rather than once globally.
+        for (String tenant : List.of(TenantContext.DEFAULT_TENANT_ID, otherTenant)) {
+            seedTemplateFor(tenant, TemplateType.PAYMENT_COMPLETED,
+                    NotificationChannel.EMAIL, "Payment {{orderId}}", "Paid {{amount}}.");
+            seedTemplateFor(tenant, TemplateType.PAYMENT_COMPLETED,
+                    NotificationChannel.PUSH, "결제 완료", "{{amount}} 결제 완료.");
+        }
+
+        String userId = "user-crosstenant-" + UUID.randomUUID();
+        String sharedEventId = UUID.randomUUID().toString();
+
+        paymentCompletedEventConsumer.onMessage(
+                paymentCompletedEventJson(sharedEventId, userId, TenantContext.DEFAULT_TENANT_ID));
+        paymentCompletedEventConsumer.onMessage(
+                paymentCompletedEventJson(sharedEventId, userId, otherTenant));
+
+        for (String tenant : List.of(TenantContext.DEFAULT_TENANT_ID, otherTenant)) {
+            assertThat(notificationsOfTenant(tenant, userId))
+                    .as("tenant %s keeps its own rows for the shared event id", tenant)
+                    .extracting(Notification::getChannel)
+                    .containsExactlyInAnyOrder(NotificationChannel.EMAIL, NotificationChannel.PUSH);
+        }
+    }
+
+    private String paymentCompletedEventJson(String eventId, String userId, String tenantId)
+            throws Exception {
+        return objectMapper.writeValueAsString(Map.of(
+                "event_id", eventId,
+                "event_type", "PaymentCompleted",
+                "occurred_at", "2026-07-20T00:00:00Z",
+                "source", "payment-service",
+                "tenant_id", tenantId != null ? tenantId : TenantContext.DEFAULT_TENANT_ID,
+                "payload", Map.of(
+                        "orderId", "order-" + UUID.randomUUID(),
+                        "userId", userId,
+                        "amount", 50000,
+                        "paidAt", "2026-07-20T00:00:00Z"
+                )
+        ));
+    }
+
+    private void seedTemplate(TemplateType type, NotificationChannel channel, String subject, String body) {
+        seedTemplateFor(TenantContext.DEFAULT_TENANT_ID, type, channel, subject, body);
+    }
+
+    /** Templates are per-(tenant, type, channel); {@code create} reads the tenant off the context. */
+    private void seedTemplateFor(String tenantId, TemplateType type, NotificationChannel channel,
+                                 String subject, String body) {
+        try {
+            TenantContext.set(tenantId);
+            if (templateRepository.findByTypeAndChannel(type, channel, tenantId).isEmpty()) {
+                templateRepository.save(NotificationTemplate.create(type, channel, subject, body));
+            }
+        } finally {
+            TenantContext.clear();
+        }
+    }
+
+    private List<Notification> notificationsOfTenant(String tenantId, String userId) {
+        try {
+            TenantContext.set(tenantId);
+            return notificationRepository.findByUserId(userId, new PageQuery(0, 100, null, null)).content();
+        } finally {
+            TenantContext.clear();
+        }
     }
 
     @Test

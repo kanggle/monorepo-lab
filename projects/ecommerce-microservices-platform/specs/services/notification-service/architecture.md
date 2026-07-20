@@ -111,7 +111,10 @@ Key domain concepts:
 - notification-service must NOT own user profile or order data
 - Notifications must respect user channel preferences (opt-out channels skipped)
 - Failed notifications must be retried according to retry policy
-- Duplicate event consumption must not produce duplicate notifications (idempotency via event_id)
+- Duplicate event consumption must not produce duplicate notifications — idempotency is scoped to
+  `(tenant_id, event_id, channel)`, not `event_id` alone. One event legitimately produces one row per
+  sendable channel, all sharing the same `event_id`; a constraint on `event_id` alone rejects a correct
+  first delivery (TASK-BE-539)
 
 ## Integration Rules
 - Event consumption must follow published event contracts
