@@ -1,8 +1,8 @@
 # ADR-MONO-052 — Transport is scm's context; wms owns the dock, not the road
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 **Date:** 2026-07-20
-**History:** PROPOSED 2026-07-20 (TASK-MONO-452)
+**History:** PROPOSED 2026-07-20 (TASK-MONO-452) · ACCEPTED 2026-07-20 (TASK-MONO-453 — user-explicit ADR-naming intent "ADR-MONO-052 ACCEPTED")
 **Decision driver:** User questions (2026-07-20) — "멀티창고고 서로 이동도 가능하고 외부로부터 들어오는것도 가능해?" → "창고 간 이동(출고→입고 사가) 관리는 누가해?" → "erp나 scm이 아니라 wms에서 관리하는거야?" → "tms 옮기는거랑 관련있어?" → "지금 3pl을 연동하는건 wms야?" → "외부 운송회사에 물건 보낼때 무슨 플랫폼/서비스에서 해?" → "내 프로젝트에서 플랫폼 급으로 tms를 만들고 거기서 외부 tms를 연동하는건?". Five distinct capabilities were found to be unowned or ambiguously owned, all of them transport-side. This ADR maps them once.
 **Supersedes:** none.
 **Related:** [ADR-MONO-050](ADR-MONO-050-scm-procurement-wms-inbound-expected.md) §D4 (the single sentence that currently carries this whole design — "carrier/3PL execution lives in scm's v2-deferred `logistics-service`"), [ADR-MONO-027](ADR-MONO-027-wms-scm-replenishment-loop.md) §D1 (the fact-event seam, and the rejection of synchronous cross-project REST that D5 here inherits), [ADR-MONO-022](ADR-MONO-022-ecommerce-wms-fulfillment-integration.md) (precedent: a non-wms domain triggers wms physical work without wms acquiring that domain's logic), [ADR-MONO-051](ADR-MONO-051-master-data-stays-federated.md) (same shape — naming an undeclared arrangement and attaching a tripwire), [ADR-MONO-002](ADR-MONO-002-phase-4-template-extraction-trigger.md) §D4 + [ADR-MONO-016](ADR-MONO-016-erp-platform-bootstrap.md) (the "erp is the final domain" declaration that D6 declines to reopen).
@@ -242,5 +242,20 @@ Per repo practice, a prior count is a hypothesis, not a source — recount rathe
 | Date | Status | Note |
 |---|---|---|
 | 2026-07-20 | PROPOSED | Authored under TASK-MONO-452 in answer to the user's 2026-07-20 question series. |
+| 2026-07-20 | ACCEPTED | Flipped under TASK-MONO-453 on the user's exact-form instruction **"ADR-MONO-052 ACCEPTED"**. |
 
-**ACCEPT gate.** This ADR is PROPOSED and authorises nothing. PROPOSED → ACCEPTED requires user-explicit ADR-naming intent in a separate task, per [`platform/architecture-decision-rule.md`](../../platform/architecture-decision-rule.md) § The ACCEPTED Gate; a bare "진행" does not clear it, and the author cannot self-ACCEPT. D6 in particular declines to reopen a prior user decision (§1.7) and must not be read as having reopened it by being written down.
+**ACCEPT gate — cleared, not bypassed.** Authoring and authorisation were separate acts by separate parties: TASK-MONO-452 wrote this ADR and left it PROPOSED, the user named it explicitly, and TASK-MONO-453 performed the flip. No self-ACCEPT occurred.
+
+The gate is worth recording because it **visibly bit**. The turn before the accepting one was a bare **"ACCEPT"**, and that did not clear it — [`platform/architecture-decision-rule.md`](../../platform/architecture-decision-rule.md):43-46 excludes bare affirmative tokens *"even when it replies directly to the message that proposed it, and even when the intent seems obvious from context"*. That clause forecloses exactly the inference available at the time (only one ADR was under discussion, so the referent was unambiguous). The rule's own reason is attributability (:53-56): a gate that any affirmative noise can open launders the author's preference into an accepted decision. It held here.
+
+**What acceptance binds.** Acceptance authorises **no implementation** — §3 is "None", and all four §D8 triggers were unfired at ratification. What becomes binding is the allocation: **D1** (transport is scm's context; the line is custody), **D3** (a cross-warehouse move is two legs, and no atomic cross-warehouse transfer will exist), **D4** (in-transit lives in neither warehouse; wms gains no `IN_TRANSIT`), **D5** (the wms↔transport seam is a fact event, never a synchronous call), and **D6** (no `tms-platform`).
+
+Three items are **not** unconditionally accepted, and reading them as such would misstate the decision:
+
+- **D7 is conditional** — the TMS adapter's stay in wms expires when a receiver exists. It is an interim, not an endorsement of its current home.
+- **D8 is a trigger, not a backlog item** — it produces tasks when it fires, and no earlier.
+- **D2's ① row** (redistribution decision → `demand-planning-service`) rests on analogy to [ADR-MONO-027](ADR-MONO-027-wms-scm-replenishment-loop.md), not on any existing spec. §5 names it the weakest allocation here; acceptance does not upgrade its evidence.
+
+D6 in particular **declines to reopen** a prior user decision (§1.7) rather than re-deciding it. Being written down and accepted does not make it a fresh reversal-eligible choice; reopening still requires superseding [ADR-MONO-002](ADR-MONO-002-phase-4-template-extraction-trigger.md) §D4 and [ADR-MONO-016](ADR-MONO-016-erp-platform-bootstrap.md).
+
+**Amending this ADR.** What was authorised is the text as it was read. Later improvements — including any strengthening of D2 ①'s basis, or a correction to [inventory-service/architecture.md:589-590](../../projects/wms-platform/specs/services/inventory-service/architecture.md#L589-L590) once §7's promotion candidate is measured — go through an amendment section (the [ADR-MONO-050](ADR-MONO-050-scm-procurement-wms-inbound-expected.md) §7 pattern), not an in-place rewrite of §1–§6.
