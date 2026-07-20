@@ -1,7 +1,7 @@
 # TASK-MONO-441 — audit which agent-memory rules are genuinely absent from canon (promote only those)
 
 - **Type**: TASK-MONO (canon hygiene — audit-first, mostly-negative expected)
-- **Status**: review
+- **Status**: done
 - **Scope**: `platform/testing-strategy.md`, `platform/git-workflow-policy.md`, `CLAUDE.md`, `rules/`
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (judgement per candidate; the work is verification, not writing)
 
