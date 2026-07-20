@@ -1,5 +1,6 @@
 package com.example.finance.account.presentation.advice;
 
+import com.example.common.persistence.DataIntegrityViolations;
 import com.example.finance.account.domain.error.FinanceDomainException;
 import com.example.finance.account.domain.money.Currency;
 import com.example.finance.account.domain.money.Money;
@@ -153,9 +154,33 @@ public class GlobalExceptionHandler {
                 "Concurrent modification detected. Please retry.");
     }
 
+    /**
+     * DB constraint violation that no more specific handler claimed. Selective mapping
+     * (TASK-MONO-450): a UNIQUE violation is a client-visible conflict → 409
+     * {@code CONCURRENT_MODIFICATION} — this service's registered code for a duplicate /
+     * concurrency conflict (account-api.md § Error code → HTTP). Finance deliberately uses
+     * {@code CONCURRENT_MODIFICATION} here, NOT the fleet's {@code DATA_INTEGRITY_VIOLATION}
+     * or {@code CONFLICT}; that is an intentional domain choice and is kept unchanged.
+     *
+     * <p>Every OTHER integrity violation (FK / NOT NULL / CHECK) is a SERVER defect, not a
+     * client conflict, so it is deliberately surfaced as a loud 500 rather than hidden as a
+     * 409 — mapping it to 409 would report a server bug as a client conflict and make the
+     * defect disappear from alerting (TASK-MONO-450 § "왜 무조건 409 가 틀렸다"). This mirrors
+     * ecommerce's TASK-BE-542 reference handler.
+     *
+     * <p>The non-unique arm cannot route through {@link #respond}: {@code INTERNAL_ERROR} is
+     * deliberately absent from {@link #STATUS_BY_CODE} (its {@code getOrDefault} fallback would
+     * turn the 500 into a 422), so the 500 is built directly, exactly like {@link #handleGeneral}.
+     */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiErrorBody> handleIntegrity(DataIntegrityViolationException e) {
-        return respond("CONCURRENT_MODIFICATION", "Data integrity conflict");
+        if (DataIntegrityViolations.isUniqueViolation(e)) {
+            log.warn("unique constraint violation -> 409 CONCURRENT_MODIFICATION", e);
+            return respond("CONCURRENT_MODIFICATION", "Data integrity conflict");
+        }
+        log.error("non-unique data integrity violation (FK / NOT NULL / CHECK) -> 500", e);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiErrorBody.of("INTERNAL_ERROR", "An unexpected error occurred"));
     }
 
     @ExceptionHandler(IllegalStateException.class)

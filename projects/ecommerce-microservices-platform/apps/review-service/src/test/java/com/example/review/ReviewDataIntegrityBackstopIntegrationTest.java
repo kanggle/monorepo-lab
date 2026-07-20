@@ -28,7 +28,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * TASK-BE-542 AC-5 layer 2 — verifies against a REAL PostgreSQL that a genuine unique
  * violation carries SQLSTATE {@code 23505} all the way through Hibernate → Spring's
- * exception translation → {@code GlobalExceptionHandler.isUniqueViolation}. Every other
+ * exception translation → {@code DataIntegrityViolations.isUniqueViolation} (promoted to
+ * {@code libs/java-common} by TASK-MONO-450; the backstop handler now delegates to it). Every other
  * TASK-BE-542 test synthesises the {@code SQLException("…", "23505")} by hand and so
  * assumes exactly the fact that matters; this one does not.
  *

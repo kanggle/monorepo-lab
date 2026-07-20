@@ -111,10 +111,13 @@ class WishlistControllerTest {
         }
 
         @Test
-        @DisplayName("DataIntegrityViolationException이 발생하면 409 DATA_INTEGRITY_VIOLATION을 반환한다")
-        void addItem_dataIntegrityViolation_returns409() throws Exception {
+        @DisplayName("unique 위반(SQLSTATE 23505)은 409 DATA_INTEGRITY_VIOLATION을 반환한다")
+        void addItem_uniqueViolation_returns409() throws Exception {
             UUID productId = UUID.randomUUID();
-            given(wishlistService.addItem(any())).willThrow(new DataIntegrityViolationException("FK violation"));
+            // A duplicate is a client-visible conflict — the backstop's 409 case (TASK-MONO-450 selective mapping).
+            DataIntegrityViolationException unique = new DataIntegrityViolationException(
+                    "duplicate key", new java.sql.SQLException("duplicate key value", "23505"));
+            given(wishlistService.addItem(any())).willThrow(unique);
 
             mockMvc.perform(post("/api/wishlists")
                             .header("X-User-Id", USER_ID.toString())
@@ -122,6 +125,24 @@ class WishlistControllerTest {
                             .content("{\"productId\":\"" + productId + "\"}"))
                     .andExpect(status().isConflict())
                     .andExpect(jsonPath("$.code").value("DATA_INTEGRITY_VIOLATION"));
+        }
+
+        @Test
+        @DisplayName("non-unique 무결성 위반(FK/NOT NULL)은 500 INTERNAL_ERROR을 반환한다 — 서버 결함은 숨기지 않는다")
+        void addItem_nonUniqueViolation_returns500() throws Exception {
+            UUID productId = UUID.randomUUID();
+            // An FK / NOT NULL violation is a server defect, not a client conflict: it must stay a loud 500
+            // rather than be masked as a 409 (TASK-MONO-450). No SQLSTATE 23505 in the chain → not unique.
+            DataIntegrityViolationException fk = new DataIntegrityViolationException(
+                    "FK violation", new java.sql.SQLException("foreign key violation", "23503"));
+            given(wishlistService.addItem(any())).willThrow(fk);
+
+            mockMvc.perform(post("/api/wishlists")
+                            .header("X-User-Id", USER_ID.toString())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"productId\":\"" + productId + "\"}"))
+                    .andExpect(status().isInternalServerError())
+                    .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"));
         }
 
         @Test

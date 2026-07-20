@@ -374,7 +374,7 @@ returns the previously-stored ASN with the original receivedAt.
 | `PO_NOT_FOUND` | 404 | PO does not exist (or belongs to another tenant) |
 | `SUPPLIER_NOT_FOUND` | 404 | Supplier id unknown |
 | `CONCURRENT_MODIFICATION` | 409 | Optimistic-lock conflict (concurrent modification of the same aggregate — consumer may retry) |
-| `CONFLICT` | 409 | DB integrity violation (FK / unique constraint — consumer should NOT retry without state change) |
+| `CONFLICT` | 409 | DB **unique**-constraint violation (SQLSTATE 23505 — consumer should NOT retry without state change). FK / NOT NULL / CHECK violations are server defects and surface as `INTERNAL_ERROR` (500), not 409 (TASK-MONO-450). |
 | `PO_STATUS_TRANSITION_INVALID` | 422 | Requested transition forbidden by `PoStatusMachine` (response includes `details: { from, to, actor }`) |
 | `PO_ALREADY_CONFIRMED` | 422 | Mutation attempted on a PO past CONFIRMED that requires DRAFT semantics (e.g., line addition) |
 | `PO_QUANTITY_EXCEEDED` | 422 | Supplier ack quantity exceeds ordered |
@@ -383,7 +383,7 @@ returns the previously-stored ASN with the original receivedAt.
 | `CATALOG_SKU_UNKNOWN` | 422 | SKU not found in supplier's catalog (S8 future use) |
 | `ILLEGAL_STATE` | 422 | Aggregate invariant violation surfaced at controller boundary |
 | `SUPPLIER_UNAVAILABLE` | 503 | Supplier circuit OPEN, retries exhausted, or bulkhead saturation |
-| `INTERNAL_ERROR` | 500 | Unhandled exception |
+| `INTERNAL_ERROR` | 500 | Unhandled exception, or a non-unique DB integrity violation (FK / NOT NULL / CHECK — a server defect, kept loud) |
 
 ---
 

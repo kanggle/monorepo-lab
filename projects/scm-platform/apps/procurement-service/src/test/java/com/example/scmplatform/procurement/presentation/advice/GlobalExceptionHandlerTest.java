@@ -25,6 +25,8 @@ import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.sql.SQLException;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -168,11 +170,33 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("DataIntegrityViolationException → 409 CONFLICT")
-    void dataIntegrity() {
+    @DisplayName("Unique violation (SQLSTATE 23505) → 409 CONFLICT")
+    void dataIntegrityUniqueViolation() {
+        // Real SQLException in the cause chain (not a mock): the discriminant walks
+        // the chain for SQLSTATE 23505. The reachability of this SQLSTATE through
+        // Spring's exception translation from a real Postgres is proven in
+        // DataIntegrityViolationIntegrationTest.
         ResponseEntity<ApiErrorBody> r = handler.handleIntegrity(
-                new DataIntegrityViolationException("unique violation"));
+                new DataIntegrityViolationException("dup key",
+                        new SQLException("duplicate key value violates unique constraint", "23505")));
         assertStatus(r, HttpStatus.CONFLICT, "CONFLICT");
+    }
+
+    @Test
+    @DisplayName("FK violation (SQLSTATE 23503, non-unique) → 500 INTERNAL_ERROR")
+    void dataIntegrityForeignKeyViolation() {
+        ResponseEntity<ApiErrorBody> r = handler.handleIntegrity(
+                new DataIntegrityViolationException("fk violation",
+                        new SQLException("violates foreign key constraint", "23503")));
+        assertStatus(r, HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR");
+    }
+
+    @Test
+    @DisplayName("Data integrity with no SQLState in chain → 500 INTERNAL_ERROR (fail loud, not masked as 409)")
+    void dataIntegrityNoSqlState() {
+        ResponseEntity<ApiErrorBody> r = handler.handleIntegrity(
+                new DataIntegrityViolationException("some integrity error"));
+        assertStatus(r, HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR");
     }
 
     // ---------------- 400: BAD_REQUEST family ----------------

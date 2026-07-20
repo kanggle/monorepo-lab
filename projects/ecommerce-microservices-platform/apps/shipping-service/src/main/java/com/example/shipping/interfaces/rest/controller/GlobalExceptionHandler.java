@@ -1,5 +1,6 @@
 package com.example.shipping.interfaces.rest.controller;
 
+import com.example.common.persistence.DataIntegrityViolations;
 import com.example.web.dto.ErrorResponse;
 import com.example.web.exception.AccessDeniedException;
 import com.example.shipping.application.exception.UnauthorizedShippingAccessException;
@@ -23,7 +24,6 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
-import java.sql.SQLException;
 import java.util.Set;
 
 @Slf4j
@@ -146,7 +146,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException e) {
-        if (isUniqueViolation(e)) {
+        if (DataIntegrityViolations.isUniqueViolation(e)) {
             // A duplicate is a client-visible conflict: the registry's declared catch-all.
             log.warn("Unique constraint violation → 409", e);
             return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -164,21 +164,5 @@ public class GlobalExceptionHandler {
         log.error("Unexpected error", e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ErrorResponse.of("INTERNAL_ERROR", "An unexpected error occurred"));
-    }
-
-    /**
-     * SQLSTATE 23505 = unique_violation (Postgres, H2). Walks the cause chain rather than
-     * matching on the exception message: Spring maps EVERY Hibernate ConstraintViolationException
-     * to a plain DataIntegrityViolationException (verified in spring-orm 6.2.1 —
-     * DuplicateKeyException comes only from NonUniqueObjectException, never from a DB unique
-     * violation), so the exception TYPE cannot discriminate and the message is vendor-dependent.
-     */
-    private static boolean isUniqueViolation(Throwable e) {
-        for (Throwable t = e; t != null && t != t.getCause(); t = t.getCause()) {
-            if (t instanceof SQLException sql && "23505".equals(sql.getSQLState())) {
-                return true;
-            }
-        }
-        return false;
     }
 }

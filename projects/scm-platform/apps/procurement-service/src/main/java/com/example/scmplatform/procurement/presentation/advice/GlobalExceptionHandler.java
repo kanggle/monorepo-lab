@@ -1,5 +1,6 @@
 package com.example.scmplatform.procurement.presentation.advice;
 
+import com.example.common.persistence.DataIntegrityViolations;
 import com.example.scmplatform.procurement.domain.error.AsnOverreceiptException;
 import com.example.scmplatform.procurement.domain.error.CatalogSkuUnknownException;
 import com.example.scmplatform.procurement.domain.error.IdempotencyKeyMismatchException;
@@ -40,10 +41,12 @@ import java.util.Set;
  *
  * <ul>
  *   <li>404 — PO_NOT_FOUND, SUPPLIER_NOT_FOUND</li>
- *   <li>409 — CONFLICT (optimistic lock / data integrity)</li>
+ *   <li>409 — CONCURRENT_MODIFICATION (optimistic lock),
+ *             CONFLICT (unique-constraint data integrity only)</li>
  *   <li>422 — PO_STATUS_TRANSITION_INVALID, PO_ALREADY_CONFIRMED,
  *             PO_QUANTITY_EXCEEDED, ASN_OVERRECEIPT, SUPPLIER_INACTIVE,
  *             CATALOG_SKU_UNKNOWN, IDEMPOTENCY_KEY_MISMATCH, VALIDATION_ERROR</li>
+ *   <li>500 — INTERNAL_ERROR (non-unique data integrity: FK / NOT NULL / CHECK)</li>
  *   <li>503 — SUPPLIER_UNAVAILABLE</li>
  * </ul>
  */
@@ -127,10 +130,36 @@ public class GlobalExceptionHandler {
                 .body(ApiErrorBody.of("CONCURRENT_MODIFICATION", "Concurrent modification detected. Please retry."));
     }
 
+    /**
+     * DB constraint violations that no domain-specific handler claimed. The status is
+     * decided at runtime, so this cannot use a static mapping:
+     *
+     * <ul>
+     *   <li><b>Unique violation</b> (SQLSTATE 23505) → 409 {@code CONFLICT}. scm intentionally
+     *       treats this as a client-visible conflict — the "must change state first" signal,
+     *       distinct from {@code CONCURRENT_MODIFICATION} (which invites an immediate retry).</li>
+     *   <li><b>FK / NOT NULL / CHECK</b> violation → 500 {@code INTERNAL_ERROR}, logged at
+     *       error. These are SERVER defects (a bug wrote an inconsistent row) and must stay
+     *       loud in logs / alerting rather than be masked as a 409 (TASK-MONO-450). Mapping
+     *       everything to 409 hid these 500s from monitoring.</li>
+     * </ul>
+     *
+     * <p>Discrimination uses {@link DataIntegrityViolations#isUniqueViolation(Throwable)} — a
+     * SQLSTATE walk of the cause chain, because Spring maps every Hibernate
+     * {@code ConstraintViolationException} to a plain {@code DataIntegrityViolationException},
+     * so the exception <em>type</em> cannot discriminate and the message is vendor-dependent.
+     */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiErrorBody> handleIntegrity(DataIntegrityViolationException e) {
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ApiErrorBody.of("CONFLICT", "Data integrity violation"));
+        if (DataIntegrityViolations.isUniqueViolation(e)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorBody.of("CONFLICT", "Data integrity violation"));
+        }
+        // FK / NOT NULL / CHECK violations are server defects — keep them loud (same
+        // INTERNAL_ERROR envelope as the catch-all handleGeneral below).
+        log.error("Non-unique data integrity violation", e);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiErrorBody.of("INTERNAL_ERROR", "An unexpected error occurred"));
     }
 
     @ExceptionHandler(MissingRequestHeaderException.class)
