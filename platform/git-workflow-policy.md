@@ -78,6 +78,19 @@ base is `main`, not as a chain of PRs pointed at each other.
 Before trusting a PR's check state, confirm the count is non-zero — an empty check list is a signal, not an
 absence of problems.
 
+### Retargeting the base does not retrigger CI
+
+If a PR was nonetheless opened against a non-`main` base, **fixing the base is not enough**. `gh pr edit
+--base main` fires an `edited` event and `gh pr ready` fires `ready_for_review` — neither is in the default
+`pull_request` activity types (`opened` / `synchronize` / `reopened`), so neither starts a run. Any
+force-push made *while* the base was still a feature branch was likewise filtered out by `branches: [main]`.
+The PR therefore sits at **0 checks even after it correctly targets `main`**, wearing the same green-looking
+face described above.
+
+**Force a run** with `gh pr close <#> && gh pr reopen <#>` (a `reopened` event, now matching `base=main`) —
+this is cleanest, as it churns no commit hashes — or push a new commit to the head branch (`synchronize`).
+Then re-confirm the check count is non-zero before merging. (Worked incident: TASK-MONO-270, PR #1649.)
+
 ---
 
 ## `gh pr create` / `gh pr merge` Body Hook False-Match
@@ -125,6 +138,16 @@ nobody greps when asking "am I allowed to edit this?". (Agent personal-memory de
 ## CI Path-Filter Constraint
 
 When editing `.github/workflows/` `dorny/paths-filter` configuration: never use negation patterns (the `predicate-quantifier: 'some'` negation misclassifies a file as "in"); use a pure-positive `code-changed` filter composed with the original via an outputs-layer AND; backfill new code extensions into the positive filter; add an entry per new project. (Agent personal-memory detail, this host: `project_ci_path_filter_074_075_quirk`.)
+
+**A correct filter is worthless if the consuming `if:` ignores it.** A job guarded by
+`github.event_name == 'push' || <filter condition>` short-circuits on the first term, so on `main` the filter
+verdict is overridden and every heavy lane runs regardless. Gate the push branch too.
+
+**When you do, the comparison must be `!= 'false'`, never `== 'true'`.** If the paths-filter step itself
+fails, every output is the empty string. `'' != 'false'` is **true** → the lanes all run → an unverified
+change is still gated (fail-safe). `'' == 'true'` is **false** → the lanes all skip → **a regression lands on
+`main` having been checked by nothing, and the skip reports green.** The two spellings are equivalent on
+every path except the one that matters. (Worked incident: TASK-MONO-343.)
 
 ---
 

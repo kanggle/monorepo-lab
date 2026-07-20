@@ -209,7 +209,28 @@ Serialising the lane (`--no-parallel`, exposed as the `gradle-args` input of `.g
 
 **A fail-closed dependency changes what the symptom looks like.** When the severed dependency is one the service denies on (a token blacklist, a rate limiter), the outage does not surface as an infrastructure error — it surfaces as *rejection*, i.e. as a plausible security or authorisation defect. Assertions that **expect** a rejection still pass in that state, so an outage always looks like "only part of it broke". Before diagnosing such a failure, grep the failing test's own output window for the dependency's outage log.
 
-Which lanes are serialised — and the evidence each one earned it with — is recorded at the caller in `.github/workflows/ci.yml`. (or keep a single constructor and move the test-only one to a static factory / `@TestConfiguration` bean). Spring auto-injects a sole constructor, but with 2+ it looks for `@Autowired`, and failing that falls back to a no-arg default constructor → `UnsatisfiedDependencyException` / `NoSuchMethodException: <init>()` at context load. A common trigger is adding a secondary constructor that takes a dependency directly (e.g. `RandomGenerator`/`Clock`) for deterministic unit tests: the unit test passes via that constructor, but the full context cannot choose a constructor. Never conclude wiring is safe from `:check` alone — verify with a full-context IT.
+Which lanes are serialised — and the evidence each one earned it with — is recorded at the caller in `.github/workflows/ci.yml`.
+
+## A test that bypasses the enforcement layer proves nothing
+
+When a rule is enforced by a **specific layer** (an HTTP filter, a decoder/validator, a DB constraint), a test
+that reaches the behaviour *below* that layer cannot see whether the layer exists. It passes identically
+whether the enforcement is wired or missing — so the suite reports green over an unenforced contract.
+
+*Worked shape:* a service declared `Idempotency-Key` replay semantics and wired **no filter at all**. The
+integration test called the application service directly (HTTP filter bypassed) with a fresh random key per
+call, so *"same key twice, through the web layer"* — the only input that could have failed — was not
+constructible. The defect shipped behind a green lane.
+
+**Therefore, when writing or reviewing a test for an enforced property:**
+
+- **Establish which layer enforces it, and route the test through that layer.** A test one layer too low is
+  not a weaker test; it is a test of a different proposition.
+- **The existence of supporting infrastructure is not evidence of enforcement.** A store bean, a column, a
+  config class prove only that someone intended the mechanism. Find the code that *consumes* them — the
+  filter registration, the `@PreAuthorize`, the `UNIQUE` constraint. A proxy indicator is not the property.
+- **Confirm by mutation** (§ G3): break the wiring — the filter registration, the validator — and require the
+  test to go RED. A test that stays green through that mutation was never covering the rule.
 
 ---
 
@@ -291,6 +312,14 @@ The same container, limit and load account **2.2× differently** for RSS across 
 
 ⇒ **If two host-dependent predicates fail, the environment cannot measure that axis. Stop being clever; compare a constant.** **A simple guard that works beats a clever guard that does not.**
 ⇒ **Host-dependent values (RSS, JVM heap, timings) may be *printed* as observations. They must not be *asserted*.**
+
+⇒ **And one measurement is not a constant.** A value observed once is a sample, not the property — re-running
+the identical job moves it. Before writing a measured number into a durable surface (a threshold, a ticket, a
+comment, a projection), state how many times it was measured and over what range; a projection built on a
+single anchor inherits that anchor's variance without showing it. *Incident: `TASK-MONO-438` predicted a lane
+at ~5m01s from one prior sample and observed 5m42s — the anchor lane had itself moved +18% (370s → 436s) on
+**identical code** between two runs.* Where a number must be quoted from one observation, mark it as such in
+the code comment too, not only in the PR description — the PR is not where the next reader looks.
 
 ### G5 — Reachability is not only about CI triggers. A runtime `default` / fallback that nothing can reach is not a guard either.
 
