@@ -31,7 +31,7 @@ It crosses as a **business code string**, and only as an event:
 
 - wms `master-service` publishes `wms.master.sku.v1` carrying both its internal `id` (uuid) and `skuCode` ([master-events.md:230-247](../../projects/wms-platform/specs/contracts/events/master-events.md#L230-L247)).
 - ecommerce `product-service` consumes it into a **locally derived** `WmsSkuSnapshot(skuId, skuCode)` and resolves `skuCode → variantId` itself ([wms-inventory-subscriptions.md:47-56](../../projects/ecommerce-microservices-platform/specs/contracts/events/wms-inventory-subscriptions.md#L47-L56)).
-- The reverse leg is symmetric in style: `ecommerce.fulfillment.requested.v1` carries `lines[].skuCode`, and wms `outbound-service` resolves it via `findSkuByCode`. The contract states explicitly that **no wms↔ecommerce id map is stored** ([ecommerce-fulfillment-subscriptions.md:41-46](../../projects/wms-platform/specs/contracts/events/ecommerce-fulfillment-subscriptions.md#L41-L46)).
+- The reverse leg is symmetric in style: `ecommerce.fulfillment.requested.v1` carries `lines[].skuCode`, and wms `outbound-service` resolves it via `findSkuByCode`. The contract states explicitly that **no wms↔ecommerce id map is stored** ([wms-shipment-subscriptions.md:42-45](../../projects/ecommerce-microservices-platform/specs/contracts/events/wms-shipment-subscriptions.md#L42-L45)).
 - scm joins on the same string: the wms low-stock alert's `payload.skuCode` is the join key into `sku_supplier_map` / `reorder_policy` ([replenishment-subscriptions.md:61](../../projects/scm-platform/specs/contracts/events/replenishment-subscriptions.md#L61)).
 - [ADR-MONO-050](ADR-MONO-050-scm-procurement-wms-inbound-expected.md) §7 D9 already elevated this to a decision for its own leg: "**Cross-service identifiers are CODES**, not UUIDs."
 
@@ -64,7 +64,7 @@ Divergence without a join is not yet a defect. Nothing currently reconciles thes
 
 Every project in this repo is extractable to its own standalone GitHub repo via `scripts/sync-portfolio.sh` ([README.md:33-44](../../README.md#L33-L44), [TEMPLATE.md](../../TEMPLATE.md) § Discovery → Distribution). ecommerce's standalone snapshot is deliberately frozen specifically to avoid dragging IAM in as a transitive dependency. Correspondingly, **every** cross-project subscription contract carries a "Standalone-publish degradation / no hard dependency" section (e.g. [wms-inventory-subscriptions.md:90-93](../../projects/ecommerce-microservices-platform/specs/contracts/events/wms-inventory-subscriptions.md#L90-L93)).
 
-An MDM hub is by construction a component that every project must reach to resolve identity. That is a hard dependency for all five — the exact property the distribution strategy is built to avoid.
+An MDM hub is by construction a component that every project must reach to resolve identity. That is a hard dependency for every project — the exact property the distribution strategy is built to avoid.
 
 ---
 
@@ -124,7 +124,7 @@ Note the distinction from §4 A2: rejecting **erp as the repo-wide hub** (routin
 
 ### D6 — The standalone-extraction constraint is binding on this decision
 
-Any future proposal that introduces a component all five projects must call to resolve identity must first demonstrate how `scripts/sync-portfolio.sh` extraction and the per-contract "no hard dependency" degradation clauses survive it. Failing that demonstration is sufficient grounds for rejection without further architectural argument.
+Any future proposal that introduces a component every project must call to resolve identity must first demonstrate how `scripts/sync-portfolio.sh` extraction and the per-contract "no hard dependency" degradation clauses survive it. Failing that demonstration is sufficient grounds for rejection without further architectural argument.
 
 ---
 
@@ -142,11 +142,11 @@ Deliberately *not* scheduled: supplier schema unification, an `erp.masterdata.bu
 
 Golden records, match/merge, survivorship rules, a repo-wide identity resolution API.
 
-Rejected on three counts: (a) it makes all five projects hard-depend on it, breaking the distribution strategy (§1.4, D6); (b) the problem it solves — the same entity duplicated *and joined* across systems — measurably does not exist yet for anything except supplier, and supplier is not joined (§1.3); (c) as portfolio work it demonstrates a platform the other five can no longer be shown without.
+Rejected on three counts: (a) it makes every project hard-depend on it, breaking the distribution strategy (§1.4, D6); (b) the problem it solves — the same entity duplicated *and joined* across systems — measurably does not exist yet for anything except supplier, and supplier is not joined (§1.3); (c) as portfolio work it demonstrates a platform the other projects can no longer be shown without.
 
 ### A2 — Promote erp `masterdata-service` to the repo-wide hub (Rejected)
 
-Already rejected once, for the same reason, in [ADR-MONO-050](ADR-MONO-050-scm-procurement-wms-inbound-expected.md) §4: erp is an E5 domain that owns neither the PO ledger nor the stock ledger, so routing master identity through it produces a domain-blind nano-hop. Additionally erp today has **zero** cross-project event seams — making it the hub would invent five.
+Already rejected once, for the same reason, in [ADR-MONO-050](ADR-MONO-050-scm-procurement-wms-inbound-expected.md) §4: erp is an E5 domain that owns neither the PO ledger nor the stock ledger, so routing master identity through it produces a domain-blind nano-hop. Additionally erp today has **zero** cross-project event seams — making it the hub would invent one to every other project.
 
 **What is rejected here is erp as the *hub*, not erp as an owner.** erp remains the authoritative owner of business partner under D5, because it holds that entity's lifecycle — which is the opposite of a hub, where a service brokers masters whose lifecycles it does not own. Conflating the two is the likeliest way this alternative gets re-proposed.
 
@@ -189,7 +189,7 @@ This ADR asserts facts about the current repo; each is checkable:
 |---|---|
 | No MDM component exists | repo-wide search for `mdm` / `master data management` → 0 hits |
 | SKU crosses boundaries as a code, not a UUID | `skuCode` present in the payloads of `master-events.md`, `ecommerce-fulfillment-subscriptions.md`, `replenishment-subscriptions.md`, `scm-procurement-events.md` |
-| No producer-side id map exists | "No wms↔ecommerce id map is stored" — `ecommerce-fulfillment-subscriptions.md:41-46` |
+| No producer-side id map exists | "No wms↔ecommerce id map is stored" — `wms-shipment-subscriptions.md:42-45` |
 | Supplier is triplicated | three schemas at the §1.3 citations |
 | Supplier is not joined cross-project | `procurement-service/data-model.md:82` (no FK declared); `masterdata-service/architecture.md:382-385` (no real integration) |
 | The tripwire has not fired | `erp.masterdata.businesspartner.changed.v1` subscriber count = 0 (`erp-masterdata-events.md:48-51`) |
