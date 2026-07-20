@@ -1,0 +1,95 @@
+# promtool unit tests for alert-rules.yml (TASK-BE-533).
+#
+# Why this file exists: `promtool check rules` only proves a rule PARSES. TASK-BE-532 removed two
+# rules that parsed perfectly and could never fire, because nothing emitted the metrics they
+# queried. Parse-validity was never the property worth asserting — "does this rule actually
+# evaluate to firing against real series" is.
+#
+# These tests feed synthetic series with the exact metric names and labels the application emits
+# (verified against MicrometerNotificationMetrics / UserMetrics and their unit tests) and assert the
+# alerts fire. A future rename on either side — rule or emitter — breaks these tests instead of
+# silently going no-data in production.
+#
+# Run: docker run --rm -v "$PWD:/w" --entrypoint promtool prom/prometheus:latest test rules /w/alert-rules.test.yml
+
+rule_files:
+  - alert-rules.yml
+
+evaluation_interval: 1m
+
+tests:
+  # ── notification_delivery ────────────────────────────────────────────────
+  - interval: 1m
+    name: "발송 실패율 50% — high/critical 양쪽 발화"
+    input_series:
+      # Emitted by MicrometerNotificationMetrics#recordFailed from NotificationSendService's catch.
+      - series: 'notification_failed_total{channel="email",reason="mail_send"}'
+        values: "0+1x15"
+      # Emitted by MicrometerNotificationMetrics#recordSent from the same method's success branch.
+      - series: 'notification_sent_total{channel="email"}'
+        values: "0+1x15"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: NotificationDeliveryFailureRateHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              category: notification
+              service: notification-service
+            exp_annotations:
+              summary: "notification-service 발송 실패율 10% 초과"
+              description: "최근 5분간 알림 발송 실패율이 50%입니다. (임계값: 10%)"
+      - eval_time: 15m
+        alertname: NotificationDeliveryFailureRateCritical
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              category: notification
+              service: notification-service
+            exp_annotations:
+              summary: "notification-service 발송 실패율 30% 초과"
+              description: "최근 5분간 알림 발송 실패율이 50%입니다. 외부 채널 연동 장애 가능성이 있습니다."
+
+  - interval: 1m
+    name: "발송 전건 성공 — 아무 규칙도 발화하지 않는다"
+    input_series:
+      - series: 'notification_sent_total{channel="email"}'
+        values: "0+1x15"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: NotificationDeliveryFailureRateHigh
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: NotificationDeliveryFailureRateCritical
+        exp_alerts: []
+
+  # ── event_publish_failure (ADR-006 user-service Scenario B) ──────────────
+  - interval: 1m
+    name: "UserWithdrawn 발행 실패 1건 — 5분 창에서 즉시 발화"
+    input_series:
+      # Emitted by UserMetrics#incrementEventPublishFailure via libs/java-observability
+      # EventMetricNames — NOT the `user_event_publish_failure_total` name ADR-006's prose uses.
+      - series: 'event_publish_failure_total{service="user-service",event_type="UserWithdrawn"}'
+        values: "0 0 0 1 1 1 1 1 1 1"
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: UserWithdrawnEventPublishFailure
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              category: event_publish
+              service: user-service
+              event_type: UserWithdrawn
+            exp_annotations:
+              summary: "user-service UserWithdrawn 이벤트 발행 실패"
+              description: "최근 5분간 UserWithdrawn 이벤트 발행이 1건 실패했습니다. 탈퇴는 커밋됐지만 order-service 의 주문 취소가 실행되지 않았을 수 있습니다. 복구 절차: knowledge/runbooks/user-withdrawn-not-cancelled.md"
+
+  - interval: 1m
+    name: "발행 실패 0건 — 발화하지 않는다"
+    input_series:
+      - series: 'event_publish_failure_total{service="user-service",event_type="UserWithdrawn"}'
+        values: "0x10"
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: UserWithdrawnEventPublishFailure
+        exp_alerts: []

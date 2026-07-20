@@ -15,6 +15,11 @@ dependencies {
 
     // Observability
     implementation project(':libs:java-observability')
+    // Micrometer's MeterRegistry is compiled against directly by MicrometerNotificationMetrics
+    // (TASK-BE-533). java-observability declares Micrometer as `implementation`, so it reaches this
+    // module's runtime classpath but NOT its compile classpath — the actuator starter must be
+    // declared here, exactly as user-service does for UserMetrics.
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
 
     // Web
     implementation 'org.springframework.boot:spring-boot-starter-web'

@@ -44,27 +44,49 @@ public class WebPushSender implements NotificationSender {
         }
 
         byte[] payload = toPayload(subject, body);
+        int delivered = 0;
+        int failed = 0;
         for (PushSubscription subscription : subscriptions) {
-            deliver(subscription, payload);
+            switch (deliver(subscription, payload)) {
+                case DELIVERED -> delivered++;
+                case FAILED -> failed++;
+                case PRUNED -> { /* housekeeping, neither a delivery nor an outage */ }
+            }
+        }
+
+        // TASK-BE-533 — the per-subscription swallow in deliver() is deliberate (one dead endpoint
+        // must not abort the user's other subscriptions), but before this escalation it also meant
+        // a push that reached NOBODY returned normally: NotificationSendService marked the row SENT
+        // and no failure was ever counted, so instrumenting only the service layer would have left
+        // push failures invisible in a new way. Escalate only when every attempt failed — a partial
+        // success is still a delivery, and an expired-and-pruned subscription is housekeeping.
+        if (failed > 0 && delivered == 0) {
+            throw new WebPushDeliveryException(
+                    "Push delivery failed for all " + failed + " subscription(s) of user " + recipient, null);
         }
     }
 
-    private void deliver(PushSubscription subscription, byte[] payload) {
+    private enum DeliveryOutcome { DELIVERED, FAILED, PRUNED }
+
+    private DeliveryOutcome deliver(PushSubscription subscription, byte[] payload) {
         try {
             WebPushSendResult result = webPushGateway.send(subscription, payload);
             if (result.isExpired()) {
                 subscriptionRepository.delete(subscription);
                 log.info("Pruned expired push subscription (status {}) for user {}",
                         result.statusCode(), subscription.getUserId());
+                return DeliveryOutcome.PRUNED;
             } else if (!result.isSuccess()) {
                 log.warn("Push delivery returned status {} for user {}",
                         result.statusCode(), subscription.getUserId());
-            } else {
-                log.info("Push notification delivered to user {}", subscription.getUserId());
+                return DeliveryOutcome.FAILED;
             }
+            log.info("Push notification delivered to user {}", subscription.getUserId());
+            return DeliveryOutcome.DELIVERED;
         } catch (Exception e) {
             // One dead endpoint must not abort delivery to the user's other subscriptions.
             log.error("Push delivery failed for user {}: {}", subscription.getUserId(), e.getMessage());
+            return DeliveryOutcome.FAILED;
         }
     }
 

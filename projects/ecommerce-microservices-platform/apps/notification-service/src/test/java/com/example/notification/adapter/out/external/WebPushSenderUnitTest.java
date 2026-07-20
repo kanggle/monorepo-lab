@@ -16,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.same;
@@ -139,5 +140,55 @@ class WebPushSenderUnitTest {
         sender.send("user-1", "제목", "본문");
 
         verify(webPushGateway, org.mockito.Mockito.times(2)).send(any(), any());
+    }
+
+    /**
+     * TASK-BE-533 AC-2 — the fail-soft swallow above is what makes push failures invisible: before
+     * this escalation a push that reached NOBODY still returned normally, so
+     * {@code NotificationSendService} marked the row SENT and the failure counter never moved.
+     * Instrumenting only the service layer would have reproduced the original defect one layer in.
+     */
+    @Test
+    @DisplayName("BE-533: 모든 구독 발송이 실패하면 예외를 던져 실패가 계측 가능해진다")
+    void allSubscriptionsFail_throwsSoTheFailureIsCountable() {
+        given(webPushGateway.isConfigured()).willReturn(true);
+        given(subscriptionRepository.findByUserId("user-1"))
+                .willReturn(List.of(sub("https://push/a"), sub("https://push/b")));
+        given(webPushGateway.send(any(), any())).willThrow(new WebPushDeliveryException("boom", null));
+
+        assertThatThrownBy(() -> sender.send("user-1", "제목", "본문"))
+                .isInstanceOf(WebPushDeliveryException.class)
+                .hasMessageContaining("all 2 subscription(s)");
+    }
+
+    @Test
+    @DisplayName("BE-533: 일부라도 전달됐으면 예외를 던지지 않는다 (부분 성공은 발송으로 집계)")
+    void partialSuccess_doesNotThrow() {
+        given(webPushGateway.isConfigured()).willReturn(true);
+        given(subscriptionRepository.findByUserId("user-1"))
+                .willReturn(List.of(sub("https://push/bad"), sub("https://push/good")));
+        when(webPushGateway.send(any(), any()))
+                .thenThrow(new WebPushDeliveryException("boom", null))
+                .thenReturn(new WebPushSendResult(201));
+
+        sender.send("user-1", "제목", "본문");
+
+        verify(webPushGateway, org.mockito.Mockito.times(2)).send(any(), any());
+    }
+
+    /**
+     * A pruned-expired subscription is housekeeping, not an outage — it must not be escalated as a
+     * delivery failure, or every natural subscription expiry would page on-call.
+     */
+    @Test
+    @DisplayName("BE-533: 전부 410(만료)이면 prune 만 하고 예외를 던지지 않는다")
+    void allExpired_prunesWithoutThrowing() {
+        given(webPushGateway.isConfigured()).willReturn(true);
+        given(subscriptionRepository.findByUserId("user-1")).willReturn(List.of(sub("https://push/dead")));
+        given(webPushGateway.send(any(), any())).willReturn(new WebPushSendResult(410));
+
+        sender.send("user-1", "제목", "본문");
+
+        verify(subscriptionRepository).delete(any());
     }
 }

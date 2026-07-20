@@ -1,6 +1,6 @@
 # TASK-BE-533 — Build the notification delivery metrics + DLQ runbook that ADR-006 gated its own ACCEPT on
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (Micrometer wiring across a small service + a runbook doc)

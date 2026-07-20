@@ -3,11 +3,13 @@ package com.example.notification.application.service;
 import com.example.notification.application.command.SendNotificationCommand;
 import com.example.notification.application.port.in.ManagePreferenceUseCase;
 import com.example.notification.application.port.in.SendNotificationUseCase;
+import com.example.notification.application.port.out.NotificationMetricsPort;
 import com.example.notification.application.port.out.NotificationRepository;
 import com.example.notification.application.port.out.NotificationSender;
 import com.example.notification.application.port.out.TemplateRepository;
 import com.example.notification.domain.model.Notification;
 import com.example.notification.domain.model.NotificationChannel;
+import com.example.notification.domain.model.NotificationFailureReason;
 import com.example.notification.domain.model.NotificationTemplate;
 import com.example.notification.domain.model.UserNotificationPreference;
 import lombok.extern.slf4j.Slf4j;
@@ -27,14 +29,17 @@ public class NotificationSendService implements SendNotificationUseCase {
     private final TemplateRepository templateRepository;
     private final ManagePreferenceUseCase managePreferenceUseCase;
     private final Map<NotificationChannel, NotificationSender> senderMap;
+    private final NotificationMetricsPort metrics;
 
     public NotificationSendService(NotificationRepository notificationRepository,
                                    TemplateRepository templateRepository,
                                    ManagePreferenceUseCase managePreferenceUseCase,
-                                   List<NotificationSender> notificationSenders) {
+                                   List<NotificationSender> notificationSenders,
+                                   NotificationMetricsPort metrics) {
         this.notificationRepository = notificationRepository;
         this.templateRepository = templateRepository;
         this.managePreferenceUseCase = managePreferenceUseCase;
+        this.metrics = metrics;
         List<NotificationSender> senders = notificationSenders != null ? notificationSenders : List.of();
         this.senderMap = senders.stream()
                 .collect(Collectors.toMap(
@@ -88,13 +93,21 @@ public class NotificationSendService implements SendNotificationUseCase {
         Notification notification = Notification.create(
                 command.tenantId(), command.userId(), channel, renderedSubject, renderedBody, command.eventId());
 
+        // This try/catch is the point where a real send failure surfaces for every channel:
+        // EmailNotificationSender lets MailException propagate, and WebPushSender — which must
+        // stay fail-soft per-subscription so one dead endpoint cannot abort the user's other
+        // subscriptions — escalates by throwing when it delivered to none of them. Counting here
+        // rather than inside each sender keeps sent/failed on one population (one notification
+        // row), so the alert's failed/(failed+sent) ratio is a true rate (TASK-BE-533 / ADR-006).
         try {
             sender.send(command.userId(), renderedSubject, renderedBody);
             notification.markSent();
+            metrics.recordSent(channel);
             log.info("Notification sent. userId={}, channel={}, eventId={}",
                     command.userId(), channel, command.eventId());
         } catch (Exception e) {
             notification.markFailed();
+            metrics.recordFailed(channel, NotificationFailureReason.classify(e));
             log.error("Failed to send notification. userId={}, channel={}, eventId={}, error={}",
                     command.userId(), channel, command.eventId(), e.getMessage());
         }
