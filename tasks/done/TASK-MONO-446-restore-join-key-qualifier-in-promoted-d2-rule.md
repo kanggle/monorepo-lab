@@ -1,6 +1,6 @@
 # TASK-MONO-446 — Restore the "as the join key" qualifier that the ADR-MONO-051 D2 promotion dropped
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-MONO
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (a one-sentence canonical-text correction, but the wording is load-bearing)
