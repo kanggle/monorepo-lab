@@ -208,49 +208,16 @@ groups:
   # 카테고리 6: 알림 발송 실패 (notification-service 전용)
   # specs/services/notification-service/observability.md:
   #   notification_failed_total{channel, reason} 기반
+  #
+  # NotificationDeliveryFailureRateHigh / NotificationDeliveryFailureRateCritical removed (TASK-BE-532,
+  # 2026-07-20): notification-service emits neither notification_failed_total nor notification_sent_total —
+  # zero Micrometer registration anywhere in notification-service/src/main. The rules were permanently
+  # no-data (could never fire at any failure rate), which is worse than no rule: a reader would conclude
+  # notification-delivery failure is monitored when it is not. TASK-BE-533 wires the counters; once they
+  # exist, restore both rules against the demonstrated emitters.
   # ──────────────────────────────────────────────
   - name: notification_delivery
     rules:
-      - alert: NotificationDeliveryFailureRateHigh
-        expr: |
-          (
-            sum(rate(notification_failed_total[5m]))
-            /
-            (
-              sum(rate(notification_failed_total[5m]))
-              +
-              sum(rate(notification_sent_total[5m]))
-            )
-          ) > 0.1
-        for: 5m
-        labels:
-          severity: warning
-          category: notification
-          service: notification-service
-        annotations:
-          summary: "notification-service 발송 실패율 10% 초과"
-          description: "최근 5분간 알림 발송 실패율이 {{ $value | humanizePercentage }}입니다. (임계값: 10%)"
-
-      - alert: NotificationDeliveryFailureRateCritical
-        expr: |
-          (
-            sum(rate(notification_failed_total[5m]))
-            /
-            (
-              sum(rate(notification_failed_total[5m]))
-              +
-              sum(rate(notification_sent_total[5m]))
-            )
-          ) > 0.3
-        for: 5m
-        labels:
-          severity: critical
-          category: notification
-          service: notification-service
-        annotations:
-          summary: "notification-service 발송 실패율 30% 초과"
-          description: "최근 5분간 알림 발송 실패율이 {{ $value | humanizePercentage }}입니다. 외부 채널 연동 장애 가능성이 있습니다."
-
       - alert: NotificationSenderDown
         expr: up{job="notification-service"} == 0
         for: 1m
