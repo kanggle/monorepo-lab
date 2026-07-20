@@ -36,8 +36,12 @@ import { ApiError } from '@/shared/api/errors';
  *   reject it — the #569 invariant is GAP-domain-scoped).
  * - **Tenant model**: NO `X-Tenant-Id` — ecommerce resolves the tenant from the
  *   JWT `tenant_id ∈ {ecommerce,*}` claim (the gateway `TenantClaimValidator`
- *   injects the trusted header). **NO `Idempotency-Key`** (the producer defines
- *   none — § 2.4.10).
+ *   injects the trusted header). **`Idempotency-Key` is OPT-IN per call**
+ *   (TASK-PC-FE / BE-536 update to § 2.4.10): the header is attached only when
+ *   {@link EcommerceGatewayRequest.idempotencyKey} is supplied — product
+ *   register/stock-adjust and promotion coupon-issue now require it
+ *   producer-side; every other mutation still sends none (producer defines
+ *   none for those).
  * - **ecommerce FLAT error envelope** `{ code, message, timestamp }` (the shared
  *   `ErrorResponse.of` — DISTINCT from wms's NESTED `{ error: { code } }`); a
  *   missing / non-JSON body degrades to a synthetic code, never throws
@@ -73,6 +77,15 @@ export interface EcommerceGatewayRequest {
    *  attached and the body is JSON-serialised. Reads / DELETE omit it (no
    *  `Content-Type` — pinned). */
   body?: unknown;
+  /**
+   * Client-supplied `Idempotency-Key`, attached ONLY when present (TASK-BE-536).
+   * Most ecommerce mutations still send none (the producer defines none for
+   * them — confirm-gate + state guards are the double-submit defence); the
+   * three endpoints that now require it (product register / stock-adjust,
+   * coupon issue) pass one explicitly. Omitting this field is
+   * behaviour-preserving for every other call site.
+   */
+  idempotencyKey?: string;
 }
 
 /**
@@ -176,7 +189,10 @@ export async function callEcommerceGateway<T>(
   };
   // NOTE: deliberately NO `X-Tenant-Id` — ecommerce resolves tenant from the
   // JWT `tenant_id` claim (gateway-injected; § 2.4.10 tenant invariant).
-  // NOTE: NO `Idempotency-Key` — the producer defines none (§ 2.4.10).
+  // `Idempotency-Key` is opt-in per call (TASK-BE-536) — only attached when the
+  // caller supplies one (product register/stock-adjust, coupon issue); every
+  // other mutation omits it, unchanged.
+  if (req.idempotencyKey) headers['Idempotency-Key'] = req.idempotencyKey;
   if (req.body !== undefined) headers['Content-Type'] = 'application/json';
 
   const controller = new AbortController();

@@ -1,6 +1,7 @@
 package com.example.product.application.service;
 
 import com.example.product.application.dto.VariantDetail;
+import com.example.product.domain.exception.DuplicateVariantOptionException;
 import com.example.product.domain.exception.ProductNotFoundException;
 import com.example.product.domain.model.Price;
 import com.example.product.domain.model.Product;
@@ -11,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Caching;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,7 +38,23 @@ public class VariantManagementService {
 
         ProductVariant variant = ProductVariant.create(optionName, new StockQuantity(stock), new Price(additionalPrice));
         product.addVariant(variant);
-        productRepository.save(product);
+
+        // TASK-BE-536 AC-0 re-measure finding: `uq_product_variants_option UNIQUE
+        // (product_id, option_name)` already exists (Flyway V5, pre-dates this task) —
+        // so no new migration is added here. What was missing is the WIRING: a plain
+        // save() defers the child INSERT to commit-time flush (past this try/catch,
+        // past the controller), so a duplicate optionName previously escaped as a raw
+        // 500 INTERNAL_ERROR instead of a clean 409. saveAndFlush forces the INSERT
+        // synchronously so the violation is catchable here (same shape as
+        // RefundRequestRepositoryImpl.insert, TASK-BE-535). The constraint itself is
+        // also the AC-4 concurrency arbiter — two simultaneous adds of the same
+        // optionName both pass the in-memory addVariant() check, but only one INSERT
+        // commits; the loser lands in this catch.
+        try {
+            productRepository.saveAndFlush(product);
+        } catch (DataIntegrityViolationException e) {
+            throw new DuplicateVariantOptionException(productId, optionName, e);
+        }
 
         log.info("Variant added: productId={}, variantId={}", productId, variant.getId());
         return VariantDetail.from(variant);

@@ -9,6 +9,8 @@ import com.example.promotion.application.result.IssueCouponsResult;
 import com.example.promotion.application.service.CouponCommandService;
 import com.example.promotion.domain.coupon.Coupon;
 import com.example.promotion.domain.coupon.CouponAlreadyUsedException;
+import com.example.promotion.domain.coupon.CouponIssueRequest;
+import com.example.promotion.domain.coupon.CouponIssueRequestRepository;
 import com.example.promotion.domain.coupon.CouponNotFoundException;
 import com.example.promotion.domain.coupon.CouponRepository;
 import com.example.promotion.domain.coupon.CouponStatus;
@@ -21,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -34,6 +37,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -50,10 +54,17 @@ class CouponCommandServiceTest {
     @Mock
     private PromotionEventPublisher eventPublisher;
 
+    @Mock
+    private CouponIssueRequestRepository couponIssueRequestRepository;
+
     private final Clock clock = Clock.fixed(Instant.parse("2026-03-28T12:00:00Z"), ZoneOffset.UTC);
 
     private CouponCommandService createService() {
-        return new CouponCommandService(couponRepository, promotionRepository, eventPublisher, clock);
+        // Not every test reaches the replay lookup (e.g. role-guard / missing-key
+        // throw earlier) — lenient() so those do not trip STRICT_STUBS.
+        lenient().when(couponIssueRequestRepository.find(any(), any())).thenReturn(Optional.empty());
+        return new CouponCommandService(
+                couponRepository, promotionRepository, eventPublisher, couponIssueRequestRepository, clock);
     }
 
     @Test
@@ -73,7 +84,7 @@ class CouponCommandServiceTest {
         given(promotionRepository.save(any(Promotion.class))).willAnswer(inv -> inv.getArgument(0));
 
         IssueCouponsCommand command = new IssueCouponsCommand(
-                promotion.getPromotionId(), List.of("user-1", "user-2"), "ECOMMERCE_OPERATOR"
+                promotion.getPromotionId(), List.of("user-1", "user-2"), "ECOMMERCE_OPERATOR", "idem-key-1"
         );
 
         IssueCouponsResult result = service.issueCoupons(command);
@@ -160,7 +171,8 @@ class CouponCommandServiceTest {
 
         given(promotionRepository.findByIdForUpdate("non-existent")).willReturn(Optional.empty());
 
-        IssueCouponsCommand command = new IssueCouponsCommand("non-existent", List.of("user-1"), "ECOMMERCE_OPERATOR");
+        IssueCouponsCommand command = new IssueCouponsCommand(
+                "non-existent", List.of("user-1"), "ECOMMERCE_OPERATOR", "idem-key-2");
 
         assertThatThrownBy(() -> service.issueCoupons(command))
                 .isInstanceOf(PromotionNotFoundException.class);
@@ -229,7 +241,8 @@ class CouponCommandServiceTest {
         given(promotionRepository.save(any(Promotion.class))).willAnswer(inv -> inv.getArgument(0));
 
         IssueCouponsCommand command = new IssueCouponsCommand(
-                promotion.getPromotionId(), List.of("user-1"), "ECOMMERCE_OPERATOR,ERP_OPERATOR,SCM_OPERATOR"
+                promotion.getPromotionId(), List.of("user-1"),
+                "ECOMMERCE_OPERATOR,ERP_OPERATOR,SCM_OPERATOR", "idem-key-3"
         );
 
         assertThatCode(() -> service.issueCoupons(command))
@@ -253,7 +266,7 @@ class CouponCommandServiceTest {
         given(promotionRepository.save(any(Promotion.class))).willAnswer(inv -> inv.getArgument(0));
 
         IssueCouponsCommand command = new IssueCouponsCommand(
-                promotion.getPromotionId(), List.of("user-1"), "ECOMMERCE_OPERATOR"
+                promotion.getPromotionId(), List.of("user-1"), "ECOMMERCE_OPERATOR", "idem-key-4"
         );
 
         assertThatCode(() -> service.issueCoupons(command))
@@ -297,5 +310,136 @@ class CouponCommandServiceTest {
 
         assertThatThrownBy(() -> service.issueCoupons(command))
                 .isInstanceOf(AccessDeniedException.class);
+    }
+
+    // ── TASK-BE-536: Idempotency-Key guard ─────────────────────────────────────
+
+    @Test
+    @DisplayName("AC-0/F4 Idempotency-Key 없으면 IdempotencyKeyRequiredException, 쿠폰 미발급")
+    void issueCoupons_missingIdempotencyKey_isRefused_noCouponIssued() {
+        CouponCommandService service = createService();
+
+        IssueCouponsCommand command = new IssueCouponsCommand(
+                "promo-1", List.of("user-1"), "ECOMMERCE_OPERATOR", null);
+
+        assertThatThrownBy(() -> service.issueCoupons(command))
+                .isInstanceOf(com.example.promotion.application.exception.IdempotencyKeyRequiredException.class);
+
+        verify(couponRepository, never()).saveAll(any());
+        verify(promotionRepository, never()).findByIdForUpdate(any());
+    }
+
+    @Test
+    @DisplayName("AC-0/F4 blank Idempotency-Key 도 거부된다 (webhook-store 널 구멍을 복사하지 않는다)")
+    void issueCoupons_blankIdempotencyKey_isRefused() {
+        CouponCommandService service = createService();
+
+        IssueCouponsCommand command = new IssueCouponsCommand(
+                "promo-1", List.of("user-1"), "ECOMMERCE_OPERATOR", "   ");
+
+        assertThatThrownBy(() -> service.issueCoupons(command))
+                .isInstanceOf(com.example.promotion.application.exception.IdempotencyKeyRequiredException.class);
+    }
+
+    @Test
+    @DisplayName("AC-1 같은 키 + 같은 사용자 배치 재생 → 기존 발급수 반환, 재발급 없음")
+    void issueCoupons_sameKeySameUserBatch_isReplay_noSecondIssuance() {
+        CouponCommandService service = createService();
+        Promotion promotion = Promotion.create(
+                "프로모션", "설명", DiscountType.FIXED, 1000, 0, 100,
+                Instant.parse("2026-03-01T00:00:00Z"),
+                Instant.parse("2026-04-01T00:00:00Z"), clock
+        );
+        given(promotionRepository.findByIdForUpdate(promotion.getPromotionId()))
+                .willReturn(Optional.of(promotion));
+        given(couponIssueRequestRepository.find(promotion.getPromotionId(), "idem-A"))
+                .willReturn(Optional.of(CouponIssueRequest.of(
+                        promotion.getPromotionId(), "idem-A", List.of("user-1", "user-2"), 2, Instant.now())));
+
+        IssueCouponsCommand command = new IssueCouponsCommand(
+                promotion.getPromotionId(), List.of("user-1", "user-2"), "ECOMMERCE_OPERATOR", "idem-A");
+
+        IssueCouponsResult result = service.issueCoupons(command);
+
+        assertThat(result.issuedCount()).isEqualTo(2);
+        verify(couponRepository, never()).saveAll(any());
+        verify(promotionRepository, never()).save(any());
+        verify(couponIssueRequestRepository, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("같은 키 + 다른 사용자 배치 재사용 → IdempotencyKeyConflictException, 쿠폰 미발급")
+    void issueCoupons_sameKeyDifferentUserBatch_isConflict() {
+        CouponCommandService service = createService();
+        Promotion promotion = Promotion.create(
+                "프로모션", "설명", DiscountType.FIXED, 1000, 0, 100,
+                Instant.parse("2026-03-01T00:00:00Z"),
+                Instant.parse("2026-04-01T00:00:00Z"), clock
+        );
+        given(promotionRepository.findByIdForUpdate(promotion.getPromotionId()))
+                .willReturn(Optional.of(promotion));
+        given(couponIssueRequestRepository.find(promotion.getPromotionId(), "idem-A"))
+                .willReturn(Optional.of(CouponIssueRequest.of(
+                        promotion.getPromotionId(), "idem-A", List.of("user-1"), 1, Instant.now())));
+
+        IssueCouponsCommand command = new IssueCouponsCommand(
+                promotion.getPromotionId(), List.of("user-2"), "ECOMMERCE_OPERATOR", "idem-A");
+
+        assertThatThrownBy(() -> service.issueCoupons(command))
+                .isInstanceOf(com.example.promotion.application.exception.IdempotencyKeyConflictException.class);
+
+        verify(couponRepository, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("AC-4 동시성 — claim insert 가 유니크 제약 위반 → IdempotencyKeyConflictException, 쿠폰 미발급")
+    void issueCoupons_concurrentDuplicate_claimInsertLosesRace_isConflict() {
+        CouponCommandService service = createService();
+        Promotion promotion = Promotion.create(
+                "프로모션", "설명", DiscountType.FIXED, 1000, 0, 100,
+                Instant.parse("2026-03-01T00:00:00Z"),
+                Instant.parse("2026-04-01T00:00:00Z"), clock
+        );
+        given(promotionRepository.findByIdForUpdate(promotion.getPromotionId()))
+                .willReturn(Optional.of(promotion));
+        given(couponIssueRequestRepository.insert(any()))
+                .willThrow(new DataIntegrityViolationException("uq_coupon_issue_request_key"));
+
+        IssueCouponsCommand command = new IssueCouponsCommand(
+                promotion.getPromotionId(), List.of("user-1"), "ECOMMERCE_OPERATOR", "idem-B");
+
+        assertThatThrownBy(() -> service.issueCoupons(command))
+                .isInstanceOf(com.example.promotion.application.exception.IdempotencyKeyConflictException.class);
+
+        verify(couponRepository, never()).saveAll(any());
+        verify(promotionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Edge Case 쿠폰 발급 한도 상호작용 — 재생은 한도까지 발급이 아니라 아무것도 발급하지 않는다")
+    void issueCoupons_replayComposesWithCap_issuesNothingNotUpToCap() {
+        CouponCommandService service = createService();
+        // maxIssuanceCount == 1, already fully issued.
+        Promotion promotion = Promotion.create(
+                "한도 프로모션", "설명", DiscountType.FIXED, 1000, 0, 1,
+                Instant.parse("2026-03-01T00:00:00Z"),
+                Instant.parse("2026-04-01T00:00:00Z"), clock
+        );
+        promotion.incrementIssuedCount(1);
+        given(promotionRepository.findByIdForUpdate(promotion.getPromotionId()))
+                .willReturn(Optional.of(promotion));
+        given(couponIssueRequestRepository.find(promotion.getPromotionId(), "idem-cap"))
+                .willReturn(Optional.of(CouponIssueRequest.of(
+                        promotion.getPromotionId(), "idem-cap", List.of("user-1"), 1, Instant.now())));
+
+        IssueCouponsCommand command = new IssueCouponsCommand(
+                promotion.getPromotionId(), List.of("user-1"), "ECOMMERCE_OPERATOR", "idem-cap");
+
+        // The replay must succeed (no re-validation against the now-exhausted cap)
+        // and must not mint a second coupon.
+        IssueCouponsResult result = service.issueCoupons(command);
+
+        assertThat(result.issuedCount()).isEqualTo(1);
+        verify(couponRepository, never()).saveAll(any());
     }
 }

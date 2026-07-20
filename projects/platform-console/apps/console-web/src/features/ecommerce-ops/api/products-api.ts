@@ -58,11 +58,15 @@ import {
  * the trusted `X-Tenant-Id`; the repository `WHERE tenant_id` chokepoint
  * isolates) — the console therefore does NOT send `X-Tenant-Id`.
  *
- * Mutation discipline (§ 2.4.10): the ecommerce product admin API defines NO
- * `Idempotency-Key` / `version` / ETag. The console does NOT fabricate one
- * (carrying a key the producer ignores is a defect) — confirm-gate (UI) +
- * producer state guards (the `409 CONFLICT` optimistic-lock + the
- * `422 VALIDATION_ERROR` family) are the double-submit / conflict defence.
+ * Mutation discipline (§ 2.4.10, updated by TASK-BE-536): the ecommerce product
+ * admin API defines no `version` / ETag anywhere, and no `Idempotency-Key` on
+ * MOST mutations — those still get none from the console (carrying a key the
+ * producer ignores is a defect); confirm-gate (UI) + producer state guards
+ * (the `409 CONFLICT` optimistic-lock + the `422 VALIDATION_ERROR` family) are
+ * the double-submit / conflict defence for those. `registerProduct` and
+ * `adjustStock` are the exception: the producer now REQUIRES
+ * `Idempotency-Key` on those two (a duplicate write moves a real balance with
+ * no other guard), so this client mints one per call — see their doc comments.
  * Mutations are reason-free (the surface defines no `X-Operator-Reason`); the
  * one exception is the stock-adjust producer body, which carries a `reason`
  * field IN THE BODY (AdjustStockRequest), not a header.
@@ -160,13 +164,33 @@ export function getProduct(id: string): Promise<ProductDetail> {
 // none; state-guard-dependent — 409/422 surfaced inline)
 // ===========================================================================
 
-/** 3 — POST /admin/products (register). */
+/**
+ * 3 — POST /admin/products (register). The producer now REQUIRES
+ * `Idempotency-Key` (TASK-BE-536 — a replayed registration would otherwise
+ * create a second product with a second stock ledger).
+ *
+ * <p>Key-generation-location note: this route currently has no client-side
+ * confirm/retry dialog state (unlike e.g. wms-outbound's cancel dialog, which
+ * mints its key once per confirmed user action and reuses it across a retry —
+ * see `use-outbound-cancel-dialog.ts`). Absent that machinery, the key is
+ * minted here, once per invocation of this function — i.e. once per BFF proxy
+ * request, which today is 1:1 with a user's confirm click. A future
+ * network-level auto-retry of the SAME submit (without a fresh user click)
+ * would need a client-held key to replay correctly; that is a frontend
+ * follow-up, not attempted here (backend-scoped task).
+ */
 export function registerProduct(
   body: RegisterProductBody,
 ): Promise<RegisterProductResponse> {
   const env = getServerEnv();
   return callEcommerce(
-    { method: 'POST', base: env.ECOMMERCE_ADMIN_BASE_URL, path: '/products', body },
+    {
+      method: 'POST',
+      base: env.ECOMMERCE_ADMIN_BASE_URL,
+      path: '/products',
+      body,
+      idempotencyKey: crypto.randomUUID(),
+    },
     (j) => RegisterProductResponseSchema.parse(j),
     PRODUCT_LABEL,
   );
@@ -258,8 +282,14 @@ export function deleteVariant(
   );
 }
 
-/** 9 — PATCH /admin/products/{id}/stock (adjust stock; body carries the signed
- *  `quantity` delta + `reason`). Confirm-gated. */
+/**
+ * 9 — PATCH /admin/products/{id}/stock (adjust stock; body carries the signed
+ * `quantity` delta + `reason`). Confirm-gated. The producer now REQUIRES
+ * `Idempotency-Key` (TASK-BE-536 — two identical deltas can both be genuine, so
+ * only a client key can tell a retry apart from a real second adjustment). See
+ * {@link registerProduct} for the key-generation-location rationale — same
+ * reasoning applies here (minted once per BFF proxy invocation).
+ */
 export function adjustStock(
   productId: string,
   body: AdjustStockBody,
@@ -271,6 +301,7 @@ export function adjustStock(
       base: env.ECOMMERCE_ADMIN_BASE_URL,
       path: `/products/${encodeURIComponent(productId)}/stock`,
       body,
+      idempotencyKey: crypto.randomUUID(),
     },
     (j) => AdjustStockResponseSchema.parse(j),
     PRODUCT_LABEL,

@@ -151,7 +151,7 @@ describe('products-api — per-domain credential selection (§ 2.4.10)', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('sends NO X-Tenant-Id and NO Idempotency-Key on a mutation (tenant via JWT claim; producer has no idem key)', async () => {
+  it('sends NO X-Tenant-Id on a mutation, and Idempotency-Key on register (TASK-BE-536 — producer now requires it there)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS');
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ id: 'p-9' }, 201));
     vi.stubGlobal('fetch', fetchMock);
@@ -165,7 +165,7 @@ describe('products-api — per-domain credential selection (§ 2.4.10)', () => {
     const init = fetchMock.mock.calls[0][1] as RequestInit;
     const headers = init.headers as Record<string, string>;
     expect(headers['X-Tenant-Id']).toBeUndefined();
-    expect(headers['Idempotency-Key']).toBeUndefined();
+    expect(headers['Idempotency-Key']).toBeTruthy();
     expect(headers['X-Operator-Reason']).toBeUndefined();
     expect(headers['X-Request-Id']).toBeTruthy();
   });
@@ -213,6 +213,9 @@ describe('products-api — endpoint wiring + bodies (§ 2.4.10 #1-9)', () => {
     const body = JSON.parse((init as RequestInit).body as string);
     expect(body.name).toBe('New');
     expect(body.variants[0]).toEqual({ optionName: 'M', stock: 3, additionalPrice: 100 });
+    // TASK-BE-536: the producer now requires Idempotency-Key on this endpoint.
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers['Idempotency-Key']).toBeTruthy();
   });
 
   it('4 update — PATCH admin /products/{id} (partial)', async () => {
@@ -283,6 +286,8 @@ describe('products-api — endpoint wiring + bodies (§ 2.4.10 #1-9)', () => {
     expect(body).toEqual({ variantId: 'v-1', quantity: -3, reason: 'damage' });
     const headers = (init as RequestInit).headers as Record<string, string>;
     expect(headers['X-Operator-Reason']).toBeUndefined();
+    // TASK-BE-536: the producer now requires Idempotency-Key on this endpoint.
+    expect(headers['Idempotency-Key']).toBeTruthy();
   });
 });
 

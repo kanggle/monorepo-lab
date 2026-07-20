@@ -16,9 +16,10 @@ export const runtime = 'nodejs';
  *   POST /api/ecommerce/promotions/{id}/coupons/issue → issue coupons (201)
  *
  * Body: { userIds: string[] } (≥1 non-empty id required — Zod-validated).
- * Domain-facing IAM OIDC token server-side; NO X-Tenant-Id; NO Idempotency-Key.
- * 422 PROMOTION_NOT_ACTIVE / COUPON_LIMIT_EXCEEDED → passthrough (inline
- * actionable). Mirrors products [id]/stock route shape.
+ * Domain-facing IAM OIDC token server-side; NO X-Tenant-Id. The producer now
+ * REQUIRES `Idempotency-Key` (TASK-BE-536) — `promotions-api.ts#issueCoupons`
+ * mints one per call. 422 PROMOTION_NOT_ACTIVE / COUPON_LIMIT_EXCEEDED →
+ * passthrough (inline actionable). Mirrors products [id]/stock route shape.
  */
 
 export async function POST(

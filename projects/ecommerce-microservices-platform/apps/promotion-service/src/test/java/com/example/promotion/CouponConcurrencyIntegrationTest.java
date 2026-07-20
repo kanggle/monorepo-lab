@@ -93,11 +93,18 @@ class CouponConcurrencyIntegrationTest {
         List<Future<?>> futures = new ArrayList<>();
         for (int i = 0; i < threadCount; i++) {
             String userId = "concurrent-user-" + i;
+            // Each thread is a DISTINCT genuine concurrent issuance request (TASK-BE-536
+            // AC-2), so each carries its OWN Idempotency-Key — a shared key would make
+            // the dedup guard the race arbiter instead of Promotion.validateCanIssue's
+            // issuedCount cap, defeating this test's purpose (cap enforcement under
+            // real concurrent writes).
+            String idempotencyKey = "concurrent-key-" + i;
             futures.add(executor.submit(() -> {
                 try {
                     latch.await();
                     couponCommandService.issueCoupons(
-                            new IssueCouponsCommand(promotion.getPromotionId(), List.of(userId), "ECOMMERCE_OPERATOR")
+                            new IssueCouponsCommand(promotion.getPromotionId(), List.of(userId),
+                                    "ECOMMERCE_OPERATOR", idempotencyKey)
                     );
                     successCount.incrementAndGet();
                 } catch (Exception e) {
@@ -139,7 +146,8 @@ class CouponConcurrencyIntegrationTest {
 
         // Issue one coupon
         couponCommandService.issueCoupons(
-                new IssueCouponsCommand(promotion.getPromotionId(), List.of(userId), "ECOMMERCE_OPERATOR")
+                new IssueCouponsCommand(promotion.getPromotionId(), List.of(userId),
+                        "ECOMMERCE_OPERATOR", "apply-test-key")
         );
 
         // Find the coupon

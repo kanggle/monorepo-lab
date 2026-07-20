@@ -40,8 +40,10 @@ import { RegisterSellerBodySchema } from '@/features/ecommerce-ops/api/seller-ty
  *     actionable, no crash; the 409 CONFLICT path drives a refetch + retry).
  *   - 503 / timeout / network → 503 (ONLY the ecommerce section degrades).
  *
- * No token / product data is ever logged. NO `Idempotency-Key` is added (the
- * producer defines none — § 2.4.10): confirm-gate + producer state guards.
+ * No token / product data is ever logged. `Idempotency-Key` is opt-in per
+ * mutation (TASK-BE-536): most still get none from the console (the producer
+ * defines none — confirm-gate + producer state guards); `registerProduct` /
+ * `adjustStock` / `issueCoupons` now mint one each (the producer requires it).
  */
 
 export const mapEcommerceError = makeProxyErrorMapper(

@@ -2,10 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
  * Same-origin ecommerce-ops product proxy route handlers (TASK-PC-FE-081 —
- * § 2.4.10):
+ * § 2.4.10, updated by TASK-BE-536):
  *   - register POST / update PATCH / delete DELETE / variant POST·PATCH·DELETE
  *     / stock PATCH: domain-facing IAM OIDC token attached server-side (NOT the
- *     operator token); NO X-Tenant-Id; NO Idempotency-Key.
+ *     operator token); NO X-Tenant-Id. `Idempotency-Key` is now attached on
+ *     register POST and stock PATCH (the producer requires it there); every
+ *     other route still sends none.
  *   - bad body (Zod fail) → 422 (no upstream call).
  *   - 401 → no upstream call when the IAM session is absent.
  *   - 503 → 503 (section degrades only); 409 → 409 passthrough.
@@ -137,7 +139,7 @@ describe('GET /api/ecommerce/products (list) proxy', () => {
 });
 
 describe('POST /api/ecommerce/products (register) proxy', () => {
-  it('attaches the domain-facing token (NOT the operator token), NO X-Tenant-Id / Idempotency-Key', async () => {
+  it('attaches the domain-facing token (NOT the operator token), NO X-Tenant-Id, and an Idempotency-Key (TASK-BE-536)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ id: 'p-9' }, 201));
@@ -151,7 +153,8 @@ describe('POST /api/ecommerce/products (register) proxy', () => {
     expect(h.Authorization).toBe('Bearer GAP-ACCESS');
     expect(h.Authorization).not.toContain('OP-MUST-NOT-USE');
     expect(h['X-Tenant-Id']).toBeUndefined();
-    expect(h['Idempotency-Key']).toBeUndefined();
+    // TASK-BE-536: the producer now requires Idempotency-Key on this endpoint.
+    expect(h['Idempotency-Key']).toBeTruthy();
   });
 
   it('an invalid body (Zod fail) → 422 (no upstream call)', async () => {
@@ -389,7 +392,7 @@ describe('variant + stock proxies', () => {
     expect(res.status).toBe(204);
   });
 
-  it('stock PATCH forwards AdjustStockRequest (reason in body, no header)', async () => {
+  it('stock PATCH forwards AdjustStockRequest (reason in body, no X-Operator-Reason header) and attaches Idempotency-Key (TASK-BE-536)', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(jsonResponse({ variantId: 'v-1', currentStock: 7 }));
@@ -406,6 +409,7 @@ describe('variant + stock proxies', () => {
     const init = fetchMock.mock.calls[0][1] as RequestInit;
     const h = init.headers as Record<string, string>;
     expect(h['X-Operator-Reason']).toBeUndefined();
+    expect(h['Idempotency-Key']).toBeTruthy();
     const body = JSON.parse(init.body as string);
     expect(body).toEqual({ variantId: 'v-1', quantity: -3, reason: 'damage' });
   });

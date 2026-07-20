@@ -73,6 +73,7 @@ class CouponIssuanceIntegrationTest {
         // Issue coupons
         mockMvc.perform(post("/api/promotions/" + promotionId + "/coupons/issue")
                         .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .header("Idempotency-Key", "issue-key-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userIds\": [\"" + userId + "\"]}"))
                 .andExpect(status().isCreated())
@@ -149,6 +150,7 @@ class CouponIssuanceIntegrationTest {
         // Issue coupons
         mockMvc.perform(post("/api/promotions/" + promotionId + "/coupons/issue")
                         .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .header("Idempotency-Key", "issue-key-2")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userIds\": [\"user-del-test\"]}"))
                 .andExpect(status().isCreated());

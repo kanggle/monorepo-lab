@@ -2,10 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
  * Same-origin ecommerce-ops promotions proxy route handlers
- * (TASK-PC-FE-086 — ADR-031 Phase 3b):
+ * (TASK-PC-FE-086 — ADR-031 Phase 3b; updated by TASK-BE-536):
  *   - create POST / update PUT / delete DELETE / coupon-issue POST: domain-facing
- *     IAM OIDC token attached server-side (NOT the operator token); NO X-Tenant-Id;
- *     NO Idempotency-Key.
+ *     IAM OIDC token attached server-side (NOT the operator token); NO X-Tenant-Id.
+ *     coupon-issue POST now attaches `Idempotency-Key` (the producer requires it
+ *     there); every other route still sends none.
  *   - bad body (Zod fail) → 422 (no upstream call).
  *   - 401 → 401 when the IAM session is absent.
  *   - 503 → 503 (section degrades only); 422 → 422 passthrough.
@@ -289,6 +290,9 @@ describe('POST /api/ecommerce/promotions/{id}/coupons/issue', () => {
     );
     const sentBody = JSON.parse((init as RequestInit).body as string);
     expect(sentBody.userIds).toEqual(['u-1', 'u-2', 'u-3']);
+    // TASK-BE-536: the producer now requires Idempotency-Key on this endpoint.
+    const h = (init as RequestInit).headers as Record<string, string>;
+    expect(h['Idempotency-Key']).toBeTruthy();
   });
 
   it('invalid body (empty userIds) → 422 (no upstream call)', async () => {

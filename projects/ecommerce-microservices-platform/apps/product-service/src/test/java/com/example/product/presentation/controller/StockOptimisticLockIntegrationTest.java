@@ -73,8 +73,8 @@ class StockOptimisticLockIntegrationTest {
     @DisplayName("동시 재고 차감 요청 시 일부만 성공하고 나머지는 OptimisticLockingFailureException 발생")
     void concurrentStockDecrease_partialSuccess() throws InterruptedException {
         RegisterProductCommand command = new RegisterProductCommand(
-                "동시성 테스트 상품", "설명", 10000L, null,
-                List.of(new VariantCommand("기본", 100, 0)));
+                "동시성 테스트 상품", "설명", 10000L, null, null, null,
+                List.of(new VariantCommand("기본", 100, 0)), "reg-lock-1");
         UUID productId = registerProductService.register(command);
         UUID variantId = queryProductService.findById(productId).variants().get(0).id();
 
@@ -87,11 +87,17 @@ class StockOptimisticLockIntegrationTest {
         ExecutorService executor = Executors.newFixedThreadPool(threadCount);
 
         for (int i = 0; i < threadCount; i++) {
+            // Each thread represents a DISTINCT genuine concurrent adjustment (e.g. a
+            // different order's reservation), so each carries its OWN Idempotency-Key
+            // (TASK-BE-536 AC-2) — a shared key would make the dedup guard itself the
+            // race arbiter instead of Inventory's @Version, defeating this test's
+            // purpose (optimistic-lock behaviour under real concurrent writes).
+            String idempotencyKey = "lock-key-" + i;
             executor.submit(() -> {
                 try {
                     startLatch.await();
                     adjustStockService.adjust(
-                            new AdjustStockCommand(productId, variantId, -1, "ORDER_RESERVED"));
+                            new AdjustStockCommand(productId, variantId, -1, "ORDER_RESERVED", idempotencyKey));
                     successCount.incrementAndGet();
                 } catch (OptimisticLockingFailureException e) {
                     conflictCount.incrementAndGet();
@@ -118,8 +124,8 @@ class StockOptimisticLockIntegrationTest {
     @DisplayName("동시 재고 증가와 감소 요청 시 데이터 정합성이 유지된다")
     void concurrentIncreaseAndDecrease_dataConsistency() throws InterruptedException {
         RegisterProductCommand command = new RegisterProductCommand(
-                "동시성 증감 상품", "설명", 10000L, null,
-                List.of(new VariantCommand("기본", 50, 0)));
+                "동시성 증감 상품", "설명", 10000L, null, null, null,
+                List.of(new VariantCommand("기본", 50, 0)), "reg-lock-2");
         UUID productId = registerProductService.register(command);
         UUID variantId = queryProductService.findById(productId).variants().get(0).id();
 
@@ -134,11 +140,13 @@ class StockOptimisticLockIntegrationTest {
         for (int i = 0; i < threadCount; i++) {
             int delta = (i % 2 == 0) ? 5 : -3;
             String reason = (delta > 0) ? "RESTOCK" : "ORDER_RESERVED";
+            // Distinct key per thread — see the sibling test above (TASK-BE-536 AC-2).
+            String idempotencyKey = "lock-key2-" + i;
             executor.submit(() -> {
                 try {
                     startLatch.await();
                     adjustStockService.adjust(
-                            new AdjustStockCommand(productId, variantId, delta, reason));
+                            new AdjustStockCommand(productId, variantId, delta, reason, idempotencyKey));
                     if (delta > 0) {
                         increaseSuccess.incrementAndGet();
                     } else {

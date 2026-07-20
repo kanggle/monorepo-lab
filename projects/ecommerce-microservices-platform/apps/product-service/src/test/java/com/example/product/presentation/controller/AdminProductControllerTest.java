@@ -12,6 +12,9 @@ import com.example.product.application.service.QueryProductService;
 import com.example.product.application.service.RegisterProductService;
 import com.example.product.application.service.UpdateProductService;
 import com.example.product.application.service.VariantManagementService;
+import com.example.product.domain.exception.DuplicateVariantOptionException;
+import com.example.product.domain.exception.IdempotencyKeyConflictException;
+import com.example.product.domain.exception.IdempotencyKeyRequiredException;
 import com.example.product.domain.exception.ProductNotFoundException;
 import com.example.product.domain.exception.VariantNotFoundException;
 import com.example.product.domain.model.ProductStatus;
@@ -162,6 +165,57 @@ class AdminProductControllerTest {
                 .andExpect(jsonPath("$.id").isNotEmpty());
     }
 
+    // ── TASK-BE-536: Idempotency-Key on POST /api/admin/products ──────────
+
+    @Test
+    @DisplayName("POST /api/admin/products - Idempotency-Key 헤더가 커맨드로 전달된다")
+    void register_idempotencyKey_reachesCommand() throws Exception {
+        org.mockito.ArgumentCaptor<com.example.product.application.command.RegisterProductCommand> captor =
+                org.mockito.ArgumentCaptor.forClass(com.example.product.application.command.RegisterProductCommand.class);
+        given(registerProductService.register(captor.capture())).willReturn(UUID.randomUUID());
+
+        mockMvc.perform(post("/api/admin/products")
+                        .header("Idempotency-Key", "idem-key-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "name": "테스트 상품", "price": 10000, "variants": [{ "optionName": "기본", "stock": 10, "additionalPrice": 0 }] }
+                                """))
+                .andExpect(status().isCreated());
+
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().idempotencyKey()).isEqualTo("idem-key-1");
+    }
+
+    @Test
+    @DisplayName("POST /api/admin/products - Idempotency-Key 헤더 누락 시 400 / IDEMPOTENCY_KEY_REQUIRED 반환")
+    void register_missingIdempotencyKey_returns400() throws Exception {
+        given(registerProductService.register(any()))
+                .willThrow(new IdempotencyKeyRequiredException("required"));
+
+        mockMvc.perform(post("/api/admin/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "name": "테스트 상품", "price": 10000, "variants": [{ "optionName": "기본", "stock": 10, "additionalPrice": 0 }] }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REQUIRED"));
+    }
+
+    @Test
+    @DisplayName("POST /api/admin/products - 같은 키를 다른 상품명으로 재사용하면 409 / IDEMPOTENCY_KEY_CONFLICT 반환")
+    void register_reusedIdempotencyKey_returns409() throws Exception {
+        given(registerProductService.register(any()))
+                .willThrow(new IdempotencyKeyConflictException("conflict"));
+
+        mockMvc.perform(post("/api/admin/products")
+                        .header("Idempotency-Key", "idem-key-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "name": "테스트 상품", "price": 10000, "variants": [{ "optionName": "기본", "stock": 10, "additionalPrice": 0 }] }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_CONFLICT"));
+    }
+
     // ─── POST /api/admin/products/{id}/variants ────────────────────────
 
     @Test
@@ -177,6 +231,22 @@ class AdminProductControllerTest {
                                 { "optionName": "옵션A", "stock": 10, "additionalPrice": 0 }
                                 """))
                 .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-536 POST /api/admin/products/{id}/variants - 중복 optionName 시 409 / DUPLICATE_VARIANT_OPTION 반환")
+    void addVariant_duplicateOptionName_returns409() throws Exception {
+        UUID productId = UUID.randomUUID();
+        given(variantManagementService.addVariant(any(), any(), anyInt(), anyLong()))
+                .willThrow(new DuplicateVariantOptionException(productId, "옵션A", null));
+
+        mockMvc.perform(post("/api/admin/products/{id}/variants", productId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "optionName": "옵션A", "stock": 10, "additionalPrice": 0 }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DUPLICATE_VARIANT_OPTION"));
     }
 
     // ─── PATCH /api/admin/products/{id}/variants/{variantId} ───────────
@@ -307,6 +377,7 @@ class AdminProductControllerTest {
         given(adjustStockService.adjust(any())).willReturn(new AdjustStockResult(variantId, 150));
 
         mockMvc.perform(patch("/api/admin/products/{id}/stock", productId)
+                        .header("Idempotency-Key", "adj-key-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "variantId": "%s", "quantity": 50, "reason": "RESTOCK" }
@@ -314,6 +385,63 @@ class AdminProductControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.variantId").value(variantId.toString()))
                 .andExpect(jsonPath("$.currentStock").value(150));
+    }
+
+    // ── TASK-BE-536: Idempotency-Key on PATCH /api/admin/products/{id}/stock ──
+
+    @Test
+    @DisplayName("PATCH /api/admin/products/{id}/stock - Idempotency-Key 헤더가 커맨드로 전달된다")
+    void adjustStock_idempotencyKey_reachesCommand() throws Exception {
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+        org.mockito.ArgumentCaptor<com.example.product.application.command.AdjustStockCommand> captor =
+                org.mockito.ArgumentCaptor.forClass(com.example.product.application.command.AdjustStockCommand.class);
+        given(adjustStockService.adjust(captor.capture())).willReturn(new AdjustStockResult(variantId, 150));
+
+        mockMvc.perform(patch("/api/admin/products/{id}/stock", productId)
+                        .header("Idempotency-Key", "adj-key-2")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "variantId": "%s", "quantity": 50, "reason": "RESTOCK" }
+                                """.formatted(variantId)))
+                .andExpect(status().isOk());
+
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().idempotencyKey()).isEqualTo("adj-key-2");
+    }
+
+    @Test
+    @DisplayName("PATCH /api/admin/products/{id}/stock - Idempotency-Key 헤더 누락 시 400 / IDEMPOTENCY_KEY_REQUIRED 반환")
+    void adjustStock_missingIdempotencyKey_returns400() throws Exception {
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+        given(adjustStockService.adjust(any()))
+                .willThrow(new IdempotencyKeyRequiredException("required"));
+
+        mockMvc.perform(patch("/api/admin/products/{id}/stock", productId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "variantId": "%s", "quantity": 50, "reason": "RESTOCK" }
+                                """.formatted(variantId)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REQUIRED"));
+    }
+
+    @Test
+    @DisplayName("PATCH /api/admin/products/{id}/stock - 같은 키를 다른 수량으로 재사용하면 409 / IDEMPOTENCY_KEY_CONFLICT 반환")
+    void adjustStock_reusedIdempotencyKey_returns409() throws Exception {
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+        given(adjustStockService.adjust(any()))
+                .willThrow(new IdempotencyKeyConflictException("conflict"));
+
+        mockMvc.perform(patch("/api/admin/products/{id}/stock", productId)
+                        .header("Idempotency-Key", "adj-key-3")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "variantId": "%s", "quantity": 50, "reason": "RESTOCK" }
+                                """.formatted(variantId)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_CONFLICT"));
     }
 
     @Test

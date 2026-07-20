@@ -50,8 +50,9 @@ export async function GET(req: Request) {
  *
  * The domain-facing IAM OIDC token is attached server-side (NOT the operator
  * token — § 2.4.10); the body is Zod-validated against the producer
- * RegisterProductRequest shape before it reaches the upstream. NO
- * `Idempotency-Key` (producer defines none); confirm-gated in the UI.
+ * RegisterProductRequest shape before it reaches the upstream. The producer
+ * now REQUIRES `Idempotency-Key` (TASK-BE-536) — `products-api.ts#registerProduct`
+ * mints one per call; confirm-gated in the UI.
  */
 export async function POST(req: Request) {
   const requestId = newRequestId();

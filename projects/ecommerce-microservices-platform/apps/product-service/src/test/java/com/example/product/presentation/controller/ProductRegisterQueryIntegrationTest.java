@@ -91,8 +91,8 @@ class ProductRegisterQueryIntegrationTest {
     @DisplayName("상품 등록 후 목록 조회에 포함된다")
     void register_thenListContainsProduct() {
         RegisterProductCommand command = new RegisterProductCommand(
-                "테스트 상품", "설명", 15000L, null,
-                List.of(new VariantCommand("기본", 10, 0)));
+                "테스트 상품", "설명", 15000L, null, null, null,
+                List.of(new VariantCommand("기본", 10, 0)), "reg-q-1");
 
         UUID id = registerProductService.register(command);
 
@@ -105,10 +105,10 @@ class ProductRegisterQueryIntegrationTest {
     @DisplayName("상품 등록 후 상세 조회 시 variants 포함 반환")
     void register_thenDetailContainsVariants() {
         RegisterProductCommand command = new RegisterProductCommand(
-                "사이즈 상품", "사이즈 있는 상품", 20000L, null,
+                "사이즈 상품", "사이즈 있는 상품", 20000L, null, null, null,
                 List.of(
                         new VariantCommand("S", 5, 0),
-                        new VariantCommand("M", 10, 1000)));
+                        new VariantCommand("M", 10, 1000)), "reg-q-2");
 
         UUID id = registerProductService.register(command);
 
@@ -122,8 +122,8 @@ class ProductRegisterQueryIntegrationTest {
     @DisplayName("등록 성공 시 ProductCreated 이벤트가 발행된다")
     void register_publishesProductCreatedEvent() {
         RegisterProductCommand command = new RegisterProductCommand(
-                "이벤트 상품", "이벤트 테스트", 12000L, null,
-                List.of(new VariantCommand("기본", 5, 0)));
+                "이벤트 상품", "이벤트 테스트", 12000L, null, null, null,
+                List.of(new VariantCommand("기본", 5, 0)), "reg-q-3");
 
         UUID id = registerProductService.register(command);
 
@@ -146,10 +146,10 @@ class ProductRegisterQueryIntegrationTest {
     @DisplayName("이벤트 페이로드가 계약과 일치한다 (variantId, stock, additionalPrice 포함)")
     void register_eventPayloadMatchesContract() {
         RegisterProductCommand command = new RegisterProductCommand(
-                "계약 검증 상품", "설명", 30000L, null,
+                "계약 검증 상품", "설명", 30000L, null, null, null,
                 List.of(
                         new VariantCommand("S", 10, 0),
-                        new VariantCommand("L", 5, 2000)));
+                        new VariantCommand("L", 5, 2000)), "reg-q-4");
 
         UUID id = registerProductService.register(command);
 
@@ -170,8 +170,8 @@ class ProductRegisterQueryIntegrationTest {
     @DisplayName("status 필터로 목록 조회")
     void register_thenFilterByStatus_returnsMatchingProducts() {
         RegisterProductCommand command = new RegisterProductCommand(
-                "판매 상품", "설명", 10000L, null,
-                List.of(new VariantCommand("기본", 3, 0)));
+                "판매 상품", "설명", 10000L, null, null, null,
+                List.of(new VariantCommand("기본", 3, 0)), "reg-q-5");
         registerProductService.register(command);
 
         var result = queryProductService.findAll(null, ProductStatus.ON_SALE, null, 0, 20);
@@ -183,11 +183,11 @@ class ProductRegisterQueryIntegrationTest {
     @DisplayName("name 부분 일치(대소문자 무관) 필터로 목록 조회 (TASK-BE-420)")
     void register_thenFilterByName_returnsMatchingProducts() {
         registerProductService.register(new RegisterProductCommand(
-                "블루 셔츠", "설명", 10000L, null,
-                List.of(new VariantCommand("기본", 1, 0))));
+                "블루 셔츠", "설명", 10000L, null, null, null,
+                List.of(new VariantCommand("기본", 1, 0)), "reg-q-6"));
         registerProductService.register(new RegisterProductCommand(
-                "레드 바지", "설명", 20000L, null,
-                List.of(new VariantCommand("기본", 1, 0))));
+                "레드 바지", "설명", 20000L, null, null, null,
+                List.of(new VariantCommand("기본", 1, 0)), "reg-q-7"));
 
         var match = queryProductService.findAll(null, null, "셔츠", 0, 20);
         assertThat(match.content()).isNotEmpty();
@@ -197,8 +197,8 @@ class ProductRegisterQueryIntegrationTest {
 
         // 대소문자 무관 부분 일치
         registerProductService.register(new RegisterProductCommand(
-                "Blue Shirt", "설명", 10000L, null,
-                List.of(new VariantCommand("기본", 1, 0))));
+                "Blue Shirt", "설명", 10000L, null, null, null,
+                List.of(new VariantCommand("기본", 1, 0)), "reg-q-8"));
         var caseInsensitive = queryProductService.findAll(null, null, "blue", 0, 20);
         assertThat(caseInsensitive.content()).anyMatch(p -> p.name().equals("Blue Shirt"));
         assertThat(caseInsensitive.content()).noneMatch(p -> p.name().equals("레드 바지"));
@@ -229,8 +229,8 @@ class ProductRegisterQueryIntegrationTest {
     void register_invalidCategoryId_throwsInvalidCategoryException() {
         UUID fakeCategoryId = UUID.randomUUID();
         RegisterProductCommand command = new RegisterProductCommand(
-                "상품", "설명", 10000L, fakeCategoryId,
-                List.of(new VariantCommand("기본", 1, 0)));
+                "상품", "설명", 10000L, fakeCategoryId, null, null,
+                List.of(new VariantCommand("기본", 1, 0)), "reg-q-9");
 
         assertThatThrownBy(() -> registerProductService.register(command))
                 .isInstanceOf(InvalidCategoryException.class);
@@ -241,8 +241,8 @@ class ProductRegisterQueryIntegrationTest {
     void findAll_pagination_works() {
         for (int i = 0; i < 3; i++) {
             registerProductService.register(new RegisterProductCommand(
-                    "상품" + i, "설명", 10000L, null,
-                    List.of(new VariantCommand("기본", 1, 0))));
+                    "상품" + i, "설명", 10000L, null, null, null,
+                    List.of(new VariantCommand("기본", 1, 0)), "reg-q-page-" + i));
         }
 
         var page0 = queryProductService.findAll(null, null, null, 0, 2);

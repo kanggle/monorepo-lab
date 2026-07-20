@@ -11,7 +11,7 @@ public record AdjustStockRequest(
         @NotNull Integer quantity,
         @NotBlank String reason
 ) {
-    public AdjustStockCommand toCommand(UUID productId) {
-        return new AdjustStockCommand(productId, variantId, quantity, reason);
+    public AdjustStockCommand toCommand(UUID productId, String idempotencyKey) {
+        return new AdjustStockCommand(productId, variantId, quantity, reason, idempotencyKey);
     }
 }

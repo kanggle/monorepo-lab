@@ -1,5 +1,8 @@
 package com.example.product.presentation.advice;
 
+import com.example.product.domain.exception.DuplicateVariantOptionException;
+import com.example.product.domain.exception.IdempotencyKeyConflictException;
+import com.example.product.domain.exception.IdempotencyKeyRequiredException;
 import com.example.product.domain.exception.ImageLimitExceededException;
 import com.example.product.domain.exception.ImageNotFoundException;
 import com.example.product.domain.exception.InsufficientStockException;
@@ -121,6 +124,24 @@ public class GlobalExceptionHandler {
     public ErrorResponse handleStorageUnavailable(StorageUnavailableException ex) {
         log.error("Storage unavailable: {}", ex.getMessage(), ex);
         return ErrorResponse.of("STORAGE_UNAVAILABLE", "Object storage service is unavailable");
+    }
+
+    @ExceptionHandler(DuplicateVariantOptionException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ErrorResponse handleDuplicateVariantOption(DuplicateVariantOptionException ex) {
+        return ErrorResponse.of("DUPLICATE_VARIANT_OPTION", ex.getMessage());
+    }
+
+    @ExceptionHandler(IdempotencyKeyRequiredException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorResponse handleIdempotencyKeyRequired(IdempotencyKeyRequiredException ex) {
+        return ErrorResponse.of("IDEMPOTENCY_KEY_REQUIRED", ex.getMessage());
+    }
+
+    @ExceptionHandler(IdempotencyKeyConflictException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ErrorResponse handleIdempotencyKeyConflict(IdempotencyKeyConflictException ex) {
+        return ErrorResponse.of("IDEMPOTENCY_KEY_CONFLICT", ex.getMessage());
     }
 
     @ExceptionHandler(OptimisticLockingFailureException.class)

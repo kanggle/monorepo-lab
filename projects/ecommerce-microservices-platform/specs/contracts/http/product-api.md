@@ -153,6 +153,27 @@ If no images exist, the value from the manual `thumbnailUrl` field (set via PATC
 ### POST /api/admin/products
 Register a new product. Requires admin role.
 
+**Idempotency (required on this endpoint, TASK-BE-536)**
+
+A replayed registration must not create a second product with a second stock
+ledger. A name-uniqueness natural key is deliberately NOT used — two genuinely
+different products can legitimately share a name — so a missing or blank
+`Idempotency-Key` is refused with **400 `IDEMPOTENCY_KEY_REQUIRED`** rather than
+falling back to a non-idempotent write. The key is scoped per-tenant.
+
+| Replay shape | Behaviour |
+|---|---|
+| Same key, same `name` | **Replay.** Returns **201** with the ALREADY-created product's `id`. No second product is created, no second `ProductCreated` is published. |
+| Same key, different `name` | **409 `IDEMPOTENCY_KEY_CONFLICT`** — the key is bound to the first request's name. |
+| Different key, same tenant | A **genuine second registration** (even with the same `name`). Proceeds normally. |
+
+Records are retained indefinitely (no TTL). Under two simultaneous duplicates the
+loser of the `UNIQUE (tenant_id, idempotency_key)` insert also receives **409
+`IDEMPOTENCY_KEY_CONFLICT`**; retrying that request hits the replay row.
+
+**Request Headers**
+- `Idempotency-Key: string` (**required**) — client-supplied, scoped to the tenant
+
 **Request Body**
 ```json
 {
@@ -186,7 +207,9 @@ plane has no seller authority — it cannot register products.
 |---|---|---|
 | 400 | VALIDATION_ERROR | Missing or invalid field |
 | 400 | INVALID_CATEGORY | Category with given ID does not exist |
+| 400 | IDEMPOTENCY_KEY_REQUIRED | `Idempotency-Key` header missing or blank |
 | 403 | ACCESS_DENIED | Admin role required |
+| 409 | IDEMPOTENCY_KEY_CONFLICT | The same `Idempotency-Key` was replayed with a different `name`, or lost a concurrent same-key insert race |
 
 ---
 
@@ -259,6 +282,13 @@ Add a variant to an existing product. Requires admin role.
 
 **Authorization**: gateway `roles ∋ ECOMMERCE_OPERATOR` + non-blank `tenant_id`. Service applies no additional ecommerce-local RBAC.
 
+**Idempotency (natural key, TASK-BE-536)**: a duplicate `optionName` on the same
+product is never a legitimate second request (unlike stock/create/coupon, where two
+identical requests can both be genuine), so this endpoint uses a DB-level
+`UNIQUE (product_id, option_name)` constraint rather than a client
+`Idempotency-Key` — no request header is required. The scope is per-product: the
+same `optionName` on a DIFFERENT product is not a duplicate.
+
 **Request Body**
 ```json
 {
@@ -284,6 +314,7 @@ Add a variant to an existing product. Requires admin role.
 | 400 | VALIDATION_ERROR | Missing or invalid field |
 | 403 | ACCESS_DENIED | Admin role required |
 | 404 | PRODUCT_NOT_FOUND | Product with given ID does not exist |
+| 409 | DUPLICATE_VARIANT_OPTION | A variant with this `optionName` already exists on this product |
 
 ---
 
@@ -454,6 +485,27 @@ Update product information. Requires admin role.
 ### PATCH /api/admin/products/{productId}/stock
 Adjust inventory stock. Requires admin role.
 
+**Idempotency (required on this endpoint, TASK-BE-536)**
+
+Two identical stock deltas can both be genuine (a real second "+10" receipt), so
+no natural key can separate a retry from a real second adjustment — only the
+client knows which it is. A missing or blank `Idempotency-Key` is refused with
+**400 `IDEMPOTENCY_KEY_REQUIRED`**. The key is scoped to `variantId` (the balance
+that actually changes), not `productId`.
+
+| Replay shape | Behaviour |
+|---|---|
+| Same key, same `quantity` | **Replay.** Returns **200** with the variant's current stock. `stock` is NOT adjusted a second time, and NO second `StockChanged` event is published. |
+| Same key, different `quantity` | **409 `IDEMPOTENCY_KEY_CONFLICT`** — the key is bound to the first request's quantity. |
+| Different key, same variant | A **genuine second adjustment** (even with the same `quantity` — e.g. "+10 received twice"). Proceeds normally. |
+
+Records are retained indefinitely (no TTL). Under two simultaneous duplicates the
+loser of the `UNIQUE (variant_id, idempotency_key)` insert also receives **409
+`IDEMPOTENCY_KEY_CONFLICT`**; retrying that request hits the replay row.
+
+**Request Headers**
+- `Idempotency-Key: string` (**required**) — client-supplied, scoped to `variantId`
+
 **Request Body**
 ```json
 {
@@ -473,9 +525,11 @@ Adjust inventory stock. Requires admin role.
 |---|---|---|
 | 400 | VALIDATION_ERROR | Missing or invalid field |
 | 400 | INSUFFICIENT_STOCK | Stock adjustment would result in negative stock |
+| 400 | IDEMPOTENCY_KEY_REQUIRED | `Idempotency-Key` header missing or blank |
 | 403 | ACCESS_DENIED | Admin role required |
 | 404 | PRODUCT_NOT_FOUND | Product with given ID does not exist |
 | 404 | VARIANT_NOT_FOUND | Variant with given ID does not exist |
+| 409 | IDEMPOTENCY_KEY_CONFLICT | The same `Idempotency-Key` was replayed for this variant with a different `quantity`, or lost a concurrent same-key insert race |
 
 ---
 

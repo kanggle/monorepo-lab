@@ -17,8 +17,9 @@ export const runtime = 'nodejs';
  *
  * AdjustStockRequest carries the target `variantId`, a SIGNED `quantity` delta,
  * and a required `reason` (IN THE BODY, not a header). Domain-facing IAM OIDC
- * token server-side; Zod-validated; NO `Idempotency-Key`; confirm-gated. A
- * `400 INSUFFICIENT_STOCK` (decrement below zero) is surfaced inline.
+ * token server-side; Zod-validated; confirm-gated. The producer now REQUIRES
+ * `Idempotency-Key` (TASK-BE-536) — `products-api.ts#adjustStock` mints one per
+ * call. A `400 INSUFFICIENT_STOCK` (decrement below zero) is surfaced inline.
  */
 export async function PATCH(
   req: Request,

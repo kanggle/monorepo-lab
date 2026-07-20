@@ -5,6 +5,8 @@ import com.example.product.application.dto.AdjustStockResult;
 import com.example.product.domain.event.ProductEvent;
 import com.example.product.domain.event.ProductEventPublisher;
 import com.example.product.domain.event.StockChangedPayload;
+import com.example.product.domain.exception.IdempotencyKeyConflictException;
+import com.example.product.domain.exception.IdempotencyKeyRequiredException;
 import com.example.product.domain.exception.InsufficientStockException;
 import com.example.product.domain.exception.ProductNotFoundException;
 import com.example.product.domain.exception.VariantNotFoundException;
@@ -13,9 +15,11 @@ import com.example.product.domain.model.Price;
 import com.example.product.domain.model.Product;
 import com.example.product.domain.model.ProductStatus;
 import com.example.product.domain.model.ProductVariant;
+import com.example.product.domain.model.StockAdjustmentRequest;
 import com.example.product.domain.model.StockQuantity;
 import com.example.product.domain.repository.InventoryRepository;
 import com.example.product.domain.repository.ProductRepository;
+import com.example.product.domain.repository.StockAdjustmentRequestRepository;
 import com.example.product.application.port.ProductMetricPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -24,7 +28,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -34,6 +42,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -56,15 +65,22 @@ class AdjustStockServiceTest {
     @Mock
     private ReservationRetryService reservationRetryService;
 
+    @Mock
+    private StockAdjustmentRequestRepository stockAdjustmentRequestRepository;
+
     private EventPublishingHelper eventPublishingHelper;
     private AdjustStockService adjustStockService;
 
     @BeforeEach
     void setUp() {
         eventPublishingHelper = new EventPublishingHelper(productEventPublisher);
+        Clock clock = Clock.fixed(Instant.parse("2026-07-20T00:00:00Z"), ZoneOffset.UTC);
         adjustStockService = new AdjustStockService(
                 productRepository, inventoryRepository, eventPublishingHelper, productMetrics,
-                reservationRetryService);
+                reservationRetryService, stockAdjustmentRequestRepository, clock);
+        // Not every test reaches the replay lookup (e.g. quantity==0 throws
+        // earlier) — lenient() so those do not trip STRICT_STUBS.
+        lenient().when(stockAdjustmentRequestRepository.find(any(), any())).thenReturn(Optional.empty());
     }
 
     private Product makeProductWithVariant(UUID productId, UUID variantId, int stock, ProductStatus status) {
@@ -86,7 +102,7 @@ class AdjustStockServiceTest {
         given(inventoryRepository.save(any())).willReturn(inventory);
 
         AdjustStockResult result = adjustStockService.adjust(
-                new AdjustStockCommand(productId, variantId, 5, "RESTOCK"));
+                new AdjustStockCommand(productId, variantId, 5, "RESTOCK", "test-key"));
 
         assertThat(result.variantId()).isEqualTo(variantId);
         assertThat(result.currentStock()).isEqualTo(15);
@@ -107,7 +123,7 @@ class AdjustStockServiceTest {
         given(inventoryRepository.save(any())).willReturn(inventory);
 
         AdjustStockResult result = adjustStockService.adjust(
-                new AdjustStockCommand(productId, variantId, -3, "ADMIN_ADJUSTMENT"));
+                new AdjustStockCommand(productId, variantId, -3, "ADMIN_ADJUSTMENT", "test-key"));
 
         assertThat(result.currentStock()).isEqualTo(7);
         // Negative adjustment must NOT trigger backorder retry (TASK-BE-428).
@@ -127,7 +143,7 @@ class AdjustStockServiceTest {
         given(inventoryRepository.save(any())).willReturn(inventory);
         given(productRepository.save(any())).willReturn(product);
 
-        adjustStockService.adjust(new AdjustStockCommand(productId, variantId, -5, "ADMIN_ADJUSTMENT"));
+        adjustStockService.adjust(new AdjustStockCommand(productId, variantId, -5, "ADMIN_ADJUSTMENT", "test-key"));
 
         assertThat(product.getStatus()).isEqualTo(ProductStatus.SOLD_OUT);
         verify(productRepository).save(product);
@@ -146,7 +162,7 @@ class AdjustStockServiceTest {
         given(inventoryRepository.save(any())).willReturn(inventory);
         given(productRepository.save(any())).willReturn(product);
 
-        adjustStockService.adjust(new AdjustStockCommand(productId, variantId, 10, "RESTOCK"));
+        adjustStockService.adjust(new AdjustStockCommand(productId, variantId, 10, "RESTOCK", "test-key"));
 
         assertThat(product.getStatus()).isEqualTo(ProductStatus.ON_SALE);
         verify(productRepository).save(product);
@@ -164,7 +180,7 @@ class AdjustStockServiceTest {
         given(inventoryRepository.findByVariantId(variantId)).willReturn(Optional.of(inventory));
 
         assertThatThrownBy(() ->
-                adjustStockService.adjust(new AdjustStockCommand(productId, variantId, -5, "ADMIN_ADJUSTMENT")))
+                adjustStockService.adjust(new AdjustStockCommand(productId, variantId, -5, "ADMIN_ADJUSTMENT", "test-key")))
                 .isInstanceOf(InsufficientStockException.class);
     }
 
@@ -175,7 +191,7 @@ class AdjustStockServiceTest {
         UUID variantId = UUID.randomUUID();
 
         assertThatThrownBy(() ->
-                adjustStockService.adjust(new AdjustStockCommand(productId, variantId, 0, "RESTOCK")))
+                adjustStockService.adjust(new AdjustStockCommand(productId, variantId, 0, "RESTOCK", "test-key")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("must not be zero");
 
@@ -191,7 +207,7 @@ class AdjustStockServiceTest {
         given(productRepository.findById(productId)).willReturn(Optional.empty());
 
         assertThatThrownBy(() ->
-                adjustStockService.adjust(new AdjustStockCommand(productId, variantId, 5, "RESTOCK")))
+                adjustStockService.adjust(new AdjustStockCommand(productId, variantId, 5, "RESTOCK", "test-key")))
                 .isInstanceOf(ProductNotFoundException.class);
     }
 
@@ -206,7 +222,7 @@ class AdjustStockServiceTest {
         given(productRepository.findById(productId)).willReturn(Optional.of(product));
 
         assertThatThrownBy(() ->
-                adjustStockService.adjust(new AdjustStockCommand(productId, variantId, 5, "RESTOCK")))
+                adjustStockService.adjust(new AdjustStockCommand(productId, variantId, 5, "RESTOCK", "test-key")))
                 .isInstanceOf(VariantNotFoundException.class);
     }
 
@@ -222,7 +238,7 @@ class AdjustStockServiceTest {
         given(inventoryRepository.findByVariantId(variantId)).willReturn(Optional.of(inventory));
         given(inventoryRepository.save(any())).willReturn(inventory);
 
-        adjustStockService.adjust(new AdjustStockCommand(productId, variantId, 5, "RESTOCK"));
+        adjustStockService.adjust(new AdjustStockCommand(productId, variantId, 5, "RESTOCK", "test-key"));
 
         ArgumentCaptor<ProductEvent> captor = ArgumentCaptor.forClass(ProductEvent.class);
         verify(productEventPublisher).publish(captor.capture());
@@ -252,7 +268,119 @@ class AdjustStockServiceTest {
         willThrow(new RuntimeException("kafka down")).given(productEventPublisher).publish(any());
 
         AdjustStockResult result = adjustStockService.adjust(
-                new AdjustStockCommand(productId, variantId, 5, "RESTOCK"));
+                new AdjustStockCommand(productId, variantId, 5, "RESTOCK", "test-key"));
+
+        assertThat(result.currentStock()).isEqualTo(15);
+        verify(inventoryRepository).save(inventory);
+    }
+
+    // ── TASK-BE-536: Idempotency-Key guard ─────────────────────────────────────
+
+    @Test
+    @DisplayName("AC-0/F4 Idempotency-Key 없으면 IdempotencyKeyRequiredException, 재고 미조정")
+    void adjust_missingIdempotencyKey_isRefused_noStockAdjusted() {
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+
+        assertThatThrownBy(() ->
+                adjustStockService.adjust(new AdjustStockCommand(productId, variantId, 5, "RESTOCK", null)))
+                .isInstanceOf(IdempotencyKeyRequiredException.class);
+
+        verify(inventoryRepository, never()).save(any());
+        verify(productEventPublisher, never()).publish(any());
+    }
+
+    @Test
+    @DisplayName("AC-0/F4 blank Idempotency-Key 도 거부된다 (webhook-store 널 구멍을 복사하지 않는다)")
+    void adjust_blankIdempotencyKey_isRefused() {
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+
+        assertThatThrownBy(() ->
+                adjustStockService.adjust(new AdjustStockCommand(productId, variantId, 5, "RESTOCK", "  ")))
+                .isInstanceOf(IdempotencyKeyRequiredException.class);
+
+        verify(inventoryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("AC-1/AC-3 같은 키 + 같은 수량 재생 → 재고 재조정 없음, StockChanged 재발행 없음")
+    void adjust_sameKeySameQuantity_isReplay_noReAdjust_noReEvent() {
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+        Product product = makeProductWithVariant(productId, variantId, 15, ProductStatus.ON_SALE);
+        Inventory inventory = Inventory.create(variantId, new StockQuantity(15));
+
+        given(productRepository.findById(productId)).willReturn(Optional.of(product));
+        given(stockAdjustmentRequestRepository.find(variantId, "idem-A"))
+                .willReturn(Optional.of(StockAdjustmentRequest.reconstitute(
+                        1L, variantId, "idem-A", 5, Instant.now())));
+        given(inventoryRepository.findByVariantId(variantId)).willReturn(Optional.of(inventory));
+
+        AdjustStockResult result = adjustStockService.adjust(
+                new AdjustStockCommand(productId, variantId, 5, "RESTOCK", "idem-A"));
+
+        assertThat(result.currentStock()).isEqualTo(15);
+        // The mutating path (Inventory write, event publish, backorder retry,
+        // dedupe-row insert) must not run on a replay (AC-1 / AC-3).
+        verify(inventoryRepository, never()).save(any());
+        verify(productEventPublisher, never()).publish(any());
+        verify(reservationRetryService, never()).onStockIncreased(any());
+        verify(stockAdjustmentRequestRepository, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("같은 키 + 다른 수량 재사용 → IdempotencyKeyConflictException, 재고 미조정")
+    void adjust_sameKeyDifferentQuantity_isConflict() {
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+        Product product = makeProductWithVariant(productId, variantId, 10, ProductStatus.ON_SALE);
+
+        given(productRepository.findById(productId)).willReturn(Optional.of(product));
+        given(stockAdjustmentRequestRepository.find(variantId, "idem-A"))
+                .willReturn(Optional.of(StockAdjustmentRequest.reconstitute(
+                        1L, variantId, "idem-A", 5, Instant.now())));
+
+        assertThatThrownBy(() ->
+                adjustStockService.adjust(new AdjustStockCommand(productId, variantId, 9, "RESTOCK", "idem-A")))
+                .isInstanceOf(IdempotencyKeyConflictException.class);
+
+        verify(inventoryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("AC-4 동시성 — claim insert 가 유니크 제약 위반 → IdempotencyKeyConflictException, 재고 미조정")
+    void adjust_concurrentDuplicate_claimInsertLosesRace_isConflict() {
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+        Product product = makeProductWithVariant(productId, variantId, 10, ProductStatus.ON_SALE);
+
+        given(productRepository.findById(productId)).willReturn(Optional.of(product));
+        given(stockAdjustmentRequestRepository.insert(any()))
+                .willThrow(new DataIntegrityViolationException("uq_stock_adjustment_request_key"));
+
+        assertThatThrownBy(() ->
+                adjustStockService.adjust(new AdjustStockCommand(productId, variantId, 5, "RESTOCK", "idem-A")))
+                .isInstanceOf(IdempotencyKeyConflictException.class);
+
+        verify(inventoryRepository, never()).save(any());
+        verify(productEventPublisher, never()).publish(any());
+    }
+
+    @Test
+    @DisplayName("AC-2 다른 키로 두 번째 조정 → 정상적으로 누적 조정된다")
+    void adjust_differentKey_isGenuineSecondAdjustment() {
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+        Product product = makeProductWithVariant(productId, variantId, 10, ProductStatus.ON_SALE);
+        Inventory inventory = Inventory.create(variantId, new StockQuantity(10));
+
+        given(productRepository.findById(productId)).willReturn(Optional.of(product));
+        given(inventoryRepository.findByVariantId(variantId)).willReturn(Optional.of(inventory));
+        given(inventoryRepository.save(any())).willReturn(inventory);
+
+        AdjustStockResult result = adjustStockService.adjust(
+                new AdjustStockCommand(productId, variantId, 5, "RESTOCK", "idem-B"));
 
         assertThat(result.currentStock()).isEqualTo(15);
         verify(inventoryRepository).save(inventory);
