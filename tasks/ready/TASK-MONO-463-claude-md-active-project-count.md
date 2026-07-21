@@ -1,4 +1,8 @@
-# TASK-MONO-461 — Correct CLAUDE.md Repository Layout active-project count (5 → 8)
+# TASK-MONO-463 — Correct CLAUDE.md Repository Layout active-project count (5 → 8)
+
+> **Renumbered 461 → 463**: TASK-MONO-461 was concurrently claimed and merged to `main` by another session
+> (`controller-slice-test-naming-convention`, #2839) while this task was being filed. 462 remains this round's
+> error-catalog task; 463 is this one.
 
 **Status:** ready
 
