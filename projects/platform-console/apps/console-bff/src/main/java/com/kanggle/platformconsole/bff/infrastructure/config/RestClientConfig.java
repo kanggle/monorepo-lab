@@ -29,7 +29,10 @@ import java.time.Duration;
  *
  * <p>Each bean shares the OTel-traced builder baseline ({@link #restClientBuilder})
  * and applies a per-leg request/read timeout aligned with the composition's 5s
- * total budget (per-leg 2s; § 2.4.9.1 Implementation guidance).
+ * total budget (per-leg 2s; § 2.4.9.1 Implementation guidance). The identical
+ * clone→baseUrl→timeout→build construction is single-sourced in {@link #perDomainClient}
+ * (TASK-PC-BE-014); each bean keeps its own name, {@code @Value} property key, and type
+ * so downstream {@code @Qualifier} injection is unaffected.
  *
  * <p>The per-leg circuit-breaker / retry primitives from {@code libs/java-web}
  * (Resilience4j) are applied at the call site (see the composition use case)
@@ -53,51 +56,46 @@ public class RestClientConfig {
     @Bean(name = "gapRestClient")
     public RestClient gapRestClient(RestClient.Builder builder,
                                     @Value("${consolebff.outbound.gap.base-url}") String baseUrl) {
-        return builder.clone()
-                .baseUrl(baseUrl)
-                .requestFactory(timeoutRequestFactory())
-                .build();
+        return perDomainClient(builder, baseUrl);
     }
 
     @Bean(name = "wmsRestClient")
     public RestClient wmsRestClient(RestClient.Builder builder,
                                     @Value("${consolebff.outbound.wms.base-url}") String baseUrl) {
-        return builder.clone()
-                .baseUrl(baseUrl)
-                .requestFactory(timeoutRequestFactory())
-                .build();
+        return perDomainClient(builder, baseUrl);
     }
 
     @Bean(name = "scmRestClient")
     public RestClient scmRestClient(RestClient.Builder builder,
                                     @Value("${consolebff.outbound.scm.base-url}") String baseUrl) {
-        return builder.clone()
-                .baseUrl(baseUrl)
-                .requestFactory(timeoutRequestFactory())
-                .build();
+        return perDomainClient(builder, baseUrl);
     }
 
     @Bean(name = "financeRestClient")
     public RestClient financeRestClient(RestClient.Builder builder,
                                         @Value("${consolebff.outbound.finance.base-url}") String baseUrl) {
-        return builder.clone()
-                .baseUrl(baseUrl)
-                .requestFactory(timeoutRequestFactory())
-                .build();
+        return perDomainClient(builder, baseUrl);
     }
 
     @Bean(name = "erpRestClient")
     public RestClient erpRestClient(RestClient.Builder builder,
                                     @Value("${consolebff.outbound.erp.base-url}") String baseUrl) {
-        return builder.clone()
-                .baseUrl(baseUrl)
-                .requestFactory(timeoutRequestFactory())
-                .build();
+        return perDomainClient(builder, baseUrl);
     }
 
     @Bean(name = "ecommerceRestClient")
     public RestClient ecommerceRestClient(RestClient.Builder builder,
                                           @Value("${consolebff.outbound.ecommerce.base-url}") String baseUrl) {
+        return perDomainClient(builder, baseUrl);
+    }
+
+    /**
+     * Shared construction for every per-domain {@link RestClient}: clone the OTel-traced
+     * {@code builder}, pin the leg {@code baseUrl}, and apply a fresh per-leg timeout
+     * factory. A new {@link #timeoutRequestFactory()} instance is created per call so each
+     * bean keeps its own request factory (identical to the pre-dedup per-bean semantics).
+     */
+    private static RestClient perDomainClient(RestClient.Builder builder, String baseUrl) {
         return builder.clone()
                 .baseUrl(baseUrl)
                 .requestFactory(timeoutRequestFactory())
