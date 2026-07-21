@@ -914,10 +914,13 @@ u_to_mib() {
 }
 # <compose-file> → 그 파일 kafka 블록의 선언 리밋(원문). 블록/리밋 없으면 "".
 # ⚠️ 들여쓰기 칸수를 하드코딩하지 않는다(첫 판본이 그래서 리밋을 못 읽고 공허 FAIL 냈다).
+# ⚠️ `|| true` 는 **필수**다: 미선언 브로커는 grep 이 no-match(1)를 내는데, 스크립트의
+# `set -o pipefail` 이 그걸 전파하면 `raw="$(u_declared_limit_of …)"` 명령치환이 `set -e`
+# 로 스크립트를 죽인다(미선언=정상 케이스인데 abort). head 의 SIGPIPE(141)도 같이 삼킨다.
 u_declared_limit_of() {
   awk '/^  kafka:$/{f=1;next} /^  [A-Za-z0-9._-]+:$/{f=0} f' "$1" \
     | grep -E '^[[:space:]]*(memory|mem_limit):[[:space:]]' | head -1 \
-    | sed -E 's/^[[:space:]]*(memory|mem_limit):[[:space:]]*//'
+    | sed -E 's/^[[:space:]]*(memory|mem_limit):[[:space:]]*//' || true
 }
 
 # ── 정적 하한 검사 — 발견된 전 브로커 (B) ──────────────────────────────────────
