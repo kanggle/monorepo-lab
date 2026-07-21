@@ -104,6 +104,47 @@ export const transientCookieOpts = {
   maxAge: 600, // 10 min — bounded login round-trip
 };
 
+/** The awaited cookie store returned by {@link cookies} — the mutation surface
+ *  the `clear*Session` helpers operate on. */
+type CookieStore = Awaited<ReturnType<typeof cookies>>;
+
+/**
+ * Drop the active-tenant selection and its coupled assumed (domain-facing) token.
+ *
+ * These two are set/cleared together BY CONSTRUCTION (ADR-MONO-020 D4 / § 2.7) —
+ * the assumed token is scoped to {@link TENANT_COOKIE}, so a stale assumed token
+ * must never outlive the tenant it was minted for. Used on re-assume failure
+ * where the base IAM + operator session stays valid and only the tenant selection
+ * resets.
+ */
+export function clearTenantSelection(jar: CookieStore): void {
+  jar.delete(ASSUMED_TOKEN_COOKIE);
+  jar.delete(TENANT_COOKIE);
+}
+
+/**
+ * End the operator session: drop the operator token plus the tenant selection it
+ * scopes ({@link clearTenantSelection}). The IAM OIDC cookies (access/refresh/id)
+ * are KEPT — this is the pre-operator state the `(onboarding)` route group admits
+ * (a valid IAM login that is not yet an operator of any tenant).
+ */
+export function clearOperatorSession(jar: CookieStore): void {
+  jar.delete(OPERATOR_COOKIE);
+  clearTenantSelection(jar);
+}
+
+/**
+ * Drop the ENTIRE console session — the IAM OIDC cookies (access/refresh/id_token)
+ * plus the operator session ({@link clearOperatorSession}). Leaves no partial
+ * authed state; the API client falls back to a clean re-login.
+ */
+export function clearFullSession(jar: CookieStore): void {
+  jar.delete(ACCESS_COOKIE);
+  jar.delete(REFRESH_COOKIE);
+  jar.delete(ID_TOKEN_COOKIE);
+  clearOperatorSession(jar);
+}
+
 /**
  * Server-side read of the IAM OIDC access token (or null).
  *

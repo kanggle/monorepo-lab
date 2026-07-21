@@ -8,10 +8,10 @@ import {
   OPERATOR_COOKIE,
   ID_TOKEN_COOKIE,
   TENANT_COOKIE,
-  ASSUMED_TOKEN_COOKIE,
   PKCE_VERIFIER_COOKIE,
   OAUTH_STATE_COOKIE,
   tokenCookieOpts,
+  clearOperatorSession,
 } from '@/shared/lib/session';
 import { exchangeForOperatorToken } from '@/shared/lib/operator-token-exchange';
 import { homeTenantFromAccessToken } from '@/shared/lib/jwt';
@@ -168,9 +168,7 @@ export async function GET(req: Request) {
       // failed exchange never leaves a stale tenant pointing at a session with
       // no operator credential (TASK-PC-FE-036). `isAuthenticated()` requires
       // BOTH cookies, so neither branch below can reach the `(console)` shell.
-      jar.delete(OPERATOR_COOKIE);
-      jar.delete(TENANT_COOKIE);
-      jar.delete(ASSUMED_TOKEN_COOKIE);
+      clearOperatorSession(jar);
 
       if (notProvisioned) {
         // fail_closed (exchange 401) = a VALID IAM login that is simply not
