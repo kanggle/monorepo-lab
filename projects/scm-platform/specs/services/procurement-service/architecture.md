@@ -689,10 +689,10 @@ is bootstrapped.
 | 3 | Cross-tenant JWT — `tenant_id ∉ {scm, *}` **and** signed `entitled_domains ∌ scm` (dual-accept both branches fail) | 403 `TENANT_FORBIDDEN` (validator chain or filter) |
 | 4 | Redis offline during idempotency check | fail-CLOSED → fall back to `idempotency_keys` table; if both unavailable, 503 `IDEMPOTENCY_STORE_UNAVAILABLE` |
 | 5 | Supplier circuit OPEN | 503 `SUPPLIER_UNAVAILABLE` (translated by fallback method); PO stays in pre-call status |
-| 6 | Supplier 4xx (HttpClientErrorException) | propagates, no retry; mapped to 502 `SUPPLIER_REJECTED` by GlobalExceptionHandler |
+| 6 | Supplier 4xx (HttpClientErrorException) | not retried (4xx excluded from `@Retry`); the `@CircuitBreaker(supplier)` `submitFallback` re-wraps it — like any adapter failure — as `SupplierUnavailableException` → 503 `SUPPLIER_UNAVAILABLE`. No distinct 502 `SUPPLIER_REJECTED` mapping exists: a supplier *business* rejection is not currently distinguished from *unavailability* (the breaker fallback masks the 4xx before any handler sees it). Distinguishing them would need `ignoreExceptions` on the breaker + a dedicated handler — deliberately deferred, not shipped. |
 | 7 | Supplier transient 5xx | retried up to 3× with exponential + jitter; success → continue, exhaustion → SupplierUnavailableException |
 | 8 | Bulkhead saturation | 503 `SUPPLIER_UNAVAILABLE` after 100ms wait |
-| 9 | PO state transition not allowed | 409 `PO_STATUS_TRANSITION_INVALID` (`PoStatusTransitionInvalidException`) |
+| 9 | PO state transition not allowed | 422 `PO_STATUS_TRANSITION_INVALID` (`PoStatusTransitionInvalidException`) |
 | 10 | ASN over-receipt (cumulative > ordered) | 422 `ASN_OVERRECEIPT` (`AsnOverreceiptException`) |
 | 11 | Duplicate ASN webhook (same `supplierAsnRef`) | idempotent — returns the existing ASN with the original response shape |
 | 12 | Already-ACK PO receives another supplier-ack webhook | idempotent no-op — returns the PO in its current status |
