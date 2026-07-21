@@ -188,11 +188,11 @@ This ADR asserts facts about the current repo; each is checkable:
 | Claim | Check |
 |---|---|
 | No MDM component exists | no service, spec, or contract is **named** `mdm` / `master data management`. The repo-wide string search is non-zero and grows as tickets cite this ADR, but no hit is a component: matches are documents naming this ADR/decision plus the `mdm` substring inside Testcontainers' `createNetworkCmdModifier` in E2E test bases. Verify the absence of a *component* (a named service/spec/contract), not the string count. |
-| SKU crosses boundaries as a code, not a UUID | `skuCode` present in the payloads of `master-events.md`, `ecommerce-fulfillment-subscriptions.md`, `replenishment-subscriptions.md`, `scm-procurement-events.md` |
+| SKU crosses boundaries as a code, not a UUID | `skuCode` present in the payloads of `master-events.md`, `fulfillment-events.md`, `replenishment-subscriptions.md`, `scm-procurement-events.md` |
 | No producer-side id map exists | "No wms↔ecommerce id map is stored" — `wms-shipment-subscriptions.md:42-45` |
 | Supplier is triplicated | three schemas at the §1.3 citations |
 | Supplier is not joined cross-project | `procurement-service/data-model.md:82` (no FK declared); `masterdata-service/architecture.md:382-385` (no real integration) |
-| The tripwire has not fired | `erp.masterdata.businesspartner.changed.v1` subscriber count = 0 (`erp-masterdata-events.md:48-51`) |
+| The tripwire has not fired | `erp.masterdata.businesspartner.changed.v1` has zero subscribers — the read-model subscription list explicitly excludes it (`read-model-subscriptions.md:23`; read-model consumes only the sibling org-view topics, and `erp-masterdata-events.md:48-51` records "v1 consumers = none") |
 | A hub would break extraction | per-contract "Standalone-publish degradation" clauses; `TEMPLATE.md` § Cross-Project Runtime Coupling (Extraction Constraint) |
 
 Re-run these before citing this ADR as current. Per repo practice, a prior count is a hypothesis, not a source — recount rather than inherit.
