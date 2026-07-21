@@ -143,6 +143,13 @@ window — grain-agnostic).
   genuinely **overlapping** (non-identical) windows remain permitted by design, and
   re-opening the same window after the earlier one is CLOSED is permitted so a
   correction re-run is not blocked.
+- **Residual double-payout risk of the overlap allowance (retained by design).** Because
+  `close` folds every accrual in `[from, to)` into `seller_payout` rows without mutating
+  the accrual, two genuinely-overlapping (non-identical) OPEN windows — once both closed —
+  each fold the accruals in their intersection, paying those accruals twice. Only *exact*
+  duplicates are guarded (the partial unique index); non-identical overlaps are **not**
+  defended in code. The window is an operator-supplied natural key, so this boundary is the
+  operator's to respect. This is a deliberate, documented acceptance — not an oversight.
 
 **Response 201**
 ```json
