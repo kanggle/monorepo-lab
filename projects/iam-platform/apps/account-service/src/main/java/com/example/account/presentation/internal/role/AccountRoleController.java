@@ -2,7 +2,7 @@ package com.example.account.presentation.internal.role;
 
 import com.example.account.application.command.AddAccountRoleCommand;
 import com.example.account.application.command.RemoveAccountRoleCommand;
-import com.example.account.application.exception.TenantScopeDeniedException;
+import com.example.account.presentation.internal.TenantScopeGuard;
 import com.example.account.application.result.AccountRoleMutationResult;
 import com.example.account.application.service.AddAccountRoleUseCase;
 import com.example.account.application.service.GetAccountRolesUseCase;
@@ -59,7 +59,7 @@ public class AccountRoleController {
             @RequestHeader(value = "X-Tenant-Id", required = false) String callerTenantId,
             @Valid @RequestBody SingleRoleMutationRequest request) {
 
-        validateTenantScope(callerTenantId, tenantId);
+        TenantScopeGuard.validate(callerTenantId, tenantId);
 
         AddAccountRoleCommand command = new AddAccountRoleCommand(
                 tenantId, accountId, request.roleName(), request.operatorId());
@@ -78,7 +78,7 @@ public class AccountRoleController {
             @RequestHeader(value = "X-Tenant-Id", required = false) String callerTenantId,
             @Valid @RequestBody SingleRoleMutationRequest request) {
 
-        validateTenantScope(callerTenantId, tenantId);
+        TenantScopeGuard.validate(callerTenantId, tenantId);
 
         RemoveAccountRoleCommand command = new RemoveAccountRoleCommand(
                 tenantId, accountId, request.roleName(), request.operatorId());
@@ -101,21 +101,10 @@ public class AccountRoleController {
             @PathVariable String accountId,
             @RequestHeader(value = "X-Tenant-Id", required = false) String callerTenantId) {
 
-        validateTenantScope(callerTenantId, tenantId);
+        TenantScopeGuard.validate(callerTenantId, tenantId);
 
         List<String> roles = getAccountRolesUseCase.execute(tenantId, accountId);
         return ResponseEntity.ok(AccountRolesResponse.of(accountId, tenantId, roles));
     }
 
-    /**
-     * Defense-in-depth tenant scope check. Mirrors
-     * {@code TenantProvisioningController#validateTenantScope}: the gateway
-     * performs the primary validation; this is a second line of defense.
-     */
-    private void validateTenantScope(String callerTenantId, String pathTenantId) {
-        if (callerTenantId != null && !callerTenantId.isBlank()
-                && !callerTenantId.equals(pathTenantId)) {
-            throw new TenantScopeDeniedException(callerTenantId, pathTenantId);
-        }
-    }
 }

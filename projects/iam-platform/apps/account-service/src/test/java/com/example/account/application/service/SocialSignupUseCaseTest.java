@@ -18,7 +18,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -53,12 +52,15 @@ class SocialSignupUseCaseTest {
     @Mock
     private TenantRepository tenantRepository;
 
-    @InjectMocks
     private SocialSignupUseCase socialSignupUseCase;
 
     /** TASK-BE-507: social signup validates its tenant first, like every other create path. */
     @BeforeEach
-    void tenantIsActive() {
+    void setUp() {
+        // Real ActiveTenantGuard over the mocked TenantRepository — behaviour and every
+        // assertion below are preserved verbatim; only the wiring changed.
+        socialSignupUseCase = new SocialSignupUseCase(accountRepository, profileRepository,
+                eventPublisher, accountIdentityProvisioner, new ActiveTenantGuard(tenantRepository));
         lenient().when(tenantRepository.findById(any(TenantId.class)))
                 .thenAnswer(inv -> {
                     TenantId id = inv.getArgument(0);

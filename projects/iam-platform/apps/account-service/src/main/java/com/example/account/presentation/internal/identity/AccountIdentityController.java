@@ -1,6 +1,6 @@
 package com.example.account.presentation.internal.identity;
 
-import com.example.account.application.exception.TenantScopeDeniedException;
+import com.example.account.presentation.internal.TenantScopeGuard;
 import com.example.account.application.service.GetAccountIdentityUseCase;
 import com.example.account.presentation.dto.response.AccountIdentityResponse;
 import lombok.RequiredArgsConstructor;
@@ -39,16 +39,10 @@ public class AccountIdentityController {
             @PathVariable String accountId,
             @RequestHeader(value = "X-Tenant-Id", required = false) String callerTenantId) {
 
-        validateTenantScope(callerTenantId, tenantId);
+        TenantScopeGuard.validate(callerTenantId, tenantId);
 
         String identityId = getAccountIdentityUseCase.execute(tenantId, accountId).orElse(null);
         return ResponseEntity.ok(AccountIdentityResponse.of(accountId, tenantId, identityId));
     }
 
-    private void validateTenantScope(String callerTenantId, String pathTenantId) {
-        if (callerTenantId != null && !callerTenantId.isBlank()
-                && !callerTenantId.equals(pathTenantId)) {
-            throw new TenantScopeDeniedException(callerTenantId, pathTenantId);
-        }
-    }
 }

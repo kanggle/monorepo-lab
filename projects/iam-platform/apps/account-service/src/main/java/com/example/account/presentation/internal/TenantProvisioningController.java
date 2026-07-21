@@ -2,7 +2,6 @@ package com.example.account.presentation.internal;
 
 import com.example.account.application.command.AssignRolesCommand;
 import com.example.account.application.command.ProvisionAccountCommand;
-import com.example.account.application.exception.TenantScopeDeniedException;
 import com.example.account.application.result.AssignRolesResult;
 import com.example.account.application.result.ProvisionAccountResult;
 import com.example.account.application.result.ProvisionedAccountDetailResult;
@@ -71,7 +70,7 @@ public class TenantProvisioningController {
             @RequestHeader(value = "X-Tenant-Id", required = false) String callerTenantId,
             @Valid @RequestBody ProvisionAccountRequest request) {
 
-        validateTenantScope(callerTenantId, tenantId);
+        TenantScopeGuard.validate(callerTenantId, tenantId);
 
         ProvisionAccountCommand command = new ProvisionAccountCommand(
                 tenantId,
@@ -101,7 +100,7 @@ public class TenantProvisioningController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String status) {
 
-        validateTenantScope(callerTenantId, tenantId);
+        TenantScopeGuard.validate(callerTenantId, tenantId);
 
         AccountStatus statusFilter = status != null ? AccountStatus.valueOf(status) : null;
         ProvisionedAccountListResult result = tenantAccountQueryUseCase.listAccounts(
@@ -119,7 +118,7 @@ public class TenantProvisioningController {
             @PathVariable String accountId,
             @RequestHeader(value = "X-Tenant-Id", required = false) String callerTenantId) {
 
-        validateTenantScope(callerTenantId, tenantId);
+        TenantScopeGuard.validate(callerTenantId, tenantId);
 
         ProvisionedAccountDetailResult result = tenantAccountQueryUseCase.getAccount(tenantId, accountId);
         return ResponseEntity.ok(ProvisionedAccountDetailResponse.from(result));
@@ -136,7 +135,7 @@ public class TenantProvisioningController {
             @RequestHeader(value = "X-Tenant-Id", required = false) String callerTenantId,
             @Valid @RequestBody AssignRolesRequest request) {
 
-        validateTenantScope(callerTenantId, tenantId);
+        TenantScopeGuard.validate(callerTenantId, tenantId);
 
         AssignRolesCommand command = new AssignRolesCommand(
                 tenantId,
@@ -160,7 +159,7 @@ public class TenantProvisioningController {
             @RequestHeader(value = "X-Tenant-Id", required = false) String callerTenantId,
             @Valid @RequestBody ProvisionStatusChangeRequest request) {
 
-        validateTenantScope(callerTenantId, tenantId);
+        TenantScopeGuard.validate(callerTenantId, tenantId);
 
         AccountStatus targetStatus = AccountStatus.valueOf(request.status());
         ProvisionedStatusChangeResult result = provisionStatusChangeUseCase.execute(
@@ -179,7 +178,7 @@ public class TenantProvisioningController {
             @RequestHeader(value = "X-Tenant-Id", required = false) String callerTenantId,
             @RequestBody(required = false) ProvisionPasswordResetRequest request) {
 
-        validateTenantScope(callerTenantId, tenantId);
+        TenantScopeGuard.validate(callerTenantId, tenantId);
 
         String operatorId = request != null ? request.operatorId() : null;
         ProvisionPasswordResetResult result = provisionPasswordResetUseCase.execute(
@@ -187,23 +186,4 @@ public class TenantProvisioningController {
         return ResponseEntity.ok(ProvisionPasswordResetResponse.from(result));
     }
 
-    /**
-     * Defense-in-depth tenant scope validation.
-     *
-     * <p>The gateway performs primary validation (TASK-BE-230). This method is the
-     * second line of defense at the controller level.
-     *
-     * <p>If {@code X-Tenant-Id} is absent (e.g., service-to-service without JWT),
-     * validation is skipped — the gateway's mTLS / shared-token layer is trusted.
-     *
-     * @param callerTenantId value from {@code X-Tenant-Id} header (may be null)
-     * @param pathTenantId   the {@code {tenantId}} path variable
-     * @throws TenantScopeDeniedException if the header is present and does not match the path
-     */
-    private void validateTenantScope(String callerTenantId, String pathTenantId) {
-        if (callerTenantId != null && !callerTenantId.isBlank()
-                && !callerTenantId.equals(pathTenantId)) {
-            throw new TenantScopeDeniedException(callerTenantId, pathTenantId);
-        }
-    }
 }
