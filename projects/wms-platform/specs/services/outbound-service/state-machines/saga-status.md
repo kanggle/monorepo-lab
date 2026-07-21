@@ -29,7 +29,7 @@ Order machine, see [`order-status.md`](order-status.md).
 | `PACKING_CONFIRMED` | no | `SealPackingUnitUseCase` (REST, last seal) | All units sealed; order fully packed. Order in `PACKED`. Awaiting shipping confirmation. |
 | `SHIPPED` | no | `ConfirmShippingUseCase` (REST) | Shipment created; `outbound.shipping.confirmed` published. Awaiting `inventory.confirmed` AND TMS ack. |
 | `COMPLETED` | **yes** | `InventoryConfirmedConsumer` (Kafka) | Inventory consumed reserved stock. Saga done. (TMS may still be pending — independent side-channel on Shipment.) |
-| `RESERVE_FAILED` | **yes** | `InventoryAdjustedConsumer` filtered: `INSUFFICIENT_STOCK` | Inventory could not reserve. Order moved to `BACKORDERED`. No compensation emitted (all-or-nothing reserve — no resources held). |
+| `RESERVE_FAILED` | **yes** | `InventoryReserveFailedConsumer` (`inventory.reserve.failed`) | Inventory could not reserve. Order moved to `BACKORDERED`. No compensation emitted (all-or-nothing reserve — no resources held). |
 | `CANCELLATION_REQUESTED` | no | `CancelOrderUseCase` from `RESERVED`/`PICKING_CONFIRMED`/`PACKING_CONFIRMED` | Cancel issued; `outbound.picking.cancelled` written to outbox. Awaiting `inventory.released`. |
 | `CANCELLED` | **yes** | `InventoryReleasedConsumer` (Kafka), OR `CancelOrderUseCase` directly when saga was still `REQUESTED` (no reservation exists) | Compensation complete. Saga done. |
 | `SHIPPED_NOT_NOTIFIED` | no (alert) | TMS retry exhaustion (after-commit handler) | Shipment was published to outbox + `inventory.confirmed` may have arrived; TMS push failed after retry/circuit/bulkhead exhaustion. Stock already consumed. Stays here until manual `:retry-tms-notify` succeeds (→ `COMPLETED` if `inventory.confirmed` arrived). |
@@ -51,7 +51,7 @@ Order machine, see [`order-status.md`](order-status.md).
                                │
                 ┌──────────────┴───────────────┐
                 │                              │
-                │ inventory.adjusted{INSUFFICIENT_STOCK} (Kafka)
+                │ inventory.reserve.failed{INSUFFICIENT_STOCK} (Kafka)
                 │                              │
                 ▼                              ▼
         ┌──────────────┐               ┌──────────────┐
@@ -126,7 +126,7 @@ Order machine, see [`order-status.md`](order-status.md).
 stateDiagram-v2
     [*] --> REQUESTED : ReceiveOrderUseCase<br/>(emits picking.requested)
     REQUESTED --> RESERVED : inventory.reserved
-    REQUESTED --> RESERVE_FAILED : inventory.adjusted<br/>{INSUFFICIENT_STOCK}
+    REQUESTED --> RESERVE_FAILED : inventory.reserve.failed<br/>{INSUFFICIENT_STOCK}
     REQUESTED --> CANCELLED : cancel<br/>(no reservation yet)
     RESERVED --> PICKING_CONFIRMED : confirmPicking
     RESERVED --> CANCELLATION_REQUESTED : cancel
@@ -155,7 +155,7 @@ stateDiagram-v2
 |---|---|---|---|---|---|
 | (none) | `REQUESTED` | `ReceiveOrderUseCase` (REST/webhook background) | n/a | new row | Atomic with Order creation, PickingRequest creation, Outbox: `outbound.order.received` + `outbound.picking.requested` |
 | `REQUESTED` | `RESERVED` | `InventoryReservedConsumer` consumes `inventory.reserved` | YES (`outbound_event_dedupe`) | YES (Saga.version++) | PickingRequest.status → `SUBMITTED`. No outbox row (REST drives next step) |
-| `REQUESTED` | `RESERVE_FAILED` | `InventoryAdjustedConsumer` consumes `inventory.adjusted` filtered to `reason=INSUFFICIENT_STOCK` | YES | YES | Order.backorder() → `BACKORDERED`. Outbox: `outbound.order.cancelled` (carries `reason=BACKORDERED`) |
+| `REQUESTED` | `RESERVE_FAILED` | `InventoryReserveFailedConsumer` consumes `inventory.reserve.failed` | YES | YES | Order.backorder() → `BACKORDERED`. Outbox: `outbound.order.cancelled` (carries `reason=BACKORDERED`) |
 | `REQUESTED` | `CANCELLED` | `CancelOrderUseCase` (REST) — no reservation yet exists | n/a | YES | Order.cancel() → `CANCELLED`. Outbox: `outbound.order.cancelled` ONLY (no `picking.cancelled` because no reservation) |
 | `RESERVED` | `PICKING_CONFIRMED` | `ConfirmPickingUseCase` (REST) | n/a (REST) | YES | Atomic with Order.completePicking() → `PICKED`, PickingConfirmation creation, Outbox: `outbound.picking.completed` |
 | `RESERVED` / `PICKING_CONFIRMED` / `PACKING_CONFIRMED` | `CANCELLATION_REQUESTED` | `CancelOrderUseCase` (REST) | n/a | YES | Atomic with Order.cancel() → `CANCELLED`, Outbox: `outbound.picking.cancelled` + `outbound.order.cancelled` |
