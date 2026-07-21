@@ -6,6 +6,8 @@ import com.example.erp.masterdata.application.command.Commands.CreateJobGradeCom
 import com.example.erp.masterdata.application.command.Commands.RetireJobGradeCommand;
 import com.example.erp.masterdata.application.command.Commands.UpdateJobGradeCommand;
 import com.example.erp.masterdata.application.view.JobGradeView;
+import com.example.erp.masterdata.domain.common.PageResult;
+import com.example.erp.masterdata.domain.jobgrade.repository.JobGradeListFilter;
 import com.example.erp.masterdata.infrastructure.security.ActorContextResolver;
 import com.example.erp.masterdata.presentation.dto.ApiEnvelope;
 import com.example.erp.masterdata.presentation.dto.JobGradeRequests.CreateJobGradeRequest;
@@ -54,11 +56,15 @@ public class JobGradeController {
 
     @GetMapping
     public ResponseEntity<ApiEnvelope<List<JobGradeView>>> list(
+            @RequestParam(required = false) LocalDate asOf,
+            @RequestParam(required = false) Boolean active,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         ActorContext actor = ActorContextResolver.currentOrThrow();
-        List<JobGradeView> data = service.listJobGrades(actor, page, size);
-        return ResponseEntity.ok(ApiEnvelope.ofList(data, page, size));
+        PageResult<JobGradeView> result = service.listJobGrades(actor,
+                new JobGradeListFilter(asOf, active), page, size);
+        return ResponseEntity.ok(
+                ApiEnvelope.ofList(result.content(), page, size, result.totalElements()));
     }
 
     @GetMapping("/{id}")

@@ -1,7 +1,9 @@
 package com.example.erp.masterdata.infrastructure.persistence.jpa;
 
 import com.example.erp.masterdata.domain.common.MasterStatus;
+import com.example.erp.masterdata.domain.common.PageResult;
 import com.example.erp.masterdata.domain.costcenter.CostCenter;
+import com.example.erp.masterdata.domain.costcenter.repository.CostCenterListFilter;
 import com.example.erp.masterdata.domain.costcenter.repository.CostCenterRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -32,8 +34,12 @@ public class CostCenterRepositoryImpl implements CostCenterRepository {
     }
 
     @Override
-    public List<CostCenter> findAll(String tenantId, int page, int size) {
-        return jpa.findAllByTenantId(tenantId, PageRequest.of(page, size));
+    public PageResult<CostCenter> findAll(String tenantId, CostCenterListFilter filter, int page, int size) {
+        MasterStatus status = MasterStatusFilters.toStatus(filter.active());
+        List<CostCenter> content = jpa.findFiltered(tenantId, status, filter.departmentId(),
+                filter.asOf(), PageRequest.of(page, size));
+        long total = jpa.countFiltered(tenantId, status, filter.departmentId(), filter.asOf());
+        return new PageResult<>(content, total);
     }
 
     @Override

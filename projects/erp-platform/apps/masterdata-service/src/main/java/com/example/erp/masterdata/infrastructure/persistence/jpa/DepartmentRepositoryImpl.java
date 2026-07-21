@@ -1,7 +1,9 @@
 package com.example.erp.masterdata.infrastructure.persistence.jpa;
 
 import com.example.erp.masterdata.domain.common.MasterStatus;
+import com.example.erp.masterdata.domain.common.PageResult;
 import com.example.erp.masterdata.domain.department.Department;
+import com.example.erp.masterdata.domain.department.repository.DepartmentListFilter;
 import com.example.erp.masterdata.domain.department.repository.DepartmentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -35,8 +37,12 @@ public class DepartmentRepositoryImpl implements DepartmentRepository {
     }
 
     @Override
-    public List<Department> findAll(String tenantId, int page, int size) {
-        return jpa.findAllByTenantId(tenantId, PageRequest.of(page, size));
+    public PageResult<Department> findAll(String tenantId, DepartmentListFilter filter, int page, int size) {
+        MasterStatus status = MasterStatusFilters.toStatus(filter.active());
+        List<Department> content = jpa.findFiltered(tenantId, status, filter.parentId(),
+                filter.asOf(), PageRequest.of(page, size));
+        long total = jpa.countFiltered(tenantId, status, filter.parentId(), filter.asOf());
+        return new PageResult<>(content, total);
     }
 
     @Override

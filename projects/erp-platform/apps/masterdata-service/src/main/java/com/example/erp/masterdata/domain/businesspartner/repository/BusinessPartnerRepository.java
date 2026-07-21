@@ -1,8 +1,8 @@
 package com.example.erp.masterdata.domain.businesspartner.repository;
 
 import com.example.erp.masterdata.domain.businesspartner.BusinessPartner;
+import com.example.erp.masterdata.domain.common.PageResult;
 
-import java.util.List;
 import java.util.Optional;
 
 public interface BusinessPartnerRepository {
@@ -12,5 +12,9 @@ public interface BusinessPartnerRepository {
 
     Optional<BusinessPartner> findByCode(String code, String tenantId);
 
-    List<BusinessPartner> findAll(String tenantId, int page, int size);
+    /**
+     * Filtered, paginated list with the TRUE total-row count
+     * (masterdata-api.md § GET /business-partners + § PageMeta).
+     */
+    PageResult<BusinessPartner> findAll(String tenantId, BusinessPartnerListFilter filter, int page, int size);
 }

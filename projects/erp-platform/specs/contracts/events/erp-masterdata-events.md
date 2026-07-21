@@ -2,7 +2,7 @@
 
 Kafka events published by `erp-platform/apps/masterdata-service` through
 the **transactional outbox** (`libs/java-messaging` `BaseEventPublisher` +
-`MasterdataOutboxPollingScheduler extends OutboxPollingScheduler`).
+`MasterdataOutboxPublisher extends AbstractOutboxPublisher<MasterdataOutboxJpaEntity>`).
 
 Authoritative architecture:
 [`masterdata-service/architecture.md`](../../services/masterdata-service/architecture.md).

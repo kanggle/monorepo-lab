@@ -33,13 +33,18 @@ import com.example.erp.masterdata.domain.authorization.RequiredScope;
 import com.example.erp.masterdata.domain.businesspartner.BusinessPartner;
 import com.example.erp.masterdata.domain.businesspartner.PartnerType;
 import com.example.erp.masterdata.domain.businesspartner.PaymentTerms;
+import com.example.erp.masterdata.domain.businesspartner.repository.BusinessPartnerListFilter;
 import com.example.erp.masterdata.domain.businesspartner.repository.BusinessPartnerRepository;
+import com.example.erp.masterdata.domain.common.PageResult;
 import com.example.erp.masterdata.domain.costcenter.CostCenter;
+import com.example.erp.masterdata.domain.costcenter.repository.CostCenterListFilter;
 import com.example.erp.masterdata.domain.costcenter.repository.CostCenterRepository;
 import com.example.erp.masterdata.domain.department.Department;
+import com.example.erp.masterdata.domain.department.repository.DepartmentListFilter;
 import com.example.erp.masterdata.domain.department.repository.DepartmentRepository;
 import com.example.erp.masterdata.domain.effectivedate.EffectivePeriod;
 import com.example.erp.masterdata.domain.employee.Employee;
+import com.example.erp.masterdata.domain.employee.repository.EmployeeListFilter;
 import com.example.erp.masterdata.domain.employee.repository.EmployeeRepository;
 import com.example.erp.masterdata.domain.error.DomainErrors.DataScopeForbiddenException;
 import com.example.erp.masterdata.domain.error.DomainErrors.MasterdataDuplicateKeyException;
@@ -48,6 +53,7 @@ import com.example.erp.masterdata.domain.error.DomainErrors.MasterdataParentCycl
 import com.example.erp.masterdata.domain.error.DomainErrors.MasterdataReferenceViolationException;
 import com.example.erp.masterdata.domain.error.DomainErrors.PermissionDeniedException;
 import com.example.erp.masterdata.domain.jobgrade.JobGrade;
+import com.example.erp.masterdata.domain.jobgrade.repository.JobGradeListFilter;
 import com.example.erp.masterdata.domain.jobgrade.repository.JobGradeRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -227,10 +233,11 @@ public class MasterdataApplicationService {
     }
 
     @Transactional(readOnly = true)
-    public List<DepartmentView> listDepartments(ActorContext actor, int page, int size) {
+    public PageResult<DepartmentView> listDepartments(ActorContext actor, DepartmentListFilter filter,
+                                                      int page, int size) {
         authorize(actor, RequiredScope.READ, null);
-        return departmentRepository.findAll(actor.tenantId(), page, size)
-                .stream().map(DepartmentView::from).toList();
+        return departmentRepository.findAll(actor.tenantId(), filter, page, size)
+                .map(DepartmentView::from);
     }
 
     // ====================================================================
@@ -322,10 +329,11 @@ public class MasterdataApplicationService {
     }
 
     @Transactional(readOnly = true)
-    public List<EmployeeView> listEmployees(ActorContext actor, int page, int size) {
+    public PageResult<EmployeeView> listEmployees(ActorContext actor, EmployeeListFilter filter,
+                                                  int page, int size) {
         authorize(actor, RequiredScope.READ, null);
-        return employeeRepository.findAll(actor.tenantId(), page, size)
-                .stream().map(EmployeeView::from).toList();
+        return employeeRepository.findAll(actor.tenantId(), filter, page, size)
+                .map(EmployeeView::from);
     }
 
     // ====================================================================
@@ -406,10 +414,11 @@ public class MasterdataApplicationService {
     }
 
     @Transactional(readOnly = true)
-    public List<JobGradeView> listJobGrades(ActorContext actor, int page, int size) {
+    public PageResult<JobGradeView> listJobGrades(ActorContext actor, JobGradeListFilter filter,
+                                                  int page, int size) {
         authorize(actor, RequiredScope.READ, null);
-        return jobGradeRepository.findAll(actor.tenantId(), page, size)
-                .stream().map(JobGradeView::from).toList();
+        return jobGradeRepository.findAll(actor.tenantId(), filter, page, size)
+                .map(JobGradeView::from);
     }
 
     // ====================================================================
@@ -495,10 +504,11 @@ public class MasterdataApplicationService {
     }
 
     @Transactional(readOnly = true)
-    public List<CostCenterView> listCostCenters(ActorContext actor, int page, int size) {
+    public PageResult<CostCenterView> listCostCenters(ActorContext actor, CostCenterListFilter filter,
+                                                      int page, int size) {
         authorize(actor, RequiredScope.READ, null);
-        return costCenterRepository.findAll(actor.tenantId(), page, size)
-                .stream().map(CostCenterView::from).toList();
+        return costCenterRepository.findAll(actor.tenantId(), filter, page, size)
+                .map(CostCenterView::from);
     }
 
     // ====================================================================
@@ -587,10 +597,12 @@ public class MasterdataApplicationService {
     }
 
     @Transactional(readOnly = true)
-    public List<BusinessPartnerView> listBusinessPartners(ActorContext actor, int page, int size) {
+    public PageResult<BusinessPartnerView> listBusinessPartners(ActorContext actor,
+                                                                BusinessPartnerListFilter filter,
+                                                                int page, int size) {
         authorize(actor, RequiredScope.READ, null);
-        return businessPartnerRepository.findAll(actor.tenantId(), page, size)
-                .stream().map(BusinessPartnerView::from).toList();
+        return businessPartnerRepository.findAll(actor.tenantId(), filter, page, size)
+                .map(BusinessPartnerView::from);
     }
 
     // ====================================================================

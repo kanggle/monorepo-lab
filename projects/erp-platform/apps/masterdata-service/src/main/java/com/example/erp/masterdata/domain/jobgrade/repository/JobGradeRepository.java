@@ -1,8 +1,8 @@
 package com.example.erp.masterdata.domain.jobgrade.repository;
 
+import com.example.erp.masterdata.domain.common.PageResult;
 import com.example.erp.masterdata.domain.jobgrade.JobGrade;
 
-import java.util.List;
 import java.util.Optional;
 
 public interface JobGradeRepository {
@@ -12,5 +12,9 @@ public interface JobGradeRepository {
 
     Optional<JobGrade> findByCode(String code, String tenantId);
 
-    List<JobGrade> findAll(String tenantId, int page, int size);
+    /**
+     * Filtered, paginated list with the TRUE total-row count
+     * (masterdata-api.md § GET /job-grades + § PageMeta).
+     */
+    PageResult<JobGrade> findAll(String tenantId, JobGradeListFilter filter, int page, int size);
 }

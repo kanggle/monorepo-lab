@@ -6,6 +6,8 @@ import com.example.erp.masterdata.application.command.Commands.CreateCostCenterC
 import com.example.erp.masterdata.application.command.Commands.RetireCostCenterCommand;
 import com.example.erp.masterdata.application.command.Commands.UpdateCostCenterCommand;
 import com.example.erp.masterdata.application.view.CostCenterView;
+import com.example.erp.masterdata.domain.common.PageResult;
+import com.example.erp.masterdata.domain.costcenter.repository.CostCenterListFilter;
 import com.example.erp.masterdata.infrastructure.security.ActorContextResolver;
 import com.example.erp.masterdata.presentation.dto.ApiEnvelope;
 import com.example.erp.masterdata.presentation.dto.CostCenterRequests.CreateCostCenterRequest;
@@ -54,11 +56,16 @@ public class CostCenterController {
 
     @GetMapping
     public ResponseEntity<ApiEnvelope<List<CostCenterView>>> list(
+            @RequestParam(required = false) LocalDate asOf,
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) String departmentId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         ActorContext actor = ActorContextResolver.currentOrThrow();
-        List<CostCenterView> data = service.listCostCenters(actor, page, size);
-        return ResponseEntity.ok(ApiEnvelope.ofList(data, page, size));
+        PageResult<CostCenterView> result = service.listCostCenters(actor,
+                new CostCenterListFilter(asOf, active, departmentId), page, size);
+        return ResponseEntity.ok(
+                ApiEnvelope.ofList(result.content(), page, size, result.totalElements()));
     }
 
     @GetMapping("/{id}")

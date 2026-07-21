@@ -6,6 +6,9 @@ import com.example.erp.masterdata.application.command.Commands.CreateBusinessPar
 import com.example.erp.masterdata.application.command.Commands.RetireBusinessPartnerCommand;
 import com.example.erp.masterdata.application.command.Commands.UpdateBusinessPartnerCommand;
 import com.example.erp.masterdata.application.view.BusinessPartnerView;
+import com.example.erp.masterdata.domain.businesspartner.PartnerType;
+import com.example.erp.masterdata.domain.businesspartner.repository.BusinessPartnerListFilter;
+import com.example.erp.masterdata.domain.common.PageResult;
 import com.example.erp.masterdata.infrastructure.security.ActorContextResolver;
 import com.example.erp.masterdata.presentation.dto.ApiEnvelope;
 import com.example.erp.masterdata.presentation.dto.BusinessPartnerRequests.CreateBusinessPartnerRequest;
@@ -58,11 +61,28 @@ public class BusinessPartnerController {
 
     @GetMapping
     public ResponseEntity<ApiEnvelope<List<BusinessPartnerView>>> list(
+            @RequestParam(required = false) LocalDate asOf,
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) String partnerType,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         ActorContext actor = ActorContextResolver.currentOrThrow();
-        List<BusinessPartnerView> data = service.listBusinessPartners(actor, page, size);
-        return ResponseEntity.ok(ApiEnvelope.ofList(data, page, size));
+        PageResult<BusinessPartnerView> result = service.listBusinessPartners(actor,
+                new BusinessPartnerListFilter(asOf, active, parsePartnerType(partnerType)), page, size);
+        return ResponseEntity.ok(
+                ApiEnvelope.ofList(result.content(), page, size, result.totalElements()));
+    }
+
+    /**
+     * Parse the optional {@code partnerType} filter (case-insensitive, mirroring
+     * the create path). Blank/absent → no constraint; an unknown value raises
+     * {@link IllegalArgumentException} → 400 VALIDATION_ERROR.
+     */
+    private static PartnerType parsePartnerType(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        return PartnerType.valueOf(raw.trim().toUpperCase());
     }
 
     @GetMapping("/{id}")

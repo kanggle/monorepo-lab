@@ -1,5 +1,6 @@
 package com.example.erp.masterdata.domain.costcenter.repository;
 
+import com.example.erp.masterdata.domain.common.PageResult;
 import com.example.erp.masterdata.domain.costcenter.CostCenter;
 
 import java.util.List;
@@ -12,7 +13,11 @@ public interface CostCenterRepository {
 
     Optional<CostCenter> findByCode(String code, String tenantId);
 
-    List<CostCenter> findAll(String tenantId, int page, int size);
+    /**
+     * Filtered, paginated list with the TRUE total-row count
+     * (masterdata-api.md § GET /cost-centers + § PageMeta).
+     */
+    PageResult<CostCenter> findAll(String tenantId, CostCenterListFilter filter, int page, int size);
 
     /** Active cost-centers referencing the given department — for retire guard. */
     List<CostCenter> findActiveByDepartmentId(String departmentId, String tenantId);

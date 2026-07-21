@@ -6,6 +6,8 @@ import com.example.erp.masterdata.application.command.Commands.CreateEmployeeCom
 import com.example.erp.masterdata.application.command.Commands.RetireEmployeeCommand;
 import com.example.erp.masterdata.application.command.Commands.UpdateEmployeeCommand;
 import com.example.erp.masterdata.application.view.EmployeeView;
+import com.example.erp.masterdata.domain.common.PageResult;
+import com.example.erp.masterdata.domain.employee.repository.EmployeeListFilter;
 import com.example.erp.masterdata.infrastructure.security.ActorContextResolver;
 import com.example.erp.masterdata.presentation.dto.ApiEnvelope;
 import com.example.erp.masterdata.presentation.dto.EmployeeRequests.CreateEmployeeRequest;
@@ -55,11 +57,17 @@ public class EmployeeController {
 
     @GetMapping
     public ResponseEntity<ApiEnvelope<List<EmployeeView>>> list(
+            @RequestParam(required = false) LocalDate asOf,
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) String departmentId,
+            @RequestParam(required = false) String costCenterId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         ActorContext actor = ActorContextResolver.currentOrThrow();
-        List<EmployeeView> data = service.listEmployees(actor, page, size);
-        return ResponseEntity.ok(ApiEnvelope.ofList(data, page, size));
+        PageResult<EmployeeView> result = service.listEmployees(actor,
+                new EmployeeListFilter(asOf, active, departmentId, costCenterId), page, size);
+        return ResponseEntity.ok(
+                ApiEnvelope.ofList(result.content(), page, size, result.totalElements()));
     }
 
     @GetMapping("/{id}")

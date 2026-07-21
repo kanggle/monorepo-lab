@@ -31,12 +31,18 @@ public record ApiEnvelope<T>(T data, Map<String, Object> meta) {
      * Convenience factory for paginated list responses. Produces the standard
      * {@code { data, meta: { page, size, totalElements, timestamp } }} envelope
      * used by all five master-data list endpoints.
+     *
+     * <p>{@code totalElements} is the TRUE total-row count for the query (across
+     * ALL pages), supplied by the repository's count query — NOT
+     * {@code data.size()} (masterdata-api.md § PageMeta). A caller on page 0 of a
+     * 25-row result sees {@code totalElements == 25} even though {@code data}
+     * holds only the page slice.
      */
-    public static <T> ApiEnvelope<List<T>> ofList(List<T> data, int page, int size) {
+    public static <T> ApiEnvelope<List<T>> ofList(List<T> data, int page, int size, long totalElements) {
         Map<String, Object> meta = new LinkedHashMap<>();
         meta.put("page", page);
         meta.put("size", size);
-        meta.put("totalElements", data.size());
+        meta.put("totalElements", totalElements);
         meta.put("timestamp", Instant.now().toString());
         return new ApiEnvelope<>(data, meta);
     }
