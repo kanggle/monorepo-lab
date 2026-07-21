@@ -1,6 +1,5 @@
 package com.example.fanplatform.membership.application;
 
-import com.example.fanplatform.membership.domain.membership.Membership;
 import com.example.fanplatform.membership.domain.membership.MembershipRepository;
 import com.example.fanplatform.membership.domain.time.ClockPort;
 import lombok.RequiredArgsConstructor;
@@ -27,10 +26,5 @@ public class ListMembershipsUseCase {
         return membershipRepository.findByAccount(actor.accountId(), actor.tenantId()).stream()
                 .map(m -> MembershipView.from(m, now))
                 .toList();
-    }
-
-    // exposed for unit-test parity with the controller mapping
-    static MembershipView view(Membership m, Instant now) {
-        return MembershipView.from(m, now);
     }
 }
