@@ -40,12 +40,12 @@ CI 게이트로 고정하지 않는다(백엔드 의존 + 환경 flake). 필요 
 
 ```bash
 # 1) 풀스택 기동 후 (또는 prod 빌드 미리보기)
-pnpm --filter web-store build && pnpm --filter web-store start   # :3000
+pnpm --filter web-store build && pnpm --filter web-store start   # :3001
 
 # 2) 별도 셸에서 주요 경로 측정
-npx lighthouse http://localhost:3000/           --only-categories=performance --output=json --output-path=./lh-home.json
-npx lighthouse http://localhost:3000/products    --only-categories=performance --output=json --output-path=./lh-products.json
-npx lighthouse "http://localhost:3000/products/<id>" --only-categories=performance --output-path=./lh-pdp.html --view
+npx lighthouse http://localhost:3001/           --only-categories=performance --output=json --output-path=./lh-home.json
+npx lighthouse http://localhost:3001/products    --only-categories=performance --output=json --output-path=./lh-products.json
+npx lighthouse "http://localhost:3001/products/<id>" --only-categories=performance --output-path=./lh-pdp.html --view
 ```
 
 리포트 산출물(`lh-*.json`/`.html`)은 **커밋하지 않는다**(휘발성 측정물).

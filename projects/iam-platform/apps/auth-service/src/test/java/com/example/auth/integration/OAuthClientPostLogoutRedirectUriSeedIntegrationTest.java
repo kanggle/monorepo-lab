@@ -149,8 +149,9 @@ class OAuthClientPostLogoutRedirectUriSeedIntegrationTest extends AbstractIntegr
 
         List<String> postLogout = client.getClientSettings().getSetting(PLR_KEY);
         assertThat(postLogout)
-                .as("post-logout-redirect-uris must round-trip to the exact seeded List<String>")
-                .containsExactly("http://localhost:3000/", "http://fan-platform.local/");
+                .as("post-logout-redirect-uris must round-trip to the exact seeded List<String> "
+                        + "(V0028 TASK-MONO-460 appended the localhost:3002 dev-port landing)")
+                .containsExactly("http://localhost:3000/", "http://localhost:3002/", "http://fan-platform.local/");
 
         // Standard SAS settings + core fields intact on the repaired row.
         assertThat(client.getClientSettings().isRequireProofKey()).isTrue();
@@ -162,6 +163,7 @@ class OAuthClientPostLogoutRedirectUriSeedIntegrationTest extends AbstractIntegr
                         AuthorizationGrantType.REFRESH_TOKEN);
         assertThat(client.getRedirectUris()).contains(
                 "http://localhost:3000/api/auth/callback/iam",
+                "http://localhost:3002/api/auth/callback/iam", // V0028 TASK-MONO-460 dev-port
                 "http://fan-platform.local/api/auth/callback/iam");
         assertThat(client.getScopes()).contains("openid", "profile", "email", "tenant.read");
         assertThat(client.getClientSettings().<String>getSetting("custom.tenant_id"))
@@ -179,8 +181,13 @@ class OAuthClientPostLogoutRedirectUriSeedIntegrationTest extends AbstractIntegr
 
         List<String> postLogout = client.getClientSettings().getSetting(PLR_KEY);
         assertThat(postLogout)
-                .containsExactly("http://localhost:3000/", "http://web.ecommerce.local/");
+                .as("V0028 TASK-MONO-460 appended the localhost:3001 dev-port landing")
+                .containsExactly("http://localhost:3000/", "http://localhost:3001/", "http://web.ecommerce.local/");
 
+        assertThat(client.getRedirectUris()).contains(
+                "http://localhost:3000/api/auth/callback/iam",
+                "http://localhost:3001/api/auth/callback/iam", // V0028 TASK-MONO-460 dev-port
+                "http://web.ecommerce.local/api/auth/callback/iam");
         assertThat(client.getClientSettings().isRequireProofKey()).isTrue();
         assertThat(client.getScopes())
                 .contains("openid", "profile", "email", "tenant.read", "ecommerce.consumer");

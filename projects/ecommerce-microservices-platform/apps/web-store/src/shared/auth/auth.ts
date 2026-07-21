@@ -18,7 +18,7 @@ export { refreshAccessToken } from '@/shared/auth/auth-callbacks';
  * GAP V0012 seed registers:
  *   - client_id:     `ecommerce-web-store-client`
  *   - client_secret: `ecommerce-dev` (plain, dev-only)
- *   - redirect_uris: http://localhost:3000/api/auth/callback/iam,
+ *   - redirect_uris: http://localhost:3001/api/auth/callback/iam (dev port, +V0028 TASK-MONO-460),
  *                    http://web.ecommerce.local/api/auth/callback/iam
  *   - scopes:        openid profile email tenant.read ecommerce.consumer
  *

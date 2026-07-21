@@ -4,9 +4,9 @@
   "private": true,
   "description": "fan-platform Next.js 15 App Router frontend — feed / artists / posts / login.",
   "scripts": {
-    "dev": "next dev --port 3000",
+    "dev": "next dev --port 3002",
     "build": "next build",
-    "start": "next start --port 3000",
+    "start": "next start --port 3002",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "e2e": "playwright test",
