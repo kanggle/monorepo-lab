@@ -89,8 +89,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 - `TASK-PC-FE-253-login-auth-surface-hygiene.md` — **🟢 READY (P2) — 콘솔 로그인 인증 표면 정합성 2건.** 2026-07-21 로그인 코드 리뷰 산물. **둘 다 현재 유저 경로에서 재현되는 결함은 아니다** — 한 PR 로 묶는 저심각도 청소. **항목 A**: `/api/auth/session` 이 `authenticated = getAccessToken() !== null`(access 단독)로 판정하나 실제 가드 `isAuthenticated()` 는 **access + operator 둘 다** 요구 ⇒ **pre-operator 세션**(로그인 O / operator X, `(onboarding)` 만 진입)에게 `true` 를 답하는데 콘솔엔 못 들어감. 🟡 **현재 소비자 0**(소스 grep) = dead-ish endpoint → 삭제 또는 의미 정합. **항목 B**: `login/page.tsx` 의 `next` redirect 가 `startsWith('/')` 만 봐 `//evil.com` 통과 — 🟡 **악용 불가**(`login/route.ts` 가 `!startsWith('//')` 로 재차단) 이지만 같은 개념을 두 곳에서 판정하는데 page 가 약함 → route 와 동일 술어로(가능하면 공유 헬퍼). **🔵 방어하는 실패 모드 = "같은 개념(authenticated/redirect 안전성)을 두 곳에서 다르게 판정" — 지금은 소비자 부재·route 재차단 덕에 무해하나 한쪽 조건이 바뀌면 결함.** **⚠️ 착수 시 재측정(AC-0): session 판정식·소비자 수·page/route sanitize 술어 실측 — 소비자가 생겼으면 삭제 불가·정합 강제.** 백엔드/계약 변경 0. 분석=Opus 4.8 / 구현 권장=Sonnet 4.6. [[feedback_repo_knows_what_it_does_not_say]] [[project_guard_wiring_not_just_logic]]
 - `TASK-PC-FE-249-console-menu-render-coverage-and-stale-nav-comments.md` — **3개 메뉴 화면 render 테스트 부재 + stale nav "stub" 주석.** `/partnerships`·`/ecommerce/users`·`/ecommerce/notifications/templates` 는 state/api/proxy/nav 테스트만 있고 **화면 컴포넌트를 마운트하는 테스트가 없음**(mount-crash 회귀가 초록으로 새어나감). + `console-nav-config.ts` 가 `/tenants`·`/permissions`·`/permission-sets` 를 "PC-FE-225 stub"이라 부르나 전부 **실기능**(FE-226/227/228) — 진짜 stub 은 `/operator-groups` 하나. **세 화면 다 라이브 렌더 OK — 회귀 가드 추가 + 주석 정정이지 fix 아님.** 분석=Opus 4.8 / 구현 권장=Sonnet. (2026-07-19 콘솔 메뉴 검증 스윕 산물.) **⚠️ 착수 시 재측정: `/operator-groups` 는 더 이상 stub 아님 — `TASK-PC-FE-250`(#2685)이 실기능 전환하며 nav "stub" 주석·iam-guide `stub:true`·`pc-fe-225` stub 테스트를 이미 정리함. 남은 스코프 = `/partnerships`·`/ecommerce/users`·`/ecommerce/notifications/templates` render 테스트 3건.**
-- `TASK-PC-BE-014-console-bff-restclient-bean-factory-dedup.md` — console-bff `RestClientConfig` 의 byte-identical `RestClient` `@Bean` 팩토리 메서드 6개를 공용 헬퍼로 통합 (behavior-preserving; bean 이름/qualifier 불변).
-
 _(직전 완료)_ 콘솔 6도메인 기능↔메뉴 정렬 웨이브 + IAM 「권한」/「권한 세트」 화면(PC-FE-227/228) 완결. ADR-MONO-046 「운영자 그룹」 로드맵은 여전히 PROPOSED/PAUSED 게이팅.
 
 _(직전 완료)_ **IAM 「권한」/「권한 세트」 화면 완료** (PC-FE-227/228 DONE, 2026-07-09, PR #2343 squash `cbdc1a04`). `/permissions`·`/permission-sets` 스텁을 BE-486 RBAC 카탈로그(`GET /api/admin/roles`+`/permissions`, 게이트 `operator.manage`) 위 read-only 화면으로 대체. 공유 클라이언트 `shared/api/rbac-catalog.ts`(228=role을 권한 세트로 재프레이밍, 별도 엔드포인트 없음). native `<details>` drill-down·SSR 회복탄력성(operators/audit 매퍼 미러). vitest 2696/2696. **→ BE-486 언블록 소비 완료.**
@@ -114,6 +112,8 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 (empty)
 
 ## review
+
+- `TASK-PC-BE-014-console-bff-restclient-bean-factory-dedup.md` — console-bff `RestClientConfig` 의 byte-identical `RestClient` `@Bean` 팩토리 메서드 6개를 공용 `perDomainClient` 헬퍼로 통합 (behavior-preserving; bean 이름/`@Value`/qualifier 불변, per-bean timeout factory 유지). AC-0 재측정: 정확히 6개·byte-identical·13곳 `@Qualifier` 주입 확인. impl PR open, CI 대기.
 
 ## done
 

@@ -1,6 +1,6 @@
 # TASK-PC-BE-014 — Collapse console-bff RestClient @Bean factory duplication (behavior-preserving)
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-PC-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (mechanical extraction, behavior-preserving)
