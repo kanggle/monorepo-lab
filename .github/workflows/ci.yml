@@ -203,6 +203,11 @@ jobs:
       # those PRs `code-changed` is false by construction, so AND-combining would
       # give the guard a green skip on 100% of its defect class (§ F1).
       index-queue: ${{ steps.filter.outputs.index-queue }}
+      # TASK-MONO-461: raw filter, NOT AND-combined with `code-changed`. Two of this
+      # guard's trigger paths are non-code: the spec (testing-strategy.md) being
+      # weakened, and the guard script itself. AND-ing with code-changed would skip
+      # the guard on a spec-only .md diff — exactly a change it must police (§ F1).
+      controller-slice: ${{ steps.filter.outputs.controller-slice }}
       # Same reasoning as service-map above: deleting a row from error-handling.md is a
       # docs-only diff, and that is precisely the change the guard must catch.
       error-registry: ${{ steps.filter.outputs.error-registry }}
@@ -411,6 +416,14 @@ jobs:
               - 'projects/*/tasks/in-progress/**'
               - 'projects/*/tasks/done/**'
               - 'scripts/check-index-queue-drift.sh'
+            # TASK-MONO-461: controller web-slice naming (*ControllerSliceTest).
+            # Triggers on any test .java (a mis-named slice arrives there), the spec,
+            # and the guard script. Pure-positive (no negation — MONO-074/075 quirk
+            # rule); NOT AND-ed with code-changed (the spec path is markdown).
+            controller-slice:
+              - 'projects/*/apps/*/src/test/**/*.java'
+              - 'platform/testing-strategy.md'
+              - 'scripts/check-controller-slice-naming.sh'
             # TASK-MONO-352: platform/error-handling.md declares itself "the single
             # authoritative registry" and mandates that every new error code be added
             # to it — but nothing enforced that, and 37 live codes had drifted out.
@@ -671,6 +684,44 @@ jobs:
 
       - name: Guard — every INDEX queue listing matches its queue directory
         run: bash scripts/check-index-queue-drift.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-461 — controller web-slice naming guard.
+  #
+  # platform/testing-strategy.md declares controller slices are named
+  # *ControllerSliceTest. Nothing enforced it, and the fleet drifted into three
+  # forms (*ControllerTest / *ControllerSliceTest / *ControllerWebMvcTest) — a
+  # declaration↔truth drift surfaced by MONO-458's coverage audit (its slice
+  # regex under-counted the drifted names, nearly filing a phantom gap).
+  #
+  # Predicate keys on the PROPERTY, not a proxy: a file is a controller slice iff
+  # its name matches *Controller*Test AND it uses a MockMvc slice mechanism
+  # (@WebMvcTest / @WebFluxTest / standaloneSetup). That excludes contract tests
+  # (*ApiContractTest), aspect/health slices, and controller UNIT tests (Mockito,
+  # no MockMvc) — all of which legitimately keep their own names.
+  #
+  # --selftest runs first and is a required step, not a courtesy (§ G3): it
+  # injects a known violation + known exclusions and asserts the predicate bites
+  # the former and ignores the latter. Landed atomically with the 108-file rename
+  # so the guard is GREEN on day one (§ G2 — a day-one-RED guard gets switched off).
+  # ---------------------------------------------------------------------------
+  controller-slice-naming:
+    name: Controller slice naming (*ControllerSliceTest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.controller-slice == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-controller-slice-naming.sh
+
+      - name: Self-test the predicate (violation bites; unit/contract excluded)
+        run: bash scripts/check-controller-slice-naming.sh --selftest
+
+      - name: Guard — controller web-slices are named *ControllerSliceTest
+        run: bash scripts/check-controller-slice-naming.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-360 — gateway declaration / exposure drift guard.

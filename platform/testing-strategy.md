@@ -34,8 +34,20 @@ Every service must have coverage at all four levels unless the level is explicit
 - Test HTTP request/response mapping, validation, and exception handling.
 - Use controller-level isolation (mock all service dependencies).
 - Must verify security configuration and global exception handling behavior.
+- The web layer is exercised through a MockMvc web slice — either `@WebMvcTest`
+  or `MockMvcBuilders.standaloneSetup(...)`. A controller test that instantiates
+  the controller directly with Mockito (no MockMvc) is a **unit** test, not a
+  slice, and keeps the unit naming (`{ClassName}Test`).
 
-**Naming:** `*ControllerTest.java`
+**Naming:** `*ControllerSliceTest.java`
+
+The `Slice` marker is load-bearing, not decoration: a bare `{Controller}Test`
+does not say whether it is a `@WebMvcTest` slice or a full-context controller IT,
+and it collides with the unit/`{ClassName}Test` and integration-infrastructure
+`{ClassName}Test` forms below. `*ControllerSliceTest` encodes the isolation level
+in the name. (Canonicalised fleet-wide in TASK-MONO-461, which also added the CI
+guard that enforces it — see § CI Guards. Prior to that the fleet carried three
+drifted forms: `*ControllerTest`, `*ControllerSliceTest`, `*ControllerWebMvcTest`.)
 
 ## Integration Tests
 
@@ -245,7 +257,7 @@ constructible. The defect shipped behind a green lane.
 | Unit (service) | `{ServiceName}Test` | `<ApplicationServiceClass>Test` |
 | Unit (entity) | `{EntityName}Test` | `<DomainEntityClass>Test` |
 | Unit (infrastructure) | `{ClassName}UnitTest` | `<InfrastructureClass>UnitTest` |
-| Controller slice | `{ControllerName}Test` | `<RestControllerClass>Test` |
+| Controller slice | `{ControllerName}SliceTest` | `<RestControllerClass>SliceTest` |
 | Integration (infrastructure) | `{ClassName}Test` | `<PersistenceAdapter>Test` |
 | Integration (full flow) | `{Feature}IntegrationTest` | `<FeatureName>IntegrationTest` |
 | Event (unit) | `{EventName}EventTest` | `<DomainEvent>EventTest` |
