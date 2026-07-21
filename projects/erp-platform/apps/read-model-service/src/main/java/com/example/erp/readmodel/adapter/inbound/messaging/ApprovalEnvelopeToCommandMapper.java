@@ -34,17 +34,9 @@ public class ApprovalEnvelopeToCommandMapper {
     }
 
     public ApprovalFactCommand map(String rawValue, String topic, ApprovalStatus status) {
-        ApprovalEventEnvelope envelope;
-        try {
-            envelope = objectMapper.readValue(rawValue, ApprovalEventEnvelope.class);
-        } catch (Exception e) {
-            throw new InvalidEnvelopeException("Unparseable approval envelope on topic " + topic
-                    + ": " + e.getMessage());
-        }
-        if (envelope == null || !envelope.isValid()) {
-            throw new InvalidEnvelopeException("Invalid approval envelope (missing eventId/"
-                    + "aggregateId/payload) on topic " + topic);
-        }
+        ApprovalEventEnvelope envelope = EnvelopeParsing.parseAndValidate(
+                objectMapper, rawValue, topic, ApprovalEventEnvelope.class, "approval ",
+                "eventId/aggregateId/payload", ApprovalEventEnvelope::isValid);
         ApprovalSubjectType subjectType =
                 ApprovalSubjectType.fromOrNull(envelope.payloadString("subjectType"));
         if (subjectType == null) {

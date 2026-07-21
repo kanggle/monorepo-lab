@@ -1,6 +1,6 @@
 # TASK-ERP-BE-034 — Extract read-model Kafka-consumer + envelope-mapper boilerplate (behavior-preserving)
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-ERP-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (mechanical extraction, behavior-preserving)
