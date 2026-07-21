@@ -68,6 +68,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 - `TASK-FAN-BE-024-outbox-publisher-classname-doc-drift.md` — 은퇴한 v1 `*OutboxPollingScheduler` 클래스명을 v2 `*OutboxPublisher` 로 정정 — event contracts 2건 + service architecture Forbidden-Dependencies 절 3건 (doc-only).
 - `TASK-FAN-BE-025-current-actor-authorship-channel-dedup.md` — `@CurrentActor` 리졸버 호출부 보일러플레이트(31×), community authorship guard(6×), notification 채널-어댑터 metric/logging 중복(4×) 제거 (behavior-preserving).
+- `TASK-FAN-BE-026-v2-notification-wiring-community-events.md` — **FEATURE (v2, 결함 아님)** — produced-but-unconsumed `community.*` 이벤트를 notification 이 소비하도록 배선(reply/mention/reaction 알림) + membership welcome/cancellation 알림. **핵심 설계**: community 이벤트가 라우팅 필드(post 작성자·멘션 대상)를 안 담아, notification 이 community 를 동기 재호출하지 않으려면 **이벤트 계약 enrichment 선행**(no-sync-coupling 불변식 유지). follower-fanout(post.published·artist.published)은 없는 follow 그래프(`community.follow.added`) 의존이라 **out of scope**. events/README:39 가 이 미소비를 "정상"으로 선언 → 이건 v2 피처.
 
 ## in-progress
 
