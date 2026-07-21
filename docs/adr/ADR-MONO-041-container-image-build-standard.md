@@ -10,7 +10,7 @@
 
 **Supersedes:** none. **Superseded by:** none.
 
-**Family:** [ADR-MONO-013](ADR-MONO-013-unified-platform-console.md) (the console images this standardizes), [ADR-MONO-018](ADR-MONO-018-federation-e2e-harness.md) (the federation-e2e stack whose ~48 containers are the primary consumer of these images). Build-cache-optimization sibling at the CI layer: project memory `project_frontend_docker_build_cache_optimization` (Next.js BuildKit cache-mount work — this ADR is its backend-jar counterpart).
+**Family:** [ADR-MONO-013](ADR-MONO-013-platform-console-foundation.md) (the console images this standardizes), [ADR-MONO-018](ADR-MONO-018-platform-console-phase-8-federation-hardening.md) (the federation-e2e stack whose ~48 containers are the primary consumer of these images). Build-cache-optimization sibling at the CI layer: project memory `project_frontend_docker_build_cache_optimization` (Next.js BuildKit cache-mount work — this ADR is its backend-jar counterpart).
 
 **Related:** every `projects/*/apps/*/Dockerfile` for a Spring Boot service (41 files); the iam-family `.dockerignore` negation pattern; `platform/deployment-policy.md` (image tagging convention `{service}:{git-sha}`); project memory `feedback_prune_old_image_after_rebuild` (dangling-prune after rebuild) and `env_rancher_desktop_vhdx_no_shrink` (why image size matters on this host); the host-jar build pattern (`./gradlew :apps:<svc>:bootJar` → `COPY build/libs/*.jar`) documented in `env_gap_docker_host_prebuilt_jar_redeploy_trap`.
 
