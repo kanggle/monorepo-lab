@@ -1,6 +1,6 @@
 # TASK-MONO-457 — ADR-MONO-051 §6 has two more rows whose citations no longer resolve (SKU-as-code names a file that does not exist; the tripwire row's citation has drifted)
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-MONO
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (both are citation repairs; the tripwire row carries one judgment — whether the citation drifted or the *decision* did)
