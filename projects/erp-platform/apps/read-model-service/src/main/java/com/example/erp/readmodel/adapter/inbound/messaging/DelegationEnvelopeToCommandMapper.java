@@ -40,17 +40,9 @@ public class DelegationEnvelopeToCommandMapper {
     }
 
     public DelegationFactCommand map(String rawValue, String topic, DelegationFactStatus status) {
-        DelegationEventEnvelope envelope;
-        try {
-            envelope = objectMapper.readValue(rawValue, DelegationEventEnvelope.class);
-        } catch (Exception e) {
-            throw new InvalidEnvelopeException("Unparseable delegation envelope on topic " + topic
-                    + ": " + e.getMessage());
-        }
-        if (envelope == null || !envelope.isValid()) {
-            throw new InvalidEnvelopeException("Invalid delegation envelope (missing eventId/"
-                    + "aggregateId/payload/grantId) on topic " + topic);
-        }
+        DelegationEventEnvelope envelope = EnvelopeParsing.parseAndValidate(
+                objectMapper, rawValue, topic, DelegationEventEnvelope.class, "delegation ",
+                "eventId/aggregateId/payload/grantId", DelegationEventEnvelope::isValid);
         if (!envelope.hasTenant(requiredTenant)) {
             throw new InvalidEnvelopeException("Non-" + requiredTenant + " tenant '"
                     + envelope.tenantId() + "' on topic " + topic);

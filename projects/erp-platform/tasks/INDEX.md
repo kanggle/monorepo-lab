@@ -78,13 +78,13 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-ERP-BE-034-read-model-consumer-mapper-dedup.md` — read-model 서비스 Kafka 컨슈머 4종 공통 골격 + `*EnvelopeToCommandMapper` try/catch 보일러플레이트 3종 추출 (behavior-preserving).
-
 ## in-progress
 
 (empty)
 
 ## review
+
+- `TASK-ERP-BE-034-read-model-consumer-mapper-dedup.md` — read-model 서비스 Kafka 컨슈머 4종 공통 골격(`AbstractMasterChangeConsumer`) + `*EnvelopeToCommandMapper` parse/validate 보일러플레이트 3종(`EnvelopeParsing.parseAndValidate`) 추출 (behavior-preserving). AC-0 재측정: 컨슈머 4종 `@RetryableTopic`/`@KafkaListener` byte-identical, 매퍼 3종 동일 try/catch 확인. impl PR open, CI 대기.
 
 ## done
 

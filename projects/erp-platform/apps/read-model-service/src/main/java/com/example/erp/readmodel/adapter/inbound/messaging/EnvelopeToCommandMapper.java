@@ -24,17 +24,9 @@ public class EnvelopeToCommandMapper {
     }
 
     public MasterChangeCommand map(String rawValue, String topic) {
-        MasterEventEnvelope envelope;
-        try {
-            envelope = objectMapper.readValue(rawValue, MasterEventEnvelope.class);
-        } catch (Exception e) {
-            throw new InvalidEnvelopeException("Unparseable envelope on topic " + topic
-                    + ": " + e.getMessage());
-        }
-        if (envelope == null || !envelope.isValid()) {
-            throw new InvalidEnvelopeException("Invalid envelope (missing eventId/aggregateId/"
-                    + "payload) on topic " + topic);
-        }
+        MasterEventEnvelope envelope = EnvelopeParsing.parseAndValidate(
+                objectMapper, rawValue, topic, MasterEventEnvelope.class, "",
+                "eventId/aggregateId/payload", MasterEventEnvelope::isValid);
         ChangeKind changeKind = ChangeKind.fromOrNull(envelope.changeKindRaw());
         if (changeKind == null) {
             throw new InvalidEnvelopeException("Unknown/absent changeKind '"

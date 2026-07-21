@@ -1,8 +1,6 @@
 package com.example.erp.readmodel.adapter.inbound.messaging;
 
 import com.example.erp.readmodel.application.ApplyMasterChangeUseCase;
-import com.example.erp.readmodel.application.command.MasterChangeCommand;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.annotation.RetryableTopic;
@@ -14,24 +12,18 @@ import org.springframework.stereotype.Component;
 /**
  * Consumes {@code erp.masterdata.employee.changed.v1} → upserts
  * {@code employee_proj} (RETIRED marks). Manual ACK; 3 retries → {@code .DLT};
- * invalid envelope → immediate DLT (no retry).
+ * invalid envelope → immediate DLT (no retry). The consume→validate→dispatch→
+ * (retry/DLT) body lives in {@link AbstractMasterChangeConsumer}.
  */
-@Slf4j
 @Component
-public class EmployeeChangedConsumer {
+public class EmployeeChangedConsumer extends AbstractMasterChangeConsumer {
 
     static final String TOPIC = "erp.masterdata.employee.changed.v1";
-
-    private final ApplyMasterChangeUseCase useCase;
-    private final EnvelopeToCommandMapper mapper;
-    private final ConsumerMetrics metrics;
 
     public EmployeeChangedConsumer(ApplyMasterChangeUseCase useCase,
                                    EnvelopeToCommandMapper mapper,
                                    ConsumerMetrics metrics) {
-        this.useCase = useCase;
-        this.mapper = mapper;
-        this.metrics = metrics;
+        super(mapper, metrics, TOPIC, "employee", "employee.changed", useCase::applyEmployee);
     }
 
     @RetryableTopic(
@@ -43,21 +35,6 @@ public class EmployeeChangedConsumer {
     )
     @KafkaListener(topics = TOPIC, groupId = "erp-read-model-v1")
     public void consume(ConsumerRecord<String, String> record, Acknowledgment ack) {
-        try {
-            MasterChangeCommand cmd = mapper.map(record.value(), TOPIC);
-            useCase.applyEmployee(cmd);
-            metrics.applied("employee", cmd.changeKind().name());
-            ack.acknowledge();
-        } catch (InvalidEnvelopeException e) {
-            log.error("Invalid envelope on topic={} offset={}; routing to DLT: {}",
-                    record.topic(), record.offset(), e.getMessage());
-            metrics.dlt(TOPIC);
-            ack.acknowledge();
-            throw e;
-        } catch (Exception e) {
-            log.error("Failed to process employee.changed: partition={} offset={} error={}",
-                    record.partition(), record.offset(), e.getMessage(), e);
-            throw new RuntimeException("Failed to process employee.changed event", e);
-        }
+        handle(record, ack);
     }
 }
