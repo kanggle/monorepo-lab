@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-ERP-BE-032-masterdata-event-envelope-dlt-mismatch.md` — **[2026-07-21 정합화 감사 최우선 실결함]** masterdata→read-model 이벤트 **봉투 shape 불일치** → 프로듀서 실이벤트 전건 DLT. 프로듀서(`OutboxMasterdataEventPublisher`)는 top-level `aggregateId` 없이 `partitionKey`+`payload.aggregateId`만 발행하나, consumer(`MasterEventEnvelope.isValid()`)는 top-level `aggregateId` 필수 → `InvalidEnvelopeException` → retry 없이 `.DLT`. spec(`erp-masterdata-events.md §Envelope`)은 top-level `aggregateId` 선언(=consumer 편) → 프로듀서만 이탈. E2E 테스트는 spec-shape 봉투를 손수 조립해 초록(test-fixture-proves-nothing) → 프로덕션 org-view 미채움. **AC-1 방향=Option A(프로듀서를 spec 에 정합, 권장 — 구 wire 소비자 0)**. AC-3=프로듀서 실출력을 consumer 로 통과시키는 크로스서비스 계약 회귀 테스트(누락된 브리지). 분석=Opus 4.8 / 구현 권장=Opus.
 
 ## in-progress
 
