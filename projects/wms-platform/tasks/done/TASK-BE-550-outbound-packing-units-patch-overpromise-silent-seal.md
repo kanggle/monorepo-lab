@@ -1,6 +1,6 @@
 # TASK-BE-550 — outbound-service: PATCH packing-units contract over-promises "add-lines" (silent unconditional SEAL hazard)
 
-Status: ready
+Status: done
 
 `(분석=Opus 4.8 / 구현 권장=Opus — 계약↔코드 정합 + 파괴적 무음-SEAL 해저드 판정)`
 

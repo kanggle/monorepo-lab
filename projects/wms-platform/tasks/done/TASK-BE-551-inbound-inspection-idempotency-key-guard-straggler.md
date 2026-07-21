@@ -1,6 +1,6 @@
 # TASK-BE-551 — inbound-service: inspection:start / record-inspection missing the Idempotency-Key required-guard (sibling-parity straggler)
 
-Status: ready
+Status: done
 
 `(분석=Opus 4.8 / 구현 권장=Sonnet — 형제 대비 2줄/메서드 배선 + web-slice 테스트)`
 

@@ -1,6 +1,6 @@
 # TASK-BE-552 — gateway-service: public-routes spec advertises removed `/api/auth/**` routes (auth moved to IAM OIDC)
 
-Status: ready
+Status: done
 
 `(분석=Opus 4.8 / 구현 권장=Sonnet — doc-fix + 선택적 dead-code 정리)`
 
