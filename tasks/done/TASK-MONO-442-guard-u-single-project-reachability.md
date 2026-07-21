@@ -8,7 +8,7 @@ TASK-MONO-442
 
 # Status
 
-review
+done
 
 # Owner
 
