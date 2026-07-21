@@ -84,9 +84,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-- `TASK-ERP-BE-034-read-model-consumer-mapper-dedup.md` — read-model 서비스 Kafka 컨슈머 4종 공통 골격(`AbstractMasterChangeConsumer`) + `*EnvelopeToCommandMapper` parse/validate 보일러플레이트 3종(`EnvelopeParsing.parseAndValidate`) 추출 (behavior-preserving). AC-0 재측정: 컨슈머 4종 `@RetryableTopic`/`@KafkaListener` byte-identical, 매퍼 3종 동일 try/catch 확인. impl PR open, CI 대기.
-
 ## done
+
+- `TASK-ERP-BE-034-read-model-consumer-mapper-dedup.md` — **DONE (2026-07-22, impl PR #2861 squash `7df421ef5`; 3-dim verified — state=MERGED · origin/main tip 일치 · 머지 직전 0 failing required).** read-model Kafka 컨슈머 4종 공통 골격(`AbstractMasterChangeConsumer`) + `*EnvelopeToCommandMapper` parse/validate 3종(`EnvelopeParsing.parseAndValidate`) 추출. `@RetryableTopic`/DLT/retry/metric/log byte-보존(logger=`getClass()`), 매퍼 메시지 파라미터화 byte-보존. 매퍼 유닛테스트 GREEN. 분석·구현=Opus 4.8.
 
 - `TASK-ERP-BE-032-masterdata-event-envelope-dlt-mismatch.md` — **DONE (2026-07-21 audit round-2, merged #2851).** masterdata→read-model 이벤트 **봉투 shape 불일치**(프로듀서 실이벤트 전건 DLT) — Option A: `OutboxMasterdataEventPublisher.writeEvent` 가 spec §Envelope 대로 top-level `tenantId`/`aggregateType`/`aggregateId` 발행 + 신규 크로스서비스 계약 테스트로 재발 방지.
 - `TASK-ERP-BE-033-masterdata-list-filters-total-elements-events-doc.md` — **DONE (2026-07-21 audit round-2, merged #2848).** 마스터데이터 목록 문서화된 필터(`asOf`/`active`/`parentId`, 5개 엔티티) + 실제 `totalElements` 총 건수 구현 RULING 반영; events 문서 outbox-publisher 클래스명 정정.
