@@ -38,6 +38,12 @@ export function StockAdjustDialog({
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
+  // Idempotency-Key for THIS adjustment intent (TASK-PC-FE-252). Minted lazily on
+  // confirm and held; a retry of the unchanged delta (e.g. after a 409) reuses it
+  // so the producer dedupes the double-submit. Editing the delta/reason or a
+  // successful/ cancelled adjustment clears it, so a genuine second +10 gets a
+  // fresh key (NOT a value hash — that would block legitimate repeats forever).
+  const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
 
   const qtyNum = Number(quantity);
   const qtyValid = quantity !== '' && quantity !== '-' && Number.isInteger(qtyNum) && qtyNum !== 0;
@@ -49,15 +55,20 @@ export function StockAdjustDialog({
     setReason('');
     setError(null);
     setConflict(false);
+    setIdempotencyKey(null);
   }
 
   function confirm() {
     if (!valid || !variant) return;
     setError(null);
+    // Reuse the held key across a retry of the same delta; mint on first confirm.
+    const key = idempotencyKey ?? crypto.randomUUID();
+    setIdempotencyKey(key);
     adjust.mutate(
       {
         productId,
         body: { variantId: variant.id, quantity: qtyNum, reason: reason.trim() },
+        idempotencyKey: key,
       },
       {
         onSuccess: () => {
@@ -111,7 +122,12 @@ export function StockAdjustDialog({
             id={qtyId}
             inputMode="numeric"
             value={quantity}
-            onChange={(e) => setQuantity(e.target.value.replace(/[^0-9-]/g, ''))}
+            onChange={(e) => {
+              setQuantity(e.target.value.replace(/[^0-9-]/g, ''));
+              // Editing the delta = a different intent → drop the held key so the
+              // next confirm mints a fresh one (TASK-PC-FE-252, AC-3).
+              setIdempotencyKey(null);
+            }}
             className={inputCls}
             data-testid="stock-adjust-quantity"
           />
@@ -123,7 +139,10 @@ export function StockAdjustDialog({
           <input
             id={reasonId}
             value={reason}
-            onChange={(e) => setReason(e.target.value)}
+            onChange={(e) => {
+              setReason(e.target.value);
+              setIdempotencyKey(null);
+            }}
             className={inputCls}
             data-testid="stock-adjust-reason"
           />

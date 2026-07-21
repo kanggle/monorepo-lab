@@ -39,6 +39,12 @@ export function CouponIssueDialog({
   const [rawUserIds, setRawUserIds] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [successCount, setSuccessCount] = useState<number | null>(null);
+  // Idempotency-Key for THIS issue intent (TASK-PC-FE-252). Minted lazily on
+  // confirm and reused across a retry of the same batch (so a double-submit
+  // dedupes). Editing the userId list, a successful issue, or cancel clears it —
+  // re-issuing the SAME batch (a legitimate second issue, TASK-BE-536) then mints
+  // a fresh key instead of being swallowed as a replay.
+  const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
 
   /** Split by newline or comma, trim, filter empty. */
   function parseUserIds(raw: string): string[] {
@@ -55,14 +61,18 @@ export function CouponIssueDialog({
     setRawUserIds('');
     setError(null);
     setSuccessCount(null);
+    setIdempotencyKey(null);
   }
 
   function confirm() {
     if (!valid) return;
     setError(null);
     setSuccessCount(null);
+    // Reuse the held key across a retry of the same batch; mint on first confirm.
+    const key = idempotencyKey ?? crypto.randomUUID();
+    setIdempotencyKey(key);
     issue.mutate(
-      { id: promotionId, body: { userIds } },
+      { id: promotionId, body: { userIds }, idempotencyKey: key },
       {
         onSuccess: (result) => {
           const count =
@@ -70,6 +80,9 @@ export function CouponIssueDialog({
               ? (result as { issuedCount: number }).issuedCount
               : userIds.length;
           setSuccessCount(count);
+          // The dialog stays open on success; drop the key so a deliberate
+          // re-issue is a fresh intent, not a replay (TASK-PC-FE-252, AC-4).
+          setIdempotencyKey(null);
           onIssued();
         },
         onError: (e) => {
@@ -109,7 +122,12 @@ export function CouponIssueDialog({
           <textarea
             id={textareaId}
             value={rawUserIds}
-            onChange={(e) => setRawUserIds(e.target.value)}
+            onChange={(e) => {
+              setRawUserIds(e.target.value);
+              // A different userId list = a different intent → drop the held key
+              // (TASK-PC-FE-252, AC-3).
+              setIdempotencyKey(null);
+            }}
             rows={5}
             placeholder="user-uuid-1&#10;user-uuid-2&#10;user-uuid-3"
             className={inputCls}

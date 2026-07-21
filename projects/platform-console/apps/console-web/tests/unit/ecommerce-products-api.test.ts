@@ -156,16 +156,21 @@ describe('products-api — per-domain credential selection (§ 2.4.10)', () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ id: 'p-9' }, 201));
     vi.stubGlobal('fetch', fetchMock);
 
-    await registerProduct({
-      name: 'New',
-      price: 5000,
-      variants: [{ optionName: 'M', stock: 3, additionalPrice: 0 }],
-    });
+    await registerProduct(
+      {
+        name: 'New',
+        price: 5000,
+        variants: [{ optionName: 'M', stock: 3, additionalPrice: 0 }],
+      },
+      'idem-reg-1',
+    );
 
     const init = fetchMock.mock.calls[0][1] as RequestInit;
     const headers = init.headers as Record<string, string>;
     expect(headers['X-Tenant-Id']).toBeUndefined();
-    expect(headers['Idempotency-Key']).toBeTruthy();
+    // TASK-PC-FE-252: the api fn forwards the caller-supplied key verbatim (it no
+    // longer mints its own) — the client mints one per confirmed intent.
+    expect(headers['Idempotency-Key']).toBe('idem-reg-1');
     expect(headers['X-Operator-Reason']).toBeUndefined();
     expect(headers['X-Request-Id']).toBeTruthy();
   });
@@ -199,13 +204,16 @@ describe('products-api — endpoint wiring + bodies (§ 2.4.10 #1-9)', () => {
   it('3 register — POST admin /products with the producer RegisterProductRequest body', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ id: 'p-9' }, 201));
     vi.stubGlobal('fetch', fetchMock);
-    const res = await registerProduct({
-      name: 'New',
-      description: 'd',
-      price: 5000,
-      categoryId: 'c-1',
-      variants: [{ optionName: 'M', stock: 3, additionalPrice: 100 }],
-    });
+    const res = await registerProduct(
+      {
+        name: 'New',
+        description: 'd',
+        price: 5000,
+        categoryId: 'c-1',
+        variants: [{ optionName: 'M', stock: 3, additionalPrice: 100 }],
+      },
+      'idem-reg-2',
+    );
     expect(res.id).toBe('p-9');
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toBe('http://ecommerce.local/api/admin/products');
@@ -213,9 +221,11 @@ describe('products-api — endpoint wiring + bodies (§ 2.4.10 #1-9)', () => {
     const body = JSON.parse((init as RequestInit).body as string);
     expect(body.name).toBe('New');
     expect(body.variants[0]).toEqual({ optionName: 'M', stock: 3, additionalPrice: 100 });
-    // TASK-BE-536: the producer now requires Idempotency-Key on this endpoint.
+    // the producer body must NOT carry the key (it rides the header only).
+    expect(body.idempotencyKey).toBeUndefined();
+    // TASK-BE-536 requires the key; TASK-PC-FE-252 supplies it from the caller.
     const headers = (init as RequestInit).headers as Record<string, string>;
-    expect(headers['Idempotency-Key']).toBeTruthy();
+    expect(headers['Idempotency-Key']).toBe('idem-reg-2');
   });
 
   it('4 update — PATCH admin /products/{id} (partial)', async () => {
@@ -277,7 +287,11 @@ describe('products-api — endpoint wiring + bodies (§ 2.4.10 #1-9)', () => {
       .fn()
       .mockResolvedValue(jsonResponse({ variantId: 'v-1', currentStock: 7 }));
     vi.stubGlobal('fetch', fetchMock);
-    const res = await adjustStock('p-1', { variantId: 'v-1', quantity: -3, reason: 'damage' });
+    const res = await adjustStock(
+      'p-1',
+      { variantId: 'v-1', quantity: -3, reason: 'damage' },
+      'idem-stock-1',
+    );
     expect(res.currentStock).toBe(7);
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toBe('http://ecommerce.local/api/admin/products/p-1/stock');
@@ -286,8 +300,8 @@ describe('products-api — endpoint wiring + bodies (§ 2.4.10 #1-9)', () => {
     expect(body).toEqual({ variantId: 'v-1', quantity: -3, reason: 'damage' });
     const headers = (init as RequestInit).headers as Record<string, string>;
     expect(headers['X-Operator-Reason']).toBeUndefined();
-    // TASK-BE-536: the producer now requires Idempotency-Key on this endpoint.
-    expect(headers['Idempotency-Key']).toBeTruthy();
+    // TASK-BE-536 requires the key; TASK-PC-FE-252 forwards the caller's verbatim.
+    expect(headers['Idempotency-Key']).toBe('idem-stock-1');
   });
 });
 
@@ -303,11 +317,14 @@ describe('products-api — ecommerce FLAT envelope + § 2.5 resilience', () => {
 
   it('403 → ApiError(403) inline', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ecomError('ACCESS_DENIED', 403)));
-    const err = await registerProduct({
-      name: 'x',
-      price: 1,
-      variants: [{ optionName: 'a', stock: 0, additionalPrice: 0 }],
-    }).catch((e) => e);
+    const err = await registerProduct(
+      {
+        name: 'x',
+        price: 1,
+        variants: [{ optionName: 'a', stock: 0, additionalPrice: 0 }],
+      },
+      'idem-x',
+    ).catch((e) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect(err.status).toBe(403);
   });
@@ -331,7 +348,7 @@ describe('products-api — ecommerce FLAT envelope + § 2.5 resilience', () => {
 
   it('400 INSUFFICIENT_STOCK → ApiError(400) inline', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ecomError('INSUFFICIENT_STOCK', 400)));
-    const err = await adjustStock('p-1', { variantId: 'v-1', quantity: -99, reason: 'r' }).catch((e) => e);
+    const err = await adjustStock('p-1', { variantId: 'v-1', quantity: -99, reason: 'r' }, 'idem-x').catch((e) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect(err.status).toBe(400);
     expect(err.code).toBe('INSUFFICIENT_STOCK');

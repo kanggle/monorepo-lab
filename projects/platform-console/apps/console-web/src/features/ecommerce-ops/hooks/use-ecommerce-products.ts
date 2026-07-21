@@ -131,8 +131,19 @@ function invalidate(
 export function useRegisterProduct() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: RegisterProductBody) =>
-      apiClient.post<{ id: string }>('/api/ecommerce/products', body),
+    // idempotencyKey is minted per confirmed create in the form hook and sent in
+    // the body; the proxy strips it back out (TASK-PC-FE-252).
+    mutationFn: ({
+      body,
+      idempotencyKey,
+    }: {
+      body: RegisterProductBody;
+      idempotencyKey: string;
+    }) =>
+      apiClient.post<{ id: string }>('/api/ecommerce/products', {
+        ...body,
+        idempotencyKey,
+      }),
     onSuccess: () => invalidate(qc),
   });
 }
@@ -218,16 +229,20 @@ export function useDeleteVariant() {
 export function useAdjustStock() {
   const qc = useQueryClient();
   return useMutation({
+    // idempotencyKey minted per confirmed adjustment in StockAdjustDialog; sent
+    // in the body, stripped by the proxy (TASK-PC-FE-252).
     mutationFn: ({
       productId,
       body,
+      idempotencyKey,
     }: {
       productId: string;
       body: AdjustStockBody;
+      idempotencyKey: string;
     }) =>
       apiClient.patch<{ variantId: string; currentStock: number }>(
         `/api/ecommerce/products/${encodeURIComponent(productId)}/stock`,
-        body,
+        { ...body, idempotencyKey },
       ),
     onSuccess: (_d, { productId }) => invalidate(qc, productId),
   });

@@ -167,10 +167,20 @@ export function useDeletePromotion() {
 export function useIssueCoupons() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, body }: { id: string; body: IssueCouponBody }) =>
+    // idempotencyKey minted per confirmed issue in CouponIssueDialog; sent in the
+    // body, stripped by the proxy (TASK-PC-FE-252).
+    mutationFn: ({
+      id,
+      body,
+      idempotencyKey,
+    }: {
+      id: string;
+      body: IssueCouponBody;
+      idempotencyKey: string;
+    }) =>
       apiClient.post<{ issuedCount: number }>(
         `/api/ecommerce/promotions/${encodeURIComponent(id)}/coupons/issue`,
-        body,
+        { ...body, idempotencyKey },
       ),
     onSuccess: (_d, { id }) => invalidate(qc, id),
   });

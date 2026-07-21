@@ -88,6 +88,9 @@ const VALID_REGISTER = {
   name: 'Tee',
   price: 12000,
   variants: [{ optionName: 'M', stock: 5, additionalPrice: 0 }],
+  // TASK-PC-FE-252: the client mints the key and sends it in the body; the proxy
+  // strips it back out into the Idempotency-Key header.
+  idempotencyKey: 'idem-proxy-reg',
 };
 
 beforeEach(() => {
@@ -153,8 +156,12 @@ describe('POST /api/ecommerce/products (register) proxy', () => {
     expect(h.Authorization).toBe('Bearer GAP-ACCESS');
     expect(h.Authorization).not.toContain('OP-MUST-NOT-USE');
     expect(h['X-Tenant-Id']).toBeUndefined();
-    // TASK-BE-536: the producer now requires Idempotency-Key on this endpoint.
-    expect(h['Idempotency-Key']).toBeTruthy();
+    // TASK-PC-FE-252: the proxy lifts the body key into the header verbatim...
+    expect(h['Idempotency-Key']).toBe('idem-proxy-reg');
+    // ...and does NOT leak it into the producer body.
+    const forwarded = JSON.parse(init.body as string);
+    expect(forwarded.idempotencyKey).toBeUndefined();
+    expect(forwarded.name).toBe('Tee');
   });
 
   it('an invalid body (Zod fail) → 422 (no upstream call)', async () => {
@@ -400,7 +407,12 @@ describe('variant + stock proxies', () => {
     const res = await stockPATCH(
       new Request('http://console.local/api/ecommerce/products/p-1/stock', {
         method: 'PATCH',
-        body: JSON.stringify({ variantId: 'v-1', quantity: -3, reason: 'damage' }),
+        body: JSON.stringify({
+          variantId: 'v-1',
+          quantity: -3,
+          reason: 'damage',
+          idempotencyKey: 'idem-proxy-stock',
+        }),
         headers: { 'Content-Type': 'application/json' },
       }),
       { params: Promise.resolve({ id: 'p-1' }) },
@@ -409,7 +421,8 @@ describe('variant + stock proxies', () => {
     const init = fetchMock.mock.calls[0][1] as RequestInit;
     const h = init.headers as Record<string, string>;
     expect(h['X-Operator-Reason']).toBeUndefined();
-    expect(h['Idempotency-Key']).toBeTruthy();
+    // TASK-PC-FE-252: body key → header verbatim, and stripped from the body.
+    expect(h['Idempotency-Key']).toBe('idem-proxy-stock');
     const body = JSON.parse(init.body as string);
     expect(body).toEqual({ variantId: 'v-1', quantity: -3, reason: 'damage' });
   });

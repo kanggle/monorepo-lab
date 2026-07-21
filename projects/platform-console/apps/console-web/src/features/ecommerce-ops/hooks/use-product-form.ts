@@ -48,6 +48,12 @@ export function useProductForm(existing?: ProductDetail) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
+  // Idempotency-Key for the create path, minted ONCE per confirmed submit
+  // (TASK-PC-FE-252). Because the fields are locked behind the confirm dialog,
+  // an edited resubmit must cancel → re-submit, which re-fires onSubmit and
+  // mints a fresh key; retrying the SAME open confirm reuses it. Update (PATCH)
+  // is idempotent producer-side and needs no key.
+  const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
 
   const register = useRegisterProduct();
   const update = useUpdateProduct();
@@ -85,6 +91,9 @@ export function useProductForm(existing?: ProductDetail) {
     if (!formValid) return;
     setError(null);
     setConflict(false);
+    // A fresh confirmed create attempt → a fresh key. An edited resubmit passes
+    // through here again (the confirm was cancelled first), so it gets a new key.
+    if (!isEdit) setIdempotencyKey(crypto.randomUUID());
     setConfirmOpen(true);
   }
 
@@ -133,14 +142,19 @@ export function useProductForm(existing?: ProductDetail) {
         additionalPrice: Number(v.additionalPrice),
       })),
     };
-    register.mutate(body, {
-      onSuccess: () => {
-        setConfirmOpen(false);
-        router.push('/ecommerce/products');
-        router.refresh();
+    // onSubmit always mints the key before opening the confirm; guard for types.
+    const key = idempotencyKey ?? crypto.randomUUID();
+    register.mutate(
+      { body, idempotencyKey: key },
+      {
+        onSuccess: () => {
+          setConfirmOpen(false);
+          router.push('/ecommerce/products');
+          router.refresh();
+        },
+        onError: handleError,
       },
-      onError: handleError,
-    });
+    );
   }
 
   function cancelConfirm() {
