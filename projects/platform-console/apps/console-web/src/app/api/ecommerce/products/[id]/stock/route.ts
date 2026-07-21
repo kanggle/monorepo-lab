@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { adjustStock } from '@/features/ecommerce-ops/api/products-api';
 import {
-  AdjustStockBodySchema,
+  AdjustStockRequestSchema,
   mapEcommerceError,
   badRequest,
   tryParse,
@@ -18,8 +18,9 @@ export const runtime = 'nodejs';
  * AdjustStockRequest carries the target `variantId`, a SIGNED `quantity` delta,
  * and a required `reason` (IN THE BODY, not a header). Domain-facing IAM OIDC
  * token server-side; Zod-validated; confirm-gated. The producer now REQUIRES
- * `Idempotency-Key` (TASK-BE-536) — `products-api.ts#adjustStock` mints one per
- * call. A `400 INSUFFICIENT_STOCK` (decrement below zero) is surfaced inline.
+ * `Idempotency-Key` (TASK-BE-536); the console mints it per confirmed adjustment
+ * and sends it in the body (TASK-PC-FE-252) — stripped out here and passed as a
+ * separate arg. A `400 INSUFFICIENT_STOCK` (decrement below zero) surfaces inline.
  */
 export async function PATCH(
   req: Request,
@@ -28,16 +29,17 @@ export async function PATCH(
   const requestId = newRequestId();
   const { id } = await params;
 
-  let body;
+  let parsed;
   try {
-    body = tryParse(AdjustStockBodySchema, await req.json());
+    parsed = tryParse(AdjustStockRequestSchema, await req.json());
   } catch {
     return badRequest();
   }
-  if (body === null) return badRequest();
+  if (parsed === null) return badRequest();
+  const { idempotencyKey, ...body } = parsed;
 
   try {
-    const result = await adjustStock(id, body);
+    const result = await adjustStock(id, body, idempotencyKey);
     return NextResponse.json(result);
   } catch (err) {
     return mapEcommerceError(err, requestId);

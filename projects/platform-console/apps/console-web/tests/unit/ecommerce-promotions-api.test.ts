@@ -269,9 +269,11 @@ describe('promotions-api — endpoint wiring + base URL (ECOMMERCE_PUBLIC_BASE_U
       .fn()
       .mockResolvedValue(jsonResponse({ issuedCount: 3 }, 201));
     vi.stubGlobal('fetch', fetchMock);
-    const res = await issueCoupons('promo-1', {
-      userIds: ['u-1', 'u-2', 'u-3'],
-    });
+    const res = await issueCoupons(
+      'promo-1',
+      { userIds: ['u-1', 'u-2', 'u-3'] },
+      'idem-coupon-1',
+    );
     expect(res.issuedCount).toBe(3);
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toBe(
@@ -280,9 +282,10 @@ describe('promotions-api — endpoint wiring + base URL (ECOMMERCE_PUBLIC_BASE_U
     expect((init as RequestInit).method).toBe('POST');
     const body = JSON.parse((init as RequestInit).body as string);
     expect(body.userIds).toEqual(['u-1', 'u-2', 'u-3']);
-    // TASK-BE-536: the producer now requires Idempotency-Key on this endpoint.
+    expect(body.idempotencyKey).toBeUndefined();
+    // TASK-BE-536 requires the key; TASK-PC-FE-252 forwards the caller's verbatim.
     const headers = (init as RequestInit).headers as Record<string, string>;
-    expect(headers['Idempotency-Key']).toBeTruthy();
+    expect(headers['Idempotency-Key']).toBe('idem-coupon-1');
   });
 });
 
@@ -341,7 +344,7 @@ describe('promotions-api — ecommerce FLAT envelope + § 2.5 resilience', () =>
       'fetch',
       vi.fn().mockResolvedValue(ecomError('COUPON_LIMIT_EXCEEDED', 422)),
     );
-    const err = await issueCoupons('promo-1', { userIds: ['u-1'] }).catch(
+    const err = await issueCoupons('promo-1', { userIds: ['u-1'] }, 'idem-x').catch(
       (e) => e,
     );
     expect(err).toBeInstanceOf(ApiError);

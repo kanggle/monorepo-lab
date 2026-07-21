@@ -182,13 +182,16 @@ export function deletePromotion(id: string): Promise<void> {
  * `Promotion.validateCanIssue` caps only the total issued count, not "this exact
  * batch was already issued", so a replay would mint a second batch of coupons).
  *
- * <p>Key-generation-location note: no client-side confirm/retry dialog state
- * exists for this mutation (see `products-api.ts#registerProduct` for the same
- * reasoning) — minted here, once per BFF proxy invocation.
+ * <p>`idempotencyKey` is minted client-side per confirmed issue and threaded
+ * through the body (TASK-PC-FE-252 — the `CouponIssueDialog` holds it: editing
+ * the userId list or a successful issue mints a fresh one, so a deliberate
+ * re-issue of the same batch is not swallowed as a replay). The proxy strips it
+ * from the body and passes it here.
  */
 export function issueCoupons(
   id: string,
   body: IssueCouponBody,
+  idempotencyKey: string,
 ): Promise<IssueCouponResponse> {
   const env = getServerEnv();
   return callEcommerce(
@@ -197,7 +200,7 @@ export function issueCoupons(
       base: env.ECOMMERCE_PUBLIC_BASE_URL,
       path: `/promotions/${encodeURIComponent(id)}/coupons/issue`,
       body,
-      idempotencyKey: crypto.randomUUID(),
+      idempotencyKey,
     },
     (j) => IssueCouponResponseSchema.parse(j),
     PROMOTION_LABEL,

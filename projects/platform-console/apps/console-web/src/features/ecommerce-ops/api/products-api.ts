@@ -169,18 +169,17 @@ export function getProduct(id: string): Promise<ProductDetail> {
  * `Idempotency-Key` (TASK-BE-536 — a replayed registration would otherwise
  * create a second product with a second stock ledger).
  *
- * <p>Key-generation-location note: this route currently has no client-side
- * confirm/retry dialog state (unlike e.g. wms-outbound's cancel dialog, which
- * mints its key once per confirmed user action and reuses it across a retry —
- * see `use-outbound-cancel-dialog.ts`). Absent that machinery, the key is
- * minted here, once per invocation of this function — i.e. once per BFF proxy
- * request, which today is 1:1 with a user's confirm click. A future
- * network-level auto-retry of the SAME submit (without a fresh user click)
- * would need a client-held key to replay correctly; that is a frontend
- * follow-up, not attempted here (backend-scoped task).
+ * <p>The `idempotencyKey` is minted CLIENT-SIDE, once per confirmed create, and
+ * threaded through the request body (TASK-PC-FE-252 — the `use-product-form`
+ * confirm dialog holds it: a retry of the same confirmed submit reuses it, an
+ * edited resubmit gets a fresh one). The proxy route strips it from the body and
+ * passes it here. This is what makes the producer's key-based dedup actually
+ * catch a double-click — a per-call `crypto.randomUUID()` here gave each click a
+ * distinct key and defeated it (the defect this task fixed).
  */
 export function registerProduct(
   body: RegisterProductBody,
+  idempotencyKey: string,
 ): Promise<RegisterProductResponse> {
   const env = getServerEnv();
   return callEcommerce(
@@ -189,7 +188,7 @@ export function registerProduct(
       base: env.ECOMMERCE_ADMIN_BASE_URL,
       path: '/products',
       body,
-      idempotencyKey: crypto.randomUUID(),
+      idempotencyKey,
     },
     (j) => RegisterProductResponseSchema.parse(j),
     PRODUCT_LABEL,
@@ -286,13 +285,16 @@ export function deleteVariant(
  * 9 — PATCH /admin/products/{id}/stock (adjust stock; body carries the signed
  * `quantity` delta + `reason`). Confirm-gated. The producer now REQUIRES
  * `Idempotency-Key` (TASK-BE-536 — two identical deltas can both be genuine, so
- * only a client key can tell a retry apart from a real second adjustment). See
- * {@link registerProduct} for the key-generation-location rationale — same
- * reasoning applies here (minted once per BFF proxy invocation).
+ * only a client key can tell a retry apart from a real second adjustment).
+ * `idempotencyKey` is minted client-side per confirmed adjustment and threaded
+ * through the body (TASK-PC-FE-252 — see {@link registerProduct}); editing the
+ * delta/reason before a resubmit mints a fresh one, so a genuine second +10 is
+ * not mistaken for a replay.
  */
 export function adjustStock(
   productId: string,
   body: AdjustStockBody,
+  idempotencyKey: string,
 ): Promise<AdjustStockResponse> {
   const env = getServerEnv();
   return callEcommerce(
@@ -301,7 +303,7 @@ export function adjustStock(
       base: env.ECOMMERCE_ADMIN_BASE_URL,
       path: `/products/${encodeURIComponent(productId)}/stock`,
       body,
-      idempotencyKey: crypto.randomUUID(),
+      idempotencyKey,
     },
     (j) => AdjustStockResponseSchema.parse(j),
     PRODUCT_LABEL,

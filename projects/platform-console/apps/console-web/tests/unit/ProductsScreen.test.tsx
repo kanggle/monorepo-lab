@@ -216,6 +216,9 @@ describe('ProductDetail — variant inline CRUD + stock adjust', () => {
     expect(patchCall).toBeDefined();
     expect(String(patchCall[0])).toBe('/api/ecommerce/products/p-1/stock');
     const body = JSON.parse((patchCall[1] as RequestInit).body as string);
-    expect(body).toEqual({ variantId: 'v-1', quantity: -3, reason: 'damage' });
+    // The client body carries the intent's Idempotency-Key alongside the producer
+    // fields (the proxy strips it into the header — TASK-PC-FE-252).
+    expect(body).toMatchObject({ variantId: 'v-1', quantity: -3, reason: 'damage' });
+    expect(body.idempotencyKey).toEqual(expect.any(String));
   });
 });

@@ -43,7 +43,9 @@ import { RegisterSellerBodySchema } from '@/features/ecommerce-ops/api/seller-ty
  * No token / product data is ever logged. `Idempotency-Key` is opt-in per
  * mutation (TASK-BE-536): most still get none from the console (the producer
  * defines none — confirm-gate + producer state guards); `registerProduct` /
- * `adjustStock` / `issueCoupons` now mint one each (the producer requires it).
+ * `adjustStock` / `issueCoupons` carry one, minted **client-side per user
+ * intent** and threaded through the request body (TASK-PC-FE-252 — see the
+ * request schemas below).
  */
 
 export const mapEcommerceError = makeProxyErrorMapper(
@@ -85,6 +87,27 @@ export {
   RegisterSellerBodySchema,
   newRequestId,
 };
+
+/**
+ * Request schemas for the three producer-guarded mutations (TASK-PC-FE-252) =
+ * the producer body + a client-supplied `idempotencyKey`. The console mints the
+ * key once per user intent (dialog/form state) and sends it IN THE BODY; the
+ * route strips it back out and passes it as a separate argument, so the key
+ * never enters the producer body (same split the tenants create-proxy uses).
+ *
+ * The `extend` is load-bearing: `z.object` strips unknown keys, so validating the
+ * incoming payload against the bare producer body schema would silently DROP the
+ * key and the mutation would fall back to producer-side `IDEMPOTENCY_KEY_REQUIRED`.
+ */
+export const RegisterProductRequestSchema = RegisterProductBodySchema.extend({
+  idempotencyKey: z.string().min(1),
+});
+export const AdjustStockRequestSchema = AdjustStockBodySchema.extend({
+  idempotencyKey: z.string().min(1),
+});
+export const IssueCouponRequestSchema = IssueCouponBodySchema.extend({
+  idempotencyKey: z.string().min(1),
+});
 
 /** A generic parse helper: returns the parsed value or null on failure. */
 export function tryParse<T>(schema: z.ZodType<T>, value: unknown): T | null {

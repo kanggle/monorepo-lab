@@ -1,6 +1,6 @@
 # TASK-PC-FE-252 — 콘솔이 멱등키를 "호출마다" 만든다 — 더블클릭은 키가 둘이라 가드를 통과한다
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-PC-FE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (프런트 상태 관리 + 테스트. 다만 § Goal 의 *리셋 시점* 판단이 실질이다)
@@ -115,12 +115,30 @@ promotions-api.ts:200  idempotencyKey: crypto.randomUUID(),
 
 ## Definition of Done
 
-- [ ] AC-0 재측정 (세 `randomUUID()` 위치 확인)
-- [ ] 세 mutation 의 키 수명 결정 + 근거 기록
-- [ ] 키 생성을 의도 단위로 이동
-- [ ] AC-2(같은 의도=같은 키) / AC-3(다른 의도=다른 키) 테스트
-- [ ] AC-4 정당한 반복 조작 가능 확인
-- [ ] `pnpm lint` + vitest GREEN
+- [x] AC-0 재측정 (세 `randomUUID()` 위치 확인) — 세 곳 여전히 호출지점 채번 확인. **추가 발견**: 형제 features(`tenants`·`operators`·`wms-outbound-ops` 등)는 이미 "확정 액션당 다이얼로그에서 1회 생성·재시도 재사용" 패턴 → **ecommerce-ops 3곳만 straggler**([[project_enforcement_straggler_sibling_parity]]). 판단은 재발명이 아니라 형제 정렬.
+- [x] 세 mutation 의 키 수명 결정 + 근거 기록 (§ Implementation Decision) — 단일 규칙: **confirm 시 지연 생성, body 변경/성공/취소 시 폐기, 실패 시 유지**.
+- [x] 키 생성을 의도 단위로 이동 — server-side api fn 채번 제거, client(다이얼로그/폼 state)가 채번해 **body 로 전달**, proxy 가 wrapper 스키마로 분리해 header 로(tenants B2 정경). `ecommerce-gateway.ts:195` 배선 재사용.
+- [x] AC-2(같은 의도=같은 키) / AC-3(다른 의도=다른 키) 테스트 — 신규 `ecommerce-idempotency-key-lifetime.test.tsx`: 세 다이얼로그 각각 두 번 제출을 실제 구동해 **전송된 키를 비교**(F2 방어 — "헤더 존재"가 아니라 키 동일성).
+- [x] AC-4 정당한 반복 조작 가능 확인 — +10 두 번(성공 후 재조정)·같은 배치 재발급이 각각 **다른 키**로 통과함을 단언(값-해시 오답 회피).
+- [x] `pnpm lint` + vitest GREEN — `next lint` clean, `tsc --noEmit` clean, 전체 vitest **274 files / 2860 tests pass**(신규 8 포함). 로컬 검증(메인 node_modules junction). CI 가 최종 권위.
+
+---
+
+## Implementation Decision (AC-1)
+
+**키 = "이 확정 시도(intent) 시점의 body". 단일 규칙을 세 mutation 에 적용하되 컴포넌트 구조 차이만 반영:**
+
+- **생성**: confirm 시 지연(lazy) 생성(`idempotencyKey ?? crypto.randomUUID()`).
+- **유지**: 실패(409/에러) 시 유지 → **무편집 재시도는 같은 키**(AC-2, 서버 dedup 이 이중제출을 접음).
+- **폐기(null)**: (a) body 필드 변경 → 다음 confirm 이 새 키(AC-3) · (b) 성공 → 다음은 새 의도(AC-4) · (c) 취소.
+- **값-해시 키 미채택**(§ Goal 경고) — 같은 값 반복(+10 두 번)을 영구 차단하므로 오답. 랜덤 UUID + 위 수명이 정답.
+
+**mutation 별 구조 차이**:
+- `registerProduct`(use-product-form): 폼이 confirm 뒤에 잠기므로 편집=취소→재제출이고 `onSubmit` 이 매번 재채번 → 별도 필드 리셋 불필요.
+- `adjustStock`(StockAdjustDialog): 필드가 다이얼로그 안에서 편집 가능 → quantity/reason `onChange`·`reset()`(성공+취소)에서 키 null.
+- `issueCoupons`(CouponIssueDialog): 성공해도 안 닫힘 → **성공 시에도** 키 null(같은 배치 재발급 정당, AC-4), userIds `onChange` 에서 null.
+
+**배선**: 3개 producer body 스키마는 producer 로 그대로 나가므로 키 직접 추가 불가(`z.object` 가 unknown strip). tenants B2 처럼 **wrapper 스키마**(`XxxRequestSchema = XxxBodySchema.extend({ idempotencyKey })`)로 route 에서 분리 → api fn 별도 인자 → `Idempotency-Key` 헤더. 백엔드 변경 0, 계약 변경 0(콘솔이 이미 계약대로 헤더 전송, 바뀐 건 값의 수명뿐).
 
 ---
 

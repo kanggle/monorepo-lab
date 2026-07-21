@@ -4,7 +4,7 @@ import {
   registerProduct,
 } from '@/features/ecommerce-ops/api/products-api';
 import {
-  RegisterProductBodySchema,
+  RegisterProductRequestSchema,
   mapEcommerceError,
   badRequest,
   tryParse,
@@ -49,24 +49,26 @@ export async function GET(req: Request) {
  * (console-integration-contract § 2.4.10 #3): `POST /admin/products`.
  *
  * The domain-facing IAM OIDC token is attached server-side (NOT the operator
- * token — § 2.4.10); the body is Zod-validated against the producer
- * RegisterProductRequest shape before it reaches the upstream. The producer
- * now REQUIRES `Idempotency-Key` (TASK-BE-536) — `products-api.ts#registerProduct`
- * mints one per call; confirm-gated in the UI.
+ * token — § 2.4.10); the body is Zod-validated before it reaches the upstream.
+ * The producer now REQUIRES `Idempotency-Key` (TASK-BE-536); the console mints
+ * it once per confirmed create and sends it in the body (TASK-PC-FE-252) — this
+ * route strips it out and passes it as a separate arg (kept out of the producer
+ * body).
  */
 export async function POST(req: Request) {
   const requestId = newRequestId();
 
-  let body;
+  let parsed;
   try {
-    body = tryParse(RegisterProductBodySchema, await req.json());
+    parsed = tryParse(RegisterProductRequestSchema, await req.json());
   } catch {
     return badRequest();
   }
-  if (body === null) return badRequest();
+  if (parsed === null) return badRequest();
+  const { idempotencyKey, ...body } = parsed;
 
   try {
-    const result = await registerProduct(body);
+    const result = await registerProduct(body, idempotencyKey);
     return NextResponse.json(result, { status: 201 });
   } catch (err) {
     return mapEcommerceError(err, requestId);

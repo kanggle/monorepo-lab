@@ -275,7 +275,10 @@ describe('POST /api/ecommerce/promotions/{id}/coupons/issue', () => {
         'http://console.local/api/ecommerce/promotions/promo-1/coupons/issue',
         {
           method: 'POST',
-          body: JSON.stringify({ userIds: ['u-1', 'u-2', 'u-3'] }),
+          body: JSON.stringify({
+            userIds: ['u-1', 'u-2', 'u-3'],
+            idempotencyKey: 'idem-proxy-coupon',
+          }),
           headers: { 'Content-Type': 'application/json' },
         },
       ),
@@ -290,9 +293,10 @@ describe('POST /api/ecommerce/promotions/{id}/coupons/issue', () => {
     );
     const sentBody = JSON.parse((init as RequestInit).body as string);
     expect(sentBody.userIds).toEqual(['u-1', 'u-2', 'u-3']);
-    // TASK-BE-536: the producer now requires Idempotency-Key on this endpoint.
+    // TASK-PC-FE-252: body key → header verbatim, and stripped from the body.
+    expect(sentBody.idempotencyKey).toBeUndefined();
     const h = (init as RequestInit).headers as Record<string, string>;
-    expect(h['Idempotency-Key']).toBeTruthy();
+    expect(h['Idempotency-Key']).toBe('idem-proxy-coupon');
   });
 
   it('invalid body (empty userIds) → 422 (no upstream call)', async () => {
@@ -323,7 +327,7 @@ describe('POST /api/ecommerce/promotions/{id}/coupons/issue', () => {
         'http://console.local/api/ecommerce/promotions/promo-1/coupons/issue',
         {
           method: 'POST',
-          body: JSON.stringify({ userIds: ['u-1'] }),
+          body: JSON.stringify({ userIds: ['u-1'], idempotencyKey: 'idem-x' }),
           headers: { 'Content-Type': 'application/json' },
         },
       ),
@@ -344,7 +348,7 @@ describe('POST /api/ecommerce/promotions/{id}/coupons/issue', () => {
         'http://console.local/api/ecommerce/promotions/promo-1/coupons/issue',
         {
           method: 'POST',
-          body: JSON.stringify({ userIds: ['u-1'] }),
+          body: JSON.stringify({ userIds: ['u-1'], idempotencyKey: 'idem-x' }),
           headers: { 'Content-Type': 'application/json' },
         },
       ),
