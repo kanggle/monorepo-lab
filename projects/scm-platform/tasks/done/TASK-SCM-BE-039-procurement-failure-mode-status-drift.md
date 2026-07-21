@@ -1,6 +1,6 @@
 # TASK-SCM-BE-039 — Reconcile procurement Failure Modes #6 and #9 with actual HTTP status behavior
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-SCM-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (one doc correction + one behavioral ruling)

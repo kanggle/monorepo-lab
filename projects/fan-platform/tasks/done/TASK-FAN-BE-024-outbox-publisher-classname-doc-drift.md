@@ -1,6 +1,6 @@
 # TASK-FAN-BE-024 — Reconcile fan-platform outbox-relay class names in event contracts + service architectures
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-FAN-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (doc-only class-name corrections, no behavior change)

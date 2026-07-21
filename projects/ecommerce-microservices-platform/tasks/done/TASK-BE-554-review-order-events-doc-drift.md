@@ -1,6 +1,6 @@
 # TASK-BE-554 — Reconcile ecommerce contract docs: review productName, admin order endpoints, events index
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (three contract-doc additions, no behavior change)

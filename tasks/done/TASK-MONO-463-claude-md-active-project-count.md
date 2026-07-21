@@ -4,7 +4,7 @@
 > (`controller-slice-test-naming-convention`, #2839) while this task was being filed. 462 remains this round's
 > error-catalog task; 463 is this one.
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-MONO
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Haiku 4.5 (single stale-fact correction in a shared file)

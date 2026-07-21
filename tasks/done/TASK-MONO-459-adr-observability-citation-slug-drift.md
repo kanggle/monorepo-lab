@@ -1,6 +1,6 @@
 # TASK-MONO-459 — docs/adr: correct broken observability + console citation slugs (006→007, stale 013/018 filenames)
 
-Status: review
+Status: done
 
 `(분석=Opus 4.8 / 구현=Opus 4.8 — 기계적 링크 슬러그 교정, 결정 본문 무변경)`
 

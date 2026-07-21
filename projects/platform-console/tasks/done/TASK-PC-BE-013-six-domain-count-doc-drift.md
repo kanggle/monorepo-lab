@@ -1,6 +1,6 @@
 # TASK-PC-BE-013 — Correct stale "5 domains" claims to 6 across console-bff/web architecture + integration contract
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-PC-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (doc/contract corrections, no behavior change)
