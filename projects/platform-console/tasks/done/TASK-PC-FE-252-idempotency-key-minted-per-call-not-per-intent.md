@@ -1,6 +1,6 @@
 # TASK-PC-FE-252 — 콘솔이 멱등키를 "호출마다" 만든다 — 더블클릭은 키가 둘이라 가드를 통과한다
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-PC-FE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (프런트 상태 관리 + 테스트. 다만 § Goal 의 *리셋 시점* 판단이 실질이다)
