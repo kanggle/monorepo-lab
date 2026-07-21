@@ -227,7 +227,7 @@ com.example.erp.masterdata/
 │   │   (DepartmentJpaEntity/Repository/Adapter, EmployeeJpaEntity..., JobGradeJpaEntity...,
 │   │    CostCenterJpaEntity..., BusinessPartnerJpaEntity..., AuditLogJpaEntity...,
 │   │    outbox + processed_events + idempotency_keys)
-│   ├── outbox/MasterdataOutboxPollingScheduler.java   ← extends libs OutboxPollingScheduler
+│   ├── outbox/MasterdataOutboxPublisher.java   ← extends libs AbstractOutboxPublisher
 │   ├── authorization/JwtBackedAuthorizationAdapter.java ← maps JWT roles+scope → AuthorizationDecision
 │   ├── security/
 │   │   ├── SecurityConfig.java

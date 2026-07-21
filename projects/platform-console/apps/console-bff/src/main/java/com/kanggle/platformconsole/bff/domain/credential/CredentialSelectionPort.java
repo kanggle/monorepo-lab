@@ -6,8 +6,8 @@ package com.kanggle.platformconsole.bff.domain.credential;
  * <p>The selector predicate is verbatim from
  * {@code console-integration-contract.md} § 2.4.9:
  * <pre>
- *   GAP              → OperatorToken   (RFC 8693 exchanged)
- *   WMS, SCM, FINANCE, ERP → IamOidcAccessToken
+ *   IAM              → OperatorToken   (RFC 8693 exchanged)
+ *   WMS, SCM, FINANCE, ERP, ECOMMERCE → IamOidcAccessToken
  * </pre>
  *
  * <p>There is NO fallback path. If the required token is absent the

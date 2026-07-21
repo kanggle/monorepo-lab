@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
  * <p>Selector predicate — verbatim from {@code console-integration-contract.md} § 2.4.9
  * table (ADR-MONO-017 D4.A HARD INVARIANT):
  * <pre>
- *   GAP                              → OperatorToken(operatorToken)
+ *   IAM                              → OperatorToken(operatorToken)
  *   WMS, SCM, FINANCE, ERP, ECOMMERCE → IamOidcAccessToken(gapOidcAccessToken)
  * </pre>
  *
