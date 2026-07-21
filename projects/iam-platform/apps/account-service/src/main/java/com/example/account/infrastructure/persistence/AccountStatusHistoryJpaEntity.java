@@ -3,6 +3,7 @@ package com.example.account.infrastructure.persistence;
 import com.example.account.domain.history.AccountStatusHistoryEntry;
 import com.example.account.domain.status.AccountStatus;
 import com.example.account.domain.status.StatusChangeReason;
+import com.example.account.domain.tenant.TenantId;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -55,7 +56,7 @@ public class AccountStatusHistoryJpaEntity {
         entity.id = entry.getId();
         // TASK-BE-231: use tenantId from entry when present; fall back to "fan-platform"
         // for legacy fan-platform records where no explicit tenantId is set.
-        entity.tenantId = entry.getTenantId() != null ? entry.getTenantId() : "fan-platform";
+        entity.tenantId = entry.getTenantId() != null ? entry.getTenantId() : TenantId.FAN_PLATFORM.value();
         entity.accountId = entry.getAccountId();
         entity.fromStatus = entry.getFromStatus();
         entity.toStatus = entry.getToStatus();
