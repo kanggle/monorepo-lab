@@ -243,20 +243,39 @@ public abstract class AbstractReadModelIntegrationTest {
         }
     }
 
+    /**
+     * Builds a masterdata envelope in the SAME shape the real producer emits
+     * ({@code OutboxMasterdataEventPublisher.writeEvent} — TASK-ERP-BE-032): the
+     * contract's top-level {@code aggregateId}/{@code aggregateType}/{@code tenantId}
+     * plus {@code schemaVersion}/{@code partitionKey}, and the producer payload
+     * (which carries {@code aggregateId}/{@code tenantId}/{@code actor}/
+     * {@code before} as well). This helper deliberately mirrors the producer so the
+     * end-to-end suite exercises the real wire — a producer that drops the top-level
+     * {@code aggregateId} again would make these tests fail (the coverage gap that
+     * let the DLT defect ship: the old helper hand-built a spec shape the producer
+     * never emitted).
+     */
     protected String envelope(String eventId, String aggregateType, String aggregateId,
                               String changeKind, java.util.Map<String, Object> after) {
         java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("aggregateId", aggregateId);
         payload.put("changeKind", changeKind);
+        payload.put("tenantId", "erp");
         payload.put("occurredAt", Instant.now().toString());
+        payload.put("actor", "operator:test");
+        payload.put("before", null);
         payload.put("after", after);
+        payload.put("reason", null);
         java.util.Map<String, Object> env = new java.util.LinkedHashMap<>();
         env.put("eventId", eventId);
         env.put("eventType", "erp.masterdata." + aggregateType + ".changed");
-        env.put("occurredAt", Instant.now().toString());
-        env.put("tenantId", "erp");
         env.put("source", "erp-platform-masterdata-service");
+        env.put("occurredAt", Instant.now().toString());
+        env.put("schemaVersion", 1);
+        env.put("tenantId", "erp");
         env.put("aggregateType", aggregateType);
         env.put("aggregateId", aggregateId);
+        env.put("partitionKey", aggregateId);
         env.put("payload", payload);
         try {
             return objectMapper.writeValueAsString(env);

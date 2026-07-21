@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-ERP-BE-032-masterdata-event-envelope-dlt-mismatch.md` — **[2026-07-21 정합화 감사 최우선 실결함]** masterdata→read-model 이벤트 **봉투 shape 불일치** → 프로듀서 실이벤트 전건 DLT. 프로듀서(`OutboxMasterdataEventPublisher`)는 top-level `aggregateId` 없이 `partitionKey`+`payload.aggregateId`만 발행하나, consumer(`MasterEventEnvelope.isValid()`)는 top-level `aggregateId` 필수 → `InvalidEnvelopeException` → retry 없이 `.DLT`. spec(`erp-masterdata-events.md §Envelope`)은 top-level `aggregateId` 선언(=consumer 편) → 프로듀서만 이탈. E2E 테스트는 spec-shape 봉투를 손수 조립해 초록(test-fixture-proves-nothing) → 프로덕션 org-view 미채움. **AC-1 방향=Option A(프로듀서를 spec 에 정합, 권장 — 구 wire 소비자 0)**. AC-3=프로듀서 실출력을 consumer 로 통과시키는 크로스서비스 계약 회귀 테스트(누락된 브리지). 분석=Opus 4.8 / 구현 권장=Opus.
+(empty)
 
 ## in-progress
 
@@ -86,7 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-ERP-BE-032-masterdata-event-envelope-dlt-mismatch.md` — **[2026-07-21 정합화 감사 최우선 실결함, 구현 완료 — 리뷰 대기]** masterdata→read-model 이벤트 **봉투 shape 불일치** → 프로듀서 실이벤트 전건 DLT. **수정(Option A)**: `OutboxMasterdataEventPublisher.writeEvent`가 spec §Envelope 대로 top-level `tenantId`/`aggregateType`/`aggregateId`(+`schemaVersion`/`partitionKey`) 발행 — consumer(`MasterEventEnvelope.isValid()`)가 요구하던 top-level `aggregateId` 충족 → DLT 해소. spec §Envelope 예시·필드노트 정합(`traceId` v1 deferred 명시), 프로듀서 unit test top-level 필드 단언 추가, E2E `envelope()` 헬퍼를 프로듀서 실 shape로 정렬, **신규 `MasterEventEnvelopeProducerContractTest`**(프로듀서 wire→consumer mapper, 옛 7필드 wire=negative=DLT 재현 — 누락됐던 크로스서비스 브리지). 검증: masterdata+read-model Docker-free `test` (read-model Testcontainers IT는 CI Linux 권위). 분석·구현=Opus 4.8.
 
 ## done
 

@@ -1,6 +1,6 @@
 # TASK-ERP-BE-032 — masterdata→read-model event envelope mismatch: every masterdata event routes to DLT (producer wire omits top-level `aggregateId`)
 
-Status: ready
+Status: review
 
 `(분석=Opus 4.8 / 구현 권장=Opus — cross-service event contract 정합 + regression 커버리지 설계, 실프로덕션 결함)`
 
