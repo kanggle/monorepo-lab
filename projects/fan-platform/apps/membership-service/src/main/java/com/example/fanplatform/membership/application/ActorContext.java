@@ -8,8 +8,4 @@ import java.util.Set;
  * application layer. {@code accountId} = the {@code sub} claim.
  */
 public record ActorContext(String accountId, String tenantId, Set<String> roles) {
-
-    public boolean hasRole(String role) {
-        return roles != null && roles.contains(role);
-    }
 }
