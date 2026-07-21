@@ -1,6 +1,8 @@
 package com.wms.inbound.adapter.in.rest;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -9,37 +11,53 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.example.web.idempotency.IdempotencyFilterConfig;
+import com.example.web.idempotency.IdempotencyKeyFilter;
+import com.example.web.idempotency.JsonValueBodyCanonicalizer;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.inbound.adapter.in.web.advice.GlobalExceptionHandler;
+import com.wms.inbound.adapter.in.web.filter.InboundIdempotencyErrorWriter;
+import com.wms.inbound.adapter.out.idempotency.InMemoryIdempotencyStore;
 import com.wms.inbound.application.port.in.AcknowledgeDiscrepancyUseCase;
 import com.wms.inbound.application.port.in.QueryInspectionUseCase;
 import com.wms.inbound.application.port.in.RecordInspectionUseCase;
 import com.wms.inbound.application.port.in.StartInspectionUseCase;
 import com.wms.inbound.application.result.InspectionResult;
 import com.wms.inbound.config.SecurityConfig;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
- * {@code @WebMvcTest} slice for {@link InspectionController} — pins the
+ * Controller web-slice for {@link InspectionController} — pins the
  * {@code Idempotency-Key} required-guard on {@code inspection:start} and
  * {@code inspection} (record) that was missing before TASK-BE-551 (the two
  * inbound write endpoints that never enforced it, unlike every ASN/putaway
  * sibling and {@code acknowledgeDiscrepancy} in this same controller).
  *
- * <p>Covers AC-2(a) (missing key → 400) and AC-3 (a valid key leaves the happy
- * path unchanged). The shared {@link com.example.web.idempotency.IdempotencyKeyFilter}
- * dedupe/409 behaviour (AC-2 b/c) is proven against these exact paths by the
- * companion {@link InspectionControllerIdempotencyFilterTest}.
+ * <p>The outer {@code @WebMvcTest} slice covers AC-2(a) (missing key → 400) and
+ * AC-3 (a valid key leaves the happy path unchanged). The nested
+ * {@link IdempotencyFilterReach} proves the shared
+ * {@link IdempotencyKeyFilter} — registered blanket for
+ * {@code POST /api/v1/inbound/*} in
+ * {@link com.wms.inbound.config.IdempotencyConfig} — actually reaches these two
+ * paths, and that once a key IS sent the dedupe + {@code DUPLICATE_REQUEST}
+ * behaviour works (AC-2 b/c). Both mechanisms live in one compliant
+ * {@code *ControllerSliceTest} file (scripts/check-controller-slice-naming.sh).
  */
 @WebMvcTest(controllers = InspectionController.class)
 @Import({SecurityConfig.class, GlobalExceptionHandler.class})
@@ -68,15 +86,15 @@ class InspectionControllerSliceTest {
                 1L, NOW, List.of(), List.of());
     }
 
-    private static String validRecordBody() {
+    private static String validRecordBody(int qtyPassed) {
         return """
                 {
                   "notes": "inspection ok",
                   "lines": [
-                    { "asnLineId": "%s", "qtyPassed": 10, "qtyDamaged": 0, "qtyShort": 0 }
+                    { "asnLineId": "%s", "qtyPassed": %d, "qtyDamaged": 0, "qtyShort": 0 }
                   ]
                 }
-                """.formatted(ASN_LINE_ID);
+                """.formatted(ASN_LINE_ID, qtyPassed);
     }
 
     // -------------------------------------------------------------------------
@@ -127,7 +145,7 @@ class InspectionControllerSliceTest {
         mockMvc.perform(post("/api/v1/inbound/asns/{asnId}/inspection", ASN_ID)
                         .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_INBOUND_WRITE")))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(validRecordBody()))
+                        .content(validRecordBody(10)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
         verifyNoInteractions(recordInspection);
@@ -142,7 +160,7 @@ class InspectionControllerSliceTest {
                                 .authorities(new SimpleGrantedAuthority("ROLE_INBOUND_WRITE")))
                         .header(IDEMPOTENCY_KEY, "idem-record-1")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(validRecordBody()))
+                        .content(validRecordBody(10)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(INSPECTION_ID.toString()));
         verify(recordInspection).record(any());
@@ -154,7 +172,7 @@ class InspectionControllerSliceTest {
                         .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_INBOUND_READ")))
                         .header(IDEMPOTENCY_KEY, "idem-record-2")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(validRecordBody()))
+                        .content(validRecordBody(10)))
                 .andExpect(status().isForbidden());
     }
 
@@ -163,7 +181,107 @@ class InspectionControllerSliceTest {
         mockMvc.perform(post("/api/v1/inbound/asns/{asnId}/inspection", ASN_ID)
                         .header(IDEMPOTENCY_KEY, "idem-record-3")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(validRecordBody()))
+                        .content(validRecordBody(10)))
                 .andExpect(status().isUnauthorized());
+    }
+
+    /**
+     * Proves the shared {@link IdempotencyKeyFilter} reaches the inspection
+     * paths and dedupes once a key is sent (AC-2 b/c). Docker-free: a standalone
+     * MockMvc wiring the real filter through the <em>same</em>
+     * {@link IdempotencyFilterConfig} shape as production ({@code POST} + prefix
+     * {@code /api/v1/inbound/}, webhook-skipping) with the in-memory store, so
+     * the filter's own {@code shouldApply} predicate — not a test-only URL
+     * pattern — decides these paths are covered.
+     */
+    @Nested
+    class IdempotencyFilterReach {
+
+        private StartInspectionUseCase start;
+        private RecordInspectionUseCase record;
+        private MockMvc filterMockMvc;
+
+        @BeforeEach
+        void setUp() {
+            start = mock(StartInspectionUseCase.class);
+            record = mock(RecordInspectionUseCase.class);
+            AcknowledgeDiscrepancyUseCase ack = mock(AcknowledgeDiscrepancyUseCase.class);
+            QueryInspectionUseCase query = mock(QueryInspectionUseCase.class);
+
+            InspectionController controller = new InspectionController(start, record, ack, query);
+
+            ObjectMapper objectMapper = new ObjectMapper();
+            IdempotencyFilterConfig config = IdempotencyFilterConfig.builder()
+                    .methods("POST")
+                    .applyToPrefixSkippingWebhook("/api/v1/inbound/", "/webhooks/")
+                    .lockTtl(Duration.ofSeconds(30))
+                    .entryTtl(Duration.ofHours(24))
+                    .build();
+            IdempotencyKeyFilter filter = new IdempotencyKeyFilter(
+                    new InMemoryIdempotencyStore(),
+                    new JsonValueBodyCanonicalizer(objectMapper),
+                    new InboundIdempotencyErrorWriter(objectMapper),
+                    null,
+                    config);
+
+            filterMockMvc = MockMvcBuilders.standaloneSetup(controller)
+                    .setControllerAdvice(new GlobalExceptionHandler())
+                    // Resolve @AuthenticationPrincipal Jwt to null (no security context here) —
+                    // the controller falls back to actorId "anonymous"; this targets the filter.
+                    .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
+                    .addFilters(filter)
+                    .build();
+        }
+
+        @Test
+        void startInspection_sameKey_isReplayedNotReExecuted() throws Exception {
+            filterMockMvc.perform(post("/api/v1/inbound/asns/{asnId}/inspection:start", ASN_ID)
+                            .header(IDEMPOTENCY_KEY, "idem-start-replay"))
+                    .andExpect(status().isOk());
+            // Same key + same (empty) body → filter replays the cached 200; controller not re-invoked.
+            filterMockMvc.perform(post("/api/v1/inbound/asns/{asnId}/inspection:start", ASN_ID)
+                            .header(IDEMPOTENCY_KEY, "idem-start-replay"))
+                    .andExpect(status().isOk());
+
+            verify(start, times(1)).start(any());
+        }
+
+        @Test
+        void recordInspection_sameKeySameBody_isReplayedNotReExecuted() throws Exception {
+            when(record.record(any())).thenReturn(stubResult());
+
+            filterMockMvc.perform(post("/api/v1/inbound/asns/{asnId}/inspection", ASN_ID)
+                            .header(IDEMPOTENCY_KEY, "idem-record-replay")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(validRecordBody(10)))
+                    .andExpect(status().isCreated());
+            filterMockMvc.perform(post("/api/v1/inbound/asns/{asnId}/inspection", ASN_ID)
+                            .header(IDEMPOTENCY_KEY, "idem-record-replay")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(validRecordBody(10)))
+                    .andExpect(status().isCreated());
+
+            verify(record, times(1)).record(any());
+        }
+
+        @Test
+        void recordInspection_sameKeyDifferentBody_returns409DuplicateRequest() throws Exception {
+            when(record.record(any())).thenReturn(stubResult());
+
+            filterMockMvc.perform(post("/api/v1/inbound/asns/{asnId}/inspection", ASN_ID)
+                            .header(IDEMPOTENCY_KEY, "idem-record-conflict")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(validRecordBody(10)))
+                    .andExpect(status().isCreated());
+            // Same key, different body → shared filter emits 409 DUPLICATE_REQUEST.
+            filterMockMvc.perform(post("/api/v1/inbound/asns/{asnId}/inspection", ASN_ID)
+                            .header(IDEMPOTENCY_KEY, "idem-record-conflict")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(validRecordBody(7)))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("DUPLICATE_REQUEST"));
+
+            verify(record, times(1)).record(any());
+        }
     }
 }
