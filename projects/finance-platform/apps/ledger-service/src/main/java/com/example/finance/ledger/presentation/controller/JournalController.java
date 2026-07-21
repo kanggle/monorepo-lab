@@ -42,14 +42,10 @@ public class JournalController {
             @RequestBody ManualJournalEntryRequest request) {
         ActorContext actor = ActorContextResolver.currentOrThrow();
         Result result = postManualEntry.post(
-                request.toCommand(actor.tenantId(), actorIdentity(actor), idempotencyKey));
+                request.toCommand(actor.tenantId(), actor.identity(), idempotencyKey));
         JournalEntryResponse body = JournalEntryResponse.from(result.entry());
         HttpStatus status = result.replayed() ? HttpStatus.OK : HttpStatus.CREATED;
         return ResponseEntity.status(status).body(ApiEnvelope.of(body));
     }
 
-    /** The actor identity recorded as the audit actor — the JWT subject, else the tenant. */
-    private static String actorIdentity(ActorContext actor) {
-        return actor.subject() != null ? actor.subject() : actor.tenantId();
-    }
 }

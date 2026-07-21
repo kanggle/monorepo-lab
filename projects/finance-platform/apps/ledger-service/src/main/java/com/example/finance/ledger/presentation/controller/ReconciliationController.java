@@ -74,7 +74,7 @@ public class ReconciliationController {
         IngestStatementCommand command = new IngestStatementCommand(
                 actor.tenantId(), request.ledgerAccountCode(),
                 StatementSource.valueOf(request.source()), request.statementDate(),
-                lines, actorIdentity(actor));
+                lines, actor.identity());
         StatementView view = ingestStatement.ingest(command);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiEnvelope.of(StatementResponse.from(view)));
@@ -86,7 +86,7 @@ public class ReconciliationController {
         ActorContext actor = ActorContextResolver.currentOrThrow();
         DiscrepancyView view = resolveDiscrepancy.resolve(
                 id, actor.tenantId(), ResolutionType.valueOf(request.resolutionType()),
-                request.note(), actorIdentity(actor));
+                request.note(), actor.identity());
         return ResponseEntity.ok(ApiEnvelope.of(DiscrepancyResponse.from(view)));
     }
 
@@ -148,13 +148,9 @@ public class ReconciliationController {
             @RequestBody FxToleranceRequest request) {
         ActorContext actor = ActorContextResolver.currentOrThrow();
         SetFxToleranceCommand command = new SetFxToleranceCommand(
-                actor.tenantId(), request.bpsOrZero(), request.floorOrZero(), actorIdentity(actor));
+                actor.tenantId(), request.bpsOrZero(), request.floorOrZero(), actor.identity());
         FxToleranceView view = setFxTolerance.set(command);
         return ResponseEntity.ok(ApiEnvelope.of(FxToleranceResponse.from(view)));
     }
 
-    /** The actor identity recorded as {@code resolvedBy} — the JWT subject, else the tenant. */
-    private static String actorIdentity(ActorContext actor) {
-        return actor.subject() != null ? actor.subject() : actor.tenantId();
-    }
 }

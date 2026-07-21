@@ -48,7 +48,7 @@ public class PeriodController {
             @RequestBody OpenPeriodRequest request) {
         ActorContext actor = ActorContextResolver.currentOrThrow();
         AccountingPeriod period = openPeriod.open(
-                actor.tenantId(), request.from(), request.to(), actorIdentity(actor));
+                actor.tenantId(), request.from(), request.to(), actor.identity());
         PeriodResponse body = PeriodResponse.from(AccountingPeriodView.summary(period));
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.of(body));
     }
@@ -58,7 +58,7 @@ public class PeriodController {
             @PathVariable String periodId) {
         ActorContext actor = ActorContextResolver.currentOrThrow();
         AccountingPeriodView view = closePeriod.close(
-                periodId, actor.tenantId(), actorIdentity(actor));
+                periodId, actor.tenantId(), actor.identity());
         return ResponseEntity.ok(ApiEnvelope.of(PeriodDetailResponse.from(view)));
     }
 
@@ -84,11 +84,6 @@ public class PeriodController {
         ActorContext actor = ActorContextResolver.currentOrThrow();
         AccountingPeriodView view = queryPeriod.getPeriod(periodId, actor.tenantId());
         return ResponseEntity.ok(ApiEnvelope.of(PeriodDetailResponse.from(view)));
-    }
-
-    /** The actor identity recorded as {@code closedBy} — the JWT subject, else the tenant. */
-    private static String actorIdentity(ActorContext actor) {
-        return actor.subject() != null ? actor.subject() : actor.tenantId();
     }
 
     private static List<AccountingPeriodView> paginate(List<AccountingPeriodView> all,

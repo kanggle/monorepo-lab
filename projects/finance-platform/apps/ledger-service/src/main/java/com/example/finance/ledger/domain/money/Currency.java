@@ -2,6 +2,7 @@ package com.example.finance.ledger.domain.money;
 
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
 
 /**
  * Supported ISO-4217 currency with its minor-unit scale (fintech F5). Mirrors
@@ -62,6 +63,24 @@ public enum Currency {
             throw new UnsupportedCurrencyException("unsupported currency: " + code);
         }
         return c;
+    }
+
+    /**
+     * Resolve a 3-letter ISO-4217 code, mapping an {@link UnsupportedCurrencyException}
+     * to a caller-chosen exception so each call site keeps its own contract error type
+     * (e.g. {@code VALIDATION_ERROR} instead of the default {@code CURRENCY_MISMATCH}).
+     * The factory receives the offending code. A {@code null} code still throws
+     * {@link NullPointerException} via {@link #of(String)} — unchanged (not remapped).
+     *
+     * @param onUnsupported builds the exception to throw for an unknown/unsupported code
+     */
+    public static Currency ofOrThrow(String code,
+                                     Function<String, ? extends RuntimeException> onUnsupported) {
+        try {
+            return of(code);
+        } catch (UnsupportedCurrencyException e) {
+            throw onUnsupported.apply(code);
+        }
     }
 
     /** Thrown for an unknown/unsupported currency code (→ CURRENCY_MISMATCH). */

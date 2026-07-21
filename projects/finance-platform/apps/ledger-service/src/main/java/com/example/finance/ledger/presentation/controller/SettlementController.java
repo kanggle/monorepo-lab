@@ -101,7 +101,7 @@ public class SettlementController {
             @RequestBody SettlementRequest request) {
         ActorContext actor = ActorContextResolver.currentOrThrow();
         Result result = settleForeignPosition.settle(
-                request.toCommand(actor.tenantId(), actorIdentity(actor), idempotencyKey));
+                request.toCommand(actor.tenantId(), actor.identity(), idempotencyKey));
         SettlementResponse body = SettlementResponse.from(result);
         HttpStatus status = result.settled() ? HttpStatus.CREATED : HttpStatus.OK;
         return ResponseEntity.status(status).body(ApiEnvelope.of(body));
@@ -130,7 +130,7 @@ public class SettlementController {
             @RequestBody FxCostFlowConfigRequest request) {
         ActorContext actor = ActorContextResolver.currentOrThrow();
         SetFxCostFlowConfigCommand command = new SetFxCostFlowConfigCommand(
-                actor.tenantId(), request.method(), actorIdentity(actor));
+                actor.tenantId(), request.method(), actor.identity());
         FxCostFlowConfigView view = setFxCostFlowConfig.set(command);
         return ResponseEntity.ok(ApiEnvelope.of(FxCostFlowConfigResponse.from(view)));
     }
@@ -167,7 +167,7 @@ public class SettlementController {
             @RequestBody FxCostFlowAccountConfigRequest request) {
         ActorContext actor = ActorContextResolver.currentOrThrow();
         SetFxCostFlowAccountConfigCommand command = new SetFxCostFlowAccountConfigCommand(
-                actor.tenantId(), ledgerAccountCode, request.method(), actorIdentity(actor));
+                actor.tenantId(), ledgerAccountCode, request.method(), actor.identity());
         FxCostFlowAccountConfigView view = setFxCostFlowAccountConfig.set(command);
         return ResponseEntity.ok(ApiEnvelope.of(FxCostFlowAccountConfigResponse.from(view)));
     }
@@ -183,7 +183,7 @@ public class SettlementController {
             @PathVariable String ledgerAccountCode) {
         ActorContext actor = ActorContextResolver.currentOrThrow();
         boolean cleared = deleteFxCostFlowAccountConfig.clear(
-                actor.tenantId(), ledgerAccountCode, actorIdentity(actor));
+                actor.tenantId(), ledgerAccountCode, actor.identity());
         return ResponseEntity.ok(ApiEnvelope.of(
                 new FxCostFlowAccountConfigDeleteResponse(ledgerAccountCode, cleared)));
     }
@@ -222,7 +222,7 @@ public class SettlementController {
         ActorContext actor = ActorContextResolver.currentOrThrow();
         SetFxRateOverrideCommand command = new SetFxRateOverrideCommand(
                 actor.tenantId(), LedgerReportingCurrency.BASE.code(), foreignCurrency,
-                request.parsedRate(), actorIdentity(actor));
+                request.parsedRate(), actor.identity());
         FxRateOverrideView view = setFxRateOverride.set(command);
         return ResponseEntity.ok(ApiEnvelope.of(FxRateOverrideResponse.from(view)));
     }
@@ -256,17 +256,7 @@ public class SettlementController {
      * that cannot be parsed is a client input error, not a domain currency-mismatch).
      */
     private static Currency parseCurrencyOrValidationError(String currencyCode) {
-        try {
-            return Currency.of(currencyCode);
-        } catch (Currency.UnsupportedCurrencyException e) {
-            throw new FxToleranceInvalidException(
-                    "unknown currency: " + currencyCode
-                            + " — supported: KRW, USD, EUR, JPY");
-        }
-    }
-
-    /** The actor identity recorded as the audit actor — the JWT subject, else the tenant. */
-    private static String actorIdentity(ActorContext actor) {
-        return actor.subject() != null ? actor.subject() : actor.tenantId();
+        return Currency.ofOrThrow(currencyCode, c -> new FxToleranceInvalidException(
+                "unknown currency: " + c + " — supported: KRW, USD, EUR, JPY"));
     }
 }

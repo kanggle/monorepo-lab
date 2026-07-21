@@ -43,14 +43,10 @@ public class RevaluationController {
             @RequestBody RevaluationRequest request) {
         ActorContext actor = ActorContextResolver.currentOrThrow();
         Result result = revalueForeignBalance.revalue(
-                request.toCommand(actor.tenantId(), actorIdentity(actor), idempotencyKey));
+                request.toCommand(actor.tenantId(), actor.identity(), idempotencyKey));
         RevaluationResponse body = RevaluationResponse.from(result);
         HttpStatus status = result.revalued() ? HttpStatus.CREATED : HttpStatus.OK;
         return ResponseEntity.status(status).body(ApiEnvelope.of(body));
     }
 
-    /** The actor identity recorded as the audit actor — the JWT subject, else the tenant. */
-    private static String actorIdentity(ActorContext actor) {
-        return actor.subject() != null ? actor.subject() : actor.tenantId();
-    }
 }

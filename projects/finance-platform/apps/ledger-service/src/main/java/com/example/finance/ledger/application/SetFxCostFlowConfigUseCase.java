@@ -11,8 +11,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
-
 /**
  * Upsert the tenant's FX cost-flow method config (15th increment — TASK-FIN-BE-023).
  * One {@code @Transactional} boundary:
@@ -49,16 +47,14 @@ public class SetFxCostFlowConfigUseCase {
         // raise VALIDATION_ERROR (400) and write nothing (mirrors SetFxToleranceUseCase).
         CostFlowMethod method = CostFlowMethod.fromString(command.method());
 
-        Instant now = clock.now();
-        FxCostFlowConfig saved = fxCostFlowConfigRepository.save(
-                FxCostFlowConfig.of(command.tenantId(), method, command.actor(), now));
-
-        auditLogRepository.save(AuditLog.of(
-                command.tenantId(), AGGREGATE_TYPE, command.tenantId(),
-                "FX_COST_FLOW_METHOD_SET", command.actor(),
-                "method=" + saved.method().name(),
-                "set fx cost-flow method", now));
-
-        return FxCostFlowConfigView.from(saved);
+        return AuditedUpsert.run(clock, auditLogRepository,
+                now -> fxCostFlowConfigRepository.save(
+                        FxCostFlowConfig.of(command.tenantId(), method, command.actor(), now)),
+                (saved, now) -> AuditLog.of(
+                        command.tenantId(), AGGREGATE_TYPE, command.tenantId(),
+                        "FX_COST_FLOW_METHOD_SET", command.actor(),
+                        "method=" + saved.method().name(),
+                        "set fx cost-flow method", now),
+                FxCostFlowConfigView::from);
     }
 }
