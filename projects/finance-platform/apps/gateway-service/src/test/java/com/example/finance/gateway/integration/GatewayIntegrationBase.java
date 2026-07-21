@@ -4,8 +4,11 @@ import com.example.finance.gateway.testsupport.JwksMockServer;
 import com.example.finance.gateway.testsupport.JwtTestHelper;
 import com.redis.testcontainers.RedisContainer;
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 import okhttp3.mockwebserver.MockWebServer;
-import org.junit.jupiter.api.AfterAll;
+import okhttp3.mockwebserver.QueueDispatcher;
+import okhttp3.mockwebserver.RecordedRequest;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -40,6 +43,16 @@ import org.testcontainers.utility.DockerImageName;
  * <p>The JWKS startup probe is switched off for the suite: it is an orthogonal boot-time concern
  * with its own coverage, and leaving it on would couple every request-path assertion to a
  * network fetch that races context refresh. The request-path chain under test is unaffected.
+ *
+ * <p><strong>Testcontainers singleton, never torn down.</strong> The Redis container and both
+ * MockWebServers are process-wide singletons that Ryuk reaps at JVM exit — there is deliberately
+ * <em>no</em> {@code @AfterAll} that stops them. finance's IT ships two subclasses ({@code Edge}
+ * and {@code RateLimit}) that share one cached Spring context (identical config); a per-class
+ * {@code @AfterAll} teardown would stop Redis after the first class finished, and the second class
+ * would reuse the cached context pointing at a dead port — the {@code FailOpenRateLimiter} then
+ * fails open (Redis unreachable) and the rate-limit assertion never sees its 429. That is exactly
+ * the CI-Linux failure this pattern fixes (TASK-MONO-458). Cross-class state on the shared
+ * downstream is instead reset per-test in {@link #resetDownstream()}.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -79,11 +92,27 @@ public abstract class GatewayIntegrationBase {
     @Autowired
     protected WebTestClient webTestClient;
 
-    @AfterAll
-    static void stopSharedInfra() throws IOException {
-        if (downstream != null) downstream.shutdown();
-        if (jwks != null) jwks.close();
-        if (REDIS != null) REDIS.stop();
+    /**
+     * The downstream {@link MockWebServer} is a process-wide singleton (it must be static so
+     * {@code @DynamicPropertySource} can point the route at it), so its enqueued-response and
+     * recorded-request queues are shared across every test in both subclasses. Without a reset,
+     * the rate-limit test's unconsumed 200-responses would be dequeued FIFO by a later class's
+     * requests, and a stale recorded request could satisfy a {@code takeRequest()} assertion.
+     * Reset to a clean slate before each test: a fresh response queue plus a drain of any
+     * unconsumed recorded requests.
+     */
+    @BeforeEach
+    void resetDownstream() {
+        downstream.setDispatcher(new QueueDispatcher());
+        RecordedRequest drained;
+        do {
+            try {
+                drained = downstream.takeRequest(0, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        } while (drained != null);
     }
 
     @DynamicPropertySource

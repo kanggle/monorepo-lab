@@ -82,17 +82,16 @@ class GatewayRoutingIntegrationTest extends GatewayIntegrationBase {
     }
 
     @Test
-    @DisplayName("서명 변조 토큰 → 401 UNAUTHORIZED")
-    void tamperedSignatureIsRejectedWith401() {
-        String token = jwt.signErpOperatorToken("ops-tamper");
-        String[] parts = token.split("\\.");
-        String flipped = parts[2].endsWith("A")
-                ? parts[2].substring(0, parts[2].length() - 1) + "B"
-                : parts[2].substring(0, parts[2].length() - 1) + "A";
-        String tampered = parts[0] + "." + parts[1] + "." + flipped;
+    @DisplayName("위조 서명 토큰(신뢰되지 않는 키로 서명) → 401 UNAUTHORIZED")
+    void forgedSignatureIsRejectedWith401() {
+        // Deterministically forged: the token advertises the real kid but is signed with a private
+        // key whose public half is NOT in the JWKS, so signature verification MUST fail. (The
+        // previous last-base64url-char flip was a no-op ~25% of runs — for RSA-2048 that char
+        // carries only 2 significant bits — so a forged token verified and the test flaked on CI.)
+        String token = jwt.signForgedSignatureToken("ops-forged");
 
         webTestClient.get().uri(PATH)
-                .header("Authorization", "Bearer " + tampered)
+                .header("Authorization", "Bearer " + token)
                 .exchange()
                 .expectStatus().isUnauthorized()
                 .expectBody().jsonPath("$.code").isEqualTo("UNAUTHORIZED");

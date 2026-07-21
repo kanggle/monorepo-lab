@@ -21,8 +21,9 @@ import org.junit.jupiter.api.Test;
  *       path (no RewritePath, unlike fan).</li>
  *   <li>{@link #missingBearerTokenIsRejected401()} — the shared {@code SecurityConfig}
  *       {@code .anyExchange().authenticated()} + {@code GatewayErrorHandler} envelope.</li>
- *   <li>{@link #tamperedSignatureIsRejected401()} — the {@code NimbusReactiveJwtDecoder}
- *       signature verification against the JWKS MockWebServer.</li>
+ *   <li>{@link #forgedSignatureIsRejected401()} — the {@code NimbusReactiveJwtDecoder}
+ *       signature verification against the JWKS MockWebServer (token signed with an
+ *       unpublished foreign key → deterministic reject).</li>
  *   <li>{@link #expiredTokenIsRejected401()} — the {@code JwtTimestampValidator} in
  *       {@code GatewayJwtDecoders#validatorChain}.</li>
  *   <li>{@link #crossTenantTokenIsRejected403TenantForbidden()} — wms's strict
@@ -70,16 +71,17 @@ class GatewayRoutingAuthIntegrationTest extends GatewayIntegrationBase {
     }
 
     @Test
-    void tamperedSignatureIsRejected401() {
-        String token = jwt.signToken("op-tamper-1", "MASTER_READ", 300);
-        String[] parts = token.split("\\.");
-        String lastChar = parts[2].substring(parts[2].length() - 1);
-        String flipped = "A".equals(lastChar) ? "B" : "A";
-        String tampered = parts[0] + "." + parts[1] + "."
-                + parts[2].substring(0, parts[2].length() - 1) + flipped;
+    void forgedSignatureIsRejected401() {
+        // Deterministic bad signature: the token advertises the real published kid but is signed
+        // with a foreign, unpublished key, so verification against the JWKS always fails. This
+        // replaces an earlier last-base64url-char byte-flip, which was flaky ~25% of runs: the
+        // final char of an RSA-2048 signature carries only 2 data bits + 4 padding bits, so
+        // flipping it when it is 'A' toggles a padding bit only and the decoded signature is
+        // unchanged (see JwtTestHelper#signForgedSignatureToken). Do not reintroduce the flip.
+        String token = jwt.signForgedSignatureToken("op-forged-1");
 
         webTestClient.get().uri("/api/v1/master/warehouses")
-                .header("Authorization", "Bearer " + tampered)
+                .header("Authorization", "Bearer " + token)
                 .exchange()
                 .expectStatus().isUnauthorized()
                 .expectBody()

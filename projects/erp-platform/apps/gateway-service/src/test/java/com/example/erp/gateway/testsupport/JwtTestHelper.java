@@ -36,6 +36,7 @@ public final class JwtTestHelper {
 
     private final RSAKey rsaJwk;
     private final RSASSASigner signer;
+    private final RSASSASigner foreignSigner;
 
     public JwtTestHelper() {
         try {
@@ -43,6 +44,12 @@ public final class JwtTestHelper {
                     .keyID(UUID.randomUUID().toString())
                     .generate();
             this.signer = new RSASSASigner(rsaJwk);
+            // A SECOND keypair whose public half is deliberately NOT published in the JWKS. Signing
+            // with it yields a well-formed but unverifiable signature — the deterministic basis for
+            // signForgedSignatureToken. Same kid as the real key so the resource server still
+            // selects the published public key and verification fails (rather than "unknown kid").
+            RSAKey foreignJwk = new RSAKeyGenerator(2048).keyID(rsaJwk.getKeyID()).generate();
+            this.foreignSigner = new RSASSASigner(foreignJwk);
         } catch (JOSEException e) {
             throw new IllegalStateException("Failed to build RSA test keypair/signer", e);
         }
@@ -148,6 +155,40 @@ public final class JwtTestHelper {
     public String signUntrustedIssuerToken(String subject) {
         return signToken(UNTRUSTED_ISSUER, subject, "ERP_OPERATOR", DEFAULT_TENANT_ID, 300,
                 Map.of("roles", List.of("ERP_OPERATOR")));
+    }
+
+    /**
+     * A structurally valid erp operator token whose signature is produced with a private key that
+     * is NOT the counterpart of the JWKS-published public key — a forged/tampered signature. The
+     * header advertises the real {@code kid}, so the resource server selects the published key and
+     * signature verification MUST fail → 401.
+     *
+     * <p><strong>Deterministic by construction.</strong> The prior technique flipped the last
+     * base64url char of a real signature; for an RSA-2048 signature (256 bytes) that char encodes
+     * only 2 significant bits (4 trailing padding bits are non-significant), so an {@code A↔B} flip
+     * left the decoded signature bytes unchanged ~25% of runs — the "tampered" token then verified
+     * and the assertion flaked depending on the run's random key. Signing with a foreign key never
+     * verifies, regardless of key material.
+     */
+    public String signForgedSignatureToken(String subject) {
+        Instant now = Instant.now();
+        JWTClaimsSet claims = new JWTClaimsSet.Builder()
+                .subject(subject)
+                .issuer(SAS_ISSUER)
+                .claim("tenant_id", DEFAULT_TENANT_ID)
+                .claim("role", "ERP_OPERATOR")
+                .issueTime(Date.from(now))
+                .expirationTime(Date.from(now.plusSeconds(300)))
+                .jwtID(UUID.randomUUID().toString())
+                .build();
+        JWSHeader header = new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(rsaJwk.getKeyID()).build();
+        SignedJWT jwt = new SignedJWT(header, claims);
+        try {
+            jwt.sign(foreignSigner);
+        } catch (JOSEException e) {
+            throw new IllegalStateException("Failed to sign JWT", e);
+        }
+        return jwt.serialize();
     }
 
     public String keyId() {
