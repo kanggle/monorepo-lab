@@ -119,7 +119,7 @@ com.example.fanplatform.artist/
 
 - H2 / any in-memory DB (`platform/testing-strategy.md` — Postgres only).
 - `spring-cloud-starter-gateway` (artist-service is a downstream service, not an edge gateway).
-- Direct Kafka usage outside the outbox path. Producers MUST go through `ArtistEventPublisherAdapter` → outbox → `ArtistOutboxPollingScheduler`.
+- Direct Kafka usage outside the outbox path. Producers MUST go through `ArtistEventPublisherAdapter` → outbox → `ArtistOutboxPublisher`.
 - Cross-service repository imports (artist-service does not reach into community-service tables; cross-service references go through HTTP contracts or events).
 
 ### Boundary rules

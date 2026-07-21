@@ -122,7 +122,7 @@ com.example.fanplatform.membership/
 
 - H2 / any in-memory DB (`platform/testing-strategy.md` — Postgres only).
 - `spring-cloud-starter-gateway` (membership-service is a downstream service, not an edge gateway).
-- Direct Kafka usage outside the outbox path. Producers MUST go through `MembershipEventPublisher` → outbox → `MembershipOutboxPollingScheduler`.
+- Direct Kafka usage outside the outbox path. Producers MUST go through `MembershipEventPublisher` → outbox → `MembershipOutboxPublisher`.
 - Cross-service repository imports (membership-service does not reach into community-service / artist-service tables).
 - Any real external payment-gateway SDK — the PG integration is a deterministic mock in v1 (see § PG Mock Boundary). A real PG adapter is a future increment that re-implements `PaymentGatewayPort`.
 - `spring-boot-starter-data-redis` — no cache case in v1.

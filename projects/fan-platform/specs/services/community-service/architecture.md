@@ -113,7 +113,7 @@ com.example.fanplatform.community/
 
 - H2 / any in-memory DB (`platform/testing-strategy.md` — Postgres only).
 - `spring-cloud-starter-gateway` (community-service is a downstream service, not an edge gateway).
-- Direct Kafka usage outside the outbox path. Producers MUST go through `CommunityEventPublisher` → outbox → `CommunityOutboxPollingScheduler`.
+- Direct Kafka usage outside the outbox path. Producers MUST go through `CommunityEventPublisher` → outbox → `CommunityOutboxPublisher`.
 - Cross-service repository imports (community-service does not reach into artist-service / membership-service tables; membership access goes over an HTTP client — `HttpMembershipChecker`, FAN-BE-010 — never a DB-level reach-in).
 
 ### Boundary rules

@@ -3,7 +3,7 @@
 > Spec authored by **TASK-FAN-BE-008**. Implementation = **TASK-FAN-BE-009**.
 >
 > Producer: `fan-platform-membership-service`. All events flow through the outbox
-> table (`outbox`) and are relayed by `MembershipOutboxPollingScheduler` with
+> table (`outbox`) and are relayed by `MembershipOutboxPublisher` with
 > `acks=all` + `enable.idempotence=true`.
 
 ## Common envelope

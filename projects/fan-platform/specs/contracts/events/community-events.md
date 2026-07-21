@@ -1,7 +1,7 @@
 # community-events — Kafka contract
 
 > Producer: `fan-platform-community-service`. All events flow through the
-> outbox table (`outbox`) and are relayed by `CommunityOutboxPollingScheduler`
+> outbox table (`outbox`) and are relayed by `CommunityOutboxPublisher`
 > with `acks=all` + `enable.idempotence=true`.
 
 ## Common envelope
