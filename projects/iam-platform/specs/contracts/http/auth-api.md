@@ -432,7 +432,7 @@ Refresh token rotation. 기존 refresh token을 소비하고 새 access/refresh 
 |---|---|---|
 | 401 | `TOKEN_EXPIRED` | refresh token 만료 |
 | 401 | `TOKEN_REUSE_DETECTED` | 이미 rotation된 refresh token 재사용. **해당 account의 모든 세션 즉시 무효화** |
-| 401 | `TOKEN_TENANT_MISMATCH` | refresh token의 `tenant_id`와 계정의 현재 `tenant_id`가 불일치. 조작·버그 의심 → 보안 이벤트 발행 |
+| 403 | `TOKEN_TENANT_MISMATCH` | refresh token의 `tenant_id`와 계정의 현재 `tenant_id`가 불일치. 토큰 자체는 유효(인증됨)하나 다른 tenant로의 rotation은 권한 없음(Forbidden) — `platform/error-handling.md` § Auth / Token (TASK-MONO-462). 조작·버그 의심 → 보안 이벤트 발행. **SAS OAuth2 token endpoint(refresh grant)는 이 REST 경로와 별개**로 RFC 6749 §5.2에 따라 동일 semantic 오류를 `400 invalid_grant`로 응답 — 의도된 divergence(OAuth2 스펙 제약), 통일 대상 아님 |
 | 401 | `SESSION_REVOKED` | 명시적으로 revoke된 세션 |
 | 423 | `ACCOUNT_LOCKED` | 계정 잠김 (refresh 차단) — `platform/error-handling.md` § Account (TASK-BE-462) |
 

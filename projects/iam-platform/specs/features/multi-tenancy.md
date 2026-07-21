@@ -172,7 +172,7 @@ schema-level 또는 DB-level 격리로 전환되는 시점은:
 ### Refresh Token
 
 - DB `refresh_tokens.tenant_id` NOT NULL. rotation 시 `tenant_id` 일치 검증 필수
-- cross-tenant refresh(다른 테넌트의 refresh로 다른 테넌트 access 발급)는 **절대 금지** → `TOKEN_TENANT_MISMATCH` 401
+- cross-tenant refresh(다른 테넌트의 refresh로 다른 테넌트 access 발급)는 **절대 금지** → `TOKEN_TENANT_MISMATCH` 403
 
 ### Gateway 검증
 

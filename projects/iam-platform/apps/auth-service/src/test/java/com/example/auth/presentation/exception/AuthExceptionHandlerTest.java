@@ -8,6 +8,7 @@ import com.example.auth.application.exception.InvalidOAuthStateException;
 import com.example.auth.application.exception.LoginRateLimitedException;
 import com.example.auth.application.exception.OAuthCodeInvalidException;
 import com.example.auth.application.exception.OAuthProviderException;
+import com.example.auth.application.exception.TokenTenantMismatchException;
 import com.example.web.dto.ErrorResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -213,7 +214,8 @@ class AuthExceptionHandlerTest {
                 handler.handleAccountLocked(new AccountLockedException()),
                 handler.handleAccountStatus(new AccountStatusException("DORMANT", "ACCOUNT_DORMANT")),
                 handler.handleAccountStatus(new AccountStatusException("DELETED", "ACCOUNT_DELETED")),
-                handler.handleAccountStatus(new AccountStatusException("SOMETHING_NEW", "ACCOUNT_STATUS_UNKNOWN")));
+                handler.handleAccountStatus(new AccountStatusException("SOMETHING_NEW", "ACCOUNT_STATUS_UNKNOWN")),
+                handler.handleTokenTenantMismatch(new TokenTenantMismatchException("wms", "fan-platform")));
 
         Map<String, Set<HttpStatusCode>> statusesByCode = new LinkedHashMap<>();
         for (ResponseEntity<ErrorResponse> r : everyHandler) {
@@ -226,6 +228,30 @@ class AuthExceptionHandlerTest {
                 .as("code %s is emitted at more than one status: %s — a client branching on "
                         + "`code` cannot tell the two conditions apart", code, statuses)
                 .hasSize(1));
+    }
+
+    // ---------------------------------------------------------------------
+    // TASK-MONO-462 — platform/error-handling.md catalogued TOKEN_TENANT_MISMATCH
+    // as 403, but this handler (and auth-api.md, and the exception javadoc) had
+    // drifted to 401. The catalog outranks the contract (CLAUDE.md § Source of
+    // Truth Priority, layer 5 vs 6) and 403 is the semantically correct answer:
+    // the refresh token is valid/authenticated, just not authorized to rotate
+    // into a different tenant — matching its 403 catalog siblings
+    // OAUTH_INSUFFICIENT_SCOPE and SESSION_OWNERSHIP_MISMATCH.
+    // ---------------------------------------------------------------------
+
+    @Test
+    @DisplayName("TOKEN_TENANT_MISMATCH → 403 FORBIDDEN (not 401)")
+    void tokenTenantMismatchIsForbidden() {
+        ResponseEntity<ErrorResponse> r = handler.handleTokenTenantMismatch(
+                new TokenTenantMismatchException("wms", "fan-platform"));
+
+        assertStatus(r, HttpStatus.FORBIDDEN, "TOKEN_TENANT_MISMATCH");
+        assertThat(r.getStatusCode())
+                .as("catalog (platform/error-handling.md) is authoritative over the "
+                        + "now-superseded 401 contract; a valid token targeting the wrong "
+                        + "tenant is Forbidden, not Unauthorized")
+                .isNotEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
     private static void assertStatus(ResponseEntity<ErrorResponse> r,
