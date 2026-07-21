@@ -63,12 +63,27 @@ dependencies {
     // Shared gateway filter-test scaffolding — RecordingGatewayFilterChain +
     // GatewayTestJwts (TASK-MONO-429).
     testImplementation testFixtures(project(':libs:java-gateway'))
+
+    // Full-context integration suite (TASK-MONO-458): a real Spring Cloud Gateway
+    // route + filter chain driven over HTTP by WebTestClient. These deps back the
+    // JWKS stand-in and the RS256 token signing the resource server verifies, plus
+    // the Redis rate-limit backend — none of which the Docker-free unit tests need.
+    //   - nimbus: RS256 keypair + signed JWTs (JWKS-served public half).
+    //   - okhttp mockwebserver: JWKS endpoint + downstream service stand-in.
+    //   - testcontainers redis: the RequestRateLimiter's Redis backend.
+    testImplementation 'com.nimbusds:nimbus-jose-jwt:9.48'
+    testImplementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
+    testImplementation 'org.testcontainers:junit-jupiter:1.21.3'
+    testImplementation 'com.redis:testcontainers-redis:2.2.2'
+    testImplementation 'org.awaitility:awaitility:4.2.2'
 }
 
 dependencyManagement {
     imports {
         mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
         mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+        mavenBom "org.testcontainers:testcontainers-bom:1.21.3"
     }
 }
 
@@ -76,8 +91,28 @@ tasks.named('bootJar') {
     archiveFileName = 'gateway-service.jar'
 }
 
+// Default `test` task: unit + slice only. Excludes the Docker-dependent
+// integration suite so `./gradlew check` stays fast and Docker-free.
 test {
     useJUnitPlatform {
         excludeTags 'integration'
+    }
+}
+
+// Dedicated task that runs ONLY @Tag("integration") tests (Testcontainers Redis +
+// JWKS/downstream MockWebServers). Not wired into `check` so the fast feedback loop
+// stays Docker-free; the CI integration lane invokes this explicitly.
+tasks.register('integrationTest', Test) {
+    description = 'Runs Testcontainers-backed gateway integration tests (requires Docker).'
+    group = 'verification'
+    useJUnitPlatform {
+        includeTags 'integration'
+    }
+    shouldRunAfter tasks.named('test')
+
+    testLogging {
+        events 'passed', 'failed', 'skipped'
+        exceptionFormat 'full'
+        showStandardStreams = true
     }
 }
