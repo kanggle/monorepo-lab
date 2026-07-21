@@ -34,11 +34,7 @@ public class GetFxRateOverrideUseCase {
 
     /** Map an unknown/unsupported currency code to {@code VALIDATION_ERROR} (400). */
     private static Currency parseCurrency(String code) {
-        try {
-            return Currency.of(code);
-        } catch (Currency.UnsupportedCurrencyException e) {
-            throw new FxRateOverrideInvalidException(
-                    "unknown currency: " + code + " — supported: KRW, USD, EUR, JPY");
-        }
+        return Currency.ofOrThrow(code, c -> new FxRateOverrideInvalidException(
+                "unknown currency: " + c + " — supported: KRW, USD, EUR, JPY"));
     }
 }

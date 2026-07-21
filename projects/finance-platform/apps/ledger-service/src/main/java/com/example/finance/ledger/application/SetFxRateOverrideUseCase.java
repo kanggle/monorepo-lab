@@ -13,7 +13,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 
 /**
  * Upsert the tenant's FX contract-rate override (28th increment — TASK-FIN-BE-042, ADR-002
@@ -62,27 +61,20 @@ public class SetFxRateOverrideUseCase {
                     "base and foreign currency must differ — got both " + base.code());
         }
 
-        Instant now = clock.now();
-        FxRateOverride saved = fxRateOverrideRepository.save(
-                FxRateOverride.of(command.tenantId(), base, foreign, rate, command.actor(), now));
-
-        String pair = base.code() + "/" + foreign.code();
-        auditLogRepository.save(AuditLog.of(
-                command.tenantId(), AGGREGATE_TYPE, command.tenantId(),
-                "FX_RATE_OVERRIDE_SET", command.actor(),
-                "pair=" + pair + " rate=" + rate.toPlainString(),
-                "set fx contract-rate override", now));
-
-        return FxRateOverrideView.from(saved);
+        return AuditedUpsert.run(clock, auditLogRepository,
+                now -> fxRateOverrideRepository.save(
+                        FxRateOverride.of(command.tenantId(), base, foreign, rate, command.actor(), now)),
+                (saved, now) -> AuditLog.of(
+                        command.tenantId(), AGGREGATE_TYPE, command.tenantId(),
+                        "FX_RATE_OVERRIDE_SET", command.actor(),
+                        "pair=" + base.code() + "/" + foreign.code() + " rate=" + rate.toPlainString(),
+                        "set fx contract-rate override", now),
+                FxRateOverrideView::from);
     }
 
     /** Map an unknown/unsupported currency code to {@code VALIDATION_ERROR} (400). */
     private static Currency parseCurrency(String code) {
-        try {
-            return Currency.of(code);
-        } catch (Currency.UnsupportedCurrencyException e) {
-            throw new FxRateOverrideInvalidException(
-                    "unknown currency: " + code + " — supported: KRW, USD, EUR, JPY");
-        }
+        return Currency.ofOrThrow(code, c -> new FxRateOverrideInvalidException(
+                "unknown currency: " + c + " — supported: KRW, USD, EUR, JPY"));
     }
 }

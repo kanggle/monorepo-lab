@@ -11,8 +11,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
-
 /**
  * Upsert a per-account FX cost-flow method override (21st increment — TASK-FIN-BE-029).
  * One {@code @Transactional} boundary, mirroring {@link SetFxCostFlowConfigUseCase}:
@@ -51,18 +49,16 @@ public class SetFxCostFlowAccountConfigUseCase {
         // raise VALIDATION_ERROR (400) and write nothing (mirrors SetFxCostFlowConfigUseCase).
         CostFlowMethod method = CostFlowMethod.fromString(command.method());
 
-        Instant now = clock.now();
-        FxCostFlowAccountConfig saved = fxCostFlowAccountConfigRepository.save(
-                FxCostFlowAccountConfig.of(command.tenantId(), command.ledgerAccountCode(),
-                        method, command.actor(), now));
-
-        auditLogRepository.save(AuditLog.of(
-                command.tenantId(), AGGREGATE_TYPE,
-                command.tenantId() + ":" + command.ledgerAccountCode(),
-                "FX_COST_FLOW_ACCOUNT_METHOD_SET", command.actor(),
-                "account=" + saved.ledgerAccountCode() + " method=" + saved.method().name(),
-                "set fx cost-flow account override", now));
-
-        return FxCostFlowAccountConfigView.from(saved);
+        return AuditedUpsert.run(clock, auditLogRepository,
+                now -> fxCostFlowAccountConfigRepository.save(
+                        FxCostFlowAccountConfig.of(command.tenantId(), command.ledgerAccountCode(),
+                                method, command.actor(), now)),
+                (saved, now) -> AuditLog.of(
+                        command.tenantId(), AGGREGATE_TYPE,
+                        command.tenantId() + ":" + command.ledgerAccountCode(),
+                        "FX_COST_FLOW_ACCOUNT_METHOD_SET", command.actor(),
+                        "account=" + saved.ledgerAccountCode() + " method=" + saved.method().name(),
+                        "set fx cost-flow account override", now),
+                FxCostFlowAccountConfigView::from);
     }
 }

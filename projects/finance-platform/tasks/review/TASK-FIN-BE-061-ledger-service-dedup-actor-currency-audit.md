@@ -1,6 +1,6 @@
 # TASK-FIN-BE-061 — Ledger-service dedup: actor-identity, currency-parse, upsert-audit (behavior-preserving)
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-FIN-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (mechanical extraction, behavior-preserving)

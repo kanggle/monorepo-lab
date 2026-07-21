@@ -78,15 +78,13 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-FIN-BE-061-ledger-service-dedup-actor-currency-audit.md` — ledger-service `actorIdentity()` 헬퍼(5×), currency-parse-to-VALIDATION_ERROR(3×), validate→save→audit upsert 골격(4×) 중복 제거 (behavior-preserving).
-
 ## in-progress
 
 (empty)
 
 ## review
 
-(empty)
+- `TASK-FIN-BE-061-ledger-service-dedup-actor-currency-audit.md` — ledger-service `actorIdentity()` 헬퍼(5×→`ActorContext.identity()`), currency-parse-to-VALIDATION_ERROR(3×→`Currency.ofOrThrow(code, factory)`), validate→save→audit upsert 골격(4×→`AuditedUpsert.run`) 중복 제거 (behavior-preserving). AC-0 재측정: 5/3/4 카운트·near-identity 확인, 예외 타입(FxRateOverride/FxTolerance 구별)·AGGREGATE_TYPE/action 보존. **F3/F2 는 static helper 로 생성자 불변 → 기존 유닛테스트 무변경 GREEN.** impl PR open, CI 대기.
 
 ## done
 

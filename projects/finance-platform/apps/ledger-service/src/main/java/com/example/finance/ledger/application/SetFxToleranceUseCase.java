@@ -12,8 +12,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
-
 /**
  * Upsert the tenant's FX reconciliation tolerance (13th increment — TASK-FIN-BE-020).
  * One {@code @Transactional} boundary:
@@ -56,18 +54,16 @@ public class SetFxToleranceUseCase {
                     "floorMinor must be >= 0: " + command.floorMinor());
         }
 
-        Instant now = clock.now();
         FxTolerance tolerance = new FxTolerance(command.toleranceBps(), command.floorMinor());
-        ReconciliationFxToleranceConfig saved = fxToleranceRepository.save(
-                ReconciliationFxToleranceConfig.of(
-                        command.tenantId(), tolerance, command.actor(), now));
-
-        auditLogRepository.save(AuditLog.of(
-                command.tenantId(), AGGREGATE_TYPE, command.tenantId(), "FX_TOLERANCE_SET",
-                command.actor(),
-                "toleranceBps=" + saved.toleranceBps() + " floorMinor=" + saved.floorMinor(),
-                "set reconciliation fx tolerance", now));
-
-        return FxToleranceView.from(saved);
+        return AuditedUpsert.run(clock, auditLogRepository,
+                now -> fxToleranceRepository.save(
+                        ReconciliationFxToleranceConfig.of(
+                                command.tenantId(), tolerance, command.actor(), now)),
+                (saved, now) -> AuditLog.of(
+                        command.tenantId(), AGGREGATE_TYPE, command.tenantId(), "FX_TOLERANCE_SET",
+                        command.actor(),
+                        "toleranceBps=" + saved.toleranceBps() + " floorMinor=" + saved.floorMinor(),
+                        "set reconciliation fx tolerance", now),
+                FxToleranceView::from);
     }
 }
