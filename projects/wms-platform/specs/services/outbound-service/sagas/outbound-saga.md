@@ -272,7 +272,7 @@ compensation. The Outbound Saga has the following compensation matrix.
 | Step | Failure trigger | Compensation action | End state |
 |---|---|---|---|
 | Step 1 (REQUESTED) | Validation fails (partner inactive, SKU inactive, etc.) before commit | TX rollback; nothing emitted | No saga created; caller gets 4xx |
-| Step 2 (REQUESTED → RESERVED) | Inventory reports `INSUFFICIENT_STOCK` (via `inventory.adjusted`) | None needed (all-or-nothing reserve — no resources held) | Saga: `RESERVE_FAILED`. Order: `BACKORDERED`. Outbox: `outbound.order.cancelled` (reason=BACKORDERED) |
+| Step 2 (REQUESTED → RESERVED) | Inventory reports `INSUFFICIENT_STOCK` (via `inventory.reserve.failed`) | None needed (all-or-nothing reserve — no resources held) | Saga: `RESERVE_FAILED`. Order: `BACKORDERED`. Outbox: `outbound.order.cancelled` (reason=BACKORDERED) |
 | Step 2 / Step 3 (RESERVED, PICKING_CONFIRMED) | Operator-initiated cancel | Emit `outbound.picking.cancelled`; await `inventory.released` | Saga: `CANCELLATION_REQUESTED → CANCELLED`. Order: `CANCELLED` (immediately at cancel time) |
 | Step 4 (PACKING_CONFIRMED) | Operator-initiated cancel | Same as above — picked-and-packed reservations are still releasable | Same |
 | Step 5 (PACKING_CONFIRMED → SHIPPED) | TMS push fails after retry/circuit/bulkhead exhaustion | Saga moves to `SHIPPED_NOT_NOTIFIED` (alert state, NOT terminal); manual retry endpoint available | Saga: `SHIPPED_NOT_NOTIFIED`. Order: `SHIPPED` (unchanged). Stock: already consumed (no rollback possible) |
@@ -625,7 +625,7 @@ the saga has the following test surfaces.
   CANCELLED), redelivery, out-of-order arrival
 - `InventoryConfirmedConsumer`: happy path, redelivery, arriving while
   saga in SHIPPED_NOT_NOTIFIED
-- `InventoryAdjustedConsumer` (filtered: INSUFFICIENT_STOCK):
+- `InventoryReserveFailedConsumer`:
   REQUESTED → RESERVE_FAILED
 - Out-of-order: `inventory.confirmed` arriving before saga is `SHIPPED`
   → DLT (genuinely impossible)

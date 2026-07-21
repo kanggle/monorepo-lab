@@ -1,6 +1,6 @@
 # TASK-BE-545 — outbound-service spec drift: stale `inventory.adjusted` / `InventoryAdjustedConsumer` reserve-failure residue
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet (mechanical, meaning-preserving drift correction — fix direction already code-verified by TASK-MONO-196 / TASK-BE-431 / TASK-BE-387; each edit must still be re-grepped against live code before landing)

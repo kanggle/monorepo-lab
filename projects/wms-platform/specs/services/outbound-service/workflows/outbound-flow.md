@@ -170,7 +170,7 @@ inventory-service                                  outbound-service
        │     │     │   - locate stock (location, sku, lot)  │
        │     │     │   - decrement available, increment reserved
        │     │     │   - create Reservation(reservation_id = picking_request.id)
-       │     │     ├─ all-or-nothing: any line short → no reservation; emit inventory.adjusted{reason=INSUFFICIENT_STOCK}
+       │     │     ├─ all-or-nothing: any line short → no reservation; emit inventory.reserve.failed{reason=INSUFFICIENT_STOCK}
        │     │     └─ outbox: inventory.reserved (sagaId, reservation_id, lines)
        │     │
        │── emit inventory.reserved.v1 ────────────────────▶ │
@@ -194,8 +194,8 @@ inventory-service                                  outbound-service
 inventory-service                                  outbound-service
        │                                                    │
        │── ReserveStockUseCase fails any line               │
-       │── emit inventory.adjusted.v1 (reason=INSUFFICIENT_STOCK, sagaId) ───▶│
-       │                                                    │── InventoryAdjustedConsumer (filtered: reason=INSUFFICIENT_STOCK)
+       │── emit inventory.reserve.failed.v1 (reason=INSUFFICIENT_STOCK) ─────▶│
+       │                                                    │── InventoryReserveFailedConsumer
        │                                                    │     ├─ EventDedupePort
        │                                                    │     ├─ load OutboundSaga
        │                                                    │     ├─ Saga.transitionTo(RESERVE_FAILED, reason="…")

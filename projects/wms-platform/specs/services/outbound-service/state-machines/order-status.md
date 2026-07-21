@@ -114,7 +114,7 @@ stateDiagram-v2
 > **Note on `RECEIVED → BACKORDERED`**: In v1 the `RECEIVED` state is
 > transient — `ReceiveOrderUseCase` advances to `PICKING` in the same TX.
 > The reserve-failed signal arrives later (Kafka consumer of
-> `inventory.adjusted{reason=INSUFFICIENT_STOCK}`), at which point the
+> `inventory.reserve.failed{reason=INSUFFICIENT_STOCK}`), at which point the
 > Order is in `PICKING`. The `backorder()` method is therefore **also
 > allowed from `PICKING`**, transitioning to `BACKORDERED` (terminal).
 > This is documented in the Transition Rules table below.
@@ -132,7 +132,7 @@ stateDiagram-v2
 | `PACKING` | `PACKED` | `Order.completePacking()` | `SealPackingUnitUseCase` when last unit is SEALED AND all lines fully packed | Atomic with Saga → `PACKING_CONFIRMED` and Outbox: `outbound.packing.completed` |
 | `PACKED` | `SHIPPED` | `Order.confirmShipping(actorId)` | `ConfirmShippingUseCase` | Atomic with Shipment creation, Saga → `SHIPPED`, and Outbox: `outbound.shipping.confirmed`. After-commit hook triggers async TMS push |
 | `RECEIVED` / `PICKING` / `PICKED` / `PACKING` / `PACKED` | `CANCELLED` | `Order.cancel(reason, actorId)` | `CancelOrderUseCase` | Atomic with Saga state transition (→ `CANCELLATION_REQUESTED` if reservation existed, else direct `CANCELLED`) and Outbox: `outbound.order.cancelled` (and `outbound.picking.cancelled` if reservation existed) |
-| `RECEIVED` / `PICKING` | `BACKORDERED` | `Order.backorder(reason)` | `InventoryAdjustedConsumer` (filtered: `INSUFFICIENT_STOCK`) | Atomic with Saga → `RESERVE_FAILED` and Outbox: `outbound.order.cancelled` (carries `reason=BACKORDERED`) |
+| `RECEIVED` / `PICKING` | `BACKORDERED` | `Order.backorder(reason)` | `InventoryReserveFailedConsumer` | Atomic with Saga → `RESERVE_FAILED` and Outbox: `outbound.order.cancelled` (carries `reason=BACKORDERED`) |
 
 Any other invocation throws `StateTransitionInvalidException` → HTTP 422
 `STATE_TRANSITION_INVALID`. Cancellation from `SHIPPED` throws
