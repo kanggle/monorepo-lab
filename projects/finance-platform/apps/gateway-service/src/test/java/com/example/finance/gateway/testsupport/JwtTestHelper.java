@@ -39,6 +39,7 @@ public final class JwtTestHelper {
 
     private final RSAKey rsaJwk;
     private final RSASSASigner signer;
+    private final RSASSASigner foreignSigner;
 
     public JwtTestHelper() {
         try {
@@ -46,6 +47,12 @@ public final class JwtTestHelper {
                     .keyID(UUID.randomUUID().toString())
                     .generate();
             this.signer = new RSASSASigner(rsaJwk);
+            // A SECOND keypair whose public half is deliberately NOT published in the JWKS. Signing
+            // with it yields a well-formed but unverifiable signature — the deterministic basis for
+            // signForgedSignatureToken. Same kid as the real key so the resource server still selects
+            // the published public key and verification fails (rather than "unknown kid").
+            RSAKey foreignJwk = new RSAKeyGenerator(2048).keyID(rsaJwk.getKeyID()).generate();
+            this.foreignSigner = new RSASSASigner(foreignJwk);
         } catch (JOSEException e) {
             throw new IllegalStateException("Failed to build RSA test keypair/signer", e);
         }
@@ -138,6 +145,37 @@ public final class JwtTestHelper {
     public String signWrongIssuerToken(String subject) {
         return signToken("http://evil.example", subject, DEFAULT_TENANT_ID, 300,
                 Map.of("role", "OPERATOR"));
+    }
+
+    /**
+     * A finance token whose claims are all valid but whose signature is produced by a foreign key
+     * NOT in the JWKS (advertising the real {@code kid}), so verification ALWAYS fails → 401.
+     *
+     * <p>Replaces a byte-flip tamper (TASK-MONO-458 residual, fixed here in the MONO-461 CI run):
+     * flipping the LAST base64url char of an RSA-2048 signature only touches padding bits ~25% of
+     * runs (the final char carries 2 significant bits + 4 padding), so the decoded signature was
+     * unchanged and the "tampered" token verified — a per-key flake (erp/wms were fixed in MONO-458;
+     * finance passed then by key luck and kept the flaw). Signing with a foreign key never verifies.
+     */
+    public String signForgedSignatureToken(String subject) {
+        Instant now = Instant.now();
+        JWTClaimsSet claims = new JWTClaimsSet.Builder()
+                .subject(subject)
+                .issuer(SAS_ISSUER)
+                .claim("tenant_id", DEFAULT_TENANT_ID)
+                .claim("role", "OPERATOR")
+                .issueTime(Date.from(now.minusSeconds(5)))
+                .expirationTime(Date.from(now.plusSeconds(300)))
+                .jwtID(UUID.randomUUID().toString())
+                .build();
+        JWSHeader header = new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(rsaJwk.getKeyID()).build();
+        SignedJWT jwt = new SignedJWT(header, claims);
+        try {
+            jwt.sign(foreignSigner);
+        } catch (JOSEException e) {
+            throw new IllegalStateException("Failed to sign JWT", e);
+        }
+        return jwt.serialize();
     }
 
     public String keyId() {
