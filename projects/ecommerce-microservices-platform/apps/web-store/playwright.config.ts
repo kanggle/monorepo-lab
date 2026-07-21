@@ -27,7 +27,7 @@ export default defineConfig({
   workers: 1,
   reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3001',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -43,8 +43,8 @@ export default defineConfig({
   // Locally: `docker compose up` starts everything including web-store; no webServer needed.
   webServer: process.env.CI
     ? {
-        command: 'pnpm start --port 3000',
-        port: 3000,
+        command: 'pnpm start --port 3001',
+        port: 3001,
         timeout: 120_000,
         reuseExistingServer: false,
         env: {
@@ -59,7 +59,7 @@ export default defineConfig({
           // App origin — used for OIDC callback + the RP-initiated-logout
           // post_logout_redirect_uri (federated-logout.ts). Real-GAP runs
           // (SKIP_GAP_E2E=0) override OIDC_ISSUER_URL to http://auth-service:8081.
-          NEXTAUTH_URL: process.env.NEXTAUTH_URL ?? 'http://localhost:3000',
+          NEXTAUTH_URL: process.env.NEXTAUTH_URL ?? 'http://localhost:3001',
           OIDC_ISSUER_URL: process.env.OIDC_ISSUER_URL ?? 'http://127.0.0.1:1',
           ECOMMERCE_WEB_STORE_CLIENT_ID:
             process.env.ECOMMERCE_WEB_STORE_CLIENT_ID ?? 'ecommerce-web-store-client',

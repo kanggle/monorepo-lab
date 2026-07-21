@@ -15,7 +15,7 @@ import { decodeServerJwt } from './decode-server-jwt';
  * client calls BEFORE `signOut` (while the id_token cookie still exists).
  *
  * The registered `post-logout-redirect-uris` for `ecommerce-web-store-client`
- * (GAP V0012) are the app roots `http://localhost:3000/` + `http://web.ecommerce.local/`
+ * (GAP V0012 + V0028) are the app roots `http://localhost:3001/` (dev, TASK-MONO-460) + `http://web.ecommerce.local/`
  * — only made effective once the GAP `OAuthClientMapper` copies them onto the
  * SAS `RegisteredClient` (TASK-BE-328). We send the app origin + `/` (no path,
  * no query) so SAS matches it exactly.
@@ -27,7 +27,7 @@ import { decodeServerJwt } from './decode-server-jwt';
 const ISSUER = process.env.OIDC_ISSUER_URL ?? 'http://iam.local';
 const CLIENT_ID =
   process.env.ECOMMERCE_WEB_STORE_CLIENT_ID ?? 'ecommerce-web-store-client';
-const APP_URL = process.env.NEXTAUTH_URL ?? 'http://localhost:3000';
+const APP_URL = process.env.NEXTAUTH_URL ?? 'http://localhost:3001';
 
 /**
  * Reads the GAP `id_token` from the encrypted NextAuth session cookie. Returns

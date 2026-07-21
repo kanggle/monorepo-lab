@@ -74,7 +74,7 @@ bootJar, the lean GAP stack, the consumer seed, and the `/etc/hosts` issuer entr
           ECOMMERCE_WEB_STORE_CLIENT_ID: ecommerce-web-store-client
           ECOMMERCE_WEB_STORE_CLIENT_SECRET: ecommerce-dev
           NEXTAUTH_SECRET: ci-iam-e2e-secret
-          NEXTAUTH_URL: http://localhost:3000
+          NEXTAUTH_URL: http://localhost:3001
           AUTH_TRUST_HOST: 'true'
         # NOTE: playwright.config webServer runs `pnpm start` (needs a build).
         # Add `pnpm --filter web-store build` before this, OR switch the webServer

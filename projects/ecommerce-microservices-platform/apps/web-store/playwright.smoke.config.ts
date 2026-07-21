@@ -20,14 +20,14 @@ export default defineConfig({
   reporter: [['list'], ['html', { outputFolder: 'playwright-report-smoke', open: 'never' }]],
   outputDir: 'test-results-smoke',
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3001',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     locale: 'ko-KR',
   },
   webServer: {
     command: 'pnpm start',
-    port: 3000,
+    port: 3001,
     timeout: 60_000,
     reuseExistingServer: !process.env.CI,
     env: {
