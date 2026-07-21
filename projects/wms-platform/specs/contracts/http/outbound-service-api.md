@@ -651,49 +651,40 @@ Response `201`:
 Errors: `ORDER_NOT_FOUND` (404), `STATE_TRANSITION_INVALID` (422),
 `VALIDATION_ERROR` (400), `DUPLICATE_REQUEST` (409).
 
-### 3.2 PATCH `/api/v1/outbound/packing-units/{id}` — Update Packing Unit (add lines / seal)
+### 3.2 PATCH `/api/v1/outbound/packing-units/{id}` — Seal Packing Unit
 
 Auth: `OUTBOUND_WRITE`.
 Requires `Idempotency-Key`.
 
-Two operations are supported:
-1. **Add lines**: append additional `PackingUnitLine` rows to an `OPEN` unit.
-2. **Seal**: transition the unit from `OPEN` to `SEALED`. Once `SEALED` no
-   lines can be added or removed.
+The **sole operation** is **Seal**: transition the unit from `OPEN` to
+`SEALED`. Once `SEALED` the unit is immutable — a further PATCH returns
+`422 STATE_TRANSITION_INVALID`.
 
-A request may seal the unit and add lines in the same call (add first, then
-seal). If `seal = true` and a line addition would violate invariants, the
-entire request is rejected.
+Packing units are fully populated at create time (§3.1 `lines[]`); there is
+**no** incremental "add lines" operation. An earlier version of this contract
+advertised a `seal` flag plus an `addLines[]` array, but add-lines was never
+implemented. To stop a client written against that old shape from silently
+sealing a unit it meant to keep open (the unbound fields were dropped and the
+seal happened unconditionally — TASK-BE-550), the request body is now strict:
 
-`SEALED` units are immutable — PATCH returns `422 STATE_TRANSITION_INVALID`.
+- `seal: false` → `400 VALIDATION_ERROR` — this endpoint always seals; "don't
+  seal" cannot be requested.
+- a non-empty `addLines` → `400 VALIDATION_ERROR` — add-lines is not supported.
+- a legacy `seal: true` is tolerated (equivalent to omitting it).
 
 Request:
 
 ```json
 {
-  "seal": false,
-  "addLines": [
-    {
-      "orderLineId": "uuid",
-      "skuId": "uuid",
-      "lotId": "uuid-or-null",
-      "qty": 10
-    }
-  ],
   "version": 0
 }
 ```
 
 Validation:
 
-- `seal`: optional boolean, default `false`.
-- `addLines`: optional array; if absent or empty and `seal = false` → 400
-  `VALIDATION_ERROR` (nothing to do).
-- `addLines[].orderLineId`: required UUID; must belong to the same order.
-- `addLines[].skuId`: required UUID; must match the `OrderLine.sku_id`.
-- `addLines[].lotId`: optional.
-- `addLines[].qty`: required, > 0.
-- `version`: required, optimistic lock.
+- `version`: required, optimistic lock (`@Min(0)`).
+- `seal`: optional; if present it MUST be `true` — `seal: false` → 400.
+- `addLines`: MUST be absent or empty — a non-empty array → 400.
 
 Response `200`:
 
@@ -719,8 +710,8 @@ Response `200`:
 }
 ```
 
-Side-effect (when seal = true AND all packing units for the order are now
-`SEALED` AND sum of PackingUnitLines equals all order line quantities): outbox
+Side-effect (when this seal makes all packing units for the order `SEALED`
+AND sum of PackingUnitLines equals all order line quantities): outbox
 `outbound.packing.completed` (§6); order transitions to `PACKED`.
 
 Errors: `PACKING_UNIT_NOT_FOUND` (404), `STATE_TRANSITION_INVALID` (422),

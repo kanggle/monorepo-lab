@@ -2,6 +2,7 @@ package com.wms.outbound.adapter.in.web.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -216,6 +217,77 @@ class PackingControllerSliceTest {
                                 { "version": 0 }
                                 """))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("sealUnit: {seal:false,version} -> 400 (footgun closed; NO silent unconditional seal)")
+    @WithMockUser(roles = "OUTBOUND_WRITE")
+    void sealUnit_sealFalse_returns400_notSilentSeal() throws Exception {
+        // Pre-TASK-BE-550, `seal` was unbound: Jackson dropped it and the unit
+        // was sealed unconditionally — the exact opposite of seal:false, and a
+        // seal is irreversible. It must now be a 400, and never reach the seal.
+        mockMvc.perform(patch("/api/v1/outbound/packing-units/{id}", PACKING_UNIT_ID)
+                        .header(IDEMPOTENCY_KEY, "idem-seal-false")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "seal": false, "version": 0 }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+        verifyNoInteractions(sealPackingUnit);
+    }
+
+    @Test
+    @DisplayName("sealUnit: {addLines:[...],version} -> 400 (add-lines never implemented; rejected)")
+    @WithMockUser(roles = "OUTBOUND_WRITE")
+    void sealUnit_addLines_returns400() throws Exception {
+        mockMvc.perform(patch("/api/v1/outbound/packing-units/{id}", PACKING_UNIT_ID)
+                        .header(IDEMPOTENCY_KEY, "idem-add-lines")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "seal": false,
+                                  "addLines": [
+                                    { "orderLineId": "%s", "skuId": "%s", "qty": 10 }
+                                  ],
+                                  "version": 0
+                                }
+                                """.formatted(ORDER_LINE_ID, SKU_ID)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+        verifyNoInteractions(sealPackingUnit);
+    }
+
+    @Test
+    @DisplayName("sealUnit: legacy {seal:true,version} still seals -> 200 SEALED (console-web back-compat)")
+    @WithMockUser(roles = "OUTBOUND_WRITE")
+    void sealUnit_legacySealTrue_returns200Sealed() throws Exception {
+        PackingUnitResult found = new PackingUnitResult(
+                PACKING_UNIT_ID, ORDER_ID, "CTN-001", "BOX",
+                500, 30, 20, 10, "notes", "OPEN",
+                List.of(new PackingUnitLineResult(PACKING_UNIT_LINE_ID, ORDER_LINE_ID, SKU_ID, null, 5)),
+                "PACKING", 0L, T0, T0);
+        when(queryPackingUnit.findById(PACKING_UNIT_ID)).thenReturn(Optional.of(found));
+
+        PackingUnitResult sealed = new PackingUnitResult(
+                PACKING_UNIT_ID, ORDER_ID, "CTN-001", "BOX",
+                500, 30, 20, 10, "notes", "SEALED",
+                List.of(new PackingUnitLineResult(PACKING_UNIT_LINE_ID, ORDER_LINE_ID, SKU_ID, null, 5)),
+                "PACKING", 1L, T0, T0);
+        when(sealPackingUnit.seal(any())).thenReturn(sealed);
+
+        mockMvc.perform(patch("/api/v1/outbound/packing-units/{id}", PACKING_UNIT_ID)
+                        .header(IDEMPOTENCY_KEY, "idem-seal-true")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "seal": true, "version": 0 }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SEALED"));
+
+        verify(sealPackingUnit).seal(any());
     }
 
     // ------------------------------------------------------------------
