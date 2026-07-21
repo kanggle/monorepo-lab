@@ -49,7 +49,9 @@ public class InspectionController {
     @PreAuthorize("hasRole('INBOUND_WRITE') or hasRole('INBOUND_ADMIN')")
     public ResponseEntity<Void> startInspection(
             @PathVariable UUID asnId,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @AuthenticationPrincipal Jwt jwt) {
+        RequestContext.requireIdempotencyKey(idempotencyKey);
         StartInspectionCommand command = new StartInspectionCommand(asnId, RequestContext.actorId(jwt));
         startInspection.start(command);
         return ResponseEntity.ok().build();
@@ -60,7 +62,9 @@ public class InspectionController {
     public ResponseEntity<InspectionResponse> recordInspection(
             @PathVariable UUID asnId,
             @Valid @RequestBody RecordInspectionRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @AuthenticationPrincipal Jwt jwt) {
+        RequestContext.requireIdempotencyKey(idempotencyKey);
         RecordInspectionCommand command = new RecordInspectionCommand(
                 asnId, request.notes(),
                 request.lines().stream()
