@@ -86,7 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-ERP-BE-032-masterdata-event-envelope-dlt-mismatch.md` — **[2026-07-21 정합화 감사 최우선 실결함, 구현 완료 — 리뷰 대기]** masterdata→read-model 이벤트 **봉투 shape 불일치** → 프로듀서 실이벤트 전건 DLT. **수정(Option A)**: `OutboxMasterdataEventPublisher.writeEvent`가 spec §Envelope 대로 top-level `tenantId`/`aggregateType`/`aggregateId`(+`schemaVersion`/`partitionKey`) 발행 — consumer(`MasterEventEnvelope.isValid()`)가 요구하던 top-level `aggregateId` 충족 → DLT 해소. spec §Envelope 예시·필드노트 정합(`traceId` v1 deferred 명시), 프로듀서 unit test top-level 필드 단언 추가, E2E `envelope()` 헬퍼를 프로듀서 실 shape로 정렬, **신규 `MasterEventEnvelopeProducerContractTest`**(프로듀서 wire→consumer mapper, 옛 7필드 wire=negative=DLT 재현 — 누락됐던 크로스서비스 브리지). 검증: masterdata+read-model Docker-free `test` (read-model Testcontainers IT는 CI Linux 권위). 분석·구현=Opus 4.8.
 
 ## done
 

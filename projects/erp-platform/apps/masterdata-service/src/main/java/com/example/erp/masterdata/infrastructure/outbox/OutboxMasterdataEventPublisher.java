@@ -28,16 +28,22 @@ import org.springframework.stereotype.Component;
  * relay forwards the row to Kafka asynchronously; downstream consumers dedupe on
  * the envelope {@code eventId} (at-least-once).
  *
- * <p><b>Wire-shape preserved.</b> The envelope is the EXACT 7-field shape the
- * previous {@code BaseEventPublisher} path emitted —
- * {@code {eventId, eventType, source, occurredAt, schemaVersion, partitionKey,
- * payload}}, {@code source = "erp-platform-masterdata-service"}, every payload
- * field/order unchanged. The {@code before}/{@code after}/{@code reason} payload
- * keys are written UNCONDITIONALLY (a {@code null} value serialises as JSON
- * {@code null}) — byte-identical to the v1
- * {@code MasterdataEventPublisher.payload}. The only change: the envelope
- * {@code eventId} now equals the {@code masterdata_outbox} PK (both UUIDv7) so the
- * Kafka {@code eventId} header matches the payload.
+ * <p><b>Envelope conforms to the contract</b>
+ * ({@code specs/contracts/events/erp-masterdata-events.md} § Envelope,
+ * TASK-ERP-BE-032). The legacy {@code BaseEventPublisher} path emitted a 7-field
+ * shape without a top-level {@code aggregateId}; the read-model-service consumer
+ * ({@code MasterEventEnvelope.isValid()}) requires a top-level {@code aggregateId}
+ * and rejected every real event to {@code .DLT}. This publisher now emits the
+ * contract's top-level {@code tenantId}/{@code aggregateType}/{@code aggregateId}
+ * alongside the preserved {@code schemaVersion}/{@code partitionKey}:
+ * {@code {eventId, eventType, source, occurredAt, schemaVersion, tenantId,
+ * aggregateType, aggregateId, partitionKey, payload}}. {@code partitionKey}
+ * (= {@code aggregateId}) is retained as the Kafka message key; {@code traceId} is
+ * deferred in v1 (the outbox relay does not propagate W3C trace context). The
+ * {@code before}/{@code after}/{@code reason} payload keys are still written
+ * UNCONDITIONALLY (a {@code null} value serialises as JSON {@code null}). The
+ * envelope {@code eventId} equals the {@code masterdata_outbox} PK (both UUIDv7) so
+ * the Kafka {@code eventId} header matches the payload.
  */
 @Component
 public class OutboxMasterdataEventPublisher implements MasterdataEventPublisher {
@@ -120,11 +126,13 @@ public class OutboxMasterdataEventPublisher implements MasterdataEventPublisher 
     }
 
     /**
-     * Wrap {@code payload} in the canonical 7-field envelope (preserved from the
-     * v1 {@code BaseEventPublisher} path), serialise it, and persist a pending
-     * {@code masterdata_outbox} row in the caller's transaction. The generated
-     * {@link UuidV7} doubles as the envelope {@code eventId} and the row PK;
-     * {@code partition_key = aggregateId} (the v1 Kafka key).
+     * Wrap {@code payload} in the contract envelope
+     * ({@code erp-masterdata-events.md} § Envelope), serialise it, and persist a
+     * pending {@code masterdata_outbox} row in the caller's transaction. The
+     * generated {@link UuidV7} doubles as the envelope {@code eventId} and the row
+     * PK; the top-level {@code aggregateId} (required by the read-model consumer) is
+     * also mirrored as {@code partitionKey} (the Kafka message key). {@code tenantId}
+     * is read from the payload (every masterdata payload carries it).
      */
     private void writeEvent(String aggregateType, String aggregateId,
                             String eventType, Map<String, Object> payload) {
@@ -137,6 +145,9 @@ public class OutboxMasterdataEventPublisher implements MasterdataEventPublisher 
         envelope.put("source", SOURCE);
         envelope.put("occurredAt", occurredAt.toString());
         envelope.put("schemaVersion", SCHEMA_VERSION);
+        envelope.put("tenantId", payload.get("tenantId"));
+        envelope.put("aggregateType", aggregateType);
+        envelope.put("aggregateId", aggregateId);
         envelope.put("partitionKey", aggregateId);
         envelope.put("payload", payload);
 
