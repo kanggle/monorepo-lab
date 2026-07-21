@@ -2,9 +2,8 @@ package com.example.account.application.service;
 
 import com.example.account.domain.account.Account;
 import com.example.account.domain.repository.AccountRepository;
+import com.example.account.domain.repository.ProcessedEventStore;
 import com.example.account.domain.tenant.TenantId;
-import com.example.account.infrastructure.persistence.ProcessedEventJpaEntity;
-import com.example.account.infrastructure.persistence.ProcessedEventJpaRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -19,7 +18,7 @@ import java.util.Optional;
  * {@code auth.login.succeeded} Kafka event consumed by
  * {@link com.example.account.infrastructure.kafka.LoginSucceededConsumer}.
  *
- * <p>Idempotency is enforced at the DB level via {@link ProcessedEventJpaRepository}
+ * <p>Idempotency is enforced at the DB level via {@link ProcessedEventStore}
  * keyed on {@code eventId}. The dedup row insert and the account update happen
  * in the same {@link Transactional} so that a redelivery either sees the dedup
  * row (skip) or replays the full update from a clean slate (rollback).
@@ -39,7 +38,7 @@ public class UpdateLastLoginUseCase {
     private static final String EVENT_TYPE = "auth.login.succeeded";
 
     private final AccountRepository accountRepository;
-    private final ProcessedEventJpaRepository processedEventRepository;
+    private final ProcessedEventStore processedEventStore;
 
     /**
      * NET-ZERO overload — a legacy event with no {@code tenantId} in its payload stays
@@ -58,14 +57,13 @@ public class UpdateLastLoginUseCase {
      */
     @Transactional(noRollbackFor = DataIntegrityViolationException.class)
     public void execute(String eventId, String accountId, TenantId tenantId, Instant occurredAt) {
-        if (processedEventRepository.existsByEventId(eventId)) {
+        if (processedEventStore.existsByEventId(eventId)) {
             log.info("Duplicate auth.login.succeeded event skipped: eventId={}", eventId);
             return;
         }
 
         try {
-            processedEventRepository.saveAndFlush(
-                    ProcessedEventJpaEntity.create(eventId, EVENT_TYPE));
+            processedEventStore.markProcessed(eventId, EVENT_TYPE);
         } catch (DataIntegrityViolationException e) {
             // Concurrent redelivery: another consumer thread won the dedup-row
             // insert race. saveAndFlush() forces the INSERT SQL to execute
