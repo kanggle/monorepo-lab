@@ -175,7 +175,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-459-adr-observability-citation-slug-drift.md` — **🟢 REVIEW (구현 완료) — 2026-07-21 정합화 감사: docs/adr 깨진 인용 슬러그 4곳 정정.** 재측정(main `dd93fc420`): ADR-017:8 · ADR-018:8 · ADR-018:135 의 `[ADR-MONO-006](ADR-MONO-006-observability-stack.md)`(=실제로는 lint-remediation) → `ADR-MONO-007-worktree-ephemeral-observability-stack.md`(진짜 관측성 ADR), ADR-041:13 Family 의 stale 슬러그 2개(`ADR-MONO-013-unified-platform-console.md`→`-platform-console-foundation.md`, `ADR-MONO-018-federation-e2e-harness.md`→`-platform-console-phase-8-federation-hardening.md`). **🔴 전수 재조사로 에이전트 스코프 초과 발견**: ADR-018:81 에 006 링크가 하나 더 있으나 **§2 D4 결정 옵션 본문**이고 ADR 자신의 line-10 additive note 가 이미 "known broken, D1-D8 byte-unchanged(HARDSTOP-04)" 로 보존 중 → **의도적 미변경**. `done/` 3건 + INDEX MONO-137 항목의 006 잔존 = 불변 이력 → 보존. 링크 전용(앵커 무), 결정 본문 0변경. 감사 계열(446·447·454·457·459). 분석·구현=Opus 4.8. [[feedback_recount_population_dont_inherit_scope]]
 
 
 ## done
