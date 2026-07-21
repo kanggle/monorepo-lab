@@ -14,8 +14,6 @@ class RouteServiceTest {
 
     @ParameterizedTest
     @CsvSource({
-            "/api/auth/login, auth-service",
-            "/api/auth/refresh, auth-service",
             "/api/users/me, user-service",
             "/api/admin/users, user-service",
             "/api/products/42, product-service",

@@ -173,37 +173,14 @@ class GatewayIntegrationTest {
 
     // -----------------------------------------------------------------------
     // Public route scenarios
+    //
+    // Auth (/api/auth/**) is no longer a gateway route — it was removed with
+    // auth-service (TASK-BE-132); authentication moved to IAM/GAP OIDC
+    // (TASK-MONO-027). The "public path bypasses the JWT filter" property is
+    // covered below by GET /api/products/** (a real production public route);
+    // the former /api/auth/* public-route tests asserted a route production no
+    // longer serves and were removed (TASK-BE-555).
     // -----------------------------------------------------------------------
-
-    @Test
-    @DisplayName("공개 경로 POST /api/auth/login은 토큰 없이 JWT 필터를 통과한다 (다운스트림 불가 → 5xx)")
-    void publicRoute_login_passesWithoutToken() {
-        webTestClient.post()
-                .uri("/api/auth/login")
-                .exchange()
-                .expectStatus().value(status ->
-                        org.assertj.core.api.Assertions.assertThat(status).isNotEqualTo(401));
-    }
-
-    @Test
-    @DisplayName("공개 경로 POST /api/auth/signup은 토큰 없이 JWT 필터를 통과한다")
-    void publicRoute_signup_passesWithoutToken() {
-        webTestClient.post()
-                .uri("/api/auth/signup")
-                .exchange()
-                .expectStatus().value(status ->
-                        org.assertj.core.api.Assertions.assertThat(status).isNotEqualTo(401));
-    }
-
-    @Test
-    @DisplayName("공개 경로 POST /api/auth/refresh는 토큰 없이 JWT 필터를 통과한다")
-    void publicRoute_refresh_passesWithoutToken() {
-        webTestClient.post()
-                .uri("/api/auth/refresh")
-                .exchange()
-                .expectStatus().value(status ->
-                        org.assertj.core.api.Assertions.assertThat(status).isNotEqualTo(401));
-    }
 
     @Test
     @DisplayName("공개 경로 GET /api/products/**는 토큰 없이 JWT 필터를 통과한다 (다운스트림 불가 → 5xx)")
