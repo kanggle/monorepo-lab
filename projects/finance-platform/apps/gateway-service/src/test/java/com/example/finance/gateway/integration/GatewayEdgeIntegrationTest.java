@@ -117,12 +117,10 @@ class GatewayEdgeIntegrationTest extends GatewayIntegrationBase {
 
     @Test
     void tamperedSignatureRejected401() {
-        String token = jwt.signFinanceToken("operator-1");
-        String[] parts = token.split("\\.");
-        String lastChar = parts[2].substring(parts[2].length() - 1);
-        String tampered = parts[0] + "." + parts[1] + "."
-                + parts[2].substring(0, parts[2].length() - 1)
-                + ("A".equals(lastChar) ? "B" : "A");
+        // Signed by a foreign key not in the JWKS (real kid advertised) → verification always fails.
+        // Replaces a byte-flip tamper that was a ~25%-per-key no-op (MONO-458 residual; see
+        // JwtTestHelper#signForgedSignatureToken).
+        String tampered = jwt.signForgedSignatureToken("operator-1");
 
         webTestClient.get().uri(ACCOUNTS_PATH)
                 .header("Authorization", "Bearer " + tampered)
