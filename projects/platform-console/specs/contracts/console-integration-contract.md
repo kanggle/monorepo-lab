@@ -2242,6 +2242,7 @@ contract row (smoke-target for the IT harness and Traefik probe).
   | scm (`/api/scm/**`) | IAM OIDC access token (§ 2.4.6) | inbound `Authorization` |
   | finance (`/api/finance/**`) | IAM OIDC access token (§ 2.4.7) | inbound `Authorization` |
   | erp (`/api/erp/**`) | IAM OIDC access token (§ 2.4.8) | inbound `Authorization` |
+  | ecommerce (`/api/admin/**`, via ecommerce gateway) | IAM OIDC access token (§ 2.4.10) | inbound `Authorization` |
 
   The BFF **never** falls back from one credential to another (#569 invariant
   preserved). The BFF **never** mints its own token. The BFF **never** rewrites

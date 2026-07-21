@@ -30,7 +30,7 @@ and `platform/architecture-decision-rule.md`.
 | Architecture Style | **Layered by Feature** |
 | Domain | saas |
 | Primary language / stack | TypeScript strict, Next.js 15 (App Router) |
-| Bounded Context | Unified operator console over the enterprise suite (iam · wms · scm + future erp · finance) — Model B single UI |
+| Bounded Context | Unified operator console over the enterprise suite (iam · wms · scm · erp · finance · ecommerce) — Model B single UI |
 | Deployable unit | `apps/console-web/` |
 | Backend dependencies | IAM `auth-service` (OIDC Authorization Code + PKCE public client login/refresh); IAM product/tenant registry surface (catalog source, `TASK-BE-296`); per-domain `gateway`/`admin` REST APIs (federated screens, added per domain section) |
 
