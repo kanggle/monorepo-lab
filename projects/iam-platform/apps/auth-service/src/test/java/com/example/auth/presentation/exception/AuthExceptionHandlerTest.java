@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code auth-api.md} now mirrors (TASK-BE-500).
  *
  * <p><b>Why this class exists.</b> Only {@code ACCOUNT_LOCKED} → 423 was pinned
- * (a {@code LoginControllerTest} slice); the two statuses {@link
+ * (a {@code LoginControllerSliceTest} slice); the two statuses {@link
  * AuthExceptionHandler#handleAccountStatus} actually decides — {@code ACCOUNT_DORMANT}
  * → 423 and {@code ACCOUNT_DELETED} → 410 — had no test at all, which is precisely
  * how the iam spec tree drifted back to a blanket 403 without anything failing.

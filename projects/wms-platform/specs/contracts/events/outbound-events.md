@@ -253,7 +253,7 @@ Partition key: `sagaId`
 
 | Field | Type | Nullable | Notes |
 |---|---|---|---|
-| `sagaId` | UUID | no | `OutboundSaga.saga_id`. Partition key. Inventory replies echo this for correlation |
+| `sagaId` | UUID | no | `OutboundSaga.saga_id`. Partition key for this outbound→inventory request. Inventory replies do NOT echo it — they carry `reservationId`/`pickingRequestId`, from which outbound resolves the sagaId (`SagaIdResolver`) |
 | `reservationId` | UUID | no | Equals `PickingRequest.id`. This is the id inventory uses for its reservation record |
 | `orderId` | UUID | no | |
 | `warehouseId` | UUID | no | All lines belong to this warehouse |

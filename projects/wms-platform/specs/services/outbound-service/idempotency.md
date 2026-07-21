@@ -308,7 +308,7 @@ from `inventory-service` and master snapshot events from `master-service`:
 | `InventoryReservedConsumer` | `wms.inventory.reserved.v1` | Saga step 1 success → `RESERVED` |
 | `InventoryReleasedConsumer` | `wms.inventory.released.v1` | Compensation acknowledged → `CANCELLED` |
 | `InventoryConfirmedConsumer` | `wms.inventory.confirmed.v1` | Saga step 4 success → `COMPLETED` |
-| `InventoryAdjustedConsumer` (filtered: `reason=INSUFFICIENT_STOCK`) | `wms.inventory.adjusted.v1` | Out-of-stock signal → `RESERVE_FAILED` |
+| `InventoryReserveFailedConsumer` | `wms.inventory.reserve.failed.v1` | Out-of-stock during reserve → `RESERVE_FAILED` |
 | `MasterWarehouseConsumer` | `wms.master.warehouse.v1` | MasterReadModel snapshot refresh |
 | `MasterZoneConsumer` | `wms.master.zone.v1` | Same |
 | `MasterLocationConsumer` | `wms.master.location.v1` | Same |
@@ -388,7 +388,7 @@ The `outbound_event_dedupe` row is still written for two reasons:
 ### 3.5 Saga-Step Consumer Layered Idempotency
 
 Saga consumers (`InventoryReservedConsumer`, `InventoryReleasedConsumer`,
-`InventoryConfirmedConsumer`, `InventoryAdjustedConsumer`) are protected by
+`InventoryConfirmedConsumer`, `InventoryReserveFailedConsumer`) are protected by
 **two** layers:
 
 1. **EventId dedupe** — the same Kafka envelope `eventId` is processed

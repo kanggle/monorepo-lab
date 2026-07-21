@@ -64,7 +64,18 @@ This contract is the v1 forward interface for those v2 consumers.
 - **Ordering**: partition key = `aggregateId` (per-aggregate ordering;
   e.g. all Department-A events arrive in publish order). Cross-aggregate
   ordering is **not** guaranteed (consumers treat each aggregate stream
-  independently).
+  independently). The `aggregateId` is carried BOTH as a top-level envelope
+  field (the consumer's projection PK + dedupe join) AND as `partitionKey`
+  (the Kafka message key). The read-model consumer requires the **top-level
+  `aggregateId`** — an envelope missing it is invalid and routes to `.DLT`
+  (TASK-ERP-BE-032).
+- **Envelope fields (v1 wire)**: `eventId`, `eventType`, `source`,
+  `occurredAt`, `schemaVersion` (currently `1`), `tenantId`, `aggregateType`,
+  `aggregateId`, `partitionKey` (= `aggregateId`), `payload`. `traceId` is
+  **deferred in v1** — the transactional-outbox relay does not yet propagate
+  W3C trace context, so the field is omitted (forward-compatible: consumers
+  treat it as optional). `schemaVersion` bumps on a breaking payload change
+  ahead of the `.v2` topic cutover.
 - **No PII beyond identifiers**: payloads carry the master record's
   business identifiers + business fields. There is no regulated PII in
   erp master data v1 — `Employee.name` is the only personally identifying
@@ -78,12 +89,13 @@ This contract is the v1 forward interface for those v2 consumers.
 {
   "eventId": "<uuid>",
   "eventType": "erp.masterdata.department.changed",
-  "occurredAt": "<ISO-8601 UTC>",
-  "tenantId": "erp",
   "source": "erp-platform-masterdata-service",
+  "occurredAt": "<ISO-8601 UTC>",
+  "schemaVersion": 1,
+  "tenantId": "erp",
   "aggregateType": "department|employee|jobgrade|costcenter|businesspartner",
   "aggregateId": "<id>",
-  "traceId": "<w3c-traceparent trace-id>",
+  "partitionKey": "<id>",
   "payload": { ... }
 }
 ```

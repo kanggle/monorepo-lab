@@ -27,14 +27,16 @@ import org.mockito.ArgumentCaptor;
  * (TASK-ERP-BE-026 — outbox v2).
  *
  * <p>Asserts a domain event persists a {@code masterdata_outbox} row whose
- * wire-relevant fields are preserved exactly vs the v1
- * {@code BaseEventPublisher.writeEvent}: the canonical 7-field envelope
- * ({@code eventId, eventType, source, occurredAt, schemaVersion=1, partitionKey,
- * payload}) in that field order, the row {@code id} reused as the envelope
- * {@code eventId}, {@code aggregate_type}/{@code aggregate_id}/{@code event_type}
- * matching the v1 call, {@code partition_key} = aggregateId (the v1 Kafka key),
- * and the v1 payload shape — including the {@code before}/{@code after}/
- * {@code reason} keys written UNCONDITIONALLY (a null serialises as JSON null).
+ * envelope conforms to {@code erp-masterdata-events.md} § Envelope
+ * (TASK-ERP-BE-032): {@code eventId, eventType, source, occurredAt,
+ * schemaVersion=1, tenantId, aggregateType, aggregateId, partitionKey, payload}.
+ * The top-level {@code aggregateId} (required by the read-model consumer's
+ * {@code MasterEventEnvelope.isValid()}) + {@code aggregateType}/{@code tenantId}
+ * are the fields the legacy 7-field wire omitted, which routed every event to the
+ * DLT. The row {@code id} is reused as the envelope {@code eventId},
+ * {@code partition_key} = aggregateId (the Kafka key), and the payload shape is
+ * preserved — including the {@code before}/{@code after}/{@code reason} keys
+ * written UNCONDITIONALLY (a null serialises as JSON null).
  */
 class OutboxMasterdataEventPublisherTest {
 
@@ -79,6 +81,11 @@ class OutboxMasterdataEventPublisherTest {
         assertThat(envelope.get("occurredAt").asText()).isEqualTo(CLOCK.instant().toString());
         assertThat(envelope.get("schemaVersion").asInt()).isEqualTo(1);
         assertThat(envelope.get("partitionKey").asText()).isEqualTo("d-1");
+        // Contract top-level fields (TASK-ERP-BE-032) — the legacy wire omitted
+        // these; the read-model consumer requires a top-level aggregateId.
+        assertThat(envelope.get("tenantId").asText()).isEqualTo("erp");
+        assertThat(envelope.get("aggregateType").asText()).isEqualTo("department");
+        assertThat(envelope.get("aggregateId").asText()).isEqualTo("d-1");
 
         JsonNode p = envelope.get("payload");
         assertThat(p.get("aggregateId").asText()).isEqualTo("d-1");
