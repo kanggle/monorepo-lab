@@ -1,0 +1,312 @@
+package com.example.admin.presentation;
+
+import com.example.admin.application.AccountAdminUseCase;
+import com.example.admin.application.AdminActionAuditor;
+import com.example.admin.application.BulkLockAccountUseCase;
+import com.example.admin.application.LockAccountResult;
+import com.example.admin.application.QueryTenantScopeGate;
+import com.example.admin.application.exception.TenantScopeDeniedException;
+import com.example.admin.domain.rbac.PermissionEvaluator;
+import com.example.admin.infrastructure.client.AccountServiceClient;
+import com.example.admin.presentation.advice.AdminExceptionHandler;
+import com.example.admin.presentation.aspect.RequiresPermissionAspect;
+import com.example.admin.support.OperatorJwtTestFixture;
+import com.example.admin.support.SliceTestSecurityConfig;
+import com.example.security.jwt.JwtVerifier;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
+import org.springframework.boot.autoconfigure.aop.AopAutoConfiguration;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+
+import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@WebMvcTest(controllers = AccountAdminController.class)
+@ImportAutoConfiguration(AopAutoConfiguration.class)
+@Import({SliceTestSecurityConfig.class, AdminExceptionHandler.class,
+        RequiresPermissionAspect.class,
+        AccountAdminControllerSliceTest.JwtBeans.class})
+@TestPropertySource(properties = {
+        "admin.jwt.expected-token-type=admin"
+})
+class AccountAdminControllerSliceTest {
+
+    private static OperatorJwtTestFixture jwt;
+
+    @BeforeAll
+    static void initFixture() {
+        jwt = new OperatorJwtTestFixture();
+    }
+
+    @org.springframework.boot.test.context.TestConfiguration
+    static class JwtBeans {
+        @Bean
+        JwtVerifier operatorJwtVerifier() {
+            if (jwt == null) jwt = new OperatorJwtTestFixture();
+            return jwt.verifier();
+        }
+    }
+
+    @Autowired
+    MockMvc mockMvc;
+
+    /** TASK-BE-495: lets the guard assert on route existence, not on a slice-dependent status. */
+    @Autowired
+    RequestMappingHandlerMapping handlerMapping;
+
+    @MockitoBean
+    AccountAdminUseCase useCase;
+
+    @MockitoBean
+    BulkLockAccountUseCase bulkLockUseCase;
+
+    @MockitoBean
+    AccountServiceClient accountServiceClient;
+
+    @MockitoBean
+    PermissionEvaluator permissionEvaluator;
+
+    @MockitoBean
+    AdminActionAuditor auditor;
+
+    @MockitoBean
+    QueryTenantScopeGate queryTenantScopeGate;
+
+    @BeforeEach
+    void grantAll() {
+        when(permissionEvaluator.hasPermission(anyString(), anyString())).thenReturn(true);
+        when(permissionEvaluator.hasAllPermissions(anyString(), any(Collection.class))).thenReturn(true);
+        // TASK-BE-357: default — resolve to the operator's own non-platform tenant.
+        when(queryTenantScopeGate.resolve(any(), any(), any(), anyString()))
+                .thenReturn(new QueryTenantScopeGate.Resolved("fan-platform", false));
+    }
+
+    private String bearer() {
+        return "Bearer " + jwt.operatorToken("op-1");
+    }
+
+    /**
+     * TASK-BE-495 regression guard — the public detail surface
+     * {@code GET /api/admin/accounts/{accountId}} is REMOVED and must stay removed.
+     *
+     * <p>It was never in {@code admin-api.md}, had no consumer, and (unlike every
+     * sibling) skipped {@link QueryTenantScopeGate}, letting a tenant-scoped operator
+     * holding {@code account.read} read another tenant's account given only an
+     * accountId.
+     *
+     * <p>We assert on the <b>handler mapping</b> rather than on a response status:
+     * in a {@code @WebMvcTest} slice an unmapped path yields 500 (no static-resource
+     * handler is registered to turn it into a 404), so a status assertion would encode
+     * a slice artifact instead of the invariant. Absence from
+     * {@link RequestMappingHandlerMapping} is the invariant — and it turns RED the
+     * moment anyone re-adds the handler, gate or no gate.
+     */
+    @Test
+    void detail_surface_is_removed_from_the_handler_mapping() {
+        boolean detailRouteExists = handlerMapping.getHandlerMethods().keySet().stream()
+                .anyMatch(info -> {
+                    var methods = info.getMethodsCondition().getMethods();
+                    var patterns = info.getPathPatternsCondition() == null
+                            ? java.util.Set.<String>of()
+                            : info.getPathPatternsCondition().getPatternValues();
+                    return methods.contains(RequestMethod.GET)
+                            && patterns.contains("/api/admin/accounts/{accountId}");
+                });
+
+        assertThat(detailRouteExists)
+                .as("GET /api/admin/accounts/{accountId} was removed by TASK-BE-495; "
+                        + "re-adding it requires a spec-first admin-api.md section AND a "
+                        + "queryTenantScopeGate.resolve(...) call (cross-tenant => 404, never 403)")
+                .isFalse();
+    }
+
+    /** The sibling list surface must keep working — the removal is surgical. */
+    @Test
+    void list_surface_survives_the_detail_removal() {
+        boolean listRouteExists = handlerMapping.getHandlerMethods().keySet().stream()
+                .anyMatch(info -> {
+                    var methods = info.getMethodsCondition().getMethods();
+                    var patterns = info.getPathPatternsCondition() == null
+                            ? java.util.Set.<String>of()
+                            : info.getPathPatternsCondition().getPatternValues();
+                    return methods.contains(RequestMethod.GET)
+                            && patterns.contains("/api/admin/accounts");
+                });
+
+        assertThat(listRouteExists).isTrue();
+    }
+
+    @Test
+    void lock_success_returns_200() throws Exception {
+        when(useCase.lock(any())).thenReturn(new LockAccountResult(
+                "acc-1", "ACTIVE", "LOCKED", "op-1", Instant.parse("2026-01-01T00:00:00Z"), "audit-1"));
+
+        mockMvc.perform(post("/api/admin/accounts/acc-1/lock")
+                        .header("Authorization", bearer())
+                        .header("Idempotency-Key", "idemp-1")
+                        .header("X-Operator-Reason", "fraud")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accountId").value("acc-1"))
+                .andExpect(jsonPath("$.currentStatus").value("LOCKED"))
+                .andExpect(jsonPath("$.auditId").value("audit-1"));
+    }
+
+    @Test
+    void lock_missing_idempotency_key_returns_400_validation_error() throws Exception {
+        mockMvc.perform(post("/api/admin/accounts/acc-1/lock")
+                        .header("Authorization", bearer())
+                        .header("X-Operator-Reason", "fraud")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void lock_missing_operator_reason_returns_400_reason_required() throws Exception {
+        mockMvc.perform(post("/api/admin/accounts/acc-1/lock")
+                        .header("Authorization", bearer())
+                        .header("Idempotency-Key", "idemp-2")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REASON_REQUIRED"));
+    }
+
+    @Test
+    void lock_without_required_permission_returns_403() throws Exception {
+        when(permissionEvaluator.hasPermission(anyString(), anyString())).thenReturn(false);
+
+        mockMvc.perform(post("/api/admin/accounts/acc-1/lock")
+                        .header("Authorization", bearer())
+                        .header("Idempotency-Key", "idemp-3")
+                        .header("X-Operator-Reason", "fraud")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+    }
+
+    @Test
+    void lock_without_jwt_returns_401_token_invalid() throws Exception {
+        mockMvc.perform(post("/api/admin/accounts/acc-1/lock")
+                        .header("Idempotency-Key", "idemp-4")
+                        .header("X-Operator-Reason", "fraud")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("TOKEN_INVALID"));
+    }
+
+    // ---- search (GET /api/admin/accounts) ----
+
+    @Test
+    void search_superAdmin_noEmail_returns_paginated_list() throws Exception {
+        var items = List.of(new AccountServiceClient.AccountSummaryItem(
+                "acc-1", "a@example.com", "ACTIVE", Instant.parse("2026-01-01T00:00:00Z")));
+        var page = new AccountServiceClient.AccountSearchResponse(items, 1L, 0, 20, 1);
+        when(permissionEvaluator.hasPermission(anyString(), anyString())).thenReturn(true);
+        when(accountServiceClient.listAll(anyString(), anyInt(), anyInt(), any())).thenReturn(page);
+
+        mockMvc.perform(get("/api/admin/accounts")
+                        .header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value("acc-1"))
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.totalPages").value(1));
+    }
+
+    // ---- TASK-BE-475: status filter ----
+
+    @Test
+    void search_withStatus_forwards_normalized_status_to_listAll() throws Exception {
+        var page = new AccountServiceClient.AccountSearchResponse(List.of(), 3L, 0, 1, 3);
+        when(permissionEvaluator.hasPermission(anyString(), anyString())).thenReturn(true);
+        // lower-case in the request must reach the client normalized to upper-case.
+        when(accountServiceClient.listAll(anyString(), anyInt(), anyInt(), eq("LOCKED"))).thenReturn(page);
+
+        mockMvc.perform(get("/api/admin/accounts?status=locked&page=0&size=1")
+                        .header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(3));
+    }
+
+    @Test
+    void search_invalidStatus_returns_400_validation_error() throws Exception {
+        // Bad status is rejected at the admin boundary (IllegalArgumentException →
+        // VALIDATION_ERROR) BEFORE the downstream call — never a 503-masked downstream 400.
+        when(permissionEvaluator.hasPermission(anyString(), anyString())).thenReturn(true);
+
+        mockMvc.perform(get("/api/admin/accounts?status=BOGUS")
+                        .header("Authorization", bearer()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void search_noEmail_noAccountReadPermission_returns_403() throws Exception {
+        // TASK-MONO-202 — the unfiltered list now requires account.read; absent
+        // ⇒ 403 PERMISSION_DENIED (was an empty-200 list). The console relies on
+        // this 403 to distinguish "no permission" from "zero accounts".
+        when(permissionEvaluator.hasPermission(anyString(), anyString())).thenReturn(false);
+        when(permissionEvaluator.hasAllPermissions(anyString(), any(Collection.class))).thenReturn(false);
+
+        mockMvc.perform(get("/api/admin/accounts")
+                        .header("Authorization", bearer()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+    }
+
+    @Test
+    void search_withEmail_delegates_to_search_client() throws Exception {
+        var items = List.of(new AccountServiceClient.AccountSummaryItem(
+                "acc-1", "a@example.com", "ACTIVE", Instant.parse("2026-01-01T00:00:00Z")));
+        var result = new AccountServiceClient.AccountSearchResponse(items, 1L, 0, 20, 1);
+        when(accountServiceClient.search(anyString(), eq("a@example.com"))).thenReturn(result);
+
+        mockMvc.perform(get("/api/admin/accounts?email=a@example.com")
+                        .header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].email").value("a@example.com"));
+    }
+
+    @Test
+    void search_outOfScopeTenant_returns_403_tenant_scope_denied() throws Exception {
+        // TASK-BE-357: a non-platform operator requesting a tenant outside its effective
+        // scope is rejected by the shared gate (403 TENANT_SCOPE_DENIED) BEFORE any branch.
+        when(queryTenantScopeGate.resolve(any(), any(), any(), anyString()))
+                .thenThrow(new TenantScopeDeniedException("out of scope"));
+
+        mockMvc.perform(get("/api/admin/accounts?tenantId=ecommerce")
+                        .header("Authorization", bearer()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("TENANT_SCOPE_DENIED"));
+    }
+}
