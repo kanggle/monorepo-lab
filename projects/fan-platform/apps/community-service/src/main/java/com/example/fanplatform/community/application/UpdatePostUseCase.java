@@ -30,9 +30,11 @@ public class UpdatePostUseCase {
                             String title, String body, List<String> mediaRefs) {
         Post post = PostLookup.requireById(postRepository, postId, actor.tenantId());
         boolean isAuthor = post.getAuthorAccountId().equals(actor.accountId());
-        if (!isAuthor && !actor.isOperator()) {
+        if (!actor.owns(post.getAuthorAccountId())) {
             throw new PermissionDeniedException("Only the author can update this post");
         }
+        // isAuthor is retained for the PUBLISHED edit-window gate below — that is an
+        // author-AND-not-operator check, NOT the author-or-operator predicate (N2).
         if (post.getStatus() == PostStatus.PUBLISHED && isAuthor && !actor.isOperator()) {
             Instant cutoff = post.getPublishedAt() == null
                     ? null

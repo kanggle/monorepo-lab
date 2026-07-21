@@ -27,7 +27,6 @@ import java.util.UUID;
 public class LoggingEmailChannelAdapter implements NotificationChannelPort {
 
     static final String CHANNEL = "EMAIL";
-    private static final String METRIC = "notification_channel_deliveries_total";
 
     private final MeterRegistry meterRegistry;
 
@@ -45,7 +44,7 @@ public class LoggingEmailChannelAdapter implements NotificationChannelPort {
         String ref = "mockmail_" + UUID.randomUUID();
         log.info("[mock-email] delivered notification id={} account={} type={} ref={}",
                 notification.getId(), notification.getAccountId(), notification.getType(), ref);
-        meterRegistry.counter(METRIC, "channel", CHANNEL, "outcome", "delivered").increment();
+        ChannelDeliveryMetrics.delivered(meterRegistry, CHANNEL);
         return new DeliveryResult(true, CHANNEL, ref);
     }
 }

@@ -51,7 +51,6 @@ import java.util.Map;
 public class HttpFcmPushChannelAdapter implements NotificationChannelPort {
 
     static final String CHANNEL = "PUSH";
-    private static final String METRIC = "notification_channel_deliveries_total";
 
     private final MeterRegistry meterRegistry;
     private final RestClient restClient;
@@ -101,7 +100,7 @@ public class HttpFcmPushChannelAdapter implements NotificationChannelPort {
             if (ref == null || ref.isBlank()) {
                 return failed(notification, topic, "FCM 2xx without a message name");
             }
-            meterRegistry.counter(METRIC, "channel", CHANNEL, "outcome", "delivered").increment();
+            ChannelDeliveryMetrics.delivered(meterRegistry, CHANNEL);
             log.info("[fcm-push] delivered notification id={} account={} type={} topic={} ref={}",
                     notification.getId(), notification.getAccountId(), notification.getType(), topic, ref);
             return new DeliveryResult(true, CHANNEL, ref);
@@ -111,7 +110,7 @@ public class HttpFcmPushChannelAdapter implements NotificationChannelPort {
     }
 
     private DeliveryResult failed(Notification notification, String topic, String reason) {
-        meterRegistry.counter(METRIC, "channel", CHANNEL, "outcome", "failed").increment();
+        ChannelDeliveryMetrics.failed(meterRegistry, CHANNEL);
         log.warn("[fcm-push] delivery FAILED (best-effort; inbox row authoritative) "
                         + "id={} account={} topic={} reason={}",
                 notification.getId(), notification.getAccountId(), topic, reason);

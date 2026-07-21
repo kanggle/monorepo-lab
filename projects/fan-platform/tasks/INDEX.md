@@ -66,15 +66,13 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-FAN-BE-025-current-actor-authorship-channel-dedup.md` — `@CurrentActor` 리졸버 호출부 보일러플레이트(31×), community authorship guard(6×), notification 채널-어댑터 metric/logging 중복(4×) 제거 (behavior-preserving).
-
 ## in-progress
 
 (empty)
 
 ## review
 
-(empty)
+- `TASK-FAN-BE-025-current-actor-authorship-channel-dedup.md` — N1 `@CurrentActor` 인자 리졸버(서비스별, self-registering `WebMvcConfigurer`)로 `ActorContextResolver.currentOrThrow()` 호출부 31× 대체(artist 12/community 12/membership 5/notification 2), N2 community `ActorContext.owns(authorAccountId)` 로 author-or-operator 6× 통합(PublishPost role-check 제외), N3 `ChannelDeliveryMetrics` 로 notification 채널-어댑터 METRIC+recording 4× 단일화. behavior-preserving. AC-0 재측정: 31/6/4 카운트·per-service resolver·#2840/#2843 반영된 현재 main 기준 확인. resolver 는 각 서비스 currentOrThrow() 에 위임 → 401/403 실패경로 byte-보존. N2/N3 는 static/additive → 유닛테스트 무변경. impl PR open, CI 대기.
 
 ## done
 

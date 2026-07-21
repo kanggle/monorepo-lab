@@ -3,7 +3,7 @@ package com.example.fanplatform.artist.adapter.in.web.controller;
 import com.example.fanplatform.artist.adapter.in.web.dto.request.CreateFandomRequest;
 import com.example.fanplatform.artist.adapter.in.web.dto.request.UpdateFandomRequest;
 import com.example.fanplatform.artist.adapter.in.web.dto.response.ApiEnvelope;
-import com.example.fanplatform.artist.adapter.in.web.security.ActorContextResolver;
+import com.example.fanplatform.artist.adapter.in.web.security.CurrentActor;
 import com.example.fanplatform.artist.application.ActorContext;
 import com.example.fanplatform.artist.application.port.in.CreateFandomUseCase;
 import com.example.fanplatform.artist.application.port.in.CreateFandomUseCase.CreateFandomCommand;
@@ -33,16 +33,16 @@ public class FandomController {
     private final GetFandomUseCase getUseCase;
 
     @GetMapping("/{artistId}")
-    public ResponseEntity<ApiEnvelope<FandomView>> get(@PathVariable String artistId) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+    public ResponseEntity<ApiEnvelope<FandomView>> get(@CurrentActor ActorContext actor,
+                                                       @PathVariable String artistId) {
         return ResponseEntity.ok(ApiEnvelope.of(getUseCase.getByArtistId(actor, artistId)));
     }
 
     /** Create a fandom for the artist. 422 FANDOM_ALREADY_EXISTS if one already exists. */
     @PostMapping("/{artistId}")
-    public ResponseEntity<ApiEnvelope<FandomView>> create(@PathVariable String artistId,
+    public ResponseEntity<ApiEnvelope<FandomView>> create(@CurrentActor ActorContext actor,
+                                                          @PathVariable String artistId,
                                                           @Valid @RequestBody CreateFandomRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
         FandomView view = createUseCase.create(new CreateFandomCommand(
                 actor, artistId, req.fandomName(), req.colorHex(), req.foundedAt(), req.slogan()));
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.of(view));
@@ -50,9 +50,9 @@ public class FandomController {
 
     /** Update an existing fandom. 404 FANDOM_NOT_FOUND if none exists for the artist. */
     @PatchMapping("/{artistId}")
-    public ResponseEntity<ApiEnvelope<FandomView>> update(@PathVariable String artistId,
+    public ResponseEntity<ApiEnvelope<FandomView>> update(@CurrentActor ActorContext actor,
+                                                          @PathVariable String artistId,
                                                           @Valid @RequestBody UpdateFandomRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
         FandomView view = updateUseCase.update(new UpdateFandomCommand(
                 actor, artistId, req.fandomName(), req.colorHex(), req.foundedAt(), req.slogan()));
         return ResponseEntity.ok(ApiEnvelope.of(view));

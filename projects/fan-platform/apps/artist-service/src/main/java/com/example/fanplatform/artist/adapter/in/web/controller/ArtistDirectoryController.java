@@ -2,7 +2,7 @@ package com.example.fanplatform.artist.adapter.in.web.controller;
 
 import com.example.fanplatform.artist.adapter.in.web.dto.response.ApiEnvelope;
 import com.example.fanplatform.artist.adapter.in.web.dto.response.PageMeta;
-import com.example.fanplatform.artist.adapter.in.web.security.ActorContextResolver;
+import com.example.fanplatform.artist.adapter.in.web.security.CurrentActor;
 import com.example.fanplatform.artist.application.ActorContext;
 import com.example.fanplatform.artist.application.port.in.ArtistView;
 import com.example.fanplatform.artist.application.port.in.SearchArtistDirectoryUseCase;
@@ -40,8 +40,8 @@ public class ArtistDirectoryController {
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String type,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+            @RequestParam(defaultValue = "20") int size,
+            @CurrentActor ActorContext actor) {
         ArtistType parsedType = parseType(type);
         DirectorySearchResult result = searchUseCase.search(
                 new SearchArtistDirectoryQuery(actor, q, parsedType, page, size));

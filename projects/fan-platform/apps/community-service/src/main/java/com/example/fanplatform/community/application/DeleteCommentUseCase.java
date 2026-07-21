@@ -21,8 +21,7 @@ public class DeleteCommentUseCase {
         if (!comment.getPostId().equals(postId)) {
             throw new CommentNotFoundException(commentId);
         }
-        boolean isAuthor = comment.getAuthorAccountId().equals(actor.accountId());
-        if (!isAuthor && !actor.isOperator()) {
+        if (!actor.owns(comment.getAuthorAccountId())) {
             throw new PermissionDeniedException("Only the author or an operator can delete this comment");
         }
         comment.markDeleted();

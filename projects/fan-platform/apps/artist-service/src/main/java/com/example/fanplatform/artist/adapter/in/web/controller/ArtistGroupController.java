@@ -3,7 +3,7 @@ package com.example.fanplatform.artist.adapter.in.web.controller;
 import com.example.fanplatform.artist.adapter.in.web.dto.request.AddGroupMemberRequest;
 import com.example.fanplatform.artist.adapter.in.web.dto.request.CreateArtistGroupRequest;
 import com.example.fanplatform.artist.adapter.in.web.dto.response.ApiEnvelope;
-import com.example.fanplatform.artist.adapter.in.web.security.ActorContextResolver;
+import com.example.fanplatform.artist.adapter.in.web.security.CurrentActor;
 import com.example.fanplatform.artist.application.ActorContext;
 import com.example.fanplatform.artist.application.port.in.AddGroupMemberUseCase;
 import com.example.fanplatform.artist.application.port.in.ArtistGroupView;
@@ -36,8 +36,8 @@ public class ArtistGroupController {
 
     @PostMapping
     public ResponseEntity<ApiEnvelope<ArtistGroupView>> create(
+            @CurrentActor ActorContext actor,
             @Valid @RequestBody CreateArtistGroupRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
         ArtistGroupView view = createUseCase.create(new CreateArtistGroupCommand(
                 actor, req.name(), req.debutDate(), req.agency(), req.profileImageRef()));
         return ResponseEntity.created(URI.create("/api/artist-groups/" + view.id()))
@@ -45,24 +45,24 @@ public class ArtistGroupController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ApiEnvelope<ArtistGroupView>> getById(@PathVariable String id) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+    public ResponseEntity<ApiEnvelope<ArtistGroupView>> getById(@CurrentActor ActorContext actor,
+                                                                @PathVariable String id) {
         return ResponseEntity.ok(ApiEnvelope.of(getUseCase.getById(actor, id)));
     }
 
     @PostMapping("/{id}/members")
     public ResponseEntity<ApiEnvelope<ArtistGroupView>> addMember(
+            @CurrentActor ActorContext actor,
             @PathVariable String id,
             @Valid @RequestBody AddGroupMemberRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
         ArtistGroupView view = addMemberUseCase.addMember(actor, id, req.artistId(), req.toDomainRole());
         return ResponseEntity.ok(ApiEnvelope.of(view));
     }
 
     @DeleteMapping("/{id}/members/{artistId}")
-    public ResponseEntity<Void> removeMember(@PathVariable String id,
+    public ResponseEntity<Void> removeMember(@CurrentActor ActorContext actor,
+                                             @PathVariable String id,
                                              @PathVariable String artistId) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
         removeMemberUseCase.removeMember(actor, id, artistId);
         return ResponseEntity.noContent().build();
     }

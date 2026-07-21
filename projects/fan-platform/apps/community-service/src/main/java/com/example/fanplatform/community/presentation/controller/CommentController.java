@@ -3,7 +3,7 @@ package com.example.fanplatform.community.presentation.controller;
 import com.example.fanplatform.community.application.ActorContext;
 import com.example.fanplatform.community.application.AddCommentUseCase;
 import com.example.fanplatform.community.application.DeleteCommentUseCase;
-import com.example.fanplatform.community.infrastructure.security.ActorContextResolver;
+import com.example.fanplatform.community.infrastructure.security.CurrentActor;
 import com.example.fanplatform.community.presentation.dto.AddCommentRequest;
 import com.example.fanplatform.community.presentation.dto.ApiEnvelope;
 import com.example.fanplatform.community.presentation.dto.CommentResponse;
@@ -28,18 +28,18 @@ public class CommentController {
 
     @PostMapping
     public ResponseEntity<ApiEnvelope<CommentResponse>> add(
+            @CurrentActor ActorContext actor,
             @PathVariable String postId,
             @Valid @RequestBody AddCommentRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiEnvelope.of(CommentResponse.from(
                         addCommentUseCase.execute(postId, req.body(), actor))));
     }
 
     @DeleteMapping("/{commentId}")
-    public ResponseEntity<Void> delete(@PathVariable String postId,
+    public ResponseEntity<Void> delete(@CurrentActor ActorContext actor,
+                                       @PathVariable String postId,
                                        @PathVariable String commentId) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
         deleteCommentUseCase.execute(postId, commentId, actor);
         return ResponseEntity.noContent().build();
     }

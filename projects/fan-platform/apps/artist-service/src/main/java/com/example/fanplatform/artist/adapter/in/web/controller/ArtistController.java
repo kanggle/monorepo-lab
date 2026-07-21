@@ -4,7 +4,7 @@ import com.example.fanplatform.artist.adapter.in.web.dto.request.ChangeArtistSta
 import com.example.fanplatform.artist.adapter.in.web.dto.request.RegisterArtistRequest;
 import com.example.fanplatform.artist.adapter.in.web.dto.request.UpdateArtistRequest;
 import com.example.fanplatform.artist.adapter.in.web.dto.response.ApiEnvelope;
-import com.example.fanplatform.artist.adapter.in.web.security.ActorContextResolver;
+import com.example.fanplatform.artist.adapter.in.web.security.CurrentActor;
 import com.example.fanplatform.artist.application.ActorContext;
 import com.example.fanplatform.artist.application.port.in.ArchiveArtistUseCase;
 import com.example.fanplatform.artist.application.port.in.ArtistView;
@@ -44,8 +44,9 @@ public class ArtistController {
     private final GetArtistUseCase getUseCase;
 
     @PostMapping
-    public ResponseEntity<ApiEnvelope<ArtistView>> register(@Valid @RequestBody RegisterArtistRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+    public ResponseEntity<ApiEnvelope<ArtistView>> register(
+            @CurrentActor ActorContext actor,
+            @Valid @RequestBody RegisterArtistRequest req) {
         ArtistView view = registerUseCase.register(new RegisterArtistCommand(
                 actor, req.artistType(), req.stageName(), req.realName(),
                 req.debutDate(), req.agency(), req.bio(), req.profileImageRef()));
@@ -54,15 +55,15 @@ public class ArtistController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ApiEnvelope<ArtistView>> getById(@PathVariable String id) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+    public ResponseEntity<ApiEnvelope<ArtistView>> getById(@CurrentActor ActorContext actor,
+                                                           @PathVariable String id) {
         return ResponseEntity.ok(ApiEnvelope.of(getUseCase.getById(actor, id)));
     }
 
     @PatchMapping("/{id}")
-    public ResponseEntity<ApiEnvelope<ArtistView>> update(@PathVariable String id,
+    public ResponseEntity<ApiEnvelope<ArtistView>> update(@CurrentActor ActorContext actor,
+                                                          @PathVariable String id,
                                                           @Valid @RequestBody UpdateArtistRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
         UpdateArtistCommand cmd = new UpdateArtistCommand(
                 actor, id, req.stageName(), req.realName(),
                 req.debutDate(), req.agency(), req.bio(), req.profileImageRef());
@@ -77,9 +78,9 @@ public class ArtistController {
      * envelope (consistent with the other 422 error responses).
      */
     @PatchMapping("/{id}/status")
-    public ResponseEntity<ApiEnvelope<ArtistView>> changeStatus(@PathVariable String id,
+    public ResponseEntity<ApiEnvelope<ArtistView>> changeStatus(@CurrentActor ActorContext actor,
+                                                                @PathVariable String id,
                                                                 @Valid @RequestBody ChangeArtistStatusRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
         return switch (req.status()) {
             case PUBLISHED -> ResponseEntity.ok(ApiEnvelope.of(publishUseCase.publish(actor, id)));
             case ARCHIVED -> ResponseEntity.ok(

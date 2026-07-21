@@ -1,7 +1,6 @@
 package com.example.fanplatform.membership.presentation.controller;
 
 import com.example.fanplatform.membership.application.ActorContext;
-import com.example.fanplatform.membership.application.ActorContextResolver;
 import com.example.fanplatform.membership.application.CancelMembershipUseCase;
 import com.example.fanplatform.membership.application.GetMembershipUseCase;
 import com.example.fanplatform.membership.application.ListMembershipsUseCase;
@@ -12,6 +11,7 @@ import com.example.fanplatform.membership.application.SubscribeUseCase;
 import com.example.fanplatform.membership.application.exception.MembershipTierInvalidException;
 import com.example.fanplatform.membership.domain.membership.MembershipTier;
 import com.example.fanplatform.membership.presentation.dto.ApiEnvelope;
+import com.example.fanplatform.membership.presentation.security.CurrentActor;
 import com.example.fanplatform.membership.presentation.dto.CancelRequest;
 import com.example.fanplatform.membership.presentation.dto.MembershipListResponse;
 import com.example.fanplatform.membership.presentation.dto.MembershipResponse;
@@ -47,9 +47,9 @@ public class MembershipController {
 
     @PostMapping
     public ResponseEntity<ApiEnvelope<MembershipResponse>> subscribe(
+            @CurrentActor ActorContext actor,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody SubscribeRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
         MembershipTier tier = parseTier(req.tier());
         SubscribeCommand cmd = new SubscribeCommand(
                 actor, tier, req.planMonths(), req.paymentToken(), idempotencyKey);
@@ -59,10 +59,10 @@ public class MembershipController {
 
     @PostMapping("/{id}/renew")
     public ResponseEntity<ApiEnvelope<MembershipResponse>> renew(
+            @CurrentActor ActorContext actor,
             @PathVariable String id,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody RenewRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
         RenewCommand cmd = new RenewCommand(
                 actor, id, req.planMonths(), req.paymentToken(), idempotencyKey);
         MembershipResponse body = MembershipResponse.from(renewMembershipUseCase.execute(cmd));
@@ -71,9 +71,9 @@ public class MembershipController {
 
     @PostMapping("/{id}/cancel")
     public ResponseEntity<ApiEnvelope<MembershipResponse>> cancel(
+            @CurrentActor ActorContext actor,
             @PathVariable String id,
             @Valid @RequestBody(required = false) CancelRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
         String reason = req == null ? null : req.reason();
         MembershipResponse body = MembershipResponse.from(
                 cancelMembershipUseCase.execute(id, actor, reason));
@@ -81,16 +81,15 @@ public class MembershipController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiEnvelope<MembershipListResponse>> list() {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+    public ResponseEntity<ApiEnvelope<MembershipListResponse>> list(@CurrentActor ActorContext actor) {
         MembershipListResponse body = MembershipListResponse.from(
                 listMembershipsUseCase.execute(actor));
         return ResponseEntity.ok(ApiEnvelope.of(body));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ApiEnvelope<MembershipResponse>> get(@PathVariable String id) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+    public ResponseEntity<ApiEnvelope<MembershipResponse>> get(@CurrentActor ActorContext actor,
+                                                               @PathVariable String id) {
         MembershipResponse body = MembershipResponse.from(
                 getMembershipUseCase.execute(id, actor));
         return ResponseEntity.ok(ApiEnvelope.of(body));
