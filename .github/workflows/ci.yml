@@ -1620,7 +1620,7 @@ jobs:
         projects/wms-platform/apps/outbound-service/build/test-results/integrationTest/
 
   wms-inventory-inbound-integration-tests:
-    name: Integration (inventory + inbound-service, Testcontainers)
+    name: Integration (inventory + inbound + gateway-service, Testcontainers)
     needs: changes
     # TASK-MONO-335 + TASK-BE-489: the two dormant WMS integration suites
     # (inventory-service, then inbound-service) restored + wired here. Both could
@@ -1654,15 +1654,24 @@ jobs:
       # § Integration lane serialisation.
       timeout-minutes: 30
       gradle-args: --no-parallel
+      # TASK-MONO-458: wms gateway-service integration tests join here. Their
+      # footprint is a single redis:7-alpine + in-JVM MockWebServer (no Postgres /
+      # Kafka), so they do NOT add to the DB-stack contention this lane is
+      # serialised for — but --no-parallel is inherited (conservative-safe) and the
+      # lane is the lighter of the two WMS lanes, so this keeps the 4-module lane's
+      # timeout margin untouched. Re-check the 30 min margin if a heavier member joins.
       gradle-tasks: >-
         :projects:wms-platform:apps:inventory-service:integrationTest
         :projects:wms-platform:apps:inbound-service:integrationTest
+        :projects:wms-platform:apps:gateway-service:integrationTest
       artifact-name: wms-inventory-inbound-integration-test-reports
       report-paths: |
         projects/wms-platform/apps/inventory-service/build/reports/tests/integrationTest/
         projects/wms-platform/apps/inventory-service/build/test-results/integrationTest/
         projects/wms-platform/apps/inbound-service/build/reports/tests/integrationTest/
         projects/wms-platform/apps/inbound-service/build/test-results/integrationTest/
+        projects/wms-platform/apps/gateway-service/build/reports/tests/integrationTest/
+        projects/wms-platform/apps/gateway-service/build/test-results/integrationTest/
 
   iam-integration-tests:
     name: Integration (iam ${{ matrix.shard }}, Testcontainers)
@@ -1909,6 +1918,7 @@ jobs:
       gradle-tasks: >-
         :projects:finance-platform:apps:account-service:integrationTest
         :projects:finance-platform:apps:ledger-service:integrationTest
+        :projects:finance-platform:apps:gateway-service:integrationTest
       artifact-name: finance-integration-test-reports
       report-paths: |
         projects/finance-platform/apps/*/build/reports/tests/integrationTest/
@@ -1937,6 +1947,7 @@ jobs:
         :projects:erp-platform:apps:read-model-service:integrationTest
         :projects:erp-platform:apps:approval-service:integrationTest
         :projects:erp-platform:apps:notification-service:integrationTest
+        :projects:erp-platform:apps:gateway-service:integrationTest
       artifact-name: erp-integration-test-reports
       report-paths: |
         projects/erp-platform/apps/*/build/reports/tests/integrationTest/

@@ -82,6 +82,15 @@ dependencies {
     // the regular `test` source set. Its self-test runs without Docker.
     testImplementation 'org.apache.kafka:kafka-clients:3.7.0'
 
+    // Testcontainers for the full-context integration suite (`@Tag("integration")`,
+    // TASK-MONO-458). Redis-only: these boot the whole gateway in-process on a random
+    // port (@SpringBootTest) with a redis:7-alpine container behind the rate limiter.
+    // `@Testcontainers(disabledWithoutDocker = true)` clean-SKIPs where no Docker daemon
+    // is present, so `check` stays green on Docker-free hosts (the tag is also excluded
+    // from the fast `test` task below).
+    testImplementation 'org.testcontainers:junit-jupiter:1.21.3'
+    testImplementation 'com.redis:testcontainers-redis:2.2.2'
+
     // e2e-only: Testcontainers, Awaitility, plain HTTP client for live-pair
     // calls through the gateway container.
     e2eTestImplementation 'org.testcontainers:junit-jupiter:1.21.3'
@@ -103,8 +112,30 @@ tasks.named('bootJar') {
     archiveFileName = 'gateway-service.jar'
 }
 
+// Default `test` task: unit + slice only. Excludes the Docker-dependent integration
+// tests (`@Tag("integration")`, TASK-MONO-458) so `./gradlew check` stays fast and
+// Docker-free — matching the fan-platform gateway's split.
 test {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags 'integration'
+    }
+}
+
+// Dedicated task that runs ONLY the @Tag("integration") full-context tests (Testcontainers
+// Redis + in-process gateway). Not wired into `check`; CI Linux invokes it explicitly.
+tasks.register('integrationTest', Test) {
+    description = 'Runs Testcontainers-backed full-context gateway integration tests (requires Docker).'
+    group = 'verification'
+    useJUnitPlatform {
+        includeTags 'integration'
+    }
+    shouldRunAfter tasks.named('test')
+
+    testLogging {
+        events 'passed', 'failed', 'skipped'
+        exceptionFormat 'full'
+        showStandardStreams = true
+    }
 }
 
 // -------------------------------------------------------------------------
