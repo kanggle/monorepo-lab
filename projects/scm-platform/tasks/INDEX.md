@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-SCM-BE-039-procurement-failure-mode-status-drift.md` — procurement `architecture.md` Failure Modes 정합: #9 상태코드 드리프트(409→422, doc fix) + #6 도달 불가능한 문서화 결과(502 `SUPPLIER_REJECTED`) — Option A(doc→reality) vs Option B(code→doc) RULING 필요.
 
 ## in-progress
 

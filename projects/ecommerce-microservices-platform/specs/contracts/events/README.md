@@ -58,6 +58,7 @@ Also diverged, three ways:
 | `settlement-events.md` | settlement-service — producer |
 | `settlement-subscriptions.md` | consumer-side subscription to settlement-service events |
 | `shipping-events.md` | shipping-service — producer |
+| `fulfillment-events.md` | shipping-service — producer (ACL layer, ecommerce → wms cross-project, ADR-MONO-022 D1) |
 | `wms-inventory-subscriptions.md` | consumer-side subscription to wms-owned inventory topics |
 | `wms-shipment-subscriptions.md` | consumer-side subscription to wms-owned shipment/outbound topics |
 

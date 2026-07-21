@@ -222,6 +222,59 @@ Cancel an order. Only the order owner may cancel.
 
 All admin endpoints require the `ADMIN` role. Non-admin users receive `403 ACCESS_DENIED`.
 
+### GET /api/admin/orders/summary
+Calendar-period-to-date order counts (KST calendar bounds), for the operator overview.
+
+**Response 200**
+```json
+{
+  "today": 3,
+  "week": 12,
+  "month": 45,
+  "total": 320
+}
+```
+`today`/`week`/`month` are cumulative counts since the KST calendar period start through now;
+`total` is the tenant-scoped all-time count. All values are non-negative and satisfy
+`today <= week <= month <= total` for a single tenant.
+
+**Error responses**
+| Status | Code | Reason |
+|---|---|---|
+| 401 | UNAUTHORIZED | Missing or invalid access token |
+| 403 | ACCESS_DENIED | Requires ADMIN role |
+
+---
+
+### GET /api/admin/orders/insights
+Four tenant-scoped top-5 rankings derived from `order_items`, for the operator overview.
+
+**Response 200**
+```json
+{
+  "topProductsByOrderCount": [
+    { "id": "string", "label": "string", "value": 0 }
+  ],
+  "topProductsByRevenue": [
+    { "id": "string", "label": "string", "value": 0 }
+  ],
+  "topSellersByOrderCount": [
+    { "id": "string", "label": "string", "value": 0 }
+  ],
+  "topSellersByRevenue": [
+    { "id": "string", "label": "string", "value": 0 }
+  ]
+}
+```
+
+**Error responses**
+| Status | Code | Reason |
+|---|---|---|
+| 401 | UNAUTHORIZED | Missing or invalid access token |
+| 403 | ACCESS_DENIED | Requires ADMIN role |
+
+---
+
 ### GET /api/admin/orders
 List all orders (admin view).
 

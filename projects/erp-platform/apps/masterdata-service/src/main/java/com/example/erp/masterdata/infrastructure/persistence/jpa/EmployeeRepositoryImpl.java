@@ -1,7 +1,9 @@
 package com.example.erp.masterdata.infrastructure.persistence.jpa;
 
 import com.example.erp.masterdata.domain.common.MasterStatus;
+import com.example.erp.masterdata.domain.common.PageResult;
 import com.example.erp.masterdata.domain.employee.Employee;
+import com.example.erp.masterdata.domain.employee.repository.EmployeeListFilter;
 import com.example.erp.masterdata.domain.employee.repository.EmployeeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -32,8 +34,13 @@ public class EmployeeRepositoryImpl implements EmployeeRepository {
     }
 
     @Override
-    public List<Employee> findAll(String tenantId, int page, int size) {
-        return jpa.findAllByTenantId(tenantId, PageRequest.of(page, size));
+    public PageResult<Employee> findAll(String tenantId, EmployeeListFilter filter, int page, int size) {
+        MasterStatus status = MasterStatusFilters.toStatus(filter.active());
+        List<Employee> content = jpa.findFiltered(tenantId, status, filter.departmentId(),
+                filter.costCenterId(), filter.asOf(), PageRequest.of(page, size));
+        long total = jpa.countFiltered(tenantId, status, filter.departmentId(),
+                filter.costCenterId(), filter.asOf());
+        return new PageResult<>(content, total);
     }
 
     @Override

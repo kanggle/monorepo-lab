@@ -22,6 +22,7 @@ Create a review for a purchased product.
 ```json
 {
   "productId": "string (UUID)",
+  "productName": "string",
   "rating": 5,
   "title": "string",
   "content": "string"

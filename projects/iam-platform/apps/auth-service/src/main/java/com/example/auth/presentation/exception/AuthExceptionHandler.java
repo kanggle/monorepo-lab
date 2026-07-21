@@ -32,10 +32,20 @@ public class AuthExceptionHandler extends CommonGlobalExceptionHandler {
                         "Email exists in multiple tenants. Please specify tenantId."));
     }
 
+    /**
+     * TOKEN_TENANT_MISMATCH → 403, not 401 (TASK-MONO-462). The refresh token is
+     * structurally valid and correctly authenticates its own tenant — the caller is
+     * <i>authenticated</i>, just not authorized to rotate a token targeting a different
+     * tenant. That is Forbidden, matching its catalog siblings for the same
+     * authenticated-but-wrong-scope shape: {@code OAUTH_INSUFFICIENT_SCOPE} and
+     * {@code SESSION_OWNERSHIP_MISMATCH} (both 403, see {@link #handleSessionOwnership}).
+     * {@code platform/error-handling.md} already catalogued 403; this handler, the
+     * exception javadoc and {@code auth-api.md:435} were the drifted 401 side.
+     */
     @ExceptionHandler(TokenTenantMismatchException.class)
     public ResponseEntity<ErrorResponse> handleTokenTenantMismatch(TokenTenantMismatchException e) {
         log.warn("Token tenant mismatch detected");
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ErrorResponse.of("TOKEN_TENANT_MISMATCH",
                         "Refresh token tenant does not match; rotation denied"));
     }

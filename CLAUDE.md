@@ -18,7 +18,7 @@ Minimum operating rules for AI agents and developers in this monorepo. **Catalog
 ├── tasks/                 ← monorepo-level task lifecycle (shared)
 ├── docs/{adr,guides,project-overview.md}
 ├── build.gradle, settings.gradle ...
-└── projects/<project>/    ← one directory per project (5 active)
+└── projects/<project>/    ← one directory per project (8 active)
     ├── PROJECT.md         ← project classification (domain, traits)
     ├── apps/ specs/ tasks/ knowledge/ docs/ infra/
 ```

@@ -6,13 +6,16 @@ import com.example.erp.masterdata.application.command.Commands.RetireDepartmentC
 import com.example.erp.masterdata.application.event.MasterdataEventPublisher;
 import com.example.erp.masterdata.application.port.outbound.AuthorizationPort;
 import com.example.erp.masterdata.application.port.outbound.ClockPort;
+import com.example.erp.masterdata.application.view.DepartmentView;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.example.erp.masterdata.domain.audit.AuditLog;
 import com.example.erp.masterdata.domain.audit.AuditLogRepository;
 import com.example.erp.masterdata.domain.authorization.AuthorizationDecision;
 import com.example.erp.masterdata.domain.businesspartner.repository.BusinessPartnerRepository;
+import com.example.erp.masterdata.domain.common.PageResult;
 import com.example.erp.masterdata.domain.costcenter.repository.CostCenterRepository;
 import com.example.erp.masterdata.domain.department.Department;
+import com.example.erp.masterdata.domain.department.repository.DepartmentListFilter;
 import com.example.erp.masterdata.domain.department.repository.DepartmentRepository;
 import com.example.erp.masterdata.domain.effectivedate.EffectivePeriod;
 import com.example.erp.masterdata.domain.employee.repository.EmployeeRepository;
@@ -26,6 +29,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -41,6 +45,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -183,5 +188,46 @@ class MasterdataApplicationServiceTest {
                 new MoveDepartmentParentCommand(ACTOR, "d-1", "d-2",
                         LocalDate.of(2026, 6, 1), "reorg")))
                 .isInstanceOf(MasterdataParentCycleException.class);
+    }
+
+    @Test
+    @DisplayName("AC-1: list filter (asOf/active/parentId) is threaded to the repository unchanged")
+    void listDepartmentsThreadsFilterToRepository() {
+        when(authorizationPort.evaluate(any(), any(), any()))
+                .thenReturn(AuthorizationDecision.allow());
+        LocalDate asOf = LocalDate.of(2026, 3, 1);
+        DepartmentListFilter filter = new DepartmentListFilter(asOf, Boolean.TRUE, "parent-9");
+        when(departmentRepository.findAll(eq(TENANT), any(DepartmentListFilter.class), eq(0), eq(20)))
+                .thenReturn(new PageResult<>(List.of(), 0L));
+
+        service.listDepartments(ACTOR, filter, 0, 20);
+
+        ArgumentCaptor<DepartmentListFilter> captor = ArgumentCaptor.forClass(DepartmentListFilter.class);
+        verify(departmentRepository).findAll(eq(TENANT), captor.capture(), eq(0), eq(20));
+        DepartmentListFilter passed = captor.getValue();
+        assertThat(passed.asOf()).isEqualTo(asOf);
+        assertThat(passed.active()).isTrue();
+        assertThat(passed.parentId()).isEqualTo("parent-9");
+    }
+
+    @Test
+    @DisplayName("AC-2: list returns the repository's TRUE total, not the page-content size")
+    void listDepartmentsReturnsTrueTotalNotPageSize() {
+        when(authorizationPort.evaluate(any(), any(), any()))
+                .thenReturn(AuthorizationDecision.allow());
+        // Page slice holds 2 rows, but the query total across all pages is 25.
+        Department d1 = Department.create("d-1", TENANT, "DEPT-1", "Sales", null,
+                EffectivePeriod.openEnded(LocalDate.of(2026, 1, 1)), NOW);
+        Department d2 = Department.create("d-2", TENANT, "DEPT-2", "Ops", null,
+                EffectivePeriod.openEnded(LocalDate.of(2026, 1, 1)), NOW);
+        when(departmentRepository.findAll(eq(TENANT), any(DepartmentListFilter.class), eq(0), eq(2)))
+                .thenReturn(new PageResult<>(List.of(d1, d2), 25L));
+
+        PageResult<DepartmentView> result =
+                service.listDepartments(ACTOR, DepartmentListFilter.unfiltered(), 0, 2);
+
+        assertThat(result.content()).hasSize(2);
+        assertThat(result.totalElements()).isEqualTo(25L);
+        assertThat(result.totalElements()).isNotEqualTo((long) result.content().size());
     }
 }

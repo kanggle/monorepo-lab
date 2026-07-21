@@ -1,5 +1,6 @@
 package com.example.erp.masterdata.domain.department.repository;
 
+import com.example.erp.masterdata.domain.common.PageResult;
 import com.example.erp.masterdata.domain.department.Department;
 
 import java.util.List;
@@ -18,7 +19,13 @@ public interface DepartmentRepository {
 
     Optional<Department> findByCode(String code, String tenantId);
 
-    List<Department> findAll(String tenantId, int page, int size);
+    /**
+     * Filtered, paginated list with the TRUE total-row count
+     * (masterdata-api.md § GET /departments + § PageMeta). The returned
+     * {@link PageResult#totalElements()} counts ALL rows matching
+     * {@code filter}, not just the page slice.
+     */
+    PageResult<Department> findAll(String tenantId, DepartmentListFilter filter, int page, int size);
 
     /** Children of {@code parentId} (for retire reference-integrity guard). */
     List<Department> findActiveChildren(String parentId, String tenantId);

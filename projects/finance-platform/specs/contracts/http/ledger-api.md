@@ -633,6 +633,71 @@ EP's empty-200 stance from FIN-BE-033). This applies to both truly unsupported c
 
 ---
 
+## 15. Per-tenant FX rate override
+
+**(28th increment — TASK-FIN-BE-042, ADR-002 § 3.1 per-tenant override / 특수 계약환율)** A
+tenant-scoped contract rate for one foreign-currency pair that overrides the tenant-agnostic
+market feed (§14) during FX resolution — precedence `manual > per-tenant override > feed` (an
+explicit operator-supplied `settlementRate`/`closingRate` on `/settlements` / `/revaluations`
+still wins). Base is the fixed reporting currency (KRW in v1); only the foreign leg is a path
+variable. Tenant-scoped (`ActorContext`) — tenant A's override is invisible to tenant B. The
+literal `/fx-rate-override` prefix is matched ahead of the `/{ledgerAccountCode}/{currency}/lots`
+pattern (§12) — no route ambiguity.
+
+### 15.1 GET `/api/finance/ledger/settlements/fx-rate-override/{foreignCurrency}`
+
+Read the tenant's contract-rate override for the pair. Returns the persisted override, or the
+"absent" view (`present: false`, rate/audit fields omitted) when the tenant has no override for
+the pair — resolution then falls through to the feed. Pure read; no `Idempotency-Key`.
+
+`200` (override set):
+```json
+{ "data": { "baseCurrency": "KRW", "foreignCurrency": "USD", "present": true,
+    "rate": "1325.50000000", "updatedBy": "ops-7", "updatedAt": "2026-06-14T00:00:00Z" },
+  "meta": { "timestamp": "..." } }
+```
+
+`200` (no override set):
+```json
+{ "data": { "baseCurrency": "KRW", "foreignCurrency": "USD", "present": false },
+  "meta": { "timestamp": "..." } }
+```
+
+- `400 VALIDATION_ERROR` when `foreignCurrency` is unknown/unsupported.
+
+### 15.2 PUT `/api/finance/ledger/settlements/fx-rate-override/{foreignCurrency}`
+
+Upsert the tenant's contract-rate override (last-write-wins). Body:
+```json
+{ "rate": "1325.50000000" }
+```
+`rate` is the contract rate as an exact-decimal **string** (F5 wire form — never a JSON float;
+consistent with `settlementRate`/`closingRate` and the §14 fx-rate read responses). MUST be
+strictly positive. Audited (`FX_RATE_OVERRIDE_SET`, `updated_by` = the actor identity).
+
+`200`:
+```json
+{ "data": { "baseCurrency": "KRW", "foreignCurrency": "USD", "present": true,
+    "rate": "1325.50000000", "updatedBy": "ops-7", "updatedAt": "2026-06-14T00:00:00Z" },
+  "meta": { "timestamp": "..." } }
+```
+
+- `400 VALIDATION_ERROR` when `rate` is null/blank/unparseable/not strictly positive, or
+  `foreignCurrency` is unknown/unsupported — validated **before** any persist; nothing is written.
+  The DB CHECK (`ck_fx_rate_override_rate_positive`) is the structural backstop.
+- `403 TENANT_FORBIDDEN` when the dual-accept gate rejects.
+
+Field semantics (both verbs):
+- `baseCurrency` — ISO-4217 base currency code (always `"KRW"` in v1).
+- `foreignCurrency` — ISO-4217 foreign currency code.
+- `present` — `true` when a contract override row exists for the pair; `false` means no override
+  is set and resolution falls through to the market feed (§14) — not an error state.
+- `rate` — exact contract rate as a string (F5 — NOT a float); omitted when `present: false`.
+- `updatedBy` / `updatedAt` — audit fields (operator, ISO-8601 instant); omitted when
+  `present: false`.
+
+---
+
 ## Error codes (this contract → `platform/error-handling.md`)
 
 | Code | HTTP | Meaning |
@@ -676,4 +741,4 @@ EP's empty-200 stance from FIN-BE-033). This applies to both truly unsupported c
 > **per-pair FX rate history drill** (`/{foreignCurrency}/history` §14.1 — TASK-FIN-BE-040) and the
 > **real public FX API adapter** (`mode=real`, Frankfurter — TASK-FIN-BE-038) and the **ShedLock
 > single-leader poller guard** (V14 — TASK-FIN-BE-041) and the **per-tenant FX rate override**
-> (V15 — TASK-FIN-BE-042) and the **console FX rate history drill tab** (TASK-PC-FE-104).
+> (V15 — TASK-FIN-BE-042, §15) and the **console FX rate history drill tab** (TASK-PC-FE-104).

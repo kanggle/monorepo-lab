@@ -6,6 +6,8 @@ import com.example.erp.masterdata.application.command.Commands.CreateDepartmentC
 import com.example.erp.masterdata.application.view.AuditDto;
 import com.example.erp.masterdata.application.view.DepartmentView;
 import com.example.erp.masterdata.application.view.EffectivePeriodDto;
+import com.example.erp.masterdata.domain.common.PageResult;
+import com.example.erp.masterdata.domain.department.repository.DepartmentListFilter;
 import com.example.erp.masterdata.domain.error.DomainErrors;
 import com.example.erp.masterdata.presentation.advice.GlobalExceptionHandler;
 import com.example.erp.masterdata.presentation.support.IdempotentExecution;
@@ -13,6 +15,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -30,9 +33,13 @@ import java.time.LocalDate;
 import java.util.Set;
 import java.util.function.Supplier;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -157,5 +164,61 @@ class DepartmentControllerSliceTest {
                         .content("{\"name\":\"Sales\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    @DisplayName("AC-1/AC-2: GET /departments binds asOf/active/parentId + returns TRUE totalElements")
+    void listBindsFiltersAndReturnsTrueTotal() throws Exception {
+        // Service reports a 2-row page slice out of a 25-row total.
+        DepartmentView v1 = new DepartmentView("d-1", "DEPT-1", "Sales", "parent-9",
+                "ACTIVE", new EffectivePeriodDto(LocalDate.of(2026, 1, 1), null),
+                new AuditDto(Instant.now(), Instant.now()));
+        DepartmentView v2 = new DepartmentView("d-2", "DEPT-2", "Ops", "parent-9",
+                "ACTIVE", new EffectivePeriodDto(LocalDate.of(2026, 1, 1), null),
+                new AuditDto(Instant.now(), Instant.now()));
+        when(service.listDepartments(any(ActorContext.class), any(DepartmentListFilter.class),
+                eq(0), eq(2)))
+                .thenReturn(new PageResult<>(java.util.List.of(v1, v2), 25L));
+
+        mockMvc.perform(get("/api/erp/masterdata/departments")
+                        .param("asOf", "2026-03-01")
+                        .param("active", "true")
+                        .param("parentId", "parent-9")
+                        .param("page", "0")
+                        .param("size", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2))
+                // The AC-2 fix: meta.totalElements is the TRUE total (25), NOT
+                // the page length (2).
+                .andExpect(jsonPath("$.meta.totalElements").value(25))
+                .andExpect(jsonPath("$.meta.page").value(0))
+                .andExpect(jsonPath("$.meta.size").value(2));
+
+        // AC-1: the query params are bound and forwarded as the filter.
+        ArgumentCaptor<DepartmentListFilter> captor = ArgumentCaptor.forClass(DepartmentListFilter.class);
+        verify(service).listDepartments(any(ActorContext.class), captor.capture(), eq(0), eq(2));
+        DepartmentListFilter filter = captor.getValue();
+        assertThat(filter.asOf()).isEqualTo(LocalDate.of(2026, 3, 1));
+        assertThat(filter.active()).isTrue();
+        assertThat(filter.parentId()).isEqualTo("parent-9");
+    }
+
+    @Test
+    @DisplayName("GET /departments with no query params → unfiltered filter, defaults page 0 size 20")
+    void listDefaultsToUnfilteredFirstPage() throws Exception {
+        when(service.listDepartments(any(ActorContext.class), any(DepartmentListFilter.class),
+                eq(0), eq(20)))
+                .thenReturn(new PageResult<>(java.util.List.of(), 0L));
+
+        mockMvc.perform(get("/api/erp/masterdata/departments"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.meta.totalElements").value(0));
+
+        ArgumentCaptor<DepartmentListFilter> captor = ArgumentCaptor.forClass(DepartmentListFilter.class);
+        verify(service).listDepartments(any(ActorContext.class), captor.capture(), eq(0), eq(20));
+        DepartmentListFilter filter = captor.getValue();
+        assertThat(filter.asOf()).isNull();
+        assertThat(filter.active()).isNull();
+        assertThat(filter.parentId()).isNull();
     }
 }

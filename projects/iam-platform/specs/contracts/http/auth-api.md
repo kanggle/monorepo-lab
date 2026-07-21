@@ -180,7 +180,7 @@ grant_type=urn:ietf:params:oauth:grant-type:token-exchange
 | `iat` | 발급 시각 (epoch seconds) |
 | `exp` | 만료 시각 |
 | `tenant_id` | 테넌트 slug (필수 — 누락 시 발급 거부) |
-| `tenant_type` | `B2C` \| `B2B_ENTERPRISE` (필수) |
+| `tenant_type` | `B2C_CONSUMER` \| `B2B_ENTERPRISE` (필수) |
 
 **Errors**:
 
@@ -209,7 +209,7 @@ OIDC UserInfo 응답. `scope=openid` 포함 access token 필요.
   "preferred_username": "honggd",
   "locale": "ko-KR",
   "tenant_id": "fan-platform",
-  "tenant_type": "B2C"
+  "tenant_type": "B2C_CONSUMER"
 }
 ```
 
@@ -276,7 +276,7 @@ revoke 시 `OAuth2AuthorizationService.remove()` → `DomainSyncOAuth2Authorizat
   "aud": ["string"],
   "iss": "https://iam.example.com",
   "tenant_id": "fan-platform",
-  "tenant_type": "B2C"
+  "tenant_type": "B2C_CONSUMER"
 }
 ```
 
@@ -289,7 +289,7 @@ revoke 시 `OAuth2AuthorizationService.remove()` → `DomainSyncOAuth2Authorizat
 |---|---|
 | `active` | 토큰이 유효·활성 상태이면 `true` |
 | `tenant_id` | RFC 7662 extension — multi-tenant 식별 (`TenantIntrospectionCustomizer`) |
-| `tenant_type` | RFC 7662 extension — `B2C` \| `B2B_ENTERPRISE` |
+| `tenant_type` | RFC 7662 extension — `B2C_CONSUMER` \| `B2B_ENTERPRISE` |
 
 **Errors**:
 
@@ -432,7 +432,7 @@ Refresh token rotation. 기존 refresh token을 소비하고 새 access/refresh 
 |---|---|---|
 | 401 | `TOKEN_EXPIRED` | refresh token 만료 |
 | 401 | `TOKEN_REUSE_DETECTED` | 이미 rotation된 refresh token 재사용. **해당 account의 모든 세션 즉시 무효화** |
-| 401 | `TOKEN_TENANT_MISMATCH` | refresh token의 `tenant_id`와 계정의 현재 `tenant_id`가 불일치. 조작·버그 의심 → 보안 이벤트 발행 |
+| 403 | `TOKEN_TENANT_MISMATCH` | refresh token의 `tenant_id`와 계정의 현재 `tenant_id`가 불일치. 토큰 자체는 유효(인증됨)하나 다른 tenant로의 rotation은 권한 없음(Forbidden) — `platform/error-handling.md` § Auth / Token (TASK-MONO-462). 조작·버그 의심 → 보안 이벤트 발행. **SAS OAuth2 token endpoint(refresh grant)는 이 REST 경로와 별개**로 RFC 6749 §5.2에 따라 동일 semantic 오류를 `400 invalid_grant`로 응답 — 의도된 divergence(OAuth2 스펙 제약), 통일 대상 아님 |
 | 401 | `SESSION_REVOKED` | 명시적으로 revoke된 세션 |
 | 423 | `ACCOUNT_LOCKED` | 계정 잠김 (refresh 차단) — `platform/error-handling.md` § Account (TASK-BE-462) |
 
@@ -449,7 +449,7 @@ Refresh token rotation. 기존 refresh token을 소비하고 새 access/refresh 
 | Claim | 값 |
 |---|---|
 | `sub` | account_id (UUID) |
-| `iss` | `iam-platform` |
+| `iss` | OIDC issuer URL (`oidc.issuer-url`) |
 | `iat` | 발급 시각 (epoch seconds) |
 | `exp` | `iat + 1800` (30분) |
 | `jti` | UUID |
@@ -460,7 +460,7 @@ Refresh token rotation. 기존 refresh token을 소비하고 새 access/refresh 
 
 서명: RS256. 공개 키는 JWKS 엔드포인트로 배포.
 
-**검증 필수 사항 (TASK-BE-143):** gateway-service 는 `iss == iam-platform` 을 강제 검증한다 (community-service 도 함께 강제했으나 TASK-MONO-394 로 RETIRED). `iss` claim 이 누락되거나 다른 값이면 토큰을 거부 (`401 TOKEN_INVALID`). 검증 기댓값은 각 서비스의 `*.jwt.expected-issuer` 설정으로 관리되며 환경별 분리 시 환경 변수로 override 한다. admin-service 는 자체 `IssuerEnforcingJwtVerifier` 로 admin IdP issuer 를 별도 강제한다.
+**검증 필수 사항 (TASK-BE-143):** gateway-service 는 `iss` claim 값이 `gateway.jwt.allowed-issuers` 허용목록(기본값: SAS OIDC issuer URL `oidc.issuer-url` + legacy `iam`)에 포함되는지 검증한다 (community-service 도 함께 강제했으나 TASK-MONO-394 로 RETIRED). `iss` claim 이 누락되거나 허용목록에 없는 값이면 토큰을 거부 (`401 TOKEN_INVALID`). 허용목록은 환경별 분리 시 환경 변수로 override 한다. admin-service 는 자체 `IssuerEnforcingJwtVerifier` 로 admin IdP issuer 를 별도 강제한다.
 
 **`device_id` claim 설계 근거** ([specs/services/auth-service/device-session.md](../../services/auth-service/device-session.md) D1): `device_id`는 서버 발급 opaque UUID v7이며 fingerprint가 아니다. PII/식별 리스크가 낮아 access token claim으로 실어도 안전하며, stateless 경로에서 "현재 세션"을 즉시 해석할 수 있다.
 

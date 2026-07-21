@@ -38,12 +38,12 @@ and the rule files indexed by `PROJECT.md`'s declared `domain` (`saas`) and
 | Domain | saas |
 | Traits | multi-tenant, integration-heavy, audit-heavy |
 | Primary language / stack | Java 21, Spring Boot 3.4 (Servlet stack) |
-| Bounded Context | Cross-domain composition for the unified operator console — owns no domain state; aggregates 5 backend domains (IAM + wms + scm + finance + erp) into server-side composed read views (ADR-MONO-017 D1) |
+| Bounded Context | Cross-domain composition for the unified operator console — owns no domain state; aggregates 6 backend domains (IAM + wms + scm + finance + erp + ecommerce) into server-side composed read views (ADR-MONO-017 D1) |
 | Deployable unit | `apps/console-bff/` |
 | Data store | **None** (no persistence — see § Persistence) |
 | Event publication | None (no outbox — composition reads only) |
 | Event consumption | None (HTTP fan-out only — ADR-MONO-017 D1.A rejection of GraphQL/gRPC) |
-| Outbound integration | 5 backend domains over HTTP (per-domain credential selection, ADR-MONO-017 D4 HARD INVARIANT) |
+| Outbound integration | 6 backend domains over HTTP (per-domain credential selection, ADR-MONO-017 D4 HARD INVARIANT) |
 
 ### Service Type Composition
 
@@ -55,7 +55,7 @@ verbatim — contract first, gateway routing exception (see § Edge Routing),
 versioning, error envelope, JWT bearer validation, idempotency on mutating
 endpoints (BFF has **none** at v1), pagination on list endpoints, observability.
 
-The BFF is **not** an `event-consumer` even though it fans out across 5 domains
+The BFF is **not** an `event-consumer` even though it fans out across 6 domains
 that publish events; per `platform/service-types/INDEX.md` ("REST service that
 also fans out → `rest-api`"), the BFF's fan-out is a server-side composition of
 **existing** read APIs, not a Kafka subscription. **Producer-immutability**
@@ -71,7 +71,7 @@ calls the existing GETs that FE-007/008/009/010 already bind.
 `finance-platform/account-service` and `erp-platform/masterdata-service`:
 domain logic (composition rules, per-domain credential selection, degrade
 policy) is framework-free and surrounded by adapters (inbound HTTP controllers,
-outbound HTTP clients to the 5 domains). The BFF's "domain logic" is **composition
+outbound HTTP clients to the 6 domains). The BFF's "domain logic" is **composition
 discipline** — not business invariants — but the same separation gives the same
 test pyramid (domain unit + application use-case unit + slice + Testcontainers IT
 that boots WireMock domain stubs).
@@ -100,7 +100,7 @@ Reference skill: [`.claude/skills/backend/architecture/hexagonal/SKILL.md`](../.
 - Java 21, Spring Boot 3.4 (Servlet stack)
 - Spring Web (MVC), Spring Security 6 (OAuth2 Resource Server — see § Auth)
 - [`libs/java-web`](../../../../../libs/java-web/) — `RestClient` + resilience
-  primitives (Resilience4j circuit-breaker / retry / timeout) for the 5 outbound
+  primitives (Resilience4j circuit-breaker / retry / timeout) for the 6 outbound
   domain calls (ADR-MONO-017 D5.A)
 - [`libs/java-security`](../../../../../libs/java-security/) — RS256 JWT validation
   primitives, tenant-claim helpers

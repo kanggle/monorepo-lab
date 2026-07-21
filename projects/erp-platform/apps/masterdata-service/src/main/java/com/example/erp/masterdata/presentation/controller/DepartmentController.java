@@ -7,6 +7,8 @@ import com.example.erp.masterdata.application.command.Commands.MoveDepartmentPar
 import com.example.erp.masterdata.application.command.Commands.RetireDepartmentCommand;
 import com.example.erp.masterdata.application.command.Commands.UpdateDepartmentCommand;
 import com.example.erp.masterdata.application.view.DepartmentView;
+import com.example.erp.masterdata.domain.common.PageResult;
+import com.example.erp.masterdata.domain.department.repository.DepartmentListFilter;
 import com.example.erp.masterdata.infrastructure.security.ActorContextResolver;
 import com.example.erp.masterdata.presentation.dto.ApiEnvelope;
 import com.example.erp.masterdata.presentation.dto.DepartmentRequests.CreateDepartmentRequest;
@@ -61,11 +63,16 @@ public class DepartmentController {
 
     @GetMapping
     public ResponseEntity<ApiEnvelope<List<DepartmentView>>> list(
+            @RequestParam(required = false) LocalDate asOf,
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) String parentId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         ActorContext actor = ActorContextResolver.currentOrThrow();
-        List<DepartmentView> data = service.listDepartments(actor, page, size);
-        return ResponseEntity.ok(ApiEnvelope.ofList(data, page, size));
+        PageResult<DepartmentView> result = service.listDepartments(actor,
+                new DepartmentListFilter(asOf, active, parentId), page, size);
+        return ResponseEntity.ok(
+                ApiEnvelope.ofList(result.content(), page, size, result.totalElements()));
     }
 
     @GetMapping("/{id}")

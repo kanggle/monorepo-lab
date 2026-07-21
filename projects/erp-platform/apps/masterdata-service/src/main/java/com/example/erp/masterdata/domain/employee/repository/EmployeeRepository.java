@@ -1,5 +1,6 @@
 package com.example.erp.masterdata.domain.employee.repository;
 
+import com.example.erp.masterdata.domain.common.PageResult;
 import com.example.erp.masterdata.domain.employee.Employee;
 
 import java.util.List;
@@ -13,7 +14,11 @@ public interface EmployeeRepository {
 
     Optional<Employee> findByEmployeeNumber(String employeeNumber, String tenantId);
 
-    List<Employee> findAll(String tenantId, int page, int size);
+    /**
+     * Filtered, paginated list with the TRUE total-row count
+     * (masterdata-api.md § GET /employees + § PageMeta).
+     */
+    PageResult<Employee> findAll(String tenantId, EmployeeListFilter filter, int page, int size);
 
     /** Active employees referencing the given department — for retire guard. */
     List<Employee> findActiveByDepartmentId(String departmentId, String tenantId);
