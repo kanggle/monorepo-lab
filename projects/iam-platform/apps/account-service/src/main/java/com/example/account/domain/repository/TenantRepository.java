@@ -19,12 +19,6 @@ public interface TenantRepository {
 
     Optional<Tenant> findById(TenantId tenantId);
 
-    /**
-     * Returns {@code true} when a tenant with the given id exists and its status is ACTIVE.
-     * Used for pre-condition checks before provisioning accounts into a tenant.
-     */
-    boolean existsActive(TenantId tenantId);
-
     /** Returns {@code true} when any tenant with the given id exists (regardless of status). */
     boolean existsById(TenantId tenantId);
 
