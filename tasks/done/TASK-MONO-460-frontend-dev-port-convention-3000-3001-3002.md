@@ -2,7 +2,7 @@
 
 > **리넘버 노트**: 이 티켓은 최초 `TASK-MONO-458` 로 파일링됐으나, 동시 세션이 `TASK-MONO-458`(gateway-it-parity, PR #2833) 과 `TASK-MONO-459`(adr-citation-drift) 를 이미 점유 중이어서 **460 으로 재번호**했다(메모리 `env_concurrent_session_task_id_collision`).
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-MONO
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (기계적 편집 + 신규 Flyway 마이그레이션 1개 + e2e/env 소비처 전수 갱신. 다만 AC-0 의 "실제 소비처(Playwright·NEXTAUTH_URL·CI)를 전수 셌나" 재측정이 실질 — 범위 물려받기 금지)
