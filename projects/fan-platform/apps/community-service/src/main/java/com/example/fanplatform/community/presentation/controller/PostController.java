@@ -7,7 +7,7 @@ import com.example.fanplatform.community.application.GetPostUseCase;
 import com.example.fanplatform.community.application.PublishPostCommand;
 import com.example.fanplatform.community.application.PublishPostUseCase;
 import com.example.fanplatform.community.application.UpdatePostUseCase;
-import com.example.fanplatform.community.infrastructure.security.ActorContextResolver;
+import com.example.fanplatform.community.infrastructure.security.CurrentActor;
 import com.example.fanplatform.community.presentation.dto.ApiEnvelope;
 import com.example.fanplatform.community.presentation.dto.ChangePostStatusRequest;
 import com.example.fanplatform.community.presentation.dto.PostResponse;
@@ -38,8 +38,9 @@ public class PostController {
     private final DeletePostUseCase deletePostUseCase;
 
     @PostMapping
-    public ResponseEntity<ApiEnvelope<PostResponse>> publish(@Valid @RequestBody PublishPostRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+    public ResponseEntity<ApiEnvelope<PostResponse>> publish(
+            @CurrentActor ActorContext actor,
+            @Valid @RequestBody PublishPostRequest req) {
         PublishPostCommand cmd = new PublishPostCommand(
                 actor, req.postType(), req.visibility(), req.title(), req.body(), req.mediaRefs()
         );
@@ -48,17 +49,18 @@ public class PostController {
     }
 
     @GetMapping("/{postId}")
-    public ResponseEntity<ApiEnvelope<PostResponse>> get(@PathVariable String postId) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+    public ResponseEntity<ApiEnvelope<PostResponse>> get(
+            @CurrentActor ActorContext actor,
+            @PathVariable String postId) {
         return ResponseEntity.ok(
                 ApiEnvelope.of(PostResponse.from(getPostUseCase.execute(postId, actor))));
     }
 
     @PatchMapping("/{postId}")
     public ResponseEntity<ApiEnvelope<PostResponse>> update(
+            @CurrentActor ActorContext actor,
             @PathVariable String postId,
             @Valid @RequestBody UpdatePostRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
         return ResponseEntity.ok(
                 ApiEnvelope.of(PostResponse.from(updatePostUseCase.execute(
                         postId, actor, req.title(), req.body(), req.mediaRefs()))));
@@ -66,16 +68,17 @@ public class PostController {
 
     @PatchMapping("/{postId}/status")
     public ResponseEntity<Void> changeStatus(
+            @CurrentActor ActorContext actor,
             @PathVariable String postId,
             @Valid @RequestBody ChangePostStatusRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
         changePostStatusUseCase.execute(postId, req.status(), actor, req.reason());
         return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/{postId}")
-    public ResponseEntity<Void> delete(@PathVariable String postId) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+    public ResponseEntity<Void> delete(
+            @CurrentActor ActorContext actor,
+            @PathVariable String postId) {
         deletePostUseCase.execute(postId, actor, null);
         return ResponseEntity.noContent().build();
     }

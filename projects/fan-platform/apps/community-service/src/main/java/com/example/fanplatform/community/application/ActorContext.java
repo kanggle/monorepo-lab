@@ -22,4 +22,16 @@ public record ActorContext(String accountId, String tenantId, Set<String> roles)
         return hasRole("OPERATOR") || hasRole("ADMIN") || hasRole("SUPER_ADMIN")
                 || hasRole("FAN_OPERATOR");
     }
+
+    /**
+     * Whether this actor may act on content authored by {@code authorAccountId} —
+     * true when the actor IS the author, or is an operator. Single-sources the
+     * {@code authorAccountId.equals(actor.accountId()) || actor.isOperator()}
+     * authorship predicate that was re-derived across the community use cases
+     * (TASK-FAN-BE-025 N2). This is authorship, NOT a role check — the ARTIST-role
+     * gate in {@code PublishPostUseCase} is deliberately kept separate.
+     */
+    public boolean owns(String authorAccountId) {
+        return authorAccountId.equals(accountId) || isOperator();
+    }
 }

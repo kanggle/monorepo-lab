@@ -1,7 +1,6 @@
 package com.example.fanplatform.notification.presentation.controller;
 
 import com.example.fanplatform.notification.application.ActorContext;
-import com.example.fanplatform.notification.application.ActorContextResolver;
 import com.example.fanplatform.notification.application.ListNotificationsUseCase;
 import com.example.fanplatform.notification.application.MarkNotificationReadUseCase;
 import com.example.fanplatform.notification.domain.notification.Notification;
@@ -9,6 +8,7 @@ import com.example.fanplatform.notification.domain.notification.NotificationPage
 import com.example.fanplatform.notification.domain.notification.NotificationStatus;
 import com.example.fanplatform.notification.presentation.dto.ApiEnvelope;
 import com.example.fanplatform.notification.presentation.dto.NotificationResponse;
+import com.example.fanplatform.notification.presentation.security.CurrentActor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -43,8 +43,8 @@ public class NotificationInboxController {
             @RequestParam(required = false) Boolean unread,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+            @RequestParam(defaultValue = "20") int size,
+            @CurrentActor ActorContext actor) {
         validatePaging(page, size);
         // `unread` is the normative cross-domain filter (notification-inbox-contract.md § 2.1);
         // it maps onto fan's status enum. The pre-existing `status=UNREAD|READ` param is kept
@@ -61,8 +61,8 @@ public class NotificationInboxController {
     }
 
     @PostMapping("/{id}/read")
-    public ResponseEntity<ApiEnvelope<NotificationResponse>> markRead(@PathVariable String id) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+    public ResponseEntity<ApiEnvelope<NotificationResponse>> markRead(@CurrentActor ActorContext actor,
+                                                                      @PathVariable String id) {
         Notification notification = markNotificationRead.markRead(actor, id);
         return ResponseEntity.ok(ApiEnvelope.of(NotificationResponse.from(notification)));
     }

@@ -25,11 +25,11 @@ public class GetPostUseCase {
         if (post.getStatus() == PostStatus.DELETED) {
             throw new PostNotFoundException(postId);
         }
-        boolean isAuthor = post.getAuthorAccountId().equals(actor.accountId());
-        if (post.getStatus() == PostStatus.HIDDEN && !isAuthor && !actor.isOperator()) {
+        boolean accessible = actor.owns(post.getAuthorAccountId());
+        if (post.getStatus() == PostStatus.HIDDEN && !accessible) {
             throw new PostNotFoundException(postId);
         }
-        if (post.getStatus() == PostStatus.DRAFT && !isAuthor && !actor.isOperator()) {
+        if (post.getStatus() == PostStatus.DRAFT && !accessible) {
             throw new PostNotFoundException(postId);
         }
         postAccessGuard.ensureVisibilityAccessible(post, actor);

@@ -3,7 +3,7 @@ package com.example.fanplatform.community.presentation.controller;
 import com.example.fanplatform.community.application.ActorContext;
 import com.example.fanplatform.community.application.AddReactionUseCase;
 import com.example.fanplatform.community.application.RemoveReactionUseCase;
-import com.example.fanplatform.community.infrastructure.security.ActorContextResolver;
+import com.example.fanplatform.community.infrastructure.security.CurrentActor;
 import com.example.fanplatform.community.presentation.dto.AddReactionRequest;
 import com.example.fanplatform.community.presentation.dto.ApiEnvelope;
 import com.example.fanplatform.community.presentation.dto.ReactionResponse;
@@ -27,17 +27,18 @@ public class ReactionController {
 
     @PutMapping
     public ResponseEntity<ApiEnvelope<ReactionResponse>> upsert(
+            @CurrentActor ActorContext actor,
             @PathVariable String postId,
             @Valid @RequestBody AddReactionRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
         AddReactionUseCase.ReactionResult r = addReactionUseCase.execute(
                 postId, req.reactionType(), actor);
         return ResponseEntity.ok(ApiEnvelope.of(ReactionResponse.from(r)));
     }
 
     @DeleteMapping
-    public ResponseEntity<Void> remove(@PathVariable String postId) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+    public ResponseEntity<Void> remove(
+            @CurrentActor ActorContext actor,
+            @PathVariable String postId) {
         removeReactionUseCase.execute(postId, actor);
         return ResponseEntity.noContent().build();
     }

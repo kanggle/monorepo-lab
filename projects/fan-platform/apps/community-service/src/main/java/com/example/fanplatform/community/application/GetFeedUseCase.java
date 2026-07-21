@@ -107,7 +107,7 @@ public class GetFeedUseCase {
     }
 
     private boolean isLocked(Post post, ActorContext actor) {
-        if (post.getAuthorAccountId().equals(actor.accountId()) || actor.isOperator()) {
+        if (actor.owns(post.getAuthorAccountId())) {
             return false;
         }
         if (post.getVisibility() == PostVisibility.PUBLIC) {

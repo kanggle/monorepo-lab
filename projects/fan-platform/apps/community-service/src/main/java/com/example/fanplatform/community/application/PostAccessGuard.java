@@ -42,7 +42,7 @@ public class PostAccessGuard {
         Post post = PostLookup.requireById(postRepository, postId, actor.tenantId());
         if (post.getStatus() != PostStatus.PUBLISHED) {
             // Hide the existence of DRAFT/HIDDEN/DELETED from non-author readers.
-            if (!post.getAuthorAccountId().equals(actor.accountId()) && !actor.isOperator()) {
+            if (!actor.owns(post.getAuthorAccountId())) {
                 throw new PostNotFoundException(postId);
             }
         }
@@ -51,8 +51,7 @@ public class PostAccessGuard {
     }
 
     public void ensureVisibilityAccessible(Post post, ActorContext actor) {
-        boolean isAuthor = post.getAuthorAccountId().equals(actor.accountId());
-        if (isAuthor || actor.isOperator()) {
+        if (actor.owns(post.getAuthorAccountId())) {
             return;
         }
         switch (post.getVisibility()) {

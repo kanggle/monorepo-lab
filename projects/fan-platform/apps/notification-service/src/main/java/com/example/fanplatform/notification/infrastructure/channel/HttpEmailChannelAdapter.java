@@ -47,7 +47,6 @@ import java.util.Map;
 public class HttpEmailChannelAdapter implements NotificationChannelPort {
 
     static final String CHANNEL = "EMAIL";
-    private static final String METRIC = "notification_channel_deliveries_total";
 
     private final MeterRegistry meterRegistry;
     private final RestClient restClient;
@@ -97,7 +96,7 @@ public class HttpEmailChannelAdapter implements NotificationChannelPort {
             if (ref == null || ref.isBlank()) {
                 return failed(notification, recipient, "provider 2xx without a usable id");
             }
-            meterRegistry.counter(METRIC, "channel", CHANNEL, "outcome", "delivered").increment();
+            ChannelDeliveryMetrics.delivered(meterRegistry, CHANNEL);
             log.info("[http-email] delivered notification id={} account={} type={} ref={}",
                     notification.getId(), notification.getAccountId(), notification.getType(), ref);
             return new DeliveryResult(true, CHANNEL, ref);
@@ -107,7 +106,7 @@ public class HttpEmailChannelAdapter implements NotificationChannelPort {
     }
 
     private DeliveryResult failed(Notification notification, String recipient, String reason) {
-        meterRegistry.counter(METRIC, "channel", CHANNEL, "outcome", "failed").increment();
+        ChannelDeliveryMetrics.failed(meterRegistry, CHANNEL);
         log.warn("[http-email] delivery FAILED (best-effort; inbox row authoritative) "
                         + "id={} account={} to={} reason={}",
                 notification.getId(), notification.getAccountId(), recipient, reason);

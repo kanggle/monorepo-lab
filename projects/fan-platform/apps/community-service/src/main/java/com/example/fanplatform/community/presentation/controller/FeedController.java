@@ -2,7 +2,7 @@ package com.example.fanplatform.community.presentation.controller;
 
 import com.example.fanplatform.community.application.ActorContext;
 import com.example.fanplatform.community.application.GetFeedUseCase;
-import com.example.fanplatform.community.infrastructure.security.ActorContextResolver;
+import com.example.fanplatform.community.infrastructure.security.CurrentActor;
 import com.example.fanplatform.community.presentation.dto.ApiEnvelope;
 import com.example.fanplatform.community.presentation.dto.FeedResponse;
 import lombok.RequiredArgsConstructor;
@@ -21,9 +21,9 @@ public class FeedController {
 
     @GetMapping
     public ResponseEntity<ApiEnvelope<FeedResponse>> feed(
+            @CurrentActor ActorContext actor,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
         return ResponseEntity.ok(
                 ApiEnvelope.of(FeedResponse.from(getFeedUseCase.execute(actor, page, size))));
     }
