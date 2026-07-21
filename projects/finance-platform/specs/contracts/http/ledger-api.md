@@ -489,6 +489,34 @@ routes are tenant-scoped (`ActorContext`), audited, and carry no `Idempotency-Ke
 `/cost-flow-config/accounts` prefix is matched ahead of the
 `/{ledgerAccountCode}/{currency}/lots` pattern (§12) — no route ambiguity.
 
+### 13.0 GET `/api/finance/ledger/settlements/cost-flow-config` — per-tenant default
+
+Read the tenant's FX cost-flow method default (15th increment — TASK-FIN-BE-023). Returns the
+persisted config, or `WEIGHTED_AVERAGE` with the audit fields omitted (`@JsonInclude(NON_NULL)`) when
+the tenant has no row. Tenant-scoped.
+
+`200`:
+```json
+{ "data": { "method": "WEIGHTED_AVERAGE" }, "meta": { "timestamp": "..." } }
+```
+(a configured tenant additionally surfaces `"updatedBy"` and `"updatedAt"`.)
+
+### 13.0.1 PUT `/api/finance/ledger/settlements/cost-flow-config`
+
+Upsert the per-tenant default (operator config, audited — `updated_by` = actor identity). Body
+`{ "method": "FIFO" }` (`"WEIGHTED_AVERAGE"` | `"FIFO"`, exact-match uppercase). **Shadow**: settlement
+computation is not changed here (FIN-BE-025 wires FIFO consumption).
+
+`200`:
+```json
+{ "data": { "method": "FIFO", "updatedBy": "ops-7", "updatedAt": "2026-06-14T00:00:00Z" },
+  "meta": { "timestamp": "..." } }
+```
+
+- `400 VALIDATION_ERROR` when `method` is null/blank or not `WEIGHTED_AVERAGE`/`FIFO` (e.g. `"LIFO"`)
+  — validated **before** any persist; nothing is written.
+- `403 TENANT_FORBIDDEN` when the dual-accept gate rejects.
+
 ### 13.1 GET `/api/finance/ledger/settlements/cost-flow-config/accounts`
 
 List the tenant's account overrides, ordered by `ledgerAccountCode` ASC. Accounts with no override

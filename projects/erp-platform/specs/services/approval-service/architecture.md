@@ -418,7 +418,7 @@ com.example.erp.approval/
 │   │   (ApprovalRequestJpaEntity/Repository/Adapter, ApprovalRouteJpaEntity...,
 │   │    ApprovalActionJpaEntity..., ApprovalAuditLogJpaEntity...,
 │   │    outbox + processed_events + idempotency_keys)
-│   ├── outbox/ApprovalOutboxPollingScheduler.java   ← extends libs OutboxPollingScheduler
+│   ├── outbox/ApprovalOutboxPublisher.java   ← extends libs AbstractOutboxPublisher
 │   ├── masterdata/MasterDataRestAdapter.java        ← RestClient → masterdata-service /api/erp/masterdata/**
 │   ├── authorization/JwtBackedAuthorizationAdapter.java ← maps JWT roles+scope+sub → AuthorizationDecision
 │   ├── security/
