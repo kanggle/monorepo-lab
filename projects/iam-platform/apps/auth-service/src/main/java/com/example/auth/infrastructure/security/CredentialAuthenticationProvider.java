@@ -4,6 +4,7 @@ import com.example.auth.application.exception.AccountServiceUnavailableException
 import com.example.auth.application.port.TenantTypePort;
 import com.example.auth.domain.credentials.Credential;
 import com.example.auth.domain.repository.CredentialRepository;
+import com.example.auth.domain.session.PrincipalDetailKeys;
 import com.example.auth.domain.tenant.TenantContext;
 import com.example.security.password.PasswordHasher;
 import lombok.RequiredArgsConstructor;
@@ -172,9 +173,9 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
         // published — the claim is removed entirely. The roles claim (seeded by
         // RoleSeedPolicy on platform, BE-369) is the sole authorization surface.
         Map<String, Object> details = new HashMap<>();
-        details.put("tenant_id", tenantId);
-        details.put("tenant_type", tenantType);
-        details.put("account_id", credential.getAccountId());
+        details.put(PrincipalDetailKeys.TENANT_ID, tenantId);
+        details.put(PrincipalDetailKeys.TENANT_TYPE, tenantType);
+        details.put(PrincipalDetailKeys.ACCOUNT_ID, credential.getAccountId());
 
         UsernamePasswordAuthenticationToken authenticated =
                 new UsernamePasswordAuthenticationToken(

@@ -27,13 +27,7 @@ public class RefreshController {
             @Valid @RequestBody RefreshRequest request,
             HttpServletRequest httpRequest) {
 
-        SessionContext sessionContext = new SessionContext(
-                httpRequest.getRemoteAddr(),
-                httpRequest.getHeader("User-Agent"),
-                httpRequest.getHeader("X-Device-Fingerprint"),
-                httpRequest.getHeader("X-Geo-Country") != null
-                        ? httpRequest.getHeader("X-Geo-Country") : "XX"
-        );
+        SessionContext sessionContext = SessionContexts.fromRequest(httpRequest);
 
         RefreshTokenCommand command = new RefreshTokenCommand(
                 request.refreshToken(),

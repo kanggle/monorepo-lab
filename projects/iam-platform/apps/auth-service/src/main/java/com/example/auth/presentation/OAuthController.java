@@ -35,13 +35,7 @@ public class OAuthController {
             @Valid @RequestBody OAuthCallbackRequest request,
             HttpServletRequest httpRequest) {
 
-        SessionContext sessionContext = new SessionContext(
-                httpRequest.getRemoteAddr(),
-                httpRequest.getHeader("User-Agent"),
-                httpRequest.getHeader("X-Device-Fingerprint"),
-                httpRequest.getHeader("X-Geo-Country") != null
-                        ? httpRequest.getHeader("X-Geo-Country") : "XX"
-        );
+        SessionContext sessionContext = SessionContexts.fromRequest(httpRequest);
 
         OAuthCallbackCommand command = new OAuthCallbackCommand(
                 request.provider(),

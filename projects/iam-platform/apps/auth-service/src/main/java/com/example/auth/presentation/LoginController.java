@@ -68,13 +68,7 @@ public class LoginController {
         httpResponse.setHeader(DEPRECATION_HEADER, DEPRECATION_VALUE);
         httpResponse.setHeader(SUNSET_HEADER, SUNSET_VALUE);
 
-        SessionContext sessionContext = new SessionContext(
-                httpRequest.getRemoteAddr(),
-                httpRequest.getHeader("User-Agent"),
-                httpRequest.getHeader("X-Device-Fingerprint"),
-                httpRequest.getHeader("X-Geo-Country") != null
-                        ? httpRequest.getHeader("X-Geo-Country") : "XX"
-        );
+        SessionContext sessionContext = SessionContexts.fromRequest(httpRequest);
 
         LoginCommand command = new LoginCommand(
                 request.email(),
