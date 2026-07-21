@@ -37,10 +37,10 @@ Partition key convention is consistent *per family* but the underlying field dif
 | `account-events.md` | account-service — producer. Documents that community-service/membership-service consumers of these events were **RETIRED** (TASK-MONO-394) — a consumer-side retirement, not an event-side one; the events themselves are still live. |
 | `admin-events.md` | admin-service — producer |
 | `auth-events.md` | auth-service — producer, including `auth.session.revoked` |
-| `partnership-events.md` | partnership-service — producer |
+| `partnership-events.md` | admin-service — producer |
 | `security-events.md` | security-service — producer |
 | `session-events.md` | **stale/aspirational** — see Follow-up below |
-| `tenant-events.md` | tenant-service — producer |
+| `tenant-events.md` | admin-service — producer |
 
 ---
 
