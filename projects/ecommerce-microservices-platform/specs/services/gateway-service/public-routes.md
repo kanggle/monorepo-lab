@@ -10,13 +10,21 @@ Default posture: every route requires a valid JWT. Only the routes listed below 
 
 | Method | Path | Rationale |
 |---|---|---|
-| `POST` | `/api/auth/signup` | Account creation — precedes login |
-| `POST` | `/api/auth/login` | Credential exchange for access/refresh tokens |
-| `POST` | `/api/auth/refresh` | Refresh-token flow — access token itself is expired by design |
 | `GET` | `/api/products/**` | Read-only catalog browsing (anonymous commerce) |
 | `GET` | `/api/search/**` | Search / autocomplete for anonymous visitors |
 | `GET` | `/api/reviews/products/**` | Public review read; write still requires auth (rule E6) |
 | `GET` | `/actuator/health` | Liveness/readiness probes for orchestrator |
+
+> **Authentication is no longer a gateway route.** The `/api/auth/**` routes
+> (signup / login / refresh) that once fronted `auth-service` were **removed**
+> when auth-service was decommissioned (`TASK-BE-132`); authentication now runs
+> through GAP/IAM **OIDC** (`TASK-MONO-027`). Users obtain tokens directly from
+> the IdP's `/oauth2/authorize` endpoint (not gateway-proxied); the gateway
+> validates the resulting RS256 JWT as an OAuth2 Resource Server. A request to
+> any `/api/auth/**` path now matches no route → `404` (it is not a public
+> gateway route). The gateway does permit `/oauth/**` (`SecurityConfig`
+> `PUBLIC_PATHS`) so unauthenticated OIDC-related callbacks are not rejected by
+> the JWT filter.
 
 Changes to this list MUST be updated here before deployment (see `platform/api-gateway-policy.md` → Change Rule).
 
@@ -29,8 +37,13 @@ Per `platform/api-gateway-policy.md` the gateway applies rate limits per `(clien
 | Tier | Applies to | Limit |
 |---|---|---|
 | **Standard** | Catalog, search, review read, most authenticated reads | 100 req/min per IP |
-| **Sensitive** | `/api/auth/login`, `/api/auth/signup`, `/api/auth/refresh` | 10 req/min per IP (brute-force protection) |
 | **Internal-only** | Service-to-service calls routed internally (not via gateway) | N/A — bypasses gateway |
+
+> The former **Sensitive** tier rate-limited the credential endpoints
+> (`/api/auth/login` / `signup` / `refresh`). Those endpoints no longer exist at
+> this gateway — authentication moved to GAP/IAM OIDC (`TASK-BE-132` /
+> `TASK-MONO-027`), so brute-force protection for credential exchange is now the
+> IdP's concern, not this gateway's.
 
 Redis-unavailable failure mode: gateway **fails open** (allow request, log WARN, alert) per platform policy. Rate limiting is a soft protection, not a correctness boundary.
 
