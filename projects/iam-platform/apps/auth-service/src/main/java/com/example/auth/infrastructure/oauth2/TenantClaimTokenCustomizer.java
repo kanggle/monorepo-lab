@@ -2,6 +2,7 @@ package com.example.auth.infrastructure.oauth2;
 
 import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.application.port.OperatorAssignmentPort.DelegatedScope;
+import com.example.auth.domain.session.PrincipalDetailKeys;
 import com.example.auth.infrastructure.oauth2.persistence.OAuthClientMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -235,8 +236,8 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
         // so the belt-and-suspenders claim is redundant.
         alignSubToAccountId(context, principal);
 
-        String tenantId = extractTenantAttribute(principal, "tenant_id");
-        String tenantType = extractTenantAttribute(principal, "tenant_type");
+        String tenantId = extractTenantAttribute(principal, PrincipalDetailKeys.TENANT_ID);
+        String tenantType = extractTenantAttribute(principal, PrincipalDetailKeys.TENANT_TYPE);
 
         if (tenantId != null && tenantType != null) {
             context.getClaims()
@@ -309,7 +310,7 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
      * {@code sub}=account_id token resolves every operator directly.
      */
     private void alignSubToAccountId(JwtEncodingContext context, Authentication principal) {
-        String accountId = extractTenantAttribute(principal, "account_id");
+        String accountId = extractTenantAttribute(principal, PrincipalDetailKeys.ACCOUNT_ID);
         if (accountId != null && !accountId.isBlank()) {
             // sub = account UUID (full jwt-standard-claims.md compliance).
             context.getClaims().subject(accountId);
@@ -574,7 +575,7 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
      */
     private void populateRoles(JwtEncodingContext context, Authentication principal,
                                String claimTenantId, String platformTenantId) {
-        String accountId = extractTenantAttribute(principal, "account_id");
+        String accountId = extractTenantAttribute(principal, PrincipalDetailKeys.ACCOUNT_ID);
 
         java.util.List<String> stored = java.util.List.of();
         try {

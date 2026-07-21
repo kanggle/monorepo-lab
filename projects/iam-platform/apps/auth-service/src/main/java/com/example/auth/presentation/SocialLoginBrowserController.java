@@ -11,6 +11,7 @@ import com.example.auth.application.exception.OAuthProviderException;
 import com.example.auth.application.exception.UnsupportedProviderException;
 import com.example.auth.application.result.BrowserLoginResolution;
 import com.example.auth.application.result.OAuthAuthorizeResult;
+import com.example.auth.domain.session.PrincipalDetailKeys;
 import com.example.auth.domain.session.SessionContext;
 import com.example.auth.infrastructure.security.SavedRequestTenantResolver;
 import jakarta.servlet.http.HttpServletRequest;
@@ -74,6 +75,14 @@ public class SocialLoginBrowserController {
     private final SecurityContextRepository securityContextRepository =
             new HttpSessionSecurityContextRepository();
 
+    /**
+     * Prefix for every failure redirect back to the login page. Both entry points
+     * ({@code startSocialLogin} and {@code socialLoginCallback}) surface errors by
+     * redirecting to {@code /login?error=<code>}; {@link #loginError(String)} is the
+     * single source for that target.
+     */
+    private static final String LOGIN_ERROR_REDIRECT_PREFIX = "redirect:/login?error=";
+
     public SocialLoginBrowserController(
             OAuthLoginUseCase oAuthLoginUseCase,
             SavedRequestTenantResolver savedRequestTenantResolver,
@@ -93,14 +102,14 @@ public class SocialLoginBrowserController {
             return "redirect:" + result.authorizationUrl();
         } catch (UnsupportedProviderException e) {
             log.warn("social login start rejected — unsupported provider '{}'", provider);
-            return "redirect:/login?error=unsupported_provider";
+            return loginError("unsupported_provider");
         } catch (InvalidOAuthRedirectUriException e) {
             // The issuer-derived callback URI is not in the provider's
             // allowed-redirect-uris — a server misconfiguration, not user error.
             log.error("social login start failed — browser callback URI '{}' not in '{}' "
                     + "allowed-redirect-uris (check oidc.issuer-url + OAUTH_<P>_ALLOWED_REDIRECT_URIS)",
                     callbackUri, provider);
-            return "redirect:/login?error=provider_error";
+            return loginError("provider_error");
         }
     }
 
@@ -114,12 +123,7 @@ public class SocialLoginBrowserController {
 
         String callbackUri = browserCallbackUri(provider);
 
-        SessionContext sessionContext = new SessionContext(
-                request.getRemoteAddr(),
-                request.getHeader("User-Agent"),
-                request.getHeader("X-Device-Fingerprint"),
-                request.getHeader("X-Geo-Country") != null
-                        ? request.getHeader("X-Geo-Country") : "XX");
+        SessionContext sessionContext = SessionContexts.fromRequest(request);
 
         OAuthCallbackCommand command =
                 new OAuthCallbackCommand(provider, code, state, callbackUri, sessionContext);
@@ -133,15 +137,15 @@ public class SocialLoginBrowserController {
         try {
             login = oAuthLoginUseCase.resolveBrowserLogin(command, resolution.tenantId());
         } catch (OAuthEmailRequiredException e) {
-            return "redirect:/login?error=email_required";
+            return loginError("email_required");
         } catch (AccountLockedException | AccountStatusException e) {
-            return "redirect:/login?error=account_unavailable";
+            return loginError("account_unavailable");
         } catch (InvalidOAuthStateException e) {
-            return "redirect:/login?error=invalid_state";
+            return loginError("invalid_state");
         } catch (InvalidOAuthRedirectUriException | OAuthProviderException e) {
-            return "redirect:/login?error=provider_error";
+            return loginError("provider_error");
         } catch (UnsupportedProviderException e) {
-            return "redirect:/login?error=unsupported_provider";
+            return loginError("unsupported_provider");
         }
 
         establishSession(login, resolution, request, response);
@@ -168,9 +172,9 @@ public class SocialLoginBrowserController {
                                   HttpServletRequest request,
                                   HttpServletResponse response) {
         Map<String, Object> details = new HashMap<>();
-        details.put("tenant_id", resolution.tenantId());
-        details.put("tenant_type", resolution.tenantType());
-        details.put("account_id", login.accountId());
+        details.put(PrincipalDetailKeys.TENANT_ID, resolution.tenantId());
+        details.put(PrincipalDetailKeys.TENANT_TYPE, resolution.tenantType());
+        details.put(PrincipalDetailKeys.ACCOUNT_ID, login.accountId());
 
         UsernamePasswordAuthenticationToken authentication =
                 new UsernamePasswordAuthenticationToken(
@@ -197,5 +201,10 @@ public class SocialLoginBrowserController {
      */
     private String browserCallbackUri(String provider) {
         return browserCallbackBaseUrl + "/login/oauth/" + provider + "/callback";
+    }
+
+    /** Builds the redirect back to the login page carrying an {@code error} code. */
+    private static String loginError(String code) {
+        return LOGIN_ERROR_REDIRECT_PREFIX + code;
     }
 }
