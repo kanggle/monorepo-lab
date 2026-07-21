@@ -7,6 +7,7 @@ import com.example.auth.domain.repository.RefreshTokenRepository;
 import com.example.auth.infrastructure.oauth2.persistence.OAuthClientMapper;
 import com.example.auth.domain.session.DeviceSession;
 import com.example.auth.domain.session.RevokeReason;
+import com.example.auth.domain.tenant.TenantContext;
 import com.example.auth.domain.token.RefreshToken;
 import com.example.auth.domain.token.TokenReuseDetector;
 import lombok.extern.slf4j.Slf4j;
@@ -408,7 +409,7 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
         String accountId = authorization.getPrincipalName();
         String tenantId = extractClientTenantId(registeredClient);
         if (tenantId == null || tenantId.isBlank()) {
-            tenantId = "fan-platform"; // fallback per multi-tenancy policy
+            tenantId = TenantContext.DEFAULT_TENANT_ID; // fallback per multi-tenancy policy
         }
 
         Instant expiresAt = newRefreshToken.getExpiresAt() != null
@@ -466,7 +467,7 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
         // (authoritative). Resolved before publishing so it flows into auth.token.reuse.detected.
         final String tenantId = existingToken.getTenantId() != null && !existingToken.getTenantId().isBlank()
                 ? existingToken.getTenantId()
-                : "fan-platform"; // SAS flow default per persistRotation fallback
+                : TenantContext.DEFAULT_TENANT_ID; // SAS flow default per persistRotation fallback
 
         // Transactional revoke + outbox publish — all DB writes share one tx so
         // (a) the @Modifying bulk update has an active EntityManager and

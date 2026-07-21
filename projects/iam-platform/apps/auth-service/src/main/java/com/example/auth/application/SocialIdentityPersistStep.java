@@ -1,11 +1,7 @@
 package com.example.auth.application;
 
-import com.example.auth.application.exception.AccountLockedException;
-import com.example.auth.application.exception.AccountStatusException;
 import com.example.auth.domain.oauth.OAuthProvider;
 import com.example.auth.domain.oauth.OAuthUserInfo;
-import com.example.auth.domain.repository.SocialIdentityRepository;
-import com.example.auth.domain.social.SocialIdentity;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -19,15 +15,12 @@ import java.util.Optional;
  *
  * <p>This is the session-establishing counterpart to
  * {@link OAuthLoginTransactionalStep}. It performs the SAME two DB-touching
- * side effects shared with the legacy custom-JWT flow:
+ * steps shared with the legacy custom-JWT flow, both delegated to the shared
+ * {@link SocialLoginSteps} bean:
  * <ol>
- *   <li><b>social_identity upsert</b> — create on the new-identity path,
- *       {@code updateLastUsedAt} + {@code updateProviderEmail} on the existing
- *       path (mirrors {@code OAuthLoginTransactionalStep.persistLogin} lines
- *       ~61-78, byte-for-byte semantics).</li>
- *   <li><b>account-status check</b> — reject LOCKED / DORMANT / DELETED
- *       (mirrors {@code OAuthLoginTransactionalStep.checkAccountStatus},
- *       lines ~130-138).</li>
+ *   <li><b>social_identity upsert</b> — {@link SocialLoginSteps#upsertIdentity};</li>
+ *   <li><b>account-status check</b> — reject LOCKED / DORMANT / DELETED via
+ *       {@link SocialLoginSteps#checkAccountStatus}.</li>
  * </ol>
  *
  * <p>It deliberately does <b>NOT</b>:
@@ -50,7 +43,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class SocialIdentityPersistStep {
 
-    private final SocialIdentityRepository socialIdentityRepository;
+    private final SocialLoginSteps socialLoginSteps;
 
     /**
      * Upserts the social identity for the authenticated provider user and
@@ -72,39 +65,9 @@ public class SocialIdentityPersistStep {
                                               String accountId,
                                               String tenantId,
                                               Optional<String> accountStatus) {
-        // Upsert local social identity — identical semantics to
-        // OAuthLoginTransactionalStep.persistLogin (lines ~61-78).
-        Optional<SocialIdentity> existingIdentity =
-                socialIdentityRepository.findByProviderAndProviderUserId(
-                        provider.name(), userInfo.providerUserId());
-
-        if (existingIdentity.isPresent()) {
-            var identity = existingIdentity.get();
-            identity.updateLastUsedAt();
-            if (userInfo.email() != null && !userInfo.email().equals(identity.getProviderEmail())) {
-                identity.updateProviderEmail(userInfo.email());
-            }
-            socialIdentityRepository.save(identity);
-        } else {
-            var newIdentity = SocialIdentity.create(
-                    accountId, tenantId,
-                    provider.name(), userInfo.providerUserId(), userInfo.email());
-            socialIdentityRepository.save(newIdentity);
-        }
-
-        // Account-status check against the pre-fetched value (no HTTP here) —
-        // identical semantics to OAuthLoginTransactionalStep.checkAccountStatus
-        // (lines ~130-138).
-        accountStatus.ifPresent(this::checkAccountStatus);
-    }
-
-    private void checkAccountStatus(String status) {
-        switch (status) {
-            case "ACTIVE" -> { /* proceed */ }
-            case "LOCKED" -> throw new AccountLockedException();
-            case "DORMANT" -> throw new AccountStatusException("DORMANT", "ACCOUNT_DORMANT");
-            case "DELETED" -> throw new AccountStatusException("DELETED", "ACCOUNT_DELETED");
-            default -> throw new AccountStatusException(status, "ACCOUNT_STATUS_UNKNOWN");
-        }
+        // Upsert local social identity + account-status gate — the shared steps,
+        // identical to the legacy OAuthLoginTransactionalStep path.
+        socialLoginSteps.upsertIdentity(provider, userInfo, accountId, tenantId);
+        accountStatus.ifPresent(socialLoginSteps::checkAccountStatus);
     }
 }

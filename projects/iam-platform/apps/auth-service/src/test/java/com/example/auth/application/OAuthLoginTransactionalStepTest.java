@@ -15,11 +15,11 @@ import com.example.auth.domain.tenant.TenantContext;
 import com.example.auth.domain.token.RefreshToken;
 import com.example.auth.domain.token.TokenPair;
 import com.example.auth.domain.oauth.OAuthUserInfo;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -63,8 +63,19 @@ class OAuthLoginTransactionalStepTest {
     @Mock private RegisterOrUpdateDeviceSessionUseCase registerOrUpdateDeviceSessionUseCase;
     @Mock private SocialIdentityRepository socialIdentityRepository;
 
-    @InjectMocks
     private OAuthLoginTransactionalStep step;
+
+    @BeforeEach
+    void setUp() {
+        // Construct with a REAL SocialLoginSteps composed over the mocked repository,
+        // so the extracted social-identity upsert + account-status guard execute for
+        // real. Every assertion in this class (SocialIdentity captor fields, LOCKED →
+        // AccountLockedException) is preserved verbatim from the pre-extraction test.
+        step = new OAuthLoginTransactionalStep(
+                tokenGeneratorPort, refreshTokenRepository, authEventPublisher,
+                registerOrUpdateDeviceSessionUseCase,
+                new SocialLoginSteps(socialIdentityRepository));
+    }
 
     private static final SessionContext CTX =
             new SessionContext("127.0.0.1", "Chrome/120", "fp-1");
