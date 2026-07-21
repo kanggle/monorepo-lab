@@ -2,16 +2,12 @@ package com.example.auth.application;
 
 import com.example.auth.application.command.OAuthCallbackTxnCommand;
 import com.example.auth.application.event.AuthEventPublisher;
-import com.example.auth.application.exception.AccountLockedException;
-import com.example.auth.application.exception.AccountStatusException;
 import com.example.auth.application.port.TokenGeneratorPort;
 import com.example.auth.application.result.OAuthLoginResult;
 import com.example.auth.application.result.RegisterDeviceSessionResult;
 import com.example.auth.domain.oauth.OAuthProvider;
 import com.example.auth.domain.repository.RefreshTokenRepository;
-import com.example.auth.domain.repository.SocialIdentityRepository;
 import com.example.auth.domain.session.SessionContext;
-import com.example.auth.domain.social.SocialIdentity;
 import com.example.auth.domain.tenant.TenantContext;
 import com.example.auth.domain.token.RefreshToken;
 import com.example.auth.domain.token.TokenPair;
@@ -22,7 +18,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.Optional;
 
 /**
  * Transactional boundary for the OAuth callback flow.
@@ -43,7 +38,7 @@ public class OAuthLoginTransactionalStep {
     private final RefreshTokenRepository refreshTokenRepository;
     private final AuthEventPublisher authEventPublisher;
     private final RegisterOrUpdateDeviceSessionUseCase registerOrUpdateDeviceSessionUseCase;
-    private final SocialIdentityRepository socialIdentityRepository;
+    private final SocialLoginSteps socialLoginSteps;
 
     @Transactional
     public OAuthLoginResult persistLogin(OAuthCallbackTxnCommand command) {
@@ -58,27 +53,11 @@ public class OAuthLoginTransactionalStep {
         // from the OAuth state or account-service response.
         TenantContext tenantContext = TenantContext.defaultContext();
 
-        // Upsert local social identity.
-        Optional<SocialIdentity> existingIdentity =
-                socialIdentityRepository.findByProviderAndProviderUserId(
-                        provider.name(), userInfo.providerUserId());
-
-        if (existingIdentity.isPresent()) {
-            var identity = existingIdentity.get();
-            identity.updateLastUsedAt();
-            if (userInfo.email() != null && !userInfo.email().equals(identity.getProviderEmail())) {
-                identity.updateProviderEmail(userInfo.email());
-            }
-            socialIdentityRepository.save(identity);
-        } else {
-            var newIdentity = SocialIdentity.create(
-                    accountId, tenantContext.tenantId(),
-                    provider.name(), userInfo.providerUserId(), userInfo.email());
-            socialIdentityRepository.save(newIdentity);
-        }
+        // Upsert local social identity (shared with the SAS browser flow).
+        socialLoginSteps.upsertIdentity(provider, userInfo, accountId, tenantContext.tenantId());
 
         // Account status check against pre-fetched value (no HTTP here).
-        command.accountStatus().ifPresent(this::checkAccountStatus);
+        command.accountStatus().ifPresent(socialLoginSteps::checkAccountStatus);
 
         // Register/update device session
         RegisterDeviceSessionResult sessionResult =
@@ -125,15 +104,5 @@ public class OAuthLoginTransactionalStep {
                 tokenGeneratorPort.refreshTokenTtlSeconds(),
                 isNewAccount
         );
-    }
-
-    private void checkAccountStatus(String status) {
-        switch (status) {
-            case "ACTIVE" -> { /* proceed */ }
-            case "LOCKED" -> throw new AccountLockedException();
-            case "DORMANT" -> throw new AccountStatusException("DORMANT", "ACCOUNT_DORMANT");
-            case "DELETED" -> throw new AccountStatusException("DELETED", "ACCOUNT_DELETED");
-            default -> throw new AccountStatusException(status, "ACCOUNT_STATUS_UNKNOWN");
-        }
     }
 }
