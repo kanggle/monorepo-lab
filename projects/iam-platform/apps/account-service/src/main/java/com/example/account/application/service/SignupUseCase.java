@@ -3,8 +3,6 @@ package com.example.account.application.service;
 import com.example.account.application.command.SignupCommand;
 import com.example.account.application.event.AccountEventPublisher;
 import com.example.account.application.exception.AccountAlreadyExistsException;
-import com.example.account.application.exception.TenantNotFoundException;
-import com.example.account.application.exception.TenantSuspendedException;
 import com.example.account.application.port.AuthServicePort;
 import com.example.account.application.result.SignupResult;
 import com.example.account.domain.account.Account;
@@ -12,8 +10,6 @@ import com.example.account.domain.account.PasswordPolicy;
 import com.example.account.domain.profile.Profile;
 import com.example.account.domain.repository.AccountRepository;
 import com.example.account.domain.repository.ProfileRepository;
-import com.example.account.domain.repository.TenantRepository;
-import com.example.account.domain.tenant.Tenant;
 import com.example.account.domain.tenant.TenantId;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,21 +27,7 @@ public class SignupUseCase {
     private final AccountEventPublisher eventPublisher;
     private final AuthServicePort authServicePort;
     private final AccountIdentityProvisioner accountIdentityProvisioner;
-    private final TenantRepository tenantRepository;
-
-    /**
-     * TASK-BE-507: an account must never be born into a tenant that does not exist or is
-     * suspended. Mirrors {@code ProvisionAccountUseCase} — without it the only guard would be
-     * the accounts.tenant_id FK, whose DataIntegrityViolationException this use case already
-     * maps to "email already exists" (a misleading 409 for what is really a bad tenant).
-     */
-    private void requireActiveTenant(TenantId tenantId) {
-        Tenant tenant = tenantRepository.findById(tenantId)
-                .orElseThrow(() -> new TenantNotFoundException(tenantId.value()));
-        if (!tenant.isActive()) {
-            throw new TenantSuspendedException(tenantId.value());
-        }
-    }
+    private final ActiveTenantGuard activeTenantGuard;
 
     @Transactional
     public SignupResult execute(SignupCommand command) {
@@ -54,7 +36,7 @@ public class SignupUseCase {
         // /oauth2/authorize request and sends it as X-Tenant-Id. A header-less caller still pins
         // to fan-platform, so nothing that worked before changes.
         TenantId tenantId = TenantId.fromHeaderOrDefault(command.tenantId());
-        requireActiveTenant(tenantId);
+        activeTenantGuard.requireActive(tenantId);
 
         // Check email uniqueness within this tenant (primary defense: DB unique constraint)
         if (accountRepository.existsByEmail(tenantId, command.email().trim().toLowerCase())) {

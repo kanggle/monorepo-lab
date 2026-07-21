@@ -82,6 +82,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
+- `TASK-BE-545-outbound-service-spec-drift-inventory-reserve-failed.md` — **REVIEW (구현 완료, 검토 대기)** — outbound-service 스펙 6파일 + `outbound-events.md` 계약의 구 `inventory.adjusted{INSUFFICIENT_STOCK}` / `InventoryAdjustedConsumer` reserve-fail 잔재를 전용 `inventory.reserve.failed` / `InventoryReserveFailedConsumer` / `wms.inventory.reserve.failed.v1` 로 정정(14 loci). **AC-1 재계수**로 `order-status.md:163` 은 genuine 표현(`INSUFFICIENT_STOCK event`)이라 제외 — task 가설(3곳)이 2곳으로 축소. **item 7 drift 확정·정정**: `outbound-events.md:256` "replies echo sagaId" → 실제는 `pickingRequestId` echo, outbound 가 `SagaIdResolver` 로 sagaId 복원. doc-only(apps/ diff=0), `InventoryAdjustedConsumer` 잔여 0건. `TASK-BE-387` 형제 sweep 누락분. 분석·구현=Opus 4.8.
 
 ## done
 

@@ -1,6 +1,6 @@
 # TASK-MONO-456 — 통합 데모가 admin-service subject-token validator env(`OIDC_ISSUER`/`OIDC_JWKS_URI`)를 주입하지 않아 콘솔 로그인이 셸에 도달하지 못한다
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-MONO
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (데모 env 2줄 주입 + 재현 검증. 다만 AC-0 의 "실제로 깨져 있나 / AMI 가 딴 데서 세팅하나" 재측정이 실질)
@@ -107,11 +107,11 @@ oidc:
 
 ## Definition of Done
 
-- [ ] AC-0 재측정 (표준 demo-up.sh 재현 + AWS AMI 경로 확인 — "정문"이 폼인지 셸인지)
-- [ ] `OIDC_ISSUER` + `OIDC_JWKS_URI` 데모 주입 (auth-service 로 해소)
-- [ ] 콘솔 로그인 셸 도달 재현 검증
-- [ ] (검토) verify-demo-wrapper 가드에 operator-교환 도달성 스모크
-- [ ] 주입 근거 기록
+- [x] AC-0 재측정 (표준 경로 조립증명 + AWS AMI 경로 정적 확인 — § 구현 노트)
+- [x] subject-token validator env 데모 주입 — **`ADMIN_OIDC_ISSUER` + `ADMIN_OIDC_JWKS_URI`** (티켓의 `OIDC_ISSUER`/`OIDC_JWKS_URI` 대신 sibling-parity 채택, 근거 § 구현 노트)
+- [~] 콘솔 로그인 셸 도달 — **console-e2e CI 가 동일 배선의 권위 증명** + 정적 render 증명. 로컬 라이브 드라이브는 호스트 안전상 유보(동시 세션 컨테이너 가동 중)
+- [x] (검토→구현) verify-demo-wrapper 가드 (v) 추가 (operator-교환 도달성, mutation 으로 물림 증명)
+- [x] 주입 근거 기록 (override 주석 + § 구현 노트)
 
 ---
 
@@ -120,3 +120,33 @@ oidc:
 - **분량**: small(env 2줄) + 재현 검증이 실질.
 - **자매 발견(별개 티켓 아님, 참고만)**: 검증 중 seed operator 의 `admin_operators.oidc_subject` 가 토큰 `sub`(account_id)와 불일치하는 것도 봤으나, 이는 `scripts/console-demo/seed/01-iam.sql`(시드 SQL) 을 `infra/demo` 기동에 **혼용**한 아티팩트일 수 있다(두 데모 시스템의 시드 규약 차이). 표준 경로 재현 시 이 부분도 함께 관찰할 것 — 단, `OperatorOidcSubjectResolver` 주석대로 `oidc_subject`=account_id 정합은 별도 backfill(TASK-MONO-298) 이 이미 다룬 영역이다.
 - **이 task 가 방어하는 실패 모드**: **"같은 신뢰 앵커(IAM issuer/JWKS)를 두 설정 이름으로 나눠, 브라우저 도달성만 배선하고 subject-token 검증 배선은 빠뜨렸다."** 컨테이너는 전부 healthy, 로그인 폼도 뜨고, 코드도 옳지만 — operator 교환이 조용히 fail-closed 로 막혀 **아무도 콘솔 셸에 못 들어간다.** (TASK-PC-FE-253 이 콘솔 코드에서 잡은 "같은 개념 두 곳, 하나만 배선" 패턴의 인프라 판.)
+
+---
+
+## 구현 노트 (2026-07-21, 분석·구현 Opus 4.8)
+
+### AC-0 재측정 (gate — 정적으로 화해, 라이브 풀-기동은 호스트 안전상 유보)
+
+착수 시 전수 재측정했고 티켓 본문을 **가설로 취급**했다(범위 물려받기 금지). 호스트가 fork/spawn 스트레스(`docker.exe: Resource temporarily unavailable`) + **동시 세션 컨테이너 ~13개 가동 중**이라, 콘솔 데모 풀-기동(+15컨테이너)은 호스트/동시세션을 위험에 빠뜨리므로 **정적 조립 증명 + console-e2e CI 증명**으로 대체했다(메모리: 로컬 Windows docker 는 권위 아님, CI 가 권위).
+
+1. **갭은 표준 경로에 내재 — subset-artifact 아님**: `infra/demo/projects.sh` 가 조립하는 파일(iam = `docker-compose.yml` + `docker-compose.e2e.yml` + `iam-traefik.override.yml`; console = base 만)을 전수 독해. 데모의 admin-service 는 `docker-compose.e2e.yml`(251-302, `admin.oidc.*` env 전무) + `iam-traefik.override.yml`(`*iam-oidc` = 리소스서버 `OIDC_ISSUER_URL`/`OIDC_JWK_SET_URI` 만) 로 조립되어 **`admin.oidc.*` 를 어디서도 안 받는다** ⇒ validator(`IamOidcProperties`, `@ConfigurationProperties(prefix="admin.oidc")`) 가 `localhost:8081` 기본값 폴백 ⇒ JWKS fetch 실패 + iss(`http://iam.local`) 불일치 → 401. **phantom 아님.**
+2. **AWS AMI 경로(AC-0 item 2)**: `infra/demo/aws/`(user-data·packer·terraform) 전수 grep — 이 env 를 **딴 데서도 안 세팅**한다. AMI 는 같은 `demo.env`/compose 를 굽므로 **AWS 데모도 동일 갭**. ⇒ 메모리 `project_ondemand_demo_aws_poc` 의 "✅정문" 은 **콘솔 셸 도달이 아니라 로그인 폼/타 플로우**를 뜻한 것으로 화해.
+3. **audience 는 안 터진다**: 기본값 `platform-console-web` 이 우연히 토큰 aud 와 일치(티켓 주장 확인).
+
+### env 이름 결정 — `ADMIN_OIDC_*` (티켓의 `OIDC_ISSUER` 대신)
+
+validator 는 `@ConfigurationProperties(prefix="admin.oidc")` 라, 속성 `admin.oidc.issuer`/`admin.oidc.jwks-uri` 를 채우는 **작동하는 env 이름이 둘**이다:
+- `OIDC_ISSUER`/`OIDC_JWKS_URI` — application.yml 의 명시 placeholder `${OIDC_ISSUER:...}` 경유(티켓이 본 것).
+- `ADMIN_OIDC_ISSUER`/`ADMIN_OIDC_JWKS_URI` — Spring **relaxed binding**(env source, 우선순위 높음) 경유 — **`platform-console/docker-compose.e2e.yml`(:271-272) 가 이 validator 를 배선하는 정경 이름**.
+
+**후자 채택**: (a) **sibling parity** — 이 validator 가 콘솔 로그인용으로 외부 배선되는 **유일한 다른 자리**(console-e2e)와 이름 일치 ⇒ 드리프트 0, 그리고 그 하네스가 CI 에서 token-exchange 성공→셸 렌더를 이미 증명(=fix 정당성의 라이브 권위). (b) prefix-scoped 라 데모에 산재한 리소스서버 `OIDC_ISSUER_URL`(6곳)과 **비혼동**. (c) `@ConfigurationProperties` 의 idiomatic env 형태. — 티켓 F2("실제 소비 env 를 물어라")는 두 이름 모두 만족(둘 다 대리지표 아닌 실소비 속성 바인딩); 티켓 저자는 relaxed-binding 대안을 못 봤을 뿐. `OIDC_ISSUER` 로도 동작하나 parity 가 더 낫다.
+
+### 변경 산출물 (2파일, 콘솔/application.yml 변경 0)
+
+- `infra/demo/iam-traefik.override.yml` — admin-service.environment 를 `<<: *iam-oidc` merge 로 바꾸고 `ADMIN_OIDC_ISSUER: http://iam.${DEMO_DOMAIN:-local}`(공개 호스트=토큰 iss 문자열 일치) + `ADMIN_OIDC_JWKS_URI: http://auth-service:8081/internal/auth/jwks`(컨테이너 DNS, gateway-service 가 이미 fetch 하는 동일 엔드포인트) 추가. **PyYAML 렌더 검증**: 5키(추가 2 + anchor 3), 값 일치 확인. Edge Case 1(issuer 파생)·2(JWKS fetch 대상)·3(`/internal/auth/jwks`) 준수. F1(세트 주입)·F2(정확 이름) 회피.
+- `infra/demo/verify-demo-wrapper.sh` — **가드 (v)** 추가(AC-2): override 가 admin-service subject-token validator env(issuer+jwks)를 배선하는지 정적 단언. (l)이 브라우저-OIDC 도달성(전반부)을 지키듯 operator-교환 도달성(후반부)을 지킨다. **술어는 YAML key 앵커**(`^\s*ADMIN_OIDC_ISSUER:\s`) — env 블록 주석이 `ADMIN_OIDC_*` 를 산문 언급하므로 substring grep 은 대리지표가 된다(커밋될 blob 을 물어야 함). **mutation 증명**: env 라인만 제거·주석 유지 → 가드가 both missing 정확 보고(오탐 없음).
+
+### 미해소·유보
+
+- **로컬 라이브 셸-도달 재현**: 호스트 안전상 유보(위). 안전 창 또는 다음 AWS 데모 기동(`TASK-MONO-399` 계열) 시 `demo-up.sh demo-core` → 시드 operator 로그인 → `/dashboards/overview` 200 확인 권장. console-e2e CI 가 동일 배선의 라이브 권위이므로 결함 잔존 위험은 낮다.
+- **자매 발견(§ Notes, 별건)**: seed operator `oidc_subject` 정합은 이 티켓 범위 밖(env 배선만).

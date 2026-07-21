@@ -509,6 +509,20 @@ New projects pick an unused `*.local` hostname and register it in this table in 
 >
 > `console-bff` **deliberately has no hostname** (TASK-MONO-362). It is reached by `console-web` on the docker network (`http://console-bff:8080`) — every call is server-side, the browser never touches it. **This is not a missing entry; do not add one.** `scripts/check-gateway-drift.sh` (I2) fails if any backend service acquires a Traefik router.
 
+### Frontend dev-server ports (standalone `next dev`)
+
+**Distinct from the Traefik hostnames above.** The `*.local` names route containerised frontends on port 80 — inside their container every Next.js app listens on 3000, and there is no collision. This table governs only **standalone `next dev` / `next start`** (running an app directly on the host, outside Docker), where every app defaulting to :3000 means no two can run at once and OIDC callbacks collide. Each browser-facing frontend gets a **fixed** host port (TASK-MONO-460):
+
+| Frontend | Standalone dev port | OIDC dev redirect_uri |
+|---|---|---|
+| `platform-console` (console-web) | **3000** | `http://localhost:3000/api/auth/callback` (V0015) |
+| `ecommerce` web-store | **3001** | `http://localhost:3001/api/auth/callback/iam` (V0012 + V0028) |
+| `fan-platform` web | **3002** | `http://localhost:3002/api/auth/callback/iam` (V0011 + V0028) |
+
+- The port lives in each app's `package.json` (`next dev/start --port`), its Playwright config (`webServer` + `baseURL`), and its `NEXTAUTH_URL` default.
+- A new browser-facing frontend claims the next free port here and registers its `localhost:<port>/api/auth/callback/iam` redirect_uri in a **new forward** auth-service Flyway migration (never edit a seeded one — see V0028). The existing `localhost:3000` registrations stay (additive) so container/CI paths that assume 3000 keep working.
+- This has nothing to do with the Traefik `*.local` routing — a frontend reached via its hostname (`console.local`, `web.ecommerce.local`, `fan-platform.local`) is unaffected.
+
 ### One-time developer setup
 
 Append to `/etc/hosts` (Linux/macOS) or `C:\Windows\System32\drivers\etc\hosts` (Windows):

@@ -43,6 +43,15 @@ public final class JwtTestHelper {
     private final RSAKey rsaJwk;
     private final RSASSASigner signer;
 
+    /**
+     * A SECOND, independently-generated RSA keypair whose public half is deliberately
+     * <strong>never</strong> published in {@link #jwksJson()}. Used by
+     * {@link #signForgedSignatureToken(String)} to produce a token whose signature cannot
+     * validate against any published key — a deterministic "tampered signature" that does not
+     * depend on mangling bytes of a real signature.
+     */
+    private final RSASSASigner foreignSigner;
+
     public JwtTestHelper() {
         try {
             this.rsaJwk = new RSAKeyGenerator(2048)
@@ -55,6 +64,14 @@ public final class JwtTestHelper {
             this.signer = new RSASSASigner(rsaJwk);
         } catch (JOSEException e) {
             throw new IllegalStateException("Failed to build RSA signer", e);
+        }
+        try {
+            RSAKey foreignJwk = new RSAKeyGenerator(2048)
+                    .keyID(UUID.randomUUID().toString())
+                    .generate();
+            this.foreignSigner = new RSASSASigner(foreignJwk);
+        } catch (JOSEException e) {
+            throw new IllegalStateException("Failed to build foreign (unpublished) RSA signer", e);
         }
     }
 
@@ -96,6 +113,46 @@ public final class JwtTestHelper {
             jwt.sign(signer);
         } catch (JOSEException e) {
             throw new IllegalStateException("Failed to sign JWT", e);
+        }
+        return jwt.serialize();
+    }
+
+    /**
+     * Builds a structurally valid wms operator token (correct issuer/tenant/role) that
+     * <strong>advertises the real published {@code kid}</strong> in its JWS header — so the
+     * resource server selects the published key to verify — but is <strong>signed with the
+     * foreign, unpublished private key</strong>. The signature therefore never matches the
+     * published public key, yielding a <em>deterministic</em> 401.
+     *
+     * <p>Why this instead of flipping a byte of a real signature: an RSA-2048 signature is
+     * 256 bytes → 342 base64url chars, and the <em>last</em> char encodes only 2 significant
+     * bits + 4 padding bits (its value ∈ {@code {A,Q,g,w}}). Flipping the last char when it is
+     * {@code 'A'} (low 2 bits = 00) toggles only a padding bit, so the decoded signature bytes
+     * are unchanged, the "tampered" token still verifies, and the test flakes ~25% of runs
+     * depending on the generated key. Forging with a foreign key removes that dependence
+     * entirely — do not reintroduce the byte-flip.
+     */
+    public String signForgedSignatureToken(String subject) {
+        Instant now = Instant.now();
+        JWTClaimsSet claims = new JWTClaimsSet.Builder()
+                .subject(subject)
+                .issuer(LEGACY_ISSUER)
+                .claim("tenant_id", DEFAULT_TENANT_ID)
+                .claim("role", "MASTER_READ")
+                .issueTime(Date.from(now))
+                .expirationTime(Date.from(now.plusSeconds(300)))
+                .jwtID(UUID.randomUUID().toString())
+                .build();
+        // Advertise the REAL published kid so the decoder selects the published key…
+        JWSHeader header = new JWSHeader.Builder(JWSAlgorithm.RS256)
+                .keyID(rsaJwk.getKeyID())
+                .build();
+        SignedJWT jwt = new SignedJWT(header, claims);
+        try {
+            // …but sign with the foreign key the JWKS never published → signature mismatch.
+            jwt.sign(foreignSigner);
+        } catch (JOSEException e) {
+            throw new IllegalStateException("Failed to sign forged-signature JWT", e);
         }
         return jwt.serialize();
     }

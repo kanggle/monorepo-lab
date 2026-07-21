@@ -1,7 +1,6 @@
 package com.example.account.presentation.internal;
 
 import com.example.account.application.command.BulkProvisionAccountCommand;
-import com.example.account.application.exception.TenantScopeDeniedException;
 import com.example.account.application.result.BulkProvisionAccountResult;
 import com.example.account.application.service.BulkProvisionAccountUseCase;
 import com.example.account.presentation.dto.request.BulkProvisionAccountRequest;
@@ -58,7 +57,7 @@ public class BulkAccountController {
             @RequestHeader(value = "X-Tenant-Id", required = false) String callerTenantId,
             @Valid @RequestBody BulkProvisionAccountRequest request) {
 
-        validateTenantScope(callerTenantId, tenantId);
+        TenantScopeGuard.validate(callerTenantId, tenantId);
 
         List<BulkProvisionAccountCommand.Item> items = request.items().stream()
                 .map(i -> new BulkProvisionAccountCommand.Item(
@@ -81,21 +80,4 @@ public class BulkAccountController {
         return ResponseEntity.ok(BulkProvisionAccountResponse.from(result));
     }
 
-    /**
-     * Defense-in-depth tenant scope validation.
-     *
-     * <p>Mirrors the same guard in {@link TenantProvisioningController}.
-     * If {@code X-Tenant-Id} is absent, validation is skipped — the gateway's
-     * mTLS / shared-token layer is trusted.
-     *
-     * @param callerTenantId value from {@code X-Tenant-Id} header (may be null)
-     * @param pathTenantId   the {@code {tenantId}} path variable
-     * @throws TenantScopeDeniedException if the header is present and does not match the path
-     */
-    private void validateTenantScope(String callerTenantId, String pathTenantId) {
-        if (callerTenantId != null && !callerTenantId.isBlank()
-                && !callerTenantId.equals(pathTenantId)) {
-            throw new TenantScopeDeniedException(callerTenantId, pathTenantId);
-        }
-    }
 }

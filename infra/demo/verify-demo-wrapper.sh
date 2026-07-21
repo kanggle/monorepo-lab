@@ -973,4 +973,30 @@ echo "  (관측) 부하 후 메모리: $u_used   ← 호스트마다 다르다. 
 ok "kafka 부하 완주 (RestartCount=0, t5 메시지=${u_msgs})"
 cleanup_u
 
+# ---------------------------------------------------------------------------
+echo "[verify] (v) admin-service 가 operator-토큰 교환 검증 env 를 배선하는가"
+# ---------------------------------------------------------------------------
+# 근거(MONO-456): 콘솔 로그인은 OIDC 폼 뒤에 operator-토큰 교환을 한 번 더 한다
+# (POST /api/admin/auth/token-exchange). admin-service 의 subject-token validator
+# (IamOidcProperties, @ConfigurationProperties(prefix="admin.oidc"))가 읽는
+# issuer/jwks-uri 를 데모가 주입하지 않으면 둘 다 localhost:8081 기본값으로 폴백한다
+# → JWKS fetch 실패 + iss 불일치 → 401 "Subject token verification failed".
+# (l) 이 브라우저 OIDC 도달성(로그인 전반부)을 지키듯, 이 가드는 operator-교환
+# 도달성(후반부)을 지킨다. 한쪽만 있으면 폼은 뜨는데 셸엔 못 들어가는, 가장 진단하기
+# 나쁜 모양이 된다 — 컨테이너는 전부 healthy 하고 /login 도 200 이다.
+#
+# 술어는 **key 형태로 앵커한다**: 위 env 블록의 주석이 `ADMIN_OIDC_*` 를 산문으로
+# 언급하므로 substring grep 은 실제 env 라인을 지워도 통과한다(대리지표). 커밋될 blob
+# 자체 — `^  ADMIN_OIDC_ISSUER:` 라는 YAML key — 를 물어야 이 가드가 무는 것이다.
+ov="$ROOT/infra/demo/iam-traefik.override.yml"
+adm_missing=""
+grep -qE '^[[:space:]]*ADMIN_OIDC_ISSUER:[[:space:]]'   "$ov" || adm_missing="$adm_missing ADMIN_OIDC_ISSUER"
+grep -qE '^[[:space:]]*ADMIN_OIDC_JWKS_URI:[[:space:]]' "$ov" || adm_missing="$adm_missing ADMIN_OIDC_JWKS_URI"
+[ -z "$adm_missing" ] || fail "iam-traefik.override.yml 이 admin-service subject-token validator env 를 빠뜨렸습니다:$adm_missing"\
+  $'\n'"→ 없으면 validator 가 localhost:8081 기본값으로 폴백해 operator-토큰 교환이 401 로 죽습니다"\
+  $'\n'"   — 컨테이너는 전부 healthy 하고 로그인 폼도 뜨지만 콘솔 셸엔 못 들어갑니다(MONO-456)."\
+  $'\n'"→ admin-service.environment 에 ADMIN_OIDC_ISSUER(공개 호스트, 토큰 iss 와 문자열 일치) +"\
+  $'\n'"   ADMIN_OIDC_JWKS_URI(컨테이너 DNS /internal/auth/jwks) 를 넣으세요."
+ok "admin-service subject-token validator env(issuer+jwks) 유지"
+
 echo "[verify] 전체 PASS (정적 + 실기동 증명)"

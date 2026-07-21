@@ -23,7 +23,7 @@ export const env = {
   oidcIssuerUrl: process.env.OIDC_ISSUER_URL ?? 'http://iam.local',
   oidcClientId: process.env.OIDC_CLIENT_ID ?? 'fan-platform-user-flow-client',
   oidcClientSecret: process.env.OIDC_CLIENT_SECRET ?? '',
-  nextAuthUrl: process.env.NEXTAUTH_URL ?? 'http://localhost:3000',
+  nextAuthUrl: process.env.NEXTAUTH_URL ?? 'http://localhost:3002',
 } as const;
 
 export type Env = typeof env;

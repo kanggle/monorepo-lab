@@ -224,7 +224,7 @@ Full schemas: `specs/contracts/events/outbound-events.md`.
 | `inventory.reserved` | `wms.inventory.reserved.v1` | Saga step 1 success → advance to `RESERVED` |
 | `inventory.released` | `wms.inventory.released.v1` | Compensation acknowledged → advance to `CANCELLED` |
 | `inventory.confirmed` | `wms.inventory.confirmed.v1` | Saga step 4 success → advance to `COMPLETED` |
-| `inventory.adjusted` (with reason `INSUFFICIENT_STOCK`) | `wms.inventory.adjusted.v1` | Out-of-stock signal during reserve → trigger compensation |
+| `inventory.reserve.failed` | `wms.inventory.reserve.failed.v1` | Out-of-stock during reserve → `RESERVE_FAILED` (backorder signal; no compensation — all-or-nothing reserve) |
 | `master.warehouse.*` | `wms.master.warehouse.v1` | Local read-model refresh |
 | `master.zone.*` | `wms.master.zone.v1` | Same |
 | `master.location.*` | `wms.master.location.v1` | Same |

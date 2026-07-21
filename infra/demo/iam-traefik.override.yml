@@ -145,7 +145,28 @@ services:
           - iam-account-service
 
   admin-service:
-    environment: *iam-oidc
+    environment:
+      <<: *iam-oidc
+      # GAP OIDC subject-token validator (TASK-MONO-456). admin-service verifies
+      # the platform-console-web access token presented to
+      # POST /api/admin/auth/token-exchange — the operator-token swap the console
+      # login performs AFTER the OIDC form, on the way to the shell. The validator
+      # is IamOidcProperties, @ConfigurationProperties(prefix="admin.oidc"); it is
+      # a SEPARATE trust anchor from *iam-oidc above (that is the resource-server
+      # jwt: OIDC_ISSUER_URL / OIDC_JWK_SET_URI). Without these two the validator
+      # falls back to its localhost:8081 defaults — the JWKS fetch dies and the
+      # iss check fails → 401 "Subject token verification failed", so login never
+      # reaches /dashboards/overview even though every container is healthy.
+      #   issuer   = string-compared to the token iss → PUBLIC host, identical to
+      #              what auth-service mints as iss via *iam-oidc OIDC_ISSUER_URL.
+      #   jwks-uri = an actual fetch → CONTAINER DNS, the same /internal/auth/jwks
+      #              the gateway-service already consumes in docker-compose.e2e.yml
+      #              (public host would die on AWS: no IGW hairpin).
+      # ADMIN_OIDC_* binds admin.oidc.* by Spring relaxed binding; the names mirror
+      # platform-console/docker-compose.e2e.yml, the canonical wiring of this same
+      # validator for the console login flow (sibling parity).
+      ADMIN_OIDC_ISSUER: http://iam.${DEMO_DOMAIN:-local}
+      ADMIN_OIDC_JWKS_URI: http://auth-service:8081/internal/auth/jwks
     networks:
       iam-e2e: null
       traefik-net:

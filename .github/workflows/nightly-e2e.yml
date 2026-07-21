@@ -475,7 +475,7 @@ jobs:
           ECOMMERCE_WEB_STORE_CLIENT_ID: ecommerce-web-store-client
           ECOMMERCE_WEB_STORE_CLIENT_SECRET: ecommerce-dev
           NEXTAUTH_SECRET: fullstack-iam-e2e-secret
-          NEXTAUTH_URL: http://localhost:3000
+          NEXTAUTH_URL: http://localhost:3001
           AUTH_TRUST_HOST: 'true'
           PLAYWRIGHT_JSON_OUTPUT_NAME: playwright-report/results.json
         run: pnpm exec playwright test --reporter=list,json
@@ -606,7 +606,7 @@ jobs:
           ECOMMERCE_WEB_STORE_CLIENT_ID: ecommerce-web-store-client
           ECOMMERCE_WEB_STORE_CLIENT_SECRET: ecommerce-dev
           NEXTAUTH_SECRET: ci-iam-e2e-secret
-          NEXTAUTH_URL: http://localhost:3000
+          NEXTAUTH_URL: http://localhost:3001
           AUTH_TRUST_HOST: 'true'
         run: pnpm --filter web-store exec playwright test rp-initiated-logout.spec.ts
 

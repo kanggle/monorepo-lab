@@ -1,6 +1,7 @@
 package com.example.account.infrastructure.persistence;
 
 import com.example.account.domain.profile.Profile;
+import com.example.account.domain.tenant.TenantId;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -50,7 +51,7 @@ public class ProfileJpaEntity {
     private Instant maskedAt;
 
     public static ProfileJpaEntity fromDomain(Profile profile) {
-        return fromDomain(profile, "fan-platform");
+        return fromDomain(profile, TenantId.FAN_PLATFORM.value());
     }
 
     /**

@@ -13,7 +13,7 @@ import { env } from '@/shared/config/env';
  * `post_logout_redirect_uri`, so the IdP terminates ITS OWN session.
  *
  * The registered `post-logout-redirect-uris` for `fan-platform-user-flow-client`
- * (GAP V0011) are the app roots `http://localhost:3000/` + `http://fan-platform.local/`
+ * (GAP V0011 + V0028) are the app roots `http://localhost:3002/` (dev, TASK-MONO-460) + `http://fan-platform.local/`
  * — only made effective once the GAP `OAuthClientMapper` copies them onto the
  * SAS `RegisteredClient` (TASK-BE-328). We therefore send the app origin + `/`
  * (no path, no query) so SAS matches it exactly.

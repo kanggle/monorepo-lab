@@ -28,11 +28,6 @@ public class TenantRepositoryImpl implements TenantRepository {
     }
 
     @Override
-    public boolean existsActive(TenantId tenantId) {
-        return jpaRepository.existsByTenantIdAndStatus(tenantId.value(), TenantStatus.ACTIVE);
-    }
-
-    @Override
     public boolean existsById(TenantId tenantId) {
         return jpaRepository.existsById(tenantId.value());
     }
