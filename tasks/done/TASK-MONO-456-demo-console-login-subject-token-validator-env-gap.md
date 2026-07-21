@@ -1,6 +1,6 @@
 # TASK-MONO-456 — 통합 데모가 admin-service subject-token validator env(`OIDC_ISSUER`/`OIDC_JWKS_URI`)를 주입하지 않아 콘솔 로그인이 셸에 도달하지 못한다
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-MONO
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (데모 env 2줄 주입 + 재현 검증. 다만 AC-0 의 "실제로 깨져 있나 / AMI 가 딴 데서 세팅하나" 재측정이 실질)
