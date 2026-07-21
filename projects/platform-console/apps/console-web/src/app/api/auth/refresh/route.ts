@@ -10,6 +10,8 @@ import {
   ASSUMED_TOKEN_COOKIE,
   ID_TOKEN_COOKIE,
   tokenCookieOpts,
+  clearFullSession,
+  clearTenantSelection,
 } from '@/shared/lib/session';
 import { exchangeForOperatorToken } from '@/shared/lib/operator-token-exchange';
 import { exchangeForAssumedToken } from '@/shared/lib/assume-tenant-exchange';
@@ -81,13 +83,7 @@ export async function POST() {
     });
 
     if (!upstream.ok) {
-      jar.delete(ACCESS_COOKIE);
-      jar.delete(REFRESH_COOKIE);
-      jar.delete(OPERATOR_COOKIE);
-      jar.delete(ID_TOKEN_COOKIE);
-      // Whole session dropped → also clear the coupled tenant + assumed token.
-      jar.delete(ASSUMED_TOKEN_COOKIE);
-      jar.delete(TENANT_COOKIE);
+      clearFullSession(jar);
       logger.warn('refresh_failed', { requestId, status: upstream.status });
       return NextResponse.json(
         { code: 'TOKEN_INVALID', message: 'refresh failed' },
@@ -146,13 +142,7 @@ export async function POST() {
         maxAge: op.expiresIn,
       });
     } catch (err) {
-      jar.delete(ACCESS_COOKIE);
-      jar.delete(REFRESH_COOKIE);
-      jar.delete(OPERATOR_COOKIE);
-      jar.delete(ID_TOKEN_COOKIE);
-      // Whole session dropped → also clear the coupled tenant + assumed token.
-      jar.delete(ASSUMED_TOKEN_COOKIE);
-      jar.delete(TENANT_COOKIE);
+      clearFullSession(jar);
       const failClosed =
         err instanceof OperatorExchangeError && err.reason === 'fail_closed';
       logger.warn('refresh_reexchange_failed', {
@@ -183,8 +173,7 @@ export async function POST() {
         });
       } catch {
         // Drop the coupled pair — no stale assumed token, no orphan tenant.
-        jar.delete(ASSUMED_TOKEN_COOKIE);
-        jar.delete(TENANT_COOKIE);
+        clearTenantSelection(jar);
         logger.warn('refresh_reassume_failed', { requestId });
       }
     }

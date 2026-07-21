@@ -4,10 +4,8 @@ import { getServerEnv, publicOrigin } from '@/shared/config/env';
 import {
   ACCESS_COOKIE,
   REFRESH_COOKIE,
-  OPERATOR_COOKIE,
-  TENANT_COOKIE,
-  ASSUMED_TOKEN_COOKIE,
   ID_TOKEN_COOKIE,
+  clearFullSession,
 } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
 
@@ -65,12 +63,7 @@ export async function POST() {
   if (refresh) await revoke(refresh, 'refresh_token');
   if (access) await revoke(access, 'access_token');
 
-  jar.delete(ACCESS_COOKIE);
-  jar.delete(REFRESH_COOKIE);
-  jar.delete(OPERATOR_COOKIE);
-  jar.delete(TENANT_COOKIE);
-  jar.delete(ASSUMED_TOKEN_COOKIE);
-  jar.delete(ID_TOKEN_COOKIE);
+  clearFullSession(jar);
 
   // Post-logout landing — must EXACTLY match a registered
   // `post-logout-redirect-uris` entry on the IAM `platform-console-web` client
