@@ -1,6 +1,6 @@
 # TASK-MONO-454 — ADR-MONO-051 §6 has two verification rows that no longer verify, and the ADR already documents one of them
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-MONO
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (one citation repair is mechanical; the second row needs a wording judgment)
