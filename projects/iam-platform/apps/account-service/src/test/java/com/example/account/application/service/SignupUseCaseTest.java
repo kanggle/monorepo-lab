@@ -23,7 +23,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -52,14 +51,19 @@ class SignupUseCaseTest {
     @Mock private AccountIdentityProvisioner accountIdentityProvisioner;
     @Mock private TenantRepository tenantRepository;
 
-    @InjectMocks private SignupUseCase signupUseCase;
+    private SignupUseCase signupUseCase;
 
     /**
      * TASK-BE-507: every signup now resolves + validates its tenant first, so each test needs
      * an ACTIVE tenant behind whichever tenant the command carries.
      */
     @BeforeEach
-    void tenantIsActive() {
+    void setUp() {
+        // Real ActiveTenantGuard over the mocked TenantRepository, so the extracted tenant guard
+        // runs for real — every stub and assertion below is preserved verbatim from the
+        // pre-extraction test.
+        signupUseCase = new SignupUseCase(accountRepository, profileRepository, eventPublisher,
+                authServicePort, accountIdentityProvisioner, new ActiveTenantGuard(tenantRepository));
         // lenient: the two rejection tests below shadow this with a tenant-specific stub, which
         // would otherwise make this one "unused" under STRICT_STUBS.
         lenient().when(tenantRepository.findById(any(TenantId.class)))

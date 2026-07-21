@@ -1,6 +1,6 @@
 package com.example.account.presentation.internal.identity;
 
-import com.example.account.application.exception.TenantScopeDeniedException;
+import com.example.account.presentation.internal.TenantScopeGuard;
 import com.example.account.application.service.ResolveOrCreateIdentityUseCase;
 import com.example.account.application.service.ResolveOrCreateIdentityUseCase.ResolveOrCreateIdentityResult;
 import com.example.account.presentation.dto.request.ResolveOrCreateIdentityRequest;
@@ -52,17 +52,11 @@ public class ResolveOrCreateIdentityController {
             @RequestHeader(value = "X-Tenant-Id", required = false) String callerTenantId,
             @Valid @RequestBody ResolveOrCreateIdentityRequest request) {
 
-        validateTenantScope(callerTenantId, tenantId);
+        TenantScopeGuard.validate(callerTenantId, tenantId);
 
         ResolveOrCreateIdentityResult result = resolveOrCreateIdentityUseCase.execute(
                 tenantId, request.email(), request.reuseExistingOrFalse());
         return ResponseEntity.ok(ResolveOrCreateIdentityResponse.from(result));
     }
 
-    private void validateTenantScope(String callerTenantId, String pathTenantId) {
-        if (callerTenantId != null && !callerTenantId.isBlank()
-                && !callerTenantId.equals(pathTenantId)) {
-            throw new TenantScopeDeniedException(callerTenantId, pathTenantId);
-        }
-    }
 }

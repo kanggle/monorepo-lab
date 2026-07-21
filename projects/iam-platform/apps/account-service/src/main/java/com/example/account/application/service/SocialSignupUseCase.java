@@ -2,15 +2,11 @@ package com.example.account.application.service;
 
 import com.example.account.application.command.SocialSignupCommand;
 import com.example.account.application.event.AccountEventPublisher;
-import com.example.account.application.exception.TenantNotFoundException;
-import com.example.account.application.exception.TenantSuspendedException;
 import com.example.account.application.result.SocialSignupResult;
 import com.example.account.domain.account.Account;
 import com.example.account.domain.profile.Profile;
 import com.example.account.domain.repository.AccountRepository;
 import com.example.account.domain.repository.ProfileRepository;
-import com.example.account.domain.repository.TenantRepository;
-import com.example.account.domain.tenant.Tenant;
 import com.example.account.domain.tenant.TenantId;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,16 +25,7 @@ public class SocialSignupUseCase {
     private final ProfileRepository profileRepository;
     private final AccountEventPublisher eventPublisher;
     private final AccountIdentityProvisioner accountIdentityProvisioner;
-    private final TenantRepository tenantRepository;
-
-    /** TASK-BE-507 — an account must never be born into a missing or suspended tenant. */
-    private void requireActiveTenant(TenantId tenantId) {
-        Tenant tenant = tenantRepository.findById(tenantId)
-                .orElseThrow(() -> new TenantNotFoundException(tenantId.value()));
-        if (!tenant.isActive()) {
-            throw new TenantSuspendedException(tenantId.value());
-        }
-    }
+    private final ActiveTenantGuard activeTenantGuard;
 
     @Transactional
     public SocialSignupResult execute(SocialSignupCommand command) {
@@ -46,7 +33,7 @@ public class SocialSignupUseCase {
         // and already stamps it on the social-identity row and the token — it now sends it here
         // too, so the account row no longer contradicts the token. Header-less → fan-platform.
         TenantId tenantId = TenantId.fromHeaderOrDefault(command.tenantId());
-        requireActiveTenant(tenantId);
+        activeTenantGuard.requireActive(tenantId);
 
         String normalizedEmail = command.email().trim().toLowerCase();
 
