@@ -1,6 +1,6 @@
 # TASK-MONO-462 — Reconcile TOKEN_TENANT_MISMATCH HTTP status: platform catalog (403) vs code/contract (401/400)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-MONO
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus 4.8 (a source-of-truth ruling with a real semantic question, not a mechanical doc fix)

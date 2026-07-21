@@ -1,6 +1,6 @@
 # TASK-BE-553 — Reconcile auth-api.md OIDC drift: iss, tenant_type, events-README producer
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (three spec-doc corrections, no behavior change; verify each against code first)

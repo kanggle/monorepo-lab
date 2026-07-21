@@ -1,6 +1,6 @@
 # TASK-ERP-BE-033 — Masterdata list: implement documented filters + real totalElements; fix events-doc class name
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-ERP-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus 4.8 for AC-1/AC-2 (cross-cutting change across 5 entities + pagination semantics); Sonnet 4.6 for AC-3 (doc-only)

@@ -1,6 +1,6 @@
 # TASK-FIN-BE-060 — Document the per-tenant FX-rate-override endpoint in ledger-api.md
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-FIN-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (add one numbered contract section from existing code; no behavior change)
