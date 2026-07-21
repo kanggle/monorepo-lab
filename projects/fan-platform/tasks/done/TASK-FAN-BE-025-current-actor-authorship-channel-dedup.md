@@ -1,6 +1,6 @@
 # TASK-FAN-BE-025 — fan-platform dedup: @CurrentActor resolver, authorship guard, channel-adapter boilerplate
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-FAN-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (mechanical, behavior-preserving; N1 touches many call sites)
