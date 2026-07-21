@@ -2,10 +2,9 @@ package com.example.account.application.service;
 
 import com.example.account.domain.account.Account;
 import com.example.account.domain.repository.AccountRepository;
+import com.example.account.domain.repository.ProcessedEventStore;
 import com.example.account.domain.status.AccountStatus;
 import com.example.account.domain.tenant.TenantId;
-import com.example.account.infrastructure.persistence.ProcessedEventJpaEntity;
-import com.example.account.infrastructure.persistence.ProcessedEventJpaRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -41,7 +41,7 @@ class UpdateLastLoginUseCaseTest {
     private AccountRepository accountRepository;
 
     @Mock
-    private ProcessedEventJpaRepository processedEventRepository;
+    private ProcessedEventStore processedEventStore;
 
     @InjectMocks
     private UpdateLastLoginUseCase useCase;
@@ -55,7 +55,7 @@ class UpdateLastLoginUseCaseTest {
         Instant occurredAt = Instant.parse("2026-04-26T10:00:00Z");
         Account account = activeAccount(ACCOUNT_ID, null);
 
-        given(processedEventRepository.existsByEventId(EVENT_ID)).willReturn(false);
+        given(processedEventStore.existsByEventId(EVENT_ID)).willReturn(false);
         given(accountRepository.findById(TenantId.FAN_PLATFORM, ACCOUNT_ID)).willReturn(Optional.of(account));
 
         useCase.execute(EVENT_ID, ACCOUNT_ID, occurredAt);
@@ -65,32 +65,28 @@ class UpdateLastLoginUseCaseTest {
         verify(accountRepository).save(savedAccount.capture());
         assertThat(savedAccount.getValue().getLastLoginSucceededAt()).isEqualTo(occurredAt);
 
-        // Dedup row written with the correct event type (flushed eagerly so a
-        // duplicate-delivery race surfaces the constraint violation inside the
-        // try/catch instead of at commit-time deferred flush).
-        ArgumentCaptor<ProcessedEventJpaEntity> savedDedup =
-                ArgumentCaptor.forClass(ProcessedEventJpaEntity.class);
-        verify(processedEventRepository).saveAndFlush(savedDedup.capture());
-        assertThat(savedDedup.getValue().getEventId()).isEqualTo(EVENT_ID);
-        assertThat(savedDedup.getValue().getEventType()).isEqualTo("auth.login.succeeded");
+        // Dedup row recorded with the correct event id + type. The eager-flush and the
+        // entity field-mapping now live in ProcessedEventStoreImpl (asserted at that seam,
+        // ProcessedEventStoreImplTest); here we assert the port is called with the values.
+        verify(processedEventStore).markProcessed(EVENT_ID, "auth.login.succeeded");
     }
 
     @Test
     @DisplayName("중복 이벤트: existsByEventId true → 즉시 return, account/processed_events 모두 미접근")
     void execute_duplicateEventId_skipsAllSideEffects() {
-        given(processedEventRepository.existsByEventId(EVENT_ID)).willReturn(true);
+        given(processedEventStore.existsByEventId(EVENT_ID)).willReturn(true);
 
         useCase.execute(EVENT_ID, ACCOUNT_ID, Instant.parse("2026-04-26T10:00:00Z"));
 
         verify(accountRepository, never()).findById(any(), any());
         verify(accountRepository, never()).save(any());
-        verify(processedEventRepository, never()).saveAndFlush(any());
+        verify(processedEventStore, never()).markProcessed(any(), any());
     }
 
     @Test
     @DisplayName("계정 미존재: findById empty → save 미수행, 예외 미전파 (dedup row는 이미 저장됨)")
     void execute_accountNotFound_returnsWithoutSideEffects() {
-        given(processedEventRepository.existsByEventId(EVENT_ID)).willReturn(false);
+        given(processedEventStore.existsByEventId(EVENT_ID)).willReturn(false);
         given(accountRepository.findById(TenantId.FAN_PLATFORM, ACCOUNT_ID)).willReturn(Optional.empty());
 
         useCase.execute(EVENT_ID, ACCOUNT_ID, Instant.parse("2026-04-26T10:00:00Z"));
@@ -98,7 +94,7 @@ class UpdateLastLoginUseCaseTest {
         // Dedup row IS persisted (dedup-first ordering): re-delivery of the same
         // unknown-account event must short-circuit on existsByEventId rather
         // than re-walk this code path.
-        verify(processedEventRepository).saveAndFlush(any());
+        verify(processedEventStore).markProcessed(any(), any());
         verify(accountRepository, never()).save(any());
     }
 
@@ -109,7 +105,7 @@ class UpdateLastLoginUseCaseTest {
         Instant older = newer.minus(1, ChronoUnit.HOURS);
         Account account = activeAccount(ACCOUNT_ID, newer);
 
-        given(processedEventRepository.existsByEventId(EVENT_ID)).willReturn(false);
+        given(processedEventStore.existsByEventId(EVENT_ID)).willReturn(false);
         given(accountRepository.findById(TenantId.FAN_PLATFORM, ACCOUNT_ID)).willReturn(Optional.of(account));
 
         useCase.execute(EVENT_ID, ACCOUNT_ID, older);
@@ -125,9 +121,9 @@ class UpdateLastLoginUseCaseTest {
     void execute_dedupRaceCondition_doesNotPropagate() {
         Instant occurredAt = Instant.parse("2026-04-26T10:00:00Z");
 
-        given(processedEventRepository.existsByEventId(EVENT_ID)).willReturn(false);
-        given(processedEventRepository.saveAndFlush(any()))
-                .willThrow(new DataIntegrityViolationException("uk_processed_events_event_id"));
+        given(processedEventStore.existsByEventId(EVENT_ID)).willReturn(false);
+        willThrow(new DataIntegrityViolationException("uk_processed_events_event_id"))
+                .given(processedEventStore).markProcessed(any(), any());
 
         // No exception escapes the use case — saveAndFlush() forces the INSERT
         // SQL to execute inside the try/catch (vs. deferred flush at commit
