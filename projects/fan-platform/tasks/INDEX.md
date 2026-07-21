@@ -66,7 +66,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-FAN-BE-024-outbox-publisher-classname-doc-drift.md` — 은퇴한 v1 `*OutboxPollingScheduler` 클래스명을 v2 `*OutboxPublisher` 로 정정 — event contracts 2건 + service architecture Forbidden-Dependencies 절 3건 (doc-only).
+- `TASK-FAN-BE-025-current-actor-authorship-channel-dedup.md` — `@CurrentActor` 리졸버 호출부 보일러플레이트(31×), community authorship guard(6×), notification 채널-어댑터 metric/logging 중복(4×) 제거 (behavior-preserving).
 
 ## in-progress
 

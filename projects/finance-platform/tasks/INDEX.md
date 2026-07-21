@@ -78,7 +78,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-FIN-BE-060-ledger-api-fx-rate-override-undocumented.md` — 테넌트별 FX 환율 오버라이드 엔드포인트(`GET`/`PUT .../settlements/fx-rate-override/{foreignCurrency}`)를 `ledger-api.md`에 `§13` 형식의 번호 섹션으로 문서화 (doc-only).
+- `TASK-FIN-BE-061-ledger-service-dedup-actor-currency-audit.md` — ledger-service `actorIdentity()` 헬퍼(5×), currency-parse-to-VALIDATION_ERROR(3×), validate→save→audit upsert 골격(4×) 중복 제거 (behavior-preserving).
 
 ## in-progress
 

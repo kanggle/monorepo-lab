@@ -78,7 +78,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-ERP-BE-033-masterdata-list-filters-total-elements-events-doc.md` — 마스터데이터 목록 문서화된 필터(`asOf`/`active`/`parentId`, 5개 엔티티)와 실제 `totalElements` 총 건수(현재는 page length) 구현 또는 스펙 축소 RULING + 구현; events 문서 outbox-publisher 클래스명 정정.
+- `TASK-ERP-BE-034-read-model-consumer-mapper-dedup.md` — read-model 서비스 Kafka 컨슈머 4종 공통 골격 + `*EnvelopeToCommandMapper` try/catch 보일러플레이트 3종 추출 (behavior-preserving).
 
 ## in-progress
 
