@@ -876,46 +876,123 @@ echo "[verify] (u) kafka 의 메모리 리밋이 브로커를 돌릴 만한가"
 #    사람이 같은 길을 다시 걷지 않게 하기 위해서다.**
 # ═══════════════════════════════════════════════════════════════════════════
 #
-# 리밋·image·env 는 **compose 에서 읽는다**(열거하지 않는다). 하한만 상수다.
-# 실기동(부하 완주 + RestartCount 0)은 남긴다 — 그건 호스트에 무관하게 참인 명제다.
-# RSS 는 **관측으로만 찍는다.** 호스트마다 2배씩 달라지는 값 위에 단언을 세우지 않는다.
+# 하한(1 GiB)은 상수다. **모집단은 열거한다**(MONO-442). 이 가드의 첫 판본은
+# `render ecommerce` 하나만 봐서, 리밋을 선언한 브로커가 하나 더 생겨도(FIN-BE-059 가
+# finance 에 1G 를 넣었다) 검사 밖이었다 — 저장소의 kafka 6→7 중 사정거리는 1개뿐이었다.
+# 술어를 **(B) 조건부 열거**로 바꾼다: **리밋을 *선언한* 브로커는 전부 1 GiB 하한을
+# 만족해야 한다.** 미선언은 통과한다 — `MONO-397` D3 / `MONO-399` Out-of-scope 가
+# **리밋은 상한이 아니라 *설정***이라 결정했으므로(미선언 JVM 에 리밋을 강제하면 전부
+# cgroup 25% 힙으로 재설정된다), 미선언 통과는 **묵인이 아니라 결정**이고 그 사실을
+# 로그로 말한다. 모집단은 자동으로 자란다. **(C) 전수+리밋 의무화는 D3 를 뒤집는 것이라
+# 실측 근거(MONO-399 AC-2) 없이는 선택 불가다.**
+#
+# **원본 compose YAML 을 읽는다(render 아님).** 도커 없이 발견된 전 브로커를 결정론적으로
+# 검사하고, 선언된 리밋 문자열(`1G`/`512M`)이 우리가 지키려는 바로 그 산출물이기 때문이다.
+# 브로커 집합은 **열거로 발견**한다(하드코딩 목록 금지 — 그게 애초의 결함이다) → FIN-BE-059
+# 머지 여부와 무관하게 동작한다. 실기동만 대표 1개로 남긴다(아래).
 U_MIN_LIMIT_MIB=1024   # 힙 256 MiB. 512M(=힙 128 MiB)는 브로커를 돌릴 리밋이 아니다.
 u_net="verify-u-net"; u_ctr="verify-u-kafka"
 cleanup_u() { docker rm -f "$u_ctr" >/dev/null 2>&1 || true; docker network rm "$u_net" >/dev/null 2>&1 || true; }
 trap 'cleanup_u; rm -f "$names_file" "$ports_file"' EXIT
 cleanup_u
 
-u_render="$(render ecommerce)"
-[ -n "$u_render" ] || fail "(u) ecommerce compose 렌더 실패 — 가드가 공허합니다."
+# <limit-string> → MiB (정수). 파싱 실패는 "" 로 돌려 **공허 통과 대신 loud FAIL** 을 낸다.
+# `memory:` 부재(무제한) 와 `memory: 0`(명시 0)은 호출부에서 구분한다(Edge Case).
+u_to_mib() {
+  local v n u
+  v="$(printf '%s' "$1" | tr -d "\"' ")"
+  n="$(printf '%s' "$v" | sed -E 's/[^0-9].*$//')"
+  u="$(printf '%s' "$v" | sed -E 's/^[0-9]+//')"
+  [ -n "$n" ] || { printf ''; return; }
+  case "$u" in
+    g|G|gb|Gb|GB) printf '%s' "$(( n * 1024 ))" ;;
+    m|M|mb|Mb|MB) printf '%s' "$n" ;;
+    k|K|kb|Kb|KB) printf '%s' "$(( n / 1024 ))" ;;
+    ''|b|B)       printf '%s' "$(( n / 1048576 ))" ;;   # 단위 없음 = bytes
+    *)            printf '' ;;                            # 미상 단위 → 파싱 실패
+  esac
+}
+# <compose-file> → 그 파일 kafka 블록의 선언 리밋(원문). 블록/리밋 없으면 "".
+# ⚠️ 들여쓰기 칸수를 하드코딩하지 않는다(첫 판본이 그래서 리밋을 못 읽고 공허 FAIL 냈다).
+# ⚠️ `|| true` 는 **필수**다: 미선언 브로커는 grep 이 no-match(1)를 내는데, 스크립트의
+# `set -o pipefail` 이 그걸 전파하면 `raw="$(u_declared_limit_of …)"` 명령치환이 `set -e`
+# 로 스크립트를 죽인다(미선언=정상 케이스인데 abort). head 의 SIGPIPE(141)도 같이 삼킨다.
+u_declared_limit_of() {
+  awk '/^  kafka:$/{f=1;next} /^  [A-Za-z0-9._-]+:$/{f=0} f' "$1" \
+    | grep -E '^[[:space:]]*(memory|mem_limit):[[:space:]]' | head -1 \
+    | sed -E 's/^[[:space:]]*(memory|mem_limit):[[:space:]]*//' || true
+}
 
-# kafka 서비스 블록만 잘라낸다 (다음 최상위 서비스 키 전까지).
-# ⚠️ 들여쓰기 칸수를 **하드코딩하지 않는다** — 첫 판본이 `memory:` 를 12칸으로 잡았는데
-# compose 는 10칸으로 렌더한다. 그 가드는 리밋을 못 읽고 "공허" FAIL 을 냈다.
-# (조용히 통과하지 않은 것이 설계의 성과다. 하지만 세는 것보다 안 세는 편이 낫다.)
+# ── 정적 하한 검사 — 발견된 전 브로커 (B) ──────────────────────────────────────
+u_total=0; u_declared_n=0; u_unlimited_n=0; u_fail=""; u_rep_slug=""
+for p in $(printf '%s\n' "${!COMPOSE[@]}" | LC_ALL=C sort); do
+  for rel in $(compose_files "$p"); do
+    f="$ROOT/$rel"
+    [ -f "$f" ] || continue
+    grep -qE '^  kafka:[[:space:]]*$' "$f" || continue   # 최상위 kafka 서비스만(depends_on 아님)
+    u_total=$(( u_total + 1 ))
+    raw="$(u_declared_limit_of "$f")"
+    if [ -z "$raw" ]; then
+      u_unlimited_n=$(( u_unlimited_n + 1 ))
+      echo "  $p/kafka: 리밋 미선언 → 통과 (D3: 무제한은 설정을 강제하지 않는다 — 묵인 아니라 결정)"
+    else
+      mib="$(u_to_mib "$raw")"
+      [ -n "$mib" ] || fail "(u) $p/kafka 의 리밋 '$raw' 를 파싱하지 못했습니다 — **가드가 공허합니다.**"
+      u_declared_n=$(( u_declared_n + 1 ))
+      [ -z "$u_rep_slug" ] && u_rep_slug="$p"
+      if [ "$mib" -ge "$U_MIN_LIMIT_MIB" ]; then
+        echo "  $p/kafka: 리밋 ${mib}MiB ≥ ${U_MIN_LIMIT_MIB}MiB ✅ (힙 $(( mib / 4 )) MiB)"
+      else
+        echo "  $p/kafka: 리밋 ${mib}MiB < ${U_MIN_LIMIT_MIB}MiB ❌"
+        u_fail="$u_fail  $p/kafka=${mib}MiB"
+      fi
+    fi
+    break   # 프로젝트당 브로커 하나
+  done
+done
+
+# AC-3 커버리지 — 어떤 술어를 고르든 검사되지 않은 브로커 수가 사람에게 보여야 한다.
+echo "  커버리지(AC-3): 브로커 ${u_total}개 발견 / 리밋 선언 ${u_declared_n}개(전부 하한 검사) / 미선언 ${u_unlimited_n}개(D3 통과)"
+
+[ "$u_total" -ge 1 ] || fail "(u) kafka 브로커를 하나도 발견하지 못했습니다 — **가드가 공허합니다**(열거가 깨졌습니다)."
+[ -z "$u_fail" ] || fail "선언된 kafka 리밋이 ${U_MIN_LIMIT_MIB}MiB 하한 미만:$u_fail"\
+  $'\n'"→ **리밋은 상한이 아니라 설정입니다.** KAFKA_HEAP_OPTS 가 없으면 JVM 이 cgroup 을 읽어"\
+  $'\n'"   힙을 리밋의 25% 로 잡습니다 (512M → 힙 128 MiB). '512M' 은 \"512MB 까지\" 가 아니라"\
+  $'\n'"   \"**128 MiB 힙으로 브로커를 돌려라**\" 입니다."\
+  $'\n'"→ **살아 있다는 것은 증거가 아닙니다.** 512M kafka 는 격리 상태에서 healthy 였고, 함대"\
+  $'\n'"   12개 서비스가 붙자 cgroup OOM 으로 14회 재시작했습니다(MONO-397)."\
+  $'\n'"→ 해당 compose 의 memory 리밋을 ${U_MIN_LIMIT_MIB}MiB 이상으로 올리세요."
+
+# ── AC-2 픽스처 — 술어가 실제로 무는지 증명한다 (초록은 물었다는 증거가 아니다) ──
+# 가드 (u) 자신이 첫 판본에서 리밋을 못 읽고 공허 통과한 전례가 이 파일에 적혀 있다.
+# 같은 판별식(u_declared_limit_of + u_to_mib)에 위반 픽스처(512M)를 먹여 RED 판정을 확인한다.
+u_fx="$(mktemp)"
+printf '%s\n' 'services:' '  kafka:' '    image: apache/kafka:3.7.0' \
+  '    deploy:' '      resources:' '        limits:' '          memory: 512M' \
+  '  zookeeper:' '    image: x' > "$u_fx"
+u_fx_mib="$(u_to_mib "$(u_declared_limit_of "$u_fx")")"
+rm -f "$u_fx"
+[ "$u_fx_mib" = "512" ] || fail "(u) AC-2 픽스처 파싱 오류: 512M → '${u_fx_mib}'MiB (512 기대) — 판별식이 깨졌습니다."
+[ "$u_fx_mib" -lt "$U_MIN_LIMIT_MIB" ] || fail "(u) AC-2 픽스처 술어 오류: 512MiB 가 하한 미만으로 판정되지 않았습니다."
+echo "  (AC-2) 픽스처: 512M 선언 → ${u_fx_mib}MiB < ${U_MIN_LIMIT_MIB}MiB 로 판정 = 가드가 문다 ✅"
+
+ok "선언된 kafka 리밋 ${u_declared_n}개 전부 ≥ ${U_MIN_LIMIT_MIB}MiB · 미선언 ${u_unlimited_n}개 D3 통과 (브로커 ${u_total}개, MONO-399 가 실측으로 D3 를 재검토하면 이 판정을 뒤집을 수 있다)"
+
+# ── 대표 실기동 — 선언된 리밋으로 실제로 부팅하는가 (호스트 무관하게 참인 명제만 단언) ──
+# 정적 하한(위)은 전 브로커를 덮지만, "그 리밋으로 브로커가 실제로 부팅한다"는 명제는
+# **대표 1개**로 충분하다(Edge Case: 실기동은 브로커 수만큼 CI 시간을 선형 증가시킨다).
+# 리밋을 선언한 첫 브로커를 render 해서 image/env/limit 의 **실효값**을 읽어 띄운다
+# (advertised listener 는 `kafka` 를 가리키므로 network-alias 로 맞춘다).
+u_rep_slug="${u_rep_slug:-ecommerce}"
+echo "  실기동 대표: ${u_rep_slug}/kafka (나머지 브로커는 위의 정적 하한만 검사)"
+u_render="$(render "$u_rep_slug")"
+[ -n "$u_render" ] || fail "(u) ${u_rep_slug} compose 렌더 실패 — 대표 실기동이 공허합니다."
 u_block="$(printf '%s\n' "$u_render" | awk '/^  kafka:$/{f=1;next} /^  [A-Za-z0-9._-]+:$/{f=0} f')"
 u_image="$(printf '%s\n' "$u_block" | awk '/^[[:space:]]*image:[[:space:]]/{print $2; exit}')"
 u_limit="$(printf '%s\n' "$u_block" | awk '/^[[:space:]]*memory:[[:space:]]/{gsub(/"/,"",$2); print $2; exit}')"
-
-[ -n "$u_image" ] || fail "(u) compose 에서 kafka 의 image 를 못 읽었습니다 — **가드가 공허합니다.**"
-[ -n "$u_limit" ] || fail "(u) compose 에서 kafka 의 memory 리밋을 못 읽었습니다 — **가드가 공허합니다.**"\
-  $'\n'"→ 리밋을 지우면 이 가드는 아무것도 재지 않습니다. 리밋 없는 브로커는 호스트를 굶깁니다."
+[ -n "$u_image" ] || fail "(u) ${u_rep_slug} 렌더에서 kafka image 를 못 읽었습니다 — **대표 실기동이 공허합니다.**"
+[ -n "$u_limit" ] || fail "(u) ${u_rep_slug} 렌더에서 kafka memory 리밋을 못 읽었습니다 — **대표 실기동이 공허합니다.**"
 u_limit_mib=$(( u_limit / 1048576 ))
-echo "  compose 에서 읽음: image=$u_image  limit=${u_limit_mib}MiB"
-
-# ── 판정 ────────────────────────────────────────────────────────────────────
-# 정적이고, 결정론적이고, 러너에서든 노트북에서든 같은 답을 낸다. 위 주석의 두 시도가
-# 실패한 뒤 남은 유일한 술어다. **작동하는 단순한 가드가, 작동하지 않는 영리한 가드보다 낫다.**
-[ "$u_limit_mib" -ge "$U_MIN_LIMIT_MIB" ] || fail "kafka 의 메모리 리밋이 ${u_limit_mib}MiB 입니다 (최소 ${U_MIN_LIMIT_MIB}MiB):"\
-  $'\n'"→ **리밋은 상한이 아니라 설정입니다.** KAFKA_HEAP_OPTS 가 없으면 JVM 이 cgroup 을 읽어"\
-  $'\n'"   힙을 리밋의 25% 로 잡습니다: ${u_limit_mib}M → 힙 $(( u_limit_mib / 4 )) MiB."\
-  $'\n'"   '512M' 은 \"512MB 까지 써라\" 가 아니라 \"**128 MiB 힙으로 Kafka 브로커를 돌려라**\" 입니다."\
-  $'\n'"→ **살아 있다는 것은 증거가 아닙니다.** 512M kafka 는 격리 상태에서 살아 healthcheck 를"\
-  $'\n'"   통과했고, 함대 12개 서비스가 컨슈머로 붙자 cgroup OOM 으로 14회 재시작했습니다(MONO-397)."\
-  $'\n'"→ compose 의 memory 리밋을 ${U_MIN_LIMIT_MIB}MiB 이상으로 올리세요."
-ok "kafka 리밋 ${u_limit_mib}MiB ≥ ${U_MIN_LIMIT_MIB}MiB (힙 $(( u_limit_mib / 4 )) MiB)"
-
-# ── 실기동 — 선언된 리밋으로 실제로 도는가 (호스트 무관하게 참인 명제만 단언한다) ──
-# env 도 compose 에서 읽는다 (advertised listener 는 `kafka` 를 가리키므로 network-alias 로 맞춘다)
 u_envs=()
 while IFS= read -r line; do
   [ -n "$line" ] && u_envs+=(-e "$line")

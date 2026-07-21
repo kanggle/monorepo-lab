@@ -107,6 +107,20 @@ bash infra/demo/verify-demo-wrapper.sh --live   # + (f) 실기동 증명 (redis 
 > 로컬에 실 `.env` 를 가진 개발자는 결손을 보지 못한다 — CI 러너와 데모 AMI 는 본다.
 > 데모에 필요한 값은 전부 [`demo.env`](demo.env) 에 있어야 한다.
 
+### kafka 메모리 리밋 정책 — 가드 (u) (MONO-442)
+
+가드 (u)는 **리밋을 *선언한* kafka 브로커는 전부 1 GiB 하한**을 만족하는지 검사한다
+(`KAFKA_HEAP_OPTS` 없는 JVM 은 cgroup 리밋의 25%를 힙으로 잡으므로 512M=힙 128 MiB 로는
+격리 상태에선 healthy 하다가 함대 부하에서 cgroup OOM 이 난다 — MONO-397, `ecommerce-kafka`
+14회 재시작). **리밋 미선언 브로커는 통과**한다: 리밋은 상한이 아니라 *설정*이라, 없던 리밋을
+강제하면 무제한 JVM 들이 전부 25% 힙으로 재설정된다(MONO-397 **D3** / MONO-399 Out-of-scope).
+이 "미선언 통과"는 **묵인이 아니라 결정**이며, 가드가 커버리지(선언 N / 미선언 K / 전체 M)를
+로그로 출력한다. 모집단은 **브로커 열거로 자동 성장**한다(하드코딩 목록 아님 — 첫 판본이
+`render ecommerce` 하나만 봐서 리밋을 선언한 finance(FIN-BE-059)를 놓쳤던 결함을 고친 것).
+실기동(부하 완주 + RestartCount 0)은 **대표 1개**로만 증명한다(정적 하한이 전 브로커를 덮으므로).
+**MONO-399 가 데모 실측으로 D3 를 재검토하면 이 판정((B) 조건부 열거)이 (C) 전수+의무화로
+뒤집힐 수 있다** — 그 실측 근거가 나오기 전엔 (C)는 선택 불가다.
+
 CI 잡 `demo-wrapper-smoke` (`.github/workflows/ci.yml`) 가 `infra/demo/**` ·
 `infra/traefik/**` · `projects/*/docker-compose.yml` 변경 PR 에서 위를 자동 검증한다.
 (필터는 순수-positive + `code-changed` AND → README-only 변경은 skip.)
