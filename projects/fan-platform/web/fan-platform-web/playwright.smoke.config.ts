@@ -23,14 +23,14 @@ export default defineConfig({
   reporter: [['list'], ['html', { outputFolder: 'playwright-report-smoke', open: 'never' }]],
   outputDir: 'test-results-smoke',
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3002',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     locale: 'ko-KR',
   },
   webServer: {
     command: 'pnpm start',
-    port: 3000,
+    port: 3002,
     timeout: 60_000,
     reuseExistingServer: !process.env.CI,
     env: {
@@ -42,7 +42,7 @@ export default defineConfig({
       OIDC_ISSUER_URL: 'http://127.0.0.1:1',
       OIDC_CLIENT_ID: 'fan-platform-user-flow-client',
       OIDC_CLIENT_SECRET: 'smoke-test-placeholder',
-      NEXTAUTH_URL: 'http://localhost:3000',
+      NEXTAUTH_URL: 'http://localhost:3002',
       NEXTAUTH_SECRET: 'smoke-test-secret-32-bytes-min-OK',
       AUTH_TRUST_HOST: 'true',
     },
