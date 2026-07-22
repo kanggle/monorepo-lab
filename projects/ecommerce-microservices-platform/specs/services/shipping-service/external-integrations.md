@@ -63,7 +63,7 @@ Both env-overridable: `shipping.carrier.delivery-tracker.{auth-url,graphql-url}`
   and body `grant_type=client_credentials` (`application/x-www-form-urlencoded`).
 - Response `access_token` (JWT, short-lived) is cached in memory and reused until
   near expiry, then re-fetched — a hand-rolled token provider mirroring the
-  `GapClientCredentialsTokenProvider` pattern (ADR-005 workload identity).
+  `GapClientCredentialsTokenProvider` pattern (iam-platform ADR-005 workload identity).
 - GraphQL calls carry `Authorization: Bearer {access_token}`.
 - Credentials are **env-injected** (`shipping.carrier.delivery-tracker.client-id`,
   `…client-secret`) — no hardcoding. **Blank either credential = adapter disabled
@@ -277,6 +277,6 @@ reproducible). The adapter is written to the real contract regardless.
 - [`specs/contracts/http/shipping-api.md`](../../contracts/http/shipping-api.md) — published HTTP surface (refresh-tracking, carrier-webhook)
 - [`specs/contracts/events/shipping-events.md`](../../contracts/events/shipping-events.md) — `ShippingStatusChanged`
 - `.claude/skills/backend/external-http-integration` — provider-agnostic HTTP adapter playbook (MONO-234)
-- ADR-005 (workload identity) — `client_credentials` token provider precedent
+- [iam-platform ADR-005 (workload identity)](../../../../iam-platform/docs/adr/ADR-005-service-to-service-workload-identity.md) — `client_credentials` token provider precedent
 - `rules/traits/integration-heavy.md` — I1–I10
 - [Delivery Tracker docs](https://tracker.delivery/en/docs/tracking-api) — vendor wire contract
