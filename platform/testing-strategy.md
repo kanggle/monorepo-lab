@@ -116,6 +116,26 @@ A frontend with a Playwright `e2e-smoke/` suite gates every PR on **URL assertio
 
 **Naming:** `*EventTest.java` (unit), `*EventIntegrationTest.java` (with Testcontainers Kafka)
 
+**Cross-service consumer integration tests: do not block on partition assignment.** A blocking
+`ContainerTestUtils.waitForAssignment(...)` in `@BeforeEach` is a flake source when the test consumer shares a
+group with a cooperative-rebalancing application consumer — under CI contention the whole lane can time out
+waiting for an assignment that keeps churning. It also cannot prove a *negative* (that an event was not
+consumed). Instead:
+
+- **`auto-offset-reset=earliest`** on the test consumer, so it reads records produced before it joined — the
+  test no longer depends on being assigned *before* the act.
+- **Awaitility polling of the read side** for positive assertions: perform the act, then poll the resulting row
+  / projection / outbox effect until it appears, rather than blocking on the consumer itself.
+- **A downstream good-event *barrier* for negative (absence) assertions:** to assert an event was *not*
+  consumed, publish a later known-good event and wait for **its** effect; once the barrier has been processed,
+  the absent event demonstrably will not arrive. A bare `Thread.sleep` cannot establish absence.
+- **`RangeAssignor`** for the test consumer, to avoid cooperative-sticky reassignment churn during the test.
+
+A canonical reference implementation of this pattern lives in one project's outbound-service integration base
+(cited as a worked example, not a load-bearing part of the rule):
+<!-- hardstop-allow: worked-example citation of an existing reference test, not project-specific rule content (TASK-MONO-464 AC-2/AC-4) -->
+`projects/wms-platform/apps/outbound-service/src/test/java/.../OutboundServiceIntegrationBase.java`.
+
 ## Contract Tests (future)
 
 - Verify that HTTP API responses match published contracts.
@@ -247,6 +267,32 @@ constructible. The defect shipped behind a green lane.
   filter registration, the `@PreAuthorize`, the `UNIQUE` constraint. A proxy indicator is not the property.
 - **Confirm by mutation** (§ G3): break the wiring — the filter registration, the validator — and require the
   test to go RED. A test that stays green through that mutation was never covering the rule.
+
+## A green isolation / uniqueness test proves nothing if its fixture inputs cannot co-occur in production
+
+A test that asserts **isolation / uniqueness / separation** (per-tenant scoping, per-user visibility, dedupe by
+key) tests that property only if its two distinguishing fixture values can **actually co-occur in production**.
+When they cannot, the assertion passes over a mechanism that is absent — the same false green as § "A test that
+bypasses the enforcement layer", reached from a different direction.
+
+Before trusting such a test, **trace each distinguishing value back to whoever populates it** — the token
+issuer, the seed SQL, the OAuth client config, the request builder. A claim *name* does not imply the value
+varies: a fixture that stamps a **constant** `tenant_id` on every row proves nothing about per-tenant isolation,
+because production never sends two different tenants down that path — the "isolation" is a costume over a global
+mechanism. (Worked incident: `TASK-MONO-368`, where an apparent per-tenant isolation test sat over a single
+global throttle.)
+
+The second face is **a tool configuration production never uses.** An "impossible input" is also manufactured
+when the test builds a collaborator by hand with settings the wired one does not have — e.g. a bare
+`new ObjectMapper()` with strict unknown-property handling, asserting a deserialization failure, when the
+injected Spring Boot mapper has that handling **off**. The test then "proves" an outage (a DLQ route, a 4xx)
+that production wiring cannot produce. Assert against the **wired** parser / mapper / client, not a hand-built
+one. (Worked incident: `TASK-BE-545`, where a strict-mapper fixture "proved" a DLQ outage the production mapper
+did not have.)
+
+**Therefore, before asserting isolation / uniqueness / separation:** confirm the fixture's distinguishing values
+(a) can coexist within one production run and (b) are produced by the *same tooling production wires*. If either
+fails, the green is a fact about the fixture, not about the property.
 
 ---
 
