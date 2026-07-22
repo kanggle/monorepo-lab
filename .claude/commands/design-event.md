@@ -37,7 +37,7 @@ Examples:
 
 Per event:
 - Event Name
-- Topic: `{service}.{entity}.{event}`
+- Topic: `{service}.{entity}.{event}.v{n}` (version suffix per `platform/versioning-policy.md`)
 - Publisher / Consumers
 - Trigger (when the event is published)
 - Payload fields (camelCase)
@@ -66,7 +66,7 @@ MUST be present; additional fields are allowed.
 
 - Envelope fields: camelCase (per `platform/event-driven-policy.md`); payload fields: camelCase
 - Events represent past facts — immutable after publication
-- Topic naming: `{service}.{entity}.{event}` (kebab-case)
+- Topic naming: `{service}.{entity}.{event}.v{n}` (dot-separated, lowercase; the `.v{n}` version suffix is mandatory — see `platform/versioning-policy.md` § Event Versioning)
 - Consumers: idempotent processing required, DLQ required
 - Producers: publish after transaction commit (outbox pattern)
-- Breaking changes: create new version as `{EventName}V{n}`
+- Breaking changes: bump the `eventVersion` envelope field **and** publish on a new topic version `<topic>.v{n}` with a coexistence period — **both, never either** (per `platform/versioning-policy.md` § Event Versioning + `platform/event-driven-policy.md` § Schema Versioning). Do **not** use an `{EventName}V{n}` event-type suffix — that form was removed as wrong (no live contract implements it; TASK-MONO-411)
