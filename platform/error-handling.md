@@ -892,7 +892,7 @@ Owned by `notification-service` v1 (TASK-ERP-BE-011). Event-consumer that
 fans out in-app notifications from `erp.approval.*.v1` to the recipient
 employee (submitted→approver, approved/rejected→submitter, withdrawn→approver),
 plus a recipient-scoped inbox read surface. Terminal consumer — publishes no
-events (E5-style boundary; `rules/domains/erp.md` § Internal Event Catalog has
+events (E5-style boundary; `rules/domains/erp.md`'s internal event catalog has
 no `erp.notification.*` producer topic).
 
 | Code | HTTP | Description |
