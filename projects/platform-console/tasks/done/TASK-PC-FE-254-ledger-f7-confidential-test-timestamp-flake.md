@@ -1,6 +1,6 @@
 # TASK-PC-FE-254 — console-web: ledger-api F7 confidential test flakes on a timestamp-substring false positive
 
-Status: ready
+Status: done
 
 `(분석=Opus 4.8 / 구현 권장=Sonnet — test-only flake fix, 프로덕션 무변경)`
 
