@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { isAuthenticated } from '@/shared/lib/session';
+import { sanitizeReturnPath } from '@/shared/lib/return-path';
 import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
@@ -47,7 +48,9 @@ export default async function LoginPage({
   const error = sp.error
     ? (ERROR_MESSAGES[sp.error] ?? GENERIC_ERROR)
     : null;
-  const next = sp.redirect && sp.redirect.startsWith('/') ? sp.redirect : '/';
+  // Same-site sanitise via the shared predicate the login route also uses —
+  // page and route must never diverge on "is this redirect safe?" (PC-FE-253).
+  const next = sanitizeReturnPath(sp.redirect);
   const loginHref = `/api/auth/login?redirect=${encodeURIComponent(next)}`;
 
   return (
