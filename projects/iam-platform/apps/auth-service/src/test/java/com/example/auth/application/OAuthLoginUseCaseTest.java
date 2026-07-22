@@ -239,6 +239,26 @@ class OAuthLoginUseCaseTest {
     }
 
     @Test
+    @DisplayName("callback: state bound to a DIFFERENT provider than the callback route → "
+            + "InvalidOAuthStateException, no provider/account-service HTTP, no txn (item B)")
+    void callback_stateProviderMismatch_rejected() {
+        // TASK-BE-521 (item B): the state was minted for KAKAO (authorize bound it),
+        // but the callback arrives on the GOOGLE route (command.provider() == "GOOGLE").
+        // The store returns the bound provider; the caller must reject the mismatch
+        // instead of discarding it.
+        when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.KAKAO));
+
+        assertThatThrownBy(() -> oAuthLoginUseCase.callback(command))
+                .isInstanceOf(InvalidOAuthStateException.class);
+
+        // Rejected at the state gate — nothing downstream runs.
+        verify(oAuthClientProvider, never()).getClient(any());
+        verify(accountServicePort, never()).socialSignup(anyString(), anyString(), anyString(), anyString(), any());
+        verify(accountServicePort, never()).getAccountStatus(anyString());
+        verify(oAuthLoginTransactionalStep, never()).persistLogin(any());
+    }
+
+    @Test
     @DisplayName("callback: provider HTTP failure propagates; account-service HTTP and txn step NOT called")
     void callback_providerHttpFailure_skipsAccountServiceAndTxn() {
         when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.GOOGLE));

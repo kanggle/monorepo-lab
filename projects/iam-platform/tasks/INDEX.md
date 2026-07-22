@@ -74,7 +74,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
 
-- `TASK-BE-521-social-login-sas-bridge-hardening.md` — **🟢 READY — 소셜 로그인 SAS-브리지 하드닝 2건(수동 세션 확립이 Spring 자동 방어를 우회).** 2026-07-21 소셜 로그인 코드 리뷰 산물. 전체 흐름(state 단일사용·redirect_uri allowlist·HTTP outside-txn·born-unified)은 견고. **🔴 항목 A(Medium 보안)=세션 픽세이션 방어 부재**: `SocialLoginBrowserController.establishSession()` 이 `@GetMapping` 컨트롤러에서 **수동으로** `securityContextRepository.saveContext` 하며 **세션 ID 회전 없음**(비밀번호 form-login 은 `UsernamePasswordAuthenticationFilter` 가 `changeSessionId` 자동 적용 — 소셜 GET 콜백은 그 필터 미통과). 실측: `src/main` 에 `changeSessionId`/`sessionFixation` **0건**. ⇒ JSESSIONID 사전고정 시 소셜 로그인 완료해도 회전 안 돼 그 세션이 인증됨=고전 픽세이션. **통합 테스트 사각**: `SocialLoginSasBrowserIntegrationTest` 가 인증 전후 **같은 세션 재사용**(`toMockSession`)하고 회전 미단언. **🟡 항목 B(Low 방어심층)=state↔provider 미대조**: `consumeAtomic` 이 바인딩 provider 를 **반환하는데**(`OAuthStateStore:34`) 호출부(`OAuthLoginUseCase:166`)가 `.isEmpty()` 만 보고 버림 → provider A state 를 `/login/oauth/{B}/callback` 에서 소비 가능(단일사용+난수라 실익 낮으나 무료 바인딩 검증 누락). **⚠️ 착수 재측정(AC-0)**: 회전/다른 완화 부재·consumeAtomic 반환 버림 실측(특히 서블릿/전역 필터 완화 없는지). **테스트 술어(F1)**: "로그인 성공"이 아니라 **콜백 전후 세션 ID 상이**를 단언(현재도 성공한다). Out=레거시 JSON 경로(`TASK-BE-398` 일몰)·login-CSRF 별건. 계약 변경 0. 분석=Opus 4.8 / 구현 권장=Sonnet 4.6. [[project_enforcement_straggler_sibling_parity]] [[feedback_guard_predicate_wrong_verify_the_artifact]]
 - `TASK-BE-398-legacy-custom-jwt-flow-sunset-removal.md` — **⏳ 2026-08-01 게이트 대기** — 레거시 커스텀-JWT 발급 경로(`POST /api/auth/login`) 일몰 제거. 수용 측 형제 = 루트 `TASK-MONO-367`(게이트웨이 7개 + servlet allowlist). **순서 규율: 발행 측(이 티켓)이 먼저, 수용 측이 나중** — 반대 순서면 살아있는 레거시 토큰이 즉사한다.
 > 2026-07-20 (`TASK-MONO-451`): BE-508·509·510·511·512·513 의 행이 이 `## ready` 섹션에 남아 있었다 — 본문은 `**DONE**` 에 *"아래 ## done 참조"* 였고 파일도 여섯 개 전부 `done/` 에 있었다. **본문이 done 이어도 섹션이 ready 면 ready 행이다**(읽는 사람은 섹션으로 큐를 고른다). 여섯 행 모두 `## done` 에 실체가 있으므로 제거했다. 같은 커밋에서 BE-398 이 `ready/` 에 있는데 행이 없어(노트로만 언급) 행을 추가했다.
 
@@ -102,7 +101,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-(empty)
+- 🔵 `TASK-BE-521-social-login-sas-bridge-hardening.md` — **REVIEW — impl PR #2885.** 소셜 로그인 SAS-브리지 하드닝 2건. **항목 A(Medium 보안)=세션 픽세이션 방어**: `SocialLoginBrowserController.establishSession()` 이 수동 `saveContext` 전 `request.changeSessionId()`(회전) 미적용 → 추가. 비밀번호 form-login 형제 경로 자세와 정렬. **항목 B(Low 방어심층)=state↔provider 바인딩**: `OAuthLoginUseCase.resolveSocialLogin` 이 `consumeAtomic` 반환 provider 를 버려 provider A state 를 B 콜백에서 소비 가능 → 대조 후 불일치 `InvalidOAuthStateException`. 테스트 술어(F1)=콜백 전후 세션 ID 상이(컨트롤러 유닛 + IT) + provider mismatch reject. 계약 변경 0. 로컬 유닛 GREEN, IT=CI 권위. 분석=Opus 4.8 / 구현=Opus 4.8. [[project_enforcement_straggler_sibling_parity]] [[feedback_guard_predicate_wrong_verify_the_artifact]]
 
 ## done
 

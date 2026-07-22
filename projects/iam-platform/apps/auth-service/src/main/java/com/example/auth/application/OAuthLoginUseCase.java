@@ -163,7 +163,14 @@ public class OAuthLoginUseCase {
         // Acceptable because state is 128-bit UUIDv7 and not enumerable; deferring
         // state consumption past validation would re-enable replay of expired
         // attempts that fail validation.
-        if (oAuthStateStore.consumeAtomic(command.state()).isEmpty()) {
+        //
+        // TASK-BE-521 (item B) — enforce the state↔provider binding the store
+        // returns. consumeAtomic returns the OAuthProvider the state was minted for
+        // (OAuthStateStore#consumeAtomic); a state issued on provider A's authorize
+        // must not be consumable on provider B's callback. The store already tracks
+        // the binding — the previous .isEmpty()-only check discarded it.
+        Optional<OAuthProvider> boundProvider = oAuthStateStore.consumeAtomic(command.state());
+        if (boundProvider.isEmpty() || boundProvider.get() != provider) {
             throw new InvalidOAuthStateException();
         }
 

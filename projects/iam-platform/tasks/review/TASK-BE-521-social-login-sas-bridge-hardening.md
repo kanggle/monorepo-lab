@@ -1,6 +1,6 @@
 # TASK-BE-521 — 소셜 로그인 SAS-브리지 하드닝 2건 (세션 픽세이션 방어 부재 · state↔provider 미대조)
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (#1 은 한 줄 세션 회전 + 통합 테스트 단언, #2 는 한 줄 대조. 다만 #1 의 "다른 완화가 없는지" 재측정이 실질)
@@ -98,11 +98,11 @@ if (oAuthStateStore.consumeAtomic(command.state()).isEmpty()) {   // 반환된 p
 
 ## Definition of Done
 
-- [ ] AC-0 재측정 (session 회전 부재·다른 완화 없음·consumeAtomic 반환 버림 확인)
-- [ ] 항목 A: 소셜 콜백 세션 ID 회전 + 전후 ID 상이 단언 테스트
-- [ ] 항목 A: saved `/oauth2/authorize` 재개 회귀 확인
-- [ ] 항목 B: state↔provider 대조 + 짝 단언
-- [ ] `auth-service:test` GREEN (CI 권위)
+- [x] AC-0 재측정 (session 회전 부재·다른 완화 없음·consumeAtomic 반환 버림 확인) — grep 0건 재확인, `establishSession` 여전히 회전 없이 `saveContext`, `consumeAtomic` provider 반환을 `.isEmpty()`만 보고 버림 확인. phantom 아님.
+- [x] 항목 A: 소셜 콜백 세션 ID 회전 (`request.changeSessionId()`, `getSession(false)` 가드) + 전후 ID 상이 단언 테스트 (컨트롤러 유닛 `callback_success_rotatesSessionId` + IT `socialLogin_sasBrowserFlow` 콜백 전후 세션 ID 대조)
+- [x] 항목 A: saved `/oauth2/authorize` 재개 회귀 확인 — `changeSessionId` 는 세션 attribute 보존 → IT step 5 resumed authorize → code 발급 (기존 단언이 회귀 가드)
+- [x] 항목 B: state↔provider 대조 (`consumeAtomic` 반환 provider ≠ 파싱 provider → `InvalidOAuthStateException`) + 짝 단언 (mismatch reject `callback_stateProviderMismatch_rejected` / match pass 기존 테스트)
+- [x] `auth-service:test` GREEN — 로컬 유닛 GREEN (컨트롤러/use-case). IT(Testcontainers)는 Windows 로컬 SKIP → **CI 가 권위**
 
 ---
 
