@@ -5,7 +5,7 @@ description: Start a task in its own isolated git worktree + branch (keeps the m
 
 # start-task
 
-Create a dedicated git worktree + feature branch for a task, so concurrent sessions never share the main checkout (CLAUDE.md § Cross-Project Changes "Concurrent-session worktree isolation"). The positive complement to `protect-main-branch.ps1` (blocks main push) and `warn-shared-checkout-switch.ps1` (warns on dirty shared-checkout switch).
+Create a dedicated git worktree + feature branch for a task, so concurrent sessions never share the main checkout (CLAUDE.md § Cross-Project Changes "Concurrent-session isolation"). The positive complement to `protect-main-branch.ps1` (blocks main push) and `warn-shared-checkout-switch.ps1` (warns on dirty shared-checkout switch).
 
 ## Usage
 

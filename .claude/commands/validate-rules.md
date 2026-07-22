@@ -64,7 +64,7 @@ Examples:
 #### 2-5. Reference Integrity
 - [ ] All `specs/` paths referenced in skills, agents, and commands exist
 - [ ] All `.claude/skills/**/SKILL.md` paths referenced in agents exist
-- [ ] `skills/INDEX.md` lists every `SKILL.md` present under `.claude/skills/`
+- [ ] `.claude/skills/INDEX.md` lists every `SKILL.md` present under `.claude/skills/`
 - [ ] No orphaned skill folders (contain `SKILL.md` but not listed in INDEX)
 - [ ] Every skill folder contains exactly one `SKILL.md`; no stray `.md` files under `.claude/skills/` except `INDEX.md` and `README.md` at any directory level — `README.md` files document folder conventions (e.g., `.claude/skills/domain/README.md` explains the empty domain/ skill tree) and are not stray (drift = Critical for anything else)
 - [ ] Every `SKILL.md` begins with YAML frontmatter containing `name`, `description`, `category` (missing field = Critical)
@@ -73,10 +73,10 @@ Examples:
 
 This section was added to support the `service-types` catalog and agent capability metadata. All checks are read-only — `validate-rules` reports drift but never blocks via hooks.
 
-- [ ] `.claude/skills/**/SKILL.md` file set equals the path set listed in `skills/INDEX.md` "Available Skills" table (drift = Critical)
+- [ ] `.claude/skills/**/SKILL.md` file set equals the path set listed in `.claude/skills/INDEX.md` "Available Skills" table (drift = Critical)
 - [ ] `platform/service-types/*.md` file set equals the catalog listed in `platform/service-types/INDEX.md` (drift = Critical)
 - [ ] Every `specs/services/<service>/architecture.md` declares a `Service Type` and the value is one of the catalog entries (missing or invalid = Critical)
-- [ ] Every entry in `skills/INDEX.md` "Default Skill Sets by Task Type" table resolves to an existing skill file (missing = Critical)
+- [ ] Every entry in `.claude/skills/INDEX.md` "Default Skill Sets by Task Type" table resolves to an existing skill file (missing = Critical)
 - [ ] Every `.claude/agents/**/*.md` (excluding `README.md`) frontmatter contains all of `capabilities`, `languages`, `domains`, `service_types` fields (missing field = Warning)
 - [ ] Every `service_types` value in agent frontmatter is one of the `platform/service-types/INDEX.md` catalog entries or the literal `all` (invalid value = Critical)
 - [ ] Every skill referenced from a service-type spec's "Default Skill Set" exists under `.claude/skills/` (missing = Critical)
