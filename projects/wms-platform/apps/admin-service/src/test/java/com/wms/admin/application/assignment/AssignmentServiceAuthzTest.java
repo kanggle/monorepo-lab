@@ -25,6 +25,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.framework.ProxyFactory;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -153,11 +154,45 @@ class AssignmentServiceAuthzTest {
         }
     }
 
+    // ----- search (read) — TASK-BE-523 ---------------------------------------
+
+    @Nested
+    @DisplayName("search @PreAuthorize gate")
+    class Search {
+        @Test
+        void admin_allowed() {
+            authenticateAs("ROLE_WMS_ADMIN");
+            assertThat(proxied.search(null, null, null, null, PageRequest.of(0, 20)))
+                    .isNotNull();
+        }
+
+        @Test
+        void superadmin_allowed() {
+            authenticateAs("ROLE_WMS_SUPERADMIN");
+            assertThat(proxied.search(null, null, null, null, PageRequest.of(0, 20)))
+                    .isNotNull();
+        }
+
+        @Test
+        void operator_deniedWithAccessDenied() {
+            authenticateAs("ROLE_WMS_OPERATOR");
+            assertThatThrownBy(() -> proxied.search(null, null, null, null, PageRequest.of(0, 20)))
+                    .isInstanceOf(AccessDeniedException.class);
+        }
+
+        @Test
+        void viewer_deniedWithAccessDenied() {
+            authenticateAs("ROLE_WMS_VIEWER");
+            assertThatThrownBy(() -> proxied.search(null, null, null, null, PageRequest.of(0, 20)))
+                    .isInstanceOf(AccessDeniedException.class);
+        }
+    }
+
     @Test
-    @DisplayName("both gated methods carry @PreAuthorize referencing WMS_ADMIN")
+    @DisplayName("all three gated methods carry @PreAuthorize referencing WMS_ADMIN")
     void gatedMethods_carryPreAuthorize() {
         assertThatCode(() -> {
-            for (String m : List.of("grant", "revoke")) {
+            for (String m : List.of("grant", "revoke", "search")) {
                 boolean found = false;
                 for (var method : AssignmentService.class.getMethods()) {
                     if (method.getName().equals(m)

@@ -69,10 +69,13 @@ class UserControllerSliceTest {
                 .andExpect(jsonPath("$.email").value("alice@example.com"));
     }
 
-    // Note on authz: @PreAuthorize is on the application service (per
-    // architecture.md § Security), which is mocked in this slice — slice tests
-    // cannot exercise role-based denial. UserServiceAuthzTest in this package
-    // covers the @PreAuthorize matrix with an actual SecurityContext.
+    // Note on authz: write paths (create/update/deactivate/reactivate) gate at
+    // the application service (per architecture.md § Security), which is mocked
+    // in this slice — those cannot be exercised here (UserServiceAuthzTest covers
+    // that matrix with a real SecurityContext). READ paths (list/getById) carry
+    // an additional coarse controller-level @PreAuthorize (the two-layer guard
+    // in admin-service-api.md § Authorization), so read denial IS observable in
+    // this slice — see getById_viewer_forbidden below.
 
     @Test
     void create_unauthenticated_returns401() throws Exception {
@@ -171,15 +174,24 @@ class UserControllerSliceTest {
 
     @Test
     void getById_viewer_forbidden() throws Exception {
-        // GET /users/{id} requires WMS_ADMIN per § 2.3 (with self-lookup
-        // exception not enforced in this slice — viewer is denied here).
+        // GET /users/{id} requires WMS_ADMIN or higher (admin-service-api.md
+        // § 2.3). A WMS_VIEWER reading another user's record is denied with 403
+        // by the coarse controller-level @PreAuthorize (TASK-BE-523, Option A).
+        // The § 2.3 self-lookup carve-out (id == X-Actor-Id) is NOT implemented
+        // in code today, so no legitimate self-lookup path is regressed here.
         when(userService.findById(USER_ID)).thenReturn(sampleUser());
         mockMvc.perform(get("/api/v1/admin/users/" + USER_ID)
                         .with(jwt().authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_WMS_VIEWER"))))
-                .andExpect(status().isOk()); // application-layer @PreAuthorize on UserService.findById() is read-only
-        // Note: read paths in this BE-045 slice do not @PreAuthorize-gate;
-        // the controller grants any authenticated WMS_* role. Hardening is
-        // BE-046 follow-up if § 2.3 enforcement tightens.
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void list_viewer_forbidden() throws Exception {
+        // GET /users requires WMS_ADMIN or higher (admin-service-api.md § 2.2).
+        // A WMS_VIEWER is denied with 403 by the coarse controller guard.
+        mockMvc.perform(get("/api/v1/admin/users")
+                        .with(jwt().authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_WMS_VIEWER"))))
+                .andExpect(status().isForbidden());
     }
 
     @TestConfiguration

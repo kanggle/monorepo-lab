@@ -14,6 +14,7 @@ import java.net.URI;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -56,6 +57,7 @@ public class AssignmentController {
         return ResponseEntity.ok().eTag(PageableSupport.etag(a.version())).body(AssignmentResponse.from(a));
     }
 
+    @PreAuthorize("hasAnyRole('WMS_ADMIN','WMS_SUPERADMIN')")
     @GetMapping
     public PageResponse<AssignmentResponse> list(
             @RequestParam(required = false) UUID userId,

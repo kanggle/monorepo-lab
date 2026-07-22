@@ -60,12 +60,18 @@ declares required role / permission below. Two enforcement layers:
 Role → permission mapping (read from `admin_role.permissions_json`, applied
 when JWTs are minted; this contract uses the role names as a stable shorthand):
 
-| Role | Read | User / Role / Assignment write | Settings write | Force / superadmin overrides |
-|---|---|---|---|---|
-| `WMS_VIEWER` | yes | no | no | no |
-| `WMS_OPERATOR` | yes | no | no | no |
-| `WMS_ADMIN` | yes | yes | yes | no |
-| `WMS_SUPERADMIN` | yes | yes | yes | yes (force-deactivate, force-revoke, role-deletion bypass) |
+| Role | Dashboard / settings read | User / Role / Assignment read | User / Role / Assignment write | Settings write | Force / superadmin overrides |
+|---|---|---|---|---|---|
+| `WMS_VIEWER` | yes | no (self-lookup only — `GET /users/{id}` where `id == X-Actor-Id`, § 2.3) | no | no | no |
+| `WMS_OPERATOR` | yes | no | no | no | no |
+| `WMS_ADMIN` | yes | yes | yes | yes | no |
+| `WMS_SUPERADMIN` | yes | yes | yes | yes | yes (force-deactivate, force-revoke, role-deletion bypass) |
+
+The **Dashboard / settings read** column covers the `/dashboard/**` read-model
+queries (§ 1) and settings reads (§ 5.1 / 5.2), which are `WMS_VIEWER`-or-higher.
+The **User / Role / Assignment read** column (§ 2.2 / 2.3 / 3.2 / 3.3 / 4.2) is
+`WMS_ADMIN`-or-higher — a `WMS_VIEWER` / `WMS_OPERATOR` cannot list or fetch
+user / role / assignment records (the only carve-out is the § 2.3 self-lookup).
 
 `WMS_OPERATOR` is intentionally listed as non-writer on this admin surface.
 Operators perform inventory / inbound / outbound writes; admin-service writes

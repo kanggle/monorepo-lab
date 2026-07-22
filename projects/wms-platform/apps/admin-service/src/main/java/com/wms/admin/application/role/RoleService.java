@@ -160,12 +160,14 @@ public class RoleService {
         return saved;
     }
 
+    @PreAuthorize("hasAnyRole('WMS_ADMIN','WMS_SUPERADMIN')")
     @Transactional(readOnly = true)
     public Role findById(UUID id) {
         return roleRepository.findById(id)
                 .orElseThrow(() -> new RoleNotFoundException(id));
     }
 
+    @PreAuthorize("hasAnyRole('WMS_ADMIN','WMS_SUPERADMIN')")
     @Transactional(readOnly = true)
     public Page<Role> search(RoleStatus status, Pageable pageable) {
         return roleRepository.search(status, pageable);

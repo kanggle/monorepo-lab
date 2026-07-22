@@ -1,7 +1,7 @@
 # TASK-BE-523 — admin-service: read-path authorization gap (GET users/roles/assignments ungated) — DECISION REQUIRED
 
 - **Type**: TASK-BE (INVESTIGATION-first — security-behavior change gated on a spec-vs-code decision)
-- **Status**: ready
+- **Status**: review
 - **Service**: admin-service (wms-platform)
 - **Domain/traits**: wms / [transactional, multi-tenant]
 - **Analysis model**: Opus 4.8 · **Impl model**: TBD after AC-0
