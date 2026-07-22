@@ -108,6 +108,7 @@ Every list endpoint supports:
 - Same key, same method+path, **same body hash** → cached response replayed (2xx status preserved)
 - Same key, same method+path, **different body** → 409 `DUPLICATE_REQUEST`
 - TTL: 24 hours
+- Full strategy: [`specs/services/master-service/idempotency.md`](../../services/master-service/idempotency.md)
 
 ### Optimistic Locking
 

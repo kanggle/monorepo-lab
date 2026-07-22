@@ -162,7 +162,7 @@ External vendor footprint is intentionally tiny in v1.
 
 ---
 
-## Event Consumption (subscribed topics)
+## Event Consumption
 
 | Subscribed Event | Source Topic | v1 Routing Default |
 |---|---|---|
@@ -190,7 +190,7 @@ Detailed payload mapping → channel template lives in
 
 ---
 
-## Event Publication (outbox)
+## Event Publication
 
 Single published topic in v1:
 

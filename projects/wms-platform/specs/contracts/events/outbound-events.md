@@ -685,10 +685,7 @@ Every downstream consumer MUST:
   event (OTel context propagation).
 - Publisher retries on Kafka failure with exponential backoff; outbox row
   marked `published_at` only after broker ACK.
-- Publisher metrics:
-  - `outbound.outbox.pending.count`
-  - `outbound.outbox.lag.seconds`
-  - `outbound.outbox.publish.failure.total`
+- Publisher metrics: `outbound.outbox.pending.count`, `outbound.outbox.lag.seconds`, `outbound.outbox.publish.failure.total`
 
 ---
 

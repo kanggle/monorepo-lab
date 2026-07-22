@@ -1,4 +1,4 @@
-# notification-subscriptions — Consumed Event Contract
+# Event Contract — notification-service subscriptions
 
 `notification-service` subscribes to alert-worthy events from 3 producer
 services. Authoritative envelope shapes live in each producer's

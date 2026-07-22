@@ -111,7 +111,7 @@ Response envelope:
 - Same key, same method+path, **same body hash** → cached response replayed
 - Same key, same method+path, **different body** → 409 `DUPLICATE_REQUEST`
 - TTL: 24 hours
-- Full strategy: `specs/services/inventory-service/idempotency.md`
+- Full strategy: [`specs/services/inventory-service/idempotency.md`](../../services/inventory-service/idempotency.md)
 
 ### Optimistic Locking
 

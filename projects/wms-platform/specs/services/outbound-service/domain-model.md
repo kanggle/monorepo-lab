@@ -11,7 +11,7 @@ declared there and only restated here as far as needed to reason about the model
 
 ## Scope
 
-Seven owned aggregates plus infrastructure-supporting records:
+Six owned aggregates plus infrastructure-supporting records:
 
 **Aggregates (owned by this service)**
 
