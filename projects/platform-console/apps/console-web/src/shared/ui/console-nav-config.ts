@@ -87,18 +87,18 @@ export const GROUPS: NavGroup[] = [
             label: '조직 계층',
             testid: 'nav-iam-org-hierarchy',
           },
-          // 테넌트 (TASK-PC-FE-225 stub; real feature = TASK-PC-FE-226) —
-          // isolation boundary, AWS account / GCP project equivalent.
+          // 테넌트 (real feature = TASK-PC-FE-226) — isolation boundary,
+          // AWS account / GCP project equivalent.
           { href: '/tenants', label: '테넌트', testid: 'nav-iam-tenants' },
-          // 권한 (TASK-PC-FE-225 stub; real feature = TASK-PC-FE-227) —
-          // Action/Permission equivalent.
+          // 권한 (real feature = TASK-PC-FE-227) — Action/Permission
+          // equivalent.
           {
             href: '/permissions',
             label: '권한',
             testid: 'nav-iam-permissions',
           },
-          // 권한 세트 (TASK-PC-FE-225 stub; real feature = TASK-PC-FE-228) —
-          // IAM Policy/Role equivalent.
+          // 권한 세트 (real feature = TASK-PC-FE-228) — IAM Policy/Role
+          // equivalent.
           {
             href: '/permission-sets',
             label: '권한 세트',
