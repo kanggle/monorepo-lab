@@ -78,6 +78,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
+- `TASK-FIN-BE-062-refactor-spec-finance-polish.md` — **READY** — refactor-spec finance ledger 이벤트계약 타이틀 정규화(1편집, dead-ref 0). 분석=Opus 4.8 / 구현 권장=Sonnet.
+
 ## in-progress
 
 (empty)
