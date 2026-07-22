@@ -31,7 +31,6 @@ public class SecurityConfig {
             "/actuator/health",
             "/actuator/health/**",
             "/actuator/info",
-            "/api/auth/**",
             "/api/search/**",
             "/oauth/**",
             // Aggregated Swagger UI (TASK-BE-379). Permit is always present but the

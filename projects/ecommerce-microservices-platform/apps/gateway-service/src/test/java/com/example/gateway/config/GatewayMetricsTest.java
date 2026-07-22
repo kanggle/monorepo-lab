@@ -35,20 +35,20 @@ class GatewayMetricsTest {
     @Test
     @DisplayName("요청 라우팅 시 target별 gateway_requests_routed_total이 증가한다")
     void incrementRequestsRouted_incrementsCounterByTarget() {
-        gatewayMetrics.incrementRequestsRouted("auth-service");
+        gatewayMetrics.incrementRequestsRouted("user-service");
         gatewayMetrics.incrementRequestsRouted("product-service");
-        gatewayMetrics.incrementRequestsRouted("auth-service");
+        gatewayMetrics.incrementRequestsRouted("user-service");
 
-        assertThat(registry.counter("gateway_requests_routed_total", "target", "auth-service").count()).isEqualTo(2.0);
+        assertThat(registry.counter("gateway_requests_routed_total", "target", "user-service").count()).isEqualTo(2.0);
         assertThat(registry.counter("gateway_requests_routed_total", "target", "product-service").count()).isEqualTo(1.0);
     }
 
     @Test
     @DisplayName("Rate limit 시 route별 gateway_rate_limited_total이 증가한다")
     void incrementRateLimited_incrementsCounterByRoute() {
-        gatewayMetrics.incrementRateLimited("auth-service");
+        gatewayMetrics.incrementRateLimited("user-service");
 
-        assertThat(registry.counter("gateway_rate_limited_total", "route", "auth-service").count()).isEqualTo(1.0);
+        assertThat(registry.counter("gateway_rate_limited_total", "route", "user-service").count()).isEqualTo(1.0);
     }
 
     @Test
@@ -63,28 +63,28 @@ class GatewayMetricsTest {
     @DisplayName("requestsRouted를 1000번 호출해도 동일 태그에 대해 Counter가 중복 등록되지 않는다")
     void incrementRequestsRouted_repeated_noCounterLeak() {
         for (int i = 0; i < 1000; i++) {
-            gatewayMetrics.incrementRequestsRouted("auth-service");
+            gatewayMetrics.incrementRequestsRouted("user-service");
         }
 
         long meterCount = registry.getMeters().stream()
                 .filter(m -> m.getId().getName().equals("gateway_requests_routed_total"))
                 .count();
         assertThat(meterCount).isEqualTo(1);
-        assertThat(registry.counter("gateway_requests_routed_total", "target", "auth-service").count()).isEqualTo(1000.0);
+        assertThat(registry.counter("gateway_requests_routed_total", "target", "user-service").count()).isEqualTo(1000.0);
     }
 
     @Test
     @DisplayName("rateLimited를 1000번 호출해도 Counter가 중복 등록되지 않는다")
     void incrementRateLimited_repeated_noCounterLeak() {
         for (int i = 0; i < 1000; i++) {
-            gatewayMetrics.incrementRateLimited("auth-service");
+            gatewayMetrics.incrementRateLimited("user-service");
         }
 
         long meterCount = registry.getMeters().stream()
                 .filter(m -> m.getId().getName().equals("gateway_rate_limited_total"))
                 .count();
         assertThat(meterCount).isEqualTo(1);
-        assertThat(registry.counter("gateway_rate_limited_total", "route", "auth-service").count()).isEqualTo(1000.0);
+        assertThat(registry.counter("gateway_rate_limited_total", "route", "user-service").count()).isEqualTo(1000.0);
     }
 
     @Test
