@@ -68,7 +68,7 @@ Reading more than one service-type spec for a single task is forbidden — pick 
 
 | Tag | Specs to Read |
 |---|---|
-| `api` | `api-gateway-policy.md`, `versioning-policy.md`, `error-handling.md`, `contracts/jwt-standard-claims.md`, `contracts/notification-inbox-contract.md` (알림 표면을 만들거나 소비할 때) |
+| `api` | `api-gateway-policy.md`, `versioning-policy.md`, `error-handling.md`, `contracts/jwt-standard-claims.md`, `contracts/notification-inbox-contract.md` (when building or consuming a notification surface) |
 | `event` | `event-driven-policy.md` |
 | `deploy` | `deployment-policy.md`, `observability.md` |
 | `code` | `naming-conventions.md`, `coding-rules.md`, `testing-strategy.md` |
