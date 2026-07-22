@@ -1,7 +1,7 @@
 # TASK-PC-FE-249 — 3 console menu screens lack render coverage + stale "stub" nav comments
 
 - **Type**: TASK-PC-FE (frontend test coverage + doc accuracy)
-- **Status**: ready
+- **Status**: review
 - **Service**: platform-console `console-web`
 - **Analysis model**: Opus 4.8 · **Impl model**: Sonnet (vitest render tests + comment fixes — mechanical)
 
