@@ -21,6 +21,7 @@ import java.net.URI;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -61,6 +62,7 @@ public class RoleController {
                 .body(RoleResponse.from(saved, objectMapper));
     }
 
+    @PreAuthorize("hasAnyRole('WMS_ADMIN','WMS_SUPERADMIN')")
     @GetMapping
     public PageResponse<RoleResponse> list(
             @RequestParam(required = false) String status,
@@ -72,6 +74,7 @@ public class RoleController {
         return PageResponse.from(result, sort, r -> RoleResponse.from(r, objectMapper));
     }
 
+    @PreAuthorize("hasAnyRole('WMS_ADMIN','WMS_SUPERADMIN')")
     @GetMapping("/{id}")
     public ResponseEntity<RoleResponse> getById(@PathVariable UUID id) {
         Role role = roleService.findById(id);

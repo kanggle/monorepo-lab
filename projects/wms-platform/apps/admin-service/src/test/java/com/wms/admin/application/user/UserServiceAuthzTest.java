@@ -23,6 +23,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.aop.support.AopUtils;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.intercept.aopalliance.MethodSecurityInterceptor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -232,6 +233,78 @@ class UserServiceAuthzTest {
         User u = seedInactiveUser();
         authenticateAs("ROLE_WMS_VIEWER");
         assertThatThrownBy(() -> proxiedService.reactivate(u.id(), "admin"))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    // ----- findById (read) — TASK-BE-523 -------------------------------------
+
+    @Test
+    @DisplayName("findById: ADMIN passes the gate")
+    void admin_can_findById() {
+        User u = seedActiveUser();
+        authenticateAs("ROLE_WMS_ADMIN");
+        assertThat(proxiedService.findById(u.id())).isNotNull();
+    }
+
+    @Test
+    @DisplayName("findById: SUPERADMIN passes the gate")
+    void superadmin_can_findById() {
+        User u = seedActiveUser();
+        authenticateAs("ROLE_WMS_SUPERADMIN");
+        assertThat(proxiedService.findById(u.id())).isNotNull();
+    }
+
+    @Test
+    @DisplayName("findById: OPERATOR is denied with AccessDeniedException")
+    void operator_cannot_findById_raisesAccessDenied() {
+        User u = seedActiveUser();
+        authenticateAs("ROLE_WMS_OPERATOR");
+        assertThatThrownBy(() -> proxiedService.findById(u.id()))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("findById: VIEWER is denied with AccessDeniedException")
+    void viewer_cannot_findById_raisesAccessDenied() {
+        User u = seedActiveUser();
+        authenticateAs("ROLE_WMS_VIEWER");
+        assertThatThrownBy(() -> proxiedService.findById(u.id()))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    // ----- search (read) — TASK-BE-523 ---------------------------------------
+
+    @Test
+    @DisplayName("search: ADMIN passes the gate")
+    void admin_can_search() {
+        seedActiveUser();
+        authenticateAs("ROLE_WMS_ADMIN");
+        assertThat(proxiedService.search(null, null, null, PageRequest.of(0, 20)))
+                .isNotNull();
+    }
+
+    @Test
+    @DisplayName("search: SUPERADMIN passes the gate")
+    void superadmin_can_search() {
+        seedActiveUser();
+        authenticateAs("ROLE_WMS_SUPERADMIN");
+        assertThat(proxiedService.search(null, null, null, PageRequest.of(0, 20)))
+                .isNotNull();
+    }
+
+    @Test
+    @DisplayName("search: OPERATOR is denied with AccessDeniedException")
+    void operator_cannot_search_raisesAccessDenied() {
+        authenticateAs("ROLE_WMS_OPERATOR");
+        assertThatThrownBy(() -> proxiedService.search(null, null, null, PageRequest.of(0, 20)))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("search: VIEWER is denied with AccessDeniedException")
+    void viewer_cannot_search_raisesAccessDenied() {
+        authenticateAs("ROLE_WMS_VIEWER");
+        assertThatThrownBy(() -> proxiedService.search(null, null, null, PageRequest.of(0, 20)))
                 .isInstanceOf(AccessDeniedException.class);
     }
 

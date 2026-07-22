@@ -103,6 +103,7 @@ public class AssignmentService {
         return saved;
     }
 
+    @PreAuthorize("hasAnyRole('WMS_ADMIN','WMS_SUPERADMIN')")
     @Transactional(readOnly = true)
     public Page<UserRoleAssignment> search(UUID userId, UUID roleId, UUID warehouseId,
                                            AssignmentStatus status, Pageable pageable) {

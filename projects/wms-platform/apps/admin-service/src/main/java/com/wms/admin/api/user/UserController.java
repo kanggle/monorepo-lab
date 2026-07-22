@@ -21,6 +21,7 @@ import java.net.URI;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -59,6 +60,7 @@ public class UserController {
                 .body(UserResponse.from(saved));
     }
 
+    @PreAuthorize("hasAnyRole('WMS_ADMIN','WMS_SUPERADMIN')")
     @GetMapping
     public PageResponse<UserResponse> list(
             @RequestParam(required = false) String status,
@@ -72,6 +74,12 @@ public class UserController {
         return PageResponse.from(result, sort, UserResponse::from);
     }
 
+    // § 2.3 declares a WMS_VIEWER self-lookup carve-out (id == X-Actor-Id).
+    // That carve-out is NOT implemented in code today (getById never reads
+    // X-Actor-Id nor compares identities), so the coarse guard is plain
+    // WMS_ADMIN+ — no legitimate self-lookup path is regressed. Re-introducing
+    // self-lookup requires a defined actor-identity → User.id mapping (separate task).
+    @PreAuthorize("hasAnyRole('WMS_ADMIN','WMS_SUPERADMIN')")
     @GetMapping("/{id}")
     public ResponseEntity<UserResponse> getById(@PathVariable UUID id) {
         User user = userService.findById(id);

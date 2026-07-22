@@ -151,12 +151,14 @@ public class UserService {
         return saved;
     }
 
+    @PreAuthorize("hasAnyRole('WMS_ADMIN','WMS_SUPERADMIN')")
     @Transactional(readOnly = true)
     public User findById(UUID id) {
         return userRepository.findById(id)
                 .orElseThrow(() -> new UserNotFoundException(id));
     }
 
+    @PreAuthorize("hasAnyRole('WMS_ADMIN','WMS_SUPERADMIN')")
     @Transactional(readOnly = true)
     public Page<User> search(UserStatus status, UUID warehouseId, String q, Pageable pageable) {
         return userRepository.search(status, warehouseId, q, pageable);

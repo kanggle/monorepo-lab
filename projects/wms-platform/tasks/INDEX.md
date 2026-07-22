@@ -67,7 +67,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-523-admin-read-path-authz-decision.md` — **READY (판정 선행)** — admin-service 읽기 경로(`GET` users/roles/assignments)가 미게이팅. 스펙↔코드 판정이 선행하는 INVESTIGATION-first 보안 동작 변경.
 - `TASK-BE-529-notification-skip-locked-exclusivity-it-ci-robust.md` — **READY** — notification-service SKIP-LOCKED 배타성 IT(두 클레이머 이중청구 없음). `TASK-BE-528` AC-2 에서 이월된 테스트 커버리지.
 
 > 2026-07-20 (`TASK-MONO-451`): 위 두 행은 **디스크에는 `ready/` 에 있는데 이 섹션이 `(empty)` 라고 선언**하고 있었다 — 아래 2026-07-12 노트와 정반대 방향의 같은 결함이다. 그때는 표가 끝난 일을 가리켰고, 이번엔 표가 **살아있는 일을 숨겼다**. 큐를 표로 고르는 사람에게 후자는 **일이 없다는 거짓 보고**다. 이제 `scripts/check-index-queue-drift.sh` 가 양방향으로 대조한다.
@@ -80,8 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-
-## done
+- `TASK-BE-523-admin-read-path-authz-decision.md` — **REVIEW (impl PR 오픈)** — AC-0 판정 종결: **Option A (계약 강제)** 채택. admin-service 읽기 경로(`GET` users/roles/assignments)가 미게이팅이던 것을 `WMS_ADMIN`+ 로 게이트. 서비스층 `@PreAuthorize` 5개(User/Role `findById`+`search`, Assignment `search`) + 컨트롤러 coarse guard(2층 방어, 계약 §Authorization) + ProxyFactory authz RED→GREEN 확장 + masking slice 테스트 200→403 flip + 계약 요약표 VIEWER Read 행 정정. §2.3 self-lookup carve-out 은 코드 미구현이라 plain gate(회귀 없음, PR 에 명시). wms Testcontainers 레인은 CI 가 권위.
 
 - `TASK-BE-558-refactor-spec-wms-polish.md` — **DONE 2026-07-22 (3-dim verified — impl PR #2875 squash `8a063793e`; 전 PR MERGED · `origin/main` 편입 · 머지 전 required 0 failing, done/).** refactor-spec wms-platform Tier-1 구조 polish — 80 스펙 스캔 dead-ref 0 repo-wide, 15편집/11파일(contracts 타이틀→`# Event Contract —`·`## Global Envelope`·outbound domain-model Seven→Six·inventory reservation `(line NNN)` 힌트 drop·notification 헤딩·admin runbook 타이틀). `## Out of Scope (v1)` 등 semantic·Tier-2 findings 기록. 분석=Opus 4.8.
 - `TASK-BE-559-refactor-spec-wms-tier2-structural.md` — **DONE 2026-07-22 (3-dim verified — impl PR #2876 squash `f04340661`; rebase 후 머지(wms INDEX 충돌 local 해소), 전 PR MERGED · main 편입, done/).** refactor-spec wms Tier-2 구조 판단 — master domain-model `Forbidden`↔`Reference` 순서(3/3 형제 정렬) + outbound Scope 인프라 넘버링 자기모순(12 주장↔본문 11) 해소 = 2 적용; inventory db-design §7(마이그레이션 버전순 V4)·master idempotency 무넘버(의도적 divergence)·inventory Cross-References/State-Machines·architecture 등 5건 의도적 확정 기각. 분석·구현=Opus 4.8.

@@ -24,6 +24,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.framework.ProxyFactory;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -229,11 +230,81 @@ class RoleServiceAuthzTest {
         }
     }
 
+    // ----- findById (read) — TASK-BE-523 -------------------------------------
+
+    @Nested
+    @DisplayName("findById @PreAuthorize gate")
+    class FindById {
+        @Test
+        void admin_allowed() {
+            Role r = seedActiveRole();
+            authenticateAs("ROLE_WMS_ADMIN");
+            assertThat(proxied.findById(r.id())).isNotNull();
+        }
+
+        @Test
+        void superadmin_allowed() {
+            Role r = seedActiveRole();
+            authenticateAs("ROLE_WMS_SUPERADMIN");
+            assertThat(proxied.findById(r.id())).isNotNull();
+        }
+
+        @Test
+        void operator_deniedWithAccessDenied() {
+            Role r = seedActiveRole();
+            authenticateAs("ROLE_WMS_OPERATOR");
+            assertThatThrownBy(() -> proxied.findById(r.id()))
+                    .isInstanceOf(AccessDeniedException.class);
+        }
+
+        @Test
+        void viewer_deniedWithAccessDenied() {
+            Role r = seedActiveRole();
+            authenticateAs("ROLE_WMS_VIEWER");
+            assertThatThrownBy(() -> proxied.findById(r.id()))
+                    .isInstanceOf(AccessDeniedException.class);
+        }
+    }
+
+    // ----- search (read) — TASK-BE-523 ---------------------------------------
+
+    @Nested
+    @DisplayName("search @PreAuthorize gate")
+    class Search {
+        @Test
+        void admin_allowed() {
+            seedActiveRole();
+            authenticateAs("ROLE_WMS_ADMIN");
+            assertThat(proxied.search(null, PageRequest.of(0, 20))).isNotNull();
+        }
+
+        @Test
+        void superadmin_allowed() {
+            seedActiveRole();
+            authenticateAs("ROLE_WMS_SUPERADMIN");
+            assertThat(proxied.search(null, PageRequest.of(0, 20))).isNotNull();
+        }
+
+        @Test
+        void operator_deniedWithAccessDenied() {
+            authenticateAs("ROLE_WMS_OPERATOR");
+            assertThatThrownBy(() -> proxied.search(null, PageRequest.of(0, 20)))
+                    .isInstanceOf(AccessDeniedException.class);
+        }
+
+        @Test
+        void viewer_deniedWithAccessDenied() {
+            authenticateAs("ROLE_WMS_VIEWER");
+            assertThatThrownBy(() -> proxied.search(null, PageRequest.of(0, 20)))
+                    .isInstanceOf(AccessDeniedException.class);
+        }
+    }
+
     @Test
-    @DisplayName("all four gated methods carry @PreAuthorize referencing WMS_ADMIN")
+    @DisplayName("all six gated methods carry @PreAuthorize referencing WMS_ADMIN")
     void gatedMethods_carryPreAuthorize() {
         assertThatCode(() -> {
-            for (String m : List.of("create", "update", "deactivate", "reactivate")) {
+            for (String m : List.of("create", "update", "deactivate", "reactivate", "findById", "search")) {
                 boolean found = false;
                 for (var method : RoleService.class.getMethods()) {
                     if (method.getName().equals(m)
