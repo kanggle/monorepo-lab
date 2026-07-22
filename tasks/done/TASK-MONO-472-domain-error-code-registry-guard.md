@@ -8,7 +8,7 @@ TASK-MONO-472
 
 # Status
 
-review
+done
 
 # Owner
 
