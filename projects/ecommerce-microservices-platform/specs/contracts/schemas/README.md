@@ -10,7 +10,7 @@
 > - ecommerce: every `specs/contracts/http/*.md` repeats the
 >   `{ code, message, timestamp }` error envelope; every
 >   `specs/contracts/events/*.md` repeats the
->   `{ event_id, event_type, source, occurred_at, version, payload }` event
+>   `{ event_id, event_type, occurred_at, source, tenant_id, payload }` event
 >   envelope.
 > - The other portfolio projects do not maintain a populated
 >   `contracts/schemas/` either (iam-platform keeps an empty

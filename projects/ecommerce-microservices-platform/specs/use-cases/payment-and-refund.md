@@ -30,13 +30,13 @@
 
 ### 대안 흐름
 
-- **AF-1: 결제 실패 (사용자 취소)** -- 사용자가 토스 결제 위젯에서 취소하면 fail URL로 리다이렉트되고, 결제는 PENDING 상태를 유지한다.
-- **AF-2: PG 승인 실패** -- 토스 Confirm API가 에러를 반환하면 결제 상태를 FAILED로 변경하고, PG_CONFIRM_FAILED 에러를 클라이언트에 반환한다.
-- **AF-3: 금액 불일치** -- confirm 요청의 금액이 PENDING 결제 금액과 다르면 AMOUNT_MISMATCH 에러를 반환한다.
+- **AF-1: 결제 실패 (사용자 취소)** — 사용자가 토스 결제 위젯에서 취소하면 fail URL로 리다이렉트되고, 결제는 PENDING 상태를 유지한다.
+- **AF-2: PG 승인 실패** — 토스 Confirm API가 에러를 반환하면 결제 상태를 FAILED로 변경하고, PG_CONFIRM_FAILED 에러를 클라이언트에 반환한다.
+- **AF-3: 금액 불일치** — confirm 요청의 금액이 PENDING 결제 금액과 다르면 AMOUNT_MISMATCH 에러를 반환한다.
 
 ### 예외 흐름
 
-- **EF-1: 이벤트 수신 실패** -- `OrderPlaced` 이벤트 처리 실패 시 재시도 메커니즘을 통해 최종 일관성을 보장한다.
+- **EF-1: 이벤트 수신 실패** — `OrderPlaced` 이벤트 처리 실패 시 재시도 메커니즘을 통해 최종 일관성을 보장한다.
 
 ---
 
@@ -64,12 +64,12 @@
 
 ### 대안 흐름
 
-- **AF-1: 결제 미완료 상태 취소** -- 결제가 PENDING 또는 FAILED 상태에서 주문이 취소되면 PG 환불 없이 결제를 종료한다.
-- **AF-2: PG 환불 실패** -- 토스 Cancel API가 에러를 반환하면 로그를 기록하고 DLQ를 통해 재시도한다.
+- **AF-1: 결제 미완료 상태 취소** — 결제가 PENDING 또는 FAILED 상태에서 주문이 취소되면 PG 환불 없이 결제를 종료한다.
+- **AF-2: PG 환불 실패** — 토스 Cancel API가 에러를 반환하면 로그를 기록하고 DLQ를 통해 재시도한다.
 
 ### 예외 흐름
 
-- **EF-1: 이벤트 수신 실패** -- `OrderCancelled` 이벤트 처리 실패 시 재시도 메커니즘을 통해 최종 일관성을 보장한다.
+- **EF-1: 이벤트 수신 실패** — `OrderCancelled` 이벤트 처리 실패 시 재시도 메커니즘을 통해 최종 일관성을 보장한다.
 
 ---
 
@@ -97,9 +97,9 @@
 
 ### 예외 흐름
 
-- **EF-1: 결제 미존재** -- 해당 orderId의 결제 정보가 없으면 `PAYMENT_NOT_FOUND` 오류를 반환한다 (404).
-- **EF-2: 소유권 불일치** -- X-User-Id가 결제 소유자와 다르면 `ACCESS_DENIED` 오류를 반환한다 (403).
-- **EF-3: 잘못된 요청** -- 유효하지 않은 orderId 형식이면 `INVALID_PAYMENT_REQUEST` 오류를 반환한다 (400).
+- **EF-1: 결제 미존재** — 해당 orderId의 결제 정보가 없으면 `PAYMENT_NOT_FOUND` 오류를 반환한다 (404).
+- **EF-2: 소유권 불일치** — X-User-Id가 결제 소유자와 다르면 `ACCESS_DENIED` 오류를 반환한다 (403).
+- **EF-3: 잘못된 요청** — 유효하지 않은 orderId 형식이면 `INVALID_PAYMENT_REQUEST` 오류를 반환한다 (400).
 
 ---
 

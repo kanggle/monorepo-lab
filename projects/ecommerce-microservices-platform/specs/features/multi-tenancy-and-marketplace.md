@@ -1,4 +1,4 @@
-# Feature — Multi-Tenancy & Marketplace (ADR-MONO-030, Step 1 source-of-truth)
+# Feature: Multi-Tenancy & Marketplace (ADR-MONO-030, Step 1 source-of-truth)
 
 > 본 문서는 ecommerce 를 **멀티벤더 마켓플레이스 SaaS** 로 승격하는 두 직교 축의 **스펙 기준(source of truth)** 이다 — [ADR-MONO-030](../../../../docs/adr/ADR-MONO-030-ecommerce-multivendor-marketplace-saas.md) §3.4 **Step 1**.
 > **Step 1 = 스펙만** (Source-of-Truth-first). 컬럼/마이그레이션/게이트 코드/셀러 애그리거트 구현은 **Step 2(바깥 축)·Step 3(안쪽 축)** 의 별도 태스크가 본 문서를 기준으로 구현한다.

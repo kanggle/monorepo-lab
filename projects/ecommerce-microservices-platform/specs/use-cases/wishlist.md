@@ -125,6 +125,5 @@
 ---
 
 ## Related Contracts
-
 - HTTP: `specs/contracts/http/wishlist-api.md`
 - Events: 없음 (위시리스트 변경은 v1 에서 이벤트 발행 없음)
