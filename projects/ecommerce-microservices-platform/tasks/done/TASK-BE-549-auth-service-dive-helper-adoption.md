@@ -1,6 +1,6 @@
 # TASK-BE-549 — auth-service DIVE 핸들러를 fleet 표준 헬퍼로 수렴 (message-string 매칭 제거)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet (소규모 fix — 단, 단일-제약 가정 재측정 + 동시성 IT 가 실질. blind 교체 금지)
