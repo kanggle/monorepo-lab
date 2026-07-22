@@ -208,11 +208,11 @@ jobs:
       # weakened, and the guard script itself. AND-ing with code-changed would skip
       # the guard on a spec-only .md diff — exactly a change it must police (§ F1).
       controller-slice: ${{ steps.filter.outputs.controller-slice }}
-      # TASK-MONO-468: raw filter, NOT AND-combined with `code-changed`. A dead
-      # reference in a command arrives two ways, both markdown-only: a command edit
+      # TASK-MONO-468/469: raw filter, NOT AND-combined with `code-changed`. A dead
+      # reference in a command/agent arrives two ways, both markdown-only: an edit
       # that mistypes a path, or a rename of the platform/skill/agent file it points
       # at. AND-ing with code-changed would skip the guard on exactly those diffs.
-      command-refs: ${{ steps.filter.outputs.command-refs }}
+      claude-refs: ${{ steps.filter.outputs.claude-refs }}
       # Same reasoning as service-map above: deleting a row from error-handling.md is a
       # docs-only diff, and that is precisely the change the guard must catch.
       error-registry: ${{ steps.filter.outputs.error-registry }}
@@ -429,20 +429,23 @@ jobs:
               - 'projects/*/apps/*/src/test/**/*.java'
               - 'platform/testing-strategy.md'
               - 'scripts/check-controller-slice-naming.sh'
-            # TASK-MONO-468: command-reference integrity. A dead path in a
-            # `.claude/commands/*.md` arrives either when a command is edited or when
-            # a file it points at is renamed/deleted, so both the commands and their
-            # main referenced surfaces (platform/, .claude skills+agents, rules/) are
-            # triggers, plus the guard script.
+            # TASK-MONO-468/469: .claude reference integrity (commands + agents). A
+            # dead path arrives either when a command/agent is edited or when a file
+            # it points at is renamed/deleted, so both the docs and their main
+            # referenced surfaces (platform/, .claude skills+agents, rules/) are
+            # triggers, plus the guard script. `.claude/skills/**` stays a trigger
+            # even though skills are not SCANNED (MONO-469: teaching-doc FP minefield)
+            # — a command/agent points AT skill files, so a skill rename can break a
+            # reference the guard does check.
             # Pure-positive (no negation — MONO-074/075 quirk rule); NOT AND-ed with
             # code-changed (a dead reference is a markdown-only diff).
-            command-refs:
+            claude-refs:
               - '.claude/commands/**'
-              - '.claude/skills/**'
               - '.claude/agents/**'
+              - '.claude/skills/**'
               - 'platform/**'
               - 'rules/**'
-              - 'scripts/check-command-reference-integrity.sh'
+              - 'scripts/check-claude-reference-integrity.sh'
             # TASK-MONO-352: platform/error-handling.md declares itself "the single
             # authoritative registry" and mandates that every new error code be added
             # to it — but nothing enforced that, and 37 live codes had drifted out.
@@ -705,14 +708,20 @@ jobs:
         run: bash scripts/check-index-queue-drift.sh
 
   # ---------------------------------------------------------------------------
-  # TASK-MONO-468 — command-reference integrity guard.
+  # TASK-MONO-468/469 — .claude reference integrity guard (commands + agents).
   #
-  # `.claude/commands/*.md` point at platform specs, skills, agents and scripts.
-  # `/validate-rules` § 2-4/2-5 already require those references to resolve, but
-  # nothing ran it: on 2026-07-22 (MONO-467) a manual scan found `validate-rules.md`
-  # itself citing `skills/INDEX.md` — a path with no `.claude/` prefix, resolving to
-  # nothing — three times. The command layer was a guard-less surface, the same
-  # hand-kept-correspondence failure class as MONO-360 / MONO-363 / MONO-451.
+  # `.claude/commands/*.md` and `.claude/agents/**/*.md` point at platform specs,
+  # skills, agents and scripts. `/validate-rules` § 2-4/2-5 already require those
+  # references to resolve, but nothing ran it: on 2026-07-22 (MONO-467) a manual
+  # scan found `validate-rules.md` itself citing `skills/INDEX.md` — a path with no
+  # `.claude/` prefix, resolving to nothing — three times. The command/agent layer
+  # was a guard-less surface, the same hand-kept-correspondence failure class as
+  # MONO-360 / MONO-363 / MONO-451.
+  #
+  # SKILLS ARE EXCLUDED BY MEASUREMENT (MONO-469): scanning them produced 11
+  # findings, all false positives — a skill is a teaching doc whose paths are code
+  # dirs (`config/`, `hooks/`) and files-to-create (`example-frontend.yml`), not
+  # references to live repo files. See the script header.
   #
   # Filter is NOT AND-combined with `code-changed` — a dead reference is a
   # markdown-only diff. `--selftest` runs FIRST and is required, not a courtesy:
@@ -722,23 +731,23 @@ jobs:
   # Reference integrity only — semantic drift (order, wording, anchor labels) is
   # intentionally left to `/validate-rules`; see the script header.
   # ---------------------------------------------------------------------------
-  command-reference-integrity:
-    name: Command reference integrity (.claude/commands paths resolve)
+  claude-reference-integrity:
+    name: Claude reference integrity (.claude commands + agents paths resolve)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: changes
-    if: needs.changes.outputs.command-refs == 'true'
+    if: needs.changes.outputs.claude-refs == 'true'
     steps:
       - uses: actions/checkout@v4
 
       - name: Shell syntax (bash -n)
-        run: bash -n scripts/check-command-reference-integrity.sh
+        run: bash -n scripts/check-claude-reference-integrity.sh
 
       - name: Self-test the extractor against known positives and negatives
-        run: bash scripts/check-command-reference-integrity.sh --selftest
+        run: bash scripts/check-claude-reference-integrity.sh --selftest
 
-      - name: Guard — every path referenced in a command resolves
-        run: bash scripts/check-command-reference-integrity.sh
+      - name: Guard — every path referenced in a command or agent resolves
+        run: bash scripts/check-claude-reference-integrity.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-461 — controller web-slice naming guard.
