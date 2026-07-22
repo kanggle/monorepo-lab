@@ -107,7 +107,7 @@ batch_run_items (run_id FK, item_id, processed_at NULL)
 
 ---
 
-## Anti-patterns
+## Forbidden Patterns
 
 - "스케줄러 만 돌려두면 끝" — 잡 실패 시 알림 없음, 미완료 상태 방치
 - 배치 잡이 single-replica 가정으로 작성됨 — 다중 인스턴스 배포 시 같은 잡 동시 실행 → race / 중복 side-effect

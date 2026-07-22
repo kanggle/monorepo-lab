@@ -126,13 +126,13 @@ SaaS 도메인에서 공통으로 발생하는 에러는 [../../platform/error-h
 
 ## Integration Boundaries
 
-### 외부(플랫폼 경계 바깥)
+### 외부 (플랫폼 경계 바깥)
 - **이메일/SMS 프로바이더** — 가입 확인, 비밀번호 재설정, 비정상 로그인 알림 (`integration-heavy` trait 규칙을 따른다)
 - **OAuth 제공자** — 소셜 로그인 (Google, Apple, Kakao 등)
 - **IdP 페더레이션** — 엔터프라이즈 SSO (SAML, OIDC)
 - **리스크 인텔리전스** (선택) — IP 평판, 디바이스 지문, 봇 탐지 서비스
 
-### 내부(같은 프로젝트 내 다른 서비스)
+### 내부 (같은 프로젝트 내 다른 서비스)
 - Identity ↔ Profile은 내부 HTTP로 credential lookup 수행. 절대 공개 API로 노출 금지.
 - Security Analytics는 Identity의 이벤트 스트림(`*.login.*`)을 구독. 동기 호출 없음.
 - Admin은 Identity·Profile·Audit에 대한 **read + 특권 command** 경로를 가지지만, 별도 인증 경계(운영자 전용 토큰) 뒤에 숨겨야 한다.

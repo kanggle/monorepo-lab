@@ -332,7 +332,7 @@ A **guard** is a CI assertion that a property still holds (`scripts/check-*-drif
 
 **These rules had no canonical home until `TASK-MONO-404`.** They were restated inline in ~14 places (`scripts/`, `.github/workflows/ci.yml`, `libs/*/build.gradle`, guard scripts). Those restatements are *correct and load-bearing* — keep writing them where the local specifics matter. But an author writing their **first** guard had no discoverable list, and the newest rule (G4) existed in exactly **one** file. That is the same "declared ↔ true" drift class the guards themselves exist to catch.
 
-### G1 — A guard that cannot run is not a guard. Make the trigger follow the defect's *arrival path*.
+## G1 — A guard that cannot run is not a guard. Make the trigger follow the defect's *arrival path*.
 
 Before writing the guard, ask: **what diff does this defect arrive as?**
 
@@ -341,13 +341,13 @@ Before writing the guard, ask: **what diff does this defect arrive as?**
 
 *Incidents:* `TASK-MONO-359` (a guard against an externally-deleted image was gated on repo paths — the one defect class it could never see), `TASK-MONO-360` (measured: a markdown-only PR skipped 25 code jobs), `TASK-MONO-389` (the demo-wrapper guard's target arrives as markdown; the `code-changed` AND turned the guard off on exactly the change it policed).
 
-### G2 — False positives cost as much as misses. A guard that is RED on day one gets switched off — and a switched-off job's skip reports green.
+## G2 — False positives cost as much as misses. A guard that is RED on day one gets switched off — and a switched-off job's skip reports green.
 
 Prefer a narrower, exactly-enumerated predicate over a clever regex. Don't call a policy-permitted structure a violation. Allowlists are for **deliberate, justified** deviations — record *why* and *when it goes away* — and **mutate the allowlist too** (empty it; if nothing goes RED, the allowlist is decoration).
 
 *Incidents:* `TASK-MONO-360` (a name-guessing predicate matched `allowSuperAdminWildcard` because it contains `all`), `TASK-MONO-368` (a false positive on iam — the guard was wrong, not the code: **widen the predicate, don't allowlist the innocent**).
 
-### G3 — Prove it bites (mutation) — and prove the mutation *applied* before reading the result.
+## G3 — Prove it bites (mutation) — and prove the mutation *applied* before reading the result.
 
 Fill all four cells: no-signal / no-signal-with-`--require-coverage` / healthy / defect-injected. A guard that only ever FAILs is indistinguishable from a correct one if you only look at the FAIL.
 
@@ -357,7 +357,7 @@ And **a fix that only removes false positives is indistinguishable from switchin
 
 *Incidents:* `TASK-MONO-357`, `TASK-MONO-360`, `TASK-MONO-376`, `TASK-MONO-388`, `TASK-MONO-389`.
 
-### G4 — 🔴 Prove it bites **on the runner it executes on**. A threshold calibrated on your host is a proposition about *your host*.
+## G4 — 🔴 Prove it bites **on the runner it executes on**. A threshold calibrated on your host is a proposition about *your host*.
 
 Local mutation proves *"the guard's logic works."* It does **not** prove *"the guard catches the defect."* Only the runner can prove that.
 
@@ -383,27 +383,27 @@ at ~5m01s from one prior sample and observed 5m42s — the anchor lane had itsel
 **identical code** between two runs.* Where a number must be quoted from one observation, mark it as such in
 the code comment too, not only in the PR description — the PR is not where the next reader looks.
 
-### G5 — Reachability is not only about CI triggers. A runtime `default` / fallback that nothing can reach is not a guard either.
+## G5 — Reachability is not only about CI triggers. A runtime `default` / fallback that nothing can reach is not a guard either.
 
 Follow the value back to **whoever creates the condition**, and ask: *does an input that actually triggers this default exist in production?*
 
 *Incident:* `TASK-MONO-389` — the demo's idle-stop had a perfect safe default (`_get(BEAT_PARAM, now)`) that **never once executed**, because terraform always creates the parameter with `value = "0"`. The unreachable default let the guard stop every warming instance five minutes after `apply`. The fix re-anchored on a fact nobody can forge (EC2 `LaunchTime`), not on a value someone might forget to write.
 
-### G6 — Ask the question the *failure mode* asks, not the question that is easy to ask.
+## G6 — Ask the question the *failure mode* asks, not the question that is easy to ask.
 
 *Incident:* `TASK-MONO-397` — an under-provisioned broker container. The obvious guard is *"RestartCount == 0 after boot."* **It passes the defect.** Started in isolation the container survives its load, passes its healthcheck and reports `healthy`; it only dies once the rest of the fleet attaches as clients. The question was never *"did it die"* — it was ***"how much headroom is left."*** A component that cannot fail alone will not fail in the guard that starts it alone.
 
-### G7 — Don't re-enumerate the source of truth. Derive from it, and execute both sides.
+## G7 — Don't re-enumerate the source of truth. Derive from it, and execute both sides.
 
 A guard that hardcodes the list it checks **drifts with the thing it guards**. Read the population from its owner (`projects.sh`, the rendered compose, the builder's method set).
 
 *Incident:* `TASK-MONO-389` guard (t) does not list hostname forms — it runs `demo-boot.sh`'s derivation **and** the page's `demoHost()` **on the same IP** and compares. Either side changing is caught.
 
-### G8 — Write down what the guard does **not** cover.
+## G8 — Write down what the guard does **not** cover.
 
 A known hole is a different thing from an unknown hole: the second is the path by which the next person believes *"CI has this covered."*
 
-### G9 — Merging is half. Ask how the fix reaches the place it runs.
+## G9 — Merging is half. Ask how the fix reaches the place it runs.
 
 *Incident:* `TASK-MONO-397` fixed `docker-compose.yml`; compose is **baked into the demo AMI**, so the fix did not reach the live demo at all (`TASK-MONO-399` AC-6). **A green `main` is not evidence that the deployed thing is fixed.** Where a subsystem has more than one deployment layer, the layer boundary must be documented at the point of change (see `infra/demo/aws/README.md` § "코드를 고쳤다 — 그게 데모에 도달하는가?").
 

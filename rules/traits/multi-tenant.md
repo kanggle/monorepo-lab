@@ -93,7 +93,7 @@
 
 ---
 
-## Anti-patterns
+## Forbidden Patterns
 
 - 단일 admin 콘솔이 cross-tenant 데이터 화면 노출하면서 audit log 미적용 — leak 사고 시 책임 추적 불가
 - "tenant_id 컬럼만 추가" 후 query 에 `WHERE tenant_id = ?` 누락 — DB 레벨 격리 실패
