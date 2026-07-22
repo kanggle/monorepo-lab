@@ -572,7 +572,14 @@ describe('ledger-api — confidential / F7 (no token / balance / line / code / i
       ...errorSpy.mock.calls,
     ]
       .map((args) => args.map(String).join(' '))
-      .join('\n');
+      .join('\n')
+      // Redact the log line's ISO-8601 `ts` before the confidential-substring
+      // checks: the timestamp is non-confidential metadata, but its digits can
+      // coincidentally spell a confidential value — e.g. `"…:13.594Z"` contains
+      // `13.5` (the exchangeRate), which made this a clock-dependent flake
+      // (TASK-PC-FE-254). A REAL leak lands in a msg/body field, never inside a
+      // timestamp, so redaction keeps the F7 protection intact.
+      .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/g, '<ts>');
     expect(all).not.toContain('GAP-OIDC-ACCESS'); // token
     expect(all).not.toContain('je-secret-id'); // entry id (sanitised path)
     expect(all).not.toContain('182250'); // base minor-units line value
