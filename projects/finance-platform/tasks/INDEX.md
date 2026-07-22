@@ -78,8 +78,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-FIN-BE-062-refactor-spec-finance-polish.md` — **READY** — refactor-spec finance ledger 이벤트계약 타이틀 정규화(1편집, dead-ref 0). 분석=Opus 4.8 / 구현 권장=Sonnet.
-
 ## in-progress
 
 (empty)
@@ -88,6 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## done
 
+- `TASK-FIN-BE-062-refactor-spec-finance-polish.md` — **DONE 2026-07-22 (3-dim verified — impl PR #2878 squash `9c7f0ecd4`; 전 PR MERGED · main 편입 · 머지 전 required 0 failing, done/).** refactor-spec finance ledger 이벤트계약 타이틀 정규화(`# finance-ledger-events — event contract (ledger-service)`→`# Event Contract — finance-ledger-events`, account 형제·cross-project 규범 정렬); 10 스펙 dead-ref 0. HTTP-title 발산(ledger-service 하위 2문서 구분=의도적)·account(7)/ledger(8)-field envelope drift(README §5 ADR-gated)는 report-only. 분석=Opus 4.8.
 - `TASK-FIN-BE-061-ledger-service-dedup-actor-currency-audit.md` — **DONE (2026-07-22, impl PR #2863 squash `b387b6f07`; 3-dim verified — state=MERGED · origin/main tip 일치 · 머지 직전 0 failing required).** ledger-service `actorIdentity()`(5×→`ActorContext.identity()`) + currency-parse(3×→`Currency.ofOrThrow(code, factory)`, 예외 타입 FxRateOverride/FxTolerance 구별 보존) + upsert 골격(4×→`AuditedUpsert.run`, static helper=생성자 불변, AGGREGATE_TYPE/action 보존). F3/F2 use-case 유닛테스트(STRICT_STUBS) + 컨트롤러 slice GREEN 무변경. 분석·구현=Opus 4.8.
 
 - `TASK-FIN-BE-060-ledger-api-fx-rate-override-undocumented.md` — **DONE (2026-07-21 audit round-2, merged #2848).** 테넌트별 FX 환율 오버라이드 엔드포인트(`GET`/`PUT .../settlements/fx-rate-override/{foreignCurrency}`)를 `ledger-api.md`에 `§15` 형식의 번호 섹션으로 문서화 (doc-only).

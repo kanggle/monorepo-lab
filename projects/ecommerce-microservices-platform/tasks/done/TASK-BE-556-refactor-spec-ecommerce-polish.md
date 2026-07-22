@@ -8,7 +8,7 @@ refactor-spec ecommerce: structural polish (dash/path/anchor/envelope/overview-r
 
 # Status
 
-ready
+done
 
 # Owner
 

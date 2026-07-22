@@ -1,6 +1,6 @@
 # TASK-MONO-466 — Align the `/design-event` command's topic-naming + breaking-change guidance with canonical platform docs
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-MONO
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (3 one-line doc corrections in a shared `.claude/commands/` file; no code)
