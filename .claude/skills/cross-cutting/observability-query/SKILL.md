@@ -123,7 +123,7 @@ Refer to the [PromQL reference](https://prometheus.io/docs/prometheus/latest/que
 
 ## Trace queries (VictoriaTraces)
 
-`/observe trace <trace_id>` returns the full span tree for one `trace_id` from VictoriaTraces (Jaeger-compatible query API). The trace layer is pinned by [ADR-MONO-007a](../../../../docs/adr/ADR-MONO-007a-trace-layer.md) and ingests OTLP via Vector (producers + console-bff + console-web export to the Vector `:4318` OTLP source, which forwards to VictoriaTraces).
+`/observe trace <trace_id>` returns the full span tree for one `trace_id` from VictoriaTraces (Jaeger-compatible query API). The trace layer is pinned by [ADR-MONO-007a](../../../../docs/adr/ADR-MONO-007a-trace-layer.md) and ingests OTLP **directly** into VictoriaTraces at `:10428/insert/opentelemetry/v1/traces` — producers + console-bff + console-web export OTLP straight to VictoriaTraces, **bypassing Vector**. (ADR-007a D2 *decided* this leg would route through the Vector `:4318` OTLP source, but Vector 0.45 has no `opentelemetry` sink, so the shipped topology is direct — see ADR-MONO-007a D2's as-built deviation note. Logs + metrics still flow through Vector; only traces are direct.) So when a trace is missing, inspect the VictoriaTraces ingest/query path, **not** a Vector trace pipeline — there is none.
 
 The headline use case is **cross-product fan-out tracing**: a console dashboard request (Operator Overview / Domain Health) assembles as one trace tree —
 

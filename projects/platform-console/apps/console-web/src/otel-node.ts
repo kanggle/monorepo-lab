@@ -6,8 +6,13 @@
  *   requests; the undici (native `fetch`) auto-instrumentation injects W3C
  *   `traceparent` into the outbound console-bff call so the BFF adopts it as
  *   parent instead of starting a new root.
- * - Exporter: OTLP/HTTP to the Vector OTLP source (ADR-007a D2), URL from
- *   `OTEL_EXPORTER_OTLP_ENDPOINT`. When unset, NO SDK is started (no-op,
+ * - Exporter: OTLP/HTTP directly to VictoriaTraces, URL from
+ *   `OTEL_EXPORTER_OTLP_ENDPOINT`. NOTE: ADR-007a D2 decided this leg would
+ *   route through the Vector OTLP source, but the shipped topology exports
+ *   direct to VictoriaTraces, bypassing Vector — Vector 0.45 has no
+ *   `opentelemetry` sink, so traces cannot route through the spine yet (see
+ *   ADR-MONO-007a D2's as-built deviation note; logs + metrics still flow
+ *   through Vector). When unset, NO SDK is started (no-op,
  *   ADR-007a D4 — production / `next dev` without the stack is unaffected).
  * - `X-Request-Id` (set explicitly in the route handlers) is retained for
  *   log correlation alongside the trace context — they are complementary.

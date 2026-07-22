@@ -1,6 +1,6 @@
 # TASK-MONO-449 — Correct the two artifacts still claiming traces flow through Vector
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-MONO
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (two comment/doc corrections, plus one URL-construction question that needs an actual answer)

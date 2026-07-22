@@ -9,7 +9,10 @@
  * producers already adopt the incoming `traceparent` via their Spring Boot
  * OTel auto-instrumentation, so the tree assembles end-to-end
  * (console-web SSR → console-bff aggregation → 5 producer spans = 7 spans)
- * and exports to VictoriaTraces via the Vector OTLP source (ADR-007a D1/D2).
+ * and exports directly to VictoriaTraces (ADR-007a D1). NOTE: D2 decided the
+ * OTLP leg would route through the Vector source, but the shipped topology
+ * bypasses Vector — Vector 0.45 has no `opentelemetry` sink (see ADR-MONO-007a
+ * D2's as-built deviation note; logs + metrics still flow through Vector).
  *
  * No-op when `OTEL_EXPORTER_OTLP_ENDPOINT` is unset — production / `next dev`
  * without the observability stack is unaffected (ADR-007a D4). The heavy SDK
