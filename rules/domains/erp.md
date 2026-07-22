@@ -75,7 +75,7 @@ erp 도메인에서 공통으로 발생하는 에러는 [../../platform/error-ha
 - `EXTERNAL_TRAFFIC_REJECTED` — 외부(비-SSO·비-내부망) 접근 시도 거부
 
 ### Cross
-- `OPERATION_NOT_PERMITTED` — 운영자/계정 권한 없음
+- `PERMISSION_DENIED` — 운영자/계정 권한 없음 (platform/error-handling.md 에 등록된 cross-cutting 코드; 위 Authorization 섹션의 자원/행위 거부와 동일 코드)
 
 ---
 

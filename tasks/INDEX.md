@@ -173,7 +173,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- 🟡 `TASK-MONO-471-rules-refactor-tier2-defects.md` — **REVIEW (impl PR 개설 예정, 2026-07-23).** MONO-470 Tier-2 후속 중 **실제 결함 3건**만 선별(검증 후 최소 수정, 의미 무변경). ① 3.1 `erp.md` `OPERATION_NOT_PERMITTED`→`PERMISSION_DENIED`(Java emitter 0·미등록 phantom→등록 코드; Cross 섹션 유지, :73 과 동일 cross-cutting 코드 명시) ② DR2 `error-handling.md:895` dead `§ Internal Event Catalog`(실 heading 한국어)→자연영문 rephrase ③ 4.1 `README` step 6 오해소지(Service-Type 이 Core 앞선 번호처럼 보임)→common-14 가 Core 5종 포함하므로 step 2 에서 이미 로드, entrypoint Core→Service-Type 순서와 모순 없음 명시. diff 3/3. **🔴 DUP1 은 Out of Scope**(사용자 결정): `README § Index File Rule ⚠️` 가 비-갈라짐 사본 반사적 dedup 을 경고 — 도메인 error-code 목록은 아직 안 갈라짐, 포인터화는 readability↔single-source 설계 tradeoff. 분석·구현=Opus 4.8. [[feedback_repo_knows_what_it_does_not_say]] [[feedback_deletion_leaves_survivors_grep_the_consumers]]
 
 ## done
 

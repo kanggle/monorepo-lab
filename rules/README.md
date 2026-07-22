@@ -61,7 +61,7 @@ AI 에이전트와 개발자는 다음 순서로 규칙을 로드·적용한다:
 3. **Domain 계층 로드** — [domains/<declared-domain>.md](domains/) (있는 경우)
 4. **Traits 계층 로드** — [traits/<each-declared-trait>.md](traits/) (있는 경우, 여러 개)
 5. **Service-Type 계층 로드** — 구현 대상 서비스의 `architecture.md`에서 선언한 Service Type에 해당하는 [../platform/service-types/](../platform/service-types/) 파일 (정확히 1개)
-6. **기존 `platform/` 나머지** — Core/Auxiliary spec (entrypoint.md 기준)
+6. **기존 `platform/` 나머지** — Auxiliary spec (entrypoint.md 기준). Core 5종(architecture·service-boundaries·dependency-rules·shared-library-policy·security-rules)은 step 2 의 common 계층에 이미 포함되므로 Service-Type(step 5)보다 먼저 로드된다 — 이 번호는 로드 시점이 아니라 계층 열거이며, entrypoint.md 의 Core→Service-Type→Auxiliary 순서와 모순되지 않는다
 
 > Service-type 축은 domain/trait과 **직교(orthogonal)** 하다. 즉 domain이 무엇이든 trait이 무엇이든, 서비스 타입은 독립적으로 선택되며 각자 고유 규칙을 가진다.
 
