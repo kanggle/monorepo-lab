@@ -84,7 +84,7 @@ Published by `KafkaAlertPublisherAdapter`. Best-effort (no outbox).
 | Envelope field | Type | Notes |
 |---|---|---|
 | `eventId` | string (UUID) | Generated per envelope at publish time. |
-| `eventType` | string | `"inventory.alert.<type>"` (예: `"inventory.alert.snapshot_stale"` / `"inventory.alert.node_unreachable"`). |
+| `eventType` | string | `"inventory.alert.<type>"` (e.g. `"inventory.alert.snapshot_stale"` / `"inventory.alert.node_unreachable"`). |
 | `source` | string | Always `"scm-platform-inventory-visibility-service"`. |
 | `occurredAt` | string (ISO 8601 UTC instant) | Detection timestamp (= `payload.detectedAt`). |
 | `schemaVersion` | integer | `1` for v1 envelope. |

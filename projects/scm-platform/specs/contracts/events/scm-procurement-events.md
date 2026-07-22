@@ -1,4 +1,4 @@
-# Event Contract: procurement-service
+# Event Contract — procurement-service
 
 ## Overview
 
