@@ -260,6 +260,12 @@ class SocialLoginSasBrowserIntegrationTest extends AbstractIntegrationTest {
         String realState = extractParam(googleAuthUrl, "state");
         assertThat(realState).as("state generated + stored by authorize()").isNotBlank();
 
+        // TASK-BE-521 (item A): capture the pre-callback JSESSIONID so the assertion
+        // below can prove the social callback rotates it (session-fixation defense).
+        // The earlier IT reused this session verbatim and never asserted rotation —
+        // exactly the blind spot this ticket closes.
+        String preCallbackSessionId = session.getId();
+
         // 4. Google callback → session established → 302 back to saved /oauth2/authorize.
         MvcResult callback = mockMvc.perform(get("/login/oauth/google/callback")
                         .session(toMockSession(session))
@@ -270,6 +276,13 @@ class SocialLoginSasBrowserIntegrationTest extends AbstractIntegrationTest {
         String resumed = callback.getResponse().getHeader("Location");
         assertThat(resumed).contains("/oauth2/authorize");
         assertThat(resumed).contains("client_id=" + CLIENT_ID);
+
+        // TASK-BE-521 (item A): the session ID MUST have rotated across the callback.
+        // Asserting the resumed redirect alone (above) would NOT catch a missing
+        // rotation — the vulnerable path also redirects. Assert the property itself.
+        assertThat(session.getId())
+                .as("social callback rotates the session ID (fixation defense)")
+                .isNotEqualTo(preCallbackSessionId);
 
         // social_identity row was upserted for the resolved account.
         Integer rows = jdbcTemplate.queryForObject(

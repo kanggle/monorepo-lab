@@ -139,6 +139,34 @@ class SocialLoginBrowserControllerTest {
     }
 
     @Test
+    @DisplayName("callback success: rotates the session ID before establishing the SAS "
+            + "session (session-fixation defense — item A)")
+    void callback_success_rotatesSessionId() {
+        when(savedRequestTenantResolver.resolve(any(), any()))
+                .thenReturn(new SavedRequestTenantResolver.Resolution(
+                        "ecommerce", "B2C_CONSUMER",
+                        "http://iam.local/oauth2/authorize?client_id=ecommerce-web-store-client"));
+        when(oAuthLoginUseCase.resolveBrowserLogin(any(OAuthCallbackCommand.class), eq("ecommerce")))
+                .thenReturn(new BrowserLoginResolution("acc-1", "user@example.com", true));
+
+        MockHttpServletRequest request = callbackRequest();
+        // A pre-existing (potentially attacker-fixated) session — in production the
+        // saved /oauth2/authorize request lives here. Capture its id before the callback.
+        String preLoginSessionId = request.getSession(true).getId();
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        controller().socialLoginCallback("google", "code-1", "state-1", request, response);
+
+        // F1 guard: asserting "login succeeded" alone would NOT distinguish this from
+        // the vulnerable path (that also succeeds). Assert the property itself — the
+        // session ID changed.
+        String postLoginSessionId = request.getSession(false).getId();
+        assertThat(postLoginSessionId).isNotEqualTo(preLoginSessionId);
+        // ...and the authenticated SAS context landed on the rotated session.
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
+    }
+
+    @Test
     @DisplayName("callback success but no saved request → redirect to /")
     void callback_noSavedRedirect_redirectsToRoot() {
         when(savedRequestTenantResolver.resolve(any(), any()))

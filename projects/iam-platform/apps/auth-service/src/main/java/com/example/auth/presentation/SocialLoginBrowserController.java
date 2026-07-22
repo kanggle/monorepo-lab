@@ -183,6 +183,20 @@ public class SocialLoginBrowserController {
                         List.of(new SimpleGrantedAuthority("ROLE_USER")));
         authentication.setDetails(details);
 
+        // TASK-BE-521 (item A) — session-fixation defense. This path establishes the
+        // authenticated SAS session MANUALLY (no AuthenticationFilter), so it bypasses
+        // the SessionAuthenticationStrategy (SS6 default changeSessionId) that the
+        // sibling password form-login path gets automatically. Rotate the session ID
+        // here, before persisting the authenticated context, so a pre-fixated
+        // JSESSIONID cannot become an authenticated session. changeSessionId() keeps
+        // all session attributes, so the saved /oauth2/authorize request
+        // (HttpSessionRequestCache) survives and the resume still works (AC-2).
+        // Guarded on getSession(false): with no pre-existing session there is nothing
+        // to fixate, and saveContext below creates a fresh one.
+        if (request.getSession(false) != null) {
+            request.changeSessionId();
+        }
+
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);
