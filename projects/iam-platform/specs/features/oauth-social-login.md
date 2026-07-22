@@ -176,5 +176,5 @@ Microsoft Identity Platform (Azure AD v2.0)은 OpenID Connect 표준을 따르�
 ## Related Contracts
 
 - HTTP: [auth-api.md](../contracts/http/auth-api.md) `GET /api/auth/oauth/authorize`, `POST /api/auth/oauth/callback`
-- HTTP Internal: [auth-to-account-social.md](../contracts/http/internal/auth-to-account-social.md)
+- Internal: [auth-to-account-social.md](../contracts/http/internal/auth-to-account-social.md)
 - Events: [auth-events.md](../contracts/events/auth-events.md) `auth.login.succeeded` (loginMethod 필드 추가)

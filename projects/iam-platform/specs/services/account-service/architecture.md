@@ -174,7 +174,7 @@ presentation → application → domain
   - [specs/contracts/http/internal/auth-to-account.md](../../contracts/http/internal/) (credential lookup 요청 수신, `tenant_id` 파라미터 포함)
   - [specs/contracts/http/internal/security-to-account.md](../../contracts/http/internal/) (자동 잠금 명령 수신)
   - [specs/contracts/http/internal/admin-to-account.md](../../contracts/http/internal/) (관리자 상태 변경 수신)
-  - `account-internal-provisioning.md` (신규, `/internal/tenants/{tenantId}/accounts` — WMS 등 enterprise 소비자 대상)
+  - [account-internal-provisioning.md](../../contracts/http/internal/) (신규, `/internal/tenants/{tenantId}/accounts` — WMS 등 enterprise 소비자 대상)
 - **이벤트 발행**: [specs/contracts/events/account-events.md](../../contracts/events/) — `account.created`, `account.status.changed`, `account.locked`, `account.unlocked`, `account.roles.changed`, `account.deleted`, `tenant.subscription.changed`. 모두 outbox 경유. **모든 페이로드에 `tenant_id` 필수**
 
 ### Outbox (v2)
