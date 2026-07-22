@@ -1,4 +1,4 @@
-# HTTP API Contract — demand-planning-service
+# API Contract — demand-planning-service
 
 ADR-MONO-027. Base path `/api/v1/demand-planning` (via gateway-service).
 All responses use the scm `{ data, meta }` envelope; errors `{ code, message, details? }`.
