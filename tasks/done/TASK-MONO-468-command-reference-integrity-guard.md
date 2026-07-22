@@ -8,7 +8,7 @@ command 레이어 참조 정합 CI 가드 — `.claude/commands/*.md` dead-path/
 
 # Status
 
-review
+done
 
 # Owner
 
