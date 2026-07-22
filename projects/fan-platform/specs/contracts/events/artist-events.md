@@ -1,4 +1,4 @@
-# artist-events (artist-service Kafka contract)
+# artist-events — Kafka contract
 
 > Event family produced by `fan-platform/apps/artist-service`. All events
 > follow the platform envelope (`platform/event-driven-policy.md`) and inherit
