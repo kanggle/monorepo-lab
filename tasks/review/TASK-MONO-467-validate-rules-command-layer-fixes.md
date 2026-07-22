@@ -8,7 +8,7 @@ TASK-MONO-467
 
 # Status
 
-ready
+review
 
 # Owner
 
