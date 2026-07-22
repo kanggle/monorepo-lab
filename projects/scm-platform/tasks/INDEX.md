@@ -78,6 +78,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
+- `TASK-SCM-BE-040-refactor-spec-scm-polish.md` — **READY** — refactor-spec scm-platform 타이틀/언어 polish(3편집, dead-ref 0). 분석=Opus 4.8 / 구현 권장=Sonnet.
+
 ## in-progress
 
 (empty)
