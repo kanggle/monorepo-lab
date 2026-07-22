@@ -168,7 +168,7 @@ compliance 요구사항은 프로젝트 `PROJECT.md` 의 `compliance` 필드 선
 
 ---
 
-## Anti-patterns
+## Forbidden Patterns
 
 - Order와 Payment를 단일 트랜잭션으로 묶기 — 외부 PG 실패 시 전체 롤백 불가
 - 재고 예약 없이 바로 차감 — 동시성 충돌 많음

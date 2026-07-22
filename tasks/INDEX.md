@@ -173,7 +173,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- 🟡 `TASK-MONO-470-rules-refactor-tier1-structural.md` — **REVIEW (impl PR 개설 예정, 2026-07-23).** `/refactor-spec platform+rules` 감사(3-agent 병렬) 산물 — Tier-1 기계적 정합 4종·9파일, 의미 무변경. ① `testing-strategy.md` G1–G9 `###`→`##`(H1→H3 스킵 수정, 텍스트 무변경→`§ G4` 인용 유효) ② `## Anti-patterns`→`## Forbidden Patterns` 5파일(다수 11 sibling 정합, anchor 안전 grep 확인) ③ saas/wms `외부(`/`내부(`→공백 정합 ④ lint-remediation citation `§ Classes and Interfaces`→`§ Classes`(실 heading 정정). diff 19/19 대칭. **Tier-2/3 는 후속**(DUP1 도메인 error-code 포인터화·3.1 OPERATION_NOT_PERMITTED·F3/F4 Change Rule·4.1 resolution order 모순·1.1/1.2 누락섹션 authoring 등 — task 본문 Out of Scope 열거). orphan 0·dead-link 0. 분석·구현=Opus 4.8. [[feedback_repo_knows_what_it_does_not_say]]
 
 ## done
 

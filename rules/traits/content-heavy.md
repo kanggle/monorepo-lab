@@ -83,7 +83,7 @@
 
 ---
 
-## Anti-patterns
+## Forbidden Patterns
 
 - 원본과 파생본을 같은 path / 버킷에 섞음 — 캐시 무효화 복잡해지고, 원본 손상 리스크
 - 카탈로그 쓰기 모델에서 검색 쿼리 직접 수행 — LIKE 기반 검색이 DB를 태움

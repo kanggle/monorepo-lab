@@ -92,13 +92,13 @@ WMS 도메인에서 공통으로 발생하는 에러는 [../../platform/error-ha
 
 ## Integration Boundaries
 
-### 외부(플랫폼 경계 바깥)
+### 외부 (플랫폼 경계 바깥)
 - **ERP** — 입고 예정(ASN) 수신, 출고 오더 수신, 재고 실적 보고 (`integration-heavy` trait 규칙을 따른다)
 - **TMS (Transportation Management System)** — 출하 정보 전달, 배차 요청
 - **바코드/RFID 스캐너** — 입고 검수, 피킹 확인, 적치 확인 시 물품·로케이션 식별
 - **알림 채널** — 재고 부족, 입출고 완료 등 운영 이벤트 알림 (슬랙/이메일)
 
-### 내부(같은 프로젝트 내 다른 서비스)
+### 내부 (같은 프로젝트 내 다른 서비스)
 - Inbound → Inventory: 적치 확인 시 재고 증가 이벤트 발행
 - Outbound → Inventory: 피킹 지시 시 재고 할당(reserve), 출하 확인 시 재고 확정 차감
 - Master Data는 모든 서비스가 참조하는 공통 데이터. 변경 시 이벤트로 캐시 무효화.

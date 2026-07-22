@@ -85,7 +85,7 @@ Every violation emission MUST carry exactly these four blocks, in this order:
 [REMEDIATION] Choose one:
   1. Rename to `UserManagementService` (or other PascalCase full-noun form) using IDE rename refactoring; update all 14 referencing sites flagged by the linter.
   2. If the abbreviated form is justified (e.g. preserved external API surface), add an `// NAMING-04 exempt: <one-sentence reason>` annotation directly above the class declaration, and file a `tasks/ready/` task documenting the exception for spec drift review.
-[REFERENCE] platform/naming-conventions.md § Classes and Interfaces
+[REFERENCE] platform/naming-conventions.md § Classes
 ```
 
 ---

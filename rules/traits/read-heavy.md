@@ -92,7 +92,7 @@ ORM 사용 시 N+1 쿼리 금지:
 
 ---
 
-## Anti-patterns
+## Forbidden Patterns
 
 - Offset-based pagination을 수백만 건 테이블에 사용 — 깊은 페이지에서 O(N) 스캔
 - 캐시 레이어 생략 + "DB 인덱스로 해결" — 트래픽 증가 시 DB 병목
