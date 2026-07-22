@@ -1,4 +1,4 @@
-# finance-ledger-events — event contract (ledger-service)
+# Event Contract — finance-ledger-events
 
 Kafka events **consumed** and (forward-declared) **published** by
 `finance-platform/apps/ledger-service`. Authored by TASK-FIN-BE-007 **before**
