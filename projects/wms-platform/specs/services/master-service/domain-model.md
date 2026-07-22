@@ -353,6 +353,18 @@ the same transaction. Instead, deactivation is blocked while active children exi
 
 ---
 
+## Forbidden Patterns (in code)
+
+- ❌ JPA entity used as domain model (Hexagonal rule)
+- ❌ `UPDATE master_*` SQL bypassing aggregate domain methods (trait T4)
+- ❌ Hard delete of Warehouse / Zone / Location / SKU / Partner / Lot in v1
+- ❌ Cross-aggregate write in one transaction (except parent creation + event via outbox,
+  which is single-aggregate)
+- ❌ Changing immutable fields (`*_code`, `warehouse_id`, `zone_id`, `sku_id`, `base_uom`,
+  `tracking_type` in general case)
+
+---
+
 ## Reference Data Snapshot (v1 Seed)
 
 On first deployment, seed these minimum records to enable end-to-end testing:
@@ -366,18 +378,6 @@ On first deployment, seed these minimum records to enable end-to-end testing:
 
 Seeding strategy: Flyway migration `V99__seed_dev_data.sql`, only active under
 Spring profile `dev` or `standalone`.
-
----
-
-## Forbidden Patterns (in code)
-
-- ❌ JPA entity used as domain model (Hexagonal rule)
-- ❌ `UPDATE master_*` SQL bypassing aggregate domain methods (trait T4)
-- ❌ Hard delete of Warehouse / Zone / Location / SKU / Partner / Lot in v1
-- ❌ Cross-aggregate write in one transaction (except parent creation + event via outbox,
-  which is single-aggregate)
-- ❌ Changing immutable fields (`*_code`, `warehouse_id`, `zone_id`, `sku_id`, `base_uom`,
-  `tracking_type` in general case)
 
 ---
 

@@ -27,10 +27,9 @@ Six owned aggregates plus infrastructure-supporting records:
 
 7. **OutboundOutbox** — transactional outbox row (T3)
 8. **EventDedupe** — Kafka consumer-side dedupe (T8)
-9. **ErpOrderWebhookInbox** — ERP push ingest buffer (same pattern as inbound-service)
-10. **ErpOrderWebhookDedupe** — webhook replay-protection
-11. **TmsRequestDedupe** — TMS API idempotency tracking
-12. **MasterReadModel** — local cache of Location / SKU / Lot / Partner snapshots
+9. **ErpOrderWebhookInbox / ErpOrderWebhookDedupe** — ERP push ingest buffer + webhook replay-protection (combined as one body record, § 9)
+10. **TmsRequestDedupe** — TMS API idempotency tracking
+11. **MasterReadModel** — local cache of Location / SKU / Lot / Partner snapshots
 
 ---
 
