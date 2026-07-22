@@ -17,7 +17,7 @@ Defines **platform-wide** terms used across specs, tasks, and documentation. Thi
 | **Revoked Token** | A token that has been explicitly invalidated (e.g., via logout, security incident) |
 | **Authentication** | Verifying the identity of a caller ("who are you?") |
 | **Authorization** | Verifying what an authenticated caller is allowed to do ("what can you do?") |
-| **JWKS** | JSON Web Key Set — the public key material used to verify JWT signatures |
+| **JWKS** | JSON Web Key Set — the public key material used to verify JWT signatures, published at a JWKS endpoint |
 | **Identity Propagation** | Gateway sets `X-User-Id`, `X-User-Role` headers on forwarded requests from verified JWT claims |
 
 ---
@@ -81,7 +81,6 @@ Defines **platform-wide** terms used across specs, tasks, and documentation. Thi
 | **Gradle Multi-Project** | Gradle build structure where a root project includes multiple subprojects via `settings.gradle` |
 | **OTel (OpenTelemetry)** | Vendor-neutral observability framework for traces, metrics, and logs |
 | **Micrometer** | JVM metrics facade that integrates with Prometheus, Grafana, and others |
-| **JWKS** | JSON Web Key Set — endpoint exposing public keys for JWT signature validation |
 
 ---
 
