@@ -216,6 +216,10 @@ jobs:
       # Same reasoning as service-map above: deleting a row from error-handling.md is a
       # docs-only diff, and that is precisely the change the guard must catch.
       error-registry: ${{ steps.filter.outputs.error-registry }}
+      # TASK-MONO-472: raw filter, NOT AND-combined with `code-changed`. The doc side
+      # of this drift is a markdown edit — a domain rule file gaining a code, or the
+      # registry losing a row a domain still references. Both are docs-only.
+      domain-errcode: ${{ steps.filter.outputs.domain-errcode }}
       # TASK-MONO-406: NOT AND-combined with `code-changed` either. The rule this
       # guard enforces lives in `platform/shared-library-policy.md`, and weakening
       # the rule is a markdown-only diff — exactly the change the guard must still
@@ -456,6 +460,15 @@ jobs:
               - '**/*.java'
               - 'platform/error-handling.md'
               - 'scripts/check-error-code-registry.sh'
+            # TASK-MONO-472: domain rule files declare error codes that must be
+            # registered in error-handling.md (the DOC side; check-error-code-registry
+            # guards the Java-emission side). Triggers on a domain rule edit, a
+            # registry edit (a removed row can orphan a domain reference), and the
+            # guard script. Pure-positive (no negation — MONO-074/075 quirk rule).
+            domain-errcode:
+              - 'rules/domains/**'
+              - 'platform/error-handling.md'
+              - 'scripts/check-domain-error-code-registry.sh'
             # TASK-MONO-406: a shared library's @AutoConfiguration runs in every
             # consumer, so a context-wide annotation in one (@EnableJpaRepositories /
             # @EntityScan / @ComponentScan / ...) silently reconfigures the whole fleet.
@@ -1037,6 +1050,41 @@ jobs:
 
       - name: Guard — every emitted error code is registered
         run: bash scripts/check-error-code-registry.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-472 — domain rule error-code registry guard (the DOC side).
+  #
+  # Every `rules/domains/<d>.md` § Standard Error Codes section instructs that its
+  # codes be registered in `platform/error-handling.md`, and nothing enforced it:
+  # MONO-471 found `erp.md` listing `OPERATION_NOT_PERMITTED` (0 emitters,
+  # registered nowhere). `check-error-code-registry.sh` guards the Java-emission
+  # side; a markdown list is not an emission, so this is the complementary doc-side
+  # guard. Raw filter (a domain-code drift is a markdown-only diff). `--selftest`
+  # runs FIRST and is required: the false-positive frontier (description-embedded
+  # ABAC attributes / roles / event enums vs the declared code) is the whole risk.
+  #
+  # Covers wms/ecommerce/fintech/saas (measured clean). erp/fan-platform/scm are
+  # EXCLUDED pending TASK-MONO-473 (a 20-code pre-existing registration gap — a
+  # per-code HTTP-status decision, not a refactor). A guard red on day one gets
+  # switched off (§ G2); this is green on what is clean and states the gap (§ G8).
+  # ---------------------------------------------------------------------------
+  domain-error-code-registry:
+    name: Domain error-code registry (rules/domains codes vs platform/error-handling.md)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.domain-errcode == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-domain-error-code-registry.sh
+
+      - name: Self-test the extractor against known positives and negatives
+        run: bash scripts/check-domain-error-code-registry.sh --selftest
+
+      - name: Guard — every declared domain error code is registered
+        run: bash scripts/check-domain-error-code-registry.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-405: the hook fixtures ran nowhere.
