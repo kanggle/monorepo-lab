@@ -34,7 +34,7 @@ downstream 호출 시 **반드시 Idempotency-Key 전달** ([rules/traits/transa
 ### MySQL
 - `admin_actions` — **append-only 감사 원장**. 필드: `id`, `action_code` (ACCOUNT_LOCK / ACCOUNT_UNLOCK / SESSION_REVOKE / AUDIT_QUERY 등), `actor` (operator_id / role), `target_type`, `target_id`, `reason`, `ticket_id`, `outcome` (SUCCESS / FAILURE / IN_PROGRESS), `downstream_detail` (JSON), `started_at`, `completed_at`. DB 트리거로 UPDATE/DELETE 차단
 - `outbox_events` — `admin.action.performed` 스테이징
-- `tenant_partnership` + `tenant_partnership_participant` — **cross-org 파트너십** 관계 상태 (TASK-BE-476 / ADR-MONO-045). admin-service 가 예외적으로 소유하는 유일한 관계 aggregate (모든 재사용 프리미티브가 admin-service 에 있으므로, ADR-045 D8). `delegated_scope` envelope + participant 바인딩; assume-tenant 파생의 소스
+- `tenant_partnership` + `tenant_partnership_participant` — **cross-org 파트너십** 관계 상태 (TASK-BE-476 / ADR-MONO-045). admin-service 가 예외적으로 소유하는 유일한 관계 aggregate (모든 재사용 프리미티브가 admin-service 에 있으므로, ADR-MONO-045 D8). `delegated_scope` envelope + participant 바인딩; assume-tenant 파생의 소스
 
 ### Redis (선택)
 - operator 세션 nonce, rate limit 버킷 (사용 시)

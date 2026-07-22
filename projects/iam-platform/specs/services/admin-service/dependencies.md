@@ -22,7 +22,7 @@
 |---|---|---|
 | `admin_actions` | `id`, `action_code`, `actor_id`, `actor_role`, `target_type`, `target_id`, `reason`, `ticket_id`, `outcome`, `downstream_detail` (JSON), `started_at`, `completed_at` | **append-only 감사 원장**. DB 트리거로 UPDATE/DELETE 차단 ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A3). `outcome`은 SUCCESS/FAILURE/IN_PROGRESS |
 | `outbox_events` | `admin.action.performed` 이벤트 스테이징 | libs/java-messaging |
-| `tenant_partnership` / `tenant_partnership_participant` | cross-org 파트너십 관계 상태 + participant 바인딩 | **TASK-BE-476 / ADR-MONO-045** — 계약 정의됨(테이블 = [data-model.md](../../services/admin-service/data-model.md)), DDL/마이그레이션 = §3.4 step 2. admin-service 가 소유하는 유일한 관계 aggregate |
+| `tenant_partnership` / `tenant_partnership_participant` | cross-org 파트너십 관계 상태 + participant 바인딩 | **TASK-BE-476 / ADR-MONO-045** — 계약 정의됨(테이블 = [data-model.md](data-model.md)), DDL/마이그레이션 = §3.4 step 2. admin-service 가 소유하는 유일한 관계 aggregate |
 
 **도메인 상태 최소**. 계정/세션/credential은 downstream 소유. admin-service 로컬 상태 = 감사 원장 + RBAC 메타 + (신규) cross-org 파트너십 관계.
 

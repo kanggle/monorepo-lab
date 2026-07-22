@@ -181,13 +181,13 @@ effectiveCeiling(tenant) = tenant.org_node_id IS NULL ? UNBOUNDED
 
 증명은 `OrgNodeBackfillIntegrationTest` (마이그레이션 전/후 `entitled_domains` 바이트 동일성 스냅샷) 와 `V0028BackfillMigrationShapeTest` (Docker 없이 도는 구문 가드) 가 담당한다.
 
-**D6 seam (단일 지점 강제)**: 실링 교집합은 **account-service 소스에서 딱 한 번** 적용된다 — 전용 internal 엔드포인트 `GET /internal/tenants/{tenantId}/entitled-domains` 가 `ACTIVE subscriptions ∩ effectiveCeiling(tenant)` 를 반환. `GET /internal/tenant-domain-subscriptions` 는 여전히 **raw ACTIVE row** 를 반환한다(콘솔 카탈로그 + 구독 관리의 진실). auth-service `TenantClaimTokenCustomizer` 는 **바이트 불변** — `derive(E ∩ C) = derive(E) ∩ derive(C)` (ADR-035 파생이 도메인-키 기준 per-domain 이므로) ([ADR-MONO-047](../../../../../docs/adr/ADR-MONO-047-org-node-tenant-hierarchy.md) § D6, roadmap step 2 seam note).
+**D6 seam (단일 지점 강제)**: 실링 교집합은 **account-service 소스에서 딱 한 번** 적용된다 — 전용 internal 엔드포인트 `GET /internal/tenants/{tenantId}/entitled-domains` 가 `ACTIVE subscriptions ∩ effectiveCeiling(tenant)` 를 반환. `GET /internal/tenant-domain-subscriptions` 는 여전히 **raw ACTIVE row** 를 반환한다(콘솔 카탈로그 + 구독 관리의 진실). auth-service `TenantClaimTokenCustomizer` 는 **바이트 불변** — `derive(E ∩ C) = derive(E) ∩ derive(C)` (ADR-MONO-035 파생이 도메인-키 기준 per-domain 이므로) ([ADR-MONO-047](../../../../../docs/adr/ADR-MONO-047-org-node-tenant-hierarchy.md) § D6, roadmap step 2 seam note).
 
-**엔타이틀먼트-플레인 쓰기 게이트**: 도메인 `d` 의 `tenant_domain_subscription` 을 활성화(activate)하려는데 `!permits(effectiveCeiling(tenant), d)` 이면 **422 `SUBSCRIPTION_DOMAIN_OUT_OF_CEILING`**. 비활성화(deactivate)는 항상 허용(narrowing). 실링은 **엔타이틀먼트만** 제한할 뿐 IAM 역할을 부여하지 않는다 (ADR-023 plane separation).
+**엔타이틀먼트-플레인 쓰기 게이트**: 도메인 `d` 의 `tenant_domain_subscription` 을 활성화(activate)하려는데 `!permits(effectiveCeiling(tenant), d)` 이면 **422 `SUBSCRIPTION_DOMAIN_OUT_OF_CEILING`**. 비활성화(deactivate)는 항상 허용(narrowing). 실링은 **엔타이틀먼트만** 제한할 뿐 IAM 역할을 부여하지 않는다 (ADR-MONO-023 plane separation).
 
 ### `tenants` (org_node_id 추가)
 
-> TASK-BE-490 / [ADR-MONO-047](../../../../../docs/adr/ADR-MONO-047-org-node-tenant-hierarchy.md) § D1/D7 — `tenants` 테이블 본체는 Flyway `V0009__create_tenants.sql` 및 [multi-tenancy.md § Tenant Model](../../features/multi-tenancy.md#tenant-엔터티-account-service-domaintenant) 에 정의된다. 본 노트는 ADR-047 이 추가하는 **단일 컬럼**만 다룬다.
+> TASK-BE-490 / [ADR-MONO-047](../../../../../docs/adr/ADR-MONO-047-org-node-tenant-hierarchy.md) § D1/D7 — `tenants` 테이블 본체는 Flyway `V0009__create_tenants.sql` 및 [multi-tenancy.md § Tenant Model](../../features/multi-tenancy.md#tenant-엔터티-account-service-domaintenant) 에 정의된다. 본 노트는 ADR-MONO-047 이 추가하는 **단일 컬럼**만 다룬다.
 
 ```sql
 ALTER TABLE tenants

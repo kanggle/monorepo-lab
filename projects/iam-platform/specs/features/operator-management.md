@@ -1,6 +1,6 @@
-# Feature Spec: 운영자 관리 (Operator Management)
+# Feature: Operator Management (운영자 관리)
 
-## Overview
+## Purpose
 
 SUPER_ADMIN 역할을 보유한 운영자가 다른 운영자 계정을 생성하고, 역할을 부여·회수하며, 계정 상태를 변경할 수 있는 기능. admin-service 내부에서 처리되며 별도 외부 IdP 의존 없음.
 

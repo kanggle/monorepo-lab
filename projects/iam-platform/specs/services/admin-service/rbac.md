@@ -92,7 +92,7 @@ Permission 키 오탈자 방지를 위해 문자열 상수 클래스를 TASK-BE-
 | `SUPPORT_LOCK` | `account.lock`, `account.unlock`, `account.force_logout`, `audit.read` | CS L2. 계정 제어 + 감사 조회. security 이벤트는 열람 불가 |
 | `SECURITY_ANALYST` | `audit.read`, `security.event.read`, `account.force_logout` | 보안팀. 의심 세션 긴급 종료 가능, 계정 lock/unlock은 CS 경유 |
 | `TENANT_ADMIN` | `operator.manage`, `tenant.admin.delegate`, `partnership.manage`, `group.manage` | **테넌트-scoped 위임관리자** (ADR-MONO-024 D1/D4-B, ADR-MONO-045 D2/D4, ADR-MONO-046 D3/D6). grant row 의 `admin_operator_roles.tenant_id` 로 스코프 — 자기 테넌트의 운영자 관리 + 자기 테넌트 한정 sub-delegation + 자기 테넌트를 당사자로 하는 cross-org 파트너십 관리(invite/accept/participant) + 자기 테넌트의 운영자 그룹 관리(`group.manage`, `TenantScopeGuard` 대상 = `operator_group.tenant_id`). IAM 평면 전용 (`subscription.manage` 미포함). SUPER_ADMIN (`'*'`) 과 달리 D2 confinement 으로 자기 테넌트에 한정됨 (TASK-BE-345). `partnership.manage` 는 파트너십 **관리 표면**만 부여하며, 그로 인한 cross-org **파생** 권한은 `delegated_scope` cap 이 별도 강제(TASK-BE-476) |
-| `TENANT_BILLING_ADMIN` | `subscription.manage` | **테넌트-scoped entitlement 관리자** (ADR-MONO-024 D5-C). grant row 의 `tenant_id` 로 스코프 — 자기 테넌트의 도메인 구독 관리. `TENANT_ADMIN` 과 **별도 role** (IAM↔entitlement 위임 평면 분리, ADR-023 separability 실현) |
+| `TENANT_BILLING_ADMIN` | `subscription.manage` | **테넌트-scoped entitlement 관리자** (ADR-MONO-024 D5-C). grant row 의 `tenant_id` 로 스코프 — 자기 테넌트의 도메인 구독 관리. `TENANT_ADMIN` 과 **별도 role** (IAM↔entitlement 위임 평면 분리, ADR-MONO-023 separability 실현) |
 | `ORG_ADMIN` | `org.manage`, `operator.manage`, `tenant.admin.delegate`, `group.manage` | **org-node-scoped company-wide 위임관리자** (ADR-MONO-047 D5, ADR-MONO-046 D6) — flat `TENANT_ADMIN` 의 company-wide 아날로그, **노드에서 부여**된다. grant row 의 `admin_operator_roles.org_node_id` 로 스코프(≠ `tenant_id` — 아래 Org-Node Scope Confinement) → 노드 subtree 의 모든 서비스-tenant 에 대한 operator 관리 + subtree 한정 sub-delegation + org-node 트리/ceiling 관리 + 운영자 그룹 관리(`group.manage` — 이미 보유한 `operator.manage` 도달을 미러). `subscription.manage` **미포함** (v1 — entitlement 는 `TENANT_BILLING_ADMIN` 유지; additive follow-up 으로만 부여 가능, 본 태스크는 부여하지 않음). SUPER_ADMIN(`'*'`)과 달리 D5 org-node confinement 으로 자기 노드 subtree 에 한정 |
 
 ### Seed Matrix (role × permission)
@@ -121,7 +121,7 @@ Permission 키 오탈자 방지를 위해 문자열 상수 클래스를 TASK-BE-
 
 > **ADR-MONO-047 step 1→2 (TASK-BE-490 spec / TASK-BE-492 impl)**: `org.manage` 행 + `ORG_ADMIN` 열은 `V0041__seed_org_manage_permission_and_org_admin_role.sql` 로 시드된다. **inert/net-zero** — `ORG_ADMIN` 을 **어떤 operator 에도 배정하지 않으며**(`admin_operator_roles` 무변경 — `V0033__seed_tenant_admin_roles.sql` 와 동일 규율), role 정의 + 매핑만 추가한다. `ORG_ADMIN` 은 grant 된 이후에만 효력이 있고, 보유 operator 의 admin 스코프는 grant row 의 `admin_operator_roles.org_node_id`(V0042)가 구동하는 노드 subtree 로 D5 confinement 이 한정한다(아래 Org-Node Scope Confinement). `SUPER_ADMIN` 은 `org.manage` 를 추가로 얻어 ROOT 노드 생성 유일 주체가 된다. `ORG_ADMIN` 의 권한집합에 `subscription.manage` 가 ❌ 인 것은 의도적(v1 IAM 평면 전용; entitlement 는 `TENANT_BILLING_ADMIN` 유지 — additive follow-up).
 
-> **ADR-MONO-046 step 1→2 (TASK-BE-519 spec / TASK-BE-520 impl)**: `group.manage` 행은 `V00NN__seed_group_manage_permission.sql` 로 `SUPER_ADMIN`·`TENANT_ADMIN`·`ORG_ADMIN` 에 시드된다. **inert/net-zero** — role→permission 매핑만 추가하며 **어떤 operator 에도 새로 배정하지 않고**, 어떤 operator 의 assignment/role row 도 바꾸지 않는다(fan-out 은 그룹이 생성·grant 된 이후에만 발생하며, seed 는 그룹을 하나도 만들지 않는다). 보유자 집합이 `operator.manage`(`SUPER_ADMIN`/`TENANT_ADMIN`/`ORG_ADMIN`)를 정확히 미러하는 것은 의도적 — 운영자 그룹은 이 role 들이 **이미 관리하는** operator/assignment 위의 bulk-grant 편의이므로 보유자 집합도 동일하다. `SUPPORT_READONLY`/`SUPPORT_LOCK`/`SECURITY_ANALYST`(조회·지원 전용, operator 를 관리하지 않음) 및 `TENANT_BILLING_ADMIN`(entitlement 평면 전용 — IAM 운영자 관리 미보유, `operator.manage` ❌ 와 동형)에는 ❌ 다. **v1 은 fan-out(D2-A)**: 그룹 멤버십은 평가-시점 edge 가 **아니며**, `PermissionEvaluator`·perm-cache·모든 confinement 축(Target-Tenant D2·BE-467 account-data·ADR-045 cross-org·ADR-047 org-node)은 **byte-unchanged** 다(아래 Operator Group Fan-Out). inheritance 평가 경로(D2-B)는 후속 ADR 로 연기.
+> **ADR-MONO-046 step 1→2 (TASK-BE-519 spec / TASK-BE-520 impl)**: `group.manage` 행은 `V00NN__seed_group_manage_permission.sql` 로 `SUPER_ADMIN`·`TENANT_ADMIN`·`ORG_ADMIN` 에 시드된다. **inert/net-zero** — role→permission 매핑만 추가하며 **어떤 operator 에도 새로 배정하지 않고**, 어떤 operator 의 assignment/role row 도 바꾸지 않는다(fan-out 은 그룹이 생성·grant 된 이후에만 발생하며, seed 는 그룹을 하나도 만들지 않는다). 보유자 집합이 `operator.manage`(`SUPER_ADMIN`/`TENANT_ADMIN`/`ORG_ADMIN`)를 정확히 미러하는 것은 의도적 — 운영자 그룹은 이 role 들이 **이미 관리하는** operator/assignment 위의 bulk-grant 편의이므로 보유자 집합도 동일하다. `SUPPORT_READONLY`/`SUPPORT_LOCK`/`SECURITY_ANALYST`(조회·지원 전용, operator 를 관리하지 않음) 및 `TENANT_BILLING_ADMIN`(entitlement 평면 전용 — IAM 운영자 관리 미보유, `operator.manage` ❌ 와 동형)에는 ❌ 다. **v1 은 fan-out(D2-A)**: 그룹 멤버십은 평가-시점 edge 가 **아니며**, `PermissionEvaluator`·perm-cache·모든 confinement 축(Target-Tenant D2·BE-467 account-data·ADR-MONO-045 cross-org·ADR-MONO-047 org-node)은 **byte-unchanged** 다(아래 Operator Group Fan-Out). inheritance 평가 경로(D2-B)는 후속 ADR 로 연기.
 
 ### Seeding Strategy
 
@@ -273,7 +273,7 @@ function requireTenantInScope(actor, permission, targetTenantId, actionCode):
 - **대상 테넌트 해소**는 엔드포인트별이다(생성/관리 대상 operator 의 home `tenant_id`, assignment 의 `tenant_id`, 또는 요청 path 의 `tenantId`). 각 변이 use-case 는 *대상 테넌트만* 해소하여 gate 를 호출하며, **규칙 자체를 재구현하지 않는다**(D2-A 중앙 규칙; per-endpoint 재구현 D2-B 는 거부됨).
 - `null` 대상 → **거부**(fail-closed). 모든 gated 변이는 구체적 대상 테넌트를 갖는다.
 - **DENIED row 는 best-effort**(architecture.md A10 override, BE-249/262 cross-tenant deny 와 동일): 감사 실패는 `admin.audit.cross_tenant_deny_failure` 카운터만 증가시키고 403 은 항상 성립한다.
-- **NET-ZERO**: 현재 `operator.manage` / `subscription.manage` 보유 role 은 `SUPER_ADMIN`(grant row `tenant_id='*'`) 뿐이라 gate 는 아무도 거부하지 않는다 — confinement 은 ADR-024 step 2 가 비-플랫폼 admin role(`TENANT_ADMIN`/`TENANT_BILLING_ADMIN`)을 seed 한 이후에만 발효한다.
+- **NET-ZERO**: 현재 `operator.manage` / `subscription.manage` 보유 role 은 `SUPER_ADMIN`(grant row `tenant_id='*'`) 뿐이라 gate 는 아무도 거부하지 않는다 — confinement 은 ADR-MONO-024 step 2 가 비-플랫폼 admin role(`TENANT_ADMIN`/`TENANT_BILLING_ADMIN`)을 seed 한 이후에만 발효한다.
 - **NET-ZERO (org-node, ADR-MONO-047 D5)**: 위 (2) org-node subtree 분기는 seed 가 `ORG_ADMIN` 을 **어떤 operator 에도 배정하지 않으므로** 어떤 operator 가 `ORG_ADMIN @ node`(`org_node_id != null` 인 grant row)를 부여받기 전엔 **unreachable** — `effectiveAdminScope` 는 기존 동작과 byte-identical 하다.
 
 대상 표면: `POST /api/admin/operators`, `PATCH .../operators/{id}/roles`, `PATCH .../operators/{id}/status`, `PUT .../operators/{id}/assignments/{tenantId}/org-scope`, `POST .../operators/{id}/assignments/{tenantId}` (assign, step 2b), `DELETE .../operators/{id}/assignments/{tenantId}` (unassign, step 2b), `POST /api/admin/subscriptions`, `PATCH /api/admin/subscriptions/{tenantId}/{domainKey}/status`.
@@ -291,7 +291,7 @@ function requireTenantInScope(actor, permission, targetTenantId, actionCode):
 - **bulk-lock**: 배치 진입 시 1회 해소된 테넌트를 모든 per-row `LockAccountCommand` 이 상속 — cross-tenant row 는 해당 row 만 `ACCOUNT_NOT_FOUND` outcome, 배치는 200 유지.
 - **session-revoke** 는 admin-service 가 동일하게 해소·스탬프하나(BE-467 propagation), **실제 enforce 는 auth-service** 가 수행한다(TASK-BE-468) — credential-tenant 게이트로 cross-tenant force-logout 을 **no-op**(`200 count=0`, DB revoke·Redis 무효화 미수행) 처리. 상세: [auth-service/architecture.md](../auth-service/architecture.md) · [admin-api.md](../../contracts/http/admin-api.md#tenant-confinement--x-tenant-id-task-be-467).
 
-> **세 confinement 축 구분.** D2 `TenantScopeGuard` = *operator-administration* 표면(대상 = 관리 대상 operator/assignment/subscription 의 테넌트, 위반 → **403 TENANT_SCOPE_DENIED**). BE-467 `QueryTenantScopeGate` = *account-data* 표면(대상 = 계정의 `tenant_id`, 위반 → **404**, 읽기 경로와 동형). ADR-045 Cross-Org Partner Delegation Confinement(아래) = *cross-org 파생 도메인-운영* 축(대상 = 파트너십에서 파생한 host 테넌트 reach, 캡 = `delegated_scope ∩ participant ∩ host-holds`) — 앞의 두 축이 admin/account 표면을 confine 하는 것과 달리, 이 축은 **assume-tenant 발급 시 파생되는 도메인 권한**을 attenuate 하며 **admin 권한은 절대 확장하지 않는다**. 세 문장: "누가 어느 테넌트를 관리(administer)할 수 있나"(D2), "이 계정이 활성 테넌트에 속하나"(BE-467), "partner 의 operator 가 host 를 어느 범위까지 operate 할 수 있나"(ADR-045).
+> **세 confinement 축 구분.** D2 `TenantScopeGuard` = *operator-administration* 표면(대상 = 관리 대상 operator/assignment/subscription 의 테넌트, 위반 → **403 TENANT_SCOPE_DENIED**). BE-467 `QueryTenantScopeGate` = *account-data* 표면(대상 = 계정의 `tenant_id`, 위반 → **404**, 읽기 경로와 동형). ADR-MONO-045 Cross-Org Partner Delegation Confinement(아래) = *cross-org 파생 도메인-운영* 축(대상 = 파트너십에서 파생한 host 테넌트 reach, 캡 = `delegated_scope ∩ participant ∩ host-holds`) — 앞의 두 축이 admin/account 표면을 confine 하는 것과 달리, 이 축은 **assume-tenant 발급 시 파생되는 도메인 권한**을 attenuate 하며 **admin 권한은 절대 확장하지 않는다**. 세 문장: "누가 어느 테넌트를 관리(administer)할 수 있나"(D2), "이 계정이 활성 테넌트에 속하나"(BE-467), "partner 의 operator 가 host 를 어느 범위까지 operate 할 수 있나"(ADR-MONO-045).
 
 ### Grant-Menu No-Escalation (ADR-MONO-024 D3, step 2b)
 
@@ -320,14 +320,14 @@ function requireGrantable(actor, rolesToGrant, actionCode):
 
 ### Cross-Org Partner Delegation Confinement (ADR-MONO-045 D3/D5)
 
-앞의 두 축(D2 administration, BE-467 account-data)과 **별개의 세 번째 축**으로, **partner 테넌트 B 의 operator 가 host 테넌트 A 를 운영(operate)할 때의 파생 도메인 권한**을 attenuate 한다. 이는 ADR-024 within-tenant 위임을 **조직 경계 너머로** 확장한 유일한 경로이며(ADR-MONO-045 D3), 위임의 origination 만 신규이고 다운스트림(operator·role·assume-tenant)은 ADR-020/024 를 재사용한다 — 파트너십은 **관리된 envelope**이지 격리 우회가 아니다(D5).
+앞의 두 축(D2 administration, BE-467 account-data)과 **별개의 세 번째 축**으로, **partner 테넌트 B 의 operator 가 host 테넌트 A 를 운영(operate)할 때의 파생 도메인 권한**을 attenuate 한다. 이는 ADR-MONO-024 within-tenant 위임을 **조직 경계 너머로** 확장한 유일한 경로이며(ADR-MONO-045 D3), 위임의 origination 만 신규이고 다운스트림(operator·role·assume-tenant)은 ADR-MONO-020/024 를 재사용한다 — 파트너십은 **관리된 envelope**이지 격리 우회가 아니다(D5).
 
 **핵심 불변식 — 파트너십은 admin scope 를 확장하지 않는다.** cross-org actor(B-operator)가 A 에서 갖는 것은 **오직 도메인-운영 권한**(assume-tenant 도메인 토큰의 `entitled_domains` + 도메인 role)이며, A 에 대한 `effectiveAdminScope`(D2, 누가 `/api/admin/**` 를 호출 가능한가)는 **여전히 공집합**이다. 따라서:
 
 - `effectiveAdminScope(operator, permission)`(D2) 정의는 **byte-unchanged** — `admin_operator_roles` 만 읽고 파트너십을 보지 않는다. B-operator 가 A 에서 `/api/admin/operators` 등 관리 표면을 시도하면 admin scope 공집합 → **403**(파트너십과 무관). partner 는 *scoped guest*, 절대 co-admin 이 아니다.
 - 파트너십 **관리 표면**(`/api/admin/partnerships/**`) 자체는 `partnership.manage` + D2 `TenantScopeGuard`(대상 = acting-side 테넌트: invite/host-terminate → host, accept/participant/partner-terminate → partner)로 게이트된다 — 이 축이 아니라 **기존 D2 축**을 재사용.
 
-**파생 스코프 계산** — assume-tenant 발급기(`/internal/operator-assignments/check`, ADR-020 D2)가 읽는 **effective tenant scope** 가 파트너십-파생 host 테넌트를 additive 하게 포함하고, 그 host 에서의 도메인 권한은 아래 교집합으로 캡된다:
+**파생 스코프 계산** — assume-tenant 발급기(`/internal/operator-assignments/check`, ADR-MONO-020 D2)가 읽는 **effective tenant scope** 가 파트너십-파생 host 테넌트를 additive 하게 포함하고, 그 host 에서의 도메인 권한은 아래 교집합으로 캡된다:
 
 ```
 function crossOrgPartnershipScope(operator, hostTenant):
@@ -347,17 +347,17 @@ function crossOrgPartnershipScope(operator, hostTenant):
 ```
 
 - **single-`tenant_id` 토큰 (M1 보존)**: assume-tenant 는 여전히 선택된 host 하나의 `tenant_id` 토큰을 발급하며, `entitled_domains`/role 이 위 `scope` 로 캡될 뿐이다. cross-org multi-tenant 토큰은 발급하지 않는다(D5-B 거부).
-- **≤-own across org — enforcement 는 invite-time (TASK-BE-479)**: "host 는 자신이 가진 것 이상을 위임할 수 없다"는 **invite 시점에 구체적으로 강제**된다: (a) `delegated_scope` 의 각 **도메인 ∈ host 의 ACTIVE 도메인 구독**(account-service = D2 entitlement authority; command 경로라 cross-service 조회 허용) — 미보유 도메인 → `422 PARTNERSHIP_SCOPE_INVALID`; (b) 각 **role ∈ `DelegatableRoleCatalog`**(operator-tier 도메인 role 만 = auth-service `OperatorRoleDerivation` 값집합의 미러; admin-tier `*_ADMIN`·`WMS_ADMIN` 및 tenant-admin 3종 제외) → 위반 시 422. account-service 장애 시 **fail-CLOSED**(위임 미발급). — **request-time 의 `∩ hostEntitledScope` 는 의도적으로 IDENTITY(unbounded)** 다(`UnboundedHostEntitledScopeResolver`): (i) ADR-020 §3.1 이 assume-tenant hot-path 의 cross-service 콜백을 금지하고, (ii) step 2b(BE-478)가 mint 시 `entitled_domains = host-ACTIVE ∩ delegated.domains` 로 도메인을 이미 클립하므로 host 가 도메인을 잃으면 그 도메인 role 은 게이트에서 inert. 삼중교집합 항은 알고리즘 형태 보존 + 미래 로컬 host-holds 미러를 위한 seam 으로 유지. admin role 은 `delegated_scope` 에 애초에 들어갈 수 없다(data-model 불변식 + invite containsAdminRole).
-- **no transitive re-delegation (confused-deputy default deny)**: participant 는 자신이 파생한 A-scope 를 제3 조직 C 에게 재위임할 수 없다. participant 는 B 소유 operator 로 한정되고 스스로 origination 지점이 될 수 없으므로 B→C-into-A 는 구조적으로 표현 불가 — 향후 전이 위임은 별도 결정(ADR-024 within-tenant sub-delegation confinement 의 cross-org 미러).
+- **≤-own across org — enforcement 는 invite-time (TASK-BE-479)**: "host 는 자신이 가진 것 이상을 위임할 수 없다"는 **invite 시점에 구체적으로 강제**된다: (a) `delegated_scope` 의 각 **도메인 ∈ host 의 ACTIVE 도메인 구독**(account-service = D2 entitlement authority; command 경로라 cross-service 조회 허용) — 미보유 도메인 → `422 PARTNERSHIP_SCOPE_INVALID`; (b) 각 **role ∈ `DelegatableRoleCatalog`**(operator-tier 도메인 role 만 = auth-service `OperatorRoleDerivation` 값집합의 미러; admin-tier `*_ADMIN`·`WMS_ADMIN` 및 tenant-admin 3종 제외) → 위반 시 422. account-service 장애 시 **fail-CLOSED**(위임 미발급). — **request-time 의 `∩ hostEntitledScope` 는 의도적으로 IDENTITY(unbounded)** 다(`UnboundedHostEntitledScopeResolver`): (i) ADR-MONO-020 §3.1 이 assume-tenant hot-path 의 cross-service 콜백을 금지하고, (ii) step 2b(BE-478)가 mint 시 `entitled_domains = host-ACTIVE ∩ delegated.domains` 로 도메인을 이미 클립하므로 host 가 도메인을 잃으면 그 도메인 role 은 게이트에서 inert. 삼중교집합 항은 알고리즘 형태 보존 + 미래 로컬 host-holds 미러를 위한 seam 으로 유지. admin role 은 `delegated_scope` 에 애초에 들어갈 수 없다(data-model 불변식 + invite containsAdminRole).
+- **no transitive re-delegation (confused-deputy default deny)**: participant 는 자신이 파생한 A-scope 를 제3 조직 C 에게 재위임할 수 없다. participant 는 B 소유 operator 로 한정되고 스스로 origination 지점이 될 수 없으므로 B→C-into-A 는 구조적으로 표현 불가 — 향후 전이 위임은 별도 결정(ADR-MONO-024 within-tenant sub-delegation confinement 의 cross-org 미러).
 - **cascade-revoke (D6, request-time fail-closed)**: 파트너십이 `SUSPENDED`/`TERMINATED` 로 전이하면 `findActive` 가 null → 그 파트너십에서 파생한 **모든** participant 의 reach 가 다음 요청(발급/갱신)에서 즉시 0 이 된다(per-operator sweep 불필요 — 파생이 사라짐, perm-cache TTL ~10초로 bounded). 개별 participant 제거(B 가 자기 직원 offboard) 시에도 그 operator 의 `find(p.id, operator.id)` 가 null → 동일하게 즉시 소멸. 종료 시 **one-shot** `partnership.terminated` 감사 이벤트 1건([partnership-events.md](../../contracts/events/partnership-events.md)) — operator 당 N 이벤트 아님.
 - **half-state**: `PENDING`(invite 미수락) 파트너십은 `findActive` 에서 제외 → 파생 0. B-operator 는 accept(ACTIVE) 전엔 A 를 assume 할 수 없다.
-- **NET-ZERO**: 파트너십이 하나도 생성되지 않으면 `findActive` 는 항상 null → 아무도 아무 것도 파생하지 않는다. 이 축은 ADR-045 §3.4 step 2 가 첫 파트너십을 ACTIVE 로 만든 이후에만 발효 — 기존 assume-tenant 동작과 byte-identical.
+- **NET-ZERO**: 파트너십이 하나도 생성되지 않으면 `findActive` 는 항상 null → 아무도 아무 것도 파생하지 않는다. 이 축은 ADR-MONO-045 §3.4 step 2 가 첫 파트너십을 ACTIVE 로 만든 이후에만 발효 — 기존 assume-tenant 동작과 byte-identical.
 
 **대상 표면**: assume-tenant 발급 경로(`GET /internal/operator-assignments/check` 의 effective-scope 파생 + 도메인 토큰 `entitled_domains`/role customizer). 파트너십 **관리** 엔드포인트(`/api/admin/partnerships/**`)는 이 축이 아니라 D2 `TenantScopeGuard`(대상=acting-side 테넌트)로 게이트되며, cross-org actor 의 admin 표면 시도는 공집합 admin scope 로 403 된다(위 핵심 불변식).
 
 ### Org-Node Scope Confinement (ADR-MONO-047 D5)
 
-앞의 세 축(D2 administration, BE-467 account-data, ADR-045 cross-org)과 **별개의 네 번째 축**으로, **org-node 트리 자체의 변이**(노드 CRUD·ceiling 편집·`ORG_ADMIN` grant/revoke)를 confine 한다. org-node 는 company 위의 **data-less 그룹핑 노드**로 tenant 를 격리하지 않고 grouping 한다(ADR-MONO-047 § D1) — admin-service 는 트리를 저장하지 않고 account-service 로 위임하는 **thin command gateway** 다(subtree tenant 집합·effective ceiling 은 `GET /internal/org-nodes/{id}/tenants`·`/effective-ceiling` 로 읽음). 이 축은 D2 + D5 에서 파생하며 AWS Organizations SCP-attach parity 다.
+앞의 세 축(D2 administration, BE-467 account-data, ADR-MONO-045 cross-org)과 **별개의 네 번째 축**으로, **org-node 트리 자체의 변이**(노드 CRUD·ceiling 편집·`ORG_ADMIN` grant/revoke)를 confine 한다. org-node 는 company 위의 **data-less 그룹핑 노드**로 tenant 를 격리하지 않고 grouping 한다(ADR-MONO-047 § D1) — admin-service 는 트리를 저장하지 않고 account-service 로 위임하는 **thin command gateway** 다(subtree tenant 집합·effective ceiling 은 `GET /internal/org-nodes/{id}/tenants`·`/effective-ceiling` 로 읽음). 이 축은 D2 + D5 에서 파생하며 AWS Organizations SCP-attach parity 다.
 
 **ceiling 모델** (no-escalation cap 의 근거; 트리 자체는 account-service 소유):
 
@@ -385,14 +385,14 @@ strictlyAdministers(actor, N) = actor 가 SUPER_ADMIN, 또는 N 의 STRICT ances
 | `PUT /{N}/ceiling` | **`strictlyAdministers(actor, N)`** — `ORG_ADMIN @ N` 은 N 자신의 ceiling 을 편집할 수 없다(그 ceiling 이 자기 bound 이므로 self-escalation; AWS 에서 자기 OU 에 attach 된 SCP 를 그 안에서 detach 불가와 정확히 동형). 위반 → 403 `ORG_NODE_SELF_CEILING_DENIED` |
 | N 재부모화(re-parent) | `strictlyAdministers(actor, N)` **AND** `administers(actor, newParent)` |
 | N 삭제 | `strictlyAdministers(actor, N)` (+ invariant I4 — 자식 없음·tenant 없음) |
-| `ORG_ADMIN @ N` grant | `administers(actor, N)` **AND** granted role ⊆ actor 보유 **AND** granted domains ⊆ `effectiveCeiling(N)` **AND** role ≠ `SUPER_ADMIN` (no-escalation 은 ADR-024 D2/D3 재사용 — 재발명 아님) |
+| `ORG_ADMIN @ N` grant | `administers(actor, N)` **AND** granted role ⊆ actor 보유 **AND** granted domains ⊆ `effectiveCeiling(N)` **AND** role ≠ `SUPER_ADMIN` (no-escalation 은 ADR-MONO-024 D2/D3 재사용 — 재발명 아님) |
 
 **핵심 불변식 — ceiling 은 좁히기만, org-node 는 admin scope 를 확장하지 않는다.**
 
 - **ceiling narrows-only** — 노드 ceiling 은 tenant 의 reach 를 **좁히기만** 하고 절대 grant 하지 않는다(ADR-MONO-047 D2). `UNBOUNDED`(= 교집합 항등원, "모든 known 도메인"이 **아님**)와 `BOUNDED({})`(아무것도 불허)는 **정반대**다.
 - **`ORG_ADMIN` 은 자기 노드 ceiling 편집 불가** — `ORG_ADMIN @ N` 은 N 자신의 ceiling 을 편집할 수 없고(self-escalation), `strictlyAdministers(actor, N)`(STRICT ancestor 또는 SUPER_ADMIN)만 통과한다.
 - **subtree 실패 = fail-closed** — subtree 해소 실패(account-service down / CB open / timeout)는 해당 grant 를 **공집합**으로 기여한다. 절대 `'*'`·"모든 tenant" 아님. 캐시된 실패도 절대 permissive 취급 금지(위 `effectiveAdminScope` fail-closed 와 동일).
-- **`SUPER_ADMIN` 은 절대 mintable 아님** — `ORG_ADMIN` grant 은 `role ≠ SUPER_ADMIN` 을 강제한다(ADR-024 D3 재사용).
+- **`SUPER_ADMIN` 은 절대 mintable 아님** — `ORG_ADMIN` grant 은 `role ≠ SUPER_ADMIN` 을 강제한다(ADR-MONO-024 D3 재사용).
 - **cross-scope 는 404** — actor 스코프 밖의 노드/tenant 대상은 **404 `ORG_NODE_NOT_FOUND`**(403 아님 — 403 은 subtree 밖 노드/tenant 의 존재를 누설; 기존 cross-scope confinement 규약과 동형) + best-effort DENIED `admin_actions` row.
 
 > **grant ceiling cap 의 정확한 판정식 (TASK-BE-492 구현 시 명세화 — 새 결정 아님, 위 두 규칙의 기계적 귀결).**
@@ -402,7 +402,7 @@ strictlyAdministers(actor, N) = actor 가 SUPER_ADMIN, 또는 N 의 STRICT ances
 >     if ceiling == BOUNDED({}): deny 422    # 아무 도메인도 불허하는 노드는 node-admin 을 받지 못한다
 >     if domainFootprint(role) ⊄ ceiling: deny 422
 > ```
-> `domainFootprint(role)` = 그 role 이 도달하는 도메인 키 집합. **`admin_roles` 의 현행 role 은 전부 cross-domain admin-tier 라 footprint 가 공집합**이며(`admin_role_permissions` 에 도메인 축이 없다), 따라서 부분집합 검사는 오늘 vacuously true 다. 실제로 발화하는 것은 첫 번째 절 — 그리고 그 절이 바로 [internal 계약](../../contracts/http/internal/admin-to-account.md#get-internalorg-nodesorgnodeideffective-ceiling)의 *"cap 계산 실패는 grant 를 거부(빈 ceiling = 아무 도메인도 부여 불가)로 resolve 한다 — 절대 `UNBOUNDED` 로 폴백하지 않는다"* 를 만족시키는 지점이다. role 별 domain footprint 를 정의하는 것(= "admin role 이 어느 도메인에 도달하는가")은 ADR-047 이 내리지 않은 **별도 결정**이므로 여기서 발명하지 않는다. 도메인-스코프 grantable role 이 도입되면 `domainFootprint` 만 채우면 되고 판정 지점은 이미 옳은 자리에 있다. **어느 방향으로도 over-grant 는 불가능하다 — 이 cap 은 거부만 한다.**
+> `domainFootprint(role)` = 그 role 이 도달하는 도메인 키 집합. **`admin_roles` 의 현행 role 은 전부 cross-domain admin-tier 라 footprint 가 공집합**이며(`admin_role_permissions` 에 도메인 축이 없다), 따라서 부분집합 검사는 오늘 vacuously true 다. 실제로 발화하는 것은 첫 번째 절 — 그리고 그 절이 바로 [internal 계약](../../contracts/http/internal/admin-to-account.md#get-internalorg-nodesorgnodeideffective-ceiling)의 *"cap 계산 실패는 grant 를 거부(빈 ceiling = 아무 도메인도 부여 불가)로 resolve 한다 — 절대 `UNBOUNDED` 로 폴백하지 않는다"* 를 만족시키는 지점이다. role 별 domain footprint 를 정의하는 것(= "admin role 이 어느 도메인에 도달하는가")은 ADR-MONO-047 이 내리지 않은 **별도 결정**이므로 여기서 발명하지 않는다. 도메인-스코프 grantable role 이 도입되면 `domainFootprint` 만 채우면 되고 판정 지점은 이미 옳은 자리에 있다. **어느 방향으로도 over-grant 는 불가능하다 — 이 cap 은 거부만 한다.**
 
 **감사**: `admin_actions` action code = `ORG_NODE_CREATE` / `ORG_NODE_UPDATE` / `ORG_NODE_DELETE` / `ORG_NODE_CEILING_SET` / `ORG_ADMIN_GRANT` / `ORG_ADMIN_REVOKE`, `target_type='ORG_NODE'`, `target_id=<orgNodeId>`. GET 성공은 감사 row 미기록(`grantable-roles` / BE-486 read-path 규약); 403 은 best-effort DENIED row.
 
@@ -414,16 +414,16 @@ strictlyAdministers(actor, N) = actor 가 SUPER_ADMIN, 또는 N 의 STRICT ances
 
 ### Operator Group Fan-Out (ADR-MONO-046 D2-A)
 
-운영자 그룹(`operator_group` / `operator_group_member`, [data-model.md](./data-model.md))은 역할/tenant-assignment 를 **여러 operator 에 한 번에** 부여하는 admin-service 소유 tenant-scoped 편의 프리미티브다(AWS IAM User Group / Google Group 의 workforce-grouping facet). **v1 은 fan-out** — group 에 role/tenant-assignment 를 grant 하면 각 현재 멤버에 대해 **평범한 flat assignment row**(`operator_tenant_assignment` / `admin_operator_roles`)를 materialise 하고 `group_origin` 마커로 태깅하며(D5 cascade trail — ADR-045 의 형제, [data-model.md](./data-model.md) `group_origin` 절), 평가는 이 flat per-operator row 를 **직접 grant 와 완전히 동일하게** 읽는다.
+운영자 그룹(`operator_group` / `operator_group_member`, [data-model.md](./data-model.md))은 역할/tenant-assignment 를 **여러 operator 에 한 번에** 부여하는 admin-service 소유 tenant-scoped 편의 프리미티브다(AWS IAM User Group / Google Group 의 workforce-grouping facet). **v1 은 fan-out** — group 에 role/tenant-assignment 를 grant 하면 각 현재 멤버에 대해 **평범한 flat assignment row**(`operator_tenant_assignment` / `admin_operator_roles`)를 materialise 하고 `group_origin` 마커로 태깅하며(D5 cascade trail — ADR-MONO-045 의 형제, [data-model.md](./data-model.md) `group_origin` 절), 평가는 이 flat per-operator row 를 **직접 grant 와 완전히 동일하게** 읽는다.
 
 **핵심 불변식 — 그룹 멤버십은 평가-시점 edge 가 아니다.** 이 축은 앞의 네 confinement 축과 달리 **새 confinement 축이 아니다** — 기존 grant 경로를 재사용하는 bulk-write 편의일 뿐이다. 따라서 v1 에서:
 
 - **평가/캐시 byte-unchanged** — `PermissionEvaluator` 의 `operator_id → admin_operator_roles → admin_role_permissions` union 계산과 Redis perm-cache(`admin:operator:perm:{operator_id}`)는 group·멤버십 테이블을 **조회하지 않는다**. group grant 로 생긴 row 는 `group_origin != NULL` 이라는 점만 다를 뿐 평가에서 직접 grant 와 구별되지 않는다(마커는 lifecycle 부기 전용, 평가 무관).
-- **모든 confinement 축 byte-unchanged** — 위 Target-Tenant D2·BE-467 account-data·ADR-045 cross-org·ADR-047 org-node 는 그대로다. group 은 어떤 새 평가 경로도 도입하지 않는다. (membership-을-authorization-edge 로 승격하는 inheritance 평가 경로 = D2-B 는 후속 ADR 로 **연기**.)
+- **모든 confinement 축 byte-unchanged** — 위 Target-Tenant D2·BE-467 account-data·ADR-MONO-045 cross-org·ADR-MONO-047 org-node 는 그대로다. group 은 어떤 새 평가 경로도 도입하지 않는다. (membership-을-authorization-edge 로 승격하는 inheritance 평가 경로 = D2-B 는 후속 ADR 로 **연기**.)
 
 **Confinement 재사용 (신규 규칙 없음)**:
 
-- **D4 no-escalation** — group 에 role/tenant-assignment 를 grant 하는 것은 기존 `RoleGrantGuard`(grant-menu ≤-own, ADR-024 D3) + `effectiveAdminScope`(대상 tenant confinement) 를 **그대로 재사용**한다. cap 은 **grant 시점**(granter 가 자기 보유 이내만 그룹에 grant) 과 **fan-out 을 유발하는 새 멤버 추가 시점**(D5) 양쪽에서 검사되어, 그룹을 우회로 삼아 자기 미보유 role/tenant 를 멤버에게 부여할 수 없다. 위반 → `403 ROLE_GRANT_FORBIDDEN` 또는 `422 GROUP_GRANT_NO_ESCALATION`([admin-api.md](../../contracts/http/admin-api.md)).
+- **D4 no-escalation** — group 에 role/tenant-assignment 를 grant 하는 것은 기존 `RoleGrantGuard`(grant-menu ≤-own, ADR-MONO-024 D3) + `effectiveAdminScope`(대상 tenant confinement) 를 **그대로 재사용**한다. cap 은 **grant 시점**(granter 가 자기 보유 이내만 그룹에 grant) 과 **fan-out 을 유발하는 새 멤버 추가 시점**(D5) 양쪽에서 검사되어, 그룹을 우회로 삼아 자기 미보유 role/tenant 를 멤버에게 부여할 수 없다. 위반 → `403 ROLE_GRANT_FORBIDDEN` 또는 `422 GROUP_GRANT_NO_ESCALATION`([admin-api.md](../../contracts/http/admin-api.md)).
 - **D3 tenant-scope** — group 은 `operator_group.tenant_id`(단일 concrete tenant, `'*'` 아님)로 tenant-scoped 되며, 모든 group 변이(CRUD/member/grant)는 `TenantScopeGuard`(대상 = `group.tenant_id`)로 confine 된다 — `TENANT_ADMIN @ acme` 는 acme 그룹만, `SUPER_ADMIN`(`'*'`)은 net-zero. 멤버는 그 tenant 소속 operator 만(멤버 home `tenant_id` == `group.tenant_id`, 위반 → `422 GROUP_MEMBER_TENANT_MISMATCH`).
 
 **Idempotence & cascade (D5)** — fan-out 은 멤버가 이미 보유한 **동등한 직접 grant** 를 중복 생성하지 않으며(`(operator, tenant)`/`(operator, role)` PK 상 row 존재 시 no-op skip), cascade-revoke(remove-member / delete-group)는 `group_origin = <groupId>` 인 row **만** 삭제하여 직접 grant(=`group_origin IS NULL`)를 절대 파괴하지 않는다. 정확한 마커 스키마·PK 상호작용·다중 그룹 중첩 시 단일-소유 마커 규약은 [data-model.md](./data-model.md) `operator_group` / `group_origin` 절이 canonical.
@@ -497,11 +497,11 @@ function evaluateAuditRead(operator, permissionSet, request):
 | Integration | seed role × endpoint 매트릭스를 table-driven으로 검증 (4 role × 6 endpoint ≈ 24 조합) |
 | Audit | DENIED 시 `admin_actions` row 1건 기록, spray 10회 → 10 row (no dedup, D3) |
 | Fail-closed | `admin_actions` INSERT 실패 주입 → 403이 아닌 500 반환, downstream 호출 없음 |
-| Unit (org-node, ADR-047 D5) | `org.manage` union; `effectiveAdminScope` 3-way 해소 — `'*'` short-circuit **FIRST**(subtree round-trip 이전 반환), `org_node_id != null` → subtree 분기, else tenant 분기; `administers`/`strictlyAdministers` 판정; no-escalation 매트릭스(role ⊆ 보유 ∧ domains ⊆ effectiveCeiling ∧ role ≠ SUPER_ADMIN); `subtreeTenantIds` 실패 → **공집합**(절대 `'*'`/all) |
+| Unit (org-node, ADR-MONO-047 D5) | `org.manage` union; `effectiveAdminScope` 3-way 해소 — `'*'` short-circuit **FIRST**(subtree round-trip 이전 반환), `org_node_id != null` → subtree 분기, else tenant 분기; `administers`/`strictlyAdministers` 판정; no-escalation 매트릭스(role ⊆ 보유 ∧ domains ⊆ effectiveCeiling ∧ role ≠ SUPER_ADMIN); `subtreeTenantIds` 실패 → **공집합**(절대 `'*'`/all) |
 | Integration (org-node) | `ORG_ADMIN @ node` → subtree 전체 tenant reach; subtree 밖 tenant/노드 → **404**(403 아님) + DENIED row; `SUPER_ADMIN` byte-unchanged(round-trip 없음); over-ceiling grant → 422 `ORG_ADMIN_GRANT_OUT_OF_CEILING`; `admin_actions`(`ORG_NODE_*`/`ORG_ADMIN_*`) row 기록; GET 성공은 감사 row 미기록 |
 | Security (org-node) | 모든 org-node 엔드포인트 deny-default(non-`org.manage` → 403 + DENIED row); `ORG_ADMIN @ N` 의 자기 노드 ceiling 편집 → 403 `ORG_NODE_SELF_CEILING_DENIED`; `SUPER_ADMIN` grant 시도 → 403(never mintable) |
 | Fail-closed (org-node) | account-service down/CB/timeout → subtree **공집합**(admin 이 reach 를 잃음 — 절대 `'*'`/all tenants); 캐시된 실패 permissive 취급 안 함 |
-| Unit (group, ADR-046 D2-A) | fan-out 이 멤버당 flat row(`group_origin=<groupId>` 태그) 생성; **동등 직접 grant 존재 시 idempotent skip**(중복 row·PK 충돌 없음); remove-member/delete-group 이 `group_origin=<groupId>` row **만** revoke(`group_origin IS NULL` 직접 grant 불변); no-escalation cap 이 **grant-time + add-member-time** 양쪽 검사; `PermissionEvaluator` union 이 group/member 테이블 **미조회**(byte-unchanged) |
+| Unit (group, ADR-MONO-046 D2-A) | fan-out 이 멤버당 flat row(`group_origin=<groupId>` 태그) 생성; **동등 직접 grant 존재 시 idempotent skip**(중복 row·PK 충돌 없음); remove-member/delete-group 이 `group_origin=<groupId>` row **만** revoke(`group_origin IS NULL` 직접 grant 불변); no-escalation cap 이 **grant-time + add-member-time** 양쪽 검사; `PermissionEvaluator` union 이 group/member 테이블 **미조회**(byte-unchanged) |
 | Integration (group) | group grant → 전 멤버 `operator_tenant_assignment`/`admin_operator_roles` fan-out; add-member → 그룹 기존 grant 가 새 멤버로 fan-out; remove-member → 그 멤버 `group_origin` row revoke(직접 grant 잔존); delete-group → 전 `group_origin` row cascade-revoke; `group.manage` deny-default(non-holder → 403 + DENIED row); `TenantScopeGuard` cross-tenant group 변이 → 403 `TENANT_SCOPE_DENIED`; no-escalation 초과 grant → 403/422; GET read 성공은 감사 row 미기록 |
 | Security (group) | 모든 group 엔드포인트 deny-default(non-`group.manage` → 403 + DENIED row); `TENANT_ADMIN @ acme` 가 타 테넌트 group CRUD/member/grant → 403 `TENANT_SCOPE_DENIED`; 미보유 role/tenant 를 그룹으로 우회 grant 시도 → 403 `ROLE_GRANT_FORBIDDEN`/422 |
 
@@ -522,7 +522,7 @@ D1 dual-read: `operator_tenant_assignment` rows ∪ {legacy `admin_operators.ten
 - **권한 평가(`RequiresPermissionAspect`) 비경유**: 이 엔드포인트는 `/internal/**`
   체인에 속하며 operator 권한이 아니라 IAM `client_credentials` 워크로드 JWT 로
   인가된다. 따라서 `@RequiresPermission` annotation 도, `admin_actions` row 도
-  적용되지 않는다 (read-only — ADR-014 token-exchange "not audited" 규칙 동일).
+  적용되지 않는다 (read-only — ADR-MONO-014 token-exchange "not audited" 규칙 동일).
 - **`/internal/**` 체인**: `SecurityFilterChain @Order(0)` + `securityMatcher("/internal/**")`,
   IAM JWKS resource-server, account-service 미러링. 미인증 → 401 `UNAUTHORIZED`.
   기존 operator 체인(`@Order(2)`, `/api/admin/**`)은 byte-unchanged.
