@@ -117,11 +117,12 @@ For each refactoring opportunity, record:
 - Risk level: low (rename, extract) / medium (restructure) / high (cross-class change)
 - Dependencies: other refactoring items that must complete first
 
-Prioritize by:
+Prioritize by (mirrors `platform/refactoring-policy.md` § Prioritization — that policy wins):
 1. **layer-violation** and **pattern-mismatch** first (architecture compliance)
 2. **dead-code** second (safe removal, reduces noise)
-3. **duplication** and **long-method** third (structural improvement)
-4. **naming** and **complexity** last (polish)
+3. **duplication** third (extract shared logic)
+4. **long-method** and **complexity** fourth (structural improvement)
+5. **naming** last (polish)
 
 Group items that touch the same file or class into a single refactoring unit.
 
