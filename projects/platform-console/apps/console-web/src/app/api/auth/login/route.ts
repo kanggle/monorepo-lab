@@ -11,6 +11,7 @@ import {
   OAUTH_STATE_COOKIE,
   transientCookieOpts,
 } from '@/shared/lib/session';
+import { sanitizeReturnPath } from '@/shared/lib/return-path';
 import { logger, newRequestId } from '@/shared/lib/logger';
 
 export const runtime = 'nodejs';
@@ -33,12 +34,10 @@ export async function GET(req: Request) {
   const env = getServerEnv();
   const { searchParams } = new URL(req.url);
 
-  const rawRedirect = searchParams.get('redirect') ?? '/';
-  // Only allow same-site absolute paths — prevents open-redirect.
-  const postLoginPath =
-    rawRedirect.startsWith('/') && !rawRedirect.startsWith('//')
-      ? rawRedirect
-      : '/';
+  // Same-site sanitise via the shared predicate the login page also uses —
+  // the single source of "is this redirect safe?" (open-redirect guard,
+  // PC-FE-253).
+  const postLoginPath = sanitizeReturnPath(searchParams.get('redirect'));
 
   const verifier = generateCodeVerifier();
   const challenge = await deriveCodeChallenge(verifier);

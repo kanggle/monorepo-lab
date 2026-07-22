@@ -87,7 +87,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-PC-FE-253-login-auth-surface-hygiene.md` — **🟢 READY (P2) — 콘솔 로그인 인증 표면 정합성 2건.** 2026-07-21 로그인 코드 리뷰 산물. **둘 다 현재 유저 경로에서 재현되는 결함은 아니다** — 한 PR 로 묶는 저심각도 청소. **항목 A**: `/api/auth/session` 이 `authenticated = getAccessToken() !== null`(access 단독)로 판정하나 실제 가드 `isAuthenticated()` 는 **access + operator 둘 다** 요구 ⇒ **pre-operator 세션**(로그인 O / operator X, `(onboarding)` 만 진입)에게 `true` 를 답하는데 콘솔엔 못 들어감. 🟡 **현재 소비자 0**(소스 grep) = dead-ish endpoint → 삭제 또는 의미 정합. **항목 B**: `login/page.tsx` 의 `next` redirect 가 `startsWith('/')` 만 봐 `//evil.com` 통과 — 🟡 **악용 불가**(`login/route.ts` 가 `!startsWith('//')` 로 재차단) 이지만 같은 개념을 두 곳에서 판정하는데 page 가 약함 → route 와 동일 술어로(가능하면 공유 헬퍼). **🔵 방어하는 실패 모드 = "같은 개념(authenticated/redirect 안전성)을 두 곳에서 다르게 판정" — 지금은 소비자 부재·route 재차단 덕에 무해하나 한쪽 조건이 바뀌면 결함.** **⚠️ 착수 시 재측정(AC-0): session 판정식·소비자 수·page/route sanitize 술어 실측 — 소비자가 생겼으면 삭제 불가·정합 강제.** 백엔드/계약 변경 0. 분석=Opus 4.8 / 구현 권장=Sonnet 4.6. [[feedback_repo_knows_what_it_does_not_say]] [[project_guard_wiring_not_just_logic]]
+_(없음)_
+
 _(직전 완료)_ 콘솔 6도메인 기능↔메뉴 정렬 웨이브 + IAM 「권한」/「권한 세트」 화면(PC-FE-227/228) 완결. ADR-MONO-046 「운영자 그룹」 로드맵은 여전히 PROPOSED/PAUSED 게이팅.
 
 _(직전 완료)_ **IAM 「권한」/「권한 세트」 화면 완료** (PC-FE-227/228 DONE, 2026-07-09, PR #2343 squash `cbdc1a04`). `/permissions`·`/permission-sets` 스텁을 BE-486 RBAC 카탈로그(`GET /api/admin/roles`+`/permissions`, 게이트 `operator.manage`) 위 read-only 화면으로 대체. 공유 클라이언트 `shared/api/rbac-catalog.ts`(228=role을 권한 세트로 재프레이밍, 별도 엔드포인트 없음). native `<details>` drill-down·SSR 회복탄력성(operators/audit 매퍼 미러). vitest 2696/2696. **→ BE-486 언블록 소비 완료.**
@@ -111,6 +112,8 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 (empty)
 
 ## review
+
+- `TASK-PC-FE-253-login-auth-surface-hygiene.md` — **🟣 REVIEW — 콘솔 로그인 인증 표면 정합성 2건 (impl PR 대기).** 2026-07-21 로그인 코드 리뷰 산물, 저심각도 청소 1 PR. **AC-0 재측정**: session 판정식(여전히 access 단독)·`/api/auth/session` 소비자(**여전히 0**, 소스/e2e/OpenAPI grep)·page/route sanitize 술어(page 여전히 `startsWith('/')` 단독, route 여전히 `!startsWith('//')` 재차단) 모두 원문 가설과 일치 — phantom 아님. **항목 A (삭제 채택)**: 소비자 0 확정 ⇒ `session/route.ts` 삭제(가장 정직, F1). 잔여 참조 grep = task 파일·INDEX 리스팅·`shared/lib/session` 라이브러리 지칭뿐(삭제한 route 소비자 0). **항목 B (공유 헬퍼 승격)**: `shared/lib/return-path.ts` `sanitizeReturnPath()` 신설 — page·route 가 **동일 함수** 호출(AC-4, 술어 한 곳). 술어=`startsWith('/') && !startsWith('//')` + 백슬래시 정규화 `/\evil.com` 도 강등(브라우저가 `\`→`/` 접음). layout `buildLoginRedirect`(x-pathname 생산자, `/login`·`/api/` 추가 제약)는 별개 표면이라 미포함(PR 본문 기록). **테스트**: `return-path.test.ts` 7건(`//`·`https://`·`/\`·authority-only·빈값 강등 + 정상경로 통과) + `auth-routes.test.ts` route 소비자 강등 3건 확장. **로컬 GREEN**: worktree node_modules junction, `pnpm test` 2876 pass(신규 7, 회귀 0)·`pnpm lint` 0·tsc 0. 백엔드/계약 변경 0. 분석=Opus 4.8 / 구현=Opus 4.8. [[feedback_repo_knows_what_it_does_not_say]] [[project_guard_wiring_not_just_logic]]
 
 ## done
 

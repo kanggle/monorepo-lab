@@ -141,6 +141,35 @@ describe('GET /api/auth/login (PKCE initiation)', () => {
     await loginGET(req);
     expect(cookieJar.get(OAUTH_STATE_COOKIE)?.value).toMatch(/\|\/$/);
   });
+
+  // PC-FE-253: the route consumes the shared sanitizeReturnPath predicate, so
+  // it downgrades the protocol-relative forms the login page must also reject
+  // (page and route can never diverge on redirect safety).
+  it('sanitises a protocol-relative // redirect target to "/"', async () => {
+    const req = new Request(
+      'http://console.local/api/auth/login?redirect=//evil.example',
+    );
+    await loginGET(req);
+    expect(cookieJar.get(OAUTH_STATE_COOKIE)?.value).toMatch(/\|\/$/);
+  });
+
+  it('sanitises the backslash-normalised /\\ redirect target to "/"', async () => {
+    const req = new Request(
+      'http://console.local/api/auth/login?redirect=/%5Cevil.example',
+    );
+    await loginGET(req);
+    expect(cookieJar.get(OAUTH_STATE_COOKIE)?.value).toMatch(/\|\/$/);
+  });
+
+  it('preserves a legitimate same-site redirect target', async () => {
+    const req = new Request(
+      'http://console.local/api/auth/login?redirect=/dashboards/overview',
+    );
+    await loginGET(req);
+    expect(cookieJar.get(OAUTH_STATE_COOKIE)?.value).toContain(
+      '|/dashboards/overview',
+    );
+  });
 });
 
 describe('GET /api/auth/callback (token exchange)', () => {
