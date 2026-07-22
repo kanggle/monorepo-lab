@@ -1,7 +1,7 @@
 # TASK-SCM-BE-040 — refactor-spec: scm-platform structural polish (clean Tier-1 batch)
 
 - **Type**: TASK-SCM-BE (spec-refactor — structural/format only, NO requirement/contract/decision change)
-- **Status**: ready
+- **Status**: done
 - **Service**: scm-platform (contracts)
 - **Domain/traits**: scm / [event-driven, transactional, batch-job]
 - **Analysis model**: Opus 4.8 · **Impl model**: Sonnet (mechanical spec polish)

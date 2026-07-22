@@ -66,8 +66,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-FAN-BE-027-refactor-spec-fan-polish.md` — **READY** — refactor-spec fan-platform artist 이벤트계약 타이틀 정규화(1편집, dead-ref 0). 분석=Opus 4.8 / 구현 권장=Sonnet.
-
 ## in-progress
 
 (empty)
@@ -76,6 +74,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## done
 
+- `TASK-FAN-BE-027-refactor-spec-fan-polish.md` — **DONE 2026-07-22 (3-dim verified — impl PR #2879 squash `7e1fa2120`; 전 PR MERGED · main 편입 · 머지 전 required 0 failing, done/).** refactor-spec fan artist 이벤트계약 타이틀 정규화(`# artist-events (artist-service Kafka contract)`→`# artist-events — Kafka contract`, community/fan-membership 형제 정렬); 29 스펙 dead-ref 0. HTTP 3타이틀 세트 일관·eventId JSON 예시 내 한글 상태주석은 report-only. 분석=Opus 4.8.
 - `TASK-FAN-BE-025-current-actor-authorship-channel-dedup.md` — **DONE (2026-07-22, impl PR #2865 squash `d92d7af38`; 3-dim verified — state=MERGED · origin/main tip 일치 · 머지 직전 0 failing required).** N1 `@CurrentActor` 인자 리졸버(서비스별 self-registering `WebMvcConfigurer`, 각 서비스 `currentOrThrow()` 위임)로 호출부 31× 대체(artist 12/community 12/membership 5/notification 2) — 401/403 실패경로 byte-보존. N2 `ActorContext.owns(authorAccountId)` 로 authorship 6× 통합(PublishPost role-check 제외). N3 `ChannelDeliveryMetrics` 로 채널 METRIC+recording 4× 단일화. 4서비스 compile GREEN + slice/adapter/use-case 테스트 무변경 GREEN(리졸버가 @WebMvcTest slice 에서 등록 확인). 분석·구현=Opus 4.8.
 
 - `TASK-FAN-BE-024-outbox-publisher-classname-doc-drift.md` — **DONE (2026-07-21 audit round-2, merged #2848).** 은퇴한 v1 `*OutboxPollingScheduler` 클래스명을 v2 `*OutboxPublisher` 로 정정 — event contracts 2건 + service architecture Forbidden-Dependencies 절 3건 (doc-only).

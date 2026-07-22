@@ -1,7 +1,7 @@
 # TASK-FAN-BE-027 — refactor-spec: fan-platform title normalization (clean Tier-1)
 
 - **Type**: TASK-FAN-BE (spec-refactor — structural/format only, NO requirement/contract/decision change)
-- **Status**: ready
+- **Status**: done
 - **Service**: fan-platform (contracts)
 - **Domain/traits**: fan / [event-driven, transactional, multi-tenant]
 - **Analysis model**: Opus 4.8 · **Impl model**: Sonnet (mechanical spec polish)

@@ -1,7 +1,7 @@
 # TASK-FIN-BE-062 — refactor-spec: finance-platform title normalization (clean Tier-1)
 
 - **Type**: TASK-FIN-BE (spec-refactor — structural/format only, NO requirement/contract/decision change)
-- **Status**: ready
+- **Status**: done
 - **Service**: finance-platform (contracts)
 - **Domain/traits**: fintech / [event-driven, transactional, multi-tenant]
 - **Analysis model**: Opus 4.8 · **Impl model**: Sonnet (mechanical spec polish)

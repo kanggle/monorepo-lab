@@ -1,7 +1,7 @@
 # TASK-BE-558 — refactor-spec: wms-platform structural polish (clean Tier-1 batch)
 
 - **Type**: TASK-BE (spec-refactor — structural/format only, NO requirement/contract/decision change)
-- **Status**: ready
+- **Status**: done
 - **Service**: wms-platform (contracts + inventory / outbound / notification / admin services)
 - **Domain/traits**: wms / [event-driven, transactional, multi-tenant, integration-heavy]
 - **Analysis model**: Opus 4.8 · **Impl model**: Sonnet (mechanical spec polish)

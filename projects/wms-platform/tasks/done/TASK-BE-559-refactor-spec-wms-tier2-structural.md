@@ -1,7 +1,7 @@
 # TASK-BE-559 — refactor-spec: wms-platform Tier-2 structural judgment pass
 
 - **Type**: TASK-BE (spec-refactor — structural section ordering / numbering only, NO requirement/contract/decision change)
-- **Status**: ready
+- **Status**: done
 - **Service**: wms-platform (master-service, outbound-service domain-model)
 - **Domain/traits**: wms / [event-driven, transactional, multi-tenant]
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (per-item intentional-vs-drift judgment)
