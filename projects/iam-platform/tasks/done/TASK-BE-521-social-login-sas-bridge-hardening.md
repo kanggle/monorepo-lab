@@ -1,6 +1,6 @@
 # TASK-BE-521 — 소셜 로그인 SAS-브리지 하드닝 2건 (세션 픽세이션 방어 부재 · state↔provider 미대조)
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (#1 은 한 줄 세션 회전 + 통합 테스트 단언, #2 는 한 줄 대조. 다만 #1 의 "다른 완화가 없는지" 재측정이 실질)
