@@ -180,13 +180,13 @@ the row.
 
 | Aspect | Value | Source |
 |---|---|---|
-| Default TTL | 24 hours, configurable per warehouse | `architecture.md § Saga Participation` (line 510) |
-| Job interval | `inventory.reservation.ttl-job.interval-ms=60000` (60s) | `architecture.md § Saga / Long-running Flow` (line 523) |
+| Default TTL | 24 hours, configurable per warehouse | `architecture.md § Saga Participation` |
+| Job interval | `inventory.reservation.ttl-job.interval-ms=60000` (60s) | `architecture.md § Saga / Long-running Flow` |
 | Batch size | `inventory.reservation.ttl-job.batch-size=200` | same |
 | Transaction boundary | each row in its own `@Transactional` | same — one failure does not abort the batch |
 | OL race | OL conflict (manual release races with sweep) → retry next tick | same |
 | Terminal state | `RELEASED` (reason `EXPIRED`) | `domain-model.md § 3 Reservation § State Machine` |
-| Metric | `inventory.reservation.expiry.swept.total` counter (incremented by released count per tick) | ADR-MONO-005 § D5 + `architecture.md § Saga / Long-running Flow` line 523 |
+| Metric | `inventory.reservation.expiry.swept.total` counter (incremented by released count per tick) | ADR-MONO-005 § D5 + `architecture.md § Saga / Long-running Flow` |
 
 Domain caller: `ReleaseReservationService.releaseExpired(...)` (called by
 the `@Scheduled` sweeper). Each row's release follows § 2.2 atomic

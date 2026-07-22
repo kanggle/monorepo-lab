@@ -1,4 +1,4 @@
-# Runbook — admin-service DB Role Grants
+# admin-service — DB Role Grants Runbook
 
 This runbook captures the GRANT / REVOKE statements that production and
 staging operators must apply to the `admin_db` PostgreSQL role used by

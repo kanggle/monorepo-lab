@@ -7,9 +7,9 @@ domain method path is forbidden and enforced at code-review level).
 
 This document is referenced from
 [`../architecture.md`](../architecture.md) § State Machines § Reservation
-lifecycle (line 529-547),
+lifecycle,
 [`../domain-model.md`](../domain-model.md) § 3 Reservation § State Machine
-(line 297-308) and § State Machines (Cross-reference) (line 617-628),
+and § State Machines (Cross-reference),
 and [`../sagas/reservation-saga.md`](../sagas/reservation-saga.md). For
 the orchestrator-side saga machine spanning two services, see the
 sibling [`../../outbound-service/state-machines/saga-status.md`](../../outbound-service/state-machines/saga-status.md).
@@ -305,12 +305,12 @@ Matrix; this section covers the **state-machine unit and slice tests only**.
 ## References
 
 - [`../architecture.md`](../architecture.md) — § State Machines §
-  Reservation lifecycle (line 529-547), § Saga / Long-running Flow §
-  Category D reference (line 517-525).
+  Reservation lifecycle, § Saga / Long-running Flow §
+  Category D reference.
 - [`../domain-model.md`](../domain-model.md) — § 3 Reservation § State
-  Machine (line 297-308), § 3 § Invariants (line 320-339), § 3 §
-  Quantity-mismatch Handling (line 340-345), § State Machines
-  (Cross-reference) (line 617-628).
+  Machine, § 3 § Invariants, § 3 §
+  Quantity-mismatch Handling, § State Machines
+  (Cross-reference).
 - [`../sagas/reservation-saga.md`](../sagas/reservation-saga.md) —
   companion saga document; per-operation atomic actions, compensation
   rule, observability.

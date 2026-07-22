@@ -1,4 +1,4 @@
-# notification-events — Published Event Contract
+# Event Contract — notification-service Domain Events
 
 `notification-service` publishes a single audit-trail event in v1.
 
@@ -12,7 +12,7 @@ Authoritative spec cross-link: `specs/services/notification-service/architecture
 
 ---
 
-## Envelope
+## Global Envelope
 
 All `notification-service` published events use the standard WMS envelope:
 

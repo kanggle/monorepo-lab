@@ -69,6 +69,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 - `TASK-BE-523-admin-read-path-authz-decision.md` — **READY (판정 선행)** — admin-service 읽기 경로(`GET` users/roles/assignments)가 미게이팅. 스펙↔코드 판정이 선행하는 INVESTIGATION-first 보안 동작 변경.
 - `TASK-BE-529-notification-skip-locked-exclusivity-it-ci-robust.md` — **READY** — notification-service SKIP-LOCKED 배타성 IT(두 클레이머 이중청구 없음). `TASK-BE-528` AC-2 에서 이월된 테스트 커버리지.
+- `TASK-BE-558-refactor-spec-wms-polish.md` — **READY** — refactor-spec wms-platform Tier-1 구조 polish(15편집/11파일, dead-ref 0 repo-wide). 분석=Opus 4.8 / 구현 권장=Sonnet.
 
 > 2026-07-20 (`TASK-MONO-451`): 위 두 행은 **디스크에는 `ready/` 에 있는데 이 섹션이 `(empty)` 라고 선언**하고 있었다 — 아래 2026-07-12 노트와 정반대 방향의 같은 결함이다. 그때는 표가 끝난 일을 가리켰고, 이번엔 표가 **살아있는 일을 숨겼다**. 큐를 표로 고르는 사람에게 후자는 **일이 없다는 거짓 보고**다. 이제 `scripts/check-index-queue-drift.sh` 가 양방향으로 대조한다.
 
