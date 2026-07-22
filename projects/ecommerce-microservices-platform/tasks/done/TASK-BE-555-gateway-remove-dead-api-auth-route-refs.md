@@ -1,6 +1,6 @@
 # TASK-BE-555 — gateway-service: remove dead `/api/auth/**` route references (BE-552 AC-2 follow-up)
 
-Status: ready
+Status: done
 
 `(분석=Opus 4.8 / 구현 권장=Sonnet — dead-code + stale-test drift 정리, gateway IT 재검증)`
 
