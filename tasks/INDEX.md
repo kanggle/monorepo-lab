@@ -174,7 +174,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- 🟡 `TASK-MONO-467-validate-rules-command-layer-fixes.md` — **REVIEW (impl PR #2883, 2026-07-22).** `/validate-rules` 2026-07-22 전수 스캔 산물 — command-layer 정합 4건 (Critical 1 + Warning 3, docs/tooling only). ① `validate-rules.md` dead-path `skills/INDEX.md`→`.claude/skills/INDEX.md` ×3 (검증 커맨드 자기 안의 죽은 참조) ② `refactor-code.md` Phase 2 우선순위를 `refactoring-policy.md` § Prioritization 과 정합(complexity→long-method 와 tie, naming 위) ③ `process-tasks.md` contract-change dispatch `+`→`or`(type별 api-designer/event-architect, sequential — `/implement-task` Phase 5 정경) ④ `start-task.md` CLAUDE.md anchor 라벨 `"Concurrent-session isolation"` verbatim. 나머지 스캔면 전부 클린(skills 74/74·agents 13/13·service-type 48/48·cross-ref resolve). Info 2(命名 일관성·deprecated auth-service 가시성) 비차단. 분석·구현=Opus 4.8.
 
 ## done
 - ✅ `TASK-MONO-464-promote-three-test-and-worktree-rules-to-canonical.md` — **DONE 2026-07-22 (impl PR #2882; 3-dim verify on merge).** `/audit-memory` 가 memory-only 로 발견한 3규칙을 정경 승격 (doc-only, apps/·CI 무변경): (1) **격리/고유성 테스트는 픽스처 값이 프로덕션에서 공존 가능해야 유효** — 값-공존 + 프로덕션이 안 쓰는 도구설정 두 얼굴, "값을 populate 하는 곳까지 추적"(MONO-368·BE-545 인용) → `testing-strategy.md` 신규 §; (2) **크로스서비스 Kafka consumer IT 는 blocking `waitForAssignment` 금지** — earliest · Awaitility read-side 폴링 · negative=good-event barrier · RangeAssignor + canonical 참조 → `testing-strategy.md` § Event Consumer/Producer Tests 증강; (3) **worktree 체크아웃 브랜치엔 `gh pr merge --delete-branch` 가 ref 삭제 무음 스킵** → `git-workflow-policy.md` § Post-Merge Hygiene 증강. **AC-0 재측정: 3규칙 전부 목적지 부재 확인(드롭 0)**. AC-4/HARDSTOP-03: canonical 파일 참조는 `<!-- hardstop-allow -->` annotation 으로 명시(load-bearing 아닌 worked-example 인용). 분석·구현=Opus 4.8.
