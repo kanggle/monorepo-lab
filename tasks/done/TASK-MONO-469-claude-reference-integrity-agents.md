@@ -8,7 +8,7 @@ TASK-MONO-469
 
 # Status
 
-review
+done
 
 # Owner
 
