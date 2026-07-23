@@ -3,6 +3,8 @@ import {
   COUPON_NOTE,
   DISCOUNT_TYPES,
   DOMAIN_SERVICES,
+  ECOMMERCE_GLOSSARY,
+  ECOMMERCE_RECIPES,
   ECOMMERCE_ROLE_NOTE,
   NOTIFICATION_CHANNELS,
   NOTIFICATION_NOTE,
@@ -20,6 +22,8 @@ import {
   USER_STATES,
 } from '../data';
 import {
+  Glossary,
+  GuideRecipe,
   GuideToc,
   Mono,
   NoteCard,
@@ -37,6 +41,7 @@ import {
  */
 
 const SECTIONS = [
+  { id: 'ecommerce-guide-recipes', label: '자주 하는 작업' },
   { id: 'ecommerce-guide-services', label: '도메인 서비스' },
   { id: 'ecommerce-guide-order', label: '주문' },
   { id: 'ecommerce-guide-payment', label: '결제' },
@@ -47,6 +52,7 @@ const SECTIONS = [
   { id: 'ecommerce-guide-user', label: '사용자' },
   { id: 'ecommerce-guide-notification', label: '알림' },
   { id: 'ecommerce-guide-roles', label: '참고: E-Commerce 도메인 롤' },
+  { id: 'ecommerce-guide-glossary', label: '용어집' },
 ];
 
 export function EcommerceGuideScreen() {
@@ -63,6 +69,28 @@ export function EcommerceGuideScreen() {
       </p>
 
       <GuideToc items={SECTIONS} />
+
+      {/* ───────────────── 자주 하는 작업 (레시피) ───────────────── */}
+      <h2
+        id="ecommerce-guide-recipes"
+        data-testid="ecommerce-guide-recipes"
+        className="mb-2 text-xl font-semibold"
+      >
+        자주 하는 작업
+      </h2>
+      <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
+        “이럴 땐 이렇게” — 각 단계는 주문·배송·셀러 화면의 실제 상태·작업만
+        참조합니다.
+      </p>
+      <div className="mb-10">
+        {ECOMMERCE_RECIPES.map((recipe, i) => (
+          <GuideRecipe
+            key={recipe.title}
+            recipe={recipe}
+            testid={`ecommerce-guide-recipe-${i}`}
+          />
+        ))}
+      </div>
 
       {/* ───────────────── 도메인 서비스 맵 ───────────────── */}
       <h2
@@ -545,6 +573,22 @@ export function EcommerceGuideScreen() {
           body={ECOMMERCE_ROLE_NOTE.body}
         />
       </div>
+
+      {/* ───────────────── 용어집 ───────────────── */}
+      <h2
+        id="ecommerce-guide-glossary"
+        data-testid="ecommerce-guide-glossary"
+        className="mb-2 mt-10 text-xl font-semibold"
+      >
+        용어집
+      </h2>
+      <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
+        이 화면에 나오는 낯선 용어의 뜻입니다.
+      </p>
+      <Glossary
+        entries={ECOMMERCE_GLOSSARY}
+        testid="ecommerce-guide-glossary-table"
+      />
     </section>
   );
 }

@@ -1,6 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
-import { GuideToc, StateFlow } from '@/shared/ui/guide-primitives';
+import {
+  Glossary,
+  GuideRecipe,
+  GuideToc,
+  StateFlow,
+  Term,
+  type GlossaryEntry,
+  type GuideRecipeData,
+} from '@/shared/ui/guide-primitives';
 import { runAxe } from '../a11y/axe-helper';
 
 /**
@@ -79,5 +87,101 @@ describe('StateFlow', () => {
     render(<StateFlow states={states} />);
     const flow = screen.getByTestId('state-flow');
     expect(flow.getAttribute('aria-hidden')).toBe('true');
+  });
+});
+
+describe('GuideRecipe (TASK-PC-FE-256)', () => {
+  const recipe: GuideRecipeData = {
+    title: '환불 요청이 들어왔을 때',
+    intro: '결제 전용 화면이 없어 환불은 주문 취소의 보상으로 처리됩니다.',
+    steps: ['주문을 연다', '취소하면 환불 보상이 걸린다', '결제 상태로 관측된다'],
+  };
+
+  it('renders the title, intro and one numbered <li> per step in a semantic <ol>', () => {
+    render(<GuideRecipe recipe={recipe} testid="test-recipe" />);
+    const card = screen.getByTestId('test-recipe');
+    expect(within(card).getByText(recipe.title)).toBeInTheDocument();
+    expect(within(card).getByText(recipe.intro!)).toBeInTheDocument();
+    // Semantic ordered list.
+    const ol = card.querySelector('ol');
+    expect(ol).not.toBeNull();
+    recipe.steps.forEach((step, i) => {
+      const li = screen.getByTestId(`test-recipe-step-${i}`);
+      expect(li.tagName).toBe('LI');
+      expect(within(li).getByText(step)).toBeInTheDocument();
+      // The circular marker carries the 1-based step number.
+      expect(within(li).getByText(String(i + 1))).toBeInTheDocument();
+    });
+  });
+
+  it('omits the intro paragraph when none is given', () => {
+    const noIntro: GuideRecipeData = { title: 'x', steps: ['a', 'b'] };
+    render(<GuideRecipe recipe={noIntro} testid="no-intro" />);
+    expect(screen.getByTestId('no-intro-step-0')).toBeInTheDocument();
+    expect(screen.getByTestId('no-intro-step-1')).toBeInTheDocument();
+  });
+
+  it('is WCAG AA axe-clean', async () => {
+    const { container } = render(
+      <GuideRecipe recipe={recipe} testid="test-recipe" />,
+    );
+    const violations = await runAxe(container);
+    expect(violations).toEqual([]);
+  });
+});
+
+describe('Term (TASK-PC-FE-256)', () => {
+  it('wraps children in an <abbr> exposing the expansion via title (SR-friendly)', () => {
+    render(<Term title="Purchase Order">PO</Term>);
+    const abbr = screen.getByText('PO');
+    expect(abbr.tagName).toBe('ABBR');
+    expect(abbr.getAttribute('title')).toBe('Purchase Order');
+  });
+});
+
+describe('Glossary (TASK-PC-FE-256)', () => {
+  const entries: GlossaryEntry[] = [
+    {
+      key: 'PO',
+      term: '발주 (PO)',
+      full: 'Purchase Order',
+      meaning: '공급사에 물품을 주문하는 구매 문서.',
+    },
+    {
+      key: 'S5',
+      term: 'S5 경고',
+      meaning: '발주 결정의 근거로 쓰지 말라는 계약상 경고.',
+    },
+  ];
+
+  it('renders one row per entry with the term (as <dfn>) and its always-visible meaning', () => {
+    render(<Glossary entries={entries} testid="test-glossary" />);
+    expect(screen.getByTestId('test-glossary')).toBeInTheDocument();
+    for (const e of entries) {
+      const row = screen.getByTestId(`test-glossary-${e.key}`);
+      expect(within(row).getByText(e.term)).toBeInTheDocument();
+      // The definition is present in the row text (not hover-only).
+      expect(within(row).getByText(e.meaning)).toBeInTheDocument();
+      // Term cell uses a <dfn> semantic element.
+      expect(row.querySelector('dfn')).not.toBeNull();
+    }
+  });
+
+  it('wraps an abbreviation term in <abbr title> only when a full expansion is given', () => {
+    render(<Glossary entries={entries} testid="test-glossary" />);
+    const poRow = screen.getByTestId('test-glossary-PO');
+    const s5Row = screen.getByTestId('test-glossary-S5');
+    expect(poRow.querySelector('abbr')?.getAttribute('title')).toBe(
+      'Purchase Order',
+    );
+    expect(s5Row.querySelector('abbr')).toBeNull();
+  });
+
+  it('is WCAG AA axe-clean', async () => {
+    const { container } = render(
+      <Glossary entries={entries} testid="test-glossary" />,
+    );
+    const violations = await runAxe(container);
+    expect(violations).toEqual([]);
   });
 });

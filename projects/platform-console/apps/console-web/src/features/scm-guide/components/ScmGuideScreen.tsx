@@ -7,6 +7,8 @@ import {
   POLICY_FIELDS,
   REPLENISHMENT_LOOP_NOTE,
   S5_NOTE,
+  SCM_GLOSSARY,
+  SCM_RECIPES,
   SCM_ROLE_NOTE,
   STALENESS_STATES,
   SUGGESTION_STATES,
@@ -14,6 +16,8 @@ import {
   type ConfigField,
 } from '../data';
 import {
+  Glossary,
+  GuideRecipe,
   GuideToc,
   Mono,
   NoteCard,
@@ -32,12 +36,14 @@ import {
  */
 
 const SECTIONS = [
+  { id: 'scm-guide-recipes', label: '자주 하는 작업' },
   { id: 'scm-guide-services', label: '도메인 서비스' },
   { id: 'scm-guide-procurement', label: '발주' },
   { id: 'scm-guide-visibility', label: '재고 가시성' },
   { id: 'scm-guide-replenishment', label: '보충 추천' },
   { id: 'scm-guide-config', label: '설정' },
   { id: 'scm-guide-roles', label: '참고: SCM 도메인 롤 · 단일테넌트' },
+  { id: 'scm-guide-glossary', label: '용어집' },
 ];
 
 /** 설정 필드 표(재주문 정책 · 공급사 매핑 공용). */
@@ -94,6 +100,28 @@ export function ScmGuideScreen() {
       </p>
 
       <GuideToc items={SECTIONS} />
+
+      {/* ───────────────── 자주 하는 작업 (레시피) ───────────────── */}
+      <h2
+        id="scm-guide-recipes"
+        data-testid="scm-guide-recipes"
+        className="mb-2 text-xl font-semibold"
+      >
+        자주 하는 작업
+      </h2>
+      <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
+        “이럴 땐 이렇게” — 각 단계는 보충·설정·재고 화면의 실제 상태·작업만
+        참조합니다.
+      </p>
+      <div className="mb-10">
+        {SCM_RECIPES.map((recipe, i) => (
+          <GuideRecipe
+            key={recipe.title}
+            recipe={recipe}
+            testid={`scm-guide-recipe-${i}`}
+          />
+        ))}
+      </div>
 
       {/* ───────────────── 도메인 서비스 맵 ───────────────── */}
       <h2
@@ -346,6 +374,19 @@ export function ScmGuideScreen() {
       <div data-testid="scm-guide-roles">
         <NoteCard title={SCM_ROLE_NOTE.title} body={SCM_ROLE_NOTE.body} />
       </div>
+
+      {/* ───────────────── 용어집 ───────────────── */}
+      <h2
+        id="scm-guide-glossary"
+        data-testid="scm-guide-glossary"
+        className="mb-2 mt-10 text-xl font-semibold"
+      >
+        용어집
+      </h2>
+      <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
+        이 화면에 나오는 낯선 용어의 뜻입니다.
+      </p>
+      <Glossary entries={SCM_GLOSSARY} testid="scm-guide-glossary-table" />
     </section>
   );
 }

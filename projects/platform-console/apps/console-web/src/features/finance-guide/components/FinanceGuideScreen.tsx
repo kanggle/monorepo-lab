@@ -5,12 +5,16 @@ import {
   DOMAIN_SERVICES,
   DOUBLE_ENTRY_NOTE,
   F5_NOTE,
+  FINANCE_GLOSSARY,
+  FINANCE_RECIPES,
   FX_NOTE,
   KYC_LEVELS,
   RECONCILIATION_NOTE,
 } from '../data';
 import {
   AttentionCell,
+  Glossary,
+  GuideRecipe,
   GuideToc,
   Mono,
   NoteCard,
@@ -27,11 +31,13 @@ import {
  */
 
 const SECTIONS = [
+  { id: 'finance-guide-recipes', label: '자주 하는 작업' },
   { id: 'finance-guide-services', label: '도메인 서비스' },
   { id: 'finance-guide-screens', label: '콘솔 화면' },
   { id: 'finance-guide-account-states', label: '계좌 상태' },
   { id: 'finance-guide-kyc', label: 'KYC 레벨' },
   { id: 'finance-guide-concepts', label: '핵심 개념' },
+  { id: 'finance-guide-glossary', label: '용어집' },
 ];
 
 export function FinanceGuideScreen() {
@@ -48,6 +54,28 @@ export function FinanceGuideScreen() {
       </p>
 
       <GuideToc items={SECTIONS} />
+
+      {/* ───────────────── 자주 하는 작업 (레시피) ───────────────── */}
+      <h2
+        id="finance-guide-recipes"
+        data-testid="finance-guide-recipes"
+        className="mb-2 text-xl font-semibold"
+      >
+        자주 하는 작업
+      </h2>
+      <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
+        “이럴 땐 이렇게” — 각 단계는 계좌·원장·개요 화면의 실제 상태·작업만
+        참조합니다.
+      </p>
+      <div className="mb-10">
+        {FINANCE_RECIPES.map((recipe, i) => (
+          <GuideRecipe
+            key={recipe.title}
+            recipe={recipe}
+            testid={`finance-guide-recipe-${i}`}
+          />
+        ))}
+      </div>
 
       {/* ───────────────── 도메인 서비스 맵 ───────────────── */}
       <h2
@@ -247,6 +275,19 @@ export function FinanceGuideScreen() {
         body={RECONCILIATION_NOTE.body}
       />
       <NoteCard title={FX_NOTE.title} body={FX_NOTE.body} />
+
+      {/* ───────────────── 용어집 ───────────────── */}
+      <h2
+        id="finance-guide-glossary"
+        data-testid="finance-guide-glossary"
+        className="mb-2 mt-10 text-xl font-semibold"
+      >
+        용어집
+      </h2>
+      <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
+        이 화면에 나오는 낯선 회계·규제 용어의 뜻입니다.
+      </p>
+      <Glossary entries={FINANCE_GLOSSARY} testid="finance-guide-glossary-table" />
     </section>
   );
 }

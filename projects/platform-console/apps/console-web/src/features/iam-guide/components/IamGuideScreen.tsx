@@ -1,5 +1,11 @@
 import { Card } from '@/shared/ui/Card';
-import { GuideToc, Mono, NoteCard } from '@/shared/ui/guide-primitives';
+import {
+  Glossary,
+  GuideRecipe,
+  GuideToc,
+  Mono,
+  NoteCard,
+} from '@/shared/ui/guide-primitives';
 import {
   ACCOUNT_HATS,
   AUTH_PLANE_DISJOINT,
@@ -8,6 +14,8 @@ import {
   DELEGATION_CHAIN,
   DELEGATION_GUARDS,
   DOMAIN_ROLE_MAP,
+  IAM_GLOSSARY,
+  IAM_RECIPES,
   OPERATOR_ONBOARDING_AXES,
   PERMISSION_KEYS,
   SCREEN_ACCESS,
@@ -30,9 +38,11 @@ import {
  */
 
 const SECTIONS = [
+  { id: 'iam-guide-recipes', label: '자주 하는 작업' },
   { id: 'iam-guide-concepts', label: '1. 먼저 알아둘 것' },
   { id: 'iam-guide-usage', label: '2. 메뉴 사용법' },
   { id: 'iam-guide-reference', label: '3. 레퍼런스' },
+  { id: 'iam-guide-glossary', label: '용어집' },
 ];
 
 function AccessCell({ level, note }: { level: AccessLevel; note?: string }) {
@@ -91,6 +101,28 @@ export function IamGuideScreen() {
       </p>
 
       <GuideToc items={SECTIONS} />
+
+      {/* ═════════════════ 자주 하는 작업 (레시피) ═════════════════ */}
+      <h2
+        id="iam-guide-recipes"
+        data-testid="iam-guide-recipes"
+        className="mb-2 border-b border-border pb-2 text-xl font-semibold"
+      >
+        자주 하는 작업
+      </h2>
+      <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
+        “이럴 땐 이렇게” — 아래 절차의 각 단계는 이 화면이 설명하는 실제 메뉴와
+        권한만 참조합니다.
+      </p>
+      <div className="mb-10">
+        {IAM_RECIPES.map((recipe, i) => (
+          <GuideRecipe
+            key={recipe.title}
+            recipe={recipe}
+            testid={`iam-guide-recipe-${i}`}
+          />
+        ))}
+      </div>
 
       {/* ═════════════════ 1. 개념 ═════════════════ */}
       <PartHeading id="iam-guide-concepts" num="1.">
@@ -497,6 +529,19 @@ export function IamGuideScreen() {
           </tbody>
         </table>
       </div>
+
+      {/* ═════════════════ 용어집 ═════════════════ */}
+      <h2
+        id="iam-guide-glossary"
+        data-testid="iam-guide-glossary"
+        className="mb-2 mt-10 border-b border-border pb-2 text-xl font-semibold"
+      >
+        용어집
+      </h2>
+      <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
+        이 화면에 나오는 낯선 용어의 뜻입니다.
+      </p>
+      <Glossary entries={IAM_GLOSSARY} testid="iam-guide-glossary-table" />
     </section>
   );
 }
