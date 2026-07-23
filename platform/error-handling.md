@@ -442,11 +442,16 @@ Owned by `procurement-service`. PO state machine + supplier integration.
 | SUPPLIER_NOT_FOUND | 404 | Supplier reference does not exist |
 | SUPPLIER_INACTIVE | 422 | Supplier is deactivated; cannot create new PO |
 | SUPPLIER_UNAVAILABLE | 503 | Supplier integration endpoint unreachable after Resilience4j retry / circuit-breaker / bulkhead exhaustion (`SupplierUnavailableException`, S2 / ADR-MONO-005 § D4 Category B reference) |
+| SUPPLIER_CONTRACT_EXPIRED | 422 | Transaction attempted against a supplier whose contract has lapsed — the deliberate finer-grained split of `SUPPLIER_INACTIVE`'s "deactivated **or** contract-expired" umbrella (the domain catalog lists both as distinct bullets). 422 matches `SUPPLIER_INACTIVE`. No current emitter (scm services v2-planned); catalogued from `rules/domains/scm.md` § Supplier (TASK-MONO-473) |
+| SLA_VIOLATION | *(detection-only)* | Supplier/carrier SLA breach, raised for **detection / recording** — a monitoring signal, not an API request rejection, so it carries no HTTP status (cf. `SNAPSHOT_STALE`, documented for awareness rather than as an error). No current emitter; catalogued from `rules/domains/scm.md` § Supplier (TASK-MONO-473) |
+| CATALOG_SYNC_TIMEOUT | 503 | Supplier catalog synchronisation exceeded its response deadline. `_TIMEOUT` → 503 (transient upstream), consistent with `SUPPLIER_UNAVAILABLE`. No current emitter; catalogued from `rules/domains/scm.md` § Supplier (TASK-MONO-473) |
 | CATALOG_SKU_UNKNOWN | 422 | SKU referenced in a PO line does not exist in the product catalog (`CatalogSkuUnknownException`) |
 | IDEMPOTENCY_KEY_MISMATCH | 422 | `Idempotency-Key` matches an existing request but the request body hash differs (`IdempotencyKeyMismatchException`). Registered intentional alias of Platform-Common `DUPLICATE_REQUEST` (409); scm procurement deliberately maps this body-hash-mismatch shape to **422** (unprocessable semantic variant) rather than the default 409 conflict — the status difference is intentional, not drift (TASK-MONO-244) |
 | SETTLEMENT_PERIOD_LOCKED | 422 | Settlement period is locked; cannot modify PO line in this period (S3 immutability) — **v2-planned**, no `SettlementPeriodLockedException` class yet (deferred to v2 settlement-service) |
 | ASN_OVERRECEIPT | 422 | ASN reports more units than the PO line ordered (per spec deviation policy) |
 | RECONCILIATION_DISCREPANCY_OPEN | 422 | Discrepancy exists; manual operator review required (S8 — auto-close forbidden) — **v2-planned**, no exception class yet (deferred to v2 settlement-service) |
+| INVOICE_AMOUNT_MISMATCH | 422 | Supplier invoice amount does not match the PO amount — a settlement precondition failure. `_MISMATCH` → 422, consistent with fintech `CURRENCY_MISMATCH` (422) and the neighbouring `RECONCILIATION_DISCREPANCY_OPEN`. **v2-planned** (deferred to v2 settlement-service); catalogued from `rules/domains/scm.md` § Settlement (TASK-MONO-473) |
+| SETTLEMENT_NOT_READY | 422 | Settlement blocked because incomplete goods receipts remain open — a business precondition not yet met → 422, matching `SETTLEMENT_PERIOD_LOCKED`. **v2-planned** (deferred to v2 settlement-service); catalogued from `rules/domains/scm.md` § Settlement (TASK-MONO-473) |
 | REQUEST_ERROR | *(pass-through)* | Fallback code of procurement-service's `ResponseStatusException` handler, which **carries the exception's own status through** and only chooses the code: 401 → `UNAUTHORIZED`, 403 → `PERMISSION_DENIED`, anything else → `REQUEST_ERROR`. This is the one registry row with no fixed status, by construction. No procurement main-code path throws `ResponseStatusException` today, but Spring's own subclasses route here (e.g. `NoResourceFoundException`, 404) |
 
 > `IDEMPOTENCY_KEY_REQUIRED` (400) is also emitted by procurement-service via handler guard — see Platform-Common Transactional Trait section.
@@ -476,10 +481,26 @@ Owned by `demand-planning-service` (ADR-MONO-027 reorder-suggestion loop). Optim
 | INVALID_SUGGESTION_STATE | 422 | Requested transition not allowed from the current suggestion state (`InvalidSuggestionStateException`) |
 | SKU_SUPPLIER_UNMAPPED | 422 | SKU has no supplier mapping; cannot generate a DRAFT PO (`SkuSupplierUnmappedException`) |
 | PROCUREMENT_UNAVAILABLE | 503 | Procurement DRAFT-PO leg unavailable; suggestion stays APPROVED, operator retries (idempotent on `sourceSuggestionId`) (`ProcurementUnavailableException`) |
+| FORECAST_PERIOD_INVALID | 422 | Forecast period is invalid (starts too far in the past / future, or an inverted range) — a domain-rule rejection of a demand-planning input → 422, matching the demand-planning siblings above. No current emitter (scm v2-planned); catalogued from `rules/domains/scm.md` § Demand Planning (TASK-MONO-473) |
+| REORDER_POINT_NEGATIVE | 422 | Attempt to set a negative reorder point — violates a demand-planning domain invariant → 422. No current emitter; catalogued from `rules/domains/scm.md` § Demand Planning (TASK-MONO-473) |
+| FORECAST_DATA_INSUFFICIENT | 422 | Not enough historical data to compute a forecast — a business precondition not met → 422. No current emitter; catalogued from `rules/domains/scm.md` § Demand Planning (TASK-MONO-473) |
+| SAFETY_STOCK_BELOW_MINIMUM | 422 | Safety stock set below the policy minimum — violates a demand-planning policy invariant → 422. No current emitter; catalogued from `rules/domains/scm.md` § Demand Planning (TASK-MONO-473) |
 
 ---
 
-## Account  `[domain: saas]`
+## Logistics  `[domain: scm]`
+
+Owned by `logistics-service` (carrier integration + routing + ETA tracking).
+Carrier-facing outbound integration with the same fail-transient posture as
+procurement's supplier leg. See [`rules/domains/scm.md`](../rules/domains/scm.md)
+§ Standard Error Codes (Logistics). No current emitter — scm services are
+v2-planned; these are catalogued from the domain rule file (TASK-MONO-473).
+
+| Code | HTTP | Description |
+|---|---|---|
+| CARRIER_TIMEOUT | 503 | Carrier API exceeded its response deadline. `_TIMEOUT` → 503 (transient upstream), consistent with `SUPPLIER_UNAVAILABLE` / `CATALOG_SYNC_TIMEOUT` |
+| ROUTE_UNAVAILABLE | 422 | No route exists between the requested origin and destination — the request is well-formed but cannot be fulfilled → 422 (a business "cannot fulfil", NOT a 503 infra outage despite the `_UNAVAILABLE` suffix; semantic wins) |
+| ETA_EXPIRED | 422 | An operation was rejected because the shipment's ETA has already passed without a confirmed arrival (stale-ETA state precondition) → 422. If a deployment surfaces this purely as a monitoring flag rather than an API rejection, it carries no HTTP status (cf. `SLA_VIOLATION`) |
 
 Owned by `account-service` (Identity Platform — multi-tenant account lifecycle).
 
@@ -695,6 +716,7 @@ Owned by `artist-service` (artist identity / fandom metadata).
 |---|---|---|
 | ARTIST_NOT_FOUND | 404 | Artist does not exist OR cross-tenant OR DRAFT/ARCHIVED (non-admin → 404 not 403, per content-heavy display rule) |
 | ARTIST_INVALID_STATE | 422 | Requested transition not allowed from current artist state (DRAFT/PUBLISHED/ARCHIVED). No current emitter — the live artist-service surfaces the specific guards `ARTIST_NOT_PUBLISHED`/`ARTIST_ARCHIVED` instead; this generic transition code is reserved (TASK-MONO-249) |
+| ARTIST_INACTIVE | 422 | Operation attempted on an artist that is not in an operable (PUBLISHED) state — the domain-catalog umbrella label for the non-operable case whose live guards are `ARTIST_NOT_PUBLISHED` / `ARTIST_ARCHIVED` (both 422). No current emitter; catalogued from `rules/domains/fan-platform.md` § Artist (TASK-MONO-473). 422 matches every artist-state sibling above |
 | ARTIST_NOT_PUBLISHED | 422 | Artist is not in PUBLISHED state; operation rejected (`ArtistNotPublishedException`) |
 | ARTIST_ARCHIVED | 422 | Artist is ARCHIVED; operation rejected (`ArtistArchivedException`) |
 | ARTIST_GROUP_NOT_FOUND | 404 | Artist group not found (`ArtistGroupNotFoundException`) |
@@ -717,6 +739,20 @@ Owned by `membership-service` (fan subscription / tier lifecycle). Idempotency-k
 | MEMBERSHIP_TIER_INVALID | 422 | Requested membership tier is not a valid value (`MembershipTierInvalidException`) |
 | MEMBERSHIP_NOT_RENEWABLE | 422 | Membership is not in a renewable state (`MembershipNotRenewableException`) |
 | MEMBERSHIP_STATE_INVALID | 422 | Invalid membership status transition (`InvalidStateTransitionException`; payload carries `from`/`to`). Membership-service mapping of the same exception class that fan community-service maps to `POST_STATUS_TRANSITION_INVALID` |
+| MEMBERSHIP_EXPIRED | 403 | Content access attempted with an expired membership; the content gate rejects it. 403 matches the sibling content-gate codes `MEMBERSHIP_REQUIRED` / `MEMBERSHIP_TIER_INSUFFICIENT` (both 403) — this is an access denial, not a membership-record state transition. No current emitter; catalogued from `rules/domains/fan-platform.md` § Membership (TASK-MONO-473) |
+| MEMBERSHIP_DOWNGRADE_BLOCKED | 422 | Tier downgrade rejected while a paid billing cycle is still active (downgrade takes effect at cycle end). A business-rule rejection on a membership operation → 422, matching `MEMBERSHIP_NOT_RENEWABLE` / `MEMBERSHIP_STATE_INVALID` (both 422). No current emitter; catalogued from `rules/domains/fan-platform.md` § Membership (TASK-MONO-473) |
+
+## Moderation  `[domain: fan-platform]`
+
+Owned by `community-service` (report / review workflow over posts). Moderation
+state that gates non-author access and operator decisions. See
+[`rules/domains/fan-platform.md`](../rules/domains/fan-platform.md) § Standard Error
+Codes (Moderation).
+
+| Code | HTTP | Description |
+|---|---|---|
+| POST_REPORTED_PENDING_REVIEW | 403 | A post is reported and under moderation review; non-author access is refused and the reason is surfaced to the caller (the description explicitly *indicates* the pending-review state rather than hiding it — hence 403, not the content-heavy 404-hide used for DRAFT/ARCHIVED). No current emitter; catalogued from `rules/domains/fan-platform.md` § Moderation (TASK-MONO-473) |
+| MODERATION_DECISION_REQUIRED | 422 | An operation is blocked because a reported item still requires an operator moderation decision — a business precondition not yet met → 422, matching fan-platform's other state-precondition rejections. No current emitter; catalogued from `rules/domains/fan-platform.md` § Moderation (TASK-MONO-473) |
 
 ## Account / Balance / Transaction  `[domain: fintech]`
 
@@ -886,7 +922,19 @@ before any repository call); fail-CLOSED on missing role/scope (E6·E7).
 > readability. `UNAUTHORIZED` (401, missing/invalid/expired JWT) —
 > Platform-Common Authentication.
 
-## Notification  `[domain: erp]`
+## Integrated Read Model  `[domain: erp]`
+
+Owned by `read-model-service` (cross-source integrated org/employee query surface,
+ADR-MONO read-model projection). A read-only aggregator over upstream master /
+approval sources; fails CLOSED when an upstream source cannot answer rather than
+fabricating a field (E5). See [`rules/domains/erp.md`](../rules/domains/erp.md)
+§ Standard Error Codes (Integrated Read Model / Authorization).
+
+| Code | HTTP | Description |
+|---|---|---|
+| READ_MODEL_SOURCE_UNAVAILABLE | 503 | An upstream source system backing an integrated read-model query is unavailable, so the projected field cannot be resolved; the service fails closed and never fabricates the value (E5 — `QueryEmployeeOrgViewUseCase` / `EmployeeOrgView`). `_UNAVAILABLE` → 503 (transient upstream outage), consistent with scm `SUPPLIER_UNAVAILABLE` / `NODE_UNREACHABLE` (TASK-MONO-473) |
+
+
 
 Owned by `notification-service` v1 (TASK-ERP-BE-011). Event-consumer that
 fans out in-app notifications from `erp.approval.*.v1` to the recipient

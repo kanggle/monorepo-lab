@@ -8,7 +8,7 @@ TASK-MONO-473
 
 # Status
 
-ready
+review
 
 # Owner
 

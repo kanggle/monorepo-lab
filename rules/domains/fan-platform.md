@@ -56,13 +56,13 @@ fan-platform 도메인에서 공통으로 발생하는 에러는 [../../platform
 ### Artist
 - `ARTIST_NOT_FOUND` — 존재하지 않는 아티스트
 - `ARTIST_INACTIVE` — 비활성화된 아티스트에 대한 작업 시도
-- `FOLLOW_SELF_FORBIDDEN` — 자기 자신을 follow 시도 (운영자 계정의 아티스트 동기화 케이스)
+- `SELF_FOLLOW_FORBIDDEN` — 자기 자신을 follow 시도 (운영자 계정의 아티스트 동기화 케이스). 레지스트리·`SelfFollowForbiddenException` 이 쓰는 정경 철자로 정합 (TASK-MONO-473 — 이전 `FOLLOW_SELF_FORBIDDEN` 은 토큰 전치 드리프트, 아무도 발행 안 함)
 
 ### Content
 - `POST_NOT_FOUND` — 존재하지 않는 포스트
 - `POST_STATUS_TRANSITION_INVALID` — 허용되지 않는 상태 전이 (예: DELETED → PUBLISHED)
 - `COMMENT_NOT_FOUND` — 존재하지 않는 댓글
-- `REACTION_INVALID_EMOJI` — 허용되지 않는 이모지 코드
+- `REACTION_INVALID_TYPE` — 허용되지 않는 리액션 타입(이모지 코드). 레지스트리에 등록된 정경 철자로 정합 (TASK-MONO-473 — 이전 `REACTION_INVALID_EMOJI` 는 같은 개념의 미등록 드리프트)
 
 ### Membership
 - `MEMBERSHIP_REQUIRED` — MEMBERS_ONLY 콘텐츠에 대한 무료 사용자 접근
