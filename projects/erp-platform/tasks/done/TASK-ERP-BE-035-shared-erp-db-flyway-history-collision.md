@@ -1,7 +1,7 @@
 # TASK-ERP-BE-035 — erp 4개 서비스가 공유하는 `erp_db` 의 단일 `flyway_schema_history` 체크섬 충돌 (masterdata·notification 크래시루프)
 
 - **Type**: TASK-ERP-BE (defect — data/migration isolation)
-- **Status**: ready
+- **Status**: done
 - **Service**: masterdata-service · notification-service · approval-service · read-model-service (erp-platform)
 - **Domain/traits**: erp / (declared in PROJECT.md)
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (multi-service migration isolation + baked-volume reset ordering)

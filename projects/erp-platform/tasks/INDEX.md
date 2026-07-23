@@ -78,8 +78,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-ERP-BE-035-shared-erp-db-flyway-history-collision.md` — erp 4개 서비스(masterdata·notification·approval·read-model)가 공유하는 `erp_db` 의 단일 `flyway_schema_history` 에서 **버전번호 충돌**(각자 V1__init 등 같은 번호·다른 내용) → 최초 migrate 승자만 살고 나머지는 checksum mismatch 로 크래시루프. **TASK-MONO-399 데모 실측(2026-07-23)에서 masterdata 47회·notification 41회 재시작을 스택트레이스로 확정.** 수정=서비스별 flyway history 격리. MONO-399 AC-6 재굽기의 선행(재굽기로 안 고쳐짐). 분석=Opus 4.8.
-
 ## in-progress
 
 (empty)
@@ -88,6 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## done
 
+- `TASK-ERP-BE-035-shared-erp-db-flyway-history-collision.md` — **DONE (2026-07-23, impl PR #2920 squash `fb116d81b`; 3-dim verified — state=MERGED · origin/main tip 일치 · 머지 직전 0 failing required, **Integration (erp-platform, Testcontainers) 레인 GREEN**).** masterdata·approval·notification 이 공유 `erp_db` + 단일 `flyway_schema_history` 에서 각자 V1__init + 제네릭 `outbox`/`processed_events`/`idempotency_keys` 를 같은 번호로 들고 충돌 → 최초 migrate 승자만 살고 나머지 checksum mismatch 크래시루프(MONO-399 데모 실측: masterdata 47회·notification 41회). **AC-0 정정: read-model 은 이미 `erp_read_model_db` 격리라 3서비스 문제; 테이블명도 충돌해 flyway.table 만으론 불충분 → DB 분리.** 수정=approval→`erp_approval_db`, notification→`erp_notification_db`(read-model 패턴 미러): `infra/mysql-initdb/02-*` + app datasource + compose env + architecture.md 3곳. `V1__init.sql` byte-불변(체크섬 보존). 회귀 `FlywayHistoryIsolationIntegrationTest`(전용 history=clean / 공유 history 선점=`FlywayValidateException`) CI GREEN. **MONO-399 AC-6 재굽기의 선행 충족** — 재굽기 1회로 kafka 1G+finance 브로커+erp DB격리 3개 배포. 분석·구현=Opus 4.8.
 - `TASK-ERP-BE-034-read-model-consumer-mapper-dedup.md` — **DONE (2026-07-22, impl PR #2861 squash `7df421ef5`; 3-dim verified — state=MERGED · origin/main tip 일치 · 머지 직전 0 failing required).** read-model Kafka 컨슈머 4종 공통 골격(`AbstractMasterChangeConsumer`) + `*EnvelopeToCommandMapper` parse/validate 3종(`EnvelopeParsing.parseAndValidate`) 추출. `@RetryableTopic`/DLT/retry/metric/log byte-보존(logger=`getClass()`), 매퍼 메시지 파라미터화 byte-보존. 매퍼 유닛테스트 GREEN. 분석·구현=Opus 4.8.
 
 - `TASK-ERP-BE-032-masterdata-event-envelope-dlt-mismatch.md` — **DONE (2026-07-21 audit round-2, merged #2851).** masterdata→read-model 이벤트 **봉투 shape 불일치**(프로듀서 실이벤트 전건 DLT) — Option A: `OutboxMasterdataEventPublisher.writeEvent` 가 spec §Envelope 대로 top-level `tenantId`/`aggregateType`/`aggregateId` 발행 + 신규 크로스서비스 계약 테스트로 재발 방지.
