@@ -90,8 +90,18 @@ describe('WmsOverview (TASK-PC-FE-166)', () => {
     // distribution (PC-FE-170).
     expect(screen.queryByTestId('wms-alerts-count')).toBeNull();
     expect(screen.queryByTestId('wms-alerts-count-degraded')).toBeNull();
-    // Stat tiles, NOT nav links (no anchor / href).
-    expect(screen.getByTestId('wms-overview').querySelector('a')).toBeNull();
+    // Stat tiles, NOT nav links (no anchor / href) — scoped to the count
+    // container so the 바로가기 nav's 가이드 link (PC-FE-257) is not counted.
+    expect(
+      screen.getByTestId('wms-overview-counts').querySelector('a'),
+    ).toBeNull();
+  });
+
+  it('links the overview to the WMS guide (PC-FE-257 discoverability parity)', () => {
+    render(<WmsOverview state={baseState()} />);
+    const link = screen.getByTestId('wms-overview-link-guide');
+    expect(link.tagName).toBe('A');
+    expect(link).toHaveAttribute('href', '/wms/guide');
   });
 
   it('배송 (FLOW) renders 오늘/주간/월간 period buckets + 전체 total; 재고 (LEVEL) stays a single total', () => {

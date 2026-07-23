@@ -28,6 +28,22 @@ describe('WmsGuideScreen', () => {
     expect(screen.getByTestId('wms-guide-outbound')).toBeInTheDocument();
   });
 
+  it('mounts the 읽기경로 배너 (GuideReadingPath) at the top of the guide (TASK-PC-FE-257)', () => {
+    render(<WmsGuideScreen />);
+    const banner = screen.getByTestId('wms-guide-reading-path');
+    expect(banner).toBeInTheDocument();
+    // Points at sections that actually exist on this guide (재고 · 출고).
+    expect(within(banner).getByText('재고')).toBeInTheDocument();
+    expect(within(banner).getByText('출고')).toBeInTheDocument();
+  });
+
+  it('cross-links the WMS domain-role note to the IAM guide (TASK-PC-FE-257)', () => {
+    render(<WmsGuideScreen />);
+    const link = screen.getByTestId('wms-guide-xlink-iam');
+    expect(link.tagName).toBe('A');
+    expect(link).toHaveAttribute('href', '/iam/guide');
+  });
+
   it('renders the in-page TOC with a link per existing section id (TASK-PC-FE-255)', () => {
     render(<WmsGuideScreen />);
     const toc = screen.getByTestId('guide-toc');

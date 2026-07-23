@@ -111,6 +111,35 @@ export function GuideToc({
 }
 
 /**
+ * 읽기경로 배너(TASK-PC-FE-257). "처음이면 여기부터" — 가이드 상단에서 처음
+ * 온 사람에게 어떤 섹션부터 읽으면 되는지 1~2문장으로 안내한다. 순수 정적 —
+ * 데이터/상태 없음. 각 GuideScreen 이 그 도메인의 **실제 섹션**에 맞는 안내를
+ * `children` 으로 넘긴다(허구 섹션 언급 금지). IAM 가이드의 기존 inline 안내
+ * ("처음이라면 1·2 만 읽으세요")가 문구 원형이다. 랜드마크(`<aside>`)로 만들지
+ * 않는다 — 가이드 `<section>`(region) 안에 중첩되면 axe `landmark-is-top-level`
+ * 을 어기기 때문. 제목 `<p>` 가 배너의 시각적 헤딩 역할을 한다.
+ */
+export function GuideReadingPath({
+  children,
+  title = '처음이면 여기부터',
+  testid = 'guide-reading-path',
+}: {
+  children: ReactNode;
+  title?: string;
+  testid?: string;
+}) {
+  return (
+    <div
+      data-testid={testid}
+      className="mb-8 rounded-lg border border-border bg-muted/40 px-4 py-3"
+    >
+      <p className="mb-1 text-sm font-semibold text-foreground">{title}</p>
+      <p className="text-sm text-muted-foreground">{children}</p>
+    </div>
+  );
+}
+
+/**
  * 상태 전이 시각 다이어그램(TASK-PC-FE-255). 선형/분기 상태머신을 배열 순서
  * 그대로 mono 칩 + 화살표로 보여준다 — 기존 상태 표(테이블) **위**에 추가되는
  * 보조 시각화이며 표를 대체하지 않는다(상세·스크린리더용 정보원은 표가

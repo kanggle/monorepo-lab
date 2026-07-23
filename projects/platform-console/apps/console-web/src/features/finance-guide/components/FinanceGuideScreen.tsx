@@ -14,6 +14,7 @@ import {
 import {
   AttentionCell,
   Glossary,
+  GuideReadingPath,
   GuideRecipe,
   GuideToc,
   Mono,
@@ -52,6 +53,13 @@ export function FinanceGuideScreen() {
         finance-platform 마이크로서비스 구성, 그리고 규제 계좌 상태 · KYC ·
         금액 표현(F5) · 복식부기 · 대사 · FX 신선도 개념을 정리한 참조입니다.
       </p>
+
+      <GuideReadingPath testid="finance-guide-reading-path">
+        처음이라면 <strong>콘솔 화면</strong>과 <strong>계좌 상태</strong>부터
+        보세요 — 개요·계좌·원장이 무엇을 보여주고 규제 계좌 상태가 무슨 뜻인지가
+        먼저입니다. 도메인 서비스·KYC·핵심 개념·용어집은 필요할 때 찾아보는
+        참조입니다.
+      </GuideReadingPath>
 
       <GuideToc items={SECTIONS} />
 

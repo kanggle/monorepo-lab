@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { EcommerceOverviewState } from '../api/overview-state';
 import { RankingBarChart } from './RankingBarChart';
 import { CountCard } from './EcommerceCountCard';
@@ -33,6 +34,18 @@ export function EcommerceOverview({
       {/* Per-area count cards — each card IS the quick-launch link. */}
       <div className="mb-8">
         <h2 className="mb-3 text-lg font-semibold text-foreground">운영 개요</h2>
+        <nav
+          aria-label="E-Commerce 화면 바로가기"
+          className="mb-4 flex flex-wrap gap-4 text-sm"
+        >
+          <Link
+            href="/ecommerce/guide"
+            data-testid="ecommerce-overview-link-guide"
+            className="underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            가이드
+          </Link>
+        </nav>
         <div
           data-testid="ecommerce-ops-links"
           className="flex flex-wrap gap-3"

@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { WmsOverviewState } from '../api/overview-state';
 import { CountTile } from './WmsOverviewCountTile';
 
@@ -39,6 +40,19 @@ export function WmsOverview({ state }: { state: WmsOverviewState }) {
       className="mb-8"
     >
       <h2 className="mb-3 text-lg font-semibold text-foreground">운영 개요</h2>
+
+      <nav
+        aria-label="WMS 화면 바로가기"
+        className="mb-6 flex flex-wrap gap-4 text-sm"
+      >
+        <Link
+          href="/wms/guide"
+          data-testid="wms-overview-link-guide"
+          className="underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          가이드
+        </Link>
+      </nav>
 
       {/* Per-area count tiles — read-only stat tiles (no drill-in routes). */}
       <div data-testid="wms-overview-counts" className="mb-6 flex flex-wrap gap-3">

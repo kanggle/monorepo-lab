@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Card } from '@/shared/ui/Card';
 import {
   COUPON_NOTE,
@@ -23,6 +24,7 @@ import {
 } from '../data';
 import {
   Glossary,
+  GuideReadingPath,
   GuideRecipe,
   GuideToc,
   Mono,
@@ -67,6 +69,12 @@ export function EcommerceGuideScreen() {
         보여주는 상태값의 의미와, 그 뒤의 이커머스 마이크로서비스 구성을 정리한
         참조입니다. (모든 화면은 도메인 롤로 게이트되며, 맨 아래 참조.)
       </p>
+
+      <GuideReadingPath testid="ecommerce-guide-reading-path">
+        처음이라면 <strong>주문</strong>과 <strong>배송</strong>부터 보세요 —
+        주문이 어떻게 흐르고 배송이 어떻게 이어지는지가 핵심입니다. 나머지
+        상품·프로모션·셀러·사용자·알림은 필요할 때 찾아보는 참조입니다.
+      </GuideReadingPath>
 
       <GuideToc items={SECTIONS} />
 
@@ -306,6 +314,17 @@ export function EcommerceGuideScreen() {
       </div>
 
       <NoteCard title={SHIPPING_WMS_NOTE.title} body={SHIPPING_WMS_NOTE.body} />
+      <p className="mb-10 text-sm text-muted-foreground">
+        WMS 풀필먼트로 라우팅된 배송의 물리 재고 차감과 출고 상태 흐름은{' '}
+        <Link
+          href="/wms/guide"
+          data-testid="ecommerce-guide-xlink-wms"
+          className="underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          WMS 가이드
+        </Link>
+        에서 확인하세요.
+      </p>
 
       {/* ───────────────── 상품 ───────────────── */}
       <h2

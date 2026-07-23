@@ -16,6 +16,7 @@ import {
 import {
   AttentionCell,
   Glossary,
+  GuideReadingPath,
   GuideRecipe,
   GuideToc,
   Mono,
@@ -60,6 +61,13 @@ export function ErpGuideScreen() {
         상태 · 결재 상태머신 · 위임 스코프 · effective-dating(`asOf`) ·
         read-model 투영 · 알림 통합 개념을 정리한 참조입니다.
       </p>
+
+      <GuideReadingPath testid="erp-guide-reading-path">
+        처음이라면 <strong>콘솔 화면</strong>과 <strong>결재 상태</strong>부터
+        보세요 — 6개 화면이 무엇을 하고 결재가 어떻게 흐르는지가 먼저입니다.
+        도메인 서비스·마스터/직원 상태·위임 스코프·핵심 개념·용어집은 필요할 때
+        찾아보는 참조입니다.
+      </GuideReadingPath>
 
       <GuideToc items={SECTIONS} />
 

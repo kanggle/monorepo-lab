@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Card } from '@/shared/ui/Card';
 import {
   INVENTORY_EVENTS,
@@ -14,6 +15,7 @@ import {
 } from '../data';
 import {
   Glossary,
+  GuideReadingPath,
   GuideRecipe,
   GuideToc,
   Mono,
@@ -49,6 +51,12 @@ export function WmsGuideScreen() {
         흐름, 출고 주문의 상태 변화 — 를 정리한 참조입니다. (모든 화면은 도메인
         롤로 게이트되며, 맨 아래 참조.)
       </p>
+
+      <GuideReadingPath testid="wms-guide-reading-path">
+        처음이라면 <strong>재고</strong>와 <strong>출고</strong> 두 섹션부터
+        읽으세요 — 각 화면이 보여주는 수량 버킷과 주문 상태의 의미입니다. 도메인
+        롤과 용어집은 필요할 때 찾아보는 참조입니다.
+      </GuideReadingPath>
 
       <GuideToc items={SECTIONS} />
 
@@ -353,7 +361,15 @@ export function WmsGuideScreen() {
         재고·출고 화면은 <strong>WMS 도메인 롤</strong>로 게이트됩니다. 운영자가
         wms 구독 테넌트로 <strong>테넌트 선택(assume-tenant)</strong> 할 때
         자동으로 파생되어 주입됩니다. (IAM 콘솔 3화면을 게이트하는 admin-console
-        역할과는 별도 축 — IAM 가이드 참조.)
+        역할과는 별도 축 —{' '}
+        <Link
+          href="/iam/guide"
+          data-testid="wms-guide-xlink-iam"
+          className="underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          IAM 가이드
+        </Link>{' '}
+        참조.)
       </p>
       <div className="overflow-x-auto">
         <table className="data-table" data-testid="wms-guide-roles">
