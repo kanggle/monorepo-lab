@@ -50,12 +50,14 @@ class FlywayHistoryIsolationIntegrationTest {
                     .withStartupTimeout(Duration.ofMinutes(3));
 
     private static String urlFor(String db) {
-        // Swap the container's default database name for the target one.
+        // Swap the container's default database name for the target one. Split on
+        // '?' first so a '/' inside query params can't be mistaken for the path.
         String base = MYSQL.getJdbcUrl();
-        int slash = base.lastIndexOf('/');
-        int q = base.indexOf('?', slash);
+        int q = base.indexOf('?');
+        String head = q >= 0 ? base.substring(0, q) : base;
         String params = q >= 0 ? base.substring(q) : "";
-        return base.substring(0, slash + 1) + db + params;
+        int slash = head.lastIndexOf('/');
+        return head.substring(0, slash + 1) + db + params;
     }
 
     private static void createDatabase(String db) throws Exception {
