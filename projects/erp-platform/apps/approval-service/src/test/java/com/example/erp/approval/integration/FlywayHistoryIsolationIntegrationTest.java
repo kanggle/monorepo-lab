@@ -4,11 +4,10 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.example.testsupport.integration.DockerAvailableCondition;
-import java.sql.Connection;
-import java.sql.Statement;
 import java.time.Duration;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.exception.FlywayValidateException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,16 +24,23 @@ import org.testcontainers.utility.DockerImageName;
  * (plus generic {@code outbox} / {@code processed_events} tables). When all
  * three shared one database they shared one {@code flyway_schema_history}: the
  * first to migrate wrote version 1's checksum, the others failed
- * {@code validate} with a checksum mismatch and never booted. The fix gives
- * each service its own database.
+ * {@code validate} with a checksum mismatch and never booted.
  *
- * <p>This test drives Flyway directly (no Spring context) against a single
- * MySQL container:
+ * <p>The shipped fix gives each service its <b>own database</b> (approval →
+ * {@code erp_approval_db}), which yields its own {@code flyway_schema_history}.
+ * This test exercises that isolation property directly, driving Flyway against
+ * the container's database:
  * <ul>
- *   <li><b>fix</b>: approval's real migrations apply cleanly in a dedicated DB;
- *   <li><b>repro</b>: if another service "wins" version 1 first in a SHARED DB,
- *       approval's migrate fails fast with {@link FlywayValidateException}.
+ *   <li><b>fix</b>: approval's real migrations apply cleanly when their Flyway
+ *       history is isolated (its own history table = its own DB in production);
+ *   <li><b>repro</b>: when another service has already won version 1 in a
+ *       <em>shared</em> history, approval's migrate fails fast with
+ *       {@link FlywayValidateException} — exactly the demo-host crash.
  * </ul>
+ *
+ * <p>Uses only the container's default database + app user (no root / no extra
+ * databases), so it is deterministic and privilege-safe. baseline-on-migrate is
+ * off so a fresh history table always replays from V1 regardless of test order.
  */
 @Tag("integration")
 @ExtendWith(DockerAvailableCondition.class)
@@ -49,53 +55,47 @@ class FlywayHistoryIsolationIntegrationTest {
                     .withPassword("erp")
                     .withStartupTimeout(Duration.ofMinutes(3));
 
-    private static String urlFor(String db) {
-        // Swap the container's default database name for the target one. Split on
-        // '?' first so a '/' inside query params can't be mistaken for the path.
-        String base = MYSQL.getJdbcUrl();
-        int q = base.indexOf('?');
-        String head = q >= 0 ? base.substring(0, q) : base;
-        String params = q >= 0 ? base.substring(q) : "";
-        int slash = head.lastIndexOf('/');
-        return head.substring(0, slash + 1) + db + params;
+    /** Drop every object so each test starts from an empty schema (the two tests
+     *  share one container; without this the second sees a non-empty schema with
+     *  no history table and Flyway aborts). */
+    @BeforeEach
+    void wipeSchema() {
+        Flyway.configure()
+                .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
+                .cleanDisabled(false)
+                .load()
+                .clean();
     }
 
-    private static void createDatabase(String db) throws Exception {
-        try (Connection c = MYSQL.createConnection("");
-                Statement s = c.createStatement()) {
-            s.execute("CREATE DATABASE IF NOT EXISTS " + db
-                    + " CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-        }
-    }
-
-    private static Flyway flyway(String db, String location) {
+    private static Flyway flyway(String historyTable, String location) {
         return Flyway.configure()
-                .dataSource(urlFor(db), MYSQL.getUsername(), MYSQL.getPassword())
+                .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
+                .table(historyTable)
                 .locations(location)
-                .baselineOnMigrate(true)
+                .baselineOnMigrate(false)
                 .load();
     }
 
     @Test
-    void approvalMigratesCleanlyInItsOwnDatabase() throws Exception {
-        createDatabase("erp_approval_db");
-
-        assertThatCode(() -> flyway("erp_approval_db", "classpath:db/migration").migrate())
-                .as("approval's real migrations apply with no checksum mismatch in its own DB")
+    void approvalMigratesCleanlyWithAnIsolatedHistory() {
+        // Its own history table (what a dedicated erp_approval_db gives it in
+        // production) → approval's real migrations apply with no mismatch.
+        assertThatCode(() -> flyway("flyway_history_approval", "classpath:db/migration").migrate())
+                .as("approval's real migrations apply cleanly when its Flyway history is isolated")
                 .doesNotThrowAnyException();
     }
 
     @Test
-    void approvalFailsValidateWhenAnotherServiceWonTheSharedHistory() throws Exception {
-        createDatabase("erp_shared_db");
+    void approvalFailsValidateWhenAnotherServiceWonTheSharedHistory() {
+        // Another service migrates version 1 first into the SHARED default
+        // history table (the pre-fix erp_db situation).
+        flyway("flyway_schema_history", "classpath:db/collision").migrate();
 
-        // Another service migrates version 1 first into the SHARED history table.
-        flyway("erp_shared_db", "classpath:db/collision").migrate();
-
-        // approval's real version 1 now mismatches the stored checksum → fail fast.
-        Flyway approval = flyway("erp_shared_db", "classpath:db/migration");
+        // approval's real version 1 now mismatches the stored checksum → the
+        // exact FlywayValidateException that crash-looped it on the demo host.
+        Flyway approval = flyway("flyway_schema_history", "classpath:db/migration");
         assertThatThrownBy(approval::migrate)
-                .as("shared flyway_schema_history won by another service must fail approval's validate")
+                .as("a shared Flyway history won by another service must fail approval's validate")
                 .isInstanceOf(FlywayValidateException.class);
     }
 }
