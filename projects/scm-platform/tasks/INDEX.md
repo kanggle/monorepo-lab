@@ -78,6 +78,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
+- `TASK-SCM-BE-042-logistics-service-bootstrap.md` — **READY (ADR-MONO-053 Phase 1, first code).** Bootstrap the scm `logistics-service` Spring Boot app (Hexagonal) per BE-041 specs: Gradle module + Flyway `V1` (`dispatch`/`dispatch_request_dedupe`/`processed_events`) + domain (`Dispatch` status machine) + `ShipmentDispatchPort` w/ **EasyPost adapter** (+ standalone) + Resilience4j (circuit/retry/bulkhead, dedicated pool) + OAuth2 RS tenant dual-accept + `DispatchController` (inspect + `:retry`) + gateway route/Traefik/compose + CI lanes + 3 new error codes. WireMock EasyPost IT matrix + Testcontainers + tenant fail-closed. **Excludes** consumer (BE-044), 굿스플로/`CarrierRouter` (BE-043), `FulfillmentRouter` (BE-044). Precedent = BE-024. 후속=BE-043/044. 분석=Opus 4.8 / 구현 권장=backend-engineer(opus).
+
 ## in-progress
 
 ## review
