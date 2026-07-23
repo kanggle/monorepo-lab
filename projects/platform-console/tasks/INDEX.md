@@ -113,7 +113,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
-_(없음)_
+- `TASK-PC-FE-257-domain-guide-comprehension-uplift-p2.md` — **가이드 이해도 개선 P2 구현 → review** (2026-07-23). PC-FE-255(P0)·256(P1) 후속, UX 로드맵 종결. ① 공용 `GuideReadingPath`("처음이면 여기부터") 5 가이드(WMS·SCM·Finance·ERP·E-Comm) 배선 — 각 문구는 그 가이드 실제 `SECTIONS` 대조(허구 섹션 0), IAM 은 기존 inline 유지(정규화 선택·미실행). ② **발견성 straggler 교정**: WMS·SCM·E-Comm 개요에 `개요→가이드` 링크 신설(Finance `<nav 바로가기>` 패턴·`<domain>-overview-link-guide` testid·동일 focus-ring). ③ 교차링크(실측): WMS→IAM(`wms-guide-xlink-iam`)·SCM→WMS(`scm-guide-xlink-wms`)·E-Comm→WMS(`ecommerce-guide-xlink-wms`) — Finance·ERP 는 타도메인 언급이 auth 메커니즘("IAM OIDC 토큰")뿐이라 **0(억지 안 함)**. **🔵 measure-don't-inherit**: 각 `data.ts` 렌더 문자열 실측 후 진짜 교차참조만 링크. 가이드 `'use client'` 신규 0·개요 3화면 기존 지시어 유지·백엔드/계약 0. axe landmark 이슈(중첩 `<aside>`) 테스트로 잡아 `<div>` 로 수정. **검증**: tsc 0 · `next lint` 0 · vitest **279파일/2904 GREEN, 0 실패**(flake 없음). 기존 testid(255·256·개요) 전부 보존. 구현=frontend-engineer(Opus)/격리 worktree, 분석=Opus 4.8.
 
 ## done
 

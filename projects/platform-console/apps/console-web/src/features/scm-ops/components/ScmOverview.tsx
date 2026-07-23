@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { cn } from '@/shared/lib/cn';
 import { formatDateTime } from '@/shared/lib/datetime';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
@@ -99,6 +100,19 @@ export function ScmOverview({ state }: { state: ScmOverviewState }) {
   return (
     <section data-testid="scm-overview" aria-label="SCM 운영 개요" className="mb-8">
       <h2 className="mb-3 text-lg font-semibold text-foreground">운영 개요</h2>
+
+      <nav
+        aria-label="SCM 화면 바로가기"
+        className="mb-6 flex flex-wrap gap-4 text-sm"
+      >
+        <Link
+          href="/scm/guide"
+          data-testid="scm-overview-link-guide"
+          className="underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          가이드
+        </Link>
+      </nav>
 
       {/* S5 obligation — surfaced prominently whenever inventory-visibility
           data (the 재고 스냅샷 count) is shown (§ 2.4.6). */}

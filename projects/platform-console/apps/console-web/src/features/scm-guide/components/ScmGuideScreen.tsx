@@ -15,8 +15,10 @@ import {
   SUPPLIER_FIELDS,
   type ConfigField,
 } from '../data';
+import Link from 'next/link';
 import {
   Glossary,
+  GuideReadingPath,
   GuideRecipe,
   GuideToc,
   Mono,
@@ -98,6 +100,13 @@ export function ScmGuideScreen() {
         이어지는 보충 루프를 정리한 참조입니다. (SCM 은 단일테넌트 도메인이며,
         접근은 맨 아래 롤 참조.)
       </p>
+
+      <GuideReadingPath testid="scm-guide-reading-path">
+        처음이라면 <strong>발주</strong>와 <strong>보충 추천</strong>부터
+        보세요 — 저재고 알림에서 발주까지 이어지는 보충 루프가 SCM 의 핵심
+        흐름입니다. 도메인 서비스·재고 가시성·설정·용어집은 필요할 때 찾아보는
+        참조입니다.
+      </GuideReadingPath>
 
       <GuideToc items={SECTIONS} />
 
@@ -285,8 +294,16 @@ export function ScmGuideScreen() {
       </h2>
       <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
         <strong>보충</strong> 화면(<Mono>/scm/replenishment</Mono>)의 추천은 아래
-        상태머신을 따릅니다. wms 저재고 알림이 <Mono>추천(SUGGESTED)</Mono>을
-        만들고, 운영자가 승인하면 <Mono>물질화(MATERIALIZED)</Mono>되며 DRAFT
+        상태머신을 따릅니다.{' '}
+        <Link
+          href="/wms/guide"
+          data-testid="scm-guide-xlink-wms"
+          className="underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          wms 저재고 알림
+        </Link>
+        이 <Mono>추천(SUGGESTED)</Mono>을 만들고, 운영자가 승인하면{' '}
+        <Mono>물질화(MATERIALIZED)</Mono>되며 DRAFT
         발주가 생성됩니다. 승인·기각은 <strong>추천 · 승인</strong> 상태에서만
         가능합니다.
       </p>

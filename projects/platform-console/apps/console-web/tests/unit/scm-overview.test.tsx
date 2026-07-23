@@ -53,8 +53,18 @@ describe('ScmOverview (TASK-PC-FE-167)', () => {
     expect(screen.getByTestId('scm-recent-pos')).toHaveTextContent('PO-1');
     // S5 obligation surfaced.
     expect(screen.getByTestId('scm-s5-warning')).toBeInTheDocument();
-    // Stat tiles, NOT nav links.
-    expect(screen.getByTestId('scm-overview').querySelector('a')).toBeNull();
+    // Stat tiles, NOT nav links — scoped to the count container so the
+    // 바로가기 nav's 가이드 link (PC-FE-257) is not counted.
+    expect(
+      screen.getByTestId('scm-overview-counts').querySelector('a'),
+    ).toBeNull();
+  });
+
+  it('links the overview to the SCM guide (PC-FE-257 discoverability parity)', () => {
+    render(<ScmOverview state={baseState()} />);
+    const link = screen.getByTestId('scm-overview-link-guide');
+    expect(link.tagName).toBe('A');
+    expect(link).toHaveAttribute('href', '/scm/guide');
   });
 
   it('no S5 warning when the inventory cell did not resolve', () => {

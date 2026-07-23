@@ -44,6 +44,19 @@ describe('EcommerceGuideScreen', () => {
     }
   });
 
+  it('mounts the 읽기경로 배너 (GuideReadingPath) and cross-links WMS fulfillment to the WMS guide (TASK-PC-FE-257)', () => {
+    render(<EcommerceGuideScreen />);
+    const banner = screen.getByTestId('ecommerce-guide-reading-path');
+    expect(banner).toBeInTheDocument();
+    // Points at sections that actually exist on this guide (주문 · 배송).
+    expect(within(banner).getByText('주문')).toBeInTheDocument();
+    expect(within(banner).getByText('배송')).toBeInTheDocument();
+    // The WMS-routed shipping note cross-links to the WMS guide.
+    const xlink = screen.getByTestId('ecommerce-guide-xlink-wms');
+    expect(xlink.tagName).toBe('A');
+    expect(xlink).toHaveAttribute('href', '/wms/guide');
+  });
+
   it('renders every domain service row', () => {
     render(<EcommerceGuideScreen />);
     for (const s of DOMAIN_SERVICES) {

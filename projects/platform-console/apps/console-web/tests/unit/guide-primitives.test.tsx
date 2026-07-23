@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import {
   Glossary,
+  GuideReadingPath,
   GuideRecipe,
   GuideToc,
   StateFlow,
@@ -87,6 +88,39 @@ describe('StateFlow', () => {
     render(<StateFlow states={states} />);
     const flow = screen.getByTestId('state-flow');
     expect(flow.getAttribute('aria-hidden')).toBe('true');
+  });
+});
+
+describe('GuideReadingPath (TASK-PC-FE-257)', () => {
+  it('renders the "처음이면 여기부터" banner with its title and guidance body', () => {
+    render(
+      <GuideReadingPath>처음이라면 재고와 출고부터 읽으세요.</GuideReadingPath>,
+    );
+    const banner = screen.getByTestId('guide-reading-path');
+    // A plain container (NOT a nested landmark — see GuideReadingPath doc).
+    expect(banner.tagName).toBe('DIV');
+    expect(within(banner).getByText('처음이면 여기부터')).toBeInTheDocument();
+    expect(
+      within(banner).getByText('처음이라면 재고와 출고부터 읽으세요.'),
+    ).toBeInTheDocument();
+  });
+
+  it('accepts a per-guide testid and an overridable title', () => {
+    render(
+      <GuideReadingPath testid="wms-guide-reading-path" title="이 화면 읽는 법">
+        본문
+      </GuideReadingPath>,
+    );
+    const banner = screen.getByTestId('wms-guide-reading-path');
+    expect(within(banner).getByText('이 화면 읽는 법')).toBeInTheDocument();
+  });
+
+  it('is WCAG AA axe-clean', async () => {
+    const { container } = render(
+      <GuideReadingPath>안내 문구</GuideReadingPath>,
+    );
+    const violations = await runAxe(container);
+    expect(violations).toEqual([]);
   });
 });
 

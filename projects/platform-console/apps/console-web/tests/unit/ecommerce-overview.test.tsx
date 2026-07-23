@@ -87,6 +87,13 @@ describe('EcommerceOverview (TASK-PC-FE-156 / TASK-PC-FE-164)', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it('links the overview to the E-Commerce guide (PC-FE-257 discoverability parity)', () => {
+    render(<EcommerceOverview state={baseState()} />);
+    const link = screen.getByTestId('ecommerce-overview-link-guide');
+    expect(link.tagName).toBe('A');
+    expect(link).toHaveAttribute('href', '/ecommerce/guide');
+  });
+
   it('renders count cards as quick-launch links with period values and total', () => {
     render(<EcommerceOverview state={baseState()} />);
     // Link href + testid
