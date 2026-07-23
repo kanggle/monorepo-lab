@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-_(없음)_
+- `TASK-PC-FE-257-domain-guide-comprehension-uplift-p2.md` — **가이드 이해도 개선 P2 (읽기경로 배너 + 발견성 + 교차링크)**. PC-FE-255(P0)·256(P1) 후속, UX 로드맵 종결. ① 공용 `GuideReadingPath`("처음이면 여기부터") — IAM 만 보유 → 나머지 5 가이드 배선. ② **발견성 straggler 교정**: IAM/Finance/ERP 개요는 `개요→가이드` 링크 보유하나 WMS/SCM/E-Comm 개요는 미보유(실측 0건) → Finance 패턴(`<domain>-overview-link-guide`) 복제. ③ 교차링크: 가이드 본문의 **진짜 교차도메인 참조만** 링크화(자기 도메인 용어·억지 제외, 실측). **🔴 착수=선행 측정**: 발견성은 기존 링크 마크업 정독 후 동일 testid 복제, 교차링크는 각 `data.ts` 렌더 문자열 실측. 가이드 `'use client'` 신규 도입 0·백엔드/계약 0, 기존 testid(255 `guide-toc`/`state-flow`·256 recipe/glossary·개요 `*-overview-*`) 보존. 분석=Opus 4.8 / 구현 권장=Opus.
 
 _(직전 완료)_ 콘솔 6도메인 기능↔메뉴 정렬 웨이브 + IAM 「권한」/「권한 세트」 화면(PC-FE-227/228) 완결. ADR-MONO-046 「운영자 그룹」 로드맵은 여전히 PROPOSED/PAUSED 게이팅.
 
