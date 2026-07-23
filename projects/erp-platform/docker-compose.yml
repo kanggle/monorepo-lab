@@ -196,9 +196,10 @@ services:
   # approval-service — TASK-ERP-BE-009 active. Approval Workflow bounded context
   # (first increment): ApprovalRequest aggregate + single-stage state machine +
   # no-self-approval + idempotent transitions + immutable audit + masterdata
-  # subject ref-check; publishes erp.approval.*.v1 through the outbox. Shares the
-  # erp_db MySQL instance (separate tables; no shared-table JOIN) and the Kafka
-  # broker. Path-based routing on erp.local: /api/erp/approval/** → approval-service
+  # subject ref-check; publishes erp.approval.*.v1 through the outbox. Uses its
+  # OWN erp_approval_db (TASK-ERP-BE-035 — previously shared erp_db and collided
+  # with masterdata/notification on flyway history + generic table names) + the
+  # Kafka broker. Path-based routing on erp.local: /api/erp/approval/** → approval-service
   # (priority=100, like read-model); everything else → masterdata-service
   # (catch-all, priority=1). v1 direct-routing bridge until gateway-service.
   # ---------------------------------------------------------------------------
@@ -216,7 +217,8 @@ services:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
       MYSQL_HOST: mysql
       MYSQL_PORT: "3306"
-      MYSQL_DB: ${MYSQL_DB:-erp_db}
+      # Own DB (created by infra/mysql-initdb/02-*). NOT erp_db. TASK-ERP-BE-035.
+      MYSQL_DB: erp_approval_db
       MYSQL_USER: ${MYSQL_USER:-erp}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-erp}
       REDIS_HOST: redis
@@ -253,7 +255,8 @@ services:
   # withdrawn}.v1, resolves recipient + renders, persists in-app Notification +
   # Category C delivery (IN_APP), serves a recipient-scoped read-only inbox
   # (event-consumer + rest-api dual-type). Terminal consumer (no outbox, no
-  # re-emission). Shares the erp_db MySQL instance (separate tables) + the Kafka
+  # re-emission). Uses its OWN erp_notification_db (TASK-ERP-BE-035 — previously
+  # shared erp_db and collided on flyway history + `processed_events`) + the Kafka
   # broker. Path-based routing on erp.local: /api/erp/notifications/** →
   # notification-service (priority=100, like read-model / approval); everything
   # else → masterdata-service (catch-all, priority=1). v1 direct-routing bridge
@@ -273,7 +276,8 @@ services:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
       MYSQL_HOST: mysql
       MYSQL_PORT: "3306"
-      MYSQL_DB: ${MYSQL_DB:-erp_db}
+      # Own DB (created by infra/mysql-initdb/02-*). NOT erp_db. TASK-ERP-BE-035.
+      MYSQL_DB: erp_notification_db
       MYSQL_USER: ${MYSQL_USER:-erp}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-erp}
       KAFKA_BOOTSTRAP: kafka:9092

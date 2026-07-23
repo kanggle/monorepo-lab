@@ -134,7 +134,7 @@ and the rule files indexed by `PROJECT.md`'s declared `domain` (`erp`) and
 | Primary language / stack | Java 21, Spring Boot 3.4 (Servlet stack) |
 | Bounded Context | Audit / Operations — notification fan-out (`rules/domains/erp.md` § Bounded Contexts: "결재 상신/승인/반려 … 알림"). **Notification logic only** (recipient resolution + message rendering); **no domain business logic** (no approval/master state machine), and **no authoritative-fact re-emission** (E5-adjacent boundary, see § Scope discipline) |
 | Deployable unit | `apps/notification-service/` |
-| Data store | MySQL `erp_db` (same instance as `masterdata-service` / `approval-service`, **separate tables** `notification` / `notification_delivery` / `processed_events`; no shared tables, no cross-service JOIN) |
+| Data store | MySQL `erp_notification_db` (its **own database** on the shared MySQL instance — TASK-ERP-BE-035; tables `notification` / `notification_delivery` / `processed_events`). Previously shared `erp_db`, but its `processed_events` + `V1__init` collided with masterdata/approval on one `flyway_schema_history` → crash-loop. A DB per service (mirroring read-model's `erp_read_model_db`) isolates the Flyway history and tables; no cross-service JOIN. |
 | Event publication | **None** — notification-service is a terminal consumer. It runs **no transactional outbox** and publishes **no** `erp.notification.*` topic (`rules/domains/erp.md` § Internal Event Catalog has **no** `erp.notification.*` entry — notification is a CONSUMER, not a producer). `OutboxMetricsAutoConfiguration` is **excluded** (TASK-MONO-406 deleted `OutboxAutoConfiguration` from the library outright), see § Outbox + audit_log invariants |
 | Event consumption | Kafka topics from `approval-service` (same project): the 4 transition topics `erp.approval.{submitted,approved,rejected,withdrawn}.v1` + `erp.approval.delegated.v1` (TASK-ERP-BE-014 — delegation-granted) + `erp.approval.delegation.revoked.v1` (TASK-ERP-BE-016 — delegation-revoked); both delegation topics `aggregateType = DelegationGrant`; `processed_events` dedupe, T8; consumer group `erp-notification-v1` |
 
@@ -700,7 +700,7 @@ The Kafka consumer trusts the producer's `tenantId = erp` envelope field
 |---|---|---|---|
 | In | erp `gateway-service` (v1 deferred) → direct JWT until then | HTTP `/api/erp/notifications/**` | tenant-validated JWT (entitlement-trust dual-accept) |
 | In | erp `approval-service` Kafka | Consumer subscribed to `erp.approval.{submitted,approved,rejected,withdrawn}.v1` | `processed_events` (T8) idempotent; closes the approval → notification loop |
-| Out | MySQL `erp_db` | JDBC | `notification` / `notification_delivery` / `processed_events` (separate tables; no shared-table JOIN with approval / masterdata) |
+| Out | MySQL `erp_notification_db` | JDBC | `notification` / `notification_delivery` / `processed_events` (own DB — TASK-ERP-BE-035; no shared-table JOIN with approval / masterdata) |
 | Out | IAM `/oauth2/jwks` | HTTPS | RS256 JWT verification (libs/java-security) |
 | Out (obs) | OTLP collector | HTTPS | `${OTLP_ENDPOINT}` traces |
 | Out (v2) | external channel (Slack/SMTP) | HTTPS/SMTP | **deferred** — `NoopExternalChannelAdapter` stub in v1; v2 wires the real adapter + Category C retry scheduler behind the same `NotificationChannelPort` |
