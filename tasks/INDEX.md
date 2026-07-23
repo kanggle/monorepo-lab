@@ -173,7 +173,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-476-claudemd-heading-level-normalization.md` — **🟢 REVIEW — CLAUDE.md heading-level 정규화(사용자 "claude.md 리팩토링" 요청).** refactor-spec discovery: CLAUDE.md 는 mechanical clean(dead-ref 0·anchor 전부 유효·"8 active" 정확·skip 0)이나 제목+12섹션이 **전부 H1**(저장소 다른 문서=H1제목+H2섹션 컨벤션과 어긋남). 12개 섹션 `#`→`##`(제목 `# CLAUDE.md` 만 H1 유지). **diff = 12개 마커뿐**(numstat 12/12 순수치환, 섹션 텍스트·규칙 본문 byte-unchanged → anchor·hook `§섹션명` 이름참조 무손상). **안전(측정)**: hook 3종은 CLAUDE.md 를 섹션 이름/`Test-Path` 로만 참조, **레벨 미파싱** → classifier-blocked `.claude/hooks/` 무영향. **F1/F5 defer 와 차이**: defer 근거 `hardstop-rules.md` 구조-파싱 hook 결합이 CLAUDE.md 엔 없음(MONO-475 와 같은 안전 인스턴스). 사용자 결정=정규화 진행. 분석·구현=Opus 4.8. [[project_mono_085_dead_reference_batch]]
 
 ## done
 

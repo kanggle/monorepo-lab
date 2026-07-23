@@ -4,7 +4,7 @@ Minimum operating rules for AI agents and developers in this monorepo. **Catalog
 
 ---
 
-# Repository Layout
+## Repository Layout
 
 ```
 <repo-root>/
@@ -32,7 +32,7 @@ See [`TEMPLATE.md`](TEMPLATE.md) for the Discovery → Distribution strategy.
 
 ---
 
-# Identify the Target Project (Read First)
+## Identify the Target Project (Read First)
 
 Before reading any spec or starting implementation:
 
@@ -47,7 +47,7 @@ Path conventions in this document:
 
 ---
 
-# Project Classification
+## Project Classification
 
 After the target project is identified, resolve rule layers:
 
@@ -62,7 +62,7 @@ Agents/skills split: `common/` (always) vs `domain/<domain>/` (matched domain on
 
 ---
 
-# Core Principles
+## Core Principles
 
 - Specifications are the source of truth.
 - Work must be executed through tasks.
@@ -72,7 +72,7 @@ Agents/skills split: `common/` (always) vs `domain/<domain>/` (matched domain on
 
 ---
 
-# Source of Truth Priority
+## Source of Truth Priority
 
 When documents conflict, higher number = lower priority:
 
@@ -97,7 +97,7 @@ If a source is empty or absent, skip to the next. Layers 2–4 conflict resoluti
 
 ---
 
-# Task Rules
+## Task Rules
 
 - Do not implement work without a task.
 - **Project-internal work** (changes inside a single `projects/<name>/`) → task in that project's `tasks/ready/`, follow `projects/<name>/tasks/INDEX.md`.
@@ -111,7 +111,7 @@ Lifecycle and review rules: `tasks/INDEX.md` (root) and each `projects/<name>/ta
 
 ---
 
-# Required Workflow
+## Required Workflow
 
 1. Read this file.
 2. Decide project-internal vs monorepo-level (`tasks/INDEX.md` § decision table).
@@ -133,7 +133,7 @@ Lifecycle and review rules: `tasks/INDEX.md` (root) and each `projects/<name>/ta
 
 ---
 
-# Hard Stop Rules
+## Hard Stop Rules
 
 Stop immediately if any of the conditions below holds. **Every Hard Stop emission MUST follow the 4-block format defined in [`platform/lint-remediation-message-standard.md`](platform/lint-remediation-message-standard.md)** — prose stops are not acceptable. Do not attempt workaround implementation.
 
@@ -156,7 +156,7 @@ The hook [`.claude/hooks/hardstop-detect.ps1`](.claude/hooks/hardstop-detect.ps1
 
 ---
 
-# Layer Rules
+## Layer Rules
 
 - **Architecture**: [`platform/architecture-decision-rule.md`](platform/architecture-decision-rule.md). Each service follows the architecture declared in its `<project>/specs/services/<service>/architecture.md`.
 - **Shared Library**: [`platform/shared-library-policy.md`](platform/shared-library-policy.md). No project-specific content in `libs/` — Hard-Stop-enforced.
@@ -165,7 +165,7 @@ The hook [`.claude/hooks/hardstop-detect.ps1`](.claude/hooks/hardstop-detect.ps1
 
 ---
 
-# Cross-Project Changes
+## Cross-Project Changes
 
 A change affecting multiple projects (e.g. shared library rule refactor that ripples into every project) must land in **one atomic PR**:
 
@@ -193,7 +193,7 @@ Full convention + branching + PR shape: [`docs/guides/monorepo-workflow.md`](doc
 
 ---
 
-# Local Network Convention
+## Local Network Convention
 
 Hostname-based routing via a single shared Traefik (`*.local` → `127.0.0.1`). Each project's gateway registers its hostname via docker-compose labels; backing services (postgres, redis, kafka, …) use `expose:` only (no host ports). Legacy `PORT_PREFIX` is fully retired (TASK-MONO-024). New projects must not reintroduce it.
 
@@ -202,7 +202,7 @@ Hostname-based routing via a single shared Traefik (`*.local` → `127.0.0.1`). 
 
 ---
 
-# Recommending Tasks and Dispatching Agents
+## Recommending Tasks and Dispatching Agents
 
 When recommending a task or implementation path, annotate with both the **analysis model** (current session) and the **recommended implementation model** based on task complexity: `(분석=<model> / 구현 권장=<model>)`. Example: `진행 권장 (분석=Opus 4.7 / 구현 권장=Sonnet 4.6 — 단순 fix)`.
 
