@@ -80,6 +80,9 @@ scm 도메인에서 공통으로 발생하는 에러는 [../../platform/error-ha
 - `SAFETY_STOCK_BELOW_MINIMUM` — 안전 재고가 정책 최소치 미만
 
 ### Logistics
+- `DISPATCH_NOT_FOUND` — 존재하지 않는 dispatch (운영자 inspect / `:retry` 대상 없음, SCM-BE-042)
+- `CARRIER_UNROUTABLE` — shipment 에 vendor 를 라우팅할 수 없음 (null carrierCode + 기본 vendor 없음 / 미매핑 region; `CarrierRouter` degrade, SCM-BE-043 예약, SCM-BE-042 등록)
+- `DISPATCH_ALREADY_COMPLETED` — 이미 DISPATCHED 된 dispatch 의 전이 시도 (409, SCM-BE-042)
 - `SHIPMENT_NOT_FOUND` — 존재하지 않는 shipment
 - `CARRIER_TIMEOUT` — carrier API 응답 시간 초과
 - `ROUTE_UNAVAILABLE` — 출발지·도착지 간 경로 없음

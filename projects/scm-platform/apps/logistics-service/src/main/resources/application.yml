@@ -1,0 +1,155 @@
+spring:
+  application:
+    name: scm-platform-logistics-service
+
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:postgres}:${POSTGRES_PORT:5432}/${POSTGRES_DB:scm_logistics}
+    username: ${POSTGRES_USER:scm}
+    password: ${POSTGRES_PASSWORD:scm}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  jpa:
+    hibernate:
+      # Flyway owns the schema — Hibernate validates only.
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc.time_zone: UTC
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration/logistics
+    baseline-on-migrate: true
+
+  # Kafka SCAFFOLD only. The seam consumer (@KafkaListener on
+  # wms.outbound.shipping.confirmed.v1, group scm-logistics-v1) is wired in
+  # TASK-SCM-BE-044 — no listener consumes this topic yet.
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:kafka:9092}
+    consumer:
+      group-id: scm-logistics-v1
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      enable-auto-commit: false
+      properties:
+        isolation.level: read_committed
+    listener:
+      ack-mode: manual
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER_URL:http://iam.local}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:${OIDC_ISSUER_URL:http://iam.local}/oauth2/jwks}}
+
+server:
+  port: ${SERVER_PORT:8080}
+  forward-headers-strategy: framework
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+
+logging:
+  level:
+    root: INFO
+    com.example.scmplatform.logistics: INFO
+    org.hibernate.SQL: WARN
+  pattern:
+    level: "%5p [traceId=%X{traceId:-} requestId=%X{requestId:-} tenantId=%X{tenantId:-}]"
+
+scmplatform:
+  oauth2:
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://iam.local},iam}
+    required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:scm}
+
+logistics:
+  # EasyPost carrier-aggregator dispatch (external-integrations.md §1).
+  # Auth = HTTP Basic (API key as username, empty password). base = api.easypost.com/v2.
+  # The dev fallback key is a placeholder — a missing/invalid key surfaces as
+  # DISPATCH_FAILED on first call (§6), never a boot failure.
+  easypost:
+    base-url: ${EASYPOST_BASE_URL:https://api.easypost.com/v2}
+    api-key: ${EASYPOST_API_KEY:easypost-test-key-placeholder}
+    connect-timeout-seconds: ${EASYPOST_CONNECT_TIMEOUT_SECONDS:5}
+    read-timeout-seconds: ${EASYPOST_READ_TIMEOUT_SECONDS:30}
+    # Dedicated pool — NOT shared with any other vendor (I9).
+    pool-max-total: ${EASYPOST_POOL_MAX_TOTAL:10}
+    pool-max-per-route: ${EASYPOST_POOL_MAX_PER_ROUTE:10}
+
+# Dedicated EasyPost resilience instances (external-integrations.md §1.5/§1.6/§1.8).
+# NOT shared with any other pool (I9). 429 is surfaced by the client as a
+# EasyPostRateLimitedException so it is RETRIED (retry-exceptions) while other 4xx
+# (HttpClientErrorException) are IGNORED (never retried, never open the circuit).
+resilience4j:
+  circuitbreaker:
+    instances:
+      easyPostDispatch:
+        failure-rate-threshold: 50
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        wait-duration-in-open-state: 60s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        register-health-indicator: false
+        record-exceptions:
+          - org.springframework.web.client.HttpServerErrorException
+          - org.springframework.web.client.ResourceAccessException
+          - java.io.IOException
+          - com.example.scmplatform.logistics.adapter.outbound.dispatch.EasyPostRateLimitedException
+        ignore-exceptions:
+          - org.springframework.web.client.HttpClientErrorException
+  retry:
+    instances:
+      easyPostDispatch:
+        max-attempts: 3
+        wait-duration: 1s
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        exponential-max-wait-duration: 4s
+        enable-randomized-wait: true
+        # ±200ms jitter at the ~1s base (external-integrations.md §1.6). resilience4j
+        # jitter is proportional to the interval, so this approximates ±200ms at 1s.
+        randomized-wait-factor: 0.2
+        retry-exceptions:
+          - org.springframework.web.client.HttpServerErrorException
+          - org.springframework.web.client.ResourceAccessException
+          - java.io.IOException
+          - com.example.scmplatform.logistics.adapter.outbound.dispatch.EasyPostRateLimitedException
+        ignore-exceptions:
+          - org.springframework.web.client.HttpClientErrorException
+          - io.github.resilience4j.circuitbreaker.CallNotPermittedException
+          - io.github.resilience4j.bulkhead.BulkheadFullException
+  bulkhead:
+    instances:
+      easyPostDispatch:
+        max-concurrent-calls: 10
+        # fail-fast → BulkheadFullException → DISPATCH_FAILED (I9).
+        max-wait-duration: 0

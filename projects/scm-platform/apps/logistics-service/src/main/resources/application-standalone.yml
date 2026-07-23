@@ -1,0 +1,16 @@
+# standalone profile — local / CI bring-up with NO vendor credentials.
+#
+# StandaloneDispatchAdapter (@Profile("standalone")) serves a deterministic
+# in-memory ack, so the dispatch path is exercised without EasyPost. The
+# EasyPost adapter (@Profile("!standalone")) and its dedicated pool are NOT
+# created under this profile (external-integrations.md § Test Suite; ADR-053
+# standalone parity). No EASYPOST_API_KEY is required.
+spring:
+  config:
+    activate:
+      on-profile: standalone
+
+logistics:
+  easypost:
+    # Present but unused under standalone — the EasyPost adapter is not loaded.
+    api-key: standalone-no-vendor-credentials

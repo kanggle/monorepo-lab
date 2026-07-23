@@ -490,14 +490,18 @@ Owned by `demand-planning-service` (ADR-MONO-027 reorder-suggestion loop). Optim
 
 ## Logistics  `[domain: scm]`
 
-Owned by `logistics-service` (carrier integration + routing + ETA tracking).
-Carrier-facing outbound integration with the same fail-transient posture as
-procurement's supplier leg. See [`rules/domains/scm.md`](../rules/domains/scm.md)
-§ Standard Error Codes (Logistics). No current emitter — scm services are
-v2-planned; these are catalogued from the domain rule file (TASK-MONO-473).
+Owned by `logistics-service` (carrier dispatch of confirmed shipments; ADR-MONO-053
+Phase 1). Carrier-facing outbound integration with the same fail-transient posture
+as procurement's supplier leg. See [`rules/domains/scm.md`](../rules/domains/scm.md)
+§ Standard Error Codes (Logistics). The first three codes are **live** as of
+TASK-SCM-BE-042 (`logistics-service` bootstrap); the tracking / ETA codes remain
+catalogued-only (Phase 2/3, no emitter yet).
 
 | Code | HTTP | Description |
 |---|---|---|
+| DISPATCH_NOT_FOUND | 404 | Dispatch record does not exist for the given id (`DispatchNotFoundException`) — operator inspect / `:retry` of an unknown dispatch (TASK-SCM-BE-042) |
+| CARRIER_UNROUTABLE | 422 | No vendor can be resolved for the shipment (null `carrierCode` with no default, or an unmapped region) — well-formed but cannot be routed → 422, matching `ROUTE_UNAVAILABLE` (`CarrierUnroutableException`). Reserved for the `CarrierRouter` degrade path (TASK-SCM-BE-043); logistics-service registers it now (TASK-SCM-BE-042) |
+| DISPATCH_ALREADY_COMPLETED | 409 | A transition was rejected because the dispatch is already in the terminal DISPATCHED state (`IllegalDispatchTransitionException`). `_ALREADY_` → 409, consistent with `PO_ALREADY_CONFIRMED` (TASK-SCM-BE-042) |
 | CARRIER_TIMEOUT | 503 | Carrier API exceeded its response deadline. `_TIMEOUT` → 503 (transient upstream), consistent with `SUPPLIER_UNAVAILABLE` / `CATALOG_SYNC_TIMEOUT` |
 | ROUTE_UNAVAILABLE | 422 | No route exists between the requested origin and destination — the request is well-formed but cannot be fulfilled → 422 (a business "cannot fulfil", NOT a 503 infra outage despite the `_UNAVAILABLE` suffix; semantic wins) |
 | ETA_EXPIRED | 422 | An operation was rejected because the shipment's ETA has already passed without a confirmed arrival (stale-ETA state precondition) → 422. If a deployment surfaces this purely as a monitoring flag rather than an API rejection, it carries no HTTP status (cf. `SLA_VIOLATION`) |

@@ -127,6 +127,10 @@ include(
     // TASK-SCM-BE-024: demand-planning-service — ADR-027 Phase 1 replenishment loop.
     // event-consumer (wms alert) + batch-job (nightly sweep) + rest-api (operator surface).
     'projects:scm-platform:apps:demand-planning-service',
+    // TASK-SCM-BE-042: logistics-service — ADR-MONO-053 Phase 1 carrier dispatch.
+    // event-consumer scaffold (wms outbound.shipping.confirmed seam, wired in BE-044) +
+    // rest-api operator surface (inspect + :retry) + EasyPost outbound dispatch adapter.
+    'projects:scm-platform:apps:logistics-service',
     'projects:scm-platform:tests:e2e'
 )
 

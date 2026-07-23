@@ -285,6 +285,27 @@ gate — `approve` materialises a **DRAFT** PO only (never auto-SUBMIT):
 > acknowledged in the subsections above and ride the same operator IAM OIDC
 > token; there is no list route for the seed pair (per-`{skuCode}` only).
 
+### `logistics-service` (TASK-SCM-BE-042, shipped — ADR-MONO-053 Phase 1)
+
+| Field | Value |
+|---|---|
+| External path predicate | `Path=/api/v1/logistics/**` |
+| Internal target | `${LOGISTICS_SERVICE_URI:http://logistics-service:8080}` |
+| RewritePath | `/api/v1/logistics/(?<segment>.*) → /api/logistics/${segment}` |
+| Auth | required (JWT) for all endpoints |
+| Rate limit | `replenishRate=1`, `burstCapacity=120`, key = `accountKeyResolver` |
+| Status | live |
+
+Live v1 endpoints (carrier-dispatch operator surface — inspect + re-drive a failed
+dispatch; ADR-053 §D2/§D8). The dispatch record itself is created by the wms
+`outbound.shipping.confirmed` seam consumer (TASK-SCM-BE-044) — there is **no**
+create-dispatch route:
+
+| Method | External path | Purpose | Idempotency |
+|---|---|---|---|
+| GET | `/api/v1/logistics/dispatches/{id}` | inspect a dispatch | n/a |
+| POST | `/api/v1/logistics/dispatches/{id}:retry` | re-drive a `DISPATCH_FAILED` dispatch | server-side by dispatch state + `Idempotency-Key={shipment.id}` (already-`DISPATCHED` → cached ack, no vendor call) |
+
 ### Local management endpoints
 
 | Path | Auth | Description |
@@ -304,9 +325,11 @@ These appear once the v2 services bootstrap (separate tasks):
 | External path | Owner | Bootstrap task |
 |---|---|---|
 | `/api/v1/suppliers/**` | supplier-service | deferred |
-| `/api/v1/logistics/**` | logistics-service | deferred |
 | `/api/v1/settlement/**` | settlement-service | deferred |
 | `/api/v1/admin/**` | admin-service | deferred |
+
+> `/api/v1/logistics/**` (logistics-service) graduated from deferred to **live** in
+> TASK-SCM-BE-042 (ADR-MONO-053 Phase 1) — see the route-catalogue entry above.
 
 ## References
 
@@ -319,3 +342,4 @@ These appear once the v2 services bootstrap (separate tasks):
 - TASK-SCM-BE-024 — demand-planning-service bootstrap (ADR-MONO-027 Phase 1; activated the `/api/v1/demand-planning/**` route)
 - TASK-SCM-BE-027 — platform-console operator-**action** consumer acknowledgment (demand-planning replenishment gate) + route-catalogue reconciliation
 - TASK-SCM-BE-028 — platform-console operator-**config (seed)** consumer acknowledgment (demand-planning reorder-policy + sku-supplier-map)
+- TASK-SCM-BE-042 — logistics-service bootstrap (ADR-MONO-053 Phase 1; activated the `/api/v1/logistics/**` route)

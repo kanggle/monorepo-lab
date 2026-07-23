@@ -1319,12 +1319,14 @@ jobs:
         # TASK-SCM-BE-002: procurement-service
         # TASK-SCM-BE-003: inventory-visibility-service
         # TASK-SCM-BE-024: demand-planning-service
+        # TASK-SCM-BE-042: logistics-service
         run: >-
           ./gradlew
           :projects:scm-platform:apps:gateway-service:check
           :projects:scm-platform:apps:procurement-service:check
           :projects:scm-platform:apps:inventory-visibility-service:check
           :projects:scm-platform:apps:demand-planning-service:check
+          :projects:scm-platform:apps:logistics-service:check
           --no-daemon --stacktrace
 
       - name: Build and check finance-platform backend (Docker-free)
@@ -1550,6 +1552,7 @@ jobs:
           :projects:scm-platform:apps:procurement-service:bootJar
           :projects:scm-platform:apps:inventory-visibility-service:bootJar
           :projects:scm-platform:apps:demand-planning-service:bootJar
+          :projects:scm-platform:apps:logistics-service:bootJar
           --no-daemon --stacktrace
 
       - name: Upload scm-platform boot jars
@@ -1565,6 +1568,7 @@ jobs:
             projects/scm-platform/apps/procurement-service/build/libs/procurement-service.jar
             projects/scm-platform/apps/inventory-visibility-service/build/libs/inventory-visibility-service.jar
             projects/scm-platform/apps/demand-planning-service/build/libs/demand-planning-service.jar
+            projects/scm-platform/apps/logistics-service/build/libs/logistics-service.jar
           retention-days: 1
 
   frontend-unit-tests:
@@ -2055,6 +2059,7 @@ jobs:
         :projects:scm-platform:apps:procurement-service:integrationTest
         :projects:scm-platform:apps:inventory-visibility-service:integrationTest
         :projects:scm-platform:apps:demand-planning-service:integrationTest
+        :projects:scm-platform:apps:logistics-service:integrationTest
       artifact-name: scm-integration-test-reports
       report-paths: |
         projects/scm-platform/apps/*/build/reports/tests/integrationTest/
@@ -2399,7 +2404,8 @@ jobs:
           {"name":"gateway-service","image":"scm-platform-gateway-service:e2e","prop":"scm.e2e.gatewayImage"},
           {"name":"procurement-service","image":"scm-platform-procurement-service:e2e","prop":"scm.e2e.procurementImage"},
           {"name":"inventory-visibility-service","image":"scm-platform-inventory-visibility-service:e2e","prop":"scm.e2e.inventoryVisibilityImage"},
-          {"name":"demand-planning-service","image":"scm-platform-demand-planning-service:e2e","prop":"scm.e2e.demandPlanningImage"}
+          {"name":"demand-planning-service","image":"scm-platform-demand-planning-service:e2e","prop":"scm.e2e.demandPlanningImage"},
+          {"name":"logistics-service","image":"scm-platform-logistics-service:e2e","prop":"scm.e2e.logisticsImage"}
         ]
       report-artifact: scm-platform-e2e-test-reports
       report-paths: |

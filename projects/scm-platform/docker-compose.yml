@@ -250,6 +250,49 @@ services:
       start_period: 30s
 
   # ---------------------------------------------------------------------------
+  # logistics-service — activated by TASK-SCM-BE-042 (ADR-MONO-053 Phase 1).
+  # Carrier dispatch of confirmed shipments: EasyPost outbound leg + operator
+  # :retry. Kafka seam consumer (outbound.shipping.confirmed) is scaffold-only
+  # here (wired in BE-044). Reached externally via gateway /api/v1/logistics/**.
+  # ---------------------------------------------------------------------------
+  logistics-service:
+    image: scm-platform/logistics-service:local
+    container_name: scm-platform-logistics
+    build:
+      context: ./apps/logistics-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: scm_logistics
+      POSTGRES_USER: ${POSTGRES_USER:-scm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scm}
+      # Cross-project seam source (wms outbound.shipping.confirmed). Same cluster in dev.
+      KAFKA_BOOTSTRAP: ${WMS_KAFKA_BOOTSTRAP:-kafka:9092}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://iam.local}
+      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://iam.local/oauth2/jwks}
+      # EasyPost dispatch — test key via env (§6). Absent key → DISPATCH_FAILED on
+      # first call, never a boot failure. Use the standalone profile for no-vendor bring-up.
+      EASYPOST_API_KEY: ${EASYPOST_API_KEY:-easypost-test-key-placeholder}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - scm-platform-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
   # inventory-visibility-service — activated by TASK-SCM-BE-003.
   # Cross-node read-model: wms event consumer + staleness batch + REST API.
   # ---------------------------------------------------------------------------

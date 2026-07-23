@@ -94,7 +94,7 @@
 
 - **domain**: `scm` · **traits**: `transactional`, `integration-heavy`, `batch-heavy`
 - **포지션**: **Phase 4 catalyst 도메인** ([ADR-MONO-002](adr/ADR-MONO-002-phase-4-template-extraction-trigger.md)). `batch-heavy` trait 의 첫 사용 사례.
-- **상태**: v1 = 3 service skeleton + INT-001 series 완료 (2026-05-07). v1.1 = `demand-planning-service` 라이브 (SCM-BE-024)
+- **상태**: v1 = 3 service skeleton + INT-001 series 완료 (2026-05-07). v1.1 = `demand-planning-service` 라이브 (SCM-BE-024). v1.2 = `logistics-service` Phase 1 라이브 (ADR-MONO-053, SCM-BE-042)
 - **service map (v1.x)**:
 
 | Service | Type | 책임 |
@@ -103,8 +103,9 @@
 | `procurement-service` | rest-api | PO 발행/확정/취소, supplier ack, ASN 수신 |
 | `inventory-visibility-service` | rest-api | cross-node 재고 가시성 (read-model, wms snapshot 구독) |
 | `demand-planning-service` | event-consumer + batch-job + rest-api | ADR-027 Phase 1 보충 루프 — wms 저재고 alert 구독 + nightly sweep + 보충 제안 / reorder policy / sku-supplier map 운영 표면 (SCM-BE-024) |
+| `logistics-service` | event-consumer + rest-api | ADR-MONO-053 Phase 1 — wms `outbound.shipping.confirmed` 구독(BE-044 배선) + EasyPost 캐리어 dispatch + 운영자 `:retry`. 3PL/추적/ETA 는 Phase 2/3 deferred (SCM-BE-042) |
 
-- **v2 deferred**: `supplier-service`, `logistics-service`, `settlement-service`, `notification-service`, `admin-service`
+- **v2 deferred**: `supplier-service`, `settlement-service`, `notification-service`, `admin-service`
 - **wms 와의 차별점**: wms = 단일 창고 내부 동선 (한 노드). scm = 노드들의 그래프 (조달 → 운송 → 정산).
 - **콘솔 운영 read consumer 런타임 정합 (2026-06-02~03, MONO-170 데모 표면화)**: `procurement` PO read 의 decimal 필드가 Jackson number → 콘솔 `z.string()` parse-fail = decimal-string 계약 위반 → `@JsonFormat(shape=STRING)` (SCM-BE-020); `inventory-visibility` globex 시드 non-UUID id 불변식 위반 (MONO-171) + corrupt read-model 재구성이 무로깅 `422` 로 둔갑 → `ReadModelCorruptException` → `500`+log 재정정 (SCM-BE-021). 이로써 SCM 운영 카드가 acme/globex 양 테넌트 풀 렌더.
 
