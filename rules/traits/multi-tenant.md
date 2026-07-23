@@ -87,12 +87,6 @@
 
 ---
 
-## Overrides
-
-해당 없음. common rule 과 충돌 없음. 단 `transactional` T1 의 idempotency 키는 tenant_id 와 함께 namespace 형성 (`<tenant>:<endpoint>:<idem-key>`) — 본 trait 와 자연 부합.
-
----
-
 ## Forbidden Patterns
 
 - 단일 admin 콘솔이 cross-tenant 데이터 화면 노출하면서 audit log 미적용 — leak 사고 시 책임 추적 불가
@@ -103,3 +97,38 @@
 - 다른 tenant 의 ID enumeration 후 403 응답 받아 존재 확인 — 404 over 403 룰 위반
 - async worker / batch job 이 SecurityContext 없는 상태에서 tenant context 추론 누락 — 첫 row 의 tenant 로 모든 row 처리
 - multi-tenant 가드 부재 service 가 outbox 통해 cross-tenant 이벤트 publish — consumer 측에서 tenant filter 우회
+
+---
+
+## Required Artifacts
+
+multi-tenant trait 이 활성화된 프로젝트는 다음 산출물을 **필수**로 갖춘다:
+
+1. **Tenant 격리 전략 문서** — 선택한 분리 전략(shared-schema + `tenant_id` NOT NULL 기본), DB/Redis/객체 스토리지/검색 인덱스의 tenant 키 규칙 (M1). 위치: `specs/services/<service>/tenancy.md` 또는 `knowledge/architecture/tenancy.md`.
+2. **3-layer isolation 맵** — Gateway JWT claim 검증 → Service-level final guard(`TenantClaimEnforcer` 등) → Persistence `WHERE tenant_id` 자동 주입, 각 layer 의 책임 (M2). 위치: `specs/services/<service>/security.md`.
+3. **Cross-tenant leak 회귀 테스트** — `MultiTenantIsolationTest`(READ→404, WRITE→403), event consumer 인 경우 `CrossTenantEventConsumptionTest`(mismatch envelope silent drop) (M6). 위치: `apps/<service>/src/test/...`.
+4. **Tenant context 전파 스키마** — Kafka envelope/이벤트/outbox row 의 `tenant_id` 필드, 비동기 워커/scheduler 의 명시적 전달 규칙 (M5). 위치: `specs/contracts/events/` 또는 envelope schema.
+5. **Per-tenant rate limit / quota 정책** — (tenant_id, route_id) 키 rate limit, connection pool 격리, list endpoint 의 필수 `LIMIT` (M7). 위치: `specs/services/<service>/rate-limit.md`.
+
+---
+
+## Interaction with Common Rules
+
+- [../../platform/error-handling.md](../../platform/error-handling.md) 의 `TENANT_FORBIDDEN` (403) 를 cross-tenant write 와 non-allowed tenant claim 에, cross-tenant read 는 `NOT_FOUND` (404) 로 매핑한다 (M2·M3 — existence leak 방지).
+- [../../platform/testing-strategy.md](../../platform/testing-strategy.md) 의 Integration 레이어에서 M6 의 cross-tenant leak 회귀 테스트를 모든 multi-tenant service 에 필수 포함한다(1개라도 누락 시 review block).
+- [transactional.md](transactional.md) **(함께 선언 시)**: T1 의 idempotency 키는 tenant_id 와 함께 namespace 를 형성한다 (`<tenant>:<endpoint>:<idem-key>`) — 본 trait 와 자연 부합.
+- [regulated.md](regulated.md) · [audit-heavy.md](audit-heavy.md) **(함께 선언 시)**: 본 trait 의 tenant 격리 보장이 그 두 trait 의 컴플라이언스·감사 요건을 떠받친다 (특히 M3 예외의 SUPER_ADMIN cross-tenant 조회는 별도 audit-log 강제).
+
+---
+
+## Checklist (Review Gate)
+
+- [ ] 모든 영속 데이터 row/키(DB·Redis·객체 스토리지·검색 인덱스)가 `tenant_id`(NOT NULL) 또는 tenant prefix 를 갖는가? (M1)
+- [ ] Gateway → Service-level guard → Persistence 의 3-layer 격리가 모두 존재하고 하나도 누락되지 않았는가? (M2)
+- [ ] Cross-tenant read 가 404(NOT 403)를, cross-tenant write 가 403 을 반환하는가? (M3)
+- [ ] list/search endpoint 가 tenant context 없이 호출 시 default deny 이고 pagination cursor 에 tenant_id 가 인코딩되는가? (M4)
+- [ ] Kafka envelope/outbox/async 워커가 tenant_id 를 NOT NULL 로 전파·검증하는가? (M5)
+- [ ] Cross-tenant leak 회귀 테스트(READ 404 / WRITE 403 / event mismatch drop)가 존재하는가? (M6)
+- [ ] Rate limit/quota 가 (tenant_id, route) 키이고 무한 query 가 금지되는가? (M7)
+- [ ] Tenant 격리 전략·3-layer 맵·leak 회귀 테스트·context 전파 스키마·rate-limit 정책 문서가 존재하는가?
+- [ ] 금지 패턴(`WHERE tenant_id` 누락, claim-만 검증, tenant prefix 없는 Redis 키, 403-로-존재확인, async tenant 추론 누락)이 존재하지 않는가?
