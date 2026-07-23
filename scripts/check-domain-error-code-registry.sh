@@ -34,15 +34,16 @@
 # per-domain rationale) while making a drift from the registry fail loudly the
 # moment it appears, instead of a manual audit months later.
 #
-# SCOPE (measured, not assumed — TASK-MONO-472)
-# ---------------------------------------------
-# The first live run flagged 26 codes; classified, that was 6 false positives
-# (description-embedded ABAC attributes / roles / event enums) and a genuine
-# PRE-EXISTING gap of 20 codes across erp / fan-platform / scm — domain codes
-# never registered. Registering those needs an HTTP-status decision per code, so
-# those three domains are EXCLUDED here (see UNRECONCILED below) and reconciled in
-# TASK-MONO-473. This guard covers the four already-clean domains (wms, ecommerce,
-# fintech, saas) day-one green, and each excluded domain joins as it is reconciled.
+# SCOPE (measured, not assumed — TASK-MONO-472 / TASK-MONO-473)
+# ------------------------------------------------------------
+# The first live run (MONO-472) flagged 26 codes; classified, that was 6 false
+# positives (description-embedded ABAC attributes / roles / event enums) and a
+# genuine PRE-EXISTING gap of 20 codes across erp / fan-platform / scm — domain
+# codes never registered. MONO-472 shipped guarding the four already-clean domains
+# (wms, ecommerce, fintech, saas) day-one green and EXCLUDED the three with the gap
+# (a per-code HTTP-status decision, not a refactor). MONO-473 then reconciled the
+# 20: 18 registered in error-handling.md and 2 fixed as token drift in the domain
+# file. All SEVEN domains are now guarded by default (nothing excluded).
 #
 # WHAT IS AND IS NOT CHECKED (the false-positive frontier)
 # -------------------------------------------------------
@@ -164,23 +165,19 @@ registered="$(registered_codes "$REGISTRY")"
 [ -n "$registered" ] || { echo "FATAL: parsed 0 codes out of $REGISTRY — the guard would pass vacuously" >&2; exit 2; }
 
 # Domains whose Standard Error Codes section declares codes NOT YET in the
-# registry — a PRE-EXISTING drift measured on 2026-07-23 (TASK-MONO-472),
-# reconciled separately in TASK-MONO-473. They are EXCLUDED here, not fixed by
-# this guard, because bringing them green means REGISTERING those codes (an HTTP
-# status + description per code = a platform-contract decision, not a refactor).
-# A guard red on day one gets switched off (testing-strategy.md § G2); the honest
-# move is to guard the domains that are already clean and state the gap (§ G8).
-# As each domain is reconciled in MONO-473, delete it from this list.
-#   erp          1 code : READ_MODEL_SOURCE_UNAVAILABLE
-#   fan-platform 7 codes: ARTIST_INACTIVE, FOLLOW_SELF_FORBIDDEN, REACTION_INVALID_EMOJI,
-#                         MEMBERSHIP_EXPIRED, MEMBERSHIP_DOWNGRADE_BLOCKED,
-#                         POST_REPORTED_PENDING_REVIEW, MODERATION_DECISION_REQUIRED
-#   scm          12 codes: SUPPLIER_CONTRACT_EXPIRED, SLA_VIOLATION, CATALOG_SYNC_TIMEOUT,
-#                         FORECAST_PERIOD_INVALID, REORDER_POINT_NEGATIVE,
-#                         FORECAST_DATA_INSUFFICIENT, SAFETY_STOCK_BELOW_MINIMUM,
-#                         CARRIER_TIMEOUT, ROUTE_UNAVAILABLE, ETA_EXPIRED,
-#                         INVOICE_AMOUNT_MISMATCH, SETTLEMENT_NOT_READY
-UNRECONCILED="${DOMAIN_ERRCODE_EXCLUDE:-erp fan-platform scm}"
+# registry. This was a PRE-EXISTING drift of 20 codes across erp / fan-platform /
+# scm, measured on 2026-07-23 (TASK-MONO-472) and RECONCILED in TASK-MONO-473:
+# 18 codes registered in error-handling.md (status per suffix-convention + the
+# same-subsection siblings, rationale in each row) and 2 fan-platform codes fixed
+# in the domain file as token drift of already-registered emitted codes
+# (`FOLLOW_SELF_FORBIDDEN` → `SELF_FOLLOW_FORBIDDEN`, `REACTION_INVALID_EMOJI` →
+# `REACTION_INVALID_TYPE`). All 7 domains are now clean and guarded by default.
+#
+# The list stays empty but OVERRIDABLE via DOMAIN_ERRCODE_EXCLUDE: if a future
+# domain adds an unregistered code and registering it needs a deferred HTTP-status
+# decision, exclude that domain here with a MONO-473-style reconcile task rather
+# than letting the guard go red on day one (testing-strategy.md § G2 / § G8).
+UNRECONCILED="${DOMAIN_ERRCODE_EXCLUDE:-}"
 
 mapfile -t domain_files < <(git ls-files 'rules/domains/*.md' | LC_ALL=C sort)
 if [[ ${#domain_files[@]} -eq 0 ]]; then
@@ -218,7 +215,7 @@ done
 echo
 if [[ $fail -eq 0 ]]; then
   echo "check-domain-error-code-registry: OK — $(( ${#domain_files[@]} - skipped )) reconciled domain file(s), ${checked} declared code(s), all registered."
-  echo "  ${skipped} domain(s) excluded pending TASK-MONO-473 registration (see UNRECONCILED)."
+  echo "  ${skipped} domain(s) excluded via DOMAIN_ERRCODE_EXCLUDE (see UNRECONCILED)."
 else
   echo "check-domain-error-code-registry: FAILED — ${findings} unregistered domain code(s)."
   echo "  Register in ${REGISTRY} first, or fix to the registered name."
