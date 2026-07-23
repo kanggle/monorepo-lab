@@ -1,7 +1,7 @@
 # TASK-BE-529 — notification-service: CI-robust SKIP-LOCKED exclusivity IT (two-claimant no-double-claim)
 
 - **Type**: TASK-BE (test-coverage — deferred from TASK-BE-528 AC-2)
-- **Status**: review
+- **Status**: done
 - **Service**: notification-service (wms-platform)
 - **Domain/traits**: wms / [event-driven, transactional, multi-tenant]
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (concurrency + CI-lane behaviour)
