@@ -11,6 +11,7 @@ import {
 } from '../data';
 import {
   AttentionCell,
+  GuideToc,
   Mono,
   NoteCard,
   StateTh,
@@ -25,6 +26,14 @@ import {
  * 가이드(IamGuideScreen) · WMS 가이드(WmsGuideScreen)와 동일 패턴.
  */
 
+const SECTIONS = [
+  { id: 'finance-guide-services', label: '도메인 서비스' },
+  { id: 'finance-guide-screens', label: '콘솔 화면' },
+  { id: 'finance-guide-account-states', label: '계좌 상태' },
+  { id: 'finance-guide-kyc', label: 'KYC 레벨' },
+  { id: 'finance-guide-concepts', label: '핵심 개념' },
+];
+
 export function FinanceGuideScreen() {
   return (
     <section aria-labelledby="finance-guide-heading" data-testid="finance-guide">
@@ -37,6 +46,8 @@ export function FinanceGuideScreen() {
         finance-platform 마이크로서비스 구성, 그리고 규제 계좌 상태 · KYC ·
         금액 표현(F5) · 복식부기 · 대사 · FX 신선도 개념을 정리한 참조입니다.
       </p>
+
+      <GuideToc items={SECTIONS} />
 
       {/* ───────────────── 도메인 서비스 맵 ───────────────── */}
       <h2

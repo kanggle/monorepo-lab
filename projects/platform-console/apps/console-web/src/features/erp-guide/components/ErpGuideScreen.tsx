@@ -13,8 +13,10 @@ import {
 } from '../data';
 import {
   AttentionCell,
+  GuideToc,
   Mono,
   NoteCard,
+  StateFlow,
   StateTh,
   TerminalCell,
 } from '@/shared/ui/guide-primitives';
@@ -29,6 +31,16 @@ import {
  * IAM 가이드(IamGuideScreen) · WMS 가이드(WmsGuideScreen)와 동일 패턴.
  */
 
+const SECTIONS = [
+  { id: 'erp-guide-services', label: '도메인 서비스' },
+  { id: 'erp-guide-screens', label: '콘솔 화면' },
+  { id: 'erp-guide-master-states', label: '마스터 상태' },
+  { id: 'erp-guide-employment-states', label: '직원 재직 상태' },
+  { id: 'erp-guide-approval-states', label: '결재 상태' },
+  { id: 'erp-guide-delegation-scopes', label: '위임 스코프' },
+  { id: 'erp-guide-concepts', label: '핵심 개념' },
+];
+
 export function ErpGuideScreen() {
   return (
     <section aria-labelledby="erp-guide-heading" data-testid="erp-guide">
@@ -42,6 +54,8 @@ export function ErpGuideScreen() {
         상태 · 결재 상태머신 · 위임 스코프 · effective-dating(`asOf`) ·
         read-model 투영 · 알림 통합 개념을 정리한 참조입니다.
       </p>
+
+      <GuideToc items={SECTIONS} />
 
       {/* ───────────────── 도메인 서비스 맵 ───────────────── */}
       <h2
@@ -242,6 +256,7 @@ export function ErpGuideScreen() {
         상태 6종입니다. 경로: <Mono>DRAFT → SUBMITTED → IN_REVIEW(2~N 단계) →
         APPROVED | REJECTED | WITHDRAWN</Mono>.
       </p>
+      <StateFlow states={APPROVAL_STATUSES} />
       <div className="mb-10 overflow-x-auto">
         <table
           className="data-table"

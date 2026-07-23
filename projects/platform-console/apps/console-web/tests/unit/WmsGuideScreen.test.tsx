@@ -26,6 +26,31 @@ describe('WmsGuideScreen', () => {
     expect(screen.getByTestId('wms-guide-outbound')).toBeInTheDocument();
   });
 
+  it('renders the in-page TOC with a link per existing section id (TASK-PC-FE-255)', () => {
+    render(<WmsGuideScreen />);
+    const toc = screen.getByTestId('guide-toc');
+    for (const id of [
+      'wms-guide-inventory',
+      'wms-guide-outbound',
+      'wms-guide-roles',
+    ]) {
+      const link = within(toc).getByTestId(`guide-toc-${id}`);
+      expect(link.getAttribute('href')).toBe(`#${id}`);
+      // The linked section id must actually exist on the page — no drift.
+      expect(document.getElementById(id)).not.toBeNull();
+    }
+  });
+
+  it('renders the order-state flow diagram above the order-state table (TASK-PC-FE-255)', () => {
+    render(<WmsGuideScreen />);
+    const flow = screen.getByTestId('state-flow');
+    for (const s of ORDER_STATES) {
+      expect(within(flow).getByTestId(`state-flow-${s.name}`)).toBeInTheDocument();
+    }
+    // The table remains — the diagram is additive, not a replacement.
+    expect(screen.getByTestId('wms-guide-order-states')).toBeInTheDocument();
+  });
+
   it('renders every stock bucket with its field + pickability', () => {
     render(<WmsGuideScreen />);
     const table = screen.getByTestId('wms-guide-buckets');

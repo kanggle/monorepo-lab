@@ -87,8 +87,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-PC-FE-255-domain-guide-comprehension-uplift.md` — **가이드 UX 개선 (2026-07-23)** — 6개 도메인 GuideScreen 전문 정독 기반 이해도 평가(종합 A−)에서 도출한 **P0**: ① 페이지 내 목차(기존 섹션 `id` 소스, 하드코딩 금지) ② 상태 전이 시각 다이어그램(기존 상태표 상단 보조, `TerminalCell`(●) 시맨틱 재사용). 순수 presentation 레이어 — 신규 데이터/백엔드/계약 0, `'use client'` 미도입, 기존 `data-testid` 보존. 대상 = `features/*-guide/*GuideScreen.tsx` 6종 + `shared/ui/guide-primitives.tsx`. **backlog→ready 게이트 충족**: spec=console-web architecture + `docs/conventions/frontend-ui.md` 정합, 계약 무관(presentation-only), AC 명확, 선행 없음. P1(작업 레시피·용어 정의)·P2(읽기경로 배너·발견성/교차링크)는 이 태스크 머지 후 별도 발행.
-
 _(직전 완료)_ 콘솔 6도메인 기능↔메뉴 정렬 웨이브 + IAM 「권한」/「권한 세트」 화면(PC-FE-227/228) 완결. ADR-MONO-046 「운영자 그룹」 로드맵은 여전히 PROPOSED/PAUSED 게이팅.
 
 _(직전 완료)_ **IAM 「권한」/「권한 세트」 화면 완료** (PC-FE-227/228 DONE, 2026-07-09, PR #2343 squash `cbdc1a04`). `/permissions`·`/permission-sets` 스텁을 BE-486 RBAC 카탈로그(`GET /api/admin/roles`+`/permissions`, 게이트 `operator.manage`) 위 read-only 화면으로 대체. 공유 클라이언트 `shared/api/rbac-catalog.ts`(228=role을 권한 세트로 재프레이밍, 별도 엔드포인트 없음). native `<details>` drill-down·SSR 회복탄력성(operators/audit 매퍼 미러). vitest 2696/2696. **→ BE-486 언블록 소비 완료.**
@@ -112,6 +110,8 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 (empty)
 
 ## review
+
+- `TASK-PC-FE-255-domain-guide-comprehension-uplift.md` — **가이드 UX 개선 P0 구현 → review** (2026-07-23). ① `GuideToc`(기존 섹션 `id` 소스 앵커 목차) + ② `StateFlow`(상태 칩+화살표, `TerminalCell` ● 시맨틱 재사용) 공용 프리미티브 신설 후 6 GuideScreen 배선. GuideToc=6종 전부, StateFlow=WMS 주문·E-Commerce 주문/배송·ERP 결재·SCM 발주. 순수 server-component presentation(신규 데이터/백엔드/계약 0, `'use client'` 미도입), 기존 `data-testid` 보존. 신규 id 3개 추가(`wms-guide-roles`·`scm-guide-roles`·`ecommerce-guide-roles` — 기존 id 없던 도메인-롤 h2). **검증**: tsc 0·lint 0·vitest 2884 통과(신규 `guide-primitives.test.tsx` 6 + `WmsGuideScreen` +2, 회귀 0). 편차(정직): StateFlow 컨테이너 `aria-hidden`(표가 canonical AT 소스) + TOC는 sticky 아닌 top-placed(AC 허용·모바일 가림 회피). 구현=frontend-engineer(Sonnet)/격리 worktree. spec PR #2916(backlog→ready 승격) 스택.
 
 ## done
 
