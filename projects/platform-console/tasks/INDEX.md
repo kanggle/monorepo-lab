@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-PC-FE-256-domain-guide-comprehension-uplift-p1.md` — **가이드 이해도 개선 P1 (작업 레시피 + 용어 정의)**. PC-FE-255(P0 목차·다이어그램, #2917) 후속. ① 공용 `GuideRecipe`(번호형 "이럴 땐 이렇게" 절차, IAM `DELEGATION_CHAIN` `<ol>` 패턴 공용화) 6도메인 각 2~3개 + ② 용어 정의(인라인 `Term`/`<abbr>` 및/또는 미니 `Glossary`). **🔴 착수=선행 측정 필수**: 용어 목록을 255 done 노트 예시(`assume-tenant`·`read-model`·`S5`·`F5`)에서 **상속 금지** — 실측 결과 그 용어들은 코드 주석에만 있고 가이드 사용자 문자열엔 거의 없음(가이드는 이미 평이한 한글). 각 `*-guide/data.ts` 렌더 콘텐츠를 전수 측정해 "일반 운영자가 모를 용어"만 정의, 레시피는 실제 상태·메뉴만 참조. 순수 server-component(신규 데이터/백엔드/계약 0, `'use client'` 미도입), 기존 `data-testid`+255 `guide-toc`/`state-flow` 보존. 분석=Opus 4.8 / 구현 권장=Opus(6도메인 용어 선별·레시피 정확성=도메인 판단).
+_(없음)_
 
 _(직전 완료)_ 콘솔 6도메인 기능↔메뉴 정렬 웨이브 + IAM 「권한」/「권한 세트」 화면(PC-FE-227/228) 완결. ADR-MONO-046 「운영자 그룹」 로드맵은 여전히 PROPOSED/PAUSED 게이팅.
 
@@ -113,7 +113,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
-_(없음)_
+- `TASK-PC-FE-256-domain-guide-comprehension-uplift-p1.md` — **가이드 이해도 개선 P1 구현 → review** (2026-07-23). PC-FE-255(P0) 후속. ① 공용 `GuideRecipe`(번호형 "이럴 땐 이렇게", IAM `DELEGATION_CHAIN` 마커 스타일 재사용) 6도메인 **각 3개** + ② 용어 정의 = 도메인별 미니 `Glossary`(용어\|뜻 2열, `<dfn>`+약어 `Term`/`<abbr>`) + 인라인 `Term`. 신규 섹션 `<domain>-guide-recipes`·`-glossary` 를 255 `GuideToc` 에 추가. **🔵 재측정 적용(상속 안 함)**: 각 `data.ts` 렌더 문자열을 실측해 용어 선별 — `assume-tenant` 는 WMS/SCM/E-Comm 산문엔 렌더되나 IAM엔 없어 IAM 용어집서 제외, `F5`/`producer`/`사가`-코드명은 내부어라 기각하고 운영자-facing 개념으로 대체 정의. 용어 수: IAM 3·WMS 4·SCM 4·Finance 5·ERP 4·E-Comm 5. 순수 server-component(신규 데이터/백엔드/계약 0, `'use client'` 0), 기존 `data-testid`+`guide-toc`/`state-flow` 보존. **검증**: tsc 0 · `next lint` 0 · 가이드 테스트 42/42(신규 primitives 13 + Wms 14 + Ecommerce 15, axe-clean 6화면) — full-suite 3 실패는 무관 파일(LedgerOps·OutboundOps) 워커 flake로 격리 재실행 GREEN(CI가 권위). **편차(정직)**: Lever B는 침습적인 기존 산문 인라인 래핑 대신 항상 보이는 `Glossary` "뜻" 열로 구현(키보드/모바일 도달, hover 비의존) — `Term`/`<abbr>` 는 용어집 약어에 사용. 구현=frontend-engineer(Opus)/격리 worktree, 분석=Opus 4.8.
 
 ## done
 
