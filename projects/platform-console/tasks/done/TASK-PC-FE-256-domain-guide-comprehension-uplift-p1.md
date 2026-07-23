@@ -1,6 +1,6 @@
 # TASK-PC-FE-256 — 도메인 가이드 이해도 개선 P1 (작업 레시피 + 용어 정의)
 
-**Status:** review
+**Status:** done
 **Area:** platform-console / console-web · **Files:** `src/features/*-guide/{components/*GuideScreen.tsx,data.ts}` (6종) + `src/shared/ui/guide-primitives.tsx`
 **Type:** TASK-PC-FE (frontend, 순수 presentation 레이어)
 
