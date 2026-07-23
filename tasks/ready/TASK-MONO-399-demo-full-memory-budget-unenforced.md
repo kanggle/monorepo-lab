@@ -20,6 +20,56 @@ monorepo
 - demo
 - observability
 
+---
+
+# 🔬 실측 결과 (2026-07-23, 데모 호스트 `i-070c54a...`, AMI `ami-0b6b962d3f3f23865` = as-baked `f5288a7b1`)
+
+**AC-0~AC-5 완료 · AC-6 은 [`TASK-ERP-BE-035`](../../projects/erp-platform/tasks/ready/TASK-ERP-BE-035-shared-erp-db-flyway-history-collision.md) 머지 후로 연기(사용자 판단 2026-07-23 — 이중 bake 회피).**
+
+1회 기동(`terraform apply` → `/start` → SSM 측정 → `terraform destroy`), 실비용 ≈ 인스턴스 27분 $0.23(packer 미수행). 원시 로그: 세션 scratchpad `measure_out.txt`.
+
+## AC-0 — 인계 숫자 재측정 (달랐다 — 그 사실이 먼저다)
+
+| 항목 | 인계(397/366) | 실측(origin/main) |
+|---|---|---|
+| 리밋 선언 프로젝트 | "ecommerce 하나뿐" | **ecommerce + finance 2개** |
+| 리밋 선언 lines | 34 | **35** (ecommerce 34 = 전 서비스 + finance kafka 1G) |
+| profile=full 총 서비스 | "50"/"90" 혼재 | **86** 선언 / **98** 컨테이너(런타임, 95 running) |
+
+finance kafka 1G 는 커밋 `47d2a6bc1`(FIN-BE-059, *"add the missing Kafka broker"*)가 **AMI 구운 뒤** 추가 — as-baked `f5288a7b1` 엔 finance kafka 브로커 자체가 없다.
+
+## AC-1 — 재시작 근인 (증거 기반 분류, "재시작=원인" 금지)
+
+| 컨테이너 | 재시작 | exit/oom/memlim | 근인 (증거) | main 이 고치나 |
+|---|---|---|---|---|
+| ecommerce-kafka | 41+ | 0 / false / **512M** | **cgroup OOM** — dmesg `oom-kill:constraint=CONSTRAINT_MEMCG`, task=java, 동일 cgroup 다수 | ✅ MONO-397 1G (재굽기 필요) |
+| finance-ledger | 17 | 0 / false / 0 | **미싱 브로커** — `ConfigException: No resolvable bootstrap urls given in bootstrap.servers` | ✅ FIN-BE-059 (재굽기 필요) |
+| erp-masterdata / erp-notification | 47 / 41 | 0 / false / 0 | 🆕 **Flyway 체크섬 충돌** — 공유 `erp_db` 단일 `flyway_schema_history`, `FlywayValidateException: checksum mismatch v1/v2/v3` | ❌ **안 고쳐짐 → [`TASK-ERP-BE-035`](../../projects/erp-platform/tasks/ready/TASK-ERP-BE-035-shared-erp-db-flyway-history-collision.md)** |
+
+`erp-gateway`/`finance-gateway`/`scm-gateway` 1~2회 = 웜업 transient. **`OOMKilled=false, ExitCode=0` 이 cgroup OOM 을 숨긴다는 397 실측을 재확인** — dmesg 가 권위.
+
+## AC-2 — 실제 메모리 (문서 정정, 가드 아님)
+
+`free -m`: **used ~28GB / total 31.5GB / available ~2.8GB** (vs MONO-366 *"26GB / 여유 5.5GB"*). ⚠️ **as-baked 스택은 3중 크래시루프로 완전 안정화하지 않으므로**(kafka+finance+erp) 이 값은 루프 중 관측치다 — clean 측정은 세 fix 배포(AC-6) 후에야 가능. 호스트 의존 값이라 **가드로 승격하지 않고 문서만 고친다**(397 이 이 축에서 두 번 실패).
+
+## AC-3 — 512M→1G 인과 확인 ✅
+
+`docker update --memory 1G ecommerce-kafka` 라이브 적용 후 **150초간 재시작 0회**(41 고정), status=running, oom=false, dmesg 신규 OOM 없음. → MONO-397 의 1G 가 데모 호스트에서 OOM 루프를 멈춘다.
+
+## AC-4 — KRaft 로그 손상 인과: **미증명으로 종결** (세 번째 추측 없음)
+
+512M OOM-kill 후 매 재시작 kafka 는 `Recovering unflushed segment ... N/N recovered`(unclean shutdown 정상 복구)만 수행, **`corrupt`/`CorruptRecord`/`LogRecoveryError` 마커 0건**. ⇒ **이 재현에서 512M OOM 은 로그를 손상시키지 않는다.** 389(잘린 웜업)도 397(OOM)도 손상 인과로 증명되지 않음 — 판정 불가를 판정 불가로 적는다.
+
+## AC-5 — 정리 ✅
+
+`terraform destroy` 29개 전량 삭제, 인스턴스 terminated. AMI+스냅샷 존치(재굽기 미수행이므로 불변).
+
+## AC-6 — 연기 (blocked on ERP-BE-035)
+
+재굽기(main 기준)는 kafka 1G + finance 브로커 2개는 고치나 **erp Flyway 충돌은 못 고친다**(main 소스 결함). 지금 재굽기하면 2/3 데모 + 나중 재굽기 = 이중 bake. **사용자 판단: ERP-BE-035 먼저 머지 → 한 번의 재굽기로 3개 동시 배포.** 착수 조건 = ERP-BE-035 `done`.
+
+---
+
 # Goal
 
 `TASK-MONO-397` 이 `ecommerce-kafka` 의 512 MiB 를 고치면서 **답하지 못하고 남긴 세 가지 질문**에 데모 호스트 실측으로 답한다.

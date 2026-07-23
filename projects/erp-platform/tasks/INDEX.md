@@ -78,6 +78,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
+- `TASK-ERP-BE-035-shared-erp-db-flyway-history-collision.md` — erp 4개 서비스(masterdata·notification·approval·read-model)가 공유하는 `erp_db` 의 단일 `flyway_schema_history` 에서 **버전번호 충돌**(각자 V1__init 등 같은 번호·다른 내용) → 최초 migrate 승자만 살고 나머지는 checksum mismatch 로 크래시루프. **TASK-MONO-399 데모 실측(2026-07-23)에서 masterdata 47회·notification 41회 재시작을 스택트레이스로 확정.** 수정=서비스별 flyway history 격리. MONO-399 AC-6 재굽기의 선행(재굽기로 안 고쳐짐). 분석=Opus 4.8.
+
 ## in-progress
 
 (empty)
