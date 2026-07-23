@@ -1,6 +1,6 @@
 # TASK-PC-FE-255 — 도메인 가이드 이해도 개선 (목차 + 상태 다이어그램)
 
-**Status:** backlog
+**Status:** ready
 **Area:** platform-console / console-web · **Files:** `src/features/*-guide/components/*GuideScreen.tsx` (6종) + `src/shared/ui/guide-primitives.tsx`
 **Type:** TASK-PC-FE (frontend, 순수 presentation 레이어)
 
