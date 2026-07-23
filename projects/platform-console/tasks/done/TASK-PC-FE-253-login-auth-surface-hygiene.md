@@ -1,6 +1,6 @@
 # TASK-PC-FE-253 — 콘솔 로그인 인증 표면 정리 2건 (session 판정 불일치 · redirect sanitize 이중화)
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-PC-FE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (판단 가벼움 — 죽은 엔드포인트 결정 + 한 줄 방어층. 다만 § F1 의 "삭제 vs 의미 정합" 결정이 실질)
