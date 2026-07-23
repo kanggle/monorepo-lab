@@ -58,8 +58,14 @@ public class EasyPostDispatchAdapter implements ShipmentDispatchPort {
     }
 
     @Override
-    @CircuitBreaker(name = "easyPostDispatch", fallbackMethod = "dispatchFallback")
-    @Retry(name = "easyPostDispatch")
+    // fallbackMethod is on @Retry (the OUTERMOST resilience4j aspect: Retry → CircuitBreaker →
+    // Bulkhead). Keeping it here — not on @CircuitBreaker — is load-bearing: a fallback on the
+    // middle CircuitBreaker aspect fires per-attempt and converts the retryable vendor exception
+    // to a domain exception *before* @Retry can see it, collapsing the retry count. On the
+    // outermost aspect it fires exactly once, after all retries are exhausted (or the circuit is
+    // open / bulkhead full), so 429/5xx/timeout retry the full max-attempts=3 (external-integrations.md §1.6).
+    @CircuitBreaker(name = "easyPostDispatch")
+    @Retry(name = "easyPostDispatch", fallbackMethod = "dispatchFallback")
     @Bulkhead(name = "easyPostDispatch")
     public DispatchAck dispatch(Dispatch dispatch) {
         UUID requestId = dispatch.getShipmentId().value();
