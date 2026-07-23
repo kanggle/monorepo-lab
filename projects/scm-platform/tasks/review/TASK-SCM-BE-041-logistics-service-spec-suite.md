@@ -1,6 +1,6 @@
 # TASK-SCM-BE-041 — logistics-service spec suite (Phase 1: architecture + EasyPost dispatch + shipping.confirmed subscription)
 
-**Status:** in-progress
+**Status:** review
 **Type:** TASK-SCM-BE
 **Depends on / 전제:** [ADR-MONO-053](../../../../docs/adr/ADR-MONO-053-logistics-service-multimodal-fulfillment.md) **ACCEPTED** (2026-07-24 — gate met; this task promoted `backlog/ → ready/`). Reads: [ADR-MONO-052](../../../../docs/adr/ADR-MONO-052-transport-context-map.md) §D2/§D5/§D7, [ADR-MONO-050](../../../../docs/adr/ADR-MONO-050-scm-procurement-wms-inbound-expected.md) §D4.
 **후속 / blocks:** TASK-SCM-BE-042 (logistics-service bootstrap impl), which reads the specs this task writes.
