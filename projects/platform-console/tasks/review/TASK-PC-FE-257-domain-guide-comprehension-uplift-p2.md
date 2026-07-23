@@ -1,6 +1,6 @@
 # TASK-PC-FE-257 — 도메인 가이드 이해도 개선 P2 (읽기경로 배너 + 발견성 + 교차링크)
 
-**Status:** ready
+**Status:** review
 **Area:** platform-console / console-web · **Files:** `src/features/*-guide/{components/*GuideScreen.tsx,data.ts}` (6종) + `src/features/{wms-ops,scm-ops,ecommerce-ops}/components/*Overview.tsx` (3종) + `src/shared/ui/guide-primitives.tsx`
 **Type:** TASK-PC-FE (frontend, 순수 presentation 레이어)
 
