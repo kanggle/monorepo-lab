@@ -14,8 +14,10 @@ import {
   type ConfigField,
 } from '../data';
 import {
+  GuideToc,
   Mono,
   NoteCard,
+  StateFlow,
   StateTh,
   TerminalCell,
 } from '@/shared/ui/guide-primitives';
@@ -28,6 +30,15 @@ import {
  * IAM 가이드(IamGuideScreen) · WMS 가이드(WmsGuideScreen) · E-Commerce 가이드
  * (EcommerceGuideScreen)와 동일 패턴.
  */
+
+const SECTIONS = [
+  { id: 'scm-guide-services', label: '도메인 서비스' },
+  { id: 'scm-guide-procurement', label: '발주' },
+  { id: 'scm-guide-visibility', label: '재고 가시성' },
+  { id: 'scm-guide-replenishment', label: '보충 추천' },
+  { id: 'scm-guide-config', label: '설정' },
+  { id: 'scm-guide-roles', label: '참고: SCM 도메인 롤 · 단일테넌트' },
+];
 
 /** 설정 필드 표(재주문 정책 · 공급사 매핑 공용). */
 function ConfigFieldTable({
@@ -81,6 +92,8 @@ export function ScmGuideScreen() {
         이어지는 보충 루프를 정리한 참조입니다. (SCM 은 단일테넌트 도메인이며,
         접근은 맨 아래 롤 참조.)
       </p>
+
+      <GuideToc items={SECTIONS} />
 
       {/* ───────────────── 도메인 서비스 맵 ───────────────── */}
       <h2
@@ -150,6 +163,7 @@ export function ScmGuideScreen() {
         종료로 마감 · 취소가 있습니다. <strong>콘솔의 발주 목록은 읽기 전용</strong>
         이라는 점에 유의하세요.
       </p>
+      <StateFlow states={PO_STATES} />
       <div className="mb-10 overflow-x-auto">
         <table className="data-table" data-testid="scm-guide-po-states">
           <caption className="sr-only">발주 상태</caption>
@@ -323,7 +337,10 @@ export function ScmGuideScreen() {
       <NoteCard title={CONFIG_NOTE.title} body={CONFIG_NOTE.body} />
 
       {/* ───────────────── 도메인 롤 ───────────────── */}
-      <h2 className="mb-2 text-xl font-semibold">
+      <h2
+        id="scm-guide-roles"
+        className="mb-2 text-xl font-semibold"
+      >
         참고: SCM 도메인 롤 · 단일테넌트
       </h2>
       <div data-testid="scm-guide-roles">

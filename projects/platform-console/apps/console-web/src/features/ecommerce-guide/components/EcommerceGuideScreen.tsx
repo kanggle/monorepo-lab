@@ -20,8 +20,10 @@ import {
   USER_STATES,
 } from '../data';
 import {
+  GuideToc,
   Mono,
   NoteCard,
+  StateFlow,
   StateTh,
   TerminalCell,
 } from '@/shared/ui/guide-primitives';
@@ -33,6 +35,19 @@ import {
  * (server component, no 'use client'): 가이드는 콘솔 진입자 누구나 열람 가능.
  * IAM 가이드(IamGuideScreen)·WMS 가이드(WmsGuideScreen)와 동일 패턴.
  */
+
+const SECTIONS = [
+  { id: 'ecommerce-guide-services', label: '도메인 서비스' },
+  { id: 'ecommerce-guide-order', label: '주문' },
+  { id: 'ecommerce-guide-payment', label: '결제' },
+  { id: 'ecommerce-guide-shipping', label: '배송' },
+  { id: 'ecommerce-guide-product', label: '상품' },
+  { id: 'ecommerce-guide-promotion', label: '프로모션' },
+  { id: 'ecommerce-guide-seller', label: '셀러' },
+  { id: 'ecommerce-guide-user', label: '사용자' },
+  { id: 'ecommerce-guide-notification', label: '알림' },
+  { id: 'ecommerce-guide-roles', label: '참고: E-Commerce 도메인 롤' },
+];
 
 export function EcommerceGuideScreen() {
   return (
@@ -46,6 +61,8 @@ export function EcommerceGuideScreen() {
         보여주는 상태값의 의미와, 그 뒤의 이커머스 마이크로서비스 구성을 정리한
         참조입니다. (모든 화면은 도메인 롤로 게이트되며, 맨 아래 참조.)
       </p>
+
+      <GuideToc items={SECTIONS} />
 
       {/* ───────────────── 도메인 서비스 맵 ───────────────── */}
       <h2
@@ -115,6 +132,7 @@ export function EcommerceGuideScreen() {
         <strong>이벤트가 구동하는 읽기 전용 상태</strong>를 구분하세요 —
         배송중/배송완료는 배송 서비스가 구동하며 운영자가 직접 못 바꿉니다.
       </p>
+      <StateFlow states={ORDER_STATES} />
       <div className="mb-10 overflow-x-auto">
         <table className="data-table" data-testid="ecommerce-guide-order-states">
           <caption className="sr-only">주문 상태</caption>
@@ -221,6 +239,7 @@ export function EcommerceGuideScreen() {
         콘솔은 한 방향 전이만 노출합니다. <Mono>준비중 → 발송 → 배송중 → 배송완료</Mono>.
         발송 전이에는 운송사 + 운송장번호가 필수입니다.
       </p>
+      <StateFlow states={SHIPPING_STATES} />
       <div className="mb-10 overflow-x-auto">
         <table
           className="data-table"
@@ -514,7 +533,12 @@ export function EcommerceGuideScreen() {
       <NoteCard title={NOTIFICATION_NOTE.title} body={NOTIFICATION_NOTE.body} />
 
       {/* ───────────────── 도메인 롤 ───────────────── */}
-      <h2 className="mb-2 text-xl font-semibold">참고: E-Commerce 도메인 롤</h2>
+      <h2
+        id="ecommerce-guide-roles"
+        className="mb-2 text-xl font-semibold"
+      >
+        참고: E-Commerce 도메인 롤
+      </h2>
       <div data-testid="ecommerce-guide-roles">
         <NoteCard
           title={ECOMMERCE_ROLE_NOTE.title}

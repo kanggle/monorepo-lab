@@ -10,7 +10,7 @@ import {
   TMS_STATES,
   WMS_ROLES,
 } from '../data';
-import { Mono, NoteCard } from '@/shared/ui/guide-primitives';
+import { GuideToc, Mono, NoteCard, StateFlow } from '@/shared/ui/guide-primitives';
 
 /**
  * WMS 가이드 화면 (TASK-PC-FE-183). 순수 정적 참조 화면 — 재고(수량 버킷·예약
@@ -18,6 +18,12 @@ import { Mono, NoteCard } from '@/shared/ui/guide-primitives';
  * 설명한다. 데이터 페치·권한 게이트 없음(server component, no 'use client'):
  * 가이드는 콘솔 진입자 누구나 열람 가능. IAM 가이드(IamGuideScreen)와 동일 패턴.
  */
+
+const SECTIONS = [
+  { id: 'wms-guide-inventory', label: '재고' },
+  { id: 'wms-guide-outbound', label: '출고' },
+  { id: 'wms-guide-roles', label: '참고: WMS 도메인 롤' },
+];
 
 export function WmsGuideScreen() {
   return (
@@ -32,6 +38,8 @@ export function WmsGuideScreen() {
         흐름, 출고 주문의 상태 변화 — 를 정리한 참조입니다. (모든 화면은 도메인
         롤로 게이트되며, 맨 아래 참조.)
       </p>
+
+      <GuideToc items={SECTIONS} />
 
       {/* ───────────────── 재고 ───────────────── */}
       <h2
@@ -208,6 +216,7 @@ export function WmsGuideScreen() {
         예외 종료 2개(취소 · 재고부족 이월)로 구성됩니다. 피킹·패킹은 각각
         “진행 중”과 “완료” 두 단계로 나뉩니다.
       </p>
+      <StateFlow states={ORDER_STATES} />
       <div className="mb-10 overflow-x-auto">
         <table className="data-table" data-testid="wms-guide-order-states">
           <caption className="sr-only">출고 주문 상태</caption>
@@ -301,7 +310,12 @@ export function WmsGuideScreen() {
       <NoteCard title={SAGA_NOTE.title} body={SAGA_NOTE.body} />
 
       {/* ───────────────── 도메인 롤 ───────────────── */}
-      <h2 className="mb-2 text-xl font-semibold">참고: WMS 도메인 롤</h2>
+      <h2
+        id="wms-guide-roles"
+        className="mb-2 text-xl font-semibold"
+      >
+        참고: WMS 도메인 롤
+      </h2>
       <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
         재고·출고 화면은 <strong>WMS 도메인 롤</strong>로 게이트됩니다. 운영자가
         wms 구독 테넌트로 <strong>테넌트 선택(assume-tenant)</strong> 할 때

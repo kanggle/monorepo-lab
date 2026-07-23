@@ -1,5 +1,5 @@
 import { Card } from '@/shared/ui/Card';
-import { Mono, NoteCard } from '@/shared/ui/guide-primitives';
+import { GuideToc, Mono, NoteCard } from '@/shared/ui/guide-primitives';
 import {
   ACCOUNT_HATS,
   AUTH_PLANE_DISJOINT,
@@ -28,6 +28,12 @@ import {
  *
  * 역할/권한 키/구독 도메인 **카탈로그는 3에만** 존재한다(2 는 그것을 참조만 한다).
  */
+
+const SECTIONS = [
+  { id: 'iam-guide-concepts', label: '1. 먼저 알아둘 것' },
+  { id: 'iam-guide-usage', label: '2. 메뉴 사용법' },
+  { id: 'iam-guide-reference', label: '3. 레퍼런스' },
+];
 
 function AccessCell({ level, note }: { level: AccessLevel; note?: string }) {
   const glyph = level === 'full' ? '✅' : level === 'partial' ? '△' : '✕';
@@ -83,6 +89,8 @@ export function IamGuideScreen() {
         곳입니다. 처음이라면 <strong>1 · 2</strong> 만 읽으세요 —{' '}
         <strong>3</strong> 은 역할 · 권한 키 · 도메인 롤을 찾아보는 표입니다.
       </p>
+
+      <GuideToc items={SECTIONS} />
 
       {/* ═════════════════ 1. 개념 ═════════════════ */}
       <PartHeading id="iam-guide-concepts" num="1.">

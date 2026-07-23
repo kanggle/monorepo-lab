@@ -75,3 +75,78 @@ export function TerminalCell({
     </span>
   );
 }
+
+/**
+ * 페이지 내 목차(in-page TOC, TASK-PC-FE-255). 각 GuideScreen 이 이미 갖고
+ * 있는 섹션 `id` 를 소스로 앵커 링크 목록을 렌더한다 — 하드코딩 금지, 화면이
+ * `items` 를 그 화면의 실제 섹션 heading 에서 구성해 넘긴다. 순수 정적 —
+ * 데이터 페치·상태 없음. 키보드로 각 링크에 접근 가능(네이티브 `<a>`).
+ */
+export function GuideToc({
+  items,
+}: {
+  items: { id: string; label: string }[];
+}) {
+  return (
+    <nav
+      aria-label="목차"
+      data-testid="guide-toc"
+      className="mb-8 rounded-lg border border-border bg-muted/30 p-3"
+    >
+      <ul className="flex flex-wrap gap-x-4 gap-y-1.5">
+        {items.map((item) => (
+          <li key={item.id}>
+            <a
+              href={`#${item.id}`}
+              data-testid={`guide-toc-${item.id}`}
+              className="rounded text-sm text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              {item.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
+/**
+ * 상태 전이 시각 다이어그램(TASK-PC-FE-255). 선형/분기 상태머신을 배열 순서
+ * 그대로 mono 칩 + 화살표로 보여준다 — 기존 상태 표(테이블) **위**에 추가되는
+ * 보조 시각화이며 표를 대체하지 않는다(상세·스크린리더용 정보원은 표가
+ * 유지). 종료(terminal) 상태는 `TerminalCell` 의 ● 시맨틱과 일관되게
+ * 채움(foreground) 스타일로 구분한다. 표가 이미 완전한 정보를 제공하므로
+ * 이 다이어그램 자체는 스크린리더에서 숨김(`aria-hidden`) 처리한다.
+ */
+export function StateFlow({
+  states,
+}: {
+  states: { label: string; name: string; terminal?: boolean }[];
+}) {
+  return (
+    <div
+      data-testid="state-flow"
+      aria-hidden="true"
+      className="mb-4 flex flex-wrap items-center gap-x-1.5 gap-y-2"
+    >
+      {states.map((s, i) => (
+        <span key={s.name} className="flex items-center gap-1.5">
+          <span
+            data-testid={`state-flow-${s.name}`}
+            className={
+              s.terminal
+                ? 'rounded bg-foreground px-2 py-1 font-mono text-xs font-medium text-background'
+                : 'rounded bg-muted px-2 py-1 font-mono text-xs text-foreground'
+            }
+          >
+            {s.terminal && <span aria-hidden="true">● </span>}
+            {s.label}
+          </span>
+          {i < states.length - 1 && (
+            <span className="text-muted-foreground">→</span>
+          )}
+        </span>
+      ))}
+    </div>
+  );
+}
