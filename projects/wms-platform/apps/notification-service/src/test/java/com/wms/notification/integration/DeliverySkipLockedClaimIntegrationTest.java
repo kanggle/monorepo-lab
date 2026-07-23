@@ -119,10 +119,22 @@ class DeliverySkipLockedClaimIntegrationTest extends NotificationServiceIntegrat
 
     @AfterEach
     void cleanup() {
-        // DELETE (ROW EXCLUSIVE), never TRUNCATE (ACCESS EXCLUSIVE): by this point
-        // every raw lock has been released, but DELETE also respects lock_timeout
-        // so a stray lock could never turn cleanup into a 30-min hang.
-        jdbc.update("DELETE FROM notification_delivery");
+        // BOUNDED cleanup (defence-in-depth). The IT profile disables the retry-scheduler
+        // poller (application-test.yml retry-poll-interval-ms), so no background claim
+        // should hold a delivery-row lock here. But an unbounded DELETE is exactly how
+        // BE-528 hung: the poller (then firing every 1s) held a FOR UPDATE lock on a
+        // seeded row and this DELETE blocked on it forever (no lock_timeout on a pooled
+        // connection) → the bundled lane hit the 30-min job timeout. A SET LOCAL
+        // statement_timeout makes a stray lock fail FAST and loud (RED in 15s) instead.
+        txTemplate().execute(status -> {
+            entityManager.unwrap(Session.class).doWork(c -> {
+                try (Statement s = c.createStatement()) {
+                    s.execute("SET LOCAL statement_timeout = '15s'");
+                    s.executeUpdate("DELETE FROM notification_delivery");
+                }
+            });
+            return null;
+        });
     }
 
     // -----------------------------------------------------------------------

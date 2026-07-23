@@ -25,4 +25,14 @@ wms:
       # Faster polling under test so awaitility doesn't time out.
       polling-interval-ms: 200
     delivery:
-      retry-poll-interval-ms: 1000
+      # TASK-BE-529: effectively disable the live @Scheduled retry poller during
+      # integration tests. At 1000ms it fired every second and CLAIMED (FOR
+      # UPDATE) any PENDING+due delivery row a test seeded — then a test's
+      # @AfterEach `DELETE FROM notification_delivery` blocked forever on that
+      # background lock (no lock_timeout on the cleanup connection) → the whole
+      # bundled IT lane hung to the 30-min job timeout (the BE-528 symptom).
+      # A 1h fixedDelay lets the first tick run once at an empty startup table
+      # and then never again during the test window, so no background claim
+      # races the tests' fixtures. No IT depends on the retry cadence
+      # (AlertConsumer awaits the dedupe row, not delivery processing).
+      retry-poll-interval-ms: 3600000
