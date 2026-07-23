@@ -5,15 +5,19 @@
 # aggregate + single-stage state machine, no-self-approval (E3/I4), idempotent
 # transitions (E4), immutable audit (E8/A7), and a synchronous masterdata
 # subject reference-integrity check on submit (E1). Publishes the four approval
-# transition events through the transactional outbox. MySQL erp_db (separate
-# tables from masterdata-service; no shared-table JOIN).
+# transition events through the transactional outbox. MySQL erp_approval_db
+# (its own database — TASK-ERP-BE-035; no shared-table JOIN with masterdata).
 # -----------------------------------------------------------------------------
 spring:
   application:
     name: erp-platform-approval-service
 
   datasource:
-    url: jdbc:mysql://${MYSQL_HOST:mysql}:${MYSQL_PORT:3306}/${MYSQL_DB:erp_db}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    # Own database (erp_approval_db) — NOT the shared erp_db. approval /
+    # masterdata / notification each define their own V1__init + generic
+    # `outbox` / `processed_events` / `idempotency_keys` tables; sharing one DB
+    # collided on both the Flyway history AND those table names (TASK-ERP-BE-035).
+    url: jdbc:mysql://${MYSQL_HOST:mysql}:${MYSQL_PORT:3306}/${MYSQL_DB:erp_approval_db}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
     username: ${MYSQL_USER:erp}
     password: ${MYSQL_PASSWORD:erp}
     hikari:

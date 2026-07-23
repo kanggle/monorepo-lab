@@ -11,9 +11,10 @@ spring:
     name: erp-platform-notification-service
 
   datasource:
-    # Shares the erp_db MySQL instance with masterdata / approval (separate
-    # tables: notification / notification_delivery / processed_events).
-    url: jdbc:mysql://${MYSQL_HOST:mysql}:${MYSQL_PORT:3306}/${MYSQL_DB:erp_db}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    # Own database (erp_notification_db) — NOT the shared erp_db. It defines its
+    # own `processed_events` table, which collided with masterdata / approval
+    # when all three shared erp_db + one flyway_schema_history (TASK-ERP-BE-035).
+    url: jdbc:mysql://${MYSQL_HOST:mysql}:${MYSQL_PORT:3306}/${MYSQL_DB:erp_notification_db}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
     username: ${MYSQL_USER:erp}
     password: ${MYSQL_PASSWORD:erp}
     hikari:

@@ -8,6 +8,23 @@
 
 ---
 
+## 🔧 구현 (2026-07-23) — AC-0 정정 + DB 분리
+
+**AC-0 재측정이 티켓 전제를 두 가지 정정했다:**
+
+1. **충돌은 4개가 아니라 3개 서비스** — `read-model-service` 는 이미 자기 DB(`erp_read_model_db`)를 쓴다(그래서 데모에서 healthy 했다). 공유 `erp_db` 는 **masterdata · approval · notification** 셋뿐. approval 이 관측 부팅에서 healthy 였던 건 그 부팅의 migrate 레이스 승자였기 때문(비결정적).
+2. **flyway.table 격리만으론 불충분** — 세 서비스가 `erp_db` 에서 **테이블 이름도 충돌**한다: `outbox`(masterdata+approval) · `idempotency_keys`(masterdata+approval) · `processed_events`(셋 다). history 만 나눠도 CREATE TABLE 이 충돌/공유된다 ⇒ **DB 분리**가 정답(read-model 선례와 동일).
+
+**적용**: masterdata 는 `erp_db` 유지, **approval → `erp_approval_db`**, **notification → `erp_notification_db`**.
+- `infra/mysql-initdb/02-create-service-dbs.sql` (신규) — 두 DB + grant(01-* 의 read-model 패턴 미러).
+- approval/notification `application.yml` datasource 기본값 + `docker-compose.yml` env(`MYSQL_DB`) + 주석.
+- approval/notification `architecture.md` Data store 서술.
+- 회귀: `FlywayHistoryIsolationIntegrationTest`(approval) — 전용 DB=GREEN / 공유 history 를 타 서비스가 선점=`FlywayValidateException`. `compileTestJava` GREEN, 실행은 CI Testcontainers 권위.
+
+**baked 볼륨**: 신규 DB 방식이라 as-baked `erp_db` 의 오염된 history 와 무관(신규 DB=신규 history). MONO-399 AC-6 재굽기가 fresh 볼륨을 만들어 세 fix 를 함께 배포한다.
+
+---
+
 ## 🔴 발굴 출처 — TASK-MONO-399 데모 호스트 실측 (2026-07-23)
 
 MONO-399 이 데모 AMI(`ami-0b6b962d3f3f23865`, main `f5288a7b1` 동결)를 실측하던 중, erp 4개 서비스 중 **2개가 부팅 시 무한 크래시루프**하는 것을 dmesg/`docker logs` 로 확인했다:
