@@ -173,7 +173,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-475-refactoring-policy-heading-level-skip.md` — **🟢 REVIEW — 규칙 리팩토링 재감사 유일 mechanical finding 처리.** `/refactor-spec platform rules --dry-run`(470~474 아크 직후 재감사; dead-ref 0·도메인7/trait9 섹션집합 균일)의 finding 1건: `platform/refactoring-policy.md` `# Rules`(H1) 하위 `### Mandatory`/`### Prohibited`(H3) → `## `(H2) 승격, H2 skip 제거. MONO-470 `testing-strategy.md` G-heading(`###`→`##`)과 **동일 클래스**. **F1/F5 defer 와 차이**: defer 근거였던 `hardstop-rules.md` 훅 결합(heading 파싱)이 **이 파일엔 없음**(reference-integrity 는 경로·§Prioritization·selftest 픽스처로만 참조, 레벨 미파싱)이라 안전. **diff = heading 마커 2줄뿐**(rule 본문·텍스트 byte-unchanged, anchor 무손상 — `#mandatory`/`#prohibited` 인용 0건). reference-integrity selftest+guard GREEN. 분석·구현=Opus 4.8. [[project_mono_085_dead_reference_batch]]
 
 ## done
 

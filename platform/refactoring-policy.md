@@ -53,7 +53,7 @@ If any precondition is not met, resolve it before starting refactoring.
 
 # Rules
 
-### Mandatory
+## Mandatory
 
 1. **No behavior change.** Externally observable behavior must remain identical before and after.
 2. **Tests pass before and after.** Run the full service test suite at both checkpoints.
@@ -74,7 +74,7 @@ If any precondition is not met, resolve it before starting refactoring.
    correction in TASK-MONO-400, where a credential called "orphaned" was in live production use by another
    project.)
 
-### Prohibited
+## Prohibited
 
 - Refactoring production code and test code in the same change (adjust tests separately after).
 - Refactoring without a green test baseline.
