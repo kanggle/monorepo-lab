@@ -85,6 +85,10 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 **리팩토링 발굴 스윕 후보 (2026-07-18)** — console-web/console-bff 3방향 스캔(god-file · 갈라진 중복 · dead-code+컨벤션)에서 검증된 후보. 각 파일의 backlog→ready 게이트(범위·spec·AC) 미충족 상태. console-web features/shared 는 같은 날 dead-code **audited-clean(0건)**. **PC-FE-243 · PC-BE-012 · PC-FE-244 · PC-FE-245 · PC-FE-246 은 머지 완료(#2649, squash `619f65182`) → done. PC-FE-247(조사)도 수행 완료 → done(양쪽 decline).** 이 스윕의 backlog 잔류 = 없음.
 
+**가이드 UX 개선 (2026-07-23)** — 6개 도메인 GuideScreen 전문 정독 기반 이해도 평가(종합 A−)에서 도출.
+
+- `TASK-PC-FE-255-domain-guide-comprehension-uplift.md` — 도메인 가이드 이해도 개선 **P0**: ① 페이지 내 목차(기존 섹션 `id` 소스, 하드코딩 금지) ② 상태 전이 시각 다이어그램(기존 상태표 상단 보조, `TerminalCell`(●) 시맨틱 재사용). 순수 presentation 레이어 — 신규 데이터/백엔드/계약 0, `'use client'` 미도입, 기존 `data-testid` 보존. 대상 = `features/*-guide/*GuideScreen.tsx` 6종 + `shared/ui/guide-primitives.tsx`. **backlog→ready 게이트**: frontend-ui 컨벤션 정합 + AC 최종화 필요. P1(작업 레시피·용어 정의)·P2(읽기경로 배너·발견성/교차링크)는 이 태스크 머지 후 별도 발행.
+
 ## ready
 
 _(없음)_
