@@ -86,12 +86,6 @@ ORM 사용 시 N+1 쿼리 금지:
 
 ---
 
-## Overrides
-
-해당 없음. common rule과 충돌 없음.
-
----
-
 ## Forbidden Patterns
 
 - Offset-based pagination을 수백만 건 테이블에 사용 — 깊은 페이지에서 O(N) 스캔
@@ -100,3 +94,37 @@ ORM 사용 시 N+1 쿼리 금지:
 - Read replica로 결제 확인 경로 조회 — lag으로 "결제했는데 주문 조회 안 됨" 사고
 - SQL `LIKE '%keyword%'`로 검색 — 인덱스 활용 불가
 - N+1 쿼리 방치 — 리스트 응답이 DB 커넥션 풀을 고갈
+
+---
+
+## Required Artifacts
+
+read-heavy trait 이 활성화된 프로젝트는 다음 산출물을 **필수**로 갖춘다:
+
+1. **Pagination 전략 문서** — cursor-based 우선(cursor 인코딩 규칙), offset 허용 범위, `limit` 기본 20/최대 100 (R1). 위치: `specs/services/<service>/api-conventions.md`.
+2. **캐시 레이어 + 무효화 전략** — 뜨거운 데이터(Redis/Memcached, TTL)·정적 자산(CDN)·쿼리 결과 캐시 키(정규화), 무효화(TTL/이벤트/수동)와 stampede 방지 (R2·R3). 위치: `specs/services/<service>/caching.md`.
+3. **Read replica 라우팅 + lag tolerance** — 읽기 전용 쿼리의 replica 라우팅, 허용 replication lag, primary 강제 경로(read-your-own-write) (R4). 위치: `specs/services/<service>/data-access.md`.
+4. **검색 인프라 설계** — 전문 검색(Elasticsearch/OpenSearch 등)·자동완성·복합 필터, 허용 정렬 필드 화이트리스트, 최대 결과 하드 리밋 (R5). 위치: `specs/services/<service>/search.md`.
+5. **N+1 방지 근거** — fetch join/`@EntityGraph`/DTO projection 사용, 리스트 응답의 쿼리 수 상한, unavoidable N-query 주석 (R6).
+
+---
+
+## Interaction with Common Rules
+
+- [../../platform/error-handling.md](../../platform/error-handling.md) 의 `VALIDATION_ERROR` (400) 를 `limit` 초과·잘못된 cursor 에 사용한다 (R1).
+- [../../platform/observability.md](../../platform/observability.md) 에 캐시 hit/miss rate·replica lag·검색 latency 메트릭을 추가해 읽기 경로 성능을 관측한다 (R2·R3·R4).
+- [content-heavy.md](content-heavy.md) **(함께 선언 권장)**: content-heavy 의 검색·필터·정렬 요구(C6)가 본 trait 의 R1/R3/R5 를 참조로 통합한다 — 중복 규정하지 않는다.
+- [../../platform/architecture.md](../../platform/architecture.md) 의 서비스 경계 원칙에 따라 읽기 복제본/projection 이 쓰기 경로와 분리된 조회 표면으로 존재한다 (R4).
+
+---
+
+## Checklist (Review Gate)
+
+- [ ] 리스트 조회가 cursor-based(우선) 페이지네이션이고 전체 반환이 없으며 `limit` 상한(기본 20/최대 100)이 강제되는가? (R1)
+- [ ] 조회 응답이 `ETag` + `Cache-Control` 을 명시하고 `If-None-Match` → 304 를 지원하는가? (R2)
+- [ ] 캐시 레이어(Redis/CDN)가 명시되고 무효화 전략 + stampede 방지가 있는가? (R3)
+- [ ] 읽기 전용 쿼리가 replica 로 라우팅되고 lag tolerance 가 명시되며 결제 확인 등은 primary 강제인가? (R4)
+- [ ] 검색·필터·정렬이 전용 인프라를 쓰고 정렬 필드가 화이트리스트이며 최대 결과 하드 리밋이 있는가? (R5)
+- [ ] 리스트 응답이 fetch join/projection 으로 N+1 을 방지하는가? (R6)
+- [ ] Pagination 전략·캐시 무효화·replica 라우팅·검색 인프라·N+1 방지 문서가 존재하는가?
+- [ ] 금지 패턴(대용량 offset 페이지네이션, 캐시 생략, TTL 없는 영구 캐시, replica 로 결제 확인, `LIKE '%kw%'` 검색, N+1 방치)이 존재하지 않는가?

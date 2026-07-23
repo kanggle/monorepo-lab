@@ -101,12 +101,6 @@ batch_run_items (run_id FK, item_id, processed_at NULL)
 
 ---
 
-## Overrides
-
-해당 없음. common rule 과 충돌 없음. `transactional` T3 (outbox) 와는 자연 부합 — 배치가 발생시키는 cross-service 이벤트는 outbox 패턴 그대로 사용.
-
----
-
 ## Forbidden Patterns
 
 - "스케줄러 만 돌려두면 끝" — 잡 실패 시 알림 없음, 미완료 상태 방치
@@ -119,3 +113,42 @@ batch_run_items (run_id FK, item_id, processed_at NULL)
 - 재시도 cap 없이 무한 재시도 — vendor outage 시 모든 시스템 자원 소진
 - "재실행하면 회복됨" 가정인데 idempotent 보장 없음 — 같은 결제 / 정산 row 가 N 번 생성
 - ShedLock 누락 + cron 만 사용 — kubernetes pod 다중 replica 환경에서 잡 N 번 동시 실행
+
+---
+
+## Required Artifacts
+
+batch-heavy trait 이 활성화된 프로젝트는 다음 산출물을 **필수**로 갖춰야 한다:
+
+1. **배치 잡 카탈로그 + 스케줄** — 잡 이름, 스케줄(cron/interval), 배치 윈도우(off-peak), 담당 데이터셋. 위치: `specs/services/<service>/batch-jobs.md`.
+2. **Checkpoint 스키마** — `batch_runs` / `batch_run_items` 등 진행 상황 영속화 구조 (B2). DB migration 에 포함.
+3. **Idempotency 키 전략** — 입력 dataset key(`(period, dataset_id)`), dedupe 마커(`processed_at`/`batch_run_id`), upsert 규칙 (B1). 위치: `specs/services/<service>/idempotency.md`.
+4. **재시도 / dead-letter 정책 문서** — 재시도 가능/불가 오류 분류, backoff cap, per-row vs per-batch 실패 처리, 운영자 검토 큐 (B3). 위치: `specs/services/<service>/retry-policy.md`.
+5. **분산 lock 설정** — ShedLock + lock provider(pg_advisory_lock 등), 잡당 singleton 보장 (B5). DB migration / 설정에 포함.
+6. **관찰 + 알림 정의** — `<batch>.run.count` / `.duration.seconds` / `.rows.processed.count` / `.lag.seconds` / `.failure.count` 메트릭과 `lag > 2×interval` 알림 (B6). [../../platform/observability.md](../../platform/observability.md) 준수.
+7. **실패 시나리오 테스트** — 같은 입력 2회 연속 실행 시 두 번째 side-effect 0 (B1), partial 실패 후 checkpoint 재개 (B2), pod kill 후 stale partial 회복.
+
+---
+
+## Interaction with Common Rules
+
+- [../../platform/observability.md](../../platform/observability.md) 에 정의된 메트릭에 더해 B6 의 배치 잡 메트릭(run/duration/rows/lag/failure)과 lag SLO 알림을 추가한다.
+- [../../platform/testing-strategy.md](../../platform/testing-strategy.md) 의 Integration 테스트 레이어에서 **재실행 멱등성·checkpoint 회복** 시나리오를 필수 포함한다 (B1·B2).
+- [../../platform/error-handling.md](../../platform/error-handling.md) 의 재시도 가능/불가 구분에 맞춰 transient 오류(timeout·503)는 backoff 재시도, integrity/validation 오류는 즉시 dead-letter 로 처리한다 (B3).
+- [transactional.md](transactional.md) **(함께 선언 시)**: T3 (outbox) 와 자연 부합 — 배치가 발생시키는 cross-service 이벤트는 outbox 패턴을 그대로 사용한다.
+- [read-heavy.md](read-heavy.md) **(함께 선언 시)**: B4 의 대량 SELECT read replica 라우팅이 R4 (DB 복제본 활용) 와 부합한다.
+
+---
+
+## Checklist (Review Gate)
+
+- [ ] 모든 배치 잡이 idempotent 하고 같은 입력 2회 실행 시 두 번째 side-effect 가 0 인가? (B1)
+- [ ] 긴 배치가 chunk 단위 checkpoint 를 남기고 재기동 시 마지막 checkpoint 부터 재개하는가? (B2)
+- [ ] 재시도 가능/불가 오류가 분리되고 backoff cap + dead-letter + per-row/per-batch 실패 구분이 있는가? (B3)
+- [ ] 대량 SELECT 가 replica 로, 대량 write 가 chunk+yield 로 처리되며 배치 윈도우가 명시되는가? (B4)
+- [ ] 다중 인스턴스 배포에서 ShedLock 등 분산 lock 으로 잡당 1 인스턴스만 실행되는가? (B5)
+- [ ] 각 잡이 run/duration/rows/lag/failure 메트릭과 lag SLO 알림을 갖는가? (B6)
+- [ ] 배치가 전용 connection pool/executor + 스트리밍(cursor/chunk)으로 OLTP 자원과 격리되는가? (B7)
+- [ ] (data-intensive 함께 선언 시) 입력 hash + 결과 immutability 로 재현 가능한가? (B8)
+- [ ] Checkpoint 스키마·재시도 정책·분산 lock·메트릭·실패 시나리오 테스트 문서가 존재하는가?
+- [ ] 금지 패턴(from-scratch 재처리, single-replica 가정, silent 실패, 무한 재시도, 멱등 보장 없는 "재실행하면 회복")이 존재하지 않는가?

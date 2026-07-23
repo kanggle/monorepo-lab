@@ -77,12 +77,6 @@
 
 ---
 
-## Overrides
-
-해당 없음. common rule과 충돌 없음.
-
----
-
 ## Forbidden Patterns
 
 - 원본과 파생본을 같은 path / 버킷에 섞음 — 캐시 무효화 복잡해지고, 원본 손상 리스크
@@ -90,3 +84,37 @@
 - 공개 API에서 `DRAFT` 콘텐츠도 리턴 — 미완성 콘텐츠 노출 사고
 - 편집 이력 보존 안 함 — 분쟁 발생 시 입증 불가
 - 미디어 URL을 랜덤 UUID로 생성 — CDN 캐시 활용 어려움; 결정적 경로 권장
+
+---
+
+## Required Artifacts
+
+content-heavy trait 이 활성화된 프로젝트는 다음 산출물을 **필수**로 갖춘다:
+
+1. **콘텐츠 노출 상태 다이어그램** — `DRAFT → PUBLISHED → UNPUBLISHED / ARCHIVED / SCHEDULED` 전이 규칙 (콘텐츠 유형별 state machine) (C4). 위치: `specs/services/<service>/state-machines/content-status.md`.
+2. **미디어 저장 모델** — 원본 ↔ 파생본 분리, 버킷/경로 규칙(결정적 파생 경로), 캐시 무효화(버전/해시 suffix) (C2). [../../platform/object-storage-policy.md](../../platform/object-storage-policy.md) 준수. 위치: `specs/services/<service>/media-model.md`.
+3. **읽기 projection + 동기화 SLA** — 쓰기 모델(OLTP) ↔ 읽기 모델(검색 엔진/캐시/CDN JSON), `content.updated`/`content.deleted` 이벤트 전파, 최대 지연 SLA(권장 5~30s) (C3). 위치: `specs/services/<service>/read-model.md`.
+4. **locale / version 스키마** — 콘텐츠 텍스트의 `locale`(BCP 47) + `version`, 과거 버전 아카이브 정책 (C1). data model 에 포함.
+5. **편집 이력 / audit trail** — 누가 언제 어떤 필드를 바꿨는지, `PUBLISHED` 이후 이력 immutability, 작성자 ↔ 모더레이터 권한 구분 (C5). 위치: `specs/services/<service>/data-model.md` 또는 `knowledge/architecture/content-audit.md`.
+
+---
+
+## Interaction with Common Rules
+
+- [../../platform/object-storage-policy.md](../../platform/object-storage-policy.md) 의 버킷 네이밍·presigned URL 업로드·라이프사이클 규칙이 C2 (미디어 원본/파생본) 에 직접 적용된다.
+- [../../platform/error-handling.md](../../platform/error-handling.md) 의 `STATE_TRANSITION_INVALID` (422) 를 C4 노출 상태 비허용 전이에, `STORAGE_UNAVAILABLE`/`MEDIA_NOT_FOUND`/`MEDIA_VALIDATION_FAILED` 를 미디어 경로에 사용한다.
+- [read-heavy.md](read-heavy.md) **(함께 선언 권장)**: 검색·필터·정렬·페이지네이션·캐시 요구사항은 R1 (Pagination)·R3 (Caching)·R5 (Search infrastructure) 를 참조로 통합한다 (C6 — 중복 규정하지 않는다).
+- [../../platform/architecture.md](../../platform/architecture.md) 의 서비스 경계 원칙에 따라 읽기 projection(C3)이 쓰기 모델과 분리된 소비 표면으로 존재한다.
+
+---
+
+## Checklist (Review Gate)
+
+- [ ] 콘텐츠 텍스트가 `locale` + `version` 을 기본 스키마로 갖고 과거 버전을 보존하는가? (C1)
+- [ ] 미디어 원본(immutable 객체 스토리지) ↔ 파생본(CDN/동적)이 분리되고 파생 경로가 결정적인가? (C2)
+- [ ] 콘텐츠 인덱싱이 쓰기 모델과 분리된 read projection 이고 동기화 SLA 가 명시되며 읽기 모델 downtime 이 쓰기를 막지 않는가? (C3)
+- [ ] 노출 상태(`DRAFT`/`PUBLISHED`/`UNPUBLISHED`/`ARCHIVED`/`SCHEDULED`)가 state machine 으로 문서화되고 비허용 전이가 422 로 거부되는가? (C4)
+- [ ] 작성자 ↔ 모더레이터 권한이 구분되고 편집 이력이 보관되며 `PUBLISHED` 이후 이력이 immutable(추가만)인가? (C5)
+- [ ] 검색·필터·정렬이 read-heavy R1/R3/R5 를 참조로 통합되어 있는가? (C6)
+- [ ] 노출 상태 다이어그램·미디어 저장 모델·읽기 projection SLA·locale/version 스키마·편집 이력 문서가 존재하는가?
+- [ ] 금지 패턴(원본/파생본 혼합, 쓰기 모델 직접 검색, `DRAFT` 공개 노출, 이력 미보존)이 존재하지 않는가?
