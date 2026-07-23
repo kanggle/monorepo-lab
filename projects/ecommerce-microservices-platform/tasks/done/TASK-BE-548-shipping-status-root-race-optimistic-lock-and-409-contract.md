@@ -1,11 +1,37 @@
 # TASK-BE-548 — 배송 상태 동시 전이의 root 경합 제거 (`@Version` 낙관적 락 + 409 계약)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus 4.8 (마이그레이션 + 에러 계약 + BE-547 과의 매개자 상호작용 판정. "컬럼 하나 추가"가 아니다)
 
 > `TASK-BE-537`(done, 재현·근본원인)이 root 경합을 확인하고, `TASK-BE-547`(done, PR #2811)이 그 **실사용 피해(중복 알림)**를 발행측 결정적 event_id 로 종결하면서 명시적으로 후속으로 미룬 그 작업. **BE-547 은 피해를 없앴지 root 경합 자체를 없애지 않았다.**
+
+---
+
+## Resolution — AC-0 판정 = **won't-do** (2026-07-23, 근거 있는 종결)
+
+AC-0 게이트("해야 하는가")를 착수 시 실측 판정한 결과 **won't-do**. 티켓 본문의 F3·Notes·AC-0 이 명시적으로 허용한 결과이며, 코드 실측이 "순가치"를 뒷받침하지 못했다.
+
+**재측정 근거 (코드가 이긴다):**
+
+1. **`@Version` 부재 재확인 (AC-0.1)** — `ShippingJpaEntity` 에 `@Version` 0건(known-positive `wms AsnJpaEntity` 대조 — 패턴은 저장소에 유효, 이 서비스에만 없음). ✔ 전제 유효.
+2. **고객 피해·클라이언트 응답은 이미 해결 (AC-0.2)** — `ConcurrentStatusTransitionIntegrationTest`(BE-547 회귀 가드)가 증명: 동시 이중 SHIPPED 에서 정확히 한 tx 만 커밋, 패자는 아웃박스 PK 유니크 위반(23505)→`DataIntegrityViolationException`→`GlobalExceptionHandler` DIVE 백스톱→**이미 409**. `ShippingStatusChanged`·`ManualShipConfirmRequested` 각 1건, 최종 SHIPPED. 즉 **피해(중복 알림)와 패자 409 응답은 BE-547 로 이미 완결.**
+3. **"무해한 중복 UPDATE 제거"라는 순가치가 존재하지 않음** — `SpringShippingEventPublisher` 는 아웃박스 INSERT 를 **호출자 트랜잭션 안에서** 수행([SpringShippingEventPublisher.java:84-92](../../apps/shipping-service/src/main/java/com/example/shipping/infrastructure/event/SpringShippingEventPublisher.java)). 패자 tx 의 `shippings` UPDATE 와 outbox INSERT 는 **같은 트랜잭션**이라, PK 충돌이 tx 전체를 원자적으로 롤백한다 ⇒ **패자의 중복 UPDATE 는 애초에 commit 되지 않는다.** 티켓 Goal 의 "두 번째 트랜잭션이 shippings 에 무해한 중복 UPDATE 를 쓰는 것 자체는 그대로다" 전제가 코드로 **반증**됨.
+4. **남은 것은 순수 미관뿐** — `@Version` OptimisticLock 이든 아웃박스-PK 충돌이든 결과가 **동일**(롤백·409·이벤트 1건·최종 SHIPPED). 실패 모드의 "정확성"은 관측 가능한 행동 차이가 없다.
+
+**비용은 실질 (F3 gold-plating):**
+
+- DB 마이그레이션(`version` 컬럼 + 기존 행 backfill + `migration-h2` 이중 관리).
+- **F2 위험** — 같은 "동시 충돌"에 409 코드가 둘(`DATA_INTEGRITY_VIOLATION` vs 신규 `OPTIMISTIC_LOCK_CONFLICT`)로 갈려 계약이 혼란.
+- **AC-2 dead-path** — `@Version` 이 UPDATE 에서 먼저 터지면 BE-547 의 아웃박스-PK→DIVE 경로가 동시 케이스에서 도달불가가 되지만, event_id 결정성은 소비자 dedup·순차 재시도·carrier 발행 경로용으로 **유지 필수**(F4/Out of Scope) ⇒ 작동하는 가드를 그림자로 덮고 둘 다 유지 + 죽은 경로 문서화. 부품만 늘고 행동은 동일.
+- **AC-3 회귀 위험** — 무인 `CarrierAdvanceProcessor`(REQUIRES_NEW 배치)에 현재 없는 `ObjectOptimisticLockingFailureException` 실패 모드를 신규 도입 → 재시도/무시 정책이 새로 필요.
+
+**결론**: 피해는 사라졌고, 패자는 이미 409 를 받고, 제거 대상이라던 중복 UPDATE 는 persist 조차 안 된다. 순가치 ≈ 0 인데 마이그레이션·2차 409 코드·dead-path·신규 배치 실패 모드를 감수하는 것은 티켓 자신이 정의한 **F3**. BE-547 이 이미 **공급원**에서 접었으므로 `@Version` 은 중복 2차 가드 — [[project_deterministic_event_id_outbox_pk_collapses_dupes]] 원칙("공급원을 고쳐라")과도 일치.
+
+**BE-547 은 되돌리지 않는다** (F4) — 결정적 event_id 는 소비자 idempotency 키로 독립적으로 필요. 상보 관계, 대체 아님.
+
+> 아래 원본 Goal/Scope/AC 는 이력 보존용. 구현되지 않았다.
 
 ---
 
