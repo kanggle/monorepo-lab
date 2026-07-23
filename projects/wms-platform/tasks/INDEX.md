@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-529-notification-skip-locked-exclusivity-it-ci-robust.md` — **READY** — notification-service SKIP-LOCKED 배타성 IT(두 클레이머 이중청구 없음). `TASK-BE-528` AC-2 에서 이월된 테스트 커버리지.
+(empty)
 
 > 2026-07-20 (`TASK-MONO-451`): 위 두 행은 **디스크에는 `ready/` 에 있는데 이 섹션이 `(empty)` 라고 선언**하고 있었다 — 아래 2026-07-12 노트와 정반대 방향의 같은 결함이다. 그때는 표가 끝난 일을 가리켰고, 이번엔 표가 **살아있는 일을 숨겼다**. 큐를 표로 고르는 사람에게 후자는 **일이 없다는 거짓 보고**다. 이제 `scripts/check-index-queue-drift.sh` 가 양방향으로 대조한다.
 
@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-529-notification-skip-locked-exclusivity-it-ci-robust.md` — **REVIEW (impl PR 대기)** — notification-service SKIP-LOCKED delivery-claim IT 신설(`DeliverySkipLockedClaimIntegrationTest`, 2 테스트). **🔵 재측정(코드가 이김)**: BE-528 의 "notification IT-레인은 *어떤* IT 추가에도 hang" 가설을 재측정 — 레인엔 **이미 통과 중인 IT 4개**(Alert/Dedupe/Flyway/Routing) 존재 ⇒ 진범은 레인 자체 아니라 BE-528 동시성 시도들의 **leaked lock → `@AfterEach TRUNCATE` 무한대기** 캐스케이드. 따라서 **ci.yml 레인 미변경**(깨끗한 bounded IT 에 베팅). **설계(hang 불가)**: (a) plain-claim = 실 repo `findPendingDueForRetry`(PENDING+due, created_at 정렬) 단일 tx. (b) exclusivity = A(raw 연결, `lock_timeout=5s`)가 유일 claimable row 를 `FOR UPDATE SKIP LOCKED LIMIT 1` 로 점유 → B=**실 repo 쿼리**(`SET LOCAL statement_timeout=8s` — Hibernate 가 lock hint 로 세션 `lock_timeout` 을 재작성하는 걸 우회, statement_timeout 은 직교)가 claim ⇒ SKIP LOCKED 면 A 행 건너뛰고 free 행만, **뮤테이션(hint 제거)이면 B 가 8s 에 abort=RED**. 모든 락 결정적 rollback+close → TRUNCATE-hang 원인 제거(cleanup 은 DELETE). `@Timeout(30)` 백스톱. **AC-1 러너 검증**: A·B 연결의 timeout 실효를 `current_setting` 로 단언. 로컬 happy-path 2/2 GREEN(권위는 CI Linux). src/main 무변경. 분석·구현=Opus 4.8. [[env_ci_flake_is_a_hypothesis_not_a_verdict]] [[env_wms_notification_seed_cluster_ci_flake]] [[env_test_fixture_impossible_input_proves_nothing]]
 
 ## done
 
