@@ -74,9 +74,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## backlog
 
-- `TASK-SCM-BE-041-logistics-service-spec-suite.md` — **BACKLOG (gated on [ADR-MONO-053](../../../docs/adr/ADR-MONO-053-logistics-service-multimodal-fulfillment.md) ACCEPTED).** logistics-service Phase-1 **spec suite** (carrier-dispatch half of the carrier + 3PL multimodal fulfillment): `architecture.md` (event-consumer + rest-api composition, `ShipmentDispatchPort` + EasyPost/굿스플로/standalone adapters, `CarrierRouter`, `FulfillmentRouter` self-branch seam), `external-integrations.md` (EasyPost + 굿스플로 integration-heavy artifact), additive `outbound.shipping.confirmed` **subscription** contract (no wms schema change, ADR-052 §D5), PROJECT.md Service Map v2→v1-active. Spec-only; precedent = BE-023 spec → BE-024 bootstrap. **Promotion**: `backlog → ready` only when ADR-053 is ACCEPTED. 후속=BE-042 (bootstrap impl). 분석=Opus 4.8.
+(empty)
 
 ## ready
+
+- `TASK-SCM-BE-041-logistics-service-spec-suite.md` — **READY (promoted 2026-07-24 on [ADR-MONO-053](../../../docs/adr/ADR-MONO-053-logistics-service-multimodal-fulfillment.md) ACCEPTED).** logistics-service Phase-1 **spec suite** (carrier-dispatch half of the carrier + 3PL multimodal fulfillment): `architecture.md` (event-consumer + rest-api composition, `ShipmentDispatchPort` + EasyPost/굿스플로/standalone adapters, `CarrierRouter`, `FulfillmentRouter` self-branch seam), `external-integrations.md` (EasyPost + 굿스플로 integration-heavy artifact), additive `outbound.shipping.confirmed` **subscription** contract (no wms schema change, ADR-052 §D5), PROJECT.md Service Map v2→v1-active. Spec-only; precedent = BE-023 spec → BE-024 bootstrap. 후속=BE-042 (bootstrap impl). 분석=Opus 4.8.
 
 ## in-progress
 

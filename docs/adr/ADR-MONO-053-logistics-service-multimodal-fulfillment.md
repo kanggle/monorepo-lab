@@ -1,8 +1,8 @@
 # ADR-MONO-053 — logistics-service goes multimodal: carrier dispatch now, 3PL fulfillment designed-in
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 **Date:** 2026-07-24
-**History:** PROPOSED 2026-07-24 (this record). ACCEPT is a human gate — an agent may not accept its own ADR.
+**History:** PROPOSED 2026-07-24 (this record) · ACCEPTED 2026-07-24 (owner exact-form instruction **"ADR-MONO-053 ACCEPTED"**). ACCEPT is a human gate — an agent may not accept its own ADR; author (agent) and acceptor (owner) were separate parties.
 **Decision driver:** User (2026-07-24), after a design conversation that walked the whole transport surface — "집계사(굿스플로·EasyPost·스윗트래커)를 붙이고 3pl도 붙이는 방식" → "둘 다 하는 방식으로 구현". The owner elects to **fire [ADR-MONO-052](ADR-MONO-052-transport-context-map.md) §D8-2** by adopting **EasyPost** (real vendor, free sandbox) as a dispatch vendor, replacing the `tms.example.com` placeholder, and to build the hybrid **carrier + 3PL multi-node fulfillment** that 052 mapped but deliberately left unbuilt.
 **Supersedes:** none. This ADR **does not supersede** [ADR-MONO-052](ADR-MONO-052-transport-context-map.md); it is 052 doing exactly what its §D8 said — *"reopened as work — not as a decision"*. 052's §D2 ownership map is this ADR's **input**, not something it re-decides.
 **Related:** [ADR-MONO-052](ADR-MONO-052-transport-context-map.md) (the map: §D2 ownership, §D5 the `outbound.shipping.confirmed` fact-event seam, §D6 no `tms-platform`, §D7 the wms TMS-adapter interim, §D8 the tripwire this fires), [ADR-MONO-050](ADR-MONO-050-scm-procurement-wms-inbound-expected.md) §D4 (a 3PL warehouse is operated by the 3PL's own WMS — wms rejects its receiving; DLT gate), [ADR-MONO-027](ADR-MONO-027-wms-scm-replenishment-loop.md) (demand-planning owns the reorder/redistribution decision; the reject-synchronous-REST principle), [ADR-MONO-022](ADR-MONO-022-ecommerce-wms-fulfillment-integration.md) (precedent: a non-wms domain drives wms physical work without acquiring wms's logic).
@@ -196,5 +196,10 @@ Each row re-measured at authoring (2026-07-24); recount rather than inherit befo
 | Date | Status | Note |
 |---|---|---|
 | 2026-07-24 | PROPOSED | Authored in answer to the owner's 2026-07-24 "둘 다 하는 방식으로 구현" instruction, firing 052 §D8-2. Authorises no code. |
+| 2026-07-24 | ACCEPTED | Flipped on the owner's exact-form instruction **"ADR-MONO-053 ACCEPTED"**. Author and acceptor were separate parties — no self-ACCEPT. |
 
-**ACCEPT gate — not yet cleared.** The owner's "진행" authorised **authoring this PROPOSED record and its first backlog task**, not accepting the decision. `platform/architecture-decision-rule.md` excludes bare affirmatives from the ACCEPT gate even when the referent is unambiguous; acceptance requires a separate, exact-form instruction naming this ADR. Until then, no implementation begins and TASK-SCM-BE-041 stays in `backlog/`.
+**ACCEPT gate — cleared, not bypassed.** The owner's earlier "진행" authorised only **authoring this PROPOSED record and its first backlog task** — it did not accept the decision, because `platform/architecture-decision-rule.md` excludes bare affirmatives from the ACCEPT gate even when the referent is unambiguous. Acceptance came as a **separate, exact-form instruction naming this ADR** ("ADR-MONO-053 ACCEPTED"), issued by the owner (a different party from the authoring agent). The gate's purpose is attributability — it held.
+
+**What acceptance binds.** Acceptance authorises **Phase 1** (D1 bootstrap · D2 dispatch port + EasyPost/굿스플로 · D3 CarrierRouter · D4 the self-branch FulfillmentRouter seam · D8 the wms TMS-adapter retirement once the receiver is live) and the promotion of TASK-SCM-BE-041 `backlog/ → ready/`. Three items are **not** unconditionally bound: **D5** (the 3PL path) is Phase 2, gated on a separate D8-3 election; **D6** (스윗트래커 tracking) is Phase 3 / optional; and **D5's demand-planning routing ownership** rests on 052's *weakest allocation* (§D2① analogy) and must be re-measured before Phase 2, not inherited. **D9** (no `tms-platform`) declines to reopen 052 §D6 rather than re-deciding it.
+
+**Amending this ADR.** What was authorised is the text as read. Later changes — including any strengthening of D5's routing basis — go through an amendment section (the ADR-050 §7 pattern), not an in-place rewrite of §1–§6.

@@ -1,11 +1,11 @@
 # TASK-SCM-BE-041 — logistics-service spec suite (Phase 1: architecture + EasyPost dispatch + shipping.confirmed subscription)
 
-**Status:** backlog
+**Status:** ready
 **Type:** TASK-SCM-BE
-**Depends on / 전제:** [ADR-MONO-053](../../../../docs/adr/ADR-MONO-053-logistics-service-multimodal-fulfillment.md) **ACCEPTED** (this task may not move `backlog/ → ready/` while 053 is PROPOSED). Reads: [ADR-MONO-052](../../../../docs/adr/ADR-MONO-052-transport-context-map.md) §D2/§D5/§D7, [ADR-MONO-050](../../../../docs/adr/ADR-MONO-050-scm-procurement-wms-inbound-expected.md) §D4.
+**Depends on / 전제:** [ADR-MONO-053](../../../../docs/adr/ADR-MONO-053-logistics-service-multimodal-fulfillment.md) **ACCEPTED** (2026-07-24 — gate met; this task promoted `backlog/ → ready/`). Reads: [ADR-MONO-052](../../../../docs/adr/ADR-MONO-052-transport-context-map.md) §D2/§D5/§D7, [ADR-MONO-050](../../../../docs/adr/ADR-MONO-050-scm-procurement-wms-inbound-expected.md) §D4.
 **후속 / blocks:** TASK-SCM-BE-042 (logistics-service bootstrap impl), which reads the specs this task writes.
 
-> **Promotion gate.** `backlog → ready` is allowed only once ADR-MONO-053 is ACCEPTED (its architecture decisions are this task's source of truth) — see `projects/scm-platform/tasks/INDEX.md` § Move Rules. Until then this task is a placeholder capturing the agreed Phase-1 spec scope; do not implement.
+> **Promotion gate — met.** `backlog → ready` required ADR-MONO-053 ACCEPTED (its architecture decisions are this task's source of truth); 053 was accepted 2026-07-24, so this task is now implementable per `projects/scm-platform/tasks/INDEX.md` § Move Rules. Its own `ready → in-progress` move happens when spec authoring begins.
 
 ---
 
