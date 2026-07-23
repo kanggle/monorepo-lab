@@ -100,6 +100,16 @@ class DeliverySkipLockedClaimIntegrationTest extends NotificationServiceIntegrat
      */
     private static final String STATEMENT_TIMEOUT = "8s";
 
+    /**
+     * Unique per-class marker so this test is hermetic: it seeds, queries, asserts
+     * and cleans up ONLY its own rows. `AlertConsumerIntegrationTest` also writes
+     * {@code notification_delivery} rows and does not clean them, so a global
+     * {@code containsExactly} or a global {@code DELETE} would flake (foreign rows
+     * in the result / a foreign in-flight lock stalling cleanup). Scoping to this
+     * marker removes both.
+     */
+    private static final String SOURCE_TOPIC = "be529.skiplocked.test";
+
     @Autowired
     private NotificationDeliveryJpaRepository deliveryRepository;
 
@@ -130,7 +140,10 @@ class DeliverySkipLockedClaimIntegrationTest extends NotificationServiceIntegrat
             entityManager.unwrap(Session.class).doWork(c -> {
                 try (Statement s = c.createStatement()) {
                     s.execute("SET LOCAL statement_timeout = '15s'");
-                    s.executeUpdate("DELETE FROM notification_delivery");
+                    // Only THIS test's rows (SOURCE_TOPIC) — never a foreign row a
+                    // sibling test left in-flight/locked, which would stall cleanup.
+                    s.executeUpdate(
+                            "DELETE FROM notification_delivery WHERE source_topic = '" + SOURCE_TOPIC + "'");
                 }
             });
             return null;
@@ -147,17 +160,19 @@ class DeliverySkipLockedClaimIntegrationTest extends NotificationServiceIntegrat
     void claimReturnsOnlyPendingDueOrdered() {
         UUID dueOld = seed("PENDING", NOW.minusSeconds(60), NOW.minusSeconds(300));
         UUID dueNewNullRetry = seed("PENDING", null, NOW.minusSeconds(120));
-        seed("PENDING", NOW.plusSeconds(600), NOW.minusSeconds(200)); // not due yet
-        seed("SUCCEEDED", NOW.minusSeconds(60), NOW.minusSeconds(400)); // terminal status
-        seed("FAILED", null, NOW.minusSeconds(500)); // terminal status
+        UUID futureDue = seed("PENDING", NOW.plusSeconds(600), NOW.minusSeconds(200)); // not due yet
+        UUID succeeded = seed("SUCCEEDED", NOW.minusSeconds(60), NOW.minusSeconds(400)); // terminal status
+        UUID failed = seed("FAILED", null, NOW.minusSeconds(500)); // terminal status
+        List<UUID> mine = List.of(dueOld, dueNewNullRetry, futureDue, succeeded, failed);
 
         List<UUID> claimed = txTemplate().execute(status ->
-                deliveryRepository.findPendingDueForRetry(NOW, PageRequest.of(0, 50)).stream()
+                deliveryRepository.findPendingDueForRetry(NOW, PageRequest.of(0, 200)).stream()
                         .map(NotificationDeliveryJpaEntity::getId)
+                        .filter(mine::contains) // hermetic: ignore any foreign sibling-test rows
                         .toList());
 
-        // Only the two PENDING+due rows, ordered by created_at (−300 before −120);
-        // future-due, SUCCEEDED and FAILED rows are excluded.
+        // Among THIS test's rows, only the two PENDING+due ones, ordered by created_at
+        // (−300 before −120); future-due, SUCCEEDED and FAILED rows are excluded.
         assertThat(claimed).containsExactly(dueOld, dueNewNullRetry);
     }
 
@@ -180,18 +195,20 @@ class DeliverySkipLockedClaimIntegrationTest extends NotificationServiceIntegrat
                             + "connection on the CI runner (AC-1)")
                     .isNotEqualTo("0");
 
-            // Claimant A locks exactly the first-by-created_at claimable row and holds it.
-            List<UUID> lockedByA = claimForUpdateSkipLockedLimit1(a);
-            assertThat(lockedByA)
-                    .as("claimant A locks the first-by-created_at claimable row")
+            // Claimant A locks exactly THIS test's `locked` row (by id — deterministic,
+            // independent of any foreign row's created_at) and holds it.
+            assertThat(lockRowById(a, locked))
+                    .as("claimant A locks this test's target row")
                     .containsExactly(locked);
 
             // Claimant B — the REAL repository query — runs while A holds `locked`.
-            List<UUID> claimedByB = claimViaRealRepoBounded();
+            List<UUID> claimedByB = claimViaRealRepoBounded().stream()
+                    .filter(List.of(locked, free)::contains) // hermetic: ignore foreign rows
+                    .toList();
 
             // Exclusivity: B must NEVER see the row A holds, and must still make
-            // progress on the free row. A regression that drops SKIP LOCKED makes
-            // B block on `locked` and abort at lock_timeout (5s) → RED, not a hang.
+            // progress on the free row. A regression that drops SKIP LOCKED makes B
+            // block on `locked` and abort at statement_timeout (8s) → RED, not a hang.
             assertThat(claimedByB)
                     .as("SKIP LOCKED: B skips the row A holds and claims only the free one")
                     .containsExactly(free)
@@ -256,18 +273,12 @@ class DeliverySkipLockedClaimIntegrationTest extends NotificationServiceIntegrat
         }
     }
 
-    /** Claimant A: lock exactly one claimable row via the same predicate + SKIP LOCKED, hold the tx open. */
-    private List<UUID> claimForUpdateSkipLockedLimit1(Connection c) throws SQLException {
+    /** Claimant A: lock exactly the given row (by id) FOR UPDATE and hold the tx open. */
+    private List<UUID> lockRowById(Connection c, UUID id) throws SQLException {
         List<UUID> ids = new ArrayList<>();
-        try (PreparedStatement ps = c.prepareStatement("""
-                SELECT id FROM notification_delivery
-                 WHERE status = 'PENDING'
-                   AND (scheduled_retry_at IS NULL OR scheduled_retry_at <= ?::timestamptz)
-                 ORDER BY created_at
-                 FOR UPDATE SKIP LOCKED
-                 LIMIT 1
-                """)) {
-            ps.setString(1, NOW.toString());
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT id FROM notification_delivery WHERE id = ?::uuid FOR UPDATE")) {
+            ps.setString(1, id.toString());
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     ids.add(rs.getObject("id", UUID.class));
@@ -284,11 +295,12 @@ class DeliverySkipLockedClaimIntegrationTest extends NotificationServiceIntegrat
                   (id, event_id, source_topic, channel_id, recipient, delivery_idempotency_key,
                    payload_snapshot, status, attempt_count, scheduled_retry_at, last_error,
                    version, created_at, updated_at)
-                VALUES (?, ?, 'wms.test.topic', 'slack:wms-alerts', 'ops@example.com', ?,
+                VALUES (?, ?, ?, 'slack:wms-alerts', 'ops@example.com', ?,
                    '{}'::jsonb, ?, 0, ?::timestamptz, NULL, 0, ?::timestamptz, ?::timestamptz)
                 """,
                 id,
                 UUID.randomUUID(),
+                SOURCE_TOPIC,
                 "idem-" + id,
                 status,
                 scheduledRetryAt == null ? null : scheduledRetryAt.toString(),
