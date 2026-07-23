@@ -113,7 +113,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
-_(없음)_
+- `TASK-PC-FE-256-domain-guide-comprehension-uplift-p1.md` — **가이드 이해도 개선 P1 구현 → review** (2026-07-23). PC-FE-255(P0) 후속. ① 공용 `GuideRecipe`(번호형 "이럴 땐 이렇게", IAM `DELEGATION_CHAIN` 마커 스타일 재사용) 6도메인 **각 3개** + ② 용어 정의 = 도메인별 미니 `Glossary`(용어\|뜻 2열, `<dfn>`+약어 `Term`/`<abbr>`) + 인라인 `Term`. 신규 섹션 `<domain>-guide-recipes`·`-glossary` 를 255 `GuideToc` 에 추가. **🔵 재측정 적용(상속 안 함)**: 각 `data.ts` 렌더 문자열을 실측해 용어 선별 — `assume-tenant` 는 WMS/SCM/E-Comm 산문엔 렌더되나 IAM엔 없어 IAM 용어집서 제외, `F5`/`producer`/`사가`-코드명은 내부어라 기각하고 운영자-facing 개념으로 대체 정의. 용어 수: IAM 3·WMS 4·SCM 4·Finance 5·ERP 4·E-Comm 5. 순수 server-component(신규 데이터/백엔드/계약 0, `'use client'` 0), 기존 `data-testid`+`guide-toc`/`state-flow` 보존. **검증**: tsc 0 · `next lint` 0 · 가이드 테스트 42/42(신규 primitives 13 + Wms 14 + Ecommerce 15, axe-clean 6화면) — full-suite 3 실패는 무관 파일(LedgerOps·OutboundOps) 워커 flake로 격리 재실행 GREEN(CI가 권위). **편차(정직)**: Lever B는 침습적인 기존 산문 인라인 래핑 대신 항상 보이는 `Glossary` "뜻" 열로 구현(키보드/모바일 도달, hover 비의존) — `Term`/`<abbr>` 는 용어집 약어에 사용. 구현=frontend-engineer(Opus)/격리 worktree, 분석=Opus 4.8.
 
 ## done
 

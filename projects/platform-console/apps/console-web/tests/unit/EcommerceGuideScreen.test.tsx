@@ -14,6 +14,8 @@ import {
   USER_STATES,
   TEMPLATE_TYPES,
   NOTIFICATION_CHANNELS,
+  ECOMMERCE_GLOSSARY,
+  ECOMMERCE_RECIPES,
 } from '@/features/ecommerce-guide/data';
 import { runAxe } from '../a11y/axe-helper';
 
@@ -195,6 +197,35 @@ describe('EcommerceGuideScreen', () => {
       'SMS',
       'PUSH',
     ]);
+  });
+
+  it('mounts 작업 레시피 (GuideRecipe) with numbered steps (TASK-PC-FE-256)', () => {
+    render(<EcommerceGuideScreen />);
+    expect(screen.getByTestId('ecommerce-guide-recipes')).toBeInTheDocument();
+    expect(ECOMMERCE_RECIPES.length).toBeGreaterThanOrEqual(2);
+    expect(ECOMMERCE_RECIPES.length).toBeLessThanOrEqual(3);
+    ECOMMERCE_RECIPES.forEach((recipe, i) => {
+      const card = screen.getByTestId(`ecommerce-guide-recipe-${i}`);
+      expect(within(card).getByText(recipe.title)).toBeInTheDocument();
+      expect(card.querySelector('ol')).not.toBeNull();
+      recipe.steps.forEach((_, s) => {
+        expect(
+          within(card).getByTestId(`ecommerce-guide-recipe-${i}-step-${s}`),
+        ).toBeInTheDocument();
+      });
+    });
+  });
+
+  it('mounts 용어집 (Glossary) with always-visible definitions (TASK-PC-FE-256)', () => {
+    render(<EcommerceGuideScreen />);
+    const glossary = screen.getByTestId('ecommerce-guide-glossary-table');
+    expect(glossary).toBeInTheDocument();
+    for (const entry of ECOMMERCE_GLOSSARY) {
+      const row = within(glossary).getByTestId(
+        `ecommerce-guide-glossary-table-${entry.key}`,
+      );
+      expect(within(row).getByText(entry.meaning)).toBeInTheDocument();
+    }
   });
 
   it('renders the ecommerce domain-role note (single ECOMMERCE_OPERATOR axis)', () => {

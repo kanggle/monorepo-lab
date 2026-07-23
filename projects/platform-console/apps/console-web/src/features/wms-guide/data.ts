@@ -22,6 +22,11 @@
  * 텍스트 자체는 사람이 스펙과 맞춘다(iam-guide data.ts 동일 정책).
  */
 
+import type {
+  GlossaryEntry,
+  GuideRecipeData,
+} from '@/shared/ui/guide-primitives';
+
 // ───────────────────────── 재고 (Inventory) ─────────────────────────
 
 /** 재고 수량 버킷. `보유(on-hand)`는 저장값이 아니라 파생값. */
@@ -321,5 +326,73 @@ export const WMS_ROLES: WmsRole[] = [
     role: 'OUTBOUND_ADMIN',
     surface: '출고 취소',
     desc: '출고 전 주문 취소.',
+  },
+];
+
+// ───────────────────────── 작업 레시피 (TASK-PC-FE-256) ─────────────────────────
+
+/**
+ * WMS 작업 레시피 — 재고(가용 버킷·조정) · 출고(주문 상태머신·취소 롤) · TMS
+ * 통보 상태라는 이 화면의 실제 상태·화면만 참조한다.
+ */
+export const WMS_RECIPES: GuideRecipeData[] = [
+  {
+    title: '재고가 모자라 출고가 이월(BACKORDERED)됐을 때',
+    steps: [
+      '재고 화면(/wms/inventory)에서 해당 SKU 의 가용 버킷을 확인합니다 — 가용이 부족하면 예약이 실패해 출고가 이월됩니다.',
+      '입고 적치나 재고 조정으로 가용 수량을 채웁니다(재고 변동 = 입고/조정).',
+      '이미 BACKORDERED(종료 상태)로 빠진 주문은 되살아나지 않으니, 재고를 채운 뒤 새 출고를 생성해 정상 경로(접수→피킹→…)로 태웁니다.',
+    ],
+  },
+  {
+    title: '출고를 취소해야 할 때',
+    steps: [
+      '출고 화면(/wms/outbound)에서 주문 상태를 확인합니다 — 취소는 출고완료(SHIPPED) 전(접수~패킹완료)에만 가능합니다.',
+      '취소하면 잡혀 있던 재고 예약이 보상 흐름으로 해제되어 가용으로 복귀합니다(예약 RESERVED→RELEASED).',
+      '출고 취소에는 OUTBOUND_ADMIN 롤이 필요합니다.',
+    ],
+  },
+  {
+    title: '택배가 운송사에 통보되지 않을 때',
+    steps: [
+      '택배/출고 표에서 TMS 통보 상태가 통보 대기(PENDING) 또는 통보 실패(NOTIFY_FAILED)인지 확인합니다.',
+      '"수동 TMS 재시도"로 다시 통보를 시도합니다 — 통보가 완료(NOTIFIED)되면 운송장번호가 채워집니다.',
+      '데모 환경에는 TMS mock 이 없어 통보 대기에 머무는 것이 정상입니다(장애 아님).',
+    ],
+  },
+];
+
+// ───────────────────────── 용어집 (TASK-PC-FE-256) ─────────────────────────
+
+/**
+ * WMS 용어집 — 화면에 실제 렌더되는 문자열 중 일반 운영자가 모를 법한 용어만.
+ * 버킷·예약 흐름은 화면이 이미 표로 설명하므로 제외.
+ */
+export const WMS_GLOSSARY: GlossaryEntry[] = [
+  {
+    key: 'SKU',
+    term: 'SKU',
+    full: 'Stock Keeping Unit',
+    meaning:
+      '재고를 관리하는 최소 상품 단위. 위치·로트와 함께 재고 수량을 식별하는 키가 됩니다.',
+  },
+  {
+    key: 'TMS',
+    term: '운송사 통보 (TMS)',
+    full: 'Transportation Management System',
+    meaning:
+      '출고 확정된 화물을 택배사에 넘기는 운송 관리 시스템. 통보 대기·완료·실패 상태로 택배/출고 표에 표시됩니다.',
+  },
+  {
+    key: 'saga',
+    term: '사가 (saga)',
+    meaning:
+      '출고의 여러 단계를 뒤에서 조율하는 내부 상태머신. 운영자가 직접 다루지 않지만 알림·"점검 필요" 신호의 출처입니다.',
+  },
+  {
+    key: 'assume-tenant',
+    term: '테넌트 선택 (assume-tenant)',
+    meaning:
+      '운영자가 특정 테넌트를 골라 그 테넌트의 도메인 권한을 부여받는 동작. 이때 WMS 도메인 롤(재고·출고 읽기/쓰기)이 자동으로 파생됩니다.',
   },
 ];

@@ -25,6 +25,11 @@
  * 설명 텍스트 자체는 사람이 스펙과 맞춘다(iam-guide/wms-guide data.ts 동일 정책).
  */
 
+import type {
+  GlossaryEntry,
+  GuideRecipeData,
+} from '@/shared/ui/guide-primitives';
+
 // ───────────────────────── 도메인 서비스 맵 ─────────────────────────
 
 /** 이커머스 마이크로서비스 1개. */
@@ -548,3 +553,78 @@ export const ECOMMERCE_ROLE_NOTE = {
   title: 'E-Commerce 도메인 롤 (단일 ECOMMERCE_OPERATOR)',
   body: 'E-Commerce 화면은 단일 도메인 롤 `ECOMMERCE_OPERATOR` 으로 게이트된다. 운영자가 ecommerce 구독 테넌트로 테넌트 선택(assume-tenant)할 때 자동 파생되어 주입되며(auth-service OperatorRoleDerivation), 상품·주문·배송·프로모션·사용자·셀러·알림 7개 화면이 모두 이 하나의 롤로 동일하게 열린다. WMS 처럼 화면별 세분 롤(READ/WRITE)은 없다. ecommerce 구독이 없거나 롤이 없으면 도메인 게이트웨이가 403 을 반환하고 콘솔은 "접근 권한이 없습니다"로 표시한다. (IAM 콘솔을 게이트하는 admin-console 역할과는 별도 축 — IAM 가이드 참조.)',
 } as const;
+
+// ───────────────────────── 작업 레시피 (TASK-PC-FE-256) ─────────────────────────
+
+/**
+ * E-Commerce 작업 레시피 — 주문 취소→환불 보상 · 배송 발송(운송사/운송장 필수·
+ * WMS 토글) · 셀러 상태 전이라는 이 화면의 실제 상태·화면만 참조한다. 결제는
+ * 전용 화면이 없다는 점(주문 상태로 간접 노출)을 정직하게 반영한다.
+ */
+export const ECOMMERCE_RECIPES: GuideRecipeData[] = [
+  {
+    title: '환불 요청이 들어왔을 때',
+    intro: '결제 전용 화면이 없어 환불은 주문 취소의 보상으로 처리됩니다.',
+    steps: [
+      '주문 화면(/ecommerce/orders)에서 해당 주문을 엽니다 — 운영자는 대기(PENDING)·확정(CONFIRMED) 상태에서만 취소할 수 있습니다.',
+      '취소하면 캡처된 결제가 있으면 환불/보이드 보상이 자동으로 걸립니다(확정 전 미캡처 건은 보이드, 채무 없음).',
+      '환불 결과는 결제 상태(환불완료 REFUNDED · 부분환불 PARTIALLY_REFUNDED)로 관측되며, 콘솔에는 주문 상태(취소)로 간접 표시됩니다.',
+    ],
+  },
+  {
+    title: '주문을 발송 처리할 때',
+    steps: [
+      '배송 화면(/ecommerce/shippings)에서 준비중(PREPARING) 배송을 엽니다.',
+      '발송(SHIPPED)하려면 운송사와 운송장번호가 반드시 있어야 합니다 — 없으면 거부됩니다. 발송하면 주문도 배송중(SHIPPED)으로 반영됩니다.',
+      'WMS 풀필먼트로 라우팅된 주문(wmsRouted)이면 "WMS 재고 차감" 토글을 켜 물리 재고를 차감합니다.',
+    ],
+  },
+  {
+    title: '셀러를 정지하거나 종료할 때',
+    steps: [
+      '셀러 화면(/ecommerce/sellers)에서 대상 셀러의 상태를 확인합니다 — 셀러는 수정/삭제가 없고 상태 전이로만 바뀝니다.',
+      '활성(ACTIVE)에서 정지(SUSPENDED, 가역) 또는 종료(CLOSED, 비가역)를 고릅니다.',
+      '종료는 되돌릴 수 없고 백킹 계정이 비활성화됩니다(테넌트별 default 셀러는 항상 활성 유지).',
+    ],
+  },
+];
+
+// ───────────────────────── 용어집 (TASK-PC-FE-256) ─────────────────────────
+
+/**
+ * E-Commerce 용어집 — 화면에 실제 렌더되는 문자열 중 일반 운영자가 모를 법한
+ * 용어만. 주문·배송·셀러 상태 enum 은 표가 이미 한글 라벨로 설명하므로 제외.
+ */
+export const ECOMMERCE_GLOSSARY: GlossaryEntry[] = [
+  {
+    key: 'variant',
+    term: '옵션 (variant)',
+    meaning:
+      '상품의 SKU·옵션 단위(색·사이즈 등). 상품 등록에 최소 1개가 필요하고, 재고는 옵션별로 분리해 조정합니다.',
+  },
+  {
+    key: 'SKU',
+    term: 'SKU',
+    full: 'Stock Keeping Unit',
+    meaning: '재고를 관리하는 최소 상품 단위. 옵션(variant)마다 별도 재고를 가집니다.',
+  },
+  {
+    key: 'PG',
+    term: '결제대행 (PG)',
+    full: 'Payment Gateway',
+    meaning:
+      '카드·간편결제를 처리하는 결제 게이트웨이(여기선 Toss Payments). 결제 승인과 환불이 이 경로로 이뤄집니다.',
+  },
+  {
+    key: 'backorder',
+    term: '재고부족 이월 (BACKORDERED)',
+    meaning:
+      '확정 시 재고가 모자라면 주문이 빠지는 상태. 재입고되면 FIFO 재예약으로 다시 확정됩니다. 콘솔 상태 선택지엔 없고 읽기로만 보입니다.',
+  },
+  {
+    key: 'assume-tenant',
+    term: '테넌트 선택 (assume-tenant)',
+    meaning:
+      '운영자가 ecommerce 구독 테넌트를 골라 ECOMMERCE_OPERATOR 롤을 부여받는 동작. 7개 운영 화면이 모두 이 하나의 롤로 열립니다.',
+  },
+];

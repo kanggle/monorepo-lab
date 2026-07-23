@@ -8,9 +8,18 @@ import {
   SAGA_NOTE,
   STOCK_BUCKETS,
   TMS_STATES,
+  WMS_GLOSSARY,
+  WMS_RECIPES,
   WMS_ROLES,
 } from '../data';
-import { GuideToc, Mono, NoteCard, StateFlow } from '@/shared/ui/guide-primitives';
+import {
+  Glossary,
+  GuideRecipe,
+  GuideToc,
+  Mono,
+  NoteCard,
+  StateFlow,
+} from '@/shared/ui/guide-primitives';
 
 /**
  * WMS 가이드 화면 (TASK-PC-FE-183). 순수 정적 참조 화면 — 재고(수량 버킷·예약
@@ -20,9 +29,11 @@ import { GuideToc, Mono, NoteCard, StateFlow } from '@/shared/ui/guide-primitive
  */
 
 const SECTIONS = [
+  { id: 'wms-guide-recipes', label: '자주 하는 작업' },
   { id: 'wms-guide-inventory', label: '재고' },
   { id: 'wms-guide-outbound', label: '출고' },
   { id: 'wms-guide-roles', label: '참고: WMS 도메인 롤' },
+  { id: 'wms-guide-glossary', label: '용어집' },
 ];
 
 export function WmsGuideScreen() {
@@ -40,6 +51,28 @@ export function WmsGuideScreen() {
       </p>
 
       <GuideToc items={SECTIONS} />
+
+      {/* ───────────────── 자주 하는 작업 (레시피) ───────────────── */}
+      <h2
+        id="wms-guide-recipes"
+        data-testid="wms-guide-recipes"
+        className="mb-2 text-xl font-semibold"
+      >
+        자주 하는 작업
+      </h2>
+      <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
+        “이럴 땐 이렇게” — 각 단계는 재고·출고 화면의 실제 상태·작업만
+        참조합니다.
+      </p>
+      <div className="mb-10">
+        {WMS_RECIPES.map((recipe, i) => (
+          <GuideRecipe
+            key={recipe.title}
+            recipe={recipe}
+            testid={`wms-guide-recipe-${i}`}
+          />
+        ))}
+      </div>
 
       {/* ───────────────── 재고 ───────────────── */}
       <h2
@@ -355,6 +388,19 @@ export function WmsGuideScreen() {
           </tbody>
         </table>
       </div>
+
+      {/* ───────────────── 용어집 ───────────────── */}
+      <h2
+        id="wms-guide-glossary"
+        data-testid="wms-guide-glossary"
+        className="mb-2 mt-10 text-xl font-semibold"
+      >
+        용어집
+      </h2>
+      <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
+        이 화면에 나오는 낯선 용어의 뜻입니다.
+      </p>
+      <Glossary entries={WMS_GLOSSARY} testid="wms-guide-glossary-table" />
     </section>
   );
 }

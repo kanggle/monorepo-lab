@@ -32,6 +32,11 @@
  * data.ts 동일 정책).
  */
 
+import type {
+  GlossaryEntry,
+  GuideRecipeData,
+} from '@/shared/ui/guide-primitives';
+
 // ───────────────────────── 도메인 서비스 맵 ─────────────────────────
 
 /** erp-platform 마이크로서비스 1개. */
@@ -315,3 +320,69 @@ export const NOTIFICATION_NOTE = {
   title: '알림 — 결재 전이는 벨 aggregator 로 통합',
   body: 'approval-service 의 4개 전이 이벤트(제출·승인·반려·철회)는 notification-service 가 소비해 수신자 스코프 인앱 알림을 생성한다. 콘솔은 이를 독립 ERP 메뉴가 아니라 콘솔 셸 상단의 공용 알림 벨에 통합해 노출한다(ADR-043 P2 DECLINED — 도메인별 독립 알림 화면 재발굴 금지). 벨에서 결재 알림을 클릭하면 해당 결재 요청(`/erp/approval`)으로 딥링크된다.',
 } as const;
+
+// ───────────────────────── 작업 레시피 (TASK-PC-FE-256) ─────────────────────────
+
+/**
+ * ERP 작업 레시피 — 결재 상태머신(반려→새 요청) · 위임 grant · effective-dating
+ * (asOf)이라는 이 화면의 실제 상태·화면만 참조한다.
+ */
+export const ERP_RECIPES: GuideRecipeData[] = [
+  {
+    title: '결재가 반려됐을 때 다시 올리기',
+    steps: [
+      '결재함(/erp/approval)에서 반려된(REJECTED) 요청의 사유를 이력에서 확인합니다.',
+      '반려는 종료 상태라 되돌릴 수 없으니, 내용을 고쳐 새 결재 요청을 생성합니다(DRAFT).',
+      '제출(submit)하면 첫 단계 승인자부터 다시 라우팅됩니다(2단계 이상이면 IN_REVIEW 로 진행).',
+    ],
+  },
+  {
+    title: '자리를 비울 때 결재를 위임하기',
+    steps: [
+      '위임 화면(/erp/delegation)에서 대결(위임) grant 를 등록합니다.',
+      '포괄(GLOBAL) 또는 건별(REQUEST) 스코프와 유효기간(validFrom/validTo, validTo 부재=무기한)을 정합니다.',
+      '활성 grant 가 있으면 대리인이 대신 승인/반려할 수 있고, 처리 시 실제 승인자가 정직하게 표시됩니다(actingForApproverId).',
+    ],
+  },
+  {
+    title: '과거 시점의 조직 상태를 조회할 때',
+    steps: [
+      '마스터 화면(/erp/masters) 상단의 시점 선택기(AsOfPicker)에 조회할 날짜를 지정합니다.',
+      '그러면 "현재"가 아니라 "그 시점"의 마스터 상태가 정확히 반환됩니다(effective-dating).',
+      '개요의 마스터 카운트 타일도 같은 asOf 를 따라 집계됩니다.',
+    ],
+  },
+];
+
+// ───────────────────────── 용어집 (TASK-PC-FE-256) ─────────────────────────
+
+/**
+ * ERP 용어집 — 화면에 실제 렌더되는 문자열 중 일반 운영자가 모를 법한 용어만.
+ * 결재 상태 enum(초안·제출됨…)·위임 스코프는 표가 이미 한글로 설명하므로 제외.
+ */
+export const ERP_GLOSSARY: GlossaryEntry[] = [
+  {
+    key: 'effective-dating',
+    term: '시점 조회 (effective-dating)',
+    meaning:
+      'asOf 날짜를 지정하면 "현재"가 아니라 "그 시점"의 마스터 상태를 조회하는 기능. 과거 조회에 현재 상태를 대신 보여주지 않습니다.',
+  },
+  {
+    key: 'read-model',
+    term: '읽기모델 (read-model)',
+    meaning:
+      '원본 데이터를 이벤트로 투영해 만든 조회 전용 사본(조직도 등). 도메인 로직이 없고 원본보다 잠깐 지연될 수 있습니다.',
+  },
+  {
+    key: 'eventually-consistent',
+    term: '최종 일관성 (eventually-consistent)',
+    meaning:
+      '투영이 원본을 곧 따라잡지만 순간적으로는 과거일 수 있는 상태. 아직 반영 안 된 참조는 조작된 값 대신 "동기화 중"으로 표시됩니다.',
+  },
+  {
+    key: 'delegation',
+    term: '대결 (위임, delegation)',
+    meaning:
+      '결재자가 부재할 때 다른 운영자가 대신 승인·반려하도록 권한을 넘기는 것. 포괄(GLOBAL)·건별(REQUEST) 스코프와 유효기간을 가집니다.',
+  },
+];

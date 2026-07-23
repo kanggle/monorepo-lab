@@ -31,6 +31,11 @@
  * 동일 정책).
  */
 
+import type {
+  GlossaryEntry,
+  GuideRecipeData,
+} from '@/shared/ui/guide-primitives';
+
 // ───────────────────────── 도메인 서비스 맵 ─────────────────────────
 
 /** scm-platform 마이크로서비스 1개. */
@@ -363,3 +368,71 @@ export const SCM_ROLE_NOTE = {
   title: 'SCM 도메인 롤 (단일 SCM_OPERATOR) · 단일테넌트',
   body: 'SCM 은 v1 단일테넌트 도메인이다 — scm-gateway 는 JWT `tenant_id ∈ {scm, *}` 만 허용하고(다른 테넌트는 403 TENANT_FORBIDDEN), 운영자는 콘솔 테넌트 스위처에서 `scm` 을 선택(assume-tenant)해야 도메인 토큰이 tenant_id=scm 으로 발급된다. 이때 auth-service OperatorRoleDerivation 이 단일 도메인 롤 `SCM_OPERATOR` 를 파생한다(WMS 의 화면별 세분 롤과 달리 하나뿐, E-Commerce 의 단일 ADMIN 과 유사). demand-planning(보충·설정)은 테넌트 게이트만으로 열리고 별도 롤 체크가 없으나, 조달의 발주 확정(confirm)은 roles∋OPERATOR 를 요구한다. (콘솔 자체를 게이트하는 admin-console 역할과는 다른 축 — IAM 가이드 참조.)',
 } as const;
+
+// ───────────────────────── 작업 레시피 (TASK-PC-FE-256) ─────────────────────────
+
+/**
+ * SCM 작업 레시피 — 보충 루프(추천→승인→DRAFT 발주) · 설정(재주문 정책·공급사
+ * 매핑) · 재고 가시성(신선도·S5)이라는 이 화면의 실제 상태·화면만 참조한다.
+ */
+export const SCM_RECIPES: GuideRecipeData[] = [
+  {
+    title: '보충 추천을 승인해 발주로 만들 때',
+    steps: [
+      '보충 화면(/scm/replenishment)에서 추천(SUGGESTED) 항목을 엽니다 — 추천·승인 상태에서만 승인/기각할 수 있습니다.',
+      '승인하면 공급사 매핑을 해석해 DRAFT 발주가 생성되고 추천은 물질화(MATERIALIZED)로 종료됩니다.',
+      '공급사 매핑이 없으면 승인이 막히니(SKU_SUPPLIER_UNMAPPED), 설정 화면에서 그 SKU 의 매핑을 먼저 등록합니다.',
+    ],
+  },
+  {
+    title: '보충 추천이 자동으로 안 생길 때',
+    steps: [
+      '설정 화면(/scm/config)에서 해당 SKU 의 재주문점(reorderPoint)이 설정돼 있는지 확인합니다.',
+      'wms 가용재고가 재주문점 아래로 떨어져야 추천이 생성됩니다(보충 루프 ②).',
+      '공급사 매핑도 함께 등록해야 나중에 승인 시 DRAFT 발주까지 이어집니다(루프 ③).',
+    ],
+  },
+  {
+    title: '재고 스냅샷이 미덥지 않을 때',
+    steps: [
+      '재고 화면에서 노드별 신선도(staleness)를 확인합니다 — 지연(STALE)·도달불가(UNREACHABLE) 노드가 있으면 합산 수량을 그만큼 낮은 신뢰로 읽습니다.',
+      '이 스냅샷에는 항상 S5 경고가 붙습니다 — 발주 결정의 근거로 쓰지 않습니다.',
+      '실제 재고 차감·발주의 권위는 wms inventory-service 이며, 이 스냅샷은 최종 일관성 읽기모델이라 순간적으로 과거일 수 있습니다.',
+    ],
+  },
+];
+
+// ───────────────────────── 용어집 (TASK-PC-FE-256) ─────────────────────────
+
+/**
+ * SCM 용어집 — 화면에 실제 렌더되는 문자열 중 일반 운영자가 모를 법한 용어만.
+ * 상태머신 enum(초안·제출…)은 표가 이미 한글 라벨과 설명을 붙였으므로 제외.
+ */
+export const SCM_GLOSSARY: GlossaryEntry[] = [
+  {
+    key: 'PO',
+    term: '발주 (PO)',
+    full: 'Purchase Order',
+    meaning:
+      '공급사에 물품을 주문하는 구매 문서. 초안→제출→접수→확정→…→정산 생명주기를 따르며, 콘솔의 발주 목록은 읽기 전용입니다.',
+  },
+  {
+    key: 'S5',
+    term: 'S5 경고',
+    meaning:
+      '재고 가시성 응답에 항상 붙는 계약상 경고 — "이 재고 스냅샷을 발주 결정의 근거로 쓰지 말라"는 뜻입니다. 콘솔은 이 문자열을 숨기지 않습니다.',
+  },
+  {
+    key: 'staleness',
+    term: '신선도 (staleness)',
+    meaning:
+      '노드 재고 스냅샷이 얼마나 최신인지 — 최신(FRESH)·지연(STALE)·도달불가(UNREACHABLE). 지연/도달불가 노드는 데이터를 신뢰하기 어렵습니다.',
+  },
+  {
+    key: 'SKU',
+    term: 'SKU',
+    full: 'Stock Keeping Unit',
+    meaning:
+      '재고·발주를 관리하는 최소 상품 단위. 재주문 정책과 공급사 매핑을 이 단위로 설정합니다.',
+  },
+];

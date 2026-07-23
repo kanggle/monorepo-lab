@@ -27,6 +27,11 @@
  * 동일 정책).
  */
 
+import type {
+  GlossaryEntry,
+  GuideRecipeData,
+} from '@/shared/ui/guide-primitives';
+
 // ───────────────────────── 도메인 서비스 맵 ─────────────────────────
 
 /** finance-platform 마이크로서비스 1개. */
@@ -227,3 +232,78 @@ export const ACCOUNT_ID_DRIVEN_NOTE = {
   title: '계좌·원장 분개는 목록 조회가 없다 (id-driven)',
   body: 'finance v1 은 계좌(account-service)·분개(ledger-service) 모두 list/search GET 을 제공하지 않는다 — 계좌 화면은 accountId 를, 원장의 분개 조회는 entryId 를 입력받는 조회 전용 화면이다. 개요가 "계좌 목록 요약"이 아니라 "운영자 본인의 기본계좌 단건 스냅샷"만 보여주는 이유도 이 제약 때문이다(cross-account 집계·synthetic 합산 금지).',
 } as const;
+
+// ───────────────────────── 작업 레시피 (TASK-PC-FE-256) ─────────────────────────
+
+/**
+ * Finance 작업 레시피 — 대사 해소(원장 화면의 유일한 쓰기) · 시산표 inBalance ·
+ * 규제 계좌 상태/KYC 라는 이 화면의 실제 상태·화면만 참조한다. 콘솔에 없는 쓰기
+ * (KYC 승급·동결 해제 등)는 "콘솔 범위 밖"으로 정직하게 안내한다.
+ */
+export const FINANCE_RECIPES: GuideRecipeData[] = [
+  {
+    title: '대사 차이를 해소할 때',
+    steps: [
+      '원장 화면(/ledger)의 대사 큐에서 OPEN 상태의 차이를 엽니다.',
+      '차이 유형(외부 미매칭·내부 미매칭·금액 불일치)을 확인합니다 — 금액 불일치에는 FX 차액도 포함됩니다.',
+      '해소하면 상태가 RESOLVED 로 바뀝니다(대사 해소는 원장 화면의 유일한 쓰기). 개요의 "미해소 대사 차이 수" 타일은 OPEN 건수를 셉니다.',
+    ],
+  },
+  {
+    title: '시산표가 안 맞을 때 (inBalance = false)',
+    steps: [
+      '개요의 원장 타일 또는 원장 화면의 시산표에서 inBalance 플래그를 확인합니다.',
+      'false 면 차변/대변 합계가 어긋난 데이터 정합성 문제입니다 — 콘솔은 이를 숨기지 않고 그대로 보여줍니다.',
+      '원장에서 계정별 차변/대변 총계와 분개(journal entry)를 드릴다운해 원인을 찾습니다.',
+    ],
+  },
+  {
+    title: '계좌가 거래를 못 할 때',
+    steps: [
+      '계좌 화면(/finance/accounts)에서 accountId 로 상태를 조회합니다.',
+      '상태가 동결(FROZEN)·제한(RESTRICTED)이거나 KYC 레벨이 낮으면(NONE/BASIC) 홀드·이체가 차단될 수 있습니다.',
+      'KYC 승급·동결 해제는 콘솔 범위 밖(백엔드 조치)입니다 — 콘솔은 규제 상태를 있는 그대로 표시만 합니다.',
+    ],
+  },
+];
+
+// ───────────────────────── 용어집 (TASK-PC-FE-256) ─────────────────────────
+
+/**
+ * Finance 용어집 — 화면에 실제 렌더되는 회계·규제 전문 용어 중 일반 운영자가
+ * 모를 법한 것만. 계좌 상태 enum(활성·동결…)은 표가 이미 한글로 설명하므로 제외.
+ */
+export const FINANCE_GLOSSARY: GlossaryEntry[] = [
+  {
+    key: 'KYC',
+    term: 'KYC',
+    full: 'Know Your Customer',
+    meaning:
+      '고객확인 절차. 레벨(미인증·기본·완전)이 낮으면 거래 한도가 낮거나 홀드·이체가 차단될 수 있습니다.',
+  },
+  {
+    key: 'trial-balance',
+    term: '시산표 (trial balance)',
+    meaning:
+      '전 계정의 차변·대변 합계를 집계한 표. inBalance 플래그가 차변=대변임을 즉시 증명하며, false 면 정합성 문제입니다.',
+  },
+  {
+    key: 'reconciliation',
+    term: '대사 (reconciliation)',
+    meaning:
+      '외부 명세서(은행·PG 정산 파일 등)와 내부 원장을 맞춰보는 것. 불일치는 OPEN 차이로 큐에 쌓이고 운영자가 해소합니다.',
+  },
+  {
+    key: 'FX',
+    term: 'FX',
+    full: 'Foreign Exchange',
+    meaning:
+      '외환(환율). 다중 통화 원장은 외부 환율 피드를 캐시하며, 각 환율의 기준 시각·경과·신선도(stale)를 함께 보여줍니다.',
+  },
+  {
+    key: 'minor-units',
+    term: '최소 화폐단위 (minor units)',
+    meaning:
+      '금액을 정밀도 손실 없이 정수 문자열로 표현하는 단위(원=0자리, 달러=2자리). 콘솔은 이를 숫자로 변환하지 않고 문자열로만 다룹니다.',
+  },
+];

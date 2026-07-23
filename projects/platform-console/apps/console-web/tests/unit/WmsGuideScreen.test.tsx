@@ -8,6 +8,8 @@ import {
   LOW_STOCK_MECHANISMS,
   ORDER_STATES,
   TMS_STATES,
+  WMS_GLOSSARY,
+  WMS_RECIPES,
   WMS_ROLES,
 } from '@/features/wms-guide/data';
 import { runAxe } from '../a11y/axe-helper';
@@ -121,6 +123,39 @@ describe('WmsGuideScreen', () => {
       'NOTIFIED',
       'NOTIFY_FAILED',
     ]);
+  });
+
+  it('mounts the 작업 레시피 (GuideRecipe) with numbered steps that reference real states (TASK-PC-FE-256)', () => {
+    render(<WmsGuideScreen />);
+    expect(screen.getByTestId('wms-guide-recipes')).toBeInTheDocument();
+    // 2~3 recipes, each an actual GuideRecipe card with numbered steps.
+    expect(WMS_RECIPES.length).toBeGreaterThanOrEqual(2);
+    expect(WMS_RECIPES.length).toBeLessThanOrEqual(3);
+    WMS_RECIPES.forEach((recipe, i) => {
+      const card = screen.getByTestId(`wms-guide-recipe-${i}`);
+      expect(within(card).getByText(recipe.title)).toBeInTheDocument();
+      // A numbered <ol> with one <li> per step (not just "a component exists").
+      expect(card.querySelector('ol')).not.toBeNull();
+      recipe.steps.forEach((_, s) => {
+        expect(
+          within(card).getByTestId(`wms-guide-recipe-${i}-step-${s}`),
+        ).toBeInTheDocument();
+      });
+    });
+  });
+
+  it('mounts the 용어집 (Glossary) — each term defined actually renders in this guide (TASK-PC-FE-256)', () => {
+    render(<WmsGuideScreen />);
+    const glossary = screen.getByTestId('wms-guide-glossary-table');
+    expect(glossary).toBeInTheDocument();
+    for (const entry of WMS_GLOSSARY) {
+      const row = within(glossary).getByTestId(
+        `wms-guide-glossary-table-${entry.key}`,
+      );
+      // Definition visible in the row (keyboard/mobile reachable, not hover-only).
+      expect(within(row).getByText(entry.meaning)).toBeInTheDocument();
+      expect(row.querySelector('dfn')).not.toBeNull();
+    }
   });
 
   it('renders the WMS domain roles (separate axis from IAM roles)', () => {

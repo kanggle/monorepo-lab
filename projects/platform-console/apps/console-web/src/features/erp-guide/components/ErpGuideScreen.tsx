@@ -7,12 +7,16 @@ import {
   DELEGATION_SCOPES,
   DOMAIN_SERVICES,
   EMPLOYMENT_STATUSES,
+  ERP_GLOSSARY,
+  ERP_RECIPES,
   MASTER_STATUSES,
   NOTIFICATION_NOTE,
   READ_MODEL_NOTE,
 } from '../data';
 import {
   AttentionCell,
+  Glossary,
+  GuideRecipe,
   GuideToc,
   Mono,
   NoteCard,
@@ -32,6 +36,7 @@ import {
  */
 
 const SECTIONS = [
+  { id: 'erp-guide-recipes', label: '자주 하는 작업' },
   { id: 'erp-guide-services', label: '도메인 서비스' },
   { id: 'erp-guide-screens', label: '콘솔 화면' },
   { id: 'erp-guide-master-states', label: '마스터 상태' },
@@ -39,6 +44,7 @@ const SECTIONS = [
   { id: 'erp-guide-approval-states', label: '결재 상태' },
   { id: 'erp-guide-delegation-scopes', label: '위임 스코프' },
   { id: 'erp-guide-concepts', label: '핵심 개념' },
+  { id: 'erp-guide-glossary', label: '용어집' },
 ];
 
 export function ErpGuideScreen() {
@@ -56,6 +62,28 @@ export function ErpGuideScreen() {
       </p>
 
       <GuideToc items={SECTIONS} />
+
+      {/* ───────────────── 자주 하는 작업 (레시피) ───────────────── */}
+      <h2
+        id="erp-guide-recipes"
+        data-testid="erp-guide-recipes"
+        className="mb-2 text-xl font-semibold"
+      >
+        자주 하는 작업
+      </h2>
+      <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
+        “이럴 땐 이렇게” — 각 단계는 결재함·위임·마스터 화면의 실제 상태·작업만
+        참조합니다.
+      </p>
+      <div className="mb-10">
+        {ERP_RECIPES.map((recipe, i) => (
+          <GuideRecipe
+            key={recipe.title}
+            recipe={recipe}
+            testid={`erp-guide-recipe-${i}`}
+          />
+        ))}
+      </div>
 
       {/* ───────────────── 도메인 서비스 맵 ───────────────── */}
       <h2
@@ -351,6 +379,19 @@ export function ErpGuideScreen() {
 
       <NoteCard title={READ_MODEL_NOTE.title} body={READ_MODEL_NOTE.body} />
       <NoteCard title={NOTIFICATION_NOTE.title} body={NOTIFICATION_NOTE.body} />
+
+      {/* ───────────────── 용어집 ───────────────── */}
+      <h2
+        id="erp-guide-glossary"
+        data-testid="erp-guide-glossary"
+        className="mb-2 mt-10 text-xl font-semibold"
+      >
+        용어집
+      </h2>
+      <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
+        이 화면에 나오는 낯선 용어의 뜻입니다.
+      </p>
+      <Glossary entries={ERP_GLOSSARY} testid="erp-guide-glossary-table" />
     </section>
   );
 }
