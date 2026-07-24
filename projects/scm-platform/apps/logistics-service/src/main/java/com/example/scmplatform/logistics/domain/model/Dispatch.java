@@ -34,8 +34,9 @@ public class Dispatch {
     private final UUID orderId;          // correlation only (nullable)
     private final String orderNo;        // correlation only (nullable)
     private final String tenantId;       // echoed from the seam (nullable for B2B)
+    private final String requestedCarrierCode; // routing INPUT from the seam (nullable); ≠ carrierCode
 
-    private CarrierCode carrierCode;     // set on DISPATCHED
+    private CarrierCode carrierCode;     // CONFIRMED carrier, set on DISPATCHED
     private TrackingNo trackingNo;       // set on DISPATCHED
     private DispatchStatus status;
     private String failureReason;        // set on DISPATCH_FAILED
@@ -46,7 +47,8 @@ public class Dispatch {
     private Instant updatedAt;
 
     private Dispatch(UUID id, ShipmentId shipmentId, String shipmentNo, UUID orderId,
-                     String orderNo, String tenantId, CarrierCode carrierCode, TrackingNo trackingNo,
+                     String orderNo, String tenantId, String requestedCarrierCode,
+                     CarrierCode carrierCode, TrackingNo trackingNo,
                      DispatchStatus status, String failureReason, Carrier vendor, int version,
                      Instant createdAt, Instant updatedAt) {
         this.id = Objects.requireNonNull(id, "id");
@@ -55,6 +57,7 @@ public class Dispatch {
         this.orderId = orderId;
         this.orderNo = orderNo;
         this.tenantId = tenantId;
+        this.requestedCarrierCode = requestedCarrierCode;
         this.carrierCode = carrierCode;
         this.trackingNo = trackingNo;
         this.status = Objects.requireNonNull(status, "status");
@@ -66,23 +69,38 @@ public class Dispatch {
     }
 
     /**
-     * Create a new PENDING dispatch for a confirmed shipment. In Phase 1 this is invoked by the
-     * seam consumer (BE-044) and by IT seeding; there is no create-dispatch REST endpoint.
+     * Create a new PENDING dispatch for a confirmed shipment with no routing signal (null
+     * {@code requestedCarrierCode} → the {@code CarrierRouter} default vendor). Convenience
+     * overload preserved for existing callers / IT seeding.
      */
     public static Dispatch create(UUID id, ShipmentId shipmentId, String shipmentNo,
                                   UUID orderId, String orderNo, String tenantId, Instant now) {
+        return create(id, shipmentId, shipmentNo, orderId, orderNo, tenantId, null, now);
+    }
+
+    /**
+     * Create a new PENDING dispatch for a confirmed shipment. In Phase 1 this is invoked by the
+     * seam consumer (BE-044, which supplies {@code requestedCarrierCode} from the event) and by
+     * IT seeding; there is no create-dispatch REST endpoint. {@code requestedCarrierCode} is the
+     * routing INPUT (nullable) — distinct from the CONFIRMED {@code carrierCode} set on the ack.
+     */
+    public static Dispatch create(UUID id, ShipmentId shipmentId, String shipmentNo,
+                                  UUID orderId, String orderNo, String tenantId,
+                                  String requestedCarrierCode, Instant now) {
         return new Dispatch(id, shipmentId, shipmentNo, orderId, orderNo, tenantId,
-                null, null, DispatchStatus.PENDING, null, null, 0, now, now);
+                requestedCarrierCode, null, null, DispatchStatus.PENDING, null, null, 0, now, now);
     }
 
     /** Reconstruct from persistence. */
     public static Dispatch reconstitute(UUID id, ShipmentId shipmentId, String shipmentNo,
                                         UUID orderId, String orderNo, String tenantId,
+                                        String requestedCarrierCode,
                                         CarrierCode carrierCode, TrackingNo trackingNo,
                                         DispatchStatus status, String failureReason, Carrier vendor,
                                         int version, Instant createdAt, Instant updatedAt) {
         return new Dispatch(id, shipmentId, shipmentNo, orderId, orderNo, tenantId,
-                carrierCode, trackingNo, status, failureReason, vendor, version, createdAt, updatedAt);
+                requestedCarrierCode, carrierCode, trackingNo, status, failureReason, vendor,
+                version, createdAt, updatedAt);
     }
 
     /**
@@ -124,6 +142,7 @@ public class Dispatch {
     public UUID getOrderId() { return orderId; }
     public String getOrderNo() { return orderNo; }
     public String getTenantId() { return tenantId; }
+    public String getRequestedCarrierCode() { return requestedCarrierCode; }
     public CarrierCode getCarrierCode() { return carrierCode; }
     public TrackingNo getTrackingNo() { return trackingNo; }
     public DispatchStatus getStatus() { return status; }

@@ -3,6 +3,7 @@ package com.example.scmplatform.logistics.application;
 import com.example.scmplatform.logistics.application.port.outbound.DispatchAck;
 import com.example.scmplatform.logistics.application.port.outbound.DispatchPersistencePort;
 import com.example.scmplatform.logistics.application.port.outbound.ShipmentDispatchPort;
+import com.example.scmplatform.logistics.application.routing.CarrierRouter;
 import com.example.scmplatform.logistics.application.usecase.DispatchShipmentUseCase;
 import com.example.scmplatform.logistics.domain.error.ShipmentDispatchException;
 import com.example.scmplatform.logistics.domain.model.Carrier;
@@ -29,11 +30,13 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class DispatchShipmentUseCaseTest {
 
+    @Mock CarrierRouter carrierRouter;
     @Mock ShipmentDispatchPort dispatchPort;
     @Mock DispatchPersistencePort persistencePort;
     @InjectMocks DispatchShipmentUseCase useCase;
 
     private Dispatch pending() {
+        // requestedCarrierCode null → the router selects the default vendor (mocked below).
         return Dispatch.create(UUID.randomUUID(), ShipmentId.of(UUID.randomUUID()),
                 "SHP-001", UUID.randomUUID(), "ORD-001", "scm", Instant.now());
     }
@@ -41,6 +44,7 @@ class DispatchShipmentUseCaseTest {
     @Test
     void dispatch_vendorSuccess_recordsDispatched() {
         Dispatch d = pending();
+        when(carrierRouter.select(null)).thenReturn(dispatchPort);
         when(dispatchPort.dispatch(d)).thenReturn(new DispatchAck("TRACK-1", "USPS", Carrier.EASYPOST));
         when(persistencePort.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -49,13 +53,30 @@ class DispatchShipmentUseCaseTest {
         assertThat(result.getStatus()).isEqualTo(DispatchStatus.DISPATCHED);
         assertThat(result.getTrackingNo().value()).isEqualTo("TRACK-1");
         assertThat(result.getVendor()).isEqualTo(Carrier.EASYPOST);
+        verify(carrierRouter).select(null);
         verify(dispatchPort).dispatch(d);
         verify(persistencePort).save(d);
     }
 
     @Test
+    void dispatch_routesViaRequestedCarrierCode() {
+        // A domestic requestedCarrierCode is passed to the router (which owns the vendor mapping).
+        Dispatch d = Dispatch.create(UUID.randomUUID(), ShipmentId.of(UUID.randomUUID()),
+                "SHP-KR", UUID.randomUUID(), "ORD-KR", "scm", "CJ-LOGISTICS", Instant.now());
+        when(carrierRouter.select("CJ-LOGISTICS")).thenReturn(dispatchPort);
+        when(dispatchPort.dispatch(d)).thenReturn(new DispatchAck("INV-1", "CJ", Carrier.GOODSFLOW));
+        when(persistencePort.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        Dispatch result = useCase.dispatch(d);
+
+        assertThat(result.getVendor()).isEqualTo(Carrier.GOODSFLOW);
+        verify(carrierRouter).select("CJ-LOGISTICS");
+    }
+
+    @Test
     void dispatch_vendorFailure_recordsFailed() {
         Dispatch d = pending();
+        when(carrierRouter.select(null)).thenReturn(dispatchPort);
         when(dispatchPort.dispatch(d))
                 .thenThrow(new ShipmentDispatchException("EasyPost 503", true, null));
         when(persistencePort.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -71,7 +92,7 @@ class DispatchShipmentUseCaseTest {
     void dispatch_alreadyDispatched_isNoOp_noVendorCall() {
         Dispatch dispatched = Dispatch.reconstitute(
                 UUID.randomUUID(), ShipmentId.of(UUID.randomUUID()), "SHP-001",
-                UUID.randomUUID(), "ORD-001", "scm",
+                UUID.randomUUID(), "ORD-001", "scm", null,
                 CarrierCode.of("USPS"), TrackingNo.of("TRACK-1"),
                 DispatchStatus.DISPATCHED, null, Carrier.EASYPOST, 1, Instant.now(), Instant.now());
 
@@ -79,7 +100,8 @@ class DispatchShipmentUseCaseTest {
 
         assertThat(result).isSameAs(dispatched);
         assertThat(result.getStatus()).isEqualTo(DispatchStatus.DISPATCHED);
-        // Idempotent short-circuit — the cached ack stands: no vendor call, no write.
+        // Idempotent short-circuit — the cached ack stands: no routing, no vendor call, no write.
+        verify(carrierRouter, never()).select(any());
         verify(dispatchPort, never()).dispatch(any());
         verify(persistencePort, never()).save(any());
     }

@@ -53,9 +53,18 @@ public abstract class AbstractLogisticsIntegrationTest {
     protected static final WireMockServer EASYPOST =
             new WireMockServer(wireMockConfig().dynamicPort());
 
+    /**
+     * Independent 굿스플로 stub — a SEPARATE WireMock from EASYPOST (I9: the two vendors share no
+     * pool/circuit/stub). Both {@code !standalone} adapter beans load in every IT, so both vendor
+     * base-urls point at a stub; a test drives whichever the {@code CarrierRouter} selects.
+     */
+    protected static final WireMockServer GOODSFLOW =
+            new WireMockServer(wireMockConfig().dynamicPort());
+
     static {
         POSTGRES.start();
         EASYPOST.start();
+        GOODSFLOW.start();
     }
 
     @DynamicPropertySource
@@ -77,6 +86,13 @@ public abstract class AbstractLogisticsIntegrationTest {
         registry.add("logistics.easypost.read-timeout-seconds", () -> "2");
         registry.add("resilience4j.retry.instances.easyPostDispatch.wait-duration", () -> "100ms");
         registry.add("resilience4j.retry.instances.easyPostDispatch.exponential-max-wait-duration", () -> "300ms");
+
+        // 굿스플로 → its OWN WireMock, fast timeouts + fast retry backoff (independent instance, I9).
+        registry.add("logistics.goodsflow.base-url", GOODSFLOW::baseUrl);
+        registry.add("logistics.goodsflow.connect-timeout-seconds", () -> "1");
+        registry.add("logistics.goodsflow.read-timeout-seconds", () -> "2");
+        registry.add("resilience4j.retry.instances.goodsflowDispatch.wait-duration", () -> "100ms");
+        registry.add("resilience4j.retry.instances.goodsflowDispatch.exponential-max-wait-duration", () -> "300ms");
 
         registry.add("spring.kafka.bootstrap-servers", () -> "localhost:59092");
         registry.add("spring.security.oauth2.resourceserver.jwt.jwk-set-uri",
@@ -102,10 +118,27 @@ public abstract class AbstractLogisticsIntegrationTest {
         return persistencePort.save(dispatch);
     }
 
+    /** Seed a PENDING dispatch row with a specific requested carrier code (routing input). */
+    protected Dispatch seedPending(UUID shipmentId, String shipmentNo, String requestedCarrierCode) {
+        Dispatch dispatch = Dispatch.create(UUID.randomUUID(), ShipmentId.of(shipmentId),
+                shipmentNo, UUID.randomUUID(), "ORD-" + shipmentNo, TENANT_SCM,
+                requestedCarrierCode, Instant.now());
+        return persistencePort.save(dispatch);
+    }
+
     /** Seed a DISPATCH_FAILED dispatch row (a prior vendor failure awaiting operator :retry). */
     protected Dispatch seedFailed(UUID shipmentId, String shipmentNo) {
+        return seedFailed(shipmentId, shipmentNo, null);
+    }
+
+    /**
+     * Seed a DISPATCH_FAILED dispatch row with a specific requested carrier code, so {@code :retry}
+     * re-routes deterministically from the stored signal (BE-043 routing IT).
+     */
+    protected Dispatch seedFailed(UUID shipmentId, String shipmentNo, String requestedCarrierCode) {
         Dispatch dispatch = Dispatch.create(UUID.randomUUID(), ShipmentId.of(shipmentId),
-                shipmentNo, UUID.randomUUID(), "ORD-" + shipmentNo, TENANT_SCM, Instant.now());
+                shipmentNo, UUID.randomUUID(), "ORD-" + shipmentNo, TENANT_SCM,
+                requestedCarrierCode, Instant.now());
         dispatch.recordFailure("seeded prior failure", Instant.now());
         return persistencePort.save(dispatch);
     }

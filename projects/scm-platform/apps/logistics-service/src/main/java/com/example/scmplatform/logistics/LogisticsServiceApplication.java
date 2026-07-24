@@ -9,20 +9,20 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
  * logistics-service — scm's 5th domain service (ADR-MONO-053 Phase 1).
  *
  * <p>Takes a confirmed shipment (goods already left a wms warehouse) and gets it onto a
- * carrier. Phase 1 is <b>carrier dispatch for one vendor (EasyPost)</b> plus the operator
- * {@code :retry} recovery surface — the foundational skeleton.
+ * carrier. Phase 1 is <b>multi-vendor carrier dispatch</b> (EasyPost international + 굿스플로
+ * domestic, selected per shipment by {@code CarrierRouter}, with a credential-free standalone
+ * stub) plus the operator {@code :retry} recovery surface.
  *
  * <p>Service Type: event-consumer + rest-api. Architecture: Hexagonal
  * (domain / application / adapter / config).
  *
- * <p><b>Deliberately NOT wired in this slice</b> (ADR-053 §D7 phasing):
+ * <p><b>Deliberately NOT wired yet</b> (ADR-053 §D7 phasing):
  * <ul>
  *   <li>the Kafka seam consumer {@code ShippingConfirmedConsumer} → TASK-SCM-BE-044
- *       (only the Kafka config scaffold + {@code processed_events} table land here);</li>
- *   <li>the 굿스플로 adapter + {@code CarrierRouter} → TASK-SCM-BE-043;</li>
+ *       (only the Kafka config scaffold + {@code processed_events} table exist; the live
+ *       {@code carrierCode} routing signal is fed by that consumer — here it is seeded/stored);</li>
  *   <li>the {@code FulfillmentRouter} self-branch → TASK-SCM-BE-044.</li>
  * </ul>
- * With one vendor there is no router — {@code DispatchShipmentUseCase} calls the port directly.
  *
  * <p>This is a <b>terminal service</b> in Phase 1 — it publishes no domain event and runs
  * <b>no transactional outbox</b>: {@link OutboxMetricsAutoConfiguration} from

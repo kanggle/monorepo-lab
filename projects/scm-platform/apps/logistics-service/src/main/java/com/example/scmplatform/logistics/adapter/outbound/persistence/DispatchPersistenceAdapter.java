@@ -44,6 +44,7 @@ public class DispatchPersistenceAdapter implements DispatchPersistencePort {
         entity.setOrderId(dispatch.getOrderId());
         entity.setOrderNo(dispatch.getOrderNo());
         entity.setTenantId(dispatch.getTenantId());
+        entity.setRequestedCarrierCode(dispatch.getRequestedCarrierCode());
         entity.setCarrierCode(dispatch.getCarrierCode() == null ? null : dispatch.getCarrierCode().value());
         entity.setTrackingNo(dispatch.getTrackingNo() == null ? null : dispatch.getTrackingNo().value());
         entity.setStatus(dispatch.getStatus());
@@ -63,6 +64,7 @@ public class DispatchPersistenceAdapter implements DispatchPersistencePort {
                 e.getOrderId(),
                 e.getOrderNo(),
                 e.getTenantId(),
+                e.getRequestedCarrierCode(),
                 e.getCarrierCode() == null ? null : CarrierCode.of(e.getCarrierCode()),
                 e.getTrackingNo() == null ? null : TrackingNo.of(e.getTrackingNo()),
                 e.getStatus(),

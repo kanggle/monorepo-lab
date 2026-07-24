@@ -103,6 +103,40 @@ logistics:
     pool-max-total: ${EASYPOST_POOL_MAX_TOTAL:10}
     pool-max-per-route: ${EASYPOST_POOL_MAX_PER_ROUTE:10}
 
+  # 굿스플로 domestic carrier-aggregator dispatch (external-integrations.md §2, BE-043).
+  # Auth = API-key header (NOT Basic). base = test-api.goodsflow.io for stg/dev.
+  # A missing/invalid key surfaces ONLY on 굿스플로 dispatches as DISPATCH_FAILED
+  # (EasyPost unaffected — per-vendor keys/pools, §6), never a boot failure.
+  goodsflow:
+    base-url: ${GOODSFLOW_BASE_URL:https://test-api.goodsflow.io}
+    api-key: ${GOODSFLOW_API_KEY:goodsflow-test-key-placeholder}
+    # Vendor-specified API-key header name (§2.2). Configurable — set to whatever the
+    # 굿스플로 OPEN API mandates without a code change.
+    api-key-header-name: ${GOODSFLOW_API_KEY_HEADER:Authorization}
+    connect-timeout-seconds: ${GOODSFLOW_CONNECT_TIMEOUT_SECONDS:5}
+    read-timeout-seconds: ${GOODSFLOW_READ_TIMEOUT_SECONDS:30}
+    # Dedicated pool — NOT shared with EasyPost or any other vendor (I9, §2.8).
+    pool-max-total: ${GOODSFLOW_POOL_MAX_TOTAL:10}
+    pool-max-per-route: ${GOODSFLOW_POOL_MAX_PER_ROUTE:10}
+
+  # CarrierRouter registry (ADR-053 §D3). carrierCode → vendor; a null/unmapped code
+  # routes to default-vendor with a CARRIER_UNROUTABLE degrade (never a drop). The
+  # domestic/international split is registry structure — the seam carries carrierCode,
+  # not a geographic Region.
+  carrier-router:
+    default-vendor: ${LOGISTICS_DEFAULT_VENDOR:EASYPOST}
+    carrier-vendors:
+      # Domestic (KR) carriers → 굿스플로.
+      CJ-LOGISTICS: GOODSFLOW
+      HANJIN: GOODSFLOW
+      LOTTE: GOODSFLOW
+      KOREA-POST: GOODSFLOW
+      # International carriers → EasyPost.
+      UPS: EASYPOST
+      FEDEX: EASYPOST
+      DHL: EASYPOST
+      USPS: EASYPOST
+
 # Dedicated EasyPost resilience instances (external-integrations.md §1.5/§1.6/§1.8).
 # NOT shared with any other pool (I9). 429 is surfaced by the client as a
 # EasyPostRateLimitedException so it is RETRIED (retry-exceptions) while other 4xx
@@ -126,6 +160,24 @@ resilience4j:
           - com.example.scmplatform.logistics.adapter.outbound.dispatch.EasyPostRateLimitedException
         ignore-exceptions:
           - org.springframework.web.client.HttpClientErrorException
+      # 굿스플로 circuit — same policy SHAPE as easyPostDispatch, INDEPENDENT instance (I9,
+      # external-integrations.md §2.5). A 굿스플로 outage must not open EasyPost's circuit.
+      goodsflowDispatch:
+        failure-rate-threshold: 50
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        wait-duration-in-open-state: 60s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        register-health-indicator: false
+        record-exceptions:
+          - org.springframework.web.client.HttpServerErrorException
+          - org.springframework.web.client.ResourceAccessException
+          - java.io.IOException
+          - com.example.scmplatform.logistics.adapter.outbound.dispatch.GoodsflowRateLimitedException
+        ignore-exceptions:
+          - org.springframework.web.client.HttpClientErrorException
   retry:
     instances:
       easyPostDispatch:
@@ -147,9 +199,32 @@ resilience4j:
           - org.springframework.web.client.HttpClientErrorException
           - io.github.resilience4j.circuitbreaker.CallNotPermittedException
           - io.github.resilience4j.bulkhead.BulkheadFullException
+      # 굿스플로 retry — same shape as easyPostDispatch (3 attempts, ~1/2/4s ±200ms),
+      # INDEPENDENT instance (I9, §2.6). 429 → GoodsflowRateLimitedException → retried.
+      goodsflowDispatch:
+        max-attempts: 3
+        wait-duration: 1s
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        exponential-max-wait-duration: 4s
+        enable-randomized-wait: true
+        randomized-wait-factor: 0.2
+        retry-exceptions:
+          - org.springframework.web.client.HttpServerErrorException
+          - org.springframework.web.client.ResourceAccessException
+          - java.io.IOException
+          - com.example.scmplatform.logistics.adapter.outbound.dispatch.GoodsflowRateLimitedException
+        ignore-exceptions:
+          - org.springframework.web.client.HttpClientErrorException
+          - io.github.resilience4j.circuitbreaker.CallNotPermittedException
+          - io.github.resilience4j.bulkhead.BulkheadFullException
   bulkhead:
     instances:
       easyPostDispatch:
         max-concurrent-calls: 10
         # fail-fast → BulkheadFullException → DISPATCH_FAILED (I9).
+        max-wait-duration: 0
+      # 굿스플로 bulkhead — dedicated 10-slot fail-fast semaphore, INDEPENDENT of EasyPost (I9, §2.8).
+      goodsflowDispatch:
+        max-concurrent-calls: 10
         max-wait-duration: 0
