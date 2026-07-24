@@ -8,7 +8,7 @@ membership-service: PortOne V2 payment adapter (profile-gated, server-side verif
 
 # Status
 
-review
+done
 
 # Owner
 
