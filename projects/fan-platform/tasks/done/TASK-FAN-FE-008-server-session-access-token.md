@@ -8,7 +8,7 @@ fan-platform-web: Server Components send no bearer — getFanSession reads the s
 
 # Status
 
-review
+done
 
 # Owner
 
