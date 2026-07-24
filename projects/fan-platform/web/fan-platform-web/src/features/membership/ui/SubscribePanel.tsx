@@ -50,6 +50,11 @@ export function SubscribePanel({
   const [decline, setDecline] = useState<{ tier: MembershipTier; message: string } | null>(null);
 
   const held = new Set(heldActiveTiers);
+  // PREMIUM ⊇ MEMBERS_ONLY (membership-service AccessPolicy.tierGrants): holding
+  // PREMIUM already grants all MEMBERS_ONLY content, so offering the MEMBERS_ONLY
+  // subscribe would sell nothing new. Suppress it. The reverse (MEMBERS_ONLY held
+  // → PREMIUM offered) stays open as the upgrade path.
+  const hasPremium = held.has('PREMIUM');
 
   const onSubscribe = (tier: MembershipTier) => {
     setDecline(null);
@@ -103,6 +108,8 @@ export function SubscribePanel({
       <ul className="grid gap-4 md:grid-cols-2">
         {TIERS.map((meta) => {
           const isHeld = held.has(meta.tier);
+          // MEMBERS_ONLY is already covered by a held PREMIUM — offer nothing.
+          const includedInPremium = meta.tier === 'MEMBERS_ONLY' && hasPremium && !isHeld;
           const isHighlighted = highlightTier === meta.tier;
           const busy = isPending && pendingTier === meta.tier;
           return (
@@ -126,6 +133,10 @@ export function SubscribePanel({
                 {isHeld ? (
                   <p className="rounded-md bg-emerald-50 px-3 py-2 text-center text-sm font-medium text-emerald-700">
                     이용 중인 멤버십
+                  </p>
+                ) : includedInPremium ? (
+                  <p className="rounded-md bg-ink-50 px-3 py-2 text-center text-sm font-medium text-ink-500">
+                    프리미엄에 포함됨
                   </p>
                 ) : (
                   <Button
