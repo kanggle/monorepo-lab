@@ -8,7 +8,7 @@ membership-service: tier-aware pricing + MEMBERS_ONLY → PREMIUM upgrade with p
 
 # Status
 
-review
+done
 
 # Owner
 

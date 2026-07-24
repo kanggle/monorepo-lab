@@ -8,7 +8,7 @@ fan-platform-web: tier-aware payment amount + MEMBERS_ONLY → PREMIUM upgrade q
 
 # Status
 
-review
+done
 
 # Owner
 
