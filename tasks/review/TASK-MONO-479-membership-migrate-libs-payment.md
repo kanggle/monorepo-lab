@@ -8,7 +8,7 @@ Migrate `membership-service` onto `libs/payment` (ADR-MONO-056 Phase 1, consumer
 
 # Status
 
-backlog
+review
 
 # Owner
 
