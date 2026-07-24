@@ -78,11 +78,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-SCM-BE-043-goodsflow-adapter-carrier-router.md` — **READY (2026-07-24, ADR-MONO-053 Phase 1, slice 2/3).** Extend `logistics-service` to **multi-vendor** carrier dispatch: add the **굿스플로** aggregator adapter (domestic KR carriers, API-key header, dedicated `goodsflow-client` pool + independent Resilience4j — I9) behind the existing `ShipmentDispatchPort`, and introduce **`CarrierRouter`** (`carrierCode` → owning vendor; null/unmapped → configured default vendor + `CARRIER_UNROUTABLE` degrade log, never a silent drop). Adds Flyway **`V2`** `requested_carrier_code` (additive nullable — the stored routing signal that lets `:retry` re-route a `DISPATCH_FAILED` dispatch) + refactors `DispatchShipmentUseCase` to route via the router (two `!standalone` port beans now coexist). Reapplies the two BE-042 retry lessons for 굿스플로 (fallback on outermost `@Retry`; HttpClient `.disableAutomaticRetries()`). **Excludes** the seam consumer + `FulfillmentRouter` (BE-044), 3PL (Phase 2), address enrichment (separate follow-up). 선행=BE-042 ✓. 후속=BE-044. 분석=Opus 4.8 / 구현 권장=backend-engineer(opus).
-
 ## in-progress
 
 ## review
+
+- `TASK-SCM-BE-043-goodsflow-adapter-carrier-router.md` — **IN REVIEW (2026-07-24, impl PR #2941, ADR-MONO-053 Phase 1 slice 2/3).** Extend `logistics-service` to **multi-vendor** carrier dispatch: add the **굿스플로** aggregator adapter (domestic KR carriers, API-key header, dedicated `goodsflowRestClient` pool + independent Resilience4j — I9) behind the existing `ShipmentDispatchPort`, and introduce **`CarrierRouter`** (`carrierCode` → owning vendor; null/unmapped → configured default vendor + `CARRIER_UNROUTABLE` degrade log/counter, never a silent drop). Adds Flyway **`V2`** `requested_carrier_code` (additive nullable — the stored routing signal that lets `:retry` re-route a `DISPATCH_FAILED` dispatch) + refactors `DispatchShipmentUseCase` to route via the router (two `!standalone` port beans now coexist). Reapplies the two BE-042 retry lessons for 굿스플로 (fallback on outermost `@Retry`; HttpClient `.disableAutomaticRetries()`). architecture.md "Region"→`carrierCode` amended in-place. **Excludes** the seam consumer + `FulfillmentRouter` (BE-044), 3PL (Phase 2), address enrichment (separate follow-up). 선행=BE-042 ✓. 후속=BE-044. 분석=Opus 4.8 / 구현=backend-engineer(opus).
 
 ## done
 
