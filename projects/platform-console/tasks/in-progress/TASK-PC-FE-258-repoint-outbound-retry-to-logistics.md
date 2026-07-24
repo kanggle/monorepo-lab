@@ -1,6 +1,6 @@
 # TASK-PC-FE-258 — repoint operator outbound-retry from wms TMS to logistics dispatch (D8 console half)
 
-**Status:** ready
+**Status:** in-progress
 **Type:** TASK-PC-FE
 **Depends on / 전제:** [TASK-SCM-BE-045](../../../scm-platform/tasks/done/TASK-SCM-BE-045-dispatch-lookup-by-shipment.md) **done** (the logistics `GET /api/v1/logistics/dispatches/by-shipment/{shipmentId}` lookup this repoint needs — already on main) · [TASK-PC-FE-087](../done/TASK-PC-FE-087-console-wms-outbound-tms-retry-action.md) **done** (the action being repointed) · [ADR-MONO-053](../../../../docs/adr/ADR-MONO-053-logistics-service-multimodal-fulfillment.md) **ACCEPTED** §D8.
 **후속 / blocks:** the wms-internal **TMS side-channel retirement** task (retires wms `:retry-tms-notify` + `TmsClientAdapter` + `SHIPPED_NOT_NOTIFIED` + `tms_request_dedupe`). That task is unblocked **only after** this repoint lands — once the console stops calling the wms endpoint, wms can retire it with **zero** cross-project coupling. **Order: this task first, then the wms retirement.**

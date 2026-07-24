@@ -87,8 +87,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-PC-FE-258-repoint-outbound-retry-to-logistics.md` — **READY (2026-07-24, ADR-MONO-053 §D8 console half).** Repoint the operator outbound-retry action from the wms placeholder `POST /shipments/{id}:retry-tms-notify` to the real carrier-dispatch recovery, logistics `POST /api/v1/logistics/dispatches/{id}:retry` (scm gateway). BFF chain: orderId → shipmentId (wms admin, unchanged) → **NEW** dispatchId via logistics `GET /dispatches/by-shipment/{shipmentId}` (BE-045) → `:retry`. Relabel "TMS 재시도" → "발송 재시도"; `DISPATCH_NOT_FOUND` (shipment exists, no dispatch yet) → inline actionable like `SHIPMENT_NOT_FOUND`. **Console-internal** — no wms change, reuses the **existing** scm-gateway credential (`SCM_GATEWAY_BASE_URL`, already used for demand-planning mutations). BE-045 decoupled the two D8 halves so this needs no atomic cross-project PR. 선행=BE-045 ✓, PC-FE-087 ✓. 후속=**wms-internal TMS retirement** (unblocked once the console stops calling the wms endpoint — this task first). 분석=Opus 4.8 / 구현 권장=frontend-engineer(opus).
-
 _(직전 완료)_ 콘솔 6도메인 기능↔메뉴 정렬 웨이브 + IAM 「권한」/「권한 세트」 화면(PC-FE-227/228) 완결. ADR-MONO-046 「운영자 그룹」 로드맵은 여전히 PROPOSED/PAUSED 게이팅.
 
 _(직전 완료)_ **IAM 「권한」/「권한 세트」 화면 완료** (PC-FE-227/228 DONE, 2026-07-09, PR #2343 squash `cbdc1a04`). `/permissions`·`/permission-sets` 스텁을 BE-486 RBAC 카탈로그(`GET /api/admin/roles`+`/permissions`, 게이트 `operator.manage`) 위 read-only 화면으로 대체. 공유 클라이언트 `shared/api/rbac-catalog.ts`(228=role을 권한 세트로 재프레이밍, 별도 엔드포인트 없음). native `<details>` drill-down·SSR 회복탄력성(operators/audit 매퍼 미러). vitest 2696/2696. **→ BE-486 언블록 소비 완료.**
@@ -109,7 +107,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## in-progress
 
-(empty)
+- `TASK-PC-FE-258-repoint-outbound-retry-to-logistics.md` — **IN-PROGRESS (2026-07-24, ADR-MONO-053 §D8 console half).** Repoint the operator outbound-retry action from the retired wms TMS side-channel to logistics `POST /api/v1/logistics/dispatches/{id}:retry` (scm gateway). BFF chain: orderId → shipmentId (wms admin, unchanged) → **NEW** dispatchId via logistics `GET /dispatches/by-shipment/{shipmentId}` (BE-045) → `:retry`. Relabel "TMS 재시도" → "발송 재시도"; `DISPATCH_NOT_FOUND` inline actionable like `SHIPMENT_NOT_FOUND`. **Console-internal** — no wms change, reuses the existing scm-gateway credential (`SCM_GATEWAY_BASE_URL`). 분석=Opus 4.8 / 구현=frontend-engineer(opus).
 
 ## review
 
