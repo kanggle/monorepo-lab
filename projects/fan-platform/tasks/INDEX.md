@@ -66,7 +66,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-FAN-BE-028-artist-directory-null-query-cast.md` — **READY.** Artist directory `GET /api/v1/artists` returns 500 when called with no `q` (untyped-null `:q` → PostgreSQL `lower(bytea)`); the default "browse all artists" landing page hits this → production defect. Fix = `CAST(:q AS string)` in `ArtistJpaRepository.searchPublished` (wms sibling idiom), behavior-preserving on the `q` path, PostgreSQL Testcontainers regression on the null path. Surfaced during 2026-07-24 local demo data seeding. (분석=Opus 4.8 / 구현 권장=Sonnet — 단순 fix)
 - `TASK-FAN-INT-004-local-s2s-membership-workload-identity-wiring.md` — **READY.** `MEMBERS_ONLY`/`PREMIUM` post read returns 403 even for an ACTIVE PREMIUM member in the `iam.local` local demo bring-up. **Not a product defect** — fail-close is by design (FAN-BE-010 AC-2 / FAN-BE-019); the gap is unprovisioned community→membership S2S workload identity in the local overlay (`COMMUNITY_SERVICE_CLIENT_ID/SECRET` + `IAM_TOKEN_URI` unset, IAM `V0009` client seed not guaranteed in the minimal iam.local). Wire the credentials + commit the (currently untracked) overlay; fail-closed deny for non-members must be preserved. (분석=Opus 4.8 / 구현 권장=Sonnet — 로컬 배선)
 
 ## in-progress
@@ -74,6 +73,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 (empty)
 
 ## review
+
+- `TASK-FAN-BE-028-artist-directory-null-query-cast.md` — **REVIEW (impl PR open).** Fixed artist directory `GET /api/v1/artists` 500 on the no-`q` browse-all path: `ArtistJpaRepository.searchPublished` now casts BOTH occurrences of the nullable `:q` (`CAST(:q AS string)`) so PostgreSQL types the parameter instead of resolving `lower(bytea)`. Added `ArtistDirectoryBrowseIntegrationTest` (PostgreSQL Testcontainers) locking the null-`q`, null-`q`+type-filter, and non-null `q` paths. Local compile GREEN; IT runs on the fan Integration Testcontainers CI lane (Docker-less Windows SKIPs). 분석·구현=Opus 4.8.
 
 ## done
 
