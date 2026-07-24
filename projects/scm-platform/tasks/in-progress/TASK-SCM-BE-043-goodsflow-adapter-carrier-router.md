@@ -1,6 +1,6 @@
 # TASK-SCM-BE-043 — 굿스플로 dispatch adapter + CarrierRouter (multi-vendor routing)
 
-**Status:** ready
+**Status:** in-progress
 **Type:** TASK-SCM-BE
 **Depends on / 전제:** [TASK-SCM-BE-042](../done/TASK-SCM-BE-042-logistics-service-bootstrap.md) **done** (the service skeleton + `ShipmentDispatchPort` + EasyPost adapter this task extends) · [ADR-MONO-053](../../../../docs/adr/ADR-MONO-053-logistics-service-multimodal-fulfillment.md) **ACCEPTED** §D3 (CarrierRouter). Reads: [ADR-MONO-052](../../../../docs/adr/ADR-MONO-052-transport-context-map.md) §D5.
 **후속 / blocks:** TASK-SCM-BE-044 (`FulfillmentRouter` self-branch + `outbound.shipping.confirmed` consumer — the live trigger that feeds the routing signal this task consumes). BE-044 requires this router.
