@@ -8,7 +8,7 @@ fan-platform-web: don't offer MEMBERS_ONLY subscribe when PREMIUM is already hel
 
 # Status
 
-ready
+review
 
 # Owner
 
