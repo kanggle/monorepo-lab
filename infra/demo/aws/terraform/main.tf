@@ -21,6 +21,9 @@ locals {
   beat_param  = "/${var.project}/last-heartbeat"
   start_param = "/${var.project}/started-at"
   usage_param = "/${var.project}/monthly-usage"
+  # 도메인별 헬스 스냅샷(TASK-MONO-477). 인스턴스가 demo-status.sh 로 주기 발행하고
+  # Lambda /domains 는 읽기만 한다 — SSM SendCommand 는 비동기라 매 요청 왕복이 취약하다.
+  health_param = "/${var.project}/domains-health"
 
   vpc_id    = var.vpc_id != "" ? var.vpc_id : data.aws_vpc.default[0].id
   subnet_id = var.subnet_id != "" ? var.subnet_id : data.aws_subnets.default[0].ids[0]
@@ -84,6 +87,20 @@ resource "aws_iam_role_policy_attachment" "ec2_ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# 인스턴스가 도메인 헬스 스냅샷을 발행할 수 있게 한다(TASK-MONO-477). AmazonSSMManagedInstanceCore
+# 는 SSM 에이전트용이라 임의 파라미터 PutParameter 를 주지 않는다 — 그 한 파라미터만 최소로 연다.
+resource "aws_iam_role_policy" "ec2_health" {
+  role = aws_iam_role.ec2.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["ssm:PutParameter"]
+      Resource = aws_ssm_parameter.health.arn
+    }]
+  })
+}
+
 resource "aws_iam_instance_profile" "ec2" {
   name_prefix = "${local.name}-"
   role        = aws_iam_role.ec2.name
@@ -139,6 +156,15 @@ resource "aws_ssm_parameter" "usage" {
   lifecycle { ignore_changes = [value] }
 }
 
+# 도메인 헬스 스냅샷(TASK-MONO-477). 인스턴스의 demo-status.timer 가 값을 갱신하므로
+# terraform 은 초기값만 심고 이후 드리프트를 무시한다(beat/started/usage 와 동일 패턴).
+resource "aws_ssm_parameter" "health" {
+  name  = local.health_param
+  type  = "String"
+  value = "{}"
+  lifecycle { ignore_changes = [value] }
+}
+
 # ---------------------------------------------------------------------------
 # 컨트롤 플레인 Lambda (항상 대기, 과금 거의 0)
 # ---------------------------------------------------------------------------
@@ -180,6 +206,30 @@ resource "aws_iam_role_policy" "lambda" {
         Action   = ["ssm:GetParameter", "ssm:PutParameter"]
         Resource = [aws_ssm_parameter.beat.arn, aws_ssm_parameter.started.arn, aws_ssm_parameter.usage.arn]
       },
+      # /domains 는 헬스 스냅샷을 읽기만 한다(발행은 인스턴스가 한다).
+      {
+        Effect   = "Allow"
+        Action   = ["ssm:GetParameter"]
+        Resource = [aws_ssm_parameter.health.arn]
+      },
+      # /domain/{start,stop} → 인스턴스에서 demo-up.sh/demo-down.sh <domain> 실행.
+      # 리소스를 이 인스턴스 + AWS-RunShellScript 문서로 좁힌다(최소 권한). 리전 자리는
+      # "*" — 인스턴스 ID(전역 유일) + 계정으로 이미 좁혀지고, aws_region 데이터소스의
+      # .name 이 provider 최신판에서 deprecated 라 불필요한 결합을 피한다.
+      {
+        Effect = "Allow"
+        Action = ["ssm:SendCommand"]
+        Resource = [
+          "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:instance/${aws_instance.demo.id}",
+          "arn:aws:ssm:*::document/AWS-RunShellScript",
+        ]
+      },
+      # 명령 실행 결과 조회. 이 액션들은 리소스 수준 권한을 지원하지 않아 "*" 여야 한다.
+      {
+        Effect   = "Allow"
+        Action   = ["ssm:GetCommandInvocation"]
+        Resource = "*"
+      },
     ]
   })
 }
@@ -199,6 +249,7 @@ resource "aws_lambda_function" "control" {
       BEAT_PARAM             = local.beat_param
       STARTED_PARAM          = local.start_param
       USAGE_PARAM            = local.usage_param
+      HEALTH_PARAM           = local.health_param
       IDLE_MINUTES           = tostring(var.idle_minutes)
       MAX_RUNTIME_MINUTES    = tostring(var.max_runtime_minutes)
       MONTHLY_BUDGET_MINUTES = tostring(var.monthly_budget_minutes)
@@ -236,7 +287,11 @@ resource "aws_apigatewayv2_integration" "lambda" {
 }
 
 resource "aws_apigatewayv2_route" "routes" {
-  for_each  = toset(["POST /start", "POST /stop", "GET /status", "POST /heartbeat"])
+  for_each = toset([
+    "POST /start", "POST /stop", "GET /status", "POST /heartbeat",
+    # 도메인별 선택 (TASK-MONO-477)
+    "GET /domains", "POST /domain/start", "POST /domain/stop",
+  ])
   api_id    = aws_apigatewayv2_api.api.id
   route_key = each.value
   target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
@@ -385,11 +440,11 @@ resource "aws_s3_bucket_policy" "site" {
 }
 
 resource "aws_s3_object" "index" {
-  bucket       = aws_s3_bucket.site.id
-  key          = "index.html"
-  source       = "${path.module}/../site/index.html"
-  etag         = filemd5("${path.module}/../site/index.html")
-  content_type = "text/html; charset=utf-8"
+  bucket        = aws_s3_bucket.site.id
+  key           = "index.html"
+  source        = "${path.module}/../site/index.html"
+  etag          = filemd5("${path.module}/../site/index.html")
+  content_type  = "text/html; charset=utf-8"
   cache_control = "public, max-age=60"
 }
 

@@ -19,6 +19,21 @@
     #msg { margin-top: 8px; font-size: .95rem; opacity: .85; }
     a.open { display: none; margin-top: 14px; font-weight: 600; }
     .hint { font-size: .82rem; opacity: .6; margin-top: 20px; }
+    /* 도메인별 선택 (TASK-MONO-477) */
+    .domains { display: none; }
+    .domains h2 { font-size: 1.05rem; margin: 0 0 12px; }
+    .dall { margin-bottom: 8px; }
+    .dall button { font-size: .85rem; padding: 8px 14px; background: #8883; }
+    .drow { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid #8882; }
+    .dname { flex: 1; font-weight: 600; }
+    .badge { font-size: .78rem; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+    .b-up { background: #16a34a2e; color: #16a34a; }
+    .b-partial { background: #d977062e; color: #d97706; }
+    .b-down { background: #8883; }
+    .b-unknown { background: #8882; opacity: .7; }
+    .dbtn { font-size: .82rem; padding: 6px 14px; }
+    .dbtn.up { background: #555; color: #fff; }
+    .dbtn.down { background: #2563eb; color: #fff; }
   </style>
 </head>
 <body>
@@ -39,6 +54,21 @@
     <div id="bar"><i></i></div>
     <div id="msg">상태 확인 중…</div>
     <a class="open" id="open" target="_blank" rel="noopener">데모 사이트 열기 →</a>
+  </div>
+
+  <!--
+    도메인 선택 (TASK-MONO-477). 인스턴스가 running 일 때만 보인다. 전체가 아니라
+    필요한 도메인만 올리면 OOM 여유·웜업 시간을 벌 수 있다(비용은 VM 가동시간이 결정하므로
+    도메인 수와 무관 — 월 예산 가드는 그대로다). 헬스는 /domains 폴링으로 갱신한다.
+  -->
+  <div class="card domains" id="domains">
+    <h2>도메인 선택 기동 / 종료</h2>
+    <div class="dall">
+      <button id="dall-start">전체 시작</button>
+      <button id="dall-stop">전체 종료</button>
+    </div>
+    <div id="dlist"></div>
+    <div id="dmsg" class="hint" style="margin-top: 10px"></div>
   </div>
 
   <p class="hint">자동 종료: 20분 무활동 · 최대 3시간. 요금 안전장치가 이중으로 걸려 있습니다.</p>
@@ -80,8 +110,13 @@
     const $ = (id) => document.getElementById(id);
     let beatTimer = null, pollTimer = null;
 
-    async function api(path, method = "GET") {
-      const r = await fetch(API_BASE + path, { method });
+    async function api(path, method = "GET", payload) {
+      const opts = { method };
+      if (payload !== undefined) {
+        opts.headers = { "content-type": "application/json" };
+        opts.body = JSON.stringify(payload);
+      }
+      const r = await fetch(API_BASE + path, opts);
       const body = await r.json().catch(() => ({}));
       // 상태코드를 버리면 429(월 예산 소진) 가 조용히 무시된다 — 사용자는 영원히
       // "기동 중" 을 보게 된다. ok 를 함께 돌려주고 호출부가 반드시 확인한다.
@@ -96,6 +131,7 @@
       $("stop").disabled = !isRun;
       $("bar").style.display = (state === "pending" || state === "starting") ? "block" : "none";
       $("open").style.display = (isRun && ip) ? "inline-block" : "none";
+      $("domains").style.display = isRun ? "block" : "none";
       if (ip) $("open").href = demoUrl(ip);
       const label = {
         stopped: "🟢 대기 중 — 시작을 누르세요",
@@ -122,9 +158,68 @@
         const usage = (body.budget_minutes != null)
           ? { used: body.used_minutes, budget: body.budget_minutes } : null;
         render(body.state, body.ip, usage);
-        if (running(body.state)) startHeartbeat(); else stopHeartbeat();
+        if (running(body.state)) { startHeartbeat(); pollDomains(); } else stopHeartbeat();
       } catch (e) { $("msg").textContent = "상태 확인 실패"; }
     }
+
+    // ---- 도메인별 선택 (TASK-MONO-477) ----------------------------------------
+    const DOMAINS = ["iam", "wms", "scm", "finance", "erp", "ecommerce", "fan", "console"];
+    const DLABEL = {
+      up: ["🟢 실행 중", "b-up"], partial: ["🟡 일부", "b-partial"],
+      down: ["⚪ 꺼짐", "b-down"], unknown: ["… 확인 중", "b-unknown"],
+    };
+
+    function buildDomainRows() {
+      $("dlist").innerHTML = DOMAINS.map((d) => `
+        <div class="drow" data-domain="${d}">
+          <span class="dname">${d}</span>
+          <span class="badge b-unknown" data-badge>… 확인 중</span>
+          <button class="dbtn down" data-act data-mode="start">시작</button>
+        </div>`).join("");
+    }
+
+    function renderDomains(snap) {
+      for (const d of DOMAINS) {
+        const row = document.querySelector(`.drow[data-domain="${d}"]`);
+        if (!row) continue;
+        const info = snap[d] || { state: "unknown" };
+        const st = DLABEL[info.state] ? info.state : "unknown";
+        const [text, cls] = DLABEL[st];
+        const badge = row.querySelector("[data-badge]");
+        badge.className = "badge " + cls;
+        badge.textContent = (info.total != null && st !== "unknown")
+          ? `${text} ${info.healthy}/${info.total}` : text;
+        const btn = row.querySelector("[data-act]");
+        const isUp = (st === "up" || st === "partial");
+        btn.textContent = isUp ? "종료" : "시작";
+        btn.className = "dbtn " + (isUp ? "up" : "down");
+        btn.dataset.mode = isUp ? "stop" : "start";
+      }
+    }
+
+    async function pollDomains() {
+      try {
+        const { ok, body } = await api("/domains");
+        if (ok && body.domains) renderDomains(body.domains);
+      } catch (e) { /* 다음 상태 폴링이 재시도한다 */ }
+    }
+
+    async function domainAction(name, mode) {
+      const path = (mode === "stop") ? "/domain/stop" : "/domain/start";
+      $("dmsg").textContent = `${name} 요청 중…`;
+      const { ok, status, body } = await api(path, "POST", { name });
+      $("dmsg").textContent = body.message || (ok ? `${name} ${mode} 요청됨` : `실패 (${status})`);
+      setTimeout(pollDomains, 1500);   // 명령이 반영될 시간을 준 뒤 갱신
+    }
+
+    $("dlist").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-act]");
+      if (!btn) return;
+      domainAction(btn.closest(".drow").dataset.domain, btn.dataset.mode || "start");
+    });
+    $("dall-start").onclick = () => domainAction("full", "start");
+    $("dall-stop").onclick = () => domainAction("all", "stop");
+    buildDomainRows();
 
     $("start").onclick = async () => {
       $("msg").textContent = "기동 요청 중…";
