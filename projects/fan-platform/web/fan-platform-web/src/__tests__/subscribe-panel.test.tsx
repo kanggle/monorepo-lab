@@ -16,10 +16,20 @@ describe('SubscribePanel', () => {
     expect(screen.getAllByRole('button', { name: '구독하기' })).toHaveLength(2);
   });
 
-  it('marks a held tier as in-use instead of offering subscribe', () => {
+  it('suppresses the MEMBERS_ONLY subscribe when PREMIUM is held (superset)', () => {
     render(<SubscribePanel heldActiveTiers={['PREMIUM']} />);
+    // PREMIUM card → in-use; MEMBERS_ONLY card → already covered by premium, so
+    // it offers NO subscribe (PREMIUM ⊇ MEMBERS_ONLY). Both actions are non-buttons.
     expect(screen.getByText('이용 중인 멤버십')).toBeInTheDocument();
-    // Only the un-held tier keeps its subscribe button.
+    expect(screen.getByText('프리미엄에 포함됨')).toBeInTheDocument();
+    expect(screen.queryAllByRole('button', { name: '구독하기' })).toHaveLength(0);
+  });
+
+  it('still offers PREMIUM when only MEMBERS_ONLY is held (upgrade path stays open)', () => {
+    render(<SubscribePanel heldActiveTiers={['MEMBERS_ONLY']} />);
+    expect(screen.getByText('이용 중인 멤버십')).toBeInTheDocument();
+    expect(screen.queryByText('프리미엄에 포함됨')).not.toBeInTheDocument();
+    // PREMIUM is a genuine upgrade → its subscribe button remains.
     expect(screen.getAllByRole('button', { name: '구독하기' })).toHaveLength(1);
   });
 
