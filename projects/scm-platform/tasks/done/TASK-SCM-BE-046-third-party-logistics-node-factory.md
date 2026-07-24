@@ -1,6 +1,6 @@
 # TASK-SCM-BE-046 — activate the `THIRD_PARTY_LOGISTICS` node: factory + explicit registration (no Flyway)
 
-**Status:** review
+**Status:** done
 **Type:** TASK-SCM-BE
 **Depends on / 전제:** [ADR-MONO-054](../../../../docs/adr/ADR-MONO-054-third-party-logistics-node-activation.md) **ACCEPTED** §D2/§D4 (the Phase-2a Surface-A activation this task starts) · [ADR-MONO-050](../../../../docs/adr/ADR-MONO-050-scm-procurement-wms-inbound-expected.md) §D4 (a 3PL warehouse is operated by the 3PL's own WMS — observed, never operated).
 **후속 / blocks:** [TASK-SCM-BE-047] (3PL read-only observation — node staleness + snapshot ingestion) and [TASK-SCM-BE-048] (honour a 3PL-destined inbound-expected) both need this node to be constructible. **Surface B is NOT unblocked by this task** — the outbound 3PL fulfillment path stays deferred on ADR-054 §D5's named missing owner.
