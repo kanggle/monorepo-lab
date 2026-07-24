@@ -1,6 +1,6 @@
 # TASK-SCM-BE-045 — logistics dispatch lookup by shipmentId (D8 prerequisite)
 
-**Status:** ready
+**Status:** review
 **Type:** TASK-SCM-BE
 **Depends on / 전제:** [TASK-SCM-BE-044](../done/TASK-SCM-BE-044-shipping-confirmed-consumer-fulfillment-router.md) **done** (the consumer that creates dispatch rows; `DispatchPersistencePort.findByShipmentId` already exists for its layer-2 dedup) · [ADR-MONO-053](../../../../docs/adr/ADR-MONO-053-logistics-service-multimodal-fulfillment.md) **ACCEPTED** §D8.
 **후속 / blocks:** the **D8 wms TMS retirement** monorepo task (wms `:retry-tms-notify` removal + platform-console repoint). That task **cannot proceed without this endpoint** — see § Why.

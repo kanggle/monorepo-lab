@@ -78,11 +78,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-SCM-BE-045-dispatch-lookup-by-shipment.md` — **READY (2026-07-24, ADR-MONO-053 §D8 prerequisite).** Purely **additive** read endpoint `GET /api/v1/logistics/dispatches/by-shipment/{shipmentId}` (→ same `DispatchResponse` envelope as `GET /{id}`; absent → `404 DISPATCH_NOT_FOUND`), reusing the existing `DispatchPersistencePort.findByShipmentId` (already used by the BE-044 consumer's layer-2 dedup) + the contract row in `gateway-public-routes.md` § logistics-service (contract-first). **Why**: platform-console's operator "TMS 재시도" action holds a **`shipmentId`** but logistics is keyed by **dispatch id**, so the ADR-053 §D8 relocation (console → logistics `:retry`) is **impossible** and the wms `:retry-tms-notify` cannot be retired. This exposes the existing mapping so D8 can then land as one atomic cross-project PR. Lands **alone** safely — no behaviour change, no schema/Flyway, no new error code, no consumer touched. 선행=BE-044 ✓. 후속=**D8 monorepo task** (wms TMS retirement + console repoint). 분석=Opus 4.8 / 구현 권장=Sonnet (mechanical).
-
 ## in-progress
 
 ## review
+
+- `TASK-SCM-BE-045-dispatch-lookup-by-shipment.md` — **IN REVIEW (2026-07-24, impl PR pending, ADR-MONO-053 §D8 prerequisite).** Purely **additive** read endpoint `GET /api/v1/logistics/dispatches/by-shipment/{shipmentId}` (→ same `DispatchResponse` envelope as `GET /{id}`; absent → `404 DISPATCH_NOT_FOUND`), delegating to the existing `DispatchPersistencePort.findByShipmentId` (already used by the BE-044 consumer's layer-2 dedup) + `DispatchNotFoundException.forShipment(...)` factory + the contract row in `gateway-public-routes.md` § logistics-service (contract-first). **Why**: platform-console's operator "TMS 재시도" action holds a **`shipmentId`** but logistics is keyed by **dispatch id**, so the ADR-053 §D8 relocation (console → logistics `:retry`) is **impossible** and the wms `:retry-tms-notify` cannot be retired. This exposes the existing mapping so D8 can then land as one atomic cross-project PR. Lands **alone** safely — no behaviour change, no schema/Flyway, no new error code, no consumer touched. Slice tests (found=same body as by-id / absent=404) green locally. 선행=BE-044 ✓. 후속=**D8 monorepo task** (wms TMS retirement + console repoint). 분석=Opus 4.8 / 구현=Opus(직접).
 
 ## done
 

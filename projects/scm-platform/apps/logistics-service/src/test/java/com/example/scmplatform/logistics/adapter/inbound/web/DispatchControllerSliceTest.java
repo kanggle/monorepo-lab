@@ -81,6 +81,30 @@ class DispatchControllerSliceTest {
 
     @Test
     @WithMockUser
+    void getDispatchByShipment_returns200_sameBodyAsById() throws Exception {
+        when(persistencePort.findByShipmentId(SHIPMENT_ID)).thenReturn(Optional.of(dispatched()));
+
+        mockMvc.perform(get("/api/logistics/dispatches/by-shipment/" + SHIPMENT_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(DISPATCH_ID.toString()))
+                .andExpect(jsonPath("$.data.shipmentId").value(SHIPMENT_ID.toString()))
+                .andExpect(jsonPath("$.data.status").value("DISPATCHED"))
+                .andExpect(jsonPath("$.data.trackingNo").value("TRACK-1"));
+    }
+
+    @Test
+    @WithMockUser
+    void getDispatchByShipment_noDispatch_returns404() throws Exception {
+        UUID missingShipment = UUID.randomUUID();
+        when(persistencePort.findByShipmentId(missingShipment)).thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/api/logistics/dispatches/by-shipment/" + missingShipment))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("DISPATCH_NOT_FOUND"));
+    }
+
+    @Test
+    @WithMockUser
     void retry_failedDispatch_recoversToDispatched() throws Exception {
         when(retryDispatchUseCase.retry(eq(DISPATCH_ID))).thenReturn(dispatched());
 

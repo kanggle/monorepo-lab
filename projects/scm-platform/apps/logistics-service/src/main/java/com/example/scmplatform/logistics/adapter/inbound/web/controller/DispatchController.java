@@ -20,7 +20,11 @@ import java.util.UUID;
  * Base path {@code /api/logistics/dispatches} (external {@code /api/v1/logistics/**} via gateway).
  *
  * <ul>
- *   <li>{@code GET /{id}} — inspect a dispatch.</li>
+ *   <li>{@code GET /{id}} — inspect a dispatch by dispatch id.</li>
+ *   <li>{@code GET /by-shipment/{shipmentId}} — inspect a dispatch by the shipment it dispatches
+ *       ({@code dispatch.shipment_id} is unique). The relocation entry point for the wms
+ *       {@code :retry-tms-notify} console action, which holds a shipment id, not a dispatch id
+ *       (ADR-053 §D8).</li>
  *   <li>{@code POST /{id}:retry} — re-drive a failed dispatch. Naturally idempotent: an
  *       already-{@code DISPATCHED} shipment returns the cached ack with <b>no vendor call</b>
  *       (the {@code dispatch_request_dedupe} short-circuit).</li>
@@ -47,6 +51,14 @@ public class DispatchController {
     public ResponseEntity<ApiEnvelope<DispatchResponse>> getDispatch(@PathVariable UUID id) {
         Dispatch dispatch = persistencePort.findById(id)
                 .orElseThrow(() -> new DispatchNotFoundException(id));
+        return ResponseEntity.ok(ApiEnvelope.of(DispatchResponse.from(dispatch)));
+    }
+
+    @GetMapping("/by-shipment/{shipmentId}")
+    public ResponseEntity<ApiEnvelope<DispatchResponse>> getDispatchByShipment(
+            @PathVariable UUID shipmentId) {
+        Dispatch dispatch = persistencePort.findByShipmentId(shipmentId)
+                .orElseThrow(() -> DispatchNotFoundException.forShipment(shipmentId));
         return ResponseEntity.ok(ApiEnvelope.of(DispatchResponse.from(dispatch)));
     }
 
