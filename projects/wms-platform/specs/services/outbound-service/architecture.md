@@ -42,9 +42,8 @@ when implementing — same documented exception as `inventory-service`.
   location.
 - **Packing** — packed unit (box / pallet) recording.
 - **Shipping Confirmation** — final step. Drives `inventory-service` to consume
-  reserved stock (W5: shipped → consumed).
-- **TMS handover** — outbound notification to TMS (Transportation Management
-  System) of shipment ready.
+  reserved stock (W5: shipped → consumed) and emits `outbound.shipping.confirmed`,
+  off which the scm `logistics-service` dispatches the carrier (ADR-MONO-053 §D8).
 
 It is the **single system of record** for order identity, picking instructions,
 packing units, and shipping records. It does **not** own stock quantities.
@@ -62,7 +61,8 @@ packing units, and shipping records. It does **not** own stock quantities.
 - Multi-warehouse picking (v1: single-warehouse orders only; cross-warehouse →
   v2 saga)
 - Returns (RMA outbound) — different lifecycle, deferred to v2
-- Carrier rating / TMS quote (handled by external TMS; we only push the shipment)
+- Carrier dispatch / rating / tracking — relocated to the scm `logistics-service`
+  (ADR-MONO-053 §D8 / ADR-MONO-052 §D7); outbound only emits `shipping.confirmed`
 
 ---
 
@@ -76,8 +76,8 @@ Hexagonal (Ports & Adapters)
   forces saga state and compensation logic into the domain layer (a `Saga`
   aggregate) rather than scattering it across services / handlers.
 - WMS traits (`transactional`, `integration-heavy`) demand sharp separation —
-  TMS adapter, ERP webhook adapter, inventory-service stub adapter all live in
-  outbound port implementations.
+  the ERP webhook adapter and inventory-service stub adapter live in outbound
+  port implementations.
 - Uniform with `master-service`, `inventory-service`, `inbound-service`.
 
 ### Trade-off Accepted
@@ -116,8 +116,6 @@ com.wms.outbound/
 │       ├── event/
 │       │   ├── outbox/
 │       │   └── publisher/
-│       ├── tms/
-│       │   └── adapter/         # TmsClientAdapter (HTTP) — implements ShipmentNotificationPort
 │       └── masterref/
 │           └── readmodel/
 ├── application/
@@ -129,7 +127,7 @@ com.wms.outbound/
 │   │   └── out/                 # OrderPersistencePort, PickingPersistencePort,
 │   │                            #   PackingPersistencePort, ShipmentPersistencePort,
 │   │                            #   SagaPersistencePort, OutboundEventPort,
-│   │                            #   ShipmentNotificationPort, MasterReadModelPort,
+│   │                            #   MasterReadModelPort,
 │   │                            #   IdempotencyStorePort, EventDedupePort
 │   ├── service/                 # Use-case implementations (@Service, @Transactional)
 │   ├── saga/                    # OutboundSagaCoordinator — application-level orchestrator
@@ -154,11 +152,9 @@ Same five rules as siblings. Specifics for outbound:
 2. Application layer contains a **SagaCoordinator** — orchestrates step transitions
    in response to events. Coordinator is **stateless**; saga state lives in DB
    under the `OutboundSaga` aggregate.
-3. TMS adapter is purely outbound. Domain calls `ShipmentNotificationPort.notify(shipment)`
-   without knowing the vendor.
-4. ERP order-webhook reception identical pattern to `inbound-service` ASN webhook
+3. ERP order-webhook reception identical pattern to `inbound-service` ASN webhook
    (signature + replay + inbox table).
-5. Mappers package-private inside persistence adapter.
+4. Mappers package-private inside persistence adapter.
 
 ---
 
@@ -182,10 +178,11 @@ v1 outbound dependencies:
 - **Kafka** — event publication (via outbox), event consumption (consumer group
   `outbound-service`)
 - **Redis** — idempotency-key store and event-dedupe cache
-- **External TMS** — outbound HTTP `POST /shipments` to push shipment-ready
-  notification. Per `integration-heavy` rule I1–I4, I7–I9 (timeout, circuit
-  breaker, retry, vendor adapter, internal model translation, bulkhead pool).
 - **External ERP** (acknowledgement of order receipt — optional in v1)
+
+> Carrier dispatch (the former external-TMS outbound call) was relocated to the
+> scm `logistics-service`, which consumes `outbound.shipping.confirmed`
+> (ADR-MONO-053 §D8). outbound-service no longer holds any TMS dependency.
 
 ---
 
@@ -202,7 +199,7 @@ All outbound state changes publish events via the **transactional outbox pattern
 | `outbound.picking.cancelled` | `wms.outbound.picking.cancelled.v1` | **Compensation**: triggers `inventory-service` release |
 | `outbound.picking.completed` | `wms.outbound.picking.completed.v1` | Operator confirmed all picks |
 | `outbound.packing.completed` | `wms.outbound.packing.completed.v1` | Packing units finalised |
-| `outbound.shipping.confirmed` | `wms.outbound.shipping.confirmed.v1` | **Saga step 4**: triggers `inventory-service` consume; TMS notified |
+| `outbound.shipping.confirmed` | `wms.outbound.shipping.confirmed.v1` | **Saga step 4**: triggers `inventory-service` consume; scm `logistics-service` dispatches carrier |
 
 Full schemas: `specs/contracts/events/outbound-events.md`.
 
@@ -284,7 +281,7 @@ as the **state-keeping orchestrator**.
        v
    STEP_4: Operator confirms shipping ──> emit outbound.shipping.confirmed
        |                                  inventory-service consumes, calls Confirm
-       |                                  TMS notified via outbound port
+       |                                  scm logistics-service dispatches carrier
        |
        v ◄── consume inventory.confirmed
    COMPLETED (terminal)
@@ -299,7 +296,6 @@ as the **state-keeping orchestrator**.
 | Pick-stage cancellation | Same as above |
 | Post-pick / pre-ship cancellation | Same — pick-confirmed reservations are still releasable |
 | Post-ship cancellation | **Forbidden in v1**. Returns is v2 (creates RMA inbound) |
-| TMS notify fails | Retry per `integration-heavy` I3 (3 attempts, exp backoff, jitter); on exhaustion, saga stays `SHIPPED_NOT_NOTIFIED` and an alert fires. Stock is already consumed — TMS retry is the only recovery |
 
 ### Saga State Machine
 
@@ -328,7 +324,6 @@ as the **state-keeping orchestrator**.
               |
               v
             SHIPPED ──[confirmed]──> COMPLETED (terminal)
-                      ──[notify_tms_failed (after retries)]──> SHIPPED_NOT_NOTIFIED (alert)
 ```
 
 Diagram in: `specs/services/outbound-service/state-machines/saga-status.md`.
@@ -348,7 +343,7 @@ Full saga document: `specs/services/outbound-service/sagas/outbound-saga.md`
 | `version` | Long | Optimistic lock |
 | `started_at` | Instant | |
 | `last_transition_at` | Instant | |
-| `failure_reason` | String | Populated on `RESERVE_FAILED` / `SHIPPED_NOT_NOTIFIED` |
+| `failure_reason` | String | Populated on `RESERVE_FAILED` / `STUCK_RECOVERY_FAILED` |
 
 Saga events are persisted to outbox in the **same TX** as the state transition.
 
@@ -445,32 +440,22 @@ Full document at `specs/services/outbound-service/workflows/outbound-flow.md`
    → saga state PACKING_CONFIRMED
 
 5. Operator confirms shipping → outbox: outbound.shipping.confirmed
-   → TMS notified via outbound port
+   → scm logistics-service dispatches carrier (ADR-MONO-053 §D8)
    → consume inventory.confirmed (eventual)
    → saga state COMPLETED
 ```
 
 ---
 
-## TMS Integration (integration-heavy)
+## Carrier Dispatch (relocated — ADR-MONO-053 §D8)
 
-Outbound HTTP call to TMS via `ShipmentNotificationPort`:
-
-- **Adapter**: `TmsClientAdapter` in `adapter/out/tms/`
-- **Timeouts**: connect 5s, read 30s (I1)
-- **Circuit breaker**: Resilience4j; threshold 50% over 20 calls, open for 60s (I2)
-- **Retry**: 3 attempts, exponential backoff 1s/2s/4s + ±200ms jitter (I3)
-- **Idempotency**: vendor's `Idempotency-Key` header populated with our `shipment_id`
-  (I4); falls back to `tms_request_dedupe` table if vendor doesn't honour
-- **Bulkhead**: dedicated thread pool + connection pool, separate from any other
-  vendor (I9). Pool size starts at 10.
-- **Internal model translation**: `Shipment` domain object → `TmsShipmentRequest`
-  in adapter (I8). TMS response translated to `TmsAcknowledgement` internal type.
-- **Failure handling**: after retry exhaustion, saga moves to `SHIPPED_NOT_NOTIFIED`
-  and emits an alert. Stock is already consumed — re-notify is via a manual
-  ops endpoint (`POST /shipments/{id}/retry-tms-notify`).
-
-Full vendor catalog: `specs/services/outbound-service/external-integrations.md`.
+The former outbound-service TMS notification side-channel (an outbound HTTP push
+after ship-confirm, plus a `SHIPPED_NOT_NOTIFIED` alert state, a
+`tms_request_dedupe` table, and a `:retry-tms-notify` recovery endpoint) has been
+**retired** (TASK-BE-560). Carrier dispatch is now owned by the scm
+`logistics-service`, which consumes `outbound.shipping.confirmed` and drives the
+carrier (multimodal, 3PL-ready) per ADR-MONO-053 / ADR-MONO-052. outbound-service
+holds no TMS dependency, config, or metrics.
 
 ---
 
@@ -498,7 +483,6 @@ Full contract: `specs/contracts/webhooks/erp-order-webhook.md`.
 - Webhook inbox: `erp_order_webhook_inbox`
 - Webhook dedupe: `erp_order_webhook_dedupe`
 - Saga state: `outbound_saga`
-- TMS request dedupe: `tms_request_dedupe(request_id PK, sent_at, response_snapshot)`
 
 Full schema reflection lives in [`database-design.md`](database-design.md); domain meaning per entity in [`domain-model.md`](domain-model.md).
 
@@ -511,13 +495,8 @@ Full schema reflection lives in [`database-design.md`](database-design.md); doma
   - `outbound.saga.active.count` — gauge of currently in-progress sagas
   - `outbound.saga.state.transitions{from,to}` — transition counter
   - `outbound.saga.completed.duration.seconds` — receipt-to-complete histogram
-  - `outbound.saga.failed.count{reason=reserve_failed|tms_notify_failed}`
+  - `outbound.saga.failed.count{reason=reserve_failed}`
   - `outbound.saga.compensation.fired.count`
-- **TMS-specific** (per integration-heavy):
-  - `outbound.tms.request.count{result=success|timeout|5xx|circuit_open}`
-  - `outbound.tms.request.duration.seconds` p50/p95/p99
-  - `outbound.tms.circuit.state{vendor}` — gauge: 0=closed, 1=half-open, 2=open
-  - `outbound.tms.retry.count{attempt}`
 - **Webhook-specific**: same set as inbound
 
 ---
@@ -527,10 +506,8 @@ Full schema reflection lives in [`database-design.md`](database-design.md); doma
 - Roles (v1):
   - `OUTBOUND_READ` — GET endpoints
   - `OUTBOUND_WRITE` — manual order, picking/packing confirmations, shipping confirmation
-  - `OUTBOUND_ADMIN` — order cancellation, manual TMS retry, force-saga-fail
+  - `OUTBOUND_ADMIN` — order cancellation, force-saga-fail
 - ERP webhook anonymous (signature replaces JWT), dedicated route in gateway
-- TMS API key per environment, loaded from Secret Manager (per
-  `platform/security-rules.md`)
 - Service-account token used by `inventory-service` to publish back; outbound
   trusts inventory's events as long as broker auth holds (no per-event signing
   internal)
@@ -570,19 +547,10 @@ No PII stored. Customer contact data inherited from master-service is operationa
 - Out-of-order events: `inventory.confirmed` arriving before saga is `SHIPPED`
   is silently dropped (impossible state — log + alert)
 
-### TMS Adapter (WireMock — I10)
-- Success → ack stored, saga → `COMPLETED`
-- Timeout → 3 retries, then `SHIPPED_NOT_NOTIFIED`
-- 5xx → 3 retries, same outcome
-- 4xx → no retry, immediate `SHIPPED_NOT_NOTIFIED`
-- Circuit open → fast-fail, same outcome
-- Manual retry endpoint → success on second attempt → saga → `COMPLETED`
-
 ### Contract Tests
 - All endpoints in `outbound-service-api.md`
 - All published event schemas
 - Webhook contract per `webhooks/erp-order-webhook.md`
-- TMS request/response per `external-integrations.md`
 
 ### Failure-mode (per trait `transactional` Required Artifact 5)
 - Same `Idempotency-Key` POST twice → identical result
@@ -618,9 +586,9 @@ Per [ADR-MONO-005](../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-
 
 | Flow | Category | Grace / Poll | Cap | Metrics | Escalation event | Status |
 |---|---|---|---|---|---|---|
-| outbound saga (`picking → packing → shipping` ↔ inventory + TMS) | **A** (orchestrated, persistent `outbound_saga` row) | grace `outbound.saga.sweeper.threshold-seconds=300`s · poll `outbound.saga.sweeper.fixed-delay-ms=60000`ms · batch `outbound.saga.sweeper.batch-size=100` | `outbound.saga.sweeper.max-attempts=5` → terminal `STUCK_RECOVERY_FAILED` | `outbound.saga.sweeper.run.count`, `outbound.saga.sweeper.recovery.fired{from_state}`, `outbound.saga.sweeper.exhausted.count{from_state}` | `outbound.alert.saga.recovery.exhausted` (outbox event — see `SagaRecoveryExhaustedEvent`) | **Compliant** (reference impl, TASK-BE-050) |
+| outbound saga (`picking → packing → shipping` ↔ inventory) | **A** (orchestrated, persistent `outbound_saga` row) | grace `outbound.saga.sweeper.threshold-seconds=300`s · poll `outbound.saga.sweeper.fixed-delay-ms=60000`ms · batch `outbound.saga.sweeper.batch-size=100` | `outbound.saga.sweeper.max-attempts=5` → terminal `STUCK_RECOVERY_FAILED` | `outbound.saga.sweeper.run.count`, `outbound.saga.sweeper.recovery.fired{from_state}`, `outbound.saga.sweeper.exhausted.count{from_state}` | `outbound.alert.saga.recovery.exhausted` (outbox event — see `SagaRecoveryExhaustedEvent`) | **Compliant** (reference impl, TASK-BE-050) |
 
-Source: `SagaSweeper` + `SagaRecoveryHandler` split (per `feedback_refactor_code_baseline_it.md` AOP self-invocation guard). Adapter-level Resilience4j on `TmsClientAdapter` covers the external-call sub-step (Category B inside the Category A saga).
+Source: `SagaSweeper` + `SagaRecoveryHandler` split (per `feedback_refactor_code_baseline_it.md` AOP self-invocation guard).
 
 ---
 
@@ -633,7 +601,7 @@ Source: `SagaSweeper` + `SagaRecoveryHandler` split (per `feedback_refactor_code
   by FEFO.
 - **Wave picking / batch picking** — group multiple orders into one operator
   pick run. v2: introduces `Wave` aggregate.
-- **Carrier rating / quote** — TMS quote API. v2.
+- **Carrier rating / quote** — owned by the scm `logistics-service` (ADR-MONO-053).
 
 ---
 
@@ -654,8 +622,8 @@ Source: `SagaSweeper` + `SagaRecoveryHandler` split (per `feedback_refactor_code
 3. ✅ [`erp-order-webhook.md`](../../contracts/webhooks/erp-order-webhook.md) — webhook contract.
 4. ✅ [`outbound-events.md`](../../contracts/events/outbound-events.md) — published event schemas.
 5. ✅ [`idempotency.md`](idempotency.md) — REST + webhook + event + saga-level.
-6. ✅ [`external-integrations.md`](external-integrations.md) — TMS + ERP
-   catalog (timeouts, circuit, retry, secrets).
+6. ✅ [`external-integrations.md`](external-integrations.md) — ERP webhook
+   integration catalog (timeouts, secrets).
 7. ✅ [`workflows/outbound-flow.md`](workflows/outbound-flow.md) — per
    `rules/domains/wms.md` Required Artifact 4.
 8. ✅ [`state-machines/order-status.md`](state-machines/order-status.md).
@@ -686,7 +654,7 @@ Source: `SagaSweeper` + `SagaRecoveryHandler` split (per `feedback_refactor_code
 - `CLAUDE.md`, `PROJECT.md`
 - `rules/domains/wms.md` — Outbound bounded context, W1, W2, W4, W5, W6
 - `rules/traits/transactional.md` — T1–T8 (especially T2, T3, T4, T5, T6, T7, T8)
-- `rules/traits/integration-heavy.md` — I1–I10 (TMS adapter)
+- `rules/traits/integration-heavy.md` — I6 (ERP webhook reception)
 - `platform/architecture-decision-rule.md`
 - `platform/service-types/rest-api.md`
 - `platform/service-types/event-consumer.md`

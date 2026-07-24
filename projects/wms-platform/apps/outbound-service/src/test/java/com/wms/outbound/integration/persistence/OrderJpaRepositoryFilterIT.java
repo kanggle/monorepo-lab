@@ -56,9 +56,9 @@ class OrderJpaRepositoryFilterIT {
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
         // Generate the OrderEntity schema from the mapping (NOT Flyway) — this
-        // query-text regression only needs the orders table, and the outbound
-        // Flyway set has a pre-existing test-time issue (V13 tms_request_dedupe)
-        // orthogonal to this fix. Real Postgres still exercises the 42P18 path.
+        // query-text regression only needs the orders table, and the full outbound
+        // Flyway set is orthogonal to this fix. Real Postgres still exercises the
+        // 42P18 path.
         registry.add("spring.flyway.enabled", () -> "false");
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
     }

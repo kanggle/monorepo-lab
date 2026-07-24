@@ -166,24 +166,6 @@ public class OutboundSagaCoordinator {
     }
 
     /**
-     * TMS push exhausted (after-commit): {@code SHIPPED → SHIPPED_NOT_NOTIFIED}.
-     * Called from a separate TX (post-commit listener); the alert metric fires
-     * downstream from this transition.
-     */
-    @Transactional(propagation = Propagation.REQUIRED)
-    public void onTmsNotifyFailed(UUID sagaId, String reason) {
-        OutboundSaga saga = sagaPersistence.findById(sagaId).orElse(null);
-        if (saga == null) {
-            log.warn("onTmsNotifyFailed for unknown sagaId={}; skipping", sagaId);
-            return;
-        }
-        Instant now = clock.instant();
-        saga.onTmsNotifyFailed(reason, now);
-        sagaPersistence.save(saga);
-        log.warn("saga_shipped_not_notified sagaId={} reason={}", sagaId, reason);
-    }
-
-    /**
      * Reserve-failed compensation: saga {@code REQUESTED → RESERVE_FAILED};
      * order to {@code BACKORDERED}.
      */

@@ -58,7 +58,7 @@ class ShippingControllerSliceTest {
     void confirmShipping_happyPath_returns201() throws Exception {
         ShipmentResult result = new ShipmentResult(
                 SHIPMENT_ID, "SHP-001", ORDER_ID, "ORD-100", "UPS", null,
-                T0, "PENDING", null, "SHIPPED", "SHIPPED", 1L, T0, "shipper-1");
+                T0, "SHIPPED", "SHIPPED", 1L, T0, "shipper-1");
         when(confirmShipping.confirm(any())).thenReturn(result);
 
         mockMvc.perform(post("/api/v1/outbound/orders/{orderId}/shipments", ORDER_ID)

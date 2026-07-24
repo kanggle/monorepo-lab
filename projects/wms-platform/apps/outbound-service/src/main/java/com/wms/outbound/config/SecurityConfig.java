@@ -38,8 +38,7 @@ import org.springframework.security.web.access.AccessDeniedHandler;
  *   <li>{@code OUTBOUND_READ} — query endpoints</li>
  *   <li>{@code OUTBOUND_WRITE} — manual order creation, picking/packing
  *       confirmations, shipping confirmation</li>
- *   <li>{@code OUTBOUND_ADMIN} — order cancellation, manual TMS retry,
- *       force-saga-fail</li>
+ *   <li>{@code OUTBOUND_ADMIN} — order cancellation, force-saga-fail</li>
  * </ul>
  *
  * <p>The webhook endpoint {@code /webhooks/erp/order} is permitted without JWT —
@@ -54,8 +53,8 @@ import org.springframework.security.web.access.AccessDeniedHandler;
 // exists solely in a servlet web context. Without this, a @SpringBootTest with
 // webEnvironment=NONE (the outbound IT base) fails to load — securityFilterChain
 // has no HttpSecurity bean to inject. Production runs as a servlet web app, so
-// the condition is true there (security unchanged); non-web contexts (the saga /
-// TMS ITs that only autowire domain beans) cleanly skip it.
+// the condition is true there (security unchanged); non-web contexts (the saga
+// ITs that only autowire domain beans) cleanly skip it.
 @Configuration
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @EnableMethodSecurity
@@ -82,7 +81,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_PATHS).permitAll()
                         // NOTE: granular role enforcement (e.g. OUTBOUND_ADMIN
-                        // for post-pick cancel + TMS retry) happens in the
+                        // for post-pick cancel) happens in the
                         // application services (CancelOrderService, etc.) where
                         // the role decision is data-dependent on order/saga
                         // state. The filter chain below only enforces the

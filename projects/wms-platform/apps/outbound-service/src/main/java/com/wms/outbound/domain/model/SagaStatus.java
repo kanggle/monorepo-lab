@@ -10,14 +10,10 @@ package com.wms.outbound.domain.model;
  * <p>Terminal states: {@link #COMPLETED}, {@link #CANCELLED},
  * {@link #RESERVE_FAILED}, {@link #STUCK_RECOVERY_FAILED}.
  *
- * <p>{@link #SHIPPED_NOT_NOTIFIED} is a non-terminal alert state — saga
- * remains here until manual TMS retry succeeds.
- *
  * <p>{@link #STUCK_RECOVERY_FAILED} is the terminal state set by the saga
  * sweeper (TASK-BE-050) once a saga has exceeded the configured maximum
- * number of re-emission attempts without advancing. Distinct from
- * {@link #SHIPPED_NOT_NOTIFIED} (TMS-side) — this one is the sweeper /
- * inventory channel exhaustion and triggers
+ * number of re-emission attempts without advancing. It is the sweeper /
+ * inventory channel exhaustion state and triggers
  * {@code outbound.alert.saga.recovery.exhausted}.
  *
  * <p>{@link #CANCELLATION_REQUESTED} is the transient state set when an
@@ -39,7 +35,6 @@ public enum SagaStatus {
     CANCELLATION_REQUESTED,
     CANCELLED,
     SHIPPED,
-    SHIPPED_NOT_NOTIFIED,
     COMPLETED,
     STUCK_RECOVERY_FAILED
 }

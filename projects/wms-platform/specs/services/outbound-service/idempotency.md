@@ -65,7 +65,6 @@ require `Idempotency-Key`:
 | POST | `/orders/{id}/packing-units` |
 | PATCH | `/packing-units/{id}` (seal) |
 | POST | `/orders/{id}/shipments` |
-| POST | `/shipments/{id}:retry-tms-notify` |
 
 GET endpoints are naturally idempotent — no header required or accepted.
 ERP webhook endpoint (`POST /webhooks/erp/order`) does NOT use
@@ -189,7 +188,6 @@ remain effective after Redis TTL expiry:
 | `POST /orders/{id}/shipments` | `shipment.order_id` UNIQUE — one shipment per order; second attempt sees `Order.status != PACKED` | `STATE_TRANSITION_INVALID` |
 | `POST /orders/{id}:cancel` | `Order.status` guard — second cancel sees `CANCELLED` not eligible state | `STATE_TRANSITION_INVALID` (`ORDER_ALREADY_SHIPPED` after `SHIPPED`) |
 | `PATCH /packing-units/{id}` (seal) | `packing_unit.status` guard — second seal sees `SEALED` | `STATE_TRANSITION_INVALID` |
-| `POST /shipments/{id}:retry-tms-notify` | `shipment.tms_status` guard — endpoint is naturally idempotent: `NOTIFIED` shipments return cached ack; only `NOTIFY_FAILED` triggers a new attempt | `STATE_TRANSITION_INVALID` if `tms_status = PENDING` (saga not yet at SHIPPED) |
 
 These two-layer defenses ensure outbound idempotency survives Redis TTL
 expiry. Most retries happen within 24h; the domain layer is the safety net.
@@ -565,7 +563,6 @@ dedupe doesn't have the row.
 | Kafka DLQ replay after 30-day TTL purge | Saga state-machine guard | Silent no-op if already-applied; legal transition if not |
 | Saga sweeper re-emits `outbound.picking.requested` after inventory already reserved | Saga state-machine guard (on receipt of re-emitted `inventory.reserved`) | No-op |
 | Two pods consume same partition briefly (rebalance) | At-most-once in partition | Not possible — Kafka partition assigned to one consumer |
-| REST `:retry-tms-notify` on already-NOTIFIED shipment | Domain status guard | 200 with cached ack (no second TMS call); naturally idempotent |
 
 ### 5.1 30-day Replay Risk for Kafka
 
@@ -732,7 +729,7 @@ This document covers idempotency. Related concerns are covered elsewhere:
   `PARTNER_INVALID_TYPE`): handled by use-cases against
   `MasterReadModel`, documented in
   [`architecture.md`](architecture.md) § Key Domain Invariants
-- **External integration timeouts/retries** (TMS, ERP webhook):
+- **External integration timeouts/retries** (ERP webhook):
   [`external-integrations.md`](external-integrations.md)
 
 ---
@@ -740,9 +737,9 @@ This document covers idempotency. Related concerns are covered elsewhere:
 ## References
 
 - `specs/services/outbound-service/architecture.md` § Idempotency, §
-  Outbound Saga, § TMS Integration
+  Outbound Saga
 - `specs/services/outbound-service/domain-model.md` §6 OutboundSaga, §8
-  EventDedupe, §9 ErpOrderWebhookInbox/Dedupe, §10 TmsRequestDedupe
+  EventDedupe, §9 ErpOrderWebhookInbox/Dedupe, §10 MasterReadModel
 - `specs/contracts/http/outbound-service-api.md` § Idempotency Semantics
 - `specs/contracts/webhooks/erp-order-webhook.md` § Replay Dedupe
 - `specs/services/inbound-service/idempotency.md` — sibling reference

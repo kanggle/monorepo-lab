@@ -1,6 +1,5 @@
 package com.wms.outbound.domain.model;
 
-import com.wms.outbound.domain.exception.StateTransitionInvalidException;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -11,10 +10,10 @@ import java.util.UUID;
  * <p>Authoritative reference:
  * {@code specs/services/outbound-service/domain-model.md} §5.
  *
- * <p>Mostly immutable: only {@code tms_status} / {@code tms_notified_at} /
- * {@code tracking_no} / {@code carrier_code} may change after creation, and
- * only via the {@link #markTmsNotified} / {@link #markTmsNotifyFailed}
- * domain methods (T4).
+ * <p>Effectively immutable after creation. Carrier dispatch (the former TMS
+ * side-channel) was relocated to the scm {@code logistics-service}
+ * (ADR-MONO-053 §D8), so the shipment no longer tracks a TMS notification
+ * status; it records that the order shipped and its carrier/tracking metadata.
  */
 public final class Shipment {
 
@@ -24,9 +23,6 @@ public final class Shipment {
     private String carrierCode;
     private String trackingNo;
     private final Instant shippedAt;
-    private TmsStatus tmsStatus;
-    private Instant tmsNotifiedAt;
-    private UUID tmsRequestId;
     private long version;
     private final Instant createdAt;
     private final String createdBy;
@@ -38,9 +34,6 @@ public final class Shipment {
                     String carrierCode,
                     String trackingNo,
                     Instant shippedAt,
-                    TmsStatus tmsStatus,
-                    Instant tmsNotifiedAt,
-                    UUID tmsRequestId,
                     long version,
                     Instant createdAt,
                     String createdBy,
@@ -51,46 +44,10 @@ public final class Shipment {
         this.carrierCode = carrierCode;
         this.trackingNo = trackingNo;
         this.shippedAt = Objects.requireNonNull(shippedAt, "shippedAt");
-        this.tmsStatus = Objects.requireNonNull(tmsStatus, "tmsStatus");
-        this.tmsNotifiedAt = tmsNotifiedAt;
-        this.tmsRequestId = tmsRequestId;
         this.version = version;
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt");
         this.createdBy = Objects.requireNonNull(createdBy, "createdBy");
         this.updatedAt = Objects.requireNonNull(updatedAt, "updatedAt");
-    }
-
-    /**
-     * Records a successful TMS acknowledgement: {@code PENDING} or
-     * {@code NOTIFY_FAILED} → {@code NOTIFIED}.
-     *
-     * <p>Manual retry (`POST /shipments/{id}:retry-tms-notify`) may invoke this
-     * from {@code NOTIFY_FAILED}; first-time success invokes from {@code PENDING}.
-     */
-    public void markTmsNotified(Instant now, UUID requestId) {
-        if (tmsStatus == TmsStatus.NOTIFIED) {
-            throw new StateTransitionInvalidException(
-                    TmsStatus.NOTIFIED.name(), TmsStatus.NOTIFIED.name());
-        }
-        this.tmsStatus = TmsStatus.NOTIFIED;
-        this.tmsNotifiedAt = now;
-        this.tmsRequestId = requestId;
-        this.updatedAt = now;
-    }
-
-    /**
-     * Records a TMS push exhaustion: {@code PENDING} → {@code NOTIFY_FAILED}.
-     */
-    public void markTmsNotifyFailed(Instant now) {
-        if (tmsStatus == TmsStatus.NOTIFY_FAILED) {
-            return;
-        }
-        if (tmsStatus != TmsStatus.PENDING) {
-            throw new StateTransitionInvalidException(
-                    tmsStatus.name(), TmsStatus.NOTIFY_FAILED.name());
-        }
-        this.tmsStatus = TmsStatus.NOTIFY_FAILED;
-        this.updatedAt = now;
     }
 
     public UUID getId() {
@@ -115,18 +72,6 @@ public final class Shipment {
 
     public Instant getShippedAt() {
         return shippedAt;
-    }
-
-    public TmsStatus getTmsStatus() {
-        return tmsStatus;
-    }
-
-    public Instant getTmsNotifiedAt() {
-        return tmsNotifiedAt;
-    }
-
-    public UUID getTmsRequestId() {
-        return tmsRequestId;
     }
 
     public long getVersion() {

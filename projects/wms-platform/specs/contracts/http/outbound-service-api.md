@@ -44,7 +44,7 @@ Responses:
 |---|---|
 | `OUTBOUND_READ` | All GET endpoints |
 | `OUTBOUND_WRITE` | Manual order creation, picking/packing confirmations, shipping confirmation |
-| `OUTBOUND_ADMIN` | Order cancellation (post-pick), manual TMS retry, force-saga operations |
+| `OUTBOUND_ADMIN` | Order cancellation (post-pick), force-saga operations |
 
 Enforced at the application layer, not in controllers. Roles are propagated
 through the command record and checked in the use-case service.
@@ -65,7 +65,7 @@ the SIGNED `tenant_id` claim of the access token (never a client header):
     `source = FULFILLMENT_ECOMMERCE` (any client-supplied `source` is overridden).
   - Any single-order read or mutation (`GET /orders/{id}`, `…/saga`,
     `…/picking-requests`, cancel, pick-confirm, packing create/seal/confirm,
-    shipping confirm, TMS retry) on an order whose `tenant_id` does not match the
+    shipping confirm) on an order whose `tenant_id` does not match the
     caller — including B2B / `null`-tenant orders — returns **403
     `TENANT_SCOPE_DENIED`**.
 
@@ -731,11 +731,10 @@ packing units sealed, all quantities packed). This call atomically:
 1. Creates the `Shipment` record.
 2. Calls `Order.confirmShipping()` → status transitions to `SHIPPED`.
 3. Writes outbox `outbound.shipping.confirmed` event (saga step 4).
-4. Triggers TMS notification via `ShipmentNotificationPort` (async, not
-   blocking the HTTP response).
 
-The caller receives `200` as soon as the DB transaction commits; TMS
-notification result is reflected in `tmsStatus` (visible via `GET /shipments/{id}`).
+Carrier dispatch is driven downstream by the scm `logistics-service` off the
+`outbound.shipping.confirmed` event (ADR-MONO-053 §D8); outbound-service performs
+no TMS notification.
 
 Request:
 
@@ -748,8 +747,7 @@ Request:
 
 Validation:
 
-- `carrierCode`: optional, ≤ 40 chars. Carrier may be assigned by TMS after
-  notification.
+- `carrierCode`: optional, ≤ 40 chars. Captured at ship-confirm time.
 - `version`: required, optimistic lock check on the Order.
 
 Response `201`:
@@ -763,8 +761,6 @@ Response `201`:
   "carrierCode": "CJ-LOGISTICS",
   "trackingNo": null,
   "shippedAt": "2026-04-29T15:00:00Z",
-  "tmsStatus": "PENDING",
-  "tmsNotifiedAt": null,
   "orderStatus": "SHIPPED",
   "sagaState": "SHIPPED",
   "version": 0,
@@ -773,15 +769,11 @@ Response `201`:
 }
 ```
 
-`tmsStatus = PENDING` immediately after creation; transitions to `NOTIFIED`
-on TMS ack, or `NOTIFY_FAILED` after retry exhaustion (saga →
-`SHIPPED_NOT_NOTIFIED`, alert fires).
-
-`trackingNo` is populated asynchronously from the TMS acknowledgement; fetch
-via `GET /shipments/{id}` after TMS notification completes.
+`trackingNo` is null at creation; if the downstream logistics-service dispatch
+records a tracking number it may be reflected on a later `GET /shipments/{id}`.
 
 Side-effect: outbox `outbound.shipping.confirmed` (§7) — cross-service
-contract with `inventory-service`.
+contract with `inventory-service` (and the scm `logistics-service` dispatch).
 
 Errors: `ORDER_NOT_FOUND` (404), `STATE_TRANSITION_INVALID` (422),
 `PACKING_INCOMPLETE` (422), `CONFLICT` (409), `DUPLICATE_REQUEST` (409),
@@ -790,43 +782,14 @@ Errors: `ORDER_NOT_FOUND` (404), `STATE_TRANSITION_INVALID` (422),
 ### 4.2 GET `/api/v1/outbound/shipments/{id}` — Get Shipment
 
 Auth: `OUTBOUND_READ`.
-Response `200`: same shape as §4.1 create response with current `tmsStatus`
-and `trackingNo` (if TMS has acknowledged).
+Response `200`: same shape as §4.1 create response.
 Errors: `SHIPMENT_NOT_FOUND` (404).
 Headers: `ETag: "v{version}"`.
 
-### 4.3 POST `/api/v1/outbound/shipments/{id}:retry-tms-notify` — Manual TMS Retry
-
-Auth: `OUTBOUND_ADMIN`.
-Requires `Idempotency-Key`.
-
-Allowed only when `Shipment.tmsStatus == NOTIFY_FAILED` (saga is
-`SHIPPED_NOT_NOTIFIED`). Re-triggers the TMS notification via
-`ShipmentNotificationPort`. Stock is already consumed — this only re-notifies
-the carrier system.
-
-On successful TMS ack: `tmsStatus → NOTIFIED`, `sagaState → COMPLETED`.
-On failure: `tmsStatus` remains `NOTIFY_FAILED`; caller may retry again
-(subject to same idempotency TTL).
-
-Request: empty body or `{}`.
-
-Response `200`:
-
-```json
-{
-  "shipmentId": "uuid",
-  "tmsStatus": "NOTIFIED",
-  "tmsNotifiedAt": "2026-04-29T16:00:00Z",
-  "trackingNo": "CJ-123456789",
-  "sagaState": "COMPLETED",
-  "retriedAt": "2026-04-29T16:00:00Z",
-  "retriedBy": "user-uuid"
-}
-```
-
-Errors: `SHIPMENT_NOT_FOUND` (404), `STATE_TRANSITION_INVALID` (422 — not
-in `NOTIFY_FAILED`), `FORBIDDEN` (403), `DUPLICATE_REQUEST` (409).
+> **Carrier-dispatch recovery relocated (ADR-MONO-053 §D8, TASK-BE-560).** The
+> former `POST /shipments/{id}:retry-tms-notify` endpoint was removed with the
+> outbound TMS side-channel. The operator recovery action now drives the scm
+> logistics-service dispatch `:retry` (PC-FE-258).
 
 ---
 
@@ -855,10 +818,10 @@ Response `200`:
 
 `state` values: `REQUESTED`, `RESERVE_FAILED`, `RESERVED`, `PICKING_CONFIRMED`,
 `PACKING_CONFIRMED`, `CANCELLATION_REQUESTED`, `CANCELLED`, `SHIPPED`,
-`SHIPPED_NOT_NOTIFIED`, `COMPLETED`.
+`COMPLETED`, `STUCK_RECOVERY_FAILED`.
 
 `failureReason`: populated for `RESERVE_FAILED` (insufficient-stock details
-from inventory) and `SHIPPED_NOT_NOTIFIED` (TMS error details).
+from inventory) and `STUCK_RECOVERY_FAILED` (sweeper-exhaustion details).
 
 Errors: `ORDER_NOT_FOUND` (404).
 
@@ -892,7 +855,6 @@ the state change. Kafka publish is asynchronous (outbox publisher SLA). See
 | `POST /orders/{id}/packing-units` | none (unit creation is internal lifecycle) |
 | `PATCH /packing-units/{id}` | `outbound.packing.completed` (only when all units sealed and all quantities packed) |
 | `POST /orders/{id}/shipments` | `outbound.shipping.confirmed` |
-| `POST /shipments/{id}:retry-tms-notify` | none (re-sends to TMS only; no new outbox event) |
 
 The ERP webhook ingest path's `outbound.order.received` + `outbound.picking.requested`
 events are fired by the **background processor**, not by the webhook controller.
@@ -930,5 +892,5 @@ events are fired by the **background processor**, not by the webhook controller.
 - `platform/api-gateway-policy.md`
 - `platform/security-rules.md`
 - `rules/traits/transactional.md` — T1 (idempotency), T3 (outbox), T4 (state machine), T5 (optimistic lock)
-- `rules/traits/integration-heavy.md` — I3 (TMS retry), I4 (TMS idempotency key)
+- `rules/traits/integration-heavy.md` — I6 (ERP webhook reception)
 - `rules/domains/wms.md` — Outbound bounded context, W1, W4, W5, W6

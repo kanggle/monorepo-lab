@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.wms.outbound.application.command.ConfirmShippingCommand;
 import com.wms.outbound.application.result.ShipmentResult;
 import com.wms.outbound.application.saga.OutboundSagaCoordinator;
-import com.wms.outbound.application.service.fakes.FakeApplicationEventPublisher;
 import com.wms.outbound.application.service.fakes.FakeOrderPersistencePort;
 import com.wms.outbound.application.service.fakes.FakeOutboxWriterPort;
 import com.wms.outbound.application.service.fakes.FakePackingPersistencePort;
@@ -30,7 +29,6 @@ import com.wms.outbound.domain.model.PickingRequest;
 import com.wms.outbound.domain.model.PickingRequestLine;
 import com.wms.outbound.domain.model.PickingRequestStatus;
 import com.wms.outbound.domain.model.SagaStatus;
-import com.wms.outbound.domain.model.TmsStatus;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -53,7 +51,6 @@ class ConfirmShippingServiceTest {
     private FakeSagaPersistencePort sagaPersistence;
     private FakeShipmentPersistencePort shipmentPersistence;
     private FakeOutboxWriterPort outboxWriter;
-    private FakeApplicationEventPublisher eventPublisher;
     private OutboundSagaCoordinator coordinator;
     private ConfirmShippingService service;
 
@@ -76,11 +73,10 @@ class ConfirmShippingServiceTest {
         sagaPersistence = new FakeSagaPersistencePort();
         shipmentPersistence = new FakeShipmentPersistencePort();
         outboxWriter = new FakeOutboxWriterPort();
-        eventPublisher = new FakeApplicationEventPublisher();
         coordinator = new OutboundSagaCoordinator(sagaPersistence, orderPersistence, outboxWriter, fixedClock);
         service = new ConfirmShippingService(orderPersistence, pickingPersistence,
                 pickingConfirmationPersistence, packingPersistence, sagaPersistence,
-                shipmentPersistence, coordinator, outboxWriter, eventPublisher,
+                shipmentPersistence, coordinator, outboxWriter,
                 new com.wms.outbound.application.service.fakes.FakeCallerScopeProvider(),
                 fixedClock);
 
@@ -109,15 +105,11 @@ class ConfirmShippingServiceTest {
 
         assertThat(result.orderStatus()).isEqualTo(OrderStatus.SHIPPED.name());
         assertThat(result.sagaState()).isEqualTo(SagaStatus.SHIPPED.name());
-        assertThat(result.tmsStatus()).isEqualTo(TmsStatus.PENDING.name());
         // shipment_no format aligned to outbound-service-api.md §4.1 example
         // (SHP-YYYYMMDD-NNNN) per TASK-BE-040 AC-06.
         assertThat(result.shipmentNo()).startsWith("SHP-");
         assertThat(shipmentPersistence.count()).isEqualTo(1);
         assertThat(outboxWriter.countByType("outbound.shipping.confirmed")).isEqualTo(1);
-        assertThat(eventPublisher.published).hasSize(1);
-        assertThat(eventPublisher.published.get(0))
-                .isInstanceOf(ShipmentNotifyTrigger.class);
     }
 
     @Test
@@ -134,7 +126,6 @@ class ConfirmShippingServiceTest {
                 .isInstanceOf(StateTransitionInvalidException.class);
         assertThat(shipmentPersistence.count()).isZero();
         assertThat(outboxWriter.published).isEmpty();
-        assertThat(eventPublisher.published).isEmpty();
     }
 
     @Test

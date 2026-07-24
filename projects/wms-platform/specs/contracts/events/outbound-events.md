@@ -440,7 +440,7 @@ Partition key: `orderId`
 Consumer expectations:
 
 - `admin-service`: updates order dashboard; makes packing summary available
-  for the TMS handover view
+  for the carrier handover view
 - `notification-service`: optional alert indicating order is ready to ship
 
 ### 7. `outbound.shipping.confirmed`  ⚠️ Cross-service contract
@@ -513,14 +513,18 @@ Partition key: `sagaId`
 > `SHIPPED` for > 5 minutes (idempotent at the inventory consumer via T8).
 >
 > Once this event is published, **the saga is terminal from the outbound side**
-> (stock depletion is irrevocable in v1). TMS failure after this point results
-> in `SHIPPED_NOT_NOTIFIED` alert but does not affect inventory.
+> (stock depletion is irrevocable in v1). Carrier dispatch happens downstream in
+> the scm `logistics-service` off this event and does not affect the outbound
+> saga or inventory (ADR-MONO-053 §D8).
 
 Consumer expectations:
 
 - `inventory-service` (`ShippingConfirmedConsumer`): calls
   `ConfirmReservationUseCase` per line, consuming reserved quantities. Publishes
   `inventory.confirmed` with `reservationId` and `sagaId`.
+- scm `logistics-service`: consumes the event to dispatch the carrier
+  (multimodal / 3PL-ready), per ADR-MONO-053 §D8. Independent of the outbound
+  saga completion path.
 - `admin-service`: marks order as shipped in dashboard; computes order
   fulfillment cycle-time metric
 

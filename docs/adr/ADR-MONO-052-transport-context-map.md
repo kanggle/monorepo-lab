@@ -133,7 +133,7 @@ D2 ④ names the destination; this decision declines to schedule the move. `adap
 
 When the move happens, the shape is already determined by D5: wms stops calling the vendor and keeps publishing `outbound.shipping.confirmed`; `logistics-service` subscribes and owns the vendor client, `tms_status`, the retry endpoint, and `carrierCode` resolution. wms's outbox publication is unchanged — it is the one piece that does not move.
 
-Two facts make this interim cheap rather than a debt accruing interest: the vendor **does not exist yet** (`base-url` defaults to `https://tms.example.com/api/v1`, and [tms-shipment-api.md](../../projects/wms-platform/specs/contracts/http/tms-shipment-api.md) calls itself *indicative* pending a real vendor schema), and the adapter is already behind a port (`ShipmentNotificationPort`), so relocation is a wiring change rather than a rewrite.
+Two facts make this interim cheap rather than a debt accruing interest: the vendor **does not exist yet** (`base-url` defaults to `https://tms.example.com/api/v1`, and the former `tms-shipment-api.md` — since deleted by TASK-BE-560 when the side-channel was retired — called itself *indicative* pending a real vendor schema), and the adapter is already behind a port (`ShipmentNotificationPort`), so relocation is a wiring change rather than a rewrite.
 
 ### D8 — Tripwire: what triggers the `logistics-service` bootstrap
 

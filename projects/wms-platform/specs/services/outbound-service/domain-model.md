@@ -4,8 +4,8 @@ Domain model specification for `outbound-service`. Owned aggregates, fields,
 relationships, invariants, and state transitions.
 
 Read this after `specs/services/outbound-service/architecture.md`. The outbound
-saga, TMS integration pattern, webhook reception, and Hexagonal layout are
-declared there and only restated here as far as needed to reason about the model.
+saga, webhook reception, and Hexagonal layout are declared there and only
+restated here as far as needed to reason about the model.
 
 ---
 
@@ -19,7 +19,7 @@ Six owned aggregates plus infrastructure-supporting records:
 2. **PickingRequest** — saga step 1; reservation instruction to `inventory-service`
 3. **PickingConfirmation** — physical pick confirmation by operator
 4. **PackingUnit** — packing record (box / pallet)
-5. **Shipment** — final shipment record; TMS handover
+5. **Shipment** — final shipment record
 6. **OutboundSaga** — saga state tracker; orchestrates reserve → pick → pack →
    ship across `outbound-service` and `inventory-service`
 
@@ -28,8 +28,7 @@ Six owned aggregates plus infrastructure-supporting records:
 7. **OutboundOutbox** — transactional outbox row (T3)
 8. **EventDedupe** — Kafka consumer-side dedupe (T8)
 9. **ErpOrderWebhookInbox / ErpOrderWebhookDedupe** — ERP push ingest buffer + webhook replay-protection (combined as one body record, § 9)
-10. **TmsRequestDedupe** — TMS API idempotency tracking
-11. **MasterReadModel** — local cache of Location / SKU / Lot / Partner snapshots
+10. **MasterReadModel** — local cache of Location / SKU / Lot / Partner snapshots
 
 ---
 
@@ -255,8 +254,8 @@ envelope). One Order may have multiple PackingUnits.
 | `order_id` | UUID (FK) | no | |
 | `carton_no` | String (40) | no | Unique within the Order; operator-assigned or auto-generated |
 | `packing_type` | enum `BOX` / `PALLET` / `ENVELOPE` | no | |
-| `weight_grams` | Integer | yes | For TMS handover |
-| `length_mm` / `width_mm` / `height_mm` | Integer | yes | Dimensions for TMS |
+| `weight_grams` | Integer | yes | For carrier handover |
+| `length_mm` / `width_mm` / `height_mm` | Integer | yes | Dimensions for carrier handover |
 | `notes` | String (500) | yes | |
 | `status` | enum `OPEN` / `SEALED` | no | Sealed when packing is finalized |
 | (common version / timestamp fields) | | | |
@@ -288,10 +287,10 @@ envelope). One Order may have multiple PackingUnits.
 ### Purpose
 
 The final shipping record. Created when `ConfirmShippingUseCase` is executed on
-a `PACKED` order. Triggers:
-1. `outbound.shipping.confirmed` outbox event → `inventory-service` consumes →
-   `confirm(reserved)` on all reserved quantities.
-2. TMS HTTP notification via `ShipmentNotificationPort`.
+a `PACKED` order. Triggers the `outbound.shipping.confirmed` outbox event →
+`inventory-service` consumes → `confirm(reserved)` on all reserved quantities.
+Carrier dispatch is driven downstream by the scm `logistics-service` off the same
+event (ADR-MONO-053 §D8); this service performs no TMS notification.
 
 ### Fields
 
@@ -300,12 +299,9 @@ a `PACKED` order. Triggers:
 | `id` | UUID | no | |
 | `order_id` | UUID (FK) | no | 1:1 with Order in v1 |
 | `shipment_no` | String (40) | no | Auto-generated. Format: `SHP-YYYYMMDD-NNNN` where `NNNN` is a random 4-digit numeric suffix (1000–9999). **Globally unique**, enforced by `idx_shipment_shipment_no`. See generation strategy in Invariants. Example: `SHP-20260429-0001` (see `outbound-service-api.md §4.1`). |
-| `carrier_code` | String (40) | yes | Carrier identifier for TMS (may be assigned after TMS notification) |
-| `tracking_no` | String (100) | yes | Carrier-assigned tracking number; populated from TMS ack |
+| `carrier_code` | String (40) | yes | Carrier identifier captured at ship-confirm time |
+| `tracking_no` | String (100) | yes | Carrier-assigned tracking number (set downstream by logistics-service dispatch, if any) |
 | `shipped_at` | Instant | no | Wall-clock at `ConfirmShippingUseCase` execution |
-| `tms_status` | enum `PENDING` / `NOTIFIED` / `NOTIFY_FAILED` | no | Tracks TMS notification outcome |
-| `tms_notified_at` | Instant | yes | Set when TMS ack received |
-| `tms_request_id` | UUID | yes | The `request_id` stored in `TmsRequestDedupe` |
 | (common version / timestamp fields) | | | |
 
 ### Invariants
@@ -319,11 +315,8 @@ a `PACKED` order. Triggers:
 - `Shipment` is the anchor for the `outbound.shipping.confirmed` outbox event.
   The event carries `reservation_id` (= `picking_request.id`) and per-line
   confirmed quantities so inventory-service can `confirm()` each line.
-- `tms_status = NOTIFY_FAILED` → Saga advances to `SHIPPED_NOT_NOTIFIED` (alert);
-  stock is already consumed. Manual retry endpoint `POST /shipments/{id}/retry-tms-notify`
-  re-attempts TMS notification without changing stock state.
-- Shipment is immutable (except `tms_status` / `tms_notified_at` / `tracking_no`
-  updates from TMS response handling).
+- Shipment is effectively immutable after creation (only `tracking_no` /
+  `carrier_code` may be updated by a downstream dispatch record).
 
 ---
 
@@ -343,7 +336,7 @@ inbound Kafka events.
 | `saga_id` | UUID | no | PK; also used as Kafka `sagaId` header for partition routing |
 | `order_id` | UUID | no | 1:1 with Order; unique |
 | `state` | enum | no | See saga state machine below |
-| `failure_reason` | String (500) | yes | Populated on `RESERVE_FAILED` or `SHIPPED_NOT_NOTIFIED` |
+| `failure_reason` | String (500) | yes | Populated on `RESERVE_FAILED` or `STUCK_RECOVERY_FAILED` |
 | `last_transition_at` | Instant | no | Monotonically increasing; used by sweeper |
 | `started_at` | Instant | no | |
 | (common version / timestamp fields) | | | |
@@ -371,10 +364,10 @@ inbound Kafka events.
                        v
               PACKING_CONFIRMED ──[cancel]──> CANCELLATION_REQUESTED
                        |
-         [confirmShipping REST → emit shipping.confirmed → TMS call]
+         [confirmShipping REST → emit shipping.confirmed]
                        |
                        v
-                   SHIPPED ──[tms_notify_failed]──> SHIPPED_NOT_NOTIFIED (alert)
+                   SHIPPED
                        |
           [inventory.confirmed consumed]
                        |
@@ -389,8 +382,6 @@ inbound Kafka events.
 ```
 
 - `RESERVE_FAILED`, `CANCELLED`, `COMPLETED`, `STUCK_RECOVERY_FAILED` are terminal.
-- `SHIPPED_NOT_NOTIFIED` is a **non-terminal alert state** — saga stays here until
-  manual TMS retry succeeds, at which point it advances to `COMPLETED`.
 - Direct `UPDATE outbound_saga SET state = ?` is forbidden (T4). Only
   `OutboundSagaCoordinator.apply(event)` transitions state.
 
@@ -474,22 +465,7 @@ Order + OutboundSaga + first outbox row atomically.
 
 ---
 
-## 10. TmsRequestDedupe (infrastructure)
-
-Per `integration-heavy` rule I4 — idempotency toward TMS.
-
-| Field | Type | Notes |
-|---|---|---|
-| `request_id` | UUID | PK; = `shipment.id`, used as `Idempotency-Key` to TMS |
-| `sent_at` | Instant | Time of first successful HTTP dispatch |
-| `response_snapshot` | JSONB | TMS ack payload (or error body on failure) |
-
-If TMS vendor honours the idempotency key, re-sends are absorbed. If not,
-this table acts as a local gate: only one successful send per `request_id`.
-
----
-
-## 11. MasterReadModel (local cache; read-only from this service's POV)
+## 10. MasterReadModel (local cache; read-only from this service's POV)
 
 Same snapshot pattern as siblings. Populated by master `*` consumers.
 
@@ -545,7 +521,7 @@ consistency only; W6 is local-only in v1.
 | PickingRequest | PickingRequestLines | events (`outbound.picking.requested`, saga coordination) |
 | PickingConfirmation | PickingConfirmationLines | `Order.completePicking()` called in same use-case TX |
 | PackingUnit | PackingUnitLines | `Order.completePacking()` called when all units sealed |
-| Shipment | TMS status | `outbound.shipping.confirmed` event; fires once, then TMS call |
+| Shipment | shipment record | `outbound.shipping.confirmed` event; fires once (scm logistics-service dispatches carrier off it, ADR-MONO-053 §D8) |
 | OutboundSaga | saga state | Events from `inventory-service` advance the saga; saga triggers `Order` state transitions via the coordinator |
 
 Single-use-case multi-aggregate writes permitted:
@@ -604,8 +580,8 @@ Flyway `V99__seed_dev_data.sql`, profile `dev` or `standalone`.
   `rules/domains/wms.md` Required Artifact 4
 - `specs/services/outbound-service/idempotency.md` — REST + webhook + event +
   saga-level strategy
-- `specs/services/outbound-service/external-integrations.md` — TMS + ERP
-  catalog (timeouts, circuit, retry, secrets)
+- `specs/services/outbound-service/external-integrations.md` — ERP webhook
+  integration catalog (timeouts, secrets)
 - `platform/error-handling.md` — register `STATE_TRANSITION_INVALID` (global),
   `WAREHOUSE_MISMATCH` (shared with inbound), `PARTNER_INVALID_TYPE` (shared),
   `LOT_REQUIRED` (shared), `PICKING_INCOMPLETE` (new for outbound)
@@ -619,7 +595,7 @@ Flyway `V99__seed_dev_data.sql`, profile `dev` or `standalone`.
   Standard Error Codes
 - `rules/traits/transactional.md` — T2 (no dist TX), T3 (outbox), T4 (no direct
   status), T5 (optimistic lock), T6 (compensation), T7 (saga), T8 (eventId dedupe)
-- `rules/traits/integration-heavy.md` — I1–I4, I7–I9 (TMS adapter); I6 (webhook)
+- `rules/traits/integration-heavy.md` — I6 (ERP webhook reception)
 - `specs/services/inventory-service/architecture.md` — saga counterpart;
   consumer of `outbound.picking.requested` / `.cancelled` / `shipping.confirmed`
 - `specs/services/inbound-service/architecture.md` — webhook pattern reference

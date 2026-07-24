@@ -27,13 +27,12 @@ Order machine, see [`order-status.md`](order-status.md).
 | `RESERVED` | no | `InventoryReservedConsumer` (Kafka) | Inventory reserved successfully. Awaiting operator pick confirmation. |
 | `PICKING_CONFIRMED` | no | `ConfirmPickingUseCase` (REST) | Operator confirmed picks. Order in `PICKED`. Awaiting packing. |
 | `PACKING_CONFIRMED` | no | `SealPackingUnitUseCase` (REST, last seal) | All units sealed; order fully packed. Order in `PACKED`. Awaiting shipping confirmation. |
-| `SHIPPED` | no | `ConfirmShippingUseCase` (REST) | Shipment created; `outbound.shipping.confirmed` published. Awaiting `inventory.confirmed` AND TMS ack. |
-| `COMPLETED` | **yes** | `InventoryConfirmedConsumer` (Kafka) | Inventory consumed reserved stock. Saga done. (TMS may still be pending — independent side-channel on Shipment.) |
+| `SHIPPED` | no | `ConfirmShippingUseCase` (REST) | Shipment created; `outbound.shipping.confirmed` published. Awaiting `inventory.confirmed`. Carrier dispatch is driven downstream by the scm `logistics-service` off that event (ADR-MONO-053 §D8) — no wms-side TMS wait. |
+| `COMPLETED` | **yes** | `InventoryConfirmedConsumer` (Kafka) | Inventory consumed reserved stock. Saga done. |
 | `RESERVE_FAILED` | **yes** | `InventoryReserveFailedConsumer` (`inventory.reserve.failed`) | Inventory could not reserve. Order moved to `BACKORDERED`. No compensation emitted (all-or-nothing reserve — no resources held). |
 | `CANCELLATION_REQUESTED` | no | `CancelOrderUseCase` from `RESERVED`/`PICKING_CONFIRMED`/`PACKING_CONFIRMED` | Cancel issued; `outbound.picking.cancelled` written to outbox. Awaiting `inventory.released`. |
 | `CANCELLED` | **yes** | `InventoryReleasedConsumer` (Kafka), OR `CancelOrderUseCase` directly when saga was still `REQUESTED` (no reservation exists) | Compensation complete. Saga done. |
-| `SHIPPED_NOT_NOTIFIED` | no (alert) | TMS retry exhaustion (after-commit handler) | Shipment was published to outbox + `inventory.confirmed` may have arrived; TMS push failed after retry/circuit/bulkhead exhaustion. Stock already consumed. Stays here until manual `:retry-tms-notify` succeeds (→ `COMPLETED` if `inventory.confirmed` arrived). |
-| `STUCK_RECOVERY_FAILED` | **yes (operator)** | Saga sweeper exhausted (TASK-BE-050) | Sweeper re-emitted the appropriate event the configured maximum number of times (default 5) without the saga advancing. Alert event `outbound.alert.saga.recovery.exhausted` fired in the same TX as this transition. Ops investigates per the per-saga runbook. Distinct from `SHIPPED_NOT_NOTIFIED` — that one is TMS-side; this one is sweeper-exhaustion across the ↔ inventory channel. |
+| `STUCK_RECOVERY_FAILED` | **yes (operator)** | Saga sweeper exhausted (TASK-BE-050) | Sweeper re-emitted the appropriate event the configured maximum number of times (default 5) without the saga advancing. Alert event `outbound.alert.saga.recovery.exhausted` fired in the same TX as this transition. Ops investigates per the per-saga runbook. This is sweeper-exhaustion across the ↔ inventory channel. |
 
 ---
 
@@ -75,20 +74,12 @@ Order machine, see [`order-status.md`](order-status.md).
                                        ┌──────────┐
                                        │ SHIPPED  │
                                        └────┬─────┘
-                                            │
-                  ┌─────────────────────────┴─────────────────────────┐
-                  │ inventory.confirmed                  TMS exhaust  │
-                  │ (Kafka)                              (after-commit)
-                  ▼                                                   ▼
-            ┌──────────────┐                              ┌──────────────────────┐
-            │  COMPLETED   │                              │ SHIPPED_NOT_NOTIFIED │
-            │  (terminal)  │                              │      (alert)         │
-            └──────────────┘                              └──────────┬───────────┘
-                  ▲                                                   │
-                  │                          inventory.confirmed      │
-                  │                          (or :retry-tms-notify    │
-                  │                           succeeds + sweeper)     │
-                  └───────────────────────────────────────────────────┘
+                                            │ inventory.confirmed (Kafka)
+                                            ▼
+                                     ┌──────────────┐
+                                     │  COMPLETED   │
+                                     │  (terminal)  │
+                                     └──────────────┘
 
                                   CANCELLATION PATH
 
@@ -135,8 +126,6 @@ stateDiagram-v2
     PACKING_CONFIRMED --> SHIPPED : confirmShipping<br/>(emits shipping.confirmed)
     PACKING_CONFIRMED --> CANCELLATION_REQUESTED : cancel
     SHIPPED --> COMPLETED : inventory.confirmed
-    SHIPPED --> SHIPPED_NOT_NOTIFIED : TMS exhaust<br/>(after-commit)
-    SHIPPED_NOT_NOTIFIED --> COMPLETED : inventory.confirmed<br/>or retry-tms-notify success
     CANCELLATION_REQUESTED --> CANCELLED : inventory.released
     REQUESTED --> STUCK_RECOVERY_FAILED : sweeper cap exceeded
     CANCELLATION_REQUESTED --> STUCK_RECOVERY_FAILED : sweeper cap exceeded
@@ -160,10 +149,8 @@ stateDiagram-v2
 | `RESERVED` | `PICKING_CONFIRMED` | `ConfirmPickingUseCase` (REST) | n/a (REST) | YES | Atomic with Order.completePicking() → `PICKED`, PickingConfirmation creation, Outbox: `outbound.picking.completed` |
 | `RESERVED` / `PICKING_CONFIRMED` / `PACKING_CONFIRMED` | `CANCELLATION_REQUESTED` | `CancelOrderUseCase` (REST) | n/a | YES | Atomic with Order.cancel() → `CANCELLED`, Outbox: `outbound.picking.cancelled` + `outbound.order.cancelled` |
 | `PICKING_CONFIRMED` | `PACKING_CONFIRMED` | `SealPackingUnitUseCase` (REST, final seal completing all lines) | n/a | YES | Atomic with Order.completePacking() → `PACKED`, Outbox: `outbound.packing.completed` |
-| `PACKING_CONFIRMED` | `SHIPPED` | `ConfirmShippingUseCase` (REST) | n/a | YES | Atomic with Order.confirmShipping() → `SHIPPED`, Shipment creation (`tms_status=PENDING`), Outbox: `outbound.shipping.confirmed`. After-commit: TMS push |
+| `PACKING_CONFIRMED` | `SHIPPED` | `ConfirmShippingUseCase` (REST) | n/a | YES | Atomic with Order.confirmShipping() → `SHIPPED`, Shipment creation, Outbox: `outbound.shipping.confirmed` (scm `logistics-service` dispatches carrier off this event, ADR-MONO-053 §D8) |
 | `SHIPPED` | `COMPLETED` | `InventoryConfirmedConsumer` consumes `inventory.confirmed` | YES | YES | No outbox row (terminal, no downstream wait) |
-| `SHIPPED` | `SHIPPED_NOT_NOTIFIED` | TMS retry / circuit / bulkhead exhaustion (after-commit handler) | n/a (TMS, not Kafka) | YES | Shipment.tms_status → `NOTIFY_FAILED`, failure_reason populated. Alert fires. No outbox row |
-| `SHIPPED_NOT_NOTIFIED` | `COMPLETED` | (a) `InventoryConfirmedConsumer`, OR (b) `RetryTmsNotifyUseCase` success + already-received `inventory.confirmed` | YES (a only) | YES | Shipment.tms_status → `NOTIFIED` (b only). No outbox row |
 | `CANCELLATION_REQUESTED` | `CANCELLED` | `InventoryReleasedConsumer` consumes `inventory.released` | YES | YES | No outbox row |
 
 > Direct `UPDATE outbound_saga SET state = ?` is **forbidden** (T4). Only
@@ -192,7 +179,7 @@ silently no-op already-applied transitions.
 
 | Current state | Event kind | Reason |
 |---|---|---|
-| `RESERVED`, `PICKING_CONFIRMED`, `PACKING_CONFIRMED`, `SHIPPED`, `SHIPPED_NOT_NOTIFIED`, `COMPLETED` | `inventory.reserved` | Saga already past reserve step (sweeper re-emit landed) |
+| `RESERVED`, `PICKING_CONFIRMED`, `PACKING_CONFIRMED`, `SHIPPED`, `COMPLETED` | `inventory.reserved` | Saga already past reserve step (sweeper re-emit landed) |
 | `COMPLETED` | `inventory.confirmed` | Saga already completed (broker redelivery with fresh id) |
 | `CANCELLED` | `inventory.released` | Saga already cancelled |
 | `RESERVE_FAILED` | `inventory.released` | Reserve failed (no reservation existed); release event spurious — log INFO no-op for safety |
@@ -283,9 +270,6 @@ across pods). For each transitional state with stale `last_transition_at`:
 | `CANCELLATION_REQUESTED` | > 5 min | Re-emit `outbound.picking.cancelled` |
 | `SHIPPED` | > 5 min without `inventory.confirmed` dedupe row | Re-emit `outbound.shipping.confirmed` |
 
-The sweeper does NOT re-emit for `SHIPPED_NOT_NOTIFIED` — TMS recovery is
-operator-initiated via `:retry-tms-notify`.
-
 Re-emission produces a fresh Kafka envelope `eventId`. The downstream
 inventory-service consumer absorbs via its own dedupe (if within 30 days) or
 its own reservation-id UNIQUE constraint. When inventory replies, the
@@ -310,8 +294,6 @@ use-case TX. The table below shows the parallel state movement:
 | `PICKING_CONFIRMED → PACKING_CONFIRMED` | `PICKED → PACKING → PACKED` (within `SealPackingUnitUseCase`; `startPacking` happened earlier on first unit creation) |
 | `PACKING_CONFIRMED → SHIPPED` | `PACKED → SHIPPED` |
 | `SHIPPED → COMPLETED` | (none — Order stays `SHIPPED`) |
-| `SHIPPED → SHIPPED_NOT_NOTIFIED` | (none — Order stays `SHIPPED`; only Shipment.tms_status changes) |
-| `SHIPPED_NOT_NOTIFIED → COMPLETED` | (none) |
 | `REQUESTED → RESERVE_FAILED` | `PICKING → BACKORDERED` |
 | `* → CANCELLATION_REQUESTED` | `* → CANCELLED` (Order moves to terminal CANCELLED immediately; saga still has work to do — release reservation) |
 | `CANCELLATION_REQUESTED → CANCELLED` | (none — Order already CANCELLED) |
@@ -356,8 +338,6 @@ Per [`../architecture.md`](../architecture.md) § Testing Requirements:
   - Pre-pick cancel: REQUESTED → CANCELLED (no `picking.cancelled` outbox)
   - Mid-flow cancel: RESERVED → CANCELLATION_REQUESTED → CANCELLED
     (single `picking.cancelled` emission)
-  - TMS exhaustion: SHIPPED → SHIPPED_NOT_NOTIFIED (alert metric increments)
-  - TMS recovery: SHIPPED_NOT_NOTIFIED → COMPLETED via retry-notify endpoint
 - **Persistence Adapter (Testcontainers Postgres)**:
   - Optimistic-lock conflict on `outbound_saga.version` — two parallel
     transition attempts → one succeeds, one raises
@@ -388,8 +368,6 @@ Per [`../architecture.md`](../architecture.md) § Testing Requirements:
 - [`../workflows/outbound-flow.md`](../workflows/outbound-flow.md) —
   narrative walk-through
 - [`../idempotency.md`](../idempotency.md) §4 Saga-Level Idempotency
-- [`../external-integrations.md`](../external-integrations.md) §2 TMS
-  (failure paths leading to `SHIPPED_NOT_NOTIFIED`)
 - `rules/traits/transactional.md` — T2 (no dist TX), T4 (no direct
   status), T5 (optimistic lock), T6 (compensation), T7 (saga atomicity),
   T8 (eventId dedupe)

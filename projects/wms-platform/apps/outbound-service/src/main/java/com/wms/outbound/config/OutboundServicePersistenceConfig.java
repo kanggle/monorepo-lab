@@ -17,12 +17,10 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
  */
 @Configuration
 @EntityScan(basePackages = {
-        "com.wms.outbound.adapter.out.persistence",
-        "com.wms.outbound.adapter.out.tms.persistence" // TASK-BE-049
+        "com.wms.outbound.adapter.out.persistence"
 })
 @EnableJpaRepositories(basePackages = {
-        "com.wms.outbound.adapter.out.persistence",
-        "com.wms.outbound.adapter.out.tms.persistence" // TASK-BE-049
+        "com.wms.outbound.adapter.out.persistence"
 })
 public class OutboundServicePersistenceConfig {
 

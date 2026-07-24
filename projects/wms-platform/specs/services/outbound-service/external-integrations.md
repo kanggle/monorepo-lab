@@ -8,9 +8,10 @@ integrates with — direction, auth, timeouts, circuit-breaker policy, retry
 policy, observability hooks. Implementation must match these declarations.
 Changes here precede code changes (per `CLAUDE.md` Contract Rule).
 
-The marquee integration in this service is the **outbound TMS push** — a
-real outbound HTTP call subject to the full `integration-heavy` rule set
-(I1–I4, I7–I9). The other vendors mirror the inbound-service catalog.
+The primary external integration in this service is the **inbound ERP order
+webhook** (§1). The former outbound TMS push was retired in TASK-BE-560 —
+carrier dispatch is owned by the scm `logistics-service` (ADR-MONO-053 §D8); see
+§2. The remaining vendors mirror the inbound-service catalog.
 
 ---
 
@@ -20,11 +21,11 @@ real outbound HTTP call subject to the full `integration-heavy` rule set
 |---|---|---|---|---|
 | **External ERP** | inbound (receive) | HTTPS webhook | HMAC-SHA256 | Order reception |
 | **External ERP** | outbound (push ack) | — | — | **Not in v1** |
-| **External TMS** | outbound (push) | HTTPS REST | API key (`X-Tms-Api-Key`) | Shipment-ready notification |
+| ~~External TMS~~ | ~~outbound (push)~~ | — | — | **Retired** — carrier dispatch relocated to scm `logistics-service` (ADR-MONO-053 §D8, TASK-BE-560) |
 | **Kafka cluster** | both | TCP / SASL | mTLS or SCRAM | event publish + saga reply / master snapshot consume |
 | **PostgreSQL** | outbound (DB) | TCP | password | persistence |
 | **Redis** | outbound (cache) | TCP | password | idempotency store |
-| **Secret Manager** | outbound (config) | HTTPS | service-account / IAM | webhook secret + TMS API key retrieval |
+| **Secret Manager** | outbound (config) | HTTPS | service-account / IAM | ERP webhook secret retrieval |
 
 Internal services (`master-service`, `inventory-service`,
 `gateway-service`, `admin-service`) are not "external" — they live in the
@@ -130,280 +131,22 @@ These are placeholders — fully specified when v2 is scheduled.
 
 ---
 
-## 2. External TMS — Outbound Shipment Push (integration-heavy core)
+## 2. Carrier Dispatch — Relocated to scm logistics-service (ADR-MONO-053 §D8)
 
-TMS (Transportation Management System) is the carrier-coordination
-platform that schedules pickup and produces tracking numbers. After a
-Shipment is confirmed, `outbound-service` pushes the shipment to TMS via
-HTTPS so TMS can dispatch the carrier.
+The outbound-service TMS notification side-channel — a post-commit HTTPS push
+of the confirmed shipment to a Transportation Management System, plus its
+`SHIPPED_NOT_NOTIFIED` alert state, `tms_request_dedupe` idempotency table, and
+`:retry-tms-notify` recovery endpoint — has been **retired** (TASK-BE-560).
 
-This is the **only outbound HTTP integration** in v1 outbound-service and
-the canonical exercise of `integration-heavy` rules I1–I4, I7–I9.
+Carrier dispatch (multimodal, 3PL-ready) is now owned by the scm
+`logistics-service`, which consumes the `outbound.shipping.confirmed` event and
+drives the carrier itself, per **ADR-MONO-053 §D8** (custody boundary in
+ADR-MONO-052 §D7). outbound-service therefore holds **no** outbound HTTP vendor
+integration, no TMS config/secret, and no TMS metrics. The only remaining
+external integration is the inbound ERP order webhook (§1).
 
-### 2.1 Endpoint
-
-```
-POST {tms-base}/shipments
-```
-
-`{tms-base}` is environment-specific — `https://tms.example.com/api/v1`
-in prod, distinct values in stg/dr/dev. Loaded from configuration and
-overridable per-environment.
-
-Full wire-level contract:
-[`specs/contracts/http/tms-shipment-api.md`](../../contracts/http/tms-shipment-api.md).
-
-### 2.2 Authentication (per `platform/security-rules.md`)
-
-- **API key** in header: `X-Tms-Api-Key: <key>`.
-- Secret: per-environment in Secret Manager (`tms-prod`, `tms-stg`,
-  `tms-dr`). Loaded at boot via `SecretRetriever` port; cached in memory.
-- Rotation: two-key window — `current` and `previous` both supplied
-  during cut-over (TMS supports multi-key in v1).
-- TLS: TMS server certificate validated against the system trust store;
-  no certificate pinning in v1.
-
-### 2.3 Adapter Layout
-
-Per Hexagonal architecture
-([`architecture.md`](architecture.md) § Architecture Style):
-
-```
-adapter/out/tms/
-├── TmsClientAdapter.java            // @Profile("!standalone") implements ShipmentNotificationPort
-├── StandaloneTmsClientAdapter.java  // @Profile("standalone") in-memory fallback
-├── TmsShipmentRequest.java          // vendor-shaped DTO (out)
-├── TmsShipmentResponse.java         // vendor-shaped DTO (in)
-├── TmsShipmentMapper.java           // Shipment ↔ TmsShipmentRequest (I8)
-├── TmsClientProperties.java         // @ConfigurationProperties
-├── TmsClientConfig.java             // RestClient + connection pool bean
-├── TmsMetrics.java                  // Micrometer counter / timer / gauge
-└── persistence/                     // tms_request_dedupe entity + repo + adapter
-    ├── TmsRequestDedupeEntity.java
-    ├── TmsRequestDedupeRepository.java
-    └── TmsRequestDedupePersistenceAdapter.java
-```
-
-`ShipmentNotificationPort` and the internal `TmsAcknowledgement` record live
-in `application/port/out/`. The domain calls `port.notify(shipmentId)`
-without knowing TMS exists — full ports & adapters separation per
-`integration-heavy` I7 (vendor adapter) and I8 (internal model
-translation). `TmsShipmentRequest` / `TmsShipmentResponse` are
-adapter-internal vendor DTOs and never leak across the port boundary.
-
-### 2.4 Timeouts (I1)
-
-| Stage | Value | Rationale |
-|---|---|---|
-| `connectTimeout` | **5 s** | TMS hostname must resolve and TCP handshake within 5s; longer means TMS or network is degraded |
-| `readTimeout` | **30 s** | TMS p99 response time observed at 8–12s during peak; 30s gives 2–3× buffer |
-| Total per-attempt budget | ~30 s | Sum of connect + read |
-
-Implementation: Spring `RestClient` (Java 21, synchronous) layered over
-Apache HttpClient 5 with a dedicated `PoolingHttpClientConnectionManager`
-(see §2.8 Bulkhead). The TMS step is invoked synchronously from the
-post-commit `TransactionalEventListener` (after the saga TX has already
-committed) — reactive plumbing is not required and would add complexity
-to the bulkhead / metrics integration. The connection pool, RestClient
-bean, and Resilience4j wiring are all named `tms-client` and dedicated to
-TMS only (not shared with other vendors per I9).
-
-### 2.5 Circuit Breaker (I2)
-
-Resilience4j `tmsShipmentCircuit`:
-
-| Property | Value |
-|---|---|
-| `failureRateThreshold` | 50% |
-| `slidingWindowType` | `COUNT_BASED` |
-| `slidingWindowSize` | 20 |
-| `minimumNumberOfCalls` | 10 |
-| `waitDurationInOpenState` | **60 s** |
-| `permittedNumberOfCallsInHalfOpenState` | 3 |
-| `automaticTransitionFromOpenToHalfOpenEnabled` | true |
-| `recordExceptions` | `com.wms.outbound.adapter.out.tms.TmsTransientException` (5xx, timeout, IO) |
-| `ignoreExceptions` | `com.wms.outbound.adapter.out.tms.TmsPermanentException` (4xx — caller bug, not TMS health) |
-
-When OPEN: calls fail fast with `CallNotPermittedException`. The adapter
-catches and translates to the domain-level
-`ExternalServiceUnavailableException`; the saga moves to
-`SHIPPED_NOT_NOTIFIED` (see §2.10).
-
-State exposed as gauge `outbound.tms.circuit.state` (0=closed, 1=half-open,
-2=open).
-
-### 2.6 Retry (I3)
-
-Resilience4j `tmsShipmentRetry`:
-
-| Property | Value |
-|---|---|
-| `maxAttempts` | **3** (1 initial + 2 retries) |
-| `waitDuration` | starts at 1s |
-| `intervalFunction` | exponential `2^(attempt-1)` capped at 4s, plus jitter |
-| Jitter | uniform random ±200ms per attempt |
-| `retryExceptions` | `com.wms.outbound.adapter.out.tms.TmsTransientException` (5xx, 429, timeout, IO) |
-| `ignoreExceptions` | `com.wms.outbound.adapter.out.tms.TmsPermanentException` (4xx ≠ 429), `io.github.resilience4j.circuitbreaker.CallNotPermittedException` (circuit fast-fail does not retry) |
-
-Effective delay sequence: ~1s, ~2s, ~4s (each ±200ms).
-
-After retry exhaustion the adapter throws
-`ExternalServiceUnavailableException`. The saga handler translates to
-`SHIPPED_NOT_NOTIFIED` (§2.10).
-
-### 2.7 Idempotency Toward TMS (I4)
-
-- Header: `Idempotency-Key: {shipment.id}` — UUID, stable for the lifetime
-  of the shipment record. Same key on retry (Resilience4j) and on manual
-  re-notify (`POST /shipments/{id}:retry-tms-notify`).
-- TMS contract guarantees that a repeat call with the same key and same
-  body returns the original ack. If TMS is in mid-process, it returns 409
-  / 202 (vendor-specific) — adapter treats both as "already accepted" and
-  returns the cached ack.
-- Local fallback: `tms_request_dedupe(request_id PK, sent_at,
-  response_snapshot)` table records the first successful send. If TMS
-  fails to honor the key (e.g., vendor regression), the local table is
-  the ground-truth: a second adapter invocation reads the snapshot and
-  short-circuits without a network call.
-
-Adapter pseudo-code:
-
-```
-1. SELECT response_snapshot FROM tms_request_dedupe WHERE request_id = shipment.id
-2a. Found: return TmsAcknowledgement.fromSnapshot(snapshot)
-2b. Not found:
-    → POST {tms-base}/shipments with Idempotency-Key=shipment.id
-    → on success: INSERT tms_request_dedupe(request_id, sent_at, response_snapshot)
-                  return ack
-    → on permanent failure: do not insert; let exception propagate
-```
-
-The `INSERT` runs in its own short transaction (`Propagation.REQUIRES_NEW`)
-so the saga's main TX can already be committed (TMS call happens
-**after** TX commit per §2.10).
-
-### 2.8 Bulkhead (I9)
-
-Two layers cooperate to bound TMS concurrency:
-
-1. **Apache HttpClient 5 connection pool** — dedicated
-   `PoolingHttpClientConnectionManager` with `maxTotal=10`,
-   `defaultMaxPerRoute=10`, configured in `TmsClientConfig`. This is
-   the primary bound — at most 10 simultaneous TMS sockets across the
-   JVM, regardless of caller pattern.
-2. **Resilience4j `Bulkhead` (SEMAPHORE type)** — declarative annotation
-   on the adapter method:
-
-   | Property | Value |
-   |---|---|
-   | `maxConcurrentCalls` | **10** |
-   | `maxWaitDuration` | 0 (fail-fast — saturation throws `BulkheadFullException`) |
-
-   `SEMAPHORE` is the synchronous-friendly bulkhead variant — the
-   `THREADPOOL` variant requires a `CompletableFuture` return type, which
-   would require restructuring the saga listener to be async-aware for
-   no operational benefit (the listener already runs on a separate
-   thread from the request handler — see §2.10).
-
-Dedicated to TMS only — **not shared** with HTTP server pool, DB
-HikariCP pool, Kafka producer/consumer pools, or any future vendor
-pool. Saturation behavior: when all 10 semaphore permits are held,
-additional invocations throw `BulkheadFullException`; the adapter
-catches and translates to `ExternalServiceUnavailableException`, which
-the saga handler captures as `SHIPPED_NOT_NOTIFIED`.
-
-### 2.9 Internal Model Translation (I7, I8)
-
-Mapping `Shipment` (domain) → `TmsShipmentRequest` (vendor) is performed
-in `TmsShipmentMapper`, package-private inside `adapter/out/tms/`. The
-domain model never leaks vendor-shaped fields. Inverse for
-`TmsAcknowledgement` (vendor response) → domain values applied via
-`Shipment.recordTmsAck(...)`:
-
-| Vendor field | Domain field | Notes |
-|---|---|---|
-| `tms_shipment_id` | (not stored) | Vendor-internal handle |
-| `carrier_code` | `Shipment.carrier_code` | Assigned by TMS — populated post-ack |
-| `tracking_number` | `Shipment.tracking_no` | Same |
-| `accepted_at` | `Shipment.tms_notified_at` | TMS clock; we accept skew |
-| `status` (`ACCEPTED` / `REJECTED` / `PENDING_CARRIER_ASSIGNMENT`) | `Shipment.tms_status` | `ACCEPTED|PENDING_CARRIER_ASSIGNMENT` → `NOTIFIED`; `REJECTED` → `NOTIFY_FAILED` |
-
-### 2.10 Failure States and Saga Coupling
-
-The saga handler (`OutboundSagaCoordinator.confirmShipping(...)`) calls
-`port.notify(shipment)` **after** the saga's main TX commits. This is
-intentional — per `transactional` rule T2 (no distributed TX), the TMS
-call cannot be inside the saga TX, otherwise a TMS failure would roll
-back the inventory-confirm event publication.
-
-Sequence:
-
-```
-1. ConfirmShippingUseCase @Transactional:
-   - Order.confirmShipping() → SHIPPED
-   - Create Shipment(tms_status=PENDING)
-   - Saga.transitionTo(SHIPPED)
-   - Outbox row: outbound.shipping.confirmed
-   - COMMIT
-
-2. Async (after-commit hook or scheduler picks up SHIPPED shipments):
-   - port.notify(shipment) via TmsClientAdapter
-   - on success: Shipment.tms_status=NOTIFIED, tms_notified_at=now()
-   - inventory.confirmed event arrives → Saga.transitionTo(COMPLETED)
-
-3. Failure path (after retry / circuit / bulkhead exhaustion):
-   - Shipment.tms_status=NOTIFY_FAILED, failure_reason populated
-   - Saga.transitionTo(SHIPPED_NOT_NOTIFIED), failure_reason populated
-   - Alert fires: outbound.tms.notify_failed.count > 0
-   - Stock is already consumed (inventory.confirmed already in flight or
-     completed) — TMS is the only loose end
-```
-
-Manual retry: `POST /api/v1/outbound/shipments/{id}:retry-tms-notify`.
-This re-invokes the adapter with the same `Idempotency-Key`. On success,
-the saga moves from `SHIPPED_NOT_NOTIFIED` to `COMPLETED`. The endpoint
-itself is naturally idempotent — calling it twice for an already
-`NOTIFIED` shipment returns the cached ack without a TMS call.
-
-### 2.11 4xx / Permanent Failures
-
-| HTTP status | Treatment | Saga outcome |
-|---|---|---|
-| 200 / 201 | `ACCEPTED` | Saga eventually `COMPLETED` |
-| 202 | `PENDING_CARRIER_ASSIGNMENT` (still success) | Same as 200 |
-| 400 `VALIDATION_ERROR` | No retry. Domain bug — alert. | `SHIPPED_NOT_NOTIFIED`, `failure_reason=TMS_VALIDATION_REJECTED` |
-| 401 / 403 | No retry. Secret rotation issue. | `SHIPPED_NOT_NOTIFIED`, alert ops |
-| 404 (vendor account) | No retry. Config issue. | `SHIPPED_NOT_NOTIFIED`, alert ops |
-| 409 (vendor-specific dup) | Adapter treats as success (idempotency honored) | `COMPLETED` after `inventory.confirmed` |
-| 422 | No retry. Schema mismatch. | `SHIPPED_NOT_NOTIFIED`, `failure_reason=TMS_SCHEMA_REJECTED` |
-| 429 (rate limit) | Retry per backoff | If exhausted: `SHIPPED_NOT_NOTIFIED` |
-| 5xx | Retry per backoff | If exhausted: `SHIPPED_NOT_NOTIFIED` |
-| Timeout | Retry per backoff | Same |
-
-### 2.12 Observability (TMS-specific, per integration-heavy)
-
-| Metric | Description |
-|---|---|
-| `outbound.tms.request.count{result=success|timeout|5xx|4xx|circuit_open|bulkhead_full}` | Counter of TMS calls by outcome |
-| `outbound.tms.request.duration.seconds` | Histogram p50/p95/p99 |
-| `outbound.tms.retry.count{attempt=1|2|3}` | Counter of retry attempts |
-| `outbound.tms.circuit.state` | Gauge: 0=closed, 1=half-open, 2=open |
-| `outbound.tms.bulkhead.available` | Gauge of free slots in pool |
-| `outbound.tms.notify_failed.count` | Counter; alerts at >0 |
-| `outbound.tms.dedupe.cache_hit.count` | Counter of `tms_request_dedupe` short-circuits |
-| `outbound.saga.shipped_not_notified.count` | Gauge of sagas stuck in `SHIPPED_NOT_NOTIFIED` |
-
-Logs (structured JSON):
-
-- `tms_request_started` `{shipmentId, attempt}` (DEBUG)
-- `tms_request_succeeded` `{shipmentId, durationMs, trackingNo}` (INFO)
-- `tms_request_failed` `{shipmentId, attempt, error, durationMs}` (WARN
-  per attempt; ERROR after exhaustion)
-- `tms_circuit_opened` (WARN, fires alert)
-- `tms_circuit_closed` (INFO)
-
-Tracing: TMS call is a child span `tms.shipment.notify` of the saga's
-trace. Carries `shipment.id` and `attempt` attributes.
+> The vendor wire spec (formerly `specs/contracts/http/tms-shipment-api.md`) is
+> deleted; the carrier-side contract now lives with logistics-service.
 
 ---
 
@@ -596,13 +339,11 @@ Outbound (read). Used for:
 
 - Per-environment ERP order-webhook HMAC secrets (`erp-order-prod`,
   `erp-order-stg`, `erp-order-dr`).
-- Per-environment TMS API keys (`tms-prod`, `tms-stg`, `tms-dr`).
 - Future: outbound ERP API tokens (v2).
 
 ### 6.2 Provider
 
-- v1 dev: env-var fallback (`ERP_ORDER_WEBHOOK_SECRET_<ENV>`,
-  `TMS_API_KEY_<ENV>`) for local testing.
+- v1 dev: env-var fallback (`ERP_ORDER_WEBHOOK_SECRET_<ENV>`) for local testing.
 - v1 prod: AWS Secrets Manager (or equivalent — concrete provider chosen
   at deploy time).
 - Refresh cadence: cached at boot; `SIGHUP`-style refresh via Actuator
@@ -619,7 +360,6 @@ Outbound (read). Used for:
 | Secret Manager unreachable at boot | Pod fails to start (no fallback in prod). Health check fails |
 | Secret Manager unreachable at refresh | Old (cached) secret continues to work; refresh logs WARN. Ops triggers manual re-fetch |
 | Secret value missing for declared `X-Erp-Source` | Webhook with that source gets 401 `WEBHOOK_SIGNATURE_INVALID` (no secret to compare against) |
-| TMS API key missing | TMS adapter throws on first call; saga moves to `SHIPPED_NOT_NOTIFIED`; alerts ops |
 
 ---
 
@@ -628,16 +368,14 @@ Outbound (read). Used for:
 | Vendor | Timeout (connect / read) | Circuit Breaker | Retry (count, base, max) | Idempotency | Bulkhead | DLQ / Recovery |
 |---|---|---|---|---|---|---|
 | ERP webhook (in) | n/a (we receive) | n/a | n/a (ERP-side) | `X-Erp-Event-Id` 7d dedupe | n/a | inbox `FAILED` queue |
-| **TMS (out)** | **5s / 30s** | **50% over 20, open 60s** | **3, 1s/2s/4s + ±200ms jitter** | **`Idempotency-Key={shipment.id}` + `tms_request_dedupe` table** | **Pool 10** | `SHIPPED_NOT_NOTIFIED` saga state + manual retry endpoint |
 | Kafka producer | 5s / 30s | n/a (outbox absorbs) | 5 broker, exp-backoff | `eventId` (downstream) | Spring default | outbox stays unpublished |
 | Kafka consumer | (broker session) | n/a | 3 in-process, [1,2,4]s | `eventId` 30d dedupe + saga state-machine guard | Spring default | `<topic>.DLT` |
 | PostgreSQL | 5s / (statement) | n/a (failure → 5xx) | 0 (TX retry on 409 only) | n/a | HikariCP 20 | n/a |
 | Redis | 2s / 1s | n/a (failure → 5xx) | 0 (fail-closed) | n/a | Lettuce default | n/a |
 | Secret Manager | 3s / 5s | n/a (boot-only path) | 3, exp-backoff | n/a | n/a | n/a |
 
-Bulkhead (`integration-heavy` I9): TMS requires its own dedicated thread
-pool (declared in §2.8). Kafka producer/consumer use Spring's default
-thread pools, which are isolated from the HTTP server's request
+Bulkhead (`integration-heavy` I9): Kafka producer/consumer use Spring's
+default thread pools, which are isolated from the HTTP server's request
 threadpool. PostgreSQL has its own HikariCP pool. **No pool is shared**
 across vendors.
 
@@ -654,12 +392,6 @@ Per `rules/traits/integration-heavy.md` § Interaction with Common Rules:
 | `outbound.webhook.processing.failure.total{reason}` | ERP-in | Counter by domain failure code |
 | `outbound.webhook.inbox.pending.count` | ERP-in | Gauge of PENDING inbox rows |
 | `outbound.webhook.dedupe.hit.rate` | ERP-in | Computed metric |
-| `outbound.tms.request.count{result}` | TMS-out | Counter of TMS calls by outcome |
-| `outbound.tms.request.duration.seconds` | TMS-out | Histogram p50/p95/p99 |
-| `outbound.tms.retry.count{attempt}` | TMS-out | Counter of retry attempts |
-| `outbound.tms.circuit.state` | TMS-out | Gauge 0=closed, 1=half-open, 2=open |
-| `outbound.tms.bulkhead.available` | TMS-out | Gauge of free slots |
-| `outbound.tms.notify_failed.count` | TMS-out | Counter; alerts at >0 |
 | `outbound.outbox.pending.count` | Kafka-out | Gauge of unpublished outbox rows |
 | `outbound.outbox.lag.seconds` | Kafka-out | Histogram of oldest unpublished row age |
 | `outbound.outbox.publish.failure.total` | Kafka-out | Counter of publish failures |
@@ -670,7 +402,7 @@ Per `rules/traits/integration-heavy.md` § Interaction with Common Rules:
 
 Logs (structured JSON, INFO level — see
 [`idempotency.md`](idempotency.md) § Observability for the precise event
-keys; TMS-specific keys in §2.12 above).
+keys).
 
 Tracing (OTel):
 
@@ -680,9 +412,6 @@ Tracing (OTel):
   the `erp_order_webhook_inbox` row.
 - Outbound Kafka publish carries the trace via `traceparent` Kafka
   header.
-- TMS call is a child span `tms.shipment.notify` of the
-  `confirm-shipping` use-case trace, with `shipment.id` and `attempt`
-  attributes.
 
 ---
 
@@ -694,7 +423,6 @@ All external-integration paths must have failure-mode tests using fakes:
 |---|---|
 | ERP webhook ingest | Spring Boot integration test (controller called directly), no real ERP |
 | Background processor | Testcontainers PostgreSQL + fake `MasterReadModel` snapshots |
-| **TMS adapter** | **WireMock** — success, timeout, 5xx, 4xx, circuit-open, bulkhead-full, manual retry. See `architecture.md` § Testing Requirements > TMS Adapter for the exact matrix |
 | Kafka producer (outbox) | Testcontainers Kafka |
 | Kafka consumer (inventory replies + master snapshots) | Testcontainers Kafka, poison-record case routes to DLT |
 | Saga consumer + state-machine guard | Testcontainers Kafka — feed same event with fresh eventIds, assert no double-transition |
@@ -715,9 +443,6 @@ in this spec):
 
 - ERP webhook outage → `docs/runbooks/erp-order-webhook.md`
   - Drains PENDING inbox, escalates to ERP integration owner
-- TMS outage → `docs/runbooks/tms.md`
-  - Identify `SHIPPED_NOT_NOTIFIED` sagas, batch-trigger
-    `:retry-tms-notify`, escalate to TMS vendor
 - Kafka cluster outage → `docs/runbooks/kafka.md`
 - PostgreSQL primary failover → `docs/runbooks/postgres.md`
 
@@ -729,11 +454,9 @@ These are operational documents, not specs. Linked here for completeness.
 
 - Outbound webhook to ERP (push order ack)
 - mTLS instead of HMAC for inbound webhook
-- Multi-tenant ERP / multi-tenant TMS (one secret per
-  customer-supplier instead of per-env)
-- TMS quote / rating API (carrier rating is v2)
-- TMS push of pickup-completion / delivery-completion events back into
-  outbound (carrier tracking → notification-service in v2)
+- Multi-tenant ERP (one secret per customer-supplier instead of per-env)
+- Carrier dispatch / rating / tracking — owned by the scm `logistics-service`
+  (ADR-MONO-053 / ADR-MONO-052), not outbound-service
 - Scanner / RFID adapter for picking confirmation
 - Notification provider integration (handled by `notification-service`,
   not outbound-service)
@@ -742,23 +465,19 @@ These are operational documents, not specs. Linked here for completeness.
 
 ## References
 
-- `specs/services/outbound-service/architecture.md` — Dependencies, TMS
-  Integration, Webhook Reception
+- `specs/services/outbound-service/architecture.md` — Dependencies,
+  Webhook Reception
 - `specs/contracts/webhooks/erp-order-webhook.md` — wire-level webhook
   contract
-- `specs/contracts/http/tms-shipment-api.md` — vendor-controlled TMS wire
-  contract (request/response, idempotency,
-  4xx/5xx classification, schema versioning)
 - `specs/services/outbound-service/idempotency.md` — REST + webhook +
   Kafka + saga dedupe strategies
 - `specs/services/outbound-service/sagas/outbound-saga.md` — saga state
   transitions; failure paths
 - `specs/contracts/events/outbound-events.md` — outbound Kafka schemas
 - `specs/services/inbound-service/external-integrations.md` — sibling
-  reference (no TMS, but same ERP webhook + Kafka + Postgres + Redis +
-  Secret Manager structure)
-- `rules/traits/integration-heavy.md` — I1–I10 (especially I1–I4, I7–I9
-  for TMS)
+  reference (same ERP webhook + Kafka + Postgres + Redis + Secret Manager
+  structure)
+- `rules/traits/integration-heavy.md` — I6, I10 (ERP webhook reception)
 - `platform/api-gateway-policy.md` — webhook routing tier
 - `platform/security-rules.md` — Secret Manager policy
 - `platform/observability.md` — required metrics for integrations

@@ -8,7 +8,7 @@ This document complements
 [`state-machines/order-status.md`](../state-machines/order-status.md), and
 [`state-machines/saga-status.md`](../state-machines/saga-status.md) by
 walking the **happy path** and the most common deviations through every
-service involved (master, gateway, outbound, inventory, admin, TMS,
+service involved (master, gateway, outbound, inventory, admin,
 notification).
 
 The outbound flow differs from inbound in one crucial way: it is **a
@@ -28,9 +28,9 @@ inventory-side handlers are described in
 | **outbound-service** | This service | `outbound-service` (event `producer`) |
 | **inventory-service** | Reserves / releases / confirms stock per saga step | `inventory-service` |
 | **master-service** | Authoritative source for Partner / SKU / Lot / Location | `master-service` |
-| **TMS** | External — receives shipment-ready notification | `system:tms` (consumer of our outbound HTTP) |
+| **scm logistics-service** | Consumes `outbound.shipping.confirmed`; dispatches the carrier (ADR-MONO-053 §D8) | `logistics-service` |
 | **admin-service** | Read-only KPI projections | `admin-service` |
-| **notification-service** | Optional alerting on failures (RESERVE_FAILED, SHIPPED_NOT_NOTIFIED) | `notification-service` |
+| **notification-service** | Optional alerting on failures (RESERVE_FAILED, STUCK_RECOVERY_FAILED) | `notification-service` |
 
 ---
 
@@ -331,11 +331,13 @@ yet consumed).
 
 ---
 
-## Phase 5 — Operator Confirms Shipping (Saga Step 4 + TMS)
+## Phase 5 — Operator Confirms Shipping (Saga Step 4)
 
 The operator confirms the shipment is ready to leave the warehouse. This
-is the most consequential step — it fires the saga's final outbound
-event and triggers TMS notification.
+is the most consequential step — it fires the saga's final outbound event
+(`outbound.shipping.confirmed`), which both `inventory-service` (stock
+confirm) and the scm `logistics-service` (carrier dispatch, ADR-MONO-053
+§D8) consume.
 
 ### 5a. Synchronous Path (REST + atomic TX)
 
@@ -352,15 +354,15 @@ Operator                gateway-service           outbound-service          Post
  │                            │                          │     │   (if SHIPPED already: ORDER_ALREADY_SHIPPED)
  │                            │                          │     ├─ load OutboundSaga (state must be PACKING_CONFIRMED)
  │                            │                          │     ├─ Order.confirmShipping()  (PACKED → SHIPPED)
- │                            │                          │     ├─ create Shipment (tms_status=PENDING)
+ │                            │                          │     ├─ create Shipment
  │                            │                          │     ├─ Saga.transitionTo(SHIPPED)
  │                            │                          │     └─ outbox: outbound.shipping.confirmed
- │◀── 201 {shipmentId, shipmentNo, tms_status=PENDING, order.status=SHIPPED} ─│
+ │◀── 201 {shipmentId, shipmentNo, order.status=SHIPPED} ──│
                               │                          │                      │
                               Kafka: wms.outbound.shipping.confirmed.v1
                                                          │
                                                          │  (consumed by inventory-service — see §5b)
-                                                         │  (separately: TMS push — see §5c)
+                                                         │  (consumed by scm logistics-service — carrier dispatch, §5c)
 ```
 
 ### 5b. Inventory Confirm (Async)
@@ -381,101 +383,23 @@ inventory-service                                outbound-service
        │                                                  │     ├─ load OutboundSaga
        │                                                  │     │     - already COMPLETED? state-machine guard → no-op
        │                                                  │     │     - SHIPPED? proceed
-       │                                                  │     │     - SHIPPED_NOT_NOTIFIED? still proceed (TMS retry can re-progress)
        │                                                  │     ├─ Saga.transitionTo(COMPLETED)
        │                                                  │     └─ commit
        │                                                  ▼
                                                    Saga state: COMPLETED (terminal)
 ```
 
-### 5c. TMS Push (Async — after main TX commit)
+### 5c. Carrier Dispatch (downstream — scm logistics-service)
 
-```
-After ConfirmShippingUseCase TX commits:
-  AfterCommit hook (or scheduled poller for SHIPPED shipments with tms_status=PENDING)
-
-outbound-service                                  TMS
-       │                                                  │
-       │── TmsClientAdapter.notify(shipment)              │
-       │     ├─ check tms_request_dedupe (skip if cached snapshot exists)
-       │     ├─ POST {tms-base}/shipments                 │
-       │     │     headers:                               │
-       │     │       Idempotency-Key: {shipment.id}       │
-       │     │       X-Tms-Api-Key: <secret>              │
-       │     │     body: TmsShipmentRequest(carrier, dimensions, ...) ─▶│
-       │     │                                            │
-       │     │ ◀── 200 {tms_shipment_id, carrier_code, tracking_number, status=ACCEPTED} ──│
-       │     ├─ INSERT tms_request_dedupe (REQUIRES_NEW)  │
-       │     ├─ Shipment.recordTmsAck(...)                │
-       │     │     - tms_status: PENDING → NOTIFIED       │
-       │     │     - tms_notified_at = now()              │
-       │     │     - tracking_no, carrier_code populated  │
-       │     │
-       │     [success path ends; Saga.transitionTo(COMPLETED) already happened or will happen via §5b]
-```
-
-**Failure path** (after retry / circuit / bulkhead exhaustion — see
-[`external-integrations.md`](../external-integrations.md) §2):
-
-```
-       │
-       │     ├─ retries exhausted (timeout / 5xx / circuit open)
-       │     ├─ Shipment.recordTmsFailure(reason)
-       │     │     - tms_status: PENDING → NOTIFY_FAILED
-       │     │     - failure_reason populated
-       │     ├─ Saga.transitionTo(SHIPPED_NOT_NOTIFIED, reason="…")
-       │     ├─ outbox: (no event — internal alert only)
-       │     └─ metric outbound.tms.notify_failed.count++
-                                                          │
-                                                   notification-service alert fires
-                                                   ops investigates via runbook
-```
-
-**Stock state**: At this point, `inventory.confirmed` may already have
-been processed (Saga went `SHIPPED → COMPLETED → ... ` then back? No —
-saga state-machine forbids that). What actually happens:
-
-- If `inventory.confirmed` arrived **before** TMS exhaustion: saga is
-  already `COMPLETED`. The TMS handler still updates the Shipment row
-  (independent aggregate). No saga regression — `COMPLETED` is terminal,
-  and the TMS-failure side-channel records the issue on the Shipment.
-- If `inventory.confirmed` arrives **during** TMS retry: saga moves
-  `SHIPPED → COMPLETED`. TMS exhaustion afterward only flips
-  `Shipment.tms_status=NOTIFY_FAILED` and emits the alert; the saga
-  stays `COMPLETED`.
-- If TMS exhaustion happens **before** `inventory.confirmed`: saga moves
-  `SHIPPED → SHIPPED_NOT_NOTIFIED`. When `inventory.confirmed` later
-  arrives, the saga state-machine checks: from
-  `SHIPPED_NOT_NOTIFIED` + `inventory.confirmed`, the saga transitions
-  straight to `COMPLETED` (the alert is a soft state, not blocking).
-
-> **Subtlety**: `SHIPPED_NOT_NOTIFIED` is a non-terminal alert state.
-> Both `inventory.confirmed` (which advances saga to `COMPLETED`) and a
-> manual `:retry-tms-notify` call (which only updates Shipment, not
-> saga) progress the system. See
-> [`state-machines/saga-status.md`](../state-machines/saga-status.md)
-> for the full transition table.
-
-### 5d. Manual TMS Retry
-
-For sagas in `SHIPPED_NOT_NOTIFIED`:
-
-```
-Operator (OUTBOUND_ADMIN)        outbound-service
- │                                       │
- │── POST /api/v1/outbound/shipments/{id}:retry-tms-notify ─▶│
- │                                       │── RetryTmsNotifyUseCase
- │                                       │     ├─ idempotency check (Redis)
- │                                       │     ├─ Shipment.tms_status must be NOTIFY_FAILED
- │                                       │     │     (NOTIFIED → return cached ack, no TMS call)
- │                                       │     ├─ TmsClientAdapter.notify(shipment) (same Idempotency-Key)
- │                                       │     ├─ on success:
- │                                       │     │     - Shipment.recordTmsAck(...)  → tms_status=NOTIFIED
- │                                       │     │     - if Saga.state == SHIPPED_NOT_NOTIFIED:
- │                                       │     │         Saga.transitionTo(COMPLETED)  (sweeper / direct)
- │                                       │     └─ on failure: stays NOTIFY_FAILED, alert continues
- │◀── 200 {shipment.tms_status=NOTIFIED, tracking_no} ─────│
-```
+Carrier dispatch is **not** part of the outbound saga. The scm
+`logistics-service` consumes `outbound.shipping.confirmed` and drives the
+carrier itself (multimodal, 3PL-ready), owning its own dispatch idempotency,
+retry, and recovery (`:retry` on the dispatch). This replaced the former
+outbound TMS push side-channel + `SHIPPED_NOT_NOTIFIED` alert state +
+`:retry-tms-notify` recovery endpoint (retired in TASK-BE-560; ADR-MONO-053
+§D8, ADR-MONO-052 §D7). The outbound saga's `SHIPPED → COMPLETED` transition
+is driven solely by `inventory.confirmed` (§5b) and is independent of dispatch
+outcome.
 
 ---
 
@@ -550,7 +474,7 @@ inventory-service                                outbound-service
 | Pick-stage cancellation (Saga in `PICKING_CONFIRMED`) | Same path — picked-but-still-reserved stock is releasable | Same |
 | Post-pick / pre-ship cancellation (Saga in `PACKING_CONFIRMED`) | Same path | Same |
 | Post-ship cancellation | **Forbidden in v1** (`ORDER_ALREADY_SHIPPED`) | Returns / RMA is v2 |
-| TMS notify fails after retries | Saga stays `SHIPPED_NOT_NOTIFIED`; manual retry via `:retry-tms-notify` | Stock already consumed — TMS retry is the only recovery |
+| Carrier dispatch fails | Handled downstream in scm `logistics-service` (dispatch `:retry`) — outside the outbound saga (ADR-MONO-053 §D8) | Outbound saga is unaffected; stock already consumed |
 
 ---
 
@@ -609,11 +533,9 @@ consumer-side dedupe and saga-level idempotency, re-emission is safe.
 | Inventory `inventory.reserved` arrives with **fresh** eventId for already-RESERVED saga (sweeper re-emit) | State-machine guard: silent no-op |
 | Reserve fails (insufficient stock) | Saga → `RESERVE_FAILED`; Order → `BACKORDERED`; outbox: `outbound.order.cancelled` (reason=BACKORDERED). Single emission |
 | Pre-pick cancel | `outbound.picking.cancelled` fired exactly once. Inventory releases, emits `inventory.released`. Saga → `CANCELLED` |
-| TMS timeout / 5xx | Retried 3 times exp-backoff; on exhaustion saga → `SHIPPED_NOT_NOTIFIED`, alert. Stock already consumed |
-| TMS 4xx (validation) | No retry; saga → `SHIPPED_NOT_NOTIFIED` immediately, `failure_reason=TMS_VALIDATION_REJECTED` |
+| Carrier dispatch fails downstream | Owned by scm `logistics-service` (its own retry / recovery); does not touch the outbound saga (ADR-MONO-053 §D8) |
 | `inventory.confirmed` arrives before saga is `SHIPPED` (impossible — but log-and-drop) | State-machine guard logs WARN `saga_event_invalid_transition`, message goes to DLT after retries; ops investigates |
 | inventory-service down when `outbound.shipping.confirmed` published | Event sits on Kafka topic; inventory-service catches up on restart. Outbox already delivered — outbound TX committed. Saga sweeper safe-net at 5min |
-| outbound-service crashes after Order TX commits but before TMS push | After-commit hook re-runs on next pod start (scheduled poller picks up SHIPPED + tms_status=PENDING shipments) |
 | ERP webhook arrives after operator manually creates same Order | First commit wins (`order_no` UNIQUE); second errors. Webhook inbox row marked FAILED with reason; ops investigates |
 
 ---
@@ -629,7 +551,6 @@ target):
 | Reserved → operator confirms picks | 15–60 min (operator walking aisles) |
 | Picks confirmed → packing complete | 5–20 min |
 | Packing complete → shipping confirmed | 1–5 min |
-| Shipping confirmed → TMS notified | ~1–3s (TMS p99 <12s) |
 | Shipping confirmed → inventory.confirmed | ~2–10s |
 | **End-to-end (excluding human time)** | typically ~20s of compute / IO; rest is human labor |
 | **End-to-end (with operator time)** | typically 30–90 min |
@@ -664,7 +585,7 @@ Outbound-service contributes ~5s of compute / IO; the rest is human time
 - Cross-warehouse split-picking (multi-warehouse Order — `WAREHOUSE_MISMATCH` blocks)
 - FEFO auto-allocation by inventory (v1: order line specifies lot or null)
 - Wave / batch picking (v2: `Wave` aggregate)
-- Carrier rating / TMS quote API (v2)
+- Carrier rating / dispatch / tracking (owned by scm `logistics-service`, ADR-MONO-053)
 - Per-line picking confirmation (v1: one consolidated confirmation per order)
 - Reverse picking (un-confirming a PickingConfirmation)
 - Partial shipping (v1: all-or-nothing per Order)
@@ -676,7 +597,7 @@ Outbound-service contributes ~5s of compute / IO; the rest is human time
 ## References
 
 - [`../architecture.md`](../architecture.md) § Outbound Saga, § Outbound
-  Workflow, § TMS Integration
+  Workflow, § Carrier Dispatch (relocated)
 - [`../domain-model.md`](../domain-model.md) — entity field details
 - [`../state-machines/order-status.md`](../state-machines/order-status.md)
   — formal Order transition table
@@ -684,8 +605,8 @@ Outbound-service contributes ~5s of compute / IO; the rest is human time
   — formal saga transition table
 - [`../sagas/outbound-saga.md`](../sagas/outbound-saga.md) — saga document
   per trait `transactional` Required Artifact 2
-- [`../external-integrations.md`](../external-integrations.md) — TMS,
-  ERP, Kafka, Postgres, Redis policies
+- [`../external-integrations.md`](../external-integrations.md) — ERP,
+  Kafka, Postgres, Redis policies
 - [`../idempotency.md`](../idempotency.md) — REST + webhook + Kafka +
   saga-level dedupe strategies
 - `specs/contracts/http/outbound-service-api.md` — REST endpoint shapes
