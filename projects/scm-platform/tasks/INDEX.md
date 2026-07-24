@@ -78,6 +78,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
+- `TASK-SCM-BE-046-third-party-logistics-node-factory.md` — **READY**. ADR-MONO-054 Phase 2a (Surface A) slice 1/3 — activate the `THIRD_PARTY_LOGISTICS` inventory node. Adds the **missing constructor path** (`InventoryNode.registerThirdPartyLogistics(...)`, sibling to `autoRegisterWmsWarehouse`) + an **explicit** registration use case (idempotent on `uq_inventory_nodes_tenant_external` — a 3PL relationship is an onboarding fact, not an event side-effect, so **no auto-register**). **No Flyway** (enum + JPA + `ck_inventory_nodes_type` CHECK already include the value — ADR-054 §1.2). 3PL stock is **observed read-only, never operated** (ADR-054 §D4 / ADR-050 §D4). **Excludes**: stock observation (BE-047), honouring a 3PL inbound-expected (BE-048, wms gate untouched), and **all** of Surface B (outbound 3PL fulfillment — deferred on ADR-054 §D5's named missing owner). Spec-first per PR Separation Rule. 선행=ADR-054 ACCEPTED ✓. 후속=BE-047 · BE-048. 분석=Opus 4.8 / 구현 권장=Sonnet (bounded: factory + idempotent use case + spec, no Flyway, no cross-service coupling).
+
 ## in-progress
 
 ## review
