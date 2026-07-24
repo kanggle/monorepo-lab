@@ -1,8 +1,8 @@
 # ADR-MONO-056 — payment-gateway abstraction: standardize on PortOne as the aggregation layer, extract a project-agnostic `libs/payment` backend port, keep the checkout UI a documented per-project pattern (defer a standalone payment service)
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 **Date:** 2026-07-24
-**History:** PROPOSED 2026-07-24 (this record). ACCEPT is a human gate — an agent may not accept its own ADR. The PROPOSED record authorises **no code**; acceptance binds the Phase 1 scope in § What acceptance binds.
+**History:** PROPOSED 2026-07-24 (#2977) · ACCEPTED 2026-07-24 (owner exact-form instruction **"ADR-MONO-056 ACCEPTED"**). ACCEPT is a human gate — author (agent) and acceptor (owner) were separate parties; an agent may not accept its own ADR. The PROPOSED record authorised no code; this acceptance binds the Phase 1 scope in § 5, with the § 6 open questions resolved to the agent-recommended defaults the owner accepted (§ 7).
 **Decision driver:** Owner (2026-07-24) — *"또다른 PG사를 연동하거나 고를 수 있도록 하고, 이커머스/팬플랫폼 외에 추가로 만들어질 사이트에서도 사용할 수 있도록 라이브러리나 플랫폼이나 서비스로 빼는 건 어떻게 생각해?"* Two consumers now integrate a PG independently and more sites are planned; the owner asks whether to extract the PG integration for reuse + vendor-swappability, and in what form (library / platform / service).
 **Related:** [ADR-MONO-004](ADR-MONO-004-shared-messaging-scaffolding.md) (the `libs/java-messaging` precedent — project-agnostic infra extracted to a shared lib, adapters wired per service), [ADR-MONO-005](ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md) (Category-B synchronous-external resilience taxonomy the Toss adapter already follows), fan-platform [ADR-001](../../projects/fan-platform/docs/adr/ADR-001-real-pg-portone-verification-boundary.md) (the PortOne verify-boundary this ADR generalises). `CLAUDE.md` § Shared vs project boundary + HARDSTOP-03 (why `libs/payment` must be domain-free) + HARDSTOP-09 (why this decision needs an ADR before any extraction task).
 
@@ -115,3 +115,24 @@ The PROPOSED record authorises **no code**. On owner ACCEPT (exact-form `"ADR-MO
 - **Canonical model** — is *verify* the right union, or should the port expose both an `authorize/capture` (confirm) and a `verify` operation explicitly? (verify-only is simpler; two-op is truer to Toss.)
 - **PortOne standardisation depth** — migrate ecommerce's checkout onto PortOne too (single SDK everywhere), or keep Toss-direct permanently as the showcase? (§D1 proposes keep.)
 - **Module granularity** — one `libs/payment`, or `libs/payment-core` (port+types) + `libs/payment-portone` / `libs/payment-toss` (adapters) so a consumer pulls only its vendor? (leaning split, to avoid dragging both vendors' SDKs into every service.)
+
+---
+
+## 7. What ACCEPT resolved (2026-07-24)
+
+The owner accepted with the agent-recommended defaults on all three § 6 open questions:
+
+1. **Canonical model = verify (single-op).** The port's contract is *"prove this payment is real for this amount + currency"* — the invariant every consumer needs. A confirm-model vendor (Toss) performs its `POST /v1/payments/confirm` **inside** the adapter and returns a verified result; the port does **not** expose a separate capture op. The Toss adapter's javadoc MUST state that its `confirm` is a **money-capture**, not a read, so no consumer mistakes the port for read-only. (Two-op `authorize/capture` deferred — reconsider only if a consumer needs a distinct pre-auth/capture split.)
+2. **Keep Toss-direct as a permanent showcase (D1 as written).** ecommerce is **not** force-migrated onto PortOne. Rationale: it would disturb an already-green R4j adapter + refund + reconciliation test surface for no functional gain, and keeping a second *model* behind the same port is the proof the abstraction earns its keep. New sites still default to PortOne.
+3. **Module split: `libs/payment-core` + `libs/payment-portone` + `libs/payment-toss`.** Core holds the port + canonical value types + Category-B resilience scaffolding (vendor-SDK-free). Each vendor adapter is its own module so a consumer pulls only its vendor's SDK onto its runtime classpath (avoids the `libs/java-gateway` cross-framework-leak class of problem, cf. ADR-MONO-049 D1).
+
+### Phase 1 task decomposition (this ACCEPT authorises)
+
+| Task | Lifecycle | Scope |
+|---|---|---|
+| `TASK-MONO-478` | **ready** (actionable now) | Create `libs/payment-core` + `libs/payment-portone` + `libs/payment-toss`; move the two existing adapters in, domain-free, config-selectable. **No** consumer migration. |
+| `TASK-MONO-479` | backlog (blocked on 478) | Migrate `membership-service` → `libs/payment` (atomic, preserve test surface + CI green). |
+| `TASK-MONO-480` | backlog (blocked on 478) | Migrate `payment-service` → `libs/payment` (atomic, preserve test surface + CI green). |
+| `TASK-MONO-481` | backlog (independent) | Author the checkout-pattern skill/guide (D3). |
+
+479/480/481 promote to `ready` when 478 lands. The standalone service (D4), shared FE package (C), and recurring/billing-key modeling remain out of scope (future ADRs).
