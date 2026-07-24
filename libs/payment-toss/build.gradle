@@ -1,0 +1,44 @@
+plugins {
+    id 'io.spring.dependency-management'
+}
+
+// libs:payment-toss — the Toss Payments confirm-model adapter for the libs:payment-core port
+// (ADR-MONO-056 Phase 1). Carries the ADR-MONO-005 Category-B Resilience4j surface + a plain
+// RestClient HTTP client — no Toss SDK. Domain-free.
+dependencies {
+    implementation project(':libs:payment-core')
+
+    // Spring (bean + RestClient + JdkClientHttpRequestFactory) + Boot config-properties binding
+    implementation 'org.springframework:spring-context'
+    implementation 'org.springframework:spring-web'
+    implementation 'org.springframework.boot:spring-boot'
+    implementation 'org.springframework.boot:spring-boot-autoconfigure'
+
+    // Jackson (Toss REST body parsing)
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+
+    // slf4j (Lombok @Slf4j generates an org.slf4j.Logger field)
+    implementation 'org.slf4j:slf4j-api'
+
+    // Resilience4j (ADR-MONO-005 Category B — CircuitBreaker/Retry/Bulkhead AOP, TASK-BE-139)
+    implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.2.0'
+    implementation 'io.github.resilience4j:resilience4j-circuitbreaker:2.2.0'
+    implementation 'io.github.resilience4j:resilience4j-retry:2.2.0'
+    implementation 'io.github.resilience4j:resilience4j-bulkhead:2.2.0'
+
+    // Lombok (@Slf4j)
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    testCompileOnly 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok'
+
+    // Test — WireMock stands in for the Toss REST API (no Spring context, CI-safe).
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.wiremock:wiremock-standalone:3.10.0'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
+    }
+}

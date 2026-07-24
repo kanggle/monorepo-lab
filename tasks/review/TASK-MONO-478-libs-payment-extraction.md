@@ -8,7 +8,7 @@ Extract `libs/payment-core` + `libs/payment-portone` + `libs/payment-toss` — p
 
 # Status
 
-ready
+review
 
 # Owner
 
