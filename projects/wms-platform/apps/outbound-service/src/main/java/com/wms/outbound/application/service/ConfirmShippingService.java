@@ -25,7 +25,6 @@ import com.wms.outbound.domain.model.PickingConfirmationLine;
 import com.wms.outbound.domain.model.PickingRequest;
 import com.wms.outbound.domain.model.SagaStatus;
 import com.wms.outbound.domain.model.Shipment;
-import com.wms.outbound.domain.model.TmsStatus;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -39,7 +38,6 @@ import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,9 +45,10 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * AC-07 implementation: confirms shipping, transitions order
  * {@code PACKED → SHIPPED}, advances saga to {@code SHIPPED}, creates
- * {@link Shipment}, writes {@code outbound.shipping.confirmed} outbox row,
- * and fires a {@link ShipmentNotifyTrigger} application event for the
- * {@link ShipmentNotificationListener} to invoke TMS post-commit.
+ * {@link Shipment}, and writes the {@code outbound.shipping.confirmed} outbox
+ * row. Carrier dispatch is driven downstream by the scm
+ * {@code logistics-service} off that event (ADR-MONO-053 §D8); this service
+ * no longer performs any TMS notification.
  */
 @Service
 public class ConfirmShippingService implements ConfirmShippingUseCase {
@@ -69,7 +68,6 @@ public class ConfirmShippingService implements ConfirmShippingUseCase {
     private final ShipmentPersistencePort shipmentPersistence;
     private final OutboundSagaCoordinator sagaCoordinator;
     private final OutboxWriterPort outboxWriter;
-    private final ApplicationEventPublisher eventPublisher;
     private final CallerScopeProvider callerScopeProvider;
     private final Clock clock;
 
@@ -81,7 +79,6 @@ public class ConfirmShippingService implements ConfirmShippingUseCase {
                                   ShipmentPersistencePort shipmentPersistence,
                                   OutboundSagaCoordinator sagaCoordinator,
                                   OutboxWriterPort outboxWriter,
-                                  ApplicationEventPublisher eventPublisher,
                                   CallerScopeProvider callerScopeProvider,
                                   Clock clock) {
         this.orderPersistence = orderPersistence;
@@ -92,7 +89,6 @@ public class ConfirmShippingService implements ConfirmShippingUseCase {
         this.shipmentPersistence = shipmentPersistence;
         this.sagaCoordinator = sagaCoordinator;
         this.outboxWriter = outboxWriter;
-        this.eventPublisher = eventPublisher;
         this.callerScopeProvider = callerScopeProvider;
         this.clock = clock;
     }
@@ -134,9 +130,6 @@ public class ConfirmShippingService implements ConfirmShippingUseCase {
         log.info("shipping_confirmed orderId={} shipmentId={} sagaId={}",
                 savedOrder.getId(), savedShipment.getId(), agg.saga().sagaId());
 
-        // Fire post-commit event for TMS push.
-        eventPublisher.publishEvent(new ShipmentNotifyTrigger(agg.saga().sagaId(), savedShipment.getId()));
-
         return new ShipmentResult(
                 savedShipment.getId(),
                 savedShipment.getShipmentNo(),
@@ -145,8 +138,6 @@ public class ConfirmShippingService implements ConfirmShippingUseCase {
                 savedShipment.getCarrierCode(),
                 savedShipment.getTrackingNo(),
                 savedShipment.getShippedAt(),
-                savedShipment.getTmsStatus().name(),
-                savedShipment.getTmsNotifiedAt(),
                 savedOrder.getStatus().name(),
                 SagaStatus.SHIPPED.name(),
                 savedShipment.getVersion(),
@@ -195,7 +186,7 @@ public class ConfirmShippingService implements ConfirmShippingUseCase {
 
     /**
      * Constructs the {@link Shipment} domain object with a deterministic
-     * {@code shipmentNo} and {@link TmsStatus#PENDING}. Does NOT persist.
+     * {@code shipmentNo}. Does NOT persist.
      */
     private static Shipment buildShipmentRecord(Order savedOrder,
                                                 ConfirmShippingCommand command,
@@ -207,11 +198,8 @@ public class ConfirmShippingService implements ConfirmShippingUseCase {
                 savedOrder.getId(),
                 shipmentNo,
                 command.carrierCode(),
-                null /* trackingNo populated by TMS ack */,
+                null /* trackingNo set downstream by logistics-service dispatch */,
                 now,
-                TmsStatus.PENDING,
-                null,
-                null,
                 0L,
                 now,
                 command.actorId(),

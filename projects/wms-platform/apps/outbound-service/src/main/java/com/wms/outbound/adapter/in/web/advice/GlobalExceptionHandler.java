@@ -69,15 +69,11 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * External vendor (TMS, ERP webhook out, etc.) unreachable / circuit-open
-     * / retry-exhausted. Mapped to 503 per {@code platform/error-handling.md}
+     * External vendor (e.g. ERP webhook out) unreachable / circuit-open /
+     * retry-exhausted. Mapped to 503 per {@code platform/error-handling.md}
      * (registered globally for {@code integration-heavy} trait). Specific subtype
      * handler — takes precedence over {@link #handleDomain} (which would default it to 422).
-     *
-     * <p>The {@code RetryTmsNotificationService} catches this internally for
-     * the manual-retry endpoint (returning 200 with the failed snapshot per
-     * {@code outbound-service-api.md} §4.3), so this handler is the
-     * defensive fallback for any other path that lets it escape.
+     * Defensive fallback for any path that lets it escape.
      */
     @ExceptionHandler(ExternalServiceUnavailableException.class)
     public ResponseEntity<ApiErrorEnvelope> handleExternalUnavailable(ExternalServiceUnavailableException e) {

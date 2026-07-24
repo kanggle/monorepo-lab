@@ -35,8 +35,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  *
  * <p>Rows are seeded directly via JDBC to avoid touching the write path (scope
  * = additive read-only endpoint). The test reuses the existing IT base
- * (Postgres + Kafka + Redis + WireMock), all started as a static shared
- * infrastructure.
+ * (Postgres + Kafka + Redis), all started as a static shared infrastructure.
  */
 class PickingRequestByOrderIT extends OutboundServiceIntegrationBase {
 
@@ -69,7 +68,7 @@ class PickingRequestByOrderIT extends OutboundServiceIntegrationBase {
         Instant now = Instant.now();
 
         // Seed the outbound order (no partner_snapshot FK is enforced — random
-        // partner ids are fine; column set mirrors the proven TmsClientAdapterIT seed).
+        // partner ids are fine).
         jdbc.update("""
                 INSERT INTO outbound_order
                     (id, erp_order_number, order_no, source, warehouse_id,

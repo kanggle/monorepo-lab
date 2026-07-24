@@ -65,8 +65,8 @@ its init + align stages together, so the final shape is unambiguous.
 
    ┌─────────────────┐  1:1 (FK)
    │   shipment      │  ◀── UNIQUE order_id (one shipment per order, v1)
-   │ (V4 + V11 + V12)│      shipment_no partial unique
-   │ + tms_status FSM│      + V12 created_by (BE-040)
+   │ (V4 + V11 + V12 │      shipment_no partial unique
+   │  − V18 tms drop)│      + V12 created_by (BE-040)
    └─────────────────┘
 
    ┌─────────────────────┐  ┌──────────────────────────┐
@@ -79,21 +79,19 @@ its init + align stages together, so the final shape is unambiguous.
    │ (V7, status FSM)       │  │ (V7, append-only)        │
    └────────────────────────┘  └──────────────────────────┘
 
-   ┌────────────────────────┐  ← V13 BE-049 (final shape)
-   │  tms_request_dedupe    │     V4 early bootstrap superseded
-   │  (request_id PK,       │
-   │   response_snapshot)   │
-   └────────────────────────┘
+   (tms_request_dedupe — DROPPED by V18, TASK-BE-560 / ADR-MONO-053 §D8)
 ```
 
-Total: **15 tables + 4 trigger functions** across 14 migrations
+Total: **14 tables + 3 trigger functions** across 15 migrations
 (V1=91, V2=29, V3=39, V4=40, V5=18, V6=25, V7=25, V8=87, V9=33, V10=43,
-V11=93, V12=5, V13=34, V14=27 line — 589 total).
+V11=93, V12=5, V13=34, V14=27, V18=39 line). V18 (TASK-BE-560) retired the
+TMS side-channel: dropped `tms_request_dedupe` and the `shipment.tms_*`
+columns, and migrated any `SHIPPED_NOT_NOTIFIED` saga back to `SHIPPED`.
 
 Larger than master (8 tables / 7 migrations) and smaller than inbound
 (18 tables / 8 migrations) but with the highest *migration count* in
 the portfolio — reflecting outbound's continuous evolution from
-bootstrap to BE-049 (TMS dedupe) and BE-050 (saga sweeper).
+bootstrap through BE-050 (saga sweeper) to BE-560 (TMS retirement).
 
 ---
 
@@ -365,7 +363,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_packing_unit_carton_no
     ON packing_unit(order_id, carton_no)
     WHERE carton_no IS NOT NULL;
 
--- shipment: TMS integration fields + audit
+-- shipment: shipment_no + audit + (historical) TMS fields.
+-- NOTE: tms_status / tms_notified_at / tms_request_id were later DROPPED by V18
+-- (TASK-BE-560 / ADR-MONO-053 §D8) when the TMS side-channel was retired.
 ALTER TABLE shipment
     ADD COLUMN IF NOT EXISTS shipment_no      VARCHAR(40),
     ADD COLUMN IF NOT EXISTS tms_status       VARCHAR(30) NOT NULL DEFAULT 'PENDING',
@@ -400,17 +400,18 @@ attribute is assigned.
 **`shipment_no` partial unique (global)**: shipment_no is a customer-
 facing identifier (appears on shipping labels) — globally unique.
 
-**`tms_status` FSM**: starts `PENDING`, transitions to `NOTIFIED` /
-`NOTIFY_FAILED` based on TMS adapter outcome (see
-[`external-integrations.md § 2 TMS`](external-integrations.md) and
-[`sagas/outbound-saga.md`](sagas/outbound-saga.md) § Shipped-Not-Notified).
+**TMS columns removed (V18, TASK-BE-560)**: `tms_status`, `tms_notified_at`,
+and `tms_request_id` were dropped when the outbound TMS side-channel was
+retired (ADR-MONO-053 §D8). Carrier dispatch is now owned by the scm
+`logistics-service`. The generic V4 `status` column is retained (NOT NULL,
+no reader).
 
 ---
 
 ## 5. OutboundSaga (V5 + V14, domain-model § 6, ADR-MONO-005 Category B)
 
 Saga state aggregate orchestrating the full Order → Picking → Packing →
-Shipping → TMS lifecycle.
+Shipping lifecycle.
 
 ### 5.1 V5 bootstrap
 
@@ -433,11 +434,10 @@ CREATE INDEX idx_outbound_saga_order_id ON outbound_saga(order_id);
 ```
 
 **`order_id UNIQUE`**: one saga per Order. The saga row is the
-orchestration anchor — every inventory reply / TMS callback advances
+orchestration anchor — every inventory reply advances
 status through `REQUESTED → RESERVED → PICKING → PICKED → PACKING →
 PACKED → SHIPPED → COMPLETED` (terminal), or branches to one of the
-failure terminals (`RESERVE_FAILED`, `SHIPPED_NOT_NOTIFIED`,
-`STUCK_RECOVERY_FAILED`).
+failure terminals (`RESERVE_FAILED`, `STUCK_RECOVERY_FAILED`).
 
 ### 5.2 V14 saga sweeper recovery (BE-050)
 
@@ -577,62 +577,35 @@ remains mutable (status FSM `PENDING → APPLIED | FAILED`).
 
 ---
 
-## 8. TMS Request Dedupe (V4 → V13, integration-heavy I4)
+## 8. TMS Request Dedupe (V4 → V13 → **DROPPED by V18**, historical)
 
-This table has two shape stages — V4 bootstrap (early scaffolding) and
-V13 BE-049 (final production shape). V13's `CREATE TABLE IF NOT EXISTS`
-is a no-op when V4 already created the table; the final ground-truth
-columns are described in V13.
+This table existed to back the outbound TMS notification side-channel
+(vendor idempotency fallback, integration-heavy I4). It was created by V4
+(bootstrap) / V13 (BE-049 final 3-column shape) and **dropped by V18**
+(TASK-BE-560 / ADR-MONO-053 §D8) when the side-channel was retired —
+carrier dispatch moved to the scm `logistics-service`, which owns its own
+dispatch idempotency. No outbound-service table replaces it.
 
-### 8.1 V4 bootstrap (early)
-
-```sql
-CREATE TABLE tms_request_dedupe (
-    shipment_id      UUID PRIMARY KEY,
-    idempotency_key  VARCHAR(255) NOT NULL,
-    tms_status       VARCHAR(30)  NOT NULL DEFAULT 'PENDING',
-    requested_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW()
-);
-```
-
-### 8.2 V13 BE-049 final shape
+The V18 removal migration:
 
 ```sql
-CREATE TABLE IF NOT EXISTS tms_request_dedupe (
-    request_id        UUID                     PRIMARY KEY,
-    sent_at           TIMESTAMP WITH TIME ZONE NOT NULL,
-    response_snapshot JSONB                    NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_tms_request_dedupe_sent_at
-    ON tms_request_dedupe (sent_at);
+-- V18 (TASK-BE-560)
+UPDATE outbound_saga SET status = 'SHIPPED', failure_reason = NULL, updated_at = NOW()
+ WHERE status = 'SHIPPED_NOT_NOTIFIED';
+DROP TABLE IF EXISTS tms_request_dedupe;
+ALTER TABLE shipment
+    DROP COLUMN IF EXISTS tms_status,
+    DROP COLUMN IF EXISTS tms_notified_at,
+    DROP COLUMN IF EXISTS tms_request_id;
 ```
-
-**Final production shape** (V13): 3-column shape declared in
-[`external-integrations.md § 2.7`](external-integrations.md). Each row
-is keyed by `request_id` = `Shipment.id` (UUIDv7), so insert order is
-monotonically increasing in time. `response_snapshot JSONB` caches the
-vendor `TmsAcknowledgement` (success flag + vendor request id + tracking
-no + carrier code + status).
-
-**Vendor idempotency fallback (I4)**: if the TMS vendor honours the
-`Idempotency-Key` header (= `request_id`), this table caches the
-response so a re-attempt skips the network call. If the vendor regresses
-and stops honouring the header, this table becomes the local ground-
-truth and prevents duplicate side effects on the WMS side.
-
-**Insert sequencing rule**: the row is inserted in a separate
-`REQUIRES_NEW` transaction, **after** the saga TX commits and **after**
-the TMS network call returns 2xx. A failed TMS call must NOT insert here
-— that would cement a failure as "already sent".
 
 ---
 
 ## 9. Append-Only Enforcement Strategy (V8, W2)
 
-Four trigger functions enforce the W2 invariant. Same two-layer defense
-as inventory V5 / inbound V7 — extended for outbound's four protected
-tables.
+Three trigger functions enforce the W2 invariant across the currently
+protected tables (a fourth, on `tms_request_dedupe`, was retired with that
+table in V18). Same two-layer defense as inventory V5 / inbound V7.
 
 ```sql
 -- outbound_event_dedupe: UPDATE + DELETE block
@@ -653,7 +626,6 @@ CREATE TRIGGER trg_outbound_event_dedupe_no_delete
     FOR EACH ROW EXECUTE FUNCTION outbound_event_dedupe_reject_modification();
 
 -- erp_order_webhook_dedupe: same 2-trigger pattern (omitted for brevity; see V8 source)
--- tms_request_dedupe: same 2-trigger pattern (omitted for brevity; see V8 source)
 
 -- outbound_outbox: DELETE-only block (publisher needs UPDATE for published_at)
 CREATE OR REPLACE FUNCTION outbound_outbox_reject_delete()
@@ -673,7 +645,6 @@ CREATE TRIGGER trg_outbound_outbox_no_delete
 |---|---|---|
 | `outbound_event_dedupe` | UPDATE + DELETE | T8 contract — once processed, outcome is permanent |
 | `erp_order_webhook_dedupe` | UPDATE + DELETE | Webhook replay protection |
-| `tms_request_dedupe` | UPDATE + DELETE | Vendor acknowledgement is immutable — re-fetch from vendor if questioned |
 | `outbound_outbox` | **DELETE only** (UPDATE permitted) | Publisher needs UPDATE for `published_at` stamp |
 
 The trigger pattern is identical to inbound V7 (per
@@ -690,7 +661,6 @@ BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = current_user) THEN
         EXECUTE format('REVOKE UPDATE, DELETE ON outbound_event_dedupe FROM %I', current_user);
         EXECUTE format('REVOKE UPDATE, DELETE ON erp_order_webhook_dedupe FROM %I', current_user);
-        EXECUTE format('REVOKE UPDATE, DELETE ON tms_request_dedupe FROM %I', current_user);
         EXECUTE format('REVOKE DELETE ON outbound_outbox FROM %I', current_user);
     END IF;
 EXCEPTION WHEN OTHERS THEN
@@ -698,11 +668,10 @@ EXCEPTION WHEN OTHERS THEN
 END $$;
 ```
 
-Note: V8 runs BEFORE V13 (which redefines `tms_request_dedupe`). The
-trigger and REVOKE attach to the V4 shape; once V13 lands, the new
-columns are still subject to the same triggers — PostgreSQL triggers
-follow the table, not specific columns, so the protection persists
-across the V13 schema change.
+Note: V8 also created an append-only trigger + REVOKE on the former
+`tms_request_dedupe` table; both were retired when V18 dropped that table
+(TASK-BE-560). The orphaned trigger *function* is harmless (no table to
+fire on) and left in place to avoid editing prior migrations.
 
 ---
 
@@ -755,8 +724,8 @@ across the V13 schema change.
 | `erp_order_webhook_inbox` | `erp_order_webhook_inbox_pkey` | PK | row lookup |
 | `erp_order_webhook_inbox` | `idx_erp_order_webhook_inbox_status` | partial (`status='PENDING'`) | processor hot path |
 | `erp_order_webhook_dedupe` | `erp_order_webhook_dedupe_pkey` | PK (event_id) | replay protection |
-| `tms_request_dedupe` | `tms_request_dedupe_pkey` | PK | vendor idempotency cache |
-| `tms_request_dedupe` | `idx_tms_request_dedupe_sent_at` | btree | retention sweeper |
+
+(`tms_request_dedupe` and its indexes were dropped by V18 — TASK-BE-560.)
 
 **5 partial indexes** (highlighted): outbox pending / saga sweeper /
 order_no partial unique / shipment_no partial unique / carton_no
@@ -777,17 +746,18 @@ preserve zero-downtime migration semantics.
 | V5 | `V5__init_saga_table.sql` | 18 | init | outbound_saga |
 | V6 | `V6__init_outbox_dedupe.sql` | 25 | init | outbound_outbox + outbound_event_dedupe |
 | V7 | `V7__init_webhook_inbox.sql` | 25 | init | erp_order_webhook_inbox + dedupe |
-| V8 | `V8__role_grants.sql` | 87 | init | 4 trigger function (W2 append-only) + REVOKE |
+| V8 | `V8__role_grants.sql` | 87 | init | 4 trigger function (W2 append-only) + REVOKE (one, on `tms_request_dedupe`, later retired by V18) |
 | V9 | `V9__outbox_dedupe_schema_align.sql` | 33 | align | outbox aggregate_type/event_version/partition_key + dedupe outcome enum |
 | V10 | `V10__order_schema_align.sql` | 43 | align | outbound_order order_no + source + customer_partner_id + audit (BE-037) |
 | V11 | `V11__picking_pack_ship_schema_align.sql` | 93 | align | picking saga_id + UNIQUE + confirmation align / packing carton_no + dimensions + UNIQUE / shipment shipment_no + tms_status + UNIQUE (BE-038) |
 | V12 | `V12__shipment_created_by.sql` | 5 | align | shipment.created_by (BE-040) |
 | V13 | `V13__tms_request_dedupe.sql` | 34 | feature | tms_request_dedupe final shape (BE-049 vendor idempotency fallback) |
 | V14 | `V14__saga_re_emit_count.sql` | 27 | feature | outbound_saga.re_emit_count + sweeper-candidates partial index (BE-050) |
+| V18 | `V18__retire_tms_side_channel.sql` | 39 | cleanup | DROP tms_request_dedupe + shipment.tms_* columns; SHIPPED_NOT_NOTIFIED → SHIPPED data migration (BE-560, ADR-MONO-053 §D8) |
 
-**9 init + 4 align + 2 feature** — the largest schema evolution count
-in the wms portfolio. When `V15+` lands, this document must be updated
-in the same commit (per the retrospective contract introduced by
+**9 init + 4 align + 2 feature + 1 cleanup** — the largest schema evolution
+count in the wms portfolio. When a new migration lands, this document must be
+updated in the same commit (per the retrospective contract introduced by
 TASK-BE-157).
 
 ---
@@ -796,8 +766,8 @@ TASK-BE-157).
 
 - [`domain-model.md`](domain-model.md) — domain meaning of each table
 - [`architecture.md`](architecture.md) — § Persistence, § Saga Persistence, § Open Items
-- [`idempotency.md`](idempotency.md) — REST + outbox + webhook + tms dedupe strategies
-- [`external-integrations.md`](external-integrations.md) — TMS marquee (I4 idempotency reference for § 8)
+- [`idempotency.md`](idempotency.md) — REST + outbox + webhook dedupe strategies
+- [`external-integrations.md`](external-integrations.md) — ERP webhook integration catalog
 - [`sagas/outbound-saga.md`](sagas/outbound-saga.md) — saga state machine + sweeper recovery
 - [`state-machines/saga-status.md`](state-machines/saga-status.md) — saga state transitions
 - [`../inventory-service/database-design.md`](../inventory-service/database-design.md) — sibling primary template (BE-157)
@@ -808,6 +778,6 @@ TASK-BE-157).
 - `../../../apps/outbound-service/src/main/resources/db/migration/V14__saga_re_emit_count.sql`
 - `../../../../../rules/domains/wms.md` — W2 append-only invariant
 - `../../../../../rules/traits/transactional.md` — T3 (outbox), T4 (state machine), T8 (event dedupe)
-- `../../../../../rules/traits/integration-heavy.md` — I4 (vendor idempotency)
+- `../../../../../rules/traits/integration-heavy.md` — I6 (ERP webhook reception)
 - `../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md` — Category B saga policy
 - `../../../../../platform/architecture.md` — system-level architecture

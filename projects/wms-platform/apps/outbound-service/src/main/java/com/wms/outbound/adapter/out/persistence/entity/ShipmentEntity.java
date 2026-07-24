@@ -11,13 +11,17 @@ import java.util.UUID;
 /**
  * JPA entity backing {@code shipment}.
  *
- * <p>V4 created core columns; V11 added {@code shipment_no},
- * {@code tms_status}, {@code tms_notified_at}, {@code tms_request_id},
- * {@code version}, {@code updated_at}.
+ * <p>V4 created core columns; V11 added {@code shipment_no}, {@code version},
+ * {@code updated_at}. V18 (ADR-MONO-053 §D8) dropped the TMS side-channel
+ * columns ({@code tms_status}, {@code tms_notified_at}, {@code tms_request_id});
+ * carrier dispatch now lives in the scm {@code logistics-service}.
  */
 @Entity
 @Table(name = "shipment")
 public class ShipmentEntity {
+
+    /** Constant for the bootstrap-era, NOT-NULL {@code status} column (no reader). */
+    private static final String STATUS_SHIPPED = "SHIPPED";
 
     @Id
     private UUID id;
@@ -34,21 +38,17 @@ public class ShipmentEntity {
     @Column(name = "tracking_number", length = 200)
     private String trackingNo;
 
-    /** Bootstrap-era status column; v1 mirrors {@code tms_status} (legacy default 'PENDING'). */
+    /**
+     * Bootstrap-era V4 status column (NOT NULL). No longer mirrors any TMS
+     * status after V18 — held constant at {@code SHIPPED} on insert; nothing
+     * reads it. Retained to satisfy the NOT-NULL constraint without a schema
+     * change beyond the TMS-column drops.
+     */
     @Column(name = "status", nullable = false, length = 30)
     private String status;
 
     @Column(name = "shipped_at")
     private Instant shippedAt;
-
-    @Column(name = "tms_status", nullable = false, length = 30)
-    private String tmsStatus;
-
-    @Column(name = "tms_notified_at")
-    private Instant tmsNotifiedAt;
-
-    @Column(name = "tms_request_id")
-    private UUID tmsRequestId;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
@@ -67,19 +67,15 @@ public class ShipmentEntity {
     }
 
     public ShipmentEntity(UUID id, UUID orderId, String shipmentNo, String carrierCode,
-                          String trackingNo, Instant shippedAt, String tmsStatus,
-                          Instant tmsNotifiedAt, UUID tmsRequestId,
+                          String trackingNo, Instant shippedAt,
                           Instant createdAt, String createdBy, Instant updatedAt) {
         this.id = id;
         this.orderId = orderId;
         this.shipmentNo = shipmentNo;
         this.carrierCode = carrierCode;
         this.trackingNo = trackingNo;
-        this.status = tmsStatus; // bootstrap mirror
+        this.status = STATUS_SHIPPED;
         this.shippedAt = shippedAt;
-        this.tmsStatus = tmsStatus;
-        this.tmsNotifiedAt = tmsNotifiedAt;
-        this.tmsRequestId = tmsRequestId;
         this.createdAt = createdAt;
         this.createdBy = createdBy;
         this.updatedAt = updatedAt;
@@ -91,9 +87,6 @@ public class ShipmentEntity {
     public String getCarrierCode() { return carrierCode; }
     public String getTrackingNo() { return trackingNo; }
     public Instant getShippedAt() { return shippedAt; }
-    public String getTmsStatus() { return tmsStatus; }
-    public Instant getTmsNotifiedAt() { return tmsNotifiedAt; }
-    public UUID getTmsRequestId() { return tmsRequestId; }
     public Instant getCreatedAt() { return createdAt; }
     public String getCreatedBy() { return createdBy; }
     public Instant getUpdatedAt() { return updatedAt; }
@@ -101,11 +94,5 @@ public class ShipmentEntity {
 
     public void setCarrierCode(String carrierCode) { this.carrierCode = carrierCode; }
     public void setTrackingNo(String trackingNo) { this.trackingNo = trackingNo; }
-    public void setTmsStatus(String tmsStatus) {
-        this.tmsStatus = tmsStatus;
-        this.status = tmsStatus;
-    }
-    public void setTmsNotifiedAt(Instant tmsNotifiedAt) { this.tmsNotifiedAt = tmsNotifiedAt; }
-    public void setTmsRequestId(UUID tmsRequestId) { this.tmsRequestId = tmsRequestId; }
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
 }

@@ -15,8 +15,6 @@ public record ShipmentResult(
         String carrierCode,
         String trackingNo,
         Instant shippedAt,
-        String tmsStatus,
-        Instant tmsNotifiedAt,
         String orderStatus,
         String sagaState,
         long version,

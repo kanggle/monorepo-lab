@@ -14,7 +14,6 @@ import com.wms.outbound.application.port.out.EventDedupePort;
 import com.wms.outbound.application.port.out.MasterReadModelPort;
 import com.wms.outbound.application.port.out.MasterReadModelWriterPort;
 import com.wms.outbound.application.port.out.OutboxWriterPort;
-import com.wms.outbound.application.port.out.ShipmentNotificationPort;
 import com.wms.outbound.application.port.out.WebhookSecretPort;
 import com.wms.outbound.application.saga.OutboundSagaCoordinator;
 import org.junit.jupiter.api.Test;
@@ -51,7 +50,6 @@ class OutboundServiceSmokeTest {
         assertThat(context.getBean(MasterReadModelWriterPort.class)).isNotNull();
         assertThat(context.getBean(IdempotencyStore.class)).isNotNull();
         assertThat(context.getBean(OutboxWriterPort.class)).isNotNull();
-        assertThat(context.getBean(ShipmentNotificationPort.class)).isNotNull();
         assertThat(context.getBean(OutboundSagaCoordinator.class)).isNotNull();
         assertThat(context.getBean(ProcessWebhookInboxUseCase.class)).isNotNull();
         assertThat(context.getBean(IngestWebhookEventUseCase.class)).isNotNull();

@@ -31,7 +31,7 @@ machine — both progress in lock-step but are tracked separately. See
 | `PICKED` | no | Operator has confirmed all picks; saga is in `PICKING_CONFIRMED`. PickingConfirmation rows exist. Awaiting packing. |
 | `PACKING` | no | At least one PackingUnit has been created; not all units sealed or not all lines fully packed. |
 | `PACKED` | no | All PackingUnits are SEALED and all lines are fully accounted for. Awaiting shipping confirmation. Saga is in `PACKING_CONFIRMED`. |
-| `SHIPPED` | **yes** | Shipping confirmed; Shipment created; saga in `SHIPPED`/`SHIPPED_NOT_NOTIFIED`/`COMPLETED`. **Cancellation forbidden** — returns/RMA is v2. |
+| `SHIPPED` | **yes** | Shipping confirmed; Shipment created; saga in `SHIPPED`/`COMPLETED`. **Cancellation forbidden** — returns/RMA is v2. |
 | `CANCELLED` | **yes** | Order cancelled before shipping. Inventory reservations released via compensation saga (if any existed). |
 | `BACKORDERED` | **yes** | Reserve failed (insufficient stock). Order will not progress; ops creates a follow-up order or notifies customer. |
 
@@ -130,7 +130,7 @@ stateDiagram-v2
 | `PICKING` | `PICKED` | `Order.completePicking(actorId)` | `ConfirmPickingUseCase` finalises PickingConfirmation | Atomic with Saga → `PICKING_CONFIRMED` and Outbox: `outbound.picking.completed` |
 | `PICKED` | `PACKING` | `Order.startPacking()` | First `CreatePackingUnitUseCase` invocation | None (intermediate state; outbox fires only on completion) |
 | `PACKING` | `PACKED` | `Order.completePacking()` | `SealPackingUnitUseCase` when last unit is SEALED AND all lines fully packed | Atomic with Saga → `PACKING_CONFIRMED` and Outbox: `outbound.packing.completed` |
-| `PACKED` | `SHIPPED` | `Order.confirmShipping(actorId)` | `ConfirmShippingUseCase` | Atomic with Shipment creation, Saga → `SHIPPED`, and Outbox: `outbound.shipping.confirmed`. After-commit hook triggers async TMS push |
+| `PACKED` | `SHIPPED` | `Order.confirmShipping(actorId)` | `ConfirmShippingUseCase` | Atomic with Shipment creation, Saga → `SHIPPED`, and Outbox: `outbound.shipping.confirmed` (scm logistics-service dispatches carrier off this event, ADR-MONO-053 §D8) |
 | `RECEIVED` / `PICKING` / `PICKED` / `PACKING` / `PACKED` | `CANCELLED` | `Order.cancel(reason, actorId)` | `CancelOrderUseCase` | Atomic with Saga state transition (→ `CANCELLATION_REQUESTED` if reservation existed, else direct `CANCELLED`) and Outbox: `outbound.order.cancelled` (and `outbound.picking.cancelled` if reservation existed) |
 | `RECEIVED` / `PICKING` | `BACKORDERED` | `Order.backorder(reason)` | `InventoryReserveFailedConsumer` | Atomic with Saga → `RESERVE_FAILED` and Outbox: `outbound.order.cancelled` (carries `reason=BACKORDERED`) |
 
@@ -196,9 +196,8 @@ Once `SHIPPED` is entered:
 - ❌ **Cancellation forbidden**: any cancel attempt → `ORDER_ALREADY_SHIPPED`
   (422). Returns / RMA is v2 (creates a separate inbound RMA flow).
 - ❌ **Mutation forbidden**: Shipment, OrderLines, PackingUnits all immutable
-  (Shipment allows updates only to `tms_status`/`tracking_no`/
-  `tms_notified_at` — these are vendor-driven side-channel updates, not
-  domain mutations).
+  (Shipment allows updates only to `carrier_code`/`tracking_no` — populated by
+  a downstream logistics-service dispatch, not domain mutations).
 - ❌ **No reverse picking** in v1 — un-confirming a `PickingConfirmation`
   not supported. To correct an erroneous confirmation, ops creates a
   cancellation (which compensates the inventory reservation) and a fresh

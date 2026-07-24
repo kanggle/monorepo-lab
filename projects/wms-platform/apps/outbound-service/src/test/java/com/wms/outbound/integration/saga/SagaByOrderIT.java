@@ -53,7 +53,7 @@ class SagaByOrderIT extends OutboundServiceIntegrationBase {
         Instant now = Instant.now();
 
         // Seed the outbound order (mirrors the proven column set used by
-        // PickingRequestByOrderIT and TmsClientAdapterIT).
+        // PickingRequestByOrderIT).
         jdbc.update("""
                 INSERT INTO outbound_order
                     (id, erp_order_number, order_no, source, warehouse_id,

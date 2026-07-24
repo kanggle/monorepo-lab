@@ -4,7 +4,6 @@ import com.wms.outbound.adapter.out.persistence.entity.ShipmentEntity;
 import com.wms.outbound.adapter.out.persistence.repository.ShipmentJpaRepository;
 import com.wms.outbound.application.port.out.ShipmentPersistencePort;
 import com.wms.outbound.domain.model.Shipment;
-import com.wms.outbound.domain.model.TmsStatus;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -35,9 +34,6 @@ public class ShipmentRepositoryImpl implements ShipmentPersistencePort {
                     shipment.getCarrierCode(),
                     shipment.getTrackingNo(),
                     shipment.getShippedAt(),
-                    shipment.getTmsStatus().name(),
-                    shipment.getTmsNotifiedAt(),
-                    shipment.getTmsRequestId(),
                     shipment.getCreatedAt(),
                     shipment.getCreatedBy(),
                     shipment.getUpdatedAt());
@@ -45,9 +41,6 @@ public class ShipmentRepositoryImpl implements ShipmentPersistencePort {
             entity = existing.get();
             entity.setCarrierCode(shipment.getCarrierCode());
             entity.setTrackingNo(shipment.getTrackingNo());
-            entity.setTmsStatus(shipment.getTmsStatus().name());
-            entity.setTmsNotifiedAt(shipment.getTmsNotifiedAt());
-            entity.setTmsRequestId(shipment.getTmsRequestId());
             entity.setUpdatedAt(shipment.getUpdatedAt());
         }
         ShipmentEntity saved = repo.save(entity);
@@ -74,9 +67,6 @@ public class ShipmentRepositoryImpl implements ShipmentPersistencePort {
                 e.getCarrierCode(),
                 e.getTrackingNo(),
                 e.getShippedAt(),
-                TmsStatus.valueOf(e.getTmsStatus() != null ? e.getTmsStatus() : TmsStatus.PENDING.name()),
-                e.getTmsNotifiedAt(),
-                e.getTmsRequestId(),
                 e.getVersion(),
                 e.getCreatedAt(),
                 e.getCreatedBy() != null ? e.getCreatedBy() : "system",

@@ -17,9 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
  * call goes through the raw object reference and bypasses the proxy — so the
  * {@code REQUIRES_NEW} annotation has no effect. The processor wants each
  * inbox-row status flip to commit independently of the (already-completed)
- * domain TX, so the helper must live behind a real proxy. Mirrors the
- * {@link ShipmentNotificationListener} / {@link ShipmentNotificationPersistence}
- * split used elsewhere in this service.
+ * domain TX, so the helper must live behind a real proxy — the standard
+ * transactional-helper split used elsewhere in this service.
  *
  * <p>Each method delegates to {@link WebhookInboxStorePort}, which itself runs
  * inside a Spring-managed transaction. The {@code REQUIRES_NEW} on this layer
