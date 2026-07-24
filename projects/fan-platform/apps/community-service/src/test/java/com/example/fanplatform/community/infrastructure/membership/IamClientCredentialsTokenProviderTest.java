@@ -37,11 +37,12 @@ class IamClientCredentialsTokenProviderTest {
         return new IamClientCredentialsTokenProvider(
                 server.url("/oauth2/token").toString(),
                 "community-service-client",
-                "secret");
+                "secret",
+                "membership.read");
     }
 
     @Test
-    @DisplayName("Basic auth + grant_type=client_credentials sent; access_token returned")
+    @DisplayName("Basic auth + grant_type=client_credentials&scope=membership.read sent; access_token returned")
     void fetchesToken() throws InterruptedException {
         server.enqueue(new MockResponse()
                 .setHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE)
@@ -55,7 +56,7 @@ class IamClientCredentialsTokenProviderTest {
         String expectedBasic = "Basic " + Base64.getEncoder()
                 .encodeToString("community-service-client:secret".getBytes());
         assertThat(req.getHeader("Authorization")).isEqualTo(expectedBasic);
-        assertThat(req.getBody().readUtf8()).isEqualTo("grant_type=client_credentials");
+        assertThat(req.getBody().readUtf8()).isEqualTo("grant_type=client_credentials&scope=membership.read");
     }
 
     @Test
