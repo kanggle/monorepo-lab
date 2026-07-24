@@ -46,7 +46,11 @@ describe('SubscribePanel', () => {
 
     await user.click(screen.getAllByRole('button', { name: '카드로 결제' })[1]); // PREMIUM card
 
-    expect(requestPortOnePayment).toHaveBeenCalledWith(expect.any(String), 17900);
+    expect(requestPortOnePayment).toHaveBeenCalledWith(
+      expect.any(String),
+      17900,
+      expect.objectContaining({}),
+    );
     expect(subscribe).toHaveBeenCalledWith('PREMIUM', 1, 'pay-x');
   });
 
@@ -58,8 +62,29 @@ describe('SubscribePanel', () => {
 
     await user.click(screen.getAllByRole('button', { name: '카드로 결제' })[0]); // MEMBERS_ONLY card
 
-    expect(requestPortOnePayment).toHaveBeenCalledWith(expect.any(String), 7900);
+    expect(requestPortOnePayment).toHaveBeenCalledWith(
+      expect.any(String),
+      7900,
+      expect.objectContaining({}),
+    );
     expect(subscribe).toHaveBeenCalledWith('MEMBERS_ONLY', 1, 'pay-m');
+  });
+
+  it('forwards the signed-in fan email to the PG (KG이니시스 requires buyer email)', async () => {
+    requestPortOnePayment.mockResolvedValue({ ok: true, paymentId: 'pay-e' });
+    subscribe.mockResolvedValue({ ok: true, membership: {} });
+    const user = userEvent.setup();
+    render(
+      <SubscribePanel heldActiveTiers={[]} buyerEmail="fan@example.com" buyerName="테스트 팬" />,
+    );
+
+    await user.click(screen.getAllByRole('button', { name: '카드로 결제' })[0]);
+
+    expect(requestPortOnePayment).toHaveBeenCalledWith(
+      expect.any(String),
+      7900,
+      expect.objectContaining({ email: 'fan@example.com', fullName: '테스트 팬' }),
+    );
   });
 
   it('upgrade (holds MEMBERS_ONLY) → PREMIUM shows the credit + charges the prorated quote', async () => {
@@ -79,7 +104,11 @@ describe('SubscribePanel', () => {
     await user.click(upgradeBtn);
 
     // The PRORATED charge (13,950) — not the list price — reaches PortOne.
-    expect(requestPortOnePayment).toHaveBeenCalledWith(expect.any(String), 13950);
+    expect(requestPortOnePayment).toHaveBeenCalledWith(
+      expect.any(String),
+      13950,
+      expect.objectContaining({}),
+    );
     expect(subscribe).toHaveBeenCalledWith('PREMIUM', 1, 'pay-up');
   });
 

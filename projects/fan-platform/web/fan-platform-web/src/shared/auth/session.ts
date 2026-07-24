@@ -28,6 +28,11 @@ export interface FanSession {
   accountId: string | null;
   tenantId: string | null;
   roles: string[];
+  // Signed-in fan's email / display name (from the OIDC `email`/`profile` scopes).
+  // Non-sensitive identity, safe to forward to a client component that opens the
+  // PG window (KG이니시스 V2 requires the buyer email — see portone-checkout.ts).
+  email: string | null;
+  displayName: string | null;
 }
 
 const EMPTY: FanSession = {
@@ -35,6 +40,8 @@ const EMPTY: FanSession = {
   accountId: null,
   tenantId: null,
   roles: [],
+  email: null,
+  displayName: null,
 };
 
 /**
@@ -69,6 +76,8 @@ export async function getFanSession(): Promise<FanSession> {
     accountId: session.accountId ?? null,
     tenantId: session.tenantId ?? null,
     roles: session.roles ?? [],
+    email: session.user?.email ?? null,
+    displayName: session.user?.name ?? null,
   };
 }
 

@@ -19,7 +19,15 @@ function fmt(date: string): string {
  * not canceled). Renewing re-activates the same tier with a fresh window from now
  * (the `'use server'` renew action; the access token stays on the server).
  */
-export function RenewPanel({ membership }: { membership: MembershipListItem }) {
+export function RenewPanel({
+  membership,
+  buyerEmail,
+  buyerName,
+}: {
+  membership: MembershipListItem;
+  buyerEmail?: string | null;
+  buyerName?: string | null;
+}) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -31,6 +39,7 @@ export function RenewPanel({ membership }: { membership: MembershipListItem }) {
       const checkout = await requestPortOnePayment(
         `${TIER_LABEL[membership.tier]} 멤버십 갱신 (${membership.planMonths}개월)`,
         TIER_MONTHLY_KRW[membership.tier] * membership.planMonths,
+        { email: buyerEmail, fullName: buyerName },
       );
       if (!checkout.ok) {
         setError(checkout.message);

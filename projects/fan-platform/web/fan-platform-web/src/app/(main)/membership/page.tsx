@@ -55,9 +55,20 @@ export default async function MembershipPage({
       </header>
 
       {active ? <MembershipStatusCard membership={active} /> : null}
-      {expired ? <RenewPanel membership={expired} /> : null}
+      {expired ? (
+        <RenewPanel
+          membership={expired}
+          buyerEmail={session.email}
+          buyerName={session.displayName}
+        />
+      ) : null}
 
-      <SubscribePanel heldActiveTiers={heldActiveTiers} highlightTier={highlightTier} />
+      <SubscribePanel
+        heldActiveTiers={heldActiveTiers}
+        highlightTier={highlightTier}
+        buyerEmail={session.email}
+        buyerName={session.displayName}
+      />
     </section>
   );
 }

@@ -45,9 +45,13 @@ const PLAN_OPTIONS = [1, 3, 12];
 export function SubscribePanel({
   heldActiveTiers,
   highlightTier,
+  buyerEmail,
+  buyerName,
 }: {
   heldActiveTiers: MembershipTier[];
   highlightTier?: MembershipTier;
+  buyerEmail?: string | null;
+  buyerName?: string | null;
 }) {
   const [planMonths, setPlanMonths] = useState(1);
   const [isPending, startTransition] = useTransition();
@@ -103,7 +107,10 @@ export function SubscribePanel({
       if (amountKrw === 0) {
         paymentId = 'upgrade-credit';
       } else {
-        const checkout = await requestPortOnePayment(orderName, amountKrw);
+        const checkout = await requestPortOnePayment(orderName, amountKrw, {
+          email: buyerEmail,
+          fullName: buyerName,
+        });
         if (!checkout.ok) {
           setDecline({ tier, message: checkout.message });
           setPendingTier(null);
