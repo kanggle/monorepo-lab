@@ -72,8 +72,9 @@ Hexagonal chosen because:
 
 ```
 domain/         ← Pure Java: Dispatch (status machine PENDING→DISPATCHED→
-                  DISPATCH_FAILED), Carrier, value objects (ShipmentId, TrackingNo,
-                  CarrierCode, Region), ProcessedEvent
+                  DISPATCH_FAILED; carries requestedCarrierCode = the routing input),
+                  Carrier, value objects (ShipmentId, TrackingNo, CarrierCode),
+                  ProcessedEvent
 application/    ← Use cases (DispatchShipmentUseCase, RetryDispatchUseCase) +
                   CarrierRouter + FulfillmentRouter (self-branch) + outbound ports
                   (ShipmentDispatchPort, DispatchPersistencePort)
@@ -162,10 +163,16 @@ demand-planning's and inventory-visibility's deliberate no-outbox rationale (Cat
 
 ## Multimodal seam (ADR-053 §D4 — Phase 1 shape)
 
-- **`CarrierRouter`** selects the vendor for a self-fulfilled shipment by `Region`
-  (domestic → 굿스플로; international → EasyPost; unmapped region → a documented
-  default vendor, never a silent drop — see Failure Modes). Exactly one vendor per
-  shipment.
+- **`CarrierRouter`** selects the vendor for a self-fulfilled shipment by the
+  shipment's **`carrierCode`** (the routing signal the seam actually carries — the
+  seam carries **no** geographic region, the documented "known input gap"). A
+  config-driven `carrierCode → vendor` registry models the split (domestic carriers
+  → 굿스플로; international → EasyPost); a **null or unmapped** `carrierCode` → a
+  documented default vendor with a `CARRIER_UNROUTABLE` degrade, never a silent drop
+  — see Failure Modes. Exactly one vendor per shipment. (BE-043 amended this from an
+  earlier "by Region" wording: the built router routes on `carrierCode`, and no
+  `Region` value object exists — the domestic/international split is registry
+  structure, per the subscriptions contract § CarrierRouter selection.)
 - **`FulfillmentRouter`** is introduced with **only the self-fulfillment branch
   wired**: every input in Phase 1 arrives via `shipping.confirmed` (i.e. wms already
   fulfilled), so the router resolves to *carrier-dispatch*. The Phase-2 3PL branch
@@ -192,13 +199,13 @@ envelope; the vendor call is a child span `logistics.dispatch`. Logs on every
 | Postgres down | consumer retry → DLT; REST 503. |
 | Vendor (EasyPost/굿스플로) 5xx / timeout | per-vendor retry+jitter → circuit; on exhaustion the event is ack'd, dispatch persisted `DISPATCH_FAILED`, alert fires; operator `:retry` recovers. Never a consume failure (S5). |
 | Vendor 4xx (bad request) | non-retryable; `DISPATCH_FAILED` with reason; alert (config/domain bug, not vendor health). |
-| Region unmapped by `CarrierRouter` | fail to the documented **default vendor** and log `CARRIER_UNROUTABLE` degrade — never silently drop the shipment. |
+| `carrierCode` null or unmapped by `CarrierRouter` | route to the documented **default vendor** and emit a `CARRIER_UNROUTABLE` degrade (log + metric) — never silently drop the shipment. |
 | Duplicate `shipping.confirmed` (same eventId or same shipmentId) | no-op via the two dedup layers; no double dispatch. |
 | Vendor honours idempotency key with a 409/202 | adapter treats as "already accepted", returns cached ack (I4). |
 
 ## Testing
 
-Unit (dispatch state machine, `CarrierRouter` region selection incl. unmapped
+Unit (dispatch state machine, `CarrierRouter` carrierCode selection incl. null/unmapped
 fallback, `FulfillmentRouter` self-branch, dedup). Slice (`@WebMvcTest`
 DispatchController incl. `:retry` idempotency). **WireMock** per vendor — success,
 timeout, 5xx, 4xx, circuit-open, bulkhead-full, idempotency-replay (the matrix in

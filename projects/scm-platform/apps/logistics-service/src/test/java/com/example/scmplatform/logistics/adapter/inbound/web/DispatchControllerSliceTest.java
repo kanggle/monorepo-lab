@@ -52,7 +52,7 @@ class DispatchControllerSliceTest {
 
     private static Dispatch dispatched() {
         return Dispatch.reconstitute(DISPATCH_ID, ShipmentId.of(SHIPMENT_ID), "SHP-001",
-                ORDER_ID, "ORD-001", "scm", CarrierCode.of("USPS"), TrackingNo.of("TRACK-1"),
+                ORDER_ID, "ORD-001", "scm", null, CarrierCode.of("USPS"), TrackingNo.of("TRACK-1"),
                 DispatchStatus.DISPATCHED, null, Carrier.EASYPOST, 1, Instant.now(), Instant.now());
     }
 

@@ -49,6 +49,11 @@ class DispatchJpaEntity implements Persistable<UUID> {
     @Column(name = "tenant_id")
     private String tenantId;
 
+    // Routing INPUT from the seam (nullable). Distinct from carrier_code (the CONFIRMED carrier
+    // from the vendor ack) — this is what lets :retry re-route a DISPATCH_FAILED dispatch.
+    @Column(name = "requested_carrier_code")
+    private String requestedCarrierCode;
+
     @Column(name = "carrier_code")
     private String carrierCode;
 
