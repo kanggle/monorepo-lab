@@ -78,6 +78,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
+- `TASK-SCM-BE-047-third-party-logistics-observed-stock.md` — **READY**. ADR-MONO-054 Phase 2a (Surface A) slice 2/3 — 3PL node **read-only stock observation**. Adds an operator/internal **REST push** (`POST /api/inventory-visibility/nodes/{nodeId}/observed-stock`) that records an **absolute** snapshot (`InventorySnapshot.applyQuantity`, not delta) against an **existing** `THIRD_PARTY_LOGISTICS` node (reject absent/wrong-type — **never** `resolveOrCreateNode`, which auto-registers WMS) + **seeds the `NodeStaleness` row** so the node joins the FRESH→STALE lifecycle (batch is node-type-agnostic). **No Flyway** (snapshot/staleness tables carry no node-type column); read side already surfaces any node type (no change). **Excludes** BE-048, any real 3PL vendor read-adapter, and all 3PL stock **mutation** (we record an observation, never operate). 선행=BE-046 done ✓. 후속=(BE-048 independent). 분석=Opus 4.8 / 구현 권장=Sonnet.
+
 ## in-progress
 
 ## review
