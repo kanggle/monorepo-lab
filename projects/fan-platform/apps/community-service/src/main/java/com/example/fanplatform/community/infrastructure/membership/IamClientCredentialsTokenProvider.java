@@ -8,6 +8,8 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
@@ -40,16 +42,27 @@ public class IamClientCredentialsTokenProvider {
     private final RestClient restClient;
     private final String tokenUri;
     private final String basicAuthHeader;
+    private final String tokenRequestBody;
 
     private volatile CachedToken cached;
 
     public IamClientCredentialsTokenProvider(
             @Value("${iam.internal-client.token-uri:http://iam.local/oauth2/token}") String tokenUri,
             @Value("${iam.internal-client.client-id:community-service-client}") String clientId,
-            @Value("${iam.internal-client.client-secret:secret}") String clientSecret) {
+            @Value("${iam.internal-client.client-secret:secret}") String clientSecret,
+            @Value("${iam.internal-client.scope:membership.read}") String scope) {
         this.tokenUri = tokenUri;
         this.basicAuthHeader = "Basic " + Base64.getEncoder()
                 .encodeToString((clientId + ":" + clientSecret).getBytes());
+        // The token MUST carry the membership.read scope: membership-service's
+        // WorkloadIdentityAuthoritiesConverter authorizes /internal/** on the scope
+        // axis (TASK-FAN-BE-029; platform/contracts/jwt-standard-claims.md "machine
+        // tokens authorize on the scope axis"). SAS omits the scope claim entirely
+        // unless the token request asks for it — a bare grant_type=client_credentials
+        // yields a scope-less token that the receiver (correctly) rejects. The scope
+        // is registered to community-service-client in IAM V0009.
+        this.tokenRequestBody = "grant_type=client_credentials&scope="
+                + URLEncoder.encode(scope, StandardCharsets.UTF_8);
         this.restClient = RestClient.create();
     }
 
@@ -70,7 +83,7 @@ public class IamClientCredentialsTokenProvider {
                 .uri(tokenUri)
                 .header("Authorization", basicAuthHeader)
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                .body("grant_type=client_credentials")
+                .body(tokenRequestBody)
                 .retrieve()
                 .body(TokenResponse.class);
         if (resp == null || resp.accessToken() == null || resp.accessToken().isBlank()) {

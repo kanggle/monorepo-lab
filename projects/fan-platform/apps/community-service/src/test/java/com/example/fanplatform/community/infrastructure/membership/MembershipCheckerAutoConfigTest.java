@@ -35,7 +35,8 @@ class MembershipCheckerAutoConfigTest {
                     () -> new IamClientCredentialsTokenProvider(
                             "http://iam.local/oauth2/token",
                             "community-service-client",
-                            "secret"))
+                            "secret",
+                            "membership.read"))
             .withUserConfiguration(MembershipCheckerAutoConfig.class);
 
     @Test
