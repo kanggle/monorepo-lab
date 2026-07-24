@@ -48,7 +48,7 @@
 | 404 | MEMBERSHIP_NOT_FOUND | missing OR cross-tenant OR cross-account; existence not leaked |
 | 409 | IDEMPOTENCY_KEY_CONFLICT | `Idempotency-Key` reused with a different payload |
 | 409 | CONFLICT | optimistic-lock collision |
-| 422 | PAYMENT_DECLINED | PG mock declined authorization; no membership created |
+| 422 | PAYMENT_DECLINED | PG declined / verification failed (mock: `tok_decline`; portone: status ≠ PAID or amount mismatch); no membership created |
 | 422 | MEMBERSHIP_TIER_INVALID | `tier` not in `{ MEMBERS_ONLY, PREMIUM }` |
 | 422 | MEMBERSHIP_NOT_RENEWABLE | renew called on a CANCELED membership (deliberate opt-out — subscribe fresh instead) |
 | 422 | VALIDATION_ERROR | constraint violation (`@Valid`, e.g. `planMonths < 1`) |
@@ -60,9 +60,9 @@
 ### `POST /api/fan/memberships` — Subscribe
 
 Auth: any authenticated fan (`accountId` = `sub`). **`Idempotency-Key` header is
-required** (transactional.md T1). The PG mock authorize runs synchronously; on
-approval a membership is created directly in `ACTIVE`, on decline NO row is
-created and the API returns 422 `PAYMENT_DECLINED`.
+required** (transactional.md T1). Payment runs synchronously through
+`PaymentGatewayPort`; on approval a membership is created directly in `ACTIVE`, on
+decline NO row is created and the API returns 422 `PAYMENT_DECLINED`.
 
 Headers:
 ```
@@ -74,9 +74,27 @@ Request:
 {
   "tier": "MEMBERS_ONLY | PREMIUM",
   "planMonths": 1,
-  "paymentToken": "tok_visa_demo (optional; mock — use 'tok_decline' to force a decline)"
+  "paymentId": "<PG payment reference; optional>"
 }
 ```
+
+**`paymentId` semantics are profile-dependent** (see architecture.md § PG Boundary,
+[ADR-001](../../../docs/adr/ADR-001-real-pg-portone-verification-boundary.md)):
+
+- **`portone` profile (real PG):** `paymentId` is the PortOne payment reference the
+  browser SDK returned after the payment window completed. The backend **verifies**
+  it server-side (`status == PAID` AND paid amount == charged amount) before
+  creating the membership — the client's success signal alone is never trusted. A
+  verification failure → 422 `PAYMENT_DECLINED`, no row.
+- **default mock profile (`!portone`, CI/dev):** `paymentId` is an opaque token; the
+  reserved sentinel `tok_decline` forces a 422 `PAYMENT_DECLINED`, any other value
+  (incl. omitted) approves.
+
+> **Compatibility note (Phase 0):** this contract change (`paymentToken` → `paymentId`)
+> is documented ahead of implementation per the repo's contract-first policy. The
+> field-name/verification switch lands atomically with the PortOne adapter
+> (TASK-FAN-BE-031 / TASK-FAN-FE-010) so `main` never carries a half-migrated payment
+> path.
 
 Response 201:
 ```json
@@ -90,7 +108,7 @@ Response 201:
     "validFrom": "2026-06-06T00:00:00Z",
     "validTo": "2026-07-06T00:00:00Z",
     "planMonths": 1,
-    "paymentRef": "pgmock_0190f3e2-...",
+    "paymentRef": "pgmock_0190f3e2-... (mock) | <verified paymentId> (portone)",
     "createdAt": "2026-06-06T00:00:00Z",
     "canceledAt": null
   },
@@ -129,7 +147,7 @@ Response 200:
     "validFrom": "2026-06-06T00:00:00Z",
     "validTo": "2026-07-06T00:00:00Z",
     "planMonths": 1,
-    "paymentRef": "pgmock_0190f3e2-...",
+    "paymentRef": "pgmock_0190f3e2-... (mock) | <verified paymentId> (portone)",
     "createdAt": "2026-06-06T00:00:00Z",
     "canceledAt": "2026-06-10T00:00:00Z"
   },
