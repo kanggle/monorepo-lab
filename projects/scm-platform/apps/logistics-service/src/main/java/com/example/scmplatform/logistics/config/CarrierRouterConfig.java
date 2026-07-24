@@ -2,6 +2,7 @@ package com.example.scmplatform.logistics.config;
 
 import com.example.scmplatform.logistics.application.port.outbound.ShipmentDispatchPort;
 import com.example.scmplatform.logistics.application.routing.CarrierRouter;
+import com.example.scmplatform.logistics.application.routing.FulfillmentRouter;
 import com.example.scmplatform.logistics.domain.model.Carrier;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -47,5 +48,15 @@ public class CarrierRouterConfig {
     @Profile("standalone")
     CarrierRouter standaloneCarrierRouter(ShipmentDispatchPort standalonePort) {
         return CarrierRouter.singleVendor(Carrier.STANDALONE, standalonePort);
+    }
+
+    /**
+     * The framework-free {@link FulfillmentRouter} multimodal seam (ADR-053 §D4). Profile-agnostic —
+     * Phase 1 always resolves self-fulfillment (carrier dispatch); the Phase-2 3PL arm is a
+     * documented extension point, not active. No collaborators in Phase 1.
+     */
+    @Bean
+    FulfillmentRouter fulfillmentRouter() {
+        return new FulfillmentRouter();
     }
 }

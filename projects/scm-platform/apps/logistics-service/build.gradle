@@ -29,7 +29,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
-    // Kafka scaffold only — the seam consumer (@KafkaListener) is wired in BE-044.
+    // Kafka — the ShippingConfirmedConsumer (@KafkaListener on wms.outbound.shipping.confirmed.v1)
+    // + DefaultErrorHandler/DLT wiring (BE-044) run on this starter.
     implementation 'org.springframework.kafka:spring-kafka'
 
     // Database
@@ -85,6 +86,8 @@ dependencies {
     // Testcontainers (integration tests, @Tag("integration"))
     testImplementation 'org.testcontainers:junit-jupiter:1.21.3'
     testImplementation 'org.testcontainers:postgresql:1.21.3'
+    // Kafka container for the BE-044 seam-consumer IT (wms.outbound.shipping.confirmed.v1 → dispatch).
+    testImplementation 'org.testcontainers:kafka:1.21.3'
     testImplementation 'org.awaitility:awaitility:4.2.2'
 
     // WireMock — EasyPost vendor stand-in for the integration-heavy dispatch matrix (I10).
