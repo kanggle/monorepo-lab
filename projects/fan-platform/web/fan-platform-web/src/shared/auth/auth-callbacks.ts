@@ -180,6 +180,25 @@ export async function jwtCallback({
 }
 
 /**
+ * Select the bearer access token from a decoded Auth.js JWT for server-side
+ * gateway calls. Pure counterpart of the `getToken()` plumbing in the
+ * server-only `session.ts` (kept here so it is unit-testable without the
+ * `server-only` / `next/headers` boundary).
+ *
+ * Returns null when: there is no JWT, a prior silent refresh failed
+ * (`RefreshAccessTokenError` — sending the known-stale token would just 401),
+ * or the `accessToken` claim is missing / not a non-empty string. The token is
+ * NEVER copied onto the public session (F2) — this reads the raw JWT instead,
+ * which is why the token survives here even though `sessionCallback` strips it.
+ */
+export function selectAccessToken(jwt: JwtToken | null | undefined): string | null {
+  if (!jwt) return null;
+  if (jwt.error === 'RefreshAccessTokenError') return null;
+  const accessToken = jwt.accessToken;
+  return typeof accessToken === 'string' && accessToken.length > 0 ? accessToken : null;
+}
+
+/**
  * The `session` callback body — exposes ONLY non-sensitive identity claims to
  * client JS (F2). Degrades to anonymous when a silent refresh failed (F3
  * fallback). The access / refresh / id tokens are never copied onto the

@@ -11,6 +11,7 @@ import {
   refreshAccessToken,
   jwtCallback,
   sessionCallback,
+  selectAccessToken,
   REFRESH_MARGIN_SECONDS,
 } from '@/shared/auth/auth-callbacks';
 
@@ -371,5 +372,35 @@ describe('sessionCallback', () => {
     expect(session.accountId).toBeNull();
     expect(session.tenantId).toBeNull();
     expect(session.roles).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// selectAccessToken — server-side bearer read from the raw JWT (TASK-FAN-FE-008)
+// ---------------------------------------------------------------------------
+
+describe('selectAccessToken', () => {
+  it('returns the accessToken from a healthy JWT (the token sessionCallback strips)', () => {
+    // The SAME token shape the session callback deliberately removes (F2) — the
+    // server-side gateway fetch must still get it from the raw JWT.
+    expect(selectAccessToken({ accessToken: 'at-123', accountId: 'acc1' })).toBe('at-123');
+  });
+
+  it('returns null when a silent refresh failed (RefreshAccessTokenError)', () => {
+    // A known-stale token must NOT be sent — the caller behaves as unauthenticated.
+    expect(
+      selectAccessToken({ accessToken: 'stale-at', error: 'RefreshAccessTokenError' }),
+    ).toBeNull();
+  });
+
+  it('returns null for a missing / empty / non-string accessToken', () => {
+    expect(selectAccessToken({})).toBeNull();
+    expect(selectAccessToken({ accessToken: '' })).toBeNull();
+    expect(selectAccessToken({ accessToken: 123 as unknown as string })).toBeNull();
+  });
+
+  it('returns null for a null / undefined JWT (no session cookie)', () => {
+    expect(selectAccessToken(null)).toBeNull();
+    expect(selectAccessToken(undefined)).toBeNull();
   });
 });
