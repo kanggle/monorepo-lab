@@ -1,0 +1,45 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc.time_zone: UTC
+    open-in-view: false
+
+  # Integration tests override datasource + flyway via @DynamicPropertySource
+  # (Testcontainers Postgres). Slice @WebMvcTest tests configure no datasource.
+  flyway:
+    enabled: false
+
+  kafka:
+    # Dummy — no @KafkaListener consumes anything in Phase 1, so no broker is contacted.
+    bootstrap-servers: localhost:59092
+    consumer:
+      group-id: scm-logistics-v1-test
+    listener:
+      ack-mode: manual
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:9999
+          jwk-set-uri: http://localhost:9999/oauth2/jwks
+
+scmplatform:
+  oauth2:
+    allowed-issuers: "http://localhost:9999,iam"
+    required-tenant-id: scm
+
+logistics:
+  easypost:
+    base-url: http://localhost:9999
+    api-key: test-key
+    connect-timeout-seconds: 2
+    read-timeout-seconds: 2
+
+logging:
+  level:
+    root: WARN
+    com.example.scmplatform.logistics: DEBUG

@@ -103,6 +103,21 @@ spring:
                 redis-rate-limiter.requestedTokens: 1
                 key-resolver: "#{@accountKeyResolver}"
 
+        # logistics-service — activated by TASK-SCM-BE-042 (ADR-MONO-053 Phase 1).
+        # Routes /api/v1/logistics/** to logistics-service internal /api/logistics/**.
+        - id: logistics-service
+          uri: ${LOGISTICS_SERVICE_URI:http://logistics-service:8080}
+          predicates:
+            - Path=/api/v1/logistics/**
+          filters:
+            - RewritePath=/api/v1/logistics/(?<segment>.*), /api/logistics/${segment}
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 1
+                redis-rate-limiter.burstCapacity: 120
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@accountKeyResolver}"
+
 server:
   port: ${SERVER_PORT:8080}
   forward-headers-strategy: framework

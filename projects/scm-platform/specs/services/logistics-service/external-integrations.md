@@ -253,9 +253,20 @@ This is the relocation of the wms `SHIPPED_NOT_NOTIFIED` + `:retry-tms-notify` s
 | 2xx | success | `DISPATCHED` |
 | 400 / 422 | no retry (domain/schema bug — alert) | `DISPATCH_FAILED`, reason set |
 | 401 / 403 | no retry (secret/onboarding issue — alert ops) | `DISPATCH_FAILED` |
-| 409 (idempotent dup) | treat as success (I4) | `DISPATCHED` (cached ack) |
+| 409 (vendor dup) | no retry — **not** auto-treated as success (see note) | `DISPATCH_FAILED`, recoverable via `:retry` |
 | 429 | retry per backoff | if exhausted: `DISPATCH_FAILED` |
 | 5xx / timeout / IO | retry per backoff | if exhausted: `DISPATCH_FAILED` |
+
+> **409 handling (amended by TASK-SCM-BE-042 impl — EasyPost-accurate).** The
+> generic "409 → treat as success (cached ack)" inherited from the wms TMS
+> contract does **not** fit EasyPost: on an idempotent replay EasyPost returns the
+> **original 2xx** (not 409), and genuine replays are already short-circuited by the
+> local `dispatch_request_dedupe` **before any network call** (I4). A network 409
+> that reaches the adapter is therefore an anomaly with no tracking number to record
+> — auto-marking `DISPATCHED` would fabricate a success. It is treated as
+> `DISPATCH_FAILED` and is recoverable via the operator `:retry` endpoint (which
+> re-checks local dedupe first). A future 굿스플로 adapter (BE-043) may re-map 409
+> per that vendor's semantics — 4xx handling is per-adapter, not a shared invariant.
 
 ---
 

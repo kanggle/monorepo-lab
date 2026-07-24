@@ -1,6 +1,6 @@
 # TASK-SCM-BE-042 — logistics-service bootstrap (skeleton + ShipmentDispatchPort + EasyPost adapter)
 
-**Status:** ready
+**Status:** in-progress
 **Type:** TASK-SCM-BE
 **Depends on / 전제:** [TASK-SCM-BE-041](../done/TASK-SCM-BE-041-logistics-service-spec-suite.md) **done** (the specs this task builds against) · [ADR-MONO-053](../../../../docs/adr/ADR-MONO-053-logistics-service-multimodal-fulfillment.md) **ACCEPTED** (Phase 1). Reads: [ADR-MONO-052](../../../../docs/adr/ADR-MONO-052-transport-context-map.md) §D5/§D7.
 **후속 / blocks:** TASK-SCM-BE-043 (굿스플로 adapter + `CarrierRouter`) · TASK-SCM-BE-044 (`FulfillmentRouter` self-branch + `outbound.shipping.confirmed` consumer). Both require this bootstrap.
