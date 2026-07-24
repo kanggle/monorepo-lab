@@ -66,14 +66,14 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-FAN-BE-031-portone-payment-adapter.md` — **READY (Phase 1, blocked on live-verify only).** membership-service 실 PG 어댑터 — `PortOnePaymentAdapter`(`@Profile("portone")`) + PortOne REST 서버측 검증(`status==PAID` AND 결제금액==청구금액, 클라이언트 성공신호 불신) + `PaymentGatewayPort` 파라미터 `paymentToken→paymentReference` 중립화. mock은 `@Profile("!portone")` 기본값 유지(CI/키없음 안전). WireMock 통합테스트=CI-safe; 라이브 검증만 PortOne 키 필요(FE-010과 원자적 머지). ADR-001. 분석=Opus 4.8 / 구현 권장=Opus(외부 연동+보안 검증).
-- `TASK-FAN-FE-010-portone-checkout-window.md` — **READY (Phase 1, blocked on live-verify only).** fan-platform-web `@portone/browser-sdk` 체크아웃 — "결제 토큰" 텍스트필드 제거, "카드로 결제" → `requestPayment(...)`로 **실 PG 결제창** → 반환 `paymentId`를 `subscribe` 액션에 전달(백엔드 BE-031이 서버측 검증). vitest는 SDK mock=CI-safe; 라이브 결제창 검증만 `NEXT_PUBLIC_PORTONE_*` 키 필요(BE-031과 원자적 머지). FE-009 티어-상위집합 단언 보존. ADR-001. 분석=Opus 4.8 / 구현 권장=Opus.
-
 ## in-progress
 
 (empty)
 
 ## review
+
+- `TASK-FAN-BE-031-portone-payment-adapter.md` — **REVIEW (Phase 1, PR pending).** membership-service 실 PG 어댑터 — `PortOnePaymentAdapter`(`@Profile("portone")`) + PortOne REST 서버측 검증(`status==PAID` AND 결제금액==청구금액, 클라이언트 성공신호 불신). mock은 `@Profile("!portone")` 기본값(CI/키없음 자동 폴백). API 필드 `paymentToken→paymentId`(DTO/command/contract), 포트 파라미터 `paymentReference` 중립화(subscribe+renew 공유). 로컬 검증: `compileJava`/`compileTestJava` + `PortOnePaymentAdapterTest`(MockWebServer fail-closed 7케이스: PAID+금액일치→승인 / status·금액변조·통화·404·5xx·blank→거절 + auth 헤더) GREEN. Testcontainers IT는 CI 권위. FE-010과 원자적. ADR-001. 분석·구현=Opus 4.8.
+- `TASK-FAN-FE-010-portone-checkout-window.md` — **REVIEW (Phase 1, PR pending).** fan-platform-web `@portone/browser-sdk@^0.1.9` 체크아웃 — "결제 토큰" 필드 제거, "카드로 결제"→`requestPortOnePayment()`(공유 헬퍼=subscribe+renew)로 **실 PG 결제창**→`paymentId`를 액션에 전달(백엔드 검증). `totalAmount=9900*planMonths`(백엔드 flat charge 일치=금액검증 통과). 로컬 검증: vitest 95/95(SDK mock, cancel→미호출·decline inline 포함)+tsc+lint+`next build` GREEN. FE-009 상위집합 단언 보존. BE-031과 원자적. ADR-001. 분석·구현=Opus 4.8.
 
 ## done
 

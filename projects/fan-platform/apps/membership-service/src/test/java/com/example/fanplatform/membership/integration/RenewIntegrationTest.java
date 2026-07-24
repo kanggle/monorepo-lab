@@ -71,7 +71,7 @@ class RenewIntegrationTest extends MembershipServiceIntegrationBase {
         String token = jwt.signFanToken("fan-" + System.nanoTime());
 
         ResponseEntity<String> sub = subscribe(token, "sub-1",
-                "{\"tier\":\"PREMIUM\",\"planMonths\":1,\"paymentToken\":\"tok_visa_demo\"}");
+                "{\"tier\":\"PREMIUM\",\"planMonths\":1,\"paymentId\":\"tok_visa_demo\"}");
         assertThat(sub.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         JsonNode subData = objectMapper.readTree(sub.getBody()).path("data");
         String priorId = subData.path("membershipId").asText();

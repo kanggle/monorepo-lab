@@ -60,7 +60,7 @@ public class RenewMembershipUseCase {
             throw new MembershipNotRenewableException(cmd.priorMembershipId());
         }
 
-        String fingerprint = fingerprint(cmd.priorMembershipId(), cmd.planMonths(), cmd.paymentToken());
+        String fingerprint = fingerprint(cmd.priorMembershipId(), cmd.planMonths(), cmd.paymentId());
 
         // 2) Idempotency check ---------------------------------------------------
         Optional<IdempotencyKey> existing =
@@ -80,7 +80,7 @@ public class RenewMembershipUseCase {
         // 3) PG authorize --------------------------------------------------------
         long amountMinor = PRICE_PER_MONTH_MINOR * cmd.planMonths();
         PaymentGatewayPort.PaymentResult result = paymentGateway.authorize(
-                amountMinor, cmd.planMonths(), cmd.paymentToken(), cmd.idempotencyKey());
+                amountMinor, cmd.planMonths(), cmd.paymentId(), cmd.idempotencyKey());
         if (!result.approved()) {
             throw new PaymentDeclinedException();
         }
@@ -112,9 +112,9 @@ public class RenewMembershipUseCase {
      * replay means the same key is being reused for a different request (409).
      * Excludes the idempotency key itself (the lookup key).
      */
-    private static String fingerprint(String priorMembershipId, int planMonths, String paymentToken) {
+    private static String fingerprint(String priorMembershipId, int planMonths, String paymentId) {
         String raw = "renew|" + priorMembershipId + "|" + planMonths + "|"
-                + (paymentToken == null ? "" : paymentToken);
+                + (paymentId == null ? "" : paymentId);
         return Sha256.hex(raw);
     }
 }

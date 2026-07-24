@@ -75,7 +75,7 @@ class MembershipServiceIntegrationTest extends MembershipServiceIntegrationBase 
         // subscribe
         ResponseEntity<String> subRes = rest.exchange(
                 url("/api/fan/memberships"), HttpMethod.POST,
-                new HttpEntity<>("{\"tier\":\"PREMIUM\",\"planMonths\":1,\"paymentToken\":\"tok_visa_demo\"}",
+                new HttpEntity<>("{\"tier\":\"PREMIUM\",\"planMonths\":1,\"paymentId\":\"tok_visa_demo\"}",
                         headers(fanToken, "key-1")),
                 String.class);
         assertThat(subRes.getStatusCode()).isEqualTo(HttpStatus.CREATED);

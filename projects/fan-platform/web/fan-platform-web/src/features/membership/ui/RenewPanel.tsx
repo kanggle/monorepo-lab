@@ -2,6 +2,7 @@
 import { useState, useTransition } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { renewMembership } from '@/features/membership/api/actions';
+import { requestPortOnePayment } from '@/features/membership/lib/portone-checkout';
 import type { MembershipListItem } from '@/entities/membership';
 
 const TIER_LABEL: Record<MembershipListItem['tier'], string> = {
@@ -25,7 +26,21 @@ export function RenewPanel({ membership }: { membership: MembershipListItem }) {
   const onRenew = () => {
     setError(null);
     startTransition(async () => {
-      const result = await renewMembership(membership.membershipId, membership.planMonths, '');
+      // Same PortOne payment window as subscribe; the paymentId is verified
+      // server-side by the renew action's backend (ADR-001).
+      const checkout = await requestPortOnePayment(
+        `${TIER_LABEL[membership.tier]} 멤버십 갱신 (${membership.planMonths}개월)`,
+        membership.planMonths,
+      );
+      if (!checkout.ok) {
+        setError(checkout.message);
+        return;
+      }
+      const result = await renewMembership(
+        membership.membershipId,
+        membership.planMonths,
+        checkout.paymentId,
+      );
       if (!result.ok) setError(result.message);
     });
   };

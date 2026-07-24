@@ -56,7 +56,7 @@ class PaymentDeclineIntegrationTest extends MembershipServiceIntegrationBase {
 
         ResponseEntity<String> res = rest.exchange(
                 "http://localhost:" + port + "/api/fan/memberships", HttpMethod.POST,
-                new HttpEntity<>("{\"tier\":\"PREMIUM\",\"planMonths\":1,\"paymentToken\":\"tok_decline\"}", h),
+                new HttpEntity<>("{\"tier\":\"PREMIUM\",\"planMonths\":1,\"paymentId\":\"tok_decline\"}", h),
                 String.class);
 
         assertThat(res.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);

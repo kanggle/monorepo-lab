@@ -127,7 +127,7 @@ class SubscribeUseCaseTest {
         verify(membershipRepository, never()).save(any());
     }
 
-    /** Mirror of SubscribeUseCase#fingerprint (SHA-256 of tier|planMonths|paymentToken). */
+    /** Mirror of SubscribeUseCase#fingerprint (SHA-256 of tier|planMonths|paymentId). */
     private static String fingerprintOf(MembershipTier tier, int planMonths, String token) {
         try {
             java.security.MessageDigest d = java.security.MessageDigest.getInstance("SHA-256");

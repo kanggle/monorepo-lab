@@ -127,3 +127,15 @@ fanplatform:
     jwt:
       jwk-set-uri: ${INTERNAL_JWT_JWK_SET_URI:${OIDC_ISSUER_URL:http://iam.local}/oauth2/jwks}
       issuer: ${INTERNAL_JWT_ISSUER:${OIDC_ISSUER_URL:http://iam.local}}
+
+# Real PG (PortOne V2) — consumed ONLY by PortOnePaymentAdapter under the
+# `portone` profile (ADR-001). Under the default (mock) profile the adapter bean
+# is not created, so these are unused and `api-secret` is never resolved.
+# Keys are injected via runtime env and are NEVER committed / never in CI:
+#   FAN_PAYMENT_PORTONE_API_SECRET  (server-side secret — no default → fail-fast
+#                                    under `portone` if unset)
+fan:
+  payment:
+    portone:
+      api-base: ${FAN_PAYMENT_PORTONE_API_BASE:https://api.portone.io}
+      api-secret: ${FAN_PAYMENT_PORTONE_API_SECRET}

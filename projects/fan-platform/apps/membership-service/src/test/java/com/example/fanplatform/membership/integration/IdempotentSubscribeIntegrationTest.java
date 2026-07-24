@@ -68,7 +68,7 @@ class IdempotentSubscribeIntegrationTest extends MembershipServiceIntegrationBas
     @DisplayName("same key + same payload → single row, identical membershipId")
     void replaySameResult() throws Exception {
         String token = jwt.signFanToken("fan-" + System.nanoTime());
-        String body = "{\"tier\":\"PREMIUM\",\"planMonths\":1,\"paymentToken\":\"tok_visa_demo\"}";
+        String body = "{\"tier\":\"PREMIUM\",\"planMonths\":1,\"paymentId\":\"tok_visa_demo\"}";
 
         ResponseEntity<String> first = subscribe(token, "idem-1", body);
         ResponseEntity<String> second = subscribe(token, "idem-1", body);
