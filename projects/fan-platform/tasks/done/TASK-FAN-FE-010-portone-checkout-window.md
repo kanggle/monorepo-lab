@@ -8,7 +8,7 @@ fan-platform-web: PortOne browser SDK checkout — real payment window on subscr
 
 # Status
 
-review
+done
 
 # Owner
 
