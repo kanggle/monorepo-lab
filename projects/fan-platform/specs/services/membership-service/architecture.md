@@ -124,7 +124,7 @@ com.example.fanplatform.membership/
 - `spring-cloud-starter-gateway` (membership-service is a downstream service, not an edge gateway).
 - Direct Kafka usage outside the outbox path. Producers MUST go through `MembershipEventPublisher` → outbox → `MembershipOutboxPublisher`.
 - Cross-service repository imports (membership-service does not reach into community-service / artist-service tables).
-- Any real external payment-gateway SDK — the PG integration is a deterministic mock in v1 (see § PG Mock Boundary). A real PG adapter is a future increment that re-implements `PaymentGatewayPort`.
+- A real external PG SDK bundled into the DEFAULT build — the mock is the default (`@Profile("!portone")`) so CI / tests / keyless envs never call a real PG. The PortOne adapter (§ PG Boundary, [ADR-001](../../../docs/adr/ADR-001-real-pg-portone-verification-boundary.md)) is a profile-gated addition (`@Profile("portone")`, keys via env), NOT a replacement of the port abstraction.
 - `spring-boot-starter-data-redis` — no cache case in v1.
 
 ### Boundary rules
@@ -132,7 +132,7 @@ com.example.fanplatform.membership/
 - `presentation/` MUST NOT call `infrastructure/` directly. All infrastructure access flows through `application/` use cases that depend on domain ports.
 - `domain/` MUST NOT depend on Spring or Jakarta annotations beyond `jakarta.persistence` (JPA) — chosen as a pragmatic exception so the `Membership` entity doubles as a JPA-mapped object (matches the community-service convention). No Spring framework imports inside `domain/`.
 - `application/event/MembershipEventPublisher` is the ONLY producer path. Any new event MUST extend the publisher; never call `OutboxWriter` directly from a use case or controller.
-- `PaymentGatewayPort` is the ONLY boundary to payment authorization. Use cases depend on the port; the deterministic mock adapter lives in `infrastructure/payment/`.
+- `PaymentGatewayPort` is the ONLY boundary to payment. Use cases depend on the port; both the default mock and the profile-gated PortOne adapter live in `infrastructure/payment/` (§ PG Boundary). The mock is active unless the `portone` profile is set.
 - `infrastructure/security/` re-validates `tenant_id` for end-user routes even though the gateway already does — fail-closed defense-in-depth (see § Tenant Isolation). The `/internal/**` route is a separate security chain authenticated by workload-identity JWT (see § Internal Access-Check Contract).
 
 ---
@@ -234,35 +234,58 @@ in DENY, never ALLOW. This is the same contract the consuming
 
 ---
 
-## PG Mock Boundary
+## PG Boundary (Mock + PortOne)
 
-Payment authorization is abstracted behind `PaymentGatewayPort`:
+Payment is abstracted behind `PaymentGatewayPort` — the ONLY boundary to payment.
+The domain and use-case layers depend on the port and are **unchanged** regardless
+of which adapter is active:
 
 ```
-boolean/PaymentResult authorize(amount, planMonths, paymentToken, idempotencyKey) → { approved, paymentRef }
+PaymentResult authorize(amountMinor, planMonths, paymentReference, idempotencyKey) → { approved, paymentRef }
 ```
 
-The v1 adapter `MockPaymentGatewayAdapter` is a **deterministic mock** — there is
-**no real external PG integration** in this increment. The mock decision rule is
-documented and reproducible so tests are deterministic:
+Two adapters implement the port; selection is **profile-gated** so a keyless
+environment (CI, integration tests, a contributor's laptop) always falls back to
+the deterministic mock — a real external PG call never happens in CI.
 
-- **Decline rule (documented test boundary):** a request is declined when
-  `paymentToken` equals the reserved sentinel `tok_decline` (or is otherwise
-  flagged by a documented decline rule, e.g. an amount-based test trigger).
-  Decline → `SubscribeUseCase` creates NO membership row and the API returns 422
-  `PAYMENT_DECLINED`.
-- **Approve (default):** any other token approves and yields a synthetic
-  `paymentRef` (e.g. `pgmock_<uuid>`), which is stored on the `Membership`.
-- **Idempotency:** subscribe requires an `Idempotency-Key` header (transactional.md
-  T1). A replay of the same `(accountId, Idempotency-Key)` returns the same
-  membership result (same id / paymentRef) without re-authorizing or creating a
-  duplicate row. A conflicting reuse of the key with a different payload returns
-  409 `IDEMPOTENCY_KEY_CONFLICT`.
+### Mock adapter — `MockPaymentGatewayAdapter` (default: `@Profile("!portone")`)
 
-A real PG adapter is a future increment: it re-implements `PaymentGatewayPort`
-and is wired via `@ConditionalOnMissingBean` / profile, with the mock retained for
-dev + integration tests. The domain and use-case layers are unchanged by that
-swap.
+A **deterministic mock** with a documented, reproducible decision rule so tests
+stay deterministic. Here `paymentReference` is treated as an opaque token:
+
+- **Decline rule (documented test boundary):** declined when `paymentReference`
+  equals the reserved sentinel `tok_decline`. Decline → `SubscribeUseCase` creates
+  NO membership row and the API returns 422 `PAYMENT_DECLINED`.
+- **Approve (default):** any other value approves and yields a synthetic
+  `paymentRef` (e.g. `pgmock_<uuid>`), stored on the `Membership`.
+
+### PortOne adapter — `PortOnePaymentAdapter` (`@Profile("portone")`, keys required)
+
+Real PG integration via **PortOne V2** (see [ADR-001](../../../docs/adr/ADR-001-real-pg-portone-verification-boundary.md)).
+The trust model is **client-initiated payment + server-side verification** — the
+adapter NEVER trusts the client's success signal:
+
+1. The browser SDK opens the PG payment window; the card data goes to the PG (not
+   to us — PCI scope reduction). The client obtains a `paymentId` and passes it as
+   `paymentReference`.
+2. `authorize()` calls the PortOne REST API (`GET /payments/{paymentId}`,
+   `Authorization: PortOne <API_SECRET>`) and **verifies** `status == PAID` AND the
+   **paid amount equals `amountMinor`** (guards a tampered client). Only then →
+   approved with `paymentRef = paymentId`.
+3. Any verification failure (status ≠ PAID, amount mismatch, lookup error) →
+   declined → 422 `PAYMENT_DECLINED`, no row created.
+
+Keys (`storeId`/`channelKey` client-side, `API secret` server-side) are injected at
+runtime via env — **never committed, never in CI secrets**. Integration tests stub
+the PortOne API with **WireMock** (PAID / failed / amount-mismatch) so CI stays
+deterministic without real keys.
+
+### Idempotency (both adapters)
+
+Subscribe requires an `Idempotency-Key` header (transactional.md T1). A replay of
+the same `(accountId, Idempotency-Key)` returns the same membership result (same id
+/ paymentRef) without re-authorizing or creating a duplicate row. A conflicting
+reuse of the key with a different payload returns 409 `IDEMPOTENCY_KEY_CONFLICT`.
 
 ---
 
