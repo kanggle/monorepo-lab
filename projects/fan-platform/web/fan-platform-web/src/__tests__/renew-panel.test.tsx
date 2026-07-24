@@ -9,6 +9,11 @@ const { renewMembership } = vi.hoisted(() => ({
 }));
 vi.mock('@/features/membership/api/actions', () => ({ renewMembership }));
 
+const { requestPortOnePayment } = vi.hoisted(() => ({
+  requestPortOnePayment: vi.fn(async () => ({ ok: true as const, paymentId: 'pay-renew' })),
+}));
+vi.mock('@/features/membership/lib/portone-checkout', () => ({ requestPortOnePayment }));
+
 const expired: MembershipListItem = {
   membershipId: 'm-9',
   tier: 'MEMBERS_ONLY',
@@ -22,19 +27,23 @@ const expired: MembershipListItem = {
 };
 
 describe('RenewPanel', () => {
-  beforeEach(() => renewMembership.mockClear());
+  beforeEach(() => {
+    renewMembership.mockClear();
+    requestPortOnePayment.mockClear();
+  });
 
   it('renders the expired tier and window end', () => {
     render(<RenewPanel membership={expired} />);
     expect(screen.getByText(/멤버스 전용 멤버십이 만료되었습니다/)).toBeInTheDocument();
   });
 
-  it('renews on click with the membership id and plan months', async () => {
+  it('opens the payment window then renews with the returned paymentId', async () => {
     const user = userEvent.setup();
     render(<RenewPanel membership={expired} />);
 
     await user.click(screen.getByTestId('renew-panel-button'));
 
-    expect(renewMembership).toHaveBeenCalledWith('m-9', 1, '');
+    expect(requestPortOnePayment).toHaveBeenCalled();
+    expect(renewMembership).toHaveBeenCalledWith('m-9', 1, 'pay-renew');
   });
 });

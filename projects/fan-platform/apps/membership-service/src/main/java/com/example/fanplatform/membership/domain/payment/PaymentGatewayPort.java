@@ -1,26 +1,29 @@
 package com.example.fanplatform.membership.domain.payment;
 
 /**
- * The ONLY boundary to payment authorization. Use cases depend on this port; the
- * v1 implementation is a deterministic mock
- * ({@code infrastructure.payment.MockPaymentGatewayAdapter}). A real PG adapter is
- * a future increment that re-implements this port — the domain and use-case
- * layers are unchanged by that swap.
+ * The ONLY boundary to payment. Use cases depend on this port. Two adapters
+ * implement it, selected by profile (architecture.md § PG Boundary): the default
+ * {@code MockPaymentGatewayAdapter} ({@code @Profile("!portone")}) and the real
+ * {@code PortOnePaymentAdapter} ({@code @Profile("portone")}). The domain and
+ * use-case layers are unchanged by which adapter is active.
  */
 public interface PaymentGatewayPort {
 
     /**
-     * Authorizes a subscription payment.
+     * Authorizes (mock) or verifies (real PG) a subscription payment.
      *
-     * @param amountMinor    the charge amount in minor units (not persisted in v1)
-     * @param planMonths     subscription length in whole months
-     * @param paymentToken   client-supplied opaque token (the reserved sentinel
-     *                       {@code tok_decline} forces a decline)
-     * @param idempotencyKey the subscribe idempotency key (mock is stateless but
-     *                       the real adapter forwards it to the PG)
-     * @return the authorization result
+     * @param amountMinor      the charge amount in minor units — the real adapter
+     *                         verifies the PG-side paid amount equals this (tamper guard)
+     * @param planMonths       subscription length in whole months
+     * @param paymentReference client-supplied PG reference. Mock: an opaque token
+     *                         (the reserved sentinel {@code tok_decline} forces a
+     *                         decline). PortOne: the {@code paymentId} the client
+     *                         obtained from the payment window, verified server-side.
+     * @param idempotencyKey   the subscribe idempotency key (mock is stateless; the
+     *                         real adapter may forward it to the PG)
+     * @return the authorization/verification result
      */
-    PaymentResult authorize(long amountMinor, int planMonths, String paymentToken, String idempotencyKey);
+    PaymentResult authorize(long amountMinor, int planMonths, String paymentReference, String idempotencyKey);
 
     /**
      * @param approved   true when the PG approved the charge

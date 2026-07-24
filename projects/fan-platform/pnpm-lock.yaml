@@ -10,6 +10,9 @@ importers:
 
   web/fan-platform-web:
     dependencies:
+      '@portone/browser-sdk':
+        specifier: ^0.1.9
+        version: 0.1.9
       '@tanstack/react-query':
         specifier: ^5.60.0
         version: 5.100.8(react@19.2.5)
@@ -782,6 +785,9 @@ packages:
     resolution: {integrity: sha512-PG6q63nQg5c9rIi4/Z5lR5IVF7yU5MqmKaPOe0HSc0O2cX1fPi96sUQu5j7eo4gKCkB2AnNGoWt7y4/Xx3Kcqg==}
     engines: {node: '>=18'}
     hasBin: true
+
+  '@portone/browser-sdk@0.1.9':
+    resolution: {integrity: sha512-GiLziqmKKSrorjWDvWjPhtD1nBd4zlY1crIPX5Kisx797MQYveqhtSMYwuyjRgwgInfEWonXjXWkHd5bTFUiWQ==}
 
   '@rolldown/pluginutils@1.0.0-rc.3':
     resolution: {integrity: sha512-eybk3TjzzzV97Dlj5c+XrBFW57eTNhzod66y9HrBlzJ6NsCrWCp/2kaPS3K9wJmurBC0Tdw4yPjXKZqlznim3Q==}
@@ -3721,6 +3727,8 @@ snapshots:
   '@playwright/test@1.59.1':
     dependencies:
       playwright: 1.59.1
+
+  '@portone/browser-sdk@0.1.9': {}
 
   '@rolldown/pluginutils@1.0.0-rc.3': {}
 

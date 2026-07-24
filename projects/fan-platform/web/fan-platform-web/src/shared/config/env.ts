@@ -24,6 +24,14 @@ export const env = {
   oidcClientId: process.env.OIDC_CLIENT_ID ?? 'fan-platform-user-flow-client',
   oidcClientSecret: process.env.OIDC_CLIENT_SECRET ?? '',
   nextAuthUrl: process.env.NEXTAUTH_URL ?? 'http://localhost:3002',
+  /**
+   * PortOne V2 public keys (browser — build-time inlined via NEXT_PUBLIC_*).
+   * Semi-public: they initialise the payment window client-side. The API secret
+   * that VERIFIES the payment is server-side only (membership-service), never here.
+   * Empty when unset → the checkout helper reports "결제 모듈 미설정" instead of crashing.
+   */
+  portoneStoreId: process.env.NEXT_PUBLIC_PORTONE_STORE_ID ?? '',
+  portoneChannelKey: process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY ?? '',
 } as const;
 
 export type Env = typeof env;

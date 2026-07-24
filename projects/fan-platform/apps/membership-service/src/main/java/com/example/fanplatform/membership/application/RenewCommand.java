@@ -2,13 +2,15 @@ package com.example.fanplatform.membership.application;
 
 /**
  * Renew use-case input. The {@code tier} is inherited from the prior membership
- * (not supplied by the caller). {@code paymentToken} is optional (mock); the
- * reserved sentinel {@code tok_decline} forces a PG decline.
+ * (not supplied by the caller). {@code paymentId} is the PG payment reference —
+ * optional under the mock profile ({@code tok_decline} forces a decline); under
+ * the {@code portone} profile it is the client-obtained PortOne paymentId,
+ * verified server-side.
  */
 public record RenewCommand(
         ActorContext actor,
         String priorMembershipId,
         int planMonths,
-        String paymentToken,
+        String paymentId,
         String idempotencyKey) {
 }

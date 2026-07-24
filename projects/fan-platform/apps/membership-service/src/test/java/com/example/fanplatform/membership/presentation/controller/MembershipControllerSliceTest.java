@@ -88,7 +88,7 @@ class MembershipControllerSliceTest {
                         .header("Authorization", fanBearer("acc1"))
                         .header("Idempotency-Key", "key-1")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"tier\":\"PREMIUM\",\"planMonths\":1,\"paymentToken\":\"tok_visa_demo\"}"))
+                        .content("{\"tier\":\"PREMIUM\",\"planMonths\":1,\"paymentId\":\"tok_visa_demo\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.membershipId").value("m1"))
                 .andExpect(jsonPath("$.data.status").value("ACTIVE"))
@@ -142,7 +142,7 @@ class MembershipControllerSliceTest {
                         .header("Authorization", fanBearer("acc1"))
                         .header("Idempotency-Key", "key-1")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"tier\":\"PREMIUM\",\"planMonths\":1,\"paymentToken\":\"tok_decline\"}"))
+                        .content("{\"tier\":\"PREMIUM\",\"planMonths\":1,\"paymentId\":\"tok_decline\"}"))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("PAYMENT_DECLINED"));
     }
@@ -156,7 +156,7 @@ class MembershipControllerSliceTest {
                         .header("Authorization", fanBearer("acc1"))
                         .header("Idempotency-Key", "renew-key-1")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"planMonths\":1,\"paymentToken\":\"tok_visa_demo\"}"))
+                        .content("{\"planMonths\":1,\"paymentId\":\"tok_visa_demo\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.membershipId").value("m1"))
                 .andExpect(jsonPath("$.data.status").value("ACTIVE"))

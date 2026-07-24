@@ -18,6 +18,6 @@ public record SubscribeRequest(
         @Min(value = 1, message = "planMonths must be >= 1")
         int planMonths,
 
-        @Size(max = 80, message = "paymentToken must be <= 80 chars")
-        String paymentToken) {
+        @Size(max = 80, message = "paymentId must be <= 80 chars")
+        String paymentId) {
 }

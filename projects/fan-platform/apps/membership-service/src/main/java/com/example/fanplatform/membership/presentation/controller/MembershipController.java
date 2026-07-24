@@ -52,7 +52,7 @@ public class MembershipController {
             @Valid @RequestBody SubscribeRequest req) {
         MembershipTier tier = parseTier(req.tier());
         SubscribeCommand cmd = new SubscribeCommand(
-                actor, tier, req.planMonths(), req.paymentToken(), idempotencyKey);
+                actor, tier, req.planMonths(), req.paymentId(), idempotencyKey);
         MembershipResponse body = MembershipResponse.from(subscribeUseCase.execute(cmd));
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.of(body));
     }
@@ -64,7 +64,7 @@ public class MembershipController {
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody RenewRequest req) {
         RenewCommand cmd = new RenewCommand(
-                actor, id, req.planMonths(), req.paymentToken(), idempotencyKey);
+                actor, id, req.planMonths(), req.paymentId(), idempotencyKey);
         MembershipResponse body = MembershipResponse.from(renewMembershipUseCase.execute(cmd));
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.of(body));
     }

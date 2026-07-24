@@ -55,7 +55,7 @@ public class SubscribeUseCase {
         ActorContext actor = cmd.actor();
         String tenantId = actor.tenantId();
         String accountId = actor.accountId();
-        String fingerprint = fingerprint(cmd.tier(), cmd.planMonths(), cmd.paymentToken());
+        String fingerprint = fingerprint(cmd.tier(), cmd.planMonths(), cmd.paymentId());
 
         // 1) Idempotency check ---------------------------------------------------
         Optional<IdempotencyKey> existing =
@@ -75,7 +75,7 @@ public class SubscribeUseCase {
         // 2) PG authorize --------------------------------------------------------
         long amountMinor = PRICE_PER_MONTH_MINOR * cmd.planMonths();
         PaymentGatewayPort.PaymentResult result = paymentGateway.authorize(
-                amountMinor, cmd.planMonths(), cmd.paymentToken(), cmd.idempotencyKey());
+                amountMinor, cmd.planMonths(), cmd.paymentId(), cmd.idempotencyKey());
         if (!result.approved()) {
             // Decline → NO row created, NO event.
             throw new PaymentDeclinedException();
@@ -108,8 +108,8 @@ public class SubscribeUseCase {
      * key is being reused for a different request (409). Excludes the
      * idempotency key itself (which is the lookup key).
      */
-    private static String fingerprint(MembershipTier tier, int planMonths, String paymentToken) {
-        String raw = tier.name() + "|" + planMonths + "|" + (paymentToken == null ? "" : paymentToken);
+    private static String fingerprint(MembershipTier tier, int planMonths, String paymentId) {
+        String raw = tier.name() + "|" + planMonths + "|" + (paymentId == null ? "" : paymentId);
         return Sha256.hex(raw);
     }
 }

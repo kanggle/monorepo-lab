@@ -2,6 +2,7 @@
 import { useState, useTransition } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { subscribe } from '@/features/membership/api/actions';
+import { requestPortOnePayment } from '@/features/membership/lib/portone-checkout';
 import type { MembershipTier } from '@/entities/membership';
 
 interface TierMeta {
@@ -43,7 +44,6 @@ export function SubscribePanel({
   heldActiveTiers: MembershipTier[];
   highlightTier?: MembershipTier;
 }) {
-  const [paymentToken, setPaymentToken] = useState('tok_visa_demo');
   const [planMonths, setPlanMonths] = useState(1);
   const [isPending, startTransition] = useTransition();
   const [pendingTier, setPendingTier] = useState<MembershipTier | null>(null);
@@ -60,7 +60,19 @@ export function SubscribePanel({
     setDecline(null);
     setPendingTier(tier);
     startTransition(async () => {
-      const result = await subscribe(tier, planMonths, paymentToken);
+      const meta = TIERS.find((t) => t.tier === tier);
+      // Open the PortOne payment window; the returned paymentId is verified
+      // server-side by the subscribe action's backend (ADR-001).
+      const checkout = await requestPortOnePayment(
+        `${meta?.name ?? '멤버십'} 멤버십 (${planMonths}개월)`,
+        planMonths,
+      );
+      if (!checkout.ok) {
+        setDecline({ tier, message: checkout.message });
+        setPendingTier(null);
+        return;
+      }
+      const result = await subscribe(tier, planMonths, checkout.paymentId);
       if (!result.ok) {
         setDecline({
           tier,
@@ -91,18 +103,9 @@ export function SubscribePanel({
             ))}
           </select>
         </label>
-        <label className="flex flex-1 flex-col gap-1 text-sm">
-          <span className="font-medium text-ink-700">
-            결제 토큰 <span className="text-ink-400">(데모 — tok_decline 입력 시 거절)</span>
-          </span>
-          <input
-            type="text"
-            value={paymentToken}
-            onChange={(e) => setPaymentToken(e.target.value)}
-            placeholder="tok_visa_demo"
-            className="rounded-md border border-ink-300 px-3 py-1.5 font-mono text-sm"
-          />
-        </label>
+        <p className="flex-1 self-center text-sm text-ink-500">
+          카드 결제는 PortOne 테스트 결제창에서 진행됩니다.
+        </p>
       </fieldset>
 
       <ul className="grid gap-4 md:grid-cols-2">
@@ -146,7 +149,7 @@ export function SubscribePanel({
                     disabled={isPending}
                     onClick={() => onSubscribe(meta.tier)}
                   >
-                    {busy ? '구독 처리 중...' : '구독하기'}
+                    {busy ? '결제 처리 중...' : '카드로 결제'}
                   </Button>
                 )}
                 {decline && decline.tier === meta.tier ? (

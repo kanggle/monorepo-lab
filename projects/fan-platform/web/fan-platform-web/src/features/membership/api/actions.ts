@@ -21,13 +21,15 @@ const RENEW_DECLINE_CODES = new Set(['PAYMENT_DECLINED', 'MEMBERSHIP_NOT_RENEWAB
 
 /**
  * Subscribe to a tier. A fresh `Idempotency-Key` is generated server-side per
- * attempt (membership-api.md T1 — the header is required). The PG mock runs
- * synchronously: `tok_decline` forces a 422 PAYMENT_DECLINED.
+ * attempt (membership-api.md T1 — the header is required). `paymentId` is the PG
+ * payment reference the client obtained from the PortOne payment window; the
+ * backend verifies it server-side (portone profile) or treats it as an opaque
+ * token (mock profile — `tok_decline` forces a 422 PAYMENT_DECLINED).
  */
 export async function subscribe(
   tier: MembershipTier,
   planMonths: number,
-  paymentToken: string,
+  paymentId: string,
 ): Promise<SubscribeResult> {
   const session = await getFanSession();
   try {
@@ -38,7 +40,7 @@ export async function subscribe(
       body: {
         tier,
         planMonths,
-        paymentToken: paymentToken.trim() || 'tok_visa_demo',
+        paymentId,
       },
     });
     revalidatePath('/membership');
@@ -61,7 +63,7 @@ export async function subscribe(
 export async function renewMembership(
   membershipId: string,
   planMonths: number,
-  paymentToken: string,
+  paymentId: string,
 ): Promise<SubscribeResult> {
   const session = await getFanSession();
   try {
@@ -71,7 +73,7 @@ export async function renewMembership(
         accessToken: session.accessToken,
         method: 'POST',
         headers: { 'Idempotency-Key': randomUUID() },
-        body: { planMonths, paymentToken: paymentToken.trim() || 'tok_visa_demo' },
+        body: { planMonths, paymentId },
       },
     );
     revalidatePath('/membership');
