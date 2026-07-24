@@ -8,7 +8,7 @@ fan-platform-web: forward buyer identity (email/name) to the PortOne payment win
 
 # Status
 
-review
+done
 
 # Owner
 
