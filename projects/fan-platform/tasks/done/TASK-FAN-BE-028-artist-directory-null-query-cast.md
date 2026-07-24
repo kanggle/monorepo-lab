@@ -8,7 +8,7 @@ Fix artist directory 500 when no search term (untyped null `:q` → `lower(bytea
 
 # Status
 
-review
+done
 
 # Owner
 
