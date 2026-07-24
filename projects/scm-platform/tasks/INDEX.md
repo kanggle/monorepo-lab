@@ -78,11 +78,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-SCM-BE-047-third-party-logistics-observed-stock.md` — **READY**. ADR-MONO-054 Phase 2a (Surface A) slice 2/3 — 3PL node **read-only stock observation**. Adds an operator/internal **REST push** (`POST /api/inventory-visibility/nodes/{nodeId}/observed-stock`) that records an **absolute** snapshot (`InventorySnapshot.applyQuantity`, not delta) against an **existing** `THIRD_PARTY_LOGISTICS` node (reject absent/wrong-type — **never** `resolveOrCreateNode`, which auto-registers WMS) + **seeds the `NodeStaleness` row** so the node joins the FRESH→STALE lifecycle (batch is node-type-agnostic). **No Flyway** (snapshot/staleness tables carry no node-type column); read side already surfaces any node type (no change). **Excludes** BE-048, any real 3PL vendor read-adapter, and all 3PL stock **mutation** (we record an observation, never operate). 선행=BE-046 done ✓. 후속=(BE-048 independent). 분석=Opus 4.8 / 구현 권장=Sonnet.
-
 ## in-progress
 
 ## review
+
+- `TASK-SCM-BE-047-third-party-logistics-observed-stock.md` — **REVIEW (impl pushed, branch `feat/scm-be-047-3pl-observation`; awaiting CI + merge)**. ADR-MONO-054 Phase 2a (Surface A) slice 2/3 — 3PL node **read-only stock observation**. `applyThirdPartyObservedStock(...)` app method: `findById` → **type-gate** (THIRD_PARTY_LOGISTICS, else 409 reuse `NODE_TYPE_CONFLICT`) + tenant-gate → **absolute** write via `InventorySnapshot.applyQuantity` (new private `applyObservedQuantity`, NOT `applySnapshotDelta`; **never** `resolveOrCreateNode`) + **seeds `NodeStaleness`** (one `observationId` UUID/push, per-line stale-`observedAt` skip). New `POST /api/inventory-visibility/nodes/{nodeId}/observed-stock` on `NodeRegistrationController` (200 / 404 unknown / 409 wrong-type / 422 blank; tenant fail-closed; `observedAt` default via ClockPort). **No Flyway**; read side already surfaces any node type (no change). **Excludes** BE-048, real 3PL vendor read-adapter, all 3PL stock **mutation**. **Tests**: unit 7 + slice 8 (13 total) + **4 Testcontainers IT — ran GREEN locally this session** (Docker happened available: register→observe→visible via cross-node read + `NodeStaleness` seeded + stale-skip + 404/409). guards(queue·error-code ×2·gateway·service-type) pass. **Known minor**: tenant-mismatch → 409 leaks node existence (scm 사실상 single-tenant; read side도 동형 lax) — hardening 후보. 선행=BE-046 done ✓. 후속=(BE-048 independent, precursor-gated). 분석=Opus 4.8 / 구현=backend-engineer(sonnet) 위임 + 리드 코드리뷰·가드·XML 검증.
 
 ## done
 
