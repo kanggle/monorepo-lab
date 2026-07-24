@@ -1,6 +1,6 @@
 # TASK-SCM-BE-044 — shipping.confirmed consumer + FulfillmentRouter (the live seam trigger)
 
-**Status:** in-progress
+**Status:** review
 **Type:** TASK-SCM-BE
 **Depends on / 전제:** [TASK-SCM-BE-043](../done/TASK-SCM-BE-043-goodsflow-adapter-carrier-router.md) **done** (`CarrierRouter` + the stored `requested_carrier_code` routing signal this consumer populates) · [TASK-SCM-BE-042](../done/TASK-SCM-BE-042-logistics-service-bootstrap.md) **done** (Kafka consumer **scaffold** `KafkaConsumerConfig` — group `scm-logistics-v1`, manual ack, earliest, read_committed; `processed_events`; `Dispatch` + `DispatchShipmentUseCase`) · [ADR-MONO-053](../../../../docs/adr/ADR-MONO-053-logistics-service-multimodal-fulfillment.md) **ACCEPTED** §D4. Reads: [ADR-MONO-052](../../../../docs/adr/ADR-MONO-052-transport-context-map.md) §D5 (fact-event seam).
 **후속 / blocks:** Phase 2 3PL (`FulfillmentRouter` 3PL branch — gated on ADR-052 §D8-3) · wms TMS-adapter retirement (D8, separate cross-project TASK-MONO-XXX) · Phase 3 스윗트래커 tracking (optional).
