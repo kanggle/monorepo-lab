@@ -1,6 +1,6 @@
 # TASK-BE-560 — retire the outbound-service TMS side-channel (ADR-053 §D8 wms half)
 
-**Status:** review
+**Status:** done
 **Type:** TASK-BE
 **Depends on / 전제:** [TASK-PC-FE-258](../../../platform-console/tasks/done/TASK-PC-FE-258-repoint-outbound-retry-to-logistics.md) **done** (the platform-console operator action no longer calls the wms `:retry-tms-notify` endpoint — it now drives logistics `:retry`) · [ADR-MONO-053](../../../../docs/adr/ADR-MONO-053-logistics-service-multimodal-fulfillment.md) **ACCEPTED** §D8 · [ADR-MONO-052](../../../../docs/adr/ADR-MONO-052-transport-context-map.md) §D7 (custody boundary — transport left wms).
 **후속 / blocks:** none — this **closes ADR-053 §D8** and the Phase-1 D8 line. (3PL Phase 2 / tracking Phase 3 remain, gated on ADR-052 §D8-3.)
