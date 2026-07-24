@@ -42,6 +42,12 @@ public class ReorderSuggestionJpaEntity implements Persistable<UUID> {
     @Column(name = "warehouse_code")
     private String warehouseCode;
 
+    // ADR-MONO-055 §D2/§D3: the destination node TYPE that flows to the PO
+    // destinationNodeType (WMS_WAREHOUSE | THIRD_PARTY_LOGISTICS | ...). Nullable at the
+    // column for pre-055 in-flight rows; the domain normalises null → WMS_WAREHOUSE.
+    @Column(name = "destination_node_type", length = 30)
+    private String destinationNodeType;
+
     // ADR-MONO-050 D9: supplier CODE (String), not a UUID — resolved by wms via findPartnerByCode.
     @Column(name = "supplier_id", nullable = false)
     private String supplierId;

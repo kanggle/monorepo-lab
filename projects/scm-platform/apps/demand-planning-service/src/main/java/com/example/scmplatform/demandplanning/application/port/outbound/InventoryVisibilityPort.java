@@ -25,7 +25,14 @@ public interface InventoryVisibilityPort {
      *                      IVS may not have learned one yet. A null code never suppresses the
      *                      suggestion — it only omits the wms inbound-expected addressing on
      *                      the materialized PO (fail-closed, no uuid leak).
+     * @param nodeType      the node's {@code NodeType} name (ADR-MONO-055 §D2/§D3 /
+     *                      TASK-SCM-BE-048) — {@code WMS_WAREHOUSE} | {@code SUPPLIER} |
+     *                      {@code THIRD_PARTY_LOGISTICS} | {@code IN_TRANSIT}. Threaded onto
+     *                      the suggestion so a below-reorder {@code THIRD_PARTY_LOGISTICS}
+     *                      node drafts a PO addressed to that 3PL node. <b>Nullable</b>:
+     *                      absent on older IVS builds / for a node absent from the registry;
+     *                      read as {@code WMS_WAREHOUSE} downstream (backward compat).
      */
     record SkuWarehouseQty(String skuCode, UUID warehouseId, int availableQty,
-                           String warehouseCode) {}
+                           String warehouseCode, String nodeType) {}
 }

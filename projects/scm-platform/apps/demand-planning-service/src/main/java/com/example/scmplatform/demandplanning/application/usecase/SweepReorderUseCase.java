@@ -95,7 +95,7 @@ public class SweepReorderUseCase {
 
             try {
                 raised += evaluateBatchCandidate(skuCode, warehouseId, availableQty,
-                        candidate.warehouseCode(), now);
+                        candidate.warehouseCode(), candidate.nodeType(), now);
             } catch (Exception e) {
                 log.warn("Batch sweep: error evaluating skuCode={} warehouseId={}: {}",
                         skuCode, warehouseId, e.getMessage());
@@ -112,9 +112,15 @@ public class SweepReorderUseCase {
      *                      warehouse code, threaded onto the suggestion so a batch-origin
      *                      PO addresses its wms inbound-expected by code. Nullable; a null
      *                      never suppresses the suggestion (fail-closed addressing only).
+     * @param nodeType      ADR-MONO-055 §D2/§D3 / TASK-SCM-BE-048 — the IVS node's type,
+     *                      threaded onto the suggestion so a below-reorder
+     *                      {@code THIRD_PARTY_LOGISTICS} node drafts a PO addressed to that
+     *                      3PL node. Nullable; a null normalises to {@code WMS_WAREHOUSE}
+     *                      in the suggestion (backward compat). The reorder policy itself is
+     *                      unchanged — only the target vocabulary widens (ADR-055 §D2).
      */
     private int evaluateBatchCandidate(String skuCode, UUID warehouseId, int availableQty,
-                                       String warehouseCode, Instant now) {
+                                       String warehouseCode, String nodeType, Instant now) {
         // Resolve mapping — skip unmapped SKU (logged, not DLT'd in batch — no event to route)
         Optional<SkuSupplierMapping> mappingOpt = mappingPort.findBySkuCode(TENANT_ID, skuCode);
         if (mappingOpt.isEmpty()) {
@@ -151,8 +157,8 @@ public class SweepReorderUseCase {
         }
 
         ReorderSuggestion suggestion = ReorderSuggestion.raiseFromBatch(
-                UUID.randomUUID(), skuCode, warehouseId, warehouseCode, mapping.getSupplierId(),
-                reorderQty, availableQty, TENANT_ID, now);
+                UUID.randomUUID(), skuCode, warehouseId, warehouseCode, nodeType,
+                mapping.getSupplierId(), reorderQty, availableQty, TENANT_ID, now);
 
         suggestionPort.save(suggestion);
         sweepSuggestionsCounter.increment();

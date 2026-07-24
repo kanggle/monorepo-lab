@@ -269,13 +269,37 @@ Current inventory snapshot **across all tenants** (the replenishment batch is te
 ```json
 {
   "data": [
-    { "sku": "SKU-001", "nodeId": "uuid", "availableQty": 42 }
+    {
+      "sku": "SKU-001",
+      "nodeId": "uuid",
+      "availableQty": 42,
+      "warehouseCode": "WH-SEOUL-01",
+      "nodeType": "WMS_WAREHOUSE"
+    }
   ],
   "meta": { "count": 1 }
 }
 ```
 
 `availableQty` is the snapshot quantity as an integer (whole units). No pagination at v1 demo scale.
+
+`warehouseCode` (ADR-MONO-050 §D9 / TASK-SCM-BE-037) is the owning node's business
+warehouse code — **nullable/absent**: wms resolves it best-effort, so IVS may not have
+learned one yet, and a `THIRD_PARTY_LOGISTICS` node never carries one (it is a wms-only
+code). A null/absent code never drops the row from the sweep; it only means the drafted
+PO omits the wms inbound-expected addressing (fail-closed, no uuid leak). This field was
+already served by the code and is documented here to correct a prior contract-vs-code
+staleness.
+
+`nodeType` (ADR-MONO-055 §D2/§D3 / TASK-SCM-BE-048) is the owning node's
+`NodeType` — one of `WMS_WAREHOUSE` | `SUPPLIER` | `THIRD_PARTY_LOGISTICS`
+| `IN_TRANSIT`. It lets demand-planning's batch reorder sweep widen its replenishment
+target from "wms warehouse only" to "any observed node," so a below-reorder-point
+`THIRD_PARTY_LOGISTICS` node (observed read-only via TASK-SCM-BE-047) drafts a PO
+addressed to that 3PL node. **Nullable/absent**: an older IVS build omits it and a node
+absent from the node registry serialises it as `null`. The caller (demand-planning)
+treats **absent/null as `WMS_WAREHOUSE`** for backward compatibility with pre-055
+in-flight suggestions — a null never drops the row.
 
 ---
 

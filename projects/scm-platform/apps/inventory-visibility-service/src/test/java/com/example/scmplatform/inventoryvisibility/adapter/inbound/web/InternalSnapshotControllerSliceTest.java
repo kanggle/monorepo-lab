@@ -56,10 +56,15 @@ class InternalSnapshotControllerSliceTest {
                 now);
     }
 
-    private InventoryVisibilityApplicationService.SnapshotWithWarehouseCode row(
+    private InventoryVisibilityApplicationService.SnapshotWithNodeMeta row(
             String sku, BigDecimal qty, String warehouseCode) {
-        return new InventoryVisibilityApplicationService.SnapshotWithWarehouseCode(
-                snapshot(sku, qty), warehouseCode);
+        return row(sku, qty, warehouseCode, "WMS_WAREHOUSE");
+    }
+
+    private InventoryVisibilityApplicationService.SnapshotWithNodeMeta row(
+            String sku, BigDecimal qty, String warehouseCode, String nodeType) {
+        return new InventoryVisibilityApplicationService.SnapshotWithNodeMeta(
+                snapshot(sku, qty), warehouseCode, nodeType);
     }
 
     @Test
@@ -83,7 +88,39 @@ class InternalSnapshotControllerSliceTest {
                 .andExpect(jsonPath("$.meta.count").value(1))
                 .andExpect(jsonPath("$.data[0].sku").value("SKU-001"))
                 .andExpect(jsonPath("$.data[0].nodeId").value(nodeId.toString()))
-                .andExpect(jsonPath("$.data[0].availableQty").value(7));
+                .andExpect(jsonPath("$.data[0].availableQty").value(7))
+                .andExpect(jsonPath("$.data[0].nodeType").value("WMS_WAREHOUSE"));
+    }
+
+    /**
+     * ADR-MONO-055 §D2/§D3 (TASK-SCM-BE-048): the internal read surface must serve the node's
+     * type so demand-planning's batch sweep can widen its replenishment target beyond wms
+     * warehouses — a THIRD_PARTY_LOGISTICS node drives a PO addressed to that 3PL node.
+     */
+    @Test
+    void internalSnapshot_servesNodeType_including3pl() throws Exception {
+        when(applicationService.getAllSnapshotsAcrossTenantsWithWarehouseCode())
+                .thenReturn(List.of(row("SKU-3PL", new BigDecimal("2"), null, "THIRD_PARTY_LOGISTICS")));
+
+        mockMvc.perform(get("/internal/inventory-visibility/snapshot"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].nodeType").value("THIRD_PARTY_LOGISTICS"))
+                .andExpect(jsonPath("$.data[0].warehouseCode").doesNotExist());
+    }
+
+    /**
+     * The node type is nullable (a node absent from the registry). A null must still serve
+     * the row — the caller reads absent/null as WMS_WAREHOUSE (backward compat).
+     */
+    @Test
+    void internalSnapshot_nullNodeType_rowStillServed() throws Exception {
+        when(applicationService.getAllSnapshotsAcrossTenantsWithWarehouseCode())
+                .thenReturn(List.of(row("SKU-001", new BigDecimal("7"), "WH01", null)));
+
+        mockMvc.perform(get("/internal/inventory-visibility/snapshot"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.meta.count").value(1))
+                .andExpect(jsonPath("$.data[0].nodeType").doesNotExist());
     }
 
     /**

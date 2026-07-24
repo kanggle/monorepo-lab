@@ -83,7 +83,10 @@ public class SuggestionApprovalTxn {
                 // procurement can address the wms inbound-expected event by CODE (Option A).
                 // Null for BATCH suggestions (IVS carries no code) → procurement drafts
                 // the PO but emits no inbound-expected (fail-closed).
-                suggestion.getWarehouseCode(), mapping.getLeadTimeDays());
+                suggestion.getWarehouseCode(),
+                // ADR-MONO-055 §D2/§D3: carry the destination node TYPE so the drafted PO is
+                // addressed to the correct node type (WMS_WAREHOUSE or THIRD_PARTY_LOGISTICS).
+                suggestion.getDestinationNodeType(), mapping.getLeadTimeDays());
     }
 
     /**
@@ -112,17 +115,19 @@ public class SuggestionApprovalTxn {
     public record ApprovalPlan(boolean alreadyMaterialized, UUID existingPoId,
                                UUID suggestionId, String supplierId, String currency,
                                String skuCode, int quantity,
-                               String warehouseCode, int leadTimeDays) {
+                               String warehouseCode, String destinationNodeType,
+                               int leadTimeDays) {
 
         public static ApprovalPlan alreadyMaterialized(UUID poId) {
-            return new ApprovalPlan(true, poId, null, null, null, null, 0, null, 0);
+            return new ApprovalPlan(true, poId, null, null, null, null, 0, null, null, 0);
         }
 
         public static ApprovalPlan proceed(UUID suggestionId, String supplierId, String currency,
                                            String skuCode, int quantity,
-                                           String warehouseCode, int leadTimeDays) {
+                                           String warehouseCode, String destinationNodeType,
+                                           int leadTimeDays) {
             return new ApprovalPlan(false, null, suggestionId, supplierId, currency,
-                    skuCode, quantity, warehouseCode, leadTimeDays);
+                    skuCode, quantity, warehouseCode, destinationNodeType, leadTimeDays);
         }
     }
 }

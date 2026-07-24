@@ -86,7 +86,7 @@ class SweepReorderUseCaseTest {
     @Test
     void batchSweepRaisesSuggestionCarryingTheWarehouseCode() {
         when(ivsPort.findAllBelowReorderPoint(TENANT)).thenReturn(List.of(
-                new SkuWarehouseQty(SKU, WAREHOUSE_ID, 3, "WH01")));
+                new SkuWarehouseQty(SKU, WAREHOUSE_ID, 3, "WH01", "WMS_WAREHOUSE")));
         stubHappyPath();
 
         int raised = useCase.sweep();
@@ -95,14 +95,38 @@ class SweepReorderUseCaseTest {
         ReorderSuggestion suggestion = capturedSuggestion();
         assertThat(suggestion.getSource()).isEqualTo(SuggestionSource.BATCH);
         assertThat(suggestion.getWarehouseCode()).isEqualTo("WH01");
+        // ADR-MONO-055 §D2/§D3: a wms candidate still yields a WMS_WAREHOUSE-targeted suggestion.
+        assertThat(suggestion.getDestinationNodeType()).isEqualTo("WMS_WAREHOUSE");
         // The uuid dimension is retained purely as the dedup key — never emitted downstream.
         assertThat(suggestion.getWarehouseId()).isEqualTo(WAREHOUSE_ID);
+    }
+
+    /**
+     * ADR-MONO-055 §D2/§D3 (TASK-SCM-BE-048): the load-bearing new property — a below-reorder
+     * {@code THIRD_PARTY_LOGISTICS} candidate (observed via BE-047) raises a suggestion carrying
+     * node type {@code THIRD_PARTY_LOGISTICS}, so the drafted PO is addressed to that 3PL node.
+     * A 3PL node carries no warehouse code (wms-only), so the code stays null — that never
+     * suppresses the suggestion.
+     */
+    @Test
+    void batchSweepRaises3plTypedSuggestion_forThirdPartyLogisticsNode() {
+        when(ivsPort.findAllBelowReorderPoint(TENANT)).thenReturn(List.of(
+                new SkuWarehouseQty(SKU, WAREHOUSE_ID, 3, null, "THIRD_PARTY_LOGISTICS")));
+        stubHappyPath();
+
+        int raised = useCase.sweep();
+
+        assertThat(raised).isEqualTo(1);
+        ReorderSuggestion suggestion = capturedSuggestion();
+        assertThat(suggestion.getSource()).isEqualTo(SuggestionSource.BATCH);
+        assertThat(suggestion.getDestinationNodeType()).isEqualTo("THIRD_PARTY_LOGISTICS");
+        assertThat(suggestion.getWarehouseCode()).isNull();
     }
 
     @Test
     void nullWarehouseCodeStillRaisesTheSuggestion() {
         when(ivsPort.findAllBelowReorderPoint(TENANT)).thenReturn(List.of(
-                new SkuWarehouseQty(SKU, WAREHOUSE_ID, 3, null)));
+                new SkuWarehouseQty(SKU, WAREHOUSE_ID, 3, null, "WMS_WAREHOUSE")));
         stubHappyPath();
 
         int raised = useCase.sweep();
@@ -111,10 +135,26 @@ class SweepReorderUseCaseTest {
         assertThat(capturedSuggestion().getWarehouseCode()).isNull();
     }
 
+    /**
+     * ADR-MONO-055 backward compat: a null node type (older IVS build / node absent from the
+     * registry) normalises to {@code WMS_WAREHOUSE} on the suggestion — never null.
+     */
+    @Test
+    void nullNodeTypeDefaultsToWmsWarehouse() {
+        when(ivsPort.findAllBelowReorderPoint(TENANT)).thenReturn(List.of(
+                new SkuWarehouseQty(SKU, WAREHOUSE_ID, 3, "WH01", null)));
+        stubHappyPath();
+
+        int raised = useCase.sweep();
+
+        assertThat(raised).isEqualTo(1);
+        assertThat(capturedSuggestion().getDestinationNodeType()).isEqualTo("WMS_WAREHOUSE");
+    }
+
     @Test
     void aboveReorderPointRaisesNothing() {
         when(ivsPort.findAllBelowReorderPoint(TENANT)).thenReturn(List.of(
-                new SkuWarehouseQty(SKU, WAREHOUSE_ID, 99, "WH01")));
+                new SkuWarehouseQty(SKU, WAREHOUSE_ID, 99, "WH01", "WMS_WAREHOUSE")));
         when(mappingPort.findBySkuCode(TENANT, SKU)).thenReturn(Optional.of(
                 new SkuSupplierMapping(SKU, "SUP-0043", 25, 3, "KRW", TENANT)));
         when(policyPort.findBySkuCode(TENANT, SKU)).thenReturn(Optional.of(

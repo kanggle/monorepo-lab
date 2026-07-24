@@ -227,39 +227,56 @@ public class InventoryVisibilityApplicationService {
 
     /**
      * As {@link #getAllSnapshotsAcrossTenants()}, but each snapshot is paired with its
-     * node's business {@code warehouseCode} (ADR-MONO-050 D9 / TASK-SCM-BE-037) so the
-     * demand-planning batch sweep can address a replenishment PO by code rather than uuid.
+     * node's business {@code warehouseCode} (ADR-MONO-050 D9 / TASK-SCM-BE-037) <b>and</b>
+     * its {@code nodeType} (ADR-MONO-055 §D2/§D3 / TASK-SCM-BE-048) so the demand-planning
+     * batch sweep can address a replenishment PO by code and widen its target from
+     * "wms warehouse only" to "any observed node" (a {@code THIRD_PARTY_LOGISTICS} node
+     * observed read-only via TASK-SCM-BE-047 can now be a replenishment target).
      *
-     * <p>The code is nullable: the owning node may not have learned one yet (wms emits it
-     * best-effort). A null code never omits the row — it only means the downstream
-     * inbound-expected addressing is skipped for that warehouse.
+     * <p>Both dimensions are nullable and share the same defensive handling: the owning
+     * node may not have learned a {@code warehouseCode} yet (wms emits it best-effort), and
+     * a node absent from the registry resolves to a {@code null} type. A null on either
+     * never omits the row — a null code only skips the downstream inbound-expected
+     * addressing, and a null type is read as {@code WMS_WAREHOUSE} downstream (backward
+     * compat).
      */
     @Transactional(readOnly = true)
-    public List<SnapshotWithWarehouseCode> getAllSnapshotsAcrossTenantsWithWarehouseCode() {
-        // Snapshots are keyed per (node, sku), so ONE warehouse node backs many rows and a
-        // naive per-row lookup re-reads the same node repeatedly. Memoise for the duration of
-        // this read: the projection then costs one lookup per DISTINCT node instead of one per
+    public List<SnapshotWithNodeMeta> getAllSnapshotsAcrossTenantsWithWarehouseCode() {
+        // Snapshots are keyed per (node, sku), so ONE node backs many rows and a naive
+        // per-row lookup re-reads the same node repeatedly. Memoise for the duration of this
+        // read: the projection then costs one lookup per DISTINCT node instead of one per
         // snapshot row (the sweep reads every row). Deliberately local — no batch-fetch method
         // is added to the node port for a read concern, and a call-scoped map cannot go stale.
         // NOTE: containsKey/put, not computeIfAbsent — computeIfAbsent does NOT record a null
-        // result, so it would re-query on every row for exactly the nodes whose code is still
-        // null (the initial / fail-closed state). Caching the null is the whole point here.
-        Map<NodeId, String> warehouseCodeByNode = new HashMap<>();
+        // result, so it would re-query on every row for exactly the nodes whose metadata is
+        // still null (the initial / fail-closed state). Caching the null is the whole point.
+        Map<NodeId, NodeMeta> metaByNode = new HashMap<>();
         return snapshotRepository.findAllAcrossTenants().stream()
                 .map(s -> {
                     NodeId nodeId = s.getNodeId();
-                    if (!warehouseCodeByNode.containsKey(nodeId)) {
-                        warehouseCodeByNode.put(nodeId, nodeRepository.findById(nodeId)
-                                .map(InventoryNode::getWarehouseCode)
-                                .orElse(null));
+                    if (!metaByNode.containsKey(nodeId)) {
+                        metaByNode.put(nodeId, nodeRepository.findById(nodeId)
+                                .map(n -> new NodeMeta(n.getWarehouseCode(),
+                                        n.getNodeType() != null ? n.getNodeType().name() : null))
+                                .orElse(new NodeMeta(null, null)));
                     }
-                    return new SnapshotWithWarehouseCode(s, warehouseCodeByNode.get(nodeId));
+                    NodeMeta meta = metaByNode.get(nodeId);
+                    return new SnapshotWithNodeMeta(s, meta.warehouseCode(), meta.nodeType());
                 })
                 .toList();
     }
 
-    /** Read-projection pairing a snapshot with its node's nullable warehouse code. */
-    public record SnapshotWithWarehouseCode(InventorySnapshot snapshot, String warehouseCode) {
+    /** Memoisation carrier for a node's nullable warehouse code + node type. */
+    private record NodeMeta(String warehouseCode, String nodeType) {
+    }
+
+    /**
+     * Read-projection pairing a snapshot with its node's nullable warehouse code and
+     * nullable node type ({@code WMS_WAREHOUSE} | {@code SUPPLIER} |
+     * {@code THIRD_PARTY_LOGISTICS} | {@code IN_TRANSIT}; null when the node is absent).
+     */
+    public record SnapshotWithNodeMeta(InventorySnapshot snapshot, String warehouseCode,
+                                       String nodeType) {
     }
 
     @Transactional(readOnly = true)
