@@ -49,4 +49,17 @@ describe('RenewPanel', () => {
     expect(requestPortOnePayment).toHaveBeenCalled();
     expect(renewMembership).toHaveBeenCalledWith('m-9', 1, 'pay-renew');
   });
+
+  it('forwards the signed-in fan email to the PG (KG이니시스 requires buyer email)', async () => {
+    const user = userEvent.setup();
+    render(<RenewPanel membership={expired} buyerEmail="fan@example.com" buyerName="테스트 팬" />);
+
+    await user.click(screen.getByTestId('renew-panel-button'));
+
+    expect(requestPortOnePayment).toHaveBeenCalledWith(
+      expect.any(String),
+      7900,
+      expect.objectContaining({ email: 'fan@example.com', fullName: '테스트 팬' }),
+    );
+  });
 });
