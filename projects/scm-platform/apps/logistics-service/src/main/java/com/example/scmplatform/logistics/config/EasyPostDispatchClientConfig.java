@@ -50,6 +50,11 @@ public class EasyPostDispatchClientConfig {
         CloseableHttpClient httpClient = HttpClients.custom()
                 .setConnectionManager(connectionManager)
                 .setDefaultRequestConfig(requestConfig)
+                // Retry is governed SOLELY by Resilience4j (easyPostDispatch). HttpClient 5's
+                // DefaultHttpRequestRetryStrategy retries 429/503/IO internally, which would
+                // double-count against the Resilience4j @Retry (max-attempts=3) and inflate the
+                // real vendor-call count (external-integrations.md §1.6 fixes attempts at 3).
+                .disableAutomaticRetries()
                 .build();
 
         HttpComponentsClientHttpRequestFactory requestFactory =
