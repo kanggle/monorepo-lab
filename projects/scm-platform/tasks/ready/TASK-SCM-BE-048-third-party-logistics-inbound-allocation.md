@@ -1,9 +1,9 @@
 # TASK-SCM-BE-048 — 3PL inbound replenishment-target allocation (demand-planning owns the node-type choice)
 
-**Status:** backlog
+**Status:** ready
 **Type:** TASK-SCM-BE
 **Depends on / 전제:** [ADR-MONO-055](../../../../docs/adr/ADR-MONO-055-order-to-node-allocation-ownership.md) **ACCEPTED** §D2/§D3 (inbound replenishment-target allocation is demand-planning's, widened to node type) · [TASK-SCM-BE-047](../done/TASK-SCM-BE-047-third-party-logistics-observed-stock.md) **done** (3PL stock is now observed read-only — the input this allocation reads) · [TASK-SCM-BE-046](../done/TASK-SCM-BE-046-third-party-logistics-node-factory.md) **done** (a `THIRD_PARTY_LOGISTICS` node is constructible). Context: [ADR-MONO-027](../../../../docs/adr/ADR-MONO-027-wms-scm-replenishment-loop.md) (demand-planning's reorder decision — the *un-retired* basis) · [ADR-MONO-050](../../../../docs/adr/ADR-MONO-050-scm-procurement-wms-inbound-expected.md) §D4 (a 3PL is operated by its own WMS).
-**후속 / blocks:** [TASK-SCM-BE-049](TASK-SCM-BE-049-third-party-logistics-inbound-honour-sink.md) (honour/sink — records the 3PL-destined expectation; gated on this task done). **Does NOT** touch Surface B / outbound routing (ADR-055 §D5 — ADR-022 territory).
+**후속 / blocks:** [TASK-SCM-BE-049](../backlog/TASK-SCM-BE-049-third-party-logistics-inbound-honour-sink.md) (honour/sink — records the 3PL-destined expectation; gated on this task done). **Does NOT** touch Surface B / outbound routing (ADR-055 §D5 — ADR-022 territory).
 
 > **The allocation half, not the honour half.** ADR-055 §D2 finds that "honouring a 3PL inbound-expected" (054 §3's original BE-048) presupposes a prior decision: *a replenishment PO must first be **addressed** to a 3PL node*. Today it never is — [`ProcurementDraftPoClient`](../../apps/demand-planning-service/src/main/java/com/example/scmplatform/demandplanning/adapter/outbound/procurement/ProcurementDraftPoClient.java) hardcodes `destinationNodeType = "WMS_WAREHOUSE"`. This task builds the **allocation** (demand-planning decides a 3PL node can be a replenishment target); BE-049 builds the **honour/sink** (what happens to the resulting 3PL-destined expectation). Splitting them keeps each reviewable.
 
