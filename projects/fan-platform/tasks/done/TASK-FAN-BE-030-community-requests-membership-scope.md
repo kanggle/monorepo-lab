@@ -8,7 +8,7 @@ community-service must request the membership.read scope on its client_credentia
 
 # Status
 
-review
+done
 
 # Owner
 
