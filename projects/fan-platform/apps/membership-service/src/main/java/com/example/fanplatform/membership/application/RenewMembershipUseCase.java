@@ -11,6 +11,7 @@ import com.example.fanplatform.membership.domain.idempotency.IdempotencyKeyRepos
 import com.example.fanplatform.membership.domain.membership.Membership;
 import com.example.fanplatform.membership.domain.membership.MembershipRepository;
 import com.example.fanplatform.membership.domain.payment.PaymentGatewayPort;
+import com.example.fanplatform.membership.domain.pricing.MembershipPricing;
 import com.example.fanplatform.membership.domain.time.ClockPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -35,9 +36,6 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 public class RenewMembershipUseCase {
-
-    /** Synthetic per-month price in minor units (mock — not externally exposed). */
-    private static final long PRICE_PER_MONTH_MINOR = 9_900L;
 
     private final MembershipRepository membershipRepository;
     private final IdempotencyKeyRepository idempotencyKeyRepository;
@@ -77,8 +75,8 @@ public class RenewMembershipUseCase {
             return MembershipView.from(stored, clock.now());
         }
 
-        // 3) PG authorize --------------------------------------------------------
-        long amountMinor = PRICE_PER_MONTH_MINOR * cmd.planMonths();
+        // 3) PG authorize (tier-aware price — renew keeps the prior tier) ---------
+        long amountMinor = MembershipPricing.listChargeMinor(prior.getTier(), cmd.planMonths());
         PaymentGatewayPort.PaymentResult result = paymentGateway.authorize(
                 amountMinor, cmd.planMonths(), cmd.paymentId(), cmd.idempotencyKey());
         if (!result.approved()) {

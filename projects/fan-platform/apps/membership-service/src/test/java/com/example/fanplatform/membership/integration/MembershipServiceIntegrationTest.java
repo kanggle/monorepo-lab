@@ -152,4 +152,46 @@ class MembershipServiceIntegrationTest extends MembershipServiceIntegrationBase 
         assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(res.getBody()).contains("MEMBERSHIP_NOT_FOUND");
     }
+
+    @Test
+    @DisplayName("PREMIUM subscribe holding active MEMBERS_ONLY → members-only superseded (CANCELED), PREMIUM ACTIVE (TASK-FAN-BE-032)")
+    void upgradeSupersedesMembersOnly() throws Exception {
+        String fanId = "fan-" + System.nanoTime();
+        String fanToken = jwt.signFanToken(fanId);
+
+        // 1) hold an active MEMBERS_ONLY membership.
+        ResponseEntity<String> membersRes = rest.exchange(
+                url("/api/fan/memberships"), HttpMethod.POST,
+                new HttpEntity<>("{\"tier\":\"MEMBERS_ONLY\",\"planMonths\":1,\"paymentId\":\"tok_visa_demo\"}",
+                        headers(fanToken, "key-members")),
+                String.class);
+        assertThat(membersRes.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        String membersId = objectMapper.readTree(membersRes.getBody())
+                .path("data").path("membershipId").asText();
+
+        // 2) upgrade to PREMIUM (mock approves; the supersede + create run in one TX).
+        ResponseEntity<String> upgradeRes = rest.exchange(
+                url("/api/fan/memberships"), HttpMethod.POST,
+                new HttpEntity<>("{\"tier\":\"PREMIUM\",\"planMonths\":1,\"paymentId\":\"tok_visa_demo\"}",
+                        headers(fanToken, "key-upgrade")),
+                String.class);
+        assertThat(upgradeRes.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        JsonNode upJson = objectMapper.readTree(upgradeRes.getBody());
+        assertThat(upJson.path("data").path("tier").asText()).isEqualTo("PREMIUM");
+        assertThat(upJson.path("data").path("status").asText()).isEqualTo("ACTIVE");
+        String premiumId = upJson.path("data").path("membershipId").asText();
+
+        // 3) the members-only row is superseded (CANCELED) in the DB; PREMIUM is ACTIVE.
+        var members = membershipJpaRepository.findById(membersId).orElseThrow();
+        assertThat(members.getStatus().name()).isEqualTo("CANCELED");
+        assertThat(members.getCanceledAt()).isNotNull();
+        var premium = membershipJpaRepository.findById(premiumId).orElseThrow();
+        assertThat(premium.getStatus().name()).isEqualTo("ACTIVE");
+        assertThat(premium.getTier().name()).isEqualTo("PREMIUM");
+
+        // a canceled outbox event was emitted for the superseded members-only.
+        assertThat(outboxJpaRepository.findAll())
+                .anyMatch(e -> "fan.membership.canceled".equals(e.getEventType())
+                        && membersId.equals(e.getAggregateId()));
+    }
 }

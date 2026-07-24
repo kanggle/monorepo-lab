@@ -9,6 +9,7 @@ import com.example.fanplatform.membership.domain.membership.Membership;
 import com.example.fanplatform.membership.domain.membership.MembershipRepository;
 import com.example.fanplatform.membership.domain.membership.MembershipTier;
 import com.example.fanplatform.membership.domain.payment.PaymentGatewayPort;
+import com.example.fanplatform.membership.domain.pricing.UpgradeProration;
 import com.example.fanplatform.membership.domain.time.ClockPort;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -44,6 +46,7 @@ class SubscribeUseCaseTest {
     @Mock IdempotencyKeyRepository idempotencyKeyRepository;
     @Mock PaymentGatewayPort paymentGateway;
     @Mock MembershipEventPublisher eventPublisher;
+    @Mock UpgradeQuoter upgradeQuoter;
     @Mock ClockPort clock;
 
     @InjectMocks SubscribeUseCase useCase;
@@ -52,12 +55,20 @@ class SubscribeUseCaseTest {
         return new SubscribeCommand(ACTOR, MembershipTier.PREMIUM, 1, "tok_visa_demo", key);
     }
 
+    /** No members-only held → plain PREMIUM list price (17,900), no supersede. */
+    private void stubPlainPremiumAssessment() {
+        when(upgradeQuoter.assess(eq(MembershipTier.PREMIUM), eq(1), eq("acc1"), eq("fan-platform"), any()))
+                .thenReturn(new UpgradeQuoter.UpgradeAssessment(
+                        Optional.empty(), new UpgradeProration.Quote(17_900, 0, 17_900, 0)));
+    }
+
     @Test
     @DisplayName("new key + approve → ACTIVE membership + idempotency row + activated event")
     void approveCreatesActive() {
         when(clock.now()).thenReturn(NOW);
         when(idempotencyKeyRepository.find("fan-platform", "acc1", "key-1")).thenReturn(Optional.empty());
-        when(paymentGateway.authorize(anyLong(), anyInt(), eq("tok_visa_demo"), eq("key-1")))
+        stubPlainPremiumAssessment();
+        when(paymentGateway.authorize(eq(17_900L), anyInt(), eq("tok_visa_demo"), eq("key-1")))
                 .thenReturn(PaymentGatewayPort.PaymentResult.approved("pgmock_ref"));
         when(membershipRepository.save(any(Membership.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -66,6 +77,7 @@ class SubscribeUseCaseTest {
         assertThat(view.status().name()).isEqualTo("ACTIVE");
         assertThat(view.paymentRef()).isEqualTo("pgmock_ref");
         assertThat(view.validFrom()).isEqualTo(NOW);
+        verify(paymentGateway).authorize(eq(17_900L), eq(1), eq("tok_visa_demo"), eq("key-1"));
         verify(membershipRepository).save(any(Membership.class));
         verify(idempotencyKeyRepository).save(any(IdempotencyKey.class));
         verify(eventPublisher).publishActivated(anyString(), eq("fan-platform"), eq("acc1"),
@@ -73,10 +85,43 @@ class SubscribeUseCaseTest {
     }
 
     @Test
-    @DisplayName("decline → 422 PaymentDeclined, NO row, NO idempotency row, NO event")
+    @DisplayName("PREMIUM holding active MEMBERS_ONLY → supersede + prorated charge + both events")
+    void upgradeSupersedesMembersOnly() {
+        when(clock.now()).thenReturn(NOW);
+        when(idempotencyKeyRepository.find("fan-platform", "acc1", "key-up")).thenReturn(Optional.empty());
+        Membership members = Membership.activate("m-members", "fan-platform", "acc1",
+                MembershipTier.MEMBERS_ONLY, NOW.minusSeconds(100), NOW.plusSeconds(1_296_000L),
+                1, "pgmock_members", NOW);
+        // 15 remaining days → credit 3,950, prorated charge 13,950 (see UpgradeProrationTest).
+        UpgradeProration.Quote q = new UpgradeProration.Quote(17_900, 3_950, 13_950, 15);
+        when(upgradeQuoter.assess(eq(MembershipTier.PREMIUM), eq(1), eq("acc1"), eq("fan-platform"), any()))
+                .thenReturn(new UpgradeQuoter.UpgradeAssessment(Optional.of(members), q));
+        when(paymentGateway.authorize(eq(13_950L), eq(1), eq("tok_visa_demo"), eq("key-up")))
+                .thenReturn(PaymentGatewayPort.PaymentResult.approved("pgmock_up"));
+        when(membershipRepository.save(any(Membership.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        useCase.execute(cmd("key-up"));
+
+        // The members-only row is superseded (canceled) and the PORATED amount is charged.
+        assertThat(members.isCanceled()).isTrue();
+        verify(paymentGateway).authorize(eq(13_950L), eq(1), eq("tok_visa_demo"), eq("key-up"));
+        verify(eventPublisher).publishCanceled(eq("m-members"), eq("fan-platform"), eq("acc1"),
+                eq(MembershipTier.MEMBERS_ONLY), eq("SUPERSEDED_BY_UPGRADE"), any(Instant.class), any(Instant.class));
+        verify(eventPublisher).publishActivated(anyString(), eq("fan-platform"), eq("acc1"),
+                eq(MembershipTier.PREMIUM), eq(1), any(Instant.class), any(Instant.class), any(Instant.class));
+        // members-only save (cancel) + premium save.
+        verify(membershipRepository, times(2)).save(any(Membership.class));
+    }
+
+    @Test
+    @DisplayName("decline → 422 PaymentDeclined, NO row, NO idempotency row, NO event, NO supersede")
     void declineCreatesNoRow() {
+        when(clock.now()).thenReturn(NOW);
         when(idempotencyKeyRepository.find("fan-platform", "acc1", "key-2")).thenReturn(Optional.empty());
-        when(paymentGateway.authorize(anyLong(), anyInt(), eq("tok_decline"), eq("key-2")))
+        when(upgradeQuoter.assess(eq(MembershipTier.PREMIUM), eq(1), eq("acc1"), eq("fan-platform"), any()))
+                .thenReturn(new UpgradeQuoter.UpgradeAssessment(
+                        Optional.empty(), new UpgradeProration.Quote(17_900, 0, 17_900, 0)));
+        when(paymentGateway.authorize(eq(17_900L), anyInt(), eq("tok_decline"), eq("key-2")))
                 .thenReturn(PaymentGatewayPort.PaymentResult.declined());
 
         SubscribeCommand declineCmd = new SubscribeCommand(
@@ -89,6 +134,8 @@ class SubscribeUseCaseTest {
         verify(idempotencyKeyRepository, never()).save(any());
         verify(eventPublisher, never()).publishActivated(anyString(), anyString(), anyString(),
                 any(), anyInt(), any(), any(), any());
+        verify(eventPublisher, never()).publishCanceled(anyString(), anyString(), anyString(),
+                any(), anyString(), any(), any());
     }
 
     @Test
@@ -98,7 +145,6 @@ class SubscribeUseCaseTest {
         Membership stored = Membership.activate(
                 "m-stored", "fan-platform", "acc1", MembershipTier.PREMIUM,
                 NOW, NOW.plusSeconds(100), 1, "pgmock_ref", NOW);
-        // Same fingerprint as cmd("key-1") payload (PREMIUM|1|tok_visa_demo).
         IdempotencyKey key = IdempotencyKey.create("fan-platform", "acc1", "key-1",
                 fingerprintOf(MembershipTier.PREMIUM, 1, "tok_visa_demo"), "m-stored", NOW);
         when(idempotencyKeyRepository.find("fan-platform", "acc1", "key-1")).thenReturn(Optional.of(key));

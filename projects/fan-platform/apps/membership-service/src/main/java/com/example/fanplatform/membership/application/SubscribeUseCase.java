@@ -21,33 +21,37 @@ import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 
 /**
- * Subscribe (Idempotency-Key + PG mock authorize → ACTIVE).
+ * Subscribe (Idempotency-Key + PG authorize/verify → ACTIVE), with tier-aware
+ * pricing and MEMBERS_ONLY → PREMIUM upgrade proration (TASK-FAN-BE-032).
  *
- * <p>Flow (architecture.md § PG Mock Boundary, § State Machine):
+ * <p>Flow (architecture.md § PG Boundary, § State Machine):
  * <ol>
- *   <li>Look up {@code idempotency_keys} for (tenant, account, key).
- *       <ul>
- *         <li>Found + same fingerprint → return the stored membership (no
- *             re-authorization, no duplicate row).</li>
- *         <li>Found + different fingerprint → 409 IDEMPOTENCY_KEY_CONFLICT.</li>
- *       </ul></li>
- *   <li>New key → PG authorize. Decline → NO row, 422 PAYMENT_DECLINED.</li>
- *   <li>Approve → create ACTIVE membership (validFrom = now micros, validTo =
- *       validFrom + planMonths) + idempotency row + activated outbox event, all
- *       in ONE transaction.</li>
+ *   <li>Idempotency lookup — same key+payload replays the stored result (no
+ *       re-charge, no re-supersede); a different payload → 409.</li>
+ *   <li><b>Upgrade assessment</b> ({@link UpgradeQuoter}) — a PREMIUM subscribe while
+ *       an ACTIVE, in-window MEMBERS_ONLY membership is held prorates the charge
+ *       ({@code 17,900×planMonths − remainingDays×7,900/30}, floored at 0); the SAME
+ *       assessment backs the upgrade-quote endpoint so the client-paid amount equals
+ *       what is re-verified here. Otherwise the plain tier list price.</li>
+ *   <li>PG authorize the computed amount (skipped for a 0-won upgrade — PortOne
+ *       cannot process a zero payment). Decline → NO row, 422.</li>
+ *   <li>Approve → (upgrade: cancel the members-only row + emit canceled) create the
+ *       ACTIVE membership + idempotency row + activated event, all in ONE
+ *       transaction — a decline/rollback leaves the members-only intact.</li>
  * </ol>
  */
 @Service
 @RequiredArgsConstructor
 public class SubscribeUseCase {
 
-    /** Synthetic per-month price in minor units (mock — not externally exposed). */
-    private static final long PRICE_PER_MONTH_MINOR = 9_900L;
+    /** Cancel reason recorded on the members-only row when a PREMIUM upgrade supersedes it. */
+    static final String CANCEL_REASON_UPGRADE = "SUPERSEDED_BY_UPGRADE";
 
     private final MembershipRepository membershipRepository;
     private final IdempotencyKeyRepository idempotencyKeyRepository;
     private final PaymentGatewayPort paymentGateway;
     private final MembershipEventPublisher eventPublisher;
+    private final UpgradeQuoter upgradeQuoter;
     private final ClockPort clock;
 
     @Transactional
@@ -65,31 +69,53 @@ public class SubscribeUseCase {
             if (!key.getRequestFingerprint().equals(fingerprint)) {
                 throw new IdempotencyKeyConflictException(cmd.idempotencyKey());
             }
-            // Same key + same payload → replay the stored result (no re-auth, no dup).
+            // Same key + same payload → replay the stored result (no re-auth, no dup, no re-supersede).
             Membership stored = membershipRepository
                     .findByIdScoped(key.getMembershipId(), accountId, tenantId)
                     .orElseThrow(() -> new MembershipNotFoundException(key.getMembershipId()));
             return MembershipView.from(stored, clock.now());
         }
 
-        // 2) PG authorize --------------------------------------------------------
-        long amountMinor = PRICE_PER_MONTH_MINOR * cmd.planMonths();
-        PaymentGatewayPort.PaymentResult result = paymentGateway.authorize(
-                amountMinor, cmd.planMonths(), cmd.paymentId(), cmd.idempotencyKey());
-        if (!result.approved()) {
-            // Decline → NO row created, NO event.
-            throw new PaymentDeclinedException();
+        Instant now = clock.now();
+
+        // 2) Upgrade assessment (shared with the quote endpoint) + prorated charge.
+        UpgradeQuoter.UpgradeAssessment assessment =
+                upgradeQuoter.assess(cmd.tier(), cmd.planMonths(), accountId, tenantId, now);
+        Optional<Membership> upgradeFrom = assessment.supersedes();
+        long amountMinor = assessment.quote().chargeMinor();
+
+        // 3) PG authorize --------------------------------------------------------
+        // A 0-won upgrade (credit ≥ list price) approves without a PG call — PortOne
+        // cannot process a zero-amount payment.
+        String paymentRef;
+        if (amountMinor == 0L) {
+            paymentRef = "upgrade_credit_" + UuidV7.randomString();
+        } else {
+            PaymentGatewayPort.PaymentResult result = paymentGateway.authorize(
+                    amountMinor, cmd.planMonths(), cmd.paymentId(), cmd.idempotencyKey());
+            if (!result.approved()) {
+                // Decline → NO row created, NO supersede, NO event (TX not yet mutated).
+                throw new PaymentDeclinedException();
+            }
+            paymentRef = result.paymentRef();
         }
 
-        // 3) Create ACTIVE membership + idempotency row + activated event --------
-        Instant now = clock.now();
+        // 4) Supersede the members-only (upgrade only) + create the new membership.
+        upgradeFrom.ifPresent(members -> {
+            members.cancel(now);
+            membershipRepository.save(members);
+            eventPublisher.publishCanceled(
+                    members.getId(), members.getTenantId(), members.getAccountId(),
+                    members.getTier(), CANCEL_REASON_UPGRADE, now, now);
+        });
+
         Instant validFrom = now;
         Instant validTo = validFrom.plus(cmd.planMonths() * 30L, ChronoUnit.DAYS);
         String membershipId = UuidV7.randomString();
 
         Membership membership = Membership.activate(
                 membershipId, tenantId, accountId, cmd.tier(),
-                validFrom, validTo, cmd.planMonths(), result.paymentRef(), now);
+                validFrom, validTo, cmd.planMonths(), paymentRef, now);
         Membership saved = membershipRepository.save(membership);
 
         idempotencyKeyRepository.save(IdempotencyKey.create(

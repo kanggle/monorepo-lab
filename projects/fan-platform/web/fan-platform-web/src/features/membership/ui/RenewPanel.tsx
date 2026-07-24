@@ -2,7 +2,7 @@
 import { useState, useTransition } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { renewMembership } from '@/features/membership/api/actions';
-import { requestPortOnePayment } from '@/features/membership/lib/portone-checkout';
+import { requestPortOnePayment, TIER_MONTHLY_KRW } from '@/features/membership/lib/portone-checkout';
 import type { MembershipListItem } from '@/entities/membership';
 
 const TIER_LABEL: Record<MembershipListItem['tier'], string> = {
@@ -30,7 +30,7 @@ export function RenewPanel({ membership }: { membership: MembershipListItem }) {
       // server-side by the renew action's backend (ADR-001).
       const checkout = await requestPortOnePayment(
         `${TIER_LABEL[membership.tier]} 멤버십 갱신 (${membership.planMonths}개월)`,
-        membership.planMonths,
+        TIER_MONTHLY_KRW[membership.tier] * membership.planMonths,
       );
       if (!checkout.ok) {
         setError(checkout.message);

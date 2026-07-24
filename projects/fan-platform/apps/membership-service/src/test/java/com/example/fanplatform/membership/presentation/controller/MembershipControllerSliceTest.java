@@ -5,6 +5,7 @@ import com.example.fanplatform.membership.application.CancelMembershipUseCase;
 import com.example.fanplatform.membership.application.GetMembershipUseCase;
 import com.example.fanplatform.membership.application.ListMembershipsUseCase;
 import com.example.fanplatform.membership.application.MembershipView;
+import com.example.fanplatform.membership.application.QuoteUpgradeUseCase;
 import com.example.fanplatform.membership.application.RenewCommand;
 import com.example.fanplatform.membership.application.RenewMembershipUseCase;
 import com.example.fanplatform.membership.application.SubscribeCommand;
@@ -56,6 +57,7 @@ class MembershipControllerSliceTest {
     @MockitoBean CancelMembershipUseCase cancelMembershipUseCase;
     @MockitoBean ListMembershipsUseCase listMembershipsUseCase;
     @MockitoBean GetMembershipUseCase getMembershipUseCase;
+    @MockitoBean QuoteUpgradeUseCase quoteUpgradeUseCase;
 
     private String fanBearer(String sub) {
         return "Bearer " + jwt.signFanToken(sub);

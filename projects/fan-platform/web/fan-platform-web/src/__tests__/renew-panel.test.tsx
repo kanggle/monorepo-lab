@@ -12,7 +12,10 @@ vi.mock('@/features/membership/api/actions', () => ({ renewMembership }));
 const { requestPortOnePayment } = vi.hoisted(() => ({
   requestPortOnePayment: vi.fn(async () => ({ ok: true as const, paymentId: 'pay-renew' })),
 }));
-vi.mock('@/features/membership/lib/portone-checkout', () => ({ requestPortOnePayment }));
+vi.mock('@/features/membership/lib/portone-checkout', () => ({
+  requestPortOnePayment,
+  TIER_MONTHLY_KRW: { MEMBERS_ONLY: 7900, PREMIUM: 17900 },
+}));
 
 const expired: MembershipListItem = {
   membershipId: 'm-9',
