@@ -250,12 +250,14 @@ class FanTenantGatePolicyTest {
     class InternalPrefixIsExempt {
 
         @Test
-        @DisplayName("a workload-identity token — no tenant_id at all — reaches /internal/**")
+        @DisplayName("a token the tenant gate would 401 (null tenant) still reaches /internal/** — the exemption is load-bearing")
         void workloadIdentityTokenReachesInternal() throws Exception {
-            // This is exactly the token the @Order(1) internal chain produces: internalJwtDecoder
-            // "does NOT pin tenant_id" (its own Javadoc), and the chain still puts a
-            // JwtAuthenticationToken in the context. Without the exemption the gate 401s it --
-            // and community/HttpMembershipChecker stops working.
+            // The @Order(1) internal chain's internalJwtDecoder "does NOT pin tenant_id" (its own
+            // Javadoc); it authorizes by the membership.read scope, not by tenant (TASK-FAN-BE-029).
+            // This probe uses a NULL-tenant token -- one the tenant gate would otherwise 401 -- to
+            // prove the /internal/ exemption is what lets the workload call through. (Real IAM
+            // workload tokens ARE tenant-scoped, but the exemption must hold regardless, so the
+            // tenant gate never stands between community/HttpMembershipChecker and this surface.)
             Outcome outcome = filter(jwt(null, null), "/internal/membership/access-check");
             assertThat(outcome.called)
                     .as("remove the /internal/ clause from the exemption and this goes red; that "
