@@ -58,6 +58,13 @@ dependencies {
     // (§ D2; assertNoApiOnSharedLibs enforces it).
     implementation project(':libs:java-security-servlet')
 
+    // ADR-MONO-056 Phase 1: the shared payment-gateway boundary + the PortOne verify-model
+    // adapter. Replaces the in-service private port + PortOnePaymentAdapter (TASK-MONO-479).
+    // Only the PortOne vendor module is pulled — the Toss adapter's SDK never reaches this
+    // service's runtime classpath (the per-vendor split is why libs/payment-toss is omitted).
+    implementation project(':libs:payment-core')
+    implementation project(':libs:payment-portone')
+
     // Test (unit + slice)
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
