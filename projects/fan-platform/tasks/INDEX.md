@@ -72,9 +72,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-- `TASK-FAN-BE-029-membership-workload-identity-positive-discriminator.md` — **REVIEW (impl PR open).** membership `/internal` workload-identity 결함 수정 — `WorkloadIdentityAuthoritiesConverter`가 **tenant_id 있으면 거부**(부정 판별자)했으나, 실제 IAM cc 토큰은 tenant-scoped라 `tenant_id="fan-platform"`를 운반(TenantClaimTokenCustomizer가 fail-closed로 항상 스탬프) → 모든 멤버의 MEMBERS_ONLY/PREMIUM 읽기가 403(프로덕션 잠복 결함, 테스트가 tenant_id 없는 가짜 토큰으로 green-wash). Fix=**긍정 판별자**(필수 scope `membership.read`, tenant_id 무관; `security-rules.md` "exactly one of subject/scope", order-service `SystemClientSubjectValidator` 선례). 테스트 4파일을 실제 IAM shape으로 교정(`JwtTestHelper.signWorkloadToken`+converter/IT). **INT-004 supersede**(그 티켓의 "로컬 env 배선" 전제가 라이브 진단으로 반증). fan Integration Testcontainers CI가 권위(호스트 자원고갈로 로컬 gradle 불가). 분석·구현=Opus 4.8.
-
 ## done
+
+- `TASK-FAN-BE-029-membership-workload-identity-positive-discriminator.md` — **DONE (2026-07-24, 3-dim verified — impl PR #2939 squash `4147c389a`; state=MERGED · `4147c389a` origin/main 편입(ancestor) · 머지 전 13 pass / 0 failing required).** membership `/internal` workload-identity 결함 — `WorkloadIdentityAuthoritiesConverter`가 **tenant_id 있으면 거부**(부정 판별자)했으나 실제 IAM cc 토큰은 tenant-scoped라 `tenant_id="fan-platform"` 운반(TenantClaimTokenCustomizer fail-closed 스탬프, jwt-standard-claims.md가 모든 grant에 tenant_id 강제) → **모든 멤버의 MEMBERS_ONLY/PREMIUM 읽기 403**(프로덕션 잠복; 테스트가 tenant_id 없는 가짜 토큰으로 green-wash). Fix=**긍정 판별자**(필수 scope `membership.read`, tenant_id 무관; `security-rules.md` "exactly one of subject/scope" + order-service `SystemClientSubjectValidator` 선례). 테스트 4파일을 실제 IAM shape(tenant_id 있음)으로 교정 — **fan Integration Testcontainers CI GREEN 2m17s가 권위**(교정된 AccessCheck/InternalAuth IT가 실제 토큰 shape 검증; 로컬 gradle은 호스트 자원고갈 JVM 크래시로 불가). ⚠️ 라이브 데모 멤버→200은 membership 재빌드+재배포 필요(호스트 여유 시). 라이브 진단이 **INT-004 전제(로컬 env 배선) 반증** → INT-004 supersede(done). 분석·구현=Opus 4.8. [[project_fan_platform_seed_recipe_and_two_gaps]]
 
 - `TASK-FAN-INT-004-local-s2s-membership-workload-identity-wiring.md` — **⛔ SUPERSEDED (2026-07-24) by TASK-FAN-BE-029.** 라이브 진단으로 전제 반증: "로컬 docker-compose S2S 자격증명 미프로비저닝"이 아니라(자격증명 정상·토큰 발급됨), 실제 원인은 **토큰-shape 계약 충돌**(IAM cc 토큰이 tenant_id 운반 vs membership converter가 tenant_id 있으면 거부). 수신측 제품 결함=BE-029로 수정, 로컬 오버레이 변경 불필요. 미구현 종결(no impl PR).
 
