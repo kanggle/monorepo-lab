@@ -173,7 +173,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-481-checkout-pattern-skill.md` — **🔵 REVIEW (impl PR open) — [ADR-MONO-056](../docs/adr/ADR-MONO-056-payment-gateway-abstraction.md) D3.** PG checkout 패턴을 `docs/guides/payment-checkout.md`로 문서화(skill 대신 guide — 인간 참조). 4대 gotcha: verify-boundary(클라 신호 불신·서버 verify 권위) · 구매자 identity 전달(KG이니시스 V2 `customer.email` 필수) · `NEXT_PUBLIC_*` 빌드타임 인라인(키 변경=재빌드) · 금액 일치(변조가드). + 실패계약(PortOne declined vs Toss throw)·Toss R4j `ignore-exceptions` lib FQN·벤더선택(PortOne aggregator=config)·결제창 vs 결제위젯. **프로젝트 무관 작성**(서비스명·projects/ 경로 0 — HARDSTOP-03 통과; 외부 벤더명·lib 경로만). 분석·구현=Opus.
 
 ## done
 

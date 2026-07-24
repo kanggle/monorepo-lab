@@ -8,7 +8,7 @@ Author the PG checkout-pattern skill/guide (ADR-MONO-056 D3)
 
 # Status
 
-backlog
+review
 
 # Owner
 
