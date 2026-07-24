@@ -10,7 +10,7 @@
 | tenant_id | VARCHAR(64) NOT NULL | always `scm` in v1 |
 | node_type | VARCHAR(30) NOT NULL | WMS_WAREHOUSE / SUPPLIER / THIRD_PARTY_LOGISTICS / IN_TRANSIT |
 | node_external_id | VARCHAR(100) NOT NULL | external system identifier (e.g., wms warehouseId) |
-| name | VARCHAR(200) | empty for auto-registered nodes |
+| name | VARCHAR(200) | empty for auto-registered `WMS_WAREHOUSE` nodes (enriched later); **named at registration** for explicitly-registered `THIRD_PARTY_LOGISTICS` nodes (ADR-MONO-054 §D2 / TASK-SCM-BE-046) — a 3PL relationship is known by name when onboarded |
 | status | VARCHAR(20) NOT NULL | ACTIVE / SUSPENDED / DECOMMISSIONED |
 | contact_info | JSONB | nullable; mapped via `@JdbcTypeCode(SqlTypes.JSON)` on the JPA entity (see § Hibernate ↔ PostgreSQL JSONB note below) |
 | created_at | TIMESTAMPTZ NOT NULL | |
@@ -18,6 +18,14 @@
 
 Unique: `(tenant_id, node_external_id)`.
 Index: `(tenant_id, node_type, status)`.
+
+**Registration model** (see [`architecture.md § Node Registration Model`](architecture.md#node-registration-model-adr-mono-054-d2--task-scm-be-046)):
+`WMS_WAREHOUSE` is auto-registered from wms events; `THIRD_PARTY_LOGISTICS`
+is **explicitly registered** (`POST /api/inventory-visibility/nodes`,
+ADR-MONO-054 §D2 / TASK-SCM-BE-046) — a 3PL relationship is an onboarding
+fact, not an event side-effect. A registered 3PL node is **observed
+read-only, never operated** (ADR-054 §D4 / ADR-050 §D4); `SUPPLIER` /
+`IN_TRANSIT` remain declared with no active registration path in v1.
 
 **Hibernate ↔ PostgreSQL JSONB note** (TASK-SCM-INT-001b cycle 2 fix, PR #262):
 `InventoryNodeJpaEntity.contactInfo` is a `String` column mapped to PostgreSQL

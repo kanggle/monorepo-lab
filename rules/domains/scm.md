@@ -91,6 +91,7 @@ scm 도메인에서 공통으로 발생하는 에러는 [../../platform/error-ha
 ### Inventory Visibility
 - `NODE_UNREACHABLE` — 외부 node (creditor 창고, 3PL) snapshot 수신 실패
 - `SNAPSHOT_STALE` — 최신 스냅샷이 staleness threshold 초과
+- `NODE_TYPE_CONFLICT` — 등록 요청의 externalId 가 이미 다른 node type 으로 등록되어 있음 (예: wms 창고를 3PL 로 재등록 시도)
 
 ### Settlement
 - `SETTLEMENT_PERIOD_LOCKED` — 잠긴 정산 기간 수정 시도

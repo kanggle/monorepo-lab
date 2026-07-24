@@ -2,6 +2,7 @@ package com.example.scmplatform.inventoryvisibility.adapter.inbound.web.advice;
 
 import com.example.scmplatform.inventoryvisibility.adapter.inbound.web.dto.ApiErrorBody;
 import com.example.scmplatform.inventoryvisibility.domain.error.NodeNotFoundException;
+import com.example.scmplatform.inventoryvisibility.domain.error.NodeTypeConflictException;
 import com.example.scmplatform.inventoryvisibility.domain.error.NodeUnreachableException;
 import com.example.scmplatform.inventoryvisibility.domain.error.ReadModelCorruptException;
 import com.example.scmplatform.inventoryvisibility.domain.error.SnapshotStaleException;
@@ -37,6 +38,19 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorBody> handleNodeUnreachable(NodeUnreachableException e) {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(ApiErrorBody.of("NODE_UNREACHABLE", e.getMessage()));
+    }
+
+    /**
+     * TASK-SCM-BE-046 — a registration request's externalId is already registered
+     * under a different node type (e.g. a wms auto-registered warehouse). A
+     * repeat registration of the SAME type never reaches this handler — that
+     * path is idempotent (find-or-register, no-op) in
+     * {@code RegisterThirdPartyLogisticsNodeService}.
+     */
+    @ExceptionHandler(NodeTypeConflictException.class)
+    public ResponseEntity<ApiErrorBody> handleNodeTypeConflict(NodeTypeConflictException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorBody.of("NODE_TYPE_CONFLICT", e.getMessage()));
     }
 
     @ExceptionHandler(SnapshotStaleException.class)
