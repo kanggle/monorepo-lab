@@ -22,13 +22,19 @@
 #   systemd → demo-boot.sh → (DEMO_DOMAIN 파생) → demo-up.sh <profile>
 #
 # 사용법:
-#   bash infra/demo/demo-boot.sh [demo-core|full]
+#   bash infra/demo/demo-boot.sh [demo-core|full|<domain...>]
 #   DEMO_DOMAIN=1-2-3-4.sslip.io bash infra/demo/demo-boot.sh full   # 파생 건너뜀
+#
+# 인자를 **그대로 demo-up.sh 로 전달**한다(TASK-MONO-477). 그래서 컨트롤 플레인이
+# SSM 으로 `demo-boot.sh fan console` 을 부르면, 도메인 파생이 여기서 일어난 뒤
+# demo-up.sh 가 그 도메인들을 올린다 — per-domain 기동도 올바른 DEMO_DOMAIN 을 얻는다.
 # =============================================================================
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROFILE="${1:-full}"
+# 무인자 부팅은 full (systemd 유닛이 DEMO_PROFILE=full 을 넘기지만 안전망으로 유지).
+[ "$#" -eq 0 ] && set -- full
+PROFILE="$*"
 
 # -----------------------------------------------------------------------------
 # 도메인 파생
@@ -82,4 +88,4 @@ echo "[boot] profile=$PROFILE  DEMO_DOMAIN=$DEMO_DOMAIN"
 # `demo-up.sh` 는 `demo.env` 를 스스로 source 한다. 거기서 `DEMO_DOMAIN` 은 반드시
 # `${DEMO_DOMAIN:-local}` 형태여야 한다 — bare 대입이면 `set -a; source` 가 **여기서
 # export 한 값을 덮어쓴다**(358 에서 실제로 당했다). 가드 (n) 이 그 형태를 지킨다.
-exec bash "$HERE/demo-up.sh" "$PROFILE"
+exec bash "$HERE/demo-up.sh" "$@"

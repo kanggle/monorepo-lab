@@ -34,10 +34,21 @@ INSTANCE_ID = os.environ["INSTANCE_ID"]
 BEAT_PARAM = os.environ["BEAT_PARAM"]
 STARTED_PARAM = os.environ["STARTED_PARAM"]
 USAGE_PARAM = os.environ["USAGE_PARAM"]
+HEALTH_PARAM = os.environ.get("HEALTH_PARAM", "/portfolio-demo/domains-health")
 IDLE_MINUTES = int(os.environ.get("IDLE_MINUTES", "20"))
 MAX_MINUTES = int(os.environ.get("MAX_RUNTIME_MINUTES", "180"))
 BUDGET_MINUTES = int(os.environ.get("MONTHLY_BUDGET_MINUTES", "600"))
 ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "*")
+
+# 데모 호스트에 저장소가 클론된 경로(packer 단계 2). demo-boot.sh/demo-down.sh 가 여기 있다.
+REPO = "/opt/monorepo-lab"
+
+# 도메인 화이트리스트 (TASK-MONO-477). SSM RunShellScript 로 넘기는 이름은 **반드시**
+# 이 집합으로 검증한다 — 검증 없이 사용자 입력을 셸 명령에 넣으면 명령 주입이 된다.
+# 출처는 projects.sh 의 COMPOSE 키. "full"/"demo-core" 는 프로파일, "all" 은 전체 종료.
+DOMAINS = frozenset({"iam", "wms", "scm", "finance", "erp", "ecommerce", "fan", "console"})
+START_NAMES = DOMAINS | {"full", "demo-core"}
+STOP_NAMES = DOMAINS | {"all"}
 
 # EventBridge 틱 간격(5분)의 2배. 틱이 한 번 유실돼도 실제 경과분을 반영하되,
 # 인스턴스가 오래 running 이었는데 Lambda 가 죽어 있던 구간을 과도하게 몰아서
@@ -202,6 +213,83 @@ def heartbeat():
     return _resp({"ok": True})
 
 
+# ---- 도메인별 선택 (TASK-MONO-477) -----------------------------------------
+
+def _send(commands):
+    """SSM RunShellScript 로 인스턴스에서 명령을 실행하고 CommandId 를 돌려준다."""
+    r = ssm.send_command(
+        InstanceIds=[INSTANCE_ID],
+        DocumentName="AWS-RunShellScript",
+        Comment="demo per-domain control",
+        Parameters={"commands": commands, "executionTimeout": ["1800"]},
+    )
+    return r["Command"]["CommandId"]
+
+
+def _body_name(event):
+    """요청 본문(JSON)에서 name 을 꺼낸다. 없거나 파싱 실패면 ""."""
+    raw = event.get("body") or ""
+    try:
+        data = json.loads(raw) if raw else {}
+    except (ValueError, TypeError):
+        data = {}
+    name = data.get("name", "") if isinstance(data, dict) else ""
+    return name.strip() if isinstance(name, str) else ""
+
+
+def domains():
+    """인스턴스 상태 + 도메인별 헬스 스냅샷.
+
+    스냅샷은 인스턴스의 demo-status.timer 가 SSM 에 발행한다(비동기). VM 이 running 이
+    아니면 스냅샷은 stale 이므로 전부 down 으로 본다 — 손상/부재를 '전부 up' 으로 읽지 않는다.
+    """
+    state, ip, _ = _state()
+    snap = {}
+    if state == "running":
+        raw = _get(HEALTH_PARAM)
+        try:
+            parsed = json.loads(raw) if raw else {}
+            if isinstance(parsed, dict):
+                snap = parsed
+        except (ValueError, TypeError):
+            snap = {}
+    return _resp({"state": state, "ip": ip, "domains": snap})
+
+
+def domain_start(event):
+    name = _body_name(event)
+    if name not in START_NAMES:
+        return _resp({"error": "invalid-domain", "name": name, "valid": sorted(START_NAMES)}, 400)
+    state, _, _ = _state()
+    if state != "running":
+        return _resp({"state": state,
+                      "message": "먼저 데모를 시작하세요 (인스턴스가 켜져 있어야 도메인을 올릴 수 있습니다)"}, 409)
+    u = _usage()
+    if _budget_exhausted(u):
+        return _resp({"error": "monthly-budget-exhausted",
+                      "message": f"이번 달 예산 소진 ({u['seconds'] // 60}/{BUDGET_MINUTES}분)"}, 429)
+    # demo-boot.sh 를 경유한다 — 인스턴스가 IMDS 로 DEMO_DOMAIN 을 파생한 뒤 demo-up.sh <name>
+    # 을 부른다. demo-up.sh 를 직접 부르면 DEMO_DOMAIN=local 로 떠 라우터가 *.local 이 되고
+    # 방문자가 도달할 수 없다(MONO-358). name 은 START_NAMES 로 검증됐으므로 주입 안전.
+    cmd = _send([f"bash {REPO}/infra/demo/demo-boot.sh {name}"])
+    return _resp({"state": "running", "domain": name, "action": "start",
+                  "command_id": cmd, "message": f"{name} 기동 요청됨 — 웜업까지 잠시 걸립니다"})
+
+
+def domain_stop(event):
+    name = _body_name(event)
+    if name not in STOP_NAMES:
+        return _resp({"error": "invalid-domain", "name": name, "valid": sorted(STOP_NAMES)}, 400)
+    state, _, _ = _state()
+    if state != "running":
+        return _resp({"state": state, "message": "인스턴스가 켜져 있지 않습니다"}, 409)
+    # "all" = 전체 종료(demo-down.sh 무인자 → traefik 포함). 그 외 = 부분 종료(잔존 가드 적용).
+    down = f"bash {REPO}/infra/demo/demo-down.sh" + ("" if name == "all" else f" {name}")
+    cmd = _send([down])
+    return _resp({"state": "running", "domain": name, "action": "stop",
+                  "command_id": cmd, "message": f"{name} 종료 요청됨"})
+
+
 # ---- Scheduled idle check --------------------------------------------------
 
 def idle_check():
@@ -279,6 +367,13 @@ def handler(event, context):
 
     if method == "OPTIONS":
         return _resp({"ok": True})
+    # 도메인 라우트를 먼저 본다 — "/domain/start" 는 "/start" 로도 끝나므로 순서가 load-bearing.
+    if path.endswith("/domains"):
+        return domains()
+    if path.endswith("/domain/start"):
+        return domain_start(event)
+    if path.endswith("/domain/stop"):
+        return domain_stop(event)
     if path.endswith("/start"):
         return start()
     if path.endswith("/stop"):

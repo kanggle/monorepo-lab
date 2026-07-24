@@ -30,6 +30,7 @@ class _FakeParamNotFound(Exception):
 class _FakeSSM:
     def __init__(self):
         self.store = {}
+        self.sent = []  # send_command 호출 기록 (TASK-MONO-477)
         self.exceptions = types.SimpleNamespace(ParameterNotFound=_FakeParamNotFound)
 
     def put_parameter(self, Name, Value, Type, Overwrite):
@@ -39,6 +40,10 @@ class _FakeSSM:
         if Name not in self.store:
             raise _FakeParamNotFound(Name)
         return {"Parameter": {"Value": self.store[Name]}}
+
+    def send_command(self, InstanceIds, DocumentName, Comment, Parameters):
+        self.sent.append({"instances": InstanceIds, "doc": DocumentName, "params": Parameters})
+        return {"Command": {"CommandId": "cmd-fake"}}
 
 
 class _FakeEC2:
@@ -80,6 +85,7 @@ os.environ.update({
     "BEAT_PARAM": "/t/beat",
     "STARTED_PARAM": "/t/started",
     "USAGE_PARAM": "/t/usage",
+    "HEALTH_PARAM": "/t/health",
     "IDLE_MINUTES": "20",
     "MAX_RUNTIME_MINUTES": "180",
     "MONTHLY_BUDGET_MINUTES": "60",  # 테스트는 1시간 예산
@@ -308,6 +314,91 @@ class FreshlyLaunchedInstanceTest(unittest.TestCase):
             r = handler.idle_check()
         self.assertEqual(FAKE_EC2.stop_calls, 1, "세션 상한은 하트비트로 우회될 수 없다")
         self.assertIn("max-runtime", r["reason"])
+
+
+class DomainControlTest(unittest.TestCase):
+    """도메인별 선택 (TASK-MONO-477).
+
+    가장 중요한 것은 **명령 주입 방지**다: /domain/{start,stop} 이 받은 name 을 SSM
+    RunShellScript 로 넘기므로, 화이트리스트 밖 입력은 명령을 보내기 전에 400 으로 막아야
+    한다. 그리고 대칭으로 — 정상 이름은 올바른 스크립트(start=demo-boot 경유로 도메인 파생)
+    를 부르는지, VM 이 꺼져 있으면 거절하는지, 예산 소진을 상속하는지 확인한다.
+    """
+
+    def setUp(self):
+        FAKE_SSM.store.clear()
+        FAKE_SSM.sent.clear()
+        FAKE_EC2.state = "running"
+        FAKE_EC2.start_calls = 0
+        FAKE_EC2.stop_calls = 0
+        FAKE_EC2.launch_time = launched(0)
+
+    def _evt(self, name):
+        return {"body": json.dumps({"name": name})}
+
+    def _fresh_usage(self):
+        FAKE_SSM.store["/t/usage"] = json.dumps(
+            {"month": handler._month(T0), "seconds": 0, "tick": 0})
+
+    def test_domain_start_sends_command_via_boot(self):
+        self._fresh_usage()
+        with mock.patch.object(handler, "_now", return_value=T0):
+            resp = handler.domain_start(self._evt("fan"))
+        self.assertEqual(resp["statusCode"], 200)
+        self.assertEqual(len(FAKE_SSM.sent), 1)
+        cmd = FAKE_SSM.sent[0]["params"]["commands"][0]
+        # demo-boot.sh 경유여야 한다 — 그래야 인스턴스가 DEMO_DOMAIN 을 파생한다.
+        self.assertIn("demo-boot.sh fan", cmd)
+
+    def test_domain_start_rejects_unknown_name_without_sending(self):
+        resp = handler.domain_start(self._evt("bogus; rm -rf /"))
+        self.assertEqual(resp["statusCode"], 400)
+        self.assertEqual(len(FAKE_SSM.sent), 0, "검증 실패 시 명령을 보내면 안 된다(주입 방지)")
+
+    def test_domain_start_requires_running_vm(self):
+        FAKE_EC2.state = "stopped"
+        resp = handler.domain_start(self._evt("fan"))
+        self.assertEqual(resp["statusCode"], 409)
+        self.assertEqual(len(FAKE_SSM.sent), 0)
+
+    def test_domain_start_refused_when_budget_exhausted(self):
+        FAKE_SSM.store["/t/usage"] = json.dumps(
+            {"month": handler._month(T0), "seconds": BUDGET_SEC, "tick": 0})
+        with mock.patch.object(handler, "_now", return_value=T0):
+            resp = handler.domain_start(self._evt("fan"))
+        self.assertEqual(resp["statusCode"], 429)
+        self.assertEqual(len(FAKE_SSM.sent), 0)
+
+    def test_domain_stop_partial_passes_domain_arg(self):
+        resp = handler.domain_stop(self._evt("console"))
+        self.assertEqual(resp["statusCode"], 200)
+        self.assertIn("demo-down.sh console", FAKE_SSM.sent[0]["params"]["commands"][0])
+
+    def test_domain_stop_all_downs_everything(self):
+        resp = handler.domain_stop(self._evt("all"))
+        self.assertEqual(resp["statusCode"], 200)
+        # "all" = 무인자 demo-down.sh (traefik 포함 전체 종료)
+        self.assertTrue(
+            FAKE_SSM.sent[0]["params"]["commands"][0].rstrip().endswith("demo-down.sh"))
+
+    def test_domains_reads_snapshot_when_running(self):
+        FAKE_SSM.store["/t/health"] = json.dumps(
+            {"iam": {"state": "up", "healthy": 5, "total": 5}})
+        resp = handler.domains()
+        self.assertEqual(resp["statusCode"], 200)
+        self.assertEqual(body(resp)["domains"]["iam"]["state"], "up")
+
+    def test_domains_hides_stale_snapshot_when_stopped(self):
+        FAKE_EC2.state = "stopped"
+        FAKE_SSM.store["/t/health"] = json.dumps(
+            {"iam": {"state": "up", "healthy": 5, "total": 5}})
+        resp = handler.domains()
+        self.assertEqual(body(resp)["domains"], {}, "VM 이 꺼졌으면 스냅샷은 stale — 전부 감춘다")
+
+    def test_domains_corrupt_snapshot_is_empty_not_crash(self):
+        FAKE_SSM.store["/t/health"] = "}{ not json"
+        resp = handler.domains()
+        self.assertEqual(body(resp)["domains"], {})
 
 
 if __name__ == "__main__":
