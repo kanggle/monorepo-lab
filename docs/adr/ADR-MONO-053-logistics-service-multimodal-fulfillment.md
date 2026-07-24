@@ -203,3 +203,14 @@ Each row re-measured at authoring (2026-07-24); recount rather than inherit befo
 **What acceptance binds.** Acceptance authorises **Phase 1** (D1 bootstrap · D2 dispatch port + EasyPost/굿스플로 · D3 CarrierRouter · D4 the self-branch FulfillmentRouter seam · D8 the wms TMS-adapter retirement once the receiver is live) and the promotion of TASK-SCM-BE-041 `backlog/ → ready/`. Three items are **not** unconditionally bound: **D5** (the 3PL path) is Phase 2, gated on a separate D8-3 election; **D6** (스윗트래커 tracking) is Phase 3 / optional; and **D5's demand-planning routing ownership** rests on 052's *weakest allocation* (§D2① analogy) and must be re-measured before Phase 2, not inherited. **D9** (no `tms-platform`) declines to reopen 052 §D6 rather than re-deciding it.
 
 **Amending this ADR.** What was authorised is the text as read. Later changes — including any strengthening of D5's routing basis — go through an amendment section (the ADR-050 §7 pattern), not an in-place rewrite of §1–§6.
+
+---
+
+## 9. Amendment — [ADR-MONO-054](ADR-MONO-054-third-party-logistics-node-activation.md) (Phase 2, D8-3 firing), 2026-07-24
+
+Per §7 ("052 amendment, not rewrite") and the closing note above, corrections to this ADR are recorded as an amendment section rather than an in-place edit of §1–§6. [ADR-MONO-054](ADR-MONO-054-third-party-logistics-node-activation.md) — accepted 2026-07-24 on the owner's D8-3 election — fired §D5's Phase-2 gate and performed the D2① re-measurement §D5 mandated ("re-measure … not inherit"). The re-measurement **failed**, and 054 §D6 corrects two claims here:
+
+- **§D4** — *"the 3PL branch slots in during Phase 2 without reworking the dispatch path … makes 둘 다 an additive Phase 2, not a Phase-1 rewrite."* — **Holds only for the inbound/observation half.** It does **not** hold for the outbound fulfillment path: the logistics `FulfillmentRouter`'s only input is `outbound.shipping.confirmed`, a **self-fulfillment-only** signal (a 3PL order never emits it), so the router can never receive a 3PL order and the `THIRD_PARTY_LOGISTICS` arm is not an additive slot but unreachable-by-this-seam. See ADR-054 §D5/§D6.
+- **§D5** — the demand-planning ownership of the outbound self-vs-3PL routing decision (via 052 §D2① analogy) is **withdrawn as inherited**: `demand-planning-service` is replenishment-only (no order/allocation surface). The outbound routing decision has **no owner yet** and is deferred by ADR-054 §D5 pending a separate order-to-node allocation ADR (ADR-022 territory).
+
+Unchanged and still binding: §D1–§D3 (bootstrap, `ShipmentDispatchPort`, `CarrierRouter`), §D8 (wms TMS retirement, landed), §D9 (no `tms-platform`). Read those together with ADR-054 §D6.
