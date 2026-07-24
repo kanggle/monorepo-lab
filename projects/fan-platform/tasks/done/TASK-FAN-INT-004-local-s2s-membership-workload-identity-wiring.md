@@ -2,13 +2,16 @@
 
 TASK-FAN-INT-004
 
+> **⛔ SUPERSEDED (2026-07-24) by [`TASK-FAN-BE-029`](../review/TASK-FAN-BE-029-membership-workload-identity-positive-discriminator.md).**
+> This task's premise — a local docker-compose S2S credential wiring gap — was **falsified by live diagnosis**. The credentials ARE correct (`community-service-client`/`secret` matches IAM V0009) and IAM DOES mint a token. The real 403 cause is a **token-shape contract conflict**: the IAM `client_credentials` token is tenant-scoped and carries `tenant_id`, but membership-service's `WorkloadIdentityAuthoritiesConverter` rejected any token with `tenant_id` (an unsanctioned negative discriminator). That is a product defect in the receiver, fixed by BE-029 (positive `membership.read` scope discriminator). No local overlay change is needed.
+
 # Title
 
-Provision community→membership S2S workload identity in the iam.local local/demo bring-up
+Provision community→membership S2S workload identity in the iam.local local/demo bring-up (SUPERSEDED by BE-029)
 
 # Status
 
-ready
+done
 
 # Owner
 

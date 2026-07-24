@@ -66,15 +66,17 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-FAN-INT-004-local-s2s-membership-workload-identity-wiring.md` — **READY.** `MEMBERS_ONLY`/`PREMIUM` post read returns 403 even for an ACTIVE PREMIUM member in the `iam.local` local demo bring-up. **Not a product defect** — fail-close is by design (FAN-BE-010 AC-2 / FAN-BE-019); the gap is unprovisioned community→membership S2S workload identity in the local overlay (`COMMUNITY_SERVICE_CLIENT_ID/SECRET` + `IAM_TOKEN_URI` unset, IAM `V0009` client seed not guaranteed in the minimal iam.local). Wire the credentials + commit the (currently untracked) overlay; fail-closed deny for non-members must be preserved. (분석=Opus 4.8 / 구현 권장=Sonnet — 로컬 배선)
-
 ## in-progress
 
 (empty)
 
 ## review
 
+- `TASK-FAN-BE-029-membership-workload-identity-positive-discriminator.md` — **REVIEW (impl PR open).** membership `/internal` workload-identity 결함 수정 — `WorkloadIdentityAuthoritiesConverter`가 **tenant_id 있으면 거부**(부정 판별자)했으나, 실제 IAM cc 토큰은 tenant-scoped라 `tenant_id="fan-platform"`를 운반(TenantClaimTokenCustomizer가 fail-closed로 항상 스탬프) → 모든 멤버의 MEMBERS_ONLY/PREMIUM 읽기가 403(프로덕션 잠복 결함, 테스트가 tenant_id 없는 가짜 토큰으로 green-wash). Fix=**긍정 판별자**(필수 scope `membership.read`, tenant_id 무관; `security-rules.md` "exactly one of subject/scope", order-service `SystemClientSubjectValidator` 선례). 테스트 4파일을 실제 IAM shape으로 교정(`JwtTestHelper.signWorkloadToken`+converter/IT). **INT-004 supersede**(그 티켓의 "로컬 env 배선" 전제가 라이브 진단으로 반증). fan Integration Testcontainers CI가 권위(호스트 자원고갈로 로컬 gradle 불가). 분석·구현=Opus 4.8.
+
 ## done
+
+- `TASK-FAN-INT-004-local-s2s-membership-workload-identity-wiring.md` — **⛔ SUPERSEDED (2026-07-24) by TASK-FAN-BE-029.** 라이브 진단으로 전제 반증: "로컬 docker-compose S2S 자격증명 미프로비저닝"이 아니라(자격증명 정상·토큰 발급됨), 실제 원인은 **토큰-shape 계약 충돌**(IAM cc 토큰이 tenant_id 운반 vs membership converter가 tenant_id 있으면 거부). 수신측 제품 결함=BE-029로 수정, 로컬 오버레이 변경 불필요. 미구현 종결(no impl PR).
 
 - `TASK-FAN-BE-028-artist-directory-null-query-cast.md` — **DONE (2026-07-24, 3-dim verified — impl PR #2933 squash `2418c112e`; state=MERGED · `2418c112e` origin/main 편입(ancestor) · 머지 전 13 pass / 0 failing required).** artist 디렉터리 `GET /api/v1/artists`가 `q` 없이 호출되면 500(기본 "browse all" 랜딩이 도달=프로덕션 결함) — untyped `:q`가 null일 때 PostgreSQL이 `LOWER(('%'||?||'%'))` 서브트리를 못 typing해 `lower(bytea)`로 해석(42883). Fix=`ArtistJpaRepository.searchPublished`의 `:q` **두 occurrence 모두** `CAST(:q AS string)`(Hibernate가 named param 2회 바인딩=IS NULL 가드+CONCAT, 둘 다 캐스팅 필요; wms 형제 관용구). non-null `q` 경로 byte-보존. 신규 `ArtistDirectoryBrowseIntegrationTest`(PostgreSQL Testcontainers)가 null-`q`/null-`q`+type/non-null-`q` 3경로 잠금 — **fan Integration Testcontainers CI 레인 GREEN 2m27s가 권위**(Docker-less Windows SKIP, H2는 버그 마스킹). 2026-07-24 로컬 데모 시드 중 발굴. ⚠️ 인접 잠복 쌍둥이=wms `AdminUserJpaRepository.java`(별건 티켓). 분석·구현=Opus 4.8. [[project_fan_platform_seed_recipe_and_two_gaps]]
 

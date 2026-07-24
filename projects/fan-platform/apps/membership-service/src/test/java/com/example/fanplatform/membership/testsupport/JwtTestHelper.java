@@ -69,17 +69,24 @@ public final class JwtTestHelper {
     }
 
     /**
-     * Workload-identity client_credentials token: NO tenant_id, carries scope +
-     * client_id markers. {@code sub == client_id} is the canonical OAuth2
-     * client_credentials shape.
+     * Workload-identity client_credentials token, faithful to what the real IAM
+     * mints for {@code community-service-client}: {@code sub == aud == client_id},
+     * {@code scope=["membership.read"]} (JSON array, the SAS shape), and — like
+     * EVERY IAM grant — a {@code tenant_id} claim (the {@code TenantClaimTokenCustomizer}
+     * stamps it fail-closed; jwt-standard-claims.md). The receiver recognizes it
+     * by the {@code membership.read} scope, NOT by tenant_id absence
+     * (TASK-FAN-BE-029). No {@code client_id}/{@code azp} claim — the real cc token
+     * has none.
      */
     public String signWorkloadToken(String clientId) {
         Instant now = Instant.now();
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
                 .subject(clientId)
+                .audience(clientId)
                 .issuer(SAS_ISSUER)
-                .claim("client_id", clientId)
-                .claim("scope", "internal.membership.read")
+                .claim("tenant_id", DEFAULT_TENANT_ID)
+                .claim("tenant_type", "B2C")
+                .claim("scope", List.of("membership.read"))
                 .issueTime(Date.from(now))
                 .expirationTime(Date.from(now.plusSeconds(300)))
                 .jwtID(UUID.randomUUID().toString())
