@@ -303,7 +303,8 @@ create-dispatch route:
 
 | Method | External path | Purpose | Idempotency |
 |---|---|---|---|
-| GET | `/api/v1/logistics/dispatches/{id}` | inspect a dispatch | n/a |
+| GET | `/api/v1/logistics/dispatches/{id}` | inspect a dispatch by dispatch id | n/a |
+| GET | `/api/v1/logistics/dispatches/by-shipment/{shipmentId}` | inspect a dispatch by the shipment it dispatches (`dispatch.shipment_id` unique); no dispatch for that shipment → `404 DISPATCH_NOT_FOUND`. The dispatch-id-free entry point for the wms `:retry-tms-notify` relocation (TASK-SCM-BE-045, ADR-053 §D8) — a `shipmentId`-holding console resolves the dispatch, then calls `:retry`. | n/a |
 | POST | `/api/v1/logistics/dispatches/{id}:retry` | re-drive a `DISPATCH_FAILED` dispatch | server-side by dispatch state + `Idempotency-Key={shipment.id}` (already-`DISPATCHED` → cached ack, no vendor call) |
 
 ### Local management endpoints
