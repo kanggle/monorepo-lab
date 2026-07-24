@@ -10,8 +10,10 @@ import com.example.fanplatform.membership.domain.idempotency.IdempotencyKeyRepos
 import com.example.fanplatform.membership.domain.membership.Membership;
 import com.example.fanplatform.membership.domain.membership.MembershipRepository;
 import com.example.fanplatform.membership.domain.membership.MembershipTier;
-import com.example.fanplatform.membership.domain.payment.PaymentGatewayPort;
 import com.example.fanplatform.membership.domain.time.ClockPort;
+import com.example.libs.payment.PaymentAuthorization;
+import com.example.libs.payment.PaymentGatewayPort;
+import com.example.libs.payment.PaymentVerificationRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -91,13 +93,13 @@ public class SubscribeUseCase {
         if (amountMinor == 0L) {
             paymentRef = "upgrade_credit_" + UuidV7.randomString();
         } else {
-            PaymentGatewayPort.PaymentResult result = paymentGateway.authorize(
-                    amountMinor, cmd.planMonths(), cmd.paymentId(), cmd.idempotencyKey());
+            PaymentAuthorization result = paymentGateway.verify(new PaymentVerificationRequest(
+                    cmd.paymentId(), amountMinor, "KRW", null));
             if (!result.approved()) {
                 // Decline → NO row created, NO supersede, NO event (TX not yet mutated).
                 throw new PaymentDeclinedException();
             }
-            paymentRef = result.paymentRef();
+            paymentRef = result.vendorPaymentRef();
         }
 
         // 4) Supersede the members-only (upgrade only) + create the new membership.

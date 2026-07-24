@@ -8,8 +8,9 @@ import com.example.fanplatform.membership.domain.idempotency.IdempotencyKeyRepos
 import com.example.fanplatform.membership.domain.membership.Membership;
 import com.example.fanplatform.membership.domain.membership.MembershipRepository;
 import com.example.fanplatform.membership.domain.membership.MembershipTier;
-import com.example.fanplatform.membership.domain.payment.PaymentGatewayPort;
 import com.example.fanplatform.membership.domain.time.ClockPort;
+import com.example.libs.payment.PaymentAuthorization;
+import com.example.libs.payment.PaymentGatewayPort;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,8 +28,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -67,8 +68,10 @@ class RenewMembershipUseCaseTest {
         when(membershipRepository.findByIdScoped("m0", "acc1", "fan-platform")).thenReturn(Optional.of(p));
         when(idempotencyKeyRepository.find("fan-platform", "acc1", "k1")).thenReturn(Optional.empty());
         when(clock.now()).thenReturn(NOW);
-        when(paymentGateway.authorize(anyLong(), anyInt(), eq("tok_visa_demo"), eq("k1")))
-                .thenReturn(PaymentGatewayPort.PaymentResult.approved("pgmock_new"));
+        // The renew charge is verified against the token; amount is the tier list price (not
+        // pinned here, matching the old anyLong() matcher) — match on paymentReference.
+        when(paymentGateway.verify(argThat(r -> "tok_visa_demo".equals(r.paymentReference()))))
+                .thenReturn(PaymentAuthorization.approved("pgmock_new", null, null));
         when(membershipRepository.save(any(Membership.class))).thenAnswer(inv -> inv.getArgument(0));
 
         MembershipView view = useCase.execute(cmd("m0", "k1"));
@@ -88,8 +91,8 @@ class RenewMembershipUseCaseTest {
         when(membershipRepository.findByIdScoped("m0", "acc1", "fan-platform")).thenReturn(Optional.of(p));
         when(idempotencyKeyRepository.find("fan-platform", "acc1", "k1")).thenReturn(Optional.empty());
         when(clock.now()).thenReturn(NOW);
-        when(paymentGateway.authorize(anyLong(), anyInt(), anyString(), anyString()))
-                .thenReturn(PaymentGatewayPort.PaymentResult.approved("pgmock_new"));
+        when(paymentGateway.verify(any()))
+                .thenReturn(PaymentAuthorization.approved("pgmock_new", null, null));
         when(membershipRepository.save(any(Membership.class))).thenAnswer(inv -> inv.getArgument(0));
 
         MembershipView view = useCase.execute(cmd("m0", "k1"));
@@ -108,7 +111,7 @@ class RenewMembershipUseCaseTest {
         assertThatThrownBy(() -> useCase.execute(cmd("m0", "k1")))
                 .isInstanceOf(MembershipNotRenewableException.class);
 
-        verify(paymentGateway, never()).authorize(anyLong(), anyInt(), anyString(), anyString());
+        verify(paymentGateway, never()).verify(any());
         verify(membershipRepository, never()).save(any());
         verify(eventPublisher, never()).publishActivated(anyString(), anyString(), anyString(),
                 any(), anyInt(), any(), any(), any());
@@ -129,8 +132,8 @@ class RenewMembershipUseCaseTest {
         Membership p = prior("m0", NOW.minus(40, ChronoUnit.DAYS), NOW.minus(1, ChronoUnit.DAYS));
         when(membershipRepository.findByIdScoped("m0", "acc1", "fan-platform")).thenReturn(Optional.of(p));
         when(idempotencyKeyRepository.find("fan-platform", "acc1", "k2")).thenReturn(Optional.empty());
-        when(paymentGateway.authorize(anyLong(), anyInt(), eq("tok_decline"), eq("k2")))
-                .thenReturn(PaymentGatewayPort.PaymentResult.declined());
+        when(paymentGateway.verify(argThat(r -> "tok_decline".equals(r.paymentReference()))))
+                .thenReturn(PaymentAuthorization.declined());
 
         RenewCommand declineCmd = new RenewCommand(ACTOR, "m0", 1, "tok_decline", "k2");
         assertThatThrownBy(() -> useCase.execute(declineCmd))

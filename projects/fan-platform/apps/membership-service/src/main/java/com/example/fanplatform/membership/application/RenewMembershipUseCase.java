@@ -10,9 +10,11 @@ import com.example.fanplatform.membership.domain.idempotency.IdempotencyKey;
 import com.example.fanplatform.membership.domain.idempotency.IdempotencyKeyRepository;
 import com.example.fanplatform.membership.domain.membership.Membership;
 import com.example.fanplatform.membership.domain.membership.MembershipRepository;
-import com.example.fanplatform.membership.domain.payment.PaymentGatewayPort;
 import com.example.fanplatform.membership.domain.pricing.MembershipPricing;
 import com.example.fanplatform.membership.domain.time.ClockPort;
+import com.example.libs.payment.PaymentAuthorization;
+import com.example.libs.payment.PaymentGatewayPort;
+import com.example.libs.payment.PaymentVerificationRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -77,8 +79,8 @@ public class RenewMembershipUseCase {
 
         // 3) PG authorize (tier-aware price — renew keeps the prior tier) ---------
         long amountMinor = MembershipPricing.listChargeMinor(prior.getTier(), cmd.planMonths());
-        PaymentGatewayPort.PaymentResult result = paymentGateway.authorize(
-                amountMinor, cmd.planMonths(), cmd.paymentId(), cmd.idempotencyKey());
+        PaymentAuthorization result = paymentGateway.verify(new PaymentVerificationRequest(
+                cmd.paymentId(), amountMinor, "KRW", null));
         if (!result.approved()) {
             throw new PaymentDeclinedException();
         }
@@ -91,7 +93,7 @@ public class RenewMembershipUseCase {
 
         Membership renewed = Membership.activate(
                 membershipId, tenantId, accountId, prior.getTier(),
-                validFrom, validTo, cmd.planMonths(), result.paymentRef(), now);
+                validFrom, validTo, cmd.planMonths(), result.vendorPaymentRef(), now);
         Membership saved = membershipRepository.save(renewed);
 
         idempotencyKeyRepository.save(IdempotencyKey.create(

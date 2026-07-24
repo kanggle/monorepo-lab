@@ -173,7 +173,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-479-membership-migrate-libs-payment.md` — **🔵 REVIEW (impl PR open, verified) — [ADR-MONO-056](../docs/adr/ADR-MONO-056-payment-gateway-abstraction.md) Phase 1 소비자1.** membership-service를 `libs/payment-core`+`libs/payment-portone`로 마이그레이션(behavior-preserving). 사설 포트/`PortOnePaymentAdapter`/그 테스트 삭제 → lib 포트 사용. `MockPaymentGatewayAdapter`가 lib 포트 구현(@Profile("!portone") 기본 유지, tok_decline→declined 동일). **배선**: 새 `PaymentGatewayConfig`가 lib `PortOnePaymentAdapter`를 `@Bean @Profile("portone")`로 등록(컴포넌트스캔 안 함=이중빈·keyless 실PG 방지). **config 키 `fan.payment.portone.*` 유지**(rename 시 라이브 데모 `FAN_PAYMENT_PORTONE_API_SECRET` 깨짐 회피). 호출부 `authorize`→`verify(PaymentVerificationRequest(ref,amount,"KRW",null))`. **독립 검증**: diff=membership-service만(libs/·타프로젝트 0) · compile+유닛(Subscribe5/Renew5/Mock3) GREEN · 배선·mock·키 1:1 · money-safety(decline→approve 전환 0). 분석=Opus / 구현=backend-engineer(Opus dispatch) + 독립 재검증.
 
 ## done
 

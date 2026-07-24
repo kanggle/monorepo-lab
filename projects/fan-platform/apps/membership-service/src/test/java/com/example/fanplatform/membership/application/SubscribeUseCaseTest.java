@@ -8,9 +8,11 @@ import com.example.fanplatform.membership.domain.idempotency.IdempotencyKeyRepos
 import com.example.fanplatform.membership.domain.membership.Membership;
 import com.example.fanplatform.membership.domain.membership.MembershipRepository;
 import com.example.fanplatform.membership.domain.membership.MembershipTier;
-import com.example.fanplatform.membership.domain.payment.PaymentGatewayPort;
 import com.example.fanplatform.membership.domain.pricing.UpgradeProration;
 import com.example.fanplatform.membership.domain.time.ClockPort;
+import com.example.libs.payment.PaymentAuthorization;
+import com.example.libs.payment.PaymentGatewayPort;
+import com.example.libs.payment.PaymentVerificationRequest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,7 +29,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -55,6 +56,16 @@ class SubscribeUseCaseTest {
         return new SubscribeCommand(ACTOR, MembershipTier.PREMIUM, 1, "tok_visa_demo", key);
     }
 
+    /**
+     * The shared PG port takes a single verification request: paymentReference (token) +
+     * expectedAmountMinor + currency (always "KRW" for this service). planMonths /
+     * idempotencyKey are no longer part of the PG contract (the real adapter never used them),
+     * so the amount + token intent of the old 4-arg matchers is preserved via record equality.
+     */
+    private static PaymentVerificationRequest verifyReq(long amountMinor, String token) {
+        return new PaymentVerificationRequest(token, amountMinor, "KRW", null);
+    }
+
     /** No members-only held → plain PREMIUM list price (17,900), no supersede. */
     private void stubPlainPremiumAssessment() {
         when(upgradeQuoter.assess(eq(MembershipTier.PREMIUM), eq(1), eq("acc1"), eq("fan-platform"), any()))
@@ -68,8 +79,8 @@ class SubscribeUseCaseTest {
         when(clock.now()).thenReturn(NOW);
         when(idempotencyKeyRepository.find("fan-platform", "acc1", "key-1")).thenReturn(Optional.empty());
         stubPlainPremiumAssessment();
-        when(paymentGateway.authorize(eq(17_900L), anyInt(), eq("tok_visa_demo"), eq("key-1")))
-                .thenReturn(PaymentGatewayPort.PaymentResult.approved("pgmock_ref"));
+        when(paymentGateway.verify(verifyReq(17_900L, "tok_visa_demo")))
+                .thenReturn(PaymentAuthorization.approved("pgmock_ref", null, null));
         when(membershipRepository.save(any(Membership.class))).thenAnswer(inv -> inv.getArgument(0));
 
         MembershipView view = useCase.execute(cmd("key-1"));
@@ -77,7 +88,7 @@ class SubscribeUseCaseTest {
         assertThat(view.status().name()).isEqualTo("ACTIVE");
         assertThat(view.paymentRef()).isEqualTo("pgmock_ref");
         assertThat(view.validFrom()).isEqualTo(NOW);
-        verify(paymentGateway).authorize(eq(17_900L), eq(1), eq("tok_visa_demo"), eq("key-1"));
+        verify(paymentGateway).verify(verifyReq(17_900L, "tok_visa_demo"));
         verify(membershipRepository).save(any(Membership.class));
         verify(idempotencyKeyRepository).save(any(IdempotencyKey.class));
         verify(eventPublisher).publishActivated(anyString(), eq("fan-platform"), eq("acc1"),
@@ -96,15 +107,15 @@ class SubscribeUseCaseTest {
         UpgradeProration.Quote q = new UpgradeProration.Quote(17_900, 3_950, 13_950, 15);
         when(upgradeQuoter.assess(eq(MembershipTier.PREMIUM), eq(1), eq("acc1"), eq("fan-platform"), any()))
                 .thenReturn(new UpgradeQuoter.UpgradeAssessment(Optional.of(members), q));
-        when(paymentGateway.authorize(eq(13_950L), eq(1), eq("tok_visa_demo"), eq("key-up")))
-                .thenReturn(PaymentGatewayPort.PaymentResult.approved("pgmock_up"));
+        when(paymentGateway.verify(verifyReq(13_950L, "tok_visa_demo")))
+                .thenReturn(PaymentAuthorization.approved("pgmock_up", null, null));
         when(membershipRepository.save(any(Membership.class))).thenAnswer(inv -> inv.getArgument(0));
 
         useCase.execute(cmd("key-up"));
 
         // The members-only row is superseded (canceled) and the PORATED amount is charged.
         assertThat(members.isCanceled()).isTrue();
-        verify(paymentGateway).authorize(eq(13_950L), eq(1), eq("tok_visa_demo"), eq("key-up"));
+        verify(paymentGateway).verify(verifyReq(13_950L, "tok_visa_demo"));
         verify(eventPublisher).publishCanceled(eq("m-members"), eq("fan-platform"), eq("acc1"),
                 eq(MembershipTier.MEMBERS_ONLY), eq("SUPERSEDED_BY_UPGRADE"), any(Instant.class), any(Instant.class));
         verify(eventPublisher).publishActivated(anyString(), eq("fan-platform"), eq("acc1"),
@@ -121,8 +132,8 @@ class SubscribeUseCaseTest {
         when(upgradeQuoter.assess(eq(MembershipTier.PREMIUM), eq(1), eq("acc1"), eq("fan-platform"), any()))
                 .thenReturn(new UpgradeQuoter.UpgradeAssessment(
                         Optional.empty(), new UpgradeProration.Quote(17_900, 0, 17_900, 0)));
-        when(paymentGateway.authorize(eq(17_900L), anyInt(), eq("tok_decline"), eq("key-2")))
-                .thenReturn(PaymentGatewayPort.PaymentResult.declined());
+        when(paymentGateway.verify(verifyReq(17_900L, "tok_decline")))
+                .thenReturn(PaymentAuthorization.declined());
 
         SubscribeCommand declineCmd = new SubscribeCommand(
                 ACTOR, MembershipTier.PREMIUM, 1, "tok_decline", "key-2");
@@ -154,7 +165,7 @@ class SubscribeUseCaseTest {
         MembershipView view = useCase.execute(cmd("key-1"));
 
         assertThat(view.membershipId()).isEqualTo("m-stored");
-        verify(paymentGateway, never()).authorize(anyLong(), anyInt(), anyString(), anyString());
+        verify(paymentGateway, never()).verify(any());
         verify(membershipRepository, never()).save(any());
         verify(idempotencyKeyRepository, never()).save(any());
     }
@@ -169,7 +180,7 @@ class SubscribeUseCaseTest {
         assertThatThrownBy(() -> useCase.execute(cmd("key-1")))
                 .isInstanceOf(IdempotencyKeyConflictException.class);
 
-        verify(paymentGateway, never()).authorize(anyLong(), anyInt(), anyString(), anyString());
+        verify(paymentGateway, never()).verify(any());
         verify(membershipRepository, never()).save(any());
     }
 

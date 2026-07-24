@@ -1,6 +1,7 @@
 package com.example.fanplatform.membership.infrastructure.payment;
 
-import com.example.fanplatform.membership.domain.payment.PaymentGatewayPort;
+import com.example.libs.payment.PaymentAuthorization;
+import com.example.libs.payment.PaymentVerificationRequest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -10,29 +11,32 @@ class MockPaymentGatewayAdapterTest {
 
     private final MockPaymentGatewayAdapter adapter = new MockPaymentGatewayAdapter();
 
-    @Test
-    @DisplayName("tok_decline → declined, no paymentRef")
-    void declineToken() {
-        PaymentGatewayPort.PaymentResult result =
-                adapter.authorize(9900, 1, MockPaymentGatewayAdapter.DECLINE_TOKEN, "idem-1");
-        assertThat(result.approved()).isFalse();
-        assertThat(result.paymentRef()).isNull();
+    /** The mock keys only off the payment reference; amount/currency/order are inert. */
+    private static PaymentVerificationRequest req(String paymentReference) {
+        return new PaymentVerificationRequest(paymentReference, 9900L, "KRW", null);
     }
 
     @Test
-    @DisplayName("any other token → approved with pgmock_ paymentRef")
+    @DisplayName("tok_decline → declined, no vendorPaymentRef")
+    void declineToken() {
+        PaymentAuthorization result = adapter.verify(req(MockPaymentGatewayAdapter.DECLINE_TOKEN));
+        assertThat(result.approved()).isFalse();
+        assertThat(result.vendorPaymentRef()).isNull();
+    }
+
+    @Test
+    @DisplayName("any other token → approved with pgmock_ vendorPaymentRef")
     void approveToken() {
-        PaymentGatewayPort.PaymentResult result =
-                adapter.authorize(9900, 1, "tok_visa_demo", "idem-2");
+        PaymentAuthorization result = adapter.verify(req("tok_visa_demo"));
         assertThat(result.approved()).isTrue();
-        assertThat(result.paymentRef()).startsWith("pgmock_");
+        assertThat(result.vendorPaymentRef()).startsWith("pgmock_");
     }
 
     @Test
     @DisplayName("null token → approved (default)")
     void nullTokenApproves() {
-        PaymentGatewayPort.PaymentResult result = adapter.authorize(9900, 1, null, "idem-3");
+        PaymentAuthorization result = adapter.verify(req(null));
         assertThat(result.approved()).isTrue();
-        assertThat(result.paymentRef()).startsWith("pgmock_");
+        assertThat(result.vendorPaymentRef()).startsWith("pgmock_");
     }
 }
