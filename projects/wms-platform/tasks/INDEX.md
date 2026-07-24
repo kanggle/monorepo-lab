@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-560-retire-tms-side-channel.md` — **READY (2026-07-24, ADR-MONO-053 §D8 wms half — closes D8).** Retire the outbound-service **TMS side-channel** in full: the after-commit `ShipmentNotificationListener` push, `:retry-tms-notify` REST recovery, the whole `adapter/out/tms/*` subsystem (`TmsClientAdapter`/stub/config/mapper/dtos/metrics/dedupe), `SagaStatus.SHIPPED_NOT_NOTIFIED` + its two transitions, `tms_request_dedupe` table, `Shipment.tms_status`, and ~11 spec sections (+ delete `tms-shipment-api.md`). **Critical**: TMS was a **parallel alert side-channel, never the saga completion path** (`SHIPPED → COMPLETED` runs on `inventory.confirmed`), so the ↔inventory choreography + reserve/cancel/sweeper paths are **untouched** — main-path saga tests pass unmodified. New Flyway migration: `SHIPPED_NOT_NOTIFIED`→`SHIPPED` (rejoin inventory-confirm path; ~0 rows since stub always acked) + `DROP` dedupe table + `DROP COLUMN tms_status`. **wms-internal** — unblocked because logistics owns dispatch (BE-042/043/044) and the console repointed off the wms endpoint (PC-FE-258). grep-consumers discipline per removal (survivor = defect). No scm/console change. 선행=PC-FE-258 ✓. 후속=없음 (D8 종결; 3PL Phase 2 gated on ADR-052 §D8-3). 분석=Opus 4.8 / 구현 권장=backend-engineer(opus).
 
 > 2026-07-20 (`TASK-MONO-451`): 위 두 행은 **디스크에는 `ready/` 에 있는데 이 섹션이 `(empty)` 라고 선언**하고 있었다 — 아래 2026-07-12 노트와 정반대 방향의 같은 결함이다. 그때는 표가 끝난 일을 가리켰고, 이번엔 표가 **살아있는 일을 숨겼다**. 큐를 표로 고르는 사람에게 후자는 **일이 없다는 거짓 보고**다. 이제 `scripts/check-index-queue-drift.sh` 가 양방향으로 대조한다.
 
