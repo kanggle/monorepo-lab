@@ -641,7 +641,7 @@ describe('OutboundOpsScreen — cancel action (TASK-PC-FE-085)', () => {
   });
 });
 
-describe('OutboundOpsScreen — TMS retry action (TASK-PC-FE-087)', () => {
+describe('OutboundOpsScreen — dispatch retry action (TASK-PC-FE-258)', () => {
   async function drillInto(
     user: ReturnType<typeof userEvent.setup>,
     seedStatus: string,
@@ -658,7 +658,7 @@ describe('OutboundOpsScreen — TMS retry action (TASK-PC-FE-087)', () => {
     );
   }
 
-  it('shows the TMS retry action ONLY for SHIPPED + SHIPPED_NOT_NOTIFIED (with admin note)', async () => {
+  it('shows the 발송 재시도 action for a SHIPPED order (independent of the wms saga state)', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -667,15 +667,19 @@ describe('OutboundOpsScreen — TMS retry action (TASK-PC-FE-087)', () => {
     );
     const user = userEvent.setup();
     await drillInto(user, 'SHIPPED');
-    expect(screen.getByTestId('outbound-action-retry-tms')).toBeInTheDocument();
-    expect(screen.getByTestId('outbound-retry-admin-note')).toBeInTheDocument();
+    expect(
+      screen.getByTestId('outbound-action-retry-dispatch'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId('outbound-retry-dispatch-note'),
+    ).toBeInTheDocument();
     // It is the recovery action — the cancel button is absent for SHIPPED.
     expect(
       screen.queryByTestId('outbound-action-cancel-order'),
     ).not.toBeInTheDocument();
   });
 
-  it('hides the TMS retry action for a healthy SHIPPED order (saga COMPLETED)', async () => {
+  it('still shows the 발송 재시도 action for a SHIPPED order whose saga is COMPLETED (no wms SHIPPED_NOT_NOTIFIED gate)', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(jsonResponse(drillEnvelope('SHIPPED', 'COMPLETED'))),
@@ -683,11 +687,11 @@ describe('OutboundOpsScreen — TMS retry action (TASK-PC-FE-087)', () => {
     const user = userEvent.setup();
     await drillInto(user, 'SHIPPED');
     expect(
-      screen.queryByTestId('outbound-action-retry-tms'),
-    ).not.toBeInTheDocument();
+      screen.getByTestId('outbound-action-retry-dispatch'),
+    ).toBeInTheDocument();
   });
 
-  it('hides the TMS retry action for a non-SHIPPED order (PACKED)', async () => {
+  it('hides the 발송 재시도 action for a non-SHIPPED order (PACKED)', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -697,15 +701,15 @@ describe('OutboundOpsScreen — TMS retry action (TASK-PC-FE-087)', () => {
     const user = userEvent.setup();
     await drillInto(user, 'PACKED');
     expect(
-      screen.queryByTestId('outbound-action-retry-tms'),
+      screen.queryByTestId('outbound-action-retry-dispatch'),
     ).not.toBeInTheDocument();
   });
 
-  it('confirming retry posts (reason-free) to the retry-tms proxy with an Idempotency-Key', async () => {
+  it('confirming retry posts (reason-free) to the retry-dispatch proxy with an Idempotency-Key', async () => {
     const fetchMock = vi.fn((url: string, _init?: RequestInit) =>
       Promise.resolve(
-        String(url).includes('/retry-tms')
-          ? jsonResponse({ tmsStatus: 'NOTIFIED', sagaState: 'COMPLETED' })
+        String(url).includes('/retry-dispatch')
+          ? jsonResponse({ id: 'dsp-1', status: 'DISPATCHED' })
           : jsonResponse(drillEnvelope('SHIPPED', 'SHIPPED_NOT_NOTIFIED')),
       ),
     );
@@ -713,17 +717,19 @@ describe('OutboundOpsScreen — TMS retry action (TASK-PC-FE-087)', () => {
     const user = userEvent.setup();
     await drillInto(user, 'SHIPPED');
 
-    await user.click(screen.getByTestId('outbound-action-retry-tms'));
+    await user.click(screen.getByTestId('outbound-action-retry-dispatch'));
     expect(screen.getByTestId('outbound-action-dialog')).toBeInTheDocument();
     await user.click(screen.getByTestId('outbound-action-confirm'));
 
     await waitFor(() =>
       expect(
-        fetchMock.mock.calls.some((c) => String(c[0]).includes('/retry-tms')),
+        fetchMock.mock.calls.some((c) =>
+          String(c[0]).includes('/retry-dispatch'),
+        ),
       ).toBe(true),
     );
     const call = fetchMock.mock.calls.find((c) =>
-      String(c[0]).includes('/retry-tms'),
+      String(c[0]).includes('/retry-dispatch'),
     )!;
     const init = call[1] as RequestInit;
     expect(init.method).toBe('POST');
@@ -736,7 +742,7 @@ describe('OutboundOpsScreen — TMS retry action (TASK-PC-FE-087)', () => {
   it('404 SHIPMENT_NOT_FOUND → inline error (no crash)', async () => {
     const fetchMock = vi.fn((url: string) =>
       Promise.resolve(
-        String(url).includes('/retry-tms')
+        String(url).includes('/retry-dispatch')
           ? new Response(
               JSON.stringify({ code: 'SHIPMENT_NOT_FOUND', message: 'x' }),
               { status: 404, headers: { 'Content-Type': 'application/json' } },
@@ -748,12 +754,12 @@ describe('OutboundOpsScreen — TMS retry action (TASK-PC-FE-087)', () => {
     const user = userEvent.setup();
     await drillInto(user, 'SHIPPED');
 
-    await user.click(screen.getByTestId('outbound-action-retry-tms'));
+    await user.click(screen.getByTestId('outbound-action-retry-dispatch'));
     await user.click(screen.getByTestId('outbound-action-confirm'));
 
     await waitFor(() =>
       expect(screen.getByTestId('outbound-action-error')).toHaveTextContent(
-        '출고 건을 찾을 수 없습니다',
+        '발송 정보',
       ),
     );
     expect(
@@ -761,10 +767,38 @@ describe('OutboundOpsScreen — TMS retry action (TASK-PC-FE-087)', () => {
     ).toBeInTheDocument();
   });
 
-  it('403 FORBIDDEN (non-admin) → inline permission message', async () => {
+  it('404 DISPATCH_NOT_FOUND (no dispatch yet) → inline actionable "아직 발송 접수 전" (no crash)', async () => {
     const fetchMock = vi.fn((url: string) =>
       Promise.resolve(
-        String(url).includes('/retry-tms')
+        String(url).includes('/retry-dispatch')
+          ? new Response(
+              JSON.stringify({ code: 'DISPATCH_NOT_FOUND', message: 'x' }),
+              { status: 404, headers: { 'Content-Type': 'application/json' } },
+            )
+          : jsonResponse(drillEnvelope('SHIPPED', 'SHIPPED_NOT_NOTIFIED')),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    await drillInto(user, 'SHIPPED');
+
+    await user.click(screen.getByTestId('outbound-action-retry-dispatch'));
+    await user.click(screen.getByTestId('outbound-action-confirm'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('outbound-action-error')).toHaveTextContent(
+        '아직 발송 접수 전',
+      ),
+    );
+    expect(
+      screen.getByRole('heading', { name: 'WMS 출고' }),
+    ).toBeInTheDocument();
+  });
+
+  it('403 FORBIDDEN → inline permission message', async () => {
+    const fetchMock = vi.fn((url: string) =>
+      Promise.resolve(
+        String(url).includes('/retry-dispatch')
           ? new Response(JSON.stringify({ code: 'FORBIDDEN', message: 'x' }), {
               status: 403,
               headers: { 'Content-Type': 'application/json' },
@@ -776,7 +810,7 @@ describe('OutboundOpsScreen — TMS retry action (TASK-PC-FE-087)', () => {
     const user = userEvent.setup();
     await drillInto(user, 'SHIPPED');
 
-    await user.click(screen.getByTestId('outbound-action-retry-tms'));
+    await user.click(screen.getByTestId('outbound-action-retry-dispatch'));
     await user.click(screen.getByTestId('outbound-action-confirm'));
 
     await waitFor(() =>

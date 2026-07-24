@@ -520,14 +520,14 @@ the **§ 3 parity matrix is NOT mutated** (additive domain scope, no § 3 row).
   | 7 | **seal packing unit** | `PATCH /packing-units/{id}` (§ 3.2, `seal:true`) | **mutation** | `OUTBOUND_WRITE` |
   | 8 | **confirm shipping** | `POST /orders/{id}/shipments` (§ 4.1) | **mutation** | `OUTBOUND_WRITE` |
   | 9 | **cancel order** | `POST /orders/{id}:cancel` (§ 1.4) | **mutation** | `OUTBOUND_WRITE` (PICKING) / `OUTBOUND_ADMIN` (post-pick) |
-  | 10 | **retry TMS notify** | `POST /shipments/{id}:retry-tms-notify` (§ 4.3) | **mutation** | `OUTBOUND_ADMIN` |
+  | 10 | **retry dispatch** (repointed — TASK-PC-FE-258) | logistics `POST /api/v1/logistics/dispatches/{id}:retry` (scm gateway) via the wms-admin shipment resolve → logistics `by-shipment` dispatch resolve | **mutation** | producer-enforced (scm-tenant JWT) |
 
   The wms outbound **manual order-create** (`POST /orders`, § 1.1) remains
   **out of v1 console scope** — deferred, not silently dropped (manual create
   contradicts the auto-create-from-ecommerce model). The console outbound
   surface = the read set + the forward pick→pack→ship lifecycle advance + the
-  cancel action (op 9, TASK-PC-FE-085) + the TMS-retry recovery action
-  (op 10, TASK-PC-FE-087).
+  cancel action (op 9, TASK-PC-FE-085) + the dispatch-retry recovery action
+  (op 10, TASK-PC-FE-087 → repointed to logistics by TASK-PC-FE-258).
 
   **Cancel (op 9 — the one NON-forward action; TASK-PC-FE-085) mutation shape**
   (consumes producer § 1.4 unchanged; diverges from the reason-free ops 5–8 in
@@ -552,39 +552,58 @@ the **§ 3 parity matrix is NOT mutated** (additive domain scope, no § 3 row).
     `CANCELLED` later once `inventory.released` is consumed. The UI surfaces a
     non-blocking "재고 해제 대기" hint, never asserting a synchronous terminal.
 
-  **TMS retry (op 10 — the recovery admin action; TASK-PC-FE-087) mutation
-  shape** (consumes producer § 4.3 unchanged; the recovery sibling to cancel —
-  re-triggers the carrier notification for a shipped order whose TMS notify
-  failed):
-  - **trigger signal** — surfaced ONLY for an order with `status=SHIPPED` AND
-    saga **`SHIPPED_NOT_NOTIFIED`** (producer allows § 4.3 only when the
-    shipment `tmsStatus == NOTIFY_FAILED`; the order saga state is the
-    order-level read signal — the admin `ShipmentSummary` read-model does NOT
-    project `tmsStatus`, so the saga (op 3) is authoritative for "needs retry").
-  - **shipment-id resolution (the net-new mechanic — NOT a producer change)** —
-    § 4.3 is **shipment-keyed**, but the outbound order-centric reads carry no
-    `shipmentId` (§ 1.2 order detail = create-response shape; there is no
-    `GET /orders/{id}/shipments`). The proxy resolves it server-side from the
-    **admin read-model** `GET /api/v1/admin/dashboard/shipments?orderId={id}`
-    (admin-service-api.md § 1.3 — the `orderId` filter is contracted) → first
-    `shipmentId`. This reads `WMS_ADMIN_BASE_URL` (§ 2.4.5) with the **SAME**
-    IAM-OIDC domain-facing credential as the outbound mutation — same wms
-    gateway, distinct `/api/v1/admin` vs `/api/v1/outbound` path prefix. No
-    shipment resolves → `404 SHIPMENT_NOT_FOUND` inline (NO outbound retry POST
-    is fired).
-  - **reason-free** — re-notifies the carrier only (stock already consumed),
-    UNLIKE cancel's required reason. Empty/`{}` body + an `Idempotency-Key`
-    (UUID, stable per a confirmed retry / fresh per a new attempt). NO
-    `X-Operator-Reason` (the wms surface still has none).
-  - **role** — producer-enforced **`OUTBOUND_ADMIN`** (no escalation matrix,
-    UNLIKE cancel). The console does NOT pre-gate on role — it attempts and maps
-    a `403 FORBIDDEN` to an inline actionable state, plus a pre-emptive "needs
-    OUTBOUND_ADMIN" hint.
-  - **outcomes** — success: `tmsStatus → NOTIFIED`, `sagaState → COMPLETED`
-    (recovery). Not in `NOTIFY_FAILED` → `422 STATE_TRANSITION_INVALID`. Same
-    `Idempotency-Key` re-retry → `409 DUPLICATE_REQUEST` (idempotent no-op — no
-    double carrier notification). A still-failing carrier leaves the shipment
-    `NOTIFY_FAILED` / saga `SHIPPED_NOT_NOTIFIED` → the action stays available.
+  **Dispatch retry (op 10 — the recovery action; TASK-PC-FE-087, REPOINTED to
+  logistics by TASK-PC-FE-258 / ADR-MONO-053 §D8) mutation shape.** Carrier
+  dispatch moved from the wms TMS side-channel to **`logistics-service`**
+  (ADR-053 Phase 1, live) on the **scm gateway**; this action now re-drives a
+  failed **carrier dispatch** instead of the retired wms
+  `:retry-tms-notify`. The operator mental model ("re-send this shipment to the
+  carrier") is preserved — only the backend it hits changed. The wms
+  `:retry-tms-notify` endpoint + TMS subsystem retirement is a **separate
+  wms-internal follow-up task** (unblocked once this repoint lands); no
+  `projects/wms-platform/` change is part of this binding.
+  - **trigger signal** — surfaced for an order with `status=SHIPPED` (a carrier
+    dispatch exists only once the shipment is confirmed). It **no longer depends
+    on the wms `tmsStatus` / `SHIPPED_NOT_NOTIFIED` saga state** (retired D8
+    side-channel). The real "does a retry apply?" signal is the **logistics
+    dispatch status** (`DISPATCH_FAILED` → retry meaningful), resolved
+    server-side at action time; the action is otherwise the reason-free
+    always-available recovery affordance.
+  - **two-hop resolution (orderId → shipmentId → dispatchId), two 404s** — the
+    logistics `:retry` is **dispatch-id-keyed**, but the outbound order-centric
+    reads carry no `shipmentId` (§ 1.2 order detail = create-response shape; no
+    `GET /orders/{id}/shipments`) and no `dispatchId`. The proxy resolves in two
+    hops: (1) `shipmentId` from the wms **admin read-model**
+    `GET /api/v1/admin/dashboard/shipments?orderId={id}` (admin-service-api.md
+    § 1.3 — `WMS_ADMIN_BASE_URL`, § 2.4.5 credential); (2) the dispatch from
+    logistics `GET /api/v1/logistics/dispatches/by-shipment/{shipmentId}`
+    (gateway-public-routes.md § logistics-service — BE-045). No shipment →
+    `404 SHIPMENT_NOT_FOUND` inline ("발송 정보 없음"); a shipment but no dispatch
+    yet (the wms `outbound.shipping.confirmed` seam event not consumed) →
+    `404 DISPATCH_NOT_FOUND` inline ("아직 발송 접수 전"). **Both are inline
+    actionable states — NO `:retry` POST is fired on either.**
+  - **gateway + credential REUSE (the crux — NOT a new credential)** — the
+    logistics resolve + retry go through the **scm gateway**
+    (`SCM_GATEWAY_BASE_URL`, default `http://scm.local`) reusing the **same
+    domain-facing IAM OIDC credential + `callScmGateway` client the console
+    already uses for the § 2.4.6 / § 2.4.6.1 scm demand-planning mutations**
+    (the scm gateway validates the IAM RS256 token + `tenant_id ∈ {scm,*}`
+    claim producer-side). This binding adds **no new env var, no new IAM
+    entitlement, no new error code**. The logistics calls are NOT routed through
+    the wms `callOutbound` client (a distinct gateway/base + nested error
+    envelope). A logistics outage degrades ONLY the wms-outbound section (reuses
+    `WmsOutboundUnavailableError` → `mapOutboundError` → 503).
+  - **reason-free** — re-drives the carrier dispatch only (stock already
+    consumed), UNLIKE cancel's required reason. Empty `{}` body + an
+    `Idempotency-Key` (UUID, stable per a confirmed retry / fresh per a new
+    attempt). NO `X-Operator-Reason`, NO `X-Tenant-Id`.
+  - **role** — producer-enforced (a valid scm-tenant JWT). The console does NOT
+    pre-gate on role — it attempts and maps a `403 FORBIDDEN` / `TENANT_FORBIDDEN`
+    to an inline actionable state.
+  - **outcomes** — success: the re-driven dispatch (`status → DISPATCHED`). The
+    logistics `:retry` is naturally idempotent (an already-`DISPATCHED` dispatch
+    returns a cached ack, no vendor call). A non-`DISPATCH_FAILED` dispatch is
+    handled inline by the producer.
 
   § 3 parity matrix **not** mutated (additive non-IAM domain mutation, like the
   rest of § 2.4.5.1).

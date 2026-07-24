@@ -41,6 +41,8 @@ const { ENV } = vi.hoisted(() => ({
     WMS_TIMEOUT_MS: 50,
     WMS_OUTBOUND_BASE_URL: 'http://wms.local/api/v1/outbound',
     WMS_OUTBOUND_TIMEOUT_MS: 50,
+    SCM_GATEWAY_BASE_URL: 'http://scm.local',
+    SCM_TIMEOUT_MS: 50,
     LOG_LEVEL: 'info' as const,
     NEXT_PUBLIC_APP_URL: 'http://console.local',
   },
@@ -56,7 +58,7 @@ import { POST as pickPOST } from '@/app/api/wms/outbound/[orderId]/pick/route';
 import { POST as packPOST } from '@/app/api/wms/outbound/[orderId]/pack/route';
 import { POST as shipPOST } from '@/app/api/wms/outbound/[orderId]/ship/route';
 import { POST as cancelPOST } from '@/app/api/wms/outbound/[orderId]/cancel/route';
-import { POST as retryPOST } from '@/app/api/wms/outbound/[orderId]/retry-tms/route';
+import { POST as retryPOST } from '@/app/api/wms/outbound/[orderId]/retry-dispatch/route';
 import { ACCESS_COOKIE, OPERATOR_COOKIE } from '@/shared/lib/session';
 
 function jsonResponse(body: unknown, status = 200) {
@@ -511,33 +513,53 @@ describe('POST /api/wms/outbound/{orderId}:cancel (TASK-PC-FE-085)', () => {
   });
 });
 
-describe('POST /api/wms/outbound/{orderId}/retry-tms (TASK-PC-FE-087)', () => {
+describe('POST /api/wms/outbound/{orderId}/retry-dispatch (TASK-PC-FE-258)', () => {
   function retryReq(body: unknown) {
-    return new Request('http://console.local/api/wms/outbound/o-1/retry-tms', {
-      method: 'POST',
-      body: JSON.stringify(body),
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Request(
+      'http://console.local/api/wms/outbound/o-1/retry-dispatch',
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+        headers: { 'Content-Type': 'application/json' },
+      },
+    );
   }
   const SHIPMENT_PAGE = {
     content: [{ shipmentId: 'shp-1' }],
     page: { number: 0, size: 1, totalElements: 1, totalPages: 1 },
   };
+  // logistics DispatchResponse envelope { data: { id, shipmentId, status, … } }.
+  const DISPATCH_ENVELOPE = {
+    data: {
+      id: 'dsp-1',
+      shipmentId: 'shp-1',
+      status: 'DISPATCH_FAILED',
+      trackingNo: null,
+      carrierCode: 'CJ',
+    },
+  };
+  // scm gateway FLAT error envelope { code, message, timestamp }.
+  function scmError(code: string, status: number) {
+    return new Response(
+      JSON.stringify({ code, message: 'e', timestamp: 't' }),
+      { status, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
 
-  it('resolves the shipmentId from the admin read-model THEN POSTs the retry (domain-facing token, Idempotency-Key, reason-free)', async () => {
+  it('resolves shipmentId (wms admin) → dispatch (logistics by-shipment) → POSTs :retry on the scm gateway (domain-facing token, Idempotency-Key, reason-free)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
     const fetchMock = vi.fn((url: string, init?: RequestInit) => {
-      if (String(url).includes(':retry-tms-notify') && init?.method === 'POST') {
+      const u = String(url);
+      if (u.includes('/dispatches/by-shipment/')) {
+        return Promise.resolve(jsonResponse(DISPATCH_ENVELOPE));
+      }
+      if (u.includes(':retry') && init?.method === 'POST') {
         return Promise.resolve(
-          jsonResponse({
-            shipmentId: 'shp-1',
-            tmsStatus: 'NOTIFIED',
-            sagaState: 'COMPLETED',
-          }),
+          jsonResponse({ data: { id: 'dsp-1', status: 'DISPATCHED' } }),
         );
       }
-      // admin read-model shipment lookup
+      // wms admin read-model shipment lookup
       return Promise.resolve(jsonResponse(SHIPMENT_PAGE));
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -547,26 +569,42 @@ describe('POST /api/wms/outbound/{orderId}/retry-tms (TASK-PC-FE-087)', () => {
     });
     expect(res.status).toBe(200);
 
-    // (1) the admin lookup hits /api/v1/admin/dashboard/shipments?orderId=o-1
+    // (1) the admin lookup hits the wms gateway /api/v1/admin/dashboard/shipments?orderId=o-1
     const adminCall = fetchMock.mock.calls.find((c) =>
       String(c[0]).includes('/dashboard/shipments'),
     )!;
     expect(adminCall).toBeDefined();
     const adminUrl = new URL(String(adminCall[0]));
+    expect(adminUrl.origin).toBe('http://wms.local');
     expect(adminUrl.pathname).toContain('/api/v1/admin/dashboard/shipments');
     expect(adminUrl.searchParams.get('orderId')).toBe('o-1');
     const adminH = (adminCall[1] as RequestInit).headers as Record<string, string>;
     expect(adminH.Authorization).toBe('Bearer GAP-ACCESS');
     expect(adminH['Idempotency-Key']).toBeUndefined(); // it's a read
 
-    // (2) the retry hits the OUTBOUND base, shipment-keyed, with the key
+    // (2) the dispatch resolve hits the SCM gateway by-shipment (read, no key)
+    const byShipmentCall = fetchMock.mock.calls.find((c) =>
+      String(c[0]).includes('/dispatches/by-shipment/'),
+    )!;
+    expect(byShipmentCall).toBeDefined();
+    const bsUrl = new URL(String(byShipmentCall[0]));
+    expect(bsUrl.origin).toBe('http://scm.local'); // scm gateway, NOT wms
+    expect(bsUrl.pathname).toBe(
+      '/api/v1/logistics/dispatches/by-shipment/shp-1',
+    );
+    const bsH = (byShipmentCall[1] as RequestInit).headers as Record<string, string>;
+    expect(bsH.Authorization).toBe('Bearer GAP-ACCESS');
+    expect(bsH['X-Tenant-Id']).toBeUndefined();
+    expect(bsH['Idempotency-Key']).toBeUndefined(); // it's a read
+
+    // (3) the retry hits the SCM gateway logistics :retry, dispatch-id-keyed, with the key
     const retryCall = fetchMock.mock.calls.find((c) =>
-      String(c[0]).includes(':retry-tms-notify'),
+      String(c[0]).includes(':retry'),
     )!;
     expect(retryCall).toBeDefined();
-    expect(String(retryCall[0])).toContain(
-      '/api/v1/outbound/shipments/shp-1:retry-tms-notify',
-    );
+    const rUrl = new URL(String(retryCall[0]));
+    expect(rUrl.origin).toBe('http://scm.local');
+    expect(rUrl.pathname).toBe('/api/v1/logistics/dispatches/dsp-1:retry');
     const init = retryCall[1] as RequestInit;
     const h = init.headers as Record<string, string>;
     expect(init.method).toBe('POST');
@@ -574,9 +612,10 @@ describe('POST /api/wms/outbound/{orderId}/retry-tms (TASK-PC-FE-087)', () => {
     expect(h.Authorization).not.toContain('OP-MUST-NOT-USE');
     expect(h['Idempotency-Key']).toBe('idem-retry-1');
     expect(h['X-Operator-Reason']).toBeUndefined();
+    expect(h['X-Tenant-Id']).toBeUndefined();
   });
 
-  it('no shipment resolves for the order → 404 SHIPMENT_NOT_FOUND (NO outbound retry POST)', async () => {
+  it('no shipment resolves for the order → 404 SHIPMENT_NOT_FOUND (NO dispatch resolve, NO retry POST)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     const fetchMock = vi
       .fn()
@@ -590,9 +629,30 @@ describe('POST /api/wms/outbound/{orderId}/retry-tms (TASK-PC-FE-087)', () => {
     const body = await res.json();
     expect(body.code).toBe('SHIPMENT_NOT_FOUND');
     expect(
-      fetchMock.mock.calls.some((c) =>
-        String(c[0]).includes(':retry-tms-notify'),
-      ),
+      fetchMock.mock.calls.some((c) => String(c[0]).includes('/dispatches/')),
+    ).toBe(false);
+  });
+
+  it('shipment exists but no dispatch yet → 404 DISPATCH_NOT_FOUND (NO retry POST)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi.fn((url: string) => {
+      const u = String(url);
+      if (u.includes('/dispatches/by-shipment/')) {
+        return Promise.resolve(scmError('DISPATCH_NOT_FOUND', 404));
+      }
+      return Promise.resolve(jsonResponse(SHIPMENT_PAGE));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await retryPOST(retryReq({ idempotencyKey: 'k' }), {
+      params: Promise.resolve({ orderId: 'o-1' }),
+    });
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.code).toBe('DISPATCH_NOT_FOUND');
+    // The by-shipment resolve happened; NO :retry POST was fired.
+    expect(
+      fetchMock.mock.calls.some((c) => String(c[0]).includes(':retry')),
     ).toBe(false);
   });
 
@@ -617,13 +677,18 @@ describe('POST /api/wms/outbound/{orderId}/retry-tms (TASK-PC-FE-087)', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('403 FORBIDDEN (needs OUTBOUND_ADMIN) → 403 passthrough', async () => {
+  it('403 on the logistics :retry → 403 passthrough', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
-    const fetchMock = vi.fn((url: string, init?: RequestInit) =>
-      String(url).includes(':retry-tms-notify') && init?.method === 'POST'
-        ? Promise.resolve(wmsError('FORBIDDEN', 403))
-        : Promise.resolve(jsonResponse(SHIPMENT_PAGE)),
-    );
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes('/dispatches/by-shipment/')) {
+        return Promise.resolve(jsonResponse(DISPATCH_ENVELOPE));
+      }
+      if (u.includes(':retry') && init?.method === 'POST') {
+        return Promise.resolve(scmError('FORBIDDEN', 403));
+      }
+      return Promise.resolve(jsonResponse(SHIPMENT_PAGE));
+    });
     vi.stubGlobal('fetch', fetchMock);
     const res = await retryPOST(retryReq({ idempotencyKey: 'k' }), {
       params: Promise.resolve({ orderId: 'o-1' }),

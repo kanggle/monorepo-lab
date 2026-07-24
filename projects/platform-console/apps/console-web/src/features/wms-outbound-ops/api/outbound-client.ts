@@ -33,9 +33,9 @@ export interface CallOptions {
   /** Typed mutation body; `undefined` for reads. */
   body?: unknown;
   /**
-   * Base URL override. Defaults to `WMS_OUTBOUND_BASE_URL`. The TMS-retry
-   * shipment-id resolver (TASK-PC-FE-087) overrides this to
-   * `WMS_ADMIN_BASE_URL` to read the admin read-model
+   * Base URL override. Defaults to `WMS_OUTBOUND_BASE_URL`. The shipment-id
+   * resolver (TASK-PC-FE-087; the wms half of the two-hop 발송 재시도 resolve)
+   * overrides this to `WMS_ADMIN_BASE_URL` to read the admin read-model
    * (`GET /dashboard/shipments?orderId`) — SAME wms gateway + SAME IAM-OIDC
    * domain-facing credential, a DISTINCT `/api/v1/admin` path prefix
    * (console-integration-contract § 2.4.5 / § 2.4.5.1). The token + abort +
@@ -50,7 +50,7 @@ export interface CallOptions {
 /**
  * wms-outbound-ops profile for the shared {@link callWmsGateway} core: the WMS
  * outbound-service surface (`WMS_OUTBOUND_BASE_URL`, `WMS_OUTBOUND_TIMEOUT_MS`;
- * a request may override baseUrl/timeout — the TMS-retry admin read does) that
+ * a request may override baseUrl/timeout — the shipment-id admin read does) that
  * degrades via {@link WmsOutboundUnavailableError} and logs `wms_outbound_*`
  * events.
  */

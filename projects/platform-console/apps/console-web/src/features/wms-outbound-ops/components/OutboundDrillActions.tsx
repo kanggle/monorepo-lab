@@ -8,8 +8,9 @@ import type { ActionKind } from './outbound-ops-helpers';
 /**
  * Order-drill actions region (TASK-PC-FE-198 split) — the confirm-gated +
  * status/saga-gated lifecycle actions (pick / pack / ship), the reason-required
- * cancel affordance, the TMS-retry recovery affordance, and the async /
- * pick-blocked hints. Pure presentation: the {@link OutboundOrderDrill}
+ * cancel affordance, the reason-free dispatch-retry recovery affordance
+ * (logistics-service, TASK-PC-FE-258), and the async / pick-blocked hints. Pure
+ * presentation: the {@link OutboundOrderDrill}
  * container owns all state + mutations + the status/saga gating and passes the
  * resolved flags + handlers via props.
  */
@@ -116,24 +117,24 @@ export function OutboundDrillActions({
         </p>
       )}
 
-      {/* TMS retry — the recovery admin action for a shipped order whose
-          carrier notification failed (saga SHIPPED_NOT_NOTIFIED). */}
+      {/* Dispatch retry — the reason-free recovery action for a shipped order
+          whose carrier dispatch failed (logistics-service, TASK-PC-FE-258). */}
       {retryVisible && (
         <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border pt-3">
           <Button
             variant="secondary"
             onClick={() => onRetry(detail.orderId)}
             disabled={retryMutationPending}
-            data-testid="outbound-action-retry-tms"
+            data-testid="outbound-action-retry-dispatch"
           >
-            TMS 재전송
+            발송 재시도
           </Button>
           <span
             className="text-xs text-muted-foreground"
-            data-testid="outbound-retry-admin-note"
+            data-testid="outbound-retry-dispatch-note"
           >
-            출고는 완료됐지만 택배사 통보가 실패했습니다. 재전송은
-            관리자(OUTBOUND_ADMIN) 권한이 필요합니다.
+            택배사 발송(dispatch)이 실패한 경우 다시 시도합니다. 발송이 이미
+            접수됐다면 중복 없이 무시됩니다.
           </span>
         </div>
       )}
