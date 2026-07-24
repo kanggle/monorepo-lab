@@ -78,11 +78,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-SCM-BE-048-third-party-logistics-inbound-allocation.md` — **READY (promoted 2026-07-24 from backlog on ADR-MONO-055 ACCEPTED; impl in progress)**. ADR-055 §D2/§D3 inbound half — **replenishment-target allocation**: demand-planning's reorder decision (ADR-027) widened to node type so a below-reorder-point `THIRD_PARTY_LOGISTICS` node (observed via BE-047) can be a replenishment target. 3 additive hops (IVS below-reorder read-model surfaces `nodeType` + includes 3PL nodes → `ReorderSuggestion` node-type dimension via **batch** path → `ProcurementDraftPoClient` sources `destinationNodeType` from the suggestion, retiring the hardcoded `WMS_WAREHOUSE`). Downstream (PO column/wire/gate + wms consumer gate) already node-type-aware → no change. **NOT** the retired 052 §D2① outbound claim (replenishment-target selection, not order-fulfillment routing — ADR-055 §1.5); alert path (ADR-027 loop) untouched; no wms gate widening; no Surface B. 선행=ADR-055 ACCEPTED ✓ · BE-047 done ✓ · BE-046 done ✓. 후속=BE-049 (honour/sink, backlog). 분석=Opus 4.8 / 구현 권장=Opus. [[project_adr054_3pl_surface_split_seam_constrains_decision_site]]
-
 ## in-progress
 
 ## review
+
+- `TASK-SCM-BE-048-third-party-logistics-inbound-allocation.md` — **REVIEW (impl 2026-07-24, PR pending)**. ADR-055 §D2/§D3 inbound half — **replenishment-target allocation**: demand-planning's reorder decision (ADR-027) widened to node type so a below-reorder-point `THIRD_PARTY_LOGISTICS` node (observed via BE-047) drafts a PO carrying `destinationNodeType=THIRD_PARTY_LOGISTICS`, retiring the hardcoded `WMS_WAREHOUSE`. 3 additive hops (IVS `/internal/.../snapshot` surfaces `nodeType`+`warehouseCode`, projection reuses memoised per-node lookup → `ReorderSuggestion` gains `destination_node_type` Flyway V3, ctor normalises null→WMS → sweep/ApprovalPlan/`DraftPoCommand` threaded → `ProcurementDraftPoClient` 3-branch sources type from cmd). 3PL PO carries type only (no warehouseId; wms inbound-expected correctly not emitted — `isWmsWarehouseDestination()`=false, procurement accepts 3PL draft, verified). **NOT** the retired 052 §D2① outbound claim (ADR-055 §1.5); `raiseFromAlert` signature unchanged (alert=wms-only, ADR-027); no wms gate/emit-gate/Surface B/ecommerce change. compileJava/compileTestJava + touched unit/slice GREEN local (--rerun-tasks); ApproveMaterializationIntegrationTest 3PL case CI-only (Testcontainers). 선행=ADR-055 ACCEPTED ✓ · BE-047 done ✓. 후속=BE-049 (honour/sink, backlog, gated on this done). 분석=Opus 4.8 / 구현=backend-engineer(opus) 위임 + 리드 diff 리뷰·독립 테스트 재실행. [[project_adr054_3pl_surface_split_seam_constrains_decision_site]]
 
 ## done
 
