@@ -254,6 +254,7 @@ the `meta.warning: "Not for procurement decisions (S5)"` envelope:
 | GET | `/api/v1/inventory-visibility/staleness` | node-by-node staleness status (FRESH / STALE / UNREACHABLE) |
 | GET | `/api/v1/inventory-visibility/nodes` | node list with status (id, externalId, type, name, status) — **public** per TASK-SCM-BE-008 decision (ops dashboard prerequisite) |
 | POST | `/api/v1/inventory-visibility/nodes` | explicitly register a `THIRD_PARTY_LOGISTICS` node (201 new / 200 idempotent repeat / 409 `NODE_TYPE_CONFLICT`) — the one mutating endpoint on this read-only API (ADR-MONO-054 §D2, TASK-SCM-BE-046) |
+| POST | `/api/v1/inventory-visibility/nodes/{nodeId}/observed-stock` | record an absolute observed-stock reading for an existing `THIRD_PARTY_LOGISTICS` node (200 recorded / 404 `NODE_NOT_FOUND` / 409 `NODE_TYPE_CONFLICT` / 422 `VALIDATION_ERROR`) — read-only ingestion push, no auto-registration (ADR-MONO-054 §D4, TASK-SCM-BE-047) |
 
 ### `demand-planning-service` (TASK-SCM-BE-024, shipped — ADR-MONO-027 Phase 1)
 

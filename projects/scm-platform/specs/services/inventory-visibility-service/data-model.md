@@ -71,6 +71,17 @@ Indexes: `(tenant_id, sku)`, `(node_id, updated_at DESC)`, `(tenant_id, updated_
 
 **S5 note**: this table is an eventually-consistent read-model. `last_event_at` is the authoritative freshness indicator. Callers must check staleness before trusting quantity values for PO decisions.
 
+**3PL observation note** (ADR-MONO-054 §D4 / TASK-SCM-BE-047): the table carries
+**no node-type column** — a row for a `THIRD_PARTY_LOGISTICS` node is
+structurally identical to a `WMS_WAREHOUSE` row. The two differ only in how
+`quantity`/`last_event_id`/`last_event_at`/`version` are **written**: wms rows
+are written by `applyDelta` (incremental, from `wms.inventory.*` events); a 3PL
+row is written by `applyQuantity` (**absolute set**, from an operator-pushed
+observation via `POST /nodes/{nodeId}/observed-stock`) — each observation
+*replaces* the stored quantity rather than accumulating against it. Staleness
+applies identically once a 3PL node has been observed at least once (see
+`node_staleness` below).
+
 ### node_staleness
 
 | Column | Type | Notes |
@@ -83,6 +94,14 @@ Indexes: `(tenant_id, sku)`, `(node_id, updated_at DESC)`, `(tenant_id, updated_
 | last_checked_at | TIMESTAMPTZ | set by staleness detection batch |
 
 Index: `(tenant_id, staleness_status)`.
+
+**3PL observation note** (TASK-SCM-BE-047): the only path that creates a row
+for a `THIRD_PARTY_LOGISTICS` node's `node_id` is the first
+`applyThirdPartyObservedStock` call — `POST /nodes` (TASK-SCM-BE-046, node
+registration) does **not** seed one. A registered-but-never-observed 3PL node
+therefore has no `node_staleness` row and is absent from the staleness sweep
+until its first observation, at which point it joins the FRESH/STALE/UNREACHABLE
+lifecycle exactly like a wms node.
 
 ### event_dedupe
 
