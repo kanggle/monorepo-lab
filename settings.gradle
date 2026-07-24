@@ -22,6 +22,13 @@ rootProject.name = 'monorepo-lab'
 // nobody has loaded it yet is the failure this whole line of work has been chasing.
 // One module costs one line. `libs:java-gateway` MUST NOT depend on it —
 // `assertNoServletOnReactiveEdge` goes red if it ever does.
+//
+// libs:payment-core + libs:payment-portone + libs:payment-toss are the project-agnostic
+// payment-gateway abstraction (ADR-MONO-056 Phase 1 / TASK-MONO-478). payment-core holds the
+// canonical verify port + value types + Category-B resilience API surface and is VENDOR-SDK-FREE;
+// each vendor adapter is its own module so a consumer pulls only its vendor's HTTP surface onto
+// its runtime classpath (the libs:java-gateway cross-framework-leak lesson, ADR-MONO-049 § D1).
+// No consumer depends on them yet — the two live integrations migrate in TASK-MONO-479 / 480.
 include(
     'libs:java-common',
     'libs:java-gateway',
@@ -32,7 +39,10 @@ include(
     'libs:java-security-servlet',
     'libs:java-test-support',
     'libs:java-web',
-    'libs:java-web-servlet'
+    'libs:java-web-servlet',
+    'libs:payment-core',
+    'libs:payment-portone',
+    'libs:payment-toss'
 )
 
 // Project: wms-platform

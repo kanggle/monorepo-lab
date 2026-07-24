@@ -1,0 +1,41 @@
+plugins {
+    id 'io.spring.dependency-management'
+}
+
+// libs:payment-core — the project-agnostic payment-gateway port + canonical value types +
+// Category-B resilience API surface (ADR-MONO-056 Phase 1). It is deliberately VENDOR-SDK-FREE:
+// no Toss/PortOne class or HTTP specific may appear here — those live only in the vendor
+// modules (libs:payment-portone / libs:payment-toss), so a consumer pulls only its vendor's
+// HTTP surface onto its runtime classpath (avoids the libs:java-gateway cross-framework-leak
+// class of problem, ADR-MONO-049 § D1). Allowed classpath: Spring, Jackson, Resilience4j API,
+// slf4j — nothing vendor-specific.
+dependencies {
+    // Spring (context) — the port/value types are framework-neutral today; Spring is on the
+    // allowed classpath for the Category-B scaffolding this module hosts.
+    implementation 'org.springframework:spring-context'
+
+    // Jackson — canonical value-type (de)serialization surface.
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+
+    // Resilience4j API (annotations only — the CircuitBreaker/Retry/Bulkhead surface a vendor
+    // adapter annotates against; NOT a vendor SDK).
+    implementation 'io.github.resilience4j:resilience4j-annotations:2.2.0'
+
+    // slf4j
+    implementation 'org.slf4j:slf4j-api'
+
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    testCompileOnly 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok'
+
+    // Test
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
+    }
+}
