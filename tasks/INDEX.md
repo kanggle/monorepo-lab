@@ -173,7 +173,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-480-payment-service-migrate-libs-payment.md` — **🔵 REVIEW (impl PR open, verified) — [ADR-MONO-056](../docs/adr/ADR-MONO-056-payment-gateway-abstraction.md) Phase 1 소비자2.** ecommerce payment-service를 `libs/payment-core`+`libs/payment-toss`로 마이그레이션(behavior-preserving, money-safety). 사설 포트/`TossPaymentsAdapter`/Properties/`Pg*Exception` 2종/`PaymentGateway{ConfirmResult,Status}`/어댑터 테스트 삭제 → lib. **배선**: `PaymentGatewayConfig`(@Profile("!standalone"), `@Import(TossPaymentsAdapter)`, `@EnableConfigurationProperties`)가 단일 lib 빈 등록(3포트 구현), R4j `toss-payments` config는 application.yml에 잔존. 🔴 **R4j `ignore-exceptions` FQN을 lib로 재지정**(`com.example.libs.payment.PgConfirmFailedException`) — 4xx=no-retry 가드 보존(stale FQN이면 조용히 재시도됨). `confirm`→`verify(PaymentVerificationRequest(paymentKey,amount,"KRW",orderId))`, 예외 throw 계약(permanent/transient) 불변 → PaymentConfirmService 2 catch 브랜치 무손상. `cancel`→`refund`, `fetchStatus` 동일. StandaloneConfig stub 3포트 구현. **독립 검증**: diff=payment-service만 · compile+유닛(Confirm/Refund/Reconciler/Slice/Contract) GREEN · money-safety 단언(stranded stays-COMPLETED·double-refund guard·partial idempotency·transient no-state-change) 보존, IT는 CI. 분석=Opus / 구현=backend-engineer(Opus dispatch)+독립 재검증.
 
 ## done
 
