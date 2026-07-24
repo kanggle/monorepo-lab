@@ -200,30 +200,32 @@ export function useCancelOrder() {
   });
 }
 
-// --- TMS retry (TASK-PC-FE-087 — reason-free admin action). The proxy
-//     resolves the shipmentId server-side from the admin read-model. ---------
+// --- dispatch retry (TASK-PC-FE-258 — reason-free "발송 재시도"). The proxy
+//     resolves orderId → shipmentId (wms admin) → dispatchId (logistics), then
+//     POSTs the logistics `:retry`. --------------------------------------------
 
-interface RetryTmsArgs {
+interface RetryDispatchArgs {
   orderId: string;
   /** Stable per the confirmed retry; fresh per a new confirmed attempt. */
   idempotencyKey: string;
 }
 
-export function useRetryTms() {
+export function useRetryDispatch() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ orderId, idempotencyKey }: RetryTmsArgs) => {
-      // Reason-free (re-notify only). The proxy resolves the shipmentId from
-      // the admin read-model, then POSTs the retry with the Idempotency-Key.
+    mutationFn: async ({ orderId, idempotencyKey }: RetryDispatchArgs) => {
+      // Reason-free (re-drive the carrier dispatch only). The proxy resolves
+      // the shipmentId (wms admin) then the dispatchId (logistics by-shipment),
+      // then POSTs the logistics `:retry` with the Idempotency-Key.
       const raw = await apiClient.post<unknown>(
-        `/api/wms/outbound/${encodeURIComponent(orderId)}/retry-tms`,
+        `/api/wms/outbound/${encodeURIComponent(orderId)}/retry-dispatch`,
         { idempotencyKey },
       );
       return raw;
     },
     onSuccess: (_data, { orderId }) => {
-      // Refetch the orders list + the drilled order so the recovered saga
-      // (SHIPPED_NOT_NOTIFIED → COMPLETED) + tmsStatus reflect.
+      // Refetch the orders list + the drilled order so the re-driven dispatch
+      // status reflects.
       qc.invalidateQueries({ queryKey: [OUTBOUND_KEY, 'orders'] });
       qc.invalidateQueries({ queryKey: [OUTBOUND_KEY, 'drill', orderId] });
     },

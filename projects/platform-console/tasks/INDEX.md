@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-PC-FE-258-repoint-outbound-retry-to-logistics.md` — **READY (2026-07-24, ADR-MONO-053 §D8 console half).** Repoint the operator outbound-retry action from the wms placeholder `POST /shipments/{id}:retry-tms-notify` to the real carrier-dispatch recovery, logistics `POST /api/v1/logistics/dispatches/{id}:retry` (scm gateway). BFF chain: orderId → shipmentId (wms admin, unchanged) → **NEW** dispatchId via logistics `GET /dispatches/by-shipment/{shipmentId}` (BE-045) → `:retry`. Relabel "TMS 재시도" → "발송 재시도"; `DISPATCH_NOT_FOUND` (shipment exists, no dispatch yet) → inline actionable like `SHIPMENT_NOT_FOUND`. **Console-internal** — no wms change, reuses the **existing** scm-gateway credential (`SCM_GATEWAY_BASE_URL`, already used for demand-planning mutations). BE-045 decoupled the two D8 halves so this needs no atomic cross-project PR. 선행=BE-045 ✓, PC-FE-087 ✓. 후속=**wms-internal TMS retirement** (unblocked once the console stops calling the wms endpoint — this task first). 분석=Opus 4.8 / 구현 권장=frontend-engineer(opus).
+_(없음)_
 
 _(직전 완료)_ 콘솔 6도메인 기능↔메뉴 정렬 웨이브 + IAM 「권한」/「권한 세트」 화면(PC-FE-227/228) 완결. ADR-MONO-046 「운영자 그룹」 로드맵은 여전히 PROPOSED/PAUSED 게이팅.
 
@@ -113,7 +113,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
-_(없음)_
+- `TASK-PC-FE-258-repoint-outbound-retry-to-logistics.md` — **REVIEW (2026-07-24, ADR-MONO-053 §D8 console half — impl pushed on `feat/pc-fe-258-impl`, PR/merge = lead's chore).** Repointed the operator "발송 재시도" recovery action from the retired wms TMS side-channel to logistics `POST /api/v1/logistics/dispatches/{id}:retry` (scm gateway). BFF chain: orderId → shipmentId (wms admin, unchanged) → **NEW** dispatchId via logistics `GET /dispatches/by-shipment/{shipmentId}` (BE-045) → `:retry`. New `outbound-logistics-api.ts` REUSES the scm demand-planning `callScmGateway` client + domain-facing IAM credential (NOT the wms `callOutbound` client); `outbound-tms-api.ts`→`outbound-shipment-api.ts` (resolver only), `retryTmsNotify` deleted (`grep retry-tms-notify src` = 0). Two 404s both inline-actionable (no retry POST): `SHIPMENT_NOT_FOUND` (no shipment) / `DISPATCH_NOT_FOUND` (no dispatch yet, "아직 발송 접수 전"). Gate `canRetryTms`(SHIPPED_NOT_NOTIFIED)→`canRetryDispatch`(SHIPPED only — no wms saga dependency). Contract §2.4.5.1 op 10 updated. **Console-internal** — no wms/env/IAM/error-code change; `SCM_GATEWAY_BASE_URL` reused. Local: tsc 0 · next lint 0 · vitest 55/55 (outbound suites) — full CI Frontend lanes = authority. 후속=wms-internal TMS retirement (now unblocked). 분석=Opus 4.8 / 구현=frontend-engineer(opus).
 
 ## done
 

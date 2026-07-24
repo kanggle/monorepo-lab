@@ -12,7 +12,7 @@ import {
   canPack,
   canShip,
   canCancel,
-  canRetryTms,
+  canRetryDispatch,
   type OutboundOrderPage,
   type OutboundListParams,
 } from '../api/types';
@@ -127,10 +127,12 @@ export function OutboundOpsScreen({ orders }: OutboundOpsScreenProps) {
   const packEnabled = useMemo(() => canPack(drillStatus), [drillStatus]);
   const shipEnabled = useMemo(() => canShip(drillStatus), [drillStatus]);
   const cancelVisible = useMemo(() => canCancel(drillStatus), [drillStatus]);
-  // TMS retry: SHIPPED order whose saga is stuck at SHIPPED_NOT_NOTIFIED.
+  // Dispatch retry: surfaced for a SHIPPED order (a carrier dispatch exists only
+  // after shipping). The "does a retry apply?" signal is the logistics dispatch
+  // status, resolved server-side at action time — NOT the wms saga state.
   const retryVisible = useMemo(
-    () => canRetryTms(drillStatus, drillSagaState),
-    [drillStatus, drillSagaState],
+    () => canRetryDispatch(drillStatus),
+    [drillStatus],
   );
   // Async-cancel hint: order CANCELLED but the saga still releasing inventory.
   const cancelPending = useMemo(
@@ -212,12 +214,12 @@ export function OutboundOpsScreen({ orders }: OutboundOpsScreenProps) {
         onCancel={cancelDialog.closeCancel}
       />
 
-      {/* TMS retry confirm — reason-free (reuse the generic action dialog). */}
+      {/* Dispatch retry confirm — reason-free (reuse the generic action dialog). */}
       <OutboundActionDialog
         open={retryTarget !== null}
-        title="TMS 재전송을 시도할까요?"
-        description="택배사(TMS) 통보를 다시 시도합니다. 재고는 이미 차감되어 있고, 통보만 재전송됩니다. 성공하면 saga 가 COMPLETED 로 회복됩니다. 관리자(OUTBOUND_ADMIN) 권한이 필요합니다."
-        confirmLabel="TMS 재전송"
+        title="발송을 다시 시도할까요?"
+        description="택배사 발송(dispatch)을 다시 시도합니다. 재고는 이미 차감되어 있고, 택배사 발송만 재실행됩니다. 이미 발송된 경우 중복 없이 무시됩니다."
+        confirmLabel="발송 재시도"
         pending={retryDialog.retryPending}
         errorMessage={retryDialog.retryError}
         onConfirm={retryDialog.confirmRetry}

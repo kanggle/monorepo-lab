@@ -80,6 +80,12 @@ export interface ScmGatewayRequest {
    *  attached and the body is JSON-serialised. A read-only caller omits it (no
    *  `Content-Type` — pinned by the scm-ops read-only test). */
   body?: unknown;
+  /** `Idempotency-Key` header value — attached ONLY when present (forwarded
+   *  verbatim to the shared flat-envelope core). The demand-planning
+   *  approve/dismiss actions omit it (server-side idempotent by state); the
+   *  logistics `dispatches/{id}:retry` action (TASK-PC-FE-258) supplies a stable
+   *  key per confirmed attempt. Reads omit it. */
+  idempotencyKey?: string;
   /** Seed-lookup GETs only: a `404` short-circuits to the profile's
    *  `notFoundSentinel` instead of throwing (config's 404-as-empty-state). */
   notFoundIsEmpty?: boolean;

@@ -64,7 +64,9 @@
  *   outbound-fulfillment-api.ts — ConfirmPickLine, confirmPick,
  *                                 PackingUnitLine, createPackingUnit,
  *                                 sealPackingUnit, confirmShipping
- *   outbound-tms-api.ts         — resolveShipmentIdForOrder, retryTmsNotify
+ *   outbound-shipment-api.ts    — resolveShipmentIdForOrder (wms admin read-model)
+ *   outbound-logistics-api.ts   — resolveDispatchIdForShipment, retryDispatch
+ *                                 (logistics-service, scm gateway — TASK-PC-FE-258)
  */
 
 // ORDER domain (reads + cancel)
@@ -86,8 +88,11 @@ export {
 } from './outbound-fulfillment-api';
 export type { PackingUnitLine } from './outbound-fulfillment-api';
 
-// TMS domain (retry + admin read-model resolver)
+// SHIPMENT resolver (wms admin read-model — the wms half of the two-hop resolve)
+export { resolveShipmentIdForOrder } from './outbound-shipment-api';
+
+// LOGISTICS dispatch (scm gateway — the carrier-dispatch retry, TASK-PC-FE-258)
 export {
-  resolveShipmentIdForOrder,
-  retryTmsNotify,
-} from './outbound-tms-api';
+  resolveDispatchIdForShipment,
+  retryDispatch,
+} from './outbound-logistics-api';

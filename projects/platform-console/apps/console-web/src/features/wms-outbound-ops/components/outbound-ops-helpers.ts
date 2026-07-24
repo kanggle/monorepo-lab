@@ -80,19 +80,24 @@ export function cancelErrorMessage(code: string): string {
   }
 }
 
-/** TMS-retry-specific producer error → inline operator message (§ 4.3 +
- *  the proxy's SHIPMENT_NOT_FOUND). */
-export function retryTmsErrorMessage(code: string): string {
+/** Dispatch-retry-specific producer error → inline operator message
+ *  (TASK-PC-FE-258 — logistics `dispatches/{id}:retry` + the proxy's two 404s).
+ *  Both 404s are inline actionable states, not crashes: no shipment projected
+ *  vs. a shipment with no carrier dispatch yet. */
+export function retryDispatchErrorMessage(code: string): string {
   switch (code) {
     case 'SHIPMENT_NOT_FOUND':
-      return '출고 건을 찾을 수 없습니다. TMS 재전송 대상이 없습니다.';
+      return '발송 정보를 찾을 수 없습니다. 재시도 대상이 없습니다.';
+    case 'DISPATCH_NOT_FOUND':
+      return '아직 발송 접수 전입니다. 택배사 발송이 생성되면 다시 시도할 수 있습니다.';
     case 'STATE_TRANSITION_INVALID':
-      return '이미 정상 통보되었거나 재전송 대상 상태가 아닙니다. 목록을 새로고침하세요.';
+      return '이미 발송되었거나 재시도 대상 상태가 아닙니다. 목록을 새로고침하세요.';
     case 'FORBIDDEN':
-      return 'TMS 재전송 권한이 없습니다. 관리자(OUTBOUND_ADMIN) 권한이 필요합니다.';
+    case 'TENANT_FORBIDDEN':
+      return '발송 재시도 권한이 없습니다.';
     case 'DUPLICATE_REQUEST':
-      return '이미 재전송 요청이 접수되었습니다 (중복 무시).';
+      return '이미 재시도 요청이 접수되었습니다 (중복 무시).';
     default:
-      return messageForCode(code, 'TMS 재전송을 처리하지 못했습니다.');
+      return messageForCode(code, '발송 재시도를 처리하지 못했습니다.');
   }
 }

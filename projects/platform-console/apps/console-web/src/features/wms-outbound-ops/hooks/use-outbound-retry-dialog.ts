@@ -2,19 +2,20 @@
 
 import { useState } from 'react';
 import { ApiError } from '@/shared/api/errors';
-import { useRetryTms } from './use-outbound-ops';
-import { retryTmsErrorMessage } from '../components/outbound-ops-helpers';
+import { useRetryDispatch } from './use-outbound-ops';
+import { retryDispatchErrorMessage } from '../components/outbound-ops-helpers';
 
 /**
- * TMS-retry dialog lifecycle for the wms outbound screen (TASK-PC-FE-214 split
- * — extracted verbatim from the `OutboundOpsScreen` container; no behaviour
- * change).
+ * Dispatch-retry dialog lifecycle for the wms outbound screen (TASK-PC-FE-214
+ * split; repointed by TASK-PC-FE-258 from the wms TMS side-channel to the
+ * logistics carrier-dispatch retry).
  *
- * Reason-free admin action; the shipment-id is resolved server-side from the
- * admin read-model. Owns the retry target (orderId + a per-attempt
- * Idempotency-Key) and the inline error. On success the drill refetch reflects
- * the recovered saga (→ COMPLETED) / tmsStatus; if it stayed NOT_NOTIFIED the
- * action re-appears.
+ * Reason-free recovery action ("발송 재시도"); the orderId → shipmentId →
+ * dispatchId chain is resolved server-side in the proxy. Owns the retry target
+ * (orderId + a per-attempt Idempotency-Key) and the inline error. On success the
+ * drill refetch reflects the re-driven dispatch; a missing shipment
+ * (`SHIPMENT_NOT_FOUND`) or a missing dispatch (`DISPATCH_NOT_FOUND`) surfaces as
+ * an inline actionable message (no crash, no retry POST fired server-side).
  */
 export interface OutboundRetryDialogState {
   retryTarget: { orderId: string; idempotencyKey: string } | null;
@@ -26,7 +27,7 @@ export interface OutboundRetryDialogState {
 }
 
 export function useOutboundRetryDialog(): OutboundRetryDialogState {
-  const retry = useRetryTms();
+  const retry = useRetryDispatch();
   const [retryTarget, setRetryTarget] = useState<{
     orderId: string;
     idempotencyKey: string;
@@ -45,14 +46,13 @@ export function useOutboundRetryDialog(): OutboundRetryDialogState {
       { orderId: retryTarget.orderId, idempotencyKey: retryTarget.idempotencyKey },
       {
         onSuccess: () => {
-          // The drill refetch reflects the recovered saga (→ COMPLETED) /
-          // tmsStatus; if it stayed NOT_NOTIFIED the action re-appears.
+          // The drill refetch reflects the re-driven dispatch status.
           setRetryTarget(null);
           setRetryError(null);
         },
         onError: (e) => {
           const code = e instanceof ApiError ? e.code : 'SERVICE_UNAVAILABLE';
-          setRetryError(retryTmsErrorMessage(code));
+          setRetryError(retryDispatchErrorMessage(code));
         },
       },
     );

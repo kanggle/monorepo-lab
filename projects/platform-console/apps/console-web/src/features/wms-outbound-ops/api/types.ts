@@ -253,23 +253,34 @@ export const CancelResultSchema = z
   .passthrough();
 export type CancelResult = z.infer<typeof CancelResultSchema>;
 
-// --- 4.3 manual TMS retry response (TASK-PC-FE-087) -----------------------
-// Tolerant: every field optional + passthrough. On success the producer
-// returns `tmsStatus: NOTIFIED` + `sagaState: COMPLETED` (recovery); a still-
-// failed retry leaves `tmsStatus: NOTIFY_FAILED` (saga stays
-// `SHIPPED_NOT_NOTIFIED`) — the UI reads these to reflect the outcome.
-export const TmsRetryResultSchema = z
+// --- logistics dispatch envelope (TASK-PC-FE-258) -------------------------
+// Carrier dispatch moved to `logistics-service` (ADR-MONO-053 Phase 1, D8) on
+// the scm gateway. The operator "발송 재시도" action now re-drives a failed
+// carrier dispatch (logistics `dispatches/{id}:retry`) instead of the retired
+// wms TMS notify side-channel. The producer returns the `DispatchResponse`
+// envelope `{ data: { id, shipmentId, status, trackingNo, carrierCode, … } }`
+// (gateway-public-routes.md § logistics-service — consumed only). The proxy
+// unwraps `data` before parsing this shape.
+//
+// Tolerant: only `id` is required (the retry is dispatch-id-keyed); `status`
+// ∈ DISPATCH_REQUESTED|DISPATCHED|DISPATCH_FAILED|… kept as a plain string so an
+// unknown/future status never throws. Everything else is passthrough.
+export const DispatchRefSchema = z
   .object({
+    id: z.string(),
     shipmentId: z.string().optional(),
-    tmsStatus: z.string().optional(),
-    tmsNotifiedAt: z.string().nullable().optional(),
+    status: z.string().optional(),
     trackingNo: z.string().nullable().optional(),
-    sagaState: z.string().optional(),
-    retriedAt: z.string().nullable().optional(),
-    retriedBy: z.string().nullable().optional(),
+    carrierCode: z.string().nullable().optional(),
   })
   .passthrough();
-export type TmsRetryResult = z.infer<typeof TmsRetryResultSchema>;
+export type DispatchRef = z.infer<typeof DispatchRefSchema>;
+
+// The `dispatches/{id}:retry` response is the same `DispatchResponse` envelope
+// (the re-driven dispatch record). Alias the shape so the retry-result type is
+// named at the action call site.
+export const DispatchRetryResultSchema = DispatchRefSchema;
+export type DispatchRetryResult = z.infer<typeof DispatchRetryResultSchema>;
 
 // --- admin shipment-id resolver shape (TASK-PC-FE-087) -------------------
 // TMS retry operates on a `shipmentId`, but the outbound order-centric reads
@@ -337,16 +348,16 @@ export function cancelNeedsAdmin(status: string | undefined): boolean {
   return status !== undefined && POST_PICK_STATES.has(status);
 }
 
-/** Manual TMS retry (TASK-PC-FE-087) is reachable ONLY for a SHIPPED order
- *  whose saga is `SHIPPED_NOT_NOTIFIED` (the producer allows § 4.3 only when
- *  `Shipment.tmsStatus == NOTIFY_FAILED`; the saga state is the order-level
- *  read signal — the admin `ShipmentSummary` read-model does not project
- *  `tmsStatus`). A healthy SHIPPED order (saga `COMPLETED`) and any non-SHIPPED
- *  status gate the action off. Producer is the final authority (a 422
- *  STATE_TRANSITION_INVALID is still handled inline). */
-export function canRetryTms(
-  status: string | undefined,
-  saga: string | null | undefined,
-): boolean {
-  return status === 'SHIPPED' && saga === 'SHIPPED_NOT_NOTIFIED';
+/** Dispatch retry (TASK-PC-FE-258 — "발송 재시도") is surfaced for a `SHIPPED`
+ *  order (a carrier dispatch exists only once the shipment is confirmed). It is
+ *  the reason-free recovery action that re-drives the logistics dispatch
+ *  (`dispatches/{id}:retry`). It deliberately does NOT depend on the wms
+ *  `tmsStatus` / `SHIPPED_NOT_NOTIFIED` saga state (retired D8 side-channel) —
+ *  the real "does a retry apply?" signal is the logistics dispatch status
+ *  (`DISPATCH_FAILED`), resolved server-side in the proxy at action time. When
+ *  no dispatch exists yet the proxy returns an inline `DISPATCH_NOT_FOUND`; a
+ *  non-`DISPATCH_FAILED` dispatch is handled inline by the producer. The
+ *  producer (logistics) is the final authority. */
+export function canRetryDispatch(status: string | undefined): boolean {
+  return status === 'SHIPPED';
 }
