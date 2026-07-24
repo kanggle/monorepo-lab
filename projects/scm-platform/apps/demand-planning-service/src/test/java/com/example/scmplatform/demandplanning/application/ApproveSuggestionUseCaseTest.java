@@ -48,7 +48,7 @@ class ApproveSuggestionUseCaseTest {
     private SuggestionApprovalTxn.ApprovalPlan proceedPlan() {
         return SuggestionApprovalTxn.ApprovalPlan.proceed(
                 SUGGESTION_ID, SUPPLIER_ID, "KRW", "SKU-APPLE-001", 100,
-                WAREHOUSE_CODE, 7);
+                WAREHOUSE_CODE, "WMS_WAREHOUSE", 7);
     }
 
     @Test

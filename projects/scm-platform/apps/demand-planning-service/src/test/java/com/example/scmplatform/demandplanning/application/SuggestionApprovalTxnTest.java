@@ -98,7 +98,7 @@ class SuggestionApprovalTxnTest {
     @Test
     void prepareApprove_dismissedSuggestion_throws422() {
         ReorderSuggestion dismissed = ReorderSuggestion.reconstitute(
-                SUGGESTION_ID, SKU, WAREHOUSE_ID, WAREHOUSE_CODE, SUPPLIER_ID, 100,
+                SUGGESTION_ID, SKU, WAREHOUSE_ID, WAREHOUSE_CODE, "WMS_WAREHOUSE", SUPPLIER_ID, 100,
                 SuggestionStatus.DISMISSED, SuggestionSource.ALERT, null, 5, null,
                 TENANT, 1, Instant.now(), Instant.now());
         when(suggestionPort.findById(SUGGESTION_ID)).thenReturn(Optional.of(dismissed));
@@ -112,7 +112,7 @@ class SuggestionApprovalTxnTest {
     void prepareApprove_alreadyMaterialized_shortCircuits_withoutMappingLookup() {
         UUID poId = UUID.randomUUID();
         ReorderSuggestion materialized = ReorderSuggestion.reconstitute(
-                SUGGESTION_ID, SKU, WAREHOUSE_ID, WAREHOUSE_CODE, SUPPLIER_ID, 100,
+                SUGGESTION_ID, SKU, WAREHOUSE_ID, WAREHOUSE_CODE, "WMS_WAREHOUSE", SUPPLIER_ID, 100,
                 SuggestionStatus.MATERIALIZED, SuggestionSource.ALERT, null, 5, poId,
                 TENANT, 2, Instant.now(), Instant.now());
         when(suggestionPort.findById(SUGGESTION_ID)).thenReturn(Optional.of(materialized));
@@ -129,7 +129,7 @@ class SuggestionApprovalTxnTest {
         // A prior failed attempt left the suggestion APPROVED; retry re-resolves
         // the mapping but does not re-save the (already APPROVED) suggestion.
         ReorderSuggestion approved = ReorderSuggestion.reconstitute(
-                SUGGESTION_ID, SKU, WAREHOUSE_ID, WAREHOUSE_CODE, SUPPLIER_ID, 100,
+                SUGGESTION_ID, SKU, WAREHOUSE_ID, WAREHOUSE_CODE, "WMS_WAREHOUSE", SUPPLIER_ID, 100,
                 SuggestionStatus.APPROVED, SuggestionSource.ALERT, null, 5, null,
                 TENANT, 1, Instant.now(), Instant.now());
         when(suggestionPort.findById(SUGGESTION_ID)).thenReturn(Optional.of(approved));
@@ -145,7 +145,7 @@ class SuggestionApprovalTxnTest {
     @Test
     void completeMaterialize_transitionsApprovedToMaterialized() {
         ReorderSuggestion approved = ReorderSuggestion.reconstitute(
-                SUGGESTION_ID, SKU, WAREHOUSE_ID, WAREHOUSE_CODE, SUPPLIER_ID, 100,
+                SUGGESTION_ID, SKU, WAREHOUSE_ID, WAREHOUSE_CODE, "WMS_WAREHOUSE", SUPPLIER_ID, 100,
                 SuggestionStatus.APPROVED, SuggestionSource.ALERT, null, 5, null,
                 TENANT, 1, Instant.now(), Instant.now());
         when(suggestionPort.findById(SUGGESTION_ID)).thenReturn(Optional.of(approved));
@@ -165,7 +165,7 @@ class SuggestionApprovalTxnTest {
     void completeMaterialize_alreadyMaterialized_isIdempotent() {
         UUID poId = UUID.randomUUID();
         ReorderSuggestion materialized = ReorderSuggestion.reconstitute(
-                SUGGESTION_ID, SKU, WAREHOUSE_ID, WAREHOUSE_CODE, SUPPLIER_ID, 100,
+                SUGGESTION_ID, SKU, WAREHOUSE_ID, WAREHOUSE_CODE, "WMS_WAREHOUSE", SUPPLIER_ID, 100,
                 SuggestionStatus.MATERIALIZED, SuggestionSource.ALERT, null, 5, poId,
                 TENANT, 2, Instant.now(), Instant.now());
         when(suggestionPort.findById(SUGGESTION_ID)).thenReturn(Optional.of(materialized));

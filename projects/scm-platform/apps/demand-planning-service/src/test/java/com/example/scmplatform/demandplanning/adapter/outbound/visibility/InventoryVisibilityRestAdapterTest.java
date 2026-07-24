@@ -104,6 +104,51 @@ class InventoryVisibilityRestAdapterTest {
                 .containsExactly("SKU-ABSENT", "SKU-NULL");
     }
 
+    /**
+     * ADR-MONO-055 §D2/§D3 (TASK-SCM-BE-048): the additive {@code nodeType} is parsed when
+     * present. It is what lets a below-reorder {@code THIRD_PARTY_LOGISTICS} node drive a
+     * replenishment suggestion addressed to that 3PL node.
+     */
+    @Test
+    void parsesNodeType_whenPresent() {
+        UUID wmsNode = UUID.randomUUID();
+        UUID tplNode = UUID.randomUUID();
+        enqueueJson("{\"data\":["
+                + "{\"sku\":\"SKU-WMS\",\"nodeId\":\"" + wmsNode + "\",\"availableQty\":4,"
+                + "\"warehouseCode\":\"WH01\",\"nodeType\":\"WMS_WAREHOUSE\"},"
+                + "{\"sku\":\"SKU-3PL\",\"nodeId\":\"" + tplNode + "\",\"availableQty\":2,"
+                + "\"nodeType\":\"THIRD_PARTY_LOGISTICS\"}"
+                + "],\"meta\":{\"count\":2}}");
+
+        List<SkuWarehouseQty> result = adapter.findAllBelowReorderPoint("scm");
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).nodeType()).isEqualTo("WMS_WAREHOUSE");
+        assertThat(result.get(1).nodeType()).isEqualTo("THIRD_PARTY_LOGISTICS");
+        assertThat(result.get(1).warehouseCode()).isNull();
+    }
+
+    /**
+     * ADR-MONO-055: the field is ADDITIVE — an older IVS build omits it and a node absent
+     * from the registry serialises it as JSON null. Neither may fail the row: the candidate
+     * is still returned with a null type (the suggestion normalises it to WMS_WAREHOUSE).
+     */
+    @Test
+    void nodeTypeAbsentOrNull_yieldsNullType_rowStillReturned() {
+        UUID absentNode = UUID.randomUUID();
+        UUID nullNode = UUID.randomUUID();
+        enqueueJson("{\"data\":["
+                + "{\"sku\":\"SKU-ABSENT\",\"nodeId\":\"" + absentNode + "\",\"availableQty\":4},"
+                + "{\"sku\":\"SKU-NULL\",\"nodeId\":\"" + nullNode + "\",\"availableQty\":7,"
+                + "\"nodeType\":null}"
+                + "],\"meta\":{\"count\":2}}");
+
+        List<SkuWarehouseQty> result = adapter.findAllBelowReorderPoint("scm");
+
+        assertThat(result).hasSize(2);
+        assertThat(result).allSatisfy(r -> assertThat(r.nodeType()).isNull());
+    }
+
     @Test
     void emptyData_returnsEmptyList() {
         enqueueJson("{\"data\":[],\"meta\":{\"count\":0}}");

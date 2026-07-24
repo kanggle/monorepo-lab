@@ -67,8 +67,12 @@ public class InventoryVisibilityRestAdapter implements InventoryVisibilityPort {
                 // ADR-MONO-050 D9: additive + nullable — absent on older IVS builds and null
                 // until IVS learns the code from a wms mutation event. Never a parse failure.
                 String warehouseCode = row.path("warehouseCode").asText(null);
+                // ADR-MONO-055 §D2/§D3: additive + nullable — absent on older IVS builds and
+                // null for a node absent from the registry. Null is passed through (the
+                // suggestion normalises it to WMS_WAREHOUSE); never a parse failure.
+                String nodeType = row.path("nodeType").asText(null);
                 result.add(new SkuWarehouseQty(sku, UUID.fromString(nodeId), availableQty,
-                        warehouseCode));
+                        warehouseCode, nodeType));
             } catch (RuntimeException e) {
                 // Skip a single malformed row; never abort the whole sweep candidate set.
                 log.warn("IVS internal snapshot: skipping malformed row {}: {}", row, e.getMessage());

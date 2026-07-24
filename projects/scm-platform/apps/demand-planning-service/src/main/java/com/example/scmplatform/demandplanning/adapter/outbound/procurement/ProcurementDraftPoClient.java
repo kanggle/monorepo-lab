@@ -37,9 +37,12 @@ public class ProcurementDraftPoClient implements ProcurementDraftPoPort {
     private static final String FROM_SUGGESTION_PATH = "/api/procurement/po/from-suggestion";
     private static final String ORIGIN_DEMAND_PLANNING = "DEMAND_PLANNING";
     private static final String UNIT_PRICE_REF = "LAST_KNOWN";
-    // ADR-MONO-050 D4: v1 replenishment always targets an own wms warehouse (the
-    // low-stock alert that seeded the reorder named a wms warehouse).
+    // ADR-MONO-055 §D2/§D3: the destination node TYPE is now SOURCED FROM THE SUGGESTION,
+    // not hardcoded. These constants are only the string literals; the value on the wire is
+    // the suggestion's destinationNodeType (alert path + wms batch nodes → WMS_WAREHOUSE;
+    // a below-reorder 3PL node → THIRD_PARTY_LOGISTICS).
     private static final String NODE_TYPE_WMS_WAREHOUSE = "WMS_WAREHOUSE";
+    private static final String NODE_TYPE_THIRD_PARTY_LOGISTICS = "THIRD_PARTY_LOGISTICS";
 
     private final RestClient client;
 
@@ -61,17 +64,31 @@ public class ProcurementDraftPoClient implements ProcurementDraftPoPort {
         body.put("origin", ORIGIN_DEMAND_PLANNING);
         body.put("sourceSuggestionId", cmd.sourceSuggestionId().toString());
         body.put("leadTimeDays", cmd.leadTimeDays());
-        // ADR-MONO-050 D1/D3/D4/D9: address the wms inbound-expected event by warehouse
-        // CODE. Only ALERT-sourced suggestions carry a code; a BATCH suggestion has none
-        // (IVS read-model limitation) → omit the destination so procurement drafts the PO
-        // but never emits inbound-expected (fail-closed — never emit an unresolvable id).
+        // ADR-MONO-055 §D2/§D3: source the destination node TYPE from the suggestion
+        // (retiring the hardcoded WMS_WAREHOUSE as the source of truth). Three cases:
+        //   1. THIRD_PARTY_LOGISTICS → the allocation half of the 3PL inbound path. A 3PL
+        //      node carries no wms warehouse code, so there is NO destinationWarehouseId to
+        //      set — and that is correct: the wms inbound-expected is intentionally NOT
+        //      emitted for a 3PL destination (procurement's emit-gate already excludes it),
+        //      and BE-049 routes the 3PL-destined expectation to the scm sink.
+        //   2. WMS_WAREHOUSE (or null → default WMS) with a resolvable warehouse CODE →
+        //      address the wms inbound-expected by code (ADR-MONO-050 D1/D3/D4/D9 behaviour).
+        //   3. not 3PL and no/blank code (e.g. a BATCH wms node whose code IVS has not yet
+        //      learned) → omit the destination so procurement drafts the PO but emits no
+        //      inbound-expected (fail-closed — never emit an unresolvable id).
+        String nodeType = cmd.destinationNodeType();
         String destinationWarehouseCode = cmd.destinationWarehouseId();
-        if (destinationWarehouseCode != null && !destinationWarehouseCode.isBlank()) {
+        if (NODE_TYPE_THIRD_PARTY_LOGISTICS.equals(nodeType)) {
+            body.put("destinationNodeType", NODE_TYPE_THIRD_PARTY_LOGISTICS);
+            log.info("3PL replenishment allocation (ADR-055 §D2): drafting PO to a "
+                    + "THIRD_PARTY_LOGISTICS node for suggestion={} — no wms inbound-expected "
+                    + "emitted (BE-049 routes it to the scm sink)", cmd.sourceSuggestionId());
+        } else if (destinationWarehouseCode != null && !destinationWarehouseCode.isBlank()) {
             body.put("destinationWarehouseId", destinationWarehouseCode);
             body.put("destinationNodeType", NODE_TYPE_WMS_WAREHOUSE);
         } else {
-            log.warn("No warehouse code on suggestion={} (BATCH-sourced?) — drafting PO without "
-                    + "wms inbound-expected addressing (follow-up: IVS carry warehouseCode)",
+            log.warn("No warehouse code on suggestion={} (BATCH-sourced wms node?) — drafting "
+                    + "PO without wms inbound-expected addressing (fail-closed)",
                     cmd.sourceSuggestionId());
         }
         body.put("lines", List.of(Map.of(

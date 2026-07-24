@@ -33,9 +33,15 @@ public interface ProcurementDraftPoPort {
                           // via findWarehouseByCode) + sku_supplier_map lead time
                           // (→ expectedArrivalDate). Enables the wms inbound-expected event
                           // on PO CONFIRMED. destinationWarehouseId is null for BATCH
-                          // suggestions (no code source) → no inbound-expected emitted.
+                          // suggestions with no code source → no inbound-expected emitted.
                           // supplierId is likewise a supplier CODE (wms findPartnerByCode).
-                          String destinationWarehouseId, int leadTimeDays) {
+                          String destinationWarehouseId,
+                          // ADR-MONO-055 §D2/§D3: the destination node TYPE from the
+                          // suggestion (→ procurement destinationNodeType). WMS_WAREHOUSE for
+                          // the alert path + wms batch nodes; THIRD_PARTY_LOGISTICS for a 3PL
+                          // node (which carries no warehouse code, so no inbound-expected is
+                          // emitted toward wms — correct interim, BE-049 routes it to the sink).
+                          String destinationNodeType, int leadTimeDays) {
     }
 
     record DraftPoResult(String poId, String poStatus) {

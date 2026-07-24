@@ -96,7 +96,7 @@ class SuggestionControllerSliceTest {
     @WithMockUser
     void dismissSuggestion_returns200() throws Exception {
         ReorderSuggestion dismissed = ReorderSuggestion.reconstitute(
-                SUGGESTION_ID, "SKU-001", WAREHOUSE_ID, WAREHOUSE_CODE, SUPPLIER_ID,
+                SUGGESTION_ID, "SKU-001", WAREHOUSE_ID, WAREHOUSE_CODE, "WMS_WAREHOUSE", SUPPLIER_ID,
                 100, SuggestionStatus.DISMISSED, SuggestionSource.ALERT,
                 null, 5, null, "scm", 1, Instant.now(), Instant.now());
         when(suggestionQueryUseCase.dismiss(eq(SUGGESTION_ID), any())).thenReturn(dismissed);

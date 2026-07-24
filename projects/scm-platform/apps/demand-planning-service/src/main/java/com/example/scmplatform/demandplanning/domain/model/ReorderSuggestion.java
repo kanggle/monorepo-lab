@@ -32,10 +32,20 @@ import java.util.UUID;
  */
 public class ReorderSuggestion {
 
+    /**
+     * Default destination node type (ADR-MONO-055 §D2/§D3). A suggestion with no explicit
+     * node type — the ALERT path (wms-only), a pre-055 in-flight persisted row, or a BATCH
+     * candidate whose node type IVS could not resolve — is treated as a wms warehouse, the
+     * pre-055 contract. Normalised in the constructor so {@link #getDestinationNodeType()}
+     * is never null.
+     */
+    public static final String NODE_TYPE_WMS_WAREHOUSE = "WMS_WAREHOUSE";
+
     private final UUID id;
     private final String skuCode;
     private final UUID warehouseId;          // dedup-key dimension (wms locationId)
     private final String warehouseCode;      // ADR-050 D9: warehouse CODE → PO destination (nullable on both paths)
+    private final String destinationNodeType; // ADR-055 §D2/§D3: node TYPE → PO destinationNodeType (never null; defaults WMS_WAREHOUSE)
     private final String supplierId;         // ADR-050 D9: supplier CODE (was UUID)
     private final int suggestedQty;
     private SuggestionStatus status;
@@ -49,7 +59,8 @@ public class ReorderSuggestion {
     private Instant updatedAt;
 
     private ReorderSuggestion(UUID id, String skuCode, UUID warehouseId, String warehouseCode,
-                               String supplierId, int suggestedQty, SuggestionStatus status,
+                               String destinationNodeType, String supplierId, int suggestedQty,
+                               SuggestionStatus status,
                                SuggestionSource source, UUID triggerEventId, Integer triggerAvailableQty,
                                UUID materializedPoId, String tenantId, int version,
                                Instant createdAt, Instant updatedAt) {
@@ -57,6 +68,10 @@ public class ReorderSuggestion {
         this.skuCode = Objects.requireNonNull(skuCode, "skuCode");
         this.warehouseId = Objects.requireNonNull(warehouseId, "warehouseId");
         this.warehouseCode = warehouseCode; // nullable — wms resolves the code best-effort
+        // ADR-055 §D2/§D3: normalise null/blank → WMS_WAREHOUSE (backward compat) so the
+        // getter is never null and the ALERT path + pre-055 rows keep their wms behaviour.
+        this.destinationNodeType = (destinationNodeType != null && !destinationNodeType.isBlank())
+                ? destinationNodeType : NODE_TYPE_WMS_WAREHOUSE;
         this.supplierId = Objects.requireNonNull(supplierId, "supplierId");
         this.suggestedQty = suggestedQty;
         this.status = Objects.requireNonNull(status, "status");
@@ -73,12 +88,18 @@ public class ReorderSuggestion {
     /**
      * Factory — raise a new SUGGESTED reorder suggestion from an alert.
      * Carries the additive warehouse CODE (ADR-050 D9) that flows to the PO destination.
+     *
+     * <p>The alert path is wms-only (ADR-MONO-055 §D2 — {@code wms.inventory.alert.v1}
+     * fires only for wms nodes), so the destination node type is always
+     * {@code WMS_WAREHOUSE}. The signature is deliberately unchanged: 3PL replenishment
+     * rides the batch/snapshot path only ({@link #raiseFromBatch}).
      */
     public static ReorderSuggestion raiseFromAlert(UUID id, String skuCode, UUID warehouseId,
                                                     String warehouseCode, String supplierId, int suggestedQty,
                                                     UUID triggerEventId, int triggerAvailableQty,
                                                     String tenantId, Instant now) {
-        return new ReorderSuggestion(id, skuCode, warehouseId, warehouseCode, supplierId, suggestedQty,
+        return new ReorderSuggestion(id, skuCode, warehouseId, warehouseCode,
+                NODE_TYPE_WMS_WAREHOUSE, supplierId, suggestedQty,
                 SuggestionStatus.SUGGESTED, SuggestionSource.ALERT,
                 triggerEventId, triggerAvailableQty, null, tenantId, 0, now, now);
     }
@@ -91,27 +112,36 @@ public class ReorderSuggestion {
      * exactly like the ALERT path. {@code warehouseCode} remains <b>nullable</b> — wms
      * resolves it best-effort, and IVS may not have learned one for this node yet; such a
      * PO simply emits no wms inbound-expected (fail-closed, no uuid leak).
+     *
+     * <p>ADR-MONO-055 §D2/§D3: the batch path now carries the node's {@code nodeType} from
+     * the IVS read-model, so a below-reorder {@code THIRD_PARTY_LOGISTICS} node drafts a PO
+     * addressed to that 3PL node. A null {@code destinationNodeType} normalises to
+     * {@code WMS_WAREHOUSE} in the constructor (backward compat).
      */
     public static ReorderSuggestion raiseFromBatch(UUID id, String skuCode, UUID warehouseId,
-                                                    String warehouseCode,
+                                                    String warehouseCode, String destinationNodeType,
                                                     String supplierId, int suggestedQty,
                                                     int triggerAvailableQty,
                                                     String tenantId, Instant now) {
-        return new ReorderSuggestion(id, skuCode, warehouseId, warehouseCode, supplierId, suggestedQty,
+        return new ReorderSuggestion(id, skuCode, warehouseId, warehouseCode,
+                destinationNodeType, supplierId, suggestedQty,
                 SuggestionStatus.SUGGESTED, SuggestionSource.BATCH,
                 null, triggerAvailableQty, null, tenantId, 0, now, now);
     }
 
     /**
-     * Reconstruct from persistence.
+     * Reconstruct from persistence. A null {@code destinationNodeType} (a pre-ADR-055
+     * in-flight row) normalises to {@code WMS_WAREHOUSE} in the constructor (backward compat).
      */
     public static ReorderSuggestion reconstitute(UUID id, String skuCode, UUID warehouseId,
-                                                  String warehouseCode, String supplierId, int suggestedQty,
+                                                  String warehouseCode, String destinationNodeType,
+                                                  String supplierId, int suggestedQty,
                                                   SuggestionStatus status, SuggestionSource source,
                                                   UUID triggerEventId, Integer triggerAvailableQty,
                                                   UUID materializedPoId, String tenantId, int version,
                                                   Instant createdAt, Instant updatedAt) {
-        return new ReorderSuggestion(id, skuCode, warehouseId, warehouseCode, supplierId, suggestedQty,
+        return new ReorderSuggestion(id, skuCode, warehouseId, warehouseCode,
+                destinationNodeType, supplierId, suggestedQty,
                 status, source, triggerEventId, triggerAvailableQty,
                 materializedPoId, tenantId, version, createdAt, updatedAt);
     }
@@ -160,6 +190,8 @@ public class ReorderSuggestion {
     public String getSkuCode() { return skuCode; }
     public UUID getWarehouseId() { return warehouseId; }
     public String getWarehouseCode() { return warehouseCode; }
+    /** Destination node TYPE (ADR-MONO-055 §D2/§D3) — never null; defaults {@code WMS_WAREHOUSE}. */
+    public String getDestinationNodeType() { return destinationNodeType; }
     public String getSupplierId() { return supplierId; }
     public int getSuggestedQty() { return suggestedQty; }
     public SuggestionStatus getStatus() { return status; }
