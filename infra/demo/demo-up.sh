@@ -24,7 +24,12 @@
 #
 # 사용법:
 #   bash infra/demo/demo-up.sh [demo-core|full]
+#   bash infra/demo/demo-up.sh <domain...>        # 예: iam fan console (하드 의존 자동 포함)
 #   DEMO_BUILD=1 bash infra/demo/demo-up.sh full
+#
+# 도메인 리스트 모드 (TASK-MONO-477): 임의 도메인을 골라 부분 기동한다. projects.sh 의
+# resolve_deps 가 하드 의존(전원→iam)을 자동 포함하고 FULL 순서로 정렬하므로, `console`
+# 하나만 줘도 iam 이 함께 뜬다(없으면 로그인 불가 — MONO-358).
 # =============================================================================
 set -euo pipefail
 
@@ -37,14 +42,27 @@ source "$HERE/projects.sh"
 # shellcheck source=infra/demo/demo.env
 set -a; source "$HERE/demo.env"; set +a
 
-PROFILE="${1:-demo-core}"
 BUILD="${DEMO_BUILD:-0}"
 
-case "$PROFILE" in
-  full)      SET=("${FULL[@]}") ;;
-  demo-core) SET=("${CORE[@]}") ;;
-  *) echo "usage: demo-up.sh [demo-core|full]" >&2; exit 2 ;;
-esac
+# 인자 해석: 프로파일 키워드(full|demo-core) 또는 임의 도메인 리스트(TASK-MONO-477).
+if [ "$#" -eq 0 ]; then
+  PROFILE="demo-core"; SET=("${CORE[@]}")
+elif [ "$#" -eq 1 ] && [ "$1" = "full" ]; then
+  PROFILE="full"; SET=("${FULL[@]}")
+elif [ "$#" -eq 1 ] && [ "$1" = "demo-core" ]; then
+  PROFILE="demo-core"; SET=("${CORE[@]}")
+else
+  # 도메인 리스트 — 하드 의존을 자동 포함하고 FULL 순서로 정렬한다.
+  # (resolve_deps 의 exit code 를 잡아야 미지 도메인이 조용히 무시되지 않는다 —
+  #  process substitution 은 exit code 를 전파하지 않으므로 command substitution 을 쓴다.)
+  if ! RESOLVED="$(resolve_deps "$@")"; then
+    echo "usage: demo-up.sh [demo-core|full|<domain...>]  (유효 도메인: ${!COMPOSE[*]})" >&2
+    exit 2
+  fi
+  mapfile -t SET <<<"$RESOLVED"
+  PROFILE="domains:$*"
+  echo "[demo] 요청: $*  →  기동 대상(하드 의존 포함, 순서화): ${SET[*]}"
+fi
 
 build_flag=""
 [ "$BUILD" = "1" ] && build_flag="--build"
