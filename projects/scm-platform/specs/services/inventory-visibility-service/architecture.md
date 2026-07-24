@@ -21,10 +21,14 @@
 `inventory-visibility-service` combines two service types in one deployable unit:
 
 - `rest-api` for synchronous **read-only** queries (cross-node inventory snapshot, staleness metadata).
-  4 read endpoints (S5 — "Not for procurement decisions"), plus one mutating
-  endpoint (`POST /nodes`, TASK-SCM-BE-046) for **explicit** THIRD_PARTY_LOGISTICS
-  node registration — an onboarding action, not a procurement-decision surface,
-  so it does not conflict with S5's read-only intent for the other four.
+  4 read endpoints (S5 — "Not for procurement decisions"), plus two mutating
+  endpoints: `POST /nodes` (TASK-SCM-BE-046) for **explicit** THIRD_PARTY_LOGISTICS
+  node registration, and `POST /nodes/{nodeId}/observed-stock` (TASK-SCM-BE-047)
+  for **ingesting** an operator-pushed observation of stock held at an
+  already-registered 3PL node. Neither is a procurement-decision surface — the
+  first is an onboarding action, the second records what we *observe* at a 3PL
+  we do not operate — so neither conflicts with S5's read-only intent for the
+  other four.
 - `event-consumer` for asynchronous **inbound** event subscription:
   - `wms.inventory.received.v1` → upsert quantity snapshot
   - `wms.inventory.adjusted.v1` → delta apply on snapshot
@@ -93,6 +97,7 @@ Formal request / response shapes live in
 | GET | `/api/inventory-visibility/staleness` | public | `NodeStalenessController#getStaleness` | node-by-node staleness status (FRESH / STALE / UNREACHABLE) |
 | GET | `/api/inventory-visibility/nodes` | public | `InventoryVisibilityController#getNodes` | node list with status (id, externalId, type, name, status) |
 | POST | `/api/inventory-visibility/nodes` | public | `NodeRegistrationController#registerNode` | explicitly register a THIRD_PARTY_LOGISTICS node (ADR-MONO-054 §D2, TASK-SCM-BE-046) — 201 new / 200 idempotent repeat / 409 `NODE_TYPE_CONFLICT` |
+| POST | `/api/inventory-visibility/nodes/{nodeId}/observed-stock` | public | `NodeRegistrationController#observeStock` | record an absolute observed-stock reading for an existing THIRD_PARTY_LOGISTICS node (ADR-MONO-054 §D4, TASK-SCM-BE-047) — 200 recorded / 404 `NODE_NOT_FOUND` / 409 `NODE_TYPE_CONFLICT` / 422 `VALIDATION_ERROR` |
 
 `/nodes` exposure decision (TASK-SCM-BE-008): **public**. Rationale:
 1. The controller method has no `@PreAuthorize` and no role guard — code-level
@@ -145,6 +150,33 @@ inbound-expectation whitelist gate (`CreateScmInboundExpectationService`)
 stays untouched by node registration — routing a 3PL-destined inbound
 expectation away from wms is TASK-SCM-BE-048, a separate producer-side
 concern from this node's existence.
+
+### 3PL stock observation ingestion (ADR-MONO-054 §D4 / TASK-SCM-BE-047)
+
+A 3PL has **no `wms.*` Kafka event stream** — its own WMS is authoritative for
+its four walls (ADR-050 §D4), so the three `wms.inventory.*` consumers never
+fire for a 3PL node. `POST /api/inventory-visibility/nodes/{nodeId}/observed-stock`
+is the minimal ingestion path this gap needs (ADR-054 §D4's "read APIs or
+periodic snapshots"; Phase 2a picks the push form): an operator/adapter pushes
+a **full, absolute** reading of the 3PL node's stock, which
+`InventoryVisibilityApplicationService#applyThirdPartyObservedStock` records via
+`InventorySnapshot.applyQuantity` (**set**, never `applyDelta` — the same
+method the three wms consumers use is deliberately not reused here, because a
+3PL observation is a point-in-time reading, not an incremental event). We still
+never *operate* the 3PL's stock (no pick/pack/adjust/transfer) — this is us
+recording what the 3PL reports, nothing more, keeping the "read-only toward
+the 3PL" posture even though the write lands in our own read-model.
+
+The endpoint resolves the target node via `InventoryNodeRepository#findById`
+and rejects (never auto-registers) when the node is absent, not
+`THIRD_PARTY_LOGISTICS`, or belongs to another tenant — `resolveOrCreateNode`
+(which auto-registers a `WMS_WAREHOUSE`) is never called from this path. An
+observation whose `observedAt` is older than a SKU's stored `lastEventAt` is
+skipped line-by-line (stale/replayed reading), while the node's `NodeStaleness`
+row is still seeded/refreshed for the push as a whole — this is the **only**
+path that creates a `NodeStaleness` row for a 3PL node (registration does not),
+so a 3PL node only joins the FRESH/STALE/UNREACHABLE lifecycle once first
+observed.
 
 ## batch-heavy First Code
 
@@ -297,6 +329,9 @@ The published `scm.inventory.alert.v1` payload carries a constant `tenantId: "sc
 | 11 | Snapshot query for unknown SKU / node | empty result (read-model absence is normal, not 404) |
 | 12 | `POST /nodes` registers an externalId already registered under a **different** `NodeType` (e.g. wms auto-registered warehouse) | 409 `NODE_TYPE_CONFLICT` — a 3PL registration must not silently overwrite an unrelated node (TASK-SCM-BE-046) |
 | 13 | `POST /nodes` concurrent registration race on `uq_inventory_nodes_tenant_external` | find-or-register: the losing writer re-reads and returns the existing node, not a 500 (TASK-SCM-BE-046 Edge Case) |
+| 14 | `POST /nodes/{nodeId}/observed-stock` — `nodeId` does not exist | 404 `NODE_NOT_FOUND` (TASK-SCM-BE-047) |
+| 15 | `POST /nodes/{nodeId}/observed-stock` — `nodeId` resolves to a non-`THIRD_PARTY_LOGISTICS` node (e.g. a wms warehouse), or a node belonging to a different tenant | 409 `NODE_TYPE_CONFLICT` — never silently mutates a wms node's snapshot, never auto-registers (TASK-SCM-BE-047 Failure Scenario B) |
+| 16 | `POST /nodes/{nodeId}/observed-stock` — a line's `observedAt` is older than the SKU's stored `lastEventAt` | that line is skipped (last-observation-wins by time); the request still returns 200 and staleness still refreshes (TASK-SCM-BE-047 Edge Case) |
 
 ## Testing Strategy
 
@@ -313,6 +348,11 @@ The published `scm.inventory.alert.v1` payload carries a constant `tenantId: "sc
   - Redis outage → fail-open fallback, `X-Cache: UNAVAILABLE`, no 5xx.
   - Cross-tenant JWT → 403; missing tenant claim → 401.
   - All 4 read endpoints carry `meta.warning: "Not for procurement decisions (S5)"`.
+  - `applyThirdPartyObservedStock` against a real registered `THIRD_PARTY_LOGISTICS`
+    node (TASK-SCM-BE-047): snapshot rows persisted; visible via
+    `getSnapshotByNode` and `getCrossNodeSnapshot`; `NodeStaleness` row seeded;
+    unknown/wrong-type node rejected; an older `observedAt` line is skipped
+    without overwriting the stored quantity.
 
 `integrationTest` is excluded from `./gradlew check` so the fast feedback loop stays Docker-free (same convention as `procurement-service`).
 

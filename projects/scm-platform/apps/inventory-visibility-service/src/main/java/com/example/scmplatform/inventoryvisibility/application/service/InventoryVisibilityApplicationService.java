@@ -4,6 +4,7 @@ import com.example.scmplatform.inventoryvisibility.application.port.outbound.Ale
 import com.example.scmplatform.inventoryvisibility.application.port.outbound.ClockPort;
 import com.example.scmplatform.inventoryvisibility.application.port.outbound.EventDedupePort;
 import com.example.scmplatform.inventoryvisibility.domain.error.NodeNotFoundException;
+import com.example.scmplatform.inventoryvisibility.domain.error.NodeTypeConflictException;
 import com.example.scmplatform.inventoryvisibility.domain.node.InventoryNode;
 import com.example.scmplatform.inventoryvisibility.domain.node.NodeId;
 import com.example.scmplatform.inventoryvisibility.domain.node.NodeType;
@@ -140,6 +141,64 @@ public class InventoryVisibilityApplicationService {
         eventDedupePort.markProcessed(eventId, tenantId, clock.now(), sourceTopic);
         log.info("applied inventory.transferred: src={} dst={} sku={} qty={} eventId={}",
                 srcNode.getId(), dstNode.getId(), skuId, quantity, eventId);
+    }
+
+    // -------------------------------------------------------------------------
+    // 3PL observation ingestion use case (ADR-MONO-054 §D4 / TASK-SCM-BE-047)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Record an operator-pushed observation of stock held at an existing
+     * {@code THIRD_PARTY_LOGISTICS} node — {@code POST .../nodes/{nodeId}/observed-stock}
+     * (ADR-MONO-054 §D4 / TASK-SCM-BE-047).
+     *
+     * <p>Unlike the wms {@code applyInventory*} use cases above, this is a REST push,
+     * not a Kafka event, and the observation is an **absolute** reading (a full snapshot
+     * of what the 3PL reports), never a delta — {@link InventorySnapshot#applyQuantity}
+     * is used, not {@link InventorySnapshot#applyDelta} / {@link #applySnapshotDelta}.
+     *
+     * <p>The node must already exist as {@code THIRD_PARTY_LOGISTICS} for the calling
+     * tenant — {@link #resolveOrCreateNode} (which auto-registers a {@code WMS_WAREHOUSE})
+     * is deliberately never called here (Failure Scenario B).
+     *
+     * @throws NodeNotFoundException     if {@code nodeId} does not resolve to any node
+     * @throws NodeTypeConflictException if the resolved node is not
+     *                                    {@code THIRD_PARTY_LOGISTICS}, or belongs to a
+     *                                    different tenant than {@code tenantId}
+     */
+    @Transactional
+    public void applyThirdPartyObservedStock(String nodeId, String tenantId,
+                                              Instant observedAt, List<ObservedLine> lines) {
+        NodeId id = NodeId.of(nodeId);
+        InventoryNode node = nodeRepository.findById(id)
+                .orElseThrow(() -> new NodeNotFoundException(nodeId));
+        if (node.getNodeType() != NodeType.THIRD_PARTY_LOGISTICS) {
+            throw new NodeTypeConflictException("Inventory node nodeId=" + nodeId
+                    + " has type=" + node.getNodeType()
+                    + "; observed-stock ingestion requires THIRD_PARTY_LOGISTICS");
+        }
+        if (!node.getTenantId().equals(tenantId)) {
+            throw new NodeTypeConflictException(
+                    "Inventory node nodeId=" + nodeId + " does not belong to tenant=" + tenantId);
+        }
+
+        // One observation id per push (not per line) — every line in this call shares the
+        // same provenance marker, mirroring how a single wms event id covers its payload.
+        UUID observationId = UUID.randomUUID();
+        for (ObservedLine line : lines) {
+            applyObservedQuantity(id, Sku.of(line.skuCode()),
+                    Quantity.of(line.quantity()), observationId, observedAt, tenantId);
+        }
+        // The only path that seeds/refreshes NodeStaleness for a 3PL node — registration
+        // (RegisterThirdPartyLogisticsNodeService) does not create one (Edge Case: Staleness
+        // seed timing, TASK-SCM-BE-047).
+        updateStaleness(id, tenantId, observationId, observedAt);
+        log.info("applied 3PL observed stock: node={} lines={} observationId={} observedAt={}",
+                id, lines.size(), observationId, observedAt);
+    }
+
+    /** A single 3PL observed-stock reading: an absolute quantity for one SKU. */
+    public record ObservedLine(String skuCode, BigDecimal quantity) {
     }
 
     // -------------------------------------------------------------------------
@@ -284,6 +343,39 @@ public class InventoryVisibilityApplicationService {
             Quantity initial = isAddition ? delta : Quantity.ZERO;
             InventorySnapshot snapshot =
                     InventorySnapshot.create(nodeId, sku, tenantId, initial, eventId, occurredAt);
+            snapshotRepository.save(snapshot);
+        }
+    }
+
+    /**
+     * Applies an **absolute** observed quantity to the inventory snapshot for a 3PL
+     * node/SKU pair (ADR-MONO-054 §D4 / TASK-SCM-BE-047) — mirrors the structure of
+     * {@link #applySnapshotDelta} but calls {@link InventorySnapshot#applyQuantity}
+     * (set) rather than {@link InventorySnapshot#applyDelta} (accumulate), because a
+     * 3PL observation is a full reading, not an incremental wms event.
+     *
+     * <p>Ordering guard: if the existing snapshot's {@code lastEventAt} is strictly
+     * newer than this observation's {@code observedAt}, the line is skipped — a
+     * stale/replayed reading must never overwrite a newer one (Edge Case: Stale
+     * reading). A zero quantity is a valid observation (SKU dropped to 0) and is
+     * applied like any other value, never treated as "no observation".
+     */
+    private void applyObservedQuantity(NodeId nodeId, Sku sku, Quantity observedQuantity,
+                                        UUID observationId, Instant observedAt, String tenantId) {
+        Optional<InventorySnapshot> existing =
+                snapshotRepository.findByNodeIdAndSku(nodeId, sku, tenantId);
+        if (existing.isPresent()) {
+            InventorySnapshot snapshot = existing.get();
+            if (snapshot.getLastEventAt().isAfter(observedAt)) {
+                log.debug("skipping stale 3PL observation: node={} sku={} storedLastEventAt={} observedAt={}",
+                        nodeId, sku, snapshot.getLastEventAt(), observedAt);
+                return;
+            }
+            snapshot.applyQuantity(observedQuantity, observationId, observedAt);
+            snapshotRepository.save(snapshot);
+        } else {
+            InventorySnapshot snapshot = InventorySnapshot.create(
+                    nodeId, sku, tenantId, observedQuantity, observationId, observedAt);
             snapshotRepository.save(snapshot);
         }
     }
