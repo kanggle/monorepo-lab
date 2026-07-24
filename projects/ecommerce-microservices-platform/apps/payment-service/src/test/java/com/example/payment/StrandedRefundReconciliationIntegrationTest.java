@@ -1,7 +1,7 @@
 package com.example.payment;
 
-import com.example.payment.application.port.out.PaymentGatewayPort;
-import com.example.payment.application.port.out.PaymentGatewayStatus;
+import com.example.libs.payment.PaymentGatewayStatus;
+import com.example.libs.payment.toss.TossPaymentsAdapter;
 import com.example.payment.application.port.out.StrandedRefundRepository;
 import com.example.payment.application.service.StrandedRefundSweeper;
 import com.example.payment.domain.model.StrandedRefund;
@@ -77,7 +77,7 @@ class StrandedRefundReconciliationIntegrationTest {
     private JdbcTemplate jdbcTemplate;
 
     @MockitoBean
-    private PaymentGatewayPort paymentGateway;
+    private TossPaymentsAdapter paymentGateway;
 
     private StrandedRefund seedStranded(String paymentId) {
         return repository.save(StrandedRefund.open(
@@ -95,7 +95,7 @@ class StrandedRefundReconciliationIntegrationTest {
 
         StrandedRefund reloaded = repository.findById(seeded.getId()).orElseThrow();
         assertThat(reloaded.getStatus()).isEqualTo(StrandedRefundStatus.RESOLVED);
-        verify(paymentGateway, never()).cancelPayment(anyString(), anyString());
+        verify(paymentGateway, never()).refund(anyString(), anyString());
     }
 
     @Test
@@ -108,7 +108,7 @@ class StrandedRefundReconciliationIntegrationTest {
 
         StrandedRefund reloaded = repository.findById(seeded.getId()).orElseThrow();
         assertThat(reloaded.getStatus()).isEqualTo(StrandedRefundStatus.RESOLVED);
-        verify(paymentGateway).cancelPayment(anyString(), anyString());
+        verify(paymentGateway).refund(anyString(), anyString());
     }
 
     @Test
@@ -117,8 +117,8 @@ class StrandedRefundReconciliationIntegrationTest {
         String paymentId = "ac5-" + System.nanoTime();
         StrandedRefund seeded = seedStranded(paymentId);
         given(paymentGateway.fetchStatus(anyString())).willReturn(PaymentGatewayStatus.CAPTURED);
-        doThrow(new com.example.payment.application.exception.PgConfirmFailedException("rejected"))
-                .when(paymentGateway).cancelPayment(anyString(), anyString());
+        doThrow(new com.example.libs.payment.PgConfirmFailedException("rejected"))
+                .when(paymentGateway).refund(anyString(), anyString());
 
         sweeper.sweepOnce();
 

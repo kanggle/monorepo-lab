@@ -13,6 +13,10 @@ dependencies {
     // Messaging (Outbox pattern)
     implementation project(':libs:java-messaging')
 
+    // Payment gateway abstraction (ADR-MONO-056 Phase 1 — shared port + Toss adapter)
+    implementation project(':libs:payment-core')
+    implementation project(':libs:payment-toss')
+
     // Observability
     implementation project(':libs:java-observability')
 

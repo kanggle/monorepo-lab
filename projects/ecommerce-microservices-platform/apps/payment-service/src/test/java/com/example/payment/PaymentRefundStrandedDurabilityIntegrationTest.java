@@ -2,9 +2,9 @@ package com.example.payment;
 
 import com.example.payment.adapter.in.event.OrderPlacedEventConsumer;
 import com.example.payment.application.exception.PaymentAlreadyCompletedException;
-import com.example.payment.application.exception.PgGatewayUnavailableException;
-import com.example.payment.application.port.out.PaymentGatewayConfirmResult;
-import com.example.payment.application.port.out.PaymentGatewayPort;
+import com.example.libs.payment.PaymentAuthorization;
+import com.example.libs.payment.PgGatewayUnavailableException;
+import com.example.libs.payment.toss.TossPaymentsAdapter;
 import com.example.payment.application.port.out.PaymentRepository;
 import com.example.payment.application.service.PaymentConfirmService;
 import com.example.payment.application.service.PaymentRefundService;
@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -118,7 +118,7 @@ class PaymentRefundStrandedDurabilityIntegrationTest {
     private ObjectMapper objectMapper;
 
     @MockitoBean
-    private PaymentGatewayPort paymentGateway;
+    private TossPaymentsAdapter paymentGateway;
 
     private String orderPlacedJson(String orderId, String userId, long totalPrice) throws Exception {
         return objectMapper.writeValueAsString(Map.of(
@@ -152,20 +152,20 @@ class PaymentRefundStrandedDurabilityIntegrationTest {
         // done, saw PENDING) and its post-capture FRESH re-read (sees VOIDED) straddle the commit
         // deterministically. AtomicInteger guards against an unexpected second capture invocation.
         AtomicInteger captureCalls = new AtomicInteger();
-        given(paymentGateway.confirmPayment(anyString(), anyString(), anyLong()))
+        given(paymentGateway.verify(any()))
                 .willAnswer(invocation -> {
                     if (captureCalls.getAndIncrement() == 0) {
                         // Independent VOID commit on a separate connection, mid-capture.
                         requiresNew.executeWithoutResult(status ->
                                 paymentRefundService.handleOrderCancelled(orderId));
                     }
-                    return new PaymentGatewayConfirmResult("CARD", "https://receipt.test/mock");
+                    return PaymentAuthorization.approved("pk_test", "CARD", "https://receipt.test/mock");
                 });
 
         // Post-capture auto-cancel (the refund of the just-captured amount) fails at the PG →
         // the existing strand trigger fires (PaymentConfirmService records the escalation in REQUIRES_NEW).
         doThrow(new PgGatewayUnavailableException("cancel retry exhausted"))
-                .when(paymentGateway).cancelPayment(anyString(), eq("Order cancelled during confirm"));
+                .when(paymentGateway).refund(anyString(), eq("Order cancelled during confirm"));
 
         // PENDING payment created. NOTE: VOIDED is committed INSIDE the confirmPayment Answer during
         // confirm() below (NOT sequentially before it) — so confirm()'s pre-capture guard sees PENDING.

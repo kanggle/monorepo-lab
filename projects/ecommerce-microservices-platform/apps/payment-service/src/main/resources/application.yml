@@ -115,7 +115,7 @@ resilience4j:
           - org.springframework.web.client.HttpServerErrorException
         ignore-exceptions:
           - org.springframework.web.client.HttpClientErrorException
-          - com.example.payment.application.exception.PgConfirmFailedException
+          - com.example.libs.payment.PgConfirmFailedException
   bulkhead:
     instances:
       toss-payments:

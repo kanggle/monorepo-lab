@@ -3,8 +3,8 @@ package com.example.payment;
 import com.example.payment.adapter.in.event.OrderPlacedEventConsumer;
 import com.example.payment.application.exception.IdempotencyKeyRequiredException;
 import com.example.payment.application.exception.IdempotencyKeyConflictException;
-import com.example.payment.application.port.out.PaymentGatewayConfirmResult;
-import com.example.payment.application.port.out.PaymentGatewayPort;
+import com.example.libs.payment.PaymentAuthorization;
+import com.example.libs.payment.toss.TossPaymentsAdapter;
 import com.example.payment.application.port.out.PaymentRepository;
 import com.example.payment.application.service.PaymentConfirmService;
 import com.example.payment.application.service.PaymentRefundService;
@@ -33,8 +33,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
 /**
@@ -87,12 +86,12 @@ class PaymentPartialRefundIdempotencyIntegrationTest {
     private JdbcTemplate jdbc;
 
     @MockitoBean
-    private PaymentGatewayPort paymentGateway;
+    private TossPaymentsAdapter paymentGateway;
 
     @BeforeEach
     void stubPaymentGateway() {
-        given(paymentGateway.confirmPayment(anyString(), anyString(), anyLong()))
-                .willReturn(new PaymentGatewayConfirmResult("CARD", "https://receipt.test/mock"));
+        given(paymentGateway.verify(any()))
+                .willReturn(PaymentAuthorization.approved("pk_test", "CARD", "https://receipt.test/mock"));
     }
 
     /** Creates a COMPLETED payment of {@code amount} and returns its paymentId. */

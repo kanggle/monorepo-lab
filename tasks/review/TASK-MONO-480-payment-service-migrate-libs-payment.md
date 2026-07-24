@@ -8,7 +8,7 @@ Migrate ecommerce `payment-service` onto `libs/payment` (ADR-MONO-056 Phase 1, c
 
 # Status
 
-backlog
+review
 
 # Owner
 

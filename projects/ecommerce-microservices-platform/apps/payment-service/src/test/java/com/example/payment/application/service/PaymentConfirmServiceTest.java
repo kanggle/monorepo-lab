@@ -3,12 +3,14 @@ package com.example.payment.application.service;
 import com.example.payment.application.event.PaymentCompletedEvent;
 import com.example.payment.application.exception.AmountMismatchException;
 import com.example.payment.application.exception.PaymentAlreadyCompletedException;
-import com.example.payment.application.exception.PgConfirmFailedException;
-import com.example.payment.application.exception.PgGatewayUnavailableException;
 import com.example.payment.application.exception.UnauthorizedPaymentAccessException;
+import com.example.libs.payment.PaymentAuthorization;
+import com.example.libs.payment.PaymentGatewayPort;
+import com.example.libs.payment.PaymentVerificationRequest;
+import com.example.libs.payment.PgConfirmFailedException;
+import com.example.libs.payment.PgGatewayUnavailableException;
+import com.example.libs.payment.RefundablePaymentGateway;
 import com.example.payment.application.port.out.PaymentEventPublisher;
-import com.example.payment.application.port.out.PaymentGatewayConfirmResult;
-import com.example.payment.application.port.out.PaymentGatewayPort;
 import com.example.payment.application.port.out.PaymentMetricRecorder;
 import com.example.payment.application.port.out.PaymentRepository;
 import com.example.payment.domain.exception.PaymentNotFoundException;
@@ -42,6 +44,9 @@ class PaymentConfirmServiceTest {
     private PaymentGatewayPort paymentGateway;
 
     @Mock
+    private RefundablePaymentGateway paymentRefundGateway;
+
+    @Mock
     private PaymentEventPublisher paymentEventPublisher;
 
     @Mock
@@ -50,11 +55,16 @@ class PaymentConfirmServiceTest {
     @Mock
     private PaymentRefundStrandedRecorder paymentRefundStrandedRecorder;
 
+    /** The service verifies against KRW for the amount the caller confirmed. */
+    private static PaymentVerificationRequest req(String paymentKey, long amount, String orderId) {
+        return new PaymentVerificationRequest(paymentKey, amount, "KRW", orderId);
+    }
+
     @BeforeEach
     void setUp() {
         paymentConfirmService = new PaymentConfirmService(
-                paymentRepository, paymentGateway, paymentEventPublisher, paymentMetricRecorder,
-                paymentRefundStrandedRecorder
+                paymentRepository, paymentGateway, paymentRefundGateway, paymentEventPublisher,
+                paymentMetricRecorder, paymentRefundStrandedRecorder
         );
     }
 
@@ -63,8 +73,8 @@ class PaymentConfirmServiceTest {
     void confirm_happyPath_savesCompletedPaymentAndPublishesEvent() {
         Payment payment = Payment.create("order-1", "user-1", 30000L);
         given(paymentRepository.findByOrderId("order-1")).willReturn(Optional.of(payment));
-        given(paymentGateway.confirmPayment("pk_test_123", "order-1", 30000L))
-                .willReturn(new PaymentGatewayConfirmResult("CARD", "https://receipt.url"));
+        given(paymentGateway.verify(req("pk_test_123", 30000L, "order-1")))
+                .willReturn(PaymentAuthorization.approved("pk_test_123", "CARD", "https://receipt.url"));
         given(paymentRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
 
         PaymentConfirmResult result = paymentConfirmService.confirm("user-1", "pk_test_123", "order-1", 30000L);
@@ -129,7 +139,7 @@ class PaymentConfirmServiceTest {
     void confirm_pgFailure_setsFailedAndThrows() {
         Payment payment = Payment.create("order-1", "user-1", 30000L);
         given(paymentRepository.findByOrderId("order-1")).willReturn(Optional.of(payment));
-        given(paymentGateway.confirmPayment("pk_test_123", "order-1", 30000L))
+        given(paymentGateway.verify(req("pk_test_123", 30000L, "order-1")))
                 .willThrow(new PgConfirmFailedException("server error"));
         given(paymentRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
 
@@ -149,7 +159,7 @@ class PaymentConfirmServiceTest {
     void confirm_pgGatewayUnavailable_doesNotChangeStateAndPropagates() {
         Payment payment = Payment.create("order-1", "user-1", 30000L);
         given(paymentRepository.findByOrderId("order-1")).willReturn(Optional.of(payment));
-        given(paymentGateway.confirmPayment("pk_test_123", "order-1", 30000L))
+        given(paymentGateway.verify(req("pk_test_123", 30000L, "order-1")))
                 .willThrow(new PgGatewayUnavailableException("retry exhausted"));
 
         assertThatThrownBy(() -> paymentConfirmService.confirm("user-1", "pk_test_123", "order-1", 30000L))
@@ -178,7 +188,7 @@ class PaymentConfirmServiceTest {
                 .isInstanceOf(PaymentAlreadyCompletedException.class);
 
         // Never hit the PG, never captured, never published.
-        verify(paymentGateway, never()).confirmPayment(any(), any(), org.mockito.ArgumentMatchers.anyLong());
+        verify(paymentGateway, never()).verify(any());
         verify(paymentRepository, never()).save(any());
         verify(paymentEventPublisher, never()).publishPaymentCompleted(any());
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.VOIDED);
@@ -197,21 +207,21 @@ class PaymentConfirmServiceTest {
                 .willReturn(Optional.of(pending));        // pre-capture read (cached/managed)
         given(paymentRepository.findByOrderIdFresh("order-1"))
                 .willReturn(Optional.of(voided));         // post-capture FRESH re-read (TASK-BE-443)
-        given(paymentGateway.confirmPayment("pk_test_123", "order-1", 30000L))
-                .willReturn(new PaymentGatewayConfirmResult("CARD", "https://receipt.url"));
+        given(paymentGateway.verify(req("pk_test_123", 30000L, "order-1")))
+                .willReturn(PaymentAuthorization.approved("pk_test_123", "CARD", "https://receipt.url"));
 
         assertThatThrownBy(() -> paymentConfirmService.confirm("user-1", "pk_test_123", "order-1", 30000L))
                 .isInstanceOf(PaymentAlreadyCompletedException.class);
 
         // Captured at PG, then immediately auto-cancelled (full cancel) — funds not retained.
-        verify(paymentGateway).confirmPayment("pk_test_123", "order-1", 30000L);
-        verify(paymentGateway).cancelPayment("pk_test_123", "Order cancelled during confirm");
+        verify(paymentGateway).verify(req("pk_test_123", 30000L, "order-1"));
+        verify(paymentRefundGateway).refund("pk_test_123", "Order cancelled during confirm");
         // Did NOT advance to COMPLETED nor publish PaymentCompleted.
         verify(paymentRepository, never()).save(any());
         verify(paymentEventPublisher, never()).publishPaymentCompleted(any());
         verify(paymentMetricRecorder, never()).incrementPaymentCompleted();
 
-        // AC-3: cancelPayment succeeded → no stranded escalation, no money-safety metric.
+        // AC-3: refund succeeded → no stranded escalation, no money-safety metric.
         verify(paymentRefundStrandedRecorder, never()).record(any(), any(), any(), anyLong(), any());
         verify(paymentMetricRecorder, never()).incrementRefundStranded();
         verify(paymentMetricRecorder).incrementPaymentRefunded();
@@ -231,10 +241,10 @@ class PaymentConfirmServiceTest {
                 .willReturn(Optional.of(pending));        // pre-capture read (cached/managed)
         given(paymentRepository.findByOrderIdFresh("order-1"))
                 .willReturn(Optional.of(voided));         // post-capture FRESH re-read (TASK-BE-443)
-        given(paymentGateway.confirmPayment("pk_test_123", "order-1", 30000L))
-                .willReturn(new PaymentGatewayConfirmResult("CARD", "https://receipt.url"));
+        given(paymentGateway.verify(req("pk_test_123", 30000L, "order-1")))
+                .willReturn(PaymentAuthorization.approved("pk_test_123", "CARD", "https://receipt.url"));
         doThrow(new PgGatewayUnavailableException("cancel retry exhausted"))
-                .when(paymentGateway).cancelPayment("pk_test_123", "Order cancelled during confirm");
+                .when(paymentRefundGateway).refund("pk_test_123", "Order cancelled during confirm");
 
         // Still rejects the confirm (must not advance VOIDED → COMPLETED).
         assertThatThrownBy(() -> paymentConfirmService.confirm("user-1", "pk_test_123", "order-1", 30000L))
@@ -264,10 +274,10 @@ class PaymentConfirmServiceTest {
                 .willReturn(Optional.of(pending));        // pre-capture read (cached/managed)
         given(paymentRepository.findByOrderIdFresh("order-1"))
                 .willReturn(Optional.of(voided));         // post-capture FRESH re-read (TASK-BE-443)
-        given(paymentGateway.confirmPayment("pk_test_123", "order-1", 30000L))
-                .willReturn(new PaymentGatewayConfirmResult("CARD", "https://receipt.url"));
+        given(paymentGateway.verify(req("pk_test_123", 30000L, "order-1")))
+                .willReturn(PaymentAuthorization.approved("pk_test_123", "CARD", "https://receipt.url"));
         doThrow(new PgConfirmFailedException("cancel rejected"))
-                .when(paymentGateway).cancelPayment("pk_test_123", "Order cancelled during confirm");
+                .when(paymentRefundGateway).refund("pk_test_123", "Order cancelled during confirm");
 
         assertThatThrownBy(() -> paymentConfirmService.confirm("user-1", "pk_test_123", "order-1", 30000L))
                 .isInstanceOf(PaymentAlreadyCompletedException.class);
@@ -294,10 +304,10 @@ class PaymentConfirmServiceTest {
                 .willReturn(Optional.of(pending));        // pre-capture read (cached/managed)
         given(paymentRepository.findByOrderIdFresh("order-1"))
                 .willReturn(Optional.of(voided));         // post-capture FRESH re-read (TASK-BE-443)
-        given(paymentGateway.confirmPayment("pk_test_123", "order-1", 30000L))
-                .willReturn(new PaymentGatewayConfirmResult("CARD", "https://receipt.url"));
+        given(paymentGateway.verify(req("pk_test_123", 30000L, "order-1")))
+                .willReturn(PaymentAuthorization.approved("pk_test_123", "CARD", "https://receipt.url"));
         doThrow(new PgGatewayUnavailableException("cancel retry exhausted"))
-                .when(paymentGateway).cancelPayment("pk_test_123", "Order cancelled during confirm");
+                .when(paymentRefundGateway).refund("pk_test_123", "Order cancelled during confirm");
         doThrow(new IllegalStateException("outbox DB down"))
                 .when(paymentRefundStrandedRecorder)
                 .record(any(), any(), any(), anyLong(), any());

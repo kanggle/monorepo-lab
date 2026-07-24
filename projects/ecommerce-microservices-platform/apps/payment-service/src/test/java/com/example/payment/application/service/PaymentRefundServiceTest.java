@@ -3,11 +3,11 @@ package com.example.payment.application.service;
 import com.example.payment.application.event.PaymentRefundedEvent;
 import com.example.payment.application.exception.IdempotencyKeyRequiredException;
 import com.example.payment.application.exception.IdempotencyKeyConflictException;
-import com.example.payment.application.exception.PgGatewayUnavailableException;
+import com.example.libs.payment.PgGatewayUnavailableException;
+import com.example.libs.payment.RefundablePaymentGateway;
 import com.example.payment.application.exception.UnauthorizedPaymentAccessException;
 import com.example.payment.domain.exception.PaymentNotFoundException;
 import com.example.payment.application.port.out.PaymentEventPublisher;
-import com.example.payment.application.port.out.PaymentGatewayPort;
 import com.example.payment.application.port.out.PaymentMetricRecorder;
 import com.example.payment.application.port.out.RefundRequestRepository;
 import com.example.payment.domain.model.Payment;
@@ -51,7 +51,7 @@ class PaymentRefundServiceTest {
     private PaymentMetricRecorder paymentMetricRecorder;
 
     @Mock
-    private PaymentGatewayPort paymentGateway;
+    private RefundablePaymentGateway paymentGateway;
 
     @Mock
     private RefundRequestRepository refundRequestRepository;
@@ -108,7 +108,7 @@ class PaymentRefundServiceTest {
 
         paymentRefundService.handleOrderCancelled("order-1");
 
-        verify(paymentGateway).cancelPayment("pk_test_123", "Order cancelled");
+        verify(paymentGateway).refund("pk_test_123", "Order cancelled");
         ArgumentCaptor<Payment> captor = ArgumentCaptor.forClass(Payment.class);
         verify(paymentRepository).save(captor.capture());
         assertThat(captor.getValue().getStatus()).isEqualTo(PaymentStatus.REFUNDED);
@@ -128,7 +128,7 @@ class PaymentRefundServiceTest {
         verify(paymentRepository).save(captor.capture());
         assertThat(captor.getValue().getStatus()).isEqualTo(PaymentStatus.VOIDED);
         // No money movement: void never touches the PG and emits no refund event.
-        verify(paymentGateway, never()).cancelPayment(any(), any());
+        verify(paymentGateway, never()).refund(any(), any());
         verify(paymentEventPublisher, never()).publishPaymentRefunded(any());
     }
 
@@ -142,7 +142,7 @@ class PaymentRefundServiceTest {
         paymentRefundService.handleOrderCancelled("order-1");
 
         verify(paymentRepository, never()).save(any());
-        verify(paymentGateway, never()).cancelPayment(any(), any());
+        verify(paymentGateway, never()).refund(any(), any());
         verify(paymentEventPublisher, never()).publishPaymentRefunded(any());
     }
 
@@ -156,7 +156,7 @@ class PaymentRefundServiceTest {
         paymentRefundService.handleOrderCancelled("order-1");
 
         verify(paymentRepository, never()).save(any());
-        verify(paymentGateway, never()).cancelPayment(any(), any());
+        verify(paymentGateway, never()).refund(any(), any());
         verify(paymentEventPublisher, never()).publishPaymentRefunded(any());
     }
 
@@ -201,7 +201,7 @@ class PaymentRefundServiceTest {
         ArgumentCaptor<Payment> captor = ArgumentCaptor.forClass(Payment.class);
         verify(paymentRepository).save(captor.capture());
         assertThat(captor.getValue().getStatus()).isEqualTo(PaymentStatus.VOIDED);
-        verify(paymentGateway, never()).cancelPayment(any(), any());
+        verify(paymentGateway, never()).refund(any(), any());
         verify(paymentEventPublisher, never()).publishPaymentRefunded(any());
     }
 
@@ -236,7 +236,7 @@ class PaymentRefundServiceTest {
 
         paymentRefundService.refundPayment("order-1");
 
-        verify(paymentGateway).cancelPayment("pk_test_123", "Order cancelled");
+        verify(paymentGateway).refund("pk_test_123", "Order cancelled");
 
         ArgumentCaptor<Payment> captor = ArgumentCaptor.forClass(Payment.class);
         verify(paymentRepository).save(captor.capture());
@@ -256,7 +256,7 @@ class PaymentRefundServiceTest {
 
         paymentRefundService.refundPayment("order-1");
 
-        verify(paymentGateway, never()).cancelPayment(any(), any());
+        verify(paymentGateway, never()).refund(any(), any());
         verify(paymentRepository).save(any());
         verify(paymentEventPublisher).publishPaymentRefunded(any());
     }
@@ -272,7 +272,7 @@ class PaymentRefundServiceTest {
 
         verify(paymentRepository, never()).save(any());
         verify(paymentEventPublisher, never()).publishPaymentRefunded(any());
-        verify(paymentGateway, never()).cancelPayment(any(), any());
+        verify(paymentGateway, never()).refund(any(), any());
     }
 
     @Test
@@ -292,7 +292,7 @@ class PaymentRefundServiceTest {
         Payment payment = completedPaymentWithPgKey();
         given(paymentRepository.findByOrderId("order-1")).willReturn(Optional.of(payment));
         doThrow(new PgGatewayUnavailableException("retry exhausted"))
-                .when(paymentGateway).cancelPayment("pk_test_123", "Order cancelled");
+                .when(paymentGateway).refund("pk_test_123", "Order cancelled");
 
         assertThatThrownBy(() -> paymentRefundService.refundPayment("order-1"))
                 .isInstanceOf(PgGatewayUnavailableException.class);
@@ -318,7 +318,7 @@ class PaymentRefundServiceTest {
         Payment result = paymentRefundService.refundPayment("pay-1", "user-1", 10000L, KEY);
 
         // PG partial cancel invoked with the 3-arg (key, reason, amount) overload.
-        verify(paymentGateway).cancelPayment("pk_test_123", "Partial refund", 10000L);
+        verify(paymentGateway).refund("pk_test_123", "Partial refund", 10000L);
 
         assertThat(result.getStatus()).isEqualTo(PaymentStatus.PARTIALLY_REFUNDED);
         assertThat(result.getRefundedAmount()).isEqualTo(10000L);
@@ -359,7 +359,7 @@ class PaymentRefundServiceTest {
         assertThatThrownBy(() -> paymentRefundService.refundPayment("pay-1", "attacker", 10000L, KEY))
                 .isInstanceOf(UnauthorizedPaymentAccessException.class);
 
-        verify(paymentGateway, never()).cancelPayment(any(), any(), anyLong());
+        verify(paymentGateway, never()).refund(any(), any(), anyLong());
         verify(paymentRepository, never()).save(any());
         verify(paymentEventPublisher, never()).publishPaymentRefunded(any());
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
@@ -405,7 +405,7 @@ class PaymentRefundServiceTest {
         assertThat(afterReplay.getStatus()).isEqualTo(PaymentStatus.PARTIALLY_REFUNDED);
 
         // The replay must also not re-move money or re-announce it.
-        verify(paymentGateway, times(1)).cancelPayment("pk_test_123", "Partial refund", 10000L);
+        verify(paymentGateway, times(1)).refund("pk_test_123", "Partial refund", 10000L);
         verify(paymentRepository, times(1)).save(any());
         verify(paymentEventPublisher, times(1)).publishPaymentRefunded(any());
         verify(refundRequestRepository, times(1)).insert(any());
@@ -430,8 +430,8 @@ class PaymentRefundServiceTest {
 
         assertThat(result.getRefundedAmount()).isEqualTo(15000L);
         assertThat(result.getStatus()).isEqualTo(PaymentStatus.PARTIALLY_REFUNDED);
-        verify(paymentGateway).cancelPayment("pk_test_123", "Partial refund", 10000L);
-        verify(paymentGateway).cancelPayment("pk_test_123", "Partial refund", 5000L);
+        verify(paymentGateway).refund("pk_test_123", "Partial refund", 10000L);
+        verify(paymentGateway).refund("pk_test_123", "Partial refund", 5000L);
         verify(paymentEventPublisher, times(2)).publishPaymentRefunded(any());
         verify(refundRequestRepository, times(2)).insert(any());
     }
@@ -450,7 +450,7 @@ class PaymentRefundServiceTest {
 
         // No accumulation, no PG movement, no event — the first refund's state is intact.
         assertThat(payment.getRefundedAmount()).isZero();
-        verify(paymentGateway, never()).cancelPayment(any(), any(), anyLong());
+        verify(paymentGateway, never()).refund(any(), any(), anyLong());
         verify(paymentRepository, never()).save(any());
         verify(paymentEventPublisher, never()).publishPaymentRefunded(any());
         verify(refundRequestRepository, never()).insert(any());
@@ -467,7 +467,7 @@ class PaymentRefundServiceTest {
         // Refused before the payment is even loaded — nothing touched.
         verify(paymentRepository, never()).findById(any());
         verify(refundRequestRepository, never()).insert(any());
-        verify(paymentGateway, never()).cancelPayment(any(), any(), anyLong());
+        verify(paymentGateway, never()).refund(any(), any(), anyLong());
     }
 
     /**
@@ -493,7 +493,7 @@ class PaymentRefundServiceTest {
                 .hasCauseInstanceOf(DataIntegrityViolationException.class);
 
         // The loser performed NO refund: no PG cancel, no save, no event.
-        verify(paymentGateway, never()).cancelPayment(any(), any(), anyLong());
+        verify(paymentGateway, never()).refund(any(), any(), anyLong());
         verify(paymentRepository, never()).save(any());
         verify(paymentEventPublisher, never()).publishPaymentRefunded(any());
     }

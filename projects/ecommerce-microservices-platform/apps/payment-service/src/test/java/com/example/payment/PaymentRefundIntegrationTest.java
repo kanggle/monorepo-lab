@@ -1,7 +1,7 @@
 package com.example.payment;
 
-import com.example.payment.application.port.out.PaymentGatewayConfirmResult;
-import com.example.payment.application.port.out.PaymentGatewayPort;
+import com.example.libs.payment.PaymentAuthorization;
+import com.example.libs.payment.toss.TossPaymentsAdapter;
 import com.example.payment.application.service.PaymentConfirmService;
 import com.example.payment.domain.model.PaymentStatus;
 import com.example.payment.application.port.out.PaymentRepository;
@@ -23,8 +23,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
 import java.util.List;
@@ -74,12 +73,12 @@ class PaymentRefundIntegrationTest {
     private ObjectMapper objectMapper;
 
     @MockitoBean
-    private PaymentGatewayPort paymentGateway;
+    private TossPaymentsAdapter paymentGateway;
 
     @BeforeEach
     void stubPaymentGateway() {
-        given(paymentGateway.confirmPayment(anyString(), anyString(), anyLong()))
-                .willReturn(new PaymentGatewayConfirmResult("CARD", "https://receipt.test/mock"));
+        given(paymentGateway.verify(any()))
+                .willReturn(PaymentAuthorization.approved("pk_test", "CARD", "https://receipt.test/mock"));
     }
 
     private String buildOrderPlacedJson(String orderId, String userId, long totalPrice) throws Exception {
