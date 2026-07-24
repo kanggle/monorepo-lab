@@ -66,6 +66,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
+- `TASK-FAN-BE-031-portone-payment-adapter.md` — **READY (Phase 1, blocked on live-verify only).** membership-service 실 PG 어댑터 — `PortOnePaymentAdapter`(`@Profile("portone")`) + PortOne REST 서버측 검증(`status==PAID` AND 결제금액==청구금액, 클라이언트 성공신호 불신) + `PaymentGatewayPort` 파라미터 `paymentToken→paymentReference` 중립화. mock은 `@Profile("!portone")` 기본값 유지(CI/키없음 안전). WireMock 통합테스트=CI-safe; 라이브 검증만 PortOne 키 필요(FE-010과 원자적 머지). ADR-001. 분석=Opus 4.8 / 구현 권장=Opus(외부 연동+보안 검증).
+- `TASK-FAN-FE-010-portone-checkout-window.md` — **READY (Phase 1, blocked on live-verify only).** fan-platform-web `@portone/browser-sdk` 체크아웃 — "결제 토큰" 텍스트필드 제거, "카드로 결제" → `requestPayment(...)`로 **실 PG 결제창** → 반환 `paymentId`를 `subscribe` 액션에 전달(백엔드 BE-031이 서버측 검증). vitest는 SDK mock=CI-safe; 라이브 결제창 검증만 `NEXT_PUBLIC_PORTONE_*` 키 필요(BE-031과 원자적 머지). FE-009 티어-상위집합 단언 보존. ADR-001. 분석=Opus 4.8 / 구현 권장=Opus.
+
 ## in-progress
 
 (empty)
