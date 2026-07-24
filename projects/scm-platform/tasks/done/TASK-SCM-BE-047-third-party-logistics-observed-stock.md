@@ -1,6 +1,6 @@
 # TASK-SCM-BE-047 — 3PL node read-only stock observation (ingestion + staleness)
 
-**Status:** review
+**Status:** done
 **Type:** TASK-SCM-BE
 **Depends on / 전제:** [TASK-SCM-BE-046](../done/TASK-SCM-BE-046-third-party-logistics-node-factory.md) **done** (the `THIRD_PARTY_LOGISTICS` node is now constructible + registered) · [ADR-MONO-054](../../../../docs/adr/ADR-MONO-054-third-party-logistics-node-activation.md) **ACCEPTED** §D4 (3PL stock observed **read-only, never operated**).
 **후속 / blocks:** none required. BE-048 (honour a 3PL-destined inbound-expected) is **independent** and separately gated — do not couple.
