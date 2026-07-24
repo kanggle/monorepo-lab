@@ -90,6 +90,14 @@ Request:
   reserved sentinel `tok_decline` forces a 422 `PAYMENT_DECLINED`, any other value
   (incl. omitted) approves.
 
+**Pricing + upgrade (TASK-FAN-BE-032):** the charge is **tier-aware** — MEMBERS_ONLY
+7,900 / PREMIUM 17,900 per month (minor units; KRW won). A PREMIUM subscribe while
+the fan holds an ACTIVE, in-window MEMBERS_ONLY membership is an **upgrade**: that
+members-only row is canceled (`SUPERSEDED_BY_UPGRADE`) and the charge is prorated —
+`17,900×planMonths − remainingWholeDays×(7,900/30)`, floored at 0 (a 0-won upgrade
+skips the PG call). Preview the amount with `GET …/upgrade-quote` (below); under the
+`portone` profile the PortOne-paid amount MUST equal that prorated charge.
+
 > **Compatibility note (Phase 0):** this contract change (`paymentToken` → `paymentId`)
 > is documented ahead of implementation per the repo's contract-first policy. The
 > field-name/verification switch lands atomically with the PortOne adapter
@@ -123,6 +131,39 @@ same `membershipId` and `paymentRef`, no new row, no re-authorization.
 Errors: 400 (missing `Idempotency-Key`), 401, 403 (TENANT_FORBIDDEN), 409
 (IDEMPOTENCY_KEY_CONFLICT — same key, different payload), 422 (PAYMENT_DECLINED /
 MEMBERSHIP_TIER_INVALID / VALIDATION_ERROR for `planMonths < 1`).
+
+### `GET /api/fan/memberships/upgrade-quote` — Upgrade quote (TASK-FAN-BE-032)
+
+Auth: any authenticated fan. Preview the price of a subscribe/upgrade BEFORE opening
+the payment window, so the client requests the correct amount from PortOne. Computed
+by the SAME method the subscribe path re-verifies against — the previewed
+`chargeMinor` is exactly what the backend expects.
+
+Query: `?tier=MEMBERS_ONLY|PREMIUM&planMonths=N` (planMonths defaults to 1).
+
+Response 200:
+```json
+{
+  "data": {
+    "tier": "PREMIUM",
+    "planMonths": 1,
+    "listPriceMinor": 17900,
+    "creditMinor": 3950,
+    "chargeMinor": 13950,
+    "supersedesMembershipId": "0190f3e2-..."
+  },
+  "meta": { "timestamp": "..." }
+}
+```
+
+- `supersedesMembershipId` is non-null ONLY for a PREMIUM request while an ACTIVE,
+  in-window MEMBERS_ONLY membership is held (the row that a subscribe would cancel,
+  reason `SUPERSEDED_BY_UPGRADE`). Otherwise `creditMinor = 0`,
+  `chargeMinor = listPriceMinor`, `supersedesMembershipId = null` (plain subscribe).
+- Amounts are minor units (KRW won). `chargeMinor` may be `0` when the credit covers
+  the list price (the subscribe then approves without a PG call).
+- Read-only; no idempotency key, no side effects. Errors: 401, 403 (TENANT_FORBIDDEN),
+  422 (MEMBERSHIP_TIER_INVALID for an unknown `tier`).
 
 ### `POST /api/fan/memberships/{id}/cancel` — Cancel
 

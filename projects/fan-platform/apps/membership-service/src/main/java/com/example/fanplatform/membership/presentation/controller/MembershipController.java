@@ -4,10 +4,12 @@ import com.example.fanplatform.membership.application.ActorContext;
 import com.example.fanplatform.membership.application.CancelMembershipUseCase;
 import com.example.fanplatform.membership.application.GetMembershipUseCase;
 import com.example.fanplatform.membership.application.ListMembershipsUseCase;
+import com.example.fanplatform.membership.application.QuoteUpgradeUseCase;
 import com.example.fanplatform.membership.application.RenewCommand;
 import com.example.fanplatform.membership.application.RenewMembershipUseCase;
 import com.example.fanplatform.membership.application.SubscribeCommand;
 import com.example.fanplatform.membership.application.SubscribeUseCase;
+import com.example.fanplatform.membership.application.UpgradeQuoteView;
 import com.example.fanplatform.membership.application.exception.MembershipTierInvalidException;
 import com.example.fanplatform.membership.domain.membership.MembershipTier;
 import com.example.fanplatform.membership.presentation.dto.ApiEnvelope;
@@ -17,6 +19,7 @@ import com.example.fanplatform.membership.presentation.dto.MembershipListRespons
 import com.example.fanplatform.membership.presentation.dto.MembershipResponse;
 import com.example.fanplatform.membership.presentation.dto.RenewRequest;
 import com.example.fanplatform.membership.presentation.dto.SubscribeRequest;
+import com.example.fanplatform.membership.presentation.dto.UpgradeQuoteResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -27,6 +30,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -44,6 +48,7 @@ public class MembershipController {
     private final CancelMembershipUseCase cancelMembershipUseCase;
     private final ListMembershipsUseCase listMembershipsUseCase;
     private final GetMembershipUseCase getMembershipUseCase;
+    private final QuoteUpgradeUseCase quoteUpgradeUseCase;
 
     @PostMapping
     public ResponseEntity<ApiEnvelope<MembershipResponse>> subscribe(
@@ -55,6 +60,22 @@ public class MembershipController {
                 actor, tier, req.planMonths(), req.paymentId(), idempotencyKey);
         MembershipResponse body = MembershipResponse.from(subscribeUseCase.execute(cmd));
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.of(body));
+    }
+
+    /**
+     * Preview the price of a subscribe/upgrade (TASK-FAN-BE-032). For a PREMIUM
+     * request while an active MEMBERS_ONLY membership is held, returns the prorated
+     * charge + credit + the members-only id that would be superseded; otherwise the
+     * plain tier list price. The client opens the PortOne window for {@code chargeMinor}.
+     */
+    @GetMapping("/upgrade-quote")
+    public ResponseEntity<ApiEnvelope<UpgradeQuoteResponse>> upgradeQuote(
+            @CurrentActor ActorContext actor,
+            @RequestParam String tier,
+            @RequestParam(defaultValue = "1") int planMonths) {
+        MembershipTier parsed = parseTier(tier);
+        UpgradeQuoteView view = quoteUpgradeUseCase.execute(actor, parsed, planMonths);
+        return ResponseEntity.ok(ApiEnvelope.of(UpgradeQuoteResponse.from(view)));
     }
 
     @PostMapping("/{id}/renew")

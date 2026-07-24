@@ -16,8 +16,40 @@ export type SubscribeResult =
   | { ok: true; membership: Membership }
   | { ok: false; code: string; message: string };
 
+/**
+ * Upgrade-quote preview (TASK-FAN-BE-032). `chargeMinor` is what the client must
+ * request from PortOne — the backend re-computes and re-verifies the same value.
+ * `supersedesMembershipId` is non-null only when a PREMIUM request would upgrade
+ * from (and cancel) an active MEMBERS_ONLY membership.
+ */
+export interface UpgradeQuote {
+  tier: MembershipTier;
+  planMonths: number;
+  listPriceMinor: number;
+  creditMinor: number;
+  chargeMinor: number;
+  supersedesMembershipId: string | null;
+}
+
 const DECLINE_CODES = new Set(['PAYMENT_DECLINED', 'MEMBERSHIP_TIER_INVALID']);
 const RENEW_DECLINE_CODES = new Set(['PAYMENT_DECLINED', 'MEMBERSHIP_NOT_RENEWABLE']);
+
+/**
+ * Preview the price of a subscribe/upgrade before opening the payment window.
+ * Returns the plain tier list price, or — for a PREMIUM request while an active
+ * MEMBERS_ONLY membership is held — the prorated charge + credit (§ BE-032).
+ */
+export async function getUpgradeQuote(
+  tier: MembershipTier,
+  planMonths: number,
+): Promise<UpgradeQuote> {
+  const session = await getFanSession();
+  const res = await gatewayFetch<UpgradeQuote>(
+    `/api/v1/memberships/upgrade-quote?tier=${encodeURIComponent(tier)}&planMonths=${planMonths}`,
+    { accessToken: session.accessToken, cache: 'no-store' },
+  );
+  return res.data;
+}
 
 /**
  * Subscribe to a tier. A fresh `Idempotency-Key` is generated server-side per

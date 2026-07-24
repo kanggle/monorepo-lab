@@ -183,6 +183,17 @@ is the strict superset. The rule is centralized in `AccessPolicy.tierGrants`:
 | (none) | `subscribe` (PG mock authorize **declines**) | (no row) | NO row created; API returns 422 `PAYMENT_DECLINED` |
 | ACTIVE | `cancel` | CANCELED | terminal; sets `canceledAt`; emits `fan.membership.canceled.v1` |
 | CANCELED | `cancel` | CANCELED | **idempotent no-op** — returns the membership, emits NO new event |
+| ACTIVE (MEMBERS_ONLY) | `subscribe` PREMIUM (**upgrade**) | CANCELED | superseded in the subscribe TX — reason `SUPERSEDED_BY_UPGRADE`, emits `canceled.v1`; a new PREMIUM row is created ACTIVE in the same TX (TASK-FAN-BE-032) |
+
+- **Tier-aware pricing + upgrade (TASK-FAN-BE-032).** The charge is per-tier
+  (MEMBERS_ONLY 7,900 / PREMIUM 17,900 per month, `MembershipPricing`). A PREMIUM
+  subscribe while an ACTIVE, in-window MEMBERS_ONLY membership is held is an
+  **upgrade**: the members-only row is canceled (above) and the charge is prorated
+  by the unused whole days (`UpgradeProration`, floored at 0). The SAME
+  `UpgradeQuoter` backs the `GET …/upgrade-quote` preview and the subscribe charge,
+  so the client-paid amount equals what the portone adapter re-verifies. A 0-won
+  upgrade approves without a PG call. Supersede + create + both events are ONE
+  transaction — a PG decline/rollback leaves the members-only intact.
 
 - **No `PENDING_PAYMENT` stored state.** The PG mock authorize is *synchronous*:
   on success the row is created directly in `ACTIVE`; on decline no row is created
