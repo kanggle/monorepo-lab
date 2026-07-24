@@ -72,6 +72,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
+- `TASK-FAN-FE-009-tier-superset-subscribe-ui.md` — **REVIEW (PR #2959)**. PREMIUM 보유 시 MEMBERS_ONLY "구독하기"를 억제하고 "프리미엄에 포함됨" 표기(티어 상위집합 UI — `PREMIUM ⊇ MEMBERS_ONLY`). 역방향은 업그레이드 경로로 보존. 순수 프런트, `SubscribePanel`; vitest 3케이스+tsc+lint green. 분석·구현=Opus 4.8.
+
 ## done
 
 - `TASK-FAN-FE-008-server-session-access-token.md` — **DONE (2026-07-24, 3-dim verified — impl PR #2951 squash `d72830d7b`; state=MERGED · `d72830d7b` origin/main 편입(ancestor) · 머지 전 10 pass / 0 failing required).** 🔴 fan-platform-web의 잠복 제품버그 — 모든 Server-Component 데이터 fetch가 **bearer 없이** 게이트웨이로 나가 401 → 전 페이지 "불러올 수 없습니다" 배너. 원인=`session.ts getFanSession()`이 **세션 객체**에서 토큰을 읽는데 `sessionCallback`은 F2로 **토큰을 세션에서 제거**(유닛테스트가 `accessToken undefined` 단언) → 항상 null → 14페이지가 `getX(null,…)`. Fix=`getToken()`(next-auth/jwt)으로 **raw 세션 JWT에서 직접** 디코드(F2 유지, 세션엔 여전히 토큰 없음) + 순수 `selectAccessToken` 추출·유닛테스트 4건. 브라우저 로그인이 지금껏 완주된 적 없어 잠복. **라이브 검증**: headless next-auth 로그인→SSR `/artists`·`/`가 실제 아티스트·피드 렌더(배너 사라짐). 🔴 verify-seed(직접 토큰)는 200이었으나 실 브라우저 SSR 경로는 깨져 있던 것 — **라이브만 포착**. green-wash 회피=세션에 토큰 붙이는 손쉬운 오답(테스트된 F2 약화) 대신 raw JWT 읽기. 분석·구현=Opus 4.8. [[project_fan_platform_seed_recipe_and_two_gaps]]
