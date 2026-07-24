@@ -1,11 +1,12 @@
 package com.example.payment.application.service;
 
 import com.example.payment.application.event.PaymentRefundUnresolvedEvent;
-import com.example.payment.application.exception.PgConfirmFailedException;
-import com.example.payment.application.exception.PgGatewayUnavailableException;
+import com.example.libs.payment.PaymentGatewayStatus;
+import com.example.libs.payment.PaymentStatusReadPort;
+import com.example.libs.payment.PgConfirmFailedException;
+import com.example.libs.payment.PgGatewayUnavailableException;
+import com.example.libs.payment.RefundablePaymentGateway;
 import com.example.payment.application.port.out.PaymentEventPublisher;
-import com.example.payment.application.port.out.PaymentGatewayPort;
-import com.example.payment.application.port.out.PaymentGatewayStatus;
 import com.example.payment.application.port.out.PaymentMetricRecorder;
 import com.example.payment.application.port.out.StrandedRefundRepository;
 import com.example.payment.domain.model.StrandedRefund;
@@ -57,7 +58,10 @@ public class StrandedRefundReconciler {
     static final String RECONCILE_CANCEL_REASON = "Stranded refund auto-reconciliation (TASK-BE-438)";
 
     private final StrandedRefundRepository repository;
-    private final PaymentGatewayPort paymentGateway;
+    /** Read the PG-side status before re-issuing a cancel (double-refund guard). */
+    private final PaymentStatusReadPort paymentStatusGateway;
+    /** Re-issue the reversal at the PG. Same underlying Toss adapter bean as the status port. */
+    private final RefundablePaymentGateway paymentRefundGateway;
     private final PaymentEventPublisher paymentEventPublisher;
     private final PaymentMetricRecorder metrics;
     private final Clock clock;
@@ -67,7 +71,8 @@ public class StrandedRefundReconciler {
     private final long maxBackoffMs;
 
     public StrandedRefundReconciler(StrandedRefundRepository repository,
-                                    PaymentGatewayPort paymentGateway,
+                                    PaymentStatusReadPort paymentStatusGateway,
+                                    RefundablePaymentGateway paymentRefundGateway,
                                     PaymentEventPublisher paymentEventPublisher,
                                     PaymentMetricRecorder metrics,
                                     Clock clock,
@@ -75,7 +80,8 @@ public class StrandedRefundReconciler {
                                     @Value("${payment.stranded-refund.initial-backoff-ms:1000}") long initialBackoffMs,
                                     @Value("${payment.stranded-refund.max-backoff-ms:30000}") long maxBackoffMs) {
         this.repository = repository;
-        this.paymentGateway = paymentGateway;
+        this.paymentStatusGateway = paymentStatusGateway;
+        this.paymentRefundGateway = paymentRefundGateway;
         this.paymentEventPublisher = paymentEventPublisher;
         this.metrics = metrics;
         this.clock = clock;
@@ -112,7 +118,7 @@ public class StrandedRefundReconciler {
         // ── PG-state-first (double-refund guard) ──────────────────────────────────────────────
         PaymentGatewayStatus state;
         try {
-            state = paymentGateway.fetchStatus(paymentKey);
+            state = paymentStatusGateway.fetchStatus(paymentKey);
         } catch (PgGatewayUnavailableException | PgConfirmFailedException e) {
             // Fetch failure is transient — never infer resolution from a read error.
             backoffOrTerminate(record, now, "fetchStatus failed: " + e.getClass().getSimpleName());
@@ -128,7 +134,7 @@ public class StrandedRefundReconciler {
 
     private void recancel(StrandedRefund record, Instant now, String paymentKey) {
         try {
-            paymentGateway.cancelPayment(paymentKey, RECONCILE_CANCEL_REASON);
+            paymentRefundGateway.refund(paymentKey, RECONCILE_CANCEL_REASON);
             resolve(record, now, "retry cancel succeeded at PG");
         } catch (PgGatewayUnavailableException e) {
             // Transient transport failure — bounded retry with backoff.

@@ -1,8 +1,10 @@
 package com.example.payment.application.service;
 
+import com.example.libs.payment.PaymentAuthorization;
+import com.example.libs.payment.PaymentGatewayPort;
+import com.example.libs.payment.PaymentVerificationRequest;
+import com.example.libs.payment.RefundablePaymentGateway;
 import com.example.payment.application.port.out.PaymentEventPublisher;
-import com.example.payment.application.port.out.PaymentGatewayConfirmResult;
-import com.example.payment.application.port.out.PaymentGatewayPort;
 import com.example.payment.domain.model.Payment;
 import com.example.payment.application.port.out.PaymentRepository;
 import com.example.payment.adapter.out.metrics.PaymentMetrics;
@@ -37,6 +39,9 @@ class PaymentTopicConfigTest {
     private PaymentGatewayPort paymentGateway;
 
     @Mock
+    private RefundablePaymentGateway paymentRefundGateway;
+
+    @Mock
     private PaymentRefundStrandedRecorder paymentRefundStrandedRecorder;
 
     @Mock
@@ -46,14 +51,14 @@ class PaymentTopicConfigTest {
     @DisplayName("PaymentConfirmService는 PaymentEventPublisher.publishPaymentCompleted를 호출한다")
     void confirmPayment_delegatesToEventPublisher() {
         PaymentConfirmService service = new PaymentConfirmService(
-                paymentRepository, paymentGateway, paymentEventPublisher, paymentMetrics,
-                paymentRefundStrandedRecorder
+                paymentRepository, paymentGateway, paymentRefundGateway, paymentEventPublisher,
+                paymentMetrics, paymentRefundStrandedRecorder
         );
 
         Payment payment = Payment.create("order-1", "user-1", 10000L);
         given(paymentRepository.findByOrderId("order-1")).willReturn(Optional.of(payment));
-        given(paymentGateway.confirmPayment("pk_test", "order-1", 10000L))
-                .willReturn(new PaymentGatewayConfirmResult("CARD", null));
+        given(paymentGateway.verify(new PaymentVerificationRequest("pk_test", 10000L, "KRW", "order-1")))
+                .willReturn(PaymentAuthorization.approved("pk_test", "CARD", null));
         given(paymentRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
 
         service.confirm("user-1", "pk_test", "order-1", 10000L);
@@ -71,7 +76,7 @@ class PaymentTopicConfigTest {
         // the partial-refund dedupe store (TASK-BE-535 AC-3) — the collaborator is supplied
         // only to satisfy the constructor.
         PaymentRefundService service = new PaymentRefundService(
-                paymentRepository, paymentEventPublisher, paymentMetrics, paymentGateway,
+                paymentRepository, paymentEventPublisher, paymentMetrics, paymentRefundGateway,
                 refundRequestRepository, java.time.Clock.systemUTC()
         );
 

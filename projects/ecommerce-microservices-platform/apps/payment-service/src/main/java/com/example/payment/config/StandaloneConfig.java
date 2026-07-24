@@ -1,13 +1,16 @@
 package com.example.payment.config;
 
+import com.example.libs.payment.PaymentAuthorization;
+import com.example.libs.payment.PaymentGatewayPort;
+import com.example.libs.payment.PaymentGatewayStatus;
+import com.example.libs.payment.PaymentStatusReadPort;
+import com.example.libs.payment.PaymentVerificationRequest;
+import com.example.libs.payment.RefundablePaymentGateway;
 import com.example.payment.application.event.PaymentCompletedEvent;
 import com.example.payment.application.event.PaymentRefundStrandedEvent;
 import com.example.payment.application.event.PaymentRefundUnresolvedEvent;
 import com.example.payment.application.event.PaymentRefundedEvent;
 import com.example.payment.application.port.out.PaymentEventPublisher;
-import com.example.payment.application.port.out.PaymentGatewayConfirmResult;
-import com.example.payment.application.port.out.PaymentGatewayPort;
-import com.example.payment.application.port.out.PaymentGatewayStatus;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -43,32 +46,41 @@ public class StandaloneConfig {
         };
     }
 
+    /**
+     * In-memory PG stub for the {@code standalone} profile (no real Toss adapter). Registered by
+     * its concrete type so it satisfies every lib port a service injects
+     * ({@link PaymentGatewayPort}, {@link RefundablePaymentGateway}, {@link PaymentStatusReadPort}).
+     */
     @Bean
-    PaymentGatewayPort paymentGatewayPort() {
-        return new PaymentGatewayPort() {
-            @Override
-            public PaymentGatewayConfirmResult confirmPayment(String paymentKey, String orderId, long amount) {
-                log.info("STANDALONE: Simulated payment confirm for order {}", orderId);
-                return new PaymentGatewayConfirmResult("CARD", null);
-            }
+    StandalonePaymentGateway standalonePaymentGateway() {
+        return new StandalonePaymentGateway();
+    }
 
-            @Override
-            public void cancelPayment(String paymentKey, String cancelReason) {
-                log.info("STANDALONE: Simulated payment cancel for paymentKey {}", paymentKey);
-            }
+    static class StandalonePaymentGateway
+            implements PaymentGatewayPort, RefundablePaymentGateway, PaymentStatusReadPort {
 
-            @Override
-            public void cancelPayment(String paymentKey, String cancelReason, long cancelAmount) {
-                log.info("STANDALONE: Simulated partial payment cancel for paymentKey {} (cancelAmount={})",
-                        paymentKey, cancelAmount);
-            }
+        @Override
+        public PaymentAuthorization verify(PaymentVerificationRequest request) {
+            log.info("STANDALONE: Simulated payment verify for order {}", request.orderReference());
+            return PaymentAuthorization.approved(request.paymentReference(), "CARD", null);
+        }
 
-            @Override
-            public PaymentGatewayStatus fetchStatus(String paymentKey) {
-                // The stranded-refund sweeper is @Profile("!standalone") and never runs here.
-                log.info("STANDALONE: Simulated payment status fetch for paymentKey {}", paymentKey);
-                return PaymentGatewayStatus.UNKNOWN;
-            }
-        };
+        @Override
+        public void refund(String vendorPaymentRef, String reason) {
+            log.info("STANDALONE: Simulated payment refund for paymentKey {}", vendorPaymentRef);
+        }
+
+        @Override
+        public void refund(String vendorPaymentRef, String reason, long amountMinor) {
+            log.info("STANDALONE: Simulated partial payment refund for paymentKey {} (amount={})",
+                    vendorPaymentRef, amountMinor);
+        }
+
+        @Override
+        public PaymentGatewayStatus fetchStatus(String vendorPaymentRef) {
+            // The stranded-refund sweeper is @Profile("!standalone") and never runs here.
+            log.info("STANDALONE: Simulated payment status fetch for paymentKey {}", vendorPaymentRef);
+            return PaymentGatewayStatus.UNKNOWN;
+        }
     }
 }

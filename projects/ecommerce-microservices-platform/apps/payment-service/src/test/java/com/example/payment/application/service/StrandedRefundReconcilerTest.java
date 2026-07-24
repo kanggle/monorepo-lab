@@ -1,11 +1,12 @@
 package com.example.payment.application.service;
 
 import com.example.payment.application.event.PaymentRefundUnresolvedEvent;
-import com.example.payment.application.exception.PgConfirmFailedException;
-import com.example.payment.application.exception.PgGatewayUnavailableException;
+import com.example.libs.payment.PaymentGatewayStatus;
+import com.example.libs.payment.PaymentStatusReadPort;
+import com.example.libs.payment.PgConfirmFailedException;
+import com.example.libs.payment.PgGatewayUnavailableException;
+import com.example.libs.payment.RefundablePaymentGateway;
 import com.example.payment.application.port.out.PaymentEventPublisher;
-import com.example.payment.application.port.out.PaymentGatewayPort;
-import com.example.payment.application.port.out.PaymentGatewayStatus;
 import com.example.payment.application.port.out.PaymentMetricRecorder;
 import com.example.payment.application.port.out.StrandedRefundRepository;
 import com.example.payment.domain.model.StrandedRefund;
@@ -44,7 +45,9 @@ class StrandedRefundReconcilerTest {
     @Mock
     private StrandedRefundRepository repository;
     @Mock
-    private PaymentGatewayPort paymentGateway;
+    private PaymentStatusReadPort paymentStatusGateway;
+    @Mock
+    private RefundablePaymentGateway paymentRefundGateway;
     @Mock
     private PaymentEventPublisher paymentEventPublisher;
     @Mock
@@ -52,8 +55,8 @@ class StrandedRefundReconcilerTest {
 
     private StrandedRefundReconciler reconciler(int maxAttempts) {
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
-        return new StrandedRefundReconciler(repository, paymentGateway, paymentEventPublisher,
-                metrics, clock, maxAttempts, INITIAL_BACKOFF_MS, MAX_BACKOFF_MS);
+        return new StrandedRefundReconciler(repository, paymentStatusGateway, paymentRefundGateway,
+                paymentEventPublisher, metrics, clock, maxAttempts, INITIAL_BACKOFF_MS, MAX_BACKOFF_MS);
     }
 
     private StrandedRefund openRecord(int attempts) {
@@ -67,12 +70,12 @@ class StrandedRefundReconcilerTest {
     void reconcile_pgAlreadyCanceled_resolvesWithoutReCancel() {
         StrandedRefund record = openRecord(0);
         given(repository.findById(1L)).willReturn(Optional.of(record));
-        given(paymentGateway.fetchStatus("pk_test_123")).willReturn(PaymentGatewayStatus.CANCELED);
+        given(paymentStatusGateway.fetchStatus("pk_test_123")).willReturn(PaymentGatewayStatus.CANCELED);
 
         reconciler(8).reconcile(1L);
 
         // Never re-issue a cancel — the original transient cancel actually succeeded.
-        verify(paymentGateway, never()).cancelPayment(anyString(), anyString());
+        verify(paymentRefundGateway, never()).refund(anyString(), anyString());
         verify(metrics).incrementRefundStrandedResolved();
         verify(repository).save(record);
         assertThat(record.getStatus()).isEqualTo(StrandedRefundStatus.RESOLVED);
@@ -84,11 +87,11 @@ class StrandedRefundReconcilerTest {
     void reconcile_capturedAndCancelSucceeds_resolves() {
         StrandedRefund record = openRecord(0);
         given(repository.findById(1L)).willReturn(Optional.of(record));
-        given(paymentGateway.fetchStatus("pk_test_123")).willReturn(PaymentGatewayStatus.CAPTURED);
+        given(paymentStatusGateway.fetchStatus("pk_test_123")).willReturn(PaymentGatewayStatus.CAPTURED);
 
         reconciler(8).reconcile(1L);
 
-        verify(paymentGateway).cancelPayment(eq("pk_test_123"), anyString());
+        verify(paymentRefundGateway).refund(eq("pk_test_123"), anyString());
         verify(metrics).incrementRefundStrandedResolved();
         verify(paymentEventPublisher, never()).publishPaymentRefundUnresolved(any());
         assertThat(record.getStatus()).isEqualTo(StrandedRefundStatus.RESOLVED);
@@ -99,9 +102,9 @@ class StrandedRefundReconcilerTest {
     void reconcile_transientFailure_incrementsAttemptsAndBacksOff() {
         StrandedRefund record = openRecord(0);
         given(repository.findById(1L)).willReturn(Optional.of(record));
-        given(paymentGateway.fetchStatus("pk_test_123")).willReturn(PaymentGatewayStatus.CAPTURED);
+        given(paymentStatusGateway.fetchStatus("pk_test_123")).willReturn(PaymentGatewayStatus.CAPTURED);
         doThrow(new PgGatewayUnavailableException("cancel retry exhausted"))
-                .when(paymentGateway).cancelPayment(eq("pk_test_123"), anyString());
+                .when(paymentRefundGateway).refund(eq("pk_test_123"), anyString());
 
         reconciler(8).reconcile(1L);
 
@@ -120,12 +123,12 @@ class StrandedRefundReconcilerTest {
     void reconcile_fetchStatusFails_treatedAsTransient() {
         StrandedRefund record = openRecord(2);
         given(repository.findById(1L)).willReturn(Optional.of(record));
-        given(paymentGateway.fetchStatus("pk_test_123"))
+        given(paymentStatusGateway.fetchStatus("pk_test_123"))
                 .willThrow(new PgGatewayUnavailableException("status fetch exhausted"));
 
         reconciler(8).reconcile(1L);
 
-        verify(paymentGateway, never()).cancelPayment(anyString(), anyString());
+        verify(paymentRefundGateway, never()).refund(anyString(), anyString());
         assertThat(record.getStatus()).isEqualTo(StrandedRefundStatus.STRANDED);
         assertThat(record.getAttempts()).isEqualTo(3);
         // attempt 3 → 1s * 2^2 = 4s backoff
@@ -138,9 +141,9 @@ class StrandedRefundReconcilerTest {
         // maxAttempts=3, record at attempts=2 → this retry would exhaust (2+1>=3).
         StrandedRefund record = openRecord(2);
         given(repository.findById(1L)).willReturn(Optional.of(record));
-        given(paymentGateway.fetchStatus("pk_test_123")).willReturn(PaymentGatewayStatus.CAPTURED);
+        given(paymentStatusGateway.fetchStatus("pk_test_123")).willReturn(PaymentGatewayStatus.CAPTURED);
         doThrow(new PgGatewayUnavailableException("cancel retry exhausted"))
-                .when(paymentGateway).cancelPayment(eq("pk_test_123"), anyString());
+                .when(paymentRefundGateway).refund(eq("pk_test_123"), anyString());
 
         reconciler(3).reconcile(1L);
 
@@ -163,9 +166,9 @@ class StrandedRefundReconcilerTest {
     void reconcile_definitiveRejection_terminatesImmediately() {
         StrandedRefund record = openRecord(0);
         given(repository.findById(1L)).willReturn(Optional.of(record));
-        given(paymentGateway.fetchStatus("pk_test_123")).willReturn(PaymentGatewayStatus.CAPTURED);
+        given(paymentStatusGateway.fetchStatus("pk_test_123")).willReturn(PaymentGatewayStatus.CAPTURED);
         doThrow(new PgConfirmFailedException("cancel rejected"))
-                .when(paymentGateway).cancelPayment(eq("pk_test_123"), anyString());
+                .when(paymentRefundGateway).refund(eq("pk_test_123"), anyString());
 
         reconciler(8).reconcile(1L);
 
@@ -184,8 +187,8 @@ class StrandedRefundReconcilerTest {
 
         reconciler(8).reconcile(1L);
 
-        verify(paymentGateway, never()).fetchStatus(anyString());
-        verify(paymentGateway, never()).cancelPayment(anyString(), anyString());
+        verify(paymentStatusGateway, never()).fetchStatus(anyString());
+        verify(paymentRefundGateway, never()).refund(anyString(), anyString());
         verify(repository, never()).save(any());
         verify(metrics, never()).incrementRefundStrandedResolved();
         verify(metrics, never()).incrementRefundStrandedUnresolved();

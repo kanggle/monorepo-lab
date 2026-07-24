@@ -3,12 +3,14 @@ package com.example.payment.application.service;
 import com.example.payment.application.event.PaymentCompletedEvent;
 import com.example.payment.application.exception.AmountMismatchException;
 import com.example.payment.application.exception.PaymentAlreadyCompletedException;
-import com.example.payment.application.exception.PgConfirmFailedException;
-import com.example.payment.application.exception.PgGatewayUnavailableException;
 import com.example.payment.application.exception.UnauthorizedPaymentAccessException;
+import com.example.libs.payment.PaymentAuthorization;
+import com.example.libs.payment.PaymentGatewayPort;
+import com.example.libs.payment.PaymentVerificationRequest;
+import com.example.libs.payment.PgConfirmFailedException;
+import com.example.libs.payment.PgGatewayUnavailableException;
+import com.example.libs.payment.RefundablePaymentGateway;
 import com.example.payment.application.port.out.PaymentEventPublisher;
-import com.example.payment.application.port.out.PaymentGatewayConfirmResult;
-import com.example.payment.application.port.out.PaymentGatewayPort;
 import com.example.payment.application.port.out.PaymentMetricRecorder;
 import com.example.payment.application.port.out.PaymentRepository;
 import com.example.payment.domain.exception.PaymentNotFoundException;
@@ -25,7 +27,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class PaymentConfirmService {
 
     private final PaymentRepository paymentRepository;
+    /** Verify (= Toss confirm / money-capture) via the shared lib port (ADR-MONO-056). */
     private final PaymentGatewayPort paymentGateway;
+    /** Refund/cancel via the shared lib port — same underlying Toss adapter bean. */
+    private final RefundablePaymentGateway paymentRefundGateway;
     private final PaymentEventPublisher paymentEventPublisher;
     private final PaymentMetricRecorder paymentMetricRecorder;
     private final PaymentRefundStrandedRecorder paymentRefundStrandedRecorder;
@@ -53,9 +58,9 @@ public class PaymentConfirmService {
             throw new AmountMismatchException(payment.getAmount(), amount);
         }
 
-        PaymentGatewayConfirmResult pgResult;
+        PaymentAuthorization pgResult;
         try {
-            pgResult = paymentGateway.confirmPayment(paymentKey, orderId, amount);
+            pgResult = paymentGateway.verify(new PaymentVerificationRequest(paymentKey, amount, "KRW", orderId));
         } catch (PgConfirmFailedException e) {
             // PG-side definitive rejection (4xx). Lock the row to FAILED so the
             // user must start a new order — the PG already processed and
@@ -97,7 +102,7 @@ public class PaymentConfirmService {
         if (latest.isVoided()) {
             if (paymentKey != null) {
                 try {
-                    paymentGateway.cancelPayment(paymentKey, "Order cancelled during confirm");
+                    paymentRefundGateway.refund(paymentKey, "Order cancelled during confirm");
                 } catch (PgGatewayUnavailableException | PgConfirmFailedException e) {
                     // TASK-BE-437 money-safety escalation: the post-capture auto-refund failed at the
                     // PG, so the just-captured customer funds are stranded with no DLT/retry on this

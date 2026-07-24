@@ -5,8 +5,8 @@ import com.example.payment.application.exception.IdempotencyKeyRequiredException
 import com.example.payment.application.exception.IdempotencyKeyConflictException;
 import com.example.payment.application.exception.UnauthorizedPaymentAccessException;
 import com.example.payment.domain.exception.PaymentNotFoundException;
+import com.example.libs.payment.RefundablePaymentGateway;
 import com.example.payment.application.port.out.PaymentEventPublisher;
-import com.example.payment.application.port.out.PaymentGatewayPort;
 import com.example.payment.application.port.out.PaymentMetricRecorder;
 import com.example.payment.application.port.out.RefundRequestRepository;
 import com.example.payment.domain.model.Payment;
@@ -30,7 +30,7 @@ public class PaymentRefundService {
     private final PaymentRepository paymentRepository;
     private final PaymentEventPublisher paymentEventPublisher;
     private final PaymentMetricRecorder paymentMetricRecorder;
-    private final PaymentGatewayPort paymentGateway;
+    private final RefundablePaymentGateway paymentGateway;
     /** Idempotency store for the HTTP partial-refund path (TASK-BE-535). */
     private final RefundRequestRepository refundRequestRepository;
     private final Clock clock;
@@ -114,7 +114,7 @@ public class PaymentRefundService {
             // rolls back, payment row stays in its prior state, caller's
             // retry/DLT mechanism re-drives. No state advance on transport
             // failure (PG actual state unknown).
-            paymentGateway.cancelPayment(payment.getPaymentKey(), "Order cancelled");
+            paymentGateway.refund(payment.getPaymentKey(), "Order cancelled");
         } else {
             log.info("No paymentKey for orderId={}, skipping PG cancel", orderId);
         }
@@ -263,7 +263,7 @@ public class PaymentRefundService {
         payment.refund(amount);
 
         if (payment.getPaymentKey() != null) {
-            paymentGateway.cancelPayment(payment.getPaymentKey(), "Partial refund", amount);
+            paymentGateway.refund(payment.getPaymentKey(), "Partial refund", amount);
         } else {
             log.info("No paymentKey for paymentId={}, skipping PG partial cancel", paymentId);
         }

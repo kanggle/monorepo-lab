@@ -1,8 +1,8 @@
 package com.example.payment;
 
 import com.example.payment.adapter.in.event.OrderPlacedEventConsumer;
-import com.example.payment.application.port.out.PaymentGatewayConfirmResult;
-import com.example.payment.application.port.out.PaymentGatewayPort;
+import com.example.libs.payment.PaymentAuthorization;
+import com.example.libs.payment.toss.TossPaymentsAdapter;
 import com.example.payment.application.service.PaymentConfirmService;
 import com.example.payment.application.service.PaymentRefundService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -34,8 +34,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
 /**
@@ -98,12 +97,12 @@ class PaymentEventPublishIntegrationTest {
     private EmbeddedKafkaBroker embeddedKafkaBroker;
 
     @MockitoBean
-    private PaymentGatewayPort paymentGateway;
+    private TossPaymentsAdapter paymentGateway;
 
     @BeforeEach
     void stubPaymentGateway() {
-        given(paymentGateway.confirmPayment(anyString(), anyString(), anyLong()))
-                .willReturn(new PaymentGatewayConfirmResult("CARD", "https://receipt.test/mock"));
+        given(paymentGateway.verify(any()))
+                .willReturn(PaymentAuthorization.approved("pk_test", "CARD", "https://receipt.test/mock"));
     }
 
     private String buildOrderPlacedJson(String orderId, String userId, long totalPrice) throws Exception {
