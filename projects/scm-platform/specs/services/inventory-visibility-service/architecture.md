@@ -21,7 +21,10 @@
 `inventory-visibility-service` combines two service types in one deployable unit:
 
 - `rest-api` for synchronous **read-only** queries (cross-node inventory snapshot, staleness metadata).
-  4 read endpoints, no mutating REST (S5 — "Not for procurement decisions").
+  4 read endpoints (S5 — "Not for procurement decisions"), plus one mutating
+  endpoint (`POST /nodes`, TASK-SCM-BE-046) for **explicit** THIRD_PARTY_LOGISTICS
+  node registration — an onboarding action, not a procurement-decision surface,
+  so it does not conflict with S5's read-only intent for the other four.
 - `event-consumer` for asynchronous **inbound** event subscription:
   - `wms.inventory.received.v1` → upsert quantity snapshot
   - `wms.inventory.adjusted.v1` → delta apply on snapshot
@@ -89,6 +92,7 @@ Formal request / response shapes live in
 | GET | `/api/inventory-visibility/sku/{sku}` | public | `InventoryVisibilityController#getSkuSnapshot` | per-SKU cross-node breakdown with Redis cache (`X-Cache: HIT/MISS/UNAVAILABLE`) |
 | GET | `/api/inventory-visibility/staleness` | public | `NodeStalenessController#getStaleness` | node-by-node staleness status (FRESH / STALE / UNREACHABLE) |
 | GET | `/api/inventory-visibility/nodes` | public | `InventoryVisibilityController#getNodes` | node list with status (id, externalId, type, name, status) |
+| POST | `/api/inventory-visibility/nodes` | public | `NodeRegistrationController#registerNode` | explicitly register a THIRD_PARTY_LOGISTICS node (ADR-MONO-054 §D2, TASK-SCM-BE-046) — 201 new / 200 idempotent repeat / 409 `NODE_TYPE_CONFLICT` |
 
 `/nodes` exposure decision (TASK-SCM-BE-008): **public**. Rationale:
 1. The controller method has no `@PreAuthorize` and no role guard — code-level
@@ -120,6 +124,27 @@ read-model for an authoritative source.
 - Manual ACK mode
 - Retry: 3 attempts + DLT
 - Idempotency: `event_dedupe` table keyed on `eventId` (UUID v7)
+
+## Node Registration Model (ADR-MONO-054 §D2 / TASK-SCM-BE-046)
+
+`inventory_nodes` has two structurally different birth paths, by `NodeType`:
+
+| Node type | Birth path | Trigger |
+|---|---|---|
+| `WMS_WAREHOUSE` | **Auto-registered** | First `wms.inventory.{received,adjusted,transferred}.v1` event referencing an unknown `nodeExternalId` (Edge Case 3, TASK-SCM-BE-003). Name/contactInfo start empty, enriched later; `warehouseCode` learned set-if-present (ADR-MONO-050 §D9). |
+| `THIRD_PARTY_LOGISTICS` | **Explicitly registered** | `POST /api/inventory-visibility/nodes` (operator/onboarding action). A 3PL relationship has no upstream event stream to be born from — it is an onboarding fact, not an event side-effect. Named **at** registration (unlike the empty-then-enriched warehouse name); `warehouseCode` stays `null` (wms-only business code, not applicable). Idempotent on `(tenant_id, node_external_id)` — a repeat registration of the same external id is a no-op returning the existing node, not a duplicate. |
+| `SUPPLIER` / `IN_TRANSIT` | Declared, no active registration path in v1 | Reserved for a future task. |
+
+A `THIRD_PARTY_LOGISTICS` node's stock is **observed read-only, never operated**
+(ADR-054 §D4 / ADR-050 §D4 — a 3PL is operated by its own WMS, exactly as
+`wms-platform` is authoritative for its own four walls). This service never
+picks, packs, adjusts, or transfers 3PL stock — TASK-SCM-BE-046 registers an
+**empty** node (no stock ingestion); read-only observation (node staleness +
+snapshot ingestion for a 3PL node) is TASK-SCM-BE-047. The wms-platform
+inbound-expectation whitelist gate (`CreateScmInboundExpectationService`)
+stays untouched by node registration — routing a 3PL-destined inbound
+expectation away from wms is TASK-SCM-BE-048, a separate producer-side
+concern from this node's existence.
 
 ## batch-heavy First Code
 
@@ -270,6 +295,8 @@ The published `scm.inventory.alert.v1` payload carries a constant `tenantId: "sc
 | 9 | Node has never reported any event | classified `UNREACHABLE` → `NODE_UNREACHABLE` alert |
 | 10 | Read endpoint serves eventually-stale data | by design — response carries `meta.warning: "Not for procurement decisions (S5)"` (not a failure) |
 | 11 | Snapshot query for unknown SKU / node | empty result (read-model absence is normal, not 404) |
+| 12 | `POST /nodes` registers an externalId already registered under a **different** `NodeType` (e.g. wms auto-registered warehouse) | 409 `NODE_TYPE_CONFLICT` — a 3PL registration must not silently overwrite an unrelated node (TASK-SCM-BE-046) |
+| 13 | `POST /nodes` concurrent registration race on `uq_inventory_nodes_tenant_external` | find-or-register: the losing writer re-reads and returns the existing node, not a 500 (TASK-SCM-BE-046 Edge Case) |
 
 ## Testing Strategy
 

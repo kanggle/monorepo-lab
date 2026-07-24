@@ -1,7 +1,9 @@
 package com.example.scmplatform.inventoryvisibility.adapter.inbound.web.advice;
 
 import com.example.scmplatform.inventoryvisibility.adapter.inbound.web.dto.ApiErrorBody;
+import com.example.scmplatform.inventoryvisibility.domain.error.NodeTypeConflictException;
 import com.example.scmplatform.inventoryvisibility.domain.error.ReadModelCorruptException;
+import com.example.scmplatform.inventoryvisibility.domain.node.NodeType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -42,5 +44,16 @@ class GlobalExceptionHandlerTest {
         assertThat(r.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
         assertThat(r.getBody()).isNotNull();
         assertThat(r.getBody().code()).isEqualTo("VALIDATION_ERROR");
+    }
+
+    @Test
+    @DisplayName("NodeTypeConflictException → 409 NODE_TYPE_CONFLICT (TASK-SCM-BE-046)")
+    void nodeTypeConflict() {
+        ResponseEntity<ApiErrorBody> r = handler.handleNodeTypeConflict(
+                new NodeTypeConflictException("WH-EXT-1", NodeType.WMS_WAREHOUSE, NodeType.THIRD_PARTY_LOGISTICS));
+
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(r.getBody()).isNotNull();
+        assertThat(r.getBody().code()).isEqualTo("NODE_TYPE_CONFLICT");
     }
 }

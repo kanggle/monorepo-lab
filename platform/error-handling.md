@@ -466,6 +466,7 @@ Owned by `inventory-visibility-service`. Read-only cross-node visibility (eventu
 | SNAPSHOT_NOT_FOUND | 404 | Snapshot for the requested key does not exist. No current v1 emitter in `inventory-visibility-service` — designed read-surface code, reserved (TASK-MONO-249) |
 | NODE_UNREACHABLE | 503 | Inventory node is unreachable (network partition or node down) (`NodeUnreachableException`) |
 | SNAPSHOT_STALE | 200 (warning body) | Snapshot data is older than the configured staleness threshold; response includes stale data with `meta.staleness` warning and `meta.warning: "Not for procurement decisions"` (S5). Not an HTTP error — documented for caller awareness (`SnapshotStaleException`). Replaces the prior `STALENESS_THRESHOLD_EXCEEDED` catalog name |
+| NODE_TYPE_CONFLICT | 409 | `POST /api/inventory-visibility/nodes` (TASK-SCM-BE-046, ADR-MONO-054 §D2) — the request's `nodeExternalId` is already registered under a **different** `NodeType` (e.g. a wms auto-registered `WMS_WAREHOUSE` re-requested as `THIRD_PARTY_LOGISTICS`) (`NodeTypeConflictException`). A repeat registration of the *same* type is idempotent (200, no-op) and never reaches this code |
 
 ---
 

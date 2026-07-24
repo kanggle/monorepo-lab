@@ -132,6 +132,56 @@ Node list with status.
 
 ---
 
+## POST /api/inventory-visibility/nodes
+
+Explicitly register a `THIRD_PARTY_LOGISTICS` inventory node (ADR-MONO-054 §D2 /
+TASK-SCM-BE-046). This is the one **mutating** endpoint on an otherwise
+read-only API (S5) — a 3PL relationship is an onboarding fact, not an event
+side-effect, so it has no auto-registration path the way a `WMS_WAREHOUSE`
+node does. Registers only `THIRD_PARTY_LOGISTICS` nodes; the registered node is
+**empty** (no stock) and **observed read-only, never operated** thereafter
+(ADR-054 §D4 / ADR-050 §D4) — stock observation is TASK-SCM-BE-047.
+
+**Request body:**
+```json
+{
+  "nodeExternalId": "3PL-GOODGOOD-001",
+  "name": "품고 물류센터"
+}
+```
+
+**Response 201 — new node registered:**
+```json
+{
+  "data": {
+    "id": "uuid",
+    "nodeExternalId": "3PL-GOODGOOD-001",
+    "nodeType": "THIRD_PARTY_LOGISTICS",
+    "name": "품고 물류센터",
+    "status": "ACTIVE"
+  },
+  "meta": { "timestamp": "...", "warning": "Not for procurement decisions (S5)" }
+}
+```
+
+**Response 200 — idempotent repeat registration (same `(tenantId, nodeExternalId)`,
+already `THIRD_PARTY_LOGISTICS`):** same body shape as 201, no second row created.
+
+**Response 422 — `nodeExternalId` or `name` blank:** standard `VALIDATION_ERROR` envelope.
+
+**Response 409 — `nodeExternalId` already registered under a different `NodeType`**
+(e.g. a wms auto-registered `WMS_WAREHOUSE`): `NODE_TYPE_CONFLICT`.
+
+```json
+{
+  "code": "NODE_TYPE_CONFLICT",
+  "message": "Inventory node externalId=WH-EXT-1 is already registered as WMS_WAREHOUSE; cannot re-register as THIRD_PARTY_LOGISTICS",
+  "timestamp": "..."
+}
+```
+
+---
+
 ## Internal endpoints (non-gateway, network-trusted) — ADR-MONO-027 §D7.1
 
 These are **NOT** routed by scm-gateway (the gateway routes only `/api/v1/**`) and **NOT** exposed on any public host route. They are reachable only on the intra-scm container network and carry **no JWT** (`permitAll`). The trust boundary is network isolation; production must keep IVS un-routed externally. Used only by the demand-planning `ReorderSweepScheduler` (unattended `@Scheduled`, no operator token).
@@ -165,4 +215,5 @@ Current inventory snapshot **across all tenants** (the replenishment batch is te
 | `TENANT_FORBIDDEN` | 403 | token.tenant_id ≠ scm |
 | `PERMISSION_DENIED` | 403 | Insufficient scope |
 | `VALIDATION_ERROR` | 400/422 | Invalid parameters |
+| `NODE_TYPE_CONFLICT` | 409 | `POST /nodes` externalId already registered under a different `NodeType` (TASK-SCM-BE-046) |
 | `INTERNAL_ERROR` | 500 | Unexpected server error |
