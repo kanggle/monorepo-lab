@@ -33,6 +33,31 @@ export interface UpgradeQuote {
 
 const DECLINE_CODES = new Set(['PAYMENT_DECLINED', 'MEMBERSHIP_TIER_INVALID']);
 const RENEW_DECLINE_CODES = new Set(['PAYMENT_DECLINED', 'MEMBERSHIP_NOT_RENEWABLE']);
+// A billing-key enroll rejects a bad tier / blank key as a business validation
+// (returned inline as `{ ok: false }`, not thrown) — mirrors the subscribe decline.
+const ENROLL_DECLINE_CODES = new Set(['MEMBERSHIP_TIER_INVALID', 'VALIDATION_ERROR']);
+
+/**
+ * A billing-key enrollment (ADR-002 §D1 auto-renewal). Mirrors the flat body of
+ * `POST /api/v1/memberships/billing-key` (NOT the `{ data, meta }` envelope).
+ * NOTE: the `billingKey` itself is NEVER part of this shape — it is sent once to
+ * the backend and discarded, never returned or stored client-side (ADR-002 §D5).
+ */
+export interface BillingKeyEnrollment {
+  enrollmentId: string;
+  tier: MembershipTier;
+  active: boolean;
+  createdAt: string;
+}
+
+/**
+ * Result of a billing-key enroll attempt. The expected business validation
+ * (422 MEMBERSHIP_TIER_INVALID / VALIDATION_ERROR) is returned as `{ ok: false }`
+ * — NOT thrown — so the client renders it inline. Auth/transport errors still throw.
+ */
+export type EnrollBillingKeyResult =
+  | { ok: true; enrollment: BillingKeyEnrollment }
+  | { ok: false; code: string; message: string };
 
 /**
  * Preview the price of a subscribe/upgrade before opening the payment window.
@@ -116,6 +141,61 @@ export async function renewMembership(
     }
     throw err;
   }
+}
+
+/**
+ * Enroll a billing key for auto-renewal (`POST /api/v1/memberships/billing-key`,
+ * ADR-002 §D1). The `billingKey` is the vendor-opaque value the client obtained
+ * from `PortOne.requestIssueBillingKey(...)`; it is sent once and discarded — this
+ * action NEVER logs it, NEVER returns it, and NEVER stores it (ADR-002 §D5,
+ * treated as sensitive as an access token). The backend replaces any existing
+ * active enrollment for the same tier (at most one active per tier). The expected
+ * business validation (422 MEMBERSHIP_TIER_INVALID / VALIDATION_ERROR) is returned
+ * as `{ ok: false }` rather than thrown; other errors rethrow.
+ */
+export async function enrollBillingKey(
+  tier: MembershipTier,
+  billingKey: string,
+): Promise<EnrollBillingKeyResult> {
+  const session = await getFanSession();
+  try {
+    const res = await gatewayFetch<BillingKeyEnrollment>('/api/v1/memberships/billing-key', {
+      accessToken: session.accessToken,
+      method: 'POST',
+      body: { tier, billingKey },
+    });
+    revalidatePath('/membership');
+    return { ok: true, enrollment: res.data };
+  } catch (err) {
+    if (err instanceof ApiError && ENROLL_DECLINE_CODES.has(err.code)) {
+      return { ok: false, code: err.code, message: err.message };
+    }
+    throw err;
+  }
+}
+
+/**
+ * Turn off auto-renewal for a tier (`DELETE /api/v1/memberships/billing-key/{tier}`,
+ * ADR-002 §D1). Soft-deactivates the active enrollment; the membership itself is
+ * untouched (it stays valid until its window ends, it just won't auto-renew). A 404
+ * (`BILLING_KEY_ENROLLMENT_NOT_FOUND`) is an idempotent no-op at the UI level — the
+ * user intent ("no auto-renew") is satisfied either way — mirroring `cancelMembership`.
+ */
+export async function cancelBillingKeyEnrollment(tier: MembershipTier): Promise<void> {
+  const session = await getFanSession();
+  try {
+    await gatewayFetch(`/api/v1/memberships/billing-key/${encodeURIComponent(tier)}`, {
+      accessToken: session.accessToken,
+      method: 'DELETE',
+    });
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      revalidatePath('/membership');
+      return;
+    }
+    throw err;
+  }
+  revalidatePath('/membership');
 }
 
 /**

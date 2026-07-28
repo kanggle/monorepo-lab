@@ -6,6 +6,7 @@ import {
   SubscribePanel,
   MembershipStatusCard,
   RenewPanel,
+  AutoRenewToggle,
 } from '@/features/membership';
 import type { MembershipTier } from '@/entities/membership';
 
@@ -55,6 +56,13 @@ export default async function MembershipPage({
       </header>
 
       {active ? <MembershipStatusCard membership={active} /> : null}
+      {active ? (
+        <AutoRenewToggle
+          tier={active.tier}
+          buyerEmail={session.email}
+          buyerName={session.displayName}
+        />
+      ) : null}
       {expired ? (
         <RenewPanel
           membership={expired}
