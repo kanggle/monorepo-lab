@@ -37,13 +37,23 @@ Follow `platform/testing-strategy.md`.
 - Method: `{scenario}_{condition}_{expectedResult}`
 - DisplayName: Korean description of the business behavior
 
-## Review Checklist
+## Coverage Checklist
+
+Test-completeness only — this is not `code-reviewer`'s quality/security/performance review
+(`.claude/skills/review-checklist/SKILL.md` remains the single source of truth for that; `qa-engineer` does
+not duplicate it):
 
 - [ ] All acceptance criteria items covered by tests
 - [ ] Edge cases and failure scenarios tested
-- [ ] No layer violations
 - [ ] Contract field names match exactly
 - [ ] All tests pass
+
+## Division of Labor with `backend-engineer` / `frontend-engineer`
+
+The implementer writes unit and slice/component tests as part of implementation (their own workflow step 4,
+using `testing-backend`/`testing-frontend`). `qa-engineer` owns the layers implementers don't: integration,
+contract, and e2e tests, plus overall coverage verification against acceptance criteria — dispatched
+separately once implementation lands, not duplicating the implementer's unit-level tests.
 
 ## Does NOT
 

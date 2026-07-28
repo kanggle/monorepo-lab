@@ -3,6 +3,7 @@ name: event-architect
 description: Event-driven architecture specialist. Designs domain events, event contracts, and messaging patterns.
 model: opus
 tools: Read, Write, Edit, Glob, Grep
+skills: messaging/outbox-pattern, messaging/idempotent-consumer, messaging/consumer-retry-dlq, messaging/event-implementation
 capabilities: [event-contract-design, payload-schema, idempotency-design, retry-dlq-design, schema-versioning]
 languages: [yaml, markdown]
 domains: [all]

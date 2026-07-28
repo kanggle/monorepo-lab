@@ -45,6 +45,17 @@ Follow CLAUDE.md Source of Truth Priority. Architecture-relevant sources:
 - Write ADRs using `.claude/templates/adr-template.md` format when architecture decisions are needed
 - Include context, options, decision rationale, and consequences
 
+## Ownership Boundary
+
+- Owns: architecture pattern selection for new services, ADRs, cross-service trade-off decisions, and setting
+  the declared pattern a service must follow.
+- Overlaps with `refactoring-engineer` and `code-reviewer` on layer-violation *detection* — the boundary is
+  **when**, not **what**: `architect` reviews at design time (new service, pattern change, ADR);
+  `refactoring-engineer` detects and fixes violations in existing code as a dedicated pass;
+  `code-reviewer` checks a specific PR diff against `.claude/skills/review-checklist/SKILL.md` § Architecture
+  Compliance at review time. All three use the same rule (`platform/architecture.md` +
+  `specs/services/<service>/architecture.md`'s declared pattern) — only the trigger differs.
+
 ## CLAUDE.md Compliance
 
 All decisions follow CLAUDE.md Hard Stop Rules and Source of Truth Priority. If specs are missing or conflicting, stop and report.

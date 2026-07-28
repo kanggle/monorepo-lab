@@ -12,6 +12,8 @@ Platform-wide naming rules for code, files, and infrastructure.
 |---|---|---|
 | Class / Interface | PascalCase | `UserRepository`, `LoginService` |
 | Record (DTO) | PascalCase + suffix | `LoginRequest`, `SignupResponse` |
+| Application-layer input/output | `{UseCase}Command` / `{UseCase}Result` | `CreateOrderCommand`, `CreateOrderResult` |
+| HTTP-layer input/output | `{UseCase}Request` / `{UseCase}Response` | `LoginRequest`, `LoginResponse` |
 | Exception | PascalCase + `Exception` | `InvalidCredentialsException` |
 | Configuration | PascalCase + `Config` | `SecurityConfig`, `RedisConfig` |
 | Filter | PascalCase + `Filter` | `JwtAuthenticationFilter` |

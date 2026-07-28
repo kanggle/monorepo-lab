@@ -3,7 +3,7 @@ name: backend-engineer
 description: Spring Boot backend implementation specialist. Implements API endpoints, service logic, and infrastructure adapters.
 model: opus
 tools: Read, Write, Edit, Glob, Grep, Bash
-skills: backend/implementation-workflow, backend/springboot-api, backend/testing-backend, backend/exception-handling, backend/validation, backend/dto-mapping, backend/transaction-handling, backend/pagination
+skills: backend/implementation-workflow, backend/springboot-api, backend/testing-backend, backend/exception-handling, backend/validation, backend/dto-mapping, backend/transaction-handling, backend/pagination, messaging/event-implementation, messaging/outbox-pattern, messaging/idempotent-consumer, messaging/consumer-retry-dlq
 capabilities: [api-implementation, data-access, transaction-management, event-publishing, event-consumption, testing]
 languages: [java, kotlin]
 domains: [all]
