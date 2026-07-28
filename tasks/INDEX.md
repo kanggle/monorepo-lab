@@ -173,9 +173,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-486-validate-rules-platform-warnings.md` — 2026-07-29 `/validate-rules` platform Warning 6건(entrypoint/rules-common Auxiliary 표 누락 2파일, coding-rules↔observability 로깅 규칙 중복 2건, coding-rules/security-rules/deployment-policy 하드코딩시크릿 3중복, CLAUDE.md config/ 인용 누락, naming-conventions↔testing-strategy 테스트명명 미동기화). 전부 교차링크 추가(규칙 변경 없음). `TASK-MONO-485`(Critical, merged #3009)의 자매 티켓. PR 예정.
+(empty)
 
 ## done
+
+- **`TASK-MONO-486-validate-rules-platform-warnings.md` — ✅ DONE (2026-07-29).** 2026-07-29 `/validate-rules` platform Warning 6건 수정(entrypoint/rules-common Auxiliary 표 누락 2파일, coding-rules↔observability 로깅 규칙 중복 2건, coding-rules/security-rules/deployment-policy 하드코딩시크릿 3중복, CLAUDE.md config/ 인용 누락, naming-conventions↔testing-strategy 테스트명명 미동기화). `TASK-MONO-485`(Critical, merged #3009)의 자매 티켓. **PR #3011 squash `341c8de3e` 머지.** 3-dim 검증: MERGED · origin/main tip 일치 · pre-merge 0 failing.
 
 - **`TASK-MONO-485-validate-rules-critical-fixes.md` — ✅ DONE (2026-07-29).** 2026-07-29 `/validate-rules` Critical 6건 수정(email/roles 클레임 헤지 2건, 댕글링 스킬 경로 2건, jwt-auth·identity-platform-setup tenant_id/tenant_type 누락, event-driven-policy.md outbox 삭제 서술 stale[TASK-MONO-413 후속], process-tasks.md done/ 다이어그램 stale). `TASK-MONO-410`/`413` 과 중복 없음. **PR #3009 squash `8045fe434` 머지.** 3-dim 검증: MERGED · origin/main tip 일치 · pre-merge 0 failing(4 GREEN, 나머지 SKIPPED).
 
