@@ -15,6 +15,7 @@ import com.example.libs.payment.PaymentAuthorization;
 import com.example.libs.payment.PaymentGatewayPort;
 import com.example.libs.payment.PaymentVerificationRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,6 +52,7 @@ public class SubscribeUseCase {
 
     private final MembershipRepository membershipRepository;
     private final IdempotencyKeyRepository idempotencyKeyRepository;
+    @Qualifier("paymentGateway")
     private final PaymentGatewayPort paymentGateway;
     private final MembershipEventPublisher eventPublisher;
     private final UpgradeQuoter upgradeQuoter;

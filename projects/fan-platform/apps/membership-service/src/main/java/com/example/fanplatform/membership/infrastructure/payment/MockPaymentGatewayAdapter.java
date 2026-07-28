@@ -4,6 +4,7 @@ import com.example.common.id.UuidV7;
 import com.example.libs.payment.PaymentAuthorization;
 import com.example.libs.payment.PaymentGatewayPort;
 import com.example.libs.payment.PaymentVerificationRequest;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
@@ -34,6 +35,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @Profile("!portone")
+@Qualifier("paymentGateway")
 public class MockPaymentGatewayAdapter implements PaymentGatewayPort {
 
     /** Reserved sentinel token that forces a decline (documented test boundary). */

@@ -66,6 +66,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
+- `TASK-FAN-BE-034-portone-profile-context-boot-test.md` — **READY — 선행: TASK-FAN-BE-033-fix-02(머지 후 착수)**. `portone` 프로파일로 membership-service 컨텍스트를 부팅만 하는 테스트를 CI에 배선 — fix-02급 DI 배선 모호성 재발을 CI가 잡도록 하는 후속 회귀 가드. 실 PortOne 네트워크 호출 없음.
+
 ## in-progress
 
 (empty)
@@ -74,6 +76,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## done
 
+- `TASK-FAN-BE-033-fix-02-portone-ambiguous-bean.md` — **DONE (2026-07-28, 라이브 검증으로 직접 확인 — 브라우저+실카드 결제 성공 → `memberships` 행 `payment_ref=pay-38912e68-...`, 실 PortOnePaymentAdapter 경로 확인, `pgmock_` 아님).** ADR-001 라이브 결제 검증(membership-service `portone` 프로파일 실기동) 중 발견: `PaymentGatewayConfig`의 두 `@Bean`이 같은 `PortOnePaymentAdapter` 인스턴스를 `PaymentGatewayPort`/`RecurringBillingGateway` 양쪽으로 노출 — Spring eager 타입매칭이 두 빈 다 양쪽 포트의 candidate로 판정해 `portone` 프로파일에서만 `NoUniqueBeanDefinitionException`(mock 프로파일은 단일-인터페이스 클래스라 무영향; 어떤 테스트도 `portone` 풀 컨텍스트를 기동 안 해 CI 미포착). Fix=안정적 `@Qualifier`("paymentGateway"/"recurringBillingGateway")를 mock/portone 양쪽 빈 + 4개 소비 유스케이스 생성자 파라미터에 동일 부여(7파일, 순수 DI 배선). `./gradlew :membership-service:test`(mock 프로파일) GREEN 확인. 분석·구현=Opus(라이브 검증 중 자체 발견·수정). [[project_fan_platform_portone_pg_integration]]
 - `TASK-FAN-FE-013-billing-key-issuance-ui.md` — **DONE (2026-07-28, 3-dim verified — impl PR #3001 squash `5a17225cd`; state=MERGED · origin/main tip=ancestor · 머지 전 0 failing, 전체 vitest/lint/build 통과).** [ADR-002](../docs/adr/ADR-002-billing-key-auto-renewal.md) — **이로써 정기결제 전체 스택 완결**(ADR-MONO-057 lib → BE-033 백엔드 → FE-013 프런트). 빌링키 발급 UI(`AutoRenewToggle`) — `requestIssueBillingKey`(`portone-checkout.ts` 패턴 재사용, 구매자 identity 전달) → `enrollBillingKey`/`cancelBillingKeyEnrollment` 서버 액션(정정된 외부경로 `/api/v1/memberships/billing-key`, fix-01 이후). 백엔드 발급목록 조회(GET) 엔드포인트 없어 낙관적 로컬 상태 UI로 설계(새 엔드포인트 발명 안 함). `billingKey`는 단일 호출로 소비, 컴포넌트 상태·로그·응답에 절대 미보존. **독립 검증**: diff=fan-platform-web만 · `gatewayFetch` flat-body 래핑 실제 코드로 확인 · 경로/계약 일치 · tsc/vitest(105/105)/lint/build 전부 직접 재실행 GREEN. 분석=Opus / 구현=frontend-engineer(Opus dispatch)+독립 재검증. [[project_fan_platform_portone_pg_integration]]
 - `TASK-FAN-BE-033-fix-01-gateway-path.md` — **DONE (2026-07-28, 3-dim verified — impl PR #2998 squash `b5f33221c`; state=MERGED · origin/main tip=ancestor · 머지 전 0 failing).** TASK-FAN-BE-033 fix — `BillingKeyController`가 단수 `/api/fan/membership/billing-key`로 매핑돼 게이트웨이(복수 `/api/v1/memberships/**`만 리라이트, TASK-FAN-BE-009)로 도달 불가했던 라우팅 결함. 복수 `/api/fan/memberships/billing-key`로 정정(게이트웨이 무변경으로 커버). `MembershipController` 기존 매핑과 충돌 없음 확인. IT+계약스펙 경로 동기화. TASK-FAN-FE-013 착수 전 자체 발견.
 

@@ -8,6 +8,7 @@ import com.example.libs.payment.PaymentGatewayPort;
 import com.example.libs.payment.PaymentVerificationRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
@@ -56,6 +57,7 @@ import java.util.Optional;
 public class WebhookReconcileUseCase {
 
     private final MembershipRepository membershipRepository;
+    @Qualifier("paymentGateway")
     private final PaymentGatewayPort paymentGateway;
 
     /**

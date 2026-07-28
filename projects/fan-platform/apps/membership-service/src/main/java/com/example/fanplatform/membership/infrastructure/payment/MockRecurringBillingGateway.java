@@ -3,6 +3,7 @@ package com.example.fanplatform.membership.infrastructure.payment;
 import com.example.libs.payment.PaymentAuthorization;
 import com.example.libs.payment.PaymentGatewayPort;
 import com.example.libs.payment.RecurringBillingGateway;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
@@ -29,6 +30,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @Profile("!portone")
+@Qualifier("recurringBillingGateway")
 public class MockRecurringBillingGateway implements RecurringBillingGateway {
 
     /** Reserved sentinel billing key that forces a decline (documented test boundary). */
