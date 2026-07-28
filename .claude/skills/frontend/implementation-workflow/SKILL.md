@@ -20,7 +20,7 @@ Prerequisite: read `platform/coding-rules.md` (TypeScript Rules section) and fol
 2. Read the target task in `tasks/ready/`
 3. Read `platform/entrypoint.md` → follow spec reading order
 4. Read `.claude/skills/INDEX.md` → identify matched frontend skills
-5. Read the app's architecture skill (`feature-sliced-design.md` or `layered-by-feature.md`)
+5. Read the app's architecture skill (`frontend/architecture/feature-sliced-design/SKILL.md` or `frontend/architecture/layered-by-feature/SKILL.md`)
 
 ### 2. Read Existing Code
 

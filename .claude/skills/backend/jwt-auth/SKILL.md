@@ -58,7 +58,7 @@ Domain interface in `domain/service/`, implementation in `infrastructure/securit
 ```java
 // domain/service/TokenGenerator.java
 public interface TokenGenerator {
-    String generateAccessToken(Account account, String audience);
+    String generateAccessToken(Account account, String audience, String tenantId, String tenantType);
     long accessTokenTtlSeconds();
 }
 ```
@@ -74,7 +74,7 @@ public class JwtTokenGenerator implements TokenGenerator {
     private final String issuer;
 
     @Override
-    public String generateAccessToken(Account account, String audience) {
+    public String generateAccessToken(Account account, String audience, String tenantId, String tenantType) {
         Instant now = Instant.now();
         // A token is scoped to ONE platform (`aud`) and carries ONLY that platform's roles.
         List<String> roles = account.rolesFor(audience);   // never the account's full role set
@@ -83,6 +83,8 @@ public class JwtTokenGenerator implements TokenGenerator {
             .subject(account.getId().toString())
             .claim("email", account.getEmail().value())
             .claim("roles", roles)                          // ARRAY. `roles` is the sole authorization axis.
+            .claim("tenant_id", tenantId)                   // REQUIRED — TenantClaimValidator rejects a token missing it
+            .claim("tenant_type", tenantType)               // REQUIRED — always minted alongside tenant_id
             .issuer(issuer)
             .audience().add(audience).and()
             .id(UUID.randomUUID().toString())               // `jti` - required for revocation
@@ -99,6 +101,10 @@ hold `CUSTOMER` *and* `WMS_OPERATOR` simultaneously — a singular `role` claim 
 that, which is why the contract has no such claim. There is no `account_type` claim: it was
 removed (TASK-MONO-263) and gateways gate on `roles` only.
 
+**`tenant_id` and `tenant_type` are required on every grant** (`platform/contracts/jwt-standard-claims.md`).
+A token missing `tenant_id` is rejected at the edge by `TenantClaimValidator` — omitting it is not a smaller
+token, it is an invalid one.
+
 ---
 
 ## JWT Claims
@@ -109,6 +115,8 @@ Per `platform/contracts/jwt-standard-claims.md` — this table is a summary, the
 |---|---|---|
 | `sub` | account UUID | Identity. Gateways inject it as `X-User-Id` |
 | `roles` | **array** of platform-scoped roles | **Sole authorization axis.** Gateways inject it as `X-User-Role` (comma-separated) |
+| `tenant_id` | tenant identifier | **Required on every grant.** `TenantClaimValidator` rejects a token missing it — no tenant-isolation filter without it |
+| `tenant_type` | tenant kind | **Required, always minted alongside `tenant_id`.** Not itself edge-enforced; consumed downstream for tenant-kind branching |
 | `email` | account email | Injected as `X-User-Email` |
 | `iss` | issuer | Validated against the gateway's allow-list |
 | `aud` | **one** platform | A token is for exactly one platform and carries only that platform's roles |

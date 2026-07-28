@@ -15,7 +15,7 @@ Prerequisite: read `platform/service-types/rest-api.md` before using this skill.
 ## Orchestration Order
 
 1. **Contract** — author or update `specs/contracts/http/<service>-api.md` (use `/design-api`)
-2. **Architecture style** — pick from `backend/architecture/{layered,clean,ddd,hexagonal}.md` and declare in `specs/services/<service>/architecture.md`
+2. **Architecture style** — pick from `backend/architecture/{layered,clean,ddd,hexagonal}/SKILL.md` and declare in `specs/services/<service>/architecture.md`
 3. **API skeleton** — `backend/springboot-api/SKILL.md`
 4. **Validation** — `backend/validation/SKILL.md`
 5. **DTO mapping** — `backend/dto-mapping/SKILL.md`

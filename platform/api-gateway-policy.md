@@ -46,8 +46,8 @@ The gateway MUST NOT:
 - The gateway verifies the `Authorization: Bearer <token>` header on protected routes.
 - **On valid JWT**: forward the request with verified identity headers derived from the token's claims:
   - `X-User-Id` (from `sub` claim)
-  - `X-User-Role` (from `role` or `roles` claim)
-  - `X-User-Email` (from `email` claim, if present)
+  - `X-User-Role` (from `roles` claim — the sole authorization axis per `platform/contracts/jwt-standard-claims.md`; there is no singular `role` claim)
+  - `X-User-Email` (from `email` claim — required on every token per `platform/contracts/jwt-standard-claims.md` § Standard Claims)
   - Additional claims as declared in the project's auth spec
 - **On invalid or missing JWT**: return `401 UNAUTHORIZED` immediately without forwarding.
 - **Public routes** (no JWT required) MUST be explicitly listed in the gateway route configuration. There is no implicit public access.
