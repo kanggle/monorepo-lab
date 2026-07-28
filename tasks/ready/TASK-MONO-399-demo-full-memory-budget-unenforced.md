@@ -26,6 +26,17 @@ monorepo
 
 **AC-0~AC-5 완료 · AC-6 은 [`TASK-ERP-BE-035`](../../projects/erp-platform/tasks/ready/TASK-ERP-BE-035-shared-erp-db-flyway-history-collision.md) 머지 후로 연기(사용자 판단 2026-07-23 — 이중 bake 회피).**
 
+**2026-07-28 재판단: ERP-BE-035 는 `done`(게이트 해소)됐지만, AC-6 을 다시 한번 연기한다 — 이중 bake 회피가 이번에도 이유다.**
+`TASK-BE-390`/`TASK-BE-398`/`TASK-MONO-367`(레거시 issuer 제거, ⏳ 2026-08-01 날짜 게이트)가 건드리는
+`gateway-service/src/main/resources/application.yml` 도 **AMI 에 구워지는 앱 소스**다(§ *"고쳤는데 데모에는
+도달하지 않았다"* 표 참조). 나흘~일주일 뒤 저 셋이 끝나면 또 재굽기가 필요하므로, 지금 굽고 그때 또
+구우면 정확히 이 티켓이 ERP-BE-035 때 피한 이중 bake 를 반복한다. **AWS 실측 확인(2026-07-28)**: 현재
+Lambda/S3/CloudFront 프론트도어 자체가 전량 삭제된 상태(AC-5 의 `terraform destroy` 가 실제로 전량
+삭제 — state 없음이 아니라 진짜로 없음, EC2·보안그룹·IAM role 도 0개, AMI+스냅샷 1쌍만 존치)라 **방문자
+노출 리스크 자체가 없다** — 지금 급히 구울 이유가 없다. **착수 조건 갱신 = BE-390 + BE-398 + MONO-367
+중 최소 한쪽이 `done`인 시점** (완전히 다 끝날 때까지 무기한 대기가 아니라, 그 배치가 실제로 도착하면
+그때 한 번에 굽는다).
+
 1회 기동(`terraform apply` → `/start` → SSM 측정 → `terraform destroy`), 실비용 ≈ 인스턴스 27분 $0.23(packer 미수행). 원시 로그: 세션 scratchpad `measure_out.txt`.
 
 ## AC-0 — 인계 숫자 재측정 (달랐다 — 그 사실이 먼저다)
