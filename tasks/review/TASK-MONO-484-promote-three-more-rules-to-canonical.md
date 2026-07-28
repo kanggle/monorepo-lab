@@ -1,6 +1,6 @@
 # TASK-MONO-484 — Promote three more durable rules from agent memory into canonical platform docs
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-MONO
 **Analysis model:** Sonnet 5 / **Recommended impl model:** Sonnet 5 (three doc insertions into existing platform files; no code)
