@@ -78,7 +78,7 @@ class BillingKeyEnrollmentIntegrationTest extends MembershipServiceIntegrationBa
         String plaintextKey = "bk_live_opaque_" + System.nanoTime();
 
         ResponseEntity<String> enroll = rest.exchange(
-                "http://localhost:" + port + "/api/fan/membership/billing-key",
+                "http://localhost:" + port + "/api/fan/memberships/billing-key",
                 HttpMethod.POST,
                 new HttpEntity<>("{\"tier\":\"PREMIUM\",\"billingKey\":\"" + plaintextKey + "\"}", auth(token)),
                 String.class);
@@ -98,13 +98,13 @@ class BillingKeyEnrollmentIntegrationTest extends MembershipServiceIntegrationBa
 
         // Cancel → 200 active=false, then a second cancel → 404.
         ResponseEntity<String> cancel = rest.exchange(
-                "http://localhost:" + port + "/api/fan/membership/billing-key/PREMIUM",
+                "http://localhost:" + port + "/api/fan/memberships/billing-key/PREMIUM",
                 HttpMethod.DELETE, new HttpEntity<>(auth(token)), String.class);
         assertThat(cancel.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(objectMapper.readTree(cancel.getBody()).path("active").asBoolean()).isFalse();
 
         ResponseEntity<String> cancelAgain = rest.exchange(
-                "http://localhost:" + port + "/api/fan/membership/billing-key/PREMIUM",
+                "http://localhost:" + port + "/api/fan/memberships/billing-key/PREMIUM",
                 HttpMethod.DELETE, new HttpEntity<>(auth(token)), String.class);
         assertThat(cancelAgain.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(cancelAgain.getBody()).contains("BILLING_KEY_ENROLLMENT_NOT_FOUND");
@@ -132,7 +132,7 @@ class BillingKeyEnrollmentIntegrationTest extends MembershipServiceIntegrationBa
 
         // Enroll a billing key for the tier.
         ResponseEntity<String> enroll = rest.exchange(
-                "http://localhost:" + port + "/api/fan/membership/billing-key",
+                "http://localhost:" + port + "/api/fan/memberships/billing-key",
                 HttpMethod.POST,
                 new HttpEntity<>("{\"tier\":\"PREMIUM\",\"billingKey\":\"bk_auto_" + System.nanoTime() + "\"}", auth(token)),
                 String.class);
