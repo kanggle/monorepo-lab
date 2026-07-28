@@ -173,9 +173,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-488-validate-rules-agent-warnings.md` — 2026-07-29 `/validate-rules` agent Warning 9건(naming-conventions.md Command/Result·Request/Response 미문서화, backend-engineer skills: messaging/* 누락, event-architect·devops-engineer skills: 필드 부재, refactoring-engineer frontend 스킬 갭 미고지, architect/refactoring-engineer/code-reviewer 레이어위반검출 경계 미문서화, qa-engineer/code-reviewer 체크리스트 중복, backend/frontend/qa 테스트작성 분담 미문서화). `TASK-MONO-485`/`486`/`487` 자매 티켓. PR 예정.
+(empty)
 
 ## done
+
+- **`TASK-MONO-488-validate-rules-agent-warnings.md` — ✅ DONE (2026-07-29).** 2026-07-29 `/validate-rules` agent Warning 9건 수정(naming-conventions.md Command/Result·Request/Response 미문서화, backend-engineer skills: messaging/* 누락, event-architect·devops-engineer skills: 필드 부재, refactoring-engineer frontend 스킬 갭 미고지, architect/refactoring-engineer/code-reviewer 레이어위반검출 경계 미문서화, qa-engineer/code-reviewer 체크리스트 중복, backend/frontend/qa 테스트작성 분담 미문서화). `TASK-MONO-485`/`486`/`487` 자매 티켓. **PR #3015 squash `1e1961139` 머지.** 3-dim 검증: MERGED · origin/main tip 일치 · pre-merge 0 failing.
 
 - **`TASK-MONO-487-validate-rules-skill-warnings.md` — ✅ DONE (2026-07-29, partial by design).** 2026-07-29 `/validate-rules` skill Warning 5건 수정(standalone-profile Flyway 예외 미문서화, testing-backend 클래스명 컨벤션 불일치, idempotent-consumer 가 EventDedupePort 안 씀, event-consumer-setup 댕글링 앵커 3개, write-tests.md 백엔드 전용). **auth-client CSRF 는 훅 버그로 차단**(RULE-CONSISTENCY-04 가 무관한 기존 참조를 편집-전 콘텐츠로 재검사 — TASK-MONO-410 과 동일 클래스; 우회 안 함, 후속 후보로 기록). `TASK-MONO-485`/`486` 자매 티켓. **PR #3013 squash `776311a3e` 머지.** 3-dim 검증: MERGED · origin/main tip 일치 · pre-merge 0 failing.
 
