@@ -173,9 +173,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-485-validate-rules-critical-fixes.md` — 2026-07-29 `/validate-rules` Critical 6건(email/roles 클레임 헤지 2건, 댕글링 스킬 경로 2건, jwt-auth·identity-platform-setup tenant_id/tenant_type 누락, event-driven-policy.md outbox 삭제 서술 stale[TASK-MONO-413 스킬 수정의 미완 후속], process-tasks.md done/ 다이어그램 stale). `TASK-MONO-410`/`413` 과 중복 없음(사전 diff 완료). PR 예정.
+(empty)
 
 ## done
+
+- **`TASK-MONO-485-validate-rules-critical-fixes.md` — ✅ DONE (2026-07-29).** 2026-07-29 `/validate-rules` Critical 6건 수정(email/roles 클레임 헤지 2건, 댕글링 스킬 경로 2건, jwt-auth·identity-platform-setup tenant_id/tenant_type 누락, event-driven-policy.md outbox 삭제 서술 stale[TASK-MONO-413 후속], process-tasks.md done/ 다이어그램 stale). `TASK-MONO-410`/`413` 과 중복 없음. **PR #3009 squash `8045fe434` 머지.** 3-dim 검증: MERGED · origin/main tip 일치 · pre-merge 0 failing(4 GREEN, 나머지 SKIPPED).
 
 - **`TASK-MONO-484-promote-three-more-rules-to-canonical.md` — ✅ DONE (2026-07-29).** 2026-07-29 `/audit-memory` 스윕 산물(TASK-MONO-464 와 동일 패턴). `platform/git-workflow-policy.md` 에 3규칙 삽입(공유파일 task 시리즈 단일-worktree 직렬화 / self-merge·force-push 명시승인 / 머지 후 nightly 확인 습관) + `CLAUDE.md` 카탈로그 포인터 3개. **PR #3007 squash `3cfed600b` 머지.** 3-dim 검증: `gh pr view` state=MERGED · `origin/main` tip = mergeCommit 정확히 일치 · pre-merge `statusCheckRollup` 0 failing(4개 GREEN — INDEX queue drift·Claude reference integrity·Task ID collision·changes; 나머지는 path-filter 로 정상 SKIPPED, docs-only 변경).
 
