@@ -1,6 +1,6 @@
 # TASK-SCM-BE-049 — 3PL inbound-expected honour + scm-internal sink (route away from wms, record against the 3PL node)
 
-**Status:** backlog
+**Status:** ready
 **Type:** TASK-SCM-BE
 **Depends on / 전제:** [TASK-SCM-BE-048](TASK-SCM-BE-048-third-party-logistics-inbound-allocation.md) **done** (a replenishment PO can now be *addressed* to a `THIRD_PARTY_LOGISTICS` node — the allocation this task honours) · [ADR-MONO-055](../../../../docs/adr/ADR-MONO-055-order-to-node-allocation-ownership.md) **ACCEPTED** §D4 (the honour sink is an scm-internal expectation record; the external 3PL-WMS notification stays deferred) · [ADR-MONO-054](../../../../docs/adr/ADR-MONO-054-third-party-logistics-node-activation.md) §D3 (honour = route **away from** wms, do not widen the wms DLT gate) · [TASK-SCM-BE-047](../done/TASK-SCM-BE-047-third-party-logistics-observed-stock.md) **done** (observation reconciles the expectation).
 **후속 / blocks:** none required. The **external** 3PL-WMS ASN (`ThirdPartyFulfillmentPort`, ADR-054 §D7) and all of Surface B (ADR-055 §D5) stay deferred — **do not** build them here.
@@ -71,4 +71,4 @@ The sink is **scm-internal and lightweight** (ADR-055 §D4): an expected-inbound
 
 ---
 
-**Recommended models** (분석=Opus 4.8 / 구현 권장): a new small expected-inbound model + producer fork + observation reconciliation — the model-shape and reconciliation design are genuine calls (**Opus**); the fork wiring is mechanical once shaped. 구현은 BE-048 done 이후 backlog → ready 승격 시.
+**Recommended models** (분석=Opus 4.8 / 구현 권장): a new small expected-inbound model + producer fork + observation reconciliation — the model-shape and reconciliation design are genuine calls (**Opus**); the fork wiring is mechanical once shaped.
