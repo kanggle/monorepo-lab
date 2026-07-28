@@ -8,6 +8,8 @@
 # 안전: 모두 "안 쓰는 것만" 지운다(실행 중 컨테이너·그 이미지·named 볼륨은 보호).
 #   - container prune : 멈춘 컨테이너(Testcontainers 고아 등)
 #   - image prune     : dangling(<none>) 이미지 — 재빌드로 태그 떨어진 옛 이미지
+#   - volume prune    : 익명(64자리 hex) dangling 볼륨만(TASK-MONO-483). named 볼륨
+#                       (데모 시드 데이터 등)은 절대 안 건드림.
 #   - builder prune   : 빌드 캐시 — **나이**로 자른다(1주 넘게 안 쓴 것만)
 #   - 로그 감시       : 상한 없는 컨테이너를 보고만 한다(기본 비파괴; 지우려면 --logs)
 #
@@ -167,10 +169,46 @@ report_logs() {
   echo ""
 }
 
+# ── 볼륨 헬퍼 ─────────────────────────────────────────────────────────────
+# 익명(anonymous) dangling 볼륨만 골라낸다. 도커가 자동 생성하는 볼륨(예: 이름
+# 미지정 컨테이너, Testcontainers 잔여물)은 이름이 sha256 다이제스트 형태의
+# 64자리 hex 다(예: 1d80db4ee14b...). named 볼륨(사람이 붙인 이름, 예:
+# iam_mysql-data, federation-hardening-e2e_ecommerce-*-postgres-data)은 데모
+# 시드 데이터일 수 있으므로 이 스크립트가 절대 건드리지 않는다 — "64자리 hex
+# 여부" 하나로 익명/named 를 가른다(2026-07-28 실증: dangling 47개 중 익명 29 ·
+# named 18, named 만 보존 확인).
+# ⚠️ named 볼륨을 일부러 64자리 hex 이름으로 지정하면 이 판별이 오탐할 수
+#    있다는 알려진 한계가 있다(이 저장소에선 관측된 적 없음).
+anonymous_dangling_volumes() {
+  docker volume ls -f dangling=true --format '{{.Name}}' 2>/dev/null | grep -E '^[0-9a-f]{64}$' || true
+}
+
+report_volumes() {
+  echo "=== 볼륨 정리 미리보기 (익명만 대상, named 는 절대 안 건드림) ==="
+  anon="$(anonymous_dangling_volumes)"
+  acount=0
+  [ -n "$anon" ] && acount="$(printf '%s\n' "$anon" | grep -c . || true)"
+  all_dangling="$(docker volume ls -f dangling=true --format '{{.Name}}' 2>/dev/null | grep -c . || true)"
+  named_count=$(( ${all_dangling:-0} - acount ))
+
+  echo "익명(테스트컨테이너 잔여 등) dangling 볼륨: ${acount}개"
+  if [ "$acount" -eq 0 ]; then
+    echo "  없음"
+  else
+    printf '%s\n' "$anon" | head -10 | sed 's/^/  [x] /'
+    if [ "$acount" -gt 10 ]; then
+      echo "  ... 외 $((acount - 10))개"
+    fi
+  fi
+  echo "named dangling 볼륨(데모 시드 데이터 등, 보존): ${named_count}개"
+  echo ""
+}
+
 echo "=== 청소 전 ==="
 docker system df
 echo ""
 report_logs
+report_volumes
 
 if [ "$DRY" = "1" ]; then
   echo "[dry-run] 아무것도 지우지 않았습니다."
@@ -192,6 +230,21 @@ fi
 docker container prune -f
 echo "=== dangling 이미지 정리 ==="
 docker image prune -f
+
+echo "=== 익명 dangling 볼륨 정리 (named 볼륨은 안 건드림) ==="
+targets="$(anonymous_dangling_volumes)"
+if [ -z "$targets" ]; then
+  echo "  대상 없음."
+else
+  n=0
+  while IFS= read -r vol; do
+    [ -n "$vol" ] || continue
+    docker volume rm "$vol" >/dev/null 2>&1 && n=$((n + 1))
+  done <<EOF
+$targets
+EOF
+  echo "  익명 볼륨 ${n}개 삭제 완료."
+fi
 
 echo "=== 빌드 캐시: ${CACHE_MAX_AGE} 넘게 안 쓴 것 제거 ==="
 # -a 는 dangling 뿐 아니라 unused 전체를 대상에 넣고, until 필터가 "최근 것은 남긴다".
@@ -244,5 +297,6 @@ echo "=== 청소 후 ==="
 docker system df
 echo ""
 report_logs
+report_volumes
 echo ">>> VM 내부를 비웠습니다. C: 실제 회수는 관리자에서 compact-rd-vhdx.ps1 필요"
 echo "    (이유: WSL2 vhdx 는 prune 후에도 호스트에서 안 줄어듦)."

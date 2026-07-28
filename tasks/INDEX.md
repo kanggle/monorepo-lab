@@ -169,11 +169,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-483-docker-cleanup-anon-volume-prune.md` — **🟡 IN-PROGRESS** — `scripts/docker-cleanup.sh`(주간 자동 정리, TASK-MONO-391)는 컨테이너/dangling 이미지/빌드캐시(나이 기준)를 이미 자동 정리하지만 **볼륨은 손대지 않는다**. 2026-07-28 수동 진단에서 dangling 볼륨 47개 중 29개가 Testcontainers 잔여 익명 볼륨(64자리 hex 이름)이고 18개는 named 데모 시드 데이터(federation-hardening-e2e/iam/iamsocial/smoke-*)였음을 확인 — 익명만 안전하게 삭제해 1.1GB 회수. 이 판별(정규식 `^[0-9a-f]{64}$`)을 주간 스크립트에 편입한다. named 볼륨은 앞으로도 절대 안 건드림. 분석=Sonnet 5 / 구현 권장=Sonnet — 기존 이미지 prune 패턴을 볼륨에 한 겹 더 얹는 정형 작업. [[env_rancher_desktop_vhdx_no_shrink]] [[env_docker_container_json_log_unbounded_otlp_spam]]
+(empty)
 
 ## review
 
-(empty)
+- `TASK-MONO-483-docker-cleanup-anon-volume-prune.md` — **🔵 REVIEW** — `scripts/docker-cleanup.sh`(주간 자동 정리, TASK-MONO-391)에 익명(64자리 hex) dangling 볼륨 자동 정리를 추가, named 볼륨(데모 시드 데이터 등)은 그대로 보존. **구현 완료 + 4개 AC 전부 실측 검증**: AC-1(named 볼륨 미삭제 — 테스트용 named 볼륨 생성 후 실행, `docker volume ls`로 생존 확인) · AC-2(익명 볼륨 실삭제 — `docker run -v` 고아 볼륨 생성 후 삭제 확인, 실행 결과 익명 8개 삭제) · AC-3(`--dry-run` 무변경 — 실행 전후 `docker volume ls` 동일) · AC-4(기존 컨테이너/이미지/빌드캐시/로그 섹션 출력 회귀 없음). 2026-07-28 수동 진단에서 발견된 47개 dangling 볼륨(익명 29·named 18) 판별 로직을 그대로 이식. 분석=Sonnet 5 / 구현=Sonnet 5. [[env_rancher_desktop_vhdx_no_shrink]] [[env_docker_container_json_log_unbounded_otlp_spam]]
 
 ## done
 
