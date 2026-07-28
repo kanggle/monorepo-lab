@@ -77,6 +77,7 @@ backend, frontend
 - **결함 1 실측 절차**: `docker exec ecommerce-gateway-service curl -H "Origin: http://localhost:3001" http://localhost:8080/api/products` → 403(Origin 헤더 있음) vs 헤더 없이 → 200. `route.ts`(web-store BFF 프록시)에 임시 `console.error`로 `backendRes.status`를 찍어 gateway가 403을 반환함을 확정한 뒤 되돌림(운영 코드 변경 없음 — `git diff` 로 원본과 동일함 확인).
 - **결함 2 실측 절차**: `page.evaluate(() => window.TossPayments(key).payment({customerKey}).requestPayment({...}))`로 앱과 동일 패턴을 직접 재현 → `"결제위젯 연동 키는 지원하지 않습니다"` 정확한 reject 메시지 확보. 공개 테스트 키 쌍은 Toss 공식 문서 기반 다수 커뮤니티 튜토리얼(velog 등)에서 재확인.
 - 두 결함 모두 원인이 서로 완전히 무관하고(하나는 gateway CORS 설정, 하나는 PG 연동 키 타입), 우연히 같은 라이브 검증 세션에서 순차로 발견됨 — 결함 1을 고치고 나서야 결함 2가 드러났다(결함 1이 막고 있는 동안은 주문 생성 자체가 안 돼 Toss SDK 호출까지 도달하지 못했음).
+- **AC-4 후속 시도 기록(2026-07-29)**: 카드사(신한/우리) ISP·3DS 리다이렉트, 카카오페이 QR스캔, SSG페이 휴대폰 PUSH 3가지 결제수단 모두 Playwright로 끝까지 밀어봤으나 셋 다 동일하게 **실제 모바일 앱/기기 인증**(QR 스캔, PUSH 승인, ISP 앱)을 요구하는 지점에서 멈춘다 — SSG페이는 가짜 휴대폰번호(01012345678)로 PUSH 요청까지는 성공하지만 "결제 완료하기" 버튼은 실제 앱 승인 여부를 폴링만 할 뿐 자동 승인되지 않는다. 세 가지 서로 다른 결제수단이 동일한 벽에 부딪혔다는 것은 이것이 특정 카드사의 우연이 아니라 **API 개별연동(결제창) 패턴의 실 PG 샌드박스 자체가 실기기 인증을 요구하도록 설계됨**을 시사한다. `결제위젯`(Payment Widget) 통합이었다면 위젯 자체 데모/테스트 버튼이 있었을 수 있으나, 이 앱은 `use-toss-payment.ts`가 위젯이 아닌 개별연동 패턴을 쓰므로 해당 안 됨. 결론: 이 마지막 구간은 재시도로 뚫릴 문제가 아니며, 실제 완료 확인이 필요하면 실기기/실계정 수동 진행이 유일한 경로.
 
 # Edge Cases
 
