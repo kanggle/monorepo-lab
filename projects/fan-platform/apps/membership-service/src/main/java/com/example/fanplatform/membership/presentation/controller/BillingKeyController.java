@@ -24,19 +24,22 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Billing-key enrollment endpoints (ADR-002 §D1/§D2) under
- * {@code /api/fan/membership/billing-key} — the end-user chain ({@code /api/fan/**},
- * already {@code .authenticated()}). A fan registers the {@code billingKey} the
- * frontend obtained from {@code PortOne.requestIssueBillingKey(...)} once; the
- * auto-renew scheduler then charges it on the membership's renewal date.
+ * {@code /api/fan/memberships/billing-key} — the end-user chain ({@code /api/fan/**},
+ * already {@code .authenticated()}). Plural {@code memberships} (fix-01, TASK-FAN-BE-033):
+ * the gateway's existing rewrite only matches {@code /api/v1/memberships/**} →
+ * {@code /api/fan/memberships${segment}} (TASK-FAN-BE-009) — a singular {@code membership}
+ * path here was unreachable through the gateway. A fan registers the
+ * {@code billingKey} the frontend obtained from {@code PortOne.requestIssueBillingKey(...)}
+ * once; the auto-renew scheduler then charges it on the membership's renewal date.
  *
  * <p><b>The billing key is never returned</b> in any response (ADR-002 §D5) — the
  * response carries only {@code enrollmentId / tier / active / createdAt}.
  *
  * <p>Responses are flat bodies (the pinned TASK-FAN-BE-033 contract), unlike the
- * {@code /api/fan/memberships} surface which wraps in {@code { data, meta }}.
+ * {@code /api/fan/memberships} list/detail surface which wraps in {@code { data, meta }}.
  */
 @RestController
-@RequestMapping("/api/fan/membership/billing-key")
+@RequestMapping("/api/fan/memberships/billing-key")
 @RequiredArgsConstructor
 public class BillingKeyController {
 

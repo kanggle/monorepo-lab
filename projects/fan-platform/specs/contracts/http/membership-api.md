@@ -295,7 +295,7 @@ ADR-002 §D5) and is **NEVER** returned in any response or logged.
 > `{ data, meta }`), these two endpoints return **flat bodies** (the pinned
 > TASK-FAN-BE-033 contract).
 
-### `POST /api/fan/membership/billing-key` — Enroll a billing key
+### `POST /api/fan/memberships/billing-key` — Enroll a billing key
 
 Auth: any authenticated fan (`accountId` = `sub`). Registers the `billingKey` the
 frontend obtained from `PortOne.requestIssueBillingKey(...)` (trusted as-is — Phase 1
@@ -326,7 +326,7 @@ Errors: 401, 403 (TENANT_FORBIDDEN), 409 (CONFLICT — optimistic-lock / partial
 race for the same active tier), 422 (`MEMBERSHIP_TIER_INVALID` for an unknown tier;
 `VALIDATION_ERROR` for a blank `billingKey`).
 
-### `DELETE /api/fan/membership/billing-key/{tier}` — Cancel (turn off auto-renew)
+### `DELETE /api/fan/memberships/billing-key/{tier}` — Cancel (turn off auto-renew)
 
 Auth: the enrollment owner. Soft-deactivates (`active=false`) the active enrollment
 for the tier — the row is kept for history. Does NOT touch the membership itself (an
