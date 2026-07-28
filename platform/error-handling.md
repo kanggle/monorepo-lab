@@ -746,6 +746,7 @@ Owned by `membership-service` (fan subscription / tier lifecycle). Idempotency-k
 | MEMBERSHIP_STATE_INVALID | 422 | Invalid membership status transition (`InvalidStateTransitionException`; payload carries `from`/`to`). Membership-service mapping of the same exception class that fan community-service maps to `POST_STATUS_TRANSITION_INVALID` |
 | MEMBERSHIP_EXPIRED | 403 | Content access attempted with an expired membership; the content gate rejects it. 403 matches the sibling content-gate codes `MEMBERSHIP_REQUIRED` / `MEMBERSHIP_TIER_INSUFFICIENT` (both 403) — this is an access denial, not a membership-record state transition. No current emitter; catalogued from `rules/domains/fan-platform.md` § Membership (TASK-MONO-473) |
 | MEMBERSHIP_DOWNGRADE_BLOCKED | 422 | Tier downgrade rejected while a paid billing cycle is still active (downgrade takes effect at cycle end). A business-rule rejection on a membership operation → 422, matching `MEMBERSHIP_NOT_RENEWABLE` / `MEMBERSHIP_STATE_INVALID` (both 422). No current emitter; catalogued from `rules/domains/fan-platform.md` § Membership (TASK-MONO-473) |
+| BILLING_KEY_ENROLLMENT_NOT_FOUND | 404 | Cancel of a billing-key auto-renewal enrollment for a tier with no active enrollment (`BillingKeyEnrollmentNotFoundException`, ADR-002/TASK-FAN-BE-033) |
 
 ## Moderation  `[domain: fan-platform]`
 
