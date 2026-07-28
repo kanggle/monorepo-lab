@@ -113,12 +113,12 @@ class ApproveMaterializationIntegrationTest extends AbstractDemandPlanningIntegr
     // node — no warehouse code (wms-only), node type THIRD_PARTY_LOGISTICS.
     static final String SKU_3PL = "SKU-APPLE-3PL-IT";
 
-    private UUID seed3plSuggestion() {
+    private UUID seed3plSuggestion(UUID nodeId) {
         UUID id = UUID.randomUUID();
         ReorderSuggestionJpaEntity s = new ReorderSuggestionJpaEntity();
         s.setId(id);
         s.setSkuCode(SKU_3PL);
-        s.setWarehouseId(UUID.randomUUID());
+        s.setWarehouseId(nodeId);
         s.setWarehouseCode(null); // a 3PL node carries no wms warehouse code
         s.setDestinationNodeType("THIRD_PARTY_LOGISTICS");
         s.setSupplierId(SUPPLIER_ID);
@@ -183,10 +183,12 @@ class ApproveMaterializationIntegrationTest extends AbstractDemandPlanningIntegr
     }
 
     @Test
-    @DisplayName("ADR-055 §D2: a BATCH 3PL suggestion drafts a PO with destinationNodeType="
-            + "THIRD_PARTY_LOGISTICS and no destinationWarehouseId")
+    @DisplayName("ADR-055 §D2/§D4: a BATCH 3PL suggestion drafts a PO with destinationNodeType="
+            + "THIRD_PARTY_LOGISTICS, threading the IVS node id as destinationWarehouseId so "
+            + "BE-049's honour sink has an address to record against")
     void approve3plBatchSuggestion_addressesPoToThirdPartyLogisticsNode() throws Exception {
-        UUID suggestionId = seed3plSuggestion();
+        UUID nodeId = UUID.randomUUID();
+        UUID suggestionId = seed3plSuggestion(nodeId);
         seedMapping(SKU_3PL);
         String poId = UUID.randomUUID().toString();
         enqueueDraftPo(poId);
@@ -201,10 +203,10 @@ class ApproveMaterializationIntegrationTest extends AbstractDemandPlanningIntegr
         JsonNode body = objectMapper.readTree(request.getBody().readUtf8());
         // The allocation half (ADR-055 §D2): the PO is addressed to the 3PL node type.
         assertThat(body.path("destinationNodeType").asText()).isEqualTo("THIRD_PARTY_LOGISTICS");
-        // A 3PL node carries no warehouse code, so no destinationWarehouseId is emitted —
-        // procurement's emit-gate correctly skips the wms inbound-expected (BE-049 sink).
-        assertThat(body.path("destinationWarehouseId").isMissingNode()
-                || body.path("destinationWarehouseId").isNull()).isTrue();
+        // The honour half (ADR-055 §D4 / BE-049): the IVS node id is threaded through as
+        // destinationWarehouseId — a 3PL node carries no wms warehouse code, but the honour
+        // sink still needs an address to record the expected inbound against.
+        assertThat(body.path("destinationWarehouseId").asText()).isEqualTo(nodeId.toString());
         assertThat(body.path("lines").get(0).path("sku").asText()).isEqualTo(SKU_3PL);
     }
 

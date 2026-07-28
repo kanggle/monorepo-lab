@@ -19,7 +19,11 @@ public interface InventoryVisibilityPort {
     /**
      * A batch sweep candidate.
      *
-     * @param warehouseId   the IVS node id — the dedup-key dimension only, never emitted downstream
+     * @param warehouseId   the IVS node id — the dedup-key dimension for a {@code WMS_WAREHOUSE}
+     *                      destination (never emitted downstream there). <b>Exception</b>
+     *                      (ADR-055 §D4 / TASK-SCM-BE-049): for a {@code THIRD_PARTY_LOGISTICS}
+     *                      destination it IS emitted downstream as {@code destinationWarehouseId},
+     *                      so the 3PL honour sink has a node to record the expectation against
      * @param warehouseCode the node's business warehouse CODE (ADR-MONO-050 D9 /
      *                      TASK-SCM-BE-037). <b>Nullable</b>: wms resolves it best-effort, so
      *                      IVS may not have learned one yet. A null code never suppresses the
