@@ -173,7 +173,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-483-docker-cleanup-anon-volume-prune.md` — **🔵 REVIEW** — `scripts/docker-cleanup.sh`(주간 자동 정리, TASK-MONO-391)에 익명(64자리 hex) dangling 볼륨 자동 정리를 추가, named 볼륨(데모 시드 데이터 등)은 그대로 보존. **구현 완료 + 4개 AC 전부 실측 검증**: AC-1(named 볼륨 미삭제 — 테스트용 named 볼륨 생성 후 실행, `docker volume ls`로 생존 확인) · AC-2(익명 볼륨 실삭제 — `docker run -v` 고아 볼륨 생성 후 삭제 확인, 실행 결과 익명 8개 삭제) · AC-3(`--dry-run` 무변경 — 실행 전후 `docker volume ls` 동일) · AC-4(기존 컨테이너/이미지/빌드캐시/로그 섹션 출력 회귀 없음). 2026-07-28 수동 진단에서 발견된 47개 dangling 볼륨(익명 29·named 18) 판별 로직을 그대로 이식. 분석=Sonnet 5 / 구현=Sonnet 5. [[env_rancher_desktop_vhdx_no_shrink]] [[env_docker_container_json_log_unbounded_otlp_spam]]
 
 ## done
 
