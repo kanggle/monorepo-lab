@@ -16,6 +16,7 @@ import com.example.libs.payment.PaymentVerificationRequest;
 import com.example.libs.payment.PgGatewayUnavailableException;
 import com.example.libs.payment.RecurringBillingGateway;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -90,8 +91,8 @@ public class AutoRenewMembershipsUseCase {
     public AutoRenewMembershipsUseCase(
             BillingKeyEnrollmentRepository enrollmentRepository,
             MembershipRepository membershipRepository,
-            RecurringBillingGateway recurringBillingGateway,
-            PaymentGatewayPort paymentGateway,
+            @Qualifier("recurringBillingGateway") RecurringBillingGateway recurringBillingGateway,
+            @Qualifier("paymentGateway") PaymentGatewayPort paymentGateway,
             RenewMembershipUseCase renewMembershipUseCase,
             ClockPort clock,
             @Value("${fanplatform.membership.auto-renew.lookahead-days:1}") long lookaheadDays) {

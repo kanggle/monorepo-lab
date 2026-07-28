@@ -3,6 +3,7 @@ package com.example.fanplatform.membership.infrastructure.payment;
 import com.example.libs.payment.PaymentGatewayPort;
 import com.example.libs.payment.RecurringBillingGateway;
 import com.example.libs.payment.portone.PortOnePaymentAdapter;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,12 +29,24 @@ import org.springframework.web.client.RestClient;
  * Keeping the existing {@code fan.payment.portone.*} namespace avoids renaming the runtime env
  * ({@code FAN_PAYMENT_PORTONE_API_SECRET}) the local demo override + gitignored {@code .env}
  * already set — a behavior-preserving choice with no deployment blast radius.
+ *
+ * <p><b>{@code @Qualifier} on both beans (TASK-FAN-BE-033-fix-02).</b> {@link PortOnePaymentAdapter}
+ * implements BOTH {@link PaymentGatewayPort} and {@link RecurringBillingGateway}, so Spring's
+ * eager type-matching during autowiring finds each bean method's instance assignable to BOTH
+ * ports, not just its declared return type — every unqualified injection point of either port
+ * throws {@code NoUniqueBeanDefinitionException} under the {@code portone} profile (caught live,
+ * never exercised by CI since no test boots the full context under {@code portone}). The
+ * {@code "paymentGateway"} / {@code "recurringBillingGateway"} qualifier values are mirrored on
+ * {@link MockPaymentGatewayAdapter} / {@link MockRecurringBillingGateway} and on every consumer
+ * constructor parameter of these types, so resolution is identical and unambiguous under both
+ * profiles.
  */
 @Configuration
 public class PaymentGatewayConfig {
 
     @Bean
     @Profile("portone")
+    @Qualifier("paymentGateway")
     PaymentGatewayPort portOnePaymentGateway(
             @Value("${fan.payment.portone.api-base:https://api.portone.io}") String apiBase,
             @Value("${fan.payment.portone.api-secret}") String apiSecret,
@@ -51,7 +64,9 @@ public class PaymentGatewayConfig {
      */
     @Bean
     @Profile("portone")
-    RecurringBillingGateway portOneRecurringBillingGateway(PaymentGatewayPort portOnePaymentGateway) {
+    @Qualifier("recurringBillingGateway")
+    RecurringBillingGateway portOneRecurringBillingGateway(
+            @Qualifier("paymentGateway") PaymentGatewayPort portOnePaymentGateway) {
         return (RecurringBillingGateway) portOnePaymentGateway;
     }
 }
