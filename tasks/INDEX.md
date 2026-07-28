@@ -173,7 +173,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-487-validate-rules-skill-warnings.md` — 2026-07-29 `/validate-rules` skill Warning 5건+1(standalone-profile Flyway 예외 미문서화, testing-backend 클래스명 컨벤션 불일치, idempotent-consumer 가 EventDedupePort 안 씀, event-consumer-setup 댕글링 앵커 3개, write-tests.md 백엔드 전용). **auth-client CSRF 는 훅 버그로 차단**(RULE-CONSISTENCY-04 가 무관한 기존 참조를 편집-전 콘텐츠로 재검사하는 것으로 보임 — TASK-MONO-410 이 이미 겪은 동일 클래스; 우회 안 함, 후속 후보로 기록). `TASK-MONO-485`/`486` 자매 티켓. PR 예정.
 
 ## done
 
