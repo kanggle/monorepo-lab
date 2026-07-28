@@ -72,6 +72,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
+- `TASK-FAN-FE-013-billing-key-issuance-ui.md` — **REVIEW (impl PR open, verified) — [ADR-002](../docs/adr/ADR-002-billing-key-auto-renewal.md).** 빌링키 발급 UI(`AutoRenewToggle`) — `requestIssueBillingKey`(`portone-checkout.ts` 패턴 재사용, 구매자 identity 전달) → `enrollBillingKey`/`cancelBillingKeyEnrollment` 서버 액션(정정된 외부경로 `/api/v1/memberships/billing-key`, TASK-FAN-BE-033-fix-01 이후). 백엔드 발급목록 조회(GET) 엔드포인트 없어 낙관적 로컬 상태 UI로 설계(새 엔드포인트 발명 안 함). `billingKey`는 단일 호출로 소비, 컴포넌트 상태·로그·응답에 절대 미보존. **독립 검증**: diff=fan-platform-web만 · `gatewayFetch` flat-body 래핑 실제 코드로 확인 · 경로/계약 일치 · tsc/vitest(105/105)/lint/build 전부 직접 재실행 GREEN. 분석=Opus / 구현=frontend-engineer(Opus dispatch)+독립 재검증.
+
 ## done
 
 - `TASK-FAN-BE-033-fix-01-gateway-path.md` — **DONE (2026-07-28, 3-dim verified — impl PR #2998 squash `b5f33221c`; state=MERGED · origin/main tip=ancestor · 머지 전 0 failing).** TASK-FAN-BE-033 fix — `BillingKeyController`가 단수 `/api/fan/membership/billing-key`로 매핑돼 게이트웨이(복수 `/api/v1/memberships/**`만 리라이트, TASK-FAN-BE-009)로 도달 불가했던 라우팅 결함. 복수 `/api/fan/memberships/billing-key`로 정정(게이트웨이 무변경으로 커버). `MembershipController` 기존 매핑과 충돌 없음 확인. IT+계약스펙 경로 동기화. TASK-FAN-FE-013 착수 전 자체 발견.
