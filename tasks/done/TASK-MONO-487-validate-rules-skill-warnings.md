@@ -1,6 +1,6 @@
 # TASK-MONO-487 — `/validate-rules` (2026-07-29) skill-tier Warning fixes
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-MONO
 **Analysis model:** Sonnet 5 / **Recommended impl model:** Sonnet 5 (skill content corrections, no design

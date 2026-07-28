@@ -173,9 +173,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-487-validate-rules-skill-warnings.md` — 2026-07-29 `/validate-rules` skill Warning 5건+1(standalone-profile Flyway 예외 미문서화, testing-backend 클래스명 컨벤션 불일치, idempotent-consumer 가 EventDedupePort 안 씀, event-consumer-setup 댕글링 앵커 3개, write-tests.md 백엔드 전용). **auth-client CSRF 는 훅 버그로 차단**(RULE-CONSISTENCY-04 가 무관한 기존 참조를 편집-전 콘텐츠로 재검사하는 것으로 보임 — TASK-MONO-410 이 이미 겪은 동일 클래스; 우회 안 함, 후속 후보로 기록). `TASK-MONO-485`/`486` 자매 티켓. PR 예정.
+(empty)
 
 ## done
+
+- **`TASK-MONO-487-validate-rules-skill-warnings.md` — ✅ DONE (2026-07-29, partial by design).** 2026-07-29 `/validate-rules` skill Warning 5건 수정(standalone-profile Flyway 예외 미문서화, testing-backend 클래스명 컨벤션 불일치, idempotent-consumer 가 EventDedupePort 안 씀, event-consumer-setup 댕글링 앵커 3개, write-tests.md 백엔드 전용). **auth-client CSRF 는 훅 버그로 차단**(RULE-CONSISTENCY-04 가 무관한 기존 참조를 편집-전 콘텐츠로 재검사 — TASK-MONO-410 과 동일 클래스; 우회 안 함, 후속 후보로 기록). `TASK-MONO-485`/`486` 자매 티켓. **PR #3013 squash `776311a3e` 머지.** 3-dim 검증: MERGED · origin/main tip 일치 · pre-merge 0 failing.
 
 - **`TASK-MONO-486-validate-rules-platform-warnings.md` — ✅ DONE (2026-07-29).** 2026-07-29 `/validate-rules` platform Warning 6건 수정(entrypoint/rules-common Auxiliary 표 누락 2파일, coding-rules↔observability 로깅 규칙 중복 2건, coding-rules/security-rules/deployment-policy 하드코딩시크릿 3중복, CLAUDE.md config/ 인용 누락, naming-conventions↔testing-strategy 테스트명명 미동기화). `TASK-MONO-485`(Critical, merged #3009)의 자매 티켓. **PR #3011 squash `341c8de3e` 머지.** 3-dim 검증: MERGED · origin/main tip 일치 · pre-merge 0 failing.
 
