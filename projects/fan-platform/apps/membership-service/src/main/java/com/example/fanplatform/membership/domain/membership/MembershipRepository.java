@@ -35,4 +35,15 @@ public interface MembershipRepository {
      * membership's own {@code tenantId}.
      */
     List<Membership> findExpirable(Instant now, int limit);
+
+    /**
+     * The membership whose {@code paymentRef} equals the given PG payment
+     * reference, if any. Used by the webhook reconcile path to recognise a
+     * renewal that a scheduler tick already committed for a given {@code paymentId}
+     * (the renewed row stores that {@code paymentId} as its {@code paymentRef}).
+     *
+     * <p><b>Cross-tenant</b> by design — the webhook is a system-driven reconcile,
+     * not a user request, and a PG {@code paymentId} is globally unique.
+     */
+    Optional<Membership> findByPaymentRef(String paymentRef);
 }

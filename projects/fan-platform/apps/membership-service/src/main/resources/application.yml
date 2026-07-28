@@ -111,6 +111,26 @@ fanplatform:
       initial-delay-ms: ${EXPIRY_SWEEP_INITIAL_DELAY_MS:60000}
       max-batch: ${EXPIRY_SWEEP_MAX_BATCH:100}
 
+    # Billing-key auto-renewal (TASK-FAN-BE-033, ADR-002 §D2). Server-initiated
+    # recurring billing: charges a stored billing key when a membership's validTo is
+    # within `lookahead-days`, then drives the unchanged RenewMembershipUseCase.
+    # Disable (enabled=false) in ITs that drive the use case directly. Default
+    # interval is daily; initial-delay keeps it quiet during short ITs.
+    auto-renew:
+      enabled: ${AUTO_RENEW_ENABLED:true}
+      interval-ms: ${AUTO_RENEW_INTERVAL_MS:86400000}
+      initial-delay-ms: ${AUTO_RENEW_INITIAL_DELAY_MS:60000}
+      lookahead-days: ${AUTO_RENEW_LOOKAHEAD_DAYS:1}
+      max-batch: ${AUTO_RENEW_MAX_BATCH:100}
+
+    # Billing-key at-rest encryption key (ADR-002 §D5) — base64-encoded, MUST decode
+    # to exactly 32 bytes (AES-256). Injected via env in production
+    # (FAN_MEMBERSHIP_BILLING_KEY_ENCRYPTION_KEY); the committed default below is a
+    # THROWAWAY DEV key (same posture as the PortOne API secret — a real key is never
+    # committed). Rotating this key invalidates previously-stored (dev) billing keys.
+    billing-key:
+      encryption-key: ${FAN_MEMBERSHIP_BILLING_KEY_ENCRYPTION_KEY:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=}
+
   oauth2:
     # D2-b deprecation window: SAS issuer + legacy "iam" string. MUST stay
     # byte-identical to gateway-service's allowed-issuers (cross-service issuer
@@ -143,3 +163,9 @@ fan:
     portone:
       api-base: ${FAN_PAYMENT_PORTONE_API_BASE:https://api.portone.io}
       api-secret: ${FAN_PAYMENT_PORTONE_API_SECRET}
+      # PortOne V2 webhook secret (ADR-002 §D3) — base64, conventionally `whsec_`-prefixed
+      # (Standard Webhooks). Injected via env in production
+      # (FAN_PAYMENT_PORTONE_WEBHOOK_SECRET); the committed default is a THROWAWAY DEV
+      # secret. Used ONLY to HMAC-verify inbound webhooks — a wrong/absent real secret
+      # simply 401s every delivery (fail-closed), it never charges.
+      webhook-secret: ${FAN_PAYMENT_PORTONE_WEBHOOK_SECRET:whsec_AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=}

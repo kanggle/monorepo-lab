@@ -30,4 +30,7 @@ public interface MembershipJpaRepository extends JpaRepository<Membership, Strin
      */
     List<Membership> findByStatusAndValidToLessThanAndExpiryNotifiedAtIsNullOrderByValidToAsc(
             MembershipStatus status, Instant validTo, Pageable pageable);
+
+    /** Cross-tenant point lookup by the durable PG payment reference (webhook reconcile). */
+    Optional<Membership> findFirstByPaymentRef(String paymentRef);
 }

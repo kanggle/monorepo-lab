@@ -45,4 +45,9 @@ public class MembershipRepositoryImpl implements MembershipRepository {
         return jpa.findByStatusAndValidToLessThanAndExpiryNotifiedAtIsNullOrderByValidToAsc(
                 MembershipStatus.ACTIVE, now, PageRequest.of(0, limit));
     }
+
+    @Override
+    public Optional<Membership> findByPaymentRef(String paymentRef) {
+        return jpa.findFirstByPaymentRef(paymentRef);
+    }
 }

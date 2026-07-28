@@ -46,6 +46,7 @@
 | 403 | TENANT_FORBIDDEN | `tenant_id` claim does not match `fan-platform` (and is not `*`) |
 | 403 | FORBIDDEN | `/internal/**` called with a non-workload-identity token |
 | 404 | MEMBERSHIP_NOT_FOUND | missing OR cross-tenant OR cross-account; existence not leaked |
+| 404 | BILLING_KEY_ENROLLMENT_NOT_FOUND | cancel of a tier with no active billing-key enrollment |
 | 409 | IDEMPOTENCY_KEY_CONFLICT | `Idempotency-Key` reused with a different payload |
 | 409 | CONFLICT | optimistic-lock collision |
 | 422 | PAYMENT_DECLINED | PG declined / verification failed (mock: `tok_decline`; portone: status ≠ PAID or amount mismatch); no membership created |
@@ -280,6 +281,92 @@ read-time `active`).
 
 Errors: 401, 403, 404 (MEMBERSHIP_NOT_FOUND — missing / cross-account /
 cross-tenant; existence not leaked).
+
+---
+
+## Billing-key auto-renewal (public) — TASK-FAN-BE-033 / ADR-002
+
+Real recurring billing (정기결제): a fan registers a billing key once and a server
+scheduler auto-charges + auto-renews on the membership's `validTo` date, reusing the
+unchanged Renew flow. The billing key is stored **encrypted at rest** (AES-GCM,
+ADR-002 §D5) and is **NEVER** returned in any response or logged.
+
+> **Envelope note.** Unlike the `/api/fan/memberships` surface (which wraps in
+> `{ data, meta }`), these two endpoints return **flat bodies** (the pinned
+> TASK-FAN-BE-033 contract).
+
+### `POST /api/fan/membership/billing-key` — Enroll a billing key
+
+Auth: any authenticated fan (`accountId` = `sub`). Registers the `billingKey` the
+frontend obtained from `PortOne.requestIssueBillingKey(...)` (trusted as-is — Phase 1
+does no server-side issuance verification, ADR-MONO-057 §7; the blast radius is
+bounded by the charge-time `verify`). Replaces any existing **active** enrollment for
+the same tier (soft-deactivates the old, inserts a new) rather than stacking — at
+most one active enrollment per (account, tier).
+
+Request:
+```json
+{
+  "tier": "MEMBERS_ONLY | PREMIUM",
+  "billingKey": "<opaque vendor billing key, ≤ 512 chars>"
+}
+```
+
+Response 201:
+```json
+{
+  "enrollmentId": "0190f3e2-...",
+  "tier": "PREMIUM",
+  "active": true,
+  "createdAt": "2026-07-28T00:00:00Z"
+}
+```
+
+Errors: 401, 403 (TENANT_FORBIDDEN), 409 (CONFLICT — optimistic-lock / partial-unique
+race for the same active tier), 422 (`MEMBERSHIP_TIER_INVALID` for an unknown tier;
+`VALIDATION_ERROR` for a blank `billingKey`).
+
+### `DELETE /api/fan/membership/billing-key/{tier}` — Cancel (turn off auto-renew)
+
+Auth: the enrollment owner. Soft-deactivates (`active=false`) the active enrollment
+for the tier — the row is kept for history. Does NOT touch the membership itself (an
+active membership stays valid until its window ends; it just won't auto-renew).
+
+Response 200:
+```json
+{ "tier": "PREMIUM", "active": false }
+```
+
+Errors: 401, 403 (TENANT_FORBIDDEN), 404 (`BILLING_KEY_ENROLLMENT_NOT_FOUND` — no
+active enrollment for the tier), 422 (`MEMBERSHIP_TIER_INVALID` for an unknown tier).
+
+---
+
+## Webhooks (PG-facing — public, no JWT)
+
+### `POST /webhooks/portone` — PortOne V2 webhook receiver — TASK-FAN-BE-033 / ADR-002 §D3
+
+A public, unauthenticated surface (in `PublicPaths.EXACT`): PortOne cannot present a
+fan JWT and carries no tenant claim, so this bypasses BOTH end-user auth AND
+tenant-claim enforcement. Its **own** auth is the HMAC signature (Standard Webhooks:
+headers `webhook-id`, `webhook-timestamp`, `webhook-signature`; HMAC-SHA256 over
+`{id}.{timestamp}.{rawBody}` with the configured `whsec_`-prefixed secret).
+
+- **Invalid / missing / tampered signature → `401`**, before any payload processing.
+- **Valid signature → `200`.** The payload is treated as a *trigger only*, never a
+  source of truth: its amount/status are **never** trusted; the payload's `paymentId`
+  is reconciled via the existing `verify(paymentId, ...)`. A duplicate / irrelevant /
+  unknown-`paymentId` delivery is still a `200` (absorbed idempotently — the renew
+  idempotency-key check handles at-least-once delivery; no dedupe table, ADR-MONO-057 §7).
+
+Body: the raw PortOne event JSON (read untouched for signature verification). No
+response body.
+
+> **NOT live-verified.** There is no public URL reachable from the internet in
+> local/dev, and PortOne's exact header/signature/secret format MUST be reconfirmed
+> against its current V2 reference before a live wiring (same honesty standard as
+> TASK-MONO-482). Proven by an IT posting a synthetically-signed payload, not by live
+> end-to-end delivery.
 
 ---
 
