@@ -1,8 +1,8 @@
 # ADR-MONO-057 — extend `libs/payment` with a recurring-billing capability: server-initiated billing-key charges, reusing the existing `verify` op for reconciliation
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 **Date:** 2026-07-25
-**History:** PROPOSED 2026-07-25 (this record). ACCEPT is a human gate — an agent may not accept its own ADR. The PROPOSED record authorises **no code**.
+**History:** PROPOSED 2026-07-25 (#2988) · ACCEPTED 2026-07-25 (owner exact-form instruction **"ADR-MONO-057 ACCEPTED"**, given together with the companion **"ADR-002 ACCEPTED"**). ACCEPT is a human gate — author (agent) and acceptor (owner) were separate parties. The PROPOSED record authorised no code; this acceptance binds the Phase 1 scope in § 5, with the § 6 open questions resolved per § 7.
 **Decision driver:** Owner (2026-07-25) — fan-platform's subscribe/renew is currently *repeated one-time payment* (the fan re-opens the PG window every month), not PG-level recurring billing. Owner asked what's needed for real 정기결제 (auto-charge) and directed proceeding with the design first.
 **Related:** [ADR-MONO-056](ADR-MONO-056-payment-gateway-abstraction.md) (the `libs/payment` port this extends; explicitly deferred "recurring/billing-key modeling" to a future ADR — this is that ADR), [fan-platform ADR-002](../../projects/fan-platform/docs/adr/ADR-002-billing-key-auto-renewal.md) (the project-specific consumption design — BillingKeyEnrollment, scheduler, webhook handler; companion to this ADR), [fan-platform ADR-001](../../projects/fan-platform/docs/adr/ADR-001-real-pg-portone-verification-boundary.md) (the one-time-payment verify boundary this generalises), `TASK-BE-438` stranded-refund reconciler (the money-safety reconciliation pattern this ADR reuses for a lost-response charge).
 
@@ -111,3 +111,21 @@ The PROPOSED record authorises **no code**. On owner ACCEPT (exact-form `"ADR-MO
 - **Billing-key issuance verification** — Phase 1 trusts the client SDK's `billingKey` return value as-is (it registers a payment method, not money movement, so the blast radius of a forged issuance is bounded by the charge-time `verify`/reconcile step that follows). Add a server-side issuance-status check now, or defer until a concrete abuse case is observed?
 - **Webhook delivery guarantee** — PortOne webhooks are typically at-least-once with retries; the consumer's webhook handler must be idempotent (this ADR notes it; ADR-002 must design for duplicate delivery, e.g. dedupe on `paymentId`).
 - **Method name** — `chargeBillingKey` vs `charge` (shorter, since the capability interface already scopes it). Leaning `chargeBillingKey` for grep-ability against `verify`.
+
+---
+
+## 7. What ACCEPT resolved (2026-07-25)
+
+The owner accepted with the agent-recommended defaults on all three § 6 open questions:
+
+1. **Billing-key issuance — no server-side verification in Phase 1.** The client SDK's `billingKey` is trusted as-is; issuance registers a payment method, not money movement, and the blast radius of a forged/replayed issuance is already bounded by the charge-time `verify`/reconcile step (§1.3, §D3). Revisit only if a concrete abuse case is observed (documented risk, deliberately accepted — not silently skipped).
+2. **Webhook idempotency — no new dedupe table.** fan-platform ADR-002 §D2/§D3 already routes every server-initiated charge (scheduler or webhook-triggered reconcile) through the **existing** `RenewMembershipUseCase` idempotency-key check, which already absorbs a duplicate at-least-once webhook delivery. Confirmed sufficient; no new mechanism needed in `libs/payment`.
+3. **Method name = `chargeBillingKey`** (as drafted) — kept for grep-ability against `verify`.
+
+### Phase 1 task (this ACCEPT authorises)
+
+| Task | Lifecycle | Scope |
+|---|---|---|
+| `TASK-MONO-482` | **ready** | `libs/payment-core`: add `RecurringBillingGateway.chargeBillingKey(...)`, domain-free, optional capability. `libs/payment-portone`: implement it + a reusable webhook signature-verification utility. **No consumer** — library only, mirrors `TASK-MONO-478`'s scope discipline. |
+
+Consumer work (fan-platform `BillingKeyEnrollment` + scheduler + webhook endpoint + `RenewMembershipUseCase` wiring) is authorised by the companion **fan-platform ADR-002**'s own ACCEPT (also given), tracked as `TASK-FAN-BE-033` / `TASK-FAN-FE-013` — both **blocked on `TASK-MONO-482` landing** (backlog, promote to ready on merge), per ADR-002 §"Phase 분할".
