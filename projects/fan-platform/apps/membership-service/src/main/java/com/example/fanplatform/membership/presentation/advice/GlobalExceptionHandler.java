@@ -1,5 +1,6 @@
 package com.example.fanplatform.membership.presentation.advice;
 
+import com.example.fanplatform.membership.application.exception.BillingKeyEnrollmentNotFoundException;
 import com.example.fanplatform.membership.application.exception.IdempotencyKeyConflictException;
 import com.example.fanplatform.membership.application.exception.MembershipNotFoundException;
 import com.example.fanplatform.membership.application.exception.MembershipNotRenewableException;
@@ -38,6 +39,12 @@ public class GlobalExceptionHandler extends AbstractDomainExceptionHandler {
     public ResponseEntity<ApiErrorBody> handleNotFound(MembershipNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ApiErrorBody.of("MEMBERSHIP_NOT_FOUND", e.getMessage()));
+    }
+
+    @ExceptionHandler(BillingKeyEnrollmentNotFoundException.class)
+    public ResponseEntity<ApiErrorBody> handleEnrollmentNotFound(BillingKeyEnrollmentNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiErrorBody.of("BILLING_KEY_ENROLLMENT_NOT_FOUND", e.getMessage()));
     }
 
     @ExceptionHandler(PaymentDeclinedException.class)

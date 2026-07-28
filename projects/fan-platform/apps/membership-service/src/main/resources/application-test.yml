@@ -34,9 +34,23 @@ membership:
     batch-size: 100
 
 fanplatform:
+  membership:
+    # Fixed base64 (32-byte) AES key for tests — deterministic so the encrypted
+    # billing_key_encrypted round-trips across the shared Testcontainer.
+    billing-key:
+      encryption-key: AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw=
+    # Auto-renew scheduler off by default in ITs; tests drive the use case directly.
+    auto-renew:
+      enabled: false
   oauth2:
     allowed-issuers: ${OIDC_ALLOWED_ISSUERS:http://test-issuer,iam}
     required-tenant-id: fan-platform
+
+fan:
+  payment:
+    portone:
+      # Fixed base64 webhook secret for the webhook IT's synthetic signing.
+      webhook-secret: whsec_AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw=
   internal:
     jwt:
       # Integration tests point this at the WireMock JWKS + the

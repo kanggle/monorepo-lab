@@ -1,6 +1,7 @@
 package com.example.fanplatform.membership.infrastructure.payment;
 
 import com.example.libs.payment.PaymentGatewayPort;
+import com.example.libs.payment.RecurringBillingGateway;
 import com.example.libs.payment.portone.PortOnePaymentAdapter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -38,5 +39,19 @@ public class PaymentGatewayConfig {
             @Value("${fan.payment.portone.api-secret}") String apiSecret,
             RestClient.Builder builder) {
         return new PortOnePaymentAdapter(apiBase, apiSecret, builder);
+    }
+
+    /**
+     * The recurring-billing capability under {@code portone} (ADR-MONO-057 / ADR-002).
+     * The shared {@link PortOnePaymentAdapter} implements BOTH {@link PaymentGatewayPort}
+     * and {@link RecurringBillingGateway}, so we expose the SAME already-wired instance
+     * (same RestClient / base URL / API secret) under the second port rather than
+     * constructing a duplicate adapter. Under the default mock profile,
+     * {@code MockRecurringBillingGateway} supplies this port instead.
+     */
+    @Bean
+    @Profile("portone")
+    RecurringBillingGateway portOneRecurringBillingGateway(PaymentGatewayPort portOnePaymentGateway) {
+        return (RecurringBillingGateway) portOnePaymentGateway;
     }
 }

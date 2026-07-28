@@ -15,7 +15,13 @@ public final class PublicPaths {
     public static final Set<String> EXACT = Set.of(
             "/actuator/health",
             "/actuator/info",
-            "/actuator/prometheus"
+            "/actuator/prometheus",
+            // PortOne V2 webhook (TASK-FAN-BE-033, ADR-002 §D3). Public by necessity:
+            // PortOne cannot present a fan JWT and carries no tenant claim, so this
+            // bypasses BOTH end-user auth AND tenant-claim enforcement. Its OWN auth is
+            // the HMAC signature verified in PortOneWebhookController — an invalid
+            // signature is rejected 401 there, not by Spring Security.
+            "/webhooks/portone"
     );
 
     /** Path prefixes whose subtree is public. Each entry MUST end with {@code /}. */
