@@ -40,7 +40,7 @@ Defines how services are built, packaged, and deployed.
 - All environment-specific configuration is injected via environment variables.
 - No environment-specific config files are bundled into the Docker image.
 - Secrets (DB passwords, JWT secret, API keys) are managed via a secrets manager (e.g. Vault, AWS Secrets Manager).
-- Hard-coded secrets are forbidden.
+  Hard-coded secrets are forbidden — see [security-rules.md](security-rules.md) § Sensitive Data.
 
 ---
 

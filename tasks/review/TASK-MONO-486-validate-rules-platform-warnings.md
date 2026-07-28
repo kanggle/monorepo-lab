@@ -1,6 +1,6 @@
 # TASK-MONO-486 — `/validate-rules` (2026-07-29) platform spec Warning fixes
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-MONO
 **Analysis model:** Sonnet 5 / **Recommended impl model:** Sonnet 5 (cross-reference additions between existing
