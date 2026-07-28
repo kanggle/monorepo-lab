@@ -28,6 +28,22 @@ Multiple interactive agent sessions (or routines) running at the same time must 
 - Worktree-add Windows pitfalls (DWIM remote-branch resolution, failed-remove, prune side effects) — always pass **absolute** worktree-add paths; a relative `../x` from a drifted shell cwd can nest a stray directory inside the main checkout and lose files. (Agent personal-memory detail, this host: `env_git_worktree_verify_windows`, `env_concurrent_git_branch_switch_hazard`.)
 - Worktree teardown on Windows with junctioned `node_modules` — when a frontend worktree shares the main checkout's `node_modules` via a directory junction (reparse point), tearing the worktree down naively (`Remove-Item -Recurse` / `git worktree remove`) follows the junction and **corrupts the main checkout's `node_modules`** (e.g. a missing `.pnpm` store then breaks the main tree's `tsc`/`vitest`). Remove the junction reparse points **first** (`cmd /c rmdir <junction>`, which unlinks without following), then delete the worktree directory. Recovery if corrupted: re-run the affected app's install (`pnpm install --force`). (Agent personal-memory detail, this host: `env_worktree_node_modules_junction_cleanup_hazard`.)
 
+### Shared-File Task Series — Reuse One Worktree, Serialize the Merges
+
+A series of tasks that each edit the **same shared file** (a nav config, a barrel `index.ts`, a shared
+`types.ts`) is a special case even under the isolation rule above: running the series across **separate,
+parallel** worktrees does not just risk cross-contamination — it guarantees a merge conflict on that shared file,
+because task N+1's branch is cut from a base that does not yet contain task N's edit to it.
+
+- **Reuse a single worktree across the whole series and serialize the merges**: implement, verify, and merge
+  task N to completion first; only then, in the **same** worktree, `git fetch origin main && git checkout -b
+  <task N+1 branch> origin/main`. Task N's shared-file change is now in the base, so N+1 lands on top of it
+  without conflict.
+- This is strictly cheaper than parallelizing anyway — reusing the worktree avoids a full re-checkout and
+  re-populating any junctioned `node_modules` between tasks in the series.
+- This does not relax § Concurrent-Session Worktree Isolation above — it describes how a **single** session
+  should sequence a series it owns; other concurrent sessions still need their own separate worktree.
+
 ### Dispatching a subagent into a worktree
 
 When delegating implementation to a subagent (the Agent tool) that must edit *inside* a worktree, pass **absolute worktree paths** in the prompt and instruct it to use them. A relative-looking path resolves against the **session cwd** (the parked main checkout), so the subagent's edits silently land in the protected main checkout instead of the worktree — the same contamination this section guards against, via a different route.
@@ -133,6 +149,38 @@ preamble repeated the claim, and the agent that tried anyway landed PR #2616 dir
 had been propagating unchallenged, and the correction was recorded only in that task's DONE note — a place
 nobody greps when asking "am I allowed to edit this?". (Agent personal-memory detail, this host:
 `env_classifier_claude_self_mod_block`.)
+
+---
+
+## Self-Merge and Force-Push Require Explicit Authorization
+
+Two actions get blocked by the auto-mode classifier independent of, and via a different trigger than, the
+`.claude/` self-modification rule above:
+
+1. **Self-merging a PR the agent itself just authored** (`gh pr merge <n> --squash`). A general "proceed to
+   completion / don't stop for confirmation" instruction is read as generic autonomy, not as naming
+   merge-without-review specifically — it does not, by itself, authorize merging your own unreviewed PR. Get an
+   **explicit, specific** confirmation (e.g. ask directly whether to merge) before doing so.
+2. **`git push --force-with-lease`** — blocked as history-rewriting unless the user explicitly named a force
+   push. If a rebase needs re-pushing and the user hasn't asked for a force push, push to a **new ref** instead
+   (`git push origin HEAD:<branch>-v2`) rather than forcing over the existing one.
+
+---
+
+## Post-Merge Nightly Check for Route/Nav/testid Changes
+
+Two full-stack e2e suites (the console E2E job and the frontend E2E job) run only in `nightly-e2e.yml`, not in
+`ci.yml` — moved there by `TASK-MONO-045` for cost reasons. This is an intentional trade-off, not a bug, so the
+gap persists: a PR that changes a console/web-store route, nav entry, testid, or screen heading can merge green
+having never exercised the spec that asserts on it, then redden `main` overnight with nothing surfacing the
+failure until someone notices independently.
+
+- **Before merging** a route/nav/testid/heading change: grep the e2e spec directories (console, web-store) for
+  a spec asserting on the changed testid/URL, and fix it in the same PR if found.
+- **When unsure**, fire the nightly suite directly against the branch — `gh workflow run nightly-e2e.yml --ref
+  <branch>` — cheaper than discovering a red `main` after the fact. (Worked incident: `TASK-PC-FE-240`, a route
+  move that merged green and left `main` red for four days before anyone noticed.)
+- **After merging such a change**, check the next nightly run on `main` once — nothing else currently does.
 
 ---
 
