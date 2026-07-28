@@ -34,7 +34,7 @@ Main context (coordinate only)
   ├─ Phase 2: Review  (/review-task)
   │    ├─ Discovery (tasks/review/)
   │    ├─ Execute via worktree-isolated subagents (all parallel)
-  │    └─ Merge → approved tasks move to done/, fix tasks created in ready/
+  │    └─ Merge → approved tasks stay in review/ pending close chore, fix tasks created in ready/
   └─ Phase 3: Summary
 ```
 
@@ -100,7 +100,7 @@ Approved: N / Total: M
 Fix needed: [list with fix task IDs]
 
 ### Overall
-- Tasks completed (done): [count]
+- Approved (pending close chore, still in review/): [count]
 - Fix tasks created (ready): [count]
 - Failed/Blocked: [count]
 ```

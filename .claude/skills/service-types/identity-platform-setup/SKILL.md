@@ -51,6 +51,8 @@ Jwts.builder()
     .subject(account.getId().toString())          // sub
     .audience().add(aud).and()                    // aud (one platform per token)
     .claim("roles", resolveRoles(account, aud))   // roles[] — only this aud's roles
+    .claim("tenant_id", tenantId)                 // REQUIRED on every grant — edge-enforced (TenantClaimValidator)
+    .claim("tenant_type", tenantType)             // REQUIRED, always minted alongside tenant_id
     .claim("email", account.getEmail())
     .issuer(issuerUri)                            // iss
     .issuedAt(now)

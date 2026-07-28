@@ -73,7 +73,7 @@ Serialization: JSON by default. Binary encoding (Avro, Protobuf) is allowed when
 
 - **Transactional Outbox** pattern is required for any producer whose domain state change must stay consistent with event publication (see `rules/traits/transactional.md` T3). Events are written to an outbox table in the same DB transaction as the state change; a separate process forwards outbox rows to Kafka.
 - Events MUST NOT be published from inside a database transaction that may still roll back (except via outbox, which is write-to-outbox, not write-to-broker).
-- Publisher MUST retry broker failures with exponential backoff; rows are deleted from outbox only after broker acknowledgment.
+- Publisher MUST retry broker failures with exponential backoff; on broker acknowledgment the row is marked published (`published_at` set) in a fresh transaction — rows are retained, not deleted, so plan retention/archival separately if the outbox table needs to stay small.
 - Publisher metrics: `outbox.pending.count`, `outbox.lag.seconds`, `outbox.publish.failure.total`.
 
 ---
