@@ -1,6 +1,6 @@
 # TASK-SCM-BE-050 — `actor.accountId()` overflows every `VARCHAR(36)` actor column when the caller is a client-credentials client (PO drafting hard-fails)
 
-**Status:** review
+**Status:** done
 **Type:** TASK-SCM-BE (defect)
 **Depends on / 전제:** none.
 **후속 / blocks:** none required — this is a standalone defect fix.
