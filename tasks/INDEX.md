@@ -173,9 +173,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-484-promote-three-more-rules-to-canonical.md` — 2026-07-29 `/audit-memory` 스윕 산물(TASK-MONO-464 와 동일 패턴). `platform/git-workflow-policy.md` 에 3규칙 삽입(공유파일 task 시리즈 단일-worktree 직렬화 / self-merge·force-push 명시승인 / 머지 후 nightly 확인 습관) + `CLAUDE.md` 카탈로그 포인터 3개. PR #3007 (`task/mono-484-promote-canonical-rules`).
+(empty)
 
 ## done
+
+- **`TASK-MONO-484-promote-three-more-rules-to-canonical.md` — ✅ DONE (2026-07-29).** 2026-07-29 `/audit-memory` 스윕 산물(TASK-MONO-464 와 동일 패턴). `platform/git-workflow-policy.md` 에 3규칙 삽입(공유파일 task 시리즈 단일-worktree 직렬화 / self-merge·force-push 명시승인 / 머지 후 nightly 확인 습관) + `CLAUDE.md` 카탈로그 포인터 3개. **PR #3007 squash `3cfed600b` 머지.** 3-dim 검증: `gh pr view` state=MERGED · `origin/main` tip = mergeCommit 정확히 일치 · pre-merge `statusCheckRollup` 0 failing(4개 GREEN — INDEX queue drift·Claude reference integrity·Task ID collision·changes; 나머지는 path-filter 로 정상 SKIPPED, docs-only 변경).
 
 - `TASK-MONO-483-docker-cleanup-anon-volume-prune.md` — **DONE (2026-07-28, 3-dim verified — impl PR #2993 squash `b51e47915`; state=MERGED · origin/main tip=ancestor · 머지 전 0 failing — changes + INDEX queue drift + Task ID collision SUCCESS, 나머지는 scripts-only path-filter SKIPPED).** `scripts/docker-cleanup.sh`(주간 자동 정리, TASK-MONO-391)에 익명(64자리 hex) dangling 볼륨 자동 정리를 추가, named 볼륨(데모 시드 데이터 등)은 그대로 보존. **4개 AC 전부 실측 검증**: AC-1(named 볼륨 미삭제 — 테스트용 named 볼륨 생성 후 실행, `docker volume ls`로 생존 확인) · AC-2(익명 볼륨 실삭제 — `docker run -v` 고아 볼륨 생성 후 삭제 확인, 실행 결과 익명 8개 삭제) · AC-3(`--dry-run` 무변경 — 실행 전후 `docker volume ls` 동일) · AC-4(기존 컨테이너/이미지/빌드캐시/로그 섹션 출력 회귀 없음). 2026-07-28 수동 진단에서 발견된 47개 dangling 볼륨(익명 29·named 18) 판별 로직을 그대로 이식. 분석=Sonnet 5 / 구현=Sonnet 5. [[env_rancher_desktop_vhdx_no_shrink]] [[env_docker_container_json_log_unbounded_otlp_spam]]
 
