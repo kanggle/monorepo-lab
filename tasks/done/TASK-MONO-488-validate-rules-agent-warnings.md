@@ -1,6 +1,6 @@
 # TASK-MONO-488 — `/validate-rules` (2026-07-29) agent-tier Warning fixes
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-MONO
 **Analysis model:** Sonnet 5 / **Recommended impl model:** Sonnet 5 (agent metadata + boundary documentation
