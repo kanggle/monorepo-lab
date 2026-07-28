@@ -31,6 +31,7 @@ public interface ProcurementEventPublisher {
     String EVENT_ASN_RECEIVED = "scm.procurement.asn.received";
     String EVENT_INBOUND_EXPECTED = "scm.procurement.inbound-expected";
     String EVENT_INBOUND_EXPECTED_CANCELLED = "scm.procurement.inbound-expected.cancelled";
+    String EVENT_INBOUND_EXPECTED_THIRD_PARTY = "scm.procurement.inbound-expected.third-party";
 
     void publishPoSubmitted(PurchaseOrder po);
 
@@ -63,4 +64,18 @@ public interface ProcurementEventPublisher {
      * so wms can drop a not-yet-received expectation for a cancelled PO.
      */
     void publishInboundExpectedCancelled(PurchaseOrder po);
+
+    /**
+     * ADR-MONO-055 §D4 / TASK-SCM-BE-049: publish
+     * {@code scm.procurement.inbound-expected.third-party.v1} for a
+     * {@code THIRD_PARTY_LOGISTICS}-addressed replenishment PO on CONFIRMED. This is
+     * the scm-internal honour sink — consumed only by
+     * {@code inventory-visibility-service}, never by wms (ADR-MONO-054 §D3: route
+     * away from wms, do not widen the wms DLT gate). The caller
+     * ({@code PurchaseOrderApplicationService}) has already applied the producer-side
+     * fork — this method assumes the PO is a {@code THIRD_PARTY_LOGISTICS}-addressed
+     * PO with a non-null {@code destinationWarehouseId} (the inventory-visibility
+     * node id it is addressed to).
+     */
+    void publishInboundExpectedThirdParty(PurchaseOrder po);
 }

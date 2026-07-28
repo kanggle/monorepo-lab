@@ -15,9 +15,13 @@ import java.util.UUID;
  * <p><strong>ADR-MONO-050 D9 (Option A — cross-service identifiers are CODES).</strong>
  * Two warehouse dimensions are carried, deliberately split:
  * <ul>
- *   <li>{@code warehouseId} (UUID) — the wms {@code locationId}. Kept solely as the
- *       stable dedup-key dimension {@code (tenantId, skuCode, warehouseId)} (the
- *       open-suggestion guard, D6). Never emitted downstream.</li>
+ *   <li>{@code warehouseId} (UUID) — the IVS node id. Primarily the stable dedup-key
+ *       dimension {@code (tenantId, skuCode, warehouseId)} (the open-suggestion guard, D6)
+ *       and never emitted downstream for a {@code WMS_WAREHOUSE} destination. <b>Exception
+ *       (ADR-055 §D4 / TASK-SCM-BE-049):</b> for a {@code THIRD_PARTY_LOGISTICS} destination
+ *       it IS threaded through as the PO's {@code destinationWarehouseId} — the 3PL honour
+ *       sink needs a resolvable node address, and the 3PL node carries no wms warehouse code
+ *       to use instead.</li>
  *   <li>{@code warehouseCode} (String) — the wms warehouse <em>business code</em>
  *       (e.g. {@code "WH-SEOUL-01"}). This is the value that flows to the PO
  *       {@code destinationWarehouseId} so wms's {@code findWarehouseByCode} resolves it.

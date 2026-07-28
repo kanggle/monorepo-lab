@@ -5,6 +5,7 @@ import com.example.scmplatform.inventoryvisibility.application.port.outbound.Eve
 import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService;
 import com.example.scmplatform.inventoryvisibility.domain.node.InventoryNode;
 import com.example.scmplatform.inventoryvisibility.domain.node.NodeId;
+import com.example.scmplatform.inventoryvisibility.domain.expectation.repository.InboundExpectationRepository;
 import com.example.scmplatform.inventoryvisibility.domain.node.repository.InventoryNodeRepository;
 import com.example.scmplatform.inventoryvisibility.domain.snapshot.InventorySnapshot;
 import com.example.scmplatform.inventoryvisibility.domain.snapshot.Quantity;
@@ -41,6 +42,7 @@ class EventDedupeTest {
     @Mock InventoryNodeRepository nodeRepository;
     @Mock InventorySnapshotRepository snapshotRepository;
     @Mock NodeStalenessRepository stalenessRepository;
+    @Mock InboundExpectationRepository inboundExpectationRepository;
     @Mock EventDedupePort eventDedupePort;
     @Mock AlertPublisherPort alertPublisherPort;
     @Mock ClockPort clock;
@@ -55,7 +57,7 @@ class EventDedupeTest {
     void setUp() {
         service = new InventoryVisibilityApplicationService(
                 nodeRepository, snapshotRepository, stalenessRepository,
-                eventDedupePort, alertPublisherPort, clock);
+                inboundExpectationRepository, eventDedupePort, alertPublisherPort, clock);
     }
 
     @Test

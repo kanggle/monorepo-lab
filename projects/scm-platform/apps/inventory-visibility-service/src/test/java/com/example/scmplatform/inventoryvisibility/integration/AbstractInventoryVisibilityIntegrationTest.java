@@ -70,6 +70,9 @@ public abstract class AbstractInventoryVisibilityIntegrationTest {
     static final String TOPIC_INVENTORY_ADJUSTED = "wms.inventory.adjusted.v1";
     static final String TOPIC_INVENTORY_TRANSFERRED = "wms.inventory.transferred.v1";
     protected static final String TOPIC_ALERT = "scm.inventory.alert.v1";
+    // ADR-MONO-055 §D4 / TASK-SCM-BE-049 — the intra-scm 3PL inbound-expectation sink topic.
+    protected static final String TOPIC_INBOUND_EXPECTED_THIRD_PARTY =
+            "scm.procurement.inbound-expected.third-party.v1";
 
     @SuppressWarnings("resource")
     protected static final PostgreSQLContainer<?> POSTGRES =
@@ -115,7 +118,8 @@ public abstract class AbstractInventoryVisibilityIntegrationTest {
                     new NewTopic(TOPIC_INVENTORY_RECEIVED, 1, (short) 1),
                     new NewTopic(TOPIC_INVENTORY_ADJUSTED, 1, (short) 1),
                     new NewTopic(TOPIC_INVENTORY_TRANSFERRED, 1, (short) 1),
-                    new NewTopic(TOPIC_ALERT, 1, (short) 1)
+                    new NewTopic(TOPIC_ALERT, 1, (short) 1),
+                    new NewTopic(TOPIC_INBOUND_EXPECTED_THIRD_PARTY, 1, (short) 1)
             )).all().get(30, java.util.concurrent.TimeUnit.SECONDS);
         } catch (ExecutionException e) {
             // Idempotent — topic already exists is fine

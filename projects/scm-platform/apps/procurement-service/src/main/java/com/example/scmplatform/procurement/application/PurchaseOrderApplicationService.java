@@ -284,31 +284,49 @@ public class PurchaseOrderApplicationService {
     }
 
     /**
-     * ADR-MONO-050 D3/D4 producer-side gate. Emits {@code inbound-expected.v1}
-     * only for own-warehouse ({@code WMS_WAREHOUSE}) replenishment POs. Everything
-     * else is fail-closed:
+     * ADR-MONO-050 D3/D4 + ADR-MONO-055 §D4 producer-side routing fork on CONFIRMED.
+     * The destination node type decides where a replenishment PO's inbound
+     * expectation is recorded:
      * <ul>
-     *   <li>operator-authored / 3PL-destination PO → not eligible → skip (D4);</li>
-     *   <li>eligible warehouse PO with an unknown lead time → skip + warn rather
-     *       than emit a wrong arrival horizon (Failure Scenario B — never guess).</li>
+     *   <li>{@code WMS_WAREHOUSE} → {@code inbound-expected.v1} toward wms
+     *       (ADR-050 D1/D2/D4 — unchanged; a missing lead time is fail-closed so no
+     *       wrong wms ASN horizon is fabricated);</li>
+     *   <li>{@code THIRD_PARTY_LOGISTICS} → {@code inbound-expected.third-party.v1}
+     *       toward the scm-internal sink (inventory-visibility), <strong>honoured, not
+     *       dropped</strong> (ADR-055 §D4). The wms consumer/DLT gate never sees a 3PL
+     *       destination — the fork is entirely producer-side (ADR-054 §D3: route away
+     *       from wms, do not widen the wms DLT gate). No wrong-horizon fail-close here:
+     *       there is no downstream wms ASN window a null date would corrupt, so a 3PL
+     *       expectation is recorded even without a lead time (nullable expectedAt);</li>
+     *   <li>anything else — an operator-authored PO with no destination, or a 3PL PO
+     *       with no resolvable node id — is a fail-closed drop (never record an
+     *       un-addressable expectation).</li>
      * </ul>
      */
     private void maybePublishInboundExpected(PurchaseOrder po) {
-        if (!po.isWmsWarehouseDestination()) {
-            log.debug("PO {} is not a WMS_WAREHOUSE-addressed replenishment PO "
-                    + "(origin={}, nodeType={}) — no inbound-expected emitted (ADR-050 D4)",
-                    po.getId(), po.getOrigin(), po.getDestinationNodeType());
+        if (po.isWmsWarehouseDestination()) {
+            if (po.expectedArrivalDate() == null) {
+                // fail-closed: warehouse is known but the lead time is not — do not
+                // fabricate an arrival horizon. Surfaced to ops via WARN.
+                log.warn("inbound-expected NOT emitted for PO {} (warehouse={}): lead_time_days "
+                        + "missing — fail-closed per ADR-050 (no silent wrong horizon)",
+                        po.getId(), po.getDestinationWarehouseId());
+                return;
+            }
+            eventPublisher.publishInboundExpected(po);
             return;
         }
-        if (po.expectedArrivalDate() == null) {
-            // fail-closed: warehouse is known but the lead time is not — do not
-            // fabricate an arrival horizon. Surfaced to ops via WARN.
-            log.warn("inbound-expected NOT emitted for PO {} (warehouse={}): lead_time_days "
-                    + "missing — fail-closed per ADR-050 (no silent wrong horizon)",
-                    po.getId(), po.getDestinationWarehouseId());
+        if (po.isThirdPartyLogisticsDestination()) {
+            // ADR-MONO-055 §D4 honour: a 3PL-addressed PO is recorded against the 3PL
+            // node in the scm-internal sink (inventory-visibility), NOT sent to wms and
+            // NOT DLT'd (ADR-054 §D3). Entirely producer-side.
+            eventPublisher.publishInboundExpectedThirdParty(po);
             return;
         }
-        eventPublisher.publishInboundExpected(po);
+        log.debug("PO {} is not addressed to a wms warehouse or a 3PL node "
+                + "(origin={}, nodeType={}, dest={}) — no inbound-expected emitted",
+                po.getId(), po.getOrigin(), po.getDestinationNodeType(),
+                po.getDestinationWarehouseId());
     }
 
     // ---------------- CANCEL PO ----------------

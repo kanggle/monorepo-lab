@@ -142,6 +142,66 @@ class OutboxProcurementEventPublisherTest {
         assertThat(line.get("uom").asText()).isEqualTo("EA");
     }
 
+    // --- ADR-MONO-055 §D4 3PL inbound-expected honour sink -----------------------
+
+    @Test
+    void publishInboundExpectedThirdParty_persistsRow_withSinkPayloadFields() throws Exception {
+        PurchaseOrder po = thirdPartyAddressedConfirmedPo();
+
+        publisher.publishInboundExpectedThirdParty(po);
+
+        ProcurementOutboxJpaEntity row = capturedRow();
+        assertThat(row.getEventType()).isEqualTo(ProcurementEventPublisher.EVENT_INBOUND_EXPECTED_THIRD_PARTY);
+        assertThat(row.getAggregateType()).isEqualTo("purchase_order");
+        assertThat(row.getAggregateId()).isEqualTo("po-3pl");
+        assertThat(row.getPartitionKey()).isNull();
+        assertThat(row.getOccurredAt()).isEqualTo(CLOCK.instant());
+
+        JsonNode envelope = objectMapper.readTree(row.getPayload());
+        assertThat(envelope.get("eventId").asText()).isEqualTo(row.getEventId().toString());
+        assertThat(envelope.get("eventType").asText())
+                .isEqualTo(ProcurementEventPublisher.EVENT_INBOUND_EXPECTED_THIRD_PARTY);
+        assertThat(envelope.get("source").asText()).isEqualTo("scm-platform-procurement-service");
+        assertThat(envelope.get("schemaVersion").asInt()).isEqualTo(1);
+        assertThat(envelope.get("partitionKey").asText()).isEqualTo("po-3pl");
+
+        JsonNode payload = envelope.get("payload");
+        assertThat(payload.get("poId").asText()).isEqualTo("po-3pl");
+        assertThat(payload.get("poNumber").asText()).isEqualTo("PO-3PL-01");
+        assertThat(payload.get("tenantId").asText()).isEqualTo("scm");
+        // the 3PL node the honour sink records against (carried on destinationWarehouseId)
+        assertThat(payload.get("destinationNodeId").asText()).isEqualTo("3pl-node-uuid");
+        assertThat(payload.get("destinationNodeType").asText()).isEqualTo("THIRD_PARTY_LOGISTICS");
+        assertThat(payload.get("currency").asText()).isEqualTo("KRW");
+        String expectedDate = po.getConfirmedAt().atZone(ZoneOffset.UTC)
+                .toLocalDate().plusDays(5).toString();
+        assertThat(payload.get("expectedArrivalDate").asText()).isEqualTo(expectedDate);
+
+        JsonNode line = payload.get("lines").get(0);
+        assertThat(line.get("skuCode").asText()).isEqualTo("SKU-APPLE-001");
+        assertThat(line.get("expectedQty").asText()).isEqualTo("100");
+        assertThat(line.get("uom").asText()).isEqualTo("EA");
+    }
+
+    @Test
+    void publishInboundExpectedThirdParty_withUnknownLeadTime_recordsNullExpectedArrivalDate() throws Exception {
+        PurchaseOrder po = PurchaseOrder.createDraftFromSuggestion(
+                "po-3pl", "scm", "PO-3PL-01", "sup-3pl", "buyer-3pl", "KRW",
+                "sugg-3pl", "3pl-node-uuid", "THIRD_PARTY_LOGISTICS", null);
+        po.addLine(PurchaseOrderLine.create(
+                "line-3pl", po.getId(), "scm", 1, "SKU-APPLE-001", null,
+                new BigDecimal("100"), BigDecimal.ZERO));
+        po.submit(com.example.scmplatform.procurement.domain.po.status.ActorType.BUYER);
+        po.acknowledge(com.example.scmplatform.procurement.domain.po.status.ActorType.SUPPLIER);
+        po.confirm(com.example.scmplatform.procurement.domain.po.status.ActorType.OPERATOR);
+
+        publisher.publishInboundExpectedThirdParty(po);
+
+        JsonNode payload = objectMapper.readTree(capturedRow().getPayload()).get("payload");
+        // Null horizon is recorded (no downstream wms ASN window to corrupt) — not fail-closed.
+        assertThat(payload.get("expectedArrivalDate").isNull()).isTrue();
+    }
+
     @Test
     void publishInboundExpectedCancelled_persistsRow_withPoAndLineSkus() throws Exception {
         PurchaseOrder po = warehouseAddressedConfirmedPo();
@@ -174,6 +234,21 @@ class OutboxProcurementEventPublisherTest {
                 "sugg-050", "wh-seoul-01", "WMS_WAREHOUSE", 7);
         po.addLine(PurchaseOrderLine.create(
                 "line-050", po.getId(), "scm", 1, "SKU-APPLE-001", null,
+                new BigDecimal("100"), BigDecimal.ZERO));
+        po.submit(com.example.scmplatform.procurement.domain.po.status.ActorType.BUYER);
+        po.acknowledge(com.example.scmplatform.procurement.domain.po.status.ActorType.SUPPLIER);
+        po.confirm(com.example.scmplatform.procurement.domain.po.status.ActorType.OPERATOR);
+        return po;
+    }
+
+    private PurchaseOrder thirdPartyAddressedConfirmedPo() {
+        // A 3PL-addressed replenishment PO: destinationWarehouseId carries the
+        // inventory-visibility node id (the generic destination identifier for a 3PL).
+        PurchaseOrder po = PurchaseOrder.createDraftFromSuggestion(
+                "po-3pl", "scm", "PO-3PL-01", "sup-3pl", "buyer-3pl", "KRW",
+                "sugg-3pl", "3pl-node-uuid", "THIRD_PARTY_LOGISTICS", 5);
+        po.addLine(PurchaseOrderLine.create(
+                "line-3pl", po.getId(), "scm", 1, "SKU-APPLE-001", null,
                 new BigDecimal("100"), BigDecimal.ZERO));
         po.submit(com.example.scmplatform.procurement.domain.po.status.ActorType.BUYER);
         po.acknowledge(com.example.scmplatform.procurement.domain.po.status.ActorType.SUPPLIER);

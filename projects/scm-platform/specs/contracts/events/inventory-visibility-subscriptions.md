@@ -17,11 +17,46 @@ The authoritative envelope schema is at:
 | `wms.inventory.received.v1` | `inventory.received` | `WmsInventoryReceivedConsumer` |
 | `wms.inventory.adjusted.v1` | `inventory.adjusted` | `WmsInventoryAdjustedConsumer` |
 | `wms.inventory.transferred.v1` | `inventory.transferred` | `WmsInventoryTransferredConsumer` |
+| `scm.procurement.inbound-expected.third-party.v1` | `scm.procurement.inbound-expected.third-party` | `ScmThirdPartyInboundExpectedConsumer` |
+
+### Intra-scm subscription — 3PL inbound-expected honour sink (ADR-MONO-055 §D4 / TASK-SCM-BE-049)
+
+`scm.procurement.inbound-expected.third-party.v1` is an **intra-scm** (not
+cross-project) subscription: `procurement-service` publishes it when a
+`THIRD_PARTY_LOGISTICS`-addressed replenishment PO is confirmed, and this service
+is its **only** consumer — the scm-internal honour sink (ADR-MONO-055 §D4). The
+authoritative payload schema is owned by
+[`scm-procurement-events.md`](./scm-procurement-events.md) §
+`scm.procurement.inbound-expected.third-party`; the fields this consumer reads:
+
+- `payload.poId` / `payload.poNumber` — the source PO reference (idempotency key).
+- `payload.tenantId` — always `scm` in v1.
+- `payload.destinationNodeId` — the inventory-visibility node the PO is addressed
+  to. The consumer resolves the `THIRD_PARTY_LOGISTICS` node by this id via
+  `InventoryNodeRepository#findById` and **fails closed** (no orphan expectation)
+  if the node is absent, not `THIRD_PARTY_LOGISTICS`, or belongs to another
+  tenant (→ non-retryable DLT with a clear error).
+- `payload.expectedArrivalDate` (nullable), `payload.currency`.
+- `payload.lines[]` — `skuCode` + `expectedQty` (one `inbound_expectations` row
+  per line).
+
+The recorded expectation (`inbound_expectations`) is **reconciled** by a later
+3PL observation (`POST /nodes/{nodeId}/observed-stock`, TASK-SCM-BE-047): when the
+observed stock for `(node, sku)` meets or exceeds the expected quantity, the
+OPEN expectation is marked SATISFIED. An unmet expectation stays OPEN as a
+visible operational signal (never silently purged). **wms is not involved** —
+no wms consumer subscribes to this topic (ADR-MONO-054 §D3).
 
 ### Idempotency Key
 
 `eventId` from the wms envelope (UUID v7). Stored in `event_dedupe` table after processing.
 Duplicate eventId → event is skipped without mutation (T8).
+
+For the intra-scm 3PL sink event, idempotency is **structural** rather than via
+`event_dedupe`: the `inbound_expectations` table is UNIQUE on
+`(tenant_id, source_po_number, sku, node_id)`, so a re-confirmed / replayed PO
+does not double-record — a duplicate insert is caught and treated as a no-op
+(idempotent on the PO reference, ADR-MONO-055 §D4 / TASK-SCM-BE-049).
 
 ### Retry + DLT
 

@@ -7,6 +7,7 @@ import com.example.scmplatform.inventoryvisibility.application.service.Inventory
 import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService.ObservedLine;
 import com.example.scmplatform.inventoryvisibility.domain.error.NodeNotFoundException;
 import com.example.scmplatform.inventoryvisibility.domain.error.NodeTypeConflictException;
+import com.example.scmplatform.inventoryvisibility.domain.expectation.repository.InboundExpectationRepository;
 import com.example.scmplatform.inventoryvisibility.domain.node.InventoryNode;
 import com.example.scmplatform.inventoryvisibility.domain.node.NodeId;
 import com.example.scmplatform.inventoryvisibility.domain.node.repository.InventoryNodeRepository;
@@ -55,6 +56,7 @@ class ApplyThirdPartyObservedStockUseCaseTest {
     @Mock InventoryNodeRepository nodeRepository;
     @Mock InventorySnapshotRepository snapshotRepository;
     @Mock NodeStalenessRepository stalenessRepository;
+    @Mock InboundExpectationRepository inboundExpectationRepository;
     @Mock EventDedupePort eventDedupePort;
     @Mock AlertPublisherPort alertPublisherPort;
     @Mock ClockPort clock;
@@ -68,7 +70,7 @@ class ApplyThirdPartyObservedStockUseCaseTest {
     void setUp() {
         service = new InventoryVisibilityApplicationService(
                 nodeRepository, snapshotRepository, stalenessRepository,
-                eventDedupePort, alertPublisherPort, clock);
+                inboundExpectationRepository, eventDedupePort, alertPublisherPort, clock);
     }
 
     private InventoryNode thirdPartyNode() {

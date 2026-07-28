@@ -80,9 +80,19 @@ public class ProcurementDraftPoClient implements ProcurementDraftPoPort {
         String destinationWarehouseCode = cmd.destinationWarehouseId();
         if (NODE_TYPE_THIRD_PARTY_LOGISTICS.equals(nodeType)) {
             body.put("destinationNodeType", NODE_TYPE_THIRD_PARTY_LOGISTICS);
-            log.info("3PL replenishment allocation (ADR-055 §D2): drafting PO to a "
-                    + "THIRD_PARTY_LOGISTICS node for suggestion={} — no wms inbound-expected "
-                    + "emitted (BE-049 routes it to the scm sink)", cmd.sourceSuggestionId());
+            // ADR-MONO-055 §D4 / TASK-SCM-BE-049: a 3PL node carries no wms warehouse CODE,
+            // so the honour sink addresses it by the inventory-visibility NODE ID instead
+            // (an scm-internal identifier round-tripping back to IVS — not a cross-service
+            // code leak). Carried on procurement's generic destinationWarehouseId field so
+            // the 3PL inbound-expected event names the node the expectation is recorded
+            // against. A null node id (legacy caller) → no addressing → procurement
+            // fail-closes the sink emit (never records an un-addressable expectation).
+            if (cmd.warehouseId() != null) {
+                body.put("destinationWarehouseId", cmd.warehouseId().toString());
+            }
+            log.info("3PL replenishment honour (ADR-055 §D4): drafting PO to a "
+                    + "THIRD_PARTY_LOGISTICS node={} for suggestion={} — routed to the scm "
+                    + "inbound-expected sink, NOT wms", cmd.warehouseId(), cmd.sourceSuggestionId());
         } else if (destinationWarehouseCode != null && !destinationWarehouseCode.isBlank()) {
             body.put("destinationWarehouseId", destinationWarehouseCode);
             body.put("destinationNodeType", NODE_TYPE_WMS_WAREHOUSE);

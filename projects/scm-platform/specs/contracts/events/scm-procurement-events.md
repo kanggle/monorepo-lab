@@ -30,6 +30,7 @@ Canonical Kafka topic names. Topic naming convention =
 | `scm.procurement.asn.received` | `scm.procurement.asn.received.v1` | `asn` | live | Supplier-issued ASN webhook accepted |
 | `scm.procurement.inbound-expected` | `scm.procurement.inbound-expected.v1` | `purchase_order` | live | ACKNOWLEDGED → CONFIRMED, **only** for a `WMS_WAREHOUSE`-addressed replenishment PO (ADR-MONO-050 D1/D2/D4) |
 | `scm.procurement.inbound-expected.cancelled` | `scm.procurement.inbound-expected.cancelled.v1` | `purchase_order` | live | A non-terminal (not-yet-received) `WMS_WAREHOUSE`-addressed PO is cancelled/withdrawn (ADR-MONO-050 D6.3) |
+| `scm.procurement.inbound-expected.third-party` | `scm.procurement.inbound-expected.third-party.v1` | `purchase_order` | live | ACKNOWLEDGED → CONFIRMED, **only** for a `THIRD_PARTY_LOGISTICS`-addressed replenishment PO (ADR-MONO-055 §D4 / TASK-SCM-BE-049). The scm-internal honour sink — consumed by `inventory-visibility-service`, **never** by wms (wms does not operate a 3PL's WMS — ADR-MONO-050 §D4). |
 
 > **v1 reachability note**: The `po.closed` topic constant + event type are
 > declared in `ProcurementEventPublisher` and `ProcurementOutboxPollingScheduler`
@@ -368,6 +369,19 @@ destination warehouse at all — does **not** emit this event. v1 turns confirme
 POs into wms inbound expectations only for own warehouses. This is enforced
 producer-side; wms additionally rejects a non-`WMS_WAREHOUSE` payload defensively.
 
+> **3PL routing fork (ADR-MONO-055 §D4 / TASK-SCM-BE-049).** A
+> `THIRD_PARTY_LOGISTICS`-addressed PO is no longer a silent producer-side drop:
+> the confirm path now forks. A `WMS_WAREHOUSE` PO emits
+> `inbound-expected.v1` (this event, toward wms — unchanged, byte-identical). A
+> `THIRD_PARTY_LOGISTICS` PO instead emits
+> `scm.procurement.inbound-expected.third-party.v1` (below), which only
+> `inventory-visibility-service` consumes as its scm-internal honour sink. The
+> **wms** `inbound-expected.v1` topic and its consumer/DLT gate never see a 3PL
+> destination — the fork is entirely producer-side (ADR-MONO-054 §D3: route
+> **away from** wms, do not widen the correct wms DLT gate). The external 3PL-WMS
+> notification (`ThirdPartyFulfillmentPort`, ADR-MONO-054 §D7) stays deferred; the
+> internal record does not depend on it.
+
 **Payload does NOT re-use the common PO base** — it is built as an ordered map
 (like `asn.received`), carrying only the fields wms `inbound-service` needs.
 
@@ -487,6 +501,87 @@ warehouse-addressed (`WMS_WAREHOUSE`) PO is cancelled while **non-terminal**.
     "poNumber": "PO-A1B2C3D4",
     "lines": [
       { "skuCode": "SKU-APPLE-001" }
+    ]
+  }
+}
+```
+
+---
+
+### scm.procurement.inbound-expected.third-party (ADR-MONO-055 §D4)
+
+Triggered when an operator confirms an ACKNOWLEDGED PO (`ACKNOWLEDGED → CONFIRMED`)
+**and** that PO is addressed to a `THIRD_PARTY_LOGISTICS` node
+(`destinationNodeType = THIRD_PARTY_LOGISTICS` with a non-null
+`destinationNodeId`). It is published in the **same transaction** as the
+`CONFIRMED` state change (alongside `scm.procurement.po.confirmed`) via the
+transactional outbox, so the honour sink never loses the arrival expectation on
+the publisher side (T2 + T3, ADR-MONO-055 §D4).
+
+This is the **honour** of a 3PL-destined inbound expectation (ADR-MONO-054 §D3):
+a 3PL PO is **recorded** against the 3PL node in `inventory-visibility-service`
+rather than dropped or DLT'd. The physical receiving is the 3PL's own WMS
+(ADR-MONO-050 §D4); scm records the expectation and BE-047's observation
+reconciles it when the stock lands. **No wms involvement** — the wms
+`inbound-expected.v1` topic is intentionally not used (wms does not operate the
+3PL's WMS; ADR-MONO-054 §D3 keeps the wms DLT gate un-widened).
+
+**Producer-side gate**: this event fires **only** when
+`destinationNodeType = THIRD_PARTY_LOGISTICS` **and** the PO carries a non-null
+`destinationNodeId` (the inventory-visibility node the replenishment PO is
+addressed to). A 3PL PO with no resolvable node id is fail-closed (no emit, WARN)
+— the sink must never record an un-addressable expectation.
+
+**Sanctioned consumer**: `inventory-visibility-service`
+(group `scm-inventory-visibility-v1`) — see
+[`inventory-visibility-subscriptions.md`](./inventory-visibility-subscriptions.md).
+No wms consumer subscribes to this topic.
+
+**Payload does NOT re-use the common PO base** — it is built as an ordered map
+(like `inbound-expected` and `asn.received`), carrying only the fields the
+inventory-visibility sink needs.
+
+**Payload fields:**
+
+| Field | Type | Nullable | Description |
+|---|---|---|---|
+| `poId` | string (UUID v7) | no | Purchase order aggregate id (matches `partitionKey`). |
+| `poNumber` | string | no | Source PO reference; the idempotency dedupe key on the sink side, combined with `skuCode` + node. |
+| `tenantId` | string | no | Always `"scm"` in v1. |
+| `destinationNodeId` | string | no | The `inventory-visibility` node id (the node the replenishment PO is addressed to). The sink resolves the `THIRD_PARTY_LOGISTICS` node by this id and fails closed if it is absent/deregistered (no orphan expectation). |
+| `destinationNodeType` | string enum | no | Always `THIRD_PARTY_LOGISTICS` for this event. |
+| `expectedArrivalDate` | string (ISO 8601 date, `YYYY-MM-DD`) \| null | yes | `confirmedAt` (UTC date) + `lead_time_days`; `null` when the lead time is unknown (the sink still records the expectation — a null horizon is not fail-closed here because there is no downstream wms ASN whose window it would corrupt). |
+| `currency` | string (ISO 4217) | no | PO currency. |
+| `lines` | array | no | One entry per PO line — see below. |
+
+**`lines[]` element:**
+
+| Field | Type | Nullable | Description |
+|---|---|---|---|
+| `skuCode` | string | no | `purchase_order_lines.sku`. |
+| `expectedQty` | string (BigDecimal plain) | no | Ordered quantity as a plain decimal string (e.g. `"100"`). |
+| `uom` | string | no | Unit of measure. **v1 constant `"EA"`** (as `inbound-expected.v1`). |
+
+**Example:**
+
+```json
+{
+  "eventId": "0192d4e0-7a1b-7c3d-8e4f-5a6b7c8d9e0f",
+  "eventType": "scm.procurement.inbound-expected.third-party",
+  "source": "scm-platform-procurement-service",
+  "occurredAt": "2026-07-28T04:12:00.000Z",
+  "schemaVersion": 1,
+  "partitionKey": "01HZWX12345678901234567890",
+  "payload": {
+    "poId": "01HZWX12345678901234567890",
+    "poNumber": "PO-A1B2C3D4",
+    "tenantId": "scm",
+    "destinationNodeId": "8f14e45f-ceea-467a-9f0b-4d2c7a1e9b33",
+    "destinationNodeType": "THIRD_PARTY_LOGISTICS",
+    "expectedArrivalDate": "2026-08-04",
+    "currency": "KRW",
+    "lines": [
+      { "skuCode": "SKU-APPLE-001", "expectedQty": "100", "uom": "EA" }
     ]
   }
 }

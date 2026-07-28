@@ -39,9 +39,18 @@ public interface ProcurementDraftPoPort {
                           // ADR-MONO-055 §D2/§D3: the destination node TYPE from the
                           // suggestion (→ procurement destinationNodeType). WMS_WAREHOUSE for
                           // the alert path + wms batch nodes; THIRD_PARTY_LOGISTICS for a 3PL
-                          // node (which carries no warehouse code, so no inbound-expected is
-                          // emitted toward wms — correct interim, BE-049 routes it to the sink).
-                          String destinationNodeType, int leadTimeDays) {
+                          // node.
+                          String destinationNodeType,
+                          // ADR-MONO-055 §D4 / TASK-SCM-BE-049: the inventory-visibility node
+                          // id (the suggestion's dedup-key dimension). For a
+                          // THIRD_PARTY_LOGISTICS destination this is the node the honour sink
+                          // records the expectation against — carried to procurement's
+                          // destinationWarehouseId so the 3PL inbound-expected event addresses
+                          // the correct node. Unused for a WMS_WAREHOUSE destination (which
+                          // addresses by warehouse CODE instead). Nullable/absent only for
+                          // legacy callers; the batch/alert paths always carry it.
+                          UUID warehouseId,
+                          int leadTimeDays) {
     }
 
     record DraftPoResult(String poId, String poStatus) {

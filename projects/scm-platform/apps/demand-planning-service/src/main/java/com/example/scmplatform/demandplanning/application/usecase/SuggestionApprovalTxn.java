@@ -86,7 +86,12 @@ public class SuggestionApprovalTxn {
                 suggestion.getWarehouseCode(),
                 // ADR-MONO-055 §D2/§D3: carry the destination node TYPE so the drafted PO is
                 // addressed to the correct node type (WMS_WAREHOUSE or THIRD_PARTY_LOGISTICS).
-                suggestion.getDestinationNodeType(), mapping.getLeadTimeDays());
+                suggestion.getDestinationNodeType(),
+                // ADR-MONO-055 §D4 / TASK-SCM-BE-049: carry the inventory-visibility node id
+                // so a THIRD_PARTY_LOGISTICS-addressed PO can address the honour sink at the
+                // correct node (procurement routes it to destinationWarehouseId for 3PL).
+                suggestion.getWarehouseId(),
+                mapping.getLeadTimeDays());
     }
 
     /**
@@ -116,18 +121,18 @@ public class SuggestionApprovalTxn {
                                UUID suggestionId, String supplierId, String currency,
                                String skuCode, int quantity,
                                String warehouseCode, String destinationNodeType,
-                               int leadTimeDays) {
+                               UUID warehouseId, int leadTimeDays) {
 
         public static ApprovalPlan alreadyMaterialized(UUID poId) {
-            return new ApprovalPlan(true, poId, null, null, null, null, 0, null, null, 0);
+            return new ApprovalPlan(true, poId, null, null, null, null, 0, null, null, null, 0);
         }
 
         public static ApprovalPlan proceed(UUID suggestionId, String supplierId, String currency,
                                            String skuCode, int quantity,
                                            String warehouseCode, String destinationNodeType,
-                                           int leadTimeDays) {
+                                           UUID warehouseId, int leadTimeDays) {
             return new ApprovalPlan(false, null, suggestionId, supplierId, currency,
-                    skuCode, quantity, warehouseCode, destinationNodeType, leadTimeDays);
+                    skuCode, quantity, warehouseCode, destinationNodeType, warehouseId, leadTimeDays);
         }
     }
 }

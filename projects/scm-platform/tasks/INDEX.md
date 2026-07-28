@@ -76,11 +76,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-SCM-BE-049-third-party-logistics-inbound-honour-sink.md` — **READY (promoted 2026-07-28 — BE-048 dependency done, spec/contracts/AC complete)**. ADR-055 §D4 inbound half — **honour/sink**: a confirmed PO addressed (by BE-048) to a `THIRD_PARTY_LOGISTICS` node is **honoured** (ADR-054 §D3 / 052 §D8-3) by routing its inbound expectation **away from wms** to an **scm-internal expected-inbound record** against the 3PL node in inventory-visibility (the sink ADR-055 §1.3 named as missing), reconciled by BE-047 observation. wms DLT gate **stays** (ADR-054 §D3 — route away, don't widen); **external** 3PL-WMS ASN (`ThirdPartyFulfillmentPort`, ADR-054 §D7) stays **deferred** — sink is scm-internal only. 선행=BE-048 done ✓ · BE-047 done ✓. 후속=none required; Surface B (ADR-055 §D5) separate ADR-022 territory. 분석=Opus 4.8 / 구현 권장=Opus. [[project_adr054_3pl_surface_split_seam_constrains_decision_site]]
-
 ## in-progress
 
 ## review
+
+- `TASK-SCM-BE-049-third-party-logistics-inbound-honour-sink.md` — **REVIEW (impl PR open 2026-07-28)**. ADR-055 §D4 inbound half — **honour/sink** implemented. Producer fork in `PurchaseOrderApplicationService.maybePublishInboundExpected`: a `THIRD_PARTY_LOGISTICS`-addressed confirmed PO now emits the new `scm.procurement.inbound-expected.third-party.v1` (outbox, T2+T3) instead of `log.debug`+drop; a `WMS_WAREHOUSE` PO still emits `inbound-expected.v1` byte-identically (wms DLT gate untouched — ADR-054 §D3). Sink in inventory-visibility: new `inbound_expectations` read-model (Flyway **V3**, UNIQUE `(tenant, po_number, sku, node)` = idempotent on PO ref), `ScmThirdPartyInboundExpectedConsumer` records one row/line against the 3PL node (fail-closed → DLT on absent/wrong-type/cross-tenant node, no orphan), reconciled to `SATISFIED` by BE-047 observation (binary v1; unmet stays OPEN). Reachability: minimal demand-planning thread — the IVS node id (already on the suggestion as `warehouseId`) flows through `ApprovalPlan`/`DraftPoCommand`→`ProcurementDraftPoClient` 3PL branch→PO `destinationWarehouseId` (its own comment already deferred 3PL routing to BE-049; allocation *decision* untouched). Contract-first: `scm-procurement-events.md` + `inventory-visibility-subscriptions.md` + IVS `data-model.md`. Tests: procurement + IVS unit GREEN; IVS Testcontainers IT (record-via-event / reconcile / idempotency / fail-closed) GREEN locally on real PG+Kafka. **External** 3PL-WMS ASN (ADR-054 §D7) + Surface B (ADR-055 §D5) untouched. 분석=Opus 4.8 / 구현 권장=Opus. [[project_adr054_3pl_surface_split_seam_constrains_decision_site]]
 
 ## done
 

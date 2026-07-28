@@ -153,6 +153,38 @@ public class OutboxProcurementEventPublisher implements ProcurementEventPublishe
     }
 
     @Override
+    public void publishInboundExpectedThirdParty(PurchaseOrder po) {
+        // ADR-MONO-055 §D4 payload — the scm-internal 3PL honour sink event. A dedicated
+        // ordered map (NOT the common PO base): only the fields inventory-visibility's
+        // sink reads. eventId/occurredAt live in the envelope, not the payload.
+        // destinationNodeId is carried on the PO's destinationWarehouseId field (the
+        // generic "destination node identifier" — the inventory-visibility node id for a
+        // THIRD_PARTY_LOGISTICS destination).
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("poId", po.getId());
+        payload.put("poNumber", po.getPoNumber());
+        payload.put("tenantId", po.getTenantId());
+        payload.put("destinationNodeId", po.getDestinationWarehouseId());
+        payload.put("destinationNodeType", po.getDestinationNodeType());
+        // Nullable: no downstream wms ASN window to corrupt, so a 3PL expectation is
+        // recorded even without a lead time (contrast the fail-closed wms branch).
+        payload.put("expectedArrivalDate",
+                po.expectedArrivalDate() != null ? po.expectedArrivalDate().toString() : null);
+        payload.put("currency", po.getTotalAmount().getCurrency());
+
+        List<Map<String, Object>> lines = new ArrayList<>();
+        for (PurchaseOrderLine line : po.linesView()) {
+            Map<String, Object> l = new LinkedHashMap<>();
+            l.put("skuCode", line.getSku());
+            l.put("expectedQty", line.getQuantity().stripTrailingZeros().toPlainString());
+            l.put("uom", UOM_EACH);
+            lines.add(l);
+        }
+        payload.put("lines", lines);
+        writeEvent(AGGREGATE_PO, po.getId(), EVENT_INBOUND_EXPECTED_THIRD_PARTY, payload);
+    }
+
+    @Override
     public void publishInboundExpectedCancelled(PurchaseOrder po) {
         // ADR-MONO-050 D6.3 payload — poId + poNumber + cancelled line skus.
         Map<String, Object> payload = new LinkedHashMap<>();

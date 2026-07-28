@@ -103,6 +103,50 @@ therefore has no `node_staleness` row and is absent from the staleness sweep
 until its first observation, at which point it joins the FRESH/STALE/UNREACHABLE
 lifecycle exactly like a wms node.
 
+### inbound_expectations
+
+The scm-internal **3PL inbound-expectation sink** (ADR-MONO-055 §D4 / TASK-SCM-BE-049).
+A lightweight, read-model-shaped record of stock we expect to arrive at a
+`THIRD_PARTY_LOGISTICS` node, materialized from
+`scm.procurement.inbound-expected.third-party.v1` (published by
+`procurement-service` when a 3PL-addressed replenishment PO is confirmed). It is
+**not** a state machine — it is a projection with a two-value `status`
+(`OPEN` → `SATISFIED`) reconciled by 3PL observation (TASK-SCM-BE-047).
+
+| Column | Type | Notes |
+|---|---|---|
+| id | VARCHAR(36) PK | UUID |
+| tenant_id | VARCHAR(64) NOT NULL | always `scm` in v1 |
+| node_id | VARCHAR(36) NOT NULL FK→inventory_nodes | the addressed 3PL node |
+| sku | VARCHAR(100) NOT NULL | |
+| expected_quantity | NUMERIC(18,3) NOT NULL | ordered quantity for this line |
+| source_po_id | VARCHAR(36) NOT NULL | the procurement PO aggregate id |
+| source_po_number | VARCHAR(40) NOT NULL | the PO business reference (dedupe dimension) |
+| expected_at | DATE | nullable — `confirmedAt + lead_time_days`, absent when lead time unknown |
+| status | VARCHAR(20) NOT NULL | `OPEN` / `SATISFIED` (default `OPEN`) |
+| created_at | TIMESTAMPTZ NOT NULL | |
+| updated_at | TIMESTAMPTZ NOT NULL | |
+| satisfied_at | TIMESTAMPTZ | set when reconciled to `SATISFIED` |
+
+Unique: `(tenant_id, source_po_number, sku, node_id)` — **idempotency on the PO
+reference** (ADR-MONO-055 §D4): a re-confirmed / replayed PO does not
+double-record; a duplicate insert is caught and treated as a no-op.
+Indexes: `(node_id, sku, status)` (reconciliation lookup), `(tenant_id, status)`
+(open-expectation operational visibility).
+
+**Reconciliation** (TASK-SCM-BE-047 observation feed): when
+`applyThirdPartyObservedStock` records an absolute observed quantity for
+`(node_id, sku)`, every `OPEN` expectation for that pair whose
+`expected_quantity ≤ observed quantity` is marked `SATISFIED` (v1 is **binary**
+— a partial observation below the expected quantity leaves the expectation
+`OPEN`, an aging operational signal, not silently dropped). No bespoke scheduler:
+reconciliation rides the existing observation path.
+
+**3PL node absent / wrong type** (fail-closed): the consumer resolves the node by
+`node_id` before inserting; an absent, non-`THIRD_PARTY_LOGISTICS`, or
+cross-tenant node yields a clear error routed to the topic DLT — **no orphan
+expectation** is created (ADR-MONO-055 §D4 / TASK-SCM-BE-049 Edge Case).
+
 ### event_dedupe
 
 | Column | Type | Notes |
