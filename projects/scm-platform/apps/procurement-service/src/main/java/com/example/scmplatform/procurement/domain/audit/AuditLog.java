@@ -44,7 +44,10 @@ public class AuditLog {
     @Column(name = "action", length = 40, nullable = false)
     private String action;
 
-    @Column(name = "actor_account_id", length = 36)
+    // Width 255 (not 36): mirrors purchase_orders.buyer_account_id — a
+    // client-credentials caller's sub (client_id) can exceed 36 chars
+    // (TASK-SCM-BE-050). Nullable for SUPPLIER / SYSTEM actions.
+    @Column(name = "actor_account_id", length = 255)
     private String actorAccountId;
 
     @Enumerated(EnumType.STRING)

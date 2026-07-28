@@ -80,7 +80,7 @@ Aggregate root for the PO lifecycle. State machine is enforced by
 | tenant_id | VARCHAR(64) NOT NULL | |
 | po_number | VARCHAR(40) NOT NULL | format = `"PO-" + UUID-v7-rand_b-tail-8-uppercase`; see § po_number format below |
 | supplier_id | VARCHAR(36) NOT NULL | references `suppliers.id` (no FK declared — supplier may be in v2 supplier-service) |
-| buyer_account_id | VARCHAR(36) NOT NULL | IAM `sub` claim of the actor who drafted the PO |
+| buyer_account_id | VARCHAR(255) NOT NULL | IAM `sub` claim of the actor who drafted the PO. Widened 36→255 by TASK-SCM-BE-050 (V5) — see § Actor identity width below |
 | status | VARCHAR(30) NOT NULL | CHECK ∈ {`DRAFT`, `SUBMITTED`, `ACKNOWLEDGED`, `CONFIRMED`, `PARTIALLY_RECEIVED`, `RECEIVED`, `SETTLED`, `CLOSED`, `CANCELED`} |
 | total_amount | NUMERIC(18,2) NOT NULL | sum of `line.quantity × line.unit_price` |
 | currency | VARCHAR(3) NOT NULL | ISO 4217 |
@@ -167,7 +167,7 @@ Append-only audit trail (S7) for PO state transitions.
 | tenant_id | VARCHAR(64) NOT NULL | |
 | from_status | VARCHAR(30) NOT NULL | |
 | to_status | VARCHAR(30) NOT NULL | |
-| actor_account_id | VARCHAR(36) | nullable for SUPPLIER / SYSTEM transitions |
+| actor_account_id | VARCHAR(255) | nullable for SUPPLIER / SYSTEM transitions. Widened 36→255 by TASK-SCM-BE-050 (V5) — see § Actor identity width below |
 | actor_type | VARCHAR(20) NOT NULL | CHECK ∈ {`BUYER`, `OPERATOR`, `SUPPLIER`, `SYSTEM`} |
 | reason | VARCHAR(200) | optional context (e.g., supplier ack ref, cancel reason) |
 | occurred_at | TIMESTAMPTZ NOT NULL | |
@@ -239,7 +239,7 @@ transaction as the state change.
 | aggregate_type | VARCHAR(40) NOT NULL | `purchase_order`, `asn`, `supplier`, … |
 | aggregate_id | VARCHAR(36) NOT NULL | |
 | action | VARCHAR(40) NOT NULL | `DRAFT`, `SUBMIT`, `ACKNOWLEDGE`, `CONFIRM`, `CANCEL`, `RECEIVE`, … |
-| actor_account_id | VARCHAR(36) | nullable for SUPPLIER / SYSTEM |
+| actor_account_id | VARCHAR(255) | nullable for SUPPLIER / SYSTEM. Widened 36→255 by TASK-SCM-BE-050 (V5) — see § Actor identity width below |
 | actor_type | VARCHAR(20) NOT NULL | `BUYER` / `OPERATOR` / `SUPPLIER` / `SYSTEM` |
 | before_state | JSONB | nullable on creation |
 | after_state | JSONB | nullable on deletion (no v1 case) |
@@ -306,6 +306,43 @@ backstop when Redis is offline — Failure Mode #4 fail-CLOSED).
 
 Composite PK: `(idempotency_key, endpoint, tenant_id)`.
 Index: `idx_idempotency_expires (expires_at)`.
+
+---
+
+## Actor identity width (`buyer_account_id` / `actor_account_id`)
+
+The three actor-identity columns — `purchase_orders.buyer_account_id`,
+`po_status_history.actor_account_id`, `audit_log.actor_account_id` — all store
+the IAM `sub` claim of the acting principal, lifted verbatim from the JWT by
+`ActorContextJwtAuthenticationConverter` (no truncation, no normalisation).
+
+They were originally `VARCHAR(36)`, sized like the UUID-shaped id columns on the
+implicit assumption that an actor `sub` is always a 36-char UUID. That is false
+for scm's documented machine caller: the `scm-platform-internal-services-client`
+client-credentials token carries `sub == client_id` (**37 chars** — see
+[`iam-integration.md`](../../integration/iam-integration.md) Edge Case E1), which
+overflows a `VARCHAR(36)` and hard-fails PO drafting with a Hibernate
+`DataException` → 500.
+
+**TASK-SCM-BE-050 (V5)** widened all three columns to `VARCHAR(255)`:
+
+- The value stays the **true, verifiable `sub`** — not a truncated or hashed
+  derivative (a lossy store would let two distinct client ids collide and would
+  mangle the audit trail).
+- `255` is chosen with real headroom, not a tight fit to 37: RFC 5321 caps an
+  email at 254 chars, and an OAuth2 `client_id` (RFC 6749 §2.2) has no standard
+  length ceiling, so 255 covers any realistic future machine-client registration
+  as well as UUIDs (36) and email subs — a new client-credentials client can be
+  registered without silently reopening the overflow.
+- All three columns were widened together — fixing only `buyer_account_id` would
+  leave the two currently NULL-tolerant sibling `actor_account_id` columns
+  latently broken for any future non-NULL actor write path.
+
+The alternative (minting a bounded synthetic actor id at the JWT boundary so the
+columns keep a UUID shape) was rejected: it would break direct verifiability
+against the token and require a reverse-lookup mapping table for audit/debugging,
+a wider blast radius for no correctness benefit — and the "UUID shape" was
+already soft (an operator `sub` may be an email, which is not a UUID).
 
 ---
 
