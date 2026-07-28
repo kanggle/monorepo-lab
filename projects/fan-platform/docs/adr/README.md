@@ -5,6 +5,7 @@
 | # | 제목 | 상태 |
 |---|---|---|
 | [ADR-001](ADR-001-real-pg-portone-verification-boundary.md) | 실 PG 연동 — PortOne V2 클라이언트 개시 결제 + 서버측 검증 경계(profile 게이팅, mock 은 CI/test 기본값 유지) | Proposed |
+| [ADR-002](ADR-002-billing-key-auto-renewal.md) | 빌링키 기반 자동 갱신(정기결제) — 서버 개시 청구 + `BillingKeyEnrollment` + fail-closed 실패 정책(새 상태 없음, `RenewMembershipUseCase` 재사용). `ADR-MONO-057`(라이브러리 확장)의 컴패니언, 별도 ACCEPT 게이트 | Proposed |
 
 ## ADR 작성 원칙
 
