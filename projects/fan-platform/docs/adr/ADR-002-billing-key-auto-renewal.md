@@ -1,7 +1,7 @@
 # ADR-002: 빌링키 기반 자동 갱신(정기결제) — 서버 개시 청구 + BillingKeyEnrollment + fail-closed 실패 정책
 
-**Status**: Proposed
-**Date**: 2026-07-25 (proposed)
+**Status**: Accepted
+**Date**: 2026-07-25 (proposed) · 2026-07-25 (accepted — owner exact-form intent **"ADR-002 ACCEPTED"**, given together with the companion **"ADR-MONO-057 ACCEPTED"**)
 **Deciders**: kanggle
 **Supersedes**: —
 **Relates to**: [`ADR-001`](ADR-001-real-pg-portone-verification-boundary.md)(클라 개시-서버 검증 경계 — 본 ADR이 확장하는 신뢰 모델), [`ADR-MONO-057`](../../../../docs/adr/ADR-MONO-057-recurring-billing-key-capability.md)(`libs/payment`에 `RecurringBillingGateway` 추가 — 본 ADR의 전제 조건, 별도 ACCEPT), `specs/services/membership-service/architecture.md` § State Machine
@@ -83,10 +83,11 @@ BillingKeyEnrollment {
 
 - **Phase 0 (본 ADR + ADR-MONO-057)** — 코드 불필요. 두 ADR 모두 ACCEPT 대기(별도 게이트 — `ADR-MONO-057 ACCEPTED` + `ADR-002 ACCEPTED` 각각 정확형 intent 필요).
 - **Phase 1 (ADR-MONO-057 ACCEPT 후)** — `libs/payment-core` `RecurringBillingGateway` + `libs/payment-portone` 구현 + 웹훅 서명검증 유틸. 소비자 무관(TASK-MONO-478 패턴 반복).
-- **Phase 2 (본 ADR ACCEPT 후, Phase 1 선행 필요)** — `BillingKeyEnrollment` 엔티티 + 발급 UI + 스케줄러 + 웹훅 엔드포인트 + `RenewMembershipUseCase` 재사용 배선 + 라이브 검증(실제 빌링키 발급→자동청구 1회 확인) 후에만 ACCEPTED 승격.
+- **Phase 2 (본 ADR ACCEPT 후, Phase 1 선행 필요)** — `BillingKeyEnrollment` 엔티티 + 발급 UI + 스케줄러 + 웹훅 엔드포인트 + `RenewMembershipUseCase` 재사용 배선. **ACCEPT는 설계 승인 = 이 Phase 착수 허가**(ADR-MONO-056 선례와 동일 관례 — 구현 선행조건 아님)이며, 별도로 **"라이브 검증 완료"(실제 빌링키 발급→자동청구 1회 확인)를 이 Phase의 완료 기준**으로 둔다 — Status History에 검증 완료를 별도 기록.
 
 ---
 
 ## Status History
 
 - 2026-07-25 **Proposed** — 라이브 미검증. self-ACCEPT 금지(`platform/architecture-decision-rule.md § The ACCEPTED Gate`); ADR-MONO-057과 별개로 kanggle의 정확형 intent 필요.
+- 2026-07-25 **Accepted** — kanggle 정확형 intent "ADR-002 ACCEPTED"(ADR-MONO-057 ACCEPTED와 동시 지시, 별개 게이트로 각각 명시). **Phase 2 착수 승인** — `TASK-FAN-BE-033`(BillingKeyEnrollment+스케줄러+웹훅+`RenewMembershipUseCase` 배선) + `TASK-FAN-FE-013`(빌링키 발급 UI), 둘 다 `TASK-MONO-482`(ADR-MONO-057 Phase 1, libs/payment 확장) 착륙 전까지 backlog 유지 — 본 ADR "Phase 분할"이 명시한 선행조건. 라이브 검증(실제 자동청구 1회 확인) 전까지는 이 Status 자체가 구현 완료를 뜻하지 않음 — 구현+라이브 검증은 별도 완료 기준.
