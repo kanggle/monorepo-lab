@@ -46,9 +46,9 @@ Choose the cheapest sufficient strategy:
 
 | Strategy | When | Skill |
 |---|---|---|
-| Natural (upsert by event-derived key) | Read model materialization | `messaging/idempotent-consumer/SKILL.md` §natural |
-| Idempotency table by `eventId` | Side-effect-producing handlers (email, webhook) | `messaging/idempotent-consumer/SKILL.md` §idempotency-table |
-| Optimistic concurrency on aggregate | Updates to versioned aggregates | `messaging/idempotent-consumer/SKILL.md` §version-check |
+| Natural (upsert by event-derived key) | Read model materialization | `messaging/idempotent-consumer/SKILL.md` § Business Key Check |
+| Idempotency table by `eventId` via shared `EventDedupePort` | Side-effect-producing handlers (email, webhook) | `messaging/idempotent-consumer/SKILL.md` § Processed Event Table |
+| Optimistic concurrency on aggregate | Updates to versioned aggregates | Not covered by `idempotent-consumer/SKILL.md` — apply standard JPA `@Version` locking directly |
 
 ---
 

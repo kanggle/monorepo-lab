@@ -9,6 +9,7 @@ category: backend
 Testing patterns for Spring Boot backend services in this repository.
 
 Prerequisite: read `platform/testing-strategy.md` before using this skill.
+# No single spec — this skill operates across every service's `specs/services/<service>/architecture.md`; the canonical test-type/naming source is the shared `platform/testing-strategy.md`, not a per-service spec.
 
 ---
 
@@ -134,7 +135,7 @@ When testing an infrastructure class directly (without Spring context), use `@Ex
 
 ```java
 @ExtendWith(MockitoExtension.class)
-class RedisUserSessionRegistryUnitTest {
+class RedisUserSessionRegistryTest {
 
     @Mock
     private StringRedisTemplate redisTemplate;

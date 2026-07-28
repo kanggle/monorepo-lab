@@ -40,28 +40,26 @@ Best when: the business entity has a natural unique key tied to the event.
 
 ---
 
-## Processed Event Table
+## Processed Event Table — via the shared `EventDedupePort`
 
-Track processed event IDs when no natural unique key exists.
-
-```sql
-CREATE TABLE processed_events (
-    event_id     UUID        PRIMARY KEY,
-    processed_at TIMESTAMP   NOT NULL DEFAULT NOW()
-);
-```
+Track processed event IDs when no natural unique key exists. **Use the shared port
+(`com.example.messaging.dedupe.EventDedupePort`, `libs/java-messaging`) — do not hand-roll a
+`processedEventRepository.existsById()`/`save()` pair.** The port already does exactly that against your
+service's own dedupe table (per-service persistence adapter; the contract is shared).
 
 ```java
 @Transactional
-public void handleEvent(UUID eventId, Runnable action) {
-    if (processedEventRepository.existsById(eventId)) {
+public void handleEvent(UUID eventId, String eventType, Runnable action) {
+    EventDedupePort.Outcome outcome = eventDedupePort.process(eventId, eventType, action);
+    if (outcome == EventDedupePort.Outcome.IGNORED_DUPLICATE) {
         log.info("Event already processed: {}", eventId);
-        return;
     }
-    action.run();
-    processedEventRepository.save(new ProcessedEvent(eventId));
 }
 ```
+
+Your adapter implements `EventDedupePort` against a table with the same shape
+(`event_id UUID PRIMARY KEY`, `processed_at TIMESTAMP`) — the port's javadoc documents the exact
+insert/detect-duplicate/rollback semantics, so read it before implementing.
 
 Best when: multiple operations could result from one event.
 

@@ -25,8 +25,10 @@ Examples:
 
 1. Read `CLAUDE.md` and complete project classification (load `PROJECT.md` + the applicable `rules/common.md` / `rules/domains/<domain>.md` / `rules/traits/<trait>.md` per `platform/entrypoint.md` Step 0) — active traits (e.g. `transactional`) impose test mandates.
 2. Read `platform/testing-strategy.md`
-3. Read `.claude/skills/backend/testing-backend/SKILL.md`
-4. Read `specs/services/<service>/architecture.md` for the target service
+3. Read `specs/services/<service>/architecture.md` for the target service and check its declared `Service Type`.
+4. Read the skill matching that Service Type: `.claude/skills/backend/testing-backend/SKILL.md` for a backend
+   service type (`rest-api`, `event-consumer`, `batch-job`, `grpc-service`, `graphql-service`,
+   `identity-platform`), or `.claude/skills/frontend/testing-frontend/SKILL.md` for `frontend-app`.
 5. Check whether test files already exist for the target code
 6. Determine required test levels based on the architecture style
 7. Write tests
@@ -34,12 +36,22 @@ Examples:
 
 ## Test Levels (per testing-strategy.md)
 
+### Backend service types
+
 | Level | Target | Annotation |
 |---|---|---|
 | Unit | Domain logic, service logic | `@ExtendWith(MockitoExtension.class)` |
 | Controller Slice | HTTP mapping, request/response conversion | `@WebMvcTest` + `MockMvc` |
 | Integration | DB/cache integration, end-to-end flow | `@SpringBootTest` + `@Testcontainers` |
 | Event | Event publishing/consumption | Kafka Testcontainers |
+
+### `frontend-app` service type
+
+| Level | Target | Tooling |
+|---|---|---|
+| Hook | Custom hooks, data-fetching logic | Vitest + `renderHook` (`@testing-library/react`) |
+| Component | Rendered output, user interaction | Vitest + `@testing-library/react` + `@testing-library/user-event` |
+| E2E | Full user flow across pages | `.claude/skills/testing/e2e-test/SKILL.md` (Playwright) |
 
 ## Rules
 

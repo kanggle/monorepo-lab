@@ -75,6 +75,13 @@ public class StandaloneConfig {
 ## Application Configuration
 
 > **Note:** H2 is used here for standalone local development only. This does NOT apply to integration tests — see `platform/testing-strategy.md` which requires Testcontainers with real PostgreSQL.
+>
+> **Flyway exception:** `platform/coding-rules.md` § Database requires Flyway for all schema migrations —
+> this profile's `flyway.enabled: false` + `ddl-auto: update` is a deliberate, scoped exception for the
+> `standalone` local-dev profile only (H2 file mode can't replay the project's PostgreSQL-targeted Flyway
+> scripts). It does not apply to any other profile, including tests (`@ActiveProfiles("test")` still runs
+> Flyway against Testcontainers PostgreSQL — see `database/migration-strategy/SKILL.md` and
+> `database/schema-change-workflow/SKILL.md`, which document the same standalone-only carve-out).
 
 ```yaml
 # application-standalone.yml
