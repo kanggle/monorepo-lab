@@ -1,6 +1,6 @@
 # TASK-MONO-485 — `/validate-rules` (2026-07-29) Critical fixes
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-MONO
 **Analysis model:** Sonnet 5 / **Recommended impl model:** Sonnet 5 (mechanical doc/spec corrections, no design decisions — the authoritative value in each case is already established by cross-referencing an existing contract)
