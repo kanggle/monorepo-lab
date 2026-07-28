@@ -1,6 +1,6 @@
 # TASK-SCM-BE-049 — 3PL inbound-expected honour + scm-internal sink (route away from wms, record against the 3PL node)
 
-**Status:** review
+**Status:** done
 **Type:** TASK-SCM-BE
 **Depends on / 전제:** [TASK-SCM-BE-048](TASK-SCM-BE-048-third-party-logistics-inbound-allocation.md) **done** (a replenishment PO can now be *addressed* to a `THIRD_PARTY_LOGISTICS` node — the allocation this task honours) · [ADR-MONO-055](../../../../docs/adr/ADR-MONO-055-order-to-node-allocation-ownership.md) **ACCEPTED** §D4 (the honour sink is an scm-internal expectation record; the external 3PL-WMS notification stays deferred) · [ADR-MONO-054](../../../../docs/adr/ADR-MONO-054-third-party-logistics-node-activation.md) §D3 (honour = route **away from** wms, do not widen the wms DLT gate) · [TASK-SCM-BE-047](../done/TASK-SCM-BE-047-third-party-logistics-observed-stock.md) **done** (observation reconciles the expectation).
 **후속 / blocks:** none required. The **external** 3PL-WMS ASN (`ThirdPartyFulfillmentPort`, ADR-054 §D7) and all of Surface B (ADR-055 §D5) stay deferred — **do not** build them here.
