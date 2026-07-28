@@ -59,7 +59,15 @@ public class PurchaseOrder {
     @Column(name = "supplier_id", length = 36, nullable = false)
     private String supplierId;
 
-    @Column(name = "buyer_account_id", length = 36, nullable = false)
+    /**
+     * IAM {@code sub} claim of the actor who drafted the PO. Width 255 (not 36):
+     * a human operator's {@code sub} is a UUID/email (&lt;=36) but scm's
+     * client-credentials machine caller carries {@code sub == client_id} (e.g. the
+     * 37-char {@code scm-platform-internal-services-client}), which overflows a
+     * VARCHAR(36). Kept as the true, verifiable {@code sub} — never truncated
+     * (TASK-SCM-BE-050 / iam-integration.md Edge Case E1).
+     */
+    @Column(name = "buyer_account_id", length = 255, nullable = false)
     private String buyerAccountId;
 
     @Enumerated(EnumType.STRING)
