@@ -5,6 +5,8 @@ import com.example.scmplatform.inventoryvisibility.application.port.outbound.Clo
 import com.example.scmplatform.inventoryvisibility.application.port.outbound.EventDedupePort;
 import com.example.scmplatform.inventoryvisibility.domain.error.NodeNotFoundException;
 import com.example.scmplatform.inventoryvisibility.domain.error.NodeTypeConflictException;
+import com.example.scmplatform.inventoryvisibility.domain.expectation.InboundExpectation;
+import com.example.scmplatform.inventoryvisibility.domain.expectation.repository.InboundExpectationRepository;
 import com.example.scmplatform.inventoryvisibility.domain.node.InventoryNode;
 import com.example.scmplatform.inventoryvisibility.domain.node.NodeId;
 import com.example.scmplatform.inventoryvisibility.domain.node.NodeType;
@@ -13,6 +15,7 @@ import com.example.scmplatform.inventoryvisibility.domain.snapshot.InventorySnap
 import com.example.scmplatform.inventoryvisibility.domain.snapshot.Quantity;
 import com.example.scmplatform.inventoryvisibility.domain.snapshot.Sku;
 import com.example.scmplatform.inventoryvisibility.domain.snapshot.repository.InventorySnapshotRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import com.example.scmplatform.inventoryvisibility.domain.staleness.NodeStaleness;
 import com.example.scmplatform.inventoryvisibility.domain.staleness.StalenessThreshold;
 import com.example.scmplatform.inventoryvisibility.domain.staleness.repository.NodeStalenessRepository;
@@ -24,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,6 +55,7 @@ public class InventoryVisibilityApplicationService {
     private final InventoryNodeRepository nodeRepository;
     private final InventorySnapshotRepository snapshotRepository;
     private final NodeStalenessRepository stalenessRepository;
+    private final InboundExpectationRepository inboundExpectationRepository;
     private final EventDedupePort eventDedupePort;
     private final AlertPublisherPort alertPublisherPort;
     private final ClockPort clock;
@@ -186,8 +191,13 @@ public class InventoryVisibilityApplicationService {
         // same provenance marker, mirroring how a single wms event id covers its payload.
         UUID observationId = UUID.randomUUID();
         for (ObservedLine line : lines) {
-            applyObservedQuantity(id, Sku.of(line.skuCode()),
+            Sku sku = Sku.of(line.skuCode());
+            Quantity effective = applyObservedQuantity(id, sku,
                     Quantity.of(line.quantity()), observationId, observedAt, tenantId);
+            // ADR-MONO-055 §D4 / TASK-SCM-BE-049: reconcile any OPEN 3PL inbound expectation
+            // for this (node, sku) now that the stock has been observed — reuse the
+            // observation path rather than a bespoke scheduler.
+            reconcileInboundExpectations(id, sku, effective, tenantId);
         }
         // The only path that seeds/refreshes NodeStaleness for a 3PL node — registration
         // (RegisterThirdPartyLogisticsNodeService) does not create one (Edge Case: Staleness
@@ -199,6 +209,98 @@ public class InventoryVisibilityApplicationService {
 
     /** A single 3PL observed-stock reading: an absolute quantity for one SKU. */
     public record ObservedLine(String skuCode, BigDecimal quantity) {
+    }
+
+    // -------------------------------------------------------------------------
+    // 3PL inbound-expectation sink (ADR-MONO-055 §D4 / TASK-SCM-BE-049)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Record the scm-internal <b>3PL inbound expectation</b> honour sink
+     * (ADR-MONO-055 §D4 / TASK-SCM-BE-049) — one {@code inbound_expectations} row per
+     * line — for a {@code THIRD_PARTY_LOGISTICS}-addressed replenishment PO that
+     * {@code procurement-service} confirmed
+     * ({@code scm.procurement.inbound-expected.third-party.v1}).
+     *
+     * <p>Fail-closed on the addressed node (Edge Case: 3PL node deregistered/absent):
+     * the node must exist, be {@code THIRD_PARTY_LOGISTICS}, and belong to the caller's
+     * tenant — otherwise a clear error is thrown (routed to the topic DLT by the
+     * consumer) and <b>no orphan expectation</b> is created.
+     *
+     * <p>Idempotent on the PO reference (Edge Case: duplicate PO / re-confirm): a line
+     * whose {@code (tenant, poNumber, sku, node)} already exists is skipped; the DB
+     * UNIQUE constraint is the concurrent-replay backstop.
+     *
+     * @throws NodeNotFoundException     if {@code nodeId} resolves to no node
+     * @throws NodeTypeConflictException if the node is not {@code THIRD_PARTY_LOGISTICS}
+     *                                    or belongs to another tenant
+     */
+    @Transactional
+    public void recordThirdPartyInboundExpectation(String nodeId, String tenantId,
+                                                    String sourcePoId, String sourcePoNumber,
+                                                    LocalDate expectedAt, List<ExpectedLine> lines) {
+        NodeId id = NodeId.of(nodeId);
+        InventoryNode node = nodeRepository.findById(id)
+                .orElseThrow(() -> new NodeNotFoundException(nodeId));
+        if (node.getNodeType() != NodeType.THIRD_PARTY_LOGISTICS) {
+            throw new NodeTypeConflictException("Inventory node nodeId=" + nodeId
+                    + " has type=" + node.getNodeType()
+                    + "; 3PL inbound-expectation sink requires THIRD_PARTY_LOGISTICS");
+        }
+        if (!node.getTenantId().equals(tenantId)) {
+            throw new NodeTypeConflictException(
+                    "Inventory node nodeId=" + nodeId + " does not belong to tenant=" + tenantId);
+        }
+
+        Instant now = clock.now();
+        for (ExpectedLine line : lines) {
+            Sku sku = Sku.of(line.skuCode());
+            if (inboundExpectationRepository.exists(tenantId, sourcePoNumber, sku, id)) {
+                log.debug("3PL inbound-expectation idempotent skip: po={} sku={} node={}",
+                        sourcePoNumber, sku, id);
+                continue;
+            }
+            InboundExpectation expectation = InboundExpectation.record(
+                    tenantId, id, sku, Quantity.of(line.expectedQuantity()),
+                    sourcePoId, sourcePoNumber, expectedAt, now);
+            try {
+                inboundExpectationRepository.save(expectation);
+                log.info("recorded 3PL inbound-expectation: po={} sku={} qty={} node={} expectedAt={}",
+                        sourcePoNumber, sku, line.expectedQuantity(), id, expectedAt);
+            } catch (DataIntegrityViolationException race) {
+                // Concurrent replay won the UNIQUE (tenant, po_number, sku, node) — idempotent
+                // no-op, exactly as the exists() pre-check would have skipped it.
+                log.debug("3PL inbound-expectation race (idempotent): po={} sku={} node={}",
+                        sourcePoNumber, sku, id);
+            }
+        }
+    }
+
+    /** A single expected-inbound line: an ordered quantity for one SKU. */
+    public record ExpectedLine(String skuCode, BigDecimal expectedQuantity) {
+    }
+
+    /**
+     * Reconcile OPEN 3PL inbound expectations for a {@code (node, sku)} pair against an
+     * observed absolute quantity (ADR-MONO-055 §D4 / TASK-SCM-BE-049). v1 is binary: an
+     * expectation whose expected quantity is met/exceeded by the observation is marked
+     * SATISFIED; an unmet one stays OPEN (a visible, aging operational signal).
+     */
+    private void reconcileInboundExpectations(NodeId nodeId, Sku sku, Quantity observed, String tenantId) {
+        List<InboundExpectation> open =
+                inboundExpectationRepository.findOpenByNodeAndSku(nodeId, sku, tenantId);
+        if (open.isEmpty()) {
+            return;
+        }
+        Instant now = clock.now();
+        for (InboundExpectation expectation : open) {
+            if (expectation.isSatisfiedBy(observed)) {
+                expectation.markSatisfied(now);
+                inboundExpectationRepository.save(expectation);
+                log.info("reconciled 3PL inbound-expectation SATISFIED: po={} sku={} node={} observed={}",
+                        expectation.getSourcePoNumber(), sku, nodeId, observed);
+            }
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -377,8 +479,8 @@ public class InventoryVisibilityApplicationService {
      * reading). A zero quantity is a valid observation (SKU dropped to 0) and is
      * applied like any other value, never treated as "no observation".
      */
-    private void applyObservedQuantity(NodeId nodeId, Sku sku, Quantity observedQuantity,
-                                        UUID observationId, Instant observedAt, String tenantId) {
+    private Quantity applyObservedQuantity(NodeId nodeId, Sku sku, Quantity observedQuantity,
+                                           UUID observationId, Instant observedAt, String tenantId) {
         Optional<InventorySnapshot> existing =
                 snapshotRepository.findByNodeIdAndSku(nodeId, sku, tenantId);
         if (existing.isPresent()) {
@@ -386,15 +488,18 @@ public class InventoryVisibilityApplicationService {
             if (snapshot.getLastEventAt().isAfter(observedAt)) {
                 log.debug("skipping stale 3PL observation: node={} sku={} storedLastEventAt={} observedAt={}",
                         nodeId, sku, snapshot.getLastEventAt(), observedAt);
-                return;
+                // The stored (newer) quantity is authoritative for reconciliation — a stale
+                // reading must not decide expectation satisfaction with an out-of-date value.
+                return snapshot.getQuantity();
             }
             snapshot.applyQuantity(observedQuantity, observationId, observedAt);
             snapshotRepository.save(snapshot);
-        } else {
-            InventorySnapshot snapshot = InventorySnapshot.create(
-                    nodeId, sku, tenantId, observedQuantity, observationId, observedAt);
-            snapshotRepository.save(snapshot);
+            return observedQuantity;
         }
+        InventorySnapshot snapshot = InventorySnapshot.create(
+                nodeId, sku, tenantId, observedQuantity, observationId, observedAt);
+        snapshotRepository.save(snapshot);
+        return observedQuantity;
     }
 
     /**

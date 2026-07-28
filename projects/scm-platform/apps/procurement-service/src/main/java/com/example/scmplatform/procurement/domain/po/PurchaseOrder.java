@@ -150,6 +150,14 @@ public class PurchaseOrder {
      */
     public static final String NODE_TYPE_WMS_WAREHOUSE = "WMS_WAREHOUSE";
 
+    /**
+     * Destination node type addressed to a third-party-logistics node (ADR-MONO-055
+     * §D4). A 3PL-addressed replenishment PO is honoured by recording an expectation
+     * against the 3PL node in the scm-internal sink (inventory-visibility), NOT by a
+     * wms inbound-expected event (wms does not operate a 3PL's WMS — ADR-MONO-050 §D4).
+     */
+    public static final String NODE_TYPE_THIRD_PARTY_LOGISTICS = "THIRD_PARTY_LOGISTICS";
+
     public static PurchaseOrder createDraft(String id,
                                             String tenantId,
                                             String poNumber,
@@ -351,6 +359,25 @@ public class PurchaseOrder {
      */
     public boolean isWmsWarehouseDestination() {
         return NODE_TYPE_WMS_WAREHOUSE.equals(destinationNodeType)
+                && destinationWarehouseId != null
+                && !destinationWarehouseId.isBlank();
+    }
+
+    /**
+     * True when this PO is a replenishment order addressed to a
+     * {@code THIRD_PARTY_LOGISTICS} node (ADR-MONO-055 §D4 / TASK-SCM-BE-049). Such a
+     * PO is honoured by recording an expectation against the 3PL node in the
+     * scm-internal sink (inventory-visibility), not by a wms inbound-expected event.
+     *
+     * <p>{@code destinationWarehouseId} carries the addressed inventory-visibility
+     * node id for a 3PL destination (the field is the generic "destination node
+     * identifier" — a warehouse business code for a {@code WMS_WAREHOUSE}, the
+     * inventory-visibility node id for a {@code THIRD_PARTY_LOGISTICS}). A 3PL PO with
+     * no resolvable node id is excluded (fail-closed — the sink must never record an
+     * un-addressable expectation).
+     */
+    public boolean isThirdPartyLogisticsDestination() {
+        return NODE_TYPE_THIRD_PARTY_LOGISTICS.equals(destinationNodeType)
                 && destinationWarehouseId != null
                 && !destinationWarehouseId.isBlank();
     }

@@ -35,6 +35,7 @@ class ApproveSuggestionUseCaseTest {
     private ApproveSuggestionUseCase useCase;
 
     static final UUID SUGGESTION_ID = UUID.fromString("0192cccc-0000-0000-0000-000000000001");
+    static final UUID WAREHOUSE_ID = UUID.fromString("0192cccc-0000-0000-0000-000000000002");
     // ADR-MONO-050 D9: warehouse + supplier CODES flow to the procurement command.
     static final String WAREHOUSE_CODE = "WH-SEOUL-01";
     static final String SUPPLIER_ID = "SUP-0043";
@@ -48,7 +49,7 @@ class ApproveSuggestionUseCaseTest {
     private SuggestionApprovalTxn.ApprovalPlan proceedPlan() {
         return SuggestionApprovalTxn.ApprovalPlan.proceed(
                 SUGGESTION_ID, SUPPLIER_ID, "KRW", "SKU-APPLE-001", 100,
-                WAREHOUSE_CODE, "WMS_WAREHOUSE", 7);
+                WAREHOUSE_CODE, "WMS_WAREHOUSE", WAREHOUSE_ID, 7);
     }
 
     @Test

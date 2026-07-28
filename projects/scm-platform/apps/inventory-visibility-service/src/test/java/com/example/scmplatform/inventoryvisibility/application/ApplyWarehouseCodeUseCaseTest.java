@@ -6,6 +6,7 @@ import com.example.scmplatform.inventoryvisibility.application.port.outbound.Eve
 import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService;
 import com.example.scmplatform.inventoryvisibility.domain.node.InventoryNode;
 import com.example.scmplatform.inventoryvisibility.domain.node.NodeId;
+import com.example.scmplatform.inventoryvisibility.domain.expectation.repository.InboundExpectationRepository;
 import com.example.scmplatform.inventoryvisibility.domain.node.repository.InventoryNodeRepository;
 import com.example.scmplatform.inventoryvisibility.domain.snapshot.repository.InventorySnapshotRepository;
 import com.example.scmplatform.inventoryvisibility.domain.staleness.repository.NodeStalenessRepository;
@@ -49,6 +50,7 @@ class ApplyWarehouseCodeUseCaseTest {
     @Mock InventoryNodeRepository nodeRepository;
     @Mock InventorySnapshotRepository snapshotRepository;
     @Mock NodeStalenessRepository stalenessRepository;
+    @Mock InboundExpectationRepository inboundExpectationRepository;
     @Mock EventDedupePort eventDedupePort;
     @Mock AlertPublisherPort alertPublisherPort;
     @Mock ClockPort clock;
@@ -62,7 +64,7 @@ class ApplyWarehouseCodeUseCaseTest {
     void setUp() {
         service = new InventoryVisibilityApplicationService(
                 nodeRepository, snapshotRepository, stalenessRepository,
-                eventDedupePort, alertPublisherPort, clock);
+                inboundExpectationRepository, eventDedupePort, alertPublisherPort, clock);
         when(clock.now()).thenReturn(now);
         when(eventDedupePort.isDuplicate(eventId)).thenReturn(false);
         when(snapshotRepository.findByNodeIdAndSku(any(), any(), eq(TENANT)))

@@ -252,7 +252,7 @@ class PurchaseOrderApplicationServiceTest {
     // ---------------- CONFIRM → inbound-expected (ADR-MONO-050 D1/D2/D4) ----------------
 
     @Test
-    @DisplayName("confirm() of a WMS_WAREHOUSE-addressed replenishment PO emits inbound-expected (ADR-050 D1)")
+    @DisplayName("confirm() of a WMS_WAREHOUSE-addressed replenishment PO emits inbound-expected toward wms only (ADR-050 D1; not the 3PL sink)")
     void confirmWarehouseAddressedEmitsInboundExpected() {
         PurchaseOrder po = acknowledgedFromSuggestionPo("wh-01", "WMS_WAREHOUSE", 7);
         when(poRepository.findById(po.getId(), TENANT)).thenReturn(Optional.of(po));
@@ -261,10 +261,12 @@ class PurchaseOrderApplicationServiceTest {
 
         verify(eventPublisher, times(1)).publishPoConfirmed(any(), eq(OPERATOR_ACCOUNT));
         verify(eventPublisher, times(1)).publishInboundExpected(any());
+        // The wms branch is untouched by the 3PL fork — the 3PL sink is never hit.
+        verify(eventPublisher, never()).publishInboundExpectedThirdParty(any());
     }
 
     @Test
-    @DisplayName("confirm() of an operator-authored PO (no destination) does NOT emit inbound-expected (fail-closed)")
+    @DisplayName("confirm() of an operator-authored PO (no destination) emits neither wms nor 3PL inbound-expected (fail-closed)")
     void confirmOperatorPoDoesNotEmitInboundExpected() {
         PurchaseOrder po = acknowledgedPo(); // createDraft → no destination
         when(poRepository.findById(po.getId(), TENANT)).thenReturn(Optional.of(po));
@@ -273,17 +275,33 @@ class PurchaseOrderApplicationServiceTest {
 
         verify(eventPublisher, times(1)).publishPoConfirmed(any(), eq(OPERATOR_ACCOUNT));
         verify(eventPublisher, never()).publishInboundExpected(any());
+        verify(eventPublisher, never()).publishInboundExpectedThirdParty(any());
     }
 
     @Test
-    @DisplayName("confirm() of a 3PL-destination PO does NOT emit inbound-expected (ADR-050 D4 producer filter)")
-    void confirm3plDestinationDoesNotEmitInboundExpected() {
+    @DisplayName("confirm() of a 3PL-addressed PO is HONOURED — emits the 3PL sink event, NOT wms (ADR-055 D4 / ADR-054 D3)")
+    void confirm3plDestinationEmitsThirdPartySink_notWms() {
         PurchaseOrder po = acknowledgedFromSuggestionPo("3pl-node-01", "THIRD_PARTY_LOGISTICS", 7);
         when(poRepository.findById(po.getId(), TENANT)).thenReturn(Optional.of(po));
 
         service.confirm(new ConfirmPurchaseOrderCommand(OPERATOR, po.getId()));
 
+        // Honoured, not dropped: routed to the scm-internal sink.
+        verify(eventPublisher, times(1)).publishInboundExpectedThirdParty(any());
+        // Never toward wms — the wms consumer/DLT gate never sees a 3PL destination (Failure A).
         verify(eventPublisher, never()).publishInboundExpected(any());
+    }
+
+    @Test
+    @DisplayName("confirm() of a 3PL PO with no resolvable node id emits neither event (fail-closed — no un-addressable expectation)")
+    void confirm3plDestinationWithoutNodeIdEmitsNeither() {
+        PurchaseOrder po = acknowledgedFromSuggestionPo(null, "THIRD_PARTY_LOGISTICS", 7);
+        when(poRepository.findById(po.getId(), TENANT)).thenReturn(Optional.of(po));
+
+        service.confirm(new ConfirmPurchaseOrderCommand(OPERATOR, po.getId()));
+
+        verify(eventPublisher, never()).publishInboundExpected(any());
+        verify(eventPublisher, never()).publishInboundExpectedThirdParty(any());
     }
 
     @Test
@@ -295,6 +313,7 @@ class PurchaseOrderApplicationServiceTest {
         service.confirm(new ConfirmPurchaseOrderCommand(OPERATOR, po.getId()));
 
         verify(eventPublisher, never()).publishInboundExpected(any());
+        verify(eventPublisher, never()).publishInboundExpectedThirdParty(any());
     }
 
     // ---------------- CANCEL ----------------
