@@ -36,10 +36,8 @@ Platform-wide coding standards for all services and libraries.
 ## Logging
 
 - Use structured logging via SLF4J.
-- Log at `INFO` for significant business events (login, signup, order placed).
-- Log at `WARN` for recoverable issues.
-- Log at `ERROR` for unexpected failures; include stack traces.
-- Never log sensitive data: passwords, tokens, card numbers, PII.
+- Log level policy (INFO/WARN/ERROR) and the sensitive-data exclusion list are owned by
+  [observability.md](observability.md) § Rules — follow that section; do not restate it here.
 
 ## Database
 
@@ -74,7 +72,9 @@ Platform-wide coding standards for all services and libraries.
 
 - No dead code or commented-out code in production.
 - No `TODO` comments without a linked task ID (e.g. `// TODO: TASK-BE-010`).
-- Do not hard-code environment-specific values (URLs, secrets, ports). Use environment variables.
+- Do not hard-code environment-specific values (URLs, secrets, ports). Use environment variables. Secrets
+  specifically are governed by [security-rules.md](security-rules.md) § Sensitive Data (hard-coded secrets
+  forbidden) — do not restate that rule here.
 
 ---
 

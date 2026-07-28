@@ -55,7 +55,10 @@ Examples:
 
 ## Test Files
 
-`{TestedClass}Test.java` or `{Feature}IntegrationTest.java`
+Per-test-type naming (unit/controller-slice/integration/e2e) is owned by
+[testing-strategy.md](testing-strategy.md) § Naming Conventions — that table is authoritative and includes the
+`*ControllerSliceTest` rename precedent (`TASK-MONO-461`). Do not restate a thinner rule here; follow that
+table.
 
 ---
 

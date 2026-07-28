@@ -43,6 +43,8 @@
 |---|---|
 | [../platform/event-driven-policy.md](../platform/event-driven-policy.md) | trait에 의해 이벤트 발행/소비가 요구될 때 (예: `integration-heavy`, `real-time`) |
 | [../platform/api-gateway-policy.md](../platform/api-gateway-policy.md) | 퍼블릭 API 노출이 있는 프로젝트(gateway 사용). 대부분의 외부 대면 서비스에 해당 |
+| [../platform/abac-data-scope.md](../platform/abac-data-scope.md) | 운영자 접근을 데이터 슬라이스로 좁혀야 할 때(ADR-MONO-025), 기본 RBAC 을 넘어서는 경우 |
+| [../platform/access-conditions.md](../platform/access-conditions.md) | 권한이 런타임 조건 하에서만 유효해야 할 때(ADR-MONO-026, closed-enum restriction-only 게이트) |
 | [../platform/deployment-policy.md](../platform/deployment-policy.md) | k8s 배포 환경 — 현재 저장소는 기본값이지만 로컬·서버리스 환경은 예외 |
 | [../platform/refactoring-policy.md](../platform/refactoring-policy.md) | 리팩토링 작업을 수행할 때만 로드 |
 | [../platform/object-storage-policy.md](../platform/object-storage-policy.md) | `content-heavy` trait 활성화 시 (미디어 / object storage 저장이 필요한 프로젝트). 참조: `rules/traits/content-heavy.md` C2 |

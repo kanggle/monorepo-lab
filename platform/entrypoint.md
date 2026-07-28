@@ -69,6 +69,7 @@ Reading more than one service-type spec for a single task is forbidden — pick 
 | Tag | Specs to Read |
 |---|---|
 | `api` | `api-gateway-policy.md`, `versioning-policy.md`, `error-handling.md`, `contracts/jwt-standard-claims.md`, `contracts/notification-inbox-contract.md` (when building or consuming a notification surface) |
+| `authz` | `abac-data-scope.md`, `access-conditions.md` — read when a task narrows operator access by data slice (ADR-MONO-025) or runtime condition (ADR-MONO-026), beyond baseline RBAC |
 | `event` | `event-driven-policy.md` |
 | `deploy` | `deployment-policy.md`, `observability.md` |
 | `code` | `naming-conventions.md`, `coding-rules.md`, `testing-strategy.md` |
