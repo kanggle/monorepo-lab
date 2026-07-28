@@ -173,7 +173,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-484-promote-three-more-rules-to-canonical.md` — 2026-07-29 `/audit-memory` 스윕 산물(TASK-MONO-464 와 동일 패턴). `platform/git-workflow-policy.md` 에 3규칙 삽입(공유파일 task 시리즈 단일-worktree 직렬화 / self-merge·force-push 명시승인 / 머지 후 nightly 확인 습관) + `CLAUDE.md` 카탈로그 포인터 3개. PR #3007 (`task/mono-484-promote-canonical-rules`).
 
 ## done
 
