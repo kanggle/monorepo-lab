@@ -20,7 +20,11 @@ Analyze existing code for refactoring opportunities and perform safe refactoring
 
 1. Read `platform/refactoring-policy.md` for rules and constraints
 2. Read `specs/services/<service>/architecture.md` for the target service
-3. Read `.claude/skills/backend/refactoring/SKILL.md` for patterns
+3. Read `.claude/skills/backend/refactoring/SKILL.md` for patterns. **`frontend-app` targets**: no
+   dedicated frontend-refactoring skill exists in the catalog yet — apply `platform/refactoring-policy.md`
+   directly, plus the app's declared frontend architecture skill (`frontend/architecture/feature-sliced-design`
+   or `frontend/architecture/layered-by-feature`) for structural boundaries. Do not assume
+   `backend/refactoring/SKILL.md`'s Java-specific patterns transfer.
 4. Read the target code and understand its current structure
 5. Run existing tests — confirm green baseline
 6. Identify refactoring opportunities by category
@@ -77,6 +81,12 @@ Analyze existing code for refactoring opportunities and perform safe refactoring
 ## CLAUDE.md Compliance
 
 All refactoring follows CLAUDE.md Source of Truth Priority and `platform/refactoring-policy.md`.
+
+## Ownership Boundary
+
+Layer-violation *detection* overlaps `architect`'s Architecture Review and `code-reviewer`'s Architecture
+Compliance check — see `architect.md` § Ownership Boundary for the full three-way split. This agent's own
+role is the dedicated-pass fix, not the design-time or per-PR check.
 
 ## Does NOT
 

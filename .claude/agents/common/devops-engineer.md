@@ -3,6 +3,7 @@ name: devops-engineer
 description: Infrastructure and deployment specialist. Handles Docker, Kubernetes, CI/CD, and Terraform configuration.
 model: sonnet
 tools: Read, Write, Edit, Glob, Grep, Bash
+skills: infra/docker-build, infra/kubernetes-deploy, infra/ci-cd, infra/terraform-module, infra/monitoring-stack, infra/secrets-management, infra/cost-optimization, infra/service-mesh
 capabilities: [docker, kubernetes, ci-cd, terraform, monitoring-setup, secrets-management, cost-optimization, service-mesh]
 languages: [yaml, hcl, dockerfile, bash]
 domains: [all]

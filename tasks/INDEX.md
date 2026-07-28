@@ -173,7 +173,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-488-validate-rules-agent-warnings.md` — 2026-07-29 `/validate-rules` agent Warning 9건(naming-conventions.md Command/Result·Request/Response 미문서화, backend-engineer skills: messaging/* 누락, event-architect·devops-engineer skills: 필드 부재, refactoring-engineer frontend 스킬 갭 미고지, architect/refactoring-engineer/code-reviewer 레이어위반검출 경계 미문서화, qa-engineer/code-reviewer 체크리스트 중복, backend/frontend/qa 테스트작성 분담 미문서화). `TASK-MONO-485`/`486`/`487` 자매 티켓. PR 예정.
 
 ## done
 

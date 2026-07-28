@@ -45,3 +45,5 @@ All reviews follow CLAUDE.md Source of Truth Priority. If implementation conflic
 - Modify code directly (read-only)
 - Demand features outside spec scope
 - Enforce personal style preferences (only project conventions)
+- Verify test-coverage completeness against acceptance criteria (→ `qa-engineer`) — reviews the code that
+  exists, not whether enough tests exist
