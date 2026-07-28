@@ -8,7 +8,7 @@ fan-platform-web: billing-key issuance UI (자동 갱신 등록) (ADR-002)
 
 # Status
 
-review
+done
 
 # Owner
 
