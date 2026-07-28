@@ -76,6 +76,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
+- `TASK-SCM-BE-050-buyer-account-id-varchar36-client-credentials-overflow.md` — **READY (filed 2026-07-28, found by live functional check of the BE-046~049 3PL chain, not CI)**. `purchase_orders.buyer_account_id VARCHAR(36) NOT NULL` (+ sibling `po_status_history`/`audit_log` `.actor_account_id VARCHAR(36)`) assumes `actor.accountId()` is always UUID-shaped, but `ActorContextJwtAuthenticationConverter` stores the raw JWT `sub` unchecked — the documented client-credentials caller `scm-platform-internal-services-client` (37 chars, `specs/integration/iam-integration.md` Edge Case E1) overflows it, so **any** client-credentials-authenticated PO draft (`draftFromSuggestion`/`draft`) 500s on insert. **Not 3PL-specific** — same shared PO-creation path for `WMS_WAREHOUSE` and `THIRD_PARTY_LOGISTICS` destinations alike; CI never catches it because it authenticates as an operator (≤36-char `sub`), never the 37-char service client. Confirmed live: BE-048's reorder→suggestion→approve raised a correctly-typed 3PL suggestion, BE-049's honour-routing decision fired and logged correctly, but the PO `INSERT` itself failed — `inbound_expectations` never got written, blocking the BE-049 chain from being verified end-to-end. Real design call for the fix (schema-width vs. derived bounded machine-actor id — Scope §1), not a truncation patch. 분석=Opus 4.8 / 구현 권장=Opus.
+
 ## in-progress
 
 ## review
