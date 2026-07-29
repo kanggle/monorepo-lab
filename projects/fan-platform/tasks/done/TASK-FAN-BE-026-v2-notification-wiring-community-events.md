@@ -1,6 +1,6 @@
 # TASK-FAN-BE-026 — v2 notification wiring: connect the produced-but-unconsumed community.* events (+ membership welcome/cancellation)
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-FAN-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (event-contract enrichment + new consumers + notification-type design — not a mechanical change; a wrong contract shape reintroduces sync coupling)
