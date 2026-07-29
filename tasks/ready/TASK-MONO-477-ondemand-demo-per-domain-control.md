@@ -21,6 +21,38 @@ monorepo
 
 ---
 
+# 진행 상황 (2026-07-29 재확인, AC-0 재검증)
+
+**항목 1~8(로컬 스크립트 + 컨트롤 플레인 전체) = 이미 구현·병합 완료.** `ready/`에 남아 있었던 이유는
+구현이 안 끝나서가 아니라 **태스크 lifecycle(ready→done, INDEX)이 안 닫혔기 때문**이다 — 두 PR 모두
+이 태스크 파일을 건드리지 않았다.
+
+- **PR [#2937](https://github.com/kanggle/monorepo-lab/pull/2937)** (2026-07-24 MERGED) — 항목 1~4
+  (로컬 스크립트: `projects.sh` DEPS/`resolve_deps`, `demo-up.sh`/`demo-down.sh` 도메인 인자,
+  `demo-status.sh` 신규). AC-1~3 충족.
+- **PR [#2940](https://github.com/kanggle/monorepo-lab/pull/2940)** (2026-07-24 MERGED) — 항목 5~8
+  (컨트롤 플레인: `handler.py` 3신규 액션 + 명령 주입 화이트리스트 + VM-stopped 409 + 예산 429 상속,
+  `main.tf` IAM/라우트/스냅샷 파라미터, `site/index.html` 도메인 그리드, `test_handler.py` 24건).
+  AC-4~6 충족.
+- 3차원 병합 검증(`gh pr view --json state,mergedAt,mergeCommit,statusCheckRollup`) 통과 — 둘 다
+  `state=MERGED`, git log에 머지 커밋 존재, 필요 체크 전부 SUCCESS/SKIPPED(FAILURE 0).
+
+**남은 것 = AC-7(AWS 실증) · AC-8(재굽기, `TASK-MONO-399` AC-6과 병합) 뿐이다.**
+
+**🔴 알려진 갭 — 인스턴스 헬스 발행자가 코드에 없다.** PR #2940 본문이 명시적으로 이렇게 적었다:
+> 인스턴스 헬스 발행자(`demo-status-publish.sh` + `demo-status.timer` + packer + user_data)는 baked
+> 라 살아있는 인스턴스에서만 검증 가능하므로 AWS/재굽기 증분(AC-7/8, MONO-399 AC-6 와 합침)으로 연기.
+
+즉 `main.tf`의 인스턴스 IAM(`ssm:PutParameter`, `aws_iam_role_policy.ec2_health`)과 SSM 파라미터
+(`aws_ssm_parameter.health`)는 이미 있지만, 그것을 실제로 채우는 **systemd 타이머 스크립트가 아직 없다**
+— `/domains`는 apply 직후 terraform 초기값 `{}` 만 반환한다(도메인 "확인 중" 표시로 정직하게 처리됨,
+빈 값을 "전부 up"으로 오독하지 않음). 이 조각은 **의도적으로** AC-7/8과 함께 라이브 인스턴스에서
+검증하기로 미뤄졌다 — 이 PoC가 "packer validate는 통과하는데 실제로는 안 됨" 함정에 여러 번 데었기
+때문(`project_ondemand_demo_aws_poc` 메모리). 다음 착수자는 이 스크립트를 **AC-7/8 착수 시점에** 함께
+작성하고 라이브 인스턴스에서 바로 검증할 것 — 미리 써두고 나중에 믿지 말 것.
+
+---
+
 # 배경 — 이미 있는 것과 없는 것
 
 온디맨드 데모(`MONO-366/379/380/389/397`)는 **평소 꺼두고 방문자가 버튼을 누르면 EC2 를 켜는** 구조로
@@ -124,47 +156,55 @@ VM on/off 는 기존 컨트롤 플레인을 그대로 쓰고, 도메인별 up/do
 
 # Acceptance Criteria
 
-**AC-0 — 재사용 지점 재확인 (verify-then-act).**
+**AC-0 — 재사용 지점 재확인 (verify-then-act). ✅ 완료 (2026-07-29 재검증).**
 착수 시 `infra/demo/` 와 `infra/demo/aws/` 를 `origin/main` 에서 다시 읽는다. 본 티켓의 파일 목록·라인
 참조는 출처가 아니라 **가설**이다. SSM 인스턴스 프로파일이 여전히 붙어 있는지(`main.tf`), `demo-up.sh` 의
 프로파일 인자 파싱이 바뀌지 않았는지 확인한다.
 
-**AC-1 — `projects.sh` DEPS 맵.**
+**AC-1 — `projects.sh` DEPS 맵. ✅ 완료 (#2937).**
 각 도메인의 의존을 선언한다(최소: 전원→iam, console→federation 소비 도메인, wms↔ecommerce 루프).
 `resolve_deps <slug...>` 가 선택 집합의 전이적 폐포를 **기동 순서(iam 먼저, console 마지막)** 로 반환한다.
 단위 가드: `resolve_deps console` 이 `iam` 을 포함하는지.
 
-**AC-2 — `demo-up.sh` / `demo-down.sh` 도메인 리스트 인자.**
+**AC-2 — `demo-up.sh` / `demo-down.sh` 도메인 리스트 인자. ✅ 완료 (#2937).**
 `demo-up.sh iam fan console` 이 DEPS 확장 후 해당 프로젝트만 `-p` 로 띄운다. `demo-down.sh console` 이
 console 만 내리되, **다른 떠 있는 도메인이 iam 을 소비 중이면 iam·traefik 은 유지**한다. 기존
 `demo-core|full` 인자는 **하위 호환**으로 계속 동작한다.
 
-**AC-3 — `demo-status.sh` 헬스 스냅샷.**
+**AC-3 — `demo-status.sh` 헬스 스냅샷. ✅ 스크립트 완료 (#2937) — 단 SSM 파라미터 발행(systemd 타이머)은 미구현, AC-7/8 로 이월.**
 `docker compose -p <slug> ps --format json` 을 집계해 도메인별 `{state, healthy, total}` JSON 을
 표준출력 + 지정 SSM 파라미터에 발행한다. 떠 있지 않은 도메인은 `state=down` 으로 명시(누락 아님).
 
-**AC-4 — Lambda 신규 액션 + IAM.**
+**AC-4 — Lambda 신규 액션 + IAM. ✅ 완료 (#2940).**
 `GET /domains` 가 SSM 스냅샷을 반환. `POST /domain/start`·`/domain/stop` 이 running VM 에 SendCommand 로
 `demo-up.sh`/`demo-down.sh <name>` 을 실행. VM stopped 시 `/domain/start` 는 먼저 VM 을 켜거나(선택)
 명확한 안내를 반환. **예산 소진 시 도메인 start 도 429.** IAM 은 `ssm:SendCommand`(문서·인스턴스 ARN
 스코프)+`GetCommandInvocation`+스냅샷 파라미터 R/W 만 추가(최소 권한).
 
-**AC-5 — 페이지 도메인 그리드.**
+**AC-5 — 페이지 도메인 그리드. ✅ 완료 (#2940).**
 `site/index.html` 이 8개 도메인 토글 + "전체"를 렌더하고 각 헬스 배지를 `/domains` 폴링으로 갱신한다.
 기존 안전장치 유지: config.js 미로드 시 크게 실패, 웜업 정직 문구(도메인별 예상 시간), `demoHost()` 대시
 표기(점 표기 404 함정), `ok/status` 확인(429 무시 금지).
 
-**AC-6 — 테스트.**
-`test_handler.py` 가 신규 3액션을 커버(SendCommand 목, 예산 소진 시 도메인 start 429, VM stopped 분기).
-로컬에서 `demo-up.sh iam fan console` → `demo-status.sh` → `demo-down.sh console` 왕복을 실증(도커 기동
-가능 환경에서). **로컬 Windows 는 IT 권위 아님** — 스크립트 로직은 로컬, AWS 경로는 인스턴스 실증.
+**AC-6 — 테스트. ✅ 완료 (#2937/#2940).**
+`test_handler.py` 가 신규 3액션을 커버(SendCommand 목, 예산 소진 시 도메인 start 429, VM stopped 분기,
+24건 통과). 로컬 도커 왕복은 스텁 통합 테스트(#2937) + CI "Demo wrapper smoke"(Linux, 이 저장소의 권위
+있는 실행 환경)가 두 PR 모두 SUCCESS로 커버. **로컬 Windows 는 IT 권위 아님** — 스크립트 로직은 로컬,
+AWS 경로는 인스턴스 실증.
 
-**AC-7 — AWS 실증 (1회 기동).**
+**AC-7 — AWS 실증 (1회 기동). ⏳ 잔존 — 여기서부터 착수.**
 `terraform apply` → 페이지에서 도메인 토글 → SSM 경로로 부분 기동/정지가 실제로 동작하고 헬스가
 페이지에 반영되는지 브라우저(Playwright/headless fetch)로 실증. **끝나면 `terraform destroy` 즉시 복귀.**
 ⚠️ `terraform apply`/`destroy`/`packer build` 는 **사용자 승인 필요**.
 
-**AC-8 — 재굽기 (측정·실증이 끝난 뒤, MONO-399 와 합침 가능).**
+**🔴 AC-7 착수 전 선행 작업 — 인스턴스 헬스 발행자를 여기서 함께 짠다.**
+위 "진행 상황" 절 참조: `demo-status-publish.sh`(HEALTH_PARAM 대상으로 `aws ssm put-parameter`) +
+`demo-status.timer`(30초 주기) + `demo-ami.pkr.hcl` 배선(설치·enable) + `demo-stack.service` 와 동일하게
+**저장소가 소유**하는 systemd 유닛. AC-7 실증이 곧 이 스크립트의 첫 실검증이므로 **먼저 써두고 나중에
+믿지 말 것** — 라이브 인스턴스에서 `systemctl status demo-status.timer` + SSM `GetParameter` 로 값이
+실제로 갱신되는지 그 자리에서 확인한다.
+
+**AC-8 — 재굽기 (측정·실증이 끝난 뒤, MONO-399 와 합침 가능). ⏳ 잔존.**
 항목 1~4가 baked 이므로 최종 도달에 재굽기 필요. `MONO-399` AC-6 이 이미 재굽기를 예약했으므로 **가능하면
 한 번의 bake 로 합친다**(ERP-BE-035 머지 후). 새 AMI 로 인스턴스를 띄운 뒤 **인스턴스 안에서 직접**
 `git -C /opt/monorepo-lab log -1` 과 `demo-up.sh` 의 도메인 인자 동작을 런타임 확인 — *구운 것을 믿지 않는다*.
