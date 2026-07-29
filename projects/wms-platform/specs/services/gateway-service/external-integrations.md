@@ -28,7 +28,7 @@ point for the day the OAuth2 AS is swapped for an external SaaS IdP
 Sibling integration surfaces (cross-reference; gateway does not consume them):
 
 - [`../inbound-service/external-integrations.md`](../inbound-service/external-integrations.md) — ERP ASN webhook (HMAC, routed through gateway but verified inside inbound).
-- [`../outbound-service/external-integrations.md`](../outbound-service/external-integrations.md) — ERP order webhook + TMS push.
+- [`../outbound-service/external-integrations.md`](../outbound-service/external-integrations.md) — ERP order webhook (marquee); the former TMS push was retired in TASK-BE-560 (ADR-MONO-053 §D8).
 - [`../notification-service/external-integrations.md`](../notification-service/external-integrations.md) — Slack Incoming Webhooks (BE-158).
 - [`../inventory-service/external-integrations.md`](../inventory-service/external-integrations.md) — sibling zero-state (BE-156, primary template).
 
@@ -42,7 +42,7 @@ Sibling integration surfaces (cross-reference; gateway does not consume them):
 - **Webhooks (ERP) flow through but are verified downstream** — HMAC signature validation lives inside `inbound-service` / `outbound-service`, not in the gateway. The gateway bypass route (`/webhooks/erp/**`) is explicitly carved out of JWT validation per [`architecture.md`](architecture.md) § Routes.
 - **Downstream proxy is sibling-only** — 5 service routes all target internal `<service-name>:8080` hostnames; no external HTTP target.
 
-The vendor surface that *does* exist (Slack / TMS / ERP) is owned by the downstream services per Hexagonal port/adapter separation. Routing the traffic through gateway is plumbing, not integration.
+The vendor surface that *does* exist (Slack / ERP) is owned by the downstream services per Hexagonal port/adapter separation; the former outbound TMS push (retired, TASK-BE-560) is now owned by the scm `logistics-service`, outside this project's gateway routes entirely. Routing the traffic through gateway is plumbing, not integration.
 
 ---
 
@@ -94,7 +94,7 @@ Until one of these triggers fires, this file remains zero-state.
 - [`overview.md`](overview.md) — Service identity + Public surface (routes) + Dependent Systems
 - [`architecture.md`](architecture.md) — § Routes, § Identity (`### Service Type Composition`), § Service Type
 - [`../inbound-service/external-integrations.md`](../inbound-service/external-integrations.md) — sibling non-zero (ERP ASN)
-- [`../outbound-service/external-integrations.md`](../outbound-service/external-integrations.md) — sibling non-zero (TMS marquee)
+- [`../outbound-service/external-integrations.md`](../outbound-service/external-integrations.md) — sibling non-zero (ERP order webhook marquee; TMS push retired, TASK-BE-560)
 - [`../inventory-service/external-integrations.md`](../inventory-service/external-integrations.md) — sibling zero-state (BE-156)
 - [`../notification-service/external-integrations.md`](../notification-service/external-integrations.md) — sibling non-zero (Slack, BE-158)
 - `../../../../../rules/traits/integration-heavy.md` — Required Artifacts + I1–I10

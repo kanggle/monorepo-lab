@@ -30,7 +30,7 @@ Bounded context는 [../../rules/domains/wms.md](../../rules/domains/wms.md)의 �
 ## Trait Rationale
 
 - **transactional**: 재고 이동(입고 적치, 피킹 차감, 재고 조정)은 강한 일관성과 멱등성이 필수. 동시 피킹 시 재고 정합성, 입고 검수 후 적치 확정, 출하 확인 후 재고 차감 등 모든 핵심 경로에서 트랜잭션 보장이 요구된다. 적용 대상: `inventory-service`, `inbound-service`, `outbound-service`.
-- **integration-heavy**: ERP 연동(입고 예정/출고 오더 수신), TMS 연동(출하 정보 전달), 바코드/RFID 스캐너 인터페이스, 외부 알림(슬랙/이메일) 등 외부 시스템과의 연동이 안정성의 핵심 변수. Circuit breaker, retry, DLQ, idempotent side-effect 패턴 반복 적용.
+- **integration-heavy**: ERP 연동(입고 예정/출고 오더 수신), 바코드/RFID 스캐너 인터페이스, 외부 알림(슬랙/이메일) 등 외부 시스템과의 연동이 안정성의 핵심 변수. (구 TMS 출하 정보 전달 연동은 TASK-BE-560 으로 폐기됨 — carrier dispatch 는 scm `logistics-service` 가 소유, ADR-MONO-053 §D8.) Circuit breaker, retry, DLQ, idempotent side-effect 패턴 반복 적용.
 
 ## Service Map (초기)
 

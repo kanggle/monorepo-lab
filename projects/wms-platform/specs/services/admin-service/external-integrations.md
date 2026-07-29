@@ -26,7 +26,7 @@ for any future external integration (external IdP / SAML / SCIM — see
 Sibling integration surfaces (for cross-reference; not consumed by admin itself):
 
 - [`../inbound-service/external-integrations.md`](../inbound-service/external-integrations.md) — ERP ASN webhook reference.
-- [`../outbound-service/external-integrations.md`](../outbound-service/external-integrations.md) — TMS marquee reference.
+- [`../outbound-service/external-integrations.md`](../outbound-service/external-integrations.md) — ERP order webhook marquee reference (former TMS push retired, TASK-BE-560).
 - [`../notification-service/external-integrations.md`](../notification-service/external-integrations.md) — Slack Incoming Webhooks (BE-158).
 - [`../inventory-service/external-integrations.md`](../inventory-service/external-integrations.md) — sibling zero-state (BE-156, primary template).
 
@@ -97,7 +97,7 @@ Until one of these triggers fires, this file remains zero-state.
 - [`idempotency.md`](idempotency.md) — Projection-side T8 dedupe
 - [`../../contracts/events/admin-events.md`](../../contracts/events/admin-events.md) — admin.user.* / admin.role.* / admin.settings.* schemas
 - [`../inbound-service/external-integrations.md`](../inbound-service/external-integrations.md) — sibling non-zero reference
-- [`../outbound-service/external-integrations.md`](../outbound-service/external-integrations.md) — sibling non-zero reference (TMS marquee)
+- [`../outbound-service/external-integrations.md`](../outbound-service/external-integrations.md) — sibling non-zero reference (ERP order webhook marquee; TMS push retired, TASK-BE-560)
 - [`../inventory-service/external-integrations.md`](../inventory-service/external-integrations.md) — sibling zero-state (BE-156)
 - [`../notification-service/external-integrations.md`](../notification-service/external-integrations.md) — sibling non-zero reference (Slack, BE-158)
 - `../../../../../rules/traits/integration-heavy.md` — Required Artifacts + I1–I10

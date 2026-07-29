@@ -290,7 +290,7 @@ sequenceDiagram
 ### 적용 Trait
 
 - **`transactional`** — 변경 경로에 `Idempotency-Key`, 상태 머신, 낙관적 잠금, 트랜잭셔널 아웃박스 적용
-- **`integration-heavy`** — ERP / TMS / 스캐너 연동을 전용 포트, 서킷 브레이커, 벌크헤드 패턴으로 대비
+- **`integration-heavy`** — ERP / 스캐너 / Slack 알림 연동을 전용 포트, 서킷 브레이커, 벌크헤드 패턴으로 대비 (구 TMS 연동은 TASK-BE-560 으로 폐기)
 
 [`rules/traits/transactional.md`](../../rules/traits/transactional.md) · [`rules/traits/integration-heavy.md`](../../rules/traits/integration-heavy.md) 참고.
 
@@ -479,7 +479,7 @@ Lot 생성 시 부모 SKU의 `trackingType == LOT` AND `status == ACTIVE` 조건
 
 ### 쓰기 집약적 서비스에 헥사고날 아키텍처 적용
 
-Master는 헥사고날로 도메인 로직을 인프라와 분리합니다. Gateway는 Layered (풍부한 도메인 없음). 선택 이유: ERP, TMS, 스캐너 등 다양한 외부 통합의 다양성이 Ports & Adapters 은유와 자연스럽게 맞기 때문입니다. 상세: [specs/services/master-service/architecture.md](specs/services/master-service/architecture.md).
+Master는 헥사고날로 도메인 로직을 인프라와 분리합니다. Gateway는 Layered (풍부한 도메인 없음). 선택 이유: ERP, Slack 알림, 스캐너 등 다양한 외부 통합의 다양성이 Ports & Adapters 은유와 자연스럽게 맞기 때문입니다(과거 TMS 연동은 TASK-BE-560 으로 폐기). 상세: [specs/services/master-service/architecture.md](specs/services/master-service/architecture.md).
 
 ### 이벤트 발행을 위한 트랜잭셔널 아웃박스
 

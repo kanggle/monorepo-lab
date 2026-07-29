@@ -122,7 +122,7 @@ families**, plus one out-of-set mechanism:
 | `inventory-service` | `inventory:idempotency:{method}:{path_hash}:{idempotency_key}` | 128 chars | **Raw-appended.** Keeps the raw key visible in Redis for operability/debuggability; `path_hash` (SHA-256 prefix) keeps the prefix bounded. 128 = opaque-string bound. |
 | `inbound-service` | `inbound:idempotency:{method}:{path_hash}:{idempotency_key}` | 128 chars | Raw-appended (same family as inventory). |
 | `admin-service` | `admin:idempotency:{method}:{path_hash}:{idempotency_key}` | 128 chars | Raw-appended (same family as inventory). |
-| `outbound-service` | `outbound:idempotency:{method}:{path_hash}:{idempotency_key}` | **255 chars** | Raw-appended family, but a **larger cap** to accommodate longer composite keys originating from the saga / TMS-handover flow (outbound carries a saga-level idempotency layer on top of eventId dedupe — see `outbound-service/idempotency.md`). |
+| `outbound-service` | `outbound:idempotency:{method}:{path_hash}:{idempotency_key}` | **255 chars** | Raw-appended family, but a **larger cap** to accommodate longer composite keys originating from the saga flow (outbound carries a saga-level idempotency layer on top of eventId dedupe — see `outbound-service/idempotency.md`). |
 | `notification-service` | _(out of set)_ Postgres `delivery_idempotency_key = sha256(eventId+channelId+recipient)` | — | **Not request idempotency.** It is event-consumer delivery dedupe (Postgres column, not a Redis request key). A fundamentally different mechanism and concern — explicitly **excluded** from this convention set. |
 
 **Why (B) document rather than (A) normalize.** The divergence is

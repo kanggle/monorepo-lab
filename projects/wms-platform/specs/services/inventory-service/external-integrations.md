@@ -21,7 +21,7 @@ future external integration that lands directly in inventory.
 Sibling integration surfaces (where the WMS does talk to external systems):
 
 - [`../inbound-service/external-integrations.md`](../inbound-service/external-integrations.md) — ERP ASN webhook (HMAC-SHA256), Kafka cluster, infrastructure.
-- [`../outbound-service/external-integrations.md`](../outbound-service/external-integrations.md) — ERP order webhook (HMAC-SHA256), external TMS push (API key, the marquee `integration-heavy` exercise), Kafka cluster, infrastructure.
+- [`../outbound-service/external-integrations.md`](../outbound-service/external-integrations.md) — ERP order webhook (HMAC-SHA256, the marquee `integration-heavy` exercise), Kafka cluster, infrastructure. The former external TMS push (API key) was retired in TASK-BE-560 (ADR-MONO-053 §D8); carrier dispatch now lives in scm `logistics-service`.
 
 `inventory-service` consumes the internal events those services publish (via Kafka) and publishes its own reservation / confirmation / adjustment events — see [`architecture.md`](architecture.md) § Dependencies and [`../../contracts/events/inventory-events.md`](../../contracts/events/inventory-events.md).
 
@@ -31,7 +31,7 @@ Sibling integration surfaces (where the WMS does talk to external systems):
 
 `inventory-service` is the **core domain service** for stock state; it is deliberately shielded from external protocol concerns:
 
-- External actors (ERP, TMS, scanners, future vendors) never call `inventory-service` directly. They reach inventory state only indirectly — by triggering an ASN-receive in `inbound-service`, an order in `outbound-service`, or by issuing a REST mutation that the `gateway-service` routes to inventory's internal REST API (`/api/v1/inventory/**`).
+- External actors (ERP, scanners, future vendors — the former TMS push was retired in TASK-BE-560) never call `inventory-service` directly. They reach inventory state only indirectly — by triggering an ASN-receive in `inbound-service`, an order in `outbound-service`, or by issuing a REST mutation that the `gateway-service` routes to inventory's internal REST API (`/api/v1/inventory/**`).
 - The internal REST surface (`inventory-service-api.md`) is consumed by **internal operators only** (admin UI, support tooling) — there is no external client identity exchanged at this boundary; gateway-level auth + per-route rate limit (per `gateway-service/application.yml`) is the entirety of the protection layer.
 - Cross-service communication uses Kafka (master snapshots in, reservation/confirmation events out) — Kafka is project infrastructure, not an external vendor (see § Internal vs External Boundary below).
 
@@ -91,7 +91,7 @@ Until one of these triggers fires, this file remains zero-state.
 - [`idempotency.md`](idempotency.md) — REST + event dedupe (internal only)
 - [`../../contracts/events/inventory-events.md`](../../contracts/events/inventory-events.md) — published event schemas
 - [`../inbound-service/external-integrations.md`](../inbound-service/external-integrations.md) — sibling non-zero reference
-- [`../outbound-service/external-integrations.md`](../outbound-service/external-integrations.md) — sibling non-zero reference (TMS marquee)
+- [`../outbound-service/external-integrations.md`](../outbound-service/external-integrations.md) — sibling non-zero reference (ERP order webhook marquee; TMS push retired, TASK-BE-560)
 - `rules/traits/integration-heavy.md` — Required Artifacts + I1–I10
 - `platform/observability.md` — required metrics (inventory-side metrics are internal-event focused)
 - `platform/error-handling.md` — error code catalog (inventory error codes registered: `RESERVATION_NOT_FOUND`, `RESERVATION_QUANTITY_MISMATCH`, `LOCATION_INACTIVE`, `SKU_INACTIVE`, `LOT_INACTIVE`, `LOT_EXPIRED`)
