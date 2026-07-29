@@ -15,7 +15,6 @@ import com.example.fanplatform.membership.domain.time.ClockPort;
 import com.example.libs.payment.PaymentAuthorization;
 import com.example.libs.payment.PaymentGatewayPort;
 import com.example.libs.payment.PaymentVerificationRequest;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,15 +36,38 @@ import java.util.Optional;
  * {@code now}. {@code validTo = validFrom + planMonths·30d}.
  */
 @Service
-@RequiredArgsConstructor
 public class RenewMembershipUseCase {
 
     private final MembershipRepository membershipRepository;
     private final IdempotencyKeyRepository idempotencyKeyRepository;
-    @Qualifier("paymentGateway")
     private final PaymentGatewayPort paymentGateway;
     private final MembershipEventPublisher eventPublisher;
     private final ClockPort clock;
+
+    /**
+     * Explicit constructor (NOT Lombok {@code @RequiredArgsConstructor}) — TASK-FAN-BE-034 fix.
+     * A field-level {@code @Qualifier} does NOT propagate onto a Lombok-generated constructor
+     * parameter (confirmed via bytecode: the generated constructor carried zero
+     * {@code RuntimeVisibleParameterAnnotations}), so under the {@code portone} profile — where
+     * {@link PaymentGatewayPort} has two candidate beans (§ {@code PaymentGatewayConfig}) — this
+     * silently-unqualified injection point threw {@code NoUniqueBeanDefinitionException} at
+     * context refresh despite TASK-FAN-BE-033-fix-02's intent. The mock profile never surfaced
+     * it (a single-candidate type has nothing to disambiguate). Caught by the
+     * {@code PortOneProfileContextBootIntegrationTest} guard this fix ships with; matches the
+     * already-correct explicit-constructor pattern in {@code AutoRenewMembershipsUseCase}.
+     */
+    public RenewMembershipUseCase(
+            MembershipRepository membershipRepository,
+            IdempotencyKeyRepository idempotencyKeyRepository,
+            @Qualifier("paymentGateway") PaymentGatewayPort paymentGateway,
+            MembershipEventPublisher eventPublisher,
+            ClockPort clock) {
+        this.membershipRepository = membershipRepository;
+        this.idempotencyKeyRepository = idempotencyKeyRepository;
+        this.paymentGateway = paymentGateway;
+        this.eventPublisher = eventPublisher;
+        this.clock = clock;
+    }
 
     @Transactional
     public MembershipView execute(RenewCommand cmd) {

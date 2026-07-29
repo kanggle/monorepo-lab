@@ -6,7 +6,6 @@ import com.example.fanplatform.membership.domain.pricing.MembershipPricing;
 import com.example.libs.payment.PaymentAuthorization;
 import com.example.libs.payment.PaymentGatewayPort;
 import com.example.libs.payment.PaymentVerificationRequest;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -53,12 +52,29 @@ import java.util.Optional;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class WebhookReconcileUseCase {
 
     private final MembershipRepository membershipRepository;
-    @Qualifier("paymentGateway")
     private final PaymentGatewayPort paymentGateway;
+
+    /**
+     * Explicit constructor (NOT Lombok {@code @RequiredArgsConstructor}) — TASK-FAN-BE-034
+     * fix. A field-level {@code @Qualifier} does NOT propagate onto a Lombok-generated
+     * constructor parameter (confirmed via bytecode: the generated constructor carried zero
+     * {@code RuntimeVisibleParameterAnnotations}), so under the {@code portone} profile — where
+     * {@link PaymentGatewayPort} has two candidate beans (§ {@code PaymentGatewayConfig}) — this
+     * silently-unqualified injection point threw {@code NoUniqueBeanDefinitionException} at
+     * context refresh despite TASK-FAN-BE-033-fix-02's intent. The mock profile never surfaced
+     * it (a single-candidate type has nothing to disambiguate). Caught by the
+     * {@code PortOneProfileContextBootIntegrationTest} guard this fix ships with; matches the
+     * already-correct explicit-constructor pattern in {@code AutoRenewMembershipsUseCase}.
+     */
+    public WebhookReconcileUseCase(
+            MembershipRepository membershipRepository,
+            @Qualifier("paymentGateway") PaymentGatewayPort paymentGateway) {
+        this.membershipRepository = membershipRepository;
+        this.paymentGateway = paymentGateway;
+    }
 
     /**
      * Reconcile the outcome referenced by a verified webhook. Always safe to run
