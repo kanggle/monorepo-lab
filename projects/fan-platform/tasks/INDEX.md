@@ -67,7 +67,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 ## ready
 
 - `TASK-FAN-BE-035-notification-envelope-parser-dedup.md` — filed 2026-07-29. Extracts the shared Kafka envelope-parsing helper duplicated when `CommunityEventParser` was cloned from `MembershipEventParser` in `TASK-FAN-BE-026` (~47 of ~125 lines byte-identical).
-- `TASK-FAN-BE-036-remove-dead-tenant-context.md` — filed 2026-07-29. Deletes the unreferenced `TenantContext` class straggling in `notification-service`/`community-service`/`artist-service` (already removed from `membership-service` by an earlier sweep).
 
 ## in-progress
 
@@ -75,7 +74,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-FAN-BE-036-remove-dead-tenant-context.md` — filed 2026-07-29, moved to review 2026-07-29. Deleted the unreferenced `TenantContext` class from `notification-service`/`community-service`/`artist-service` (already removed from `membership-service` by an earlier sweep). Repo-wide grep confirmed zero live consumers of the class in any of the three services (only self-references within each file); `architecture.md` § Package Layout updated in all three. `notification-service:check`/`community-service:check`/`artist-service:check` GREEN, identical test counts (93/115/116), no test file modified.
 
 ## done
 
