@@ -1,4 +1,4 @@
-package com.wms.master.adapter.out.idempotency;
+package com.wms.admin.infra.idempotency;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -16,6 +16,15 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+/**
+ * Unit tests for {@link InMemoryIdempotencyStore}.
+ *
+ * <p>The concurrency test forks two threads that both call
+ * {@link InMemoryIdempotencyStore#tryAcquireLock(String, Duration)} on the
+ * same key. Exactly one must observe a successful acquire — verifying the
+ * {@link java.util.concurrent.ConcurrentHashMap#compute} guarantee
+ * (TASK-BE-564 — closes the get-then-put race present before this fix).
+ */
 class InMemoryIdempotencyStoreTest {
 
     @Test
@@ -66,7 +75,7 @@ class InMemoryIdempotencyStoreTest {
     @DisplayName("two concurrent threads call tryAcquireLock — exactly one wins (TASK-BE-564)")
     void concurrentTryAcquireLockYieldsExactlyOneWinner() throws Exception {
         InMemoryIdempotencyStore store = new InMemoryIdempotencyStore();
-        String key = "POST:master:11111111-1111-1111-1111-111111111111";
+        String key = "POST:admin:11111111-1111-1111-1111-111111111111";
         Duration ttl = Duration.ofSeconds(30);
 
         int rounds = 200;
