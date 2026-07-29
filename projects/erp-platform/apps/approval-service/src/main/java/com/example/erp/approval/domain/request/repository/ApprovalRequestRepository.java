@@ -1,5 +1,6 @@
 package com.example.erp.approval.domain.request.repository;
 
+import com.example.erp.approval.domain.common.PageResult;
 import com.example.erp.approval.domain.request.ApprovalAction;
 import com.example.erp.approval.domain.request.ApprovalRequest;
 import com.example.erp.approval.domain.request.ApprovalStatus;
@@ -26,14 +27,19 @@ public interface ApprovalRequestRepository {
 
     Optional<ApprovalRequest> findById(String id, String tenantId);
 
-    List<ApprovalRequest> findAll(String tenantId, ApprovalStatus status, int page, int size);
+    /**
+     * {@link PageResult#totalElements()} carries the TRUE count of ALL matching
+     * rows (across every page), not {@code content().size()} — approval-api.md
+     * § PageMeta.
+     */
+    PageResult<ApprovalRequest> findAll(String tenantId, ApprovalStatus status, int page, int size);
 
     /** Requests where the actor is the submitter OR the approver (scope-aware list). */
-    List<ApprovalRequest> findByParticipant(String tenantId, String participantId,
-                                            ApprovalStatus status, int page, int size);
+    PageResult<ApprovalRequest> findByParticipant(String tenantId, String participantId,
+                                                  ApprovalStatus status, int page, int size);
 
     /** Pending inbox: SUBMITTED requests whose approver equals {@code approverId}. */
-    List<ApprovalRequest> findInbox(String tenantId, String approverId, int page, int size);
+    PageResult<ApprovalRequest> findInbox(String tenantId, String approverId, int page, int size);
 
     ApprovalAction appendAction(ApprovalAction action);
 

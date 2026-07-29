@@ -16,14 +16,23 @@ public interface ApprovalRequestJpaRepository extends JpaRepository<ApprovalRequ
 
     List<ApprovalRequest> findAllByTenantId(String tenantId, Pageable pageable);
 
+    long countByTenantId(String tenantId);
+
     List<ApprovalRequest> findAllByTenantIdAndStatus(String tenantId, ApprovalStatus status,
                                                      Pageable pageable);
+
+    long countByTenantIdAndStatus(String tenantId, ApprovalStatus status);
 
     @Query("SELECT r FROM ApprovalRequest r WHERE r.tenantId = :tenantId "
             + "AND (r.submitterId = :participantId OR r.approverId = :participantId)")
     List<ApprovalRequest> findByParticipant(@Param("tenantId") String tenantId,
                                             @Param("participantId") String participantId,
                                             Pageable pageable);
+
+    @Query("SELECT COUNT(r) FROM ApprovalRequest r WHERE r.tenantId = :tenantId "
+            + "AND (r.submitterId = :participantId OR r.approverId = :participantId)")
+    long countByParticipant(@Param("tenantId") String tenantId,
+                            @Param("participantId") String participantId);
 
     @Query("SELECT r FROM ApprovalRequest r WHERE r.tenantId = :tenantId "
             + "AND (r.submitterId = :participantId OR r.approverId = :participantId) "
@@ -32,6 +41,13 @@ public interface ApprovalRequestJpaRepository extends JpaRepository<ApprovalRequ
                                                      @Param("participantId") String participantId,
                                                      @Param("status") ApprovalStatus status,
                                                      Pageable pageable);
+
+    @Query("SELECT COUNT(r) FROM ApprovalRequest r WHERE r.tenantId = :tenantId "
+            + "AND (r.submitterId = :participantId OR r.approverId = :participantId) "
+            + "AND r.status = :status")
+    long countByParticipantAndStatus(@Param("tenantId") String tenantId,
+                                     @Param("participantId") String participantId,
+                                     @Param("status") ApprovalStatus status);
 
     List<ApprovalRequest> findAllByTenantIdAndApproverIdAndStatus(
             String tenantId, String approverId, ApprovalStatus status, Pageable pageable);
@@ -49,4 +65,12 @@ public interface ApprovalRequestJpaRepository extends JpaRepository<ApprovalRequ
     List<ApprovalRequest> findInboxPending(@Param("tenantId") String tenantId,
                                            @Param("approverId") String approverId,
                                            Pageable pageable);
+
+    /** TRUE total-row count backing {@link #findInboxPending} (approval-api.md § PageMeta). */
+    @Query("SELECT COUNT(r) FROM ApprovalRequest r WHERE r.tenantId = :tenantId "
+            + "AND r.approverId = :approverId "
+            + "AND r.status IN (com.example.erp.approval.domain.request.ApprovalStatus.SUBMITTED, "
+            + "com.example.erp.approval.domain.request.ApprovalStatus.IN_REVIEW)")
+    long countInboxPending(@Param("tenantId") String tenantId,
+                           @Param("approverId") String approverId);
 }

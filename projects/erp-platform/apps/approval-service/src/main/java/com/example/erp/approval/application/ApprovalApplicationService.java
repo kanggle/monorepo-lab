@@ -16,6 +16,7 @@ import com.example.erp.approval.domain.audit.ApprovalAuditLog;
 import com.example.erp.approval.domain.audit.ApprovalAuditLogRepository;
 import com.example.erp.approval.domain.authorization.AuthorizationDecision;
 import com.example.erp.approval.domain.authorization.RequiredScope;
+import com.example.erp.approval.domain.common.PageResult;
 import com.example.erp.approval.domain.delegation.DelegationResolution;
 import com.example.erp.approval.domain.delegation.DelegationResolver;
 import com.example.erp.approval.domain.error.ApprovalErrors.ApprovalNotAuthorizedApproverException;
@@ -224,10 +225,10 @@ public class ApprovalApplicationService {
     }
 
     @Transactional(readOnly = true)
-    public List<ApprovalSummaryView> list(ActorContext actor, ApprovalStatus status,
-                                          ParticipantRole role, int page, int size) {
+    public PageResult<ApprovalSummaryView> list(ActorContext actor, ApprovalStatus status,
+                                                ParticipantRole role, int page, int size) {
         authorizeRead(actor);
-        List<ApprovalRequest> rows;
+        PageResult<ApprovalRequest> rows;
         if (role == null && (actor.isOperator() || actor.isPlatformScope())) {
             // Operator / platform scope sees the tenant-wide list.
             rows = requestRepository.findAll(actor.tenantId(), status, page, size);
@@ -236,14 +237,14 @@ public class ApprovalApplicationService {
             rows = requestRepository.findByParticipant(
                     actor.tenantId(), actor.actorId(), status, page, size);
         }
-        return rows.stream().map(ApprovalSummaryView::from).toList();
+        return rows.map(ApprovalSummaryView::from);
     }
 
     @Transactional(readOnly = true)
-    public List<ApprovalSummaryView> inbox(ActorContext actor, int page, int size) {
+    public PageResult<ApprovalSummaryView> inbox(ActorContext actor, int page, int size) {
         authorizeRead(actor);
         return requestRepository.findInbox(actor.tenantId(), actor.actorId(), page, size)
-                .stream().map(ApprovalSummaryView::from).toList();
+                .map(ApprovalSummaryView::from);
     }
 
     /** Scope filter for the list endpoint (?role=SUBMITTER|APPROVER). */

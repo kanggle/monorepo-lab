@@ -478,4 +478,50 @@ class ApprovalLifecycleIntegrationTest extends AbstractApprovalIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
+
+    // ---- pagination totalElements = TRUE cross-page total (TASK-ERP-BE-036) ----
+
+    @Test
+    @DisplayName("list: meta.totalElements is the TRUE total across all pages, not data.size()")
+    void listTotalElementsIsTrueTotal() throws Exception {
+        // A dedicated approver id keeps this deterministic regardless of any
+        // other test's rows in the shared MySQL container (findByParticipant
+        // scopes to this actor). 3 requests, page size 2 → a real 2nd page
+        // exists, so a data.size()-based totalElements (the pre-fix bug) would
+        // read 2 instead of the true 3.
+        String approver = "emp-page-app-list";
+        String submitter = "emp-page-sub-list";
+        create(submitter, approver, "k-page-list-1");
+        create(submitter, approver, "k-page-list-2");
+        create(submitter, approver, "k-page-list-3");
+
+        mockMvc.perform(get("/api/erp/approval/requests?role=APPROVER&page=0&size=2")
+                        .header("Authorization", "Bearer " + token(approver, "erp.read")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.meta.page").value(0))
+                .andExpect(jsonPath("$.meta.size").value(2))
+                .andExpect(jsonPath("$.meta.totalElements").value(3));
+    }
+
+    @Test
+    @DisplayName("inbox: meta.totalElements is the TRUE total across all pages, not data.size()")
+    void inboxTotalElementsIsTrueTotal() throws Exception {
+        String approver = "emp-page-app-inbox";
+        String submitter = "emp-page-sub-inbox";
+        String id1 = create(submitter, approver, "k-page-inbox-1");
+        String id2 = create(submitter, approver, "k-page-inbox-2");
+        String id3 = create(submitter, approver, "k-page-inbox-3");
+        submitOk(id1, submitter, "k-page-inbox-submit-1");
+        submitOk(id2, submitter, "k-page-inbox-submit-2");
+        submitOk(id3, submitter, "k-page-inbox-submit-3");
+
+        mockMvc.perform(get("/api/erp/approval/inbox?page=0&size=2")
+                        .header("Authorization", "Bearer " + token(approver, "erp.read")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.meta.page").value(0))
+                .andExpect(jsonPath("$.meta.size").value(2))
+                .andExpect(jsonPath("$.meta.totalElements").value(3));
+    }
 }
