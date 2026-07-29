@@ -95,9 +95,8 @@ com.example.fanplatform.notification/
 │   │   ├── NotificationRepository.java          ← port
 │   │   ├── NotificationType.java                ← WELCOME / CANCELLATION / EXPIRY_REMINDER / REPLY / MENTION / REACTION_BADGE
 │   │   └── NotificationStatus.java              ← UNREAD / READ
-│   ├── channel/
-│   │   └── NotificationChannelPort.java         ← port: deliver(notification) → DeliveryResult
-│   └── tenant/TenantContext.java
+│   └── channel/
+│       └── NotificationChannelPort.java         ← port: deliver(notification) → DeliveryResult
 └── infrastructure/
     ├── config/JpaConfig.java + ClockConfig.java + KafkaConsumerConfig.java
     │                                             ← KafkaConsumerConfig owns the single DefaultErrorHandler

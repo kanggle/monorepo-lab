@@ -96,8 +96,7 @@ com.example.fanplatform.artist/
 │   │                                                      ArtistProfile (VO), ArtistStatus, ArtistType
 │   ├── group/                                          ← ArtistGroup, ArtistGroupId,
 │   │                                                      GroupMembership, GroupRole, ArtistGroupStatus
-│   ├── fandom/                                         ← Fandom, FandomId
-│   └── tenant/TenantContext.java
+│   └── fandom/                                         ← Fandom, FandomId
 └── config/
     ├── SecurityConfig.java                             ← OAuth2 RS + admin role enforcement
     ├── ServiceLevelOAuth2Config.java                   ← service-level JwtDecoder + validators

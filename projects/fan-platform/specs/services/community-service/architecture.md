@@ -90,7 +90,6 @@ com.example.fanplatform.community/
 │   ├── comment/Comment.java + repository port
 │   ├── reaction/Reaction.java + ReactionType
 │   ├── follow/Follow.java + repository port
-│   ├── tenant/TenantContext.java
 │   └── membership/MembershipChecker.java  ← port
 └── infrastructure/
     ├── config/JpaConfig.java + ClockConfig.java + OutboxConfig.java
