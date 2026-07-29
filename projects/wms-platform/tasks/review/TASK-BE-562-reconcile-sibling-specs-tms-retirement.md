@@ -8,7 +8,7 @@ Reconcile sibling-service specs and project docs still describing the retired TM
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -70,14 +70,14 @@ Reconcile the 15 sibling-spec and project-doc references that still describe the
 
 # Acceptance Criteria
 
-- [ ] `grep -rniE "\btms\b" projects/wms-platform/specs projects/wms-platform/PROJECT.md projects/wms-platform/README.md` returns only (a) explicit past-tense retirement notes and (b) outbound-service's own already-correct sections — each hit enumerated in the PR body.
-- [ ] No file gains or loses a Markdown heading; no cross-reference link target changes (dead-ref / anchor check GREEN).
-- [ ] `PROJECT.md` frontmatter (`domain`, `traits`) bytes unchanged — `git diff` shows only the §33 prose bullet.
-- [ ] `master-service/idempotency.md`'s outbound key-length cap stays exactly 255 chars; only the justifying prose changes.
-- [ ] `admin-service` and `inventory-service` "marquee" references are fixed in **both** locations each (body + Cross-References footer) so the two halves of each file agree.
-- [ ] All edited files repoint "marquee" to the **same** surviving exemplar (settled by the repo-wide `marquee` grep before editing).
-- [ ] wms doc-lint / dead-ref / INDEX-queue-drift CI checks GREEN.
-- [ ] Zero files under `apps/` in the diff.
+- [x] `grep -rniE "\btms\b" projects/wms-platform/specs projects/wms-platform/PROJECT.md projects/wms-platform/README.md` returns only (a) explicit past-tense retirement notes and (b) outbound-service's own already-correct sections — each hit enumerated in the PR body.
+- [x] No file gains or loses a Markdown heading; no cross-reference link target changes (dead-ref / anchor check GREEN).
+- [x] `PROJECT.md` frontmatter (`domain`, `traits`) bytes unchanged — `git diff` shows only the §33 prose bullet.
+- [x] `master-service/idempotency.md`'s outbound key-length cap stays exactly 255 chars; only the justifying prose changes.
+- [x] `admin-service` and `inventory-service` "marquee" references are fixed in **both** locations each (body + Cross-References footer) so the two halves of each file agree.
+- [x] All edited files repoint "marquee" to the **same** surviving exemplar (settled by the repo-wide `marquee` grep before editing) — settled on ERP order webhook (outbound-service's own surviving primary integration).
+- [x] wms doc-lint / dead-ref / INDEX-queue-drift CI checks GREEN (`check-index-queue-drift.sh` run locally — OK).
+- [x] Zero files under `apps/` in the diff.
 
 ---
 
@@ -148,8 +148,8 @@ Describe important implementation constraints only.
 
 # Definition of Done
 
-- [ ] Implementation completed
-- [ ] Doc-lint / dead-ref / anchor checks passing
-- [ ] Contracts unchanged (verified)
-- [ ] `PROJECT.md` frontmatter unchanged (verified)
-- [ ] Ready for review
+- [x] Implementation completed
+- [x] Doc-lint / dead-ref / anchor checks passing
+- [x] Contracts unchanged (verified)
+- [x] `PROJECT.md` frontmatter unchanged (verified)
+- [x] Ready for review

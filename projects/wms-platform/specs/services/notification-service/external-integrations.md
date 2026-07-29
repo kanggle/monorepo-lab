@@ -120,10 +120,11 @@ boundary.
 Implementation: JDK `java.net.http.HttpClient` (not Spring `RestClient`).
 Rationale: Slack body is trivial (`{"text":"..."}`) — no Spring HTTP
 plumbing needed; virtual-thread direct compatible (Java 21 / Spring Boot
-`spring.threads.virtual.enabled=true`). Sibling outbound-service uses
-`RestClient` because its TMS body is rich (multi-field shipment DTO);
-notification's choice is intentional, not a missed-opportunity for
-unification.
+`spring.threads.virtual.enabled=true`). The sibling outbound-service TMS
+adapter used `RestClient` for its richer multi-field shipment DTO before
+its retirement (TASK-BE-560, ADR-MONO-053 §D8); notification's choice
+remains intentional on its own trivial-payload merits, not a
+missed-opportunity for unification with a sibling vendor client.
 
 ### 1.7 Circuit Breaker (I2)
 
@@ -522,7 +523,7 @@ NOT in this spec):
 - [`../../contracts/events/notification-subscriptions.md`](../../contracts/events/notification-subscriptions.md) — 6 source topic catalog
 - [`../../contracts/events/notification-events.md`](../../contracts/events/notification-events.md) — `notification.delivered.v1` audit schema
 - [`../inbound-service/external-integrations.md`](../inbound-service/external-integrations.md) — sibling (ERP webhook + Kafka + Postgres + Secret Manager)
-- [`../outbound-service/external-integrations.md`](../outbound-service/external-integrations.md) — sibling (TMS marquee, full I1-I10 reference)
+- [`../outbound-service/external-integrations.md`](../outbound-service/external-integrations.md) — sibling (ERP order webhook marquee, full I1-I10 reference; former TMS push retired, TASK-BE-560)
 - [`../inventory-service/external-integrations.md`](../inventory-service/external-integrations.md) — sibling (zero-state, BE-156)
 - `../../../apps/notification-service/src/main/resources/application.yml` — Resilience4j `slack` + channel aliases
 - `../../../apps/notification-service/src/main/java/com/wms/notification/adapter/outbound/slack/SlackChannelAdapter.java` — adapter source-of-truth

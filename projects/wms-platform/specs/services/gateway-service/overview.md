@@ -70,5 +70,5 @@ Rate-limit tiers (per `(account, routeId)`): standard 100 rps, admin 60 rps, web
 - `notification-service` 는 REST surface 0 — gateway route 없음.
 - Business logic of any kind.
 - Domain state persistence.
-- Direct TMS / ERP calls — `outbound-service` / `inbound-service` 가 adapter 소유.
+- Direct ERP calls — `outbound-service` / `inbound-service` 가 adapter 소유. (구 TMS 직접 연동은 TASK-BE-560 으로 폐기 — carrier dispatch 는 scm `logistics-service` 가 소유, ADR-MONO-053 §D8.)
 - 다중 IdP 통합 (SAML / SCIM) — OAuth2 / JWT 만 지원.

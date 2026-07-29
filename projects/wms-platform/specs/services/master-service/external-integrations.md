@@ -21,7 +21,7 @@ Paths).
 Sibling integration surfaces (for cross-reference; not consumed by master itself):
 
 - [`../inbound-service/external-integrations.md`](../inbound-service/external-integrations.md) — ERP ASN webhook (HMAC), Kafka, infrastructure.
-- [`../outbound-service/external-integrations.md`](../outbound-service/external-integrations.md) — ERP order webhook + TMS push (marquee).
+- [`../outbound-service/external-integrations.md`](../outbound-service/external-integrations.md) — ERP order webhook (marquee); the former TMS push was retired in TASK-BE-560 (ADR-MONO-053 §D8).
 - [`../notification-service/external-integrations.md`](../notification-service/external-integrations.md) — Slack Incoming Webhooks (marquee, BE-158).
 
 `master-service` publishes 6 aggregate snapshot topics (`master.warehouse.*` / `.zone.*` / `.location.*` / `.sku.*` / `.partner.*` / `.lot.*`) that the 5 sibling services consume — see [`../../contracts/events/master-events.md`](../../contracts/events/master-events.md). The relationship is publisher-only: master never reads sibling events.
@@ -90,7 +90,7 @@ Until one of these triggers fires, this file remains zero-state.
 - [`idempotency.md`](idempotency.md) — REST + outbox dedupe
 - [`../../contracts/events/master-events.md`](../../contracts/events/master-events.md) — 6 published event schemas
 - [`../inbound-service/external-integrations.md`](../inbound-service/external-integrations.md) — sibling non-zero reference (ERP ASN)
-- [`../outbound-service/external-integrations.md`](../outbound-service/external-integrations.md) — sibling non-zero reference (TMS marquee)
+- [`../outbound-service/external-integrations.md`](../outbound-service/external-integrations.md) — sibling non-zero reference (ERP order webhook marquee; TMS push retired, TASK-BE-560)
 - [`../inventory-service/external-integrations.md`](../inventory-service/external-integrations.md) — sibling zero-state (BE-156, primary template)
 - [`../notification-service/external-integrations.md`](../notification-service/external-integrations.md) — sibling non-zero reference (Slack, BE-158)
 - `../../../../../rules/traits/integration-heavy.md` — Required Artifacts + I1–I10
