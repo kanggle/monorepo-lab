@@ -15,7 +15,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class JwtSignerTest {
+class OperatorJwtSignerTest {
 
     private static KeyPair rsaKeyPair() throws Exception {
         KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
@@ -35,7 +35,7 @@ class JwtSignerTest {
         AdminJwtKeyStore keyStore = new AdminJwtKeyStore(
                 Map.of("v1", toPkcs8Pem(kp.getPrivate())), "v1");
 
-        JwtSigner signer = new JwtSigner(keyStore, "admin-service");
+        OperatorJwtSigner signer = new OperatorJwtSigner(keyStore, "admin-service");
 
         Instant now = Instant.now();
         Map<String, Object> claims = new LinkedHashMap<>();
@@ -74,7 +74,7 @@ class JwtSignerTest {
         KeyPair kp = rsaKeyPair();
         AdminJwtKeyStore keyStore = new AdminJwtKeyStore(
                 Map.of("v7", toPkcs8Pem(kp.getPrivate())), "v7");
-        JwtSigner signer = new JwtSigner(keyStore, "admin-service");
+        OperatorJwtSigner signer = new OperatorJwtSigner(keyStore, "admin-service");
         assertThat(signer.activeKid()).isEqualTo("v7");
     }
 }

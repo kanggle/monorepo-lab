@@ -33,7 +33,7 @@ import static org.mockito.Mockito.when;
 class BootstrapTokenServiceTest {
 
     private KeyPair keyPair;
-    private JwtSigner signer;
+    private OperatorJwtSigner signer;
     private JwtVerifier verifier;
     private StringRedisTemplate redis;
     private ValueOperations<String, String> valueOps;
@@ -45,9 +45,9 @@ class BootstrapTokenServiceTest {
         KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
         gen.initialize(2048);
         this.keyPair = gen.generateKeyPair();
-        // Build a JwtSigner that reuses the admin JwtSigner type (issuer + kid injection).
+        // Build an OperatorJwtSigner (admin-service's issuer/kid-injecting wrapper).
         AdminJwtKeyStore keyStore = fixtureKeyStore((RSAPrivateKey) keyPair.getPrivate());
-        this.signer = new JwtSigner(keyStore, "admin-service");
+        this.signer = new OperatorJwtSigner(keyStore, "admin-service");
         this.verifier = new Rs256JwtVerifier((RSAPublicKey) keyPair.getPublic());
 
         this.redis = mock(StringRedisTemplate.class);

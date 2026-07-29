@@ -164,7 +164,7 @@ admin-service는 일반 사용자 JWT와 **물리적으로 분리된 자체 IdP(
   - `token_type = "admin"` + 별도 issuer로 user 토큰과의 혼용을 **서명 수준**에서 차단 (rbac.md D4).
   - 독립적 kid rotation과 감사 경계(regulated R9) 준수.
 
-### JwtSigner Bean Requirements
+### Operator JWT Signer Bean Requirements
 
 - **Algorithm**: RS256 (RSA 2048-bit 이상). HS* 대칭 키 금지 (regulated R9 영구 키 금지 원칙 + JWKS 공개 운영 용이성).
 - **Kid rotation**: 서명 키는 `kid` 포함. 현재 kid 1개 + 이전 kid N개 병행 검증(grace period). rotation 주기는 운영 ADR에서 확정(초안 90일).

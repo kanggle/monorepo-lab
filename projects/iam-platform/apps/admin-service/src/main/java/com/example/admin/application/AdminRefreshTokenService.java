@@ -5,7 +5,7 @@ import com.example.admin.application.exception.RefreshTokenReuseDetectedExceptio
 import com.example.admin.application.port.AdminRefreshTokenPort;
 import com.example.admin.application.port.OperatorLookupPort;
 import com.example.admin.infrastructure.config.AdminJwtProperties;
-import com.example.admin.infrastructure.security.JwtSigner;
+import com.example.admin.infrastructure.security.OperatorJwtSigner;
 import com.example.common.id.UuidV7;
 import com.example.security.jwt.JwtVerificationException;
 import com.example.security.jwt.JwtVerifier;
@@ -53,7 +53,7 @@ public class AdminRefreshTokenService {
     private final AdminRefreshTokenPort tokenPort;
     private final OperatorLookupPort operatorLookup;
     private final AdminRefreshTokenIssuer refreshIssuer;
-    private final JwtSigner jwtSigner;
+    private final OperatorJwtSigner jwtSigner;
 
     @Transactional(noRollbackFor = RefreshTokenReuseDetectedException.class)
     public RefreshResult refresh(String refreshTokenJwt) {

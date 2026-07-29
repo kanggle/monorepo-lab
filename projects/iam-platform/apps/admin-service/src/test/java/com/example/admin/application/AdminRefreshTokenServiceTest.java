@@ -5,7 +5,7 @@ import com.example.admin.application.exception.RefreshTokenReuseDetectedExceptio
 import com.example.admin.application.port.AdminRefreshTokenPort;
 import com.example.admin.application.port.OperatorLookupPort;
 import com.example.admin.infrastructure.config.AdminJwtProperties;
-import com.example.admin.infrastructure.security.JwtSigner;
+import com.example.admin.infrastructure.security.OperatorJwtSigner;
 import com.example.security.jwt.JwtVerificationException;
 import com.example.security.jwt.JwtVerifier;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,7 +48,7 @@ class AdminRefreshTokenServiceTest {
     @Mock AdminRefreshTokenPort tokenPort;
     @Mock OperatorLookupPort operatorLookup;
     @Mock AdminRefreshTokenIssuer refreshIssuer;
-    @Mock JwtSigner jwtSigner;
+    @Mock OperatorJwtSigner jwtSigner;
 
     private AdminJwtProperties props;
     private AdminRefreshTokenService service;
