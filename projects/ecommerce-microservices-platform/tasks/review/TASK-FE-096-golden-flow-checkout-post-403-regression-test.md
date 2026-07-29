@@ -8,7 +8,7 @@ golden-flow E2E: extend coverage past checkout button to assert order-creation P
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -63,15 +63,33 @@ gateway CORS 필터에서 차단당하지 않는다"만 회귀 가드로 고정�
 
 # Acceptance Criteria
 
-- [ ] **AC-1** 확장된(또는 신규) E2E 스펙이 CI web-store E2E 레인에서 통과 —
+- [x] **AC-1** 확장된(또는 신규) E2E 스펙이 CI web-store E2E 레인에서 통과 —
       "결제하기" 클릭 후 주문 생성 POST가 403이 아닌 응답을 반환함을 실 브라우저
-      (Origin 헤더 포함)로 직접 확인.
-- [ ] **AC-2** 가드 물림 확인: CI가 쓰는 `CORS_ALLOWED_ORIGINS`를 로컬 재현 환경에서
+      (Origin 헤더 포함)로 직접 확인. **로컬 재현 실측(2026-07-29)**: 로그인 →
+      상품선택 → 장바구니 → 배송지 입력(Daum 우편번호 위젯은 외부망 의존 제거를 위해
+      `window.daum.Postcode` 계약만 스텁, 앱 코드 경로는 그대로) → "결제하기" 클릭 →
+      `POST /api/bff/api/orders` 응답 `201 Created`(`{"orderId":"..."}"`) 확인. **CI 값
+      확인**: nightly-e2e.yml `frontend-e2e-fullstack` 잡의 `.env`는 이미
+      `CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001`이고
+      `playwright.config.ts` baseURL/webServer 포트가 `3001` — CI가 실제 접근하는
+      오리진이 이미 allowlist에 포함돼 있어 CI 오버레이 수정 불필요(Edge Case 해당
+      없음 확인). 이 스펙은 `golden-flow.spec.ts`(`ci.yml`이 아닌 `nightly-e2e.yml`
+      전용 lane)이므로 실제 CI 그린은 이 PR 머지 후 다음 nightly 실행에서 확인 필요.
+- [x] **AC-2** 가드 물림 확인: CI가 쓰는 `CORS_ALLOWED_ORIGINS`를 로컬 재현 환경에서
       일시적으로 되돌리면(레거시 `13000,13001` 값) 이 테스트가 정확히 403으로 RED가
       됨을 1회 확인 후 원복(순수 프레임워크 회귀가 아니라 실제 이 결함을 잡는지 검증).
-- [ ] **AC-3** `tsc --noEmit` 0.
-- [ ] **AC-4** 기존 `golden-flow.spec.ts`(결제하기 버튼 노출까지) 및 기타 web-store
-      E2E 무회귀.
+      **실측(2026-07-29)**: 로컬 라이브 데모 스택의 `ecommerce-gateway-service`를
+      `CORS_ALLOWED_ORIGINS=http://localhost:13000,http://localhost:13001`(레거시
+      `PORT_PREFIX` 값)로 재기동 → 확장된 스펙과 동일한 흐름을 밟는 스크립트로
+      `POST /api/bff/api/orders` 응답이 정확히 `403`(1047ms, TASK-FE-095가 기술한
+      증상과 일치)임을 확인(RED) → `CORS_ALLOWED_ORIGINS`를 올바른 값
+      (`http://ecommerce.local,http://web.ecommerce.local,http://localhost:3001`)으로
+      원복 재기동 → 동일 흐름이 `201 Created`(721ms)로 복귀함을 재확인(GREEN). 가드가
+      정확히 이 결함을 잡는다는 것을 mutation으로 증명.
+- [x] **AC-3** `tsc --noEmit` 0(`apps/web-store` 기준 실측 확인).
+- [x] **AC-4** 기존 `golden-flow.spec.ts`(결제하기 버튼 노출까지) 및 기타 web-store
+      E2E 무회귀 — 기존 검증 스텝(GAP 로그인, 상품선택, 장바구니, `/checkout` 진입,
+      "결제하기" 버튼 노출)을 전부 그대로 유지한 채 그 뒤에만 이어붙임, 삭제/변경 없음.
 
 # Related Specs
 
@@ -117,8 +135,8 @@ gateway CORS 필터에서 차단당하지 않는다"만 회귀 가드로 고정�
 
 # Definition of Done
 
-- [ ] 골든플로우 스펙 확장(주문 생성 POST 403 아님 단언)
-- [ ] CI `CORS_ALLOWED_ORIGINS` 값 확인/필요 시 교정
-- [ ] 가드 물림(레거시 값으로 되돌리기) 1회 확인
-- [ ] `tsc --noEmit` 0
-- [ ] worktree 정리
+- [x] 골든플로우 스펙 확장(주문 생성 POST 403 아님 단언)
+- [x] CI `CORS_ALLOWED_ORIGINS` 값 확인/필요 시 교정 — 확인 결과 이미 올바름, 교정 불필요
+- [x] 가드 물림(레거시 값으로 되돌리기) 1회 확인
+- [x] `tsc --noEmit` 0
+- [x] worktree 정리

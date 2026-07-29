@@ -75,14 +75,15 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | ID | Title | Service | Tags |
 |---|---|---|---|
 | TASK-BE-390 | **READY — ⏳ 2026-08-01 게이트 (그 전 구현 금지)**. D2-b deprecation window(~2026-08-01) 종료 후 gateway `allowed-issuers`에서 레거시 `iam` issuer 제거 + 테스트 정리. AC-0 verify-then-act(live `iss=iam` 토큰 0 확인) 선행. | gateway-service | code, security, test |
-| TASK-FE-096 | **READY — 선행: TASK-FE-095(DONE)**. `golden-flow.spec.ts`를 주문 생성 POST 시점까지 확장해 gateway CORS 403 아님을 CI 회귀 가드로 고정(Toss 결제창 완주는 범위 밖). CI가 쓰는 `CORS_ALLOWED_ORIGINS` 값이 CI 오리진과 일치하는지 먼저 확인 필요. | web-store | code, test |
 ## in-progress
 
 _(없음)_
 
 ## review
 
-_(없음)_
+| ID | Title | Service | Tags |
+|---|---|---|---|
+| TASK-FE-096 | **REVIEW — 선행: TASK-FE-095(DONE).** `golden-flow.spec.ts`를 주문 생성 POST 시점까지 확장해 gateway CORS 403 아님을 CI 회귀 가드로 고정(Toss 결제창 완주는 범위 밖). CI `CORS_ALLOWED_ORIGINS` 값은 이미 CI 오리진(`localhost:3001`)을 포함해 교정 불필요함을 확인. **mutation-check 실측**: 로컬에서 레거시 값(`13000,13001`)으로 되돌려 정확히 403 RED 확인 → 원복 후 201 GREEN 재확인. `tsc --noEmit` 0. | web-store | code, test |
 
 ## done
 
