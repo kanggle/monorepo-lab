@@ -1,7 +1,9 @@
 package com.kanggle.platformconsole.bff.application.composition;
 
+import com.kanggle.platformconsole.bff.domain.composition.CircuitOpenException;
 import com.kanggle.platformconsole.bff.domain.composition.LegOutcome;
 import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
+import com.kanggle.platformconsole.bff.support.LegResilienceDoubles;
 import io.micrometer.context.ContextRegistry;
 import io.micrometer.context.ThreadLocalAccessor;
 import io.micrometer.core.instrument.Counter;
@@ -71,7 +73,12 @@ class CompositionEngineTest {
     @BeforeEach
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
-        engine = new CompositionEngine(meterRegistry, Tracer.NOOP, ROUTE);
+        // Pass-through gate: these scenarios are about fan-out coordination, not
+        // about the breaker. The breaker itself is exercised in
+        // Resilience4jLegResilienceAdapterTest and, wired, in
+        // CircuitBreakerIntegrationTest.
+        engine = new CompositionEngine(meterRegistry, Tracer.NOOP, ROUTE,
+                LegResilienceDoubles.passThrough());
     }
 
     // ------------------------------------------------------------------
@@ -221,6 +228,58 @@ class CompositionEngineTest {
                 .counter();
         assertThat(scmTimeout).isNotNull();
         assertThat(scmTimeout.count()).isEqualTo(1.0);
+    }
+
+    // ------------------------------------------------------------------
+    // Scenario 4 — the resilience gate is on the leg path (TASK-PC-BE-015)
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("resilience_gate: an OPEN gate rejects the leg body and the CircuitOpenException reaches the injected classifier — the engine still decides no classification")
+    void time_routes_the_leg_through_the_resilience_gate() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        // Gate is OPEN for WMS only; every other domain passes through.
+        CompositionEngine gated = new CompositionEngine(registry, Tracer.NOOP, ROUTE,
+                LegResilienceDoubles.openFor(DomainTarget.WMS));
+
+        AtomicInteger wmsBodyInvocations = new AtomicInteger();
+        LegErrorClassifier classifier = (domain, e) -> {
+            if (e instanceof CircuitOpenException) {
+                registry.counter("bff_fanout_errors", "domain", domain.name().toLowerCase(),
+                        "route", ROUTE, "code", "circuit_open").increment();
+                return CompositionLeg.outcomeOnly(LegOutcome.circuitOpen(domain));
+            }
+            return CompositionLeg.outcomeOnly(LegOutcome.degraded(domain, "DOWNSTREAM_ERROR"));
+        };
+
+        Map<DomainTarget, Supplier<CompositionLeg>> bodies = new EnumMap<>(DomainTarget.class);
+        for (DomainTarget d : DOMAINS) {
+            bodies.put(d, () -> gated.time(d, () -> {
+                if (d == DomainTarget.WMS) {
+                    wmsBodyInvocations.incrementAndGet();
+                }
+                return CompositionLeg.ok(LegOutcome.ok(d), Map.of("ok", true));
+            }, classifier));
+        }
+
+        Map<DomainTarget, CompositionLeg> results = gated.fanOut("tenant-cb", bodies);
+
+        // The gated leg surfaces the CIRCUIT_OPEN degrade …
+        assertThat(results.get(DomainTarget.WMS).outcome().isCircuitOpen()).isTrue();
+        assertThat(results.get(DomainTarget.WMS).outcome().reason()).isEqualTo("CIRCUIT_OPEN");
+        // … and its body never ran (fail-fast means no outbound work at all).
+        assertThat(wmsBodyInvocations.get()).isZero();
+        // Other legs untouched by the gate.
+        for (DomainTarget d : List.of(DomainTarget.IAM, DomainTarget.SCM,
+                DomainTarget.FINANCE, DomainTarget.ERP)) {
+            assertThat(results.get(d).outcome().isOk())
+                    .as("domain %s should be ok", d).isTrue();
+        }
+        Counter circuitOpen = registry.find("bff_fanout_errors")
+                .tag("domain", "wms").tag("route", ROUTE).tag("code", "circuit_open")
+                .counter();
+        assertThat(circuitOpen).isNotNull();
+        assertThat(circuitOpen.count()).isEqualTo(1.0);
     }
 
     // ------------------------------------------------------------------

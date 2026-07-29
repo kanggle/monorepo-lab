@@ -1,5 +1,7 @@
 package com.kanggle.platformconsole.bff.application.composition;
 
+import com.kanggle.platformconsole.bff.application.port.outbound.LegResiliencePort;
+import com.kanggle.platformconsole.bff.domain.composition.CircuitOpenException;
 import com.kanggle.platformconsole.bff.domain.composition.LegOutcome;
 import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
 import io.micrometer.context.ContextSnapshot;
@@ -37,6 +39,19 @@ import java.util.function.Supplier;
  * touches a credential, never reads a tenant header, and never decides
  * on a degrade-policy classification beyond what the injected
  * {@link LegErrorClassifier} dictates.
+ *
+ * <p><b>Per-leg resilience gate (TASK-PC-BE-015)</b>: {@link #time} runs every
+ * leg body through the injected {@link LegResiliencePort}, keyed
+ * {@code (domain, routeLabel)}. This class is the <b>only</b> place in the
+ * service that holds both halves of that key — the {@code RestClient} beans are
+ * per-domain and know nothing of the route — which is why the circuit-breaker
+ * envelope the spec words as "keyed by {@code (domain, route)}" is wired here
+ * rather than in an HTTP interceptor. A rejected call surfaces as
+ * {@link CircuitOpenException} out of {@code call.get()} and therefore reaches
+ * the injected {@link LegErrorClassifier} on the identical path as every other
+ * leg failure; each use-case's classifier maps it to
+ * {@code degraded / CIRCUIT_OPEN} + {@code bff_fanout_errors{code="circuit_open"}}.
+ * The engine itself still decides no classification.
  *
  * <p><b>Behavior byte-equal invariants</b> (TASK-PC-BE-005 hard
  * constraints — must remain unchanged after extraction):
@@ -91,6 +106,7 @@ public final class CompositionEngine {
     private final MeterRegistry meterRegistry;
     private final Tracer tracer;
     private final String routeLabel;
+    private final LegResiliencePort resilience;
 
     /**
      * @param meterRegistry the Micrometer registry shared with the use-case
@@ -104,12 +120,19 @@ public final class CompositionEngine {
      *                      {@code bff_fanout_latency} timers and
      *                      {@code bff_fanout_errors} counters (e.g.
      *                      {@code "operator-overview"} /
-     *                      {@code "domain-health"})
+     *                      {@code "domain-health"}). Also the second half of the
+     *                      resilience gate's {@code (domain, route)} key.
+     * @param resilience    the per-leg circuit-breaker + bounded-retry gate
+     *                      (TASK-PC-BE-015). Required — pass
+     *                      {@code LegResiliencePort} pass-through double in unit
+     *                      tests that are not exercising the gate.
      */
-    public CompositionEngine(MeterRegistry meterRegistry, Tracer tracer, String routeLabel) {
+    public CompositionEngine(MeterRegistry meterRegistry, Tracer tracer, String routeLabel,
+                             LegResiliencePort resilience) {
         this.meterRegistry = meterRegistry;
         this.tracer = tracer;
         this.routeLabel = routeLabel;
+        this.resilience = resilience;
     }
 
     // ------------------------------------------------------------------
@@ -258,7 +281,11 @@ public final class CompositionEngine {
                 .tag("bff.route", routeLabel)
                 .start();
         try (Tracer.SpanInScope ignored = tracer.withSpan(legSpan)) {
-            CompositionLeg r = call.get();
+            // Per-leg circuit-breaker + bounded retry, keyed (domain, routeLabel)
+            // — TASK-PC-BE-015. On an OPEN breaker the body is never invoked and a
+            // CircuitOpenException lands in the catch below, i.e. on the same path
+            // as any other leg failure.
+            CompositionLeg r = resilience.execute(domain, routeLabel, call);
             sample.stop(timer);
             return r;
         } catch (RuntimeException e) {
@@ -277,9 +304,11 @@ public final class CompositionEngine {
      * Increments the per-leg error counter
      * {@code bff_fanout_errors{domain,route,code}} for the configured
      * {@link #routeLabel}. The {@code code} tag value MUST be one of the
-     * historic classifications ({@code missing_prerequisite},
+     * contract's classifications ({@code missing_prerequisite},
      * {@code tenant_forbidden}, {@code permission_denied}, {@code 5xx},
-     * {@code timeout}) — Prometheus dashboards depend on this stability.
+     * {@code timeout}, {@code circuit_open}) — Prometheus dashboards depend on
+     * this stability. {@code circuit_open} was in the contract's enum from the
+     * start but had no emitter until TASK-PC-BE-015 wired the breaker.
      */
     public void emitErrorCounter(DomainTarget domain, String code) {
         meterRegistry.counter("bff_fanout_errors",

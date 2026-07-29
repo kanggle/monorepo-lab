@@ -270,7 +270,10 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
     @DisplayName("per_leg_degrade_wms_503: 200 envelope; wms card degraded/DOWNSTREAM_ERROR")
     void per_leg_degrade_wms_503() {
         respond(GAP, 200, "{\"page\":{\"totalElements\":1}}");
-        respond(WMS, 503, "{}");
+        // respondAlways, not enqueue: the leg is retried once (TASK-PC-BE-015)
+        // and an exhausted QueueDispatcher would block until the read timeout,
+        // turning DOWNSTREAM_ERROR into TIMEOUT. See AbstractConsoleBffIntegrationTest.
+        respondAlways(WMS, 503, "{}");
         respond(SCM, 200, "{}");
         respond(ERP, 200, "{}");
         respond(ECOMMERCE, 200, "{\"totalElements\":1}");
@@ -315,12 +318,12 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
         respond(WMS, 200, "{}");
         respond(SCM, 200, "{}");
         respond(ECOMMERCE, 200, "{\"totalElements\":1}");
-        // ERP delays 3s — exceeds the 2s per-leg read timeout (RestClientConfig).
-        ERP.enqueue(new MockResponse()
-                .setResponseCode(200)
-                .setHeader("Content-Type", "application/json")
-                .setBody("{}")
-                .setHeadersDelay(3, TimeUnit.SECONDS));
+        // ERP delays 3s on EVERY request — exceeds the 2s per-leg read timeout
+        // (RestClientConfig). respondAlways, not a one-shot enqueue: the timed-out
+        // attempt is retried once (TASK-PC-BE-015) and a drained QueueDispatcher
+        // would park a MockWebServer worker forever, failing @AfterAll's
+        // shutdown() with "Gave up waiting for queue to shut down".
+        respondAlways(ERP, 200, "{}", 3_000L);
 
         ResponseEntity<String> response = callOverview(authHeaders());
         String body = response.getBody();
@@ -345,12 +348,13 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
     @Test
     @DisplayName("all_down_503: 200 envelope with all-down cards; degrade counter per non-ok leg")
     void all_down_503() {
-        respond(GAP, 503, "{}");
-        respond(WMS, 503, "{}");
-        respond(SCM, 503, "{}");
+        // respondAlways on every leg — each is retried once (TASK-PC-BE-015).
+        respondAlways(GAP, 503, "{}");
+        respondAlways(WMS, 503, "{}");
+        respondAlways(SCM, 503, "{}");
         // FINANCE never fires — MVP option (b)
-        respond(ERP, 503, "{}");
-        respond(ECOMMERCE, 503, "{}");
+        respondAlways(ERP, 503, "{}");
+        respondAlways(ECOMMERCE, 503, "{}");
 
         ResponseEntity<String> response = callOverview(authHeaders());
         String body = response.getBody();

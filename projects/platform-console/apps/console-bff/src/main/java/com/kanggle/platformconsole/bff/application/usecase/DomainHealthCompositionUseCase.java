@@ -6,8 +6,10 @@ import com.kanggle.platformconsole.bff.application.port.outbound.EcommerceHealth
 import com.kanggle.platformconsole.bff.application.port.outbound.ErpHealthReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.FinanceHealthReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.IamHealthReadPort;
+import com.kanggle.platformconsole.bff.application.port.outbound.LegResiliencePort;
 import com.kanggle.platformconsole.bff.application.port.outbound.ScmHealthReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.WmsHealthReadPort;
+import com.kanggle.platformconsole.bff.domain.composition.CircuitOpenException;
 import com.kanggle.platformconsole.bff.domain.composition.DegradePolicy;
 import com.kanggle.platformconsole.bff.domain.composition.LegOutcome;
 import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
@@ -82,13 +84,14 @@ public class DomainHealthCompositionUseCase {
     public DomainHealthCompositionUseCase(
             MeterRegistry meterRegistry,
             Tracer tracer,
+            LegResiliencePort resilience,
             IamHealthReadPort gapPort,
             WmsHealthReadPort wmsPort,
             ScmHealthReadPort scmPort,
             FinanceHealthReadPort financePort,
             ErpHealthReadPort erpPort,
             EcommerceHealthReadPort ecommercePort) {
-        this.engine = new CompositionEngine(meterRegistry, tracer, ROUTE_LABEL);
+        this.engine = new CompositionEngine(meterRegistry, tracer, ROUTE_LABEL, resilience);
         this.gapPort = gapPort;
         this.wmsPort = wmsPort;
         this.scmPort = scmPort;
@@ -138,8 +141,18 @@ public class DomainHealthCompositionUseCase {
      * {@link HttpClientErrorException} (incl. 401/403) to
      * {@code degraded / DOWNSTREAM_ERROR} (no permission outcome on a
      * public actuator leg), treats socket timeout as {@code TIMEOUT}.
+     *
+     * <p>TASK-PC-BE-015 adds the leading {@link CircuitOpenException} arm:
+     * {@code degraded / CIRCUIT_OPEN} + {@code code="circuit_open"}, matching
+     * § 2.4.9.2's {@code code ∈ {5xx, timeout, circuit_open}} for this route.
      */
     private CompositionLeg classifyError(DomainTarget domain, Throwable e) {
+        if (e instanceof CircuitOpenException) {
+            // Fail-fast: the breaker for (domain, "domain-health") is OPEN, so no
+            // outbound request was made and no per-leg timeout was paid.
+            engine.emitErrorCounter(domain, "circuit_open");
+            return CompositionLeg.outcomeOnly(LegOutcome.circuitOpen(domain));
+        }
         if (e instanceof HttpClientErrorException) {
             engine.emitErrorCounter(domain, "5xx");
             return CompositionLeg.outcomeOnly(LegOutcome.degraded(domain, "DOWNSTREAM_ERROR"));
