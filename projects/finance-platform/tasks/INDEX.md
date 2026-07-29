@@ -78,6 +78,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
+- `TASK-FIN-BE-063-idempotency-body-hash-key-order-canonicalization.md` — account-service `IdempotentExecution` 요청바디 해시가 Jackson 기본 직렬화(키순서 비정규)로 계산되어, 동일 논리 바디가 키순서만 달라도 다른 해시가 되어 같은 `Idempotency-Key` 재요청이 REPLAY 대신 409 `IDEMPOTENCY_KEY_CONFLICT`로 오판되는 결함 수정. `libs:java-web-servlet` `BodyHashUtil`(키정렬 canonical 해시, 이미 monorepo 공유 구현) 채택.
+
 ## in-progress
 
 (empty)
