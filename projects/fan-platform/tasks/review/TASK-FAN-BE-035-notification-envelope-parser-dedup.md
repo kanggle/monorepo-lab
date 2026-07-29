@@ -8,7 +8,7 @@ notification-service: extract the shared Kafka envelope-parsing helper duplicate
 
 # Status
 
-ready
+review
 
 # Owner
 

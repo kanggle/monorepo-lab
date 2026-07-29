@@ -66,8 +66,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-FAN-BE-035-notification-envelope-parser-dedup.md` — filed 2026-07-29. Extracts the shared Kafka envelope-parsing helper duplicated when `CommunityEventParser` was cloned from `MembershipEventParser` in `TASK-FAN-BE-026` (~47 of ~125 lines byte-identical).
-
 ## in-progress
 
 (empty)
@@ -75,6 +73,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 ## review
 
 - `TASK-FAN-BE-036-remove-dead-tenant-context.md` — filed 2026-07-29, moved to review 2026-07-29. Deleted the unreferenced `TenantContext` class from `notification-service`/`community-service`/`artist-service` (already removed from `membership-service` by an earlier sweep). Repo-wide grep confirmed zero live consumers of the class in any of the three services (only self-references within each file); `architecture.md` § Package Layout updated in all three. `notification-service:check`/`community-service:check`/`artist-service:check` GREEN, identical test counts (93/115/116), no test file modified.
+- `TASK-FAN-BE-035-notification-envelope-parser-dedup.md` — impl PR open (2026-07-29). Extracts `EventEnvelope` (envelope preamble + schemaVersion gate) + `JsonFields` (`requireText`/`requireInt`/`optionalText`/`optionalTextArray`/`requireInstant`) as package-private static helpers in `application.consumer`, shared by `MembershipEventParser`/`CommunityEventParser`. Zero test-file diff; `notification-service:test` unchanged at 83 tests before/after; `grep -c 'Envelope is not a JSON object'` = 1; `architecture.md` § Package Layout updated. CI Linux Testcontainers IT lane (`MembershipEventConsumeIntegrationTest` etc.) not run locally (no Docker) — pending CI verification on the PR.
 
 ## done
 
