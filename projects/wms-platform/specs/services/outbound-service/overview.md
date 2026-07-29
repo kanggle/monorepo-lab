@@ -10,7 +10,7 @@
 | Project | `wms-platform` |
 | Service Type | `rest-api` + `event-consumer` (dual; saga orchestrator) |
 | Architecture Style | **Hexagonal (Ports & Adapters)** — see [architecture.md § Architecture Style](architecture.md) |
-| Stack | Java 21, Spring Boot 3.4, PostgreSQL, Kafka (consumer + outbox via `libs/java-messaging`), Spring Data JPA, Resilience4j, TMS adapter |
+| Stack | Java 21, Spring Boot 3.4, PostgreSQL, Kafka (consumer + outbox via `libs/java-messaging`), Spring Data JPA |
 | Deployable unit | `apps/outbound-service/` |
 | Bounded Context | `Outbound` |
 | Persistent stores | PostgreSQL (Order / PickingRequest / PickingConfirmation / PackingUnit / Shipment / Saga state + master read-model cache) + Kafka outbox |
@@ -22,7 +22,6 @@
 - Orchestrate 4-step picking saga: `Order → PickingRequest → Packing → ShippingConfirmation` (T4 ordering, ADR-MONO-005 § D6 Category A).
 - Drive `inventory-service` reserve (W4) and confirm-consumed (W5) via saga reply events.
 - Receive ERP order webhooks (HMAC-signed) and ops manual entry.
-- Hand off shipment-ready notification to external TMS (Resilience4j wrap per ADR-MONO-005 § D6 Category B).
 
 ## Public surface
 
@@ -36,7 +35,6 @@
 | Kafka consume | `inventory.reserved.v1`, `inventory.confirmed.v1` | — | saga reply channel |
 | Kafka consume | `master.*` (6 aggregate types) | — | read-model cache refresh |
 | Kafka publish | `outbound.picking.requested.v1`, `outbound.picking.completed.v1`, `outbound.shipping.confirmed.v1` | — | inventory + notification consumers |
-| HTTP outbound | TMS adapter (R4j wrap) | — | shipment-ready notification |
 
 자세한 spec 은 [`../../contracts/http/outbound-service-api.md`](../../contracts/http/outbound-service-api.md) + [`../../contracts/events/outbound-events.md`](../../contracts/events/outbound-events.md) + [`../../contracts/webhooks/erp-order-webhook.md`](../../contracts/webhooks/erp-order-webhook.md) 참조. saga policy: [`../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md`](../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md).
 
@@ -47,7 +45,6 @@
 3. **`outbound.shipping.confirmed` only after physical pack + operator confirmation** — auto-emit 금지.
 4. **eventId-based dedupe on all consumed events** (T8) — saga reply 중복 = no-op.
 5. **Saga + outbox atomic** — saga state mutation 과 outbox row 가 한 TX (T3).
-6. **TMS handover failure must not block shipping confirmation** — TMS 5xx → fallback + retry, Shipment 자체는 commit (Category B fallback per ADR-MONO-005).
 
 ## Owned Data
 
@@ -67,11 +64,9 @@
 - `master-service` (snapshots)
 - `inventory-service` (saga reply events)
 - ERP system (order webhook source)
-- TMS (external HTTP, R4j wrap)
 
 ## Out of scope (v1)
 
 - Inventory quantities — `inventory-service` (W4/W5 owner).
 - Returns / RMA outbound — v2.
 - Multi-warehouse cross-boundary picking — v2.
-- Carrier rating / TMS quote — external TMS 책임.
