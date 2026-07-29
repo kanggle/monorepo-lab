@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-561-remove-dead-tms-retirement-survivors.md` — filed 2026-07-29. Removes the 4 build deps + 2 env vars orphaned by `TASK-BE-560`'s TMS side-channel retirement (`outbound-service/build.gradle` + `docker-compose.e2e.yml`). Dead-code removal, no `src/` change.
+(empty)
 
 > 2026-07-20 (`TASK-MONO-451`): 위 두 행은 **디스크에는 `ready/` 에 있는데 이 섹션이 `(empty)` 라고 선언**하고 있었다 — 아래 2026-07-12 노트와 정반대 방향의 같은 결함이다. 그때는 표가 끝난 일을 가리켰고, 이번엔 표가 **살아있는 일을 숨겼다**. 큐를 표로 고르는 사람에게 후자는 **일이 없다는 거짓 보고**다. 이제 `scripts/check-index-queue-drift.sh` 가 양방향으로 대조한다.
 
@@ -80,6 +80,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 ## review
 
 - `TASK-BE-562-reconcile-sibling-specs-tms-retirement.md` — filed 2026-07-29, in review. Reconciles 15 sibling-spec / `PROJECT.md` / `README.md` references still describing the retired TMS push as live; repoints all "marquee" designations to the surviving ERP order webhook. Docs-only.
+- `TASK-BE-561-remove-dead-tms-retirement-survivors.md` — impl PR pending review (2026-07-29). Removed `httpclient5` / `resilience4j-spring-boot3` / `resilience4j-micrometer` / `wiremock-standalone` from `outbound-service/build.gradle` and `TMS_BASE_URL` / `TMS_API_KEY` from `docker-compose.e2e.yml` — the build/env survivors `TASK-BE-560` left behind. `git diff --stat` touches exactly 2 implementation files (no `src/` change). Local: `build`/`unitTest`/`integrationTest` GREEN (244 unit + 22 integration testcases, 0 failures, Docker available locally); bootJar container boots clean with the reduced classpath (no `ClassNotFoundException`/`BeanCreationException`) — the compose-stack `/actuator/health` check itself could not be confirmed locally (hangs on every path, `/actuator/info` and a bogus path included) but an A/B rebuild with the original (pre-removal) dependencies reproduces the identical hang, so it predates this change and is an environmental limitation of this local Windows Docker stack, not a regression; CI `wms E2E` lane is authoritative for that AC. Repo-root `infra/demo/demo.env` (`WMS_TMS_BASE_URL`/`WMS_TMS_API_KEY`) intentionally left as a known remaining survivor (out of scope, monorepo-level path).
 
 ## done
 
