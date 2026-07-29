@@ -5,6 +5,8 @@ import com.kanggle.platformconsole.bff.domain.credential.CredentialSelectionPort
 import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
 import com.kanggle.platformconsole.bff.domain.credential.OutboundCredential;
 import com.kanggle.platformconsole.bff.infrastructure.config.NotificationAggregatorProperties;
+import com.kanggle.platformconsole.bff.support.LegResilienceDoubles;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.tracing.Tracer;
 import org.junit.jupiter.api.BeforeEach;
@@ -75,7 +77,40 @@ class NotificationAggregationUseCaseTest {
         NotificationAggregatorProperties props = new NotificationAggregatorProperties();
         props.setDomains(List.of("erp"));
         useCase = new NotificationAggregationUseCase(
-                props, credentialSelection, meterRegistry, Tracer.NOOP, erpPort);
+                props, credentialSelection, meterRegistry, Tracer.NOOP,
+                LegResilienceDoubles.passThrough(), erpPort);
+    }
+
+    /**
+     * TASK-PC-BE-015 — the aggregator's wire surface reports degraded legs only
+     * as {@code degradedDomains} names, so the {@code CIRCUIT_OPEN} evidence here
+     * is the metric plus the fact that the read port is never touched. The
+     * operator-visible effect: the bell renders the surviving domains at once
+     * instead of waiting out a dead domain's per-leg timeout.
+     */
+    @Test
+    @DisplayName("circuit_open: OPEN breaker on the erp leg → degradedDomains=[erp] + circuit_open counter; read port never invoked; still returns 200-shaped result")
+    void circuit_open_leg_degrades_without_calling_the_port() {
+        NotificationAggregatorProperties props = new NotificationAggregatorProperties();
+        props.setDomains(List.of("erp"));
+        NotificationAggregationUseCase gated = new NotificationAggregationUseCase(
+                props, credentialSelection, meterRegistry, Tracer.NOOP,
+                LegResilienceDoubles.openFor(DomainTarget.ERP), erpPort);
+        stubErpCredential();
+
+        NotificationAggregationResult result = gated.aggregate(0, 20, null);
+
+        assertThat(result.degradedDomains()).containsExactly("erp");
+        assertThat(result.items()).isEmpty();
+        verify(erpPort, never()).readInbox(anyString(), anyInt(), anyInt(), any());
+
+        Counter circuitOpen = meterRegistry.find("bff_fanout_errors")
+                .tag("domain", "erp")
+                .tag("route", "notification-aggregator")
+                .tag("code", "circuit_open")
+                .counter();
+        assertThat(circuitOpen).as("circuit_open must now have an emitter").isNotNull();
+        assertThat(circuitOpen.count()).isEqualTo(1.0);
     }
 
     private void stubErpCredential() {

@@ -271,7 +271,10 @@ class DomainHealthIntegrationTest extends AbstractConsoleBffIntegrationTest {
     @DisplayName("per_leg_degrade_wms_503: 200 envelope; wms card degraded/DOWNSTREAM_ERROR")
     void per_leg_degrade_wms_503() {
         respond(GAP, 200, "{\"status\":\"UP\"}");
-        respond(WMS, 503, "{}");
+        // respondAlways, not enqueue: the leg is retried once (TASK-PC-BE-015)
+        // and an exhausted QueueDispatcher would block until the read timeout,
+        // turning DOWNSTREAM_ERROR into TIMEOUT. See AbstractConsoleBffIntegrationTest.
+        respondAlways(WMS, 503, "{}");
         respond(SCM, 200, "{\"status\":\"UP\"}");
         respond(FINANCE, 200, "{\"status\":\"UP\"}");
         respond(ERP, 200, "{\"status\":\"UP\"}");
@@ -320,12 +323,13 @@ class DomainHealthIntegrationTest extends AbstractConsoleBffIntegrationTest {
     @Test
     @DisplayName("all_down_6x_503: 200 envelope with all 6 degraded cards; no forbidden anywhere")
     void all_down_6x_503() {
-        respond(GAP, 503, "{}");
-        respond(WMS, 503, "{}");
-        respond(SCM, 503, "{}");
-        respond(FINANCE, 503, "{}");
-        respond(ERP, 503, "{}");
-        respond(ECOMMERCE, 503, "{}");
+        // respondAlways on every leg — each is retried once (TASK-PC-BE-015).
+        respondAlways(GAP, 503, "{}");
+        respondAlways(WMS, 503, "{}");
+        respondAlways(SCM, 503, "{}");
+        respondAlways(FINANCE, 503, "{}");
+        respondAlways(ERP, 503, "{}");
+        respondAlways(ECOMMERCE, 503, "{}");
 
         ResponseEntity<String> response = callHealth(authHeaders());
         String body = response.getBody();

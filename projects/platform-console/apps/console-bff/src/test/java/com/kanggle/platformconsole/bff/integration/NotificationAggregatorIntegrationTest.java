@@ -199,7 +199,11 @@ class NotificationAggregatorIntegrationTest extends AbstractConsoleBffIntegratio
     @Test
     @DisplayName("failure_isolation_erp_down_503: still 200 + degradedDomains=[erp] + empty items (never 5xx)")
     void failure_isolation_erp_down() {
-        respond(ERP, 503, "{}");
+        // respondAlways, not enqueue: the inbox leg is retried once
+        // (TASK-PC-BE-015) and an exhausted QueueDispatcher would block until
+        // the read timeout. The mark-read surface below is NOT retried (it is a
+        // mutating proxy outside the fan-out engine), so those tests keep enqueue.
+        respondAlways(ERP, 503, "{}");
 
         ResponseEntity<String> response = callInbox(authHeaders());
         String body = response.getBody();

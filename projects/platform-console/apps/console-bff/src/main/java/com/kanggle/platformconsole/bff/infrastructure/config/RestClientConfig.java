@@ -34,9 +34,22 @@ import java.time.Duration;
  * (TASK-PC-BE-014); each bean keeps its own name, {@code @Value} property key, and type
  * so downstream {@code @Qualifier} injection is unaffected.
  *
- * <p>The per-leg circuit-breaker / retry primitives from {@code libs/java-web}
- * (Resilience4j) are applied at the call site (see the composition use case)
- * since the use case decides per-leg vs composition-level error classification.
+ * <p><b>Resilience division of labour (corrected by TASK-PC-BE-015).</b> These
+ * beans own the <i>timeout</i> third of the {@code integration-heavy} triad and
+ * nothing else. The per-leg <b>circuit-breaker + bounded retry</b> live in
+ * {@code adapter.outbound.resilience.Resilience4jLegResilienceAdapter}, built
+ * from {@code libs/java-common}'s
+ * {@code com.example.common.resilience.ResilienceClientFactory}, and are applied
+ * by {@code CompositionEngine.time(...)} — the only place that holds both halves
+ * of the spec's {@code (domain, route)} breaker key (a {@code RestClient} bean is
+ * per-domain and cannot see the route).
+ *
+ * <p>This javadoc previously claimed those primitives came from
+ * {@code libs/java-web} and were "applied at the call site". Both halves were
+ * false: {@code libs/java-web} contains no resilience code at all, and no call
+ * site applied any. The citation is corrected here rather than deleted, because
+ * the next reader of {@code architecture.md} § Resilience needs to land on the
+ * module that actually holds the primitives.
  */
 @Configuration
 public class RestClientConfig {
