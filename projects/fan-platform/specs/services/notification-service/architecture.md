@@ -84,6 +84,11 @@ com.example.fanplatform.notification/
 │   │   ├── MembershipEventParser.java + MembershipEvent.java
 │   │   ├── CommunityEventConsumer.java          ← @KafkaListener(comment.added.v1, reaction.added.v1) → use case
 │   │   ├── CommunityEventParser.java + CommunityEvent.java
+│   │   ├── EventEnvelope.java                   ← package-private helper: shared envelope preamble +
+│   │   │                                           schemaVersion gate (TASK-FAN-BE-035, not a Spring bean)
+│   │   ├── JsonFields.java                      ← package-private helper: shared requireText/requireInt/
+│   │   │                                           optionalText/optionalTextArray/requireInstant accessors
+│   │   │                                           (TASK-FAN-BE-035, not a Spring bean)
 │   │   └── MalformedEventException.java + UnsupportedSchemaVersionException.java  ← shared by BOTH parsers
 │   ├── HandleMembershipEventUseCase.java        ← idempotent: create Notification + dispatch channels
 │   ├── HandleCommunityEventUseCase.java         ← idempotent: 0..N Notifications (reply/mention/badge) + dispatch
