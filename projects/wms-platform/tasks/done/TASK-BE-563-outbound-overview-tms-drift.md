@@ -8,7 +8,7 @@ Reconcile outbound-service's own overview.md with the TMS side-channel retiremen
 
 # Status
 
-review
+done
 
 # Owner
 

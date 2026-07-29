@@ -8,7 +8,7 @@ Reconcile sibling-service specs and project docs still describing the retired TM
 
 # Status
 
-review
+done
 
 # Owner
 
