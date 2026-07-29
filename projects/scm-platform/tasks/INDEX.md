@@ -78,9 +78,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-SCM-BE-051-logistics-vendor-adapter-dedup.md` — filed 2026-07-29. Collapses the copy-pasted EasyPost/Goodsflow dispatch-adapter hierarchy in `logistics-service` (~150-170 duplicated lines; the same two Resilience4j retry-config defects were fixed twice per-vendor) while preserving per-vendor circuit/pool isolation (I9).
-
 ## in-progress
+
+- `TASK-SCM-BE-051-logistics-vendor-adapter-dedup.md` — filed 2026-07-29. Collapses the copy-pasted EasyPost/Goodsflow dispatch-adapter hierarchy in `logistics-service` (~150-170 duplicated lines; the same two Resilience4j retry-config defects were fixed twice per-vendor) while preserving per-vendor circuit/pool isolation (I9).
 
 ## review
 
