@@ -68,7 +68,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## in-progress
 
-(empty)
+- `TASK-FAN-BE-037-jwks-uri-default-path-mismatch.md` — **🔵 IN-PROGRESS.** 5개 서비스(gateway/community/artist/membership/notification) 전부 `JWT_JWKS_URI` 기본값이 `http://iam.local/.well-known/jwks.json`인데, IAM `auth-service`의 실제 엔드포인트는 `/oauth2/jwks`(ecommerce/scm/erp/finance는 전부 올바름 — fan-platform만 straggler). fan-platform 자신의 스펙 내에서도 갈라져 있음(`iam-integration.md`·`membership-service/dependencies.md`는 정답 `/oauth2/jwks`, `community`·`artist`·`gateway-service` 스펙은 오답). 테스트가 전부 `/.well-known/jwks.json`을 서빙하는 자체 mock으로 실제 IAM 배선을 우회해 지금까지 은폐됨. 스펙 정정 + 5개 서비스 기본값·테스트 더블 일괄 수정. 분석=Sonnet 5 / 구현 권장=Sonnet 5(기계적이나 터치포인트 多 — specs 3 + compose 5 + application.yml 5 + env.example 1 + mock server 6 + 단언 테스트 2). [[project_fan_platform_local_bringup]]
 
 ## review
 

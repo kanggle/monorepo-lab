@@ -23,10 +23,11 @@ import java.io.IOException;
  * has no cache case).
  *
  * <p>The same JWKS stand-in serves both the end-user decoder
- * ({@code /.well-known/jwks.json}) and the workload-identity decoder
- * ({@code /oauth2/jwks}); both token kinds are signed by the one
- * {@link JwtTestHelper} keypair. The internal issuer is pinned to
- * {@link JwtTestHelper#SAS_ISSUER}.
+ * ({@code spring.security.oauth2.resourceserver.jwt.jwk-set-uri}) and the
+ * workload-identity decoder ({@code fanplatform.internal.jwt.jwk-set-uri}) at
+ * the single real IAM route, {@code /oauth2/jwks}; both token kinds are
+ * signed by the one {@link JwtTestHelper} keypair. The internal issuer is
+ * pinned to {@link JwtTestHelper#SAS_ISSUER}.
  *
  * <p>Tagged {@code @Tag("integration")} so the default {@code test} task skips
  * it; only {@code integrationTest} includes it. {@code disabledWithoutDocker}

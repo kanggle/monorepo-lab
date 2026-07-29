@@ -9,10 +9,18 @@ import java.io.IOException;
 import java.net.InetAddress;
 
 /**
- * Wraps a {@link MockWebServer} serving the JWKS JSON document. Serves the same
- * JWKS at both {@code /.well-known/jwks.json} (end-user decoder) and
- * {@code /oauth2/jwks} (workload-identity decoder) since the test keypair signs
- * both token kinds. Bound to all interfaces so containers can reach it.
+ * Wraps a {@link MockWebServer} serving the JWKS JSON document at
+ * {@code /oauth2/jwks} — the single real IAM auth-service route. Both the
+ * end-user decoder ({@code spring.security.oauth2.resourceserver.jwt.jwk-set-uri})
+ * and the workload-identity decoder ({@code fanplatform.internal.jwt.jwk-set-uri})
+ * now default to this same physical endpoint in production
+ * ({@code application.yml}), so this mock collapses to a single served path
+ * (previously dual-served two distinct URIs) to match the other 4
+ * fan-platform services' {@code JwksMockServer} and actually exercise the
+ * real contract. {@code hostJwksUrl()} and
+ * {@code hostInternalJwksUrl()} stay as separate accessors — they wire two
+ * distinct Spring properties — but now resolve to the same URL, mirroring the
+ * production defaults. Bound to all interfaces so containers can reach it.
  */
 public final class JwksMockServer implements AutoCloseable {
 
@@ -26,8 +34,7 @@ public final class JwksMockServer implements AutoCloseable {
             @Override
             public MockResponse dispatch(RecordedRequest request) {
                 String path = request.getPath();
-                if (path != null
-                        && (path.startsWith("/.well-known/jwks.json") || path.startsWith("/oauth2/jwks"))) {
+                if (path != null && path.startsWith("/oauth2/jwks")) {
                     return new MockResponse()
                             .setResponseCode(200)
                             .setHeader("Content-Type", "application/json")
@@ -40,7 +47,7 @@ public final class JwksMockServer implements AutoCloseable {
     }
 
     public String hostJwksUrl() {
-        return "http://" + server.getHostName() + ":" + server.getPort() + "/.well-known/jwks.json";
+        return "http://" + server.getHostName() + ":" + server.getPort() + "/oauth2/jwks";
     }
 
     public String hostInternalJwksUrl() {
