@@ -50,8 +50,20 @@ persistence 를 공유한다. 적용되는 규칙: 양 service-type spec 모두 
 
 ## Internal Structure Rule
 
+### Root package — `com.example.security.service` (TASK-BE-559)
+
+이 서비스의 자체 코드는 **`com.example.security.service`** 아래에 산다. `com.example.security`(한 단계 위)가 아니다.
+
+이유는 **공유 라이브러리 `libs/java-security` 가 `com.example.security` 를 이미 점유**하고 있기 때문이다(`.access` / `.jwt` / `.oauth2` / `.password` / `.pii` / `.redis`; 형제 `libs/java-security-servlet` 은 `.servlet`). `@SpringBootApplication` 의 기본 component-scan base package 는 **그 클래스가 선언된 패키지**이므로, `SecurityApplication` 이 `com.example.security` 에 있으면 스캔 범위가 **공유 라이브러리 트리 전체**를 덮는다. 그 상태에서 라이브러리에 Spring bean 이 하나라도 추가되면, 그 bean 은 라이브러리를 쓰는 여러 소비 서비스 중 **오직 `security-service` 의 컨텍스트에만** 조용히 등록된다 — 컴파일러도 유닛 테스트도 보지 못하고, 부팅이 깨질 때에만 드러나는 비대칭이다. 두 산출물의 JPMS/sealed-jar 패키징도 split package 로 막힌다.
+
+`com.example.security.service` 는 라이브러리 패키지들의 **형제**이므로(조상도 자손도 아니다) 기본 스캔이 라이브러리를 건드리지 않는다. **이 격리는 기본 스캔 규칙 자체가 제공한다** — 따라서 `SecurityApplication` 에 `scanBasePackages` 나 별도 `@ComponentScan` 인자를 **추가하지 않는다**(문자열 인자는 같은 결함을 다시 열 여지를 만든다).
+
+`platform/naming-conventions.md` § Packages 의 `com.example.{service}.{layer}` 에서 `{service}` 자리가 한 단계 깊어진 형태다. `{service}` 좌표를 공유 라이브러리가 선점한 유일한 서비스이며, 규약이 서브패키지 구조를 각 서비스 architecture.md 에 위임한 지점에 해당한다.
+
+**변경 규칙**: `libs/java-security` 의 패키지를 옮겨 이 관계를 "정리"하지 말 것 — 그 라이브러리 좌표는 8개 프로젝트가 import 하는 공개 표면이다.
+
 ```
-apps/security-service/src/main/java/com/example/security/
+apps/security-service/src/main/java/com/example/security/service/
 ├── SecurityApplication.java
 │
 ├── consumer/                        ← Primary: Kafka 이벤트 소비 경로

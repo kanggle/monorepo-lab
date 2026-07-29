@@ -95,7 +95,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## in-progress
 
-(empty)
+- `TASK-BE-559-security-service-package-collision-with-java-security-lib.md` — **구조 결함(잠재) 제거** — `libs/java-security` 와 `apps/security-service` 가 루트 패키지 `com.example.security` 를 공유하고, `SecurityApplication` 이 하필 그 루트에 있어 **기본 component-scan 이 공유 라이브러리 트리 전체를 덮는다**. 오늘 무해한 이유는 라이브러리에 Spring stereotype 이 0개이기 때문 — **설계가 아니라 우연**. 보안 라이브러리에 bean 이 하나 추가되는 순간 그 bean 은 여러 소비자 중 security-service 컨텍스트에만 조용히 등록되고, **컴파일러도 유닛 테스트도 이를 못 본다**. 해소 = 서비스 자체 코드만 `com.example.security.service.*` 로 이전(라이브러리 무변경 — **라이브러리는 옳다**, 8개 프로젝트가 그 좌표를 import). 137 파일 `git mv` rename. 분석=Opus 5 / 구현=Opus 5.
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 
