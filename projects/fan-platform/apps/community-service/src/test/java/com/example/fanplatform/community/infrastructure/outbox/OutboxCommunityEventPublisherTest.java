@@ -16,6 +16,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -91,8 +92,8 @@ class OutboxCommunityEventPublisherTest {
 
     @Test
     void publishCommentAdded_persistsV2Row_withCommentPayload() throws Exception {
-        publisher.publishCommentAdded("c1", "p1", "fan-platform", "fan-1",
-                Instant.parse("2026-05-05T00:00:00Z"));
+        publisher.publishCommentAdded("c1", "p1", "fan-platform", "fan-1", "author-1",
+                List.of("fan-2", "fan-3"), Instant.parse("2026-05-05T00:00:00Z"));
 
         CommunityOutboxJpaEntity row = capturedRow();
         assertThat(row.getEventType()).isEqualTo(CommunityEventPublisher.EVENT_COMMENT_ADDED);
@@ -104,11 +105,30 @@ class OutboxCommunityEventPublisherTest {
         assertThat(payload.get("postId").asText()).isEqualTo("p1");
         assertThat(payload.get("commentId").asText()).isEqualTo("c1");
         assertThat(payload.get("authorAccountId").asText()).isEqualTo("fan-1");
+        // TASK-FAN-BE-026 recipient-routing fields, serialised into the payload.
+        assertThat(payload.get("postAuthorAccountId").asText()).isEqualTo("author-1");
+        assertThat(payload.get("mentionedAccountIds").isArray()).isTrue();
+        assertThat(payload.get("mentionedAccountIds")).hasSize(2);
+        assertThat(payload.get("mentionedAccountIds").get(0).asText()).isEqualTo("fan-2");
+        assertThat(payload.get("mentionedAccountIds").get(1).asText()).isEqualTo("fan-3");
+    }
+
+    @Test
+    void publishCommentAdded_serialisesEmptyMentionListAsAnEmptyArray() throws Exception {
+        // The producer's real behaviour today: no mention syntax exists, so the
+        // field is present-but-empty rather than absent (stable wire shape).
+        publisher.publishCommentAdded("c2", "p1", "fan-platform", "fan-1", "author-1",
+                List.of(), Instant.parse("2026-05-05T00:00:00Z"));
+
+        JsonNode payload = objectMapper.readTree(capturedRow().getPayload()).get("payload");
+        assertThat(payload.has("mentionedAccountIds")).isTrue();
+        assertThat(payload.get("mentionedAccountIds").isArray()).isTrue();
+        assertThat(payload.get("mentionedAccountIds")).isEmpty();
     }
 
     @Test
     void publishReactionAdded_persistsV2Row_withReactionPayload() throws Exception {
-        publisher.publishReactionAdded("p1", "fan-platform", "fan-1",
+        publisher.publishReactionAdded("p1", "fan-platform", "fan-1", "author-1",
                 ReactionType.LIKE, Instant.parse("2026-05-06T00:00:00Z"));
 
         CommunityOutboxJpaEntity row = capturedRow();
@@ -118,6 +138,8 @@ class OutboxCommunityEventPublisherTest {
         JsonNode envelope = objectMapper.readTree(row.getPayload());
         JsonNode payload = envelope.get("payload");
         assertThat(payload.get("reactorAccountId").asText()).isEqualTo("fan-1");
+        // TASK-FAN-BE-026 recipient-routing field: the badge recipient.
+        assertThat(payload.get("postAuthorAccountId").asText()).isEqualTo("author-1");
         assertThat(payload.get("reactionType").asText()).isEqualTo("LIKE");
     }
 

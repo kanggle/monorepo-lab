@@ -69,4 +69,34 @@ class NotificationTemplateTest {
                 .contains(validTo.toString())
                 .contains("Renew");
     }
+
+    // --- community interaction templates (TASK-FAN-BE-026) --------------------
+
+    @Test
+    @DisplayName("REPLY renders the commenter and the post it was left on")
+    void replyRendersCommenterAndPost() {
+        NotificationTemplate.RenderedContent c = NotificationTemplate.reply("fan-1", "post-1");
+
+        assertThat(c.title()).isEqualTo("New reply on your post");
+        assertThat(c.body()).contains("fan-1").contains("post-1");
+    }
+
+    @Test
+    @DisplayName("MENTION renders the commenter and the post, with a mention-specific title")
+    void mentionRendersCommenterAndPost() {
+        NotificationTemplate.RenderedContent c = NotificationTemplate.mention("fan-1", "post-1");
+
+        assertThat(c.title()).isEqualTo("You were mentioned in a comment");
+        assertThat(c.body()).contains("fan-1").contains("post-1").contains("mentioned");
+    }
+
+    @Test
+    @DisplayName("REACTION_BADGE renders the reactor, the reaction type and the post")
+    void reactionBadgeRendersReactorTypeAndPost() {
+        NotificationTemplate.RenderedContent c =
+                NotificationTemplate.reactionBadge("fan-1", "LOVE", "post-1");
+
+        assertThat(c.title()).isEqualTo("Someone reacted to your post");
+        assertThat(c.body()).contains("fan-1").contains("LOVE").contains("post-1");
+    }
 }

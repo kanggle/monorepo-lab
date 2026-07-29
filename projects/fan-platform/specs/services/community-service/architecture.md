@@ -22,7 +22,7 @@ All implementation tasks targeting this service must follow this declaration,
 | Deployable unit | `apps/community-service/` |
 | Data store | Postgres 16 (database `fanplatform_community`) |
 | Cache | Redis 7 (feed cache only — fail-open) |
-| Event publication | Kafka via outbox (`community.post.*` lifecycle events — `community.post.published`, `community.post.status_changed.v1`) |
+| Event publication | Kafka via outbox — post lifecycle (`community.post.published.v1`, `community.post.status_changed.v1`) + interaction (`community.comment.added.v1`, `community.reaction.added.v1`; the latter two carry recipient-routing fields since TASK-FAN-BE-026 and are consumed by notification-service) |
 | Event consumption | none (single-type rest-api) |
 
 ### Service Type Composition
@@ -202,6 +202,24 @@ applies the same tiering at the row level — locked items are returned with
   - `community.post.status_changed` → `community.post.status_changed.v1`
   - `community.comment.added` → `community.comment.added.v1`
   - `community.reaction.added` → `community.reaction.added.v1`
+- **Recipient-routing fields on the interaction events (TASK-FAN-BE-026).**
+  `publishCommentAdded` additionally carries `postAuthorAccountId` +
+  `mentionedAccountIds`, and `publishReactionAdded` carries
+  `postAuthorAccountId`. Both are resolved from the `Post` that
+  `PostAccessGuard.requirePublishedAccess` already loaded **inside the same
+  business transaction** — no extra read, no new dependency. They exist so
+  notification-service (`CommunityEventConsumer`, the first live consumer of these
+  two topics) can address a reply / mention / interaction-badge alert **without a
+  synchronous call back into community-service**; that keeps community-service's
+  inbound surface HTTP-only-from-the-gateway. Additive on the same `.v1` topic —
+  see `specs/contracts/events/community-events.md` § Recipient-routing fields.
+  `mentionedAccountIds` is **always an empty array today**: there is no
+  `@`-mention syntax (`AddCommentRequest` carries only `body`) and no
+  username→accountId directory to resolve one against; populating it is a
+  producer-only change once such a feature exists.
+- Event consumption stays **none** — this service produces these events and does
+  not consume any (the "Event consumption | none" row in § Identity is unchanged
+  by TASK-FAN-BE-026).
 - The Kafka record key = `aggregateId` (postId; partition_key left null → relay
   fallback, preserving the v1 key).
 - Envelope shape (canonical 7-field, byte-identical to the v1
@@ -245,7 +263,7 @@ applies the same tiering at the row level — locked items are returned with
 
 ## Testing Strategy
 
-- **Unit** — `PostStatusMachineTest`, `PostAccessGuardTest`, `TenantClaimValidatorTest`, `AllowedIssuersValidatorTest`, `CommunityEventPublisherTest`, every use case (`Publish/ChangeStatus/AddReaction/FollowArtist`), `TenantClaimEnforcerTest`.
+- **Unit** — `PostStatusMachineTest`, `PostAccessGuardTest`, `TenantClaimValidatorTest`, `AllowedIssuersValidatorTest`, `OutboxCommunityEventPublisherTest` (envelope + payload serialisation, incl. the TASK-FAN-BE-026 `postAuthorAccountId` / `mentionedAccountIds` fields and the empty-array case), every use case (`Publish/ChangeStatus/AddComment/AddReaction/FollowArtist` — `AddCommentUseCaseTest` / `AddReactionUseCaseTest` assert the post author is carried on the emitted event, including the self-interaction case where actor == post author), `TenantClaimEnforcerTest`.
 - **Slice** — `@WebMvcTest` for each controller (`Post/Feed/Comment/Reaction/Follow`) covering envelope shape, validation, auth.
 - **Integration** (`@Tag("integration")`, Postgres + Kafka + Redis Testcontainers, WireMock JWKS):
   - `CommunityServiceIntegrationTest` — happy path E2E.

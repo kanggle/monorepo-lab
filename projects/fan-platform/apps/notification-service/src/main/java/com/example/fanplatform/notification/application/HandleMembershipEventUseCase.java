@@ -72,6 +72,7 @@ public class HandleMembershipEventUseCase {
                 event.eventId(),
                 event.eventType(),
                 event.membershipId(),
+                null, // postId — membership-sourced notification has no post correlation
                 clock.now());
 
         notificationRepository.save(notification);
@@ -95,6 +96,11 @@ public class HandleMembershipEventUseCase {
                     event.tier(), event.canceledAt(), event.reason());
             case EXPIRY_REMINDER -> NotificationTemplate.expiry(
                     event.tier(), event.validTo());
+            // REPLY / MENTION / REACTION_BADGE are community-sourced and are
+            // rendered by HandleCommunityEventUseCase; they can never be produced
+            // by NotificationType.fromEventType on a membership event type.
+            default -> throw new IllegalArgumentException(
+                    "Not a membership notification type: " + type);
         };
     }
 }

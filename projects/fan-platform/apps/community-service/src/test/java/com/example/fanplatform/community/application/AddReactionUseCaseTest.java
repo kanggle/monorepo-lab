@@ -60,7 +60,7 @@ class AddReactionUseCaseTest {
         // upsert produces no DB row change, so consumers have no way to know
         // the event is a redundancy).
         verify(eventPublisher, never()).publishReactionAdded(
-                any(), any(), any(), any(), any());
+                any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -92,9 +92,45 @@ class AddReactionUseCaseTest {
         useCase.execute("p1", ReactionType.FIRE, actor);
 
         verify(reactionRepository).save(any(Reaction.class));
+        // TASK-FAN-BE-026: the post author (the badge recipient) is carried on the
+        // event, resolved from the Post the access guard already loaded.
         verify(eventPublisher).publishReactionAdded(
-                any(String.class), any(String.class), any(String.class),
-                any(ReactionType.class), any());
+                eq("p1"), eq(TENANT), eq("fan-1"), eq("author-1"),
+                eq(ReactionType.FIRE), any());
+    }
+
+    @Test
+    @DisplayName("TASK-FAN-BE-026: type 변경 발행에도 postAuthorAccountId 가 실린다")
+    void changeTypeCarriesPostAuthor() {
+        Post post = published();
+        when(postAccessGuard.requirePublishedAccess(eq("p1"), any(ActorContext.class))).thenReturn(post);
+        Reaction existing = Reaction.create("p1", "fan-1", TENANT, ReactionType.LIKE);
+        when(reactionRepository.find("p1", "fan-1", TENANT)).thenReturn(Optional.of(existing));
+        when(reactionRepository.countByPostId("p1", TENANT)).thenReturn(1L);
+
+        ActorContext actor = new ActorContext("fan-1", TENANT, Set.of("FAN"));
+        useCase.execute("p1", ReactionType.LOVE, actor);
+
+        verify(eventPublisher).publishReactionAdded(
+                eq("p1"), eq(TENANT), eq("fan-1"), eq("author-1"),
+                eq(ReactionType.LOVE), any());
+    }
+
+    @Test
+    @DisplayName("TASK-FAN-BE-026: 자기 글에 반응하면 actor 와 postAuthorAccountId 가 같게 실린다 (억제는 consumer 책임)")
+    void selfReactionCarriesIdenticalActorAndPostAuthor() {
+        Post post = published(); // author-1
+        when(postAccessGuard.requirePublishedAccess(eq("p1"), any(ActorContext.class))).thenReturn(post);
+        when(reactionRepository.find("p1", "author-1", TENANT)).thenReturn(Optional.empty());
+        when(reactionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(reactionRepository.countByPostId("p1", TENANT)).thenReturn(1L);
+
+        ActorContext actor = new ActorContext("author-1", TENANT, Set.of("FAN"));
+        useCase.execute("p1", ReactionType.LIKE, actor);
+
+        verify(eventPublisher).publishReactionAdded(
+                eq("p1"), eq(TENANT), eq("author-1"), eq("author-1"),
+                eq(ReactionType.LIKE), any());
     }
 
     private static Post published() {

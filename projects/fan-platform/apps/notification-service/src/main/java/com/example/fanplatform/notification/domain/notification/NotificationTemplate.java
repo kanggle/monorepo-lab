@@ -15,7 +15,18 @@ import java.time.Instant;
  *       canceled" + the cancel time + optional reason.</li>
  *   <li>{@link NotificationType#EXPIRY_REMINDER} — "Your {tier} membership has
  *       expired" + the window end ({@code validTo}).</li>
+ *   <li>{@link NotificationType#REPLY} — "New reply on your post" + who commented
+ *       and on which post (TASK-FAN-BE-026).</li>
+ *   <li>{@link NotificationType#MENTION} — "You were mentioned in a comment".</li>
+ *   <li>{@link NotificationType#REACTION_BADGE} — "Someone reacted to your post"
+ *       + the reaction type.</li>
  * </ul>
+ *
+ * <p>The community renderers name the actor by {@code accountId} only: the event
+ * carries no display name, and notification-service is forbidden from reading
+ * another service's tables or calling it synchronously (architecture.md
+ * § Forbidden dependencies) — so a display name would require a contract change,
+ * not a lookup.
  */
 public final class NotificationTemplate {
 
@@ -55,6 +66,39 @@ public final class NotificationTemplate {
         String title = "Your " + tier + " membership has expired";
         String body = "Your " + tier + " membership ended on " + validTo
                 + ". Renew to keep your member benefits.";
+        return new RenderedContent(title, body);
+    }
+
+    /**
+     * Renders the REPLY content for a {@code community.comment.added} payload —
+     * addressed to the post's author.
+     */
+    public static RenderedContent reply(String commenterAccountId, String postId) {
+        String title = "New reply on your post";
+        String body = commenterAccountId + " commented on your post " + postId + ".";
+        return new RenderedContent(title, body);
+    }
+
+    /**
+     * Renders the MENTION content for a {@code community.comment.added} payload —
+     * addressed to one mentioned account.
+     */
+    public static RenderedContent mention(String commenterAccountId, String postId) {
+        String title = "You were mentioned in a comment";
+        String body = commenterAccountId + " mentioned you in a comment on post "
+                + postId + ".";
+        return new RenderedContent(title, body);
+    }
+
+    /**
+     * Renders the REACTION_BADGE content for a {@code community.reaction.added}
+     * payload — addressed to the post's author.
+     */
+    public static RenderedContent reactionBadge(String reactorAccountId, String reactionType,
+                                                String postId) {
+        String title = "Someone reacted to your post";
+        String body = reactorAccountId + " reacted " + reactionType
+                + " to your post " + postId + ".";
         return new RenderedContent(title, body);
     }
 }
