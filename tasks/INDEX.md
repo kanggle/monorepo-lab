@@ -166,11 +166,9 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-490-iam-wms-traefik-gap-bringup-docs.md` — **🔵 IN-PROGRESS.** `TEMPLATE.md`의 브링업 문서가 `pnpm iam:up`/`pnpm wms:up`만으로 `iam.local`/`wms.local`이 Traefik 라우팅된다고 암시하지만, 두 프로젝트의 `docker-compose.yml`은 인프라(mysql/postgres/redis/kafka)만 포함하고 게이트웨이/앱 서비스에는 Traefik 라벨이 전혀 없다(앱 서비스는 `bootRun` 또는 격리망 `docker-compose.e2e.yml`로만 기동) — 문서대로 "전체 기동"을 시도하면 OIDC consumer 게이트웨이(ecommerce/fan-platform/scm/erp/finance)가 JWKS 조회 fail-fast에 걸릴 가능성이 높다. 이 갭 자체는 `TASK-MONO-358`이 **의도적으로 데모 전용**(`infra/demo/iam-traefik.override.yml`)으로만 해소했고 일반 로컬 compose는 바이트 동일 유지가 그 task의 AC였다 — 즉 버그가 아니라 **문서가 현재 동작을 정확히 반영하지 못하는 것**. 아키텍처 변경 없이 `TEMPLATE.md`에 제약을 명시하는 문서 전용 task. 분석=Sonnet 5 / 구현 권장=Sonnet 5(단순 문서 정정). [[project_fan_platform_local_bringup]]
-
 ## review
 
-(empty)
+- `TASK-MONO-490-iam-wms-traefik-gap-bringup-docs.md` — **🟣 REVIEW (PR [#3047](https://github.com/kanggle/monorepo-lab/pull/3047)).** `TEMPLATE.md`의 브링업 문서가 `pnpm iam:up`/`pnpm wms:up`만으로 `iam.local`/`wms.local`이 Traefik 라우팅된다고 암시했지만, 두 프로젝트의 `docker-compose.yml`은 인프라(mysql/postgres/redis/kafka)만 포함하고 게이트웨이/앱 서비스에는 Traefik 라벨이 전혀 없다(앱 서비스는 `bootRun` 또는 격리망 `docker-compose.e2e.yml`로만 기동) — 문서대로 "전체 기동"을 시도하면 OIDC consumer 게이트웨이(ecommerce/fan-platform/scm/erp/finance)가 JWKS 조회 fail-fast에 걸릴 가능성이 높았다. 이 갭 자체는 `TASK-MONO-358`이 **의도적으로 데모 전용**(`infra/demo/iam-traefik.override.yml`)으로만 해소했고 일반 로컬 compose는 바이트 동일 유지가 그 task의 AC였다 — 즉 버그가 아니라 **문서가 현재 동작을 정확히 반영하지 못했던 것**. 아키텍처 변경 없이 `TEMPLATE.md` 브링업 시퀀스 3단계 + per-project 매트릭스에 제약을 명시하는 문서 전용 수정(`TEMPLATE.md`만 변경). 분석=Sonnet 5 / 구현=Sonnet 5(세션 직접). [[project_fan_platform_local_bringup]]
 
 ## done
 

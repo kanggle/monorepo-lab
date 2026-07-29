@@ -8,7 +8,7 @@ TASK-MONO-490
 
 # Status
 
-in-progress
+review
 
 # Owner
 
