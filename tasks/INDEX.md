@@ -173,9 +173,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-489-jwks-health-probe-transient-404.md` — **구현 완료, 리뷰 대기.** `libs/java-gateway`의 `JwksHealthProbe`에 404 전용 bounded 재시도 계층(3회, 1초 고정간격, 별도 inner `retryWhen` + `Exceptions.isRetryExhausted` 경계)을 신설 — 기존 일반 계층(connection-refused/5xx/timeout, 지수백오프 ~31s)과는 분리해 진짜 오설정의 조기 실패는 보존. 401/403 등 다른 4xx는 그대로 즉시 terminal(범위를 404로 좁힘 — 인시던트가 실제 관측한 코드만). 신규 테스트 4종(인시던트 재현 2종 + adversarial 예산소진 2종, `StepVerifier` mutation 가드 포함) + 기존 `JwksHealthProbeTest` 전수 무회귀. 소비처 4곳(fan/scm/finance/erp `apps:gateway-service:test`) + wms(AC-5 무영향) 전부 `BUILD SUCCESSFUL`. AC-1~AC-6 전부 충족, 근거는 task 파일 본문에 기록. 분석·구현=Sonnet 5(정밀한 Reactor retryWhen 체이닝이 필요해 위임 대신 본세션이 직접 처리).
+(empty)
 
 ## done
+
+- **`TASK-MONO-489-jwks-health-probe-transient-404.md` — ✅ DONE (2026-07-29, impl PR #3018 squash `24c210072` 머지).** `libs/java-gateway`의 `JwksHealthProbe`에 404 전용 bounded 재시도 계층(3회, 1초 고정간격, 별도 inner `retryWhen` + `Exceptions.isRetryExhausted` 경계)을 신설 — 기존 일반 계층(connection-refused/5xx/timeout, 지수백오프 ~31s)과는 분리해 진짜 오설정의 조기 실패는 보존. 401/403 등 다른 4xx는 그대로 즉시 terminal(범위를 404로 좁힘 — 인시던트가 실제 관측한 코드만). 신규 테스트 4종(인시던트 재현 2종 + adversarial 예산소진 2종, `StepVerifier` mutation 가드 포함) + 기존 `JwksHealthProbeTest` 전수 무회귀, 소비처 4곳(fan/scm/finance/erp)+wms(AC-5) 전수 무회귀 확인. AC-1~AC-6 근거는 task 파일 본문에 기록. 3-dim 검증: MERGED · origin/main tip 일치 · pre-merge 0 failing. 분석·구현=Sonnet 5(정밀한 Reactor retryWhen 체이닝이 필요해 위임 대신 본세션이 직접 처리).
 
 - **`TASK-MONO-488-validate-rules-agent-warnings.md` — ✅ DONE (2026-07-29).** 2026-07-29 `/validate-rules` agent Warning 9건 수정(naming-conventions.md Command/Result·Request/Response 미문서화, backend-engineer skills: messaging/* 누락, event-architect·devops-engineer skills: 필드 부재, refactoring-engineer frontend 스킬 갭 미고지, architect/refactoring-engineer/code-reviewer 레이어위반검출 경계 미문서화, qa-engineer/code-reviewer 체크리스트 중복, backend/frontend/qa 테스트작성 분담 미문서화). `TASK-MONO-485`/`486`/`487` 자매 티켓. **PR #3015 squash `1e1961139` 머지.** 3-dim 검증: MERGED · origin/main tip 일치 · pre-merge 0 failing.
 
