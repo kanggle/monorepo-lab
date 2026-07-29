@@ -8,7 +8,7 @@ logistics-service: collapse the copy-pasted EasyPost/Goodsflow vendor-adapter hi
 
 # Status
 
-in-progress
+review
 
 # Owner
 
