@@ -59,6 +59,10 @@ dependencies {
     // `api` — a shared security class must not transit onto a consumer's compile classpath
     // (§ D2; assertNoApiOnSharedLibs enforces it).
     implementation project(':libs:java-security-servlet')
+    // TASK-FIN-BE-063: BodyHashUtil — canonical (key-order-independent) SHA-256
+    // request-body hash, already the single shared implementation for every
+    // other servlet-stack Idempotency-Key surface in the monorepo (TASK-MONO-271).
+    implementation project(':libs:java-web-servlet')
 
     // Test (unit + slice)
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
