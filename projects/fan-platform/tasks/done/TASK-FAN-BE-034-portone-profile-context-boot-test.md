@@ -8,7 +8,7 @@ membership-service: CI-gated Spring context-boot test for the `portone` profile
 
 # Status
 
-review
+done
 
 # Owner
 
