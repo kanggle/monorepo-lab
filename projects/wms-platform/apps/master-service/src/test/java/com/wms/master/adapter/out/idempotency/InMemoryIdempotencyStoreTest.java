@@ -63,7 +63,7 @@ class InMemoryIdempotencyStoreTest {
     }
 
     @Test
-    @DisplayName("two concurrent threads call tryAcquireLock — exactly one wins (TASK-BE-564)")
+    @DisplayName("two concurrent threads call tryAcquireLock — exactly one wins (TASK-BE-565)")
     void concurrentTryAcquireLockYieldsExactlyOneWinner() throws Exception {
         InMemoryIdempotencyStore store = new InMemoryIdempotencyStore();
         String key = "POST:master:11111111-1111-1111-1111-111111111111";

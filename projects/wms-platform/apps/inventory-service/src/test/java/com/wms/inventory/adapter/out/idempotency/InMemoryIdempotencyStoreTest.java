@@ -23,7 +23,7 @@ import org.junit.jupiter.api.Test;
  * {@link InMemoryIdempotencyStore#tryAcquireLock(String, Duration)} on the
  * same key. Exactly one must observe a successful acquire — verifying the
  * {@link java.util.concurrent.ConcurrentHashMap#compute} guarantee
- * (TASK-BE-564 — closes the get-then-put race present before this fix).
+ * (TASK-BE-565 — closes the get-then-put race present before this fix).
  */
 class InMemoryIdempotencyStoreTest {
 
@@ -72,7 +72,7 @@ class InMemoryIdempotencyStoreTest {
     }
 
     @Test
-    @DisplayName("two concurrent threads call tryAcquireLock — exactly one wins (TASK-BE-564)")
+    @DisplayName("two concurrent threads call tryAcquireLock — exactly one wins (TASK-BE-565)")
     void concurrentTryAcquireLockYieldsExactlyOneWinner() throws Exception {
         InMemoryIdempotencyStore store = new InMemoryIdempotencyStore();
         String key = "POST:inventory:11111111-1111-1111-1111-111111111111";
