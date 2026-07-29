@@ -8,7 +8,7 @@ Remove dead build dependencies and env vars left behind by the TMS side-channel 
 
 # Status
 
-review
+done
 
 # Owner
 
