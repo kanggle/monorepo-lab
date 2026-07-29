@@ -1,6 +1,7 @@
 package com.example.fanplatform.community.application;
 
 import com.example.fanplatform.community.application.event.CommunityEventPublisher;
+import com.example.fanplatform.community.domain.post.Post;
 import com.example.fanplatform.community.domain.reaction.Reaction;
 import com.example.fanplatform.community.domain.reaction.ReactionRepository;
 import com.example.fanplatform.community.domain.reaction.ReactionType;
@@ -22,7 +23,10 @@ public class AddReactionUseCase {
 
     @Transactional
     public ReactionResult execute(String postId, ReactionType reactionType, ActorContext actor) {
-        postAccessGuard.requirePublishedAccess(postId, actor);
+        // The guard already loads the Post in this transaction — its author is the
+        // interaction-badge recipient carried on the event (TASK-FAN-BE-026), so
+        // notification-service needs no callback into this service.
+        Post post = postAccessGuard.requirePublishedAccess(postId, actor);
         Optional<Reaction> existing = reactionRepository.find(postId, actor.accountId(), actor.tenantId());
         Reaction reaction;
         boolean changed;
@@ -48,7 +52,7 @@ public class AddReactionUseCase {
         if (changed) {
             eventPublisher.publishReactionAdded(
                     postId, actor.tenantId(), actor.accountId(),
-                    reactionType, reaction.getUpdatedAt());
+                    post.getAuthorAccountId(), reactionType, reaction.getUpdatedAt());
         }
         return new ReactionResult(postId, reactionType, total);
     }

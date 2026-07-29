@@ -66,7 +66,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-FAN-BE-026-v2-notification-wiring-community-events.md` — **FEATURE (v2, 결함 아님)** — produced-but-unconsumed `community.*` 이벤트를 notification 이 소비하도록 배선(reply/mention/reaction 알림) + membership welcome/cancellation 알림. **핵심 설계**: community 이벤트가 라우팅 필드(post 작성자·멘션 대상)를 안 담아, notification 이 community 를 동기 재호출하지 않으려면 **이벤트 계약 enrichment 선행**(no-sync-coupling 불변식 유지). follower-fanout(post.published·artist.published)은 없는 follow 그래프(`community.follow.added`) 의존이라 **out of scope**. events/README:39 가 이 미소비를 "정상"으로 선언 → 이건 v2 피처.
+(empty)
 
 ## in-progress
 
@@ -74,7 +74,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-FAN-BE-026-v2-notification-wiring-community-events.md` — **FEATURE (v2, 결함 아님), 구현 완료·리뷰 대기.** `community.comment.added.v1`/`community.reaction.added.v1`에 라우팅 필드(`postAuthorAccountId`, `mentionedAccountIds`) 추가(additive) → notification-service `CommunityEventConsumer`가 REPLY/MENTION/REACTION_BADGE로 소비(no-sync-coupling 유지, AC-1 grep 재검증 완료). `mentionedAccountIds`는 멘션 파싱/유저네임 디렉토리 부재로 항상 빈 배열 발행(계약 필드만 additive로 존재, 의도적 범위 제한). `Notification` 스키마 V3 마이그레이션(membership_id nullable + post_id 컬럼 + CHECK 확장 + idempotency 유니크를 `(source_event_id, account_id, type)`로 확장 — 한 이벤트가 여러 수신자로 fan-out 가능해서 필요, 원 지시에 없던 발견). community-service(115) + notification-service(93) 유닛/슬라이스 테스트 전부 GREEN(독립 재실행 확인). follower-fanout은 여전히 out of scope(follow 그래프 부재).
 
 ## done
 

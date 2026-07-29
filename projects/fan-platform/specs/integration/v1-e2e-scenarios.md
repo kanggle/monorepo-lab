@@ -253,7 +253,10 @@ follow-up TASK-FAN-INT-NNN.
 - **Frontend e2e (Playwright)** — TASK-FAN-FE-001.
 - **Performance / load testing** — separate task.
 - **`community.reaction.added` / `community.comment.added` consumer
-  verification** — no v1 consumer exists (notification-service is v2).
+  verification** — no v1 consumer exists (notification-service is v2). A v2
+  consumer now does exist (`CommunityEventConsumer`, TASK-FAN-BE-026), but it is
+  verified by notification-service's own `CommunityEventConsumeIntegrationTest`,
+  not by this v1 suite.
 - **Cross-project E2E (real IAM IdP)** — IAM is mocked via WireMock JWKS
   here; full IAM login/redirect is the frontend e2e's territory.
 - **artist self-service** — admin-only in v1.

@@ -15,7 +15,10 @@ import java.time.Instant;
 
 /**
  * Notification aggregate — one in-app notification held for one fan account,
- * derived from one membership lifecycle event.
+ * derived from one consumed event: a membership lifecycle event (WELCOME /
+ * CANCELLATION / EXPIRY_REMINDER, correlated by {@code membershipId}) or a
+ * community interaction event (REPLY / MENTION / REACTION_BADGE, correlated by
+ * {@code postId} — TASK-FAN-BE-026).
  *
  * <p>The single mutable state is {@code status} ({@code UNREAD → READ}) via
  * {@link #markRead(Instant)} (idempotent). A notification is created ONLY by the
@@ -24,8 +27,12 @@ import java.time.Instant;
  * pragmatic JPA exception, matching the membership / community convention) — no
  * Spring imports.
  *
- * <p>{@code sourceEventId} (the consumed envelope {@code eventId}) is unique — the
- * secondary idempotency guard behind the {@code processed_events} table.
+ * <p>{@code (sourceEventId, accountId, type)} is unique — the secondary idempotency
+ * guard behind the {@code processed_events} table. It is a composite (not
+ * {@code sourceEventId} alone) because one {@code community.comment.added} event
+ * can legitimately fan out to several recipients (a REPLY plus one MENTION per
+ * mentioned account); a duplicate delivery still collides because it regenerates
+ * the identical tuples (V3 migration).
  */
 @Entity
 @Table(name = "notifications")
@@ -63,8 +70,20 @@ public class Notification {
     @Column(name = "source_event_type", length = 64, nullable = false)
     private String sourceEventType;
 
-    @Column(name = "membership_id", length = 36, nullable = false)
+    /**
+     * The originating membership aggregate id — non-null for a membership-sourced
+     * notification (WELCOME / CANCELLATION / EXPIRY_REMINDER), {@code null} for a
+     * community-sourced one (V3 dropped the NOT NULL).
+     */
+    @Column(name = "membership_id", length = 36)
     private String membershipId;
+
+    /**
+     * The correlating post id — non-null for a community-sourced notification
+     * (REPLY / MENTION / REACTION_BADGE), {@code null} for a membership-sourced one.
+     */
+    @Column(name = "post_id", length = 36)
+    private String postId;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
@@ -80,11 +99,17 @@ public class Notification {
      * Factory for a brand-new UNREAD notification. {@code createdAt} MUST already
      * be truncated to micros by the caller (§15) so an in-memory value equals the
      * DB re-read.
+     *
+     * <p>{@code membershipId} and {@code postId} are the two mutually-alternative
+     * origin correlations: a membership-sourced notification passes a
+     * {@code membershipId} and {@code null} post, a community-sourced one passes
+     * {@code null} membership and a {@code postId}. Which one is non-null is the
+     * calling use case's decision; the schema does not enforce the exclusivity.
      */
     public static Notification create(String id, String tenantId, String accountId,
                                       NotificationType type, String title, String body,
                                       String sourceEventId, String sourceEventType,
-                                      String membershipId, Instant createdAt) {
+                                      String membershipId, String postId, Instant createdAt) {
         Notification n = new Notification();
         n.id = id;
         n.tenantId = tenantId;
@@ -96,6 +121,7 @@ public class Notification {
         n.sourceEventId = sourceEventId;
         n.sourceEventType = sourceEventType;
         n.membershipId = membershipId;
+        n.postId = postId;
         n.createdAt = createdAt;
         n.readAt = null;
         return n;

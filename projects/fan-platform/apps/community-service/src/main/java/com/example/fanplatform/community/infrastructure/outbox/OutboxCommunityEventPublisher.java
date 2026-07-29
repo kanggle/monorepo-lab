@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -81,20 +82,28 @@ public class OutboxCommunityEventPublisher implements CommunityEventPublisher {
 
     @Override
     public void publishCommentAdded(String commentId, String postId, String tenantId,
-                                    String authorAccountId, Instant occurredAt) {
+                                    String authorAccountId, String postAuthorAccountId,
+                                    List<String> mentionedAccountIds, Instant occurredAt) {
         Map<String, Object> payload = base(postId, tenantId);
         payload.put("commentId", commentId);
         payload.put("authorAccountId", authorAccountId);
+        // Recipient-routing fields (TASK-FAN-BE-026) — additive on the same .v1
+        // topic so notification-service never has to call back into this service.
+        payload.put("postAuthorAccountId", postAuthorAccountId);
+        payload.put("mentionedAccountIds",
+                mentionedAccountIds == null ? List.of() : List.copyOf(mentionedAccountIds));
         payload.put("occurredAt", occurredAt.toString());
         writeEvent(AGGREGATE_TYPE, postId, EVENT_COMMENT_ADDED, payload);
     }
 
     @Override
     public void publishReactionAdded(String postId, String tenantId,
-                                     String reactorAccountId, ReactionType reactionType,
-                                     Instant occurredAt) {
+                                     String reactorAccountId, String postAuthorAccountId,
+                                     ReactionType reactionType, Instant occurredAt) {
         Map<String, Object> payload = base(postId, tenantId);
         payload.put("reactorAccountId", reactorAccountId);
+        // Recipient-routing field (TASK-FAN-BE-026) — the badge recipient.
+        payload.put("postAuthorAccountId", postAuthorAccountId);
         payload.put("reactionType", reactionType.name());
         payload.put("occurredAt", occurredAt.toString());
         writeEvent(AGGREGATE_TYPE, postId, EVENT_REACTION_ADDED, payload);

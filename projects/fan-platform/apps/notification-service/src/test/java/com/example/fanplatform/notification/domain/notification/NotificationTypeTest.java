@@ -27,6 +27,24 @@ class NotificationTypeTest {
     }
 
     @Test
+    void mapsReactionAddedToReactionBadge() {
+        // TASK-FAN-BE-026: community.reaction.added has exactly one recipient role
+        // (the post author), so the event type alone determines the notification type.
+        assertThat(NotificationType.fromEventType("community.reaction.added"))
+                .isEqualTo(NotificationType.REACTION_BADGE);
+    }
+
+    @Test
+    void rejectsCommentAddedBecauseItIsRecipientRoleDependent() {
+        // community.comment.added produces REPLY (to the post author) and/or MENTION
+        // (per mentioned account) from ONE event, so it deliberately has no
+        // eventType→type mapping; HandleCommunityEventUseCase picks per recipient.
+        assertThatThrownBy(() -> NotificationType.fromEventType("community.comment.added"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("REPLY or MENTION");
+    }
+
+    @Test
     void rejectsUnknownTypes() {
         assertThatThrownBy(() -> NotificationType.fromEventType("something.else"))
                 .isInstanceOf(IllegalArgumentException.class);

@@ -32,15 +32,15 @@ and the relevant trait rules (`rules/traits/integration-heavy.md`,
 | Deployable unit | `apps/notification-service/` |
 | Data store | Postgres 16 (database `fanplatform_notification`) |
 | Cache | none (v1 — the inbox is a tenant+account indexed point query; Redis deliberately omitted) |
-| Event consumption | Kafka — `fan.membership.activated.v1`, `fan.membership.canceled.v1` (consumer group `notification-service-membership-events`) |
+| Event consumption | Kafka, two independent subscriptions — **membership lifecycle**: `fan.membership.activated.v1`, `fan.membership.canceled.v1`, `fan.membership.expired.v1` (group `notification-service-membership-events`); **community interaction**: `community.comment.added.v1`, `community.reaction.added.v1` (group `notification-service-community-events`, TASK-FAN-BE-026) |
 | Event publication | **none** — terminal consumer (no outbox, no produced topics) |
 
 ### Service Type Composition
 
 `notification-service` is **primarily `event-consumer`** per
 `platform/service-types/INDEX.md`: its core role is asynchronously reacting to
-membership lifecycle events and fanning out notifications through channel
-adapters. It additionally exposes a **small secondary `rest-api`** surface — the
+membership lifecycle events and community interaction events and fanning out
+notifications through channel adapters. It additionally exposes a **small secondary `rest-api`** surface — the
 in-app **notification inbox** (`GET /api/fan/notifications`, mark-as-read) — which
 is an explicitly allowed "small query endpoint as a secondary capability"
 (`event-consumer.md` § Allowed Patterns). The service publishes **no** events
@@ -80,25 +80,33 @@ com.example.fanplatform.notification/
 ├── application/
 │   ├── ActorContext.java                        ← caller value object (accountId = sub)
 │   ├── consumer/
-│   │   └── MembershipEventConsumer.java         ← @KafkaListener(activated.v1, canceled.v1) → use case
+│   │   ├── MembershipEventConsumer.java         ← @KafkaListener(activated.v1, canceled.v1, expired.v1) → use case
+│   │   ├── MembershipEventParser.java + MembershipEvent.java
+│   │   ├── CommunityEventConsumer.java          ← @KafkaListener(comment.added.v1, reaction.added.v1) → use case
+│   │   ├── CommunityEventParser.java + CommunityEvent.java
+│   │   └── MalformedEventException.java + UnsupportedSchemaVersionException.java  ← shared by BOTH parsers
 │   ├── HandleMembershipEventUseCase.java        ← idempotent: create Notification + dispatch channels
+│   ├── HandleCommunityEventUseCase.java         ← idempotent: 0..N Notifications (reply/mention/badge) + dispatch
 │   ├── ListNotificationsUseCase.java            ← inbox read (tenant+account scoped, paginated)
 │   └── MarkNotificationReadUseCase.java         ← UNREAD → READ (idempotent)
 ├── domain/
 │   ├── notification/
 │   │   ├── Notification.java                    ← @Entity (JPA) — notification aggregate
 │   │   ├── NotificationRepository.java          ← port
-│   │   ├── NotificationType.java                ← WELCOME / CANCELLATION (+ template mapping)
+│   │   ├── NotificationType.java                ← WELCOME / CANCELLATION / EXPIRY_REMINDER / REPLY / MENTION / REACTION_BADGE
 │   │   └── NotificationStatus.java              ← UNREAD / READ
 │   ├── channel/
 │   │   └── NotificationChannelPort.java         ← port: deliver(notification) → DeliveryResult
 │   └── tenant/TenantContext.java
 └── infrastructure/
     ├── config/JpaConfig.java + ClockConfig.java + KafkaConsumerConfig.java
+    │                                             ← KafkaConsumerConfig owns the single DefaultErrorHandler
+    │                                               (retry backoff + DeadLetterPublishingRecoverer → <topic>.dlq)
+    │                                               shared by BOTH listener groups — topic-agnostic, no per-family class
     ├── jpa/                                      ← Spring Data adapter for NotificationRepository
     ├── messaging/
     │   ├── idempotency/                          ← libs:java-messaging processed_events guard
-    │   └── dlq/MembershipEventDlqPublisher.java  ← routes poisoned/exhausted events to <topic>.dlq
+    │   └── ConsumerMetrics.java                  ← per-topic processed/failed counters (both consumers)
     ├── channel/
     │   ├── LoggingEmailChannelAdapter.java       ← deterministic mock (NO real email)
     │   └── LoggingPushChannelAdapter.java        ← deterministic mock (NO real FCM/APNs)
@@ -134,8 +142,22 @@ com.example.fanplatform.notification/
   cases depend on the port; the deterministic mock adapters live in
   `infrastructure/channel/`. A real channel adapter swaps in via
   `@ConditionalOnMissingBean` / profile without touching domain or use cases.
-- `MembershipEventConsumer` is the ONLY inbound Kafka surface; it delegates to
-  `HandleMembershipEventUseCase` and never embeds business logic.
+- `application/consumer/` holds the ONLY inbound Kafka surfaces — exactly two
+  consumers, one per event family: `MembershipEventConsumer` →
+  `HandleMembershipEventUseCase`, and `CommunityEventConsumer` →
+  `HandleCommunityEventUseCase` (TASK-FAN-BE-026). Neither embeds business logic;
+  each parses its envelope and delegates. **No third inbound surface may be added
+  without updating this section and § Subscribed Topics.**
+- The two families stay **separate use cases**, not one merged handler: their
+  payload shapes and recipient-resolution rules differ (one membership event → one
+  recipient; one comment event → 0..N recipients across two notification types).
+  Only the idempotency / persist / dispatch mechanics are common.
+- **No outbound synchronous call to a sibling fan-platform service.** Community
+  alerts are routed purely from the enriched event payload
+  (`postAuthorAccountId` / `mentionedAccountIds` — community-events.md
+  § Recipient-routing fields). The only outbound HTTP in this service is the
+  optional real EMAIL / FCM channel adapter to an *external* provider
+  (§ Channel Mock Boundary); nothing calls community/artist/membership-service.
 - `infrastructure/security/` re-validates `tenant_id` for the inbox routes even
   though the gateway already does — fail-closed defense-in-depth (§ Tenant Isolation).
 
@@ -144,23 +166,32 @@ com.example.fanplatform.notification/
 ## Domain Model
 
 `Notification` is the single aggregate — one delivered/queued notification held
-for one fan account, derived from one membership lifecycle event.
+for one fan account, derived from one consumed event (a membership lifecycle
+event, or a community interaction event since TASK-FAN-BE-026).
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | string (UUID v7) | aggregate id |
 | `tenantId` | string | row-level isolation; always `fan-platform` in this project |
-| `accountId` | string | the recipient fan = IAM `sub` claim (from the event payload `accountId`) |
-| `type` | `NotificationType` | `WELCOME` \| `CANCELLATION` \| `EXPIRY_REMINDER` |
+| `accountId` | string | the recipient fan = IAM `sub` claim (membership: the event payload `accountId`; community: the routed recipient — post author or a mentioned account) |
+| `type` | `NotificationType` | `WELCOME` \| `CANCELLATION` \| `EXPIRY_REMINDER` \| `REPLY` \| `MENTION` \| `REACTION_BADGE` |
 | `title` | string | rendered from the type template |
-| `body` | string | rendered from the event payload (tier, plan window, etc.) |
+| `body` | string | rendered from the event payload (tier, plan window, commenter, reaction type, …) |
 | `status` | `NotificationStatus` | `UNREAD` \| `READ` |
-| `sourceEventId` | string (UUID) | the consumed envelope `eventId` — also the idempotency key |
-| `sourceEventType` | string | `fan.membership.activated` \| `fan.membership.canceled` \| `fan.membership.expired` |
-| `membershipId` | string (UUID) | the originating membership aggregate id |
+| `sourceEventId` | string (UUID) | the consumed envelope `eventId` — the idempotency key (see the composite unique below) |
+| `sourceEventType` | string | `fan.membership.{activated,canceled,expired}` \| `community.{comment,reaction}.added` |
+| `membershipId` | string (UUID)? | the originating membership aggregate id. **Nullable since V3** — non-null only for membership-sourced rows |
+| `postId` | string (UUID)? | the correlating post. Non-null only for community-sourced rows (V3) |
 | `createdAt` | timestamptz | consume time |
 | `readAt` | timestamptz? | set on UNREAD → READ; null while UNREAD |
 | `version` | long | optimistic lock |
+
+`membershipId` and `postId` are **mutually alternative origin correlations** —
+exactly one is non-null per row, decided by the originating use case. The schema
+deliberately does **not** enforce that exclusivity with a CHECK (the invariant is
+owned by the two consumers; a DB constraint is not required by any current
+acceptance criterion). The inbox DTO uses `@JsonInclude(NON_NULL)`, so a
+community-sourced item simply omits `membershipId`.
 
 ### Event → Notification mapping
 
@@ -169,6 +200,26 @@ for one fan account, derived from one membership lifecycle event.
 | `fan.membership.activated.v1` | `WELCOME` | "Welcome to {tier} membership" | window `[validFrom … validTo]`, `planMonths` |
 | `fan.membership.canceled.v1` | `CANCELLATION` | "Your {tier} membership was canceled" | `canceledAt`, optional `reason` |
 | `fan.membership.expired.v1` | `EXPIRY_REMINDER` | "Your {tier} membership has expired" | `validTo` (window end) |
+| `community.comment.added.v1` → `postAuthorAccountId` | `REPLY` | "New reply on your post" | `authorAccountId` (commenter) + `postId` |
+| `community.comment.added.v1` → each `mentionedAccountIds` entry | `MENTION` | "You were mentioned in a comment" | `authorAccountId` (commenter) + `postId` |
+| `community.reaction.added.v1` → `postAuthorAccountId` | `REACTION_BADGE` | "Someone reacted to your post" | `reactorAccountId` + `reactionType` + `postId` |
+
+**One event → 0..N notifications (community only).** `community.comment.added`
+is the only consumed event whose notification type is **recipient-role dependent**:
+the same envelope yields a REPLY for the post author *and* a MENTION per mentioned
+account. `NotificationType.fromEventType` therefore rejects that event type
+(it maps only 1:1 event types, incl. `community.reaction.added` → `REACTION_BADGE`);
+`HandleCommunityEventUseCase` selects the constant per recipient.
+
+**Zero-notification outcomes are successes** (logged, event still marked
+processed, no DLQ): self-notify suppression (actor == post author, or a
+self-mention), an empty `mentionedAccountIds`, and a **pre-enrichment in-flight
+event with no `postAuthorAccountId`** (a rollout artifact, explicitly not a
+malformed event — community-events.md § Recipient-routing fields).
+
+**Body rendering names accounts by `accountId`**, not display name: the events
+carry no display name and cross-service reads / sync calls are forbidden, so a
+friendlier name would require a further contract change, not a lookup.
 
 All three membership lifecycle topics are now consumed (`expired.v1` since
 TASK-FAN-BE-014 — the producer's expiry sweeper emits it; see
@@ -179,6 +230,22 @@ Adding `EXPIRY_REMINDER` to the stored `type` requires a **V2 migration** to ext
 the `ck_notification_type` CHECK allow-list (§16 — the Testcontainers IT is the
 authoritative gate).
 
+### Migrations
+
+| Version | Change |
+|---|---|
+| `V1__init.sql` | `notifications` + `processed_events`; `type` allow-list `WELCOME, CANCELLATION`; `UNIQUE (source_event_id)` |
+| `V2__expiry_reminder_type.sql` | `type` allow-list += `EXPIRY_REMINDER` (TASK-FAN-BE-014) |
+| `V3__community_notification_types.sql` | TASK-FAN-BE-026: `membership_id` **DROP NOT NULL**; add nullable `post_id VARCHAR(36)` + index `(tenant_id, post_id)`; `type` allow-list += `REPLY, MENTION, REACTION_BADGE`; **`uq_notification_source_event` widened from `(source_event_id)` to `(source_event_id, account_id, type)`** |
+
+The unique-key widening is load-bearing, not cosmetic: one
+`community.comment.added` event legitimately writes a REPLY row *and* one MENTION
+row per mentioned account, all sharing the same `source_event_id`, which the
+single-column UNIQUE would have rejected. The composite preserves the
+secondary-guard semantics exactly — a duplicate delivery regenerates the identical
+`(event, recipient, type)` tuples and still collides — and degenerates to the old
+behaviour for membership events (one event → one recipient → one type).
+
 ---
 
 ## Subscribed Topics (event-consumer.md § Subscription Ownership)
@@ -188,12 +255,24 @@ authoritative gate).
 | `fan.membership.activated.v1` | membership-service | `notification-service-membership-events` | `membershipId` | `MembershipEventConsumer#onActivated` | consumed |
 | `fan.membership.canceled.v1` | membership-service | `notification-service-membership-events` | `membershipId` | `MembershipEventConsumer#onCanceled` | consumed |
 | `fan.membership.expired.v1` | membership-service (expiry sweeper) | `notification-service-membership-events` | `membershipId` | `MembershipEventConsumer#onExpired` | consumed (TASK-FAN-BE-014) |
+| `community.comment.added.v1` | community-service | `notification-service-community-events` | `postId` | `CommunityEventConsumer#onCommentAdded` | consumed (TASK-FAN-BE-026) |
+| `community.reaction.added.v1` | community-service | `notification-service-community-events` | `postId` | `CommunityEventConsumer#onReactionAdded` | consumed (TASK-FAN-BE-026) |
 
-- **Consumer group**: `notification-service-membership-events` — one team-owned
-  group for the membership-event subscription (`<service>-<purpose>` convention).
-- **Ordering**: per-`membershipId` ordering is preserved by the producer's
-  partition key; cross-membership ordering is NOT relied upon. WELCOME and
-  CANCELLATION for the same membership therefore arrive in causal order.
+- **Consumer groups** (`<service>-<purpose>` convention): one per event family —
+  `notification-service-membership-events` and
+  `notification-service-community-events`. Separate groups so community lag /
+  replay / rebalance is independent of the membership subscription.
+- **Ordering**: per-`membershipId` ordering is preserved by the membership
+  producer's partition key; cross-membership ordering is NOT relied upon. WELCOME
+  and CANCELLATION for the same membership therefore arrive in causal order.
+  Community events are keyed by `postId`, so interactions on the same post are
+  ordered; ordering across posts is not relied upon (each notification is
+  independent).
+- **Not subscribed**: `community.post.published.v1` and
+  `community.post.status_changed.v1` remain produced-but-unconsumed. Follower
+  fan-out on `post.published` needs a follow graph + a `community.follow.added`
+  event that does not exist yet (TASK-FAN-BE-026 § Out of scope);
+  `post.status_changed` is a search-service concern, not notification.
 
 ---
 
@@ -204,10 +283,17 @@ authoritative gate).
 - Strategy: **idempotency table keyed by `eventId`** via `libs:java-messaging`'s
   `processed_events` (24h+ retention). Before handling, the use case checks/inserts
   `processed_events(eventId)`; a duplicate delivery (at-least-once) short-circuits
-  with NO second `Notification` row and NO second channel dispatch.
-- Secondary natural guard: `Notification.sourceEventId` is unique — a race that
-  slipped past the processed-events check still cannot create a duplicate
-  (DB unique constraint → caught + treated as already-processed).
+  with NO second `Notification` row and NO second channel dispatch. **Both**
+  consumers use the same store and the same guard — the eventId space is global,
+  so a community event and a membership event can never collide on it.
+- Secondary natural guard: `Notification (sourceEventId, accountId, type)` is
+  unique — a race that slipped past the processed-events check still cannot create
+  a duplicate (DB unique constraint → caught + treated as already-processed). It is
+  a **composite** rather than `sourceEventId` alone so one community comment event
+  can legally fan out to several recipients (§ Migrations, V3).
+- An event that resolves to **zero** notifications (self-notify suppression, empty
+  mention list, missing recipient on a pre-enrichment event) is still marked
+  processed — a redelivery must not re-run the suppression logic and must not DLQ.
 
 ### Retry and DLQ (event-consumer.md § Retry and DLQ; consumer-retry-dlq.md)
 
@@ -215,9 +301,16 @@ authoritative gate).
   error, a DB blip): in-process exponential backoff with jitter, **max 3 retries**.
 - Persistent failures (retries exhausted) and **un-parseable / unsupported-schema**
   envelopes: routed to the DLQ topic **`<topic>.dlq`** (e.g.
-  `fan.membership.activated.v1.dlq`) with the **full original envelope + failure
-  reason** header, via `MembershipEventDlqPublisher`. The event is then marked
+  `fan.membership.activated.v1.dlq`, `community.comment.added.v1.dlq`) with the
+  **full original envelope + failure reason** header. The event is then marked
   consumed (offset committed) so the partition is never poisoned.
+  The mechanism is a **single topic-agnostic** `DefaultErrorHandler` bean in
+  `infrastructure/config/KafkaConsumerConfig` (backoff + a
+  `DeadLetterPublishingRecoverer` whose destination resolver appends `.dlq` to the
+  source topic), auto-wired into the listener container factory. It therefore
+  covers **both** consumer groups with no per-family publisher class; the
+  `MalformedEventException` / `UnsupportedSchemaVersionException` non-retryable
+  registration is likewise shared by both parsers.
 - **emit-not-throw discipline** (feedback §18): a handler MUST NOT let a per-message
   exception escape to stall the partition — it either succeeds, retries, or routes
   to DLQ. The channel dispatch failure is isolated per notification.
@@ -392,6 +485,9 @@ the same tenant+account scope.
 | Channel mock transient failure | bounded in-process retry (≤3, backoff+jitter); the inbox row is already durable |
 | Channel failure after retries exhausted | event → `<topic>.dlq` with envelope + reason; offset committed; `dlq_depth` alert |
 | Un-parseable envelope / unsupported `schemaVersion` | event → `<topic>.dlq` (never silent drop) |
+| Community event where the actor IS the post author (self-comment / self-reaction / self-mention) | no notification; logged; event marked processed (AC-3) |
+| Community event with **no** `postAuthorAccountId` (emitted before the TASK-FAN-BE-026 producer enrichment) | no addressable recipient → skip + log + mark processed. **NOT** a DLQ case — it is an expected rollout artifact, not a malformed event |
+| Community event whose recipient account is deleted/inactive | the notification row is still written (no cross-service read exists to detect it); it is simply never fetched by that account's inbox |
 | Missing/invalid end-user JWT (inbox) | 401 UNAUTHORIZED |
 | `tenant_id` is `wms`/other (not `fan-platform`/`*`) | 403 TENANT_FORBIDDEN |
 | Inbox read of another account's / tenant's notification | 404 NOTIFICATION_NOT_FOUND (no leak) |
@@ -406,7 +502,19 @@ the same tenant+account scope.
 
 - **Unit** — `HandleMembershipEventUseCaseTest` (activated→WELCOME, canceled→CANCELLATION,
   idempotent re-delivery = no duplicate, channel-failure→retry/DLQ path),
-  `NotificationTypeTemplateTest` (title/body rendering per payload),
+  `HandleCommunityEventUseCaseTest` (comment→REPLY, mention fan-out one row per
+  mentioned account + dedupe of a repeated account, reaction→REACTION_BADGE,
+  **self-notify suppression for both REPLY and REACTION_BADGE plus self-mention**,
+  idempotent re-delivery, **missing `postAuthorAccountId` → skip + mark processed,
+  never throw**),
+  `CommunityEventParserTest` (both envelopes, malformed JSON, missing required
+  field, unsupported `schemaVersion`, absent `mentionedAccountIds` → empty list,
+  absent `postAuthorAccountId` → null not an exception, unrelated community
+  eventType rejected),
+  `NotificationTypeTest` (1:1 mappings incl. `community.reaction.added` →
+  REACTION_BADGE; `community.comment.added` rejected as recipient-role dependent),
+  `NotificationTypeTemplateTest` (title/body rendering per payload, incl. the
+  REPLY / MENTION / REACTION_BADGE renderers),
   `ListNotificationsUseCaseTest` (tenant+account scoping, status filter, paging),
   `MarkNotificationReadUseCaseTest` (UNREAD→READ, idempotent re-mark),
   `LoggingChannelAdapterTest` (deterministic mock ref + counter),
@@ -418,6 +526,16 @@ the same tenant+account scope.
   - `MembershipEventConsumeIntegrationTest` — publish `fan.membership.activated.v1`
     → notification row created (WELCOME) + mock channel invoked; publish
     `canceled.v1` → CANCELLATION row.
+  - `CommunityEventConsumeIntegrationTest` — publish `community.comment.added.v1`
+    → REPLY row for the post author (`post_id` set, `membership_id` NULL); a
+    mention-carrying event → REPLY + one MENTION row per mentioned account, all
+    sharing one `source_event_id` (proves the V3 composite unique); publish
+    `community.reaction.added.v1` → REACTION_BADGE row; a self-interaction → no
+    row while a following third-party event still lands (proves suppression does
+    not stall the partition); duplicate community `eventId` → one row. This IT is
+    the **authoritative gate for the V3 migration** — the new `type` values must
+    pass `ck_notification_type`, `membership_id` must accept NULL, and `post_id`
+    must exist; a Docker-free `:check` slice cannot catch any of those (§16).
   - `IdempotentConsumeIntegrationTest` — re-deliver the same `eventId` → single
     notification row (at-least-once tolerated).
   - `DlqRoutingIntegrationTest` — a forced persistent handler failure (or
@@ -468,6 +586,7 @@ This spec does NOT create build or infra files. FAN-BE-013 wires:
 - `projects/fan-platform/specs/services/gateway-service/architecture.md`
 - `projects/fan-platform/specs/integration/iam-integration.md`
 - `projects/fan-platform/specs/contracts/events/fan-membership-events.md` (the consumed contract)
+- `projects/fan-platform/specs/contracts/events/community-events.md` (the second consumed contract — § Recipient-routing fields)
 - `rules/traits/integration-heavy.md` § I3 / I8 (fail-closed, retry/DLQ)
 - `rules/traits/multi-tenant.md` § M2 (tenant_id everywhere)
 - ADR-MONO-005 (workload identity) — not used by the consume path; the inbox is end-user OAuth2

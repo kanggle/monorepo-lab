@@ -86,15 +86,41 @@ Triggered when `AddCommentUseCase` succeeds.
 
 ```json
 {
-  "postId":          "<UUID>",
-  "tenantId":        "fan-platform",
-  "commentId":       "<UUID>",
-  "authorAccountId": "<UUID>",
-  "occurredAt":      "ISO-8601 UTC"
+  "postId":               "<UUID>",
+  "tenantId":             "fan-platform",
+  "commentId":            "<UUID>",
+  "authorAccountId":      "<UUID>",
+  "postAuthorAccountId":  "<UUID>",
+  "mentionedAccountIds":  ["<UUID>", "..."],
+  "occurredAt":           "ISO-8601 UTC"
 }
 ```
 
-Consumers (planned): notification-service (mention/reply alerts).
+### Recipient-routing fields (TASK-FAN-BE-026, additive)
+
+`postAuthorAccountId` and `mentionedAccountIds` were **added to the same `.v1`
+topic** so a consumer can address a reply/mention alert **without a synchronous
+call back into community-service** (the no-sync-coupling invariant — see
+`specs/services/notification-service/architecture.md` and TASK-FAN-BE-026 §
+Design decision). The addition is backward-compatible per this directory's
+additive-compatibility rule: no field was renamed or removed, the topic and
+`schemaVersion` are unchanged, and consumers tolerate unknown fields.
+
+| Field | Type | Semantics |
+|---|---|---|
+| `postAuthorAccountId` | string (UUID) | the **post**'s author = the reply-alert recipient. Equal to `authorAccountId` when a user comments on their own post (consumers suppress the self-notify). |
+| `mentionedAccountIds` | array of string (UUID) | mention-alert recipients. **May be empty** — and is empty for every event the current producer emits: community-service has no `@`-mention syntax and no username→accountId directory, so nothing populates it yet. The field is on the wire so a future mention-resolution increment is a producer-only change. |
+
+**Rollout tolerance (consumer requirement).** Events emitted *before* this
+enrichment carry neither field. A consumer MUST treat an absent
+`postAuthorAccountId` as "no addressable recipient → skip + log + dedupe" and an
+absent `mentionedAccountIds` as an empty list — **never** as a malformed event
+(no DLQ routing for this case).
+
+Consumers:
+- notification-service — `CommunityEventConsumer` → REPLY alert to
+  `postAuthorAccountId` + MENTION alert per `mentionedAccountIds` entry
+  (consumer group `notification-service-community-events`, TASK-FAN-BE-026).
 
 ## `community.reaction.added.v1`
 
@@ -109,15 +135,31 @@ type-change activity.
 
 ```json
 {
-  "postId":            "<UUID>",
-  "tenantId":          "fan-platform",
-  "reactorAccountId":  "<UUID>",
-  "reactionType":      "LIKE | LOVE | FIRE | SAD",
-  "occurredAt":        "ISO-8601 UTC"
+  "postId":               "<UUID>",
+  "tenantId":             "fan-platform",
+  "reactorAccountId":     "<UUID>",
+  "postAuthorAccountId":  "<UUID>",
+  "reactionType":         "LIKE | LOVE | FIRE | SAD",
+  "occurredAt":           "ISO-8601 UTC"
 }
 ```
 
-Consumers (planned): notification-service (interaction badges), analytics.
+### Recipient-routing field (TASK-FAN-BE-026, additive)
+
+| Field | Type | Semantics |
+|---|---|---|
+| `postAuthorAccountId` | string (UUID) | the **post**'s author = the interaction-badge recipient. Equal to `reactorAccountId` when a user reacts to their own post (consumers suppress the self-notify). |
+
+Same additive-compatibility and rollout-tolerance rules as
+`community.comment.added.v1` above: same topic, same `schemaVersion`, nothing
+renamed or removed; a consumer reading a pre-enrichment in-flight event MUST skip
+(log + dedupe), not DLQ.
+
+Consumers:
+- notification-service — `CommunityEventConsumer` → REACTION_BADGE alert to
+  `postAuthorAccountId` (consumer group `notification-service-community-events`,
+  TASK-FAN-BE-026).
+- analytics (planned).
 
 ---
 

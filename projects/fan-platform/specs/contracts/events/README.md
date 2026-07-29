@@ -29,14 +29,15 @@ Examples: `artist.registered.v1`, `artist.published.v1`, `community.post.publish
 | File | Producer / Type |
 |---|---|
 | `artist-events.md` | artist-service — producer. **No live consumers today** — every event in this family is marked "(planned)" in the spec, and no `@KafkaListener` for `artist.*` topics exists anywhere in `apps/`. |
-| `community-events.md` | community-service — producer. **No live consumers today**, same as above ("(planned)" per spec, no listener in code). |
+| `community-events.md` | community-service — producer. **Partially consumed** (TASK-FAN-BE-026) — `CommunityEventConsumer` in notification-service (`@KafkaListener`, group `notification-service-community-events`) subscribes to `community.comment.added.v1` + `community.reaction.added.v1`. The other two (`community.post.published.v1`, `community.post.status_changed.v1`) remain **produced-but-unconsumed** — still "(planned)" per spec, no listener in code. |
 | `fan-membership-events.md` | membership-service — producer. **Consumed** — `MembershipEventConsumer` in notification-service (`@KafkaListener`) subscribes to all three `fan.membership.*` topics. |
 
 ---
 
 ## Notes
 
-- **Produced-but-unconsumed events are real, not a gap in this README.** `artist.*` and `community.*` topics are actively published (outbox → Kafka) but have zero subscribers in the current codebase. The specs are honest about this ("planned"); flagging it here so a reader of this index doesn't assume a consumer exists.
+- **Produced-but-unconsumed events are real, not a gap in this README.** Every `artist.*` topic, plus `community.post.published.v1` and `community.post.status_changed.v1`, are actively published (outbox → Kafka) but have zero subscribers in the current codebase. The specs are honest about this ("planned"); flagging it here so a reader of this index doesn't assume a consumer exists. The two community *interaction* topics are no longer in this bucket — TASK-FAN-BE-026 wired `community.comment.added.v1` / `community.reaction.added.v1` to notification-service. Follower-fanout on `community.post.published.v1` / `artist.published.v1` stays unconsumed because it needs a follow graph + a `community.follow.added` event that does not exist yet.
+- **Enrichment over sync callback (TASK-FAN-BE-026).** The two newly-consumed community topics gained recipient-routing fields (`postAuthorAccountId`, `mentionedAccountIds`) *on the same `.v1` topic* rather than notification-service querying community-service synchronously. This preserves the project property that notification-service holds **zero** outbound synchronous dependencies; the additions are backward-compatible (nothing renamed/removed, `schemaVersion` unchanged, consumers tolerate unknown fields and absent new fields).
 - `artist-events.md`'s envelope example documents `partitionKey` as populated directly from the aggregate id. In the actual outbox row, `partition_key` is persisted as `null`, and the Kafka key is set via the relay's fallback to `aggregateId` — same wire behavior, different code path. Not a divergence in outcome, just a subtlety the spec text doesn't surface; noted here for anyone reading the code against the spec.
 
 ## Follow-up (not in scope for this README)

@@ -14,7 +14,7 @@ class LoggingChannelAdapterTest {
 
     private static Notification sample() {
         return Notification.create("n1", "fan-platform", "acc-1", NotificationType.WELCOME,
-                "t", "b", "evt-1", "fan.membership.activated", "mem-1",
+                "t", "b", "evt-1", "fan.membership.activated", "mem-1", null,
                 Instant.parse("2026-06-11T08:00:00Z"));
     }
 

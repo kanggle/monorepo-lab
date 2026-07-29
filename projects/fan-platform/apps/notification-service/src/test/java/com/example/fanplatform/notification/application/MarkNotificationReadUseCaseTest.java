@@ -39,7 +39,7 @@ class MarkNotificationReadUseCaseTest {
 
     private static Notification unread(String id) {
         return Notification.create(id, "fan-platform", "acc-1", NotificationType.WELCOME,
-                "t", "b", "evt-" + id, "fan.membership.activated", "mem-1", CREATED);
+                "t", "b", "evt-" + id, "fan.membership.activated", "mem-1", null, CREATED);
     }
 
     @Test

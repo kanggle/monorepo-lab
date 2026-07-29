@@ -44,12 +44,18 @@ integration contract.
 
 ### Kafka events
 
-| Topic | Producer SLA | Consumers (planned) |
+| Topic | Producer SLA | Consumers |
 |---|---|---|
-| `community.post.published.v1` | at-least-once | notification-service (push fanout, v2), search-service (indexing, v2) |
-| `community.post.status_changed.v1` | at-least-once | search-service (re-indexing on HIDDEN/DELETED), audit pipeline |
-| `community.comment.added.v1` | at-least-once | notification-service (mention/reply alerts) |
-| `community.reaction.added.v1` | at-least-once | notification-service (interaction badges), analytics-service (engagement metrics, v3) |
+| `community.post.published.v1` | at-least-once | *(none live)* — notification-service push fanout is **blocked** on a follow graph + a `community.follow.added` event that does not exist yet; search-service indexing planned |
+| `community.post.status_changed.v1` | at-least-once | *(none live)* — search-service (re-index on HIDDEN/DELETED) + audit pipeline, both planned |
+| `community.comment.added.v1` | at-least-once | **live**: notification-service `CommunityEventConsumer` → REPLY / MENTION alerts (group `notification-service-community-events`, TASK-FAN-BE-026) |
+| `community.reaction.added.v1` | at-least-once | **live**: notification-service `CommunityEventConsumer` → REACTION_BADGE alert (same group); analytics-service engagement metrics planned (v3) |
+
+The two live subscriptions route **only** from the event payload — notification-service
+makes no synchronous call back into community-service. That is precisely why the two
+interaction payloads carry `postAuthorAccountId` / `mentionedAccountIds`
+(TASK-FAN-BE-026); community-service gains **no new inbound dependency** from this
+wiring.
 
 Event envelope and payloads are declared in
 `projects/fan-platform/specs/contracts/events/community-events.md`.

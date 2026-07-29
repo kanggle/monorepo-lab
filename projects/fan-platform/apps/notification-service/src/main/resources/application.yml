@@ -28,10 +28,15 @@ spring:
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP:kafka:9092}
     consumer:
-      # Consumer group per the architecture.md § Subscribed Topics
-      # (<service>-<purpose>). Values are read as raw String and parsed by the
-      # service ObjectMapper in the consumer so an undeserializable payload is a
-      # controlled DLQ route, not a poison-pill deserialization loop.
+      # Fallback consumer group only. Since TASK-FAN-BE-026 there are TWO groups
+      # (architecture.md § Subscribed Topics, <service>-<purpose> convention):
+      # notification-service-membership-events and
+      # notification-service-community-events. Each @KafkaListener declares its
+      # groupId explicitly, so this value is never the effective group for a live
+      # listener — it stays as the Spring Kafka default.
+      # Values are read as raw String and parsed by the service ObjectMapper in
+      # the consumer so an undeserializable payload is a controlled DLQ route, not
+      # a poison-pill deserialization loop.
       group-id: ${KAFKA_CONSUMER_GROUP:notification-service-membership-events}
       auto-offset-reset: earliest
       enable-auto-commit: false

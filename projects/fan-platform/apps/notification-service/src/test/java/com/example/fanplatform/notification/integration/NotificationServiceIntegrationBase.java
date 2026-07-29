@@ -48,6 +48,8 @@ public abstract class NotificationServiceIntegrationBase {
     protected static final String TOPIC_ACTIVATED = "fan.membership.activated.v1";
     protected static final String TOPIC_CANCELED = "fan.membership.canceled.v1";
     protected static final String TOPIC_EXPIRED = "fan.membership.expired.v1";
+    protected static final String TOPIC_COMMENT_ADDED = "community.comment.added.v1";
+    protected static final String TOPIC_REACTION_ADDED = "community.reaction.added.v1";
 
     protected static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>(
             DockerImageName.parse("postgres:16-alpine"))
@@ -155,5 +157,43 @@ public abstract class NotificationServiceIntegrationBase {
                  "payload":{"membershipId":"%s","tenantId":"fan-platform","accountId":"%s",
                    "tier":"%s","validTo":"2026-07-11T00:00:00Z","occurredAt":"2026-07-11T00:00:01Z"}}
                 """).formatted(eventId, membershipId, membershipId, accountId, tier);
+    }
+
+    // ----- envelope builders (canonical community envelope, TASK-FAN-BE-026) ----
+
+    /**
+     * {@code community.comment.added} envelope. {@code mentionedAccountIdsJson} is
+     * the raw JSON array literal (e.g. {@code []} or {@code ["fan-2"]}) so a test
+     * can also exercise the empty-list case the producer emits today.
+     */
+    protected static String commentAddedEnvelope(String eventId, String postId,
+                                                 String commenterAccountId,
+                                                 String postAuthorAccountId,
+                                                 String mentionedAccountIdsJson) {
+        return ("""
+                {"eventId":"%s","eventType":"community.comment.added",
+                 "source":"fan-platform-community-service","occurredAt":"2026-07-22T08:59:00Z",
+                 "schemaVersion":1,"partitionKey":"%s",
+                 "payload":{"postId":"%s","tenantId":"fan-platform","commentId":"cmt-%s",
+                   "authorAccountId":"%s","postAuthorAccountId":"%s",
+                   "mentionedAccountIds":%s,"occurredAt":"2026-07-22T08:59:00Z"}}
+                """).formatted(eventId, postId, postId, eventId, commenterAccountId,
+                postAuthorAccountId, mentionedAccountIdsJson);
+    }
+
+    /** {@code community.reaction.added} envelope. */
+    protected static String reactionAddedEnvelope(String eventId, String postId,
+                                                  String reactorAccountId,
+                                                  String postAuthorAccountId,
+                                                  String reactionType) {
+        return ("""
+                {"eventId":"%s","eventType":"community.reaction.added",
+                 "source":"fan-platform-community-service","occurredAt":"2026-07-22T09:01:00Z",
+                 "schemaVersion":1,"partitionKey":"%s",
+                 "payload":{"postId":"%s","tenantId":"fan-platform","reactorAccountId":"%s",
+                   "postAuthorAccountId":"%s","reactionType":"%s",
+                   "occurredAt":"2026-07-22T09:01:00Z"}}
+                """).formatted(eventId, postId, postId, reactorAccountId,
+                postAuthorAccountId, reactionType);
     }
 }

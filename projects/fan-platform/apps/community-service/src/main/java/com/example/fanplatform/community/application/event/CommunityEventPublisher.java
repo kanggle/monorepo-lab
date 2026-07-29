@@ -6,6 +6,7 @@ import com.example.fanplatform.community.domain.post.status.PostStatus;
 import com.example.fanplatform.community.domain.reaction.ReactionType;
 
 import java.time.Instant;
+import java.util.List;
 
 /**
  * The producer port for {@code community.*} events (port interface,
@@ -41,10 +42,38 @@ public interface CommunityEventPublisher {
                                   PostStatus from, PostStatus to,
                                   String actorAccountId, Instant occurredAt);
 
+    /**
+     * Emits {@code community.comment.added}.
+     *
+     * <p><strong>Recipient-routing fields (TASK-FAN-BE-026).</strong>
+     * {@code postAuthorAccountId} and {@code mentionedAccountIds} are carried on
+     * the event so notification-service can address a reply/mention alert
+     * <em>without</em> calling back into community-service. They are additive on
+     * the same {@code .v1} topic (community-events.md § Recipient-routing fields).
+     *
+     * @param authorAccountId     the <em>comment</em>'s author (the actor)
+     * @param postAuthorAccountId the <em>post</em>'s author = reply-alert recipient;
+     *                            equal to {@code authorAccountId} when a user
+     *                            comments on their own post (the consumer
+     *                            suppresses that self-notify)
+     * @param mentionedAccountIds mention-alert recipients; may be empty, never
+     *                            {@code null}. Always empty today — community-service
+     *                            has no mention syntax and no username directory.
+     */
     void publishCommentAdded(String commentId, String postId, String tenantId,
-                             String authorAccountId, Instant occurredAt);
+                             String authorAccountId, String postAuthorAccountId,
+                             List<String> mentionedAccountIds, Instant occurredAt);
 
+    /**
+     * Emits {@code community.reaction.added}.
+     *
+     * @param reactorAccountId    the reacting account (the actor)
+     * @param postAuthorAccountId the post's author = interaction-badge recipient
+     *                            (TASK-FAN-BE-026 recipient-routing field); equal
+     *                            to {@code reactorAccountId} for a self-reaction,
+     *                            which the consumer suppresses
+     */
     void publishReactionAdded(String postId, String tenantId,
-                              String reactorAccountId, ReactionType reactionType,
-                              Instant occurredAt);
+                              String reactorAccountId, String postAuthorAccountId,
+                              ReactionType reactionType, Instant occurredAt);
 }

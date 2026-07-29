@@ -57,7 +57,7 @@ class HttpFcmPushChannelAdapterTest {
     private static Notification sample(String accountId) {
         return Notification.create("n1", "fan-platform", accountId, NotificationType.WELCOME,
                 "Welcome to GOLD membership", "window 2026-06-01 … 2026-09-01", "evt-1",
-                "fan.membership.activated", "mem-1", Instant.parse("2026-06-11T08:00:00Z"));
+                "fan.membership.activated", "mem-1", null, Instant.parse("2026-06-11T08:00:00Z"));
     }
 
     private double counter(String outcome) {
