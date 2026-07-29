@@ -34,7 +34,7 @@ public final class TenantContext {
         if (tenantId == null || tenantId.isBlank()) {
             CURRENT.remove();
         } else {
-            CURRENT.set(tenantId.trim());
+            CURRENT.set(tenantId);
         }
     }
 
