@@ -8,7 +8,7 @@ TASK-MONO-489
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -108,23 +108,75 @@ connection-refused/timeout(WARN 재시도 로그가 실제로 찍혔던 케이�
 
 # Acceptance Criteria
 
-- [ ] **AC-1** `isTransient()`가 404(최소한 이 인시던트가 관측한 상태 코드)를 무조건
+- [x] **AC-1** `isTransient()`가 404(최소한 이 인시던트가 관측한 상태 코드)를 무조건
       terminal로 취급하지 않고, bounded 재시도 예산 안에서는 transient로 취급한다.
       선택한 예산(횟수/간격/총 추가 시간)과 그 근거를 이 task 파일 또는 구현 PR
       설명에 명시 기록한다.
-- [ ] **AC-2** 예산을 다 써도 계속 4xx면 프로브는 여전히 종결 처리하고 애플리케이션
+
+      **선택한 예산과 근거 (구현 완료 기록):**
+      `JwksHealthProbe`에 **404 전용** bounded 재시도 계층을 신설 — 3회, 1초 고정
+      간격(`Retry.fixedDelay(3, Duration.ofSeconds(1))`), 총 추가 예산 최대 3초.
+      기존 일반 계층(connection-refused/5xx/timeout, 지수백오프 1→2→4→8→16s ~31s)
+      과는 **별도의 안쪽(inner) `retryWhen`**으로 분리 — `probe()`의 `.retryWhen(...)`
+      두 단을 체이닝해 innermost가 404만 `Retry.fixedDelay`로 소진하고, 소진 시
+      Reactor가 감싸는 `Exceptions.retryExhausted(...)` 마커를 outer 계층의
+      `isTransient()`가 `Exceptions.isRetryExhausted(t)`로 인지해 terminal 처리한다.
+      **범위를 404로만 좁힌 근거**: 이 인시던트가 실제 관측한 상태 코드는 404뿐이고,
+      401/403 등 다른 4xx는 "백엔드 재기동 중" 신호가 아니라 인증/인가 오설정일
+      가능성이 훨씬 높음 — Edge Case의 "예산은 작게, 범위는 좁게" 원칙에 따라 4xx
+      전체가 아닌 404 하나만 대상으로 함. **예산을 3초로 정한 근거**: 실제
+      인시던트의 재기동 창(195초)에 정확히 맞추는 것은 불가능/불필요(그러면 진짜
+      오설정 조기발견이 3분 이상 늦어짐 — Failure Scenario가 명시적으로 경고하는
+      과잉완화) — 대신 outer 계층의 첫 backoff(1s)가 이미 "즉시 재시도하지 않고
+      한 박자 쉼"을 제공하므로, 404 계층은 그 다음 몇 초 안에 라우트가 등록되는
+      흔한 mid-restart tail만 흡수하도록 작게 유지. 구현: `libs/java-gateway/src/main/java/com/example/apigateway/security/JwksHealthProbe.java`
+      (`CLIENT_ERROR_RETRY_ATTEMPTS`/`CLIENT_ERROR_RETRY_DELAY` 상수 + javadoc).
+- [x] **AC-2** 예산을 다 써도 계속 4xx면 프로브는 여전히 종결 처리하고 애플리케이션
       컨텍스트를 닫는다 — "영구 오설정은 빠르게 실패한다"는 원래 설계 의도가
       살아있음을 신규 adversarial 테스트로 고정.
-- [ ] **AC-3** 신규 테스트가 이번 인시던트 재현 시나리오(TimeoutException → 404 →
+
+      `JwksHealthProbeTest#closesContextAfterClientErrorBudgetExhaustedOnPersistent404`
+      (온-이벤트 경로) + `#probeMonoErrorsAsRetryExhaustedOncePersistent404BudgetRunsOut`
+      (순수 `Mono` mutation 가드, `StepVerifier`)로 고정. 전자는 총 호출 횟수가
+      정확히 4회(최초 1 + bounded 3)이고 경과시간이 10초 미만(= outer 31s 스케줄로
+      새지 않음)임을 단언.
+- [x] **AC-3** 신규 테스트가 이번 인시던트 재현 시나리오(TimeoutException → 404 →
       성공)에서 프로브가 컨텍스트를 닫지 않고 정상 완료됨을 확인한다.
-- [ ] **AC-4** `libs/java-gateway`의 기존 `JwksHealthProbe*Test` 전부 무회귀, 그리고
+
+      `#recoversFromConnectionErrorThenTransient404ThenSucceeds`(1차=503 전송레벨
+      전이 오류, 2차=404, 3차=성공) + `#probeMonoSucceedsAfterTwoBounded404sWithinClientErrorBudget`
+      (순수 `Mono`, `StepVerifier`). MockWebServer 결정성을 위해 원 인시던트의
+      `TimeoutException` 대신 이미 이 테스트 파일이 "transient" 대표값으로 쓰던 503을
+      1차 오류로 사용(fixture는 그대로 outer 일반 계층에서 재시도되므로 인과 관계는
+      동일 — 접속불가/5xx/timeout 모두 `isTransient()`의 동일 분기).
+- [x] **AC-4** `libs/java-gateway`의 기존 `JwksHealthProbe*Test` 전부 무회귀, 그리고
       이 클래스를 `@Bean`으로 소비하는 gateway-service들(fan-platform, scm, finance,
       erp — grep으로 전수 확인) 각각의 관련 테스트 스위트 무회귀.
-- [ ] **AC-5** `wms`는 여전히 이 빈을 배선하지 않는다 — 컴파일/스캔 확인(기존
+
+      grep 재확인 결과 소비처는 정확히 4곳(`OAuth2ResourceServerConfig.java`의
+      `@Bean jwksHealthProbe(...)` — fan-platform/scm-platform/finance-platform/
+      erp-platform). `./gradlew :libs:java-gateway:test`
+      `:projects:fan-platform:apps:gateway-service:test`
+      `:projects:scm-platform:apps:gateway-service:test`
+      `:projects:finance-platform:apps:gateway-service:test`
+      `:projects:erp-platform:apps:gateway-service:test` 전부 BUILD SUCCESSFUL.
+- [x] **AC-5** `wms`는 여전히 이 빈을 배선하지 않는다 — 컴파일/스캔 확인(기존
       `JwksHealthProbeWiringTest` 계열 가드가 있다면 그대로 통과, 없다면 이 변경이
       새로 만들지 않음을 확인).
-- [ ] **AC-6** 클래스 상단 javadoc의 `isTransient` 설명이 새 정책과 일치하도록
+
+      `JwksHealthProbe`는 `@Component`가 아닌 opt-in `@Bean`이라 스캔 leak 경로
+      자체가 없음(TASK-MONO-357 설계 불변, 이 task는 미변경). grep 재확인:
+      `projects/wms-platform/` 어디에도 `jwksHealthProbe`/`new JwksHealthProbe`
+      없음. `:projects:wms-platform:apps:gateway-service:test` BUILD SUCCESSFUL
+      (기존 `GatewayComponentScanTest` 등 무회귀 — 참고: 문서 상 명명된
+      `JwksHealthProbeWiringTest`라는 파일은 저장소에 실존하지 않음; 실제 가드는
+      "wms의 config 클래스에 `jwksHealthProbe` `@Bean` 메서드가 없다"는 grep-확인
+      가능한 부재 그 자체).
+- [x] **AC-6** 클래스 상단 javadoc의 `isTransient` 설명이 새 정책과 일치하도록
       갱신됨.
+
+      클래스 상단 javadoc + `probe()`/`isRetryableClientError()`/`isTransient()`
+      각각의 javadoc을 새 2-tier 정책에 맞게 갱신.
 
 ---
 
@@ -167,6 +219,15 @@ connection-refused/timeout(WARN 재시도 로그가 실제로 찍혔던 케이�
   상호작용)을 확인 — 기존 `overallTimeout`(consumer마다 설정 가능)을 초과하지
   않도록 예산을 그 안에 포함시킬지, 별도로 둘지 결정하고 명시.
 
+  **결정 (구현 완료 기록):** 별도 예산이 아니라 **기존 `overallTimeout` 안에
+  포함**. 두 `retryWhen` 계층 모두 `probe()`의 `.timeout(overallTimeout)`보다
+  안쪽(upstream)에 있으므로, 404 bounded 재시도가 소비하는 시간은 자연히 기존
+  전체 데드라인의 일부로 카운트된다 — 새 상한을 추가한 게 아니라 기존 상한 안에서
+  "무엇이 재시도 대상인가"만 바꿨다. 따라서 `overallTimeout`이 짧게 설정된
+  consumer(예: 슬라이스 테스트)에서는 404 예산이 다 소진되기 전에 전체 타임아웃이
+  먼저 끊길 수 있는데, 이는 기존에도 있던 동작(전체 타임아웃이 항상 최종
+  상한)이라 회귀가 아니다.
+
 # Failure Scenarios
 
 - 4xx 전체를 무조건 재시도 가능하게 완화하면(과도한 완화), 진짜 잘못된 URL도
@@ -196,9 +257,9 @@ connection-refused/timeout(WARN 재시도 로그가 실제로 찍혔던 케이�
 
 # Definition of Done
 
-- [ ] `isTransient()`/`probe()` 재시도 정책 조정 + 근거 기록
-- [ ] javadoc 갱신
-- [ ] 신규 테스트(정상화 시나리오 + adversarial) 추가·통과
-- [ ] 기존 라이브러리·소비처 테스트 전수 무회귀 확인
-- [ ] wms 무영향 확인
-- [ ] 리뷰 준비 완료
+- [x] `isTransient()`/`probe()` 재시도 정책 조정 + 근거 기록
+- [x] javadoc 갱신
+- [x] 신규 테스트(정상화 시나리오 + adversarial) 추가·통과
+- [x] 기존 라이브러리·소비처 테스트 전수 무회귀 확인
+- [x] wms 무영향 확인
+- [x] 리뷰 준비 완료
