@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 import okhttp3.mockwebserver.Dispatcher;
 import okhttp3.mockwebserver.MockResponse;
@@ -18,6 +19,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.Exceptions;
+import reactor.test.StepVerifier;
 
 /**
  * Unit tests for {@link JwksHealthProbe}'s fail-fast contract:
@@ -26,6 +29,9 @@ import org.springframework.web.reactive.function.client.WebClient;
  *   <li>Probe succeeds (JWKS returns 200) → app context is NOT closed.</li>
  *   <li>Probe transiently fails (503) but recovers within the window → context NOT closed.</li>
  *   <li>Probe fails for the entire window → {@code applicationContext.close()} is called.</li>
+ *   <li>TASK-MONO-489: a 404 gets a small bounded retry budget (not an immediate close) but
+ *       still closes if that budget runs out — see the {@code ...ClientErrorBudget...} and
+ *       {@code recoversFromConnectionErrorThenTransient404...} tests below.</li>
  * </ul>
  *
  * <p>Plus the guard that made moving this class here safe at all — see
@@ -156,13 +162,19 @@ class JwksHealthProbeTest {
     }
 
     @Test
-    void closesContextImmediatelyOn404() {
-        // 4xx is a configuration problem (wrong URL / auth), not a transient
-        // network issue. The probe must not retry pointlessly — it should give up
-        // and trigger fail-fast.
+    void closesContextAfterClientErrorBudgetExhaustedOnPersistent404() {
+        // TASK-MONO-489 adversarial case (mutation-style): a 404 now gets a small bounded
+        // retry budget (3 attempts, 1s apart) for the case where the backend is mid-restart.
+        // If it is STILL 404 after that budget, it is a genuine misconfiguration (wrong
+        // URL/auth) and must fail fast — critically, it must NOT fall through to the much
+        // larger general-tier backoff (1+2+4+8+16=31s), which exists for real transient
+        // outages, not a confirmed-permanent 404. The elapsed-time assertion is what proves
+        // that: bounded (>= the 3s client-error budget) but nowhere near the 31s ceiling.
+        AtomicInteger calls = new AtomicInteger();
         jwksServer.setDispatcher(new Dispatcher() {
             @Override
             public MockResponse dispatch(RecordedRequest request) {
+                calls.incrementAndGet();
                 return new MockResponse().setResponseCode(404);
             }
         });
@@ -179,8 +191,100 @@ class JwksHealthProbeTest {
         long elapsed = System.currentTimeMillis() - start;
 
         verify(ctx, atLeastOnce()).close();
-        // Should give up well before the 30s timeout because 4xx is non-transient.
-        assertThat(elapsed).isLessThan(15_000);
+        assertThat(calls.get())
+                .as("1 initial attempt + 3 bounded client-error retries, no more")
+                .isEqualTo(4);
+        assertThat(elapsed)
+                .as("must fail fast off the small client-error budget, not the 31s general "
+                        + "backoff schedule")
+                .isLessThan(10_000);
+    }
+
+    @Test
+    void recoversFromConnectionErrorThenTransient404ThenSucceeds() {
+        // Reproduces the 2026-07-29 fan-platform incident (TASK-MONO-489): the JWKS backend
+        // is mid-restart. First attempt hits a transient 5xx (already retried, pre-fix, by
+        // the general tier — the same shape as doesNotCloseContextWhenJwksRecoversAfter
+        // Transient503 above). Second attempt gets routed but the backend has not registered
+        // the route yet (404 — previously terminal on the spot). Third attempt succeeds once
+        // the backend is fully up. Before this task, the second attempt alone would have
+        // closed the context.
+        AtomicInteger calls = new AtomicInteger();
+        jwksServer.setDispatcher(new Dispatcher() {
+            @Override
+            public MockResponse dispatch(RecordedRequest request) {
+                int n = calls.incrementAndGet();
+                if (n == 1) {
+                    return new MockResponse().setResponseCode(503);
+                }
+                if (n == 2) {
+                    return new MockResponse().setResponseCode(404);
+                }
+                return jwksOk();
+            }
+        });
+
+        ConfigurableApplicationContext ctx = mock(ConfigurableApplicationContext.class);
+        JwksHealthProbe probe = new JwksHealthProbe(
+                jwksUrl(),
+                30,
+                ctx,
+                WebClient.builder());
+
+        probe.onApplicationEvent(FAKE_EVENT);
+
+        verify(ctx, never()).close();
+        assertThat(calls.get()).isEqualTo(3);
+    }
+
+    @Test
+    void probeMonoSucceedsAfterTwoBounded404sWithinClientErrorBudget() {
+        // Same recovery shape as above but asserted directly on the pure probe() Mono via
+        // StepVerifier (Failure Scenarios note: boot-time timing defects aren't caught by
+        // ordinary unit tests, so probe()'s Mono-returning shape must be independently
+        // verifiable without going through onApplicationEvent's block()/context-close side
+        // effects).
+        AtomicInteger calls = new AtomicInteger();
+        jwksServer.setDispatcher(new Dispatcher() {
+            @Override
+            public MockResponse dispatch(RecordedRequest request) {
+                int n = calls.incrementAndGet();
+                if (n <= 2) {
+                    return new MockResponse().setResponseCode(404);
+                }
+                return jwksOk();
+            }
+        });
+
+        JwksHealthProbe probe = new JwksHealthProbe(
+                jwksUrl(), 30, mock(ConfigurableApplicationContext.class), WebClient.builder());
+
+        StepVerifier.create(probe.probe())
+                .expectNext(JWKS_BODY)
+                .verifyComplete();
+
+        assertThat(calls.get()).isEqualTo(3);
+    }
+
+    @Test
+    void probeMonoErrorsAsRetryExhaustedOncePersistent404BudgetRunsOut() {
+        // Mutation guard for the isTransient() boundary: if Exceptions.isRetryExhausted(t) is
+        // ever dropped or inverted, a persistent 404 stops being terminal to the general tier
+        // and this Mono either succeeds after 5 more backed-off attempts or times out well
+        // past the bounded window asserted here.
+        jwksServer.setDispatcher(new Dispatcher() {
+            @Override
+            public MockResponse dispatch(RecordedRequest request) {
+                return new MockResponse().setResponseCode(404);
+            }
+        });
+
+        JwksHealthProbe probe = new JwksHealthProbe(
+                jwksUrl(), 30, mock(ConfigurableApplicationContext.class), WebClient.builder());
+
+        StepVerifier.create(probe.probe())
+                .expectErrorMatches(Exceptions::isRetryExhausted)
+                .verify(Duration.ofSeconds(8));
     }
 
     private static MockResponse jwksOk() {
