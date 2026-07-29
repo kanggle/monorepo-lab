@@ -74,7 +74,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## backlog
 
+- `TASK-SCM-BE-052-demand-planning-destination-addressing-seam.md` — filed 2026-07-29. Moves the 3PL/WMS destination-addressing decision out of `ProcurementDraftPoClient` into the application layer. **Blocked from ready/**: `procurement-api.md` documents a 5-field request body while the shipped DTO sends 8 (drifted additively across BE-035→048→049) — needs a contract-reconciliation docs task first.
+
 ## ready
+
+- `TASK-SCM-BE-051-logistics-vendor-adapter-dedup.md` — filed 2026-07-29. Collapses the copy-pasted EasyPost/Goodsflow dispatch-adapter hierarchy in `logistics-service` (~150-170 duplicated lines; the same two Resilience4j retry-config defects were fixed twice per-vendor) while preserving per-vendor circuit/pool isolation (I9).
 
 ## in-progress
 
