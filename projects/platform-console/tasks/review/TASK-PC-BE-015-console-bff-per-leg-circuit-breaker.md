@@ -1,6 +1,6 @@
 # TASK-PC-BE-015 — console-bff per-leg circuit-breaker + bounded retry (close the spec-vs-reality resilience gap)
 
-**Status:** in-progress
+**Status:** review
 
 **Type:** TASK-PC-BE
 **Owner:** backend

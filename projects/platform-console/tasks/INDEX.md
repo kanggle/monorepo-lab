@@ -89,7 +89,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 _(없음)_
 
-_(진행 중)_ `TASK-PC-BE-015` — console-bff 의 spec-vs-reality resilience 갭 봉합. `architecture.md` § Resilience(D5.A)·`RestClientConfig` javadoc·계약 § 2.4.9 가 모두 "per-leg circuit-breaker keyed by `(domain, route)`" 를 단언하지만 `src/main` 에 resilience4j import 0건(타임아웃 쌍만 존재). `libs/java-common` 의 `ResilienceClientFactory` 를 **그대로 채택**해 13개 `(domain, route)` 레그 전부 CB+bounded retry 뒤로 이동하고, 죽어 있던 `circuit_open`/`CIRCUIT_OPEN` 분류를 실제 emitter 로 살린다(console-web zod `DEGRADED_REASONS` 는 이미 소비 준비 완료). 문서의 `libs/java-web` 인용도 오답(그 모듈엔 resilience 코드 0) → `libs/java-common` 정정. 분석=Opus 5 / 구현 권장=Opus.
+_(직전 착수)_ `TASK-PC-BE-015` — console-bff 의 spec-vs-reality resilience 갭 봉합. `architecture.md` § Resilience(D5.A)·`RestClientConfig` javadoc·계약 § 2.4.9 가 모두 "per-leg circuit-breaker keyed by `(domain, route)`" 를 단언하지만 `src/main` 에 resilience4j import 0건(타임아웃 쌍만 존재). `libs/java-common` 의 `ResilienceClientFactory` 를 **그대로 채택**해 13개 `(domain, route)` 레그 전부 CB+bounded retry 뒤로 이동하고, 죽어 있던 `circuit_open`/`CIRCUIT_OPEN` 분류를 실제 emitter 로 살린다(console-web zod `DEGRADED_REASONS` 는 이미 소비 준비 완료). 문서의 `libs/java-web` 인용도 오답(그 모듈엔 resilience 코드 0) → `libs/java-common` 정정. 분석=Opus 5 / 구현 권장=Opus.
 
 _(직전 완료)_ 콘솔 6도메인 기능↔메뉴 정렬 웨이브 + IAM 「권한」/「권한 세트」 화면(PC-FE-227/228) 완결. ADR-MONO-046 「운영자 그룹」 로드맵은 여전히 PROPOSED/PAUSED 게이팅.
 
@@ -111,9 +111,11 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## in-progress
 
-- `TASK-PC-BE-015-console-bff-per-leg-circuit-breaker.md` — console-bff 13개 `(domain, route)` 아웃바운드 레그에 `libs/java-common` `ResilienceClientFactory` 기반 circuit-breaker + bounded retry 적용, 죽어 있던 `circuit_open`/`CIRCUIT_OPEN` 분류를 실 emitter 로 전환. 분석=Opus 5 / 구현=Opus 5.
+(empty)
 
 ## review
+
+- `TASK-PC-BE-015-console-bff-per-leg-circuit-breaker.md` — **REVIEW (impl PR 오픈, 미머지).** console-bff 의 spec-vs-reality resilience 갭 봉합: `architecture.md` § Resilience(D5.A)·`RestClientConfig` javadoc·계약 §§ 2.4.9/2.4.9.1/2.4.9.2 가 단언하던 per-`(domain, route)` circuit-breaker 를 **실제로 구현**. 신규 `LegResiliencePort`(application) + `Resilience4jLegResilienceAdapter`(adapter) — 게이트 1개/키, `libs/java-common` `ResilienceClientFactory` **customizer 오버로드로 무-fork 채택**(4xx-ignore 자세 상속). `CompositionEngine.time(...)` 이 유일한 배선 지점(= `(domain, route)` 두 반쪽을 모두 쥔 유일한 곳; `RestClient` 빈은 도메인별이라 route 를 못 봄). 죽어 있던 `circuit_open`/`CIRCUIT_OPEN` 이 실 emitter 획득 — `LegOutcome.Status` 는 3값 유지하고 `reason` 으로 실었기에 **console-web 무변경**(zod `DEGRADED_REASONS` 가 이미 수용). 문서의 `libs/java-web` 인용도 정정(그 모듈엔 resilience 코드 0). **🔵 AC-0/AC-1 재측정이 티켓 숫자를 뒤집음: 아웃바운드 레그는 12가 아니라 13**(6 overview + 6 health + 1 notification-inbox; 14번째 `markRead` 는 fan-out 밖 mutating proxy 라 의도적 미게이트, 어댑터·스펙·티켓 3곳에 명시). **🔴 라이브러리 채택 중 발견한 제약**: `standardCircuitBreakerConfig()` 가 이미 `waitDurationInOpenState` 를 세워 두어 재지정 시 Resilience4j 가 `IllegalStateException` 으로 하드-거부 ⇒ 프로퍼티 미노출·라이브러리 10s 상속(포크 아님, `ResilienceProperties` javadoc 에 기록). window 는 `COUNT_BASED` 로 오버라이드 — 레그는 대시보드 로드당 1회라 `TIME_BASED` 10s 창은 `minimumNumberOfCalls` 에 영원히 도달 못 함(= 열릴 수 없는 브레이커는 resilience 아니라 문서). retry 2회/150ms 는 `attempts × 2s + backoff ≈ 4.45s < 5s` 합성 데드라인에 맞춰 **테스트로 단언**. **기존 IT 픽스처 재무장 필요했음**: 1회성 `enqueue` 는 retry 시도가 빈 `QueueDispatcher` 에 파킹돼 ① `DOWNSTREAM_ERROR`→`TIMEOUT` 오분류 ② `@AfterAll shutdown()` 을 `Gave up waiting for queue to shut down` 으로 죽여 **테스트 전건 PASS + 클래스 `executionError` FAILED** 를 만들었다(실측 후 `respondAlways` 도입). 로컬 GREEN: unit 70/70(신규 12) · integrationTest 42/42(신규 2, 부팅 컨텍스트+MockWebServer 실패주입). 계약 표면 변경 0(인용 정정만). 분석=Opus 5 / 구현=Opus 5. [[feedback_recount_population_dont_inherit_scope]] [[env_empty_detector_output_is_not_absence]]
 
 ## done
 
