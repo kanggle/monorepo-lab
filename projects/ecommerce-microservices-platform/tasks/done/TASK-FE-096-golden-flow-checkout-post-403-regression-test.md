@@ -8,7 +8,7 @@ golden-flow E2E: extend coverage past checkout button to assert order-creation P
 
 # Status
 
-review
+done
 
 # Owner
 
