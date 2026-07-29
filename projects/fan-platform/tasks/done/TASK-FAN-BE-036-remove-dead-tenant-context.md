@@ -8,7 +8,7 @@ Remove the unreferenced TenantContext class straggling in notification/community
 
 # Status
 
-review
+done
 
 # Owner
 
