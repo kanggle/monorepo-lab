@@ -173,7 +173,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-491-naming-conventions-fleet-reconciliation.md` — filed + impl'd 2026-07-29, in review. Byproduct of an 8-project parallel commonality/naming audit run this session — updates `platform/naming-conventions.md` to document conventions the fleet already independently converged on (`{UseCase}View`/`Page` alongside `Result`, `*UseCase` alongside `*Service`, `*Adapter`/`*Properties`/`*ExceptionHandler`/`*Store` rows, 4-segment package root, Hexagonal layer-name set, AIP-136 colon-verb endpoints). Docs-only, zero code renamed. 분석=Sonnet 5 / 구현=Sonnet 5(세션, 직접).
 
 ## done
 
