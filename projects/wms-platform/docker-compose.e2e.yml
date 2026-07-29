@@ -179,9 +179,6 @@ services:
       DB_USERNAME: outbound
       DB_PASSWORD: ${OUTBOUND_DB_PASSWORD:-outbound}
       KAFKA_CONSUMER_GROUP: wms-outbound-service
-      # TMS is a post-commit external stub in v1 (ADR-MONO-005 category D).
-      TMS_BASE_URL: ${WMS_TMS_BASE_URL:-http://localhost:9999}
-      TMS_API_KEY: ${WMS_TMS_API_KEY:-demo}
     expose: ["8084"]
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8084/actuator/health || exit 1"]
