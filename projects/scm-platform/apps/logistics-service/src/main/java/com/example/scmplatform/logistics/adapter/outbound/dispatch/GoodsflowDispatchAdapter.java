@@ -4,23 +4,18 @@ import com.example.scmplatform.logistics.adapter.outbound.persistence.DispatchDe
 import com.example.scmplatform.logistics.application.port.outbound.DispatchAck;
 import com.example.scmplatform.logistics.application.port.outbound.ShipmentDispatchPort;
 import com.example.scmplatform.logistics.config.GoodsflowClientProperties;
-import com.example.scmplatform.logistics.domain.error.ShipmentDispatchException;
 import com.example.scmplatform.logistics.domain.model.Carrier;
 import com.example.scmplatform.logistics.domain.model.Dispatch;
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Profile;
-import org.springframework.http.MediaType;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
-import java.util.Optional;
-import java.util.UUID;
+import java.util.function.Consumer;
 
 /**
  * 굿스플로 (Goodsflow) domestic carrier-aggregator dispatch adapter (external-integrations.md §2).
@@ -41,29 +36,44 @@ import java.util.UUID;
  *       pool — not shared with EasyPost or any other vendor.</li>
  * </ul>
  *
+ * <p>The HTTP sequence itself lives in {@link AbstractHttpDispatchAdapter} (TASK-SCM-BE-051);
+ * sharing the template shares <b>no</b> resilience instance, pool, DTO or 4xx rule with EasyPost.
+ * This class supplies the 굿스플로 hooks and — critically — <b>keeps its own resilience annotations
+ * and its own {@code dispatchFallback} declaration</b>.
+ *
  * Active under every profile except {@code standalone} (which swaps in the credential-free stub).
  */
 @Component
 @Profile("!standalone")
-public class GoodsflowDispatchAdapter implements ShipmentDispatchPort {
-
-    private static final Logger log = LoggerFactory.getLogger(GoodsflowDispatchAdapter.class);
-
-    private final RestClient goodsflowRestClient;
-    private final GoodsflowShipmentMapper mapper;
-    private final DispatchDedupeStore dedupeStore;
-    private final String apiKeyHeaderName;
-    private final String apiKey;
+public class GoodsflowDispatchAdapter
+        extends AbstractHttpDispatchAdapter<GoodsflowShipmentRequest, GoodsflowShipmentResponse>
+        implements ShipmentDispatchPort {
 
     public GoodsflowDispatchAdapter(@Qualifier("goodsflowRestClient") RestClient goodsflowRestClient,
                                     GoodsflowShipmentMapper mapper,
                                     DispatchDedupeStore dedupeStore,
                                     GoodsflowClientProperties props) {
-        this.goodsflowRestClient = goodsflowRestClient;
-        this.mapper = mapper;
-        this.dedupeStore = dedupeStore;
-        this.apiKeyHeaderName = props.getApiKeyHeaderName();
-        this.apiKey = props.getApiKey();
+        super(goodsflowRestClient,
+                mapper,
+                dedupeStore,
+                Carrier.GOODSFLOW,
+                "굿스플로",
+                apiKeyHeader(props),
+                () -> new GoodsflowRateLimitedException("굿스플로 returned 429 (rate limited)"),
+                "굿스플로 accepted the shipment but returned no invoiceNo (운송장번호)");
+    }
+
+    /**
+     * 굿스플로 API-key header (§2.2) — the vendor-specified header name (configurable). Snapshotted
+     * at construction, exactly as the pre-BE-051 adapter fields were, and applied by the shared
+     * template <b>before</b> {@code Idempotency-Key}/{@code Content-Type} so header order and
+     * content are unchanged. EasyPost contributes no such header (its auth is a default header on
+     * its own client), so this key can never ride an EasyPost POST.
+     */
+    private static Consumer<HttpHeaders> apiKeyHeader(GoodsflowClientProperties props) {
+        String apiKeyHeaderName = props.getApiKeyHeaderName();
+        String apiKey = props.getApiKey();
+        return headers -> headers.add(apiKeyHeaderName, apiKey);
     }
 
     @Override
@@ -74,60 +84,25 @@ public class GoodsflowDispatchAdapter implements ShipmentDispatchPort {
     // outermost aspect it fires exactly once, after all retries are exhausted (or the circuit is
     // open / bulkhead full), so 429/5xx/timeout retry the full max-attempts=3 (§2.6). This is the
     // reapplication of the two BE-042 retry lessons for the 굿스플로 vendor.
+    //
+    // This method — not the shared template it calls — is the proxied entry point. The
+    // doDispatch(...) call below is an ordinary intra-object call (Spring AOP self-invocation), so
+    // the aspects apply exactly once; doDispatch is final and carries no annotation.
     @CircuitBreaker(name = "goodsflowDispatch")
     @Retry(name = "goodsflowDispatch", fallbackMethod = "dispatchFallback")
     @Bulkhead(name = "goodsflowDispatch")
     public DispatchAck dispatch(Dispatch dispatch) {
-        UUID requestId = dispatch.getShipmentId().value();
-
-        Optional<String> cached = dedupeStore.findSnapshot(requestId);
-        if (cached.isPresent()) {
-            // Repeat send — cached ack, NO network call (I4).
-            return mapper.ackFromSnapshot(cached.get());
-        }
-
-        GoodsflowShipmentRequest request = mapper.toRequest(dispatch);
-        GoodsflowShipmentResponse response = goodsflowRestClient.post()
-                .uri("/shipments")
-                // 굿스플로 API-key header (§2.2) — the vendor-specified header name (configurable).
-                .header(apiKeyHeaderName, apiKey)
-                // Stable dedup key across resilience4j retry and operator :retry (§2.7).
-                .header("Idempotency-Key", requestId.toString())
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(request)
-                .retrieve()
-                // 429 → a distinct RETRYABLE exception; every other 4xx falls through to the
-                // default handler (HttpClientErrorException → ignored, non-retryable).
-                .onStatus(status -> status.value() == 429, (req, res) -> {
-                    throw new GoodsflowRateLimitedException("굿스플로 returned 429 (rate limited)");
-                })
-                .body(GoodsflowShipmentResponse.class);
-
-        if (response == null || response.trackingCode() == null || response.trackingCode().isBlank()) {
-            // A 2xx with no 운송장번호 is a contract failure, not a vendor outage → permanent.
-            throw new ShipmentDispatchException(
-                    "굿스플로 accepted the shipment but returned no invoiceNo (운송장번호)", false, null);
-        }
-
-        dedupeStore.save(requestId, Carrier.GOODSFLOW, mapper.serialize(response));
-        return mapper.toAck(response);
+        return doDispatch(dispatch);
     }
 
     /**
      * Resilience4j fallback — reachable on circuit OPEN, retries exhausted, a permanent 4xx,
-     * timeout/IO, or bulkhead-full. Translates the transport/resilience failure into a domain
-     * {@link ShipmentDispatchException}; the "no 운송장번호" case is already domain-shaped and is
-     * re-thrown as-is.
+     * timeout/IO, or bulkhead-full. Declared HERE on purpose: resilience4j resolves
+     * {@code fallbackMethod} by name on the target class, not through inheritance. The body is the
+     * shared translation (the "no 운송장번호" case is already domain-shaped and is re-thrown as-is).
      */
     @SuppressWarnings("unused")
     public DispatchAck dispatchFallback(Dispatch dispatch, Throwable t) {
-        if (t instanceof ShipmentDispatchException sde) {
-            throw sde;
-        }
-        boolean retryable = !(t instanceof HttpClientErrorException);
-        log.warn("굿스플로 dispatch failed for shipment {} ({}: {})",
-                dispatch.getShipmentId(), t.getClass().getSimpleName(), t.getMessage());
-        throw new ShipmentDispatchException(
-                "굿스플로 dispatch failed: " + t.getMessage(), retryable, t);
+        return translateFailure(dispatch, t);
     }
 }

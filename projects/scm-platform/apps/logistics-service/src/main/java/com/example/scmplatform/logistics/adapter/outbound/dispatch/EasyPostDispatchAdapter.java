@@ -9,17 +9,10 @@ import com.example.scmplatform.logistics.domain.model.Dispatch;
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Profile;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
-
-import java.util.Optional;
-import java.util.UUID;
 
 /**
  * EasyPost carrier-aggregator dispatch adapter (external-integrations.md §1). Pushes a confirmed
@@ -37,24 +30,34 @@ import java.util.UUID;
  *       pool — not shared with any other vendor.</li>
  * </ul>
  *
+ * <p>The HTTP sequence itself lives in {@link AbstractHttpDispatchAdapter} (TASK-SCM-BE-051); this
+ * class supplies the EasyPost hooks and — critically — <b>keeps its own resilience annotations and
+ * its own {@code dispatchFallback} declaration</b>. Auth is HTTP Basic applied as a default header
+ * on {@code easyPostRestClient}, so no per-request auth header is contributed here (§1.2).
+ *
  * Active under every profile except {@code standalone} (which swaps in the credential-free stub).
  */
 @Component
 @Profile("!standalone")
-public class EasyPostDispatchAdapter implements ShipmentDispatchPort {
-
-    private static final Logger log = LoggerFactory.getLogger(EasyPostDispatchAdapter.class);
-
-    private final RestClient easyPostRestClient;
-    private final EasyPostShipmentMapper mapper;
-    private final DispatchDedupeStore dedupeStore;
+public class EasyPostDispatchAdapter
+        extends AbstractHttpDispatchAdapter<EasyPostShipmentRequest, EasyPostShipmentResponse>
+        implements ShipmentDispatchPort {
 
     public EasyPostDispatchAdapter(@Qualifier("easyPostRestClient") RestClient easyPostRestClient,
                                    EasyPostShipmentMapper mapper,
                                    DispatchDedupeStore dedupeStore) {
-        this.easyPostRestClient = easyPostRestClient;
-        this.mapper = mapper;
-        this.dedupeStore = dedupeStore;
+        super(easyPostRestClient,
+                mapper,
+                dedupeStore,
+                Carrier.EASYPOST,
+                "EasyPost",
+                // No per-request auth header — HTTP Basic is a default header on the EasyPost
+                // client (§1.2), and the 굿스플로 API-key header must never appear on an
+                // EasyPost POST (separate RestClient beans make that structural).
+                headers -> {
+                },
+                () -> new EasyPostRateLimitedException("EasyPost returned 429 (rate limited)"),
+                "EasyPost accepted the shipment but returned no tracking_code");
     }
 
     @Override
@@ -64,57 +67,25 @@ public class EasyPostDispatchAdapter implements ShipmentDispatchPort {
     // to a domain exception *before* @Retry can see it, collapsing the retry count. On the
     // outermost aspect it fires exactly once, after all retries are exhausted (or the circuit is
     // open / bulkhead full), so 429/5xx/timeout retry the full max-attempts=3 (external-integrations.md §1.6).
+    //
+    // This method — not the shared template it calls — is the proxied entry point. The
+    // doDispatch(...) call below is an ordinary intra-object call (Spring AOP self-invocation), so
+    // the aspects apply exactly once; doDispatch is final and carries no annotation.
     @CircuitBreaker(name = "easyPostDispatch")
     @Retry(name = "easyPostDispatch", fallbackMethod = "dispatchFallback")
     @Bulkhead(name = "easyPostDispatch")
     public DispatchAck dispatch(Dispatch dispatch) {
-        UUID requestId = dispatch.getShipmentId().value();
-
-        Optional<String> cached = dedupeStore.findSnapshot(requestId);
-        if (cached.isPresent()) {
-            // Repeat send — cached ack, NO network call (I4).
-            return mapper.ackFromSnapshot(cached.get());
-        }
-
-        EasyPostShipmentRequest request = mapper.toRequest(dispatch);
-        EasyPostShipmentResponse response = easyPostRestClient.post()
-                .uri("/shipments")
-                .header("Idempotency-Key", requestId.toString())
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(request)
-                .retrieve()
-                // 429 → a distinct RETRYABLE exception; every other 4xx falls through to the
-                // default handler (HttpClientErrorException → ignored, non-retryable).
-                .onStatus(status -> status.value() == 429, (req, res) -> {
-                    throw new EasyPostRateLimitedException("EasyPost returned 429 (rate limited)");
-                })
-                .body(EasyPostShipmentResponse.class);
-
-        if (response == null || response.trackingCode() == null || response.trackingCode().isBlank()) {
-            // A 2xx with no tracking_code is a contract failure, not a vendor outage → permanent.
-            throw new ShipmentDispatchException(
-                    "EasyPost accepted the shipment but returned no tracking_code", false, null);
-        }
-
-        dedupeStore.save(requestId, Carrier.EASYPOST, mapper.serialize(response));
-        return mapper.toAck(response);
+        return doDispatch(dispatch);
     }
 
     /**
      * Resilience4j fallback — reachable on circuit OPEN, retries exhausted, a permanent 4xx,
-     * timeout/IO, or bulkhead-full. Translates the transport/resilience failure into a domain
-     * {@link ShipmentDispatchException}; the "no tracking_code" case is already domain-shaped and
-     * is re-thrown as-is.
+     * timeout/IO, or bulkhead-full. Declared HERE on purpose: resilience4j resolves
+     * {@code fallbackMethod} by name on the target class, not through inheritance. The body is the
+     * shared translation ("no tracking_code" is already domain-shaped and is re-thrown as-is).
      */
     @SuppressWarnings("unused")
     public DispatchAck dispatchFallback(Dispatch dispatch, Throwable t) {
-        if (t instanceof ShipmentDispatchException sde) {
-            throw sde;
-        }
-        boolean retryable = !(t instanceof HttpClientErrorException);
-        log.warn("EasyPost dispatch failed for shipment {} ({}: {})",
-                dispatch.getShipmentId(), t.getClass().getSimpleName(), t.getMessage());
-        throw new ShipmentDispatchException(
-                "EasyPost dispatch failed: " + t.getMessage(), retryable, t);
+        return translateFailure(dispatch, t);
     }
 }
