@@ -40,6 +40,18 @@ import org.springframework.web.client.RestClient;
  * {@link MockPaymentGatewayAdapter} / {@link MockRecurringBillingGateway} and on every consumer
  * constructor parameter of these types, so resolution is identical and unambiguous under both
  * profiles.
+ *
+ * <p><b>Amendment (TASK-FAN-BE-034).</b> fix-02's consumer-side change placed
+ * {@code @Qualifier("paymentGateway")} on the FIELD of three Lombok {@code @RequiredArgsConstructor}
+ * use cases ({@code SubscribeUseCase}, {@code RenewMembershipUseCase}, {@code WebhookReconcileUseCase}).
+ * Lombok does not copy that annotation onto the constructor parameter it generates (confirmed via
+ * javap: zero {@code RuntimeVisibleParameterAnnotations}), so those three injection points stayed
+ * effectively unqualified and still threw {@code NoUniqueBeanDefinitionException} under
+ * {@code portone} — discovered by the {@code PortOneProfileContextBootIntegrationTest} guard this
+ * task adds, on its very first (unmutated) run. Fixed by converting all three to an explicit
+ * constructor with {@code @Qualifier} on the parameter (the pattern {@link
+ * com.example.fanplatform.membership.application.billing.AutoRenewMembershipsUseCase} already
+ * used correctly) — no behavior change, DI wiring only.
  */
 @Configuration
 public class PaymentGatewayConfig {

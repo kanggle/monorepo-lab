@@ -66,13 +66,15 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-FAN-BE-034-portone-profile-context-boot-test.md` — **READY — 선행: TASK-FAN-BE-033-fix-02(머지 후 착수)**. `portone` 프로파일로 membership-service 컨텍스트를 부팅만 하는 테스트를 CI에 배선 — fix-02급 DI 배선 모호성 재발을 CI가 잡도록 하는 후속 회귀 가드. 실 PortOne 네트워크 호출 없음.
+(empty)
 
 ## in-progress
 
 (empty)
 
 ## review
+
+- `TASK-FAN-BE-034-portone-profile-context-boot-test.md` — **REVIEW.** `PortOneProfileContextBootIntegrationTest` — `portone` 프로파일로 membership-service 전체 컨텍스트를 부팅만 하는 CI-gated 가드(기존 `Integration (fan-platform, Testcontainers)` 레인에 `@Tag("integration")`으로 자연 배선, 신규 CI YAML 불요). **첫 실행(무-mutation)에 실결함 발견+동일 PR 내 수정**: `SubscribeUseCase`/`RenewMembershipUseCase`/`WebhookReconcileUseCase`가 Lombok `@RequiredArgsConstructor` + FIELD-레벨 `@Qualifier("paymentGateway")`를 썼는데, Lombok이 그 애노테이션을 생성 생성자 파라미터로 복사하지 않음(javap 바이트코드로 확인 — `RuntimeVisibleParameterAnnotations` 0개) → fix-02가 "수정"했다고 기록한 4개 소비 유스케이스 중 3개가 실제로는 `portone` 하 여전히 unqualified였고, 이 가드의 무-mutation 첫 로컬 실행이 `RenewMembershipUseCase`에서 실제 `NoUniqueBeanDefinitionException`으로 즉시 RED. 3개 클래스를 명시적 생성자(파라미터-레벨 `@Qualifier`, 이미 올바르던 `AutoRenewMembershipsUseCase` 패턴과 동일)로 전환해 수정 — 동작 변화 없음, 순수 DI 배선. **AC-2 mutation-check(수정 후)**: `PaymentGatewayConfig.portOnePaymentGateway()`의 `@Qualifier("paymentGateway")`를 `@Qualifier("recurringBillingGateway")`로 역전 → 로컬 재현 RED(`NoSuchBeanDefinitionException` for `portOneRecurringBillingGateway`, mock 취소 후 즉시 GREEN 재확인, 커밋 안 됨). **로컬 검증**: `:membership-service:check`(unit+slice, Docker-free) GREEN, `:membership-service:integrationTest`(Testcontainers 전체 12클래스, 신규 가드 포함) 전부 GREEN(로컬 Windows Docker 자원경합으로 Kafka/Postgres 컨테이너 기동 타임아웃 3회 재시도 필요 — 인프라 노이즈, project memory `env_hyperv_socket_buffer_exhaustion_docker_churn`/`project_testcontainers_docker_desktop_blocker` 패턴과 일치, CI Linux 가 권위). 3-dim 검증 대기.
 
 ## done
 
