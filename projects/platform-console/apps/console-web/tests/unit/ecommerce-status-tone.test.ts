@@ -1,10 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { orderStatusTone } from '@/features/ecommerce-ops/api/order-types';
 import { shippingStatusTone } from '@/features/ecommerce-ops/api/shipping-types';
-import {
-  productStatusTone,
-  promotionStatusTone,
-} from '@/features/ecommerce-ops/api/types';
+import { productStatusTone } from '@/features/ecommerce-ops/api/product-types';
+import { promotionStatusTone } from '@/features/ecommerce-ops/api/promotion-types';
 
 /**
  * TASK-PC-FE-159 — the ecommerce status → shared {@link StatusTone} maps

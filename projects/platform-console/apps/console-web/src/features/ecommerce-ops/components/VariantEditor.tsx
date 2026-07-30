@@ -1,6 +1,6 @@
 'use client';
 
-import type { Variant } from '../api/types';
+import type { Variant } from '../api/product-types';
 import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { VariantTable } from './VariantTable';
 import { VariantAddRow } from './VariantAddRow';

@@ -9,10 +9,12 @@ import {
   AddVariantBodySchema,
   UpdateVariantBodySchema,
   AdjustStockBodySchema,
+} from '@/features/ecommerce-ops/api/product-types';
+import {
   CreatePromotionBodySchema,
   UpdatePromotionBodySchema,
   IssueCouponBodySchema,
-} from '@/features/ecommerce-ops/api/types';
+} from '@/features/ecommerce-ops/api/promotion-types';
 import { UpdateShippingStatusBodySchema } from '@/features/ecommerce-ops/api/shipping-types';
 import {
   PresignedUrlBodySchema,

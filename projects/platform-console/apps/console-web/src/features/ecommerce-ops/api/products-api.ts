@@ -25,7 +25,7 @@ import {
   type AdjustStockBody,
   PRODUCT_DEFAULT_PAGE_SIZE,
   PRODUCT_MAX_PAGE_SIZE,
-} from './types';
+} from './product-types';
 
 /**
  * Server-side ecommerce `product-service` operations client (TASK-PC-FE-081 —

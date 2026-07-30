@@ -5,7 +5,7 @@ import { formatDateTime } from '@/shared/lib/datetime';
 import {
   promotionStatusTone,
   type PromotionDetail as PromotionDetailType,
-} from '../api/types';
+} from '../api/promotion-types';
 import { formatPromotionDay } from './promotion-format';
 
 interface PromotionDetailFieldsProps {

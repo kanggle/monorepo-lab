@@ -1,6 +1,6 @@
 import { mapSectionResilience, mapDetailResilience } from './section-state';
 import { listProducts, getProduct } from './ecommerce-api';
-import type { ProductList, ProductDetail, ProductListParams } from './types';
+import type { ProductList, ProductDetail, ProductListParams } from './product-types';
 
 /**
  * Server-side ecommerce product operations section state for the

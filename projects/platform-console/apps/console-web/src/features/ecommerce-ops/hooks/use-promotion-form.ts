@@ -12,7 +12,7 @@ import {
   type PromotionDetail,
   type CreatePromotionBody,
   type UpdatePromotionBody,
-} from '../api/types';
+} from '../api/promotion-types';
 
 /**
  * `<input type="date">` yields `YYYY-MM-DD`; the promotion-service parses

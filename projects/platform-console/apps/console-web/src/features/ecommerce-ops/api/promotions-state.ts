@@ -1,6 +1,6 @@
 import { mapSectionResilience, mapDetailResilience } from './section-state';
 import { listPromotions, getPromotion } from './ecommerce-api';
-import type { PromotionList, PromotionDetail, PromotionListParams } from './types';
+import type { PromotionList, PromotionDetail, PromotionListParams } from './promotion-types';
 
 /**
  * Server-side ecommerce promotion operations section state for the

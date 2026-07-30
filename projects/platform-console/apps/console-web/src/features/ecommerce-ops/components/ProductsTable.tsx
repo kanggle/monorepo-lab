@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Button } from '@/shared/ui/Button';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
-import { productStatusTone, type ProductList } from '../api/types';
+import { productStatusTone, type ProductList } from '../api/product-types';
 
 interface ProductsTableProps {
   rows: ProductList['content'];

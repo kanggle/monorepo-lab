@@ -21,7 +21,7 @@ import {
   type AdjustStockBody,
   PRODUCT_DEFAULT_PAGE_SIZE,
   PRODUCT_MAX_PAGE_SIZE,
-} from '../api/types';
+} from '../api/product-types';
 
 /**
  * Client-side ecommerce-ops product hooks (TASK-PC-FE-081 — architecture.md

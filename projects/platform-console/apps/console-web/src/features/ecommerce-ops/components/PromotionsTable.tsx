@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Button } from '@/shared/ui/Button';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { formatPromotionDay } from './promotion-format';
-import { promotionStatusTone, type PromotionList } from '../api/types';
+import { promotionStatusTone, type PromotionList } from '../api/promotion-types';
 
 interface PromotionsTableProps {
   rows: PromotionList['content'];

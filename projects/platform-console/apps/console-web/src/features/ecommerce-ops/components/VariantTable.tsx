@@ -2,7 +2,7 @@
 
 import type { Dispatch, SetStateAction } from 'react';
 import { Button } from '@/shared/ui/Button';
-import type { Variant } from '../api/types';
+import type { Variant } from '../api/product-types';
 
 interface VariantEditSlice {
   editId: string | null;

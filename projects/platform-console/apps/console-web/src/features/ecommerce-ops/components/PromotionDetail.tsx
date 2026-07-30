@@ -9,7 +9,7 @@ import {
   usePromotion,
   useDeletePromotion,
 } from '../hooks/use-ecommerce-promotions';
-import { type PromotionDetail as PromotionDetailType } from '../api/types';
+import { type PromotionDetail as PromotionDetailType } from '../api/promotion-types';
 import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { CouponIssueDialog } from './CouponIssueDialog';
 import { DetailHeader } from '@/shared/ui/DetailHeader';

@@ -11,7 +11,7 @@ import {
   type ProductDetail,
   type RegisterProductBody,
   type UpdateProductBody,
-} from '../api/types';
+} from '../api/product-types';
 
 export interface VariantDraft {
   optionName: string;

@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/shared/ui/Button';
-import { PRODUCT_STATUS_VALUES, type ProductDetail } from '../api/types';
+import { PRODUCT_STATUS_VALUES, type ProductDetail } from '../api/product-types';
 import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { ProductVariantsFieldset } from './ProductVariantsFieldset';
 import { useProductForm } from '../hooks/use-product-form';

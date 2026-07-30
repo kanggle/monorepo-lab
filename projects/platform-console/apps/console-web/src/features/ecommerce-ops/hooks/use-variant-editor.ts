@@ -7,7 +7,7 @@ import {
   useUpdateVariant,
   useDeleteVariant,
 } from './use-ecommerce-products';
-import type { Variant } from '../api/types';
+import type { Variant } from '../api/product-types';
 
 /**
  * Inline variant CRUD state + mutations for {@link VariantEditor}
