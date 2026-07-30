@@ -1,6 +1,6 @@
 # TASK-MONO-496 — Error catalog commonalization gaps: PERMISSION_DENIED promotion + Content-Heavy trait duplicate in ecommerce Product
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-MONO
 **Analysis model:** Sonnet 5 / **Recommended impl model:** Sonnet 5 (documentation reconciliation; no new architectural decision beyond a naming ruling already implied by existing document convention)
