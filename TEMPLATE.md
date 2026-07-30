@@ -540,6 +540,7 @@ Bringing up any project's stack locally follows a fixed order. Steps 1–2 are o
 1. **Register hostnames** (one-time per machine) — `bash scripts/dev-setup.sh` (Linux/macOS) or `.\scripts\dev-setup.ps1` as Administrator (Windows). See [§ One-time developer setup](#one-time-developer-setup) above.
 2. **Start the shared Traefik** (once per session) — `pnpm traefik:up`. This creates the external `traefik-net` network every project compose joins. Skip it and every `*.local` hostname is unroutable.
 3. **Start IAM first if the target is an OIDC consumer** — `pnpm iam:up`. Every consumer gateway validates tokens against `http://iam.local/oauth2/jwks` at startup and **fails fast** when IAM is unreachable, so IAM must be healthy *before* the consumer's gateway boots. `iam-platform` is the identity provider — it has no such dependency and is brought up on its own. See the matrix below for which projects are consumers.
+   > **`pnpm iam:up` / `pnpm wms:up` alone do not make `iam.local` / `wms.local` reachable.** Both projects' `docker-compose.yml` contain infrastructure only (mysql/postgres, redis, kafka, kafka-ui, observability) — `gateway-service`/`auth-service` carry no Traefik labels there and are not part of the default `:up` target. Those app services run either as host `./gradlew :apps:<service>:bootRun` processes (not Traefik-routed either) or inside the isolated `docker-compose.e2e.yml` harness (own network + host ports, not on `traefik-net`). Consequently, bringing up every project's `:up` command in sequence does **not** by itself give OIDC consumers a working `iam.local` — their gateways will fail-fast on the JWKS check unless IAM's app services are separately reachable. The one place `iam.local` *is* Traefik-exposed today is the AWS on-demand demo overlay, `infra/demo/iam-traefik.override.yml` (`TASK-MONO-358`) — a reference implementation for anyone reproducing this locally, not a drop-in for plain `pnpm iam:up`.
 4. **Copy `.env`** (one-time per project) — `cp .env.example .env` in the project directory and adjust secrets if needed (local `changeme-local` defaults work out of the box).
 5. **Start the project stack** — the project's `up` command (matrix below). Compose `depends_on` sequences backing services → app services → gateway/frontend; a cold first boot can take several minutes while every JVM starts.
 6. **Verify** — `pnpm <project>:ps` for container health, then `curl -i http://<hostname>/actuator/health` (backend) or open the frontend hostname in a browser.
@@ -550,14 +551,16 @@ Tear down with the matching `:down` command (named volumes are preserved).
 
 | Project | Up / down | Primary hostname(s) | IAM first? |
 |---|---|---|---|
-| iam-platform | `pnpm iam:up` / `iam:down` | `iam.local` | — (identity provider) |
+| iam-platform | `pnpm iam:up` / `iam:down` | `iam.local`¹ | — (identity provider) |
 | ecommerce-microservices-platform | `pnpm ecommerce:up` / `ecommerce:down` | `ecommerce.local`, `web.ecommerce.local` | ✅ |
-| wms-platform | `pnpm wms:up` / `wms:down` | `wms.local` | ✅ |
+| wms-platform | `pnpm wms:up` / `wms:down` | `wms.local`¹ | ✅ |
 | fan-platform | `pnpm fan-platform:up` / `fan-platform:down` | `fan-platform.local` | ✅ |
 | scm-platform | `pnpm scm:up` / `scm:down` | `scm.local` | ✅ |
 | erp-platform | `pnpm erp:up` / `erp:down` | `erp.local` | ✅ |
 | finance-platform | `pnpm finance:up` / `finance:down` | `finance.local`, `ledger.local` | ✅ |
 | platform-console | `pnpm console:up` / `console:down` | `console.local` | ✅ |
+
+¹ **Not reachable from `pnpm <name>:up` alone** — see the callout under step 3 above. Both hostnames map to the primary gateway of an infra-only compose file; the gateway itself needs a `bootRun` or the demo overlay to answer.
 
 Each project's `docs/onboarding/local-dev.md` records that stack's service/resource inventory (or points to its `docker-compose.yml` as the authoritative inventory) plus any project-specific bring-up notes. **The full resource list for a project is always its `docker-compose.yml`** — this matrix is the ordering contract, not the inventory.
 
