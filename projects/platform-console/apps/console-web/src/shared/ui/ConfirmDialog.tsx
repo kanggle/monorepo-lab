@@ -43,12 +43,21 @@ import { Button } from '@/shared/ui/Button';
  * `…-submit` for the confirm button, three use `…-confirm`; the accounts family
  * carries no domain prefix at all). Deriving them would have silently broken
  * existing assertions.
+ *
+ * TASK-PC-FE-268 migrated 3 more instances TASK-PC-FE-262 had left
+ * unverified (`wms-outbound-ops` `OutboundCancelDialog`, `wms-ops`
+ * `AcknowledgeAlertDialog`, `org-hierarchy` `OrgReasonDialog`) and added the
+ * optional `cancelLabel` prop (default `'취소'`) for `OutboundCancelDialog`'s
+ * `'닫기'` dismiss copy.
  */
 export interface ConfirmDialogProps {
   open: boolean;
   title: string;
   description: ReactNode;
   confirmLabel: string;
+  /** Cancel-button text (TASK-PC-FE-268). Defaults to '취소' — override for a
+   *  caller whose dismiss affordance reads differently (e.g. '닫기'). */
+  cancelLabel?: string;
   /** Privilege-high / irreversible action → tints title + confirm button. */
   destructive?: boolean;
   pending?: boolean;
@@ -82,6 +91,7 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel,
+  cancelLabel = '취소',
   destructive = false,
   pending = false,
   confirmDisabled = false,
@@ -198,7 +208,7 @@ export function ConfirmDialog({
             disabled={pending}
             data-testid={cancelTestId}
           >
-            취소
+            {cancelLabel}
           </Button>
           <Button
             ref={confirmRef}
