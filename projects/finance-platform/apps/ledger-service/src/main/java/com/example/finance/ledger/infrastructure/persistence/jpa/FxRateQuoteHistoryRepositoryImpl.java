@@ -2,7 +2,7 @@ package com.example.finance.ledger.infrastructure.persistence.jpa;
 
 import com.example.finance.ledger.domain.journal.FxRateQuoteHistory;
 import com.example.finance.ledger.domain.journal.repository.FxRateQuoteHistoryRepository;
-import com.example.finance.ledger.domain.money.Currency;
+import com.example.finance.common.money.Currency;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;

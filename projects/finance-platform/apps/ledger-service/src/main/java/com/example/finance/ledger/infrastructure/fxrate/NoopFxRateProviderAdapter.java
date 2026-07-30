@@ -1,7 +1,7 @@
 package com.example.finance.ledger.infrastructure.fxrate;
 
 import com.example.finance.ledger.application.port.outbound.FxRateProviderPort;
-import com.example.finance.ledger.domain.money.Currency;
+import com.example.finance.common.money.Currency;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 

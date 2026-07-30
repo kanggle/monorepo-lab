@@ -1,7 +1,7 @@
 package com.example.finance.ledger.presentation.dto;
 
 import com.example.finance.ledger.application.RevalueForeignBalanceCommand;
-import com.example.finance.ledger.domain.money.Currency;
+import com.example.finance.common.money.Currency;
 
 import java.math.BigDecimal;
 import java.time.Instant;

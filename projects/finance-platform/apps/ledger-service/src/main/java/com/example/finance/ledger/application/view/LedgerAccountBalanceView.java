@@ -2,7 +2,7 @@ package com.example.finance.ledger.application.view;
 
 import com.example.finance.ledger.domain.account.LedgerAccountType;
 import com.example.finance.ledger.domain.account.NormalSide;
-import com.example.finance.ledger.domain.money.Money;
+import com.example.finance.common.money.Money;
 
 /** A ledger account's running balance (ledger-api.md § 3). */
 public record LedgerAccountBalanceView(

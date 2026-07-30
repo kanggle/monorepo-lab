@@ -111,7 +111,7 @@ Shared library placement rules: `shared-library-policy.md`
 
 This repository may be used either as a single-project repository or as a multi-project monorepo. **Canonical layout** is defined in [`../CLAUDE.md`](../CLAUDE.md) § Repository Layout (single source of truth); per-directory ownership notes live in [`repository-structure.md`](repository-structure.md).
 
-Key invariant for both shapes — the **shared library layer** (`platform/`, `rules/`, `.claude/`, `libs/`, `tasks/templates/`, `docs/guides/`, `CLAUDE.md`, `TEMPLATE.md`) is project-agnostic and must not contain project-specific content (service names, API paths, domain entities). Hard-Stop-enforced (HARDSTOP-03). In monorepo shape, project-specific content lives under `projects/<name>/` (`PROJECT.md`, `apps/`, `specs/`, `tasks/`, `knowledge/`, `docs/` non-guides, `infra/`).
+Key invariant for both shapes — the **shared library layer** (`platform/`, `rules/`, `.claude/`, `libs/`, `tasks/templates/`, `docs/guides/`, `CLAUDE.md`, `TEMPLATE.md`) is project-agnostic and must not contain project-specific content (service names, API paths, domain entities). Hard-Stop-enforced (HARDSTOP-03). In monorepo shape, project-specific content lives under `projects/<name>/` (`PROJECT.md`, `apps/`, `specs/`, `tasks/`, `knowledge/`, `docs/` non-guides, `infra/`, and optionally `libs/` — project-scoped shared modules, which are project-specific by construction and therefore NOT bound by the project-agnostic rule above; see [`repository-structure.md`](repository-structure.md) § Project-scoped shared modules).
 
 ---
 

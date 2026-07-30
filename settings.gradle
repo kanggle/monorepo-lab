@@ -150,7 +150,28 @@ include(
 // to v2. account-service skeleton has no business logic yet — TASK-FIN-BE-001
 // implements it. This bootstrap intentionally resets the libs/ churn clock
 // (ADR-MONO-003a § D2.1, recorded in ADR-MONO-008 § 3.3).
+//
+// TASK-FIN-BE-064 (ADR-003 ACCEPTED Option A): `projects:finance-platform:libs:
+// finance-common` is this repository's FIRST project-scoped shared module. It is not
+// a repo-root `libs:*` module and must not be promoted into one. It holds the
+// `Money`/`Currency` value objects that account-service and ledger-service had each
+// declared for themselves — near-byte-identical copies that ledger-service's own
+// javadoc had already flagged as deferred debt.
+//
+// Why here and not `libs/`: `Currency`'s v1 supported-currency whitelist is a
+// finance-platform PRODUCT decision, not a technical fact. Repo-root `libs/` is
+// project-agnostic by rule (CLAUDE.md § Repository Layout, platform/shared-library-
+// policy.md), so promoting the whitelist there would plant one project's business
+// rule in the shared layer, and would also strand the module when finance-platform is
+// extracted to its standalone fork (ADR-MONO-008 Option C). ADR-003 § 2 weighs both
+// options in full.
+//
+// The path composes the two conventions already in this file: the `projects:<project>:`
+// prefix every app module uses, and the `libs:<name>` segment the root shared layer
+// uses. `check-service-map-drift.sh` matches `:apps:` only, so this module correctly
+// needs no docs/project-overview.md service row.
 include(
+    'projects:finance-platform:libs:finance-common',
     'projects:finance-platform:apps:account-service',
     // TASK-FIN-BE-007: ledger-service (v2 double-entry general ledger, first
     // increment — ADR-MONO-008 § D3). Hexagonal + DDD; rest-api + event-consumer

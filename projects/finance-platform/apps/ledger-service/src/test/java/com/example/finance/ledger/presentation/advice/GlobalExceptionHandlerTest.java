@@ -1,8 +1,8 @@
 package com.example.finance.ledger.presentation.advice;
 
 import com.example.finance.ledger.domain.error.LedgerErrors;
-import com.example.finance.ledger.domain.money.Currency;
-import com.example.finance.ledger.domain.money.Money;
+import com.example.finance.common.money.Currency;
+import com.example.finance.common.money.Money;
 import com.example.finance.ledger.presentation.dto.ApiErrorBody;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

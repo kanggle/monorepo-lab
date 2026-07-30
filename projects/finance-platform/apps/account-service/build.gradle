@@ -49,6 +49,12 @@ dependencies {
     // Structured logging (prod profile)
     implementation 'net.logstash.logback:logstash-logback-encoder:8.0'
 
+    // finance-platform project-scoped shared module (ADR-003 Option A,
+    // TASK-FIN-BE-064): Money / Currency value objects, shared with ledger-service.
+    // Framework-free, so `domain/` may depend on it without breaching the
+    // "domain MUST NOT depend on Spring" boundary rule.
+    implementation project(':projects:finance-platform:libs:finance-common')
+
     // Shared libs
     implementation project(':libs:java-common')
     implementation project(':libs:java-web')

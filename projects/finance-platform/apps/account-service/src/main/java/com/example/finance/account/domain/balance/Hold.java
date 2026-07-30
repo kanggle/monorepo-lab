@@ -2,8 +2,8 @@ package com.example.finance.account.domain.balance;
 
 import com.example.finance.account.domain.error.DomainErrors.AmountInvalidException;
 import com.example.finance.account.domain.error.DomainErrors.HoldAlreadySettledException;
-import com.example.finance.account.domain.money.Currency;
-import com.example.finance.account.domain.money.Money;
+import com.example.finance.common.money.Currency;
+import com.example.finance.common.money.Money;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

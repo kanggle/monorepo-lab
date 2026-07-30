@@ -27,8 +27,8 @@ import com.example.finance.ledger.domain.journal.repository.FxCostFlowConfigRepo
 import com.example.finance.ledger.domain.journal.repository.FxPositionLotRepository;
 import com.example.finance.ledger.domain.journal.repository.JournalRepository;
 import com.example.finance.ledger.domain.journal.repository.JournalRepository.AccountTotals;
-import com.example.finance.ledger.domain.money.Currency;
-import com.example.finance.ledger.domain.money.Money;
+import com.example.finance.common.money.Currency;
+import com.example.finance.common.money.Money;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

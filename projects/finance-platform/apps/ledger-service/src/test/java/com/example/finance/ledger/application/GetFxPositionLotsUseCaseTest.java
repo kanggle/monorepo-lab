@@ -3,7 +3,7 @@ package com.example.finance.ledger.application;
 import com.example.finance.ledger.application.view.FxPositionLotsView;
 import com.example.finance.ledger.domain.journal.FxPositionLot;
 import com.example.finance.ledger.domain.journal.repository.FxPositionLotRepository;
-import com.example.finance.ledger.domain.money.Currency;
+import com.example.finance.common.money.Currency;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

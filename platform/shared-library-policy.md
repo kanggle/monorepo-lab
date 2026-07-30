@@ -180,7 +180,12 @@ Before adding code to `libs/`, confirm all of the following:
 3. Can it remain stable without depending on one service's internal model?
 4. Would moving it to `libs/` reduce duplication without increasing coupling?
 
-If any answer is no, keep the code inside the owning service.
+If any answer is no, keep the code inside the owning service — **unless** the only failing
+answer is #2 *because the concept is owned by a whole project rather than by one service*.
+That case has its own home: a project-scoped shared module under `projects/<p>/libs/`
+([`repository-structure.md`](repository-structure.md) § Project-scoped shared modules). It is
+not repo-root `libs/`, nothing in this file's Forbidden list is relaxed for it, and it may not
+be promoted to repo-root `libs/` without an ADR.
 
 ---
 
@@ -189,6 +194,11 @@ If any answer is no, keep the code inside the owning service.
 If a rule or model belongs to one bounded context, it must stay in that service.
 
 Domain ownership is more important than reuse convenience.
+
+This rule answers "which service owns it", so it returns no answer when the honest answer is
+"neither — the project does". Do not read that silence as permission to promote to repo-root
+`libs/`; read it as the signal for a project-scoped shared module (above). The distinction is
+the point: ownership narrows to the correct scope, it does not widen to the shared layer.
 
 ---
 

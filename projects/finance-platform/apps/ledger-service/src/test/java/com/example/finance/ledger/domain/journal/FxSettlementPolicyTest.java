@@ -4,7 +4,7 @@ import com.example.finance.ledger.domain.account.LedgerAccountCodes;
 import com.example.finance.ledger.domain.error.LedgerErrors.SettlementRateInvalidException;
 import com.example.finance.ledger.domain.journal.FxSettlementPolicy.Outcome;
 import com.example.finance.ledger.domain.journal.FxSettlementPolicy.SettlementResult;
-import com.example.finance.ledger.domain.money.Currency;
+import com.example.finance.common.money.Currency;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -206,9 +206,9 @@ class FxSettlementPolicyTest {
             SettlementResult r = settleOrThrow(10_000L, 130_000L, "13.7");
             JournalLine removal = r.lines().get(0);
             assertThat(removal.ledgerAccountCode()).isEqualTo(CASH);
-            assertThat(removal.money()).isEqualTo(com.example.finance.ledger.domain.money.Money.of(10_000L, USD));
+            assertThat(removal.money()).isEqualTo(com.example.finance.common.money.Money.of(10_000L, USD));
             assertThat(removal.baseMoney())
-                    .isEqualTo(com.example.finance.ledger.domain.money.Money.of(130_000L, KRW));
+                    .isEqualTo(com.example.finance.common.money.Money.of(130_000L, KRW));
         }
 
         @Test

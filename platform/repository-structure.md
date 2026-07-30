@@ -54,6 +54,7 @@ Used when the repository hosts multiple projects sharing a library layer at the 
     ├── <project-a>/
     │   ├── PROJECT.md       # Project classification (domain + traits)
     │   ├── apps/            # Deployable services for this project
+    │   ├── libs/            # OPTIONAL: project-scoped shared modules (see below)
     │   ├── specs/           # Project-internal specs
     │   ├── tasks/           # Project-internal task lifecycle
     │   ├── knowledge/       # Project design references
@@ -65,6 +66,27 @@ Used when the repository hosts multiple projects sharing a library layer at the 
 
 In the monorepo shape, the **library layer** (`platform/`, `rules/`, `.claude/`, `libs/`, `packages/` if present, `tasks/templates/`, `docs/guides/`, `CLAUDE.md`, `TEMPLATE.md`) is shared across all projects and must remain project-agnostic.
 
+## Project-scoped shared modules (`projects/<p>/libs/`)
+
+There are **two** library layers in the monorepo shape, and they are not interchangeable:
+
+| | repo-root `libs/` | `projects/<p>/libs/` |
+|---|---|---|
+| Shared by | every project | the services of **one** project |
+| Content | technical mechanisms only — project-agnostic, Hard-Stop-enforced (HARDSTOP-03) | that project's own domain vocabulary, including its **product decisions** (supported-value sets, domain policies) |
+| Owner | Platform team | that project's team |
+| Gradle include | `libs:<module>` | `projects:<p>:libs:<module>` |
+| Travels on template extraction | no (stays in the monorepo library layer) | yes — it sits under `projects/<p>/` |
+
+Use `projects/<p>/libs/` when two or more services **of the same project** declare the same domain concept and neither service owns it (`shared-library-policy.md` § Ownership Rule cannot pick a home, because the concept belongs to the project, not to one bounded context). Promoting such a concept to repo-root `libs/` instead would plant one project's product decision in the project-agnostic layer — the shape § Forbidden rules out.
+
+Constraints, both directions:
+
+- The module must not depend on any service module; consumers declare it with `implementation`, never `api` (`shared-library-policy.md` § Dependency Rule).
+- It is not automatically promotable to repo-root `libs/` when a second project wants it — that promotion is a separate ADR decision, and it re-imposes the project-agnostic rule the module was placed here to avoid.
+- Introducing one is an architecture decision and requires an ADR in the owning project's `docs/adr/` (`architecture-decision-rule.md`).
+- **Check guard reachability before choosing the path.** Most repo guards and CI gradle-task lists key on `projects/*/apps/*`; a `libs/` module they do not enumerate is a module whose tests never run and whose drift nothing reports — and a guard that does not run reports green.
+
 ---
 
 # Ownership
@@ -72,7 +94,8 @@ In the monorepo shape, the **library layer** (`platform/`, `rules/`, `.claude/`,
 | Directory | Owner | Notes |
 |---|---|---|
 | `apps/` (single) or `projects/<p>/apps/` (mono) | Service team | One sub-dir per deployable service |
-| `libs/` | Platform team | Shared Java libs; technical reuse only — domain logic forbidden (`shared-library-policy.md`) |
+| `libs/` (repo root) | Platform team | Shared Java libs; technical reuse only — domain logic forbidden (`shared-library-policy.md`) |
+| `projects/<p>/libs/` (mono, optional) | That project's team | Project-scoped shared modules — domain vocabulary shared by ≥ 2 of that project's services. Not project-agnostic, and not promotable to repo-root `libs/` without an ADR. See § Project-scoped shared modules |
 | `packages/` | Frontend team | Shared TypeScript packages; only when ≥ 2 apps share |
 | `specs/` (single) or `projects/<p>/specs/` (mono) | Architecture team | Source of truth: `contracts/`, `services/`, `features/`, `use-cases/` |
 | `tasks/` | All teams | Lifecycle: `backlog/` → `ready/` → `in-progress/` → `review/` → `done/`. Templates under `tasks/templates/` (shared) |
@@ -94,6 +117,7 @@ In the monorepo shape, the **library layer** (`platform/`, `rules/`, `.claude/`,
 - In monorepo shape, service directories MUST live under `projects/<p>/apps/`. Root-level `apps/` is reserved for single-project shape.
 - Each service under `<specs-scope>/services/` must have an `architecture.md` declaring its `Service Type`.
 - Shared libraries must pass `shared-library-policy.md` before being added to `libs/` or `packages/`.
+- A project-scoped shared module belongs under `projects/<p>/libs/<module>/` and is included as `projects:<p>:libs:<module>` — never under `projects/<p>/apps/` (it is not deployable) and never under repo-root `libs/` (it is not project-agnostic).
 - Project-specific content (service names, paths, domain entities) MUST NOT appear in the shared library layer — Hard-Stop-enforced (HARDSTOP-03).
 
 ---

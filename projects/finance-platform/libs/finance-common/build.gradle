@@ -1,0 +1,41 @@
+plugins {
+    id 'io.spring.dependency-management'
+}
+
+group = 'com.example.finance.common'
+
+// -------------------------------------------------------------------------
+// finance-platform finance-common (TASK-FIN-BE-064, ADR-003 Option A).
+//
+// PROJECT-SCOPED shared module — the first one in this repository. It is NOT a
+// repo-root `libs:*` module and must not become one: it holds finance-platform's
+// shared money vocabulary (`Money`, `Currency`), and `Currency`'s v1 supported-
+// currency whitelist is a finance-platform PRODUCT decision, not a technical fact
+// (ADR-003 § 1.2 / § 2 Option B "단점"). Promoting it to repo-root `libs/` would
+// plant a single project's business rule inside the 8-project project-agnostic
+// layer — the shape `platform/shared-library-policy.md § Forbidden` rules out.
+//
+// Consumers: projects:finance-platform:apps:account-service
+//            projects:finance-platform:apps:ledger-service
+// Both declare it with `implementation` (never `api` — root `assertNoApiOnSharedLibs`
+// only inspects `libs:*`, but the same one-way rule applies here by policy:
+// `platform/shared-library-policy.md § Dependency Rule`).
+//
+// DELIBERATELY FRAMEWORK-FREE. No Spring, no JPA, no Jackson. Both services'
+// architecture.md carries the boundary rule "`domain/` MUST NOT depend on Spring",
+// and their `domain/` packages depend on this module — so any framework added here
+// would breach that rule transitively, in two services at once, without either
+// service's build file changing.
+// -------------------------------------------------------------------------
+
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.junit.jupiter:junit-jupiter-params'
+    testImplementation 'org.assertj:assertj-core'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
+    }
+}

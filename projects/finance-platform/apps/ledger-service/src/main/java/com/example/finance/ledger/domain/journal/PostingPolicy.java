@@ -1,7 +1,7 @@
 package com.example.finance.ledger.domain.journal;
 
 import com.example.finance.ledger.domain.account.LedgerAccountCodes;
-import com.example.finance.ledger.domain.money.Money;
+import com.example.finance.common.money.Money;
 
 import java.time.Instant;
 import java.util.List;

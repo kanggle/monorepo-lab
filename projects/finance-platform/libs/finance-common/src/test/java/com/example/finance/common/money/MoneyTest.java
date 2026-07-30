@@ -1,4 +1,4 @@
-package com.example.finance.account.domain.money;
+package com.example.finance.common.money;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -11,6 +11,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * Domain unit tests for {@link Money} (fintech F5 — integer minor units,
  * never float/double; currency mismatch guard; scale per currency).
+ *
+ * <p>TASK-FIN-BE-064: the union of the two per-service {@code MoneyTest} classes
+ * this module's extraction replaced (account-service's 17 executed cases +
+ * ledger-service's {@code absoluteDifference} coverage). Every assertion that
+ * existed in either service is preserved here.
  */
 class MoneyTest {
 
@@ -27,6 +32,7 @@ class MoneyTest {
     @DisplayName("F5: string-encoded minor units parse to the same value")
     void stringMinorUnits() {
         assertThat(Money.of("1000", Currency.USD).minorUnits()).isEqualTo(1000L);
+        assertThat(Money.of("150000", Currency.KRW)).isEqualTo(Money.of(150_000L, Currency.KRW));
     }
 
     @Test
@@ -75,6 +81,25 @@ class MoneyTest {
     }
 
     @Test
+    @DisplayName("absoluteDifference is symmetric and never negative")
+    void absoluteDifference() {
+        Money big = Money.of(150_000L, Currency.KRW);
+        Money small = Money.of(50_000L, Currency.KRW);
+        assertThat(small.absoluteDifference(big)).isEqualTo(Money.of(100_000L, Currency.KRW));
+        assertThat(big.absoluteDifference(small)).isEqualTo(Money.of(100_000L, Currency.KRW));
+        assertThat(big.absoluteDifference(big).isZero()).isTrue();
+    }
+
+    @Test
+    @DisplayName("F5: mixed-currency absoluteDifference → CurrencyMismatchException")
+    void absoluteDifferenceCurrencyMismatch() {
+        Money usd = Money.of(100L, Currency.USD);
+        Money krw = Money.of(100L, Currency.KRW);
+        assertThatThrownBy(() -> usd.absoluteDifference(krw))
+                .isInstanceOf(Money.CurrencyMismatchException.class);
+    }
+
+    @Test
     @DisplayName("F5: mixed-currency add → CurrencyMismatchException")
     void currencyMismatchAdd() {
         Money usd = Money.of(100L, Currency.USD);
@@ -110,6 +135,10 @@ class MoneyTest {
         assertThatThrownBy(() -> Currency.of("XYZ"))
                 .isInstanceOf(Currency.UnsupportedCurrencyException.class);
         assertThatThrownBy(() -> Currency.of("US"))
+                .isInstanceOf(Currency.UnsupportedCurrencyException.class);
+        assertThatThrownBy(() -> Currency.of("XBT"))
+                .isInstanceOf(Currency.UnsupportedCurrencyException.class);
+        assertThatThrownBy(() -> Currency.of("KR"))
                 .isInstanceOf(Currency.UnsupportedCurrencyException.class);
     }
 

@@ -4,7 +4,7 @@ import com.example.finance.ledger.domain.account.LedgerAccountCodes;
 import com.example.finance.ledger.domain.error.LedgerErrors.RevaluationRateInvalidException;
 import com.example.finance.ledger.domain.journal.FxRevaluationPolicy.Outcome;
 import com.example.finance.ledger.domain.journal.FxRevaluationPolicy.RevaluationResult;
-import com.example.finance.ledger.domain.money.Currency;
+import com.example.finance.common.money.Currency;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

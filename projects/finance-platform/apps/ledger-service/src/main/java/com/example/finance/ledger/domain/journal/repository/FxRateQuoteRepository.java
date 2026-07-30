@@ -1,7 +1,7 @@
 package com.example.finance.ledger.domain.journal.repository;
 
 import com.example.finance.ledger.domain.journal.FxRateQuote;
-import com.example.finance.ledger.domain.money.Currency;
+import com.example.finance.common.money.Currency;
 
 import java.util.List;
 import java.util.Optional;

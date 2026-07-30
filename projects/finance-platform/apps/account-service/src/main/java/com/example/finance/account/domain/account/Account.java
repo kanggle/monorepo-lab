@@ -4,7 +4,7 @@ import com.example.finance.account.domain.account.status.AccountStatus;
 import com.example.finance.account.domain.account.status.AccountStatusMachine;
 import com.example.finance.account.domain.error.DomainErrors.AccountFrozenException;
 import com.example.finance.account.domain.error.DomainErrors.AccountNotActiveException;
-import com.example.finance.account.domain.money.Currency;
+import com.example.finance.common.money.Currency;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

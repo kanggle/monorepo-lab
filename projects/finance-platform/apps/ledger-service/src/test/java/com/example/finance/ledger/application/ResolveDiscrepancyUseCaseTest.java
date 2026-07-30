@@ -8,7 +8,7 @@ import com.example.finance.ledger.domain.audit.AuditLogRepository;
 import com.example.finance.ledger.domain.error.LedgerErrors.ReconciliationAlreadyResolvedException;
 import com.example.finance.ledger.domain.error.LedgerErrors.ReconciliationDiscrepancyNotFoundException;
 import com.example.finance.ledger.domain.error.LedgerErrors.ReconciliationPeriodLockedException;
-import com.example.finance.ledger.domain.money.Currency;
+import com.example.finance.common.money.Currency;
 import com.example.finance.ledger.domain.period.AccountingPeriod;
 import com.example.finance.ledger.domain.period.PeriodStatus;
 import com.example.finance.ledger.domain.period.repository.AccountingPeriodRepository;

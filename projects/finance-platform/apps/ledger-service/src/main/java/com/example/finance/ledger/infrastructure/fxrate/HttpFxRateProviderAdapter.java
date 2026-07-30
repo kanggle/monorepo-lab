@@ -2,7 +2,7 @@ package com.example.finance.ledger.infrastructure.fxrate;
 
 import com.example.finance.ledger.application.port.outbound.ClockPort;
 import com.example.finance.ledger.application.port.outbound.FxRateProviderPort;
-import com.example.finance.ledger.domain.money.Currency;
+import com.example.finance.common.money.Currency;
 import com.example.common.resilience.ResilienceClientFactory;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

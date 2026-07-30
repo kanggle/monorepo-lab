@@ -9,8 +9,8 @@ import com.example.finance.ledger.domain.error.LedgerErrors.AccountingPeriodAlre
 import com.example.finance.ledger.domain.error.LedgerErrors.AccountingPeriodNotFoundException;
 import com.example.finance.ledger.domain.journal.repository.JournalRepository;
 import com.example.finance.ledger.domain.journal.repository.JournalRepository.AccountTotals;
-import com.example.finance.ledger.domain.money.Currency;
-import com.example.finance.ledger.domain.money.Money;
+import com.example.finance.common.money.Currency;
+import com.example.finance.common.money.Money;
 import com.example.finance.ledger.domain.period.AccountingPeriod;
 import com.example.finance.ledger.domain.period.PeriodBalanceSnapshot;
 import com.example.finance.ledger.domain.period.PeriodStatus;

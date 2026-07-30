@@ -1,6 +1,6 @@
 package com.example.finance.ledger.domain.period;
 
-import com.example.finance.ledger.domain.money.Money;
+import com.example.finance.common.money.Money;
 
 /**
  * One ledger account's debit/credit totals captured in a

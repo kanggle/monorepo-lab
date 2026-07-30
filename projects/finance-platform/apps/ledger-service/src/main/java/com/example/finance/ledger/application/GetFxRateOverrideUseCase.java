@@ -3,7 +3,7 @@ package com.example.finance.ledger.application;
 import com.example.finance.ledger.application.view.FxRateOverrideView;
 import com.example.finance.ledger.domain.error.LedgerErrors.FxRateOverrideInvalidException;
 import com.example.finance.ledger.domain.journal.repository.FxRateOverrideRepository;
-import com.example.finance.ledger.domain.money.Currency;
+import com.example.finance.common.money.Currency;
 import com.example.finance.ledger.domain.money.LedgerReportingCurrency;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

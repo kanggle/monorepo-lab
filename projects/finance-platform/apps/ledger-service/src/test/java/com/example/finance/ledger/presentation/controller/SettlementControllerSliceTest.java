@@ -29,13 +29,13 @@ import com.example.finance.ledger.domain.error.LedgerErrors.LedgerAccountNotFoun
 import com.example.finance.ledger.domain.error.LedgerErrors.LedgerPeriodClosedException;
 import com.example.finance.ledger.domain.error.LedgerErrors.SettlementRateInvalidException;
 import com.example.finance.ledger.domain.journal.CostFlowMethod;
-import com.example.finance.ledger.domain.money.Currency;
+import com.example.finance.common.money.Currency;
 import com.example.finance.ledger.domain.journal.EntryDirection;
 import com.example.finance.ledger.domain.journal.FxSettlementPolicy.Outcome;
 import com.example.finance.ledger.domain.journal.JournalEntry;
 import com.example.finance.ledger.domain.journal.JournalLine;
 import com.example.finance.ledger.domain.journal.SourceRef;
-import com.example.finance.ledger.domain.money.Money;
+import com.example.finance.common.money.Money;
 import com.example.finance.ledger.presentation.advice.GlobalExceptionHandler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

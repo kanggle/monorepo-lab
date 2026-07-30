@@ -2,8 +2,8 @@ package com.example.finance.account.presentation.advice;
 
 import com.example.common.persistence.DataIntegrityViolations;
 import com.example.finance.account.domain.error.FinanceDomainException;
-import com.example.finance.account.domain.money.Currency;
-import com.example.finance.account.domain.money.Money;
+import com.example.finance.common.money.Currency;
+import com.example.finance.common.money.Money;
 import com.example.finance.account.presentation.dto.ApiErrorBody;
 import jakarta.persistence.OptimisticLockException;
 import lombok.extern.slf4j.Slf4j;

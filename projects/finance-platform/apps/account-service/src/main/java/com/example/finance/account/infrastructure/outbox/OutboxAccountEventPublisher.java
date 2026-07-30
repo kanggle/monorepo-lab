@@ -8,7 +8,7 @@ import com.example.finance.account.domain.account.KycLevel;
 import com.example.finance.account.domain.account.status.AccountStatus;
 import com.example.finance.account.domain.balance.Balance;
 import com.example.finance.account.domain.balance.Hold;
-import com.example.finance.account.domain.money.Money;
+import com.example.finance.common.money.Money;
 import com.example.finance.account.domain.transaction.Transaction;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;

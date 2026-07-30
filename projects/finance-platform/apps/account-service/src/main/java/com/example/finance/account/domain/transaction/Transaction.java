@@ -1,8 +1,8 @@
 package com.example.finance.account.domain.transaction;
 
 import com.example.finance.account.domain.error.DomainErrors.TransactionAlreadySettledException;
-import com.example.finance.account.domain.money.Currency;
-import com.example.finance.account.domain.money.Money;
+import com.example.finance.common.money.Currency;
+import com.example.finance.common.money.Money;
 import com.example.finance.account.domain.transaction.status.TransactionStatus;
 import com.example.finance.account.domain.transaction.status.TransactionStatusMachine;
 import jakarta.persistence.Column;

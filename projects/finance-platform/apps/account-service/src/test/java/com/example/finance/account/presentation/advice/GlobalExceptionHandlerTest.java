@@ -1,8 +1,8 @@
 package com.example.finance.account.presentation.advice;
 
 import com.example.finance.account.domain.error.DomainErrors;
-import com.example.finance.account.domain.money.Currency;
-import com.example.finance.account.domain.money.Money;
+import com.example.finance.common.money.Currency;
+import com.example.finance.common.money.Money;
 import com.example.finance.account.presentation.dto.ApiErrorBody;
 import jakarta.persistence.OptimisticLockException;
 import org.junit.jupiter.api.DisplayName;

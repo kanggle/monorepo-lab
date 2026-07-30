@@ -7,7 +7,7 @@ import com.example.finance.ledger.domain.audit.AuditLogRepository;
 import com.example.finance.ledger.domain.error.LedgerErrors.FxRateOverrideInvalidException;
 import com.example.finance.ledger.domain.journal.FxRateOverride;
 import com.example.finance.ledger.domain.journal.repository.FxRateOverrideRepository;
-import com.example.finance.ledger.domain.money.Currency;
+import com.example.finance.common.money.Currency;
 import com.example.finance.ledger.domain.money.LedgerReportingCurrency;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

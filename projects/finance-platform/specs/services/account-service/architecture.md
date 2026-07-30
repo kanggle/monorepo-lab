@@ -161,9 +161,11 @@ com.example.finance.account/
 │   │   └── status/
 │   │       ├── TransactionStatus.java      ← REQUESTED…COMPLETED + FAILED/REVERSED
 │   │       └── TransactionStatusMachine.java
-│   ├── money/
-│   │   ├── Money.java                      ← long minorUnits + Currency (NO float/double)
-│   │   └── Currency.java                   ← ISO-4217 + minor-unit scale (KRW=0,USD=2)
+│   ├── (money/ — REMOVED by TASK-FIN-BE-064, ADR-003 Option A. Money + Currency
+│   │    now live in the project-scoped shared module
+│   │    projects:finance-platform:libs:finance-common, package
+│   │    com.example.finance.common.money, shared with ledger-service. Framework-free,
+│   │    so the "domain MUST NOT depend on Spring" boundary rule still holds.)
 │   ├── compliance/
 │   │   ├── KycGate.java                    ← KYC-level vs requested-op policy (pure)
 │   │   └── ScreeningDecision.java          ← AML/sanction result VO
@@ -227,6 +229,12 @@ com.example.finance.account/
   `libs:java-observability`, `libs:java-security`, `libs:java-security-servlet`
   (ADR-MONO-049 § D5-3 — `TenantClaimEnforcer`), `libs:java-web-servlet`
   (TASK-FIN-BE-063 — `BodyHashUtil` canonical idempotency body hash)
+- project-scoped shared module: `projects:finance-platform:libs:finance-common`
+  (TASK-FIN-BE-064 / ADR-003 Option A — `Money` + `Currency` value objects, shared
+  with `ledger-service`). Declared `implementation`, never `api`. The module is
+  framework-free (no Spring/JPA/Jackson) precisely so `domain/` may depend on it
+  without breaching § Boundary rules; adding a framework to it would breach that
+  rule in both services at once, with no change to either service's build file.
 
 ### Forbidden dependencies
 
@@ -466,7 +474,7 @@ All under `/api/finance/**` (gateway, when introduced, rewrites
 | **F2** Available/ledger split; single balance writer; (v2) double-entry | ✅ v1 / forward-decl | `Balance` VO `available = ledger − held`; one mutation path; `LEDGER_*` codes forward-declared for ledger-service v2 |
 | **F3** Settled txn immutable; reversal-only | ✅ | `TransactionStatusMachine` blocks post-SETTLED mutation; `REVERSAL` txn references original; both audited |
 | **F4** KYC/AML gate precedes fund movement | ✅ | un-bypassable `KycGate` + `CompliancePort` in the single application path; `SANCTION_HIT` → operator queue |
-| **F5** Money = minor-units / BigDecimal, no float | ✅ | `Money(long minorUnits, Currency)`; JSON as string/integer; `CURRENCY_MISMATCH` guard; grep-zero float/double in `domain/money` |
+| **F5** Money = minor-units / BigDecimal, no float | ✅ | `Money(long minorUnits, Currency)`; JSON as string/integer; `CURRENCY_MISMATCH` guard; grep-zero float/double in the shared `finance-common` money module (TASK-FIN-BE-064 — was `domain/money`) |
 | **F6** Immutable audit on fund/regulatory ops | ✅ | `audit_log` + `account_status_history` append-only, same Tx (audit-heavy trait) |
 | **F7** Regulated PII encrypted + masked | ✅ | `PiiEncryptor` AES-GCM; log/event/error masking (regulated trait) |
 | **F8** Reconciliation no auto-close | ✅ (modelled) | `reconciliation_discrepancy` + operator queue; v1 no external source, real matching v2 |

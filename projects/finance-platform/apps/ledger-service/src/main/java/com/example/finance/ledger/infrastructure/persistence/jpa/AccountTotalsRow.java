@@ -1,6 +1,6 @@
 package com.example.finance.ledger.infrastructure.persistence.jpa;
 
-import com.example.finance.ledger.domain.money.Currency;
+import com.example.finance.common.money.Currency;
 
 /**
  * JPQL projection row for per-account debit/credit totals (trial balance). A
