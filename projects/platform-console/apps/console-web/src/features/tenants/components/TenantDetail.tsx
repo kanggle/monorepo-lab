@@ -3,17 +3,13 @@
 import { useState } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { DetailHeader } from '@/shared/ui/DetailHeader';
-import { StatusBadge, type StatusTone } from '@/shared/ui/StatusBadge';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import { formatDateTime } from '@/shared/lib/datetime';
 import { useTenant, useUpdateTenant } from '../hooks/use-tenants';
-import type { Tenant, UpdateTenantInput } from '../api/types';
+import { tenantStatusTone, type Tenant, type UpdateTenantInput } from '../api/types';
 import { TenantForm } from './TenantForm';
 import { TenantConfirmDialog } from './TenantConfirmDialog';
-
-function tenantStatusTone(status: string): StatusTone {
-  return status === 'ACTIVE' ? 'success' : status === 'SUSPENDED' ? 'warning' : 'neutral';
-}
 
 function tenantTypeLabel(tenantType: string): string {
   if (tenantType === 'B2C_CONSUMER') return 'B2C (소비자)';
