@@ -1,6 +1,8 @@
 'use client';
 
+import { useId } from 'react';
 import { Button } from '@/shared/ui/Button';
+import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { showPickerOnClick } from '@/shared/lib/show-picker';
 import type { DelegationGrant } from '../api/delegation-types';
 import { approvalErrorMessage } from './approval-error';
@@ -250,6 +252,12 @@ function DelegationCreateDialog({ onClose }: { onClose: () => void }) {
 // Revoke dialog — reason required.
 // ===========================================================================
 
+// TASK-PC-FE-269 — thin wrapper over `shared/ui/ConfirmDialog`. Gains a
+// Tab-loop focus trap + Escape-to-cancel it did not have before (same
+// precedented side effect TASK-PC-FE-262/268 already documented for other
+// migrated dialogs). The pre-existing `delegation-revoke-dialog` testid
+// moves from the overlay div to the shared primitive's frame element; a
+// new `delegation-revoke-cancel` testid is added (Cancel had none before).
 function DelegationRevokeDialog({
   grant,
   onClose,
@@ -257,80 +265,54 @@ function DelegationRevokeDialog({
   grant: DelegationGrant;
   onClose: () => void;
 }) {
+  const reasonId = useId();
   const { reason, setReason, revokeM, ok, onConfirm } = useDelegationRevoke(
     grant,
     onClose,
   );
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
-      data-testid="delegation-revoke-dialog"
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="위임 회수"
-        className="w-full max-w-md rounded-lg border border-border bg-background p-6 shadow-lg"
-      >
-        <h2 className="text-lg font-semibold text-foreground">위임 회수</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
+    <ConfirmDialog
+      open
+      title="위임 회수"
+      description={
+        <>
           대결자: <span className="font-medium text-foreground">{grant.delegateId}</span>
+        </>
+      }
+      confirmLabel="회수"
+      destructive
+      pending={revokeM.isPending}
+      confirmDisabled={!ok}
+      errorMessage={revokeM.error ? approvalErrorMessage(revokeM.error) : null}
+      dialogTestId="delegation-revoke-dialog"
+      cancelTestId="delegation-revoke-cancel"
+      confirmTestId="delegation-revoke-confirm"
+      errorTestId="delegation-error"
+      onConfirm={onConfirm}
+      onCancel={onClose}
+    >
+      <label
+        htmlFor={reasonId}
+        className="mt-4 block text-sm font-medium text-foreground"
+      >
+        사유 <span aria-hidden="true">*</span>
+      </label>
+      <textarea
+        id={reasonId}
+        data-testid="delegation-revoke-reason"
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        rows={3}
+        maxLength={512}
+        className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+        placeholder="회수 사유를 입력하세요 (필수)"
+      />
+      {!ok && (
+        <p className="mt-1 text-xs text-destructive" role="status">
+          회수에는 사유가 필요합니다.
         </p>
-        <label
-          htmlFor="delegation-revoke-reason"
-          className="mt-4 block text-sm font-medium text-foreground"
-        >
-          사유 <span aria-hidden="true">*</span>
-        </label>
-        <textarea
-          id="delegation-revoke-reason"
-          data-testid="delegation-revoke-reason"
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          rows={3}
-          maxLength={512}
-          className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
-          placeholder="회수 사유를 입력하세요 (필수)"
-        />
-        {!ok && (
-          <p
-            className="mt-1 text-xs text-destructive"
-            role="status"
-          >
-            회수에는 사유가 필요합니다.
-          </p>
-        )}
-
-        {revokeM.error ? (
-          <p
-            className="mt-4 text-sm text-destructive"
-            role="status"
-            data-testid="delegation-error"
-          >
-            {approvalErrorMessage(revokeM.error)}
-          </p>
-        ) : null}
-
-        <div className="mt-6 flex justify-end gap-2">
-          <Button
-            variant="secondary"
-            onClick={onClose}
-            disabled={revokeM.isPending}
-          >
-            취소
-          </Button>
-          <Button
-            variant="primary"
-            onClick={onConfirm}
-            disabled={!ok || revokeM.isPending}
-            data-testid="delegation-revoke-confirm"
-            className="bg-destructive text-destructive-foreground hover:opacity-90"
-          >
-            {revokeM.isPending ? '처리 중…' : '회수'}
-          </Button>
-        </div>
-      </div>
-    </div>
+      )}
+    </ConfirmDialog>
   );
 }
