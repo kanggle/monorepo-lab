@@ -8,7 +8,7 @@ Fix non-atomic `tryAcquireLock` race in `InMemoryIdempotencyStore` (admin / inve
 
 # Status
 
-review
+done
 
 # Owner
 
