@@ -8,7 +8,7 @@ console-web extract shared/ui/ConfirmDialog primitive, unify 9 confirm-gate dial
 
 # Status
 
-review
+done
 
 # Owner
 
