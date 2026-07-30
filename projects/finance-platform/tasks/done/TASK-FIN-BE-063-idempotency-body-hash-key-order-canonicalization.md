@@ -8,7 +8,7 @@ Canonicalize the idempotency request-body hash (key-order-independent) to close 
 
 # Status
 
-review
+done
 
 # Owner
 
