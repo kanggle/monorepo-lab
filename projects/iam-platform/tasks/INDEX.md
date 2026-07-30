@@ -101,6 +101,8 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
+- `TASK-BE-567-revoke-orphaned-membership-service-client.md` — **🔵 REVIEW** (impl PR open). `TASK-MONO-400` 이 명시적으로 유보한 판단 — "정리 여부는 이 티켓의 질문이 아니다". `membership-service-client`(V0009 시드)는 `TASK-MONO-394`(iam 자체 membership-service 은퇴, 유일한 의도된 소비자) 이후 소비자 0(AC-0 재확인: `git grep` 전수 — 실 소비자 0, 코멘트 1건뿐). `community-service-client`(같은 V0009, `fan-platform` community-service 가 실사용)는 무변경 — DELETE 는 `client_id` 로 정확히 스코프됨. 신규 Flyway `V0029` 로 해당 client 행만 DELETE + `auth-api.md` Registered Clients 표에서 행 제거. auth-service 테스트 전량(`--rerun-tasks`, Testcontainers 포함) GREEN, 6m32s. 2026-07-30 사용자에게 revoke/유보/추가조사 3안 제시 → **revoke 선택**. 분석=Sonnet 5 / 구현=Sonnet 5(세션 직접).
+
 ## done
 
 - `TASK-BE-558-rename-admin-jwtsigner-classname-collision.md` — **DONE (2026-07-30, 3-dim verified — impl PR #3048 squash `1958a391ba5819b599c7b0e589a5b19925e05a8b`; state=MERGED · origin/main tip 포함 확인 · 머지 전 실패 체크 0건).** 모노레포 전역 클래스명 충돌 감사에서 발굴. `admin-service` local `JwtSigner`(class) 를 `OperatorJwtSigner` 로 rename — `libs/java-security` 의 `com.example.security.jwt.JwtSigner`(interface, 동명 무관 타입) 와의 충돌 해소. 순수 rename + 죽은 `com.gap.security.jwt.JwtSigner` javadoc 참조 정정, 동작 변경 없음. `./gradlew :projects:iam-platform:apps:admin-service:test` GREEN (134 test suites, 0 failures/errors, renamed `OperatorJwtSignerTest` included).

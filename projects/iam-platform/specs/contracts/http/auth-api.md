@@ -306,7 +306,6 @@ Registered OAuth 2.0 clients. Seeded via Flyway migrations. Managed via admin-se
 | Client ID | Tenant | Grant Types | PKCE | Redirect URIs | Scopes | Flyway Version |
 |---|---|---|---|---|---|---|
 | `community-service-client` | `fan-platform` | `client_credentials` | No | — | `account.read`, `membership.read` | V0009 |
-| `membership-service-client` | `fan-platform` | `client_credentials` | No | — | `account.read`, `membership.read` | V0009 |
 | `wms-user-flow-client` | `wms` | `authorization_code`, `refresh_token` | Yes | `http://localhost:9001/callback` | `openid`, `profile`, `email`, `offline_access`, `wms.*` | V0010 |
 | `wms-internal-services-client` | `wms` | `client_credentials` | No | — | `wms.*` scopes | V0010 |
 | `fan-platform-user-flow-client` | `fan-platform` | `authorization_code`, `refresh_token` | Yes (required) | `http://localhost:3000/api/auth/callback/iam`, `http://fan-platform.local/api/auth/callback/iam` | `openid`, `profile`, `email`, `tenant.read` | V0011 |
