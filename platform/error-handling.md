@@ -88,6 +88,7 @@ Services that return additional context (trace/request ids, structured `details`
 |---|---|---|
 | FORBIDDEN | 403 | Authenticated caller lacks the required role/permission |
 | ACCESS_DENIED | 403 | Insufficient permissions to access resource (alias kept for backwards compatibility; prefer FORBIDDEN in new code) |
+| PERMISSION_DENIED | 403 | Registered descriptive alias of `FORBIDDEN` (same "lacks required role/permission" shape) — the string services actually emit via a dedicated `PermissionDeniedException` / Spring Security `AccessDeniedHandler` mapping rather than the platform-generic name. Emitted with identical semantics by IAM `admin-service`, erp `masterdata-service`, and scm `procurement-service` / `demand-planning-service` / `inventory-visibility-service`. Promoted here from independent domain-local registration in `Admin [domain: saas]` and `Authorization [domain: erp]` (TASK-MONO-496) — the semantic never diverged across either registration, it was just duplicated |
 
 ## Validation
 
@@ -275,12 +276,15 @@ Owned by `product-service`. See `rules/domains/ecommerce.md`.
 | IMAGE_NOT_FOUND | 404 | Image with given ID does not exist for this product |
 | SELLER_NOT_FOUND | 404 | Seller with given ID does not exist (marketplace seller surface, ADR-MONO-030) |
 | IMAGE_LIMIT_EXCEEDED | 422 | Product already has the maximum number of images |
-| MEDIA_NOT_FOUND | 404 | Media object not found in object storage by key (product-service `MediaNotFoundException`) |
-| MEDIA_VALIDATION_FAILED | 400 | Media upload payload fails format, size, or MIME-type validation (product-service `MediaValidationException`) |
-| STORAGE_UNAVAILABLE | 503 | Object storage service is unreachable or returned an error (product-service `StorageUnavailableException`) |
 | DUPLICATE_VARIANT_OPTION | 409 | `POST /api/admin/products/{productId}/variants` would create a second variant with an `optionName` that already exists on this product — natural-key guard, `uq_product_variants_option UNIQUE (product_id, option_name)` (product-service `DuplicateVariantOptionException`, TASK-BE-536) |
 | IDEMPOTENCY_KEY_REQUIRED | 400 | `Idempotency-Key` header missing or blank on `PATCH /api/admin/products/{productId}/stock` or `POST /api/admin/products` (product-service `IdempotencyKeyRequiredException`, TASK-BE-536) |
 | IDEMPOTENCY_KEY_CONFLICT | 409 | The same `Idempotency-Key` was replayed with a different `quantity` (stock) or `name` (product create), or lost the concurrent insert race on the respective `UNIQUE` dedupe table (product-service `IdempotencyKeyConflictException`, TASK-BE-536). A same-key + same-payload replay is NOT an error — it returns the current/prior result without a second mutation. |
+
+> `MEDIA_NOT_FOUND` (404, `MediaNotFoundException`), `MEDIA_VALIDATION_FAILED` (400, `MediaValidationException`), and
+> `STORAGE_UNAVAILABLE` (503, `StorageUnavailableException`) are emitted by `product-service`'s media upload path but are
+> documented under Platform-Common § Content-Heavy Trait — the shape and status are the trait's, not a product-specific
+> semantic. TASK-MONO-496 removed the standalone rows this section had carried since TASK-MONO-052; `rules/domains/ecommerce.md`
+> already described these as shared Content-Heavy Trait codes, so this brings the registry in line with that.
 
 ## Search  `[domain: ecommerce]`
 
@@ -625,7 +629,6 @@ Owned by `admin-service` (operator portal — operator lifecycle, 2FA, audit-log
 | Code | HTTP | Description |
 |---|---|---|
 | REASON_REQUIRED | 400 | `X-Operator-Reason` header missing on an audited admin action (`ReasonRequiredException`) |
-| PERMISSION_DENIED | 403 | Operator or account lacks required permission/role (`PermissionDeniedException`). Cross-service: also emitted by IAM community + membership services, and by scm `procurement-service` / `demand-planning-service` / `inventory-visibility-service` (Spring Security `AccessDeniedHandler` → 403), with identical semantics |
 | INVALID_BOOTSTRAP_TOKEN | 401 | Bootstrap token missing, expired, or already consumed (`InvalidBootstrapTokenException`) |
 | INVALID_2FA_CODE | 401 | TOTP code is invalid or expired (`InvalidTwoFaCodeException`) |
 | TOTP_NOT_ENROLLED | 404 | TOTP enrollment required before recovery-code regeneration (`TotpNotEnrolledException`) |
@@ -655,6 +658,8 @@ Owned by `admin-service` (operator portal — operator lifecycle, 2FA, audit-log
 | OPTIMISTIC_LOCK_CONFLICT | 409 | Optimistic-lock collision on `admin_operators.version`. **Registered intentional alias** of Platform-Common `CONFLICT` / `CONCURRENT_MODIFICATION` (same 409 shape) — `admin-service` overrides the parent handler's mapping so the code matches what `admin-api.md` mandates for this surface (TASK-BE-306; alias precedent TASK-MONO-244) |
 
 > `CURRENT_PASSWORD_MISMATCH` is emitted by this service but is documented under Platform-Common Authentication — TASK-MONO-350 promoted it there when IAM `auth-service` became a second emitter with identical semantics (400, `CurrentPasswordMismatchException`). One code, one row: registering it in two sections is how a shared code drifts to two different statuses.
+>
+> `PERMISSION_DENIED` (403, `PermissionDeniedException`) is emitted by this service but is documented under Platform-Common Authorization — TASK-MONO-496 promoted it there when the same string, same status, same semantic was found independently registered a second time in `Authorization [domain: erp]` (`masterdata-service`), plus reused as-is by scm `procurement-service` / `demand-planning-service` / `inventory-visibility-service`.
 
 ## Community  `[domain: saas]`
 
@@ -913,10 +918,13 @@ before any repository call); fail-CLOSED on missing role/scope (E6·E7).
 
 | Code | HTTP | Description |
 |---|---|---|
-| PERMISSION_DENIED | 403 | Caller lacks the required role for the requested use case (`PermissionDeniedException`) (E6). Cross-project: same string as IAM admin-service `PermissionDeniedException` — erp-local emission. |
 | DATA_SCOPE_FORBIDDEN | 403 | Caller has the required role but the target row's owning department is outside the caller's organization scope (descendant departments only) (`DataScopeForbiddenException`) (E6). Cross-project: also emitted by wms `master-service` (`DataScopeForbiddenException` → 403) with the identical role-OK-but-scope-denied semantic |
 | EXTERNAL_TRAFFIC_REJECTED | 403 | External (non-internal-network) traffic reached the application layer. Primary enforcement is at the Traefik / network layer (`internal: true` Docker network); this code is the application-layer fallback surface (E7) |
 
+> `PERMISSION_DENIED` (403, `PermissionDeniedException`, E6) — emitted by `masterdata-service` but documented under Platform-Common
+> Authorization; TASK-MONO-496 promoted it there when the same string/status/semantic was found independently registered a second
+> time in `Admin [domain: saas]` (`admin-service`), plus reused as-is by scm `procurement-service` / `demand-planning-service` /
+> `inventory-visibility-service`.
 > `TENANT_FORBIDDEN` (403, cross-tenant JWT) — see `Tenant  [domain: saas]`
 > section; erp consumes the same string with `tenant_id ∈ {erp, *}`
 > semantics (defense-in-depth via the JWT validator chain).
