@@ -8,7 +8,7 @@ console-web: eliminate all forbidden `features/A → features/B` imports (17 edg
 
 # Status
 
-review
+done
 
 # Owner
 
