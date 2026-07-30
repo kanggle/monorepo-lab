@@ -1,8 +1,10 @@
 import Link from 'next/link';
 import { cn } from '@/shared/lib/cn';
 import { formatDateTime } from '@/shared/lib/datetime';
-import type { AuditRow } from '@/features/audit/api/types';
-import type { CellStatus } from '../api/overview-state';
+import type {
+  CellStatus,
+  IamOverviewAuditRow,
+} from '../api/overview-state';
 import { AUDIT_SOURCE_LABEL, STATUS_DOT, STATUS_LABEL } from './overview-labels';
 import { Placeholder } from './IamOverviewPrimitives';
 
@@ -14,23 +16,24 @@ import { Placeholder } from './IamOverviewPrimitives';
  */
 
 /**
- * Row display shape — tolerant of the AuditRow discriminated union (+ the
- * generic `.passthrough()` fallback whose broad `source: string` defeats clean
- * discriminated narrowing), so a producer evolution never crashes the mini-list.
- * Read fields off one permissive record view instead of per-variant narrowing.
+ * Row display shape — tolerant of the producer's discriminated audit-row union
+ * (+ the generic `.passthrough()` fallback whose broad `source: string` defeats
+ * clean discriminated narrowing), so a producer evolution never crashes the
+ * mini-list. Read fields off one permissive record view instead of per-variant
+ * narrowing.
+ *
+ * TASK-PC-FE-259 — the parameter is the overview's OWN
+ * {@link IamOverviewAuditRow} view-model, not `features/audit`'s `AuditRow`
+ * wire type: this card never used the union's narrowing anyway (it immediately
+ * cast to the permissive record below), so borrowing the type across a feature
+ * boundary bought nothing and violated `architecture.md`
+ * § Forbidden Dependencies. Structurally identical — 0 behavior change.
  */
 export function auditRowView(
-  row: AuditRow,
+  row: IamOverviewAuditRow,
   index: number,
 ): { key: string; source: string; primary: string; occurredAt?: string } {
-  const r = row as {
-    source: string;
-    auditId?: string;
-    eventId?: string;
-    actionCode?: string;
-    outcome?: string | null;
-    occurredAt?: string;
-  };
+  const r = row;
   const source = AUDIT_SOURCE_LABEL[r.source] ?? r.source;
   const key = r.auditId ?? r.eventId ?? `row-${index}`;
   let primary: string;
@@ -51,7 +54,7 @@ export function AuditCard({
 }: {
   status: CellStatus;
   total: number | null;
-  recent: AuditRow[] | null;
+  recent: IamOverviewAuditRow[] | null;
 }) {
   const ok = status === 'ok';
   return (

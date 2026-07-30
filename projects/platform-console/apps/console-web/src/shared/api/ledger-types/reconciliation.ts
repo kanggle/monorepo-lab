@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { StatusTone } from '@/shared/ui/StatusBadge';
-import { MoneySchema, LedgerMetaSchema, type Money } from './money';
+import { MoneySchema, type Money } from '@/shared/lib/money';
+import { LedgerMetaSchema } from './common';
 
 // ---------------------------------------------------------------------------
 // Reconciliation discrepancies — reconciliation-api.md § 4 (queue), § 5 (detail)

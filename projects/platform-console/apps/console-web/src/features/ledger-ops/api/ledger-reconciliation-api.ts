@@ -1,33 +1,21 @@
 import {
   DiscrepancySchema,
   type Discrepancy,
-  DiscrepanciesResponseSchema,
-  type DiscrepanciesResponse,
-  type DiscrepanciesQueryParams,
   type ResolveDiscrepancyBody,
 } from './types';
-import { callLedger, pageParams } from './ledger-client';
+import { callLedger } from '@/shared/api/ledger-client';
 
-// ---------------------------------------------------------------------------
-// reconciliation discrepancies (queue) —
-//   GET /api/finance/ledger/reconciliation/discrepancies?status=&page=&size=
-//   reconciliation-api.md § 4 envelope = { data: [ Discrepancy ], meta }.
-// ---------------------------------------------------------------------------
-
-export async function listDiscrepancies(
-  params: DiscrepanciesQueryParams = {},
-): Promise<DiscrepanciesResponse> {
-  const qs = new URLSearchParams();
-  if (params.status) qs.set('status', params.status);
-  pageParams(qs, params.page, params.size);
-  return callLedger(
-    {
-      path: `/api/finance/ledger/reconciliation/discrepancies?${qs.toString()}`,
-      logPath: '/api/finance/ledger/reconciliation/discrepancies',
-    },
-    (json) => DiscrepanciesResponseSchema.parse(json),
-  );
-}
+/**
+ * TASK-PC-FE-259 — `listDiscrepancies` (the OPEN-discrepancy queue read) was
+ * promoted to `shared/api/ledger-overview-read.ts` because
+ * `features/finance-overview` consumes it for the `/finance` landing
+ * snapshot's "미해소 대사 차이" tile, and `architecture.md` § Forbidden
+ * Dependencies bars a `features/A → features/B` import ("공유 가치는
+ * `shared/` 로 승격"). It is re-exported here so the `ledger-api` barrel is
+ * unchanged. The discrepancy DETAIL read and the resolve MUTATION below have a
+ * single consumer each and stay feature-local.
+ */
+export { listDiscrepancies } from '@/shared/api/ledger-overview-read';
 
 // ---------------------------------------------------------------------------
 // reconciliation discrepancy (detail) —

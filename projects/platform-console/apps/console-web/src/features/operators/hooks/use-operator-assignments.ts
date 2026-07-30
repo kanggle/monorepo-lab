@@ -14,21 +14,21 @@ import {
   type SetOrgScopeResult,
 } from '../api/types';
 // TASK-PC-FE-050 — org_scope drives the erp read-model filter, so a
-// successful set must invalidate the erp read-model queries. We import the
-// `ERP_KEY` query-key constant from the erp-ops `erp-keys` module — the
-// feature's intentionally dependency-free, CLIENT-SAFE key factory (its
-// header documents that the erp-ops BARREL must NOT be imported from a
-// client component because it re-exports server-only state that drags
-// `next/headers` into the client bundle). This is a cross-feature query-key
-// coordination only, not a feature-internal logic dependency.
-import { ERP_KEY } from '@/features/erp-ops/api/erp-keys';
-// Pure (zod-only, client-safe) erp department types for the org_scope
-// picker — imported from the types module directly (NOT the barrel; same
-// client-safety reason as ERP_KEY above).
+// successful set must invalidate the erp read-model queries.
+// TASK-PC-FE-259 — the `ERP_KEY` query-key ROOT and the client-safe erp
+// department read shapes are consumed by BOTH `features/erp-ops` and this
+// feature, so they live in `shared/` (`architecture.md` § Forbidden
+// Dependencies — "공유 가치는 `shared/` 로 승격"). Earlier revisions deep-
+// imported `@/features/erp-ops/api/{erp-keys,types}` and justified it as
+// "cross-feature query-key coordination only"; the rule has no such carve-out,
+// and the erp-ops BARREL was never usable here anyway (it re-exports
+// server-only state that drags `next/headers` into the client bundle). The
+// promoted modules are zod-only / bare-constant and stay client-safe.
+import { ERP_KEY } from '@/shared/api/query-keys';
 import {
   DepartmentListResponseSchema,
   type DepartmentListResponse,
-} from '@/features/erp-ops/api/types';
+} from '@/shared/api/erp-masterdata-department-read';
 import {
   OPERATORS_KEY,
   assignmentsKey,

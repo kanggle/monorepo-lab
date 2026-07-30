@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { performLogout } from '@/features/auth';
+import { performLogout } from '@/shared/lib/logout';
 import { cn } from '@/shared/lib/cn';
 
 interface Props {

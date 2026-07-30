@@ -1,14 +1,14 @@
-import { getActiveTenant } from '@/shared/lib/session';
 import { logger } from '@/shared/lib/logger';
-import { ApiError, AccountsUnavailableError } from '@/shared/api/errors';
+import { ApiError } from '@/shared/api/errors';
+import { callAdminGateway } from '@/shared/api/iam-gateway';
 import {
-  callAdminGateway,
-  type AdminGatewayProfile,
-} from '@/shared/api/iam-gateway';
+  ADMIN_PREFIX,
+  ACCOUNTS_PROFILE,
+  callGapAdmin,
+  searchAccounts,
+} from '@/shared/api/iam-accounts-read';
 import {
-  AccountPageSchema,
   type AccountPage,
-  type AccountSearchParams,
   LockResultSchema,
   type LockResult,
   UnlockResultSchema,
@@ -46,103 +46,24 @@ import {
  * AccountsUnavailableError} (accounts section degrades only); 400/404/409/422 →
  * `ApiError` (inline actionable). Logging: structured, server-side only; the
  * operator token and account PII (emails) are NEVER logged (redacted).
+ *
+ * TASK-PC-FE-259 — the search/list READ (`searchAccounts`), the
+ * `ACCOUNTS_PROFILE` and the hardened {@link callGapAdmin} call site were
+ * promoted to `shared/api/iam-accounts-read.ts` because `features/dashboards`
+ * (§ 2.4.4 composed overview) and `features/iam-overview` (`/iam` landing) also
+ * consume the read, and `architecture.md` § Forbidden Dependencies bars a
+ * `features/A → features/B` import ("공유 가치는 `shared/` 로 승격"). The read
+ * is re-exported below so this module remains the accounts public client
+ * surface pinned by console-integration-contract § 3.1 **row 1**
+ * (`features/accounts` `searchAccounts`) — the 16-row parity attestation is
+ * unchanged. Every MUTATION below (§ 3.1 rows 3–8) stays feature-local and
+ * uses the SAME shared call site.
  */
-
-const ADMIN_PREFIX = '/api/admin';
-
-interface CallOptions {
-  method: 'GET' | 'POST';
-  path: string;
-  /** Operator-entered audit reason → `X-Operator-Reason` (mutations only). */
-  reason?: string;
-  /** Stable per a single confirmed action → `Idempotency-Key`. */
-  idempotencyKey?: string;
-  /** JSON body (mutations). */
-  body?: unknown;
-}
+export { searchAccounts } from '@/shared/api/iam-accounts-read';
 
 /** Redaction guard — never let an account email reach a structured log. */
 function logAccountRef(accountId: string): string {
   return accountId;
-}
-
-/**
- * accounts profile for the shared {@link callAdminGateway} core: the IAM
- * accounts surface (`ACCOUNTS_TIMEOUT_MS`) that degrades via
- * {@link AccountsUnavailableError} and logs `accounts_*` events. Unlike the
- * newer operators/partnerships clients, accounts (a) handles 403 TOGETHER with
- * 401 (`forbiddenMode: 'auth'`) and (b) FORCES `X-Operator-Reason` +
- * `Idempotency-Key` on every mutation (`forceMutationHeaders: true`).
- */
-const ACCOUNTS_PROFILE: AdminGatewayProfile = {
-  logPrefix: 'accounts',
-  requestFailedLabel: 'accounts request failed',
-  resolveTimeoutMs: (env) => env.ACCOUNTS_TIMEOUT_MS,
-  makeUnavailable: (reason, code, message) =>
-    new AccountsUnavailableError(reason, code, message),
-  isUnavailable: (err) => err instanceof AccountsUnavailableError,
-  messages: {
-    degraded: 'IAM accounts service unavailable',
-    timeout: 'IAM accounts call timed out',
-    network: 'IAM accounts call failed',
-  },
-  forbiddenMode: 'auth',
-  forceMutationHeaders: true,
-};
-
-/**
- * Single hardened call site — a thin wrapper over the shared
- * {@link callAdminGateway} core with the {@link ACCOUNTS_PROFILE}.
- */
-async function callGapAdmin<T>(
-  opts: CallOptions,
-  parse: (json: unknown) => T,
-): Promise<T> {
-  return callAdminGateway(
-    {
-      method: opts.method,
-      path: opts.path,
-      reason: opts.reason,
-      idempotencyKey: opts.idempotencyKey,
-      body: opts.body,
-    },
-    parse,
-    ACCOUNTS_PROFILE,
-  );
-}
-
-// ---------------------------------------------------------------------------
-// 1. search / list — GET /api/admin/accounts
-// ---------------------------------------------------------------------------
-
-export async function searchAccounts(
-  params: AccountSearchParams = {},
-): Promise<AccountPage> {
-  const qs = new URLSearchParams();
-  if (params.email && params.email.trim() !== '') {
-    qs.set('email', params.email.trim());
-  } else {
-    qs.set('page', String(params.page ?? 0));
-    qs.set('size', String(params.size ?? 20));
-    // TASK-BE-475 / TASK-PC-FE-181: optional lifecycle-status filter — list branch
-    // only (the producer ignores it on the email single-lookup). Absent ⇒ all statuses.
-    if (params.status && params.status.trim() !== '') {
-      qs.set('status', params.status.trim());
-    }
-  }
-  // TASK-BE-357: scope the search/list to the active tenant (mirror of the audit
-  // view — `audit-api.ts` TASK-PC-FE-043). The producer scopes by this `tenantId`
-  // query param (NOT `X-Tenant-Id`) and gates it against the operator's effective
-  // scope (403 TENANT_SCOPE_DENIED → surfaced inline by the accounts screen). An
-  // explicit `params.tenantId` (SUPER_ADMIN cross-tenant) overrides. A missing
-  // active tenant is blocked in the gateway (400 NO_ACTIVE_TENANT) before fetch.
-  const tenant = await getActiveTenant();
-  const scopeTenant = params.tenantId ?? tenant;
-  if (scopeTenant) qs.set('tenantId', scopeTenant);
-  return callGapAdmin(
-    { method: 'GET', path: `${ADMIN_PREFIX}/accounts?${qs.toString()}` },
-    (json) => AccountPageSchema.parse(json),
-  );
 }
 
 // ---------------------------------------------------------------------------

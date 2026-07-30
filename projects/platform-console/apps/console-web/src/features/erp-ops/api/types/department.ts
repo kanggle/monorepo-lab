@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { EffectivePeriodSchema, AuditSchema, ErpMetaSchema } from './common';
 
 /**
  * erp masters — Department types (TASK-PC-FE-109 split). Read schemas +
@@ -8,33 +7,28 @@ import { EffectivePeriodSchema, AuditSchema, ErpMetaSchema } from './common';
  *
  *   GET /api/erp/masterdata/departments (?asOf=&active=&parentId=&page=&size=)
  *   GET /api/erp/masterdata/departments/{id} (?asOf=)
+ *
+ * TASK-PC-FE-259 — the READ schemas live in
+ * `shared/api/erp-masterdata-department-read.ts`: `features/operators`' per-
+ * operator org_scope dialog (TASK-PC-FE-050) renders a department picker from
+ * the SAME `/api/erp/masterdata/departments` read, and importing it from this
+ * feature was a `features/A → features/B` import that `architecture.md`
+ * § Forbidden Dependencies bars ("공유 가치는 `shared/` 로 승격"). The
+ * `erp-ops` barrel was not an option for that pair — it is server-coupled and
+ * the picker is a client component. Re-exported here so the `types` barrel and
+ * every erp-ops consumer are unchanged. The WRITE PILOT inputs below stay
+ * feature-local (single consumer).
  */
-
-export const DepartmentSchema = z
-  .object({
-    id: z.string(),
-    code: z.string(),
-    name: z.string(),
-    parentId: z.string().nullable().optional(),
-    // tolerated as free string (unknown → generic label).
-    status: z.string(),
-    effectivePeriod: EffectivePeriodSchema,
-    audit: AuditSchema.optional(),
-  })
-  .passthrough();
-export type Department = z.infer<typeof DepartmentSchema>;
-
-export const DepartmentListResponseSchema = z.object({
-  data: z.array(DepartmentSchema),
-  meta: ErpMetaSchema,
-});
-export type DepartmentListResponse = z.infer<typeof DepartmentListResponseSchema>;
-
-export const DepartmentDetailResponseSchema = z.object({
-  data: DepartmentSchema,
-  meta: ErpMetaSchema,
-});
-export type DepartmentDetailResponse = z.infer<typeof DepartmentDetailResponseSchema>;
+export {
+  DepartmentSchema,
+  DepartmentListResponseSchema,
+  DepartmentDetailResponseSchema,
+} from '@/shared/api/erp-masterdata-department-read';
+export type {
+  Department,
+  DepartmentListResponse,
+  DepartmentDetailResponse,
+} from '@/shared/api/erp-masterdata-department-read';
 
 // ---------------------------------------------------------------------------
 // Department WRITE inputs (TASK-PC-FE-046 — the department write PILOT;

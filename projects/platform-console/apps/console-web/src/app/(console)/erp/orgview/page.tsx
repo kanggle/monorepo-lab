@@ -2,8 +2,8 @@ import {
   ErpOrgViewScreen,
   ErpSectionNotice,
   getErpOrgViewState,
-  resolveErpEligibility,
 } from '@/features/erp-ops';
+import { resolveErpEligibility } from '../_eligibility';
 
 export const dynamic = 'force-dynamic';
 

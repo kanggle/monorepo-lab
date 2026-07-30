@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { type Money } from './money';
+import { type Money } from '@/shared/lib/money';
 
 // ---------------------------------------------------------------------------
 // FX position open-lots drill — TASK-PC-FE-091

@@ -1,12 +1,12 @@
-import { LedgerUnavailableError } from '@/shared/api/errors';
+import { LedgerUnavailableError } from './errors';
 import {
   callFlatEnvelopeGateway,
   type FlatEnvelopeGatewayProfile,
-} from '@/shared/api/flat-envelope-gateway';
+} from './flat-envelope-gateway';
 import {
   LEDGER_DEFAULT_PAGE_SIZE,
   LEDGER_MAX_PAGE_SIZE,
-} from './types';
+} from './ledger-types/common';
 
 /**
  * Server-side finance `ledger-service` operations client (TASK-PC-FE-072 —
@@ -60,9 +60,20 @@ import {
  * token and any ledger data are NEVER logged — the log `path` carries the
  * sanitised `logPath` route shape (no `entryId` / `periodId` / `discrepancyId`,
  * even path-encoded).
+ *
+ * ── WHY THIS LIVES IN `shared/` (TASK-PC-FE-259) ──
+ * `features/finance-overview` (the `/finance` landing snapshot) consumes four
+ * of the ledger reads that ride this call site, so the reads + the wire types
+ * they parse were promoted to `shared/api/` per `architecture.md`
+ * § Forbidden Dependencies ("공유 가치는 `shared/` 로 승격"). A `shared/`
+ * module may not import a feature, so the hardened core moved with them.
+ * `features/ledger-ops` still owns every ledger-specific read/mutation that
+ * only it consumes, and imports this core exactly as before — 0 behaviour
+ * change (the module was moved verbatim: same profile, same timeout, same
+ * `ledger_*` log events, same error taxonomy).
  */
 
-interface CallOptions {
+export interface LedgerCallOptions {
   /** Path relative to `${LEDGER_BASE_URL}` (e.g.
    *  `/api/finance/ledger/entries/{id}`). */
   path: string;
@@ -112,7 +123,7 @@ const LEDGER_PROFILE: FlatEnvelopeGatewayProfile = {
  * passes `method: 'POST'` + a body (no `Idempotency-Key` accessor exists).
  */
 export async function callLedger<T>(
-  opts: CallOptions,
+  opts: LedgerCallOptions,
   parse: (json: unknown) => T,
 ): Promise<T> {
   const { raw } = await callFlatEnvelopeGateway(

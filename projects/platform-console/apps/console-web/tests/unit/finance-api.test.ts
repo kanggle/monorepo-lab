@@ -465,11 +465,18 @@ describe('finance-api / types — F5 money invariant (precision-exact string; NO
   // any line that references `amount` in `features/finance-ops/`. The
   // grep runs against the REAL source files, not a mock.
   it('the on-disk `features/finance-ops/` source applies NO Number()/parseFloat()/parseInt() to `amount`', () => {
-    const root = path.resolve(
-      __dirname,
-      '../../src/features/finance-ops',
-    );
+    // TASK-PC-FE-259 — the F5 primitive (`Money`/`formatMoney`) and the
+    // account+balance read shapes were promoted OUT of `features/finance-ops`
+    // into `shared/`. A guard that kept scanning only the old root would still
+    // pass while no longer covering the code it guards, so the promoted
+    // modules are scanned too (guard reachability, not just guard presence).
+    const roots = [
+      path.resolve(__dirname, '../../src/features/finance-ops'),
+      path.resolve(__dirname, '../../src/shared/lib/money.ts'),
+      path.resolve(__dirname, '../../src/shared/api/finance-accounts-read.ts'),
+    ];
     function walk(p: string): string[] {
+      if (!statSync(p).isDirectory()) return [p];
       const out: string[] = [];
       for (const name of readdirSync(p)) {
         const full = path.join(p, name);
@@ -478,10 +485,18 @@ describe('finance-api / types — F5 money invariant (precision-exact string; NO
       }
       return out;
     }
-    const files = walk(root).filter(
-      (f) => f.endsWith('.ts') || f.endsWith('.tsx'),
-    );
+    const files = roots
+      .flatMap((r) => walk(r))
+      .filter((f) => f.endsWith('.ts') || f.endsWith('.tsx'));
     expect(files.length).toBeGreaterThan(0);
+    // The promoted modules MUST be in the scanned set — a silent path typo
+    // would re-open exactly the gap this guard exists to close.
+    expect(files.some((f) => f.replace(/\\/g, '/').endsWith('shared/lib/money.ts'))).toBe(true);
+    expect(
+      files.some((f) =>
+        f.replace(/\\/g, '/').endsWith('shared/api/finance-accounts-read.ts'),
+      ),
+    ).toBe(true);
     const offenders: string[] = [];
     for (const f of files) {
       const lines = readFileSync(f, 'utf8').split(/\r?\n/);

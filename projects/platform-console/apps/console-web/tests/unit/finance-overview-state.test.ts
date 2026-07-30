@@ -32,13 +32,13 @@ const m = vi.hoisted(() => ({
   getBalances: vi.fn(),
   getFinanceDefaultAccountId: vi.fn(),
 }));
-vi.mock('@/features/ledger-ops/api/ledger-api', () => ({
+vi.mock('@/shared/api/ledger-overview-read', () => ({
   getTrialBalance: m.getTrialBalance,
   listPeriods: m.listPeriods,
   listDiscrepancies: m.listDiscrepancies,
   getFxRates: m.getFxRates,
 }));
-vi.mock('@/features/finance-ops/api/finance-api', () => ({
+vi.mock('@/shared/api/finance-accounts-read', () => ({
   getAccount: m.getAccount,
   getBalances: m.getBalances,
 }));

@@ -46,7 +46,7 @@ import type { ApprovalListResponse } from './approval-types';
  * tenant from the JWT `tenant_id ∈ {erp,*}` claim producer-side —
  * the console does NOT send a tenant. Each route first resolves erp
  * eligibility from the data-driven registry (via
- * `resolveErpEligibility()` in `./erp-eligibility`) and passes it in
+ * `resolveErpEligibility()` in `app/(console)/erp/_eligibility`) and passes it in
  * here. If not eligible the loader blocks with `notEligible` and NO
  * erp call is ever made.
  *

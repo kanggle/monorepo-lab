@@ -1,10 +1,9 @@
 import { redirect } from 'next/navigation';
 import { getActiveTenant } from '@/shared/lib/session';
 import { ApiError } from '@/shared/api/errors';
-import { listOperators } from '@/features/operators/api/operators-api';
-import { searchAccounts } from '@/features/accounts/api/accounts-api';
-import { queryAudit } from '@/features/audit/api/audit-api';
-import type { AuditRow } from '@/features/audit/api/types';
+import { listOperators } from '@/shared/api/iam-operators-read';
+import { searchAccounts } from '@/shared/api/iam-accounts-read';
+import { queryAudit } from '@/shared/api/iam-audit-read';
 
 /**
  * Server-side IAM **operator overview snapshot** fan-out for the `/iam` landing
@@ -17,7 +16,15 @@ import type { AuditRow } from '@/features/audit/api/types';
  * list endpoints' `totalElements` with `page=0&size=1` — NO `/summary`
  * aggregation endpoint, NO console-bff leg (contrast: the console-wide
  * §2.4.4 / §2.4.9.1 operator overview is a console-bff fan-out — this one is
- * domain-internal, reusing the three feature api fns server-side):
+ * domain-internal, reusing the three EXISTING server reads):
+ *
+ * TASK-PC-FE-259 — those reads live in
+ * `shared/api/iam-{accounts,audit,operators}-read.ts`. Earlier revisions
+ * imported them out of `@/features/{operators,accounts,audit}/api/*`, which
+ * `architecture.md` § Forbidden Dependencies bars — "같은 계층
+ * `features/A → features/B` 상호 참조 금지, 공유 가치는 `shared/` 로 승격".
+ * Each feature still re-exports its own read on its § 3.1-pinned public path;
+ * the promotion changed WHERE the read is defined, not WHICH read runs.
  *   - operators — `listOperators` (§2.4.3; `operator.manage`) total + ACTIVE/SUSPENDED split.
  *   - accounts  — `searchAccounts` (§2.4.1; `account.read`) total.
  *   - audit     — `queryAudit` (§2.4.2; `audit.read`) total + recent 5 rows.
@@ -59,10 +66,34 @@ export interface AccountsSummary {
   status: CellStatus;
 }
 
+/**
+ * One recent audit row **as this overview consumes it** (TASK-PC-FE-259).
+ *
+ * The mini-list never narrows the producer's discriminated `AuditRow` union —
+ * `IamOverviewAuditCard.auditRowView()` deliberately reads fields off one
+ * permissive record view so a producer evolution (a new `source`, a dropped
+ * optional field) can never crash the card. Declaring THAT shape here, as the
+ * overview's own view-model, is both the honest description of what this
+ * feature needs and what keeps it off `features/audit`'s internals
+ * (`architecture.md` § Forbidden Dependencies — a producer wire type is not
+ * "shared value" just because an aggregator borrowed it). Structurally
+ * assignable from every `AuditRow` variant, so the runtime rows and the
+ * rendered output are unchanged.
+ */
+export interface IamOverviewAuditRow {
+  source: string;
+  auditId?: string;
+  eventId?: string;
+  actionCode?: string;
+  outcome?: string | null;
+  occurredAt?: string;
+  [key: string]: unknown;
+}
+
 /** Audit·security card — total events in scope + the recent 5 rows. */
 export interface AuditSummary {
   total: number | null;
-  recent: AuditRow[] | null;
+  recent: IamOverviewAuditRow[] | null;
   status: CellStatus;
 }
 

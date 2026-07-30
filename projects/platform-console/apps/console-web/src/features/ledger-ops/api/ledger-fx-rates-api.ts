@@ -2,7 +2,7 @@ import {
   FxRatesRefreshResponseSchema,
   type FxRatesRefreshResponse,
 } from './types';
-import { callLedger } from './ledger-client';
+import { callLedger } from '@/shared/api/ledger-client';
 
 // ---------------------------------------------------------------------------
 // FX 환율 수동 refresh — TASK-MONO-300 (Scope B)

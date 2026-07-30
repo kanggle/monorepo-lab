@@ -30,13 +30,13 @@ const m = vi.hoisted(() => ({
   queryAudit: vi.fn(),
 }));
 vi.mock('@/shared/lib/session', () => ({ getActiveTenant: m.getActiveTenant }));
-vi.mock('@/features/operators/api/operators-api', () => ({
+vi.mock('@/shared/api/iam-operators-read', () => ({
   listOperators: m.listOperators,
 }));
-vi.mock('@/features/accounts/api/accounts-api', () => ({
+vi.mock('@/shared/api/iam-accounts-read', () => ({
   searchAccounts: m.searchAccounts,
 }));
-vi.mock('@/features/audit/api/audit-api', () => ({ queryAudit: m.queryAudit }));
+vi.mock('@/shared/api/iam-audit-read', () => ({ queryAudit: m.queryAudit }));
 
 import { getIamOverviewState } from '@/features/iam-overview/api/overview-state';
 

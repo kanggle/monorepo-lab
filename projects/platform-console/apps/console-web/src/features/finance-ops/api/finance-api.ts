@@ -1,19 +1,25 @@
-import { FinanceUnavailableError } from '@/shared/api/errors';
+import { callFinance } from '@/shared/api/finance-accounts-read';
 import {
-  callFlatEnvelopeGateway,
-  type FlatEnvelopeGatewayProfile,
-} from '@/shared/api/flat-envelope-gateway';
-import {
-  AccountSchema,
-  type Account,
-  BalancesResponseSchema,
-  type BalancesResponse,
   TransactionsResponseSchema,
   type TransactionsResponse,
   type TransactionsQueryParams,
   FINANCE_DEFAULT_PAGE_SIZE,
   FINANCE_MAX_PAGE_SIZE,
 } from './types';
+
+/**
+ * TASK-PC-FE-259 — `getAccount` / `getBalances` (and the hardened
+ * {@link callFinance} call site + the FINANCE profile they use) were promoted
+ * to `shared/api/finance-accounts-read.ts` because `features/finance-overview`
+ * consumes the same two reads for the `/finance` landing snapshot, and
+ * `architecture.md` § Forbidden Dependencies bars a `features/A → features/B`
+ * import ("공유 가치는 `shared/` 로 승격"). They are re-exported here so this
+ * module remains the finance-ops public client surface documented by
+ * console-integration-contract § 2.4.7 — no consumer, proxy route or test
+ * changed. `listTransactions` below has a single consumer and stays
+ * feature-local, using the SAME shared call site.
+ */
+export { getAccount, getBalances } from '@/shared/api/finance-accounts-read';
 
 /**
  * Server-side finance `account-service` operations client (TASK-PC-FE-009 —
@@ -59,56 +65,6 @@ import {
  * `logPath` route shape (no `accountId`, even path-encoded).
  */
 
-interface CallOptions {
-  /** Path relative to `${FINANCE_BASE_URL}` (e.g.
-   *  `/api/finance/accounts/{id}`). */
-  path: string;
-  /** Sanitised path shape for logging (no accountId / no PII —
-   *  e.g. `/api/finance/accounts/{id}/balances`). */
-  logPath: string;
-}
-
-/**
- * finance profile for the shared {@link callFlatEnvelopeGateway} core: degrades
- * via {@link FinanceUnavailableError} and logs `finance_*` events against the
- * finance `account-service` at `${FINANCE_BASE_URL}` (timeout
- * `FINANCE_TIMEOUT_MS`). No rate-limit policy (finance documents no 429).
- */
-const FINANCE_PROFILE: FlatEnvelopeGatewayProfile = {
-  logPrefix: 'finance',
-  requestFailedLabel: 'finance request failed',
-  resolveDefaults: (env) => ({
-    baseUrl: env.FINANCE_BASE_URL,
-    timeoutMs: env.FINANCE_TIMEOUT_MS,
-  }),
-  makeUnavailable: (reason, code, message) =>
-    new FinanceUnavailableError(reason, code, message),
-  isUnavailable: (err) => err instanceof FinanceUnavailableError,
-  messages: {
-    degraded: 'finance unavailable',
-    timeout: 'finance call timed out',
-    network: 'finance call failed',
-  },
-};
-
-/**
- * Single hardened call site — a thin GET wrapper over the shared
- * {@link callFlatEnvelopeGateway} core with the {@link FINANCE_PROFILE}.
- * Read-only: no method/body is passed, so the core sends a GET with no
- * `Content-Type` / mutation headers.
- */
-async function callFinance<T>(
-  opts: CallOptions,
-  parse: (json: unknown) => T,
-): Promise<T> {
-  const { raw } = await callFlatEnvelopeGateway(
-    { path: opts.path, logPath: opts.logPath },
-    parse,
-    FINANCE_PROFILE,
-  );
-  return raw;
-}
-
 // ---------------------------------------------------------------------------
 // pagination helper
 // ---------------------------------------------------------------------------
@@ -125,42 +81,6 @@ function pageParams(qs: URLSearchParams, page?: number, size?: number): void {
         Math.max(1, size ?? FINANCE_DEFAULT_PAGE_SIZE),
       ),
     ),
-  );
-}
-
-// ---------------------------------------------------------------------------
-// account by id — GET /api/finance/accounts/{accountId}
-//   account-api.md envelope = { data: Account, meta }. READ-ONLY.
-// ---------------------------------------------------------------------------
-
-export async function getAccount(accountId: string): Promise<Account> {
-  return callFinance(
-    {
-      path: `/api/finance/accounts/${encodeURIComponent(accountId)}`,
-      // confidential / F7 — the log path carries NO accountId.
-      logPath: '/api/finance/accounts/{id}',
-    },
-    (json) => {
-      const env = (json ?? {}) as { data?: unknown };
-      return AccountSchema.parse(env.data);
-    },
-  );
-}
-
-// ---------------------------------------------------------------------------
-// balances — GET /api/finance/accounts/{accountId}/balances
-//   account-api.md envelope = { data: [ Balance ], meta }. READ-ONLY.
-// ---------------------------------------------------------------------------
-
-export async function getBalances(
-  accountId: string,
-): Promise<BalancesResponse> {
-  return callFinance(
-    {
-      path: `/api/finance/accounts/${encodeURIComponent(accountId)}/balances`,
-      logPath: '/api/finance/accounts/{id}/balances',
-    },
-    (json) => BalancesResponseSchema.parse(json),
   );
 }
 

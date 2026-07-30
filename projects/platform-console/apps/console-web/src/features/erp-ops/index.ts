@@ -51,9 +51,13 @@ export { ErpApprovalScreen } from './components/ErpApprovalScreen';
 export type { ErpApprovalScreenProps } from './components/ErpApprovalScreen';
 export { ErpDelegationScreen } from './components/ErpDelegationScreen';
 export type { ErpDelegationScreenProps } from './components/ErpDelegationScreen';
-// TASK-PC-FE-076 — shared route eligibility pre-flight + notice.
-export { resolveErpEligibility } from './api/erp-eligibility';
-export type { ErpEligibility } from './api/erp-eligibility';
+// TASK-PC-FE-076 — shared route eligibility notice.
+// TASK-PC-FE-259: `resolveErpEligibility` / `ErpEligibility` moved OUT of this
+// feature to `app/(console)/erp/_eligibility.ts` — it is a route-level registry
+// pre-flight, and living here forced a forbidden
+// `features/erp-ops → features/catalog` import (`architecture.md`
+// § Forbidden Dependencies). Every sibling domain already resolves eligibility
+// in the page; erp now matches them.
 export { ErpSectionNotice } from './components/ErpSectionNotice';
 export type { ErpNoticeKind } from './components/ErpSectionNotice';
 export { EmployeeOrgViewCard } from './components/EmployeeOrgViewCard';

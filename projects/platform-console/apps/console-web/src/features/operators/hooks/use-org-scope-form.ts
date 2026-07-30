@@ -2,10 +2,15 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { ApiError, messageForCode } from '@/shared/api/errors';
-// Pure (zod-only, client-safe) erp department type + retired predicate —
-// imported from the erp-ops types module directly (NOT the barrel, which is
-// server-coupled; same client-safety reason as the hooks' ERP_KEY import).
-import { isRetired, type Department } from '@/features/erp-ops/api/types';
+// Pure (zod-only, client-safe) erp department type + retired predicate.
+// TASK-PC-FE-259 — promoted to `shared/` because BOTH `features/erp-ops` and
+// this feature's org_scope picker consume them (`architecture.md`
+// § Forbidden Dependencies — "공유 가치는 `shared/` 로 승격"); the erp-ops
+// barrel is server-coupled and was never an option from a client component.
+import {
+  isRetired,
+  type Department,
+} from '@/shared/api/erp-masterdata-department-read';
 import {
   useOperatorAssignments,
   useOrgScopeDepartments,

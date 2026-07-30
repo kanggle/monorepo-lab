@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MoneySchema } from './money';
+import { MoneySchema } from '@/shared/lib/money';
 
 // ---------------------------------------------------------------------------
 // Trial balance — GET /api/finance/ledger/trial-balance (ledger-api.md § 4)
