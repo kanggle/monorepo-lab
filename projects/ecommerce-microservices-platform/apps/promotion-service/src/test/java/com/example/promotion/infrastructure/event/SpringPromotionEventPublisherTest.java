@@ -27,7 +27,7 @@ class SpringPromotionEventPublisherTest {
 
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-06-27T10:15:30Z"), ZoneOffset.UTC);
 
-    private final PromotionOutboxRepository repository = mock(PromotionOutboxRepository.class);
+    private final PromotionOutboxJpaRepository repository = mock(PromotionOutboxJpaRepository.class);
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final SpringPromotionEventPublisher publisher =
             new SpringPromotionEventPublisher(repository, objectMapper);

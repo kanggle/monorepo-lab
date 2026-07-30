@@ -2,7 +2,7 @@ package com.example.promotion;
 
 import com.example.promotion.application.event.CouponUsedEvent;
 import com.example.promotion.application.port.PromotionEventPublisher;
-import com.example.promotion.infrastructure.event.PromotionOutboxRepository;
+import com.example.promotion.infrastructure.event.PromotionOutboxJpaRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -68,7 +68,7 @@ class PromotionOutboxRelayIntegrationTest {
     private com.example.promotion.infrastructure.event.PromotionOutboxPublisher relay;
 
     @Autowired
-    private PromotionOutboxRepository outboxRepository;
+    private PromotionOutboxJpaRepository outboxRepository;
 
     @Autowired
     private ObjectMapper objectMapper;

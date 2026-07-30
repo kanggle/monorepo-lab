@@ -16,7 +16,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
  * narrower) choice rather than a workaround.
  *
  * <p><b>TASK-BE-449 (outbox v2):</b> {@code adapter.out.event} is also scanned
- * so the v2 {@code PaymentOutboxEntity} / {@code PaymentOutboxRepository} (which
+ * so the v2 {@code PaymentOutboxEntity} / {@code PaymentOutboxJpaRepository} (which
  * live with the outbox publisher/writer, an event-output concern) are registered.
  * Mock-repo unit tests do not exercise this wiring — only the full-context
  * {@code @SpringBootTest} integration lane catches a missing scan package.

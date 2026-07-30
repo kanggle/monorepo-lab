@@ -45,7 +45,7 @@ public class PromotionOutboxPublisher extends AbstractOutboxPublisher<PromotionO
     static final String TOPIC_COUPON_USED = "promotion.coupon.used";
     static final String TOPIC_COUPON_EXPIRED = "promotion.coupon.expired";
 
-    public PromotionOutboxPublisher(PromotionOutboxRepository repository,
+    public PromotionOutboxPublisher(PromotionOutboxJpaRepository repository,
                                     KafkaTemplate<String, String> kafkaTemplate,
                                     TransactionTemplate transactionTemplate,
                                     Clock clock,
@@ -66,7 +66,7 @@ public class PromotionOutboxPublisher extends AbstractOutboxPublisher<PromotionO
         // metric name is available for dashboards/alerts (cf. master-service
         // preserving master.outbox.pending.count).
         Gauge.builder("promotion.outbox.pending.count", repository,
-                        PromotionOutboxRepository::countByPublishedAtIsNull)
+                        PromotionOutboxJpaRepository::countByPublishedAtIsNull)
                 .description("Unpublished promotion outbox rows")
                 .register(meterRegistry);
     }

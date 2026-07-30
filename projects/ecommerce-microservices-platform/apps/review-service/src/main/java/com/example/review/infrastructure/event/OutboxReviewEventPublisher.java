@@ -40,7 +40,7 @@ public class OutboxReviewEventPublisher implements ReviewEventPublisher {
 
     private static final String AGGREGATE_TYPE = "Review";
 
-    private final ReviewOutboxRepository outboxRepository;
+    private final ReviewOutboxJpaRepository outboxRepository;
     private final ObjectMapper objectMapper;
 
     @Override

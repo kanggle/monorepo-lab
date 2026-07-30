@@ -7,7 +7,7 @@ import com.example.messaging.outbox.SpringDataOutboxRowRepository;
 import com.example.messaging.outbox.TopicResolver;
 import com.example.order.application.port.OrderMetricsPort;
 import com.example.order.infrastructure.persistence.OrderOutboxEntity;
-import com.example.order.infrastructure.persistence.OrderOutboxRepository;
+import com.example.order.infrastructure.persistence.OrderOutboxJpaRepository;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
@@ -51,7 +51,7 @@ public class OrderOutboxPublisher extends AbstractOutboxPublisher<OrderOutboxEnt
     static final String TOPIC_ORDER_CANCELLED = "order.order.cancelled";
     static final String TOPIC_ORDER_SAGA_RECOVERY_EXHAUSTED = "order.alert.saga.recovery.exhausted";
 
-    public OrderOutboxPublisher(OrderOutboxRepository repository,
+    public OrderOutboxPublisher(OrderOutboxJpaRepository repository,
                                 KafkaTemplate<String, String> kafkaTemplate,
                                 TransactionTemplate transactionTemplate,
                                 Clock clock,
@@ -70,7 +70,7 @@ public class OrderOutboxPublisher extends AbstractOutboxPublisher<OrderOutboxEnt
                 batchSize);
 
         Gauge.builder("order.outbox.pending.count", repository,
-                        OrderOutboxRepository::countByPublishedAtIsNull)
+                        OrderOutboxJpaRepository::countByPublishedAtIsNull)
                 .description("Unpublished order outbox rows")
                 .register(meterRegistry);
     }

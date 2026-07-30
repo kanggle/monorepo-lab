@@ -62,7 +62,7 @@ class ShippingOutboxPublisherTest {
     @Test
     @SuppressWarnings("unchecked")
     void publishPending_sendsToMappedTopicWithHeaders_preservesKeyAndValue_thenMarksPublished() {
-        ShippingOutboxRepository repository = mock(ShippingOutboxRepository.class);
+        ShippingOutboxJpaRepository repository = mock(ShippingOutboxJpaRepository.class);
         KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
         MeterRegistry registry = new SimpleMeterRegistry();
 
@@ -102,7 +102,7 @@ class ShippingOutboxPublisherTest {
     @Test
     @SuppressWarnings("unchecked")
     void constructor_registersPreservedPendingCountGauge() {
-        ShippingOutboxRepository repository = mock(ShippingOutboxRepository.class);
+        ShippingOutboxJpaRepository repository = mock(ShippingOutboxJpaRepository.class);
         KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
         MeterRegistry registry = new SimpleMeterRegistry();
         given(repository.countByPublishedAtIsNull()).willReturn(7L);
@@ -118,7 +118,7 @@ class ShippingOutboxPublisherTest {
     @Test
     @SuppressWarnings("unchecked")
     void publishPending_kafkaFailure_leavesRowPending_recordsFailure_andBacksOff() {
-        ShippingOutboxRepository repository = mock(ShippingOutboxRepository.class);
+        ShippingOutboxJpaRepository repository = mock(ShippingOutboxJpaRepository.class);
         KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
         MeterRegistry registry = new SimpleMeterRegistry();
 

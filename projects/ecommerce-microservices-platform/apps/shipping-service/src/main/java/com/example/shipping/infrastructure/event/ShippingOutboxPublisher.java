@@ -36,7 +36,7 @@ public class ShippingOutboxPublisher extends AbstractOutboxPublisher<ShippingOut
     static final String TOPIC_FULFILLMENT_REQUESTED = "ecommerce.fulfillment.requested.v1";
     static final String TOPIC_MANUAL_SHIP_CONFIRM_REQUESTED = "ecommerce.shipping.manual-confirm-requested.v1";
 
-    public ShippingOutboxPublisher(ShippingOutboxRepository repository,
+    public ShippingOutboxPublisher(ShippingOutboxJpaRepository repository,
                                    KafkaTemplate<String, String> kafkaTemplate,
                                    TransactionTemplate transactionTemplate,
                                    Clock clock,
@@ -54,7 +54,7 @@ public class ShippingOutboxPublisher extends AbstractOutboxPublisher<ShippingOut
                 batchSize);
 
         Gauge.builder("shipping.outbox.pending.count", repository,
-                        ShippingOutboxRepository::countByPublishedAtIsNull)
+                        ShippingOutboxJpaRepository::countByPublishedAtIsNull)
                 .description("Unpublished shipping outbox rows")
                 .register(meterRegistry);
     }

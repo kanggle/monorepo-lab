@@ -59,7 +59,7 @@ public class SpringShippingEventPublisher implements ShippingEventPublisher {
     private static final String AGGREGATE_TYPE_SHIPPING = "Shipping";
     private static final String AGGREGATE_TYPE_FULFILLMENT = "Fulfillment";
 
-    private final ShippingOutboxRepository outboxRepository;
+    private final ShippingOutboxJpaRepository outboxRepository;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 

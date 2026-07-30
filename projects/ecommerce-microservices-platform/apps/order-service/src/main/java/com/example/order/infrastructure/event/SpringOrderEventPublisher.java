@@ -6,7 +6,7 @@ import com.example.order.application.event.OrderPlacedEvent;
 import com.example.order.application.event.OrderSagaRecoveryExhaustedEvent;
 import com.example.order.application.port.OrderEventPublisher;
 import com.example.order.infrastructure.persistence.OrderOutboxEntity;
-import com.example.order.infrastructure.persistence.OrderOutboxRepository;
+import com.example.order.infrastructure.persistence.OrderOutboxJpaRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
@@ -41,7 +41,7 @@ public class SpringOrderEventPublisher implements OrderEventPublisher {
 
     private static final String AGGREGATE_TYPE = "Order";
 
-    private final OrderOutboxRepository outboxRepository;
+    private final OrderOutboxJpaRepository outboxRepository;
     private final ObjectMapper objectMapper;
 
     @Override

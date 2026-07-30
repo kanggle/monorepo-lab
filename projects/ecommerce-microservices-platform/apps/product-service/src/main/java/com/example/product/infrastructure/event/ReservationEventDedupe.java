@@ -20,7 +20,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ReservationEventDedupe {
 
-    private final ReservationProcessedEventRepository processedEventRepository;
+    private final ReservationProcessedEventJpaRepository processedEventRepository;
     private final Clock clock;
 
     @Transactional(propagation = Propagation.MANDATORY)

@@ -56,7 +56,7 @@ public class PaymentOutboxPublisher extends AbstractOutboxPublisher<PaymentOutbo
     static final String TOPIC_PAYMENT_REFUND_STRANDED = "payment.alert.refund.stranded";
     static final String TOPIC_PAYMENT_REFUND_UNRESOLVED = "payment.alert.refund.unresolved";
 
-    public PaymentOutboxPublisher(PaymentOutboxRepository repository,
+    public PaymentOutboxPublisher(PaymentOutboxJpaRepository repository,
                                   KafkaTemplate<String, String> kafkaTemplate,
                                   TransactionTemplate transactionTemplate,
                                   Clock clock,
@@ -75,7 +75,7 @@ public class PaymentOutboxPublisher extends AbstractOutboxPublisher<PaymentOutbo
                 batchSize);
 
         Gauge.builder("payment.outbox.pending.count", repository,
-                        PaymentOutboxRepository::countByPublishedAtIsNull)
+                        PaymentOutboxJpaRepository::countByPublishedAtIsNull)
                 .description("Unpublished payment outbox rows")
                 .register(meterRegistry);
     }

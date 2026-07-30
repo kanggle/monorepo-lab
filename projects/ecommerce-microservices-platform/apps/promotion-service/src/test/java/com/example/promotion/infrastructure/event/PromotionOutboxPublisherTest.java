@@ -66,7 +66,7 @@ class PromotionOutboxPublisherTest {
     @Test
     @SuppressWarnings("unchecked")
     void publishPending_sendsToMappedTopicWithHeaders_preservesKeyAndValue_thenMarksPublished() {
-        PromotionOutboxRepository repository = mock(PromotionOutboxRepository.class);
+        PromotionOutboxJpaRepository repository = mock(PromotionOutboxJpaRepository.class);
         KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
         MeterRegistry registry = new SimpleMeterRegistry();
 
@@ -111,7 +111,7 @@ class PromotionOutboxPublisherTest {
     @Test
     @SuppressWarnings("unchecked")
     void constructor_registersPreservedPendingCountGauge() {
-        PromotionOutboxRepository repository = mock(PromotionOutboxRepository.class);
+        PromotionOutboxJpaRepository repository = mock(PromotionOutboxJpaRepository.class);
         KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
         MeterRegistry registry = new SimpleMeterRegistry();
         given(repository.countByPublishedAtIsNull()).willReturn(4L);
@@ -127,7 +127,7 @@ class PromotionOutboxPublisherTest {
     @Test
     @SuppressWarnings("unchecked")
     void publishPending_kafkaFailure_leavesRowPending_recordsFailure_andBacksOff() {
-        PromotionOutboxRepository repository = mock(PromotionOutboxRepository.class);
+        PromotionOutboxJpaRepository repository = mock(PromotionOutboxJpaRepository.class);
         KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
         MeterRegistry registry = new SimpleMeterRegistry();
 

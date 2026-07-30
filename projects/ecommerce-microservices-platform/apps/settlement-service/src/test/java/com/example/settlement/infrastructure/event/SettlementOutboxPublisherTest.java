@@ -10,7 +10,7 @@ import static org.mockito.Mockito.verify;
 
 import com.example.settlement.application.event.SettlementPeriodClosedEvent;
 import com.example.settlement.infrastructure.persistence.SettlementOutboxEntity;
-import com.example.settlement.infrastructure.persistence.SettlementOutboxRepository;
+import com.example.settlement.infrastructure.persistence.SettlementOutboxJpaRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
@@ -61,7 +61,7 @@ class SettlementOutboxPublisherTest {
     @Test
     @SuppressWarnings("unchecked")
     void publishPending_sendsToMappedTopicWithHeaders_preservesKeyAndValue_thenMarksPublished() {
-        SettlementOutboxRepository repository = mock(SettlementOutboxRepository.class);
+        SettlementOutboxJpaRepository repository = mock(SettlementOutboxJpaRepository.class);
         KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
         MeterRegistry registry = new SimpleMeterRegistry();
 
@@ -103,7 +103,7 @@ class SettlementOutboxPublisherTest {
     @Test
     @SuppressWarnings("unchecked")
     void constructor_registersPreservedPendingCountGauge() {
-        SettlementOutboxRepository repository = mock(SettlementOutboxRepository.class);
+        SettlementOutboxJpaRepository repository = mock(SettlementOutboxJpaRepository.class);
         KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
         MeterRegistry registry = new SimpleMeterRegistry();
         given(repository.countByPublishedAtIsNull()).willReturn(5L);
@@ -119,7 +119,7 @@ class SettlementOutboxPublisherTest {
     @Test
     @SuppressWarnings("unchecked")
     void publishPending_kafkaFailure_leavesRowPending_recordsFailure_andBacksOff() {
-        SettlementOutboxRepository repository = mock(SettlementOutboxRepository.class);
+        SettlementOutboxJpaRepository repository = mock(SettlementOutboxJpaRepository.class);
         KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
         MeterRegistry registry = new SimpleMeterRegistry();
 

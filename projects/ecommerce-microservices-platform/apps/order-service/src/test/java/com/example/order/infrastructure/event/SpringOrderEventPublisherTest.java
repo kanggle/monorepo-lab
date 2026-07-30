@@ -3,7 +3,7 @@ package com.example.order.infrastructure.event;
 import com.example.order.application.event.OrderCancelledEvent;
 import com.example.order.application.event.OrderPlacedEvent;
 import com.example.order.infrastructure.persistence.OrderOutboxEntity;
-import com.example.order.infrastructure.persistence.OrderOutboxRepository;
+import com.example.order.infrastructure.persistence.OrderOutboxJpaRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,7 +39,7 @@ class SpringOrderEventPublisherTest {
     private SpringOrderEventPublisher springOrderEventPublisher;
 
     @Mock
-    private OrderOutboxRepository outboxRepository;
+    private OrderOutboxJpaRepository outboxRepository;
 
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();

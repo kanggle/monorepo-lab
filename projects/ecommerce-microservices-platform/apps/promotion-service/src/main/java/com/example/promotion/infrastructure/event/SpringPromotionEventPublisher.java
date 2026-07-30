@@ -44,7 +44,7 @@ public class SpringPromotionEventPublisher implements PromotionEventPublisher {
     private static final String EVENT_TYPE_COUPON_USED = "CouponUsed";
     private static final String EVENT_TYPE_COUPON_EXPIRED = "CouponExpired";
 
-    private final PromotionOutboxRepository outboxRepository;
+    private final PromotionOutboxJpaRepository outboxRepository;
     private final ObjectMapper objectMapper;
 
     @Override

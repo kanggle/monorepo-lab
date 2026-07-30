@@ -5,6 +5,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.UUID;
 
 /** Idempotent-consumer dedupe store for the reservation saga consumers (TASK-BE-428). */
-public interface ReservationProcessedEventRepository
+public interface ReservationProcessedEventJpaRepository
         extends JpaRepository<ReservationProcessedEventEntity, UUID> {
 }
