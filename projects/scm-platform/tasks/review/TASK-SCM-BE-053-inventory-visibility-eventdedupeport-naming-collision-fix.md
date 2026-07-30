@@ -8,7 +8,7 @@ inventory-visibility-service: rename local `EventDedupePort` (and its "EventDedu
 
 # Status
 
-in-progress
+review
 
 # Owner
 

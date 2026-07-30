@@ -80,9 +80,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## in-progress
 
-- `TASK-SCM-BE-053-inventory-visibility-eventdedupeport-naming-collision-fix.md` — filed 2026-07-30. Renames `inventory-visibility-service`'s local `EventDedupePort` (and its `EventDedupeRecord`/`EventDedupeRepository`/`EventDedupeRepositoryImpl`/`EventDedupeJpaEntity`/`EventDedupeJpaRepository` siblings) to the `ProcessedEvent*` vocabulary already used by `demand-planning-service`/`logistics-service` for the identical consumer-idempotency concept — fixes a genuine name collision with the shared `libs/java-messaging` `EventDedupePort` (different contract, same simple name, zero IVS consumers of the shared one). Pure Rename-category refactor; DB table `event_dedupe` and packages unchanged.
-
 ## review
+
+- `TASK-SCM-BE-053-inventory-visibility-eventdedupeport-naming-collision-fix.md` — filed 2026-07-30, impl complete same day. Renamed `inventory-visibility-service`'s local `EventDedupePort` (and its `EventDedupeRecord`/`EventDedupeRepository`/`EventDedupeRepositoryImpl`/`EventDedupeJpaEntity`/`EventDedupeJpaRepository` siblings) to the `ProcessedEvent*` vocabulary already used by `demand-planning-service`/`logistics-service` for the identical consumer-idempotency concept — fixes a genuine name collision with the shared `libs/java-messaging` `EventDedupePort` (different contract, same simple name, zero IVS consumers of the shared one, confirmed unchanged by this task). Pure Rename-category refactor; DB table `event_dedupe`, its columns, and all packages unchanged. Baseline `test`=120/`integrationTest`=23 GREEN before the change, identical counts GREEN after (real Postgres/Kafka/Redis Testcontainers, Docker available this session). Awaiting PR review.
 
 ## done
 
