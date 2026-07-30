@@ -8,7 +8,7 @@ console-web shared overview-cell vocabulary extraction — dedup `cellPlaceholde
 
 # Status
 
-review
+done
 
 # Owner
 
