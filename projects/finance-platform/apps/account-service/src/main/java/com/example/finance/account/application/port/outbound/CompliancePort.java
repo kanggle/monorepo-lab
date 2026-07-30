@@ -1,7 +1,7 @@
 package com.example.finance.account.application.port.outbound;
 
 import com.example.finance.account.domain.compliance.ScreeningDecision;
-import com.example.finance.account.domain.money.Money;
+import com.example.finance.common.money.Money;
 
 /**
  * Outbound port for AML/sanction screening (architecture.md § KYC/AML

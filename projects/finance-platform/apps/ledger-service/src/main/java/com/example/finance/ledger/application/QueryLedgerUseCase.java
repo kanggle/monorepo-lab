@@ -13,9 +13,9 @@ import com.example.finance.ledger.domain.error.LedgerErrors.LedgerAccountNotFoun
 import com.example.finance.ledger.domain.journal.JournalEntry;
 import com.example.finance.ledger.domain.journal.repository.JournalRepository;
 import com.example.finance.ledger.domain.journal.repository.JournalRepository.AccountTotals;
-import com.example.finance.ledger.domain.money.Currency;
+import com.example.finance.common.money.Currency;
 import com.example.finance.ledger.domain.money.LedgerReportingCurrency;
-import com.example.finance.ledger.domain.money.Money;
+import com.example.finance.common.money.Money;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

@@ -2,9 +2,9 @@ package com.example.finance.ledger.domain.journal;
 
 import com.example.finance.ledger.domain.account.LedgerAccountCodes;
 import com.example.finance.ledger.domain.error.LedgerErrors.SettlementRateInvalidException;
-import com.example.finance.ledger.domain.money.Currency;
+import com.example.finance.common.money.Currency;
 import com.example.finance.ledger.domain.money.LedgerReportingCurrency;
-import com.example.finance.ledger.domain.money.Money;
+import com.example.finance.common.money.Money;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;

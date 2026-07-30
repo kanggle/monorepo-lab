@@ -24,8 +24,8 @@ import com.example.finance.account.domain.error.DomainErrors.AccountNotActiveExc
 import com.example.finance.account.domain.error.DomainErrors.InsufficientAvailableBalanceException;
 import com.example.finance.account.domain.error.DomainErrors.KycRequiredException;
 import com.example.finance.account.domain.error.DomainErrors.SanctionHitException;
-import com.example.finance.account.domain.money.Currency;
-import com.example.finance.account.domain.money.Money;
+import com.example.finance.common.money.Currency;
+import com.example.finance.common.money.Money;
 import com.example.finance.account.domain.transaction.Transaction;
 import com.example.finance.account.domain.transaction.TransactionType;
 import com.example.finance.account.domain.transaction.repository.TransactionRepository;

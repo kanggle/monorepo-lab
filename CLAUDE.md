@@ -21,12 +21,20 @@ Minimum operating rules for AI agents and developers in this monorepo. **Catalog
 └── projects/<project>/    ← one directory per project (8 active)
     ├── PROJECT.md         ← project classification (domain, traits)
     ├── apps/ specs/ tasks/ knowledge/ docs/ infra/
+    └── libs/              ← optional: project-scoped shared modules (see below)
 ```
 
 **Shared vs project boundary** (strict, Hard-Stop-enforced):
 
 - **Shared (repo root)**: `platform/`, `rules/`, `.claude/`, `libs/`, `tasks/templates/`, `tasks/INDEX.md` + monorepo-level `tasks/{ready,…}/`, `docs/guides/`, `CLAUDE.md`, `TEMPLATE.md` — **must remain project-agnostic** (no service names, API paths, domain entities).
-- **Project-specific (`projects/<name>/`)**: `PROJECT.md`, `apps/`, `specs/`, project `tasks/`, `knowledge/`, `docs/` (except `guides/`), `infra/`.
+- **Project-specific (`projects/<name>/`)**: `PROJECT.md`, `apps/`, `specs/`, project `tasks/`, `knowledge/`, `docs/` (except `guides/`), `infra/`, and — when two or more of that project's services share a concept — `libs/`.
+
+**Project-scoped shared modules (`projects/<name>/libs/<module>/`)** — for code shared by **several services of one project** but owned by that project's domain:
+
+- **When**: two or more services in the same project declare the same domain concept, and that concept carries a **product decision of that project** (a supported-value whitelist, a domain policy) rather than a purely technical mechanism. Repo-root `libs/` is for the technical mechanisms; it must stay project-agnostic, so a project's product decision cannot live there. Keeping the copies per-service instead is the failure mode this exists to avoid — a change lands in one copy and silently not the sibling.
+- **Gradle**: `include 'projects:<project>:libs:<module>'` in the root `settings.gradle`, alongside that project's `apps:*` entries. Consumers declare it with `implementation`, never `api`. The module must not depend on any service module (one-way, per [`platform/shared-library-policy.md`](platform/shared-library-policy.md) § Dependency Rule).
+- **Constraint**: it is still project-specific content — it lives under `projects/<name>/` (so it travels with the project on template extraction) and is **not** subject to the project-agnostic rule that binds repo-root `libs/`. The reverse also holds: it must not be promoted to repo-root `libs/` merely because a second project wants it; that promotion is an ADR decision.
+- **Introducing one requires an ADR** in the owning project's `docs/adr/`, because it is an architecture decision about ownership (`platform/architecture-decision-rule.md`), and the CI/guard surface must be checked — most repo guards key on `projects/*/apps/*` and will not see a `libs/` module, including the gradle-task list of the project's CI job (a module reached only as a compile dependency never runs its own tests).
 
 See [`TEMPLATE.md`](TEMPLATE.md) for the Discovery → Distribution strategy.
 

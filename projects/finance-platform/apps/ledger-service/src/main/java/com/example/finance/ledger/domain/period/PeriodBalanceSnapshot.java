@@ -1,7 +1,7 @@
 package com.example.finance.ledger.domain.period;
 
-import com.example.finance.ledger.domain.money.Currency;
-import com.example.finance.ledger.domain.money.Money;
+import com.example.finance.common.money.Currency;
+import com.example.finance.common.money.Money;
 
 import java.util.List;
 import java.util.Objects;

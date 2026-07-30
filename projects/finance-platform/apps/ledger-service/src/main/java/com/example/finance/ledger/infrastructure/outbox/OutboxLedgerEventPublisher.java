@@ -5,7 +5,7 @@ import com.example.finance.ledger.application.port.outbound.LedgerEventPublisher
 import com.example.finance.ledger.domain.journal.JournalEntry;
 import com.example.finance.ledger.domain.journal.JournalLine;
 import com.example.finance.ledger.domain.journal.SourceRef;
-import com.example.finance.ledger.domain.money.Money;
+import com.example.finance.common.money.Money;
 import com.example.finance.ledger.domain.period.AccountingPeriod;
 import com.example.finance.ledger.domain.reconciliation.ExternalStatement;
 import com.example.finance.ledger.domain.reconciliation.ReconciliationDiscrepancy;

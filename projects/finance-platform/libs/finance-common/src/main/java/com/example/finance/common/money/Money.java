@@ -1,4 +1,4 @@
-package com.example.finance.account.domain.money;
+package com.example.finance.common.money;
 
 import java.util.Objects;
 
@@ -15,6 +15,10 @@ import java.util.Objects;
  * <p>Pure Java — no Spring/JPA. Currency-mismatched arithmetic raises
  * {@link CurrencyMismatchException} (mapped to 422 {@code CURRENCY_MISMATCH}).
  * Negative amounts are rejected at construction.
+ *
+ * <p>Shared by {@code account-service} and {@code ledger-service}
+ * (ADR-003 Option A, TASK-FIN-BE-064) — this is the single source of truth for
+ * finance-platform's money semantics; neither service declares its own copy.
  */
 public final class Money {
 
@@ -87,6 +91,13 @@ public final class Money {
                     "subtraction would yield a negative amount");
         }
         return new Money(result, this.currency);
+    }
+
+    /** Absolute difference of two amounts (always non-negative). */
+    public Money absoluteDifference(Money other) {
+        ensureSameCurrency(other);
+        long diff = Math.abs(Math.subtractExact(this.minorUnits, other.minorUnits));
+        return new Money(diff, this.currency);
     }
 
     public boolean isGreaterThan(Money other) {

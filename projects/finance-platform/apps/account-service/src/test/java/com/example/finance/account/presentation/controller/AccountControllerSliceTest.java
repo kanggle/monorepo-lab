@@ -105,7 +105,7 @@ class AccountControllerSliceTest {
     @DisplayName("POST /api/finance/accounts unsupported currency → 422 CURRENCY_MISMATCH")
     void openUnsupportedCurrency() throws Exception {
         when(service.openAccount(any())).thenThrow(
-                new com.example.finance.account.domain.money.Currency
+                new com.example.finance.common.money.Currency
                         .UnsupportedCurrencyException("unsupported currency: XBT"));
         mockMvc.perform(post("/api/finance/accounts")
                         .header("Idempotency-Key", "k2")

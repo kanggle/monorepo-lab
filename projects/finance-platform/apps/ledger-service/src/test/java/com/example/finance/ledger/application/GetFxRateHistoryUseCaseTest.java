@@ -4,7 +4,7 @@ import com.example.finance.ledger.application.view.FxRateHistorySummaryView;
 import com.example.finance.ledger.application.view.FxRateHistoryView;
 import com.example.finance.ledger.domain.journal.FxRateQuoteHistory;
 import com.example.finance.ledger.domain.journal.repository.FxRateQuoteHistoryRepository;
-import com.example.finance.ledger.domain.money.Currency;
+import com.example.finance.common.money.Currency;
 import com.example.finance.ledger.domain.money.LedgerReportingCurrency;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

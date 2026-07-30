@@ -8,7 +8,7 @@ import com.example.finance.ledger.domain.journal.FxRateOverride;
 import com.example.finance.ledger.domain.journal.FxRateQuote;
 import com.example.finance.ledger.domain.journal.repository.FxRateOverrideRepository;
 import com.example.finance.ledger.domain.journal.repository.FxRateQuoteRepository;
-import com.example.finance.ledger.domain.money.Currency;
+import com.example.finance.common.money.Currency;
 import com.example.finance.ledger.domain.money.LedgerReportingCurrency;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

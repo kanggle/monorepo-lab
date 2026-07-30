@@ -7,7 +7,7 @@ import com.example.finance.ledger.domain.journal.FxRateQuote;
 import com.example.finance.ledger.domain.journal.FxRateQuoteHistory;
 import com.example.finance.ledger.domain.journal.repository.FxRateQuoteHistoryRepository;
 import com.example.finance.ledger.domain.journal.repository.FxRateQuoteRepository;
-import com.example.finance.ledger.domain.money.Currency;
+import com.example.finance.common.money.Currency;
 import com.example.finance.ledger.domain.money.LedgerReportingCurrency;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;

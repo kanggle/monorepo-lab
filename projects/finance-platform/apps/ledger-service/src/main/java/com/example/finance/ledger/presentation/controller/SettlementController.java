@@ -19,7 +19,7 @@ import com.example.finance.ledger.application.view.FxCostFlowConfigView;
 import com.example.finance.ledger.application.view.FxPositionLotsView;
 import com.example.finance.ledger.application.view.FxRateOverrideView;
 import com.example.finance.ledger.domain.error.LedgerErrors.FxToleranceInvalidException;
-import com.example.finance.ledger.domain.money.Currency;
+import com.example.finance.common.money.Currency;
 import com.example.finance.ledger.domain.money.LedgerReportingCurrency;
 import com.example.finance.ledger.infrastructure.security.ActorContextResolver;
 import com.example.finance.ledger.presentation.dto.ApiEnvelope;

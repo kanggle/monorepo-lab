@@ -4,7 +4,7 @@ import com.example.finance.account.domain.account.KycLevel;
 import com.example.finance.account.domain.error.DomainErrors.KycLevelInsufficientException;
 import com.example.finance.account.domain.error.DomainErrors.KycRequiredException;
 import com.example.finance.account.domain.error.DomainErrors.TransactionLimitExceededException;
-import com.example.finance.account.domain.money.Money;
+import com.example.finance.common.money.Money;
 import com.example.finance.account.domain.transaction.TransactionType;
 
 import java.util.Map;

@@ -1,8 +1,8 @@
 package com.example.finance.ledger.presentation.advice;
 
 import com.example.finance.ledger.domain.error.LedgerDomainException;
-import com.example.finance.ledger.domain.money.Currency;
-import com.example.finance.ledger.domain.money.Money;
+import com.example.finance.common.money.Currency;
+import com.example.finance.common.money.Money;
 import com.example.finance.ledger.presentation.dto.ApiErrorBody;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpMethod;

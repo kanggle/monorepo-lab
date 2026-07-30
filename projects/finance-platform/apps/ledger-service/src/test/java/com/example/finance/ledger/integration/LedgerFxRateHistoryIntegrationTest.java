@@ -1,7 +1,7 @@
 package com.example.finance.ledger.integration;
 
 import com.example.finance.ledger.domain.journal.FxRateQuoteHistory;
-import com.example.finance.ledger.domain.money.Currency;
+import com.example.finance.common.money.Currency;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

@@ -2,7 +2,7 @@ package com.example.finance.ledger.infrastructure.fxrate;
 
 import com.example.finance.ledger.application.port.outbound.ClockPort;
 import com.example.finance.ledger.application.port.outbound.FxRateProviderPort.RateQuote;
-import com.example.finance.ledger.domain.money.Currency;
+import com.example.finance.common.money.Currency;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;

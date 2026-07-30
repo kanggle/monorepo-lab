@@ -607,9 +607,10 @@ com.example.finance.ledger/
 │   │   ├── ReconciliationMatcher.java     ← pure: txn-leg 1:1 by (amount,currency,direction); (11th incr) + base(FX)-leg check on a match → AMOUNT_MISMATCH when ext.baseAmount ≠ internal.baseMoney (currency≠KRW)
 │   │   └── repository/ReconciliationRepository.java + ReconciliationAccounts.java (clearing-account allow-list)
 │   ├── money/
-│   │   ├── Money.java                     ← long minorUnits + Currency (NO float/double)
-│   │   ├── Currency.java                  ← ISO-4217 + minor-unit scale (KRW/USD/EUR/JPY)
-│   │   └── LedgerReportingCurrency.java   ← (8th incr) BASE = KRW (fixed reporting/base currency; configurable forward-declared)
+│   │   └── LedgerReportingCurrency.java   ← (8th incr) BASE = KRW (fixed reporting/base currency; configurable forward-declared). Stays here: WHICH currency the ledger reports in is ledger-owned (shared-library-policy.md § Ownership Rule)
+│   │       (Money.java + Currency.java REMOVED by TASK-FIN-BE-064, ADR-003 Option A — now
+│   │        projects:finance-platform:libs:finance-common, package com.example.finance.common.money,
+│   │        shared with account-service; framework-free so the domain boundary rule still holds)
 │   ├── audit/
 │   │   ├── AuditLog.java
 │   │   └── AuditLogRepository.java
@@ -714,6 +715,14 @@ Same allow-list as account-service (`spring-boot-starter-{web,data-jpa,data-redi
 shared libs `java-common`/`java-web`/`java-messaging`/`java-observability`/`java-security`).
 Redis is **not** required in the first increment (no client idempotency-key surface;
 dedupe is event-id based via `processed_events`).
+
+Plus the project-scoped shared module `projects:finance-platform:libs:finance-common`
+(TASK-FIN-BE-064 / ADR-003 Option A — the `Money` + `Currency` value objects, shared with
+`account-service`; `LedgerReportingCurrency` stays in this service). Declared
+`implementation`, never `api`. The module is framework-free (no Spring/JPA/Jackson)
+precisely so `domain/` may depend on it without breaching § Boundary rules; adding a
+framework to it would breach that rule in both services at once, with no change to either
+service's build file.
 
 ### Forbidden dependencies
 
@@ -2101,7 +2110,7 @@ is structurally gone; `OutboxMetricsAutoConfiguration` (still shipped) stays
 | **F1** idempotent + Tx-protected | ✅ | `processed_events` dedupe (source event id) in the posting `@Transactional`; at-most-once entry per event; **(5th incr)** manual posting reuses the same dedupe keyed by the client `Idempotency-Key` (`manual:{key}`) — replay returns the original entry |
 | **F2** double-entry ledger | ✅ (this is it) | `JournalEntry` balanced invariant `Σdebit == Σcredit`; ledger is downstream of the wallet, never writes back; **(5th incr)** operator manual entries pass the SAME factory balance gate before any persist |
 | **F3** posted entry immutable; reversal-only | ✅ | no UPDATE/DELETE of entries/lines; `REVERSAL` entry references the original; **(5th incr)** manual adjusting entries are equally immutable (a correction is another entry) |
-| **F5** money = minor-units, no float | ✅ | `Money(long, Currency)`; grep-zero float/double in `domain/money`; `CURRENCY_MISMATCH` guard. **(8th incr)** money stays integer minor units (both transaction and base amounts are `long`); the `exchangeRate` is an exact `BigDecimal` / `DECIMAL(20,8)` (decimal, **not** a float) recorded for provenance — the balance is checked on integer `baseAmount`s, never re-derived from the rate, so no rounding can create/destroy funds. **(9th incr)** FX revaluation's `revaluedBase = round(foreignBalance × closingRate)` is computed with the `BigDecimal` rate then stored as a `long` KRW minor (HALF_UP); the booked `delta` is integer base minor units, balanced exactly — no float touches the books |
+| **F5** money = minor-units, no float | ✅ | `Money(long, Currency)`; grep-zero float/double in the shared `finance-common` money module (TASK-FIN-BE-064 — was `domain/money`); `CURRENCY_MISMATCH` guard. **(8th incr)** money stays integer minor units (both transaction and base amounts are `long`); the `exchangeRate` is an exact `BigDecimal` / `DECIMAL(20,8)` (decimal, **not** a float) recorded for provenance — the balance is checked on integer `baseAmount`s, never re-derived from the rate, so no rounding can create/destroy funds. **(9th incr)** FX revaluation's `revaluedBase = round(foreignBalance × closingRate)` is computed with the `BigDecimal` rate then stored as a `long` KRW minor (HALF_UP); the booked `delta` is integer base minor units, balanced exactly — no float touches the books |
 | **F6** immutable audit | ✅ | append-only `audit_log`, same Tx (audit-heavy) |
 | **F7** regulated PII encrypted/masked | N/A (first increment) | the ledger stores account ids + amounts, no new regulated PII (no KYC documents); reuses account-service-masked refs |
 | **F8** reconciliation no auto-close | ✅ (4th increment) | `ReconciliationMatcher` records mismatches as OPEN `ReconciliationDiscrepancy` (operator review queue); resolution is operator-only via `ResolveDiscrepancyUseCase` — no code path auto-closes or adjusts a discrepancy (§ Reconciliation); **(6th/7th increment)** a CLOSED period is closed to reconciliation on both sides — neither resolving an existing discrepancy nor ingesting a new statement dated in the period is allowed (`RECONCILIATION_PERIOD_LOCKED`; § Reconciliation § Period lock) |

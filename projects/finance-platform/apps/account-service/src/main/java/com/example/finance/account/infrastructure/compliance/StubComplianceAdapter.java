@@ -3,7 +3,7 @@ package com.example.finance.account.infrastructure.compliance;
 import com.example.common.id.UuidV7;
 import com.example.finance.account.application.port.outbound.CompliancePort;
 import com.example.finance.account.domain.compliance.ScreeningDecision;
-import com.example.finance.account.domain.money.Money;
+import com.example.finance.common.money.Money;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;

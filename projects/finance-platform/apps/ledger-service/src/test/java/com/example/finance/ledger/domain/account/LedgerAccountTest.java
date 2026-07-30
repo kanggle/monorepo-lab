@@ -1,7 +1,7 @@
 package com.example.finance.ledger.domain.account;
 
-import com.example.finance.ledger.domain.money.Currency;
-import com.example.finance.ledger.domain.money.Money;
+import com.example.finance.common.money.Currency;
+import com.example.finance.common.money.Money;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

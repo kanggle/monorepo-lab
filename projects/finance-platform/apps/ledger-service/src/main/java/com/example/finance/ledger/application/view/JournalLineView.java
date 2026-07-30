@@ -1,7 +1,7 @@
 package com.example.finance.ledger.application.view;
 
 import com.example.finance.ledger.domain.journal.EntryDirection;
-import com.example.finance.ledger.domain.money.Money;
+import com.example.finance.common.money.Money;
 
 import java.math.BigDecimal;
 

@@ -3,8 +3,8 @@ package com.example.finance.ledger.messaging;
 import com.example.finance.ledger.application.PostFromTransactionCommand;
 import com.example.finance.ledger.domain.journal.CompletedTransaction;
 import com.example.finance.ledger.domain.journal.LedgerTransactionType;
-import com.example.finance.ledger.domain.money.Currency;
-import com.example.finance.ledger.domain.money.Money;
+import com.example.finance.common.money.Currency;
+import com.example.finance.common.money.Money;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 

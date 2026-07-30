@@ -55,6 +55,13 @@ dependencies {
     implementation 'net.javacrumbs.shedlock:shedlock-spring:6.2.0'
     implementation 'net.javacrumbs.shedlock:shedlock-provider-jdbc-template:6.2.0'
 
+    // finance-platform project-scoped shared module (ADR-003 Option A,
+    // TASK-FIN-BE-064): Money / Currency value objects, shared with account-service.
+    // Framework-free, so `domain/` may depend on it without breaching the
+    // "domain MUST NOT depend on Spring" boundary rule. LedgerReportingCurrency
+    // stays in this service — the reporting/base currency is a ledger-owned decision.
+    implementation project(':projects:finance-platform:libs:finance-common')
+
     // Shared libs
     implementation project(':libs:java-common')
     implementation project(':libs:java-web')

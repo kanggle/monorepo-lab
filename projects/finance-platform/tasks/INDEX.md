@@ -84,6 +84,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
+- `TASK-FIN-BE-064-finance-common-money-currency-module-extraction.md` — **ADR-003 (ACCEPTED 2026-07-30) Option A 실행.** `account-service`/`ledger-service` 가 각자 선언한 near-byte-identical `Money`/`Currency`(+ 중첩 예외 2종)를 저장소 **최초의 프로젝트 범위 공유 Gradle 모듈** `projects:finance-platform:libs:finance-common`(package `com.example.finance.common.money`)로 이관하고 양 서비스가 의존. 이관본은 두 사본의 **합집합**(ledger 전용 `Money.absoluteDifference` + `Currency.ofOrThrow` 보존) — shape/API/불변식은 ADR §5 대로 byte-unchanged. `LedgerReportingCurrency` 는 ledger 소유로 잔류. 신규 구조 패턴이므로 `CLAUDE.md § Repository Layout` + `platform/repository-structure.md`(자체 Change Rule) + `platform/architecture.md` 레이아웃 서술 동시 갱신, ci.yml finance Docker-free 스텝에 신규 모듈 `check` 추가(미추가 시 모듈 테스트가 CI 에서 영원히 미실행).
+
 ## done
 
 - `TASK-FIN-BE-063-idempotency-body-hash-key-order-canonicalization.md` — **DONE (2026-07-30, 3-dim verified — impl PR #3043 squash `9011e116a59b7870e623c7a7eec964e5945d1db7`; state=MERGED · origin/main tip 포함 확인 · 머지 전 실패 체크 0건).** account-service `IdempotentExecution` 요청바디 해시가 Jackson 기본 직렬화(키순서 비정규)로 계산되어, 동일 논리 바디가 키순서만 달라도 다른 해시가 되어 같은 `Idempotency-Key` 재요청이 REPLAY 대신 409 `IDEMPOTENCY_KEY_CONFLICT`로 오판되는 결함 수정. `libs:java-web-servlet` `BodyHashUtil`(키정렬 canonical 해시, 이미 monorepo 공유 구현) 채택. 구현+테스트 완료(5개 신규 unit test, 166→171, GREEN).
