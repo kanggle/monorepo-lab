@@ -9,7 +9,7 @@ ADR-MONO-058 D5 (fan-platform only) — promote the `PublicPaths` `isPublic()` m
 
 # Status
 
-review
+done
 
 # Owner
 
