@@ -8,7 +8,7 @@ console-web rename `features/dashboards`' colliding `OperatorOverview` type/sche
 
 # Status
 
-review
+done
 
 # Owner
 
