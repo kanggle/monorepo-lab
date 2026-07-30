@@ -6,7 +6,7 @@ import { LedgerOpsTabs } from './LedgerOpsTabs';
 import {
   useLedgerOpsState,
   type LedgerOpsScreenProps,
-} from './use-ledger-ops-state';
+} from '../hooks/use-ledger-ops-state';
 
 /**
  * finance ledger operations section (TASK-PC-FE-072 — § 2.4.7.1; the

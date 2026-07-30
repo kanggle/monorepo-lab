@@ -4,7 +4,7 @@ import { DiscrepancyQueue } from './DiscrepancyQueue';
 import { DiscrepancyDetail } from './DiscrepancyDetail';
 import { StatementLookup } from './StatementLookup';
 import { StatementDetail } from './StatementDetail';
-import type { useLedgerOpsState } from './use-ledger-ops-state';
+import type { useLedgerOpsState } from '../hooks/use-ledger-ops-state';
 
 type S = ReturnType<typeof useLedgerOpsState>;
 

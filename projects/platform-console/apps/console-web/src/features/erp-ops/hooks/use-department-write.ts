@@ -8,7 +8,7 @@ import {
   useUpdateDepartment,
   useRetireDepartment,
   useMoveDepartmentParent,
-} from '../hooks/use-erp-ops';
+} from './use-erp-ops';
 
 /**
  * `<DepartmentWriteDialog>` container hook (TASK-PC-FE-151 — behaviour-

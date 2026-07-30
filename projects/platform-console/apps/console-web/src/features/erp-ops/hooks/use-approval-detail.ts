@@ -9,7 +9,7 @@ import {
   useApproveApproval,
   useRejectApproval,
   useWithdrawApproval,
-} from '../hooks/use-erp-ops';
+} from './use-erp-ops';
 
 /**
  * `<ApprovalDetail>` container hook (TASK-PC-FE-235 — behaviour-preserving

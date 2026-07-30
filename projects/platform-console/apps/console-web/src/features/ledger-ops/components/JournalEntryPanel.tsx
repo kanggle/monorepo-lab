@@ -3,7 +3,7 @@
 import { messageForCode } from '@/shared/api/errors';
 import { JournalEntryLookup } from './JournalEntryLookup';
 import { JournalEntryDetail } from './JournalEntryDetail';
-import type { useLedgerOpsState } from './use-ledger-ops-state';
+import type { useLedgerOpsState } from '../hooks/use-ledger-ops-state';
 
 type S = ReturnType<typeof useLedgerOpsState>;
 

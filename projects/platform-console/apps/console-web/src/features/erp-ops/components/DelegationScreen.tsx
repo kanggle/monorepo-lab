@@ -9,7 +9,7 @@ import {
   useDelegationScreen,
   useDelegationCreate,
   useDelegationRevoke,
-} from './use-delegation-screen';
+} from '../hooks/use-delegation-screen';
 
 /**
  * ERP "위임(대결) 관리" screen (TASK-PC-FE-054 — PC-FE-053 follow-up;

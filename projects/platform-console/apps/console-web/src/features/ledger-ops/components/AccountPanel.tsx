@@ -1,7 +1,7 @@
 import { messageForCode } from '@/shared/api/errors';
 import { AccountLookup } from './AccountLookup';
 import { AccountDetail } from './AccountDetail';
-import type { useLedgerOpsState } from './use-ledger-ops-state';
+import type { useLedgerOpsState } from '../hooks/use-ledger-ops-state';
 
 type S = ReturnType<typeof useLedgerOpsState>;
 

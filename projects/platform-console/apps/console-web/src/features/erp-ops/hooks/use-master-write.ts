@@ -9,7 +9,7 @@ import type {
   MasterWriteConfig,
   MasterWriteRequest,
   MasterWriteDialogProps,
-} from './MasterWriteDialog';
+} from '../components/MasterWriteDialog';
 
 /**
  * `<MasterWriteDialog>` container hook (TASK-PC-FE-152 — behaviour-
