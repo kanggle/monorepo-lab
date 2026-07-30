@@ -8,7 +8,7 @@ console-web rename colliding `accountStatusTone` — domain-qualify IAM vs Finan
 
 # Status
 
-review
+done
 
 # Owner
 
