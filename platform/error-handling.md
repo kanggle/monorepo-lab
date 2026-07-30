@@ -661,9 +661,13 @@ Owned by `admin-service` (operator portal — operator lifecycle, 2FA, audit-log
 >
 > `PERMISSION_DENIED` (403, `PermissionDeniedException`) is emitted by this service but is documented under Platform-Common Authorization — TASK-MONO-496 promoted it there when the same string, same status, same semantic was found independently registered a second time in `Authorization [domain: erp]` (`masterdata-service`), plus reused as-is by scm `procurement-service` / `demand-planning-service` / `inventory-visibility-service`.
 
-## Community  `[domain: saas]`
+## ~~Community~~  `[domain: saas]`  — **RETIRED 2026-07-14** (TASK-MONO-394)
 
-Owned by IAM `community-service` (multi-tenant community feature distinct from `fan-platform/community-service` — same string codes, different service ownership).
+~~Owned by IAM `community-service`~~ (multi-tenant community feature distinct from `fan-platform/community-service` — same
+string codes, different service ownership). IAM's `community-service` was a FROZEN product-layer demo consumer, deleted by
+TASK-MONO-394 once `fan-platform` began performing the same role for real (see `iam-platform/PROJECT.md` and
+`docs/project-overview.md`, which carry the same RETIRED marker). **No service emits these codes today** — table kept below
+as the historical record `fan-platform`'s own `Community [domain: fan-platform]` section cross-references (TASK-MONO-497).
 
 | Code | HTTP | Description |
 |---|---|---|
@@ -672,11 +676,15 @@ Owned by IAM `community-service` (multi-tenant community feature distinct from `
 | NOT_FOLLOWING | 404 | Not currently following; unfollow rejected (`NotFollowingException`) |
 | POST_STATUS_TRANSITION_INVALID | 422 | Post status transition is not allowed (illegal state guard) |
 
-> Cross-project: `fan-platform/community-service` emits the same 4 strings (see `Community  [domain: fan-platform]` below). The semantic is identical — two services in two different projects intentionally share code strings.
+> Cross-project (historical): `fan-platform/community-service` emitted the same 4 strings while IAM's `community-service` was
+> live (see `Community  [domain: fan-platform]` below). `fan-platform`'s codes are unaffected by the retirement — only IAM's
+> side is gone.
 
-## Membership  `[domain: saas]`
+## ~~Membership~~  `[domain: saas]`  — **RETIRED 2026-07-14** (TASK-MONO-394)
 
-Owned by `membership-service`.
+~~Owned by `membership-service`~~. Deleted alongside its sibling `community-service` by TASK-MONO-394 for the same reason —
+`fan-platform`'s own `membership-service` now performs this role for real. **No service emits these codes today** — table
+kept below as the historical record.
 
 | Code | HTTP | Description |
 |---|---|---|
@@ -709,12 +717,12 @@ Owned by `community-service` (post / comment / reaction / follow).
 | POST_NOT_FOUND | 404 | Post does not exist (or cross-tenant — see `multi-tenant.md` M3) |
 | POST_STATUS_TRANSITION_INVALID | 422 | Illegal post-state transition (DRAFT/PUBLISHED/HIDDEN/DELETED) (`InvalidStateTransitionException`). Was cross-shared with IAM's community-service until TASK-MONO-394 retired it — this code is now fan-only |
 | MEMBERSHIP_TIER_INSUFFICIENT | 403 | Caller membership tier below required (PUBLIC < FOLLOWERS < MEMBERS_ONLY < SUBSCRIBERS_ONLY). No current emitter — the live content-gate emits `MEMBERSHIP_REQUIRED` (below); this finer-grained tier code is reserved (TASK-MONO-249) |
-| MEMBERSHIP_REQUIRED | 403 | Caller's membership tier insufficient for this content (`MembershipRequiredException`). Cross-project alias — see `Community  [domain: saas]` |
+| MEMBERSHIP_REQUIRED | 403 | Caller's membership tier insufficient for this content (`MembershipRequiredException`). Was cross-shared with IAM's community-service until TASK-MONO-394 retired it — this code is now fan-only |
 | COMMENT_NOT_FOUND | 404 | Comment does not exist or scope mismatch (`CommentNotFoundException`) |
 | SELF_FOLLOW_FORBIDDEN | 422 | Account cannot follow itself (`SelfFollowForbiddenException`) |
 | EDIT_WINDOW_EXPIRED | 422 | PUBLISHED post is past the edit window (`EditWindowExpiredException`) |
-| ALREADY_FOLLOWING | 409 | Already following this artist (`AlreadyFollowingException`). Cross-project — see `Community  [domain: saas]` |
-| NOT_FOLLOWING | 404 | Not currently following; unfollow rejected (`NotFollowingException`). Cross-project — see `Community  [domain: saas]` |
+| ALREADY_FOLLOWING | 409 | Already following this artist (`AlreadyFollowingException`). Was cross-shared with IAM's community-service until TASK-MONO-394 retired it — this code is now fan-only |
+| NOT_FOLLOWING | 404 | Not currently following; unfollow rejected (`NotFollowingException`). Was cross-shared with IAM's community-service until TASK-MONO-394 retired it — this code is now fan-only |
 | REACTION_INVALID_TYPE | 400 | Reaction type not in the allowed enum (v2-planned — currently handled via generic `VALIDATION_ERROR`) |
 | FEED_QUERY_INVALID | 400 | Feed cursor or filter combination is invalid (v2-planned — currently handled via generic `VALIDATION_ERROR`) |
 
