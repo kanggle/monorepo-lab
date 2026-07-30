@@ -1,11 +1,11 @@
 # ADR-003: `Money`/`Currency` 값객체를 account-service·ledger-service 중복에서 프로젝트 범위 공유 위치로
 
-- **Status**: PROPOSED
+- **Status**: ACCEPTED (2026-07-30)
 - **Date**: 2026-07-30
 - **Authors**: architecture (naming-convention 감사 산물 — finance-platform 세 번째 프로젝트 ADR)
 - **Supersedes**: —
 - **Superseded by**: —
-- **History**: PROPOSED 2026-07-30 — 8-프로젝트 네이밍 컨벤션 감사(2026-07-30)가 `account-service`/`ledger-service` 양쪽에 거의 동일한 `Money`/`Currency` 값객체가 독립 선언돼 있음을 발견. `ledger-service`의 `Money.java` 자체 javadoc 이 "Mirrors account-service's `Money`... a single source of truth would be a shared lib in a later increment; first-increment parity is intentional" 이라고 이미 이 부채를 인지·유예해 왔다. 공유 코드를 어디에 둘지는 `platform/shared-library-policy.md § Decision Rule`(기술/공통 vs 도메인-소유 판정)이 걸리는 아키텍처 결정이고, 이 저장소 8개 프로젝트 전체에 **프로젝트 범위(project-scoped) 공유 모듈 선례가 전무**(전부 repo-root `libs/` 아니면 프로젝트 내부 각 서비스 로컬)하므로 코드로 묵시 결정하면 HARDSTOP-09 위반 → 결정을 먼저 기록하고 PAUSE. **ACCEPTED 전환 + 구현은 별도 user-explicit-intent 태스크. Self-ACCEPT 금지.**
+- **History**: PROPOSED 2026-07-30 — 8-프로젝트 네이밍 컨벤션 감사(2026-07-30)가 `account-service`/`ledger-service` 양쪽에 거의 동일한 `Money`/`Currency` 값객체가 독립 선언돼 있음을 발견. `ledger-service`의 `Money.java` 자체 javadoc 이 "Mirrors account-service's `Money`... a single source of truth would be a shared lib in a later increment; first-increment parity is intentional" 이라고 이미 이 부채를 인지·유예해 왔다. 공유 코드를 어디에 둘지는 `platform/shared-library-policy.md § Decision Rule`(기술/공통 vs 도메인-소유 판정)이 걸리는 아키텍처 결정이고, 이 저장소 8개 프로젝트 전체에 **프로젝트 범위(project-scoped) 공유 모듈 선례가 전무**(전부 repo-root `libs/` 아니면 프로젝트 내부 각 서비스 로컬)하므로 코드로 묵시 결정하면 HARDSTOP-09 위반 → 결정을 먼저 기록하고 PAUSE. **ACCEPTED 전환 + 구현은 별도 user-explicit-intent 태스크. Self-ACCEPT 금지.** · **ACCEPTED 2026-07-30** — 사용자가 sibling `ADR-MONO-058`과 함께 검토 후 `AskUserQuestion`에서 `"ADR-003 ACCEPTED"`를 명시하는 옵션을 선택(같은 스레드에서 앞서 나온 맨 "진행"은 이 ADR 자신의 게이트에 따라 불충분으로 판단해 재확인함). §2의 Option A(프로젝트 범위 신규 Gradle 모듈)가 **byte-unchanged 확정** — ACCEPTED는 *확정*이지 재결정이 아님. 실행(§6: 모듈 신설 → account-service 전환 → ledger-service 전환 → CLAUDE.md 문서 정합)은 별도 post-ACCEPTED task. **NOT self-ACCEPT** — 작성 에이전트(본 세션)가 아니라 사용자가 별도 턴에서 승인.
 
 ---
 
