@@ -1,5 +1,7 @@
 package com.example.fanplatform.community.presentation.security;
 
+import com.example.security.servlet.PublicPathSet;
+
 import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.Set;
@@ -18,6 +20,11 @@ import java.util.Set;
  * <p>The {@code /actuator/health/} prefix wildcard handles Kubernetes
  * liveness/readiness sub-paths ({@code /actuator/health/liveness},
  * {@code /actuator/health/readiness}).
+ *
+ * <p>The {@code EXACT}/{@code PREFIXES} matching mechanism delegates to
+ * {@link PublicPathSet} (ADR-MONO-058 § D5) — this class supplies only the
+ * data (community-service's own policy of what is public); the matching
+ * logic itself is shared with the other three fan-platform services.
  */
 public final class PublicPaths {
 
@@ -33,21 +40,18 @@ public final class PublicPaths {
             "/actuator/health/"
     );
 
+    private static final PublicPathSet MECHANISM = PublicPathSet.of(EXACT, PREFIXES);
+
     private PublicPaths() {
     }
 
     /** Returns true if {@code path} matches any whitelisted path. */
     public static boolean isPublic(String path) {
-        if (path == null) return false;
-        if (EXACT.contains(path)) return true;
-        for (String prefix : PREFIXES) {
-            if (path.startsWith(prefix)) return true;
-        }
-        return false;
+        return MECHANISM.isPublic(path);
     }
 
     /** Convenience overload for servlet filter usage. */
     public static boolean isPublic(HttpServletRequest request) {
-        return isPublic(request.getRequestURI());
+        return MECHANISM.isPublic(request);
     }
 }
