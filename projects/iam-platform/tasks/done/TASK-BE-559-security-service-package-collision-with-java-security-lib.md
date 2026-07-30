@@ -8,7 +8,7 @@ security-service 자체 코드를 `com.example.security` → `com.example.securi
 
 # Status
 
-review
+done
 
 # Owner
 
