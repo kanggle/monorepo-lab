@@ -20,7 +20,7 @@
  * screen NEVER submits a PO.
  */
 export { ReplenishmentScreen } from './components/ReplenishmentScreen';
-export { ReplenishmentActionDialog } from './components/ReplenishmentActionDialog';
+export { ReplenishmentConfirmDialog } from './components/ReplenishmentConfirmDialog';
 export { getReplenishmentSectionState } from './api/replenishment-state';
 export type { ReplenishmentSectionState } from './api/replenishment-state';
 export type {

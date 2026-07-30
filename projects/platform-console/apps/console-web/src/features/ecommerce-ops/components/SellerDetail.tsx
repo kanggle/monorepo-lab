@@ -17,7 +17,7 @@ import {
   type SellerLifecycleAction,
   type SellerDetail as SellerDetailType,
 } from '../api/seller-types';
-import { ConfirmDialog } from './ConfirmDialog';
+import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { DetailHeader } from '@/shared/ui/DetailHeader';
 
 /**
@@ -171,9 +171,14 @@ export function SellerDetail({ seller }: SellerDetailProps) {
         title={activeMeta?.title ?? ''}
         description={activeMeta ? activeMeta.describe(data.displayName) : ''}
         confirmLabel={activeMeta?.confirmLabel ?? ''}
-        tone={activeMeta?.tone ?? 'default'}
+        destructive={activeMeta?.tone === 'destructive'}
         pending={activeM?.isPending ?? false}
         errorMessage={actionError}
+        dialogTestId="ecommerce-confirm-dialog"
+        overlayTestId="ecommerce-confirm-overlay"
+        cancelTestId="ecommerce-confirm-cancel"
+        confirmTestId="ecommerce-confirm-confirm"
+        errorTestId="ecommerce-confirm-error"
         onConfirm={runAction}
         onCancel={() => {
           setPendingAction(null);

@@ -1,29 +1,22 @@
 'use client';
 
-import { type ReactNode, type RefObject } from 'react';
-import { Button } from '@/shared/ui/Button';
+import { type RefObject } from 'react';
 
 /**
- * Presentational body of {@link ConfirmActionDialog} (TASK-PC-FE-210 split).
- * Rendered INSIDE the container's `role="dialog"` frame — the reason / typed
- * state, the open-reset + auto-focus effect, the Escape / focus-trap key
- * handler, and both `dialogRef` / `reasonRef` stay in the container so the
- * `querySelectorAll` focus-trap and the ref auto-focus are byte-identical to
- * the pre-split component. This file only renders the title / description, the
- * reason field (attaching the container's `reasonRef`), the optional
- * typed-confirmation field (gdpr-delete), the inline error, and the footer.
- * Every `data-testid` / aria / class / copy is verbatim.
+ * Presentational body of {@link ConfirmActionDialog} (TASK-PC-FE-210 split,
+ * trimmed in TASK-PC-FE-262). Rendered as the shared `shared/ui/ConfirmDialog`
+ * primitive's `children`, INSIDE its `role="dialog"` frame — the reason /
+ * typed state, the open-reset effect and both refs stay in the container, and
+ * the shell (title / description / error banner / footer / focus trap / Escape)
+ * is now the shared primitive's job.
+ *
+ * This file therefore renders ONLY the two domain fields: the required reason
+ * textarea (attaching the container's `reasonRef`) and the optional
+ * typed-confirmation input (gdpr-delete). Every `data-testid` / aria / class /
+ * copy is verbatim.
  */
 export interface ConfirmActionDialogBodyProps {
-  title: string;
-  description: ReactNode;
-  destructive: boolean;
-  confirmLabel: string;
   requireTypedConfirmation?: string;
-  pending: boolean;
-  errorMessage?: string | null;
-  titleId: string;
-  descId: string;
   reasonId: string;
   typedId: string;
   reasonRef: RefObject<HTMLTextAreaElement | null>;
@@ -32,21 +25,10 @@ export interface ConfirmActionDialogBodyProps {
   typed: string;
   onTypedChange: (value: string) => void;
   reasonOk: boolean;
-  canConfirm: boolean;
-  onConfirm: () => void;
-  onCancel: () => void;
 }
 
 export function ConfirmActionDialogBody({
-  title,
-  description,
-  destructive,
-  confirmLabel,
   requireTypedConfirmation,
-  pending,
-  errorMessage,
-  titleId,
-  descId,
   reasonId,
   typedId,
   reasonRef,
@@ -55,29 +37,9 @@ export function ConfirmActionDialogBody({
   typed,
   onTypedChange,
   reasonOk,
-  canConfirm,
-  onConfirm,
-  onCancel,
 }: ConfirmActionDialogBodyProps) {
   return (
     <>
-      <h2
-        id={titleId}
-        className={
-          destructive
-            ? 'text-lg font-semibold text-destructive'
-            : 'text-lg font-semibold text-foreground'
-        }
-      >
-        {title}
-      </h2>
-      <div
-        id={descId}
-        className="mt-2 text-sm text-muted-foreground"
-      >
-        {description}
-      </div>
-
       <div className="mt-4">
         <label
           htmlFor={reasonId}
@@ -131,40 +93,6 @@ export function ConfirmActionDialogBody({
           />
         </div>
       )}
-
-      {errorMessage && (
-        <p
-          role="alert"
-          data-testid="confirm-error"
-          className="mt-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-        >
-          {errorMessage}
-        </p>
-      )}
-
-      <div className="mt-6 flex justify-end gap-3">
-        <Button
-          variant="secondary"
-          onClick={onCancel}
-          disabled={pending}
-          data-testid="confirm-cancel"
-        >
-          취소
-        </Button>
-        <Button
-          variant={destructive ? 'primary' : 'primary'}
-          onClick={onConfirm}
-          disabled={!canConfirm}
-          data-testid="confirm-submit"
-          className={
-            destructive
-              ? 'bg-destructive text-destructive-foreground hover:opacity-90'
-              : undefined
-          }
-        >
-          {pending ? '처리 중…' : confirmLabel}
-        </Button>
-      </div>
     </>
   );
 }

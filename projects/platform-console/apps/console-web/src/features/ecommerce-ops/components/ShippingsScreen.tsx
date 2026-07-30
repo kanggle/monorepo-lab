@@ -3,7 +3,7 @@
 import { Button } from '@/shared/ui/Button';
 import { messageForCode } from '@/shared/api/errors';
 import { type ShippingList } from '../api/shipping-types';
-import { ConfirmDialog } from './ConfirmDialog';
+import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { ShipFormDialog } from './ShipFormDialog';
 import { ShippingsTable } from './ShippingsTable';
 import { STATUS_FILTER_OPTIONS, statusLabel } from './shipping-labels';
@@ -156,9 +156,13 @@ export function ShippingsScreen({ shippings }: ShippingsScreenProps) {
         title="배송 상태를 변경할까요?"
         description={transitionDescription}
         confirmLabel={transitionConfirmLabel}
-        tone="default"
         pending={updateStatusPending}
         errorMessage={transitionError}
+        dialogTestId="ecommerce-confirm-dialog"
+        overlayTestId="ecommerce-confirm-overlay"
+        cancelTestId="ecommerce-confirm-cancel"
+        confirmTestId="ecommerce-confirm-confirm"
+        errorTestId="ecommerce-confirm-error"
         onConfirm={confirmTransition}
         onCancel={cancelTransition}
       />

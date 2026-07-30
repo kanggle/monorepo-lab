@@ -9,7 +9,7 @@ import {
   COMMISSION_RATE_MAX_BPS,
   rateBpsToPercent,
 } from '../api/settlement-types';
-import { ConfirmDialog } from './ConfirmDialog';
+import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 
 /**
  * Commission-rate SET form (TASK-PC-FE-221 Phase B). Confirm-gated PUT of a
@@ -146,6 +146,11 @@ export function CommissionRateForm({ onApplied }: CommissionRateFormProps) {
         confirmLabel="설정"
         pending={pending}
         errorMessage={error}
+        dialogTestId="ecommerce-confirm-dialog"
+        overlayTestId="ecommerce-confirm-overlay"
+        cancelTestId="ecommerce-confirm-cancel"
+        confirmTestId="ecommerce-confirm-confirm"
+        errorTestId="ecommerce-confirm-error"
         onConfirm={confirmSet}
         onCancel={() => {
           setConfirmOpen(false);

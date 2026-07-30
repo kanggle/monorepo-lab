@@ -10,7 +10,7 @@ import {
 } from '../api/settlement-types';
 import { SettlementPeriodsTable } from './SettlementPeriodsTable';
 import { PeriodOpenForm } from './PeriodOpenForm';
-import { ConfirmDialog } from './ConfirmDialog';
+import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 
 /**
  * Settlement periods section (TASK-PC-FE-221). Owns pagination + query; the
@@ -142,9 +142,14 @@ export function SettlementPeriodsSection({
         title="정산 기간을 마감할까요?"
         description={`기간 "${closingPeriodId ?? ''}"을(를) 마감합니다. 적립 라인이 PENDING 지급으로 접히고 정산 기간 마감 이벤트가 발행됩니다. 이 작업은 되돌릴 수 없습니다.`}
         confirmLabel="마감"
-        tone="destructive"
+        destructive
         pending={closeM.isPending}
         errorMessage={closeError}
+        dialogTestId="ecommerce-confirm-dialog"
+        overlayTestId="ecommerce-confirm-overlay"
+        cancelTestId="ecommerce-confirm-cancel"
+        confirmTestId="ecommerce-confirm-confirm"
+        errorTestId="ecommerce-confirm-error"
         onConfirm={runClose}
         onCancel={() => {
           setClosingPeriodId(null);

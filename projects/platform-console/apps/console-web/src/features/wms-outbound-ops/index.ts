@@ -11,7 +11,6 @@
  * (`getOperatorToken()`) — the #569 invariant is GAP-domain-scoped.
  */
 export { OutboundOpsScreen } from './components/OutboundOpsScreen';
-export { OutboundActionDialog } from './components/OutboundActionDialog';
 export { getOutboundSectionState } from './api/outbound-state';
 export type { OutboundSectionState } from './api/outbound-state';
 export type {

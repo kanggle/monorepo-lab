@@ -30,7 +30,6 @@ export { ProductDetail } from './components/ProductDetail';
 export { ProductForm } from './components/ProductForm';
 export { VariantEditor } from './components/VariantEditor';
 export { StockAdjustDialog } from './components/StockAdjustDialog';
-export { ConfirmDialog } from './components/ConfirmDialog';
 
 export {
   getProductsSectionState,

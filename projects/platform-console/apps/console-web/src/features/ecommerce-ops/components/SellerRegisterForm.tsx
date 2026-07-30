@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/shared/ui/Button';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import { useRegisterSeller } from '../hooks/use-ecommerce-sellers';
-import { ConfirmDialog } from './ConfirmDialog';
+import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 
 /**
  * Seller register form (TASK-PC-FE-090 — ADR-MONO-031 § 2.4.10.5).
@@ -150,6 +150,11 @@ export function SellerRegisterForm() {
         confirmLabel="등록"
         pending={pending}
         errorMessage={error}
+        dialogTestId="ecommerce-confirm-dialog"
+        overlayTestId="ecommerce-confirm-overlay"
+        cancelTestId="ecommerce-confirm-cancel"
+        confirmTestId="ecommerce-confirm-confirm"
+        errorTestId="ecommerce-confirm-error"
         onConfirm={confirmSubmit}
         onCancel={() => {
           setConfirmOpen(false);

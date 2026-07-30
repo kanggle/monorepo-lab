@@ -2,7 +2,7 @@
 
 import { Button } from '@/shared/ui/Button';
 import { PRODUCT_STATUS_VALUES, type ProductDetail } from '../api/types';
-import { ConfirmDialog } from './ConfirmDialog';
+import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { ProductVariantsFieldset } from './ProductVariantsFieldset';
 import { useProductForm } from '../hooks/use-product-form';
 
@@ -184,6 +184,13 @@ export function ProductForm({ existing }: ProductFormProps) {
         pending={pending}
         errorMessage={error}
         conflict={conflict}
+        dialogTestId="ecommerce-confirm-dialog"
+        overlayTestId="ecommerce-confirm-overlay"
+        cancelTestId="ecommerce-confirm-cancel"
+        confirmTestId="ecommerce-confirm-confirm"
+        errorTestId="ecommerce-confirm-error"
+        conflictTestId="ecommerce-confirm-conflict"
+        conflictMessage="상품 상태가 변경되었습니다. 최신 상태를 확인했습니다 — 계속하려면 다시 시도하세요."
         onConfirm={confirmSubmit}
         onCancel={cancelConfirm}
       />

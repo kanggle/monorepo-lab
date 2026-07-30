@@ -15,7 +15,7 @@ import {
   type PromotionList,
   type PromotionListParams,
 } from '../api/types';
-import { ConfirmDialog } from './ConfirmDialog';
+import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { PromotionsTable } from './PromotionsTable';
 
 /**
@@ -215,9 +215,14 @@ export function PromotionsScreen({ promotions }: PromotionsScreenProps) {
             : ''
         }
         confirmLabel="삭제"
-        tone="destructive"
+        destructive
         pending={del.isPending}
         errorMessage={delError}
+        dialogTestId="ecommerce-confirm-dialog"
+        overlayTestId="ecommerce-confirm-overlay"
+        cancelTestId="ecommerce-confirm-cancel"
+        confirmTestId="ecommerce-confirm-confirm"
+        errorTestId="ecommerce-confirm-error"
         onConfirm={confirmDelete}
         onCancel={() => {
           setToDelete(null);

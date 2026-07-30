@@ -9,7 +9,7 @@ import {
   type SuggestionPage,
   type SuggestionQueryParams,
 } from '../api/types';
-import { ReplenishmentActionDialog } from './ReplenishmentActionDialog';
+import { ReplenishmentConfirmDialog } from './ReplenishmentConfirmDialog';
 import { ApprovedDraftBanner } from './ApprovedDraftBanner';
 import { ReplenishmentFilters } from './ReplenishmentFilters';
 import { ReplenishmentListStates } from './ReplenishmentListStates';
@@ -152,7 +152,7 @@ export function ReplenishmentScreen({ suggestions }: ReplenishmentScreenProps) {
         />
       )}
 
-      <ReplenishmentActionDialog
+      <ReplenishmentConfirmDialog
         open={action !== null}
         title={copy?.title ?? ''}
         description={copy?.description ?? ''}

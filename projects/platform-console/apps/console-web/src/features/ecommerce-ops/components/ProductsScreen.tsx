@@ -15,7 +15,7 @@ import {
   type ProductList,
   type ProductListParams,
 } from '../api/types';
-import { ConfirmDialog } from './ConfirmDialog';
+import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { ProductsTable } from './ProductsTable';
 
 /**
@@ -192,9 +192,14 @@ export function ProductsScreen({ products }: ProductsScreenProps) {
             : ''
         }
         confirmLabel="삭제"
-        tone="destructive"
+        destructive
         pending={del.isPending}
         errorMessage={delError}
+        dialogTestId="ecommerce-confirm-dialog"
+        overlayTestId="ecommerce-confirm-overlay"
+        cancelTestId="ecommerce-confirm-cancel"
+        confirmTestId="ecommerce-confirm-confirm"
+        errorTestId="ecommerce-confirm-error"
         onConfirm={confirmDelete}
         onCancel={() => {
           setToDelete(null);
