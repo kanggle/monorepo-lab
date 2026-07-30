@@ -8,7 +8,7 @@ console-web migrate remaining 3 confirm-dialog instances to `shared/ui/ConfirmDi
 
 # Status
 
-review
+done
 
 # Owner
 
