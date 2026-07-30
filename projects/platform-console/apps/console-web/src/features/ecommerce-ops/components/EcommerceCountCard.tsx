@@ -1,7 +1,11 @@
 import Link from 'next/link';
 import { cn } from '@/shared/lib/cn';
-import type { AreaCount, CellStatus } from '../api/overview-state';
+import type { AreaCount } from '../api/overview-state';
 import { cellPlaceholder } from './overview-labels';
+import {
+  OVERVIEW_STATUS_DOT as SERVICE_STATUS_DOT,
+  OVERVIEW_STATUS_LABEL as SERVICE_STATUS_LABEL,
+} from '@/shared/lib/overview-cell';
 
 /**
  * Per-area count card for the ecommerce operator overview (TASK-PC-FE-199 —
@@ -9,26 +13,10 @@ import { cellPlaceholder } from './overview-labels';
  * the quick-launch `Link`; renders오늘/주간/월간 period metrics + 전체 total
  * (back-compat testids), or a compact "점검 필요" / "권한 없음" placeholder for a
  * non-`ok` cell. All `data-testid`s are unchanged.
+ *
+ * Per-area service-status dot/label vocabulary moved to
+ * `shared/lib/overview-cell.ts` (TASK-PC-FE-264 — 5-domain duplication).
  */
-
-/**
- * Per-area service-status indicator — mirrors the console-home "도메인 상태 요약"
- * dot vocabulary (DomainHealthSummaryCard). The cell status IS the per-service
- * signal here: `ok` means the area's list endpoint responded (service reachable +
- * authorized), `forbidden` is a 403 (no operator permission), `degraded` is a
- * 503/timeout/network reach failure. No extra fan-out — this reuses the count
- * cell's own resolved status.
- */
-const SERVICE_STATUS_DOT: Record<CellStatus, string> = {
-  ok: 'bg-green-500',
-  degraded: 'bg-red-500',
-  forbidden: 'bg-muted-foreground/40',
-};
-const SERVICE_STATUS_LABEL: Record<CellStatus, string> = {
-  ok: '정상',
-  degraded: '점검 필요',
-  forbidden: '권한 없음',
-};
 
 export function CountCard({ area }: { area: AreaCount }) {
   const ok = area.status === 'ok' && area.count !== null;

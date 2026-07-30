@@ -9,6 +9,11 @@ import type {
 } from '../api/overview-state';
 import { S5Warning } from './S5Warning';
 import { poStatusTone } from './scm-ops-helpers';
+import {
+  overviewCellPlaceholder as cellPlaceholder,
+  OVERVIEW_STATUS_DOT as SERVICE_STATUS_DOT,
+  OVERVIEW_STATUS_LABEL as SERVICE_STATUS_LABEL,
+} from '@/shared/lib/overview-cell';
 
 /**
  * scm operator **overview snapshot** presentation (TASK-PC-FE-167 — follows
@@ -35,21 +40,6 @@ const PO_STATUS_LABELS: Record<string, string> = {
   SETTLED: '정산',
   CLOSED: '마감',
   CANCELED: '취소',
-};
-
-function cellPlaceholder(status: CellStatus): string {
-  return status === 'forbidden' ? '권한 없음' : '점검 필요';
-}
-
-const SERVICE_STATUS_DOT: Record<CellStatus, string> = {
-  ok: 'bg-green-500',
-  degraded: 'bg-red-500',
-  forbidden: 'bg-muted-foreground/40',
-};
-const SERVICE_STATUS_LABEL: Record<CellStatus, string> = {
-  ok: '정상',
-  degraded: '점검 필요',
-  forbidden: '권한 없음',
 };
 
 function CountTile({ area }: { area: ScmAreaCount }) {

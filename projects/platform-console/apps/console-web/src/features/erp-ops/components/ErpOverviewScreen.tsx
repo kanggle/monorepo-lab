@@ -1,10 +1,11 @@
 import Link from 'next/link';
 import { cn } from '@/shared/lib/cn';
-import type {
-  ErpOverviewState,
-  ErpAreaCount,
-  CellStatus,
-} from '../api/overview-state';
+import type { ErpOverviewState, ErpAreaCount } from '../api/overview-state';
+import {
+  overviewCellPlaceholder as cellPlaceholder,
+  OVERVIEW_STATUS_DOT as SERVICE_STATUS_DOT,
+  OVERVIEW_STATUS_LABEL as SERVICE_STATUS_LABEL,
+} from '@/shared/lib/overview-cell';
 
 /**
  * erp domain **overview** landing (`/erp` — TASK-PC-FE-232). Server
@@ -29,21 +30,6 @@ import type {
 export interface ErpOverviewScreenProps {
   state: ErpOverviewState;
 }
-
-function cellPlaceholder(status: CellStatus): string {
-  return status === 'forbidden' ? '권한 없음' : '점검 필요';
-}
-
-const SERVICE_STATUS_DOT: Record<CellStatus, string> = {
-  ok: 'bg-green-500',
-  degraded: 'bg-red-500',
-  forbidden: 'bg-muted-foreground/40',
-};
-const SERVICE_STATUS_LABEL: Record<CellStatus, string> = {
-  ok: '정상',
-  degraded: '점검 필요',
-  forbidden: '권한 없음',
-};
 
 function CountTile({ area }: { area: ErpAreaCount }) {
   const ok = area.status === 'ok' && area.count !== null;
