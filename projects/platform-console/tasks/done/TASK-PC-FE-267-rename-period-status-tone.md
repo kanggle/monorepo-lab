@@ -8,7 +8,7 @@ console-web rename colliding `periodStatusTone` — disambiguate ledger vs ecomm
 
 # Status
 
-review
+done
 
 # Owner
 
