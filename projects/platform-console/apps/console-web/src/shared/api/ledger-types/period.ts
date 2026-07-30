@@ -24,7 +24,7 @@ const PERIOD_STATUS_TONE: Record<KnownPeriodStatus, StatusTone> = {
   CLOSED: 'success',
 };
 
-export function periodStatusTone(status: string): StatusTone {
+export function ledgerPeriodStatusTone(status: string): StatusTone {
   return PERIOD_STATUS_TONE[status as KnownPeriodStatus] ?? 'neutral';
 }
 
