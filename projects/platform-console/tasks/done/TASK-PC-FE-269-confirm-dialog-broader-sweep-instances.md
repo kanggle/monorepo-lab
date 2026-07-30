@@ -8,7 +8,7 @@ console-web migrate 4 more confirm-dialog instances (broader `role="dialog"` swe
 
 # Status
 
-review
+done
 
 # Owner
 
