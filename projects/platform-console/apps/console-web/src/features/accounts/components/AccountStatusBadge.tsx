@@ -6,7 +6,7 @@ import { StatusBadge, type StatusTone } from '@/shared/ui/StatusBadge';
  * `status` is a tolerant free string (the producer may add lifecycle states);
  * an unrecognised value renders `neutral` rather than crashing or being hidden.
  */
-export function accountStatusTone(status: string): StatusTone {
+export function iamAccountStatusTone(status: string): StatusTone {
   if (status === 'ACTIVE') return 'success';
   if (status === 'LOCKED') return 'danger';
   return 'neutral';
@@ -22,7 +22,7 @@ export function accountStatusTone(status: string): StatusTone {
  */
 export function AccountStatusBadge({ status }: { status: string }) {
   return (
-    <StatusBadge tone={accountStatusTone(status)} data-testid="account-status">
+    <StatusBadge tone={iamAccountStatusTone(status)} data-testid="account-status">
       {status}
     </StatusBadge>
   );

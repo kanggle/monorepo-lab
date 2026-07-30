@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  accountStatusTone,
+  financeAccountStatusTone,
   txnStatusTone,
 } from '@/features/finance-ops/api/types';
 import {
@@ -15,16 +15,16 @@ import {
  * Unknown/future status → `neutral` (tolerant — never a crash).
  */
 
-describe('accountStatusTone (finance)', () => {
+describe('financeAccountStatusTone (finance)', () => {
   it('maps each known account status to its semantic tone', () => {
-    expect(accountStatusTone('PENDING_KYC')).toBe('warning');
-    expect(accountStatusTone('ACTIVE')).toBe('success');
-    expect(accountStatusTone('RESTRICTED')).toBe('warning');
-    expect(accountStatusTone('FROZEN')).toBe('danger');
-    expect(accountStatusTone('CLOSED')).toBe('neutral');
+    expect(financeAccountStatusTone('PENDING_KYC')).toBe('warning');
+    expect(financeAccountStatusTone('ACTIVE')).toBe('success');
+    expect(financeAccountStatusTone('RESTRICTED')).toBe('warning');
+    expect(financeAccountStatusTone('FROZEN')).toBe('danger');
+    expect(financeAccountStatusTone('CLOSED')).toBe('neutral');
   });
   it('maps an unknown/future status to neutral', () => {
-    expect(accountStatusTone('FUTURE')).toBe('neutral');
+    expect(financeAccountStatusTone('FUTURE')).toBe('neutral');
   });
 });
 
