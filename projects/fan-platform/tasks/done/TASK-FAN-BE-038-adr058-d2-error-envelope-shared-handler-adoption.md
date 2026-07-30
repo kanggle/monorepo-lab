@@ -8,7 +8,7 @@ ADR-MONO-058 D2 (fan-platform only) — adopt `libs/java-web-servlet.CommonGloba
 
 # Status
 
-review
+done
 
 # Owner
 
