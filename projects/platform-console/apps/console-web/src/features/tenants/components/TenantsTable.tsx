@@ -2,20 +2,17 @@
 
 import Link from 'next/link';
 import { Button } from '@/shared/ui/Button';
-import { StatusBadge, type StatusTone } from '@/shared/ui/StatusBadge';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { formatDateTime } from '@/shared/lib/datetime';
 import {
   TENANT_STATUSES,
   TENANT_TYPES,
+  tenantStatusTone,
   type Tenant,
   type TenantPage,
   type TenantStatus,
   type TenantType,
 } from '../api/types';
-
-function tenantStatusTone(status: string): StatusTone {
-  return status === 'ACTIVE' ? 'success' : status === 'SUSPENDED' ? 'warning' : 'neutral';
-}
 
 function tenantTypeLabel(tenantType: string): string {
   if (tenantType === 'B2C_CONSUMER') return 'B2C';

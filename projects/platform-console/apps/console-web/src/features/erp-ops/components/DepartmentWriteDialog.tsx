@@ -8,7 +8,7 @@ import {
   departmentWriteErrorMessage,
   type DeptWriteMode,
   type DeptWriteRequest,
-} from './use-department-write';
+} from '../hooks/use-department-write';
 
 /**
  * Department write PILOT dialog (TASK-PC-FE-046 / § 2.4.8 *Department

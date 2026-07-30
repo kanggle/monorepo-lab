@@ -9,7 +9,7 @@ import {
   type OperatorPage,
   type OperatorListParams,
 } from '../api/types';
-import { listKey } from './operators-keys';
+import { listKey } from '../api/operators-keys';
 
 // --- read: list -----------------------------------------------------------
 

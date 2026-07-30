@@ -1,7 +1,7 @@
 import type { PeriodsResponse } from '../api/types';
 import { PeriodsTable } from './PeriodsTable';
 import { PeriodDetail } from './PeriodDetail';
-import type { useLedgerOpsState } from './use-ledger-ops-state';
+import type { useLedgerOpsState } from '../hooks/use-ledger-ops-state';
 
 type S = ReturnType<typeof useLedgerOpsState>;
 

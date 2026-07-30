@@ -12,7 +12,7 @@ import { statusToneClass, type StatusTone } from '@/shared/ui/StatusBadge';
 import { approvalErrorMessage } from './approval-error';
 import { formatDateTime } from '@/shared/lib/datetime';
 import { SUBJECT_LABEL, statusLabel, StatusBadge } from './approval-common';
-import { useApprovalDetail } from './use-approval-detail';
+import { useApprovalDetail } from '../hooks/use-approval-detail';
 
 // ===========================================================================
 // Detail view — status badge + history timeline + state-gated actions.

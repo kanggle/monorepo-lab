@@ -4,7 +4,7 @@ import { messageForCode } from '@/shared/api/errors';
 import { FxRatesTable } from './FxRatesTable';
 import { FxRateHistoryLookup } from './FxRateHistoryLookup';
 import { FxRateHistoryTable } from './FxRateHistoryTable';
-import type { useLedgerOpsState } from './use-ledger-ops-state';
+import type { useLedgerOpsState } from '../hooks/use-ledger-ops-state';
 
 type S = ReturnType<typeof useLedgerOpsState>;
 

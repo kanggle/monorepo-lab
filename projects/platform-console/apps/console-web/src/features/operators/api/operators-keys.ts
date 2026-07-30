@@ -1,7 +1,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { type OperatorListParams } from '../api/types';
+import { type OperatorListParams } from './types';
 
 /**
  * Shared React Query key factory + list invalidation helper for the operators

@@ -6,7 +6,7 @@ import {
   useMasterWriteForm,
   masterWriteErrorMessage,
   PAYMENT_METHODS,
-} from './use-master-write';
+} from '../hooks/use-master-write';
 
 /**
  * Generic master write dialog (TASK-PC-FE-048) — drives create / update /

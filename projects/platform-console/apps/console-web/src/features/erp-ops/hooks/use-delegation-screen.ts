@@ -6,7 +6,7 @@ import {
   useDelegations,
   useCreateDelegation,
   useRevokeDelegation,
-} from '../hooks/use-erp-ops';
+} from './use-erp-ops';
 
 /**
  * `<DelegationScreen>` container hook (TASK-PC-FE-150 — behaviour-

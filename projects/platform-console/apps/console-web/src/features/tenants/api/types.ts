@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { StatusTone } from '@/shared/ui/StatusBadge';
 
 /**
  * Feature-local types for the IAM tenant-management surface (TASK-PC-FE-226).
@@ -32,6 +33,10 @@ export type TenantType = (typeof TENANT_TYPES)[number];
 
 export const TENANT_STATUSES = ['ACTIVE', 'SUSPENDED'] as const;
 export type TenantStatus = (typeof TENANT_STATUSES)[number];
+
+export function tenantStatusTone(status: string): StatusTone {
+  return status === 'ACTIVE' ? 'success' : status === 'SUSPENDED' ? 'warning' : 'neutral';
+}
 
 // --- tenant_id validation (contract § "Tenant ID 규칙") ---------------------
 

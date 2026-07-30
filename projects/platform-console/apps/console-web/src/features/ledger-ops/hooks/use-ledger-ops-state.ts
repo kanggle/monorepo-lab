@@ -20,9 +20,9 @@ import {
   useFxRates,
   useFxRateHistory,
   useRefreshFxRates,
-} from '../hooks/use-ledger-ops';
+} from './use-ledger-ops';
 import { ApiError } from '@/shared/api/errors';
-import type { TabKey } from './LedgerOpsTabs';
+import type { TabKey } from '../components/LedgerOpsTabs';
 
 /**
  * Container state for the ledger ops screen (TASK-PC-FE-106 split). Holds the
