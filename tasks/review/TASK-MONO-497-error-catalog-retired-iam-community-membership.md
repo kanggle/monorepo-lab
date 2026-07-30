@@ -1,6 +1,6 @@
 # TASK-MONO-497 — Error catalog stale sections: `Community`/`Membership [domain: saas]` never updated after TASK-MONO-394 retirement
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-MONO
 **Analysis model:** Sonnet 5 / **Recommended impl model:** Sonnet 5 (documentation correction with an already-settled precedent — no new decision, just applying the repo's existing RETIRED convention)
