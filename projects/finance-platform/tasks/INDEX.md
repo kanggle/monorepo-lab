@@ -78,11 +78,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-FIN-BE-064-finance-common-money-currency-module-extraction.md` — **ADR-003 (ACCEPTED 2026-07-30) Option A 실행.** `account-service`/`ledger-service` 가 각자 선언한 near-byte-identical `Money`/`Currency`(+ 중첩 예외 2종)를 저장소 **최초의 프로젝트 범위 공유 Gradle 모듈** `projects:finance-platform:libs:finance-common`(package `com.example.finance.common.money`)로 이관하고 양 서비스가 의존. 이관본은 두 사본의 **합집합**(ledger 전용 `Money.absoluteDifference` + `Currency.ofOrThrow` 보존) — shape/API/불변식은 ADR §5 대로 byte-unchanged. `LedgerReportingCurrency` 는 ledger 소유로 잔류. 신규 구조 패턴이므로 `CLAUDE.md § Repository Layout` + `platform/repository-structure.md`(자체 Change Rule) + `platform/architecture.md` 레이아웃 서술 동시 갱신, ci.yml finance Docker-free 스텝에 신규 모듈 `check` 추가(미추가 시 모듈 테스트가 CI 에서 영원히 미실행).
-
 ## in-progress
 
-(empty)
+- `TASK-FIN-BE-064-finance-common-money-currency-module-extraction.md` — **ADR-003 (ACCEPTED 2026-07-30) Option A 실행.** `account-service`/`ledger-service` 가 각자 선언한 near-byte-identical `Money`/`Currency`(+ 중첩 예외 2종)를 저장소 **최초의 프로젝트 범위 공유 Gradle 모듈** `projects:finance-platform:libs:finance-common`(package `com.example.finance.common.money`)로 이관하고 양 서비스가 의존. 이관본은 두 사본의 **합집합**(ledger 전용 `Money.absoluteDifference` + `Currency.ofOrThrow` 보존) — shape/API/불변식은 ADR §5 대로 byte-unchanged. `LedgerReportingCurrency` 는 ledger 소유로 잔류. 신규 구조 패턴이므로 `CLAUDE.md § Repository Layout` + `platform/repository-structure.md`(자체 Change Rule) + `platform/architecture.md` 레이아웃 서술 동시 갱신, ci.yml finance Docker-free 스텝에 신규 모듈 `check` 추가(미추가 시 모듈 테스트가 CI 에서 영원히 미실행).
 
 ## review
 
