@@ -118,7 +118,7 @@ class OAuth2ResourceServerConfigTest {
      */
     private static OAuth2ResourceServerConfig configWithDefaults() {
         return new OAuth2ResourceServerConfig(
-                "http://iam.local/.well-known/jwks.json", "http://iam.local,iam", "fan-platform");
+                "http://iam.local/oauth2/jwks", "http://iam.local,iam", "fan-platform");
     }
 
     private static Object readField(Object target, String name) throws Exception {

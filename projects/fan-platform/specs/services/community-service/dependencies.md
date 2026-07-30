@@ -32,7 +32,7 @@ Declared in `apps/community-service/build.gradle`:
 ### IAM IdP — OIDC Resource Server
 
 - Issuer: `${OIDC_ISSUER_URL}` (default `http://iam.local`).
-- JWKS: `${OIDC_JWK_SET_URI}` or `${JWT_JWKS_URI}` or `${OIDC_ISSUER_URL}/.well-known/jwks.json`.
+- JWKS: `${OIDC_JWK_SET_URI}` or `${JWT_JWKS_URI}` or `${OIDC_ISSUER_URL}/oauth2/jwks`.
 - Algorithm: RS256 only.
 - Required claims: `iss` (∈ allowed-issuers), `sub`, `tenant_id` ∈ `{ fan-platform, * }`, `exp`, `nbf`, `iat`.
 - Optional: `roles[]` or `role` string for OPERATOR / SUPER_ADMIN authorization.

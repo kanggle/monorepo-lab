@@ -10,8 +10,8 @@ import java.net.InetAddress;
 
 /**
  * Wraps a {@link MockWebServer} serving the JWKS JSON document at
- * {@code /.well-known/jwks.json} (the end-user decoder). Bound to all interfaces
- * so containers can reach it.
+ * {@code /oauth2/jwks} (the real IAM auth-service route, end-user decoder).
+ * Bound to all interfaces so containers can reach it.
  */
 public final class JwksMockServer implements AutoCloseable {
 
@@ -25,7 +25,7 @@ public final class JwksMockServer implements AutoCloseable {
             @Override
             public MockResponse dispatch(RecordedRequest request) {
                 String path = request.getPath();
-                if (path != null && path.startsWith("/.well-known/jwks.json")) {
+                if (path != null && path.startsWith("/oauth2/jwks")) {
                     return new MockResponse()
                             .setResponseCode(200)
                             .setHeader("Content-Type", "application/json")
@@ -38,7 +38,7 @@ public final class JwksMockServer implements AutoCloseable {
     }
 
     public String hostJwksUrl() {
-        return "http://" + server.getHostName() + ":" + server.getPort() + "/.well-known/jwks.json";
+        return "http://" + server.getHostName() + ":" + server.getPort() + "/oauth2/jwks";
     }
 
     @Override
