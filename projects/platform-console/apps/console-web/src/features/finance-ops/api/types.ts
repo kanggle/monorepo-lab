@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import type { StatusTone } from '@/shared/ui/StatusBadge';
+import { MoneySchema } from '@/shared/lib/money';
+import {
+  FinanceMetaSchema,
+  type FinanceMeta,
+} from '@/shared/api/finance-accounts-types';
 
 /**
  * Feature-local types for the finance `account-service`'s read-only
@@ -45,187 +50,55 @@ import type { StatusTone } from '@/shared/ui/StatusBadge';
 
 // ---------------------------------------------------------------------------
 // F5 money — string-encoded integer minor units + ISO-4217 currency.
+//
+// TASK-PC-FE-259: the Money primitive itself now lives in
+// `shared/lib/money.ts`. It was declared here AND, character-for-character
+// identically, in `features/ledger-ops/api/types/money.ts` — and a third
+// feature (`features/finance-overview`) cross-imported this copy, which
+// `architecture.md` § Forbidden Dependencies forbids ("공유 가치는 `shared/`
+// 로 승격"). The single definition is promoted; this module re-exports it so
+// every finance-ops consumer (`BalancesTable`, `TransactionsTable`, the
+// `TransactionSchema` that composes `MoneySchema`, …) keeps its existing
+// `../api/types` import unchanged. 0 behavior change — the promoted
+// implementation is byte-identical.
 // ---------------------------------------------------------------------------
 
-/**
- * Money — F5 contract shape: `{ amount, currency }` where `amount` is a
- * precision-exact **string** of integer minor units (e.g. KRW
- * `"1234567890123"`), NEVER a `number`. `currency` is ISO-4217 (3 chars).
- * Producer-side scale: KRW=0 (no decimals), USD=2 (cents).
- *
- * Why a string regex (and NEVER `z.number()`): a JS `Number` is an IEEE
- * 754 float — precision loss on large minor-units values (e.g. KRW
- * `2^54+1`). The regex is the parser-level guarantee that we never
- * accidentally hand the UI a Number-shaped amount.
- */
-export const MoneySchema = z.object({
-  amount: z.string().regex(/^-?\d+$/, 'amount must be an integer string (F5)'),
-  currency: z.string().min(3).max(3),
-});
-export type Money = z.infer<typeof MoneySchema>;
-
-/** Per-currency minor-unit scale (digits after the decimal point in the
- *  presentation form). Producer source = `account-api.md` § Money. */
-export const DEFAULT_CURRENCY_SCALES: Readonly<Record<string, number>> = {
-  KRW: 0,
-  USD: 2,
-  EUR: 2,
-  JPY: 0,
-  GBP: 2,
-};
-
-/**
- * Renders a Money value scale-correct, **from the string minor-units**
- * — no float / `Number(...)` / `parseFloat(...)` / `parseInt(...)` is
- * applied to `amount` (F5 invariant; a test grep-asserts this).
- *
- * String manipulation only:
- *   - locate the sign (if any) and operate on the digit body;
- *   - left-pad to >= scale+1 digits;
- *   - splice in a decimal point (scale > 0) or use the digits as-is
- *     (scale = 0);
- *   - re-attach the sign + the currency.
- *
- * An unknown currency falls back to a sensible default scale (0,
- * tolerant-parser discipline) — no throw.
- */
-export function formatMoney(
-  money: Money,
-  scales: Readonly<Record<string, number>> = DEFAULT_CURRENCY_SCALES,
-): string {
-  const scale = scales[money.currency] ?? 0;
-  const isNegative = money.amount.startsWith('-');
-  const digits = isNegative ? money.amount.slice(1) : money.amount;
-  // We deliberately work with the string; integer length comparisons are
-  // string-length, not numeric — no Number coercion of `amount`.
-  let body: string;
-  if (scale <= 0) {
-    body = digits;
-  } else {
-    // Left-pad so we have at least `scale + 1` digits, then splice the
-    // decimal in.
-    const padded =
-      digits.length > scale ? digits : '0'.repeat(scale - digits.length + 1) + digits;
-    const intPart = padded.slice(0, padded.length - scale);
-    const fracPart = padded.slice(padded.length - scale);
-    body = `${intPart}.${fracPart}`;
-  }
-  return `${isNegative ? '-' : ''}${body} ${money.currency}`;
-}
+export { MoneySchema, DEFAULT_CURRENCY_SCALES, formatMoney } from '@/shared/lib/money';
+export type { Money } from '@/shared/lib/money';
 
 // ---------------------------------------------------------------------------
-// Balances — per-currency ledger/available/held as F5 money.
-//   GET /api/finance/accounts/{id}/balances → { data: [ Balance ], meta }
+// Account + balances read shapes — promoted to `shared/api/finance-accounts-types.ts`
+// (TASK-PC-FE-259).
+//
+// `features/finance-overview` (the `/finance` landing) renders the operator's
+// default-account snapshot from the SAME shapes, so they are consumed by two
+// features — `architecture.md` § Forbidden Dependencies says a shared value is
+// promoted to `shared/`, not cross-imported. Re-exported here so this module
+// stays the finance-ops public type surface (console-integration-contract
+// § 2.4.7) and every existing `../api/types` import is unchanged. The
+// TRANSACTION shapes below are NOT promoted — single consumer, feature-local.
 // ---------------------------------------------------------------------------
 
-export const BalanceSchema = z.object({
-  currency: z.string().min(3).max(3),
-  // ledger / available / held are all F5 minor-units STRINGS (the
-  // producer balances response carries these as raw minor-units strings,
-  // not wrapped Money objects — `account-api.md` § GET balances). They
-  // are REQUIRED money fields (never optional/discardable — F5).
-  ledger: z.string().regex(/^-?\d+$/, 'ledger must be an integer string (F5)'),
-  available: z
-    .string()
-    .regex(/^-?\d+$/, 'available must be an integer string (F5)'),
-  held: z.string().regex(/^-?\d+$/, 'held must be an integer string (F5)'),
-});
-export type Balance = z.infer<typeof BalanceSchema>;
-
-/** finance success envelope: `{ data, meta: { timestamp } }`. */
-export const FinanceMetaSchema = z
-  .object({
-    timestamp: z.string().optional(),
-    page: z.number().int().nonnegative().optional(),
-    size: z.number().int().positive().optional(),
-    totalElements: z.number().int().nonnegative().optional(),
-  })
-  .passthrough();
-export type FinanceMeta = z.infer<typeof FinanceMetaSchema>;
-
-export const BalancesResponseSchema = z.object({
-  data: z.array(BalanceSchema),
-  meta: FinanceMetaSchema,
-});
-export type BalancesResponse = z.infer<typeof BalancesResponseSchema>;
-
-/**
- * Convenience accessor that materialises a Balance row's three
- * minor-units strings as Money objects for the same `currency`. Pure
- * string transformation (no `Number(...)`).
- */
-export function balanceMoney(b: Balance): {
-  ledger: Money;
-  available: Money;
-  held: Money;
-} {
-  return {
-    ledger: { amount: b.ledger, currency: b.currency },
-    available: { amount: b.available, currency: b.currency },
-    held: { amount: b.held, currency: b.currency },
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Account — GET /api/finance/accounts/{id}
-//   account-api.md: { data: { accountId, status, currency, kycLevel,
-//     balances: [...], createdAt, updatedAt }, meta }
-// ---------------------------------------------------------------------------
-
-/** Producer status enum surfaced HONESTLY (FROZEN / RESTRICTED / CLOSED
- *  shown as-is, never hidden — § 2.4.7). Stored as a free string so
- *  unknown / future values render generically (no parser throw,
- *  tolerant-parser discipline). */
-export const KNOWN_ACCOUNT_STATUSES = [
-  'PENDING_KYC',
-  'ACTIVE',
-  'RESTRICTED',
-  'FROZEN',
-  'CLOSED',
-] as const;
-export type KnownAccountStatus = (typeof KNOWN_ACCOUNT_STATUSES)[number];
-
-/**
- * Account status → shared semantic {@link StatusTone} (rendered via the shared
- * `<StatusBadge>` — TASK-PC-FE-159). The regulated states are surfaced HONESTLY
- * (§ 2.4.7): ACTIVE is good (success); PENDING_KYC / RESTRICTED need attention
- * (warning); FROZEN is a hard block (danger); CLOSED is terminal-inactive
- * (neutral). An unknown/future status → `neutral` (tolerant — never a throw).
- */
-const ACCOUNT_STATUS_TONE: Record<KnownAccountStatus, StatusTone> = {
-  PENDING_KYC: 'warning',
-  ACTIVE: 'success',
-  RESTRICTED: 'warning',
-  FROZEN: 'danger',
-  CLOSED: 'neutral',
-};
-
-export function accountStatusTone(status: string): StatusTone {
-  return ACCOUNT_STATUS_TONE[status as KnownAccountStatus] ?? 'neutral';
-}
-
-export const KNOWN_KYC_LEVELS = ['NONE', 'BASIC', 'FULL'] as const;
-export type KnownKycLevel = (typeof KNOWN_KYC_LEVELS)[number];
-
-export const AccountSchema = z
-  .object({
-    accountId: z.string(),
-    // tolerated as free string (unknown → generic label).
-    status: z.string(),
-    currency: z.string().min(3).max(3),
-    kycLevel: z.string().optional(),
-    balances: z.array(BalanceSchema).optional(),
-    createdAt: z.string().optional(),
-    updatedAt: z.string().nullable().optional(),
-  })
-  .passthrough();
-export type Account = z.infer<typeof AccountSchema>;
-
-export const AccountResponseSchema = z.object({
-  data: AccountSchema,
-  meta: FinanceMetaSchema,
-});
-export type AccountResponse = z.infer<typeof AccountResponseSchema>;
+export {
+  BalanceSchema,
+  FinanceMetaSchema,
+  BalancesResponseSchema,
+  balanceMoney,
+  KNOWN_ACCOUNT_STATUSES,
+  accountStatusTone,
+  KNOWN_KYC_LEVELS,
+  AccountSchema,
+  AccountResponseSchema,
+} from '@/shared/api/finance-accounts-types';
+export type {
+  Balance,
+  FinanceMeta,
+  BalancesResponse,
+  KnownAccountStatus,
+  KnownKycLevel,
+  Account,
+  AccountResponse,
+} from '@/shared/api/finance-accounts-types';
 
 // ---------------------------------------------------------------------------
 // Transactions — GET /api/finance/accounts/{id}/transactions

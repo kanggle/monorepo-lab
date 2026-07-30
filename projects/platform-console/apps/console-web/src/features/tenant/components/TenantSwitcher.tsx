@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useState } from 'react';
-import { useTenantSwitch } from '../hooks/use-tenant-switch';
+import { useTenantSwitch } from '@/shared/api/use-tenant-switch';
 import type { CompanyGroup } from '../lib/tenant-options';
 
 interface Props {

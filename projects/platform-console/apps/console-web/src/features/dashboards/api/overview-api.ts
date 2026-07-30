@@ -1,6 +1,6 @@
-import { searchAccounts } from '@/features/accounts/api/accounts-api';
-import { queryAudit } from '@/features/audit/api/audit-api';
-import { listOperators } from '@/features/operators/api/operators-api';
+import { searchAccounts } from '@/shared/api/iam-accounts-read';
+import { queryAudit } from '@/shared/api/iam-audit-read';
+import { listOperators } from '@/shared/api/iam-operators-read';
 import {
   ApiError,
   AccountsUnavailableError,
@@ -27,13 +27,25 @@ import {
  * `/api/dashboards` proxy, which composes server-side.
  *
  * NO NEW PRODUCER (ADR-MONO-015 D1): this is a **bounded fan-out** over the
- * EXISTING FE-002/003/004 server clients (`searchAccounts` / `queryAudit` /
+ * EXISTING FE-002/003/004 server reads (`searchAccounts` / `queryAudit` /
  * `listOperators`). It does NOT duplicate or invent a IAM client — every
  * hardened call site (operator-token bearer via `getOperatorToken()` —
  * NEVER `getAccessToken()`, `X-Tenant-Id` from `getActiveTenant()`,
  * AbortController hard timeout, structured no-PII logging) is inherited
  * unchanged from those clients. This file is ONLY the composition +
  * per-source isolation + the overview view-model.
+ *
+ * TASK-PC-FE-259 — those three reads are consumed by this feature AND by
+ * `features/{accounts,audit,operators}` AND by `features/iam-overview`, so
+ * they live in `shared/api/iam-{accounts,audit,operators}-read.ts`. Earlier
+ * revisions imported them straight out of each feature's own `api/` folder,
+ * which `architecture.md` § Forbidden Dependencies bars — "같은 계층
+ * `features/A → features/B` 상호 참조 금지, 공유 가치는 `shared/` 로 승격".
+ * The composition itself STAYS here: console-integration-contract § 3.1
+ * **row 16** pins `features/dashboards` `getOperatorOverview` as the console
+ * binding for the ADR-MONO-015-refined "dashboards" parity capability, and
+ * each feature still re-exports its read on its own § 3.1-pinned path, so the
+ * 16-row parity attestation is unchanged.
  *
  * READ-ONLY (§ 2.4.4 — mirrors the FE-003 read discipline): every leg is a
  * GET; there is NO `X-Operator-Reason`, NO `Idempotency-Key`, NO confirm

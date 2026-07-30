@@ -81,64 +81,35 @@ export type GrantableRolesResponse = z.infer<
   typeof GrantableRolesResponseSchema
 >;
 
-// --- operator status ------------------------------------------------------
+// --- operator status + list (GET /api/admin/operators) --------------------
+//
+// TASK-PC-FE-259 — the list wire shapes were promoted to
+// `shared/api/iam-operators-read.ts`: `features/dashboards` (§ 2.4.4 composed
+// overview, leg 3) and `features/iam-overview` (`/iam` landing) consume the
+// same read, and `architecture.md` § Forbidden Dependencies bars a
+// `features/A → features/B` import ("공유 가치는 `shared/` 로 승격").
+// Re-exported here so this module stays the operators public type surface and
+// every existing `../api/types` import is unchanged. The privilege-sensitive
+// CREATE / ROLES / STATUS / PASSWORD / PROFILE / ORG-SCOPE shapes below are
+// NOT promoted — single consumer, feature-local (§ 3.1 rows 12–15, 17–18).
 
-export const OPERATOR_STATUSES = ['ACTIVE', 'SUSPENDED'] as const;
-export type OperatorStatus = (typeof OPERATOR_STATUSES)[number];
-
-// --- list (GET /api/admin/operators) --------------------------------------
-
-/**
- * Per-operator profile carrier (TASK-BE-308). Optional field on each list-
- * response item — omitted by the producer when the operator's
- * {@code finance_default_account_id} is NULL (field-level
- * {@code @JsonInclude.NON_NULL}); present with
- * {@code { defaultAccountId: "<uuid>" }} when set. The shape is byte-
- * identical to the registry response item carrier and the
- * {@code me/profile} + {@code admin/{operatorId}/profile} request bodies
- * (admin-api.md § "carrier shape 대칭성"). Strict on the nested key set —
- * a forward-compat new sibling key (e.g. wmsDefaultWarehouseId) is a
- * fail-fast signal, not a silent acceptance.
- */
-export const OperatorContextSchema = z.object({
-  defaultAccountId: z.string().optional(),
-});
-export type OperatorContext = z.infer<typeof OperatorContextSchema>;
-
-export const OperatorSummarySchema = z.object({
-  operatorId: z.string(),
-  email: z.string(),
-  displayName: z.string(),
-  // Producer documents ACTIVE/SUSPENDED; keep as string so an unknown
-  // future status never crashes the list render.
-  status: z.string(),
-  // Role members are strings (unknown/future role ⇒ generic chip, no crash).
-  roles: z.array(z.string()),
-  totpEnrolled: z.boolean().optional(),
-  lastLoginAt: z.string().nullable().optional(),
-  createdAt: z.string(),
-  // TASK-BE-308 — optional profile carrier; PC-FE-018 consumer reads
-  // operatorContext?.defaultAccountId to pre-populate the admin
-  // profile-edit dialog with the operator's current value.
-  operatorContext: OperatorContextSchema.optional(),
-});
-export type OperatorSummary = z.infer<typeof OperatorSummarySchema>;
-
-export const OperatorPageSchema = z.object({
-  content: z.array(OperatorSummarySchema),
-  totalElements: z.number().int().nonnegative(),
-  page: z.number().int().nonnegative(),
-  size: z.number().int().positive(),
-  totalPages: z.number().int().nonnegative(),
-});
-export type OperatorPage = z.infer<typeof OperatorPageSchema>;
-
-export interface OperatorListParams {
-  /** ACTIVE | SUSPENDED filter; undefined ⇒ all. */
-  status?: OperatorStatus;
-  page?: number;
-  size?: number;
-}
+// NOTE: the pure-zod `iam-operators-types` module, NOT the server
+// `iam-operators-read` client — this module is imported by CLIENT components
+// (`ChangePasswordForm`, `AccountSelfService`, the operators hooks) and the
+// read client reaches `next/headers`.
+export {
+  OPERATOR_STATUSES,
+  OperatorContextSchema,
+  OperatorSummarySchema,
+  OperatorPageSchema,
+} from '@/shared/api/iam-operators-types';
+export type {
+  OperatorStatus,
+  OperatorContext,
+  OperatorSummary,
+  OperatorPage,
+  OperatorListParams,
+} from '@/shared/api/iam-operators-types';
 
 // --- create (POST /api/admin/operators) -----------------------------------
 

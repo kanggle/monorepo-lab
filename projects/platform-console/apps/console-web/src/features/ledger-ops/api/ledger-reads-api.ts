@@ -1,13 +1,8 @@
 import {
-  TrialBalanceSchema,
-  type TrialBalance,
   JournalEntrySchema,
   type JournalEntry,
   PeriodSchema,
   type Period,
-  PeriodsResponseSchema,
-  type PeriodsResponse,
-  type PeriodsQueryParams,
   AccountBalanceSchema,
   type AccountBalance,
   AccountEntriesResponseSchema,
@@ -17,50 +12,27 @@ import {
   type Statement,
   PositionLotsResponseSchema,
   type PositionLotsResponse,
-  FxRatesResponseSchema,
-  type FxRatesResponse,
   FxRateHistoryResponseSchema,
   type FxRateHistoryResponse,
 } from './types';
-import { callLedger, pageParams } from './ledger-client';
+import { callLedger, pageParams } from '@/shared/api/ledger-client';
 
-// ---------------------------------------------------------------------------
-// trial balance — GET /api/finance/ledger/trial-balance
-//   ledger-api.md § 4 envelope = { data: TrialBalance, meta }. READ-ONLY.
-//   Index-style browsable read (no input — tenant-scoped from the JWT).
-// ---------------------------------------------------------------------------
-
-export async function getTrialBalance(): Promise<TrialBalance> {
-  return callLedger(
-    {
-      path: '/api/finance/ledger/trial-balance',
-      logPath: '/api/finance/ledger/trial-balance',
-    },
-    (json) => {
-      const env = (json ?? {}) as { data?: unknown };
-      return TrialBalanceSchema.parse(env.data);
-    },
-  );
-}
-
-// ---------------------------------------------------------------------------
-// accounting periods (list) — GET /api/finance/ledger/periods?page=&size=
-//   ledger-api.md § 7 envelope = { data: [ Period (no snapshot) ], meta }.
-// ---------------------------------------------------------------------------
-
-export async function listPeriods(
-  params: PeriodsQueryParams = {},
-): Promise<PeriodsResponse> {
-  const qs = new URLSearchParams();
-  pageParams(qs, params.page, params.size);
-  return callLedger(
-    {
-      path: `/api/finance/ledger/periods?${qs.toString()}`,
-      logPath: '/api/finance/ledger/periods',
-    },
-    (json) => PeriodsResponseSchema.parse(json),
-  );
-}
+/**
+ * TASK-PC-FE-259 — `getTrialBalance`, `listPeriods` and `getFxRates` were
+ * promoted to `shared/api/ledger-overview-read.ts` because
+ * `features/finance-overview` consumes the same three reads for the
+ * `/finance` landing snapshot, and `architecture.md` § Forbidden Dependencies
+ * bars a `features/A → features/B` import ("공유 가치는 `shared/` 로 승격").
+ * They are re-exported here so the `ledger-api` barrel — the public surface
+ * consumed by the `app/api/ledger/**` proxy routes, the ledger screens and the
+ * existing tests — is unchanged. Every read below has a single consumer and
+ * stays feature-local, using the SAME shared hardened call site.
+ */
+export {
+  getTrialBalance,
+  listPeriods,
+  getFxRates,
+} from '@/shared/api/ledger-overview-read';
 
 // ---------------------------------------------------------------------------
 // accounting period (detail) — GET /api/finance/ledger/periods/{periodId}
@@ -284,28 +256,10 @@ export async function getPositionLots(
 //   `logPath` is a fixed constant (no id/code/currency to sanitise).
 // ---------------------------------------------------------------------------
 
-/**
- * `getFxRates()` — reads the FX feed cache from the ledger service.
- * Returns `{ feedEnabled, rates }` where each rate carries a pair of
- * currency codes, the exact decimal `rate` **string** (F5 — NOT a float),
- * freshness timestamps, `ageSeconds` (duration, not money), and `stale`.
- * READ-ONLY. The domain-facing IAM OIDC access token is attached by
- * `callLedger`; NEVER `getOperatorToken()`. No path parameters — global
- * list. An empty cache is a normal `200` (`rates: []`) — NOT a 404.
- */
-export async function getFxRates(): Promise<FxRatesResponse> {
-  return callLedger(
-    {
-      path: '/api/finance/ledger/fx-rates',
-      // No id / code / currency to sanitise — the path is already generic.
-      logPath: '/api/finance/ledger/fx-rates',
-    },
-    (json) => {
-      const env = (json ?? {}) as { data?: unknown };
-      return FxRatesResponseSchema.parse(env.data);
-    },
-  );
-}
+//   `getFxRates()` itself is defined in `shared/api/ledger-overview-read.ts`
+//   (TASK-PC-FE-259 promotion — two consuming features) and re-exported from
+//   the top of this module, so this section header still documents the read
+//   next to its ledger-ops siblings.
 
 // ---------------------------------------------------------------------------
 // FX 환율 history 드릴 — TASK-PC-FE-104

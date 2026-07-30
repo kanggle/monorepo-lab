@@ -2,12 +2,12 @@ import Link from 'next/link';
 import { Card } from '@/shared/ui/Card';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { labelForUnknown } from '@/shared/lib/tolerant-label';
+import { formatMoney } from '@/shared/lib/money';
 import {
   KNOWN_ACCOUNT_STATUSES,
   accountStatusTone,
   balanceMoney,
-  formatMoney,
-} from '@/features/finance-ops/api/types';
+} from '@/shared/api/finance-accounts-types';
 import type { FinanceOverviewState } from '../api/overview-state';
 
 /**

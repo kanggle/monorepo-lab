@@ -12,9 +12,18 @@
  * `erp-state.ts` re-exports these symbols (so the existing
  * `erp-state.ts` import surface is preserved for callers that
  * already import from it).
+ *
+ * TASK-PC-FE-259 — the `ERP_KEY` ROOT itself moved to
+ * `shared/api/query-keys.ts`: `features/operators` must invalidate
+ * `[ERP_KEY, 'read-model']` after an org_scope write, and importing
+ * it from here was a `features/A → features/B` import that
+ * `architecture.md` § Forbidden Dependencies bars ("공유 가치는
+ * `shared/` 로 승격"). Re-exported below, so every key factory in
+ * this file and every existing consumer is unchanged.
  */
 
-export const ERP_KEY = 'erp-ops';
+export { ERP_KEY } from '@/shared/api/query-keys';
+import { ERP_KEY } from '@/shared/api/query-keys';
 
 /** Sanitises the asOf input to the wire string (URL query-param
  *  form). Strings only — no Number coercion. Empty / undefined →

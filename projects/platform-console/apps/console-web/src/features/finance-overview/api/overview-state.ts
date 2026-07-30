@@ -5,9 +5,12 @@ import {
   listPeriods,
   listDiscrepancies,
   getFxRates,
-} from '@/features/ledger-ops/api/ledger-api';
-import { getAccount, getBalances } from '@/features/finance-ops/api/finance-api';
-import type { Account, BalancesResponse } from '@/features/finance-ops/api/types';
+} from '@/shared/api/ledger-overview-read';
+import { getAccount, getBalances } from '@/shared/api/finance-accounts-read';
+import type {
+  Account,
+  BalancesResponse,
+} from '@/shared/api/finance-accounts-types';
 import { getFinanceDefaultAccountId } from '@/shared/lib/finance-default-account-id';
 
 /**
@@ -28,10 +31,20 @@ import { getFinanceDefaultAccountId } from '@/shared/lib/finance-default-account
  * Mirrors `features/iam-overview/api/overview-state.ts` (TASK-PC-FE-180):
  * this is a domain-internal composition over the EXISTING finance
  * `account-service` (§ 2.4.7) + `ledger-service` (§ 2.4.7.1) server
- * clients — reused directly (feature-internal `api/` modules, NOT the
- * public barrels; the same cross-feature "overview aggregator" exception
- * already established by `iam-overview` importing `features/{operators,
- * accounts,audit}/api/*`). No console-bff leg, no new endpoint.
+ * clients — REUSED, never re-implemented. No console-bff leg, no new
+ * endpoint, no new producer call.
+ *
+ * TASK-PC-FE-259 — those reads are consumed by this feature AND by
+ * `features/finance-ops` / `features/ledger-ops`, so they live in
+ * `shared/api/{finance-accounts-read,ledger-overview-read}.ts`. Earlier
+ * revisions of this file imported them straight out of
+ * `@/features/{finance-ops,ledger-ops}/api/*` and justified it as an
+ * "overview aggregator exception … already established by `iam-overview`".
+ * **There is no such exception.** `architecture.md` § Forbidden
+ * Dependencies is unconditional — `features/A → features/B` 상호 참조
+ * 금지, 공유 가치는 `shared/` 로 승격 — and `iam-overview` was simply the
+ * same drift, fixed in the same task. Do not reintroduce a cross-feature
+ * import here; promote the value instead.
  *
  * ── INDEPENDENT DEGRADE (the decisive rule) ──
  * The ledger leg and the account leg run in their OWN try/catch (never a

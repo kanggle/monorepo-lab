@@ -7,7 +7,7 @@ import { AccountMenu } from '@/shared/ui/AccountMenu';
 // 로그아웃 item runs the existing RP-initiated OIDC logout (performLogout);
 // mock it so the test asserts the call without navigating the jsdom window.
 const { logoutMock } = vi.hoisted(() => ({ logoutMock: vi.fn() }));
-vi.mock('@/features/auth', () => ({ performLogout: logoutMock }));
+vi.mock('@/shared/lib/logout', () => ({ performLogout: logoutMock }));
 
 beforeEach(() => {
   logoutMock.mockClear();

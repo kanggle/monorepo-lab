@@ -10,6 +10,25 @@ interface SwitchResult {
 }
 
 /**
+ * Shared **active-tenant switch** mutation hook (TASK-PC-FE-040 /
+ * TASK-PC-FE-259 promotion).
+ *
+ * ── WHY THIS LIVES IN `shared/` ──
+ * Switching the active tenant is a console-wide concern, not a `tenant`-feature
+ * private one: it is driven from the top-bar `TenantSwitcher`
+ * (`features/tenant`) **and** from every product card's tenant row in
+ * `CatalogGrid` (`features/catalog`), which previously imported it across the
+ * feature boundary. Per `architecture.md` § Forbidden Dependencies —
+ *
+ *   > 같은 계층 `features/A → features/B` 상호 참조 금지
+ *   > (공유 가치는 `shared/` 로 승격).
+ *
+ * `features/tenant` still re-exports it from its barrel (the switcher remains
+ * part of that feature's public surface); both call sites import this module.
+ * `shared/api/` (not `shared/lib/`) because the hook's whole body is a backend
+ * call through the shared `apiClient` — the console's single backend entry
+ * point.
+ *
  * Tenant switch mutation. Posts to the same-origin `/api/tenant` route which
  * validates the requested tenant against the operator's own registry scope
  * server-side and rejects cross-tenant selections with 403 (multi-tenant

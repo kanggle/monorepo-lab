@@ -1,9 +1,4 @@
-import { getActiveTenant } from '@/shared/lib/session';
-import { clampPageSize } from '@/shared/lib/pagination';
 import {
-  OperatorPageSchema,
-  type OperatorPage,
-  type OperatorListParams,
   CreateOperatorResultSchema,
   type CreateOperatorResult,
   type CreateOperatorInput,
@@ -21,7 +16,19 @@ import { callGapOperators, OPERATORS_PREFIX } from './operators-client';
  * privilege-sensitive surface: list + create + edit-roles + change-status +
  * admin-set-profile + grantable-roles. Re-exported verbatim through the
  * `operators-api` barrel. 0 behavior change.
+ *
+ * TASK-PC-FE-259 — the LIST read (`listOperators`) was promoted to
+ * `shared/api/iam-operators-read.ts` because `features/dashboards` (the
+ * § 2.4.4 composed overview, leg 3) and `features/iam-overview` (the `/iam`
+ * landing) also consume it, and `architecture.md` § Forbidden Dependencies
+ * bars a `features/A → features/B` import ("공유 가치는 `shared/` 로 승격").
+ * It is re-exported below so the `operators-api` barrel — the feature's
+ * contract-pinned public surface (console-integration-contract § 2.4.4 leg 3,
+ * § 3.1) — is unchanged, and the 16-row parity attestation still passes
+ * through this path. Every MUTATION here (§ 3.1 rows 12–14, 18) stays
+ * feature-local and uses the SAME shared hardened call site.
  */
+export { listOperators } from '@/shared/api/iam-operators-read';
 
 // ---------------------------------------------------------------------------
 // 0. grantable-roles — GET /api/admin/operators/grantable-roles
@@ -45,29 +52,11 @@ export async function getGrantableRoles(): Promise<string[]> {
 
 // ---------------------------------------------------------------------------
 // 1. list — GET /api/admin/operators (status filter + pagination; READ)
-//    No mutation headers (per the matrix).
+//    No mutation headers (per the matrix). `listOperators` itself is defined
+//    in `shared/api/iam-operators-read.ts` (TASK-PC-FE-259 promotion — three
+//    consuming features) and re-exported from the top of this module, so this
+//    section header still documents the read next to its siblings.
 // ---------------------------------------------------------------------------
-
-export async function listOperators(
-  params: OperatorListParams = {},
-): Promise<OperatorPage> {
-  const qs = new URLSearchParams();
-  if (params.status) qs.set('status', params.status);
-  // TASK-MONO-175: scope the operator list to the ACTIVE tenant so 운영자 관리
-  // follows the tenant switcher (the producer scopes by the `tenantId` query
-  // param — home ∪ assignment — and gates it against the caller's effective
-  // scope; mirror of the audit `tenantId` pattern). The same active tenant is
-  // also sent as `X-Tenant-Id` by `callGapOperators`; when none is selected
-  // that call blocks with NO_ACTIVE_TENANT before any fetch.
-  const tenant = await getActiveTenant();
-  if (tenant) qs.set('tenantId', tenant);
-  qs.set('page', String(Math.max(0, params.page ?? 0)));
-  qs.set('size', String(clampPageSize(params.size, 20, 100)));
-  return callGapOperators(
-    { method: 'GET', path: `${OPERATORS_PREFIX}?${qs.toString()}` },
-    (json) => OperatorPageSchema.parse(json),
-  );
-}
 
 // ---------------------------------------------------------------------------
 // 2. create — POST /api/admin/operators

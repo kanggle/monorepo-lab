@@ -1,6 +1,6 @@
 'use client';
 
-import { useTenantSwitch } from '@/features/tenant';
+import { useTenantSwitch } from '@/shared/api/use-tenant-switch';
 import type { RegistryProduct, ProductKey } from '@/shared/api/registry-types';
 import { ServiceTile, type TileTone } from './ServiceTile';
 

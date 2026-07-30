@@ -63,12 +63,22 @@
  *     statement-detail read (statement reuses the discrepancy schema).
  *   - `account.ts` — account-level balance/entries drill reads.
  *   - `fx.ts` — FX position open-lots + FX rate feed/history/refresh.
+ *
+ * TASK-PC-FE-259 — FOUR of those concept modules (`trial-balance` · `period` ·
+ * `reconciliation` · `fx`) back reads that `features/finance-overview` also
+ * consumes for the `/finance` landing snapshot, so they were promoted to
+ * `shared/api/ledger-types/` (with their leaf `money`/meta primitives) per
+ * `architecture.md` § Forbidden Dependencies — "공유 가치는 `shared/` 로
+ * 승격", never a `features/A → features/B` import. `journal.ts` and
+ * `account.ts` have a single consumer and stay feature-local. This barrel
+ * still re-exports all seven, so `from '.../api/types'` is unchanged for every
+ * ledger-ops component, hook, proxy route and test.
  */
 
 export * from './money';
-export * from './trial-balance';
+export * from '@/shared/api/ledger-types/trial-balance';
 export * from './journal';
-export * from './period';
-export * from './reconciliation';
+export * from '@/shared/api/ledger-types/period';
+export * from '@/shared/api/ledger-types/reconciliation';
 export * from './account';
-export * from './fx';
+export * from '@/shared/api/ledger-types/fx';

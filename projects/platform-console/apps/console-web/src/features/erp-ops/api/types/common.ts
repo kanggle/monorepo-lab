@@ -26,6 +26,16 @@ import { labelForUnknown } from '@/shared/lib/tolerant-label';
 // ---------------------------------------------------------------------------
 
 /**
+ * TASK-PC-FE-259 — `EffectivePeriod`, `isRetired`, `Audit` and `ErpMeta` are
+ * defined in `shared/api/erp-masterdata-department-read.ts` alongside the
+ * department read shapes they compose. `features/operators`' org_scope
+ * department picker (TASK-PC-FE-050) consumes those shapes, and importing
+ * them from this feature was a `features/A → features/B` import that
+ * `architecture.md` § Forbidden Dependencies bars ("공유 가치는 `shared/` 로
+ * 승격") — with no barrel escape hatch, since the `erp-ops` barrel is
+ * server-coupled and the picker is a client component. Re-exported here so
+ * every erp-ops module and the `types` barrel are unchanged.
+ *
  * `EffectivePeriod` — `{ effectiveFrom, effectiveTo }`. `effectiveTo`
  * may be `null` (open-ended / active). Both fields are ISO-8601
  * DATE strings (the producer wire shape from `masterdata-api.md` §
@@ -33,11 +43,18 @@ import { labelForUnknown } from '@/shared/lib/tolerant-label';
  * rows (`effectiveTo` in the past) are rendered visually distinct
  * but NOT hidden (E2 honesty).
  */
-export const EffectivePeriodSchema = z.object({
-  effectiveFrom: z.string(),
-  effectiveTo: z.string().nullable(),
-});
-export type EffectivePeriod = z.infer<typeof EffectivePeriodSchema>;
+export {
+  EffectivePeriodSchema,
+  isRetired,
+  AuditSchema,
+  ErpMetaSchema,
+} from '@/shared/api/erp-masterdata-department-read';
+export type {
+  EffectivePeriod,
+  Audit,
+  ErpMeta,
+} from '@/shared/api/erp-masterdata-department-read';
+
 
 /** Producer master `status` enum surfaced HONESTLY (a `RETIRED`
  *  master is shown as such, never hidden — § 2.4.8). Stored as a
@@ -103,37 +120,13 @@ export const KNOWN_PARTNER_TYPES = [
 export type KnownPartnerType = (typeof KNOWN_PARTNER_TYPES)[number];
 
 // ---------------------------------------------------------------------------
-// Audit — append-only audit (E8) surfaced on detail responses.
+// `AuditSchema` (E8 append-only audit surfaced on detail responses) and
+// `ErpMetaSchema` (flat erp success-meta — same wire as scm/finance, distinct
+// producer / own parser) are defined in
+// `shared/api/erp-masterdata-department-read.ts` and re-exported at the top of
+// this module (TASK-PC-FE-259 promotion — the department read they compose has
+// a second consuming feature).
 // ---------------------------------------------------------------------------
-
-export const AuditSchema = z
-  .object({
-    createdAt: z.string().optional(),
-    createdBy: z.string().optional(),
-    updatedAt: z.string().optional(),
-    updatedBy: z.string().optional(),
-  })
-  .partial()
-  .passthrough();
-export type Audit = z.infer<typeof AuditSchema>;
-
-// ---------------------------------------------------------------------------
-// erp success envelope shapes — flat (same wire as scm/finance,
-// distinct producer / own parser).
-// ---------------------------------------------------------------------------
-
-/** erp success-meta: `{ timestamp, page?, size?, totalElements? }`.
- *  Producer-specific — kept distinct from finance / scm meta even
- *  though byte-identical (each domain owns its own parser). */
-export const ErpMetaSchema = z
-  .object({
-    timestamp: z.string().optional(),
-    page: z.number().int().nonnegative().optional(),
-    size: z.number().int().positive().optional(),
-    totalElements: z.number().int().nonnegative().optional(),
-  })
-  .passthrough();
-export type ErpMeta = z.infer<typeof ErpMetaSchema>;
 
 // ---------------------------------------------------------------------------
 // read-model meta — extends the base meta with `warning` (required,
@@ -204,23 +197,11 @@ export interface ErpDetailQueryParams {
 
 export const labelForUnknownEnum = labelForUnknown;
 
-/** True if `effectiveTo` is in the past relative to `now` (default
- *  = `new Date()`). Used by E2 rendering to mark retired rows
- *  visually distinct without HIDING them. */
-export function isRetired(
-  period: EffectivePeriod,
-  now: Date = new Date(),
-): boolean {
-  if (!period.effectiveTo) return false;
-  // String comparison on ISO-8601 DATEs is monotonic — no Date()
-  // parse needed when both sides are ISO-8601, but we keep Date()
-  // to be robust against partial-precision producer values.
-  try {
-    return new Date(period.effectiveTo).getTime() < now.getTime();
-  } catch {
-    return false;
-  }
-}
+// `isRetired` — "true if `effectiveTo` is in the past", used by E2 rendering to
+// mark retired rows visually distinct without HIDING them — is defined in
+// `shared/api/erp-masterdata-department-read.ts` and re-exported at the top of
+// this module (TASK-PC-FE-259 promotion — `features/operators`' org_scope
+// department picker applies the same predicate).
 
 // ---------------------------------------------------------------------------
 // Shared retire body — identical across every master (TASK-PC-FE-048).

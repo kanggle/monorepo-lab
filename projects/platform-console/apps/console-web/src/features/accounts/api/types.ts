@@ -16,48 +16,31 @@ import { z } from 'zod';
  */
 
 // --- search / list (GET /api/admin/accounts) ------------------------------
+//
+// TASK-PC-FE-259 — the search/list wire shapes were promoted to
+// `shared/api/iam-accounts-read.ts`: `features/dashboards` (§ 2.4.4 composed
+// overview) and `features/iam-overview` (`/iam` landing) consume the same read,
+// and `architecture.md` § Forbidden Dependencies bars a `features/A →
+// features/B` import ("공유 가치는 `shared/` 로 승격"). Re-exported here so
+// this module stays the accounts public type surface and every existing
+// `../api/types` import is unchanged. The MUTATION result shapes below are NOT
+// promoted — single consumer, feature-local (§ 3.1 rows 3–8).
 
 export const AccountStatusSchema = z.enum(['ACTIVE', 'LOCKED', 'DELETED']);
 export type AccountStatus = z.infer<typeof AccountStatusSchema>;
 
-export const AccountSummarySchema = z.object({
-  id: z.string(),
-  email: z.string(),
-  // Producer documents ACTIVE; LOCKED/DELETED are reachable post-mutation.
-  status: z.string(),
-  createdAt: z.string(),
-});
-export type AccountSummary = z.infer<typeof AccountSummarySchema>;
-
-export const AccountPageSchema = z.object({
-  content: z.array(AccountSummarySchema),
-  totalElements: z.number().int().nonnegative(),
-  page: z.number().int().nonnegative(),
-  size: z.number().int().positive(),
-  totalPages: z.number().int().nonnegative(),
-});
-export type AccountPage = z.infer<typeof AccountPageSchema>;
-
-export interface AccountSearchParams {
-  /** Single-lookup by email; mutually exclusive with list pagination. */
-  email?: string;
-  page?: number;
-  size?: number;
-  /**
-   * TASK-BE-475 / TASK-PC-FE-181 — optional lifecycle-status filter
-   * (`ACTIVE`|`LOCKED`|`DORMANT`|`DELETED`). Applies to the LIST branch only
-   * (the producer ignores it on the `email` single-lookup). Drives the IAM
-   * overview's 잠금 현황 count (`{ status: 'LOCKED', size: 1 }.totalElements`).
-   */
-  status?: string;
-  /**
-   * TASK-BE-357 — explicit tenant scope (SUPER_ADMIN cross-tenant). When omitted
-   * the api layer defaults it to the active tenant (mirror of the audit view),
-   * so the 계정 운영 search follows the tenant switcher. The producer gates it
-   * against the operator's effective scope (403 TENANT_SCOPE_DENIED).
-   */
-  tenantId?: string;
-}
+// NOTE: the pure-zod `iam-accounts-types` module, NOT the server
+// `iam-accounts-read` client — this module is imported by CLIENT components
+// and the read client reaches `next/headers`.
+export {
+  AccountSummarySchema,
+  AccountPageSchema,
+} from '@/shared/api/iam-accounts-types';
+export type {
+  AccountSummary,
+  AccountPage,
+  AccountSearchParams,
+} from '@/shared/api/iam-accounts-types';
 
 // --- lock / unlock --------------------------------------------------------
 

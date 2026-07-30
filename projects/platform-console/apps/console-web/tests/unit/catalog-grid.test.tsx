@@ -15,7 +15,7 @@ import type { RegistryProduct } from '@/shared/api/registry-types';
  * onSuccess so we can assert the navigation; window.location is stubbed.
  */
 const { mutateMock } = vi.hoisted(() => ({ mutateMock: vi.fn() }));
-vi.mock('@/features/tenant', () => ({
+vi.mock('@/shared/api/use-tenant-switch', () => ({
   useTenantSwitch: () => ({ mutate: mutateMock, isPending: false, isError: false }),
 }));
 vi.mock('next/link', () => ({

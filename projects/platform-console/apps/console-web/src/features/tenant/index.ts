@@ -1,5 +1,5 @@
 export { TenantSwitcher } from './components/TenantSwitcher';
-export { useTenantSwitch } from './hooks/use-tenant-switch';
+export { useTenantSwitch } from '@/shared/api/use-tenant-switch';
 export { selectableTenants, groupTenantsByCompany } from './lib/tenant-options';
 export type {
   CompanyGroup,

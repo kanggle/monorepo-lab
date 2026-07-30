@@ -309,8 +309,20 @@ describe('account-drill api — F5 money invariant (bit-exact minor-units string
   // The F5 grep guard — must not introduce any Number()/parseFloat()/parseInt()
   // on lines referencing `amount` in the features/ledger-ops/ source tree.
   it('the on-disk source still has NO Number()/parseFloat()/parseInt() on `amount`/`exchangeRate` lines (F5 guard)', () => {
-    const root = path.resolve(__dirname, '../../src/features/ledger-ops');
+    // TASK-PC-FE-259 — the F5 primitive (`Money`/`formatMoney`), the four
+    // ledger concept type modules and the overview reads were promoted OUT of
+    // `features/ledger-ops` into `shared/`. A guard that kept scanning only the
+    // old root would still pass while no longer covering the code it guards,
+    // so the promoted modules are scanned too (guard reachability).
+    const roots = [
+      path.resolve(__dirname, '../../src/features/ledger-ops'),
+      path.resolve(__dirname, '../../src/shared/lib/money.ts'),
+      path.resolve(__dirname, '../../src/shared/api/ledger-types'),
+      path.resolve(__dirname, '../../src/shared/api/ledger-client.ts'),
+      path.resolve(__dirname, '../../src/shared/api/ledger-overview-read.ts'),
+    ];
     function walk(p: string): string[] {
+      if (!statSync(p).isDirectory()) return [p];
       const out: string[] = [];
       for (const name of readdirSync(p)) {
         const full = path.join(p, name);
@@ -319,10 +331,18 @@ describe('account-drill api — F5 money invariant (bit-exact minor-units string
       }
       return out;
     }
-    const files = walk(root).filter(
-      (f) => f.endsWith('.ts') || f.endsWith('.tsx'),
-    );
+    const files = roots
+      .flatMap((r) => walk(r))
+      .filter((f) => f.endsWith('.ts') || f.endsWith('.tsx'));
     expect(files.length).toBeGreaterThan(0);
+    // The promoted modules MUST be in the scanned set — a silent path typo
+    // would re-open exactly the gap this guard exists to close.
+    expect(files.some((f) => f.replace(/\\/g, '/').endsWith('shared/lib/money.ts'))).toBe(true);
+    expect(
+      files.some((f) =>
+        f.replace(/\\/g, '/').endsWith('shared/api/ledger-types/fx.ts'),
+      ),
+    ).toBe(true);
     const offenders: string[] = [];
     for (const f of files) {
       const lines = readFileSync(f, 'utf8').split(/\r?\n/);

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { StatusTone } from '@/shared/ui/StatusBadge';
-import { MoneySchema, LedgerMetaSchema } from './money';
+import { MoneySchema } from '@/shared/lib/money';
+import { LedgerMetaSchema } from './common';
 
 // ---------------------------------------------------------------------------
 // Accounting periods — GET /api/finance/ledger/periods[/{periodId}]
