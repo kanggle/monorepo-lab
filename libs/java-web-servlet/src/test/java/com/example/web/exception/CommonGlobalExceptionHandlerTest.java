@@ -195,4 +195,68 @@ class CommonGlobalExceptionHandlerTest {
         assertThat(response.getBody().code()).isEqualTo("INTERNAL_ERROR");
         assertThat(response.getBody().message()).isEqualTo("An unexpected error occurred");
     }
+
+    // ---------------------------------------------------------------------
+    // validationFailureStatus() — ADR-MONO-058 § D2 override hook.
+    //
+    // The four existing 400 assertions above are the backward-compatibility
+    // guard: they use a subclass that does NOT override the hook, which is the
+    // shape every current adopter (iam-platform account / admin / auth /
+    // security) has. The two tests below add the other half — that the default
+    // is genuinely the hook's value and not a hard-coded literal that merely
+    // happens to agree with it, and that an overriding subclass actually moves
+    // both arms.
+    // ---------------------------------------------------------------------
+
+    /** A subclass with fan-platform's published contract: @Valid / IAE → 422. */
+    private static class UnprocessableEntityHandler extends CommonGlobalExceptionHandler {
+        @Override
+        protected HttpStatus validationFailureStatus() {
+            return HttpStatus.UNPROCESSABLE_ENTITY;
+        }
+    }
+
+    @Test
+    @DisplayName("validationFailureStatus() 기본값은 400 — 훅을 override 하지 않은 기존 소비자는 무영향")
+    void validationFailureStatus_defaultsToBadRequest() {
+        assertThat(new CommonGlobalExceptionHandler() {}.validationFailureStatus())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    @DisplayName("validationFailureStatus() 를 422 로 override 하면 @Valid 위반과 IllegalArgumentException 이 함께 422")
+    void overridingHook_movesBothValidationArmsTo422() {
+        CommonGlobalExceptionHandler h = new UnprocessableEntityHandler();
+
+        FieldError fieldError = new FieldError("request", "tier", "must not be blank");
+        when(mockValidationEx.getBindingResult()).thenReturn(mockBindingResult);
+        when(mockBindingResult.getFieldErrors()).thenReturn(List.of(fieldError));
+
+        ResponseEntity<ErrorResponse> validation = h.handleValidation(mockValidationEx);
+        ResponseEntity<ErrorResponse> illegalArgument =
+                h.handleIllegalArgument(new IllegalArgumentException("planMonths must be >= 1"));
+
+        assertThat(validation.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(validation.getBody().code()).isEqualTo("VALIDATION_ERROR");
+        assertThat(validation.getBody().message()).isEqualTo("tier: must not be blank");
+
+        assertThat(illegalArgument.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(illegalArgument.getBody().code()).isEqualTo("VALIDATION_ERROR");
+        assertThat(illegalArgument.getBody().message()).isEqualTo("planMonths must be >= 1");
+    }
+
+    @Test
+    @DisplayName("훅은 검증 arm 에만 적용 — 405 / 415 / 500 은 override 와 무관하게 그대로")
+    void overridingHook_doesNotLeakIntoOtherArms() {
+        CommonGlobalExceptionHandler h = new UnprocessableEntityHandler();
+
+        assertThat(h.handleMalformedRequest(new HttpMessageNotReadableException(
+                "malformed JSON", mock(HttpInputMessage.class))).getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(h.handleMethodNotSupported(new HttpRequestMethodNotSupportedException(
+                "DELETE", List.of("GET"))).getStatusCode())
+                .isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
+        assertThat(h.handleGeneral(new RuntimeException("boom")).getStatusCode())
+                .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+    }
 }

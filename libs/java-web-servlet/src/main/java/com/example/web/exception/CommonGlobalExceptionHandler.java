@@ -20,13 +20,46 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 @Slf4j
 public abstract class CommonGlobalExceptionHandler {
 
+    /**
+     * HTTP status this handler answers request-validation failures with — the
+     * {@code @Valid} constraint-violation arm ({@link #handleValidation}) and the
+     * {@link IllegalArgumentException} arm ({@link #handleIllegalArgument}).
+     *
+     * <p>Defaults to {@code 400 Bad Request}, matching
+     * {@code platform/error-handling.md § HTTP Status Code Mapping}. A service whose
+     * published contract answers {@code 422 Unprocessable Entity} for the same case
+     * overrides this once instead of re-implementing both arms:
+     *
+     * <pre>{@code
+     * @Override
+     * protected HttpStatus validationFailureStatus() {
+     *     return HttpStatus.UNPROCESSABLE_ENTITY;
+     * }
+     * }</pre>
+     *
+     * <p>Added by ADR-MONO-058 § D2, which requires the shared handler to expose this
+     * mapping rather than force one status on every adopter (fan-platform's three HTTP
+     * contracts publish 422 for {@code @Valid} failures; the iam-platform adopters
+     * publish 400). It is deliberately a {@code protected} method and not a
+     * configuration property: an error status is a per-service published contract, not
+     * a per-deployment knob.
+     *
+     * <p>Scope note — this hook covers only the two arms named above. The
+     * {@code HttpMessageNotReadableException} / missing-header / missing-parameter arms
+     * stay at 400 for every adopter; a service that publishes something else there
+     * overrides that single handler method directly.
+     */
+    protected HttpStatus validationFailureStatus() {
+        return HttpStatus.BAD_REQUEST;
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException e) {
         String message = e.getBindingResult().getFieldErrors().stream()
                 .findFirst()
                 .map(err -> err.getField() + ": " + err.getDefaultMessage())
                 .orElse("Validation failed");
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        return ResponseEntity.status(validationFailureStatus())
                 .body(ErrorResponse.of("VALIDATION_ERROR", message));
     }
 
@@ -50,7 +83,7 @@ public abstract class CommonGlobalExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        return ResponseEntity.status(validationFailureStatus())
                 .body(ErrorResponse.of("VALIDATION_ERROR", e.getMessage()));
     }
 
