@@ -14,7 +14,7 @@ import {
   PRODUCT_STATUS_VALUES,
   type ProductList,
   type ProductListParams,
-} from '../api/types';
+} from '../api/product-types';
 import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { ProductsTable } from './ProductsTable';
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/shared/ui/Button';
-import { type PromotionDetail } from '../api/types';
+import { type PromotionDetail } from '../api/promotion-types';
 import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { PromotionFormFields } from './PromotionFormFields';
 import { usePromotionForm } from '../hooks/use-promotion-form';

@@ -14,7 +14,7 @@ import {
   PROMOTION_STATUS_VALUES,
   type PromotionList,
   type PromotionListParams,
-} from '../api/types';
+} from '../api/promotion-types';
 import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { PromotionsTable } from './PromotionsTable';
 

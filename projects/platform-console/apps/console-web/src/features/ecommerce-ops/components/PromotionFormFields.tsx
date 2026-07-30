@@ -1,7 +1,7 @@
 'use client';
 
 import { showPickerOnClick } from '@/shared/lib/show-picker';
-import { DISCOUNT_TYPE_VALUES } from '../api/types';
+import { DISCOUNT_TYPE_VALUES } from '../api/promotion-types';
 import type { usePromotionForm } from '../hooks/use-promotion-form';
 
 type PromotionFormHook = ReturnType<typeof usePromotionForm>;

@@ -3,7 +3,7 @@
 import { useId, useState } from 'react';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import { useAdjustStock } from '../hooks/use-ecommerce-products';
-import type { Variant } from '../api/types';
+import type { Variant } from '../api/product-types';
 import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 
 /**

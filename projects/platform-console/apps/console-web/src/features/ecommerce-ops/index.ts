@@ -53,7 +53,7 @@ export type {
   UpdateVariantBody,
   AdjustStockBody,
   ProductStatus,
-} from './api/types';
+} from './api/product-types';
 
 // ---------------------------------------------------------------------------
 // Orders facet (TASK-PC-FE-083 — ADR-MONO-031 Phase 1b orders slice)
@@ -137,11 +137,11 @@ export type {
   IssueCouponBody,
   PromotionStatus,
   DiscountType,
-} from './api/types';
+} from './api/promotion-types';
 export {
   PROMOTION_STATUS_VALUES,
   DISCOUNT_TYPE_VALUES,
-} from './api/types';
+} from './api/promotion-types';
 
 // ---------------------------------------------------------------------------
 // Shippings facet (TASK-PC-FE-088 — ADR-031 Phase 4b — LIST + STATUS CHANGE + REFRESH)

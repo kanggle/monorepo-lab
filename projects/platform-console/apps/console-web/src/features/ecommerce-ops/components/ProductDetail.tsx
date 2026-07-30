@@ -11,7 +11,7 @@ import {
   productStatusTone,
   type ProductDetail as ProductDetailType,
   type Variant,
-} from '../api/types';
+} from '../api/product-types';
 import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { VariantEditor } from './VariantEditor';
 import { StockAdjustDialog } from './StockAdjustDialog';

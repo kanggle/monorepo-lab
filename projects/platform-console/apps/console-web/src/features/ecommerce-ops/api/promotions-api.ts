@@ -21,7 +21,7 @@ import {
   type IssueCouponBody,
   PROMOTION_DEFAULT_PAGE_SIZE,
   PROMOTION_MAX_PAGE_SIZE,
-} from './types';
+} from './promotion-types';
 
 /**
  * Server-side ecommerce `promotion-service` operations client (TASK-PC-FE-086 —
