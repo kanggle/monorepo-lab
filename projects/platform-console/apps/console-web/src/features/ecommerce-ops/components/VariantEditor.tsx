@@ -1,7 +1,7 @@
 'use client';
 
 import type { Variant } from '../api/types';
-import { ConfirmDialog } from './ConfirmDialog';
+import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { VariantTable } from './VariantTable';
 import { VariantAddRow } from './VariantAddRow';
 import { useVariantEditor } from '../hooks/use-variant-editor';
@@ -48,9 +48,14 @@ export function VariantEditor({ productId, variants }: VariantEditorProps) {
         title="옵션을 삭제할까요?"
         description={del.description}
         confirmLabel="삭제"
-        tone="destructive"
+        destructive
         pending={del.pending}
         errorMessage={del.delError}
+        dialogTestId="ecommerce-confirm-dialog"
+        overlayTestId="ecommerce-confirm-overlay"
+        cancelTestId="ecommerce-confirm-cancel"
+        confirmTestId="ecommerce-confirm-confirm"
+        errorTestId="ecommerce-confirm-error"
         onConfirm={del.confirmDelete}
         onCancel={del.cancelDelete}
       />

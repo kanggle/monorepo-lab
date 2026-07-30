@@ -4,7 +4,7 @@ import { useId, useState } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import { useOpenPeriod } from '../hooks/use-ecommerce-settlements';
-import { ConfirmDialog } from './ConfirmDialog';
+import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 
 /**
  * Settlement period OPEN form (TASK-PC-FE-221 Phase B). Confirm-gated POST of a
@@ -134,6 +134,11 @@ export function PeriodOpenForm() {
         confirmLabel="개시"
         pending={pending}
         errorMessage={error}
+        dialogTestId="ecommerce-confirm-dialog"
+        overlayTestId="ecommerce-confirm-overlay"
+        cancelTestId="ecommerce-confirm-cancel"
+        confirmTestId="ecommerce-confirm-confirm"
+        errorTestId="ecommerce-confirm-error"
         onConfirm={confirmOpenPeriod}
         onCancel={() => {
           setConfirmOpen(false);

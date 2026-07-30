@@ -2,7 +2,7 @@
 
 import { Button } from '@/shared/ui/Button';
 import { type PromotionDetail } from '../api/types';
-import { ConfirmDialog } from './ConfirmDialog';
+import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { PromotionFormFields } from './PromotionFormFields';
 import { usePromotionForm } from '../hooks/use-promotion-form';
 
@@ -92,6 +92,11 @@ export function PromotionForm({ existing }: PromotionFormProps) {
         confirmLabel={isEdit ? '저장' : '등록'}
         pending={pending}
         errorMessage={error}
+        dialogTestId="ecommerce-confirm-dialog"
+        overlayTestId="ecommerce-confirm-overlay"
+        cancelTestId="ecommerce-confirm-cancel"
+        confirmTestId="ecommerce-confirm-confirm"
+        errorTestId="ecommerce-confirm-error"
         onConfirm={confirmSubmit}
         onCancel={cancelConfirm}
       />

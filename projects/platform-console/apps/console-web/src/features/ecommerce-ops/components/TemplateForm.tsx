@@ -8,7 +8,7 @@ import {
   type NotificationTemplateDetail,
   type TemplateType,
 } from '../api/notification-types';
-import { ConfirmDialog } from './ConfirmDialog';
+import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { useTemplateForm } from '../hooks/use-template-form';
 
 /**
@@ -208,6 +208,11 @@ export function TemplateForm({ existing }: TemplateFormProps) {
         confirmLabel={isEdit ? '저장' : '등록'}
         pending={pending}
         errorMessage={error}
+        dialogTestId="ecommerce-confirm-dialog"
+        overlayTestId="ecommerce-confirm-overlay"
+        cancelTestId="ecommerce-confirm-cancel"
+        confirmTestId="ecommerce-confirm-confirm"
+        errorTestId="ecommerce-confirm-error"
         onConfirm={confirmSubmit}
         onCancel={cancelConfirm}
       />

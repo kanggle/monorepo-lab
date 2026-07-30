@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { ConfirmDialog } from './ConfirmDialog';
+import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 
 /**
  * Carrier + trackingNumber input dialog for the PREPARING → SHIPPED transition
@@ -91,10 +91,15 @@ export function ShipFormDialog({
       pending={pending}
       confirmDisabled={!valid}
       errorMessage={errorMessage}
+      dialogTestId="ecommerce-confirm-dialog"
+      overlayTestId="ecommerce-confirm-overlay"
+      cancelTestId="ecommerce-confirm-cancel"
+      confirmTestId="ecommerce-confirm-confirm"
+      errorTestId="ecommerce-confirm-error"
       onConfirm={confirm}
       onCancel={cancel}
     >
-      <div className="space-y-3" data-testid="ship-form">
+      <div className="mt-4 space-y-3" data-testid="ship-form">
         <div>
           <label
             htmlFor={carrierId}

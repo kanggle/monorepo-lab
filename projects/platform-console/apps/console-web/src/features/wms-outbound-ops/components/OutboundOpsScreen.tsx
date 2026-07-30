@@ -16,7 +16,7 @@ import {
   type OutboundOrderPage,
   type OutboundListParams,
 } from '../api/types';
-import { OutboundActionDialog } from './OutboundActionDialog';
+import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { OutboundCancelDialog } from './OutboundCancelDialog';
 import { OutboundOpsHeader } from './OutboundOpsHeader';
 import { OutboundOrdersTable } from './OutboundOrdersTable';
@@ -191,7 +191,7 @@ export function OutboundOpsScreen({ orders }: OutboundOpsScreenProps) {
         />
       )}
 
-      <OutboundActionDialog
+      <ConfirmDialog
         open={action !== null}
         title={action ? ACTION_COPY[action.kind].title : ''}
         description={action ? ACTION_COPY[action.kind].description : ''}
@@ -199,6 +199,13 @@ export function OutboundOpsScreen({ orders }: OutboundOpsScreenProps) {
         pending={actionDialog.activeMutationPending}
         errorMessage={actionDialog.actionError}
         conflict={actionDialog.actionConflict}
+        dialogTestId="outbound-action-dialog"
+        overlayTestId="outbound-action-overlay"
+        cancelTestId="outbound-action-cancel"
+        confirmTestId="outbound-action-confirm"
+        errorTestId="outbound-action-error"
+        conflictTestId="outbound-action-conflict"
+        conflictMessage="주문 상태가 변경되었습니다. 최신 상태를 확인했습니다 — 계속하려면 다시 시도하세요."
         onConfirm={actionDialog.confirmAction}
         onCancel={actionDialog.closeAction}
       />
@@ -215,13 +222,18 @@ export function OutboundOpsScreen({ orders }: OutboundOpsScreenProps) {
       />
 
       {/* Dispatch retry confirm — reason-free (reuse the generic action dialog). */}
-      <OutboundActionDialog
+      <ConfirmDialog
         open={retryTarget !== null}
         title="발송을 다시 시도할까요?"
         description="택배사 발송(dispatch)을 다시 시도합니다. 재고는 이미 차감되어 있고, 택배사 발송만 재실행됩니다. 이미 발송된 경우 중복 없이 무시됩니다."
         confirmLabel="발송 재시도"
         pending={retryDialog.retryPending}
         errorMessage={retryDialog.retryError}
+        dialogTestId="outbound-action-dialog"
+        overlayTestId="outbound-action-overlay"
+        cancelTestId="outbound-action-cancel"
+        confirmTestId="outbound-action-confirm"
+        errorTestId="outbound-action-error"
         onConfirm={retryDialog.confirmRetry}
         onCancel={retryDialog.closeRetry}
       />

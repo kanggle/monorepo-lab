@@ -7,7 +7,7 @@ import {
   allowedTransitions,
   type OrderStatus,
 } from '../api/order-types';
-import { ConfirmDialog } from './ConfirmDialog';
+import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { Button } from '@/shared/ui/Button';
 
 /**
@@ -158,10 +158,16 @@ export function OrderStatusDialog({
             : ''
         }
         confirmLabel={pendingTarget ? labelFor(pendingTarget) : '확인'}
-        tone="default"
         pending={change.isPending}
         errorMessage={errorMsg}
         conflict={conflict}
+        dialogTestId="ecommerce-confirm-dialog"
+        overlayTestId="ecommerce-confirm-overlay"
+        cancelTestId="ecommerce-confirm-cancel"
+        confirmTestId="ecommerce-confirm-confirm"
+        errorTestId="ecommerce-confirm-error"
+        conflictTestId="ecommerce-confirm-conflict"
+        conflictMessage="상품 상태가 변경되었습니다. 최신 상태를 확인했습니다 — 계속하려면 다시 시도하세요."
         onConfirm={confirmChange}
         onCancel={closeDialog}
       />

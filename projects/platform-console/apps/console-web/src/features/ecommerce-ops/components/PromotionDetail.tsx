@@ -10,7 +10,7 @@ import {
   useDeletePromotion,
 } from '../hooks/use-ecommerce-promotions';
 import { type PromotionDetail as PromotionDetailType } from '../api/types';
-import { ConfirmDialog } from './ConfirmDialog';
+import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { CouponIssueDialog } from './CouponIssueDialog';
 import { DetailHeader } from '@/shared/ui/DetailHeader';
 import { PromotionDetailFields } from './PromotionDetailFields';
@@ -117,9 +117,14 @@ export function PromotionDetail({ promotion }: PromotionDetailProps) {
         title="프로모션을 삭제할까요?"
         description={`"${data.name}" 프로모션을 삭제합니다. 이 작업은 되돌릴 수 없습니다.`}
         confirmLabel="삭제"
-        tone="destructive"
+        destructive
         pending={del.isPending}
         errorMessage={delError}
+        dialogTestId="ecommerce-confirm-dialog"
+        overlayTestId="ecommerce-confirm-overlay"
+        cancelTestId="ecommerce-confirm-cancel"
+        confirmTestId="ecommerce-confirm-confirm"
+        errorTestId="ecommerce-confirm-error"
         onConfirm={doDelete}
         onCancel={() => {
           setConfirmDelete(false);

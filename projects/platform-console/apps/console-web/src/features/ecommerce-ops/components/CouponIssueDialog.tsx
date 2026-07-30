@@ -3,7 +3,7 @@
 import { useId, useState } from 'react';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import { useIssueCoupons } from '../hooks/use-ecommerce-promotions';
-import { ConfirmDialog } from './ConfirmDialog';
+import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 
 /**
  * Confirm-gated coupon-issue dialog (TASK-PC-FE-086 — ADR-031 Phase 3b).
@@ -105,13 +105,18 @@ export function CouponIssueDialog({
       pending={issue.isPending}
       confirmDisabled={!valid}
       errorMessage={error}
+      dialogTestId="ecommerce-confirm-dialog"
+      overlayTestId="ecommerce-confirm-overlay"
+      cancelTestId="ecommerce-confirm-cancel"
+      confirmTestId="ecommerce-confirm-confirm"
+      errorTestId="ecommerce-confirm-error"
       onConfirm={confirm}
       onCancel={() => {
         reset();
         onClose();
       }}
     >
-      <div className="space-y-3" data-testid="coupon-issue-form">
+      <div className="mt-4 space-y-3" data-testid="coupon-issue-form">
         <div>
           <label
             htmlFor={textareaId}

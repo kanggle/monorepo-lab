@@ -12,7 +12,7 @@ import {
   type ProductDetail as ProductDetailType,
   type Variant,
 } from '../api/types';
-import { ConfirmDialog } from './ConfirmDialog';
+import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { VariantEditor } from './VariantEditor';
 import { StockAdjustDialog } from './StockAdjustDialog';
 import { ImageManager } from './ImageManager';
@@ -165,9 +165,14 @@ export function ProductDetail({ product }: ProductDetailProps) {
         title="상품을 삭제할까요?"
         description={`"${data.name}" 상품을 삭제합니다. 이 작업은 되돌릴 수 없습니다.`}
         confirmLabel="삭제"
-        tone="destructive"
+        destructive
         pending={del.isPending}
         errorMessage={delError}
+        dialogTestId="ecommerce-confirm-dialog"
+        overlayTestId="ecommerce-confirm-overlay"
+        cancelTestId="ecommerce-confirm-cancel"
+        confirmTestId="ecommerce-confirm-confirm"
+        errorTestId="ecommerce-confirm-error"
         onConfirm={doDelete}
         onCancel={() => {
           setConfirmDelete(false);

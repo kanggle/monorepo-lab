@@ -9,7 +9,7 @@ import {
   useDeleteImage,
 } from '../hooks/use-ecommerce-images';
 import { IMAGE_MAX_PER_PRODUCT, type ImageItem } from '../api/image-types';
-import { ConfirmDialog } from './ConfirmDialog';
+import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { ImageUploadField } from './ImageUploadField';
 
 /**
@@ -176,9 +176,14 @@ export function ImageManager({ productId }: ImageManagerProps) {
         title="이미지를 삭제할까요?"
         description="선택한 이미지를 삭제합니다. 이 작업은 되돌릴 수 없습니다."
         confirmLabel="삭제"
-        tone="destructive"
+        destructive
         pending={del.isPending}
         errorMessage={delError}
+        dialogTestId="ecommerce-confirm-dialog"
+        overlayTestId="ecommerce-confirm-overlay"
+        cancelTestId="ecommerce-confirm-cancel"
+        confirmTestId="ecommerce-confirm-confirm"
+        errorTestId="ecommerce-confirm-error"
         onConfirm={confirmDelete}
         onCancel={() => {
           setToDelete(null);

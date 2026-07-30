@@ -14,7 +14,7 @@ import {
   type PayoutsListParams,
 } from '../api/settlement-types';
 import { PeriodPayoutsTable } from './PeriodPayoutsTable';
-import { ConfirmDialog } from './ConfirmDialog';
+import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 
 /**
  * Settlement period detail (TASK-PC-FE-221) — the per-period payouts list. There
@@ -156,6 +156,11 @@ export function PeriodPayoutsScreen({
         confirmLabel="지급 실행"
         pending={executeM.isPending}
         errorMessage={execError}
+        dialogTestId="ecommerce-confirm-dialog"
+        overlayTestId="ecommerce-confirm-overlay"
+        cancelTestId="ecommerce-confirm-cancel"
+        confirmTestId="ecommerce-confirm-confirm"
+        errorTestId="ecommerce-confirm-error"
         onConfirm={runExecute}
         onCancel={() => {
           setConfirmOpen(false);
