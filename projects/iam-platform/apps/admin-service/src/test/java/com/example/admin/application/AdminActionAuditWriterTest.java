@@ -58,7 +58,7 @@ class AdminActionAuditWriterTest {
 
     private void stubOperatorResolution() {
         when(operatorLookupPort.findByOperatorId("op-1"))
-                .thenReturn(Optional.of(new OperatorLookupPort.OperatorSummary(42L, "op-1", "fan-platform")));
+                .thenReturn(Optional.of(new OperatorLookupPort.OperatorLookupRef(42L, "op-1", "fan-platform")));
     }
 
     @Test

@@ -12,8 +12,15 @@ import java.util.Optional;
  * the JWT {@code sub} UUID and the internal PK without reaching into
  * {@code infrastructure.persistence.rbac}.
  *
- * <p>TASK-BE-249: {@link OperatorSummary} extended with {@code tenantId} so the
+ * <p>TASK-BE-249: {@link OperatorLookupRef} extended with {@code tenantId} so the
  * application layer can perform tenant-scope checks without importing JPA entities.
+ *
+ * <p>TASK-BE-560: the projection was named {@code OperatorSummary} until it
+ * collided — same simple name, unrelated shape — with
+ * {@code OperatorQueryService.OperatorSummary}, the 9-field
+ * {@code GET /api/admin/operators} listing DTO in the same application layer.
+ * The listing DTO (API-facing, mirrored by {@code OperatorSummaryResponse})
+ * keeps that name; this identity reference is {@code OperatorLookupRef}.
  */
 public interface OperatorLookupPort {
 
@@ -24,10 +31,10 @@ public interface OperatorLookupPort {
     Optional<Long> findInternalId(String operatorId);
 
     /**
-     * @return a {@link OperatorSummary} carrying both the internal PK, the
+     * @return a {@link OperatorLookupRef} carrying both the internal PK, the
      *         external UUID, and the tenant scope when a matching row exists.
      */
-    Optional<OperatorSummary> findByOperatorId(String operatorId);
+    Optional<OperatorLookupRef> findByOperatorId(String operatorId);
 
     /**
      * Minimal projection exposed to the application layer. Never includes
@@ -36,12 +43,12 @@ public interface OperatorLookupPort {
      * <p>TASK-BE-249: {@code tenantId} added. Platform-scope operators
      * (SUPER_ADMIN) carry {@code "*"} as their tenantId.
      */
-    record OperatorSummary(Long internalId, String operatorId, String tenantId) {
+    record OperatorLookupRef(Long internalId, String operatorId, String tenantId) {
         /**
          * Legacy 2-arg constructor kept for call sites that predate TASK-BE-249.
          * Defaults {@code tenantId} to {@code "fan-platform"}.
          */
-        public OperatorSummary(Long internalId, String operatorId) {
+        public OperatorLookupRef(Long internalId, String operatorId) {
             this(internalId, operatorId, "fan-platform");
         }
     }
