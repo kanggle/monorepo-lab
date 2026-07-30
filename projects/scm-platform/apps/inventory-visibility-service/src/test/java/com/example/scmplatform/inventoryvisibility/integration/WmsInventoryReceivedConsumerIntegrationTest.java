@@ -51,7 +51,7 @@ class WmsInventoryReceivedConsumerIntegrationTest extends AbstractInventoryVisib
             assertThat(snapshots).hasSize(1);
             assertThat(snapshots.get(0).getQuantity()).isEqualByComparingTo(new BigDecimal("15"));
 
-            assertThat(dedupeJpa.findById(eventId.toString())).isPresent();
+            assertThat(processedEventJpa.findById(eventId.toString())).isPresent();
         });
     }
 
@@ -84,7 +84,7 @@ class WmsInventoryReceivedConsumerIntegrationTest extends AbstractInventoryVisib
         publish(TOPIC_INVENTORY_RECEIVED, first.toString(),
                 receivedEnvelope(first, Instant.now(), warehouseId, skuId, 7, "WH01"));
         await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
-            assertThat(dedupeJpa.findById(first.toString())).isPresent();
+            assertThat(processedEventJpa.findById(first.toString())).isPresent();
             assertThat(nodeJpa.findByTenantIdAndNodeExternalId(TENANT_SCM, warehouseId)
                     .orElseThrow().getWarehouseCode()).isEqualTo("WH01");
         });
@@ -96,7 +96,7 @@ class WmsInventoryReceivedConsumerIntegrationTest extends AbstractInventoryVisib
                 receivedEnvelope(second, Instant.now(), warehouseId, skuId, 4, null));
 
         await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
-            assertThat(dedupeJpa.findById(second.toString())).isPresent();
+            assertThat(processedEventJpa.findById(second.toString())).isPresent();
             InventoryNodeJpaEntity node =
                     nodeJpa.findByTenantIdAndNodeExternalId(TENANT_SCM, warehouseId).orElseThrow();
             assertThat(node.getWarehouseCode())
@@ -121,14 +121,14 @@ class WmsInventoryReceivedConsumerIntegrationTest extends AbstractInventoryVisib
                 receivedEnvelope(first, Instant.now(), warehouseId, skuId, 7));
 
         await().atMost(30, TimeUnit.SECONDS).untilAsserted(() ->
-                assertThat(dedupeJpa.findById(first.toString())).isPresent());
+                assertThat(processedEventJpa.findById(first.toString())).isPresent());
 
         UUID second = UUID.randomUUID();
         publish(TOPIC_INVENTORY_RECEIVED, second.toString(),
                 receivedEnvelope(second, Instant.now(), warehouseId, skuId, 4));
 
         await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
-            assertThat(dedupeJpa.findById(second.toString())).isPresent();
+            assertThat(processedEventJpa.findById(second.toString())).isPresent();
             String nodeId = nodeJpa.findByTenantIdAndNodeExternalId(TENANT_SCM, warehouseId)
                     .orElseThrow().getId();
             BigDecimal qty = snapshotJpa.findAll().stream()

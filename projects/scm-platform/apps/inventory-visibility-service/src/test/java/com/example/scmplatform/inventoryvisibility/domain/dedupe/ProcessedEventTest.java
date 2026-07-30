@@ -1,7 +1,7 @@
 package com.example.scmplatform.inventoryvisibility.domain.dedupe;
 
 import com.example.scmplatform.inventoryvisibility.application.port.outbound.ClockPort;
-import com.example.scmplatform.inventoryvisibility.application.port.outbound.EventDedupePort;
+import com.example.scmplatform.inventoryvisibility.application.port.outbound.ProcessedEventPort;
 import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService;
 import com.example.scmplatform.inventoryvisibility.domain.node.InventoryNode;
 import com.example.scmplatform.inventoryvisibility.domain.node.NodeId;
@@ -37,13 +37,13 @@ import static org.mockito.Mockito.when;
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
-class EventDedupeTest {
+class ProcessedEventTest {
 
     @Mock InventoryNodeRepository nodeRepository;
     @Mock InventorySnapshotRepository snapshotRepository;
     @Mock NodeStalenessRepository stalenessRepository;
     @Mock InboundExpectationRepository inboundExpectationRepository;
-    @Mock EventDedupePort eventDedupePort;
+    @Mock ProcessedEventPort processedEventPort;
     @Mock AlertPublisherPort alertPublisherPort;
     @Mock ClockPort clock;
 
@@ -57,14 +57,14 @@ class EventDedupeTest {
     void setUp() {
         service = new InventoryVisibilityApplicationService(
                 nodeRepository, snapshotRepository, stalenessRepository,
-                inboundExpectationRepository, eventDedupePort, alertPublisherPort, clock);
+                inboundExpectationRepository, processedEventPort, alertPublisherPort, clock);
     }
 
     @Test
     void firstProcessing_isNotDuplicate_snapshotIsSaved() {
         when(clock.now()).thenReturn(now);
         // First time: not a duplicate
-        when(eventDedupePort.isDuplicate(eventId)).thenReturn(false);
+        when(processedEventPort.isDuplicate(eventId)).thenReturn(false);
         InventoryNode node = InventoryNode.autoRegisterWmsWarehouse(nodeId, "scm", "WH-001", null, now);
         when(nodeRepository.findByTenantIdAndExternalId("scm", "WH-001"))
                 .thenReturn(Optional.of(node));
@@ -78,28 +78,28 @@ class EventDedupeTest {
                 "wms.inventory.received.v1");
 
         verify(snapshotRepository).save(any(InventorySnapshot.class));
-        verify(eventDedupePort).markProcessed(eq(eventId), eq("scm"), eq(now),
+        verify(processedEventPort).markProcessed(eq(eventId), eq("scm"), eq(now),
                 eq("wms.inventory.received.v1"));
     }
 
     @Test
     void duplicateEvent_isSkipped_snapshotNotSaved() {
         // Duplicate: isDuplicate returns true
-        when(eventDedupePort.isDuplicate(eventId)).thenReturn(true);
+        when(processedEventPort.isDuplicate(eventId)).thenReturn(true);
 
         service.applyInventoryReceived("WH-001", "SKU-001", 50L, null, eventId, now, "scm",
                 "wms.inventory.received.v1");
 
         // No snapshot mutation
         verify(snapshotRepository, never()).save(any());
-        verify(eventDedupePort, never()).markProcessed(any(), any(), any(), any());
+        verify(processedEventPort, never()).markProcessed(any(), any(), any(), any());
     }
 
     @Test
     void sameEventId_processedTwice_onlyFirstMutatesSnapshot() {
         when(clock.now()).thenReturn(now);
         // First call: not duplicate
-        when(eventDedupePort.isDuplicate(eventId)).thenReturn(false);
+        when(processedEventPort.isDuplicate(eventId)).thenReturn(false);
         InventoryNode node = InventoryNode.autoRegisterWmsWarehouse(nodeId, "scm", "WH-001", null, now);
         when(nodeRepository.findByTenantIdAndExternalId("scm", "WH-001"))
                 .thenReturn(Optional.of(node));
@@ -113,7 +113,7 @@ class EventDedupeTest {
                 "wms.inventory.received.v1");
 
         // Second call: now duplicate
-        when(eventDedupePort.isDuplicate(eventId)).thenReturn(true);
+        when(processedEventPort.isDuplicate(eventId)).thenReturn(true);
         service.applyInventoryReceived("WH-001", "SKU-001", 50L, null, eventId, now, "scm",
                 "wms.inventory.received.v1");
 

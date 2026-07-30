@@ -53,7 +53,7 @@ class InventoryNodeAutoCreateIntegrationTest extends AbstractInventoryVisibility
                     .isEqualTo(InventoryNodeJpaEntity.NodeTypeJpa.WMS_WAREHOUSE);
             assertThat(node.get().getStatus())
                     .isEqualTo(InventoryNodeJpaEntity.NodeStatusJpa.ACTIVE);
-            assertThat(dedupeJpa.findById(eventId.toString())).isPresent();
+            assertThat(processedEventJpa.findById(eventId.toString())).isPresent();
         });
     }
 

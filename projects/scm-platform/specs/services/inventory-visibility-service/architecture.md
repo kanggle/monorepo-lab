@@ -54,7 +54,7 @@ Hexagonal chosen because:
 ## Layer Structure
 
 ```
-domain/         ← Pure Java: InventoryNode, InventorySnapshot, NodeStaleness, EventDedupeRecord
+domain/         ← Pure Java: InventoryNode, InventorySnapshot, NodeStaleness, ProcessedEventRecord
 application/    ← Use cases + port interfaces (no Spring annotations in domain)
 adapter/
   inbound/
@@ -336,7 +336,7 @@ The published `scm.inventory.alert.v1` payload carries a constant `tenantId: "sc
 ## Testing Strategy
 
 - **Unit** (`./gradlew :apps:inventory-visibility-service:test`):
-  - Domain: `InventorySnapshot` (received upsert / adjusted delta / transferred dual-row apply), `NodeStaleness` FRESH/STALE/UNREACHABLE classification, `InventoryNode`, `EventDedupeRecord`.
+  - Domain: `InventorySnapshot` (received upsert / adjusted delta / transferred dual-row apply), `NodeStaleness` FRESH/STALE/UNREACHABLE classification, `InventoryNode`, `ProcessedEventRecord`.
   - Application: use-case services with mocked ports.
   - Adapters: 3 Kafka consumer mappers, validator units (`TenantClaimValidatorTest`, `AllowedIssuersValidatorTest`), `TenantClaimEnforcerTest`.
 - **Slice**: JPA adapter slices (H2), Redis cache adapter (fail-open path), REST controller slices (S5 `meta.warning` assertion), error-handler slice.

@@ -2,6 +2,6 @@ package com.example.scmplatform.inventoryvisibility.adapter.outbound.persistence
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface EventDedupeJpaRepository extends JpaRepository<EventDedupeJpaEntity, String> {
+public interface ProcessedEventJpaRepository extends JpaRepository<ProcessedEventJpaEntity, String> {
     boolean existsByEventId(String eventId);
 }

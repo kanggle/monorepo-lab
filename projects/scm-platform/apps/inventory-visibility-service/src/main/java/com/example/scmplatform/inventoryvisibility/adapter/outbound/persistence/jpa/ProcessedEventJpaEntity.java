@@ -15,7 +15,7 @@ import java.time.Instant;
 @Getter
 @Setter
 @NoArgsConstructor
-public class EventDedupeJpaEntity {
+public class ProcessedEventJpaEntity {
 
     @Id
     @Column(name = "event_id", nullable = false, length = 36)
