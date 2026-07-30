@@ -73,7 +73,7 @@ class AdminRefreshTokenServiceTest {
         when(jwtVerifier.verify(RAW_JWT)).thenReturn(claims(OP_UUID, JTI, "admin_refresh"));
         when(tokenPort.findByJti(JTI)).thenReturn(Optional.of(activeRow(JTI, OP_PK)));
         when(operatorLookup.findByOperatorId(OP_UUID))
-                .thenReturn(Optional.of(new OperatorLookupPort.OperatorSummary(OP_PK, OP_UUID)));
+                .thenReturn(Optional.of(new OperatorLookupPort.OperatorLookupRef(OP_PK, OP_UUID)));
         when(refreshIssuer.issue(eq(OP_PK), eq(OP_UUID), eq(JTI)))
                 .thenReturn(new AdminRefreshTokenIssuer.Issued(
                         "new.refresh.jwt", "new-jti", 2_592_000L, Instant.now().plusSeconds(2_592_000L)));
@@ -107,7 +107,7 @@ class AdminRefreshTokenServiceTest {
         when(jwtVerifier.verify(RAW_JWT)).thenReturn(claims(OP_UUID, JTI, "admin_refresh"));
         when(tokenPort.findByJti(JTI)).thenReturn(Optional.of(activeRow(JTI, 999L)));
         when(operatorLookup.findByOperatorId(OP_UUID))
-                .thenReturn(Optional.of(new OperatorLookupPort.OperatorSummary(OP_PK, OP_UUID)));
+                .thenReturn(Optional.of(new OperatorLookupPort.OperatorLookupRef(OP_PK, OP_UUID)));
 
         assertThatExceptionOfType(InvalidRefreshTokenException.class)
                 .isThrownBy(() -> service.refresh(RAW_JWT))
@@ -122,7 +122,7 @@ class AdminRefreshTokenServiceTest {
         when(jwtVerifier.verify(RAW_JWT)).thenReturn(claims(OP_UUID, JTI, "admin_refresh"));
         when(tokenPort.findByJti(JTI)).thenReturn(Optional.of(revokedRow(JTI, OP_PK)));
         when(operatorLookup.findByOperatorId(OP_UUID))
-                .thenReturn(Optional.of(new OperatorLookupPort.OperatorSummary(OP_PK, OP_UUID)));
+                .thenReturn(Optional.of(new OperatorLookupPort.OperatorLookupRef(OP_PK, OP_UUID)));
         when(tokenPort.revokeAllForOperator(eq(OP_PK), any(Instant.class),
                 eq(AdminRefreshTokenPort.REASON_REUSE_DETECTED))).thenReturn(2);
 

@@ -55,12 +55,12 @@ public class AdminActionAuditWriter {
             throw new AuditFailureException(
                     "Cannot resolve admin_operators.id: operator UUID is null");
         }
-        OperatorLookupPort.OperatorSummary summary = port.findByOperatorId(operatorUuid)
+        OperatorLookupPort.OperatorLookupRef operatorRef = port.findByOperatorId(operatorUuid)
                 .orElseThrow(() -> new AuditFailureException(
                         "admin_operators row not found for operatorId=" + operatorUuid));
-        String tenantId = summary.tenantId();
+        String tenantId = operatorRef.tenantId();
         if (tenantId == null) tenantId = "fan-platform"; // defensive fallback
-        return new OperatorResolved(summary.internalId(), tenantId);
+        return new OperatorResolved(operatorRef.internalId(), tenantId);
     }
 
     /**

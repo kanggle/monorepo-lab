@@ -55,18 +55,18 @@ public class QueryTenantScopeGate {
                             String requestedTenantId,
                             ActionCode actionCode,
                             String permission) {
-        OperatorLookupPort.OperatorSummary opSummary = operatorLookupPort
+        OperatorLookupPort.OperatorLookupRef operatorRef = operatorLookupPort
                 .findByOperatorId(operator.operatorId())
                 .orElseThrow(() -> new TenantScopeDeniedException(
                         "Operator not found: " + operator.operatorId()));
 
-        String operatorTenantId = opSummary.tenantId();
+        String operatorTenantId = operatorRef.tenantId();
         boolean isPlatformScope = AdminOperator.PLATFORM_TENANT_ID.equals(operatorTenantId);
 
         // TASK-BE-326 dual-read effective scope (assignments ∪ home). NET-ZERO with
         // no assignments → {home tenant} → membership check == legacy equality.
         Set<String> effectiveTenants = tenantScopeResolver
-                .resolveEffectiveTenantScope(opSummary.internalId(), operatorTenantId);
+                .resolveEffectiveTenantScope(operatorRef.internalId(), operatorTenantId);
 
         String requested = (requestedTenantId == null || requestedTenantId.isBlank())
                 ? operatorTenantId

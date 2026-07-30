@@ -53,7 +53,7 @@ public class CreateOperatorUseCase {
                                                Boolean reuseExistingIdentity) {
         // --- TASK-BE-249: resolve actor's tenantId for scope guard ---
         String actorTenantId = operatorLookupPort.findByOperatorId(actor.operatorId())
-                .map(OperatorLookupPort.OperatorSummary::tenantId)
+                .map(OperatorLookupPort.OperatorLookupRef::tenantId)
                 .orElse("fan-platform");
         boolean actorIsPlatformScope = AdminOperator.PLATFORM_TENANT_ID.equals(actorTenantId);
 
