@@ -64,7 +64,7 @@ spring:
         request.timeout.ms: 60000
         # ErrorHandlingDeserializer delegates — match production wiring.
         spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
-        spring.deserializer.value.delegate.class: com.example.security.infrastructure.kafka.StrictJsonStringDeserializer
+        spring.deserializer.value.delegate.class: com.example.security.service.infrastructure.kafka.StrictJsonStringDeserializer
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer

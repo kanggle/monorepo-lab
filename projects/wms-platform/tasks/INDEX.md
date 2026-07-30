@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-565-idempotency-store-lock-race-fix.md` — monorepo-wide audit found `InMemoryIdempotencyStore.tryAcquireLock` forked into a correct atomic `compute()` form (`inbound`/`outbound`) and a non-atomic `get`→check→`put` form (`admin`/`inventory`/`master`); fixed the 3 non-atomic services to use `compute()` with a lambda-captured `acquired` flag (not a post-hoc value-equality check — that shape has its own latent false-positive under coarse clock resolution, found while writing the concurrency test). Added/extended a 2-thread/200-round race test per fixed service; `admin-service`/`inventory-service`/`master-service` full `test` GREEN; `inbound-service`/`outbound-service` untouched (diff empty).
 
 ## done
 

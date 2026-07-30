@@ -9,7 +9,8 @@ import okhttp3.mockwebserver.RecordedRequest;
 
 /**
  * Wraps a {@link MockWebServer} that serves the JWKS JSON document produced
- * by {@link JwtTestHelper} at {@code /.well-known/jwks.json}.
+ * by {@link JwtTestHelper} at {@code /oauth2/jwks} (the real IAM auth-service
+ * route, per {@code OAuth2AuthorizationServerIntegrationTest}).
  *
  * <p>Binds to all interfaces ({@code 0.0.0.0}) on an OS-chosen ephemeral port
  * so that Testcontainers containers can reach the host JVM via the
@@ -33,7 +34,7 @@ public final class JwksMockServer implements AutoCloseable {
             @Override
             public MockResponse dispatch(RecordedRequest request) {
                 String path = request.getPath();
-                if (path != null && path.startsWith("/.well-known/jwks.json")) {
+                if (path != null && path.startsWith("/oauth2/jwks")) {
                     return new MockResponse()
                             .setResponseCode(200)
                             .setHeader("Content-Type", "application/json")
@@ -47,7 +48,7 @@ public final class JwksMockServer implements AutoCloseable {
 
     /** URL reachable from the host JVM. NOT usable from inside containers. */
     public String hostJwksUrl() {
-        return "http://" + server.getHostName() + ":" + server.getPort() + "/.well-known/jwks.json";
+        return "http://" + server.getHostName() + ":" + server.getPort() + "/oauth2/jwks";
     }
 
     /**
@@ -56,7 +57,7 @@ public final class JwksMockServer implements AutoCloseable {
      * container via {@code withExtraHost("host.docker.internal", "host-gateway")}.
      */
     public String containerJwksUrl() {
-        return "http://host.docker.internal:" + server.getPort() + "/.well-known/jwks.json";
+        return "http://host.docker.internal:" + server.getPort() + "/oauth2/jwks";
     }
 
     /** OIDC issuer URL reachable from inside containers — used for {@code OIDC_ISSUER_URL}. */

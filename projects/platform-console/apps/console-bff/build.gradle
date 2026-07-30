@@ -54,6 +54,15 @@ dependencies {
     // Structured logging (prod profile)
     implementation 'net.logstash.logback:logstash-logback-encoder:8.0'
 
+    // Resilience4j — per-leg circuit-breaker + bounded retry for the outbound
+    // fan-out legs (TASK-PC-BE-015, architecture.md § Resilience D5.A).
+    // libs/java-common declares these `implementation`, so they are NOT on this
+    // module's compile classpath transitively even though we consume its
+    // com.example.common.resilience.ResilienceClientFactory. Declared explicitly,
+    // mirroring iam-platform/apps/account-service/build.gradle.
+    implementation 'io.github.resilience4j:resilience4j-circuitbreaker:2.2.0'
+    implementation 'io.github.resilience4j:resilience4j-retry:2.2.0'
+
     // Shared libs
     implementation project(':libs:java-common')
     implementation project(':libs:java-web')

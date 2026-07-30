@@ -21,7 +21,7 @@ import java.util.UUID;
  *
  * <p>Generates a 2048-bit RSA keypair on construction, exposes the public half
  * as a JWKS JSON document (served by MockWebServer at
- * {@code /.well-known/jwks.json}), and signs JWTs with the private half. The
+ * {@code /oauth2/jwks}), and signs JWTs with the private half. The
  * gateway's {@code JWT_JWKS_URI} env var points at the MockWebServer so Spring
  * Security's oauth2 resource-server validates signatures against the same key.
  */

@@ -66,7 +66,7 @@ Tokens carry a 10-minute TTL — comfortably outliving even a slow CI run.
 
 ### JWKS server
 
-`JwksMockServer` serves `/.well-known/jwks.json` from the host JVM. Two URL
+`JwksMockServer` serves `/oauth2/jwks` from the host JVM. Two URL
 forms:
 
 - `hostJwksUrl()` — `http://localhost:<port>/...`, usable from the test

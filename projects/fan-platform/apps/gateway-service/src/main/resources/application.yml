@@ -18,7 +18,7 @@ spring:
           issuer-uri: ${OIDC_ISSUER_URL:http://iam.local}
           # JWKS endpoint default. Real environments set OIDC_JWK_SET_URI to the
           # issuer's JWKS endpoint. JWT_JWKS_URI is the legacy env var name.
-          jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:${OIDC_ISSUER_URL:http://iam.local}/.well-known/jwks.json}}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:${OIDC_ISSUER_URL:http://iam.local}/oauth2/jwks}}
 
   cloud:
     gateway:

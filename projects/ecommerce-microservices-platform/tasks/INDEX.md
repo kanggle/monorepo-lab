@@ -81,7 +81,9 @@ _(없음)_
 
 ## review
 
-_(없음)_
+| ID | Title | Service | Tags |
+|---|---|---|---|
+| TASK-BE-564 | 모노레포 감사에서 발견 — `TenantContext` 는 10개 ecommerce 서비스에 byte-identical 복제본으로 존재하는데 settlement-service 복제본만 `CURRENT.set(tenantId.trim())` 로 조용히 분기(나머지 9개는 verbatim `CURRENT.set(tenantId)`). Gateway `JwtHeaderMapping`/`TenantClaimValidator` 어느 쪽도 공백-패딩 `tenant_id` 를 trim/검증하지 않음(양쪽 다 `isBlank()` 만 확인) — 스펙도 trim 을 요구하지 않음 ⇒ **판정: settlement 의 `.trim()` 이 사고 분기**(9개 다수가 맞음; 말소된 값이 오히려 fail-closed-by-non-match 를 조용히 우회함). `.trim()` 제거 + 공백-패딩 verbatim 보존 단위테스트(9개, 0F 0E) 추가. "어떤 서비스도 손상된 `X-Tenant-Id` 를 명시적으로 거부하지 않는다"는 별개의 크로스커팅 발견은 report-only 로 분리(범위 밖). | settlement-service | code, test, bugfix |
 
 ## done
 

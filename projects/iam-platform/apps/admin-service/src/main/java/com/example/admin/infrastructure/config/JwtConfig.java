@@ -4,7 +4,7 @@ import com.example.admin.application.port.IamOidcSubjectTokenValidator;
 import com.example.admin.infrastructure.security.AdminJwtKeyStore;
 import com.example.admin.infrastructure.security.IamOidcJwksSubjectTokenValidator;
 import com.example.admin.infrastructure.security.IssuerEnforcingJwtVerifier;
-import com.example.admin.infrastructure.security.JwtSigner;
+import com.example.admin.infrastructure.security.OperatorJwtSigner;
 import com.example.security.jwt.JwtVerifier;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +17,7 @@ import org.springframework.context.annotation.Primary;
  * Wires the admin-service operator IdP:
  * <ul>
  *   <li>{@link AdminJwtKeyStore} — kid → RSA key map, fail-fast validation</li>
- *   <li>{@link JwtSigner} — active-kid signer for 029-2/029-3 login + 2FA flows</li>
+ *   <li>{@link OperatorJwtSigner} — active-kid signer for 029-2/029-3 login + 2FA flows</li>
  *   <li>Primary {@link JwtVerifier} ({@code operatorJwtVerifier}) — used by
  *       {@code OperatorAuthenticationFilter}. Enforces
  *       {@code iss=admin-service} on top of RS256 signature verification.</li>
@@ -54,8 +54,8 @@ public class JwtConfig {
     }
 
     @Bean
-    public JwtSigner operatorJwtSigner(AdminJwtKeyStore keyStore, AdminJwtProperties properties) {
-        return new JwtSigner(keyStore, properties.getIssuer());
+    public OperatorJwtSigner operatorJwtSigner(AdminJwtKeyStore keyStore, AdminJwtProperties properties) {
+        return new OperatorJwtSigner(keyStore, properties.getIssuer());
     }
 
     @Bean

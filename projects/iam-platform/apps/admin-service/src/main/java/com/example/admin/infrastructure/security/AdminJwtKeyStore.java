@@ -20,7 +20,7 @@ import java.util.Optional;
  * derived public keys. Fails fast if an RSA key is smaller than 2048 bits
  * or malformed.
  *
- * <p>Used by {@link JwtSigner} (private key for active kid) and the JWKS
+ * <p>Used by {@link OperatorJwtSigner} (private key for active kid) and the JWKS
  * endpoint (all public keys).
  */
 public final class AdminJwtKeyStore {

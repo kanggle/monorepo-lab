@@ -12,16 +12,23 @@ Platform-wide naming rules for code, files, and infrastructure.
 |---|---|---|
 | Class / Interface | PascalCase | `UserRepository`, `LoginService` |
 | Record (DTO) | PascalCase + suffix | `LoginRequest`, `SignupResponse` |
-| Application-layer input/output | `{UseCase}Command` / `{UseCase}Result` | `CreateOrderCommand`, `CreateOrderResult` |
+| Application-layer input | `{UseCase}Command` | `CreateOrderCommand` |
+| Application-layer output | `{UseCase}Result` (mutation) or `{UseCase}View` / `{UseCase}Page` (read/query) | `CreateOrderResult`, `ArtistView`, `InboxPage` |
 | HTTP-layer input/output | `{UseCase}Request` / `{UseCase}Response` | `LoginRequest`, `LoginResponse` |
 | Exception | PascalCase + `Exception` | `InvalidCredentialsException` |
 | Configuration | PascalCase + `Config` | `SecurityConfig`, `RedisConfig` |
+| `@ConfigurationProperties` binding | PascalCase + `Properties` | `RateLimitOverrideProperties`, `WebPushProperties` |
 | Filter | PascalCase + `Filter` | `JwtAuthenticationFilter` |
 | Controller | PascalCase + `Controller` | `AuthController` |
-| Service | PascalCase + `Service` | `LoginService`, `SignupService` |
+| Service (application-layer use case, `@Service`) | PascalCase + `Service` or PascalCase + `UseCase` | `LoginService`, `CreateOrderUseCase` |
 | Repository (interface) | PascalCase + `Repository` | `UserRepository` |
 | Repository (impl) | PascalCase + `RepositoryImpl` | `UserRepositoryImpl` |
+| Outbound port adapter (non-repository) | PascalCase + `Adapter` | `HttpCarrierTrackingAdapter`, `FeedCacheAdapter` |
 | JPA Repository | PascalCase + `JpaRepository` | `UserJpaRepository` |
+| Global/base exception-handler (`@RestControllerAdvice` or its shared base) | PascalCase + `ExceptionHandler` | `GlobalExceptionHandler`, `CommonGlobalExceptionHandler` |
+| Idempotency/lock store | PascalCase + `Store` | `InMemoryIdempotencyStore`, `RedisSeenSignatureStore` |
+
+Both application-layer output forms above are accepted — `{UseCase}Result` for a use case that mutates state, `{UseCase}View`/`{UseCase}Page` for a read/query use case returning a projection. Do not mechanically rename existing `*View`/`*Page` classes to `*Result`; this row documents the convention the fleet already converged on independently across every project (a 2026-07-29 monorepo-wide audit found effectively zero `*Result` classes and dozens of `*View`/`*Page` ones).
 
 ## Methods
 
@@ -39,8 +46,8 @@ Platform-wide naming rules for code, files, and infrastructure.
 ## Packages
 
 - Lowercase, dot-separated.
-- Structure: `com.example.{service}.{layer}`
-- Layers: `domain`, `application`, `infrastructure`, `presentation`
+- Structure: `com.example.{project}.{service}.{layer}` — the `{project}` segment (e.g. `erp`, `finance`, `fanplatform`, `scmplatform`) namespaces a service's classes against same-named services in other projects. `com.example.{service}.{layer}` (3 segments, no project namespace) remains valid for the two projects that predate this convention (ecommerce, iam) — do not force a repackage of existing code to add the segment.
+- Layers: `domain`, `application`, `infrastructure`, `presentation` for Layered services; Hexagonal (Ports & Adapters) services instead use `domain`, `application`, `adapter` (with `adapter/in|out` or `adapter/inbound|outbound` sub-packages, per the service's declared convention), plus a top-level `config` package — both are valid per-service styles, declared in that service's `architecture.md`.
 - Sub-package structure is defined per service in `specs/services/<service>/architecture.md`.
 
 ---
@@ -70,7 +77,9 @@ table.
 
 - Use `kebab-case` for URL path segments: `/api/v1/<resource>/refresh-token` (but prefer single words where possible).
 - Use plural nouns for resource collections: `/api/v1/<resources>`.
-- Use verbs only for action endpoints that don't map cleanly to resources: `/api/v1/<resource>/<action>` (e.g., `/deactivate`, `/refresh`).
+- Use verbs only for action endpoints that don't map cleanly to resources, in one of two forms — pick one per endpoint family and stay consistent within it:
+  - slash form: `/api/v1/<resource>/<action>` (e.g., `/deactivate`, `/refresh`)
+  - colon form (AIP-136): `/api/v1/<resource>/{id}:<action>` (e.g., `/{id}:cancel`, `/{id}:retry`) — used where a contract already declares it (`specs/contracts/http/`); do not introduce it as a new pattern without a contract-first decision, since it changes the wire path.
 
 ---
 

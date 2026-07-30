@@ -2,7 +2,7 @@ package com.example.admin.application;
 
 import com.example.admin.application.port.AdminRefreshTokenPort;
 import com.example.admin.infrastructure.config.AdminJwtProperties;
-import com.example.admin.infrastructure.security.JwtSigner;
+import com.example.admin.infrastructure.security.OperatorJwtSigner;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -29,7 +29,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AdminRefreshTokenIssuer {
 
-    private final JwtSigner jwtSigner;
+    private final OperatorJwtSigner jwtSigner;
     private final AdminRefreshTokenPort tokenPort;
     private final AdminJwtProperties properties;
 

@@ -3,6 +3,7 @@ package com.example.erp.approval.presentation.controller;
 import com.example.erp.approval.application.ActorContext;
 import com.example.erp.approval.application.ApprovalApplicationService;
 import com.example.erp.approval.application.view.ApprovalSummaryView;
+import com.example.erp.approval.domain.common.PageResult;
 import com.example.erp.approval.infrastructure.security.ActorContextResolver;
 import com.example.erp.approval.presentation.dto.ApiEnvelope;
 import lombok.RequiredArgsConstructor;
@@ -31,7 +32,8 @@ public class ApprovalInboxController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         ActorContext actor = ActorContextResolver.currentOrThrow();
-        List<ApprovalSummaryView> data = service.inbox(actor, page, size);
-        return ResponseEntity.ok(ApiEnvelope.ofList(data, page, size));
+        PageResult<ApprovalSummaryView> result = service.inbox(actor, page, size);
+        return ResponseEntity.ok(
+                ApiEnvelope.ofList(result.content(), page, size, result.totalElements()));
     }
 }

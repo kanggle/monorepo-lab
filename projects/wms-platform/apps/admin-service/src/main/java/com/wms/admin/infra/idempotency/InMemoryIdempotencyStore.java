@@ -49,12 +49,23 @@ public class InMemoryIdempotencyStore implements IdempotencyStore {
     public boolean tryAcquireLock(String storageKey, Duration ttl) {
         long now = clock.millis();
         long expiresAt = now + ttl.toMillis();
-        Long existing = locks.get(storageKey);
-        if (existing != null && existing > now) {
-            return false;
-        }
-        locks.put(storageKey, expiresAt);
-        return true;
+        // compute() is atomic per-key: the lambda runs without concurrent
+        // interference from other tryAcquireLock/releaseLock calls on the same
+        // key. `acquired` is set from *inside* the lambda so it reflects
+        // whether this specific invocation took the acquire branch — comparing
+        // the returned map value against a locally computed `expiresAt` instead
+        // would be unsafe, since two racing callers can compute an identical
+        // `expiresAt` under coarse clock resolution and both appear to "win".
+        boolean[] acquired = {false};
+        locks.compute(storageKey, (key, existing) -> {
+            if (existing != null && existing.longValue() > now) {
+                acquired[0] = false;
+                return existing; // lock is held — do not overwrite
+            }
+            acquired[0] = true;
+            return expiresAt; // acquire or renew expired lock
+        });
+        return acquired[0];
     }
 
     @Override

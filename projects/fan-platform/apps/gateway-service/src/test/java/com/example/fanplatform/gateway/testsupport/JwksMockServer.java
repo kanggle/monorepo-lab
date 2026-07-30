@@ -9,7 +9,8 @@ import okhttp3.mockwebserver.RecordedRequest;
 
 /**
  * Wraps an {@link MockWebServer} that serves the JWKS JSON document produced
- * by {@link JwtTestHelper} at {@code /.well-known/jwks.json}.
+ * by {@link JwtTestHelper} at {@code /oauth2/jwks} (the real IAM auth-service
+ * route, per {@code OAuth2AuthorizationServerIntegrationTest}).
  */
 public final class JwksMockServer implements AutoCloseable {
 
@@ -23,7 +24,7 @@ public final class JwksMockServer implements AutoCloseable {
             @Override
             public MockResponse dispatch(RecordedRequest request) {
                 String path = request.getPath();
-                if (path != null && path.startsWith("/.well-known/jwks.json")) {
+                if (path != null && path.startsWith("/oauth2/jwks")) {
                     return new MockResponse()
                             .setResponseCode(200)
                             .setHeader("Content-Type", "application/json")
@@ -38,7 +39,7 @@ public final class JwksMockServer implements AutoCloseable {
     }
 
     public String hostJwksUrl() {
-        return "http://" + server.getHostName() + ":" + server.getPort() + "/.well-known/jwks.json";
+        return "http://" + server.getHostName() + ":" + server.getPort() + "/oauth2/jwks";
     }
 
     public int port() {

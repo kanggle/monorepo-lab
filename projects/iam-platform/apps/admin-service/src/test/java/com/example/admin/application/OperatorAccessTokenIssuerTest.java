@@ -2,7 +2,7 @@ package com.example.admin.application;
 
 import com.example.admin.infrastructure.config.AdminJwtProperties;
 import com.example.admin.infrastructure.security.AdminJwtKeyStore;
-import com.example.admin.infrastructure.security.JwtSigner;
+import com.example.admin.infrastructure.security.OperatorJwtSigner;
 import com.example.security.jwt.Rs256JwtVerifier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -40,7 +40,7 @@ class OperatorAccessTokenIssuerTest {
                 + "\n-----END PRIVATE KEY-----\n";
 
         AdminJwtKeyStore keyStore = new AdminJwtKeyStore(Map.of("test-kid", pem), "test-kid");
-        JwtSigner signer = new JwtSigner(keyStore, "admin-service");
+        OperatorJwtSigner signer = new OperatorJwtSigner(keyStore, "admin-service");
 
         AdminJwtProperties props = new AdminJwtProperties();
         props.setActiveSigningKid("test-kid");

@@ -9,6 +9,7 @@ import com.kanggle.platformconsole.bff.application.port.outbound.ScmHealthReadPo
 import com.kanggle.platformconsole.bff.application.port.outbound.WmsHealthReadPort;
 import com.kanggle.platformconsole.bff.domain.credential.CredentialSelectionPort;
 import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
+import com.kanggle.platformconsole.bff.support.LegResilienceDoubles;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -82,8 +83,56 @@ class DomainHealthCompositionUseCaseTest {
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
         useCase = new DomainHealthCompositionUseCase(
-                meterRegistry, Tracer.NOOP, gapPort, wmsPort, scmPort, financePort, erpPort,
+                meterRegistry, Tracer.NOOP, LegResilienceDoubles.passThrough(),
+                gapPort, wmsPort, scmPort, financePort, erpPort,
                 ecommercePort);
+    }
+
+    /**
+     * TASK-PC-BE-015 — a leg rejected by its OPEN {@code (domain, "domain-health")}
+     * breaker must render {@code degraded / CIRCUIT_OPEN} (the reason
+     * {@code console-web}'s {@code DEGRADED_REASONS} zod enum already accepts) and
+     * increment {@code bff_fanout_errors{code="circuit_open"}} — the classification
+     * § 2.4.9.2 has always listed but nothing emitted.
+     */
+    @Test
+    @DisplayName("circuit_open: OPEN breaker on the wms leg → degraded/CIRCUIT_OPEN card + circuit_open counter; the port is never called; other legs ok")
+    void circuit_open_leg_renders_CIRCUIT_OPEN_without_calling_the_port() {
+        DomainHealthCompositionUseCase gated = new DomainHealthCompositionUseCase(
+                meterRegistry, Tracer.NOOP, LegResilienceDoubles.openFor(DomainTarget.WMS),
+                gapPort, wmsPort, scmPort, financePort, erpPort, ecommercePort);
+
+        when(gapPort.read()).thenReturn(Map.of("status", "UP"));
+        when(scmPort.read()).thenReturn(Map.of("status", "UP"));
+        when(financePort.read()).thenReturn(Map.of("status", "UP"));
+        when(erpPort.read()).thenReturn(Map.of("status", "UP"));
+        when(ecommercePort.read()).thenReturn(Map.of("status", "UP"));
+        // wmsPort intentionally un-stubbed: STRICT_STUBS would flag an unused stub,
+        // which is itself the assertion that the fail-fast path never touches it.
+
+        List<CompositionLeg> legs = gated.compose();
+
+        CompositionLeg wms = legs.get(1);
+        assertThat(wms.outcome().domain()).isEqualTo(DomainTarget.WMS);
+        assertThat(wms.outcome().isDegraded()).isTrue();
+        assertThat(wms.outcome().reason()).isEqualTo("CIRCUIT_OPEN");
+        assertThat(wms.outcome().isCircuitOpen()).isTrue();
+        assertThat(wms.data()).isNull();
+        verify(wmsPort, never()).read();
+
+        Counter circuitOpen = meterRegistry.find("bff_fanout_errors")
+                .tag("domain", "wms")
+                .tag("route", "domain-health")
+                .tag("code", "circuit_open")
+                .counter();
+        assertThat(circuitOpen).as("circuit_open must now have an emitter").isNotNull();
+        assertThat(circuitOpen.count()).isEqualTo(1.0);
+
+        // Every other card is unaffected — per-card degrade, never all-or-nothing.
+        for (int i : new int[]{0, 2, 3, 4, 5}) {
+            assertThat(legs.get(i).outcome().isOk())
+                    .as("card %d should be ok", i).isTrue();
+        }
     }
 
     // ------------------------------------------------------------------

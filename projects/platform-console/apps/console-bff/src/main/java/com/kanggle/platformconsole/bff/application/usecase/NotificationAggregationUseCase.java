@@ -3,6 +3,8 @@ package com.kanggle.platformconsole.bff.application.usecase;
 import com.kanggle.platformconsole.bff.application.composition.CompositionEngine;
 import com.kanggle.platformconsole.bff.application.composition.CompositionLeg;
 import com.kanggle.platformconsole.bff.application.port.outbound.ErpNotificationsReadPort;
+import com.kanggle.platformconsole.bff.application.port.outbound.LegResiliencePort;
+import com.kanggle.platformconsole.bff.domain.composition.CircuitOpenException;
 import com.kanggle.platformconsole.bff.domain.composition.LegOutcome;
 import com.kanggle.platformconsole.bff.domain.credential.CredentialSelectionPort;
 import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
@@ -83,10 +85,11 @@ public class NotificationAggregationUseCase {
             CredentialSelectionPort credentialSelection,
             MeterRegistry meterRegistry,
             Tracer tracer,
+            LegResiliencePort resilience,
             ErpNotificationsReadPort erpPort) {
         this.properties = properties;
         this.credentialSelection = credentialSelection;
-        this.engine = new CompositionEngine(meterRegistry, tracer, ROUTE_LABEL);
+        this.engine = new CompositionEngine(meterRegistry, tracer, ROUTE_LABEL, resilience);
         this.erpPort = erpPort;
     }
 
@@ -270,8 +273,19 @@ public class NotificationAggregationUseCase {
      * Operator Overview): a 401 from one domain must not blank the bell for the
      * others, so it is classified as a per-domain degrade, never an
      * {@code UpstreamUnauthorizedException}.
+     *
+     * <p>TASK-PC-BE-015 adds the leading {@link CircuitOpenException} arm. Note
+     * the aggregator's wire surface reports degraded legs only as
+     * {@code degradedDomains} names, so {@code CIRCUIT_OPEN} is visible here via
+     * {@code bff_fanout_errors{code="circuit_open"}} rather than in the body —
+     * the operator-visible effect is that the bell renders the remaining domains
+     * immediately instead of waiting out a dead domain's timeout.
      */
     private CompositionLeg classifyError(DomainTarget domain, Throwable e) {
+        if (e instanceof CircuitOpenException) {
+            engine.emitErrorCounter(domain, "circuit_open");
+            return CompositionLeg.outcomeOnly(LegOutcome.circuitOpen(domain));
+        }
         if (e instanceof MissingCredentialException) {
             engine.emitErrorCounter(domain, "missing_prerequisite");
             return CompositionLeg.outcomeOnly(LegOutcome.degraded(domain, "MISSING_PREREQUISITE"));

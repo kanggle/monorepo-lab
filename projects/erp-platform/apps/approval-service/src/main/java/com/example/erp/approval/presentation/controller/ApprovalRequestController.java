@@ -9,6 +9,7 @@ import com.example.erp.approval.application.command.Commands.SubmitCommand;
 import com.example.erp.approval.application.command.Commands.WithdrawCommand;
 import com.example.erp.approval.application.view.ApprovalRequestView;
 import com.example.erp.approval.application.view.ApprovalSummaryView;
+import com.example.erp.approval.domain.common.PageResult;
 import com.example.erp.approval.infrastructure.security.ActorContextResolver;
 import com.example.erp.approval.presentation.dto.ApiEnvelope;
 import com.example.erp.approval.presentation.dto.ApprovalRequests.ApproveRequest;
@@ -67,10 +68,11 @@ public class ApprovalRequestController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         ActorContext actor = ActorContextResolver.currentOrThrow();
-        List<ApprovalSummaryView> data = service.list(actor,
+        PageResult<ApprovalSummaryView> result = service.list(actor,
                 ApprovalApplicationService.parseStatus(status),
                 ApprovalApplicationService.parseRole(role), page, size);
-        return ResponseEntity.ok(ApiEnvelope.ofList(data, page, size));
+        return ResponseEntity.ok(
+                ApiEnvelope.ofList(result.content(), page, size, result.totalElements()));
     }
 
     @GetMapping("/{id}")

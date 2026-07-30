@@ -24,6 +24,20 @@ and the rule files indexed by `PROJECT.md`'s declared `domain` (`saas`) and
 > Sections below describe the **target v1 skeleton + Phase 7 MVP-ready** shape;
 > the impl PR (TASK-PC-BE-001) lands the skeleton, and TASK-PC-FE-011 lands the
 > first composition route on top.
+>
+> **Additive note — TASK-PC-BE-015 (non-decision-changing clarification, per
+> § Change Rule (b))**: § Resilience (D5.A) and § Tech Stack described the
+> per-leg circuit-breaker + retry as coming from `libs/java-web`. That module
+> holds four files and **no resilience code**; the Resilience4j wiring is in
+> `libs/java-common` (`ResilienceClientFactory`), which `console-bff`'s
+> `build.gradle` already depended on but imported nothing from. Until
+> TASK-PC-BE-015 **no circuit-breaker or retry existed in the service at all** —
+> only the timeout pair in `RestClientConfig` — so the D5.A prose described an
+> intent, not the code, and the `circuit_open` classification the contract lists
+> had no emitter. **No D1–D8 decision changes**: D5.A is executed as written;
+> the citation is corrected and the wording made specific about where the
+> primitives are applied (`CompositionEngine.time(...)` via the
+> `LegResiliencePort` outbound port). No ADR-MONO-017 amendment is required.
 
 ---
 
@@ -99,9 +113,13 @@ Reference skill: [`.claude/skills/backend/architecture/hexagonal/SKILL.md`](../.
 
 - Java 21, Spring Boot 3.4 (Servlet stack)
 - Spring Web (MVC), Spring Security 6 (OAuth2 Resource Server — see § Auth)
-- [`libs/java-web`](../../../../../libs/java-web/) — `RestClient` + resilience
-  primitives (Resilience4j circuit-breaker / retry / timeout) for the 6 outbound
-  domain calls (ADR-MONO-017 D5.A)
+- [`libs/java-common`](../../../../../libs/java-common/) —
+  `com.example.common.resilience.ResilienceClientFactory`, the Resilience4j
+  circuit-breaker / retry primitives for the outbound domain legs
+  (ADR-MONO-017 D5.A). Adopted through its customizer overloads, unforked; the
+  per-leg connect/read timeouts stay in `RestClientConfig`'s `RestClient` beans.
+  *(This row previously named `libs/java-web`, which contains no resilience code
+  at all — corrected by TASK-PC-BE-015 together with the implementation.)*
 - [`libs/java-security`](../../../../../libs/java-security/) — RS256 JWT validation
   primitives, tenant-claim helpers
 - Micrometer + OTel for the BFF-specific metrics surface (ADR-MONO-017 D7.A)
@@ -249,20 +267,36 @@ any producer — D3.B rejection):
 
 The BFF inherits the
 [`console-integration-contract.md` § 2.5](../../contracts/console-integration-contract.md)
-resilience patterns **per outbound domain** (circuit-breaker + retry + timeout)
-via `libs/java-web` Resilience4j primitives.
+resilience patterns **per outbound leg** (circuit-breaker + retry + timeout)
+via [`libs/java-common`](../../../../../libs/java-common/)'s
+`ResilienceClientFactory` (Resilience4j).
 
 - **Per-leg circuit-breaker keyed by `(domain, route)`** — a wms outage does not
-  open the breaker for scm.
+  open the breaker for scm, and a wms trip on the Domain Health route does not
+  open the wms leg of the Operator Overview route (independent sibling
+  instances, § 2.4.9.2). Implemented as the `LegResiliencePort` outbound port,
+  applied by `CompositionEngine.time(...)` — the only place holding both halves
+  of the key (a `RestClient` bean is per-domain and cannot see the route).
+  An open breaker rejects the leg **without opening a socket** and surfaces the
+  degrade classification `CIRCUIT_OPEN` + `bff_fanout_errors{code="circuit_open"}`.
 - **Per-leg hard timeout** bounded so the composition's total fan-out latency
   budget is not exceeded (composition latency budget = inbound request timeout
-  − fan-out coordination overhead).
+  − fan-out coordination overhead). The retry budget is sized against the same
+  deadline: `attempts × per-leg timeout + backoff` must stay under
+  `CompositionEngine.COMPOSITION_TIMEOUT`, else per-leg degrades would be
+  misattributed as whole-composition timeouts.
 - **Aggregation degrade** — partial-failure composition rendering: every
   responsive leg's data + per-failed-leg `{ status: "degraded", domain, reason }`
   card. **All-down still returns 200 with an all-degraded envelope** — the
   composition route never blanks the dashboard (D5.B rejection: "BFF-level
   aggregation timeout (all-or-nothing)").
-- **Bounded retry** on outbound legs only — never on the inbound request.
+- **Bounded retry** on outbound **composition** legs only — never on the inbound
+  request, and never on the mark-read proxy
+  (`POST /api/console/notifications/{sourceDomain}/{id}/read`), which is a
+  mutating pass-through outside the fan-out engine: it stays timeout-bounded
+  only. 4xx is never retried and never counts toward the breaker's failure rate
+  (a `403 TENANT_FORBIDDEN` / cross-leg `401` is an authorization outcome, not a
+  downstream availability fault).
 
 The rejected D5.B (all-or-nothing 503 on any single domain failure) MUST NOT
 be reintroduced.

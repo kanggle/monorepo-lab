@@ -1,0 +1,56 @@
+package com.example.security.service.application;
+
+import com.example.security.service.domain.detection.DetectionResult;
+import com.example.security.service.domain.detection.EvaluationContext;
+import com.example.security.service.domain.detection.RiskLevel;
+import com.example.security.service.domain.detection.RiskScoreAggregator;
+import com.example.security.service.domain.repository.SuspiciousEventRepository;
+import com.example.security.service.domain.suspicious.SuspiciousEvent;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
+import java.util.UUID;
+
+/**
+ * Persistence boundary for suspicious events. Extracted to a separate Spring bean
+ * so that {@link Transactional} methods are invoked through the AOP proxy
+ * (external invocation) rather than via self-invocation from
+ * {@link DetectSuspiciousActivityUseCase}.
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class SuspiciousEventPersistenceService {
+
+    private final SuspiciousEventRepository suspiciousEventRepository;
+
+    @Transactional
+    public SuspiciousEvent recordSuspiciousEvent(EvaluationContext ctx,
+                                                 RiskScoreAggregator.Aggregated aggregated,
+                                                 RiskLevel level) {
+        DetectionResult winner = aggregated.winner();
+        SuspiciousEvent event = SuspiciousEvent.create(
+                UUID.randomUUID().toString(),
+                ctx.tenantId(),
+                ctx.accountId(),
+                winner.ruleCode(),
+                winner.riskScore(),
+                level,
+                winner.evidence(),
+                ctx.eventId(),
+                Instant.now()
+        );
+        suspiciousEventRepository.save(event);
+        log.info("Persisted suspicious event: id={}, accountId={}, ruleCode={}, score={}, action={}",
+                event.getId(), event.getAccountId(), event.getRuleCode(), event.getRiskScore(), level);
+        return event;
+    }
+
+    @Transactional
+    public void updateLockResult(SuspiciousEvent event) {
+        suspiciousEventRepository.save(event);
+    }
+}

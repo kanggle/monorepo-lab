@@ -29,6 +29,20 @@ import java.util.Map;
  * {@code Authorization: Bearer <credential>} + {@code Accept: application/json}.
  * The credential is the GAP/IAM OIDC access token ({@code IamOidcAccessToken}) —
  * the aggregator is a dispatcher, never a credential rewrite (D6).
+ *
+ * <p><b>Resilience coverage is asymmetric across this adapter's two surfaces
+ * (TASK-PC-BE-015) — stated here so it is not rediscovered.</b>
+ * <ul>
+ *   <li>{@link #readInbox} is a fan-out leg: it runs inside
+ *       {@code CompositionEngine.time(...)} and is therefore behind the
+ *       {@code (ERP, "notification-aggregator")} circuit breaker + bounded retry.</li>
+ *   <li>{@link #markRead} is <b>not</b> gated. It is a mutating proxy invoked
+ *       directly by {@code NotificationAggregationUseCase.markRead(...)}, outside
+ *       the fan-out engine: there is no composition leg to degrade, and a bounded
+ *       retry would be an unsafe re-POST. It stays bounded by the shared 2s
+ *       {@code erpRestClient} timeout only, and its producer errors are passed
+ *       through to the caller verbatim (TASK-PC-BE-011).</li>
+ * </ul>
  */
 @Component
 public class ErpNotificationsReadAdapter implements ErpNotificationsReadPort {

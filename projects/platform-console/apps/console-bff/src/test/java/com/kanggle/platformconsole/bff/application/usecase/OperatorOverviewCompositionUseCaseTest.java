@@ -12,6 +12,7 @@ import com.kanggle.platformconsole.bff.domain.credential.CredentialSelectionPort
 import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
 import com.kanggle.platformconsole.bff.domain.credential.MissingCredentialException;
 import com.kanggle.platformconsole.bff.domain.credential.OutboundCredential;
+import com.kanggle.platformconsole.bff.support.LegResilienceDoubles;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -102,7 +103,54 @@ class OperatorOverviewCompositionUseCaseTest {
         meterRegistry = new SimpleMeterRegistry();
         useCase = new OperatorOverviewCompositionUseCase(
                 credentialSelection, meterRegistry, Tracer.NOOP,
+                LegResilienceDoubles.passThrough(),
                 gapPort, wmsPort, scmPort, financePort, erpPort, ecommercePort);
+    }
+
+    /**
+     * TASK-PC-BE-015 — an OPEN {@code (WMS, "operator-overview")} breaker renders
+     * {@code degraded / CIRCUIT_OPEN} (§ 2.4.9.1's degraded-reason union) and
+     * emits {@code bff_fanout_errors{code="circuit_open"}}, without touching the
+     * read port. Credential selection still happens (it is servlet-thread
+     * pre-resolve, upstream of the gate) — the fail-fast saves the socket, not
+     * the local dispatch.
+     */
+    @Test
+    @DisplayName("circuit_open: OPEN breaker on the wms leg → degraded/CIRCUIT_OPEN card + circuit_open counter; read port never invoked; other legs ok")
+    void circuit_open_leg_renders_CIRCUIT_OPEN_without_calling_the_port() {
+        stubAllCredentialsHappy();
+        OperatorOverviewCompositionUseCase gated = new OperatorOverviewCompositionUseCase(
+                credentialSelection, meterRegistry, Tracer.NOOP,
+                LegResilienceDoubles.openFor(DomainTarget.WMS),
+                gapPort, wmsPort, scmPort, financePort, erpPort, ecommercePort);
+
+        when(gapPort.read(anyString(), anyString())).thenReturn(Map.of("k", "v"));
+        when(scmPort.read(anyString(), anyString())).thenReturn(Map.of("k", "v"));
+        when(erpPort.read(anyString(), anyString())).thenReturn(Map.of("k", "v"));
+        when(ecommercePort.read(anyString(), anyString())).thenReturn(Map.of("k", "v"));
+
+        List<CompositionLeg> legs = gated.compose(TENANT, null);
+
+        CompositionLeg wms = legs.get(1);
+        assertThat(wms.outcome().domain()).isEqualTo(DomainTarget.WMS);
+        assertThat(wms.outcome().isDegraded()).isTrue();
+        assertThat(wms.outcome().reason()).isEqualTo("CIRCUIT_OPEN");
+        assertThat(wms.data()).isNull();
+        verify(wmsPort, never()).read(anyString(), anyString());
+
+        Counter circuitOpen = meterRegistry.find("bff_fanout_errors")
+                .tag("domain", "wms")
+                .tag("route", "operator-overview")
+                .tag("code", "circuit_open")
+                .counter();
+        assertThat(circuitOpen).as("circuit_open must now have an emitter").isNotNull();
+        assertThat(circuitOpen.count()).isEqualTo(1.0);
+
+        // Per-card degrade only — the responsive legs still carry their data.
+        assertThat(legs.get(0).outcome().isOk()).isTrue();
+        assertThat(legs.get(2).outcome().isOk()).isTrue();
+        assertThat(legs.get(4).outcome().isOk()).isTrue();
+        assertThat(legs.get(5).outcome().isOk()).isTrue();
     }
 
     private void stubAllCredentialsHappy() {

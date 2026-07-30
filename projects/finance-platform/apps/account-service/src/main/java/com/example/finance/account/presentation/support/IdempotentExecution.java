@@ -3,6 +3,7 @@ package com.example.finance.account.presentation.support;
 import com.example.finance.account.application.port.outbound.IdempotencyStore;
 import com.example.finance.account.domain.error.DomainErrors.IdempotencyKeyConflictException;
 import com.example.finance.account.presentation.dto.ApiEnvelope;
+import com.example.web.idempotency.BodyHashUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -10,7 +11,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.function.Supplier;
 
@@ -38,6 +38,15 @@ import java.util.function.Supplier;
  * <p>Body type is intentionally erased to {@link ApiEnvelope}: a replay must
  * be byte-faithful to the first response. The store is fail-CLOSED (DB
  * unreachable on a fund-write claim → 503 {@code IDEMPOTENCY_STORE_UNAVAILABLE}).
+ *
+ * <p><b>Canonical body hash (TASK-FIN-BE-063)</b>: the payload hash MUST be
+ * order-independent — two semantically-identical bodies whose JSON keys
+ * happen to serialize in a different order (different client library
+ * version, DTO field reordering) must hash identically, or a same-key replay
+ * would incorrectly conflict (409 {@code IDEMPOTENCY_KEY_CONFLICT}) instead
+ * of returning the cached response. {@link BodyHashUtil#computeHash} —
+ * shared with every other servlet-stack Idempotency-Key implementation in
+ * the monorepo — re-serialises with sorted keys before hashing.
  */
 @Slf4j
 @Component
@@ -56,7 +65,8 @@ public class IdempotentExecution {
                                  String idempotencyKey,
                                  Object requestPayload,
                                  Supplier<ResponseEntity<?>> action) {
-        String payloadHash = sha256(toJson(requestPayload));
+        String payloadHash = BodyHashUtil.computeHash(
+                toJson(requestPayload).getBytes(StandardCharsets.UTF_8), objectMapper);
         long deadlineNanos = System.nanoTime() + IN_PROGRESS_WAIT.toNanos();
 
         while (true) {
@@ -147,18 +157,6 @@ public class IdempotentExecution {
             return objectMapper.readValue(json, ApiEnvelope.class);
         } catch (Exception e) {
             throw new IllegalStateException("idempotency response deserialize failed", e);
-        }
-    }
-
-    private static String sha256(String s) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] d = md.digest(s.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder(64);
-            for (byte b : d) sb.append(String.format("%02x", b));
-            return sb.toString();
-        } catch (Exception e) {
-            throw new IllegalStateException("sha-256 unavailable", e);
         }
     }
 }

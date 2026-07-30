@@ -6,8 +6,10 @@ import com.kanggle.platformconsole.bff.application.port.outbound.EcommerceOvervi
 import com.kanggle.platformconsole.bff.application.port.outbound.ErpDepartmentsReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.FinanceBalanceReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.IamAccountsReadPort;
+import com.kanggle.platformconsole.bff.application.port.outbound.LegResiliencePort;
 import com.kanggle.platformconsole.bff.application.port.outbound.ScmInventoryReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.WmsInventoryReadPort;
+import com.kanggle.platformconsole.bff.domain.composition.CircuitOpenException;
 import com.kanggle.platformconsole.bff.domain.composition.DegradePolicy;
 import com.kanggle.platformconsole.bff.domain.composition.LegOutcome;
 import com.kanggle.platformconsole.bff.domain.credential.CredentialSelectionPort;
@@ -86,6 +88,7 @@ public class OperatorOverviewCompositionUseCase {
             CredentialSelectionPort credentialSelection,
             MeterRegistry meterRegistry,
             Tracer tracer,
+            LegResiliencePort resilience,
             IamAccountsReadPort gapPort,
             WmsInventoryReadPort wmsPort,
             ScmInventoryReadPort scmPort,
@@ -93,7 +96,7 @@ public class OperatorOverviewCompositionUseCase {
             ErpDepartmentsReadPort erpPort,
             EcommerceOverviewReadPort ecommercePort) {
         this.credentialSelection = credentialSelection;
-        this.engine = new CompositionEngine(meterRegistry, tracer, ROUTE_LABEL);
+        this.engine = new CompositionEngine(meterRegistry, tracer, ROUTE_LABEL, resilience);
         this.gapPort = gapPort;
         this.wmsPort = wmsPort;
         this.scmPort = scmPort;
@@ -217,10 +220,21 @@ public class OperatorOverviewCompositionUseCase {
     }
 
     /**
-     * Operator Overview leg error classifier — byte-equal with the historic
-     * in-line {@code time(...)} catch chain.
+     * Operator Overview leg error classifier.
+     *
+     * <p>TASK-PC-BE-015 adds the leading {@link CircuitOpenException} arm
+     * ({@code degraded / CIRCUIT_OPEN} + {@code code="circuit_open"}); the
+     * remaining arms are byte-equal with the historic in-line {@code time(...)}
+     * catch chain. The circuit arm is <b>first</b> deliberately: a fail-fast
+     * rejection is not a downstream answer, so it must not fall through into the
+     * 4xx/5xx classification that would otherwise mislabel it
+     * {@code DOWNSTREAM_ERROR}.
      */
     private CompositionLeg classifyError(DomainTarget domain, Throwable e) {
+        if (e instanceof CircuitOpenException) {
+            engine.emitErrorCounter(domain, "circuit_open");
+            return CompositionLeg.outcomeOnly(LegOutcome.circuitOpen(domain));
+        }
         if (e instanceof MissingCredentialException) {
             engine.emitErrorCounter(domain, "missing_prerequisite");
             return CompositionLeg.outcomeOnly(LegOutcome.forbidden(domain, "MISSING_PREREQUISITE"));

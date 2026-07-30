@@ -1,6 +1,7 @@
 package com.kanggle.platformconsole.bff;
 
 import com.kanggle.platformconsole.bff.infrastructure.config.NotificationAggregatorProperties;
+import com.kanggle.platformconsole.bff.infrastructure.config.ResilienceProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -20,7 +21,10 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
  * </ul>
  */
 @SpringBootApplication
-@EnableConfigurationProperties(NotificationAggregatorProperties.class)
+@EnableConfigurationProperties({
+        NotificationAggregatorProperties.class,
+        ResilienceProperties.class
+})
 public class ConsoleBffApplication {
 
     public static void main(String[] args) {

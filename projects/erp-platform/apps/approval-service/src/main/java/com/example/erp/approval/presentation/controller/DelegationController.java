@@ -94,6 +94,9 @@ public class DelegationController {
         ActorContext actor = ActorContextResolver.currentOrThrow();
         List<DelegationGrantView> data = service.listDelegations(actor,
                 DelegationApplicationService.parseRole(role));
-        return ResponseEntity.ok(ApiEnvelope.ofList(data, 0, data.size()));
+        // Unpaginated endpoint (no page/size query params documented in
+        // approval-api.md) — the full grant list is always returned, so
+        // data.size() genuinely IS the true total here (TASK-ERP-BE-036).
+        return ResponseEntity.ok(ApiEnvelope.ofList(data, 0, data.size(), data.size()));
     }
 }
