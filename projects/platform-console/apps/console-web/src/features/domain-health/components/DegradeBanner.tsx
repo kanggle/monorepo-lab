@@ -1,5 +1,6 @@
 import type { Card, DomainHealth } from '../api/types';
 import { RetryButton } from './RetryButton';
+import { DegradeBanner as SharedDegradeBanner } from '@/shared/ui/DegradeBanner';
 
 /**
  * Banner shown when EVERY one of the 5 cards is `degraded`
@@ -13,6 +14,9 @@ import { RetryButton } from './RetryButton';
  * NOTE: per § 2.4.9.2 invariant, `forbidden` is never emitted on
  * this route — "all non-ok" reduces to "all degraded" here (the
  * card status union is `'ok' | 'degraded'`).
+ *
+ * Thin wrapper (TASK-PC-FE-263) — owns `isAllDegraded`, its copy text,
+ * and its testid, delegates the banner shell to `shared/ui/DegradeBanner`.
  */
 
 export function isAllDegraded(cards: ReadonlyArray<Card>): boolean {
@@ -27,23 +31,13 @@ export interface DegradeBannerProps {
 }
 
 export function DegradeBanner({ initial }: DegradeBannerProps) {
-  if (!isAllDegraded(initial.cards)) return null;
   return (
-    <div
-      role="status"
-      data-testid="domain-health-all-degraded"
-      className="mb-6 flex items-start justify-between gap-4 rounded-md border border-border bg-muted px-4 py-3 text-sm text-muted-foreground"
-    >
-      <div>
-        <p className="font-medium text-foreground">
-          모든 도메인의 상태 정보를 일시적으로 불러올 수 없습니다.
-        </p>
-        <p className="mt-1">
-          콘솔 자체는 정상 동작합니다. 잠시 후 아래에서 다시 시도하거나
-          각 도메인 화면으로 직접 이동하세요.
-        </p>
-      </div>
-      <RetryButton initial={initial} testidSuffix="banner" />
-    </div>
+    <SharedDegradeBanner
+      show={isAllDegraded(initial.cards)}
+      testid="domain-health-all-degraded"
+      heading="모든 도메인의 상태 정보를 일시적으로 불러올 수 없습니다."
+      description="콘솔 자체는 정상 동작합니다. 잠시 후 아래에서 다시 시도하거나 각 도메인 화면으로 직접 이동하세요."
+      retry={<RetryButton initial={initial} testidSuffix="banner" />}
+    />
   );
 }

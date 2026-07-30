@@ -1,6 +1,6 @@
 'use client';
 
-import { Button } from '@/shared/ui/Button';
+import { RetryButton as SharedRetryButton } from '@/shared/ui/RetryButton';
 import { useOperatorOverview } from '../hooks/use-operator-overview';
 import type { OperatorOverview } from '../api/operator-overview-types';
 
@@ -18,6 +18,9 @@ import type { OperatorOverview } from '../api/operator-overview-types';
  * action; the visual treatment of degraded cards lives in the server
  * components. This keeps the client-component surface as narrow as
  * possible (server-component-first).
+ *
+ * Thin wrapper (TASK-PC-FE-263) — owns the feature hook selection and
+ * testid string, delegates rendering to `shared/ui/RetryButton`.
  */
 
 export interface RetryButtonProps {
@@ -35,18 +38,12 @@ export function RetryButton({ initial, label, testidSuffix }: RetryButtonProps) 
   const testid = testidSuffix
     ? `operator-overview-retry-${testidSuffix}`
     : 'operator-overview-retry';
-  const text = overview.isFetching
-    ? (label ? `${label}…` : '새로고침 중…')
-    : (label ?? '다시 시도');
   return (
-    <Button
-      type="button"
-      variant="secondary"
-      onClick={() => overview.refetch()}
-      disabled={overview.isFetching}
-      data-testid={testid}
-    >
-      {text}
-    </Button>
+    <SharedRetryButton
+      isFetching={overview.isFetching}
+      onRetry={() => overview.refetch()}
+      label={label}
+      testid={testid}
+    />
   );
 }

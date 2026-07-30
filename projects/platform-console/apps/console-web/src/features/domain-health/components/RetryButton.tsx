@@ -1,6 +1,6 @@
 'use client';
 
-import { Button } from '@/shared/ui/Button';
+import { RetryButton as SharedRetryButton } from '@/shared/ui/RetryButton';
 import { useDomainHealth } from '../hooks/use-domain-health';
 import type { DomainHealth } from '../api/types';
 
@@ -13,6 +13,9 @@ import type { DomainHealth } from '../api/types';
  * This button consumes the React Query hook and triggers an explicit
  * refetch on click — there is NO auto-poll / interval / focus refetch
  * (§ 2.4.4 / § 2.4.9 invariant).
+ *
+ * Thin wrapper (TASK-PC-FE-263) — owns the feature hook selection and
+ * testid string, delegates rendering to `shared/ui/RetryButton`.
  */
 
 export interface RetryButtonProps {
@@ -30,18 +33,12 @@ export function RetryButton({ initial, label, testidSuffix }: RetryButtonProps) 
   const testid = testidSuffix
     ? `domain-health-retry-${testidSuffix}`
     : 'domain-health-retry';
-  const text = health.isFetching
-    ? (label ? `${label}…` : '새로고침 중…')
-    : (label ?? '다시 시도');
   return (
-    <Button
-      type="button"
-      variant="secondary"
-      onClick={() => health.refetch()}
-      disabled={health.isFetching}
-      data-testid={testid}
-    >
-      {text}
-    </Button>
+    <SharedRetryButton
+      isFetching={health.isFetching}
+      onRetry={() => health.refetch()}
+      label={label}
+      testid={testid}
+    />
   );
 }
