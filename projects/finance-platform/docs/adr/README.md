@@ -6,7 +6,7 @@
 |---|---|---|
 | [ADR-001](ADR-001-fx-cost-flow-method-fifo-lot-tracking.md) | 외화 포지션 원가흐름을 가중평균에서 FIFO 로트 추적으로(per-tenant 설정·opt-in) | Accepted |
 | [ADR-002](ADR-002-realtime-fx-rate-feed.md) | 실시간 FX 환율 피드 — 수동 입력에서 config-gated 외부 피드 + 캐시·staleness 가드로 | Accepted |
-| [ADR-003](ADR-003-money-currency-shared-location.md) | `Money`/`Currency` 값객체를 account-service·ledger-service 중복에서 프로젝트 범위 공유 위치로 | Proposed |
+| [ADR-003](ADR-003-money-currency-shared-location.md) | `Money`/`Currency` 값객체를 account-service·ledger-service 중복에서 프로젝트 범위 공유 위치로 | Accepted |
 
 ## ADR 작성 원칙
 
