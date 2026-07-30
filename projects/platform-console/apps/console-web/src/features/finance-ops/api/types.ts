@@ -85,7 +85,7 @@ export {
   BalancesResponseSchema,
   balanceMoney,
   KNOWN_ACCOUNT_STATUSES,
-  accountStatusTone,
+  financeAccountStatusTone,
   KNOWN_KYC_LEVELS,
   AccountSchema,
   AccountResponseSchema,

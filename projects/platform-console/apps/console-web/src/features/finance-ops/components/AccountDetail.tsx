@@ -1,5 +1,5 @@
 import type { Account } from '../api/types';
-import { KNOWN_ACCOUNT_STATUSES, accountStatusTone } from '../api/types';
+import { KNOWN_ACCOUNT_STATUSES, financeAccountStatusTone } from '../api/types';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { labelForUnknown } from '@/shared/lib/tolerant-label';
 
@@ -53,7 +53,7 @@ export function AccountDetail({ account }: AccountDetailProps) {
           <dt className="text-muted-foreground">상태</dt>
           <dd className="text-foreground">
             <StatusBadge
-              tone={accountStatusTone(account.status)}
+              tone={financeAccountStatusTone(account.status)}
               data-testid="finance-account-status"
             >
               {label}

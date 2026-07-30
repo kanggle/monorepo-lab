@@ -127,7 +127,7 @@ const ACCOUNT_STATUS_TONE: Record<KnownAccountStatus, StatusTone> = {
   CLOSED: 'neutral',
 };
 
-export function accountStatusTone(status: string): StatusTone {
+export function financeAccountStatusTone(status: string): StatusTone {
   return ACCOUNT_STATUS_TONE[status as KnownAccountStatus] ?? 'neutral';
 }
 

@@ -5,7 +5,7 @@ import { labelForUnknown } from '@/shared/lib/tolerant-label';
 import { formatMoney } from '@/shared/lib/money';
 import {
   KNOWN_ACCOUNT_STATUSES,
-  accountStatusTone,
+  financeAccountStatusTone,
   balanceMoney,
 } from '@/shared/api/finance-accounts-types';
 import type { FinanceOverviewState } from '../api/overview-state';
@@ -223,7 +223,7 @@ function AccountSnapshotCard({ state }: { state: FinanceOverviewState }) {
           <dt className="text-muted-foreground">상태</dt>
           <dd className="text-foreground">
             <StatusBadge
-              tone={accountStatusTone(snapshot.account.status)}
+              tone={financeAccountStatusTone(snapshot.account.status)}
               data-testid="finance-overview-account-status"
             >
               {label}
