@@ -49,6 +49,14 @@ import { Button } from '@/shared/ui/Button';
  * `AcknowledgeAlertDialog`, `org-hierarchy` `OrgReasonDialog`) and added the
  * optional `cancelLabel` prop (default `'취소'`) for `OutboundCancelDialog`'s
  * `'닫기'` dismiss copy.
+ *
+ * TASK-PC-FE-269 migrated 4 more instances found via a broader `role="dialog"`
+ * sweep (`ledger-ops` `DiscrepancyResolveDialog`, `operators`
+ * `OperatorProfileEditDialog`, and two private dialogs nested in `erp-ops`
+ * `ApprovalDetail`/`DelegationScreen`) and added the optional `dialogAttrs`
+ * prop — `ApprovalReasonDialog`'s `data-transition` attribute is directly
+ * asserted by `ApprovalScreen.test.tsx`, so it needed a way to reach the
+ * frame element without a one-off, non-reusable prop.
  */
 export interface ConfirmDialogProps {
   open: boolean;
@@ -58,6 +66,10 @@ export interface ConfirmDialogProps {
   /** Cancel-button text (TASK-PC-FE-268). Defaults to '취소' — override for a
    *  caller whose dismiss affordance reads differently (e.g. '닫기'). */
   cancelLabel?: string;
+  /** Extra `data-*` attributes spread onto the dialog frame element
+   *  (TASK-PC-FE-269) — for a caller whose existing tests assert against a
+   *  custom attribute already on the frame (e.g. `data-transition`). */
+  dialogAttrs?: Record<string, string>;
   /** Privilege-high / irreversible action → tints title + confirm button. */
   destructive?: boolean;
   pending?: boolean;
@@ -92,6 +104,7 @@ export function ConfirmDialog({
   description,
   confirmLabel,
   cancelLabel = '취소',
+  dialogAttrs,
   destructive = false,
   pending = false,
   confirmDisabled = false,
@@ -164,6 +177,7 @@ export function ConfirmDialog({
         aria-describedby={descId}
         data-testid={dialogTestId}
         className="w-full max-w-md rounded-lg border border-border bg-background p-6 shadow-lg"
+        {...dialogAttrs}
       >
         <h2
           id={titleId}
