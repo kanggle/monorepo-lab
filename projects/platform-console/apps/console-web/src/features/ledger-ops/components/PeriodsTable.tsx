@@ -6,7 +6,7 @@ import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { labelForUnknown } from '@/shared/lib/tolerant-label';
 import {
   KNOWN_PERIOD_STATUSES,
-  periodStatusTone,
+  ledgerPeriodStatusTone,
   type Period,
   type PeriodsQueryParams,
   type PeriodsResponse,
@@ -106,7 +106,7 @@ export function PeriodsTable({
                   <td className="p-2">{p.periodId}</td>
                   <td className="p-2">
                     <StatusBadge
-                      tone={periodStatusTone(p.status)}
+                      tone={ledgerPeriodStatusTone(p.status)}
                       data-testid={`ledger-period-status-${i}`}
                     >
                       {labelForUnknown(p.status, KNOWN_PERIOD_STATUSES)}

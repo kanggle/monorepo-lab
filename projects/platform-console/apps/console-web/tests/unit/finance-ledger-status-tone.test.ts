@@ -4,7 +4,7 @@ import {
   txnStatusTone,
 } from '@/features/finance-ops/api/types';
 import {
-  periodStatusTone,
+  ledgerPeriodStatusTone,
   discrepancyStatusTone,
 } from '@/features/ledger-ops/api/types';
 
@@ -44,13 +44,13 @@ describe('txnStatusTone (finance)', () => {
   });
 });
 
-describe('periodStatusTone (ledger)', () => {
+describe('ledgerPeriodStatusTone (ledger)', () => {
   it('maps each known period status to its semantic tone', () => {
-    expect(periodStatusTone('OPEN')).toBe('progress');
-    expect(periodStatusTone('CLOSED')).toBe('success');
+    expect(ledgerPeriodStatusTone('OPEN')).toBe('progress');
+    expect(ledgerPeriodStatusTone('CLOSED')).toBe('success');
   });
   it('maps an unknown/future status to neutral', () => {
-    expect(periodStatusTone('FUTURE')).toBe('neutral');
+    expect(ledgerPeriodStatusTone('FUTURE')).toBe('neutral');
   });
 });
 

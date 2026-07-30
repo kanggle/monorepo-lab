@@ -93,7 +93,7 @@ const PERIOD_STATUS_TONE: Record<PeriodStatus, StatusTone> = {
   CLOSED: 'success',
 };
 
-export function periodStatusTone(status: string): StatusTone {
+export function settlementPeriodStatusTone(status: string): StatusTone {
   return PERIOD_STATUS_TONE[status as PeriodStatus] ?? 'neutral';
 }
 

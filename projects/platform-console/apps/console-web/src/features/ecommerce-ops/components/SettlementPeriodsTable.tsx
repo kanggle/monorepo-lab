@@ -5,7 +5,7 @@ import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { Button } from '@/shared/ui/Button';
 import { formatDate, formatDateTime } from '@/shared/lib/datetime';
 import {
-  periodStatusTone,
+  settlementPeriodStatusTone,
   type PeriodsResponse,
 } from '../api/settlement-types';
 
@@ -83,7 +83,7 @@ export function SettlementPeriodsTable({
                   {formatDate(p.to)}
                 </td>
                 <td className="p-2" data-testid={`period-row-status-${i}`}>
-                  <StatusBadge tone={periodStatusTone(p.status)}>
+                  <StatusBadge tone={settlementPeriodStatusTone(p.status)}>
                     {p.status}
                   </StatusBadge>
                 </td>

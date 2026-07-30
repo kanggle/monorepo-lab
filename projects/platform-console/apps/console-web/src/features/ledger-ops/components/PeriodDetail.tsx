@@ -3,7 +3,7 @@
 import {
   formatMoney,
   KNOWN_PERIOD_STATUSES,
-  periodStatusTone,
+  ledgerPeriodStatusTone,
   type Period,
 } from '../api/types';
 import { usePeriod } from '../hooks/use-ledger-ops';
@@ -79,7 +79,7 @@ export function PeriodDetail({ periodId, initial }: PeriodDetailProps) {
             className="text-foreground"
             data-testid="ledger-period-detail-status"
           >
-            <StatusBadge tone={periodStatusTone(period.status)}>
+            <StatusBadge tone={ledgerPeriodStatusTone(period.status)}>
               {labelForUnknown(period.status, KNOWN_PERIOD_STATUSES)}
             </StatusBadge>
           </dd>
