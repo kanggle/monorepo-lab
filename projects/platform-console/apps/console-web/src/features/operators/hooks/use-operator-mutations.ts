@@ -14,7 +14,7 @@ import {
   type OperatorStatus,
   type UpdateProfileInput,
 } from '../api/types';
-import { invalidateOperators } from './operators-keys';
+import { invalidateOperators } from '../api/operators-keys';
 
 // --- mutation: create -----------------------------------------------------
 

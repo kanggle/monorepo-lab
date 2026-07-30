@@ -33,7 +33,7 @@ import {
   OPERATORS_KEY,
   assignmentsKey,
   invalidateOperators,
-} from './operators-keys';
+} from '../api/operators-keys';
 
 // --- read: org-scope assignments (TASK-PC-FE-050) -------------------------
 
