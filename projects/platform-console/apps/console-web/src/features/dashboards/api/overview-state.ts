@@ -25,14 +25,14 @@ import type { OperatorOverview } from './types';
  * producer-side — the route issues exactly one bounded fan-out per load
  * (no auto-refetch here; the hook enforces no refetch loop).
  */
-export interface OverviewState {
+export interface IamComposedOverviewState {
   overview: OperatorOverview | null;
   /** True when no tenant is selected — render the "select a tenant" gate
    *  (never an empty `X-Tenant-Id` on any leg). */
   noTenant: boolean;
 }
 
-export async function getOverviewState(): Promise<OverviewState> {
+export async function getIamComposedOverviewState(): Promise<IamComposedOverviewState> {
   // Pre-flight tenant gate (no empty header ever leaves on any leg —
   // § 2.4.4). Checked once, before the fan-out, so a missing tenant is a
   // single actionable state rather than three identical per-card errors.

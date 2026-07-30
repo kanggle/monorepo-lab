@@ -4,7 +4,7 @@ import type { CardStatus } from '../api/types';
 
 /**
  * Per-source overview card shell for the IAM composed operator overview
- * (TASK-PC-FE-005 — extracted from {@link OperatorOverviewScreen},
+ * (TASK-PC-FE-005 — extracted from {@link IamComposedOverviewScreen},
  * TASK-PC-FE-212 presentational split).
  *
  * Per-source isolation (§ 2.4.4 / ADR-015 D3): the card renders its `ok`

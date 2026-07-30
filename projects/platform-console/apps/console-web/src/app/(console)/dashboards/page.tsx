@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { getOverviewState, OperatorOverviewScreen } from '@/features/dashboards';
+import { getIamComposedOverviewState, IamComposedOverviewScreen } from '@/features/dashboards';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
  *
  * Server component: the initial overview is composed server-side by a
  * bounded fan-out over the EXISTING FE-002/003/004 read clients with the
- * HttpOnly operator token + active tenant (`getOverviewState()` →
+ * HttpOnly operator token + active tenant (`getIamComposedOverviewState()` →
  * `getOperatorOverview()`). READ-ONLY — no mutation, no new IAM producer,
  * NOT a Grafana embed (ADR-MONO-015 D1). Resilience:
  *   - 401 on ANY leg → `redirect('/login')` (clean WHOLE-overview
@@ -27,7 +27,7 @@ export const dynamic = 'force-dynamic';
  *     the full screen with each card's own placeholder (never blank).
  */
 export default async function DashboardsPage() {
-  const state = await getOverviewState();
+  const state = await getIamComposedOverviewState();
 
   if (state.noTenant || !state.overview) {
     return (
@@ -65,5 +65,5 @@ export default async function DashboardsPage() {
     );
   }
 
-  return <OperatorOverviewScreen initial={state.overview} />;
+  return <IamComposedOverviewScreen initial={state.overview} />;
 }
