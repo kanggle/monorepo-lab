@@ -8,7 +8,7 @@ Reconcile platform/naming-conventions.md with conventions the fleet already conv
 
 # Status
 
-review
+done
 
 # Owner
 
