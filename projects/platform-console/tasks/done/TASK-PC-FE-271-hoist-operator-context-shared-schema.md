@@ -8,7 +8,7 @@ console-web hoist duplicated `OperatorContextSchema`/`OperatorContext` into one 
 
 # Status
 
-review
+done
 
 # Owner
 
