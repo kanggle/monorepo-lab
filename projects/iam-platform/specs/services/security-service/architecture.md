@@ -50,8 +50,26 @@ persistence 를 공유한다. 적용되는 규칙: 양 service-type spec 모두 
 
 ## Internal Structure Rule
 
+### Root package — `com.example.security.service` (TASK-BE-559)
+
+이 서비스의 자체 코드는 **`com.example.security.service`** 아래에 산다. `com.example.security`(한 단계 위)가 아니다.
+
+이유는 **공유 라이브러리 `libs/java-security` 가 `com.example.security` 를 이미 점유**하고 있기 때문이다(`.access` / `.jwt` / `.oauth2` / `.password` / `.pii` / `.redis`; 형제 `libs/java-security-servlet` 은 `.servlet`). `@SpringBootApplication` 의 기본 component-scan base package 는 **그 클래스가 선언된 패키지**이므로, `SecurityApplication` 이 `com.example.security` 에 있으면 스캔 범위가 **공유 라이브러리 트리 전체**를 덮는다. 그 상태에서 라이브러리에 Spring bean 이 하나라도 추가되면, 그 bean 은 라이브러리를 쓰는 여러 소비 서비스 중 **오직 `security-service` 의 컨텍스트에만** 조용히 등록된다 — 컴파일러도 유닛 테스트도 보지 못하고, 부팅이 깨질 때에만 드러나는 비대칭이다. 두 산출물의 JPMS/sealed-jar 패키징도 split package 로 막힌다.
+
+`com.example.security.service` 는 라이브러리 패키지들의 **형제**이므로(조상도 자손도 아니다) 기본 스캔이 라이브러리를 건드리지 않는다. **이 격리는 기본 스캔 규칙 자체가 제공한다** — 따라서 `SecurityApplication` 에 `scanBasePackages` 나 별도 `@ComponentScan` 인자를 **추가하지 않는다**(문자열 인자는 같은 결함을 다시 열 여지를 만든다).
+
+**`platform/naming-conventions.md` § Packages 와의 관계** (TASK-MONO-491 갱신본 기준). 규약은 신규 프로젝트에 `com.example.{project}.{service}.{layer}` 를 권하면서, **iam 과 ecommerce 는 3-세그먼트 `com.example.{service}.{layer}` 로 grandfather 하고 "`{project}` 세그먼트를 넣으려고 기존 코드를 repackage 하지 말 것"을 명시**한다. 본 서비스의 좌표는 그 지침과 충돌하지 않는다 — `{project}` 세그먼트를 **넣지 않았다**. `{service}` 자리가 한 단계 깊어졌을 뿐이며, 그 이유는 규약 정렬이 아니라 **라이브러리 충돌 회피**다.
+
+> `com.example.iamplatform.security.*`(= `{project}` 형태) 도 충돌을 해소하지만 채택하지 않았다. 그것은 규약이 하지 말라고 적은 바로 그 repackage 이고, iam 형제 4개(`com.example.{auth,account,admin,gateway}`)를 그대로 둔 채 한 서비스만 옮기면 **다른 종류의 불일치**를 만든다. iam 전체의 `{project}` 세그먼트 전환은 fleet 수렴 판단이므로 monorepo-level task/ADR 의 몫이지 이 서비스 스펙이 단독으로 정할 사안이 아니다.
+
+**변경 규칙**: `libs/java-security` 의 패키지를 옮겨 이 관계를 "정리"하지 말 것 — 그 라이브러리 좌표는 8개 프로젝트가 import 하는 공개 표면이다.
+
+> **왜 지금인가 (ADR-MONO-058, PROPOSED).** [ADR-MONO-058](../../../../../docs/adr/ADR-MONO-058-fleet-wide-shared-technical-scaffolding-consolidation.md) 이 **`libs/java-security` 와 `libs/java-security-servlet` 에 코드를 추가할 것을 제안**하고 있다 — D6(`IamClientCredentialsTokenProvider` → `libs/java-security`; **security-service 자신이 그 복사본 보유자 중 하나다**), D1·D4·D5(→ `libs/java-security-servlet`). 즉 *"언젠가 누가 이 라이브러리에 bean 을 추가하면"* 은 더 이상 가정이 아니라 **추적 티켓(`TASK-MONO-495`)이 달린 예정된 작업**이다.
+>
+> ADR-MONO-058 § D4 는 라이브러리 쪽 방어를 이미 알고 있다 — *"component-scan 되는 bean 이 아니라 opt-in 호출로"* (`platform/shared-library-policy.md § No context-wide annotations`). **그러나 그 방어는 공급원 규율 하나뿐이고, 이 문서가 세우는 방어는 소비자 격리다.** 라이브러리가 규율을 완벽히 지켜도, 스캔 루트가 라이브러리를 덮고 있는 한 *실수로* 붙은 stereotype 하나가 이 서비스의 컨텍스트에만 들어온다. 두 방어는 독립이며 둘 다 필요하다.
+
 ```
-apps/security-service/src/main/java/com/example/security/
+apps/security-service/src/main/java/com/example/security/service/
 ├── SecurityApplication.java
 │
 ├── consumer/                        ← Primary: Kafka 이벤트 소비 경로
