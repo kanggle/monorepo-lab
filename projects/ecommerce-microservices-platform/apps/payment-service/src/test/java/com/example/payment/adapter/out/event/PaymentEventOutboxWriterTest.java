@@ -32,7 +32,7 @@ import static org.mockito.Mockito.verify;
 class PaymentEventOutboxWriterTest {
 
     @Mock
-    private PaymentOutboxRepository outboxRepository;
+    private PaymentOutboxJpaRepository outboxRepository;
 
     private PaymentEventOutboxWriter writer;
     private ObjectMapper objectMapper;

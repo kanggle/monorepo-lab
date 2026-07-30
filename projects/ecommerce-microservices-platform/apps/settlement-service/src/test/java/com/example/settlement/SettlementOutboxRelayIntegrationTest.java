@@ -3,7 +3,7 @@ package com.example.settlement;
 import com.example.settlement.application.event.SettlementPeriodClosedEvent;
 import com.example.settlement.application.port.SettlementEventPublisher;
 import com.example.settlement.infrastructure.event.SettlementOutboxPublisher;
-import com.example.settlement.infrastructure.persistence.SettlementOutboxRepository;
+import com.example.settlement.infrastructure.persistence.SettlementOutboxJpaRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -69,7 +69,7 @@ class SettlementOutboxRelayIntegrationTest {
     private SettlementOutboxPublisher relay;
 
     @Autowired
-    private SettlementOutboxRepository outboxRepository;
+    private SettlementOutboxJpaRepository outboxRepository;
 
     @Autowired
     private ObjectMapper objectMapper;

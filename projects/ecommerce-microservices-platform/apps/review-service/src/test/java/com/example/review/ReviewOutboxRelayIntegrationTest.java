@@ -4,7 +4,7 @@ import com.example.review.domain.event.ReviewCreatedPayload;
 import com.example.review.domain.event.ReviewEvent;
 import com.example.review.domain.event.ReviewEventPublisher;
 import com.example.review.infrastructure.event.ReviewOutboxPublisher;
-import com.example.review.infrastructure.event.ReviewOutboxRepository;
+import com.example.review.infrastructure.event.ReviewOutboxJpaRepository;
 import com.example.review.infrastructure.event.dto.ReviewEventMessage;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -69,7 +69,7 @@ class ReviewOutboxRelayIntegrationTest {
     private ReviewOutboxPublisher relay;
 
     @Autowired
-    private ReviewOutboxRepository outboxRepository;
+    private ReviewOutboxJpaRepository outboxRepository;
 
     @Autowired
     private ObjectMapper objectMapper;

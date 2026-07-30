@@ -15,7 +15,7 @@ import org.springframework.data.jpa.repository.Query;
  * {@code com.example.settlement.infrastructure.persistence} so it is picked up by
  * {@code @EnableJpaRepositories(basePackages = "com.example.settlement.infrastructure.persistence")}.
  */
-public interface SettlementOutboxRepository extends JpaRepository<SettlementOutboxEntity, UUID> {
+public interface SettlementOutboxJpaRepository extends JpaRepository<SettlementOutboxEntity, UUID> {
 
     @Query("SELECT o FROM SettlementOutboxEntity o WHERE o.publishedAt IS NULL ORDER BY o.occurredAt ASC")
     List<SettlementOutboxEntity> findPending(Pageable pageable);

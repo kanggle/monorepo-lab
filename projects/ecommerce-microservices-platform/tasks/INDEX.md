@@ -81,7 +81,7 @@ _(없음)_
 
 ## review
 
-_(없음)_
+| TASK-BE-565 | JPA Repository 네이밍 컨벤션 수정 — `JpaRepository`를 직접 extends 하면서 `Jpa` 접미사 없이 `...Repository`로만 명명된 10개 인터페이스에 `Jpa` 삽입(`platform/naming-conventions.md` "JPA Repository" 행 위반 시정, 순수 기계적 rename). | order-service, payment-service, promotion-service, settlement-service, shipping-service, review-service, product-service | code, refactor |
 
 ## done
 

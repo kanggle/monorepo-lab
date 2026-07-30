@@ -30,8 +30,8 @@ class WmsInventoryReconciliationServiceTest {
 
     private static final Clock FIXED = Clock.fixed(Instant.parse("2026-06-08T10:00:00Z"), ZoneOffset.UTC);
 
-    private WmsSkuSnapshotRepository skuSnapshotRepository;
-    private WmsInventoryAvailableRepository inventoryAvailableRepository;
+    private WmsSkuSnapshotJpaRepository skuSnapshotRepository;
+    private WmsInventoryAvailableJpaRepository inventoryAvailableRepository;
     private InventoryRepository inventoryRepository;
     private EventPublishingHelper eventPublishingHelper;
     private ReservationRetryService reservationRetryService;
@@ -45,8 +45,8 @@ class WmsInventoryReconciliationServiceTest {
 
     @BeforeEach
     void setUp() {
-        skuSnapshotRepository = mock(WmsSkuSnapshotRepository.class);
-        inventoryAvailableRepository = mock(WmsInventoryAvailableRepository.class);
+        skuSnapshotRepository = mock(WmsSkuSnapshotJpaRepository.class);
+        inventoryAvailableRepository = mock(WmsInventoryAvailableJpaRepository.class);
         inventoryRepository = mock(InventoryRepository.class);
         eventPublishingHelper = mock(EventPublishingHelper.class);
         reservationRetryService = mock(ReservationRetryService.class);

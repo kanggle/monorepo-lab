@@ -13,7 +13,7 @@ import org.springframework.data.jpa.repository.Query;
  * {@code findPending(Pageable)} returning unpublished rows in FIFO order and a
  * {@code countByPublishedAtIsNull()} for the pending-count gauge.
  */
-public interface ShippingOutboxRepository extends JpaRepository<ShippingOutboxEntity, UUID> {
+public interface ShippingOutboxJpaRepository extends JpaRepository<ShippingOutboxEntity, UUID> {
 
     @Query("SELECT o FROM ShippingOutboxEntity o WHERE o.publishedAt IS NULL ORDER BY o.occurredAt ASC")
     List<ShippingOutboxEntity> findPending(Pageable pageable);

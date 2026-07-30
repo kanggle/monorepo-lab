@@ -29,8 +29,8 @@ public class WmsInventoryReconciliationService {
 
     static final String RECONCILIATION_REASON = "WMS_RECONCILIATION";
 
-    private final WmsSkuSnapshotRepository skuSnapshotRepository;
-    private final WmsInventoryAvailableRepository inventoryAvailableRepository;
+    private final WmsSkuSnapshotJpaRepository skuSnapshotRepository;
+    private final WmsInventoryAvailableJpaRepository inventoryAvailableRepository;
     private final InventoryRepository inventoryRepository;
     private final EventPublishingHelper eventPublishingHelper;
     private final ReservationRetryService reservationRetryService;

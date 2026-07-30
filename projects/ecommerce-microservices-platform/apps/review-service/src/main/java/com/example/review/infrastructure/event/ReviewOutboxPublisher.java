@@ -37,7 +37,7 @@ public class ReviewOutboxPublisher extends AbstractOutboxPublisher<ReviewOutboxE
     static final String TOPIC_REVIEW_UPDATED = "review.review.updated";
     static final String TOPIC_REVIEW_DELETED = "review.review.deleted";
 
-    public ReviewOutboxPublisher(ReviewOutboxRepository repository,
+    public ReviewOutboxPublisher(ReviewOutboxJpaRepository repository,
                                  KafkaTemplate<String, String> kafkaTemplate,
                                  TransactionTemplate transactionTemplate,
                                  Clock clock,
@@ -55,7 +55,7 @@ public class ReviewOutboxPublisher extends AbstractOutboxPublisher<ReviewOutboxE
                 batchSize);
 
         Gauge.builder("review.outbox.pending.count", repository,
-                        ReviewOutboxRepository::countByPublishedAtIsNull)
+                        ReviewOutboxJpaRepository::countByPublishedAtIsNull)
                 .description("Unpublished review outbox rows")
                 .register(meterRegistry);
     }

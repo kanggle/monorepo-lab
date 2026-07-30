@@ -43,7 +43,7 @@ public class PaymentEventOutboxWriter implements PaymentEventPublisher {
     static final String EVENT_TYPE_REFUND_STRANDED = "PaymentRefundStranded";
     static final String EVENT_TYPE_REFUND_UNRESOLVED = "PaymentRefundUnresolved";
 
-    private final PaymentOutboxRepository outboxRepository;
+    private final PaymentOutboxJpaRepository outboxRepository;
     private final ObjectMapper objectMapper;
 
     @Override

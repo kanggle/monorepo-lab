@@ -20,7 +20,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class WmsReconciliationDedupe {
 
-    private final WmsProcessedEventRepository processedEventRepository;
+    private final WmsProcessedEventJpaRepository processedEventRepository;
     private final Clock clock;
 
     @Transactional(propagation = Propagation.MANDATORY)

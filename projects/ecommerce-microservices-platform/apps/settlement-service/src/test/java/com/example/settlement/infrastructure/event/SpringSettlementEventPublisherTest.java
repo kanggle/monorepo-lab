@@ -6,7 +6,7 @@ import static org.mockito.Mockito.verify;
 
 import com.example.settlement.application.event.SettlementPeriodClosedEvent;
 import com.example.settlement.infrastructure.persistence.SettlementOutboxEntity;
-import com.example.settlement.infrastructure.persistence.SettlementOutboxRepository;
+import com.example.settlement.infrastructure.persistence.SettlementOutboxJpaRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.List;
@@ -24,7 +24,7 @@ import org.mockito.ArgumentCaptor;
  */
 class SpringSettlementEventPublisherTest {
 
-    private final SettlementOutboxRepository repository = mock(SettlementOutboxRepository.class);
+    private final SettlementOutboxJpaRepository repository = mock(SettlementOutboxJpaRepository.class);
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final SpringSettlementEventPublisher publisher =
             new SpringSettlementEventPublisher(repository, objectMapper);

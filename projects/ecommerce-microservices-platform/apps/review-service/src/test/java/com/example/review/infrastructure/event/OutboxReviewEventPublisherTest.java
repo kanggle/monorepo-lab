@@ -36,7 +36,7 @@ import static org.mockito.Mockito.verify;
 class OutboxReviewEventPublisherTest {
 
     @Mock
-    private ReviewOutboxRepository outboxRepository;
+    private ReviewOutboxJpaRepository outboxRepository;
 
     private OutboxReviewEventPublisher publisher;
     private ObjectMapper objectMapper;

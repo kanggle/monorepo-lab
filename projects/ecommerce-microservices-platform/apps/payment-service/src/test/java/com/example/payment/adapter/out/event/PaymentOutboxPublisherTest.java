@@ -63,7 +63,7 @@ class PaymentOutboxPublisherTest {
     @Test
     @SuppressWarnings("unchecked")
     void publishPending_sendsToMappedTopicWithHeaders_preservesKeyAndValue_thenMarksPublished() {
-        PaymentOutboxRepository repository = mock(PaymentOutboxRepository.class);
+        PaymentOutboxJpaRepository repository = mock(PaymentOutboxJpaRepository.class);
         KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
         MeterRegistry registry = new SimpleMeterRegistry();
         PaymentMetricRecorder metricRecorder = mock(PaymentMetricRecorder.class);
@@ -104,7 +104,7 @@ class PaymentOutboxPublisherTest {
     @Test
     @SuppressWarnings("unchecked")
     void constructor_registersPreservedPendingCountGauge() {
-        PaymentOutboxRepository repository = mock(PaymentOutboxRepository.class);
+        PaymentOutboxJpaRepository repository = mock(PaymentOutboxJpaRepository.class);
         KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
         MeterRegistry registry = new SimpleMeterRegistry();
         PaymentMetricRecorder metricRecorder = mock(PaymentMetricRecorder.class);
@@ -121,7 +121,7 @@ class PaymentOutboxPublisherTest {
     @Test
     @SuppressWarnings("unchecked")
     void publishPending_kafkaFailure_recordsFailure_preservesV1PaymentMetricHook_andBacksOff() {
-        PaymentOutboxRepository repository = mock(PaymentOutboxRepository.class);
+        PaymentOutboxJpaRepository repository = mock(PaymentOutboxJpaRepository.class);
         KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
         MeterRegistry registry = new SimpleMeterRegistry();
         PaymentMetricRecorder metricRecorder = mock(PaymentMetricRecorder.class);

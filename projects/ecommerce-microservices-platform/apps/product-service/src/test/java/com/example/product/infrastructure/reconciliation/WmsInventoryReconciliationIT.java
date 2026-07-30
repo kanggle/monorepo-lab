@@ -56,8 +56,8 @@ class WmsInventoryReconciliationIT {
 
     @Autowired private WmsInventoryReconciliationService service;
     @Autowired private InventoryRepository inventoryRepository;
-    @Autowired private WmsSkuSnapshotRepository skuSnapshotRepository;
-    @Autowired private WmsInventoryAvailableRepository inventoryAvailableRepository;
+    @Autowired private WmsSkuSnapshotJpaRepository skuSnapshotRepository;
+    @Autowired private WmsInventoryAvailableJpaRepository inventoryAvailableRepository;
 
     // V8 seed variant 'c0000000-...-0001' (stock 50); V12 backfills its sku deterministically.
     private static final UUID SEED_VARIANT = UUID.fromString("c0000000-0000-0000-0000-000000000001");

@@ -3,7 +3,7 @@ package com.example.shipping;
 import com.example.shipping.application.port.ShippingEventPublisher;
 import com.example.shipping.domain.model.ShippingStatus;
 import com.example.shipping.infrastructure.event.ShippingOutboxPublisher;
-import com.example.shipping.infrastructure.event.ShippingOutboxRepository;
+import com.example.shipping.infrastructure.event.ShippingOutboxJpaRepository;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.DisplayName;
@@ -63,7 +63,7 @@ class ShippingOutboxRelayIntegrationTest {
     private ShippingOutboxPublisher relay;
 
     @Autowired
-    private ShippingOutboxRepository outboxRepository;
+    private ShippingOutboxJpaRepository outboxRepository;
 
     @Autowired
     private EmbeddedKafkaBroker broker;

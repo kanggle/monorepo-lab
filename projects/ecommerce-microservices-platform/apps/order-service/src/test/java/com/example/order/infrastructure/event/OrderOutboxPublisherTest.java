@@ -11,7 +11,7 @@ import static org.mockito.Mockito.verify;
 
 import com.example.order.application.port.OrderMetricsPort;
 import com.example.order.infrastructure.persistence.OrderOutboxEntity;
-import com.example.order.infrastructure.persistence.OrderOutboxRepository;
+import com.example.order.infrastructure.persistence.OrderOutboxJpaRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
@@ -64,7 +64,7 @@ class OrderOutboxPublisherTest {
     @Test
     @SuppressWarnings("unchecked")
     void publishPending_sendsToMappedTopicWithHeaders_preservesKeyAndValue_thenMarksPublished() {
-        OrderOutboxRepository repository = mock(OrderOutboxRepository.class);
+        OrderOutboxJpaRepository repository = mock(OrderOutboxJpaRepository.class);
         KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
         MeterRegistry registry = new SimpleMeterRegistry();
         OrderMetricsPort orderMetrics = mock(OrderMetricsPort.class);
@@ -105,7 +105,7 @@ class OrderOutboxPublisherTest {
     @Test
     @SuppressWarnings("unchecked")
     void constructor_registersPreservedPendingCountGauge() {
-        OrderOutboxRepository repository = mock(OrderOutboxRepository.class);
+        OrderOutboxJpaRepository repository = mock(OrderOutboxJpaRepository.class);
         KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
         MeterRegistry registry = new SimpleMeterRegistry();
         OrderMetricsPort orderMetrics = mock(OrderMetricsPort.class);
@@ -122,7 +122,7 @@ class OrderOutboxPublisherTest {
     @Test
     @SuppressWarnings("unchecked")
     void publishPending_kafkaFailure_recordsFailure_preservesV1OrderMetricHook_andBacksOff() {
-        OrderOutboxRepository repository = mock(OrderOutboxRepository.class);
+        OrderOutboxJpaRepository repository = mock(OrderOutboxJpaRepository.class);
         KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
         MeterRegistry registry = new SimpleMeterRegistry();
         OrderMetricsPort orderMetrics = mock(OrderMetricsPort.class);

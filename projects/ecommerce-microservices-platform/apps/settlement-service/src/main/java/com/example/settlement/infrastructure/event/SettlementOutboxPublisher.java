@@ -6,7 +6,7 @@ import com.example.messaging.outbox.SpringDataOutboxRowRepository;
 import com.example.messaging.outbox.TopicResolver;
 import com.example.settlement.application.event.SettlementPeriodClosedEvent;
 import com.example.settlement.infrastructure.persistence.SettlementOutboxEntity;
-import com.example.settlement.infrastructure.persistence.SettlementOutboxRepository;
+import com.example.settlement.infrastructure.persistence.SettlementOutboxJpaRepository;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
@@ -39,7 +39,7 @@ public class SettlementOutboxPublisher extends AbstractOutboxPublisher<Settlemen
 
     static final String TOPIC_PERIOD_CLOSED = "settlement.period.closed";
 
-    public SettlementOutboxPublisher(SettlementOutboxRepository repository,
+    public SettlementOutboxPublisher(SettlementOutboxJpaRepository repository,
                                      KafkaTemplate<String, String> kafkaTemplate,
                                      TransactionTemplate transactionTemplate,
                                      Clock clock,
@@ -57,7 +57,7 @@ public class SettlementOutboxPublisher extends AbstractOutboxPublisher<Settlemen
                 batchSize);
 
         Gauge.builder("settlement.outbox.pending.count", repository,
-                        SettlementOutboxRepository::countByPublishedAtIsNull)
+                        SettlementOutboxJpaRepository::countByPublishedAtIsNull)
                 .description("Unpublished settlement outbox rows")
                 .register(meterRegistry);
     }

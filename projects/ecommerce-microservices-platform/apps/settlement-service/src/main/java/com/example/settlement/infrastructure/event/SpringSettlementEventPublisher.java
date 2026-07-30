@@ -3,7 +3,7 @@ package com.example.settlement.infrastructure.event;
 import com.example.settlement.application.event.SettlementPeriodClosedEvent;
 import com.example.settlement.application.port.SettlementEventPublisher;
 import com.example.settlement.infrastructure.persistence.SettlementOutboxEntity;
-import com.example.settlement.infrastructure.persistence.SettlementOutboxRepository;
+import com.example.settlement.infrastructure.persistence.SettlementOutboxJpaRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
@@ -35,7 +35,7 @@ public class SpringSettlementEventPublisher implements SettlementEventPublisher 
 
     private static final String AGGREGATE_TYPE = "SettlementPeriod";
 
-    private final SettlementOutboxRepository outboxRepository;
+    private final SettlementOutboxJpaRepository outboxRepository;
     private final ObjectMapper objectMapper;
 
     @Override
