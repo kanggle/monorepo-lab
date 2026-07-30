@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-566-admin-service-redis-idempotency-key-naming-drift.md` — `admin-service` `RedisIdempotencyStore` Redis key entity segment `idem` → `idempotency` (spec-aligned drift fix); `master-service`'s equivalent `idem` prefix is explicitly out of scope — its own spec (`idempotency.md` § Cross-Service Idempotency Key Conventions) pins it as an intentional, ADR-governed divergence (`TASK-BE-293` WI-3). PR pending review.
 
 ## done
 

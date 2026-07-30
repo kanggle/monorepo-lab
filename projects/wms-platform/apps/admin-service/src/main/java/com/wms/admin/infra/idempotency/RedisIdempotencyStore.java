@@ -11,14 +11,14 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 /**
  * Redis-backed {@link IdempotencyStore}.
  * <p>
- * Entry key: {@code admin:idem:{storageKey}} with JSON-encoded
- * {@link StoredResponse}. Lock key: {@code admin:idem:lock:{storageKey}}.
+ * Entry key: {@code admin:idempotency:{storageKey}} with JSON-encoded
+ * {@link StoredResponse}. Lock key: {@code admin:idempotency:lock:{storageKey}}.
  * 24h TTL applied at write time.
  */
 public class RedisIdempotencyStore implements IdempotencyStore {
 
-    private static final String ENTRY_PREFIX = "admin:idem:";
-    private static final String LOCK_PREFIX = "admin:idem:lock:";
+    private static final String ENTRY_PREFIX = "admin:idempotency:";
+    private static final String LOCK_PREFIX = "admin:idempotency:lock:";
 
     private final StringRedisTemplate redis;
     private final ObjectMapper objectMapper;
