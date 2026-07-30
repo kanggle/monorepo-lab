@@ -8,7 +8,7 @@ console-web split ecommerce-ops `api/types.ts` into `product-types.ts`/`promotio
 
 # Status
 
-review
+done
 
 # Owner
 
