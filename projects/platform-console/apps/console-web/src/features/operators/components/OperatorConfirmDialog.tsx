@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { Button } from '@/shared/ui/Button';
+import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { KNOWN_OPERATOR_ROLES, ELEVATED_ROLE } from '../api/types';
 import { OperatorConfirmRoleEditor } from './OperatorConfirmRoleEditor';
 
@@ -9,11 +9,13 @@ import { OperatorConfirmRoleEditor } from './OperatorConfirmRoleEditor';
  * Reason-capture + confirm dialog for the privilege-sensitive operators
  * mutations (console-integration-contract § 2.4.3 / audit-heavy / saas S5).
  *
- * This mirrors the FE-002 `features/accounts` `ConfirmActionDialog` reason-
- * capture pattern. It is a feature-LOCAL component (not a cross-feature
- * import — architecture.md § Forbidden Dependencies forbids
- * `features/operators → features/accounts`; the shared value would have to
- * be promoted to `shared/`, which is out of this slice's scope).
+ * Thin wrapper over the shared {@link ConfirmDialog} primitive
+ * (TASK-PC-FE-262): the shell (backdrop / `role="dialog"` frame / ARIA /
+ * Escape / focus trap / error banner / footer) lives in `shared/ui`, and this
+ * file owns only the reason state + the domain body (the required reason
+ * textarea and the optional role multi-select), passed as `children`. The
+ * public prop API is UNCHANGED — including the `elevated` prop name, which is
+ * mapped to the primitive's `destructive` internally, so no caller changes.
  *
  * Invariants:
  *   - `onConfirm` is NOT called until a NON-EMPTY operator reason is
@@ -24,7 +26,8 @@ import { OperatorConfirmRoleEditor } from './OperatorConfirmRoleEditor';
  *     select (edit-roles); confirming returns the selected roles. An empty
  *     selection (`[]` = remove all roles) is permitted by the producer but
  *     gets `elevatedCopy` strong-confirm wording from the caller.
- *   - Keyboard-operable + WCAG AA: focus moves into the dialog on open,
+ *   - Keyboard-operable + WCAG AA: focus moves into the dialog on open (the
+ *     reason textarea — passed as the primitive's `initialFocusRef`),
  *     `Escape` cancels, focus is trapped, `role="dialog"` + `aria-modal` +
  *     labelled/described. axe-clean.
  */
@@ -69,57 +72,28 @@ export function OperatorConfirmDialog({
   onConfirm,
   onCancel,
 }: OperatorConfirmDialogProps) {
-  const titleId = useId();
-  const descId = useId();
   const reasonId = useId();
   const rolesId = useId();
-  const dialogRef = useRef<HTMLDivElement>(null);
   const reasonRef = useRef<HTMLTextAreaElement>(null);
   const [reason, setReason] = useState('');
   const [roles, setRoles] = useState<string[]>([]);
 
+  // Reset transient input each time the dialog opens (a fresh user action →
+  // a fresh reason). Focus-into-dialog is the shared primitive's job — it
+  // focuses `initialFocusRef` (the reason textarea) on open.
   useEffect(() => {
     if (open) {
       setReason('');
       setRoles(roleEditor?.initialRoles ?? []);
-      const t = setTimeout(() => reasonRef.current?.focus(), 0);
-      return () => clearTimeout(t);
     }
   }, [open, roleEditor]);
-
-  useEffect(() => {
-    if (!open) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onCancel();
-      }
-      if (e.key === 'Tab' && dialogRef.current) {
-        const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
-          'button, textarea, input, [tabindex]:not([tabindex="-1"])',
-        );
-        if (focusable.length === 0) return;
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    }
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [open, onCancel]);
 
   // feat/iam-grantable-roles-filter — render KNOWN_OPERATOR_ROLES ∩
   // grantableRoles, UNIONED with the operator's initialRoles (an
   // already-held role stays visible/removable even outside the caller's
   // grantable set). `null` ⇒ render every KNOWN_OPERATOR_ROLES (fallback).
   // Plain (non-memoised) derivation — cheap over a ≤6-item constant array,
-  // and this component already returns `null` above for the closed state,
+  // and this component already returns `null` below for the closed state,
   // so a `useMemo` here would run conditionally (rules-of-hooks violation).
   const renderableRoles =
     grantableRoles === null
@@ -133,7 +107,6 @@ export function OperatorConfirmDialog({
   if (!open) return null;
 
   const reasonOk = reason.trim().length > 0;
-  const canConfirm = reasonOk && !pending;
   const removingAll = roleEditor !== undefined && roles.length === 0;
   const grantingElevated =
     roleEditor !== undefined && roles.includes(ELEVATED_ROLE);
@@ -147,111 +120,68 @@ export function OperatorConfirmDialog({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      data-testid="operator-confirm-overlay"
+    <ConfirmDialog
+      open={open}
+      title={title}
+      description={description}
+      confirmLabel={confirmLabel}
+      destructive={elevated}
+      pending={pending}
+      confirmDisabled={!reasonOk}
+      errorMessage={errorMessage}
+      dialogTestId="operator-confirm-dialog"
+      overlayTestId="operator-confirm-overlay"
+      cancelTestId="operator-confirm-cancel"
+      confirmTestId="operator-confirm-submit"
+      errorTestId="operator-confirm-error"
+      initialFocusRef={reasonRef}
+      onConfirm={() =>
+        reasonOk &&
+        !pending &&
+        onConfirm(reason.trim(), roleEditor ? roles : undefined)
+      }
+      onCancel={onCancel}
     >
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={descId}
-        data-testid="operator-confirm-dialog"
-        className="w-full max-w-md rounded-lg border border-border bg-background p-6 shadow-lg"
-      >
-        <h2
-          id={titleId}
-          className={
-            elevated
-              ? 'text-lg font-semibold text-destructive'
-              : 'text-lg font-semibold text-foreground'
-          }
+      {roleEditor && (
+        <OperatorConfirmRoleEditor
+          rolesId={rolesId}
+          renderableRoles={renderableRoles}
+          roles={roles}
+          toggleRole={toggleRole}
+          removingAll={removingAll}
+          grantingElevated={grantingElevated}
+        />
+      )}
+
+      <div className="mt-4">
+        <label
+          htmlFor={reasonId}
+          className="block text-sm font-medium text-foreground"
         >
-          {title}
-        </h2>
-        <div id={descId} className="mt-2 text-sm text-muted-foreground">
-          {description}
-        </div>
-
-        {roleEditor && (
-          <OperatorConfirmRoleEditor
-            rolesId={rolesId}
-            renderableRoles={renderableRoles}
-            roles={roles}
-            toggleRole={toggleRole}
-            removingAll={removingAll}
-            grantingElevated={grantingElevated}
-          />
-        )}
-
-        <div className="mt-4">
-          <label
-            htmlFor={reasonId}
-            className="block text-sm font-medium text-foreground"
-          >
-            감사 사유 <span aria-hidden="true">*</span>
-            <span className="sr-only">(필수)</span>
-          </label>
-          <textarea
-            id={reasonId}
-            ref={reasonRef}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            required
-            aria-required="true"
-            rows={3}
-            data-testid="operator-confirm-reason"
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            placeholder="이 운영 작업의 사유를 입력하세요 (감사 기록에 남습니다)"
-          />
-          {!reasonOk && (
-            <p
-              className="mt-1 text-xs text-muted-foreground"
-              data-testid="operator-reason-required-hint"
-            >
-              사유를 입력해야 작업을 진행할 수 있습니다.
-            </p>
-          )}
-        </div>
-
-        {errorMessage && (
+          감사 사유 <span aria-hidden="true">*</span>
+          <span className="sr-only">(필수)</span>
+        </label>
+        <textarea
+          id={reasonId}
+          ref={reasonRef}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          required
+          aria-required="true"
+          rows={3}
+          data-testid="operator-confirm-reason"
+          className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          placeholder="이 운영 작업의 사유를 입력하세요 (감사 기록에 남습니다)"
+        />
+        {!reasonOk && (
           <p
-            role="alert"
-            data-testid="operator-confirm-error"
-            className="mt-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            className="mt-1 text-xs text-muted-foreground"
+            data-testid="operator-reason-required-hint"
           >
-            {errorMessage}
+            사유를 입력해야 작업을 진행할 수 있습니다.
           </p>
         )}
-
-        <div className="mt-6 flex justify-end gap-3">
-          <Button
-            variant="secondary"
-            onClick={onCancel}
-            disabled={pending}
-            data-testid="operator-confirm-cancel"
-          >
-            취소
-          </Button>
-          <Button
-            variant="primary"
-            onClick={() =>
-              canConfirm &&
-              onConfirm(reason.trim(), roleEditor ? roles : undefined)
-            }
-            disabled={!canConfirm}
-            data-testid="operator-confirm-submit"
-            className={
-              elevated
-                ? 'bg-destructive text-destructive-foreground hover:opacity-90'
-                : undefined
-            }
-          >
-            {pending ? '처리 중…' : confirmLabel}
-          </Button>
-        </div>
       </div>
-    </div>
+    </ConfirmDialog>
   );
 }
