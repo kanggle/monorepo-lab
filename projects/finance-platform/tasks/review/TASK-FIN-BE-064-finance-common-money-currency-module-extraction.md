@@ -8,7 +8,7 @@ Extract `Money`/`Currency` into a project-scoped shared Gradle module (`projects
 
 # Status
 
-in-progress
+review
 
 # Owner
 
