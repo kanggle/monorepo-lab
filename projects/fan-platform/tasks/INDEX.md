@@ -66,9 +66,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-FAN-BE-040-adr058-d1-actor-jwt-claim-cluster.md` — **READY.** ADR-MONO-058 § D1 (fan-platform only, ACCEPTED 2026-07-30) — 4개 서비스(community/artist/membership/notification)의 actor/JWT-claim 추출 클러스터(`ActorContextJwtAuthenticationConverter`, `ActorContextResolver`, `@CurrentActor` + argument-resolver)를 `libs/java-security-servlet`의 새 `…servlet.actor` 패키지로 승격. 4벌 메커니즘이 **byte-identical**(`git diff --no-index` 전 인접쌍 = package/import/javadoc만 차이)임을 선행 확인 — 동작 분기 0건. `ActorContext` 레코드와 그 편의 메서드(`isOperator`/`isAdmin`/`owns`/`hasRole`, `FAN_OPERATOR` 등 롤 리터럴)는 **서비스에 그대로 잔류**(§ D1 Ownership Rule); 공유측은 `ActorContextFactory<A>` 하나로만 서비스 타입을 받는다. ADR § 6 기준 최고위험 항목 — 검증은 실 필터체인 + 실 RSA 서명 JWT(array-form `roles` / delimited-string `role` 양쪽) 필수. 선행=BE-038(D2)·BE-039(D5) ✓. 분석·구현=Opus 5.
-
 ## in-progress
+
+- `TASK-FAN-BE-040-adr058-d1-actor-jwt-claim-cluster.md` — **IN-PROGRESS.** ADR-MONO-058 § D1 (fan-platform only, ACCEPTED 2026-07-30) — 4개 서비스(community/artist/membership/notification)의 actor/JWT-claim 추출 클러스터(`ActorContextJwtAuthenticationConverter`, `ActorContextResolver`, `@CurrentActor` + argument-resolver)를 `libs/java-security-servlet`의 새 `…servlet.actor` 패키지로 승격. 4벌 메커니즘이 **byte-identical**(`git diff --no-index` 전 인접쌍 = package/import/javadoc만 차이)임을 선행 확인 — 동작 분기 0건. `ActorContext` 레코드와 그 편의 메서드(`isOperator`/`isAdmin`/`owns`/`hasRole`, `FAN_OPERATOR` 등 롤 리터럴)는 **서비스에 그대로 잔류**(§ D1 Ownership Rule); 공유측은 `ActorContextFactory<A>` 하나로만 서비스 타입을 받는다. ADR § 6 기준 최고위험 항목 — 검증은 실 필터체인 + 실 RSA 서명 JWT(array-form `roles` / delimited-string `role` 양쪽) 필수. 선행=BE-038(D2)·BE-039(D5) ✓. 분석·구현=Opus 5.
 
 ## review
 
