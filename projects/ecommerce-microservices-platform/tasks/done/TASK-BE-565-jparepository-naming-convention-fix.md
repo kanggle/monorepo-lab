@@ -8,7 +8,7 @@ JPA Repository naming convention fix — append `Jpa` to 10 interfaces that exte
 
 # Status
 
-review
+done
 
 # Owner
 
