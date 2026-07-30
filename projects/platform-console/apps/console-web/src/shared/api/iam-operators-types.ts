@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import {
+  OperatorContextSchema,
+  type OperatorContext,
+} from './operator-context-types';
 
 /**
  * Shared **client-safe** IAM `admin-service` operator LIST wire shapes
@@ -35,22 +39,13 @@ export type OperatorStatus = (typeof OPERATOR_STATUSES)[number];
 
 // --- list wire shapes (GET /api/admin/operators) --------------------------
 
-/**
- * Per-operator profile carrier (TASK-BE-308). Optional field on each list-
- * response item — omitted by the producer when the operator's
- * {@code finance_default_account_id} is NULL (field-level
- * {@code @JsonInclude.NON_NULL}); present with
- * {@code { defaultAccountId: "<uuid>" }} when set. The shape is byte-
- * identical to the registry response item carrier and the
- * {@code me/profile} + {@code admin/{operatorId}/profile} request bodies
- * (admin-api.md § "carrier shape 대칭성"). Strict on the nested key set —
- * a forward-compat new sibling key (e.g. wmsDefaultWarehouseId) is a
- * fail-fast signal, not a silent acceptance.
- */
-export const OperatorContextSchema = z.object({
-  defaultAccountId: z.string().optional(),
-});
-export type OperatorContext = z.infer<typeof OperatorContextSchema>;
+// `OperatorContextSchema`/`OperatorContext` moved to
+// `shared/api/operator-context-types.ts` (TASK-PC-FE-271 — was
+// byte-identically duplicated in `shared/api/registry-types.ts`).
+// Re-exported here so `features/operators/api/types.ts`'s existing
+// re-export barrel needs zero changes.
+export { OperatorContextSchema };
+export type { OperatorContext };
 
 export const OperatorSummarySchema = z.object({
   operatorId: z.string(),

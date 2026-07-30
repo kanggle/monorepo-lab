@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { OperatorContextSchema } from './operator-context-types';
 
 /**
  * IAM product/tenant registry response shape.
@@ -16,23 +17,17 @@ import { z } from 'zod';
 export const ProductKeySchema = z.enum(['iam', 'wms', 'scm', 'erp', 'finance', 'ecommerce']);
 export type ProductKey = z.infer<typeof ProductKeySchema>;
 
-/**
- * Per-operator per-product profile attribute carrier (TASK-BE-304 producer /
- * TASK-PC-FE-014 consumer). The producer omits this field entirely when no
- * attribute is set (Jackson `@JsonInclude(NON_NULL)`) — `undefined` here,
- * never literal `null`. v1: only the `finance` product item populates
- * `defaultAccountId` (sourced from IAM `admin_operators.finance_default_account_id`);
- * the other 5 items always omit `operatorContext`. The schema is intentionally
- * additive + optional so a v0 producer / unprovisioned operator parses cleanly.
- * See `console-integration-contract.md § 2.2` + `console-registry-api.md
- * § Per-operator profile attributes`.
- */
-export const OperatorContextSchema = z
-  .object({
-    defaultAccountId: z.string().optional(),
-  })
-  .optional();
-export type OperatorContext = z.infer<typeof OperatorContextSchema>;
+// `OperatorContextSchema`/`OperatorContext` moved to
+// `shared/api/operator-context-types.ts` (TASK-PC-FE-271 — was
+// byte-identically duplicated here and in `shared/api/iam-operators-types.ts`;
+// see that module's doc comment for the full producer-symmetry citation).
+// Per-operator per-product profile attribute carrier (TASK-BE-304 producer /
+// TASK-PC-FE-014 consumer). The producer omits this field entirely when no
+// attribute is set (Jackson `@JsonInclude(NON_NULL)`) — `undefined` here,
+// never literal `null`. v1: only the `finance` product item populates
+// `defaultAccountId`; the other 5 items always omit `operatorContext`. See
+// `console-integration-contract.md § 2.2` + `console-registry-api.md
+// § Per-operator profile attributes`.
 
 export const RegistryProductSchema = z.object({
   productKey: ProductKeySchema,
@@ -40,7 +35,7 @@ export const RegistryProductSchema = z.object({
   available: z.boolean(),
   tenants: z.array(z.string()),
   baseRoute: z.string().min(1),
-  operatorContext: OperatorContextSchema,
+  operatorContext: OperatorContextSchema.optional(),
 });
 export type RegistryProduct = z.infer<typeof RegistryProductSchema>;
 
