@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { resolveConsoleRoute } from '@/features/catalog';
 import type { RegistryProduct } from '@/shared/api/registry-types';
 import { IamComposedOverviewScreen } from '@/features/dashboards';
-import type { OperatorOverview } from '@/features/dashboards';
+import type { IamComposedOverview } from '@/features/dashboards';
 import { OVERVIEW_QUICK_LINKS } from '@/features/dashboards/api/types';
 
 /**
@@ -33,7 +33,7 @@ function wrapper() {
   );
 }
 
-const OVERVIEW: OperatorOverview = {
+const OVERVIEW: IamComposedOverview = {
   accounts: { status: 'ok', totalElements: 1, sampleCount: 1 },
   audit: {
     status: 'ok',

@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { getActiveTenant } from '@/shared/lib/session';
 import { ApiError } from '@/shared/api/errors';
 import { getOperatorOverview } from './overview-api';
-import type { OperatorOverview } from './types';
+import type { IamComposedOverview } from './types';
 
 /**
  * Server-side composed-overview state for the `(console)/dashboards` route
@@ -26,7 +26,7 @@ import type { OperatorOverview } from './types';
  * (no auto-refetch here; the hook enforces no refetch loop).
  */
 export interface IamComposedOverviewState {
-  overview: OperatorOverview | null;
+  overview: IamComposedOverview | null;
   /** True when no tenant is selected — render the "select a tenant" gate
    *  (never an empty `X-Tenant-Id` on any leg). */
   noTenant: boolean;
