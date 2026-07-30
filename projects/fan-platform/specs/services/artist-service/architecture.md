@@ -112,7 +112,7 @@ com.example.fanplatform.artist/
 - `spring-kafka`
 - `flyway-core`, `flyway-database-postgresql`, `org.postgresql:postgresql`
 - `io.micrometer:micrometer-registry-prometheus`, `micrometer-tracing-bridge-otel`, `opentelemetry-exporter-otlp`
-- shared libs: `libs:java-common`, `libs:java-web`, `libs:java-messaging`, `libs:java-observability`, `libs:java-security`
+- shared libs: `libs:java-common`, `libs:java-web`, `libs:java-web-servlet` (ADR-MONO-058 § D2 — `CommonGlobalExceptionHandler`), `libs:java-messaging`, `libs:java-observability`, `libs:java-security`
 
 ### Forbidden dependencies
 

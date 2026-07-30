@@ -10,9 +10,9 @@ import com.example.fanplatform.community.application.exception.PostNotFoundExcep
 import com.example.fanplatform.community.application.exception.SelfFollowForbiddenException;
 import com.example.fanplatform.community.domain.post.status.InvalidStateTransitionException;
 import com.example.fanplatform.community.presentation.dto.ApiErrorBody;
+import com.example.web.dto.ErrorResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -32,58 +32,71 @@ import java.util.Map;
  *             EDIT_WINDOW_EXPIRED / VALIDATION_ERROR</li>
  * </ul>
  *
- * <p>Cross-cutting handlers (optimistic lock, integrity, validation,
- * type-mismatch, illegal-argument, illegal-state, general) are inherited from
- * {@link AbstractDomainExceptionHandler}.
+ * <p><strong>Envelope (ADR-MONO-058 § D2)</strong>: arms that carry no structured
+ * context return {@code libs/java-web}'s shared {@link ErrorResponse}
+ * ({@code {code, message, timestamp}}). The two arms whose {@code details} payload is
+ * documented in {@code community-api.md} — {@code MEMBERSHIP_REQUIRED} and
+ * {@code POST_STATUS_TRANSITION_INVALID} — return {@link ApiErrorBody}, the
+ * {@code details}-carrying extension {@code platform/error-handling.md § Error Response
+ * Format} explicitly permits. A {@code details}-less {@code ApiErrorBody} and an
+ * {@code ErrorResponse} serialise to the same three keys, so the split is invisible on
+ * the wire.
+ *
+ * <p>Cross-cutting handlers are inherited from {@link AbstractDomainExceptionHandler}
+ * (fan-platform policy: data-integrity, type-mismatch, illegal-state, JPA optimistic
+ * lock, the 422 validation status) and, above it, {@code CommonGlobalExceptionHandler}
+ * (framework arms: 400 / 404 / 405 / 409 / 415 / 500).
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler extends AbstractDomainExceptionHandler {
 
     @ExceptionHandler(PostNotFoundException.class)
-    public ResponseEntity<ApiErrorBody> handlePostNotFound(PostNotFoundException e) {
+    public ResponseEntity<ErrorResponse> handlePostNotFound(PostNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ApiErrorBody.of("POST_NOT_FOUND", e.getMessage()));
+                .body(ErrorResponse.of("POST_NOT_FOUND", e.getMessage()));
     }
 
     @ExceptionHandler(CommentNotFoundException.class)
-    public ResponseEntity<ApiErrorBody> handleCommentNotFound(CommentNotFoundException e) {
+    public ResponseEntity<ErrorResponse> handleCommentNotFound(CommentNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ApiErrorBody.of("COMMENT_NOT_FOUND", e.getMessage()));
+                .body(ErrorResponse.of("COMMENT_NOT_FOUND", e.getMessage()));
     }
 
     @ExceptionHandler(PermissionDeniedException.class)
-    public ResponseEntity<ApiErrorBody> handlePermission(PermissionDeniedException e) {
+    public ResponseEntity<ErrorResponse> handlePermission(PermissionDeniedException e) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(ApiErrorBody.of("PERMISSION_DENIED", e.getMessage()));
+                .body(ErrorResponse.of("PERMISSION_DENIED", e.getMessage()));
     }
 
+    /** Contract: {@code community-api.md} — 403 with {@code details.requiredTier}. */
     @ExceptionHandler(MembershipRequiredException.class)
     public ResponseEntity<ApiErrorBody> handleMembership(MembershipRequiredException e) {
         Map<String, Object> details = new LinkedHashMap<>();
         details.put("requiredTier", e.requiredTier().name());
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(ApiErrorBody.of("MEMBERSHIP_REQUIRED",
+                .body(ApiErrorBody.withDetails("MEMBERSHIP_REQUIRED",
                         "Membership tier required: " + e.requiredTier(), details));
     }
 
     @ExceptionHandler(AlreadyFollowingException.class)
-    public ResponseEntity<ApiErrorBody> handleAlreadyFollowing(AlreadyFollowingException e) {
+    public ResponseEntity<ErrorResponse> handleAlreadyFollowing(AlreadyFollowingException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ApiErrorBody.of("ALREADY_FOLLOWING", "Already following this artist"));
+                .body(ErrorResponse.of("ALREADY_FOLLOWING", "Already following this artist"));
     }
 
     @ExceptionHandler(NotFollowingException.class)
-    public ResponseEntity<ApiErrorBody> handleNotFollowing(NotFollowingException e) {
+    public ResponseEntity<ErrorResponse> handleNotFollowing(NotFollowingException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ApiErrorBody.of("NOT_FOLLOWING", "Not currently following this artist"));
+                .body(ErrorResponse.of("NOT_FOLLOWING", "Not currently following this artist"));
     }
 
     @ExceptionHandler(SelfFollowForbiddenException.class)
-    public ResponseEntity<ApiErrorBody> handleSelfFollow(SelfFollowForbiddenException e) {
+    public ResponseEntity<ErrorResponse> handleSelfFollow(SelfFollowForbiddenException e) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(ApiErrorBody.of("SELF_FOLLOW_FORBIDDEN", "An account cannot follow itself"));
+                .body(ErrorResponse.of("SELF_FOLLOW_FORBIDDEN", "An account cannot follow itself"));
     }
 
+    /** Contract: {@code community-api.md} — 422 with {@code details {from, to, actor}}. */
     @ExceptionHandler(InvalidStateTransitionException.class)
     public ResponseEntity<ApiErrorBody> handleInvalidTransition(InvalidStateTransitionException e) {
         Map<String, Object> details = new LinkedHashMap<>();
@@ -91,20 +104,18 @@ public class GlobalExceptionHandler extends AbstractDomainExceptionHandler {
         details.put("to", e.to().name());
         details.put("actor", e.actor().name());
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(ApiErrorBody.of("POST_STATUS_TRANSITION_INVALID",
+                .body(ApiErrorBody.withDetails("POST_STATUS_TRANSITION_INVALID",
                         "Invalid post status transition", details));
     }
 
     @ExceptionHandler(UpdatePostUseCase.EditWindowExpiredException.class)
-    public ResponseEntity<ApiErrorBody> handleEditWindow(UpdatePostUseCase.EditWindowExpiredException e) {
+    public ResponseEntity<ErrorResponse> handleEditWindow(UpdatePostUseCase.EditWindowExpiredException e) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(ApiErrorBody.of("EDIT_WINDOW_EXPIRED",
+                .body(ErrorResponse.of("EDIT_WINDOW_EXPIRED",
                         "PUBLISHED post is past the edit window"));
     }
 
-    @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<ApiErrorBody> handleMalformed(HttpMessageNotReadableException e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiErrorBody.of("VALIDATION_ERROR", "Malformed request body"));
-    }
+    // HttpMessageNotReadableException (malformed body) → 400 VALIDATION_ERROR
+    // "Malformed request body" is inherited verbatim from CommonGlobalExceptionHandler;
+    // the local copy this class carried was byte-identical (ADR-MONO-058 § D2).
 }

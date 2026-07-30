@@ -21,7 +21,8 @@ Declared in `apps/artist-service/build.gradle`:
 - `net.logstash.logback:logstash-logback-encoder` (prod profile)
 - shared libs:
   - `libs:java-common` — `UuidV7`, `PageQuery/PageResult`
-  - `libs:java-web` — common web utilities
+  - `libs:java-web` — `ErrorResponse` (`{code, message, timestamp}`), the platform error envelope returned by every handler arm that carries no structured `details`; other common web utilities
+  - `libs:java-web-servlet` — `CommonGlobalExceptionHandler`. **Adopted by ADR-MONO-058 § D2 / TASK-FAN-BE-038**: `AbstractDomainExceptionHandler extends CommonGlobalExceptionHandler`, inheriting the framework arms (400 missing-header / missing-parameter, 404 `NoResourceFound`/`NoHandlerFound`, 405 + RFC 7231 `Allow`, 409 `ObjectOptimisticLockingFailureException`, 415, catch-all 500) instead of hand-copying them. Two deliberate divergences stay service-side: fan-platform's published **422** for `@Valid` / `IllegalArgumentException` (via the base's `validationFailureStatus()` hook) and artist-service's published **422** for a malformed body / unknown enum (`artist-api.md`), carried by overriding the base's `handleMalformedRequest`. The service-local `ApiErrorBody` survives **only** as the `details`-carrying envelope extension `platform/error-handling.md § Error Response Format` permits, used by the one arm whose `details` payload `artist-api.md` documents (`STATE_TRANSITION_INVALID`)
   - `libs:java-messaging` — `AbstractOutboxPublisher`, `OutboxRowEntity`
     (`@MappedSuperclass`), `SpringDataOutboxRowRepository`, `TopicResolver`,
     `OutboxMetrics` / `MicrometerOutboxMetrics`. (The v1 `OutboxWriter` /
