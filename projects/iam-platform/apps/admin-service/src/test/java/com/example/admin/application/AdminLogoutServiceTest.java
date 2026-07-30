@@ -66,7 +66,7 @@ class AdminLogoutServiceTest {
         when(tokenPort.findByJti(REFRESH_JTI))
                 .thenReturn(Optional.of(activeRow(REFRESH_JTI, OP_PK)));
         when(operatorLookup.findByOperatorId(OP_UUID))
-                .thenReturn(Optional.of(new OperatorLookupPort.OperatorSummary(OP_PK, OP_UUID)));
+                .thenReturn(Optional.of(new OperatorLookupPort.OperatorLookupRef(OP_PK, OP_UUID)));
 
         service.logout(OP_UUID, ACCESS_JTI, accessExp, REFRESH_JWT);
 
@@ -96,7 +96,7 @@ class AdminLogoutServiceTest {
         when(tokenPort.findByJti(REFRESH_JTI))
                 .thenReturn(Optional.of(activeRow(REFRESH_JTI, 999L)));
         when(operatorLookup.findByOperatorId(OP_UUID))
-                .thenReturn(Optional.of(new OperatorLookupPort.OperatorSummary(OP_PK, OP_UUID)));
+                .thenReturn(Optional.of(new OperatorLookupPort.OperatorLookupRef(OP_PK, OP_UUID)));
 
         service.logout(OP_UUID, ACCESS_JTI, accessExp, REFRESH_JWT);
 

@@ -84,7 +84,7 @@ public class AdminRefreshTokenService {
         AdminRefreshTokenPort.TokenRecord row = tokenPort.findByJti(jti)
                 .orElseThrow(() -> new InvalidRefreshTokenException("Refresh token jti not registered"));
 
-        OperatorLookupPort.OperatorSummary operator = operatorLookup.findByOperatorId(operatorUuid)
+        OperatorLookupPort.OperatorLookupRef operator = operatorLookup.findByOperatorId(operatorUuid)
                 .orElseThrow(() -> new InvalidRefreshTokenException("Operator not found for sub"));
 
         if (!operator.internalId().equals(row.operatorInternalId())) {

@@ -62,7 +62,7 @@ class CreateOperatorUseCaseTest {
 
         // Default: actor is fan-platform (non-platform-scope)
         when(operatorLookupPort.findByOperatorId("actor-uuid"))
-                .thenReturn(Optional.of(new OperatorLookupPort.OperatorSummary(99L, "actor-uuid", "fan-platform")));
+                .thenReturn(Optional.of(new OperatorLookupPort.OperatorLookupRef(99L, "actor-uuid", "fan-platform")));
 
         // TASK-MONO-334: operator-create now requires a pre-existing tenant account.
         // Default the account-existence probe to "exists" (totalElements=1) so every
@@ -185,7 +185,7 @@ class CreateOperatorUseCaseTest {
     void createOperator_platform_scope_actor_can_create_platform_scope_operator() {
         // Override: actor is platform-scope (SUPER_ADMIN)
         when(operatorLookupPort.findByOperatorId("actor-uuid"))
-                .thenReturn(Optional.of(new OperatorLookupPort.OperatorSummary(99L, "actor-uuid", "*")));
+                .thenReturn(Optional.of(new OperatorLookupPort.OperatorLookupRef(99L, "actor-uuid", "*")));
 
         // TASK-BE-262: per-tenant check — platform-scope tenant '*', email unique within '*'
         when(operatorPort.existsByTenantIdAndEmail("*", "super@example.com")).thenReturn(false);
@@ -289,7 +289,7 @@ class CreateOperatorUseCaseTest {
     void createOperator_platformScope_skipsIdentityEntirely() {
         // actor must be platform-scope to create a '*' operator
         when(operatorLookupPort.findByOperatorId("actor-uuid"))
-                .thenReturn(Optional.of(new OperatorLookupPort.OperatorSummary(99L, "actor-uuid", "*")));
+                .thenReturn(Optional.of(new OperatorLookupPort.OperatorLookupRef(99L, "actor-uuid", "*")));
         when(operatorPort.existsByTenantIdAndEmail("*", "super@example.com")).thenReturn(false);
         when(operatorPort.resolveRolesByName(List.of())).thenReturn(new LinkedHashMap<>());
         when(passwordHasher.hash(anyString())).thenReturn("h");
@@ -481,7 +481,7 @@ class CreateOperatorUseCaseTest {
     @DisplayName("MONO-334: platform-scope '*' 은 계정 존재 검사 면제 (account_db tenant 행 없음)")
     void createOperator_platformScope_exemptFromAccountExistenceCheck() {
         when(operatorLookupPort.findByOperatorId("actor-uuid"))
-                .thenReturn(Optional.of(new OperatorLookupPort.OperatorSummary(99L, "actor-uuid", "*")));
+                .thenReturn(Optional.of(new OperatorLookupPort.OperatorLookupRef(99L, "actor-uuid", "*")));
         when(operatorPort.existsByTenantIdAndEmail("*", "super@example.com")).thenReturn(false);
         when(operatorPort.resolveRolesByName(List.of())).thenReturn(new LinkedHashMap<>());
         when(passwordHasher.hash(anyString())).thenReturn("h");
