@@ -2,9 +2,9 @@
 
 import Link from 'next/link';
 import { Button } from '@/shared/ui/Button';
-import { useOperatorOverview } from '../hooks/use-overview';
+import { useIamComposedOverview } from '../hooks/use-overview';
 import { formatDateTime } from '@/shared/lib/datetime';
-import { OVERVIEW_QUICK_LINKS, type OperatorOverview } from '../api/types';
+import { OVERVIEW_QUICK_LINKS, type IamComposedOverview } from '../api/types';
 import { OverviewCard } from './OverviewCard';
 import { Metric } from './OverviewMetric';
 
@@ -31,13 +31,13 @@ import { Metric } from './OverviewMetric';
  */
 
 export interface IamComposedOverviewScreenProps {
-  initial: OperatorOverview;
+  initial: IamComposedOverview;
 }
 
 export function IamComposedOverviewScreen({
   initial,
 }: IamComposedOverviewScreenProps) {
-  const overview = useOperatorOverview(initial);
+  const overview = useIamComposedOverview(initial);
   const data = overview.data ?? initial;
 
   const { accounts, audit, operators } = data;

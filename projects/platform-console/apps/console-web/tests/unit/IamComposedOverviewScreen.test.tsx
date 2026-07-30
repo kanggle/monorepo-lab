@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { IamComposedOverviewScreen } from '@/features/dashboards';
-import type { OperatorOverview } from '@/features/dashboards';
+import type { IamComposedOverview } from '@/features/dashboards';
 import { runAxe } from '../a11y/axe-helper';
 
 /**
@@ -36,7 +36,7 @@ function wrapper() {
   );
 }
 
-const OK: OperatorOverview = {
+const OK: IamComposedOverview = {
   accounts: { status: 'ok', totalElements: 150, sampleCount: 20 },
   audit: {
     status: 'ok',
@@ -107,7 +107,7 @@ describe('IamComposedOverviewScreen — render all cards', () => {
   });
 
   it('zero / empty values render without crashing', () => {
-    const zero: OperatorOverview = {
+    const zero: IamComposedOverview = {
       accounts: { status: 'ok', totalElements: 0, sampleCount: 0 },
       audit: {
         status: 'ok',
@@ -134,7 +134,7 @@ describe('IamComposedOverviewScreen — render all cards', () => {
 
 describe('IamComposedOverviewScreen — per-source isolation', () => {
   it('an accounts-degraded card shows its OWN placeholder; audit + operators still render', () => {
-    const partial: OperatorOverview = {
+    const partial: IamComposedOverview = {
       ...OK,
       accounts: { status: 'degraded', totalElements: null, sampleCount: null },
     };
@@ -158,7 +158,7 @@ describe('IamComposedOverviewScreen — per-source isolation', () => {
   });
 
   it('an operators-forbidden card shows "not available to your role"; others fine', () => {
-    const partial: OperatorOverview = {
+    const partial: IamComposedOverview = {
       ...OK,
       operators: {
         status: 'forbidden',
@@ -182,7 +182,7 @@ describe('IamComposedOverviewScreen — per-source isolation', () => {
   });
 
   it('an audit-forbidden card (intersection-permission) renders inline (no crash)', () => {
-    const partial: OperatorOverview = {
+    const partial: IamComposedOverview = {
       ...OK,
       audit: {
         status: 'forbidden',
@@ -200,7 +200,7 @@ describe('IamComposedOverviewScreen — per-source isolation', () => {
   });
 
   it('all-degraded → an all-degraded notice + a retry affordance (no crash)', () => {
-    const allDown: OperatorOverview = {
+    const allDown: IamComposedOverview = {
       accounts: { status: 'degraded', totalElements: null, sampleCount: null },
       audit: {
         status: 'degraded',

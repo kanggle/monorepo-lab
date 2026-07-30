@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
 import { READ_QUERY_REFETCH } from '@/shared/api/query-options';
-import { OperatorOverviewSchema, type OperatorOverview } from '../api/types';
+import { IamComposedOverviewSchema, type IamComposedOverview } from '../api/types';
 
 /**
  * Client-side composed-overview read hook (architecture.md § Server vs
@@ -40,12 +40,12 @@ import { OperatorOverviewSchema, type OperatorOverview } from '../api/types';
 // (fresh cache seeded by initialData); only the drilldown soft-nav crashed.
 const OVERVIEW_KEY = ['iam-detail-overview'] as const;
 
-async function fetchOverview(): Promise<OperatorOverview> {
+async function fetchOverview(): Promise<IamComposedOverview> {
   const raw = await apiClient.get<unknown>('/api/dashboards');
-  return OperatorOverviewSchema.parse(raw);
+  return IamComposedOverviewSchema.parse(raw);
 }
 
-export function useOperatorOverview(initial?: OperatorOverview) {
+export function useIamComposedOverview(initial?: IamComposedOverview) {
   return useQuery({
     queryKey: OVERVIEW_KEY,
     queryFn: fetchOverview,

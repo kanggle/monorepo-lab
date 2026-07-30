@@ -9,7 +9,7 @@ import {
 } from '@/shared/api/errors';
 import { logger, newRequestId } from '@/shared/lib/logger';
 import {
-  type OperatorOverview,
+  type IamComposedOverview,
   type AccountsSummary,
   type AuditActivitySummary,
   type OperatorsSummary,
@@ -156,7 +156,7 @@ async function isolateLeg<T>(
  * — the hook owns that). Per-source isolated; a `401` from any leg
  * propagates as an `ApiError(401)` (whole-overview re-login).
  */
-export async function getOperatorOverview(): Promise<OperatorOverview> {
+export async function getOperatorOverview(): Promise<IamComposedOverview> {
   const requestId = newRequestId();
 
   // Defaults: every card is present (degraded card = a status, never a

@@ -96,12 +96,12 @@ export type OperatorsSummary = z.infer<typeof OperatorsSummarySchema>;
  * UI renders the full shell even when sources are down — per-source
  * isolation (§ 2.4.4 / ADR-015 D3).
  */
-export const OperatorOverviewSchema = z.object({
+export const IamComposedOverviewSchema = z.object({
   accounts: AccountsSummarySchema,
   audit: AuditActivitySummarySchema,
   operators: OperatorsSummarySchema,
 });
-export type OperatorOverview = z.infer<typeof OperatorOverviewSchema>;
+export type IamComposedOverview = z.infer<typeof IamComposedOverviewSchema>;
 
 /** Quick-link targets — the overview links into the EXISTING in-console
  *  routes (FE-002/003/004). `iam.baseRoute` (`/accounts`) is unchanged;

@@ -115,6 +115,8 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
+- `TASK-PC-FE-270-rename-dashboards-operator-overview-type.md` — **REVIEW (impl PR 대기)**. `features/dashboards`(IAM 전용 3카드)와 `features/operator-overview`(6도메인 BFF 합성)가 `OperatorOverviewSchema`/`OperatorOverview`/`useOperatorOverview`를 동일 이름으로 export하던 충돌 — FE-261이 스크린 컴포넌트(`OperatorOverviewScreen`→`IamComposedOverviewScreen`)만 개명하고 명시적으로 미룬 항목. `use-overview.ts`의 TASK-PC-FE-071 주석이 이 충돌 때문에 실제 런타임 크래시(query-key 혼동으로 drilldown이 `Cannot read properties of undefined`)가 났었다고 기록 — 그때는 query-key만 분리하고 이름은 그대로 뒀었다. `dashboards` 쪽을 FE-261과 동일한 `IamComposedOverview*` 네이밍으로 완결(타입/스키마/훅). **`getOperatorOverview` 함수명은 FE-259의 `console-integration-contract.md` § 3.1 row 16 계약-고정 표면이라 미변경**(타입 이름만 변경). `features/operator-overview` 쪽은 무변경(그 방향이 올바른 이름). 로컬 검증: `tsc --noEmit` 0 · `next lint` 0 · vitest 전량 **280파일/2909 GREEN**(baseline 동일) · 대상 4파일(dashboards-nav/IamComposedOverviewScreen/overview-api/parity-verification) 126/126 개별 확인 · `grep OperatorOverview\b features/dashboards tests` 0건. 분석=Sonnet 5 / 구현=Sonnet 5.
+
 (empty)
 
 ## done

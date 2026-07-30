@@ -10,7 +10,7 @@ export { getIamComposedOverviewState } from './api/overview-state';
 export type { IamComposedOverviewState } from './api/overview-state';
 export { getOperatorOverview } from './api/overview-api';
 export type {
-  OperatorOverview,
+  IamComposedOverview,
   AccountsSummary,
   AuditActivitySummary,
   OperatorsSummary,
