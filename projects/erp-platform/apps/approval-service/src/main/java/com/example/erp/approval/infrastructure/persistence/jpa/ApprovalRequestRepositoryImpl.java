@@ -1,5 +1,6 @@
 package com.example.erp.approval.infrastructure.persistence.jpa;
 
+import com.example.erp.approval.domain.common.PageResult;
 import com.example.erp.approval.domain.error.ApprovalErrors.ApprovalRouteInvalidException;
 import com.example.erp.approval.domain.request.ApprovalAction;
 import com.example.erp.approval.domain.request.ApprovalRequest;
@@ -45,31 +46,41 @@ public class ApprovalRequestRepositoryImpl implements ApprovalRequestRepository 
     }
 
     @Override
-    public List<ApprovalRequest> findAll(String tenantId, ApprovalStatus status,
-                                         int page, int size) {
+    public PageResult<ApprovalRequest> findAll(String tenantId, ApprovalStatus status,
+                                               int page, int size) {
         PageRequest pageable = PageRequest.of(page, size);
-        return status == null
+        List<ApprovalRequest> content = status == null
                 ? requestJpa.findAllByTenantId(tenantId, pageable)
                 : requestJpa.findAllByTenantIdAndStatus(tenantId, status, pageable);
+        long total = status == null
+                ? requestJpa.countByTenantId(tenantId)
+                : requestJpa.countByTenantIdAndStatus(tenantId, status);
+        return new PageResult<>(content, total);
     }
 
     @Override
-    public List<ApprovalRequest> findByParticipant(String tenantId, String participantId,
-                                                   ApprovalStatus status, int page, int size) {
+    public PageResult<ApprovalRequest> findByParticipant(String tenantId, String participantId,
+                                                         ApprovalStatus status, int page, int size) {
         PageRequest pageable = PageRequest.of(page, size);
-        return status == null
+        List<ApprovalRequest> content = status == null
                 ? requestJpa.findByParticipant(tenantId, participantId, pageable)
                 : requestJpa.findByParticipantAndStatus(tenantId, participantId, status, pageable);
+        long total = status == null
+                ? requestJpa.countByParticipant(tenantId, participantId)
+                : requestJpa.countByParticipantAndStatus(tenantId, participantId, status);
+        return new PageResult<>(content, total);
     }
 
     @Override
-    public List<ApprovalRequest> findInbox(String tenantId, String approverId,
-                                           int page, int size) {
+    public PageResult<ApprovalRequest> findInbox(String tenantId, String approverId,
+                                                 int page, int size) {
         // Pending = current stage's approver is the caller AND status ∈
         // {SUBMITTED, IN_REVIEW} (TASK-ERP-BE-012). approver_id is denormalized to
         // the current stage's approver.
-        return requestJpa.findInboxPending(
+        List<ApprovalRequest> content = requestJpa.findInboxPending(
                 tenantId, approverId, PageRequest.of(page, size));
+        long total = requestJpa.countInboxPending(tenantId, approverId);
+        return new PageResult<>(content, total);
     }
 
     @Override

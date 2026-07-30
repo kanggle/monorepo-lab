@@ -84,6 +84,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
+- `TASK-FIN-BE-063-idempotency-body-hash-key-order-canonicalization.md` — account-service `IdempotentExecution` 요청바디 해시가 Jackson 기본 직렬화(키순서 비정규)로 계산되어, 동일 논리 바디가 키순서만 달라도 다른 해시가 되어 같은 `Idempotency-Key` 재요청이 REPLAY 대신 409 `IDEMPOTENCY_KEY_CONFLICT`로 오판되는 결함 수정. `libs:java-web-servlet` `BodyHashUtil`(키정렬 canonical 해시, 이미 monorepo 공유 구현) 채택. 구현+테스트 완료(5개 신규 unit test, 166→171, GREEN), 리뷰 대기.
+
 ## done
 
 - `TASK-FIN-BE-062-refactor-spec-finance-polish.md` — **DONE 2026-07-22 (3-dim verified — impl PR #2878 squash `9c7f0ecd4`; 전 PR MERGED · main 편입 · 머지 전 required 0 failing, done/).** refactor-spec finance ledger 이벤트계약 타이틀 정규화(`# finance-ledger-events — event contract (ledger-service)`→`# Event Contract — finance-ledger-events`, account 형제·cross-project 규범 정렬); 10 스펙 dead-ref 0. HTTP-title 발산(ledger-service 하위 2문서 구분=의도적)·account(7)/ledger(8)-field envelope drift(README §5 ADR-gated)는 report-only. 분석=Opus 4.8.

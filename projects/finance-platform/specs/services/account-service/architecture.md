@@ -224,7 +224,9 @@ com.example.finance.account/
 - `com.fasterxml.jackson.{core:jackson-databind, datatype:jackson-datatype-jsr310}`
 - `net.logstash.logback:logstash-logback-encoder` (prod profile)
 - shared libs: `libs:java-common`, `libs:java-web`, `libs:java-messaging`,
-  `libs:java-observability`, `libs:java-security`
+  `libs:java-observability`, `libs:java-security`, `libs:java-security-servlet`
+  (ADR-MONO-049 § D5-3 — `TenantClaimEnforcer`), `libs:java-web-servlet`
+  (TASK-FIN-BE-063 — `BodyHashUtil` canonical idempotency body hash)
 
 ### Forbidden dependencies
 
@@ -344,7 +346,11 @@ All mutating endpoints require `Idempotency-Key` (missing → 400
 NX-EX), `idempotency_keys` table fallback when Redis is offline
 (fail-CLOSED → 503 `IDEMPOTENCY_STORE_UNAVAILABLE` if both down). Same key +
 identical payload → first stored response replayed (no fund re-movement);
-same key + different payload → 409 `IDEMPOTENCY_KEY_CONFLICT`. Key scope =
+same key + different payload → 409 `IDEMPOTENCY_KEY_CONFLICT`. The payload
+hash MUST be **key-order-canonical** (`BodyHashUtil.computeHash`,
+`libs:java-web-servlet` — TASK-FIN-BE-063): two semantically-identical
+bodies whose JSON keys serialize in a different order still hash identically,
+so a replay never spuriously conflicts. Key scope =
 `(idempotency_key, endpoint, tenant_id)`.
 
 ## Outbox + audit_log invariants

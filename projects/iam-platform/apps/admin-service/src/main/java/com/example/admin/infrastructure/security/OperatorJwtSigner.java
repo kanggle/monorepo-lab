@@ -11,17 +11,20 @@ import java.util.Objects;
  * that injects the configured issuer and active {@code kid} for every token
  * minted by admin-service.
  *
- * <p>Not the same type as {@code com.gap.security.jwt.JwtSigner} — this is
- * admin-service's infrastructure-level seam so downstream call sites do not
- * need to know about kid selection or issuer enforcement.
+ * <p>Distinct from — and does not implement — the shared
+ * {@link com.example.security.jwt.JwtSigner} interface from
+ * {@code libs/java-security} (which {@link Rs256JwtSigner} itself
+ * implements). This class is admin-service's infrastructure-level seam
+ * around that interface so downstream call sites do not need to know about
+ * kid selection or issuer enforcement.
  */
-public final class JwtSigner {
+public final class OperatorJwtSigner {
 
     private final AdminJwtKeyStore keyStore;
     private final String issuer;
     private final Rs256JwtSigner delegate;
 
-    public JwtSigner(AdminJwtKeyStore keyStore, String issuer) {
+    public OperatorJwtSigner(AdminJwtKeyStore keyStore, String issuer) {
         this.keyStore = Objects.requireNonNull(keyStore, "keyStore must not be null");
         this.issuer = Objects.requireNonNull(issuer, "issuer must not be null");
         this.delegate = new Rs256JwtSigner(keyStore.activePrivateKey(), keyStore.activeKid());

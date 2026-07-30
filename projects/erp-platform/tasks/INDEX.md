@@ -80,9 +80,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## in-progress
 
-(empty)
-
 ## review
+
+- `TASK-ERP-BE-036-approval-apienvelope-totalelements-fix.md` — approval-service `ApiEnvelope.ofList` computes `totalElements` as `data.size()` (current page slice) instead of the TRUE cross-page total the other 3 services' copies (masterdata/notification/read-model) correctly supply via an explicit `long totalElements` parameter (monorepo-wide `ApiEnvelope` audit finding).
 
 ## done
 

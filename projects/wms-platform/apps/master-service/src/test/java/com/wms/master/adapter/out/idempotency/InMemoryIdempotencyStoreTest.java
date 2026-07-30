@@ -7,7 +7,13 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class InMemoryIdempotencyStoreTest {
@@ -54,6 +60,42 @@ class InMemoryIdempotencyStoreTest {
         assertThat(store.tryAcquireLock("k", Duration.ofMinutes(1))).isTrue();
         store.releaseLock("k");
         assertThat(store.tryAcquireLock("k", Duration.ofMinutes(1))).isTrue();
+    }
+
+    @Test
+    @DisplayName("two concurrent threads call tryAcquireLock — exactly one wins (TASK-BE-565)")
+    void concurrentTryAcquireLockYieldsExactlyOneWinner() throws Exception {
+        InMemoryIdempotencyStore store = new InMemoryIdempotencyStore();
+        String key = "POST:master:11111111-1111-1111-1111-111111111111";
+        Duration ttl = Duration.ofSeconds(30);
+
+        int rounds = 200;
+        AtomicInteger collisionsObserved = new AtomicInteger();
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            for (int i = 0; i < rounds; i++) {
+                String roundKey = key + ":" + i;
+                CountDownLatch start = new CountDownLatch(1);
+                Future<Boolean> a = pool.submit(() -> {
+                    start.await();
+                    return store.tryAcquireLock(roundKey, ttl);
+                });
+                Future<Boolean> b = pool.submit(() -> {
+                    start.await();
+                    return store.tryAcquireLock(roundKey, ttl);
+                });
+                start.countDown();
+                int wins = (a.get() ? 1 : 0) + (b.get() ? 1 : 0);
+                if (wins != 1) {
+                    collisionsObserved.incrementAndGet();
+                }
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(collisionsObserved.get())
+                .as("exactly one thread per round must win the lock")
+                .isZero();
     }
 
     private static Clock tickingClock(AtomicReference<Instant> now) {

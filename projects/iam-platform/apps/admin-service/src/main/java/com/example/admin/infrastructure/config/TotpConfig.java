@@ -1,7 +1,7 @@
 package com.example.admin.infrastructure.config;
 
 import com.example.admin.infrastructure.security.BootstrapTokenService;
-import com.example.admin.infrastructure.security.JwtSigner;
+import com.example.admin.infrastructure.security.OperatorJwtSigner;
 import com.example.admin.infrastructure.security.TotpSecretCipher;
 import com.example.security.jwt.JwtVerifier;
 import com.example.security.password.Argon2idPasswordHasher;
@@ -41,7 +41,7 @@ public class TotpConfig {
     }
 
     @Bean
-    public BootstrapTokenService bootstrapTokenService(JwtSigner signer,
+    public BootstrapTokenService bootstrapTokenService(OperatorJwtSigner signer,
                                                        JwtVerifier operatorJwtVerifier,
                                                        StringRedisTemplate redis,
                                                        AdminJwtProperties jwtProperties) {

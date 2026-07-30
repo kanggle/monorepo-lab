@@ -95,3 +95,28 @@ consolebff:
   # {sourceDomain} path segment of POST /api/console/notifications/{sourceDomain}/{id}/read.
   notifications:
     domains: ${CONSOLE_BFF_NOTIFICATION_DOMAINS:erp}
+  # Per-leg resilience gate (TASK-PC-BE-015 — architecture.md § Resilience D5.A,
+  # contract §§ 2.4.9 / 2.4.9.1 / 2.4.9.2, rules/traits/integration-heavy.md I2/I3).
+  # One circuit-breaker + retry pair per (domain, route) key, built from
+  # libs/java-common ResilienceClientFactory's customizer overloads — the shared
+  # 4xx-ignore posture and jittered backoff are inherited, not restated.
+  #
+  # These values ARE the spec's numbers; the rationale for each divergence from
+  # the library default is in ResilienceProperties' javadoc:
+  #   - COUNT_BASED window: a leg fires once per dashboard load, so a TIME_BASED
+  #     10s window could essentially never reach minimumNumberOfCalls.
+  #   - 2 attempts / 150ms base: 2s per-leg timeout x 2 attempts + <=0.45s backoff
+  #     ~= 4.45s, which must stay under CompositionEngine.COMPOSITION_TIMEOUT (5s).
+  resilience:
+    enabled: ${CONSOLE_BFF_RESILIENCE_ENABLED:true}
+    circuit-breaker:
+      failure-rate-threshold: 50
+      sliding-window-size: 10
+      minimum-number-of-calls: 5
+      # NOTE: wait-duration-in-open-state has no key here on purpose — the shared
+      # factory already sets it (10s) and Resilience4j rejects a second
+      # assignment. See ResilienceProperties § "Settings intentionally NOT exposed".
+      permitted-calls-in-half-open: 3
+    retry:
+      max-attempts: 2
+      backoff-base-ms: 150

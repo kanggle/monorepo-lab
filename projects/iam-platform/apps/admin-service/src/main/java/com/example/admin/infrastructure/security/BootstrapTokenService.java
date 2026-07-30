@@ -47,12 +47,12 @@ public class BootstrapTokenService {
     /** Default scope set minted on login enrollment-required path. */
     public static final Set<String> DEFAULT_SCOPES = Set.of(SCOPE_ENROLL, SCOPE_VERIFY);
 
-    private final JwtSigner signer;
+    private final OperatorJwtSigner signer;
     private final JwtVerifier verifier;
     private final StringRedisTemplate redis;
     private final String issuer;
 
-    public BootstrapTokenService(JwtSigner signer,
+    public BootstrapTokenService(OperatorJwtSigner signer,
                                  JwtVerifier verifier,
                                  StringRedisTemplate redis,
                                  String issuer) {

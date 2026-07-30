@@ -2285,8 +2285,11 @@ contract row (smoke-target for the IT harness and Traefik probe).
 ##### Resilience (D5.A — per-domain CB inherited from § 2.5)
 
 - Each outbound leg is governed by a circuit-breaker keyed by `(domain, route)`
-  via `libs/java-web` Resilience4j primitives; a wms outage does not open the
-  breaker for scm.
+  via `libs/java-common`'s `ResilienceClientFactory` (Resilience4j); a wms outage
+  does not open the breaker for scm. An open breaker rejects the leg without
+  opening a socket and renders `{ status: "degraded", reason: "CIRCUIT_OPEN" }`.
+  *(Cited as `libs/java-web` until TASK-PC-BE-015 — that module contains no
+  resilience code; citation corrected alongside the implementation.)*
 - **Aggregation degrade discipline** — partial-failure composition rendering:
   every responsive leg's data + per-failed-leg
   `{ status: "degraded", domain, reason }` card. **All-down still returns 200
@@ -2524,8 +2527,8 @@ For the inbound-validation errors **before** any outbound leg fires
 
 ##### Resilience (verbatim from § 2.4.9, restated for cross-reference only)
 
-- Per-leg circuit-breaker keyed by `(domain, route)` via `libs/java-web` Resilience4j.
-- Per-leg hard timeout bounded so the composition's total fan-out latency budget is not exceeded.
+- Per-leg circuit-breaker keyed by `(domain, route)` via `libs/java-common`'s `ResilienceClientFactory` (Resilience4j).
+- Per-leg hard timeout bounded so the composition's total fan-out latency budget is not exceeded. The bounded retry is sized against the same budget (`attempts × per-leg timeout + backoff` < composition timeout).
 - Aggregation degrade: every responsive leg's `data` + per-failed-leg `{ status: "degraded" / "forbidden", reason }` card.
 - All-down still returns 200 with all-degraded/forbidden envelope. D5.B (all-or-nothing 503) is forbidden.
 
@@ -2752,7 +2755,7 @@ because every leg there shares the inbound operator/OIDC credential — a
 
 ##### Resilience
 
-- Per-leg circuit-breaker keyed by `(domain, route="domain-health")` via `libs/java-web` Resilience4j — sibling circuit instance to § 2.4.9.1's `(domain, "operator-overview")` (independent state, so one dashboard's circuit trip does not bleed into the other).
+- Per-leg circuit-breaker keyed by `(domain, route="domain-health")` via `libs/java-common`'s `ResilienceClientFactory` (Resilience4j) — sibling circuit instance to § 2.4.9.1's `(domain, "operator-overview")` (independent state, so one dashboard's circuit trip does not bleed into the other).
 - Per-leg hard timeout reused (2s, the existing per-leg config in `RestClientConfig.PER_LEG_TIMEOUT`).
 - Composition-level 5s budget reused.
 - Aggregation degrade: every responsive leg's `data` + per-failed-leg `{ status: "degraded", reason }` card.

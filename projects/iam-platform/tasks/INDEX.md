@@ -101,7 +101,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-(empty)
+- `TASK-BE-558-rename-admin-jwtsigner-classname-collision.md` — 모노레포 전역 클래스명 충돌 감사에서 발굴. `admin-service` local `JwtSigner`(class) 를 `OperatorJwtSigner` 로 rename — `libs/java-security` 의 `com.example.security.jwt.JwtSigner`(interface, 동명 무관 타입) 와의 충돌 해소. 순수 rename + 죽은 `com.gap.security.jwt.JwtSigner` javadoc 참조 정정, 동작 변경 없음. `./gradlew :projects:iam-platform:apps:admin-service:test` GREEN (134 test suites, 0 failures/errors, renamed `OperatorJwtSignerTest` included).
 
 ## done
 
