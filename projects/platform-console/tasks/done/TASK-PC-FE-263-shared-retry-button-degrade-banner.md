@@ -8,7 +8,7 @@ console-web shared RetryButton + degrade-banner shell extraction — dedup `doma
 
 # Status
 
-review
+done
 
 # Owner
 
