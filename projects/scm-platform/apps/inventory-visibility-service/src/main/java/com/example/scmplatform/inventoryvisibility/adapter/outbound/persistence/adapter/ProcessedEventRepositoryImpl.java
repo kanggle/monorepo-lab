@@ -1,10 +1,10 @@
 package com.example.scmplatform.inventoryvisibility.adapter.outbound.persistence.adapter;
 
-import com.example.scmplatform.inventoryvisibility.adapter.outbound.persistence.jpa.EventDedupeJpaEntity;
-import com.example.scmplatform.inventoryvisibility.adapter.outbound.persistence.jpa.EventDedupeJpaRepository;
-import com.example.scmplatform.inventoryvisibility.application.port.outbound.EventDedupePort;
-import com.example.scmplatform.inventoryvisibility.domain.dedupe.EventDedupeRecord;
-import com.example.scmplatform.inventoryvisibility.domain.dedupe.repository.EventDedupeRepository;
+import com.example.scmplatform.inventoryvisibility.adapter.outbound.persistence.jpa.ProcessedEventJpaEntity;
+import com.example.scmplatform.inventoryvisibility.adapter.outbound.persistence.jpa.ProcessedEventJpaRepository;
+import com.example.scmplatform.inventoryvisibility.application.port.outbound.ProcessedEventPort;
+import com.example.scmplatform.inventoryvisibility.domain.dedupe.ProcessedEventRecord;
+import com.example.scmplatform.inventoryvisibility.domain.dedupe.repository.ProcessedEventRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -14,9 +14,9 @@ import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
-public class EventDedupeRepositoryImpl implements EventDedupeRepository, EventDedupePort {
+public class ProcessedEventRepositoryImpl implements ProcessedEventRepository, ProcessedEventPort {
 
-    private final EventDedupeJpaRepository jpaRepository;
+    private final ProcessedEventJpaRepository jpaRepository;
 
     @Override
     public boolean existsByEventId(UUID eventId) {
@@ -24,13 +24,13 @@ public class EventDedupeRepositoryImpl implements EventDedupeRepository, EventDe
     }
 
     @Override
-    public Optional<EventDedupeRecord> findByEventId(UUID eventId) {
+    public Optional<ProcessedEventRecord> findByEventId(UUID eventId) {
         return jpaRepository.findById(eventId.toString()).map(this::toDomain);
     }
 
     @Override
-    public EventDedupeRecord save(EventDedupeRecord record) {
-        EventDedupeJpaEntity e = new EventDedupeJpaEntity();
+    public ProcessedEventRecord save(ProcessedEventRecord record) {
+        ProcessedEventJpaEntity e = new ProcessedEventJpaEntity();
         e.setEventId(record.getEventId().toString());
         e.setTenantId(record.getTenantId());
         e.setProcessedAt(record.getProcessedAt());
@@ -38,7 +38,7 @@ public class EventDedupeRepositoryImpl implements EventDedupeRepository, EventDe
         return toDomain(jpaRepository.save(e));
     }
 
-    // EventDedupePort implementation
+    // ProcessedEventPort implementation
     @Override
     public boolean isDuplicate(UUID eventId) {
         return existsByEventId(eventId);
@@ -46,11 +46,11 @@ public class EventDedupeRepositoryImpl implements EventDedupeRepository, EventDe
 
     @Override
     public void markProcessed(UUID eventId, String tenantId, Instant processedAt, String sourceTopic) {
-        save(EventDedupeRecord.of(eventId, tenantId, processedAt, sourceTopic));
+        save(ProcessedEventRecord.of(eventId, tenantId, processedAt, sourceTopic));
     }
 
-    private EventDedupeRecord toDomain(EventDedupeJpaEntity e) {
-        return EventDedupeRecord.of(
+    private ProcessedEventRecord toDomain(ProcessedEventJpaEntity e) {
+        return ProcessedEventRecord.of(
                 ReadModelIds.requireUuid(e.getEventId(), "event_dedupe.event_id"),
                 e.getTenantId(),
                 e.getProcessedAt(),

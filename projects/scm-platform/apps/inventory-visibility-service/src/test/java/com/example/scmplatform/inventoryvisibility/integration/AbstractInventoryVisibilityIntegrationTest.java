@@ -1,6 +1,6 @@
 package com.example.scmplatform.inventoryvisibility.integration;
 
-import com.example.scmplatform.inventoryvisibility.adapter.outbound.persistence.jpa.EventDedupeJpaRepository;
+import com.example.scmplatform.inventoryvisibility.adapter.outbound.persistence.jpa.ProcessedEventJpaRepository;
 import com.example.scmplatform.inventoryvisibility.adapter.outbound.persistence.jpa.InventoryNodeJpaEntity;
 import com.example.scmplatform.inventoryvisibility.adapter.outbound.persistence.jpa.InventoryNodeJpaRepository;
 import com.example.scmplatform.inventoryvisibility.adapter.outbound.persistence.jpa.InventorySnapshotJpaRepository;
@@ -180,7 +180,7 @@ public abstract class AbstractInventoryVisibilityIntegrationTest {
     protected NodeStalenessJpaRepository stalenessJpa;
 
     @Autowired
-    protected EventDedupeJpaRepository dedupeJpa;
+    protected ProcessedEventJpaRepository processedEventJpa;
 
     @Autowired
     protected ObjectMapper objectMapper;

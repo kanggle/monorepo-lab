@@ -2,7 +2,7 @@ package com.example.scmplatform.inventoryvisibility.application;
 
 import com.example.scmplatform.inventoryvisibility.application.port.outbound.AlertPublisherPort;
 import com.example.scmplatform.inventoryvisibility.application.port.outbound.ClockPort;
-import com.example.scmplatform.inventoryvisibility.application.port.outbound.EventDedupePort;
+import com.example.scmplatform.inventoryvisibility.application.port.outbound.ProcessedEventPort;
 import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService;
 import com.example.scmplatform.inventoryvisibility.domain.node.InventoryNode;
 import com.example.scmplatform.inventoryvisibility.domain.node.NodeId;
@@ -51,7 +51,7 @@ class ApplyWarehouseCodeUseCaseTest {
     @Mock InventorySnapshotRepository snapshotRepository;
     @Mock NodeStalenessRepository stalenessRepository;
     @Mock InboundExpectationRepository inboundExpectationRepository;
-    @Mock EventDedupePort eventDedupePort;
+    @Mock ProcessedEventPort processedEventPort;
     @Mock AlertPublisherPort alertPublisherPort;
     @Mock ClockPort clock;
 
@@ -64,9 +64,9 @@ class ApplyWarehouseCodeUseCaseTest {
     void setUp() {
         service = new InventoryVisibilityApplicationService(
                 nodeRepository, snapshotRepository, stalenessRepository,
-                inboundExpectationRepository, eventDedupePort, alertPublisherPort, clock);
+                inboundExpectationRepository, processedEventPort, alertPublisherPort, clock);
         when(clock.now()).thenReturn(now);
-        when(eventDedupePort.isDuplicate(eventId)).thenReturn(false);
+        when(processedEventPort.isDuplicate(eventId)).thenReturn(false);
         when(snapshotRepository.findByNodeIdAndSku(any(), any(), eq(TENANT)))
                 .thenReturn(Optional.empty());
         when(snapshotRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -136,7 +136,7 @@ class ApplyWarehouseCodeUseCaseTest {
                 eventId, now, TENANT, TOPIC);
 
         verify(snapshotRepository).save(any());
-        verify(eventDedupePort).markProcessed(eq(eventId), eq(TENANT), eq(now), eq(TOPIC));
+        verify(processedEventPort).markProcessed(eq(eventId), eq(TENANT), eq(now), eq(TOPIC));
     }
 
     @Test

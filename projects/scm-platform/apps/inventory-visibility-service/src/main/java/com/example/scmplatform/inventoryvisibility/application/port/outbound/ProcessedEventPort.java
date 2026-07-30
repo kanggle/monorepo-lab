@@ -6,7 +6,7 @@ import java.util.UUID;
 /**
  * Outbound port for event idempotency checking and recording (T8).
  */
-public interface EventDedupePort {
+public interface ProcessedEventPort {
 
     /** Returns true if the event has already been processed. */
     boolean isDuplicate(UUID eventId);

@@ -2,7 +2,7 @@ package com.example.scmplatform.inventoryvisibility.application;
 
 import com.example.scmplatform.inventoryvisibility.application.port.outbound.AlertPublisherPort;
 import com.example.scmplatform.inventoryvisibility.application.port.outbound.ClockPort;
-import com.example.scmplatform.inventoryvisibility.application.port.outbound.EventDedupePort;
+import com.example.scmplatform.inventoryvisibility.application.port.outbound.ProcessedEventPort;
 import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService;
 import com.example.scmplatform.inventoryvisibility.domain.node.InventoryNode;
 import com.example.scmplatform.inventoryvisibility.domain.node.NodeId;
@@ -46,7 +46,7 @@ class ApplyInventoryTransferredUseCaseTest {
     @Mock InventorySnapshotRepository snapshotRepository;
     @Mock NodeStalenessRepository stalenessRepository;
     @Mock InboundExpectationRepository inboundExpectationRepository;
-    @Mock EventDedupePort eventDedupePort;
+    @Mock ProcessedEventPort processedEventPort;
     @Mock AlertPublisherPort alertPublisherPort;
     @Mock ClockPort clock;
 
@@ -61,9 +61,9 @@ class ApplyInventoryTransferredUseCaseTest {
     void setUp() {
         service = new InventoryVisibilityApplicationService(
                 nodeRepository, snapshotRepository, stalenessRepository,
-                inboundExpectationRepository, eventDedupePort, alertPublisherPort, clock);
+                inboundExpectationRepository, processedEventPort, alertPublisherPort, clock);
         when(clock.now()).thenReturn(now);
-        when(eventDedupePort.isDuplicate(eventId)).thenReturn(false);
+        when(processedEventPort.isDuplicate(eventId)).thenReturn(false);
     }
 
     @Test
@@ -101,7 +101,7 @@ class ApplyInventoryTransferredUseCaseTest {
         ArgumentCaptor<InventorySnapshot> captor = ArgumentCaptor.forClass(InventorySnapshot.class);
         verify(snapshotRepository, times(2)).save(captor.capture());
 
-        verify(eventDedupePort).markProcessed(eq(eventId), eq("scm"), eq(now), any());
+        verify(processedEventPort).markProcessed(eq(eventId), eq("scm"), eq(now), any());
     }
 
     @Test

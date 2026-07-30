@@ -2,7 +2,7 @@ package com.example.scmplatform.inventoryvisibility.application.service;
 
 import com.example.scmplatform.inventoryvisibility.application.port.outbound.AlertPublisherPort;
 import com.example.scmplatform.inventoryvisibility.application.port.outbound.ClockPort;
-import com.example.scmplatform.inventoryvisibility.application.port.outbound.EventDedupePort;
+import com.example.scmplatform.inventoryvisibility.application.port.outbound.ProcessedEventPort;
 import com.example.scmplatform.inventoryvisibility.domain.error.NodeNotFoundException;
 import com.example.scmplatform.inventoryvisibility.domain.error.NodeTypeConflictException;
 import com.example.scmplatform.inventoryvisibility.domain.expectation.InboundExpectation;
@@ -44,7 +44,7 @@ import java.util.UUID;
  * <ul>
  *   <li>No framework classes in domain objects — only in this service and adapters.</li>
  *   <li>Transactional boundary: one DB transaction per event or query.</li>
- *   <li>Idempotency: duplicate eventId check via EventDedupePort before any mutation.</li>
+ *   <li>Idempotency: duplicate eventId check via ProcessedEventPort before any mutation.</li>
  * </ul>
  */
 @Slf4j
@@ -56,7 +56,7 @@ public class InventoryVisibilityApplicationService {
     private final InventorySnapshotRepository snapshotRepository;
     private final NodeStalenessRepository stalenessRepository;
     private final InboundExpectationRepository inboundExpectationRepository;
-    private final EventDedupePort eventDedupePort;
+    private final ProcessedEventPort processedEventPort;
     private final AlertPublisherPort alertPublisherPort;
     private final ClockPort clock;
 
@@ -77,7 +77,7 @@ public class InventoryVisibilityApplicationService {
                                         UUID eventId,
                                         Instant occurredAt, String tenantId,
                                         String sourceTopic) {
-        if (eventDedupePort.isDuplicate(eventId)) {
+        if (processedEventPort.isDuplicate(eventId)) {
             log.debug("Duplicate event skipped: eventId={} topic={}", eventId, sourceTopic);
             return;
         }
@@ -86,7 +86,7 @@ public class InventoryVisibilityApplicationService {
                 Quantity.of(BigDecimal.valueOf(qtyReceived)), true,
                 eventId, occurredAt, tenantId);
         updateStaleness(node.getId(), tenantId, eventId, occurredAt);
-        eventDedupePort.markProcessed(eventId, tenantId, clock.now(), sourceTopic);
+        processedEventPort.markProcessed(eventId, tenantId, clock.now(), sourceTopic);
         log.info("applied inventory.received: node={} sku={} qty={} eventId={}",
                 node.getId(), skuId, qtyReceived, eventId);
     }
@@ -99,7 +99,7 @@ public class InventoryVisibilityApplicationService {
                                         long delta, String warehouseCode, UUID eventId,
                                         Instant occurredAt, String tenantId,
                                         String sourceTopic) {
-        if (eventDedupePort.isDuplicate(eventId)) {
+        if (processedEventPort.isDuplicate(eventId)) {
             log.debug("Duplicate event skipped: eventId={} topic={}", eventId, sourceTopic);
             return;
         }
@@ -112,7 +112,7 @@ public class InventoryVisibilityApplicationService {
         applySnapshotDelta(node.getId(), Sku.of(skuId), absDelta, isAddition,
                 eventId, occurredAt, tenantId);
         updateStaleness(node.getId(), tenantId, eventId, occurredAt);
-        eventDedupePort.markProcessed(eventId, tenantId, clock.now(), sourceTopic);
+        processedEventPort.markProcessed(eventId, tenantId, clock.now(), sourceTopic);
         log.info("applied inventory.adjusted: node={} sku={} delta={} eventId={}",
                 node.getId(), skuId, delta, eventId);
     }
@@ -127,7 +127,7 @@ public class InventoryVisibilityApplicationService {
                                            String warehouseCode,
                                            UUID eventId, Instant occurredAt,
                                            String tenantId, String sourceTopic) {
-        if (eventDedupePort.isDuplicate(eventId)) {
+        if (processedEventPort.isDuplicate(eventId)) {
             log.debug("Duplicate event skipped: eventId={} topic={}", eventId, sourceTopic);
             return;
         }
@@ -143,7 +143,7 @@ public class InventoryVisibilityApplicationService {
 
         updateStaleness(srcNode.getId(), tenantId, eventId, occurredAt);
         updateStaleness(dstNode.getId(), tenantId, eventId, occurredAt);
-        eventDedupePort.markProcessed(eventId, tenantId, clock.now(), sourceTopic);
+        processedEventPort.markProcessed(eventId, tenantId, clock.now(), sourceTopic);
         log.info("applied inventory.transferred: src={} dst={} sku={} qty={} eventId={}",
                 srcNode.getId(), dstNode.getId(), skuId, quantity, eventId);
     }

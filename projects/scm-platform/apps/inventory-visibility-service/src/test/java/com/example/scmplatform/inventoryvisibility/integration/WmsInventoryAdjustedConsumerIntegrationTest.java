@@ -62,7 +62,7 @@ class WmsInventoryAdjustedConsumerIntegrationTest extends AbstractInventoryVisib
             assertThat(snapshots.get(0).getTenantId()).isEqualTo(TENANT_SCM);
 
             // Dedupe row written.
-            assertThat(dedupeJpa.findById(eventId.toString())).isPresent();
+            assertThat(processedEventJpa.findById(eventId.toString())).isPresent();
         });
     }
 
@@ -96,7 +96,7 @@ class WmsInventoryAdjustedConsumerIntegrationTest extends AbstractInventoryVisib
                 adjustedEnvelope(eventId, Instant.now(), warehouseExternalId, skuId, 10, null));
 
         await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
-            assertThat(dedupeJpa.findById(eventId.toString())).isPresent();
+            assertThat(processedEventJpa.findById(eventId.toString())).isPresent();
             InventoryNodeJpaEntity node = nodeJpa
                     .findByTenantIdAndNodeExternalId(TENANT_SCM, warehouseExternalId).orElseThrow();
             assertThat(node.getWarehouseCode()).isNull();
@@ -120,7 +120,7 @@ class WmsInventoryAdjustedConsumerIntegrationTest extends AbstractInventoryVisib
                 adjustedEnvelope(firstEvent, Instant.now(), warehouseExternalId, skuId, 20));
 
         await().atMost(30, TimeUnit.SECONDS).untilAsserted(() ->
-                assertThat(dedupeJpa.findById(firstEvent.toString())).isPresent());
+                assertThat(processedEventJpa.findById(firstEvent.toString())).isPresent());
 
         // Then negative -3
         UUID secondEvent = UUID.randomUUID();
@@ -128,7 +128,7 @@ class WmsInventoryAdjustedConsumerIntegrationTest extends AbstractInventoryVisib
                 adjustedEnvelope(secondEvent, Instant.now(), warehouseExternalId, skuId, -3));
 
         await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
-            assertThat(dedupeJpa.findById(secondEvent.toString())).isPresent();
+            assertThat(processedEventJpa.findById(secondEvent.toString())).isPresent();
             String nodeId = nodeJpa.findByTenantIdAndNodeExternalId(TENANT_SCM, warehouseExternalId)
                     .orElseThrow().getId();
             BigDecimal qty = snapshotJpa.findAll().stream()

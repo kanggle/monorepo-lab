@@ -2,7 +2,7 @@ package com.example.scmplatform.inventoryvisibility.application;
 
 import com.example.scmplatform.inventoryvisibility.application.port.outbound.AlertPublisherPort;
 import com.example.scmplatform.inventoryvisibility.application.port.outbound.ClockPort;
-import com.example.scmplatform.inventoryvisibility.application.port.outbound.EventDedupePort;
+import com.example.scmplatform.inventoryvisibility.application.port.outbound.ProcessedEventPort;
 import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService;
 import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService.ObservedLine;
 import com.example.scmplatform.inventoryvisibility.domain.error.NodeNotFoundException;
@@ -57,7 +57,7 @@ class ApplyThirdPartyObservedStockUseCaseTest {
     @Mock InventorySnapshotRepository snapshotRepository;
     @Mock NodeStalenessRepository stalenessRepository;
     @Mock InboundExpectationRepository inboundExpectationRepository;
-    @Mock EventDedupePort eventDedupePort;
+    @Mock ProcessedEventPort processedEventPort;
     @Mock AlertPublisherPort alertPublisherPort;
     @Mock ClockPort clock;
 
@@ -70,7 +70,7 @@ class ApplyThirdPartyObservedStockUseCaseTest {
     void setUp() {
         service = new InventoryVisibilityApplicationService(
                 nodeRepository, snapshotRepository, stalenessRepository,
-                inboundExpectationRepository, eventDedupePort, alertPublisherPort, clock);
+                inboundExpectationRepository, processedEventPort, alertPublisherPort, clock);
     }
 
     private InventoryNode thirdPartyNode() {

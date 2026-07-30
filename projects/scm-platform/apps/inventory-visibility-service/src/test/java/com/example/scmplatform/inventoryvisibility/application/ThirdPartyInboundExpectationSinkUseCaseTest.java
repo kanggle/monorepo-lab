@@ -2,7 +2,7 @@ package com.example.scmplatform.inventoryvisibility.application;
 
 import com.example.scmplatform.inventoryvisibility.application.port.outbound.AlertPublisherPort;
 import com.example.scmplatform.inventoryvisibility.application.port.outbound.ClockPort;
-import com.example.scmplatform.inventoryvisibility.application.port.outbound.EventDedupePort;
+import com.example.scmplatform.inventoryvisibility.application.port.outbound.ProcessedEventPort;
 import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService;
 import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService.ExpectedLine;
 import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService.ObservedLine;
@@ -59,7 +59,7 @@ class ThirdPartyInboundExpectationSinkUseCaseTest {
     @Mock InventorySnapshotRepository snapshotRepository;
     @Mock NodeStalenessRepository stalenessRepository;
     @Mock InboundExpectationRepository inboundExpectationRepository;
-    @Mock EventDedupePort eventDedupePort;
+    @Mock ProcessedEventPort processedEventPort;
     @Mock AlertPublisherPort alertPublisherPort;
     @Mock ClockPort clock;
 
@@ -73,7 +73,7 @@ class ThirdPartyInboundExpectationSinkUseCaseTest {
     void setUp() {
         service = new InventoryVisibilityApplicationService(
                 nodeRepository, snapshotRepository, stalenessRepository,
-                inboundExpectationRepository, eventDedupePort, alertPublisherPort, clock);
+                inboundExpectationRepository, processedEventPort, alertPublisherPort, clock);
     }
 
     private InventoryNode thirdPartyNode() {

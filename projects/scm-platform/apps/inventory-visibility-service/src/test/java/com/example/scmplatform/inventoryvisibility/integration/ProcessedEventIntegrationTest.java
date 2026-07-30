@@ -17,7 +17,7 @@ import static org.awaitility.Awaitility.await;
  * <p>Publishing the same {@code eventId} twice on
  * {@code wms.inventory.adjusted.v1} must result in exactly one snapshot
  * mutation — the second delivery is a silent skip via the
- * {@link com.example.scmplatform.inventoryvisibility.application.port.outbound.EventDedupePort}
+ * {@link com.example.scmplatform.inventoryvisibility.application.port.outbound.ProcessedEventPort}
  * short-circuit (DB UNIQUE on {@code event_dedupe.event_id} is the safety net).
  *
  * <p>Mirrors TASK-SCM-INT-001b's cross-service dedupe verification but at
@@ -25,7 +25,7 @@ import static org.awaitility.Awaitility.await;
  * 5 minutes.
  */
 @DisplayName("IT-3: event dedupe (T8)")
-class EventDedupeIntegrationTest extends AbstractInventoryVisibilityIntegrationTest {
+class ProcessedEventIntegrationTest extends AbstractInventoryVisibilityIntegrationTest {
 
     @Test
     @DisplayName("동일 eventId 2회 publish → 1번만 snapshot 변동, 2번째는 silent skip")
@@ -42,7 +42,7 @@ class EventDedupeIntegrationTest extends AbstractInventoryVisibilityIntegrationT
 
         // First delivery → snapshot quantity = 5, dedupe row written.
         await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
-            assertThat(dedupeJpa.findById(eventId.toString())).isPresent();
+            assertThat(processedEventJpa.findById(eventId.toString())).isPresent();
             String nodeId = nodeJpa.findByTenantIdAndNodeExternalId(TENANT_SCM, warehouseId)
                     .orElseThrow().getId();
             BigDecimal qty = snapshotJpa.findAll().stream()
@@ -64,7 +64,7 @@ class EventDedupeIntegrationTest extends AbstractInventoryVisibilityIntegrationT
                     // Quantity unchanged — duplicate did NOT add another +5.
                     assertThat(qty).isEqualByComparingTo(new BigDecimal("5"));
                     // Exactly one dedupe row.
-                    long dedupeRows = dedupeJpa.findAll().stream()
+                    long dedupeRows = processedEventJpa.findAll().stream()
                             .filter(d -> d.getEventId().equals(eventId.toString()))
                             .count();
                     assertThat(dedupeRows).isEqualTo(1);
