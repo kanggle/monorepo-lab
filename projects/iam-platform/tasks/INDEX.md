@@ -75,6 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
 
 - `TASK-BE-398-legacy-custom-jwt-flow-sunset-removal.md` — **⏳ 2026-08-01 게이트 대기** — 레거시 커스텀-JWT 발급 경로(`POST /api/auth/login`) 일몰 제거. 수용 측 형제 = 루트 `TASK-MONO-367`(게이트웨이 7개 + servlet allowlist). **순서 규율: 발행 측(이 티켓)이 먼저, 수용 측이 나중** — 반대 순서면 살아있는 레거시 토큰이 즉사한다.
+- `TASK-BE-560-rename-operator-lookup-port-operatorsummary-collision.md` — **READY** — 네이밍 감사에서 발굴한 **실제 충돌**: `admin-service` application 계층에 구조가 전혀 다른 `OperatorSummary` 두 개(`OperatorLookupPort` 의 3-필드 내부-PK lookup projection vs `OperatorQueryService` 의 9-필드 `GET /api/admin/operators` 리스팅 DTO). lookup 쪽을 `OperatorLookupRef` 로 rename, **API 표면 이름인 리스팅 DTO 는 유지**(`OperatorSummaryResponse` + 콘솔 `OperatorSummarySchema` 미러). 순수 rename, 동작·계약 무변경. 형제 선례 = `TASK-BE-558`(admin `JwtSigner` → `OperatorJwtSigner`).
 > 2026-07-20 (`TASK-MONO-451`): BE-508·509·510·511·512·513 의 행이 이 `## ready` 섹션에 남아 있었다 — 본문은 `**DONE**` 에 *"아래 ## done 참조"* 였고 파일도 여섯 개 전부 `done/` 에 있었다. **본문이 done 이어도 섹션이 ready 면 ready 행이다**(읽는 사람은 섹션으로 큐를 고른다). 여섯 행 모두 `## done` 에 실체가 있으므로 제거했다. 같은 커밋에서 BE-398 이 `ready/` 에 있는데 행이 없어(노트로만 언급) 행을 추가했다.
 
 **→ IAM 라이브 스윕 결함 6건 전량 종결** (BE-508·509·510·511·512 + monorepo `TASK-MONO-415`). 부수 산출: `TASK-MONO-415` 착수 재측정이 ecommerce 갈라진 핸들러 복사본을 발견 → 후속 `TASK-BE-504`(ecommerce ready/) 생성.
