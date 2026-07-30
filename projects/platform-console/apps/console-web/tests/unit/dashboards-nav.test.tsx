@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { resolveConsoleRoute } from '@/features/catalog';
 import type { RegistryProduct } from '@/shared/api/registry-types';
-import { OperatorOverviewScreen } from '@/features/dashboards';
+import { IamComposedOverviewScreen } from '@/features/dashboards';
 import type { OperatorOverview } from '@/features/dashboards';
 import { OVERVIEW_QUICK_LINKS } from '@/features/dashboards/api/types';
 
@@ -61,7 +61,7 @@ describe('dashboards nav — does not disturb the catalog iam.baseRoute (FE-002)
   });
 
   it('the IAM detail screen mounts as a drill-down destination (read-only, no confirm dialog)', () => {
-    render(<OperatorOverviewScreen initial={OVERVIEW} />, {
+    render(<IamComposedOverviewScreen initial={OVERVIEW} />, {
       wrapper: wrapper(),
     });
     // TASK-PC-FE-034: re-framed as the IAM drill-down detail.
@@ -72,7 +72,7 @@ describe('dashboards nav — does not disturb the catalog iam.baseRoute (FE-002)
   });
 
   it('the IAM detail screen offers a back link to the home overview (/dashboards/overview)', () => {
-    render(<OperatorOverviewScreen initial={OVERVIEW} />, {
+    render(<IamComposedOverviewScreen initial={OVERVIEW} />, {
       wrapper: wrapper(),
     });
     const back = screen.getByTestId('iam-detail-back-link');

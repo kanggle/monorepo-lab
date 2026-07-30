@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { OperatorOverviewScreen } from '@/features/dashboards';
+import { IamComposedOverviewScreen } from '@/features/dashboards';
 import type { OperatorOverview } from '@/features/dashboards';
 import { runAxe } from '../a11y/axe-helper';
 
@@ -63,9 +63,9 @@ beforeEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('OperatorOverviewScreen — render all cards', () => {
+describe('IamComposedOverviewScreen — render all cards', () => {
   it('renders the server-provided overview: accounts / audit / operators', () => {
-    render(<OperatorOverviewScreen initial={OK} />, { wrapper: wrapper() });
+    render(<IamComposedOverviewScreen initial={OK} />, { wrapper: wrapper() });
 
     expect(
       screen.getByRole('heading', { name: 'IAM 상세 (계정 · 감사 · 운영자)' }),
@@ -88,13 +88,13 @@ describe('OperatorOverviewScreen — render all cards', () => {
   });
 
   it('has NO destructive/confirm dialog (read-only — FE-002/004 scaffolding absent)', () => {
-    render(<OperatorOverviewScreen initial={OK} />, { wrapper: wrapper() });
+    render(<IamComposedOverviewScreen initial={OK} />, { wrapper: wrapper() });
     expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument();
     expect(screen.queryByTestId('confirm-reason')).not.toBeInTheDocument();
   });
 
   it('quick-links resolve to the EXISTING /accounts /audit /operators routes', () => {
-    render(<OperatorOverviewScreen initial={OK} />, { wrapper: wrapper() });
+    render(<IamComposedOverviewScreen initial={OK} />, { wrapper: wrapper() });
     expect(
       screen.getByTestId('overview-card-accounts-quicklink'),
     ).toHaveAttribute('href', '/accounts');
@@ -122,7 +122,7 @@ describe('OperatorOverviewScreen — render all cards', () => {
         suspendedCount: 0,
       },
     };
-    render(<OperatorOverviewScreen initial={zero} />, { wrapper: wrapper() });
+    render(<IamComposedOverviewScreen initial={zero} />, { wrapper: wrapper() });
     expect(screen.getByTestId('overview-accounts-total')).toHaveTextContent(
       '0',
     );
@@ -132,13 +132,13 @@ describe('OperatorOverviewScreen — render all cards', () => {
   });
 });
 
-describe('OperatorOverviewScreen — per-source isolation', () => {
+describe('IamComposedOverviewScreen — per-source isolation', () => {
   it('an accounts-degraded card shows its OWN placeholder; audit + operators still render', () => {
     const partial: OperatorOverview = {
       ...OK,
       accounts: { status: 'degraded', totalElements: null, sampleCount: null },
     };
-    render(<OperatorOverviewScreen initial={partial} />, {
+    render(<IamComposedOverviewScreen initial={partial} />, {
       wrapper: wrapper(),
     });
     expect(
@@ -167,7 +167,7 @@ describe('OperatorOverviewScreen — per-source isolation', () => {
         suspendedCount: null,
       },
     };
-    render(<OperatorOverviewScreen initial={partial} />, {
+    render(<IamComposedOverviewScreen initial={partial} />, {
       wrapper: wrapper(),
     });
     expect(
@@ -191,7 +191,7 @@ describe('OperatorOverviewScreen — per-source isolation', () => {
         latestOccurredAt: null,
       },
     };
-    render(<OperatorOverviewScreen initial={partial} />, {
+    render(<IamComposedOverviewScreen initial={partial} />, {
       wrapper: wrapper(),
     });
     expect(
@@ -215,7 +215,7 @@ describe('OperatorOverviewScreen — per-source isolation', () => {
         suspendedCount: null,
       },
     };
-    render(<OperatorOverviewScreen initial={allDown} />, {
+    render(<IamComposedOverviewScreen initial={allDown} />, {
       wrapper: wrapper(),
     });
     expect(
@@ -229,12 +229,12 @@ describe('OperatorOverviewScreen — per-source isolation', () => {
   });
 });
 
-describe('OperatorOverviewScreen — explicit retry (one bounded call set, no auto-refetch)', () => {
+describe('IamComposedOverviewScreen — explicit retry (one bounded call set, no auto-refetch)', () => {
   it('the refresh button issues exactly one re-query to the proxy (no storm)', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(OK));
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
-    render(<OperatorOverviewScreen initial={OK} />, { wrapper: wrapper() });
+    render(<IamComposedOverviewScreen initial={OK} />, { wrapper: wrapper() });
 
     // seeded initialData ⇒ NO fetch on mount (no auto-refetch storm)
     expect(fetchMock).not.toHaveBeenCalled();
@@ -245,9 +245,9 @@ describe('OperatorOverviewScreen — explicit retry (one bounded call set, no au
   });
 });
 
-describe('OperatorOverviewScreen — accessibility (WCAG AA)', () => {
+describe('IamComposedOverviewScreen — accessibility (WCAG AA)', () => {
   it('the overview is axe-clean and keyboard-operable', async () => {
-    const { container } = render(<OperatorOverviewScreen initial={OK} />, {
+    const { container } = render(<IamComposedOverviewScreen initial={OK} />, {
       wrapper: wrapper(),
     });
     const violations = await runAxe(container);

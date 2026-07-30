@@ -34,7 +34,7 @@ import { OperatorOverviewSchema, type OperatorOverview } from '../api/types';
 // `(console)` layout (shared QueryClient), so a colliding key let the home
 // overview's cached `{ cards, asOf }` satisfy this hook on a client-side
 // soft-navigation (drill-down click), where `initialData` is ignored because a
-// cache entry already exists. `OperatorOverviewScreen` then destructured an
+// cache entry already exists. `IamComposedOverviewScreen` then destructured an
 // undefined `accounts`/`audit`/`operators` → `Cannot read properties of
 // undefined (reading 'status')` → route error boundary. A hard load worked
 // (fresh cache seeded by initialData); only the drilldown soft-nav crashed.

@@ -30,13 +30,13 @@ import { Metric } from './OverviewMetric';
  * not catalog routes).
  */
 
-export interface OperatorOverviewScreenProps {
+export interface IamComposedOverviewScreenProps {
   initial: OperatorOverview;
 }
 
-export function OperatorOverviewScreen({
+export function IamComposedOverviewScreen({
   initial,
-}: OperatorOverviewScreenProps) {
+}: IamComposedOverviewScreenProps) {
   const overview = useOperatorOverview(initial);
   const data = overview.data ?? initial;
 
