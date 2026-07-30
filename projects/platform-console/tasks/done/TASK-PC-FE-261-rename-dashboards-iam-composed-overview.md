@@ -8,7 +8,7 @@ console-web rename features/dashboards' OperatorOverviewScreen -> IamComposedOve
 
 # Status
 
-review
+done
 
 # Owner
 
