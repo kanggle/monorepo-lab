@@ -101,7 +101,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-(empty)
+- `TASK-BE-567-revoke-orphaned-membership-service-client.md` — **🔵 REVIEW** (impl PR open). `TASK-MONO-400` 이 명시적으로 유보한 판단 — "정리 여부는 이 티켓의 질문이 아니다". `membership-service-client`(V0009 시드)는 `TASK-MONO-394`(iam 자체 membership-service 은퇴, 유일한 의도된 소비자) 이후 소비자 0(AC-0 재확인: `git grep` 전수 — 실 소비자 0, 코멘트 1건뿐). `community-service-client`(같은 V0009, `fan-platform` community-service 가 실사용)는 무변경 — DELETE 는 `client_id` 로 정확히 스코프됨. 신규 Flyway `V0029` 로 해당 client 행만 DELETE + `auth-api.md` Registered Clients 표에서 행 제거. auth-service 테스트 전량(`--rerun-tasks`, Testcontainers 포함) GREEN, 6m32s. 2026-07-30 사용자에게 revoke/유보/추가조사 3안 제시 → **revoke 선택**. 분석=Sonnet 5 / 구현=Sonnet 5(세션 직접).
 
 ## done
 

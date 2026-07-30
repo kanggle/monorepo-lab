@@ -1,0 +1,26 @@
+-- TASK-BE-567
+-- Revokes the membership-service-client OAuth2 client_credentials registration
+-- seeded by V0009__seed_community_membership_oauth_clients.sql.
+--
+-- Why: membership-service-client was pre-registered in V0009 "reserved for
+-- future outbound calls from membership-service" (iam-platform's own,
+-- now-retired, membership-service). That service was retired by TASK-MONO-394
+-- (2026-07-14) before it ever grew a caller. TASK-MONO-400 measured this and
+-- confirmed zero consumers repo-wide, but deliberately deferred the
+-- revoke-or-keep decision. This migration executes that now-made decision.
+--
+-- V0009 itself is never edited — it is an already-applied Flyway migration
+-- (checksum-verified on every startup). This is an additive migration that
+-- deletes exactly the one dead row.
+--
+-- Scope discipline: this DELETE must not touch anything else.
+--   - community-service-client (V0009's other row) is genuinely live — used
+--     by fan-platform's deployed community-service via
+--     IamClientCredentialsTokenProvider / HttpMembershipChecker — and is
+--     untouched here.
+--   - The account.read / membership.read oauth_scopes rows (tenant
+--     fan-platform) are still referenced by community-service-client's own
+--     `scopes` JSON column and must survive; oauth_clients.scopes is a
+--     per-row JSON array, not a join table, so this DELETE cannot cascade
+--     into them.
+DELETE FROM oauth_clients WHERE client_id = 'membership-service-client';
