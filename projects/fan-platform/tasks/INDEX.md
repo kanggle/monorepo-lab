@@ -70,7 +70,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-FAN-BE-039-adr058-d5-public-paths-shared-value-type.md` — ADR-MONO-058 § D5 (fan-platform only) — promote the `PublicPaths` `isPublic()` mechanism (not the path data) to `libs/java-security-servlet.PublicPathSet`.
 
 ## done
 

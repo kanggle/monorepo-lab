@@ -1,5 +1,7 @@
 package com.example.fanplatform.membership.presentation.security;
 
+import com.example.security.servlet.PublicPathSet;
+
 import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.Set;
@@ -8,6 +10,12 @@ import java.util.Set;
  * Centralized whitelist of paths that bypass authentication AND tenant-claim
  * enforcement on the end-user surface. Both the end-user {@code SecurityFilterChain}
  * and {@code TenantClaimEnforcer} reference this list so the two stay in lockstep.
+ *
+ * <p>The {@code EXACT}/{@code PREFIXES} matching mechanism delegates to
+ * {@link PublicPathSet} (ADR-MONO-058 § D5) — this class supplies only the
+ * data (membership-service's own policy of what is public, including the
+ * PortOne webhook entry below); the matching logic itself is shared with the
+ * other three fan-platform services.
  */
 public final class PublicPaths {
 
@@ -29,19 +37,16 @@ public final class PublicPaths {
             "/actuator/health/"
     );
 
+    private static final PublicPathSet MECHANISM = PublicPathSet.of(EXACT, PREFIXES);
+
     private PublicPaths() {
     }
 
     public static boolean isPublic(String path) {
-        if (path == null) return false;
-        if (EXACT.contains(path)) return true;
-        for (String prefix : PREFIXES) {
-            if (path.startsWith(prefix)) return true;
-        }
-        return false;
+        return MECHANISM.isPublic(path);
     }
 
     public static boolean isPublic(HttpServletRequest request) {
-        return isPublic(request.getRequestURI());
+        return MECHANISM.isPublic(request);
     }
 }
