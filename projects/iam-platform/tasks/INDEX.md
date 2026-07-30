@@ -95,11 +95,13 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## in-progress
 
-- `TASK-BE-560-rename-operator-lookup-port-operatorsummary-collision.md` — **IN PROGRESS** — 네이밍 감사에서 발굴한 **실제 충돌**: `admin-service` application 계층에 구조가 전혀 다른 `OperatorSummary` 두 개(`OperatorLookupPort` 의 3-필드 내부-PK lookup projection vs `OperatorQueryService` 의 9-필드 `GET /api/admin/operators` 리스팅 DTO). lookup 쪽을 `OperatorLookupRef` 로 rename, **API 표면 이름인 리스팅 DTO 는 유지**(`OperatorSummaryResponse` + 콘솔 `OperatorSummarySchema` 미러). 순수 rename, 동작·계약 무변경. 형제 선례 = `TASK-BE-558`(admin `JwtSigner` → `OperatorJwtSigner`).
+(empty)
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 
 ## review
+
+- `TASK-BE-560-rename-operator-lookup-port-operatorsummary-collision.md` — **REVIEW (impl PR 오픈, 리뷰 대기).** 네이밍 감사에서 발굴한 **실제 충돌**: `admin-service` application 계층에 구조가 전혀 다른 `OperatorSummary` 두 개 — `OperatorLookupPort.OperatorSummary(Long internalId, String operatorId, String tenantId)`(아웃바운드 포트의 내부-PK lookup projection; audit FK 해석·refresh 토큰 소유 검증·tenant-scope 게이트가 소비) vs `OperatorQueryService.OperatorSummary`(9-필드 `GET /api/admin/operators` 리스팅 DTO, `OperatorSummaryResponse` 매핑 + 콘솔 `OperatorSummarySchema` 미러). **두 타입을 갈라놓은 유일한 장치가 호출부의 qualified nested 형태뿐이었고**, 같은 테스트 패키지의 형제 클래스 두 개가 서로 다른 `OperatorSummary` 를 생성하고 있었다(wrong-type-import 해저드). lookup 쪽을 **`OperatorLookupRef`** 로 rename; **리스팅 DTO 는 이름 유지**(계약 가시 표면 — `OperatorQueryService`/`OperatorAdminController`/`presentation/dto/**` diff 0). **이름 선택은 후보 3개를 기각한 결과**: `OperatorRef` = 기존 `AdminOperatorRefreshToken*` 패밀리의 **부분문자열**(앞으로의 모든 grep 이 오탐) / `OperatorView` = `AdminOperatorPort` 가 **같은 패키지에** 이미 선언(새 충돌 생성) / `OperatorLookupView` = `*View` 는 이 서비스에서 rich read-model projection 접미사인데, 식별자-해석 레코드를 그 패밀리에 다시 넣으면 이번 충돌을 만든 바로 그 혼동 유형이 보존된다. 순수 rename — 레코드 shape·필드 순서·legacy 2-arg 생성자(`tenantId`=`"fan-platform"`)·`AdminActionAuditWriter` 방어적 null fallback·fail-closed `AuditFailureException`·`'*'` 플랫폼 센티넬 전부 무변경, 직렬화되지 않는 타입이라 계약/이벤트 무영향. 테스트는 **컴파일 강제 식별자 갱신만**(6 클래스 15 생성자 호출부; 단언·스텁값·픽스처 상수 변경 0). 형제 선례 = `TASK-BE-558`(admin `JwtSigner` → `OperatorJwtSigner`). **검증**: `:test` baseline(변경 전) **134 suites / 848 tests / 0 failures** → 변경 후 **133 suites / 841 tests GREEN + `AdminActionJpaRepositoryTest` 7/7 GREEN(재실행)** = 848, baseline 과 모집단 동일. 🔴 변경 후 풀런에서 나온 실패 1건은 **이 변경이 건드리지 않은** 클래스의 `mysql:8.0` `ContainerLaunchException`(로컬 Windows Docker 일시 결함; 동일 브랜치에서 단독 재실행 시 7/7 통과) — 렌더링된 총계를 그대로 물려받지 않고 클래스별로 다시 셌다.
 
 ## done
 

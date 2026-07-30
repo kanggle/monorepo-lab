@@ -8,7 +8,7 @@ Rename `OperatorLookupPort.OperatorSummary` to `OperatorLookupRef` — resolve s
 
 # Status
 
-in-progress
+review
 
 # Owner
 
