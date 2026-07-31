@@ -12,28 +12,22 @@ import com.example.scmplatform.procurement.domain.error.SupplierInactiveExceptio
 import com.example.scmplatform.procurement.domain.error.SupplierNotFoundException;
 import com.example.scmplatform.procurement.domain.error.SupplierUnavailableException;
 import com.example.scmplatform.procurement.presentation.dto.ApiErrorBody;
+import com.example.web.dto.ErrorResponse;
+import com.example.web.exception.CommonGlobalExceptionHandler;
 import jakarta.persistence.OptimisticLockException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
-import org.springframework.web.HttpMediaTypeNotSupportedException;
-import org.springframework.web.HttpRequestMethodNotSupportedException;
-import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.web.servlet.NoHandlerFoundException;
-import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Maps procurement domain exceptions to the platform error envelope.
@@ -49,23 +43,50 @@ import java.util.Set;
  *   <li>500 — INTERNAL_ERROR (non-unique data integrity: FK / NOT NULL / CHECK)</li>
  *   <li>503 — SUPPLIER_UNAVAILABLE</li>
  * </ul>
+ *
+ * <p><strong>ADR-MONO-058 § D2 (TASK-SCM-BE-055)</strong>: the framework/non-domain arms
+ * (404 {@code NoResourceFound}/{@code NoHandlerFound}, 405 {@code MethodNotSupported}
+ * incl. the RFC 7231 {@code Allow} header, 415 {@code MediaTypeNotSupported},
+ * 400 malformed-body / missing-parameter, {@code @Valid} violations, and the catch-all
+ * 500) are inherited from {@code libs/java-web-servlet}'s
+ * {@link CommonGlobalExceptionHandler} instead of being hand-copied here. Only genuinely
+ * procurement-owned policy stays below.
  */
 @Slf4j
 @RestControllerAdvice
-public class GlobalExceptionHandler {
+public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
+
+    /**
+     * scm publishes <strong>422</strong> for {@code @Valid} constraint violations and for
+     * {@code IllegalArgumentException} at the controller boundary
+     * ({@code procurement-api.md} § Error codes — "{@code VALIDATION_ERROR} | 400/422"),
+     * where the shared default is 400. One override moves both inherited arms; see
+     * {@link CommonGlobalExceptionHandler#validationFailureStatus()}.
+     */
+    @Override
+    protected HttpStatus validationFailureStatus() {
+        return HttpStatus.UNPROCESSABLE_ENTITY;
+    }
 
     @ExceptionHandler(PoNotFoundException.class)
-    public ResponseEntity<ApiErrorBody> handlePoNotFound(PoNotFoundException e) {
+    public ResponseEntity<ErrorResponse> handlePoNotFound(PoNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ApiErrorBody.of("PO_NOT_FOUND", e.getMessage()));
+                .body(ErrorResponse.of("PO_NOT_FOUND", e.getMessage()));
     }
 
     @ExceptionHandler(SupplierNotFoundException.class)
-    public ResponseEntity<ApiErrorBody> handleSupplierNotFound(SupplierNotFoundException e) {
+    public ResponseEntity<ErrorResponse> handleSupplierNotFound(SupplierNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ApiErrorBody.of("SUPPLIER_NOT_FOUND", e.getMessage()));
+                .body(ErrorResponse.of("SUPPLIER_NOT_FOUND", e.getMessage()));
     }
 
+    /**
+     * The one arm in this service whose response carries {@code details} — documented in
+     * {@code procurement-api.md} as "response includes {@code details: { from, to, actor }}".
+     * It therefore returns the {@code details}-carrying {@link ApiErrorBody} extension of
+     * the shared envelope rather than {@link ErrorResponse}; every other arm returns the
+     * shared type (ADR-MONO-058 § D2 / TASK-SCM-BE-055 design decision 1).
+     */
     @ExceptionHandler(PoStatusTransitionInvalidException.class)
     public ResponseEntity<ApiErrorBody> handleStatusInvalid(PoStatusTransitionInvalidException e) {
         Map<String, Object> details = new LinkedHashMap<>();
@@ -73,61 +94,82 @@ public class GlobalExceptionHandler {
         details.put("to", e.getTo().name());
         details.put("actor", e.getActor().name());
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(ApiErrorBody.of("PO_STATUS_TRANSITION_INVALID",
+                .body(ApiErrorBody.withDetails("PO_STATUS_TRANSITION_INVALID",
                         "Invalid PO status transition", details));
     }
 
     @ExceptionHandler(PoAlreadyConfirmedException.class)
-    public ResponseEntity<ApiErrorBody> handleAlreadyConfirmed(PoAlreadyConfirmedException e) {
+    public ResponseEntity<ErrorResponse> handleAlreadyConfirmed(PoAlreadyConfirmedException e) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(ApiErrorBody.of("PO_ALREADY_CONFIRMED", e.getMessage()));
+                .body(ErrorResponse.of("PO_ALREADY_CONFIRMED", e.getMessage()));
     }
 
     @ExceptionHandler(PoQuantityExceededException.class)
-    public ResponseEntity<ApiErrorBody> handleQuantityExceeded(PoQuantityExceededException e) {
+    public ResponseEntity<ErrorResponse> handleQuantityExceeded(PoQuantityExceededException e) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(ApiErrorBody.of("PO_QUANTITY_EXCEEDED", e.getMessage()));
+                .body(ErrorResponse.of("PO_QUANTITY_EXCEEDED", e.getMessage()));
     }
 
     @ExceptionHandler(AsnOverreceiptException.class)
-    public ResponseEntity<ApiErrorBody> handleOverreceipt(AsnOverreceiptException e) {
+    public ResponseEntity<ErrorResponse> handleOverreceipt(AsnOverreceiptException e) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(ApiErrorBody.of("ASN_OVERRECEIPT", e.getMessage()));
+                .body(ErrorResponse.of("ASN_OVERRECEIPT", e.getMessage()));
     }
 
     @ExceptionHandler(SupplierInactiveException.class)
-    public ResponseEntity<ApiErrorBody> handleSupplierInactive(SupplierInactiveException e) {
+    public ResponseEntity<ErrorResponse> handleSupplierInactive(SupplierInactiveException e) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(ApiErrorBody.of("SUPPLIER_INACTIVE", e.getMessage()));
+                .body(ErrorResponse.of("SUPPLIER_INACTIVE", e.getMessage()));
     }
 
     @ExceptionHandler(CatalogSkuUnknownException.class)
-    public ResponseEntity<ApiErrorBody> handleSku(CatalogSkuUnknownException e) {
+    public ResponseEntity<ErrorResponse> handleSku(CatalogSkuUnknownException e) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(ApiErrorBody.of("CATALOG_SKU_UNKNOWN", e.getMessage()));
+                .body(ErrorResponse.of("CATALOG_SKU_UNKNOWN", e.getMessage()));
     }
 
     @ExceptionHandler(IdempotencyKeyMismatchException.class)
-    public ResponseEntity<ApiErrorBody> handleIdempotencyMismatch(IdempotencyKeyMismatchException e) {
+    public ResponseEntity<ErrorResponse> handleIdempotencyMismatch(IdempotencyKeyMismatchException e) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(ApiErrorBody.of("IDEMPOTENCY_KEY_MISMATCH", e.getMessage()));
+                .body(ErrorResponse.of("IDEMPOTENCY_KEY_MISMATCH", e.getMessage()));
     }
 
     @ExceptionHandler(SupplierUnavailableException.class)
-    public ResponseEntity<ApiErrorBody> handleSupplierUnavailable(SupplierUnavailableException e) {
+    public ResponseEntity<ErrorResponse> handleSupplierUnavailable(SupplierUnavailableException e) {
         log.warn("supplier unavailable: {}", e.getMessage());
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body(ApiErrorBody.of("SUPPLIER_UNAVAILABLE", e.getMessage()));
+                .body(ErrorResponse.of("SUPPLIER_UNAVAILABLE", e.getMessage()));
     }
 
-    @ExceptionHandler({OptimisticLockException.class, ObjectOptimisticLockingFailureException.class})
-    public ResponseEntity<ApiErrorBody> handleOptimisticLock(Exception e) {
-        // TASK-SCM-BE-010 (refactor-spec audit): distinct code from
-        // DataIntegrityViolation's "CONFLICT" — consumers can choose retry
-        // strategy (CONCURRENT_MODIFICATION = retry OK, CONFLICT = must
-        // change state first). Aligns with architecture.md Failure Mode #16.
+    /**
+     * Spring's optimistic-lock failure. <strong>Overrides</strong> the shared base rather
+     * than deleting the arm: the base answers 409 {@code CONFLICT}, while scm procurement
+     * deliberately answers 409 {@code CONCURRENT_MODIFICATION} so consumers can pick a
+     * retry strategy (CONCURRENT_MODIFICATION = retry OK, CONFLICT = must change state
+     * first — TASK-SCM-BE-010, architecture.md Failure Mode #16, and
+     * {@code procurement-api.md} § Error codes). Inheriting the base unchanged here would
+     * have silently renamed a published error code.
+     */
+    @Override
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handleOptimisticLock(ObjectOptimisticLockingFailureException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ApiErrorBody.of("CONCURRENT_MODIFICATION", "Concurrent modification detected. Please retry."));
+                .body(ErrorResponse.of("CONCURRENT_MODIFICATION",
+                        "Concurrent modification detected. Please retry."));
+    }
+
+    /**
+     * JPA's own {@link OptimisticLockException} — a different type from Spring's
+     * {@link ObjectOptimisticLockingFailureException} above, so it needs its own arm.
+     * It must carry a <em>distinct method name</em>: two differently-named methods mapped
+     * to the same exception type is an "Ambiguous @ExceptionHandler" failure at bean
+     * creation, not at compile time.
+     */
+    @ExceptionHandler(OptimisticLockException.class)
+    public ResponseEntity<ErrorResponse> handleJpaOptimisticLock(OptimisticLockException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("CONCURRENT_MODIFICATION",
+                        "Concurrent modification detected. Please retry."));
     }
 
     /**
@@ -148,121 +190,91 @@ public class GlobalExceptionHandler {
      * SQLSTATE walk of the cause chain, because Spring maps every Hibernate
      * {@code ConstraintViolationException} to a plain {@code DataIntegrityViolationException},
      * so the exception <em>type</em> cannot discriminate and the message is vendor-dependent.
+     *
+     * <p>Not covered by {@link CommonGlobalExceptionHandler} — runtime discrimination is
+     * service policy, so this arm stays local.
      */
     @ExceptionHandler(DataIntegrityViolationException.class)
-    public ResponseEntity<ApiErrorBody> handleIntegrity(DataIntegrityViolationException e) {
+    public ResponseEntity<ErrorResponse> handleIntegrity(DataIntegrityViolationException e) {
         if (DataIntegrityViolations.isUniqueViolation(e)) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(ApiErrorBody.of("CONFLICT", "Data integrity violation"));
+                    .body(ErrorResponse.of("CONFLICT", "Data integrity violation"));
         }
         // FK / NOT NULL / CHECK violations are server defects — keep them loud (same
-        // INTERNAL_ERROR envelope as the catch-all handleGeneral below).
+        // INTERNAL_ERROR envelope as the inherited catch-all).
         log.error("Non-unique data integrity violation", e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiErrorBody.of("INTERNAL_ERROR", "An unexpected error occurred"));
+                .body(ErrorResponse.of("INTERNAL_ERROR", "An unexpected error occurred"));
     }
 
+    /**
+     * <strong>Overrides</strong> the shared base's 400 {@code VALIDATION_ERROR} arm to keep
+     * procurement's {@code Idempotency-Key} special case: a missing idempotency key on a
+     * mutating endpoint is {@code IDEMPOTENCY_KEY_REQUIRED} (T1 /
+     * {@code platform/error-handling.md} § Transactional Trait), not a generic missing
+     * header. Any other missing header falls back to the base's exact message shape.
+     */
+    @Override
     @ExceptionHandler(MissingRequestHeaderException.class)
-    public ResponseEntity<ApiErrorBody> handleMissingHeader(MissingRequestHeaderException e) {
+    public ResponseEntity<ErrorResponse> handleMissingHeader(MissingRequestHeaderException e) {
         if ("Idempotency-Key".equalsIgnoreCase(e.getHeaderName())) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiErrorBody.of("IDEMPOTENCY_KEY_REQUIRED",
+                    .body(ErrorResponse.of("IDEMPOTENCY_KEY_REQUIRED",
                             "Idempotency-Key header is required for mutating endpoints"));
         }
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiErrorBody.of("VALIDATION_ERROR",
-                        "Missing required header: " + e.getHeaderName()));
+        return super.handleMissingHeader(e);
     }
 
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiErrorBody> handleValidation(MethodArgumentNotValidException e) {
-        String message = e.getBindingResult().getFieldErrors().stream()
-                .findFirst()
-                .map(err -> err.getField() + ": " + err.getDefaultMessage())
-                .orElse("Validation failed");
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(ApiErrorBody.of("VALIDATION_ERROR", message));
-    }
-
+    /**
+     * <strong>Overrides</strong> the shared base only to keep the diagnostic log line —
+     * the status and body come straight from {@code super}, i.e. 422 via
+     * {@link #validationFailureStatus()}. TASK-SCM-BE-021 added this logging deliberately:
+     * a silent 422 was what made TASK-MONO-171 hard to diagnose, so dropping it during
+     * adoption would be an undisclosed regression of an incident fix.
+     */
+    @Override
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiErrorBody> handleIllegalArgument(IllegalArgumentException e) {
-        // Logged at warn for parity with handleIllegalState below — a 422 should
-        // still leave a diagnostic trail (TASK-SCM-BE-021).
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
         log.warn("illegal argument at controller boundary", e);
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(ApiErrorBody.of("VALIDATION_ERROR", e.getMessage()));
+        return super.handleIllegalArgument(e);
     }
 
+    /**
+     * Not covered by {@link CommonGlobalExceptionHandler} — without this arm a non-parsable
+     * path/query value would fall through to the catch-all and regress the documented 400
+     * into a 500.
+     */
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-    public ResponseEntity<ApiErrorBody> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiErrorBody.of("VALIDATION_ERROR", "Invalid parameter: " + e.getName()));
+                .body(ErrorResponse.of("VALIDATION_ERROR", "Invalid parameter: " + e.getName()));
     }
 
-    @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<ApiErrorBody> handleMalformed(HttpMessageNotReadableException e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiErrorBody.of("VALIDATION_ERROR", "Malformed request body"));
-    }
-
+    /** Registered as {@code ILLEGAL_STATE} 422 in {@code platform/error-handling.md} § General. */
     @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<ApiErrorBody> handleIllegalState(IllegalStateException e) {
+    public ResponseEntity<ErrorResponse> handleIllegalState(IllegalStateException e) {
         log.warn("illegal state at controller boundary", e);
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(ApiErrorBody.of("ILLEGAL_STATE", e.getMessage()));
+                .body(ErrorResponse.of("ILLEGAL_STATE", e.getMessage()));
     }
 
     /**
      * Pass-through for {@link ResponseStatusException} (e.g. webhook signature
-     * failures thrown inline in controllers). Without this handler the catch-all
-     * {@code handleGeneral} intercepts it and returns 500 instead of the
-     * intended status code.
+     * failures thrown inline in controllers). Without this handler the inherited
+     * catch-all intercepts it and returns 500 instead of the intended status code.
+     *
+     * <p>Service-specific plumbing, not part of the shared base's generic tail — it is
+     * the emitter of the {@code REQUEST_ERROR} registry row, whose status is the
+     * exception's own by construction.
      */
     @ExceptionHandler(ResponseStatusException.class)
-    public ResponseEntity<ApiErrorBody> handleResponseStatus(ResponseStatusException e) {
+    public ResponseEntity<ErrorResponse> handleResponseStatus(ResponseStatusException e) {
         int status = e.getStatusCode().value();
         String code = status == 401 ? "UNAUTHORIZED"
                 : status == 403 ? "PERMISSION_DENIED"
                 : "REQUEST_ERROR";
         String reason = e.getReason() != null ? e.getReason() : e.getMessage();
         return ResponseEntity.status(status)
-                .body(ApiErrorBody.of(code, reason));
-    }
-
-    @ExceptionHandler(NoResourceFoundException.class)
-    public ResponseEntity<ApiErrorBody> handleNoResourceFound(NoResourceFoundException e) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ApiErrorBody.of("NOT_FOUND", "The requested resource was not found"));
-    }
-
-    @ExceptionHandler(NoHandlerFoundException.class)
-    public ResponseEntity<ApiErrorBody> handleNoHandlerFound(NoHandlerFoundException e) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ApiErrorBody.of("NOT_FOUND", "The requested resource was not found"));
-    }
-
-    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-    public ResponseEntity<ApiErrorBody> handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
-        ResponseEntity.BodyBuilder builder = ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED);
-        Set<HttpMethod> supported = e.getSupportedHttpMethods();
-        if (supported != null && !supported.isEmpty()) {
-            builder.allow(supported.toArray(new HttpMethod[0]));
-        }
-        return builder.body(ApiErrorBody.of("METHOD_NOT_ALLOWED",
-                "HTTP method not supported for this endpoint"));
-    }
-
-    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
-    public ResponseEntity<ApiErrorBody> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException e) {
-        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
-                .body(ApiErrorBody.of("UNSUPPORTED_MEDIA_TYPE",
-                        "Request Content-Type is not supported by this endpoint"));
-    }
-
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiErrorBody> handleGeneral(Exception e) {
-        log.error("Unexpected error", e);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiErrorBody.of("INTERNAL_ERROR", "An unexpected error occurred"));
+                .body(ErrorResponse.of(code, reason));
     }
 }

@@ -1,7 +1,23 @@
 # API Contract — demand-planning-service
 
 ADR-MONO-027. Base path `/api/v1/demand-planning` (via gateway-service).
-All responses use the scm `{ data, meta }` envelope; errors `{ code, message, details? }`.
+All responses use the scm `{ data, meta }` envelope; errors `{ code, message, timestamp }`
+(`libs/java-web.ErrorResponse`).
+
+> **Error-envelope change — TASK-SCM-BE-055 / ADR-MONO-058 § D2.** This line previously
+> read `{ code, message, details? }`. Two corrections, both to make it describe what the
+> service emits:
+> - **`timestamp` added.** Until D2 adoption this service's controller advice emitted only
+>   `{ code, message }`, in violation of `platform/error-handling.md § Error Response
+>   Format` ("the three fields above must always be present") and inconsistent with its own
+>   security-layer `HttpErrorResponseWriter`, which already emitted `timestamp` on 401/403.
+>   A 404/422 and a 401 from the same service therefore had different shapes. Adopting the
+>   shared `ErrorResponse` closes that. **This is an additive, observable change** — a
+>   client parsing `code`/`message` is unaffected; a client asserting an exact key set is
+>   not.
+> - **`details?` removed.** A repo-wide grep found **zero** call sites populating it in
+>   this service; the field never existed on its envelope record at all, so no response it
+>   ever emitted carried the key. The `details?` here was aspirational, not observed.
 Auth: OAuth2 RS (RS256, IAM JWKS), `tenant_id=scm` fail-closed + entitlement-trust
 dual-accept. **Operator surface — tenant-gated, no role split.** These routes are
 consumed by the platform-console operator (IAM `platform-console-web` token); the

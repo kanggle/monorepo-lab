@@ -74,7 +74,15 @@ config/         ← Spring @Configuration beans only
 - Stateless JWT auth (OAuth2 RS, IAM JWKS)
 - `tenant_id=scm` fail-closed at gateway + service level
 - Read-only endpoints (no mutating REST)
-- Standard error envelope `{ code, message }`
+- Standard error envelope `{ code, message, timestamp }` (`libs/java-web.ErrorResponse`,
+  adopted by TASK-SCM-BE-055 / ADR-MONO-058 § D2). `timestamp` was always emitted — this
+  line previously understated the envelope; it now matches both the emitted body and
+  `inventory-visibility-api.md`.
+- Generic (non-domain) exception arms — 404 unmapped path, 405 + RFC 7231 `Allow`, 415,
+  400 malformed-body / missing-header / missing-parameter, `@Valid`, catch-all 500 — are
+  inherited from `libs/java-web-servlet.CommonGlobalExceptionHandler` (`implementation`,
+  never `api`); `@Valid` and `IllegalArgumentException` answer **422** via the
+  `validationFailureStatus()` override.
 - Paginated list endpoints
 
 ### REST endpoints (v1)

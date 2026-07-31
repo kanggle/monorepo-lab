@@ -1,6 +1,6 @@
 package com.example.scmplatform.inventoryvisibility.adapter.inbound.web.advice;
 
-import com.example.scmplatform.inventoryvisibility.adapter.inbound.web.dto.ApiErrorBody;
+import com.example.web.dto.ErrorResponse;
 import com.example.scmplatform.inventoryvisibility.domain.error.NodeTypeConflictException;
 import com.example.scmplatform.inventoryvisibility.domain.error.ReadModelCorruptException;
 import com.example.scmplatform.inventoryvisibility.domain.node.NodeType;
@@ -26,7 +26,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("ReadModelCorruptException → 500 INTERNAL_ERROR (server data-integrity fault, not a client 422)")
     void readModelCorrupt() {
-        ResponseEntity<ApiErrorBody> r = handler.handleReadModelCorrupt(
+        ResponseEntity<ErrorResponse> r = handler.handleReadModelCorrupt(
                 new ReadModelCorruptException("inventory_nodes.id", "node-001",
                         new IllegalArgumentException("Invalid UUID string: node-001")));
 
@@ -38,7 +38,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("IllegalArgumentException → 422 VALIDATION_ERROR (genuine client-boundary validation still 422)")
     void illegalArgument() {
-        ResponseEntity<ApiErrorBody> r = handler.handleIllegalArgument(
+        ResponseEntity<ErrorResponse> r = handler.handleIllegalArgument(
                 new IllegalArgumentException("nodeId must not be blank"));
 
         assertThat(r.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
@@ -49,7 +49,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("NodeTypeConflictException → 409 NODE_TYPE_CONFLICT (TASK-SCM-BE-046)")
     void nodeTypeConflict() {
-        ResponseEntity<ApiErrorBody> r = handler.handleNodeTypeConflict(
+        ResponseEntity<ErrorResponse> r = handler.handleNodeTypeConflict(
                 new NodeTypeConflictException("WH-EXT-1", NodeType.WMS_WAREHOUSE, NodeType.THIRD_PARTY_LOGISTICS));
 
         assertThat(r.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);

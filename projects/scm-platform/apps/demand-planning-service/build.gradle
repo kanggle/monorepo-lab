@@ -50,6 +50,10 @@ dependencies {
     // Shared libs
     implementation project(':libs:java-common')
     implementation project(':libs:java-web')
+    // ADR-MONO-058 § D2 (TASK-SCM-BE-055): the shared CommonGlobalExceptionHandler base
+    // this service's GlobalExceptionHandler extends for the generic (non-domain) arms.
+    // `implementation`, not `api` — a shared web helper must not transit onto consumers.
+    implementation project(':libs:java-web-servlet')
     implementation project(':libs:java-messaging')
     implementation project(':libs:java-observability')
     implementation project(':libs:java-security')

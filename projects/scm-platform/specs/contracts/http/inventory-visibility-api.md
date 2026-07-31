@@ -5,7 +5,16 @@ Base path: `/api/inventory-visibility` (rewritten by gateway from `/api/v1/inven
 All endpoints:
 - Require Bearer token with `tenant_id=scm`
 - Return `{ data: ..., meta: { timestamp, warning: "Not for procurement decisions (S5)" } }`
-- Error format: `{ code, message, details?, timestamp }`
+- Error format: `{ code, message, timestamp }` (`libs/java-web.ErrorResponse`)
+  - **`details` removed from the published shape (TASK-SCM-BE-055 / ADR-MONO-058 § D2).**
+    The field was declared on the former local `ApiErrorBody` record and on this line, but
+    a repo-wide grep found **zero** call sites populating it in this service — no response
+    this service has ever emitted carried a `details` key (it was suppressed by
+    `@JsonInclude(NON_NULL)`). Removing it from the contract records what the service
+    actually emits; it is not a narrowing of any observed response. If a future error here
+    genuinely needs structured context, `platform/error-handling.md § Error Response
+    Format` permits extending the envelope — see `procurement-api.md`, whose
+    `PO_STATUS_TRANSITION_INVALID` is scm's one live `details` emitter.
 
 ---
 

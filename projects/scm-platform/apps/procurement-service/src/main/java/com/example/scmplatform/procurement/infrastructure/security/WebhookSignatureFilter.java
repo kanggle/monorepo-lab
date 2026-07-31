@@ -1,6 +1,6 @@
 package com.example.scmplatform.procurement.infrastructure.security;
 
-import com.example.scmplatform.procurement.presentation.dto.ApiErrorBody;
+import com.example.web.dto.ErrorResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -19,7 +19,7 @@ import java.io.IOException;
  *
  * <p>This is a servlet filter (runs before the {@code DispatcherServlet}), so
  * the {@code @ExceptionHandler} advice does not apply to it — on failure it
- * writes the 401 {@link ApiErrorBody} JSON directly.
+ * writes the 401 {@link ErrorResponse} JSON directly.
  *
  * <p>Only {@code POST} requests under {@code /api/procurement/webhooks/} are
  * inspected; everything else passes straight through. The request body is
@@ -69,6 +69,6 @@ public class WebhookSignatureFilter extends OncePerRequestFilter {
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
         response.getWriter().write(
-                objectMapper.writeValueAsString(ApiErrorBody.of("UNAUTHORIZED", reason)));
+                objectMapper.writeValueAsString(ErrorResponse.of("UNAUTHORIZED", reason)));
     }
 }

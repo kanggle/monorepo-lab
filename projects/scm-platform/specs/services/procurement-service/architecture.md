@@ -196,8 +196,9 @@ com.example.scmplatform.procurement/
 - `io.opentelemetry:opentelemetry-exporter-otlp`
 - `com.fasterxml.jackson.{core:jackson-databind, datatype:jackson-datatype-jsr310}`
 - `net.logstash.logback:logstash-logback-encoder` (prod profile)
-- shared libs: `libs:java-common`, `libs:java-web`, `libs:java-messaging`, `libs:java-observability`, `libs:java-security`, `libs:java-security-servlet`
-  (the servlet security mechanisms: `TenantClaimEnforcer` + `PublicPathSet` per ADR-MONO-049 § D5-5 / ADR-MONO-058 § D5, `ResourceServerChainAssembler` per § D4, and the `…servlet.actor` package per § D1 — declared `implementation`, never `api`)
+- shared libs: `libs:java-common`, `libs:java-web`, `libs:java-web-servlet`, `libs:java-messaging`, `libs:java-observability`, `libs:java-security`, `libs:java-security-servlet`
+  (the servlet security mechanisms: `TenantClaimEnforcer` + `PublicPathSet` per ADR-MONO-049 § D5-5 / ADR-MONO-058 § D5, `ResourceServerChainAssembler` per § D4, and the `…servlet.actor` package per § D1 — declared `implementation`, never `api`;
+  `libs:java-web-servlet` supplies `CommonGlobalExceptionHandler`, the base this service's `GlobalExceptionHandler` extends for the generic (non-domain) exception arms per ADR-MONO-058 § D2 / TASK-SCM-BE-055 — also `implementation`, never `api`)
 
 ### Forbidden dependencies
 

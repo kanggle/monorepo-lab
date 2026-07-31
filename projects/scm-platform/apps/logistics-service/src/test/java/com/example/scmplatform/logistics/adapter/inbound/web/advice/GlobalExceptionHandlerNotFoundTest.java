@@ -1,4 +1,4 @@
-package com.example.scmplatform.procurement.presentation.advice;
+package com.example.scmplatform.logistics.adapter.inbound.web.advice;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
