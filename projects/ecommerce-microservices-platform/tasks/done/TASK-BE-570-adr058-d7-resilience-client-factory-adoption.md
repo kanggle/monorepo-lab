@@ -8,7 +8,7 @@ ADR-MONO-058 D7 (ResilienceClientFactory) — adopt `libs/java-common.Resilience
 
 # Status
 
-review
+done
 
 # Owner
 
