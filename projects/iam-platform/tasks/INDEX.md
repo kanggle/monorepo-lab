@@ -108,7 +108,11 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-- **`TASK-BE-568-adr058-d6-adopt-iam-client-credentials-token-provider.md` — 구현 완료 (2026-07-31), 리뷰 대기.**
+(empty)
+
+## done
+
+- **`TASK-BE-568-adr058-d6-adopt-iam-client-credentials-token-provider.md` — ✅ DONE (2026-07-31, 3-dim verified — impl PR #3130 squash `0cba83e36`; state=MERGED · origin/main tip ancestor 확인 · 머지 전 실패 체크 0건).**
   `TASK-MONO-501`(canonical class promotion, PR #3116, merged) 선행 완료 확인 후 착수. iam-platform 4개 서비스
   (`auth`/`account`/`admin`/`security-service`) 로컬 `IamClientCredentialsTokenProvider` 사본 4개 전량 삭제, 9개
   caller 를 `libs/java-security` 정규 클래스로 교체 — RFC 7617 UTF-8 Basic-auth 인코딩 + 명시적 connect/read
@@ -117,10 +121,8 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
   assert). 서비스별 `IamClientCredentialsTokenProviderTest` 3개 재조준 + account-service 신규 1개(기존 커버리지
   0 이었음) — UTF-8 헤더 byte-assert 포함. `git diff --stat` 로 9개 caller 파일 각 1-line import 삽입만 확인(동작
   변경 없음). 4개 서비스 전체 `:test` 개별 실행 GREEN: auth 640 / account 504 / admin 848 / security 240, 실패 0.
-  account-service 는 `libs:java-security` gradle 의존성이 누락돼 있어 추가(나머지 3개는 이미 선언됨).
+  account-service 는 `libs:java-security` gradle 의존성이 누락돼 있어 추가(나머지 3개는 이미 선언됨). `TASK-MONO-495` 분할 산물.
   분석=Sonnet 5 / 구현=Sonnet 5(세션 직접).
-
-## done
 
 - **`TASK-BE-567-revoke-orphaned-membership-service-client.md` — ✅ DONE (2026-07-30, 3-dim verified — impl PR #3098 squash `c9ee45867`; state=MERGED · origin/main tip 포함 확인 · 머지 전 실패 체크 0건, `Integration (iam A/B, Testcontainers)` + `E2E smoke (iam docker-compose)` 포함 전부 GREEN).** `TASK-MONO-400` 이 명시적으로 유보한 판단 — "정리 여부는 이 티켓의 질문이 아니다". `membership-service-client`(V0009 시드)는 `TASK-MONO-394`(iam 자체 membership-service 은퇴, 유일한 의도된 소비자) 이후 소비자 0(AC-0 재확인: `git grep` 전수 — 실 소비자 0, 코멘트 1건뿐). `community-service-client`(같은 V0009, `fan-platform` community-service 가 실사용)는 무변경 — DELETE 는 `client_id` 로 정확히 스코프됨. 신규 Flyway `V0029` 로 해당 client 행만 DELETE + `auth-api.md` Registered Clients 표에서 행 제거. auth-service 테스트 전량(로컬 `--rerun-tasks`, Testcontainers 포함) GREEN, 6m32s. 착수 중 동시 세션들의 머지로 `mergeable=CONFLICTING`(INDEX.md 충돌) 이 됐고 `git merge origin/main` 로 정상 해소 후 CI 재발동. 2026-07-30 사용자에게 revoke/유보/추가조사 3안 제시 → **revoke 선택**. 분석=Sonnet 5 / 구현=Sonnet 5(세션 직접).
 
