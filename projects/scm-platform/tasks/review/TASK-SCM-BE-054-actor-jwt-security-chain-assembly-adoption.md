@@ -8,7 +8,7 @@ Adopt ADR-MONO-058 D1 (actor/JWT-claim cluster) + D4 (security-chain assembly) �
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -86,14 +86,14 @@ For each: replace the `NimbusJwtDecoder` construction + `AllowedIssuersValidator
 
 # Acceptance Criteria
 
-- [ ] **Prerequisite gate**: `TASK-MONO-500` (D4 builder promotion to `libs/java-security-servlet`) is merged before the D4 half of this task starts — verify by reading that task's own `Status` field directly, not by inference. The D1 half has no such gate (the actor package is already promoted and present at `libs/java-security-servlet/src/main/java/com/example/security/servlet/actor/`).
-- [ ] D1: `procurement-service`'s `ActorContextResolver.java` and `ActorContextJwtAuthenticationConverter.java` are removed/replaced by the shared `libs/java-security-servlet` actor package; the local `ActorContext` record is re-parameterized to a plain `Set<String> roles` input while retaining every existing convenience method and role literal unchanged in behavior.
-- [ ] D1: claim-lifting behavior is unchanged — `sub`/`tenant_id` extraction, `roles`-or-`role` (array or delimited string) normalization into `ROLE_`-prefixed authorities all verified identical before/after via the existing test suite.
-- [ ] D1: `ClientCredentialsActorOverflowIntegrationTest` (the `TASK-SCM-BE-050` 37-char client-credentials `sub` regression test) passes unmodified through the new resolution path.
-- [ ] D4: all four services (`procurement`, `logistics`, `inventory-visibility`, `demand-planning`) invoke the `TASK-MONO-500` builder explicitly and opt-in from their own `@Configuration` class — never a component-scanned/auto-configured bean.
-- [ ] D4: for each of the four services, exempt-path routing, authenticated-vs-public path behavior, stateless session policy, and CSRF-disabled-for-API posture are verified byte-for-byte unchanged before/after (diff actual filter-chain behavior via existing 401/403 tests, not just class presence).
-- [ ] `gateway-service` is untouched by this task (no files under `apps/gateway-service/` modified).
-- [ ] All pre-existing security-relevant tests across the four touched services (unit, slice, and Testcontainers IT — including `MultiTenantIsolationIntegrationTest`, `AuditLogIntegrationTest`, and each service's own 401/403 slice tests) pass unmodified with an identical test count to the recorded baseline.
+- [x] **Prerequisite gate**: `TASK-MONO-500` (D4 builder promotion to `libs/java-security-servlet`) is merged before the D4 half of this task starts — verify by reading that task's own `Status` field directly, not by inference. The D1 half has no such gate (the actor package is already promoted and present at `libs/java-security-servlet/src/main/java/com/example/security/servlet/actor/`).
+- [x] D1: `procurement-service`'s `ActorContextResolver.java` and `ActorContextJwtAuthenticationConverter.java` are removed/replaced by the shared `libs/java-security-servlet` actor package; the local `ActorContext` record is re-parameterized to a plain `Set<String> roles` input while retaining every existing convenience method and role literal unchanged in behavior.
+- [x] D1: claim-lifting behavior is unchanged — `sub`/`tenant_id` extraction, `roles`-or-`role` (array or delimited string) normalization into `ROLE_`-prefixed authorities all verified identical before/after via the existing test suite.
+- [x] D1: `ClientCredentialsActorOverflowIntegrationTest` (the `TASK-SCM-BE-050` 37-char client-credentials `sub` regression test) passes unmodified through the new resolution path.
+- [x] D4: all four services (`procurement`, `logistics`, `inventory-visibility`, `demand-planning`) invoke the `TASK-MONO-500` builder explicitly and opt-in from their own `@Configuration` class — never a component-scanned/auto-configured bean.
+- [x] D4: for each of the four services, exempt-path routing, authenticated-vs-public path behavior, stateless session policy, and CSRF-disabled-for-API posture are verified byte-for-byte unchanged before/after (diff actual filter-chain behavior via existing 401/403 tests, not just class presence).
+- [x] `gateway-service` is untouched by this task (no files under `apps/gateway-service/` modified).
+- [x] All pre-existing security-relevant tests across the four touched services (unit, slice, and Testcontainers IT — including `MultiTenantIsolationIntegrationTest`, `AuditLogIntegrationTest`, and each service's own 401/403 slice tests) pass unmodified with an identical test count to the recorded baseline.
 - [ ] scm-platform's Build & Test and Integration (Testcontainers) CI lanes are GREEN for all four touched services.
 
 ---
@@ -180,11 +180,158 @@ Follow each touched service's own architecture doc:
 
 ---
 
+# Verification Record
+
+## Prerequisite gate — read, not inferred
+
+`tasks/done/TASK-MONO-500-adr058-d4-security-chain-assembly-promotion.md`, `# Status` field reads
+`done`. The landed class is `libs/java-security-servlet/…/ResourceServerChainAssembler` with two
+entry points — `jwtDecoder(jwkSetUri) → JwtDecoderBuilder` and
+`statelessJwtChain(http) → FilterChainBuilder`.
+
+**Opt-in confirmed, not assumed** (the task's own first Failure Scenario): the class carries no
+`@AutoConfiguration` / `@Configuration` / `@Component` / `@Bean`, and the module ships no
+`META-INF/spring/…AutoConfiguration.imports`. All four adoptions are explicit calls from each
+service's own `@Configuration` class. No Hard Stop was raised.
+
+## Measured baseline — the current auth posture, recorded before any edit
+
+Read out of the four `SecurityConfig` classes on the pre-change tree. **The `anyRequest()` tail was
+measured per service, not assumed** — the ADR notes the fleet splits 14 `denyAll()` / 5
+`authenticated()`, and all four scm services turned out to be `denyAll()`:
+
+| service | `anyRequest()` tail | permitAll | authenticated | extra rule | converter |
+|---|---|---|---|---|---|
+| `procurement` | **`denyAll()`** | `PublicPaths.EXACT` + `PREFIXES**` (incl. `/api/procurement/webhooks/**`) | `/api/procurement/**` | — | local `ActorContextJwtAuthenticationConverter` |
+| `logistics` | **`denyAll()`** | `PublicPaths.EXACT` (`PREFIXES` empty) | `/api/logistics/**` | — | none (`jwt(jwt -> {})`) |
+| `inventory-visibility` | **`denyAll()`** | `PublicPaths.EXACT` (`PREFIXES` empty) | `/api/inventory-visibility/**` | `permitAll("/internal/inventory-visibility/**")`, **between** the public paths and the authenticated pattern | none |
+| `demand-planning` | **`denyAll()`** | `PublicPaths.EXACT` (`PREFIXES` empty) | `/api/demand-planning/**` | — | none |
+
+All four: CSRF disabled, `SessionCreationPolicy.STATELESS`, service-owned 401/403 writers
+(`UNAUTHORIZED` / `TENANT_FORBIDDEN` / `PERMISSION_DENIED`), `@ConditionalOnMissingBean(JwtDecoder)`
+on the decoder bean. Every one of those is preserved verbatim — each service still supplies its own
+entry point, its own access-denied handler and its own patterns, and now states `.anyRequestDenied()`
+**out loud** rather than inheriting it silently.
+
+## Test counts — `test` lane (Docker-free)
+
+| module | before | after | delta |
+|---|---|---|---|
+| `procurement-service` | 212 | 222 | +10 |
+| `logistics-service` | 56 | 61 | +5 |
+| `inventory-visibility-service` | 120 | 126 | +6 |
+| `demand-planning-service` | 87 | 92 | +5 |
+
+Baseline captured on this branch **before the first edit** by summing
+`tests=`/`failures=`/`errors=`/`skipped=` over each module's `build/test-results/test/*.xml`; all
+four were 0 failures / 0 errors / 0 skipped, and still are after, confirmed by a final
+`--rerun-tasks` pass over all four suites.
+
+**No pre-existing test was removed, renamed or weakened.** The whole delta is four new files
+(`ActorContextAuthPathSliceTest` in procurement, `ResourceServerChainAuthPathSliceTest` in the other
+three). Pre-existing test files edited — none in an assertion:
+
+- `ActorContextJwtAuthenticationConverterTest` — adapted 1:1 to the new call path
+  (`new ActorContextJwtAuthenticationConverter<>(ActorContext::new)`); both assertions byte-identical.
+- the four `ScmTenantGatePolicyTest` `wiredConfig()` helpers — **one added fixture line each**,
+  `jwkSetUri`. Disclosed because it edits a pre-existing test: the D4 assembler validates its JWKS
+  URI at wiring time, where the hand-rolled code only read it inside `jwtDecoder()`. The fixture
+  previously left the field `null` — a state the service could never actually be in. No assertion
+  changed; case counts unchanged.
+- `ActorContextTest` — **not touched** (`ActorContext` itself is byte-unchanged).
+
+## Test counts — `integrationTest` lane (Testcontainers, local Docker)
+
+| module | tests | failures | errors | skipped |
+|---|---|---|---|---|
+| `procurement-service` | 18 | 0 | 0 | 0 |
+| `logistics-service` | 32 | 0 | 0 | 0 |
+| `inventory-visibility-service` | 23 | 0 | 0 | 0 |
+| `demand-planning-service` | 14 | 0 | 0 | 0 |
+
+All ITs ran **unmodified**, including the three the AC names by hand:
+`ClientCredentialsActorOverflowIntegrationTest` (3 cases — the 37-char client-credentials `sub`),
+`MultiTenantIsolationIntegrationTest` (2), `AuditLogIntegrationTest` (2).
+
+**Local-run caveat, recorded rather than smoothed over.** On the first pass all four lanes were run
+concurrently and `demand-planning` reported 14 tests / **14 SKIPPED** — `DockerAvailableCondition`'s
+probe lost under four simultaneous Docker clients on this Windows host, and Gradle still printed
+`BUILD SUCCESSFUL`. A skipped lane is not a green lane; re-run alone it is the 14/0/0/**0** above.
+CI's Linux lane remains the authoritative record for all four.
+
+## D1 — the Ownership-Rule boundary, checked mechanically
+
+- `git diff -- '*application/ActorContext.java'` → **empty**. `hasRole`, `isOperator()`,
+  `actorType()` and every role literal (`OPERATOR`/`ADMIN`/`SUPER_ADMIN`/`SCM_OPERATOR`) are
+  byte-unchanged and still in `procurement-service`.
+- `libs/` is **not in the diff at all** — the actor package was already promoted by
+  `TASK-FAN-BE-040`; this task only consumes it. `gateway-service` likewise absent.
+- Deleted: `application/security/ActorContextResolver.java` and
+  `infrastructure/security/ActorContextJwtAuthenticationConverter.java` (incl. its nested
+  `ActorContextJwtAuthenticationToken`). The `"ROLE_" +` prefix literal and the `[,\s]+` role-split
+  literal no longer appear anywhere under `projects/scm-platform/`.
+- `PurchaseOrderController`'s 7 call sites moved from `ActorContextResolver.currentOrThrow()` to
+  `ActorContextResolver.currentOrThrow(ActorContext.class)` — one import line plus 7 arguments, no
+  signature change. **Disclosed deviation from `TASK-SCM-BE-017` A2**: that task had moved the
+  resolver into `application/security/` so `presentation/controller/` would not import
+  `infrastructure/`. The shared resolver is neither — it is a `libs/` mechanism, so the boundary A2
+  protects is intact, and `architecture.md`'s Layer Structure is updated to say so rather than
+  leaving a dangling reference to a deleted file.
+
+## Auth-path verification is at filter-chain level, not unit level
+
+A converter that lifts claims correctly but is never wired, and an `anyRequest()` tail that flipped
+from `denyAll()` to `authenticated()`, both pass every unit test in these modules and both change
+who can call the service. So each of the four new tests drives the **real** `SecurityConfig` chain
+with a **really RSA-signed** JWT through a **real** `NimbusJwtDecoder` whose validator chain is the
+one that service's own `ServiceLevelOAuth2Config` builds (real `AllowedIssuersValidator`, real
+`TenantClaimValidator`). Nothing is hand-constructed — no hand-built `Jwt`, no hand-built
+`ActorContext`, no test-authored validator chain. In procurement the actor and the authorities are
+read off the **live `SecurityContext` at controller-invocation time**.
+
+| service | asserted |
+|---|---|
+| `procurement` (10) | array-form `roles:[…]`; space-delimited `role:"A B"`; comma-delimited `role:"A,B"`; assume-tenant `SCM_OPERATOR`; 37-char client-credentials `sub` with no role claim → `BUYER`, zero authorities; no token → 401 `UNAUTHORIZED`; cross-tenant → 403 `TENANT_FORBIDDEN`; **authenticated caller on an unlisted path → 403 (the `denyAll()` tail)**; `/actuator/health` unauthenticated → not 401; **`/api/procurement/webhooks/**` unauthenticated → not 401** (the webhook bypass this task's Edge Cases call out) |
+| `logistics` (5) | in-tenant token → 200; no token → 401; cross-tenant → 403; unlisted path → 403 (`denyAll()` tail); `/actuator/health` → not 401 |
+| `inventory-visibility` (6) | the same five, **plus `/internal/inventory-visibility/**` with no token at all → 200** — the rule that had to be re-placed through the assembler's `authorizeRules` seam, which runs after the public paths and before the blanket authenticated patterns. Registered on the wrong side it would be shadowed and this case would 401. |
+| `demand-planning` (5) | the same five |
+
+## Guard mutation-check — the new assertions were measured to bite
+
+Two mutations, each reverted after measuring:
+
+1. `logistics` `.anyRequestDenied()` → `.anyRequestAuthenticated()` → **1 failed / 5**
+   ("authenticated caller on an unlisted path → 403"). The tail-preservation guard.
+2. `procurement` `.jwtAuthenticationConverter(…)` removed from the chain → **5 failed / 10** (every
+   D1 claim-lifting case). The "correct but never wired" guard.
+
+Both reverted; full suites back to green.
+
+## Observable behaviour deltas
+
+**None.** No status code, error code, envelope field, claim name, path pattern, exception type or
+exception message changed; `specs/contracts/http/` needed no edit. One preserved-by-hand detail
+worth naming: `procurement` keeps its own `extractOAuth2Error` null-code guard and its use of
+`TenantClaimValidator.ERROR_CODE_TENANT_MISMATCH`, while the other three keep their literal
+`"tenant_mismatch"` — a pre-existing divergence in service-owned code that D4 does not touch and
+this task deliberately did not "tidy" (§ Failure Scenarios, scope creep).
+
+## Specs reconciled (same PR)
+
+`specs/services/procurement-service/architecture.md` — Layer Structure (the two deleted D1 files;
+`ActorContext`'s Ownership-Rule note; the `infrastructure/security/` contents, which still listed
+`AllowedIssuersValidator`/`TenantClaimValidator` classes deleted by ADR-MONO-049 and omitted the
+three webhook classes), the roles-only actor-derivation note, the shared-libs line (which had never
+listed `libs:java-security-servlet` although `build.gradle` has declared it since ADR-MONO-049), and
+the two stale `presentation/filter/TenantClaimEnforcer` references.
+
+---
+
 # Definition of Done
 
-- [ ] `TASK-MONO-500` confirmed merged before D4 half starts
-- [ ] D1 adopted in `procurement-service`; D4 adopted in `procurement-service`, `logistics-service`, `inventory-visibility-service`, `demand-planning-service`
-- [ ] `gateway-service` untouched
-- [ ] All pre-existing security tests pass unmodified, identical counts per service to recorded baseline
+- [x] `TASK-MONO-500` confirmed merged before D4 half starts
+- [x] D1 adopted in `procurement-service`; D4 adopted in `procurement-service`, `logistics-service`, `inventory-visibility-service`, `demand-planning-service`
+- [x] `gateway-service` untouched
+- [x] All pre-existing security tests pass unmodified, identical counts per service to recorded baseline
 - [ ] scm-platform Build & Test + Integration (Testcontainers) CI lanes GREEN for all four touched services
 - [ ] Task moved `ready → done`, referencing `TASK-MONO-495` and `TASK-MONO-500` as origin/prerequisite

@@ -40,6 +40,12 @@ class ScmTenantGatePolicyTest {
         ServiceLevelOAuth2Config config = new ServiceLevelOAuth2Config();
         ReflectionTestUtils.setField(config, "requiredTenantId", "scm");
         ReflectionTestUtils.setField(config, "allowedIssuersCsv", ISSUER);
+        // TASK-SCM-BE-054: the D4 assembler validates its JWKS URI at wiring time, so the
+        // fixture now supplies the one this service binds in production instead of leaving the
+        // field null. No assertion below reads it — the JWKS endpoint is fetched lazily, on first
+        // signature verification, and nothing here verifies a signature. Setting it makes the
+        // fixture a state the service could actually be in; a null jwkSetUri never was one.
+        ReflectionTestUtils.setField(config, "jwkSetUri", ISSUER + "/oauth2/jwks");
         return config;
     }
 

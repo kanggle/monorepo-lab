@@ -37,16 +37,23 @@ public final class PublicPaths {
     /** Empty, and that is not an oversight — see the class Javadoc. */
     public static final Set<String> PREFIXES = Set.of();
 
-    private static final PublicPathSet MECHANISM = PublicPathSet.of(EXACT, PREFIXES);
+    /**
+     * The same data as a {@link PublicPathSet}, for the ADR-MONO-058 § D4 chain assembler.
+     *
+     * <p>Handing {@code SecurityConfig} and {@code TenantClaimEnforcer} the <em>same</em> instance is
+     * the point: the paths Spring Security permits unauthenticated and the paths the tenant gate
+     * skips are then one object, and cannot drift apart (ADR-MONO-049 § 1.8).
+     */
+    public static final PublicPathSet AS_SET = PublicPathSet.of(EXACT, PREFIXES);
 
     private PublicPaths() {
     }
 
     public static boolean isPublic(String path) {
-        return MECHANISM.isPublic(path);
+        return AS_SET.isPublic(path);
     }
 
     public static boolean isPublic(HttpServletRequest request) {
-        return MECHANISM.isPublic(request);
+        return AS_SET.isPublic(request);
     }
 }

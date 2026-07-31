@@ -13,13 +13,13 @@ import com.example.scmplatform.procurement.application.command.DraftFromSuggesti
 import com.example.scmplatform.procurement.application.command.DraftPurchaseOrderCommand;
 import com.example.scmplatform.procurement.application.command.SubmitPurchaseOrderCommand;
 import com.example.scmplatform.procurement.domain.po.status.PoStatus;
-import com.example.scmplatform.procurement.application.security.ActorContextResolver;
 import com.example.scmplatform.procurement.presentation.dto.ApiEnvelope;
 import com.example.scmplatform.procurement.presentation.dto.CancelPurchaseOrderRequest;
 import com.example.scmplatform.procurement.presentation.dto.DraftFromSuggestionRequest;
 import com.example.scmplatform.procurement.presentation.dto.DraftPurchaseOrderRequest;
 import com.example.scmplatform.procurement.presentation.dto.PageResponse;
 import com.example.scmplatform.procurement.presentation.dto.PurchaseOrderResponse;
+import com.example.security.servlet.actor.ActorContextResolver;
 import jakarta.validation.Valid;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -57,7 +57,7 @@ public class PurchaseOrderController {
     public ResponseEntity<ApiEnvelope<PurchaseOrderResponse>> draft(
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody DraftPurchaseOrderRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         DraftPurchaseOrderCommand cmd = new DraftPurchaseOrderCommand(
                 actor,
                 req.supplierId(),
@@ -88,7 +88,7 @@ public class PurchaseOrderController {
     @PostMapping("/from-suggestion")
     public ResponseEntity<ApiEnvelope<PurchaseOrderResponse>> draftFromSuggestion(
             @Valid @RequestBody DraftFromSuggestionRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         DraftFromSuggestionCommand cmd = new DraftFromSuggestionCommand(
                 actor,
                 req.supplierId(),
@@ -109,7 +109,7 @@ public class PurchaseOrderController {
 
     @GetMapping("/{poId}")
     public ResponseEntity<ApiEnvelope<PurchaseOrderResponse>> get(@PathVariable String poId) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return ResponseEntity.ok(
                 ApiEnvelope.of(PurchaseOrderResponse.from(service.get(poId, actor))));
     }
@@ -120,7 +120,7 @@ public class PurchaseOrderController {
             @RequestParam(required = false) String supplierId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         PageResult<PurchaseOrderView> result = service.search(actor, status, supplierId,
                 PageQuery.of(page, size, "createdAt", "DESC"));
         return ResponseEntity.ok(ApiEnvelope.of(PageResponse.from(result.map(PurchaseOrderResponse::from))));
@@ -130,7 +130,7 @@ public class PurchaseOrderController {
     public ResponseEntity<ApiEnvelope<PurchaseOrderResponse>> submit(
             @PathVariable String poId,
             @RequestHeader("Idempotency-Key") String idempotencyKey) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         PurchaseOrderView view = service.submit(new SubmitPurchaseOrderCommand(actor, poId, idempotencyKey));
         return ResponseEntity.ok(ApiEnvelope.of(PurchaseOrderResponse.from(view)));
     }
@@ -139,7 +139,7 @@ public class PurchaseOrderController {
     public ResponseEntity<ApiEnvelope<PurchaseOrderResponse>> confirm(
             @PathVariable String poId,
             @RequestHeader("Idempotency-Key") String idempotencyKey) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         PurchaseOrderView view = idempotency.execute(
                 actor.tenantId(), "POST /api/procurement/po/{poId}/confirm", idempotencyKey,
                 hasher.hash(Map.of("poId", poId)), HttpStatus.OK.value(), PurchaseOrderView.class,
@@ -152,7 +152,7 @@ public class PurchaseOrderController {
             @PathVariable String poId,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody(required = false) CancelPurchaseOrderRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         String reason = req == null ? null : req.reason();
         PurchaseOrderView view = idempotency.execute(
                 actor.tenantId(), "POST /api/procurement/po/{poId}/cancel", idempotencyKey,

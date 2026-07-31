@@ -2,6 +2,7 @@ package com.example.scmplatform.procurement.infrastructure.security;
 
 import com.example.scmplatform.procurement.application.ActorContext;
 import com.example.scmplatform.procurement.domain.po.status.ActorType;
+import com.example.security.servlet.actor.ActorContextJwtAuthenticationConverter;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
@@ -17,13 +18,19 @@ import static org.assertj.core.api.Assertions.assertThat;
  * ({@code scm-platform-internal-services-client}, 37 chars — iam-integration.md
  * Edge Case E1). This proves the converter surfaces that full id (no roles → maps
  * to {@link ActorType#BUYER}); the downstream widened columns then store it.
+ *
+ * <p>TASK-SCM-BE-054 (ADR-MONO-058 § D1): the converter is now the shared
+ * {@link ActorContextJwtAuthenticationConverter}, parameterised with procurement's own
+ * {@code ActorContext::new}. The assertions are unchanged — the point of keeping them is that
+ * they are about the <em>resolution path this service actually runs</em>, and a shared mechanism
+ * that dropped the full {@code sub} would fail here exactly as a local one would.
  */
 class ActorContextJwtAuthenticationConverterTest {
 
     private static final String CLIENT_CREDENTIALS_SUB = "scm-platform-internal-services-client";
 
-    private final ActorContextJwtAuthenticationConverter converter =
-            new ActorContextJwtAuthenticationConverter();
+    private final ActorContextJwtAuthenticationConverter<ActorContext> converter =
+            new ActorContextJwtAuthenticationConverter<>(ActorContext::new);
 
     private static Jwt.Builder baseJwt(String sub) {
         return Jwt.withTokenValue("token")
