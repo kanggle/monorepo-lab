@@ -57,6 +57,10 @@ dependencies {
     // its outbox auto-config is excluded — read-model is no-outbox, E5 terminal).
     implementation project(':libs:java-common')
     implementation project(':libs:java-web')
+    // ADR-MONO-058 § D2: CommonGlobalExceptionHandler — the non-domain exception arms
+    // (404/405/415/400/409/500) this service's GlobalExceptionHandler now inherits
+    // instead of hand-copying. Servlet-only module; never onto a reactive classpath.
+    implementation project(':libs:java-web-servlet')
     implementation project(':libs:java-messaging')
     implementation project(':libs:java-observability')
     implementation project(':libs:java-security')

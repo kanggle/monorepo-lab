@@ -264,8 +264,12 @@ com.example.erp.masterdata/
   `io.opentelemetry:opentelemetry-exporter-otlp`.
 - `com.fasterxml.jackson.{core:jackson-databind, datatype:jackson-datatype-jsr310}`.
 - `net.logstash.logback:logstash-logback-encoder` (prod profile).
-- shared libs: `libs:java-common`, `libs:java-web`, `libs:java-messaging`,
-  `libs:java-observability`, `libs:java-security`.
+- shared libs: `libs:java-common`, `libs:java-web`, `libs:java-web-servlet`
+  (ADR-MONO-058 § D2 — `CommonGlobalExceptionHandler`, the base
+  `presentation/advice/GlobalExceptionHandler` extends for the non-domain
+  404/405/415/400/500 arms), `libs:java-messaging`, `libs:java-observability`,
+  `libs:java-security`, `libs:java-security-servlet` (ADR-MONO-049 § D5-4 /
+  ADR-MONO-058 § D4).
 
 ### Forbidden dependencies
 

@@ -19,7 +19,8 @@ public final class SelfApprovalGuard {
 
     public static void ensureNotSelfApproval(String submitterId, String approverId) {
         if (submitterId != null && submitterId.equals(approverId)) {
-            throw new ApprovalRouteInvalidException(
+            throw ApprovalRouteInvalidException.withCause(
+                    ApprovalRouteInvalidException.CAUSE_SELF_APPROVAL,
                     "self-approval is forbidden: submitter '" + submitterId
                             + "' must not be the approver (E3/I4 Separation of Duties)");
         }

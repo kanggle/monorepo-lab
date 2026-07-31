@@ -269,11 +269,17 @@ public class ApprovalRequest {
         }
     }
 
+    /**
+     * approval-api.md § withdraw: the not-authorized code is reused for the
+     * submitter-only constraint and {@code details.role = "submitter"} discriminates it
+     * from an approver-position rejection.
+     */
     private void ensureActingSubmitter(String actorId) {
         if (!Objects.equals(this.submitterId, actorId)) {
             throw new ApprovalNotAuthorizedApproverException(
                     "principal '" + actorId + "' is not the submitter '"
-                            + this.submitterId + "' — only the submitter may withdraw");
+                            + this.submitterId + "' — only the submitter may withdraw",
+                    ApprovalNotAuthorizedApproverException.ROLE_SUBMITTER);
         }
     }
 

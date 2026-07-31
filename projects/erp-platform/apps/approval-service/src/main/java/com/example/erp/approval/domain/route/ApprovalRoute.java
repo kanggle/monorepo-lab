@@ -69,7 +69,8 @@ public final class ApprovalRoute {
             // Self-approval (E3 / I4) — submitter must not appear at any stage.
             SelfApprovalGuard.ensureNotSelfApproval(submitterId, approverId);
             if (!seen.add(approverId)) {
-                throw new ApprovalRouteInvalidException(
+                throw ApprovalRouteInvalidException.withCause(
+                        ApprovalRouteInvalidException.CAUSE_DUPLICATE_STAGE_APPROVER,
                         "route is malformed: duplicate_stage_approver — approver '"
                                 + approverId + "' appears at more than one stage"
                                 + " (E3/I4 Separation of Duties)");

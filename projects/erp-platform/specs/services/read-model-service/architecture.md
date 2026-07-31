@@ -184,8 +184,13 @@ config/         ← Spring @Configuration beans only (Kafka consumer, security)
   `ApprovalFactController` / `DelegationFactController`, replacing the three
   hand-rolled local `application.query.*Page` records; already declared in
   `build.gradle` but unused before this adoption), `libs:java-web`,
+  `libs:java-web-servlet` (ADR-MONO-058 § D2 — `CommonGlobalExceptionHandler`, the
+  base `adapter/inbound/web/advice/GlobalExceptionHandler` extends for the
+  non-domain 404/405/415/400/409/500 arms; the service emits the shared
+  `libs/java-web.ErrorResponse` on every arm),
   `libs:java-messaging` (consumer + dedupe scaffolding only — no outbox, E5
-  terminal), `libs:java-observability`, `libs:java-security`.
+  terminal), `libs:java-observability`, `libs:java-security`,
+  `libs:java-security-servlet` (ADR-MONO-049 § D5-4 / ADR-MONO-058 § D4).
 
 ## Service Type Compliance
 

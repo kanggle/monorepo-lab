@@ -28,10 +28,18 @@ All endpoints:
   "warning": "Eventually-consistent read-model" } }`. List responses extend
   `meta` with `page` / `size` / `totalElements`. An org-view with an unresolved
   reference adds `meta.unresolved: ["department"|"costCenter"|"jobGrade", ...]`.
-- Error envelope: `{ "code": "<ERROR_CODE>", "message": "<human>", "details":
-  <object?>, "timestamp": "<ISO-8601>" }`. Codes per
-  [`platform/error-handling.md`](../../../../../platform/error-handling.md)
-  erp section.
+- Error envelope: `{ "code": "<ERROR_CODE>", "message": "<human>",
+  "timestamp": "<ISO-8601>" }` — the platform-standard three fields
+  ([`platform/error-handling.md`](../../../../../platform/error-handling.md)
+  § Error Response Format), emitted by the shared
+  `libs/java-web.ErrorResponse`. Codes per the same file's erp section.
+  **No `details` field** (ADR-MONO-058 § D2 / TASK-ERP-BE-038): no
+  read-model-service code documents structured context, so the optional
+  `"details": <object?>` this line previously advertised was never populated and
+  has been removed. No wire change — `@JsonInclude(NON_NULL)` always omitted it.
+  (`masterdata-api.md` / `approval-api.md` *do* document `details` for specific
+  codes and keep a `details`-carrying envelope.) `message` is human-readable
+  prose, not a machine-matched value.
 - No webhook / public-callback surface (erp is internal-only, E7). Only
   `/actuator/{health,info}` are unauthenticated.
 

@@ -35,7 +35,26 @@ All endpoints:
 - Error envelope: `{ "code": "<ERROR_CODE>", "message": "<human>",
   "details": <object?>, "timestamp": "<ISO-8601>" }`. Codes per
   [`platform/error-handling.md`](../../../../../platform/error-handling.md)
-  erp section.
+  erp section. `details` follows the `@JsonInclude(NON_NULL)` absent-field
+  convention — it is **omitted** for every code that does not document it, never
+  serialized as `null`. The one code that carries it today is
+  `MASTERDATA_REFERENCE_VIOLATION` (see below); `message` is human-readable prose
+  and is **not** a machine-matched value.
+- **`MASTERDATA_REFERENCE_VIOLATION` → `details` shape** (TASK-ERP-BE-038 —
+  the field was documented here from the start but was not populated by the
+  service until then):
+  ```json
+  { "code": "MASTERDATA_REFERENCE_VIOLATION",
+    "message": "Department dept-1 is referenced by active child departments, employees — cannot retire",
+    "details": { "referencers": ["childDepartments", "employees", "costCenters"] },
+    "timestamp": "<ISO-8601>" }
+  ```
+  `details.referencers` is a string array of the referencer **kinds** that are
+  currently blocking the retire, drawn from the closed set
+  `childDepartments` / `employees` / `costCenters`, in that order. **Every** kind is
+  evaluated (no short-circuit), so the array lists all blockers at once rather than
+  only the first one found. JobGrade / CostCenter retire can only be blocked by
+  `employees`, so their array always has exactly one element.
 - No webhook / public-callback surface in v1 (erp is internal-only, E7).
   Only `/actuator/{health,info}` are unauthenticated.
 
@@ -148,7 +167,8 @@ Logical retire. Blocked if any live reference points at this department.
 
 **Errors**: 404 `MASTERDATA_NOT_FOUND`, 409 `MASTERDATA_REFERENCE_VIOLATION`
 (employees / cost-centers / child departments still reference this row;
-`details` enumerates the referencer kinds), 400 `IDEMPOTENCY_KEY_REQUIRED`,
+`details.referencers` enumerates every blocking referencer kind — shape at the
+top of this file), 400 `IDEMPOTENCY_KEY_REQUIRED`,
 409 `IDEMPOTENCY_KEY_CONFLICT`, 403 `PERMISSION_DENIED`.
 
 ### POST /api/erp/masterdata/departments/{id}/move-parent
@@ -294,7 +314,8 @@ in use), 422 `MASTERDATA_EFFECTIVE_PERIOD_INVALID`,
 
 **Errors**: 404 `MASTERDATA_NOT_FOUND`, 409
 `MASTERDATA_REFERENCE_VIOLATION` (active Employee revisions still
-reference this grade), 400 `IDEMPOTENCY_KEY_REQUIRED`,
+reference this grade; `details.referencers = ["employees"]`),
+400 `IDEMPOTENCY_KEY_REQUIRED`,
 409 `IDEMPOTENCY_KEY_CONFLICT`, 403 `PERMISSION_DENIED`.
 
 ---
@@ -350,7 +371,8 @@ reference this grade), 400 `IDEMPOTENCY_KEY_REQUIRED`,
 
 **Errors**: 404 `MASTERDATA_NOT_FOUND`, 409
 `MASTERDATA_REFERENCE_VIOLATION` (active Employee revisions still
-reference this cost center), 400 `IDEMPOTENCY_KEY_REQUIRED`,
+reference this cost center; `details.referencers = ["employees"]`),
+400 `IDEMPOTENCY_KEY_REQUIRED`,
 409 `IDEMPOTENCY_KEY_CONFLICT`, 403 `PERMISSION_DENIED`.
 
 ---
