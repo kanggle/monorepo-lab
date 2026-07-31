@@ -1,8 +1,10 @@
 package com.example.fanplatform.community.infrastructure.cache;
 
-import com.example.fanplatform.community.application.FeedPage;
+import com.example.common.page.PageResult;
+import com.example.fanplatform.community.application.FeedItemView;
 import com.example.fanplatform.community.application.port.out.FeedCache;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -20,8 +22,8 @@ import java.util.Optional;
  * {@code rules/traits/integration-heavy.md} I3).
  *
  * <p>Key shape: {@code feed:&lt;tenantId&gt;:&lt;accountId&gt;:&lt;page&gt;:&lt;size&gt;}.
- * The cached value is the JSON-serialized {@link FeedPage} returned by the
- * use case, so a hit can be returned with zero DB round-trips.
+ * The cached value is the JSON-serialized {@link PageResult}&lt;{@link FeedItemView}&gt;
+ * returned by the use case, so a hit can be returned with zero DB round-trips.
  *
  * <p><strong>Invalidation strategy</strong>: v1 uses TTL-only expiry
  * ({@value #TTL_MINUTES} minutes). New posts and follow-graph changes are
@@ -33,6 +35,9 @@ import java.util.Optional;
 @Slf4j
 @Component
 public class FeedCacheRepository implements FeedCache {
+
+    private static final TypeReference<PageResult<FeedItemView>> FEED_PAGE_TYPE = new TypeReference<>() {
+    };
 
     static final long TTL_MINUTES = 5;
     private static final Duration TTL = Duration.ofMinutes(TTL_MINUTES);
@@ -60,10 +65,11 @@ public class FeedCacheRepository implements FeedCache {
     }
 
     /**
-     * Best-effort write of the full {@link FeedPage} payload. Failures are
-     * logged + counted; the caller's response is unaffected.
+     * Best-effort write of the full {@link PageResult}&lt;{@link FeedItemView}&gt;
+     * payload. Failures are logged + counted; the caller's response is
+     * unaffected.
      */
-    public void cachePage(String tenantId, String accountId, int page, int size, FeedPage value) {
+    public void cachePage(String tenantId, String accountId, int page, int size, PageResult<FeedItemView> value) {
         try {
             String json = objectMapper.writeValueAsString(value);
             redis.opsForValue().set(key(tenantId, accountId, page, size), json, TTL);
@@ -78,18 +84,18 @@ public class FeedCacheRepository implements FeedCache {
     }
 
     /**
-     * Best-effort read of a previously cached {@link FeedPage}. Returns
-     * {@link Optional#empty()} on miss, deserialization error, or Redis
+     * Best-effort read of a previously cached {@link PageResult}&lt;{@link FeedItemView}&gt;.
+     * Returns {@link Optional#empty()} on miss, deserialization error, or Redis
      * unavailability — the caller is expected to fall through to the DB.
      */
-    public Optional<FeedPage> readPage(String tenantId, String accountId, int page, int size) {
+    public Optional<PageResult<FeedItemView>> readPage(String tenantId, String accountId, int page, int size) {
         try {
             String value = redis.opsForValue().get(key(tenantId, accountId, page, size));
             if (value == null || value.isEmpty()) {
                 cacheMiss.increment();
                 return Optional.empty();
             }
-            FeedPage feedPage = objectMapper.readValue(value, FeedPage.class);
+            PageResult<FeedItemView> feedPage = objectMapper.readValue(value, FEED_PAGE_TYPE);
             cacheHit.increment();
             return Optional.of(feedPage);
         } catch (JsonProcessingException e) {

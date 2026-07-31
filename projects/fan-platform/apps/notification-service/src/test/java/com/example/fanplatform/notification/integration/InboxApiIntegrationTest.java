@@ -66,6 +66,10 @@ class InboxApiIntegrationTest extends NotificationServiceIntegrationBase {
         return root.path("data").size();
     }
 
+    private JsonNode meta(ResponseEntity<String> resp) throws Exception {
+        return mapper.readTree(resp.getBody()).path("meta");
+    }
+
     @Test
     @DisplayName("list is account-scoped + status-filtered; mark-read is idempotent; cross-account → 404")
     void inboxLifecycle() throws Exception {
@@ -81,7 +85,13 @@ class InboxApiIntegrationTest extends NotificationServiceIntegrationBase {
         String acc2 = jwt.signFanToken("acc-2");
 
         // acc-1 sees only its own two.
-        assertThat(dataSize(get("/api/fan/notifications", acc1))).isEqualTo(2);
+        ResponseEntity<String> acc1List = get("/api/fan/notifications", acc1);
+        assertThat(dataSize(acc1List)).isEqualTo(2);
+        // TASK-FAN-BE-043 (ADR-MONO-058 § D3): meta.totalPages is now present (additive field,
+        // previously absent from NotificationPage/ApiEnvelope.ofList) and correct for 2 items at
+        // the default page size (20) — a single page.
+        assertThat(meta(acc1List).path("totalElements").asLong()).isEqualTo(2L);
+        assertThat(meta(acc1List).path("totalPages").asInt()).isEqualTo(1);
         // status=UNREAD → both still unread.
         assertThat(dataSize(get("/api/fan/notifications?status=UNREAD", acc1))).isEqualTo(2);
         // acc-2 sees only its own one.

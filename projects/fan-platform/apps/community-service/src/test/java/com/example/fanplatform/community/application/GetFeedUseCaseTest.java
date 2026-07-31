@@ -1,9 +1,9 @@
 package com.example.fanplatform.community.application;
 
+import com.example.common.page.PageResult;
 import com.example.fanplatform.community.application.port.out.FeedCache;
 import com.example.fanplatform.community.domain.comment.CommentRepository;
 import com.example.fanplatform.community.domain.membership.MembershipChecker;
-import com.example.fanplatform.community.domain.post.PageResult;
 import com.example.fanplatform.community.domain.post.Post;
 import com.example.fanplatform.community.domain.post.PostRepository;
 import com.example.fanplatform.community.domain.post.PostType;

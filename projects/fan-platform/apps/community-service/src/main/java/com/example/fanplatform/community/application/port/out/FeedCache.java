@@ -1,6 +1,7 @@
 package com.example.fanplatform.community.application.port.out;
 
-import com.example.fanplatform.community.application.FeedPage;
+import com.example.common.page.PageResult;
+import com.example.fanplatform.community.application.FeedItemView;
 
 import java.util.Optional;
 
@@ -23,11 +24,11 @@ public interface FeedCache {
      * {@link Optional#empty()} on miss, deserialization error, or
      * infrastructure unavailability.
      */
-    Optional<FeedPage> readPage(String tenantId, String accountId, int page, int size);
+    Optional<PageResult<FeedItemView>> readPage(String tenantId, String accountId, int page, int size);
 
     /**
      * Best-effort write of the hydrated feed page. The caller's response is
      * unaffected by write failures.
      */
-    void cachePage(String tenantId, String accountId, int page, int size, FeedPage value);
+    void cachePage(String tenantId, String accountId, int page, int size, PageResult<FeedItemView> value);
 }

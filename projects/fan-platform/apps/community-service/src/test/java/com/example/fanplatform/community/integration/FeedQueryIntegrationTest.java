@@ -220,7 +220,7 @@ class FeedQueryIntegrationTest extends CommunityServiceIntegrationBase {
 
         String cached = stringRedisTemplate.opsForValue().get(key);
         assertThat(cached)
-                .as("Cached value should be the JSON-serialized FeedPage")
+                .as("Cached value should be the JSON-serialized feed PageResult")
                 .isNotBlank()
                 .as("Cached payload should be JSON (start with '{')")
                 .startsWith("{");

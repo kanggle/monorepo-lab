@@ -1,10 +1,10 @@
 package com.example.fanplatform.notification.presentation.controller;
 
+import com.example.common.page.PageResult;
 import com.example.fanplatform.notification.application.ListNotificationsUseCase;
 import com.example.fanplatform.notification.application.MarkNotificationReadUseCase;
 import com.example.fanplatform.notification.domain.notification.Notification;
 import com.example.fanplatform.notification.domain.notification.NotificationNotFoundException;
-import com.example.fanplatform.notification.domain.notification.NotificationPage;
 import com.example.fanplatform.notification.domain.notification.NotificationStatus;
 import com.example.fanplatform.notification.domain.notification.NotificationType;
 import com.example.fanplatform.notification.presentation.advice.GlobalExceptionHandler;
@@ -66,7 +66,7 @@ class NotificationInboxControllerSliceTest {
     @DisplayName("GET inbox returns the paginated envelope")
     void listReturnsEnvelope() throws Exception {
         when(listNotifications.list(any(), any(), anyInt(), anyInt()))
-                .thenReturn(new NotificationPage(List.of(sample()), 0, 20, 1));
+                .thenReturn(new PageResult<>(List.of(sample()), 0, 20, 1, 1));
 
         mockMvc.perform(get("/api/fan/notifications").header("Authorization", bearer()))
                 .andExpect(status().isOk())
@@ -76,14 +76,15 @@ class NotificationInboxControllerSliceTest {
                 .andExpect(jsonPath("$.data[0].status").value("UNREAD"))
                 .andExpect(jsonPath("$.data[0].deepLink").doesNotExist())
                 .andExpect(jsonPath("$.data[0].readAt").doesNotExist())
-                .andExpect(jsonPath("$.meta.totalElements").value(1));
+                .andExpect(jsonPath("$.meta.totalElements").value(1))
+                .andExpect(jsonPath("$.meta.totalPages").value(1));
     }
 
     @Test
     @DisplayName("GET inbox ?unread=true maps the normative filter onto status UNREAD (contract § 2.1)")
     void unreadAliasMapsToStatusFilter() throws Exception {
         when(listNotifications.list(any(), eq(NotificationStatus.UNREAD), anyInt(), anyInt()))
-                .thenReturn(new NotificationPage(List.of(sample()), 0, 20, 1));
+                .thenReturn(new PageResult<>(List.of(sample()), 0, 20, 1, 1));
 
         mockMvc.perform(get("/api/fan/notifications?unread=true").header("Authorization", bearer()))
                 .andExpect(status().isOk())

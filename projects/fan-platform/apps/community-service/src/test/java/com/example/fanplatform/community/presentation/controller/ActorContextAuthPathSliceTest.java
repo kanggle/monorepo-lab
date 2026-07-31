@@ -1,7 +1,8 @@
 package com.example.fanplatform.community.presentation.controller;
 
+import com.example.common.page.PageResult;
 import com.example.fanplatform.community.application.ActorContext;
-import com.example.fanplatform.community.application.FeedPage;
+import com.example.fanplatform.community.application.FeedItemView;
 import com.example.fanplatform.community.application.GetFeedUseCase;
 import com.example.fanplatform.community.presentation.advice.GlobalExceptionHandler;
 import com.example.fanplatform.community.testsupport.JwtTestHelper;
@@ -82,7 +83,7 @@ class ActorContextAuthPathSliceTest {
         when(getFeedUseCase.execute(any(), anyInt(), anyInt())).thenAnswer(invocation -> {
             boundActor.set(invocation.getArgument(0));
             liveAuthentication.set(SecurityContextHolder.getContext().getAuthentication());
-            return new FeedPage(List.of(), 0, 20, 0L, 0, false);
+            return new PageResult<FeedItemView>(List.of(), 0, 20, 0L, 0);
         });
     }
 

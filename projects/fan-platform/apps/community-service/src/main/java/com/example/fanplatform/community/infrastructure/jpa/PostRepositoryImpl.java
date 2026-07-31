@@ -1,6 +1,6 @@
 package com.example.fanplatform.community.infrastructure.jpa;
 
-import com.example.fanplatform.community.domain.post.PageResult;
+import com.example.common.page.PageResult;
 import com.example.fanplatform.community.domain.post.Post;
 import com.example.fanplatform.community.domain.post.PostRepository;
 import lombok.RequiredArgsConstructor;

@@ -1,6 +1,7 @@
 package com.example.fanplatform.community.presentation.controller;
 
-import com.example.fanplatform.community.application.FeedPage;
+import com.example.common.page.PageResult;
+import com.example.fanplatform.community.application.FeedItemView;
 import com.example.fanplatform.community.application.GetFeedUseCase;
 import com.example.fanplatform.community.presentation.advice.GlobalExceptionHandler;
 import com.example.fanplatform.community.testsupport.JwtTestHelper;
@@ -57,7 +58,7 @@ class FeedControllerSliceTest {
     @Test
     @DisplayName("GET /api/community/feed (empty follows) → 200 + empty content + envelope")
     void feed_emptyResult_returns200() throws Exception {
-        FeedPage page = new FeedPage(List.of(), 0, 20, 0L, 0, false);
+        PageResult<FeedItemView> page = new PageResult<>(List.of(), 0, 20, 0L, 0);
         when(getFeedUseCase.execute(any(), eq(0), eq(20))).thenReturn(page);
 
         mockMvc.perform(get("/api/community/feed?page=0&size=20")
@@ -74,7 +75,7 @@ class FeedControllerSliceTest {
     @Test
     @DisplayName("GET /api/community/feed (default page/size when omitted) → 200 with defaults page=0 size=20")
     void feed_defaultPagination() throws Exception {
-        FeedPage page = new FeedPage(List.of(), 0, 20, 0L, 0, false);
+        PageResult<FeedItemView> page = new PageResult<>(List.of(), 0, 20, 0L, 0);
         when(getFeedUseCase.execute(any(), eq(0), eq(20))).thenReturn(page);
 
         mockMvc.perform(get("/api/community/feed")
