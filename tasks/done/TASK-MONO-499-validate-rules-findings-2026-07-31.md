@@ -8,7 +8,7 @@ Resolve /validate-rules findings from the 2026-07-31 run (1 Critical + 3 Warning
 
 # Status
 
-review
+done
 
 # Owner
 
