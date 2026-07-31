@@ -8,7 +8,7 @@ ADR-MONO-058 D4 — promote security-chain assembly (`ServiceLevelOAuth2Config` 
 
 # Status
 
-review
+done
 
 # Owner
 
