@@ -8,7 +8,7 @@ ADR-MONO-058 D6 — iam-platform adopts the canonical `IamClientCredentialsToken
 
 # Status
 
-review
+done
 
 # Owner
 
