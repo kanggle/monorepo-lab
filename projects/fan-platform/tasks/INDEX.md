@@ -66,6 +66,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
+- `TASK-FAN-BE-041-adr058-d6-iam-client-credentials-token-provider-adoption.md` — ADR-MONO-058 § D6 (fan-platform only) — community-service switches its local `IamClientCredentialsTokenProvider` (the ADR's cited best-of-breed parameterized-`scope` shape, but still missing the UTF-8 Basic-auth encoding + connect/read timeouts) to the shared, already-fixed class in `libs/java-security`. **선행**: `tasks/ready/TASK-MONO-501-adr058-d6-iam-client-credentials-token-provider-promotion.md` (not yet landed) must be `done` first.
+- `TASK-FAN-BE-042-adr058-d7-event-dedupe-port-adoption.md` — ADR-MONO-058 § D7 (`EventDedupePort` sub-pattern only, per § 1.1's audit table) — notification-service (fan-platform's only event consumer) replaces its hand-rolled check-then-act `ProcessedEventStore`/`JpaProcessedEventStore` with the shared `EventDedupePort` from `libs/java-messaging` (already a declared dependency). `ResilienceClientFactory` explicitly out of scope — fan is not listed under that sub-pattern.
+- `TASK-FAN-BE-043-adr058-d3-pagination-carrier-adoption.md` — ADR-MONO-058 § D3 — community-service (collapses two local shapes, `domain.post.PageResult` + `application.FeedPage`), artist-service (`PageMeta`), and notification-service (`NotificationPage`, missing `totalPages` — an additive contract fix) adopt `libs/java-common.PageResult`/`PageQuery` in place of their hand-rolled carriers. membership-service confirmed out of scope (no hand-rolled pagination carrier exists there).
+- `TASK-FAN-BE-044-adr058-d4-security-chain-assembly-adoption.md` — ADR-MONO-058 § D4 (fan-platform only) — all four servlet services (community/artist/membership/notification) adopt the shared security-chain-assembly builder from `libs/java-security-servlet` in place of their `ServiceLevelOAuth2Config` + generic `SecurityConfig` tail. Filed **standalone**, deviating from § 6's suggested D1+D4 bundling, because D1 already landed separately (`TASK-FAN-BE-040`). **선행**: `tasks/ready/TASK-MONO-500-adr058-d4-security-chain-assembly-promotion.md` (not yet landed) must be `done` first.
+
 ## in-progress
 
 ## review

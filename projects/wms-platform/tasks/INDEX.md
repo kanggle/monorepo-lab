@@ -67,7 +67,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-567-adr058-d2-error-envelope-exception-handler-adoption.md` — ADR-MONO-058 D2 (wms-platform): adopt `libs/java-web-servlet.CommonGlobalExceptionHandler`/`libs/java-web.ErrorResponse` for the non-domain exception-handler tail across the 5 wms servlet services (master/inventory/outbound/inbound/admin); resolves D2's wire-shape (`ApiErrorEnvelope`'s nested `{error:{...}}` shape) + status-code blockers as wms's own design decision. 선행 없음.
+- `TASK-BE-568-adr058-d3-pagination-carrier-adoption.md` — ADR-MONO-058 D3 (wms-platform): adopt `libs/java-common.PageResult`/`PageQuery` in `inventory-service`/`outbound-service`/`inbound-service` (each hand-rolls a divergent pagination carrier); `master-service` already fully adopted, `admin-service`'s Spring-Data-`Page<T>` pattern flagged but scoped out. 선행 없음.
+- `TASK-BE-569-adr058-d4-security-chain-assembly-adoption.md` — ADR-MONO-058 D4 (wms-platform): adopt the security-chain-assembly builder in all 5 servlet services' `OAuth2ResourceServerConfig`/`SecurityConfig` generic tail. **선행: `TASK-MONO-500` (root promotion task, NOT YET LANDED).**
+- `TASK-BE-570-adr058-d5-public-paths-shared-value-type-adoption.md` — ADR-MONO-058 D5 (wms-platform): introduce a per-service `PublicPaths` class backed by the already-shared `libs/java-security-servlet.PublicPathSet`, replacing the inline `PUBLIC_PATHS` Ant-pattern array duplicated across the 5 wms servlet services' `SecurityConfig`. 선행 없음 (`PublicPathSet` already promoted via fan-platform `TASK-FAN-BE-038`/`039`).
+- `TASK-BE-571-adr058-d7-event-dedupe-port-adoption.md` — ADR-MONO-058 D7 (wms-platform, `EventDedupePort` sub-pattern only): adopt `libs/java-messaging.dedupe.EventDedupePort` in `outbound-service`/`inventory-service`/`inbound-service`, replacing their hand-rolled local interfaces of identical shape; `admin-service` (LWW-aware, incompatible contract) and `notification-service` (explicit build.gradle opt-out of `libs:java-messaging`) investigated and scoped out with reasoning. 선행 없음.
 
 > 2026-07-20 (`TASK-MONO-451`): 위 두 행은 **디스크에는 `ready/` 에 있는데 이 섹션이 `(empty)` 라고 선언**하고 있었다 — 아래 2026-07-12 노트와 정반대 방향의 같은 결함이다. 그때는 표가 끝난 일을 가리켰고, 이번엔 표가 **살아있는 일을 숨겼다**. 큐를 표로 고르는 사람에게 후자는 **일이 없다는 거짓 보고**다. 이제 `scripts/check-index-queue-drift.sh` 가 양방향으로 대조한다.
 

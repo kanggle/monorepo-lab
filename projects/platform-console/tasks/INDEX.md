@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-_(없음)_
+- `TASK-PC-BE-016-console-bff-generic-error-envelope-adoption.md` — **READY.** `ADR-MONO-058`(ACCEPTED) D2 — console-bff `GlobalExceptionHandler`의 제네릭(비도메인) tail(`handleMethodNotSupported`/`handleMediaTypeNotSupported`/`handleGeneric`)만 `libs/java-web-servlet.CommonGlobalExceptionHandler` 채택 대상으로 교체, 도메인 특화 핸들러(`MissingCredentialException` 등)는 그대로 보존. `basePackages` actuator 스코핑(PR #669 인시던트) 회귀 방지 필수. **참고**: ADR § 1.1 표가 console-bff를 D7(`ResilienceClientFactory` 미채택)에도 걸었으나 실측 결과 이미 `TASK-PC-BE-015`(2026-07-22, 감사보다 이전)로 채택 완료(explicit connect/read timeout 포함) — phantom finding으로 판정, task 미생성. `TASK-MONO-495` 분할 산물. 분석=Sonnet 5(세션) / 구현 권장=Sonnet.
 
 _(직전 착수)_ `TASK-PC-BE-015` — console-bff 의 spec-vs-reality resilience 갭 봉합. `architecture.md` § Resilience(D5.A)·`RestClientConfig` javadoc·계약 § 2.4.9 가 모두 "per-leg circuit-breaker keyed by `(domain, route)`" 를 단언하지만 `src/main` 에 resilience4j import 0건(타임아웃 쌍만 존재). `libs/java-common` 의 `ResilienceClientFactory` 를 **그대로 채택**해 13개 `(domain, route)` 레그 전부 CB+bounded retry 뒤로 이동하고, 죽어 있던 `circuit_open`/`CIRCUIT_OPEN` 분류를 실제 emitter 로 살린다(console-web zod `DEGRADED_REASONS` 는 이미 소비 준비 완료). 문서의 `libs/java-web` 인용도 오답(그 모듈엔 resilience 코드 0) → `libs/java-common` 정정. 분석=Opus 5 / 구현 권장=Opus.
 
