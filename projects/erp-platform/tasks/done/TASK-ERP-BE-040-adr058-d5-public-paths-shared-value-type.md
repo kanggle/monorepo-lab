@@ -10,7 +10,7 @@ ADR-MONO-058 D5 (erp-platform, all four servlet services) — adopt the already-
 
 # Status
 
-review
+done
 
 # Owner
 
