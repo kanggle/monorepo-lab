@@ -65,14 +65,22 @@ spring:
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
 
 # ADR-MONO-042 (TASK-BE-402) — seller-operator account provisioning via account-service
-# internal EPs, authenticated with a GAP client_credentials Bearer JWT (mirrors
-# admin-service IamClientCredentialsTokenProvider, ADR-005 단계 3b). All seller
-# provisioning is FAIL-SOFT (D3): account-service unavailability never blocks onboarding.
+# internal EPs, authenticated with a GAP client_credentials Bearer JWT: the shared
+# IamClientCredentialsTokenProvider (ADR-MONO-058 § D6, libs/java-security, TASK-BE-568;
+# origin ADR-005 단계 3b). All seller provisioning is FAIL-SOFT (D3): account-service
+# unavailability never blocks onboarding.
 iam:
   internal-client:
     token-uri: ${IAM_TOKEN_URI:http://localhost:8081/oauth2/token}
     client-id: ${IAM_CLIENT_ID:product-service-client}
     client-secret: ${IAM_CLIENT_SECRET:secret}
+    # explicit connect/read timeouts for the token-acquisition call itself (TASK-BE-568 —
+    # the local copy this replaced used RestClient.create() with NO timeout at all).
+    # Default 5s/5s matches ecommerce/batch-worker's already-fixed copy of this same class.
+    # Distinct namespace from iam.downstream.* below, which times the seller-provisioning
+    # call to account-service, not this token call.
+    connect-timeout-ms: ${IAM_INTERNAL_CLIENT_CONNECT_TIMEOUT_MS:5000}
+    read-timeout-ms: ${IAM_INTERNAL_CLIENT_READ_TIMEOUT_MS:5000}
   account-service:
     base-url: ${ACCOUNT_SERVICE_BASE_URL:http://localhost:8081}
   downstream:

@@ -10,6 +10,10 @@ dependencies {
     // Shared Web
     implementation project(':libs:java-web')
 
+    // IamClientCredentialsTokenProvider — outbound IAM client_credentials token acquisition
+    // for AccountServiceSellerProvisioner (ADR-MONO-058 § D6, TASK-BE-568).
+    implementation project(':libs:java-security')
+
     // Observability
     implementation project(':libs:java-observability')
 
