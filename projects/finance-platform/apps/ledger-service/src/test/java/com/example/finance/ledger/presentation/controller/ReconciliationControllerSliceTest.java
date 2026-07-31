@@ -7,8 +7,8 @@ import com.example.finance.ledger.application.IngestStatementUseCase;
 import com.example.finance.ledger.application.QueryReconciliationUseCase;
 import com.example.finance.ledger.application.ResolveDiscrepancyUseCase;
 import com.example.finance.ledger.application.SetFxToleranceCommand;
+import com.example.common.page.PageResult;
 import com.example.finance.ledger.application.SetFxToleranceUseCase;
-import com.example.finance.ledger.application.view.DiscrepancyPageView;
 import com.example.finance.ledger.application.view.DiscrepancyView;
 import com.example.finance.ledger.application.view.FxToleranceView;
 import com.example.finance.ledger.application.view.ReconciliationMatchView;
@@ -189,7 +189,7 @@ class ReconciliationControllerSliceTest extends AbstractLedgerControllerSliceTes
                 70_000L, 0L, Currency.KRW, Instant.parse("2026-01-31T00:00:00Z")));
         when(queryReconciliation.listDiscrepancies(eq("finance"),
                 eq(DiscrepancyStatus.OPEN), anyInt(), anyInt()))
-                .thenReturn(new DiscrepancyPageView(List.of(d), 0, 20, 1, 1));
+                .thenReturn(new PageResult<>(List.of(d), 0, 20, 1, 1));
 
         mockMvc.perform(get("/api/finance/ledger/reconciliation/discrepancies")
                         .param("status", "OPEN"))

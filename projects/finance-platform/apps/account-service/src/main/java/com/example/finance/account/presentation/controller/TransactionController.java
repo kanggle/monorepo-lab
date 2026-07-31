@@ -1,5 +1,6 @@
 package com.example.finance.account.presentation.controller;
 
+import com.example.common.page.PageResult;
 import com.example.finance.account.application.AccountApplicationService;
 import com.example.finance.account.application.AccountApplicationService.CaptureResult;
 import com.example.finance.account.application.AccountApplicationService.HoldResult;
@@ -16,7 +17,6 @@ import com.example.finance.account.presentation.dto.CaptureHoldRequest;
 import com.example.finance.account.presentation.dto.HoldResponse;
 import com.example.finance.account.presentation.dto.MoneyResponse;
 import com.example.finance.account.presentation.dto.PlaceHoldRequest;
-import com.example.finance.account.presentation.dto.PageResponse;
 import com.example.finance.account.presentation.dto.TransactionResponse;
 import com.example.finance.account.presentation.dto.TransferRequest;
 import com.example.finance.account.presentation.support.IdempotentExecution;
@@ -129,18 +129,16 @@ public class TransactionController {
     }
 
     @GetMapping("/{id}/transactions")
-    public ResponseEntity<ApiEnvelope<PageResponse<TransactionResponse>>> list(
+    public ResponseEntity<ApiEnvelope<PageResult<TransactionResponse>>> list(
             @PathVariable String id,
             @RequestParam(required = false) String type,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         ActorContext actor = ActorContextResolver.currentOrThrow();
-        com.example.finance.account.application.view.TransactionPageView p =
+        PageResult<TransactionView> p =
                 service.listTransactions(id, actor, type, status, page, size);
-        PageResponse<TransactionResponse> body = new PageResponse<>(
-                p.content().stream().map(TransactionResponse::from).toList(),
-                p.page(), p.size(), p.totalElements(), p.totalPages());
+        PageResult<TransactionResponse> body = p.map(TransactionResponse::from);
         Map<String, Object> meta = new LinkedHashMap<>();
         meta.put("page", p.page());
         meta.put("size", p.size());

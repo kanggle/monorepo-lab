@@ -1,6 +1,6 @@
 package com.example.finance.ledger.application;
 
-import com.example.finance.ledger.application.view.DiscrepancyPageView;
+import com.example.common.page.PageResult;
 import com.example.finance.ledger.application.view.DiscrepancyView;
 import com.example.finance.ledger.application.view.StatementView;
 import com.example.finance.ledger.domain.error.LedgerErrors.ReconciliationDiscrepancyNotFoundException;
@@ -43,11 +43,11 @@ public class QueryReconciliationUseCase {
     }
 
     @Transactional(readOnly = true)
-    public DiscrepancyPageView listDiscrepancies(String tenantId, DiscrepancyStatus status,
+    public PageResult<DiscrepancyView> listDiscrepancies(String tenantId, DiscrepancyStatus status,
                                                  int page, int size) {
         DiscrepancyPage p = reconciliationRepository.findDiscrepancies(tenantId, status, page, size);
         List<DiscrepancyView> content = p.content().stream().map(DiscrepancyView::from).toList();
-        return new DiscrepancyPageView(content, p.page(), p.size(),
+        return new PageResult<>(content, p.page(), p.size(),
                 p.totalElements(), p.totalPages());
     }
 

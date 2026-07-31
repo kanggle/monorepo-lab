@@ -1,8 +1,8 @@
 package com.example.finance.ledger.presentation.controller;
 
+import com.example.common.page.PageResult;
 import com.example.finance.ledger.application.ActorContext;
 import com.example.finance.ledger.application.QueryLedgerUseCase;
-import com.example.finance.ledger.application.view.AccountLinePageView;
 import com.example.finance.ledger.application.view.AccountLineView;
 import com.example.finance.ledger.application.view.JournalEntryView;
 import com.example.finance.ledger.application.view.JournalLineView;
@@ -100,7 +100,7 @@ class LedgerControllerSliceTest extends AbstractLedgerControllerSliceTest {
     @Test
     @DisplayName("GET /accounts/{code}/entries → 200 paginated")
     void getAccountEntries() throws Exception {
-        AccountLinePageView page = new AccountLinePageView(List.of(
+        PageResult<AccountLineView> page = new PageResult<>(List.of(
                 new AccountLineView("e-1", Instant.now(), EntryDirection.CREDIT, krw(150_000))),
                 0, 20, 1, 1);
         when(queryLedger.getAccountLines("CASH_CLEARING", "finance", 0, 20)).thenReturn(page);

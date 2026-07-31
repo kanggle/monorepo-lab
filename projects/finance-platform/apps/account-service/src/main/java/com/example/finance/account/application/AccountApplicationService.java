@@ -1,6 +1,7 @@
 package com.example.finance.account.application;
 
 import com.example.common.id.UuidV7;
+import com.example.common.page.PageResult;
 import com.example.finance.account.application.command.CaptureHoldCommand;
 import com.example.finance.account.application.command.OpenAccountCommand;
 import com.example.finance.account.application.command.PlaceHoldCommand;
@@ -13,7 +14,6 @@ import com.example.finance.account.application.port.outbound.CompliancePort;
 import com.example.finance.account.application.view.AccountView;
 import com.example.finance.account.application.view.BalanceView;
 import com.example.finance.account.application.view.HoldView;
-import com.example.finance.account.application.view.TransactionPageView;
 import com.example.finance.account.application.view.TransactionView;
 import com.example.finance.account.domain.account.Account;
 import com.example.finance.account.domain.account.ActorType;
@@ -356,7 +356,7 @@ public class AccountApplicationService {
     }
 
     @Transactional(readOnly = true)
-    public TransactionPageView listTransactions(String accountId,
+    public PageResult<TransactionView> listTransactions(String accountId,
                                                ActorContext actor,
                                                String type,
                                                String status,
@@ -369,7 +369,7 @@ public class AccountApplicationService {
                 ? null : TransactionStatus.valueOf(status.trim().toUpperCase());
         TransactionRepository.Page p = transactionRepository.findByAccountId(
                 accountId, actor.tenantId(), t, s, page, size);
-        return new TransactionPageView(
+        return new PageResult<>(
                 p.content().stream().map(TransactionView::from).toList(),
                 p.page(), p.size(), p.totalElements(), p.totalPages());
     }

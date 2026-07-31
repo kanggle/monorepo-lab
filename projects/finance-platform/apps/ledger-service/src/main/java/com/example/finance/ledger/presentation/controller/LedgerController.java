@@ -1,8 +1,9 @@
 package com.example.finance.ledger.presentation.controller;
 
+import com.example.common.page.PageResult;
 import com.example.finance.ledger.application.ActorContext;
 import com.example.finance.ledger.application.QueryLedgerUseCase;
-import com.example.finance.ledger.application.view.AccountLinePageView;
+import com.example.finance.ledger.application.view.AccountLineView;
 import com.example.finance.ledger.infrastructure.security.ActorContextResolver;
 import com.example.finance.ledger.presentation.dto.AccountLineResponse;
 import com.example.finance.ledger.presentation.dto.ApiEnvelope;
@@ -49,7 +50,7 @@ public class LedgerController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         ActorContext actor = ActorContextResolver.currentOrThrow();
-        AccountLinePageView pageView =
+        PageResult<AccountLineView> pageView =
                 queryLedger.getAccountLines(ledgerAccountCode, actor.tenantId(), page, size);
         List<AccountLineResponse> body = pageView.content().stream()
                 .map(AccountLineResponse::from).toList();
