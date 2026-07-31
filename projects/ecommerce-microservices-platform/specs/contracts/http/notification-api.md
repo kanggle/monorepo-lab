@@ -37,7 +37,8 @@ List notifications for the authenticated user.
   ],
   "page": 0,
   "size": 20,
-  "totalElements": 10
+  "totalElements": 10,
+  "totalPages": 1
 }
 ```
 

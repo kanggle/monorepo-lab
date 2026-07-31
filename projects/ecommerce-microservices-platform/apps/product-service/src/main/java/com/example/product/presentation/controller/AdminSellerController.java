@@ -1,7 +1,7 @@
 package com.example.product.presentation.controller;
 
+import com.example.common.page.PageResult;
 import com.example.common.summary.PeriodSummary;
-import com.example.product.application.dto.SellerListResult;
 import com.example.product.application.dto.SellerSummary;
 import com.example.product.application.service.RegisterSellerService;
 import com.example.product.application.service.SellerQueryService;
@@ -73,7 +73,7 @@ public class AdminSellerController {
             @RequestParam(defaultValue = "20") int size) {
         validateAdminRole(userRole);
         int cappedSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
-        SellerListResult result = sellerQueryService.listSellers(Math.max(page, 0), cappedSize);
+        PageResult<SellerSummary> result = sellerQueryService.listSellers(Math.max(page, 0), cappedSize);
         return ResponseEntity.ok(SellerListResponse.from(result));
     }
 

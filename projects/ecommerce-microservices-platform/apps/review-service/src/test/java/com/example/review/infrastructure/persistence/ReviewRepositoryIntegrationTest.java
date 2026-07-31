@@ -1,10 +1,11 @@
 package com.example.review.infrastructure.persistence;
 
+import com.example.common.page.PageResult;
 import com.example.review.application.port.PurchaseVerificationPort;
 import com.example.review.application.port.ReviewQueryPort;
+import com.example.review.application.result.MyReviewItem;
 import com.example.review.application.result.ReviewListResult;
 import com.example.review.application.result.ReviewSummaryResult;
-import com.example.review.application.result.MyReviewListResult;
 import com.example.review.domain.model.Review;
 import com.example.review.domain.model.ReviewStatus;
 import com.example.review.ReviewServiceApplication;
@@ -152,6 +153,7 @@ class ReviewRepositoryIntegrationTest {
         assertThat(result.totalElements()).isEqualTo(3);
         assertThat(result.totalReviews()).isEqualTo(3);
         assertThat(result.averageRating()).isGreaterThan(0);
+        assertThat(result.totalPages()).isEqualTo(2);
     }
 
     @Test
@@ -224,9 +226,10 @@ class ReviewRepositoryIntegrationTest {
         reviewRepository.save(Review.create(userId, UUID.randomUUID(), "상품1", 5, "제목1", "내용1", TEST_CLOCK));
         reviewRepository.save(Review.create(userId, UUID.randomUUID(), "상품2", 4, "제목2", "내용2", TEST_CLOCK));
 
-        MyReviewListResult result = reviewQueryPort.findByUserId(userId, 0, 20);
+        PageResult<MyReviewItem> result = reviewQueryPort.findByUserId(userId, 0, 20);
 
         assertThat(result.content()).hasSize(2);
         assertThat(result.totalElements()).isEqualTo(2);
+        assertThat(result.totalPages()).isEqualTo(1);
     }
 }

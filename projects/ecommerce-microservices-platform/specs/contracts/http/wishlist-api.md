@@ -76,7 +76,8 @@ Get the authenticated user's wishlist with pagination.
   ],
   "page": 0,
   "size": 20,
-  "totalElements": 100
+  "totalElements": 100,
+  "totalPages": 5
 }
 ```
 

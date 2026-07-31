@@ -5,7 +5,7 @@ import com.example.common.page.PageResult;
 import com.example.notification.application.port.in.QueryNotificationUseCase;
 import com.example.notification.application.port.out.NotificationRepository;
 import com.example.notification.application.result.GetNotificationResult;
-import com.example.notification.application.result.ListNotificationsResult;
+import com.example.notification.application.result.NotificationSummary;
 import com.example.notification.domain.exception.NotificationNotFoundException;
 import com.example.notification.domain.exception.UnauthorizedNotificationAccessException;
 import com.example.notification.domain.model.Notification;
@@ -20,15 +20,9 @@ public class NotificationQueryService implements QueryNotificationUseCase {
 
     private final NotificationRepository notificationRepository;
 
-    public PageResult<ListNotificationsResult.NotificationSummary> getNotifications(String userId, PageQuery pageQuery) {
+    public PageResult<NotificationSummary> getNotifications(String userId, PageQuery pageQuery) {
         PageResult<Notification> pageResult = notificationRepository.findByUserId(userId, pageQuery);
-        return new PageResult<>(
-                pageResult.content().stream().map(ListNotificationsResult.NotificationSummary::from).toList(),
-                pageResult.page(),
-                pageResult.size(),
-                pageResult.totalElements(),
-                pageResult.totalPages()
-        );
+        return pageResult.map(NotificationSummary::from);
     }
 
     public GetNotificationResult getNotificationDetail(String userId, String notificationId) {

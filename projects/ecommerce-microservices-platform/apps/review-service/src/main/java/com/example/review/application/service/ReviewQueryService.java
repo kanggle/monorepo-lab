@@ -1,7 +1,8 @@
 package com.example.review.application.service;
 
+import com.example.common.page.PageResult;
 import com.example.review.application.port.ReviewQueryPort;
-import com.example.review.application.result.MyReviewListResult;
+import com.example.review.application.result.MyReviewItem;
 import com.example.review.application.result.ReviewListResult;
 import com.example.review.application.result.ReviewSummaryResult;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +26,7 @@ public class ReviewQueryService {
         return reviewQueryPort.getSummaryByProductId(productId);
     }
 
-    public MyReviewListResult getMyReviews(UUID userId, int page, int size) {
+    public PageResult<MyReviewItem> getMyReviews(UUID userId, int page, int size) {
         return reviewQueryPort.findByUserId(userId, page, size);
     }
 }

@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
-import com.example.user.application.result.UserListPageResult;
+import com.example.common.page.PageResult;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -173,12 +173,12 @@ class UserApiContractTest {
     class AdminApi {
 
         @Test
-        @DisplayName("GET /api/admin/users 응답은 {content, page, size, totalElements}만 포함한다")
+        @DisplayName("GET /api/admin/users 응답은 {content, page, size, totalElements, totalPages}만 포함한다")
         void listUsers_response_containsSpecFields() throws Exception {
             UserProfileSummaryResult summary = new UserProfileSummaryResult(
                     UUID.randomUUID(), "test@example.com", "홍길동", "길동이", "ACTIVE", Instant.now());
             given(userProfileService.listUsers(isNull(), isNull(), eq(0), eq(20)))
-                    .willReturn(new UserListPageResult(List.of(summary), 1L, 1, 0, 20));
+                    .willReturn(new PageResult<>(List.of(summary), 0, 20, 1L, 1));
 
             MvcResult result = mockMvc.perform(get("/api/admin/users")
                             .header("X-User-Role", "ECOMMERCE_OPERATOR"))
@@ -186,7 +186,7 @@ class UserApiContractTest {
                     .andReturn();
 
             String json = result.getResponse().getContentAsString();
-            assertFieldsMatch(json, Set.of("content", "page", "size", "totalElements"),
+            assertFieldsMatch(json, Set.of("content", "page", "size", "totalElements", "totalPages"),
                     SPEC_REF + " GET /api/admin/users 200");
 
             JsonNode item = objectMapper.readTree(json).get("content").get(0);

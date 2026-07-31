@@ -53,7 +53,8 @@ Search products by keyword and filters.
   },
   "page": 0,
   "size": 20,
-  "totalElements": 100
+  "totalElements": 100,
+  "totalPages": 5
 }
 ```
 

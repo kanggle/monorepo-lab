@@ -1,6 +1,6 @@
 package com.example.product.application.service;
 
-import com.example.product.application.dto.SellerListResult;
+import com.example.common.page.PageResult;
 import com.example.product.application.dto.SellerSummary;
 import com.example.product.application.port.SellerQueryPort;
 import com.example.product.domain.exception.SellerNotFoundException;
@@ -36,13 +36,13 @@ class SellerQueryServiceTest {
     @Test
     @DisplayName("listSellers - 포트의 paged 결과를 그대로 위임 반환한다")
     void listSellers_delegatesToPort() {
-        SellerListResult result = new SellerListResult(
+        PageResult<SellerSummary> result = new PageResult<>(
                 List.of(new SellerSummary("seller-a1", "셀러 A1",
                         com.example.product.domain.model.SellerStatus.ACTIVE, null, null)),
-                0, 20, 1L);
+                0, 20, 1L, 1);
         given(sellerQueryPort.findAll(0, 20)).willReturn(result);
 
-        SellerListResult actual = sellerQueryService.listSellers(0, 20);
+        PageResult<SellerSummary> actual = sellerQueryService.listSellers(0, 20);
 
         assertThat(actual).isSameAs(result);
     }

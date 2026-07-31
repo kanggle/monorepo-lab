@@ -4,7 +4,6 @@ import com.example.user.application.command.AddWishlistItemCommand;
 import com.example.user.application.result.AddWishlistItemResult;
 import com.example.user.application.result.WishlistCheckResult;
 import com.example.user.application.result.WishlistItemResult;
-import com.example.user.application.result.WishlistPageResult;
 import com.example.user.domain.exception.AlreadyInWishlistException;
 import com.example.user.domain.exception.UserProfileNotFoundException;
 import com.example.user.domain.exception.WishlistItemNotFoundException;
@@ -54,7 +53,7 @@ public class WishlistService {
         return AddWishlistItemResult.from(saved);
     }
 
-    public WishlistPageResult getWishlist(UUID userId, int page, int size) {
+    public PageResult<WishlistItemResult> getWishlist(UUID userId, int page, int size) {
         PageQuery pageQuery = PageQuery.of(page, size, "addedAt", "DESC");
 
         PageResult<WishlistItem> pageResult = wishlistItemRepository.findAllByUserId(userId, pageQuery);
@@ -67,11 +66,7 @@ public class WishlistService {
                 ? Map.of()
                 : productInfoProvider.getProductInfos(productIds);
 
-        List<WishlistItemResult> content = pageResult.content().stream()
-                .map(item -> toWishlistItemResult(item, productInfos.get(item.getProductId())))
-                .toList();
-
-        return new WishlistPageResult(content, pageQuery.page(), pageQuery.size(), pageResult.totalElements());
+        return pageResult.map(item -> toWishlistItemResult(item, productInfos.get(item.getProductId())));
     }
 
     @Transactional

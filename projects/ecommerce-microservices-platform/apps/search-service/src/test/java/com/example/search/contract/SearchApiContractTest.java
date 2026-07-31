@@ -1,5 +1,6 @@
 package com.example.search.contract;
 
+import com.example.common.page.PageResult;
 import com.example.search.adapter.inbound.web.SearchController;
 import com.example.search.application.dto.SearchProductResult;
 import com.example.search.application.service.SearchProductService;
@@ -49,15 +50,16 @@ class SearchApiContractTest {
     // ─── GET /api/search/products — 200 ─────────────────────────────────
 
     @Test
-    @DisplayName("GET /api/search/products 응답은 {query, content, facets, page, size, totalElements}만 포함한다")
+    @DisplayName("GET /api/search/products 응답은 {query, content, facets, page, size, totalElements, totalPages}만 포함한다")
     void searchProducts_response_containsSpecFields() throws Exception {
         SearchProductResult result = new SearchProductResult(
-                List.of(SearchDocument.of("p1", "노트북", "설명", 1000000L, "ON_SALE", "cat1", 5)),
+                new PageResult<>(
+                        List.of(SearchDocument.of("p1", "노트북", "설명", 1000000L, "ON_SALE", "cat1", 5)),
+                        0, 20, 1L, 1),
                 new FacetResult(
                         List.of(new FacetResult.CategoryFacet("cat1", 1L)),
                         List.of(new FacetResult.PriceRangeFacet(null, 10000L, 0L))
-                ),
-                1L
+                )
         );
         given(searchProductService.search(any())).willReturn(result);
 
@@ -68,7 +70,7 @@ class SearchApiContractTest {
         String json = mvcResult.getResponse().getContentAsString();
         JsonNode root = objectMapper.readTree(json);
 
-        assertFieldsMatch(root, Set.of("query", "content", "facets", "page", "size", "totalElements"),
+        assertFieldsMatch(root, Set.of("query", "content", "facets", "page", "size", "totalElements", "totalPages"),
                 SPEC_REF + " GET /api/search/products 200");
 
         JsonNode item = root.get("content").get(0);

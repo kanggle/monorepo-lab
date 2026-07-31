@@ -1,6 +1,6 @@
 package com.example.product.presentation.dto;
 
-import com.example.product.application.dto.SellerListResult;
+import com.example.common.page.PageResult;
 import com.example.product.application.dto.SellerSummary;
 
 import java.time.Instant;
@@ -9,13 +9,14 @@ import java.util.List;
 /**
  * Operator seller-list envelope (ADR-MONO-030 Step 4 facet f). Mirrors
  * {@link ProductListResponse}: {@code content[]}, {@code page}, {@code size},
- * {@code totalElements}.
+ * {@code totalElements}, {@code totalPages}.
  */
 public record SellerListResponse(
         List<SellerSummaryItem> content,
         int page,
         int size,
-        long totalElements
+        long totalElements,
+        int totalPages
 ) {
     public record SellerSummaryItem(
             String sellerId,
@@ -25,11 +26,11 @@ public record SellerListResponse(
             Instant updatedAt
     ) {}
 
-    public static SellerListResponse from(SellerListResult result) {
+    public static SellerListResponse from(PageResult<SellerSummary> result) {
         List<SellerSummaryItem> items = result.content().stream()
                 .map(SellerListResponse::toItem)
                 .toList();
-        return new SellerListResponse(items, result.page(), result.size(), result.totalElements());
+        return new SellerListResponse(items, result.page(), result.size(), result.totalElements(), result.totalPages());
     }
 
     private static SellerSummaryItem toItem(SellerSummary summary) {

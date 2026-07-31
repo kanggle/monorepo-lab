@@ -71,6 +71,7 @@ List reviews for a product. Public endpoint (no auth required).
   "page": 0,
   "size": 20,
   "totalElements": 15,
+  "totalPages": 1,
   "averageRating": 4.3,
   "totalReviews": 15
 }
@@ -122,7 +123,8 @@ List reviews written by the authenticated user.
   ],
   "page": 0,
   "size": 20,
-  "totalElements": 3
+  "totalElements": 3,
+  "totalPages": 1
 }
 ```
 

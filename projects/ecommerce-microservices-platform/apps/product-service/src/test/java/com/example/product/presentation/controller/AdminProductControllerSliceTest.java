@@ -1,5 +1,6 @@
 package com.example.product.presentation.controller;
 
+import com.example.common.page.PageResult;
 import com.example.product.TestProductServiceApplication;
 import com.example.product.application.dto.AdjustStockResult;
 import com.example.product.application.dto.ProductListResult;
@@ -89,7 +90,7 @@ class AdminProductControllerSliceTest {
     void list_noRoleHeader_returns200WithPagedSummary() throws Exception {
         UUID id = UUID.randomUUID();
         ProductSummary summary = new ProductSummary(id, "상품", ProductStatus.ON_SALE, 10000L, null, null, "seller-a1");
-        ProductListResult result = new ProductListResult(List.of(summary), 0, 1, 42L);
+        ProductListResult result = new ProductListResult(new PageResult<>(List.of(summary), 0, 1, 42L, 42));
         given(queryProductService.findAll(any(), any(), any(), anyInt(), anyInt())).willReturn(result);
 
         // No X-User-Role header at all — the read MUST NOT require ECOMMERCE_OPERATOR (the
@@ -103,7 +104,8 @@ class AdminProductControllerSliceTest {
                 .andExpect(jsonPath("$.content[0].id").value(id.toString()))
                 .andExpect(jsonPath("$.totalElements").value(42))
                 .andExpect(jsonPath("$.page").value(0))
-                .andExpect(jsonPath("$.size").value(1));
+                .andExpect(jsonPath("$.size").value(1))
+                .andExpect(jsonPath("$.totalPages").value(42));
     }
 
     @Test
@@ -111,7 +113,7 @@ class AdminProductControllerSliceTest {
     void list_pageSize1_surfacesTotalCatalogCount() throws Exception {
         // metric semantics: console-bff calls ?page=0&size=1 (no status filter);
         // totalElements is the tenant's full catalog size.
-        ProductListResult result = new ProductListResult(List.of(), 0, 1, 7L);
+        ProductListResult result = new ProductListResult(new PageResult<>(List.of(), 0, 1, 7L, 7));
         given(queryProductService.findAll(isNull(), isNull(), isNull(), eq(0), eq(1))).willReturn(result);
 
         mockMvc.perform(get("/api/admin/products")
@@ -124,7 +126,7 @@ class AdminProductControllerSliceTest {
     @Test
     @DisplayName("GET /api/admin/products - size 가 MAX_PAGE_SIZE(100) 로 cap 된다 (공개 컨트롤러 미러)")
     void list_oversizedPage_isCappedAt100() throws Exception {
-        ProductListResult result = new ProductListResult(List.of(), 0, 100, 0L);
+        ProductListResult result = new ProductListResult(new PageResult<>(List.of(), 0, 100, 0L, 0));
         given(queryProductService.findAll(isNull(), isNull(), isNull(), eq(0), eq(100))).willReturn(result);
 
         mockMvc.perform(get("/api/admin/products")
@@ -137,7 +139,7 @@ class AdminProductControllerSliceTest {
     @Test
     @DisplayName("GET /api/admin/products?name=셔츠 - name 필터가 서비스로 전달된다 (공개 컨트롤러 미러, TASK-BE-420)")
     void list_withNameFilter_passedThrough() throws Exception {
-        ProductListResult result = new ProductListResult(List.of(), 0, 20, 0L);
+        ProductListResult result = new ProductListResult(new PageResult<>(List.of(), 0, 20, 0L, 0));
         org.mockito.ArgumentCaptor<String> nameCaptor = org.mockito.ArgumentCaptor.forClass(String.class);
         given(queryProductService.findAll(any(), any(), nameCaptor.capture(), anyInt(), anyInt())).willReturn(result);
 

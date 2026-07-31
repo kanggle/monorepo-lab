@@ -10,7 +10,8 @@ public record ProductListResponse(
         List<ProductSummaryItem> content,
         int page,
         int size,
-        long totalElements
+        long totalElements,
+        int totalPages
 ) {
     public record ProductSummaryItem(
             String id,
@@ -26,7 +27,7 @@ public record ProductListResponse(
         List<ProductSummaryItem> items = result.content().stream()
                 .map(ProductListResponse::toItem)
                 .toList();
-        return new ProductListResponse(items, result.page(), result.size(), result.totalElements());
+        return new ProductListResponse(items, result.page(), result.size(), result.totalElements(), result.totalPages());
     }
 
     private static ProductSummaryItem toItem(ProductSummary summary) {

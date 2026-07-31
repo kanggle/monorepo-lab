@@ -1,8 +1,9 @@
 package com.example.review.interfaces.controller;
 
 import com.example.review.TestReviewServiceApplication;
+import com.example.common.page.PageResult;
 import com.example.review.application.result.CreateReviewResult;
-import com.example.review.application.result.MyReviewListResult;
+import com.example.review.application.result.MyReviewItem;
 import com.example.review.application.result.ReviewListResult;
 import com.example.review.application.result.ReviewSummaryResult;
 import com.example.review.application.result.UpdateReviewResult;
@@ -158,11 +159,12 @@ class ReviewControllerSliceTest {
     @Test
     @DisplayName("GET /api/reviews/products/{productId} - 상품별 리뷰 목록 조회 성공")
     void getProductReviews_success_returns200() throws Exception {
-        ReviewListResult result = new ReviewListResult(
+        PageResult<ReviewListResult.ReviewItem> page = new PageResult<>(
                 List.of(new ReviewListResult.ReviewItem(
                         REVIEW_ID, USER_ID, 5, "Good", "Content", Instant.now(), Instant.now())),
-                0, 20, 1, 5.0, 1
+                0, 20, 1, 1
         );
+        ReviewListResult result = new ReviewListResult(page, 5.0, 1);
         given(reviewQueryService.getProductReviews(eq(PRODUCT_ID), anyInt(), anyInt(), anyString()))
                 .willReturn(result);
 
@@ -171,7 +173,8 @@ class ReviewControllerSliceTest {
                 .andExpect(jsonPath("$.content").isArray())
                 .andExpect(jsonPath("$.content[0].reviewId").value(REVIEW_ID.toString()))
                 .andExpect(jsonPath("$.averageRating").value(5.0))
-                .andExpect(jsonPath("$.totalReviews").value(1));
+                .andExpect(jsonPath("$.totalReviews").value(1))
+                .andExpect(jsonPath("$.totalPages").value(1));
     }
 
     @Test
@@ -193,10 +196,10 @@ class ReviewControllerSliceTest {
     @Test
     @DisplayName("GET /api/reviews/me - 내 리뷰 목록 조회 성공")
     void getMyReviews_success_returns200() throws Exception {
-        MyReviewListResult result = new MyReviewListResult(
-                List.of(new MyReviewListResult.MyReviewItem(
+        PageResult<MyReviewItem> result = new PageResult<>(
+                List.of(new MyReviewItem(
                         REVIEW_ID, PRODUCT_ID, "테스트상품", 5, "Good", "Content", Instant.now())),
-                0, 20, 1
+                0, 20, 1, 1
         );
         given(reviewQueryService.getMyReviews(eq(USER_ID), anyInt(), anyInt())).willReturn(result);
 
@@ -204,7 +207,8 @@ class ReviewControllerSliceTest {
                         .header("X-User-Id", USER_ID.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").isArray())
-                .andExpect(jsonPath("$.totalElements").value(1));
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.totalPages").value(1));
     }
 
     @Test

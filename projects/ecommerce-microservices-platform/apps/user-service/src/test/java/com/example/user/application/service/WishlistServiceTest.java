@@ -3,7 +3,7 @@ package com.example.user.application.service;
 import com.example.user.application.command.AddWishlistItemCommand;
 import com.example.user.application.result.AddWishlistItemResult;
 import com.example.user.application.result.WishlistCheckResult;
-import com.example.user.application.result.WishlistPageResult;
+import com.example.user.application.result.WishlistItemResult;
 import com.example.user.domain.exception.AlreadyInWishlistException;
 import com.example.user.domain.exception.UserProfileNotFoundException;
 import com.example.user.domain.exception.WishlistAccessDeniedException;
@@ -115,13 +115,14 @@ class WishlistServiceTest {
             given(productInfoProvider.getProductInfos(anySet()))
                     .willReturn(Map.of(PRODUCT_ID, productInfo));
 
-            WishlistPageResult result = wishlistService.getWishlist(USER_ID, 0, 20);
+            PageResult<WishlistItemResult> result = wishlistService.getWishlist(USER_ID, 0, 20);
 
             assertThat(result.content()).hasSize(1);
             assertThat(result.content().get(0).productName()).isEqualTo("테스트상품");
             assertThat(result.content().get(0).productPrice()).isEqualTo(15000);
             assertThat(result.content().get(0).productStatus()).isEqualTo("ACTIVE");
             assertThat(result.totalElements()).isEqualTo(1);
+            assertThat(result.totalPages()).isEqualTo(1);
         }
 
         @Test
@@ -133,7 +134,7 @@ class WishlistServiceTest {
                     .willReturn(pageResult);
             given(productInfoProvider.getProductInfos(anySet())).willReturn(Map.of());
 
-            WishlistPageResult result = wishlistService.getWishlist(USER_ID, 0, 20);
+            PageResult<WishlistItemResult> result = wishlistService.getWishlist(USER_ID, 0, 20);
 
             assertThat(result.content()).hasSize(1);
             assertThat(result.content().get(0).productName()).isNull();
@@ -147,7 +148,7 @@ class WishlistServiceTest {
             given(wishlistItemRepository.findAllByUserId(any(UUID.class), any(PageQuery.class)))
                     .willReturn(pageResult);
 
-            WishlistPageResult result = wishlistService.getWishlist(USER_ID, 0, 20);
+            PageResult<WishlistItemResult> result = wishlistService.getWishlist(USER_ID, 0, 20);
 
             assertThat(result.content()).isEmpty();
             assertThat(result.totalElements()).isZero();
@@ -160,7 +161,7 @@ class WishlistServiceTest {
             given(wishlistItemRepository.findAllByUserId(any(UUID.class), any(PageQuery.class)))
                     .willReturn(pageResult);
 
-            WishlistPageResult result = wishlistService.getWishlist(USER_ID, -1, 20);
+            PageResult<WishlistItemResult> result = wishlistService.getWishlist(USER_ID, -1, 20);
 
             assertThat(result.page()).isZero();
         }
@@ -172,7 +173,7 @@ class WishlistServiceTest {
             given(wishlistItemRepository.findAllByUserId(any(UUID.class), any(PageQuery.class)))
                     .willReturn(pageResult);
 
-            WishlistPageResult result = wishlistService.getWishlist(USER_ID, 0, 200);
+            PageResult<WishlistItemResult> result = wishlistService.getWishlist(USER_ID, 0, 200);
 
             assertThat(result.size()).isEqualTo(100);
         }

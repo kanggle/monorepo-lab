@@ -1,5 +1,6 @@
 package com.example.search.adapter.inbound.web;
 
+import com.example.common.page.PageQuery;
 import com.example.search.adapter.inbound.web.dto.SearchProductResponse;
 import com.example.search.application.dto.SearchProductQuery;
 import com.example.search.application.dto.SearchProductResult;
@@ -38,9 +39,10 @@ public class SearchController {
 
         SearchFilter filter = SearchFilter.of(q, categoryId, minPrice, maxPrice, status);
         SearchSort searchSort = SearchSort.from(sort);
-        SearchProductQuery query = new SearchProductQuery(filter, searchSort, page, size);
+        PageQuery pageQuery = PageQuery.of(page, size, null, null);
+        SearchProductQuery query = new SearchProductQuery(filter, searchSort, pageQuery);
 
         SearchProductResult result = searchProductUseCase.search(query);
-        return ResponseEntity.ok(SearchProductResponse.from(q, result, page, query.size()));
+        return ResponseEntity.ok(SearchProductResponse.from(q, result, query.page(), query.size()));
     }
 }

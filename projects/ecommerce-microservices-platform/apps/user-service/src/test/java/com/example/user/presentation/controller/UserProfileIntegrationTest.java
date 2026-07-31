@@ -164,7 +164,8 @@ class UserProfileIntegrationTest {
                     .andExpect(jsonPath("$.content").isArray())
                     .andExpect(jsonPath("$.page").value(0))
                     .andExpect(jsonPath("$.size").isNumber())
-                    .andExpect(jsonPath("$.totalElements").isNumber());
+                    .andExpect(jsonPath("$.totalElements").isNumber())
+                    .andExpect(jsonPath("$.totalPages").isNumber());
         }
 
         @Test

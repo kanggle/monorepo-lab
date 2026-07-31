@@ -6,6 +6,7 @@ import co.elastic.clients.elasticsearch.core.search.HitsMetadata;
 import co.elastic.clients.elasticsearch.core.search.TotalHits;
 import co.elastic.clients.elasticsearch.core.search.TotalHitsRelation;
 import co.elastic.clients.elasticsearch.core.search.Hit;
+import com.example.common.page.PageQuery;
 import com.example.search.application.dto.SearchProductQuery;
 import com.example.search.application.dto.SearchProductResult;
 import com.example.search.domain.model.SearchFilter;
@@ -45,7 +46,7 @@ class ElasticsearchQueryAdapterTest {
 
     private SearchProductQuery createQuery() {
         SearchFilter filter = SearchFilter.of("노트북", null, null, null, null);
-        return new SearchProductQuery(filter, SearchSort.RELEVANCE, 0, 20);
+        return new SearchProductQuery(filter, SearchSort.RELEVANCE, new PageQuery(0, 20, null, null));
     }
 
     @Test
@@ -77,6 +78,7 @@ class ElasticsearchQueryAdapterTest {
 
         assertThat(result.content()).isEmpty();
         assertThat(result.totalElements()).isEqualTo(0L);
+        assertThat(result.totalPages()).isEqualTo(0);
         assertThat(result.facets().categories()).isEmpty();
         assertThat(result.facets().priceRanges()).isEmpty();
     }
@@ -139,6 +141,7 @@ class ElasticsearchQueryAdapterTest {
 
         assertThat(result.content()).hasSize(1);
         assertThat(result.content().get(0).productId()).isEqualTo("p1");
+        assertThat(result.totalPages()).isEqualTo(1);
     }
 
     @Test

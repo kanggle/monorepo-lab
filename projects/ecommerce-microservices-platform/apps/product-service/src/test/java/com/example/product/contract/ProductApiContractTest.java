@@ -1,5 +1,6 @@
 package com.example.product.contract;
 
+import com.example.common.page.PageResult;
 import com.example.product.TestProductServiceApplication;
 import com.example.product.application.dto.AdjustStockResult;
 import com.example.product.application.dto.ProductDetail;
@@ -97,19 +98,19 @@ class ProductApiContractTest {
     // ─── GET /api/products — 200 ────────────────────────────────────────
 
     @Test
-    @DisplayName("GET /api/products 응답은 {content, page, size, totalElements}만 포함한다")
+    @DisplayName("GET /api/products 응답은 {content, page, size, totalElements, totalPages}만 포함한다")
     void getProducts_response_containsSpecFields() throws Exception {
         UUID prodId = UUID.randomUUID();
         ProductSummary summary = new ProductSummary(prodId, "노트북", ProductStatus.ON_SALE, 1000000L, null);
         given(queryProductService.findAll(any(), any(), any(), any(int.class), any(int.class)))
-                .willReturn(new ProductListResult(List.of(summary), 0, 20, 1));
+                .willReturn(new ProductListResult(new PageResult<>(List.of(summary), 0, 20, 1L, 1)));
 
         MvcResult result = mockMvc.perform(get("/api/products"))
                 .andExpect(status().isOk())
                 .andReturn();
 
         String json = result.getResponse().getContentAsString();
-        assertFieldsMatch(json, Set.of("content", "page", "size", "totalElements"),
+        assertFieldsMatch(json, Set.of("content", "page", "size", "totalElements", "totalPages"),
                 SPEC_REF + " GET /api/products 200");
 
         JsonNode item = objectMapper.readTree(json).get("content").get(0);

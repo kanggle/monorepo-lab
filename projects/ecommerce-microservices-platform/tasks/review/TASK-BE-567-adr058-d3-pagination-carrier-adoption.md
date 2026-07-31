@@ -8,7 +8,7 @@ ADR-MONO-058 D3 — adopt `libs/java-common.PageResult`/`PageQuery` in place of 
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -111,24 +111,59 @@ individually.
 
 # Acceptance Criteria
 
-- [ ] `user-service`, `review-service`, `product-service`, `notification-service`
+- [x] `user-service`, `review-service`, `product-service`, `notification-service`
       application-layer pagination carriers are backed by (compose or directly return)
       `com.example.common.page.PageResult`/`PageQuery`; hand-rolled equivalents are
       removed or reduced to a thin domain-specific wrapper around the shared type.
-- [ ] `search-service`'s pagination/query surface is reconciled with `PageQuery`/
+      Evidence: `WishlistPageResult`/`UserListPageResult` (user), `MyReviewListResult`
+      (review, replaced by `PageResult<MyReviewItem>`), `SellerListResult` (product,
+      replaced by `PageResult<SellerSummary>`), `ListNotificationsResult`
+      (notification, replaced by `PageResult<NotificationSummary>`) deleted outright
+      (no extra fields to preserve). `ReviewListResult` (review, extra
+      `averageRating`/`totalReviews`) and `ProductListResult` (product, kept concrete
+      because `QueryProductService.findAll` is `@Cacheable` via Redis +
+      `GenericJackson2JsonRedisSerializer` — see class javadoc for the documented
+      reasoning not to cache a raw parameterized `PageResult<T>` root value) now
+      compose `PageResult<T>` with delegate accessors.
+- [x] `search-service`'s pagination/query surface is reconciled with `PageQuery`/
       `PageResult` to the extent Elasticsearch's result shape allows, with any
       deliberate divergence (e.g. keeping `facets` outside `PageResult`) documented in
       the code, not silently dropped.
-- [ ] Every affected presentation-layer response DTO now exposes `totalPages`
+      Evidence: `SearchProductQuery` composes `PageQuery` for the request side
+      (`ElasticsearchQueryAdapter` computes ES `from`/`size` directly from it);
+      `SearchProductResult` composes `PageResult<SearchDocument>` + `FacetResult
+      facets` kept outside per the task's own Edge Cases guidance. `search-service`
+      did not have `libs:java-common` on its classpath at all (unlike the ADR's
+      general finding) — added `implementation project(':libs:java-common')` to
+      `apps/search-service/build.gradle`.
+      `ProductCatalogHttpAdapter`'s local `page`/`size` ints (an outbound REST-call
+      loop, not an application-layer pagination carrier) are deliberately NOT
+      adopted — documented in that class's javadoc why forcing `PageResult` onto a
+      cross-service Jackson deserialization target doesn't fit.
+- [x] Every affected presentation-layer response DTO now exposes `totalPages`
       (previously absent in all five).
-- [ ] Each affected service's `specs/contracts/http/<service>-api.md` is checked for
+      `WishlistPageResponse`, `AdminUserListResponse`, `ReviewListResponse`,
+      `MyReviewListResponse`, `ProductListResponse`, `SellerListResponse`,
+      `NotificationListResponse`, `SearchProductResponse` all updated.
+- [x] Each affected service's `specs/contracts/http/<service>-api.md` is checked for
       whether the added `totalPages` field requires a contract-doc update — updated if
       the contract enumerates response fields explicitly (most likely) or noted as
       already-permissive if not.
-- [ ] `./gradlew :projects:ecommerce-microservices-platform:apps:<service>:test` GREEN
+      All enumerate fields explicitly — updated: `user-api.md`, `wishlist-api.md`,
+      `review-api.md`, `product-api.md` (both `GET /api/products` and
+      `GET /api/admin/products` list responses, plus `GET /api/admin/sellers`),
+      `notification-api.md`, `search-api.md`.
+- [x] `./gradlew :projects:ecommerce-microservices-platform:apps:<service>:test` GREEN
       for each of the 5 touched services.
-- [ ] No existing endpoint's `content`/pagination field naming changes for any
+      Verified individually: user-service, review-service, product-service,
+      notification-service, search-service — all `BUILD SUCCESSFUL`.
+- [x] No existing endpoint's `content`/pagination field naming changes for any
       already-adopted service (out of scope, must remain untouched).
+      Re-verified at implementation time (grep for `PageResult`/`PageQuery` usage):
+      `order-service`, `shipping-service`, `promotion-service`, `settlement-service`
+      still import/use the shared type as the earlier finding stated — no changes
+      made to any of the four; `git status` confirms zero diff under those four
+      services' directories.
 
 ---
 
@@ -241,9 +276,9 @@ Follow, per touched service:
 
 # Definition of Done
 
-- [ ] All 5 services adopt `PageResult`/`PageQuery` (or a documented, deliberate
+- [x] All 5 services adopt `PageResult`/`PageQuery` (or a documented, deliberate
       partial adoption for `search-service`)
-- [ ] `totalPages` present in all 5 previously-missing response shapes
-- [ ] Contracts checked/updated where required
-- [ ] Tests added/passing for all 5 services
-- [ ] Ready for review
+- [x] `totalPages` present in all 5 previously-missing response shapes
+- [x] Contracts checked/updated where required
+- [x] Tests added/passing for all 5 services
+- [x] Ready for review

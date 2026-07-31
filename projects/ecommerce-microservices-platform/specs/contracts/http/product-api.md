@@ -41,7 +41,8 @@ List products with filtering and pagination.
   ],
   "page": 0,
   "size": 20,
-  "totalElements": 100
+  "totalElements": 100,
+  "totalPages": 5
 }
 ```
 
@@ -56,7 +57,7 @@ seller; an absent / `*` scope returns the full tenant catalog (net-zero, F1).
 ### GET /api/admin/products
 Operator-plane tenant-scoped product list (snapshot). Mirrors the public
 `GET /api/products` query path exactly (`content[]` / `page` / `size` /
-`totalElements`) but on the **operator plane** under `/api/admin/products`.
+`totalElements` / `totalPages`) but on the **operator plane** under `/api/admin/products`.
 Added by **TASK-MONO-243** (ADR-MONO-030 Step 4 facet a-후속-2) as the producer
 read behind the platform-console Operator Overview ecommerce snapshot leg
 (§ 2.4.9.1 row 6) — console-bff calls it with `?page=0&size=1` and surfaces
@@ -85,7 +86,8 @@ read behind the platform-console Operator Overview ecommerce snapshot leg
   ],
   "page": 0,
   "size": 1,
-  "totalElements": 42
+  "totalElements": 42,
+  "totalPages": 42
 }
 ```
 
@@ -419,7 +421,8 @@ Tenant-scoped paged list of sellers (ADR-MONO-030 Step 4 facet f). Requires admi
   ],
   "page": 0,
   "size": 20,
-  "totalElements": 5
+  "totalElements": 5,
+  "totalPages": 1
 }
 ```
 

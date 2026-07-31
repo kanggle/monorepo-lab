@@ -16,6 +16,21 @@ import java.util.List;
  * - 리스트 조회(/api/products)로 productId를 페이지 단위로 순회
  * - 각 productId에 대해 상세 조회(/api/products/{id})로 variant 정보까지 획득
  *   (variant의 stock 합산 필요)
+ *
+ * <p><b>ADR-MONO-058 D3 (TASK-BE-567) — deliberate non-adoption of {@code
+ * PageQuery}/{@code PageResult} here.</b> This adapter's {@code page}/{@code size}
+ * are pure loop-control ints for paginating an outbound HTTP call to
+ * product-service's public JSON API — not an application-layer pagination carrier
+ * of this service's own. The local {@code PageResponse} record is intentionally
+ * decoupled from product-service's actual response DTO (see comment below) so this
+ * adapter tolerates unrelated field changes on that side; reusing the shared
+ * {@code PageResult<T>} record as a Jackson deserialization target would not work
+ * cleanly here anyway (its generic {@code content} field cannot resolve a concrete
+ * element type without the {@code @class} type hints {@code PageResult} relies on
+ * elsewhere, which plain REST JSON does not carry). {@code ElasticsearchQueryAdapter}
+ * (the actual search-service pagination carrier) adopts {@code PageQuery}/
+ * {@code PageResult} — see {@link com.example.search.application.dto.SearchProductQuery}
+ * / {@link com.example.search.application.dto.SearchProductResult}.
  */
 @Slf4j
 @Component

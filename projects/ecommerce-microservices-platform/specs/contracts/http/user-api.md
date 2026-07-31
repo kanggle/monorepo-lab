@@ -234,7 +234,8 @@ List user profiles with filtering and pagination. Requires admin role.
   ],
   "page": 0,
   "size": 20,
-  "totalElements": 100
+  "totalElements": 100,
+  "totalPages": 5
 }
 ```
 

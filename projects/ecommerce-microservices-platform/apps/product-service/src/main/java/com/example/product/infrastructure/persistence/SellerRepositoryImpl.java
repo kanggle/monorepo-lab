@@ -1,6 +1,6 @@
 package com.example.product.infrastructure.persistence;
 
-import com.example.product.application.dto.SellerListResult;
+import com.example.common.page.PageResult;
 import com.example.product.application.dto.SellerSummary;
 import com.example.product.application.port.SellerQueryPort;
 import com.example.product.domain.model.Seller;
@@ -14,6 +14,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -67,18 +68,15 @@ class SellerRepositoryImpl implements SellerRepository, SellerQueryPort {
 
     @Override
     @Transactional(readOnly = true)
-    public SellerListResult findAll(int page, int size) {
+    public PageResult<SellerSummary> findAll(int page, int size) {
         Page<SellerJpaEntity> result = jpaRepository.findByTenantId(
                 TenantContext.currentTenant(),
                 PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")));
-        return new SellerListResult(
-                result.getContent().stream()
-                        .map(SellerJpaEntity::toDomain)
-                        .map(SellerSummary::from)
-                        .toList(),
-                result.getNumber(),
-                result.getSize(),
-                result.getTotalElements());
+        List<SellerSummary> content = result.getContent().stream()
+                .map(SellerJpaEntity::toDomain)
+                .map(SellerSummary::from)
+                .toList();
+        return new PageResult<>(content, result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
     }
 
     @Override

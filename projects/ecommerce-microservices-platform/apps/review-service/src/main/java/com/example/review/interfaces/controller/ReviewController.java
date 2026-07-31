@@ -2,8 +2,9 @@ package com.example.review.interfaces.controller;
 
 import com.example.review.application.command.CreateReviewCommand;
 import com.example.review.application.command.UpdateReviewCommand;
+import com.example.common.page.PageResult;
 import com.example.review.application.result.CreateReviewResult;
-import com.example.review.application.result.MyReviewListResult;
+import com.example.review.application.result.MyReviewItem;
 import com.example.review.application.result.ReviewListResult;
 import com.example.review.application.result.ReviewSummaryResult;
 import com.example.review.application.ReviewSortFields;
@@ -82,7 +83,7 @@ public class ReviewController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        MyReviewListResult result = reviewQueryService.getMyReviews(UUID.fromString(userId), sanitizePage(page), sanitizeSize(size));
+        PageResult<MyReviewItem> result = reviewQueryService.getMyReviews(UUID.fromString(userId), sanitizePage(page), sanitizeSize(size));
         return ResponseEntity.ok(MyReviewListResponse.from(result));
     }
 
