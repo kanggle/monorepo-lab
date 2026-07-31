@@ -8,7 +8,7 @@ ADR-MONO-058 D7 (EventDedupePort) — adopt `libs/java-messaging.EventDedupePort
 
 # Status
 
-review
+done
 
 # Owner
 
