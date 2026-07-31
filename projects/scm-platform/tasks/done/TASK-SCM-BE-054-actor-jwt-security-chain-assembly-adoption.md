@@ -8,7 +8,7 @@ Adopt ADR-MONO-058 D1 (actor/JWT-claim cluster) + D4 (security-chain assembly) â
 
 # Status
 
-review
+done
 
 # Owner
 
