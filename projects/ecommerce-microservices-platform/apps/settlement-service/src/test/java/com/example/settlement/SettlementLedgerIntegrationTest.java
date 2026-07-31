@@ -84,11 +84,11 @@ class SettlementLedgerIntegrationTest {
 
     @Test
     void full_round_trip_accrues_then_nets_to_zero_on_refund() {
-        orderPlacedConsumer.handle(new OrderPlacedEvent("e-placed-1", "OrderPlaced", "tenantA",
+        orderPlacedConsumer.handle(new OrderPlacedEvent("00000000-0000-0000-0000-000000000001", "OrderPlaced", "tenantA",
                 new OrderPlacedEvent.Payload("order-1", List.of(
                         new OrderPlacedEvent.Item(15_000L, 2, "seller-1"))))); // gross 30000
 
-        paymentCompletedConsumer.handle(new PaymentEvent("e-paid-1", "PaymentCompleted",
+        paymentCompletedConsumer.handle(new PaymentEvent("00000000-0000-0000-0000-000000000002", "PaymentCompleted",
                 new PaymentEvent.Payload("order-1", "pay-1", 30_000L, null, "2026-06-13T00:00:00Z", null)));
 
         TenantContext.set("tenantA");
@@ -98,7 +98,7 @@ class SettlementLedgerIntegrationTest {
         TenantContext.clear();
 
         // Refund → reversal nets back to zero.
-        paymentRefundedConsumer.handle(new PaymentEvent("e-refund-1", "PaymentRefunded",
+        paymentRefundedConsumer.handle(new PaymentEvent("00000000-0000-0000-0000-000000000003", "PaymentRefunded",
                 new PaymentEvent.Payload("order-1", "refund-1", 30_000L, true, null, "2026-06-13T01:00:00Z")));
 
         TenantContext.set("tenantA");
@@ -110,11 +110,11 @@ class SettlementLedgerIntegrationTest {
 
     @Test
     void accrual_tenant_is_derived_from_snapshot_not_payment_event() {
-        orderPlacedConsumer.handle(new OrderPlacedEvent("e-placed-2", "OrderPlaced", "tenantB",
+        orderPlacedConsumer.handle(new OrderPlacedEvent("00000000-0000-0000-0000-000000000004", "OrderPlaced", "tenantB",
                 new OrderPlacedEvent.Payload("order-2", List.of(
                         new OrderPlacedEvent.Item(10_000L, 1, "seller-9")))));
         // Payment event carries NO tenant — accrual must still land on tenantB.
-        paymentCompletedConsumer.handle(new PaymentEvent("e-paid-2", "PaymentCompleted",
+        paymentCompletedConsumer.handle(new PaymentEvent("00000000-0000-0000-0000-000000000005", "PaymentCompleted",
                 new PaymentEvent.Payload("order-2", "pay-2", 10_000L, null, null, null)));
 
         TenantContext.set("tenantB");
@@ -125,10 +125,10 @@ class SettlementLedgerIntegrationTest {
 
     @Test
     void cross_tenant_accruals_do_not_leak_M6() {
-        orderPlacedConsumer.handle(new OrderPlacedEvent("e-placed-3", "OrderPlaced", "tenantA",
+        orderPlacedConsumer.handle(new OrderPlacedEvent("00000000-0000-0000-0000-000000000006", "OrderPlaced", "tenantA",
                 new OrderPlacedEvent.Payload("order-3", List.of(
                         new OrderPlacedEvent.Item(20_000L, 1, "shared-seller")))));
-        paymentCompletedConsumer.handle(new PaymentEvent("e-paid-3", "PaymentCompleted",
+        paymentCompletedConsumer.handle(new PaymentEvent("00000000-0000-0000-0000-000000000007", "PaymentCompleted",
                 new PaymentEvent.Payload("order-3", "pay-3", 20_000L, null, null, null)));
 
         // tenantB operator must NOT see tenantA's accrual for the same seller id.
@@ -145,11 +145,11 @@ class SettlementLedgerIntegrationTest {
 
     @Test
     void seller_scope_restricts_reads_within_tenant_AC8() {
-        orderPlacedConsumer.handle(new OrderPlacedEvent("e-placed-4", "OrderPlaced", "tenantC",
+        orderPlacedConsumer.handle(new OrderPlacedEvent("00000000-0000-0000-0000-000000000008", "OrderPlaced", "tenantC",
                 new OrderPlacedEvent.Payload("order-4", List.of(
                         new OrderPlacedEvent.Item(10_000L, 1, "seller-x"),
                         new OrderPlacedEvent.Item(10_000L, 1, "seller-y")))));
-        paymentCompletedConsumer.handle(new PaymentEvent("e-paid-4", "PaymentCompleted",
+        paymentCompletedConsumer.handle(new PaymentEvent("00000000-0000-0000-0000-000000000009", "PaymentCompleted",
                 new PaymentEvent.Payload("order-4", "pay-4", 20_000L, null, null, null)));
 
         TenantContext.set("tenantC");
@@ -167,16 +167,16 @@ class SettlementLedgerIntegrationTest {
 
     @Test
     void replayed_payment_does_not_double_accrue_AC6() {
-        orderPlacedConsumer.handle(new OrderPlacedEvent("e-placed-5", "OrderPlaced", "tenantD",
+        orderPlacedConsumer.handle(new OrderPlacedEvent("00000000-0000-0000-0000-000000000010", "OrderPlaced", "tenantD",
                 new OrderPlacedEvent.Payload("order-5", List.of(
                         new OrderPlacedEvent.Item(10_000L, 1, "seller-d")))));
 
-        PaymentEvent paid = new PaymentEvent("e-paid-5", "PaymentCompleted",
+        PaymentEvent paid = new PaymentEvent("00000000-0000-0000-0000-000000000011", "PaymentCompleted",
                 new PaymentEvent.Payload("order-5", "pay-5", 10_000L, null, null, null));
         paymentCompletedConsumer.handle(paid);
         // Replay with a fresh event_id but the same (order_id, payment_id) — the
         // (order_id, payment_id) guard must still prevent a double accrual.
-        paymentCompletedConsumer.handle(new PaymentEvent("e-paid-5-dup", "PaymentCompleted",
+        paymentCompletedConsumer.handle(new PaymentEvent("00000000-0000-0000-0000-000000000012", "PaymentCompleted",
                 new PaymentEvent.Payload("order-5", "pay-5", 10_000L, null, null, null)));
 
         TenantContext.set("tenantD");
