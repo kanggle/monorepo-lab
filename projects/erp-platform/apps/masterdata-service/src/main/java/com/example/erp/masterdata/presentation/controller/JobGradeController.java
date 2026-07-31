@@ -8,7 +8,7 @@ import com.example.erp.masterdata.application.command.Commands.UpdateJobGradeCom
 import com.example.erp.masterdata.application.view.JobGradeView;
 import com.example.erp.masterdata.domain.common.PageResult;
 import com.example.erp.masterdata.domain.jobgrade.repository.JobGradeListFilter;
-import com.example.erp.masterdata.infrastructure.security.ActorContextResolver;
+import com.example.security.servlet.actor.ActorContextResolver;
 import com.example.erp.masterdata.presentation.dto.ApiEnvelope;
 import com.example.erp.masterdata.presentation.dto.JobGradeRequests.CreateJobGradeRequest;
 import com.example.erp.masterdata.presentation.dto.JobGradeRequests.RetireJobGradeRequest;
@@ -43,7 +43,7 @@ public class JobGradeController {
     public ResponseEntity<?> create(
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody CreateJobGradeRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(),
                 "POST /api/erp/masterdata/job-grades",
                 idempotencyKey, req, () -> {
@@ -60,7 +60,7 @@ public class JobGradeController {
             @RequestParam(required = false) Boolean active,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         PageResult<JobGradeView> result = service.listJobGrades(actor,
                 new JobGradeListFilter(asOf, active), page, size);
         return ResponseEntity.ok(
@@ -71,7 +71,7 @@ public class JobGradeController {
     public ResponseEntity<ApiEnvelope<JobGradeView>> get(
             @PathVariable String id,
             @RequestParam(required = false) LocalDate asOf) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         JobGradeView v = service.getJobGrade(id, actor, asOf);
         return ResponseEntity.ok(ApiEnvelope.of(v));
     }
@@ -81,7 +81,7 @@ public class JobGradeController {
             @PathVariable String id,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody UpdateJobGradeRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(),
                 "PATCH /api/erp/masterdata/job-grades/{id}",
                 idempotencyKey, req, () -> {
@@ -96,7 +96,7 @@ public class JobGradeController {
             @PathVariable String id,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody RetireJobGradeRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(),
                 "POST /api/erp/masterdata/job-grades/{id}/retire",
                 idempotencyKey, req, () -> {

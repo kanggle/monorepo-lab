@@ -4,7 +4,7 @@ import com.example.erp.approval.application.ActorContext;
 import com.example.erp.approval.application.ApprovalApplicationService;
 import com.example.erp.approval.application.view.ApprovalSummaryView;
 import com.example.erp.approval.domain.common.PageResult;
-import com.example.erp.approval.infrastructure.security.ActorContextResolver;
+import com.example.security.servlet.actor.ActorContextResolver;
 import com.example.erp.approval.presentation.dto.ApiEnvelope;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -31,7 +31,7 @@ public class ApprovalInboxController {
     public ResponseEntity<ApiEnvelope<List<ApprovalSummaryView>>> inbox(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         PageResult<ApprovalSummaryView> result = service.inbox(actor, page, size);
         return ResponseEntity.ok(
                 ApiEnvelope.ofList(result.content(), page, size, result.totalElements()));

@@ -55,6 +55,10 @@ class ErpTenantGatePolicyTest {
 
     private static ServiceLevelOAuth2Config wiredConfig() {
         ServiceLevelOAuth2Config config = new ServiceLevelOAuth2Config();
+        // jwkSetUri is only read to construct the NimbusJwtDecoder; the validator chain this
+        // suite asserts is built from the same ResourceServerChainAssembler entry point
+        // (ADR-MONO-058 D4), which requires a non-blank URI. Never fetched here.
+        ReflectionTestUtils.setField(config, "jwkSetUri", "http://jwks.invalid/jwks");
         ReflectionTestUtils.setField(config, "requiredTenantId", "erp");
         ReflectionTestUtils.setField(config, "allowedIssuersCsv", ISSUER);
         return config;

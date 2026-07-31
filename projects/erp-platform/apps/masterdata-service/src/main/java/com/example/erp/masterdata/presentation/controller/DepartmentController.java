@@ -9,7 +9,7 @@ import com.example.erp.masterdata.application.command.Commands.UpdateDepartmentC
 import com.example.erp.masterdata.application.view.DepartmentView;
 import com.example.erp.masterdata.domain.common.PageResult;
 import com.example.erp.masterdata.domain.department.repository.DepartmentListFilter;
-import com.example.erp.masterdata.infrastructure.security.ActorContextResolver;
+import com.example.security.servlet.actor.ActorContextResolver;
 import com.example.erp.masterdata.presentation.dto.ApiEnvelope;
 import com.example.erp.masterdata.presentation.dto.DepartmentRequests.CreateDepartmentRequest;
 import com.example.erp.masterdata.presentation.dto.DepartmentRequests.MoveParentRequest;
@@ -50,7 +50,7 @@ public class DepartmentController {
     public ResponseEntity<?> create(
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody CreateDepartmentRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(),
                 "POST /api/erp/masterdata/departments",
                 idempotencyKey, req, () -> {
@@ -68,7 +68,7 @@ public class DepartmentController {
             @RequestParam(required = false) String parentId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         PageResult<DepartmentView> result = service.listDepartments(actor,
                 new DepartmentListFilter(asOf, active, parentId), page, size);
         return ResponseEntity.ok(
@@ -79,7 +79,7 @@ public class DepartmentController {
     public ResponseEntity<ApiEnvelope<DepartmentView>> get(
             @PathVariable String id,
             @RequestParam(required = false) LocalDate asOf) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         DepartmentView v = service.getDepartment(id, actor, asOf);
         return ResponseEntity.ok(ApiEnvelope.of(v));
     }
@@ -89,7 +89,7 @@ public class DepartmentController {
             @PathVariable String id,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody UpdateDepartmentRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(),
                 "PATCH /api/erp/masterdata/departments/{id}",
                 idempotencyKey, req, () -> {
@@ -104,7 +104,7 @@ public class DepartmentController {
             @PathVariable String id,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody RetireDepartmentRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(),
                 "POST /api/erp/masterdata/departments/{id}/retire",
                 idempotencyKey, req, () -> {
@@ -119,7 +119,7 @@ public class DepartmentController {
             @PathVariable String id,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody MoveParentRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(),
                 "POST /api/erp/masterdata/departments/{id}/move-parent",
                 idempotencyKey, req, () -> {

@@ -8,7 +8,7 @@ import com.example.erp.masterdata.application.command.Commands.UpdateEmployeeCom
 import com.example.erp.masterdata.application.view.EmployeeView;
 import com.example.erp.masterdata.domain.common.PageResult;
 import com.example.erp.masterdata.domain.employee.repository.EmployeeListFilter;
-import com.example.erp.masterdata.infrastructure.security.ActorContextResolver;
+import com.example.security.servlet.actor.ActorContextResolver;
 import com.example.erp.masterdata.presentation.dto.ApiEnvelope;
 import com.example.erp.masterdata.presentation.dto.EmployeeRequests.CreateEmployeeRequest;
 import com.example.erp.masterdata.presentation.dto.EmployeeRequests.RetireEmployeeRequest;
@@ -43,7 +43,7 @@ public class EmployeeController {
     public ResponseEntity<?> create(
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody CreateEmployeeRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(),
                 "POST /api/erp/masterdata/employees",
                 idempotencyKey, req, () -> {
@@ -63,7 +63,7 @@ public class EmployeeController {
             @RequestParam(required = false) String costCenterId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         PageResult<EmployeeView> result = service.listEmployees(actor,
                 new EmployeeListFilter(asOf, active, departmentId, costCenterId), page, size);
         return ResponseEntity.ok(
@@ -74,7 +74,7 @@ public class EmployeeController {
     public ResponseEntity<ApiEnvelope<EmployeeView>> get(
             @PathVariable String id,
             @RequestParam(required = false) LocalDate asOf) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         EmployeeView v = service.getEmployee(id, actor, asOf);
         return ResponseEntity.ok(ApiEnvelope.of(v));
     }
@@ -84,7 +84,7 @@ public class EmployeeController {
             @PathVariable String id,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody UpdateEmployeeRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(),
                 "PATCH /api/erp/masterdata/employees/{id}",
                 idempotencyKey, req, () -> {
@@ -100,7 +100,7 @@ public class EmployeeController {
             @PathVariable String id,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody RetireEmployeeRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(),
                 "POST /api/erp/masterdata/employees/{id}/retire",
                 idempotencyKey, req, () -> {

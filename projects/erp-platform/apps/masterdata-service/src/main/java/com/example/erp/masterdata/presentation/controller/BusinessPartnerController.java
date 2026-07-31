@@ -9,7 +9,7 @@ import com.example.erp.masterdata.application.view.BusinessPartnerView;
 import com.example.erp.masterdata.domain.businesspartner.PartnerType;
 import com.example.erp.masterdata.domain.businesspartner.repository.BusinessPartnerListFilter;
 import com.example.erp.masterdata.domain.common.PageResult;
-import com.example.erp.masterdata.infrastructure.security.ActorContextResolver;
+import com.example.security.servlet.actor.ActorContextResolver;
 import com.example.erp.masterdata.presentation.dto.ApiEnvelope;
 import com.example.erp.masterdata.presentation.dto.BusinessPartnerRequests.CreateBusinessPartnerRequest;
 import com.example.erp.masterdata.presentation.dto.BusinessPartnerRequests.RetireBusinessPartnerRequest;
@@ -44,7 +44,7 @@ public class BusinessPartnerController {
     public ResponseEntity<?> create(
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody CreateBusinessPartnerRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(),
                 "POST /api/erp/masterdata/business-partners",
                 idempotencyKey, req, () -> {
@@ -66,7 +66,7 @@ public class BusinessPartnerController {
             @RequestParam(required = false) String partnerType,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         PageResult<BusinessPartnerView> result = service.listBusinessPartners(actor,
                 new BusinessPartnerListFilter(asOf, active, parsePartnerType(partnerType)), page, size);
         return ResponseEntity.ok(
@@ -89,7 +89,7 @@ public class BusinessPartnerController {
     public ResponseEntity<ApiEnvelope<BusinessPartnerView>> get(
             @PathVariable String id,
             @RequestParam(required = false) LocalDate asOf) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         BusinessPartnerView v = service.getBusinessPartner(id, actor, asOf);
         return ResponseEntity.ok(ApiEnvelope.of(v));
     }
@@ -99,7 +99,7 @@ public class BusinessPartnerController {
             @PathVariable String id,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody UpdateBusinessPartnerRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(),
                 "PATCH /api/erp/masterdata/business-partners/{id}",
                 idempotencyKey, req, () -> {
@@ -118,7 +118,7 @@ public class BusinessPartnerController {
             @PathVariable String id,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody RetireBusinessPartnerRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(),
                 "POST /api/erp/masterdata/business-partners/{id}/retire",
                 idempotencyKey, req, () -> {

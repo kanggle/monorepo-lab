@@ -10,7 +10,7 @@ import com.example.erp.approval.application.command.Commands.WithdrawCommand;
 import com.example.erp.approval.application.view.ApprovalRequestView;
 import com.example.erp.approval.application.view.ApprovalSummaryView;
 import com.example.erp.approval.domain.common.PageResult;
-import com.example.erp.approval.infrastructure.security.ActorContextResolver;
+import com.example.security.servlet.actor.ActorContextResolver;
 import com.example.erp.approval.presentation.dto.ApiEnvelope;
 import com.example.erp.approval.presentation.dto.ApprovalRequests.ApproveRequest;
 import com.example.erp.approval.presentation.dto.ApprovalRequests.CreateRequest;
@@ -50,7 +50,7 @@ public class ApprovalRequestController {
     public ResponseEntity<?> create(
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody CreateRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(),
                 "POST /api/erp/approval/requests",
                 idempotencyKey, req, () -> {
@@ -67,7 +67,7 @@ public class ApprovalRequestController {
             @RequestParam(required = false) String role,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         PageResult<ApprovalSummaryView> result = service.list(actor,
                 ApprovalApplicationService.parseStatus(status),
                 ApprovalApplicationService.parseRole(role), page, size);
@@ -77,7 +77,7 @@ public class ApprovalRequestController {
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiEnvelope<ApprovalRequestView>> detail(@PathVariable String id) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         ApprovalRequestView v = service.detail(id, actor);
         return ResponseEntity.ok(ApiEnvelope.of(v));
     }
@@ -86,7 +86,7 @@ public class ApprovalRequestController {
     public ResponseEntity<?> submit(
             @PathVariable String id,
             @RequestHeader("Idempotency-Key") String idempotencyKey) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(),
                 "POST /api/erp/approval/requests/{id}/submit",
                 idempotencyKey, "{}", () -> {
@@ -100,7 +100,7 @@ public class ApprovalRequestController {
             @PathVariable String id,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody(required = false) ApproveRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         String reason = req == null ? null : req.reason();
         return idempotency.run(actor.tenantId(),
                 "POST /api/erp/approval/requests/{id}/approve",
@@ -115,7 +115,7 @@ public class ApprovalRequestController {
             @PathVariable String id,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody RejectRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(),
                 "POST /api/erp/approval/requests/{id}/reject",
                 idempotencyKey, req, () -> {
@@ -129,7 +129,7 @@ public class ApprovalRequestController {
             @PathVariable String id,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody WithdrawRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(),
                 "POST /api/erp/approval/requests/{id}/withdraw",
                 idempotencyKey, req, () -> {

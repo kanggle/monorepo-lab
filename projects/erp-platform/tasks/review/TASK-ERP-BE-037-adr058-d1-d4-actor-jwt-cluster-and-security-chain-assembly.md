@@ -12,7 +12,7 @@ landed by `TASK-MONO-500`) in all four servlet services, keeping each service's 
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -187,43 +187,43 @@ and `§ D4` both name explicitly. **Out of scope, unchanged.**
 
 # Acceptance Criteria
 
-- [ ] **AC-1 (D1 mechanism promoted, duplicates deleted)** — `approval-service` and
+- [x] **AC-1 (D1 mechanism promoted, duplicates deleted)** — `approval-service` and
       `masterdata-service` no longer declare their own `class ActorContextJwtAuthenticationConverter`
       or `class ActorContextResolver` (repo-wide grep under
       `projects/erp-platform/apps/{approval,masterdata}-service/src/main` → 0 hits for both class
       declarations); both construct the shared generic classes instead.
-- [ ] **AC-2 (D1 policy did NOT move)** — `git diff -- "projects/erp-platform/apps/{approval,masterdata}-service/src/main/java/**/application/ActorContext.java"`
+- [x] **AC-2 (D1 policy did NOT move)** — `git diff -- "projects/erp-platform/apps/{approval,masterdata}-service/src/main/java/**/application/ActorContext.java"`
       is empty: both five-component records, every convenience method (`hasRole`, `hasScope`,
       `isPlatformScope`, `isOperator`, `isEntitledTo`) and every role/scope literal are
       byte-unchanged. No `projects/erp-platform` role/scope string appears anywhere under
       `libs/java-security-servlet/.../actor`.
-- [ ] **AC-3 (D1 claim-lifting parity, integration level)** — for both services, a test drives a
+- [x] **AC-3 (D1 claim-lifting parity, integration level)** — for both services, a test drives a
       request through the real Spring Security filter chain with a really RSA-signed JWT and
       asserts the granted authorities and the resolved `ActorContext` (including
       `dataScopeDepartmentIds`/`entitledDomains`) match today's behavior for both the `roles`-array
       and delimited-`role`-string claim forms. A hand-built `Jwt` or hand-built `ActorContext` does
       not satisfy this AC.
-- [ ] **AC-4 (D4 prerequisite gate honored)** — the PR implementing D4's half is not opened/merged
+- [x] **AC-4 (D4 prerequisite gate honored)** — the PR implementing D4's half is not opened/merged
       before `TASK-MONO-500`'s Status reads `done`; this task's own tracking records the date that
       prerequisite was confirmed.
-- [ ] **AC-5 (D4 adoption, all four services)** — `approval-service`, `masterdata-service`,
+- [x] **AC-5 (D4 adoption, all four services)** — `approval-service`, `masterdata-service`,
       `notification-service`, `read-model-service` all construct their JWT decoder + tenant-claim
       enforcer chain via `TASK-MONO-500`'s builder; each service's own
       `ServiceLevelOAuth2Config`-equivalent file either shrinks to a thin adapter around the
       builder or is deleted per whatever shape `TASK-MONO-500` actually lands.
-- [ ] **AC-6 (D4 no verdict change)** — for each of the four services, existing tests covering: no
+- [x] **AC-6 (D4 no verdict change)** — for each of the four services, existing tests covering: no
       bearer → 401; cross-tenant token → 403 `TENANT_FORBIDDEN`; `SUPER_ADMIN` wildcard-tenant
       READ admit (`TASK-ERP-BE-031`); entitlement-trust dual-accept READ admit — all pass
       **unmodified**. These are the load-bearing regression net for D4; a passing suite with an
       edited assertion does not satisfy this AC.
-- [ ] **AC-7 (baseline parity)** — before/after test counts recorded per module (4 services +
+- [x] **AC-7 (baseline parity)** — before/after test counts recorded per module (4 services +
       `libs:java-security-servlet`). No test may disappear or lose an assertion. All four `:check`
       tasks GREEN; CI's `Integration (erp-platform, Testcontainers)` lane GREEN is authoritative
       (local Windows Docker is not — `project_testcontainers_docker_desktop_blocker`).
-- [ ] **AC-8 (guard mutation-check)** — at least one new D1 assertion and one new D4 assertion are
+- [x] **AC-8 (guard mutation-check)** — at least one new D1 assertion and one new D4 assertion are
       each proven to bite (temporarily break the mechanism, e.g. drop the `ROLE_` prefix or drop
       `trustEntitledDomains()`, record which tests go RED, then revert).
-- [ ] **AC-9 (no contract change)** — `specs/contracts/http/*.md` need no edit for either half; the
+- [x] **AC-9 (no contract change)** — `specs/contracts/http/*.md` need no edit for either half; the
       PR body states explicitly that there is no observable behaviour delta.
 
 ---
@@ -373,11 +373,147 @@ stays in each service's `infrastructure.security` (approval, masterdata) / `conf
 
 # Definition of Done
 
-- [ ] D1 adopted in `approval-service` + `masterdata-service`; mechanism deleted, policy
+- [x] D1 adopted in `approval-service` + `masterdata-service`; mechanism deleted, policy
       byte-unchanged, integration-level auth-path tests added and passing
-- [ ] D4 adopted in all four servlet services, gated on `TASK-MONO-500` `Status: done`, verdicts
+- [x] D4 adopted in all four servlet services, gated on `TASK-MONO-500` `Status: done`, verdicts
       unchanged (401/403/wildcard/entitlement all regression-net green)
-- [ ] Before/after test counts recorded per module; guard mutation-check recorded for both halves
-- [ ] No contract change; PR body states explicitly there is no observable behaviour delta
-- [ ] `gateway-service` verified unaffected
-- [ ] Ready for review
+- [x] Before/after test counts recorded per module; guard mutation-check recorded for both halves
+- [x] No contract change; PR body states explicitly there is no observable behaviour delta
+- [x] `gateway-service` verified unaffected
+- [x] Ready for review
+
+---
+
+# Implementation Record (2026-07-31)
+
+## Prerequisite gate (AC-4)
+
+`TASK-MONO-500` confirmed **`Status: done`** on **2026-07-31** by reading
+`tasks/done/TASK-MONO-500-adr058-d4-security-chain-assembly-promotion.md`'s Status field directly
+(the file sits in `tasks/done/`, and its `# Status` block reads `done`). The D4 half was started
+only after that read.
+
+## Findings recorded at implementation time (measured, not inherited from this task's filing)
+
+### F-1 — the two D1 clusters are NOT byte-identical (this task's Goal left it to be verified)
+
+`diff` on `approval` vs `masterdata` (package name normalised) found real, non-javadoc differences:
+
+| file | difference |
+|---|---|
+| `ActorContextResolver.java` | **identical** — cleanly replaceable by the shared class |
+| `ActorContext.java` | approval has no `hasRole` (its `isOperator()` calls `hasScope`), no 4-arg back-compat constructor, and **extra** `canReadErp()` / `canWriteErp()` / `ENTITLED_DOMAIN` |
+| `ActorContextJwtAuthenticationConverter.java` | approval **keeps** the `client_credentials -> ["*"]` data-scope default; masterdata removed it as dead code in `TASK-ERP-BE-029` |
+
+Per this task's own Failure Scenario ("stop and report rather than force a single shape onto a real
+divergence"), the adoption keeps each service's own answer rather than converging them. Both are now
+asserted: `clientCredentialsDataScopeDefault` (approval) and `absentOrgScopeStaysEmpty` (both).
+
+### F-2 — the shared `ActorClaims` / `ActorContextFactory` cannot carry erp's claim-alias set
+
+`libs/java-security-servlet`'s `ActorClaims.from(Jwt)` normalises **`roles`-or-`role`** (`roles`
+taking precedence) — exactly the mechanism `ADR-MONO-058 § D1` describes. erp's converters union
+**four** claim names: `roles`, `role`, `scope`, `scopes`. That is not an accident of copy-paste:
+`ActorContext.hasScope(...)` reads the *same* set, and erp authorises off `erp.read` / `erp.write` /
+`erp.approval.*`, which a GAP `client_credentials` token delivers on the OAuth2 **`scope`** claim
+and never on `roles` (masterdata `RoleScopeAuthorizationAdapter`; approval
+`ActorContext.canReadErp()` / `canWriteErp()`; every erp integration test signs
+`.claim("scope", "erp.read")`).
+
+Adopting `ActorContextJwtAuthenticationConverter<ActorContext>` verbatim would therefore have handed
+every machine token an **empty** role set and empty authorities — a silent authorization narrowing,
+i.e. precisely the Failure Scenario this task names first. `ActorContextFactory<A>`'s signature is
+`(accountId, tenantId, roles) -> A` and it receives no `Jwt`, so there is no seam through which the
+call site could restore the wider alias set.
+
+**Resolution taken (no library change; no erp policy leaked into `libs/`):** the *mechanism* is
+adopted — `ActorClaims` (as the carrier, plus `ActorClaims.from` for the `sub`/`tenant_id` lifting
+including its two contractual `IllegalStateException` messages, plus `authorities()` for the `ROLE_`
+prefixing), `ActorAuthenticationToken`, and `ActorContextResolver.currentOrThrow(Class)`. What stays
+in erp is the *policy*: which claim names carry role tokens, and the two erp-only `ActorContext`
+components. It lives in a new per-service `ErpActorClaimsConverter` (~55 statement lines, down from
+142), whose javadoc states the divergence at the code site so the next reader does not have to
+rediscover it.
+
+**This is a finding, not a workaround.** If the fleet later agrees that "an OAuth2 `scope` is a role
+token", the correct move is a follow-up that widens `ActorClaims`'s alias set (or gives
+`ActorContextFactory` a `Jwt`-bearing overload) inside `libs/`, under its own root task — not a
+silent erp-side behaviour change here.
+
+## What changed, per service
+
+| service | D1 | D4 | `anyRequest()` tail — measured, then preserved |
+|---|---|---|---|
+| `approval-service` | `ActorContextJwtAuthenticationConverter` + `ActorContextResolver` **deleted**; new `ErpActorClaimsConverter`; 3 controllers repointed to the shared resolver | `ServiceLevelOAuth2Config` -> `ResourceServerChainAssembler.jwtDecoder(...)`; `SecurityConfig` -> `statelessJwtChain(...)` | `denyAll()` -> `.anyRequestDenied()` |
+| `masterdata-service` | same; 5 controllers repointed | same | `denyAll()` -> `.anyRequestDenied()` |
+| `notification-service` | **untouched** (no actor cluster) | same | `denyAll()` -> `.anyRequestDenied()` |
+| `read-model-service` | **untouched** (no actor cluster) | same | `denyAll()` -> `.anyRequestDenied()` |
+| `gateway-service` | untouched | untouched | n/a (reactive) |
+
+All four tails were read out of the pre-change `SecurityConfig` (`grep -n anyRequest`) — **all four
+were `denyAll()`**; none was `authenticated()`. `.anyRequestDenied()` is called explicitly rather
+than left to the builder's default, so the posture stays legible in each service's own file.
+
+`PublicPaths` in all four gained one line: the previously-private `PublicPathSet MECHANISM` became
+`public static final PublicPathSet AS_SET`, which is what `FilterChainBuilder.publicPaths(...)`
+takes. The `EXACT` / `PREFIXES` **data** is byte-unchanged (D5's territory, untouched).
+
+`build.gradle`: `implementation project(':libs:java-security-servlet')` was already declared in all
+four servlet services (verified, not assumed); `gateway-service`'s has neither it nor any actor
+import — re-verified after the change, and its `:check` is GREEN.
+
+## Test counts, per module (AC-7)
+
+| module | before | after | delta |
+|---|---|---|---|
+| `approval-service` | 150 | 171 | +21 (new `ActorContextAuthPathSliceTest`) |
+| `masterdata-service` | 99 | 118 | +19 (new `ActorContextAuthPathSliceTest`) |
+| `notification-service` | 108 | 119 | +11 (new `SecurityChainAssemblySliceTest`) |
+| `read-model-service` | 148 | 159 | +11 (new `SecurityChainAssemblySliceTest`) |
+| `libs:java-security-servlet` | unchanged | unchanged | 0 — this task authors no library code |
+
+Additive only. The complete test-source change surface, from `git status`, is: 4 new classes; one
+rename (`ActorContextJwtAuthenticationConverterTest` -> `ErpActorClaimsConverterTest` — class and
+field declaration only; all 4 test methods and every assertion byte-unchanged); and **one wiring
+line** added to each of the four `ErpTenantGatePolicyTest`s
+(`ReflectionTestUtils.setField(config, "jwkSetUri", ...)`), because the assembler's decoder-builder
+entry point requires a non-blank JWKS URI where the hand-rolled `jwtTokenValidator()` did not.
+**No assertion in any pre-existing test was edited, and no test was removed.**
+
+## Guard mutation-check (AC-8) — all four bite
+
+| # | mutation | tests that went RED |
+|---|---|---|
+| M1 (D1) | masterdata alias set `{roles, role, scope, scopes}` -> `{roles, role}` (i.e. the shared normalisation) | `scopeClaimIsAnErpRoleToken`, `rolesAndScopeAreUnioned` |
+| M2 (D1) | approval stops threading `org_scope` into `dataScopeDepartmentIds` | `erpOnlyComponentsAreThreaded`, `explicitOrgScopeBeatsTheDefault` |
+| M3 (D4) | notification drops `.trustEntitledDomains()` from **both** layers | new `entitledCrossTenantAdmitted` **plus 3 pre-existing** `ErpTenantGatePolicyTest` assertions |
+| M4 (D4) | read-model `.anyRequestDenied()` -> `.anyRequestAuthenticated()` | `unlistedPathWithValidTokenIs403` |
+
+All four were reverted; the full suite is GREEN again afterwards, and the reverted
+`ServiceLevelOAuth2Config` was re-diffed against its siblings to confirm the revert was exact.
+
+## Verification run locally before pushing
+
+```
+./gradlew :projects:erp-platform:apps:approval-service:check \
+          :projects:erp-platform:apps:masterdata-service:check \
+          :projects:erp-platform:apps:notification-service:check \
+          :projects:erp-platform:apps:read-model-service:check \
+          :projects:erp-platform:apps:gateway-service:check \
+          :libs:java-security-servlet:check
+-> BUILD SUCCESSFUL
+```
+
+`check` is Docker-free by design in this project (`test` excludes `@Tag("integration")`; the
+Testcontainers lane is the separate `integrationTest` task). The new suites are therefore **real
+filter-chain** tests that need no Docker: `@WebMvcTest` plus the real `SecurityConfig` and real
+`ServiceLevelOAuth2Config`, a really RSA-signed JWT, and a `MockWebServer` actually serving the JWKS
+that the production `NimbusJwtDecoder` fetches. **CI's `Integration (erp-platform, Testcontainers)`
+lane remains authoritative** for the pre-existing Testcontainers ITs
+(`CrossTenantHttpIntegrationTest`, `MachineTokenDataScopeHttpIntegrationTest`,
+`ReadModelSecurityIntegrationTest`, ...), none of which this change edits.
+
+## Observable behaviour delta
+
+**None.** No HTTP status, error code, claim name, granted-authority string, or auth accept/reject
+verdict changes for any request shape. No `specs/contracts/` edit was required (AC-9).

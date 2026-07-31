@@ -1,28 +1,21 @@
 package com.example.erp.approval.infrastructure.security;
 
 import com.example.erp.approval.presentation.security.PublicPaths;
-import com.example.security.oauth2.AllowedIssuersValidator;
 import com.example.security.oauth2.TenantClaimValidator;
+import com.example.security.servlet.ResourceServerChainAssembler;
 import com.example.security.servlet.TenantClaimEnforcer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
-import org.springframework.security.oauth2.jwt.JwtValidators;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Service-level Resource Server JWT decoder. Mirrors the erp
  * gateway-service validator chain so any direct call gets the same
- * {@link AllowedIssuersValidator} + {@link TenantClaimValidator} verdict
+ * {@code AllowedIssuersValidator} + {@link TenantClaimValidator} verdict
  * (architecture.md § Multi-tenancy — defense-in-depth). RS256 only (GAP JWKS).
  *
  * <p>The gateway <strong>exists</strong> as of TASK-MONO-357 (ADR-MONO-048 D7).
@@ -49,23 +42,34 @@ public class ServiceLevelOAuth2Config {
     @Bean
     @ConditionalOnMissingBean(JwtDecoder.class)
     public JwtDecoder jwtDecoder() {
-        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
-        decoder.setJwtValidator(jwtTokenValidator());
-        return decoder;
+        return decoderChain().build();
     }
 
     @Bean
     public OAuth2TokenValidator<Jwt> jwtTokenValidator() {
-        List<String> allowedIssuers = parseCsv(allowedIssuersCsv);
-        List<OAuth2TokenValidator<Jwt>> validators = new ArrayList<>();
-        validators.add(new JwtTimestampValidator());
-        validators.add(new AllowedIssuersValidator(allowedIssuers));
-        validators.add(TenantClaimValidator.forTenant(requiredTenantId)
-                .allowSuperAdminWildcard()   // SUPER_ADMIN platform scope (ADR-MONO-019 § D5)
-                .trustEntitledDomains()      // entitlement-trust dual-accept
-                .build());
-        validators.add(JwtValidators.createDefault());
-        return new DelegatingOAuth2TokenValidator<>(validators);
+        return decoderChain().buildValidator();
+    }
+
+    /**
+     * erp's decode-time chain, assembled by {@link ResourceServerChainAssembler}
+     * (ADR-MONO-058 § D4). The library owns the <em>order</em> the validators run in
+     * (timestamp → allowed-issuers → the validator(s) below → Spring Security's defaults)
+     * and the {@code NimbusJwtDecoder} construction; erp owns everything named here — its
+     * property keys, its tenant id, and both of its relaxations.
+     *
+     * <p>{@code allowSuperAdminWildcard()} and
+     * {@code trustEntitledDomains()} are spelled out rather
+     * than defaulted: every switch in the shared classes defaults <em>closed</em>, so
+     * deleting either line here narrows what erp admits, and
+     * {@code ErpTenantGatePolicyTest} is the assertion that notices.
+     */
+    private ResourceServerChainAssembler.JwtDecoderBuilder decoderChain() {
+        return ResourceServerChainAssembler.jwtDecoder(jwkSetUri)
+                .allowedIssuersCsv(allowedIssuersCsv)
+                .validator(TenantClaimValidator.forTenant(requiredTenantId)
+                        .allowSuperAdminWildcard()   // SUPER_ADMIN platform scope (ADR-MONO-019 § D5)
+                        .trustEntitledDomains()      // entitlement-trust dual-accept
+                        .build());
     }
 
     /**
@@ -86,17 +90,5 @@ public class ServiceLevelOAuth2Config {
                 .allowSuperAdminWildcard()
                 .trustEntitledDomains()
                 .build();
-    }
-
-    private static List<String> parseCsv(String csv) {
-        List<String> out = new ArrayList<>();
-        if (csv == null) return out;
-        for (String part : csv.split(",")) {
-            String trimmed = part.trim();
-            if (!trimmed.isEmpty()) {
-                out.add(trimmed);
-            }
-        }
-        return out;
     }
 }
