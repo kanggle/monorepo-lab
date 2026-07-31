@@ -75,6 +75,15 @@ Serialization: JSON by default. Binary encoding (Avro, Protobuf) is allowed when
 - Events MUST NOT be published from inside a database transaction that may still roll back (except via outbox, which is write-to-outbox, not write-to-broker).
 - Publisher MUST retry broker failures with exponential backoff; on broker acknowledgment the row is marked published (`published_at` set) in a fresh transaction — rows are retained, not deleted, so plan retention/archival separately if the outbox table needs to stay small.
 - Publisher metrics: `outbox.pending.count`, `outbox.lag.seconds`, `outbox.publish.failure.total`.
+- **`event_id` MUST be deterministically derived** from the event's natural transition key (e.g.
+  `UUID.nameUUIDFromBytes` over `"<Type>:"+aggregateId+":"+naturalKey`), never randomly generated per publish
+  attempt. A random `event_id` on a concurrent duplicate publish or a retry defeats every consumer's `eventId`
+  dedup table (see Consumer Rules below) — each attempt gets a different key, so dedup is a no-op. When
+  `event_id` also doubles as the outbox row's primary key, deterministic derivation goes further: a concurrent
+  duplicate publish fails at the DB unique-constraint on insert (never reaches the broker at all) — map that
+  failure to the same 409 contract already used for optimistic-lock conflicts, not a 500, and document the
+  `event_id` derivation rule in that event's own contract file. (Worked incident: TASK-BE-547, ecommerce
+  shipping-service.)
 
 ---
 
