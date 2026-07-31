@@ -10,7 +10,7 @@ across the 5 wms servlet services' `SecurityConfig`
 
 # Status
 
-review
+done
 
 # Owner
 
