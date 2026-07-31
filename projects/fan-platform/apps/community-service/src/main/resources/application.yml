@@ -113,11 +113,16 @@ community:
 
 # IAM client_credentials token for the /internal/** call above (ADR-MONO-005).
 # Uses the pre-seeded community-service-client (IAM V0009, scope membership.read).
+# TASK-FAN-BE-041: acquired via the shared libs/java-security
+# IamClientCredentialsTokenProvider (ADR-MONO-058 § D6) — connect/read timeouts
+# are a required constructor parameter on that class (no unbounded-timeout path).
 iam:
   internal-client:
     token-uri: ${IAM_TOKEN_URI:${OIDC_ISSUER_URL:http://iam.local}/oauth2/token}
     client-id: ${COMMUNITY_SERVICE_CLIENT_ID:community-service-client}
     client-secret: ${COMMUNITY_SERVICE_CLIENT_SECRET:secret}
+    connect-timeout-ms: ${IAM_INTERNAL_CLIENT_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms: ${IAM_INTERNAL_CLIENT_READ_TIMEOUT_MS:3000}
 
 fanplatform:
   oauth2:
