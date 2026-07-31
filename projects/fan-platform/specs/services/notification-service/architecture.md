@@ -123,7 +123,7 @@ com.example.fanplatform.notification/
 - `spring-kafka`
 - `flyway-core`, `flyway-database-postgresql`, `org.postgresql:postgresql`
 - `io.micrometer:micrometer-registry-prometheus`, `micrometer-tracing-bridge-otel`, `opentelemetry-exporter-otlp`
-- shared libs: `libs:java-common`, `libs:java-web`, `libs:java-web-servlet` (ADR-MONO-058 § D2 — `CommonGlobalExceptionHandler`), `libs:java-messaging`, `libs:java-observability`, `libs:java-security`
+- shared libs: `libs:java-common`, `libs:java-web`, `libs:java-web-servlet` (ADR-MONO-058 § D2 — `CommonGlobalExceptionHandler`), `libs:java-messaging`, `libs:java-observability`, `libs:java-security`, `libs:java-security-servlet` (ADR-MONO-049 § D5-6 — `TenantClaimEnforcer`; ADR-MONO-058 § D5 — `PublicPathSet`; ADR-MONO-058 § D1 — the actor/JWT-claim cluster `ActorClaims`/`ActorContextJwtAuthenticationConverter`/`ActorContextResolver`/`@CurrentActor`)
 
 ### Forbidden dependencies
 

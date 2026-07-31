@@ -8,7 +8,7 @@ import com.example.fanplatform.notification.domain.notification.NotificationPage
 import com.example.fanplatform.notification.domain.notification.NotificationStatus;
 import com.example.fanplatform.notification.presentation.dto.ApiEnvelope;
 import com.example.fanplatform.notification.presentation.dto.NotificationResponse;
-import com.example.fanplatform.notification.presentation.security.CurrentActor;
+import com.example.security.servlet.actor.CurrentActor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;

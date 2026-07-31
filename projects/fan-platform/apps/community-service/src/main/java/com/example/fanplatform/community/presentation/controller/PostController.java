@@ -7,7 +7,7 @@ import com.example.fanplatform.community.application.GetPostUseCase;
 import com.example.fanplatform.community.application.PublishPostCommand;
 import com.example.fanplatform.community.application.PublishPostUseCase;
 import com.example.fanplatform.community.application.UpdatePostUseCase;
-import com.example.fanplatform.community.infrastructure.security.CurrentActor;
+import com.example.security.servlet.actor.CurrentActor;
 import com.example.fanplatform.community.presentation.dto.ApiEnvelope;
 import com.example.fanplatform.community.presentation.dto.ChangePostStatusRequest;
 import com.example.fanplatform.community.presentation.dto.PostResponse;

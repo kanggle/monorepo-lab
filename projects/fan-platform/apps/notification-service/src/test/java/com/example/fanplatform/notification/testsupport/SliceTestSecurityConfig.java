@@ -4,7 +4,8 @@ import com.example.fanplatform.notification.infrastructure.security.ServiceLevel
 import com.example.security.servlet.TenantClaimEnforcer;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import com.example.fanplatform.notification.infrastructure.security.ActorContextJwtAuthenticationConverter;
+import com.example.fanplatform.notification.application.ActorContext;
+import com.example.security.servlet.actor.ActorContextJwtAuthenticationConverter;
 import com.example.security.oauth2.AllowedIssuersValidator;
 import com.example.fanplatform.notification.infrastructure.security.SecurityConfig;
 import com.example.security.oauth2.TenantClaimValidator;
@@ -101,7 +102,8 @@ public class SliceTestSecurityConfig {
                 .oauth2ResourceServer(rs -> rs
                         .jwt(jwt -> jwt
                                 .decoder(endUserJwtDecoder())
-                                .jwtAuthenticationConverter(new ActorContextJwtAuthenticationConverter()))
+                                .jwtAuthenticationConverter(
+                                        new ActorContextJwtAuthenticationConverter<>(ActorContext::new)))
                         .authenticationEntryPoint(SecurityConfig::onAuthenticationFailure)
                         .accessDeniedHandler(SecurityConfig::onAccessDenied));
         return http.build();

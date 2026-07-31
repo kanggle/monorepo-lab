@@ -1,7 +1,9 @@
 package com.example.fanplatform.notification.infrastructure.security;
 
 import com.example.security.oauth2.TenantClaimValidator;
+import com.example.security.servlet.actor.ActorContextJwtAuthenticationConverter;
 
+import com.example.fanplatform.notification.application.ActorContext;
 import com.example.fanplatform.notification.presentation.security.PublicPaths;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -60,7 +62,8 @@ public class SecurityConfig {
                 .oauth2ResourceServer(rs -> rs
                         .jwt(jwt -> jwt
                                 .decoder(endUserJwtDecoder)
-                                .jwtAuthenticationConverter(new ActorContextJwtAuthenticationConverter()))
+                                .jwtAuthenticationConverter(
+                                        new ActorContextJwtAuthenticationConverter<>(ActorContext::new)))
                         .authenticationEntryPoint(SecurityConfig::onAuthenticationFailure)
                         .accessDeniedHandler(SecurityConfig::onAccessDenied)
                 );

@@ -1,6 +1,7 @@
 package com.example.fanplatform.membership.testsupport;
 
-import com.example.fanplatform.membership.infrastructure.security.ActorContextJwtAuthenticationConverter;
+import com.example.fanplatform.membership.application.ActorContext;
+import com.example.security.servlet.actor.ActorContextJwtAuthenticationConverter;
 import com.example.security.oauth2.AllowedIssuersValidator;
 import com.example.fanplatform.membership.infrastructure.security.SecurityConfig;
 import com.example.security.oauth2.TenantClaimValidator;
@@ -106,7 +107,8 @@ public class SliceTestSecurityConfig {
                 .oauth2ResourceServer(rs -> rs
                         .jwt(jwt -> jwt
                                 .decoder(endUserJwtDecoder())
-                                .jwtAuthenticationConverter(new ActorContextJwtAuthenticationConverter()))
+                                .jwtAuthenticationConverter(
+                                        new ActorContextJwtAuthenticationConverter<>(ActorContext::new)))
                         .authenticationEntryPoint(SecurityConfig::onAuthenticationFailure)
                         .accessDeniedHandler(SecurityConfig::onAccessDenied));
         return http.build();

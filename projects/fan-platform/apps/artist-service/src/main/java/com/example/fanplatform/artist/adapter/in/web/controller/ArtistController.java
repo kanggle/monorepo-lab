@@ -4,7 +4,7 @@ import com.example.fanplatform.artist.adapter.in.web.dto.request.ChangeArtistSta
 import com.example.fanplatform.artist.adapter.in.web.dto.request.RegisterArtistRequest;
 import com.example.fanplatform.artist.adapter.in.web.dto.request.UpdateArtistRequest;
 import com.example.fanplatform.artist.adapter.in.web.dto.response.ApiEnvelope;
-import com.example.fanplatform.artist.adapter.in.web.security.CurrentActor;
+import com.example.security.servlet.actor.CurrentActor;
 import com.example.fanplatform.artist.application.ActorContext;
 import com.example.fanplatform.artist.application.port.in.ArchiveArtistUseCase;
 import com.example.fanplatform.artist.application.port.in.ArtistView;

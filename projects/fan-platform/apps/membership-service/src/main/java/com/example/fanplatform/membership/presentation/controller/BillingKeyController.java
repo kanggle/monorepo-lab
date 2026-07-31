@@ -10,7 +10,7 @@ import com.example.fanplatform.membership.domain.membership.MembershipTier;
 import com.example.fanplatform.membership.presentation.dto.BillingKeyCancelResponse;
 import com.example.fanplatform.membership.presentation.dto.BillingKeyEnrollmentResponse;
 import com.example.fanplatform.membership.presentation.dto.EnrollBillingKeyRequest;
-import com.example.fanplatform.membership.presentation.security.CurrentActor;
+import com.example.security.servlet.actor.CurrentActor;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
