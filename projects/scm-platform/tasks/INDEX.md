@@ -78,6 +78,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
+- `TASK-SCM-BE-054-actor-jwt-security-chain-assembly-adoption.md` — filed 2026-07-31. ADR-MONO-058 D1+D4 combined (per ADR § 6 item 7 bundling directive) — adopts the already-shared `libs/java-security-servlet` actor package in `procurement-service` (D1, grep-confirmed the only scm service with a local `ActorContextResolver`/`ActorContextJwtAuthenticationConverter`) and the `TASK-MONO-500` security-chain-assembly builder in `procurement`/`logistics`/`inventory-visibility`/`demand-planning` (D4); `gateway-service` excluded (reactive Spring Cloud Gateway). **Blocked on `TASK-MONO-500` (root, NOT YET LANDED) for the D4 half** — D1 half has no such gate.
+- `TASK-SCM-BE-055-error-envelope-exception-handler-adoption.md` — filed 2026-07-31. ADR-MONO-058 D2 — adopts `libs/java-web.ErrorResponse`/`libs/java-web-servlet.CommonGlobalExceptionHandler` in `procurement`/`logistics`/`inventory-visibility`/`demand-planning` (`gateway-service` grep-confirmed to have no local error-envelope duplication). Must record its own design decision on the ADR-flagged `details`-field wire-shape conflict (2 of 4 scm services use it today) before implementing; the 422-vs-400 status-code conflict is a straightforward apply via `CommonGlobalExceptionHandler`'s existing `validationFailureStatus()` override hook.
+- `TASK-SCM-BE-056-pagination-carrier-adoption.md` — filed 2026-07-31. ADR-MONO-058 D3 — adopts `libs/java-common.PageResult`/`PageQuery` in `inventory-visibility-service` (hand-rolled, missing `totalPages`) and `demand-planning-service` (separate `data`/`meta`-split envelope, own wire-shape decision required); `procurement-service` is a verification pass only (already fully wired end-to-end); `logistics-service`/`gateway-service` out of scope (no pagination usage found).
+- `TASK-SCM-BE-057-publicpathset-adoption.md` — filed 2026-07-31. ADR-MONO-058 D5 — adopts the already-shared `libs/java-security-servlet.PublicPathSet` mechanism in `procurement`/`logistics`/`inventory-visibility`/`demand-planning`'s local `PublicPaths` classes (data/policy stays local); `gateway-service` excluded (no local `PublicPaths` class). No blocking prerequisite — smallest, lowest-risk of the four.
+
 ## in-progress
 
 ## review
