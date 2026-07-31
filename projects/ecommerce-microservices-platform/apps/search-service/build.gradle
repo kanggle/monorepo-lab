@@ -34,6 +34,9 @@ dependencies {
     testImplementation 'org.springframework.kafka:spring-kafka-test'
     testImplementation 'org.testcontainers:elasticsearch'
     testImplementation 'org.testcontainers:junit-jupiter'
+    // MockWebServer — ProductCatalogHttpAdapter timeout-verification test (ADR-MONO-058 D7,
+    // TASK-BE-570), mirroring shipping-service's HttpCarrierTrackingAdapterTest pattern.
+    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
 }
 
 test {

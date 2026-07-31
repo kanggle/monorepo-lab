@@ -8,7 +8,7 @@ ADR-MONO-058 D7 (ResilienceClientFactory) — adopt `libs/java-common.Resilience
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -116,27 +116,82 @@ urgency.
 
 # Acceptance Criteria
 
-- [ ] `search-service`'s `ProductCatalogHttpAdapter` outbound calls now have explicit,
-      non-zero connect and read timeouts via `ResilienceClientFactory`.
-- [ ] `review-service`'s `OrderServiceClient` (purchase-verification call) now has
-      explicit, non-zero connect and read timeouts via `ResilienceClientFactory`.
-- [ ] `order-service`'s `StandaloneConfig` outbound client now has explicit timeouts
-      via `ResilienceClientFactory`.
-- [ ] `product-service`'s `AccountServiceSellerProvisioner` uses
+- [x] `search-service`'s `ProductCatalogHttpAdapter` outbound calls now have explicit,
+      non-zero connect and read timeouts via `ResilienceClientFactory`. — Confirmed
+      **zero-timeout** case per the audit (`RestClientConfig`'s bare
+      `RestClient.builder()`, no request factory). `RestClientConfig.java` deleted (its
+      sole consumer now builds directly); `ProductCatalogHttpAdapter` now built via
+      `ResilienceClientFactory.buildRestClient(productServiceUrl, connectTimeoutMs,
+      readTimeoutMs)` with `catalog.connect-timeout-ms:3000`/`catalog.read-timeout-ms:5000`
+      defaults. New `ProductCatalogHttpAdapterTest` proves a hung product-service now
+      fails within ~300ms instead of hanging forever (real `MockWebServer`, no response
+      enqueued).
+- [x] `review-service`'s `OrderServiceClient` (purchase-verification call) now has
+      explicit, non-zero connect and read timeouts via `ResilienceClientFactory`. —
+      Confirmed **zero-timeout** case (bare `RestClient.builder().baseUrl(baseUrl)
+      .build()`). Now built via `ResilienceClientFactory.buildRestClient(...)` with new
+      `order-service.connect-timeout-ms:3000`/`order-service.read-timeout-ms:5000` keys
+      added to `application.yml` (env override
+      `ORDER_SERVICE_CONNECT_TIMEOUT_MS`/`ORDER_SERVICE_READ_TIMEOUT_MS`). New
+      `OrderServiceClientTimeoutTest` proves the purchase-verification call — which sits
+      synchronously in the review-creation request path — now fails within ~300ms against
+      a hung order-service instead of blocking the request indefinitely (the primary
+      live-defect closure this task exists for).
+- [x] `order-service`'s `StandaloneConfig` outbound client now has explicit timeouts
+      via `ResilienceClientFactory`. — Was zero-timeout, `@Profile("standalone")`-gated
+      (not the default deployment topology). Now built via
+      `ResilienceClientFactory.buildRestClient(...)` with new
+      `services.payment-service.connect-timeout-ms:3000`/`read-timeout-ms:5000`
+      `@Value` defaults. New `StandaloneConfigTest` calls the `@Bean` method directly and
+      proves a hung payment-service fails within ~300ms.
+- [x] `product-service`'s `AccountServiceSellerProvisioner` uses
       `ResilienceClientFactory` instead of its own `JdkClientHttpRequestFactory`
       wiring, preserving existing configurable timeout property keys if the factory's
-      API supports externally-supplied values.
-- [ ] `batch-worker`'s `RestClients.java` helper is removed once all its consumers
+      API supports externally-supplied values. — `ResilienceClientFactory
+      .buildRestClient(String, int, int)` accepts millisecond ints directly, so the
+      existing `iam.downstream.connect-timeout-ms:3000`/`iam.downstream
+      .read-timeout-ms:10000` `@Value` keys and their default values are preserved
+      byte-for-byte (constructor signature unchanged — existing
+      `AccountServiceSellerProvisionerTest` compiles/passes unmodified). New
+      `AccountServiceSellerProvisionerTimeoutTest` proves the fail-soft provisioning
+      call still returns `failed()` within ~300ms against a WireMock 5s-delayed stub
+      (no regression from the mechanism swap).
+- [~] `batch-worker`'s `RestClients.java` helper is removed once all its consumers
       (`ProductServiceClient`, `SearchServiceClient`, others found at implementation
-      time) are migrated to `ResilienceClientFactory`.
-- [ ] Every migrated client's timeout is verified by a unit test (either asserting
+      time) are migrated to `ResilienceClientFactory`. — **Partially done, by design.**
+      `ProductServiceClient`, `SearchServiceClient`, and batch-worker's own (internal)
+      `OrderServiceClient` are migrated to `ResilienceClientFactory` (same 5s/10s
+      values preserved). Grepping the whole module found a 4th call site —
+      `IamClientCredentialsTokenProvider` — which is explicitly Out of Scope for this
+      task (covered by `TASK-BE-568`/D6, "keep the two tasks' diffs separable"); it was
+      NOT touched. Because that class remains a live consumer of `RestClients.timed(...)`,
+      `RestClients.java` was **not deleted** — deleting it would break the build
+      (Failure Scenarios explicitly warns against this: "migrate every call site first,
+      verify zero remaining references, then delete"). `RestClients.java`'s javadoc was
+      updated to document this partial-migration state and point at the remaining
+      consumer, so a future `TASK-BE-568`-style follow-up for `batch-worker` knows to
+      delete it once that migration lands.
+- [x] Every migrated client's timeout is verified by a unit test (either asserting
       the configured request factory's timeout values, or — for a stronger guard — a
       test simulating a hung endpoint and asserting the call fails within the
-      configured bound rather than hanging).
-- [ ] No existing outbound call's base URL, headers, or business logic changes as a
-      side effect of the client-bootstrap swap — this task is timeout/mechanism-only.
-- [ ] `./gradlew :projects:ecommerce-microservices-platform:apps:<service>:test`
-      GREEN for all 5 touched services.
+      configured bound rather than hanging). — Used the stronger guard everywhere: real
+      `MockWebServer`/`WireMock` hung-endpoint tests for all 5 migrated clients
+      (`ProductCatalogHttpAdapterTest`, `OrderServiceClientTimeoutTest` [review],
+      `StandaloneConfigTest`, `AccountServiceSellerProvisionerTimeoutTest`,
+      `ProductServiceClientTest`/`SearchServiceClientTest`/`OrderServiceClientTest`
+      [batch-worker]), each asserting the call fails within a generous (10x configured
+      timeout) bound rather than hanging.
+- [x] No existing outbound call's base URL, headers, or business logic changes as a
+      side effect of the client-bootstrap swap — this task is timeout/mechanism-only. —
+      Verified: all pre-existing tests (`OrderServiceClientUnitTest` [review, updated
+      only for the new constructor timeout params],
+      `AccountServiceSellerProvisionerTest`, and the batch-worker
+      `SearchIndexConsistencyIntegrationTest`/`StalePaidOrderConfirmationIntegrationTest`
+      — both `@Tag("integration")`, compile-verified) pass/compile unchanged; no URI,
+      header, or request-body construction code was touched in any migrated class.
+- [x] `./gradlew :projects:ecommerce-microservices-platform:apps:<service>:test`
+      GREEN for all 5 touched services. — All 5 run locally, `BUILD SUCCESSFUL`, 0
+      failures (see Definition of Done for per-service confirmation).
 
 ---
 
@@ -256,11 +311,28 @@ Follow, per touched service:
 
 # Definition of Done
 
-- [ ] All 5 services' outbound clients migrated to `ResilienceClientFactory`
-- [ ] Zero-timeout gap closed for `search-service` and `review-service` specifically
-      (the confirmed live-risk cases)
-- [ ] `batch-worker`'s `RestClients.java` removed once dead
-- [ ] Operator-configurable timeout properties preserved where they existed
-      (`product-service`)
-- [ ] Tests passing for all 5 services
-- [ ] Ready for review
+- [x] All 5 services' outbound clients migrated to `ResilienceClientFactory`
+      (`search-service.ProductCatalogHttpAdapter`, `review-service.OrderServiceClient`,
+      `order-service.StandaloneConfig`, `product-service.AccountServiceSellerProvisioner`,
+      `batch-worker.ProductServiceClient`/`SearchServiceClient`/`OrderServiceClient`)
+- [x] Zero-timeout gap closed for `search-service` and `review-service` specifically
+      (the confirmed live-risk cases) — both now have explicit non-zero connect/read
+      timeouts, proven by hung-endpoint unit tests failing fast instead of hanging.
+- [~] `batch-worker`'s `RestClients.java` removed once dead — NOT removed; see AC
+      note above. It still has one live consumer (`IamClientCredentialsTokenProvider`,
+      explicitly Out of Scope / `TASK-BE-568` territory), so deleting it now would break
+      the build. Its 3 in-scope consumers were migrated off it.
+- [x] Operator-configurable timeout properties preserved where they existed
+      (`product-service`) — `iam.downstream.connect-timeout-ms`/`read-timeout-ms`
+      keys and default values (3000/10000) unchanged.
+- [x] Tests passing for all 5 services — ran locally on this Windows host (unit tests
+      only; Testcontainers `@Tag("integration")` suites are compile-verified but
+      excluded from the default `test` task per each service's existing
+      Windows/Docker convention, unaffected either way since this task did not touch
+      Testcontainers-backed integration tests):
+      - `./gradlew :projects:ecommerce-microservices-platform:apps:search-service:test` → BUILD SUCCESSFUL
+      - `./gradlew :projects:ecommerce-microservices-platform:apps:review-service:test` → BUILD SUCCESSFUL
+      - `./gradlew :projects:ecommerce-microservices-platform:apps:order-service:test` → BUILD SUCCESSFUL
+      - `./gradlew :projects:ecommerce-microservices-platform:apps:product-service:test` → BUILD SUCCESSFUL
+      - `./gradlew :projects:ecommerce-microservices-platform:apps:batch-worker:test` → BUILD SUCCESSFUL
+- [x] Ready for review
