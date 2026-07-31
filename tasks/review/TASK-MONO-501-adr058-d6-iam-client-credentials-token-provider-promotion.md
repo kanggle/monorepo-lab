@@ -8,7 +8,7 @@ ADR-MONO-058 D6 — promote `IamClientCredentialsTokenProvider` (canonical, alre
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -57,11 +57,11 @@ If any section is missing or incomplete, this task must not be implemented.
 
 # Acceptance Criteria
 
-- [ ] Canonical class lands in `libs/java-security`, framework-neutral, no project names in class/method names (`HARDSTOP-03`).
-- [ ] UTF-8 Basic-auth encoding verified by an explicit unit test asserting the byte-level encoding (not just "compiles"), since this is the specific bug (RFC 7617) motivating the promotion.
-- [ ] Connect/read timeouts are constructor/builder parameters with no default that reproduces the "no timeout at all" defect the ADR flags.
-- [ ] `./gradlew :libs:java-security:test` passes.
-- [ ] No existing service modified by this task.
+- [x] Canonical class lands in `libs/java-security`, framework-neutral, no project names in class/method names (`HARDSTOP-03`).
+- [x] UTF-8 Basic-auth encoding verified by an explicit unit test asserting the byte-level encoding (not just "compiles"), since this is the specific bug (RFC 7617) motivating the promotion.
+- [x] Connect/read timeouts are constructor/builder parameters with no default that reproduces the "no timeout at all" defect the ADR flags.
+- [x] `./gradlew :libs:java-security:test` passes.
+- [x] No existing service modified by this task.
 
 ---
 
@@ -121,6 +121,6 @@ N/A — library module.
 
 # Definition of Done
 
-- [ ] Canonical class landed in `libs/java-security` with passing unit tests including the UTF-8 encoding assertion
-- [ ] No adopting service touched by this PR
+- [x] Canonical class landed in `libs/java-security` with passing unit tests including the UTF-8 encoding assertion
+- [x] No adopting service touched by this PR
 - [ ] Task moved to `done`, referencing the per-project adoption tasks (iam, ecommerce, fan) it unblocks

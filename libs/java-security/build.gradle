@@ -24,10 +24,26 @@ dependencies {
     // that both the reactive gateways and the twenty servlet services consume.
     implementation 'org.springframework.security:spring-security-oauth2-jose'
 
+    // `org.springframework.web.client.RestClient` (ADR-MONO-058 § D6 —
+    // IamClientCredentialsTokenProvider). `spring-web` is framework-neutral: it is neither
+    // `spring-webmvc` (servlet) nor `spring-webflux` (reactive), and is not on the
+    // `assertClasspathNeutrality` forbidden list below — see that task's own precedent in
+    // `libs/java-web`, which is also servlet/reactive-neutral and depends on it.
+    implementation 'org.springframework:spring-web'
+    // Jackson bindings for the token endpoint's JSON response, mirroring the same
+    // `implementation` choice already made in `libs/java-web` / `libs/java-web-servlet` /
+    // `libs/java-gateway`.
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'org.slf4j:slf4j-api'
+
     // Test
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testImplementation 'org.junit.jupiter:junit-jupiter-params'
     testImplementation 'org.assertj:assertj-core'
+    // MockWebServer stands in for the token endpoint (ADR-MONO-058 § D6), mirroring the
+    // precedent already set in libs/java-gateway and libs/payment-portone.
+    testImplementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
 }
 
 dependencyManagement {
