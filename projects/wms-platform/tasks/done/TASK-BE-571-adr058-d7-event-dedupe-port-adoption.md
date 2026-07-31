@@ -11,7 +11,7 @@ ADR-MONO-058 D7 (wms-platform, `EventDedupePort` sub-pattern only) — adopt
 
 # Status
 
-review
+done
 
 # Owner
 
