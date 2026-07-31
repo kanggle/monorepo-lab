@@ -8,7 +8,7 @@ ADR-MONO-058 D6 — adopt the promoted canonical `IamClientCredentialsTokenProvi
 
 # Status
 
-review
+done
 
 # Owner
 
