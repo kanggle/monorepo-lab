@@ -3,19 +3,15 @@ package com.example.fanplatform.membership.infrastructure.security;
 import com.example.fanplatform.membership.presentation.security.PublicPaths;
 import com.example.security.oauth2.AllowedIssuersValidator;
 import com.example.security.oauth2.TenantClaimValidator;
+import com.example.security.servlet.ResourceServerChainAssembler;
 import com.example.security.servlet.TenantClaimEnforcer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Builds the two JWT decoders used by membership-service:
@@ -57,23 +53,44 @@ public class ServiceLevelOAuth2Config {
 
     @Bean
     public NimbusJwtDecoder endUserJwtDecoder() {
-        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(endUserJwkSetUri).build();
-        decoder.setJwtValidator(endUserTokenValidator());
-        return decoder;
+        return endUserDecoderAssembly().build();
     }
 
     @Bean
     public OAuth2TokenValidator<Jwt> endUserTokenValidator() {
-        List<String> allowedIssuers = parseCsv(allowedIssuersCsv);
-        List<OAuth2TokenValidator<Jwt>> validators = new ArrayList<>();
-        validators.add(new JwtTimestampValidator());
-        validators.add(new AllowedIssuersValidator(allowedIssuers));
-        validators.add(TenantClaimValidator.forTenant(requiredTenantId)
-                .allowSuperAdminWildcard()   // SUPER_ADMIN platform scope (ADR-MONO-019 § D5)
-                // no .trustEntitledDomains() — fan is outside the entitlement plane
-                .build());
-        validators.add(JwtValidators.createDefault());
-        return new DelegatingOAuth2TokenValidator<>(validators);
+        return endUserDecoderAssembly().buildValidator();
+    }
+
+    /**
+     * The one place this service's <strong>end-user</strong> token policy is stated; both end-user
+     * beans above are built from it.
+     *
+     * <p>The assembler installs, in this exact order, the {@code JwtTimestampValidator}, the
+     * {@link AllowedIssuersValidator} over the allow-list below, the tenant validator handed to it
+     * here, and finally {@code JwtValidators.createDefault()} — the same four the hand-written chain
+     * listed, in the same order, because that order decides which {@code OAuth2Error}
+     * {@code SecurityConfig}'s entry point sees first and therefore whether a rejection is a 401 or a
+     * 403.
+     *
+     * <p><strong>The workload decoder does not come through here.</strong>
+     * {@link #internalJwtDecoder()} keeps its own hand-built {@code createDefaultWithIssuer(...)}
+     * validator: it pins a different issuer property and deliberately does not pin {@code tenant_id},
+     * so routing it through this assembly would give the {@code /internal/**} surface a tenant gate it
+     * has never had — and would break the very {@code community → membership} S2S call
+     * TASK-FAN-BE-029 exists to keep working.
+     *
+     * <p>Private, so it is not a {@code @Bean} method: each caller gets its own (stateless,
+     * structurally identical) chain, which is the shape
+     * {@link ResourceServerChainAssembler.JwtDecoderBuilder} documents for a service that exposes the
+     * decoder and the validator as two separate beans.
+     */
+    private ResourceServerChainAssembler.JwtDecoderBuilder endUserDecoderAssembly() {
+        return ResourceServerChainAssembler.jwtDecoder(endUserJwkSetUri)
+                .allowedIssuersCsv(allowedIssuersCsv)
+                .validator(TenantClaimValidator.forTenant(requiredTenantId)
+                        .allowSuperAdminWildcard()   // SUPER_ADMIN platform scope (ADR-MONO-019 § D5)
+                        // no .trustEntitledDomains() — fan is outside the entitlement plane
+                        .build());
     }
 
     /**
@@ -133,17 +150,5 @@ public class ServiceLevelOAuth2Config {
                 .allowSuperAdminWildcard()
                 // no .trustEntitledDomains() — see above
                 .build();
-    }
-
-    private static List<String> parseCsv(String csv) {
-        List<String> out = new ArrayList<>();
-        if (csv == null) return out;
-        for (String part : csv.split(",")) {
-            String trimmed = part.trim();
-            if (!trimmed.isEmpty()) {
-                out.add(trimmed);
-            }
-        }
-        return out;
     }
 }

@@ -1,6 +1,7 @@
 package com.example.fanplatform.notification.infrastructure.security;
 
 import com.example.security.oauth2.TenantClaimValidator;
+import com.example.security.servlet.ResourceServerChainAssembler;
 import com.example.security.servlet.actor.ActorContextJwtAuthenticationConverter;
 
 import com.example.fanplatform.notification.application.ActorContext;
@@ -16,8 +17,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidationException;
@@ -36,6 +35,19 @@ import java.time.Instant;
  * ({@code /api/fan/**}) require a tenant-pinned bearer token; public actuator
  * paths are permitted. Cross-tenant → 403 TENANT_FORBIDDEN (re-checked by the
  * tenant-pinned {@code endUserJwtDecoder} validators + {@code TenantClaimEnforcer}).
+ *
+ * <h2>ADR-MONO-058 § D4</h2>
+ *
+ * The generic tail — CSRF disabled, {@code STATELESS} sessions, public-vs-authenticated routing and
+ * the {@code oauth2ResourceServer(...)} call sequence — is assembled by
+ * {@link ResourceServerChainAssembler}. It is an explicit call from this {@code @Configuration}, not an
+ * auto-configuration: the library registers no filter chain of its own, so this file remains the only
+ * place this service's authentication path is decided.
+ *
+ * <p>What did not move: the public-path data ({@code PublicPaths}), the {@code /api/fan/**} pattern,
+ * the {@code anyRequest().denyAll()} tail (stated out loud via {@code anyRequestDenied()} rather than
+ * inherited from a default), the {@code ActorContextJwtAuthenticationConverter} composition
+ * (ADR-MONO-058 § D1), and the two error writers below.
  */
 @Configuration
 @EnableWebSecurity
@@ -46,28 +58,16 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain endUserFilterChain(HttpSecurity http,
                                                   JwtDecoder endUserJwtDecoder) throws Exception {
-        String[] exact = PublicPaths.EXACT.toArray(new String[0]);
-        String[] prefixed = PublicPaths.PREFIXES.stream()
-                .map(p -> p + "**")
-                .toArray(String[]::new);
-        http
-                .csrf(AbstractHttpConfigurer::disable)
-                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(exact).permitAll()
-                        .requestMatchers(prefixed).permitAll()
-                        .requestMatchers("/api/fan/**").authenticated()
-                        .anyRequest().denyAll()
-                )
-                .oauth2ResourceServer(rs -> rs
-                        .jwt(jwt -> jwt
-                                .decoder(endUserJwtDecoder)
-                                .jwtAuthenticationConverter(
-                                        new ActorContextJwtAuthenticationConverter<>(ActorContext::new)))
-                        .authenticationEntryPoint(SecurityConfig::onAuthenticationFailure)
-                        .accessDeniedHandler(SecurityConfig::onAccessDenied)
-                );
-        return http.build();
+        return ResourceServerChainAssembler.statelessJwtChain(http)
+                .publicPaths(PublicPaths.AS_SET)
+                .authenticated("/api/fan/**")
+                .anyRequestDenied()
+                .jwtDecoder(endUserJwtDecoder)
+                .jwtAuthenticationConverter(
+                        new ActorContextJwtAuthenticationConverter<>(ActorContext::new))
+                .authenticationEntryPoint(SecurityConfig::onAuthenticationFailure)
+                .accessDeniedHandler(SecurityConfig::onAccessDenied)
+                .build();
     }
 
     public static void onAuthenticationFailure(HttpServletRequest request,

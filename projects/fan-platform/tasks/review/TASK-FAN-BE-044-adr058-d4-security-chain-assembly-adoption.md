@@ -10,7 +10,7 @@ generic `SecurityConfig` tail
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -154,38 +154,113 @@ own converter.
 
 # Acceptance Criteria
 
-- [ ] `TASK-MONO-500`'s Status confirmed `done` before this task's implementation starts (verify by reading
+- [x] `TASK-MONO-500`'s Status confirmed `done` before this task's implementation starts (verify by reading
       the file, not by inference).
-- [ ] All four services' `SecurityConfig`/`ServiceLevelOAuth2Config` chain-assembly code (decoder
+      → Read `tasks/done/TASK-MONO-500-adr058-d4-security-chain-assembly-promotion.md` directly: `# Status`
+      reads `done`. The landed API was then read in full from source
+      (`libs/java-security-servlet/.../ResourceServerChainAssembler.java`) rather than from that task's
+      prose — it exposes `jwtDecoder(jwkSetUri) → JwtDecoderBuilder` and
+      `statelessJwtChain(http) → FilterChainBuilder`.
+- [x] All four services' `SecurityConfig`/`ServiceLevelOAuth2Config` chain-assembly code (decoder
       construction, validator chain, generic filter-chain tail) is replaced by an explicit call to the
       shared builder — **not** a component-scanned/auto-configured bean. Repo-wide grep confirms no
       `@Configuration` class in `libs/java-security-servlet` self-registers a security filter chain bean —
       the call site is always in the service's own `@Configuration`.
-- [ ] Each service supplies its own issuer allow-list, tenant-claim parameters, `PublicPathSet`, and
+      → `grep -rnE "@(AutoConfiguration|Configuration|Component|Bean|EnableWebSecurity)"
+      libs/java-security-servlet/src/main/java` returns **Javadoc/comment matches only** — zero real
+      annotations; `libs/java-security-servlet/src/main/resources/META-INF/spring/` does not exist, so
+      there is no `…AutoConfiguration.imports` entry either. Post-adoption grep for the hand-rolled
+      idioms (`withJwkSetUri|parseCsv|DelegatingOAuth2TokenValidator|SessionCreationPolicy|
+      AbstractHttpConfigurer`) across the four services' `src/main/java` leaves **only** the
+      intentionally out-of-scope `membership-service` `/internal/**` chain + its `internalJwtDecoder`
+      (plus three Javadoc mentions).
+- [x] Each service supplies its own issuer allow-list, tenant-claim parameters, `PublicPathSet`, and
       `ActorContextJwtAuthenticationConverter` via the builder's parameters — no service policy value is
       hardcoded into the shared builder (verified by reading `TASK-MONO-500`'s landed class for absence of
       any fan-platform-specific literal, which should already be guaranteed by that task's own AC, but
       re-verify from the consuming side).
-- [ ] Session/CSRF posture (stateless session, CSRF disabled for the API surface) verified **unchanged**
+      → Re-verified from the consuming side: the assembler holds no path, property key, tenant id, issuer
+      or role literal, and every one of those arrives as a call argument at each service's own wiring
+      site. Property keys are **unchanged** in all four (`spring.security.oauth2.resourceserver.jwt.
+      jwk-set-uri`, `fanplatform.oauth2.allowed-issuers`, `fanplatform.oauth2.required-tenant-id`, plus
+      membership's `fanplatform.internal.jwt.*`) — no `application.yml` was edited in this task.
+- [x] Session/CSRF posture (stateless session, CSRF disabled for the API surface) verified **unchanged**
       per service, by a test asserting the same behavior before/after — this is the specific "do not
       silently change any adopting service's security posture" guarantee the promotion task's own Failure
       Scenarios calls out.
-- [ ] `membership-service`'s second (`/internal/**`) filter chain is verified unchanged: its own tests
+      → **Measured, not assumed.** All four were read before any edit and all four were already identical:
+      CSRF disabled + `SessionCreationPolicy.STATELESS` + `anyRequest().denyAll()`. **No divergence found**
+      — so nothing had to be forced or excepted. The new per-service `SecurityChainAssemblySliceTest`
+      asserts both axes against the **production** chain and was run GREEN **before** the refactor and
+      again after, unchanged: CSRF via a state-changing request with no CSRF token reaching the dispatcher
+      (405/422/400 — statuses `CsrfFilter` cannot produce), session via `getSession(false) == null` +
+      no `JSESSIONID` `Set-Cookie`.
+      ⚠️ **Disclosed limit**: the usual mutation-calibration (weaken the chain, watch the probe go red) was
+      **not performed** — the auto-mode classifier hard-blocked authoring a weakened chain both in
+      production code and in a test-only opposite-posture `@TestConfiguration`. That boundary was
+      respected rather than worked around. Two of the three probes carry an internal control instead
+      (documented in each test's Javadoc): the public-path test shows this same chain answers an
+      admitted-but-unmapped request **404**, so the **403** on an unlisted path is an authorization
+      decision and not an unmapped-path artefact; and `CsrfFilter` can only ever emit 403, never
+      405/422/400. The session probe has **no** internal control and is a pure characterization pin.
+- [x] `membership-service`'s second (`/internal/**`) filter chain is verified unchanged: its own tests
       (`InternalAuthIntegrationTest`) pass unmodified, and chain ordering (which chain matches
       `/internal/**` vs `/api/fan/**`) is confirmed unchanged by an explicit test, not assumed from
       "it still compiles."
-- [ ] For each of the four services, at the real-filter-chain integration level (real `NimbusJwtDecoder`,
+      → The `@Order(1)` chain, `WorkloadIdentityAuthoritiesConverter` and `internalJwtDecoder` are
+      **byte-unchanged** (`git diff` on `SecurityConfig.java` touches only the `@Order(2)` method body,
+      the imports and the class Javadoc). `InternalAuthIntegrationTest` is **unmodified** (Testcontainers
+      lane; CI authoritative). New explicit ordering test: `SecurityChainAssemblySliceTest.Ordering`, 4
+      cases, which identifies the answering chain **by message, not by status** — the two chains write
+      different 401/403 bodies (`"Missing or invalid internal credentials"` vs `"Authentication
+      required"`; `"Workload identity required for /internal/**"` vs `"Access denied"`), so a chain swap
+      could not pass silently the way a status-only assertion would. Includes the **positive** half (a
+      real workload token clears `ROLE_INTERNAL` and reaches the dispatcher), so the internal chain is
+      shown reachable and not merely refusing everything.
+- [x] For each of the four services, at the real-filter-chain integration level (real `NimbusJwtDecoder`,
       real RSA-signed JWT — the `SliceTestSecurityConfig` pattern `TASK-FAN-BE-040` established): no bearer
       → 401; cross-tenant token → 403 `TENANT_FORBIDDEN`; disallowed issuer → 401; public path (from
       `PublicPathSet`) → reachable without a token. All byte-identical to pre-adoption behavior.
-- [ ] If any of the four services is found to have diverged in session/CSRF posture from the others since
+      → New `SecurityChainAssemblySliceTest` per service (community 9, artist 12, membership 14,
+      notification 9 cases), each written and run **GREEN against the pre-refactor tree first**, then
+      re-run unchanged after — which is what makes "byte-identical" a measurement rather than a claim.
+      **Deliberately not** built on `SliceTestSecurityConfig`: that fixture declares its *own* chain
+      resembling production's, so a D4 refactor could have changed `SecurityConfig` arbitrarily and every
+      test built on it would still pass. These import the **real** `SecurityConfig` bean and the **real**
+      `ServiceLevelOAuth2Config` validator chain; the only substitution is the signature-verification
+      source (local RSA test keypair instead of a live JWKS endpoint). Real RSA-signed JWTs throughout;
+      no hand-built `Jwt`/`Authentication`.
+- [x] If any of the four services is found to have diverged in session/CSRF posture from the others since
       the 2026-07-29 audit, that divergence is explicitly documented in the PR body (per `TASK-MONO-500`'s
       Edge Cases guidance) rather than silently forced into conformity or silently ignored.
-- [ ] No wire-visible change: no new/changed HTTP status, error code, envelope field, or claim name.
-- [ ] Test-count parity recorded per service (before/after); no test lost or weakened.
-- [ ] `./gradlew :community-service:check :artist-service:check :membership-service:check
+      → **No session/CSRF divergence exists** — measured, all four identical (see above). Two *other*
+      pre-existing divergences were found and **preserved rather than tidied**, and are stated in the PR
+      body: (1) `artist-service`'s access-denied code is `FORBIDDEN` where its three siblings write
+      `PERMISSION_DENIED`; (2) `community`/`artist` resolve a single `JwtDecoder` bean from the context
+      while `membership`/`notification` pin theirs explicitly — so `.jwtDecoder(...)` is called only in
+      the latter two, exactly as before.
+- [x] No wire-visible change: no new/changed HTTP status, error code, envelope field, or claim name.
+      → No contract file touched. Every status/code/message asserted by the new tests was first observed
+      on the pre-refactor tree. No `application.yml`, no `build.gradle`, no controller, no DTO changed.
+- [x] Test-count parity recorded per service (before/after); no test lost or weakened.
+      → community 140 → 149 (+9) · artist 137 → 149 (+12) · membership 139 → 153 (+14) ·
+      notification 111 → 120 (+9). **0 failures / 0 errors / 0 skipped on both sides.** Purely additive:
+      no test deleted, renamed or weakened. Four existing test files were touched additively only —
+      each service's `JwtTestHelper` gained a `signForeignIssuer(...)` helper (new `FOREIGN_ISSUER`
+      constant; existing signatures preserved by delegation), and each `FanTenantGatePolicyTest`'s
+      `wiredConfig()` gained **one line** setting the JWKS-URI field. That one line is a genuine finding,
+      recorded rather than buried: the shared builder is entered through `jwtDecoder(jwkSetUri)` and
+      rejects a null URI, so the *validator* chain can no longer be built from a config that left that
+      field unset — whereas the hand-written chain never read it. Production is unaffected (the `@Value`
+      has no default; an unset property already fails the context). No assertion in those suites reads
+      the field, and none was changed.
+- [x] `./gradlew :community-service:check :artist-service:check :membership-service:check
       :notification-service:check` GREEN. CI `Integration (fan-platform, Testcontainers)` lane GREEN —
       authoritative (local Windows Docker is not, `project_testcontainers_docker_desktop_blocker`).
+      → All four `:check` GREEN locally (Gradle paths are `:projects:fan-platform:apps:<service>:check`).
+      CI `Integration (fan-platform, Testcontainers)` is **pending on the PR** and remains the
+      authoritative signal — local Windows Docker is not, so `integrationTest` (incl.
+      `InternalAuthIntegrationTest`) was deliberately not treated as locally decisive.
 
 ---
 
@@ -334,12 +409,55 @@ chain-assembly implementation changes from hand-wired to a call into the shared 
 
 # Definition of Done
 
-- [ ] `TASK-MONO-500` confirmed `done` before starting
-- [ ] All four services' chain-assembly wiring replaced by explicit, opt-in calls to the shared builder
-- [ ] Session/CSRF posture verified unchanged per service (or divergence explicitly documented, not forced)
-- [ ] `membership-service`'s dual-chain ordering verified unchanged by explicit test
-- [ ] Real-filter-chain integration verification per service (401/403/public-path), byte-identical to
-      pre-adoption behavior
-- [ ] No wire-visible change stated in the PR body
-- [ ] Test-count parity recorded; four services' `:check` + CI Integration lane GREEN
-- [ ] Ready for review
+- [x] `TASK-MONO-500` confirmed `done` before starting
+- [x] All four services' chain-assembly wiring replaced by explicit, opt-in calls to the shared builder
+- [x] Session/CSRF posture verified unchanged per service (or divergence explicitly documented, not forced)
+      — no divergence found; mutation-calibration blocked by the classifier and disclosed, not silently
+      skipped
+- [x] `membership-service`'s dual-chain ordering verified unchanged by explicit test (identified by
+      message, not status; includes the positive workload-token path)
+- [x] Real-filter-chain integration verification per service (401/403/public-path), byte-identical to
+      pre-adoption behavior — each new suite run GREEN on the pre-refactor tree first
+- [x] No wire-visible change stated in the PR body
+- [x] Test-count parity recorded; four services' `:check` GREEN — CI Integration lane pending on the PR
+      (authoritative)
+- [x] Ready for review
+
+---
+
+# Implementation Record (2026-07-31)
+
+## What changed, per service
+
+| Service | `ServiceLevelOAuth2Config` | `SecurityConfig` | `PublicPaths` |
+|---|---|---|---|
+| `community` | `jwtDecoder()` + `jwtTokenValidator()` → private `decoderAssembly()` on the shared builder; `parseCsv` deleted | `filterChain(...)` → `statelessJwtChain(...)`; **no** `.jwtDecoder(...)` (single decoder bean, resolved from context — unchanged) | `MECHANISM` → public `AS_SET` |
+| `artist` | same shape as community | `filterChain(...)` → `statelessJwtChain(...)`; all 11 role/method rules moved verbatim into `.authorizeRules(...)` in **original registration order** | `MECHANISM` → public `AS_SET` |
+| `membership` | `endUserJwtDecoder()` + `endUserTokenValidator()` → private `endUserDecoderAssembly()`; **`internalJwtDecoder()` untouched** | `endUserFilterChain(...)` (`@Order(2)`) → `statelessJwtChain(...)` with `.jwtDecoder(endUserJwtDecoder)`; **`internalFilterChain(...)` (`@Order(1)`) byte-unchanged** | `MECHANISM` → public `AS_SET` |
+| `notification` | `endUserJwtDecoder()` + `endUserTokenValidator()` → private `endUserDecoderAssembly()`; `parseCsv` deleted | `endUserFilterChain(...)` → `statelessJwtChain(...)` with `.jwtDecoder(endUserJwtDecoder)` | `MECHANISM` → public `AS_SET` |
+
+`TenantClaimEnforcer` beans (D5/ADR-MONO-049) are untouched in all four — including the
+`trustEntitledDomains()` switch that stays **off**, and membership's `/internal/**` exemption.
+
+## D1 interlock (`TASK-FAN-BE-040`) — reused, not duplicated
+
+Each chain's `new ActorContextJwtAuthenticationConverter<>(ActorContext::new)` expression was **moved
+unchanged** from the old `.oauth2ResourceServer(rs -> rs.jwt(jwt -> jwt.jwtAuthenticationConverter(…)))`
+call into the builder's `.jwtAuthenticationConverter(…)` parameter. No second converter was
+constructed, no converter class was added, and nothing in the `…servlet.actor` package was touched.
+The interlock is proved by a **passing** test, not by reading both tasks' prose: every `ActorContext`
+assertion in the four pre-existing `ActorContextAuthPathSliceTest`s passes unmodified, and the new
+suites drive the same converter through the *production* chain.
+
+## `anyRequest()` tail — measured per service, not assumed
+
+The ADR reports 14/19 `denyAll()` vs 5/19 `authenticated()` fleet-wide, so all four were read before
+editing: **all four end `denyAll()`**. Each is now stated out loud via `.anyRequestDenied()` rather
+than inherited from the builder's default, and each is pinned by a test asserting that a **valid**
+token on an unlisted path is still 403 (under `authenticated()` the same request would be 404).
+
+## Out of scope, confirmed untouched
+
+`gateway-service` (reactive — `git diff` empty, no new dependency), `libs/` (`git status` clean —
+`TASK-MONO-500` already landed it), every other project, the D2 error-envelope writers and
+`extractOAuth2Error`, and the `AllowedIssuersValidator`/`TenantClaimValidator` classes themselves.

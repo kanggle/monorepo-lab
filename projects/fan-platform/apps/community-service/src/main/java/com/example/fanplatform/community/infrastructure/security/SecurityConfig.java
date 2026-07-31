@@ -1,6 +1,7 @@
 package com.example.fanplatform.community.infrastructure.security;
 
 import com.example.security.oauth2.TenantClaimValidator;
+import com.example.security.servlet.ResourceServerChainAssembler;
 import com.example.security.servlet.actor.ActorContextJwtAuthenticationConverter;
 
 import com.example.fanplatform.community.application.ActorContext;
@@ -16,8 +17,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.jwt.JwtValidationException;
 import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
@@ -41,6 +40,19 @@ import java.time.Instant;
  * (and is not the {@code "*"} wildcard). The Resource Server filter surfaces
  * that as a 401 by default; we map the granular {@code tenant_mismatch} error
  * code to 403 {@code TENANT_FORBIDDEN}.
+ *
+ * <h2>ADR-MONO-058 § D4</h2>
+ *
+ * The generic tail — CSRF disabled, {@code STATELESS} sessions, public-vs-authenticated routing and
+ * the {@code oauth2ResourceServer(...)} call sequence — is assembled by
+ * {@link ResourceServerChainAssembler}. It is an explicit call from this {@code @Configuration}, not
+ * an auto-configuration: the library registers no filter chain of its own, so this file remains the
+ * only place this service's authentication path is decided.
+ *
+ * <p>What did not move: the public-path data ({@code PublicPaths}), the {@code /api/community/**}
+ * pattern, the {@code anyRequest().denyAll()} tail (stated out loud via {@code anyRequestDenied()}
+ * rather than inherited from a default), the {@code ActorContextJwtAuthenticationConverter}
+ * composition (ADR-MONO-058 § D1), and the two error writers below.
  */
 @Configuration
 @EnableWebSecurity
@@ -50,29 +62,21 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        // Source the public-path list from PublicPaths so SecurityConfig and
-        // TenantClaimEnforcer agree on exactly the same set. Adding a new
-        // public actuator endpoint requires editing PublicPaths only.
-        String[] exact = PublicPaths.EXACT.toArray(new String[0]);
-        String[] prefixed = PublicPaths.PREFIXES.stream()
-                .map(p -> p + "**")
-                .toArray(String[]::new);
-        http
-                .csrf(AbstractHttpConfigurer::disable)
-                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(exact).permitAll()
-                        .requestMatchers(prefixed).permitAll()
-                        .requestMatchers("/api/community/**").authenticated()
-                        .anyRequest().denyAll()
-                )
-                .oauth2ResourceServer(rs -> rs
-                        .jwt(jwt -> jwt.jwtAuthenticationConverter(
-                                new ActorContextJwtAuthenticationConverter<>(ActorContext::new)))
-                        .authenticationEntryPoint(SecurityConfig::onAuthenticationFailure)
-                        .accessDeniedHandler(SecurityConfig::onAccessDenied)
-                );
-        return http.build();
+        // The public-path matchers are registered straight off PublicPaths' own PublicPathSet, so
+        // SecurityConfig and TenantClaimEnforcer read exactly the same set. Adding a new public
+        // actuator endpoint still requires editing PublicPaths only.
+        //
+        // No .jwtDecoder(...) call: community-service declares a single JwtDecoder bean and Spring
+        // Security resolves it from the context, as it did before this chain was assembled here.
+        return ResourceServerChainAssembler.statelessJwtChain(http)
+                .publicPaths(PublicPaths.AS_SET)
+                .authenticated("/api/community/**")
+                .anyRequestDenied()
+                .jwtAuthenticationConverter(
+                        new ActorContextJwtAuthenticationConverter<>(ActorContext::new))
+                .authenticationEntryPoint(SecurityConfig::onAuthenticationFailure)
+                .accessDeniedHandler(SecurityConfig::onAccessDenied)
+                .build();
     }
 
     static void onAuthenticationFailure(HttpServletRequest request,
