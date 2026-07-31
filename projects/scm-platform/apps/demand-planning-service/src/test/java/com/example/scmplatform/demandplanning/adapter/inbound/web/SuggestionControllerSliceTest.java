@@ -1,5 +1,7 @@
 package com.example.scmplatform.demandplanning.adapter.inbound.web;
 
+import com.example.common.page.PageQuery;
+import com.example.common.page.PageResult;
 import com.example.scmplatform.demandplanning.adapter.inbound.web.advice.GlobalExceptionHandler;
 import com.example.scmplatform.demandplanning.adapter.inbound.web.controller.SuggestionController;
 import com.example.scmplatform.demandplanning.application.usecase.ApproveSuggestionUseCase;
@@ -15,8 +17,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
@@ -57,14 +57,15 @@ class SuggestionControllerSliceTest {
                 SUGGESTION_ID, "SKU-001", WAREHOUSE_ID, WAREHOUSE_CODE, SUPPLIER_ID,
                 100, UUID.randomUUID(), 5, "scm", Instant.now());
 
-        when(suggestionQueryUseCase.listSuggestions(anyString(), eq(null), eq(null), any()))
-                .thenReturn(new PageImpl<>(List.of(s), PageRequest.of(0, 20), 1));
+        when(suggestionQueryUseCase.listSuggestions(anyString(), eq(null), eq(null), any(PageQuery.class)))
+                .thenReturn(new PageResult<>(List.of(s), 0, 20, 1, 1));
 
         mockMvc.perform(get("/api/demand-planning/suggestions"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].id").value(SUGGESTION_ID.toString()))
                 .andExpect(jsonPath("$.data[0].status").value("SUGGESTED"))
-                .andExpect(jsonPath("$.meta.totalElements").value(1));
+                .andExpect(jsonPath("$.meta.totalElements").value(1))
+                .andExpect(jsonPath("$.meta.totalPages").value(1));
     }
 
     @Test

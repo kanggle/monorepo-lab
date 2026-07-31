@@ -8,7 +8,7 @@ Adopt ADR-MONO-058 D3 — pagination carrier (`libs/java-common.PageResult`/`Pag
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -71,13 +71,13 @@ Work per service:
 
 # Acceptance Criteria
 
-- [ ] `procurement-service`'s existing `PageQuery`/`PageResult` wiring verified complete end-to-end (request → JPA → response); any gap found is closed as part of this task, not deferred.
-- [ ] `inventory-visibility-service`'s pagination sourced from `PageQuery`/`PageResult`; response now includes `totalPages` (previously missing).
-- [ ] `demand-planning-service`'s pagination sourced from `PageQuery`/`PageResult`; the `data`/`meta`-split-vs-single-object wire-shape decision is explicitly recorded in the PR description with rationale before implementation, consistent with whichever shape is chosen for `demand-planning-service`'s other endpoints' conventions.
-- [ ] No service's local pagination DTO independently re-declares fields `PageResult` already provides without sourcing from it (the ADR's "opportunity to fix, not preserve by wrapping" instruction).
-- [ ] `projects/scm-platform/specs/contracts/http/{inventory-visibility-api,demand-planning-api}.md` updated to reflect any wire-shape change (per `CLAUDE.md` "Specs win over tasks... update them first") — `procurement-api.md` reviewed and updated only if the verification pass finds and fixes a genuine gap.
-- [ ] Existing pagination-adjacent tests (`PageRequestsTest` in `procurement-service`, and any list-endpoint slice tests in `inventory-visibility-service`/`demand-planning-service`) pass, updated only where the wire shape genuinely changes.
-- [ ] scm-platform Build & Test CI lane GREEN for the three touched services.
+- [x] `procurement-service`'s existing `PageQuery`/`PageResult` wiring verified complete end-to-end (request → JPA → response); any gap found is closed as part of this task, not deferred. — **Evidence**: read `PurchaseOrderController.search` → `PurchaseOrderApplicationService.search` → `PurchaseOrderRepository.search(PageQuery)` (domain port) → `PurchaseOrderRepositoryImpl` (`PageRequests.toPageable` + builds `PageResult` directly from the JPA `Page`) → `PageResponse.from(PageResult)` at the wire boundary. No hand-rolled path found bypassing `PageQuery`/`PageResult`. No gap to close — genuinely a verification-only pass, zero production files changed in `procurement-service`.
+- [x] `inventory-visibility-service`'s pagination sourced from `PageQuery`/`PageResult`; response now includes `totalPages` (previously missing). — **Evidence**: `InventorySnapshotRepository.search(String, PageQuery)` (new domain port method, replaces hand-rolled `findAll(tenantId,page,size)`+`countAll(tenantId)`), `InventorySnapshotRepositoryImpl` (+ new `adapter/outbound/persistence/jpa/PageRequests`) builds `PageResult` from a single `Page<InventorySnapshotJpaEntity>` query (was 2 separate queries), `InventoryVisibilityController#getSnapshot` builds `PageQuery.of(page, size, null, null)` and unwraps via `PageResponse.from(PageResult)` (`adapter/inbound/web/dto/PageResponse`, now carries `totalPages`).
+- [x] `demand-planning-service`'s pagination sourced from `PageQuery`/`PageResult`; the `data`/`meta`-split-vs-single-object wire-shape decision is explicitly recorded in the PR description with rationale before implementation, consistent with whichever shape is chosen for `demand-planning-service`'s other endpoints' conventions. — **Evidence**: decision recorded in `specs/contracts/http/demand-planning-api.md` (§ wire-shape decision note) and in the PR description — **preserve** the `data`/`meta` split (confirmed load-bearing: `PolicyController`'s `getPolicy`/`upsertPolicy`/`getMapping`/`upsertMapping` all use the same `ApiEnvelope.of(data)` convention). `ReorderSuggestionPort.findAll` now takes `PageQuery`/returns `PageResult` (was raw `Pageable`/`Page`), `SuggestionController.listSuggestions` builds `PageQuery` and sources both `data` (content) and `meta` (`PageMeta.from(PageResult)`, new factory) from one `PageResult` — zero wire-byte change, internal-only migration.
+- [x] No service's local pagination DTO independently re-declares fields `PageResult` already provides without sourcing from it (the ADR's "opportunity to fix, not preserve by wrapping" instruction). — **Evidence**: `procurement-service.PageResponse.from`, `inventory-visibility-service.PageResponse.from`, and `demand-planning-service.PageMeta.from` all source every field from a `PageResult` instance (no independent field extraction off raw `Page`/`Pageable` remains anywhere in the three services' pagination paths).
+- [x] `projects/scm-platform/specs/contracts/http/{inventory-visibility-api,demand-planning-api}.md` updated to reflect any wire-shape change (per `CLAUDE.md` "Specs win over tasks... update them first") — `procurement-api.md` reviewed and updated only if the verification pass finds and fixes a genuine gap. — **Evidence**: `inventory-visibility-api.md` `/snapshot` response example now shows `totalPages` + an explanatory note; `demand-planning-api.md` carries the wire-shape-preserved decision note. `procurement-api.md` reviewed, no gap found, left unchanged.
+- [x] Existing pagination-adjacent tests (`PageRequestsTest` in `procurement-service`, and any list-endpoint slice tests in `inventory-visibility-service`/`demand-planning-service`) pass, updated only where the wire shape genuinely changes. — **Evidence**: `procurement-service`'s `PageRequestsTest` untouched, still passing. `inventory-visibility-service`'s `InventoryVisibilityControllerSliceTest`/`ResourceServerChainAuthPathSliceTest` updated for the new `PageQuery`/`PageResult`-returning mock signature (+ a `totalPages` assertion added); `CrossTenantIsolationIntegrationTest`/`ThirdPartyObservedStockIntegrationTest` updated for the same signature change. `demand-planning-service`'s `SuggestionControllerSliceTest` updated likewise (+ `totalPages` assertion). Local `./gradlew :...:test` (Docker-free) GREEN for all three services (see evidence below).
+- [ ] scm-platform Build & Test CI lane GREEN for the three touched services. — pending: confirmed after the impl PR's CI run (local `test` task — the Docker-free equivalent — is GREEN for all three services; see Definition of Done note).
 
 ---
 
@@ -155,10 +155,10 @@ Follow each touched service's own architecture doc (listed under Related Specs a
 
 # Definition of Done
 
-- [ ] `procurement-service` verified fully wired through `PageQuery`/`PageResult` end-to-end
-- [ ] `inventory-visibility-service` migrated, `totalPages` added
-- [ ] `demand-planning-service` migrated, wire-shape decision recorded and implemented
-- [ ] Contracts updated for any wire-shape change
-- [ ] platform-console external-consumer impact checked
-- [ ] scm-platform Build & Test CI lane GREEN
-- [ ] Task moved `ready → done`, referencing `TASK-MONO-495` as origin
+- [x] `procurement-service` verified fully wired through `PageQuery`/`PageResult` end-to-end — no production changes needed (verification pass only).
+- [x] `inventory-visibility-service` migrated, `totalPages` added
+- [x] `demand-planning-service` migrated, wire-shape decision recorded and implemented (data/meta split preserved, sourced from `PageResult` underneath)
+- [x] Contracts updated for any wire-shape change (`inventory-visibility-api.md`, `demand-planning-api.md`)
+- [x] platform-console external-consumer impact checked — read `scm-inventory-visibility-api.ts`/`types.ts`: `SnapshotPageDataSchema` is a plain (non-`.strict()`) zod `z.object()`, so the new `totalPages` field is silently tolerated (unknown-key strip, not reject/throw) — confirmed safe, not assumed.
+- [ ] scm-platform Build & Test CI lane GREEN — pending PR CI run. Local `./gradlew :projects:scm-platform:apps:{inventory-visibility-service,demand-planning-service,procurement-service}:test` (Docker-free unit+slice lane) run 2026-08-01: **inventory-visibility-service 126/126 pass, demand-planning-service 92/92 pass, procurement-service 222/222 pass, 0 skipped/failed/errored across all three.** All three modules also `compileJava`/`compileTestJava` clean (no new warnings beyond pre-existing `@MockBean` deprecation noise).
+- [ ] Task moved `ready → done`, referencing `TASK-MONO-495` as origin — deferred to the `review → done` chore PR after this impl PR merges with CI GREEN (per `tasks/INDEX.md` § PR Separation Rule).

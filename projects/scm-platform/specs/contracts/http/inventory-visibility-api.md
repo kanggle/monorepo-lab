@@ -35,7 +35,8 @@ Returns cross-node inventory snapshots.
     ],
     "page": 0,
     "size": 20,
-    "totalElements": 150
+    "totalElements": 150,
+    "totalPages": 8
   },
   "meta": {
     "timestamp": "2026-05-01T10:05:00Z",
@@ -44,6 +45,12 @@ Returns cross-node inventory snapshots.
   }
 }
 ```
+
+`totalPages` (ADR-MONO-058 § D3 / TASK-SCM-BE-056) — added when this service adopted
+the shared `libs/java-common.PageResult` pagination carrier at the wire boundary;
+previously absent from the hand-rolled response shape. Additive — existing consumers
+that ignore unknown fields are unaffected (verified against platform-console's
+operator-read consumer, which parses this response leniently).
 
 **Response 200 — with nodeId:**
 ```json

@@ -1,5 +1,7 @@
 package com.example.scmplatform.demandplanning.adapter.inbound.web.controller;
 
+import com.example.common.page.PageQuery;
+import com.example.common.page.PageResult;
 import com.example.scmplatform.demandplanning.adapter.inbound.web.dto.ApiEnvelope;
 import com.example.scmplatform.demandplanning.adapter.inbound.web.dto.ApproveRequest;
 import com.example.scmplatform.demandplanning.adapter.inbound.web.dto.ApproveResponse;
@@ -11,8 +13,6 @@ import com.example.scmplatform.demandplanning.application.usecase.SuggestionQuer
 import com.example.scmplatform.demandplanning.domain.model.ReorderSuggestion;
 import com.example.scmplatform.demandplanning.domain.model.SuggestionStatus;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -48,13 +48,15 @@ public class SuggestionController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
-        Page<ReorderSuggestion> result = suggestionQueryUseCase.listSuggestions(
-                TENANT_ID, status, skuCode, PageRequest.of(page, Math.min(size, 100)));
+        // PageQuery.of clamps size to [1, PageQuery.MAX_SIZE=100], matching the previous
+        // manual `Math.min(size, 100)` clamp exactly (ADR-MONO-058 § D3 / TASK-SCM-BE-056).
+        PageQuery pageQuery = PageQuery.of(page, size, null, null);
+        PageResult<ReorderSuggestion> result =
+                suggestionQueryUseCase.listSuggestions(TENANT_ID, status, skuCode, pageQuery);
 
-        List<SuggestionResponse> data = result.getContent().stream()
+        List<SuggestionResponse> data = result.content().stream()
                 .map(SuggestionResponse::from).toList();
-        PageMeta meta = new PageMeta(result.getNumber(), result.getSize(),
-                result.getTotalElements(), result.getTotalPages());
+        PageMeta meta = PageMeta.from(result);
 
         return ResponseEntity.ok(ApiEnvelope.of(data, meta));
     }

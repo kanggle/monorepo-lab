@@ -1,5 +1,7 @@
 package com.example.scmplatform.inventoryvisibility.adapter.inbound.web;
 
+import com.example.common.page.PageQuery;
+import com.example.common.page.PageResult;
 import com.example.scmplatform.inventoryvisibility.adapter.inbound.web.advice.GlobalExceptionHandler;
 import com.example.scmplatform.inventoryvisibility.adapter.inbound.web.dto.SkuBreakdownResponse;
 import com.example.scmplatform.inventoryvisibility.application.port.outbound.SkuBreakdownCachePort;
@@ -26,7 +28,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -62,15 +63,15 @@ class InventoryVisibilityControllerSliceTest {
                 nodeId, Sku.of("SKU-001"), "scm",
                 Quantity.of(100), UUID.randomUUID(), now);
 
-        when(applicationService.getCrossNodeSnapshot(eq("scm"), anyInt(), anyInt()))
-                .thenReturn(List.of(snap));
-        when(applicationService.countCrossNodeSnapshot(eq("scm"))).thenReturn(1L);
+        when(applicationService.getCrossNodeSnapshot(eq("scm"), any(PageQuery.class)))
+                .thenReturn(new PageResult<>(List.of(snap), 0, 20, 1, 1));
         when(applicationService.getStaleness(eq("scm"))).thenReturn(List.of());
 
         mockMvc.perform(get("/api/inventory-visibility/snapshot")
                         .with(validJwt()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").exists())
+                .andExpect(jsonPath("$.data.totalPages").value(1))
                 .andExpect(jsonPath("$.meta.warning").value("Not for procurement decisions (S5)"));
     }
 

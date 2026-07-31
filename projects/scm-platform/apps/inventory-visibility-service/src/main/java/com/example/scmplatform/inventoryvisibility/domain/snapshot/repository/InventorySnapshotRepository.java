@@ -1,5 +1,7 @@
 package com.example.scmplatform.inventoryvisibility.domain.snapshot.repository;
 
+import com.example.common.page.PageQuery;
+import com.example.common.page.PageResult;
 import com.example.scmplatform.inventoryvisibility.domain.node.NodeId;
 import com.example.scmplatform.inventoryvisibility.domain.snapshot.InventorySnapshot;
 import com.example.scmplatform.inventoryvisibility.domain.snapshot.Sku;
@@ -21,7 +23,14 @@ public interface InventorySnapshotRepository {
 
     List<InventorySnapshot> findBySku(Sku sku, String tenantId);
 
-    List<InventorySnapshot> findAll(String tenantId, int page, int size);
+    /**
+     * Cross-node paginated search for the given tenant, sourced from the shared
+     * {@link PageQuery}/{@link PageResult} carrier (ADR-MONO-058 § D3 / TASK-SCM-BE-056
+     * — mirrors {@code procurement-service}'s {@code PurchaseOrderRepository.search}
+     * pattern). Replaces the previous hand-rolled {@code findAll(tenantId, page, size)}
+     * + {@code countAll(tenantId)} pair (two separate queries with no {@code totalPages}).
+     */
+    PageResult<InventorySnapshot> search(String tenantId, PageQuery pageQuery);
 
     /**
      * Cross-tenant snapshot read for the demand-planning replenishment batch
@@ -30,8 +39,6 @@ public interface InventorySnapshotRepository {
      * surface (which is always tenant-scoped).
      */
     List<InventorySnapshot> findAllAcrossTenants();
-
-    long countAll(String tenantId);
 
     InventorySnapshot save(InventorySnapshot snapshot);
 }
