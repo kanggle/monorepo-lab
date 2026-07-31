@@ -1,6 +1,7 @@
 package com.example.fanplatform.membership.infrastructure.security;
 
 import com.example.security.oauth2.TenantClaimValidator;
+import com.example.security.servlet.ResourceServerChainAssembler;
 import com.example.security.servlet.actor.ActorContextJwtAuthenticationConverter;
 
 import com.example.fanplatform.membership.application.ActorContext;
@@ -41,6 +42,21 @@ import java.time.Instant;
  *       tenant-pinned {@code endUserJwtDecoder}, {@link ActorContextJwtAuthenticationConverter}.
  *       Public actuator paths permitted. Cross-tenant → 403 TENANT_FORBIDDEN.</li>
  * </ul>
+ *
+ * <h2>ADR-MONO-058 § D4 — one of these two chains is shared-assembled, the other is not</h2>
+ *
+ * The {@code @Order(2)} end-user chain's generic tail — CSRF disabled, {@code STATELESS} sessions,
+ * public-vs-authenticated routing and the {@code oauth2ResourceServer(...)} call sequence — comes from
+ * {@link ResourceServerChainAssembler}, called explicitly from this {@code @Configuration}. The
+ * library registers no filter chain of its own, so this file remains the only place either
+ * authentication path is decided.
+ *
+ * <p>The {@code @Order(1)} {@code /internal/**} chain stays <strong>hand-assembled</strong>. It is not
+ * a stateless <em>end-user</em> resource server: it authenticates a workload identity with a different
+ * decoder (no tenant pin), converts with {@link WorkloadIdentityAuthoritiesConverter} instead of the
+ * actor converter, gates on {@code hasRole("INTERNAL")} rather than on public-vs-authenticated paths,
+ * and writes different 401/403 bodies. Pushing it through the same builder would flatten exactly the
+ * distinctions TASK-FAN-BE-029/030 established.
  */
 @Configuration
 @EnableWebSecurity
@@ -81,28 +97,28 @@ public class SecurityConfig {
     @Order(2)
     public SecurityFilterChain endUserFilterChain(HttpSecurity http,
                                                   JwtDecoder endUserJwtDecoder) throws Exception {
-        String[] exact = PublicPaths.EXACT.toArray(new String[0]);
-        String[] prefixed = PublicPaths.PREFIXES.stream()
-                .map(p -> p + "**")
-                .toArray(String[]::new);
-        http
-                .csrf(AbstractHttpConfigurer::disable)
-                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(exact).permitAll()
-                        .requestMatchers(prefixed).permitAll()
-                        .requestMatchers("/api/fan/**").authenticated()
-                        .anyRequest().denyAll()
-                )
-                .oauth2ResourceServer(rs -> rs
-                        .jwt(jwt -> jwt
-                                .decoder(endUserJwtDecoder)
-                                .jwtAuthenticationConverter(
-                                        new ActorContextJwtAuthenticationConverter<>(ActorContext::new)))
-                        .authenticationEntryPoint(SecurityConfig::onAuthenticationFailure)
-                        .accessDeniedHandler(SecurityConfig::onAccessDenied)
-                );
-        return http.build();
+        // ADR-MONO-058 § D4 — only THIS chain is assembled by the shared builder.
+        //
+        // The @Order(2) above is unchanged and is load-bearing: this chain declares no
+        // securityMatcher, so it is the catch-all, and the Order(1) chain must keep winning
+        // /internal/**. The builder does not touch bean ordering — it never registers a chain of its
+        // own, it only assembles the one this method returns — but the ordering is asserted anyway,
+        // by message rather than by status, in SecurityChainAssemblySliceTest.Ordering: the two
+        // chains' 401/403 writers say different things, so a swap could not pass silently.
+        //
+        // The decoder IS pinned explicitly here (unlike community/artist, which declare one decoder
+        // bean): this service declares two, and .jwtDecoder(...) is what keeps this chain on the
+        // tenant-pinned end-user one.
+        return ResourceServerChainAssembler.statelessJwtChain(http)
+                .publicPaths(PublicPaths.AS_SET)
+                .authenticated("/api/fan/**")
+                .anyRequestDenied()
+                .jwtDecoder(endUserJwtDecoder)
+                .jwtAuthenticationConverter(
+                        new ActorContextJwtAuthenticationConverter<>(ActorContext::new))
+                .authenticationEntryPoint(SecurityConfig::onAuthenticationFailure)
+                .accessDeniedHandler(SecurityConfig::onAccessDenied)
+                .build();
     }
 
     // ----- internal chain handlers -----------------------------------------

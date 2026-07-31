@@ -26,6 +26,14 @@ public final class JwtTestHelper {
     public static final String SAS_ISSUER = "http://test-issuer";
     public static final String DEFAULT_TENANT_ID = "fan-platform";
 
+    /**
+     * An issuer deliberately absent from every allow-list this service is configured with. A token
+     * minted with it is well-formed in every other respect (right key, right tenant, unexpired), so
+     * rejecting it can only come from the {@code AllowedIssuersValidator} arm of the decoder's
+     * validator chain.
+     */
+    public static final String FOREIGN_ISSUER = "http://not-our-issuer";
+
     private final RSAKey rsaJwk;
     private final RSASSASigner signer;
 
@@ -58,12 +66,25 @@ public final class JwtTestHelper {
         return sign(subject, "OPERATOR", "wms", 300, Map.of());
     }
 
+    /**
+     * A token from {@link #FOREIGN_ISSUER} — same key, same tenant, unexpired. Only the issuer
+     * allow-list stands between it and the controller.
+     */
+    public String signForeignIssuer(String subject) {
+        return sign(FOREIGN_ISSUER, subject, null, DEFAULT_TENANT_ID, 300, Map.of());
+    }
+
     public String sign(String subject, String role, String tenantId, long ttlSeconds,
                        Map<String, Object> additionalClaims) {
+        return sign(SAS_ISSUER, subject, role, tenantId, ttlSeconds, additionalClaims);
+    }
+
+    private String sign(String issuer, String subject, String role, String tenantId, long ttlSeconds,
+                        Map<String, Object> additionalClaims) {
         Instant now = Instant.now();
         JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
                 .subject(subject)
-                .issuer(SAS_ISSUER)
+                .issuer(issuer)
                 .claim("tenant_id", tenantId)
                 .issueTime(Date.from(now))
                 .expirationTime(Date.from(now.plusSeconds(ttlSeconds)))

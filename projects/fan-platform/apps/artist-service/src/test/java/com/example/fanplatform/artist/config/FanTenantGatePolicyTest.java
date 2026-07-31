@@ -56,6 +56,12 @@ class FanTenantGatePolicyTest {
         ServiceLevelOAuth2Config config = new ServiceLevelOAuth2Config();
         ReflectionTestUtils.setField(config, "requiredTenantId", TENANT);
         ReflectionTestUtils.setField(config, "allowedIssuersCsv", ISSUER);
+        // ADR-MONO-058 § D4: the shared assembler is entered through jwtDecoder(jwkSetUri) and
+        // rejects a null URI, so the validator chain can no longer be built from a config that left
+        // this field unset — as the production bean never does (@Value with no default: an unset
+        // property fails the context). Wiring it here completes the fixture; no assertion below
+        // reads it, and nothing about the chain's behaviour depends on its value.
+        ReflectionTestUtils.setField(config, "jwkSetUri", ISSUER + "/oauth2/jwks");
         return config;
     }
 

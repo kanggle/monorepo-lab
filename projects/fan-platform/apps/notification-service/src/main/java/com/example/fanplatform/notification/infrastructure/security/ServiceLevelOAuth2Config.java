@@ -3,19 +3,14 @@ package com.example.fanplatform.notification.infrastructure.security;
 import com.example.fanplatform.notification.presentation.security.PublicPaths;
 import com.example.security.oauth2.AllowedIssuersValidator;
 import com.example.security.oauth2.TenantClaimValidator;
+import com.example.security.servlet.ResourceServerChainAssembler;
 import com.example.security.servlet.TenantClaimEnforcer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
-import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Builds the tenant-pinned end-user {@code JwtDecoder} for the inbox surface.
@@ -25,6 +20,20 @@ import java.util.List;
  * <p>The decoder is a named bean (NOT {@code @Primary}) wired explicitly into the
  * {@code SecurityFilterChain} so Spring Boot's default single-{@code JwtDecoder}
  * auto-configuration does not collide.
+ *
+ * <h2>ADR-MONO-058 § D4 — the assembly is shared, the policy is not</h2>
+ *
+ * The {@code NimbusJwtDecoder} construction, the {@code parseCsv} helper and the validator
+ * <em>order</em> ({@link org.springframework.security.oauth2.jwt.JwtTimestampValidator} →
+ * {@link AllowedIssuersValidator} → this service's own validators →
+ * {@link org.springframework.security.oauth2.jwt.JwtValidators#createDefault()}) now come from
+ * {@link ResourceServerChainAssembler}. That order is behaviour, not style: the delegating validator
+ * accumulates errors instead of short-circuiting, and {@code SecurityConfig}'s entry point picks the
+ * first non-{@code invalid_token} error to choose between 401 and 403.
+ *
+ * <p>Everything that decides <em>who gets in</em> stays here: the property keys, the issuer allow-list,
+ * and the {@link TenantClaimValidator} switches below. The library is called explicitly from this
+ * {@code @Configuration}; it registers nothing on its own.
  */
 @Configuration
 public class ServiceLevelOAuth2Config {
@@ -40,23 +49,36 @@ public class ServiceLevelOAuth2Config {
 
     @Bean
     public NimbusJwtDecoder endUserJwtDecoder() {
-        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(endUserJwkSetUri).build();
-        decoder.setJwtValidator(endUserTokenValidator());
-        return decoder;
+        return endUserDecoderAssembly().build();
     }
 
     @Bean
     public OAuth2TokenValidator<Jwt> endUserTokenValidator() {
-        List<String> allowedIssuers = parseCsv(allowedIssuersCsv);
-        List<OAuth2TokenValidator<Jwt>> validators = new ArrayList<>();
-        validators.add(new JwtTimestampValidator());
-        validators.add(new AllowedIssuersValidator(allowedIssuers));
-        validators.add(TenantClaimValidator.forTenant(requiredTenantId)
-                .allowSuperAdminWildcard()   // SUPER_ADMIN platform scope (ADR-MONO-019 § D5)
-                // no .trustEntitledDomains() — fan is outside the entitlement plane
-                .build());
-        validators.add(JwtValidators.createDefault());
-        return new DelegatingOAuth2TokenValidator<>(validators);
+        return endUserDecoderAssembly().buildValidator();
+    }
+
+    /**
+     * The one place this service's end-user token policy is stated; both beans above are built from it.
+     *
+     * <p>The assembler installs, in this exact order, the {@code JwtTimestampValidator}, the
+     * {@link AllowedIssuersValidator} over the allow-list below, the tenant validator handed to it here,
+     * and finally {@code JwtValidators.createDefault()} — the same four the hand-written chain listed,
+     * in the same order, because that order decides which {@code OAuth2Error}
+     * {@code SecurityConfig}'s entry point sees first and therefore whether a rejection is a 401 or a
+     * 403.
+     *
+     * <p>Private, so it is not a {@code @Bean} method: each caller gets its own (stateless,
+     * structurally identical) chain, which is the shape
+     * {@link ResourceServerChainAssembler.JwtDecoderBuilder} documents for a service that exposes the
+     * decoder and the validator as two separate beans.
+     */
+    private ResourceServerChainAssembler.JwtDecoderBuilder endUserDecoderAssembly() {
+        return ResourceServerChainAssembler.jwtDecoder(endUserJwkSetUri)
+                .allowedIssuersCsv(allowedIssuersCsv)
+                .validator(TenantClaimValidator.forTenant(requiredTenantId)
+                        .allowSuperAdminWildcard()   // SUPER_ADMIN platform scope (ADR-MONO-019 § D5)
+                        // no .trustEntitledDomains() — fan is outside the entitlement plane
+                        .build());
     }
 
     /**
@@ -89,17 +111,5 @@ public class ServiceLevelOAuth2Config {
                 .allowSuperAdminWildcard()
                 // no .trustEntitledDomains() — see above
                 .build();
-    }
-
-    private static List<String> parseCsv(String csv) {
-        List<String> out = new ArrayList<>();
-        if (csv == null) return out;
-        for (String part : csv.split(",")) {
-            String trimmed = part.trim();
-            if (!trimmed.isEmpty()) {
-                out.add(trimmed);
-            }
-        }
-        return out;
     }
 }

@@ -30,16 +30,25 @@ public final class PublicPaths {
             "/actuator/health/"
     );
 
-    private static final PublicPathSet MECHANISM = PublicPathSet.of(EXACT, PREFIXES);
+    /**
+     * The same data as a {@link PublicPathSet}, for callers that need the value object rather than a
+     * predicate — the {@code SecurityFilterChain} assembly (ADR-MONO-058 § D4) registers the
+     * {@code permitAll()} matchers straight off it.
+     *
+     * <p>It is the <em>same instance</em> {@link #isPublic(String)} answers from, which is the point:
+     * the paths Spring Security lets through unauthenticated and the paths {@code TenantClaimEnforcer}
+     * skips its tenant check on cannot drift apart.
+     */
+    public static final PublicPathSet AS_SET = PublicPathSet.of(EXACT, PREFIXES);
 
     private PublicPaths() {
     }
 
     public static boolean isPublic(String path) {
-        return MECHANISM.isPublic(path);
+        return AS_SET.isPublic(path);
     }
 
     public static boolean isPublic(HttpServletRequest request) {
-        return MECHANISM.isPublic(request);
+        return AS_SET.isPublic(request);
     }
 }
