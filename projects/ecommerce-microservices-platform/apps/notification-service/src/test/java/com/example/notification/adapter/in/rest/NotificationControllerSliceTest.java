@@ -3,7 +3,7 @@ package com.example.notification.adapter.in.rest;
 import com.example.common.page.PageResult;
 import com.example.notification.application.result.GetNotificationResult;
 import com.example.notification.application.result.GetPreferenceResult;
-import com.example.notification.application.result.ListNotificationsResult;
+import com.example.notification.application.result.NotificationSummary;
 import com.example.notification.application.port.in.ManagePreferenceUseCase;
 import com.example.notification.application.port.in.QueryNotificationUseCase;
 import com.example.notification.domain.exception.NotificationNotFoundException;
@@ -46,10 +46,10 @@ class NotificationControllerSliceTest {
     @DisplayName("GET /api/notifications/me - 알림 목록 조회 성공")
     void getMyNotifications_returns200() throws Exception {
         LocalDateTime now = LocalDateTime.now();
-        ListNotificationsResult.NotificationSummary summary = new ListNotificationsResult.NotificationSummary(
+        NotificationSummary summary = new NotificationSummary(
                 "noti-1", "EMAIL", "Test Subject", "SENT", now, now);
 
-        PageResult<ListNotificationsResult.NotificationSummary> pageResult =
+        PageResult<NotificationSummary> pageResult =
                 new PageResult<>(List.of(summary), 0, 20, 1L, 1);
         given(notificationQueryService.getNotifications(eq("user-1"), any()))
                 .willReturn(pageResult);
@@ -60,7 +60,8 @@ class NotificationControllerSliceTest {
                 .andExpect(jsonPath("$.content[0].notificationId").value("noti-1"))
                 .andExpect(jsonPath("$.content[0].channel").value("EMAIL"))
                 .andExpect(jsonPath("$.content[0].status").value("SENT"))
-                .andExpect(jsonPath("$.totalElements").value(1));
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.totalPages").value(1));
     }
 
     @Test

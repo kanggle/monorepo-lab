@@ -1,7 +1,8 @@
 package com.example.review.application.service;
 
+import com.example.common.page.PageResult;
 import com.example.review.application.port.ReviewQueryPort;
-import com.example.review.application.result.MyReviewListResult;
+import com.example.review.application.result.MyReviewItem;
 import com.example.review.application.result.ReviewListResult;
 import com.example.review.application.result.ReviewSummaryResult;
 import org.junit.jupiter.api.DisplayName;
@@ -33,11 +34,12 @@ class ReviewQueryServiceTest {
     @DisplayName("상품별 리뷰 목록을 조회할 수 있다")
     void getProductReviews_success() {
         UUID productId = UUID.randomUUID();
-        ReviewListResult expected = new ReviewListResult(
+        PageResult<ReviewListResult.ReviewItem> page = new PageResult<>(
                 List.of(new ReviewListResult.ReviewItem(
                         UUID.randomUUID(), UUID.randomUUID(), 5, "좋은 상품", "만족", Instant.now(), Instant.now())),
-                0, 20, 1, 5.0, 1
+                0, 20, 1, 1
         );
+        ReviewListResult expected = new ReviewListResult(page, 5.0, 1);
 
         given(reviewQueryPort.findByProductId(productId, 0, 20, "createdAt,desc")).willReturn(expected);
 
@@ -45,6 +47,7 @@ class ReviewQueryServiceTest {
 
         assertThat(result.content()).hasSize(1);
         assertThat(result.averageRating()).isEqualTo(5.0);
+        assertThat(result.totalPages()).isEqualTo(1);
     }
 
     @Test
@@ -68,16 +71,17 @@ class ReviewQueryServiceTest {
     @DisplayName("내 리뷰 목록을 조회할 수 있다")
     void getMyReviews_success() {
         UUID userId = UUID.randomUUID();
-        MyReviewListResult expected = new MyReviewListResult(
-                List.of(new MyReviewListResult.MyReviewItem(
+        PageResult<MyReviewItem> expected = new PageResult<>(
+                List.of(new MyReviewItem(
                         UUID.randomUUID(), UUID.randomUUID(), "테스트상품", 5, "제목", "내용", Instant.now())),
-                0, 20, 1
+                0, 20, 1, 1
         );
 
         given(reviewQueryPort.findByUserId(userId, 0, 20)).willReturn(expected);
 
-        MyReviewListResult result = reviewQueryService.getMyReviews(userId, 0, 20);
+        PageResult<MyReviewItem> result = reviewQueryService.getMyReviews(userId, 0, 20);
 
         assertThat(result.content()).hasSize(1);
+        assertThat(result.totalPages()).isEqualTo(1);
     }
 }

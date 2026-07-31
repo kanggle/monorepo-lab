@@ -1,6 +1,6 @@
 package com.example.user.presentation.controller;
 
-import com.example.user.application.result.UserListPageResult;
+import com.example.common.page.PageResult;
 import com.example.user.application.result.UserProfileResult;
 import com.example.user.application.result.UserProfileSummaryResult;
 import com.example.user.application.service.UserProfileService;
@@ -48,7 +48,7 @@ class AdminUserControllerSliceTest {
                     UUID.randomUUID(), "test@example.com", "홍길동", "길동이",
                     "ACTIVE", Instant.parse("2026-01-01T00:00:00Z")
             );
-            UserListPageResult page = new UserListPageResult(List.of(summary), 1L, 1, 0, 20);
+            PageResult<UserProfileSummaryResult> page = new PageResult<>(List.of(summary), 0, 20, 1L, 1);
             given(userProfileService.listUsers(isNull(), isNull(), eq(0), eq(20))).willReturn(page);
 
             mockMvc.perform(get("/api/admin/users")
@@ -58,7 +58,8 @@ class AdminUserControllerSliceTest {
                     .andExpect(jsonPath("$.content[0].email").value("test@example.com"))
                     .andExpect(jsonPath("$.page").value(0))
                     .andExpect(jsonPath("$.size").value(20))
-                    .andExpect(jsonPath("$.totalElements").value(1));
+                    .andExpect(jsonPath("$.totalElements").value(1))
+                    .andExpect(jsonPath("$.totalPages").value(1));
         }
 
         @Test
@@ -81,7 +82,7 @@ class AdminUserControllerSliceTest {
         @Test
         @DisplayName("status 필터로 사용자 목록을 조회한다")
         void listUsers_statusFilter_returns200() throws Exception {
-            UserListPageResult page = new UserListPageResult(List.of(), 0L, 0, 0, 20);
+            PageResult<UserProfileSummaryResult> page = new PageResult<>(List.of(), 0, 20, 0L, 0);
             given(userProfileService.listUsers(eq(ProfileStatus.ACTIVE), isNull(), eq(0), eq(20)))
                     .willReturn(page);
 
@@ -95,7 +96,7 @@ class AdminUserControllerSliceTest {
         @Test
         @DisplayName("email 부분 검색으로 사용자 목록을 조회한다")
         void listUsers_emailFilter_returns200() throws Exception {
-            UserListPageResult page = new UserListPageResult(List.of(), 0L, 0, 0, 20);
+            PageResult<UserProfileSummaryResult> page = new PageResult<>(List.of(), 0, 20, 0L, 0);
             given(userProfileService.listUsers(isNull(), eq("test"), eq(0), eq(20)))
                     .willReturn(page);
 
@@ -109,7 +110,7 @@ class AdminUserControllerSliceTest {
         @Test
         @DisplayName("페이지 번호와 사이즈를 지정하여 조회한다")
         void listUsers_withPagination_returns200() throws Exception {
-            UserListPageResult page = new UserListPageResult(List.of(), 0L, 0, 2, 10);
+            PageResult<UserProfileSummaryResult> page = new PageResult<>(List.of(), 2, 10, 0L, 0);
             given(userProfileService.listUsers(isNull(), isNull(), eq(2), eq(10)))
                     .willReturn(page);
 
@@ -177,7 +178,7 @@ class AdminUserControllerSliceTest {
         @Test
         @DisplayName("멀티롤 헤더에 ECOMMERCE_OPERATOR 포함 시 200 (multi-domain operator)")
         void listUsers_multiRoleContainingAdmin_returns200() throws Exception {
-            var page = new UserListPageResult(List.of(), 0L, 0, 0, 20);
+            var page = new PageResult<UserProfileSummaryResult>(List.of(), 0, 20, 0L, 0);
             given(userProfileService.listUsers(isNull(), isNull(), eq(0), eq(20))).willReturn(page);
 
             mockMvc.perform(get("/api/admin/users")
@@ -188,7 +189,7 @@ class AdminUserControllerSliceTest {
         @Test
         @DisplayName("단일 ECOMMERCE_OPERATOR 롤 헤더는 계속 200 (회귀 방지)")
         void listUsers_singleAdminRole_returns200_regressionGuard() throws Exception {
-            var page = new UserListPageResult(List.of(), 0L, 0, 0, 20);
+            var page = new PageResult<UserProfileSummaryResult>(List.of(), 0, 20, 0L, 0);
             given(userProfileService.listUsers(isNull(), isNull(), eq(0), eq(20))).willReturn(page);
 
             mockMvc.perform(get("/api/admin/users")

@@ -1,8 +1,8 @@
 package com.example.product.application.service;
 
+import com.example.common.page.PageResult;
 import com.example.common.summary.PeriodSummary;
 import com.example.common.time.KstPeriodBounds;
-import com.example.product.application.dto.SellerListResult;
 import com.example.product.application.dto.SellerSummary;
 import com.example.product.application.port.SellerQueryPort;
 import com.example.product.domain.exception.SellerNotFoundException;
@@ -27,7 +27,7 @@ public class SellerQueryService {
     private final SellerRepository sellerRepository;
 
     @Transactional(readOnly = true)
-    public SellerListResult listSellers(int page, int size) {
+    public PageResult<SellerSummary> listSellers(int page, int size) {
         return sellerQueryPort.findAll(page, size);
     }
 

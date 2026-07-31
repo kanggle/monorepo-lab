@@ -1,6 +1,7 @@
 package com.example.product.application.port;
 
-import com.example.product.application.dto.SellerListResult;
+import com.example.common.page.PageResult;
+import com.example.product.application.dto.SellerSummary;
 
 /**
  * Application read port for the marketplace seller operator surface (ADR-MONO-030
@@ -12,5 +13,5 @@ import com.example.product.application.dto.SellerListResult;
 public interface SellerQueryPort {
 
     /** Paged list of sellers in the current tenant, newest-first. */
-    SellerListResult findAll(int page, int size);
+    PageResult<SellerSummary> findAll(int page, int size);
 }

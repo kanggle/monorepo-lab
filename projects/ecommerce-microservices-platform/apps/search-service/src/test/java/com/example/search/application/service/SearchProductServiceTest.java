@@ -1,5 +1,7 @@
 package com.example.search.application.service;
 
+import com.example.common.page.PageQuery;
+import com.example.common.page.PageResult;
 import com.example.search.application.dto.SearchProductQuery;
 import com.example.search.application.dto.SearchProductResult;
 import com.example.search.domain.model.FacetResult;
@@ -50,11 +52,12 @@ class SearchProductServiceTest {
     @DisplayName("검색 성공 - SearchQueryPort가 호출되고 결과를 반환한다")
     void search_validQuery_callsPortAndReturnsResult() {
         SearchFilter filter = SearchFilter.of("노트북", null, null, null, null);
-        SearchProductQuery query = new SearchProductQuery(filter, SearchSort.RELEVANCE, 0, 20);
+        SearchProductQuery query = new SearchProductQuery(filter, SearchSort.RELEVANCE, new PageQuery(0, 20, null, null));
         SearchProductResult expected = new SearchProductResult(
-                List.of(SearchDocument.of("p1", "노트북", "설명", 1000L, "ON_SALE", "cat1", 10)),
-                new FacetResult(List.of(), List.of()),
-                1L
+                new PageResult<>(
+                        List.of(SearchDocument.of("p1", "노트북", "설명", 1000L, "ON_SALE", "cat1", 10)),
+                        0, 20, 1L, 1),
+                new FacetResult(List.of(), List.of())
         );
         given(searchQueryPort.search(query)).willReturn(expected);
 
@@ -68,11 +71,10 @@ class SearchProductServiceTest {
     @DisplayName("검색 결과 없음 - 빈 리스트와 totalElements=0 반환")
     void search_noResults_returnsEmptyResult() {
         SearchFilter filter = SearchFilter.of("존재하지않는상품xyz", null, null, null, null);
-        SearchProductQuery query = new SearchProductQuery(filter, SearchSort.RELEVANCE, 0, 20);
+        SearchProductQuery query = new SearchProductQuery(filter, SearchSort.RELEVANCE, new PageQuery(0, 20, null, null));
         SearchProductResult empty = new SearchProductResult(
-                List.of(),
-                new FacetResult(List.of(), List.of()),
-                0L
+                new PageResult<>(List.of(), 0, 20, 0L, 0),
+                new FacetResult(List.of(), List.of())
         );
         given(searchQueryPort.search(query)).willReturn(empty);
 
@@ -86,9 +88,9 @@ class SearchProductServiceTest {
     @DisplayName("필터 조합 - SearchQueryPort에 올바른 쿼리가 전달된다")
     void search_withFilters_passesQueryToPort() {
         SearchFilter filter = SearchFilter.of("노트북", "cat1", 100000L, 2000000L, "ON_SALE");
-        SearchProductQuery query = new SearchProductQuery(filter, SearchSort.PRICE_ASC, 0, 10);
+        SearchProductQuery query = new SearchProductQuery(filter, SearchSort.PRICE_ASC, new PageQuery(0, 10, null, null));
         given(searchQueryPort.search(any())).willReturn(
-                new SearchProductResult(List.of(), new FacetResult(List.of(), List.of()), 0L)
+                new SearchProductResult(new PageResult<>(List.of(), 0, 10, 0L, 0), new FacetResult(List.of(), List.of()))
         );
 
         searchProductService.search(query);
@@ -103,11 +105,13 @@ class SearchProductServiceTest {
     @DisplayName("검색 성공 시 search_query_total 메트릭이 증가한다")
     void search_success_incrementsSearchQueryMetric() {
         SearchFilter filter = SearchFilter.of("노트북", null, null, null, null);
-        SearchProductQuery query = new SearchProductQuery(filter, SearchSort.RELEVANCE, 0, 20);
+        SearchProductQuery query = new SearchProductQuery(filter, SearchSort.RELEVANCE, new PageQuery(0, 20, null, null));
         given(searchQueryPort.search(query)).willReturn(
                 new SearchProductResult(
-                        List.of(SearchDocument.of("p1", "노트북", "설명", 1000L, "ON_SALE", "cat1", 10)),
-                        new FacetResult(List.of(), List.of()), 1L
+                        new PageResult<>(
+                                List.of(SearchDocument.of("p1", "노트북", "설명", 1000L, "ON_SALE", "cat1", 10)),
+                                0, 20, 1L, 1),
+                        new FacetResult(List.of(), List.of())
                 )
         );
 
@@ -120,9 +124,9 @@ class SearchProductServiceTest {
     @DisplayName("검색 결과 0건이면 zero_results 메트릭이 증가한다")
     void search_emptyResult_incrementsZeroResultsMetric() {
         SearchFilter filter = SearchFilter.of("없는상품", null, null, null, null);
-        SearchProductQuery query = new SearchProductQuery(filter, SearchSort.RELEVANCE, 0, 20);
+        SearchProductQuery query = new SearchProductQuery(filter, SearchSort.RELEVANCE, new PageQuery(0, 20, null, null));
         given(searchQueryPort.search(query)).willReturn(
-                new SearchProductResult(List.of(), new FacetResult(List.of(), List.of()), 0L)
+                new SearchProductResult(new PageResult<>(List.of(), 0, 20, 0L, 0), new FacetResult(List.of(), List.of()))
         );
 
         searchProductService.search(query);
@@ -134,11 +138,13 @@ class SearchProductServiceTest {
     @DisplayName("검색 결과가 있으면 zero_results 메트릭이 증가하지 않는다")
     void search_nonEmptyResult_doesNotIncrementZeroResults() {
         SearchFilter filter = SearchFilter.of("노트북", null, null, null, null);
-        SearchProductQuery query = new SearchProductQuery(filter, SearchSort.RELEVANCE, 0, 20);
+        SearchProductQuery query = new SearchProductQuery(filter, SearchSort.RELEVANCE, new PageQuery(0, 20, null, null));
         given(searchQueryPort.search(query)).willReturn(
                 new SearchProductResult(
-                        List.of(SearchDocument.of("p1", "노트북", "설명", 1000L, "ON_SALE", "cat1", 10)),
-                        new FacetResult(List.of(), List.of()), 1L
+                        new PageResult<>(
+                                List.of(SearchDocument.of("p1", "노트북", "설명", 1000L, "ON_SALE", "cat1", 10)),
+                                0, 20, 1L, 1),
+                        new FacetResult(List.of(), List.of())
                 )
         );
 

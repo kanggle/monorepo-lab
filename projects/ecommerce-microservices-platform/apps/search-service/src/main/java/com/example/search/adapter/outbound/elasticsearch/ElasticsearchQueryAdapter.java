@@ -9,6 +9,7 @@ import co.elastic.clients.elasticsearch.core.SearchRequest;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.elasticsearch.core.search.HitsMetadata;
+import com.example.common.page.PageResult;
 import com.example.search.application.dto.SearchProductQuery;
 import com.example.search.application.dto.SearchProductResult;
 import com.example.search.domain.model.FacetResult;
@@ -70,7 +71,7 @@ public class ElasticsearchQueryAdapter implements SearchQueryPort {
             );
 
             SearchResponse<Map> response = elasticsearchClient.search(request, Map.class);
-            return toResult(response);
+            return toResult(response, query);
         } catch (SearchException e) {
             throw e;
         } catch (Exception e) {
@@ -117,10 +118,12 @@ public class ElasticsearchQueryAdapter implements SearchQueryPort {
     }
 
     @SuppressWarnings("unchecked")
-    private SearchProductResult toResult(SearchResponse<Map> response) {
+    private SearchProductResult toResult(SearchResponse<Map> response, SearchProductQuery query) {
         HitsMetadata<Map> hits = response.hits();
         if (hits == null) {
-            return new SearchProductResult(Collections.emptyList(), new FacetResult(Collections.emptyList(), Collections.emptyList()), 0L);
+            PageResult<SearchDocument> emptyPage = new PageResult<>(
+                    Collections.emptyList(), query.page(), query.size(), 0L, 0);
+            return new SearchProductResult(emptyPage, new FacetResult(Collections.emptyList(), Collections.emptyList()));
         }
 
         List<SearchDocument> documents = new ArrayList<>();
@@ -134,9 +137,12 @@ public class ElasticsearchQueryAdapter implements SearchQueryPort {
         }
 
         long totalElements = hits.total() != null ? hits.total().value() : 0L;
+        int totalPages = query.size() > 0 ? (int) Math.ceil((double) totalElements / query.size()) : 0;
         FacetResult facets = extractFacets(response);
 
-        return new SearchProductResult(documents, facets, totalElements);
+        PageResult<SearchDocument> pageResult = new PageResult<>(
+                documents, query.page(), query.size(), totalElements, totalPages);
+        return new SearchProductResult(pageResult, facets);
     }
 
     private FacetResult extractFacets(SearchResponse<Map> response) {

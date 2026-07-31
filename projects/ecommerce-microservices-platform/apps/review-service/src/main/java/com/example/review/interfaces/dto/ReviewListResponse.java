@@ -9,6 +9,7 @@ public record ReviewListResponse(
         int page,
         int size,
         long totalElements,
+        int totalPages,
         double averageRating,
         long totalReviews
 ) {
@@ -40,6 +41,7 @@ public record ReviewListResponse(
                 result.page(),
                 result.size(),
                 result.totalElements(),
+                result.totalPages(),
                 result.averageRating(),
                 result.totalReviews()
         );

@@ -1,5 +1,6 @@
 package com.example.product.infrastructure.persistence;
 
+import com.example.common.page.PageResult;
 import com.example.product.application.dto.ProductListResult;
 import com.example.product.application.dto.ProductSummary;
 import com.example.product.application.port.ProductQueryPort;
@@ -110,10 +111,9 @@ class ProductRepositoryImpl implements ProductRepository, ProductQueryPort {
                         entity.getCategoryId(),
                         entity.getSellerId()));
 
-        return new ProductListResult(
-                result.getContent(),
-                result.getNumber(),
-                result.getSize(),
-                result.getTotalElements());
+        PageResult<ProductSummary> pageResult = new PageResult<>(
+                result.getContent(), result.getNumber(), result.getSize(),
+                result.getTotalElements(), result.getTotalPages());
+        return new ProductListResult(pageResult);
     }
 }

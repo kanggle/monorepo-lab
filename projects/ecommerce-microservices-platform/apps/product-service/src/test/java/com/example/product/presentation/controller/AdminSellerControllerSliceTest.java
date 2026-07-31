@@ -1,7 +1,7 @@
 package com.example.product.presentation.controller;
 
+import com.example.common.page.PageResult;
 import com.example.product.TestProductServiceApplication;
-import com.example.product.application.dto.SellerListResult;
 import com.example.product.application.dto.SellerSummary;
 import com.example.product.application.service.RegisterSellerService;
 import com.example.product.application.service.SellerQueryService;
@@ -57,9 +57,9 @@ class AdminSellerControllerSliceTest {
     @Test
     @DisplayName("GET /api/admin/sellers - ECOMMERCE_OPERATOR 헤더로 200 + paged 요약 반환")
     void list_admin_returns200WithPagedSummary() throws Exception {
-        SellerListResult result = new SellerListResult(
+        PageResult<SellerSummary> result = new PageResult<>(
                 List.of(summary("seller-a1", "셀러 A1"), summary("default", "Default Seller")),
-                0, 20, 2L);
+                0, 20, 2L, 1);
         given(sellerQueryService.listSellers(anyInt(), anyInt())).willReturn(result);
 
         mockMvc.perform(get("/api/admin/sellers")
@@ -73,13 +73,14 @@ class AdminSellerControllerSliceTest {
                 .andExpect(jsonPath("$.content[1].sellerId").value("default"))
                 .andExpect(jsonPath("$.totalElements").value(2))
                 .andExpect(jsonPath("$.page").value(0))
-                .andExpect(jsonPath("$.size").value(20));
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.totalPages").value(1));
     }
 
     @Test
     @DisplayName("GET /api/admin/sellers - size 가 100 으로 cap 된다")
     void list_oversizedPage_isCappedAt100() throws Exception {
-        SellerListResult result = new SellerListResult(List.of(), 0, 100, 0L);
+        PageResult<SellerSummary> result = new PageResult<>(List.of(), 0, 100, 0L, 0);
         given(sellerQueryService.listSellers(eq(0), eq(100))).willReturn(result);
 
         mockMvc.perform(get("/api/admin/sellers")
@@ -148,7 +149,7 @@ class AdminSellerControllerSliceTest {
     @Test
     @DisplayName("GET /api/admin/sellers - 멀티롤 헤더에 ECOMMERCE_OPERATOR 포함 시 200 (multi-domain operator)")
     void list_multiRoleHeaderContainingAdmin_returns200() throws Exception {
-        SellerListResult result = new SellerListResult(List.of(), 0, 20, 0L);
+        PageResult<SellerSummary> result = new PageResult<>(List.of(), 0, 20, 0L, 0);
         given(sellerQueryService.listSellers(anyInt(), anyInt())).willReturn(result);
 
         mockMvc.perform(get("/api/admin/sellers")
@@ -159,7 +160,7 @@ class AdminSellerControllerSliceTest {
     @Test
     @DisplayName("GET /api/admin/sellers - ECOMMERCE_OPERATOR만 있는 단일 롤 헤더 200 (회귀 방지)")
     void list_singleAdminRole_returns200_regressionGuard() throws Exception {
-        SellerListResult result = new SellerListResult(List.of(), 0, 20, 0L);
+        PageResult<SellerSummary> result = new PageResult<>(List.of(), 0, 20, 0L, 0);
         given(sellerQueryService.listSellers(anyInt(), anyInt())).willReturn(result);
 
         mockMvc.perform(get("/api/admin/sellers")

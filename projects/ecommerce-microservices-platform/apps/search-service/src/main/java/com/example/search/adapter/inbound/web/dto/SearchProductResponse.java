@@ -12,7 +12,8 @@ public record SearchProductResponse(
         FacetsDto facets,
         int page,
         int size,
-        long totalElements
+        long totalElements,
+        int totalPages
 ) {
 
     public record ProductItem(
@@ -62,7 +63,8 @@ public record SearchProductResponse(
                 FacetsDto.from(result.facets()),
                 page,
                 size,
-                result.totalElements()
+                result.totalElements(),
+                result.totalPages()
         );
     }
 }

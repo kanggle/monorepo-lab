@@ -1,8 +1,9 @@
 package com.example.review.infrastructure.persistence;
 
+import com.example.common.page.PageResult;
 import com.example.review.application.ReviewSortFields;
 import com.example.review.application.port.ReviewQueryPort;
-import com.example.review.application.result.MyReviewListResult;
+import com.example.review.application.result.MyReviewItem;
 import com.example.review.application.result.ReviewListResult;
 import com.example.review.application.result.ReviewSummaryResult;
 import com.example.review.domain.model.Review;
@@ -79,14 +80,10 @@ class ReviewRepositoryImpl implements ReviewRepository, ReviewQueryPort {
                 ))
                 .toList();
 
-        return new ReviewListResult(
-                items,
-                result.getNumber(),
-                result.getSize(),
-                result.getTotalElements(),
-                roundToOneDecimal(averageRating),
-                totalReviews
-        );
+        PageResult<ReviewListResult.ReviewItem> pageResult = new PageResult<>(
+                items, result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
+
+        return new ReviewListResult(pageResult, roundToOneDecimal(averageRating), totalReviews);
     }
 
     @Override
@@ -117,13 +114,13 @@ class ReviewRepositoryImpl implements ReviewRepository, ReviewQueryPort {
     }
 
     @Override
-    public MyReviewListResult findByUserId(UUID userId, int page, int size) {
+    public PageResult<MyReviewItem> findByUserId(UUID userId, int page, int size) {
         Page<ReviewJpaEntity> result = jpaRepository.findByUserIdAndStatusAndTenantId(
                 userId, ReviewStatus.ACTIVE, TenantContext.currentTenant(),
                 PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")));
 
-        List<MyReviewListResult.MyReviewItem> items = result.getContent().stream()
-                .map(entity -> new MyReviewListResult.MyReviewItem(
+        List<MyReviewItem> items = result.getContent().stream()
+                .map(entity -> new MyReviewItem(
                         entity.getId(),
                         entity.getProductId(),
                         entity.getProductName(),
@@ -134,12 +131,7 @@ class ReviewRepositoryImpl implements ReviewRepository, ReviewQueryPort {
                 ))
                 .toList();
 
-        return new MyReviewListResult(
-                items,
-                result.getNumber(),
-                result.getSize(),
-                result.getTotalElements()
-        );
+        return new PageResult<>(items, result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
     }
 
     private double fetchAverageRating(UUID productId, String tenantId) {

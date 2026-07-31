@@ -1,5 +1,6 @@
 package com.example.product.presentation.controller;
 
+import com.example.common.page.PageResult;
 import com.example.product.TestProductServiceApplication;
 import com.example.product.application.dto.ProductDetail;
 import com.example.product.application.dto.ProductListResult;
@@ -75,7 +76,7 @@ class ProductControllerSliceTest {
     void getProducts_success_returns200() throws Exception {
         UUID id = UUID.randomUUID();
         ProductSummary summary = new ProductSummary(id, "상품", ProductStatus.ON_SALE, 10000L, null);
-        ProductListResult result = new ProductListResult(List.of(summary), 0, 20, 1L);
+        ProductListResult result = new ProductListResult(new PageResult<>(List.of(summary), 0, 20, 1L, 1));
         given(queryProductService.findAll(any(), any(), any(), anyInt(), anyInt())).willReturn(result);
 
         mockMvc.perform(get("/api/products"))
@@ -84,13 +85,14 @@ class ProductControllerSliceTest {
                 .andExpect(jsonPath("$.content[0].id").value(id.toString()))
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.page").value(0))
-                .andExpect(jsonPath("$.size").value(20));
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.totalPages").value(1));
     }
 
     @Test
     @DisplayName("GET /api/products?size=500 - 과도한 page size 는 100 으로 clamp 된다 (M7, TASK-BE-405)")
     void getProducts_oversizedSize_clampedToMax() throws Exception {
-        ProductListResult result = new ProductListResult(List.of(), 0, 100, 0L);
+        ProductListResult result = new ProductListResult(new PageResult<>(List.of(), 0, 100, 0L, 0));
         org.mockito.ArgumentCaptor<Integer> sizeCaptor = org.mockito.ArgumentCaptor.forClass(Integer.class);
         given(queryProductService.findAll(any(), any(), any(), anyInt(), sizeCaptor.capture())).willReturn(result);
 
@@ -104,7 +106,7 @@ class ProductControllerSliceTest {
     @Test
     @DisplayName("GET /api/products?size=50 - 정상 page size 는 그대로 전달된다 (backward-compatible)")
     void getProducts_normalSize_passedThrough() throws Exception {
-        ProductListResult result = new ProductListResult(List.of(), 0, 50, 0L);
+        ProductListResult result = new ProductListResult(new PageResult<>(List.of(), 0, 50, 0L, 0));
         org.mockito.ArgumentCaptor<Integer> sizeCaptor = org.mockito.ArgumentCaptor.forClass(Integer.class);
         given(queryProductService.findAll(any(), any(), any(), anyInt(), sizeCaptor.capture())).willReturn(result);
 
@@ -117,7 +119,7 @@ class ProductControllerSliceTest {
     @Test
     @DisplayName("GET /api/products?name=셔츠 - name 필터가 서비스로 전달된다 (TASK-BE-420)")
     void getProducts_withNameFilter_passedThrough() throws Exception {
-        ProductListResult result = new ProductListResult(List.of(), 0, 20, 0L);
+        ProductListResult result = new ProductListResult(new PageResult<>(List.of(), 0, 20, 0L, 0));
         org.mockito.ArgumentCaptor<String> nameCaptor = org.mockito.ArgumentCaptor.forClass(String.class);
         given(queryProductService.findAll(any(), any(), nameCaptor.capture(), anyInt(), anyInt())).willReturn(result);
 
@@ -130,7 +132,7 @@ class ProductControllerSliceTest {
     @Test
     @DisplayName("GET /api/products - name 파라미터 없으면 null 로 전달된다")
     void getProducts_noNameParam_passesNull() throws Exception {
-        ProductListResult result = new ProductListResult(List.of(), 0, 20, 0L);
+        ProductListResult result = new ProductListResult(new PageResult<>(List.of(), 0, 20, 0L, 0));
         org.mockito.ArgumentCaptor<String> nameCaptor = org.mockito.ArgumentCaptor.forClass(String.class);
         given(queryProductService.findAll(any(), any(), nameCaptor.capture(), anyInt(), anyInt())).willReturn(result);
 
@@ -177,7 +179,7 @@ class ProductControllerSliceTest {
     void getProducts_listExposesSellerId() throws Exception {
         UUID id = UUID.randomUUID();
         ProductSummary summary = new ProductSummary(id, "상품", ProductStatus.ON_SALE, 10000L, null, null, "seller-a1");
-        ProductListResult result = new ProductListResult(List.of(summary), 0, 20, 1L);
+        ProductListResult result = new ProductListResult(new PageResult<>(List.of(summary), 0, 20, 1L, 1));
         given(queryProductService.findAll(any(), any(), any(), anyInt(), anyInt())).willReturn(result);
 
         mockMvc.perform(get("/api/products"))

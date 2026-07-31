@@ -3,8 +3,9 @@ package com.example.user.presentation.controller;
 import com.example.user.application.command.AddWishlistItemCommand;
 import com.example.user.application.result.AddWishlistItemResult;
 import com.example.user.application.result.WishlistCheckResult;
-import com.example.user.application.result.WishlistPageResult;
+import com.example.user.application.result.WishlistItemResult;
 import com.example.user.application.service.WishlistService;
+import com.example.common.page.PageResult;
 import com.example.user.presentation.dto.request.AddWishlistItemRequest;
 import com.example.user.presentation.dto.response.AddWishlistItemResponse;
 import com.example.user.presentation.dto.response.WishlistCheckResponse;
@@ -39,7 +40,7 @@ public class WishlistController {
             @RequestHeader("X-User-Id") UUID userId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        WishlistPageResult result = wishlistService.getWishlist(userId, page, size);
+        PageResult<WishlistItemResult> result = wishlistService.getWishlist(userId, page, size);
         return ResponseEntity.ok(WishlistPageResponse.from(result));
     }
 

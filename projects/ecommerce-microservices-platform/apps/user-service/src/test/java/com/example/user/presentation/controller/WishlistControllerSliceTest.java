@@ -3,7 +3,7 @@ package com.example.user.presentation.controller;
 import com.example.user.application.result.AddWishlistItemResult;
 import com.example.user.application.result.WishlistCheckResult;
 import com.example.user.application.result.WishlistItemResult;
-import com.example.user.application.result.WishlistPageResult;
+import com.example.common.page.PageResult;
 import com.example.user.application.service.WishlistService;
 import com.example.user.domain.exception.AlreadyInWishlistException;
 import com.example.user.domain.exception.UserProfileNotFoundException;
@@ -190,7 +190,7 @@ class WishlistControllerSliceTest {
             UUID productId = UUID.randomUUID();
             UUID wishlistItemId = UUID.randomUUID();
             var item = new WishlistItemResult(wishlistItemId, productId, "테스트상품", 15000, "ACTIVE", Instant.now());
-            var pageResult = new WishlistPageResult(List.of(item), 0, 20, 1);
+            var pageResult = new PageResult<>(List.of(item), 0, 20, 1L, 1);
             given(wishlistService.getWishlist(eq(USER_ID), eq(0), eq(20))).willReturn(pageResult);
 
             mockMvc.perform(get("/api/wishlists/me")
@@ -205,7 +205,8 @@ class WishlistControllerSliceTest {
                     .andExpect(jsonPath("$.content[0].productStatus").value("ACTIVE"))
                     .andExpect(jsonPath("$.page").value(0))
                     .andExpect(jsonPath("$.size").value(20))
-                    .andExpect(jsonPath("$.totalElements").value(1));
+                    .andExpect(jsonPath("$.totalElements").value(1))
+                    .andExpect(jsonPath("$.totalPages").value(1));
         }
 
         @Test

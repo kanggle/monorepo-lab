@@ -199,7 +199,8 @@ class WishlistIntegrationTest {
                     .andExpect(jsonPath("$.content.length()").value(2))
                     .andExpect(jsonPath("$.totalElements").value(5))
                     .andExpect(jsonPath("$.page").value(0))
-                    .andExpect(jsonPath("$.size").value(2));
+                    .andExpect(jsonPath("$.size").value(2))
+                    .andExpect(jsonPath("$.totalPages").value(3));
         }
     }
 

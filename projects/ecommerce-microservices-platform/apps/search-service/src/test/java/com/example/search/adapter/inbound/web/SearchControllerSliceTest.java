@@ -1,5 +1,6 @@
 package com.example.search.adapter.inbound.web;
 
+import com.example.common.page.PageResult;
 import com.example.search.application.dto.SearchProductResult;
 import com.example.search.application.service.SearchProductService;
 import com.example.search.domain.model.FacetResult;
@@ -51,12 +52,13 @@ class SearchControllerSliceTest {
     @DisplayName("정상 요청 시 200과 응답 구조 반환")
     void search_validQ_returns200WithStructure() throws Exception {
         SearchProductResult result = new SearchProductResult(
-                List.of(SearchDocument.of("p1", "노트북", "설명", 1000000L, "ON_SALE", "cat1", 5)),
+                new PageResult<>(
+                        List.of(SearchDocument.of("p1", "노트북", "설명", 1000000L, "ON_SALE", "cat1", 5)),
+                        0, 20, 1L, 1),
                 new FacetResult(
                         List.of(new FacetResult.CategoryFacet("cat1", 1L)),
                         List.of(new FacetResult.PriceRangeFacet(null, 10000L, 0L))
-                ),
-                1L
+                )
         );
         given(searchProductService.search(any())).willReturn(result);
 
@@ -68,7 +70,8 @@ class SearchControllerSliceTest {
                 .andExpect(jsonPath("$.facets").exists())
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.page").value(0))
-                .andExpect(jsonPath("$.size").value(20));
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.totalPages").value(1));
     }
 
     @Test
@@ -83,9 +86,8 @@ class SearchControllerSliceTest {
     @DisplayName("size=101 요청 시 size가 100으로 제한된 응답 반환")
     void search_sizeOver100_cappedAt100() throws Exception {
         SearchProductResult result = new SearchProductResult(
-                List.of(),
-                new FacetResult(List.of(), List.of()),
-                0L
+                new PageResult<>(List.of(), 0, 100, 0L, 0),
+                new FacetResult(List.of(), List.of())
         );
         given(searchProductService.search(any())).willReturn(result);
 
@@ -106,7 +108,7 @@ class SearchControllerSliceTest {
     @DisplayName("검색 결과 0건이면 200과 빈 content 반환")
     void search_noResults_returns200WithEmptyContent() throws Exception {
         given(searchProductService.search(any())).willReturn(
-                new SearchProductResult(List.of(), new FacetResult(List.of(), List.of()), 0L)
+                new SearchProductResult(new PageResult<>(List.of(), 0, 20, 0L, 0), new FacetResult(List.of(), List.of()))
         );
 
         mockMvc.perform(get("/api/search/products").param("q", "없는상품xyz"))
@@ -119,7 +121,7 @@ class SearchControllerSliceTest {
     @DisplayName("categoryId, minPrice, maxPrice 필터 조합 요청 시 200 반환")
     void search_withFilterCombination_returns200() throws Exception {
         given(searchProductService.search(any())).willReturn(
-                new SearchProductResult(List.of(), new FacetResult(List.of(), List.of()), 0L)
+                new SearchProductResult(new PageResult<>(List.of(), 0, 20, 0L, 0), new FacetResult(List.of(), List.of()))
         );
 
         mockMvc.perform(get("/api/search/products")
@@ -136,7 +138,7 @@ class SearchControllerSliceTest {
     @DisplayName("sort=price_asc 파라미터가 정상 처리된다")
     void search_withSortParam_returns200() throws Exception {
         given(searchProductService.search(any())).willReturn(
-                new SearchProductResult(List.of(), new FacetResult(List.of(), List.of()), 0L)
+                new SearchProductResult(new PageResult<>(List.of(), 0, 20, 0L, 0), new FacetResult(List.of(), List.of()))
         );
 
         mockMvc.perform(get("/api/search/products")
@@ -149,7 +151,7 @@ class SearchControllerSliceTest {
     @DisplayName("page 파라미터 지정 시 응답에 page가 반영된다")
     void search_withPage_returnsCorrectPage() throws Exception {
         given(searchProductService.search(any())).willReturn(
-                new SearchProductResult(List.of(), new FacetResult(List.of(), List.of()), 0L)
+                new SearchProductResult(new PageResult<>(List.of(), 0, 20, 0L, 0), new FacetResult(List.of(), List.of()))
         );
 
         mockMvc.perform(get("/api/search/products")

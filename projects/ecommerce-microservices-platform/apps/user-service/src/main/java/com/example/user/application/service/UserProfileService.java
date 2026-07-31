@@ -3,7 +3,6 @@ package com.example.user.application.service;
 import com.example.user.application.command.UpdateProfileCommand;
 import com.example.user.application.event.UserProfileUpdatedSpringEvent;
 import com.example.user.application.event.UserWithdrawnSpringEvent;
-import com.example.user.application.result.UserListPageResult;
 import com.example.user.application.result.UserProfileResult;
 import com.example.user.application.result.UserProfileSummaryResult;
 import com.example.user.domain.exception.UserProfileNotFoundException;
@@ -21,7 +20,6 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -86,7 +84,7 @@ public class UserProfileService {
         return false;
     }
 
-    public UserListPageResult listUsers(ProfileStatus status, String email, int page, int size) {
+    public PageResult<UserProfileSummaryResult> listUsers(ProfileStatus status, String email, int page, int size) {
         PageQuery pageQuery = PageQuery.of(page, size, "createdAt", "DESC");
 
         PageResult<UserProfile> profiles;
@@ -101,10 +99,7 @@ public class UserProfileService {
             profiles = userProfileRepository.findAll(pageQuery);
         }
 
-        List<UserProfileSummaryResult> content = profiles.content().stream()
-                .map(UserProfileSummaryResult::from)
-                .toList();
-        return new UserListPageResult(content, profiles.totalElements(), profiles.totalPages(), profiles.page(), profiles.size());
+        return profiles.map(UserProfileSummaryResult::from);
     }
 
     public PeriodSummary getPeriodSummary() {

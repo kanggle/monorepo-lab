@@ -9,7 +9,7 @@ import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
 import com.example.notification.application.result.GetNotificationResult;
 import com.example.notification.application.result.GetPreferenceResult;
-import com.example.notification.application.result.ListNotificationsResult;
+import com.example.notification.application.result.NotificationSummary;
 import com.example.notification.application.port.in.ManagePreferenceUseCase;
 import com.example.notification.application.port.in.QueryNotificationUseCase;
 import jakarta.validation.Valid;
@@ -34,7 +34,7 @@ public class NotificationController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        PageResult<ListNotificationsResult.NotificationSummary> notifications = notificationQueryService.getNotifications(
+        PageResult<NotificationSummary> notifications = notificationQueryService.getNotifications(
                 userId, new PageQuery(Math.max(page, 0), size < 1 ? 20 : Math.min(size, PageQuery.MAX_SIZE), null, null));
         return ResponseEntity.ok(NotificationListResponse.from(notifications));
     }

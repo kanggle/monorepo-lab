@@ -1,5 +1,6 @@
 package com.example.product.application.service;
 
+import com.example.common.page.PageResult;
 import com.example.product.application.dto.ProductDetail;
 import com.example.product.application.dto.ProductListResult;
 import com.example.product.application.dto.ProductSummary;
@@ -48,7 +49,7 @@ class QueryProductServiceTest {
         UUID id = UUID.randomUUID();
         ProductSummary summary = new ProductSummary(id, "테스트 상품", ProductStatus.ON_SALE, 10000L, null);
         given(productQueryPort.findSummaries(any(), any(), any(), anyInt(), anyInt()))
-                .willReturn(new ProductListResult(List.of(summary), 0, 20, 1));
+                .willReturn(new ProductListResult(new PageResult<>(List.of(summary), 0, 20, 1L, 1)));
 
         ProductListResult result = queryProductService.findAll(null, null, null, 0, 20);
 
@@ -57,6 +58,7 @@ class QueryProductServiceTest {
         assertThat(result.totalElements()).isEqualTo(1);
         assertThat(result.page()).isEqualTo(0);
         assertThat(result.size()).isEqualTo(20);
+        assertThat(result.totalPages()).isEqualTo(1);
     }
 
     @Test
@@ -64,7 +66,7 @@ class QueryProductServiceTest {
     void findAll_withCategoryFilter_passesFilterToPort() {
         UUID categoryId = UUID.randomUUID();
         given(productQueryPort.findSummaries(eq(categoryId), any(), any(), anyInt(), anyInt()))
-                .willReturn(new ProductListResult(List.of(), 0, 20, 0));
+                .willReturn(new ProductListResult(new PageResult<>(List.of(), 0, 20, 0L, 0)));
 
         ProductListResult result = queryProductService.findAll(categoryId, null, null, 0, 20);
 
@@ -76,7 +78,7 @@ class QueryProductServiceTest {
     @DisplayName("목록 조회 - name 필터가 포트로 전달된다")
     void findAll_withNameFilter_passesFilterToPort() {
         given(productQueryPort.findSummaries(any(), any(), eq("셔츠"), anyInt(), anyInt()))
-                .willReturn(new ProductListResult(List.of(), 0, 20, 0));
+                .willReturn(new ProductListResult(new PageResult<>(List.of(), 0, 20, 0L, 0)));
 
         ProductListResult result = queryProductService.findAll(null, null, "셔츠", 0, 20);
 

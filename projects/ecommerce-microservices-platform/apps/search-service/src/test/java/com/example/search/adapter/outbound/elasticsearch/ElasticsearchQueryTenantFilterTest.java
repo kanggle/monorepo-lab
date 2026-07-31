@@ -6,6 +6,7 @@ import co.elastic.clients.elasticsearch._types.query_dsl.Query;
 import co.elastic.clients.elasticsearch._types.query_dsl.TermQuery;
 import co.elastic.clients.elasticsearch.core.SearchRequest;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
+import com.example.common.page.PageQuery;
 import com.example.search.application.dto.SearchProductQuery;
 import com.example.search.domain.model.SearchFilter;
 import com.example.search.domain.model.SearchSort;
@@ -64,7 +65,7 @@ class ElasticsearchQueryTenantFilterTest {
 
         SearchProductQuery query = new SearchProductQuery(
                 SearchFilter.of("노트북", null, null, null, null),
-                SearchSort.RELEVANCE, 0, 20
+                SearchSort.RELEVANCE, new PageQuery(0, 20, null, null)
         );
 
         adapter.search(query);
@@ -101,7 +102,7 @@ class ElasticsearchQueryTenantFilterTest {
 
         SearchProductQuery query = new SearchProductQuery(
                 SearchFilter.of("키보드", null, null, null, null),
-                SearchSort.RELEVANCE, 0, 20
+                SearchSort.RELEVANCE, new PageQuery(0, 20, null, null)
         );
 
         adapter.search(query);
@@ -130,13 +131,13 @@ class ElasticsearchQueryTenantFilterTest {
         // First search under tenant-a
         TenantContext.set("tenant-a");
         adapter.search(new SearchProductQuery(
-                SearchFilter.of("상품", null, null, null, null), SearchSort.RELEVANCE, 0, 10));
+                SearchFilter.of("상품", null, null, null, null), SearchSort.RELEVANCE, new PageQuery(0, 10, null, null)));
         TenantContext.clear();
 
         // Second search under tenant-b
         TenantContext.set("tenant-b");
         adapter.search(new SearchProductQuery(
-                SearchFilter.of("상품", null, null, null, null), SearchSort.RELEVANCE, 0, 10));
+                SearchFilter.of("상품", null, null, null, null), SearchSort.RELEVANCE, new PageQuery(0, 10, null, null)));
 
         ArgumentCaptor<SearchRequest> captor = ArgumentCaptor.forClass(SearchRequest.class);
         verify(elasticsearchClient, org.mockito.Mockito.times(2))

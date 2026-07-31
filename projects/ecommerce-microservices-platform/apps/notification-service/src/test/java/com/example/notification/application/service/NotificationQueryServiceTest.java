@@ -4,7 +4,7 @@ import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
 import com.example.notification.application.port.out.NotificationRepository;
 import com.example.notification.application.result.GetNotificationResult;
-import com.example.notification.application.result.ListNotificationsResult;
+import com.example.notification.application.result.NotificationSummary;
 import com.example.notification.domain.exception.NotificationNotFoundException;
 import com.example.notification.domain.exception.UnauthorizedNotificationAccessException;
 import com.example.notification.domain.model.Notification;
@@ -46,11 +46,12 @@ class NotificationQueryServiceTest {
         given(notificationRepository.findByUserId("user-1", pageQuery))
                 .willReturn(pageResult);
 
-        PageResult<ListNotificationsResult.NotificationSummary> result =
+        PageResult<NotificationSummary> result =
                 notificationQueryService.getNotifications("user-1", pageQuery);
 
         assertThat(result.content()).hasSize(1);
         assertThat(result.totalElements()).isEqualTo(1L);
+        assertThat(result.totalPages()).isEqualTo(1);
         assertThat(result.content().get(0).notificationId()).isEqualTo("noti-1");
         assertThat(result.content().get(0).channel()).isEqualTo("EMAIL");
     }
