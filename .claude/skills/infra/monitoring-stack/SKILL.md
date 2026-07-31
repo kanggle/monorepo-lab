@@ -9,6 +9,7 @@ category: infra
 Patterns for deploying Prometheus, Grafana, Loki, and alert routing for the monorepo's services.
 
 Prerequisite: read `platform/observability.md` and `cross-cutting/observability-setup/SKILL.md` before using this skill. Service-side instrumentation lives in `backend/observability-metrics/SKILL.md`.
+# No single spec — this skill operates across every service's `specs/services/<service>/architecture.md`; the canonical monitoring-stack source is the shared `platform/observability.md`, not a per-service spec.
 
 ---
 

@@ -9,6 +9,7 @@ category: backend
 Patterns for mapping between layers in Spring Boot services.
 
 Prerequisite: read `platform/coding-rules.md` before using this skill.
+# No single spec — this skill operates across every service's `specs/services/<service>/architecture.md`; the canonical layering/mapping-convention source is the shared `platform/coding-rules.md`, not a per-service spec.
 
 ---
 

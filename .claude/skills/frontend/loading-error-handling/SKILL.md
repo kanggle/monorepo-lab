@@ -9,6 +9,7 @@ category: frontend
 Patterns for handling loading states and errors in Next.js applications.
 
 Prerequisite: read `platform/coding-rules.md` (TypeScript Rules section) before using this skill.
+# No single spec — this skill operates across every service's `specs/services/<service>/architecture.md`; the canonical loading/error-handling pattern source is the shared `platform/coding-rules.md`, not a per-service spec.
 
 ---
 

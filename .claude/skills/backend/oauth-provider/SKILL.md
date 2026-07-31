@@ -9,6 +9,7 @@ category: backend
 Patterns for multi-provider OAuth 2.0 integration.
 
 Prerequisite: read `platform/security-rules.md` and `platform/error-handling.md` before using this skill.
+# No single spec — this skill operates across every service's `specs/services/<service>/architecture.md`; the canonical OAuth/security source is the shared `platform/security-rules.md`, not a per-service spec.
 
 ---
 

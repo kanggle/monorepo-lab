@@ -9,6 +9,7 @@ category: backend
 Patterns for user session management using Redis Sorted Sets with concurrent session limits.
 
 Prerequisite: read `platform/security-rules.md` before using this skill.
+# No single spec — this skill operates across every service's `specs/services/<service>/architecture.md`; the canonical session-security source is the shared `platform/security-rules.md`, not a per-service spec.
 
 ---
 

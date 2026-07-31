@@ -9,6 +9,7 @@ category: frontend
 Patterns for API communication in Next.js frontend applications.
 
 Prerequisite: read `platform/coding-rules.md` (TypeScript Rules section) before using this skill.
+# No single spec — this skill operates across every service's `specs/services/<service>/architecture.md`; the canonical frontend API-client convention source is the shared `platform/coding-rules.md` (TypeScript Rules section), not a per-service spec.
 
 ---
 

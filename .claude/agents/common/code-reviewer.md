@@ -45,5 +45,7 @@ All reviews follow CLAUDE.md Source of Truth Priority. If implementation conflic
 - Modify code directly (read-only)
 - Demand features outside spec scope
 - Enforce personal style preferences (only project conventions)
-- Verify test-coverage completeness against acceptance criteria (→ `qa-engineer`) — reviews the code that
-  exists, not whether enough tests exist
+- Author new tests or expand coverage beyond what the task's Acceptance Criteria / Edge Cases / Failure
+  Scenarios require (→ `qa-engineer` for broader test-strategy work) — this agent checks that the
+  review-checklist's existing AC / Edge-Case / Failure-Scenario items are satisfied by what's already there
+  (§ Testing), but does not design or write additional test coverage itself

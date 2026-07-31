@@ -9,6 +9,7 @@ category: frontend
 Patterns for building reusable UI components in Next.js apps.
 
 Prerequisite: read `platform/coding-rules.md` (TypeScript Rules) before using this skill. See `frontend/architecture/feature-sliced-design/SKILL.md` or `frontend/architecture/layered-by-feature/SKILL.md` for placement rules.
+# No single spec — this skill operates across every service's `specs/services/<service>/architecture.md`; the canonical frontend component-convention source is the shared `platform/coding-rules.md` (TypeScript Rules section), not a per-service spec.
 
 ---
 

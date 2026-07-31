@@ -33,16 +33,17 @@ When a specific task ID is given:
 2. Find and read the task file matching the given ID in `tasks/ready/`
 3. If the task is not in `tasks/ready/`, **stop immediately** — do not implement tasks from other directories
 4. Verify all required sections exist (Goal, Scope, Acceptance Criteria, Related Specs, Related Contracts, Edge Cases, Failure Scenarios) — stop if any is missing
-5. Read Related Specs in the order defined by `platform/entrypoint.md`
-6. Read Related Contracts
-7. Read `.claude/skills/INDEX.md` → read skill files matching Related Skills
-8. Read existing code in the target service to understand current patterns and structure
-9. Set the task's `Status` to `in-progress` **while the file is still in `tasks/ready/`**, then move it to `tasks/in-progress/`. Files under `in-progress/` and `review/` are frozen except for that single field, so the edit must precede the move.
-10. Implement
-11. Write and run tests as specified in Test Requirements
-12. Verify all Acceptance Criteria are met
-13. Set `Status` to `review` while the file is still in `tasks/in-progress/`, then move it to `tasks/review/` (same reason as step 9).
-14. Open the **impl PR**. Landing happens through a PR — `main` is hook-protected and cannot be pushed directly. **The task is not closed here**: `review/ → done/` is a separate close-chore PR gated on merge verification (see `/review-task` § Close Chore).
+5. Set up a dedicated worktree per `CLAUDE.md` § Concurrent-Session Worktree Isolation before any file is touched — `/start-task <id>` (or the equivalent `git worktree add -b task/<id>-... <path> origin/main`) — and do all remaining steps there, never in the shared main checkout. This applies identically to Single Task Mode and Batch Mode; it is not a batch-only precaution.
+6. Read Related Specs in the order defined by `platform/entrypoint.md`
+7. Read Related Contracts
+8. Read `.claude/skills/INDEX.md` → read skill files matching Related Skills
+9. Read existing code in the target service to understand current patterns and structure
+10. Set the task's `Status` to `in-progress` **while the file is still in `tasks/ready/`**, then move it to `tasks/in-progress/`. Files under `in-progress/` and `review/` are frozen except for that single field, so the edit must precede the move.
+11. Implement
+12. Write and run tests as specified in Test Requirements
+13. Verify all Acceptance Criteria are met
+14. Set `Status` to `review` while the file is still in `tasks/in-progress/`, then move it to `tasks/review/` (same reason as step 10).
+15. Open the **impl PR**. Landing happens through a PR — `main` is hook-protected and cannot be pushed directly. **The task is not closed here**: `review/ → done/` is a separate close-chore PR gated on merge verification (see `/review-task` § Close Chore).
 
 ---
 

@@ -9,6 +9,7 @@ category: infra
 Patterns for sizing Kubernetes resources, choosing instance types, and reducing cloud spend without hurting reliability.
 
 Prerequisite: read `platform/deployment-policy.md` and `cross-cutting/performance-tuning/SKILL.md` before using this skill. Monitoring of saturation lives in `infra/monitoring-stack/SKILL.md`.
+# No single spec — this skill operates across every service's `specs/services/<service>/architecture.md`; the canonical resource-sizing/deployment source is the shared `platform/deployment-policy.md`, not a per-service spec.
 
 ---
 
