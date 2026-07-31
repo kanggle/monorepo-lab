@@ -1,5 +1,6 @@
 package com.example.product.infrastructure.event;
 
+import com.example.messaging.dedupe.EventDedupePort;
 import com.example.product.application.service.ReservationService;
 import com.example.product.domain.tenant.TenantContext;
 import com.example.product.infrastructure.event.ReservationInboundEvents.PaymentCompletedMessage;
@@ -27,7 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class PaymentCompletedReservationConsumer {
 
     private final ReservationService reservationService;
-    private final ReservationEventDedupe dedupe;
+    private final EventDedupePort reservationEventDedupe;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -37,9 +38,11 @@ public class PaymentCompletedReservationConsumer {
     }
 
     void handle(PaymentCompletedMessage event) {
-        if (dedupe.isDuplicate(ReservationUuids.parseOrNull(event.eventId()), "payment.payment.completed")) {
-            return;
-        }
+        reservationEventDedupe.process(
+                ReservationUuids.parseOrNull(event.eventId()), "payment.payment.completed", () -> handleWork(event));
+    }
+
+    private void handleWork(PaymentCompletedMessage event) {
         if (event.payload() == null || event.payload().orderId() == null
                 || event.payload().orderId().isBlank()) {
             log.warn("payment.payment.completed has null/blank orderId, skipping. eventId={}", event.eventId());

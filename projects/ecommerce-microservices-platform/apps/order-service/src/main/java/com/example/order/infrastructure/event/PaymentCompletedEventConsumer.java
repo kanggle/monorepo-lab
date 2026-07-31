@@ -1,5 +1,6 @@
 package com.example.order.infrastructure.event;
 
+import com.example.messaging.dedupe.EventDedupePort;
 import com.example.order.application.service.PaymentConfirmationService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -17,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class PaymentCompletedEventConsumer {
 
     private final PaymentConfirmationService paymentConfirmationService;
-    private final EventDeduplicationChecker eventDeduplicationChecker;
+    private final EventDedupePort eventDedupePort;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -27,10 +28,11 @@ public class PaymentCompletedEventConsumer {
     }
 
     void handle(PaymentCompletedEvent event) {
-        if (eventDeduplicationChecker.isDuplicate(event.eventId(), "PaymentCompleted")) {
-            return;
-        }
+        eventDedupePort.process(
+                EventFieldParser.parseUuidOrNull(event.eventId()), "PaymentCompleted", () -> handleWork(event));
+    }
 
+    private void handleWork(PaymentCompletedEvent event) {
         if (event.payload() == null) {
             log.warn("PaymentCompleted event has null payload, skipping. eventId={}", event.eventId());
             return;

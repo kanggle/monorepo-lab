@@ -1,11 +1,13 @@
 package com.example.order.infrastructure.event;
 
+import com.example.messaging.dedupe.EventDedupePort;
 import com.example.order.application.service.OrderBackorderService;
 import com.example.order.domain.exception.OrderNotFoundException;
 import com.example.order.domain.tenant.TenantContext;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,12 +23,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("OrderReservationFailedConsumer 단위 테스트 (TASK-BE-428)")
+@DisplayName("OrderReservationFailedConsumer 단위 테스트 (TASK-BE-428, ADR-MONO-058 D7)")
 class OrderReservationFailedConsumerTest {
 
     @InjectMocks
@@ -36,10 +39,16 @@ class OrderReservationFailedConsumerTest {
     private OrderBackorderService orderBackorderService;
 
     @Mock
-    private EventDeduplicationChecker eventDeduplicationChecker;
+    private EventDedupePort eventDedupePort;
 
     @Mock
     private ObjectMapper objectMapper;
+
+    @BeforeEach
+    void stubDedupeAppliesByDefault() {
+        lenient().when(eventDedupePort.process(any(), eq("OrderReservationFailed"), any()))
+                .thenAnswer(EventDedupeTestSupport::runWork);
+    }
 
     @AfterEach
     void clearTenant() {
@@ -71,8 +80,8 @@ class OrderReservationFailedConsumerTest {
     @DisplayName("중복 이벤트 수신 시 서비스를 호출하지 않는다")
     void duplicateEvent_doesNotCallService() {
         OrderReservationFailedEvent event = event("order-123");
-        when(eventDeduplicationChecker.isDuplicate(event.eventId(), "OrderReservationFailed"))
-                .thenReturn(true);
+        when(eventDedupePort.process(any(), eq("OrderReservationFailed"), any()))
+                .thenReturn(EventDedupePort.Outcome.IGNORED_DUPLICATE);
 
         consumer.handle(event);
 

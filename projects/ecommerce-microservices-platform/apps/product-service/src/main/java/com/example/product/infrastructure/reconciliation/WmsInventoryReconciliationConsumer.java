@@ -1,5 +1,6 @@
 package com.example.product.infrastructure.reconciliation;
 
+import com.example.messaging.dedupe.EventDedupePort;
 import com.example.product.infrastructure.reconciliation.WmsReconciliationMessages.InventoryAdjustedMessage;
 import com.example.product.infrastructure.reconciliation.WmsReconciliationMessages.InventoryReceivedMessage;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -29,7 +30,7 @@ import java.util.UUID;
 public class WmsInventoryReconciliationConsumer {
 
     private final WmsInventoryReconciliationService reconciliationService;
-    private final WmsReconciliationDedupe dedupe;
+    private final EventDedupePort wmsReconciliationDedupe;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -39,9 +40,11 @@ public class WmsInventoryReconciliationConsumer {
     }
 
     void handleReceived(InventoryReceivedMessage event) {
-        if (dedupe.isDuplicate(Reconciliations.parseUuidOrNull(event.eventId()), "wms.inventory.received")) {
-            return;
-        }
+        wmsReconciliationDedupe.process(Reconciliations.parseUuidOrNull(event.eventId()),
+                "wms.inventory.received", () -> handleReceivedWork(event));
+    }
+
+    private void handleReceivedWork(InventoryReceivedMessage event) {
         if (event.payload() == null || event.payload().lines() == null) {
             log.warn("wms inventory.received event has null payload/lines, skipping. eventId={}", event.eventId());
             return;
@@ -61,9 +64,11 @@ public class WmsInventoryReconciliationConsumer {
     }
 
     void handleAdjusted(InventoryAdjustedMessage event) {
-        if (dedupe.isDuplicate(Reconciliations.parseUuidOrNull(event.eventId()), "wms.inventory.adjusted")) {
-            return;
-        }
+        wmsReconciliationDedupe.process(Reconciliations.parseUuidOrNull(event.eventId()),
+                "wms.inventory.adjusted", () -> handleAdjustedWork(event));
+    }
+
+    private void handleAdjustedWork(InventoryAdjustedMessage event) {
         if (event.payload() == null || event.payload().inventory() == null) {
             log.warn("wms inventory.adjusted event has null payload/inventory, skipping. eventId={}", event.eventId());
             return;

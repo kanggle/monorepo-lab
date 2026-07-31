@@ -15,9 +15,10 @@ import java.time.LocalDateTime;
  * {@code @EnableJpaRepositories(basePackages = "com.example.order.infrastructure.persistence")}.
  * That config does not set {@code enableDefaultTransactions = false} as the library's
  * did, which is safe here and was verified rather than assumed: every write goes
- * through {@code EventDeduplicationChecker.isDuplicate}, annotated
- * {@code @Transactional(propagation = MANDATORY)}, so {@code save} can never run
- * outside the business transaction — a strictly stronger guarantee than the flag.
+ * through {@code EventDeduplicationChecker.process} (the {@code EventDedupePort}
+ * adapter, ADR-MONO-058 D7), annotated {@code @Transactional(propagation = MANDATORY)},
+ * so {@code save} can never run outside the business transaction — a strictly stronger
+ * guarantee than the flag.
  */
 public interface ProcessedEventJpaRepository extends JpaRepository<ProcessedEventJpaEntity, String> {
 

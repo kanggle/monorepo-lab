@@ -1,5 +1,6 @@
 package com.example.order.infrastructure.event;
 
+import com.example.messaging.dedupe.EventDedupePort;
 import com.example.order.application.service.OrderPiiAnonymizationService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -10,6 +11,9 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 
 /**
  * Consumes IAM {@code account.deleted} → cascades the deletion into order-held PII
@@ -30,10 +34,14 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>Idempotent + fail-soft (ADR-MONO-037 P5). The wire is FLAT (TASK-BE-422): fields are
  * read from the JSON root, not a nested {@code payload}. The flat {@code account.deleted}
- * payload carries NO {@code eventId}, so dedup via the shared {@link EventDeduplicationChecker}
- * is re-keyed to a stable composite {@code accountId + ":" + (anonymized ? "anon" : "grace")}
- * — this lets the post-grace anonymize phase dedup independently of the grace entry while
- * remaining stable across re-delivery of the same phase. A missing {@code accountId} is
+ * payload carries NO {@code eventId}, so dedup via the shared {@link EventDedupePort}
+ * (ADR-MONO-058 D7) is re-keyed to a stable composite
+ * {@code accountId + ":" + (anonymized ? "anon" : "grace")} — this lets the post-grace
+ * anonymize phase dedup independently of the grace entry while remaining stable across
+ * re-delivery of the same phase. The port requires a {@code UUID}, so the composite string
+ * is deterministically hashed into one via {@link UUID#nameUUIDFromBytes(byte[])} (a stable
+ * name-based UUID — same composite always maps to the same id, so the dedup/duplicate
+ * outcome is unchanged by this storage-format detail). A missing {@code accountId} is
  * logged and skipped; a malformed message routes to {@code account.deleted.dlq} (the
  * {@code DefaultErrorHandler} marks {@link JsonProcessingException} /
  * {@link IllegalArgumentException} non-retryable). The lifecycle partition never blocks on
@@ -49,7 +57,7 @@ public class AccountDeletedConsumer {
     private static final String EVENT_TYPE = "AccountDeleted";
 
     private final OrderPiiAnonymizationService orderPiiAnonymizationService;
-    private final EventDeduplicationChecker eventDeduplicationChecker;
+    private final EventDedupePort eventDedupePort;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -77,12 +85,15 @@ public class AccountDeletedConsumer {
 
         // The flat account.deleted payload carries no eventId (TASK-BE-422), so dedup keys
         // off a stable accountId+phase composite — the anonymize phase dedups independently
-        // of the grace entry, and re-delivery of the same phase is a no-op.
+        // of the grace entry, and re-delivery of the same phase is a no-op. EventDedupePort
+        // requires a UUID; nameUUIDFromBytes deterministically derives one from the composite
+        // string (same composite → same id, every time), so the dedup outcome is unchanged.
         String dedupKey = userId + ":" + (anonymized ? "anon" : "grace");
-        if (eventDeduplicationChecker.isDuplicate(dedupKey, EVENT_TYPE)) {
-            return;
-        }
+        UUID dedupId = UUID.nameUUIDFromBytes(dedupKey.getBytes(StandardCharsets.UTF_8));
+        eventDedupePort.process(dedupId, EVENT_TYPE, () -> handleWork(userId, anonymized, dedupKey));
+    }
 
+    private void handleWork(String userId, boolean anonymized, String dedupKey) {
         if (!anonymized) {
             // Grace entry — order cancellation is the UserWithdrawn reaction's job; no PII action here.
             log.debug("account.deleted(anonymized=false) grace entry, no order-PII action. dedupKey={}", dedupKey);

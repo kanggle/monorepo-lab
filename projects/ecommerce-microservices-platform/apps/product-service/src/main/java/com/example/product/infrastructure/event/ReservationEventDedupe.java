@@ -1,5 +1,6 @@
 package com.example.product.infrastructure.event;
 
+import com.example.messaging.dedupe.EventDedupePort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -11,27 +12,32 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Idempotent-consumer dedupe for the reservation saga (TASK-BE-428). Runs inside the consumer's
- * transaction ({@code MANDATORY}) so the dedupe row commits atomically with the reservation /
- * stock mutation. Mirrors {@code WmsReconciliationDedupe}.
+ * {@link EventDedupePort} adapter for the reservation saga (TASK-BE-428, ADR-MONO-058 D7).
+ * Runs inside the consumer's transaction ({@code MANDATORY}) so the dedupe row commits
+ * atomically with the reservation / stock mutation. Mirrors {@code WmsReconciliationDedupe} —
+ * both implement the shared port but persist into separate service-owned tables, so both are
+ * registered as beans; consumers disambiguate by constructor-parameter name matching this
+ * bean's default name ({@code reservationEventDedupe}).
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class ReservationEventDedupe {
+public class ReservationEventDedupe implements EventDedupePort {
 
     private final ReservationProcessedEventJpaRepository processedEventRepository;
     private final Clock clock;
 
+    @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public boolean isDuplicate(UUID eventId, String eventType) {
+    public Outcome process(UUID eventId, String eventType, Runnable work) {
         if (eventId == null) {
             log.warn("reservation event has null eventId — skipping dedupe. eventType={}", eventType);
-            return false;
+            work.run();
+            return Outcome.APPLIED;
         }
         if (processedEventRepository.existsById(eventId)) {
             log.debug("Duplicate reservation event, skipping. eventId={}, eventType={}", eventId, eventType);
-            return true;
+            return Outcome.IGNORED_DUPLICATE;
         }
         // No try/catch here, deliberately (TASK-BE-541). ReservationProcessedEventEntity
         // uses an assigned @Id (the event UUID), so Hibernate queues this INSERT until the
@@ -46,6 +52,7 @@ public class ReservationEventDedupe {
         // consumer's transaction rollback-only, so "catch and carry on" is not available.
         processedEventRepository.save(
                 ReservationProcessedEventEntity.of(eventId, eventType, Instant.now(clock)));
-        return false;
+        work.run();
+        return Outcome.APPLIED;
     }
 }

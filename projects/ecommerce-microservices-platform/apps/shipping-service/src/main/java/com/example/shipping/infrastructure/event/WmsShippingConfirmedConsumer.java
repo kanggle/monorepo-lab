@@ -1,5 +1,6 @@
 package com.example.shipping.infrastructure.event;
 
+import com.example.messaging.dedupe.EventDedupePort;
 import com.example.shipping.application.service.ShippingCommandService;
 import com.example.shipping.domain.exception.ShippingNotFoundException;
 import com.example.shipping.domain.repository.ShippingRepository;
@@ -36,7 +37,7 @@ public class WmsShippingConfirmedConsumer {
 
     private final ShippingCommandService shippingCommandService;
     private final ShippingRepository shippingRepository;
-    private final EventDeduplicationChecker eventDeduplicationChecker;
+    private final EventDedupePort eventDedupePort;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -46,10 +47,11 @@ public class WmsShippingConfirmedConsumer {
     }
 
     void handle(WmsShippingConfirmedEvent event) {
-        if (eventDeduplicationChecker.isDuplicate(event.eventId(), "WmsShippingConfirmed")) {
-            return;
-        }
+        eventDedupePort.process(
+                EventIds.parseOrNull(event.eventId()), "WmsShippingConfirmed", () -> handleWork(event));
+    }
 
+    private void handleWork(WmsShippingConfirmedEvent event) {
         if (event.payload() == null) {
             throw new IllegalArgumentException(
                     "wms shipping.confirmed event has null payload. eventId=" + event.eventId());

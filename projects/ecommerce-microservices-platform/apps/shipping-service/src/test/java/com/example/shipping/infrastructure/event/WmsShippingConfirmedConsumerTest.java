@@ -1,17 +1,21 @@
 package com.example.shipping.infrastructure.event;
 
+import com.example.messaging.dedupe.EventDedupePort;
 import com.example.shipping.application.service.ShippingCommandService;
 import com.example.shipping.domain.exception.ShippingNotFoundException;
 import com.example.shipping.domain.repository.ShippingRepository;
 import com.example.shipping.domain.tenant.TenantContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -20,11 +24,12 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("WmsShippingConfirmedConsumer 단위 테스트")
+@DisplayName("WmsShippingConfirmedConsumer 단위 테스트 (ADR-MONO-058 D7)")
 class WmsShippingConfirmedConsumerTest {
 
     @InjectMocks
@@ -37,18 +42,30 @@ class WmsShippingConfirmedConsumerTest {
     private ShippingRepository shippingRepository;
 
     @Mock
-    private EventDeduplicationChecker eventDeduplicationChecker;
+    private EventDedupePort eventDedupePort;
 
     @Mock
     private ObjectMapper objectMapper;
+
+    @BeforeEach
+    void stubDedupeAppliesByDefault() {
+        lenient().when(eventDedupePort.process(any(), eq("WmsShippingConfirmed"), any()))
+                .thenAnswer(inv -> {
+                    ((Runnable) inv.getArgument(2)).run();
+                    return EventDedupePort.Outcome.APPLIED;
+                });
+    }
 
     @AfterEach
     void clearTenant() {
         TenantContext.clear();
     }
 
-    private WmsShippingConfirmedEvent event(String eventId, String orderNo) {
-        return event(eventId, orderNo, "store-acme");
+    // wms eventId is always a real UUID in production (wms owns a UUID-typed dedupe column) —
+    // fixtures use randomUUID() rather than short literals to exercise the real UUID.fromString
+    // parse path the consumer now runs (EventIds.parseOrNull), not just the mocked dedupe.
+    private WmsShippingConfirmedEvent event(String orderNo) {
+        return event(UUID.randomUUID().toString(), orderNo, "store-acme");
     }
 
     private WmsShippingConfirmedEvent event(String eventId, String orderNo, String tenantId) {
@@ -63,8 +80,7 @@ class WmsShippingConfirmedConsumerTest {
     @Test
     @DisplayName("정상 이벤트 수신 시 orderNo로 markShippedByOrderId 호출")
     void handle_validEvent_marksShipped() {
-        WmsShippingConfirmedEvent event = event("evt-1", "order-1");
-        given(eventDeduplicationChecker.isDuplicate("evt-1", "WmsShippingConfirmed")).willReturn(false);
+        WmsShippingConfirmedEvent event = event("order-1");
 
         consumer.handle(event);
 
@@ -75,8 +91,9 @@ class WmsShippingConfirmedConsumerTest {
     @Test
     @DisplayName("중복 이벤트는 무시된다 (eventId dedupe)")
     void handle_duplicate_skips() {
-        WmsShippingConfirmedEvent event = event("evt-1", "order-1");
-        given(eventDeduplicationChecker.isDuplicate("evt-1", "WmsShippingConfirmed")).willReturn(true);
+        WmsShippingConfirmedEvent event = event("order-1");
+        given(eventDedupePort.process(any(), eq("WmsShippingConfirmed"), any()))
+                .willReturn(EventDedupePort.Outcome.IGNORED_DUPLICATE);
 
         consumer.handle(event);
 
@@ -86,8 +103,7 @@ class WmsShippingConfirmedConsumerTest {
     @Test
     @DisplayName("orderNo가 없으면 IllegalArgumentException (non-retryable -> DLT)")
     void handle_missingOrderNo_throwsIllegalArgument() {
-        WmsShippingConfirmedEvent event = event("evt-2", "  ");
-        given(eventDeduplicationChecker.isDuplicate("evt-2", "WmsShippingConfirmed")).willReturn(false);
+        WmsShippingConfirmedEvent event = event("  ");
 
         assertThatThrownBy(() -> consumer.handle(event))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -98,9 +114,8 @@ class WmsShippingConfirmedConsumerTest {
     @DisplayName("payload가 null이면 IllegalArgumentException")
     void handle_nullPayload_throwsIllegalArgument() {
         WmsShippingConfirmedEvent event = new WmsShippingConfirmedEvent(
-                "evt-3", "outbound.shipping.confirmed", "2026-06-08T15:00:00Z",
+                UUID.randomUUID().toString(), "outbound.shipping.confirmed", "2026-06-08T15:00:00Z",
                 "outbound", "wms-internal-1", "store-acme", null);
-        given(eventDeduplicationChecker.isDuplicate("evt-3", "WmsShippingConfirmed")).willReturn(false);
 
         assertThatThrownBy(() -> consumer.handle(event))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -109,8 +124,7 @@ class WmsShippingConfirmedConsumerTest {
     @Test
     @DisplayName("봉투 tenantId 를 TenantContext 에 바인딩한 채 markShipped 실행, 이후 finally 로 clear")
     void handle_bindsTenantFromEnvelope_andClearsAfter() {
-        WmsShippingConfirmedEvent event = event("evt-tenant", "order-1", "store-acme");
-        given(eventDeduplicationChecker.isDuplicate("evt-tenant", "WmsShippingConfirmed")).willReturn(false);
+        WmsShippingConfirmedEvent event = event(UUID.randomUUID().toString(), "order-1", "store-acme");
         // Capture the tenant bound at the moment markShipped runs.
         String[] boundDuringCall = new String[1];
         org.mockito.BDDMockito.willAnswer(inv -> {
@@ -128,8 +142,7 @@ class WmsShippingConfirmedConsumerTest {
     @Test
     @DisplayName("봉투 tenantId 부재 시 로컬 Shipping 행의 tenant 로 폴백 (D8)")
     void handle_absentEnvelopeTenant_fallsBackToLocalRow() {
-        WmsShippingConfirmedEvent event = event("evt-fb", "order-9", null);
-        given(eventDeduplicationChecker.isDuplicate("evt-fb", "WmsShippingConfirmed")).willReturn(false);
+        WmsShippingConfirmedEvent event = event(UUID.randomUUID().toString(), "order-9", null);
         com.example.shipping.domain.model.Shipping local = com.example.shipping.domain.model.Shipping.reconstitute(
                 "ship-9", "store-zeta", "order-9", "user-9",
                 com.example.shipping.domain.model.ShippingStatus.PREPARING,
@@ -151,8 +164,7 @@ class WmsShippingConfirmedConsumerTest {
     @Test
     @DisplayName("미존재 주문이면 ShippingNotFound를 IllegalArgumentException으로 변환 (DLT)")
     void handle_unknownOrder_throwsIllegalArgument() {
-        WmsShippingConfirmedEvent event = event("evt-4", "unknown-order");
-        given(eventDeduplicationChecker.isDuplicate("evt-4", "WmsShippingConfirmed")).willReturn(false);
+        WmsShippingConfirmedEvent event = event("unknown-order");
         doThrow(new ShippingNotFoundException("unknown-order"))
                 .when(shippingCommandService).markShippedByOrderId(anyString(), anyString(), anyString());
 

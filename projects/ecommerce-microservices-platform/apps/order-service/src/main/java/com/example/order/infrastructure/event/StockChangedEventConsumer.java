@@ -1,5 +1,6 @@
 package com.example.order.infrastructure.event;
 
+import com.example.messaging.dedupe.EventDedupePort;
 import com.example.order.application.service.OrderConfirmationService;
 import com.example.order.domain.tenant.TenantContext;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -18,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class StockChangedEventConsumer {
 
     private final OrderConfirmationService orderConfirmationService;
-    private final EventDeduplicationChecker eventDeduplicationChecker;
+    private final EventDedupePort eventDedupePort;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -33,10 +34,11 @@ public class StockChangedEventConsumer {
     }
 
     void handle(StockChangedEvent event) {
-        if (eventDeduplicationChecker.isDuplicate(event.eventId(), "StockChanged")) {
-            return;
-        }
+        eventDedupePort.process(
+                EventFieldParser.parseUuidOrNull(event.eventId()), "StockChanged", () -> handleWork(event));
+    }
 
+    private void handleWork(StockChangedEvent event) {
         if (event.payload() == null) {
             log.warn("StockChanged event has null payload, skipping");
             return;

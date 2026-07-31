@@ -1,5 +1,6 @@
 package com.example.shipping.infrastructure.event;
 
+import com.example.messaging.dedupe.EventDedupePort;
 import com.example.shipping.application.command.CreateShippingCommand;
 import com.example.shipping.application.port.ShippingEventPublisher;
 import com.example.shipping.application.service.ShippingCommandService;
@@ -20,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class OrderConfirmedEventConsumer {
 
     private final ShippingCommandService shippingCommandService;
-    private final EventDeduplicationChecker eventDeduplicationChecker;
+    private final EventDedupePort eventDedupePort;
     private final ShippingEventPublisher shippingEventPublisher;
     private final FulfillmentAcl fulfillmentAcl;
     private final FulfillmentProperties fulfillmentProperties;
@@ -33,10 +34,11 @@ public class OrderConfirmedEventConsumer {
     }
 
     void handle(OrderConfirmedEvent event) {
-        if (eventDeduplicationChecker.isDuplicate(event.eventId(), "OrderConfirmed")) {
-            return;
-        }
+        eventDedupePort.process(
+                EventIds.parseOrNull(event.eventId()), "OrderConfirmed", () -> handleWork(event));
+    }
 
+    private void handleWork(OrderConfirmedEvent event) {
         if (event.payload() == null) {
             log.warn("OrderConfirmed event has null payload, skipping. eventId={}", event.eventId());
             return;

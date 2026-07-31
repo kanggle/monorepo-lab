@@ -1,5 +1,6 @@
 package com.example.shipping.infrastructure.event;
 
+import com.example.messaging.dedupe.EventDedupePort;
 import com.example.shipping.domain.repository.ShippingRepository;
 import com.example.shipping.domain.tenant.TenantContext;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -37,7 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class WmsOutboundCancelledConsumer {
 
     private final ShippingRepository shippingRepository;
-    private final EventDeduplicationChecker eventDeduplicationChecker;
+    private final EventDedupePort eventDedupePort;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -47,10 +48,11 @@ public class WmsOutboundCancelledConsumer {
     }
 
     void handle(WmsOutboundCancelledEvent event) {
-        if (eventDeduplicationChecker.isDuplicate(event.eventId(), "WmsOutboundCancelled")) {
-            return;
-        }
+        eventDedupePort.process(
+                EventIds.parseOrNull(event.eventId()), "WmsOutboundCancelled", () -> handleWork(event));
+    }
 
+    private void handleWork(WmsOutboundCancelledEvent event) {
         if (event.payload() == null) {
             log.warn("wms outbound.cancelled event has null payload, skipping. eventId={}", event.eventId());
             return;

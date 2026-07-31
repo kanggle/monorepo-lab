@@ -1,9 +1,11 @@
 package com.example.order.infrastructure.event;
 
+import com.example.messaging.dedupe.EventDedupePort;
 import com.example.order.application.service.PaymentConfirmationService;
 import com.example.order.domain.exception.InvalidOrderException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,7 +23,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("PaymentCompletedEventConsumer 단위 테스트")
+@DisplayName("PaymentCompletedEventConsumer 단위 테스트 (ADR-MONO-058 D7)")
 class PaymentCompletedEventConsumerTest {
 
     @InjectMocks
@@ -31,10 +33,16 @@ class PaymentCompletedEventConsumerTest {
     private PaymentConfirmationService paymentConfirmationService;
 
     @Mock
-    private EventDeduplicationChecker eventDeduplicationChecker;
+    private EventDedupePort eventDedupePort;
 
     @Mock
     private ObjectMapper objectMapper;
+
+    @BeforeEach
+    void stubDedupeAppliesByDefault() {
+        lenient().when(eventDedupePort.process(any(), eq("PaymentCompleted"), any()))
+                .thenAnswer(EventDedupeTestSupport::runWork);
+    }
 
     private PaymentCompletedEvent event(String orderId, String paymentId, String paidAt) {
         return new PaymentCompletedEvent(
@@ -150,7 +158,8 @@ class PaymentCompletedEventConsumerTest {
     @DisplayName("중복 이벤트 수신 시 서비스를 호출하지 않는다")
     void handle_duplicateEvent_doesNotCallService() {
         PaymentCompletedEvent event = event("order-123", "pay-456", "2026-03-24T10:00:00Z");
-        when(eventDeduplicationChecker.isDuplicate(event.eventId(), "PaymentCompleted")).thenReturn(true);
+        when(eventDedupePort.process(any(), eq("PaymentCompleted"), any()))
+                .thenReturn(EventDedupePort.Outcome.IGNORED_DUPLICATE);
 
         consumer.handle(event);
 

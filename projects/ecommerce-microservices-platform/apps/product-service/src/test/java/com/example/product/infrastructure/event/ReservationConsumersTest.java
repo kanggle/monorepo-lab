@@ -1,9 +1,11 @@
 package com.example.product.infrastructure.event;
 
+import com.example.messaging.dedupe.EventDedupePort;
 import com.example.product.application.service.ReservationService;
 import com.example.product.domain.model.reservation.StockReservationLine;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -22,15 +24,19 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 /**
- * Unit tests for the three reservation saga consumers (TASK-BE-428): envelope parse + delegate +
- * dedup. A real tolerant {@link ObjectMapper} (envelope deserialization is part of the contract)
- * + mocked {@link ReservationService}/{@link ReservationEventDedupe}.
+ * Unit tests for the three reservation saga consumers (TASK-BE-428, ADR-MONO-058 D7):
+ * envelope parse + delegate + dedup. A real tolerant {@link ObjectMapper} (envelope
+ * deserialization is part of the contract) + mocked {@link ReservationService}/
+ * {@link EventDedupePort}. Each nested class defaults the {@code process(...)} stub to
+ * run the supplied work and return {@code APPLIED}; the "duplicate" test overrides it to
+ * {@code IGNORED_DUPLICATE} without invoking the work — mirrors the shared port's contract.
  */
-@DisplayName("Reservation saga consumers 단위 테스트 (TASK-BE-428)")
+@DisplayName("Reservation saga consumers 단위 테스트 (TASK-BE-428, ADR-MONO-058 D7)")
 class ReservationConsumersTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper().registerModule(new JavaTimeModule());
@@ -39,13 +45,25 @@ class ReservationConsumersTest {
     private static final String PRODUCT_ID = UUID.randomUUID().toString();
     private static final String VARIANT_ID = UUID.randomUUID().toString();
 
+    /** Answers {@code EventDedupePort#process} by running the supplied work and returning APPLIED. */
+    private static EventDedupePort.Outcome runWork(org.mockito.invocation.InvocationOnMock invocation) {
+        ((Runnable) invocation.getArgument(2)).run();
+        return EventDedupePort.Outcome.APPLIED;
+    }
+
     @Nested
     @ExtendWith(MockitoExtension.class)
     @DisplayName("OrderPlacedReservationConsumer")
     class OrderPlaced {
         @Mock ReservationService service;
-        @Mock ReservationEventDedupe dedupe;
+        @Mock EventDedupePort dedupe;
         OrderPlacedReservationConsumer consumer;
+
+        @BeforeEach
+        void stubDedupeAppliesByDefault() {
+            lenient().when(dedupe.process(any(), eq("order.order.placed"), any()))
+                    .thenAnswer(ReservationConsumersTest::runWork);
+        }
 
         private OrderPlacedReservationConsumer consumer() {
             if (consumer == null) {
@@ -77,8 +95,6 @@ class ReservationConsumersTest {
         @Test
         @DisplayName("정상 OrderPlaced → recordOrderPlaced 에 라인 위임")
         void valid_delegates() throws Exception {
-            given(dedupe.isDuplicate(any(), eq("order.order.placed"))).willReturn(false);
-
             consumer().onMessage(wire());
 
             ArgumentCaptor<List<StockReservationLine>> captor = ArgumentCaptor.forClass(List.class);
@@ -93,7 +109,8 @@ class ReservationConsumersTest {
         @Test
         @DisplayName("중복 event_id → skip")
         void duplicate_skips() throws Exception {
-            given(dedupe.isDuplicate(any(), eq("order.order.placed"))).willReturn(true);
+            given(dedupe.process(any(), eq("order.order.placed"), any()))
+                    .willReturn(EventDedupePort.Outcome.IGNORED_DUPLICATE);
             consumer().onMessage(wire());
             verify(service, never()).recordOrderPlaced(anyString(), anyString(), anyList());
         }
@@ -101,7 +118,6 @@ class ReservationConsumersTest {
         @Test
         @DisplayName("라인에 variantId 없으면 그 라인 skip(예약 불가) — 남는 라인 없으면 위임 안 함")
         void lineWithoutVariant_skipped() throws Exception {
-            given(dedupe.isDuplicate(any(), eq("order.order.placed"))).willReturn(false);
             String wire = """
                     {
                       "event_id": "%s",
@@ -131,8 +147,14 @@ class ReservationConsumersTest {
     @DisplayName("PaymentCompletedReservationConsumer")
     class PaymentCompleted {
         @Mock ReservationService service;
-        @Mock ReservationEventDedupe dedupe;
+        @Mock EventDedupePort dedupe;
         PaymentCompletedReservationConsumer consumer;
+
+        @BeforeEach
+        void stubDedupeAppliesByDefault() {
+            lenient().when(dedupe.process(any(), eq("payment.payment.completed"), any()))
+                    .thenAnswer(ReservationConsumersTest::runWork);
+        }
 
         private PaymentCompletedReservationConsumer consumer() {
             if (consumer == null) {
@@ -163,7 +185,6 @@ class ReservationConsumersTest {
         @Test
         @DisplayName("정상 PaymentCompleted → recordPaymentCompleted(orderId, tenant) 위임")
         void valid_delegates() throws Exception {
-            given(dedupe.isDuplicate(any(), eq("payment.payment.completed"))).willReturn(false);
             consumer().onMessage(wire());
             verify(service).recordPaymentCompleted(ORDER_ID, "ecommerce");
         }
@@ -171,7 +192,8 @@ class ReservationConsumersTest {
         @Test
         @DisplayName("중복 event_id → skip")
         void duplicate_skips() throws Exception {
-            given(dedupe.isDuplicate(any(), eq("payment.payment.completed"))).willReturn(true);
+            given(dedupe.process(any(), eq("payment.payment.completed"), any()))
+                    .willReturn(EventDedupePort.Outcome.IGNORED_DUPLICATE);
             consumer().onMessage(wire());
             verify(service, never()).recordPaymentCompleted(anyString(), anyString());
         }
@@ -182,8 +204,14 @@ class ReservationConsumersTest {
     @DisplayName("OrderCancelledReservationConsumer")
     class OrderCancelled {
         @Mock ReservationService service;
-        @Mock ReservationEventDedupe dedupe;
+        @Mock EventDedupePort dedupe;
         OrderCancelledReservationConsumer consumer;
+
+        @BeforeEach
+        void stubDedupeAppliesByDefault() {
+            lenient().when(dedupe.process(any(), eq("order.order.cancelled"), any()))
+                    .thenAnswer(ReservationConsumersTest::runWork);
+        }
 
         private OrderCancelledReservationConsumer consumer() {
             if (consumer == null) {
@@ -211,7 +239,6 @@ class ReservationConsumersTest {
         @Test
         @DisplayName("정상 OrderCancelled → release(orderId) 위임")
         void valid_delegates() throws Exception {
-            given(dedupe.isDuplicate(any(), eq("order.order.cancelled"))).willReturn(false);
             consumer().onMessage(wire());
             verify(service).release(ORDER_ID);
         }
@@ -219,7 +246,8 @@ class ReservationConsumersTest {
         @Test
         @DisplayName("중복 event_id → skip")
         void duplicate_skips() throws Exception {
-            given(dedupe.isDuplicate(any(), eq("order.order.cancelled"))).willReturn(true);
+            given(dedupe.process(any(), eq("order.order.cancelled"), any()))
+                    .willReturn(EventDedupePort.Outcome.IGNORED_DUPLICATE);
             consumer().onMessage(wire());
             verify(service, never()).release(anyString());
         }

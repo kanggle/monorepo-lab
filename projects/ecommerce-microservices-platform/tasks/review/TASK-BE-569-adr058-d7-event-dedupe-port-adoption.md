@@ -8,7 +8,7 @@ ADR-MONO-058 D7 (EventDedupePort) — adopt `libs/java-messaging.EventDedupePort
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -120,27 +120,53 @@ because the dedupe table's retention policy and tenant scoping is service-specif
 
 # Acceptance Criteria
 
-- [ ] `product-service`, `order-service`, `shipping-service`, `settlement-service`
+- [x] `product-service`, `order-service`, `shipping-service`, `settlement-service`
       each have at least one adapter class implementing
       `com.example.messaging.dedupe.EventDedupePort`.
-- [ ] All named consumer classes in Scope are migrated to call
+      Evidence: `ReservationEventDedupe` + `WmsReconciliationDedupe` (product),
+      `EventDeduplicationChecker` (order), `EventDeduplicationChecker` (shipping),
+      `SettlementEventDedupe` (settlement, new class — replaces the deleted
+      `ProcessedEventStoreImpl`).
+- [x] All named consumer classes in Scope are migrated to call
       `EventDedupePort#process` instead of their prior bespoke dedupe check.
-- [ ] `MANDATORY` transaction propagation (dedupe row + side effect committing
+      Evidence: repo-wide grep for `.isDuplicate(` under the 4 services' `src/main`
+      returns zero hits; product 5 consumers, order 8 consumers (all
+      `EventDeduplicationChecker` call sites, not just the 2 named in Scope — it is
+      one shared bean), shipping 3 consumers, settlement 3 consumers — 19 consumers
+      total, all migrated.
+- [x] `MANDATORY` transaction propagation (dedupe row + side effect committing
       atomically) is preserved for every migrated consumer — verify by inspection
       that no consumer's dedupe check moved outside the enclosing `@Transactional`
       boundary.
-- [ ] Existing consumer tests for all migrated classes remain GREEN
+      Evidence: all 5 adapter `process(...)` methods keep
+      `@Transactional(propagation = Propagation.MANDATORY)`; every consumer's
+      post-dedupe business logic (including shipping-service's outbox-writing
+      `publishFulfillmentRequested` call in `OrderConfirmedEventConsumer`) moved
+      into the `Runnable` passed to `process(...)`, i.e. still inside the
+      `@Transactional` method that was already there — no consumer's transaction
+      boundary changed shape.
+- [x] Existing consumer tests for all migrated classes remain GREEN
       (`WmsShippingConfirmedConsumerTest`, `WmsOutboundCancelledConsumerTest`,
       `ProductDuplicateRequestGuardIntegrationTest`,
       `ReservationConsumersTest`/`WmsReconciliationConsumersTest`, and
       `settlement-service`'s consumer tests) with duplicate-delivery scenarios still
       asserting exactly-once side effects.
-- [ ] `settlement-service`'s existing `ProcessedEventStore` domain-port abstraction is
+      Evidence: local `:test` run per service — product-service 375/375, order-service
+      387/387, shipping-service 195/195, settlement-service 145/145, 0 failures
+      (Testcontainers-backed `ProductDuplicateRequestGuardIntegrationTest` did not run
+      locally — Windows Docker Testcontainers flake per
+      `project_testcontainers_docker_desktop_blocker`; the CI `Integration` lane is
+      authoritative for that one, everything else above is a plain `:test` unit run).
+- [x] `settlement-service`'s existing `ProcessedEventStore` domain-port abstraction is
       either removed in favor of direct `EventDedupePort` use, or reduced to a
       documented thin facade — not left as a second, now-redundant, parallel
       abstraction alongside `EventDedupePort`.
-- [ ] `./gradlew :projects:ecommerce-microservices-platform:apps:<service>:test`
+      Evidence: `ProcessedEventStore.java` and `ProcessedEventStoreImpl.java` deleted;
+      all 3 consumers depend on `EventDedupePort` directly, backed by the new
+      `SettlementEventDedupe` adapter over the same `processed_event` table.
+- [x] `./gradlew :projects:ecommerce-microservices-platform:apps:<service>:test`
       GREEN for all 4 touched services.
+      Evidence: see counts above — all 4 GREEN, 0 failures.
 
 ---
 
@@ -189,11 +215,25 @@ Follow, per touched service:
 
 # Implementation Notes
 
-- `wms-platform/apps/inventory-service/src/main/java/com/wms/inventory/adapter/out/persistence/dedupe/EventDedupeRepositoryImpl.java`
-  (and its `outbound-service`/`inbound-service` siblings) are live, working adopters
-  of `EventDedupePort` in this monorepo today — read one as the concrete adapter
-  shape before implementing ecommerce's four, rather than designing the adapter from
-  the interface alone.
+- **Re-verified at implementation time (correction to the Goal's framing above):**
+  `wms-platform`'s `inventory-service`/`outbound-service`/`inbound-service`
+  `EventDedupeRepositoryImpl` classes are **not yet** adopters of the *shared*
+  `com.example.messaging.dedupe.EventDedupePort` — each still implements its own
+  **service-local** `application/port/out/EventDedupePort` interface (byte-identical
+  in contract shape, but a separate type). wms-platform's own migration to the shared
+  port is tracked separately (`projects/wms-platform/tasks/ready/TASK-BE-571-...md`,
+  still `ready` as of this task's implementation). The wms classes were still used as
+  the concrete **adapter shape reference** (JPA entity + `INSERT ... ON CONFLICT
+  (event_id) DO NOTHING` + `MANDATORY` propagation) — that persistence pattern is
+  sound and reusable regardless of which interface the class implements — but this
+  task's four adapters implement the shared interface directly (no intermediate
+  service-local duplicate), since none of the four target services had a pre-existing
+  local port to convert (unlike wms's TASK-BE-571 case, which is a pure interface
+  swap over an already-identical local port).
+  `wms-platform/apps/inventory-service/src/main/java/com/wms/inventory/adapter/out/persistence/dedupe/EventDedupeRepositoryImpl.java`
+  (and its `outbound-service`/`inbound-service` siblings) — read one as the concrete
+  adapter shape before implementing ecommerce's four, rather than designing the
+  adapter from the interface alone.
 - `EventDedupePort#process` takes a `Runnable work` and returns an `Outcome` enum
   (`APPLIED`/`IGNORED_DUPLICATE`/`FAILED`) — this is a different call shape from
   `product-service`'s current `isDuplicate(UUID, String): boolean` (check-then-act,
@@ -230,6 +270,20 @@ Follow, per touched service:
   instead of a single `eventId` UUID), that is a legitimate blocker requiring a
   design decision (extend the adapter, or a migration) — not something to paper over.
 
+  **Resolved (implementation).** `order-service`'s `AccountDeletedConsumer` hit exactly
+  this: the flat `account.deleted` wire (TASK-BE-422) carries no `eventId` at all, so
+  the existing dedupe key was a service-defined composite
+  `accountId + ":" + (anonymized ? "anon" : "grace")` — a `String`, not a UUID, and not
+  the envelope's `event_id`. `EventDedupePort#process` requires a `UUID` and the
+  interface's contract/signature is out of scope to change (see Scope), so the chosen
+  resolution is "extend the adapter": the consumer deterministically derives a UUID
+  from the composite string via `UUID.nameUUIDFromBytes(dedupKey.getBytes(UTF_8))`
+  before calling `process(...)`. This is a storage-format detail only — the same
+  composite key always maps to the same derived UUID, so the dedup/duplicate outcome
+  is byte-identical to the pre-migration behavior; only the persisted table value
+  changes shape (a UUID string instead of the raw composite string). No other
+  consumer across the 4 services had a non-eventId dedupe key.
+
 ---
 
 # Failure Scenarios
@@ -256,10 +310,12 @@ Follow, per touched service:
 
 # Definition of Done
 
-- [ ] All 4 services implement and adopt `EventDedupePort`
-- [ ] All named consumers migrated
-- [ ] `settlement-service`'s parallel `ProcessedEventStore` abstraction resolved (not
-      left duplicated)
-- [ ] Atomicity preserved and verified
-- [ ] Tests passing for all 4 services
-- [ ] Ready for review
+- [x] All 4 services implement and adopt `EventDedupePort`
+- [x] All named consumers migrated (plus the un-named order-service consumers sharing
+      the single `EventDeduplicationChecker` bean, since it is one shared component —
+      see Acceptance Criteria evidence)
+- [x] `settlement-service`'s parallel `ProcessedEventStore` abstraction resolved (not
+      left duplicated) — deleted, consumers use `EventDedupePort` directly
+- [x] Atomicity preserved and verified (by inspection, see Acceptance Criteria)
+- [x] Tests passing for all 4 services (375/387/195/145, 0 failures)
+- [x] Ready for review

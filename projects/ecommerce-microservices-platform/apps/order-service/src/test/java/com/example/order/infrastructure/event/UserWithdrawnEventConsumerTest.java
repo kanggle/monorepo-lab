@@ -1,8 +1,10 @@
 package com.example.order.infrastructure.event;
 
+import com.example.messaging.dedupe.EventDedupePort;
 import com.example.order.application.service.UserWithdrawalOrderService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,7 +20,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("UserWithdrawnEventConsumer 단위 테스트")
+@DisplayName("UserWithdrawnEventConsumer 단위 테스트 (ADR-MONO-058 D7)")
 class UserWithdrawnEventConsumerTest {
 
     @InjectMocks
@@ -28,10 +30,16 @@ class UserWithdrawnEventConsumerTest {
     private UserWithdrawalOrderService userWithdrawalOrderService;
 
     @Mock
-    private EventDeduplicationChecker eventDeduplicationChecker;
+    private EventDedupePort eventDedupePort;
 
     @Mock
     private ObjectMapper objectMapper;
+
+    @BeforeEach
+    void stubDedupeAppliesByDefault() {
+        lenient().when(eventDedupePort.process(any(), eq("UserWithdrawn"), any()))
+                .thenAnswer(EventDedupeTestSupport::runWork);
+    }
 
     private UserWithdrawnEvent event(String userId) {
         return new UserWithdrawnEvent(
@@ -94,7 +102,8 @@ class UserWithdrawnEventConsumerTest {
     @DisplayName("중복 이벤트 수신 시 서비스를 호출하지 않는다")
     void handle_duplicateEvent_doesNotCallService() {
         UserWithdrawnEvent event = event("user-1");
-        when(eventDeduplicationChecker.isDuplicate(event.eventId(), "UserWithdrawn")).thenReturn(true);
+        when(eventDedupePort.process(any(), eq("UserWithdrawn"), any()))
+                .thenReturn(EventDedupePort.Outcome.IGNORED_DUPLICATE);
 
         consumer.handle(event);
 

@@ -1,5 +1,6 @@
 package com.example.product.infrastructure.event;
 
+import com.example.messaging.dedupe.EventDedupePort;
 import com.example.product.application.service.ReservationService;
 import com.example.product.domain.model.reservation.StockReservationLine;
 import com.example.product.domain.tenant.TenantContext;
@@ -32,7 +33,7 @@ import java.util.UUID;
 public class OrderPlacedReservationConsumer {
 
     private final ReservationService reservationService;
-    private final ReservationEventDedupe dedupe;
+    private final EventDedupePort reservationEventDedupe;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -42,9 +43,11 @@ public class OrderPlacedReservationConsumer {
     }
 
     void handle(OrderPlacedMessage event) {
-        if (dedupe.isDuplicate(ReservationUuids.parseOrNull(event.eventId()), "order.order.placed")) {
-            return;
-        }
+        reservationEventDedupe.process(
+                ReservationUuids.parseOrNull(event.eventId()), "order.order.placed", () -> handleWork(event));
+    }
+
+    private void handleWork(OrderPlacedMessage event) {
         if (event.payload() == null || event.payload().orderId() == null
                 || event.payload().items() == null || event.payload().items().isEmpty()) {
             log.warn("order.order.placed has null/empty payload, skipping. eventId={}", event.eventId());
