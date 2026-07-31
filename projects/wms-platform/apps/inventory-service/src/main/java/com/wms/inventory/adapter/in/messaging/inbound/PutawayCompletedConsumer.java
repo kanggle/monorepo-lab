@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.inventory.application.command.ReceiveStockCommand;
 import com.wms.inventory.application.command.ReceiveStockLineCommand;
 import com.wms.inventory.application.port.in.ReceiveStockUseCase;
-import com.wms.inventory.application.port.out.EventDedupePort;
+import com.example.messaging.dedupe.EventDedupePort;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;

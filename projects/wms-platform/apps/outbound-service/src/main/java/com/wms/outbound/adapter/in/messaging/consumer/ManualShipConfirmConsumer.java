@@ -3,7 +3,7 @@ package com.wms.outbound.adapter.in.messaging.consumer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.wms.outbound.application.command.ConfirmShippingCommand;
 import com.wms.outbound.application.port.in.ConfirmShippingUseCase;
-import com.wms.outbound.application.port.out.EventDedupePort;
+import com.example.messaging.dedupe.EventDedupePort;
 import com.wms.outbound.application.port.out.OrderPersistencePort;
 import com.wms.outbound.application.port.out.SagaPersistencePort;
 import com.wms.outbound.domain.model.Order;

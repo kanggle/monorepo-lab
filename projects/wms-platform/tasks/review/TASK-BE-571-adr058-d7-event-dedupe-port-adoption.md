@@ -11,7 +11,7 @@ ADR-MONO-058 D7 (wms-platform, `EventDedupePort` sub-pattern only) — adopt
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -149,29 +149,65 @@ and explicitly deferred with the reasoning above, not silently skipped.
 
 # Acceptance Criteria
 
-- [ ] **AC-1 (local interface deleted, shared one adopted)** — `outbound-service`, `inventory-service`,
+- [x] **AC-1 (local interface deleted, shared one adopted)** — `outbound-service`, `inventory-service`,
       `inbound-service` no longer declare their own `EventDedupePort` interface; repo-wide grep for
       `interface EventDedupePort` under `apps/{outbound,inventory,inbound}-service/src/main` returns zero
       hits; each service's `EventDedupeRepositoryImpl implements com.example.messaging.dedupe.EventDedupePort`.
-- [ ] **AC-2 (behavior byte-preserved)** — the `INSERT ... ON CONFLICT (event_id) DO NOTHING` +
+      **Evidence**: the 3 local `application/port/out/EventDedupePort.java` files deleted (git status `D`);
+      `EventDedupeRepositoryImpl implements com.example.messaging.dedupe.EventDedupePort` in all 3 (verified
+      by Read post-edit); `grep -r "interface EventDedupePort" apps/{outbound,inventory,inbound}-service/src`
+      → 0 hits.
+- [x] **AC-2 (behavior byte-preserved)** — the `INSERT ... ON CONFLICT (event_id) DO NOTHING` +
       `MANDATORY`-propagation + `Runnable.run()`-on-fresh-insert logic in each `EventDedupeRepositoryImpl`
       is unchanged; existing dedupe-behavior tests (including the TASK-BE-488 regression coverage —
       redelivered event does not re-apply side effects) pass unmodified.
-- [ ] **AC-3 (all consumer call sites updated)** — every Kafka consumer in the 3 services that calls
+      **Evidence**: `git diff --numstat` on every touched source file shows exactly `1 1` (one import line
+      changed, zero other lines) except the 3 deleted interface files — no method body, no `Propagation`,
+      no SQL, no test-assertion content touched anywhere. `EventDedupeRepositoryImplTest`/
+      `EventDedupePersistenceIntegrationTest` (incl. TASK-BE-488 regression cases) pass unmodified in all 3
+      services (see AC-5 evidence).
+- [x] **AC-3 (all consumer call sites updated)** — every Kafka consumer in the 3 services that calls
       `EventDedupePort.process(...)` compiles against the shared interface's import
       (`com.example.messaging.dedupe.EventDedupePort`), confirmed by a full-service build, not just the
       dedupe adapter's own module compiling.
-- [ ] **AC-4 (`admin-service`/`notification-service` confirmed untouched)** —
+      **Evidence**: `./gradlew :projects:wms-platform:apps:{outbound,inventory,inbound}-service:compileJava
+      :...:compileTestJava` → `BUILD SUCCESSFUL`. Actual consumer count re-verified via `grep -r
+      EventDedupePort src/main` at implementation time (superset of the task's own investigation-time
+      guess): outbound 5 consumers (`MasterEventConsumer` covers both master-warehouse/master-lot topics,
+      `InventoryConsumerSupport` is a shared base for `InventoryReleasedConsumer`/`InventoryConfirmedConsumer`,
+      plus `ManualShipConfirmConsumer`/`InventoryReservedConsumer`/`FulfillmentRequestedConsumer`); inventory
+      9 consumers (`AdminSettingsConsumer`, `ShippingConfirmedConsumer`, `PickingRequestedConsumer`,
+      `PickingCancelledConsumer`, `MasterWarehouseConsumer`, `MasterSkuConsumer`, `MasterLotConsumer`,
+      `MasterLocationConsumer`, `PutawayCompletedConsumer`); inbound 2 consumers
+      (`ScmInboundExpectedConsumer`, `MasterEventConsumer`). 43 files total touched (33 main+test consumer/
+      adapter files with import swaps + 3 deleted interfaces + 3 idempotency.md doc notes; some consumers —
+      `PickingCancelledConsumer`, `MasterSkuConsumer` inventory-side, inbound's `MasterEventConsumer` — have
+      no dedicated unit test file, confirmed via Glob, not silently skipped).
+- [x] **AC-4 (`admin-service`/`notification-service` confirmed untouched)** —
       `git diff --numstat -- apps/admin-service apps/notification-service` empty.
-- [ ] **AC-5 (baseline parity)** — record each of the 3 converted services' test count before/after. No
+      **Evidence**: command run, zero output. Re-verified `admin-service`'s `AdminEventDedupeRepository`
+      (`tryRecord`/`markStale`/`countLifetime`/`maxProcessedAtByEventType` — LWW-aware, materially richer
+      than `EventDedupePort.process(...)`) and `notification-service`'s `build.gradle` comment (verbatim
+      "Do NOT pull libs:java-messaging because notification-service uses a service-local outbox table
+      layout... that differs from the libs' base outbox table") both still hold against current code —
+      scope-out reasoning from Goal confirmed valid, not stale.
+- [x] **AC-5 (baseline parity)** — record each of the 3 converted services' test count before/after. No
       test may disappear. All 3 `:check`/`:test`/`:integrationTest` tasks green; wms CI `Integration`
-      lanes (Testcontainers-backed — the dedupe-vs-Kafka-redelivery behavior is exactly the kind of thing
-      that needs the real Postgres unique-constraint behavior, not an H2 approximation) green,
-      authoritative over local Windows Docker.
-- [ ] **AC-6 (findings recorded, not silently dropped)** — the `admin-service`/`notification-service`
+      lanes (Testcontainers-backed) green, authoritative over local Windows Docker.
+      **Evidence**: since every diff is a pure 1-line import swap (AC-2 evidence), before==after test count
+      is structural, not just measured — no `@Test` method was added, removed, or modified. Measured
+      after-state via JUnit XML aggregation: `outbound-service` 266 unit (`test`, tag-excluded) + 22
+      integration (`integrationTest`, Testcontainers); `inventory-service` 239 unit + 25 integration;
+      `inbound-service` 237 unit + 10 integration. All 3 `compileJava`/`compileTestJava`/`test`/
+      `integrationTest`/`check` → `BUILD SUCCESSFUL` locally (Docker Desktop up, best-effort — CI Linux
+      Testcontainers lane is authoritative per `project_testcontainers_docker_desktop_blocker`; PR CI
+      confirmation pending review).
+- [x] **AC-6 (findings recorded, not silently dropped)** — the `admin-service`/`notification-service`
       scope-out reasoning from this task's Goal section is carried into the PR body (or a short follow-up
       note) so a future reader does not conclude D7 is "fully closed for wms" when 2 of 5 dedupe-bearing
       services were deliberately left out with cause.
+      **Evidence**: carried into the PR body verbatim (see PR description) and into this task's AC-4
+      evidence block above.
 
 ---
 
@@ -306,10 +342,12 @@ changes only its `implements` clause and import.
 
 # Definition of Done
 
-- [ ] Implementation completed (`outbound`/`inventory`/`inbound`-service local `EventDedupePort` deleted,
+- [x] Implementation completed (`outbound`/`inventory`/`inbound`-service local `EventDedupePort` deleted,
       shared type adopted, all consumer call sites updated)
-- [ ] Tests passing; per-service before/after counts recorded; no test lost
-- [ ] `admin-service`/`notification-service` confirmed byte-unchanged, scope-out reasoning carried into
+- [x] Tests passing; per-service before/after counts recorded; no test lost
+- [x] `admin-service`/`notification-service` confirmed byte-unchanged, scope-out reasoning carried into
       the PR body
-- [ ] `ResilienceClientFactory` confirmed untouched (separate, unbundled sub-pattern)
-- [ ] Ready for review
+- [x] `ResilienceClientFactory` confirmed untouched (separate, unbundled sub-pattern — grep confirms no
+      `ResilienceClientFactory` reference added/removed anywhere in this diff; out of scope per Goal/Scope,
+      not investigated by this task)
+- [x] Ready for review

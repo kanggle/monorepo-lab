@@ -1,7 +1,7 @@
 package com.wms.outbound.adapter.out.persistence.adapter;
 
 import com.wms.outbound.adapter.out.persistence.repository.OutboundEventDedupeRepository;
-import com.wms.outbound.application.port.out.EventDedupePort;
+import com.example.messaging.dedupe.EventDedupePort;
 import java.time.Clock;
 import java.util.UUID;
 import org.slf4j.Logger;

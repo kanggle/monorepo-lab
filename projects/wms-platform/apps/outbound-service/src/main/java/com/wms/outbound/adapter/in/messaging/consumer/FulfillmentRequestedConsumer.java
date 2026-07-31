@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.wms.outbound.application.command.ReceiveOrderCommand;
 import com.wms.outbound.application.command.ReceiveOrderLineCommand;
 import com.wms.outbound.application.port.in.ReceiveOrderUseCase;
-import com.wms.outbound.application.port.out.EventDedupePort;
+import com.example.messaging.dedupe.EventDedupePort;
 import com.wms.outbound.application.port.out.MasterReadModelPort;
 import com.wms.outbound.domain.exception.OrderNoDuplicateException;
 import com.wms.outbound.domain.model.OrderSource;

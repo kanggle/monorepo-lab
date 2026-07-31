@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.wms.outbound.application.port.out.EventDedupePort;
+import com.example.messaging.dedupe.EventDedupePort;
 import com.wms.outbound.application.service.ReceiveOrderService;
 import com.wms.outbound.application.service.fakes.FakeMasterReadModelPort;
 import com.wms.outbound.application.service.fakes.FakeOrderPersistencePort;

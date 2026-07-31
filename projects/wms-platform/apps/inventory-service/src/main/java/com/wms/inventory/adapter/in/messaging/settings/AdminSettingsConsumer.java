@@ -1,7 +1,7 @@
 package com.wms.inventory.adapter.in.messaging.settings;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.wms.inventory.application.port.out.EventDedupePort;
+import com.example.messaging.dedupe.EventDedupePort;
 import com.wms.inventory.application.port.out.LowStockThresholdWriterPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

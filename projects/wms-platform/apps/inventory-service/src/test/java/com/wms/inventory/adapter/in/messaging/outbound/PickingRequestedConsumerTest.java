@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.inventory.application.command.ReserveStockCommand;
 import com.wms.inventory.application.port.in.ReserveStockUseCase;
-import com.wms.inventory.application.port.out.EventDedupePort;
+import com.example.messaging.dedupe.EventDedupePort;
 import com.wms.inventory.application.port.out.InventoryMovementRepository;
 import com.wms.inventory.application.port.out.InventoryRepository;
 import com.wms.inventory.application.port.out.MasterReadModelPort;

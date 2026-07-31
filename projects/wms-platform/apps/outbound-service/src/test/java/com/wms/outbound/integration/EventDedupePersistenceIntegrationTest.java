@@ -2,7 +2,7 @@ package com.wms.outbound.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.wms.outbound.application.port.out.EventDedupePort;
+import com.example.messaging.dedupe.EventDedupePort;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;

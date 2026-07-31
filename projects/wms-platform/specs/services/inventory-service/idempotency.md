@@ -162,6 +162,13 @@ Retention: 30 days. A nightly cron deletes rows where `processed_at < now() - in
 
 ### 2.3 Processing Logic
 
+The port consumed here is `com.example.messaging.dedupe.EventDedupePort`
+(`libs/java-messaging`), not a service-local interface — `inventory-service`
+adopted the shared type directly (TASK-BE-571); only the persistence adapter
+(`EventDedupeRepositoryImpl`, backed by `inventory_event_dedupe`) remains
+service-owned, per the shared interface's own javadoc on why retention/tenant
+scoping stays per-service.
+
 Within the same `@Transactional` boundary as the domain mutation:
 
 ```

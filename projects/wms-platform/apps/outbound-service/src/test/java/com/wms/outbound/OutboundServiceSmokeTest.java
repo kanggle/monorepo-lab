@@ -10,7 +10,7 @@ import com.wms.outbound.adapter.in.webhook.erp.TimestampWindowValidator;
 import com.wms.outbound.application.port.in.IngestWebhookEventUseCase;
 import com.wms.outbound.application.port.in.ProcessWebhookInboxUseCase;
 import com.wms.outbound.application.port.out.WebhookInboxStorePort;
-import com.wms.outbound.application.port.out.EventDedupePort;
+import com.example.messaging.dedupe.EventDedupePort;
 import com.wms.outbound.application.port.out.MasterReadModelPort;
 import com.wms.outbound.application.port.out.MasterReadModelWriterPort;
 import com.wms.outbound.application.port.out.OutboxWriterPort;

@@ -6,7 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.inventory.application.command.ConfirmReservationCommand;
 import com.wms.inventory.application.port.in.ConfirmReservationUseCase;
-import com.wms.inventory.application.port.out.EventDedupePort;
+import com.example.messaging.dedupe.EventDedupePort;
 import com.wms.inventory.application.port.out.ReservationRepository;
 import com.example.common.page.PageResult;
 import com.wms.inventory.application.query.ReservationListCriteria;

@@ -1,6 +1,6 @@
 package com.wms.outbound.adapter.in.messaging.consumer;
 
-import com.wms.outbound.application.port.out.EventDedupePort;
+import com.example.messaging.dedupe.EventDedupePort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;

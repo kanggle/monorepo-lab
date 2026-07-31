@@ -11,7 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.wms.outbound.adapter.out.persistence.repository.OutboundEventDedupeRepository;
-import com.wms.outbound.application.port.out.EventDedupePort;
+import com.example.messaging.dedupe.EventDedupePort;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;

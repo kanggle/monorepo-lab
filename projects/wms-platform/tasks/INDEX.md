@@ -68,7 +68,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 ## ready
 
 - `TASK-BE-567-adr058-d2-error-envelope-exception-handler-adoption.md` — ADR-MONO-058 D2 (wms-platform): adopt `libs/java-web-servlet.CommonGlobalExceptionHandler`/`libs/java-web.ErrorResponse` for the non-domain exception-handler tail across the 5 wms servlet services (master/inventory/outbound/inbound/admin); resolves D2's wire-shape (`ApiErrorEnvelope`'s nested `{error:{...}}` shape) + status-code blockers as wms's own design decision. 선행 없음.
-- `TASK-BE-571-adr058-d7-event-dedupe-port-adoption.md` — ADR-MONO-058 D7 (wms-platform, `EventDedupePort` sub-pattern only): adopt `libs/java-messaging.dedupe.EventDedupePort` in `outbound-service`/`inventory-service`/`inbound-service`, replacing their hand-rolled local interfaces of identical shape; `admin-service` (LWW-aware, incompatible contract) and `notification-service` (explicit build.gradle opt-out of `libs:java-messaging`) investigated and scoped out with reasoning. 선행 없음.
 
 > 2026-07-20 (`TASK-MONO-451`): 위 두 행은 **디스크에는 `ready/` 에 있는데 이 섹션이 `(empty)` 라고 선언**하고 있었다 — 아래 2026-07-12 노트와 정반대 방향의 같은 결함이다. 그때는 표가 끝난 일을 가리켰고, 이번엔 표가 **살아있는 일을 숨겼다**. 큐를 표로 고르는 사람에게 후자는 **일이 없다는 거짓 보고**다. 이제 `scripts/check-index-queue-drift.sh` 가 양방향으로 대조한다.
 
@@ -80,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-571-adr058-d7-event-dedupe-port-adoption.md` — **REVIEW (2026-08-01, impl PR opened).** ADR-MONO-058 D7 (wms-platform, `EventDedupePort` sub-pattern only — `ResilienceClientFactory` explicitly not this task): adopted `libs/java-messaging.dedupe.EventDedupePort` in `outbound-service`/`inventory-service`/`inbound-service`, deleting their hand-rolled local interfaces (byte-identical contract shape) and repointing all consumer call sites (43 files: outbound 5 consumers, inventory 9 consumers, inbound 2 consumers, incl. tests). Every touched source file is a pure 1-line import swap (`git diff --numstat` confirms `1 1` per file) — zero logic/test-assertion change, so before==after test parity is structural, not just measured. `admin-service` (LWW-aware `AdminEventDedupeRepository` — `tryRecord`/`markStale`/`countLifetime`, materially richer contract) and `notification-service` (explicit build.gradle opt-out of `libs:java-messaging` for its JSONB outbox layout) re-verified against current code and confirmed still scoped out (`git diff --numstat` on both — empty). Test counts (after, unit+integration): outbound 266+22, inventory 239+25, inbound 237+10; all 3 `compileJava`/`compileTestJava`/`test`/`integrationTest`/`check` GREEN locally (Docker up, best-effort — CI Testcontainers lane authoritative, confirmation pending). Brief adoption note added to each of the 3 services' `idempotency.md`. 선행 없음.
 
 ## done
 
