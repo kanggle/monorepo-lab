@@ -1,6 +1,7 @@
 package com.example.product.infrastructure.client;
 
 import com.example.product.application.port.SellerAccountProvisioner;
+import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,12 +21,14 @@ import java.util.UUID;
 
 /**
  * Account-service adapter for seller-operator account provisioning + deactivation
- * (ADR-MONO-042 D2/D4/D5). MIRRORS admin-service {@code AccountServiceClient}: a
- * {@link RestClient} over the account {@code /internal/**} endpoints, authenticated with
- * a GAP {@code client_credentials} Bearer JWT ({@link IamClientCredentialsTokenProvider},
- * ADR-005 단계 3b). product-service has NO resilience4j (unlike admin-service), so the
- * resilience is the explicit FAIL-SOFT try/catch the D3 stance requires — exactly the
- * behavior admin's {@code resolveOrCreateIdentity} swallow-to-null established.
+ * (ADR-MONO-042 D2/D4/D5). A {@link RestClient} over the account {@code /internal/**}
+ * endpoints, authenticated with a GAP {@code client_credentials} Bearer JWT — the shared
+ * {@link IamClientCredentialsTokenProvider} (ADR-MONO-058 § D6, {@code libs/java-security},
+ * wired by {@code IamTokenProviderConfig}, TASK-BE-568), not a local mirror of
+ * admin-service's own copy anymore (its ADR-005 단계 3b origin). product-service has NO
+ * resilience4j (unlike admin-service), so the resilience is the explicit FAIL-SOFT
+ * try/catch the D3 stance requires — exactly the behavior admin's
+ * {@code resolveOrCreateIdentity} swallow-to-null established.
  *
  * <p>Endpoints reused (verified present 2026-06-18, NOT modified by this task):
  * <ul>

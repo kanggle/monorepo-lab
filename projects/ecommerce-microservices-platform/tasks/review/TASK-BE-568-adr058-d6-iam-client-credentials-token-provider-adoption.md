@@ -8,7 +8,7 @@ ADR-MONO-058 D6 — adopt the promoted canonical `IamClientCredentialsTokenProvi
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -117,26 +117,45 @@ patching them in place.
 
 # Acceptance Criteria
 
-- [ ] `TASK-MONO-501` confirmed `done` before implementation starts (verify by
-      reading the task file's Status, not by assumption).
-- [ ] `product-service`'s local `IamClientCredentialsTokenProvider` class is deleted;
+- [x] `TASK-MONO-501` confirmed `done` before implementation starts (verify by
+      reading the task file's Status, not by assumption). — Confirmed: file lives at
+      `tasks/done/TASK-MONO-501-...md` with DoD box "Canonical class landed in
+      `libs/java-security`" checked; class read directly at
+      `libs/java-security/src/main/java/com/example/security/oauth2/client/IamClientCredentialsTokenProvider.java`.
+- [x] `product-service`'s local `IamClientCredentialsTokenProvider` class is deleted;
       `AccountServiceSellerProvisioner` is wired to the `libs/java-security` canonical
-      class.
-- [ ] product-service's outbound IAM token calls now use UTF-8 Basic-auth encoding
+      class. — Local file removed; `AccountServiceSellerProvisioner` now imports
+      `com.example.security.oauth2.client.IamClientCredentialsTokenProvider`; new
+      `IamTokenProviderConfig` (`infrastructure/config`) supplies the bean via
+      `@Bean` factory method (the shared class has no `@Component`, per its own
+      framework-neutral-POJO contract).
+- [x] product-service's outbound IAM token calls now use UTF-8 Basic-auth encoding
       (verified by a unit test asserting the byte-level encoding, mirroring
-      `batch-worker`'s existing fix / `TASK-MONO-501`'s canonical-class test).
-- [ ] product-service's outbound IAM token calls now have explicit connect/read
-      timeouts (verified — no more `RestClient.create()`/unbounded call).
-- [ ] `AccountServiceSellerProvisioner`'s existing seller-provisioning tests remain
+      `batch-worker`'s existing fix / `TASK-MONO-501`'s canonical-class test). —
+      `IamTokenProviderConfigTest#basicAuthHeaderIsUtf8Encoded` asserts the actual
+      WireMock-observed `Authorization` header equals the UTF-8-encoded value and
+      differs from the ISO-8859-1 one, using non-ASCII client id/secret.
+- [x] product-service's outbound IAM token calls now have explicit connect/read
+      timeouts (verified — no more `RestClient.create()`/unbounded call). — New
+      `iam.internal-client.connect-timeout-ms`/`read-timeout-ms` config keys (default
+      5000/5000, parity with `batch-worker`); `IamTokenProviderConfigTest#readTimeoutIsHonored`
+      proves a 300ms read timeout fails fast against a 5s-delayed stub.
+- [x] `AccountServiceSellerProvisioner`'s existing seller-provisioning tests remain
       GREEN (fail-soft try/catch behavior, D3 stance per its own javadoc, must be
-      unaffected).
-- [ ] `./gradlew :projects:ecommerce-microservices-platform:apps:product-service:test`
-      GREEN.
-- [ ] No behavior change to product-service's `internal-client.client-id` default
+      unaffected). — `AccountServiceSellerProvisionerTest` unchanged apart from the
+      import, still mocks the token provider; all 12 tests GREEN.
+- [x] `./gradlew :projects:ecommerce-microservices-platform:apps:product-service:test`
+      GREEN. — `BUILD SUCCESSFUL`, full product-service suite (incl. the 3 new
+      `IamTokenProviderConfigTest` cases) 0 failures.
+- [x] No behavior change to product-service's `internal-client.client-id` default
       (`product-service-client`) or any other existing config key's default value,
       unless the promoted class's shape requires a key rename — if so, update
       `application.yml` and any deployment config consistently, and note the rename
-      explicitly in this task's implementation.
+      explicitly in this task's implementation. — No rename: `iam.internal-client.token-uri`/
+      `client-id`(default unchanged `product-service-client`)/`client-secret` and
+      `iam.account-service.base-url`/`iam.downstream.*`/`iam.seller.role` all preserved
+      byte-for-byte. Only *new* keys added (`iam.internal-client.connect-timeout-ms`/
+      `read-timeout-ms`, absent before this task since the local copy had no timeout at all).
 
 ---
 
@@ -247,9 +266,9 @@ Follow:
 
 # Definition of Done
 
-- [ ] `TASK-MONO-501` confirmed done before starting
-- [ ] product-service's local `IamClientCredentialsTokenProvider` removed
-- [ ] `AccountServiceSellerProvisioner` wired to the shared `libs/java-security` class
-- [ ] UTF-8 encoding + timeout defects closed and verified by tests
-- [ ] `./gradlew :projects:ecommerce-microservices-platform:apps:product-service:test` GREEN
-- [ ] Ready for review
+- [x] `TASK-MONO-501` confirmed done before starting
+- [x] product-service's local `IamClientCredentialsTokenProvider` removed
+- [x] `AccountServiceSellerProvisioner` wired to the shared `libs/java-security` class
+- [x] UTF-8 encoding + timeout defects closed and verified by tests
+- [x] `./gradlew :projects:ecommerce-microservices-platform:apps:product-service:test` GREEN
+- [x] Ready for review

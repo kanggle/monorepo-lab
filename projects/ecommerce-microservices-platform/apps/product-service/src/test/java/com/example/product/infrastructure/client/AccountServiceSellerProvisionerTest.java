@@ -1,6 +1,7 @@
 package com.example.product.infrastructure.client;
 
 import com.example.product.application.port.SellerAccountProvisioner.ProvisioningResult;
+import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
