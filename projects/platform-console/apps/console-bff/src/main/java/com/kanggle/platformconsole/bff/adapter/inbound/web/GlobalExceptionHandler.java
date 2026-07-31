@@ -4,20 +4,18 @@ import com.kanggle.platformconsole.bff.adapter.outbound.http.MissingTenantExcept
 import com.kanggle.platformconsole.bff.application.usecase.UnknownNotificationDomainException;
 import com.kanggle.platformconsole.bff.application.usecase.UpstreamUnauthorizedException;
 import com.kanggle.platformconsole.bff.domain.credential.MissingCredentialException;
+import com.example.web.dto.ErrorResponse;
+import com.example.web.exception.CommonGlobalExceptionHandler;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.HttpMediaTypeNotSupportedException;
-import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.ResourceAccessException;
 
 import java.time.Instant;
-import java.util.Set;
 
 /**
  * Global error envelope for console-bff inbound web controllers.
@@ -30,7 +28,7 @@ import java.util.Set;
  * every controller in the application context — including Spring Boot
  * Actuator endpoints (e.g. {@code /actuator/prometheus}). When an actuator
  * endpoint throws an exception (which it can for legitimate reasons during
- * metric registry scrape composition), this handler's wide
+ * metric registry scrape composition), a wide
  * {@code @ExceptionHandler(Exception.class)} would swallow the throwable and
  * convert it to a generic {@code INTERNAL_ERROR} envelope — both
  * (a) breaking observability ({@code /actuator/prometheus} cannot return the
@@ -39,9 +37,30 @@ import java.util.Set;
  * propagate to Spring Boot's default error handling, which is correct for
  * those endpoints. (CI surface: PR #669 first three runs surfaced this as
  * "/actuator/prometheus 500 INTERNAL_SERVER_ERROR".)
+ *
+ * <p><b>ADR-MONO-058 § D2 (TASK-PC-BE-016)</b> — the generic (non-domain)
+ * exception-handler tail this class used to implement locally (405, 415, and
+ * the catch-all 500) was fleet-duplicated boilerplate. It now extends
+ * {@link CommonGlobalExceptionHandler} ({@code libs/java-web-servlet}), which
+ * supplies that tail plus 404 handling for unmapped routes
+ * ({@code NoResourceFoundException} / {@code NoHandlerFoundException}) that
+ * this class never had — those previously fell into the local catch-all as a
+ * bare {@code 500}. The {@code basePackages} scoping above is preserved
+ * because it is declared on this subclass's own {@code @RestControllerAdvice}
+ * annotation — inheriting {@code @ExceptionHandler} methods does not inherit
+ * or require the parent to carry any controller-advice annotation itself
+ * ({@link CommonGlobalExceptionHandler} carries none; adopters supply their
+ * own advice scope). All domain-specific handlers below are unchanged in
+ * behavior — {@link #handleIllegalArgument} is overridden only because the
+ * shared default emits a different {@code code} string ({@code
+ * VALIDATION_ERROR}) than console-bff's own published {@code BAD_REQUEST};
+ * the override's return type must match the parent method's {@code
+ * ResponseEntity<ErrorResponse>} exactly (Java override covariance), so it
+ * uses {@link ErrorResponse} instead of this class's local {@code ObjectNode}
+ * builder — the serialized JSON shape is identical either way.
  */
 @RestControllerAdvice(basePackages = "com.kanggle.platformconsole.bff.adapter.inbound.web")
-public class GlobalExceptionHandler {
+public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
 
     @ExceptionHandler(MissingCredentialException.class)
     public ResponseEntity<ObjectNode> handleMissingCredential(MissingCredentialException ex) {
@@ -67,44 +86,26 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.NOT_FOUND, "NOTIFICATION_NOT_FOUND", ex.getMessage());
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ObjectNode> handleIllegalArgument(IllegalArgumentException ex) {
-        return error(HttpStatus.BAD_REQUEST, "BAD_REQUEST", ex.getMessage());
-    }
-
     /**
-     * Wrong HTTP method on a matched inbound-web controller path (405). Without this the
-     * catch-all {@link #handleGeneric(Exception)} swallows it into a 500. Emits the RFC 7231
-     * §6.5.5 {@code Allow} header. (Actuator 405s stay on Spring's default handling — this
-     * advice is {@code basePackages}-scoped, see the class Javadoc.)
+     * Overrides {@link CommonGlobalExceptionHandler#handleIllegalArgument} — console-bff's own
+     * published {@code code} for this arm has always been {@code BAD_REQUEST}, not the shared
+     * default's {@code VALIDATION_ERROR}. Preserved unchanged (TASK-PC-BE-016 Scope: "Preserve
+     * all domain-specific @ExceptionHandler methods unchanged"). See class Javadoc for why the
+     * return type had to move to {@link ErrorResponse}.
      */
-    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-    public ResponseEntity<ObjectNode> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
-        ObjectNode body = JsonNodeFactory.instance.objectNode();
-        body.put("code", "METHOD_NOT_ALLOWED");
-        body.put("message", "HTTP method not supported for this endpoint");
-        body.put("timestamp", Instant.now().toString());
-        ResponseEntity.BodyBuilder builder = ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED);
-        Set<HttpMethod> supported = ex.getSupportedHttpMethods();
-        if (supported != null && !supported.isEmpty()) {
-            builder.allow(supported.toArray(new HttpMethod[0]));
-        }
-        return builder.body(body);
-    }
-
-    /** Unsupported request {@code Content-Type} on a matched path (415) — same swallow defect. */
-    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
-    public ResponseEntity<ObjectNode> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException ex) {
-        return error(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "UNSUPPORTED_MEDIA_TYPE",
-                "Request Content-Type is not supported by this endpoint");
+    @Override
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of("BAD_REQUEST", ex.getMessage()));
     }
 
     /**
      * A downstream producer returned a non-2xx status on a leg that <b>propagates</b> it (the
      * mark-read passthrough — contract § 4.5). The GET aggregate/overview legs degrade errors to a
      * 200 partial inside {@code CompositionEngine} and never reach here; only the single-domain
-     * mark-read proxy lets a {@link HttpStatusCodeException} surface. Without this arm it fell to
-     * {@link #handleGeneric(Exception)} → a generic 500, so a producer 404 (mark-read on another
+     * mark-read proxy lets a {@link HttpStatusCodeException} surface. Without this arm it would
+     * fall to the inherited catch-all → a generic 500, so a producer 404 (mark-read on another
      * recipient's notification — § 4.5) or a 503 became an opaque 500 (then 502 at console-web),
      * turning a should-degrade into a hard error (TASK-PC-BE-011).
      *
@@ -137,12 +138,6 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ObjectNode> handleDownstreamUnavailable(ResourceAccessException ex) {
         return error(HttpStatus.SERVICE_UNAVAILABLE, "DOWNSTREAM_ERROR",
                 "The notification service is unavailable");
-    }
-
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ObjectNode> handleGeneric(Exception ex) {
-        return error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
-                "An internal error occurred");
     }
 
     private ResponseEntity<ObjectNode> error(HttpStatus status, String code, String message) {
