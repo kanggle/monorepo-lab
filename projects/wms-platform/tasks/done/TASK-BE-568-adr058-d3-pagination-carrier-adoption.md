@@ -10,7 +10,7 @@ ADR-MONO-058 D3 (wms-platform) — adopt `libs/java-common.PageResult`/`PageQuer
 
 # Status
 
-review
+done
 
 # Owner
 
