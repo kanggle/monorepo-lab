@@ -8,7 +8,7 @@ Land 4 memory-audit rule promotions into CLAUDE.md / platform/ (git-workflow, re
 
 # Status
 
-review
+done
 
 # Owner
 
