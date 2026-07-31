@@ -60,15 +60,6 @@ import org.springframework.security.web.access.AccessDeniedHandler;
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    private static final String[] PUBLIC_PATHS = {
-            "/actuator/health",
-            "/actuator/health/**",
-            "/actuator/info",
-            "/actuator/prometheus",
-            // HMAC-protected — JWT not enforced at the filter chain.
-            "/webhooks/erp/order"
-    };
-
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, ObjectMapper objectMapper) throws Exception {
         http
@@ -79,7 +70,7 @@ public class SecurityConfig {
                 .logout(l -> l.disable())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(PUBLIC_PATHS).permitAll()
+                        .requestMatchers(PublicPaths.asAntPatterns()).permitAll()
                         // NOTE: granular role enforcement (e.g. OUTBOUND_ADMIN
                         // for post-pick cancel) happens in the
                         // application services (CancelOrderService, etc.) where

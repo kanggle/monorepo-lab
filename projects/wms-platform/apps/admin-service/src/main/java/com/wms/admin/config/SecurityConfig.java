@@ -2,6 +2,7 @@ package com.wms.admin.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.admin.api.dto.ApiErrorEnvelope;
+import com.wms.admin.infra.security.PublicPaths;
 import com.example.security.oauth2.TenantClaimValidator;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.ArrayList;
@@ -47,13 +48,6 @@ import org.springframework.security.web.access.intercept.AuthorizationFilter;
 @EnableMethodSecurity(prePostEnabled = true)
 public class SecurityConfig {
 
-    private static final String[] PUBLIC_PATHS = {
-            "/actuator/health",
-            "/actuator/health/**",
-            "/actuator/info",
-            "/actuator/prometheus"
-    };
-
     @Bean
     public RoleHierarchy roleHierarchy() {
         return RoleHierarchyImpl.fromHierarchy(
@@ -76,7 +70,7 @@ public class SecurityConfig {
                 .logout(l -> l.disable())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(PUBLIC_PATHS).permitAll()
+                        .requestMatchers(PublicPaths.asAntPatterns()).permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))

@@ -41,6 +41,7 @@ dependencies {
     implementation project(':libs:java-messaging')
     implementation project(':libs:java-observability')
     implementation project(':libs:java-security')
+    implementation project(':libs:java-security-servlet')
 
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

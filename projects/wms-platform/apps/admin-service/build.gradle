@@ -44,6 +44,7 @@ dependencies {
     // Framework-neutral OAuth2 validators (ADR-MONO-049 § D5). The other four wms
     // servlet services already declared this; admin-service was the one that did not.
     implementation project(':libs:java-security')
+    implementation project(':libs:java-security-servlet')
 
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
