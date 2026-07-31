@@ -1,6 +1,7 @@
 package com.example.erp.readmodel.config;
 
 import com.example.security.oauth2.TenantClaimValidator;
+import com.example.security.servlet.ResourceServerChainAssembler;
 import com.example.erp.readmodel.presentation.security.PublicPaths;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -13,8 +14,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.jwt.JwtValidationException;
 import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
@@ -44,27 +43,28 @@ public class SecurityConfig {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
+    /**
+     * The stateless JWT resource-server chain, assembled by
+     * {@link ResourceServerChainAssembler} (ADR-MONO-058 § D4).
+     *
+     * <p>What the library decides: CSRF off, {@code STATELESS} sessions, and the rule
+     * <em>order</em> (public paths → authenticated patterns → the {@code anyRequest()} tail).
+     * What this service decides, and states here in its own file: its
+     * {@link PublicPaths#AS_SET public paths}, its {@code /api/erp/**} bearer-required
+     * pattern, its 401/403 writers, and the closed
+     * {@link ResourceServerChainAssembler.FilterChainBuilder#anyRequestDenied() denyAll()}
+     * tail — spelled out rather than inherited from the builder's default, because it is
+     * this service's measured posture and not a coincidence of the default.
+     */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        String[] exact = PublicPaths.EXACT.toArray(new String[0]);
-        String[] prefixed = PublicPaths.PREFIXES.stream()
-                .map(p -> p + "**")
-                .toArray(String[]::new);
-        http
-                .csrf(AbstractHttpConfigurer::disable)
-                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(exact).permitAll()
-                        .requestMatchers(prefixed).permitAll()
-                        .requestMatchers("/api/erp/**").authenticated()
-                        .anyRequest().denyAll()
-                )
-                .oauth2ResourceServer(rs -> rs
-                        .jwt(jwt -> {})
-                        .authenticationEntryPoint(SecurityConfig::onAuthenticationFailure)
-                        .accessDeniedHandler(SecurityConfig::onAccessDenied)
-                );
-        return http.build();
+        return ResourceServerChainAssembler.statelessJwtChain(http)
+                .publicPaths(PublicPaths.AS_SET)
+                .authenticated("/api/erp/**")
+                .anyRequestDenied()
+                .authenticationEntryPoint(SecurityConfig::onAuthenticationFailure)
+                .accessDeniedHandler(SecurityConfig::onAccessDenied)
+                .build();
     }
 
     static void onAuthenticationFailure(HttpServletRequest request,

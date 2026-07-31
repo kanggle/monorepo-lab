@@ -8,7 +8,7 @@ import com.example.erp.masterdata.application.command.Commands.UpdateCostCenterC
 import com.example.erp.masterdata.application.view.CostCenterView;
 import com.example.erp.masterdata.domain.common.PageResult;
 import com.example.erp.masterdata.domain.costcenter.repository.CostCenterListFilter;
-import com.example.erp.masterdata.infrastructure.security.ActorContextResolver;
+import com.example.security.servlet.actor.ActorContextResolver;
 import com.example.erp.masterdata.presentation.dto.ApiEnvelope;
 import com.example.erp.masterdata.presentation.dto.CostCenterRequests.CreateCostCenterRequest;
 import com.example.erp.masterdata.presentation.dto.CostCenterRequests.RetireCostCenterRequest;
@@ -43,7 +43,7 @@ public class CostCenterController {
     public ResponseEntity<?> create(
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody CreateCostCenterRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(),
                 "POST /api/erp/masterdata/cost-centers",
                 idempotencyKey, req, () -> {
@@ -61,7 +61,7 @@ public class CostCenterController {
             @RequestParam(required = false) String departmentId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         PageResult<CostCenterView> result = service.listCostCenters(actor,
                 new CostCenterListFilter(asOf, active, departmentId), page, size);
         return ResponseEntity.ok(
@@ -72,7 +72,7 @@ public class CostCenterController {
     public ResponseEntity<ApiEnvelope<CostCenterView>> get(
             @PathVariable String id,
             @RequestParam(required = false) LocalDate asOf) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         CostCenterView v = service.getCostCenter(id, actor, asOf);
         return ResponseEntity.ok(ApiEnvelope.of(v));
     }
@@ -82,7 +82,7 @@ public class CostCenterController {
             @PathVariable String id,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody UpdateCostCenterRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(),
                 "PATCH /api/erp/masterdata/cost-centers/{id}",
                 idempotencyKey, req, () -> {
@@ -97,7 +97,7 @@ public class CostCenterController {
             @PathVariable String id,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody RetireCostCenterRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(),
                 "POST /api/erp/masterdata/cost-centers/{id}/retire",
                 idempotencyKey, req, () -> {

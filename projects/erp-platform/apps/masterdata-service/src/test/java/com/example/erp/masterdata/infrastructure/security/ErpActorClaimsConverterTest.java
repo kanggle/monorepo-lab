@@ -17,10 +17,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * § D5 / TASK-MONO-161) is threaded into the {@link ActorContext} fail-closed,
  * mirroring {@code TenantClaimValidator.safeStringList} shape-handling.
  */
-class ActorContextJwtAuthenticationConverterTest {
+class ErpActorClaimsConverterTest {
 
-    private final ActorContextJwtAuthenticationConverter converter =
-            new ActorContextJwtAuthenticationConverter();
+    private final ErpActorClaimsConverter converter = new ErpActorClaimsConverter();
 
     private static Jwt.Builder base(Object entitledDomains) {
         Jwt.Builder b = Jwt.withTokenValue("token")

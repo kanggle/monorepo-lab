@@ -30,16 +30,22 @@ public final class PublicPaths {
             "/actuator/health/"
     );
 
-    private static final PublicPathSet MECHANISM = PublicPathSet.of(EXACT, PREFIXES);
+    /**
+     * The same {@code EXACT}/{@code PREFIXES} data as a {@link PublicPathSet} — the single
+     * instance both the {@code isPublic} helpers below and this service's
+     * {@code SecurityConfig} chain assembly (ADR-MONO-058 § D4) read, so the paths Spring
+     * Security permits unauthenticated and the paths the tenant gate exempts cannot drift.
+     */
+    public static final PublicPathSet AS_SET = PublicPathSet.of(EXACT, PREFIXES);
 
     private PublicPaths() {
     }
 
     public static boolean isPublic(String path) {
-        return MECHANISM.isPublic(path);
+        return AS_SET.isPublic(path);
     }
 
     public static boolean isPublic(HttpServletRequest request) {
-        return MECHANISM.isPublic(request);
+        return AS_SET.isPublic(request);
     }
 }

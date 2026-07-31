@@ -7,7 +7,7 @@ import com.example.erp.approval.application.command.Commands.RevokeDelegationCom
 import com.example.erp.approval.application.view.DelegationGrantView;
 import com.example.erp.approval.domain.delegation.DelegationScope;
 import com.example.erp.approval.domain.error.ApprovalErrors.ValidationException;
-import com.example.erp.approval.infrastructure.security.ActorContextResolver;
+import com.example.security.servlet.actor.ActorContextResolver;
 import com.example.erp.approval.presentation.dto.ApiEnvelope;
 import com.example.erp.approval.presentation.dto.DelegationRequests.CreateDelegationRequest;
 import com.example.erp.approval.presentation.dto.DelegationRequests.RevokeDelegationRequest;
@@ -45,7 +45,7 @@ public class DelegationController {
     public ResponseEntity<?> create(
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody CreateDelegationRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(),
                 "POST /api/erp/approval/delegations",
                 idempotencyKey, req, () -> {
@@ -65,7 +65,7 @@ public class DelegationController {
             @PathVariable String id,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody RevokeDelegationRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(),
                 "POST /api/erp/approval/delegations/{id}/revoke",
                 idempotencyKey, req, () -> {
@@ -91,7 +91,7 @@ public class DelegationController {
     @GetMapping
     public ResponseEntity<ApiEnvelope<List<DelegationGrantView>>> list(
             @RequestParam(required = false) String role) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         List<DelegationGrantView> data = service.listDelegations(actor,
                 DelegationApplicationService.parseRole(role));
         // Unpaginated endpoint (no page/size query params documented in
