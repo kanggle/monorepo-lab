@@ -712,9 +712,16 @@ com.example.finance.ledger/
 
 Same allow-list as account-service (`spring-boot-starter-{web,data-jpa,data-redis?,security,oauth2-resource-server,validation,actuator}`,
 `spring-kafka`, `flyway-{core,mysql}`, `mysql-connector-j`, micrometer+otel, jackson,
-shared libs `java-common`/`java-web`/`java-messaging`/`java-observability`/`java-security`).
+shared libs `java-common`/`java-web`/`java-messaging`/`java-observability`/`java-security`/
+`java-security-servlet`/`java-web-servlet`).
 Redis is **not** required in the first increment (no client idempotency-key surface;
 dedupe is event-id based via `processed_events`).
+
+`libs:java-web-servlet` was added by TASK-FIN-BE-066 (ADR-MONO-058 § D2) for
+`CommonGlobalExceptionHandler` — the base class `presentation/advice/GlobalExceptionHandler`
+extends for its generic, non-domain exception tail. The error envelope is `libs:java-web`'s
+`ErrorResponse`; this service declares no local error-envelope record. `implementation`,
+never `api`, and never onto a reactive classpath.
 
 Plus the project-scoped shared module `projects:finance-platform:libs:finance-common`
 (TASK-FIN-BE-064 / ADR-003 Option A — the `Money` + `Currency` value objects, shared with

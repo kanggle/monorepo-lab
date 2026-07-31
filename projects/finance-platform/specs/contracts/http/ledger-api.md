@@ -22,7 +22,14 @@ finance`); `finance.read` scope. Responses are tenant-scoped.
 **Money** is always `{ "amount": "<minor-units-integer-string>", "currency": "<ISO-4217>" }`
 (string amount, never float — F5). **Success envelope**:
 `{ "data": <payload>, "meta": { "timestamp": "<ISO-8601>" } }`. **Error envelope**:
-`{ "code": "<ERROR_CODE>", "message": "...", "details": {…}?, "timestamp": "..." }`.
+`{ "code": "<ERROR_CODE>", "message": "...", "timestamp": "<ISO-8601>" }` — exactly the
+three-field base envelope of `platform/error-handling.md` § Error Response Format,
+serialised from the shared `libs/java-web.ErrorResponse` (ADR-MONO-058 § D2,
+TASK-FIN-BE-066). A previously documented optional `details` object was **removed** from
+this line by that task: no handler arm in this service ever populated it, so no response
+has ever carried the key. The platform envelope still permits a `details` extension — a
+future error code needing one documents its keys in § Error codes and the envelope regains
+the field then.
 List endpoints are paginated (`?page=`/`?size=`, `meta.page/size/totalElements/totalPages`).
 
 A `{ledgerAccountCode}` path segment is URL-encoded (the `CUSTOMER_WALLET:{accountId}`
@@ -745,7 +752,8 @@ Field semantics (both verbs):
 | `SETTLEMENT_RATE_INVALID` | 422 | **(10th incr)** FX settlement `settlementRate` not strictly positive on `POST /settlements` (`SettlementRateInvalidException`) |
 | `FX_RATE_UNAVAILABLE` | 422 | **(24th incr)** `closingRate` / `settlementRate` omitted on `POST /revaluations` / `/settlements` and no fresh cached quote can supply it — feed disabled, no quote, or stale (`FxRateUnavailableException`, ADR-002 D3); operator must supply a manual rate or wait for a fresh quote |
 | `SETTLEMENT_AMOUNT_INVALID` | 422 | **(12th incr)** partial FX settlement `settleForeignAmount` zero / opposite-sign / over-settle (`> \|F\|`) on `POST /settlements` (`SettlementAmountInvalidException`) |
-| `VALIDATION_ERROR` | 400 | Request field missing / malformed / unparseable — malformed JSON body, path-or-query type mismatch, and a non-numeric `settlementRate` / `closingRate` / `settleForeignAmount` string (the F5 string-decimal fields are parsed by hand, so bean validation never sees them). Platform-Common code; **always 400 in this service** |
+| `VALIDATION_ERROR` | 400 | Request field missing / malformed / unparseable — malformed JSON body, path-or-query type mismatch, a **bean-validation (`@Valid`) failure**, a **missing required query parameter**, and a non-numeric `settlementRate` / `closingRate` / `settleForeignAmount` string (the F5 string-decimal fields are parsed by hand, so bean validation never sees them). Platform-Common code; **always 400 in this service**. The `@Valid` and missing-parameter arms answered 500 before TASK-FIN-BE-066 (this service had no handler for either and the catch-all swallowed them); adopting the shared handler moved them onto the 400 this row already documented |
+| `CONFLICT` | 409 | **(TASK-FIN-BE-066)** Optimistic-lock collision on a concurrent update (`@Version` mismatch on `JournalEntry` / `AccountingPeriod`) — the Platform-Common transactional T5 code, supplied by the shared `CommonGlobalExceptionHandler`. Previously surfaced as a 500 because this service had no arm for it. account-service publishes the registered descriptive alias `CONCURRENT_MODIFICATION` for the same case; the two are equivalent per `platform/error-handling.md` § Transactional |
 | `ILLEGAL_STATE` | 422 | Aggregate invariant violated at the controller boundary — the unclassified `IllegalStateException` fallback (Platform-Common). Prefer a domain code above where the failure is a known one |
 
 ## Out of scope (forward-declared — later increments)

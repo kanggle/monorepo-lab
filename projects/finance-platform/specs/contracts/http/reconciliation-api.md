@@ -15,7 +15,12 @@ the tenant gate (no separate scope-authority axis; the operator/integration call
 arrives via the platform-console / internal-services client). Responses are
 tenant-scoped. **Money** is `{amount:"<minor-units-string>", currency}` (F5 — never a
 float). Success envelope `{ data, meta:{timestamp} }`; error envelope
-`{ code, message, details?, timestamp }`.
+`{ code, message, timestamp }` — the three-field base envelope of
+`platform/error-handling.md` § Error Response Format, shared with ledger-api.md
+(both surfaces are served by the same `ledger-service` advice). The optional
+`details` object previously documented on this line was removed by
+TASK-FIN-BE-066 (ADR-MONO-058 § D2): no handler arm ever populated it, so no
+response has ever carried the key.
 
 ---
 

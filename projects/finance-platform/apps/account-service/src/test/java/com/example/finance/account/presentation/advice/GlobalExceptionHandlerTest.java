@@ -3,7 +3,7 @@ package com.example.finance.account.presentation.advice;
 import com.example.finance.account.domain.error.DomainErrors;
 import com.example.finance.common.money.Currency;
 import com.example.finance.common.money.Money;
-import com.example.finance.account.presentation.dto.ApiErrorBody;
+import com.example.web.dto.ErrorResponse;
 import jakarta.persistence.OptimisticLockException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -38,7 +38,7 @@ class GlobalExceptionHandlerTest {
 
     private final GlobalExceptionHandler handler = new GlobalExceptionHandler();
 
-    private void assertStatus(ResponseEntity<ApiErrorBody> r,
+    private void assertStatus(ResponseEntity<ErrorResponse> r,
                               HttpStatus status, String code) {
         assertThat(r.getStatusCode()).isEqualTo(status);
         assertThat(r.getBody()).isNotNull();
@@ -145,7 +145,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("generic Exception → 500 without leaking detail")
     void generic() {
-        ResponseEntity<ApiErrorBody> r =
+        ResponseEntity<ErrorResponse> r =
                 handler.handleGeneral(new RuntimeException("secret crash"));
         assertStatus(r, HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR");
         assertThat(r.getBody().message()).doesNotContain("secret crash");
@@ -156,7 +156,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("IllegalStateException → 422 ILLEGAL_STATE (never VALIDATION_ERROR)")
     void illegalStateUsesTheRegisteredCode() {
-        ResponseEntity<ApiErrorBody> r = handler.handleIllegalState(
+        ResponseEntity<ErrorResponse> r = handler.handleIllegalState(
                 new IllegalStateException("hold already released"));
 
         assertStatus(r, HttpStatus.UNPROCESSABLE_ENTITY, "ILLEGAL_STATE");
@@ -189,11 +189,11 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("no code leaves this service at two different HTTP statuses")
     void oneCodeOneStatus() {
-        List<ResponseEntity<ApiErrorBody>> everyHandler = List.of(
+        List<ResponseEntity<ErrorResponse>> everyHandler = List.of(
                 handler.handleIllegalArgument(new IllegalArgumentException("bad amount")),
                 handler.handleIllegalState(new IllegalStateException("invariant")),
                 handler.handleValidation(beanValidationFailure()),
-                handler.handleMalformed(malformedBody()),
+                handler.handleMalformedRequest(malformedBody()),
                 handler.handleTypeMismatch(typeMismatch("accountId")),
                 handler.handleMissingHeader(missingHeader("Idempotency-Key")),
                 handler.handleMissingHeader(missingHeader("X-Custom")),
@@ -207,7 +207,7 @@ class GlobalExceptionHandlerTest {
                 handler.handleGeneral(new RuntimeException("boom")));
 
         Map<String, Set<HttpStatusCode>> statusesByCode = new LinkedHashMap<>();
-        for (ResponseEntity<ApiErrorBody> r : everyHandler) {
+        for (ResponseEntity<ErrorResponse> r : everyHandler) {
             assertThat(r.getBody()).isNotNull();
             statusesByCode
                     .computeIfAbsent(r.getBody().code(), k -> new LinkedHashSet<>())
