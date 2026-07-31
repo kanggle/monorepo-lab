@@ -15,8 +15,8 @@ import com.wms.inventory.application.query.InventoryListCriteria;
 import com.wms.inventory.application.query.MovementListCriteria;
 import com.wms.inventory.application.query.ReservationListCriteria;
 import com.wms.inventory.application.result.InventoryView;
+import com.example.common.page.PageResult;
 import com.wms.inventory.application.result.MovementView;
-import com.wms.inventory.application.result.PageView;
 import com.wms.inventory.application.result.ReservationView;
 import com.wms.inventory.application.service.MasterRefValidator;
 import com.wms.inventory.application.service.ReserveStockService;
@@ -331,7 +331,7 @@ class PickingRequestedConsumerTest {
         }
         @Override public Optional<InventoryView> findViewById(UUID id) { throw new UnsupportedOperationException(); }
         @Override public Optional<InventoryView> findViewByKey(UUID a, UUID b, UUID c) { throw new UnsupportedOperationException(); }
-        @Override public PageView<InventoryView> listViews(InventoryListCriteria c) { throw new UnsupportedOperationException(); }
+        @Override public PageResult<InventoryView> listViews(InventoryListCriteria c) { throw new UnsupportedOperationException(); }
         @Override public Inventory insert(Inventory inventory) {
             entries.put(inventory.id(), inventory); return inventory;
         }
@@ -343,7 +343,7 @@ class PickingRequestedConsumerTest {
     private static class FakeMovementRepo implements InventoryMovementRepository {
         final List<InventoryMovement> saved = new ArrayList<>();
         @Override public void save(InventoryMovement movement) { saved.add(movement); }
-        @Override public PageView<MovementView> list(MovementListCriteria c) { throw new UnsupportedOperationException(); }
+        @Override public PageResult<MovementView> list(MovementListCriteria c) { throw new UnsupportedOperationException(); }
     }
 
     private static class FakeOutbox implements OutboxWriter {
@@ -370,7 +370,7 @@ class PickingRequestedConsumerTest {
         @Override public Optional<ReservationView> findViewById(UUID id) {
             return findById(id).map(ReservationView::from);
         }
-        @Override public PageView<ReservationView> listViews(ReservationListCriteria c) { throw new UnsupportedOperationException(); }
+        @Override public PageResult<ReservationView> listViews(ReservationListCriteria c) { throw new UnsupportedOperationException(); }
         @Override public List<Reservation> findExpired(Instant asOf, int limit) { throw new UnsupportedOperationException(); }
         @Override public long countActive() { return byId.size(); }
     }

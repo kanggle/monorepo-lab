@@ -48,7 +48,7 @@ public class InventoryQueryController {
         InventoryListCriteria criteria = new InventoryListCriteria(
                 warehouseId, locationId, skuId, lotId, hasStock, minAvailable,
                 page, size, sort);
-        return PageResponse.from(queryInventory.list(criteria), InventoryResponse::from);
+        return PageResponse.from(queryInventory.list(criteria), sort, InventoryResponse::from);
     }
 
     @GetMapping("/{id}")

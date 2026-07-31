@@ -4,7 +4,7 @@ import com.wms.inventory.application.port.in.QueryInventoryUseCase;
 import com.wms.inventory.application.port.out.InventoryRepository;
 import com.wms.inventory.application.query.InventoryListCriteria;
 import com.wms.inventory.application.result.InventoryView;
-import com.wms.inventory.application.result.PageView;
+import com.example.common.page.PageResult;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -21,7 +21,7 @@ public class QueryInventoryService implements QueryInventoryUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public PageView<InventoryView> list(InventoryListCriteria criteria) {
+    public PageResult<InventoryView> list(InventoryListCriteria criteria) {
         return repository.listViews(criteria);
     }
 

@@ -12,7 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.wms.inventory.adapter.in.web.advice.GlobalExceptionHandler;
 import com.wms.inventory.application.port.in.QueryInventoryUseCase;
 import com.wms.inventory.application.result.InventoryView;
-import com.wms.inventory.application.result.PageView;
+import com.example.common.page.PageResult;
 import com.wms.inventory.config.SecurityConfig;
 import java.time.Instant;
 import java.util.List;
@@ -51,8 +51,8 @@ class InventoryQueryControllerSliceTest {
 
     @Test
     void readRoleCanListInventory() throws Exception {
-        when(queryInventory.list(any())).thenReturn(PageView.of(
-                List.of(sampleView(INV_ID, 80)), 0, 20, 1L, "updatedAt,desc"));
+        when(queryInventory.list(any())).thenReturn(new PageResult<>(
+                List.of(sampleView(INV_ID, 80)), 0, 20, 1L, 1));
 
         mockMvc.perform(get("/api/v1/inventory")
                         .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_INVENTORY_READ"))))

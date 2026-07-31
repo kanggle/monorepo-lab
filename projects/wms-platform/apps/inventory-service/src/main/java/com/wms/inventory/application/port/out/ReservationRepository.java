@@ -1,7 +1,7 @@
 package com.wms.inventory.application.port.out;
 
+import com.example.common.page.PageResult;
 import com.wms.inventory.application.query.ReservationListCriteria;
-import com.wms.inventory.application.result.PageView;
 import com.wms.inventory.application.result.ReservationView;
 import com.wms.inventory.domain.model.Reservation;
 import java.time.Instant;
@@ -39,7 +39,7 @@ public interface ReservationRepository {
 
     Optional<ReservationView> findViewById(UUID id);
 
-    PageView<ReservationView> listViews(ReservationListCriteria criteria);
+    PageResult<ReservationView> listViews(ReservationListCriteria criteria);
 
     /**
      * Streaming-friendly fetch of {@code RESERVED} rows whose {@code expiresAt}

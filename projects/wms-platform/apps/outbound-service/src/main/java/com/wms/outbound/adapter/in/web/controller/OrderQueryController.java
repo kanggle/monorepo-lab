@@ -1,8 +1,9 @@
 package com.wms.outbound.adapter.in.web.controller;
 
+import com.example.common.page.PageQuery;
 import com.wms.outbound.adapter.in.web.dto.response.OrderResponse;
 import com.wms.outbound.adapter.in.web.dto.response.OrderSummaryResponse;
-import com.wms.outbound.adapter.in.web.dto.response.PagedResponse;
+import com.wms.outbound.adapter.in.web.dto.response.PageResponse;
 import com.wms.outbound.adapter.in.web.dto.response.PickingRequestListResponse;
 import com.wms.outbound.adapter.in.web.dto.response.PickingRequestResponse;
 import com.wms.outbound.adapter.in.web.dto.response.SagaResponse;
@@ -30,6 +31,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/outbound/orders")
 public class OrderQueryController {
+
+    /** Matches {@code OrderJpaRepository}'s hardcoded ORDER BY — not client-configurable (v1). */
+    private static final String DEFAULT_SORT = "updatedAt,desc";
 
     private final QueryOrderUseCase queryOrder;
     private final QueryPickingRequestUseCase queryPickingRequest;
@@ -64,7 +68,7 @@ public class OrderQueryController {
     }
 
     @GetMapping
-    public ResponseEntity<PagedResponse<OrderSummaryResponse>> listOrders(
+    public PageResponse<OrderSummaryResponse> listOrders(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) UUID warehouseId,
             @RequestParam(required = false) UUID customerPartnerId,
@@ -76,6 +80,11 @@ public class OrderQueryController {
             @RequestParam(required = false) Instant createdBefore,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
+        // Validates page >= 0, 1 <= size <= 100 per outbound-service-api.md
+        // §Pagination (400 VALIDATION_ERROR on violation — GlobalExceptionHandler
+        // maps IllegalArgumentException, matching the existing invalid-input
+        // behavior for page < 0 / size < 1 that PageRequest.of already threw).
+        PageQuery pageQuery = new PageQuery(page, size, null, null);
         // tenantId is NOT a client-supplied filter — the cross-tenant scope is
         // applied server-side from the signed JWT in OrderQueryService
         // (TASK-MONO-304). Always pass null here.
@@ -83,12 +92,8 @@ public class OrderQueryController {
                 status, warehouseId, customerPartnerId, source, orderNo, null,
                 requiredShipAfter, requiredShipBefore,
                 createdAfter, createdBefore,
-                page, size);
-        QueryOrderUseCase.PageResult result = queryOrder.list(command);
-        List<OrderSummaryResponse> items = result.items().stream()
-                .map(OrderSummaryResponse::from)
-                .toList();
-        return ResponseEntity.ok(new PagedResponse<>(items, page, size, result.total()));
+                pageQuery.page(), pageQuery.size());
+        return PageResponse.from(queryOrder.list(command), DEFAULT_SORT, OrderSummaryResponse::from);
     }
 
     /**

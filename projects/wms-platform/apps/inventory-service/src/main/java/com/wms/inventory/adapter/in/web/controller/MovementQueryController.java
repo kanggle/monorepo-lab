@@ -28,6 +28,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/inventory")
 public class MovementQueryController {
 
+    /** Matches {@code InventoryMovementRepositoryImpl}'s hardcoded ORDER BY — not client-configurable (v1). */
+    private static final String DEFAULT_SORT = "occurredAt,desc";
+
     private final MovementQueryUseCase movementQuery;
 
     public MovementQueryController(MovementQueryUseCase movementQuery) {
@@ -48,7 +51,7 @@ public class MovementQueryController {
         MovementListCriteria criteria = new MovementListCriteria(
                 inventoryId, null, null, movementType, bucket, reasonCode,
                 occurredAfter, occurredBefore, page, size);
-        return PageResponse.from(movementQuery.list(criteria), MovementResponse::from);
+        return PageResponse.from(movementQuery.list(criteria), DEFAULT_SORT, MovementResponse::from);
     }
 
     @GetMapping("/movements")
@@ -67,6 +70,6 @@ public class MovementQueryController {
         MovementListCriteria criteria = new MovementListCriteria(
                 inventoryId, locationId, skuId, movementType, bucket, reasonCode,
                 occurredAfter, occurredBefore, page, size);
-        return PageResponse.from(movementQuery.list(criteria), MovementResponse::from);
+        return PageResponse.from(movementQuery.list(criteria), DEFAULT_SORT, MovementResponse::from);
     }
 }

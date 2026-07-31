@@ -1,8 +1,8 @@
 package com.wms.inventory.application.port.out;
 
+import com.example.common.page.PageResult;
 import com.wms.inventory.application.query.InventoryListCriteria;
 import com.wms.inventory.application.result.InventoryView;
-import com.wms.inventory.application.result.PageView;
 import com.wms.inventory.domain.model.Inventory;
 import java.util.List;
 import java.util.Optional;
@@ -39,7 +39,7 @@ public interface InventoryRepository {
 
     Optional<InventoryView> findViewByKey(UUID locationId, UUID skuId, UUID lotId);
 
-    PageView<InventoryView> listViews(InventoryListCriteria criteria);
+    PageResult<InventoryView> listViews(InventoryListCriteria criteria);
 
     /**
      * Persist a freshly-created Inventory row (no version check).

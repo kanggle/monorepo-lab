@@ -10,7 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.wms.inventory.adapter.in.web.advice.GlobalExceptionHandler;
 import com.wms.inventory.application.port.in.MovementQueryUseCase;
 import com.wms.inventory.application.result.MovementView;
-import com.wms.inventory.application.result.PageView;
+import com.example.common.page.PageResult;
 import com.wms.inventory.config.SecurityConfig;
 import com.wms.inventory.domain.model.Bucket;
 import com.wms.inventory.domain.model.MovementType;
@@ -47,7 +47,7 @@ class MovementQueryControllerSliceTest {
                 "system:putaway-consumer",
                 Instant.parse("2026-04-25T10:00:00Z"));
         when(movementQuery.list(any())).thenReturn(
-                PageView.of(List.of(v), 0, 20, 1L, "occurredAt,desc"));
+                new PageResult<>(List.of(v), 0, 20, 1L, 1));
 
         mockMvc.perform(get("/api/v1/inventory/{id}/movements", INV_ID)
                         .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_INVENTORY_READ"))))
@@ -70,7 +70,7 @@ class MovementQueryControllerSliceTest {
     @Test
     void crossRowQueryAcceptsOccurredAfterAlone() throws Exception {
         when(movementQuery.list(any())).thenReturn(
-                PageView.of(List.of(), 0, 20, 0L, "occurredAt,desc"));
+                new PageResult<>(List.of(), 0, 20, 0L, 0));
 
         mockMvc.perform(get("/api/v1/inventory/movements")
                         .param("occurredAfter", "2026-04-20T00:00:00Z")

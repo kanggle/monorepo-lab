@@ -1,9 +1,9 @@
 package com.wms.inventory.adapter.out.persistence.inventory;
 
+import com.example.common.page.PageResult;
 import com.wms.inventory.application.port.out.InventoryRepository;
 import com.wms.inventory.application.query.InventoryListCriteria;
 import com.wms.inventory.application.result.InventoryView;
-import com.wms.inventory.application.result.PageView;
 import com.wms.inventory.domain.model.Inventory;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -154,7 +154,7 @@ public class InventoryRepositoryImpl implements InventoryRepository {
 
     @Override
     @Transactional(readOnly = true)
-    public PageView<InventoryView> listViews(InventoryListCriteria c) {
+    public PageResult<InventoryView> listViews(InventoryListCriteria c) {
         StringBuilder where = new StringBuilder("WHERE 1=1");
         for (Filter f : FILTERS) {
             if (f.isEnabled().test(c)) where.append(' ').append(f.whereFragment());
@@ -177,7 +177,11 @@ public class InventoryRepositoryImpl implements InventoryRepository {
         long total = ((Number) countQuery.getSingleResult()).longValue();
 
         List<InventoryView> views = rows.stream().map(InventoryRepositoryImpl::mapRow).toList();
-        return PageView.of(views, c.page(), c.size(), total, c.sort());
+        return new PageResult<>(views, c.page(), c.size(), total, totalPages(total, c.size()));
+    }
+
+    private static int totalPages(long totalElements, int size) {
+        return size == 0 ? 0 : (int) ((totalElements + size - 1) / size);
     }
 
     private static void bindFilters(jakarta.persistence.Query dataQuery,

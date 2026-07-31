@@ -34,6 +34,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/inventory")
 public class TransferController {
 
+    /** Matches {@code StockTransferRepositoryImpl}'s hardcoded ORDER BY — not client-configurable (v1). */
+    private static final String DEFAULT_SORT = "createdAt,desc";
+
     private final TransferStockUseCase transferStock;
     private final QueryTransferUseCase queryTransfer;
 
@@ -86,7 +89,7 @@ public class TransferController {
         TransferListCriteria criteria = new TransferListCriteria(
                 warehouseId, sourceLocationId, targetLocationId, skuId,
                 reasonCode, createdAfter, createdBefore, page, size);
-        return PageResponse.from(queryTransfer.list(criteria), TransferResponse::fromView);
+        return PageResponse.from(queryTransfer.list(criteria), DEFAULT_SORT, TransferResponse::fromView);
     }
 
 }

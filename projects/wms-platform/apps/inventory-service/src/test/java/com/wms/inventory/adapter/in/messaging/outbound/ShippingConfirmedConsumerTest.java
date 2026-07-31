@@ -8,8 +8,8 @@ import com.wms.inventory.application.command.ConfirmReservationCommand;
 import com.wms.inventory.application.port.in.ConfirmReservationUseCase;
 import com.wms.inventory.application.port.out.EventDedupePort;
 import com.wms.inventory.application.port.out.ReservationRepository;
+import com.example.common.page.PageResult;
 import com.wms.inventory.application.query.ReservationListCriteria;
-import com.wms.inventory.application.result.PageView;
 import com.wms.inventory.application.result.ReservationView;
 import com.wms.inventory.domain.model.Reservation;
 import com.wms.inventory.domain.model.ReservationLine;
@@ -252,7 +252,7 @@ class ShippingConfirmedConsumerTest {
         @Override public Optional<ReservationView> findViewById(UUID id) {
             return findById(id).map(ReservationView::from);
         }
-        @Override public PageView<ReservationView> listViews(ReservationListCriteria c) { throw new UnsupportedOperationException(); }
+        @Override public PageResult<ReservationView> listViews(ReservationListCriteria c) { throw new UnsupportedOperationException(); }
         @Override public List<Reservation> findExpired(Instant asOf, int limit) { throw new UnsupportedOperationException(); }
         @Override public long countActive() { return byId.size(); }
     }

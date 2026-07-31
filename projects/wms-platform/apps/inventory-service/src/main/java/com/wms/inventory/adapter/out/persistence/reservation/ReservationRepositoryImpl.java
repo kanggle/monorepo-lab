@@ -1,8 +1,8 @@
 package com.wms.inventory.adapter.out.persistence.reservation;
 
+import com.example.common.page.PageResult;
 import com.wms.inventory.application.port.out.ReservationRepository;
 import com.wms.inventory.application.query.ReservationListCriteria;
-import com.wms.inventory.application.result.PageView;
 import com.wms.inventory.application.result.ReservationView;
 import com.wms.inventory.domain.exception.DuplicateRequestException;
 import com.wms.inventory.domain.model.Reservation;
@@ -94,7 +94,7 @@ public class ReservationRepositoryImpl implements ReservationRepository {
 
     @Override
     @Transactional(readOnly = true)
-    public PageView<ReservationView> listViews(ReservationListCriteria c) {
+    public PageResult<ReservationView> listViews(ReservationListCriteria c) {
         StringBuilder where = new StringBuilder("WHERE 1=1");
         if (c.status() != null) where.append(" AND r.status = :status");
         if (c.warehouseId() != null) where.append(" AND r.warehouseId = :warehouseId");
@@ -116,7 +116,11 @@ public class ReservationRepositoryImpl implements ReservationRepository {
                 .map(ReservationPersistenceMapper::toDomain).toList();
         long total = countQuery.getSingleResult();
         List<ReservationView> views = domainRows.stream().map(ReservationView::from).toList();
-        return PageView.of(views, c.page(), c.size(), total, "updatedAt,desc");
+        return new PageResult<>(views, c.page(), c.size(), total, totalPages(total, c.size()));
+    }
+
+    private static int totalPages(long totalElements, int size) {
+        return size == 0 ? 0 : (int) ((totalElements + size - 1) / size);
     }
 
     private static void bindFilters(jakarta.persistence.TypedQuery<?> dataQuery,

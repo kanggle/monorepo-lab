@@ -1,8 +1,8 @@
 package com.wms.inventory.adapter.out.persistence.transfer;
 
+import com.example.common.page.PageResult;
 import com.wms.inventory.application.port.out.StockTransferRepository;
 import com.wms.inventory.application.query.TransferListCriteria;
-import com.wms.inventory.application.result.PageView;
 import com.wms.inventory.application.result.TransferView;
 import com.wms.inventory.domain.model.StockTransfer;
 import com.wms.inventory.domain.model.TransferReasonCode;
@@ -49,7 +49,7 @@ public class StockTransferRepositoryImpl implements StockTransferRepository {
 
     @Override
     @Transactional(readOnly = true)
-    public PageView<TransferView> list(TransferListCriteria c) {
+    public PageResult<TransferView> list(TransferListCriteria c) {
         StringBuilder where = new StringBuilder("WHERE 1=1");
         List<Object[]> params = new ArrayList<>();
         if (c.warehouseId() != null) {
@@ -113,7 +113,11 @@ public class StockTransferRepositoryImpl implements StockTransferRepository {
                 (String) row[8],
                 (String) row[9],
                 ((java.sql.Timestamp) row[10]).toInstant())).toList();
-        return PageView.of(views, c.page(), c.size(), total, "createdAt,desc");
+        return new PageResult<>(views, c.page(), c.size(), total, totalPages(total, c.size()));
+    }
+
+    private static int totalPages(long totalElements, int size) {
+        return size == 0 ? 0 : (int) ((totalElements + size - 1) / size);
     }
 
     private static StockTransfer toDomain(StockTransferJpaEntity e) {

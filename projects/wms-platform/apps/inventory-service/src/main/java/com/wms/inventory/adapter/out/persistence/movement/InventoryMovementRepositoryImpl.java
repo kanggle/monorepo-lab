@@ -1,9 +1,9 @@
 package com.wms.inventory.adapter.out.persistence.movement;
 
+import com.example.common.page.PageResult;
 import com.wms.inventory.application.port.out.InventoryMovementRepository;
 import com.wms.inventory.application.query.MovementListCriteria;
 import com.wms.inventory.application.result.MovementView;
-import com.wms.inventory.application.result.PageView;
 import com.wms.inventory.domain.model.Bucket;
 import com.wms.inventory.domain.model.InventoryMovement;
 import com.wms.inventory.domain.model.MovementType;
@@ -52,7 +52,7 @@ public class InventoryMovementRepositoryImpl implements InventoryMovementReposit
 
     @Override
     @Transactional(readOnly = true)
-    public PageView<MovementView> list(MovementListCriteria c) {
+    public PageResult<MovementView> list(MovementListCriteria c) {
         StringBuilder where = new StringBuilder("WHERE 1=1");
         if (c.inventoryId() != null) where.append(" AND m.inventory_id = :inventoryId");
         if (c.movementType() != null) where.append(" AND m.movement_type = :movementType");
@@ -94,7 +94,11 @@ public class InventoryMovementRepositoryImpl implements InventoryMovementReposit
 
         List<MovementView> views = rows.stream()
                 .map(InventoryMovementRepositoryImpl::mapRow).toList();
-        return PageView.of(views, c.page(), size, total, "occurredAt,desc");
+        return new PageResult<>(views, c.page(), size, total, totalPages(total, size));
+    }
+
+    private static int totalPages(long totalElements, int size) {
+        return size == 0 ? 0 : (int) ((totalElements + size - 1) / size);
     }
 
     private static void bindFilters(jakarta.persistence.Query dataQuery,

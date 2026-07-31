@@ -1,8 +1,8 @@
 package com.wms.inventory.application.port.in;
 
+import com.example.common.page.PageResult;
 import com.wms.inventory.application.query.MovementListCriteria;
 import com.wms.inventory.application.result.MovementView;
-import com.wms.inventory.application.result.PageView;
 
 /**
  * Read-side queries against the W2 movement ledger.
@@ -13,5 +13,5 @@ import com.wms.inventory.application.result.PageView;
  */
 public interface MovementQueryUseCase {
 
-    PageView<MovementView> list(MovementListCriteria criteria);
+    PageResult<MovementView> list(MovementListCriteria criteria);
 }

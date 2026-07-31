@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.example.common.page.PageResult;
 import com.wms.inbound.adapter.in.web.advice.GlobalExceptionHandler;
 import com.wms.inbound.application.port.in.CancelAsnUseCase;
 import com.wms.inbound.application.port.in.CloseAsnUseCase;
@@ -156,13 +157,43 @@ class AsnControllerSliceTest {
     @Test
     void listAsns_withReadRole_returns200() throws Exception {
         when(queryAsnUseCase.list(any(), any(), anyInt(), anyInt()))
-                .thenReturn(List.of());
-        when(queryAsnUseCase.count(any(), any())).thenReturn(0L);
+                .thenReturn(new PageResult<>(List.of(), 0, 20, 0L, 0));
 
         mockMvc.perform(get("/api/v1/inbound/asns")
                         .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_INBOUND_READ"))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.total").value(0));
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.page.totalElements").value(0))
+                .andExpect(jsonPath("$.page.totalPages").value(0))
+                .andExpect(jsonPath("$.sort").value("createdAt,desc"));
+    }
+
+    @Test
+    void listAsns_multiPage_returnsContentAndTotalPages() throws Exception {
+        AsnSummaryResult summary = new AsnSummaryResult(
+                ASN_ID, "ASN-20260429-0001", "MANUAL",
+                UUID.randomUUID(), UUID.randomUUID(),
+                LocalDate.of(2026, 5, 1), "CREATED", 0L, NOW);
+        when(queryAsnUseCase.list(any(), any(), anyInt(), anyInt()))
+                .thenReturn(new PageResult<>(List.of(summary), 0, 20, 25L, 2));
+
+        mockMvc.perform(get("/api/v1/inbound/asns")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_INBOUND_READ"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(ASN_ID.toString()))
+                .andExpect(jsonPath("$.page.number").value(0))
+                .andExpect(jsonPath("$.page.size").value(20))
+                .andExpect(jsonPath("$.page.totalElements").value(25))
+                .andExpect(jsonPath("$.page.totalPages").value(2));
+    }
+
+    @Test
+    void listAsns_sizeAboveMax_returns400() throws Exception {
+        mockMvc.perform(get("/api/v1/inbound/asns")
+                        .param("size", "101")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_INBOUND_READ"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 
     // -------------------------------------------------------------------------
