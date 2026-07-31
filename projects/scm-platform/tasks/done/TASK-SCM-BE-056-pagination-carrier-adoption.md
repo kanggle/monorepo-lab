@@ -8,7 +8,7 @@ Adopt ADR-MONO-058 D3 — pagination carrier (`libs/java-common.PageResult`/`Pag
 
 # Status
 
-review
+done
 
 # Owner
 
