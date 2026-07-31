@@ -6,7 +6,7 @@ package com.wms.outbound.domain.exception;
  * <p>Each concrete subtype carries the contract-defined error code
  * (see {@code specs/contracts/http/outbound-service-api.md} § Error Codes).
  * The {@code GlobalExceptionHandler} reads {@link #errorCode()} to populate
- * the {@code ApiErrorEnvelope.code} field.
+ * the {@code ErrorResponse.code} field.
  */
 public abstract class OutboundDomainException extends RuntimeException {
 

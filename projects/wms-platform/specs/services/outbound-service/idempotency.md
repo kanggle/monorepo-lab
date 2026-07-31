@@ -18,7 +18,10 @@ side-effects), I6 (webhook reception pattern).
 > {@code RedisIdempotencyStore} adapter (implementing the lib
 > {@code IdempotencyStore}) + {@code InMemoryIdempotencyStore}
 > ({@code standalone} profile fallback), with an {@code OutboundIdempotencyErrorWriter}
-> (service {@code ApiErrorEnvelope}) and {@code OutboundIdempotencyMetrics}.
+> (shared {@code com.example.web.dto.ErrorResponse} since TASK-BE-567 /
+> ADR-MONO-058 § D2 — it replaced the service-local {@code ApiErrorEnvelope},
+> which was a component-for-component duplicate of it, so the emitted JSON is
+> unchanged) and {@code OutboundIdempotencyMetrics}.
 > The filter runs at {@code HIGHEST_PRECEDENCE + 20}, after Spring Security
 > and before DispatcherServlet, applying to {@code POST/PATCH/PUT/DELETE
 > /api/v1/outbound/**} except {@code /webhooks/**}. The previous behaviour

@@ -7,7 +7,7 @@ package com.wms.inbound.domain.exception;
  * machine-readable contract code declared in
  * {@code specs/contracts/http/inbound-service-api.md} §"Error Codes".
  * The {@code GlobalExceptionHandler} calls this method to populate the
- * {@code ApiErrorEnvelope.code} field, enabling API consumers to branch
+ * {@code ErrorResponse.code} field, enabling API consumers to branch
  * on a stable string rather than an HTTP status alone.
  */
 public abstract class InboundDomainException extends RuntimeException {

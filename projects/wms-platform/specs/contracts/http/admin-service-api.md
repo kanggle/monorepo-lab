@@ -95,6 +95,16 @@ Every error response:
 }
 ```
 
+> **Verified by TASK-BE-567 (ADR-MONO-058 § D2), 2026-08-01.** The nested wrapper
+> above is what `admin-service` actually emits — pinned by its controller-slice
+> `$.error.code` assertions and by `GlobalExceptionHandlerNotFoundTest`'s whole-body
+> shape check. Because of it this service **composes** `libs/java-web-servlet`'s
+> `CommonGlobalExceptionHandler` — delegating the non-domain arms and re-wrapping
+> their `ErrorResponse` into `ApiErrorEnvelope` — instead of extending it; extending
+> would flatten the wrapper. `master-service` does the same. `inbound` / `inventory` /
+> `outbound` publish the **flat** three-field body and extend the shared handler
+> directly (see their contracts' § Error Envelope notes).
+
 Domain error → HTTP status mapping (admin-specific only; platform-common codes
 reused as documented in `error-handling.md`):
 

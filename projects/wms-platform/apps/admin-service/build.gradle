@@ -39,7 +39,13 @@ dependencies {
     // incompatible with the spec's JSONB layout. Same decision pattern as
     // notification-service (TASK-BE-043).
     implementation project(':libs:java-common')
-    // Shared servlet Idempotency-Key filter abstraction (ADR-MONO-038).
+    // Shared error-response DTO (ADR-MONO-058 § D2 — the exception-handler tail
+    // composes CommonGlobalExceptionHandler and re-wraps its ErrorResponse into
+    // admin's nested ApiErrorEnvelope). libs:java-web-servlet declares libs:java-web
+    // as `implementation`, so it is NOT transitive — it must be declared here.
+    implementation project(':libs:java-web')
+    // Shared servlet Idempotency-Key filter abstraction (ADR-MONO-038) and the
+    // CommonGlobalExceptionHandler non-domain arm set (ADR-MONO-058 § D2).
     implementation project(':libs:java-web-servlet')
     // Framework-neutral OAuth2 validators (ADR-MONO-049 § D5). The other four wms
     // servlet services already declared this; admin-service was the one that did not.

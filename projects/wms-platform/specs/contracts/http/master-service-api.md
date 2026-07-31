@@ -60,7 +60,16 @@ service-level envelope used by `master-service`:
 }
 ```
 
-Domain error → HTTP status mapping:
+> **Verified by TASK-BE-567 (ADR-MONO-058 § D2), 2026-08-01.** The nested wrapper
+> above is what `master-service` actually emits — pinned by
+> `src/test/resources/contracts/http/error-envelope.schema.json` (`required: ["error"]`,
+> `additionalProperties: false`), by the Testcontainers `HttpContractTest`, and by ~87
+> controller-slice `$.error.code` assertions. Because of it this service **composes**
+> `libs/java-web-servlet`'s `CommonGlobalExceptionHandler` — delegating the non-domain
+> arms and re-wrapping their `ErrorResponse` into `ApiErrorEnvelope` — instead of
+> extending it; extending would flatten the wrapper. `admin-service` does the same.
+> `inbound` / `inventory` / `outbound` publish the **flat** three-field body and extend
+> the shared handler directly (see their contracts' § Error Envelope notes).
 
 | Code family | Example | HTTP |
 |---|---|---|

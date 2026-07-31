@@ -78,16 +78,36 @@ Per `platform/error-handling.md`. Every error response:
 
 ```json
 {
-  "error": {
-    "code": "ORDER_NOT_FOUND",
-    "message": "Outbound order uuid does not exist",
-    "timestamp": "2026-04-29T10:00:00.000Z",
-    "details": { "orderId": "uuid" },
-    "traceId": "abc123",
-    "requestId": "req-xyz"
-  }
+  "code": "ORDER_NOT_FOUND",
+  "message": "Outbound order uuid does not exist",
+  "timestamp": "2026-04-29T10:00:00.000Z"
 }
 ```
+
+> **Corrected by TASK-BE-567 (ADR-MONO-058 § D2), 2026-08-01 — this section
+> previously documented a nested `{"error": {code, message, timestamp, details,
+> traceId, requestId}}` envelope that `outbound-service` has never emitted.**
+> Measured against the tree: the service's error body type was a flat
+> `record ApiErrorEnvelope(String code, String message, String timestamp)`, and
+> every one of its controller-slice tests asserts `$.code` (never `$.error.code`)
+> through the real MockMvc dispatch path. TASK-BE-567 replaced that type with the
+> shared `libs/java-web.ErrorResponse`, which is component-for-component identical
+> — so the wire is unchanged and this edit corrects the **document**, not the
+> service.
+>
+> `details` / `traceId` / `requestId` are **not** emitted by this service. Where a
+> row below implies structured detail, it is carried inside `message`.
+>
+> **Fleet inconsistency, deliberately left open.** `master-service` and
+> `admin-service` publish the nested `{"error": {...}}` envelope (their own
+> contracts, plus `master-service`'s `error-envelope.schema.json`, pin it);
+> `inbound`, `inventory` and `outbound` publish this flat one. Live consequence:
+> the console BFF's `parseWmsError`
+> (`projects/platform-console/apps/console-web/src/shared/api/wms-gateway.ts`)
+> parses only the nested shape and therefore degrades to a synthetic
+> `HTTP_<status>` code on these three legs. Unifying the two shapes is a
+> **breaking** change to whichever side moves; TASK-BE-567's Out-of-Scope section
+> names the wrapping key explicitly, so it needs its own task.
 
 Domain error → HTTP status mapping:
 
