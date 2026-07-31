@@ -2,9 +2,9 @@ package com.wms.inventory.application.service;
 
 import com.wms.inventory.application.port.in.MovementQueryUseCase;
 import com.wms.inventory.application.port.out.InventoryMovementRepository;
+import com.example.common.page.PageResult;
 import com.wms.inventory.application.query.MovementListCriteria;
 import com.wms.inventory.application.result.MovementView;
-import com.wms.inventory.application.result.PageView;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,7 +19,7 @@ public class MovementQueryService implements MovementQueryUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public PageView<MovementView> list(MovementListCriteria criteria) {
+    public PageResult<MovementView> list(MovementListCriteria criteria) {
         return repository.list(criteria);
     }
 }

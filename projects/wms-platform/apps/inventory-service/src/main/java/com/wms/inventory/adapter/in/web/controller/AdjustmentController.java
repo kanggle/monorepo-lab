@@ -54,6 +54,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/inventory")
 public class AdjustmentController {
 
+    /** Matches {@code StockAdjustmentRepositoryImpl}'s hardcoded ORDER BY — not client-configurable (v1). */
+    private static final String DEFAULT_SORT = "createdAt,desc";
+
     private final AdjustStockUseCase adjustStock;
     private final QueryAdjustmentUseCase queryAdjustment;
 
@@ -146,7 +149,7 @@ public class AdjustmentController {
             @RequestParam(defaultValue = "20") int size) {
         AdjustmentListCriteria criteria = new AdjustmentListCriteria(
                 inventoryId, reasonCode, createdAfter, createdBefore, page, size);
-        return PageResponse.from(queryAdjustment.list(criteria), AdjustmentResponse::fromView);
+        return PageResponse.from(queryAdjustment.list(criteria), DEFAULT_SORT, AdjustmentResponse::fromView);
     }
 
     @GetMapping("/adjustments")
@@ -164,7 +167,7 @@ public class AdjustmentController {
         }
         AdjustmentListCriteria criteria = new AdjustmentListCriteria(
                 inventoryId, reasonCode, createdAfter, createdBefore, page, size);
-        return PageResponse.from(queryAdjustment.list(criteria), AdjustmentResponse::fromView);
+        return PageResponse.from(queryAdjustment.list(criteria), DEFAULT_SORT, AdjustmentResponse::fromView);
     }
 
     private static Set<String> callerRoles(Authentication authentication) {

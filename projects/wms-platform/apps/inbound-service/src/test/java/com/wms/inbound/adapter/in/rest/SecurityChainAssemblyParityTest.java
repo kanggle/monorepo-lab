@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.example.common.page.PageResult;
 import com.example.security.oauth2.TenantClaimValidator;
 import com.wms.inbound.adapter.in.web.advice.GlobalExceptionHandler;
 import com.wms.inbound.application.port.in.CancelAsnUseCase;
@@ -110,6 +111,15 @@ class SecurityChainAssemblyParityTest {
     @Test
     @DisplayName("INBOUND_READ 토큰 → 컨트롤러 도달")
     void authorizedToken_reachesController() throws Exception {
+        // Mockito's default-empty-values answer knows List but not the shared
+        // PageResult record, so this must be stubbed explicitly (previously
+        // the unstubbed List<AsnSummaryResult> return defaulted to empty).
+        when(queryAsnUseCase.list(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyInt()))
+                .thenReturn(new PageResult<>(List.of(), 0, 20, 0L, 0));
+
         mockMvc.perform(get(ASNS)
                         .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_INBOUND_READ"))))
                 .andExpect(status().isOk());

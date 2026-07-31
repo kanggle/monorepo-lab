@@ -1,9 +1,9 @@
 package com.wms.inventory.adapter.out.persistence.adjustment;
 
+import com.example.common.page.PageResult;
 import com.wms.inventory.application.port.out.StockAdjustmentRepository;
 import com.wms.inventory.application.query.AdjustmentListCriteria;
 import com.wms.inventory.application.result.AdjustmentView;
-import com.wms.inventory.application.result.PageView;
 import com.wms.inventory.domain.model.Bucket;
 import com.wms.inventory.domain.model.ReasonCode;
 import com.wms.inventory.domain.model.StockAdjustment;
@@ -47,7 +47,7 @@ public class StockAdjustmentRepositoryImpl implements StockAdjustmentRepository 
 
     @Override
     @Transactional(readOnly = true)
-    public PageView<AdjustmentView> list(AdjustmentListCriteria c) {
+    public PageResult<AdjustmentView> list(AdjustmentListCriteria c) {
         StringBuilder where = new StringBuilder("WHERE 1=1");
         List<Object[]> params = new ArrayList<>();
         if (c.inventoryId() != null) {
@@ -95,7 +95,11 @@ public class StockAdjustmentRepositoryImpl implements StockAdjustmentRepository 
                 (String) row[5],
                 (String) row[6],
                 ((java.sql.Timestamp) row[7]).toInstant())).toList();
-        return PageView.of(views, c.page(), c.size(), total, "createdAt,desc");
+        return new PageResult<>(views, c.page(), c.size(), total, totalPages(total, c.size()));
+    }
+
+    private static int totalPages(long totalElements, int size) {
+        return size == 0 ? 0 : (int) ((totalElements + size - 1) / size);
     }
 
     private static StockAdjustment toDomain(StockAdjustmentJpaEntity e) {

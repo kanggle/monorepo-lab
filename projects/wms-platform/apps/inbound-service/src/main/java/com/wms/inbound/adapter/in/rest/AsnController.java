@@ -1,11 +1,13 @@
 package com.wms.inbound.adapter.in.rest;
 
+import com.example.common.page.PageQuery;
 import com.wms.inbound.adapter.in.rest.dto.AsnResponse;
 import com.wms.inbound.adapter.in.rest.dto.AsnSummaryResponse;
 import com.wms.inbound.adapter.in.rest.dto.CancelAsnRequest;
 import com.wms.inbound.adapter.in.rest.dto.CloseAsnRequest;
 import com.wms.inbound.adapter.in.rest.dto.CloseAsnResponse;
 import com.wms.inbound.adapter.in.rest.dto.CreateAsnRequest;
+import com.wms.inbound.adapter.in.rest.dto.PageResponse;
 import com.wms.inbound.adapter.in.rest.util.RequestContext;
 import com.wms.inbound.application.command.CancelAsnCommand;
 import com.wms.inbound.application.command.CloseAsnCommand;
@@ -17,7 +19,6 @@ import com.wms.inbound.application.port.in.ReceiveAsnUseCase;
 import com.wms.inbound.application.result.AsnResult;
 import com.wms.inbound.application.result.CloseAsnResult;
 import jakarta.validation.Valid;
-import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -37,6 +38,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/inbound/asns")
 public class AsnController {
+
+    /** Matches {@code AsnJpaRepository}'s hardcoded ORDER BY — not client-configurable (v1). */
+    private static final String DEFAULT_SORT = "createdAt,desc";
 
     private final ReceiveAsnUseCase receiveAsn;
     private final CancelAsnUseCase cancelAsn;
@@ -86,15 +90,18 @@ public class AsnController {
 
     @GetMapping
     @PreAuthorize("hasRole('INBOUND_READ') or hasRole('INBOUND_WRITE') or hasRole('INBOUND_ADMIN')")
-    public ResponseEntity<PagedResponse<AsnSummaryResponse>> listAsns(
+    public PageResponse<AsnSummaryResponse> listAsns(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) UUID warehouseId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        List<AsnSummaryResponse> items = queryAsn.list(status, warehouseId, page, size).stream()
-                .map(AsnSummaryResponse::from).toList();
-        long total = queryAsn.count(status, warehouseId);
-        return ResponseEntity.ok(new PagedResponse<>(items, page, size, total));
+        // Validates page >= 0, 1 <= size <= 100 per inbound-service-api.md §Pagination
+        // (400 VALIDATION_ERROR on violation — GlobalExceptionHandler maps
+        // IllegalArgumentException, matching the existing invalid-input behavior).
+        PageQuery pageQuery = new PageQuery(page, size, null, null);
+        return PageResponse.from(
+                queryAsn.list(status, warehouseId, pageQuery.page(), pageQuery.size()),
+                DEFAULT_SORT, AsnSummaryResponse::from);
     }
 
     @PostMapping("/{id}:cancel")
@@ -128,6 +135,4 @@ public class AsnController {
         CloseAsnResult result = closeAsn.close(command);
         return ResponseEntity.ok(CloseAsnResponse.from(result));
     }
-
-    public record PagedResponse<T>(List<T> items, int page, int size, long total) {}
 }

@@ -10,8 +10,8 @@ import com.wms.inventory.application.port.out.InventoryRepository;
 import com.wms.inventory.application.port.out.MasterReadModelPort;
 import com.wms.inventory.application.port.out.OutboxWriter;
 import com.wms.inventory.application.query.InventoryListCriteria;
+import com.example.common.page.PageResult;
 import com.wms.inventory.application.result.InventoryView;
-import com.wms.inventory.application.result.PageView;
 import com.wms.inventory.domain.event.InventoryDomainEvent;
 import com.wms.inventory.domain.event.InventoryReceivedEvent;
 import com.wms.inventory.domain.exception.MasterRefInactiveException;
@@ -218,7 +218,7 @@ class ReceiveStockServiceTest {
         @Override public Optional<InventoryView> findViewByKey(UUID locationId, UUID skuId, UUID lotId) {
             throw new UnsupportedOperationException();
         }
-        @Override public PageView<InventoryView> listViews(InventoryListCriteria criteria) {
+        @Override public PageResult<InventoryView> listViews(InventoryListCriteria criteria) {
             throw new UnsupportedOperationException();
         }
         @Override public Inventory insert(Inventory inventory) {
@@ -245,7 +245,7 @@ class ReceiveStockServiceTest {
         final List<InventoryMovement> saved = new ArrayList<>();
 
         @Override public void save(InventoryMovement movement) { saved.add(movement); }
-        @Override public PageView<com.wms.inventory.application.result.MovementView> list(
+        @Override public PageResult<com.wms.inventory.application.result.MovementView> list(
                 com.wms.inventory.application.query.MovementListCriteria criteria) {
             throw new UnsupportedOperationException();
         }

@@ -1,8 +1,8 @@
 package com.wms.inventory.application.port.out;
 
+import com.example.common.page.PageResult;
 import com.wms.inventory.application.query.MovementListCriteria;
 import com.wms.inventory.application.result.MovementView;
-import com.wms.inventory.application.result.PageView;
 import com.wms.inventory.domain.model.InventoryMovement;
 
 /**
@@ -14,5 +14,5 @@ public interface InventoryMovementRepository {
 
     void save(InventoryMovement movement);
 
-    PageView<MovementView> list(MovementListCriteria criteria);
+    PageResult<MovementView> list(MovementListCriteria criteria);
 }

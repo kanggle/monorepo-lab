@@ -1,5 +1,6 @@
 package com.wms.outbound.application.service;
 
+import com.example.common.page.PageResult;
 import com.wms.outbound.application.command.OrderQueryCommand;
 import com.wms.outbound.application.port.in.QueryOrderUseCase;
 import com.wms.outbound.application.port.out.CallerScopeProvider;
@@ -55,7 +56,7 @@ public class OrderQueryService implements QueryOrderUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResult list(OrderQueryCommand command) {
+    public PageResult<OrderSummaryResult> list(OrderQueryCommand command) {
         // Apply the caller's tenant scope (TASK-MONO-304): unrestricted callers
         // see the command unchanged; tenant-scoped callers are pinned to their
         // own tenant's FULFILLMENT_ECOMMERCE orders.
@@ -64,7 +65,8 @@ public class OrderQueryService implements QueryOrderUseCase {
         List<OrderSummaryResult> rows = orderPersistence.findSummaries(scoped);
         long total = orderPersistence.count(scoped);
         if (rows.isEmpty()) {
-            return new PageResult(rows, total);
+            return new PageResult<>(rows, command.page(), command.size(), total,
+                    totalPages(total, command.size()));
         }
         // Single bulk saga lookup — no per-row N+1 query.
         List<UUID> orderIds = new ArrayList<>(rows.size());
@@ -88,6 +90,11 @@ public class OrderQueryService implements QueryOrderUseCase {
                     r.createdAt(),
                     r.updatedAt()));
         }
-        return new PageResult(enriched, total);
+        return new PageResult<>(enriched, command.page(), command.size(), total,
+                totalPages(total, command.size()));
+    }
+
+    private static int totalPages(long totalElements, int size) {
+        return size == 0 ? 0 : (int) ((totalElements + size - 1) / size);
     }
 }

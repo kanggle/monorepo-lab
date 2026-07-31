@@ -48,6 +48,9 @@ public class ReservationController {
 
     private static final int DEFAULT_TTL_SECONDS = 86_400;
 
+    /** Matches {@code ReservationRepositoryImpl}'s hardcoded ORDER BY — not client-configurable (v1). */
+    private static final String DEFAULT_SORT = "updatedAt,desc";
+
     private final ReserveStockUseCase reserveStock;
     private final ConfirmReservationUseCase confirmReservation;
     private final ReleaseReservationUseCase releaseReservation;
@@ -133,7 +136,7 @@ public class ReservationController {
             @RequestParam(defaultValue = "20") int size) {
         ReservationListCriteria criteria = new ReservationListCriteria(
                 status, warehouseId, pickingRequestId, expiresAfter, expiresBefore, page, size);
-        return PageResponse.from(queryReservation.list(criteria), ReservationResponse::from);
+        return PageResponse.from(queryReservation.list(criteria), DEFAULT_SORT, ReservationResponse::from);
     }
 
 }

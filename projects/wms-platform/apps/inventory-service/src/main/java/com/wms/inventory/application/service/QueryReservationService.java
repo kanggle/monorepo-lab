@@ -2,8 +2,8 @@ package com.wms.inventory.application.service;
 
 import com.wms.inventory.application.port.in.QueryReservationUseCase;
 import com.wms.inventory.application.port.out.ReservationRepository;
+import com.example.common.page.PageResult;
 import com.wms.inventory.application.query.ReservationListCriteria;
-import com.wms.inventory.application.result.PageView;
 import com.wms.inventory.application.result.ReservationView;
 import java.util.Optional;
 import java.util.UUID;
@@ -27,7 +27,7 @@ public class QueryReservationService implements QueryReservationUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public PageView<ReservationView> list(ReservationListCriteria criteria) {
+    public PageResult<ReservationView> list(ReservationListCriteria criteria) {
         return repository.listViews(criteria);
     }
 }

@@ -2,8 +2,8 @@ package com.wms.inventory.application.service;
 
 import com.wms.inventory.application.port.in.QueryTransferUseCase;
 import com.wms.inventory.application.port.out.StockTransferRepository;
+import com.example.common.page.PageResult;
 import com.wms.inventory.application.query.TransferListCriteria;
-import com.wms.inventory.application.result.PageView;
 import com.wms.inventory.application.result.TransferView;
 import java.util.Optional;
 import java.util.UUID;
@@ -27,7 +27,7 @@ public class QueryTransferService implements QueryTransferUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public PageView<TransferView> list(TransferListCriteria criteria) {
+    public PageResult<TransferView> list(TransferListCriteria criteria) {
         return repository.list(criteria);
     }
 }

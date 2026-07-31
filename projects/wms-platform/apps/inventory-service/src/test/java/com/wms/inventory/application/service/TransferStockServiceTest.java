@@ -15,8 +15,8 @@ import com.wms.inventory.application.query.InventoryListCriteria;
 import com.wms.inventory.application.query.MovementListCriteria;
 import com.wms.inventory.application.query.TransferListCriteria;
 import com.wms.inventory.application.result.InventoryView;
+import com.example.common.page.PageResult;
 import com.wms.inventory.application.result.MovementView;
-import com.wms.inventory.application.result.PageView;
 import com.wms.inventory.application.result.TransferResult;
 import com.wms.inventory.application.result.TransferView;
 import com.wms.inventory.domain.event.InventoryDomainEvent;
@@ -260,7 +260,7 @@ class TransferStockServiceTest {
         }
         @Override public Optional<InventoryView> findViewById(UUID id) { throw new UnsupportedOperationException(); }
         @Override public Optional<InventoryView> findViewByKey(UUID a, UUID b, UUID c) { throw new UnsupportedOperationException(); }
-        @Override public PageView<InventoryView> listViews(InventoryListCriteria c) { throw new UnsupportedOperationException(); }
+        @Override public PageResult<InventoryView> listViews(InventoryListCriteria c) { throw new UnsupportedOperationException(); }
         @Override public Inventory insert(Inventory inventory) { entries.put(inventory.id(), inventory); return inventory; }
         @Override public Inventory updateWithVersionCheck(Inventory inventory) { entries.put(inventory.id(), inventory); return inventory; }
     }
@@ -268,7 +268,7 @@ class TransferStockServiceTest {
     private static class FakeMovementRepo implements InventoryMovementRepository {
         final List<InventoryMovement> saved = new ArrayList<>();
         @Override public void save(InventoryMovement movement) { saved.add(movement); }
-        @Override public PageView<MovementView> list(MovementListCriteria c) { throw new UnsupportedOperationException(); }
+        @Override public PageResult<MovementView> list(MovementListCriteria c) { throw new UnsupportedOperationException(); }
     }
 
     private static class FakeTransferRepo implements StockTransferRepository {
@@ -277,7 +277,7 @@ class TransferStockServiceTest {
         @Override public Optional<StockTransfer> findById(UUID id) {
             return saved.stream().filter(t -> t.id().equals(id)).findFirst();
         }
-        @Override public PageView<TransferView> list(TransferListCriteria c) { throw new UnsupportedOperationException(); }
+        @Override public PageResult<TransferView> list(TransferListCriteria c) { throw new UnsupportedOperationException(); }
     }
 
     private static class FakeOutbox implements OutboxWriter {

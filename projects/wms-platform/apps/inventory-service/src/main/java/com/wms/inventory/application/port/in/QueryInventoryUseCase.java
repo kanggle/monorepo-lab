@@ -1,8 +1,8 @@
 package com.wms.inventory.application.port.in;
 
+import com.example.common.page.PageResult;
 import com.wms.inventory.application.query.InventoryListCriteria;
 import com.wms.inventory.application.result.InventoryView;
-import com.wms.inventory.application.result.PageView;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -16,7 +16,7 @@ import java.util.UUID;
  */
 public interface QueryInventoryUseCase {
 
-    PageView<InventoryView> list(InventoryListCriteria criteria);
+    PageResult<InventoryView> list(InventoryListCriteria criteria);
 
     Optional<InventoryView> findById(UUID id);
 

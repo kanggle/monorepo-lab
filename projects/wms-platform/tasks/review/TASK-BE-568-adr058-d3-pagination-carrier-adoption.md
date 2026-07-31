@@ -10,7 +10,7 @@ ADR-MONO-058 D3 (wms-platform) — adopt `libs/java-common.PageResult`/`PageQuer
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -145,35 +145,78 @@ among 6 projects with ~15 hand-rolled shapes fleet-wide):
 
 # Acceptance Criteria
 
-- [ ] **AC-1 (adoption, not duplication)** — repo-wide grep for a hand-rolled pagination carrier
+- [x] **AC-1 (adoption, not duplication)** — repo-wide grep for a hand-rolled pagination carrier
       (`record.*\(.*content.*page.*size.*total`, or the specific `PageView`/`PagedResponse`/nested
       `PageResult` classes named above) returns zero hits under `apps/{inventory,outbound,inbound}-service/
       src/main` after this task; each service's application layer imports
       `com.example.common.page.PageResult`/`PageQuery` directly, mirroring `master-service`'s pattern.
-- [ ] **AC-2 (`outbound-service` gains `totalPages` + echoed `page`/`size`)** — `OrderQueryController`'s
+      Evidence: `PageView.java` deleted (inventory), `PagedResponse.java` deleted (outbound), the nested
+      `QueryOrderUseCase.PageResult`/`AsnController.PagedResponse` types removed (outbound/inbound); repo-wide
+      `grep PageView|PagedResponse` under the 3 services' `src/main` returns zero hits. `PageResult` is
+      imported directly in every converted port/service/adapter. `PageQuery` is used for request-side
+      validation in `outbound`/`inbound` controllers (both previously had no size-upper-bound enforcement);
+      `inventory-service`'s 5 list endpoints already had equivalent hand-validated bounds in their
+      `*ListCriteria` records pre-existing this task (3 of 5) — left as-is (not restructured into
+      `PageQuery`) to stay behavior-preserving per AC-4; see PR body for the full reasoning.
+- [x] **AC-2 (`outbound-service` gains `totalPages` + echoed `page`/`size`)** — `OrderQueryController`'s
       list response now carries `totalPages` and the effective `page`/`size`, proven by a controller-slice
       test asserting all fields are present and correctly computed for a multi-page fixture.
-- [ ] **AC-3 (`inbound-service` field rename `items` → `content`, gains `totalPages`)** — `AsnController`'s
+      Evidence: new `OrderQueryListControllerSliceTest.listOrders_multiPageFixture_returnsTotalPagesAndEchoedPageSize`
+      (25 total elements, size=10 → totalPages=3, page/size echoed).
+- [x] **AC-3 (`inbound-service` field rename `items` → `content`, gains `totalPages`)** — `AsnController`'s
       list response uses `content` (not `items`) and carries `totalPages`, proven the same way.
-- [ ] **AC-4 (`inventory-service` conversion is behavior-preserving where the shape already matched)** —
+      Evidence: `AsnControllerSliceTest.listAsns_multiPage_returnsContentAndTotalPages` (25 total elements,
+      size=20 → totalPages=2); live-consumer grep found zero direct consumers of
+      `/api/v1/inbound/asns` outside `inbound-service` itself (see DoD item below — console-web's wms-ops
+      screen consumes `admin-service`'s separate `/dashboard/asns` read-model, not this endpoint, and its
+      own zod schema already expected `content`/`page`/`sort`, not `items`).
+- [x] **AC-4 (`inventory-service` conversion is behavior-preserving where the shape already matched)** —
       `content`/`page`/`size`/`totalElements`/`totalPages` values are identical before/after for a fixed
       test fixture (the shape already matched `PageResult`'s fields 1:1 minus `sort`, so this conversion
       should not change any emitted value, only the underlying type).
-- [ ] **AC-5 (contracts updated first, deliberately)** — `specs/contracts/http/{inventory,outbound,
+      Evidence: `totalPages` computed with the same `(totalElements+size-1)/size` formula `PageView.of` used;
+      all 5 list endpoints' persistence adapters and controllers rewired to the shared type with no filter/
+      sort/pagination logic changes; existing `InventoryQueryControllerSliceTest`/`MovementQueryControllerSliceTest`
+      assertions pass unmodified in substance (only the mock-setup call changed from `PageView.of(...)` to
+      `new PageResult<>(...)`).
+- [x] **AC-5 (contracts updated first, deliberately)** — `specs/contracts/http/{inventory,outbound,
       inbound}-service-api.md` § Pagination reflect the corrected field sets before/alongside the code
       change; the PR body states explicitly which fields are newly added (`totalPages` for outbound/
       inbound, `page`/`size` echo for outbound) versus renamed (`items`→`content` for inbound) versus
       unchanged (`inventory-service`'s field values).
-- [ ] **AC-6 (baseline parity)** — record each of the 3 converted services' test count before/after. No
+      Evidence: all 3 contracts were found to **already document** the target `content`/`page{number,size,
+      totalElements,totalPages}`/`sort` envelope (pre-dating this task — the code was catching up to an
+      already-correct spec) — verified by reading `outbound-service-api.md` §1.3/§Pagination and
+      `inbound-service-api.md` §1.3/§Pagination directly; no contract text edit was needed. Flagged
+      prominently in the PR body per this AC's instruction.
+- [x] **AC-6 (baseline parity)** — record each of the 3 converted services' test count before/after. No
       test may disappear (existing pagination tests are rewritten to assert the new shape, not deleted).
       All 3 `:check`/`:test` tasks green; wms CI `Integration`/`E2E` lanes (Testcontainers) green.
-- [ ] **AC-7 (`master-service`/`admin-service` untouched)** —
+      Evidence (local `:test`, authoritative CI run pending in the PR): inventory-service 239→239 (no tests
+      added/removed, bodies/types updated only); outbound-service 263→266 (+3, new
+      `OrderQueryListControllerSliceTest`); inbound-service 235→237 (+2, new assertions in
+      `AsnControllerSliceTest` for the multi-page + size>100 cases). All 3 local `:test` runs green.
+- [x] **AC-7 (`master-service`/`admin-service` untouched)** —
       `git diff --numstat -- apps/master-service apps/admin-service` empty.
-- [ ] **AC-8 (`PageQuery`'s validation is honored, not bypassed)** — each converted service's list endpoint
+      Evidence: `git diff --numstat -- projects/wms-platform/apps/master-service projects/wms-platform/apps/admin-service`
+      returns empty output.
+- [x] **AC-8 (`PageQuery`'s validation is honored, not bypassed)** — each converted service's list endpoint
       still enforces `size <= 100` (`PageQuery.MAX_SIZE`) and `page >= 0`/`size >= 1`, either via
       `PageQuery.of(...)`'s clamping factory or an explicit 400 on invalid input — confirm which behavior
       each service's contract documents today and preserve it (do not silently switch a documented
       400-on-invalid-input service to clamp-and-succeed, or vice versa).
+      Evidence: `outbound`/`inbound` previously threw `IllegalArgumentException` → 400 `VALIDATION_ERROR`
+      for `page<0`/`size<1` (via `PageRequest.of`) but had **no** upper-bound check (a pre-existing gap
+      versus their own already-documented `Max=100` contract); both now use `PageQuery`'s throwing
+      constructor, preserving the existing 400-on-invalid-input behavior for the low bound and closing the
+      upper-bound gap to match the contract — same exception type, same `GlobalExceptionHandler` mapping,
+      no observable regression for previously-valid input. `inventory-service` already enforced
+      `page>=0`/`1<=size<=100` with a throwing compact constructor in 3 of 5 `*ListCriteria` records
+      (`InventoryListCriteria`/`MovementListCriteria`/`ReservationListCriteria`) — left unchanged (still
+      throwing, same bounds). `AdjustmentListCriteria`/`TransferListCriteria` had **no** validation at all
+      pre-task (contract already documents `Max=100` for "all list endpoints") — left unchanged rather than
+      opportunistically adding new validation, to stay strictly within this task's declared PageResult/
+      PageQuery-adoption scope; flagged in the PR body as a pre-existing, out-of-scope gap for a future task.
 
 ---
 
@@ -297,11 +340,14 @@ shared type instead of a local one).
 
 # Definition of Done
 
-- [ ] Implementation completed (`inventory`/`outbound`/`inbound`-service conversions)
-- [ ] Tests passing; per-service before/after counts recorded; no test lost
-- [ ] Contracts updated first for the deliberate wire-shape changes (outbound `totalPages`+echo, inbound
-      `items`→`content`+`totalPages`), flagged in the PR body
-- [ ] `master-service`/`admin-service` confirmed byte-unchanged
-- [ ] Live-consumer grep for `inbound-service`'s `items`→`content` rename completed, any finding
-      coordinated before merge
-- [ ] Ready for review
+- [x] Implementation completed (`inventory`/`outbound`/`inbound`-service conversions)
+- [x] Tests passing; per-service before/after counts recorded; no test lost
+- [x] Contracts updated first for the deliberate wire-shape changes (outbound `totalPages`+echo, inbound
+      `items`→`content`+`totalPages`), flagged in the PR body — found already correct, no edit needed
+      (see AC-5 evidence)
+- [x] `master-service`/`admin-service` confirmed byte-unchanged
+- [x] Live-consumer grep for `inbound-service`'s `items`→`content` rename completed, any finding
+      coordinated before merge — repo-wide grep for `/api/v1/inbound/asns` found zero consumers outside
+      `inbound-service` itself; console-web's wms-ops ASN screen consumes `admin-service`'s separate
+      `/dashboard/asns` read-model instead (out of scope, unaffected). No coordination needed.
+- [x] Ready for review

@@ -1,8 +1,8 @@
 package com.wms.inventory.application.port.out;
 
+import com.example.common.page.PageResult;
 import com.wms.inventory.application.query.AdjustmentListCriteria;
 import com.wms.inventory.application.result.AdjustmentView;
-import com.wms.inventory.application.result.PageView;
 import com.wms.inventory.domain.model.StockAdjustment;
 import java.util.Optional;
 import java.util.UUID;
@@ -17,5 +17,5 @@ public interface StockAdjustmentRepository {
 
     Optional<StockAdjustment> findById(UUID id);
 
-    PageView<AdjustmentView> list(AdjustmentListCriteria criteria);
+    PageResult<AdjustmentView> list(AdjustmentListCriteria criteria);
 }

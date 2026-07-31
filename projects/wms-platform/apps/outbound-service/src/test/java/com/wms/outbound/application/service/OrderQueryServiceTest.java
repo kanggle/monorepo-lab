@@ -3,9 +3,10 @@ package com.wms.outbound.application.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.example.common.page.PageResult;
 import com.wms.outbound.application.command.OrderQueryCommand;
-import com.wms.outbound.application.port.in.QueryOrderUseCase.PageResult;
 import com.wms.outbound.application.result.OrderResult;
+import com.wms.outbound.application.result.OrderSummaryResult;
 import com.wms.outbound.application.service.fakes.FakeCallerScopeProvider;
 import com.wms.outbound.application.service.fakes.FakeOrderPersistencePort;
 import com.wms.outbound.application.service.fakes.FakeSagaPersistencePort;
@@ -81,13 +82,16 @@ class OrderQueryServiceTest {
 
         OrderQueryCommand cmd = new OrderQueryCommand(
                 null, null, null, null, null, null, null, null, null, null, 0, 20);
-        PageResult page = service.list(cmd);
+        PageResult<OrderSummaryResult> page = service.list(cmd);
 
-        assertThat(page.items()).hasSize(3);
-        assertThat(page.total()).isEqualTo(3L);
+        assertThat(page.content()).hasSize(3);
+        assertThat(page.totalElements()).isEqualTo(3L);
+        assertThat(page.page()).isEqualTo(0);
+        assertThat(page.size()).isEqualTo(20);
+        assertThat(page.totalPages()).isEqualTo(1);
         // Every row carries its enriched saga state, populated via the bulk
         // lookup (REQUESTED for newly-created sagas).
-        assertThat(page.items())
+        assertThat(page.content())
                 .allMatch(r -> "REQUESTED".equals(r.sagaState()));
         // CRITICAL AC-03 assertion: the per-row N+1 path must remain unused.
         assertThat(sagaPersistence.findByOrderIdCallCount).isZero();
