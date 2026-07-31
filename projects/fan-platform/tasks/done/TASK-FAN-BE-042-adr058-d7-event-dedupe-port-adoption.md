@@ -10,7 +10,7 @@ hand-rolled `ProcessedEventStore` check-then-act idempotency with the shared `Ev
 
 # Status
 
-review
+done
 
 # Owner
 
