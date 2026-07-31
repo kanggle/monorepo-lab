@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.admin.api.dto.ApiErrorEnvelope;
 import com.wms.admin.infra.security.PublicPaths;
 import com.example.security.oauth2.TenantClaimValidator;
+import com.example.security.servlet.ResourceServerChainAssembler;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -15,7 +16,6 @@ import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
 import org.springframework.security.access.hierarchicalroles.RoleHierarchyImpl;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.core.OAuth2Error;
@@ -59,27 +59,52 @@ public class SecurityConfig {
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, ObjectMapper objectMapper,
                                             RoleHierarchy roleHierarchy) throws Exception {
+        // PRESERVED AS MEASURED, NOT AS INTENDED (TASK-BE-569, ADR-MONO-058 § D4).
+        //
+        // This handler is built and then never attached to anything — it was already
+        // dead before the D4 adoption, and D4 is a mechanism swap that must not change
+        // behaviour, so it is carried over verbatim rather than either wired up or
+        // deleted. Nothing is lost by that today: this chain's authorization tail is
+        // anyRequest().authenticated(), so there is no URL-level role expression for a
+        // hierarchy to widen. The role hierarchy that IS load-bearing is the method-level
+        // one — @EnableMethodSecurity picks up the roleHierarchy() bean below from the
+        // context, which is why the @PreAuthorize("hasRole('WMS_VIEWER')") dashboards
+        // admit a WMS_ADMIN token (pinned by SecurityChainAssemblyParityTest).
+        //
+        // Wiring it up (or removing it) is an authorization-policy decision, not part of
+        // this mechanical adoption — flagged for a follow-up task.
         DefaultHttpSecurityExpressionHandler expressionHandler = new DefaultHttpSecurityExpressionHandler();
         expressionHandler.setRoleHierarchy(roleHierarchy);
 
+        // The four configurers ResourceServerChainAssembler deliberately has no opinion
+        // about, applied here rather than through its httpCustomizer(...) hook because
+        // every one of these HttpSecurity methods declares `throws Exception`, which a
+        // Customizer<HttpSecurity> lambda cannot propagate. Disabling a configurer only
+        // removes it from the builder, so applying them before the assembler is
+        // order-equivalent to the pre-D4 single fluent chain.
+        //
+        // cors/httpBasic/formLogin are belt-and-braces (none is installed by default on a
+        // context that declares its own SecurityFilterChain bean); .logout(disable) is
+        // load-bearing — HttpSecurityConfiguration DOES install LogoutFilter by default,
+        // and leaving it on would make /logout answer 302 instead of the 401 this
+        // stateless resource server returns today.
         http
-                .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.disable())
                 .httpBasic(b -> b.disable())
                 .formLogin(f -> f.disable())
-                .logout(l -> l.disable())
-                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(PublicPaths.asAntPatterns()).permitAll()
-                        .anyRequest().authenticated())
-                .oauth2ResourceServer(oauth2 -> oauth2
-                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
-                        .authenticationEntryPoint(authenticationEntryPoint(objectMapper))
-                        .accessDeniedHandler(forbiddenHandler(objectMapper)));
+                .logout(l -> l.disable());
 
-        // Apply role hierarchy to URL-level matchers (method-level uses
-        // MethodSecurityConfig — see GlobalMethodSecurityConfig below).
-        return http.build();
+        return ResourceServerChainAssembler.statelessJwtChain(http)
+                .publicPaths(PublicPaths.asSet())
+                // ADR-MONO-058 § D4 measured the anyRequest() tail as a genuinely split
+                // axis and made the assembler default to the CLOSED answer (denyAll()).
+                // admin-service is on the authenticated() side and says so out loud —
+                // preserved verbatim from the pre-D4 chain, not inherited from a default.
+                .anyRequestAuthenticated()
+                .jwtAuthenticationConverter(jwtAuthenticationConverter())
+                .authenticationEntryPoint(authenticationEntryPoint(objectMapper))
+                .accessDeniedHandler(forbiddenHandler(objectMapper))
+                .build();
     }
 
     /**

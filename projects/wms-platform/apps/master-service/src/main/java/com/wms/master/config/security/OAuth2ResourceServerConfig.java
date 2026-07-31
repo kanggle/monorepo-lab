@@ -1,21 +1,14 @@
 package com.wms.master.config.security;
 
-import com.example.security.oauth2.AllowedIssuersValidator;
 import com.example.security.oauth2.TenantClaimValidator;
+import com.example.security.servlet.ResourceServerChainAssembler;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
-import org.springframework.security.oauth2.jwt.JwtValidators;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Resource Server JWT decoder configuration (TASK-MONO-019).
@@ -28,6 +21,13 @@ import java.util.List;
  * <p>Tenant isolation: every accepted token must additionally carry
  * {@code tenant_id = wms}. Cross-tenant tokens (e.g. {@code fan-platform}) fail
  * validation here and surface as 403 {@code TENANT_FORBIDDEN} to the caller.
+ *
+ * <p>The decoder/validator <em>assembly</em> — {@code NimbusJwtDecoder.withJwkSetUri(...)},
+ * the CSV parse, and the timestamp → allowed-issuers → tenant-gate → Spring-defaults
+ * validator order — comes from {@link ResourceServerChainAssembler} since
+ * ADR-MONO-058 § D4 (TASK-BE-569); the policy above and below stays here. The assembler
+ * installs nothing by itself (plain builder, not an auto-configuration), so this file
+ * remains the only place master-service's resource-server posture is decided.
  */
 @Configuration
 public class OAuth2ResourceServerConfig {
@@ -51,13 +51,30 @@ public class OAuth2ResourceServerConfig {
     @Bean
     @ConditionalOnMissingBean(JwtDecoder.class)
     public JwtDecoder jwtDecoder() {
-        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
-        decoder.setJwtValidator(jwtTokenValidator());
-        return decoder;
+        return ResourceServerChainAssembler.jwtDecoder(jwkSetUri)
+                .allowedIssuersCsv(allowedIssuersCsv)
+                .validator(tenantGate())
+                .build();
     }
 
     /**
-     * The tenant gate, and the only place master-service's policy is stated.
+     * The validator chain, exposed as its own bean because the pre-D4 wiring did —
+     * callers that read the validator bean must keep being able to.
+     *
+     * <p>No {@code JwtIssuerValidator}: we accept either the SAS issuer or the legacy
+     * {@code "iam"} string while D2-b deprecation is ongoing, which is what the
+     * assembler's {@code allowedIssuersCsv(...)} allow-list expresses.
+     */
+    @Bean
+    public OAuth2TokenValidator<Jwt> jwtTokenValidator() {
+        return ResourceServerChainAssembler.jwtDecoder(jwkSetUri)
+                .allowedIssuersCsv(allowedIssuersCsv)
+                .validator(tenantGate())
+                .buildValidator();
+    }
+
+    /**
+     * The tenant gate, and the only place master-service's tenant policy is stated.
      *
      * <h2>{@code allowSuperAdminWildcard()} is deliberately NOT called</h2>
      *
@@ -68,41 +85,21 @@ public class OAuth2ResourceServerConfig {
      * the gate and reds a test, while an <em>added</em> one widens it and nothing complains.
      * {@code TASK-MONO-355} found this exact gate had zero coverage for its rejection.
      *
-     * <p>{@code WmsTenantGatePolicyTest} therefore builds its subject from <em>this</em>
-     * method and asserts the refusal, not just the acceptance — add
-     * {@code .allowSuperAdminWildcard()} here and that suite goes red instead of the wms
-     * edge silently opening to a platform operator.
+     * <p>{@code WmsTenantGatePolicyTest} therefore builds its subject from
+     * {@link #jwtTokenValidator()} — the <em>production</em> chain — and asserts the
+     * refusal, not just the acceptance; add {@code .allowSuperAdminWildcard()} here and
+     * that suite goes red instead of the wms edge silently opening to a platform operator.
      *
      * <p>The same chain already runs at wms's own edge: see {@code gateway-service}'s
      * {@code OAuth2ResourceServerConfig#tenantGate()} (ADR-MONO-048 § D7).
+     *
+     * <p>Both beans above build their own instance from this method; the validators are
+     * stateless, so the two chains are behaviourally identical to the single shared
+     * instance the pre-D4 wiring produced.
      */
-    @Bean
-    public OAuth2TokenValidator<Jwt> jwtTokenValidator() {
-        List<String> allowedIssuers = parseCsv(allowedIssuersCsv);
-        List<OAuth2TokenValidator<Jwt>> validators = new ArrayList<>();
-        // Standard timestamp validator — exp / nbf / iat with default leeway.
-        validators.add(new JwtTimestampValidator());
-        // No JwtIssuerValidator: we accept either the SAS issuer or the legacy
-        // "iam" string while D2-b deprecation is ongoing.
-        validators.add(new AllowedIssuersValidator(allowedIssuers));
-        validators.add(TenantClaimValidator.forTenant(requiredTenantId)
-                // no .allowSuperAdminWildcard() — see above; wms rejects it on purpose
+    private OAuth2TokenValidator<Jwt> tenantGate() {
+        return TenantClaimValidator.forTenant(requiredTenantId)
                 .trustEntitledDomains()   // entitlement-trust dual-accept (ADR-MONO-019 § D5)
-                .build());
-        // Add Spring's default validators (currently just timestamp, but future-proof).
-        validators.add(JwtValidators.createDefault());
-        return new DelegatingOAuth2TokenValidator<>(validators);
-    }
-
-    private static List<String> parseCsv(String csv) {
-        List<String> out = new ArrayList<>();
-        if (csv == null) return out;
-        for (String part : csv.split(",")) {
-            String trimmed = part.trim();
-            if (!trimmed.isEmpty()) {
-                out.add(trimmed);
-            }
-        }
-        return out;
+                .build();
     }
 }

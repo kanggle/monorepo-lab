@@ -42,11 +42,20 @@ class WmsTenantGatePolicyTest {
     private static final String SAS_ISSUER = "http://localhost:8081";
     private static final String LEGACY_ISSUER = "iam";
 
+    /**
+     * TASK-BE-569 (ADR-MONO-058 § D4): {@code ResourceServerChainAssembler.jwtDecoder(...)}
+     * is the entry point for {@code buildValidator()} as well, and it rejects a
+     * null/blank JWKS URI at the wiring site. Nothing in this suite fetches this URL —
+     * {@code buildValidator()} never constructs the {@code NimbusJwtDecoder} that would.
+     */
+    private static final String JWK_SET_URI = "http://localhost:8081/oauth2/jwks";
+
     /** The production wiring, with only the {@code @Value} fields supplied. */
     private static OAuth2ResourceServerConfig wiredConfig(String allowedIssuersCsv) {
         OAuth2ResourceServerConfig config = new OAuth2ResourceServerConfig();
         ReflectionTestUtils.setField(config, "requiredTenantId", TENANT);
         ReflectionTestUtils.setField(config, "allowedIssuersCsv", allowedIssuersCsv);
+        ReflectionTestUtils.setField(config, "jwkSetUri", JWK_SET_URI);
         return config;
     }
 
