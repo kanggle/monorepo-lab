@@ -115,8 +115,18 @@ config/         ← Spring @Configuration beans only
   dual-accept** (legacy `tenant_id ∈ {scm,*}` ∪ signed `entitled_domains ∋ scm`;
   reject = `!legacyOk && !entitled`, fail-closed) per the SCM-BE-019 blueprint
   (local `isEntitled` helper — module-boundary, not shared).
-- Standard error envelope `{ code, message }`; codes from `rules/domains/scm.md`
+- Standard error envelope `{ code, message, timestamp }` (`libs/java-web.ErrorResponse`,
+  adopted by TASK-SCM-BE-055 / ADR-MONO-058 § D2); codes from `rules/domains/scm.md`
   plus `SKU_SUPPLIER_UNMAPPED`, `SUGGESTION_ALREADY_MATERIALIZED`.
+  Before that adoption the controller advice emitted only `{ code, message }` while this
+  service's own `HttpErrorResponseWriter` (security layer) already emitted `timestamp` —
+  the two now agree, and both satisfy `platform/error-handling.md § Error Response Format`
+  ("the three fields above must always be present").
+- Generic (non-domain) exception arms — 404 unmapped path, 405 + RFC 7231 `Allow`, 415,
+  400 malformed-body / missing-header / missing-parameter, `@Valid`, catch-all 500 — are
+  inherited from `libs/java-web-servlet.CommonGlobalExceptionHandler` (`implementation`,
+  never `api`); `@Valid` and `IllegalArgumentException` answer **422** via the
+  `validationFailureStatus()` override.
 
 ## Mandatory Section Mapping (scm S-rules)
 

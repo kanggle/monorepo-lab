@@ -13,6 +13,7 @@ import com.example.scmplatform.procurement.domain.error.SupplierUnavailableExcep
 import com.example.scmplatform.procurement.domain.po.status.ActorType;
 import com.example.scmplatform.procurement.domain.po.status.PoStatus;
 import com.example.scmplatform.procurement.presentation.dto.ApiErrorBody;
+import com.example.web.dto.ErrorResponse;
 import jakarta.persistence.OptimisticLockException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,7 +35,14 @@ import static org.mockito.Mockito.when;
 /**
  * Unit tests for {@link GlobalExceptionHandler}. Bypasses Spring MVC entirely
  * and invokes each handler method directly — fastest feedback for a pure
- * mapper that only translates exceptions to {@code ApiErrorBody} envelopes.
+ * mapper that only translates exceptions to error envelopes.
+ *
+ * <p>Since TASK-SCM-BE-055 (ADR-MONO-058 D2) most arms return the shared
+ * {@link ErrorResponse}; only {@code PO_STATUS_TRANSITION_INVALID} returns the
+ * {@code details}-carrying {@link ApiErrorBody} extension. The generic tail
+ * (404/405/415/malformed-body/catch-all) is inherited from
+ * {@code CommonGlobalExceptionHandler} — its real registration is proven by
+ * {@code GlobalExceptionHandlerNotFoundTest}, which drives Spring's resolver.
  *
  * <p>Asserts the {@code (HttpStatus, code)} contract documented in
  * {@code rules/domains/scm.md} § Standard Error Codes.
@@ -48,7 +56,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("PoNotFoundException → 404 PO_NOT_FOUND")
     void poNotFound() {
-        ResponseEntity<ApiErrorBody> r = handler.handlePoNotFound(
+        ResponseEntity<ErrorResponse> r = handler.handlePoNotFound(
                 new PoNotFoundException("PO not found: po-001"));
         assertStatus(r, HttpStatus.NOT_FOUND, "PO_NOT_FOUND");
         assertThat(r.getBody().message()).contains("po-001");
@@ -57,7 +65,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("SupplierNotFoundException → 404 SUPPLIER_NOT_FOUND")
     void supplierNotFound() {
-        ResponseEntity<ApiErrorBody> r = handler.handleSupplierNotFound(
+        ResponseEntity<ErrorResponse> r = handler.handleSupplierNotFound(
                 new SupplierNotFoundException("Supplier not found: sup-001"));
         assertStatus(r, HttpStatus.NOT_FOUND, "SUPPLIER_NOT_FOUND");
     }
@@ -67,10 +75,15 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("PoStatusTransitionInvalidException → 422 with from/to/actor details")
     void statusTransitionInvalidIncludesDetails() {
+        // The one arm that keeps the `details`-carrying ApiErrorBody extension
+        // (TASK-SCM-BE-055 design decision 1) — every other arm returns ErrorResponse.
         ResponseEntity<ApiErrorBody> r = handler.handleStatusInvalid(
                 new PoStatusTransitionInvalidException(
                         PoStatus.DRAFT, PoStatus.RECEIVED, ActorType.SYSTEM));
-        assertStatus(r, HttpStatus.UNPROCESSABLE_ENTITY, "PO_STATUS_TRANSITION_INVALID");
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(r.getBody()).isNotNull();
+        assertThat(r.getBody().code()).isEqualTo("PO_STATUS_TRANSITION_INVALID");
+        assertThat(r.getBody().timestamp()).isNotNull();
         assertThat(r.getBody().details())
                 .containsEntry("from", "DRAFT")
                 .containsEntry("to", "RECEIVED")
@@ -80,7 +93,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("PoAlreadyConfirmedException → 422 PO_ALREADY_CONFIRMED")
     void alreadyConfirmed() {
-        ResponseEntity<ApiErrorBody> r = handler.handleAlreadyConfirmed(
+        ResponseEntity<ErrorResponse> r = handler.handleAlreadyConfirmed(
                 new PoAlreadyConfirmedException("po already confirmed"));
         assertStatus(r, HttpStatus.UNPROCESSABLE_ENTITY, "PO_ALREADY_CONFIRMED");
     }
@@ -88,7 +101,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("PoQuantityExceededException → 422 PO_QUANTITY_EXCEEDED")
     void quantityExceeded() {
-        ResponseEntity<ApiErrorBody> r = handler.handleQuantityExceeded(
+        ResponseEntity<ErrorResponse> r = handler.handleQuantityExceeded(
                 new PoQuantityExceededException("ordered > confirmed"));
         assertStatus(r, HttpStatus.UNPROCESSABLE_ENTITY, "PO_QUANTITY_EXCEEDED");
     }
@@ -96,7 +109,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("AsnOverreceiptException → 422 ASN_OVERRECEIPT")
     void asnOverreceipt() {
-        ResponseEntity<ApiErrorBody> r = handler.handleOverreceipt(
+        ResponseEntity<ErrorResponse> r = handler.handleOverreceipt(
                 new AsnOverreceiptException("ASN qty exceeds line balance"));
         assertStatus(r, HttpStatus.UNPROCESSABLE_ENTITY, "ASN_OVERRECEIPT");
     }
@@ -104,7 +117,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("SupplierInactiveException → 422 SUPPLIER_INACTIVE")
     void supplierInactive() {
-        ResponseEntity<ApiErrorBody> r = handler.handleSupplierInactive(
+        ResponseEntity<ErrorResponse> r = handler.handleSupplierInactive(
                 new SupplierInactiveException("supplier disabled"));
         assertStatus(r, HttpStatus.UNPROCESSABLE_ENTITY, "SUPPLIER_INACTIVE");
     }
@@ -112,7 +125,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("CatalogSkuUnknownException → 422 CATALOG_SKU_UNKNOWN")
     void catalogSkuUnknown() {
-        ResponseEntity<ApiErrorBody> r = handler.handleSku(
+        ResponseEntity<ErrorResponse> r = handler.handleSku(
                 new CatalogSkuUnknownException("sku-001 not in catalog"));
         assertStatus(r, HttpStatus.UNPROCESSABLE_ENTITY, "CATALOG_SKU_UNKNOWN");
     }
@@ -120,7 +133,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("IdempotencyKeyMismatchException → 422 IDEMPOTENCY_KEY_MISMATCH")
     void idempotencyMismatch() {
-        ResponseEntity<ApiErrorBody> r = handler.handleIdempotencyMismatch(
+        ResponseEntity<ErrorResponse> r = handler.handleIdempotencyMismatch(
                 new IdempotencyKeyMismatchException("key collision"));
         assertStatus(r, HttpStatus.UNPROCESSABLE_ENTITY, "IDEMPOTENCY_KEY_MISMATCH");
     }
@@ -128,7 +141,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("IllegalArgumentException → 422 VALIDATION_ERROR")
     void illegalArgument() {
-        ResponseEntity<ApiErrorBody> r = handler.handleIllegalArgument(
+        ResponseEntity<ErrorResponse> r = handler.handleIllegalArgument(
                 new IllegalArgumentException("invalid currency"));
         assertStatus(r, HttpStatus.UNPROCESSABLE_ENTITY, "VALIDATION_ERROR");
     }
@@ -136,7 +149,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("IllegalStateException → 422 ILLEGAL_STATE")
     void illegalState() {
-        ResponseEntity<ApiErrorBody> r = handler.handleIllegalState(
+        ResponseEntity<ErrorResponse> r = handler.handleIllegalState(
                 new IllegalStateException("no actor"));
         assertStatus(r, HttpStatus.UNPROCESSABLE_ENTITY, "ILLEGAL_STATE");
     }
@@ -146,7 +159,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("SupplierUnavailableException → 503 SUPPLIER_UNAVAILABLE")
     void supplierUnavailable() {
-        ResponseEntity<ApiErrorBody> r = handler.handleSupplierUnavailable(
+        ResponseEntity<ErrorResponse> r = handler.handleSupplierUnavailable(
                 new SupplierUnavailableException("circuit OPEN"));
         assertStatus(r, HttpStatus.SERVICE_UNAVAILABLE, "SUPPLIER_UNAVAILABLE");
     }
@@ -156,7 +169,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("OptimisticLockException → 409 CONCURRENT_MODIFICATION")
     void optimisticLock() {
-        ResponseEntity<ApiErrorBody> r = handler.handleOptimisticLock(
+        ResponseEntity<ErrorResponse> r = handler.handleJpaOptimisticLock(
                 new OptimisticLockException("version stale"));
         assertStatus(r, HttpStatus.CONFLICT, "CONCURRENT_MODIFICATION");
     }
@@ -164,7 +177,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("ObjectOptimisticLockingFailureException → 409 CONCURRENT_MODIFICATION")
     void springOptimisticLock() {
-        ResponseEntity<ApiErrorBody> r = handler.handleOptimisticLock(
+        ResponseEntity<ErrorResponse> r = handler.handleOptimisticLock(
                 new ObjectOptimisticLockingFailureException("entity", "id"));
         assertStatus(r, HttpStatus.CONFLICT, "CONCURRENT_MODIFICATION");
     }
@@ -176,7 +189,7 @@ class GlobalExceptionHandlerTest {
         // the chain for SQLSTATE 23505. The reachability of this SQLSTATE through
         // Spring's exception translation from a real Postgres is proven in
         // DataIntegrityViolationIntegrationTest.
-        ResponseEntity<ApiErrorBody> r = handler.handleIntegrity(
+        ResponseEntity<ErrorResponse> r = handler.handleIntegrity(
                 new DataIntegrityViolationException("dup key",
                         new SQLException("duplicate key value violates unique constraint", "23505")));
         assertStatus(r, HttpStatus.CONFLICT, "CONFLICT");
@@ -185,7 +198,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("FK violation (SQLSTATE 23503, non-unique) → 500 INTERNAL_ERROR")
     void dataIntegrityForeignKeyViolation() {
-        ResponseEntity<ApiErrorBody> r = handler.handleIntegrity(
+        ResponseEntity<ErrorResponse> r = handler.handleIntegrity(
                 new DataIntegrityViolationException("fk violation",
                         new SQLException("violates foreign key constraint", "23503")));
         assertStatus(r, HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR");
@@ -194,7 +207,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("Data integrity with no SQLState in chain → 500 INTERNAL_ERROR (fail loud, not masked as 409)")
     void dataIntegrityNoSqlState() {
-        ResponseEntity<ApiErrorBody> r = handler.handleIntegrity(
+        ResponseEntity<ErrorResponse> r = handler.handleIntegrity(
                 new DataIntegrityViolationException("some integrity error"));
         assertStatus(r, HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR");
     }
@@ -206,7 +219,7 @@ class GlobalExceptionHandlerTest {
     void missingIdempotencyHeader() {
         MissingRequestHeaderException ex = mock(MissingRequestHeaderException.class);
         when(ex.getHeaderName()).thenReturn("Idempotency-Key");
-        ResponseEntity<ApiErrorBody> r = handler.handleMissingHeader(ex);
+        ResponseEntity<ErrorResponse> r = handler.handleMissingHeader(ex);
         assertStatus(r, HttpStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_REQUIRED");
     }
 
@@ -215,7 +228,7 @@ class GlobalExceptionHandlerTest {
     void missingIdempotencyHeaderCaseInsensitive() {
         MissingRequestHeaderException ex = mock(MissingRequestHeaderException.class);
         when(ex.getHeaderName()).thenReturn("idempotency-key");
-        ResponseEntity<ApiErrorBody> r = handler.handleMissingHeader(ex);
+        ResponseEntity<ErrorResponse> r = handler.handleMissingHeader(ex);
         assertStatus(r, HttpStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_REQUIRED");
     }
 
@@ -224,7 +237,7 @@ class GlobalExceptionHandlerTest {
     void missingOtherHeader() {
         MissingRequestHeaderException ex = mock(MissingRequestHeaderException.class);
         when(ex.getHeaderName()).thenReturn("X-Custom");
-        ResponseEntity<ApiErrorBody> r = handler.handleMissingHeader(ex);
+        ResponseEntity<ErrorResponse> r = handler.handleMissingHeader(ex);
         assertStatus(r, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR");
         assertThat(r.getBody().message()).contains("X-Custom");
     }
@@ -234,7 +247,7 @@ class GlobalExceptionHandlerTest {
     void typeMismatch() {
         MethodArgumentTypeMismatchException ex = mock(MethodArgumentTypeMismatchException.class);
         when(ex.getName()).thenReturn("status");
-        ResponseEntity<ApiErrorBody> r = handler.handleTypeMismatch(ex);
+        ResponseEntity<ErrorResponse> r = handler.handleTypeMismatch(ex);
         assertStatus(r, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR");
         assertThat(r.getBody().message()).contains("status");
     }
@@ -242,7 +255,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("HttpMessageNotReadableException → 400 VALIDATION_ERROR")
     void malformedBody() {
-        ResponseEntity<ApiErrorBody> r = handler.handleMalformed(
+        ResponseEntity<ErrorResponse> r = handler.handleMalformedRequest(
                 new HttpMessageNotReadableException("malformed", (org.springframework.http.HttpInputMessage) null));
         assertStatus(r, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR");
     }
@@ -252,7 +265,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("ResponseStatusException 401 → 401 UNAUTHORIZED (webhook signature invalid)")
     void responseStatusException401() {
-        ResponseEntity<ApiErrorBody> r = handler.handleResponseStatus(
+        ResponseEntity<ErrorResponse> r = handler.handleResponseStatus(
                 new ResponseStatusException(HttpStatus.UNAUTHORIZED, "WEBHOOK_SIGNATURE_INVALID"));
         assertStatus(r, HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
         assertThat(r.getBody().message()).contains("WEBHOOK_SIGNATURE_INVALID");
@@ -263,7 +276,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("Generic Exception → 500 INTERNAL_ERROR (no exception detail leaked)")
     void unexpected() {
-        ResponseEntity<ApiErrorBody> r = handler.handleGeneral(
+        ResponseEntity<ErrorResponse> r = handler.handleGeneral(
                 new RuntimeException("secret crash detail"));
         assertStatus(r, HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR");
         assertThat(r.getBody().message())
@@ -273,7 +286,7 @@ class GlobalExceptionHandlerTest {
 
     // ---------------- helpers ----------------
 
-    private static void assertStatus(ResponseEntity<ApiErrorBody> r, HttpStatus expected, String code) {
+    private static void assertStatus(ResponseEntity<ErrorResponse> r, HttpStatus expected, String code) {
         assertThat(r.getStatusCode()).isEqualTo(expected);
         assertThat(r.getBody()).isNotNull();
         assertThat(r.getBody().code()).isEqualTo(code);

@@ -1,43 +1,58 @@
 package com.example.scmplatform.inventoryvisibility.adapter.inbound.web.advice;
 
-import com.example.scmplatform.inventoryvisibility.adapter.inbound.web.dto.ApiErrorBody;
 import com.example.scmplatform.inventoryvisibility.domain.error.NodeNotFoundException;
 import com.example.scmplatform.inventoryvisibility.domain.error.NodeTypeConflictException;
 import com.example.scmplatform.inventoryvisibility.domain.error.NodeUnreachableException;
 import com.example.scmplatform.inventoryvisibility.domain.error.ReadModelCorruptException;
 import com.example.scmplatform.inventoryvisibility.domain.error.SnapshotStaleException;
+import com.example.web.dto.ErrorResponse;
+import com.example.web.exception.CommonGlobalExceptionHandler;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.HttpMediaTypeNotSupportedException;
-import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
-import org.springframework.web.servlet.NoHandlerFoundException;
-import org.springframework.web.servlet.resource.NoResourceFoundException;
-
-import java.util.Set;
 
 /**
  * Maps domain exceptions to the platform error envelope.
  * Error codes follow rules/domains/scm.md Inventory Visibility section.
+ *
+ * <p><strong>ADR-MONO-058 § D2 (TASK-SCM-BE-055)</strong>: the framework/non-domain arms
+ * (404 {@code NoResourceFound}/{@code NoHandlerFound}, 405 {@code MethodNotSupported}
+ * incl. the RFC 7231 {@code Allow} header, 415 {@code MediaTypeNotSupported}, 400
+ * malformed-body / missing-header / missing-parameter, 409 optimistic lock,
+ * {@code @Valid} violations, and the catch-all 500) are inherited from
+ * {@code libs/java-web-servlet}'s {@link CommonGlobalExceptionHandler} instead of being
+ * hand-copied here. Only genuinely service-owned policy stays below.
  */
 @Slf4j
 @RestControllerAdvice
-public class GlobalExceptionHandler {
+public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
+
+    /**
+     * scm publishes <strong>422</strong> for {@code @Valid} constraint violations and for
+     * {@code IllegalArgumentException} at the controller boundary
+     * ({@code inventory-visibility-api.md} § Error codes — "{@code VALIDATION_ERROR} |
+     * 400/422"; the 422 rows at {@code POST /nodes} and {@code /observed-stock}), where
+     * the shared default is 400. One override moves both inherited arms; see
+     * {@link CommonGlobalExceptionHandler#validationFailureStatus()}.
+     */
+    @Override
+    protected HttpStatus validationFailureStatus() {
+        return HttpStatus.UNPROCESSABLE_ENTITY;
+    }
 
     @ExceptionHandler(NodeNotFoundException.class)
-    public ResponseEntity<ApiErrorBody> handleNodeNotFound(NodeNotFoundException e) {
+    public ResponseEntity<ErrorResponse> handleNodeNotFound(NodeNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ApiErrorBody.of("NODE_NOT_FOUND", e.getMessage()));
+                .body(ErrorResponse.of("NODE_NOT_FOUND", e.getMessage()));
     }
 
     @ExceptionHandler(NodeUnreachableException.class)
-    public ResponseEntity<ApiErrorBody> handleNodeUnreachable(NodeUnreachableException e) {
+    public ResponseEntity<ErrorResponse> handleNodeUnreachable(NodeUnreachableException e) {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body(ApiErrorBody.of("NODE_UNREACHABLE", e.getMessage()));
+                .body(ErrorResponse.of("NODE_UNREACHABLE", e.getMessage()));
     }
 
     /**
@@ -48,16 +63,16 @@ public class GlobalExceptionHandler {
      * {@code RegisterThirdPartyLogisticsNodeService}.
      */
     @ExceptionHandler(NodeTypeConflictException.class)
-    public ResponseEntity<ApiErrorBody> handleNodeTypeConflict(NodeTypeConflictException e) {
+    public ResponseEntity<ErrorResponse> handleNodeTypeConflict(NodeTypeConflictException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ApiErrorBody.of("NODE_TYPE_CONFLICT", e.getMessage()));
+                .body(ErrorResponse.of("NODE_TYPE_CONFLICT", e.getMessage()));
     }
 
     @ExceptionHandler(SnapshotStaleException.class)
-    public ResponseEntity<ApiErrorBody> handleSnapshotStale(SnapshotStaleException e) {
+    public ResponseEntity<ErrorResponse> handleSnapshotStale(SnapshotStaleException e) {
         // 200 with stale warning (not an error — eventual consistency is expected, S5)
         return ResponseEntity.status(HttpStatus.OK)
-                .body(ApiErrorBody.of("SNAPSHOT_STALE", e.getMessage()));
+                .body(ErrorResponse.of("SNAPSHOT_STALE", e.getMessage()));
     }
 
     /**
@@ -67,62 +82,34 @@ public class GlobalExceptionHandler {
      * as a bare {@link IllegalArgumentException} → a misleading silent 422.
      */
     @ExceptionHandler(ReadModelCorruptException.class)
-    public ResponseEntity<ApiErrorBody> handleReadModelCorrupt(ReadModelCorruptException e) {
+    public ResponseEntity<ErrorResponse> handleReadModelCorrupt(ReadModelCorruptException e) {
         log.error("Read-model data integrity fault", e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiErrorBody.of("INTERNAL_ERROR", "An unexpected error occurred"));
+                .body(ErrorResponse.of("INTERNAL_ERROR", "An unexpected error occurred"));
     }
 
+    /**
+     * <strong>Overrides</strong> the shared base only to keep the diagnostic log line —
+     * the status and body come straight from {@code super}, i.e. 422 via
+     * {@link #validationFailureStatus()}. The log was added deliberately by
+     * TASK-SCM-BE-021: "its absence made TASK-MONO-171 hard to diagnose". Server
+     * data-integrity faults take the 500 path above.
+     */
+    @Override
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiErrorBody> handleIllegalArgument(IllegalArgumentException e) {
-        // Client-boundary validation (e.g. a bad path/query value). Logged at warn
-        // so even a genuine 422 leaves a trail — its absence made TASK-MONO-171
-        // hard to diagnose. Server data-integrity faults take the 500 path above.
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
         log.warn("Rejecting request with 422 VALIDATION_ERROR: {}", e.getMessage());
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(ApiErrorBody.of("VALIDATION_ERROR", e.getMessage()));
+        return super.handleIllegalArgument(e);
     }
 
+    /**
+     * Not covered by {@link CommonGlobalExceptionHandler} — without this arm a non-UUID
+     * path variable would fall through to the catch-all and regress the documented 400
+     * into a 500.
+     */
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-    public ResponseEntity<ApiErrorBody> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiErrorBody.of("VALIDATION_ERROR", "Invalid parameter: " + e.getName()));
-    }
-
-    @ExceptionHandler(NoResourceFoundException.class)
-    public ResponseEntity<ApiErrorBody> handleNoResourceFound(NoResourceFoundException e) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ApiErrorBody.of("NOT_FOUND", "The requested resource was not found"));
-    }
-
-    @ExceptionHandler(NoHandlerFoundException.class)
-    public ResponseEntity<ApiErrorBody> handleNoHandlerFound(NoHandlerFoundException e) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ApiErrorBody.of("NOT_FOUND", "The requested resource was not found"));
-    }
-
-    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-    public ResponseEntity<ApiErrorBody> handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
-        ResponseEntity.BodyBuilder builder = ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED);
-        Set<HttpMethod> supported = e.getSupportedHttpMethods();
-        if (supported != null && !supported.isEmpty()) {
-            builder.allow(supported.toArray(new HttpMethod[0]));
-        }
-        return builder.body(ApiErrorBody.of("METHOD_NOT_ALLOWED",
-                "HTTP method not supported for this endpoint"));
-    }
-
-    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
-    public ResponseEntity<ApiErrorBody> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException e) {
-        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
-                .body(ApiErrorBody.of("UNSUPPORTED_MEDIA_TYPE",
-                        "Request Content-Type is not supported by this endpoint"));
-    }
-
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiErrorBody> handleGeneral(Exception e) {
-        log.error("Unexpected error", e);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiErrorBody.of("INTERNAL_ERROR", "An unexpected error occurred"));
+                .body(ErrorResponse.of("VALIDATION_ERROR", "Invalid parameter: " + e.getName()));
     }
 }

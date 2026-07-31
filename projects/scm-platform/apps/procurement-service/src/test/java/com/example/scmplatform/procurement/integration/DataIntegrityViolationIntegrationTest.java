@@ -5,7 +5,7 @@ import com.example.common.persistence.DataIntegrityViolations;
 import com.example.scmplatform.procurement.domain.po.PurchaseOrder;
 import com.example.scmplatform.procurement.domain.po.PurchaseOrderLine;
 import com.example.scmplatform.procurement.presentation.advice.GlobalExceptionHandler;
-import com.example.scmplatform.procurement.presentation.dto.ApiErrorBody;
+import com.example.web.dto.ErrorResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -77,7 +77,7 @@ class DataIntegrityViolationIntegrationTest extends AbstractProcurementIntegrati
         assertThat(DataIntegrityViolations.isUniqueViolation(ex)).isTrue();
 
         // Assert — the real handler maps it to 409 CONFLICT (scm's "must change state first").
-        ResponseEntity<ApiErrorBody> response = handler.handleIntegrity(ex);
+        ResponseEntity<ErrorResponse> response = handler.handleIntegrity(ex);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().code()).isEqualTo("CONFLICT");
@@ -111,7 +111,7 @@ class DataIntegrityViolationIntegrationTest extends AbstractProcurementIntegrati
         assertThat(DataIntegrityViolations.isUniqueViolation(ex)).isFalse();
 
         // Assert — the real handler maps it to 500 INTERNAL_ERROR (server defect stays loud).
-        ResponseEntity<ApiErrorBody> response = handler.handleIntegrity(ex);
+        ResponseEntity<ErrorResponse> response = handler.handleIntegrity(ex);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().code()).isEqualTo("INTERNAL_ERROR");

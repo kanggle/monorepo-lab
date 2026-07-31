@@ -34,9 +34,10 @@ class WebhookSignatureFilterTest {
     private static final byte[] BODY = "{\"tenantId\":\"scm\"}".getBytes(StandardCharsets.UTF_8);
 
     private final WebhookSignatureVerifier verifier = mock(WebhookSignatureVerifier.class);
-    // Mirror the Spring-managed ObjectMapper (JSR-310 registered) so the
-    // Instant in ApiErrorBody serialises — the bean injected in production has
-    // the module registered by Spring Boot's Jackson auto-configuration.
+    // Mirrors the Spring-managed ObjectMapper (JSR-310 registered), which is what
+    // production injects. Since TASK-SCM-BE-055 the filter writes the shared
+    // com.example.web.dto.ErrorResponse, whose timestamp is a pre-formatted String —
+    // so the envelope no longer depends on this module being registered at all.
     private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
     private final WebhookSignatureFilter filter = new WebhookSignatureFilter(verifier, objectMapper);
 
