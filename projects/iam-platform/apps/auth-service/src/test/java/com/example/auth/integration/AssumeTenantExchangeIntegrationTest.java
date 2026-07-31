@@ -114,7 +114,7 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
     private OperatorAssignmentPort operatorAssignmentPort;
 
     @MockitoBean
-    com.example.auth.infrastructure.client.IamClientCredentialsTokenProvider gapTokenProvider;
+    com.example.security.oauth2.client.IamClientCredentialsTokenProvider gapTokenProvider;
 
     @BeforeEach
     void stubGapToken() {

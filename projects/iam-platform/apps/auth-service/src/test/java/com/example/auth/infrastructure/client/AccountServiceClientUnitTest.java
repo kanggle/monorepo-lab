@@ -4,6 +4,7 @@ import com.example.auth.application.exception.AccountServiceUnavailableException
 import com.example.auth.application.result.AccountProfileResult;
 import com.example.auth.application.result.AccountStatusLookupResult;
 import com.example.auth.application.result.SocialSignupResult;
+import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 
 import java.util.List;
 import com.github.tomakehurst.wiremock.WireMockServer;

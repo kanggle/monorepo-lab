@@ -71,7 +71,7 @@ class ForceLogoutTenantConfinementIntegrationTest extends AbstractIntegrationTes
     // (unreachable in @SpringBootTest); mock the provider so the context wires (mirrors
     // AuthIntegrationTest). Not exercised by this test.
     @MockitoBean
-    private com.example.auth.infrastructure.client.IamClientCredentialsTokenProvider gapTokenProvider;
+    private com.example.security.oauth2.client.IamClientCredentialsTokenProvider gapTokenProvider;
 
     @Autowired private ForceLogoutUseCase forceLogoutUseCase;
     @Autowired private CredentialJpaRepository credentialJpaRepository;

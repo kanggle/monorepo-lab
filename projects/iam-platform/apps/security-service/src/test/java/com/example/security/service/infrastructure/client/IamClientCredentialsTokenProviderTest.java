@@ -1,11 +1,14 @@
 package com.example.security.service.infrastructure.client;
 
+import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Base64;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
@@ -18,11 +21,19 @@ import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMoc
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Unit tests for {@link IamClientCredentialsTokenProvider} (TASK-BE-318):
- * fetches a client_credentials token via Basic auth and caches it (AC-5).
+ * security-service-side wiring tests for the canonical {@code libs/java-security}
+ * {@link IamClientCredentialsTokenProvider} (TASK-BE-568, ADR-MONO-058 § D6 — replaces the
+ * previous per-service local copy, TASK-BE-318). Exercises the provider constructed with
+ * security-service's real {@code client-id} default (seeded in auth-service V0019) and the
+ * {@code internal.invoke} scope its {@code /internal/**} callers require, so the header/body
+ * bytes asserted here are exactly what production security-service sends — not just "it
+ * compiles". The class's own exhaustive behavioural test suite (caching, refresh-skew, timeout
+ * enforcement, scope-is-a-parameter) lives in {@code libs/java-security}.
  */
-@DisplayName("IamClientCredentialsTokenProvider 단위 테스트")
+@DisplayName("IamClientCredentialsTokenProvider 단위 테스트 (security-service wiring)")
 class IamClientCredentialsTokenProviderTest {
+
+    private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(5);
 
     private WireMockServer wireMock;
 
@@ -39,7 +50,8 @@ class IamClientCredentialsTokenProviderTest {
 
     private IamClientCredentialsTokenProvider provider() {
         return new IamClientCredentialsTokenProvider(
-                wireMock.baseUrl() + "/oauth2/token", "security-service-client", "secret");
+                wireMock.baseUrl() + "/oauth2/token", "security-service-client", "secret",
+                "internal.invoke", DEFAULT_TIMEOUT, DEFAULT_TIMEOUT);
     }
 
     @Test
@@ -53,8 +65,10 @@ class IamClientCredentialsTokenProviderTest {
         String token = provider().currentBearer();
 
         assertThat(token).isEqualTo("jwt-abc");
+        // RFC 7617: UTF-8, not the JVM platform-default charset (TASK-BE-568 closes this defect —
+        // the deleted local copy used the platform-default-charset `.getBytes()`).
         String expectedBasic = "Basic " + Base64.getEncoder()
-                .encodeToString("security-service-client:secret".getBytes());
+                .encodeToString("security-service-client:secret".getBytes(StandardCharsets.UTF_8));
         wireMock.verify(postRequestedFor(urlEqualTo("/oauth2/token"))
                 .withHeader("Authorization", equalTo(expectedBasic))
                 .withRequestBody(equalTo("grant_type=client_credentials&scope=internal.invoke")));
