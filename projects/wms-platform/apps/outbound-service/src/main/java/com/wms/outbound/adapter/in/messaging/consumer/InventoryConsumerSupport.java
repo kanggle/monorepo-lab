@@ -1,6 +1,6 @@
 package com.wms.outbound.adapter.in.messaging.consumer;
 
-import com.wms.outbound.application.port.out.EventDedupePort;
+import com.example.messaging.dedupe.EventDedupePort;
 import com.wms.outbound.application.saga.SagaIdResolver;
 import java.util.UUID;
 import java.util.function.BiConsumer;

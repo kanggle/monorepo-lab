@@ -15,7 +15,7 @@ import com.wms.inbound.application.command.CancelScmInboundExpectationCommand;
 import com.wms.inbound.application.command.CreateScmInboundExpectationCommand;
 import com.wms.inbound.application.port.in.CancelScmInboundExpectationUseCase;
 import com.wms.inbound.application.port.in.CreateScmInboundExpectationUseCase;
-import com.wms.inbound.application.port.out.EventDedupePort;
+import com.example.messaging.dedupe.EventDedupePort;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

@@ -9,7 +9,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.wms.inventory.application.port.out.EventDedupePort;
+import com.example.messaging.dedupe.EventDedupePort;
 import com.wms.inventory.application.port.out.LowStockThresholdWriterPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

@@ -12,7 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.wms.inbound.application.port.out.EventDedupePort;
+import com.example.messaging.dedupe.EventDedupePort;
 import com.wms.inbound.application.port.out.MasterReadModelWriterPort;
 import com.wms.inbound.domain.model.masterref.LocationSnapshot;
 import java.time.Clock;

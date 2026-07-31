@@ -1,6 +1,6 @@
 package com.wms.outbound.adapter.in.messaging.consumer;
 
-import com.wms.outbound.application.port.out.EventDedupePort;
+import com.example.messaging.dedupe.EventDedupePort;
 import com.wms.outbound.application.saga.OutboundSagaCoordinator;
 import com.wms.outbound.domain.model.OutboundSaga;
 import org.springframework.context.annotation.Profile;

@@ -1,7 +1,7 @@
 package com.wms.inventory.adapter.in.messaging.masterref;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.wms.inventory.application.port.out.EventDedupePort;
+import com.example.messaging.dedupe.EventDedupePort;
 import com.wms.inventory.application.port.out.MasterReadModelWriterPort;
 import com.wms.inventory.domain.model.masterref.LotSnapshot;
 import java.time.Clock;

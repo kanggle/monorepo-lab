@@ -1,6 +1,6 @@
 package com.wms.inventory.adapter.out.persistence.dedupe;
 
-import com.wms.inventory.application.port.out.EventDedupePort;
+import com.example.messaging.dedupe.EventDedupePort;
 import java.time.Clock;
 import java.util.UUID;
 import org.slf4j.Logger;

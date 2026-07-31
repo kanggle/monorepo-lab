@@ -3,7 +3,7 @@ package com.wms.outbound.adapter.in.messaging.consumer;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.wms.outbound.application.port.out.EventDedupePort;
+import com.example.messaging.dedupe.EventDedupePort;
 import com.wms.outbound.application.saga.OutboundSagaCoordinator;
 import com.wms.outbound.application.saga.SagaIdResolver;
 import com.wms.outbound.application.service.fakes.FakeOrderPersistencePort;

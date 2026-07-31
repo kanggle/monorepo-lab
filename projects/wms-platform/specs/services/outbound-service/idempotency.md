@@ -335,6 +335,13 @@ broker retention windows.
 
 ### 3.3 Processing Logic
 
+The port consumed here is `com.example.messaging.dedupe.EventDedupePort`
+(`libs/java-messaging`), not a service-local interface — `outbound-service`
+adopted the shared type directly (TASK-BE-571); only the persistence adapter
+(`EventDedupeRepositoryImpl`, backed by `outbound_event_dedupe`) remains
+service-owned, per the shared interface's own javadoc on why retention/tenant
+scoping stays per-service.
+
 Within the same `@Transactional` boundary as the saga / snapshot mutation.
 The `EventDedupePort` adapter declares `Propagation.MANDATORY` so the
 dedupe write joins the consumer's TX (matches the pattern from

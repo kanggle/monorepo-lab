@@ -8,7 +8,7 @@ import com.wms.inbound.adapter.in.webhook.erp.ErpAsnWebhookController;
 import com.wms.inbound.adapter.in.webhook.erp.HmacSignatureVerifier;
 import com.wms.inbound.adapter.in.webhook.erp.TimestampWindowVerifier;
 import com.wms.inbound.application.port.in.IngestWebhookEventUseCase;
-import com.wms.inbound.application.port.out.EventDedupePort;
+import com.example.messaging.dedupe.EventDedupePort;
 import com.wms.inbound.application.port.out.MasterReadModelPort;
 import com.wms.inbound.application.port.out.MasterReadModelWriterPort;
 import com.wms.inbound.application.port.out.InboundEventPort;

@@ -20,7 +20,7 @@ import com.wms.inventory.application.port.in.ReceiveStockUseCase;
 import com.wms.inventory.application.port.in.ReleaseReservationUseCase;
 import com.wms.inventory.application.port.in.ReserveStockUseCase;
 import com.wms.inventory.application.port.in.TransferStockUseCase;
-import com.wms.inventory.application.port.out.EventDedupePort;
+import com.example.messaging.dedupe.EventDedupePort;
 import com.wms.inventory.application.port.out.InventoryMovementRepository;
 import com.wms.inventory.application.port.out.InventoryRepository;
 import com.wms.inventory.application.port.out.LowStockAlertDebouncePort;
