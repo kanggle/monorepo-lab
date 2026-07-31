@@ -1,22 +1,26 @@
 package com.example.fanplatform.notification.application;
 
 import com.example.fanplatform.notification.application.consumer.CommunityEvent;
-import com.example.fanplatform.notification.application.port.ProcessedEventStore;
 import com.example.fanplatform.notification.domain.channel.NotificationChannelPort;
 import com.example.fanplatform.notification.domain.notification.Notification;
 import com.example.fanplatform.notification.domain.notification.NotificationRepository;
 import com.example.fanplatform.notification.domain.notification.NotificationStatus;
 import com.example.fanplatform.notification.domain.notification.NotificationType;
+import com.example.fanplatform.notification.testsupport.EventIds;
+import com.example.messaging.dedupe.EventDedupePort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.stubbing.Answer;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -28,6 +32,13 @@ import static org.mockito.Mockito.when;
  * TASK-FAN-BE-026 — community interaction events → REPLY / MENTION /
  * REACTION_BADGE notifications, with self-notify suppression (AC-3), eventId
  * dedupe (AC-4) and graceful handling of pre-enrichment in-flight events.
+ *
+ * <p>TASK-FAN-BE-042 (ADR-MONO-058 § D7): rewritten against the shared
+ * {@link EventDedupePort} single-call {@code process(eventId, eventType, work)}
+ * shape (was the hand-rolled check-then-act {@code ProcessedEventStore}). Every
+ * eventId literal goes through {@link EventIds#uuid} — {@code EventDedupePort} is
+ * typed {@code UUID}, so a non-UUID literal like the old {@code "evt-c1"} would
+ * make {@code UUID.fromString(...)} throw inside {@code useCase.handle(...)}.
  */
 class HandleCommunityEventUseCaseTest {
 
@@ -36,7 +47,7 @@ class HandleCommunityEventUseCaseTest {
     private static final String TENANT = "fan-platform";
 
     private NotificationRepository repository;
-    private ProcessedEventStore processedEvents;
+    private EventDedupePort dedupePort;
     private RecordingChannel email;
     private RecordingChannel push;
     private HandleCommunityEventUseCase useCase;
@@ -44,12 +55,21 @@ class HandleCommunityEventUseCaseTest {
     @BeforeEach
     void setUp() {
         repository = mock(NotificationRepository.class);
-        processedEvents = mock(ProcessedEventStore.class);
+        dedupePort = mock(EventDedupePort.class);
         email = new RecordingChannel("EMAIL");
         push = new RecordingChannel("PUSH");
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         useCase = new HandleCommunityEventUseCase(
-                repository, processedEvents, List.of(email, push), () -> NOW);
+                repository, dedupePort, List.of(email, push), () -> NOW);
+    }
+
+    /** Stubs {@code process(...)} to run the supplied work and report APPLIED — first delivery. */
+    private static Answer<EventDedupePort.Outcome> runsWork() {
+        return invocation -> {
+            Runnable work = invocation.getArgument(2);
+            work.run();
+            return EventDedupePort.Outcome.APPLIED;
+        };
     }
 
     private static CommunityEvent commentAdded(String eventId, String commenter,
@@ -72,9 +92,9 @@ class HandleCommunityEventUseCaseTest {
     @Test
     @DisplayName("comment.added → REPLY to the post author, post-correlated, no membershipId")
     void commentCreatesReply() {
-        when(processedEvents.alreadyProcessed("evt-c1")).thenReturn(false);
+        when(dedupePort.process(any(), any(), any())).thenAnswer(runsWork());
 
-        useCase.handle(commentAdded("evt-c1", "fan-1", "author-1", List.of()));
+        useCase.handle(commentAdded(EventIds.uuid("evt-c1"), "fan-1", "author-1", List.of()));
 
         List<Notification> rows = saved();
         assertThat(rows).hasSize(1);
@@ -87,20 +107,21 @@ class HandleCommunityEventUseCaseTest {
         assertThat(reply.getStatus()).isEqualTo(NotificationStatus.UNREAD);
         assertThat(reply.getPostId()).isEqualTo("post-1");
         assertThat(reply.getMembershipId()).isNull();
-        assertThat(reply.getSourceEventId()).isEqualTo("evt-c1");
+        assertThat(reply.getSourceEventId()).isEqualTo(EventIds.uuid("evt-c1"));
         assertThat(reply.getSourceEventType()).isEqualTo("community.comment.added");
         assertThat(reply.getCreatedAt()).isEqualTo(NOW);
         assertThat(email.count.get()).isEqualTo(1);
         assertThat(push.count.get()).isEqualTo(1);
-        verify(processedEvents).markProcessed("evt-c1", "community.comment.added");
+        verify(dedupePort).process(eq(UUID.fromString(EventIds.uuid("evt-c1"))),
+                eq("community.comment.added"), any());
     }
 
     @Test
     @DisplayName("comment.added with mentions → one MENTION per mentioned account, plus the REPLY")
     void commentCreatesMentionPerAccount() {
-        when(processedEvents.alreadyProcessed("evt-c2")).thenReturn(false);
+        when(dedupePort.process(any(), any(), any())).thenAnswer(runsWork());
 
-        useCase.handle(commentAdded("evt-c2", "fan-1", "author-1",
+        useCase.handle(commentAdded(EventIds.uuid("evt-c2"), "fan-1", "author-1",
                 List.of("fan-2", "fan-3")));
 
         List<Notification> rows = saved();
@@ -113,17 +134,16 @@ class HandleCommunityEventUseCaseTest {
         assertThat(rows.get(1).getTitle()).isEqualTo("You were mentioned in a comment");
         // Every row shares the source eventId — the composite unique
         // (source_event_id, account_id, type) is what makes the fan-out legal.
-        assertThat(rows).allSatisfy(n -> assertThat(n.getSourceEventId()).isEqualTo("evt-c2"));
+        assertThat(rows).allSatisfy(n -> assertThat(n.getSourceEventId()).isEqualTo(EventIds.uuid("evt-c2")));
         assertThat(email.count.get()).isEqualTo(3);
-        verify(processedEvents).markProcessed("evt-c2", "community.comment.added");
     }
 
     @Test
     @DisplayName("duplicate mentioned accounts are deduped (one MENTION row per account)")
     void duplicateMentionsAreDeduped() {
-        when(processedEvents.alreadyProcessed("evt-c3")).thenReturn(false);
+        when(dedupePort.process(any(), any(), any())).thenAnswer(runsWork());
 
-        useCase.handle(commentAdded("evt-c3", "fan-1", "author-1",
+        useCase.handle(commentAdded(EventIds.uuid("evt-c3"), "fan-1", "author-1",
                 List.of("fan-2", "fan-2")));
 
         List<Notification> rows = saved();
@@ -135,33 +155,37 @@ class HandleCommunityEventUseCaseTest {
     @Test
     @DisplayName("empty mentionedAccountIds → no mention alert, not an error")
     void emptyMentionListIsNotAnError() {
-        when(processedEvents.alreadyProcessed("evt-c4")).thenReturn(false);
+        when(dedupePort.process(any(), any(), any())).thenAnswer(runsWork());
 
-        useCase.handle(commentAdded("evt-c4", "fan-1", "author-1", List.of()));
+        useCase.handle(commentAdded(EventIds.uuid("evt-c4"), "fan-1", "author-1", List.of()));
 
         assertThat(saved()).hasSize(1);
-        verify(processedEvents).markProcessed("evt-c4", "community.comment.added");
     }
 
     @Test
     @DisplayName("AC-3: commenter IS the post author → no REPLY, still marked processed")
     void selfReplyIsSuppressed() {
-        when(processedEvents.alreadyProcessed("evt-c5")).thenReturn(false);
+        when(dedupePort.process(any(), any(), any())).thenAnswer(runsWork());
 
-        useCase.handle(commentAdded("evt-c5", "author-1", "author-1", List.of()));
+        useCase.handle(commentAdded(EventIds.uuid("evt-c5"), "author-1", "author-1", List.of()));
 
         verify(repository, never()).save(any());
         assertThat(email.count.get()).isZero();
         assertThat(push.count.get()).isZero();
-        verify(processedEvents).markProcessed("evt-c5", "community.comment.added");
+        // "Still marked processed" now means the dedupe row is committed by
+        // process(...) regardless of whether work created any rows — verified by
+        // the fact process(...) was invoked with this eventId (below) rather than
+        // by a separate markProcessed call, which no longer exists.
+        verify(dedupePort).process(eq(UUID.fromString(EventIds.uuid("evt-c5"))),
+                eq("community.comment.added"), any());
     }
 
     @Test
     @DisplayName("AC-3 spirit: a self-mention is suppressed, other mentions still fire")
     void selfMentionIsSuppressed() {
-        when(processedEvents.alreadyProcessed("evt-c6")).thenReturn(false);
+        when(dedupePort.process(any(), any(), any())).thenAnswer(runsWork());
 
-        useCase.handle(commentAdded("evt-c6", "fan-1", "author-1",
+        useCase.handle(commentAdded(EventIds.uuid("evt-c6"), "fan-1", "author-1",
                 List.of("fan-1", "fan-2")));
 
         List<Notification> rows = saved();
@@ -172,9 +196,9 @@ class HandleCommunityEventUseCaseTest {
     @Test
     @DisplayName("reaction.added → REACTION_BADGE to the post author with the reaction type")
     void reactionCreatesBadge() {
-        when(processedEvents.alreadyProcessed("evt-r1")).thenReturn(false);
+        when(dedupePort.process(any(), any(), any())).thenAnswer(runsWork());
 
-        useCase.handle(reactionAdded("evt-r1", "fan-1", "author-1"));
+        useCase.handle(reactionAdded(EventIds.uuid("evt-r1"), "fan-1", "author-1"));
 
         List<Notification> rows = saved();
         assertThat(rows).hasSize(1);
@@ -185,51 +209,51 @@ class HandleCommunityEventUseCaseTest {
         assertThat(badge.getBody()).contains("LIKE").contains("fan-1");
         assertThat(badge.getPostId()).isEqualTo("post-1");
         assertThat(badge.getMembershipId()).isNull();
-        verify(processedEvents).markProcessed("evt-r1", "community.reaction.added");
     }
 
     @Test
     @DisplayName("AC-3: reactor IS the post author → no REACTION_BADGE, still marked processed")
     void selfReactionIsSuppressed() {
-        when(processedEvents.alreadyProcessed("evt-r2")).thenReturn(false);
+        when(dedupePort.process(any(), any(), any())).thenAnswer(runsWork());
 
-        useCase.handle(reactionAdded("evt-r2", "author-1", "author-1"));
+        useCase.handle(reactionAdded(EventIds.uuid("evt-r2"), "author-1", "author-1"));
 
         verify(repository, never()).save(any());
         assertThat(push.count.get()).isZero();
-        verify(processedEvents).markProcessed("evt-r2", "community.reaction.added");
+        verify(dedupePort).process(eq(UUID.fromString(EventIds.uuid("evt-r2"))),
+                eq("community.reaction.added"), any());
     }
 
     @Test
-    @DisplayName("AC-4: duplicate delivery (already processed) is a no-op — no row, no dispatch, no re-mark")
+    @DisplayName("AC-4: duplicate delivery (already processed) is a no-op — no row, no dispatch, no re-run")
     void duplicateIsNoOp() {
-        when(processedEvents.alreadyProcessed("evt-c1")).thenReturn(true);
+        when(dedupePort.process(any(), any(), any())).thenReturn(EventDedupePort.Outcome.IGNORED_DUPLICATE);
 
-        useCase.handle(commentAdded("evt-c1", "fan-1", "author-1", List.of("fan-2")));
+        useCase.handle(commentAdded(EventIds.uuid("evt-c1"), "fan-1", "author-1", List.of("fan-2")));
 
         verify(repository, never()).save(any());
         assertThat(email.count.get()).isZero();
         assertThat(push.count.get()).isZero();
-        verify(processedEvents, never()).markProcessed(eq("evt-c1"), any());
     }
 
     @Test
     @DisplayName("pre-enrichment comment event (no postAuthorAccountId) → skip, mark processed, do NOT throw")
     void missingPostAuthorOnCommentIsSkippedNotThrown() {
-        when(processedEvents.alreadyProcessed("evt-old-1")).thenReturn(false);
+        when(dedupePort.process(any(), any(), any())).thenAnswer(runsWork());
 
-        useCase.handle(commentAdded("evt-old-1", "fan-1", null, List.of()));
+        useCase.handle(commentAdded(EventIds.uuid("evt-old-1"), "fan-1", null, List.of()));
 
         verify(repository, never()).save(any());
-        verify(processedEvents).markProcessed("evt-old-1", "community.comment.added");
+        verify(dedupePort).process(eq(UUID.fromString(EventIds.uuid("evt-old-1"))),
+                eq("community.comment.added"), any());
     }
 
     @Test
     @DisplayName("pre-enrichment comment event still delivers its mention alerts")
     void missingPostAuthorStillFiresMentions() {
-        when(processedEvents.alreadyProcessed("evt-old-2")).thenReturn(false);
+        when(dedupePort.process(any(), any(), any())).thenAnswer(runsWork());
 
-        useCase.handle(commentAdded("evt-old-2", "fan-1", null, List.of("fan-2")));
+        useCase.handle(commentAdded(EventIds.uuid("evt-old-2"), "fan-1", null, List.of("fan-2")));
 
         List<Notification> rows = saved();
         assertThat(rows).hasSize(1);
@@ -240,12 +264,33 @@ class HandleCommunityEventUseCaseTest {
     @Test
     @DisplayName("pre-enrichment reaction event (no postAuthorAccountId) → skip, mark processed, do NOT throw")
     void missingPostAuthorOnReactionIsSkippedNotThrown() {
-        when(processedEvents.alreadyProcessed("evt-old-3")).thenReturn(false);
+        when(dedupePort.process(any(), any(), any())).thenAnswer(runsWork());
 
-        useCase.handle(reactionAdded("evt-old-3", "fan-1", null));
+        useCase.handle(reactionAdded(EventIds.uuid("evt-old-3"), "fan-1", null));
 
         verify(repository, never()).save(any());
-        verify(processedEvents).markProcessed("evt-old-3", "community.reaction.added");
+        verify(dedupePort).process(eq(UUID.fromString(EventIds.uuid("evt-old-3"))),
+                eq("community.reaction.added"), any());
+    }
+
+    @Test
+    @DisplayName("TOCTOU regression guard: work's exception propagates out of handle(...) unchanged "
+            + "(atomicity relies on the caller's @Transactional rolling back, including the dedupe row)")
+    void workExceptionPropagates() {
+        RuntimeException boom = new RuntimeException("downstream failure");
+        when(dedupePort.process(any(), any(), any())).thenAnswer(invocation -> {
+            Runnable work = invocation.getArgument(2);
+            work.run();
+            return EventDedupePort.Outcome.APPLIED;
+        });
+        // An unsupported event type is the one path inside processNew(...) that
+        // throws — reuse it to prove the exception is not swallowed by handle(...).
+        CommunityEvent unsupported = new CommunityEvent(EventIds.uuid("evt-bad"), "community.unknown",
+                TENANT, "post-1", null, "fan-1", "author-1", List.of(), null, OCCURRED);
+
+        assertThatThrownBy(() -> useCase.handle(unsupported))
+                .isInstanceOf(IllegalArgumentException.class);
+        verify(repository, never()).save(any());
     }
 
     /** A counting in-memory channel — never throws (mirrors the v1 logged mocks). */

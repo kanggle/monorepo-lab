@@ -109,7 +109,9 @@ com.example.fanplatform.notification/
     │                                               shared by BOTH listener groups — topic-agnostic, no per-family class
     ├── jpa/                                      ← Spring Data adapter for NotificationRepository
     ├── messaging/
-    │   ├── idempotency/                          ← libs:java-messaging processed_events guard
+    │   ├── idempotency/                          ← EventDedupePortJpaAdapter (libs:java-messaging
+    │   │                                           EventDedupePort, ADR-MONO-058 § D7) + the
+    │   │                                           service-owned processed_events entity/repository
     │   └── ConsumerMetrics.java                  ← per-topic processed/failed counters (both consumers)
     ├── channel/
     │   ├── LoggingEmailChannelAdapter.java       ← deterministic mock (NO real email)
@@ -284,12 +286,23 @@ behaviour for membership events (one event → one recipient → one type).
 
 ### Idempotency (event-consumer.md § Idempotency; idempotent-consumer.md)
 
-- Strategy: **idempotency table keyed by `eventId`** via `libs:java-messaging`'s
-  `processed_events` (24h+ retention). Before handling, the use case checks/inserts
-  `processed_events(eventId)`; a duplicate delivery (at-least-once) short-circuits
-  with NO second `Notification` row and NO second channel dispatch. **Both**
-  consumers use the same store and the same guard — the eventId space is global,
-  so a community event and a membership event can never collide on it.
+- Strategy: **`libs:java-messaging`'s `EventDedupePort` contract** (ADR-MONO-058
+  § D7, TASK-FAN-BE-042), backed by a service-owned JPA adapter
+  (`EventDedupePortJpaAdapter`) over the `processed_events` table it declares
+  locally (TASK-MONO-406 — the library ships the port interface only, no
+  `@Entity`). Both use cases call `dedupePort.process(eventId, eventType, work)`
+  as a **single call**: the adapter inserts the dedupe row via
+  `INSERT … ON CONFLICT (event_id) DO NOTHING` and detects a duplicate by the
+  **affected-row count being 0** (PK-violation-safe), not by a separate
+  existence pre-check — the check-then-act shape (`alreadyProcessed` /
+  `markProcessed`) this replaced had a TOCTOU window under concurrent delivery
+  of the same `eventId`. A duplicate delivery (at-least-once) short-circuits
+  with NO second `Notification` row and NO second channel dispatch (`work` is
+  never invoked). **Both** consumers use the same adapter and the same guard —
+  the eventId space is global, so a community event and a membership event can
+  never collide on it. The envelope `eventId` is a UUID (both fan-platform
+  producers mint it via `UuidV7.randomUuid()`); the use case converts
+  `String → UUID` at the boundary immediately before calling the port.
 - Secondary natural guard: `Notification (sourceEventId, accountId, type)` is
   unique — a race that slipped past the processed-events check still cannot create
   a duplicate (DB unique constraint → caught + treated as already-processed). It is
