@@ -8,7 +8,7 @@ ADR-MONO-058 D6 — promote `IamClientCredentialsTokenProvider` (canonical, alre
 
 # Status
 
-review
+done
 
 # Owner
 
