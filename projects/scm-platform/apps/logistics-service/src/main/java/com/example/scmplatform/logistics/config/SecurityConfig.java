@@ -2,6 +2,7 @@ package com.example.scmplatform.logistics.config;
 
 import com.example.scmplatform.logistics.adapter.inbound.web.HttpErrorResponseWriter;
 import com.example.scmplatform.logistics.adapter.inbound.web.security.PublicPaths;
+import com.example.security.servlet.ResourceServerChainAssembler;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
@@ -9,8 +10,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.jwt.JwtValidationException;
 import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
@@ -22,6 +21,12 @@ import java.io.IOException;
  * logistics-service Spring Security configuration. OAuth2 Resource Server (RS256, IAM JWKS).
  * All {@code /api/logistics/**} endpoints require authentication; the tenant gate + entitlement
  * dual-accept live in {@link ServiceLevelOAuth2Config} (shared validators + servlet enforcer).
+ *
+ * <p>The generic tail — CSRF-disabled, {@code STATELESS}, the permit/authenticate/deny sequence
+ * and the {@code oauth2ResourceServer} wiring — is assembled by
+ * {@link ResourceServerChainAssembler#statelessJwtChain(HttpSecurity)} (ADR-MONO-058 § D4). The
+ * closed {@code anyRequest().denyAll()} tail is stated explicitly below because it is this
+ * service's own answer, not a default worth inheriting silently.
  */
 @Configuration
 @EnableWebSecurity
@@ -29,27 +34,13 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        String[] exact = PublicPaths.EXACT.toArray(new String[0]);
-        String[] prefixed = PublicPaths.PREFIXES.stream()
-                .map(p -> p + "**")
-                .toArray(String[]::new);
-        http
-                .csrf(AbstractHttpConfigurer::disable)
-                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> {
-                    auth.requestMatchers(exact).permitAll();
-                    if (prefixed.length > 0) {
-                        auth.requestMatchers(prefixed).permitAll();
-                    }
-                    auth.requestMatchers("/api/logistics/**").authenticated()
-                            .anyRequest().denyAll();
-                })
-                .oauth2ResourceServer(rs -> rs
-                        .jwt(jwt -> {})
-                        .authenticationEntryPoint(SecurityConfig::onAuthenticationFailure)
-                        .accessDeniedHandler(SecurityConfig::onAccessDenied)
-                );
-        return http.build();
+        return ResourceServerChainAssembler.statelessJwtChain(http)
+                .publicPaths(PublicPaths.AS_SET)
+                .authenticated("/api/logistics/**")
+                .anyRequestDenied()
+                .authenticationEntryPoint(SecurityConfig::onAuthenticationFailure)
+                .accessDeniedHandler(SecurityConfig::onAccessDenied)
+                .build();
     }
 
     static void onAuthenticationFailure(HttpServletRequest request,

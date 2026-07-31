@@ -135,9 +135,10 @@ com.example.scmplatform.procurement/
 │        AsnOverreceiptException, SupplierUnavailableException, ...)
 ├── application/                              ← use cases + outbound ports
 │   ├── PurchaseOrderApplicationService.java  ← @Transactional command boundaries
-│   ├── ActorContext.java
-│   ├── security/
-│   │   └── ActorContextResolver.java         ← presentation → application static call (post-BE-017)
+│   ├── ActorContext.java                     ← scm's own actor policy (isOperator/actorType +
+│   │                                            its role literals). Stays here by ADR-MONO-058
+│   │                                            § D1's Ownership Rule; only the claim-lifting
+│   │                                            mechanism moved to libs (TASK-SCM-BE-054).
 │   ├── PurchaseOrderView.java                ← read-model DTOs
 │   ├── AsnView.java
 │   ├── command/                              ← use-case input records
@@ -160,11 +161,16 @@ com.example.scmplatform.procurement/
 │   ├── crypto/
 │   │   └── SupplierCredentialsEncryptor.java ← AES-GCM (S6)
 │   ├── security/
-│   │   ├── SecurityConfig.java
-│   │   ├── ServiceLevelOAuth2Config.java
-│   │   ├── AllowedIssuersValidator.java
-│   │   ├── TenantClaimValidator.java
-│   │   └── ActorContextJwtAuthenticationConverter.java
+│   │   ├── SecurityConfig.java               ← chain tail assembled by libs
+│   │   │                                        ResourceServerChainAssembler (§ D4); the
+│   │   │                                        anyRequest().denyAll() tail and the 401/403
+│   │   │                                        writers stay here
+│   │   ├── ServiceLevelOAuth2Config.java     ← decoder + validator chain via the same
+│   │   │                                        assembler; scm's issuer allow-list, tenant
+│   │   │                                        policy and exempt paths stay here
+│   │   ├── WebhookSecurityConfig.java        ← shared-secret webhook chain (NOT the JWT path)
+│   │   ├── WebhookSignatureFilter.java
+│   │   └── WebhookSignatureVerifier.java
 │   └── config/
 │       (ClockConfig, JpaConfig)
 └── presentation/                             ← inbound web adapter
@@ -174,7 +180,9 @@ com.example.scmplatform.procurement/
     │   └── AsnWebhookController.java           ← /api/procurement/webhooks/asn
     ├── advice/GlobalExceptionHandler.java      ← domain → HTTP envelope mapping
     ├── dto/                                    ← request / response DTOs
-    ├── filter/TenantClaimEnforcer.java         ← service-level fail-closed
+    │   (no local filter class — the service-level fail-closed tenant gate is the shared
+    │    libs `TenantClaimEnforcer`, declared as an explicit @Bean in
+    │    infrastructure/security/ServiceLevelOAuth2Config since ADR-MONO-049 § D5-5)
     └── security/PublicPaths.java
 ```
 
@@ -188,7 +196,8 @@ com.example.scmplatform.procurement/
 - `io.opentelemetry:opentelemetry-exporter-otlp`
 - `com.fasterxml.jackson.{core:jackson-databind, datatype:jackson-datatype-jsr310}`
 - `net.logstash.logback:logstash-logback-encoder` (prod profile)
-- shared libs: `libs:java-common`, `libs:java-web`, `libs:java-messaging`, `libs:java-observability`, `libs:java-security`
+- shared libs: `libs:java-common`, `libs:java-web`, `libs:java-messaging`, `libs:java-observability`, `libs:java-security`, `libs:java-security-servlet`
+  (the servlet security mechanisms: `TenantClaimEnforcer` + `PublicPathSet` per ADR-MONO-049 § D5-5 / ADR-MONO-058 § D5, `ResourceServerChainAssembler` per § D4, and the `…servlet.actor` package per § D1 — declared `implementation`, never `api`)
 
 ### Forbidden dependencies
 
@@ -212,7 +221,7 @@ com.example.scmplatform.procurement/
 - `infrastructure/supplier/RestSupplierAdapter` is the **only** code path
   permitted to import vendor / HTTP client classes. The application layer
   consumes it through `SupplierAdapterPort` exclusively.
-- `presentation/filter/TenantClaimEnforcer` MUST be defense-in-depth only —
+- The shared `TenantClaimEnforcer` bean MUST be defense-in-depth only —
   the gateway and JWT validator chain are the primary tenant gate; this
   filter exists so a misconfigured gateway cannot break the invariant.
 
@@ -315,8 +324,11 @@ SETTLED
 
 > **Actor derivation (roles-only).** The `BUYER` / `OPERATOR` `ActorType` of a
 > REST-driven transition is derived from the verified JWT `roles` claim, **not**
-> from an `account_type` claim or an OAuth scope. `ActorContextJwtAuthenticationConverter`
-> lifts `roles`/`role` (+ `sub` + `tenant_id`) into `ActorContext`, and
+> from an `account_type` claim or an OAuth scope. The shared
+> `com.example.security.servlet.actor.ActorContextJwtAuthenticationConverter`
+> (`libs/java-security-servlet`, ADR-MONO-058 § D1 — this service's local copy was deleted by
+> TASK-SCM-BE-054) lifts `roles`/`role` (+ `sub` + `tenant_id`) and hands the three values to
+> procurement's own `ActorContext::new`, and
 > `ActorContext.isOperator()` returns true iff `roles ∋ {OPERATOR, ADMIN, SUPER_ADMIN}`
 > → `ActorType.OPERATOR`, otherwise the caller maps to `ActorType.BUYER`
 > (`ActorContext.actorType()`). This is the roles-only identity model

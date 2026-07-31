@@ -1,7 +1,10 @@
 package com.example.scmplatform.procurement.infrastructure.security;
 
+import com.example.scmplatform.procurement.application.ActorContext;
 import com.example.scmplatform.procurement.presentation.security.PublicPaths;
 import com.example.security.oauth2.TenantClaimValidator;
+import com.example.security.servlet.ResourceServerChainAssembler;
+import com.example.security.servlet.actor.ActorContextJwtAuthenticationConverter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -13,8 +16,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.jwt.JwtValidationException;
 import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
@@ -32,6 +33,17 @@ import java.time.Instant;
  *   <li>{@code /api/procurement/**} — bearer token required</li>
  *   <li>everything else — denied</li>
  * </ul>
+ *
+ * <p>The generic tail — CSRF-disabled, {@code STATELESS}, the permit/authenticate/deny sequence and
+ * the {@code oauth2ResourceServer} wiring — is assembled by
+ * {@link ResourceServerChainAssembler#statelessJwtChain(HttpSecurity)} (ADR-MONO-058 § D4). The
+ * closed {@code anyRequest().denyAll()} tail is stated explicitly below because it is this
+ * service's own answer, not a default worth inheriting silently.
+ *
+ * <p>The webhook prefix reaches the controllers through {@link PublicPaths}' {@code permitAll} —
+ * it never enters the JWT decoder path. Its own authentication is
+ * {@link WebhookSignatureFilter} (HMAC + timestamp + replay), registered ahead of this chain by
+ * {@link WebhookSecurityConfig}, and the D4 adoption does not move it.
  */
 @Configuration
 @EnableWebSecurity
@@ -41,26 +53,18 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        String[] exact = PublicPaths.EXACT.toArray(new String[0]);
-        String[] prefixed = PublicPaths.PREFIXES.stream()
-                .map(p -> p + "**")
-                .toArray(String[]::new);
-        http
-                .csrf(AbstractHttpConfigurer::disable)
-                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(exact).permitAll()
-                        .requestMatchers(prefixed).permitAll()
-                        .requestMatchers("/api/procurement/**").authenticated()
-                        .anyRequest().denyAll()
-                )
-                .oauth2ResourceServer(rs -> rs
-                        .jwt(jwt -> jwt.jwtAuthenticationConverter(
-                                new ActorContextJwtAuthenticationConverter()))
-                        .authenticationEntryPoint(SecurityConfig::onAuthenticationFailure)
-                        .accessDeniedHandler(SecurityConfig::onAccessDenied)
-                );
-        return http.build();
+        return ResourceServerChainAssembler.statelessJwtChain(http)
+                .publicPaths(PublicPaths.AS_SET)
+                .authenticated("/api/procurement/**")
+                .anyRequestDenied()
+                // ADR-MONO-058 § D1: the claim-lifting mechanism is the shared one; scm's own
+                // ActorContext record — isOperator(), actorType(), its role literals — stays here
+                // and is reached only through this constructor reference (Ownership Rule).
+                .jwtAuthenticationConverter(
+                        new ActorContextJwtAuthenticationConverter<>(ActorContext::new))
+                .authenticationEntryPoint(SecurityConfig::onAuthenticationFailure)
+                .accessDeniedHandler(SecurityConfig::onAccessDenied)
+                .build();
     }
 
     static void onAuthenticationFailure(HttpServletRequest request,
