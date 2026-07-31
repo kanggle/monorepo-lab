@@ -1,5 +1,7 @@
 package com.example.scmplatform.inventoryvisibility.integration;
 
+import com.example.common.page.PageQuery;
+import com.example.common.page.PageResult;
 import com.example.scmplatform.inventoryvisibility.adapter.outbound.persistence.jpa.InventoryNodeJpaEntity;
 import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService;
 import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService.ObservedLine;
@@ -69,8 +71,9 @@ class ThirdPartyObservedStockIntegrationTest extends AbstractInventoryVisibility
 
         // Cross-node read path — the 3PL node's rows must appear alongside any wms rows,
         // no node-type filter (ADR-MONO-054 §D4 read-side claim).
-        List<InventorySnapshot> crossNode = visibilityService.getCrossNodeSnapshot(TENANT_SCM, 0, 100);
-        assertThat(crossNode).anyMatch(s -> s.getNodeId().toString().equals(nodeId));
+        PageResult<InventorySnapshot> crossNodePage =
+                visibilityService.getCrossNodeSnapshot(TENANT_SCM, PageQuery.of(0, 100, null, null));
+        assertThat(crossNodePage.content()).anyMatch(s -> s.getNodeId().toString().equals(nodeId));
 
         // NodeStaleness seeded — the only path that creates one for a 3PL node.
         List<NodeStaleness> staleness = visibilityService.getStaleness(TENANT_SCM);

@@ -1,5 +1,8 @@
 package com.example.scmplatform.demandplanning.adapter.outbound.persistence.adapter;
 
+import com.example.common.page.PageQuery;
+import com.example.common.page.PageResult;
+import com.example.scmplatform.demandplanning.adapter.outbound.persistence.jpa.PageRequests;
 import com.example.scmplatform.demandplanning.adapter.outbound.persistence.jpa.ReorderSuggestionJpaEntity;
 import com.example.scmplatform.demandplanning.adapter.outbound.persistence.jpa.ReorderSuggestionJpaRepository;
 import com.example.scmplatform.demandplanning.application.port.outbound.ReorderSuggestionPort;
@@ -7,7 +10,7 @@ import com.example.scmplatform.demandplanning.domain.model.ReorderSuggestion;
 import com.example.scmplatform.demandplanning.domain.model.SuggestionStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -57,8 +60,9 @@ public class ReorderSuggestionAdapter implements ReorderSuggestionPort {
     }
 
     @Override
-    public Page<ReorderSuggestion> findAll(String tenantId, SuggestionStatus status,
-                                            String skuCode, Pageable pageable) {
+    public PageResult<ReorderSuggestion> findAll(String tenantId, SuggestionStatus status,
+                                                  String skuCode, PageQuery pageQuery) {
+        PageRequest pageable = PageRequests.toPageable(pageQuery);
         Page<ReorderSuggestionJpaEntity> page;
         if (status != null && skuCode != null && !skuCode.isBlank()) {
             page = repository.findByTenantIdAndStatusAndSkuCode(tenantId, status, skuCode, pageable);
@@ -69,7 +73,12 @@ public class ReorderSuggestionAdapter implements ReorderSuggestionPort {
         } else {
             page = repository.findByTenantId(tenantId, pageable);
         }
-        return page.map(this::toDomain);
+        return new PageResult<>(
+                page.getContent().stream().map(this::toDomain).toList(),
+                page.getNumber(),
+                page.getSize(),
+                page.getTotalElements(),
+                page.getTotalPages());
     }
 
     private ReorderSuggestion toDomain(ReorderSuggestionJpaEntity e) {

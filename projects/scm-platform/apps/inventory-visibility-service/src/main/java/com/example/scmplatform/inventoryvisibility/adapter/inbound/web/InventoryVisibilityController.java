@@ -1,5 +1,7 @@
 package com.example.scmplatform.inventoryvisibility.adapter.inbound.web;
 
+import com.example.common.page.PageQuery;
+import com.example.common.page.PageResult;
 import com.example.scmplatform.inventoryvisibility.adapter.inbound.web.dto.ApiEnvelope;
 import com.example.scmplatform.inventoryvisibility.adapter.inbound.web.dto.NodeResponse;
 import com.example.scmplatform.inventoryvisibility.adapter.inbound.web.dto.PageResponse;
@@ -41,8 +43,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class InventoryVisibilityController {
 
-    private static final int DEFAULT_PAGE_SIZE = 20;
-
     private final InventoryVisibilityApplicationService applicationService;
     private final SkuBreakdownCachePort cache;
 
@@ -76,15 +76,13 @@ public class InventoryVisibilityController {
             return ResponseEntity.ok(ApiEnvelope.of(responses, meta));
         }
 
-        // Cross-node paginated list
-        int clampedSize = Math.min(size, DEFAULT_PAGE_SIZE * 5);
-        List<InventorySnapshot> snapshots = applicationService.getCrossNodeSnapshot(tenantId, page, clampedSize);
-        long total = applicationService.countCrossNodeSnapshot(tenantId);
-        List<SnapshotResponse> responses = snapshots.stream()
-                .map(s -> SnapshotResponse.from(s, stalenessMap.get(s.getNodeId().toString())))
-                .toList();
-        PageResponse<SnapshotResponse> pageResponse =
-                PageResponse.of(responses, page, clampedSize, total);
+        // Cross-node paginated list — PageQuery.of clamps size to [1, PageQuery.MAX_SIZE=100],
+        // matching the previous manual `Math.min(size, DEFAULT_PAGE_SIZE * 5=100)` clamp exactly.
+        PageQuery pageQuery = PageQuery.of(page, size, null, null);
+        PageResult<InventorySnapshot> result = applicationService.getCrossNodeSnapshot(tenantId, pageQuery);
+        PageResult<SnapshotResponse> mapped = result.map(
+                s -> SnapshotResponse.from(s, stalenessMap.get(s.getNodeId().toString())));
+        PageResponse<SnapshotResponse> pageResponse = PageResponse.from(mapped);
 
         Map<String, Object> meta = new LinkedHashMap<>();
         meta.put("staleness", buildOverallStaleness(stalenessMap, null));

@@ -1,7 +1,10 @@
 package com.example.scmplatform.inventoryvisibility.adapter.outbound.persistence.adapter;
 
+import com.example.common.page.PageQuery;
+import com.example.common.page.PageResult;
 import com.example.scmplatform.inventoryvisibility.adapter.outbound.persistence.jpa.InventorySnapshotJpaEntity;
 import com.example.scmplatform.inventoryvisibility.adapter.outbound.persistence.jpa.InventorySnapshotJpaRepository;
+import com.example.scmplatform.inventoryvisibility.adapter.outbound.persistence.jpa.PageRequests;
 import com.example.scmplatform.inventoryvisibility.domain.node.NodeId;
 import com.example.scmplatform.inventoryvisibility.domain.snapshot.InventorySnapshot;
 import com.example.scmplatform.inventoryvisibility.domain.snapshot.Quantity;
@@ -9,7 +12,7 @@ import com.example.scmplatform.inventoryvisibility.domain.snapshot.Sku;
 import com.example.scmplatform.inventoryvisibility.domain.snapshot.SnapshotId;
 import com.example.scmplatform.inventoryvisibility.domain.snapshot.repository.InventorySnapshotRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -45,19 +48,20 @@ public class InventorySnapshotRepositoryImpl implements InventorySnapshotReposit
     }
 
     @Override
-    public List<InventorySnapshot> findAll(String tenantId, int page, int size) {
-        return jpaRepository.findAllByTenantId(tenantId, PageRequest.of(page, size))
-                .stream().map(this::toDomain).toList();
+    public PageResult<InventorySnapshot> search(String tenantId, PageQuery pageQuery) {
+        Page<InventorySnapshotJpaEntity> page =
+                jpaRepository.search(tenantId, PageRequests.toPageable(pageQuery));
+        return new PageResult<>(
+                page.getContent().stream().map(this::toDomain).toList(),
+                page.getNumber(),
+                page.getSize(),
+                page.getTotalElements(),
+                page.getTotalPages());
     }
 
     @Override
     public List<InventorySnapshot> findAllAcrossTenants() {
         return jpaRepository.findAll().stream().map(this::toDomain).toList();
-    }
-
-    @Override
-    public long countAll(String tenantId) {
-        return jpaRepository.countByTenantId(tenantId);
     }
 
     @Override

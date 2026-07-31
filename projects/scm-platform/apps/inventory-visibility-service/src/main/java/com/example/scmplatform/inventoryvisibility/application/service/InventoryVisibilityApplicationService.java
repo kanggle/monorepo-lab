@@ -1,5 +1,7 @@
 package com.example.scmplatform.inventoryvisibility.application.service;
 
+import com.example.common.page.PageQuery;
+import com.example.common.page.PageResult;
 import com.example.scmplatform.inventoryvisibility.application.port.outbound.AlertPublisherPort;
 import com.example.scmplatform.inventoryvisibility.application.port.outbound.ClockPort;
 import com.example.scmplatform.inventoryvisibility.application.port.outbound.ProcessedEventPort;
@@ -307,14 +309,15 @@ public class InventoryVisibilityApplicationService {
     // Query use cases (called by REST controllers)
     // -------------------------------------------------------------------------
 
+    /**
+     * Cross-node paginated search, sourced from the shared {@link PageQuery}/{@link PageResult}
+     * carrier (ADR-MONO-058 § D3 / TASK-SCM-BE-056). Replaces the previous
+     * {@code getCrossNodeSnapshot(tenantId, page, size)} + {@code countCrossNodeSnapshot(tenantId)}
+     * pair — {@link PageResult} carries {@code totalPages}, which the old pair never computed.
+     */
     @Transactional(readOnly = true)
-    public List<InventorySnapshot> getCrossNodeSnapshot(String tenantId, int page, int size) {
-        return snapshotRepository.findAll(tenantId, page, size);
-    }
-
-    @Transactional(readOnly = true)
-    public long countCrossNodeSnapshot(String tenantId) {
-        return snapshotRepository.countAll(tenantId);
+    public PageResult<InventorySnapshot> getCrossNodeSnapshot(String tenantId, PageQuery pageQuery) {
+        return snapshotRepository.search(tenantId, pageQuery);
     }
 
     /**

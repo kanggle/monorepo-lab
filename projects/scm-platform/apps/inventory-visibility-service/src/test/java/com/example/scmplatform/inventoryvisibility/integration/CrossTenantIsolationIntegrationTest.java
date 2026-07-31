@@ -1,6 +1,9 @@
 package com.example.scmplatform.inventoryvisibility.integration;
 
+import com.example.common.page.PageQuery;
+import com.example.common.page.PageResult;
 import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService;
+import com.example.scmplatform.inventoryvisibility.domain.snapshot.InventorySnapshot;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,16 +42,15 @@ class CrossTenantIsolationIntegrationTest extends AbstractInventoryVisibilityInt
                 TENANT_SCM, "wms.inventory.adjusted.v1");
 
         // tenant=scm — sees the snapshot
-        long scmCount = applicationService.countCrossNodeSnapshot(TENANT_SCM);
-        assertThat(scmCount).isGreaterThan(0);
+        PageResult<InventorySnapshot> scmPage =
+                applicationService.getCrossNodeSnapshot(TENANT_SCM, PageQuery.of(0, 50, null, null));
+        assertThat(scmPage.totalElements()).isGreaterThan(0);
 
         // tenant=other — does NOT see scm data
-        long otherCount = applicationService.countCrossNodeSnapshot(TENANT_OTHER);
-        assertThat(otherCount).isZero();
-
-        var otherSnapshots =
-                applicationService.getCrossNodeSnapshot(TENANT_OTHER, 0, 50);
-        assertThat(otherSnapshots).isEmpty();
+        PageResult<InventorySnapshot> otherPage =
+                applicationService.getCrossNodeSnapshot(TENANT_OTHER, PageQuery.of(0, 50, null, null));
+        assertThat(otherPage.totalElements()).isZero();
+        assertThat(otherPage.content()).isEmpty();
 
         // SKU-scoped read also fail-closed
         List<?> bySku = applicationService.getSnapshotBySku("sku-cross-tenant", TENANT_OTHER);

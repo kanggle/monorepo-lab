@@ -1,5 +1,7 @@
 package com.example.scmplatform.inventoryvisibility.config;
 
+import com.example.common.page.PageQuery;
+import com.example.common.page.PageResult;
 import com.example.scmplatform.inventoryvisibility.adapter.inbound.web.InternalSnapshotController;
 import com.example.scmplatform.inventoryvisibility.adapter.inbound.web.InventoryVisibilityController;
 import com.example.scmplatform.inventoryvisibility.adapter.inbound.web.advice.GlobalExceptionHandler;
@@ -33,7 +35,7 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 
-import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -111,9 +113,8 @@ class ResourceServerChainAuthPathSliceTest {
     @Test
     @DisplayName("a really-signed in-tenant token reaches the controller — 200")
     void inTenantTokenReachesTheController() throws Exception {
-        when(applicationService.getCrossNodeSnapshot(eq("scm"), anyInt(), anyInt()))
-                .thenReturn(List.of());
-        when(applicationService.countCrossNodeSnapshot(eq("scm"))).thenReturn(0L);
+        when(applicationService.getCrossNodeSnapshot(eq("scm"), any(PageQuery.class)))
+                .thenReturn(new PageResult<>(List.of(), 0, 20, 0, 0));
         when(applicationService.getStaleness(eq("scm"))).thenReturn(List.of());
 
         mockMvc.perform(get(API_PATH).header("Authorization", bearer(token("operator-001", "scm"))))

@@ -55,6 +55,20 @@ Query: `status` (`SUGGESTED|APPROVED|MATERIALIZED|DISMISSED`, optional), `skuCod
 }
 ```
 
+> **Wire-shape decision (ADR-MONO-058 § D3 / TASK-SCM-BE-056):** this endpoint's
+> `data`/`meta`-split envelope is **preserved unchanged** — `data` stays the bare
+> suggestion array, `meta` stays the `{ page, size, totalElements, totalPages }`
+> projection. This is `demand-planning-service`'s consistently-applied `ApiEnvelope`
+> convention (also used, sans pagination, by `getSuggestion`/`approve`/`dismiss`),
+> not a shape invented for this one endpoint — normalizing it away to the
+> single-object `content`/`page`/`size`/... shape used by `procurement-service`/
+> `inventory-visibility-service` would be a broader service-wide contract change
+> outside this task's pagination scope. What changed is **internal only**: the
+> controller now builds a `PageQuery` and both `data` and `meta` are populated from
+> the shared `PageResult` (via `PageMeta.from(PageResult)`) instead of extracting
+> fields directly off Spring Data's `Page<ReorderSuggestion>`. Zero bytes of wire
+> response change.
+
 ### `GET /api/v1/demand-planning/suggestions/{id}`
 
 `200` single suggestion (shape above). `404 SUGGESTION_NOT_FOUND`.

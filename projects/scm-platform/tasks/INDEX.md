@@ -79,11 +79,12 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 ## ready
 
 - `TASK-SCM-BE-055-error-envelope-exception-handler-adoption.md` — filed 2026-07-31. ADR-MONO-058 D2 — adopts `libs/java-web.ErrorResponse`/`libs/java-web-servlet.CommonGlobalExceptionHandler` in `procurement`/`logistics`/`inventory-visibility`/`demand-planning` (`gateway-service` grep-confirmed to have no local error-envelope duplication). Must record its own design decision on the ADR-flagged `details`-field wire-shape conflict (2 of 4 scm services use it today) before implementing; the 422-vs-400 status-code conflict is a straightforward apply via `CommonGlobalExceptionHandler`'s existing `validationFailureStatus()` override hook.
-- `TASK-SCM-BE-056-pagination-carrier-adoption.md` — filed 2026-07-31. ADR-MONO-058 D3 — adopts `libs/java-common.PageResult`/`PageQuery` in `inventory-visibility-service` (hand-rolled, missing `totalPages`) and `demand-planning-service` (separate `data`/`meta`-split envelope, own wire-shape decision required); `procurement-service` is a verification pass only (already fully wired end-to-end); `logistics-service`/`gateway-service` out of scope (no pagination usage found).
 
 ## in-progress
 
 ## review
+
+- `TASK-SCM-BE-056-pagination-carrier-adoption.md` — impl PR open (2026-08-01). ADR-MONO-058 D3 — adopted `libs/java-common.PageResult`/`PageQuery` in `inventory-visibility-service` (hand-rolled `PageResponse` → sourced from `PageResult`, `totalPages` added — previously missing) and `demand-planning-service` (`ReorderSuggestionPort`/`SuggestionQueryUseCase` migrated off raw Spring Data `Pageable`/`Page` to `PageQuery`/`PageResult`; **wire-shape decision: preserve** the `data`/`meta`-split `ApiEnvelope` convention — confirmed load-bearing across `PolicyController`'s non-paginated endpoints too — `PageMeta.from(PageResult)` sources every field, zero wire-byte change). `procurement-service` verification pass confirmed already fully wired end-to-end (zero production changes). `logistics-service`/`gateway-service` re-confirmed out of scope. Contracts updated (`inventory-visibility-api.md` + `demand-planning-api.md`); platform-console consumer impact checked (`SnapshotPageDataSchema` non-strict zod object — new field tolerated). Local `test` (Docker-free) GREEN all three services: inventory-visibility 126/126, demand-planning 92/92, procurement 222/222, 0 fail/skip/error. 분석=Sonnet 5 / 구현=backend-engineer(sonnet) 위임.
 
 ## done
 

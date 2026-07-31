@@ -1,9 +1,9 @@
 package com.example.scmplatform.demandplanning.application.port.outbound;
 
+import com.example.common.page.PageQuery;
+import com.example.common.page.PageResult;
 import com.example.scmplatform.demandplanning.domain.model.ReorderSuggestion;
 import com.example.scmplatform.demandplanning.domain.model.SuggestionStatus;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -23,6 +23,13 @@ public interface ReorderSuggestionPort {
 
     ReorderSuggestion save(ReorderSuggestion suggestion);
 
-    Page<ReorderSuggestion> findAll(String tenantId, SuggestionStatus status,
-                                    String skuCode, Pageable pageable);
+    /**
+     * Cross-status/SKU paginated search, sourced from the shared
+     * {@link PageQuery}/{@link PageResult} carrier (ADR-MONO-058 § D3 / TASK-SCM-BE-056
+     * — mirrors {@code procurement-service}'s {@code PurchaseOrderRepository.search}
+     * pattern). Replaces the previous direct {@code Pageable}/{@code Page<ReorderSuggestion>}
+     * leak of Spring Data types across this port boundary.
+     */
+    PageResult<ReorderSuggestion> findAll(String tenantId, SuggestionStatus status,
+                                          String skuCode, PageQuery pageQuery);
 }
