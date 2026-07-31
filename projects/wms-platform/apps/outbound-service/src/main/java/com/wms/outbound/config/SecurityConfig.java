@@ -3,6 +3,7 @@ package com.wms.outbound.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.outbound.adapter.in.web.dto.response.ApiErrorEnvelope;
 import com.example.security.oauth2.TenantClaimValidator;
+import com.example.security.servlet.ResourceServerChainAssembler;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -14,7 +15,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.core.OAuth2Error;
@@ -62,34 +62,53 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, ObjectMapper objectMapper) throws Exception {
+        // The four configurers ResourceServerChainAssembler deliberately has no opinion
+        // about, applied here rather than through its httpCustomizer(...) hook because
+        // every one of these HttpSecurity methods declares `throws Exception`, which a
+        // Customizer<HttpSecurity> lambda cannot propagate. Disabling a configurer only
+        // removes it from the builder, so applying them before the assembler is
+        // order-equivalent to the pre-D4 single fluent chain.
+        //
+        // cors/httpBasic/formLogin are belt-and-braces (none is installed by default on a
+        // context that declares its own SecurityFilterChain bean); .logout(disable) is
+        // load-bearing — HttpSecurityConfiguration DOES install LogoutFilter by default,
+        // and leaving it on would make /logout answer 302 instead of the 401 this
+        // stateless resource server returns today.
         http
-                .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.disable())
                 .httpBasic(b -> b.disable())
                 .formLogin(f -> f.disable())
-                .logout(l -> l.disable())
-                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(PublicPaths.asAntPatterns()).permitAll()
-                        // NOTE: granular role enforcement (e.g. OUTBOUND_ADMIN
-                        // for post-pick cancel) happens in the
-                        // application services (CancelOrderService, etc.) where
-                        // the role decision is data-dependent on order/saga
-                        // state. The filter chain below only enforces the
-                        // coarse READ/WRITE/ADMIN gate per HTTP method.
+                .logout(l -> l.disable());
+
+        return ResourceServerChainAssembler.statelessJwtChain(http)
+                .publicPaths(PublicPaths.asSet())
+                // outbound-service is the one wms service with URL-level role gates.
+                // authorizeRules(...) is the assembler's seam for exactly this, and it
+                // registers them AFTER publicPaths and BEFORE the anyRequest() tail —
+                // the same first-match-wins order the pre-D4 inline chain had.
+                //
+                // NOTE: granular role enforcement (e.g. OUTBOUND_ADMIN for post-pick
+                // cancel) happens in the application services (CancelOrderService, etc.)
+                // where the role decision is data-dependent on order/saga state. The
+                // rules below only enforce the coarse READ/WRITE/ADMIN gate per HTTP
+                // method.
+                .authorizeRules(auth -> auth
                         // Read-only paths
                         .requestMatchers(HttpMethod.GET, "/api/**").hasAnyRole("OUTBOUND_READ", "OUTBOUND_WRITE", "OUTBOUND_ADMIN")
                         // Mutating paths default to WRITE
                         .requestMatchers(HttpMethod.POST, "/api/**").hasAnyRole("OUTBOUND_WRITE", "OUTBOUND_ADMIN")
                         .requestMatchers(HttpMethod.PATCH, "/api/**").hasAnyRole("OUTBOUND_WRITE", "OUTBOUND_ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/**").hasAnyRole("OUTBOUND_WRITE", "OUTBOUND_ADMIN")
-                        .requestMatchers(HttpMethod.DELETE, "/api/**").hasAnyRole("OUTBOUND_WRITE", "OUTBOUND_ADMIN")
-                        .anyRequest().authenticated())
-                .oauth2ResourceServer(oauth2 -> oauth2
-                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
-                        .authenticationEntryPoint(authenticationEntryPoint(objectMapper))
-                        .accessDeniedHandler(forbiddenHandler(objectMapper)));
-        return http.build();
+                        .requestMatchers(HttpMethod.DELETE, "/api/**").hasAnyRole("OUTBOUND_WRITE", "OUTBOUND_ADMIN"))
+                // ADR-MONO-058 § D4 measured the anyRequest() tail as a genuinely split
+                // axis and made the assembler default to the CLOSED answer (denyAll()).
+                // outbound-service is on the authenticated() side and says so out loud —
+                // preserved verbatim from the pre-D4 chain, not inherited from a default.
+                .anyRequestAuthenticated()
+                .jwtAuthenticationConverter(jwtAuthenticationConverter())
+                .authenticationEntryPoint(authenticationEntryPoint(objectMapper))
+                .accessDeniedHandler(forbiddenHandler(objectMapper))
+                .build();
     }
 
     /**

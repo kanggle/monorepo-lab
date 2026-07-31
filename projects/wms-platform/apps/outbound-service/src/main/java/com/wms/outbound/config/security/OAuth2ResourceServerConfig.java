@@ -1,24 +1,27 @@
 package com.wms.outbound.config.security;
 
-import com.example.security.oauth2.AllowedIssuersValidator;
 import com.example.security.oauth2.TenantClaimValidator;
+import com.example.security.servlet.ResourceServerChainAssembler;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
-import org.springframework.security.oauth2.jwt.JwtValidators;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Resource Server JWT decoder configuration (TASK-MONO-019).
+ *
+ * <p>The decoder/validator <em>assembly</em> — {@code NimbusJwtDecoder.withJwkSetUri(...)},
+ * the CSV parse, and the timestamp → allowed-issuers → tenant-gate → Spring-defaults
+ * validator order — comes from {@link ResourceServerChainAssembler} since
+ * ADR-MONO-058 § D4 (TASK-BE-569). The <strong>policy</strong> stays here: the property
+ * keys, the issuer allow-list, and the tenant gate below.
+ *
+ * <p>{@link ResourceServerChainAssembler} installs nothing by itself — it is a plain
+ * builder invoked from this {@code @Configuration}, not an auto-configuration, so this
+ * file remains the only place outbound-service's resource-server posture is decided.
  */
 @Configuration
 public class OAuth2ResourceServerConfig {
@@ -35,38 +38,39 @@ public class OAuth2ResourceServerConfig {
     @Bean
     @ConditionalOnMissingBean(JwtDecoder.class)
     public JwtDecoder jwtDecoder() {
-        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
-        decoder.setJwtValidator(jwtTokenValidator());
-        return decoder;
+        return ResourceServerChainAssembler.jwtDecoder(jwkSetUri)
+                .allowedIssuersCsv(allowedIssuersCsv)
+                .validator(tenantGate())
+                .build();
     }
 
     @Bean
     public OAuth2TokenValidator<Jwt> jwtTokenValidator() {
-        List<String> allowedIssuers = parseCsv(allowedIssuersCsv);
-        List<OAuth2TokenValidator<Jwt>> validators = new ArrayList<>();
-        validators.add(new JwtTimestampValidator());
-        validators.add(new AllowedIssuersValidator(allowedIssuers));
-        validators.add(TenantClaimValidator.forTenant(requiredTenantId)
-                // no .allowSuperAdminWildcard() — wms is the only platform that rejects the
-                // SUPER_ADMIN "*" wildcard (ADR-MONO-048 § D5). The builder defaults closed,
-                // so ADDING that switch widens the gate and nothing complains — which is why
-                // WmsTenantGatePolicyTest asserts the refusal, not just the acceptance
-                // (TASK-MONO-355 found this gate had zero coverage for its rejection).
-                .trustEntitledDomains()   // entitlement-trust dual-accept (ADR-MONO-019 § D5)
-                .build());
-        validators.add(JwtValidators.createDefault());
-        return new DelegatingOAuth2TokenValidator<>(validators);
+        return ResourceServerChainAssembler.jwtDecoder(jwkSetUri)
+                .allowedIssuersCsv(allowedIssuersCsv)
+                .validator(tenantGate())
+                .buildValidator();
     }
 
-    private static List<String> parseCsv(String csv) {
-        List<String> out = new ArrayList<>();
-        if (csv == null) return out;
-        for (String part : csv.split(",")) {
-            String trimmed = part.trim();
-            if (!trimmed.isEmpty()) {
-                out.add(trimmed);
-            }
-        }
-        return out;
+    /**
+     * The tenant gate, and the only place outbound-service's tenant policy is stated.
+     *
+     * <h2>{@code allowSuperAdminWildcard()} is deliberately NOT called</h2>
+     *
+     * wms is the <strong>only</strong> platform that rejects the SUPER_ADMIN {@code "*"}
+     * wildcard (ADR-MONO-048 § D5). The validator builder defaults closed, so a
+     * <em>forgotten</em> switch narrows the gate and something goes red, while an
+     * <em>added</em> one widens it and nothing complains — which is why
+     * {@code WmsTenantGatePolicyTest} asserts the refusal and not just the acceptance
+     * (TASK-MONO-355 found this gate had zero coverage for its rejection).
+     *
+     * <p>Both beans above build their own instance from this method; the validators are
+     * stateless, so the two chains are behaviourally identical to the single shared
+     * instance the pre-D4 wiring produced.
+     */
+    private OAuth2TokenValidator<Jwt> tenantGate() {
+        return TenantClaimValidator.forTenant(requiredTenantId)
+                .trustEntitledDomains()   // entitlement-trust dual-accept (ADR-MONO-019 § D5)
+                .build();
     }
 }

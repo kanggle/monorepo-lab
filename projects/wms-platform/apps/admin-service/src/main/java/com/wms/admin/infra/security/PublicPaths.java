@@ -64,6 +64,19 @@ public final class PublicPaths {
     }
 
     /**
+     * The shared value object itself, for
+     * {@code ResourceServerChainAssembler.statelessJwtChain(...).publicPaths(...)}
+     * (ADR-MONO-058 § D4, TASK-BE-569).
+     *
+     * <p>Handing the builder the same instance {@link #isPublic(String)} answers
+     * from is the point of the accessor: the paths Spring Security lets through
+     * unauthenticated and the paths this class calls public cannot drift apart.
+     */
+    public static PublicPathSet asSet() {
+        return MECHANISM;
+    }
+
+    /**
      * {@code EXACT} plus each {@code PREFIXES} entry suffixed with {@code **},
      * for {@code SecurityConfig}'s {@code .requestMatchers(...)} call — the
      * same classification the previous inline {@code PUBLIC_PATHS} Ant-pattern
