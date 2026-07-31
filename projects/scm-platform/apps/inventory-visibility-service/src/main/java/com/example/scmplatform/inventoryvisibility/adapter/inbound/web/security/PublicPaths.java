@@ -1,5 +1,6 @@
 package com.example.scmplatform.inventoryvisibility.adapter.inbound.web.security;
 
+import com.example.security.servlet.PublicPathSet;
 import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.Set;
@@ -21,6 +22,9 @@ import java.util.Set;
  * {@code /actuator/health/liveness} and this class reproduces that exactly. Adding the prefix
  * here would widen the permit list — a behaviour change smuggled in under a refactor.
  * (ADR-MONO-049 § 1.8.)
+ *
+ * <p>The {@code EXACT}/{@code PREFIXES} matching mechanism delegates to the shared
+ * {@link PublicPathSet} (ADR-MONO-058 § D5) — this class still owns the path data.
  */
 public final class PublicPaths {
 
@@ -33,19 +37,16 @@ public final class PublicPaths {
     /** Empty, and that is not an oversight — see the class Javadoc. */
     public static final Set<String> PREFIXES = Set.of();
 
+    private static final PublicPathSet MECHANISM = PublicPathSet.of(EXACT, PREFIXES);
+
     private PublicPaths() {
     }
 
     public static boolean isPublic(String path) {
-        if (path == null) return false;
-        if (EXACT.contains(path)) return true;
-        for (String prefix : PREFIXES) {
-            if (path.startsWith(prefix)) return true;
-        }
-        return false;
+        return MECHANISM.isPublic(path);
     }
 
     public static boolean isPublic(HttpServletRequest request) {
-        return isPublic(request.getRequestURI());
+        return MECHANISM.isPublic(request);
     }
 }
