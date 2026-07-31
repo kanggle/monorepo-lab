@@ -8,7 +8,7 @@ Adopt ADR-MONO-058 D5 — `PublicPathSet` shared value type (already promoted to
 
 # Status
 
-review
+done
 
 # Owner
 
