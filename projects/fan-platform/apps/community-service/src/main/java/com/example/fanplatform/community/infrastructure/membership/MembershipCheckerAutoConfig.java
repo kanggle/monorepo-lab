@@ -1,6 +1,7 @@
 package com.example.fanplatform.community.infrastructure.membership;
 
 import com.example.fanplatform.community.domain.membership.MembershipChecker;
+import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -41,6 +42,39 @@ import java.time.Duration;
  */
 @Configuration
 public class MembershipCheckerAutoConfig {
+
+    /**
+     * The shared {@link IamClientCredentialsTokenProvider} (ADR-MONO-058 § D6,
+     * {@code libs/java-security}) is a plain, framework-neutral POJO — it carries
+     * no Spring stereotype annotation and is never itself component-scanned.
+     * community-service constructs it directly here, threading its own
+     * property-sourced config values through unchanged (TASK-FAN-BE-041; this
+     * replaced a local, now-deleted copy of the same class that carried two
+     * defects the shared class fixes: platform-default-charset Basic-auth
+     * encoding instead of explicit UTF-8, and no connect/read timeout at all).
+     *
+     * <p>{@code connect-timeout-ms}/{@code read-timeout-ms} default to the same
+     * 2000/3000ms values already used for the downstream membership-service call
+     * below, for consistency within this outbound-call chain — there was no prior
+     * value to preserve (the deleted local copy had no timeout configured at
+     * all), so these are a fresh, sane, non-zero choice, not a preserved default.
+     */
+    @Bean
+    public IamClientCredentialsTokenProvider iamClientCredentialsTokenProvider(
+            @Value("${iam.internal-client.token-uri:http://iam.local/oauth2/token}") String tokenUri,
+            @Value("${iam.internal-client.client-id:community-service-client}") String clientId,
+            @Value("${iam.internal-client.client-secret:secret}") String clientSecret,
+            @Value("${iam.internal-client.scope:membership.read}") String scope,
+            @Value("${iam.internal-client.connect-timeout-ms:2000}") long connectTimeoutMs,
+            @Value("${iam.internal-client.read-timeout-ms:3000}") long readTimeoutMs) {
+        return new IamClientCredentialsTokenProvider(
+                tokenUri,
+                clientId,
+                clientSecret,
+                scope,
+                Duration.ofMillis(connectTimeoutMs),
+                Duration.ofMillis(readTimeoutMs));
+    }
 
     /**
      * Production {@link MembershipChecker}: calls membership-service over

@@ -9,7 +9,7 @@ from its local copy to the shared, already-fixed class in `libs/java-security`
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -140,28 +140,59 @@ inside fan-platform to converge. The work is: delete community-service's local c
 
 # Acceptance Criteria
 
-- [ ] `TASK-MONO-501`'s Status confirmed `done` before this task's implementation starts (verify by reading
-      the file, not by inference).
-- [ ] Community-service's local `IamClientCredentialsTokenProvider.java` and its test are deleted; repo-wide
+- [x] `TASK-MONO-501`'s Status confirmed `done` before this task's implementation starts (verify by reading
+      the file, not by inference). — Read `tasks/done/TASK-MONO-501-...md` directly: `# Status` → `done`.
+- [x] Community-service's local `IamClientCredentialsTokenProvider.java` and its test are deleted; repo-wide
       grep for `class IamClientCredentialsTokenProvider` under `projects/fan-platform/apps` → **0 hits**.
-- [ ] `HttpMembershipChecker` / `MembershipCheckerAutoConfig` construct and consume the shared
+      — Both files deleted; `Grep "class IamClientCredentialsTokenProvider"` under
+      `projects/fan-platform/apps` → 0 hits (confirmed post-change).
+- [x] `HttpMembershipChecker` / `MembershipCheckerAutoConfig` construct and consume the shared
       `libs/java-security` class instead, with community-service's four config keys threaded through
-      unchanged (same property names, same defaults).
-- [ ] A test proves the Basic-auth header community-service's adopted instance sends is UTF-8-encoded (not
+      unchanged (same property names, same defaults). — `MembershipCheckerAutoConfig` gained a
+      `@Bean IamClientCredentialsTokenProvider iamClientCredentialsTokenProvider(...)` factory method
+      (shared class is a plain POJO, no `@Component`) threading `iam.internal-client.{token-uri,client-id,
+      client-secret,scope}` through unchanged (same property names/defaults) plus two new keys for the
+      class's now-required timeout params (`connect-timeout-ms`/`read-timeout-ms`, default 2000/3000ms,
+      matching the sibling `community.membership-service.*` timeout convention already in the same file).
+      `HttpMembershipChecker` itself is untouched (still consumes `RestClient` + `tokenProvider.currentBearer()`).
+- [x] A test proves the Basic-auth header community-service's adopted instance sends is UTF-8-encoded (not
       merely "the shared class has its own UTF-8 test" — that proves the class, not this call site's use of
-      it).
-- [ ] A test or explicit assertion proves connect/read timeouts are configured for community-service's
-      instance (no default that reproduces "no timeout at all").
-- [ ] `scope=membership.read` still flows through the token request unchanged — verified by a test, not
-      assumed (regression target: the exact defect `TASK-FAN-BE-030` fixed).
-- [ ] `HttpMembershipChecker`'s fail-closed behavior (token-acquisition failure → deny) is verified
-      unmodified — existing test(s) covering this pass without change to their assertions.
-- [ ] No `build.gradle` in fan-platform gains a new dependency (community-service already declares
-      `libs:java-security`).
-- [ ] Test-count parity recorded (before/after, per `community-service`); no test lost.
-- [ ] `./gradlew :community-service:check` GREEN; CI `Integration (fan-platform, Testcontainers)` lane
+      it). — `CommunityIamTokenAcquisitionTest.sendsUtf8BasicAuthAndScope` asserts the header against
+      `Base64.getEncoder().encodeToString("community-service-client:secret".getBytes(StandardCharsets.UTF_8))`
+      for community's real config values, via MockWebServer.
+- [x] A test or explicit assertion proves connect/read timeouts are configured for community-service's
+      instance (no default that reproduces "no timeout at all"). — Two-pronged: (1)
+      `CommunityIamTokenAcquisitionTest.zeroTimeoutRejected` proves `Duration.ZERO` for either timeout is
+      rejected by construction; (2) `MembershipCheckerAutoConfigTest.zeroConnectTimeoutFailsContextRefresh`
+      proves community's `iam.internal-client.connect-timeout-ms` property actually flows into the
+      constructor (overriding it to `0` fails context refresh with the shared class's own
+      `IllegalArgumentException`) — not silently dropped/hardcoded by the wiring.
+- [x] `scope=membership.read` still flows through the token request unchanged — verified by a test, not
+      assumed (regression target: the exact defect `TASK-FAN-BE-030` fixed). —
+      `CommunityIamTokenAcquisitionTest.sendsUtf8BasicAuthAndScope` asserts the request body equals
+      `grant_type=client_credentials&scope=membership.read` byte-for-byte.
+- [x] `HttpMembershipChecker`'s fail-closed behavior (token-acquisition failure → deny) is verified
+      unmodified — existing test(s) covering this pass without change to their assertions. —
+      `HttpMembershipCheckerTest` (6 tests) untouched, all pass.
+- [x] No `build.gradle` in fan-platform gains a new dependency (community-service already declares
+      `libs:java-security`). — `community-service/build.gradle` unmodified (line 57 dependency was already
+      present).
+- [x] Test-count parity recorded (before/after, per `community-service`); no test lost. — See table below;
+      138 → 140 (+2, all additive timeout-wiring assertions), 0 failures/errors/skipped both sides.
+- [x] `./gradlew :community-service:check` GREEN; CI `Integration (fan-platform, Testcontainers)` lane
       GREEN is authoritative (local Windows Docker is not —
-      `project_testcontainers_docker_desktop_blocker`).
+      `project_testcontainers_docker_desktop_blocker`). — Local `:community-service:check` GREEN
+      (BUILD SUCCESSFUL, 140/140 tests, 0 failures); CI lane authoritative once PR opens.
+
+## Before / After Test-Count Table (`community-service`, whole module)
+
+| | tests | skipped | failures | errors |
+|---|---|---|---|---|
+| Before (baseline, `git stash` re-run) | 138 | 0 | 0 | 0 |
+| After | 140 | 0 | 0 | 0 |
+
+Delta: `IamClientCredentialsTokenProviderTest` (3 tests) deleted, replaced by
+`CommunityIamTokenAcquisitionTest` (3 tests, adapted to the shared class's 6-arg constructor); `MembershipCheckerAutoConfigTest` gained 2 new tests (default-config bean construction + timeout-wiring proof). Net +2, no test lost.
 
 ---
 
@@ -286,10 +317,11 @@ Follow `community-service/architecture.md`. `IamClientCredentialsTokenProvider`'
 
 # Definition of Done
 
-- [ ] `TASK-MONO-501` confirmed `done` before starting
-- [ ] Local `IamClientCredentialsTokenProvider` deleted; shared `libs/java-security` class adopted
-- [ ] UTF-8 encoding + timeout configuration verified in effect for community-service's real call, by test
-- [ ] `scope=membership.read` regression-tested
-- [ ] Fail-closed contract verified unmodified
-- [ ] Test-count parity recorded; `:community-service:check` + CI Integration lane GREEN
-- [ ] Ready for review
+- [x] `TASK-MONO-501` confirmed `done` before starting
+- [x] Local `IamClientCredentialsTokenProvider` deleted; shared `libs/java-security` class adopted
+- [x] UTF-8 encoding + timeout configuration verified in effect for community-service's real call, by test
+- [x] `scope=membership.read` regression-tested
+- [x] Fail-closed contract verified unmodified
+- [x] Test-count parity recorded; `:community-service:check` GREEN locally (140/140, 0 failures) — CI
+      Integration lane authoritative once PR opens
+- [x] Ready for review
