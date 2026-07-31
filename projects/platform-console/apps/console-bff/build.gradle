@@ -66,6 +66,12 @@ dependencies {
     // Shared libs
     implementation project(':libs:java-common')
     implementation project(':libs:java-web')
+    // ADR-MONO-058 § D2 (TASK-PC-BE-016) — CommonGlobalExceptionHandler, the generic
+    // (non-domain) exception-handler tail (405/415/404-unmapped/500 catch-all),
+    // adopted by GlobalExceptionHandler. console-bff is a Servlet-stack rest-api
+    // service (build.gradle header), so this is a safe dependency per the module's
+    // own reactive-gateway exclusion note.
+    implementation project(':libs:java-web-servlet')
     implementation project(':libs:java-security')
     implementation project(':libs:java-observability')
 

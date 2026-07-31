@@ -117,6 +117,36 @@ class ConsoleBffSmokeIntegrationTest extends AbstractConsoleBffIntegrationTest {
         assertThat(body).contains("bff_aggregation_degrade_count_total");
     }
 
+    // ---- TASK-PC-BE-016 (ADR-MONO-058 § D2): PR #669 basePackages-scoping regression ----
+
+    /**
+     * {@code GlobalExceptionHandler} now extends the shared {@code CommonGlobalExceptionHandler}
+     * (TASK-PC-BE-016), so this pins the invariant its class Javadoc documents: the advice stays
+     * scoped to {@code adapter.inbound.web} and must NOT intercept an exception thrown inside the
+     * actuator endpoints' own package. {@code POST /actuator/health} (only {@code GET} is mapped)
+     * is a live framework exception ({@code HttpRequestMethodNotSupportedException}) raised inside
+     * actuator's own controller, not ours — if the advice's scoping ever regressed to unscoped (the
+     * exact PR #669 defect), this request would come back with <em>our</em> envelope
+     * ({@code "code":"METHOD_NOT_ALLOWED", ...}); scoped correctly, Spring Boot's default
+     * {@code BasicErrorController} answers instead, whose body has no {@code "code"} field at all.
+     */
+    @Test
+    @DisplayName("POST /actuator/health (405, unsupported method) — bypasses GlobalExceptionHandler, "
+            + "not our envelope (PR #669 basePackages-scoping regression)")
+    void actuatorHealth_wrongMethod_bypassesGlobalExceptionHandler() {
+        ResponseEntity<String> response = restTemplate.postForEntity(
+                "http://localhost:" + port + "/actuator/health", null, String.class);
+        String body = response.getBody();
+        assertThat(response.getStatusCode().is4xxClientError())
+                .as("wrong-method actuator call must be a client error, status=%s body:\n%s",
+                        response.getStatusCode(), body)
+                .isTrue();
+        assertThat(body)
+                .as("must be Spring Boot's default error body, NOT GlobalExceptionHandler's "
+                        + "envelope (no \"code\" field) — body:\n%s", body)
+                .doesNotContain("\"code\"");
+    }
+
     // ---- AC-12 (c): CredentialSelectionPort 5-row dry-run ----
 
     @Test
