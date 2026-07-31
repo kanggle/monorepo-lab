@@ -10,7 +10,7 @@ ADR-MONO-058 D5 (erp-platform, all four servlet services) — adopt the already-
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -132,21 +132,37 @@ preserved exactly.
 
 # Acceptance Criteria
 
-- [ ] **AC-1 (mechanism adopted)** — all four services' `PublicPaths` classes delegate to
+- [x] **AC-1 (mechanism adopted)** — all four services' `PublicPaths` classes delegate to
       `com.example.security.servlet.PublicPathSet` per the module's documented usage pattern;
-      `EXACT`/`PREFIXES` fields and both `isPublic(...)` method signatures are unchanged.
-- [ ] **AC-2 (zero downstream edits, verified not assumed)** — `git diff --stat` shows no file
-      other than the four `PublicPaths.java` (and, if genuinely required by `build.gradle`
-      absence, the four `build.gradle`) changed. If any `SecurityConfig`/`ServiceLevelOAuth2Config`
-      file required an edit, that is a finding to state in the PR body, not a silent AC failure.
-- [ ] **AC-3 (behavior identical, integration level)** — for each of the four services, existing
-      tests exercising the actuator health/info/prometheus paths as unauthenticated and every other
-      path as requiring the normal auth chain pass **unmodified**; a mutation check (temporarily
-      remove one `EXACT` entry, observe the corresponding test go RED, then revert) is recorded.
-- [ ] **AC-4 (baseline parity)** — before/after test counts recorded per module; no test lost; all
-      four `:check` GREEN; CI `Integration (erp-platform, Testcontainers)` GREEN authoritative.
-- [ ] **AC-5 (no contract or wire change)** — this is an internal mechanism swap with no HTTP-visible
-      surface of its own; the PR body states explicitly there is no observable behaviour delta.
+      `EXACT`/`PREFIXES` fields and both `isPublic(...)` method signatures are unchanged. Verified:
+      each of `approval-service`/`masterdata-service`/`notification-service`/`read-model-service`'s
+      `PublicPaths.java` now declares `private static final PublicPathSet MECHANISM =
+      PublicPathSet.of(EXACT, PREFIXES);` and both `isPublic` overloads are one-line delegations;
+      the `path.startsWith(prefix)` loop body no longer appears in any of the four classes.
+- [x] **AC-2 (zero downstream edits, verified not assumed)** — `git status --short` /
+      `git diff --stat` after implementation shows only the four `PublicPaths.java` (modified) plus
+      four new `PublicPathsTest.java` (added) changed. `build.gradle` in all four services already
+      declared `implementation project(':libs:java-security-servlet')` before this task (confirmed
+      by direct grep, not assumed) — zero `build.gradle` edits were needed.
+      `git diff --stat -- "**/SecurityConfig.java" "**/ServiceLevelOAuth2Config.java"` returns empty
+      — confirms the Goal section's "zero downstream edit" claim held; no finding to report.
+- [x] **AC-3 (behavior identical, integration level)** — all four services' existing
+      `ErpTenantGatePolicyTest` suites (which exercise the actuator health path as unauthenticated
+      and `/actuator/env`/API paths as gated, via the real `ServiceLevelOAuth2Config`-built
+      `TenantClaimEnforcer`) pass **unmodified**. Mutation check performed on
+      `masterdata-service`: temporarily corrupted `EXACT`'s `/actuator/prometheus` entry to
+      `/actuator/prometheusXXX`, re-ran `:masterdata-service:test` — 2 of the new `PublicPathsTest`
+      cases (`exactSetUnchanged`, `classificationParityBeforeAndAfter`) went RED (99 tests
+      completed, 2 failed); reverted, re-ran, back to 99/99 GREEN.
+- [x] **AC-4 (baseline parity)** — before/after test counts recorded per module (see Verification
+      Record below); no test lost, only additive. All four `:check` GREEN locally
+      (`./gradlew :projects:erp-platform:apps:{masterdata,approval,notification,read-model}-service:check`).
+      CI `Integration (erp-platform, Testcontainers)` GREEN is the authoritative gate — pending this
+      PR's CI run.
+- [x] **AC-5 (no contract or wire change)** — this is an internal mechanism swap with no
+      HTTP-visible surface of its own; stated explicitly in the PR body — no
+      `specs/contracts/` edit, no wire-format or status-code change, `PublicPaths.EXACT`/`PREFIXES`
+      literal contents unchanged for all four services.
 
 ---
 
@@ -257,12 +273,67 @@ Follow each target service's own `architecture.md` § Security. `PublicPaths` st
 
 ---
 
+# Verification Record
+
+## Test counts (local, Docker-free `:check` / `:test`)
+
+| module | before | after | delta |
+|---|---|---|---|
+| `masterdata-service` | 94 | 99 | +5 |
+| `approval-service` | 145 | 150 | +5 |
+| `notification-service` | 103 | 108 | +5 |
+| `read-model-service` | 143 | 148 | +5 |
+| `libs:java-security-servlet` | 113 | 113 | 0 (untouched, confirmed) |
+
+0 failures / 0 errors / 0 skipped in every module, before and after. No existing test was removed
+or modified — each service gained exactly one new file (`PublicPathsTest`, 5 `@Test` methods).
+
+## `build.gradle` dependency — confirmed, not assumed
+
+`grep -rn "java-security-servlet"` across all four services' `build.gradle` shows
+`implementation project(':libs:java-security-servlet')` already present in all four (pre-existing,
+per `ADR-MONO-049` `TenantClaimEnforcer` adoption) — zero `build.gradle` edits required.
+
+## AC-2 verified by diff, not assumed
+
+`git status --short` / `git diff --stat` after implementation:
+```
+ M .../approval-service/.../presentation/security/PublicPaths.java
+ M .../masterdata-service/.../presentation/security/PublicPaths.java
+ M .../notification-service/.../presentation/security/PublicPaths.java
+ M .../read-model-service/.../presentation/security/PublicPaths.java
+?? .../approval-service/.../presentation/security/PublicPathsTest.java
+?? .../masterdata-service/.../presentation/security/PublicPathsTest.java
+?? .../notification-service/.../presentation/security/PublicPathsTest.java
+?? .../read-model-service/.../presentation/security/PublicPathsTest.java
+```
+`git diff --stat -- "**/SecurityConfig.java" "**/ServiceLevelOAuth2Config.java"` returns empty —
+zero lines changed in any of the eight files across the four services. The `.exempt(PublicPaths::isPublic)`
+call site in each `ServiceLevelOAuth2Config` continues to compile against the unchanged
+`isPublic(HttpServletRequest)` static method signature.
+
+## Guard mutation-check (the new tests were verified to bite, not merely to pass)
+
+Temporarily corrupted `masterdata-service`'s `PublicPaths.EXACT` (`/actuator/prometheus` →
+`/actuator/prometheusXXX`) and re-ran `:masterdata-service:test`: **2 of the 5 new
+`PublicPathsTest` cases went RED** (`exactSetUnchanged`, `classificationParityBeforeAndAfter`) — 99
+tests completed, 2 failed. Reverted; re-ran the full suite, back to 99/99 GREEN.
+
+## Observable behaviour deltas
+
+None. `PublicPaths.EXACT`/`PREFIXES` literal contents and `isPublic(...)` classification are
+unchanged for all four services (pinned by the new `PublicPathsTest` per service). No
+`specs/contracts/` edit required.
+
+---
+
 # Definition of Done
 
-- [ ] All four `PublicPaths` classes delegate to the shared `PublicPathSet` mechanism; `EXACT`/
+- [x] All four `PublicPaths` classes delegate to the shared `PublicPathSet` mechanism; `EXACT`/
       `PREFIXES` data and both method signatures unchanged
-- [ ] Zero downstream file edits beyond the four `PublicPaths.java` (and `build.gradle` only if
-      genuinely required); any exception stated as a finding in the PR body
-- [ ] Tests passing; per-service before/after counts recorded; no test lost; mutation-check recorded
-- [ ] No contract or observable-behaviour change; PR body states this explicitly
-- [ ] Ready for review
+- [x] Zero downstream file edits beyond the four `PublicPaths.java` (and `build.gradle` only if
+      genuinely required); any exception stated as a finding in the PR body — none found, verified
+      by diff
+- [x] Tests passing; per-service before/after counts recorded; no test lost; mutation-check recorded
+- [x] No contract or observable-behaviour change; PR body states this explicitly
+- [x] Ready for review

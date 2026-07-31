@@ -1,5 +1,6 @@
 package com.example.erp.approval.presentation.security;
 
+import com.example.security.servlet.PublicPathSet;
 import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.Set;
@@ -11,6 +12,10 @@ import java.util.Set;
  *
  * <p>erp has NO public webhook/callback surface in v1 (E7 internal-only) —
  * only the actuator probes are unauthenticated (architecture.md § Security).
+ *
+ * <p>The matching mechanism delegates to {@link PublicPathSet}
+ * (ADR-MONO-058 § D5) — the {@code EXACT}/{@code PREFIXES} data below stays
+ * this service's own, unmoved.
  */
 public final class PublicPaths {
 
@@ -24,19 +29,16 @@ public final class PublicPaths {
             "/actuator/health/"
     );
 
+    private static final PublicPathSet MECHANISM = PublicPathSet.of(EXACT, PREFIXES);
+
     private PublicPaths() {
     }
 
     public static boolean isPublic(String path) {
-        if (path == null) return false;
-        if (EXACT.contains(path)) return true;
-        for (String prefix : PREFIXES) {
-            if (path.startsWith(prefix)) return true;
-        }
-        return false;
+        return MECHANISM.isPublic(path);
     }
 
     public static boolean isPublic(HttpServletRequest request) {
-        return isPublic(request.getRequestURI());
+        return MECHANISM.isPublic(request);
     }
 }
