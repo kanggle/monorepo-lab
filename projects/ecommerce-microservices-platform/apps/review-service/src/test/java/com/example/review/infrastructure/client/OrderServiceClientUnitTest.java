@@ -30,7 +30,7 @@ class OrderServiceClientUnitTest {
         mockServer = MockRestServiceServer.bindTo(builder).build();
         RestClient testRestClient = builder.build();
 
-        orderServiceClient = new OrderServiceClient(BASE_URL);
+        orderServiceClient = new OrderServiceClient(BASE_URL, 3000, 5000);
 
         Field field = OrderServiceClient.class.getDeclaredField("restClient");
         field.setAccessible(true);

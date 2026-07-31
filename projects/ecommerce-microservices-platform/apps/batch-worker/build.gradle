@@ -4,6 +4,10 @@ plugins {
 }
 
 dependencies {
+    // Shared common — ResilienceClientFactory for outbound HTTP client timeouts
+    // (ADR-MONO-058 D7, TASK-BE-570).
+    implementation project(':libs:java-common')
+
     // Observability
     implementation project(':libs:java-observability')
 

@@ -13,6 +13,14 @@ import java.time.Duration;
  * This collapses the repeated {@link SimpleClientHttpRequestFactory} setup into one place.
  * Returns a {@link RestClient.Builder} so callers can add a {@code baseUrl} (or not) before
  * {@code build()}.
+ *
+ * <p><b>ADR-MONO-058 D7 (TASK-BE-570) partial-migration note:</b> {@code ProductServiceClient},
+ * {@code SearchServiceClient}, and this package's {@code OrderServiceClient} have moved to the
+ * shared {@code com.example.common.resilience.ResilienceClientFactory} and no longer call this
+ * helper. The sole remaining caller is {@link IamClientCredentialsTokenProvider} — its migration
+ * is explicitly out of scope for TASK-BE-570 (covered instead by TASK-BE-568 / D6, kept a
+ * separable diff), so this class is NOT dead yet and must not be deleted until that consumer is
+ * migrated too.
  */
 final class RestClients {
 
