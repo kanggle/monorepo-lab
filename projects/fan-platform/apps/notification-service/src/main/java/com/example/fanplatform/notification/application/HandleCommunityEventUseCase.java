@@ -2,13 +2,13 @@ package com.example.fanplatform.notification.application;
 
 import com.example.common.id.UuidV7;
 import com.example.fanplatform.notification.application.consumer.CommunityEvent;
-import com.example.fanplatform.notification.application.port.ProcessedEventStore;
 import com.example.fanplatform.notification.domain.channel.NotificationChannelPort;
 import com.example.fanplatform.notification.domain.notification.Notification;
 import com.example.fanplatform.notification.domain.notification.NotificationRepository;
 import com.example.fanplatform.notification.domain.notification.NotificationTemplate;
 import com.example.fanplatform.notification.domain.notification.NotificationType;
 import com.example.fanplatform.notification.domain.time.ClockPort;
+import com.example.messaging.dedupe.EventDedupePort;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,6 +17,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Idempotently turns one community interaction event into zero, one, or several
@@ -45,12 +46,13 @@ import java.util.List;
  *       producer has no mention syntax). No mention alert, no error.</li>
  * </ul>
  *
- * <p><b>Idempotency</b> (AC-4): the same {@code processed_events} guard as the
- * membership path short-circuits an at-least-once duplicate. The composite unique
- * {@code (source_event_id, account_id, type)} (V3) is the DB-level secondary
- * guard — composite rather than {@code source_event_id} alone precisely because a
- * single comment event may fan out to a REPLY plus one MENTION per mentioned
- * account.
+ * <p><b>Idempotency</b> (AC-4): the same {@link EventDedupePort} guard as the
+ * membership path (ADR-MONO-058 § D7, TASK-FAN-BE-042) short-circuits an
+ * at-least-once duplicate — {@code dedupePort.process(...)} skips {@code work}
+ * without running it. The composite unique {@code (source_event_id, account_id,
+ * type)} (V3) is the DB-level secondary guard — composite rather than
+ * {@code source_event_id} alone precisely because a single comment event may fan
+ * out to a REPLY plus one MENTION per mentioned account.
  *
  * <p><b>Atomicity</b>: every notification persist + channel dispatch + the
  * {@code processed_events} mark run in one transaction, exactly as on the
@@ -61,28 +63,37 @@ import java.util.List;
 public class HandleCommunityEventUseCase {
 
     private final NotificationRepository notificationRepository;
-    private final ProcessedEventStore processedEvents;
+    private final EventDedupePort dedupePort;
     private final List<NotificationChannelPort> channels;
     private final ClockPort clock;
 
     public HandleCommunityEventUseCase(NotificationRepository notificationRepository,
-                                       ProcessedEventStore processedEvents,
+                                       EventDedupePort dedupePort,
                                        List<NotificationChannelPort> channels,
                                        ClockPort clock) {
         this.notificationRepository = notificationRepository;
-        this.processedEvents = processedEvents;
+        this.dedupePort = dedupePort;
         this.channels = channels;
         this.clock = clock;
     }
 
     @Transactional
     public void handle(CommunityEvent event) {
-        if (processedEvents.alreadyProcessed(event.eventId())) {
+        // Boundary conversion (task Edge Cases): both fan-platform producers mint
+        // eventId via UuidV7.randomUuid().toString(), so this never throws for a
+        // genuine envelope — a malformed eventId would already have failed
+        // EventEnvelope/JsonFields validation upstream in the parser.
+        UUID eventId = UUID.fromString(event.eventId());
+        EventDedupePort.Outcome outcome =
+                dedupePort.process(eventId, event.eventType(), () -> processNew(event));
+        if (outcome == EventDedupePort.Outcome.IGNORED_DUPLICATE) {
             log.debug("Duplicate event skipped (already processed): eventId={}, type={}",
                     event.eventId(), event.eventType());
-            return;
         }
+    }
 
+    /** Runs exactly once per fresh {@code eventId} — see {@link #handle(CommunityEvent)}. */
+    private void processNew(CommunityEvent event) {
         List<Notification> notifications = switch (event.eventType()) {
             case NotificationType.EVENT_COMMENT_ADDED -> commentNotifications(event);
             case NotificationType.EVENT_REACTION_ADDED -> reactionNotifications(event);
@@ -98,7 +109,6 @@ public class HandleCommunityEventUseCase {
             }
         }
 
-        processedEvents.markProcessed(event.eventId(), event.eventType());
         if (notifications.isEmpty()) {
             log.info("No addressable recipient for community event: type={}, post={}, eventId={}"
                             + " — skipped (marked processed)",

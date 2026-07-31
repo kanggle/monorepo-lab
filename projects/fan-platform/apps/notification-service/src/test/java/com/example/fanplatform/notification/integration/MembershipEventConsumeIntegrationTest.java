@@ -3,6 +3,7 @@ package com.example.fanplatform.notification.integration;
 import com.example.fanplatform.notification.domain.notification.NotificationStatus;
 import com.example.fanplatform.notification.domain.notification.NotificationType;
 import com.example.fanplatform.notification.infrastructure.jpa.NotificationJpaRepository;
+import com.example.fanplatform.notification.testsupport.EventIds;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,7 +34,7 @@ class MembershipEventConsumeIntegrationTest extends NotificationServiceIntegrati
     @DisplayName("activated.v1 → WELCOME notification persisted (UNREAD, account-scoped)")
     void activatedCreatesWelcome() {
         producer().send(TOPIC_ACTIVATED, "mem-1",
-                activatedEnvelope("evt-act-1", "mem-1", "acc-1", "PREMIUM"));
+                activatedEnvelope(EventIds.uuid("evt-act-1"), "mem-1", "acc-1", "PREMIUM"));
 
         await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
             var all = notifications.findAll();
@@ -42,7 +43,7 @@ class MembershipEventConsumeIntegrationTest extends NotificationServiceIntegrati
             assertThat(all.get(0).getStatus()).isEqualTo(NotificationStatus.UNREAD);
             assertThat(all.get(0).getAccountId()).isEqualTo("acc-1");
             assertThat(all.get(0).getMembershipId()).isEqualTo("mem-1");
-            assertThat(all.get(0).getSourceEventId()).isEqualTo("evt-act-1");
+            assertThat(all.get(0).getSourceEventId()).isEqualTo(EventIds.uuid("evt-act-1"));
             assertThat(all.get(0).getTitle()).isEqualTo("Welcome to PREMIUM membership");
         });
     }
@@ -51,7 +52,7 @@ class MembershipEventConsumeIntegrationTest extends NotificationServiceIntegrati
     @DisplayName("canceled.v1 → CANCELLATION notification persisted")
     void canceledCreatesCancellation() {
         producer().send(TOPIC_CANCELED, "mem-2",
-                canceledEnvelope("evt-can-1", "mem-2", "acc-2", "MEMBERS_ONLY"));
+                canceledEnvelope(EventIds.uuid("evt-can-1"), "mem-2", "acc-2", "MEMBERS_ONLY"));
 
         await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
             var all = notifications.findAll();
@@ -66,7 +67,7 @@ class MembershipEventConsumeIntegrationTest extends NotificationServiceIntegrati
     @DisplayName("expired.v1 → EXPIRY_REMINDER notification persisted (V2 type allow-list)")
     void expiredCreatesExpiryReminder() {
         producer().send(TOPIC_EXPIRED, "mem-3",
-                expiredEnvelope("evt-exp-1", "mem-3", "acc-3", "PREMIUM"));
+                expiredEnvelope(EventIds.uuid("evt-exp-1"), "mem-3", "acc-3", "PREMIUM"));
 
         await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
             var all = notifications.findAll();

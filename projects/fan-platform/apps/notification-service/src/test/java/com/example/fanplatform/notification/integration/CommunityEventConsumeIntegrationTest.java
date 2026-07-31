@@ -3,6 +3,7 @@ package com.example.fanplatform.notification.integration;
 import com.example.fanplatform.notification.domain.notification.NotificationStatus;
 import com.example.fanplatform.notification.domain.notification.NotificationType;
 import com.example.fanplatform.notification.infrastructure.jpa.NotificationJpaRepository;
+import com.example.fanplatform.notification.testsupport.EventIds;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,7 +40,7 @@ class CommunityEventConsumeIntegrationTest extends NotificationServiceIntegratio
     @DisplayName("comment.added.v1 → REPLY notification persisted for the post author (post-correlated, null membership)")
     void commentCreatesReply() {
         producer().send(TOPIC_COMMENT_ADDED, "post-1",
-                commentAddedEnvelope("evt-c-it-1", "post-1", "fan-1", "author-1", "[]"));
+                commentAddedEnvelope(EventIds.uuid("evt-c-it-1"), "post-1", "fan-1", "author-1", "[]"));
 
         await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
             var all = notifications.findAll();
@@ -50,7 +51,7 @@ class CommunityEventConsumeIntegrationTest extends NotificationServiceIntegratio
             assertThat(row.getAccountId()).isEqualTo("author-1");
             assertThat(row.getPostId()).isEqualTo("post-1");
             assertThat(row.getMembershipId()).isNull();
-            assertThat(row.getSourceEventId()).isEqualTo("evt-c-it-1");
+            assertThat(row.getSourceEventId()).isEqualTo(EventIds.uuid("evt-c-it-1"));
             assertThat(row.getTitle()).isEqualTo("New reply on your post");
         });
     }
@@ -59,7 +60,7 @@ class CommunityEventConsumeIntegrationTest extends NotificationServiceIntegratio
     @DisplayName("comment.added.v1 with mentions → REPLY + one MENTION row per mentioned account (composite unique key)")
     void commentWithMentionsFansOut() {
         producer().send(TOPIC_COMMENT_ADDED, "post-2",
-                commentAddedEnvelope("evt-c-it-2", "post-2", "fan-1", "author-2",
+                commentAddedEnvelope(EventIds.uuid("evt-c-it-2"), "post-2", "fan-1", "author-2",
                         "[\"fan-2\",\"fan-3\"]"));
 
         await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
@@ -70,7 +71,7 @@ class CommunityEventConsumeIntegrationTest extends NotificationServiceIntegratio
             assertThat(all).extracting(n -> n.getAccountId())
                     .containsExactlyInAnyOrder("author-2", "fan-2", "fan-3");
             assertThat(all).allSatisfy(n ->
-                    assertThat(n.getSourceEventId()).isEqualTo("evt-c-it-2"));
+                    assertThat(n.getSourceEventId()).isEqualTo(EventIds.uuid("evt-c-it-2")));
         });
     }
 
@@ -78,7 +79,7 @@ class CommunityEventConsumeIntegrationTest extends NotificationServiceIntegratio
     @DisplayName("reaction.added.v1 → REACTION_BADGE notification persisted for the post author")
     void reactionCreatesBadge() {
         producer().send(TOPIC_REACTION_ADDED, "post-3",
-                reactionAddedEnvelope("evt-r-it-1", "post-3", "fan-1", "author-3", "LOVE"));
+                reactionAddedEnvelope(EventIds.uuid("evt-r-it-1"), "post-3", "fan-1", "author-3", "LOVE"));
 
         await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
             var all = notifications.findAll();
@@ -99,24 +100,24 @@ class CommunityEventConsumeIntegrationTest extends NotificationServiceIntegratio
         // Both self-events are suppressed; the trailing third-party reaction proves
         // the partition kept moving (a stalled/DLQ'd suppression would never arrive).
         producer().send(TOPIC_COMMENT_ADDED, "post-4",
-                commentAddedEnvelope("evt-c-it-3", "post-4", "author-4", "author-4", "[]"));
+                commentAddedEnvelope(EventIds.uuid("evt-c-it-3"), "post-4", "author-4", "author-4", "[]"));
         producer().send(TOPIC_REACTION_ADDED, "post-4",
-                reactionAddedEnvelope("evt-r-it-2", "post-4", "author-4", "author-4", "LIKE"));
+                reactionAddedEnvelope(EventIds.uuid("evt-r-it-2"), "post-4", "author-4", "author-4", "LIKE"));
         producer().send(TOPIC_REACTION_ADDED, "post-4",
-                reactionAddedEnvelope("evt-r-it-3", "post-4", "fan-9", "author-4", "FIRE"));
+                reactionAddedEnvelope(EventIds.uuid("evt-r-it-3"), "post-4", "fan-9", "author-4", "FIRE"));
 
         await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
             var all = notifications.findAll();
             assertThat(all).hasSize(1);
             assertThat(all.get(0).getType()).isEqualTo(NotificationType.REACTION_BADGE);
-            assertThat(all.get(0).getSourceEventId()).isEqualTo("evt-r-it-3");
+            assertThat(all.get(0).getSourceEventId()).isEqualTo(EventIds.uuid("evt-r-it-3"));
         });
     }
 
     @Test
     @DisplayName("AC-4: duplicate community eventId → exactly one notification row")
     void duplicateDeliveryProducesSingleRow() {
-        String envelope = reactionAddedEnvelope("evt-r-it-dup", "post-5", "fan-1", "author-5", "LIKE");
+        String envelope = reactionAddedEnvelope(EventIds.uuid("evt-r-it-dup"), "post-5", "fan-1", "author-5", "LIKE");
         producer().send(TOPIC_REACTION_ADDED, "post-5", envelope);
         producer().send(TOPIC_REACTION_ADDED, "post-5", envelope);
 
