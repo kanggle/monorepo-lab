@@ -9,6 +9,7 @@ category: database
 Patterns for defining transaction boundaries in the persistence layer.
 
 Prerequisite: read `platform/coding-rules.md` before using this skill. See also `backend/transaction-handling/SKILL.md` for code-level `@Transactional` patterns.
+# No single spec — this skill operates across every service's `specs/services/<service>/architecture.md`; the canonical transaction-boundary source is the shared `platform/coding-rules.md`, not a per-service spec.
 
 ---
 

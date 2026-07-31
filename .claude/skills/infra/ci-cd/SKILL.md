@@ -9,6 +9,7 @@ category: infra
 Patterns for GitHub Actions CI/CD pipelines in this repository.
 
 Prerequisite: read `platform/deployment-policy.md` before using this skill.
+# No single spec — this skill operates across every service's `specs/services/<service>/architecture.md`; the canonical CI/CD pipeline source is the shared `platform/deployment-policy.md`, not a per-service spec.
 
 ---
 

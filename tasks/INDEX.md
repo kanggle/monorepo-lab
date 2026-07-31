@@ -168,6 +168,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
+- `TASK-MONO-499-validate-rules-findings-2026-07-31.md` — resolves 1 Critical + 3 Warnings from the 2026-07-31 `/validate-rules` run (code-reviewer/qa-engineer AC-coverage gap, testcontainers jwt.secret vs jwt-auth RS256/JWKS mandate, 26 SKILL.md missing specs/ refs, implement-task.md single-task worktree-isolation gap). 4th Warning (rules/common.md vs entrypoint.md) re-verified as phantom, no fix. `.claude/{agents,skills,commands}` only. 분석·구현=Sonnet 5(세션).
+
 ## done
 
 - **`TASK-MONO-498-audit-memory-rule-promotions-2026-07-31.md` — ✅ DONE (2026-07-31, 3-dim verified — impl+lifecycle PR #3111 squash `ea39870c0`; state=MERGED · origin/main tip 편입 확인 · 머지 전 실패 체크 0건, path-filter가 docs-only라 SUCCESS/SKIPPED뿐).** 2026-07-31 `/audit-memory` 세션에서 사용자가 AskUserQuestion으로 승인한 7개 규칙 승격 후보 중 5개를 `CLAUDE.md` § Task Rules/Cross-Project Changes + `platform/{git-workflow-policy,refactoring-policy,event-driven-policy}.md`에 착지(나머지 2개는 사용자 개인 `~/.claude/CLAUDE.md` 반영 및 해당없음). 같은 날 `/validate-rules`가 잡은 `ADR-053`→`ADR-MONO-053` 인용 오타도 동일 PR에서 수정. `git diff --stat` = 정확히 4개 파일. 분석·구현=Sonnet 5(세션).

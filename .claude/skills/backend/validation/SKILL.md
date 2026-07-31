@@ -9,6 +9,7 @@ category: backend
 Patterns for input validation in Spring Boot services.
 
 Prerequisite: read `platform/coding-rules.md` before using this skill.
+# No single spec — this skill operates across every service's `specs/services/<service>/architecture.md`; the canonical input-validation source is the shared `platform/coding-rules.md`, not a per-service spec.
 
 ---
 

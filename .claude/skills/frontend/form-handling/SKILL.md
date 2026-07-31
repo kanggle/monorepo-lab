@@ -9,6 +9,7 @@ category: frontend
 Patterns for form implementation in Next.js applications.
 
 Prerequisite: read `platform/coding-rules.md` (TypeScript Rules section) before using this skill.
+# No single spec — this skill operates across every service's `specs/services/<service>/architecture.md`; the canonical form-handling/TypeScript pattern source is the shared `platform/coding-rules.md`, not a per-service spec.
 
 ---
 

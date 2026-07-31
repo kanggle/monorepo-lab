@@ -9,6 +9,7 @@ category: cross-cutting
 Cross-cutting checklist for hardening any service against common attack classes.
 
 Prerequisite: read `platform/security-rules.md` before using this skill. Auth-specific patterns live in `backend/jwt-auth/SKILL.md`, `backend/oauth-provider/SKILL.md`, `backend/gateway-security/SKILL.md`.
+# No single spec — this skill operates across every service's `specs/services/<service>/architecture.md`; the canonical security-hardening source is the shared `platform/security-rules.md`, not a per-service spec.
 
 ---
 

@@ -9,6 +9,7 @@ category: frontend
 Patterns for testing Next.js applications with Vitest and Testing Library.
 
 Prerequisite: read `platform/testing-strategy.md` before using this skill.
+# No single spec — this skill operates across every service's `specs/services/<service>/architecture.md`; the canonical test-type/naming source is the shared `platform/testing-strategy.md`, not a per-service spec.
 
 ---
 

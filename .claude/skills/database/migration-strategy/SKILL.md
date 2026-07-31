@@ -9,6 +9,7 @@ category: database
 Patterns for Flyway migration management across services.
 
 Prerequisite: read `platform/coding-rules.md` (Database section) before using this skill.
+# No single spec — this skill operates across every service's `specs/services/<service>/architecture.md`; the canonical migration-policy source is the shared `platform/coding-rules.md` (Database section), not a per-service spec.
 
 ---
 

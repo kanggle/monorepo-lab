@@ -9,6 +9,7 @@ category: infra
 Patterns for storing, injecting, and rotating secrets across environments.
 
 Prerequisite: read `platform/security-rules.md` and `cross-cutting/security-hardening/SKILL.md` before using this skill. CI/CD-side secret usage lives in `infra/ci-cd/SKILL.md`.
+# No single spec — this skill operates across every service's `specs/services/<service>/architecture.md`; the canonical secrets-handling source is the shared `platform/security-rules.md`, not a per-service spec.
 
 ---
 

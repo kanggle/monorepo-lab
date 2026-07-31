@@ -9,6 +9,7 @@ category: infra
 Patterns for Terraform infrastructure-as-code in this repository.
 
 Prerequisite: read `platform/deployment-policy.md` before using this skill.
+# No single spec — this skill operates across every service's `specs/services/<service>/architecture.md`; the canonical infrastructure-as-code source is the shared `platform/deployment-policy.md`, not a per-service spec.
 
 ---
 

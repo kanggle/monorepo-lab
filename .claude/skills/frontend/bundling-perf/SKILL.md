@@ -9,6 +9,7 @@ category: frontend
 Patterns for keeping Next.js bundles small and Core Web Vitals green.
 
 Prerequisite: read `platform/observability.md` and `cross-cutting/performance-tuning/SKILL.md` before using this skill.
+# No single spec — this skill operates across every service's `specs/services/<service>/architecture.md`; this is a cross-cutting implementation pattern with no single spec source.
 
 ---
 

@@ -9,6 +9,7 @@ category: testing
 Guidance for choosing test types and coverage targets.
 
 Prerequisite: read `platform/testing-strategy.md` for the full specification.
+# No single spec — this skill operates across every service's `specs/services/<service>/architecture.md`; the canonical test-type/coverage source is the shared `platform/testing-strategy.md`, not a per-service spec.
 
 ---
 

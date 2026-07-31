@@ -9,6 +9,7 @@ category: testing
 Patterns for using Testcontainers in Spring Boot integration tests.
 
 Prerequisite: read `platform/testing-strategy.md` before using this skill.
+# No single spec — this skill operates across every service's `specs/services/<service>/architecture.md`; the canonical test-infrastructure source is the shared `platform/testing-strategy.md`, not a per-service spec.
 
 ---
 
@@ -106,8 +107,10 @@ static void overrideProperties(DynamicPropertyRegistry registry) {
     registry.add("spring.data.redis.host", redis::getHost);
     registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
 
-    // Application-specific
-    registry.add("jwt.secret", () -> "test-secret-key-minimum-32-characters!!");
+    // Application-specific — JWT verification points at a stubbed JWKS endpoint, never a shared
+    // symmetric secret (this repo signs RS256/JWKS-only, see backend/jwt-auth/SKILL.md)
+    registry.add("spring.security.oauth2.resourceserver.jwt.jwks-uri",
+        () -> wiremock.baseUrl() + "/.well-known/jwks.json");
 }
 ```
 
