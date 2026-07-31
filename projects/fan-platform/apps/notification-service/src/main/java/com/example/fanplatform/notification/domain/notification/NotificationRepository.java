@@ -1,5 +1,7 @@
 package com.example.fanplatform.notification.domain.notification;
 
+import com.example.common.page.PageResult;
+
 import java.util.Optional;
 
 /**
@@ -23,6 +25,6 @@ public interface NotificationRepository {
      *
      * @param status optional status filter; {@code null} returns all states.
      */
-    NotificationPage findInbox(String tenantId, String accountId,
-                               NotificationStatus status, int page, int size);
+    PageResult<Notification> findInbox(String tenantId, String accountId,
+                                        NotificationStatus status, int page, int size);
 }

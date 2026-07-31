@@ -1,10 +1,12 @@
 package com.example.fanplatform.artist.application.service;
 
+import com.example.common.page.PageResult;
 import com.example.fanplatform.artist.application.ActorContext;
 import com.example.fanplatform.artist.application.port.in.SearchArtistDirectoryUseCase.DirectorySearchResult;
 import com.example.fanplatform.artist.application.port.in.SearchArtistDirectoryUseCase.SearchArtistDirectoryQuery;
 import com.example.fanplatform.artist.application.port.out.ArtistDirectoryCache;
 import com.example.fanplatform.artist.application.port.out.ArtistRepository;
+import com.example.fanplatform.artist.domain.artist.Artist;
 import com.example.fanplatform.artist.domain.artist.ArtistType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -58,7 +60,7 @@ class ArtistDirectoryServiceTest {
     void cacheMiss() {
         when(cache.get(eq("fan-platform"), anyString())).thenReturn(Optional.empty());
         when(repo.findPublishedDirectoryPage(eq("fan-platform"), eq("abc"), eq(ArtistType.SOLO), eq(0), eq(20)))
-                .thenReturn(new ArtistRepository.DirectoryPage(List.of(), 0, 20, 0L, 0));
+                .thenReturn(new PageResult<Artist>(List.of(), 0, 20, 0L, 0));
 
         service.search(new SearchArtistDirectoryQuery(ADMIN, "abc", ArtistType.SOLO, 0, 20));
 

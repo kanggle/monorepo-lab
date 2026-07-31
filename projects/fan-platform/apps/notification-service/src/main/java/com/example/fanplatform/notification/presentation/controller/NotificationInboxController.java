@@ -1,10 +1,10 @@
 package com.example.fanplatform.notification.presentation.controller;
 
+import com.example.common.page.PageResult;
 import com.example.fanplatform.notification.application.ActorContext;
 import com.example.fanplatform.notification.application.ListNotificationsUseCase;
 import com.example.fanplatform.notification.application.MarkNotificationReadUseCase;
 import com.example.fanplatform.notification.domain.notification.Notification;
-import com.example.fanplatform.notification.domain.notification.NotificationPage;
 import com.example.fanplatform.notification.domain.notification.NotificationStatus;
 import com.example.fanplatform.notification.presentation.dto.ApiEnvelope;
 import com.example.fanplatform.notification.presentation.dto.NotificationResponse;
@@ -53,11 +53,12 @@ public class NotificationInboxController {
                 ? (unread ? NotificationStatus.UNREAD : NotificationStatus.READ)
                 : parseStatus(status);
 
-        NotificationPage result = listNotifications.list(actor, statusFilter, page, Math.min(size, MAX_SIZE));
+        PageResult<Notification> result = listNotifications.list(actor, statusFilter, page, Math.min(size, MAX_SIZE));
         List<NotificationResponse> data = result.content().stream()
                 .map(NotificationResponse::from)
                 .toList();
-        return ResponseEntity.ok(ApiEnvelope.ofList(data, result.page(), result.size(), result.totalElements()));
+        return ResponseEntity.ok(ApiEnvelope.ofList(
+                data, result.page(), result.size(), result.totalElements(), result.totalPages()));
     }
 
     @PostMapping("/{id}/read")

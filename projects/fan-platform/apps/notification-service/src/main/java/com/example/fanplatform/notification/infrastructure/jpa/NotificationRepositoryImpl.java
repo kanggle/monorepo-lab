@@ -1,7 +1,7 @@
 package com.example.fanplatform.notification.infrastructure.jpa;
 
+import com.example.common.page.PageResult;
 import com.example.fanplatform.notification.domain.notification.Notification;
-import com.example.fanplatform.notification.domain.notification.NotificationPage;
 import com.example.fanplatform.notification.domain.notification.NotificationRepository;
 import com.example.fanplatform.notification.domain.notification.NotificationStatus;
 import lombok.RequiredArgsConstructor;
@@ -40,12 +40,12 @@ public class NotificationRepositoryImpl implements NotificationRepository {
     }
 
     @Override
-    public NotificationPage findInbox(String tenantId, String accountId,
-                                      NotificationStatus status, int page, int size) {
+    public PageResult<Notification> findInbox(String tenantId, String accountId,
+                                               NotificationStatus status, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Notification> result = (status == null)
                 ? jpa.findByTenantIdAndAccountId(tenantId, accountId, pageable)
                 : jpa.findByTenantIdAndAccountIdAndStatus(tenantId, accountId, status, pageable);
-        return new NotificationPage(result.getContent(), page, size, result.getTotalElements());
+        return new PageResult<>(result.getContent(), page, size, result.getTotalElements(), result.getTotalPages());
     }
 }

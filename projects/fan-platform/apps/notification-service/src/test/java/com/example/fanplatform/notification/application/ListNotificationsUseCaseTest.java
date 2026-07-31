@@ -1,6 +1,7 @@
 package com.example.fanplatform.notification.application;
 
-import com.example.fanplatform.notification.domain.notification.NotificationPage;
+import com.example.common.page.PageResult;
+import com.example.fanplatform.notification.domain.notification.Notification;
 import com.example.fanplatform.notification.domain.notification.NotificationRepository;
 import com.example.fanplatform.notification.domain.notification.NotificationStatus;
 import org.junit.jupiter.api.Test;
@@ -21,11 +22,11 @@ class ListNotificationsUseCaseTest {
 
     @Test
     void scopesQueryToCallerAndPassesStatusAndPaging() {
-        NotificationPage page = new NotificationPage(List.of(), 0, 20, 0);
+        PageResult<Notification> page = new PageResult<>(List.of(), 0, 20, 0, 0);
         when(repository.findInbox("fan-platform", "acc-1", NotificationStatus.UNREAD, 0, 20))
                 .thenReturn(page);
 
-        NotificationPage result = useCase.list(ACTOR, NotificationStatus.UNREAD, 0, 20);
+        PageResult<Notification> result = useCase.list(ACTOR, NotificationStatus.UNREAD, 0, 20);
 
         assertThat(result).isSameAs(page);
         verify(repository).findInbox("fan-platform", "acc-1", NotificationStatus.UNREAD, 0, 20);
@@ -33,10 +34,10 @@ class ListNotificationsUseCaseTest {
 
     @Test
     void nullStatusReturnsAllStates() {
-        NotificationPage page = new NotificationPage(List.of(), 1, 5, 12);
+        PageResult<Notification> page = new PageResult<>(List.of(), 1, 5, 12, 3);
         when(repository.findInbox("fan-platform", "acc-1", null, 1, 5)).thenReturn(page);
 
-        NotificationPage result = useCase.list(ACTOR, null, 1, 5);
+        PageResult<Notification> result = useCase.list(ACTOR, null, 1, 5);
 
         assertThat(result.totalElements()).isEqualTo(12);
         verify(repository).findInbox("fan-platform", "acc-1", null, 1, 5);

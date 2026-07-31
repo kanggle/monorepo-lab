@@ -1,5 +1,6 @@
 package com.example.fanplatform.artist.adapter.out.persistence;
 
+import com.example.common.page.PageResult;
 import com.example.fanplatform.artist.application.port.out.ArtistRepository;
 import com.example.fanplatform.artist.domain.artist.Artist;
 import com.example.fanplatform.artist.domain.artist.ArtistId;
@@ -62,13 +63,13 @@ class ArtistRepositoryImpl implements ArtistRepository {
     }
 
     @Override
-    public DirectoryPage findPublishedDirectoryPage(String tenantId, String q, ArtistType type,
-                                                    int page, int size) {
+    public PageResult<Artist> findPublishedDirectoryPage(String tenantId, String q, ArtistType type,
+                                                           int page, int size) {
         // Stable, deterministic ordering for cache hashing: stage_name asc, id asc as tiebreaker.
         Sort sort = Sort.by(Sort.Direction.ASC, "stageName").and(Sort.by(Sort.Direction.ASC, "id"));
         Page<ArtistJpaEntity> p = jpa.searchPublished(tenantId, q, type, PageRequest.of(page, size, sort));
         List<Artist> items = p.getContent().stream().map(this::toDomain).toList();
-        return new DirectoryPage(items, p.getNumber(), p.getSize(), p.getTotalElements(), p.getTotalPages());
+        return new PageResult<>(items, p.getNumber(), p.getSize(), p.getTotalElements(), p.getTotalPages());
     }
 
     @Override

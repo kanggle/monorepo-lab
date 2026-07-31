@@ -1,11 +1,11 @@
 package com.example.fanplatform.artist.application.port.out;
 
+import com.example.common.page.PageResult;
 import com.example.fanplatform.artist.domain.artist.Artist;
 import com.example.fanplatform.artist.domain.artist.ArtistId;
 import com.example.fanplatform.artist.domain.artist.ArtistStatus;
 import com.example.fanplatform.artist.domain.artist.ArtistType;
 
-import java.util.List;
 import java.util.Optional;
 
 /**
@@ -41,19 +41,11 @@ public interface ArtistRepository {
      * Directory page for the {@code SearchArtistDirectoryUseCase}. Returns
      * only PUBLISHED artists in the given tenant. Sorted by stage_name.
      */
-    DirectoryPage findPublishedDirectoryPage(String tenantId, String q, ArtistType type,
-                                             int page, int size);
+    PageResult<Artist> findPublishedDirectoryPage(String tenantId, String q, ArtistType type,
+                                                   int page, int size);
 
     boolean existsByTenantIdAndStageName(String tenantId, String stageName);
 
     /** True if the artist exists in this tenant with the given status. */
     boolean existsInStatus(ArtistId id, String tenantId, ArtistStatus status);
-
-    record DirectoryPage(
-            List<Artist> items,
-            int page,
-            int size,
-            long totalElements,
-            int totalPages
-    ) {}
 }

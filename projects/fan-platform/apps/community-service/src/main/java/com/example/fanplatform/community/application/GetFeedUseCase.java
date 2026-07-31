@@ -1,8 +1,8 @@
 package com.example.fanplatform.community.application;
 
+import com.example.common.page.PageResult;
 import com.example.fanplatform.community.domain.comment.CommentRepository;
 import com.example.fanplatform.community.domain.membership.MembershipChecker;
-import com.example.fanplatform.community.domain.post.PageResult;
 import com.example.fanplatform.community.domain.post.Post;
 import com.example.fanplatform.community.domain.post.PostRepository;
 import com.example.fanplatform.community.domain.post.PostVisibility;
@@ -12,7 +12,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -50,19 +49,19 @@ public class GetFeedUseCase {
     private final FeedCache feedCache;
 
     @Transactional(readOnly = true)
-    public FeedPage execute(ActorContext actor, int page, int size) {
+    public PageResult<FeedItemView> execute(ActorContext actor, int page, int size) {
         int safePage = Math.max(0, page);
         int safeSize = Math.min(Math.max(1, size), MAX_SIZE);
 
         // 1) Read-through: fast path — return immediately from Redis on hit.
-        Optional<FeedPage> cached = feedCache.readPage(
+        Optional<PageResult<FeedItemView>> cached = feedCache.readPage(
                 actor.tenantId(), actor.accountId(), safePage, safeSize);
         if (cached.isPresent()) {
             return cached.get();
         }
 
         // 2) Miss: query Postgres + build the page.
-        FeedPage built = queryAndBuild(actor, safePage, safeSize);
+        PageResult<FeedItemView> built = queryAndBuild(actor, safePage, safeSize);
 
         // 3) Best-effort cache write of the hydrated page. The repository
         //    swallows + counts failures so the caller's response is unaffected.
@@ -70,7 +69,7 @@ public class GetFeedUseCase {
         return built;
     }
 
-    private FeedPage queryAndBuild(ActorContext actor, int safePage, int safeSize) {
+    private PageResult<FeedItemView> queryAndBuild(ActorContext actor, int safePage, int safeSize) {
         PageResult<Post> posts = postRepository.findFeedForFan(
                 actor.accountId(), actor.tenantId(), safePage, safeSize);
 
@@ -78,12 +77,11 @@ public class GetFeedUseCase {
         Map<String, Long> commentCounts = commentRepository.countsByPostIds(postIds, actor.tenantId());
         Map<String, Long> reactionCounts = reactionRepository.countsByPostIds(postIds, actor.tenantId());
 
-        List<FeedItemView> items = new ArrayList<>(posts.numberOfElements());
-        for (Post post : posts.content()) {
+        return posts.map(post -> {
             boolean locked = isLocked(post, actor);
             String title = locked ? null : post.getTitle();
             String preview = locked ? null : preview(post.getBody());
-            items.add(new FeedItemView(
+            return new FeedItemView(
                     post.getId(),
                     post.getPostType(),
                     post.getVisibility(),
@@ -94,16 +92,8 @@ public class GetFeedUseCase {
                     reactionCounts.getOrDefault(post.getId(), 0L),
                     post.getPublishedAt(),
                     locked
-            ));
-        }
-        return new FeedPage(
-                items,
-                posts.page(),
-                posts.size(),
-                posts.totalElements(),
-                posts.totalPages(),
-                posts.hasNext()
-        );
+            );
+        });
     }
 
     private boolean isLocked(Post post, ActorContext actor) {

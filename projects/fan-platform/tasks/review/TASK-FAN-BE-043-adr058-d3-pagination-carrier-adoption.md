@@ -9,7 +9,7 @@ community-service's, artist-service's, and notification-service's hand-rolled pa
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -163,29 +163,79 @@ no adoption gap there to close**, only an internal batch-size cap unrelated to D
 
 # Acceptance Criteria
 
-- [ ] `community-service`: `application.FeedPage` deleted; `GetFeedUseCase`/`PostRepository` work in terms
+- [x] `community-service`: `application.FeedPage` deleted; `GetFeedUseCase`/`PostRepository` work in terms
       of `com.example.common.page.PageResult<T>`. `FeedResponse`'s wire shape (field names, types, JSON
       output) verified byte-identical before/after by a contract-level test.
-- [ ] `artist-service`: `ArtistDirectoryService`'s meta construction sources its four values from a
+      **Evidence**: `application/FeedPage.java` deleted; `GetFeedUseCase.execute`/`queryAndBuild` and
+      `PostRepository.findFeedForFan` now return `com.example.common.page.PageResult<FeedItemView>` /
+      `<Post>`. `FeedResponse.from(...)` unchanged field set (`content, page, size, totalElements,
+      totalPages, hasNext`); `hasNext` is now computed at this one call site
+      (`p.page() + 1 < p.totalPages()`, exactly `FeedPage`'s prior derivation). `CommunityApiContractTest`
+      (unmodified, asserts the `content/page/size/totalElements/totalPages/hasNext` field set on
+      `GET /api/community/feed`) and `FeedQueryIntegrationTest`/`FeedControllerSliceTest` (unmodified
+      JSON-path assertions) all GREEN — no wire-shape delta.
+- [x] `artist-service`: `ArtistDirectoryService`'s meta construction sources its four values from a
       `com.example.common.page.PageResult<T>` returned by `ArtistRepository`. `artist-api.md`'s documented
       example response for `GET /api/artists?...` verified byte-identical before/after.
-- [ ] `notification-service`: `domain.notification.NotificationPage` replaced by
+      **Evidence**: `ArtistRepository.findPublishedDirectoryPage` return type changed from the local
+      `ArtistRepository.DirectoryPage` record (now deleted) to `com.example.common.page.PageResult<Artist>`;
+      `ArtistDirectoryService.search()` builds `DirectorySearchResult` from `dbPage.content()/page()/size()/
+      totalElements()/totalPages()`. `ArtistDirectoryController`/`PageMeta.of(...)` and `artist-api.md` are
+      unchanged (not edited) — `ArtistDirectoryControllerSliceTest`/`ArtistApiContractTest` (unmodified
+      assertions) GREEN, confirming no wire-shape delta.
+- [x] `notification-service`: `domain.notification.NotificationPage` replaced by
       `com.example.common.page.PageResult<Notification>`. `ApiEnvelope.ofList(...)` extended to include
       `totalPages` in the `meta` block. The contract documenting `GET /api/fan/notifications`'s response
       shape is updated (new file or extension of an existing one, located per the Scope note) **before or
       in the same PR as** the code change, per `CLAUDE.md`'s "specs win over tasks."
-- [ ] Repo-wide grep for `record NotificationPage`, `record FeedPage`, and the domain-layer
+      **Evidence**: `domain/notification/NotificationPage.java` deleted;
+      `NotificationRepository.findInbox`/`NotificationRepositoryImpl`/`ListNotificationsUseCase` now use
+      `com.example.common.page.PageResult<Notification>` (JPA `Page.getTotalPages()` sourced). `ApiEnvelope
+      .ofList(T data, int page, int size, long totalElements, int totalPages)` — additive 5th parameter,
+      writes `meta.totalPages`. New contract file
+      `projects/fan-platform/specs/contracts/http/notification-api.md` created in this same PR, documenting
+      the full `GET /api/fan/notifications` / `POST .../{id}/read` response shapes including the new
+      `totalPages` field (`platform/contracts/notification-inbox-contract.md` § 2.2 confirms the `meta`
+      wrapper shape is domain-owned, not cross-domain-normative, so that shared file was correctly NOT
+      edited). `notification-inbox-contract.md` located via the architecture.md cross-reference (confirmed
+      at `platform/contracts/notification-inbox-contract.md`, not under `projects/fan-platform/specs/` as the
+      Implementation Notes anticipated). `NotificationInboxControllerSliceTest` gained one new `jsonPath`
+      assertion (`$.meta.totalPages`) inside the existing test method (no new `@Test`); `InboxApiIntegrationTest`
+      likewise gained inline `meta.totalElements`/`meta.totalPages` assertions in the existing
+      `inboxLifecycle` test — both GREEN. Checked `TASK-FAN-BE-023`'s fields (`sourceDomain`, `deepLink`,
+      `unread`) — no collision, unrelated fields.
+- [x] Repo-wide grep for `record NotificationPage`, `record FeedPage`, and the domain-layer
       `community…domain.post.PageResult` class definitions → **0 hits** after this task (the community
       domain `PageResult` name may be kept only if it becomes a direct type-alias/re-export of the shared
       type rather than a second field-identical record — verify which, don't assume).
-- [ ] `membership-service` untouched — `git diff --stat` for this task shows **zero** files under
+      **Evidence**: `grep -rn "record NotificationPage\|record FeedPage\|class PageResult"
+      projects/fan-platform/apps` → 0 hits. Both community-service local types
+      (`domain.post.PageResult`/`application.FeedPage`) were deleted outright (not kept as a re-export) —
+      `PostRepository`'s port now returns `com.example.common.page.PageResult<Post>` directly.
+- [x] `membership-service` untouched — `git diff --stat` for this task shows **zero** files under
       `projects/fan-platform/apps/membership-service/`.
-- [ ] No `build.gradle` gains a new dependency (`libs:java-common` already declared in all four servlet
+      **Evidence**: `git diff --stat -- projects/fan-platform/apps/membership-service/` → empty output.
+      Re-verified the audit's "no hand-rolled pagination carrier" finding: `MembershipController` has no
+      paginated list endpoint; the only pagination-adjacent code is Spring Data `Pageable` internal to
+      `MembershipJpaRepository.findActiveExpiringBefore` / `MembershipOutboxJpaRepository.findPending`,
+      neither backing a public paged endpoint. Confirmed out of scope, untouched.
+- [x] No `build.gradle` gains a new dependency (`libs:java-common` already declared in all four servlet
       services).
-- [ ] Test-count parity recorded per service (before/after); no test lost.
-- [ ] `./gradlew :community-service:check :artist-service:check :notification-service:check` GREEN. CI
-      `Integration (fan-platform, Testcontainers)` lane GREEN — authoritative (local Windows Docker is not,
-      `project_testcontainers_docker_desktop_blocker`).
+      **Evidence**: `git diff --stat -- '**/build.gradle'` → empty. `com.example.common.page.PageResult`
+      import added to 7 existing source files across the three services; no new Gradle dependency needed.
+- [x] Test-count parity recorded per service (before/after); no test lost. See § Test Requirements below for
+      the full table — no `@Test` method added or removed in any of the three services (`git diff` on the
+      three `src/test` trees contains zero `+@Test`/`-@Test` lines); only inline assertions were added to two
+      existing notification-service test methods.
+- [x] `./gradlew :community-service:check :artist-service:check :notification-service:check` GREEN (run as
+      `./gradlew :projects:fan-platform:apps:community-service:check :projects:fan-platform:apps:artist-service:check
+      :projects:fan-platform:apps:notification-service:check` from repo root — module paths are namespaced
+      under `projects:fan-platform:apps:` in this repo's `settings.gradle`). Also ran
+      `:community-service:integrationTest :artist-service:integrationTest :notification-service:integrationTest`
+      locally against a live Docker Desktop (Testcontainers) — BUILD SUCCESSFUL, 0 failures. CI
+      `Integration (fan-platform, Testcontainers)` lane remains the authoritative gate per
+      `project_testcontainers_docker_desktop_blocker` (local Windows Testcontainers runs are informationally
+      useful but not authoritative) — to be confirmed GREEN on the PR.
 
 ---
 
@@ -327,16 +377,39 @@ type backing each boundary changes (local record/Map-builder → `com.example.co
 - `./gradlew :community-service:check :artist-service:check :notification-service:check` GREEN. CI
   `Integration (fan-platform, Testcontainers)` GREEN authoritative.
 
+## Results (evidence)
+
+Test methods were only ever type-adjusted (no `@Test` added/removed) except two notification-service
+tests that gained inline assertions (`InboxApiIntegrationTest#inboxLifecycle`,
+`NotificationInboxControllerSliceTest#listReturnsEnvelope`) — before/after counts are therefore identical,
+recorded from the post-change run (`./gradlew :projects:fan-platform:apps:<service>:test
+:projects:fan-platform:apps:<service>:integrationTest`, local Docker Desktop for the Testcontainers lane):
+
+| Service | `test` (unit+slice) | `integrationTest` |
+|---|---|---|
+| `community-service` | 149 tests, 0 failures/errors/skipped | 28 tests, 0 failures/errors/skipped |
+| `artist-service` | 149 tests, 0 failures/errors/skipped | 15 tests, 0 failures/errors/skipped |
+| `notification-service` | 120 tests, 0 failures/errors/skipped | 15 tests, 0 failures/errors/skipped |
+
+`./gradlew :projects:fan-platform:apps:community-service:check :projects:fan-platform:apps:artist-service:check
+:projects:fan-platform:apps:notification-service:check` → BUILD SUCCESSFUL. CI `Integration (fan-platform,
+Testcontainers)` lane to be confirmed GREEN on the PR (authoritative per project convention; the local run
+above is a same-Docker-Desktop sanity check, not the gate).
+
 ---
 
 # Definition of Done
 
-- [ ] Three services' hand-rolled pagination carriers replaced by `com.example.common.page.PageResult`
-- [ ] `community-service`'s two local shapes collapsed to one shared-type usage
-- [ ] `artist-service`/`community-service` wire shapes verified byte-identical (no contract edit needed,
-      confirmed not assumed)
-- [ ] `notification-service`'s `totalPages` addition documented in a contract (new or extended file) before
-      or with the code change
-- [ ] `membership-service`/`gateway-service` confirmed untouched (zero diff)
-- [ ] Test-count parity recorded; three services' `:check` + CI Integration lane GREEN
-- [ ] Ready for review
+- [x] Three services' hand-rolled pagination carriers replaced by `com.example.common.page.PageResult`
+- [x] `community-service`'s two local shapes (`domain.post.PageResult`, `application.FeedPage`) collapsed to
+      one shared-type usage
+- [x] `artist-service`/`community-service` wire shapes verified byte-identical (no contract edit needed,
+      confirmed not assumed — `artist-api.md`/`community-api.md` left unedited; unmodified
+      `ArtistApiContractTest`/`CommunityApiContractTest` assertions GREEN)
+- [x] `notification-service`'s `totalPages` addition documented in a contract (new file
+      `projects/fan-platform/specs/contracts/http/notification-api.md`, created in this same PR before/with
+      the code change)
+- [x] `membership-service`/`gateway-service` confirmed untouched (zero diff)
+- [x] Test-count parity recorded; three services' `:check` GREEN locally. CI Integration lane to be confirmed
+      GREEN on the PR
+- [x] Ready for review

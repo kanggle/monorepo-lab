@@ -1,9 +1,10 @@
 package com.example.fanplatform.notification.presentation.controller;
 
+import com.example.common.page.PageResult;
 import com.example.fanplatform.notification.application.ActorContext;
 import com.example.fanplatform.notification.application.ListNotificationsUseCase;
 import com.example.fanplatform.notification.application.MarkNotificationReadUseCase;
-import com.example.fanplatform.notification.domain.notification.NotificationPage;
+import com.example.fanplatform.notification.domain.notification.Notification;
 import com.example.fanplatform.notification.presentation.advice.GlobalExceptionHandler;
 import com.example.fanplatform.notification.testsupport.JwtTestHelper;
 import com.example.fanplatform.notification.testsupport.SliceTestSecurityConfig;
@@ -94,7 +95,7 @@ class ActorContextAuthPathSliceTest {
         when(listNotifications.list(any(), any(), anyInt(), anyInt())).thenAnswer(invocation -> {
             boundActor.set(invocation.getArgument(0));
             liveAuthentication.set(SecurityContextHolder.getContext().getAuthentication());
-            return new NotificationPage(List.of(), 0, 20, 0);
+            return new PageResult<Notification>(List.of(), 0, 20, 0, 0);
         });
     }
 

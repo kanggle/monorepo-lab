@@ -1,5 +1,7 @@
 package com.example.fanplatform.community.domain.post;
 
+import com.example.common.page.PageResult;
+
 import java.util.Optional;
 
 /**

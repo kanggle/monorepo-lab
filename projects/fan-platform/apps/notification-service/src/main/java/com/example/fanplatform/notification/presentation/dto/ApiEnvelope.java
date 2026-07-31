@@ -20,12 +20,21 @@ public record ApiEnvelope<T>(T data, Map<String, Object> meta) {
         return new ApiEnvelope<>(data, meta);
     }
 
-    public static <T> ApiEnvelope<T> ofList(T data, int page, int size, long totalElements) {
+    /**
+     * @param totalPages total number of pages. Added by TASK-FAN-BE-043
+     *                    (ADR-MONO-058 § D3 pagination-carrier adoption) — an
+     *                    additive {@code meta} field; existing fields are
+     *                    unchanged (backward-compatible per
+     *                    {@code platform/error-handling.md}'s
+     *                    permitted-to-extend precedent).
+     */
+    public static <T> ApiEnvelope<T> ofList(T data, int page, int size, long totalElements, int totalPages) {
         Map<String, Object> meta = new LinkedHashMap<>();
         meta.put("timestamp", Instant.now().toString());
         meta.put("page", page);
         meta.put("size", size);
         meta.put("totalElements", totalElements);
+        meta.put("totalPages", totalPages);
         return new ApiEnvelope<>(data, meta);
     }
 }

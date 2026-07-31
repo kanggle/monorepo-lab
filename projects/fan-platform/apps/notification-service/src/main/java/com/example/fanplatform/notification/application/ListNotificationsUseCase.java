@@ -1,6 +1,7 @@
 package com.example.fanplatform.notification.application;
 
-import com.example.fanplatform.notification.domain.notification.NotificationPage;
+import com.example.common.page.PageResult;
+import com.example.fanplatform.notification.domain.notification.Notification;
 import com.example.fanplatform.notification.domain.notification.NotificationRepository;
 import com.example.fanplatform.notification.domain.notification.NotificationStatus;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +20,7 @@ public class ListNotificationsUseCase {
     private final NotificationRepository repository;
 
     @Transactional(readOnly = true)
-    public NotificationPage list(ActorContext actor, NotificationStatus status, int page, int size) {
+    public PageResult<Notification> list(ActorContext actor, NotificationStatus status, int page, int size) {
         return repository.findInbox(actor.tenantId(), actor.accountId(), status, page, size);
     }
 }

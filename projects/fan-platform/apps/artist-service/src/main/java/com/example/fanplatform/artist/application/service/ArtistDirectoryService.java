@@ -1,9 +1,11 @@
 package com.example.fanplatform.artist.application.service;
 
+import com.example.common.page.PageResult;
 import com.example.fanplatform.artist.application.port.in.ArtistView;
 import com.example.fanplatform.artist.application.port.in.SearchArtistDirectoryUseCase;
 import com.example.fanplatform.artist.application.port.out.ArtistDirectoryCache;
 import com.example.fanplatform.artist.application.port.out.ArtistRepository;
+import com.example.fanplatform.artist.domain.artist.Artist;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,9 +47,9 @@ public class ArtistDirectoryService implements SearchArtistDirectoryUseCase {
         if (cached.isPresent()) {
             return cached.get();
         }
-        ArtistRepository.DirectoryPage dbPage = artistRepository.findPublishedDirectoryPage(
+        PageResult<Artist> dbPage = artistRepository.findPublishedDirectoryPage(
                 tenantId, qNorm.isEmpty() ? null : qNorm, q.type(), page, size);
-        List<ArtistView> items = dbPage.items().stream().map(ArtistView::from).toList();
+        List<ArtistView> items = dbPage.content().stream().map(ArtistView::from).toList();
         DirectorySearchResult result = new DirectorySearchResult(
                 items, dbPage.page(), dbPage.size(), dbPage.totalElements(), dbPage.totalPages());
         cache.put(tenantId, key, result);
