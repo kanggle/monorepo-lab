@@ -2,6 +2,7 @@ package com.example.scmplatform.logistics.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.scmplatform.logistics.adapter.inbound.web.security.PublicPaths;
 import com.example.security.oauth2.TenantClaimValidator;
 import com.example.security.servlet.TenantClaimEnforcer;
 import jakarta.servlet.FilterChain;
@@ -45,6 +46,28 @@ class ScmTenantGatePolicyTest {
     @AfterEach
     void clearContext() {
         SecurityContextHolder.clearContext();
+    }
+
+    // -----------------------------------------------------------------------
+    // TASK-SCM-BE-057 (ADR-MONO-058 § D5) — this service had no dedicated PublicPaths
+    // classification coverage (direct or indirect) before this task; these three assertions are
+    // the before/after parity net for the PublicPathSet delegation swap, mirroring the equivalent
+    // block already present in demand-planning's and inventory-visibility's own
+    // ScmTenantGatePolicyTest.
+    // -----------------------------------------------------------------------
+    @Nested
+    @DisplayName("the exempt set is exactly the three actuator probes SecurityConfig permits")
+    class PublicPathsMechanism {
+
+        @Test
+        @DisplayName("EXACT is the three probes; PREFIXES is empty by design")
+        void exemptSetIsThePermitSet() {
+            assertThat(PublicPaths.EXACT)
+                    .containsExactlyInAnyOrder(
+                            "/actuator/health", "/actuator/info", "/actuator/prometheus");
+            assertThat(PublicPaths.PREFIXES).isEmpty();
+            assertThat(PublicPaths.isPublic("/actuator/env")).isFalse();
+        }
     }
 
     @Nested
@@ -126,6 +149,17 @@ class ScmTenantGatePolicyTest {
     }
 
     @Nested
+    @DisplayName("the filter admits")
+    class FilterAdmits {
+
+        @Test
+        @DisplayName("a permitted actuator probe is exempt — even a cross-tenant token reaches it")
+        void publicPathExempt() throws Exception {
+            assertThat(filter(jwt("wms", null), "/actuator/health").called).isTrue();
+        }
+    }
+
+    @Nested
     @DisplayName("the filter refuses")
     class FilterRefuses {
 
@@ -142,6 +176,15 @@ class ScmTenantGatePolicyTest {
         @DisplayName("non-entitled: tenant_id=acme + entitled_domains=[wms] → 403, chain NOT invoked")
         void nonEntitledCrossTenantBlocked() throws Exception {
             Outcome outcome = filter(jwt("acme", List.of("wms")), API_PATH);
+            assertThat(outcome.called).isFalse();
+            assertThat(outcome.status).isEqualTo(403);
+        }
+
+        @Test
+        @DisplayName("an actuator path that is NOT permitted is still gated — the exemption does "
+                + "not leak sideways")
+        void nonPublicActuatorPathStillGated() throws Exception {
+            Outcome outcome = filter(jwt("wms", null), "/actuator/env");
             assertThat(outcome.called).isFalse();
             assertThat(outcome.status).isEqualTo(403);
         }

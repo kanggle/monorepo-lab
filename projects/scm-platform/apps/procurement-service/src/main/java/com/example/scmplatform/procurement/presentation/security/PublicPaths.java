@@ -1,5 +1,6 @@
 package com.example.scmplatform.procurement.presentation.security;
 
+import com.example.security.servlet.PublicPathSet;
 import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.Set;
@@ -15,6 +16,9 @@ import java.util.Set;
  * (see {@code SupplierAckWebhookController}). When v2 introduces HMAC-signed
  * webhooks, the verification logic is added to the webhook controllers, not
  * here.
+ *
+ * <p>The {@code EXACT}/{@code PREFIXES} matching mechanism delegates to the shared
+ * {@link PublicPathSet} (ADR-MONO-058 § D5) — this class still owns the path data.
  */
 public final class PublicPaths {
 
@@ -32,19 +36,16 @@ public final class PublicPaths {
             "/api/procurement/webhooks/"
     );
 
+    private static final PublicPathSet MECHANISM = PublicPathSet.of(EXACT, PREFIXES);
+
     private PublicPaths() {
     }
 
     public static boolean isPublic(String path) {
-        if (path == null) return false;
-        if (EXACT.contains(path)) return true;
-        for (String prefix : PREFIXES) {
-            if (path.startsWith(prefix)) return true;
-        }
-        return false;
+        return MECHANISM.isPublic(path);
     }
 
     public static boolean isPublic(HttpServletRequest request) {
-        return isPublic(request.getRequestURI());
+        return MECHANISM.isPublic(request);
     }
 }
