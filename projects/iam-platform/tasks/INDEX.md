@@ -92,7 +92,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 **ADR-MONO-058 (fleet-wide shared technical scaffolding consolidation, ACCEPTED 2026-07-30) — iam-platform 분할 착수 (2026-07-31, 루트 `TASK-MONO-495` 분할).** 8개 결정(D1-D8) 중 ADR § 1.1 표가 iam 대상으로 표시한 D1/D2/D6/D7 을 실제 코드로 재검증(감사는 2026-07-29 스냅샷) — D1(actor/JWT 클러스터)은 **iam 에 해당 패턴이 없다**(iam 은 발급자이지 소비자가 아님, 서비스별 자체 `OperatorAuthenticationFilter`/GAP client_credentials 게이트만 존재) → 티켓 없음. D2(에러 envelope)는 **이미 4개 서비스 전부 `CommonGlobalExceptionHandler`/`ErrorResponse` 채택 완료** → 티켓 없음. D6/D7 만 실제 적용 대상으로 확인되어 티켓 발행:
 
-- `TASK-BE-568-adr058-d6-adopt-iam-client-credentials-token-provider.md` — D6: `IamClientCredentialsTokenProvider` 4개 사본(auth/account/admin/security-service) 전부 `RestClient.create()`(타임아웃 0) + `.getBytes()`(UTF-8 미명시) 결함 확인 → `libs/java-security` 정규 클래스로 교체. **선행 = 루트 `tasks/ready/TASK-MONO-501`**(미착수, 아직 promotion 안 됨) — 그 전엔 시작 불가.
+> D6 티켓(4개 사본 → `libs/java-security` 정규 클래스 교체)은 구현 완료되어 `review/` 로 이동 — 아래 `## review` 참조.
 - `TASK-BE-569-adr058-d7-adopt-resilience-client-factory.md` — D7(ResilienceClientFactory 서브패턴만, EventDedupePort 아님): admin-service 5개 + account-service 1개 클라이언트가 `libs/java-common.ResilienceClientFactory.buildRestClient` 와 byte-identical 한 보일러플레이트를 직접 손코딩 — 순수 중복 정리. **ADR 의 "zero read timeout" 프레이밍은 iam 에 해당 없음**(9개 아웃바운드 클라이언트 전부 명시적 타임아웃 보유, 직접 확인) — 스코프를 실제 확인된 중복으로 좁힘. auth-service 2개는 이미 채택 완료, security-service 1개는 아키텍처가 달라(raw HttpClient, Resilience4j 미사용) 범위 밖.
 
 > D3/D4/D5/D8 은 ADR § 1.1 표에서 iam 대상으로 확인되지 않아 티켓 미발행.
@@ -107,6 +107,18 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 
 ## review
+
+- **`TASK-BE-568-adr058-d6-adopt-iam-client-credentials-token-provider.md` — 구현 완료 (2026-07-31), 리뷰 대기.**
+  `TASK-MONO-501`(canonical class promotion, PR #3116, merged) 선행 완료 확인 후 착수. iam-platform 4개 서비스
+  (`auth`/`account`/`admin`/`security-service`) 로컬 `IamClientCredentialsTokenProvider` 사본 4개 전량 삭제, 9개
+  caller 를 `libs/java-security` 정규 클래스로 교체 — RFC 7617 UTF-8 Basic-auth 인코딩 + 명시적 connect/read
+  타임아웃(신규 `iam.internal-client.connect-timeout-ms`/`read-timeout-ms`, 기본 3000/5000ms, 다운스트림 호출
+  타임아웃과 별개 knob) 을 4개 서비스 동시에 적용. `internal.invoke` scope wire-shape 불변 검증(WireMock body
+  assert). 서비스별 `IamClientCredentialsTokenProviderTest` 3개 재조준 + account-service 신규 1개(기존 커버리지
+  0 이었음) — UTF-8 헤더 byte-assert 포함. `git diff --stat` 로 9개 caller 파일 각 1-line import 삽입만 확인(동작
+  변경 없음). 4개 서비스 전체 `:test` 개별 실행 GREEN: auth 640 / account 504 / admin 848 / security 240, 실패 0.
+  account-service 는 `libs:java-security` gradle 의존성이 누락돼 있어 추가(나머지 3개는 이미 선언됨).
+  분석=Sonnet 5 / 구현=Sonnet 5(세션 직접).
 
 ## done
 

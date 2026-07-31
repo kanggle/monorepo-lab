@@ -175,7 +175,7 @@ class SocialLoginSasBrowserIntegrationTest extends AbstractIntegrationTest {
 
     // GAP client_credentials Bearer is minted via a SAS self-call unreachable in MockMvc.
     @MockitoBean
-    com.example.auth.infrastructure.client.IamClientCredentialsTokenProvider gapTokenProvider;
+    com.example.security.oauth2.client.IamClientCredentialsTokenProvider gapTokenProvider;
 
     // Replace the provider-client selector so the social token+userinfo exchange is hermetic.
     @MockitoBean

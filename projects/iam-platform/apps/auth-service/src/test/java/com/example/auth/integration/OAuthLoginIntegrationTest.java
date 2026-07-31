@@ -125,7 +125,7 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
     // self-call to /oauth2/token, unreachable in @SpringBootTest+MockMvc. Replace the provider with
     // a mock returning a fixed bearer so account stubs are exercised hermetically.
     @org.springframework.test.context.bean.override.mockito.MockitoBean
-    com.example.auth.infrastructure.client.IamClientCredentialsTokenProvider gapTokenProvider;
+    com.example.security.oauth2.client.IamClientCredentialsTokenProvider gapTokenProvider;
 
     @org.junit.jupiter.api.BeforeEach
     void stubIamClientCredentialsToken() {

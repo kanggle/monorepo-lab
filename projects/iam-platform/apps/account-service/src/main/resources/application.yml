@@ -103,10 +103,16 @@ internal:
 # TASK-BE-487 (ADR-005 단계 4): outbound /internal/auth/** calls (credential create / identity
 # backfill → auth-service) authenticate with a GAP client_credentials Bearer JWT (was unauthenticated).
 # The token is minted at auth-service's /oauth2/token with client_id=account-service-client (seeded in
-# auth V0019) and cached by IamClientCredentialsTokenProvider — lazy (first outbound auth call) so
-# startup never depends on auth-service being ready. Receiver (auth /internal/auth/**) now requires it.
+# auth V0019) and cached by the canonical libs/java-security IamClientCredentialsTokenProvider
+# (TASK-BE-568, ADR-MONO-058 § D6) — lazy (first outbound auth call) so startup never depends on
+# auth-service being ready. Receiver (auth /internal/auth/**) now requires it. connect/read-timeout-ms
+# are the token-FETCH call's own timeouts — a distinct knob from account.auth-service.* above (the
+# downstream credential-write call's timeouts): the shared provider previously had no timeout at all
+# (RestClient.create()), letting a hung token endpoint block the caller's thread indefinitely.
 iam:
   internal-client:
     token-uri: ${OIDC_TOKEN_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/token}
     client-id: ${ACCOUNT_SERVICE_CLIENT_ID:account-service-client}
     client-secret: ${ACCOUNT_SERVICE_CLIENT_SECRET:secret}
+    connect-timeout-ms: ${IAM_INTERNAL_CLIENT_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${IAM_INTERNAL_CLIENT_READ_TIMEOUT_MS:5000}

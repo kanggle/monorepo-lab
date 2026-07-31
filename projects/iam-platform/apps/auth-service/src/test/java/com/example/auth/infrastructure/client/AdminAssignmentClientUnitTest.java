@@ -1,6 +1,7 @@
 package com.example.auth.infrastructure.client;
 
 import com.example.auth.application.exception.AssumeTenantDeniedException;
+import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.http.Fault;
 import org.junit.jupiter.api.AfterEach;

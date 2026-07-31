@@ -91,12 +91,18 @@ security-service:
 
 # TASK-BE-318 (ADR-005 단계 3): outbound /internal/** calls to account-service authenticate
 # with a GAP client_credentials Bearer JWT (replaces the legacy X-Internal-Token). Token is
-# fetched from GAP /oauth2/token and cached by IamClientCredentialsTokenProvider.
+# fetched from GAP /oauth2/token and cached by the canonical libs/java-security
+# IamClientCredentialsTokenProvider (TASK-BE-568, ADR-MONO-058 § D6). connect/read-timeout-ms are
+# the token-FETCH call's own timeouts — a distinct knob from security.detection.auto-lock.* above
+# (the downstream lock-call timeouts): the shared provider previously had no timeout at all
+# (RestClient.create()), letting a hung token endpoint block the caller's thread indefinitely.
 iam:
   internal-client:
     token-uri: ${OIDC_TOKEN_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/token}
     client-id: ${SECURITY_SERVICE_CLIENT_ID:security-service-client}
     client-secret: ${SECURITY_SERVICE_CLIENT_SECRET:secret}
+    connect-timeout-ms: ${IAM_INTERNAL_CLIENT_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${IAM_INTERNAL_CLIENT_READ_TIMEOUT_MS:5000}
 
 security:
   # TASK-BE-453: v2 outbox relay (SecurityOutboxPublisher) cadence. The legacy

@@ -8,6 +8,7 @@ import com.example.auth.application.result.AccountProfileResult;
 import com.example.auth.application.result.AccountStatusLookupResult;
 import com.example.auth.application.result.SocialSignupResult;
 import com.example.common.resilience.ResilienceClientFactory;
+import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.retry.Retry;
 import lombok.extern.slf4j.Slf4j;

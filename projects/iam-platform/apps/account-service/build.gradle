@@ -9,6 +9,8 @@ dependencies {
     implementation project(':libs:java-web')
     implementation project(':libs:java-web-servlet')
     implementation project(':libs:java-messaging')
+    // TASK-BE-568 (ADR-MONO-058 § D6): canonical IamClientCredentialsTokenProvider.
+    implementation project(':libs:java-security')
     implementation project(':libs:java-observability')
 
     // Spring Boot starters

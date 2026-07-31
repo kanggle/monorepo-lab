@@ -1,4 +1,4 @@
-package com.example.auth.infrastructure.client;
+package com.example.account.infrastructure.client;
 
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import com.github.tomakehurst.wiremock.WireMockServer;
@@ -21,16 +21,18 @@ import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMoc
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * auth-service-side wiring tests for the canonical {@code libs/java-security}
+ * account-service-side wiring tests for the canonical {@code libs/java-security}
  * {@link IamClientCredentialsTokenProvider} (TASK-BE-568, ADR-MONO-058 § D6 — replaces the
- * previous per-service local copy, TASK-BE-318c). Exercises the provider constructed with
- * auth-service's real {@code client-id} default (seeded in auth-service V0019) and the
- * {@code internal.invoke} scope its {@code /internal/**} callers require, so the header/body
- * bytes asserted here are exactly what production auth-service sends — not just "it compiles".
- * The class's own exhaustive behavioural test suite (caching, refresh-skew, timeout enforcement,
+ * previous per-service local copy, TASK-BE-487). Added for parity with the sibling
+ * auth/admin/security-service wiring tests — account-service previously had no dedicated
+ * provider test of its own. Exercises the provider constructed with account-service's real
+ * {@code client-id} default (seeded in auth-service V0019) and the {@code internal.invoke}
+ * scope its {@code /internal/**} callers require, so the header/body bytes asserted here are
+ * exactly what production account-service sends — not just "it compiles". The class's own
+ * exhaustive behavioural test suite (caching, refresh-skew, timeout enforcement,
  * scope-is-a-parameter) lives in {@code libs/java-security}.
  */
-@DisplayName("IamClientCredentialsTokenProvider 단위 테스트 (auth-service wiring)")
+@DisplayName("IamClientCredentialsTokenProvider 단위 테스트 (account-service wiring)")
 class IamClientCredentialsTokenProviderTest {
 
     private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(5);
@@ -50,7 +52,7 @@ class IamClientCredentialsTokenProviderTest {
 
     private IamClientCredentialsTokenProvider provider() {
         return new IamClientCredentialsTokenProvider(
-                wireMock.baseUrl() + "/oauth2/token", "auth-service-client", "secret",
+                wireMock.baseUrl() + "/oauth2/token", "account-service-client", "secret",
                 "internal.invoke", DEFAULT_TIMEOUT, DEFAULT_TIMEOUT);
     }
 
@@ -68,14 +70,14 @@ class IamClientCredentialsTokenProviderTest {
         // RFC 7617: UTF-8, not the JVM platform-default charset (TASK-BE-568 closes this defect —
         // the deleted local copy used the platform-default-charset `.getBytes()`).
         String expectedBasic = "Basic " + Base64.getEncoder()
-                .encodeToString("auth-service-client:secret".getBytes(StandardCharsets.UTF_8));
+                .encodeToString("account-service-client:secret".getBytes(StandardCharsets.UTF_8));
         wireMock.verify(postRequestedFor(urlEqualTo("/oauth2/token"))
                 .withHeader("Authorization", equalTo(expectedBasic))
                 .withRequestBody(equalTo("grant_type=client_credentials&scope=internal.invoke")));
     }
 
     @Test
-    @DisplayName("AC-2: 유효한 캐시 토큰은 재사용되어 토큰 엔드포인트를 한 번만 호출한다")
+    @DisplayName("유효한 캐시 토큰은 재사용되어 토큰 엔드포인트를 한 번만 호출한다")
     void cachesToken_singleFetchForMultipleCalls() {
         wireMock.stubFor(post(urlEqualTo("/oauth2/token"))
                 .willReturn(aResponse().withStatus(200)

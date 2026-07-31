@@ -1,6 +1,7 @@
 package com.example.account.infrastructure.client;
 
 import com.example.account.application.port.AuthServicePort;
+import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.http.Fault;
 import org.junit.jupiter.api.AfterEach;
@@ -8,6 +9,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.List;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
@@ -44,7 +46,8 @@ class AuthServiceClientUnitTest {
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"access_token\":\"test-cc-token\",\"expires_in\":300,\"token_type\":\"Bearer\"}")));
         IamClientCredentialsTokenProvider tokenProvider = new IamClientCredentialsTokenProvider(
-                wireMockServer.baseUrl() + TOKEN_PATH, "account-service-client", "secret");
+                wireMockServer.baseUrl() + TOKEN_PATH, "account-service-client", "secret",
+                "internal.invoke", Duration.ofSeconds(3), Duration.ofSeconds(5));
         // AuthServiceClient now enforces HTTP/1.1 internally, so no workaround needed here.
         client = new AuthServiceClient(wireMockServer.baseUrl(), 3000, 5000, tokenProvider);
     }

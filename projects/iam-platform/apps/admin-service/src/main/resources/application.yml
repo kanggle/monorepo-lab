@@ -180,11 +180,18 @@ internal:
       jwk-set-uri: ${OIDC_JWK_SET_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/jwks}
       issuer: ${OIDC_ISSUER_URL:http://localhost:8081}
 
+# TASK-BE-568 (ADR-MONO-058 § D6): the token-FETCH call's own connect/read timeouts — a distinct
+# knob from admin.downstream.* above (the downstream business-call timeouts for AccountServiceClient
+# / AuthServiceClient / SecurityServiceClient / AccountServiceTenantClient / AccountServiceOrgNodeClient).
+# The shared libs/java-security IamClientCredentialsTokenProvider previously had no timeout at all
+# (RestClient.create()) here, letting a hung GAP token endpoint block the caller's thread indefinitely.
 iam:
   internal-client:
     token-uri: ${OIDC_TOKEN_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/token}
     client-id: ${ADMIN_SERVICE_CLIENT_ID:admin-service-client}
     client-secret: ${ADMIN_SERVICE_CLIENT_SECRET:secret}
+    connect-timeout-ms: ${IAM_INTERNAL_CLIENT_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${IAM_INTERNAL_CLIENT_READ_TIMEOUT_MS:5000}
 
 resilience4j:
   retry:

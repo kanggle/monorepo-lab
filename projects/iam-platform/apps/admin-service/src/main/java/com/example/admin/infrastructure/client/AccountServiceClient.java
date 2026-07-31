@@ -2,6 +2,7 @@ package com.example.admin.infrastructure.client;
 
 import com.example.admin.application.exception.DownstreamFailureException;
 import com.example.admin.application.exception.NonRetryableDownstreamException;
+import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;

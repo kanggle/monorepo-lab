@@ -1,5 +1,6 @@
 package com.example.security.service.infrastructure.client;
 
+import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import com.example.security.service.domain.Tenants;
 import com.example.security.service.domain.detection.AccountLockClient.LockResult;
 import com.example.security.service.domain.detection.AccountLockClient.Status;
