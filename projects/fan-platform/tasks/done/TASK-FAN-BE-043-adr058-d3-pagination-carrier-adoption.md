@@ -9,7 +9,7 @@ community-service's, artist-service's, and notification-service's hand-rolled pa
 
 # Status
 
-review
+done
 
 # Owner
 
