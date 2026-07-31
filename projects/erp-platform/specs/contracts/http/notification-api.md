@@ -34,7 +34,8 @@ All endpoints:
   not the caller's `sub` is treated as **non-existent** to the caller → 404, not
   403 (avoids existence leak, mirroring the read-model detail rule).
 - Success envelope: `{ "data": <payload>, "meta": { "timestamp": "<ISO-8601>",
-  ... } }`. List responses extend `meta` with `PageMeta`.
+  ... } }`. List responses extend `meta` with `PageMeta` (ADR-MONO-058 § D3 —
+  `com.example.common.page.PageResult` adoption added `totalPages`, additive).
 - Error envelope: `{ "code": "<ERROR_CODE>", "message": "<human>", "details":
   <object?>, "timestamp": "<ISO-8601>" }`. Codes per
   [`platform/error-handling.md`](../../../../../platform/error-handling.md)
@@ -92,7 +93,9 @@ All endpoints:
   (NON_NULL absent convention — never `null`).
 
 `PageMeta` (list responses):
-`{ "page": 0, "size": 20, "totalElements": 7, "timestamp": "<ISO-8601>" }`.
+`{ "page": 0, "size": 20, "totalElements": 7, "totalPages": 1,
+"timestamp": "<ISO-8601>" }`. `totalPages = ceil(totalElements / size)`
+(0 when `totalElements == 0`).
 
 ---
 
@@ -122,7 +125,7 @@ newest first (`createdAt` desc).
 **200**:
 ```json
 { "data": [ <Notification>, ... ],
-  "meta": { "page": 0, "size": 20, "totalElements": 7,
+  "meta": { "page": 0, "size": 20, "totalElements": 7, "totalPages": 1,
             "timestamp": "<ISO-8601>" } }
 ```
 

@@ -6,8 +6,8 @@ import com.example.erp.masterdata.application.command.Commands.CreateDepartmentC
 import com.example.erp.masterdata.application.command.Commands.MoveDepartmentParentCommand;
 import com.example.erp.masterdata.application.command.Commands.RetireDepartmentCommand;
 import com.example.erp.masterdata.application.command.Commands.UpdateDepartmentCommand;
+import com.example.common.page.PageResult;
 import com.example.erp.masterdata.application.view.DepartmentView;
-import com.example.erp.masterdata.domain.common.PageResult;
 import com.example.erp.masterdata.domain.department.repository.DepartmentListFilter;
 import com.example.security.servlet.actor.ActorContextResolver;
 import com.example.erp.masterdata.presentation.dto.ApiEnvelope;
@@ -71,8 +71,10 @@ public class DepartmentController {
         ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         PageResult<DepartmentView> result = service.listDepartments(actor,
                 new DepartmentListFilter(asOf, active, parentId), page, size);
-        return ResponseEntity.ok(
-                ApiEnvelope.ofList(result.content(), page, size, result.totalElements()));
+        // page/size/totalPages sourced from the result object (not the raw request) — guaranteed
+        // to agree since the repository echoes the exact page/size it was called with (AC-4).
+        return ResponseEntity.ok(ApiEnvelope.ofList(result.content(), result.page(), result.size(),
+                result.totalElements(), result.totalPages()));
     }
 
     @GetMapping("/{id}")

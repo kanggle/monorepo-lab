@@ -1,9 +1,9 @@
 package com.example.erp.readmodel.adapter.inbound.web;
 
+import com.example.common.page.PageResult;
 import com.example.erp.readmodel.adapter.inbound.web.dto.ApiEnvelope;
 import com.example.erp.readmodel.adapter.inbound.web.dto.ApprovalFactResponse;
 import com.example.erp.readmodel.application.QueryApprovalFactUseCase;
-import com.example.erp.readmodel.application.query.ApprovalFactPage;
 import com.example.erp.readmodel.domain.approval.ApprovalFactView;
 import com.example.erp.readmodel.domain.approval.ApprovalStatus;
 import com.example.erp.readmodel.domain.approval.ApprovalSubjectType;
@@ -66,13 +66,15 @@ public class ApprovalFactController {
         // org_scope read filter (TASK-ERP-BE-008): null = no narrowing (net-zero).
         List<String> orgScopeRootIds = ReadQueryWebSupport.orgScopeRootIds(readGate, jwt);
 
-        ApprovalFactPage result = useCase.list(statusFilter, subjectTypeFilter, subjectId,
-                approverId, submitterId, orgScopeRootIds, page, Math.min(size, MAX_SIZE));
+        PageResult<ApprovalFactView> result = useCase.list(statusFilter, subjectTypeFilter,
+                subjectId, approverId, submitterId, orgScopeRootIds, page, Math.min(size, MAX_SIZE));
         List<ApprovalFactResponse> data = result.content().stream()
                 .map(ApprovalFactResponse::from)
                 .toList();
-        return ResponseEntity.ok(ApiEnvelope.ofList(data, result.page(),
-                Math.min(size, MAX_SIZE), result.totalElements()));
+        // page/size/totalPages sourced from the result object (not the raw request) — guaranteed
+        // to agree since the use case echoes the exact page/size it was called with (AC-4).
+        return ResponseEntity.ok(ApiEnvelope.ofList(data, result.page(), result.size(),
+                result.totalElements(), result.totalPages()));
     }
 
     @GetMapping("/approvals/{approvalRequestId}")

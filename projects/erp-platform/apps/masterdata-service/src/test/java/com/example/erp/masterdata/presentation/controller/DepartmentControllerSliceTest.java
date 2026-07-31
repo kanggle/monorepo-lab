@@ -5,8 +5,8 @@ import com.example.erp.masterdata.application.MasterdataApplicationService;
 import com.example.erp.masterdata.application.command.Commands.CreateDepartmentCommand;
 import com.example.erp.masterdata.application.view.AuditDto;
 import com.example.erp.masterdata.application.view.DepartmentView;
+import com.example.common.page.PageResult;
 import com.example.erp.masterdata.application.view.EffectivePeriodDto;
-import com.example.erp.masterdata.domain.common.PageResult;
 import com.example.erp.masterdata.domain.department.repository.DepartmentListFilter;
 import com.example.erp.masterdata.domain.error.DomainErrors;
 import com.example.erp.masterdata.presentation.advice.GlobalExceptionHandler;
@@ -178,7 +178,8 @@ class DepartmentControllerSliceTest {
                 new AuditDto(Instant.now(), Instant.now()));
         when(service.listDepartments(any(ActorContext.class), any(DepartmentListFilter.class),
                 eq(0), eq(2)))
-                .thenReturn(new PageResult<>(java.util.List.of(v1, v2), 25L));
+                // 25 elements / size 2 -> 13 pages (ceiling division, non-exact multiple).
+                .thenReturn(new PageResult<>(java.util.List.of(v1, v2), 0, 2, 25L, 13));
 
         mockMvc.perform(get("/api/erp/masterdata/departments")
                         .param("asOf", "2026-03-01")
@@ -192,7 +193,9 @@ class DepartmentControllerSliceTest {
                 // the page length (2).
                 .andExpect(jsonPath("$.meta.totalElements").value(25))
                 .andExpect(jsonPath("$.meta.page").value(0))
-                .andExpect(jsonPath("$.meta.size").value(2));
+                .andExpect(jsonPath("$.meta.size").value(2))
+                // ADR-MONO-058 § D3 — additive field from the adopted shared PageResult.
+                .andExpect(jsonPath("$.meta.totalPages").value(13));
 
         // AC-1: the query params are bound and forwarded as the filter.
         ArgumentCaptor<DepartmentListFilter> captor = ArgumentCaptor.forClass(DepartmentListFilter.class);
@@ -208,11 +211,13 @@ class DepartmentControllerSliceTest {
     void listDefaultsToUnfilteredFirstPage() throws Exception {
         when(service.listDepartments(any(ActorContext.class), any(DepartmentListFilter.class),
                 eq(0), eq(20)))
-                .thenReturn(new PageResult<>(java.util.List.of(), 0L));
+                .thenReturn(new PageResult<>(java.util.List.of(), 0, 20, 0L, 0));
 
         mockMvc.perform(get("/api/erp/masterdata/departments"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.meta.totalElements").value(0));
+                .andExpect(jsonPath("$.meta.totalElements").value(0))
+                // Edge case (AC-2 / Edge Cases): an empty result is zero pages, not one.
+                .andExpect(jsonPath("$.meta.totalPages").value(0));
 
         ArgumentCaptor<DepartmentListFilter> captor = ArgumentCaptor.forClass(DepartmentListFilter.class);
         verify(service).listDepartments(any(ActorContext.class), captor.capture(), eq(0), eq(20));

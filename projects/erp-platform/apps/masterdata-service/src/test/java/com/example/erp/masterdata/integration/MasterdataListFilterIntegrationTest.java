@@ -4,8 +4,8 @@ import com.example.erp.masterdata.application.ActorContext;
 import com.example.erp.masterdata.application.MasterdataApplicationService;
 import com.example.erp.masterdata.application.command.Commands.CreateDepartmentCommand;
 import com.example.erp.masterdata.application.command.Commands.RetireDepartmentCommand;
+import com.example.common.page.PageResult;
 import com.example.erp.masterdata.application.view.DepartmentView;
-import com.example.erp.masterdata.domain.common.PageResult;
 import com.example.erp.masterdata.domain.department.repository.DepartmentListFilter;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -54,11 +54,18 @@ class MasterdataListFilterIntegrationTest extends AbstractMasterdataIntegrationT
         PageResult<DepartmentView> page0 = service.listDepartments(OPERATOR, byParent, 0, 10);
         assertThat(page0.content()).hasSize(10);
         assertThat(page0.totalElements()).isEqualTo(25L);
+        // ADR-MONO-058 § D3 — AC-2: 25 elements / size 10 -> 3 pages (ceiling division,
+        // non-exact multiple), computed at the real DepartmentRepositoryImpl.findAll()
+        // construction site (not a mocked value).
+        assertThat(page0.totalPages()).isEqualTo(3);
+        assertThat(page0.page()).isEqualTo(0);
+        assertThat(page0.size()).isEqualTo(10);
 
         // Last page → 5 rows, total still 25 (the AC-2 bug would report 5 here).
         PageResult<DepartmentView> page2 = service.listDepartments(OPERATOR, byParent, 2, 10);
         assertThat(page2.content()).hasSize(5);
         assertThat(page2.totalElements()).isEqualTo(25L);
+        assertThat(page2.totalPages()).isEqualTo(3);
 
         // active filter — retire one child, then ACTIVE=24 / RETIRED=1.
         service.retireDepartment(new RetireDepartmentCommand(OPERATOR, page0.content().get(0).id(), "test"));
@@ -66,19 +73,25 @@ class MasterdataListFilterIntegrationTest extends AbstractMasterdataIntegrationT
                 new DepartmentListFilter(null, Boolean.TRUE, parentId), 0, 100);
         assertThat(active.totalElements()).isEqualTo(24L);
         assertThat(active.content()).allMatch(d -> "ACTIVE".equals(d.status()));
+        assertThat(active.totalPages()).isEqualTo(1);
 
         PageResult<DepartmentView> retired = service.listDepartments(OPERATOR,
                 new DepartmentListFilter(null, Boolean.FALSE, parentId), 0, 100);
         assertThat(retired.totalElements()).isEqualTo(1L);
+        assertThat(retired.totalPages()).isEqualTo(1);
 
         // asOf before any effectiveFrom → no revision is effective yet → 0.
         PageResult<DepartmentView> beforeAll = service.listDepartments(OPERATOR,
                 new DepartmentListFilter(LocalDate.of(2025, 1, 1), null, parentId), 0, 100);
         assertThat(beforeAll.totalElements()).isEqualTo(0L);
+        // Edge case (AC-2 / Edge Cases): totalElements=0 -> totalPages 0, not 1, and no
+        // divide-by-zero (real production formula, size=100 here).
+        assertThat(beforeAll.totalPages()).isEqualTo(0);
 
         // asOf within the active window → all 25 children are effective.
         PageResult<DepartmentView> within = service.listDepartments(OPERATOR,
                 new DepartmentListFilter(LocalDate.of(2026, 6, 1), null, parentId), 0, 100);
         assertThat(within.totalElements()).isEqualTo(25L);
+        assertThat(within.totalPages()).isEqualTo(1);
     }
 }

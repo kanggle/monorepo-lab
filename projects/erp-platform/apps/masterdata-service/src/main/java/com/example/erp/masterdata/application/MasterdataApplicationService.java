@@ -1,6 +1,7 @@
 package com.example.erp.masterdata.application;
 
 import com.example.common.id.UuidV7;
+import com.example.common.page.PageResult;
 import com.example.erp.masterdata.application.command.Commands.CreateBusinessPartnerCommand;
 import com.example.erp.masterdata.application.command.Commands.CreateCostCenterCommand;
 import com.example.erp.masterdata.application.command.Commands.CreateDepartmentCommand;
@@ -35,7 +36,6 @@ import com.example.erp.masterdata.domain.businesspartner.PartnerType;
 import com.example.erp.masterdata.domain.businesspartner.PaymentTerms;
 import com.example.erp.masterdata.domain.businesspartner.repository.BusinessPartnerListFilter;
 import com.example.erp.masterdata.domain.businesspartner.repository.BusinessPartnerRepository;
-import com.example.erp.masterdata.domain.common.PageResult;
 import com.example.erp.masterdata.domain.costcenter.CostCenter;
 import com.example.erp.masterdata.domain.costcenter.repository.CostCenterListFilter;
 import com.example.erp.masterdata.domain.costcenter.repository.CostCenterRepository;

@@ -1,8 +1,8 @@
 package com.example.erp.readmodel.adapter.inbound.web;
 
 import com.example.erp.readmodel.adapter.inbound.web.advice.GlobalExceptionHandler;
+import com.example.common.page.PageResult;
 import com.example.erp.readmodel.application.QueryApprovalFactUseCase;
-import com.example.erp.readmodel.application.query.ApprovalFactPage;
 import com.example.erp.readmodel.domain.approval.ApprovalFactProjection;
 import com.example.erp.readmodel.domain.approval.ApprovalFactView;
 import com.example.erp.readmodel.domain.approval.ApprovalStatus;
@@ -114,7 +114,7 @@ class ApprovalFactControllerSliceTest {
     void listReturnsPagedEnvelopeWithFilters() throws Exception {
         when(useCase.list(eq(ApprovalStatus.SUBMITTED), eq(ApprovalSubjectType.DEPARTMENT),
                 isNull(), isNull(), isNull(), isNull(), anyInt(), anyInt()))
-                .thenReturn(new ApprovalFactPage(List.of(submittedDeptView()), 0, 20, 1L));
+                .thenReturn(new PageResult<>(List.of(submittedDeptView()), 0, 20, 1L, 1));
 
         mockMvc.perform(get("/api/erp/read-model/approvals"
                         + "?status=SUBMITTED&subjectType=DEPARTMENT&page=0&size=20"))
@@ -122,6 +122,8 @@ class ApprovalFactControllerSliceTest {
                 .andExpect(jsonPath("$.data[0].approvalRequestId").value("appr-1"))
                 .andExpect(jsonPath("$.meta.page").value(0))
                 .andExpect(jsonPath("$.meta.totalElements").value(1))
+                // ADR-MONO-058 § D3 — additive field from the adopted shared PageResult.
+                .andExpect(jsonPath("$.meta.totalPages").value(1))
                 .andExpect(jsonPath("$.meta.warning").value("Eventually-consistent read-model"));
     }
 

@@ -6,9 +6,9 @@ import com.example.erp.masterdata.application.command.Commands.CreateBusinessPar
 import com.example.erp.masterdata.application.command.Commands.RetireBusinessPartnerCommand;
 import com.example.erp.masterdata.application.command.Commands.UpdateBusinessPartnerCommand;
 import com.example.erp.masterdata.application.view.BusinessPartnerView;
+import com.example.common.page.PageResult;
 import com.example.erp.masterdata.domain.businesspartner.PartnerType;
 import com.example.erp.masterdata.domain.businesspartner.repository.BusinessPartnerListFilter;
-import com.example.erp.masterdata.domain.common.PageResult;
 import com.example.security.servlet.actor.ActorContextResolver;
 import com.example.erp.masterdata.presentation.dto.ApiEnvelope;
 import com.example.erp.masterdata.presentation.dto.BusinessPartnerRequests.CreateBusinessPartnerRequest;
@@ -69,8 +69,10 @@ public class BusinessPartnerController {
         ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         PageResult<BusinessPartnerView> result = service.listBusinessPartners(actor,
                 new BusinessPartnerListFilter(asOf, active, parsePartnerType(partnerType)), page, size);
-        return ResponseEntity.ok(
-                ApiEnvelope.ofList(result.content(), page, size, result.totalElements()));
+        // page/size/totalPages sourced from the result object (not the raw request) — guaranteed
+        // to agree since the repository echoes the exact page/size it was called with (AC-4).
+        return ResponseEntity.ok(ApiEnvelope.ofList(result.content(), result.page(), result.size(),
+                result.totalElements(), result.totalPages()));
     }
 
     /**

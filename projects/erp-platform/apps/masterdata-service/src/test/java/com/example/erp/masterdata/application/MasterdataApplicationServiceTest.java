@@ -11,8 +11,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.example.erp.masterdata.domain.audit.AuditLog;
 import com.example.erp.masterdata.domain.audit.AuditLogRepository;
 import com.example.erp.masterdata.domain.authorization.AuthorizationDecision;
+import com.example.common.page.PageResult;
 import com.example.erp.masterdata.domain.businesspartner.repository.BusinessPartnerRepository;
-import com.example.erp.masterdata.domain.common.PageResult;
 import com.example.erp.masterdata.domain.costcenter.repository.CostCenterRepository;
 import com.example.erp.masterdata.domain.department.Department;
 import com.example.erp.masterdata.domain.department.repository.DepartmentListFilter;
@@ -198,7 +198,7 @@ class MasterdataApplicationServiceTest {
         LocalDate asOf = LocalDate.of(2026, 3, 1);
         DepartmentListFilter filter = new DepartmentListFilter(asOf, Boolean.TRUE, "parent-9");
         when(departmentRepository.findAll(eq(TENANT), any(DepartmentListFilter.class), eq(0), eq(20)))
-                .thenReturn(new PageResult<>(List.of(), 0L));
+                .thenReturn(new PageResult<>(List.of(), 0, 20, 0L, 0));
 
         service.listDepartments(ACTOR, filter, 0, 20);
 
@@ -221,7 +221,7 @@ class MasterdataApplicationServiceTest {
         Department d2 = Department.create("d-2", TENANT, "DEPT-2", "Ops", null,
                 EffectivePeriod.openEnded(LocalDate.of(2026, 1, 1)), NOW);
         when(departmentRepository.findAll(eq(TENANT), any(DepartmentListFilter.class), eq(0), eq(2)))
-                .thenReturn(new PageResult<>(List.of(d1, d2), 25L));
+                .thenReturn(new PageResult<>(List.of(d1, d2), 0, 2, 25L, 13));
 
         PageResult<DepartmentView> result =
                 service.listDepartments(ACTOR, DepartmentListFilter.unfiltered(), 0, 2);
@@ -229,5 +229,10 @@ class MasterdataApplicationServiceTest {
         assertThat(result.content()).hasSize(2);
         assertThat(result.totalElements()).isEqualTo(25L);
         assertThat(result.totalElements()).isNotEqualTo((long) result.content().size());
+        // ADR-MONO-058 § D3 — totalPages/page/size preserved through PageResult.map()
+        // (masterdata's listDepartments maps Department -> DepartmentView).
+        assertThat(result.totalPages()).isEqualTo(13);
+        assertThat(result.page()).isEqualTo(0);
+        assertThat(result.size()).isEqualTo(2);
     }
 }

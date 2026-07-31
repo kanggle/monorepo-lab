@@ -5,8 +5,8 @@ import com.example.erp.masterdata.application.MasterdataApplicationService;
 import com.example.erp.masterdata.application.command.Commands.CreateCostCenterCommand;
 import com.example.erp.masterdata.application.command.Commands.RetireCostCenterCommand;
 import com.example.erp.masterdata.application.command.Commands.UpdateCostCenterCommand;
+import com.example.common.page.PageResult;
 import com.example.erp.masterdata.application.view.CostCenterView;
-import com.example.erp.masterdata.domain.common.PageResult;
 import com.example.erp.masterdata.domain.costcenter.repository.CostCenterListFilter;
 import com.example.security.servlet.actor.ActorContextResolver;
 import com.example.erp.masterdata.presentation.dto.ApiEnvelope;
@@ -64,8 +64,10 @@ public class CostCenterController {
         ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         PageResult<CostCenterView> result = service.listCostCenters(actor,
                 new CostCenterListFilter(asOf, active, departmentId), page, size);
-        return ResponseEntity.ok(
-                ApiEnvelope.ofList(result.content(), page, size, result.totalElements()));
+        // page/size/totalPages sourced from the result object (not the raw request) — guaranteed
+        // to agree since the repository echoes the exact page/size it was called with (AC-4).
+        return ResponseEntity.ok(ApiEnvelope.ofList(result.content(), result.page(), result.size(),
+                result.totalElements(), result.totalPages()));
     }
 
     @GetMapping("/{id}")

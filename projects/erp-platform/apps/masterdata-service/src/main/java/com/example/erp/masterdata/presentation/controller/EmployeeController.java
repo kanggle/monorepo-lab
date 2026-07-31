@@ -5,8 +5,8 @@ import com.example.erp.masterdata.application.MasterdataApplicationService;
 import com.example.erp.masterdata.application.command.Commands.CreateEmployeeCommand;
 import com.example.erp.masterdata.application.command.Commands.RetireEmployeeCommand;
 import com.example.erp.masterdata.application.command.Commands.UpdateEmployeeCommand;
+import com.example.common.page.PageResult;
 import com.example.erp.masterdata.application.view.EmployeeView;
-import com.example.erp.masterdata.domain.common.PageResult;
 import com.example.erp.masterdata.domain.employee.repository.EmployeeListFilter;
 import com.example.security.servlet.actor.ActorContextResolver;
 import com.example.erp.masterdata.presentation.dto.ApiEnvelope;
@@ -66,8 +66,10 @@ public class EmployeeController {
         ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         PageResult<EmployeeView> result = service.listEmployees(actor,
                 new EmployeeListFilter(asOf, active, departmentId, costCenterId), page, size);
-        return ResponseEntity.ok(
-                ApiEnvelope.ofList(result.content(), page, size, result.totalElements()));
+        // page/size/totalPages sourced from the result object (not the raw request) — guaranteed
+        // to agree since the repository echoes the exact page/size it was called with (AC-4).
+        return ResponseEntity.ok(ApiEnvelope.ofList(result.content(), result.page(), result.size(),
+                result.totalElements(), result.totalPages()));
     }
 
     @GetMapping("/{id}")

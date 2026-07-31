@@ -30,7 +30,8 @@ All endpoints:
   reproducibility AC.
 - Success envelope: `{ "data": <payload>, "meta": { "timestamp":
   "<ISO-8601>" } }`. List responses extend `meta` with
-  `page` / `size` / `totalElements`.
+  `page` / `size` / `totalElements` / `totalPages` (ADR-MONO-058 § D3 —
+  `com.example.common.page.PageResult` adoption added `totalPages`, additive).
 - Error envelope: `{ "code": "<ERROR_CODE>", "message": "<human>",
   "details": <object?>, "timestamp": "<ISO-8601>" }`. Codes per
   [`platform/error-handling.md`](../../../../../platform/error-handling.md)
@@ -55,7 +56,8 @@ All endpoints:
 ```
 
 `PageMeta` (in list responses): `{ "page": 0, "size": 20, "totalElements":
-123, "timestamp": "<ISO-8601>" }`.
+123, "totalPages": 7, "timestamp": "<ISO-8601>" }`. `totalPages =
+ceil(totalElements / size)` (0 when `totalElements == 0`).
 
 ---
 

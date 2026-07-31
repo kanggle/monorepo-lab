@@ -8,8 +8,8 @@ import com.example.erp.approval.application.command.Commands.RejectCommand;
 import com.example.erp.approval.application.command.Commands.SubmitCommand;
 import com.example.erp.approval.application.command.Commands.WithdrawCommand;
 import com.example.erp.approval.application.view.ApprovalRequestView;
+import com.example.common.page.PageResult;
 import com.example.erp.approval.application.view.ApprovalSummaryView;
-import com.example.erp.approval.domain.common.PageResult;
 import com.example.security.servlet.actor.ActorContextResolver;
 import com.example.erp.approval.presentation.dto.ApiEnvelope;
 import com.example.erp.approval.presentation.dto.ApprovalRequests.ApproveRequest;
@@ -71,8 +71,10 @@ public class ApprovalRequestController {
         PageResult<ApprovalSummaryView> result = service.list(actor,
                 ApprovalApplicationService.parseStatus(status),
                 ApprovalApplicationService.parseRole(role), page, size);
-        return ResponseEntity.ok(
-                ApiEnvelope.ofList(result.content(), page, size, result.totalElements()));
+        // page/size/totalPages sourced from the result object (not the raw request) — guaranteed
+        // to agree since the repository echoes the exact page/size it was called with (AC-4).
+        return ResponseEntity.ok(ApiEnvelope.ofList(result.content(), result.page(), result.size(),
+                result.totalElements(), result.totalPages()));
     }
 
     @GetMapping("/{id}")

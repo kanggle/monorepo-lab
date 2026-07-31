@@ -1,6 +1,6 @@
 package com.example.erp.readmodel.application;
 
-import com.example.erp.readmodel.application.query.DelegationFactPage;
+import com.example.common.page.PageResult;
 import com.example.erp.readmodel.domain.delegation.DelegationFactProjection;
 import com.example.erp.readmodel.domain.delegation.DelegationFactStatus;
 import com.example.erp.readmodel.domain.delegation.repository.DelegationFactFilter;
@@ -75,9 +75,10 @@ public class QueryDelegationFactUseCase {
 
     /** Paginated delegation-fact list with the explicit filters + the org_scope read filter. */
     @Transactional(readOnly = true)
-    public DelegationFactPage list(String delegatorId, String delegateId,
-                                   DelegationFactStatus status, Instant activeAt,
-                                   List<String> orgScopeRootIds, int page, int size) {
+    public PageResult<DelegationFactProjection> list(String delegatorId, String delegateId,
+                                                      DelegationFactStatus status, Instant activeAt,
+                                                      List<String> orgScopeRootIds, int page,
+                                                      int size) {
         DelegationFactFilter filter;
         if (orgScopeRootIds == null) {
             // Net-zero: no org_scope narrowing.
@@ -93,7 +94,10 @@ public class QueryDelegationFactUseCase {
 
         List<DelegationFactProjection> facts = delegationRepository.findPage(filter, page, size);
         long total = delegationRepository.count(filter);
-        return new DelegationFactPage(facts, page, size, total);
+        // size is always >= 1 here (ReadQueryWebSupport.validatePaging bounds it to 1..MAX_SIZE
+        // before this use case is invoked), so the ceiling-division is divide-by-zero-safe.
+        int totalPages = (int) Math.ceil((double) total / size);
+        return new PageResult<>(facts, page, size, total, totalPages);
     }
 
     // ------------------------------------------------------------------------

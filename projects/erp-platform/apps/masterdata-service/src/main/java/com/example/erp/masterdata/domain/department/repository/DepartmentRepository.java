@@ -1,6 +1,6 @@
 package com.example.erp.masterdata.domain.department.repository;
 
-import com.example.erp.masterdata.domain.common.PageResult;
+import com.example.common.page.PageResult;
 import com.example.erp.masterdata.domain.department.Department;
 
 import java.util.List;

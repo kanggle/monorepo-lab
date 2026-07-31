@@ -1,7 +1,7 @@
 package com.example.erp.masterdata.infrastructure.persistence.jpa;
 
+import com.example.common.page.PageResult;
 import com.example.erp.masterdata.domain.common.MasterStatus;
-import com.example.erp.masterdata.domain.common.PageResult;
 import com.example.erp.masterdata.domain.costcenter.CostCenter;
 import com.example.erp.masterdata.domain.costcenter.repository.CostCenterListFilter;
 import com.example.erp.masterdata.domain.costcenter.repository.CostCenterRepository;
@@ -39,7 +39,10 @@ public class CostCenterRepositoryImpl implements CostCenterRepository {
         List<CostCenter> content = jpa.findFiltered(tenantId, status, filter.departmentId(),
                 filter.asOf(), PageRequest.of(page, size));
         long total = jpa.countFiltered(tenantId, status, filter.departmentId(), filter.asOf());
-        return new PageResult<>(content, total);
+        // size is always >= 1 here — PageRequest.of() above throws for size < 1 before this
+        // line is reached, so the ceiling-division is divide-by-zero-safe.
+        int totalPages = (int) Math.ceil((double) total / size);
+        return new PageResult<>(content, page, size, total, totalPages);
     }
 
     @Override

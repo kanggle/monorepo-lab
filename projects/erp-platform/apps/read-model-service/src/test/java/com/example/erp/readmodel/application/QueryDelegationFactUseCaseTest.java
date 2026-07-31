@@ -1,6 +1,6 @@
 package com.example.erp.readmodel.application;
 
-import com.example.erp.readmodel.application.query.DelegationFactPage;
+import com.example.common.page.PageResult;
 import com.example.erp.readmodel.domain.common.MasterStatus;
 import com.example.erp.readmodel.domain.delegation.DelegationFactProjection;
 import com.example.erp.readmodel.domain.delegation.DelegationFactStatus;
@@ -98,7 +98,7 @@ class QueryDelegationFactUseCaseTest {
         when(delegationRepository.findPage(any(), anyInt(), anyInt())).thenReturn(List.of());
         when(delegationRepository.count(any())).thenReturn(0L);
 
-        DelegationFactPage page = useCase.list(null, null, null, null,
+        PageResult<DelegationFactProjection> page = useCase.list(null, null, null, null,
                 List.of("dept-root"), 0, 20);
 
         ArgumentCaptor<DelegationFactFilter> captor =
@@ -108,6 +108,20 @@ class QueryDelegationFactUseCaseTest {
         assertThat(filter.scopeUnbounded()).isFalse();
         assertThat(filter.scopedDelegatorIds()).containsExactlyInAnyOrder("emp-a", "emp-b");
         assertThat(page.totalElements()).isZero();
+        // Edge case (AC-2 / Edge Cases): an empty result is zero pages, not one.
+        assertThat(page.totalPages()).isZero();
+    }
+
+    @Test
+    void listTotalPagesIsCeilingDivisionForNonExactMultiple() {
+        when(delegationRepository.findPage(any(), anyInt(), anyInt())).thenReturn(List.of());
+        when(delegationRepository.count(any())).thenReturn(25L);
+
+        PageResult<DelegationFactProjection> page = useCase.list("emp-a", null,
+                DelegationFactStatus.ACTIVE, ACTIVE_AT, null, 0, 10);
+
+        // 25 elements / 10 per page -> 3 pages (not 2, not 2.5 truncated).
+        assertThat(page.totalPages()).isEqualTo(3);
     }
 
     @Test

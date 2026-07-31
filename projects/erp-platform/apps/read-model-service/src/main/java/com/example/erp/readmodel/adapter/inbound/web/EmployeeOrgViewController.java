@@ -1,9 +1,9 @@
 package com.example.erp.readmodel.adapter.inbound.web;
 
+import com.example.common.page.PageResult;
 import com.example.erp.readmodel.adapter.inbound.web.dto.ApiEnvelope;
 import com.example.erp.readmodel.adapter.inbound.web.dto.EmployeeOrgViewResponse;
 import com.example.erp.readmodel.application.QueryEmployeeOrgViewUseCase;
-import com.example.erp.readmodel.application.query.EmployeeOrgViewPage;
 import com.example.erp.readmodel.domain.common.MasterStatus;
 import com.example.erp.readmodel.domain.orgview.EmployeeOrgView;
 import com.example.erp.readmodel.presentation.security.ReadAuthorizationGate;
@@ -63,13 +63,15 @@ public class EmployeeOrgViewController {
         // org_scope read filter (TASK-ERP-BE-008): null = no narrowing (net-zero).
         List<String> orgScopeRootIds = ReadQueryWebSupport.orgScopeRootIds(readGate, jwt);
 
-        EmployeeOrgViewPage result = useCase.list(statusFilter, departmentId, orgScopeRootIds,
-                page, Math.min(size, MAX_SIZE));
+        PageResult<EmployeeOrgView> result = useCase.list(statusFilter, departmentId,
+                orgScopeRootIds, page, Math.min(size, MAX_SIZE));
         List<EmployeeOrgViewResponse> data = result.content().stream()
                 .map(EmployeeOrgViewResponse::from)
                 .toList();
-        return ResponseEntity.ok(ApiEnvelope.ofList(data, result.page(),
-                Math.min(size, MAX_SIZE), result.totalElements()));
+        // page/size/totalPages sourced from the result object (not the raw request) — guaranteed
+        // to agree since the use case echoes the exact page/size it was called with (AC-4).
+        return ResponseEntity.ok(ApiEnvelope.ofList(data, result.page(), result.size(),
+                result.totalElements(), result.totalPages()));
     }
 
     @GetMapping("/employees/{id}")

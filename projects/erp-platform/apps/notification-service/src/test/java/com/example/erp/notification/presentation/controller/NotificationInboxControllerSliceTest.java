@@ -1,8 +1,8 @@
 package com.example.erp.notification.presentation.controller;
 
+import com.example.common.page.PageResult;
 import com.example.erp.notification.application.MarkNotificationReadUseCase;
 import com.example.erp.notification.application.QueryInboxUseCase;
-import com.example.erp.notification.application.query.InboxPage;
 import com.example.erp.notification.config.SecurityConfig;
 import com.example.erp.notification.config.ServiceLevelOAuth2Config;
 import com.example.erp.notification.domain.error.NotificationNotFoundException;
@@ -87,7 +87,7 @@ class NotificationInboxControllerSliceTest {
     @Test
     void listIsRecipientScopedToSub() throws Exception {
         when(queryInbox.list(eq("erp"), eq("emp-1"), any(), eq(0), eq(20)))
-                .thenReturn(new InboxPage(List.of(unread()), 0, 20, 1L));
+                .thenReturn(new PageResult<>(List.of(unread()), 0, 20, 1L, 1));
 
         mockMvc.perform(get("/api/erp/notifications").with(caller("emp-1")))
                 .andExpect(status().isOk())
@@ -98,7 +98,9 @@ class NotificationInboxControllerSliceTest {
                 .andExpect(jsonPath("$.data[0].deepLink").value("/erp/approval?request=appr-1"))
                 .andExpect(jsonPath("$.data[0].read").value(false))
                 .andExpect(jsonPath("$.data[0].readAt").doesNotExist())
-                .andExpect(jsonPath("$.meta.totalElements").value(1));
+                .andExpect(jsonPath("$.meta.totalElements").value(1))
+                // ADR-MONO-058 § D3 — additive field from the adopted shared PageResult.
+                .andExpect(jsonPath("$.meta.totalPages").value(1));
     }
 
     @Test
@@ -107,7 +109,7 @@ class NotificationInboxControllerSliceTest {
                 NotificationType.DELEGATION_GRANTED, "결재 위임 지정", "body",
                 SourceRef.delegation("grant-9"), Instant.parse("2026-06-05T10:00:00Z"));
         when(queryInbox.list(eq("erp"), eq("emp-1"), any(), eq(0), eq(20)))
-                .thenReturn(new InboxPage(List.of(delegation), 0, 20, 1L));
+                .thenReturn(new PageResult<>(List.of(delegation), 0, 20, 1L, 1));
 
         mockMvc.perform(get("/api/erp/notifications").with(caller("emp-1")))
                 .andExpect(status().isOk())

@@ -1,8 +1,8 @@
 package com.example.erp.notification.config;
 
+import com.example.common.page.PageResult;
 import com.example.erp.notification.application.MarkNotificationReadUseCase;
 import com.example.erp.notification.application.QueryInboxUseCase;
-import com.example.erp.notification.application.query.InboxPage;
 import com.example.erp.notification.presentation.advice.GlobalExceptionHandler;
 import com.example.erp.notification.presentation.controller.NotificationInboxController;
 import com.example.erp.notification.presentation.security.ReadAuthorizationGate;
@@ -120,7 +120,7 @@ class SecurityChainAssemblySliceTest {
                         anyInt(), anyInt()))
                 .thenAnswer(invocation -> {
                     liveAuthentication.set(SecurityContextHolder.getContext().getAuthentication());
-                    return new InboxPage(List.of(), 0, 20, 0L);
+                    return new PageResult<>(List.of(), 0, 20, 0L, 0);
                 });
     }
 

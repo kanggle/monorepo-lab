@@ -1,6 +1,6 @@
 package com.example.erp.approval.infrastructure.persistence.jpa;
 
-import com.example.erp.approval.domain.common.PageResult;
+import com.example.common.page.PageResult;
 import com.example.erp.approval.domain.error.ApprovalErrors.ApprovalRouteInvalidException;
 import com.example.erp.approval.domain.request.ApprovalAction;
 import com.example.erp.approval.domain.request.ApprovalRequest;
@@ -55,7 +55,10 @@ public class ApprovalRequestRepositoryImpl implements ApprovalRequestRepository 
         long total = status == null
                 ? requestJpa.countByTenantId(tenantId)
                 : requestJpa.countByTenantIdAndStatus(tenantId, status);
-        return new PageResult<>(content, total);
+        // size is always >= 1 here — PageRequest.of() above throws for size < 1 before this
+        // line is reached, so the ceiling-division is divide-by-zero-safe.
+        int totalPages = (int) Math.ceil((double) total / size);
+        return new PageResult<>(content, page, size, total, totalPages);
     }
 
     @Override
@@ -68,7 +71,10 @@ public class ApprovalRequestRepositoryImpl implements ApprovalRequestRepository 
         long total = status == null
                 ? requestJpa.countByParticipant(tenantId, participantId)
                 : requestJpa.countByParticipantAndStatus(tenantId, participantId, status);
-        return new PageResult<>(content, total);
+        // size is always >= 1 here — PageRequest.of() above throws for size < 1 before this
+        // line is reached, so the ceiling-division is divide-by-zero-safe.
+        int totalPages = (int) Math.ceil((double) total / size);
+        return new PageResult<>(content, page, size, total, totalPages);
     }
 
     @Override
@@ -80,7 +86,10 @@ public class ApprovalRequestRepositoryImpl implements ApprovalRequestRepository 
         List<ApprovalRequest> content = requestJpa.findInboxPending(
                 tenantId, approverId, PageRequest.of(page, size));
         long total = requestJpa.countInboxPending(tenantId, approverId);
-        return new PageResult<>(content, total);
+        // size is always >= 1 here — PageRequest.of() above throws for size < 1 before this
+        // line is reached, so the ceiling-division is divide-by-zero-safe.
+        int totalPages = (int) Math.ceil((double) total / size);
+        return new PageResult<>(content, page, size, total, totalPages);
     }
 
     @Override

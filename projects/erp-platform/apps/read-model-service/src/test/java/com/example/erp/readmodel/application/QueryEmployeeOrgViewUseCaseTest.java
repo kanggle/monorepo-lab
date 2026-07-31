@@ -1,7 +1,7 @@
 package com.example.erp.readmodel.application;
 
+import com.example.common.page.PageResult;
 import com.example.erp.readmodel.application.port.outbound.OrgViewMetricsPort;
-import com.example.erp.readmodel.application.query.EmployeeOrgViewPage;
 import com.example.erp.readmodel.domain.common.MasterStatus;
 import com.example.erp.readmodel.domain.error.ReadModelNotFoundException;
 import com.example.erp.readmodel.domain.orgview.EmployeeOrgView;
@@ -139,11 +139,25 @@ class QueryEmployeeOrgViewUseCaseTest {
         lenient().when(costCenterRepository.findAllByIds(any())).thenReturn(Map.of());
         lenient().when(jobGradeRepository.findAllByIds(any())).thenReturn(Map.of());
 
-        EmployeeOrgViewPage result = useCase.list(MasterStatus.ACTIVE, "dept-root", 0, 20);
+        PageResult<EmployeeOrgView> result = useCase.list(MasterStatus.ACTIVE, "dept-root", 0, 20);
 
         assertThat(result.totalElements()).isEqualTo(1L);
         assertThat(result.content()).hasSize(1);
         assertThat(result.content().get(0).department().code()).isEqualTo("S");
+        // ADR-MONO-058 § D3 — AC-2: 1 element / size 20 → 1 page (ceiling division).
+        assertThat(result.totalPages()).isEqualTo(1);
+    }
+
+    @Test
+    void listTotalPagesIsCeilingDivisionForNonExactMultiple() {
+        when(employeeRepository.findPage(MasterStatus.ACTIVE, null, 0, 10))
+                .thenReturn(List.of());
+        when(employeeRepository.count(MasterStatus.ACTIVE, null)).thenReturn(25L);
+
+        PageResult<EmployeeOrgView> result = useCase.list(MasterStatus.ACTIVE, null, null, 0, 10);
+
+        // 25 elements / 10 per page → 3 pages (not 2, not 2.5 truncated).
+        assertThat(result.totalPages()).isEqualTo(3);
     }
 
     // ── org_scope read filter (TASK-ERP-BE-008) ──
@@ -169,7 +183,7 @@ class QueryEmployeeOrgViewUseCaseTest {
         lenient().when(costCenterRepository.findAllByIds(any())).thenReturn(Map.of());
         lenient().when(jobGradeRepository.findAllByIds(any())).thenReturn(Map.of());
 
-        EmployeeOrgViewPage result = useCase.list(MasterStatus.ACTIVE, null,
+        PageResult<EmployeeOrgView> result = useCase.list(MasterStatus.ACTIVE, null,
                 List.of("sales-root"), 0, 20);
 
         assertThat(result.totalElements()).isEqualTo(1L);
@@ -189,10 +203,12 @@ class QueryEmployeeOrgViewUseCaseTest {
         when(employeeRepository.count(MasterStatus.ACTIVE, List.of("sales-east")))
                 .thenReturn(0L);
 
-        EmployeeOrgViewPage result = useCase.list(MasterStatus.ACTIVE, "sales-root",
+        PageResult<EmployeeOrgView> result = useCase.list(MasterStatus.ACTIVE, "sales-root",
                 List.of("sales-east"), 0, 20);
 
         assertThat(result.totalElements()).isEqualTo(0L);
+        // Edge case (AC-2 / Edge Cases): an empty result is zero pages, not one.
+        assertThat(result.totalPages()).isEqualTo(0);
     }
 
     @Test
@@ -208,7 +224,7 @@ class QueryEmployeeOrgViewUseCaseTest {
         lenient().when(costCenterRepository.findAllByIds(any())).thenReturn(Map.of());
         lenient().when(jobGradeRepository.findAllByIds(any())).thenReturn(Map.of());
 
-        EmployeeOrgViewPage result = useCase.list(MasterStatus.ACTIVE, null, null, 0, 20);
+        PageResult<EmployeeOrgView> result = useCase.list(MasterStatus.ACTIVE, null, null, 0, 20);
 
         assertThat(result.totalElements()).isEqualTo(1L);
     }
@@ -220,10 +236,11 @@ class QueryEmployeeOrgViewUseCaseTest {
                 .thenReturn(List.of());
         when(employeeRepository.count(MasterStatus.ACTIVE, List.of())).thenReturn(0L);
 
-        EmployeeOrgViewPage result = useCase.list(MasterStatus.ACTIVE, null, List.of(), 0, 20);
+        PageResult<EmployeeOrgView> result = useCase.list(MasterStatus.ACTIVE, null, List.of(), 0, 20);
 
         assertThat(result.totalElements()).isEqualTo(0L);
         assertThat(result.content()).isEmpty();
+        assertThat(result.totalPages()).isEqualTo(0);
     }
 
     @Test

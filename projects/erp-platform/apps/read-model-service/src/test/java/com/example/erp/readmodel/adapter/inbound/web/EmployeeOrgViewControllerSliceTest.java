@@ -1,8 +1,8 @@
 package com.example.erp.readmodel.adapter.inbound.web;
 
 import com.example.erp.readmodel.adapter.inbound.web.advice.GlobalExceptionHandler;
+import com.example.common.page.PageResult;
 import com.example.erp.readmodel.application.QueryEmployeeOrgViewUseCase;
-import com.example.erp.readmodel.application.query.EmployeeOrgViewPage;
 import com.example.erp.readmodel.domain.common.MasterStatus;
 import com.example.erp.readmodel.domain.error.ReadModelNotFoundException;
 import com.example.erp.readmodel.domain.orgview.EmployeeOrgView;
@@ -114,13 +114,15 @@ class EmployeeOrgViewControllerSliceTest {
     @Test
     void listReturnsPagedEnvelopeWithWarning() throws Exception {
         when(useCase.list(eq(MasterStatus.ACTIVE), any(), isNull(), anyInt(), anyInt()))
-                .thenReturn(new EmployeeOrgViewPage(List.of(resolvedView()), 0, 20, 1L));
+                .thenReturn(new PageResult<>(List.of(resolvedView()), 0, 20, 1L, 1));
 
         mockMvc.perform(get("/api/erp/read-model/employees?page=0&size=20"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].id").value("emp-1"))
                 .andExpect(jsonPath("$.meta.page").value(0))
                 .andExpect(jsonPath("$.meta.totalElements").value(1))
+                // ADR-MONO-058 § D3 — additive field from the adopted shared PageResult.
+                .andExpect(jsonPath("$.meta.totalPages").value(1))
                 .andExpect(jsonPath("$.meta.warning").value("Eventually-consistent read-model"));
     }
 
