@@ -7,6 +7,7 @@ import com.example.admin.application.exception.OrgNodeNotFoundException;
 import com.example.admin.application.orgnode.CeilingView;
 import com.example.admin.application.orgnode.OrgNodeView;
 import com.example.admin.application.port.OrgNodePort;
+import com.example.common.resilience.ResilienceClientFactory;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -15,14 +16,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
-import java.net.http.HttpClient;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -64,16 +62,7 @@ public class AccountServiceOrgNodeClient implements OrgNodePort {
             @Value("${admin.downstream.connect-timeout-ms:3000}") int connectTimeoutMs,
             @Value("${admin.org-node.read-timeout-ms:3000}") int readTimeoutMs,
             IamClientCredentialsTokenProvider tokenProvider) {
-        HttpClient httpClient = HttpClient.newBuilder()
-                .version(HttpClient.Version.HTTP_1_1)
-                .connectTimeout(Duration.ofMillis(connectTimeoutMs))
-                .build();
-        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
-        factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
-        this.restClient = RestClient.builder()
-                .baseUrl(baseUrl)
-                .requestFactory(factory)
-                .build();
+        this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs);
         this.tokenProvider = tokenProvider;
     }
 
