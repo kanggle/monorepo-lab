@@ -141,9 +141,13 @@ credit-target in one Tx).
 
 Paginated (`?page=&size=&type=&status=`).
 
-**200**: `{ "data": [ { "transactionId", "type", "status", "money",
+**200**: `{ "data": { "content": [ { "transactionId", "type", "status", "money",
 "counterpartyAccountId?", "reversalOfTransactionId?", "createdAt",
-"settledAt?" } ], "meta": { "page", "size", "totalElements", "timestamp" } }`
+"settledAt?" } ], "page", "size", "totalElements", "totalPages" },
+"meta": { "page", "size", "totalElements", "timestamp" } }` — `data` is a
+`com.example.common.page.PageResult` page object (not a bare array); `page` /
+`size` / `totalElements` are carried both inside `data` and (redundantly) in
+`meta` for parity with the other v1 list endpoints' `meta`-only convention.
 
 **Errors**: 404 `ACCOUNT_NOT_FOUND`.
 

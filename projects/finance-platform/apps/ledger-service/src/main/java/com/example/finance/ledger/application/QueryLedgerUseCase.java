@@ -1,6 +1,6 @@
 package com.example.finance.ledger.application;
 
-import com.example.finance.ledger.application.view.AccountLinePageView;
+import com.example.common.page.PageResult;
 import com.example.finance.ledger.application.view.AccountLineView;
 import com.example.finance.ledger.application.view.JournalEntryView;
 import com.example.finance.ledger.application.view.JournalLineView;
@@ -53,7 +53,7 @@ public class QueryLedgerUseCase {
     }
 
     @Transactional(readOnly = true)
-    public AccountLinePageView getAccountLines(String ledgerAccountCode, String tenantId,
+    public PageResult<AccountLineView> getAccountLines(String ledgerAccountCode, String tenantId,
                                                int page, int size) {
         requireAccount(ledgerAccountCode, tenantId);
         JournalRepository.LinePage linePage =
@@ -62,7 +62,7 @@ public class QueryLedgerUseCase {
                 .map(r -> new AccountLineView(r.entryId(), r.postedAt(),
                         r.line().direction(), r.line().money()))
                 .toList();
-        return new AccountLinePageView(content, linePage.page(), linePage.size(),
+        return new PageResult<>(content, linePage.page(), linePage.size(),
                 linePage.totalElements(), linePage.totalPages());
     }
 

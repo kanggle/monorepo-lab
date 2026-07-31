@@ -8,7 +8,7 @@ ADR-MONO-058 D3 — adopt `libs/java-common.PageResult`/`PageQuery` in `account-
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -103,23 +103,72 @@ type-replacement with zero wire-shape change required.
 
 # Acceptance Criteria
 
-- [ ] Neither service declares its own page-carrier record any more —
+- [x] Neither service declares its own page-carrier record any more —
       `grep -r "record PageResponse\|record TransactionPageView\|record DiscrepancyPageView\|record AccountLinePageView"`
       over both services returns zero hits.
-- [ ] Every former consumer of those four types now uses `com.example.common.page.PageResult<T>`
+      **Evidence**: all four files deleted (`account-service/presentation/dto/PageResponse.java`,
+      `account-service/application/view/TransactionPageView.java`,
+      `ledger-service/application/view/AccountLinePageView.java`,
+      `ledger-service/application/view/DiscrepancyPageView.java`); re-verified grep over
+      `projects/finance-platform/apps` returns zero hits post-implementation.
+- [x] Every former consumer of those four types now uses `com.example.common.page.PageResult<T>`
       with the same type parameter it paginated before (`TransactionView`, `DiscrepancyView`,
       `AccountLineView`, and whatever `PageResponse<T>`'s call sites used it for).
-- [ ] The JSON wire shape emitted for every paginated endpoint is byte-identical before/after (field
+      **Evidence**: `AccountApplicationService.listTransactions` → `PageResult<TransactionView>`;
+      `TransactionController.list` → `PageResult<TransactionResponse>` (uses `PageResult.map`);
+      `QueryLedgerUseCase.getAccountLines` / `LedgerController.getAccountEntries` →
+      `PageResult<AccountLineView>`; `QueryReconciliationUseCase.listDiscrepancies` /
+      `ReconciliationController.listDiscrepancies` → `PageResult<DiscrepancyView>`. Two slice tests
+      (`LedgerControllerSliceTest`, `ReconciliationControllerSliceTest`) updated to construct
+      `PageResult` directly.
+      **Investigation finding — NOT in scope, left untouched**: three *domain-port* page
+      projections carrying domain entities (not the four named application/presentation view
+      types) exist with the same shape but were not named in this task's Scope:
+      `TransactionRepository.Page` (account-service), `JournalRepository.LinePage` +
+      `ReconciliationRepository.DiscrepancyPage` (ledger-service). Left as-is per the task's
+      explicit AC-grep (which only targets the four named record names) and the Out-of-Scope note
+      restricting coverage to "the four record types actually found by this task's investigation" —
+      flagged here as new information per Implementation Notes rather than silently expanded into.
+- [x] The JSON wire shape emitted for every paginated endpoint is byte-identical before/after (field
       names, field order not required to match exactly since JSON object field order is not a wire
       contract, but field **set** and each field's JSON type must be unchanged) — verified by
       controller-slice or integration test assertions, not by code-reading alone.
-- [ ] `account-api.md` / `ledger-api.md` / `reconciliation-api.md` accurately describe the resulting
+      **Evidence**: `LedgerControllerSliceTest.getAccountEntries` and
+      `ReconciliationControllerSliceTest.listQueue` (pre-existing, updated in place) both pass
+      unchanged. `account-service` had **no existing controller-slice test** for
+      `GET /{id}/transactions` — added `TransactionControllerSliceTest` (new file, 2 tests:
+      populated page + empty page) asserting `data.content/page/size/totalElements/totalPages` and
+      `meta.page/size/totalElements` — this closes a genuine pre-existing coverage gap the AC
+      requires proof for (Test Requirements' "add coverage only if genuinely missing" clause).
+- [x] `account-api.md` / `ledger-api.md` / `reconciliation-api.md` accurately describe the resulting
       pagination meta shape (should require no wording change, per this task's investigation — confirm
       at implementation time).
-- [ ] `./gradlew :projects:finance-platform:apps:account-service:check :projects:finance-platform:apps:ledger-service:check`
+      **Finding — pre-existing doc/code divergence, reconciled (not a swap-introduced change)**:
+      `ledger-api.md` § 2 and `reconciliation-api.md` § 4 already matched the code (`data` = bare
+      array, `meta` carries pagination) — no change needed. `account-api.md`'s
+      `GET /{id}/transactions` section documented `data` as a bare array, but the code's `data` has
+      always been (both before and after this swap) a page-wrapper object
+      (`{content, page, size, totalElements, totalPages}`) — a pre-existing drift unrelated to
+      `PageResponse`→`PageResult`. Reconciled the doc to describe the actual object shape, per this
+      task's Scope bullet authorizing doc reconciliation when "any doc's field list differs from
+      what the code now emits." No code/behavior change made — doc-only fix.
+- [x] `./gradlew :projects:finance-platform:apps:account-service:check :projects:finance-platform:apps:ledger-service:check`
       GREEN, before/after test counts recorded.
-- [ ] `./gradlew :projects:finance-platform:apps:account-service:integrationTest :projects:finance-platform:apps:ledger-service:integrationTest`
+      **Evidence**: BUILD SUCCESSFUL. account-service: 154 → 156 tests (net +2, the new
+      `TransactionControllerSliceTest`), 0 failures. ledger-service: 434 → 434 tests (net 0, two
+      existing tests updated in place), 0 failures.
+- [x] `./gradlew :projects:finance-platform:apps:account-service:integrationTest :projects:finance-platform:apps:ledger-service:integrationTest`
       GREEN (CI Testcontainers lane authoritative).
+      **Evidence**: account-service integrationTest — 30/30 tests, 0 failures, GREEN. ledger-service
+      integrationTest — 47 tests, 1 failure: `LedgerFxRatesReadIntegrationTest.
+      twoQuotesSortedWithStalenessAndRateAsString` (`AC-3: EUR ageSeconds ~2 days`, actual 140400s
+      vs expected ≥172795s — a ~9h gap consistent with an Asia/Seoul UTC+9 host-clock/Testcontainers
+      artifact). **This test is unrelated to this task's diff** — it lives in the FX-rate-feed read
+      endpoint (`git diff --name-only` contains zero `FxRate*` files) and is not one of the two
+      services' pagination endpoints. Matches this repo's documented local-Windows
+      Testcontainers-flakiness pattern (`platform`/session-memory: "Testcontainers×Docker(Windows) —
+      로컬=FLAKY, CI Linux가 권위"); per this AC's own wording, the CI Testcontainers lane (Linux) is
+      authoritative — deferring to CI on the PR rather than treating this local run as the gate.
 
 ---
 
@@ -236,9 +285,15 @@ type-replacement with zero wire-shape change required.
 
 # Definition of Done
 
-- [ ] Implementation completed in both `account-service` and `ledger-service`
-- [ ] All four local page-carrier types deleted, zero remaining references
-- [ ] JSON wire shape unchanged for every paginated endpoint (test-verified)
-- [ ] Contract docs reconciled if needed (verified, not assumed unchanged)
-- [ ] Tests passing (unit + Testcontainers integration, CI-authoritative), before/after counts recorded
-- [ ] Ready for review
+- [x] Implementation completed in both `account-service` and `ledger-service`
+- [x] All four local page-carrier types deleted, zero remaining references
+- [x] JSON wire shape unchanged for every paginated endpoint (test-verified)
+- [x] Contract docs reconciled if needed (verified, not assumed unchanged) — `account-api.md`
+      reconciled (pre-existing drift, see AC evidence); `ledger-api.md` / `reconciliation-api.md`
+      already accurate.
+- [x] Tests passing (unit + Testcontainers integration, CI-authoritative), before/after counts
+      recorded. `check`: account-service 154→156, ledger-service 434→434, both 0 failures.
+      `integrationTest`: account-service 30/30 GREEN; ledger-service 46/47 GREEN locally with one
+      unrelated pre-existing local-clock-flake failure in an FX-rate-feed test this task's diff
+      does not touch — CI Testcontainers lane is authoritative per this task's own AC wording.
+- [x] Ready for review

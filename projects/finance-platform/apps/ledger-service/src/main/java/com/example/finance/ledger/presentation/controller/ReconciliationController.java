@@ -7,8 +7,8 @@ import com.example.finance.ledger.application.IngestStatementUseCase;
 import com.example.finance.ledger.application.QueryReconciliationUseCase;
 import com.example.finance.ledger.application.ResolveDiscrepancyUseCase;
 import com.example.finance.ledger.application.SetFxToleranceCommand;
+import com.example.common.page.PageResult;
 import com.example.finance.ledger.application.SetFxToleranceUseCase;
-import com.example.finance.ledger.application.view.DiscrepancyPageView;
 import com.example.finance.ledger.application.view.DiscrepancyView;
 import com.example.finance.ledger.application.view.FxToleranceView;
 import com.example.finance.ledger.application.view.StatementView;
@@ -105,7 +105,7 @@ public class ReconciliationController {
         ActorContext actor = ActorContextResolver.currentOrThrow();
         DiscrepancyStatus statusFilter = status == null || status.isBlank()
                 ? null : DiscrepancyStatus.valueOf(status);
-        DiscrepancyPageView pageView =
+        PageResult<DiscrepancyView> pageView =
                 queryReconciliation.listDiscrepancies(actor.tenantId(), statusFilter, page, size);
         List<DiscrepancyResponse> content = pageView.content().stream()
                 .map(DiscrepancyResponse::from).toList();
