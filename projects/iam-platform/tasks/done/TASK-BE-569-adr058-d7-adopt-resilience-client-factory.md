@@ -8,7 +8,7 @@ ADR-MONO-058 D7 — iam-platform adopts `ResilienceClientFactory.buildRestClient
 
 # Status
 
-review
+done
 
 # Owner
 
