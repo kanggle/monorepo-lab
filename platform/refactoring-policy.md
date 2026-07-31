@@ -74,6 +74,18 @@ If any precondition is not met, resolve it before starting refactoring.
    correction in TASK-MONO-400, where a credential called "orphaned" was in live production use by another
    project.)
 
+7. **Prefer additive-shim decoupling over forcing a cross-project change atomic.** Before accepting that a
+   cross-project change must land as one atomic PR (`CLAUDE.md` § Cross-Project Changes), ask why: usually the
+   answer is "removing X from project A breaks project B, which still calls it." If so, look for a small
+   *additive*, backward-compatible change on B's side that lets it repoint away from X without A changing at
+   all. That decomposes one large atomic PR into a sequence of same-project, independently-mergeable tasks: (a)
+   B gains a new way to do without X (additive, safe alone), (b) B repoints to it (X is now unused, safe
+   alone), (c) A removes X (safe alone — nothing calls it). `main` never breaks between steps, and each step's
+   review surface is a fraction of the combined diff. This pairs with rule 6 above — the consumer-grep that
+   rule requires is usually what first reveals the hidden coupling that makes the shim strategy applicable.
+   (Worked incident: ADR-MONO-053 §D8 — a wms-endpoint retirement blocked on a console consumer became a 3-task
+   sequence via one additive scm-internal endpoint.)
+
 ## Prohibited
 
 - Refactoring production code and test code in the same change (adjust tests separately after).

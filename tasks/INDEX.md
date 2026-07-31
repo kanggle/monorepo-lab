@@ -168,6 +168,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
+- `TASK-MONO-498-audit-memory-rule-promotions-2026-07-31.md` — lands 5 rule-promotions from a 2026-07-31 `/audit-memory` session (all 7 candidates user-approved via AskUserQuestion; 5 land here, 1 landed in the user's personal `~/.claude/CLAUDE.md` outside this repo, 1 n/a) into `CLAUDE.md` § Task Rules/Cross-Project Changes + `platform/{git-workflow-policy,refactoring-policy,event-driven-policy}.md`. Docs-only, `git diff --stat` = exactly those 4 files. Also fixes the `ADR-053`→`ADR-MONO-053` citation typo the same day's `/validate-rules` run found. 분석·구현=Sonnet 5(세션).
+
 ## done
 
 - **`TASK-MONO-497-error-catalog-retired-iam-community-membership.md` — ✅ DONE (2026-07-30, 3-dim verified — spec PR #3087 squash `64cbb60ec`, impl PR #3090 squash `a74f742c8`; both state=MERGED · origin/main tip 편입 확인 · 머지 전 실패 체크 0건).** `platform/error-handling.md` 의 `Community`/`Membership [domain: saas]` 두 섹션이 **`TASK-MONO-394`(2026-07-14, iam `community-service`/`membership-service` 은퇴)** 이후에도 여전히 "Owned by IAM community-service" 현재형으로 남아있던 것을 수정 — 두 섹션 헤더를 기존 RETIRED 컨벤션(`~~strike~~` + `**RETIRED 2026-07-14** (TASK-MONO-394)`, `PROJECT.md`/`project-overview.md`와 동일)으로 정합하고 코드 표는 역사 기록으로 보존, fan-platform 섹션의 나머지 3행(`MEMBERSHIP_REQUIRED`/`ALREADY_FOLLOWING`/`NOT_FOLLOWING`)도 이미 고쳐져 있던 `POST_STATUS_TRANSITION_INVALID` 행과 같은 패턴으로 정정. AC-0 재측정: `settings.gradle`·`specs/services/`·`git ls-files` 전부 두 서비스 부재 재확인. 코드/스펙 무변경, `platform/error-handling.md` 전용. spec PR 착수 중 stale 로컬 main 체크아웃에서 복사한 INDEX.md 가 TASK-MONO-496 의 done 행을 review 로 되돌리는 회귀를 유발했고 CI 의 INDEX queue drift 가드가 즉시 잡아 follow-up 커밋으로 정정(force-push 없이). 분석=Sonnet 5 / 구현=Sonnet 5(세션 직접).

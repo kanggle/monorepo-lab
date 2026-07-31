@@ -64,8 +64,19 @@ The repo squash-merges PRs; feature/chore refs are not auto-pruned and accumulat
 - The auto-mode classifier is a context-sensitive higher safety layer over the permission allowlist — it **may** gate mass `git push origin --delete`, but not as a hard rule (it allowed a confirmed-merge-stale batch on 2026-06-15). **Attempt the deletion first** when every target ref is confirmed merge-stale (per the bullet above) and not worktree-occupied / OPEN; `gh pr create` / `gh pr merge --squash` pass; local `git branch -D` is fine for the agent. Only on an **actual** block: STOP and hand the user the exact command — do not reformulate to bypass.
 - **`git branch -r` is a stale local cache, not `origin` truth.** Before concluding remote-branch state or recommending a mass remote deletion, run `git fetch --prune` (or `git remote prune origin`). `git fetch origin main` updates only `main` and does NOT prune — so refs already deleted on `origin` linger locally as stale tracking refs that falsely read as "needs cleanup". Prune first, confirm the real residue, then hand over only what genuinely remains (often nothing — avoid an unnecessary user `push --delete`).
 - **Stacked-PR base-ref-deletion auto-close hazard.** Deleting a PR's base ref auto-closes that PR on GitHub, and `gh pr reopen` is then rejected — so `gh pr merge <base> --squash --delete-branch` is destructive-in-disguise for any child PR stacked on it. Prevention: retarget the child first (`gh pr edit <child> --base main`), or merge the base without `--delete-branch`. Recovery: `git rebase --onto origin/main <base-squash-sha>` the child, `--force-with-lease`, open a fresh PR.
+- **`Agent(isolation:'worktree')` leaves a scaffold branch behind.** The harness creates the dispatched agent's worktree on its own `worktree-agent-<id>` branch; if the agent then creates its own task branch inside that worktree and merges it via PR, `git worktree remove` only deletes the directory — both the task branch and the `worktree-agent-<id>` scaffold branch remain as local refs (fanning out fast when several agents are dispatched in parallel). After the PR merges: `git worktree remove <path> --force`, then delete **both** refs explicitly with `git branch -D` (confirm each is already in `origin/main` first — squash-merge usually rejects the safer `-d`).
 
-(Agent personal-memory detail, this host: `project_branch_hygiene_policy`.)
+(Agent personal-memory detail, this host: `project_branch_hygiene_policy`, `env_agent_worktree_isolation_leftover_scaffold_branch`.)
+
+---
+
+## Local-Only Override File Markers
+
+Before staging a broad set of session changes (`git add` across everything touched, especially after a long multi-project session), grep modified/untracked files for a self-declared "LOCAL DEMO ONLY — DO NOT COMMIT" / "(uncommitted)" header marker. These appear on ad-hoc local override files — docker-compose overlays with hardcoded local secrets/ports, scope/config tweaks tied to a locally-seeded DB row — that a user or prior session deliberately kept out of shared history.
+
+Confirm include/exclude explicitly with the user rather than assuming either way: silently staging everything risks pushing local-only secrets/config into `main`; silently dropping files risks losing real changes the marker doesn't actually apply to.
+
+(Agent personal-memory detail, this host: `feedback_check_do_not_commit_headers_before_staging`.)
 
 ---
 
