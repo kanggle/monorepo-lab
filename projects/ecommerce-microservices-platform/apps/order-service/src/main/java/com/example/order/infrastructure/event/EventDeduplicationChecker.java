@@ -1,5 +1,6 @@
 package com.example.order.infrastructure.event;
 
+import com.example.messaging.dedupe.EventDedupePort;
 import com.example.order.infrastructure.persistence.ProcessedEventJpaEntity;
 import com.example.order.infrastructure.persistence.ProcessedEventJpaRepository;
 import lombok.RequiredArgsConstructor;
@@ -8,23 +9,35 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
+
+/**
+ * {@link EventDedupePort} adapter over order-service's locally-owned {@code processed_events}
+ * table (ADR-MONO-058 D7, TASK-BE-569). The table's {@code @Id} is a {@code String}
+ * (pre-dates the shared port), so this adapter stores {@code eventId.toString()} —
+ * a storage-format detail only, the dedupe semantics (same eventId twice → the second is
+ * IGNORED_DUPLICATE) are unchanged.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class EventDeduplicationChecker {
+public class EventDeduplicationChecker implements EventDedupePort {
 
     private final ProcessedEventJpaRepository processedEventJpaRepository;
 
+    @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public boolean isDuplicate(String eventId, String eventType) {
-        if (eventId == null || eventId.isBlank()) {
-            log.warn("event_id is null or blank, skipping deduplication check. eventType={}", eventType);
-            return false;
+    public Outcome process(UUID eventId, String eventType, Runnable work) {
+        if (eventId == null) {
+            log.warn("event_id is null, skipping deduplication check. eventType={}", eventType);
+            work.run();
+            return Outcome.APPLIED;
         }
 
-        if (processedEventJpaRepository.existsByEventId(eventId)) {
-            log.warn("Duplicate event detected, skipping. eventId={}, eventType={}", eventId, eventType);
-            return true;
+        String key = eventId.toString();
+        if (processedEventJpaRepository.existsByEventId(key)) {
+            log.warn("Duplicate event detected, skipping. eventId={}, eventType={}", key, eventType);
+            return Outcome.IGNORED_DUPLICATE;
         }
 
         // No try/catch here, deliberately (TASK-BE-541). ProcessedEventJpaEntity uses an
@@ -39,7 +52,8 @@ public class EventDeduplicationChecker {
         // returns true. Catching here could not improve on that — MANDATORY propagation
         // means we are inside the consumer's transaction, and a flushed constraint violation
         // marks it rollback-only, so "catch and carry on" is not available at this layer.
-        processedEventJpaRepository.save(ProcessedEventJpaEntity.create(eventId, eventType));
-        return false;
+        processedEventJpaRepository.save(ProcessedEventJpaEntity.create(key, eventType));
+        work.run();
+        return Outcome.APPLIED;
     }
 }

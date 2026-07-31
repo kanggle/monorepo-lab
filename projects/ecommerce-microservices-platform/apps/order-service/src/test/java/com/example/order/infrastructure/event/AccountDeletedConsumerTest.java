@@ -1,5 +1,6 @@
 package com.example.order.infrastructure.event;
 
+import com.example.messaging.dedupe.EventDedupePort;
 import com.example.order.application.service.OrderPiiAnonymizationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -20,26 +22,34 @@ import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("AccountDeletedConsumer 단위 테스트 (order-service, ADR-MONO-037 P3-B, flat wire TASK-BE-422)")
+@DisplayName("AccountDeletedConsumer 단위 테스트 (order-service, ADR-MONO-037 P3-B, flat wire TASK-BE-422, ADR-MONO-058 D7)")
 class AccountDeletedConsumerTest {
 
     @Mock
     private OrderPiiAnonymizationService orderPiiAnonymizationService;
 
     @Mock
-    private EventDeduplicationChecker eventDeduplicationChecker;
+    private EventDedupePort eventDedupePort;
 
     private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
     private AccountDeletedConsumer consumer;
 
+    /** Mirrors the consumer's own accountId+phase composite → deterministic UUID derivation. */
+    private static UUID dedupId(UUID accountId, String phase) {
+        String dedupKey = accountId + ":" + phase;
+        return UUID.nameUUIDFromBytes(dedupKey.getBytes(StandardCharsets.UTF_8));
+    }
+
     @BeforeEach
     void setUp() {
         consumer = new AccountDeletedConsumer(
-                orderPiiAnonymizationService, eventDeduplicationChecker, objectMapper);
-        // default: not a duplicate (lenient — some fail-soft tests skip the dedup path entirely)
-        lenient().when(eventDeduplicationChecker.isDuplicate(org.mockito.ArgumentMatchers.any(),
-                org.mockito.ArgumentMatchers.eq("AccountDeleted"))).thenReturn(false);
+                orderPiiAnonymizationService, eventDedupePort, objectMapper);
+        // default: not a duplicate — runs the work (lenient — some fail-soft tests skip the
+        // dedup path entirely, e.g. a null accountId never reaches eventDedupePort at all).
+        lenient().when(eventDedupePort.process(org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.eq("AccountDeleted"), org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(EventDedupeTestSupport::runWork);
     }
 
     // EXACT flat shape from iam-platform account-events.md § account.deleted
@@ -72,8 +82,12 @@ class AccountDeletedConsumerTest {
 
             then(orderPiiAnonymizationService).should().anonymizeOrdersForAccount(accountId.toString());
             then(orderPiiAnonymizationService).shouldHaveNoMoreInteractions();
-            // dedup keyed off the accountId+phase composite (no eventId on the flat wire).
-            then(eventDeduplicationChecker).should().isDuplicate(accountId + ":anon", "AccountDeleted");
+            // dedup keyed off the accountId+phase composite (no eventId on the flat wire),
+            // deterministically hashed to a UUID for the shared EventDedupePort.
+            then(eventDedupePort).should().process(
+                    org.mockito.ArgumentMatchers.eq(dedupId(accountId, "anon")),
+                    org.mockito.ArgumentMatchers.eq("AccountDeleted"),
+                    org.mockito.ArgumentMatchers.any());
         }
 
         @Test
@@ -85,7 +99,10 @@ class AccountDeletedConsumerTest {
 
             then(orderPiiAnonymizationService).shouldHaveNoInteractions();
             // grace phase dedups under its own composite key.
-            then(eventDeduplicationChecker).should().isDuplicate(accountId + ":grace", "AccountDeleted");
+            then(eventDedupePort).should().process(
+                    org.mockito.ArgumentMatchers.eq(dedupId(accountId, "grace")),
+                    org.mockito.ArgumentMatchers.eq("AccountDeleted"),
+                    org.mockito.ArgumentMatchers.any());
         }
 
         @Test
@@ -105,7 +122,9 @@ class AccountDeletedConsumerTest {
         @DisplayName("중복 이벤트(accountId+phase 복합키)면 아무 동작도 하지 않는다")
         void handle_duplicate_skips() {
             UUID accountId = UUID.randomUUID();
-            given(eventDeduplicationChecker.isDuplicate(accountId + ":anon", "AccountDeleted")).willReturn(true);
+            given(eventDedupePort.process(org.mockito.ArgumentMatchers.eq(dedupId(accountId, "anon")),
+                    org.mockito.ArgumentMatchers.eq("AccountDeleted"), org.mockito.ArgumentMatchers.any()))
+                    .willReturn(EventDedupePort.Outcome.IGNORED_DUPLICATE);
             AccountDeletedEvent event = new AccountDeletedEvent(
                     accountId, "ecommerce", "USER_REQUEST", "user", null,
                     Instant.now(), Instant.now(), true);
@@ -119,9 +138,10 @@ class AccountDeletedConsumerTest {
         @DisplayName("anon 단계 중복이어도 grace 단계는 독립적으로 처리된다 (복합키 분리)")
         void handle_anonDuplicate_graceStillIndependent() {
             UUID accountId = UUID.randomUUID();
-            // anon already processed, grace not yet.
-            lenient().when(eventDeduplicationChecker.isDuplicate(accountId + ":anon", "AccountDeleted")).thenReturn(true);
-            given(eventDeduplicationChecker.isDuplicate(accountId + ":grace", "AccountDeleted")).willReturn(false);
+            // anon already processed, grace not yet (grace already defaults to APPLIED via setUp()).
+            lenient().when(eventDedupePort.process(org.mockito.ArgumentMatchers.eq(dedupId(accountId, "anon")),
+                            org.mockito.ArgumentMatchers.eq("AccountDeleted"), org.mockito.ArgumentMatchers.any()))
+                    .thenReturn(EventDedupePort.Outcome.IGNORED_DUPLICATE);
             AccountDeletedEvent graceEvent = new AccountDeletedEvent(
                     accountId, "ecommerce", "USER_REQUEST", "user", null,
                     Instant.now(), Instant.now(), false);
@@ -129,7 +149,10 @@ class AccountDeletedConsumerTest {
             consumer.handle(graceEvent);
 
             // grace branch is a no-op for order-PII but must NOT be treated as a duplicate of anon.
-            then(eventDeduplicationChecker).should().isDuplicate(accountId + ":grace", "AccountDeleted");
+            then(eventDedupePort).should().process(
+                    org.mockito.ArgumentMatchers.eq(dedupId(accountId, "grace")),
+                    org.mockito.ArgumentMatchers.eq("AccountDeleted"),
+                    org.mockito.ArgumentMatchers.any());
             then(orderPiiAnonymizationService).shouldHaveNoInteractions();
         }
 
@@ -143,7 +166,7 @@ class AccountDeletedConsumerTest {
             consumer.handle(event);
 
             then(orderPiiAnonymizationService).shouldHaveNoInteractions();
-            then(eventDeduplicationChecker).shouldHaveNoInteractions();
+            then(eventDedupePort).shouldHaveNoInteractions();
         }
 
         @Test
@@ -157,7 +180,10 @@ class AccountDeletedConsumerTest {
             consumer.handle(event);
 
             then(orderPiiAnonymizationService).shouldHaveNoInteractions();
-            then(eventDeduplicationChecker).should().isDuplicate(accountId + ":grace", "AccountDeleted");
+            then(eventDedupePort).should().process(
+                    org.mockito.ArgumentMatchers.eq(dedupId(accountId, "grace")),
+                    org.mockito.ArgumentMatchers.eq("AccountDeleted"),
+                    org.mockito.ArgumentMatchers.any());
         }
     }
 }

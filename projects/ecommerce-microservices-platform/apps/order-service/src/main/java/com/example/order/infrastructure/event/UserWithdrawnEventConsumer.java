@@ -1,5 +1,6 @@
 package com.example.order.infrastructure.event;
 
+import com.example.messaging.dedupe.EventDedupePort;
 import com.example.order.application.service.UserWithdrawalOrderService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -17,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserWithdrawnEventConsumer {
 
     private final UserWithdrawalOrderService userWithdrawalOrderService;
-    private final EventDeduplicationChecker eventDeduplicationChecker;
+    private final EventDedupePort eventDedupePort;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -27,10 +28,11 @@ public class UserWithdrawnEventConsumer {
     }
 
     void handle(UserWithdrawnEvent event) {
-        if (eventDeduplicationChecker.isDuplicate(event.eventId(), "UserWithdrawn")) {
-            return;
-        }
+        eventDedupePort.process(
+                EventFieldParser.parseUuidOrNull(event.eventId()), "UserWithdrawn", () -> handleWork(event));
+    }
 
+    private void handleWork(UserWithdrawnEvent event) {
         if (event.payload() == null) {
             log.warn("UserWithdrawn event has null payload, skipping. eventId={}", event.eventId());
             return;

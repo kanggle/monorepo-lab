@@ -1,11 +1,13 @@
 package com.example.shipping.infrastructure.event;
 
+import com.example.messaging.dedupe.EventDedupePort;
 import com.example.shipping.application.command.CreateShippingCommand;
 import com.example.shipping.application.port.ShippingEventPublisher;
 import com.example.shipping.application.service.ShippingCommandService;
 import com.example.shipping.infrastructure.config.FulfillmentProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,16 +20,18 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("OrderConfirmedEventConsumer 단위 테스트")
+@DisplayName("OrderConfirmedEventConsumer 단위 테스트 (ADR-MONO-058 D7)")
 class OrderConfirmedEventConsumerTest {
 
     @InjectMocks
@@ -37,7 +41,7 @@ class OrderConfirmedEventConsumerTest {
     private ShippingCommandService shippingCommandService;
 
     @Mock
-    private EventDeduplicationChecker eventDeduplicationChecker;
+    private EventDedupePort eventDedupePort;
 
     @Mock
     private ShippingEventPublisher shippingEventPublisher;
@@ -52,6 +56,22 @@ class OrderConfirmedEventConsumerTest {
     private ObjectMapper objectMapper;
 
     private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-06-08T10:00:00Z"), ZoneOffset.UTC);
+
+    @BeforeEach
+    void stubDedupeAppliesByDefault() {
+        lenient().when(eventDedupePort.process(any(), eq("OrderConfirmed"), any()))
+                .thenAnswer(inv -> {
+                    ((Runnable) inv.getArgument(2)).run();
+                    return EventDedupePort.Outcome.APPLIED;
+                });
+    }
+
+    // wms/order eventId is always a real UUID in production — fixtures use randomUUID()
+    // rather than short literals to exercise the real UUID.fromString parse path the
+    // consumer now runs (EventIds.parseOrNull), not just the mocked dedupe.
+    private OrderConfirmedEvent event(String orderId, String userId) {
+        return event(UUID.randomUUID().toString(), orderId, userId);
+    }
 
     private OrderConfirmedEvent event(String eventId, String orderId, String userId) {
         return new OrderConfirmedEvent(
@@ -76,8 +96,7 @@ class OrderConfirmedEventConsumerTest {
     @Test
     @DisplayName("유효한 OrderConfirmed 이벤트 처리 시 배송 생성 + fulfillment 발행")
     void handle_validEvent_createsShippingAndPublishesFulfillment() throws JsonProcessingException {
-        OrderConfirmedEvent event = event("evt-1", "order-1", "user-1");
-        given(eventDeduplicationChecker.isDuplicate("evt-1", "OrderConfirmed")).willReturn(false);
+        OrderConfirmedEvent event = event("order-1", "user-1");
         given(fulfillmentProperties.enabled()).willReturn(true);
         given(fulfillmentAcl.toFulfillmentRequested(any(), any())).willReturn(fulfillmentMessage("order-1"));
         given(objectMapper.writeValueAsString(any())).willReturn("{\"json\":true}");
@@ -93,8 +112,7 @@ class OrderConfirmedEventConsumerTest {
     @Test
     @DisplayName("fulfillment.enabled=false면 발행하지 않는다 (standalone degradation)")
     void handle_fulfillmentDisabled_doesNotPublish() {
-        OrderConfirmedEvent event = event("evt-dis", "order-1", "user-1");
-        given(eventDeduplicationChecker.isDuplicate("evt-dis", "OrderConfirmed")).willReturn(false);
+        OrderConfirmedEvent event = event("order-1", "user-1");
         given(fulfillmentProperties.enabled()).willReturn(false);
 
         consumer.handle(event);
@@ -108,8 +126,7 @@ class OrderConfirmedEventConsumerTest {
     @Test
     @DisplayName("매핑되지 않은 SKU(require-sku-mapping)면 발행하지 않고 알림만 남긴다")
     void handle_unmappedSku_doesNotPublish() {
-        OrderConfirmedEvent event = event("evt-unmapped", "order-1", "user-1");
-        given(eventDeduplicationChecker.isDuplicate("evt-unmapped", "OrderConfirmed")).willReturn(false);
+        OrderConfirmedEvent event = event("order-1", "user-1");
         given(fulfillmentProperties.enabled()).willReturn(true);
         given(fulfillmentAcl.toFulfillmentRequested(any(), any()))
                 .willThrow(new UnmappedSkuException("no mapping for v1"));
@@ -125,8 +142,9 @@ class OrderConfirmedEventConsumerTest {
     @Test
     @DisplayName("중복 이벤트는 무시된다")
     void handle_duplicateEvent_skips() {
-        OrderConfirmedEvent event = event("evt-1", "order-1", "user-1");
-        given(eventDeduplicationChecker.isDuplicate("evt-1", "OrderConfirmed")).willReturn(true);
+        OrderConfirmedEvent event = event("order-1", "user-1");
+        given(eventDedupePort.process(any(), eq("OrderConfirmed"), any()))
+                .willReturn(EventDedupePort.Outcome.IGNORED_DUPLICATE);
 
         consumer.handle(event);
 
@@ -138,8 +156,8 @@ class OrderConfirmedEventConsumerTest {
     @DisplayName("payload가 null이면 무시된다")
     void handle_nullPayload_skips() {
         OrderConfirmedEvent event = new OrderConfirmedEvent(
-                "evt-2", "OrderConfirmed", "2026-06-08T10:00:00Z", "order-service", "tenant-a", null);
-        given(eventDeduplicationChecker.isDuplicate("evt-2", "OrderConfirmed")).willReturn(false);
+                UUID.randomUUID().toString(), "OrderConfirmed", "2026-06-08T10:00:00Z", "order-service",
+                "tenant-a", null);
 
         consumer.handle(event);
 
@@ -149,8 +167,7 @@ class OrderConfirmedEventConsumerTest {
     @Test
     @DisplayName("orderId가 없으면 무시된다")
     void handle_missingOrderId_skips() {
-        OrderConfirmedEvent event = event("evt-3", null, "user-1");
-        given(eventDeduplicationChecker.isDuplicate("evt-3", "OrderConfirmed")).willReturn(false);
+        OrderConfirmedEvent event = event(null, "user-1");
 
         consumer.handle(event);
 
@@ -160,8 +177,7 @@ class OrderConfirmedEventConsumerTest {
     @Test
     @DisplayName("userId가 없으면 무시된다")
     void handle_missingUserId_skips() {
-        OrderConfirmedEvent event = event("evt-4", "order-1", "");
-        given(eventDeduplicationChecker.isDuplicate("evt-4", "OrderConfirmed")).willReturn(false);
+        OrderConfirmedEvent event = event("order-1", "");
 
         consumer.handle(event);
 
@@ -174,10 +190,9 @@ class OrderConfirmedEventConsumerTest {
         // Ensures the consumer tolerates a producer that hasn't enriched lines/address.
         // No envelope tenant_id (pre-BE-357 producer) → defaults to ecommerce (net-zero, D8).
         OrderConfirmedEvent event = new OrderConfirmedEvent(
-                "evt-min", "OrderConfirmed", "2026-06-08T10:00:00Z", "order-service", null,
+                UUID.randomUUID().toString(), "OrderConfirmed", "2026-06-08T10:00:00Z", "order-service", null,
                 new OrderConfirmedEvent.OrderConfirmedPayload(
                         "order-min", "user-min", "2026-06-08T10:00:00Z", null, null));
-        given(eventDeduplicationChecker.isDuplicate("evt-min", "OrderConfirmed")).willReturn(false);
         given(fulfillmentProperties.enabled()).willReturn(false);
 
         consumer.handle(event);

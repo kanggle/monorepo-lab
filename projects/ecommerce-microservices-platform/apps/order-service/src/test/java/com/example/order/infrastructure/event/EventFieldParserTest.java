@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -91,6 +92,38 @@ class EventFieldParserTest {
             assertThatThrownBy(() -> EventFieldParser.parseInstant(null, fieldName))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining(fieldName);
+        }
+    }
+
+    @Nested
+    @DisplayName("parseUuidOrNull 메서드 (ADR-MONO-058 D7, EventDedupePort 어댑션)")
+    class ParseUuidOrNull {
+
+        @Test
+        @DisplayName("유효한 UUID 문자열은 UUID로 파싱된다")
+        void parseUuidOrNull_validUuid_returnsUuid() {
+            UUID id = UUID.randomUUID();
+
+            assertThat(EventFieldParser.parseUuidOrNull(id.toString())).isEqualTo(id);
+        }
+
+        @Test
+        @DisplayName("null 값은 null을 반환한다 (dedupe skip, work는 실행됨)")
+        void parseUuidOrNull_null_returnsNull() {
+            assertThat(EventFieldParser.parseUuidOrNull(null)).isNull();
+        }
+
+        @Test
+        @DisplayName("공백 문자열은 null을 반환한다")
+        void parseUuidOrNull_blank_returnsNull() {
+            assertThat(EventFieldParser.parseUuidOrNull("   ")).isNull();
+        }
+
+        @Test
+        @DisplayName("비어있지 않은 잘못된 형식이면 IllegalArgumentException이 발생한다 (DLQ 라우팅)")
+        void parseUuidOrNull_malformed_throwsIllegalArgumentException() {
+            assertThatThrownBy(() -> EventFieldParser.parseUuidOrNull("not-a-uuid"))
+                    .isInstanceOf(IllegalArgumentException.class);
         }
     }
 }

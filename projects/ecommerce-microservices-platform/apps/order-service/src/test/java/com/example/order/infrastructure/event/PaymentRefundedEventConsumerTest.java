@@ -1,9 +1,11 @@
 package com.example.order.infrastructure.event;
 
+import com.example.messaging.dedupe.EventDedupePort;
 import com.example.order.application.service.PaymentRefundConfirmationService;
 import com.example.order.domain.exception.InvalidOrderException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,7 +23,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("PaymentRefundedEventConsumer 단위 테스트")
+@DisplayName("PaymentRefundedEventConsumer 단위 테스트 (ADR-MONO-058 D7)")
 class PaymentRefundedEventConsumerTest {
 
     @InjectMocks
@@ -31,10 +33,16 @@ class PaymentRefundedEventConsumerTest {
     private PaymentRefundConfirmationService paymentRefundConfirmationService;
 
     @Mock
-    private EventDeduplicationChecker eventDeduplicationChecker;
+    private EventDedupePort eventDedupePort;
 
     @Mock
     private ObjectMapper objectMapper;
+
+    @BeforeEach
+    void stubDedupeAppliesByDefault() {
+        lenient().when(eventDedupePort.process(any(), eq("PaymentRefunded"), any()))
+                .thenAnswer(EventDedupeTestSupport::runWork);
+    }
 
     /** Full-refund event (fullyRefunded = true) — the default for the existing cases. */
     private PaymentRefundedEvent event(String orderId, String refundedAt) {
@@ -160,7 +168,8 @@ class PaymentRefundedEventConsumerTest {
     @DisplayName("중복 이벤트 수신 시 서비스를 호출하지 않는다")
     void handle_duplicateEvent_doesNotCallService() {
         PaymentRefundedEvent event = event("order-123", "2026-03-24T12:00:00Z");
-        when(eventDeduplicationChecker.isDuplicate(event.eventId(), "PaymentRefunded")).thenReturn(true);
+        when(eventDedupePort.process(any(), eq("PaymentRefunded"), any()))
+                .thenReturn(EventDedupePort.Outcome.IGNORED_DUPLICATE);
 
         consumer.handle(event);
 

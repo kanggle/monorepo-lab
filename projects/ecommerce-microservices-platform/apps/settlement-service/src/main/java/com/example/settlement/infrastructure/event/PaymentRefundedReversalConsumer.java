@@ -1,8 +1,8 @@
 package com.example.settlement.infrastructure.event;
 
+import com.example.messaging.dedupe.EventDedupePort;
 import com.example.settlement.application.service.ReversePaymentCommand;
 import com.example.settlement.application.service.SettlementService;
-import com.example.settlement.domain.repository.ProcessedEventStore;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class PaymentRefundedReversalConsumer {
 
     private final SettlementService settlementService;
-    private final ProcessedEventStore processedEventStore;
+    private final EventDedupePort eventDedupePort;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -42,9 +42,11 @@ public class PaymentRefundedReversalConsumer {
     // single boundary — behaviour unchanged (TASK-BE-461).
     @Transactional
     public void handle(PaymentEvent event) {
-        if (processedEventStore.isDuplicate(event.eventId(), "PaymentRefunded")) {
-            return;
-        }
+        eventDedupePort.process(
+                EventFieldParser.parseUuidOrNull(event.eventId()), "PaymentRefunded", () -> handleWork(event));
+    }
+
+    private void handleWork(PaymentEvent event) {
         if (event.payload() == null
                 || EventFieldParser.isBlank(event.payload().orderId())
                 || EventFieldParser.isBlank(event.payload().paymentId())) {

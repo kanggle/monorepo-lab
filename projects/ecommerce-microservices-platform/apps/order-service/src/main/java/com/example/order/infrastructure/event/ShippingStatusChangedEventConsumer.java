@@ -1,5 +1,6 @@
 package com.example.order.infrastructure.event;
 
+import com.example.messaging.dedupe.EventDedupePort;
 import com.example.order.application.service.OrderShippingService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -27,7 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ShippingStatusChangedEventConsumer {
 
     private final OrderShippingService orderShippingService;
-    private final EventDeduplicationChecker eventDeduplicationChecker;
+    private final EventDedupePort eventDedupePort;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -37,10 +38,11 @@ public class ShippingStatusChangedEventConsumer {
     }
 
     void handle(ShippingStatusChangedEvent event) {
-        if (eventDeduplicationChecker.isDuplicate(event.eventId(), "ShippingStatusChanged")) {
-            return;
-        }
+        eventDedupePort.process(
+                EventFieldParser.parseUuidOrNull(event.eventId()), "ShippingStatusChanged", () -> handleWork(event));
+    }
 
+    private void handleWork(ShippingStatusChangedEvent event) {
         if (event.payload() == null) {
             log.warn("ShippingStatusChanged event has null payload, skipping. eventId={}", event.eventId());
             return;

@@ -17,6 +17,9 @@ dependencies {
     // Observability
     implementation project(':libs:java-observability')
 
+    // EventDedupePort — shared consumer-side dedupe contract (ADR-MONO-058 D7, TASK-BE-569)
+    implementation project(':libs:java-messaging')
+
     // Micrometer (for metrics)
     implementation 'io.micrometer:micrometer-core'
 

@@ -1,9 +1,9 @@
 package com.example.settlement.infrastructure.event;
 
+import com.example.messaging.dedupe.EventDedupePort;
 import com.example.settlement.application.service.RecordOrderSnapshotCommand;
 import com.example.settlement.application.service.SettlementService;
 import com.example.settlement.domain.model.OrderSnapshotLine;
-import com.example.settlement.domain.repository.ProcessedEventStore;
 import com.example.settlement.domain.tenant.TenantContext;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -34,7 +34,7 @@ public class OrderPlacedSnapshotConsumer {
     private static final String DEFAULT_SELLER_ID = "default";
 
     private final SettlementService settlementService;
-    private final ProcessedEventStore processedEventStore;
+    private final EventDedupePort eventDedupePort;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -50,9 +50,11 @@ public class OrderPlacedSnapshotConsumer {
     // single boundary — behaviour unchanged (TASK-BE-461).
     @Transactional
     public void handle(OrderPlacedEvent event) {
-        if (processedEventStore.isDuplicate(event.eventId(), "OrderPlaced")) {
-            return;
-        }
+        eventDedupePort.process(
+                EventFieldParser.parseUuidOrNull(event.eventId()), "OrderPlaced", () -> handleWork(event));
+    }
+
+    private void handleWork(OrderPlacedEvent event) {
         if (event.payload() == null || EventFieldParser.isBlank(event.payload().orderId())) {
             log.warn("OrderPlaced has no orderId — skipping. eventId={}", event.eventId());
             return;

@@ -1,6 +1,7 @@
 package com.example.settlement.infrastructure.event;
 
 import java.time.Instant;
+import java.util.UUID;
 
 final class EventFieldParser {
 
@@ -21,5 +22,19 @@ final class EventFieldParser {
         } catch (Exception e) {
             return Instant.now();
         }
+    }
+
+    /**
+     * Parses an envelope {@code event_id} for {@link com.example.messaging.dedupe.EventDedupePort}
+     * (ADR-MONO-058 D7), returning {@code null} for null/blank input — dedupe is then skipped
+     * (the port runs the work unconditionally, mirroring the pre-D7 {@code ProcessedEventStore}
+     * behaviour, which likewise treated a blank id as "never a duplicate"). A non-blank
+     * malformed value throws {@link IllegalArgumentException} — routed to the DLQ (non-retryable).
+     */
+    static UUID parseUuidOrNull(String value) {
+        if (isBlank(value)) {
+            return null;
+        }
+        return UUID.fromString(value);
     }
 }

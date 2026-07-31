@@ -1,5 +1,6 @@
 package com.example.order.infrastructure.event;
 
+import com.example.messaging.dedupe.EventDedupePort;
 import com.example.order.application.service.OrderBackorderCancellationService;
 import com.example.order.domain.repository.OrderRepository;
 import com.example.order.domain.tenant.TenantContext;
@@ -40,7 +41,7 @@ public class WmsOutboundCancelledConsumer {
 
     private final OrderBackorderCancellationService backorderCancellationService;
     private final OrderRepository orderRepository;
-    private final EventDeduplicationChecker eventDeduplicationChecker;
+    private final EventDedupePort eventDedupePort;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -50,10 +51,11 @@ public class WmsOutboundCancelledConsumer {
     }
 
     void handle(WmsOutboundCancelledEvent event) {
-        if (eventDeduplicationChecker.isDuplicate(event.eventId(), "WmsOutboundCancelled")) {
-            return;
-        }
+        eventDedupePort.process(
+                EventFieldParser.parseUuidOrNull(event.eventId()), "WmsOutboundCancelled", () -> handleWork(event));
+    }
 
+    private void handleWork(WmsOutboundCancelledEvent event) {
         if (event.payload() == null) {
             log.warn("wms outbound.cancelled event has null payload, skipping. eventId={}", event.eventId());
             return;

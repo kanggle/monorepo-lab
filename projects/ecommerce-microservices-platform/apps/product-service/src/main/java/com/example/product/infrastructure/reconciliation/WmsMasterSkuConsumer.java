@@ -1,5 +1,6 @@
 package com.example.product.infrastructure.reconciliation;
 
+import com.example.messaging.dedupe.EventDedupePort;
 import com.example.product.infrastructure.reconciliation.WmsReconciliationMessages.MasterSkuMessage;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,7 +26,7 @@ import java.util.UUID;
 public class WmsMasterSkuConsumer {
 
     private final WmsInventoryReconciliationService reconciliationService;
-    private final WmsReconciliationDedupe dedupe;
+    private final EventDedupePort wmsReconciliationDedupe;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -36,9 +37,10 @@ public class WmsMasterSkuConsumer {
 
     void handle(MasterSkuMessage event) {
         UUID eventId = Reconciliations.parseUuidOrNull(event.eventId());
-        if (dedupe.isDuplicate(eventId, "wms.master.sku")) {
-            return;
-        }
+        wmsReconciliationDedupe.process(eventId, "wms.master.sku", () -> handleWork(event));
+    }
+
+    private void handleWork(MasterSkuMessage event) {
         if (event.payload() == null || event.payload().sku() == null) {
             log.warn("wms master.sku event has null payload/sku, skipping. eventId={}", event.eventId());
             return;

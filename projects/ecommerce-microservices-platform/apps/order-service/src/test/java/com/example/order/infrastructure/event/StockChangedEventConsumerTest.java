@@ -1,9 +1,11 @@
 package com.example.order.infrastructure.event;
 
+import com.example.messaging.dedupe.EventDedupePort;
 import com.example.order.application.service.OrderConfirmationService;
 import com.example.order.domain.exception.OrderNotFoundException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("StockChangedEventConsumer 단위 테스트")
+@DisplayName("StockChangedEventConsumer 단위 테스트 (ADR-MONO-058 D7)")
 class StockChangedEventConsumerTest {
 
     @InjectMocks
@@ -27,10 +29,16 @@ class StockChangedEventConsumerTest {
     private OrderConfirmationService orderConfirmationService;
 
     @Mock
-    private EventDeduplicationChecker eventDeduplicationChecker;
+    private EventDedupePort eventDedupePort;
 
     @Mock
     private ObjectMapper objectMapper;
+
+    @BeforeEach
+    void stubDedupeAppliesByDefault() {
+        lenient().when(eventDedupePort.process(any(), eq("StockChanged"), any()))
+                .thenAnswer(EventDedupeTestSupport::runWork);
+    }
 
     private StockChangedEvent event(String reason, String orderId) {
         return new StockChangedEvent(
@@ -97,7 +105,8 @@ class StockChangedEventConsumerTest {
     @DisplayName("중복 이벤트 수신 시 서비스를 호출하지 않는다")
     void handle_duplicateEvent_doesNotCallService() {
         StockChangedEvent event = event("ORDER_RESERVED", "order-123");
-        when(eventDeduplicationChecker.isDuplicate(event.eventId(), "StockChanged")).thenReturn(true);
+        when(eventDedupePort.process(any(), eq("StockChanged"), any()))
+                .thenReturn(EventDedupePort.Outcome.IGNORED_DUPLICATE);
 
         consumer.handle(event);
 

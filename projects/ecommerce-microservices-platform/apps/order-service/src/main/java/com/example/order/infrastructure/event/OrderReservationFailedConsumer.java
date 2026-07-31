@@ -1,5 +1,6 @@
 package com.example.order.infrastructure.event;
 
+import com.example.messaging.dedupe.EventDedupePort;
 import com.example.order.application.service.OrderBackorderService;
 import com.example.order.domain.tenant.TenantContext;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -32,7 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class OrderReservationFailedConsumer {
 
     private final OrderBackorderService orderBackorderService;
-    private final EventDeduplicationChecker eventDeduplicationChecker;
+    private final EventDedupePort eventDedupePort;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -48,10 +49,11 @@ public class OrderReservationFailedConsumer {
     }
 
     void handle(OrderReservationFailedEvent event) {
-        if (eventDeduplicationChecker.isDuplicate(event.eventId(), "OrderReservationFailed")) {
-            return;
-        }
+        eventDedupePort.process(
+                EventFieldParser.parseUuidOrNull(event.eventId()), "OrderReservationFailed", () -> handleWork(event));
+    }
 
+    private void handleWork(OrderReservationFailedEvent event) {
         if (event.payload() == null) {
             log.warn("OrderReservationFailed event has null payload, skipping. eventId={}", event.eventId());
             return;

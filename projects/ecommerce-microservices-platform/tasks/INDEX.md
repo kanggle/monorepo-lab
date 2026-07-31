@@ -76,7 +76,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 |---|---|---|---|
 | TASK-BE-390 | **READY — ⏳ 2026-08-01 게이트 (그 전 구현 금지)**. D2-b deprecation window(~2026-08-01) 종료 후 gateway `allowed-issuers`에서 레거시 `iam` issuer 제거 + 테스트 정리. AC-0 verify-then-act(live `iss=iam` 토큰 0 확인) 선행. | gateway-service | code, security, test |
 | TASK-BE-566 | ADR-MONO-058 D2 — 10개 서비스 `GlobalExceptionHandler`의 비-도메인 tail(404/405/415/500/validation)을 `libs/java-web-servlet.CommonGlobalExceptionHandler`로 통합. ecommerce는 `details`-필드 충돌 없음(모두 이미 공유 `ErrorResponse` 직접 사용) + 상태코드 hook(`validationFailureStatus()`)은 라이브러리에 이미 반영됨 — 순수 adoption. | user, product, search, order, payment, promotion, settlement, shipping, notification, review | code, refactor, cleanup |
-| TASK-BE-569 | ADR-MONO-058 D7(EventDedupePort) — order/product/shipping/settlement 4개 서비스의 자체 `ProcessedEventJpaEntity`/`ProcessedEventStore` hand-roll dedupe를 `libs/java-messaging.EventDedupePort`로 교체. wms-platform 3개 서비스가 이미 live adopter(참조 구현). | order-service, product-service, shipping-service, settlement-service | code, refactor, idempotency |
 | TASK-BE-570 | ADR-MONO-058 D7(ResilienceClientFactory) — search-service `RestClientConfig`/review-service `OrderServiceClient`의 **제로 타임아웃** 확정 + order-service standalone 프로필 + product-service/batch-worker의 중복 타임아웃 메커니즘을 `libs/java-common.ResilienceClientFactory`로 통합. shipping-service는 이미 adopted(참조용). | search-service, review-service, order-service, product-service, batch-worker | code, reliability, bugfix |
 | TASK-BE-571 | ADR-MONO-058 D8 — ecommerce 10개 서비스 `TenantContext`/`TenantContextFilter` vs 이미 공유된 `libs/java-security-servlet.TenantClaimEnforcer` 정합화. **기계적 swap 아님**: `TenantClaimEnforcer`는 로컬 JWT `SecurityContext` 전제(ecommerce는 gateway 헤더-신뢰 모델, 로컬 JWT chain 없음) — (a)/(b)/(c) 중 하나를 명시적으로 결정·문서화해야 함(대부분 (c) defer 예상). ADR이 언급한 `TASK-BE-557`은 파일 부재 — 동일 결함을 다룬 `TASK-BE-564`(DONE)로 대체 확인 완료. | order, payment, product, promotion, review, search, settlement, shipping, user, notification | code, security, design-decision |
 ## in-progress
@@ -85,7 +84,9 @@ _(없음)_
 
 ## review
 
-_(없음)_
+| ID | Title | Service | Tags |
+|---|---|---|---|
+| TASK-BE-569 | ADR-MONO-058 D7(EventDedupePort) — order/product/shipping/settlement 4개 서비스의 자체 `ProcessedEventJpaEntity`/`ProcessedEventStore` hand-roll dedupe를 `libs/java-messaging.EventDedupePort`로 교체. **재검증 결과 wms-platform 3개 서비스는 아직 shared-port adopter 아님**(자체 local port, wms `TASK-BE-571` 미착수) — persistence 어댑터 형태(JPA `ON CONFLICT DO NOTHING` + `MANDATORY`)만 참조. settlement-service `ProcessedEventStore` 도메인 포트 삭제(직접 `EventDedupePort` 사용). order-service `AccountDeletedConsumer`는 composite dedupe key(no eventId, TASK-BE-422) → `UUID.nameUUIDFromBytes` 결정적 변환으로 해결. 19개 consumer 마이그레이션, 4개 서비스 `:test` 전부 GREEN(0 failures). | order-service, product-service, shipping-service, settlement-service | code, refactor, idempotency |
 
 ## done
 
