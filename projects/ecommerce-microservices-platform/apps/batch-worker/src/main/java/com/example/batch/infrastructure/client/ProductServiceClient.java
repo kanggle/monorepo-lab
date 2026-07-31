@@ -1,12 +1,12 @@
 package com.example.batch.infrastructure.client;
 
+import com.example.common.resilience.ResilienceClientFactory;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
@@ -31,9 +31,9 @@ public class ProductServiceClient {
     public ProductServiceClient(@Value("${product-service.base-url}") String baseUrl) {
         // Explicit timeouts prevent a hung product-service from blocking the scheduler thread
         // for the entire ShedLock window. 5s connect / 10s read.
-        this.restClient = RestClients.timed(Duration.ofSeconds(5), Duration.ofSeconds(10))
-                .baseUrl(baseUrl)
-                .build();
+        // ADR-MONO-058 D7 (TASK-BE-570) — migrated from the local RestClients.timed(...) helper
+        // to the shared ResilienceClientFactory (same values, shared mechanism).
+        this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, 5_000, 10_000);
     }
 
     /**

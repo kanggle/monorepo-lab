@@ -2,6 +2,7 @@ package com.example.fanplatform.notification.integration;
 
 import com.example.fanplatform.notification.domain.notification.Notification;
 import com.example.fanplatform.notification.infrastructure.jpa.NotificationJpaRepository;
+import com.example.fanplatform.notification.testsupport.EventIds;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -74,9 +75,12 @@ class InboxApiIntegrationTest extends NotificationServiceIntegrationBase {
     @DisplayName("list is account-scoped + status-filtered; mark-read is idempotent; cross-account → 404")
     void inboxLifecycle() throws Exception {
         // Seed: two notifications for acc-1, one for acc-2 (via the consume path).
-        producer().send(TOPIC_ACTIVATED, "mem-a", activatedEnvelope("evt-a", "mem-a", "acc-1", "PREMIUM"));
-        producer().send(TOPIC_CANCELED, "mem-b", canceledEnvelope("evt-b", "mem-b", "acc-1", "PREMIUM"));
-        producer().send(TOPIC_ACTIVATED, "mem-c", activatedEnvelope("evt-c", "mem-c", "acc-2", "MEMBERS_ONLY"));
+        producer().send(TOPIC_ACTIVATED, "mem-a",
+                activatedEnvelope(EventIds.uuid("evt-a"), "mem-a", "acc-1", "PREMIUM"));
+        producer().send(TOPIC_CANCELED, "mem-b",
+                canceledEnvelope(EventIds.uuid("evt-b"), "mem-b", "acc-1", "PREMIUM"));
+        producer().send(TOPIC_ACTIVATED, "mem-c",
+                activatedEnvelope(EventIds.uuid("evt-c"), "mem-c", "acc-2", "MEMBERS_ONLY"));
 
         await().atMost(Duration.ofSeconds(30))
                 .untilAsserted(() -> assertThat(notifications.count()).isEqualTo(3));

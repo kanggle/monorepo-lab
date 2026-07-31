@@ -9,13 +9,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
-import java.net.http.HttpClient;
-import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,12 +26,12 @@ import java.util.Map;
  * everything else surfaces as {@link AuthServicePort.AuthServiceUnavailable} so
  * the @Transactional signup rolls back fail-closed.</p>
  *
- * <p><b>HTTP/1.1 enforcement</b>: The JDK {@link HttpClient} defaults to
+ * <p><b>HTTP/1.1 enforcement</b>: the JDK {@code HttpClient} defaults to
  * HTTP/2 negotiation (NEGOTIATE mode). WireMock in HTTP (non-TLS) mode does not
  * reliably handle HTTP/2 H2C upgrade frames and responds with RST_STREAM, causing
- * spurious {@code AuthServiceUnavailable} in integration tests. Forcing
- * {@link HttpClient.Version#HTTP_1_1} removes this ambiguity in all environments
- * — internal service-to-service traffic does not require HTTP/2.</p>
+ * spurious {@code AuthServiceUnavailable} in integration tests. {@link ResilienceClientFactory#buildRestClient}
+ * pins HTTP_1_1 and removes this ambiguity in all environments — internal
+ * service-to-service traffic does not require HTTP/2.</p>
  */
 @Slf4j
 @Component
@@ -56,19 +53,11 @@ public class AuthServiceClient implements AuthServicePort {
             @Value("${account.auth-service.connect-timeout-ms:3000}") int connectTimeoutMs,
             @Value("${account.auth-service.read-timeout-ms:15000}") int readTimeoutMs,
             IamClientCredentialsTokenProvider tokenProvider) {
-        // Force HTTP/1.1: the JDK HttpClient defaults to HTTP/2 negotiation which
-        // causes RST_STREAM failures against WireMock (integration tests) and adds
-        // unnecessary upgrade round-trips for cleartext internal traffic.
-        HttpClient jdkHttpClient = HttpClient.newBuilder()
-                .version(HttpClient.Version.HTTP_1_1)
-                .connectTimeout(Duration.ofMillis(connectTimeoutMs))
-                .build();
-        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(jdkHttpClient);
-        requestFactory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
-        this.restClient = RestClient.builder()
-                .baseUrl(baseUrl)
-                .requestFactory(requestFactory)
-                .build();
+        // HTTP/1.1 is pinned inside ResilienceClientFactory.buildRestClient: the JDK
+        // HttpClient defaults to HTTP/2 negotiation which causes RST_STREAM failures
+        // against WireMock (integration tests) and adds unnecessary upgrade round-trips
+        // for cleartext internal traffic.
+        this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs);
         this.circuitBreaker = ResilienceClientFactory.buildCircuitBreaker("authService");
         this.retry = ResilienceClientFactory.buildRetry("authService");
         this.tokenProvider = tokenProvider;

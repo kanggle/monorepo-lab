@@ -1,5 +1,6 @@
 package com.example.product.infrastructure.client;
 
+import com.example.common.resilience.ResilienceClientFactory;
 import com.example.product.application.port.SellerAccountProvisioner;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -7,13 +8,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
-import java.net.http.HttpClient;
-import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -74,22 +72,21 @@ public class AccountServiceSellerProvisioner implements SellerAccountProvisioner
     private final IamClientCredentialsTokenProvider tokenProvider;
     private final String sellerRole;
 
+    /**
+     * ADR-MONO-058 D7 (TASK-BE-570) — previously a hand-rolled {@link
+     * org.springframework.http.client.JdkClientHttpRequestFactory} + explicit timeout wiring
+     * (not a zero-timeout risk — connect/read timeouts were already non-zero — but a duplicated
+     * mechanism). Now built via {@link ResilienceClientFactory}, preserving the existing
+     * operator-configurable {@code iam.downstream.connect-timeout-ms}/{@code read-timeout-ms}
+     * property keys and their default values byte-for-byte (3000ms/10000ms).
+     */
     public AccountServiceSellerProvisioner(
             @Value("${iam.account-service.base-url:http://localhost:8081}") String baseUrl,
             @Value("${iam.downstream.connect-timeout-ms:3000}") int connectTimeoutMs,
             @Value("${iam.downstream.read-timeout-ms:10000}") int readTimeoutMs,
             @Value("${iam.seller.role:SELLER}") String sellerRole,
             IamClientCredentialsTokenProvider tokenProvider) {
-        HttpClient httpClient = HttpClient.newBuilder()
-                .version(HttpClient.Version.HTTP_1_1)
-                .connectTimeout(Duration.ofMillis(connectTimeoutMs))
-                .build();
-        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
-        factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
-        this.restClient = RestClient.builder()
-                .baseUrl(baseUrl)
-                .requestFactory(factory)
-                .build();
+        this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs);
         this.tokenProvider = tokenProvider;
         this.sellerRole = sellerRole;
     }

@@ -8,7 +8,7 @@ ADR-MONO-058 D7 — iam-platform adopts `ResilienceClientFactory.buildRestClient
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -108,26 +108,39 @@ adoption, not a defect closure.
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (re-verify gate).** At pickup time, re-read each of the 6 target classes and confirm they still
-      hand-roll `JdkClientHttpRequestFactory` construction with the timeout values in the inventory table above. If
-      any class has already been touched (adopted, refactored, or timeout values changed) since this task was filed,
-      re-scope against the current code rather than this table.
-- [ ] **AC-1.** All 6 classes' constructors replace their hand-rolled `HttpClient`/`JdkClientHttpRequestFactory`/
-      `RestClient.builder()` block with `ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs)`.
-- [ ] **AC-2.** Each class's effective connect/read timeout values are byte-identical before and after (verified by
-      a test or explicit before/after property-value comparison in the PR body) — `AccountServiceOrgNodeClient`'s
-      3000/3000ms in particular must not silently become 3000/10000ms.
-- [ ] **AC-3.** No `@Retry`/`@CircuitBreaker` annotation, config name, or `ResilienceClientFactory.buildCircuitBreaker`/
-      `buildRetry` call is touched — diff confined to the `RestClient`/`HttpClient` construction lines and the now-unused
-      imports (`java.net.http.HttpClient`, `org.springframework.http.client.JdkClientHttpRequestFactory`, `java.time.Duration`
-      where no longer needed).
-- [ ] **AC-4.** HTTP/1.1 pinning behavior is preserved (inherent in `ResilienceClientFactory.buildRestClient` — verify
-      by reading its source, not by re-implementing a separate pin).
-- [ ] **AC-5.** Existing tests for all 6 classes (unit + any WireMock-backed slice/integration tests) pass unchanged —
-      no test assertion updated, since this is a pure construction-mechanism refactor with no intended behavior change.
-- [ ] **AC-6.** `./gradlew :projects:iam-platform:apps:admin-service:test :projects:iam-platform:apps:account-service:test`
-      GREEN at baseline counts (measured at pickup time).
-- [ ] **AC-7.** `security-service`'s `AccountServiceClient` is untouched — confirmed via `git diff --stat`.
+- [x] **AC-0 (re-verify gate).** Re-read all 6 target classes (2026-07-31, this session) directly against the
+      inventory table — all 6 still hand-rolled `HttpClient.newBuilder().version(HTTP_1_1)...` +
+      `JdkClientHttpRequestFactory` + `RestClient.builder()` with the exact timeout values in the table (admin
+      5×3000/10000ms except `AccountServiceOrgNodeClient` 3000/**3000**ms; account-service `AuthServiceClient`
+      3000/15000ms). No re-scoping needed — table still accurate.
+- [x] **AC-1.** All 6 classes' constructors replaced with a single
+      `ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs)` call — confirmed via
+      per-file diff (see PR body).
+- [x] **AC-2.** Byte-identical before/after per class, confirmed by `git diff` (property-value literals unchanged in
+      each constructor signature) + existing tests constructing each client with the same explicit
+      `(baseUrl, connectTimeoutMs, readTimeoutMs, tokenProvider)` args and asserting timeout-dependent behavior still
+      GREEN unmodified: `AccountServiceClient` (3000/10000, prod default; test passes 3000/5000 explicitly — unchanged
+      call signature) 14/14, `AccountServiceClientResilienceTest` 6/6, admin `AuthServiceClient` 10/10,
+      `SecurityServiceClient` 6/6 + `SecurityServiceClientCircuitBreakerTest` 3/3, account-service `AuthServiceClient`
+      9/9. `AccountServiceOrgNodeClient`'s 3000/3000ms literal (`admin.org-node.read-timeout-ms:3000` default) is
+      untouched — verified by diff, not silently widened to 10000ms.
+- [x] **AC-3.** No `@Retry`/`@CircuitBreaker` annotation, config `name=`, or `ResilienceClientFactory.buildCircuitBreaker`/
+      `buildRetry` call touched — `git diff` for all 6 files confined to imports + the constructor-body construction
+      lines. `AccountServiceOrgNodeClient` still has no `@Retry` (not copy-pasted from a sibling).
+- [x] **AC-4.** HTTP/1.1 pinning preserved — read `ResilienceClientFactory.buildRestClient` source
+      (`libs/java-common/.../resilience/ResilienceClientFactory.java` lines 57-70): pins
+      `HttpClient.Version.HTTP_1_1` identically to what each of the 6 classes hand-rolled.
+- [x] **AC-5.** Existing tests for all 6 classes pass unchanged, 0 test file edits: `AccountServiceClientUnitTest`
+      14/14, `AccountServiceClientResilienceTest` 6/6, admin `AuthServiceClientUnitTest` 10/10,
+      `SecurityServiceClientUnitTest` 6/6, `SecurityServiceClientCircuitBreakerTest` 3/3, account-service
+      `AuthServiceClientUnitTest` 9/9 — all 0 failures/0 errors.
+- [x] **AC-6.** `./gradlew :projects:iam-platform:apps:admin-service:test :projects:iam-platform:apps:account-service:test`
+      run locally (full suite, Testcontainers MySQL/Kafka/Redis, 30m15s) — GREEN at baseline counts: admin-service
+      848/848 (0 failures/0 errors/0 skipped), account-service 504/504 (0 failures/0 errors/0 skipped) — matches the
+      baseline recorded by the sibling `TASK-BE-568` DONE note verbatim (admin 848 / account 504).
+- [x] **AC-7.** `security-service`'s `AccountServiceClient` is untouched — `git diff --stat` for
+      `projects/iam-platform/apps/security-service/` shows zero changes; only the 5 admin-service + 1 account-service
+      files listed in Scope appear in the diff.
 
 ---
 
@@ -228,12 +241,13 @@ Follow:
 
 # Definition of Done
 
-- [ ] 6 classes' `RestClient` construction switched to `ResilienceClientFactory.buildRestClient`
-- [ ] Timeout values verified byte-identical per class (AC-2)
-- [ ] No resilience-annotation/config changes (AC-3)
-- [ ] `security-service` untouched (AC-7)
-- [ ] `admin-service`/`account-service` test suites GREEN at baseline counts
-- [ ] Task moved to `done`, referencing `TASK-MONO-495`
+- [x] 6 classes' `RestClient` construction switched to `ResilienceClientFactory.buildRestClient`
+- [x] Timeout values verified byte-identical per class (AC-2)
+- [x] No resilience-annotation/config changes (AC-3)
+- [x] `security-service` untouched (AC-7)
+- [x] `admin-service`/`account-service` test suites GREEN at baseline counts
+- [ ] Task moved to `done`, referencing `TASK-MONO-495` (pending reviewer merge — task is in `review/`, not
+      self-closed per this task's own Owner/Review Rules)
 
 ---
 

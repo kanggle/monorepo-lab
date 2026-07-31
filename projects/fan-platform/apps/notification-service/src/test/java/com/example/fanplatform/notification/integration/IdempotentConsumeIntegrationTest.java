@@ -1,6 +1,7 @@
 package com.example.fanplatform.notification.integration;
 
 import com.example.fanplatform.notification.infrastructure.jpa.NotificationJpaRepository;
+import com.example.fanplatform.notification.testsupport.EventIds;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,8 +14,9 @@ import static org.awaitility.Awaitility.await;
 
 /**
  * Re-delivering the same {@code eventId} (at-least-once) creates NO duplicate
- * notification — the {@code processed_events} guard + unique {@code source_event_id}
- * make the consume idempotent (architecture.md § Idempotency, AC-2).
+ * notification — the shared {@code EventDedupePort} guard + unique
+ * {@code source_event_id} make the consume idempotent (architecture.md §
+ * Idempotency, AC-2; TASK-FAN-BE-042 / ADR-MONO-058 § D7).
  */
 class IdempotentConsumeIntegrationTest extends NotificationServiceIntegrationBase {
 
@@ -30,7 +32,7 @@ class IdempotentConsumeIntegrationTest extends NotificationServiceIntegrationBas
     @Test
     @DisplayName("duplicate eventId → exactly one notification row")
     void duplicateDeliveryProducesSingleRow() {
-        String envelope = activatedEnvelope("evt-dup-1", "mem-1", "acc-1", "PREMIUM");
+        String envelope = activatedEnvelope(EventIds.uuid("evt-dup-1"), "mem-1", "acc-1", "PREMIUM");
 
         // Same eventId twice (at-least-once redelivery).
         producer().send(TOPIC_ACTIVATED, "mem-1", envelope);

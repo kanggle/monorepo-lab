@@ -1,5 +1,6 @@
 package com.example.search.adapter.outbound.http;
 
+import com.example.common.resilience.ResilienceClientFactory;
 import com.example.search.application.port.out.ProductCatalogPort;
 import com.example.search.domain.model.SearchDocument;
 import lombok.extern.slf4j.Slf4j;
@@ -38,11 +39,18 @@ public class ProductCatalogHttpAdapter implements ProductCatalogPort {
 
     private final RestClient restClient;
 
+    /**
+     * ADR-MONO-058 D7 (TASK-BE-570) — previously built from a bare {@code RestClient.builder()}
+     * with no request factory at all (zero connect/read timeout: a hung product-service call
+     * blocked the reindex thread indefinitely). Now built via {@link ResilienceClientFactory}
+     * with explicit, non-zero connect/read timeouts.
+     */
     public ProductCatalogHttpAdapter(
-            RestClient.Builder restClientBuilder,
-            @Value("${catalog.product-service-url:http://product-service:8082}") String productServiceUrl
+            @Value("${catalog.product-service-url:http://product-service:8082}") String productServiceUrl,
+            @Value("${catalog.connect-timeout-ms:3000}") int connectTimeoutMs,
+            @Value("${catalog.read-timeout-ms:5000}") int readTimeoutMs
     ) {
-        this.restClient = restClientBuilder.baseUrl(productServiceUrl).build();
+        this.restClient = ResilienceClientFactory.buildRestClient(productServiceUrl, connectTimeoutMs, readTimeoutMs);
     }
 
     @Override

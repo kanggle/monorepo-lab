@@ -43,6 +43,11 @@ class DlqRoutingIntegrationTest extends NotificationServiceIntegrationBase {
     @Test
     @DisplayName("unsupported schemaVersion → fan.membership.activated.v1.dlq, no notification, container alive")
     void unsupportedSchemaRoutedToDlq() {
+        // "evt-poison-1" is intentionally NOT run through EventIds.uuid(...) (TASK-FAN-BE-042):
+        // EventEnvelope.parse throws UnsupportedSchemaVersionException for the
+        // schemaVersion mismatch below BEFORE the envelope (and its eventId) ever
+        // reaches HandleMembershipEventUseCase — the eventId never gets converted
+        // via UUID.fromString(...), so a non-UUID literal is safe here.
         String poison = activatedEnvelope("evt-poison-1", "mem-1", "acc-1", "PREMIUM")
                 .replace("\"schemaVersion\":1", "\"schemaVersion\":99");
 

@@ -67,6 +67,8 @@ server:
 
 order-service:
   base-url: ${ORDER_SERVICE_URL:http://localhost:8086}
+  connect-timeout-ms: ${ORDER_SERVICE_CONNECT_TIMEOUT_MS:3000}
+  read-timeout-ms: ${ORDER_SERVICE_READ_TIMEOUT_MS:5000}
 
 management:
   endpoints:

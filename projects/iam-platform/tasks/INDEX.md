@@ -92,8 +92,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 **ADR-MONO-058 (fleet-wide shared technical scaffolding consolidation, ACCEPTED 2026-07-30) — iam-platform 분할 착수 (2026-07-31, 루트 `TASK-MONO-495` 분할).** 8개 결정(D1-D8) 중 ADR § 1.1 표가 iam 대상으로 표시한 D1/D2/D6/D7 을 실제 코드로 재검증(감사는 2026-07-29 스냅샷) — D1(actor/JWT 클러스터)은 **iam 에 해당 패턴이 없다**(iam 은 발급자이지 소비자가 아님, 서비스별 자체 `OperatorAuthenticationFilter`/GAP client_credentials 게이트만 존재) → 티켓 없음. D2(에러 envelope)는 **이미 4개 서비스 전부 `CommonGlobalExceptionHandler`/`ErrorResponse` 채택 완료** → 티켓 없음. D6/D7 만 실제 적용 대상으로 확인되어 티켓 발행:
 
-> D6 티켓(4개 사본 → `libs/java-security` 정규 클래스 교체)은 구현 완료되어 `review/` 로 이동 — 아래 `## review` 참조.
-- `TASK-BE-569-adr058-d7-adopt-resilience-client-factory.md` — D7(ResilienceClientFactory 서브패턴만, EventDedupePort 아님): admin-service 5개 + account-service 1개 클라이언트가 `libs/java-common.ResilienceClientFactory.buildRestClient` 와 byte-identical 한 보일러플레이트를 직접 손코딩 — 순수 중복 정리. **ADR 의 "zero read timeout" 프레이밍은 iam 에 해당 없음**(9개 아웃바운드 클라이언트 전부 명시적 타임아웃 보유, 직접 확인) — 스코프를 실제 확인된 중복으로 좁힘. auth-service 2개는 이미 채택 완료, security-service 1개는 아키텍처가 달라(raw HttpClient, Resilience4j 미사용) 범위 밖.
+> D6 티켓(4개 사본 → `libs/java-security` 정규 클래스 교체)은 구현·머지·클로즈 완료 — 아래 `## done` 참조.
+> D7 티켓(`TASK-BE-569`, ResilienceClientFactory 서브패턴만, EventDedupePort 아님)도 구현·머지·클로즈 완료 — 아래 `## done` 참조.
 
 > D3/D4/D5/D8 은 ADR § 1.1 표에서 iam 대상으로 확인되지 않아 티켓 미발행.
 
@@ -112,6 +112,20 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## done
 
+- **`TASK-BE-569-adr058-d7-adopt-resilience-client-factory.md` — ✅ DONE (2026-08-01, 3-dim verified — impl PR #3155 squash `bca6c78d5`; state=MERGED · origin/main tip ancestor 확인 · 머지 전 실패 체크 0건).** ADR-MONO-058 D7 (ResilienceClientFactory 서브패턴만,
+  EventDedupePort 아님). admin-service 5개(`AccountServiceClient`/`AuthServiceClient`/`SecurityServiceClient`/
+  `AccountServiceTenantClient`/`AccountServiceOrgNodeClient`) + account-service 1개(`AuthServiceClient`) 클라이언트의
+  손코딩 `HttpClient`+`JdkClientHttpRequestFactory`+HTTP/1.1 pin+`RestClient.builder()` 시퀀스를
+  `ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs)` 단일 호출로 교체 — 순수
+  construction-mechanism 치환, 타임아웃 값·`@Retry`/`@CircuitBreaker`(admin-service 5개, annotation 기반)·
+  `ResilienceClientFactory.buildCircuitBreaker`/`buildRetry`(account-service `AuthServiceClient`) 무변경.
+  `AccountServiceOrgNodeClient`의 3000/**3000**ms(permission-check 경로, 의도적 단축)도 verbatim 보존.
+  `auth-service` 2개(이미 채택 완료)·`security-service` 1개(raw `HttpClient`+수동 retry, 아키텍처 상이)는 범위 밖 —
+  `git diff --stat`로 security-service 무변경 확인. 6개 클래스 관련 unit/WireMock 테스트(AccountServiceClient 14 /
+  AccountServiceClientResilienceTest 6 / admin AuthServiceClient 10 / SecurityServiceClient 6 +
+  SecurityServiceClientCircuitBreakerTest 3 / account-service AuthServiceClient 9) 전부 무수정 GREEN.
+  `admin-service`/`account-service` `:test` 전체 실행(Testcontainers MySQL/Kafka/Redis, 30m15s) — GREEN, baseline count
+  일치: admin 848/848·account 504/504, 실패 0(`TASK-BE-568` DONE 노트 baseline 과 동일 수치). `TASK-MONO-495` 분할 산물. 분석=Sonnet 5 / 구현=Sonnet 5.
 - **`TASK-BE-568-adr058-d6-adopt-iam-client-credentials-token-provider.md` — ✅ DONE (2026-07-31, 3-dim verified — impl PR #3130 squash `0cba83e36`; state=MERGED · origin/main tip ancestor 확인 · 머지 전 실패 체크 0건).**
   `TASK-MONO-501`(canonical class promotion, PR #3116, merged) 선행 완료 확인 후 착수. iam-platform 4개 서비스
   (`auth`/`account`/`admin`/`security-service`) 로컬 `IamClientCredentialsTokenProvider` 사본 4개 전량 삭제, 9개

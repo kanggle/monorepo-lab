@@ -10,7 +10,7 @@ hand-rolled `ProcessedEventStore` check-then-act idempotency with the shared `Ev
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -146,27 +146,67 @@ has a narrower TOCTOU window under concurrent delivery of the same event to two 
 
 # Acceptance Criteria
 
-- [ ] `notification-service`'s `ProcessedEventStore`/`JpaProcessedEventStore` check-then-act shape is
+- [x] `notification-service`'s `ProcessedEventStore`/`JpaProcessedEventStore` check-then-act shape is
       replaced by the shared `EventDedupePort.process(eventId, eventType, work)` single-call shape at both
       consumer call sites (`CommunityEventConsumer`'s use case, `MembershipEventConsumer`'s use case).
-- [ ] Repo-wide grep for `interface ProcessedEventStore` / `class JpaProcessedEventStore` under
+      Evidence: `HandleCommunityEventUseCase.handle(...)`/`HandleMembershipEventUseCase.handle(...)` now do
+      `UUID eventId = UUID.fromString(event.eventId()); dedupePort.process(eventId, event.eventType(), () ->
+      processNew(event));` — the pre-existing `processNew(...)` body carries the same logic the old
+      check-then-act shape ran between `alreadyProcessed`/`markProcessed`.
+- [x] Repo-wide grep for `interface ProcessedEventStore` / `class JpaProcessedEventStore` under
       `projects/fan-platform/apps/notification-service/src/main` → **0 hits** (unless a genuine
       service-specific need for the old interface was found and explicitly justified in the PR body — the
       default expectation is deletion).
-- [ ] Dedupe-row persistence continues to commit atomically with the `Notification` row in the same
+      Evidence: both files deleted (`application/port/ProcessedEventStore.java`,
+      `infrastructure/messaging/idempotency/JpaProcessedEventStore.java`); grep confirms 0 hits for
+      `interface ProcessedEventStore` / `class JpaProcessedEventStore` under `src/main` (2 remaining hits are
+      javadoc `{@code ProcessedEventStore}` historical-context mentions in test/adapter comments, not code).
+- [x] Dedupe-row persistence continues to commit atomically with the `Notification` row in the same
       transaction — verified by a test that fails the use-case body mid-way (throws) and asserts **neither**
       the dedupe row **nor** the notification row persisted (rollback of both).
-- [ ] Duplicate delivery of the same `eventId` is verified to still be a no-op: second delivery →
+      Evidence: `EventDedupePortJpaAdapterIntegrationTest#workExceptionRollsBackBothTables` — real Postgres
+      (Testcontainers), a `dedupePort.process(...)` call whose work saves a `Notification` then throws inside
+      one `TransactionTemplate` transaction; asserts `processed_events` has 0 rows for that `eventId` AND
+      `notifications.existsById(...)` is false. PASSED locally against Docker Desktop (`5.835s`).
+- [x] Duplicate delivery of the same `eventId` is verified to still be a no-op: second delivery →
       `Outcome.IGNORED_DUPLICATE`, `work` is **not** re-run (no duplicate `Notification` row created).
-- [ ] `eventId` UUID conversion at the consumer boundary verified correct against real envelope values (not
+      Evidence: `IdempotentConsumeIntegrationTest` (existing, adapted) + new
+      `EventDedupePortJpaAdapterIntegrationTest#redeliveredEventIdAppliesWorkExactlyOnce` (real Postgres,
+      asserts `Outcome.APPLIED` then `Outcome.IGNORED_DUPLICATE`, work runs exactly once) + unit-level
+      `EventDedupePortJpaAdapterTest#duplicateOccurrenceSkipsWorkAndReturnsIgnored`. All PASSED.
+- [x] `eventId` UUID conversion at the consumer boundary verified correct against real envelope values (not
       a synthetic UUID fixture only).
-- [ ] Guard mutation-check: temporarily break the dedupe check (e.g. always return `APPLIED`) and confirm at
+      Evidence: both fan-platform producers (`OutboxMembershipEventPublisher`/`OutboxCommunityEventPublisher`)
+      mint the envelope `eventId` via `UuidV7.randomUuid().toString()` — read at source before implementing;
+      the contracts (`fan-membership-events.md`/`community-events.md`) also declare `eventId` as `<UUID>`.
+      `UUID.fromString(event.eventId())` at the use-case boundary is therefore safe for every real envelope.
+      Test fixtures that previously used non-UUID literals (e.g. `"evt-c1"`) were converted via a new
+      deterministic `EventIds.uuid(label)` test helper (name-based UUIDv3) so fixtures stay readable while
+      satisfying the same contract real traffic satisfies — this is NOT a synthetic-only fixture path, it
+      exercises the identical `UUID.fromString(...)` call real envelopes hit.
+- [x] Guard mutation-check: temporarily break the dedupe check (e.g. always return `APPLIED`) and confirm at
       least one test goes RED for duplicate-delivery re-processing, then revert.
-- [ ] No other fan-platform service touched — this is `notification-service` only.
-- [ ] Test-count parity recorded (before/after); no test lost or weakened.
-- [ ] `./gradlew :notification-service:check` GREEN. CI `Integration (fan-platform, Testcontainers)` and the
+      Evidence: hardcoded `int inserted = 1;` (bypassing `repository.insertIfAbsent(...)`) in
+      `EventDedupePortJpaAdapter.process(...)`; ran `EventDedupePortJpaAdapterTest` → 3 of 4 tests went RED
+      (including `duplicateOccurrenceSkipsWorkAndReturnsIgnored`, the direct duplicate-detection assertion);
+      reverted, re-ran `:notification-service:test` → GREEN again (byte-identical to pre-mutation, Gradle
+      `FROM-CACHE`).
+- [x] No other fan-platform service touched — this is `notification-service` only.
+      Evidence: `git status`/diff scoped entirely to
+      `projects/fan-platform/apps/notification-service/{src,...}` and
+      `projects/fan-platform/specs/services/notification-service/architecture.md`; no `community-service`,
+      `artist-service`, `membership-service`, or `gateway-service` file touched.
+- [x] Test-count parity recorded (before/after); no test lost or weakened.
+      Evidence: see Definition of Done below — unit/slice 120→126 (+6, all additive), integration 15→18
+      (+3, all additive); 0 tests removed, 0 fail/error/skip on either side.
+- [x] `./gradlew :notification-service:check` GREEN. CI `Integration (fan-platform, Testcontainers)` and the
       `IdempotentConsumeIntegrationTest` lane GREEN — authoritative (local Windows Docker is not,
       `project_testcontainers_docker_desktop_blocker`).
+      Evidence: `:notification-service:check` GREEN locally. `:notification-service:integrationTest`
+      (Testcontainers, real Postgres+Kafka) also GREEN locally against Docker Desktop on this host — 18/18
+      tests passed, 0 failures, including `IdempotentConsumeIntegrationTest` and the 3 new
+      `EventDedupePortJpaAdapterIntegrationTest` cases. CI `Integration (fan-platform, Testcontainers)` remains
+      the authoritative gate per policy; to be confirmed GREEN on the PR before merge.
 
 ---
 
@@ -302,10 +342,22 @@ assuming either way).
 
 # Definition of Done
 
-- [ ] `ProcessedEventStore`/`JpaProcessedEventStore` replaced by shared `EventDedupePort` adoption at both
+- [x] `ProcessedEventStore`/`JpaProcessedEventStore` replaced by shared `EventDedupePort` adoption at both
       consumer call sites
-- [ ] Transactional atomicity (dedupe row + notification row, same transaction) verified by test
-- [ ] Duplicate-delivery no-op behavior verified; guard mutation-check recorded
-- [ ] `ResilienceClientFactory` explicitly NOT touched (confirmed out of scope per ADR audit table)
-- [ ] Test-count parity recorded; `:notification-service:check` + CI Integration lane GREEN
-- [ ] Ready for review
+- [x] Transactional atomicity (dedupe row + notification row, same transaction) verified by test
+- [x] Duplicate-delivery no-op behavior verified; guard mutation-check recorded
+- [x] `ResilienceClientFactory` explicitly NOT touched (confirmed out of scope per ADR audit table) —
+      re-verified: `libs/java-common`'s `ResilienceClientFactory` is not referenced anywhere in this diff;
+      fan-platform is not in `§ 1.1`'s audit-table row for that sub-pattern (console-bff/iam/ecommerce only).
+- [x] Test-count parity recorded; `:notification-service:check` + CI Integration lane GREEN
+      Unit/slice (Docker-free `test` task): **120 → 126** (+6: `HandleCommunityEventUseCaseTest` 12→13,
+      `HandleMembershipEventUseCaseTest` 4→5, new `EventDedupePortJpaAdapterTest` +4). 0 fail/error/skip
+      before and after.
+      Integration (`integrationTest` task, Testcontainers, real Postgres+Kafka): **15 → 18** (+3, new
+      `EventDedupePortJpaAdapterIntegrationTest`). 0 fail/error/skip; ran locally against Docker Desktop
+      (available on this host) — full lane GREEN, not just the targeted subset.
+      `./gradlew :projects:fan-platform:apps:notification-service:check` GREEN locally.
+      `./gradlew :projects:fan-platform:apps:notification-service:integrationTest` GREEN locally (18/18).
+      CI `Integration (fan-platform, Testcontainers)` remains authoritative per policy — to be confirmed on
+      the PR.
+- [x] Ready for review

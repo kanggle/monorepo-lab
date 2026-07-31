@@ -2,20 +2,18 @@ package com.example.admin.infrastructure.client;
 
 import com.example.admin.application.exception.DownstreamFailureException;
 import com.example.admin.application.exception.NonRetryableDownstreamException;
+import com.example.common.resilience.ResilienceClientFactory;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
-import java.net.http.HttpClient;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -44,16 +42,7 @@ public class AuthServiceClient {
             @Value("${admin.downstream.connect-timeout-ms:3000}") int connectTimeoutMs,
             @Value("${admin.downstream.read-timeout-ms:10000}") int readTimeoutMs,
             IamClientCredentialsTokenProvider tokenProvider) {
-        HttpClient httpClient = HttpClient.newBuilder()
-                .version(HttpClient.Version.HTTP_1_1)
-                .connectTimeout(Duration.ofMillis(connectTimeoutMs))
-                .build();
-        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
-        factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
-        this.restClient = RestClient.builder()
-                .baseUrl(baseUrl)
-                .requestFactory(factory)
-                .build();
+        this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs);
         this.tokenProvider = tokenProvider;
     }
 
