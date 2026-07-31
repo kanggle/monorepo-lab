@@ -32,12 +32,36 @@ public record ApiEnvelope<T>(T data, Map<String, Object> meta) {
      * notification-service / read-model-service's {@code ApiEnvelope.ofList}).
      * A caller on page 0 of a 25-row result sees {@code totalElements == 25}
      * even though {@code data} holds only the page slice.
+     *
+     * <p>Kept (no {@code totalPages}) for {@code DelegationController#list}, the
+     * one approval-service list endpoint that is genuinely unpaginated (no
+     * {@code page}/{@code size} query params in approval-api.md — the full grant
+     * list is always returned) and therefore never adopts
+     * {@code com.example.common.page.PageResult} (ADR-MONO-058 § D3 — ordinary
+     * paginated endpoints use the {@link #ofList(List, int, int, long, int)}
+     * overload below).
      */
     public static <T> ApiEnvelope<List<T>> ofList(List<T> data, int page, int size, long totalElements) {
         Map<String, Object> meta = new LinkedHashMap<>();
         meta.put("page", page);
         meta.put("size", size);
         meta.put("totalElements", totalElements);
+        meta.put("timestamp", Instant.now().toString());
+        return new ApiEnvelope<>(data, meta);
+    }
+
+    /**
+     * Paginated list envelope for endpoints backed by
+     * {@code com.example.common.page.PageResult} — adds the additive
+     * {@code totalPages} field (ADR-MONO-058 § D3).
+     */
+    public static <T> ApiEnvelope<List<T>> ofList(List<T> data, int page, int size,
+                                                  long totalElements, int totalPages) {
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("page", page);
+        meta.put("size", size);
+        meta.put("totalElements", totalElements);
+        meta.put("totalPages", totalPages);
         meta.put("timestamp", Instant.now().toString());
         return new ApiEnvelope<>(data, meta);
     }

@@ -1,7 +1,7 @@
 package com.example.erp.readmodel.application;
 
+import com.example.common.page.PageResult;
 import com.example.erp.readmodel.application.port.outbound.OrgViewMetricsPort;
-import com.example.erp.readmodel.application.query.EmployeeOrgViewPage;
 import com.example.erp.readmodel.domain.common.MasterStatus;
 import com.example.erp.readmodel.domain.error.ReadModelNotFoundException;
 import com.example.erp.readmodel.domain.orgview.EmployeeOrgView;
@@ -86,7 +86,8 @@ public class QueryEmployeeOrgViewUseCase {
 
     /** Paginated employee org-view list (status + optional department-subtree filter). */
     @Transactional(readOnly = true)
-    public EmployeeOrgViewPage list(MasterStatus status, String departmentId, int page, int size) {
+    public PageResult<EmployeeOrgView> list(MasterStatus status, String departmentId, int page,
+                                            int size) {
         return list(status, departmentId, null, page, size);
     }
 
@@ -100,8 +101,8 @@ public class QueryEmployeeOrgViewUseCase {
      * empty/zero-scope expands to an empty id set → an empty page (fail-closed).
      */
     @Transactional(readOnly = true)
-    public EmployeeOrgViewPage list(MasterStatus status, String departmentId,
-                                    List<String> orgScopeRootIds, int page, int size) {
+    public PageResult<EmployeeOrgView> list(MasterStatus status, String departmentId,
+                                            List<String> orgScopeRootIds, int page, int size) {
         MasterStatus effectiveStatus = status == null ? MasterStatus.ACTIVE : status;
         List<String> explicitSubtree = null;
         if (departmentId != null && !departmentId.isBlank()) {
@@ -130,7 +131,10 @@ public class QueryEmployeeOrgViewUseCase {
         for (EmployeeProjection e : employees) {
             content.add(assembleWith(e, departments, costCenters, jobGrades, true));
         }
-        return new EmployeeOrgViewPage(content, page, size, total);
+        // size is always >= 1 here (ReadQueryWebSupport.validatePaging bounds it to 1..MAX_SIZE
+        // before this use case is invoked), so the ceiling-division is divide-by-zero-safe.
+        int totalPages = (int) Math.ceil((double) total / size);
+        return new PageResult<>(content, page, size, total, totalPages);
     }
 
     // ------------------------------------------------------------------------

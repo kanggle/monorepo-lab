@@ -1,7 +1,7 @@
 package com.example.erp.masterdata.domain.businesspartner.repository;
 
+import com.example.common.page.PageResult;
 import com.example.erp.masterdata.domain.businesspartner.BusinessPartner;
-import com.example.erp.masterdata.domain.common.PageResult;
 
 import java.util.Optional;
 

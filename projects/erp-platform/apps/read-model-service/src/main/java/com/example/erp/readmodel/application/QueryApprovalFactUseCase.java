@@ -1,7 +1,7 @@
 package com.example.erp.readmodel.application;
 
+import com.example.common.page.PageResult;
 import com.example.erp.readmodel.application.port.outbound.OrgViewMetricsPort;
-import com.example.erp.readmodel.application.query.ApprovalFactPage;
 import com.example.erp.readmodel.domain.approval.ApprovalFactProjection;
 import com.example.erp.readmodel.domain.approval.ApprovalFactView;
 import com.example.erp.readmodel.domain.approval.ApprovalStatus;
@@ -87,9 +87,9 @@ public class QueryApprovalFactUseCase {
 
     /** Paginated approval-fact list with the explicit filters + the org_scope read filter. */
     @Transactional(readOnly = true)
-    public ApprovalFactPage list(ApprovalStatus status, ApprovalSubjectType subjectType,
-                                 String subjectId, String approverId, String submitterId,
-                                 List<String> orgScopeRootIds, int page, int size) {
+    public PageResult<ApprovalFactView> list(ApprovalStatus status, ApprovalSubjectType subjectType,
+                                             String subjectId, String approverId, String submitterId,
+                                             List<String> orgScopeRootIds, int page, int size) {
         ApprovalFactFilter filter;
         if (orgScopeRootIds == null) {
             // Net-zero: no org_scope narrowing.
@@ -110,7 +110,10 @@ public class QueryApprovalFactUseCase {
         for (ApprovalFactProjection fact : facts) {
             content.add(resolveSubject(fact, true));
         }
-        return new ApprovalFactPage(content, page, size, total);
+        // size is always >= 1 here (ReadQueryWebSupport.validatePaging bounds it to 1..MAX_SIZE
+        // before this use case is invoked), so the ceiling-division is divide-by-zero-safe.
+        int totalPages = (int) Math.ceil((double) total / size);
+        return new PageResult<>(content, page, size, total, totalPages);
     }
 
     // ------------------------------------------------------------------------

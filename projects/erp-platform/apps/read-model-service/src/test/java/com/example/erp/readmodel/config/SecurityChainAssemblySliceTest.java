@@ -1,9 +1,9 @@
 package com.example.erp.readmodel.config;
 
+import com.example.common.page.PageResult;
 import com.example.erp.readmodel.adapter.inbound.web.EmployeeOrgViewController;
 import com.example.erp.readmodel.adapter.inbound.web.advice.GlobalExceptionHandler;
 import com.example.erp.readmodel.application.QueryEmployeeOrgViewUseCase;
-import com.example.erp.readmodel.application.query.EmployeeOrgViewPage;
 import com.example.erp.readmodel.presentation.security.OrgScope;
 import com.example.erp.readmodel.presentation.security.ReadAuthorizationGate;
 import com.nimbusds.jose.JWSAlgorithm;
@@ -119,7 +119,7 @@ class SecurityChainAssemblySliceTest {
                         anyInt(), anyInt()))
                 .thenAnswer(invocation -> {
                     liveAuthentication.set(SecurityContextHolder.getContext().getAuthentication());
-                    return new EmployeeOrgViewPage(List.of(), 0, 20, 0L);
+                    return new PageResult<>(List.of(), 0, 20, 0L, 0);
                 });
     }
 

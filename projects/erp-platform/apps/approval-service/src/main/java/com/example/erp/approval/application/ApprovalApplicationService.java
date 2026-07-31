@@ -1,6 +1,7 @@
 package com.example.erp.approval.application;
 
 import com.example.common.id.UuidV7;
+import com.example.common.page.PageResult;
 import com.example.erp.approval.application.command.Commands.ApproveCommand;
 import com.example.erp.approval.application.command.Commands.CreateDraftCommand;
 import com.example.erp.approval.application.command.Commands.RejectCommand;
@@ -16,7 +17,6 @@ import com.example.erp.approval.domain.audit.ApprovalAuditLog;
 import com.example.erp.approval.domain.audit.ApprovalAuditLogRepository;
 import com.example.erp.approval.domain.authorization.AuthorizationDecision;
 import com.example.erp.approval.domain.authorization.RequiredScope;
-import com.example.erp.approval.domain.common.PageResult;
 import com.example.erp.approval.domain.delegation.DelegationResolution;
 import com.example.erp.approval.domain.delegation.DelegationResolver;
 import com.example.erp.approval.domain.error.ApprovalErrors.ApprovalNotAuthorizedApproverException;

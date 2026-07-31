@@ -1,8 +1,8 @@
 package com.example.erp.masterdata.infrastructure.security;
 
 import com.example.erp.masterdata.application.ActorContext;
+import com.example.common.page.PageResult;
 import com.example.erp.masterdata.application.MasterdataApplicationService;
-import com.example.erp.masterdata.domain.common.PageResult;
 import com.example.erp.masterdata.presentation.advice.GlobalExceptionHandler;
 import com.example.erp.masterdata.presentation.controller.DepartmentController;
 import com.example.erp.masterdata.presentation.support.IdempotentExecution;
@@ -128,7 +128,7 @@ class ActorContextAuthPathSliceTest {
         when(service.listDepartments(any(), any(), anyInt(), anyInt())).thenAnswer(invocation -> {
             boundActor.set(invocation.getArgument(0));
             liveAuthentication.set(SecurityContextHolder.getContext().getAuthentication());
-            return new PageResult<>(List.of(), 0L);
+            return new PageResult<>(List.of(), 0, 20, 0L, 0);
         });
     }
 

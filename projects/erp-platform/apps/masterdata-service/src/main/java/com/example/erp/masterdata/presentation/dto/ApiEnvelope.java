@@ -29,8 +29,10 @@ public record ApiEnvelope<T>(T data, Map<String, Object> meta) {
 
     /**
      * Convenience factory for paginated list responses. Produces the standard
-     * {@code { data, meta: { page, size, totalElements, timestamp } }} envelope
-     * used by all five master-data list endpoints.
+     * {@code { data, meta: { page, size, totalElements, totalPages, timestamp } }}
+     * envelope used by all five master-data list endpoints. {@code totalPages} is
+     * additive (ADR-MONO-058 § D3 — {@code com.example.common.page.PageResult}
+     * adoption).
      *
      * <p>{@code totalElements} is the TRUE total-row count for the query (across
      * ALL pages), supplied by the repository's count query — NOT
@@ -38,11 +40,13 @@ public record ApiEnvelope<T>(T data, Map<String, Object> meta) {
      * 25-row result sees {@code totalElements == 25} even though {@code data}
      * holds only the page slice.
      */
-    public static <T> ApiEnvelope<List<T>> ofList(List<T> data, int page, int size, long totalElements) {
+    public static <T> ApiEnvelope<List<T>> ofList(List<T> data, int page, int size,
+                                                  long totalElements, int totalPages) {
         Map<String, Object> meta = new LinkedHashMap<>();
         meta.put("page", page);
         meta.put("size", size);
         meta.put("totalElements", totalElements);
+        meta.put("totalPages", totalPages);
         meta.put("timestamp", Instant.now().toString());
         return new ApiEnvelope<>(data, meta);
     }

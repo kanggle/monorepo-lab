@@ -138,7 +138,11 @@ All endpoints:
   `VALIDATION_ERROR`.
 - Success envelope: `{ "data": <payload>, "meta": { "timestamp":
   "<ISO-8601>" } }`. List responses extend `meta` with
-  `page` / `size` / `totalElements`.
+  `page` / `size` / `totalElements` / `totalPages` (ADR-MONO-058 § D3 —
+  `com.example.common.page.PageResult` adoption added `totalPages`, additive,
+  to `GET /requests` and `GET /inbox`; `GET /delegations` remains the one
+  genuinely unpaginated list endpoint — no `page`/`size` query params, the
+  full grant list is always returned — and does not gain `totalPages`).
 - Error envelope: `{ "code": "<ERROR_CODE>", "message": "<human>",
   "details": <object?>, "timestamp": "<ISO-8601>" }`. Codes per
   [`platform/error-handling.md`](../../../../../platform/error-handling.md)
@@ -186,8 +190,9 @@ All endpoints:
   "submittedAt": "<ABSENT until SUBMITTED>" }
 ```
 
-`PageMeta` (list responses): `{ "page": 0, "size": 20, "totalElements":
-123, "timestamp": "<ISO-8601>" }`.
+`PageMeta` (`GET /requests` / `GET /inbox` responses): `{ "page": 0, "size": 20,
+"totalElements": 123, "totalPages": 7, "timestamp": "<ISO-8601>" }`.
+`totalPages = ceil(totalElements / size)` (0 when `totalElements == 0`).
 
 ---
 
@@ -271,7 +276,7 @@ inside their data scope, plus requests where they are `submitterId` or
 **200**:
 ```json
 { "data": [ <ApprovalSummary>, ... ],
-  "meta": { "page": 0, "size": 20, "totalElements": 42,
+  "meta": { "page": 0, "size": 20, "totalElements": 42, "totalPages": 3,
             "timestamp": "<ISO-8601>" } }
 ```
 
@@ -430,7 +435,7 @@ filtering (v2 deferred).
 **200**:
 ```json
 { "data": [ <ApprovalSummary with status="SUBMITTED">, ... ],
-  "meta": { "page": 0, "size": 20, "totalElements": 7,
+  "meta": { "page": 0, "size": 20, "totalElements": 7, "totalPages": 1,
             "timestamp": "<ISO-8601>" } }
 ```
 

@@ -1,8 +1,8 @@
 package com.example.erp.approval.infrastructure.security;
 
 import com.example.erp.approval.application.ActorContext;
+import com.example.common.page.PageResult;
 import com.example.erp.approval.application.ApprovalApplicationService;
-import com.example.erp.approval.domain.common.PageResult;
 import com.example.erp.approval.presentation.advice.GlobalExceptionHandler;
 import com.example.erp.approval.presentation.controller.ApprovalInboxController;
 import com.nimbusds.jose.JWSAlgorithm;
@@ -114,7 +114,7 @@ class ActorContextAuthPathSliceTest {
         when(service.inbox(any(), anyInt(), anyInt())).thenAnswer(invocation -> {
             boundActor.set(invocation.getArgument(0));
             liveAuthentication.set(SecurityContextHolder.getContext().getAuthentication());
-            return new PageResult<>(List.of(), 0L);
+            return new PageResult<>(List.of(), 0, 20, 0L, 0);
         });
     }
 

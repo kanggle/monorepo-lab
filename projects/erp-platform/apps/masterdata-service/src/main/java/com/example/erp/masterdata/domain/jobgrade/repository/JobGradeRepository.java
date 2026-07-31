@@ -1,6 +1,6 @@
 package com.example.erp.masterdata.domain.jobgrade.repository;
 
-import com.example.erp.masterdata.domain.common.PageResult;
+import com.example.common.page.PageResult;
 import com.example.erp.masterdata.domain.jobgrade.JobGrade;
 
 import java.util.Optional;

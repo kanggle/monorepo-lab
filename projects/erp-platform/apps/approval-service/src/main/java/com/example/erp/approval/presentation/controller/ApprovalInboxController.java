@@ -2,8 +2,8 @@ package com.example.erp.approval.presentation.controller;
 
 import com.example.erp.approval.application.ActorContext;
 import com.example.erp.approval.application.ApprovalApplicationService;
+import com.example.common.page.PageResult;
 import com.example.erp.approval.application.view.ApprovalSummaryView;
-import com.example.erp.approval.domain.common.PageResult;
 import com.example.security.servlet.actor.ActorContextResolver;
 import com.example.erp.approval.presentation.dto.ApiEnvelope;
 import lombok.RequiredArgsConstructor;
@@ -33,7 +33,9 @@ public class ApprovalInboxController {
             @RequestParam(defaultValue = "20") int size) {
         ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         PageResult<ApprovalSummaryView> result = service.inbox(actor, page, size);
-        return ResponseEntity.ok(
-                ApiEnvelope.ofList(result.content(), page, size, result.totalElements()));
+        // page/size/totalPages sourced from the result object (not the raw request) — guaranteed
+        // to agree since the repository echoes the exact page/size it was called with (AC-4).
+        return ResponseEntity.ok(ApiEnvelope.ofList(result.content(), result.page(), result.size(),
+                result.totalElements(), result.totalPages()));
     }
 }

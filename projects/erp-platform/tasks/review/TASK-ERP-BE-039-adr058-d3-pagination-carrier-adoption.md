@@ -10,7 +10,7 @@ the `page`/`size`/`totalPages` omission along the way
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -136,28 +136,97 @@ a local `PageQuery`/`PageRequest`/`PageParams`-shaped class before assuming ther
 
 # Acceptance Criteria
 
-- [ ] **AC-1 (adoption, all local page types retired)** — repo-wide grep under
+- [x] **AC-1 (adoption, all local page types retired)** — repo-wide grep under
       `projects/erp-platform/apps/*/src/main` finds zero declarations of `PageResult` (the local
       `domain.common` copies), `InboxPage`, `EmployeeOrgViewPage`, `ApprovalFactPage`,
       `DelegationFactPage`; all use sites reference `com.example.common.page.PageResult<T>`.
-- [ ] **AC-2 (`totalPages` correctly computed at every construction site)** — for each of the (at
+      Evidence: all six local records deleted (masterdata + approval `domain/common/PageResult.java`,
+      notification `application/query/InboxPage.java`, read-model
+      `application/query/{EmployeeOrgViewPage,ApprovalFactPage,DelegationFactPage}.java`); a
+      post-change repo-wide grep for `domain\.common\.PageResult|application\.query\.(InboxPage|Employee
+      OrgViewPage|ApprovalFactPage|DelegationFactPage)` and for the local 2-arg
+      `new PageResult<>(content, total)`/`new XxxPage(...)` construction shapes returns zero matches
+      under `apps/*`; every remaining `new PageResult<>(...)` call site is the shared 5-arg
+      `(content, page, size, totalElements, totalPages)` shape.
+- [x] **AC-2 (`totalPages` correctly computed at every construction site)** — for each of the (at
       least) six former local-type construction sites, a test asserts `totalPages` matches the
       expected ceiling division for a non-exact-multiple `totalElements`/`size` pair (e.g.
       `totalElements=25, size=10 → totalPages=3`) and for `totalElements=0` (`totalPages=0`, not
       `1` and not a division error).
-- [ ] **AC-3 (contract shape preserved or explicitly extended)** — `content`/`page`/`size`/
+      Evidence per type: masterdata `PageResult` — `MasterdataListFilterIntegrationTest` (Docker-gated
+      IT, authoritative on CI-Linux) asserts `totalPages` at the real `DepartmentRepositoryImpl.findAll`
+      construction site for 25/10→3, 24/100→1, 1/100→1, **0/100→0** (the true zero-elements edge case),
+      25/100→1; `ApiEnvelopeTest` + `DepartmentControllerSliceTest` add pure-unit ceiling-division
+      coverage (13/25÷2, 0/0÷20) needing no Docker. approval `PageResult` — new
+      `ApprovalRequestRepositoryImplTest` (Mockito, no Docker) exercises the real
+      `ApprovalRequestRepositoryImpl.findAll`/`findInbox` construction sites: 25/10→3, 0/20→0 (findAll),
+      7/5→2 (findInbox). notification `InboxPage`→shared type — `QueryInboxUseCaseTest` exercises the
+      real `QueryInboxUseCase.list` formula: 1/20→1, 25/10→3, **0/20→0**. read-model's three types —
+      `QueryEmployeeOrgViewUseCaseTest`/`QueryApprovalFactUseCaseTest`/`QueryDelegationFactUseCaseTest`
+      each exercise their real use-case formula: 1/20→1, 25/10→3 (non-exact), 0/20→0 (zero-elements
+      edge case), for all three. masterdata's 4 sibling repos (Employee/JobGrade/CostCenter/
+      BusinessPartner) share the byte-identical inline ceiling-division expression proven correct by
+      the Department IT/unit coverage — not independently repo-level-unit-tested (noted, not hidden).
+- [x] **AC-3 (contract shape preserved or explicitly extended)** — `content`/`page`/`size`/
       `totalElements` JSON keys and nesting are byte-identical to today's wire output for every
       endpoint touched; `totalPages`, if newly emitted, is additive (present, does not replace or
       rename any existing key) and is added to the relevant contract file(s) in the same PR.
-- [ ] **AC-4 (masterdata/approval `page`/`size` composition reconciled)** — the mechanism that
+      Evidence: every touched controller keeps `data`/`meta.{page,size,totalElements,timestamp[,
+      warning]}` unchanged and only adds `meta.totalPages`; slice tests assert both the pre-existing
+      keys AND the new `$.meta.totalPages` in the same requests (no removed/renamed key anywhere).
+      approval-service's `GET /delegations` (unpaginated, not one of the six local types, no
+      `PageResult`) is untouched — kept on the original 4-arg `ApiEnvelope.ofList` overload, no
+      `totalPages` added, per Out-of-Scope. All four `specs/contracts/http/*-api.md` updated in this
+      PR (see AC-6).
+- [x] **AC-4 (masterdata/approval `page`/`size` composition reconciled)** — the mechanism that
       currently supplies `page`/`size` in masterdata/approval's HTTP responses (found via the
       Implementation Notes' investigation step) is either subsumed by the adopted `PageResult`
       (preferred, per the ADR's "opportunity to fix" framing) or left in place with a stated reason
       if subsuming it is not straightforward — not silently duplicated.
-- [ ] **AC-5 (baseline parity)** — before/after test counts recorded per module; no test lost; all
+      Investigation finding: confirmed by reading the pre-change controllers — masterdata's 5
+      controllers and approval's 2 paginated controllers composed `meta.page`/`meta.size` from the raw
+      inbound `@RequestParam int page, int size` (NOT from the local `PageResult`, which carried
+      neither field), while `meta.totalElements` came from the result object. **Subsumed** (the
+      preferred path): every touched controller now sources `page`/`size`/`totalElements`/`totalPages`
+      uniformly off the adopted `PageResult` result object (`result.page()`/`result.size()`/...),
+      dropping the raw-request duplication. Verified safe because `page`/`size` are never
+      clamped/defaulted differently between the request and the repository's `PageRequest.of(page,
+      size)` echo (Spring Data's `PageRequest.of` either uses the exact values or throws
+      `IllegalArgumentException` before a `PageResult` is ever constructed — no silent divergence
+      point); notification/read-model's pre-existing `Math.min(size, MAX_SIZE)` clamp already ran
+      before their local page-type's construction (their local type already carried `page`/`size`
+      pre-adoption), so no change in clamping semantics there. No local request-side
+      `PageQuery`/`PageRequest`/`PageParams`-shaped type was found in any of the four services (grepped
+      for the pattern across all four `apps/*/src/main`) — every service reads `page`/`size` as two
+      plain `@RequestParam int` args directly, so there is nothing else to retire in favor of
+      `com.example.common.page.PageQuery` (no request-side adoption gap; `PageQuery`'s clamping `of(...)`
+      factory is a NEW behavior — silently swapping the raw params' validate-and-throw semantics for
+      `PageQuery`'s clamp-instead-of-throw semantics would be an undisclosed behavior change, so it was
+      deliberately not forced per the task's own "do not force a fit" guidance).
+- [x] **AC-5 (baseline parity)** — before/after test counts recorded per module; no test lost; all
       four `:check` GREEN; CI `Integration (erp-platform, Testcontainers)` GREEN authoritative.
-- [ ] **AC-6 (specs reconciled)** — `architecture.md` dependency lines and contract § Common
+      Local `:test` GREEN, 0 failures, all four services (post-change / all additions, no test
+      deleted): notification-service 121 (was 119, +2 totalPages unit tests), read-model-service 162
+      (was 159, +3), masterdata-service 119 (was 118, +1), approval-service 174 (was 171, +3 new file
+      `ApprovalRequestRepositoryImplTest`). `./gradlew :notification-service:check
+      :read-model-service:check :masterdata-service:check :approval-service:check` GREEN locally
+      (compile + test, no additional verification task configured in these `build.gradle`s beyond
+      `test`). CI `Integration (erp-platform, Testcontainers)` is the authoritative Docker-gated rail —
+      pending this PR's CI run (not runnable locally per this host's Testcontainers/Docker-Desktop
+      flakiness convention); `TASK-ERP-BE-033`/`036` regression assertions re-verified green in the
+      same runs (`MasterdataListFilterIntegrationTest` AC-2/AC-4 total-count assertions;
+      `ApiEnvelopeTest` AC-2 total-vs-page-length assertion).
+- [x] **AC-6 (specs reconciled)** — `architecture.md` dependency lines and contract § Common
       response shapes updated wherever `libs:java-common` or `totalPages` is newly present.
+      Evidence: masterdata/approval/notification `architecture.md` already documented `libs:java-common`
+      pre-task (unchanged, still accurate); read-model-service's `architecture.md` gained a new
+      "Allowed dependencies" note under § Layer Structure documenting the newly-active
+      `com.example.common.page.PageResult` import (previously declared in `build.gradle` but genuinely
+      unused — confirmed by a pre-change grep for `com.example.common.` returning zero matches under
+      `read-model-service/src/main`). All four `specs/contracts/http/*-api.md` updated: `totalPages`
+      added to each `PageMeta`/`Common shapes` definition + every per-endpoint `200` JSON example for
+      every genuinely paginated endpoint; approval-api.md explicitly carves out `GET /delegations` as
+      the one list endpoint that stays unpaginated and does not gain `totalPages`.
 
 ---
 
@@ -302,13 +371,13 @@ inside `domain`, and record that placement decision.
 
 # Definition of Done
 
-- [ ] All six local page-result types retired; `com.example.common.page.PageResult<T>` adopted
+- [x] All six local page-result types retired; `com.example.common.page.PageResult<T>` adopted
       throughout
-- [ ] `totalPages` correctly computed and tested at every former construction site
-- [ ] AC-4's `page`/`size` composition question investigated and resolved (subsumed or explicitly
+- [x] `totalPages` correctly computed and tested at every former construction site
+- [x] AC-4's `page`/`size` composition question investigated and resolved (subsumed or explicitly
       left in place with a stated reason)
-- [ ] Tests passing; per-service before/after counts recorded; no test lost;
+- [x] Tests passing; per-service before/after counts recorded; no test lost;
       `TASK-ERP-BE-033`/`036` regressions re-verified green
-- [ ] Contracts updated for any newly-emitted field (`totalPages`)
-- [ ] Specs updated (`architecture.md` dependency lines as needed)
-- [ ] Ready for review
+- [x] Contracts updated for any newly-emitted field (`totalPages`)
+- [x] Specs updated (`architecture.md` dependency lines as needed)
+- [x] Ready for review

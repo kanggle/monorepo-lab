@@ -1,8 +1,8 @@
 package com.example.erp.readmodel.adapter.inbound.web;
 
 import com.example.erp.readmodel.adapter.inbound.web.advice.GlobalExceptionHandler;
+import com.example.common.page.PageResult;
 import com.example.erp.readmodel.application.QueryDelegationFactUseCase;
-import com.example.erp.readmodel.application.query.DelegationFactPage;
 import com.example.erp.readmodel.domain.delegation.DelegationFactProjection;
 import com.example.erp.readmodel.domain.delegation.DelegationFactStatus;
 import com.example.erp.readmodel.domain.error.ReadModelNotFoundException;
@@ -131,7 +131,7 @@ class DelegationFactControllerSliceTest {
     void listReturnsPagedEnvelopeWithFilters() throws Exception {
         when(useCase.list(eq("emp-a"), isNull(), eq(DelegationFactStatus.ACTIVE),
                 isNull(), isNull(), anyInt(), anyInt()))
-                .thenReturn(new DelegationFactPage(List.of(activeGrant()), 0, 20, 1L));
+                .thenReturn(new PageResult<>(List.of(activeGrant()), 0, 20, 1L, 1));
 
         mockMvc.perform(get("/api/erp/read-model/delegations"
                         + "?delegatorId=emp-a&status=ACTIVE&page=0&size=20"))
@@ -139,6 +139,8 @@ class DelegationFactControllerSliceTest {
                 .andExpect(jsonPath("$.data[0].grantId").value("dgr-1"))
                 .andExpect(jsonPath("$.meta.page").value(0))
                 .andExpect(jsonPath("$.meta.totalElements").value(1))
+                // ADR-MONO-058 § D3 — additive field from the adopted shared PageResult.
+                .andExpect(jsonPath("$.meta.totalPages").value(1))
                 .andExpect(jsonPath("$.meta.warning").value("Eventually-consistent read-model"));
     }
 

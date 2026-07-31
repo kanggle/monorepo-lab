@@ -1,7 +1,7 @@
 package com.example.erp.notification.application;
 
+import com.example.common.page.PageResult;
 import com.example.erp.notification.application.port.outbound.NotificationMetricsPort;
-import com.example.erp.notification.application.query.InboxPage;
 import com.example.erp.notification.domain.error.NotificationNotFoundException;
 import com.example.erp.notification.domain.notification.Notification;
 import com.example.erp.notification.domain.notification.NotificationType;
@@ -42,9 +42,37 @@ class QueryInboxUseCaseTest {
                 .thenReturn(List.of(notif("ntf-1", "emp-1")));
         when(repository.countInbox("erp", "emp-1", null)).thenReturn(1L);
 
-        InboxPage page = useCase.list("erp", "emp-1", null, 0, 20);
+        PageResult<com.example.erp.notification.domain.notification.Notification> page =
+                useCase.list("erp", "emp-1", null, 0, 20);
         assertThat(page.content()).hasSize(1);
         assertThat(page.totalElements()).isEqualTo(1L);
+        // ADR-MONO-058 § D3 — AC-2: 1 element / size 20 → 1 page (ceiling division).
+        assertThat(page.totalPages()).isEqualTo(1);
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("AC-2: totalPages is a ceiling division over a non-exact multiple")
+    void totalPagesIsCeilingDivisionForNonExactMultiple() {
+        when(repository.findInbox("erp", "emp-1", null, 0, 10))
+                .thenReturn(List.of(notif("ntf-1", "emp-1")));
+        when(repository.countInbox("erp", "emp-1", null)).thenReturn(25L);
+
+        PageResult<com.example.erp.notification.domain.notification.Notification> page =
+                useCase.list("erp", "emp-1", null, 0, 10);
+        // 25 elements / 10 per page → 3 pages (not 2, not 2.5 truncated).
+        assertThat(page.totalPages()).isEqualTo(3);
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("AC-2 edge case: zero elements -> totalPages 0, not 1")
+    void totalPagesIsZeroForEmptyResult() {
+        when(repository.findInbox("erp", "emp-1", null, 0, 20)).thenReturn(List.of());
+        when(repository.countInbox("erp", "emp-1", null)).thenReturn(0L);
+
+        PageResult<com.example.erp.notification.domain.notification.Notification> page =
+                useCase.list("erp", "emp-1", null, 0, 20);
+        assertThat(page.totalElements()).isEqualTo(0L);
+        assertThat(page.totalPages()).isEqualTo(0);
     }
 
     @Test

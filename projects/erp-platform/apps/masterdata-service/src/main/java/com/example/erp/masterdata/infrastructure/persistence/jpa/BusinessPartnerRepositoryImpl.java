@@ -1,10 +1,10 @@
 package com.example.erp.masterdata.infrastructure.persistence.jpa;
 
+import com.example.common.page.PageResult;
 import com.example.erp.masterdata.domain.businesspartner.BusinessPartner;
 import com.example.erp.masterdata.domain.businesspartner.repository.BusinessPartnerListFilter;
 import com.example.erp.masterdata.domain.businesspartner.repository.BusinessPartnerRepository;
 import com.example.erp.masterdata.domain.common.MasterStatus;
-import com.example.erp.masterdata.domain.common.PageResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
@@ -39,6 +39,9 @@ public class BusinessPartnerRepositoryImpl implements BusinessPartnerRepository 
         List<BusinessPartner> content = jpa.findFiltered(tenantId, status, filter.partnerType(),
                 filter.asOf(), PageRequest.of(page, size));
         long total = jpa.countFiltered(tenantId, status, filter.partnerType(), filter.asOf());
-        return new PageResult<>(content, total);
+        // size is always >= 1 here — PageRequest.of() above throws for size < 1 before this
+        // line is reached, so the ceiling-division is divide-by-zero-safe.
+        int totalPages = (int) Math.ceil((double) total / size);
+        return new PageResult<>(content, page, size, total, totalPages);
     }
 }

@@ -1,9 +1,9 @@
 package com.example.erp.readmodel.adapter.inbound.web;
 
+import com.example.common.page.PageResult;
 import com.example.erp.readmodel.adapter.inbound.web.dto.ApiEnvelope;
 import com.example.erp.readmodel.adapter.inbound.web.dto.DelegationFactResponse;
 import com.example.erp.readmodel.application.QueryDelegationFactUseCase;
-import com.example.erp.readmodel.application.query.DelegationFactPage;
 import com.example.erp.readmodel.domain.delegation.DelegationFactProjection;
 import com.example.erp.readmodel.domain.delegation.DelegationFactStatus;
 import com.example.erp.readmodel.presentation.security.ReadAuthorizationGate;
@@ -65,13 +65,15 @@ public class DelegationFactController {
         // org_scope read filter (TASK-ERP-BE-008): null = no narrowing (net-zero).
         List<String> orgScopeRootIds = ReadQueryWebSupport.orgScopeRootIds(readGate, jwt);
 
-        DelegationFactPage result = useCase.list(delegatorId, delegateId, statusFilter,
-                activeAtFilter, orgScopeRootIds, page, Math.min(size, MAX_SIZE));
+        PageResult<DelegationFactProjection> result = useCase.list(delegatorId, delegateId,
+                statusFilter, activeAtFilter, orgScopeRootIds, page, Math.min(size, MAX_SIZE));
         List<DelegationFactResponse> data = result.content().stream()
                 .map(DelegationFactResponse::from)
                 .toList();
-        return ResponseEntity.ok(ApiEnvelope.ofList(data, result.page(),
-                Math.min(size, MAX_SIZE), result.totalElements()));
+        // page/size/totalPages sourced from the result object (not the raw request) — guaranteed
+        // to agree since the use case echoes the exact page/size it was called with (AC-4).
+        return ResponseEntity.ok(ApiEnvelope.ofList(data, result.page(), result.size(),
+                result.totalElements(), result.totalPages()));
     }
 
     @GetMapping("/delegations/{grantId}")

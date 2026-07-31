@@ -1,8 +1,8 @@
 package com.example.erp.notification.presentation.controller;
 
+import com.example.common.page.PageResult;
 import com.example.erp.notification.application.MarkNotificationReadUseCase;
 import com.example.erp.notification.application.QueryInboxUseCase;
-import com.example.erp.notification.application.query.InboxPage;
 import com.example.erp.notification.domain.notification.Notification;
 import com.example.erp.notification.presentation.dto.ApiEnvelope;
 import com.example.erp.notification.presentation.dto.NotificationResponse;
@@ -60,13 +60,15 @@ public class NotificationInboxController {
 
         // unread=true → only unread; unread=false → only read; omitted → all.
         Boolean readFilter = unread == null ? null : !unread;
-        InboxPage result = queryInbox.list(tenantId, recipientId, readFilter, page,
+        PageResult<Notification> result = queryInbox.list(tenantId, recipientId, readFilter, page,
                 Math.min(size, MAX_SIZE));
         List<NotificationResponse> data = result.content().stream()
                 .map(NotificationResponse::from)
                 .toList();
-        return ResponseEntity.ok(ApiEnvelope.ofList(data, result.page(),
-                Math.min(size, MAX_SIZE), result.totalElements()));
+        // page/size sourced from the result object (not the raw request) — guaranteed to agree
+        // since QueryInboxUseCase.list echoes the exact page/size it was called with (AC-4).
+        return ResponseEntity.ok(ApiEnvelope.ofList(data, result.page(), result.size(),
+                result.totalElements(), result.totalPages()));
     }
 
     @GetMapping("/{id}")

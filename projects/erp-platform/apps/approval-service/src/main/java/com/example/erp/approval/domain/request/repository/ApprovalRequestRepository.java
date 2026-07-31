@@ -1,6 +1,6 @@
 package com.example.erp.approval.domain.request.repository;
 
-import com.example.erp.approval.domain.common.PageResult;
+import com.example.common.page.PageResult;
 import com.example.erp.approval.domain.request.ApprovalAction;
 import com.example.erp.approval.domain.request.ApprovalRequest;
 import com.example.erp.approval.domain.request.ApprovalStatus;

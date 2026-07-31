@@ -1,7 +1,7 @@
 package com.example.erp.notification.application;
 
+import com.example.common.page.PageResult;
 import com.example.erp.notification.application.port.outbound.NotificationMetricsPort;
-import com.example.erp.notification.application.query.InboxPage;
 import com.example.erp.notification.domain.error.NotificationNotFoundException;
 import com.example.erp.notification.domain.notification.Notification;
 import com.example.erp.notification.domain.notification.repository.NotificationRepository;
@@ -23,11 +23,15 @@ public class QueryInboxUseCase {
     private final NotificationMetricsPort metrics;
 
     @Transactional(readOnly = true)
-    public InboxPage list(String tenantId, String recipientId, Boolean read, int page, int size) {
+    public PageResult<Notification> list(String tenantId, String recipientId, Boolean read,
+                                         int page, int size) {
         var content = repository.findInbox(tenantId, recipientId, read, page, size);
         long total = repository.countInbox(tenantId, recipientId, read);
         metrics.inboxRead();
-        return new InboxPage(content, page, size, total);
+        // size is always >= 1 here (NotificationInboxController validates 1..MAX_SIZE before
+        // calling this use case), so the ceiling-division is divide-by-zero-safe.
+        int totalPages = (int) Math.ceil((double) total / size);
+        return new PageResult<>(content, page, size, total, totalPages);
     }
 
     @Transactional(readOnly = true)

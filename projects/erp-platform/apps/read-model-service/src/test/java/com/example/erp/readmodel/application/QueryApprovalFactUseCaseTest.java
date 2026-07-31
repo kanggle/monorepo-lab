@@ -1,7 +1,7 @@
 package com.example.erp.readmodel.application;
 
+import com.example.common.page.PageResult;
 import com.example.erp.readmodel.application.port.outbound.OrgViewMetricsPort;
-import com.example.erp.readmodel.application.query.ApprovalFactPage;
 import com.example.erp.readmodel.domain.approval.ApprovalFactProjection;
 import com.example.erp.readmodel.domain.approval.ApprovalFactView;
 import com.example.erp.readmodel.domain.approval.ApprovalStatus;
@@ -183,7 +183,7 @@ class QueryApprovalFactUseCaseTest {
         when(approvalRepository.findPage(any(), anyInt(), anyInt())).thenReturn(List.of());
         when(approvalRepository.count(any())).thenReturn(0L);
 
-        ApprovalFactPage page = useCase.list(null, null, null, null, null,
+        PageResult<ApprovalFactView> page = useCase.list(null, null, null, null, null,
                 List.of("dept-root"), 0, 20);
 
         ArgumentCaptor<ApprovalFactFilter> captor = ArgumentCaptor.forClass(ApprovalFactFilter.class);
@@ -193,6 +193,8 @@ class QueryApprovalFactUseCaseTest {
         assertThat(filter.scopedDepartmentIds()).containsExactlyInAnyOrder("dept-root", "dept-in");
         assertThat(filter.scopedEmployeeSubjectIds()).containsExactlyInAnyOrder("emp-1", "emp-2");
         assertThat(page.totalElements()).isZero();
+        // Edge case (AC-2 / Edge Cases): an empty result is zero pages, not one.
+        assertThat(page.totalPages()).isZero();
     }
 
     @Test
@@ -202,9 +204,22 @@ class QueryApprovalFactUseCaseTest {
                 .thenReturn(List.of(departmentFact("dept-1")));
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept("dept-1", null)));
 
-        ApprovalFactPage page = useCase.list(null, null, null, null, null, null, 0, 20);
+        PageResult<ApprovalFactView> page = useCase.list(null, null, null, null, null, null, 0, 20);
 
         assertThat(page.content()).hasSize(1);
         assertThat(page.content().get(0).departmentSubject().id()).isEqualTo("dept-1");
+        // ADR-MONO-058 § D3 — AC-2: 1 element / size 20 -> 1 page (ceiling division).
+        assertThat(page.totalPages()).isEqualTo(1);
+    }
+
+    @Test
+    void listTotalPagesIsCeilingDivisionForNonExactMultiple() {
+        lenient().when(approvalRepository.count(any())).thenReturn(25L);
+        when(approvalRepository.findPage(any(), anyInt(), anyInt())).thenReturn(List.of());
+
+        PageResult<ApprovalFactView> page = useCase.list(null, null, null, null, null, null, 0, 10);
+
+        // 25 elements / 10 per page -> 3 pages (not 2, not 2.5 truncated).
+        assertThat(page.totalPages()).isEqualTo(3);
     }
 }

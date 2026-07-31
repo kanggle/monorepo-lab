@@ -16,13 +16,18 @@ public record ApiEnvelope<T>(T data, Map<String, Object> meta) {
         return new ApiEnvelope<>(data, baseMeta());
     }
 
-    /** Paginated list envelope ({@code meta.page/size/totalElements}). */
+    /**
+     * Paginated list envelope ({@code meta.page/size/totalElements/totalPages}).
+     * {@code totalPages} is additive (ADR-MONO-058 § D3 — {@code
+     * com.example.common.page.PageResult} adoption).
+     */
     public static <T> ApiEnvelope<List<T>> ofList(List<T> data, int page, int size,
-                                                  long totalElements) {
+                                                  long totalElements, int totalPages) {
         Map<String, Object> meta = baseMeta();
         meta.put("page", page);
         meta.put("size", size);
         meta.put("totalElements", totalElements);
+        meta.put("totalPages", totalPages);
         return new ApiEnvelope<>(data, meta);
     }
 

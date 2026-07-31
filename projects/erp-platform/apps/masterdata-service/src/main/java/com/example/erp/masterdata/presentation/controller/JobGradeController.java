@@ -5,8 +5,8 @@ import com.example.erp.masterdata.application.MasterdataApplicationService;
 import com.example.erp.masterdata.application.command.Commands.CreateJobGradeCommand;
 import com.example.erp.masterdata.application.command.Commands.RetireJobGradeCommand;
 import com.example.erp.masterdata.application.command.Commands.UpdateJobGradeCommand;
+import com.example.common.page.PageResult;
 import com.example.erp.masterdata.application.view.JobGradeView;
-import com.example.erp.masterdata.domain.common.PageResult;
 import com.example.erp.masterdata.domain.jobgrade.repository.JobGradeListFilter;
 import com.example.security.servlet.actor.ActorContextResolver;
 import com.example.erp.masterdata.presentation.dto.ApiEnvelope;
@@ -63,8 +63,10 @@ public class JobGradeController {
         ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         PageResult<JobGradeView> result = service.listJobGrades(actor,
                 new JobGradeListFilter(asOf, active), page, size);
-        return ResponseEntity.ok(
-                ApiEnvelope.ofList(result.content(), page, size, result.totalElements()));
+        // page/size/totalPages sourced from the result object (not the raw request) — guaranteed
+        // to agree since the repository echoes the exact page/size it was called with (AC-4).
+        return ResponseEntity.ok(ApiEnvelope.ofList(result.content(), result.page(), result.size(),
+                result.totalElements(), result.totalPages()));
     }
 
     @GetMapping("/{id}")

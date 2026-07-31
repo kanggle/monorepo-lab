@@ -177,6 +177,16 @@ adapter/
 config/         ← Spring @Configuration beans only (Kafka consumer, security)
 ```
 
+### Allowed dependencies
+
+- shared libs: `libs:java-common` (ADR-MONO-058 § D3 — `com.example.common.page.PageResult`
+  is the paginated list-endpoint response carrier for `EmployeeOrgViewController` /
+  `ApprovalFactController` / `DelegationFactController`, replacing the three
+  hand-rolled local `application.query.*Page` records; already declared in
+  `build.gradle` but unused before this adoption), `libs:java-web`,
+  `libs:java-messaging` (consumer + dedupe scaffolding only — no outbox, E5
+  terminal), `libs:java-observability`, `libs:java-security`.
+
 ## Service Type Compliance
 
 ### rest-api
