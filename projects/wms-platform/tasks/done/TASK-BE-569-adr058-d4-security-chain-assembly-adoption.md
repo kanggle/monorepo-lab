@@ -10,7 +10,7 @@ builder (once `TASK-MONO-500` lands) in the 5 wms servlet services' `OAuth2Resou
 
 # Status
 
-review
+done
 
 # Owner
 
