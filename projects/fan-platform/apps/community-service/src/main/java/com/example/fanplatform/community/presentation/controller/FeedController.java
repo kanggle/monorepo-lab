@@ -2,7 +2,7 @@ package com.example.fanplatform.community.presentation.controller;
 
 import com.example.fanplatform.community.application.ActorContext;
 import com.example.fanplatform.community.application.GetFeedUseCase;
-import com.example.fanplatform.community.infrastructure.security.CurrentActor;
+import com.example.security.servlet.actor.CurrentActor;
 import com.example.fanplatform.community.presentation.dto.ApiEnvelope;
 import com.example.fanplatform.community.presentation.dto.FeedResponse;
 import lombok.RequiredArgsConstructor;

@@ -58,9 +58,11 @@ dependencies {
     implementation project(':libs:java-messaging')
     implementation project(':libs:java-observability')
     implementation project(':libs:java-security')
-    // ADR-MONO-049 § D5-6: the canonical servlet TenantClaimEnforcer. `implementation`, not
-    // `api` — a shared security class must not transit onto a consumer's compile classpath
-    // (§ D2; assertNoApiOnSharedLibs enforces it).
+    // ADR-MONO-049 § D5-6: the canonical servlet TenantClaimEnforcer. ADR-MONO-058 § D5:
+    // PublicPathSet. ADR-MONO-058 § D1: the actor/JWT-claim cluster, used by the END-USER chain
+    // only — the Order(1) /internal/** chain keeps its own WorkloadIdentityAuthoritiesConverter
+    // and a plain JWT principal. `implementation`, not `api` — a shared security class must not
+    // transit onto a consumer's compile classpath (§ D2; assertNoApiOnSharedLibs enforces it).
     implementation project(':libs:java-security-servlet')
 
     // ADR-MONO-056 Phase 1: the shared payment-gateway boundary + the PortOne verify-model

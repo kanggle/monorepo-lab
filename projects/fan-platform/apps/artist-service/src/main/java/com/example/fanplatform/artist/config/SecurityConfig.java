@@ -1,8 +1,9 @@
 package com.example.fanplatform.artist.config;
 
-import com.example.fanplatform.artist.adapter.in.web.security.ActorContextJwtAuthenticationConverter;
 import com.example.fanplatform.artist.adapter.in.web.security.PublicPaths;
+import com.example.fanplatform.artist.application.ActorContext;
 import com.example.security.oauth2.TenantClaimValidator;
+import com.example.security.servlet.actor.ActorContextJwtAuthenticationConverter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -88,7 +89,7 @@ public class SecurityConfig {
                 )
                 .oauth2ResourceServer(rs -> rs
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(
-                                new ActorContextJwtAuthenticationConverter()))
+                                new ActorContextJwtAuthenticationConverter<>(ActorContext::new)))
                         .authenticationEntryPoint(SecurityConfig::onAuthenticationFailure)
                         .accessDeniedHandler(SecurityConfig::onAccessDenied)
                 );

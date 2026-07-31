@@ -3,7 +3,7 @@ package com.example.fanplatform.community.presentation.controller;
 import com.example.fanplatform.community.application.ActorContext;
 import com.example.fanplatform.community.application.AddReactionUseCase;
 import com.example.fanplatform.community.application.RemoveReactionUseCase;
-import com.example.fanplatform.community.infrastructure.security.CurrentActor;
+import com.example.security.servlet.actor.CurrentActor;
 import com.example.fanplatform.community.presentation.dto.AddReactionRequest;
 import com.example.fanplatform.community.presentation.dto.ApiEnvelope;
 import com.example.fanplatform.community.presentation.dto.ReactionResponse;

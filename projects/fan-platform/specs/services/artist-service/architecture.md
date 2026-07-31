@@ -73,10 +73,15 @@ com.example.fanplatform.artist/
 │   │       ├── dto/{request,response}
 │   │       ├── advice/GlobalExceptionHandler.java
 │   │       ├── filter/TenantClaimEnforcer.java         ← service-level fail-closed
-│   │       └── security/                               ← AllowedIssuersValidator,
-│   │                                                      TenantClaimValidator,
-│   │                                                      ActorContextJwtAuthenticationConverter,
-│   │                                                      PublicPaths, ActorContextResolver
+│   │       └── security/                               ← PublicPaths (own data, delegates to
+│   │                                                      libs PublicPathSet — ADR-MONO-058 D5),
+│   │                                                      CurrentActorArgumentResolver (binds this
+│   │                                                      service's ActorContext to the shared
+│   │                                                      @CurrentActor plumbing — ADR-MONO-058 D1).
+│   │                                                      The actor/JWT-claim mechanism itself
+│   │                                                      (converter, resolver, @CurrentActor) and
+│   │                                                      AllowedIssuersValidator/TenantClaimValidator
+│   │                                                      live in libs, not here.
 │   └── out/
 │       ├── persistence/                                ← JPA entities + adapters per repo port (+ ArtistOutboxJpaEntity/Repository)
 │       ├── cache/ArtistDirectoryCacheAdapter.java      ← Redis read-through, fail-open
@@ -112,7 +117,7 @@ com.example.fanplatform.artist/
 - `spring-kafka`
 - `flyway-core`, `flyway-database-postgresql`, `org.postgresql:postgresql`
 - `io.micrometer:micrometer-registry-prometheus`, `micrometer-tracing-bridge-otel`, `opentelemetry-exporter-otlp`
-- shared libs: `libs:java-common`, `libs:java-web`, `libs:java-web-servlet` (ADR-MONO-058 § D2 — `CommonGlobalExceptionHandler`), `libs:java-messaging`, `libs:java-observability`, `libs:java-security`
+- shared libs: `libs:java-common`, `libs:java-web`, `libs:java-web-servlet` (ADR-MONO-058 § D2 — `CommonGlobalExceptionHandler`), `libs:java-messaging`, `libs:java-observability`, `libs:java-security`, `libs:java-security-servlet` (ADR-MONO-049 § D5-6 — `TenantClaimEnforcer`; ADR-MONO-058 § D5 — `PublicPathSet`; ADR-MONO-058 § D1 — the actor/JWT-claim cluster `ActorClaims`/`ActorContextJwtAuthenticationConverter`/`ActorContextResolver`/`@CurrentActor`)
 
 ### Forbidden dependencies
 

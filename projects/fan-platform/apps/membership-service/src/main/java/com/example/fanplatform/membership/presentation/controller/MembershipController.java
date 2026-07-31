@@ -13,7 +13,7 @@ import com.example.fanplatform.membership.application.UpgradeQuoteView;
 import com.example.fanplatform.membership.application.exception.MembershipTierInvalidException;
 import com.example.fanplatform.membership.domain.membership.MembershipTier;
 import com.example.fanplatform.membership.presentation.dto.ApiEnvelope;
-import com.example.fanplatform.membership.presentation.security.CurrentActor;
+import com.example.security.servlet.actor.CurrentActor;
 import com.example.fanplatform.membership.presentation.dto.CancelRequest;
 import com.example.fanplatform.membership.presentation.dto.MembershipListResponse;
 import com.example.fanplatform.membership.presentation.dto.MembershipResponse;

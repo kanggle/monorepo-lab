@@ -2,7 +2,7 @@ package com.example.fanplatform.artist.adapter.in.web.controller;
 
 import com.example.fanplatform.artist.adapter.in.web.dto.response.ApiEnvelope;
 import com.example.fanplatform.artist.adapter.in.web.dto.response.PageMeta;
-import com.example.fanplatform.artist.adapter.in.web.security.CurrentActor;
+import com.example.security.servlet.actor.CurrentActor;
 import com.example.fanplatform.artist.application.ActorContext;
 import com.example.fanplatform.artist.application.port.in.ArtistView;
 import com.example.fanplatform.artist.application.port.in.SearchArtistDirectoryUseCase;

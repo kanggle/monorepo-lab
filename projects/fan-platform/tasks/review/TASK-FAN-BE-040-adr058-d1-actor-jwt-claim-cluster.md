@@ -11,7 +11,7 @@ argument-resolver plumbing) to `libs/java-security-servlet`, keeping each servic
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -217,20 +217,20 @@ this project.
 
 # Acceptance Criteria
 
-- [ ] **AC-1 (mechanism promoted, duplicates deleted)** — `libs/java-security-servlet` gains the six
+- [x] **AC-1 (mechanism promoted, duplicates deleted)** — `libs/java-security-servlet` gains the six
       classes above in `com.example.security.servlet.actor`, and a repo-wide grep shows
       `class ActorContextJwtAuthenticationConverter`, `class ActorContextResolver`, and
       `@interface CurrentActor` appear **zero** times under `projects/fan-platform/apps/*/src/main`.
       The `"ROLE_" +` prefixing literal and the `split("[,\\s]+")` role-normalisation literal each
       appear exactly **once** in the repo's fan-platform + lib surface (in the lib).
-- [ ] **AC-2 (policy did NOT move — the load-bearing § D1 boundary)** —
+- [x] **AC-2 (policy did NOT move — the load-bearing § D1 boundary)** —
       `git diff -- "projects/fan-platform/apps/*/src/main/java/**/application/ActorContext.java"` is
       **empty**: all four `ActorContext` records are byte-unchanged, including every convenience method
       and every role literal. The shared package contains **no** role-name string
       (grep for `OPERATOR`, `ADMIN`, `FAN_`, `ARTIST` under
       `libs/java-security-servlet/src/main/java/com/example/security/servlet/actor` → 0 hits) and no
       import from any `projects/` module.
-- [ ] **AC-3 (claim-lifting parity, both claim forms, at integration level)** — for **each** of the four
+- [x] **AC-3 (claim-lifting parity, both claim forms, at integration level)** — for **each** of the four
       services, a test drives a request through the **real Spring Security filter chain** with a
       **really RSA-signed JWT** (the existing `SliceTestSecurityConfig` + `JwtTestHelper`, i.e. a real
       `NimbusJwtDecoder` + `AllowedIssuersValidator` + `TenantClaimValidator`) and asserts, for
@@ -239,12 +239,12 @@ this project.
       `SecurityContext` inside the controller call are exactly `ROLE_<each role>` and that
       `Authentication.getName()` equals the `sub`. A hand-constructed `ActorContext` or a hand-built
       `Jwt` does not satisfy this AC.
-- [ ] **AC-4 (`@CurrentActor` still binds the right actor, per service)** — the same per-service test
+- [x] **AC-4 (`@CurrentActor` still binds the right actor, per service)** — the same per-service test
       captures the `ActorContext` the controller method actually received and asserts
       `accountId` == `sub`, `tenantId` == `fan-platform`, `roles` == the expected set — for both claim
       forms. This is the reachability proof for the argument-resolver plumbing: a subclass that failed
       to register would fail here, not compile-fail.
-- [ ] **AC-5 (insufficient credentials still rejected, per service)** — per service, through the same
+- [x] **AC-5 (insufficient credentials still rejected, per service)** — per service, through the same
       real chain: no bearer → **401**, and the service's real role/credential gate still rejects.
       fan-platform has **zero `@PreAuthorize`** (verified by grep over
       `projects/fan-platform/apps`), so the equivalent per service is:
@@ -253,7 +253,7 @@ this project.
       authorities this task moves); `membership-service` → `/internal/**` with an end-user token →
       **403** (`ROLE_INTERNAL` chain); `community-service` / `notification-service` → cross-tenant token
       → **403 `TENANT_FORBIDDEN`**. Existing tests already covering these must pass **unmodified**.
-- [ ] **AC-6 (mechanism unit-tested directly in the lib)** — `ActorClaims` / converter / resolver /
+- [x] **AC-6 (mechanism unit-tested directly in the lib)** — `ActorClaims` / converter / resolver /
       argument-resolver each get their own lib test: `roles` array; `role` comma-delimited;
       `role` space-delimited; mixed separators; blank parts dropped; non-string collection elements via
       `String.valueOf`; `roles` takes precedence over `role`; neither claim → empty set; an
@@ -263,24 +263,24 @@ this project.
       matrix; `addArgumentResolvers` self-registration; and
       **`roles.contains(null)` returns `false` rather than throwing** (the `Set.copyOf` trap recorded in
       the design decision).
-- [ ] **AC-7 (baseline parity — no test lost, no test weakened)** — before/after test counts recorded
+- [x] **AC-7 (baseline parity — no test lost, no test weakened)** — before/after test counts recorded
       per module. Pre-change baseline, captured on this branch before any edit:
       community **130**, artist **129**, membership **130**, notification **104**,
       `libs:java-security-servlet` **35** — all with 0 failures / 0 errors / 0 skipped. No test may
       disappear or lose an assertion. All four `:check` tasks and `:libs:java-security-servlet:check`
       GREEN; CI's `Integration (fan-platform, Testcontainers)` lane GREEN is authoritative (local
       Windows Docker is not — `project_testcontainers_docker_desktop_blocker`).
-- [ ] **AC-8 (no other consumer of the module broken)** — `libs:java-security-servlet`'s existing
+- [x] **AC-8 (no other consumer of the module broken)** — `libs:java-security-servlet`'s existing
       classes (`TenantClaimEnforcer`, `PublicPathSet`) are **not modified**; the change is purely
       additive. The module's other consumers outside fan-platform (`scm-platform`, `erp-platform`,
       `finance-platform`) are verified by compiling a representative service of each, and
       `assertClasspathNeutrality` stays GREEN unmodified (no new dependency added — the new package
       uses only Spring Security / Spring Web types already on the module's classpath).
-- [ ] **AC-9 (guard mutation-check)** — at least one new per-service assertion is proven to **bite**:
+- [x] **AC-9 (guard mutation-check)** — at least one new per-service assertion is proven to **bite**:
       temporarily break the mechanism (e.g. drop the `ROLE_` prefix, or return the `role` claim without
       splitting) and record which tests go RED, then revert. A test that cannot be shown to fail is not
       evidence.
-- [ ] **AC-10 (no contract or wire change)** — `specs/contracts/http/*.md` need **no** edit; the PR body
+- [x] **AC-10 (no contract or wire change)** — `specs/contracts/http/*.md` need **no** edit; the PR body
       states explicitly that there is **no** observable behaviour delta (unlike D2, which had two). If
       implementation finds any wire-visible delta, stop — that is a contract change, not a promotion.
 
@@ -467,19 +467,169 @@ Follow each target service's own `architecture.md`. Nothing moves between layers
 
 # Verification Record
 
-_(filled in during implementation)_
+## Test counts (local, Docker-free `:check` / `:test`)
+
+| module | before | after | delta |
+|---|---|---|---|
+| `community-service` | 130 | 138 | +8 |
+| `artist-service` | 129 | 137 | +8 |
+| `membership-service` | 130 | 139 | +9 |
+| `notification-service` | 104 | 111 | +7 |
+| `libs:java-security-servlet` | 35 | 77 | +42 |
+
+0 failures / 0 errors / 0 skipped in every module, before and after, confirmed by re-aggregating the
+JUnit XML (`tests=`/`skipped=`/`failures=`/`errors=` summed over `build/test-results/test/*.xml`) and by
+a final `--rerun-tasks` pass over all five suites. Baseline matches `TASK-FAN-BE-039`'s recorded "after"
+counts exactly, confirming the tree was in the expected post-D5 state before D1 started.
+
+**No test was removed, renamed, or weakened.** The delta is entirely new files: one
+`ActorContextAuthPathSliceTest` per service (8/8/9/7 cases) plus four new lib test classes
+(`ActorClaimsTest`, `ActorContextJwtAuthenticationConverterTest`, `ActorContextResolverTest`,
+`AbstractCurrentActorArgumentResolverTest`). The only pre-existing test files edited are the four
+`testsupport/SliceTestSecurityConfig` — two lines each (import + converter construction), zero
+assertions touched.
+
+## AC-1 — mechanism promoted, duplicates deleted
+
+`grep -E 'class ActorContextJwtAuthenticationConverter|class ActorContextResolver|@interface CurrentActor'`
+over `projects/fan-platform/apps` → **0 hits**. 12 files deleted (3 per service). The `"ROLE_"` prefix
+literal and the `[,\s]+` role-split literal now each exist in exactly one place, `ActorClaims`.
+
+## AC-2 — policy did NOT move (the load-bearing § D1 boundary)
+
+- `git diff HEAD --stat -- "projects/fan-platform/apps/*/src/main/java/**/application/ActorContext.java"`
+  → **empty**. All four `ActorContext` records are byte-unchanged: community's `isOperator()`/`owns()`,
+  artist's `isAdmin()`, notification's `hasRole`, membership's bare record, and every role literal
+  (`OPERATOR`/`ADMIN`/`SUPER_ADMIN`/`FAN_OPERATOR`) stay exactly where they were.
+- `grep -E 'FAN|ARTIST|ADMIN|OPERATOR|SUPER_|com\.example\.fanplatform'` over
+  `libs/java-security-servlet/src/main/java/com/example/security/servlet/actor` → **0 hits**. The first
+  draft of the javadoc used `"FAN"`/`"ARTIST"` as claim-shape examples and named
+  `isAdmin()`/`isOperator()` in prose; both were rewritten to synthetic placeholders so the shared
+  package names no project's roles even in a comment.
+- `artist-service`'s `SecurityConfig.ADMIN_ROLES`, `ActorGuard.requireAdmin`, and
+  `membership-service`'s `WorkloadIdentityAuthoritiesConverter` are untouched.
+
+## AC-3 / AC-4 / AC-5 — integration-level auth verification, per service
+
+Each service gained an `ActorContextAuthPathSliceTest` driving its **real** Resource Server filter chain
+(the existing `SliceTestSecurityConfig`: a real `NimbusJwtDecoder` over a locally-generated RSA keypair,
+the real `AllowedIssuersValidator`, the real `TenantClaimValidator`, and — notification — the real
+`TenantClaimEnforcer` taken from the production `ServiceLevelOAuth2Config`) with a **really RSA-signed**
+JWT. Nothing is hand-constructed: no hand-built `Jwt`, no hand-built `ActorContext`.
+
+The authorities are read off the **live `SecurityContext` at controller-invocation time** (a Mockito
+`Answer` on the target use case captures both `SecurityContextHolder.getContext().getAuthentication()`
+and the `ActorContext` the `@CurrentActor` parameter actually received), so the assertion is about the
+running chain rather than about a fixture.
+
+| service | endpoint driven | claim forms asserted | rejection paths asserted |
+|---|---|---|---|
+| `community-service` | `GET /api/community/feed` | `roles:[…]`, `role:"A B"`, `role:"A,B"`, no claim | no token → 401 `UNAUTHORIZED`; cross-tenant → 403 `TENANT_FORBIDDEN` |
+| `artist-service` | `GET /api/artists` + `POST /api/artists` | same four | **insufficient role → 403 `FORBIDDEN`** (`hasAnyRole(ADMIN_ROLES)`); ADMIN token passes the gate; no token → 401; cross-tenant → 403 |
+| `membership-service` | `GET /api/fan/memberships` + `/internal/**` | same four | end-user token on `/internal/**` → 403; no token on `/internal/**` → 401; no token → 401; cross-tenant → 403 |
+| `notification-service` | `GET /api/fan/notifications` | same four | no token → 401; cross-tenant → 403 |
+
+Each also asserts `Authentication.getName() == sub`, `accountId`/`tenantId`/`roles` on the bound actor,
+and that the bound actor is the **service's own** `ActorContext` type. community and artist additionally
+assert their own policy still reads off it (`isOperator()`/`owns()` and `isAdmin()` respectively,
+including the `FAN_OPERATOR` case) — the § D1 Ownership-Rule boundary, exercised rather than asserted in
+prose.
+
+**`@PreAuthorize` — measured, not assumed.** `grep PreAuthorize` over `projects/fan-platform/apps`
+returns **0 hits**: fan-platform has none. The AC's intent (a role-gated endpoint still rejects an
+under-privileged caller) is satisfied by each service's actual gate, listed above. artist-service's
+`hasAnyRole(ADMIN_ROLES)` chain rule is the one that literally consumes the `ROLE_`-prefixed authorities
+this task moved.
+
+## AC-9 — guard mutation-check (the new assertions were verified to bite)
+
+Two independent mutations of the promoted mechanism, each reverted after measuring:
+
+1. `ROLE_AUTHORITY_PREFIX` `"ROLE_"` → `"MUTATED_"`:
+   **artist-service 14 failed / 137** (the 4 new auth-path cases *plus* 10 pre-existing
+   `ArtistControllerSliceTest`/`ArtistGroupControllerSliceTest`/`FandomControllerSliceTest` admin-route
+   cases), **community-service 4 failed / 138**.
+2. delimited-string role splitting removed (`role: "A B"` kept as one opaque role):
+   **lib 5 failed / 77**, **notification 2 failed / 111**, **membership 2 failed / 139**.
+
+Reverted both; full suites back to GREEN. The guards bite a real regression in the promoted mechanism,
+and mutation 1 shows the pre-existing artist suite was already a live net for the `ROLE_` prefix.
+
+## Divergence finding (the Hard-Stop question the task was required to answer)
+
+**None.** All four services' mechanism copies are byte-identical modulo package, import and javadoc
+prose — verified with `git diff --no-index` over every adjacent pair before any edit:
+
+- community ↔ artist converter: **6 lines** (3 `package`/`import`, 3 javadoc).
+- community ↔ membership converter: package + import + two javadoc paragraphs.
+- membership ↔ notification converter: package + import + one javadoc sentence.
+- community ↔ notification argument resolver: package + import only.
+- resolvers and `@CurrentActor` annotations: package + import + `{@link}` target only.
+
+Zero statements differ in claim lifting, role normalisation, authority prefixing, token construction, or
+the two `IllegalStateException` messages. The shared implementation is a faithful single version of all
+four, not a choice between them — so no Hard Stop was raised and nothing was papered over.
+
+## Design hazards found and handled during implementation
+
+- **`Set.copyOf` would have changed auth behaviour.** `ActorContext.hasRole(role)` calls
+  `roles.contains(role)`; `Set.copyOf(...).contains(null)` throws `NullPointerException` where the
+  `HashSet` every copy produced returns `false`. The shared extractor therefore returns
+  `Collections.unmodifiableSet(hashSet)` — immutable to callers, still null-tolerant. Pinned by
+  `ActorClaimsTest.containsNullIsFalseNotThrow` and `roleSetIsUnmodifiable`.
+- **Shared `@Component` would have violated the shared-library policy.**
+  `AbstractCurrentActorArgumentResolver` carries no Spring stereotype; each service keeps its own
+  four-line `@Component` subclass. That is also what keeps it visible inside `@WebMvcTest` (which
+  registers `WebMvcConfigurer`/`HandlerMethodArgumentResolver` components but not plain
+  `@Configuration` beans) — a `@Bean` would have silently dropped `@CurrentActor` binding in every
+  slice test.
+- **Test-context cache collision — measured, not theorised.** The first version of the notification
+  auth-path test declared the same `@WebMvcTest` configuration as
+  `NotificationInboxControllerSliceTest`, so both shared one cached `ApplicationContext` whose
+  `JwtDecoder` was built from whichever class's `JwtTestHelper` keypair happened to be in the static
+  field first — **turning 4 pre-existing green tests red**. Fixed with a distinct
+  `@TestPropertySource` cache key in all four new test classes, with the reason recorded in each file.
+
+## Cross-project (shared-lib) blast radius
+
+- `libs/java-security-servlet` change is **purely additive**: one new package
+  (`com.example.security.servlet.actor`, 6 classes) + 4 new test classes. `TenantClaimEnforcer` and
+  `PublicPathSet` are **not modified**; no dependency was added to the module's `build.gradle`.
+- Every other consumer, enumerated from the tree
+  (`git grep -l 'libs:java-security-servlet' -- '*/build.gradle'`) rather than assumed: `erp-platform`
+  (approval / masterdata / notification / read-model), `finance-platform` (account / ledger),
+  `scm-platform` (demand-planning / inventory-visibility / logistics / procurement) — **all 10
+  `compileTestJava` GREEN**. `libs:java-gateway` and `libs:java-security` mention the module only in
+  comments/assertions, not as dependencies; `libs:java-gateway:compileTestJava` is GREEN.
+- `assertClasspathNeutrality` (java-security-servlet, 50 artefacts, none reactive),
+  `assertClasspathNeutrality` (java-security, 23 artefacts) and `assertNoServletOnReactiveEdge`
+  (java-gateway, 94 artefacts, none servlet-bound) all OK, unmodified.
+- `gateway-service` (reactive) untouched — it has no actor classes and does not depend on the module.
+
+## Observable behaviour deltas
+
+**None.** No status code, error code, envelope field, claim name, exception type or exception message
+changed. Claim lifting, role normalisation, `ROLE_` prefixing, the token's principal/name/authenticated
+state and both `IllegalStateException` messages are byte-equivalent to the deleted copies. Unlike
+`TASK-FAN-BE-038` (D2), this task ships **zero** intentional behaviour changes — which is why the
+verification leans on mutation-checking rather than on new-behaviour assertions.
+
+## CI
+
+`Integration (fan-platform, Testcontainers)` on the PR is authoritative for the integration lane; local
+Windows Docker is not (`project_testcontainers_docker_desktop_blocker`).
 
 ---
 
 # Definition of Done
 
-- [ ] Implementation completed (6 lib classes + 4 service adoptions + 12 deletions, one atomic PR)
-- [ ] Tests passing; per-module before/after counts recorded; no test lost or weakened
-- [ ] All four `ActorContext` records verified byte-unchanged (diff, not assertion)
-- [ ] Shared package verified free of role literals and of `projects/` imports
-- [ ] Auth-path verification done at integration level (real chain, real JWT), both claim forms, per
+- [x] Implementation completed (6 lib classes + 4 service adoptions + 12 deletions, one atomic PR)
+- [x] Tests passing; per-module before/after counts recorded; no test lost or weakened
+- [x] All four `ActorContext` records verified byte-unchanged (diff, not assertion)
+- [x] Shared package verified free of role literals and of `projects/` imports
+- [x] Auth-path verification done at integration level (real chain, real JWT), both claim forms, per
       service; guard mutation-check recorded
-- [ ] Other `libs:java-security-servlet` consumers (scm / erp / finance) verified compiling
-- [ ] Contracts unchanged (verified); no observable behaviour delta stated in the PR body
-- [ ] Specs reconciled (`artist` package layout + 4 × shared-libs line)
-- [ ] Ready for review
+- [x] Other `libs:java-security-servlet` consumers (scm / erp / finance) verified compiling
+- [x] Contracts unchanged (verified); no observable behaviour delta stated in the PR body
+- [x] Specs reconciled (`artist` package layout + 4 × shared-libs line)
+- [x] Ready for review

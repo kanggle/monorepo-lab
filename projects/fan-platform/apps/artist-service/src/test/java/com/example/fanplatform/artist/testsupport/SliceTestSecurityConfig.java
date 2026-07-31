@@ -1,6 +1,7 @@
 package com.example.fanplatform.artist.testsupport;
 
-import com.example.fanplatform.artist.adapter.in.web.security.ActorContextJwtAuthenticationConverter;
+import com.example.fanplatform.artist.application.ActorContext;
+import com.example.security.servlet.actor.ActorContextJwtAuthenticationConverter;
 import com.example.security.oauth2.AllowedIssuersValidator;
 import com.example.security.oauth2.TenantClaimValidator;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -112,7 +113,7 @@ public class SliceTestSecurityConfig {
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(rs -> rs
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(
-                                new ActorContextJwtAuthenticationConverter()))
+                                new ActorContextJwtAuthenticationConverter<>(ActorContext::new)))
                         .authenticationEntryPoint((req, resp, e) -> onAuthenticationFailure(resp, e))
                         .accessDeniedHandler((req, resp, e) ->
                                 writeError(resp, HttpStatus.FORBIDDEN.value(),
