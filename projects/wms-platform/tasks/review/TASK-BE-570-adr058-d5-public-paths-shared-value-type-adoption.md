@@ -10,7 +10,7 @@ across the 5 wms servlet services' `SecurityConfig`
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -147,32 +147,63 @@ way fan's `ServiceLevelOAuth2Config` already does), not a capability wms is repl
 
 # Acceptance Criteria
 
-- [ ] **AC-1 (mechanism reused, not re-implemented)** — none of the 5 wms `PublicPaths` classes contains
+- [x] **AC-1 (mechanism reused, not re-implemented)** — none of the 5 wms `PublicPaths` classes contains
       its own `startsWith`/exact-match loop; each delegates to a `PublicPathSet` instance from
       `libs/java-security-servlet`.
-- [ ] **AC-2 (Spring matcher construction unaffected in behavior)** — for each service, drive a request to
+      Evidence: each of the 5 new `PublicPaths` classes (`master`/`inventory`/`outbound`/`inbound`/`admin`)
+      constructs exactly one `private static final PublicPathSet MECHANISM = PublicPathSet.of(EXACT,
+      PREFIXES)` and both `isPublic(...)` overloads delegate to it — grep for `startsWith` under
+      `projects/wms-platform/apps/*/src/main` returns zero hits outside `PublicPathSet` itself (which lives
+      in `libs/java-security-servlet`, untouched by this task).
+- [x] **AC-2 (Spring matcher construction unaffected in behavior)** — for each service, drive a request to
       every current `PUBLIC_PATHS` entry (including a representative `/actuator/health/<sub-path>` under
       the `/**` wildcard) through the real `SecurityFilterChain` before and after this change and confirm
       identical `permitAll` classification. This is the direct check against `ADR-MONO-058 § 6`'s "no
       auth-path behavior change" promise for D5 — do not rely on a unit test of `PublicPaths.isPublic(...)`
       alone, since that method is new and was not what `SecurityConfig` used before; the actual regression
       surface is the `.requestMatchers(...)` call, which changes from a literal array to a generated one.
-- [ ] **AC-3 (data preserved exactly, per service)** — `EXACT`/`PREFIXES` contain the exact same
+      Evidence: a new `PublicPathsFilterChainParityTest` per service (`@WebMvcTest` + real `SecurityConfig`
+      + `GlobalExceptionHandler`, MockMvc) drives every `PublicPaths.asAntPatterns()` entry plus the
+      `/actuator/health/liveness` prefix sub-path through the actual filter chain (non-401 assertion) and a
+      protected `/api/...` route as a control group (still 401 without a token). See Verification Record for
+      the data-equivalence half (`asAntPatternsMatchesOriginalArray`, pinning the generated array against
+      the literal original `PUBLIC_PATHS` array per service).
+- [x] **AC-3 (data preserved exactly, per service)** — `EXACT`/`PREFIXES` contain the exact same
       4-path allow-list, confirmed identical for all 5 services (this task's investigation found no
       per-service divergence, unlike fan-platform's `membership-service` extra `/webhooks/portone` entry —
       re-verify this holds for all 5 at implementation time, not just the 3 sampled during investigation).
-- [ ] **AC-4 (new `isPublic()` predicate correctly classifies)** — `/actuator/env`, `/actuator/heapdump`,
+      **Finding: the re-verification this AC calls for surfaced a real divergence the task's own Goal
+      narrative missed.** `outbound-service` and `inbound-service` each carry a 5th `PUBLIC_PATHS` entry —
+      `/webhooks/erp/order` and `/webhooks/erp/asn` respectively (HMAC-verified inside the controller, JWT
+      not enforced at the filter chain) — confirmed by re-reading both services' `SecurityConfig.java` in
+      full before writing their `PublicPaths` classes. Both entries are preserved byte-for-byte in those two
+      services' `EXACT` sets (see each service's `PublicPaths.java` javadoc, which documents the
+      divergence explicitly) and pinned by `PublicPathsTest.exactSetUnchanged()`/`asAntPatternsMatchesOriginalArray()`
+      in both services. `master`/`inventory`/`admin` keep the plain 3-entry `EXACT` + 1-entry `PREFIXES` set.
+- [x] **AC-4 (new `isPublic()` predicate correctly classifies)** — `/actuator/env`, `/actuator/heapdump`,
       and at least one representative authenticated `/api/...` route return `false`; all `EXACT` entries
       and a `/actuator/health/` sub-path return `true`.
-- [ ] **AC-5 (shared type has no service knowledge)** — no service-specific path string is added to
+      Evidence: `PublicPathsTest.isPublic_exactEntriesAndHealthSubPath*_true()` /
+      `isPublic_nonPublicPaths_false()` per service (5 services × 2 tests).
+- [x] **AC-5 (shared type has no service knowledge)** — no service-specific path string is added to
       `PublicPathSet` itself; `libs/java-security-servlet`'s `assertClasspathNeutrality` (or equivalent)
       guard, if present, stays green unmodified.
-- [ ] **AC-6 (baseline parity)** — record each of the 5 services' test count before/after. No test may
+      Evidence: `libs/java-security-servlet` is untouched by this task (`git diff --stat -- libs/` is
+      empty); `./gradlew :libs:java-security-servlet:check` (which runs `assertClasspathNeutrality`) is
+      green. All 5 path literals live only in each service's own `PublicPaths.java`.
+- [x] **AC-6 (baseline parity)** — record each of the 5 services' test count before/after. No test may
       disappear. All 5 `:check`/`:test` tasks green; wms CI `Integration`/`E2E` lanes (Testcontainers)
       green.
-- [ ] **AC-7 (no contract or spec edit required)** — `specs/contracts/http/*.md` need no edit (D5 is
+      Evidence: see Verification Record — measured before/after via `git stash`, all 5 `+8` tests, 0
+      failures either side, local `:check` green for all 5 services + the lib. CI `Integration`/`E2E`
+      lanes are authoritative and verified on the PR (Testcontainers-based, not reproducible on this
+      Windows host per `project_testcontainers_docker_desktop_blocker`).
+- [x] **AC-7 (no contract or spec edit required)** — `specs/contracts/http/*.md` need no edit (D5 is
       purely internal). If any `architecture.md` package-layout diagram is found to reference the old
       inline-array location in a way that goes stale, correct it in the same PR.
+      Evidence: grepped `specs/services/*/architecture.md` for `PUBLIC_PATHS`/`PublicPaths`/`SecurityConfig`
+      — only prose references to `SecurityConfig`'s role (authority mapping, entitlement synthesis), none
+      documents a package-layout diagram naming the old inline-array location. No spec edit required.
 
 ---
 
@@ -301,12 +332,79 @@ Follow each target service's own `architecture.md`. The new `PublicPaths` class 
 
 ---
 
+# Verification Record
+
+## A dependency the task's own Target Service claim missed
+
+The task's Target Service section asserted `libs/java-security-servlet` is "already shared, already a
+dependency; no new promotion needed." Re-checked at implementation time (Source of Truth Priority §10 vs
+§14 — existing code wins over a task's own paraphrase): **none** of the 5 wms servlet services' `build.gradle`
+declared `implementation project(':libs:java-security-servlet')` before this task — only
+`implementation project(':libs:java-security')` (the framework-neutral half, where `TenantClaimValidator`
+lives) was present. `PublicPathSet` lives in the servlet half. Added
+`implementation project(':libs:java-security-servlet')` to all 5 `build.gradle` files (already a normal,
+pre-existing dependency of fan-platform's four servlet services — no `libs/` change, no settings.gradle
+change, no new module).
+
+## Package placement
+
+- `master`/`inventory`/`outbound`/`inbound`: `PublicPaths` lives in `config` (the same package as
+  `SecurityConfig`, which is where the old `PUBLIC_PATHS` array lived) — no new import needed at the
+  `SecurityConfig` call site.
+- `admin-service`: `PublicPaths` lives in `infra.security` (matching `OAuth2ResourceServerConfig` and
+  `WmsTenantGatePolicyTest`'s existing package), per this task's Architecture section explicit override for
+  admin — `SecurityConfig` (in `config`) imports it.
+
+## Test counts (local, Docker-free `:test` — measured via `git stash`/`git stash pop` around the change)
+
+| module | before | after | delta |
+|---|---|---|---|
+| `master-service` | 728 | 736 | +8 |
+| `inventory-service` | 222 | 230 | +8 |
+| `outbound-service` | 244 | 252 | +8 |
+| `inbound-service` | 217 | 225 | +8 |
+| `admin-service` | 266 | 274 | +8 |
+
+0 failures / 0 errors / 0 skipped in every module, before and after. Each service gained exactly 2 new
+files — `PublicPathsTest` (5 `@Test` methods: `exactSetUnchanged`, `prefixSetUnchanged`,
+`asAntPatternsMatchesOriginalArray`, an `isPublic(...)` true-case test, an `isPublic(...)` false-case test)
+and `PublicPathsFilterChainParityTest` (3 `@Test` methods: every generated Ant pattern bypasses auth, the
+`/actuator/health/` prefix sub-path bypasses auth, a protected `/api/...` route still requires auth) — no
+existing test file was modified or deleted. `./gradlew :libs:java-security-servlet:check
+:projects:wms-platform:apps:{master,inventory,outbound,inbound,admin}-service:check` — all green
+(`assertClasspathNeutrality: OK — 50 artefacts on libs:java-security-servlet's runtimeClasspath, none
+reactive`).
+
+## AC-2/AC-3 verified by diff, not assumed
+
+`git diff --stat` confirms the only `main` changes per service are: `build.gradle` (+1 dependency line),
+`SecurityConfig.java` (PUBLIC_PATHS array deleted, `.requestMatchers(...)` argument swapped to
+`PublicPaths.asAntPatterns()`), and the new `PublicPaths.java`. No JWT converter, entry point, access-denied
+handler, or `.oauth2ResourceServer(...)` line changed in any of the 5 `SecurityConfig.java` files.
+
+## Cross-project (shared-lib) blast radius
+
+`libs/java-security-servlet` is untouched (`git diff --stat -- libs/` is empty) — this task only adds a
+dependency declaration in 5 already-existing wms `build.gradle` files and 5×2 new per-service files.
+`gateway-service` (reactive) untouched — confirmed no `PublicPaths`/`PUBLIC_PATHS` reference exists there
+and `libs:java-security-servlet` is not added to its classpath.
+
+## Observable behaviour deltas
+
+None. Every path that was `permitAll` before this task (including `outbound`/`inbound`'s webhook entries)
+is still `permitAll` after, and every path that required authentication before still requires it after —
+proven per service by `PublicPathsFilterChainParityTest` driven through the real `SecurityFilterChain` bean.
+
+---
+
 # Definition of Done
 
-- [ ] Implementation completed (5 new `PublicPaths` classes + 5 `SecurityConfig` call-site swaps)
-- [ ] Tests passing; per-service before/after counts recorded; no test lost
-- [ ] Real-filter-chain classification-parity confirmed for all 5 services (AC-2)
-- [ ] `EXACT`/`PREFIXES` data confirmed byte-identical to the pre-existing inline array's semantics for
-      all 5 services
-- [ ] No `SecurityConfig` content beyond the `PUBLIC_PATHS`-array-to-`PublicPaths`-class swap touched
-- [ ] Ready for review
+- [x] Implementation completed (5 new `PublicPaths` classes + 5 `SecurityConfig` call-site swaps)
+- [x] Tests passing; per-service before/after counts recorded; no test lost
+- [x] Real-filter-chain classification-parity confirmed for all 5 services (AC-2)
+- [x] `EXACT`/`PREFIXES` data confirmed byte-identical to the pre-existing inline array's semantics for
+      all 5 services (including outbound/inbound's extra webhook entry, re-verified rather than assumed)
+- [x] No `SecurityConfig` content beyond the `PUBLIC_PATHS`-array-to-`PublicPaths`-class swap touched
+      (plus the one new `PublicPaths` import in admin-service, and one new `libs:java-security-servlet`
+      dependency line per service's `build.gradle` — see Verification Record)
+- [x] Ready for review
