@@ -10,6 +10,9 @@ dependencies {
     // Web (common exception primitives)
     implementation project(':libs:java-web')
 
+    // Servlet-stack exception scaffolding — CommonGlobalExceptionHandler (ADR-MONO-058 § D2)
+    implementation project(':libs:java-web-servlet')
+
     // Observability
     implementation project(':libs:java-observability')
 

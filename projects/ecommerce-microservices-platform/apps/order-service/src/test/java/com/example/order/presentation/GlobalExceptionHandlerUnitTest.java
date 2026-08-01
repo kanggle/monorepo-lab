@@ -162,9 +162,12 @@ class GlobalExceptionHandlerUnitTest {
     @Test
     @DisplayName("일반 Exception 핸들러가 ErrorResponse 형식으로 응답한다")
     void handleException_returnsErrorResponseFormat() {
+        // handleGeneral is inherited from CommonGlobalExceptionHandler (ADR-MONO-058 §
+        // D2) — order-service's own catch-all arm was byte-identical, so it was deleted
+        // and this test now exercises the inherited method directly.
         Exception ex = new RuntimeException("unexpected");
 
-        ResponseEntity<ErrorResponse> result = handler.handleException(ex);
+        ResponseEntity<ErrorResponse> result = handler.handleGeneral(ex);
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         assertThat(result.getBody()).isNotNull();

@@ -3,6 +3,7 @@ package com.example.order.presentation;
 import com.example.order.application.exception.UnauthorizedOrderAccessException;
 import com.example.order.presentation.exception.InvalidRequestException;
 import com.example.web.exception.AccessDeniedException;
+import com.example.web.exception.CommonGlobalExceptionHandler;
 import com.example.order.domain.exception.InvalidOrderException;
 import com.example.order.domain.exception.OrderCannotBeCancelledException;
 import com.example.order.domain.exception.OrderNotFoundException;
@@ -14,26 +15,33 @@ import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.converter.HttpMessageNotReadableException;
-import org.springframework.web.HttpMediaTypeNotSupportedException;
-import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.servlet.NoHandlerFoundException;
-import org.springframework.web.servlet.resource.NoResourceFoundException;
 
-import java.util.Set;
-
+/**
+ * Non-domain arms (404/405/415/generic catch-all) come from
+ * {@link CommonGlobalExceptionHandler} (ADR-MONO-058 § D2). The remaining
+ * {@code @Valid}/missing-parameter/missing-header/{@code IllegalArgumentException} arms
+ * stay local: {@link #handleValidation} omits the shared handler's field-name prefix,
+ * {@link #handleMissingParam} and {@link #handleMissingHeader} answer order-specific
+ * codes/messages (the latter also special-cases {@code X-User-Id} into a 401), and
+ * {@link #handleIllegalArgument} answers {@code INVALID_ORDER_REQUEST} instead of the
+ * shared handler's generic {@code VALIDATION_ERROR}. All four are declared as true Java
+ * overrides (same name/signature/return type as the shared method, re-declaring
+ * {@code @ExceptionHandler}) rather than differently-named methods, since Spring's
+ * resolver throws {@code IllegalStateException: Ambiguous @ExceptionHandler} if two
+ * methods (inherited + local) map the same exact exception type.
+ */
 @Slf4j
 @RestControllerAdvice
-public class GlobalExceptionHandler {
+public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
 
+    @Override
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException e) {
         String message = e.getBindingResult().getFieldErrors().stream()
@@ -42,12 +50,6 @@ public class GlobalExceptionHandler {
                 .orElse("Invalid input value");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of("VALIDATION_ERROR", message));
-    }
-
-    @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<ErrorResponse> handleUnreadable(HttpMessageNotReadableException e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ErrorResponse.of("VALIDATION_ERROR", "Malformed request body"));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
@@ -60,14 +62,16 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of("VALIDATION_ERROR", message));
     }
 
+    @Override
     @ExceptionHandler(MissingServletRequestParameterException.class)
-    public ResponseEntity<ErrorResponse> handleMissingServletRequestParameter(MissingServletRequestParameterException e) {
+    public ResponseEntity<ErrorResponse> handleMissingParam(MissingServletRequestParameterException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of("VALIDATION_ERROR", e.getParameterName() + " is required"));
     }
 
+    @Override
     @ExceptionHandler(MissingRequestHeaderException.class)
-    public ResponseEntity<ErrorResponse> handleMissingRequestHeader(MissingRequestHeaderException e) {
+    public ResponseEntity<ErrorResponse> handleMissingHeader(MissingRequestHeaderException e) {
         if ("X-User-Id".equals(e.getHeaderName())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ErrorResponse.of("UNAUTHORIZED", "X-User-Id header is required"));
@@ -118,6 +122,7 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of("INVALID_ORDER_REQUEST", e.getMessage()));
     }
 
+    @Override
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -140,36 +145,6 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of("CONFLICT", "Concurrent modification conflict. Please try again."));
     }
 
-    @ExceptionHandler(NoResourceFoundException.class)
-    public ResponseEntity<ErrorResponse> handleNoResourceFound(NoResourceFoundException e) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ErrorResponse.of("NOT_FOUND", "The requested resource was not found"));
-    }
-
-    @ExceptionHandler(NoHandlerFoundException.class)
-    public ResponseEntity<ErrorResponse> handleNoHandlerFound(NoHandlerFoundException e) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ErrorResponse.of("NOT_FOUND", "The requested resource was not found"));
-    }
-
-    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-    public ResponseEntity<ErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
-        ResponseEntity.BodyBuilder builder = ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED);
-        Set<HttpMethod> supported = e.getSupportedHttpMethods();
-        if (supported != null && !supported.isEmpty()) {
-            builder.allow(supported.toArray(new HttpMethod[0]));
-        }
-        return builder.body(ErrorResponse.of("METHOD_NOT_ALLOWED",
-                "HTTP method not supported for this endpoint"));
-    }
-
-    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
-    public ResponseEntity<ErrorResponse> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException e) {
-        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
-                .body(ErrorResponse.of("UNSUPPORTED_MEDIA_TYPE",
-                        "Request Content-Type is not supported by this endpoint"));
-    }
-
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException e) {
         if (DataIntegrityViolations.isUniqueViolation(e)) {
@@ -181,13 +156,6 @@ public class GlobalExceptionHandler {
         // FK / NOT NULL / CHECK violations are SERVER defects, not client conflicts.
         // Deliberately left as 500 so they stay loud in logs and alerting (TASK-BE-542 AC-1).
         log.error("Non-unique data integrity violation", e);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ErrorResponse.of("INTERNAL_ERROR", "An unexpected error occurred"));
-    }
-
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleException(Exception e) {
-        log.error("Unexpected error", e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ErrorResponse.of("INTERNAL_ERROR", "An unexpected error occurred"));
     }

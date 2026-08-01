@@ -7,6 +7,9 @@ dependencies {
     // Shared Web
     implementation project(':libs:java-web')
 
+    // Servlet-stack exception scaffolding — CommonGlobalExceptionHandler (ADR-MONO-058 § D2)
+    implementation project(':libs:java-web-servlet')
+
     // Shared persistence utilities — DataIntegrityViolations.isUniqueViolation, the
     // SQLSTATE-23505 discriminant the GlobalExceptionHandler backstop delegates to
     // (TASK-MONO-450; other ecommerce services already declare java-common).

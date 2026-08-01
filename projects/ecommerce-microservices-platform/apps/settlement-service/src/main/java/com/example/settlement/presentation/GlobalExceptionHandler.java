@@ -10,32 +10,34 @@ import com.example.settlement.domain.period.PeriodWindowInvalidException;
 import com.example.common.persistence.DataIntegrityViolations;
 import com.example.web.dto.ErrorResponse;
 import com.example.web.exception.AccessDeniedException;
+import com.example.web.exception.CommonGlobalExceptionHandler;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.converter.HttpMessageNotReadableException;
-import org.springframework.web.HttpMediaTypeNotSupportedException;
-import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.servlet.NoHandlerFoundException;
-import org.springframework.web.servlet.resource.NoResourceFoundException;
-
-import java.util.Set;
 
 /**
  * Maps settlement exceptions to the settlement-api.md error contract:
  * {@code COMMISSION_RATE_INVALID} (422), {@code SETTLEMENT_NOT_FOUND} (404),
  * {@code ACCESS_DENIED} (403). Validation failures → 400 {@code VALIDATION_ERROR}.
+ *
+ * <p>Non-domain arms (malformed-body/404/405/415/generic catch-all) come from
+ * {@link CommonGlobalExceptionHandler} (ADR-MONO-058 § D2). {@link #handleValidation}
+ * (no field-name prefix) and {@link #handleMissingParam} (message text order differs
+ * from the shared handler's) stay local — as true Java overrides (same
+ * name/signature/return type as the shared method, re-declaring
+ * {@code @ExceptionHandler}), not differently-named methods, since Spring's resolver
+ * throws {@code IllegalStateException: Ambiguous @ExceptionHandler} if two methods
+ * (inherited + local) map the same exact exception type.
  */
 @Slf4j
 @RestControllerAdvice
-public class GlobalExceptionHandler {
+public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
 
     @ExceptionHandler(InvalidCommissionRateException.class)
     public ResponseEntity<ErrorResponse> handleInvalidRate(InvalidCommissionRateException e) {
@@ -91,6 +93,7 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of("ACCESS_DENIED", e.getMessage()));
     }
 
+    @Override
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException e) {
         String message = e.getBindingResult().getFieldErrors().stream()
@@ -99,12 +102,6 @@ public class GlobalExceptionHandler {
                 .orElse("Invalid input value");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of("VALIDATION_ERROR", message));
-    }
-
-    @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<ErrorResponse> handleUnreadable(HttpMessageNotReadableException e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ErrorResponse.of("VALIDATION_ERROR", "Malformed request body"));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
@@ -117,46 +114,11 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of("VALIDATION_ERROR", message));
     }
 
+    @Override
     @ExceptionHandler(MissingServletRequestParameterException.class)
     public ResponseEntity<ErrorResponse> handleMissingParam(MissingServletRequestParameterException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of("VALIDATION_ERROR", e.getParameterName() + " is required"));
-    }
-
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ErrorResponse.of("VALIDATION_ERROR", e.getMessage()));
-    }
-
-    @ExceptionHandler(NoResourceFoundException.class)
-    public ResponseEntity<ErrorResponse> handleNoResourceFound(NoResourceFoundException e) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ErrorResponse.of("NOT_FOUND", "The requested resource was not found"));
-    }
-
-    @ExceptionHandler(NoHandlerFoundException.class)
-    public ResponseEntity<ErrorResponse> handleNoHandlerFound(NoHandlerFoundException e) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ErrorResponse.of("NOT_FOUND", "The requested resource was not found"));
-    }
-
-    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-    public ResponseEntity<ErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
-        ResponseEntity.BodyBuilder builder = ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED);
-        Set<HttpMethod> supported = e.getSupportedHttpMethods();
-        if (supported != null && !supported.isEmpty()) {
-            builder.allow(supported.toArray(new HttpMethod[0]));
-        }
-        return builder.body(ErrorResponse.of("METHOD_NOT_ALLOWED",
-                "HTTP method not supported for this endpoint"));
-    }
-
-    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
-    public ResponseEntity<ErrorResponse> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException e) {
-        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
-                .body(ErrorResponse.of("UNSUPPORTED_MEDIA_TYPE",
-                        "Request Content-Type is not supported by this endpoint"));
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
@@ -170,13 +132,6 @@ public class GlobalExceptionHandler {
         // FK / NOT NULL / CHECK violations are SERVER defects, not client conflicts.
         // Deliberately left as 500 so they stay loud in logs and alerting (TASK-BE-542 AC-1).
         log.error("Non-unique data integrity violation", e);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ErrorResponse.of("INTERNAL_ERROR", "An unexpected error occurred"));
-    }
-
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleException(Exception e) {
-        log.error("Unexpected error", e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ErrorResponse.of("INTERNAL_ERROR", "An unexpected error occurred"));
     }

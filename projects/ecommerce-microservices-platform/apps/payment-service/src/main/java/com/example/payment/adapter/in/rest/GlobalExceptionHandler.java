@@ -11,24 +11,28 @@ import com.example.libs.payment.PgConfirmFailedException;
 import com.example.libs.payment.PgGatewayUnavailableException;
 import com.example.payment.domain.exception.InvalidPaymentException;
 import com.example.payment.domain.exception.PaymentNotFoundException;
+import com.example.web.exception.CommonGlobalExceptionHandler;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.converter.HttpMessageNotReadableException;
-import org.springframework.web.HttpMediaTypeNotSupportedException;
-import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.servlet.NoHandlerFoundException;
-import org.springframework.web.servlet.resource.NoResourceFoundException;
 
-import java.util.Set;
-
+/**
+ * Non-domain arms (malformed-body/404/405/415) come from
+ * {@link CommonGlobalExceptionHandler} (ADR-MONO-058 § D2). {@link #handleGeneral}
+ * stays local — it answers {@code "An internal server error occurred"}, matching this
+ * service's own {@link #handleDataIntegrityViolation} non-unique 500 branch, not the
+ * shared handler's {@code "An unexpected error occurred"}. It is declared as a true
+ * Java override (same name/signature/return type as the shared method, re-declaring
+ * {@code @ExceptionHandler}) rather than a differently-named method, since Spring's
+ * resolver throws {@code IllegalStateException: Ambiguous @ExceptionHandler} if two
+ * methods (inherited + local) map the same exact exception type.
+ */
 @Slf4j
 @RestControllerAdvice
-public class GlobalExceptionHandler {
+public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
 
     @ExceptionHandler(PaymentNotFoundException.class)
     public ResponseEntity<ErrorResponse> handlePaymentNotFound(PaymentNotFoundException e) {
@@ -90,42 +94,6 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of("IDEMPOTENCY_KEY_CONFLICT", e.getMessage()));
     }
 
-    @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<ErrorResponse> handleUnreadable(HttpMessageNotReadableException e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ErrorResponse.of("VALIDATION_ERROR", "Malformed request body"));
-    }
-
-    @ExceptionHandler(NoResourceFoundException.class)
-    public ResponseEntity<ErrorResponse> handleNoResourceFound(NoResourceFoundException e) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ErrorResponse.of("NOT_FOUND", "The requested resource was not found"));
-    }
-
-    @ExceptionHandler(NoHandlerFoundException.class)
-    public ResponseEntity<ErrorResponse> handleNoHandlerFound(NoHandlerFoundException e) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ErrorResponse.of("NOT_FOUND", "The requested resource was not found"));
-    }
-
-    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-    public ResponseEntity<ErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
-        ResponseEntity.BodyBuilder builder = ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED);
-        Set<HttpMethod> supported = e.getSupportedHttpMethods();
-        if (supported != null && !supported.isEmpty()) {
-            builder.allow(supported.toArray(new HttpMethod[0]));
-        }
-        return builder.body(ErrorResponse.of("METHOD_NOT_ALLOWED",
-                "HTTP method not supported for this endpoint"));
-    }
-
-    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
-    public ResponseEntity<ErrorResponse> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException e) {
-        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
-                .body(ErrorResponse.of("UNSUPPORTED_MEDIA_TYPE",
-                        "Request Content-Type is not supported by this endpoint"));
-    }
-
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException e) {
         if (DataIntegrityViolations.isUniqueViolation(e)) {
@@ -141,8 +109,9 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of("INTERNAL_ERROR", "An internal server error occurred"));
     }
 
+    @Override
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleException(Exception e) {
+    public ResponseEntity<ErrorResponse> handleGeneral(Exception e) {
         log.error("Unhandled exception", e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ErrorResponse.of("INTERNAL_ERROR", "An internal server error occurred"));

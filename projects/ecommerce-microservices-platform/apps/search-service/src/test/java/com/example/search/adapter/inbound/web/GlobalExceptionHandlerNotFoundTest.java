@@ -10,15 +10,21 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
-import java.lang.reflect.Method;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * The four arms exercised here are inherited from
+ * {@code CommonGlobalExceptionHandler} (ADR-MONO-058 § D2) — they used to be declared
+ * locally with {@code @ResponseStatus} + a bare {@link ErrorResponse} return type;
+ * the shared handler instead returns {@link ResponseEntity} directly. Both styles
+ * produce an identical wire response (same status/code/message), so this test asserts
+ * on the {@link ResponseEntity} shape the inherited methods now return.
+ */
 @DisplayName("GlobalExceptionHandler 매핑 없는 경로(404) 단위 테스트")
 class GlobalExceptionHandlerNotFoundTest {
 
@@ -26,32 +32,30 @@ class GlobalExceptionHandlerNotFoundTest {
 
     @Test
     @DisplayName("NoResourceFoundException(매핑 없는 경로)이 404 NOT_FOUND로 처리된다 (500 아님)")
-    void handleNoResourceFound_returns404NotFound() throws Exception {
+    void handleNoResourceFound_returns404NotFound() {
         NoResourceFoundException ex =
                 new NoResourceFoundException(HttpMethod.GET, "/api/definitely-not-a-real-endpoint");
 
-        ErrorResponse body = handler.handleNoResourceFound(ex);
+        ResponseEntity<ErrorResponse> response = handler.handleNoResourceFound(ex);
 
-        assertThat(body.code()).isEqualTo("NOT_FOUND");
-        assertThat(body.message()).isEqualTo("The requested resource was not found");
-
-        Method m = GlobalExceptionHandler.class.getMethod("handleNoResourceFound", NoResourceFoundException.class);
-        assertThat(m.getAnnotation(ResponseStatus.class).value()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().code()).isEqualTo("NOT_FOUND");
+        assertThat(response.getBody().message()).isEqualTo("The requested resource was not found");
     }
 
     @Test
     @DisplayName("NoHandlerFoundException(매핑 없는 경로)이 404 NOT_FOUND로 처리된다 (500 아님)")
-    void handleNoHandlerFound_returns404NotFound() throws Exception {
+    void handleNoHandlerFound_returns404NotFound() {
         NoHandlerFoundException ex =
                 new NoHandlerFoundException("GET", "/api/definitely-not-a-real-endpoint", new HttpHeaders());
 
-        ErrorResponse body = handler.handleNoHandlerFound(ex);
+        ResponseEntity<ErrorResponse> response = handler.handleNoHandlerFound(ex);
 
-        assertThat(body.code()).isEqualTo("NOT_FOUND");
-        assertThat(body.message()).isEqualTo("The requested resource was not found");
-
-        Method m = GlobalExceptionHandler.class.getMethod("handleNoHandlerFound", NoHandlerFoundException.class);
-        assertThat(m.getAnnotation(ResponseStatus.class).value()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().code()).isEqualTo("NOT_FOUND");
+        assertThat(response.getBody().message()).isEqualTo("The requested resource was not found");
     }
 
     @Test
@@ -70,15 +74,14 @@ class GlobalExceptionHandlerNotFoundTest {
 
     @Test
     @DisplayName("HttpMediaTypeNotSupportedException(잘못된 Content-Type)이 415 UNSUPPORTED_MEDIA_TYPE으로 처리된다 (500 아님)")
-    void handleMediaTypeNotSupported_returns415UnsupportedMediaType() throws Exception {
+    void handleMediaTypeNotSupported_returns415UnsupportedMediaType() {
         HttpMediaTypeNotSupportedException ex =
                 new HttpMediaTypeNotSupportedException(MediaType.TEXT_PLAIN, List.of(MediaType.APPLICATION_JSON));
 
-        ErrorResponse body = handler.handleMediaTypeNotSupported(ex);
+        ResponseEntity<ErrorResponse> response = handler.handleMediaTypeNotSupported(ex);
 
-        assertThat(body.code()).isEqualTo("UNSUPPORTED_MEDIA_TYPE");
-
-        Method m = GlobalExceptionHandler.class.getMethod("handleMediaTypeNotSupported", HttpMediaTypeNotSupportedException.class);
-        assertThat(m.getAnnotation(ResponseStatus.class).value()).isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().code()).isEqualTo("UNSUPPORTED_MEDIA_TYPE");
     }
 }

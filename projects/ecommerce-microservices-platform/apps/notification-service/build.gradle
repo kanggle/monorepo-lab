@@ -7,6 +7,9 @@ dependencies {
     // Shared Web
     implementation project(':libs:java-web')
 
+    // Servlet-stack exception scaffolding — CommonGlobalExceptionHandler (ADR-MONO-058 § D2)
+    implementation project(':libs:java-web-servlet')
+
     // Common utilities (PageQuery, PageResult, etc.)
     implementation project(':libs:java-common')
 
