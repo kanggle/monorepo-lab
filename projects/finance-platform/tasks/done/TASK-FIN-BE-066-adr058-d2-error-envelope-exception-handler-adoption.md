@@ -8,7 +8,7 @@ ADR-MONO-058 D2 — adopt `libs/java-web`/`libs/java-web-servlet`'s shared error
 
 # Status
 
-ready
+done
 
 # Owner
 
