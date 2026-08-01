@@ -2,7 +2,7 @@ package com.wms.inventory.adapter.in.web.filter;
 
 import com.example.web.idempotency.IdempotencyErrorWriter;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.wms.inventory.adapter.in.web.dto.response.ApiErrorEnvelope;
+import com.example.web.dto.ErrorResponse;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -10,7 +10,7 @@ import org.springframework.http.MediaType;
 
 /**
  * Writes the inventory-service idempotency error responses with the service's own
- * {@link ApiErrorEnvelope}, keeping the error contract service-owned
+ * {@link ErrorResponse}, keeping the error contract service-owned
  * (ADR-MONO-038 I4). Mirrors the bodies {@code GlobalExceptionHandler} emits for
  * the same codes (409 {@code DUPLICATE_REQUEST}, 400 {@code VALIDATION_ERROR}),
  * so a filter-emitted error is indistinguishable from a handler-emitted one.
@@ -40,7 +40,7 @@ public class InventoryIdempotencyErrorWriter implements IdempotencyErrorWriter {
         if (meterRegistry != null) {
             meterRegistry.counter(METRIC_MISMATCH_COUNT).increment();
         }
-        writeJsonError(response, HttpServletResponse.SC_CONFLICT, ApiErrorEnvelope.of(
+        writeJsonError(response, HttpServletResponse.SC_CONFLICT, ErrorResponse.of(
                 "DUPLICATE_REQUEST",
                 "Idempotency-Key already used with a different request body"));
     }
@@ -48,19 +48,19 @@ public class InventoryIdempotencyErrorWriter implements IdempotencyErrorWriter {
     @Override
     public void writeProcessing(HttpServletResponse response) throws IOException {
         response.setHeader("Retry-After", "1");
-        writeJsonError(response, HttpServletResponse.SC_SERVICE_UNAVAILABLE, ApiErrorEnvelope.of(
+        writeJsonError(response, HttpServletResponse.SC_SERVICE_UNAVAILABLE, ErrorResponse.of(
                 "PROCESSING",
                 "Request is being processed"));
     }
 
     @Override
     public void writeKeyTooLong(HttpServletResponse response, int maxKeyLength) throws IOException {
-        writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST, ApiErrorEnvelope.of(
+        writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST, ErrorResponse.of(
                 "VALIDATION_ERROR",
                 "Idempotency-Key header exceeds " + maxKeyLength + " characters"));
     }
 
-    private void writeJsonError(HttpServletResponse response, int status, ApiErrorEnvelope envelope)
+    private void writeJsonError(HttpServletResponse response, int status, ErrorResponse envelope)
             throws IOException {
         byte[] body = objectMapper.writeValueAsBytes(envelope);
         response.setStatus(status);

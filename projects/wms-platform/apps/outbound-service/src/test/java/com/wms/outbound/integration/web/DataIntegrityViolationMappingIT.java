@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.wms.outbound.adapter.in.web.advice.GlobalExceptionHandler;
-import com.wms.outbound.adapter.in.web.dto.response.ApiErrorEnvelope;
+import com.example.web.dto.ErrorResponse;
 import com.wms.outbound.integration.OutboundServiceIntegrationBase;
 import java.sql.SQLException;
 import java.util.UUID;
@@ -70,7 +70,7 @@ class DataIntegrityViolationMappingIT extends OutboundServiceIntegrationBase {
         // Prove the authentic SQLSTATE was delivered from the real DB (Test Requirement).
         assertThat(sqlStateOf(thrown)).isEqualTo("23505");
 
-        ResponseEntity<ApiErrorEnvelope> resp =
+        ResponseEntity<ErrorResponse> resp =
                 handler.handleIntegrity((DataIntegrityViolationException) thrown);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
@@ -93,7 +93,7 @@ class DataIntegrityViolationMappingIT extends OutboundServiceIntegrationBase {
         assertThat(thrown).isInstanceOf(DataIntegrityViolationException.class);
         assertThat(sqlStateOf(thrown)).isEqualTo("23503");
 
-        ResponseEntity<ApiErrorEnvelope> resp =
+        ResponseEntity<ErrorResponse> resp =
                 handler.handleIntegrity((DataIntegrityViolationException) thrown);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);

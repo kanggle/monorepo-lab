@@ -2,7 +2,7 @@ package com.wms.outbound.adapter.in.webhook.erp;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.wms.outbound.adapter.in.web.dto.response.ApiErrorEnvelope;
+import com.example.web.dto.ErrorResponse;
 import com.wms.outbound.adapter.in.webhook.erp.dto.WebhookAckResponse;
 import com.wms.outbound.application.command.ErpOrderWebhookRequest;
 import com.wms.outbound.application.command.IngestWebhookEventCommand;
@@ -199,7 +199,7 @@ public class ErpOrderWebhookController {
         return ingestUseCase.ingest(new IngestWebhookEventCommand(eventId, rawPayloadJson, source));
     }
 
-    private static ResponseEntity<ApiErrorEnvelope> error(HttpStatus status, String code, String message) {
-        return ResponseEntity.status(status).body(ApiErrorEnvelope.of(code, message));
+    private static ResponseEntity<ErrorResponse> error(HttpStatus status, String code, String message) {
+        return ResponseEntity.status(status).body(ErrorResponse.of(code, message));
     }
 }

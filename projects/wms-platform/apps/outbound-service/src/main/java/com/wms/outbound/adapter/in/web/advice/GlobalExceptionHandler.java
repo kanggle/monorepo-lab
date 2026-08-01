@@ -2,7 +2,8 @@ package com.wms.outbound.adapter.in.web.advice;
 
 import static com.example.common.persistence.DataIntegrityViolations.isUniqueViolation;
 
-import com.wms.outbound.adapter.in.web.dto.response.ApiErrorEnvelope;
+import com.example.web.dto.ErrorResponse;
+import com.example.web.exception.CommonGlobalExceptionHandler;
 import com.wms.outbound.domain.exception.ExternalServiceUnavailableException;
 import com.wms.outbound.domain.exception.OrderNoDuplicateException;
 import com.wms.outbound.domain.exception.OrderNotFoundException;
@@ -12,37 +13,48 @@ import com.wms.outbound.domain.exception.PickingRequestNotFoundException;
 import com.wms.outbound.domain.exception.ShipmentNotFoundException;
 import com.wms.outbound.domain.exception.TenantScopeDeniedException;
 import java.util.Map;
-import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
-import org.springframework.web.HttpMediaTypeNotSupportedException;
-import org.springframework.web.HttpRequestMethodNotSupportedException;
-import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
-import org.springframework.web.servlet.NoHandlerFoundException;
-import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
- * Maps framework + outbound domain exceptions to the {@link ApiErrorEnvelope}
- * shape declared in {@code platform/error-handling.md}.
+ * Maps outbound domain exceptions to the flat {@code {code, message, timestamp}}
+ * error body declared in {@code specs/contracts/http/outbound-service-api.md}
+ * § Error Envelope.
  *
  * <p>Domain exceptions extend {@link OutboundDomainException} and each
  * override {@link OutboundDomainException#errorCode()} with the
  * contract-defined string from {@code outbound-service-api.md} § Error Codes.
- * This handler reads {@code exception.errorCode()} so the envelope's
+ * This handler reads {@code exception.errorCode()} so the response
  * {@code code} is always the granular contract-defined string.
+ *
+ * <p><strong>ADR-MONO-058 § D2 (TASK-BE-567)</strong>: the non-domain / framework
+ * arms (404 {@code NoResourceFound} / {@code NoHandlerFound}, 405
+ * {@code MethodNotSupported} incl. the RFC 7231 {@code Allow} header, 415
+ * {@code MediaTypeNotSupported}, 400 {@code @Valid} / {@code IllegalArgument} /
+ * malformed-body / missing-header / missing-parameter, and the catch-all 500) are
+ * inherited from {@code libs/java-web-servlet}'s
+ * {@link CommonGlobalExceptionHandler} instead of being hand-copied here. That is
+ * wire-preserving for this service because its former {@code ApiErrorEnvelope}
+ * was a component-for-component duplicate of {@code libs/java-web}'s
+ * {@link ErrorResponse} ({@code code}, {@code message}, pre-formatted ISO-8601
+ * {@code timestamp} string) — unlike {@code master-service} / {@code admin-service},
+ * whose envelope nests everything under a top-level {@code error} key and which
+ * therefore compose the shared handler instead of extending it.
+ *
+ * <p>Only the arms below are genuinely outbound-owned policy and stay service-side.
  */
 @RestControllerAdvice
-public class GlobalExceptionHandler {
+public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
@@ -63,7 +75,7 @@ public class GlobalExceptionHandler {
             TenantScopeDeniedException.class, HttpStatus.FORBIDDEN);
 
     @ExceptionHandler(OutboundDomainException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleDomain(OutboundDomainException e) {
+    public ResponseEntity<ErrorResponse> handleDomain(OutboundDomainException e) {
         HttpStatus status = DOMAIN_STATUS.getOrDefault(e.getClass(), HttpStatus.UNPROCESSABLE_ENTITY);
         return body(status, e.errorCode(), e.getMessage());
     }
@@ -76,15 +88,34 @@ public class GlobalExceptionHandler {
      * Defensive fallback for any path that lets it escape.
      */
     @ExceptionHandler(ExternalServiceUnavailableException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleExternalUnavailable(ExternalServiceUnavailableException e) {
+    public ResponseEntity<ErrorResponse> handleExternalUnavailable(ExternalServiceUnavailableException e) {
         log.warn("external_service_unavailable vendor={} reason={}", e.getVendor(), e.getMessage());
         return body(HttpStatus.SERVICE_UNAVAILABLE, e.errorCode(), e.getMessage());
     }
 
+    /**
+     * Optimistic-lock collision. Declared on Spring's <em>broader</em>
+     * {@link OptimisticLockingFailureException} — the shared base only covers the
+     * narrower {@link ObjectOptimisticLockingFailureException} subtype, so this arm
+     * is not a duplicate of it and stays service-local.
+     */
     @ExceptionHandler(OptimisticLockingFailureException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleConflict(OptimisticLockingFailureException e) {
+    public ResponseEntity<ErrorResponse> handleConflict(OptimisticLockingFailureException e) {
         return body(HttpStatus.CONFLICT, "CONFLICT",
                 "Optimistic lock conflict — retry with fresh state");
+    }
+
+    /**
+     * Routes the narrower JPA-raised subtype back to {@link #handleConflict} so that both
+     * subtypes answer with outbound's published message rather than the shared base's
+     * different wording. Overriding (same signature) rather than declaring a second
+     * {@code @ExceptionHandler} for the same type is required — the latter is a boot-time
+     * {@code Ambiguous @ExceptionHandler method} failure.
+     */
+    @Override
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handleOptimisticLock(ObjectOptimisticLockingFailureException e) {
+        return handleConflict(e);
     }
 
     /**
@@ -103,9 +134,11 @@ public class GlobalExceptionHandler {
      * <p>The discriminant is {@link com.example.common.persistence.DataIntegrityViolations}
      * (SQLSTATE-based, pure JDK): the exception <em>type</em> cannot distinguish a unique
      * violation and message matching breaks on driver upgrade.
+     *
+     * <p>Not covered by the shared base — stays service-local.
      */
     @ExceptionHandler(DataIntegrityViolationException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleIntegrity(DataIntegrityViolationException e) {
+    public ResponseEntity<ErrorResponse> handleIntegrity(DataIntegrityViolationException e) {
         if (isUniqueViolation(e)) {
             log.debug("unique constraint violation → 409: {}", e.getMessage());
             return body(HttpStatus.CONFLICT, "CONFLICT",
@@ -118,70 +151,22 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler({AccessDeniedException.class, AuthorizationDeniedException.class})
-    public ResponseEntity<ApiErrorEnvelope> handleForbidden(RuntimeException e) {
+    public ResponseEntity<ErrorResponse> handleForbidden(RuntimeException e) {
         return body(HttpStatus.FORBIDDEN, "FORBIDDEN",
                 "Insufficient privileges for this operation");
     }
 
-    @ExceptionHandler({IllegalArgumentException.class, MethodArgumentTypeMismatchException.class,
-            MethodArgumentNotValidException.class})
-    public ResponseEntity<ApiErrorEnvelope> handleBadInput(Exception e) {
+    /**
+     * Path-variable / query-parameter type mismatch (e.g. a non-UUID {@code {id}}).
+     * Not covered by the shared base — without this arm it would fall through to the
+     * inherited catch-all and regress the contract's documented 400 into a 500.
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
         return body(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", e.getMessage());
     }
 
-    /**
-     * Defense-in-depth (TASK-MONO-420): a request to a path this service does
-     * not serve raises {@link NoResourceFoundException} (static resource lookup) or
-     * {@link NoHandlerFoundException} (no matching handler). Without these handlers
-     * they fall through to {@link #handleUnknown} → 500, masking a mis-route as
-     * a service fault. Map them to a clean 404 so mis-routes degrade honestly.
-     */
-    @ExceptionHandler(NoResourceFoundException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleNoResource(NoResourceFoundException e) {
-        return body(HttpStatus.NOT_FOUND, "NOT_FOUND", "Resource not found");
-    }
-
-    @ExceptionHandler(NoHandlerFoundException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleNoHandlerFound(NoHandlerFoundException e) {
-        return body(HttpStatus.NOT_FOUND, "NOT_FOUND", "Resource not found");
-    }
-
-    /**
-     * Wrong HTTP method on a matched path (TASK-MONO-421) — Spring throws
-     * {@link HttpRequestMethodNotSupportedException}. Without a dedicated handler the catch-all
-     * {@link #handleUnknown} swallows it into a 500; semantically it is a client error (405).
-     * Emits the RFC 7231 §6.5.5 {@code Allow} header listing the supported methods.
-     */
-    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
-        ResponseEntity.BodyBuilder builder = ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED);
-        Set<HttpMethod> supported = e.getSupportedHttpMethods();
-        if (supported != null && !supported.isEmpty()) {
-            builder.allow(supported.toArray(new HttpMethod[0]));
-        }
-        return builder.body(ApiErrorEnvelope.of("METHOD_NOT_ALLOWED",
-                "HTTP method not supported for this endpoint"));
-    }
-
-    /**
-     * Unsupported request {@code Content-Type} on a matched path (TASK-MONO-421) — Spring throws
-     * {@link HttpMediaTypeNotSupportedException}. Same catch-all-swallow-into-500 defect as
-     * {@link #handleMethodNotSupported}; semantically a 415.
-     */
-    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException e) {
-        return body(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "UNSUPPORTED_MEDIA_TYPE",
-                "Request Content-Type is not supported by this endpoint");
-    }
-
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiErrorEnvelope> handleUnknown(Exception e) {
-        log.error("Unhandled exception", e);
-        return body(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
-                "Internal server error");
-    }
-
-    private static ResponseEntity<ApiErrorEnvelope> body(HttpStatus status, String code, String message) {
-        return ResponseEntity.status(status).body(ApiErrorEnvelope.of(code, message));
+    private static ResponseEntity<ErrorResponse> body(HttpStatus status, String code, String message) {
+        return ResponseEntity.status(status).body(ErrorResponse.of(code, message));
     }
 }

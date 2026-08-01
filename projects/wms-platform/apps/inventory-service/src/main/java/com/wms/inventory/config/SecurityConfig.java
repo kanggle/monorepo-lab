@@ -1,7 +1,7 @@
 package com.wms.inventory.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.wms.inventory.adapter.in.web.dto.response.ApiErrorEnvelope;
+import com.example.web.dto.ErrorResponse;
 import com.example.security.oauth2.TenantClaimValidator;
 import com.example.security.servlet.ResourceServerChainAssembler;
 import jakarta.servlet.http.HttpServletResponse;
@@ -173,7 +173,7 @@ public class SecurityConfig {
                                    int status, String code, String message) throws java.io.IOException {
         response.setStatus(status);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        byte[] body = objectMapper.writeValueAsBytes(ApiErrorEnvelope.of(code, message));
+        byte[] body = objectMapper.writeValueAsBytes(ErrorResponse.of(code, message));
         response.setContentLength(body.length);
         response.getOutputStream().write(body);
         response.getOutputStream().flush();
