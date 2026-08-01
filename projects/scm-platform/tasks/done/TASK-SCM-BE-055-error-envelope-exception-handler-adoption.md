@@ -8,7 +8,7 @@ Adopt ADR-MONO-058 D2 — error envelope + generic exception-handler tail (`libs
 
 # Status
 
-ready
+done
 
 # Owner
 
