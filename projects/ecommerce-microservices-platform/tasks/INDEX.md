@@ -75,7 +75,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | ID | Title | Service | Tags |
 |---|---|---|---|
 | TASK-BE-390 | **READY — ⏳ 2026-08-01 게이트 (그 전 구현 금지)**. D2-b deprecation window(~2026-08-01) 종료 후 gateway `allowed-issuers`에서 레거시 `iam` issuer 제거 + 테스트 정리. AC-0 verify-then-act(live `iss=iam` 토큰 0 확인) 선행. | gateway-service | code, security, test |
-| TASK-BE-566 | ADR-MONO-058 D2 — 10개 서비스 `GlobalExceptionHandler`의 비-도메인 tail(404/405/415/500/validation)을 `libs/java-web-servlet.CommonGlobalExceptionHandler`로 통합. ecommerce는 `details`-필드 충돌 없음(모두 이미 공유 `ErrorResponse` 직접 사용) + 상태코드 hook(`validationFailureStatus()`)은 라이브러리에 이미 반영됨 — 순수 adoption. | user, product, search, order, payment, promotion, settlement, shipping, notification, review | code, refactor, cleanup |
 
 ## in-progress
 
@@ -83,7 +82,9 @@ _(없음)_
 
 ## review
 
-_(없음)_
+| ID | Title | Service | Tags |
+|---|---|---|---|
+| TASK-BE-566 | ADR-MONO-058 D2 — 10개 서비스 `GlobalExceptionHandler`의 비-도메인 tail(404/405/415/500/validation)을 `libs/java-web-servlet.CommonGlobalExceptionHandler`로 통합. **두 blocker 현행코드 재검증 완료**: (1) `details`-필드 충돌 없음 — 10개 서비스 핸들러/DTO에 `details`·`ApiErrorBody`·`Map<String,Object>` 0건, 모두 공유 3-필드 `ErrorResponse` 직접 사용, (2) 상태코드 충돌 없음 — 10개 전부 generic validation arm이 이미 400(422는 전부 도메인 전용 arm)이라 `validationFailureStatus()` 기본값 그대로, override 0건. 발산한 arm(order/promotion/shipping/review/search의 도메인 코드 `INVALID_*_REQUEST`, product의 다중 필드 join 메시지, order의 `X-User-Id` 401 특례 등)은 삭제하지 않고 진짜 Java `@Override`로 보존 — wire 응답 무변경. 10개 서비스 `:test` 전부 GREEN(0 failures), 예외핸들러 테스트 수 before==after(4/6/4/13/6/8/6/6/6/16). | user, product, search, order, payment, promotion, settlement, shipping, notification, review | code, refactor, cleanup |
 
 ## done
 

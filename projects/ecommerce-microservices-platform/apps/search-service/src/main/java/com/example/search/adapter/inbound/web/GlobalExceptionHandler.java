@@ -3,27 +3,32 @@ package com.example.search.adapter.inbound.web;
 import com.example.search.application.exception.SearchException;
 import com.example.web.dto.ErrorResponse;
 import com.example.web.exception.AccessDeniedException;
+import com.example.web.exception.CommonGlobalExceptionHandler;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.converter.HttpMessageNotReadableException;
-import org.springframework.web.HttpMediaTypeNotSupportedException;
-import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.servlet.NoHandlerFoundException;
-import org.springframework.web.servlet.resource.NoResourceFoundException;
 
-import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * Non-domain arms (malformed-body/404/405/415/generic catch-all) come from
+ * {@link CommonGlobalExceptionHandler} (ADR-MONO-058 § D2). {@link #handleMissingParam}
+ * and {@link #handleIllegalArgument} stay local — both answer the search-specific
+ * {@code INVALID_SEARCH_REQUEST} code, not the shared handler's generic
+ * {@code VALIDATION_ERROR}. Both are declared as true Java overrides (same
+ * name/signature/return type as the shared method, re-declaring {@code
+ * @ExceptionHandler}) rather than differently-named methods, since Spring's resolver
+ * throws {@code IllegalStateException: Ambiguous @ExceptionHandler} if two methods
+ * (inherited + local) map the same exact exception type.
+ */
 @Slf4j
 @RestControllerAdvice
-public class GlobalExceptionHandler {
+public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     @ResponseStatus(HttpStatus.FORBIDDEN)
@@ -40,22 +45,18 @@ public class GlobalExceptionHandler {
         return ErrorResponse.of("INVALID_SEARCH_REQUEST", message);
     }
 
+    @Override
     @ExceptionHandler(MissingServletRequestParameterException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ErrorResponse handleMissingParam(MissingServletRequestParameterException ex) {
-        return ErrorResponse.of("INVALID_SEARCH_REQUEST", ex.getMessage());
+    public ResponseEntity<ErrorResponse> handleMissingParam(MissingServletRequestParameterException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of("INVALID_SEARCH_REQUEST", ex.getMessage()));
     }
 
+    @Override
     @ExceptionHandler(IllegalArgumentException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ErrorResponse handleIllegalArgument(IllegalArgumentException ex) {
-        return ErrorResponse.of("INVALID_SEARCH_REQUEST", ex.getMessage());
-    }
-
-    @ExceptionHandler(HttpMessageNotReadableException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ErrorResponse handleUnreadable(HttpMessageNotReadableException ex) {
-        return ErrorResponse.of("VALIDATION_ERROR", "Malformed request body");
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of("INVALID_SEARCH_REQUEST", ex.getMessage()));
     }
 
     @ExceptionHandler(SearchException.class)
@@ -65,45 +66,4 @@ public class GlobalExceptionHandler {
         return ErrorResponse.of("SEARCH_UNAVAILABLE", "Search service is temporarily unavailable");
     }
 
-    @ExceptionHandler(NoResourceFoundException.class)
-    @ResponseStatus(HttpStatus.NOT_FOUND)
-    public ErrorResponse handleNoResourceFound(NoResourceFoundException ex) {
-        return ErrorResponse.of("NOT_FOUND", "The requested resource was not found");
-    }
-
-    @ExceptionHandler(NoHandlerFoundException.class)
-    @ResponseStatus(HttpStatus.NOT_FOUND)
-    public ErrorResponse handleNoHandlerFound(NoHandlerFoundException ex) {
-        return ErrorResponse.of("NOT_FOUND", "The requested resource was not found");
-    }
-
-    /**
-     * Wrong HTTP method on a matched path. Unlike the other handlers in this class, this
-     * cannot use {@code @ResponseStatus} alone because the RFC 7231 §6.5.5 {@code Allow}
-     * header requires access to the response headers, so it returns {@link ResponseEntity}.
-     */
-    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-    public ResponseEntity<ErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
-        ResponseEntity.BodyBuilder builder = ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED);
-        Set<HttpMethod> supported = ex.getSupportedHttpMethods();
-        if (supported != null && !supported.isEmpty()) {
-            builder.allow(supported.toArray(new HttpMethod[0]));
-        }
-        return builder.body(ErrorResponse.of("METHOD_NOT_ALLOWED",
-                "HTTP method not supported for this endpoint"));
-    }
-
-    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
-    @ResponseStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
-    public ErrorResponse handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException ex) {
-        return ErrorResponse.of("UNSUPPORTED_MEDIA_TYPE",
-                "Request Content-Type is not supported by this endpoint");
-    }
-
-    @ExceptionHandler(Exception.class)
-    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-    public ErrorResponse handleUnexpected(Exception ex) {
-        log.error("Unexpected error", ex);
-        return ErrorResponse.of("INTERNAL_ERROR", "An unexpected error occurred");
-    }
 }

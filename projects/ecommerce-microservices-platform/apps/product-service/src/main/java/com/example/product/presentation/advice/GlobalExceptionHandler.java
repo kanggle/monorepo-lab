@@ -16,55 +16,50 @@ import com.example.product.domain.exception.VariantNotFoundException;
 import com.example.common.persistence.DataIntegrityViolations;
 import com.example.web.dto.ErrorResponse;
 import com.example.web.exception.AccessDeniedException;
+import com.example.web.exception.CommonGlobalExceptionHandler;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
-import org.springframework.web.HttpMediaTypeNotSupportedException;
-import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.servlet.NoHandlerFoundException;
-import org.springframework.web.servlet.resource.NoResourceFoundException;
 
-import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * Non-domain arms (malformed-body/404/405/415/generic catch-all) come from
+ * {@link CommonGlobalExceptionHandler} (ADR-MONO-058 § D2). {@link #handleValidation}
+ * stays local — it joins *every* field error (not just the first) with
+ * {@code Collectors.joining(", ")}, unlike the shared handler's single-field message,
+ * so collapsing it would change client-visible text for multi-field validation
+ * failures. It is declared as a true Java override (same name/signature/return type as
+ * the shared method, re-declaring {@code @ExceptionHandler}) rather than a
+ * differently-named method, since Spring's resolver throws {@code IllegalStateException:
+ * Ambiguous @ExceptionHandler} if two methods (inherited + local) map the same exact
+ * exception type.
+ */
 @Slf4j
 @RestControllerAdvice
-public class GlobalExceptionHandler {
+public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
 
+    @Override
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ErrorResponse handleValidation(MethodArgumentNotValidException ex) {
+    public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
         String message = ex.getBindingResult().getFieldErrors().stream()
                 .map(FieldError::getDefaultMessage)
                 .collect(Collectors.joining(", "));
-        return ErrorResponse.of("VALIDATION_ERROR", message.isEmpty() ? "Validation failed" : message);
-    }
-
-    @ExceptionHandler(HttpMessageNotReadableException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ErrorResponse handleUnreadable(HttpMessageNotReadableException ex) {
-        return ErrorResponse.of("VALIDATION_ERROR", "Malformed request body");
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of("VALIDATION_ERROR", message.isEmpty() ? "Validation failed" : message));
     }
 
     @ExceptionHandler(AccessDeniedException.class)
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public ErrorResponse handleAccessDenied(AccessDeniedException ex) {
         return ErrorResponse.of("ACCESS_DENIED", ex.getMessage());
-    }
-
-    @ExceptionHandler(IllegalArgumentException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ErrorResponse handleIllegalArgument(IllegalArgumentException ex) {
-        return ErrorResponse.of("VALIDATION_ERROR", ex.getMessage());
     }
 
     @ExceptionHandler(InvalidCategoryException.class)
@@ -153,46 +148,11 @@ public class GlobalExceptionHandler {
         return ErrorResponse.of("CONFLICT", "Concurrent modification conflict. Please try again.");
     }
 
-    @ExceptionHandler(NoResourceFoundException.class)
-    @ResponseStatus(HttpStatus.NOT_FOUND)
-    public ErrorResponse handleNoResourceFound(NoResourceFoundException ex) {
-        return ErrorResponse.of("NOT_FOUND", "The requested resource was not found");
-    }
-
-    @ExceptionHandler(NoHandlerFoundException.class)
-    @ResponseStatus(HttpStatus.NOT_FOUND)
-    public ErrorResponse handleNoHandlerFound(NoHandlerFoundException ex) {
-        return ErrorResponse.of("NOT_FOUND", "The requested resource was not found");
-    }
-
-    /**
-     * Wrong HTTP method on a matched path. Unlike the other handlers in this class, this
-     * cannot use {@code @ResponseStatus} alone because the RFC 7231 §6.5.5 {@code Allow}
-     * header requires access to the response headers, so it returns {@link ResponseEntity}.
-     */
-    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-    public ResponseEntity<ErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
-        ResponseEntity.BodyBuilder builder = ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED);
-        Set<HttpMethod> supported = ex.getSupportedHttpMethods();
-        if (supported != null && !supported.isEmpty()) {
-            builder.allow(supported.toArray(new HttpMethod[0]));
-        }
-        return builder.body(ErrorResponse.of("METHOD_NOT_ALLOWED",
-                "HTTP method not supported for this endpoint"));
-    }
-
-    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
-    @ResponseStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
-    public ErrorResponse handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException ex) {
-        return ErrorResponse.of("UNSUPPORTED_MEDIA_TYPE",
-                "Request Content-Type is not supported by this endpoint");
-    }
-
     /**
      * Backstop for DB constraint violations no domain-specific handler claimed. Unlike most
      * handlers in this class this cannot use {@code @ResponseStatus}, because the status is
      * decided at runtime (409 for a unique violation, 500 otherwise), so it returns
-     * {@link ResponseEntity} — same reason as {@link #handleMethodNotSupported}.
+     * {@link ResponseEntity}.
      */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
@@ -207,12 +167,5 @@ public class GlobalExceptionHandler {
         log.error("Non-unique data integrity violation", ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ErrorResponse.of("INTERNAL_ERROR", "An unexpected error occurred"));
-    }
-
-    @ExceptionHandler(Exception.class)
-    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-    public ErrorResponse handleUnexpected(Exception ex) {
-        log.error("Unexpected error", ex);
-        return ErrorResponse.of("INTERNAL_ERROR", "An unexpected error occurred");
     }
 }

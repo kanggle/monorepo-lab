@@ -8,7 +8,7 @@ ADR-MONO-058 D2 — adopt `libs/java-web-servlet.CommonGlobalExceptionHandler` f
 
 # Status
 
-ready
+review
 
 # Owner
 

@@ -10,6 +10,9 @@ dependencies {
     // Shared Web
     implementation project(':libs:java-web')
 
+    // Servlet-stack exception scaffolding — CommonGlobalExceptionHandler (ADR-MONO-058 § D2)
+    implementation project(':libs:java-web-servlet')
+
     // IamClientCredentialsTokenProvider — outbound IAM client_credentials token acquisition
     // for AccountServiceSellerProvisioner (ADR-MONO-058 § D6, TASK-BE-568).
     implementation project(':libs:java-security')
