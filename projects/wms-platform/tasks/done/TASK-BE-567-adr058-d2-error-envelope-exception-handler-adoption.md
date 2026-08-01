@@ -10,7 +10,7 @@ services, and resolve D2's wire-shape + status-code blockers as wms's own design
 
 # Status
 
-ready
+done
 
 # Owner
 
