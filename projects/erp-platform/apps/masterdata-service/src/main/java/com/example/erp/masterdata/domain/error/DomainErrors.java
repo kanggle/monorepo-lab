@@ -27,9 +27,22 @@ public final class DomainErrors {
         }
     }
 
+    /**
+     * Retire blocked by ≥1 live referencer (E1). {@code masterdata-api.md} § retire
+     * endpoints promises that {@code details} enumerates the referencer kinds, so the
+     * {@code details}-carrying constructor is the one the retire guard uses:
+     * {@code {"referencers": ["childDepartments", "employees", "costCenters"]}}.
+     * The message-only constructor stays for the terminal-state guard
+     * ({@code MasterStatusMachine}), where there is no referencer to enumerate.
+     */
     public static final class MasterdataReferenceViolationException extends MasterdataDomainException {
         public MasterdataReferenceViolationException(String message) {
             super("MASTERDATA_REFERENCE_VIOLATION", message);
+        }
+
+        public MasterdataReferenceViolationException(String message,
+                                                     java.util.Map<String, Object> details) {
+            super("MASTERDATA_REFERENCE_VIOLATION", message, details);
         }
     }
 

@@ -41,16 +41,58 @@ public final class ApprovalErrors {
     }
 
     // ---- 403 (acting principal is not the route's approver / submitter) ----
+
+    /**
+     * {@code approval-api.md} § withdraw reuses this code for the submitter-only
+     * constraint and discriminates it with {@code details.role = "submitter"} — hence
+     * the {@code details}-carrying constructor. Approver-position rejections carry no
+     * {@code details} (the contract documents none for them).
+     */
     public static final class ApprovalNotAuthorizedApproverException extends ApprovalDomainException {
+
+        /** {@code details.role} value the contract documents for the submitter-only gate. */
+        public static final java.util.Map<String, Object> ROLE_SUBMITTER =
+                java.util.Map.of("role", "submitter");
+
         public ApprovalNotAuthorizedApproverException(String message) {
             super("APPROVAL_NOT_AUTHORIZED_APPROVER", message);
+        }
+
+        public ApprovalNotAuthorizedApproverException(String message,
+                                                      java.util.Map<String, Object> details) {
+            super("APPROVAL_NOT_AUTHORIZED_APPROVER", message, details);
         }
     }
 
     // ---- 422 (route malformed: no approver / self-approval / subject unresolved) ----
+
+    /**
+     * {@code approval-api.md} documents three {@code details.cause} discriminators for
+     * this single code — {@code subject_unresolved}, {@code self_approval},
+     * {@code duplicate_stage_approver} ("**No new error code** — the existing approval
+     * codes cover it"). Structural route defects the contract does not name (empty
+     * stage list, blank approver, stage index out of range) carry no {@code details};
+     * the field is documented as optional (`<object?>`), so omitting it there is
+     * contract-conformant and avoids inventing wire values.
+     */
     public static final class ApprovalRouteInvalidException extends ApprovalDomainException {
+
+        public static final String CAUSE_SUBJECT_UNRESOLVED = "subject_unresolved";
+        public static final String CAUSE_SELF_APPROVAL = "self_approval";
+        public static final String CAUSE_DUPLICATE_STAGE_APPROVER = "duplicate_stage_approver";
+
         public ApprovalRouteInvalidException(String message) {
             super("APPROVAL_ROUTE_INVALID", message);
+        }
+
+        public ApprovalRouteInvalidException(String message,
+                                             java.util.Map<String, Object> details) {
+            super("APPROVAL_ROUTE_INVALID", message, details);
+        }
+
+        /** Convenience for the three contract-documented {@code details.cause} values. */
+        public static ApprovalRouteInvalidException withCause(String cause, String message) {
+            return new ApprovalRouteInvalidException(message, java.util.Map.of("cause", cause));
         }
     }
 

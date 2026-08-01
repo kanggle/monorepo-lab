@@ -64,6 +64,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -162,18 +163,14 @@ public class MasterdataApplicationService {
         Instant now = clock.now();
 
         // Reference integrity (E1) — block retire if any live referencer exists.
-        ensureNoActiveReferencer(
-                () -> departmentRepository.findActiveChildren(existing.getId(), actor.tenantId()),
-                "Department " + existing.getId()
-                        + " has active child departments — cannot retire");
-        ensureNoActiveReferencer(
-                () -> employeeRepository.findActiveByDepartmentId(existing.getId(), actor.tenantId()),
-                "Department " + existing.getId()
-                        + " is referenced by active employees — cannot retire");
-        ensureNoActiveReferencer(
-                () -> costCenterRepository.findActiveByDepartmentId(existing.getId(), actor.tenantId()),
-                "Department " + existing.getId()
-                        + " is referenced by active cost centers — cannot retire");
+        // masterdata-api.md: the 409 body's `details` enumerates every blocking kind.
+        ensureNoActiveReferencers("Department " + existing.getId(), List.of(
+                new Referencer("childDepartments", "child departments",
+                        () -> departmentRepository.findActiveChildren(existing.getId(), actor.tenantId())),
+                new Referencer("employees", "employees",
+                        () -> employeeRepository.findActiveByDepartmentId(existing.getId(), actor.tenantId())),
+                new Referencer("costCenters", "cost centers",
+                        () -> costCenterRepository.findActiveByDepartmentId(existing.getId(), actor.tenantId()))));
 
         Map<String, Object> before = snapshot(existing);
         existing.retire(now);
@@ -389,10 +386,9 @@ public class MasterdataApplicationService {
         authorize(actor, RequiredScope.WRITE, null);
         Instant now = clock.now();
 
-        ensureNoActiveReferencer(
-                () -> employeeRepository.findActiveByJobGradeId(existing.getId(), actor.tenantId()),
-                "JobGrade " + existing.getId()
-                        + " is referenced by active employees — cannot retire");
+        ensureNoActiveReferencers("JobGrade " + existing.getId(), List.of(
+                new Referencer("employees", "employees",
+                        () -> employeeRepository.findActiveByJobGradeId(existing.getId(), actor.tenantId()))));
 
         Map<String, Object> before = snapshot(existing);
         existing.retire(now);
@@ -479,10 +475,9 @@ public class MasterdataApplicationService {
         authorize(actor, RequiredScope.WRITE, existing.getDepartmentId());
         Instant now = clock.now();
 
-        ensureNoActiveReferencer(
-                () -> employeeRepository.findActiveByCostCenterId(existing.getId(), actor.tenantId()),
-                "CostCenter " + existing.getId()
-                        + " is referenced by active employees — cannot retire");
+        ensureNoActiveReferencers("CostCenter " + existing.getId(), List.of(
+                new Referencer("employees", "employees",
+                        () -> employeeRepository.findActiveByCostCenterId(existing.getId(), actor.tenantId()))));
 
         Map<String, Object> before = snapshot(existing);
         existing.retire(now);
@@ -653,14 +648,41 @@ public class MasterdataApplicationService {
     }
 
     /**
-     * Reference-integrity guard (erp E1). If the supplied finder returns any
-     * live referencer, the retire is blocked with the contract message. Shared
-     * across Department / JobGrade / CostCenter retire paths.
+     * Reference-integrity guard (erp E1). Shared across Department / JobGrade /
+     * CostCenter retire paths.
+     *
+     * <p>{@code masterdata-api.md} § retire endpoints promises "{@code details}
+     * enumerates the referencer kinds", so <b>every</b> kind is evaluated rather than
+     * short-circuiting on the first hit — otherwise the enumeration would only ever
+     * name one kind and an operator clearing it would come straight back for the next
+     * (TASK-ERP-BE-038: the field was declared and documented but never populated).
+     *
+     * @param subject      human-readable subject prefix for the message
+     * @param referencers  ordered referencer kinds to probe
      */
-    private void ensureNoActiveReferencer(Supplier<List<?>> finder, String message) {
-        if (!finder.get().isEmpty()) {
-            throw new MasterdataReferenceViolationException(message);
+    private void ensureNoActiveReferencers(String subject, List<Referencer> referencers) {
+        List<String> blockingKinds = new ArrayList<>();
+        List<String> blockingLabels = new ArrayList<>();
+        for (Referencer referencer : referencers) {
+            if (!referencer.finder().get().isEmpty()) {
+                blockingKinds.add(referencer.kind());
+                blockingLabels.add(referencer.label());
+            }
         }
+        if (!blockingKinds.isEmpty()) {
+            throw new MasterdataReferenceViolationException(
+                    subject + " is referenced by active " + String.join(", ", blockingLabels)
+                            + " — cannot retire",
+                    Map.of("referencers", List.copyOf(blockingKinds)));
+        }
+    }
+
+    /**
+     * One probe of the reference-integrity guard: the wire {@code kind} that lands in
+     * {@code details.referencers}, the prose {@code label} that lands in the message,
+     * and the repository lookup that decides whether it blocks.
+     */
+    private record Referencer(String kind, String label, Supplier<List<?>> finder) {
     }
 
     private <T> void ensureActive(BiFunction<String, String, Optional<T>> finder,

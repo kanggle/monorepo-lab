@@ -146,7 +146,20 @@ All endpoints:
 - Error envelope: `{ "code": "<ERROR_CODE>", "message": "<human>",
   "details": <object?>, "timestamp": "<ISO-8601>" }`. Codes per
   [`platform/error-handling.md`](../../../../../platform/error-handling.md)
-  erp section.
+  erp section. `details` follows the `@JsonInclude(NON_NULL)` absent-field
+  convention — it is **omitted** for every code/scenario that does not document it,
+  never serialized as `null`. The scenarios that carry it (TASK-ERP-BE-038 — the
+  field was documented here from the start but was not populated by the service
+  until then):
+  - `APPROVAL_ROUTE_INVALID` → `details.cause ∈ { "subject_unresolved",
+    "self_approval", "duplicate_stage_approver" }`. Structural route defects the
+    contract does not name (empty stage list, blank approver) carry **no**
+    `details`.
+  - `APPROVAL_NOT_AUTHORIZED_APPROVER` → `details.role = "submitter"` on the
+    submitter-only gate (`withdraw`). An approver-position rejection carries no
+    `details`.
+
+  `message` is human-readable prose, not a machine-matched value.
 - **`@JsonInclude(NON_NULL)` absent-field convention** — nullable response
   fields (e.g. `reason`, `finalizedAt`, `submittedAt`) are **ABSENT** from the
   JSON when unset, never serialized as `null`. Consumers/tests assert absence

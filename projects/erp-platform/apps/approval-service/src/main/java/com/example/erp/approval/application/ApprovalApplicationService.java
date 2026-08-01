@@ -129,7 +129,8 @@ public class ApprovalApplicationService {
         // DRAFT → SUBMITTED mutation. A non-resolvable subject aborts the Tx
         // before any state change (request stays DRAFT) → APPROVAL_ROUTE_INVALID.
         if (!masterDataPort.isSubjectActive(request.subject(), actor.tenantId())) {
-            throw new ApprovalRouteInvalidException(
+            throw ApprovalRouteInvalidException.withCause(
+                    ApprovalRouteInvalidException.CAUSE_SUBJECT_UNRESOLVED,
                     "subject " + request.getSubjectType() + " '" + request.getSubjectId()
                             + "' does not resolve to an ACTIVE master (E1)");
         }
