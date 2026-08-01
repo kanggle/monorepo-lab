@@ -8,7 +8,7 @@ ADR-MONO-058 D1 — adopt `libs/java-security-servlet`'s shared actor/JWT-claim 
 
 # Status
 
-ready
+done
 
 # Owner
 
