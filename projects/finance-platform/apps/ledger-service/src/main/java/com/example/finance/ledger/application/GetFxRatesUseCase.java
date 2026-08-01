@@ -27,7 +27,7 @@ import java.util.List;
  *
  * <p>{@code fx_rate_quote} has no {@code tenant_id} column — market rates are
  * tenant-agnostic globals. The controller enforces authentication via
- * {@link com.example.finance.ledger.infrastructure.security.ActorContextResolver#currentOrThrow()};
+ * {@link com.example.security.servlet.actor.ActorContextResolver#currentOrThrow(Class)};
  * no tenant filter is applied here (AC-5).
  *
  * <p>Quotes are returned sorted {@code (baseCurrency, foreignCurrency)} ASC for

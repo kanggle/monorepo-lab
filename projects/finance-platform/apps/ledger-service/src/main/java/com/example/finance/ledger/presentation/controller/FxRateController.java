@@ -1,16 +1,17 @@
 package com.example.finance.ledger.presentation.controller;
 
+import com.example.finance.ledger.application.ActorContext;
 import com.example.finance.ledger.application.GetFxRateHistoryUseCase;
 import com.example.finance.ledger.application.GetFxRatesUseCase;
 import com.example.finance.ledger.application.RefreshFxRateQuotesUseCase;
 import com.example.finance.ledger.application.port.outbound.FxRateFeedSettings;
 import com.example.finance.ledger.application.view.FxRateHistorySummaryView;
 import com.example.finance.ledger.application.view.FxRatesView;
-import com.example.finance.ledger.infrastructure.security.ActorContextResolver;
 import com.example.finance.ledger.presentation.dto.ApiEnvelope;
 import com.example.finance.ledger.presentation.dto.FxRateHistoryResponse;
 import com.example.finance.ledger.presentation.dto.FxRatesRefreshResponse;
 import com.example.finance.ledger.presentation.dto.FxRatesResponse;
+import com.example.security.servlet.actor.ActorContextResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -51,7 +52,7 @@ import org.springframework.web.bind.annotation.RestController;
  * returns 0 — the endpoint returns 200 {@code {feedEnabled:false, refreshed:0}} (a no-op,
  * consistent with the GET returning {@code feedEnabled:false, rates:[]}), NOT an error.
  *
- * <p><b>Security:</b> {@link ActorContextResolver#currentOrThrow()} enforces authentication
+ * <p><b>Security:</b> {@code ActorContextResolver.currentOrThrow(ActorContext.class)} enforces authentication
  * exactly like every other ledger endpoint. The path {@code /api/finance/ledger/fx-rates} falls
  * under the existing {@code /api/finance/**} {@code .authenticated()} rule in
  * {@link com.example.finance.ledger.infrastructure.security.SecurityConfig} — no extra security
@@ -81,7 +82,7 @@ public class FxRateController {
      */
     @GetMapping
     public ResponseEntity<ApiEnvelope<FxRatesResponse>> list() {
-        ActorContextResolver.currentOrThrow(); // enforce authentication
+        ActorContextResolver.currentOrThrow(ActorContext.class); // enforce authentication
         FxRatesView view = getFxRates.get();
         return ResponseEntity.ok(ApiEnvelope.of(FxRatesResponse.from(view)));
     }
@@ -111,7 +112,7 @@ public class FxRateController {
     public ResponseEntity<ApiEnvelope<FxRateHistoryResponse>> history(
             @PathVariable String foreignCurrency,
             @RequestParam(required = false) Integer limit) {
-        ActorContextResolver.currentOrThrow(); // enforce authentication
+        ActorContextResolver.currentOrThrow(ActorContext.class); // enforce authentication
         FxRateHistorySummaryView view = getFxRateHistory.get(foreignCurrency, limit);
         return ResponseEntity.ok(ApiEnvelope.of(FxRateHistoryResponse.from(view)));
     }
@@ -135,7 +136,7 @@ public class FxRateController {
      */
     @PostMapping("/refresh")
     public ResponseEntity<ApiEnvelope<FxRatesRefreshResponse>> refresh() {
-        ActorContextResolver.currentOrThrow(); // enforce authentication
+        ActorContextResolver.currentOrThrow(ActorContext.class); // enforce authentication
         boolean feedEnabled = fxRateFeedSettings.feedEnabled();
         int refreshed = refreshFxRateQuotes.refresh();
         return ResponseEntity.ok(ApiEnvelope.of(FxRatesRefreshResponse.of(feedEnabled, refreshed)));

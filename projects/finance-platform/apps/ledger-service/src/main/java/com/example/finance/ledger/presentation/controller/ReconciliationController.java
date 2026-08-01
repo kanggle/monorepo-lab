@@ -16,7 +16,6 @@ import com.example.finance.ledger.domain.journal.EntryDirection;
 import com.example.finance.ledger.domain.reconciliation.DiscrepancyStatus;
 import com.example.finance.ledger.domain.reconciliation.ResolutionType;
 import com.example.finance.ledger.domain.reconciliation.StatementSource;
-import com.example.finance.ledger.infrastructure.security.ActorContextResolver;
 import com.example.finance.ledger.presentation.dto.ApiEnvelope;
 import com.example.finance.ledger.presentation.dto.DiscrepancyResponse;
 import com.example.finance.ledger.presentation.dto.FxToleranceRequest;
@@ -24,6 +23,7 @@ import com.example.finance.ledger.presentation.dto.FxToleranceResponse;
 import com.example.finance.ledger.presentation.dto.IngestStatementRequest;
 import com.example.finance.ledger.presentation.dto.ResolveDiscrepancyRequest;
 import com.example.finance.ledger.presentation.dto.StatementResponse;
+import com.example.security.servlet.actor.ActorContextResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -61,7 +61,7 @@ public class ReconciliationController {
     @PostMapping("/statements")
     public ResponseEntity<ApiEnvelope<StatementResponse>> ingest(
             @RequestBody IngestStatementRequest request) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         List<IngestStatementCommand.Line> lines = request.lines() == null ? List.of()
                 : request.lines().stream()
                         .map(l -> new IngestStatementCommand.Line(
@@ -83,7 +83,7 @@ public class ReconciliationController {
     @PostMapping("/discrepancies/{id}/resolve")
     public ResponseEntity<ApiEnvelope<DiscrepancyResponse>> resolve(
             @PathVariable String id, @RequestBody ResolveDiscrepancyRequest request) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         DiscrepancyView view = resolveDiscrepancy.resolve(
                 id, actor.tenantId(), ResolutionType.valueOf(request.resolutionType()),
                 request.note(), actor.identity());
@@ -92,7 +92,7 @@ public class ReconciliationController {
 
     @GetMapping("/statements/{id}")
     public ResponseEntity<ApiEnvelope<StatementResponse>> getStatement(@PathVariable String id) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         StatementView view = queryReconciliation.getStatement(id, actor.tenantId());
         return ResponseEntity.ok(ApiEnvelope.of(StatementResponse.from(view)));
     }
@@ -102,7 +102,7 @@ public class ReconciliationController {
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         DiscrepancyStatus statusFilter = status == null || status.isBlank()
                 ? null : DiscrepancyStatus.valueOf(status);
         PageResult<DiscrepancyView> pageView =
@@ -119,7 +119,7 @@ public class ReconciliationController {
 
     @GetMapping("/discrepancies/{id}")
     public ResponseEntity<ApiEnvelope<DiscrepancyResponse>> getDiscrepancy(@PathVariable String id) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         DiscrepancyView view = queryReconciliation.getDiscrepancy(id, actor.tenantId());
         return ResponseEntity.ok(ApiEnvelope.of(DiscrepancyResponse.from(view)));
     }
@@ -131,7 +131,7 @@ public class ReconciliationController {
      */
     @GetMapping("/fx-tolerance")
     public ResponseEntity<ApiEnvelope<FxToleranceResponse>> getFxTolerance() {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         FxToleranceView view = getFxTolerance.get(actor.tenantId());
         return ResponseEntity.ok(ApiEnvelope.of(FxToleranceResponse.from(view)));
     }
@@ -146,7 +146,7 @@ public class ReconciliationController {
     @PutMapping("/fx-tolerance")
     public ResponseEntity<ApiEnvelope<FxToleranceResponse>> setFxTolerance(
             @RequestBody FxToleranceRequest request) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         SetFxToleranceCommand command = new SetFxToleranceCommand(
                 actor.tenantId(), request.bpsOrZero(), request.floorOrZero(), actor.identity());
         FxToleranceView view = setFxTolerance.set(command);

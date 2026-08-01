@@ -6,12 +6,12 @@ import com.example.finance.account.application.command.OpenAccountCommand;
 import com.example.finance.account.application.command.UpgradeKycCommand;
 import com.example.finance.account.application.view.AccountView;
 import com.example.finance.account.application.view.BalanceView;
-import com.example.finance.account.infrastructure.security.ActorContextResolver;
 import com.example.finance.account.presentation.dto.AccountResponse;
 import com.example.finance.account.presentation.dto.ApiEnvelope;
 import com.example.finance.account.presentation.dto.OpenAccountRequest;
 import com.example.finance.account.presentation.dto.UpgradeKycRequest;
 import com.example.finance.account.presentation.support.IdempotentExecution;
+import com.example.security.servlet.actor.ActorContextResolver;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -44,7 +44,7 @@ public class AccountController {
     public ResponseEntity<?> open(
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody OpenAccountRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(), "POST /api/finance/accounts",
                 idempotencyKey, req, () -> {
                     AccountView v = service.openAccount(new OpenAccountCommand(
@@ -56,7 +56,7 @@ public class AccountController {
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiEnvelope<AccountResponse>> get(@PathVariable String id) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         AccountView v = service.getAccount(id, actor);
         return ResponseEntity.ok(ApiEnvelope.of(AccountResponse.from(v)));
     }
@@ -64,7 +64,7 @@ public class AccountController {
     @GetMapping("/{id}/balances")
     public ResponseEntity<ApiEnvelope<List<AccountResponse.BalanceResponse>>> balances(
             @PathVariable String id) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         List<AccountResponse.BalanceResponse> body = service.getBalances(id, actor)
                 .stream()
                 .map(AccountController::toBalanceResponse)
@@ -77,7 +77,7 @@ public class AccountController {
             @PathVariable String id,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody UpgradeKycRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(),
                 "POST /api/finance/accounts/{id}/kyc/upgrade",
                 idempotencyKey, req, () -> {

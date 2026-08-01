@@ -21,7 +21,6 @@ import com.example.finance.ledger.application.view.FxRateOverrideView;
 import com.example.finance.ledger.domain.error.LedgerErrors.FxToleranceInvalidException;
 import com.example.finance.common.money.Currency;
 import com.example.finance.ledger.domain.money.LedgerReportingCurrency;
-import com.example.finance.ledger.infrastructure.security.ActorContextResolver;
 import com.example.finance.ledger.presentation.dto.ApiEnvelope;
 import com.example.finance.ledger.presentation.dto.FxCostFlowAccountConfigDeleteResponse;
 import com.example.finance.ledger.presentation.dto.FxCostFlowAccountConfigRequest;
@@ -33,6 +32,7 @@ import com.example.finance.ledger.presentation.dto.FxRateOverrideRequest;
 import com.example.finance.ledger.presentation.dto.FxRateOverrideResponse;
 import com.example.finance.ledger.presentation.dto.SettlementRequest;
 import com.example.finance.ledger.presentation.dto.SettlementResponse;
+import com.example.security.servlet.actor.ActorContextResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -99,7 +99,7 @@ public class SettlementController {
     public ResponseEntity<ApiEnvelope<SettlementResponse>> settle(
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @RequestBody SettlementRequest request) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         Result result = settleForeignPosition.settle(
                 request.toCommand(actor.tenantId(), actor.identity(), idempotencyKey));
         SettlementResponse body = SettlementResponse.from(result);
@@ -114,7 +114,7 @@ public class SettlementController {
      */
     @GetMapping("/cost-flow-config")
     public ResponseEntity<ApiEnvelope<FxCostFlowConfigResponse>> getCostFlowConfig() {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         FxCostFlowConfigView view = getFxCostFlowConfig.get(actor.tenantId());
         return ResponseEntity.ok(ApiEnvelope.of(FxCostFlowConfigResponse.from(view)));
     }
@@ -128,7 +128,7 @@ public class SettlementController {
     @PutMapping("/cost-flow-config")
     public ResponseEntity<ApiEnvelope<FxCostFlowConfigResponse>> setCostFlowConfig(
             @RequestBody FxCostFlowConfigRequest request) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         SetFxCostFlowConfigCommand command = new SetFxCostFlowConfigCommand(
                 actor.tenantId(), request.method(), actor.identity());
         FxCostFlowConfigView view = setFxCostFlowConfig.set(command);
@@ -145,7 +145,7 @@ public class SettlementController {
      */
     @GetMapping("/cost-flow-config/accounts")
     public ResponseEntity<ApiEnvelope<List<FxCostFlowAccountConfigResponse>>> getCostFlowAccountConfigs() {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         List<FxCostFlowAccountConfigResponse> body = getFxCostFlowAccountConfigs.list(actor.tenantId())
                 .stream()
                 .map(FxCostFlowAccountConfigResponse::from)
@@ -165,7 +165,7 @@ public class SettlementController {
     public ResponseEntity<ApiEnvelope<FxCostFlowAccountConfigResponse>> setCostFlowAccountConfig(
             @PathVariable String ledgerAccountCode,
             @RequestBody FxCostFlowAccountConfigRequest request) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         SetFxCostFlowAccountConfigCommand command = new SetFxCostFlowAccountConfigCommand(
                 actor.tenantId(), ledgerAccountCode, request.method(), actor.identity());
         FxCostFlowAccountConfigView view = setFxCostFlowAccountConfig.set(command);
@@ -181,7 +181,7 @@ public class SettlementController {
     @DeleteMapping("/cost-flow-config/accounts/{ledgerAccountCode}")
     public ResponseEntity<ApiEnvelope<FxCostFlowAccountConfigDeleteResponse>> deleteCostFlowAccountConfig(
             @PathVariable String ledgerAccountCode) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         boolean cleared = deleteFxCostFlowAccountConfig.clear(
                 actor.tenantId(), ledgerAccountCode, actor.identity());
         return ResponseEntity.ok(ApiEnvelope.of(
@@ -201,7 +201,7 @@ public class SettlementController {
     @GetMapping("/fx-rate-override/{foreignCurrency}")
     public ResponseEntity<ApiEnvelope<FxRateOverrideResponse>> getRateOverride(
             @PathVariable String foreignCurrency) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         FxRateOverrideView view = getFxRateOverride.get(actor.tenantId(), foreignCurrency);
         return ResponseEntity.ok(ApiEnvelope.of(FxRateOverrideResponse.from(view)));
     }
@@ -219,7 +219,7 @@ public class SettlementController {
     public ResponseEntity<ApiEnvelope<FxRateOverrideResponse>> setRateOverride(
             @PathVariable String foreignCurrency,
             @RequestBody FxRateOverrideRequest request) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         SetFxRateOverrideCommand command = new SetFxRateOverrideCommand(
                 actor.tenantId(), LedgerReportingCurrency.BASE.code(), foreignCurrency,
                 request.parsedRate(), actor.identity());
@@ -239,7 +239,7 @@ public class SettlementController {
     public ResponseEntity<ApiEnvelope<FxPositionLotsResponse>> getPositionLots(
             @PathVariable String ledgerAccountCode,
             @PathVariable String currency) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         Currency resolved = parseCurrencyOrValidationError(currency);
         FxPositionLotsView view = getFxPositionLots.get(actor.tenantId(), ledgerAccountCode, resolved);
         return ResponseEntity.ok(ApiEnvelope.of(FxPositionLotsResponse.from(view)));

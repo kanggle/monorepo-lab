@@ -203,8 +203,10 @@ com.example.finance.account/
 │   │   ├── ServiceLevelOAuth2Config.java
 │   │   ├── AllowedIssuersValidator.java
 │   │   ├── TenantClaimValidator.java
-│   │   ├── ActorContextResolver.java
-│   │   └── ActorContextJwtAuthenticationConverter.java
+│   │   └── ActorContextJwtAuthenticationConverter.java  ← finance authority POLICY only;
+│   │       claim lifting + base ROLE_* delegated to libs `ActorClaims`
+│   │       (ADR-MONO-058 § D1 / TASK-FIN-BE-065). No local ActorContextResolver —
+│   │       call sites use libs `ActorContextResolver.currentOrThrow(ActorContext.class)`.
 │   └── config/ (ClockConfig, JpaConfig)
 └── presentation/                           ← inbound web adapter
     ├── controller/
@@ -227,7 +229,12 @@ com.example.finance.account/
 - `net.logstash.logback:logstash-logback-encoder` (prod profile)
 - shared libs: `libs:java-common`, `libs:java-web`, `libs:java-messaging`,
   `libs:java-observability`, `libs:java-security`, `libs:java-security-servlet`
-  (ADR-MONO-049 § D5-3 — `TenantClaimEnforcer`), `libs:java-web-servlet`
+  (ADR-MONO-049 § D5-3 — `TenantClaimEnforcer`; TASK-FIN-BE-065 / ADR-MONO-058 § D1 —
+  the actor cluster `ActorClaims` + `ActorContextFactory` + `ActorAuthenticationToken` +
+  `ActorContextResolver`, which replaced this service's hand-rolled claim-lifting
+  mechanism. The `ActorContext` record and every authority the converter synthesises on
+  top — `SCOPE_*`, `ROLE_FINANCE_VIEWER`, `ROLE_FINANCE_SUPERADMIN_READ` — stay
+  in-service per `shared-library-policy.md § Ownership Rule`), `libs:java-web-servlet`
   (TASK-FIN-BE-063 — `BodyHashUtil` canonical idempotency body hash;
   TASK-FIN-BE-066 / ADR-MONO-058 § D2 — `CommonGlobalExceptionHandler`, the base
   class `presentation/advice/GlobalExceptionHandler` now extends for its generic,
