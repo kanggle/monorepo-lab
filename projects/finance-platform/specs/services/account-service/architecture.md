@@ -228,7 +228,11 @@ com.example.finance.account/
 - shared libs: `libs:java-common`, `libs:java-web`, `libs:java-messaging`,
   `libs:java-observability`, `libs:java-security`, `libs:java-security-servlet`
   (ADR-MONO-049 § D5-3 — `TenantClaimEnforcer`), `libs:java-web-servlet`
-  (TASK-FIN-BE-063 — `BodyHashUtil` canonical idempotency body hash)
+  (TASK-FIN-BE-063 — `BodyHashUtil` canonical idempotency body hash;
+  TASK-FIN-BE-066 / ADR-MONO-058 § D2 — `CommonGlobalExceptionHandler`, the base
+  class `presentation/advice/GlobalExceptionHandler` now extends for its generic,
+  non-domain exception tail; the error envelope is `libs:java-web`'s
+  `ErrorResponse` and this service declares no local error-envelope record)
 - project-scoped shared module: `projects:finance-platform:libs:finance-common`
   (TASK-FIN-BE-064 / ADR-003 Option A — `Money` + `Currency` value objects, shared
   with `ledger-service`). Declared `implementation`, never `api`. The module is

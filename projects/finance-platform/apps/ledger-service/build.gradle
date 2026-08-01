@@ -65,6 +65,11 @@ dependencies {
     // Shared libs
     implementation project(':libs:java-common')
     implementation project(':libs:java-web')
+    // ADR-MONO-058 § D2 (TASK-FIN-BE-066): CommonGlobalExceptionHandler — the generic,
+    // non-domain half of GlobalExceptionHandler. `implementation`, never `api` (a servlet
+    // web class must not transit onto a consumer's compile classpath, and must never reach
+    // a reactive classpath).
+    implementation project(':libs:java-web-servlet')
     implementation project(':libs:java-messaging')
     implementation project(':libs:java-observability')
     implementation project(':libs:java-security')

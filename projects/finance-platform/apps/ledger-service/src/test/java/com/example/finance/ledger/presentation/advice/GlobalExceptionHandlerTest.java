@@ -3,7 +3,7 @@ package com.example.finance.ledger.presentation.advice;
 import com.example.finance.ledger.domain.error.LedgerErrors;
 import com.example.finance.common.money.Currency;
 import com.example.finance.common.money.Money;
-import com.example.finance.ledger.presentation.dto.ApiErrorBody;
+import com.example.web.dto.ErrorResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpInputMessage;
@@ -49,7 +49,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("IllegalArgumentException → 400 VALIDATION_ERROR (never CURRENCY_MISMATCH)")
     void illegalArgumentIsNotACurrencyMismatch() {
-        ResponseEntity<ApiErrorBody> r = handler.handleIllegalArgument(
+        ResponseEntity<ErrorResponse> r = handler.handleIllegalArgument(
                 new IllegalArgumentException("settlementRate must be a decimal string: abc"));
 
         assertStatus(r, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR");
@@ -62,7 +62,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("IllegalStateException → 422 ILLEGAL_STATE (never VALIDATION_ERROR)")
     void illegalStateUsesTheRegisteredCode() {
-        ResponseEntity<ApiErrorBody> r = handler.handleIllegalState(
+        ResponseEntity<ErrorResponse> r = handler.handleIllegalState(
                 new IllegalStateException("journal entry has no lines"));
 
         assertStatus(r, HttpStatus.UNPROCESSABLE_ENTITY, "ILLEGAL_STATE");
@@ -80,10 +80,10 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("no code leaves this service at two different HTTP statuses")
     void oneCodeOneStatus() {
-        List<ResponseEntity<ApiErrorBody>> everyHandler = List.of(
+        List<ResponseEntity<ErrorResponse>> everyHandler = List.of(
                 handler.handleIllegalArgument(new IllegalArgumentException("bad rate")),
                 handler.handleIllegalState(new IllegalStateException("invariant")),
-                handler.handleMalformed(malformedBody()),
+                handler.handleMalformedRequest(malformedBody()),
                 handler.handleTypeMismatch(typeMismatch("periodId")),
                 handler.handleMissingHeader(missingHeader("Idempotency-Key")),
                 handler.handleUnsupportedCurrency(new Currency.UnsupportedCurrencyException("XYZ")),
@@ -93,7 +93,7 @@ class GlobalExceptionHandlerTest {
                 handler.handleGeneral(new RuntimeException("boom")));
 
         Map<String, Set<HttpStatusCode>> statusesByCode = new LinkedHashMap<>();
-        for (ResponseEntity<ApiErrorBody> r : everyHandler) {
+        for (ResponseEntity<ErrorResponse> r : everyHandler) {
             assertThat(r.getBody()).isNotNull();
             statusesByCode
                     .computeIfAbsent(r.getBody().code(), k -> new LinkedHashSet<>())
@@ -124,7 +124,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("every VALIDATION_ERROR path is 400 (malformed body, type mismatch, bad argument)")
     void validationErrorIsAlways400() {
-        assertStatus(handler.handleMalformed(malformedBody()),
+        assertStatus(handler.handleMalformedRequest(malformedBody()),
                 HttpStatus.BAD_REQUEST, "VALIDATION_ERROR");
         assertStatus(handler.handleTypeMismatch(typeMismatch("periodId")),
                 HttpStatus.BAD_REQUEST, "VALIDATION_ERROR");
@@ -146,7 +146,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("missing Idempotency-Key → 400 IDEMPOTENCY_KEY_REQUIRED")
     void missingIdempotencyHeader() {
-        ResponseEntity<ApiErrorBody> r = handler.handleMissingHeader(missingHeader("Idempotency-Key"));
+        ResponseEntity<ErrorResponse> r = handler.handleMissingHeader(missingHeader("Idempotency-Key"));
         assertStatus(r, HttpStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_REQUIRED");
         assertThat(r.getBody().message()).contains("Idempotency-Key");
     }
@@ -159,14 +159,14 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("generic Exception → 500 INTERNAL_ERROR without leaking detail")
     void generic() {
-        ResponseEntity<ApiErrorBody> r = handler.handleGeneral(new RuntimeException("secret crash"));
+        ResponseEntity<ErrorResponse> r = handler.handleGeneral(new RuntimeException("secret crash"));
         assertStatus(r, HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR");
         assertThat(r.getBody().message()).doesNotContain("secret crash");
     }
 
     // ---------------- helpers ----------------
 
-    private static void assertStatus(ResponseEntity<ApiErrorBody> r, HttpStatus expected, String code) {
+    private static void assertStatus(ResponseEntity<ErrorResponse> r, HttpStatus expected, String code) {
         assertThat(r.getStatusCode()).isEqualTo(expected);
         assertThat(r.getBody()).isNotNull();
         assertThat(r.getBody().code()).isEqualTo(code);

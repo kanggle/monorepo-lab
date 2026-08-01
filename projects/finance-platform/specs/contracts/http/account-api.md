@@ -20,9 +20,17 @@ All endpoints:
   shape.
 - Success envelope: `{ "data": <payload>, "meta": { "timestamp": "<ISO-8601>" } }`.
 - Error envelope: `{ "code": "<ERROR_CODE>", "message": "<human>",
-  "details": <object?>, "timestamp": "<ISO-8601>" }`. Codes per
+  "timestamp": "<ISO-8601>" }` — exactly the three-field base envelope of
   [`platform/error-handling.md`](../../../../../platform/error-handling.md)
-  fintech section.
+  § Error Response Format, serialised from the shared
+  `libs/java-web.ErrorResponse` (ADR-MONO-058 § D2, TASK-FIN-BE-066). Codes per
+  the same document's fintech section.
+  A previously documented optional `details` object was **removed** from this
+  line by TASK-FIN-BE-066: no handler arm in this service ever populated it, so
+  no response has ever carried the key and its removal is not observable to a
+  client. The platform envelope still *permits* a service to extend the base
+  with structured `details`; if a future error code needs one, that code's row
+  below must document its keys and the envelope regains the field then.
 - No webhook / public-callback surface in v1 (finance has no external caller;
   contrast scm). Only `/actuator/{health,info}` are unauthenticated.
 

@@ -1,7 +1,7 @@
 package com.example.finance.account.integration;
 
 import com.example.finance.account.presentation.advice.GlobalExceptionHandler;
-import com.example.finance.account.presentation.dto.ApiErrorBody;
+import com.example.web.dto.ErrorResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -60,7 +60,7 @@ class DataIntegrityViolationMappingIntegrationTest extends AbstractAccountIntegr
         assertThat(sqlErrorCodeOf(div))
                 .as("MySQL duplicate must surface vendor code 1062").isEqualTo(1062);
 
-        ResponseEntity<ApiErrorBody> response = handler.handleIntegrity(div);
+        ResponseEntity<ErrorResponse> response = handler.handleIntegrity(div);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().code()).isEqualTo("CONCURRENT_MODIFICATION");
@@ -82,7 +82,7 @@ class DataIntegrityViolationMappingIntegrationTest extends AbstractAccountIntegr
         assertThat(sqlErrorCodeOf(div))
                 .as("MySQL NOT NULL violation must surface vendor code 1048, not 1062").isEqualTo(1048);
 
-        ResponseEntity<ApiErrorBody> response = handler.handleIntegrity(div);
+        ResponseEntity<ErrorResponse> response = handler.handleIntegrity(div);
         assertThat(response.getStatusCode())
                 .as("a NOT NULL violation is a server defect and must stay a loud 500")
                 .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
