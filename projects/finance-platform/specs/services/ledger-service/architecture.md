@@ -686,7 +686,11 @@ com.example.finance.ledger/
 │   │   ├── FxRateFeedProperties.java        ← @ConfigurationProperties("financeplatform.ledger.fxrate"): enabled(false)/mode(noop)/pollIntervalMs/pairs/stub.rates/http.{baseUrl,timeouts}/real.{baseUrl,timeouts}
 │   │   └── FxRateFeedConfig.java            ← @EnableConfigurationProperties + FxRateFeedSettings bean (app-port impl)
 │   ├── security/  (SecurityConfig, AllowedIssuersValidator, TenantClaimValidator,
-│   │               ActorContextJwtAuthenticationConverter, ServiceLevelOAuth2Config)
+│   │               ActorContextJwtAuthenticationConverter [finance authority POLICY only —
+│   │               claim lifting + base ROLE_* delegated to libs `ActorClaims`,
+│   │               ADR-MONO-058 § D1 / TASK-FIN-BE-065; no local ActorContextResolver,
+│   │               call sites use libs `ActorContextResolver.currentOrThrow(ActorContext.class)`],
+│   │               ServiceLevelOAuth2Config)
 │   └── config/ (ClockConfig, JpaConfig, KafkaConsumerConfig [also the outbox-relay KafkaTemplate],
 │                ChartOfAccountsSeedConfig [(9th incr) also seeds FX_GAIN/FX_LOSS], (3rd incr) OutboxConfig [TransactionTemplate + ledger.outbox.* props])
 ├── messaging/                             ← inbound event adapter
@@ -716,6 +720,14 @@ shared libs `java-common`/`java-web`/`java-messaging`/`java-observability`/`java
 `java-security-servlet`/`java-web-servlet`).
 Redis is **not** required in the first increment (no client idempotency-key surface;
 dedupe is event-id based via `processed_events`).
+
+`libs:java-security-servlet` carries two adoptions: `TenantClaimEnforcer` (ADR-MONO-049 § D5-3)
+and, since TASK-FIN-BE-065 (ADR-MONO-058 § D1), the actor cluster — `ActorClaims` +
+`ActorContextFactory` + `ActorAuthenticationToken` + `ActorContextResolver` — which replaced this
+service's hand-rolled claim-lifting mechanism. Only the **mechanism** moved: the `ActorContext`
+record (`subject`/`tenantId`/`roles`, `hasRole`, `identity()`) and every authority the converter
+synthesises on top (`SCOPE_*`, `ROLE_FINANCE_VIEWER`, `ROLE_FINANCE_SUPERADMIN_READ`) stay
+in-service per `shared-library-policy.md § Ownership Rule`.
 
 `libs:java-web-servlet` was added by TASK-FIN-BE-066 (ADR-MONO-058 § D2) for
 `CommonGlobalExceptionHandler` — the base class `presentation/advice/GlobalExceptionHandler`
@@ -1806,7 +1818,7 @@ as a **read-only** `GET` on the existing `SettlementController`. Pure read; net-
 (20th increment; `SettlementController` handler `getPositionLots`). Returns the tenant's
 **open lots** (`remaining_foreign_minor > 0`) for the given `(ledgerAccountCode, currency)`
 position, ordered `(acquired_at, seq)` ASC (the FIFO walk order, deterministic tiebreak),
-plus a summary. Tenant-scoped via `ActorContext` (the same `ActorContextResolver.currentOrThrow()`
+plus a summary. Tenant-scoped via `ActorContext` (the same `ActorContextResolver.currentOrThrow(ActorContext.class)`
 pattern). An unknown `currency` string (outside `{KRW,USD,EUR,JPY}`) returns `400
 VALIDATION_ERROR` (client input error, not domain mismatch — wrapped before delegation
 to distinguish from the 422 `CURRENCY_MISMATCH` used by write paths). An empty position
@@ -1969,7 +1981,7 @@ an unknown currency → `400 VALIDATION_ERROR`, nothing persisted.
 /api/finance/ledger/fx-rates/refresh` in `FxRateController` — operator-triggered on-demand cache
 reload. The endpoint:
 
-1. Calls `ActorContextResolver.currentOrThrow()` (auth enforcement — same pattern as every other
+1. Calls `ActorContextResolver.currentOrThrow(ActorContext.class)` (auth enforcement — same pattern as every other
    ledger endpoint; the `/api/finance/**` `.authenticated()` rule in `SecurityConfig` enforces the
    real 401/403 at the filter chain layer).
 2. Reads `FxRateFeedSettings.feedEnabled()` (the existing application-layer port, 24th increment) to

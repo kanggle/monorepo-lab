@@ -3,10 +3,10 @@ package com.example.finance.ledger.presentation.controller;
 import com.example.finance.ledger.application.ActorContext;
 import com.example.finance.ledger.application.RevalueForeignBalanceUseCase;
 import com.example.finance.ledger.application.RevalueForeignBalanceUseCase.Result;
-import com.example.finance.ledger.infrastructure.security.ActorContextResolver;
 import com.example.finance.ledger.presentation.dto.ApiEnvelope;
 import com.example.finance.ledger.presentation.dto.RevaluationRequest;
 import com.example.finance.ledger.presentation.dto.RevaluationResponse;
+import com.example.security.servlet.actor.ActorContextResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -41,7 +41,7 @@ public class RevaluationController {
     public ResponseEntity<ApiEnvelope<RevaluationResponse>> revalue(
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @RequestBody RevaluationRequest request) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         Result result = revalueForeignBalance.revalue(
                 request.toCommand(actor.tenantId(), actor.identity(), idempotencyKey));
         RevaluationResponse body = RevaluationResponse.from(result);

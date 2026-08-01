@@ -3,10 +3,10 @@ package com.example.finance.ledger.presentation.controller;
 import com.example.finance.ledger.application.ActorContext;
 import com.example.finance.ledger.application.PostManualJournalEntryUseCase;
 import com.example.finance.ledger.application.PostManualJournalEntryUseCase.Result;
-import com.example.finance.ledger.infrastructure.security.ActorContextResolver;
 import com.example.finance.ledger.presentation.dto.ApiEnvelope;
 import com.example.finance.ledger.presentation.dto.JournalEntryResponse;
 import com.example.finance.ledger.presentation.dto.ManualJournalEntryRequest;
+import com.example.security.servlet.actor.ActorContextResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -40,7 +40,7 @@ public class JournalController {
     public ResponseEntity<ApiEnvelope<JournalEntryResponse>> post(
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @RequestBody ManualJournalEntryRequest request) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         Result result = postManualEntry.post(
                 request.toCommand(actor.tenantId(), actor.identity(), idempotencyKey));
         JournalEntryResponse body = JournalEntryResponse.from(result.entry());

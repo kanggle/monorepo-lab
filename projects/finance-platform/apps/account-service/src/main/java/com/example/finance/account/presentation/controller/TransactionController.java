@@ -11,7 +11,6 @@ import com.example.finance.account.application.command.PlaceHoldCommand;
 import com.example.finance.account.application.command.ReleaseHoldCommand;
 import com.example.finance.account.application.command.TransferCommand;
 import com.example.finance.account.application.view.TransactionView;
-import com.example.finance.account.infrastructure.security.ActorContextResolver;
 import com.example.finance.account.presentation.dto.ApiEnvelope;
 import com.example.finance.account.presentation.dto.CaptureHoldRequest;
 import com.example.finance.account.presentation.dto.HoldResponse;
@@ -20,6 +19,7 @@ import com.example.finance.account.presentation.dto.PlaceHoldRequest;
 import com.example.finance.account.presentation.dto.TransactionResponse;
 import com.example.finance.account.presentation.dto.TransferRequest;
 import com.example.finance.account.presentation.support.IdempotentExecution;
+import com.example.security.servlet.actor.ActorContextResolver;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -55,7 +55,7 @@ public class TransactionController {
             @PathVariable String id,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody PlaceHoldRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(),
                 "POST /api/finance/accounts/{id}/holds",
                 idempotencyKey, req, () -> {
@@ -74,7 +74,7 @@ public class TransactionController {
             @PathVariable String holdId,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody CaptureHoldRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(),
                 "POST /api/finance/accounts/{id}/holds/{holdId}/capture",
                 idempotencyKey, req, () -> {
@@ -96,7 +96,7 @@ public class TransactionController {
             @PathVariable String id,
             @PathVariable String holdId,
             @RequestHeader("Idempotency-Key") String idempotencyKey) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(),
                 "POST /api/finance/accounts/{id}/holds/{holdId}/release",
                 idempotencyKey, "release:" + id + ":" + holdId, () -> {
@@ -116,7 +116,7 @@ public class TransactionController {
             @PathVariable String id,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody TransferRequest req) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return idempotency.run(actor.tenantId(),
                 "POST /api/finance/accounts/{id}/transfers",
                 idempotencyKey, req, () -> {
@@ -135,7 +135,7 @@ public class TransactionController {
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         PageResult<TransactionView> p =
                 service.listTransactions(id, actor, type, status, page, size);
         PageResult<TransactionResponse> body = p.map(TransactionResponse::from);

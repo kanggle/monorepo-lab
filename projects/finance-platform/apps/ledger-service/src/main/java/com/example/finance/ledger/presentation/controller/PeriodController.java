@@ -6,11 +6,11 @@ import com.example.finance.ledger.application.OpenAccountingPeriodUseCase;
 import com.example.finance.ledger.application.QueryAccountingPeriodUseCase;
 import com.example.finance.ledger.application.view.AccountingPeriodView;
 import com.example.finance.ledger.domain.period.AccountingPeriod;
-import com.example.finance.ledger.infrastructure.security.ActorContextResolver;
 import com.example.finance.ledger.presentation.dto.ApiEnvelope;
 import com.example.finance.ledger.presentation.dto.OpenPeriodRequest;
 import com.example.finance.ledger.presentation.dto.PeriodDetailResponse;
 import com.example.finance.ledger.presentation.dto.PeriodResponse;
+import com.example.security.servlet.actor.ActorContextResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -46,7 +46,7 @@ public class PeriodController {
     @PostMapping
     public ResponseEntity<ApiEnvelope<PeriodResponse>> open(
             @RequestBody OpenPeriodRequest request) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         AccountingPeriod period = openPeriod.open(
                 actor.tenantId(), request.from(), request.to(), actor.identity());
         PeriodResponse body = PeriodResponse.from(AccountingPeriodView.summary(period));
@@ -56,7 +56,7 @@ public class PeriodController {
     @PostMapping("/{periodId}/close")
     public ResponseEntity<ApiEnvelope<PeriodDetailResponse>> close(
             @PathVariable String periodId) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         AccountingPeriodView view = closePeriod.close(
                 periodId, actor.tenantId(), actor.identity());
         return ResponseEntity.ok(ApiEnvelope.of(PeriodDetailResponse.from(view)));
@@ -66,7 +66,7 @@ public class PeriodController {
     public ResponseEntity<ApiEnvelope<List<PeriodResponse>>> list(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         List<AccountingPeriodView> all = queryPeriod.listPeriods(actor.tenantId());
         List<PeriodResponse> pageContent = paginate(all, page, size).stream()
                 .map(PeriodResponse::from).toList();
@@ -81,7 +81,7 @@ public class PeriodController {
     @GetMapping("/{periodId}")
     public ResponseEntity<ApiEnvelope<PeriodDetailResponse>> get(
             @PathVariable String periodId) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         AccountingPeriodView view = queryPeriod.getPeriod(periodId, actor.tenantId());
         return ResponseEntity.ok(ApiEnvelope.of(PeriodDetailResponse.from(view)));
     }

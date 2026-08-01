@@ -27,7 +27,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *       {@code {feedEnabled, refreshed}} (AC-1).</li>
  *   <li>Feed enabled → count of upserted pairs returned (AC-1).</li>
  *   <li>Feed disabled → 200 no-op {@code {feedEnabled:false, refreshed:0}} (AC-2).</li>
- *   <li>No authenticated actor in context → {@link ActorContextResolver#currentOrThrow()}
+ *   <li>No authenticated actor in context → {@code ActorContextResolver.currentOrThrow(ActorContext.class)}
  *       throws {@link IllegalStateException} → 422 (verifies auth enforcement at the
  *       controller level — the real 401/403 is enforced by the security filter chain
  *       tested in integration tests with full Spring context) (AC-1).</li>

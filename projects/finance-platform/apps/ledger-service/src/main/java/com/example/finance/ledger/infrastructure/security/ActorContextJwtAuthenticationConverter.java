@@ -2,12 +2,14 @@ package com.example.finance.ledger.infrastructure.security;
 
 import com.example.finance.ledger.application.ActorContext;
 import com.example.security.oauth2.TenantClaimValidator;
+import com.example.security.servlet.actor.ActorAuthenticationToken;
+import com.example.security.servlet.actor.ActorClaims;
+import com.example.security.servlet.actor.ActorContextFactory;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -16,10 +18,35 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * Converts a verified {@link Jwt} into an authentication token whose principal
- * is an {@link ActorContext} — lifts {@code sub}, {@code tenant_id}, and
- * {@code roles}/{@code role} into a typed value so use cases never touch Spring
- * Security. Mirrors account-service.
+ * Converts a verified {@link Jwt} into an authentication token whose principal is an
+ * {@link ActorContext}, so use cases never touch Spring Security. Mirrors account-service.
+ *
+ * <h2>Mechanism vs. policy (ADR-MONO-058 § D1, TASK-FIN-BE-065)</h2>
+ *
+ * The <strong>mechanism</strong> — lifting {@code sub} / {@code tenant_id} / {@code roles}-or-{@code role}
+ * and building the base {@code ROLE_*} authorities — is the shared {@link ActorClaims} in
+ * {@code libs/java-security-servlet}; ledger's own actor type (whose first component is
+ * {@code subject}, not {@code accountId}) is threaded through the {@link ActorContextFactory} seam
+ * ({@link #ACTOR_FACTORY}), which is exactly what lets the two finance services keep different
+ * component names over one shared mechanism.
+ *
+ * <p>What stays here is finance's authorization <strong>policy</strong>
+ * (`platform/shared-library-policy.md § Ownership Rule`) — this converter grants strictly more than the
+ * shared mechanism knows about:
+ *
+ * <ul>
+ *   <li>{@code SCOPE_*} authorities lifted from the OAuth2 {@code scope}/{@code scp} claim
+ *       (TASK-FIN-BE-047);</li>
+ *   <li>the entitlement-trust {@link #VIEWER_ROLE} (TASK-FIN-BE-048);</li>
+ *   <li>the platform super-admin wildcard {@link #SUPERADMIN_READ_ROLE} (TASK-FIN-BE-049).</li>
+ * </ul>
+ *
+ * <p>Those extra authorities are why this is a composition over {@link ActorClaims} rather than a bare
+ * {@code implements}/subclass of the shared
+ * {@code ActorContextJwtAuthenticationConverter<A>}: {@link ActorAuthenticationToken}'s authority
+ * collection is fixed at construction ({@code AbstractAuthenticationToken} contract), so the finance
+ * authorities have to be in the collection <em>before</em> the token is built, not appended to a
+ * ready-made one.
  */
 public class ActorContextJwtAuthenticationConverter
         implements Converter<Jwt, AbstractAuthenticationToken> {
@@ -42,22 +69,21 @@ public class ActorContextJwtAuthenticationConverter
      */
     public static final String SUPERADMIN_READ_ROLE = "ROLE_FINANCE_SUPERADMIN_READ";
 
+    /**
+     * The Ownership-Rule seam: the shared mechanism hands back three plain claim values, and
+     * ledger-service turns them into its own actor type. The role predicates and the audit-identity
+     * rule ({@link ActorContext#hasRole(String)}, {@link ActorContext#identity()}) stay on that
+     * record — they are finance's authorization policy, not library mechanism.
+     */
+    private static final ActorContextFactory<ActorContext> ACTOR_FACTORY = ActorContext::new;
+
     @Override
     public AbstractAuthenticationToken convert(Jwt jwt) {
-        String subject = jwt.getSubject();
-        if (subject == null || subject.isBlank()) {
-            throw new IllegalStateException("sub claim is missing on the JWT");
-        }
-        String tenantId = jwt.getClaimAsString(TenantClaimValidator.CLAIM_TENANT_ID);
-        if (tenantId == null || tenantId.isBlank()) {
-            throw new IllegalStateException("tenant_id claim is missing on the JWT");
-        }
-        Set<String> roles = extractRoles(jwt);
-        ActorContext actor = new ActorContext(subject, tenantId, roles);
-        Collection<GrantedAuthority> authorities = new ArrayList<>();
-        for (String role : roles) {
-            authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
-        }
+        // Mechanism (shared): sub / tenant_id guards, roles-or-role normalisation, ROLE_* authorities.
+        ActorClaims claims = ActorClaims.from(jwt);
+        ActorContext actor =
+                ACTOR_FACTORY.create(claims.accountId(), claims.tenantId(), claims.roles());
+        Collection<GrantedAuthority> authorities = new ArrayList<>(claims.authorities());
         // Lift the OAuth2 `scope` claim into SCOPE_* authorities (Spring's standard prefix) so
         // SecurityConfig can require a specific scope value per endpoint. Without this the `scope`
         // claim was invisible to authorization and any authenticated finance token could write —
@@ -95,34 +121,20 @@ public class ActorContextJwtAuthenticationConverter
         // on tenant_id="*" (not on "authenticated"), so a non-wildcard scopeless/roleless token is
         // unaffected. Synthesises ONLY the READ role — the WRITE gate is untouched, so the wildcard
         // widens READ visibility only, never mutation authority.
-        if (TenantClaimValidator.WILDCARD_TENANT.equals(tenantId)) {
+        if (TenantClaimValidator.WILDCARD_TENANT.equals(claims.tenantId())) {
             authorities.add(new SimpleGrantedAuthority(SUPERADMIN_READ_ROLE));
         }
-        return new ActorContextJwtAuthenticationToken(jwt, actor, authorities);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Set<String> extractRoles(Jwt jwt) {
-        Object raw = jwt.getClaim("roles");
-        if (raw == null) raw = jwt.getClaim("role");
-        if (raw == null) return Collections.emptySet();
-        Set<String> out = new HashSet<>();
-        if (raw instanceof Collection<?> c) {
-            for (Object v : c) out.add(String.valueOf(v));
-        } else if (raw instanceof String s) {
-            for (String part : s.split("[,\\s]+")) {
-                if (!part.isBlank()) out.add(part);
-            }
-        }
-        return out;
+        return new ActorAuthenticationToken(jwt, actor, claims.accountId(), authorities);
     }
 
     /**
      * Extract OAuth2 scopes. GAP issues {@code scope} as a JSON array (e.g.
      * {@code ["finance.read"]}); RFC 6749 also allows a space-delimited string, and {@code scp}
      * is a common alias — accept all three shapes.
+     *
+     * <p>Stays in-service: the shared mechanism deliberately lifts identity + roles only, and which
+     * OAuth2 scopes exist is a finance/GAP contract (`iam-integration.md § Token 검증 규칙 #5`).
      */
-    @SuppressWarnings("unchecked")
     private static Set<String> extractScopes(Jwt jwt) {
         Object raw = jwt.getClaim("scope");
         if (raw == null) raw = jwt.getClaim("scp");
@@ -139,27 +151,5 @@ public class ActorContextJwtAuthenticationConverter
             }
         }
         return out;
-    }
-
-    /**
-     * Token whose principal is the {@link ActorContext} value. {@code final} so
-     * {@code setAuthenticated(true)} in the constructor cannot be observed by an
-     * unfinished subclass (silences {@code [this-escape]} under {@code -Xlint:all}).
-     */
-    public static final class ActorContextJwtAuthenticationToken extends JwtAuthenticationToken {
-        private final ActorContext actor;
-
-        public ActorContextJwtAuthenticationToken(Jwt jwt,
-                                                  ActorContext actor,
-                                                  Collection<? extends GrantedAuthority> authorities) {
-            super(jwt, authorities, actor.subject());
-            this.actor = actor;
-            setAuthenticated(true);
-        }
-
-        @Override
-        public Object getPrincipal() {
-            return actor;
-        }
     }
 }

@@ -4,12 +4,12 @@ import com.example.common.page.PageResult;
 import com.example.finance.ledger.application.ActorContext;
 import com.example.finance.ledger.application.QueryLedgerUseCase;
 import com.example.finance.ledger.application.view.AccountLineView;
-import com.example.finance.ledger.infrastructure.security.ActorContextResolver;
 import com.example.finance.ledger.presentation.dto.AccountLineResponse;
 import com.example.finance.ledger.presentation.dto.ApiEnvelope;
 import com.example.finance.ledger.presentation.dto.BalanceResponse;
 import com.example.finance.ledger.presentation.dto.JournalEntryResponse;
 import com.example.finance.ledger.presentation.dto.TrialBalanceResponse;
+import com.example.security.servlet.actor.ActorContextResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -38,7 +38,7 @@ public class LedgerController {
     @GetMapping("/entries/{entryId}")
     public ResponseEntity<ApiEnvelope<JournalEntryResponse>> getEntry(
             @PathVariable String entryId) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         JournalEntryResponse body = JournalEntryResponse.from(
                 queryLedger.getEntry(entryId, actor.tenantId()));
         return ResponseEntity.ok(ApiEnvelope.of(body));
@@ -49,7 +49,7 @@ public class LedgerController {
             @PathVariable String ledgerAccountCode,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         PageResult<AccountLineView> pageView =
                 queryLedger.getAccountLines(ledgerAccountCode, actor.tenantId(), page, size);
         List<AccountLineResponse> body = pageView.content().stream()
@@ -65,7 +65,7 @@ public class LedgerController {
     @GetMapping("/accounts/{ledgerAccountCode}/balance")
     public ResponseEntity<ApiEnvelope<BalanceResponse>> getBalance(
             @PathVariable String ledgerAccountCode) {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         BalanceResponse body = BalanceResponse.from(
                 queryLedger.getBalance(ledgerAccountCode, actor.tenantId()));
         return ResponseEntity.ok(ApiEnvelope.of(body));
@@ -73,7 +73,7 @@ public class LedgerController {
 
     @GetMapping("/trial-balance")
     public ResponseEntity<ApiEnvelope<TrialBalanceResponse>> getTrialBalance() {
-        ActorContext actor = ActorContextResolver.currentOrThrow();
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         TrialBalanceResponse body = TrialBalanceResponse.from(
                 queryLedger.getTrialBalance(actor.tenantId()));
         return ResponseEntity.ok(ApiEnvelope.of(body));
