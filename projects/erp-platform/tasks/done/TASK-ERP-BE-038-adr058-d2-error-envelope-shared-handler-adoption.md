@@ -10,7 +10,7 @@ the `details`-field / status-code design questions the ADR defers to this task
 
 # Status
 
-ready
+done
 
 # Owner
 
