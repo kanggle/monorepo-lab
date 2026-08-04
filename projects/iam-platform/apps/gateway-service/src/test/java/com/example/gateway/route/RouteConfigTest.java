@@ -19,6 +19,16 @@ class RouteConfigTest {
         return new RouteConfig(props);
     }
 
+    /**
+     * The non-admin half of {@code gateway.public-paths} as it stands in
+     * {@code application.yml} after TASK-BE-398 dropped the legacy custom-JWT entries.
+     */
+    private static final List<String> PRODUCTION_PUBLIC_PATHS = List.of(
+            "POST:/api/accounts/signup",
+            "POST:/api/auth/refresh",
+            "GET:/actuator/health"
+    );
+
     private static final List<String> ADMIN_PUBLIC_PATHS = List.of(
             "POST:/api/admin/auth/login",
             "POST:/api/admin/auth/2fa/enroll",
@@ -84,26 +94,33 @@ class RouteConfigTest {
 
     @ParameterizedTest(name = "기존 public 경로 {0} {1} 회귀 검증")
     @CsvSource({
-            "POST, /api/auth/login",
             "POST, /api/accounts/signup",
-            "POST, /api/auth/refresh",
-            "GET,  /api/auth/oauth/authorize",
-            "POST, /api/auth/oauth/callback"
+            "POST, /api/auth/refresh"
     })
     @DisplayName("기존 public 경로는 이번 변경으로 깨지지 않는다")
     void existingPublicPaths_regression(String method, String path) {
-        RouteConfig config = routeConfigWith(List.of(
-                "POST:/api/auth/login",
-                "POST:/api/accounts/signup",
-                "POST:/api/auth/refresh",
-                "GET:/api/auth/oauth/authorize",
-                "POST:/api/auth/oauth/callback",
-                "GET:/actuator/health"
-        ));
+        RouteConfig config = routeConfigWith(PRODUCTION_PUBLIC_PATHS);
 
         boolean isPublic = config.isPublicRoute(HttpMethod.valueOf(method.trim()), path.trim());
 
         assertThat(isPublic).isTrue();
+    }
+
+    @ParameterizedTest(name = "일몰된 레거시 경로 {0} {1} → NOT public")
+    @CsvSource({
+            "POST, /api/auth/login",
+            "GET,  /api/auth/oauth/authorize",
+            "POST, /api/auth/oauth/callback"
+    })
+    @DisplayName("TASK-BE-398 — 일몰된 레거시 커스텀-JWT 경로는 더 이상 public 이 아니다")
+    void sunsetLegacyPaths_areNotPublic(String method, String path) {
+        // The endpoints are gone from auth-service; leaving them on the edge allowlist
+        // would keep an unauthenticated hole open onto a route that no longer exists.
+        RouteConfig config = routeConfigWith(PRODUCTION_PUBLIC_PATHS);
+
+        boolean isPublic = config.isPublicRoute(HttpMethod.valueOf(method.trim()), path.trim());
+
+        assertThat(isPublic).isFalse();
     }
 
     @org.junit.jupiter.api.Test
@@ -178,23 +195,14 @@ class RouteConfigTest {
     }
 
     @org.junit.jupiter.api.Test
-    @DisplayName("OIDC public-paths 추가 후 기존 /api/auth/login 등 public 경로 회귀 없음")
+    @DisplayName("OIDC public-paths 와 나머지 public 경로가 서로를 가리지 않는다")
     void oidcPublicPaths_regression_existingPublicPathsUnaffected() {
         List<String> combined = new java.util.ArrayList<>(OIDC_PUBLIC_PATHS);
-        combined.addAll(List.of(
-                "POST:/api/auth/login",
-                "POST:/api/accounts/signup",
-                "POST:/api/auth/refresh",
-                "GET:/api/auth/oauth/authorize",
-                "POST:/api/auth/oauth/callback"
-        ));
+        combined.addAll(PRODUCTION_PUBLIC_PATHS);
         RouteConfig config = routeConfigWith(combined);
 
-        assertThat(config.isPublicRoute(HttpMethod.POST, "/api/auth/login")).isTrue();
         assertThat(config.isPublicRoute(HttpMethod.POST, "/api/accounts/signup")).isTrue();
         assertThat(config.isPublicRoute(HttpMethod.POST, "/api/auth/refresh")).isTrue();
-        assertThat(config.isPublicRoute(HttpMethod.GET, "/api/auth/oauth/authorize")).isTrue();
-        assertThat(config.isPublicRoute(HttpMethod.POST, "/api/auth/oauth/callback")).isTrue();
         // OIDC paths also present
         assertThat(config.isPublicRoute(HttpMethod.GET, "/.well-known/openid-configuration")).isTrue();
         assertThat(config.isPublicRoute(HttpMethod.POST, "/oauth2/token")).isTrue();

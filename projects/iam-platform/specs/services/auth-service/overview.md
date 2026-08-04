@@ -9,7 +9,9 @@ Identity & Access Management에서 "로그인이 성공했는가?"에 대한 유
 ## Callers
 
 - **gateway-service** — JWKS 페치 (내부 HTTP)
-- **외부 사용자** (gateway 경유) — `POST /api/auth/login`, `POST /api/auth/logout`, `POST /api/auth/refresh`
+- **외부 사용자** (gateway 경유) — `GET /oauth2/authorize` · `POST /oauth2/token` (표준 OIDC),
+  `POST /api/auth/logout`, `POST /api/auth/refresh`
+  (`POST /api/auth/login` 은 **TASK-BE-398 로 제거됨** — ADR-001 D2-b sunset 2026-08-01)
 - **admin-service** (내부 HTTP) — 강제 로그아웃, refresh token 강제 revoke
 
 ## Callees

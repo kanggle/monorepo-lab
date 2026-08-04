@@ -42,7 +42,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *   <li>authorization_code flow → refresh_token issued → revoke refresh → introspect → active=false.</li>
  *   <li>introspect with invalid/unknown token → active=false (not an error per RFC 7662 § 2.2).</li>
  *   <li>revoke with wrong client credentials → 401.</li>
- *   <li>regression: POST /api/auth/login still returns deprecation headers.</li>
+ *   <li>regression: the retired POST /api/auth/login emits no Deprecation/Sunset headers
+ *       and issues no token (TASK-BE-398).</li>
  * </ol>
  *
  * <p>TASK-BE-251 Phase 2c.
@@ -323,13 +324,13 @@ class OAuth2RevokeIntrospectIntegrationTest extends AbstractIntegrationTest {
     }
 
     // -----------------------------------------------------------------------
-    // 7. Regression: POST /api/auth/login still works + returns deprecation headers
+    // 7. TASK-BE-398: the retired POST /api/auth/login issues nothing and signals nothing
     // -----------------------------------------------------------------------
 
     @Test
     @Order(7)
-    @DisplayName("regression: POST /api/auth/login reachable + returns Deprecation + Sunset headers")
-    void regression_legacyLoginReachableWithDeprecationHeaders() throws Exception {
+    @DisplayName("TASK-BE-398: POST /api/auth/login 은 토큰도 Deprecation/Sunset 헤더도 내지 않는다")
+    void legacyLoginIsSunsetWithoutDeprecationHeaders() throws Exception {
         MvcResult result = mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -339,25 +340,16 @@ class OAuth2RevokeIntrospectIntegrationTest extends AbstractIntegrationTest {
 
         int status = result.getResponse().getStatus();
         assertThat(status)
-                .as("Legacy /api/auth/login must return 4xx (not 404 or 5xx). Got " + status)
-                .isBetween(400, 499);
-        assertThat(status)
-                .as("404 means route missing — SAS must not have captured /api/auth/login")
-                .isNotEqualTo(404);
+                .as("the retired /api/auth/login must never return 2xx. Got " + status)
+                .isGreaterThanOrEqualTo(400);
+        assertThat(result.getResponse().getContentAsString())
+                .as("no access token may be issued by the retired endpoint")
+                .doesNotContain("accessToken");
 
-        // Phase 2c: verify deprecation response headers (RFC 8594 + RFC 9745)
-        String deprecationHeader = result.getResponse().getHeader("Deprecation");
-        String sunsetHeader = result.getResponse().getHeader("Sunset");
-
-        assertThat(deprecationHeader)
-                .as("LoginController must emit Deprecation header (RFC 8594)")
-                .isEqualTo("true");
-        assertThat(sunsetHeader)
-                .as("LoginController must emit Sunset header (RFC 9745)")
-                .isNotBlank();
-        assertThat(sunsetHeader)
-                .as("Sunset date must reference 2026-08-01 (ADR-001 D2-b)")
-                .contains("2026");
+        // The DeprecatedApiHeaderFilter was removed together with the endpoint — a
+        // lingering RFC 8594 / RFC 9745 signal would mean the removal was half-done.
+        assertThat(result.getResponse().getHeader("Deprecation")).isNull();
+        assertThat(result.getResponse().getHeader("Sunset")).isNull();
     }
 
     // -----------------------------------------------------------------------

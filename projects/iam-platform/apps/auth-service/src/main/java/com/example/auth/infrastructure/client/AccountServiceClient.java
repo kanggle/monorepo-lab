@@ -288,7 +288,7 @@ public class AccountServiceClient implements AccountServicePort {
             throw new AccountServiceUnavailableException("Account service social-signup failed", e);
         } catch (RuntimeException e) {
             // TASK-BE-273 Phase 1 diagnostic: surface root cause + nested cause chain.
-            // This catch block is the source of the OAuthLoginIntegrationTest 503 on CI
+            // This catch block was the source of the legacy OAuth-callback IT 503 on CI
             // Linux (Status expected:<200> but was:<503>). Logging the cause type +
             // message + full stack lets us decide between Phase 2 option B (network
             // isolation) and option C (in-process fake controller).

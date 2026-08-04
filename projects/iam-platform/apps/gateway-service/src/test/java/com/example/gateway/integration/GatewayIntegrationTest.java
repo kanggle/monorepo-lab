@@ -102,8 +102,11 @@ class GatewayIntegrationTest {
                         .withHeader("Content-Type", "application/json")
                         .withBody(jwksResponse)));
 
-        // Setup downstream auth-service login endpoint
-        authServiceMock.stubFor(post(urlEqualTo("/api/auth/login"))
+        // Setup downstream auth-service refresh endpoint. TASK-BE-398 retired
+        // POST /api/auth/login (ADR-001 D2-b sunset) and removed it from
+        // gateway.public-paths; /api/auth/refresh is the public auth-service route
+        // these pass-through / request-id assertions now exercise.
+        authServiceMock.stubFor(post(urlEqualTo("/api/auth/refresh"))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
@@ -194,15 +197,27 @@ class GatewayIntegrationTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("공개 경로 /api/auth/login 인증 없이 다운스트림 전달")
-    void publicRoute_login_forwardsToDownstream() {
-        webTestClient.post().uri("/api/auth/login")
+    @DisplayName("공개 경로 /api/auth/refresh 인증 없이 다운스트림 전달")
+    void publicRoute_refresh_forwardsToDownstream() {
+        webTestClient.post().uri("/api/auth/refresh")
                 .header("Content-Type", "application/json")
-                .bodyValue("{\"email\":\"test@example.com\",\"password\":\"password\"}")
+                .bodyValue("{\"refreshToken\":\"mock-refresh\"}")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
                 .jsonPath("$.accessToken").isEqualTo("mock-token");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-398 — 일몰된 /api/auth/login 은 더 이상 public 이 아니다 (인증 요구 → 401)")
+    void sunsetLegacyLoginRoute_isNoLongerPublic() {
+        webTestClient.post().uri("/api/auth/login")
+                .header("Content-Type", "application/json")
+                .bodyValue("{\"email\":\"test@example.com\",\"password\":\"password\"}")
+                .exchange()
+                .expectStatus().isUnauthorized()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("TOKEN_INVALID");
     }
 
     @Test
@@ -303,9 +318,9 @@ class GatewayIntegrationTest {
     @Test
     @DisplayName("X-Request-ID가 없으면 자동 생성되어 전달됨")
     void requestId_generated_whenMissing() {
-        webTestClient.post().uri("/api/auth/login")
+        webTestClient.post().uri("/api/auth/refresh")
                 .header("Content-Type", "application/json")
-                .bodyValue("{\"email\":\"test@example.com\",\"password\":\"password\"}")
+                .bodyValue("{\"refreshToken\":\"mock-refresh\"}")
                 .exchange()
                 .expectStatus().isOk()
                 .expectHeader().exists("X-Request-ID");
@@ -316,10 +331,10 @@ class GatewayIntegrationTest {
     void requestId_propagated_whenPresent() {
         String customRequestId = "custom-request-id-12345";
 
-        webTestClient.post().uri("/api/auth/login")
+        webTestClient.post().uri("/api/auth/refresh")
                 .header("Content-Type", "application/json")
                 .header("X-Request-ID", customRequestId)
-                .bodyValue("{\"email\":\"test@example.com\",\"password\":\"password\"}")
+                .bodyValue("{\"refreshToken\":\"mock-refresh\"}")
                 .exchange()
                 .expectStatus().isOk()
                 .expectHeader().valueEquals("X-Request-ID", customRequestId);
@@ -464,7 +479,10 @@ class GatewayIntegrationTest {
                 .jsonPath("$.code").isEqualTo("TENANT_SCOPE_DENIED");
     }
 
-    private static final String EXPECTED_ISSUER = "iam";
+    // TASK-BE-398: the legacy custom-JWT issuer `iam` was retired with POST /api/auth/login
+    // and dropped from gateway.jwt.allowed-issuers, so these tests mint SAS-issuer tokens —
+    // the same value application.yml defaults to (OIDC_ISSUER_URL, default http://localhost:8081).
+    private static final String EXPECTED_ISSUER = "http://localhost:8081";
 
     private String createValidToken(String accountId, String tenantId) {
         return Jwts.builder()

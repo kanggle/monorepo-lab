@@ -8,9 +8,9 @@
 
 | Service | Role |
 |---|---|
-| auth-service | OAuth 인증 흐름 소유. Authorization URL 생성, authorization code ↔ token 교환, id_token 검증, JWT 발급 |
+| auth-service | OAuth 인증 흐름 소유. Authorization URL 생성, authorization code ↔ token 교환, id_token 검증, SAS 세션 확립 |
 | account-service | 소셜 로그인 시 계정 자동 생성 / 기존 계정 연결 (내부 HTTP) |
-| gateway-service | `/api/auth/oauth/**` 라우팅 |
+| gateway-service | `/oauth2/**` 라우팅 (레거시 `/api/auth/oauth/**` 는 TASK-BE-398 로 제거) |
 | security-service | 로그인 이벤트 소비, 비정상 탐지 (기존과 동일) |
 
 ## SAS Browser Session Flow (TASK-BE-396)
@@ -67,18 +67,27 @@ client 의 `ClientSettings` tenant 설정을 추출(`SavedRequestTenantResolver`
 
 ## Design Decisions
 
-> ⚠️ **DEPRECATED (legacy / standalone)** — 아래 `### BFF 패턴` 이하가 기술하는
-> 커스텀-JWT JSON 종결 플로우(`POST /api/auth/oauth/callback` 가 `{ accessToken,
-> refreshToken, ... }` 반환)는 **레거시**다. SAS issuer 를 신뢰하는 표준 OIDC consumer
-> (ecommerce gateway 등, ADR-MONO-027)는 이 커스텀 JWT 를 거부한다. 신규 통합은 위
-> **SAS Browser Session Flow** 를 사용해야 한다. 레거시 경로는 standalone 소비자를 위해
-> deprecation window 동안 보존되며, `POST /api/auth/login`(`LoginController`)과 함께
-> **2026-08-01 일몰** 예정이다(ADR-006). `social_identities` upsert / auto-link /
-> auto-create / state CSRF / born-unified mint 등 계정해소 자산은 두 플로우가 공유한다.
+> **레거시 커스텀-JWT JSON 플로우는 2026-08-01 제거되었다 (TASK-BE-398).**
+>
+> `GET /api/auth/oauth/authorize` + `POST /api/auth/oauth/callback`(응답이
+> `{ accessToken, refreshToken, ... }` 커스텀 JWT) 은 ADR-006 이 예고한 대로
+> `POST /api/auth/login` 과 함께 일몰되었다. 제거 사유는 그대로다 — SAS issuer 를 신뢰하는
+> 표준 OIDC consumer(ecommerce gateway 등, ADR-MONO-027)는 커스텀 JWT 를 거부하므로,
+> 소셜 플로우만 커스텀-JWT 로 남기는 것은 방향에 역행한다.
+>
+> **유일한 소셜 로그인 경로는 위 [SAS Browser Session Flow](#sas-browser-session-flow-task-be-396) 다.**
+>
+> 아래 설계 결정(BFF 서버사이드 교환 / provider token 비저장 / 계정 연결 전략 / state CSRF)은
+> **제거된 것이 아니라 브라우저 플로우가 그대로 물려받은 것**이다 — 두 플로우가 공유하던
+> 계정해소 자산(`social_identities` upsert · auto-link · auto-create · born-unified mint ·
+> Redis state)은 전부 보존된다. 제거된 것은 그 뒤에 붙어 있던 **커스텀 JWT 발급 꼬리**뿐이다
+> (`OAuthLoginUseCase.callback()` + `OAuthLoginTransactionalStep`).
 
 ### BFF 패턴 (Server-Side Token Exchange)
 
-authorization code 교환은 **auth-service가 서버 사이드에서 수행**한다. 클라이언트(브라우저/앱)는 authorization code를 auth-service에 전달하고, auth-service가 provider의 token endpoint에 직접 요청하여 id_token을 획득한다. client_secret이 프론트엔드에 노출되지 않는다.
+authorization code 교환은 **auth-service가 서버 사이드에서 수행**한다. 브라우저는 provider
+콜백을 auth-service 의 `/login/oauth/{provider}/callback` 으로 받고, auth-service가 provider의
+token endpoint에 직접 요청하여 id_token을 획득한다. client_secret이 프론트엔드에 노출되지 않는다.
 
 ### Provider Token 비저장 원칙
 
@@ -95,47 +104,37 @@ provider로부터 받는 access_token, refresh_token은 **저장하지 않는다
 
 ### CSRF 방어 (state 파라미터)
 
-- auth-service가 `GET /api/auth/oauth/authorize` 시 cryptographic random `state` 생성 → Redis에 TTL 10분 저장
-- callback 시 `state` 검증 후 Redis에서 삭제 (one-time use)
-- state 불일치 또는 만료 시 `INVALID_STATE` 에러
+- auth-service가 `GET /login/oauth/{provider}` 시 cryptographic random `state` 생성 → Redis에 TTL 10분 저장 (`OAuthLoginUseCase.authorize`)
+- callback 시 `state` 검증 후 Redis에서 삭제 (one-time use). state 는 발급 시점의 provider 에 **바인딩**되며 다른 provider 의 콜백에서는 소비되지 않는다 (TASK-BE-521)
+- state 불일치 또는 만료 시 `InvalidOAuthStateException` → `/login?error=invalid_state`
 
 ## User Flows
 
 ### 소셜 로그인 (신규 사용자)
 
-1. 클라이언트가 `GET /api/auth/oauth/authorize?provider=google&redirectUri=...` 호출
-2. auth-service가 state 생성 → Redis 저장 → provider의 authorization URL + state 반환
-3. 클라이언트가 반환된 URL로 리다이렉트 → 사용자가 provider에서 동의
-4. provider가 authorization code + state를 redirectUri로 전달
-5. 클라이언트가 `POST /api/auth/oauth/callback` 에 `{ provider, code, state, redirectUri }` 전송
-6. auth-service가:
-   a. state 검증 (Redis 조회 + 삭제)
+1. consumer 가 IAM `GET /oauth2/authorize?client_id=...` 로 진입 → 미인증 → `/login` redirect (원 요청 saved)
+2. 사용자가 `/login` 에서 provider 버튼 클릭 → `GET /login/oauth/{provider}`
+3. auth-service가 state 생성 → Redis 저장 → provider의 authorization URL로 redirect
+4. 사용자가 provider에서 동의 → provider가 authorization code + state를 `GET /login/oauth/{provider}/callback` 으로 전달
+5. auth-service가:
+   a. state 검증 (Redis GETDEL + provider 바인딩 확인)
    b. provider token endpoint에 authorization code 교환 (server-side)
    c. id_token 파싱 → `{ providerUserId, email, displayName }` 추출
    d. `social_identities` 테이블에서 `(provider, provider_user_id)` 조회
    e. 미존재 → account-service `/internal/accounts/social-signup` 호출 (계정 자동 생성)
-   f. `social_identities` row 생성
-   g. device session 생성 (기존 로그인과 동일)
-   h. JWT access/refresh token pair 발급
-   i. outbox: `auth.login.succeeded` 이벤트 (loginMethod: `OAUTH_GOOGLE`)
-7. 응답: `{ accessToken, refreshToken, expiresIn, tokenType, isNewAccount: true }`
+   f. `SocialIdentityPersistStep` — `social_identities` row upsert + 계정 상태 검사
+   g. **SAS 세션 확립** (JSESSIONID `SecurityContext`; session id 회전)
+6. saved `/oauth2/authorize` 재개 → SAS `authorization_code` → **표준 OIDC 토큰** 발급
+   (`POST /oauth2/token`). 커스텀 JWT · device session · refresh row · `auth.login.*` 이벤트는
+   이 경로에서 발생하지 않는다 — 그것들은 제거된 레거시 JSON 플로우의 꼬리였다.
 
 ### 소셜 로그인 (기존 사용자, 이미 연결)
 
-1~6.d까지 동일
-6. e. `social_identities`에 매칭 → 해당 `account_id`로 계정 상태 확인
-6. f. `last_used_at` 갱신
-6. g~i. 동일 (device session + JWT + 이벤트)
-7. 응답: `{ ..., isNewAccount: false }`
+1~5.d까지 동일. `social_identities` 매칭 → 해당 `account_id`로 계정 상태 확인 → `last_used_at` 갱신 → 5.g 이후 동일.
 
 ### 소셜 로그인 (기존 이메일 계정, 자동 연결)
 
-1~6.d까지 동일
-6. e. `social_identities` 미존재 → account-service에 social-signup 요청
-6. f. account-service가 이메일 일치 기존 계정 발견 → 200 + 기존 `accountId` 반환
-6. g. `social_identities` row 생성 (기존 accountId에 연결)
-6. h~j. 동일
-7. 응답: `{ ..., isNewAccount: false }`
+1~5.d까지 동일. `social_identities` 미존재 → account-service social-signup → 이메일 일치 기존 계정 발견 시 기존 `accountId` 반환 → `social_identities` row 를 그 계정에 연결 → 5.f 이후 동일.
 
 ### Microsoft 특이 사항
 
@@ -151,8 +150,8 @@ Microsoft Identity Platform (Azure AD v2.0)은 OpenID Connect 표준을 따르�
 - 지원 provider: **Google**, **Kakao**, **Microsoft**, **Naver** (TASK-BE-397; 추가 provider는 `OAuthClient` 인터페이스 구현으로 확장)
 - Naver는 id_token 미발급(Kakao와 동일 비-OIDC) → user-info API(`response` 래퍼)의 `id`/`email`/`name` 사용. `resultcode != "00"` → `PROVIDER_ERROR`
 - provider id_token의 `email` 필드가 없으면 로그인 거부 (이메일 필수)
-- 계정 상태가 ACTIVE가 아니면 소셜 로그인도 거부 (LOCKED → 403, DORMANT → 403, DELETED → 403)
-- 소셜 로그인 성공 시 발급하는 JWT는 이메일·패스워드 로그인과 **동일 형식·TTL**
+- 계정 상태가 ACTIVE가 아니면 소셜 로그인도 거부 (LOCKED / DORMANT / DELETED → `/login?error=account_unavailable`)
+- 소셜 로그인 성공 시 발급하는 토큰은 폼 로그인과 동일한 **SAS 표준 OIDC 토큰**이다 (TASK-BE-398 이전에는 커스텀 JWT 였다)
 - 하나의 계정에 여러 provider 연결 가능 (Google + Kakao 동시 사용)
 - 하나의 provider_user_id는 하나의 계정에만 연결 (unique constraint)
 - state TTL: **10분** (Redis `oauth:state:{state}`)
@@ -161,10 +160,14 @@ Microsoft Identity Platform (Azure AD v2.0)은 OpenID Connect 표준을 따르�
 
 - provider에서 이메일 미제공 (Kakao 이메일 미동의) → 422 `EMAIL_REQUIRED`
 - 동일 provider_user_id로 다른 계정에 이미 연결 → 로그인 시 기존 연결 계정으로 로그인 (새 연결 시도 없음)
-- provider token endpoint 장애 → 502 `PROVIDER_ERROR`
-- state 만료 (10분 초과) → 401 `INVALID_STATE`
-- 동시 callback 요청 (같은 state) → 첫 요청만 처리, 두 번째는 `INVALID_STATE` (Redis 삭제로 방어)
-- social-signup 시 account-service 장애 → 503 (fail-closed)
+- provider에서 이메일 미제공 시 브라우저 플로우는 `/login?error=email_required` 로 표면화한다
+- provider token endpoint 장애 → `OAuthProviderException` → `/login?error=provider_error`
+- provider 가 authorization code 자체를 거절(4xx `invalid_grant`) → `OAuthCodeInvalidException`
+  (어댑터가 장애와 구별해 분류 — TASK-MONO-350). 브라우저 플로우에서는 상위 타입과 같은
+  `/login?error=provider_error` 로 표면화된다
+- state 만료 (10분 초과) → `/login?error=invalid_state`
+- 동시 callback 요청 (같은 state) → 첫 요청만 처리, 두 번째는 `invalid_state` (Redis GETDEL 로 방어)
+- social-signup 시 account-service 장애 → fail-closed (토큰 미발급)
 
 ## Security Considerations
 
@@ -175,6 +178,9 @@ Microsoft Identity Platform (Azure AD v2.0)은 OpenID Connect 표준을 따르�
 
 ## Related Contracts
 
-- HTTP: [auth-api.md](../contracts/http/auth-api.md) `GET /api/auth/oauth/authorize`, `POST /api/auth/oauth/callback`
+- HTTP: [auth-api.md](../contracts/http/auth-api.md) — `GET /oauth2/authorize`, `POST /oauth2/token`
+  (레거시 `GET /api/auth/oauth/authorize` · `POST /api/auth/oauth/callback` 은 TASK-BE-398 제거 기록으로 남아 있다)
 - Internal: [auth-to-account-social.md](../contracts/http/internal/auth-to-account-social.md)
-- Events: [auth-events.md](../contracts/events/auth-events.md) `auth.login.succeeded` (loginMethod 필드 추가)
+- Events: [auth-events.md](../contracts/events/auth-events.md) `auth.login.succeeded` (loginMethod 필드).
+  **주의**: SAS 브라우저 소셜 플로우는 이 이벤트를 발행하지 않는다 — 발행하던 것은 제거된
+  레거시 커스텀-JWT 꼬리(`OAuthLoginTransactionalStep`)였다.

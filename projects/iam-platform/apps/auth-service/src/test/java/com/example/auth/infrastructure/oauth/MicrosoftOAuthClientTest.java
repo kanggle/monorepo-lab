@@ -1,5 +1,6 @@
 package com.example.auth.infrastructure.oauth;
 
+import com.example.auth.application.exception.OAuthCodeInvalidException;
 import com.example.auth.application.exception.OAuthProviderException;
 import com.example.auth.domain.oauth.OAuthProvider;
 import com.example.auth.domain.oauth.OAuthUserInfo;
@@ -140,14 +141,38 @@ class MicrosoftOAuthClientTest {
     }
 
     @Test
-    @DisplayName("token endpoint 5xx → OAuthProviderException")
+    @DisplayName("token endpoint 5xx → OAuthProviderException (진짜 장애는 장애로 남는다)")
     void tokenEndpoint5xx() {
         wireMockServer.stubFor(post(urlEqualTo(TOKEN_PATH))
                 .willReturn(aResponse().withStatus(500)));
 
         assertThatThrownBy(() -> client.exchangeCodeForUserInfo("auth-code", REDIRECT_URI))
                 .isInstanceOf(OAuthProviderException.class)
+                .isNotInstanceOf(OAuthCodeInvalidException.class)
                 .hasMessageContaining("Microsoft OAuth provider error");
+    }
+
+    /**
+     * TASK-MONO-350 classification, asserted at the adapter — the layer that actually
+     * makes the call. A provider {@code 400 invalid_grant} means the authorization code
+     * was expired / already redeemed / forged: a caller fault ({@code 401 INVALID_CODE}),
+     * not an upstream outage ({@code 502 PROVIDER_ERROR}).
+     *
+     * <p>Read together with {@link #tokenEndpoint5xx}: same endpoint, same adapter, the
+     * only difference is the provider's status class — and the two must diverge instead
+     * of collapsing into one. TASK-BE-398 moved this pair down here from the removed
+     * legacy-callback integration test, which was the only place it was proven.
+     */
+    @Test
+    @DisplayName("token endpoint 4xx (invalid_grant) → OAuthCodeInvalidException (사용자 과실, 장애 아님)")
+    void tokenEndpoint4xxIsCodeInvalidNotOutage() {
+        wireMockServer.stubFor(post(urlEqualTo(TOKEN_PATH))
+                .willReturn(aResponse().withStatus(400)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"error\":\"invalid_grant\",\"error_description\":\"code expired\"}")));
+
+        assertThatThrownBy(() -> client.exchangeCodeForUserInfo("stale-auth-code", REDIRECT_URI))
+                .isInstanceOf(OAuthCodeInvalidException.class);
     }
 
     @Test

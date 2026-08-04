@@ -50,6 +50,12 @@ public class RouteConfig {
      * Returns null if no specific scope applies (only global scope).
      */
     public String resolveRateLimitScope(String path) {
+        // TASK-BE-398 removed POST /api/auth/login (ADR-001 D2-b sunset), so this mapping
+        // no longer matches a live route. It is kept deliberately rather than deleted: the
+        // "login" bucket is the edge's only dedicated login-rate-limit scope, which
+        // platform/service-types/identity-platform.md § Brute-Force Defenses requires, and
+        // re-pointing it at the SAS login entry point (/oauth2/authorize) is a behaviour
+        // change with its own blast radius — tracked as BE-398 follow-up, not folded in here.
         if (path.startsWith("/api/auth/login")) {
             return "login";
         }

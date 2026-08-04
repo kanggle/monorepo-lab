@@ -34,11 +34,17 @@ import java.util.Optional;
  * <p>This is intentionally a thin path that does <b>not</b> reuse the full
  * {@link com.example.auth.application.LoginUseCase}. The full use case also
  * applies rate-limiting, publishes login-attempt/success/failure events, and
- * registers a device session — side effects that the JSON
- * {@code POST /api/auth/login} endpoint owns and that are out of scope for
- * the v1 form-login surface. Future enhancement work can promote the
- * credential-verify portion of {@link com.example.auth.application.LoginUseCase}
- * to a shared service and call it from both paths.
+ * registers a device session — side effects that the (now removed) JSON
+ * {@code POST /api/auth/login} endpoint owned and that are out of scope for
+ * the v1 form-login surface.
+ *
+ * <p><b>TASK-BE-398 note.</b> With that JSON endpoint retired at its ADR-001 D2-b
+ * sunset, this provider is the only remaining caller-facing password-verification
+ * path, and {@link com.example.auth.application.LoginUseCase} no longer has an HTTP
+ * entry point. Promoting the use case's rate-limiting / login-event / device-session
+ * side effects onto this path (or folding the two together) is tracked as follow-up
+ * work — see the TASK-BE-398 removal record in
+ * {@code specs/contracts/http/auth-api.md}.
  *
  * <p><b>Tenant resolution (TASK-BE-507, D1-a).</b> The lookup is scoped to the tenant of the
  * OIDC client the user is logging in through ({@link SavedRequestTenantResolver}, the same

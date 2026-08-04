@@ -21,9 +21,10 @@ import java.util.List;
  *
  * <p>Before this filter chain, an unauthenticated browser GET on
  * {@code /oauth2/authorize} was redirected by the SAS configurer's
- * {@code LoginUrlAuthenticationEntryPoint} to {@code /api/auth/login} — but
- * {@link com.example.auth.presentation.LoginController} is a JSON-only POST
- * endpoint, so the redirect was a browser dead-end. As of TASK-PC-FE-019's
+ * {@code LoginUrlAuthenticationEntryPoint} to the legacy {@code /api/auth/login} —
+ * a JSON-only POST endpoint, so the redirect was a browser dead-end. (That endpoint
+ * has since been removed entirely by TASK-BE-398 at its ADR-001 D2-b sunset;
+ * this chain is now the only interactive login surface.) As of TASK-PC-FE-019's
  * Playwright harness standup this gap was the architectural blocker for true
  * OIDC PKCE end-to-end browser testing (fixture had to fall back to a
  * {@code client_credentials} backdoor).

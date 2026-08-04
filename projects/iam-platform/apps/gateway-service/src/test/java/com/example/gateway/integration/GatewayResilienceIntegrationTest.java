@@ -133,10 +133,6 @@ class GatewayResilienceIntegrationTest {
                 .willReturn(aResponse()
                         .withHeader("Content-Type", "application/json")
                         .withBody(buildJwksResponse("res-kid-1", (RSAPublicKey) keyPairKid1.getPublic()))));
-        authServiceMock.stubFor(post(urlEqualTo("/api/auth/login"))
-                .willReturn(aResponse().withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"accessToken\":\"t\"}")));
         accountServiceMock.resetMappings();
         accountServiceMock.stubFor(get(urlEqualTo("/api/accounts/me"))
                 .willReturn(aResponse()
@@ -225,7 +221,7 @@ class GatewayResilienceIntegrationTest {
         String token = Jwts.builder()
                 .header().keyId("res-kid-1").and()
                 .subject(accountId)
-                .issuer("iam")
+                .issuer(EXPECTED_ISSUER)
                 .claim("tenant_id", "fan-platform")
                 .issuedAt(Date.from(iat))
                 .expiration(Date.from(Instant.now().plusSeconds(3600)))
@@ -257,11 +253,15 @@ class GatewayResilienceIntegrationTest {
                 .expectStatus().isOk();
     }
 
+    // TASK-BE-398: the legacy custom-JWT issuer `iam` was retired and dropped from
+    // gateway.jwt.allowed-issuers; tokens are now minted with the SAS issuer.
+    private static final String EXPECTED_ISSUER = "http://localhost:8081";
+
     private String createToken(String kid, KeyPair kp, String accountId) {
         return Jwts.builder()
                 .header().keyId(kid).and()
                 .subject(accountId)
-                .issuer("iam")
+                .issuer(EXPECTED_ISSUER)
                 .claim("email", "test@example.com")
                 // tenant_id required by JwtAuthenticationFilter; legacy-fallback disabled by default.
                 .claim("tenant_id", "fan-platform")

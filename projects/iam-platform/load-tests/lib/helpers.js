@@ -1,44 +1,66 @@
 import http from 'k6/http';
 import { check } from 'k6';
-import { BASE_URL, DEFAULT_HEADERS } from './config.js';
+import encoding from 'k6/encoding';
+import { BASE_URL } from './config.js';
 
 /**
- * 테스트 사용자 회원가입 후 로그인하여 토큰 반환
+ * TASK-BE-398 — the legacy custom-JWT `POST /api/auth/login` (and the
+ * `POST /api/auth/oauth/**` JSON social flow) were removed at their ADR-001 D2-b
+ * sunset (2026-08-01). The former `setupTestUser()` helper signed a user up and
+ * then logged in through that endpoint; there is no scriptable password-login
+ * endpoint left — interactive login is the browser OIDC Authorization Code + PKCE
+ * flow (`/oauth2/authorize` → `/login` form → `/oauth2/token`), which k6 cannot
+ * drive meaningfully as a load scenario.
+ *
+ * The auth load scenario therefore exercises the machine-driveable OIDC surface
+ * (`client_credentials` token issuance / introspection / revocation), which is the
+ * remaining hot path at the token endpoint.
  */
-export function setupTestUser(index) {
-  const email = `loadtest-${index}-${Date.now()}@test.com`;
-  const password = 'LoadTest1234!';
-  const name = `LoadTestUser${index}`;
 
-  const signupRes = http.post(
-    `${BASE_URL}/api/auth/signup`,
-    JSON.stringify({ email, password, name }),
-    { headers: DEFAULT_HEADERS }
-  );
+/**
+ * Issues an access token via the standard OIDC token endpoint using the
+ * `client_credentials` grant.
+ *
+ * Credentials come from the environment so the script carries no secret:
+ *   -e OIDC_CLIENT_ID=...  -e OIDC_CLIENT_SECRET=...
+ *
+ * @returns {{accessToken: string}|null} null when the grant is refused
+ */
+export function issueClientCredentialsToken(tags) {
+  const clientId = __ENV.OIDC_CLIENT_ID;
+  const clientSecret = __ENV.OIDC_CLIENT_SECRET;
+  const scope = __ENV.OIDC_SCOPE || 'account.read';
 
-  if (signupRes.status !== 201) {
-    console.error(`Signup failed for ${email}: ${signupRes.status} ${signupRes.body}`);
+  if (!clientId || !clientSecret) {
+    console.error(
+      'OIDC_CLIENT_ID / OIDC_CLIENT_SECRET must be set (k6 run -e OIDC_CLIENT_ID=... -e OIDC_CLIENT_SECRET=...)'
+    );
     return null;
   }
 
-  const loginRes = http.post(
-    `${BASE_URL}/api/auth/login`,
-    JSON.stringify({ email, password }),
-    { headers: DEFAULT_HEADERS }
+  const res = http.post(
+    `${BASE_URL}/oauth2/token`,
+    { grant_type: 'client_credentials', scope },
+    {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: `Basic ${encodeBasic(clientId, clientSecret)}`,
+      },
+      tags: tags || { endpoint: 'token' },
+    }
   );
 
-  if (loginRes.status !== 200) {
-    console.error(`Login failed for ${email}: ${loginRes.status} ${loginRes.body}`);
+  if (res.status !== 200) {
+    console.error(`client_credentials token request failed: ${res.status} ${res.body}`);
     return null;
   }
 
-  const body = JSON.parse(loginRes.body);
-  return {
-    email,
-    password,
-    accessToken: body.accessToken,
-    refreshToken: body.refreshToken,
-  };
+  return { accessToken: JSON.parse(res.body).access_token };
+}
+
+/** Basic-auth encoding for the token endpoint's client authentication. */
+function encodeBasic(clientId, clientSecret) {
+  return encoding.b64encode(`${clientId}:${clientSecret}`);
 }
 
 /**

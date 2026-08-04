@@ -74,7 +74,10 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
 
-- `TASK-BE-398-legacy-custom-jwt-flow-sunset-removal.md` — **⏳ 2026-08-01 게이트 대기** — 레거시 커스텀-JWT 발급 경로(`POST /api/auth/login`) 일몰 제거. 수용 측 형제 = 루트 `TASK-MONO-367`(게이트웨이 7개 + servlet allowlist). **순서 규율: 발행 측(이 티켓)이 먼저, 수용 측이 나중** — 반대 순서면 살아있는 레거시 토큰이 즉사한다.
+(empty)
+
+> `TASK-BE-398` 은 2026-08-04 날짜 게이트 통과 후 착수 — 아래 `## review` 참조.
+
 > 2026-07-20 (`TASK-MONO-451`): BE-508·509·510·511·512·513 의 행이 이 `## ready` 섹션에 남아 있었다 — 본문은 `**DONE**` 에 *"아래 ## done 참조"* 였고 파일도 여섯 개 전부 `done/` 에 있었다. **본문이 done 이어도 섹션이 ready 면 ready 행이다**(읽는 사람은 섹션으로 큐를 고른다). 여섯 행 모두 `## done` 에 실체가 있으므로 제거했다. 같은 커밋에서 BE-398 이 `ready/` 에 있는데 행이 없어(노트로만 언급) 행을 추가했다.
 
 **→ IAM 라이브 스윕 결함 6건 전량 종결** (BE-508·509·510·511·512 + monorepo `TASK-MONO-415`). 부수 산출: `TASK-MONO-415` 착수 재측정이 ecommerce 갈라진 핸들러 복사본을 발견 → 후속 `TASK-BE-504`(ecommerce ready/) 생성.
@@ -83,7 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 > 결함 #3(레거시 `POST /api/auth/login` 이 발급한 토큰을 하류가 401 거부)은 **신규 티켓 없음** — `TASK-BE-398`(레거시 커스텀-JWT 일몰 제거)이 그 경로를 통째로 제거하므로 그쪽에서 처리. OIDC(authorization_code+PKCE) 경로는 스윕에서 정상 확인.
 
-> `tasks/ready/TASK-BE-398` 은 날짜 게이트 대기.
+> `TASK-BE-398` 은 2026-08-04 날짜 게이트(2026-08-01) 통과 후 착수 — 발행 측 제거 완료, 현재 `review/`. 수용 측 형제 = 루트 `TASK-MONO-367`(게이트웨이 7개 + servlet allowlist). **순서 규율: 발행 측(BE-398)이 먼저, 수용 측이 나중** — 반대 순서면 살아있는 레거시 토큰이 즉사한다. iam 게이트웨이의 `,iam` 은 BE-398 이 자기 몫으로 이미 제거했고, 나머지 6개 게이트웨이는 MONO-367 몫이다.
 
 > **ADR-MONO-047 org-node tenant hierarchy — § 4 실행 로드맵 전량 종결** (ACCEPTED 2026-07-10 `TASK-MONO-340` 사용자 정확형 intent → 2026-07-10 완주). step 1 **BE-490**(spec) → 2a **BE-491**(account-service, org_node 권위 + D6 seam) → 2b **BE-492**(admin-service RBAC 평면, `b6b7d4c21`) → 3 **PC-FE-237**(console 조직 계층, `9a5e4b120`) → 4 **BE-493**(D7 backfill, `2e6fab9e0`). 후속 ADR(role-level ceiling D3-B / grant-at-node D2-C / cross-owner consortium)은 본 스코프 밖. 잔여 = `TASK-PC-FE-239`(IAM 가이드에 `ORG_ADMIN` 표면 반영, platform-console 큐).
 
@@ -108,7 +111,15 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-(empty)
+- **`TASK-BE-398-legacy-custom-jwt-flow-sunset-removal.md` — 구현 완료, 리뷰 대기 (2026-08-04).** ADR-001 D2-b 90일 window 만료(2026-05-01 deprecated → 2026-08-01 removal) + ADR-006 대체 완료에 따라 **레거시 커스텀-JWT 인증 표면 제거**. 날짜 게이트 통과 확인 후 착수.
+  - **AC-0 (착수 시점 재측정, 스냅샷 미승계)** — repo-wide 4경로(`/api/auth/{login,oauth/,refresh,logout}`) 비-md 히트 81파일 전수 재분류. **(a) 정적 grep PASS** — live 외부 call-site 소비자 0: ecommerce 는 *독립 auth 스택*(경로 문자열만 동일), platform-console `/api/auth/*` 는 *console 자체 Next.js 라우트*(디렉터리 실재 확인 → OIDC 리다이렉트/rotation/RP-initiated logout), repo-root `tests/federation-hardening-e2e/fixtures/login.ts` 도 **console origin** 으로 이동, fan·scm·erp·finance 참조 0건, wms 3서비스는 레거시 발급자 **수용**(호출 아님, 타 프로젝트라 범위 밖 — 손대지 않음). **(c) 소비자 OIDC 이전 PASS.** 🔴 **(b) 라이브 게이트웨이 트래픽=0 은 이 환경에서 독립 검증 불가** — 구동 데모 스택 access-log 가 필요하므로 *확인했다고 적지 않는다*. 근거는 (1) 정적 전수 0건, (2) sunset 경과 + 90일간 `Deprecation`/`Sunset` 헤더 고지, (3) console-bff 가 게이트웨이를 우회(`TASK-MONO-347`)해 이 엣지 통과 소비자가 사실상 없음. 스택을 띄울 수 있는 리뷰어는 머지 전 access-log 확인 권장.
+  - **제거**: `LoginController` · `OAuthController` · DTO 5종(`LoginRequest/Response`·`OAuthCallbackRequest/Response`·`OAuthAuthorizeResponse`) · `OAuthLoginUseCase.callback()` · `OAuthLoginTransactionalStep` · `OAuthCallbackTxnCommand` · `OAuthLoginResult` · `DeprecatedApiHeaderFilter`(+`SecurityConfig` 등록 빈·permit 2개) · gateway `public-paths` 레거시 3항목 · **gateway `allowed-issuers` 기본값의 후행 `,iam`**(§ 선행 의존 1번, `TASK-MONO-365` 가 미리 allowlist 로 바꿔둔 덕에 엣지 무중단) · 테스트 4개(`LoginControllerSliceTest`·`OAuthControllerSliceTest`·`OAuthLoginTransactionalStepTest`·`OAuthLoginIntegrationTest`) · `tests/e2e/TenantProvisioningE2ETest`(이미 `@Disabled`).
+  - **보존 (Out of Scope 전량)**: `authorize()`/`resolveBrowserLogin()`/공유 `resolveSocialLogin()` · `SocialIdentityPersistStep` · `SocialLoginSteps` · `SocialLoginBrowserController` · `LoginPageController` · `login.html` · `OAuthClient` 4종+Factory+Properties+StateStore+`SavedRequestTenantResolver` · SAS 일체 · `social_identities` · `Password*`/`AccountSession`/`Jwks`/`InternalCredential` 컨트롤러.
+  - 🔴 **범위 판단 2건 (리뷰 확인 요망)**: ① **`RefreshController`/`LogoutController` 미제거.** AC-0 상 외부 소비자 0 이지만 — (a) 두 경로엔 deprecation 이 **고지된 적 없어** 지금 지우면 이 티켓이 지키는 90일 규율 자체를 어기는 *무고지 제거*, (b) `specs/services/auth-service/architecture.md` 가 "유지(status 미정)"로 **선언**(스펙 7층 > task 10층), (c) 본 티켓 2026-07-04 AC-0 기록도 *"별도 판단 권장"*. AC 의 *"잔존 시 별도 후속으로 분리"* 조항대로 **후속 task 분리**. 발급 경로 소멸로 두 엔드포인트는 사실상 잔존물. ② **`LoginUseCase`(+Command/Result) 존치** — In-Scope 열거에 없고 자격증명 검증·실패 카운터·`auth.login.*` 이벤트·device-session 등록을 소유. HTTP 진입점만 소멸. `CredentialAuthenticationProvider` 로의 통합/폐기는 ①과 함께 후속. **부수**: gateway `RouteConfig.resolveRateLimitScope` 의 `login` 버킷 매핑도 존치 — 엣지의 **유일한 전용 login rate-limit 스코프**이고 `platform/service-types/identity-platform.md` § Brute-Force Defenses 가 MUST 하므로, `/oauth2/authorize` 재조준은 자체 blast radius 를 갖는 동작 변경이라 접어 넣지 않음(코드에 사유 주석).
+  - **함께 갱신**: `load-tests/{scenarios/auth-load-test.js,lib/helpers.js,README.md}` — 구동 불가가 된 login→refresh→logout 루프를 스크립트 가능한 OIDC 표면(`/oauth2/token` cc → `/oauth2/introspect` → `/oauth2/revoke`)으로 재구성 / `infra/grafana/dashboards/auth-overview.json` — `uri="/api/auth/login"` p99 패널 → `/oauth2/token`(안 고치면 영구 빈 패널).
+  - **스펙/계약**: `contracts/http/auth-api.md`(레거시 2절 → **제거 기록**), `contracts/http/gateway-api.md`(취소선 + REMOVED 행), `features/oauth-social-login.md`(DEPRECATED 배너 → 제거 기록, User Flow 를 브라우저 플로우로 재작성), `features/authentication.md`, `features/consumer-integration-guide.md`, `services/auth-service/{architecture.md,overview.md}`(공존 정책 표 + 내부 구조 + Testing Expectations).
+  - **커버리지 보전(소실 0)**: `AuthIntegrationTest`(12)·`DeviceSessionIntegrationTest`(4) 는 로그인 시나리오를 HTTP 대신 **`LoginUseCase` 빈 직접 구동**으로 전환(실 MySQL/Redis/WireMock 유지) / `OAuthLoginUseCaseTest` 의 오케스트레이션 보증(HTTP-before-txn 순서·state 검증·provider 실패 전파·txn 실패 시 무재시도)을 `resolveBrowserLogin()` 기준으로 전량 이관 / **`MicrosoftOAuthClientTest` 에 4xx(`invalid_grant`)→`OAuthCodeInvalidException` 단정 신규 추가** — TASK-MONO-350 의 4xx/5xx 분류를 증명하던 유일한 곳이 삭제한 IT 였으므로 실제 분류가 일어나는 **어댑터 층**으로 내려 보존 / 레거시 회귀는 **"일몰 단정"** 으로 전환(SAS 슬라이스·IT 3곳 + gateway IT 1곳이 2xx·토큰·`Deprecation`/`Sunset` 헤더 부재 + public-path 이탈을 단정).
+  - **로컬 검증**: `auth-service:test` **623/0 failed/0 skipped** · `auth-service:integrationTest` 6클래스 **38/0/0**(`SocialLoginSasBrowserIntegrationTest` 포함 — BE-396 회귀 0) · `gateway-service:test` GREEN(`TokenValidatorUnitTest#theEdgeSurvivesTheLegacyIssuerSunset` **failures=0**) · `gateway-service:integrationTest` **35/0/0** · `auth-service:check`+`gateway-service:check`+`tests:e2e:check` BUILD SUCCESSFUL. Testcontainers 로컬은 Windows 호스트 기준 — **CI Linux 가 권위**.
 
 ## done
 

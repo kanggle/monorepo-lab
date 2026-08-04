@@ -1,7 +1,6 @@
 package com.example.auth.application;
 
 import com.example.auth.application.command.OAuthCallbackCommand;
-import com.example.auth.application.command.OAuthCallbackTxnCommand;
 import com.example.auth.application.exception.*;
 import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.application.port.OAuthClient;
@@ -11,13 +10,11 @@ import com.example.auth.application.port.OAuthProviderConfigPort;
 import com.example.auth.application.result.AccountStatusLookupResult;
 import com.example.auth.application.result.BrowserLoginResolution;
 import com.example.auth.application.result.OAuthAuthorizeResult;
-import com.example.auth.application.result.OAuthLoginResult;
 import com.example.auth.application.result.SocialSignupResult;
 import com.example.auth.domain.oauth.OAuthProvider;
 import com.example.auth.domain.oauth.OAuthUserInfo;
 import com.example.auth.domain.repository.OAuthStateStore;
 import com.example.auth.domain.repository.SocialIdentityRepository;
-import com.example.auth.domain.session.SessionContext;
 import com.example.auth.domain.social.SocialIdentity;
 import com.example.common.id.UuidV7;
 import lombok.RequiredArgsConstructor;
@@ -36,7 +33,6 @@ public class OAuthLoginUseCase {
     private final OAuthProviderConfigPort oAuthProviderConfigPort;
     private final OAuthClientProvider oAuthClientProvider;
     private final OAuthStateStore oAuthStateStore;
-    private final OAuthLoginTransactionalStep oAuthLoginTransactionalStep;
     private final AccountServicePort accountServicePort;
     private final SocialIdentityRepository socialIdentityRepository;
     // TASK-BE-396 (ADR-006 option B): the session-establishing transactional tail
@@ -67,56 +63,14 @@ public class OAuthLoginUseCase {
     }
 
     /**
-     * Processes the OAuth callback.
-     *
-     * <p>Orchestration: verifies state, performs the external provider token+userinfo
-     * exchange (HTTP), then runs the pre-txn internal HTTP calls to account-service
-     * ({@code socialSignup} on new-identity path, {@code getAccountStatus} always),
-     * and only then hands the already-fetched data to
-     * {@link OAuthLoginTransactionalStep#persistLogin} which owns the DB transaction.
-     *
-     * <p>TASK-BE-069 moved the external provider HTTP out of {@code @Transactional}.
-     * TASK-BE-072 additionally moves the account-service internal HTTP calls out of
-     * {@code @Transactional} — both external and internal HTTP previously held a
-     * Hikari connection open during network I/O, reproducing the connection-pinning
-     * pattern TASK-BE-069 intended to eliminate. This method is intentionally NOT
-     * {@code @Transactional}.
-     *
-     * <p>Compensation: if the DB transaction fails after HTTP (provider + account-service)
-     * succeeds, the user sees a login failure while the provider may have recorded an
-     * authorization and account-service may have created a new account (socialSignup is
-     * idempotent for the same email+provider, so retries are safe). The outbox rollback
-     * ensures no downstream auth events are published on txn failure. No compensating
-     * provider-side revoke is performed.
-     *
-     * <p>TOCTOU note: the identity existence check is now a non-txn DB read. The
-     * transactional step still upserts the identity, so a concurrent insert between
-     * the pre-read and the txn write cannot cause duplicate rows (unique key on
-     * {@code (provider, provider_user_id)} is enforced at the DB).
-     */
-    public OAuthLoginResult callback(OAuthCallbackCommand command) {
-        // TASK-BE-507: the legacy custom-JWT flow has no initiating OIDC client to derive a
-        // tenant from, so it passes none — account-service pins fan-platform, exactly as before.
-        ResolvedSocialLogin resolved = resolveSocialLogin(command, null);
-        SessionContext ctx = command.sessionContext();
-
-        // Hand off to the transactional bean — DB writes happen atomically here.
-        // Behavior is byte-identical to the pre-TASK-BE-396 inline body: the shared
-        // pre-resolution (state consume → validate → provider HTTP → email check →
-        // identity lookup → socialSignup-or-existing → getAccountStatus) was hoisted
-        // verbatim into resolveSocialLogin(); the JWT-issuing tail is unchanged.
-        return oAuthLoginTransactionalStep.persistLogin(new OAuthCallbackTxnCommand(
-                resolved.provider(), resolved.userInfo(), ctx,
-                resolved.accountId(), resolved.isNewAccount(), resolved.accountStatus()));
-    }
-
-    /**
      * SAS browser-flow account resolution (TASK-BE-396, ADR-006 option B).
      *
-     * <p>Reuses the EXACT same pre-resolution orchestration as {@link #callback}
-     * (state {@code consumeAtomic} → {@code exchangeCodeForUserInfo} → email
-     * validate → identity lookup → socialSignup-or-existing → {@code getAccountStatus}),
-     * then runs ONLY the social-identity upsert + account-status check via
+     * <p>Since TASK-BE-398 retired the legacy custom-JWT JSON callback, this is the
+     * ONLY social-login callback path. It runs the shared pre-resolution
+     * ({@link #resolveSocialLogin}: state {@code consumeAtomic} →
+     * {@code exchangeCodeForUserInfo} → email validate → identity lookup →
+     * socialSignup-or-existing → {@code getAccountStatus}), then runs ONLY the
+     * social-identity upsert + account-status check via
      * {@link SocialIdentityPersistStep} — it does NOT issue a custom JWT, register a
      * device session, persist a refresh token, or publish login events.
      *
@@ -147,11 +101,30 @@ public class OAuthLoginUseCase {
     }
 
     /**
-     * Shared pre-resolution extracted from {@link #callback} so both the legacy
-     * custom-JWT flow and the SAS browser flow run the IDENTICAL account-resolution
-     * sequence. This body is hoisted verbatim — see {@link #callback} for the
-     * TASK-BE-069 / TASK-BE-072 / TASK-BE-063 design rationale on the
-     * outside-transaction HTTP ordering and the empty-status semantics.
+     * Shared account pre-resolution for the social-login callback.
+     *
+     * <p>Design rationale, carried over from the (now removed) legacy custom-JWT
+     * callback this body was hoisted out of:
+     *
+     * <ul>
+     *   <li>TASK-BE-069 moved the external provider HTTP out of {@code @Transactional};
+     *       TASK-BE-072 additionally moved the account-service internal HTTP calls out.
+     *       Both previously held a Hikari connection open across network I/O. This
+     *       method is intentionally NOT {@code @Transactional} — the transactional tail
+     *       ({@link SocialIdentityPersistStep}) receives already-fetched data.</li>
+     *   <li>Compensation: if the DB transaction fails after the provider +
+     *       account-service HTTP succeeded, the user sees a login failure while the
+     *       provider may have recorded an authorization and account-service may have
+     *       created an account. {@code socialSignup} is idempotent for the same
+     *       (email, provider), so retries are safe. No provider-side revoke is
+     *       performed.</li>
+     *   <li>TOCTOU: the identity existence check is a non-txn DB read. The transactional
+     *       step still upserts the identity, and the DB unique key on
+     *       {@code (provider, provider_user_id)} prevents duplicate rows.</li>
+     *   <li>TASK-BE-063 empty-status semantics: an empty {@code accountStatus} means the
+     *       account lookup was unavailable — the status guard is skipped and the rest of
+     *       the flow proceeds.</li>
+     * </ul>
      */
     private ResolvedSocialLogin resolveSocialLogin(OAuthCallbackCommand command, String tenantId) {
         OAuthProvider provider = parseProvider(command.provider());

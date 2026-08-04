@@ -60,14 +60,15 @@ OIDC AS 깊이 증명 완성 → **2026-05-11 service-type 정정** (Identity Pl
 apps/auth-service/src/main/java/com/example/auth/
 ├── AuthApplication.java
 ├── presentation/             ← HTTP 컨트롤러, 요청/응답 DTO, 예외 처리
-│   ├── LoginController.java             ← DEPRECATED (ADR-001 D2-b, 2026-08-01 제거 목표)
-│   │                                      응답에 Deprecation + Sunset 헤더 포함 (RFC 8594, RFC 9745)
+│   │                            (LoginController + OAuthController + LoginRequest/Response +
+│   │                             OAuthCallbackRequest/Response 는 TASK-BE-398 로 제거 —
+│   │                             ADR-001 D2-b sunset 2026-08-01)
+│   ├── LoginPageController.java         ← /login HTML 폼 (SAS 브라우저 플로우, TASK-BE-309)
+│   ├── SocialLoginBrowserController.java ← /login/oauth/** (TASK-BE-396, 유일한 소셜 진입점)
 │   ├── LogoutController.java
 │   ├── RefreshController.java
 │   ├── JwksController.java              ← gateway 대상 JWKS 엔드포인트
 │   ├── dto/
-│   │   ├── LoginRequest.java
-│   │   ├── LoginResponse.java
 │   │   └── RefreshRequest.java
 │   └── exception/
 │       └── AuthExceptionHandler.java
@@ -135,9 +136,27 @@ apps/auth-service/src/main/java/com/example/auth/
 | 구분 | 엔드포인트 | 상태 | 제거 일정 |
 |---|---|---|---|
 | **표준 OIDC (SAS)** | `/oauth2/**`, `/.well-known/openid-configuration` | 활성 | — |
-| **레거시** | `POST /api/auth/login` | **DEPRECATED 2026-05-01** | 2026-08-01 |
+| **브라우저 로그인** | `GET /login`, `POST /login`, `/login/oauth/**` | 활성 (TASK-BE-309/396) | — |
+| ~~**레거시**~~ | ~~`POST /api/auth/login`~~ | **REMOVED 2026-08-01 (TASK-BE-398)** | 완료 |
+| ~~**레거시**~~ | ~~`GET/POST /api/auth/oauth/**`~~ | **REMOVED 2026-08-01 (TASK-BE-398)** | 완료 |
 | **레거시** | `POST /api/auth/refresh` | 유지 (TASK-BE-259 이후 결정) | 미정 |
 | **레거시** | `POST /api/auth/logout` | 유지 | 미정 |
+
+> **TASK-BE-398 (2026-08-01) 제거 기록.** ADR-001 D2-b 의 90일 window 만료로 커스텀-JWT
+> 로그인 표면(`LoginController` · `OAuthController` · `OAuthLoginUseCase.callback()` ·
+> `OAuthLoginTransactionalStep` · 관련 DTO · `DeprecatedApiHeaderFilter` · SecurityConfig
+> permit · gateway `public-paths` 항목 · gateway `allowed-issuers` 의 후행 `,iam`)이
+> 삭제되었다. 상세는 [auth-api.md](../../contracts/http/auth-api.md) 의 제거 기록 절.
+>
+> **`refresh`/`logout` 은 남는다** — 두 경로에는 deprecation 이 고지된 적이 없어 지금
+> 지우면 무고지 제거가 되고, 이 표가 여전히 "유지(status 미정)" 로 선언한다. 다만 발급
+> 경로가 사라져 신규 커스텀 refresh token 은 더 이상 생기지 않으므로 두 엔드포인트는
+> 사실상 잔존물이다 — 일몰 고지와 제거는 **후속 task** 로 분리한다.
+>
+> **`LoginUseCase` 도 남는다** (HTTP 진입점 없음). 자격증명 검증 · 로그인 실패 카운터 ·
+> `auth.login.*` 이벤트 · device-session 등록이 여기에 있고, 폼-로그인 경로
+> (`CredentialAuthenticationProvider`)는 그중 자격증명 검증만 재구현하고 있다. 통합 또는
+> 폐기 판단은 위 후속 task 와 함께한다.
 
 **SAS 필터 체인 우선순위**:
 - `@Order(1)` — `AuthorizationServerConfig.authorizationServerSecurityFilterChain`: `/oauth2/**`, `/.well-known/**` 전담
@@ -206,7 +225,7 @@ presentation → application → domain
 - **로그인 흐름의 tenant 컨텍스트 결정**: `LoginUseCase`는 (1) auth-service local `CredentialRepository.findByEmail(email)`로 credential 조회 + 비밀번호 검증 (credential ownership은 TASK-BE-063 이후 auth-service local), (2) account-service `AccountServiceClient.lookupTenantInfo(email, tenantId?)` (`GET /internal/accounts/tenant-info`, TASK-BE-229) 호출 — 응답은 array `[{accountId, tenantId, tenantType}]`, length 0 → `ACCOUNT_NOT_FOUND`, length 1 → 정상 토큰 발급 경로, length ≥ 2 → presentation에서 `LOGIN_TENANT_AMBIGUOUS` 400으로 변환하여 클라이언트의 명시적 tenant 선택 재요청 유도, (3) `tenant_id`·`tenant_type`을 access token claim과 `refresh_tokens.tenant_id` 컬럼에 동시에 영속, (4) 발행 이벤트(`auth.login.succeeded` 등)에도 `tenant_id` 포함. 상세 응답 형태와 status 처리는 [specs/contracts/http/internal/auth-to-account.md](../../contracts/http/internal/auth-to-account.md) 가 source of truth
 - **Refresh rotation의 tenant 무결성**: `RefreshTokenUseCase`는 제출된 refresh token의 `tenant_id`(JWT claim 또는 DB row)와 새로 발급할 token의 `tenant_id`가 일치해야 한다. 불일치 시 `TOKEN_TENANT_MISMATCH` 403 + reuse-detection과 동일 수준의 보안 이벤트 발행
 - **Force-logout(session-revoke)의 tenant confinement** (TASK-BE-468): `ForceLogoutUseCase`는 admin-service가 스탬프한 `X-Tenant-Id`(TASK-BE-467 propagation)를 받아 **credential-tenant 게이트**를 적용한다. 계정belongs-to 단일 테넌트이므로 별도 tenant-scoped revoke 쿼리 없이 `credentials.tenant_id`(unique `account_id`)로 소유 테넌트를 판정한다. 해소: 헤더 부재/공백/`'*'` → **net-zero**(계정 테넌트 전체 revoke — 기존 동작); 계정을 소유하지 않는 **구체** 테넌트(credential tenant 불일치 또는 credential 부재) → **no-op**(`revokedTokenCount=0`, DB revoke·Redis 무효화 미수행 — enumeration-safe, 타 테넌트 세션 무단절); 소유 테넌트 → 정상 revoke + Redis. **404를 던지지 않는다** — cross-tenant 라도 clean `200 count=0`(404는 admin `SessionAdminUseCase`가 downstream 4xx→503으로 오매핑해 audit FAILURE 처리하므로 회피). 응답 shape(`accountId`, `revokedTokenCount`, `revokedAt`) 불변. 상세: [specs/contracts/http/internal/admin-to-auth.md](../../contracts/http/internal/admin-to-auth.md)
-- **모든 HTTP는 `@Transactional` 밖에서 수행** (TASK-BE-069 + TASK-BE-072): OAuth 콜백처럼 외부 provider HTTP, 내부 account-service HTTP, DB 쓰기가 섞인 경로는 use-case(`OAuthLoginUseCase#callback`)가 먼저 (1) provider token+userinfo exchange, (2) 로컬 `SocialIdentityJpaRepository` 비-트랜잭션 조회, (3) `accountServicePort.socialSignup`(신규 identity 경로에만), (4) `accountServicePort.getAccountStatus`를 모두 수행한 뒤, 결과를 extended `OAuthCallbackTxnCommand` (accountId, isNewAccount, accountStatus)로 `@Transactional` 빈(`OAuthLoginTransactionalStep#persistLogin`)에 전달한다. 트랜잭션 내부에는 **어떠한 HTTP 호출도 없다** — Hikari connection pinning 제거가 목적(TASK-BE-062 #18 CI에서 관측). 보상 노트: provider HTTP + account-service HTTP가 성공한 뒤 DB 커밋이 실패하면 사용자는 로그인 실패로 인식하고 outbox 롤백으로 downstream 이벤트는 발행되지 않는다. account-service `socialSignup`은 (email, provider) 기준으로 멱등이므로 retry 시에도 중복 계정을 만들지 않는다. provider-side revoke 보상은 수행하지 않는다. TOCTOU: identity 존재 체크가 비-트랜잭션으로 이동했지만 트랜잭션 내 upsert와 DB unique key `(provider, provider_user_id)`가 동시 삽입을 막는다.
+- **모든 HTTP는 `@Transactional` 밖에서 수행** (TASK-BE-069 + TASK-BE-072): OAuth 콜백처럼 외부 provider HTTP, 내부 account-service HTTP, DB 쓰기가 섞인 경로는 use-case(`OAuthLoginUseCase#resolveBrowserLogin` → 공유 `resolveSocialLogin`)가 먼저 (1) provider token+userinfo exchange, (2) 로컬 `SocialIdentityJpaRepository` 비-트랜잭션 조회, (3) `accountServicePort.socialSignup`(신규 identity 경로에만), (4) `accountServicePort.getAccountStatus`를 모두 수행한 뒤, 결과(accountId, tenantId, accountStatus)를 `@Transactional` 빈(`SocialIdentityPersistStep#persistIdentityAndCheckStatus`)에 전달한다. 트랜잭션 내부에는 **어떠한 HTTP 호출도 없다** — Hikari connection pinning 제거가 목적(TASK-BE-062 #18 CI에서 관측). 보상 노트: provider HTTP + account-service HTTP가 성공한 뒤 DB 커밋이 실패하면 사용자는 로그인 실패로 인식한다. account-service `socialSignup`은 (email, provider) 기준으로 멱등이므로 retry 시에도 중복 계정을 만들지 않는다. provider-side revoke 보상은 수행하지 않는다. TOCTOU: identity 존재 체크가 비-트랜잭션으로 이동했지만 트랜잭션 내 upsert와 DB unique key `(provider, provider_user_id)`가 동시 삽입을 막는다. (TASK-BE-398 이전에는 같은 오케스트레이션을 레거시 `OAuthLoginUseCase#callback` → `OAuthLoginTransactionalStep#persistLogin` 이 공유했다 — 그 커스텀-JWT 꼬리는 제거되었다.)
 
 ### domain/
 - 순수 비즈니스 규칙. 프레임워크 의존 없음
@@ -220,7 +239,7 @@ presentation → application → domain
 
 ## Integration Rules
 
-- **HTTP 컨트랙트 (외부)**: [specs/contracts/http/auth-api.md](../../contracts/http/) — `/api/auth/login`, `/api/auth/logout`, `/api/auth/refresh`, `/api/auth/jwks`. 로그인 응답·refresh 응답에 `tenant_id` 노출
+- **HTTP 컨트랙트 (외부)**: [specs/contracts/http/auth-api.md](../../contracts/http/) — `/oauth2/**` (표준 OIDC), `/api/auth/logout`, `/api/auth/refresh`, `/internal/auth/jwks`. refresh 응답에 `tenant_id` 노출. (`/api/auth/login` 은 TASK-BE-398 로 제거)
 - **HTTP 컨트랙트 (내부, → account-service)**: [specs/contracts/http/internal/auth-to-account.md](../../contracts/http/internal/auth-to-account.md) — tenant-info lookup (응답 array `[{accountId, tenantId, tenantType}]`, TASK-BE-229), 계정 상태 조회. entitled_domains lookup (TASK-BE-324) — **fail-soft** (caller 가 claim 생략).
 - **HTTP 컨트랙트 (내부, → admin-service)** (TASK-BE-327, 신규 outbound edge): [specs/contracts/http/internal/auth-to-admin.md](../../contracts/http/internal/auth-to-admin.md) — assume-tenant 발급 시점의 1회성 assignment 확인 (`GET /internal/operator-assignments/check`). IAM `client_credentials` Bearer JWT (`IamClientCredentialsTokenProvider` 재사용). **fail-CLOSED**: 실패 시 발급 거부. per-request 도메인→IAM callback 이 아니라 issuance-time one-shot (ADR-MONO-020 § 3.1 은 후자만 금지).
 - **이벤트 발행**: [specs/contracts/events/auth-events.md](../../contracts/events/) — `auth.login.attempted`, `auth.login.failed`, `auth.login.succeeded`, `auth.token.refreshed`, `auth.token.reuse.detected`. 모두 **outbox 경유**, 페이로드에 `tenant_id` 포함
@@ -246,7 +265,13 @@ presentation → application → domain
 | Controller slice | DTO validation · 에러 포맷 | `@WebMvcTest` |
 | Contract | 응답이 [specs/contracts/http/auth-api.md](../../contracts/http/)와 일치 | 계약 테스트 |
 
-**필수 시나리오**: 5회 실패 → 429 → Redis 카운터 증가 / 만료된 access token → 401 / refresh rotation 성공 / 이미 사용된 refresh token → `token.reuse.detected` 이벤트 + 해당 세션 전체 invalidate ([rules/traits/transactional.md](../../../../../rules/traits/transactional.md) T8과 [rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A1 교차) / **tenant 격리 회귀**: 발급된 access token의 `tenant_id` claim 존재 검증, 다른 테넌트의 refresh로 rotation 시도 시 `TOKEN_TENANT_MISMATCH` 403 / 같은 이메일이 두 테넌트에 등록된 상태에서 tenant 명시 없는 로그인 → `LOGIN_TENANT_AMBIGUOUS` 400.
+**필수 시나리오**: 5회 실패 → rate limit → Redis 카운터 증가 / 만료된 access token → 401 / refresh rotation 성공 / 이미 사용된 refresh token → `token.reuse.detected` 이벤트 + 해당 세션 전체 invalidate ([rules/traits/transactional.md](../../../../../rules/traits/transactional.md) T8과 [rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A1 교차) / **tenant 격리 회귀**: 발급된 access token의 `tenant_id` claim 존재 검증, 다른 테넌트의 refresh로 rotation 시도 시 `TOKEN_TENANT_MISMATCH` 403 / 같은 이메일이 두 테넌트에 등록된 상태에서 tenant 명시 없는 로그인 → `LOGIN_TENANT_AMBIGUOUS`.
+
+> **TASK-BE-398 이후의 검증 지점.** 로그인 계열 시나리오(실패 카운터·계정 상태·자격증명 불일치·
+> tenant ambiguity)는 HTTP 상태코드가 아니라 **`LoginUseCase` 의 결과/예외**로 검증한다 —
+> `POST /api/auth/login` 이 사라져 HTTP 진입점이 없기 때문이다. `LoginUseCaseTest`(unit) +
+> `AuthIntegrationTest`(Testcontainers, 실제 MySQL/Redis/WireMock) 두 층이 이를 담당하고,
+> refresh/logout 계열은 여전히 HTTP(`/api/auth/refresh`·`/api/auth/logout`)로 검증한다.
 
 ## Change Rule
 

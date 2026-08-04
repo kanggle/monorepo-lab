@@ -673,11 +673,14 @@ public class JwtDecoderConfig {
 - 재사용 탐지 시 해당 account 의 **모든 세션 즉시 revoke** + `auth.token.reuse.detected` 이벤트 발행 (zero tolerance).
 - `client_credentials` 응답에는 refresh token 이 없다 — 만료 시 client 가 재요청.
 
-### Deprecation 주의
+### Deprecation 주의 — 일몰 완료
 
-- `POST /api/auth/login` 은 ADR-001 D2-b 단계 폐기 대상 (2026-08-01 제거 목표). 신규 통합은 사용 금지.
-- 응답 헤더 `Deprecation: true`, `Sunset: Sun, 01 Aug 2026 00:00:00 GMT` 로 통지된다.
-- 신규 클라이언트는 처음부터 `POST /oauth2/token` 사용.
+- `POST /api/auth/login` 은 **2026-08-01 제거되었다** (ADR-001 D2-b, TASK-BE-398). 더 이상
+  호출할 수 없으며 gateway `public-paths` 에서도 빠졌다. `Deprecation` / `Sunset` 헤더를 붙이던
+  필터도 함께 제거되었으므로, 이제 이 경로는 **아무 신호 없이 거절**된다.
+- 같은 계열의 레거시 소셜 플로우 `GET /api/auth/oauth/authorize` · `POST /api/auth/oauth/callback`
+  도 동시에 제거되었다 (대체: 브라우저 `GET /login/oauth/{provider}` → SAS).
+- 모든 클라이언트는 `POST /oauth2/token` 을 사용한다.
 
 ### 운영 체크리스트 (deployment 직전)
 
@@ -725,7 +728,8 @@ public class JwtDecoderConfig {
 - **이벤트 중복 수신** — Kafka at-least-once. `eventId` dedupe 미적용 시 중복 처리 발생.
 - **다른 테넌트의 account.deleted 수신** — 단일 클러스터 공유 시 발생. `tenantId` 필터 누락 시 자기 도메인의 동일 accountId 와 충돌 가능 (정확히 같은 UUID 가 다른 테넌트에 존재할 가능성은 낮지만 0 은 아니다).
 - **client_secret 분실** — admin-service 에서 client 재발급 (rotate). 평문은 1회만 노출.
-- **`POST /api/auth/login` legacy 응답 처리** — sunset 까지는 동작하지만 신규 통합은 표준 OIDC 만 사용.
+- **`POST /api/auth/login` 을 아직 호출하는 코드** — 2026-08-01 제거되었다 (TASK-BE-398). 남아 있다면
+  경고 없이 401/403 을 받는다. 표준 OIDC 로 이전할 것.
 
 ---
 

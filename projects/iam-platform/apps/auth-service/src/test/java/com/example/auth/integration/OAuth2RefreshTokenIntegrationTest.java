@@ -58,7 +58,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * <p>TASK-BE-251 Phase 2b.
  */
-// TASK-MONO-044c-1 RC#2: see OAuthLoginIntegrationTest for rationale —
+// TASK-MONO-044c-1 RC#2: see SocialLoginSasBrowserIntegrationTest for rationale —
 // AccountServiceClient bean URL must be rebuilt per class to track this
 // class's WireMock instance.
 @SpringBootTest

@@ -38,7 +38,7 @@ OIDC Discovery 문서. RFC 8414 준거.
 
 ### GET /oauth2/jwks
 
-RSA 공개키 JWK Set. 기존 `POST /api/auth/login` 발급 토큰과 SAS 발급 토큰 모두 동일 키로 검증 가능.
+RSA 공개키 JWK Set. SAS 발급 토큰 검증용. (TASK-BE-398 이전에는 레거시 `POST /api/auth/login` 발급 토큰도 같은 키로 검증됐다 — 그 발급 경로는 일몰되었다.)
 
 **Auth required**: No
 
@@ -325,54 +325,38 @@ Registered OAuth 2.0 clients. Seeded via Flyway migrations. Managed via admin-se
 
 ---
 
-## POST /api/auth/login
+## ~~POST /api/auth/login~~ — REMOVED 2026-08-01 (TASK-BE-398)
 
-> **DEPRECATED since 2026-05-01 (ADR-001 D2-b). 제거 목표: 2026-08-01.**
-> 신규 구현은 `POST /oauth2/token` (OIDC 표준 엔드포인트)을 사용하라.
-> 모든 응답에 `Deprecation: true` (RFC 8594), `Sunset: Sun, 01 Aug 2026 00:00:00 GMT` (RFC 9745) 헤더가 포함된다.
-
-사용자 로그인. 이메일·패스워드를 검증하고 JWT access/refresh token pair를 발급한다.
-
-**Auth required**: No
-
-**Request**:
-```json
-{
-  "email": "string (required, email format)",
-  "password": "string (required, min 8)",
-  "tenantId": "string (optional, tenant slug e.g. 'fan-platform', 'wms')"
-}
-```
-
-**Response 200**:
-```json
-{
-  "accessToken": "string (JWT)",
-  "refreshToken": "string (JWT)",
-  "expiresIn": 1800,
-  "tokenType": "Bearer"
-}
-```
-
-**Errors**:
-
-| Status | Code | 조건 |
-|---|---|---|
-| 401 | `INVALID_CREDENTIALS` | 이메일 미존재 또는 패스워드 불일치. **구체 원인 노출 금지** ([rules/domains/saas.md](../../../../../rules/domains/saas.md)) |
-| 400 | `LOGIN_TENANT_AMBIGUOUS` | 같은 이메일이 여러 테넌트에 등록되어 있고 `tenantId` 미지정. 사용자는 `tenantId`를 명시하여 재시도해야 한다 |
-| 423 | `ACCOUNT_LOCKED` | 계정 잠김 상태. 잠금 해제 흐름 필요 — 자격증명 문제(401)도 권한 문제(403)도 아니므로 클라이언트가 구분해 처리해야 한다 |
-| 423 | `ACCOUNT_DORMANT` | 휴면 상태 (별도 복구 흐름 필요) |
-| 410 | `ACCOUNT_DELETED` | 삭제(익명화)된 계정 |
-| 500 | `ACCOUNT_STATUS_UNKNOWN` | 인식할 수 없는 계정 상태. **의도된 fail-loud** — 알 수 없는 상태를 조용히 거부(4xx)로 흘리지 않는다 |
-| 429 | `LOGIN_RATE_LIMITED` | 로그인 실패 횟수 초과 (Redis 카운터). `Retry-After`(초) 헤더 포함 ([rate-limiting.md](../../features/rate-limiting.md), TASK-BE-512) |
-| 400 | `VALIDATION_ERROR` | 이메일/패스워드 형식 오류 |
-
-> **계정상태 응답은 blanket 403 이 아니다** (TASK-BE-462). 권위는 [`platform/error-handling.md`](../../../../../platform/error-handling.md) § Account — `ACCOUNT_LOCKED`=423, `ACCOUNT_DORMANT`=423, `ACCOUNT_DELETED`=410. 구현은 `auth-service` `AuthExceptionHandler#handleAccountLocked` / `#handleAccountStatus`. **403 으로 되돌리지 말 것.**
-
-**Side Effects**:
-- 성공: `auth.login.succeeded` 이벤트 발행 (outbox)
-- 실패: `auth.login.failed` 이벤트 발행, Redis 실패 카운터 증가
-- 모든 시도: `auth.login.attempted` 이벤트 발행
+> **제거됨.** ADR-001 D2-b 가 정한 90일 deprecation window(2026-05-01 deprecated →
+> 2026-08-01 removal)가 만료되어 `LoginController` 와 함께 삭제되었다. 이 경로는 더 이상
+> 라우팅되지 않으며 gateway `public-paths` 에서도 제거되었다 — 인증 없이 호출하면 엣지에서
+> `401 TOKEN_INVALID` 로 거절된다.
+>
+> **대체**: 표준 OIDC. 브라우저는 `GET /oauth2/authorize` (Authorization Code + PKCE) →
+> `/login` HTML 폼 → `POST /oauth2/token`, 서비스 간 호출은 `POST /oauth2/token`
+> (`grant_type=client_credentials`).
+>
+> **함께 제거된 것**:
+> - `OAuthLoginTransactionalStep` (커스텀 JWT / device-session / refresh 발급 꼬리)
+> - `LoginRequest` / `LoginResponse` DTO
+> - `DeprecatedApiHeaderFilter` — 이 경로에 RFC 8594 `Deprecation` / RFC 9745 `Sunset`
+>   헤더를 붙이던 필터. 엔드포인트가 사라졌으므로 신호도 사라진다.
+> - gateway `gateway.jwt.allowed-issuers` 기본값의 후행 `,iam` — 이 경로가 `iss=iam`
+>   커스텀 JWT 를 발급하던 **유일한** 경로였다 (TASK-MONO-365 가 미리 allowlist 로 바꿔둔
+>   덕분에 엣지가 죽지 않았다).
+>
+> **남은 것 (별도 판단, 이 task 범위 밖)**: `POST /api/auth/refresh` 와
+> `POST /api/auth/logout` 은 유지된다 — deprecation 이 고지된 적이 없어 무고지 제거가 되고,
+> [`specs/services/auth-service/architecture.md`](../../services/auth-service/architecture.md)
+> 도 "유지(status 미정)" 로 선언한다. 다만 발급 경로가 사라져 신규 커스텀 refresh token 은
+> 더 이상 생기지 않으므로, 두 엔드포인트의 일몰은 후속 task 로 분리한다.
+>
+> **`LoginUseCase` 는 코드에 남아 있다** — HTTP 진입점만 사라졌고, 자격증명 검증 / 로그인
+> 실패 카운터 / `auth.login.*` 이벤트 / device-session 등록 로직은 그대로다. 이를
+> 폼-로그인 경로(`CredentialAuthenticationProvider`)로 승격할지 폐기할지는 위 후속 판단과
+> 함께 결정한다.
+>
+> 원본 스펙 본문(요청/응답/에러 표)은 git history 에 보존된다.
 
 ---
 
@@ -624,87 +608,34 @@ Refresh rotation(`POST /api/auth/refresh`) 경로에서 새 access token이 발�
 
 ---
 
-## GET /api/auth/oauth/authorize
+## ~~GET /api/auth/oauth/authorize~~ · ~~POST /api/auth/oauth/callback~~ — REMOVED 2026-08-01 (TASK-BE-398)
 
-OAuth 소셜 로그인 시작. provider의 authorization URL과 CSRF 방어용 state를 생성하여 반환한다.
-
-**Auth required**: No
-
-**Query Parameters**:
-
-| 파라미터 | 타입 | 필수 | 설명 |
-|---|---|---|---|
-| `provider` | string | Yes | OAuth provider 식별자. `google`, `kakao`, `microsoft` 중 하나 |
-| `redirectUri` | string | Yes | 인증 완료 후 클라이언트가 callback을 받을 URI |
-
-**Response 200**:
-```json
-{
-  "authorizationUrl": "https://accounts.google.com/o/oauth2/v2/auth?...",
-  "state": "string (cryptographic random, CSRF 방어)"
-}
-```
-
-**Errors**:
-
-| Status | Code | 조건 |
-|---|---|---|
-| 400 | `UNSUPPORTED_PROVIDER` | 지원하지 않는 provider |
-| 400 | `INVALID_REDIRECT_URI` | `redirectUri` 가 서버 화이트리스트와 정확히 일치하지 않음 (open-redirect 방지). 응답 메시지는 어떤 URI 가 거부됐는지 노출하지 않는다. |
-| 400 | `VALIDATION_ERROR` | redirectUri 누락 또는 형식 오류 |
-
----
-
-## POST /api/auth/oauth/callback
-
-OAuth authorization code를 교환하여 로그인을 완료한다. 신규 사용자는 계정이 자동 생성된다.
-
-**Auth required**: No
-
-**Request**:
-```json
-{
-  "provider": "string (required, 'google' | 'kakao' | 'microsoft')",
-  "code": "string (required, provider가 발급한 authorization code)",
-  "state": "string (required, authorize 응답에서 받은 state)",
-  "redirectUri": "string (required, authorize 시 전달한 것과 동일해야 함)"
-}
-```
-
-**Response 200**:
-```json
-{
-  "accessToken": "string (JWT)",
-  "refreshToken": "string (JWT)",
-  "expiresIn": 1800,
-  "tokenType": "Bearer",
-  "isNewAccount": true
-}
-```
-
-**Response 필드 노트**:
-- `accessToken`, `refreshToken`, `expiresIn`, `tokenType`: `POST /api/auth/login` 응답과 동일 형식·스펙
-- `isNewAccount`: 이번 소셜 로그인으로 계정이 **새로 생성**되었으면 `true`, 기존 계정이면 `false`
-
-**Errors**:
-
-| Status | Code | 조건 |
-|---|---|---|
-| 400 | `INVALID_STATE` | state 불일치, 만료, 또는 이미 사용됨. **자격증명 평가 이전에 거절**되는 위조·오형 콜백이므로 인증 실패(401)가 아니라 잘못된 요청이다 (RFC 6749 §10.12). ecommerce `auth-service`·`platform/error-handling.md` 와 동일. **TASK-MONO-350 이전에는 401 이었다** — 되돌리지 말 것 |
-| 401 | `INVALID_CODE` | provider 가 **authorization code 자체를 거절**함 (OAuth2 `invalid_grant`: 만료 / 이미 사용됨(1회용) / 위조). **`PROVIDER_ERROR`(502) 와 구별된다** — 저건 provider 가 실제로 장애일 때다. TASK-MONO-350 이전에는 이 코드를 발행하는 곳이 **0 건**이었고, 만료된 code 가 502 로 나가고 있었다 |
-| 400 | `UNSUPPORTED_PROVIDER` | 지원하지 않는 provider |
-| 400 | `INVALID_REDIRECT_URI` | `redirectUri` 가 서버 화이트리스트와 정확히 일치하지 않음 (open-redirect 방지). 검증은 state 소비 직후·provider HTTP 호출 직전에 수행. |
-| 423 | `ACCOUNT_LOCKED` | 연결된 계정이 잠김 상태 |
-| 423 | `ACCOUNT_DORMANT` | 연결된 계정이 휴면 상태 |
-| 410 | `ACCOUNT_DELETED` | 연결된 계정이 삭제(익명화) 상태 |
-| 422 | `EMAIL_REQUIRED` | provider가 이메일을 제공하지 않음 |
-| 502 | `PROVIDER_ERROR` | provider token endpoint 또는 userinfo API **장애** (5xx · 타임아웃 · TLS/DNS · 응답 파싱 실패). **code 거절(4xx)은 여기 해당하지 않는다** → `401 INVALID_CODE` |
-
-**Side Effects**:
-- 성공: `auth.login.succeeded` 이벤트 발행 (outbox, `loginMethod` 필드 포함)
-- 성공: device session 생성 (기존 로그인과 동일 — [session-management.md](../../features/session-management.md))
-- 신규 계정: account-service `/internal/accounts/social-signup` 호출 → 계정 자동 생성
-- `social_identities` row 생성 또는 `last_used_at` 갱신
+> **제거됨.** 커스텀-JWT 로 종결되던 소셜 로그인 JSON 플로우다. ADR-006 이 이를 SAS
+> 브라우저 세션 플로우로 대체했고(TASK-BE-396/397), 레거시 JSON 쌍은 `POST /api/auth/login`
+> 과 같은 계열이므로 같은 일몰(2026-08-01)에 함께 삭제되었다. gateway `public-paths` 의
+> 두 항목도 제거되었다.
+>
+> **대체**: `GET /login/oauth/{provider}` → provider → `GET /login/oauth/{provider}/callback`.
+> 콜백은 커스텀 JWT 대신 **SAS 가 소비하는 인증 세션**을 확립하고 저장된
+> `/oauth2/authorize` 요청을 재개하므로, 최종 토큰은 표준 OIDC 토큰이다.
+> 상세: [oauth-social-login.md](../../features/oauth-social-login.md).
+>
+> **보존된 것 (브라우저 플로우가 그대로 재사용)**: `OAuthLoginUseCase.authorize()` /
+> `resolveBrowserLogin()` / 공유 `resolveSocialLogin()`, `SocialIdentityPersistStep`,
+> `OAuthClient` 구현 전부(Google/Kakao/Microsoft/Naver) + `OAuthClientFactory`,
+> `OAuthStateStore`(Redis state), `social_identities` 테이블/리포지토리,
+> ADR-036 born-unified 계정 연결.
+>
+> **함께 제거된 것**: `OAuthLoginUseCase.callback()`, `OAuthCallbackRequest` /
+> `OAuthCallbackResponse` / `OAuthAuthorizeResponse` DTO, `OAuthCallbackTxnCommand`,
+> `OAuthLoginResult`.
+>
+> **에러 코드 의미는 살아 있다** — `INVALID_STATE`(400) / `INVALID_CODE`(401, provider 가
+> code 를 거절) / `PROVIDER_ERROR`(502, provider 실제 장애) 의 구분(TASK-MONO-350)은
+> 어댑터(`OAuthClientSupport`)와 `AuthExceptionHandler` 에 그대로 남아 브라우저 플로우에도
+> 적용된다. 브라우저 플로우는 이를 JSON 이 아니라 `redirect:/login?error=...` 로 표면화한다.
+>
+> 원본 스펙 본문은 git history 에 보존된다.
 
 ---
 

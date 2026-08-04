@@ -41,7 +41,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *   <li>{@code GET /.well-known/openid-configuration} — discovery document 구조</li>
  *   <li>{@code GET /oauth2/jwks} — JWKS 구조 (RSA key, kid, n, e)</li>
  *   <li>{@code POST /oauth2/token} (client_credentials) — access token + tenant_id, tenant_type claims</li>
- *   <li>기존 {@code /api/auth/login} 경로 접근성 (SAS가 가로채지 않음)</li>
+ *   <li>레거시 {@code /api/auth/login} 경로 일몰 (TASK-BE-398 — 더 이상 라우팅되지 않음)</li>
  * </ul>
  *
  * <p>Phase 2a 추가 검증 범위 (TASK-BE-251):
@@ -390,7 +390,7 @@ class OAuth2AuthorizationServerSliceTest {
         // Without an authenticated session, SAS either:
         //   (a) redirects to the configured login page (3xx) if the session is available, or
         //   (b) returns 302 to login entry point when MockMvc does not follow redirects.
-        // In slice test mode with MockMvc, SAS may return 302 (to /api/auth/login) or
+        // In slice test mode with MockMvc, SAS may return 302 (to the /login page) or
         // delegate the error handling. Any non-5xx response is acceptable here — the
         // critical invariant is that SAS DOES handle this endpoint (not 404).
         //
@@ -469,15 +469,17 @@ class OAuth2AuthorizationServerSliceTest {
     }
 
     // -----------------------------------------------------------------------
-    // 6. Regression — SAS must NOT capture /api/auth/login
+    // 6. TASK-BE-398 — the legacy /api/auth/login surface is GONE
     // -----------------------------------------------------------------------
 
     @Test
     @Order(7)
-    @DisplayName("POST /api/auth/login → routed to legacy handler (SAS chain must not intercept)")
-    void regression_loginEndpointNotCapturedBySAS() throws Exception {
-        // A bad login request should reach the legacy handler and return 4xx,
-        // NOT 404 (route not found) which would indicate SAS captured it.
+    @DisplayName("POST /api/auth/login → 일몰 완료: 어떤 체인도 토큰을 발급하지 않는다 (TASK-BE-398)")
+    void legacyLoginEndpointIsSunset() throws Exception {
+        // ADR-001 D2-b sunset (2026-08-01): LoginController and its SecurityConfig
+        // permit were removed. Whatever the servlet stack answers (403 from the
+        // @Order(2) chain's denyAll, or 404), it must NOT be a successful custom-JWT
+        // issuance — that is the property the sunset is about.
         MvcResult result = mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -487,11 +489,11 @@ class OAuth2AuthorizationServerSliceTest {
 
         int status = result.getResponse().getStatus();
         assertThat(status)
-                .as("Legacy /api/auth/login must not be captured by SAS chain. Got HTTP " + status)
-                .isBetween(400, 499);
-        assertThat(status)
-                .as("404 means SAS swallowed /api/auth/login — not acceptable")
-                .isNotEqualTo(404);
+                .as("the retired /api/auth/login must never return 2xx. Got HTTP " + status)
+                .isGreaterThanOrEqualTo(400);
+        assertThat(result.getResponse().getContentAsString())
+                .as("no access token may be issued by the retired endpoint")
+                .doesNotContain("accessToken");
     }
 
     // -----------------------------------------------------------------------
@@ -597,13 +599,13 @@ class OAuth2AuthorizationServerSliceTest {
     }
 
     // -----------------------------------------------------------------------
-    // 10. Phase 2c — POST /api/auth/login returns Deprecation header
+    // 10. TASK-BE-398 — the RFC 8594 / RFC 9745 deprecation signal is retired with the endpoint
     // -----------------------------------------------------------------------
 
     @Test
     @Order(11)
-    @DisplayName("POST /api/auth/login → Deprecation and Sunset headers present (RFC 8594, RFC 9745)")
-    void legacyLogin_returnsDeprecationHeaders() throws Exception {
+    @DisplayName("POST /api/auth/login → Deprecation/Sunset 헤더도 함께 사라졌다 (DeprecatedApiHeaderFilter 제거)")
+    void legacyLogin_noLongerAdvertisesDeprecationHeaders() throws Exception {
         MvcResult result = mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -611,16 +613,13 @@ class OAuth2AuthorizationServerSliceTest {
                                 """))
                 .andReturn();
 
-        int status = result.getResponse().getStatus();
-        assertThat(status).isBetween(400, 499);
-        assertThat(status).isNotEqualTo(404);
-
-        // Deprecation headers must be present regardless of auth success/failure
+        // The sunset date has passed; the filter that stamped these headers is gone.
+        // A lingering header would mean the removal was only half-done.
         assertThat(result.getResponse().getHeader("Deprecation"))
-                .as("Deprecation header must be 'true' (RFC 8594)")
-                .isEqualTo("true");
+                .as("DeprecatedApiHeaderFilter was removed with the endpoint")
+                .isNull();
         assertThat(result.getResponse().getHeader("Sunset"))
-                .as("Sunset header must be present and reference 2026-08-01 (RFC 9745)")
-                .contains("2026");
+                .as("DeprecatedApiHeaderFilter was removed with the endpoint")
+                .isNull();
     }
 }

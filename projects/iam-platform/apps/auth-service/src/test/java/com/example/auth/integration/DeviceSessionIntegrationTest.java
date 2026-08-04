@@ -1,8 +1,12 @@
 package com.example.auth.integration;
 
+import com.example.auth.application.LoginUseCase;
+import com.example.auth.application.command.LoginCommand;
+import com.example.auth.application.result.LoginResult;
 import com.example.auth.domain.credentials.Credential;
 import com.example.auth.domain.credentials.CredentialHash;
 import com.example.auth.domain.session.DeviceSession;
+import com.example.auth.domain.session.SessionContext;
 import com.example.auth.domain.session.RevokeReason;
 import com.example.auth.domain.repository.DeviceSessionRepository;
 import com.example.auth.domain.repository.RefreshTokenRepository;
@@ -56,7 +60,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * </ol>
  *
  */
-// TASK-MONO-044c-1 RC#2: see OAuthLoginIntegrationTest for rationale —
+// TASK-MONO-044c-1 RC#2: see SocialLoginSasBrowserIntegrationTest for rationale —
 // AccountServiceClient bean URL must be rebuilt per class to track this
 // class's WireMock instance.
 @SpringBootTest
@@ -88,6 +92,7 @@ class DeviceSessionIntegrationTest extends AbstractIntegrationTest {
         org.mockito.Mockito.when(gapTokenProvider.currentBearer()).thenReturn("test-jwt");
     }
     @Autowired private ObjectMapper objectMapper;
+    @Autowired private LoginUseCase loginUseCase;
     @Autowired private DeviceSessionRepository deviceSessionRepository;
     @Autowired private AuthOutboxJpaRepository outboxJpaRepository;
     @Autowired private CredentialJpaRepository credentialJpaRepository;
@@ -297,20 +302,25 @@ class DeviceSessionIntegrationTest extends AbstractIntegrationTest {
 
     // ----- helpers -----
 
-    private MvcResult login(String userAgent) throws Exception {
-        return mockMvc.perform(post("/api/auth/login")
-                        .header("User-Agent", userAgent)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"email":"%s","password":"%s"}
-                                """.formatted(TEST_EMAIL, TEST_PASSWORD)))
-                .andExpect(status().isOk())
-                .andReturn();
+    /**
+     * TASK-BE-398: {@code POST /api/auth/login} was removed at its ADR-001 D2-b sunset,
+     * so the device-session scenarios drive {@link LoginUseCase} directly. The use case
+     * still registers/updates the device session and persists the refresh row exactly as
+     * it did behind the HTTP endpoint — only the entry point is gone. The user-agent is
+     * carried on the {@link SessionContext} instead of the {@code User-Agent} header.
+     *
+     * <p>The device fingerprint stays {@code null} — exactly what the removed HTTP call
+     * produced (it never sent {@code X-Device-Fingerprint}), so every login still
+     * normalises to the {@code unknown} fingerprint and registers a NEW device session,
+     * which is what these scenarios count.
+     */
+    private LoginResult login(String userAgent) {
+        return loginUseCase.execute(new LoginCommand(
+                TEST_EMAIL, TEST_PASSWORD, null,
+                new SessionContext("127.0.0.1", userAgent, null)));
     }
 
-    private String loginAndExtractRefreshToken(String userAgent) throws Exception {
-        MvcResult res = login(userAgent);
-        JsonNode body = objectMapper.readTree(res.getResponse().getContentAsString());
-        return body.get("refreshToken").asText();
+    private String loginAndExtractRefreshToken(String userAgent) {
+        return login(userAgent).refreshToken();
     }
 }

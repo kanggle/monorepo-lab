@@ -12,14 +12,15 @@ import org.springframework.stereotype.Component;
 import java.util.Optional;
 
 /**
- * The two DB-touching steps shared by both social-login transactional boundaries
- * — {@link OAuthLoginTransactionalStep} (legacy custom-JWT flow) and
+ * The two DB-touching steps of the social-login transactional boundary
  * {@link SocialIdentityPersistStep} (SAS browser-session flow).
  *
- * <p>Before this bean the social-identity upsert and the account-status gate were
- * maintained as byte-for-byte copies in both step classes (documented as
- * "mirrors ... byte-for-byte semantics" in comments). Extracting them here makes
- * the shared-semantics invariant compiler-enforced rather than comment-enforced.
+ * <p>These were originally shared with the custom-JWT {@code OAuthLoginTransactionalStep}
+ * (retired by TASK-BE-398): before this bean, the social-identity upsert and the
+ * account-status gate were maintained as byte-for-byte copies in both step classes
+ * (documented as "mirrors ... byte-for-byte semantics" in comments). Extracting them
+ * here made the shared-semantics invariant compiler-enforced rather than
+ * comment-enforced; the bean is kept as the single home for those two steps.
  *
  * <p>These methods carry <b>no</b> {@code @Transactional} annotation: each caller
  * already owns the transaction, so the writes here participate in the caller's

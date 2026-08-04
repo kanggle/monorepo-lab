@@ -86,7 +86,9 @@ class GatewayTenantPropagationIntegrationTest {
                         .withHeader("Content-Type", "application/json")
                         .withBody(jwksResponse)));
 
-        authServiceMock.stubFor(post(urlEqualTo("/api/auth/login"))
+        // TASK-BE-398: /api/auth/login was retired; /api/auth/refresh is the public
+        // auth-service route these rate-limit-key assertions now drive.
+        authServiceMock.stubFor(post(urlEqualTo("/api/auth/refresh"))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
@@ -143,44 +145,44 @@ class GatewayTenantPropagationIntegrationTest {
     }
 
     @Test
-    @DisplayName("login scope rate limit 키가 tenant_id를 포함 — fan-platform:{subnet} 패턴")
-    void loginScope_rateLimitKey_includesTenantId() {
+    @DisplayName("refresh scope rate limit 키가 tenant_id를 포함 — fan-platform:{subnet} 패턴")
+    void refreshScope_rateLimitKey_includesTenantId() {
         String clientIp = "10.10.10.1";
-        // login is public, no JWT needed — tenant_id extracted as "anonymous"
-        webTestClient.post().uri("/api/auth/login")
+        // refresh is public, no JWT needed — tenant_id extracted as "anonymous"
+        webTestClient.post().uri("/api/auth/refresh")
                 .header("Content-Type", "application/json")
                 .header("X-Forwarded-For", clientIp)
-                .bodyValue("{\"email\":\"a@a.com\",\"password\":\"pw\"}")
+                .bodyValue("{\"refreshToken\":\"mock-refresh\"}")
                 .exchange()
                 .expectStatus().isOk();
 
         // Redis should contain a key with the anonymous tenant prefix
-        List<String> keys = redisTemplate.keys("rate:login:*")
+        List<String> keys = redisTemplate.keys("rate:refresh:*")
                 .collectList()
                 .block();
 
         assertThat(keys).isNotEmpty();
-        // Key must follow "rate:login:{tenant_id}:{subnet}" pattern
+        // Key must follow "rate:refresh:{tenant_id}:{subnet}" pattern
         assertThat(keys).anyMatch(k -> k.contains("anonymous:"));
     }
 
     @Test
     @DisplayName("JWT tenant_id=fan-platform인 요청의 rate limit 키 = fan-platform:... 패턴")
-    void loginScope_withJwt_rateLimitKeyIncludesTenant() {
-        // For login route (public), JWT is optional, but we can still send one
+    void refreshScope_withJwt_rateLimitKeyIncludesTenant() {
+        // For the refresh route (public), JWT is optional, but we can still send one
         // to verify tenant extraction in rate limit key
         String clientIp = "10.20.20.1";
         String token = createValidToken("account-123", "fan-platform");
 
-        webTestClient.post().uri("/api/auth/login")
+        webTestClient.post().uri("/api/auth/refresh")
                 .header("Content-Type", "application/json")
                 .header("Authorization", "Bearer " + token)
                 .header("X-Forwarded-For", clientIp)
-                .bodyValue("{\"email\":\"a@a.com\",\"password\":\"pw\"}")
+                .bodyValue("{\"refreshToken\":\"mock-refresh\"}")
                 .exchange()
                 .expectStatus().isOk();
 
-        List<String> keys = redisTemplate.keys("rate:login:*")
+        List<String> keys = redisTemplate.keys("rate:refresh:*")
                 .collectList()
                 .block();
 
@@ -253,7 +255,10 @@ class GatewayTenantPropagationIntegrationTest {
                 .expectStatus().isOk();
     }
 
-    private static final String EXPECTED_ISSUER = "iam";
+    // TASK-BE-398: the legacy custom-JWT issuer `iam` was retired with POST /api/auth/login
+    // and dropped from gateway.jwt.allowed-issuers, so these tests mint SAS-issuer tokens —
+    // the same value application.yml defaults to (OIDC_ISSUER_URL, default http://localhost:8081).
+    private static final String EXPECTED_ISSUER = "http://localhost:8081";
 
     private String createValidToken(String accountId, String tenantId) {
         return Jwts.builder()
