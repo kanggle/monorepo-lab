@@ -29,15 +29,19 @@ import static org.mockito.BDDMockito.given;
 @DisplayName("TokenValidator 단위 테스트")
 class TokenValidatorUnitTest {
 
-    /** The legacy custom-JWT issuer — retired by TASK-BE-398. */
+    /** The legacy custom-JWT issuer — retired by TASK-BE-398 and no longer accepted. */
     private static final String LEGACY_ISSUER = "iam";
     /** The SAS/OIDC issuer — what the other six gateways take as primary. */
     private static final String SAS_ISSUER = "http://localhost:8081";
-    /** Production shape (TASK-MONO-365): an allowlist holding both, for the D2-b window. */
-    private static final String ALLOWED_ISSUERS = SAS_ISSUER + "," + LEGACY_ISSUER;
+    /**
+     * Production shape after the TASK-BE-398 sunset: the allowlist holds the SAS issuer
+     * only (application.yml {@code gateway.jwt.allowed-issuers}). During the ADR-001 D2-b
+     * window (TASK-MONO-365) it also carried {@code iam}; that entry is gone with the flow.
+     */
+    private static final String ALLOWED_ISSUERS = SAS_ISSUER;
 
-    /** Kept so the existing cases read unchanged; the legacy issuer is still allowed. */
-    private static final String EXPECTED_ISSUER = LEGACY_ISSUER;
+    /** Kept so the existing cases read unchanged; now the SAS issuer, post-sunset. */
+    private static final String EXPECTED_ISSUER = SAS_ISSUER;
 
     @Mock
     private JwksCache jwksCache;

@@ -1,10 +1,17 @@
 package com.example.auth.integration;
 
+import com.example.auth.application.LoginUseCase;
+import com.example.auth.application.command.LoginCommand;
+import com.example.auth.application.exception.AccountLockedException;
+import com.example.auth.application.exception.AccountServiceUnavailableException;
+import com.example.auth.application.exception.CredentialsInvalidException;
+import com.example.auth.application.exception.LoginRateLimitedException;
+import com.example.auth.application.result.LoginResult;
 import com.example.auth.domain.credentials.Credential;
 import com.example.auth.domain.credentials.CredentialHash;
+import com.example.auth.domain.session.SessionContext;
 import com.example.auth.infrastructure.persistence.CredentialJpaEntity;
 import com.example.auth.infrastructure.persistence.CredentialJpaRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.example.security.password.Argon2idPasswordHasher;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
@@ -20,7 +27,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
 import com.example.testsupport.integration.AbstractIntegrationTest;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -30,11 +36,12 @@ import java.time.Instant;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-// TASK-MONO-044c-1 RC#2: see OAuthLoginIntegrationTest for rationale —
+// TASK-MONO-044c-1 RC#2: see SocialLoginSasBrowserIntegrationTest for rationale —
 // classes that own their WireMock and override auth.account-service.base-url
 // via @DynamicPropertySource must isolate Spring contexts to avoid the
 // AccountServiceClient bean capturing another class's now-stopped WireMock URL.
@@ -69,8 +76,13 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         org.mockito.Mockito.when(gapTokenProvider.currentBearer()).thenReturn("test-jwt");
     }
 
+    // TASK-BE-398: POST /api/auth/login was removed at its ADR-001 D2-b sunset, so the
+    // password-login scenarios below (and the token minting the refresh/logout scenarios
+    // need) drive LoginUseCase directly. The integration value is unchanged — real MySQL
+    // credentials, real Redis failure counter, real account-service HTTP via WireMock —
+    // only the (now absent) HTTP entry point is gone.
     @Autowired
-    private ObjectMapper objectMapper;
+    private LoginUseCase loginUseCase;
 
     @Autowired
     private CredentialJpaRepository credentialJpaRepository;
@@ -136,52 +148,34 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     @Test
     @Order(1)
     @DisplayName("Login succeeds and returns token pair")
-    void loginSuccess() throws Exception {
-        MvcResult result = mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"email":"%s","password":"%s"}
-                                """.formatted(TEST_EMAIL, TEST_PASSWORD)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.accessToken").isNotEmpty())
-                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
-                .andExpect(jsonPath("$.expiresIn").value(1800))
-                .andExpect(jsonPath("$.tokenType").value("Bearer"))
-                .andReturn();
+    void loginSuccess() {
+        LoginResult result = login(TEST_EMAIL, TEST_PASSWORD);
 
-        assertThat(result.getResponse().getContentAsString()).contains("accessToken");
+        assertThat(result.accessToken()).isNotBlank();
+        assertThat(result.refreshToken()).isNotBlank();
+        assertThat(result.expiresIn()).isEqualTo(1800);
     }
 
     @Test
     @Order(2)
     @DisplayName("Login fails with wrong password")
-    void loginFailsWrongPassword() throws Exception {
-        mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"email":"%s","password":"wrongpassword1"}
-                                """.formatted(TEST_EMAIL)))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
+    void loginFailsWrongPassword() {
+        assertThatThrownBy(() -> login(TEST_EMAIL, "wrongpassword1"))
+                .isInstanceOf(CredentialsInvalidException.class);
     }
 
     @Test
     @Order(3)
     @DisplayName("Login fails with unknown email (no local credential)")
-    void loginFailsUnknownEmail() throws Exception {
-        mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"email":"unknown@example.com","password":"password123"}
-                                """))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
+    void loginFailsUnknownEmail() {
+        assertThatThrownBy(() -> login("unknown@example.com", "password123"))
+                .isInstanceOf(CredentialsInvalidException.class);
     }
 
     @Test
     @Order(4)
     @DisplayName("Login rate limit after 5 failures")
-    void loginRateLimit() throws Exception {
+    void loginRateLimit() {
         // TASK-MONO-023b fix: TASK-BE-229 changed key pattern to login:fail:{tenantId}:{emailHash}.
         // LoginUseCase uses TenantContext.DEFAULT_TENANT_ID ("fan-platform") when no tenantId
         // is present in the request. Tests must seed the 3-part key so the rate-limit check fires.
@@ -191,13 +185,8 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
 
         redisTemplate.opsForValue().set(key, "5");
 
-        mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"email":"%s","password":"password123"}
-                                """.formatted(TEST_EMAIL)))
-                .andExpect(status().isTooManyRequests())
-                .andExpect(jsonPath("$.code").value("LOGIN_RATE_LIMITED"));
+        assertThatThrownBy(() -> login(TEST_EMAIL, "password123"))
+                .isInstanceOf(LoginRateLimitedException.class);
 
         redisTemplate.delete(key);
     }
@@ -206,16 +195,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     @Order(5)
     @DisplayName("Login and then refresh token")
     void loginAndRefresh() throws Exception {
-        MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"email":"%s","password":"%s"}
-                                """.formatted(TEST_EMAIL, TEST_PASSWORD)))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        String responseBody = loginResult.getResponse().getContentAsString();
-        String refreshToken = objectMapper.readTree(responseBody).get("refreshToken").asText();
+        String refreshToken = login(TEST_EMAIL, TEST_PASSWORD).refreshToken();
 
         mockMvc.perform(post("/api/auth/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -232,16 +212,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     @Order(6)
     @DisplayName("Login and then logout")
     void loginAndLogout() throws Exception {
-        MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"email":"%s","password":"%s"}
-                                """.formatted(TEST_EMAIL, TEST_PASSWORD)))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        String responseBody = loginResult.getResponse().getContentAsString();
-        String refreshToken = objectMapper.readTree(responseBody).get("refreshToken").asText();
+        String refreshToken = login(TEST_EMAIL, TEST_PASSWORD).refreshToken();
 
         mockMvc.perform(post("/api/auth/logout")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -262,15 +233,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
     @Order(65)
     @DisplayName("Refresh token reuse → 401 TOKEN_REUSE_DETECTED, all sessions revoked, Redis marker set")
     void refreshTokenReuseDetected() throws Exception {
-        MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"email":"%s","password":"%s"}
-                                """.formatted(TEST_EMAIL, TEST_PASSWORD)))
-                .andExpect(status().isOk())
-                .andReturn();
-        String originalRefresh = objectMapper.readTree(loginResult.getResponse().getContentAsString())
-                .get("refreshToken").asText();
+        String originalRefresh = login(TEST_EMAIL, TEST_PASSWORD).refreshToken();
 
         mockMvc.perform(post("/api/auth/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -309,27 +272,22 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     @Order(8)
-    @DisplayName("Account-status service down → login returns 503 (fail-closed)")
-    void accountServiceDown() throws Exception {
+    @DisplayName("Account-status service down → login fails closed (AccountServiceUnavailable)")
+    void accountServiceDown() {
         wireMock.resetAll();
         wireMock.stubFor(WireMock.get(urlPathEqualTo("/internal/accounts/" + ACCOUNT_ID + "/status"))
                 .willReturn(aResponse()
                         .withStatus(503)
                         .withFixedDelay(6000)));
 
-        mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"email":"%s","password":"%s"}
-                                """.formatted(TEST_EMAIL, TEST_PASSWORD)))
-                .andExpect(status().isServiceUnavailable())
-                .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"));
+        assertThatThrownBy(() -> login(TEST_EMAIL, TEST_PASSWORD))
+                .isInstanceOf(AccountServiceUnavailableException.class);
     }
 
     @Test
     @Order(9)
-    @DisplayName("Locked account → 423 ACCOUNT_LOCKED")
-    void loginLockedAccount() throws Exception {
+    @DisplayName("Locked account → ACCOUNT_LOCKED")
+    void loginLockedAccount() {
         // Seed a locked-user credential row
         Argon2idPasswordHasher hasher = new Argon2idPasswordHasher();
         String hash = hasher.hash(TEST_PASSWORD);
@@ -350,13 +308,8 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
                                 }
                                 """.formatted(LOCKED_ACCOUNT_ID, Instant.now().toString()))));
 
-        mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"email":"%s","password":"%s"}
-                                """.formatted(LOCKED_EMAIL, TEST_PASSWORD)))
-                .andExpect(status().isLocked())
-                .andExpect(jsonPath("$.code").value("ACCOUNT_LOCKED"));
+        assertThatThrownBy(() -> login(LOCKED_EMAIL, TEST_PASSWORD))
+                .isInstanceOf(AccountLockedException.class);
     }
 
     @Test
@@ -393,13 +346,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.accountId").value(newAccountId));
 
-        mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"email":"%s","password":"%s"}
-                                """.formatted(newEmail, TEST_PASSWORD)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.accessToken").isNotEmpty());
+        assertThat(login(newEmail, TEST_PASSWORD).accessToken()).isNotBlank();
     }
 
     @Test
@@ -420,6 +367,17 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
                                 """.formatted(ACCOUNT_ID, TEST_EMAIL, TEST_PASSWORD)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("CREDENTIAL_ALREADY_EXISTS"));
+    }
+
+    /**
+     * Drives the password-login use case directly. TASK-BE-398 removed
+     * {@code POST /api/auth/login} (ADR-001 D2-b sunset), so this replaces the former
+     * MockMvc call — same use case, same transaction, same side effects.
+     */
+    private LoginResult login(String email, String password) {
+        return loginUseCase.execute(new LoginCommand(
+                email, password, null,
+                new SessionContext("127.0.0.1", "IntegrationTest/1.0", "fp-integration")));
     }
 
     private static String hashEmail(String email) {

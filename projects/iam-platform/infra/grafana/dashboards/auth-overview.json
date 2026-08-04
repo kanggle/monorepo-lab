@@ -16,9 +16,9 @@
       "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [{ "expr": "rate(auth_login_total{result=\"failure\"}[5m])", "refId": "A" }]
     },
-    { "id": 3, "title": "Login Latency p99", "type": "timeseries", "gridPos": { "h": 6, "w": 12, "x": 0, "y": 6 },
+    { "id": 3, "title": "Token Endpoint Latency p99", "description": "TASK-BE-398: the legacy POST /api/auth/login was removed at its ADR-001 D2-b sunset (2026-08-01); this panel follows the standard OIDC token endpoint that replaced it.", "type": "timeseries", "gridPos": { "h": 6, "w": 12, "x": 0, "y": 6 },
       "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{service=\"auth-service\",uri=\"/api/auth/login\"}[5m])) by (le))", "refId": "A" }],
+      "targets": [{ "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{service=\"auth-service\",uri=\"/oauth2/token\"}[5m])) by (le))", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "s" } }
     },
     { "id": 4, "title": "Refresh Token Rotation", "type": "timeseries", "gridPos": { "h": 6, "w": 12, "x": 12, "y": 6 },

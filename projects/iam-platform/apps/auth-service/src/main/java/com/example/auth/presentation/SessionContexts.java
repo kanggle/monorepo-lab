@@ -6,9 +6,10 @@ import jakarta.servlet.http.HttpServletRequest;
 /**
  * Builds a {@link SessionContext} from the standard request headers.
  *
- * <p>The four auth entry-point controllers ({@code LoginController},
- * {@code RefreshController}, {@code OAuthController},
- * {@code SocialLoginBrowserController}) all derived the session context from the
+ * <p>The auth entry-point controllers ({@code RefreshController},
+ * {@code LogoutController}, {@code SocialLoginBrowserController} — and, until
+ * TASK-BE-398 retired them, {@code LoginController} / {@code OAuthController})
+ * all derive the session context from the
  * same four inputs — remote address, {@code User-Agent},
  * {@code X-Device-Fingerprint}, and {@code X-Geo-Country} (defaulting to
  * {@code "XX"}). This factory is the single source for that mapping.

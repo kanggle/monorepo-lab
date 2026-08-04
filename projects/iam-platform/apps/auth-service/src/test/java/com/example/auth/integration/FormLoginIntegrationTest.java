@@ -66,10 +66,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *       subsequent GET /oauth2/authorize is again unauthenticated and
  *       redirects to /login.</li>
  *   <li><b>CSRF gate</b> — POST /login without a CSRF token → 403 Forbidden.</li>
- *   <li><b>Deprecated JSON /api/auth/login regression guard</b> — POST
- *       /api/auth/login still accepts the legacy JSON body and returns a
- *       LoginResponse with access/refresh tokens, plus the RFC 8594
- *       Deprecation header.</li>
  * </ol>
  *
  * <p>Test profile uses the seeded {@code platform-console-web} OIDC client
@@ -354,17 +350,12 @@ class FormLoginIntegrationTest extends AbstractIntegrationTest {
     }
 
     // ------------------------------------------------------------------
-    // 6. Deprecated JSON /api/auth/login regression guard
+    // 6. (removed) Deprecated JSON /api/auth/login regression guard
     // ------------------------------------------------------------------
     //
-    // The deprecated JSON path's behaviour is verified by AuthIntegrationTest
-    // (full WireMock account-service stub + RFC 8594 Deprecation header check).
-    // Duplicating it here would require the same WireMock setup and would not
-    // add new regression coverage for this task. AC-9 (LoginController.java
-    // byte-unchanged) is verified at PR review time via `git diff --stat`.
-    //
-    // (No test method — intentional. The IT instead focuses on the new
-    // form-login surface and the SAS entry-point edit.)
+    // TASK-BE-398 removed POST /api/auth/login at its ADR-001 D2-b sunset
+    // (2026-08-01). The form-login surface below is now the only interactive
+    // login path; there is no legacy JSON endpoint left to guard.
 
     // ------------------------------------------------------------------
     // Helpers

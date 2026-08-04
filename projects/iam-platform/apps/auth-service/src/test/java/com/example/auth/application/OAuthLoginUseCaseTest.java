@@ -1,7 +1,6 @@
 package com.example.auth.application;
 
 import com.example.auth.application.command.OAuthCallbackCommand;
-import com.example.auth.application.command.OAuthCallbackTxnCommand;
 import com.example.auth.application.exception.InvalidOAuthRedirectUriException;
 import com.example.auth.application.exception.InvalidOAuthStateException;
 import com.example.auth.application.exception.OAuthEmailRequiredException;
@@ -12,7 +11,7 @@ import com.example.auth.application.port.OAuthClientProvider;
 import com.example.auth.application.port.OAuthProviderConfig;
 import com.example.auth.application.port.OAuthProviderConfigPort;
 import com.example.auth.application.result.AccountStatusLookupResult;
-import com.example.auth.application.result.OAuthLoginResult;
+import com.example.auth.application.result.BrowserLoginResolution;
 import com.example.auth.application.result.SocialSignupResult;
 import com.example.auth.domain.oauth.OAuthProvider;
 import com.example.auth.domain.oauth.OAuthUserInfo;
@@ -37,7 +36,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -47,24 +47,27 @@ import static org.mockito.Mockito.when;
 /**
  * Unit tests for {@link OAuthLoginUseCase} — orchestration layer.
  *
- * <p>TASK-BE-069 + TASK-BE-072 guarantees:
+ * <p>TASK-BE-069 + TASK-BE-072 guarantees (asserted below against the SAS browser
+ * callback, which since TASK-BE-398 is the only social-login callback — the legacy
+ * custom-JWT {@code callback()} and its {@code OAuthLoginTransactionalStep} tail were
+ * removed at the ADR-001 D2-b sunset; the shared pre-resolution they exercised is
+ * unchanged):
  * <ul>
- *   <li>External provider HTTP (token+userinfo) is invoked BEFORE the
- *       {@link OAuthLoginTransactionalStep} (which owns the DB transaction).</li>
+ *   <li>External provider HTTP (token+userinfo) is invoked BEFORE the transactional
+ *       step ({@link SocialIdentityPersistStep}, which owns the DB transaction).</li>
  *   <li>Internal account-service HTTP ({@code socialSignup} on new-identity path,
  *       {@code getAccountStatus} always) is invoked BEFORE the transactional step.</li>
  *   <li>When any of those HTTP calls fails, the transactional step is not invoked —
  *       no DB writes happen.</li>
  *   <li>The txn step receives the already-fetched provider data AND the resolved
- *       {@code accountId} / {@code isNewAccount} / {@code accountStatus} via
- *       {@link OAuthCallbackTxnCommand}.</li>
+ *       {@code accountId} / {@code accountStatus}.</li>
  * </ul>
  *
- * <p>TASK-BE-300: the pre-txn social-identity existence read is now via the
+ * <p>TASK-BE-300: the pre-txn social-identity existence read is via the
  * {@code SocialIdentityRepository} domain port + {@code SocialIdentity} domain model
  * (was the JPA entity/repository directly).
  *
- * <p>TASK-BE-301: the provider-client selector is now the {@code OAuthClientProvider}
+ * <p>TASK-BE-301: the provider-client selector is the {@code OAuthClientProvider}
  * application port (was the concrete {@code OAuthClientFactory}) and the per-provider
  * configuration is the {@code OAuthProviderConfigPort} application port (was the Spring
  * {@code OAuthProperties} {@code @ConfigurationProperties} type). The stub
@@ -82,9 +85,9 @@ class OAuthLoginUseCaseTest {
     @Mock private OAuthProviderConfigPort oAuthProviderConfigPort;
     @Mock private OAuthClientProvider oAuthClientProvider;
     @Mock private OAuthStateStore oAuthStateStore;
-    @Mock private OAuthLoginTransactionalStep oAuthLoginTransactionalStep;
     @Mock private AccountServicePort accountServicePort;
     @Mock private SocialIdentityRepository socialIdentityRepository;
+    @Mock private SocialIdentityPersistStep socialIdentityPersistStep;
     @Mock private OAuthClient oAuthClient;
 
     @InjectMocks
@@ -93,6 +96,7 @@ class OAuthLoginUseCaseTest {
     private static final String STATE = "state-abc";
     private static final String CODE = "auth-code-123";
     private static final String REDIRECT_URI = "http://localhost:3000/oauth/callback";
+    private static final String TENANT_ID = "fan-platform";
     private static final SessionContext CTX = new SessionContext("127.0.0.1", "Chrome/120", "fp-1");
     private static final OAuthUserInfo USER_INFO = new OAuthUserInfo(
             "provider-user-1", "user@example.com", "User", OAuthProvider.GOOGLE);
@@ -122,7 +126,7 @@ class OAuthLoginUseCaseTest {
 
     @Test
     @DisplayName("callback (new identity): provider HTTP → socialSignup HTTP → getAccountStatus HTTP "
-            + "→ persistLogin, txn command carries resolved accountId/isNewAccount/accountStatus")
+            + "→ persist step, which receives the resolved accountId/tenantId/accountStatus")
     void callback_newIdentity_allHttpBeforeTransactionalStep() {
         // given
         when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.GOOGLE));
@@ -131,39 +135,34 @@ class OAuthLoginUseCaseTest {
         when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.empty());
         when(accountServicePort.socialSignup(
-                "user@example.com", "GOOGLE", "provider-user-1", "User", null))
+                "user@example.com", "GOOGLE", "provider-user-1", "User", TENANT_ID))
                 .thenReturn(new SocialSignupResult("acc-123", "ACTIVE", true));
         when(accountServicePort.getAccountStatus("acc-123"))
                 .thenReturn(Optional.of(new AccountStatusLookupResult("acc-123", "ACTIVE")));
-        OAuthLoginResult expected = new OAuthLoginResult(
-                "access-jwt", "refresh-jwt", 1800, 604800L, true);
-        when(oAuthLoginTransactionalStep.persistLogin(any(OAuthCallbackTxnCommand.class)))
-                .thenReturn(expected);
 
         // when
-        OAuthLoginResult result = oAuthLoginUseCase.callback(command);
+        BrowserLoginResolution result = oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID);
 
         // then — all HTTP (provider + account-service) must happen BEFORE the transactional step
-        InOrder order = inOrder(oAuthClient, accountServicePort, oAuthLoginTransactionalStep);
+        InOrder order = inOrder(oAuthClient, accountServicePort, socialIdentityPersistStep);
         order.verify(oAuthClient).exchangeCodeForUserInfo(CODE, REDIRECT_URI);
         order.verify(accountServicePort).socialSignup(
-                "user@example.com", "GOOGLE", "provider-user-1", "User", null);
+                "user@example.com", "GOOGLE", "provider-user-1", "User", TENANT_ID);
         order.verify(accountServicePort).getAccountStatus("acc-123");
-        order.verify(oAuthLoginTransactionalStep).persistLogin(any(OAuthCallbackTxnCommand.class));
+        order.verify(socialIdentityPersistStep).persistIdentityAndCheckStatus(
+                any(), any(), anyString(), anyString(), any());
 
-        // and the txn command carries all pre-resolved data
-        ArgumentCaptor<OAuthCallbackTxnCommand> captor =
-                ArgumentCaptor.forClass(OAuthCallbackTxnCommand.class);
-        verify(oAuthLoginTransactionalStep).persistLogin(captor.capture());
-        OAuthCallbackTxnCommand txnCommand = captor.getValue();
-        assertThat(txnCommand.provider()).isEqualTo(OAuthProvider.GOOGLE);
-        assertThat(txnCommand.userInfo()).isEqualTo(USER_INFO);
-        assertThat(txnCommand.sessionContext()).isEqualTo(CTX);
-        assertThat(txnCommand.accountId()).isEqualTo("acc-123");
-        assertThat(txnCommand.isNewAccount()).isTrue();
-        assertThat(txnCommand.accountStatus()).contains("ACTIVE");
+        // and the txn step receives all pre-resolved data
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Optional<String>> statusCaptor = ArgumentCaptor.forClass(Optional.class);
+        verify(socialIdentityPersistStep).persistIdentityAndCheckStatus(
+                eq(OAuthProvider.GOOGLE), eq(USER_INFO), eq("acc-123"), eq(TENANT_ID),
+                statusCaptor.capture());
+        assertThat(statusCaptor.getValue()).contains("ACTIVE");
 
-        assertThat(result).isSameAs(expected);
+        assertThat(result.accountId()).isEqualTo("acc-123");
+        assertThat(result.email()).isEqualTo("user@example.com");
+        assertThat(result.isNewAccount()).isTrue();
     }
 
     @Test
@@ -179,49 +178,43 @@ class OAuthLoginUseCaseTest {
                 .thenReturn(Optional.of(existing));
         when(accountServicePort.getAccountStatus("acc-existing"))
                 .thenReturn(Optional.of(new AccountStatusLookupResult("acc-existing", "ACTIVE")));
-        when(oAuthLoginTransactionalStep.persistLogin(any(OAuthCallbackTxnCommand.class)))
-                .thenReturn(new OAuthLoginResult("a", "r", 1, 1L, false));
 
-        oAuthLoginUseCase.callback(command);
+        BrowserLoginResolution result = oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID);
 
         // socialSignup must NOT be called on the existing-identity path
         verify(accountServicePort, never()).socialSignup(anyString(), anyString(), anyString(), anyString(), any());
 
-        // Ordering: provider HTTP → getAccountStatus → persistLogin
-        InOrder order = inOrder(oAuthClient, accountServicePort, oAuthLoginTransactionalStep);
+        // Ordering: provider HTTP → getAccountStatus → persist step
+        InOrder order = inOrder(oAuthClient, accountServicePort, socialIdentityPersistStep);
         order.verify(oAuthClient).exchangeCodeForUserInfo(CODE, REDIRECT_URI);
         order.verify(accountServicePort).getAccountStatus("acc-existing");
-        order.verify(oAuthLoginTransactionalStep).persistLogin(any(OAuthCallbackTxnCommand.class));
+        order.verify(socialIdentityPersistStep).persistIdentityAndCheckStatus(
+                any(), any(), anyString(), anyString(), any());
 
-        ArgumentCaptor<OAuthCallbackTxnCommand> captor =
-                ArgumentCaptor.forClass(OAuthCallbackTxnCommand.class);
-        verify(oAuthLoginTransactionalStep).persistLogin(captor.capture());
-        assertThat(captor.getValue().accountId()).isEqualTo("acc-existing");
-        assertThat(captor.getValue().isNewAccount()).isFalse();
-        assertThat(captor.getValue().accountStatus()).contains("ACTIVE");
+        assertThat(result.accountId()).isEqualTo("acc-existing");
+        assertThat(result.isNewAccount()).isFalse();
     }
 
     @Test
-    @DisplayName("callback: getAccountStatus returns empty → txn command carries empty status; "
-            + "txn step decides what to do with it")
+    @DisplayName("callback: getAccountStatus returns empty → empty status reaches the txn step; "
+            + "the txn step decides what to do with it")
     void callback_accountStatusEmpty_propagatesEmpty() {
         when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.GOOGLE));
         when(oAuthClientProvider.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
         when(oAuthClient.exchangeCodeForUserInfo(CODE, REDIRECT_URI)).thenReturn(USER_INFO);
         when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.empty());
-        when(accountServicePort.socialSignup(anyString(), anyString(), anyString(), anyString(), isNull()))
+        when(accountServicePort.socialSignup(anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(new SocialSignupResult("acc-new", "ACTIVE", true));
         when(accountServicePort.getAccountStatus("acc-new")).thenReturn(Optional.empty());
-        when(oAuthLoginTransactionalStep.persistLogin(any(OAuthCallbackTxnCommand.class)))
-                .thenReturn(new OAuthLoginResult("a", "r", 1, 1L, true));
 
-        oAuthLoginUseCase.callback(command);
+        oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID);
 
-        ArgumentCaptor<OAuthCallbackTxnCommand> captor =
-                ArgumentCaptor.forClass(OAuthCallbackTxnCommand.class);
-        verify(oAuthLoginTransactionalStep).persistLogin(captor.capture());
-        assertThat(captor.getValue().accountStatus()).isEmpty();
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Optional<String>> statusCaptor = ArgumentCaptor.forClass(Optional.class);
+        verify(socialIdentityPersistStep).persistIdentityAndCheckStatus(
+                any(), any(), eq("acc-new"), eq(TENANT_ID), statusCaptor.capture());
+        assertThat(statusCaptor.getValue()).isEmpty();
     }
 
     @Test
@@ -229,13 +222,10 @@ class OAuthLoginUseCaseTest {
     void callback_invalidStateSkipsHttpAndTxn() {
         when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> oAuthLoginUseCase.callback(command))
+        assertThatThrownBy(() -> oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID))
                 .isInstanceOf(InvalidOAuthStateException.class);
 
-        verify(oAuthClientProvider, never()).getClient(any());
-        verify(accountServicePort, never()).socialSignup(anyString(), anyString(), anyString(), anyString(), any());
-        verify(accountServicePort, never()).getAccountStatus(anyString());
-        verify(oAuthLoginTransactionalStep, never()).persistLogin(any());
+        verifyNothingDownstreamRan();
     }
 
     @Test
@@ -248,14 +238,11 @@ class OAuthLoginUseCaseTest {
         // instead of discarding it.
         when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.KAKAO));
 
-        assertThatThrownBy(() -> oAuthLoginUseCase.callback(command))
+        assertThatThrownBy(() -> oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID))
                 .isInstanceOf(InvalidOAuthStateException.class);
 
         // Rejected at the state gate — nothing downstream runs.
-        verify(oAuthClientProvider, never()).getClient(any());
-        verify(accountServicePort, never()).socialSignup(anyString(), anyString(), anyString(), anyString(), any());
-        verify(accountServicePort, never()).getAccountStatus(anyString());
-        verify(oAuthLoginTransactionalStep, never()).persistLogin(any());
+        verifyNothingDownstreamRan();
     }
 
     @Test
@@ -267,12 +254,13 @@ class OAuthLoginUseCaseTest {
                 new OAuthProviderException("google token exchange failed");
         when(oAuthClient.exchangeCodeForUserInfo(CODE, REDIRECT_URI)).thenThrow(providerFailure);
 
-        assertThatThrownBy(() -> oAuthLoginUseCase.callback(command))
+        assertThatThrownBy(() -> oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID))
                 .isSameAs(providerFailure);
 
         verify(accountServicePort, never()).socialSignup(anyString(), anyString(), anyString(), anyString(), any());
         verify(accountServicePort, never()).getAccountStatus(anyString());
-        verify(oAuthLoginTransactionalStep, never()).persistLogin(any());
+        verify(socialIdentityPersistStep, never())
+                .persistIdentityAndCheckStatus(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -284,12 +272,13 @@ class OAuthLoginUseCaseTest {
                 "provider-user-1", "", "User", OAuthProvider.GOOGLE);
         when(oAuthClient.exchangeCodeForUserInfo(CODE, REDIRECT_URI)).thenReturn(noEmail);
 
-        assertThatThrownBy(() -> oAuthLoginUseCase.callback(command))
+        assertThatThrownBy(() -> oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID))
                 .isInstanceOf(OAuthEmailRequiredException.class);
 
         verify(accountServicePort, never()).socialSignup(anyString(), anyString(), anyString(), anyString(), any());
         verify(accountServicePort, never()).getAccountStatus(anyString());
-        verify(oAuthLoginTransactionalStep, never()).persistLogin(any());
+        verify(socialIdentityPersistStep, never())
+                .persistIdentityAndCheckStatus(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -301,20 +290,20 @@ class OAuthLoginUseCaseTest {
         when(oAuthClient.exchangeCodeForUserInfo(CODE, REDIRECT_URI)).thenReturn(USER_INFO);
         when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.empty());
-        when(accountServicePort.socialSignup(anyString(), anyString(), anyString(), anyString(), isNull()))
+        when(accountServicePort.socialSignup(anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(new SocialSignupResult("acc-1", "ACTIVE", true));
         when(accountServicePort.getAccountStatus("acc-1"))
                 .thenReturn(Optional.of(new AccountStatusLookupResult("acc-1", "ACTIVE")));
         RuntimeException dbFailure = new RuntimeException("db down");
-        when(oAuthLoginTransactionalStep.persistLogin(any(OAuthCallbackTxnCommand.class)))
-                .thenThrow(dbFailure);
+        doThrow(dbFailure).when(socialIdentityPersistStep)
+                .persistIdentityAndCheckStatus(any(), any(), anyString(), anyString(), any());
 
-        assertThatThrownBy(() -> oAuthLoginUseCase.callback(command))
+        assertThatThrownBy(() -> oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID))
                 .isSameAs(dbFailure);
 
         // HTTP fetches happened exactly once; no retry after txn failure
         verify(oAuthClient).exchangeCodeForUserInfo(CODE, REDIRECT_URI);
-        verify(accountServicePort).socialSignup("user@example.com", "GOOGLE", "provider-user-1", "User", null);
+        verify(accountServicePort).socialSignup("user@example.com", "GOOGLE", "provider-user-1", "User", TENANT_ID);
         verify(accountServicePort).getAccountStatus("acc-1");
     }
 
@@ -380,13 +369,10 @@ class OAuthLoginUseCaseTest {
         OAuthCallbackCommand evil = new OAuthCallbackCommand(
                 "GOOGLE", CODE, STATE, "https://attacker.example.com/cb", CTX);
 
-        assertThatThrownBy(() -> oAuthLoginUseCase.callback(evil))
+        assertThatThrownBy(() -> oAuthLoginUseCase.resolveBrowserLogin(evil, TENANT_ID))
                 .isInstanceOf(InvalidOAuthRedirectUriException.class);
 
-        verify(oAuthClientProvider, never()).getClient(any());
-        verify(accountServicePort, never()).socialSignup(anyString(), anyString(), anyString(), anyString(), any());
-        verify(accountServicePort, never()).getAccountStatus(anyString());
-        verify(oAuthLoginTransactionalStep, never()).persistLogin(any());
+        verifyNothingDownstreamRan();
     }
 
     @Test
@@ -416,17 +402,23 @@ class OAuthLoginUseCaseTest {
         when(oAuthClient.exchangeCodeForUserInfo(anyString(), anyString())).thenReturn(USER_INFO);
         when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.empty());
-        when(accountServicePort.socialSignup(anyString(), anyString(), anyString(), anyString(), isNull()))
+        when(accountServicePort.socialSignup(anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(new SocialSignupResult("acc-1", "ACTIVE", true));
         when(accountServicePort.getAccountStatus("acc-1"))
                 .thenReturn(Optional.of(new AccountStatusLookupResult("acc-1", "ACTIVE")));
-        when(oAuthLoginTransactionalStep.persistLogin(any()))
-                .thenReturn(new OAuthLoginResult("a", "r", 1, 1L, false));
 
         OAuthCallbackCommand blankRedirect = new OAuthCallbackCommand(
                 "GOOGLE", CODE, STATE, "", CTX);
-        oAuthLoginUseCase.callback(blankRedirect);
+        oAuthLoginUseCase.resolveBrowserLogin(blankRedirect, TENANT_ID);
 
         verify(oAuthClient).exchangeCodeForUserInfo(CODE, "http://default/callback");
+    }
+
+    private void verifyNothingDownstreamRan() {
+        verify(oAuthClientProvider, never()).getClient(any());
+        verify(accountServicePort, never()).socialSignup(anyString(), anyString(), anyString(), anyString(), any());
+        verify(accountServicePort, never()).getAccountStatus(anyString());
+        verify(socialIdentityPersistStep, never())
+                .persistIdentityAndCheckStatus(any(), any(), any(), any(), any());
     }
 }

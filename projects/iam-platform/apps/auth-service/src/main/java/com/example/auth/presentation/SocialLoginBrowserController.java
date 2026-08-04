@@ -36,8 +36,9 @@ import java.util.Map;
 /**
  * TASK-BE-396 (ADR-006 option B) — the SAS browser-session social-login bridge.
  *
- * <p>Replaces the legacy custom-JWT JSON flow ({@code /api/auth/oauth/**}) for the
- * browser case. The social authentication terminates in a SAS-consumed
+ * <p>Replaced the legacy custom-JWT JSON flow ({@code /api/auth/oauth/**}) for the
+ * browser case; TASK-BE-398 has since removed that flow entirely, so this is the only
+ * social-login surface. The social authentication terminates in a SAS-consumed
  * authenticated HTTP session (JSESSIONID {@code SecurityContext}) — NOT a custom
  * JWT — so the subsequent saved {@code /oauth2/authorize} resumes and SAS issues
  * standard tokens.

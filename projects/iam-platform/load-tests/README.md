@@ -12,7 +12,7 @@ k6 scenarios that exercise the Global Account Platform stack against the gateway
 
 | File | Purpose |
 |---|---|
-| `scenarios/auth-load-test.js` | login -> refresh -> logout loop, ramping VUs |
+| `scenarios/auth-load-test.js` | OIDC token -> introspect -> revoke loop, ramping VUs (TASK-BE-398: the legacy login -> refresh -> logout loop retired with `POST /api/auth/login`) |
 | `scenarios/signup-load-test.js` | constant-arrival-rate signup at target RPS |
 
 ## Run
@@ -20,7 +20,7 @@ k6 scenarios that exercise the Global Account Platform stack against the gateway
 Local k6:
 
 ```bash
-k6 run load-tests/scenarios/auth-load-test.js
+k6 run -e OIDC_CLIENT_ID=... -e OIDC_CLIENT_SECRET=... load-tests/scenarios/auth-load-test.js
 k6 run -e RPS=20 load-tests/scenarios/signup-load-test.js
 ```
 
@@ -43,12 +43,16 @@ Batch runner:
 
 - `BASE_URL` — gateway base URL (default `http://localhost:8080`)
 - `RPS` — target signup rate for `signup-load-test.js` (default `10`)
+- `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` — confidential OIDC client used by
+  `auth-load-test.js` for the `client_credentials` grant (**required**; the script
+  carries no secret)
+- `OIDC_SCOPE` — scope requested by `auth-load-test.js` (default `account.read`)
 
 ## Observing results
 
 While a test runs, open Grafana at http://localhost:3000 and inspect:
 
 - **Gateway Service Overview** — request rate / p99 latency / 429 rate
-- **Auth Service Overview** — login success/failure, refresh rotation
+- **Auth Service Overview** — token issuance, refresh rotation
 - **Account Service Overview** — signup rate, outbox pending
 - **System Overview** — error rate and latency heatmap across all services

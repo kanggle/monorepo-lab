@@ -100,12 +100,12 @@ gateway:
     # here. Nothing failed, because console-bff reaches the IAM services directly and
     # never crosses this edge (TASK-MONO-347).
     #
-    # TASK-BE-398 retires the legacy custom-JWT flow that mints `iss=iam`. Under the
-    # old single-value config, that would have left this gateway with NO acceptable
-    # issuer at all. When BE-398 lands, drop the trailing `,iam` here — and
-    # `TokenValidatorUnitTest#theEdgeSurvivesTheLegacyIssuerSunset` already asserts
-    # that the edge keeps working when you do.
-    allowed-issuers: ${JWT_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://localhost:8081},iam}
+    # TASK-BE-398 (2026-08-01 sunset, LANDED) removed the legacy custom-JWT flow that
+    # minted `iss=iam`; the trailing `,iam` is dropped here with it, so the edge no
+    # longer accepts a retired issuer. `TokenValidatorUnitTest
+    # #theEdgeSurvivesTheLegacyIssuerSunset` asserts exactly this world: SAS tokens
+    # pass, legacy `iss=iam` tokens do not.
+    allowed-issuers: ${JWT_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://localhost:8081}}
 
   tenant:
     legacy-fallback:
@@ -128,11 +128,11 @@ gateway:
       window-seconds: 1
 
   public-paths:
-    - POST:/api/auth/login
+    # TASK-BE-398: POST /api/auth/login + GET/POST /api/auth/oauth/** were removed from
+    # this allowlist together with the auth-service endpoints they fronted (ADR-001 D2-b
+    # sunset, 2026-08-01). Login is now standard OIDC via /oauth2/** below.
     - POST:/api/accounts/signup
     - POST:/api/auth/refresh
-    - GET:/api/auth/oauth/authorize
-    - POST:/api/auth/oauth/callback
     - GET:/actuator/health
     # OIDC / OAuth2 standard endpoints (TASK-BE-251 Phase 2c).
     # Gateway passes these through without JWT verification — auth-service (SAS)

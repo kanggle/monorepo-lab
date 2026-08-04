@@ -81,7 +81,7 @@ class GatewayRateLimitIntegrationTest {
                         .withHeader("Content-Type", "application/json")
                         .withBody(jwksResponse)));
 
-        authServiceMock.stubFor(post(urlEqualTo("/api/auth/login"))
+        authServiceMock.stubFor(post(urlEqualTo("/api/auth/refresh"))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
@@ -121,9 +121,11 @@ class GatewayRateLimitIntegrationTest {
         registry.add("spring.cloud.gateway.routes[2].uri", () -> "http://127.0.0.1:1");
         registry.add("spring.cloud.gateway.routes[2].id", () -> "dead-service");
         registry.add("spring.cloud.gateway.routes[2].predicates[0]", () -> "Path=/api/dead/**");
-        // login scope max=2 for fast rate-limit testing
-        registry.add("gateway.rate-limit.login.max-requests", () -> "2");
-        registry.add("gateway.rate-limit.login.window-seconds", () -> "60");
+        // TASK-BE-398: POST /api/auth/login was retired (ADR-001 D2-b sunset) and is no
+        // longer a public path, so the rate-limit scenarios drive the still-public
+        // POST /api/auth/refresh and its "refresh" bucket. Scope max=2 for fast testing.
+        registry.add("gateway.rate-limit.refresh.max-requests", () -> "2");
+        registry.add("gateway.rate-limit.refresh.window-seconds", () -> "60");
     }
 
     @BeforeEach
@@ -135,31 +137,31 @@ class GatewayRateLimitIntegrationTest {
     }
 
     @Test
-    @DisplayName("login scope max 초과 3번째 요청 → 429 + Retry-After 헤더")
-    void loginScope_thirdRequest_returns429WithRetryAfterHeader() {
+    @DisplayName("refresh scope max 초과 3번째 요청 → 429 + Retry-After 헤더")
+    void refreshScope_thirdRequest_returns429WithRetryAfterHeader() {
         String clientIp = "10.0.0.1";
 
         // 첫 번째 — OK
-        webTestClient.post().uri("/api/auth/login")
+        webTestClient.post().uri("/api/auth/refresh")
                 .header("Content-Type", "application/json")
                 .header("X-Forwarded-For", clientIp)
-                .bodyValue("{\"email\":\"a@a.com\",\"password\":\"pw\"}")
+                .bodyValue("{\"refreshToken\":\"mock-refresh\"}")
                 .exchange()
                 .expectStatus().isOk();
 
         // 두 번째 — OK
-        webTestClient.post().uri("/api/auth/login")
+        webTestClient.post().uri("/api/auth/refresh")
                 .header("Content-Type", "application/json")
                 .header("X-Forwarded-For", clientIp)
-                .bodyValue("{\"email\":\"a@a.com\",\"password\":\"pw\"}")
+                .bodyValue("{\"refreshToken\":\"mock-refresh\"}")
                 .exchange()
                 .expectStatus().isOk();
 
         // 세 번째 — 429
-        webTestClient.post().uri("/api/auth/login")
+        webTestClient.post().uri("/api/auth/refresh")
                 .header("Content-Type", "application/json")
                 .header("X-Forwarded-For", clientIp)
-                .bodyValue("{\"email\":\"a@a.com\",\"password\":\"pw\"}")
+                .bodyValue("{\"refreshToken\":\"mock-refresh\"}")
                 .exchange()
                 .expectStatus().isEqualTo(429)
                 .expectHeader().exists("Retry-After")
@@ -175,26 +177,26 @@ class GatewayRateLimitIntegrationTest {
 
         // ip1 두 번 → limit 도달
         for (int i = 0; i < 2; i++) {
-            webTestClient.post().uri("/api/auth/login")
+            webTestClient.post().uri("/api/auth/refresh")
                     .header("Content-Type", "application/json")
                     .header("X-Forwarded-For", ip1)
-                    .bodyValue("{\"email\":\"a@a.com\",\"password\":\"pw\"}")
+                    .bodyValue("{\"refreshToken\":\"mock-refresh\"}")
                     .exchange()
                     .expectStatus().isOk();
         }
         // ip1 세 번째 → 429
-        webTestClient.post().uri("/api/auth/login")
+        webTestClient.post().uri("/api/auth/refresh")
                 .header("Content-Type", "application/json")
                 .header("X-Forwarded-For", ip1)
-                .bodyValue("{\"email\":\"a@a.com\",\"password\":\"pw\"}")
+                .bodyValue("{\"refreshToken\":\"mock-refresh\"}")
                 .exchange()
                 .expectStatus().isEqualTo(429);
 
         // ip2 첫 번째 → 여전히 OK (별도 카운터)
-        webTestClient.post().uri("/api/auth/login")
+        webTestClient.post().uri("/api/auth/refresh")
                 .header("Content-Type", "application/json")
                 .header("X-Forwarded-For", ip2)
-                .bodyValue("{\"email\":\"a@a.com\",\"password\":\"pw\"}")
+                .bodyValue("{\"refreshToken\":\"mock-refresh\"}")
                 .exchange()
                 .expectStatus().isOk();
     }
@@ -206,31 +208,31 @@ class GatewayRateLimitIntegrationTest {
 
         // 두 번 소진 후 세 번째 429
         for (int i = 0; i < 2; i++) {
-            webTestClient.post().uri("/api/auth/login")
+            webTestClient.post().uri("/api/auth/refresh")
                     .header("Content-Type", "application/json")
                     .header("X-Forwarded-For", clientIp)
-                    .bodyValue("{\"email\":\"a@a.com\",\"password\":\"pw\"}")
+                    .bodyValue("{\"refreshToken\":\"mock-refresh\"}")
                     .exchange()
                     .expectStatus().isOk();
         }
-        webTestClient.post().uri("/api/auth/login")
+        webTestClient.post().uri("/api/auth/refresh")
                 .header("Content-Type", "application/json")
                 .header("X-Forwarded-For", clientIp)
-                .bodyValue("{\"email\":\"a@a.com\",\"password\":\"pw\"}")
+                .bodyValue("{\"refreshToken\":\"mock-refresh\"}")
                 .exchange()
                 .expectStatus().isEqualTo(429);
 
         // Redis 키 삭제 (window 만료 시뮬레이션)
-        redisTemplate.keys("rate:login:*")
+        redisTemplate.keys("rate:refresh:*")
                 .flatMap(redisTemplate::delete)
                 .collectList()
                 .block();
 
         // 다시 허용
-        webTestClient.post().uri("/api/auth/login")
+        webTestClient.post().uri("/api/auth/refresh")
                 .header("Content-Type", "application/json")
                 .header("X-Forwarded-For", clientIp)
-                .bodyValue("{\"email\":\"a@a.com\",\"password\":\"pw\"}")
+                .bodyValue("{\"refreshToken\":\"mock-refresh\"}")
                 .exchange()
                 .expectStatus().isOk();
     }
@@ -261,11 +263,15 @@ class GatewayRateLimitIntegrationTest {
                 .expectStatus().is5xxServerError();
     }
 
+    // TASK-BE-398: the legacy custom-JWT issuer `iam` was retired and dropped from
+    // gateway.jwt.allowed-issuers; tokens are now minted with the SAS issuer.
+    private static final String EXPECTED_ISSUER = "http://localhost:8081";
+
     private String createValidToken(String accountId, String tenantId) {
         return Jwts.builder()
                 .header().keyId("rl-test-kid").and()
                 .subject(accountId)
-                .issuer("iam")
+                .issuer(EXPECTED_ISSUER)
                 .claim("email", "test@example.com")
                 .claim("tenant_id", tenantId)
                 .issuedAt(Date.from(Instant.now()))

@@ -19,7 +19,10 @@
 
 ### 이메일·패스워드 로그인
 
-1. 사용자가 `POST /api/auth/login` 에 이메일·패스워드 전송
+1. 사용자가 `/login` HTML 폼(SAS 브라우저 플로우)에 이메일·패스워드 전송
+   — TASK-BE-398 이전에는 `POST /api/auth/login` JSON 엔드포인트였고, 그 경로는 ADR-001
+   D2-b sunset(2026-08-01)으로 제거되었다. 아래 2~단계의 자격증명 검증·상태 확인·실패
+   카운팅 규칙 자체는 변하지 않는다.
 2. gateway가 rate limit 검사 → 통과 시 auth-service로 전달
 3. auth-service가 account-service에 credential lookup 요청 (내부 HTTP)
 4. 계정 상태 확인: ACTIVE가 아니면 거부 (LOCKED → 403, DORMANT → 403, DELETED → 403)

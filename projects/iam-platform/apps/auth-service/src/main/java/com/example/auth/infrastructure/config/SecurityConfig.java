@@ -4,7 +4,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -38,7 +37,12 @@ import java.util.List;
  * <p>{@code @Order(2)} — runs after the SAS filter chain ({@code @Order(1)} in
  * {@link com.example.auth.infrastructure.oauth2.AuthorizationServerConfig}).
  * The SAS chain covers {@code /oauth2/**} and {@code /.well-known/**};
- * this chain covers all legacy {@code /api/auth/**} and {@code /internal/**} endpoints.
+ * this chain covers the remaining {@code /api/auth/**}, {@code /api/accounts/me/sessions/**}
+ * and {@code /internal/**} endpoints.
+ *
+ * <p><b>TASK-BE-398:</b> the legacy custom-JWT login surface ({@code POST /api/auth/login}
+ * and {@code /api/auth/oauth/**}) was removed at its ADR-001 D2-b sunset (2026-08-01), along
+ * with the {@code DeprecatedApiHeaderFilter} that stamped its RFC 8594 / RFC 9745 headers.
  *
  * <p>TASK-BE-251: SAS filter chain added.
  *
@@ -146,10 +150,11 @@ public class SecurityConfig {
                 // otherwise it defers entirely to the JWT path / the .authenticated() gate below.
                 .addFilterBefore(internalApiFilter, BearerTokenAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/login").permitAll()
+                        // TASK-BE-398: /api/auth/login and /api/auth/oauth/** (the legacy
+                        // custom-JWT flow) were removed at the ADR-001 D2-b sunset
+                        // (2026-08-01). Standard OIDC (/oauth2/**) is the only login path.
                         .requestMatchers("/api/auth/refresh").permitAll()
                         .requestMatchers("/api/auth/logout").permitAll()
-                        .requestMatchers("/api/auth/oauth/**").permitAll()
                         // Password change endpoint — gateway enforces JWT and forwards
                         // X-Account-Id (see PasswordController, auth-api.md PATCH /api/auth/password).
                         .requestMatchers("/api/auth/password").permitAll()
@@ -200,25 +205,5 @@ public class SecurityConfig {
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.getWriter().write(
                 "{\"code\":\"UNAUTHORIZED\",\"message\":\"Missing or invalid internal credentials\"}");
-    }
-
-    /**
-     * Registers {@link DeprecatedApiHeaderFilter} as a servlet filter so that RFC 8594
-     * {@code Deprecation} and RFC 9745 {@code Sunset} headers are injected on every
-     * response to {@code POST /api/auth/login} — including error responses handled by
-     * the exception handler.
-     *
-     * <p>A servlet filter is used (rather than setting headers inside the controller
-     * method) because Spring MVC exception handlers can replace the response object,
-     * which discards headers set earlier in the controller. Wrapping at the servlet
-     * layer avoids this issue.
-     */
-    @Bean
-    public FilterRegistrationBean<DeprecatedApiHeaderFilter> deprecatedApiHeaderFilter() {
-        FilterRegistrationBean<DeprecatedApiHeaderFilter> registration =
-                new FilterRegistrationBean<>(new DeprecatedApiHeaderFilter());
-        registration.addUrlPatterns("/api/auth/login");
-        registration.setOrder(Integer.MIN_VALUE); // run before Spring Security
-        return registration;
     }
 }

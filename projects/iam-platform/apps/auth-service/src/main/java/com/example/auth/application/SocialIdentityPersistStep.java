@@ -13,10 +13,10 @@ import java.util.Optional;
  * Transactional boundary for the <b>SAS browser-session</b> social-login flow
  * (TASK-BE-396, ADR-006 option B).
  *
- * <p>This is the session-establishing counterpart to
- * {@link OAuthLoginTransactionalStep}. It performs the SAME two DB-touching
- * steps shared with the legacy custom-JWT flow, both delegated to the shared
- * {@link SocialLoginSteps} bean:
+ * <p>This was the session-establishing counterpart to the custom-JWT
+ * {@code OAuthLoginTransactionalStep}; since TASK-BE-398 retired that flow it is
+ * the ONLY social-login transactional boundary. It performs the two DB-touching
+ * steps, both delegated to the shared {@link SocialLoginSteps} bean:
  * <ol>
  *   <li><b>social_identity upsert</b> — {@link SocialLoginSteps#upsertIdentity};</li>
  *   <li><b>account-status check</b> — reject LOCKED / DORMANT / DELETED via
@@ -65,8 +65,7 @@ public class SocialIdentityPersistStep {
                                               String accountId,
                                               String tenantId,
                                               Optional<String> accountStatus) {
-        // Upsert local social identity + account-status gate — the shared steps,
-        // identical to the legacy OAuthLoginTransactionalStep path.
+        // Upsert local social identity + account-status gate — the shared steps.
         socialLoginSteps.upsertIdentity(provider, userInfo, accountId, tenantId);
         accountStatus.ifPresent(socialLoginSteps::checkAccountStatus);
     }

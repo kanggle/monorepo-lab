@@ -248,11 +248,12 @@ public class AuthorizationServerConfig {
                 // (no Authorization header, no session) get a 302 redirect instead of
                 // reaching the SAS token endpoint filter.
                 .exceptionHandling(exceptions ->
-                        // TASK-BE-309: redirect unauthenticated browser GETs to the new
+                        // TASK-BE-309: redirect unauthenticated browser GETs to the
                         // HTML form-login surface (WebLoginSecurityConfig @Order(0))
-                        // instead of the JSON-only POST endpoint at /api/auth/login.
-                        // The HTML-only request matcher (text/html only) below leaves
-                        // programmatic API requests untouched.
+                        // rather than SAS's default /login target. Originally this
+                        // pointed at the JSON-only legacy POST /api/auth/login, which
+                        // TASK-BE-398 has since removed. The HTML-only request matcher
+                        // (text/html only) below leaves programmatic API requests untouched.
                         exceptions.defaultAuthenticationEntryPointFor(
                                 new LoginUrlAuthenticationEntryPoint("/login"),
                                 buildHtmlOnlyRequestMatcher()))
@@ -272,7 +273,7 @@ public class AuthorizationServerConfig {
      * Builds a {@link MediaTypeRequestMatcher} that matches ONLY explicit text/html
      * requests, ignoring {@code Accept: *\/*} which would otherwise be treated as
      * compatible with text/html and cause API requests (e.g. POST /oauth2/token from
-     * cURL or test clients sending no Accept header) to be redirected to /api/auth/login.
+     * cURL or test clients sending no Accept header) to be redirected to the login page.
      */
     private static MediaTypeRequestMatcher buildHtmlOnlyRequestMatcher() {
         MediaTypeRequestMatcher matcher = new MediaTypeRequestMatcher(MediaType.TEXT_HTML);

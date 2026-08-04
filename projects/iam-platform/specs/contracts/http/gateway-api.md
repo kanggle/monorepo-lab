@@ -15,7 +15,8 @@
 | `GET /oauth2/userinfo` | auth-service | No (SAS 처리) | UserInfo — Bearer token SAS 내부 검증 (TASK-BE-251 Phase 2c) |
 | `POST /oauth2/revoke` | auth-service | No (SAS 처리) | Token Revocation RFC 7009 (TASK-BE-251 Phase 2c) |
 | `POST /oauth2/introspect` | auth-service | No (SAS 처리) | Token Introspection RFC 7662 (TASK-BE-251 Phase 2c) |
-| `POST /api/auth/login` | auth-service | No | **DEPRECATED 2026-05-01, 제거 목표 2026-08-01** — `POST /oauth2/token` 으로 이전 |
+| ~~`POST /api/auth/login`~~ | ~~auth-service~~ | — | **REMOVED 2026-08-01 (TASK-BE-398)** — ADR-001 D2-b sunset. `public-paths` 에서도 제거되어 인증 없이 호출 시 엣지가 `401 TOKEN_INVALID`. 대체: `POST /oauth2/token` |
+| ~~`GET /api/auth/oauth/authorize`~~ · ~~`POST /api/auth/oauth/callback`~~ | ~~auth-service~~ | — | **REMOVED 2026-08-01 (TASK-BE-398)** — 레거시 커스텀-JWT 소셜 플로우. 대체: 브라우저 `GET /login/oauth/{provider}` → SAS |
 | `POST /api/auth/logout` | auth-service | Yes (access token) | — |
 | `POST /api/auth/refresh` | auth-service | No (refresh token in body) | — |
 | `POST /api/accounts/signup` | account-service | No | — |

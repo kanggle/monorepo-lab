@@ -230,16 +230,13 @@ class OAuth2AuthorizationServerIntegrationTest extends AbstractIntegrationTest {
     }
 
     // -----------------------------------------------------------------------
-    // 4. Regression — existing /api/auth/login still works
+    // 4. TASK-BE-398 — the legacy /api/auth/login surface is sunset
     // -----------------------------------------------------------------------
 
     @Test
     @Order(6)
-    @DisplayName("Regression: POST /api/auth/login endpoint is still reachable (returns 4xx, not 404/403)")
-    void regression_loginEndpointStillReachable() throws Exception {
-        // Send a deliberately bad login — the point is that the SAS filter chain
-        // did NOT intercept /api/auth/login. We expect 401 (credentials invalid),
-        // not 404 (route not found) or 403 (access denied by SAS).
+    @DisplayName("TASK-BE-398: POST /api/auth/login no longer issues a custom JWT (ADR-001 D2-b sunset)")
+    void legacyLoginEndpointIsSunset() throws Exception {
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -248,12 +245,11 @@ class OAuth2AuthorizationServerIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(result -> {
                     int status = result.getResponse().getStatus();
                     assertThat(status)
-                            .as("Login endpoint must not be captured by SAS filter chain. " +
-                                    "Expected 4xx but got " + status)
-                            .isBetween(400, 499);
-                    assertThat(status)
-                            .as("Must not be 404 (route missing) — SAS must not have swallowed the route")
-                            .isNotEqualTo(404);
+                            .as("the retired /api/auth/login must never return 2xx. Got " + status)
+                            .isGreaterThanOrEqualTo(400);
+                    assertThat(result.getResponse().getContentAsString())
+                            .as("no access token may be issued by the retired endpoint")
+                            .doesNotContain("accessToken");
                 });
     }
 
