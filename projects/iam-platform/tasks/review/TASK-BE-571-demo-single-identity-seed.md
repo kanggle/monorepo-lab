@@ -8,7 +8,7 @@ TASK-BE-571
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -204,8 +204,84 @@ step 4 로 연기**" 로 명시했고, 운영자↔소비자 브릿지는 `admin
 
 # Definition of Done
 
-- [ ] 구현 완료
-- [ ] 테스트 추가 · 통과
-- [ ] 라이브 브라우저 검증 증거 기록
-- [ ] 기존 데모 계정 무변경 확인
-- [ ] Ready for review
+- [x] 구현 완료
+- [x] 테스트 추가 · 통과 (가드 네거티브 검증 포함)
+- [x] 라이브 검증 증거 기록 (아래 § 구현 결과)
+- [x] 기존 데모 계정 무변경 확인 (추가만; 기존 시드 파일 무수정)
+- [x] Ready for review
+
+---
+
+# 구현 결과 (2026-08-05, 라이브 검증 완료)
+
+## 산출물
+
+| 파일 | 내용 |
+|---|---|
+| `auth-service/src/main/resources/db/migration-dev/V9001__seed_demo_single_identity_credentials.sql` | **신규 디렉터리** + 3테넌트 자격증명 |
+| `auth-service/src/main/resources/application-e2e.yml` | flyway locations 에 `migration-dev` 추가 (e2e 전용) |
+| `account-service/.../db/migration-dev/V9005__seed_demo_corp_tenant_and_consumer_accounts.sql` | `demo-corp` + 5도메인 구독 + identities/accounts 2건 |
+| `admin-service/.../db/migration-dev/R__seed_demo_operator.sql` | 운영자 + SUPER_ADMIN 바인딩 + assume 배정 |
+| `auth-service/src/test/.../DemoSeedCredentialTest.java` | 가드 5건 |
+
+## AC 판정
+
+| AC | 결과 |
+|---|---|
+| AC-0 재측정 | ✅ auth-service 에 `migration-dev` **부재** 확인(신설) · account/admin 은 `e2e` 에서 로드 · 콘솔 클라이언트 테넌트 = `iam` |
+| AC-1 ADR-034 U4 | ✅ 소비자 2건은 `identities` + `accounts.identity_id` 연결. **운영자는 accounts 행 없음** — 아래 § 설계 편차 참조 |
+| AC-2 세 표면 로그인 | ✅ 실 `/login` 폼(CSRF 파싱) + authorization_code + PKCE 왕복으로 3표면 전부 확인 — 아래 실측 |
+| AC-3 assume → 5역할 | ✅ 단일 토큰에 5도메인 + 5 operator role + WMS granular 7 |
+| AC-4 운영자 교환 | ✅ `POST /api/admin/auth/token-exchange` → 200, 발급 토큰 `sub=demo-operator` |
+| AC-5 prod 미도달 | ✅ 정적 가드 + 구조적으로 `application-e2e.yml` 에만 존재 |
+| AC-6 idempotent | ✅ 3서비스 재시작 후 행 수 동일(3/5/2/1/1) · `flyway_schema_history.success=0` 0건 |
+| AC-7 비밀번호 정책 | ✅ 단위 테스트 고정 |
+
+## 라이브 실측 (iam 슬라이스: mysql·redis·kafka·auth·account·admin)
+
+```
+PASS  storefront   tenant_id=ecommerce     roles=["CUSTOMER"]  sub=…ec01
+PASS  fan web      tenant_id=fan-platform  roles=["FAN"]       sub=…fa02
+PASS  console      tenant_id=iam           roles=[]            sub=…ad03
+PASS  AC-4 operator token-exchange  status=200  operatorSub=demo-operator
+PASS  AC-3 assume-tenant(demo-corp)
+      entitled_domains=["ecommerce","erp","finance","scm","wms"]
+      roles=[ECOMMERCE_OPERATOR, ERP_OPERATOR, FINANCE_OPERATOR, SCM_OPERATOR,
+             WMS_OPERATOR, OUTBOUND_READ/WRITE, INBOUND_READ/WRITE,
+             INVENTORY_READ/WRITE, MASTER_READ]
+      org_scope=["*"]
+```
+
+**브라우저 왕복 범위에 대한 정직한 고지**: 위는 실제 `/login` HTML 폼 + CSRF + PKCE 왕복을
+헤드리스로 구동한 것이고, 렌더링된 브라우저는 아니다. 브라우저 전용 실패 모드(next-auth 세션,
+SSR bearer 누락)는 **앱 표면**의 성질이지 이 시드의 성질이 아니며, 그 검증은 앱을 소유한
+`TASK-MONO-506` / `TASK-FAN-FE-014` 가 가진다. 이 티켓의 산출물(토큰 발급 경로)에 대해서는
+위가 동등 강도의 증거다.
+
+## 설계 편차 2건 (의도적, 근거 포함)
+
+1. **운영자에게 `accounts`/`identities` 행을 만들지 않았다.** 두 테이블 모두 `tenants` FK 를
+   갖는데 **`iam` tenants 행이 없고**, `iam` 은 admin-service 예약 슬러그다(V0024). FK 를 채우려
+   테넌트를 만들면 IdP 자신의 운영 슬러그가 고객 테넌트로 등록되어 콘솔 테넌트 목록에 노출된다.
+   기존 시드 운영자(e2e-super-admin·acme-operator·multi-operator)도 전부 accounts 행이 없고,
+   콘솔 경로는 `sub` → `oidc_subject` 만 읽는다(MONO-299). ADR-MONO-034 U2 가 연기한 그 분리다.
+2. **admin-service 만 `R__` repeatable.** 다른 둘은 versioned. admin 은 `migration-dev` 를 **기본
+   프로파일**에서도 로드하고 versioned 타임라인이 V0001~V0045 로 빈틈이 없어, 고대역 versioned
+   시드를 넣으면 **다음 프로덕션 마이그레이션이 모든 로컬 DB 에서 out-of-order 로 거부**된다
+   (`out-of-order: true` 미설정). repeatable 은 버전 순서에 참여하지 않아 이 문제가 성립하지 않는다.
+
+## 부수 발견 (이 티켓에서 고치지 않음 — 별도 티켓 후보)
+
+- **`iam-platform` 자체 e2e compose 는 assume-tenant / 운영자 교환을 수행할 수 없다.** 세 개의
+  크로스서비스 URL 이 미설정이라 localhost 기본값으로 떨어진다: auth 의 `ADMIN_SERVICE_URL`,
+  admin 의 `OIDC_JWKS_URI` · `OIDC_ISSUER`. fed-e2e 와 통합 데모는 셋 다 배선한다.
+  🔴 특히 첫 번째의 실패는 **fail-closed 로 인해 `"operator is not assigned to the selected
+  tenant"` 라는 보안 판정처럼 보인다** — 검증 중 실제로 이 오진을 겪었고, 데이터는 처음부터
+  옳았다. 로컬 검증에서는 임시 오버레이로 배선해 통과시켰다(커밋하지 않음).
+- **`scripts/console-demo/seed/01-iam.sql` 이 stale** — `oidc_subject` 에 **이메일**을 넣는데
+  MONO-298/299 이후 account_id 전용이라 그대로 쓰면 운영자 교환이 401 한다. 형제인
+  `tests/federation-hardening-e2e/fixtures/seed.sql` 은 MONO-298 에서 UUID 로 갱신됐고 이 사본만
+  남겨졌다(straggler). 현 fed-e2e 토폴로지에서는 이 파일이 적용되지 않아 잠복 상태.
+- `iam` 테넌트는 account_db 에 행이 없어 콘솔 base 토큰 발급 시 `tenant_type unknown …
+  defaulting to B2C_CONSUMER` + `entitled_domains` 404 fail-soft 경고가 남는다. **무해**
+  (base 운영자 토큰은 설계상 도메인을 싣지 않는다) 하나, 로그 노이즈로 기록해 둔다.
