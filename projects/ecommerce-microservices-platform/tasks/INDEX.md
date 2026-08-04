@@ -72,9 +72,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-| ID | Title | Service | Tags |
-|---|---|---|---|
-| TASK-BE-390 | **READY — ⏳ 2026-08-01 게이트 (그 전 구현 금지)**. D2-b deprecation window(~2026-08-01) 종료 후 gateway `allowed-issuers`에서 레거시 `iam` issuer 제거 + 테스트 정리. AC-0 verify-then-act(live `iss=iam` 토큰 0 확인) 선행. | gateway-service | code, security, test |
+_(없음)_
+
+_(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset. `../../../tasks/review/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
 
 ## in-progress
 

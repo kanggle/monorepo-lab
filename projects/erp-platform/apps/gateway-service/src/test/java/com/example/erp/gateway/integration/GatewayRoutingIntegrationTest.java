@@ -109,6 +109,21 @@ class GatewayRoutingIntegrationTest extends GatewayIntegrationBase {
                 .expectBody().jsonPath("$.code").isEqualTo("UNAUTHORIZED");
     }
 
+    @Test
+    @DisplayName("TASK-MONO-367 — 레거시 발급자(iam) 토큰 → 401 UNAUTHORIZED (BE-398 이후 일몰)")
+    void legacyIssuerIsRejectedWith401() {
+        // Before TASK-MONO-367 this token PASSED — the allowlist carried `iam` for the D2-b
+        // deprecation window. TASK-BE-398 retired the only flow that minted `iss=iam`, so this
+        // gateway's allowlist no longer carries it either.
+        String token = jwt.signLegacyIssuerToken("ops-legacy");
+
+        webTestClient.get().uri(PATH)
+                .header("Authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus().isUnauthorized()
+                .expectBody().jsonPath("$.code").isEqualTo("UNAUTHORIZED");
+    }
+
     // --- authorization rejections (403) ---
 
     @Test

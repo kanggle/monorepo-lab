@@ -228,11 +228,9 @@ ecommerce:
   # Consumed by OAuth2ResourceServerConfig + TenantClaimValidator +
   # AllowedIssuersValidator. See specs/integration/iam-integration.md.
   oauth2:
-    # Acceptable iss claim values during the D2-b deprecation window
-    # (~2026-08-01). Both the SAS issuer (default http://iam.local) and the
-    # legacy 'iam' string must validate while the
-    # legacy path is being deprecated.
-    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://localhost:8081},iam}
+    # TASK-MONO-367 (2026-08-01 sunset, LANDED): the legacy custom-JWT issuer `iam` is no
+    # longer minted (TASK-BE-398) and no longer accepted here. SAS issuer only.
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://localhost:8081}}
     # Tokens whose tenant_id claim does not match this value are rejected
     # at the gateway with 403 (TENANT_FORBIDDEN). Single-tenant only — no
     # wildcard support; cross-tenant access is blocked by design.

@@ -107,14 +107,15 @@ procurement:
 
 scmplatform:
   oauth2:
-    # D2-b deprecation window: SAS issuer + legacy "iam" string.
+    # TASK-MONO-367 (2026-08-01 sunset, LANDED): the legacy custom-JWT issuer `iam` is no
+    # longer minted (TASK-BE-398) and no longer accepted here. SAS issuer only.
     # MUST stay byte-identical to gateway-service's allowed-issuers — if the
     # gateway accepts an issuer that this service rejects, traffic flowing
     # through the gateway gets a 401 here despite the gateway's green light
     # (cross-service issuer drift). When changing this value, update
     # projects/scm-platform/apps/gateway-service/src/main/resources/application.yml
     # in the same commit.
-    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://iam.local},iam}
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://iam.local}}
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:scm}
   procurement:
     supplier:

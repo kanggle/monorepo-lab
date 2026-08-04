@@ -124,8 +124,10 @@ public abstract class GatewayIntegrationBase {
         registry.add("spring.security.oauth2.resourceserver.jwt.jwk-set-uri",
                 () -> jwks.hostJwksUrl());
         // finance's own property prefix (financeplatform.*), verbatim from application.yml.
-        registry.add("financeplatform.oauth2.allowed-issuers",
-                () -> JwtTestHelper.SAS_ISSUER + "," + JwtTestHelper.LEGACY_ISSUER);
+        // TASK-MONO-367 (2026-08-01 sunset, LANDED): matches production post-sunset — SAS
+        // issuer only, no trailing legacy `iam` entry (TASK-BE-398 retired the only flow
+        // that minted it). signLegacyIssuerToken() exercises the resulting rejection.
+        registry.add("financeplatform.oauth2.allowed-issuers", () -> JwtTestHelper.SAS_ISSUER);
         registry.add("financeplatform.oauth2.required-tenant-id", () -> "finance");
 
         // Orthogonal boot-time concern (see class Javadoc): keep it out of the request-path suite.

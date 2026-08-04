@@ -29,10 +29,11 @@ import java.util.UUID;
 public final class JwtTestHelper {
 
     /**
-     * Default issuer matches the legacy {@code POST /api/auth/login} issuer
-     * ({@code "iam"}) — kept on the
-     * {@link com.example.security.oauth2.AllowedIssuersValidator} allowlist while
-     * D2-b deprecation is in flight (TASK-MONO-019).
+     * The legacy {@code POST /api/auth/login} issuer ({@code "iam"}) — retired by
+     * TASK-BE-398 and no longer on the
+     * {@link com.example.security.oauth2.AllowedIssuersValidator} allowlist
+     * (TASK-MONO-367, 2026-08-01 sunset, LANDED). Kept only for
+     * {@link #signLegacyIssuerToken(String)}, which proves the rejection.
      */
     public static final String LEGACY_ISSUER = "iam";
     /** Issuer URL used by SAS-issued tokens (TASK-MONO-019). */
@@ -92,10 +93,20 @@ public final class JwtTestHelper {
      */
     public String signToken(String subject, String role, long ttlSeconds,
                             Map<String, Object> additionalClaims) {
+        return signToken(SAS_ISSUER, subject, role, ttlSeconds, additionalClaims);
+    }
+
+    /**
+     * As {@link #signToken(String, String, long, Map)}, with an explicit issuer — used by
+     * {@link #signLegacyIssuerToken(String)} to build a token the post-sunset allowlist
+     * (TASK-MONO-367) must reject.
+     */
+    public String signToken(String issuer, String subject, String role, long ttlSeconds,
+                            Map<String, Object> additionalClaims) {
         Instant now = Instant.now();
         JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
                 .subject(subject)
-                .issuer(LEGACY_ISSUER)
+                .issuer(issuer)
                 .claim("tenant_id", DEFAULT_TENANT_ID)
                 .issueTime(Date.from(now))
                 .expirationTime(Date.from(now.plusSeconds(ttlSeconds)))
@@ -118,6 +129,15 @@ public final class JwtTestHelper {
     }
 
     /**
+     * Convenience: a structurally valid wms token signed with the legacy custom-JWT issuer
+     * ({@code "iam"}) — retired by TASK-BE-398 and no longer on the allowlist
+     * (TASK-MONO-367, 2026-08-01 sunset). Before that sunset this would have passed.
+     */
+    public String signLegacyIssuerToken(String subject) {
+        return signToken(LEGACY_ISSUER, subject, "MASTER_READ", 300, Map.of());
+    }
+
+    /**
      * Builds a structurally valid wms operator token (correct issuer/tenant/role) that
      * <strong>advertises the real published {@code kid}</strong> in its JWS header — so the
      * resource server selects the published key to verify — but is <strong>signed with the
@@ -136,7 +156,7 @@ public final class JwtTestHelper {
         Instant now = Instant.now();
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
                 .subject(subject)
-                .issuer(LEGACY_ISSUER)
+                .issuer(SAS_ISSUER)
                 .claim("tenant_id", DEFAULT_TENANT_ID)
                 .claim("role", "MASTER_READ")
                 .issueTime(Date.from(now))
@@ -165,7 +185,7 @@ public final class JwtTestHelper {
         Instant now = Instant.now();
         JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
                 .subject(subject)
-                .issuer(LEGACY_ISSUER)
+                .issuer(SAS_ISSUER)
                 .claim("tenant_id", DEFAULT_TENANT_ID)
                 .issueTime(Date.from(now))
                 .expirationTime(Date.from(now.plusSeconds(300)))

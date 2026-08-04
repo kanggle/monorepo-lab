@@ -108,11 +108,11 @@ logging:
 
 erpplatform:
   oauth2:
-    # D2-b deprecation window: SAS issuer + legacy "iam"
-    # string. Keep byte-identical to gateway-service's allowed-issuers when the
-    # gateway-service is introduced (cross-service issuer drift guard — scm /
-    # finance precedent).
-    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://iam.local},iam}
+    # TASK-MONO-367 (2026-08-01 sunset, LANDED): the legacy custom-JWT issuer `iam` is no
+    # longer minted (TASK-BE-398) and no longer accepted here. SAS issuer only.
+    # Keep byte-identical to gateway-service's allowed-issuers (cross-service
+    # issuer drift guard — scm / finance precedent).
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://iam.local}}
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:erp}
   masterdata:
     idempotency:

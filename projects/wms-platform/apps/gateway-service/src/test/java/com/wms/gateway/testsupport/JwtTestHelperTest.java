@@ -38,7 +38,10 @@ class JwtTestHelperTest {
         assertThat(claims.getStringClaim("email")).isEqualTo("user-42@test.local");
         assertThat(claims.getStringClaim("account_type")).isEqualTo("OPERATOR");
         assertThat(claims.getAudience()).containsExactly("wms");
-        assertThat(claims.getIssuer()).isEqualTo(JwtTestHelper.LEGACY_ISSUER);
+        // TASK-MONO-367 (2026-08-01 sunset, LANDED): the helper's default issuer is now the
+        // SAS issuer, matching production post-sunset (the legacy `iam` issuer this helper
+        // used to default to is retired — see JwtTestHelper#signLegacyIssuerToken).
+        assertThat(claims.getIssuer()).isEqualTo(JwtTestHelper.SAS_ISSUER);
         assertThat(claims.getStringClaim("tenant_id")).isEqualTo(JwtTestHelper.DEFAULT_TENANT_ID);
         assertThat(claims.getExpirationTime()).isAfter(new java.util.Date());
     }

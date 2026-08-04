@@ -73,8 +73,10 @@ public abstract class GatewayIntegrationBase {
         registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
         registry.add("spring.security.oauth2.resourceserver.jwt.jwk-set-uri",
                 () -> jwks.hostJwksUrl());
-        registry.add("fanplatform.oauth2.allowed-issuers",
-                () -> JwtTestHelper.SAS_ISSUER + "," + JwtTestHelper.LEGACY_ISSUER);
+        // TASK-MONO-367 (2026-08-01 sunset, LANDED): matches production post-sunset — SAS
+        // issuer only, no trailing legacy `iam` entry (TASK-BE-398 retired the only flow
+        // that minted it).
+        registry.add("fanplatform.oauth2.allowed-issuers", () -> JwtTestHelper.SAS_ISSUER);
         registry.add("fanplatform.oauth2.required-tenant-id", () -> "fan-platform");
         // Override the placeholder route so /api/v1/community/** lands on the
         // downstream MockWebServer instead of the unreachable

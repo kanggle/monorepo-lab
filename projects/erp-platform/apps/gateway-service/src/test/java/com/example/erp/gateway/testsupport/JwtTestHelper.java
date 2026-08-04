@@ -158,6 +158,16 @@ public final class JwtTestHelper {
     }
 
     /**
+     * Convenience: valid signature/tenant but issued by the legacy custom-JWT string
+     * {@code "iam"} — retired by TASK-BE-398 and no longer on erp's allowlist
+     * (TASK-MONO-367, 2026-08-01 sunset). Before that sunset this would have passed.
+     */
+    public String signLegacyIssuerToken(String subject) {
+        return signToken(LEGACY_ISSUER, subject, "ERP_OPERATOR", DEFAULT_TENANT_ID, 300,
+                Map.of("roles", List.of("ERP_OPERATOR")));
+    }
+
+    /**
      * A structurally valid erp operator token whose signature is produced with a private key that
      * is NOT the counterpart of the JWKS-published public key — a forged/tampered signature. The
      * header advertises the real {@code kid}, so the resource server selects the published key and
