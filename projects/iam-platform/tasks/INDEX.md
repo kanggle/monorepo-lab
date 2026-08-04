@@ -72,12 +72,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- **`TASK-BE-570-fan-platform-client-scope-registration-gap.md`** — `fan-platform-user-flow-client`(`V0011`)의
-  등록 scope 가 `auth.ts` 요청 scope 의 진부분집합이라 OIDC `/oauth2/authorize` 단계에서 전량 `invalid_scope` 로 로그인이
-  깨짐(fan-platform 브라우저 로그인 전면 차단). `iam-integration.md` § Scopes 가 이미 문서화한 계약을 IAM 쪽 시드가
-  못 따라간 gap — 신규 `V0030` 로 카탈로그 3행 + 클라이언트 scopes 4개 보강. 2026-08-04 `TASK-MONO-502`(메모리감사) 세션의
-  이연 후속 재검증에서 발굴, 원인 IAM 쪽으로 재규명(이전 세션의 uncommitted 로컬 워크어라운드는 소실됨, 방향도 반대였음).
-
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
 
 (empty)
@@ -120,6 +114,8 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 (empty)
 
 ## done
+
+- **`TASK-BE-570-fan-platform-client-scope-registration-gap.md` — ✅ DONE (2026-08-04, 3-dim verified — impl PR #3185 squash `410a94e29`; state=MERGED · origin/main tip ancestor 확인 · 머지 전 실패 체크 0건).** `fan-platform-user-flow-client`(`V0011`)의 등록 scope 가 `auth.ts` 요청 scope 의 진부분집합이라 OIDC `/oauth2/authorize` 단계에서 전량 `invalid_scope` 로 로그인이 깨짐(fan-platform 브라우저 로그인 전면 차단). `iam-integration.md` § Scopes 가 이미 문서화한 계약을 IAM 쪽 시드가 못 따라간 gap — 신규 `V0030` 가 카탈로그 3행(`fan-platform.community.read/write`, `fan-platform.artist.read`) + 클라이언트 scopes 4개(위 3개 + `offline_access`) 보강, `V0023` 패턴의 `JSON_ARRAY_APPEND`+`JSON_SEARCH` 멱등가드. `auth-api.md` § Registered Clients 동기화. AC-0 재검증(착수 시점) PASS — `auth.ts` scope 문자열 불변, V0011 이후 어떤 마이그레이션도 이 클라이언트의 scopes 미변경 확인. 테스트: `auth-service:test` 623/0/0, `auth-service:integrationTest`(Testcontainers) 85/0/0. 범위 밖(의도적): `fan-platform.artist.write`/`membership.*`/`notification.write`(현재 미요청, scope creep 배제), 리소스서버 측 scope 강제(별도 아키텍처 결정, 미번들). 2026-08-04 `TASK-MONO-502`(메모리감사) 세션의 이연 후속 재검증에서 발굴, 원인 IAM 쪽으로 재규명(이전 세션의 uncommitted 로컬 워크어라운드는 소실됐고 방향도 반대—scope 축소가 아니라 IAM 등록 보강이 정답).
 
 - **`TASK-BE-398-legacy-custom-jwt-flow-sunset-removal.md` — ✅ DONE (2026-08-04, 3-dim verified — impl PR #3179 squash `d3075f813`; state=MERGED · origin/main tip ancestor 확인 · 머지 전 실패 체크 0건).** ADR-001 D2-b 90일 window 만료(2026-05-01 deprecated → 2026-08-01 removal) + ADR-006 대체 완료에 따라 **레거시 커스텀-JWT 인증 표면 제거**.
   - **AC-0 (착수 시점 재측정, 스냅샷 미승계)** — repo-wide 4경로(`/api/auth/{login,oauth/,refresh,logout}`) 비-md 히트 81파일 전수 재분류. **(a) 정적 grep PASS** — live 외부 call-site 소비자 0: ecommerce 는 *독립 auth 스택*(경로 문자열만 동일), platform-console `/api/auth/*` 는 *console 자체 Next.js 라우트*(디렉터리 실재 확인 → OIDC 리다이렉트/rotation/RP-initiated logout), repo-root `tests/federation-hardening-e2e/fixtures/login.ts` 도 **console origin** 으로 이동, fan·scm·erp·finance 참조 0건, wms 3서비스는 레거시 발급자 **수용**(호출 아님, 타 프로젝트라 범위 밖 — 손대지 않음). **(c) 소비자 OIDC 이전 PASS.** 🔴 **(b) 라이브 게이트웨이 트래픽=0 은 이 환경에서 독립 검증 불가**(구동 데모 스택 access-log 필요) — *확인했다고 적지 않음*, 근거는 (1) 정적 전수 0건, (2) sunset 경과 + 90일간 `Deprecation`/`Sunset` 헤더 고지, (3) console-bff 가 게이트웨이를 우회(`TASK-MONO-347`)해 이 엣지 통과 소비자가 사실상 없음. **CI `E2E smoke (iam docker-compose)`(실 스택 기동)도 GREEN** — 부분적 라이브 신호.
