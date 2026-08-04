@@ -72,7 +72,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-_(없음 — TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset. `../../../tasks/review/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
+_(없음)_
+
+_(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset. `../../../tasks/review/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
 
 ## in-progress
 
