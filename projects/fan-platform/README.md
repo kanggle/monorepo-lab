@@ -3,7 +3,7 @@
 > **K-pop 류 아티스트↔팬 커뮤니티** 백엔드 + Next.js 프론트엔드. Weverse-style.
 > Built with Claude Code · spec-driven · IAM OIDC consumer · Traefik hostname routing
 
-[![CI](https://github.com/kanggle/monorepo-lab/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kanggle/monorepo-lab/actions/workflows/ci.yml?query=branch%3Amain)
+[![CI](https://github.com/kanggle/fan-platform/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kanggle/fan-platform/actions/workflows/ci.yml?query=branch%3Amain)
 [![Java 21](https://img.shields.io/badge/java-21-007396)](https://adoptium.net/)
 [![Spring Boot 3.4](https://img.shields.io/badge/spring--boot-3.4-6DB33F)](https://spring.io/projects/spring-boot)
 [![Next.js 15](https://img.shields.io/badge/next.js-15-000000)](https://nextjs.org/)
@@ -22,9 +22,9 @@ AI-assisted 풀스택 포트폴리오 — 엔터테인먼트 회사 (HYBE / SM /
 
 ## Status
 
-🚧 **부트스트랩 진행 중** (2026-05-02 ~ )
+✅ **v1.1 — 5 backend services + web, 전부 구현·배포됨**
 
-v1 목표: gateway + community + artist 3 서비스 + lean Next.js 프론트엔드. 자세한 service map 은 [PROJECT.md](PROJECT.md#service-map-v1--v2).
+`gateway` · `community` (post / comment / reaction / follow feed) · `artist` (profile + fandom) · `membership` (subscription state machine + PG mock + outbox) · `notification` (membership events → per-fan inbox) 5 개 백엔드 서비스와 Next.js 15 프론트엔드까지 모두 구현 완료. 자세한 service map 은 [PROJECT.md](PROJECT.md#service-map-v1--v2).
 
 ## Quick Start
 
@@ -43,7 +43,7 @@ open http://fan-platform.local/
 
 ## Architecture
 
-### Service map (v1)
+### Service map (v1.1 — 5 backend + web)
 
 ```
                        ┌──────────────────────┐
@@ -54,14 +54,14 @@ open http://fan-platform.local/
                        │   gateway-service    │ ← OIDC token 검증, tenant gate
                        └──────┬───────────────┘
                               │
-                ┌─────────────┼─────────────┐
-                ▼             ▼             ▼
-        ┌──────────────┐ ┌──────────┐ ┌────────────┐
-        │  community-  │ │ artist-  │ │ (membership│
-        │   service    │ │ service  │ │  v2)       │
-        └──────┬───────┘ └────┬─────┘ └────────────┘
-               │              │
-               └──────┬───────┘
+                ┌─────────────┼─────────────┬─────────────┐
+                ▼             ▼             ▼             ▼
+        ┌──────────────┐ ┌──────────┐ ┌────────────┐ ┌────────────┐
+        │  community-  │ │ artist-  │ │ membership-│ │notification│
+        │   service    │ │ service  │ │  service   │ │  -service  │
+        └──────┬───────┘ └────┬─────┘ └─────┬──────┘ └─────┬──────┘
+               │              │             │              │
+               └──────┬───────┴─────────────┴──────────────┘
                       ▼
               ┌─────────────────┐
               │  Postgres + Kafka│
@@ -82,22 +82,24 @@ open http://fan-platform.local/
 
 | Service | Status |
 |---|---|
-| `gateway-service` | 🚧 첫 부트스트랩 태스크 ([TASK-FAN-BE-001](tasks/done/TASK-FAN-BE-001-gateway-service-bootstrap.md)) |
-| `community-service` | 📝 spec 작성 후 발행 |
-| `artist-service` | 📝 spec 작성 후 발행 |
-| `fan-platform-web` | 📝 백엔드 v1 안정화 후 |
+| `gateway-service` | ✅ 구현·배포 완료 ([TASK-FAN-BE-001](tasks/done/TASK-FAN-BE-001-gateway-service-bootstrap.md)) |
+| `community-service` | ✅ 구현·배포 완료 |
+| `artist-service` | ✅ 구현·배포 완료 |
+| `membership-service` | ✅ 구현·배포 완료 (TASK-FAN-BE-009) |
+| `notification-service` | ✅ 구현·배포 완료 (TASK-FAN-BE-013) |
+| `fan-platform-web` | ✅ 구현·배포 완료 (Next.js 15) |
 
 상세는 [tasks/INDEX.md](tasks/INDEX.md) 참조.
 
-## Differentiation from IAM's frozen `community-service`
+## Differentiation from IAM's (retired) `community-service`
 
-IAM 안에 [`community-service`](../iam-platform/apps/community-service/) 가 frozen demo 로 존재하지만, 본 fan-platform 은 다음 점에서 차별화:
+IAM 안에 `community-service` 가 product-layer demo 로 존재했으나 **2026-07-14 TASK-MONO-394 로 retired** (소스 제거, git history 에만 보존 — 상세는 [iam-platform PROJECT.md](../iam-platform/PROJECT.md)). fan-platform 은 그 데모가 살아 있던 시점부터 다음 점에서 차별화된 독립 구현이었고, 현재는 그 도메인의 유일한 실제 구현체다:
 
-| 측면 | IAM frozen demo | fan-platform |
+| 측면 | IAM demo (retired 2026-07-14) | fan-platform |
 |---|---|---|
 | 위치 | IAM 안 product-layer demo | 별도 프로젝트 |
 | 인증 | IAM 내부 API 직접 호출 | OAuth2 Resource Server 표준 패턴 |
-| Service split | community 단일 | community + artist (master data 분리) + membership (v2) |
+| Service split | community 단일 | community + artist (master data 분리) + membership + notification |
 | Multi-tenant | 단일 tenant | `tenant_id=fan-platform` 격리 검증 |
 | Frontend | 없음 | Next.js 15 + Tailwind |
 | 운영성 | dev 데모 | Traefik routing, content moderation, audit trail |

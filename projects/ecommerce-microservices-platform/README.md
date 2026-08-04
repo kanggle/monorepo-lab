@@ -15,6 +15,8 @@
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
+[![CI](https://github.com/kanggle/ecommerce-microservices-platform/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kanggle/ecommerce-microservices-platform/actions/workflows/ci.yml?query=branch%3Amain)
+
 ---
 
 ## Overview
@@ -86,9 +88,9 @@
           ┌────────────────┼────────────────────────────┐
           │                │                             │
    ┌──────▼──────┐ ┌──────▼──────┐ ┌──────▼──────┐     │
-   │    Auth     │ │   Product   │ │    Order    │     ...
-   │   (8081)    │ │   (8082)    │ │   (8086)    │
-   │  Layered    │ │    DDD      │ │    DDD      │
+   │ Settlement  │ │   Product   │ │    Order    │     ...
+   │   (8094)    │ │   (8082)    │ │   (8086)    │
+   │    DDD      │ │    DDD      │ │    DDD      │
    └──────┬──────┘ └──────┬──────┘ └──────┬──────┘
           │                │                │
           └────────────────┼────────────────┘
@@ -116,7 +118,6 @@
 | Service | Port | Architecture | 역할 | 핵심 패턴 |
 |---------|------|-------------|------|-----------|
 | **Gateway** | 8080 | Layered | API 라우팅, 인증, Rate Limiting | Spring Cloud Gateway, Redis |
-| **Auth** | 8081 | Layered | 회원가입, JWT 인증, 세션 관리 | JWT, Redis Session |
 | **Product** | 8082 | DDD | 상품 카탈로그, 재고 관리 | Aggregate, Domain Events |
 | **User** | 8084 | Layered | 프로필, 주소, 위시리스트 | CRUD, Preferences |
 | **Search** | 8085 | Hexagonal | 상품 검색, 필터링 | Elasticsearch, Event Indexing |
@@ -127,6 +128,7 @@
 | **Review** | 8091 | Layered | 상품 리뷰, 평점 | Cross-service REST |
 | **Promotion** | 8092 | DDD | 프로모션, 쿠폰 | Outbox Pattern |
 | **Notification** | 8093 | Hexagonal | 알림 (Email/SMS/Push) | Multi-channel, Event Consumer |
+| **Settlement** | 8094 | DDD | 셀러 정산·수수료 산정, 기간 마감(period-close), 시뮬레이션 페이아웃 | Event Consumer, Transactional Outbox |
 
 ### Frontend (Next.js 15 / React 19 / TypeScript)
 
@@ -144,9 +146,9 @@
 
 | 패턴 | 적용 기준 | 적용 서비스 |
 |------|----------|------------|
-| **DDD** | 복잡한 비즈니스 규칙, Aggregate 일관성 필요 | Order, Product, Promotion |
+| **DDD** | 복잡한 비즈니스 규칙, Aggregate 일관성 필요 | Order, Product, Promotion, Settlement |
 | **Hexagonal** | 외부 시스템 연동이 핵심, 교체 가능성 높음 | Payment, Search, Notification |
-| **Layered** | 비교적 단순한 CRUD, 빠른 구현 우선 | Auth, User, Shipping, Review, Batch |
+| **Layered** | 비교적 단순한 CRUD, 빠른 구현 우선 | User, Shipping, Review, Batch |
 
 ---
 
@@ -209,12 +211,12 @@ Order Service                  Kafka                    Downstream
 
 | 도메인 | 이벤트 |
 |--------|--------|
-| Auth | UserSignedUp, LoginFailed, SessionLimitExceeded |
 | Order | OrderPlaced, OrderConfirmed, OrderCancelled |
 | Payment | PaymentCompleted, PaymentFailed, RefundInitiated |
 | Product | ProductCreated, ProductUpdated, StockChanged |
 | Shipping | ShippingStatusChanged |
 | Promotion | CouponIssued, PromotionActivated |
+| Settlement | SettlementPeriodClosed (`settlement.period.closed.v1`) |
 
 ---
 
@@ -262,11 +264,12 @@ pnpm --filter web-store e2e golden-flow                    # 특정 스펙만
 
 | 시나리오 | 내용 | VU (Stress) |
 |----------|------|-------------|
-| Auth | 로그인, 회원가입, 토큰 갱신 | ~150 |
 | Search | 상품 검색, 필터링 | ~150 |
 | Order | 주문 생성, 조회, 취소 | ~150 |
 | Payment | 결제 처리 | ~150 |
 | **E2E Flow** | 회원가입→검색→주문→결제 | ~150 |
+
+> `load-tests/scenarios/auth-load-test.js`는 레거시 `auth-service`(TASK-BE-132로 retired) 엔드포인트를 대상으로 하던 시나리오라 표에서 제외했다. `settlement-service`는 이벤트 컨슈머가 주 표면(REST admin API는 부수적)이라 아직 전용 k6 시나리오가 없다 — 신규 작성 필요 시 `load-tests/scenarios/`에 추가.
 
 ### Performance 측정 결과 (Search 시나리오, 단일 호스트 Docker)
 
@@ -376,7 +379,6 @@ Spring Cloud Gateway의 `RequestRateLimiter` 필터 + Redis 토큰 버킷. IP �
 
 | Service | Swagger UI | OpenAPI JSON |
 |---------|-----------|--------------|
-| Auth | http://localhost:8081/swagger-ui.html | http://localhost:8081/v3/api-docs |
 | Product | http://localhost:8082/swagger-ui.html | http://localhost:8082/v3/api-docs |
 | User | http://localhost:8084/swagger-ui.html | http://localhost:8084/v3/api-docs |
 | Search | http://localhost:8085/swagger-ui.html | http://localhost:8085/v3/api-docs |
@@ -387,6 +389,7 @@ Spring Cloud Gateway의 `RequestRateLimiter` 필터 + Redis 토큰 버킷. IP �
 | Review | http://localhost:8091/swagger-ui.html | http://localhost:8091/v3/api-docs |
 | Promotion | http://localhost:8092/swagger-ui.html | http://localhost:8092/v3/api-docs |
 | Notification | http://localhost:8093/swagger-ui.html | http://localhost:8093/v3/api-docs |
+| Settlement | http://localhost:8094/swagger-ui.html | http://localhost:8094/v3/api-docs |
 
 - 컨트롤러의 `@RestController` + DTO에서 스키마/예시 자동 추론
 - `/v3/api-docs` JSON 출력을 Postman/Insomnia 등으로 import 가능
@@ -504,6 +507,10 @@ traits: [transactional, content-heavy, read-heavy, integration-heavy]
 - `read-heavy` → 읽기 복제, 페이지네이션 규칙 활성화
 - `integration-heavy` → Circuit Breaker, Retry, DLQ 규칙 활성화
 
+### Claude Code 기반 AI 협업
+
+이 프로젝트는 **[Claude Code](https://claude.com/claude-code)**를 사용한 규칙 주도(rule-driven) AI 협업으로 개발되었습니다. `PROJECT.md`가 선언한 `domain: ecommerce` + `traits: [transactional, content-heavy, read-heavy, integration-heavy, multi-tenant]`에 따라 AI가 해당 규칙 레이어(공통 규칙 → `ecommerce` 도메인 규칙 → 각 trait 규칙)를 자동으로 로드해 스펙 → 태스크 → 구현 → 리뷰 워크플로우를 진행합니다. 이 저장소는 원본 개발 워크스페이스인 [kanggle/monorepo-lab](https://github.com/kanggle/monorepo-lab)에서 `scripts/sync-portfolio.sh`로 추출한 스냅샷이며, 태스크 작성·리뷰·머지가 이루어진 전체 개발 이력(태스크 라이프사이클, ADR, 커밋)은 그쪽에 있습니다.
+
 ---
 
 ## Key Business Flows
@@ -535,6 +542,23 @@ Admin            Product          Kafka           Search
   │                 │                │               │── ES 반영
 ```
 
+### 셀러 정산 (Marketplace Commission, Event-Driven)
+
+`settlement-service`는 HTTP 쓰기 경로가 없는 순수 이벤트 컨슈머다 — 정산 원장은 Order/Payment 이벤트 스트림만으로 구성된다 (ADR-MONO-030 Step 4 facet b, TASK-BE-365).
+
+```
+Order           Payment          Kafka        Settlement
+  │                │                │              │
+  │── OrderPlaced ─┼───────────────▶│              │
+  │                │                │── line snapshot 캐싱 ──▶│
+  │                │── PaymentCompleted ▶           │
+  │                │                │── commission_accrual 적립 (basis-point split) ──▶│
+  │                │── PaymentRefunded ─▶           │
+  │                │                │── REVERSAL 행으로 상계 ──▶│
+```
+
+기간 마감(period-close) 시 `SettlementPeriod`가 OPEN→CLOSED로 전이하며, 창 안의 `commission_accrual`을 셀러별 `seller_payout`으로 집계하고(기존 accrual은 불변) `settlement.period.closed.v1`을 트랜잭셔널 아웃박스로 발행한다. 페이아웃은 `SellerPayoutPort`의 **시뮬레이션 어댑터**로만 PENDING→PAID|FAILED 전이한다 — 실 은행/PG 연동은 forward-declared 상태([specs/services/settlement-service/architecture.md](specs/services/settlement-service/architecture.md) 참고).
+
 ---
 
 ## Documentation
@@ -546,3 +570,17 @@ Admin            Product          Kafka           Search
 | [Demo Scenarios](docs/demo-scenarios.md) | 주요 비즈니스 흐름별 데모 시나리오 (화면 + API 매핑) |
 | [Development Process](docs/development-process.md) | 개발 방법론, 기술적 의사결정, 차별점 상세 |
 | [Performance Benchmark](docs/performance-benchmark.md) | k6 부하 테스트 결과 및 분석 |
+
+---
+
+## 🔗 Related Links
+
+- **개발 워크스페이스**: [kanggle/monorepo-lab](https://github.com/kanggle/monorepo-lab) — 태스크 작성, 리뷰, 머지가 이루어지는 원본 레포
+- **포트폴리오 허브**: [github.com/kanggle](https://github.com/kanggle) — wms-platform, iam-platform, fan-platform, scm-platform 등 다른 프로젝트
+
+### Specs (이 레포 안에 있음)
+
+- [PROJECT.md](PROJECT.md) — domain/traits 선언, 서비스 맵, 범위 외 목록
+- [specs/services/order-service/architecture.md](specs/services/order-service/architecture.md) · [specs/services/settlement-service/architecture.md](specs/services/settlement-service/architecture.md) — 대표 서비스 아키텍처 선언
+- [specs/contracts/http/](specs/contracts/http/) · [specs/contracts/events/](specs/contracts/events/) — 서비스별 API / 이벤트 계약 (source of truth)
+- [specs/features/multi-tenancy-and-marketplace.md](specs/features/multi-tenancy-and-marketplace.md) — 멀티테넌트 + 마켓플레이스(셀러/정산) 확장 스펙
