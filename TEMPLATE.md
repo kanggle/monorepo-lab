@@ -566,6 +566,18 @@ Each project's `docs/onboarding/local-dev.md` records that stack's service/resou
 
 > **Resource-constrained hosts**: a project stack cold-starts many JVMs at once. On a memory-limited Docker host, rebuilding and cold-starting many services simultaneously can trigger an out-of-memory cascade; bring services up in small batches and let each batch become healthy before the next. This is a per-host operational concern (developer environment), not a repo invariant — capture host-specific batch sizes in your own environment notes, not here.
 
+### Known operational traps
+
+Three properties of the shared Traefik/`*.local` infrastructure that are easy to rediscover the hard way, since every project depends on the same stack:
+
+- **Traefik silently skips non-healthy containers.** A service with a `healthcheck:` that hasn't passed yet (or never passes) is excluded from Traefik's routing table entirely — no error, the hostname just 404s as if the router didn't exist. Check `docker inspect --format '{{.State.Health.Status}}' <container>` before assuming a routing config bug.
+- **`wget`/`curl` against a bare `localhost` inside a container can resolve to `::1`** (IPv6) and fail silently on a service bound IPv4-only. This bites health-check scripts and debugging one-liners run *inside* a container far more often than it looks like a Traefik problem — prefer `127.0.0.1` explicitly, or the container's Traefik hostname, over bare `localhost`.
+- **Traefik version / Docker Engine API compatibility**: newer Traefik releases (v3.2+ observed) can fail to start against an incompatible Docker Engine API version bump, with a routing failure that looks identical to the two traps above. If Traefik itself won't come up cleanly, check `traefik` container logs for an explicit API-version rejection before debugging individual project routes.
+
+**Secure cookies do not work over the plain-HTTP `*.local` hostnames.** Every project's local OIDC/session cookies are `Secure`-flagged, and browsers refuse to set or send `Secure` cookies over non-HTTPS origins other than `localhost`. This is *why* the [Frontend dev-server ports](#frontend-dev-server-ports-standalone-next-dev) table above registers OIDC redirect URIs against `localhost:<port>`, not a `*.local` hostname, for standalone dev — it's not an inconsistency, it's the only way login works without provisioning local TLS. A new project's login flow that "works over `localhost` but not `<project>.local`" is this constraint, not a bug — either provision local TLS for that hostname, or keep the dev-server on `localhost` for anything doing OIDC.
+
+**`NEXT_PUBLIC_*` environment variables are inlined into the JavaScript bundle at `next build` time, not read at container-start time.** This applies to every Next.js frontend in the monorepo (console-web, web-store, fan-platform-web) and has two consequences worth knowing before you hit them: (1) a `docker-compose.yml` env override for a `NEXT_PUBLIC_*` var has no effect on an image that was already built — the value baked in at build time wins regardless of what the container's environment says at runtime; (2) this is why a portable/prebaked image (e.g. the on-demand AWS demo AMI) cannot carry a build-time-correct public origin for an environment it doesn't know about yet at build time — any URL/origin value that must vary per-deployment needs either a runtime-read (non-`NEXT_PUBLIC_`) variable behind a server component/route handler, or a rebuild per target environment.
+
 ### Adding a new project (greenfield)
 
 1. Pick an unused `*.local` hostname; add the entry to the table above in the bootstrap PR.
