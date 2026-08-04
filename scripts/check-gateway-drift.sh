@@ -119,9 +119,19 @@ PROJECTS_DIR="${PROJECTS_DIR:-$ROOT/projects}"
 #                "a backend service directly exposed" (policy L14); it is the
 #                external client.
 #   console-web  platform-console UI. Same reasoning.
+#   fan-platform-web
+#                fan-platform customer UI (Next.js, TASK-FAN-FE-014). Same
+#                reasoning as web-store — and the same shape, which is what makes
+#                the exemption safe rather than merely conventional: every
+#                backend call it makes is a SERVER-side fetch to gateway-service
+#                over the docker network (`web/fan-platform-web/src/shared/api/
+#                client.ts` implements no browser path by construction), so no
+#                browser traffic reaches a backend without crossing the gateway.
+#                Its router serves rendered pages and the next-auth routes —
+#                neither of which a gateway can serve.
 #   kafka-ui     operator tooling, not an application surface.
 #   grafana      operator tooling, not an application surface.
-TRAEFIK_ALLOWLIST="web-store console-web kafka-ui grafana"
+TRAEFIK_ALLOWLIST="web-store console-web fan-platform-web kafka-ui grafana"
 
 # I4 — gateways permitted to key their rate limit on client IP alone, by RECORDED
 # deviation (api-gateway-policy.md § Rate Limiting > Current fleet). EXACT NAMES ONLY.

@@ -150,8 +150,14 @@ class OAuthClientPostLogoutRedirectUriSeedIntegrationTest extends AbstractIntegr
         List<String> postLogout = client.getClientSettings().getSetting(PLR_KEY);
         assertThat(postLogout)
                 .as("post-logout-redirect-uris must round-trip to the exact seeded List<String> "
-                        + "(V0028 TASK-MONO-460 appended the localhost:3002 dev-port landing)")
-                .containsExactly("http://localhost:3000/", "http://localhost:3002/", "http://fan-platform.local/");
+                        + "(V0028 TASK-MONO-460 appended the localhost:3002 dev-port landing; "
+                        + "V0031 TASK-BE-573 appended the web.fan-platform demo host, inserted "
+                        + "directly after fan-platform.local by that migration's REPLACE anchor)")
+                .containsExactly(
+                        "http://localhost:3000/",
+                        "http://localhost:3002/",
+                        "http://fan-platform.local/",
+                        "http://web.fan-platform.local/");
 
         // Standard SAS settings + core fields intact on the repaired row.
         assertThat(client.getClientSettings().isRequireProofKey()).isTrue();
@@ -164,7 +170,11 @@ class OAuthClientPostLogoutRedirectUriSeedIntegrationTest extends AbstractIntegr
         assertThat(client.getRedirectUris()).contains(
                 "http://localhost:3000/api/auth/callback/iam",
                 "http://localhost:3002/api/auth/callback/iam", // V0028 TASK-MONO-460 dev-port
-                "http://fan-platform.local/api/auth/callback/iam");
+                "http://fan-platform.local/api/auth/callback/iam",
+                // V0031 TASK-BE-573 — the containerized fan web's demo host. Without
+                // this registration the browser round trip dies at the callback with a
+                // 401 that names neither the client nor the redirect_uri.
+                "http://web.fan-platform.local/api/auth/callback/iam");
         assertThat(client.getScopes()).contains("openid", "profile", "email", "tenant.read");
         assertThat(client.getClientSettings().<String>getSetting("custom.tenant_id"))
                 .isEqualTo("fan-platform");
