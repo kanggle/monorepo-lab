@@ -74,7 +74,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
 
-(empty)
+- `TASK-BE-573-fan-web-demo-host-redirect-uri.md` — `fan-platform-user-flow-client` 에 팬 웹 데모 호스트 `web.fan-platform.local` 콜백 + post-logout 등록. **`TASK-FAN-FE-014`(fan-platform, 팬 웹 컨테이너화)의 AC-0 판정에서 발굴** — 그 태스크는 "런타임 시드 `seed-demo-domain.sh` 가 데모 도메인 콜백을 등록하므로 **대개 불필요**" 라고 적어 뒀지만 **새 호스트명에 대해서는 거짓**이다: 그 스크립트는 *이미 등록된* URI 의 `.local/` 을 `.${DEMO_DOMAIN}/` 로 치환할 뿐 **`web.` 서브도메인을 만들어내지 못한다**(`REPLACE(uri,'.local/',@dom) WHERE uri LIKE '%.local/%'`). 현재 등록은 3건(`localhost:3000` · `fan-platform.local` · `localhost:3002` — V0011 → V0024 가 `/gap`→`/iam` 재작성 → V0028)이고 `web.fan-platform` 은 전 마이그레이션 0건. **형제 선례가 확증**: ecommerce web-store 는 시드 V0012 가 `web.ecommerce.local` 콜백을 처음부터 등록했다 — 새 웹 호스트엔 등록 마이그레이션이 따라붙는 것이 이 저장소의 패턴이다. 🔴 **미등록의 실패 모드**: authorize 가 `401 {"code":"UNAUTHORIZED","message":"Missing or invalid internal credentials"}` 를 뱉는데 **메시지가 원인을 전혀 가리키지 않는다**(자격증명 문제가 아니다) — 컨테이너 전부 healthy·로그인 폼 200 인데 콜백만 죽는다. **`TASK-FAN-FE-014` AC-3(로그인 성립)의 하드 선행.** 분석=Opus 5 / 구현 권장=Sonnet(V0028 의 REPLACE 패턴 재사용 + H2 호환 제약만 지키면 됨).
+
+> **선행/후속**: 이 티켓은 `projects/fan-platform/tasks/ready/TASK-FAN-FE-014` 와 **함께 성립**한다 — 마이그레이션만 머지되면 아무도 쓰지 않는 URI 가 하나 느는 것이고, 웹 호스트만 머지되면 로그인이 되지 않는다. 하나의 atomic 크로스프로젝트 PR 이 자연스럽다(CLAUDE.md § Cross-Project Changes).
 
 > `TASK-BE-398` 은 2026-08-04 날짜 게이트 통과 후 착수 — 아래 `## review` 참조.
 
