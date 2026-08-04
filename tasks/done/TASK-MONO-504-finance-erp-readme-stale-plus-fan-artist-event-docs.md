@@ -9,7 +9,7 @@ task's scope) + correct fan-platform artist-events.md's inaccurate "planned cons
 
 # Status
 
-ready
+done
 
 # Owner
 
