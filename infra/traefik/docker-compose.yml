@@ -82,6 +82,9 @@ services:
           - erp.${DEMO_DOMAIN:-local}
           - finance.${DEMO_DOMAIN:-local}
           - fan-platform.${DEMO_DOMAIN:-local}
+          # 팬 웹 (TASK-FAN-FE-014). 게이트웨이와 호스트명을 분리한 이유는
+          # projects/fan-platform/docker-compose.yml 의 fan-platform-web 주석 참조.
+          - web.fan-platform.${DEMO_DOMAIN:-local}
           - kafka.iam.${DEMO_DOMAIN:-local}
           - grafana.iam.${DEMO_DOMAIN:-local}
           - kafka.wms.${DEMO_DOMAIN:-local}

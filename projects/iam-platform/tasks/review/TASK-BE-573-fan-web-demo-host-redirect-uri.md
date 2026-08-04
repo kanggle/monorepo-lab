@@ -8,7 +8,7 @@ TASK-BE-573
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -188,7 +188,68 @@ healthy 이고 로그인 폼도 뜨는데 콜백만 401 이다.
 
 # Definition of Done
 
-- [ ] 마이그레이션 커밋
-- [ ] `auth-api.md` 동기화
-- [ ] AC-5 라이브 실측 기록
-- [ ] Ready for review
+- [x] 마이그레이션 커밋
+- [x] `auth-api.md` 동기화
+- [x] AC-5 라이브 실측 기록
+- [x] Ready for review
+
+---
+
+# 구현 결과 (2026-08-05, Opus 5)
+
+`V0031__add_fan_web_demo_host_redirect_uri.sql` 1건 + `auth-api.md` 동기화.
+`TASK-FAN-FE-014`(fan-platform)와 **하나의 atomic 크로스프로젝트 PR** 로 함께 머지
+(마이그레이션만 있으면 아무도 안 쓰는 URI 가 하나 늘고, 웹 호스트만 있으면 로그인이 안 된다 —
+CLAUDE.md § Cross-Project Changes).
+
+## AC 판정
+
+- **AC-0 (착수=재측정)** PASS — 착수 시점에 `grep -rn "web\.fan" db/migration` = **0건**, 그리고
+  `seed-demo-domain.sh` 의 조건이 여전히 `REPLACE(jt.uri, '.local/', @dom) WHERE jt.uri LIKE '%.local/%'`
+  리터럴임을 확인. 판정 근거는 스냅샷이 아니라 이 재측정이다.
+- **AC-1 (등록)** PASS — 마이그레이션 적용 후 실 DB:
+  ```
+  redirect_uris: ["http://localhost:3000/api/auth/callback/iam",
+                  "http://localhost:3002/api/auth/callback/iam",
+                  "http://fan-platform.local/api/auth/callback/iam",
+                  "http://web.fan-platform.local/api/auth/callback/iam"]
+  ```
+- **AC-2 (post-logout)** PASS — `["java.util.ArrayList", ["http://localhost:3000/", "http://localhost:3002/",
+  "http://fan-platform.local/", "http://web.fan-platform.local/"]]`. default-typing 래핑을 건드리지 않고
+  직렬화된 텍스트에 `REPLACE` 를 걸어 `[0]` 타입 태그 함정을 우회했다.
+- **AC-3 (멱등)** PASS — **재적용을 실제로 실행해서** 쟀다(재기동은 versioned 마이그레이션을 다시
+  돌리지 않으므로 멱등 증명이 되지 못한다 — 두 UPDATE 를 DB 에 직접 다시 걸었다):
+  ```
+  before:  redirect_uris=4   post-logout=4
+  UPDATE #1 → ROW_COUNT() = 0
+  UPDATE #2 → ROW_COUNT() = 0
+  after:   redirect_uris=4   post-logout=4
+  ```
+  두 WHERE 가드(`NOT LIKE '%web.fan-platform.local%'` / `NOT LIKE '%web.fan-platform%'`)가 실제로 물었다.
+- **AC-4 (H2 호환)** PASS — MySQL 전용 JSON 함수 미사용, `REPLACE()` 만. `auth-service:test` GREEN.
+- **AC-5 (라이브)** PASS — **네거티브 대조 포함**:
+  ```
+  authorize(redirect_uri=http://web.fan-platform.local/api/auth/callback/iam) → 302   ← 등록됨
+  authorize(redirect_uri=http://nope.fan-platform.local/api/auth/callback/iam) → 401   ← 미등록
+  ```
+  두 번째의 401 이 이 티켓이 경고한, **원인을 안 알려주는 바로 그 실패**다. 그리고 실제 팬 웹의
+  next-auth 왕복도 이 콜백으로 완주했다(`TASK-FAN-FE-014` § 라이브 실측 14/14).
+- **AC-6 (회귀 없음)** PASS — 기존 3건 그대로 남음(위 배열). `auth-service:test` rc=0.
+
+## 🔴 이 마이그레이션이 처음에 auth-service 를 죽였다 — 주석 때문에
+
+**Flyway 는 SQL 파일 전체에 플레이스홀더 치환을 돌린다. 주석도 포함된다.** 헤더에 데모 호스트를
+설명하려고 `web.fan-platform.<달러><중괄호>DEMO_DOMAIN<닫는중괄호>` 라고 적었더니:
+
+```
+FlywayException: Unable to parse statement in db/migration/V0031__... at line 3 col 1.
+  No value provided for placeholder: <그 토큰>
+→ BeanCreationException: flywayInitializer → auth-service 컨텍스트 초기화 실패, Exited (1)
+```
+
+**설명 문장 하나가 서비스 부팅을 막았다.** 더 볼 만한 건 두 번째다 — 고치면서 "이 형태를 쓰지 말라"고
+주석으로 설명하느라 **그 형태를 다시 써서 똑같이 죽었다.** 그래서 V0031 헤더는 이제 그 토큰을
+문자로 적지 않고 "달러-중괄호 형태를 이 파일 어디에도, 주석에도 쓰지 말 것" 이라고만 적는다.
+
+CI 의 Testcontainers IT 도 잡았을 결함이지만 **라이브 기동이 먼저 잡았다.** 같은 지뢰가 저장소의
+다른 마이그레이션에도 있는지는 확인하지 않았다 — 별도 스윕 후보.

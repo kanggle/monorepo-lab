@@ -247,6 +247,97 @@ services:
       start_period: 45s
 
   # ---------------------------------------------------------------------------
+  # fan-platform-web — 팬 고객 화면 (TASK-FAN-FE-014)
+  # ---------------------------------------------------------------------------
+  # 이 서비스가 없던 동안 통합 데모에는 팬 고객이 보는 화면이 아예 없었다.
+  # `fan-platform.${DEMO_DOMAIN}` 은 게이트웨이(API)로 뜨고, 웹은 어디에서도
+  # 서빙되지 않았다 — ecommerce 의 web-store 는 이미 되어 있는데(형제 파리티 결손).
+  #
+  # 호스트명을 `web.` 접두로 분리하는 이유
+  # ---------------------------------------------------------------------------
+  # 게이트웨이가 이미 `Host(fan-platform.${DEMO_DOMAIN})` 를 통째로 쓴다. 같은 호스트에
+  # 웹을 얹으면 두 라우터가 경로 우선순위로 갈리게 되는데, 이 앱은 `/api/auth/*` 를
+  # 자기 라우트로 쓰고 게이트웨이도 `/api/**` 를 쓴다 — 경계가 서로 얽힌다.
+  # `web.ecommerce.${DEMO_DOMAIN}` 과 같은 형태로 분리하는 것이 형제 선례이고,
+  # Traefik 규칙이 하나뿐이라 진단도 단순하다.
+  #
+  # ⚠ 이 호스트명은 IAM 에 **등록돼 있어야** 한다(TASK-BE-573, V0031). 데모의 런타임
+  # 시드(`infra/demo/seed-demo-domain.sh`)는 *이미 등록된* URI 의 `.local/` 을 치환할
+  # 뿐 `web.` 서브도메인을 만들어내지 못한다. 미등록이면 로그인 콜백이 401
+  # `"Missing or invalid internal credentials"` 로 죽는데 그 메시지는 원인을 전혀
+  # 가리키지 않는다.
+  #
+  # 빌드타임에 호스트명을 굽지 않는다
+  # ---------------------------------------------------------------------------
+  # `NEXT_PUBLIC_*` 는 빌드타임 인라인이고 데모 AMI 는 DEMO_DOMAIN 이 정해지기 전에
+  # 구워진다. 이 앱은 브라우저에서 게이트웨이를 호출하지 않으므로(server-only
+  # `shared/api/client.ts`) 공개 URL 을 구울 필요 자체가 없다 — 아래 값은 전부 런타임 env 다.
+  fan-platform-web:
+    image: fan-platform/fan-platform-web:local
+    container_name: fan-platform-web
+    build:
+      # 빌드 컨텍스트는 pnpm 워크스페이스 루트(= 이 compose 파일이 있는 디렉터리).
+      # web/fan-platform-web 을 컨텍스트로 잡으면 lockfile 이 밖에 남아
+      # `--frozen-lockfile` 이 실패한다.
+      context: .
+      dockerfile: web/fan-platform-web/Dockerfile
+    init: true
+    restart: unless-stopped
+    expose:
+      - "3000"
+    deploy:
+      resources:
+        limits:
+          # web-store 와 같은 상한. 실측(로그인 + 5화면 SSR 직후) RSS = 45 MiB 라
+          # 5배 이상 여유가 있다. 데모 호스트(m6i.2xlarge)의 잔여가 타이트하므로
+          # 상한 없이 두지 않는다. ⚠ 단일 표본이고 시드 데이터가 없는 상태의 값이다.
+          memory: 256M
+          cpus: '0.5'
+    environment:
+      # 자기 자신의 공개 오리진. next-auth 가 콜백 URL 을 여기서 만든다.
+      NEXTAUTH_URL: http://web.fan-platform.${DEMO_DOMAIN:-local}
+      # 세션 쿠키 서명 키. 데모 전용 값이며 프로덕션은 반드시 교체한다.
+      NEXTAUTH_SECRET: ${FAN_WEB_NEXTAUTH_SECRET:-fan-platform-demo-session-signing-key}
+      # issuer 는 **문자열 비교이자 브라우저가 실제로 가는 주소**다 → 공개 호스트명.
+      # 컨테이너 안에서도 해소되는 이유는 Traefik 컨테이너의 network alias 다
+      # (infra/traefik/docker-compose.yml — 가드 (i) 가 이 정합을 지킨다).
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://iam.local}
+      OIDC_CLIENT_ID: ${FAN_OIDC_CLIENT_ID:-fan-platform-user-flow-client}
+      # dev 전용 자격증명(V0011 이 BCrypt 해시로 시드, .env.example 에 평문 공개).
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-fan-platform-dev}
+      # SSR fetch 는 Traefik 을 타지 않고 컨테이너 DNS 로 직행한다. AWS 는 인스턴스가
+      # 자기 공인 IP 로 보낸 트래픽을 되돌려주지 않으므로(IGW hairpin 부재) 공개
+      # 호스트명을 쓰면 클라우드에서만 죽는다.
+      GATEWAY_URL_INTERNAL: http://gateway-service:8080
+    depends_on:
+      gateway-service:
+        condition: service_started
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-net"
+      - "traefik.http.routers.fan-platform-web.rule=Host(`web.fan-platform.${DEMO_DOMAIN:-local}`)"
+      - "traefik.http.routers.fan-platform-web.entrypoints=web"
+      - "traefik.http.services.fan-platform-web.loadbalancer.server.port=3000"
+    healthcheck:
+      # `/login` 을 찌른다: 미들웨어가 공개 경로로 통과시키는 유일한 페이지이고
+      # 게이트웨이 fetch 가 전혀 없어 백엔드 상태와 무관하게 "Next 가 서빙 중인가"만 잰다.
+      # `/` 는 미들웨어가 /login 으로 307 을 준다.
+      #
+      # 🔴 `localhost` 가 아니라 `127.0.0.1` 이어야 한다(가드 (j)). Dockerfile 의
+      # HOSTNAME=0.0.0.0 이 Node 를 IPv4 전용으로 묶는데 alpine 의 /etc/hosts 는
+      # localhost 를 ::1 로도 매핑하고 busybox wget 은 ::1 을 고른 뒤 IPv4 로
+      # 폴백하지 않는다 → 앱은 멀쩡한데 프로브만 죽고, **Traefik 은 non-healthy
+      # 컨테이너를 조용히 건너뛴다**(에러 0건). 오타 하나가 화면 전체를 지운다.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/login >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - fan-platform-net
+      - traefik-net
+
+  # ---------------------------------------------------------------------------
   # Postgres 16 — backing store for community / artist / membership / notification.
   # Multi-database: docker-entrypoint-initdb.d script creates per-service DBs
   # so each service has its own isolated schema namespace.
