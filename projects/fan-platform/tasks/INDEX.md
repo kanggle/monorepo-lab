@@ -66,6 +66,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
+- `TASK-FAN-FE-014-web-containerize-for-integrated-demo.md` — **🟢 READY — 통합 데모에 팬 고객 화면이 아예 없다.** `infra/demo/projects.sh` 의 `COMPOSE[fan]` 이 가리키는 compose 에는 게이트웨이·4서비스·인프라만 있고 **web 서비스가 없으며**, `web/fan-platform-web/` 에는 **Dockerfile 도 없다** → `demo-up.sh full` 에서 `fan-platform.local` 은 API 게이트웨이로 뜨고 팬이 실제로 보는 화면은 어디서도 서빙되지 않는다. 형제 프로젝트는 이미 되어 있다(ecommerce `web-store` = compose 서비스 + Traefik `Host(web.ecommerce.${DEMO_DOMAIN:-local})`) — **형제 파리티 결손**. **AC-1 = 프로덕션 빌드 필수**(`next dev` 는 ~2GB 를 쓰고 호스트 자원 고갈 시 SSR 이 OOM 으로 죽으면서 UI 에는 "게이트웨이 미응답" 으로 **잘못** 표시된다 — 실측된 오진 경로). **AC-3 = SSR bearer 확인**(직접 토큰 스모크로 대체 금지 — `TASK-FAN-FE-008` 에서 직접 토큰은 200 인데 next-auth SSR 경로는 전 페이지 401 이었다). **AC-4 = 헬스체크 IPv4 + `localhost` 금지**(non-healthy 컨테이너를 Traefik 은 **조용히 스킵**한다). **AC-7 = `.local` 하드코딩 0건**(빈 `DEMO_DOMAIN` 은 라우터를 거부당하지 않고 만들어져 아무것과도 매치하지 않는다 — 에러 0건, 전부 healthy, 404). ⚠️ `NEXT_PUBLIC_*` 는 빌드타임 인라인이라 런타임 데모 도메인을 담을 수 없다. compose·앱소스는 **AMI 층**이므로 재굽기 전까지 AWS 데모에 도달하지 않는다. 분석=Opus 5 / 구현 권장=**Sonnet**(web-store 선례 이식, 단 복사 금지 — 세션/인증 경로가 다르다). [[env_traefik_skips_unhealthy_and_ipv6_localhost]] [[env_next_public_inlined_at_build_time]]
+
 ## in-progress
 
 ## review
