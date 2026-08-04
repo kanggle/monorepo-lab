@@ -72,6 +72,12 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
+- **`TASK-BE-570-fan-platform-client-scope-registration-gap.md`** — `fan-platform-user-flow-client`(`V0011`)의
+  등록 scope 가 `auth.ts` 요청 scope 의 진부분집합이라 OIDC `/oauth2/authorize` 단계에서 전량 `invalid_scope` 로 로그인이
+  깨짐(fan-platform 브라우저 로그인 전면 차단). `iam-integration.md` § Scopes 가 이미 문서화한 계약을 IAM 쪽 시드가
+  못 따라간 gap — 신규 `V0030` 로 카탈로그 3행 + 클라이언트 scopes 4개 보강. 2026-08-04 `TASK-MONO-502`(메모리감사) 세션의
+  이연 후속 재검증에서 발굴, 원인 IAM 쪽으로 재규명(이전 세션의 uncommitted 로컬 워크어라운드는 소실됨, 방향도 반대였음).
+
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
 
 (empty)
