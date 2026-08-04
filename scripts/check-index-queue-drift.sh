@@ -55,20 +55,29 @@
 #   archive    EXCLUDED: some projects have an `## archive` section and no
 #              `tasks/archive/` directory at all.
 #
-#   done       EXCLUDED, and this one was measured rather than assumed. `## done`
-#              is an append-only changelog, and a large share of its rows are
-#              GROUPED — one bullet closing several tickets ("TASK-MONO-437 +
-#              TASK-MONO-439", "TASK-MONO-430/431 (+ scm SCM-BE-034/035/038)").
-#              Set equality over one-ID-per-row reports every co-closed ticket as
-#              disk-only. Measured on the tree at 2026-07-20, not estimated —
-#              re-run it with INDEX_DRIFT_SECTIONS="ready in-progress review done":
-#              848 findings, 833 of them on the `done` axis, against 15 on the
+#   done       EXCLUDED from set-equality, and this one was measured rather than
+#              assumed. `## done` is an append-only changelog, and a large share
+#              of its rows are GROUPED — one bullet closing several tickets
+#              ("TASK-MONO-437 + TASK-MONO-439", "TASK-MONO-430/431 (+ scm
+#              SCM-BE-034/035/038)"). Set equality over one-ID-per-row reports
+#              every co-closed ticket as disk-only. Measured on the tree at
+#              2026-07-20, not estimated — re-run it with
+#              INDEX_DRIFT_SECTIONS="ready in-progress review done": 848
+#              findings, 833 of them on the `done` axis, against 15 on the
 #              active queues. That is not a guard, it is noise with a red X on
 #              it. The three defects this ticket exists for were all
 #              ACTIVE-queue drift, which is what active-queue coverage is for:
 #              a task that leaves `ready/` is caught leaving, whatever its
-#              destination. Drift confined to `## done` (a closed task listed
-#              twice, or not at all) is not covered — stated plainly, per § G8.
+#              destination. Drift confined to `## done`'s CONTENTS (a closed
+#              task listed twice, or not at all) is not covered — stated
+#              plainly, per § G8. A narrower, orthogonal check — is the `##
+#              done` HEADING itself duplicated in the file, splitting one
+#              section into two — IS covered (2026-08-04, memory-audit
+#              promotion): that failure mode recurred independently across at
+#              least four separate close-chores/sessions (wms, finance,
+#              ecommerce, root `tasks/INDEX.md`) and needs no directory
+#              comparison to detect, only a heading count within the file
+#              itself. See DUPLICATE HEADING CHECK below.
 #
 # FORMAT TOLERANCE (ticket AC-4)
 # ------------------------------
@@ -88,7 +97,10 @@
 #     ecommerce. Both are parsed; table header and `|---|` separator rows are
 #     skipped by shape.
 #   * empty sections are written `(empty)`, `_(없음)_`, or left blank.
-#   * `## done` occurs TWICE in platform-console; sections are merged by name.
+#   * A heading occurring twice (observed: `## done` in platform-console, wms,
+#     finance-platform, ecommerce, and root) is parsed WITHOUT crashing — rows
+#     merge into the same bucket by name — but is now reported as its own
+#     finding (§ DUPLICATE HEADING CHECK) rather than silently tolerated.
 #   * `## ready → in-progress` is a heading in every file's Move Rules. Sections
 #     are only read AFTER `# Task List`, so that transition heading is not
 #     mistaken for the ready queue.
@@ -132,6 +144,21 @@
 #   root   § ready lists MONO-428/430/432/448, all four in done/
 #
 # Nobody had ever compared these. That list is the ticket's largest yield.
+#
+# DUPLICATE HEADING CHECK (2026-08-04, memory-audit promotion)
+# -------------------------------------------------------------
+# Independent of set-equality above: a `## <name>` heading (e.g. `## done`)
+# appearing TWICE in one file's Task List splits that section's rows across
+# two disjoint blocks. The parser already tolerates this (rows merge into the
+# same bucket by name — see § FORMAT TOLERANCE), so it never crashes and
+# never shows up as drift; it just silently produces two `## done` blocks in
+# the rendered file, one of which a future reader/editor won't see when they
+# search for "the done section". This recurred independently across at least
+# four separate close-chores (wms, finance-platform, ecommerce, root
+# `tasks/INDEX.md`), each time caught by hand via `grep -n "^## "` rather than
+# CI, because nothing was watching this axis. Flagged for EVERY heading name,
+# not just `done` — the mechanism (an Edit boundary that doesn't consume the
+# blank line before an existing same-named heading) is not `done`-specific.
 #
 # USAGE
 #   scripts/check-index-queue-drift.sh              # guard the repo
@@ -210,6 +237,10 @@ This heading must NOT be read as the ready queue.
 
 _(없음)_
 
+## done
+
+- `TASK-BE-999-example.md` — a stray second `## done` block
+
 ## odd-section
 
 prose only, no row, no marker
@@ -217,7 +248,9 @@ FIXTURE
   expected='PARSE	odd-section	1 non-blank line(s), no parsable row and no (empty)/_(없음)_ marker
 ROW	ready	TASK-MONO-451
 ROW	ready	TASK-MONO-430
-ROW	review	TASK-FIN-BE-059'
+ROW	review	TASK-FIN-BE-059
+ROW	done	TASK-BE-999
+DUP	done	2'
   got="$(extract_rows "$fx" | LC_ALL=C sort)"
   rm -f "$fx"
   if [[ "$got" != "$(printf '%s' "$expected" | LC_ALL=C sort)" ]]; then
@@ -232,7 +265,9 @@ ROW	review	TASK-FIN-BE-059'
     echo "  fixture asserts: unlabelled root-style ready region parsed as 'ready';"
     echo "  '## ready → in-progress' in Move Rules NOT parsed as a section;"
     echo "  note bullet (ADR subject) not a row; row quoting '(empty)' still a row;"
-    echo "  bullet + table + placeholder forms; prose-only section = PARSE error."
+    echo "  bullet + table + placeholder forms; prose-only section = PARSE error;"
+    echo "  a heading repeated ('## done' x2) parses without crashing AND is"
+    echo "  reported as its own DUP finding."
   fi
   return $st_fail
 }
@@ -269,6 +304,7 @@ extract_rows() {
       name = $0
       sub(/^##[[:space:]]*/, "", name)
       sub(/[[:space:]]*$/, "", name)
+      heading_count[name]++
       section = name
       implicit = 0
       next
@@ -330,6 +366,9 @@ extract_rows() {
       }
       if (implicit_rows > 0 && seen_heading["ready"])
         printf "PARSE\t<unlabelled>\t%d row(s) sit between \"# Task List\" and the first \"##\" in a file that ALSO has a \"## ready\" heading — cannot tell which is the ready queue\n", implicit_rows
+      for (n in heading_count)
+        if (heading_count[n] > 1)
+          printf "DUP\t%s\t%d\n", n, heading_count[n]
     }
   ' "$1"
 }
@@ -390,6 +429,15 @@ for idx in "${indexes[@]}"; do
     fi
   done <<< "$parsed"
 
+  while IFS=$'\t' read -r kind name count; do
+    [[ "$kind" == "DUP" ]] || continue
+    echo "DRIFT: ${idx} — heading \"## ${name}\" appears ${count} times, splitting the section"
+    echo "       merge the blocks into one (keep one heading, concatenate the entries) —"
+    echo "       this is a leftover close-chore Edit boundary, not intentional structure"
+    findings=$((findings + 1))
+    fail=1
+  done <<< "$parsed"
+
   for sect in $SECTIONS; do
     # --- listed set -----------------------------------------------------
     listed="$(
@@ -444,9 +492,10 @@ done
 echo
 if [[ $fail -eq 0 ]]; then
   echo "check-index-queue-drift: OK — ${#indexes[@]} INDEX files, sections [${SECTIONS}]"
-  echo "  listing and directory agree in both directions."
-  echo "  (backlog/archive/done intentionally unguarded; see the header for what"
-  echo "   that leaves uncovered.)"
+  echo "  listing and directory agree in both directions, no duplicate headings."
+  echo "  (backlog/archive/done CONTENTS intentionally unguarded via set-equality;"
+  echo "   see the header for what that leaves uncovered. Duplicate HEADINGS in"
+  echo "   any section, including done, ARE checked.)"
 else
   echo "check-index-queue-drift: FAILED — ${findings} drift finding(s), ${parse_errors} parse error(s)."
 fi

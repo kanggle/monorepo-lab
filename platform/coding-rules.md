@@ -65,6 +65,7 @@ Platform-wide coding standards for all services and libraries.
 - No `any` types unless absolutely necessary (add a comment explaining why).
 - Use `interface` for external shapes, `type` for unions and computed types.
 - Prefer `const` over `let`; never use `var`.
+- **A proxy/BFF route that reconstructs a `Response`/`NextResponse` from an upstream call must not attach a body to a null-body status.** Per the Fetch spec, responses with status `204`, `205`, or `304` are defined to have a null body — constructing a `new Response(body, { status })` for one of these with a non-null `body` argument throws, which typically surfaces as an opaque `500` at the proxy layer even though the upstream call itself succeeded. Check `res.status` against this set (or read `res.body === null`) before deciding whether to forward a body.
 
 ---
 
