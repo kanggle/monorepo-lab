@@ -88,6 +88,28 @@ ecommerce 의 `web-store` 는 compose 서비스이고 Traefik 라우터
 
 ---
 
+# 선행 의존 (AC-0 판정 결과, 2026-08-05)
+
+**`TASK-BE-573`(iam-platform) — 하드 선행.** AC-3(로그인 성립)은 이것 없이 성립하지 않는다.
+
+위 In Scope 의 판정 항목("런타임 시드 `infra/demo/seed-demo-domain.sh` 가 이미 데모 도메인
+콜백을 등록하므로 **대개 불필요**")을 실제로 판정한 결과 **필요하다**로 나왔다. 그 스크립트는
+*이미 등록된* URI 의 `.local/` 을 `.${DEMO_DOMAIN}/` 로 **치환**할 뿐이고
+(`REPLACE(uri,'.local/',@dom) WHERE uri LIKE '%.local/%'`), **`web.` 서브도메인을 새로
+만들어내지는 못한다.** `fan-platform-user-flow-client` 의 현재 등록은 3건
+(`localhost:3000` · `fan-platform.local` · `localhost:3002` — V0011 → V0024 가
+`/gap`→`/iam` 재작성 → V0028)뿐이고 `web.fan-platform` 은 전 마이그레이션에 0건이다.
+
+형제 선례가 이를 확증한다 — ecommerce 의 web-store 는 시드 마이그레이션 V0012 가
+`web.ecommerce.local` 콜백을 **처음부터 등록**했다. 새 웹 호스트에는 등록 마이그레이션이
+따라붙는 것이 이 저장소의 패턴이다.
+
+🔴 미등록 시 authorize 는 `401 {"code":"UNAUTHORIZED","message":"Missing or invalid
+internal credentials"}` 를 뱉는데 **메시지가 원인을 전혀 가리키지 않는다**(자격증명 문제가
+아니다). 컨테이너는 전부 healthy 이고 로그인 폼도 200 인데 콜백만 죽는다.
+
+---
+
 # Related Specs
 
 > **Before reading Related Specs**: `platform/entrypoint.md` Step 0 —
