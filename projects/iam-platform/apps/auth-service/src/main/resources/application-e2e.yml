@@ -16,7 +16,12 @@ spring:
       maximum-pool-size: 5
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    # TASK-BE-571: migration-dev carries the demo-only credential seed, present at
+    # startup ONLY under this profile. The default profile (application.yml) and
+    # production stay pinned to db/migration alone, so the demo credentials can
+    # never reach a production auth_db — the same split account-service uses
+    # (application.yml = migration; application-e2e.yml = migration + migration-dev).
+    locations: classpath:db/migration,classpath:db/migration-dev
     baseline-on-migrate: false
   data:
     redis:
