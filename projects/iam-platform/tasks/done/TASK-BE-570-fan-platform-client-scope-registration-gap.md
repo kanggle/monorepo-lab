@@ -9,7 +9,7 @@ TASK-BE-570
 
 # Status
 
-ready
+done
 
 # Owner
 
