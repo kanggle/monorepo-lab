@@ -1,14 +1,27 @@
 import type { NextConfig } from 'next';
 
 /**
- * v1 frontend is dev-server first (`pnpm fan-platform:web` runs `next dev`).
- * Production-style standalone output is deferred to v2 — see TASK-FAN-FE-001
- * § Out of Scope #10. Dropping `output: 'standalone'` also avoids a Windows
- * symlink permission error when copying traced files inside a worktree
- * (pnpm hoists deps via symlinks; the standalone copier requires elevated
- * symlink privileges on Windows).
+ * Standalone output is OPT-IN via `NEXT_OUTPUT_STANDALONE=1` (TASK-FAN-FE-014).
+ * The demo container build sets it; a plain local `pnpm build` does not.
+ *
+ * That split is deliberate and is why this is a flag rather than the bare
+ * `output: 'standalone'` the sibling web-store uses. v1 was dev-server first
+ * and dropped standalone outright (TASK-FAN-FE-001 § Out of Scope #10) because
+ * the file-tracing copier needs elevated symlink privileges on Windows — pnpm
+ * hoists deps as symlinks and the copier has to reproduce them — and this repo
+ * is developed on Windows. The demo container needs standalone (small image,
+ * `node server.js` as the production entrypoint) and builds on Linux, where
+ * that constraint does not exist. Enabling it unconditionally would buy a
+ * container improvement with a local-build regression on the very hosts that
+ * cannot absorb it.
+ *
+ * `next.config` is evaluated per build, so this is read at build time only —
+ * nothing about it reaches the running server.
  */
 const nextConfig: NextConfig = {
+  ...(process.env.NEXT_OUTPUT_STANDALONE === '1'
+    ? { output: 'standalone' as const }
+    : {}),
   images: {
     unoptimized: true,
   },
