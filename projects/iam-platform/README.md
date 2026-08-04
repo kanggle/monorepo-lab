@@ -261,13 +261,39 @@ iam-platform/
 
 ## Development Methodology
 
-이 프로젝트는 **Spec-Driven, Task-Driven** 방법론을 따릅니다:
+이 프로젝트는 **[Claude Code](https://claude.com/claude-code)** 기반의 규칙 주도, **Spec-Driven, Task-Driven** 방법론을 따릅니다:
 
-1. **PROJECT.md** — 도메인/특성 분류 (`saas`, `transactional`, `regulated`, `audit-heavy`, `integration-heavy`)
+1. **PROJECT.md** — 도메인/특성 분류 (`saas`, `transactional`, `regulated`, `audit-heavy`, `integration-heavy`, `multi-tenant`)
 2. **specs/** — 기능 스펙, API/이벤트 계약, 서비스 아키텍처가 구현의 source of truth
-3. **tasks/** — 모든 구현은 태스크 단위로 추적 (backlog → ready → done)
+3. **tasks/** — 모든 구현은 태스크 단위로 추적 (backlog → ready → done, 완료 태스크 91개)
 4. **rules/** — taxonomy 기반 규칙 시스템으로 도메인별 제약 자동 적용
 5. **review** — 태스크 완료 후 리뷰 → fix 태스크 발행 사이클
+
+위 250+ 커밋·91개 완료 태스크·13개 Feature Spec·14개 API/Event Contract, OIDC Authorization Server(Spring Authorization Server) 구현과 6건의 ADR([`docs/adr/`](docs/adr/))은 모두 이 워크플로우로 사람-AI 협업을 거쳐 만들어졌습니다 — AI 에이전트가 `PROJECT.md`의 선언된 domain/traits에 따라 규칙을 로드하고, `tasks/ready/`의 태스크만 구현하며, 완료 후 독립적인 리뷰 패스를 거치는 구조입니다. 전체 프로세스: [docs/guides/development-process.md](../../docs/guides/development-process.md).
+
+---
+
+## 🔗 관련 링크
+
+- **개발 워크스페이스**: [kanggle/monorepo-lab](https://github.com/kanggle/monorepo-lab) — 태스크 작성, 리뷰, 머지가 이루어지는 원본 모노레포. 이 레포(`iam-platform`)는 `scripts/sync-portfolio.sh`를 통해 `projects/iam-platform/`을 추출한 스냅샷입니다.
+- **포트폴리오 허브**: [github.com/kanggle](https://github.com/kanggle) — 다른 프로젝트 (wms-platform, fan-platform, scm-platform 등)
+
+### 스펙 (이 레포 안에 있음)
+
+- [PROJECT.md](PROJECT.md) — domain/traits 선언, 서비스 맵, RETIRED 이력 (admin-web, community/membership-service)
+- [specs/services/auth-service/architecture.md](specs/services/auth-service/architecture.md) — OIDC Authorization Server
+- [specs/services/account-service/architecture.md](specs/services/account-service/architecture.md)
+- [specs/services/admin-service/architecture.md](specs/services/admin-service/architecture.md)
+- [specs/services/security-service/architecture.md](specs/services/security-service/architecture.md)
+- [specs/services/gateway-service/architecture.md](specs/services/gateway-service/architecture.md)
+- [specs/contracts/http/auth-api.md](specs/contracts/http/auth-api.md) · [account-api.md](specs/contracts/http/account-api.md) · [admin-api.md](specs/contracts/http/admin-api.md)
+- [docs/adr/](docs/adr/) — ADR-001(OIDC 채택) ~ ADR-006(외부 IdP 로그인 SAS 통합)
+- [docs/migration-notes.md](docs/migration-notes.md) — GAP → IAM rename, admin-web retirement 상세
+
+### 규칙
+
+- [rules/common.md](../../rules/common.md) — 항상 로드되는 규칙 인덱스
+- [rules/domains/saas.md](../../rules/domains/saas.md) — SaaS 도메인 규칙
 
 ---
 

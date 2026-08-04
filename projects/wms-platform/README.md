@@ -4,13 +4,13 @@
 
 > **창고 관리 시스템 백엔드** — 프로덕션 기준으로 설계한 포트폴리오 프로젝트
 
-Spring Boot 3 마이크로서비스: 마스터 데이터 관리, 재고 변이 처리, 엣지 게이트웨이로 구성된 창고 운영의 핵심 시스템입니다. 헥사고날 아키텍처, 트랜잭셔널 아웃박스, 2단계 예약(재고 선점), 멱등성 키, JWT + 요청 제한, 컨트랙트 하네스, 실 컨테이너 E2E 테스트까지 프로덕션 수준의 구현을 목표로 했습니다.
+Spring Boot 3 마이크로서비스 7개(master · inventory · inbound · outbound · notification · admin · gateway)로 구성된 창고 운영의 핵심 시스템입니다. 헥사고날 아키텍처, 트랜잭셔널 아웃박스, 2단계 예약(재고 선점), 멱등성 키, OIDC + tenant 게이트, 컨트랙트 하네스, 실 컨테이너 E2E 테스트까지 프로덕션 수준의 구현을 목표로 했습니다.
 
-> **v2로 미룬 범위** — `inbound`, `outbound`, `admin` 서비스는 스펙(`specs/services/<name>/`)만 완성된 상태입니다. 넓이보다 깊이를 택한 의도적인 선택입니다 — [Scope-honest v1](#-scope-honest-v1) 참고.
+> **v1 — 7개 서비스 전부 구현 완료.** `inbound` · `outbound` · `admin` · `notification` 도 스펙만이 아니라 실제 코드로 구현되어 있습니다 ([서비스 목록](#서비스-목록) 참고).
 
 ---
 
-## 📍 현황 — v1: master + inventory + gateway
+## 📍 현황 — v1: 7개 서비스 전체 구현
 
 ### master-service
 
@@ -34,9 +34,25 @@ Spring Boot 3 마이크로서비스: 마스터 데이터 관리, 재고 변이 �
 | `LowStockDetection` — 임계값 + Redis SETNX 1h 디바운스, fail-open | ✅ | ✅ | `inventory.low-stock-detected` |
 | 아웃바운드 사가 컨슈머 (PickingRequested · PickingCancelled · ShippingConfirmed · PutawayCompleted) | ✅ | ✅ | (인바운드; 동일 TX 내 eventId 중복 제거) |
 
+### inbound-service
+
+ASN(입고 예정) 관리, 검수, 적치 지시. `wms.inbound.putaway.completed.v1` 발행 — inventory-service의 `PutawayCompletedConsumer`가 소비해 재고를 적립합니다(아래 "Putaway → `inventory.received`" 시퀀스 다이어그램 참고). `inbound-inspection-completed` / `inbound-asn-cancelled` 이벤트는 notification-service로 전파되어 Slack 알림을 발생시킵니다. 헥사고날 아키텍처.
+
+### outbound-service
+
+출고 오더, 피킹 지시/확인, 패킹, 출하 확인 — 아웃바운드 사가 오케스트레이터(`rest-api` + `event-consumer`). `wms.outbound.picking.requested.v1` / `.picking.cancelled.v1` 발행 — inventory-service가 소비해 재고를 예약/해제합니다. `outbound-order-cancelled` / `outbound-shipping-confirmed` 이벤트는 notification-service로 전파됩니다. 헥사고날 아키텍처.
+
+### notification-service
+
+`AlertConsumer` 하나가 소스 토픽 6개를 구독하는 이벤트 컨슈머(`event-consumer`): `inventory-alert` · `inventory-adjusted` · `inbound-inspection-completed` · `inbound-asn-cancelled` · `outbound-order-cancelled` · `outbound-shipping-confirmed`. 각 토픽을 Slack 채널 알림으로 렌더링/발송합니다(`SlackChannelAdapter` / `SlackBodyRenderer`).
+
+### admin-service
+
+대시보드, KPI 조회, 사용자/권한 관리 — CQRS 읽기 모델 중심(`rest-api` + `event-consumer`). 쓰기 표면(User/Role/Setting)은 단순 CRUD라 Layered 아키텍처를 적용합니다(다른 4개 backend 서비스는 Hexagonal — [PROJECT.md § Overrides](PROJECT.md) 참고).
+
 ### gateway-service
 
-JWT 검증 · Redis 요청 제한 (`{ip, routeId}` 복합 키, fail-open 데코레이터) · 헤더 보강 (`X-User-Id`, `X-User-Role`) · master-service와 실 컨테이너 E2E 테스트 5시나리오.
+OIDC 리소스 서버(GAP의 JWKS 기반 RS256 access token 검증, `GatewayJwtDecoders` 공유 검증 체인) + tenant 게이트(`tenant_id=wms` strict equality, entitlement-trust dual-accept — wms만 SUPER_ADMIN wildcard를 거부) · Redis 요청 제한 (`{ip, routeId}` 복합 키, fail-open 데코레이터) · 헤더 보강 (`X-User-Id`, `X-User-Role`) · master-service와 실 컨테이너 E2E 테스트 5시나리오.
 
 ---
 
@@ -62,53 +78,62 @@ flowchart LR
     Client(["Client<br/>(web · mobile · ERP)"])
 
     subgraph Edge["Edge"]
-        GW["gateway-service<br/>:8080<br/><br/>• JWT validate<br/>• rate-limit<br/>  (ip,routeId) fail-open<br/>• header enrich"]
+        GW["gateway-service<br/>:8080<br/><br/>• OIDC resource server<br/>• tenant gate (wms)<br/>• rate-limit<br/>  (ip,routeId) fail-open<br/>• header enrich"]
     end
 
     subgraph App["Application"]
         MS["master-service<br/>:8081<br/><br/>• Hexagonal<br/>• Idempotency filter<br/>• Lot expiry sched"]
+        IB["inbound-service<br/>:8082<br/><br/>• Hexagonal<br/>• ASN / 검수 / 적치"]
         IS["inventory-service<br/>:8083<br/><br/>• Hexagonal<br/>• 4 outbound-saga<br/>  consumers<br/>• Reservation TTL job<br/>• Low-stock detector"]
+        OB["outbound-service<br/>:8084<br/><br/>• Hexagonal<br/>• 사가 오케스트레이터<br/>• 피킹/패킹/출하"]
+        NT["notification-service<br/>:8085<br/><br/>• event-consumer<br/>• 6-topic → Slack"]
+        AD["admin-service<br/>:8086<br/><br/>• Layered / CQRS<br/>• 대시보드 · KPI"]
     end
 
     subgraph Infra["Infrastructure"]
         PG[("Postgres 16<br/>per-service DB +<br/>outbox + dedupe")]
-        KF[["Kafka (KRaft)<br/>wms.master.*.v1<br/>wms.inventory.*.v1"]]
+        KF[["Kafka (KRaft)<br/>wms.master.*.v1<br/>wms.inventory.*.v1<br/>wms.inbound.*.v1<br/>wms.outbound.*.v1"]]
         RD[("Redis<br/>idempotency<br/>rate-limit<br/>low-stock debounce")]
     end
 
-    subgraph V2["📐 v2 — specs only"]
-        IB["inbound-service"]
-        OB["outbound-service"]
-        AD["admin-service"]
-    end
-
     Client -->|HTTPS| GW
-    GW -->|JWT + X-User-*| MS
-    GW -->|JWT + X-User-*| IS
+    GW -->|OIDC + X-User-*| MS
+    GW -->|OIDC + X-User-*| IB
+    GW -->|OIDC + X-User-*| IS
+    GW -->|OIDC + X-User-*| OB
+    GW -->|OIDC + X-User-*| AD
     GW -.-> RD
     MS --> PG
+    IB --> PG
     IS --> PG
+    OB --> PG
+    AD --> PG
     MS -.-> RD
     IS -.-> RD
     MS -->|outbox| PG
+    IB -->|outbox| PG
     IS -->|outbox| PG
+    OB -->|outbox| PG
     MS -->|publish| KF
+    IB -->|publish| KF
     IS -->|publish| KF
+    OB -->|publish| KF
     KF -->|consume<br/>eventId dedupe| IS
-
-    KF -.-> V2
+    KF -->|consume<br/>eventId dedupe| OB
+    KF -->|consume<br/>6 topics| NT
+    NT -->|Slack| Slack(["Slack"])
 
     style Client fill:#e1f5ff,stroke:#0288d1
     style GW fill:#fff3e0,stroke:#f57c00
     style MS fill:#f3e5f5,stroke:#7b1fa2
+    style IB fill:#f3e5f5,stroke:#7b1fa2
     style IS fill:#e3f2fd,stroke:#1976d2
+    style OB fill:#e3f2fd,stroke:#1976d2
+    style NT fill:#fce4ec,stroke:#c2185b
+    style AD fill:#ede7f6,stroke:#5e35b1
     style PG fill:#e8f5e9,stroke:#388e3c
     style KF fill:#e8f5e9,stroke:#388e3c
     style RD fill:#e8f5e9,stroke:#388e3c
-    style V2 fill:#f5f5f5,stroke:#9e9e9e,stroke-dasharray:5 5
-    style IB fill:#fafafa,stroke:#bdbdbd
-    style OB fill:#fafafa,stroke:#bdbdbd
-    style AD fill:#fafafa,stroke:#bdbdbd
 ```
 
 ### Putaway → `inventory.received` (서비스 간 이벤트 흐름)
@@ -116,7 +141,7 @@ flowchart LR
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Pub as External publisher<br/>(future inbound-service)
+    participant Pub as inbound-service
     participant K as Kafka<br/>wms.inbound.putaway.completed.v1
     participant C as PutawayCompletedConsumer
     participant ED as EventDedupePort
@@ -151,7 +176,7 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     autonumber
-    participant OB as outbound-service<br/>(v2 — simulated by demo)
+    participant OB as outbound-service
     participant K as Kafka<br/>wms.outbound.picking.requested.v1
     participant C as PickingRequestedConsumer
     participant ED as EventDedupePort
@@ -270,22 +295,23 @@ sequenceDiagram
 
 | 서비스 | 서비스 타입 | 책임 | v1 상태 |
 |---|---|---|---|
-| `gateway-service` | `rest-api` | 외부 라우팅, JWT 검증, 요청 제한, 헤더 보강 | ✅ 구현 완료 |
+| `gateway-service` | `rest-api` | 외부 라우팅, OIDC 리소스 서버(GAP JWKS 검증) + tenant 게이트, 요청 제한, 헤더 보강 | ✅ 구현 완료 |
 | `master-service` | `rest-api` | 마스터 데이터: 창고, 구역, 위치, SKU, Lot | ✅ 구현 완료 |
 | `inventory-service` | `rest-api` + `event-consumer` | 위치 기반 재고; W4/W5 예약; 조정·이전·부족 알림; 아웃바운드 사가 참여 | ✅ 구현 완료 |
-| `inbound-service` | `rest-api` | ASN 관리, 검수, 적치 | 📐 스펙만 — v2 |
-| `outbound-service` | `rest-api` + `event-consumer` (사가 오케스트레이터) | 출고 주문, 피킹, 포장, 배송; 아웃바운드 사가 | 📐 스펙만 — v2 |
-| `admin-service` | `rest-api` + `event-consumer` (CQRS 읽기 모델) | 대시보드, KPI, 사용자/권한 관리 | 📐 스펙만 — v2 |
+| `inbound-service` | `rest-api` + `event-consumer` | ASN 관리, 검수, 적치 지시; `putaway.completed` 발행 | ✅ 구현 완료 |
+| `outbound-service` | `rest-api` + `event-consumer` (사가 오케스트레이터) | 출고 주문, 피킹, 포장, 배송; 아웃바운드 사가 | ✅ 구현 완료 |
+| `notification-service` | `event-consumer` | Kafka 6개 토픽 소비 → Slack 알림 발송 | ✅ 구현 완료 |
+| `admin-service` | `rest-api` + `event-consumer` (CQRS 읽기 모델) | 대시보드, KPI, 사용자/권한 관리 | ✅ 구현 완료 |
 
-각 서비스의 내부 아키텍처는 `specs/services/<service>/architecture.md`에 선언되어 있습니다. 쓰기 집약적 서비스(master / inventory / inbound / outbound)는 **헥사고날(Ports & Adapters)**을 적용합니다. Gateway와 admin은 Layered입니다(admin은 읽기 전용 / CQRS 형태로 문서화된 `## Overrides` 적용).
+각 서비스의 내부 아키텍처는 `specs/services/<service>/architecture.md`에 선언되어 있습니다. 쓰기 집약적 서비스(master / inventory / inbound / outbound)는 **헥사고날(Ports & Adapters)**을 적용합니다. Gateway와 admin은 Layered입니다(admin은 읽기 전용 / CQRS 형태로 문서화된 `## Overrides` 적용). notification은 컨슈머 전용이라 도메인 계층이 얇습니다.
 
 ### 바운디드 컨텍스트 (`rules/domains/wms.md` 기준)
 
 - **마스터 데이터** — warehouse, zone, location, SKU, partner, lot (v1 구현; partner 유예)
-- **인바운드** — ASN, 검수, 적치
-- **재고** — 위치 기반 재고, 이전, 조정
-- **아웃바운드** — 주문, 피킹, 포장, 배송
-- **Admin / 운영** — 대시보드, KPI, 사용자 관리
+- **인바운드** — ASN, 검수, 적치 (v1 구현)
+- **재고** — 위치 기반 재고, 이전, 조정 (v1 구현)
+- **아웃바운드** — 주문, 피킹, 포장, 배송 (v1 구현)
+- **Admin / 운영** — 대시보드, KPI, 사용자 관리 (v1 구현)
 
 ### 적용 Trait
 
@@ -434,13 +460,14 @@ wms-platform/
 ├── rules/                  ← 규칙 분류 체계 (common + domains/wms + traits)
 ├── .claude/                ← AI 에이전트 설정: skills/, agents/, commands/, config/
 │
-├── apps/                   ← 서비스 모듈
-│   ├── gateway-service/    ← v1 ✅
-│   ├── master-service/     ← v1 ✅
-│   ├── inventory-service/  ← v1 ✅
-│   ├── inbound-service/    ← v2 (스펙만)
-│   ├── outbound-service/   ← v2 (스펙만)
-│   └── admin-service/      ← v2 (스펙만)
+├── apps/                   ← 서비스 모듈 (7개 전부 v1 구현 완료)
+│   ├── gateway-service/    ← ✅
+│   ├── master-service/     ← ✅
+│   ├── inventory-service/  ← ✅
+│   ├── inbound-service/    ← ✅
+│   ├── outbound-service/   ← ✅
+│   ├── notification-service/ ← ✅
+│   └── admin-service/      ← ✅
 │
 ├── specs/
 │   ├── contracts/
@@ -449,9 +476,10 @@ wms-platform/
 │   ├── services/
 │   │   ├── master-service/    ← architecture, domain-model, idempotency
 │   │   ├── inventory-service/ ← architecture, domain-model, idempotency, sagas, state-machines
-│   │   ├── inbound-service/   ← architecture, domain-model (v2 — 코드 선행 스펙)
-│   │   ├── outbound-service/  ← architecture, domain-model (v2)
-│   │   └── admin-service/     ← architecture, domain-model (v2)
+│   │   ├── inbound-service/   ← architecture, domain-model
+│   │   ├── outbound-service/  ← architecture, domain-model
+│   │   ├── notification-service/ ← architecture, domain-model
+│   │   └── admin-service/     ← architecture, domain-model
 │   ├── features/
 │   └── use-cases/
 ├── tasks/
@@ -546,15 +574,14 @@ Trait T5 (낙관적 잠금 우선; 비관적 잠금 금지). [`ReserveStockServi
 | `gateway-service` | ✅ | (해당 없음) | (gateway-routes 스펙) | ✅ | ✅ |
 | `master-service` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `inventory-service` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `inbound-service` | ✅ | ✅ | ❌ | ❌ | ❌ |
-| `outbound-service` | ✅ | ✅ | ❌ | ❌ | ❌ |
-| `admin-service` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `inbound-service` | ✅ | ✅ | ✅ | ✅ | ✅ (34) |
+| `outbound-service` | ✅ | ✅ | ✅ | ✅ | ✅ (62) |
+| `admin-service` | ✅ | ✅ | ✅ | ✅ | ✅ (55) |
+| `notification-service` | ✅ | ✅ | (이벤트 전용, HTTP 컨트랙트 없음) | ✅ | ✅ (23) |
 
-`inbound`, `outbound`, `admin` 서비스는 `specs/services/<name>/`에 아키텍처와 도메인 모델 스펙이 완전히 작성되어 있지만, 컨트랙트 / 구현 / 테스트는 의도적으로 **v2 범위**입니다. 각 `architecture.md`는 첫 번째 구현 태스크가 `tasks/ready/`로 이동하기 전에 완성해야 할 항목을 "Open Items" 섹션으로 나열합니다.
+7개 서비스 전부 아키텍처·도메인 모델 스펙, 구현, 테스트가 완비되어 있습니다. `inbound` / `outbound` / `admin`은 각각 `specs/contracts/http/{inbound,outbound,admin}-service-api.md`에 HTTP 컨트랙트를 갖고, `notification-service`는 REST API가 없는 이벤트 컨슈머 전용 서비스라 별도 HTTP 컨트랙트 대신 소비하는 6개 Kafka 토픽이 계약입니다.
 
-**범위를 의도적으로 좁힌 이유**: 넓이보다 깊이. master + inventory만으로 규칙 세트에 선언된 모든 아키텍처 패턴을 실행합니다 — 헥사고날 레이아웃, 트랜잭셔널 아웃박스, eventId 중복 제거, 2단계 사가 참여, 낙관적 잠금 재시도, 멱등성, JWT + 역할 기반 인가, 관측성 메트릭, 컨트랙트 하네스. 반쯤 구현된 서비스 3개를 추가하면 새로운 패턴 없이 리뷰 가치만 희석됩니다.
-
-`inventory-service.PutawayCompletedConsumer`는 실제 Kafka 토픽에서 `wms.inbound.putaway.completed.v1`을 소비합니다; E2E 데모에서는 이벤트를 데모 스크립트가 직접 발행합니다([데모](#-데모--curl로-실행하는-황금-경로-e2e) 참고). v2에서 inbound-service가 구현되면 inventory-service 변경 없이 그 이벤트의 퍼블리셔로 연결됩니다.
+`inventory-service.PutawayCompletedConsumer`는 실제 Kafka 토픽 `wms.inbound.putaway.completed.v1`을 소비하고, 그 퍼블리셔는 이제 실제 `inbound-service`입니다(과거 이 절이 "v2에서 inbound-service가 구현되면"이라 적었던 시점은 지났습니다 — [데모](#-데모--curl로-실행하는-황금-경로-e2e) 참고).
 
 ---
 
@@ -584,17 +611,16 @@ Trait T5 (낙관적 잠금 우선; 비관적 잠금 금지). [`ReserveStockServi
 
 - [PROJECT.md](PROJECT.md) — domain/traits 선언, 서비스 맵, 범위 외 목록
 
-**v1 — 구현 완료:**
+**7개 서비스 — 전부 구현 완료:**
 - [specs/services/master-service/architecture.md](specs/services/master-service/architecture.md) · [domain-model.md](specs/services/master-service/domain-model.md) · [idempotency.md](specs/services/master-service/idempotency.md)
 - [specs/services/inventory-service/architecture.md](specs/services/inventory-service/architecture.md) · [domain-model.md](specs/services/inventory-service/domain-model.md) · [idempotency.md](specs/services/inventory-service/idempotency.md)
 - [specs/services/gateway-service/architecture.md](specs/services/gateway-service/architecture.md) · [public-routes.md](specs/services/gateway-service/public-routes.md)
-- [specs/contracts/http/master-service-api.md](specs/contracts/http/master-service-api.md) · [inventory-service-api.md](specs/contracts/http/inventory-service-api.md)
-- [specs/contracts/events/master-events.md](specs/contracts/events/master-events.md) · [inventory-events.md](specs/contracts/events/inventory-events.md)
-
-**v2 — 스펙만:**
 - [specs/services/inbound-service/architecture.md](specs/services/inbound-service/architecture.md) · [domain-model.md](specs/services/inbound-service/domain-model.md)
 - [specs/services/outbound-service/architecture.md](specs/services/outbound-service/architecture.md) · [domain-model.md](specs/services/outbound-service/domain-model.md)
 - [specs/services/admin-service/architecture.md](specs/services/admin-service/architecture.md) · [domain-model.md](specs/services/admin-service/domain-model.md)
+- [specs/services/notification-service/architecture.md](specs/services/notification-service/architecture.md) · [domain-model.md](specs/services/notification-service/domain-model.md)
+- [specs/contracts/http/master-service-api.md](specs/contracts/http/master-service-api.md) · [inventory-service-api.md](specs/contracts/http/inventory-service-api.md) · [inbound-service-api.md](specs/contracts/http/inbound-service-api.md) · [outbound-service-api.md](specs/contracts/http/outbound-service-api.md) · [admin-service-api.md](specs/contracts/http/admin-service-api.md)
+- [specs/contracts/events/master-events.md](specs/contracts/events/master-events.md) · [inventory-events.md](specs/contracts/events/inventory-events.md)
 
 ### 규칙
 
