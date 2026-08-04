@@ -63,9 +63,10 @@ Payload:
 }
 ```
 
-Consumers (planned):
-- search-service (v2): index in DRAFT shard for admin search.
-- audit pipeline: append to immutable log.
+**Consumers:** **none yet.** The event is published so a future admin-search index
+or audit log can consume it without a producer change. No service currently
+subscribes — fan-platform has no `search-service` today (unlike the
+same-named, unrelated service in `ecommerce-microservices-platform`).
 
 ### `artist.published.v1`
 
@@ -80,10 +81,10 @@ in the public directory.
 }
 ```
 
-Consumers (planned):
-- search-service: re-index into the public directory shard.
-- notification-service (v2): broadcast push to existing followers (when
-  community-service emits `community.follow.added`).
+**Consumers:** **none yet.** The event is published so a future public-directory
+search index or a follower-broadcast notification could consume it without a
+producer change. No service currently subscribes — neither a `search-service`
+nor a follower-broadcast path exists in fan-platform today.
 
 ### `artist.updated.v1`
 
@@ -103,8 +104,7 @@ filtered out at the application service).
 
 If no fields actually change (caller sent only nulls), no event is emitted.
 
-Consumers (planned):
-- search-service: re-index.
+**Consumers:** **none yet.** No service currently subscribes.
 
 ### `artist.archived.v1`
 
@@ -120,10 +120,11 @@ Emitted on `* → ARCHIVED` transition.
 }
 ```
 
-Consumers (planned):
-- community-service: mark posts and follows referencing this artist as
-  pointing to an archived target (display-side handles "no longer active").
-- search-service: remove from the public directory shard.
+**Consumers:** **none yet.** The event is published so `community-service`
+could someday mark posts/follows pointing at this artist as archived, or a
+search index could remove it from the public directory, without a producer
+change. No service currently subscribes — `community-service` has no
+consumer for this topic today.
 
 ### `artist.group_created.v1`
 
@@ -139,8 +140,7 @@ Emitted on group creation. Membership rows are NOT included — listen on
 }
 ```
 
-Consumers (planned):
-- search-service: index group entity.
+**Consumers:** **none yet.** No service currently subscribes.
 
 ### `artist.group_member_changed.v1`
 
@@ -159,6 +159,8 @@ Emitted when a member is added or removed from a group.
 
 For `action=REMOVED`, `role=FORMER_MEMBER`. The event preserves the role at
 removal time so consumers can render history without an extra lookup.
+
+**Consumers:** **none yet.** No service currently subscribes.
 
 ---
 
