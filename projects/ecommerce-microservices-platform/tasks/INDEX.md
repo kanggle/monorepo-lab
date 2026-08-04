@@ -72,7 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-_(없음)_
+- `TASK-BE-572-demo-mock-pg-profile.md` — **🟢 READY — 데모에서 구매를 완주시키기 위한 mock PG 프로파일.** 실 Toss 경로는 **사람이 못 넘는다**(API 개별연동 결제창 패턴: 카드 ISP/3DS · 카카오페이 QR · SSG페이 PUSH 3수단 전부 실기기 확인 요구 — 면접관에게 휴대폰 인증을 시킬 수 없다). 그렇다고 기존 `standalone` 은 대안이 아니다 — PG 는 스텁이 되지만 **`PaymentEventPublisher` 도 no-op** 이라 `PaymentCompleted` 가 안 나가 주문/배송/정산 사가가 전부 멈춘다(결제만 되고 그 뒤가 안 보이면 시연 가치 0). 그리고 더미 키로는 `loadTossPayments()` 가 실패해 체크아웃에 **"결제 모듈을 불러오는데 실패했습니다"** 배너가 뜬다. ⇒ **mock 승인 + 실 Kafka 이벤트** 조합의 프로파일이 필요하다. **ADR 신규 불필요** — `ADR-MONO-056` D2 가 *"Consumers select via Spring config/profile — exactly the `@Profile("portone")` pattern fan-platform already uses"* 로 이미 결정했고 fan 이 그 형태로 살아 있다(형제 파리티). **AC-2 = prod 상호배타 가드 + 네거티브 검증**(가드를 지우면 RED). **AC-3 = 기본값 안전** — fan 은 mock 이 기본이지만 ecommerce 는 실 Toss 가 기본이므로 **파리티를 맹목 적용하지 않는다**(차이의 근거를 기록). **AC-5 = 라이브 완주만 인정**(장바구니→주문→결제완료→배송 read-model→콘솔 주문탭). ⚠️ fan 에서 실측된 `@Qualifier` 이중 포트 함정 + **Lombok `@RequiredArgsConstructor` 가 필드의 `@Qualifier` 를 생성자 파라미터로 복사하지 않는다** — 같은 함정을 반복하지 말 것. `infra/demo/demo.env:143` 의 "결제 승인까지 가지 않는다" 주석은 이 티켓이 사실을 바꾸므로 **반드시 갱신**. 분석=Opus 5 / 구현 권장=**Opus**(프로파일 상호배타 + 이벤트 경로 보존). [[env_toss_realpg_sandbox_requires_real_device_auth]]
 
 _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DONE. `../../../tasks/done/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
 
