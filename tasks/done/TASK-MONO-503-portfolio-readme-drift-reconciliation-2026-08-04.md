@@ -9,7 +9,7 @@ stale project READMEs, and 6 lower-severity drift items (2026-08-04 survey)
 
 # Status
 
-ready
+done
 
 # Owner
 
