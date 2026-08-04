@@ -152,6 +152,7 @@ logging:
 wms:
   # TASK-MONO-019: OIDC Resource Server validators.
   oauth2:
-    # Acceptable iss claim values during the D2-b deprecation window.
-    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://localhost:8081},iam}
+    # TASK-MONO-367 (2026-08-01 sunset, LANDED): the legacy custom-JWT issuer `iam` is no
+    # longer minted (TASK-BE-398) and no longer accepted here. SAS issuer only.
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://localhost:8081}}
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:wms}

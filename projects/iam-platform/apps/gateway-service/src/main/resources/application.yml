@@ -101,8 +101,8 @@ gateway:
     # never crosses this edge (TASK-MONO-347).
     #
     # TASK-BE-398 (2026-08-01 sunset, LANDED) removed the legacy custom-JWT flow that
-    # minted `iss=iam`; the trailing `,iam` is dropped here with it, so the edge no
-    # longer accepts a retired issuer. `TokenValidatorUnitTest
+    # minted `iss=iam`; the trailing legacy-issuer entry is dropped here with it, so the
+    # edge no longer accepts a retired issuer. `TokenValidatorUnitTest
     # #theEdgeSurvivesTheLegacyIssuerSunset` asserts exactly this world: SAS tokens
     # pass, legacy `iss=iam` tokens do not.
     allowed-issuers: ${JWT_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://localhost:8081}}

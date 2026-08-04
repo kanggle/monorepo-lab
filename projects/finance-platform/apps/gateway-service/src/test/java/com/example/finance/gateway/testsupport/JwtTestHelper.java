@@ -148,6 +148,16 @@ public final class JwtTestHelper {
     }
 
     /**
+     * Convenience: a finance token signed with the legacy custom-JWT issuer string
+     * {@code "iam"} — retired by TASK-BE-398 and no longer on finance's allowlist
+     * (TASK-MONO-367, 2026-08-01 sunset). Before that sunset this would have passed.
+     */
+    public String signLegacyIssuerToken(String subject) {
+        return signToken(LEGACY_ISSUER, subject, DEFAULT_TENANT_ID, 300,
+                Map.of("role", "OPERATOR"));
+    }
+
+    /**
      * A finance token whose claims are all valid but whose signature is produced by a foreign key
      * NOT in the JWKS (advertising the real {@code kid}), so verification ALWAYS fails → 401.
      *

@@ -132,10 +132,11 @@ fanplatform:
       encryption-key: ${FAN_MEMBERSHIP_BILLING_KEY_ENCRYPTION_KEY:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=}
 
   oauth2:
-    # D2-b deprecation window: SAS issuer + legacy "iam" string. MUST stay
+    # TASK-MONO-367 (2026-08-01 sunset, LANDED): the legacy custom-JWT issuer `iam` is no
+    # longer minted (TASK-BE-398) and no longer accepted here. SAS issuer only. MUST stay
     # byte-identical to gateway-service's allowed-issuers (cross-service issuer
     # drift — see community-service application.yml for the rationale).
-    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://iam.local},iam}
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://iam.local}}
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:fan-platform}
 
   # Workload-identity (ADR-MONO-005) — the /internal/** security chain validates

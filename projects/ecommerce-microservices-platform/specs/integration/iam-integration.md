@@ -39,7 +39,7 @@ spring:
           audiences: ecommerce
 ```
 
-`ecommerce.oauth2.allowed-issuers` 는 D2-b deprecation 윈도우 (~2026-08-01) 동안 SAS issuer 와 legacy `iam-platform` issuer 양쪽을 허용한다 (TASK-BE-253 패턴).
+`ecommerce.oauth2.allowed-issuers` 는 SAS issuer(`OIDC_ISSUER_URL`) 만 허용한다. D2-b deprecation 윈도우 (~2026-08-01) 동안 legacy `iam` issuer 도 함께 허용했으나, TASK-BE-398 이 그 문자열을 발급하던 유일한 경로(레거시 커스텀-JWT 플로우)를 제거했고 TASK-MONO-367 이 그 시점에 맞춰 수용 측(allowlist)에서도 제거했다(fleet-wide, 게이트웨이 7개 전부).
 
 ---
 
@@ -80,7 +80,7 @@ ecommerce 도메인의 세분화된 resource scope (`ecommerce.product.read`, `e
 
 1. **서명 검증** — IAM 의 JWKS 로 RS256 서명 검증 (Spring Security `NimbusJwtDecoder` 자동).
 2. **표준 클레임 검증** — `exp`, `nbf`, `iat` (`JwtTimestampValidator`).
-3. **Issuer 검증** — `AllowedIssuersValidator` 로 SAS issuer + legacy `iam-platform` 양쪽 허용 (D2-b deprecate 호환).
+3. **Issuer 검증** — `AllowedIssuersValidator` 로 SAS issuer 만 허용 (TASK-MONO-367: legacy `iam` issuer 는 2026-08-01 일몰로 제거됨, TASK-BE-398 이 발행 측을 먼저 끊었다).
 4. **Audience 검증** — `audiences: ecommerce` 로 `aud` 클레임 검증 (Spring Security 자동).
 5. **Tenant 검증** — `TenantClaimValidator` (entitlement-trust, ADR-MONO-030 §2.4) 로 **임의 well-formed `tenant_id`** 를 수용; **blank/missing 만** `tenant_mismatch` → 403 `TENANT_FORBIDDEN`. (레거시 고정슬러그 `ecommerce` = dual-accept 윈도우의 default-tenant. 도메인간 격리는 다운스트림 row 필터로 집행 — 게이트가 아님.)
 6. **Role 강제** — `AccountTypeEnforcementFilter` (TASK-BE-131; ADR-MONO-035 4b-2a 로 roles-only 전환 — `account_type` OR-branch 제거) 가 `/api/admin/**` 경로에 `roles ∋ ECOMMERCE_OPERATOR` 강제, 그 외 인증 필요 경로에 `roles ∋ CUSTOMER` 강제.
@@ -111,7 +111,7 @@ ecommerce 도메인의 세분화된 resource scope (`ecommerce.product.read`, `e
 - [ ] dev / stg / prod 별 `OIDC_ISSUER_URL` 확정 (gateway-facing 외부 URL — 컨테이너 내부 DNS 그대로 사용 시 `iss` mismatch).
 - [ ] `ecommerce-web-store-client` 의 redirect URI 를 실제 production 도메인으로 갱신 (admin API 또는 V0012 시드 갱신 마이그레이션). (`ecommerce-admin-dashboard-client` 은 RETIRED — admin-dashboard 앱 제거, TASK-MONO-259; operator UI 는 platform-console.)
 - [ ] 두 client_secret 을 secret manager 로 회전.
-- [ ] D2-b deprecation 윈도우 종료 시 `ecommerce.oauth2.allowed-issuers` 에서 `iam-platform` 제거.
+- [x] D2-b deprecation 윈도우 종료 시 `ecommerce.oauth2.allowed-issuers` 에서 `iam-platform`(legacy `iam`) 제거 (TASK-MONO-367, absorbs TASK-BE-390).
 - [ ] IAM 의 `ecommerce` 테넌트 등록 (V0012 시드 또는 admin-service [Tenant Lifecycle API](../../../iam-platform/specs/contracts/http/admin-api.md)).
 - [x] frontend (web-store) 의 NextAuth provider 가 `ecommerce-web-store-client` client_id + IAM authorize endpoint 를 사용하도록 cutover (TASK-FE-067). (운영자 UI 는 platform-console — admin-dashboard 앱 제거, TASK-MONO-259.)
 - [x] 자체 ecommerce auth-service 컴포넌트 제거 (TASK-BE-132).

@@ -144,6 +144,22 @@ class GatewayEdgeIntegrationTest extends GatewayIntegrationBase {
     }
 
     @Test
+    void legacyIssuerTokenRejected401() {
+        // TASK-MONO-367 (2026-08-01 sunset, LANDED): before this, the allowlist below
+        // (GatewayIntegrationBase) carried the legacy `iam` issuer and this token PASSED.
+        // TASK-BE-398 retired the only flow that minted `iss=iam`, so it is gone from the
+        // allowlist too, and this token must now be rejected.
+        String token = jwt.signLegacyIssuerToken("operator-1");
+
+        webTestClient.get().uri(ACCOUNTS_PATH)
+                .header("Authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus().isUnauthorized()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("UNAUTHORIZED");
+    }
+
+    @Test
     void crossTenantTokenRejected403TenantForbidden() {
         // A signature-valid token for tenant "wms" with no finance entitlement. The tenant gate
         // maps this to 403 TENANT_FORBIDDEN (not 401) — re-authenticating would not help.

@@ -134,10 +134,11 @@ logging:
 
 erpplatform:
   oauth2:
-    # Acceptable iss values during the D2-b deprecation window: the SAS issuer URL and the
-    # legacy "iam" string. An EMPTY list is a misconfiguration, not "accept any issuer" —
-    # AllowedIssuersValidator refuses to construct from one, so a missing value fails the boot.
-    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://iam.local},iam}
+    # TASK-MONO-367 (2026-08-01 sunset, LANDED): the legacy custom-JWT issuer `iam` is no
+    # longer minted (TASK-BE-398) and no longer accepted here. SAS issuer only. An EMPTY
+    # list is still a misconfiguration, not "accept any issuer" — AllowedIssuersValidator
+    # refuses to construct from one, so a missing value fails the boot.
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://iam.local}}
     # Same tenant the erp services' own ServiceLevelOAuth2Config requires. The gateway and the
     # service behind it must not disagree about which tokens are valid.
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:erp}

@@ -47,7 +47,9 @@ spring:
 # TASK-MONO-027: validator config for the integration profile.
 # JwtTestHelper signs tokens with iss=https://test.local/issuer and
 # tenant_id=ecommerce; the validators must accept that pair.
+# TASK-MONO-367 (2026-08-01 sunset, LANDED): the legacy custom-JWT issuer `iam` is no
+# longer minted (TASK-BE-398) and no longer accepted here, matching production.
 ecommerce:
   oauth2:
-    allowed-issuers: https://test.local/issuer,iam
+    allowed-issuers: https://test.local/issuer
     required-tenant-id: ecommerce

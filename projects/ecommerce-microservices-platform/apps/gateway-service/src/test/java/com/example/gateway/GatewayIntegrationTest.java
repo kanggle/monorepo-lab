@@ -217,9 +217,11 @@ class GatewayIntegrationTest {
     // TASK-MONO-027 — TenantClaimValidator + AllowedIssuersValidator scenarios
     //
     // The integration profile (application-integration-test.yml) configures:
-    //   ecommerce.oauth2.allowed-issuers = https://test.local/issuer,
-    //                                      iam
+    //   ecommerce.oauth2.allowed-issuers = https://test.local/issuer
     //   ecommerce.oauth2.required-tenant-id = ecommerce
+    //
+    // TASK-MONO-367 (2026-08-01 sunset, LANDED): the legacy `iam` issuer entry above is
+    // gone — TASK-BE-398 retired the only flow that minted it.
     //
     // Spring Security WebFlux surfaces all JWT validation failures
     // (issuer mismatch, missing/blank tenant_id) as 401 via
@@ -317,8 +319,12 @@ class GatewayIntegrationTest {
     }
 
     @Test
-    @DisplayName("iss=iam (legacy) + tenant_id=ecommerce → 통과")
-    void protectedRoute_legacyIssuer_passesJwtFilter() {
+    @DisplayName("TASK-MONO-367 — iss=iam (legacy) + tenant_id=ecommerce → 거부 (401, BE-398 이후 일몰)")
+    void protectedRoute_legacyIssuer_rejected401() {
+        // Before TASK-MONO-367 this exact token PASSED (the allowlist carried `iam` for the
+        // D2-b deprecation window). TASK-BE-398 retired the only flow that minted `iss=iam`,
+        // so this gateway no longer accepts it either — the edge must reject, not merely stop
+        // seeing the value in production traffic.
         String token = jwtHelper.signTokenWithIssuerAndTenant(
                 "iam", "ecommerce");
 
@@ -326,8 +332,9 @@ class GatewayIntegrationTest {
                 .uri("/api/orders/123")
                 .header("Authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().value(status ->
-                        org.assertj.core.api.Assertions.assertThat(status).isNotEqualTo(401));
+                .expectStatus().isUnauthorized()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("UNAUTHORIZED");
     }
 
     @Test

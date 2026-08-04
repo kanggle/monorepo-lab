@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.lang.reflect.Field;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
@@ -95,7 +96,11 @@ class OAuth2ResourceServerConfigTest {
     }
 
     @Test
-    void acceptsLegacyIssuerToken() throws Exception {
+    @DisplayName("TASK-MONO-367 — 레거시 발급자(iam)는 일몰 후 거부된다 (BE-398 이후)")
+    void rejectsLegacyIssuerToken() throws Exception {
+        // Before TASK-MONO-367 this token PASSED — the allowlist carried `iam` for the D2-b
+        // deprecation window. TASK-BE-398 retired the only flow that minted `iss=iam`, so the
+        // allowlist below (configWithDefaults) no longer carries it either.
         OAuth2ResourceServerConfig config = configWithDefaults();
         OAuth2TokenValidator<Jwt> validator = config.jwtTokenValidator();
 
@@ -109,16 +114,20 @@ class OAuth2ResourceServerConfigTest {
                 .build();
 
         OAuth2TokenValidatorResult result = validator.validate(jwt);
-        assertThat(result.hasErrors()).isFalse();
+        assertThat(result.hasErrors()).isTrue();
+        assertThat(result.getErrors()).anyMatch(e -> "invalid_issuer".equals(e.getErrorCode()));
     }
 
     /**
      * The config now takes its properties on the constructor (TASK-MONO-355), so the
      * reflective field-write this helper used to need is gone. Same values, same keys.
+     *
+     * <p>TASK-MONO-367 (2026-08-01 sunset, LANDED): the allowed-issuers value matches
+     * production post-sunset — SAS issuer only, no trailing {@code ,iam}.
      */
     private static OAuth2ResourceServerConfig configWithDefaults() {
         return new OAuth2ResourceServerConfig(
-                "http://iam.local/oauth2/jwks", "http://iam.local,iam", "fan-platform");
+                "http://iam.local/oauth2/jwks", "http://iam.local", "fan-platform");
     }
 
     private static Object readField(Object target, String name) throws Exception {

@@ -91,7 +91,10 @@ logging:
 
 scmplatform:
   oauth2:
-    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://iam.local},iam}
+    # TASK-MONO-367 (2026-08-01 sunset, LANDED): the legacy custom-JWT issuer `iam` is no
+    # longer minted (TASK-BE-398) and no longer accepted here. SAS issuer only. MUST stay
+    # byte-identical to gateway-service's allowed-issuers (cross-service issuer drift).
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://iam.local}}
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:scm}
   demand-planning:
     # Intra-scm procurement leg (ADR-MONO-027 D5). demand-planning calls
