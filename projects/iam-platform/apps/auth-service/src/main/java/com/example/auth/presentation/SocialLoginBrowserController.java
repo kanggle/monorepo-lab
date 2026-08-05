@@ -163,7 +163,7 @@ public class SocialLoginBrowserController {
      * <p>Mirrors {@code CredentialAuthenticationProvider}'s principal template:
      * {@code UsernamePasswordAuthenticationToken(email, null, [ROLE_USER])} with a
      * {@code details} map of {@code tenant_id} / {@code tenant_type} /
-     * {@code account_id}. The details map MUST be a {@link HashMap} (never
+     * {@code account_id} / {@code email}. The details map MUST be a {@link HashMap} (never
      * {@code Map.of}) — SAS's {@code JdbcOAuth2AuthorizationService} serializes the
      * Authentication via the strict {@code SecurityJackson2Modules} allowlist, and
      * an immutable map breaks the {@code /oauth2/token} round-trip.
@@ -176,6 +176,10 @@ public class SocialLoginBrowserController {
         details.put(PrincipalDetailKeys.TENANT_ID, resolution.tenantId());
         details.put(PrincipalDetailKeys.TENANT_TYPE, resolution.tenantType());
         details.put(PrincipalDetailKeys.ACCOUNT_ID, login.accountId());
+        // TASK-BE-577: the social path must publish the email too, or a social login
+        // yields an email-less token while a form login yields one — the same account,
+        // two different tokens, decided by how the user happened to sign in.
+        details.put(PrincipalDetailKeys.EMAIL, login.email());
 
         UsernamePasswordAuthenticationToken authentication =
                 new UsernamePasswordAuthenticationToken(

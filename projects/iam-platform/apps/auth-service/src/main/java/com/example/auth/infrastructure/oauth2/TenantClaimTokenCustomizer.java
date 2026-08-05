@@ -60,6 +60,11 @@ import org.springframework.stereotype.Component;
  * and decouples {@link RoleSeedPolicy} from {@code account_type} (consumer seed keyed on
  * platform only). Operators get domain roles at assume-tenant (BE-376), consumers carry
  * {@code CUSTOMER}/{@code FAN} (seed) — neither needs {@code account_type}.
+ *
+ * <p>TASK-BE-577 — adds the OIDC {@code email} claim on the identity-bearing grants, gated
+ * on the {@code email} scope. See {@link #populateEmail}: the contract has required this
+ * claim all along and the consumers downstream were already wired for it; only the mint was
+ * missing.
  */
 @Slf4j
 @Component
@@ -117,6 +122,35 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
      * {@link #customizeForAssumeTenant}.
      */
     private static final String CLAIM_ROLES = "roles";
+
+    /**
+     * TASK-BE-577: the OIDC {@code email} claim.
+     *
+     * <p><b>This is not a new decision.</b> {@code platform/contracts/jwt-standard-claims.md}
+     * has carried an {@code email} row since the contract was written, and ADR-MONO-037 P1
+     * chose its option A on the explicit ground that onboarding PII "flows through the OIDC
+     * token (its proper, consented channel), not a fan-out event" — which is why
+     * {@code account.created} is emailHash-only. Both halves were in place; the claim was
+     * simply never minted. Six clients declare the {@code email} scope, users consented to
+     * it, the ecommerce edge maps {@code X-User-Email} from it and the user-service
+     * provisioner accepts it — and every one of those was a no-op, because the value at the
+     * head of that chain did not exist (measured 2026-08-06: 5 of 5 obtainable tokens, 3
+     * tenants, public and confidential clients — no {@code email} claim on any of them).
+     *
+     * <p><b>Why nothing caught it.</b> {@code scripts/check-jwt-claims-registry.sh} compares
+     * minted claims against the contract in one direction only — code → doc — and says so in
+     * its own header. A claim the document requires and the code never mints is precisely
+     * the case it does not look at.
+     *
+     * <p><b>Scope-gated.</b> Emitted only when the {@code email} scope was actually granted
+     * (§ AC-2), so a client that never asked for PII never receives it. Consent is the reason
+     * this channel is the proper one; emitting unconditionally would remove the consent and
+     * keep only the PII.
+     */
+    private static final String CLAIM_EMAIL = "email";
+
+    /** OIDC scope whose grant authorizes the {@link #CLAIM_EMAIL} claim. */
+    private static final String SCOPE_EMAIL = "email";
 
     /**
      * TASK-BE-324: account-service port used to resolve {@code entitled_domains} at
@@ -236,6 +270,12 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
         // so the belt-and-suspenders claim is redundant.
         alignSubToAccountId(context, principal);
 
+        // TASK-BE-577: the OIDC `email` claim. Placed beside alignSubToAccountId because
+        // both read the principal and neither depends on how tenant resolution below
+        // turns out — the email is a property of who logged in, not of which branch
+        // resolved their tenant.
+        populateEmail(context, principal);
+
         String tenantId = extractTenantAttribute(principal, PrincipalDetailKeys.TENANT_ID);
         String tenantType = extractTenantAttribute(principal, PrincipalDetailKeys.TENANT_TYPE);
 
@@ -315,6 +355,56 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
             // sub = account UUID (full jwt-standard-claims.md compliance).
             context.getClaims().subject(accountId);
         }
+    }
+
+    /**
+     * TASK-BE-577: injects the OIDC {@code email} claim on the identity-bearing grants
+     * ({@code authorization_code} and, through the same method, {@code refresh_token}).
+     *
+     * <p><b>Two conditions, both required.</b> The {@code email} scope must have been
+     * granted — a client that did not ask for PII does not receive it — and the principal
+     * must actually carry an email in its {@code details} map. Either missing → the claim
+     * is omitted, never emitted blank: the ecommerce edge maps this header with
+     * {@code skipIfNull}, so an absent claim degrades to "no header" (the behaviour that
+     * has been in place all along), whereas a blank one would travel as a present-but-empty
+     * header and provision a profile with an empty email — worse than the null it replaced.
+     *
+     * <p><b>Never on {@code client_credentials}.</b> A workload is not an identity and has
+     * no email; the grant never reaches this method. Nor on {@code token_exchange}
+     * (assume-tenant): that token answers "which tenant is this operator acting in", the
+     * base token already carries the operator's email for anything that needs it, and no
+     * consumer of the assumed token reads one — so emitting it there would widen the PII
+     * surface for nobody's benefit. Out of scope by the ticket, and stated here so the
+     * omission reads as a decision rather than an oversight.
+     *
+     * <p><b>Not logged.</b> The value is PII; only its presence is logged. A claim minted
+     * to travel through a consented channel must not be copied into an unconsented one.
+     *
+     * <p><b>The ID token gets it too, deliberately.</b> {@link #customize} dispatches on the
+     * grant type, and this method serves both token types on that grant — so the claim lands
+     * on the {@code id_token} as well. The ticket listed the id_token path as a separate
+     * judgement; the judgement is that <em>excluding</em> it would take an extra condition to
+     * keep {@code email} out of the one place OIDC Core actually defines it, for a client that
+     * asked for the {@code email} scope. Suppressing it would be the surprising behaviour.
+     *
+     * <p><b>Pre-existing authorizations.</b> An {@code OAuth2Authorization} stored before
+     * this change carries a {@code details} map without the email key, so a refresh against
+     * it omits the claim — the exact pre-change behaviour, degrading rather than failing.
+     * The next fresh login populates it.
+     */
+    private void populateEmail(JwtEncodingContext context, Authentication principal) {
+        if (!context.getAuthorizedScopes().contains(SCOPE_EMAIL)) {
+            return;
+        }
+        String email = extractTenantAttribute(principal, PrincipalDetailKeys.EMAIL);
+        if (email == null) {
+            // extractTenantAttribute already rejects blank, so this is "no email known".
+            log.debug("TenantClaimTokenCustomizer: email scope granted but the principal "
+                    + "carries no email detail — omitting the claim (skipIfNull downstream)");
+            return;
+        }
+        context.getClaims().claim(CLAIM_EMAIL, email.trim());
+        log.debug("TenantClaimTokenCustomizer: injected the email claim (value not logged — PII)");
     }
 
     /**

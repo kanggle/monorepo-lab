@@ -151,6 +151,7 @@ grant_type=urn:ietf:params:oauth:grant-type:token-exchange
 | `tenant_id` | **선택된** customer tenant (`audience`) — `'*'` 이 아님 |
 | `tenant_type` | 선택된 customer tenant 의 type (`B2B_ENTERPRISE`) |
 | `entitled_domains` | 선택된 tenant 의 ACTIVE subscriptions **만** (fail-soft 시 생략) |
+| `email` | **없음.** 아래 § Scope ↔ Claim 참조 — 이 grant 는 `email` 을 싣지 않는다 |
 
 **Assume-Tenant Errors**:
 
@@ -181,6 +182,36 @@ grant_type=urn:ietf:params:oauth:grant-type:token-exchange
 | `exp` | 만료 시각 |
 | `tenant_id` | 테넌트 slug (필수 — 누락 시 발급 거부) |
 | `tenant_type` | `B2C_CONSUMER` \| `B2B_ENTERPRISE` (필수) |
+| `email` | 계정 이메일 — **`email` scope 가 승인된 경우에만** (§ Scope ↔ Claim) |
+
+#### Scope ↔ Claim (TASK-BE-577)
+
+무엇을 요청하면 무엇이 실리는지는 지금까지 어디에도 적혀 있지 않았다. 그 결과
+`email` scope 를 선언한 클라이언트 6개가 전부 그 scope 를 승인받고도 **클레임 없는
+토큰**을 받아 왔다 — 게이트웨이의 `X-User-Email` 주입도, 소비자 프로필의 이메일도
+그래서 영구히 비어 있었다(실측, TASK-BE-575 → BE-577).
+
+| Scope | 실리는 claim | 어디에 |
+|---|---|---|
+| `openid` | `sub`, `iss`, `iat`, `exp` (표준) | access token + id token |
+| `email` | **`email`** (계정 이메일) | access token + id token |
+| `profile` | **없음** — 아래 참조 | — |
+| (scope 무관) | `tenant_id`, `tenant_type`, `roles`, `entitled_domains` | access token + id token |
+
+- **`email` 은 scope 로 게이트된다.** scope 없이 발급된 토큰에는 클레임이 없다. 동의가
+  이 채널을 PII 의 정당한 경로로 만드는 근거이므로(ADR-MONO-037 P1), 무조건 실으면
+  동의만 사라지고 PII 만 남는다.
+- **값이 없으면 클레임을 생략한다 — 빈 문자열로 싣지 않는다.** 소비 측이
+  `skipIfNull` 로 헤더를 매핑하므로, 빈 값은 "헤더 있음 + 값 없음" 으로 전달돼 빈
+  이메일을 가진 프로필을 만든다(생략보다 나쁘다).
+- **`profile` scope 는 아직 아무 클레임도 싣지 않는다.** auth-service 의 자격증명
+  저장소에 표시 이름 컬럼이 **없고**(`credentials` 는 email 까지다), 이름을 읽는
+  소비자도 없다(어느 게이트웨이도 `X-User-Name` 을 매핑하지 않는다). 소스도 소비자도
+  없는 PII 클레임을 미리 싣지 않는다 — 필요해지면 그때 결정한다.
+- **assume-tenant(token-exchange) 토큰에는 싣지 않는다.** 그 토큰이 답하는 질문은
+  "이 운영자가 어느 테넌트로 행위하는가" 이고, base 토큰이 이미 이메일을 갖고 있으며,
+  assumed 토큰의 이메일을 읽는 소비자는 없다.
+- **`client_credentials` 에는 구조적으로 실리지 않는다** — 워크로드는 신원이 아니다.
 
 **Errors**:
 

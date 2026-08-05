@@ -90,6 +90,21 @@ class CredentialAuthenticationProviderTest {
     }
 
     @Test
+    @DisplayName("TASK-BE-577: the details map carries the email, so the customizer never has to read it off the principal name")
+    void detailsMap_carriesEmail() {
+        stubHappyCredentialLookup();
+        when(tenantTypePort.resolve("acme-corp")).thenReturn("B2B_ENTERPRISE");
+
+        Map<String, Object> details = authenticateAndGetDetails();
+
+        // The producer↔consumer half of the email claim. The customizer reads this key;
+        // if a producer stops publishing it, the claim silently disappears — which is
+        // why the key lives in PrincipalDetailKeys and is asserted here rather than
+        // being inferred from Authentication.getName() happening to be the same string.
+        assertThat(details).containsEntry("email", EMAIL);
+    }
+
+    @Test
     @DisplayName("TASK-BE-407: tenant_type in the details map is the resolver's authoritative value")
     void detailsMap_tenantTypeFromResolver() {
         stubHappyCredentialLookup();

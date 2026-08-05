@@ -178,10 +178,16 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
         // TASK-MONO-263 (ADR-032 D5 step 4): the account_type detail is no longer
         // published — the claim is removed entirely. The roles claim (seeded by
         // RoleSeedPolicy on platform, BE-369) is the sole authorization surface.
+        // TASK-BE-577: the email is published as a detail rather than read back off
+        // the principal name at issuance time. Both are the same string today, but
+        // the principal name is a Spring Security convention that a producer may
+        // change without any compile error — which is the exact drift this key class
+        // exists to prevent (see PrincipalDetailKeys' javadoc).
         Map<String, Object> details = new HashMap<>();
         details.put(PrincipalDetailKeys.TENANT_ID, tenantId);
         details.put(PrincipalDetailKeys.TENANT_TYPE, tenantType);
         details.put(PrincipalDetailKeys.ACCOUNT_ID, credential.getAccountId());
+        details.put(PrincipalDetailKeys.EMAIL, credential.getEmail());
 
         UsernamePasswordAuthenticationToken authenticated =
                 new UsernamePasswordAuthenticationToken(
