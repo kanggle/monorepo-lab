@@ -136,7 +136,20 @@ fi
 # -----------------------------------------------------------------------------
 # 2. 운영자 토큰 — 백오피스 (콘솔 E-Commerce 탭이 읽는 것)
 # -----------------------------------------------------------------------------
-OP_TOKEN="$(operator_token demo-corp)"
+# 🔴 `demo-corp` 가 아니라 `ecommerce` 를 assume 한다 (TASK-BE-576).
+#
+# 두 테넌트는 서로 다른 것을 준다:
+#   demo-corp  → **권한**(5개 도메인 구독에서 파생되는 *_OPERATOR 역할)
+#   ecommerce  → **가시성**(스토어프런트가 쓰는 행이 실제로 사는 곳)
+#
+# 백오피스를 demo-corp 로 넣으면 콘솔이 **반쪽**이 된다 — 셀러·프로모션·알림 템플릿은
+# 보이는데 바로 옆의 상품·주문·배송·정산은 비어 있다(둘이 다른 테넌트에 살기 때문).
+# 스토어프런트 쪽을 옮길 수는 없다: 카탈로그 자체가 `tenant_id='ecommerce'` 이고
+# (product-service V8 이 tenant 컬럼을 안 적어 기본값을 탄다 — 상품 8/8 · 카테고리 7/7
+# 실측), 게이트웨이가 소비자 토큰에 그 테넌트를 강제한다. 그러니 **운영자가 그쪽으로
+# 가야 한다.** `ecommerce` 테넌트는 ecommerce+wms 를 구독하므로 assume 하면
+# ECOMMERCE_OPERATOR 를 그대로 받는다(실측: 원소 수 8/4/1/3/3 = DB 와 일치).
+OP_TOKEN="$(operator_token ecommerce)"
 if [ -z "${OP_TOKEN:-}" ]; then
   seed_fail "운영자 토큰 발급 실패 — 백오피스 시드를 건너뜁니다"
   seed_summary; exit $?
@@ -226,15 +239,15 @@ if [ -n "${SHIP_ID:-}" ]; then
         # 이미 그 상태를 지났으면 전이 거절이 정상이다(멱등 재실행).
         409|422|400)
           seed_log "  → $target 전이 불가/불필요 (HTTP $SEED_LAST_STATUS) ${SEED_LAST_BODY:0:120}" ;;
-        # 🔴 알려진 결함 — 실패로 세지 않고 **원인을 이름 붙여** 남긴다.
-        # 소비자 토큰으로 방금 조회한 그 배송 건이 운영자에게는 존재하지 않는다:
-        # 행은 `tenant_id=ecommerce`(게이트웨이가 소비자에게 강제하는 값)인데 데모
-        # 운영자는 `demo-corp` 를 assume 하기 때문이다. 즉 테넌트 분리는 목록 화면을
-        # 비우는 데 그치지 않고 **운영자의 쓰기까지 막는다.** → TASK-BE-576.
+        # 🔴 여기서 403/404 가 나오면 **테넌트 불일치를 의심하라** — 소비자 토큰으로
+        # 방금 조회한 배송 건이 운영자에게는 존재하지 않는 상태다. TASK-BE-576 이
+        # 정확히 이 모양이었다(운영자가 `demo-corp` 를 assume 하는데 행은
+        # `tenant_id=ecommerce`). 지금은 위에서 `ecommerce` 를 assume 하므로 나오지
+        # 않아야 하고, 나온다면 그 assume 가 깨진 것이다. 그래서 **실패로 센다** —
+        # 알려진 결함이 고쳐진 뒤에도 경고로 남겨 두면 회귀가 초록으로 보인다.
         403|404)
-          seed_warn "배송 전이 $target 이 운영자 테넌트에서 대상을 찾지 못했습니다 (HTTP $SEED_LAST_STATUS)"
-          seed_warn "  → 데모 운영자는 demo-corp, 배송 행은 tenant_id=ecommerce — 알려진 결함 TASK-BE-576"
-          seed_warn "  → 그 결과 리뷰(DELIVERED 전제)도 시드되지 않습니다"
+          seed_fail "배송 전이 $target — HTTP $SEED_LAST_STATUS. 운영자가 배송 건을 찾지 못했습니다"
+          seed_warn "  → 테넌트 불일치를 의심하라(TASK-BE-576 이 그 모양이었다): 이 시드는 'ecommerce' 를 assume 해야 한다"
           break ;;
         *)
           seed_fail "배송 전이 실패 $target — HTTP $SEED_LAST_STATUS ${SEED_LAST_BODY:0:160}" ;;

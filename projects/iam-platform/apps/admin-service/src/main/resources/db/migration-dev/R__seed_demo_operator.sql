@@ -84,3 +84,62 @@ SELECT o.id, r.id, o.tenant_id, NOW(6), NULL
 INSERT IGNORE INTO operator_tenant_assignment (operator_id, tenant_id, granted_at, granted_by, permission_set_id)
 SELECT o.id, 'demo-corp', NOW(6), NULL, NULL
   FROM admin_operators o WHERE o.operator_id = 'demo-operator';
+
+-- ---------------------------------------------------------------------------
+-- 4. Assume-tenant assignment → `ecommerce` (TASK-BE-576).
+--
+-- WHY A SECOND TENANT, WHEN demo-corp ALREADY OPENS ALL FIVE DOMAINS
+-- ---------------------------------------------------------------------------
+-- demo-corp grants AUTHORIZATION (its five ACTIVE subscriptions derive
+-- ECOMMERCE_OPERATOR + WMS/SCM/ERP/FINANCE_OPERATOR at assume time). It does NOT
+-- grant VISIBILITY, because it owns no data: every ecommerce row is written under
+-- `tenant_id = 'ecommerce'`, and the services filter every read by the request's
+-- tenant (`TenantContext.currentTenant()` threaded into each repository call).
+--
+-- The failure this produced was invisible to every cheap check. Measured with a
+-- demo-corp assumed token, 2026-08-05:
+--
+--   GET /api/admin/products             200  totalElements 0   (DB: 8)
+--   GET /api/admin/orders               200  totalElements 0   (DB: 4)
+--   GET /api/admin/users                200  totalElements 0   (DB: 1)
+--   GET /api/shippings                  200  totalElements 0   (DB: 3)
+--   GET /api/admin/settlements/accruals 200  totalElements 0   (DB: 3)
+--
+-- The gateway ACCEPTS the token (entitlement-trust admits demo-corp) — so the
+-- edge is green, the health card is green, and every list is empty. It is not
+-- read-only either: the operator could not advance a shipment it had just been
+-- shown by the buyer's own token (`PUT /api/shippings/{id}/status` → 404
+-- SHIPPING_NOT_FOUND), which in turn made a verified-purchase review impossible.
+--
+-- WHY NOT MOVE THE STOREFRONT INTO demo-corp INSTEAD (the tempting one-tenant fix)
+-- ---------------------------------------------------------------------------
+-- Because the CATALOG lives in `ecommerce`: `product-service` V8 seeds products
+-- and categories with no tenant column, so they take the column default and the
+-- rows read `tenant_id = 'ecommerce'` (verified: products 8/8, categories 7/7).
+-- A storefront operating as demo-corp would show an EMPTY shop. Re-tenanting a
+-- production migration to suit a demo is not on the table. The consumer token's
+-- tenant is likewise pinned by the gateway (`required-tenant-id: ecommerce`) and
+-- by the client registration (`ecommerce-web-store-client` → tenant `ecommerce`).
+-- So the storefront must stay in `ecommerce`, and the operator must be able to
+-- stand in that tenant to administer it.
+--
+-- WHY ONLY `ecommerce` AND NOT ALL FIVE DOMAIN TENANTS
+-- ---------------------------------------------------------------------------
+-- The mechanism is domain-agnostic (every domain threads a tenant through its
+-- persistence layer), but the SYMPTOM needs a writer outside the console. In this
+-- demo only ecommerce has one — the storefront. WMS/SCM/ERP/Finance data is
+-- created by this same operator through the console while assuming demo-corp, so
+-- it lands in demo-corp and is visible there. Adding four more assignments would
+-- put four more entries in the tenant switcher to fix a symptom nobody has
+-- measured. `TASK-MONO-510` AC-0 re-checks each domain's element counts against
+-- the DB when it seeds them; if one of them does have an outside writer (a
+-- `*-internal-services-client` is registered per domain and carries that domain's
+-- tenant), the fix is one more row here.
+--
+-- The switcher needs no code change: it lists the tenants the console registry
+-- reports for this operator, which is derived from these assignment rows
+-- (verified live — the switcher went from [demo-corp] to [demo-corp, ecommerce]).
+-- ---------------------------------------------------------------------------
+INSERT IGNORE INTO operator_tenant_assignment (operator_id, tenant_id, granted_at, granted_by, permission_set_id)
+SELECT o.id, 'ecommerce', NOW(6), NULL, NULL
+  FROM admin_operators o WHERE o.operator_id = 'demo-operator';
