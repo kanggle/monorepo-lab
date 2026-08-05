@@ -69,6 +69,30 @@ admin-service 는 자체 IdP 를 소유하며 operator JWT 를 별도 RS256 키 
 
 이 위임 관계는 플랫폼 불변식이다. 향후 operator JWT 를 gateway 에서 검증하도록 변경하려면 ADR + 본 섹션 개정이 선행되어야 한다.
 
+### 구현은 **서브트리 와일드카드**이며, 경로를 열거하지 않는다 (TASK-MONO-508)
+
+`gateway.public-paths` 는 이 서브트리를 **메서드별 와일드카드 한 줄씩**으로 표현한다
+(`GET:/api/admin/**`, `POST:`, `PUT:`, `PATCH:`, `DELETE:`, 그리고 `GET:/.well-known/admin/**`).
+**개별 경로를 다시 열거하지 말 것.**
+
+한때 열거로 되어 있었고, 그 목록은 admin-service 의 표면보다 뒤처졌다. 목록이 작성된 뒤 추가된
+operator 엔드포인트는 전부 gateway 에서 401 로 죽었다 — 즉 **위 불변식이 금지한 "gateway 가
+operator JWT 를 검증하는 상태" 가 ADR 없이 사실상 성립해 있었다.** 통합 데모에서 실제 operator
+토큰으로 측정한 결과:
+
+| | 결과 |
+|---|---|
+| 열거된 3경로 (`console/registry`, `audit`, `accounts`) | **200** |
+| 열거되지 않은 8경로 (`org-nodes`, `me`, `operators`, `operators/grantable-roles`, `roles`, `permissions`, `groups`, `partnerships`) | **401 `TOKEN_INVALID`** |
+
+콘솔의 IAM 관리 화면 7개가 `→ /login → /console` 로 튕겼다. 열거는 **드리프트가 조용한** 표현이다:
+새 엔드포인트를 추가한 사람에게 아무 신호도 주지 않으면서 그 엔드포인트만 어둡게 만든다.
+
+`RouteConfigTest` 가 이 불변식을 **실제 `application.yml` 을 읽어** 검증한다 — 픽스처를 손으로
+복사하지 않는다. 이전 판은 복사본이 원본과 어긋난 채 초록이었고, 심지어
+`GET /api/admin/accounts/{id}` 를 "public 아님" 이라고 단언해 이 섹션과 정면으로 모순됐다.
+**산출물을 복제한 픽스처는 복제본만 검증한다.**
+
 `/.well-known/admin/jwks.json` 은 admin-service 의 공개키를 외부 검증자에게 노출하기 위한 표준 디스커버리 엔드포인트다. gateway 는 `/.well-known/admin/**` 라우트를 admin-service 로 프록시한다.
 
 ---
