@@ -1049,6 +1049,70 @@ esac
 ok "결제 mock 정합 (payment-service='${x_profiles}' ↔ web-store DEMO_PAYMENT_MOCK='${x_flag}')"
 
 # ---------------------------------------------------------------------------
+echo "[verify] (x2) 팬 결제 mock 이 프런트·백엔드 양쪽에서 같은 상태인가"
+# ---------------------------------------------------------------------------
+# 근거(TASK-FAN-FE-015): 같은 성질을 팬에도 요구하되 **술어가 뒤집힌다.**
+#
+#   ecommerce — 실 Toss 어댑터가 기본. `demo-pg` 프로파일을 **켜야** 목이 된다.
+#               ⇒ 불변식: 프런트 플래그 ON ⟺ 프로파일에 `demo-pg` 있음        (가드 x)
+#   fan       — 목이 기본이다. `MockPaymentGatewayAdapter` 가 `@Profile("!portone")`
+#               이므로 `portone` 을 **켜야** 실 PG 가 된다.
+#               ⇒ 불변식: 프런트 플래그 ON ⟺ 프로파일에 `portone` **없음**    (여기)
+#
+# 🔴 그래서 (x) 의 술어를 그대로 복사하면 **정반대를 단언**하고 팬의 정상 데모 설정이
+# RED 가 된다. 이 티켓이 고친 상태가 그 증거다 — 팬 백엔드는 이미 목이었고 프런트만 몰랐다.
+#
+# 한쪽만 켜지면 조용히 깨지는 것은 같다:
+#   프런트만 켜짐(= portone 도 켜짐) → 지어낸 paymentId 를 실 PortOne 어댑터가 거부한다.
+#   프런트만 꺼짐(= 이 티켓 이전)    → 백엔드 목이 승인할 준비가 됐는데도 프런트가
+#                                     'PortOne 키 미설정' 으로 요청 자체를 안 보낸다.
+# 어느 쪽도 기동 시점엔 신호가 없고 구독 버튼을 눌러야 드러난다.
+x2_render="$(render fan)"
+x2_profiles="$(printf '%s' "$x2_render" | awk '
+  /^[a-z]+:/ { sec = $1; sub(/:$/, "", sec); svc = "" }
+  sec != "services" { next }
+  /^  [a-zA-Z0-9._-]+:$/ { svc = $1; sub(/:$/, "", svc); blk = ""; next }
+  /^    [a-zA-Z0-9._-]+:/ { blk = $1; sub(/:$/, "", blk) }
+  svc == "membership-service" && blk == "environment" && /^      SPRING_PROFILES_ACTIVE:/ {
+    v = $2; gsub(/"/, "", v); print v }
+')"
+x2_flag="$(printf '%s' "$x2_render" | awk '
+  /^[a-z]+:/ { sec = $1; sub(/:$/, "", sec); svc = "" }
+  sec != "services" { next }
+  /^  [a-zA-Z0-9._-]+:$/ { svc = $1; sub(/:$/, "", svc); blk = ""; next }
+  /^    [a-zA-Z0-9._-]+:/ { blk = $1; sub(/:$/, "", blk) }
+  svc == "fan-platform-web" && blk == "environment" && /^      DEMO_PAYMENT_MOCK:/ {
+    v = $2; gsub(/"/, "", v); print v }
+')"
+
+# (x) 와 같은 이유로 추출 실패를 통과로 보고하지 않는다. 키가 사라지면 두 값이 모두 빈
+# 문자열이 되는데, 팬에서는 그 조합이 **바로 이 티켓이 고친 결함** 이라 특히 위험하다.
+printf '%s' "$x2_render" | grep -qE '^      SPRING_PROFILES_ACTIVE:' \
+  || fail "(x2) fan 렌더에서 membership-service 의 SPRING_PROFILES_ACTIVE 를 찾지 못했습니다 — 탐지식이 깨졌습니다."
+printf '%s' "$x2_render" | grep -qE '^      DEMO_PAYMENT_MOCK:' \
+  || fail "(x2) fan 렌더에서 fan-platform-web 의 DEMO_PAYMENT_MOCK 를 찾지 못했습니다"\
+    $'\n'"→ fan-platform-web.environment 에 \`DEMO_PAYMENT_MOCK: \${DEMO_PAYMENT_MOCK:-}\` 가 있어야 합니다."\
+    $'\n'"   compose 는 자기가 이름을 적은 변수만 컨테이너에 넣습니다 — demo.env 값만으로는 도달하지 않습니다."
+
+case ",$x2_profiles," in
+  *,portone,*) x2_real=1 ;;
+  *)           x2_real=0 ;;
+esac
+[ "$x2_flag" = "1" ] && x2_front=1 || x2_front=0
+# 목이 기본이므로 "백엔드가 목인가" = "portone 이 꺼져 있는가".
+x2_back_mock=$(( 1 - x2_real ))
+
+[ "$x2_back_mock" = "$x2_front" ] || fail "팬 결제 mock 설정이 한쪽만 켜져 있습니다:"\
+  $'\n'"  membership-service SPRING_PROFILES_ACTIVE = '$x2_profiles'  (portone: $x2_real ⇒ 목: $x2_back_mock)"\
+  $'\n'"  fan-platform-web   DEMO_PAYMENT_MOCK      = '$x2_flag'  (on: $x2_front)"\
+  $'\n'"→ 프런트만 켜짐 = 지어낸 paymentId 를 실 PortOne 어댑터가 거부해 구독이 죽습니다."\
+  $'\n'"→ 프런트만 꺼짐 = 백엔드 목이 승인할 준비가 됐는데도 프런트가 'PortOne 키 미설정' 으로"\
+  $'\n'"   요청 자체를 보내지 않습니다 (TASK-FAN-FE-015 가 고친 상태가 정확히 이것입니다)."\
+  $'\n'"→ 팬은 극성이 ecommerce 와 반대입니다 — 목이 기본이고 portone 이 opt-in 입니다."
+
+ok "팬 결제 mock 정합 (membership-service='${x2_profiles}' ↔ fan-platform-web DEMO_PAYMENT_MOCK='${x2_flag}')"
+
+# ---------------------------------------------------------------------------
 # (y) 시드의 직접-DB 는 반드시 `dbexec --why` 를 거친다 (TASK-MONO-506 AC-1)
 # ---------------------------------------------------------------------------
 # AC-1 은 "사유 없는 직접-DB 0건" 을 요구한다. 그 성질은 두 겹으로 지킨다:

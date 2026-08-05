@@ -1,6 +1,8 @@
 'use client';
 import * as PortOne from '@portone/browser-sdk/v2';
 import { env } from '@/shared/config/env';
+import { isDemoPayment } from '@/features/membership/lib/demo-payment';
+import { randomUuid } from '@/shared/lib/random-id';
 import type { MembershipTier } from '@/entities/membership';
 
 /**
@@ -56,12 +58,23 @@ export async function requestPortOnePayment(
   amountKrw: number,
   buyer?: CheckoutBuyer,
 ): Promise<CheckoutResult> {
+  // TASK-FAN-FE-015: asked BEFORE the key guard below, and the order is the fix rather
+  // than an optimisation — that guard is what returned "결제 모듈이 설정되지 않았습니다"
+  // and refused to call the backend at all, while membership-service's mock gateway was
+  // sitting behind it approving anything.
+  if (await isDemoPayment()) {
+    // Deliberately NOT a shortcut past the backend: we return a well-formed paymentId and
+    // let the caller run the real subscribe/renew request, which really does verify through
+    // PaymentGatewayPort and really does write a membership row. Only the payment window is
+    // skipped; everything after this point is the path production runs.
+    return { ok: true, paymentId: `pay-${randomUuid()}` };
+  }
   if (!env.portoneStoreId || !env.portoneChannelKey) {
     return { ok: false, message: '결제 모듈이 설정되지 않았습니다 (PortOne 키 미설정).' };
   }
   // A fresh unique id per attempt — reusing one would collide with the backend's
   // idempotency/replay guard.
-  const paymentId = `pay-${crypto.randomUUID()}`;
+  const paymentId = `pay-${randomUuid()}`;
   let response: Awaited<ReturnType<typeof PortOne.requestPayment>>;
   try {
     response = await PortOne.requestPayment({
