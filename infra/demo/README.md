@@ -251,11 +251,26 @@ IAM 에 등록조차 되지 않은 클라이언트를 기대하므로 DNS 와 �
   **떼어내 재기동**하자 `/artists` 가 즉시 error 분기로 떨어지고 로그에 같은
   `Couldn't retrieve remote JWK set` 이 떴다 → fan 도 **잠재 결함이 아니라 실제 결함**이었다.
 
-**아직 남은 것**: 콘솔의 org-hierarchy 레그(`/api/admin/org-nodes`)는 여전히 401 이다.
-이건 **다른 층**이다 — 도메인 게이트웨이가 아니라 IAM admin API 이고, 토큰도 다르다
-(`kid=v1`, `iss=admin-service`, `token_type=admin` 인 operator 토큰. SAS 토큰은 `kid=key-2026-04-01`).
-상류 응답은 `401 TOKEN_INVALID "Access token is missing, expired, or has an invalid signature"`
-이며 요청은 IAM 에 **정상 도달**한다(DNS 무관). `TASK-MONO-508` 로 분리했다.
+## IAM admin API — gateway 가 operator 토큰을 검증하려 들었다 (TASK-MONO-507 → 508)
+
+`MONO-507` 이 "org-hierarchy 레그가 여전히 401" 로 남겨 둔 것의 정체다. **DNS 와는 무관하고**
+(요청은 IAM 에 정상 도달했다) 위 절과는 **다른 층**이다 — 도메인 게이트웨이가 아니라 IAM 이고,
+토큰도 다르다: operator 토큰은 admin-service 가 **자기 키로** 서명한다(`kid=v1`,
+`iss=admin-service`, `token_type=admin`). SAS 토큰은 `kid=key-2026-04-01` 이다.
+
+원인은 iam gateway 의 `public-paths` 가 operator 엔드포인트를 **하나씩 열거**하고 있었고 그
+목록이 admin-service 표면보다 뒤처졌다는 것. 그래서 `gateway-api.md § Admin Routes` 가
+**플랫폼 불변식**으로 못 박은 "gateway 는 `/api/admin/**` 서브트리 전체에서 JWT 검증을 하지
+않는다" 가 실제로는 깨져 있었다 — 그 문서가 ADR 을 요구하는 방향은 **열거 쪽**이었다.
+
+실제 operator 토큰으로 측정한 결과가 그대로 상관관계다: **열거된 3/3 은 200, 열거되지 않은
+8/8 은 401 `TOKEN_INVALID`.** 콘솔 화면으로는 7개가 `→ /login → /console` 로 튕겼다
+(`/org-hierarchy` `/operators` `/operator-groups` `/permissions` `/permission-sets` `/tenants`
+`/partnerships`). 수정 후 12/12 통과.
+
+🔵 `/partnerships` 가 **401 → 403 `PERMISSION_DENIED`** 로 바뀐 것이 위임이 옳게 작동한다는
+증거다: 요청이 admin-service 까지 가서 **인증은 통과하고 RBAC 이 거부**했다. 401 은 "누구인지
+확인할 수 없다"(엣지), 403 은 "누구인지 알고, 권한이 없다"(서비스)다.
 
 > AWS Terraform / AMI / start-stop 은 **[`aws/`](aws/) 에 있다.**
 >

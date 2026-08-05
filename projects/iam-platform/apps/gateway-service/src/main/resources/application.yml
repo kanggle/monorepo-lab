@@ -142,33 +142,55 @@ gateway:
     - GET:/oauth2/**
     - POST:/oauth2/**
     - GET:/.well-known/openid-configuration
-    # admin-service self-serve auth (no operator JWT at gateway layer).
-    # operator JWT verification is delegated to admin-service
-    # OperatorAuthenticationFilter. admin-api.md §Authentication Exceptions.
-    - POST:/api/admin/auth/login
-    # TASK-BE-298 / ADR-MONO-014: GAP OIDC -> operator token exchange.
-    # No prior operator JWT (GAP OIDC subject token in body); admin-service
-    # TokenExchangeService validates the subject token against auth-service
-    # JWKS and fail-closed mints the operator token. Same model as /login.
-    - POST:/api/admin/auth/token-exchange
-    - POST:/api/admin/auth/2fa/enroll
-    - POST:/api/admin/auth/2fa/verify
-    - POST:/api/admin/auth/refresh
-    - GET:/.well-known/admin/jwks.json
-    # admin operator-protected endpoints. gateway skips its account-JWT check
-    # because operator tokens are signed by admin-service (separate JWKS);
-    # admin-service's OperatorAuthenticationFilter is the single verification
-    # point for operator identity. See gateway-api.md §Admin Routes.
-    - GET:/api/admin/accounts
-    - GET:/api/admin/accounts/**
-    - POST:/api/admin/accounts/*/lock
-    - POST:/api/admin/accounts/*/unlock
-    - POST:/api/admin/sessions/*/revoke
-    - GET:/api/admin/audit
-    # TASK-BE-296: platform-console product/tenant registry. operator JWT is
-    # verified by admin-service OperatorAuthenticationFilter (single point) —
-    # gateway skips its account-JWT check, same model as GET /api/admin/audit.
-    - GET:/api/admin/console/registry
+    # === admin subtree — delegated wholesale, NOT enumerated (TASK-MONO-508) ===
+    #
+    # gateway-api.md § Admin Routes declares this a PLATFORM INVARIANT:
+    #
+    #   "gateway 는 /api/admin/** 및 /.well-known/admin/** 서브트리 전체에서 자체 JWT
+    #    검증을 수행하지 않는다. … 이 위임 관계는 플랫폼 불변식이다. 향후 operator JWT 를
+    #    gateway 에서 검증하도록 변경하려면 ADR + 본 섹션 개정이 선행되어야 한다."
+    #
+    # operator tokens are minted by admin-service under its OWN RS256 key pair
+    # (kid=v1, iss=admin-service) and cannot be verified against auth-service's
+    # account JWKS. admin-service's OperatorAuthenticationFilter is the single
+    # verification point, and it already covers the whole subtree — its
+    # shouldNotFilter() ends in `return !path.startsWith("/api/admin/")`, with an
+    # explicit skip list for the endpoints that legitimately carry no operator JWT
+    # (login, token-exchange, 2FA bootstrap, refresh, onboarding, jwks).
+    #
+    # This USED TO BE a hand-maintained per-path enumeration, and it had fallen
+    # behind: every operator endpoint added after the list was written was dark.
+    # Measured on the integrated demo with a real operator token — 3/3 enumerated
+    # paths returned 200 and 8/8 un-enumerated ones returned 401 TOKEN_INVALID:
+    #
+    #   200  /api/admin/console/registry    401  /api/admin/org-nodes
+    #   200  /api/admin/audit               401  /api/admin/me
+    #   200  /api/admin/accounts            401  /api/admin/operators
+    #                                       401  /api/admin/operators/grantable-roles
+    #                                       401  /api/admin/roles
+    #                                       401  /api/admin/permissions
+    #                                       401  /api/admin/groups
+    #                                       401  /api/admin/partnerships
+    #
+    # The console's whole IAM administration section was 401. Note which way the
+    # ADR requirement points: the ENUMERATION was the undeclared deviation — it
+    # made the gateway verify operator JWTs on 8+ paths — not this subtree.
+    #
+    # "public" here means "the gateway performs no JWT verification", NOT
+    # "unauthenticated": routing, rate-limit, request-id, CORS and spoofed-header
+    # stripping all still run, and admin-service authenticates then authorizes
+    # (RBAC by DB lookup on every request, rbac.md D5).
+    #
+    # The five verbs are the ones admin-service actually maps under /api/admin.
+    # OPTIONS is deliberately absent — CORS preflight is the gateway's globalcors
+    # concern and no admin controller maps it; that was equally true of the
+    # enumeration this replaces, so nothing changes there.
+    - GET:/api/admin/**
+    - POST:/api/admin/**
+    - PUT:/api/admin/**
+    - PATCH:/api/admin/**
+    - DELETE:/api/admin/**
+    - GET:/.well-known/admin/**
 
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}

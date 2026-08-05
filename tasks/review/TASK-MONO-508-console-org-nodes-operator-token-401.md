@@ -8,7 +8,7 @@ TASK-MONO-508
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -105,19 +105,30 @@ admin-service 의 필터인지)부터 로그로 특정하고, 그 검증기가 �
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (착수 = 재측정)** — 위 실측을 그대로 믿지 않는다. 슬라이스를 다시 띄워 401 을
-      재현하고, **검증기 쪽 로그로** 거부 지점을 특정한다. 서명 키 도메인 가설은 확인되기
-      전까지 가설이다
-- [ ] **AC-1** — 원인을 한 문장으로 적을 수 있다(어느 컴포넌트가 무엇을 왜 거부하는가)
-- [ ] **AC-2** — 수정 후 콘솔에서 조직 계층 섹션이 **그 경로에서** 200 으로 렌더된다
-      (바운스 금지 — 술어를 `finalPath` 동일성으로 둘 것. `MONO-505` 에서 느슨한 술어가
-      바운스를 통과시킨 전례가 있다)
-- [ ] **AC-3** — `권한 없음` / degraded 텍스트가 없다. **마커는 컴포넌트에서 복사**한다
-      (`degraded` 문자열은 `data-testid` 에만 나오는 오탐이다 — 실측 확인됨)
-- [ ] **AC-4 (형제 파리티)** — operator 토큰을 쓰는 다른 IAM admin 레그를 전수로 세고,
-      되는 것/안 되는 것을 기록한다. **선행 숫자를 물려받지 말고 다시 셀 것**
-- [ ] **AC-5** — 재발 방지 수단을 추가하고 **네거티브 테스트로 무는 것을 확인**한다
-- [ ] **AC-6** — `verify-demo-wrapper.sh` 전체 + CI green
+- [x] **AC-0 (착수 = 재측정)** — 재현했고, 거부 지점을 **메시지 문자열로** 특정했다. 두 401 은
+      서로 **다른 필터**였다: `"Access token is missing, expired, or has an invalid signature"` 는
+      iam **gateway** 의 `JwtAuthenticationFilter`, `"Operator token invalid"` 는 admin-service 의
+      `OperatorAuthenticationFilter`. 즉 operator 토큰은 admin-service 에 **도달조차 못 했다**.
+      서명 키 도메인 가설은 **원인이 아니라 결과**였다 — 게이트웨이가 그 토큰을 account JWT 로
+      검증하려 든 것이 원인이고, 키가 다른 건 그래서 실패한 이유일 뿐이다.
+- [x] **AC-1 (원인 한 문장)** — **iam gateway 의 `public-paths` 가 operator 엔드포인트를 하나씩
+      열거하고 있었고 그 목록이 admin-service 표면보다 뒤처져, 열거되지 않은 경로에서
+      게이트웨이가 admin-service 서명 토큰을 account JWKS 로 검증하려다 401 을 냈다.**
+      `gateway-api.md § Admin Routes` 는 이 서브트리 전체 위임을 **플랫폼 불변식**으로 못 박고
+      있으므로 새 결정이 아니라 **설정 드리프트**이며, ADR 을 요구하는 방향은 **열거 쪽**이었다.
+- [x] **AC-2** — `finalPath` 동일성 술어로 통과. 10개 화면 전부 `status=200 finalPath==요청경로`,
+      바운스 0건. 수정 **전** 실측과 대비된다(아래 실주행 증거).
+- [x] **AC-3** — 마커 0건. 마커는 컴포넌트에서 복사한 사람이 읽는 텍스트만 사용
+      (`권한 없음` / `일시적으로` / `불러오지 못` / `불러올 수 없` / `연결할 수 없` / `다시 로그인`).
+- [x] **AC-4 (형제 파리티)** — **모집단을 다시 세니 org-nodes 만의 문제가 아니었다.** operator
+      토큰으로 11개 레그를 전수 측정: **허용목록에 있는 3/3 은 200, 없는 8/8 은 401** — 완전한
+      상관관계. 콘솔의 **IAM 관리 섹션 전체**가 죽어 있었고 티켓 이름이 범위를 크게 축소하고
+      있었다. 서브트리 위임으로 11/11 이 도달한다.
+- [x] **AC-5** — `RouteConfigTest` 를 **실제 `application.yml` 을 읽도록** 바꾸고(손 복사 픽스처
+      3개 제거) 서브트리 불변식을 단언한다. 네거티브: yml 을 옛 열거로 되돌리면 **8+ 케이스 RED**,
+      복구하면 GREEN. yml 추출 0건도 FAIL 로 둔다.
+- [x] **AC-6** — gateway-service `test` 113 / `integrationTest` 35, **실패 0 · 스킵 0**
+      (XML 리포트로 확인 — `BUILD SUCCESSFUL` 만으로 판단하지 않았다). CI 는 PR 에서 확인.
 
 ---
 
@@ -171,7 +182,56 @@ admin-service 의 필터인지)부터 로그로 특정하고, 그 검증기가 �
 
 # Definition of Done
 
-- [ ] 원인 규명 + 수정
-- [ ] 형제 레그 파리티 확인 기록
-- [ ] 실주행 증거 기록
-- [ ] Ready for review
+- [x] 원인 규명 + 수정
+- [x] 형제 레그 파리티 확인 기록 (org-nodes 1개가 아니라 8개였다)
+- [x] 실주행 증거 기록
+- [x] Ready for review
+
+---
+
+# 실주행 증거 — 수정 전/후 (같은 스택, 같은 계정)
+
+**API 레그 (operator 토큰 직접)**
+
+```
+                                   before   after
+/api/admin/console/registry   [열거]  200      200
+/api/admin/audit              [열거]  200      200
+/api/admin/accounts           [열거]  200      200
+/api/admin/org-nodes                 401      200
+/api/admin/me                        401      200
+/api/admin/operators                 401      200
+/api/admin/operators/grantable-roles 401      200
+/api/admin/roles                     401      200
+/api/admin/permissions               401      200
+/api/admin/groups                    401      200
+/api/admin/partnerships              401      403 PERMISSION_DENIED
+```
+
+🔵 `partnerships` 의 **401 → 403** 이 위임이 옳게 작동한다는 증거다: 요청이 admin-service 까지
+가서 **인증은 통과하고 RBAC 이 거부**했다. 401 = "누구인지 확인 불가"(엣지),
+403 = "누구인지 알고, 권한이 없다"(서비스).
+
+**콘솔 화면 (브라우저 경로 — 쿠키로 SSR fetch)**
+
+수정 **전** (게이트웨이를 옛 설정으로 되돌려 실측):
+
+```
+7/12 FAILED
+/org-hierarchy   307 -> /login 307 -> /console 200   finalPath=/console  bytes=31505
+/operators       307 -> /login 307 -> /console 200   finalPath=/console  bytes=31505
+/operator-groups 307 -> /login 307 -> /console 200   finalPath=/console  bytes=31505
+/permissions     307 -> /login 307 -> /console 200   finalPath=/console  bytes=31505
+/permission-sets 307 -> /login 307 -> /console 200   finalPath=/console  bytes=31505
+/tenants         307 -> /login 307 -> /console 200   finalPath=/console  bytes=31505
+/partnerships    307 -> /login 307 -> /console 200   finalPath=/console  bytes=31505
+```
+
+수정 **후**: `ALL 12 CHECKS PASS` — 10개 화면 전부 `finalPath == 요청 경로`, 마커 0건.
+
+🔴 튕긴 7개가 **전부 `status=200` 이고 바이트 수까지 같다**(31,505 = `/console` 페이지).
+"200 이면 OK" 나 "나쁜 단어 없으면 OK" 술어는 이걸 통과시킨다 — `MONO-505` 에서 실제로
+통과시켰다. `finalPath` 동일성만이 이걸 잡는다.
+
+**고친 뒤 초록은 고치기 전 빨강을 증명하지 않는다** — 그래서 옛 설정으로 되돌려 위 before 를
+따로 측정했다(jar 재빌드 + 컨테이너 재배포 2회).

@@ -7,6 +7,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.http.HttpMethod;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -20,30 +21,60 @@ class RouteConfigTest {
     }
 
     /**
-     * The non-admin half of {@code gateway.public-paths} as it stands in
-     * {@code application.yml} after TASK-BE-398 dropped the legacy custom-JWT entries.
+     * {@code gateway.public-paths} read from the REAL {@code application.yml} — the
+     * single fixture for every case in this class (TASK-MONO-508).
+     *
+     * <p><strong>These used to be three hand-copied literals, and that is exactly how
+     * the defect survived.</strong> The admin copy drifted from the file it claimed to
+     * mirror — it was missing {@code GET:/api/admin/accounts/**},
+     * {@code POST:/api/admin/auth/token-exchange} and
+     * {@code GET:/api/admin/console/registry} — and it went further than drift: a case
+     * named {@code adminSubtree_nonAllowlistedPath_isNotPublic} <em>asserted</em> that
+     * {@code GET /api/admin/accounts/{id}} is NOT public, contradicting both the
+     * shipped config and {@code gateway-api.md § Admin Routes}. So the suite stayed
+     * green while the edge 401'd the console's entire IAM administration section, and
+     * the one test whose <em>name</em> carried the invariant ("admin 서브트리는 …
+     * public") proved it only of the nine paths someone had remembered to copy.
+     *
+     * <p>A fixture that duplicates the artifact can only ever test the duplicate.
+     * Reading the file means a narrowing edit to {@code application.yml} turns this
+     * suite red instead of silently un-delegating the subtree.
      */
-    private static final List<String> PRODUCTION_PUBLIC_PATHS = List.of(
-            "POST:/api/accounts/signup",
-            "POST:/api/auth/refresh",
-            "GET:/actuator/health"
-    );
+    private static final List<String> PUBLIC_PATHS = publicPathsFromYaml();
 
-    private static final List<String> ADMIN_PUBLIC_PATHS = List.of(
-            "POST:/api/admin/auth/login",
-            "POST:/api/admin/auth/2fa/enroll",
-            "POST:/api/admin/auth/2fa/verify",
-            "POST:/api/admin/auth/refresh",
-            "GET:/.well-known/admin/jwks.json",
-            "POST:/api/admin/accounts/*/lock",
-            "POST:/api/admin/accounts/*/unlock",
-            "POST:/api/admin/sessions/*/revoke",
-            "GET:/api/admin/audit"
-    );
+    @SuppressWarnings("unchecked")
+    private static List<String> publicPathsFromYaml() {
+        try (java.io.InputStream in =
+                     RouteConfigTest.class.getResourceAsStream("/application.yml")) {
+            assertThat(in).as("application.yml must be on the test classpath").isNotNull();
+            Map<String, Object> root = new org.yaml.snakeyaml.Yaml().load(in);
+            Map<String, Object> gateway = (Map<String, Object>) root.get("gateway");
+            List<String> paths = (List<String>) gateway.get("public-paths");
+            // An empty read must fail loudly: a silently empty allowlist would make
+            // every "NOT public" assertion below pass for the wrong reason.
+            assertThat(paths).as("gateway.public-paths in application.yml").isNotEmpty();
+            return paths;
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("cannot read application.yml", e);
+        }
+    }
 
+    /**
+     * The platform invariant of {@code gateway-api.md § Admin Routes}: the gateway runs
+     * NO JWT verification anywhere under {@code /api/admin/**} or
+     * {@code /.well-known/admin/**}. Operator tokens are signed by admin-service under
+     * its own key pair, so the gateway cannot verify them; {@code
+     * OperatorAuthenticationFilter} is the single verification point and already covers
+     * the whole subtree.
+     *
+     * <p>The paths below are deliberately ones nobody enumerated — including endpoints
+     * that were measured returning 401 on the integrated demo before this was fixed.
+     */
     @ParameterizedTest(name = "{0} {1} → public")
     @CsvSource({
+            // the endpoints that WERE enumerated (regression)
             "POST, /api/admin/auth/login",
+            "POST, /api/admin/auth/token-exchange",
             "POST, /api/admin/auth/2fa/enroll",
             "POST, /api/admin/auth/2fa/verify",
             "POST, /api/admin/auth/refresh",
@@ -51,45 +82,87 @@ class RouteConfigTest {
             "POST, /api/admin/accounts/01HXYZ/lock",
             "POST, /api/admin/accounts/01HXYZ/unlock",
             "POST, /api/admin/sessions/01HXYZ/revoke",
-            "GET,  /api/admin/audit"
+            "GET,  /api/admin/audit",
+            "GET,  /api/admin/console/registry",
+            // the endpoints that were NOT — measured 401 TOKEN_INVALID on the demo
+            "GET,  /api/admin/org-nodes",
+            "GET,  /api/admin/me",
+            "GET,  /api/admin/operators",
+            "GET,  /api/admin/operators/grantable-roles",
+            "GET,  /api/admin/roles",
+            "GET,  /api/admin/permissions",
+            "GET,  /api/admin/groups",
+            "GET,  /api/admin/partnerships",
+            // every verb admin-service maps, at subtree depth
+            "POST,   /api/admin/org-nodes",
+            "PATCH,  /api/admin/org-nodes/01HXYZ",
+            "PUT,    /api/admin/org-nodes/01HXYZ/ceiling",
+            "DELETE, /api/admin/org-nodes/01HXYZ/admins/01HABC",
+            "PUT,    /api/admin/operators/01HXYZ/assignments/acme/org-scope",
+            "DELETE, /api/admin/groups/01HXYZ/grants/01HABC",
+            "POST,   /api/admin/onboarding/organizations",
+            "POST,   /api/admin/subscriptions",
+            // a path nobody has written yet — the invariant is about the subtree,
+            // not about today's controller list
+            "GET,  /api/admin/not-invented-yet/deep/path"
     })
-    @DisplayName("admin 서브트리는 gateway 층에서 public — operator JWT 검증은 downstream 전담")
+    @DisplayName("admin 서브트리 전체가 gateway 층에서 public — operator JWT 검증은 downstream 전담")
     void adminSubtree_isPublic(String method, String path) {
-        RouteConfig config = routeConfigWith(ADMIN_PUBLIC_PATHS);
+        RouteConfig config = routeConfigWith(PUBLIC_PATHS);
 
         boolean isPublic = config.isPublicRoute(HttpMethod.valueOf(method.trim()), path.trim());
 
-        assertThat(isPublic).isTrue();
+        assertThat(isPublic)
+                .as("gateway-api.md § Admin Routes: %s %s must reach admin-service "
+                        + "without gateway JWT verification", method.trim(), path.trim())
+                .isTrue();
     }
 
-    @ParameterizedTest(name = "{0} {1} → NOT public (method 다름)")
+    /**
+     * The delegation is scoped to the admin subtree and does not leak outward. A
+     * neighbouring path that merely starts with the same prefix stays authenticated —
+     * this is what stops the fix from becoming "everything is public".
+     */
+    @ParameterizedTest(name = "{0} {1} → NOT public (admin 서브트리 밖)")
     @CsvSource({
-            "GET,  /api/admin/auth/login",
-            "GET,  /api/admin/auth/2fa/enroll",
-            "POST, /.well-known/admin/jwks.json"
+            "GET,  /api/adminx",
+            "GET,  /api/accounts/me",
+            "POST, /api/tenants",
+            "GET,  /.well-known/openid-configuration-not"
     })
-    @DisplayName("admin public-path 은 method 를 정확히 일치시켜야 통과")
-    void adminSubtree_wrongMethod_isNotPublic(String method, String path) {
-        RouteConfig config = routeConfigWith(ADMIN_PUBLIC_PATHS);
+    @DisplayName("admin 위임은 서브트리 밖으로 새지 않는다")
+    void outsideAdminSubtree_isNotPublic(String method, String path) {
+        RouteConfig config = routeConfigWith(PUBLIC_PATHS);
 
         boolean isPublic = config.isPublicRoute(HttpMethod.valueOf(method.trim()), path.trim());
 
         assertThat(isPublic).isFalse();
     }
 
-    @ParameterizedTest(name = "{0} {1} → NOT public (admin subtree 외)")
-    @CsvSource({
-            "GET,  /api/admin/unknown",
-            "POST, /api/admin/accounts/01HXYZ/suspend",
-            "GET,  /api/admin/accounts/01HXYZ"
-    })
-    @DisplayName("admin public-paths 에 선언되지 않은 admin 경로는 여전히 인증 대상")
-    void adminSubtree_nonAllowlistedPath_isNotPublic(String method, String path) {
-        RouteConfig config = routeConfigWith(ADMIN_PUBLIC_PATHS);
+    /**
+     * The bare subtree root is delegated too, and that is not an accident of notation:
+     * Spring's {@code AntPathMatcher} lets {@code /**} match zero segments, so
+     * {@code /api/admin/**} matches {@code /api/admin} itself. This is asserted rather
+     * than left implicit because it is a real boundary and it is worth stating which
+     * way it falls.
+     *
+     * <p>It costs nothing: no admin-service controller maps {@code /api/admin} exactly,
+     * so the request 404s downstream, and admin-service's own
+     * {@code OperatorAuthenticationFilter} draws the boundary in the same place — its
+     * {@code shouldNotFilter} ends in {@code !path.startsWith("/api/admin/")}, which is
+     * also {@code true} for the bare root. The two layers therefore agree; a path where
+     * the edge and the service disagreed about who authenticates is the failure mode
+     * worth preventing, and this is not one.
+     *
+     * <p>The same already held before this change — {@code GET:/api/admin/accounts/**}
+     * matched {@code /api/admin/accounts} under the previous enumeration.
+     */
+    @org.junit.jupiter.api.Test
+    @DisplayName("서브트리 루트(/api/admin)도 위임 대상 — 두 층의 경계가 일치한다")
+    void adminSubtreeRoot_isPublic() {
+        RouteConfig config = routeConfigWith(PUBLIC_PATHS);
 
-        boolean isPublic = config.isPublicRoute(HttpMethod.valueOf(method.trim()), path.trim());
-
-        assertThat(isPublic).isFalse();
+        assertThat(config.isPublicRoute(HttpMethod.GET, "/api/admin")).isTrue();
     }
 
     @ParameterizedTest(name = "기존 public 경로 {0} {1} 회귀 검증")
@@ -99,7 +172,7 @@ class RouteConfigTest {
     })
     @DisplayName("기존 public 경로는 이번 변경으로 깨지지 않는다")
     void existingPublicPaths_regression(String method, String path) {
-        RouteConfig config = routeConfigWith(PRODUCTION_PUBLIC_PATHS);
+        RouteConfig config = routeConfigWith(PUBLIC_PATHS);
 
         boolean isPublic = config.isPublicRoute(HttpMethod.valueOf(method.trim()), path.trim());
 
@@ -116,7 +189,7 @@ class RouteConfigTest {
     void sunsetLegacyPaths_areNotPublic(String method, String path) {
         // The endpoints are gone from auth-service; leaving them on the edge allowlist
         // would keep an unauthenticated hole open onto a route that no longer exists.
-        RouteConfig config = routeConfigWith(PRODUCTION_PUBLIC_PATHS);
+        RouteConfig config = routeConfigWith(PUBLIC_PATHS);
 
         boolean isPublic = config.isPublicRoute(HttpMethod.valueOf(method.trim()), path.trim());
 
@@ -135,7 +208,7 @@ class RouteConfigTest {
     @org.junit.jupiter.api.Test
     @DisplayName("null method 는 public 아님")
     void nullMethod_isNotPublic() {
-        RouteConfig config = routeConfigWith(ADMIN_PUBLIC_PATHS);
+        RouteConfig config = routeConfigWith(PUBLIC_PATHS);
 
         assertThat(config.isPublicRoute(null, "/api/admin/auth/login")).isFalse();
     }
@@ -143,12 +216,6 @@ class RouteConfigTest {
     // -----------------------------------------------------------------------
     // TASK-BE-251 Phase 2c: OAuth2 / OIDC standard endpoint routing (public paths)
     // -----------------------------------------------------------------------
-
-    private static final List<String> OIDC_PUBLIC_PATHS = List.of(
-            "GET:/oauth2/**",
-            "POST:/oauth2/**",
-            "GET:/.well-known/openid-configuration"
-    );
 
     @ParameterizedTest(name = "OIDC/OAuth2 표준 경로 {0} {1} → public (JWT 검증 없이 통과)")
     @org.junit.jupiter.params.provider.CsvSource({
@@ -168,7 +235,7 @@ class RouteConfigTest {
     })
     @DisplayName("OIDC/OAuth2 표준 경로는 gateway JWT 검증 없이 통과 — auth-service(SAS)가 인증 처리")
     void oidcOAuth2Paths_arePublic(String method, String path) {
-        RouteConfig config = routeConfigWith(OIDC_PUBLIC_PATHS);
+        RouteConfig config = routeConfigWith(PUBLIC_PATHS);
 
         boolean isPublic = config.isPublicRoute(HttpMethod.valueOf(method.trim()), path.trim());
 
@@ -187,7 +254,7 @@ class RouteConfigTest {
     })
     @DisplayName("OIDC public-paths 는 선언된 method만 통과")
     void oidcPaths_wrongMethod_isNotPublic(String method, String path) {
-        RouteConfig config = routeConfigWith(OIDC_PUBLIC_PATHS);
+        RouteConfig config = routeConfigWith(PUBLIC_PATHS);
 
         boolean isPublic = config.isPublicRoute(HttpMethod.valueOf(method.trim()), path.trim());
 
@@ -197,9 +264,7 @@ class RouteConfigTest {
     @org.junit.jupiter.api.Test
     @DisplayName("OIDC public-paths 와 나머지 public 경로가 서로를 가리지 않는다")
     void oidcPublicPaths_regression_existingPublicPathsUnaffected() {
-        List<String> combined = new java.util.ArrayList<>(OIDC_PUBLIC_PATHS);
-        combined.addAll(PRODUCTION_PUBLIC_PATHS);
-        RouteConfig config = routeConfigWith(combined);
+        RouteConfig config = routeConfigWith(PUBLIC_PATHS);
 
         assertThat(config.isPublicRoute(HttpMethod.POST, "/api/accounts/signup")).isTrue();
         assertThat(config.isPublicRoute(HttpMethod.POST, "/api/auth/refresh")).isTrue();
