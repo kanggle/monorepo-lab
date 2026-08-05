@@ -1049,6 +1049,45 @@ esac
 ok "결제 mock 정합 (payment-service='${x_profiles}' ↔ web-store DEMO_PAYMENT_MOCK='${x_flag}')"
 
 # ---------------------------------------------------------------------------
+# (y) 시드의 직접-DB 는 반드시 `dbexec --why` 를 거친다 (TASK-MONO-506 AC-1)
+# ---------------------------------------------------------------------------
+# AC-1 은 "사유 없는 직접-DB 0건" 을 요구한다. 그 성질은 두 겹으로 지킨다:
+#   1) `lib.sh` 의 `dbexec` 가 `--why` 없이는 **실행을 거부**한다(런타임 게이트)
+#   2) 이 가드가 그 게이트를 **우회하는 경로**를 막는다 — 시드 스크립트가 helper 를
+#      거치지 않고 `docker exec … psql/mysql` 을 직접 부르면 1)이 무력해진다.
+#
+# 왜 "주석에 사유가 있는가" 를 검사하지 않는가: 그것이 대리지표다. 사유가 코드
+# **인자**여야 빠뜨리는 것이 불가능하다. 여기서는 우회 여부만 본다.
+echo "[verify] (y) 시드 스크립트가 dbexec 를 우회해 DB 를 직접 건드리지 않는가"
+y_seed_dir="$ROOT/infra/demo/seed"
+if [ -d "$y_seed_dir" ]; then
+  y_offenders=""
+  for f in "$y_seed_dir"/seed-*.sh; do
+    [ -f "$f" ] || continue
+    # lib.sh 자신은 예외다 — `dbexec`/`dbquery` 의 구현이 거기 있다.
+    if grep -nE 'docker[[:space:]]+exec[^|]*\b(psql|mysql)\b' "$f" >/dev/null 2>&1; then
+      y_offenders="$y_offenders $(basename "$f")"
+    fi
+  done
+  [ -z "$y_offenders" ] || fail "시드 스크립트가 docker exec psql/mysql 을 직접 호출합니다:$y_offenders"\
+    $'\n'"→ `dbexec --why \"<사유>\"` 를 쓰십시오 (infra/demo/seed/lib.sh)."\
+    $'\n'"→ 사유를 **인자로** 요구하는 이유: 주석 규약은 깜빡할 수 있지만 필수 인자는 그럴 수 없습니다."
+
+  # 드라이버가 실제로 존재하고, demo-up.sh 가 그것을 부르는가 (배선을 본다 — 로직이 아니라).
+  [ -f "$y_seed_dir/seed.sh" ] || fail "infra/demo/seed/seed.sh 가 없습니다 — 도메인 시드 드라이버가 사라졌습니다"
+  grep -q 'seed/seed\.sh' "$ROOT/infra/demo/demo-up.sh" \
+    || fail "demo-up.sh 가 seed/seed.sh 를 호출하지 않습니다"\
+       $'\n'"→ 시드 스크립트가 저장소에 있어도 기동 경로에서 불리지 않으면 화면은 그대로 빕니다."
+  grep -q 'DEMO_SEED' "$y_seed_dir/seed.sh" \
+    || fail "seed.sh 에 DEMO_SEED 스위치가 없습니다 (AMI 재굽기·디버깅에서 끌 수 있어야 합니다)"
+
+  y_n=$(ls "$y_seed_dir"/seed-*.sh 2>/dev/null | wc -l | tr -d ' ')
+  ok "시드 배선 유지 (도메인 시드 ${y_n}개 · 전부 dbexec 경유 · demo-up.sh 가 드라이버 호출 · DEMO_SEED 스위치 존재)"
+else
+  fail "infra/demo/seed/ 가 없습니다 — TASK-MONO-506 의 시드 디렉터리가 사라졌습니다"
+fi
+
+# ---------------------------------------------------------------------------
 if [ "$LIVE" -eq 0 ]; then
   echo "[verify] 정적 검증 PASS (실기동 증명은 --live)"
   exit 0

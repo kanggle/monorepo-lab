@@ -1,0 +1,224 @@
+# 면접 데모 워크스루
+
+> **읽는 사람**: 이 저장소를 처음 여는 사람(면접관 · 신규 합류자).
+> **목적**: 계정 하나로 세 표면(스토어프런트 · 팬 · 콘솔)을 눌러 보고, **각 화면이
+> 무엇을 증명하는지** 알게 하는 것.
+>
+> 이 문서는 사람용 참조다(`docs/guides/` 규약 — AI 에이전트의 소스오브트루스가 아니다).
+
+---
+
+## 0. 계정
+
+| | |
+|---|---|
+| 이메일 | `demo@demo.com` |
+| 비밀번호 | `Demo1234!` |
+
+**하나의 자격증명으로 세 표면 전부**에 로그인한다. 같은 이메일/비밀번호가 표면마다
+다른 신원으로 해석되는 것이 아니라, IAM(Spring Authorization Server)이 **어느
+클라이언트로 왔는지**에 따라 다른 테넌트·역할의 토큰을 발급한다:
+
+- 스토어프런트 → `tenant_id=ecommerce`, `roles=[CUSTOMER]`
+- 팬 → `tenant_id=fan-platform`, `roles=[CUSTOMER]`
+- 콘솔 → `tenant_id=iam` 로 로그인한 뒤, **`demo-corp` 를 assume** 하면
+  `roles=[ECOMMERCE_OPERATOR, ERP_OPERATOR, FINANCE_OPERATOR, SCM_OPERATOR, WMS_OPERATOR, …]`
+
+마지막 줄이 이 데모의 설계 요점이다. 운영자 권한은 계정에 붙어 있지 않고
+**테넌트를 assume 하는 순간 그 테넌트의 도메인 구독에서 파생된다**
+(`OperatorRoleDerivation.fromEntitledDomains`). `demo-corp` 하나가 5개 도메인을
+구독하고 있으므로, 테넌트 스위처를 만지지 않고도 콘솔의 도메인 운영 5개 섹션이
+전부 열린다.
+
+---
+
+## 1. 기동
+
+```bash
+# 전체
+bash infra/demo/demo-up.sh full
+
+# 슬라이스 (하드 의존은 자동 포함 — console 만 줘도 iam 이 함께 뜬다)
+bash infra/demo/demo-up.sh iam ecommerce console
+```
+
+기동 마지막에 **도메인 데이터 시드**가 자동으로 돈다(`infra/demo/seed/`). 끄려면
+`DEMO_SEED=0`. 시드가 실패해도 스택은 유지되며, 실패한 도메인 이름이 로그 마지막에
+다시 나열된다.
+
+진입 URL (로컬 기준 — `DEMO_DOMAIN` 이 `local` 이 아니면 그 도메인으로 치환):
+
+| 표면 | URL |
+|---|---|
+| 콘솔 | `http://console.local` |
+| 스토어프런트 | `http://web.ecommerce.local` |
+| 팬 | `http://web.fan-platform.local` |
+
+`*.local` 은 hosts 파일에 `127.0.0.1` 로 등록돼 있어야 한다(TEMPLATE.md § Local
+Network Convention). EC2 데모는 `<ip>.sslip.io` 를 쓰므로 hosts 등록이 필요 없다.
+
+---
+
+## 2. 스토어프런트 — 구매를 끝까지 완주한다
+
+`http://web.ecommerce.local` → 우상단 **로그인** → IAM 로그인 폼 → 스토어로 복귀.
+
+### 클릭 경로
+
+1. **홈 / 상품** — 카탈로그. 상품 8 · 카테고리 7 · 변형 28 (product-service 의
+   `V8__seed_sample_data.sql`).
+2. **상품 상세** — 옵션(변형)을 고르면 총액이 계산된다.
+3. **장바구니** — 항목을 **체크박스로 선택**해야 주문 진입점이 활성화된다.
+4. **주문/결제** — 저장된 배송지(시드가 넣은 「집」/「회사」)를 고른다.
+5. **결제** — 데모는 `demo-pg` 프로파일이라 **결제 위젯 없이 즉시 승인**된다.
+6. **주문 완료** → **마이페이지 → 주문내역**에 확정된 주문이 보인다.
+
+### 이 경로가 증명하는 것
+
+**결제만 가짜고 그 뒤는 전부 진짜다.** `demo-pg` 는 PG 승인만 대체하고
+`PaymentEventPublisher` 는 실물 그대로다(TASK-BE-572). 그래서 한 번의 구매가
+아래를 연쇄로 만든다 — 화면이 아니라 **DB 로** 확인할 수 있다:
+
+```
+payments        COMPLETED               ← 결제
+payment_outbox  PaymentCompleted, published_at 채워짐   ← 트랜잭셔널 아웃박스
+orders          CONFIRMED               ← 주문 사가
+shippings       PREPARING               ← 배송 생성
+commission_accrual  1행 (ACCRUAL)       ← 정산 적립
+```
+
+기존 `standalone` 프로파일이었다면 **첫 줄만 남고 나머지는 전부 비어 있다** —
+화면은 "결제됨" 인데 시스템의 나머지가 조용히 동의하지 않는 상태다.
+
+### 마이페이지 화면들
+
+| 화면 | 증명하는 것 |
+|---|---|
+| 프로필 | IAM 신원이 도메인 프로필로 연결돼 있다 |
+| 주문내역 · 주문 상세 | 주문 사가의 결과 |
+| 위시리스트 | 사용자 소유 데이터의 CRUD |
+| 배송지 관리 | 체크아웃이 참조하는 마스터 데이터 |
+| 쿠폰 | 프로모션에서 **발급된** 쿠폰(쿠폰을 직접 만들지 않는다) |
+| 내 리뷰 | **배송 완료된 주문에만** 쓸 수 있다(구매자 리뷰 규칙) |
+| 알림 · 알림 설정 | 알림 구독/수신 설정 |
+
+---
+
+## 3. 팬 플랫폼
+
+`http://web.fan-platform.local` → 로그인(같은 계정).
+
+아티스트 디렉터리 · 아티스트 상세 · 게시물 · 멤버십 · 알림 · 내 정보.
+`PUBLIC` / `MEMBERS_ONLY` / `PREMIUM` 세 가시성이 **멤버십 등급에 따라** 다르게
+보이는 것이 이 표면의 핵심이다(권한이 UI 가 아니라 서비스에서 강제된다).
+
+> ⚠️ **팬 도메인의 데이터 시드는 아직 이 저장소에 없다.** 기동은 되지만 화면은
+> 비어 있다. 시드 프레임워크(`infra/demo/seed/`)는 준비돼 있고, 팬 전용 시드는
+> `TASK-MONO-509` 로 분리했다 — 사유와 알려진 레시피는 그 티켓에 있다.
+
+---
+
+## 4. 콘솔 — 운영자 시점
+
+`http://console.local` → 로그인 → **테넌트 스위처에서 `demo-corp` 선택**.
+
+> 🔴 테넌트를 고르기 전에는 도메인 운영 섹션이 열리지 않는다. 운영자 역할이
+> 테넌트 assume 에서 파생되기 때문이다(§0).
+
+### 화면 모집단
+
+`console-nav-config.ts` 의 nav 리프는 **47개**이고, nav 에 없지만 개요에서
+도달 가능한 `/dashboards/health` 를 더하면 **48개**다.
+
+| 그룹 | 리프 수 | 내용 |
+|---|---|---|
+| (최상단) | 2 | 개요 · 카탈로그 |
+| 관리 → IAM | 9 | 개요 · 가이드 · 운영자 · 운영자 그룹 · 조직 계층 · 테넌트 · 권한 · 권한 세트 · 감사 |
+| 고객 신원 | 1 | 계정 운영 |
+| 조직 설정 | 2 | 도메인 구독 · 파트너십 |
+| 도메인 운영 → WMS | 7 | 개요 · 가이드 · 입고 · 재고 · 출고 · 마스터 · 운영설정 |
+| 도메인 운영 → SCM | 6 | 개요 · 가이드 · 조달 · 재고 · 보충 계획 · 보충 계획 설정 |
+| 도메인 운영 → Finance | 4 | 개요 · 가이드 · 계좌 · 원장 |
+| 도메인 운영 → ERP | 6 | 개요 · 가이드 · 마스터 · 통합 조회 · 결재함 · 위임 |
+| 도메인 운영 → E-Commerce | 10 | 개요 · 가이드 · 상품 · 주문 · 배송 · 프로모션 · 사용자 · 셀러 · 정산 · 알림 |
+
+각 도메인 섹션은 **그 도메인 스택이 떠 있을 때만** 데이터를 보여준다. `demo-up.sh`
+에 그 도메인을 주지 않았다면 해당 섹션은 "일시적으로 불러올 수 없습니다" 로
+degrade 한다 — 이것은 결함이 아니라 부분 기동의 정상 동작이다.
+
+### 🔴 지금 열리지 않는 것 — 콘솔의 E-Commerce 목록 탭
+
+**증상**: 스토어프런트에서 구매를 완주해도 콘솔 「주문」 탭은 비어 있다. 「상품」
+「사용자」 「배송」 「정산」 도 마찬가지다.
+
+**원인**: 데이터의 테넌트와 운영자의 테넌트가 다르다.
+
+- 스토어프런트 구매는 `tenant_id=ecommerce` 로 쌓인다 — ecommerce 게이트웨이가
+  소비자 토큰에 `required-tenant-id: ecommerce` 를 강제하므로 **다른 값일 수 없다**.
+- 데모 운영자는 `demo-corp` **하나에만** assign 돼 있다(`operator_tenant_assignment`
+  실측: operator 5 → demo-corp). `audience=ecommerce` 로 assume 을 시도하면
+  `invalid_grant: operator is not assigned to the selected tenant` 다.
+
+즉 **entitlement 레그는 통과하는데(게이트웨이가 토큰을 받는다) 행 수준 테넌트
+필터가 전부 걸러낸다.** 게이트웨이 200 + 빈 목록이라, 헬스 체크나 상태코드로는
+절대 보이지 않는다.
+
+🔴 **읽기만의 문제가 아니다.** 시드가 배송을 진행시키려다 같은 벽에 부딪혔다 —
+소비자 토큰으로 **방금 조회한** 배송 건이 운영자에게는 존재하지 않는다:
+
+```
+GET  /api/shippings/orders/{orderId}   200  (소비자)  shippingId=ae08bf5c-…
+PUT  /api/shippings/ae08bf5c-…/status  404  (운영자)  SHIPPING_NOT_FOUND
+```
+
+그래서 배송을 `DELIVERED` 로 만들 수 없고, **리뷰도 쓸 수 없다**(리뷰는 배송 완료된
+주문에만 허용된다 — 정당한 도메인 규칙이다). 하나의 테넌트 분리가 화면 5개와
+쓰기 경로 2개를 함께 막고 있다.
+
+→ `TASK-BE-576` 으로 분리했다. 그 티켓이 닫히면 이 절은 삭제된다.
+
+지금 콘솔에서 **비어 있지 않은** E-Commerce 탭: 개요 · 가이드 · 셀러 · 프로모션 ·
+정산(기간) · 알림(템플릿) — 시드가 운영자 토큰으로 만든 것들이라 `demo-corp` 소속이다.
+
+---
+
+## 5. 시드는 무엇을 하는가
+
+`infra/demo/seed/` — 자세한 설계는 그 디렉터리의 `README.md`.
+
+원칙 한 줄: **넣을 수 있는 것은 실제 API 로 넣는다. 넣는 행위 자체가 그 기능의
+검증이기 때문이다.** 직접 DB 는 `dbexec --why "<사유>"` 로만 가능하며, 사유가 함수의
+**필수 인자**라 빠뜨릴 수 없다.
+
+현재 직접-DB 항목은 **하나뿐**이다: ecommerce 소비자 프로필. 사유 —
+user-service 에 프로필 **생성** 엔드포인트가 존재하지 않는다(컨트롤러 4개 전수 확인).
+→ `TASK-BE-575`.
+
+---
+
+## 6. 알려진 한계 (조용한 누락 없이)
+
+| 항목 | 상태 | 추적 |
+|---|---|---|
+| 콘솔 E-Commerce 목록 탭이 스토어프런트 데이터를 못 본다 | 테넌트 분리 | `TASK-BE-576` |
+| 배송을 `DELIVERED` 로 진행시킬 수 없다 ⇒ **리뷰도 쓸 수 없다** | 같은 테넌트 분리(운영자 쓰기까지 막힌다) | `TASK-BE-576` |
+| `/my/profile` · `/my/addresses` · `/my/wishlist` 가 시드 없이는 404/500 | user-service 프로필 프로비저닝 부재 | `TASK-BE-575` |
+| 팬 도메인 데이터 시드 없음 | 미착수 | `TASK-MONO-509` |
+| WMS · SCM · ERP · Finance 도메인 데이터 시드 없음 | 미착수 | `TASK-MONO-510` |
+| 장바구니는 시드할 수 없다 | `localStorage` 기반(클라이언트 상태) — 면접관이 담으면 즉시 찬다 | — |
+| 상품 이미지가 MinIO 에 없다 | V8 시드의 원격 `thumbnailUrl` 로 표시된다(깨지지 않음) | — |
+| 로컬 호스트에서 8프로젝트 동시 기동 불가 | 실측 35컨테이너 = 9.2 GiB / 도커 가용 11.7 GiB | `TASK-MONO-399` AC-2 |
+
+---
+
+## 7. 문제가 생기면
+
+| 증상 | 먼저 볼 것 |
+|---|---|
+| 로그인 후 되돌아오지 못한다 | `infra/demo/seed-demo-domain.sh` 로그 — redirect_uri 가 데모 도메인에 등록됐는지 |
+| 콘솔 도메인 섹션이 전부 degrade | 그 도메인 스택이 떠 있는지 (`docker ps`), `demo.env` 의 `CONSOLE_BFF_OUTBOUND_*` |
+| 백엔드가 401 "Authentication required" | 그 서비스가 `traefik-net` 에 붙어 JWKS 를 해소하는지 (`infra/demo/*-identity.override.yml`) |
+| 화면은 200 인데 목록이 비었다 | **테넌트를 의심하라** — §4 의 사례가 정확히 그 모양이다 |
+| 결제가 실패한다 | `ECOMMERCE_PAYMENT_PROFILES=demo-pg` 와 `DEMO_PAYMENT_MOCK=1` 이 **함께** 켜졌는지 |
+
+전 항목 정적 검증: `bash infra/demo/verify-demo-wrapper.sh`

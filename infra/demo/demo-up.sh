@@ -86,5 +86,13 @@ if [[ " ${SET[*]} " == *" iam "* ]]; then
   bash "$HERE/seed-demo-domain.sh"
 fi
 
+# 도메인 데이터 시드 (TASK-MONO-506). 계정과 배선이 갖춰져도 화면이 비어 있으면
+# 데모는 아무것도 증명하지 못한다. `DEMO_SEED=0` 으로 끌 수 있고, 실패해도 이미 떠 있는
+# 스택을 내리지 않는다(비-0 로 끝나되 기동은 유지) — 그래서 `|| true` 가 아니라
+# 종료코드를 보존해 마지막 줄에서 알린다. 가드 (z) 가 이 호출을 지킨다.
+seed_rc=0
+bash "$HERE/seed/seed.sh" "${SET[@]}" || seed_rc=$?
+
 echo "[demo] up complete — profile=$PROFILE"
+[ "$seed_rc" -eq 0 ] || echo "[demo] ⚠ 도메인 데이터 시드가 일부 실패했습니다(위 [seed] 로그 참조) — 해당 화면은 빌 수 있습니다"
 echo "[demo] 호스트: console.${DEMO_DOMAIN} / web.ecommerce.${DEMO_DOMAIN} / wms.${DEMO_DOMAIN} / <domain>.${DEMO_DOMAIN} (Traefik)"
