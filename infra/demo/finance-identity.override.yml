@@ -1,0 +1,21 @@
+# =============================================================================
+# infra/demo/finance-identity.override.yml — finance 백엔드를 신원 평면에 연결
+# (TASK-MONO-507)
+# =============================================================================
+# 근거 전문: infra/demo/erp-identity.override.yml 헤더. 같은 결함·같은 원인이며
+# finance 는 형제 파리티(AC-4)로 확인해 포함했다 — account/ledger 두 서비스 모두
+# `jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:...}}` 를 선언하고, compose 가 그
+# env 를 주입하며, networks 는 `finance-platform-net` 하나뿐이었다.
+#
+# 콘솔의 Finance 섹션은 레그가 둘이다(FINANCE_BASE_URL / LEDGER_BASE_URL, 둘 다
+# finance 게이트웨이를 가리킨다 — infra/demo/demo.env). 그 둘이 각각 account-service 와
+# ledger-service 로 들어가므로 **한쪽만 연결하면 섹션의 절반만 산다.**
+# =============================================================================
+services:
+  account-service:
+    networks:
+      - traefik-net
+
+  ledger-service:
+    networks:
+      - traefik-net

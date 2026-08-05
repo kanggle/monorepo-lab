@@ -860,6 +860,128 @@ done
 
 ok "콘솔 '.local' 기본값 키 $(printf '%s\n' $console_keys | wc -l | tr -d ' ') 개가 demo.env + compose 양쪽에 있다"
 
+
+# ---------------------------------------------------------------------------
+echo "[verify] (w) 모든 OIDC 리소스 서버가 자기 JWKS 호스트를 해소할 수 있는가"
+# ---------------------------------------------------------------------------
+# 근거(MONO-507): 리소스 서버는 디코드 시점에 JWKS 를 **실제로 fetch** 한다. 그 주소를
+# 해소하지 못하면 Spring 은 UnknownHost 를 **fail-closed 로 401 "Authentication
+# required"** 로 바꾼다 — 즉 **연결 결함이 인증 판정으로 위장한다**. 실제로 겪은 모양:
+#
+#   base 토큰(tenant_id=iam)    → 403 TENANT_FORBIDDEN   ← 엣지의 테넌트 게이트
+#   assumed 토큰(tenant_id=데모) → 401 UNAUTHORIZED       ← 게이트 통과 후 뒤에서 사망
+#
+# 403 을 받으려면 엣지에서 죽어야 하고 401 을 받으려면 엣지를 **통과**해야 한다. 그래서
+# 401 은 토큰이 나쁘다는 증거가 아니라 좋다는 증거였는데, 두 상태 코드를 나란히 놓기
+# 전까지는 정반대로 읽혔다. 원인은 데모가 주입하는 `iam-auth-service` 가 traefik-net
+# 위에만 있는 alias 인데 백엔드 19개는 자기 프로젝트 사설망에만 있었다는 것이다.
+#
+# 왜 "오버레이 파일이 존재하는가" 를 묻지 않는가
+# ---------------------------------------------------------------------------
+# 그건 대리지표다 — 파일이 있어도 서비스 하나를 빠뜨리면 통과하고, 새 프로젝트가
+# 들어오면 아무 말도 안 한다. 이 가드는 **성질 자체**를 묻는다: 렌더된 compose 에서
+# 각 리소스 서버가 붙은 네트워크들 위의 이름 집합을 만들고, 그 서비스가 실제로 설정된
+# JWKS URL 의 호스트가 그 집합 안에 있는지 본다. 그래서 traefik-net 이 아닌 다른
+# 방법으로 도달성을 확보해도 이 가드는 옳게 통과한다.
+#
+# 커버리지의 한계를 여기 적어 둔다(조용한 축소 금지)
+# ---------------------------------------------------------------------------
+# 리소스 서버 여부는 **저장소 사실**(application.yml 이 `jwk-set-uri` 를 선언하는가)로
+# 판정하고, compose 의 `build.context` 경로로 모듈↔서비스를 잇는다. 반면 사용할 호스트는
+# compose 가 주입한 `*JWK*` env 에서 읽고, 없으면 데모의 정본($JWT_JWKS_URI)으로 본다.
+# application.yml 안의 다단 기본값 체인까지 해석하지는 않는다 — 그 경우는 정본으로
+# 근사하며, 정본과 다른 기본값을 쓰는 서비스는 이 가드의 사각지대다.
+w_names="$(mktemp)"; w_rs="$(mktemp)"; w_svc="$(mktemp)"
+trap 'rm -f "$names_file" "$ports_file" "$w_names" "$w_rs" "$w_svc"' EXIT
+
+# (1) 저장소 사실 — jwk-set-uri 를 선언하는 앱 모듈 (projects/<p>/apps/<module>)
+for f in "$ROOT"/projects/*/apps/*/src/main/resources/application.yml; do
+  [ -r "$f" ] || continue
+  grep -qE '^[[:space:]]*jwk-set-uri:' "$f" || continue
+  m="${f#"$ROOT"/projects/}"; m="${m%%/src/*}"          # <project>/apps/<module>
+  printf '%s\n' "$m"
+done | sort -u > "$w_rs"
+[ -s "$w_rs" ] || fail "(w) 리소스 서버를 한 개도 추출하지 못했습니다 — 탐지식이 깨졌습니다(0건은 '없음'이 아닙니다)."
+
+# (2) 렌더 사실 — 서비스별 networks / aliases / container_name / JWKS 호스트 / 모듈
+for p in "${!COMPOSE[@]}"; do
+  render "$p" | awk -v proj="$p" '
+    /^[a-z]+:/            { sec = $1; sub(/:$/, "", sec); svc = ""; blk = "" }
+    sec != "services"     { next }
+    /^  [a-zA-Z0-9._-]+:$/ { svc = $1; sub(/:$/, "", svc); blk = ""; net = ""; next }
+    svc == ""             { next }
+    /^    [a-zA-Z0-9._-]+:/ { blk = $1; sub(/:$/, "", blk) }
+    /^    container_name:/  { print "C|" proj "|" svc "|" $2; next }
+    /^      context:/ {
+      if (blk == "build" && match($2, /projects\/[^/]+\/apps\/[^/\\]+$/)) {
+        mod = substr($2, RSTART + length("projects/")); gsub(/\\/, "/", mod); print "M|" proj "|" svc "|" mod
+      }
+      # Windows 렌더는 백슬래시 경로다 — 그 형태도 잡는다.
+      if (blk == "build" && match($2, /projects\\[^\\]+\\apps\\[^\\]+$/)) {
+        mod = substr($2, RSTART + length("projects\\")); gsub(/\\/, "/", mod); print "M|" proj "|" svc "|" mod
+      }
+      next
+    }
+    blk == "environment" && /^      [A-Za-z0-9_]+:/ {
+      k = $1; sub(/:$/, "", k)
+      if (k ~ /JWK/) { v = $2; gsub(/"/, "", v)
+        if (v ~ /^https?:\/\//) { h = v; sub(/^https?:\/\//, "", h); sub(/[:\/].*$/, "", h)
+          print "J|" proj "|" svc "|" h }
+      }
+      next
+    }
+    blk == "networks" && /^      [a-zA-Z0-9._-]+:/ { net = $1; sub(/:$/, "", net); print "N|" proj "|" svc "|" net; next }
+    blk == "networks" && /^          - / && net != "" { print "A|" proj "|" svc "|" net "|" $2; next }
+  '
+done > "$w_svc"
+# traefik 컨테이너의 alias 도 같은 fabric 의 이름이다.
+render traefik | awk '
+  /^[a-z]+:/ { sec = $1; sub(/:$/, "", sec); svc = "" }
+  sec != "services" { next }
+  /^  [a-zA-Z0-9._-]+:$/ { svc = $1; sub(/:$/, "", svc); blk = ""; net = "" ; next }
+  /^    [a-zA-Z0-9._-]+:/ { blk = $1; sub(/:$/, "", blk) }
+  blk == "networks" && /^      [a-zA-Z0-9._-]+:/ { net = $1; sub(/:$/, "", net); print "N|traefik|" svc "|" net; next }
+  blk == "networks" && /^          - / && net != "" { print "A|traefik|" svc "|" net "|" $2; next }
+' >> "$w_svc"
+
+# (3) 네트워크별 해소 가능한 이름 집합.
+#     `traefik-net` 만 전역(external 공유 fabric)이고 나머지는 프로젝트 로컬이다 —
+#     그래서 키를 그렇게 만든다. 여기를 뒤집으면 가드가 도달성을 과대평가한다.
+awk -F'|' '
+  $1 == "N" { key = ($4 == "traefik-net") ? "traefik-net" : $2 "/" $4; print key "\t" $3 }
+  $1 == "A" { key = ($4 == "traefik-net") ? "traefik-net" : $2 "/" $4; print key "\t" $5 }
+' "$w_svc" | sort -u > "$w_names"
+# container_name 도 그 서비스가 붙은 모든 네트워크에서 해소된다.
+awk -F'|' '$1 == "C" { cn[$2 "|" $3] = $4 }
+           $1 == "N" { key = ($4 == "traefik-net") ? "traefik-net" : $2 "/" $4
+                       if (($2 "|" $3) in cn) print key "\t" cn[$2 "|" $3] }' "$w_svc" | sort -u >> "$w_names"
+
+# (4) 판정
+w_default_host="$(printf '%s' "${JWT_JWKS_URI:-}" | sed -E 's#^https?://##; s#[:/].*$##')"
+[ -n "$w_default_host" ] || fail "(w) demo.env 의 JWT_JWKS_URI 에서 호스트를 뽑지 못했습니다 (값='${JWT_JWKS_URI:-}')."
+w_checked=0; w_bad=""
+while IFS='|' read -r _ p svc mod; do
+  grep -qxF "$mod" "$w_rs" || continue                    # 리소스 서버가 아님
+  host="$(awk -F'|' -v p="$p" -v s="$svc" '$1=="J" && $2==p && $3==s { print $4; exit }' "$w_svc")"
+  [ -n "$host" ] || host="$w_default_host"                # compose 가 안 주입 → 정본으로 본다
+  reachable=0
+  while IFS='|' read -r _ _ _ net; do
+    key="traefik-net"; [ "$net" = "traefik-net" ] || key="$p/$net"
+    grep -qxF "$(printf '%s\t%s' "$key" "$host")" "$w_names" && { reachable=1; break; }
+  done < <(awk -F'|' -v p="$p" -v s="$svc" '$1=="N" && $2==p && $3==s' "$w_svc")
+  w_checked=$((w_checked + 1))
+  [ "$reachable" = 1 ] || w_bad="$w_bad"$'\n'"  $p:$svc ($mod) → JWKS 호스트 '$host' 가 이 서비스의 네트워크 어디에도 없습니다"
+done < <(awk -F'|' '$1 == "M"' "$w_svc")
+
+[ "$w_checked" -gt 0 ] || fail "(w) 데모 compose 에서 리소스 서버 서비스를 한 개도 매칭하지 못했습니다 — build.context ↔ 모듈 조인이 깨졌습니다."
+[ -z "$w_bad" ] || fail "JWKS 를 fetch 할 수 없는 리소스 서버가 있습니다:$w_bad"\
+  $'\n'"→ 이 서비스들은 **모든 요청을 401 \"Authentication required\" 로 떨굽니다.** 토큰이 완벽해도 그렇습니다"\
+  $'\n'"   — Spring 이 JWKS fetch 실패(UnknownHost)를 fail-closed 로 401 로 바꾸기 때문입니다."\
+  $'\n'"→ 게이트웨이는 토큰을 **수락한 뒤** 뒤로 넘기므로, 증상은 '엣지가 좋은 토큰을 거부한다' 로 보입니다."\
+  $'\n'"→ 해당 프로젝트의 infra/demo/<slug>-identity.override.yml 에 그 서비스를 추가하고"\
+  $'\n'"   infra/demo/projects.sh 의 COMPOSE[<slug>] 에 그 파일이 들어 있는지 확인하세요."
+ok "리소스 서버 ${w_checked}개 전부 자기 JWKS 호스트를 해소 가능 (선언 모듈 $(wc -l < "$w_rs" | tr -d ' ')개 중 데모에 뜨는 것)"
+
 # ---------------------------------------------------------------------------
 if [ "$LIVE" -eq 0 ]; then
   echo "[verify] 정적 검증 PASS (실기동 증명은 --live)"
