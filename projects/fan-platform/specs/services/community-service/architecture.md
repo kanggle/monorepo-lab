@@ -172,6 +172,15 @@ applies the same tiering at the row level — locked items are returned with
 `title`/`bodyPreview` redacted and `locked=true` so the UI knows to display a
 "Subscribe" CTA without leaking content.
 
+**The feed evaluates that gate per request, never from cache (TASK-FAN-BE-046).** The feed
+cache stores a `FeedItemSnapshot` page — facts about posts — and the `locked` decision plus the
+redaction are applied on the way out, on the cache-hit path and the miss path alike. This is a
+requirement, not an implementation choice: caching the rendered `FeedItemView` meant the
+decision outlived the entitlement that produced it, so a fan who cancelled kept receiving the
+gated title and body preview for up to the TTL while `GET /api/community/posts/{id}` already
+answered 403. Both directions matter — a fan who subscribes is unlocked on the next request,
+with no wait for the entry to expire.
+
 ---
 
 ## Outbox + Kafka (event-driven-policy.md, integration-heavy.md I8)
@@ -236,7 +245,7 @@ applies the same tiering at the row level — locked items are returned with
 ## Read Path (read-heavy.md)
 
 - Single-post `GET /api/community/posts/{id}` — pure DB read, no cache.
-- Feed `GET /api/community/feed` — fan-out-on-read with Redis read-through cache (5-minute TTL). On Redis unavailability, fall through to Postgres directly (fail-open) and emit `community_feed_cache_unavailable_total`. **Invalidation**: TTL-only in v1 — newly published posts and follow/unfollow changes are visible after at most 5 minutes. v2 may add explicit DEL on `community.post.published` / a future `community.follow.changed` topic if sub-minute freshness becomes a requirement.
+- Feed `GET /api/community/feed` — fan-out-on-read with Redis read-through cache (5-minute TTL). On Redis unavailability, fall through to Postgres directly (fail-open) and emit `community_feed_cache_unavailable_total`. **What is cached**: a `FeedItemSnapshot` page (post facts only) under key `feed:<version>:<tenant>:<account>:<page>:<size>` — never the membership decision (see § Membership Tiering). **Invalidation**: TTL-only, and it covers *freshness* only — newly published posts and follow/unfollow changes are visible after at most 5 minutes. A cache-aware consumer of `community.post.published` / a future `community.follow.changed` topic may add explicit DEL if sub-minute freshness becomes a requirement. **Entitlement is deliberately not on that list**: it is recomputed per request instead, so a lost or late event cannot leave a post unlocked (event-driven invalidation would fail *open*; recomputation fails *closed*, because `MembershipChecker` does). The gate costs at most one `MembershipChecker` call per distinct required tier on the page — at most two regardless of page size, zero when nothing on the page is gated.
 - Bulk aggregate counts (`countsByPostIds`) batch all comment/reaction tallies into 2 grouped queries per page.
 
 ---

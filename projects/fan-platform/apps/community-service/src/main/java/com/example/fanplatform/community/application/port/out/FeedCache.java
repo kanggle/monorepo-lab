@@ -1,7 +1,7 @@
 package com.example.fanplatform.community.application.port.out;
 
 import com.example.common.page.PageResult;
-import com.example.fanplatform.community.application.FeedItemView;
+import com.example.fanplatform.community.application.FeedItemSnapshot;
 
 import java.util.Optional;
 
@@ -16,6 +16,13 @@ import java.util.Optional;
  * throw on cache unavailability — they must return {@link Optional#empty()}
  * (reads) or silently swallow the error (writes), per
  * {@code rules/traits/integration-heavy.md} I3.
+ *
+ * <p><strong>The unit is a {@link FeedItemSnapshot} page, never a rendered
+ * {@code FeedItemView} page (TASK-FAN-BE-046).</strong> That is a property of this port, not
+ * an implementation detail of one adapter: a cache that can hold a {@code locked} flag can
+ * serve an authorization decision that has since stopped being true. Keeping the type
+ * entitlement-free is what makes that unrepresentable, so a future adapter cannot reintroduce
+ * it by accident.
  */
 public interface FeedCache {
 
@@ -24,11 +31,11 @@ public interface FeedCache {
      * {@link Optional#empty()} on miss, deserialization error, or
      * infrastructure unavailability.
      */
-    Optional<PageResult<FeedItemView>> readPage(String tenantId, String accountId, int page, int size);
+    Optional<PageResult<FeedItemSnapshot>> readPage(String tenantId, String accountId, int page, int size);
 
     /**
-     * Best-effort write of the hydrated feed page. The caller's response is
+     * Best-effort write of the feed page projection. The caller's response is
      * unaffected by write failures.
      */
-    void cachePage(String tenantId, String accountId, int page, int size, PageResult<FeedItemView> value);
+    void cachePage(String tenantId, String accountId, int page, int size, PageResult<FeedItemSnapshot> value);
 }

@@ -6,6 +6,7 @@ import com.example.fanplatform.community.domain.post.Post;
 import com.example.fanplatform.community.domain.post.PostType;
 import com.example.fanplatform.community.domain.post.PostVisibility;
 import com.example.fanplatform.community.domain.post.status.ActorType;
+import com.example.fanplatform.community.infrastructure.cache.FeedCacheRepository;
 import com.example.fanplatform.community.infrastructure.jpa.FollowJpaRepository;
 import com.example.fanplatform.community.infrastructure.jpa.PostJpaRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -211,8 +212,9 @@ class FeedQueryIntegrationTest extends CommunityServiceIntegrationBase {
         // Trigger a feed call (size=10).
         fetchFeed(fanToken, 0, 10);
 
-        // FeedCacheRepository key shape: feed:<tenant>:<account>:<page>:<size>.
-        String key = "feed:fan-platform:" + fanId + ":0:10";
+        // Derived, not re-typed: a hand-copied literal keeps asserting the old shape
+        // after a KEY_VERSION bump and passes anyway (TASK-FAN-BE-046).
+        String key = FeedCacheRepository.key("fan-platform", fanId, 0, 10);
         Boolean exists = stringRedisTemplate.hasKey(key);
         assertThat(exists)
                 .as("Redis cache key %s must be present after feed query", key)
@@ -230,7 +232,7 @@ class FeedQueryIntegrationTest extends CommunityServiceIntegrationBase {
     @DisplayName("read-through: 2nd call hits Redis (DB mutation invisible until TTL)")
     void secondCall_servedFromCacheNotDb() throws Exception {
         String fanToken = jwt.signFanToken(fanId);
-        String key = "feed:fan-platform:" + fanId + ":0:10";
+        String key = FeedCacheRepository.key("fan-platform", fanId, 0, 10);
 
         // 1) First call: cache miss. Verify the key was absent before, and
         //    the cache key exists after.
