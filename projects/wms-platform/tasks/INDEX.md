@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-_(없음)_
+- `TASK-BE-572-notification-service-is-permanently-unhealthy.md` — **🟢 READY — `wms-notification-service` 는 구조적으로 통과할 수 없는 헬스체크를 갖고 있다.** `TASK-MONO-510` AC-8 발굴. 실측: 컨테이너는 `Up … (unhealthy)` 인데 **부팅은 정상**이고, 컨테이너 **안에서** `curl localhost:8085/actuator/health` 도 `000`, 로그에 **"Tomcat started on port" 줄이 아예 없다**. 원인은 `build.gradle` 주석 한 문장이 틀린 것 — *"Actuator alone exposes /actuator/health"* 라고 적혀 있지만 **웹 스타터가 없으면 actuator 는 HTTP 표면을 갖지 못한다**(non-web 애플리케이션으로 뜬다). 그런데 `application.yml` 은 `server.port` 를 잡고 compose 헬스체크는 그 포트를 찌른다 ⇒ **절대 초록이 될 수 없다.** 🔴 **왜 아무도 안 걸렸나**: 라우팅 대상이 아니고 `depends_on: service_healthy` 로 기다리는 형제도 없어 스택이 정상적으로 뜬다 — 그래서 **항상 빨간 등**이 되어 아무도 보지 않는 상태가 됐다(꺼진 가드의 거울상). A(프로세스/컨슈머 기준 헬스) vs B(관리 포트로 actuator 를 실제로 연다 — 주석의 원래 의도) 중 택1. 🔴 **AC-2 가 음성 대조를 요구한다** — A 안은 `pgrep` 이 죽은 컨슈머를 못 보므로 양성만 단언하면 **지금과 대칭인 "항상 초록"** 결함이 된다. 지금 고쳐도 아무것도 안 깨진다(위험 낮음). 분석=Opus 5 / 구현 권장=**Sonnet**. [[project_guard_reachability_not_just_bite]]
 
 > 2026-07-20 (`TASK-MONO-451`): 위 두 행은 **디스크에는 `ready/` 에 있는데 이 섹션이 `(empty)` 라고 선언**하고 있었다 — 아래 2026-07-12 노트와 정반대 방향의 같은 결함이다. 그때는 표가 끝난 일을 가리켰고, 이번엔 표가 **살아있는 일을 숨겼다**. 큐를 표로 고르는 사람에게 후자는 **일이 없다는 거짓 보고**다. 이제 `scripts/check-index-queue-drift.sh` 가 양방향으로 대조한다.
 

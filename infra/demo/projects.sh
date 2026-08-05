@@ -32,7 +32,7 @@ declare -A COMPOSE=(
   # fail-closed 로 **401 "Authentication required"** 로 바꾼다. 게이트웨이는 토큰을 정상
   # 수락한 뒤였으므로 증상은 "엣지가 좋은 토큰을 거부한다" 로 보인다. 상세 + 실측:
   # infra/demo/erp-identity.override.yml 헤더. 가드 (v) 가 이 정합을 강제한다.
-  [wms]="projects/wms-platform/docker-compose.yml projects/wms-platform/docker-compose.e2e.yml infra/demo/wms-identity.override.yml"
+  [wms]="projects/wms-platform/docker-compose.yml projects/wms-platform/docker-compose.e2e.yml infra/demo/wms-identity.override.yml infra/demo/wms-devseed.override.yml"
   [ecommerce]="projects/ecommerce-microservices-platform/docker-compose.yml"
   [scm]="projects/scm-platform/docker-compose.yml infra/demo/scm-identity.override.yml"
   [fan]="projects/fan-platform/docker-compose.yml infra/demo/fan-identity.override.yml"
