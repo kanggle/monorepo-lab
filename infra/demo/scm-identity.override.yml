@@ -1,0 +1,30 @@
+# =============================================================================
+# infra/demo/scm-identity.override.yml — scm 백엔드를 신원 평면에 연결 (TASK-MONO-507)
+# =============================================================================
+# 근거 전문은 infra/demo/erp-identity.override.yml 헤더에 있다(같은 결함, 같은 원인).
+# 요약: 이 4개는 OIDC 리소스 서버라 디코드 시점에 JWKS 를 실제로 fetch 하는데,
+# 데모가 주입하는 `iam-auth-service` 는 traefik-net 위에만 있는 alias 라서
+# 프로젝트 사설망에만 있던 이 서비스들에게는 존재하지 않는 이름이었다. UnknownHost 를
+# Spring 이 fail-closed 로 401 로 바꾸므로, 게이트웨이를 통과한 좋은 토큰이 뒤에서 죽었다.
+#
+# scm 은 erp 와 함께 실측된 것이 아니라 **동일 구조임을 확인**해서 포함했다
+# (TASK-MONO-507 AC-4 형제 파리티): 4개 서비스 전부 application.yml 에
+# `jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:...}}` 를 들고 있고, compose 는
+# 그 env 를 주입하며, networks 는 `scm-platform-net` 하나뿐이었다.
+# =============================================================================
+services:
+  procurement-service:
+    networks:
+      - traefik-net
+
+  demand-planning-service:
+    networks:
+      - traefik-net
+
+  logistics-service:
+    networks:
+      - traefik-net
+
+  inventory-visibility-service:
+    networks:
+      - traefik-net

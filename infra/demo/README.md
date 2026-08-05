@@ -203,10 +203,59 @@ systemd(demo-stack.service) → demo-boot.sh → (IMDSv2 로 공인 IP → DEMO_
   fail-closed 라 **"이 테넌트를 고를 수 없다" 는 보안 판정으로 위장**했다. ⇒ 콘솔에서
   테넌트 전환이 불가능했고, 따라서 **어떤 도메인 섹션도 열릴 수 없었다.**
 
-**아직 남은 것**: 테넌트 전환까지 성립한 뒤에도 도메인 게이트웨이가 assumed 토큰을
-**401 로 거부**한다(ERP 실측). 토큰 자체는 정상이다 — `tenant_id=demo-corp`,
-`entitled_domains` 5개, operator role 5개 + WMS granular, `iss=http://iam.local`.
-env 승격이 아니라 **도메인 게이트웨이의 토큰 수용** 문제이므로 별도 티켓이다.
+## 신원 평면 — 백엔드가 JWKS 에 도달하는 경로 (TASK-MONO-507)
+
+> `MONO-505` 가 남긴 "도메인 게이트웨이가 assumed 토큰을 401 로 거부한다" 를 추적한 결과다.
+> **결론부터: 게이트웨이는 토큰을 거부하지 않았다.** 401 을 낸 것은 게이트웨이 **뒤**의
+> 서비스였고, 원인은 토큰이 아니라 **DNS** 였다.
+
+각 도메인의 백엔드는 게이트웨이 뒤의 **두 번째 리소스 서버 층**이다(각 서비스의
+`ServiceLevelOAuth2Config` — "gateway 가 있어도 이 층은 load-bearing" 이라고 그 클래스가
+스스로 적어 두었다). 리소스 서버는 디코드 시점에 JWKS 를 **실제로 fetch** 하는데,
+데모가 주입하는 `iam-auth-service` 는 **`traefik-net` 위에만 있는 alias** 이고
+traefik-net 에 합류하는 것은 게이트웨이 뿐이었다. 즉 **백엔드 19개에게 그 이름은 존재하지
+않았다.** Spring 은 그 UnknownHost 를 fail-closed 로 **401 "Authentication required"** 로
+바꾼다 — **연결 결함이 인증 판정으로 위장한다.**
+
+두 상태 코드를 나란히 놓기 전까지 이것은 정확히 반대로 읽혔다(같은 게이트웨이, 같은 경로):
+
+| 보낸 토큰 | 응답 | 누가 냈나 |
+|---|---|---|
+| base (`tenant_id=iam`) | `403 TENANT_FORBIDDEN "tenant_id 'iam' is not allowed"` | **엣지**의 테넌트 게이트 |
+| assumed (`tenant_id=demo-corp`) | `401 UNAUTHORIZED "Authentication required"` | 엣지를 **통과한 뒤** 백엔드 |
+
+403 을 받으려면 엣지에서 죽어야 하고 401 을 받으려면 엣지를 **통과**해야 한다. 그러므로
+그 401 은 토큰이 나쁘다는 증거가 아니라 **좋다는 증거**였다.
+
+폴백 기본값(`http://iam.local/oauth2/jwks`)도 답이 아니다. `iam.local` 은 Traefik 의 alias 인데
+Traefik 도 traefik-net 에만 있다. 로컬은 오히려 더 나쁘다 — Docker 임베디드 DNS 가 **호스트의
+hosts 파일**로 폴백해 `127.0.0.1` 을 주므로 컨테이너가 **자기 자신**에게 접속한다.
+
+**수정**: `infra/demo/<slug>-identity.override.yml` 5개가 해당 백엔드를 traefik-net 에 붙인다
+(erp 4 · scm 4 · wms 5 · fan 4 · finance 2 = 19). 라우터 라벨은 붙이지 않는다 — ingress 는
+여전히 게이트웨이 전용이다. ecommerce 는 제외했다: 그 백엔드들은 게이트웨이가 주입한 헤더를
+신뢰하고 자체 JWKS 체인이 없다(`order-service` 의 `/api/internal/**` 만 예외이며, 그 체인은
+IAM 에 등록조차 되지 않은 클라이언트를 기대하므로 DNS 와 무관한 별개 결함이다).
+
+**가드 (w)** 가 정합을 강제한다. 술어는 "오버레이 파일이 있는가"(대리지표)가 아니라
+**"각 리소스 서버가 자기 JWKS URL 의 호스트를 자기 네트워크에서 해소할 수 있는가"** 다 —
+렌더된 compose 에서 네트워크별 이름 집합을 만들어 대조하므로, 다른 방법으로 도달성을
+확보해도 옳게 통과한다. 리소스 서버 여부는 `application.yml` 의 `jwk-set-uri` 선언으로
+판정하고 `build.context` 로 모듈↔서비스를 잇는다.
+
+실주행 증거:
+
+- **erp** — 수정 후 `/erp` 가 (바운스 없이) `/erp` 에서 200, 콘솔 로그의 `erp_unauthorized`
+  **0건**, 7개 엔드포인트 전부 200.
+- **fan** — 4개 백엔드 전부 JWKS fetch 성공. 그리고 `artist-service` 하나만 traefik-net 에서
+  **떼어내 재기동**하자 `/artists` 가 즉시 error 분기로 떨어지고 로그에 같은
+  `Couldn't retrieve remote JWK set` 이 떴다 → fan 도 **잠재 결함이 아니라 실제 결함**이었다.
+
+**아직 남은 것**: 콘솔의 org-hierarchy 레그(`/api/admin/org-nodes`)는 여전히 401 이다.
+이건 **다른 층**이다 — 도메인 게이트웨이가 아니라 IAM admin API 이고, 토큰도 다르다
+(`kid=v1`, `iss=admin-service`, `token_type=admin` 인 operator 토큰. SAS 토큰은 `kid=key-2026-04-01`).
+상류 응답은 `401 TOKEN_INVALID "Access token is missing, expired, or has an invalid signature"`
+이며 요청은 IAM 에 **정상 도달**한다(DNS 무관). `TASK-MONO-508` 로 분리했다.
 
 > AWS Terraform / AMI / start-stop 은 **[`aws/`](aws/) 에 있다.**
 >

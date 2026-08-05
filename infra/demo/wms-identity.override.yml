@@ -1,0 +1,44 @@
+# =============================================================================
+# infra/demo/wms-identity.override.yml — wms 백엔드를 신원 평면에 연결 (TASK-MONO-507)
+# =============================================================================
+# 근거 전문: infra/demo/erp-identity.override.yml 헤더.
+#
+# wms 는 형제 중에서 **가장 오래 위장돼 있던** 경우다. 다른 프로젝트는 compose 기본값이
+# `http://iam.local/oauth2/jwks` 라 "데모 env 가 덮어써서 생긴 문제" 처럼 보이지만,
+# wms 의 docker-compose.e2e.yml 은 기본값 자체가
+#
+#   OIDC_JWK_SET_URI: ${WMS_OIDC_JWK_SET_URI:-http://iam-auth-service:8081/oauth2/jwks}
+#
+# 이다. 즉 **compose 가 이미 traefik-net alias 해소를 전제하고 있으면서** 정작 그
+# 서비스들을 traefik-net 에 붙이지는 않았다. 그 파일이 태어난 하네스
+# (federation-hardening-e2e)는 단일 compose 라 모두가 한 네트워크에 있었고, 그래서
+# 전제가 참이었다. 통합 데모로 옮겨오면서 전제만 따라오고 토폴로지는 따라오지 않았다.
+#
+# notification-service 는 **의도적으로 제외**한다 — 이벤트 컨슈머라 리소스 서버 체인이
+# 없다(application.yml 에 jwk-set-uri 없음, OAuth2ResourceServerConfig 없음).
+# 필요 없는 서비스를 fabric 에 올리지 않는 것도 이 파일의 계약이다. 가드 (v) 는
+# "JWKS 를 fetch 하는 서비스" 만 요구하므로 이 제외를 그대로 통과시킨다.
+#
+# kafka-ui / grafana 는 이미 traefik-net 에 있다(자기 Traefik 라우터를 가진 관측
+# 서비스다). 여기서 건드리지 않는다.
+# =============================================================================
+services:
+  admin-service:
+    networks:
+      - traefik-net
+
+  inbound-service:
+    networks:
+      - traefik-net
+
+  inventory-service:
+    networks:
+      - traefik-net
+
+  master-service:
+    networks:
+      - traefik-net
+
+  outbound-service:
+    networks:
+      - traefik-net

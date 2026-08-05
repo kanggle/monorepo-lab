@@ -26,12 +26,18 @@ declare -A COMPOSE=(
   # 이름의 alias 를 얹어야 한다. 이것이 없으면 96 컨테이너가 전부 healthy 로 떠도
   # **로그인이 불가능**하다(도달할 iam 엣지가 없다). 상세: iam-traefik.override.yml
   [iam]="projects/iam-platform/docker-compose.yml projects/iam-platform/docker-compose.e2e.yml infra/demo/iam-traefik.override.yml"
-  [wms]="projects/wms-platform/docker-compose.yml projects/wms-platform/docker-compose.e2e.yml"
+  # `*-identity.override.yml` — 각 도메인의 **백엔드 리소스 서버**를 traefik-net 에 붙인다
+  # (TASK-MONO-507). 붙이지 않으면 그 서비스들은 JWKS 를 fetch 할 주소(`iam-auth-service`,
+  # traefik-net 위에만 있는 alias)를 해소하지 못하고, Spring 이 그 UnknownHost 를
+  # fail-closed 로 **401 "Authentication required"** 로 바꾼다. 게이트웨이는 토큰을 정상
+  # 수락한 뒤였으므로 증상은 "엣지가 좋은 토큰을 거부한다" 로 보인다. 상세 + 실측:
+  # infra/demo/erp-identity.override.yml 헤더. 가드 (v) 가 이 정합을 강제한다.
+  [wms]="projects/wms-platform/docker-compose.yml projects/wms-platform/docker-compose.e2e.yml infra/demo/wms-identity.override.yml"
   [ecommerce]="projects/ecommerce-microservices-platform/docker-compose.yml"
-  [scm]="projects/scm-platform/docker-compose.yml"
-  [fan]="projects/fan-platform/docker-compose.yml"
-  [finance]="projects/finance-platform/docker-compose.yml"
-  [erp]="projects/erp-platform/docker-compose.yml"
+  [scm]="projects/scm-platform/docker-compose.yml infra/demo/scm-identity.override.yml"
+  [fan]="projects/fan-platform/docker-compose.yml infra/demo/fan-identity.override.yml"
+  [finance]="projects/finance-platform/docker-compose.yml infra/demo/finance-identity.override.yml"
+  [erp]="projects/erp-platform/docker-compose.yml infra/demo/erp-identity.override.yml"
   [console]="projects/platform-console/docker-compose.yml"
 )
 
