@@ -76,6 +76,50 @@ public class PaymentConfirmService {
             throw e;
         }
 
+        // ── TASK-BE-574: a decline that arrives as a VALUE, not as an exception ─────────
+        // PaymentGatewayPort admits both failure shapes and says so: an implementation MAY
+        // return declined() instead of throwing, and "a consumer wiring a specific adapter
+        // must handle that adapter's declared failure shape". This consumer handled exactly
+        // one of the two, so an approved=false result fell straight through to confirm()
+        // below and was recorded COMPLETED with PaymentCompleted published — order
+        // confirmed, shipped and settled for money that was never taken.
+        //
+        // Placed BEFORE the post-capture auto-refund guard on purpose: a value-decline means
+        // no capture happened, so there is nothing to refund and calling the PG to cancel
+        // would be wrong.
+        //
+        // WHY THE ROW IS NOT MOVED TO FAILED, unlike the PgConfirmFailedException branch:
+        // that exception is provably definitive — it comes from a 4xx on a capture call, and
+        // its own javadoc says "No retry will help", which is what justifies locking the row.
+        // A bare approved=false carries no such proof. The port admits declined() for
+        // "failed/forged/tampered/UNREACHABLE", and the PortOne adapter — the one value-
+        // declining implementation in this repo — states that "a PortOne 4xx/5xx, a network
+        // error, or an unparsable body" all fail closed to declined. So the bit is the union
+        // of both Toss exception classes and cannot be read as either one.
+        //
+        // Facing that ambiguity the two errors are not symmetric. Leaving the row PENDING on
+        // a definitive decline costs a repeated call that declines again — never COMPLETED,
+        // no money moves. Locking it to FAILED on a transient decline strands a customer who
+        // HAS already paid (a verify-model vendor's payment is captured client-side before
+        // verify runs) behind a dead order that needs a manual refund. So we take the
+        // conservative branch — which is the one this method already applies to an
+        // indeterminate PG answer, three lines up: "PG actual state is unknown — DO NOT
+        // transition to FAILED. Propagate so the @Transactional boundary rolls back and the
+        // user can idempotently retry."
+        //
+        // Hence PgGatewayUnavailableException (503, retryable) rather than a third outcome
+        // shape. It reads oddly for a gateway that did answer, and that is a real cost paid
+        // knowingly: the log line below distinguishes the two for operators. An adapter that
+        // CAN prove a decline is permanent should throw PgConfirmFailedException itself
+        // rather than returning declined() — the port already offers that shape.
+        if (!pgResult.approved()) {
+            log.warn("PG returned a value-decline (approved=false) for orderId={}, paymentKey={} — "
+                            + "not confirming, leaving the payment PENDING for retry. The gateway "
+                            + "answered; it did not fail to answer.", orderId, paymentKey);
+            throw new PgGatewayUnavailableException(
+                    "PG did not approve the payment (declined result for orderId=" + orderId + ")");
+        }
+
         // ── TASK-BE-435 belt-and-suspenders, post-capture auto-refund guard ──────────────
         // Concurrency mechanism: a row re-read after the PG capture detects an OrderCancelled
         // that committed a VOIDED transition AFTER our initial read but DURING the (slow) PG

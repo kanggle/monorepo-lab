@@ -37,15 +37,20 @@ import org.springframework.context.annotation.Profile;
  * <h2>Declining is done by THROWING, never by returning {@code declined()}</h2>
  *
  * <strong>Do not "simplify" {@link DemoPaymentGateway#verify} to return
- * {@link PaymentAuthorization#declined()}.</strong> Measured in this repo (TASK-BE-572 AC-0):
- * {@code PaymentConfirmService.confirm} never reads {@code PaymentAuthorization.approved()} — it
- * goes straight from {@code verify(...)} to {@code payment.confirm(...)}. Rejection reaches the
- * {@code FAILED} path only via {@code PgConfirmFailedException}, which is exactly how
- * {@code TossPaymentsAdapter} signals it (it never returns {@code declined()} either; only
- * fan-platform's use cases read that flag). A gateway here that returned {@code declined()} would
- * be recorded as a <em>successful</em> payment. This class therefore mirrors the real adapter's
- * contract, and the asymmetry itself is left to a separate ticket rather than patched under a demo
- * task — it is domain logic, and this task must not change it.
+ * {@link PaymentAuthorization#declined()}.</strong> The original reason was a defect: measured
+ * under TASK-BE-572 AC-0, {@code PaymentConfirmService.confirm} never read
+ * {@code PaymentAuthorization.approved()}, so a gateway returning {@code declined()} here would
+ * have been recorded as a <em>successful</em> payment. <b>TASK-BE-574 closed that hole</b> — the
+ * confirm path now rejects a value-decline, so this class is no longer the only thing standing
+ * between a declined demo payment and a confirmed order.
+ *
+ * <p>The instruction stands anyway, for a different and better reason. A {@code declined()} value
+ * cannot say whether the decline was permanent or transient, so BE-574 must treat it
+ * conservatively as indeterminate (503, row left PENDING for retry). This gateway <em>knows</em>
+ * its declines are deliberate and permanent, and {@code PgConfirmFailedException} is the shape
+ * that carries that — which is also exactly how {@code TossPaymentsAdapter} signals a real 4xx.
+ * Throwing keeps the demo's rejection landing on the {@code FAILED} path and keeps the demo
+ * indistinguishable from the real adapter to its caller, which is the whole point of this class.
  */
 @Slf4j
 @Configuration
