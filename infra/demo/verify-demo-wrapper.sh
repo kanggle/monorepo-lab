@@ -983,6 +983,72 @@ done < <(awk -F'|' '$1 == "M"' "$w_svc")
 ok "리소스 서버 ${w_checked}개 전부 자기 JWKS 호스트를 해소 가능 (선언 모듈 $(wc -l < "$w_rs" | tr -d ' ')개 중 데모에 뜨는 것)"
 
 # ---------------------------------------------------------------------------
+echo "[verify] (x) 결제 mock 이 프런트·백엔드 양쪽에서 같은 상태인가"
+# ---------------------------------------------------------------------------
+# 근거(TASK-BE-572): 데모 결제는 **두 곳**이 동의해야 성립한다 —
+#   payment-service `SPRING_PROFILES_ACTIVE` 에 `demo-pg` (mock PG 가 승인)
+#   web-store `DEMO_PAYMENT_MOCK=1`        (체크아웃이 Toss SDK 를 건너뛴다)
+# 한쪽만 켜지면 조용히 깨진다:
+#   백엔드만 → 프런트가 더미 키로 Toss SDK 를 로드하다 실패 배너를 띄운다.
+#   프런트만 → 지어낸 paymentKey 를 실 Toss 어댑터가 거부해 승인이 죽는다.
+# 어느 쪽도 **기동 시점엔 아무 신호가 없고** 결제 버튼을 눌러야 드러난다.
+#
+# 그리고 `prod` 와 `demo-pg` 가 함께 렌더되면 payment-service 는 부팅에 실패한다
+# (DemoPgProfileGuard). 그 실패는 옳지만, compose 렌더에서 미리 잡는 편이 훨씬 싸다.
+#
+# 술어는 **렌더된 compose** 다(demo.env 를 source 한 상태로 이 스크립트가 이미 실행 중이므로
+# 데모가 실제로 띄우는 값 그대로다). 두 키를 손으로 나열하지 않고 서비스에서 뽑는다.
+x_render="$(render ecommerce)"
+x_profiles="$(printf '%s' "$x_render" | awk '
+  /^[a-z]+:/ { sec = $1; sub(/:$/, "", sec); svc = "" }
+  sec != "services" { next }
+  /^  [a-zA-Z0-9._-]+:$/ { svc = $1; sub(/:$/, "", svc); blk = ""; next }
+  /^    [a-zA-Z0-9._-]+:/ { blk = $1; sub(/:$/, "", blk) }
+  svc == "payment-service" && blk == "environment" && /^      SPRING_PROFILES_ACTIVE:/ {
+    v = $2; gsub(/"/, "", v); print v }
+')"
+x_flag="$(printf '%s' "$x_render" | awk '
+  /^[a-z]+:/ { sec = $1; sub(/:$/, "", sec); svc = "" }
+  sec != "services" { next }
+  /^  [a-zA-Z0-9._-]+:$/ { svc = $1; sub(/:$/, "", svc); blk = ""; next }
+  /^    [a-zA-Z0-9._-]+:/ { blk = $1; sub(/:$/, "", blk) }
+  svc == "web-store" && blk == "environment" && /^      DEMO_PAYMENT_MOCK:/ {
+    v = $2; gsub(/"/, "", v); print v }
+')"
+
+# 추출 실패를 통과로 보고하지 않는다. 키가 사라지면(= 데모 결제 배선이 통째로 빠지면)
+# 두 값이 모두 빈 문자열이 되어 "둘 다 꺼짐" 으로 조용히 합격할 수 있다.
+printf '%s' "$x_render" | grep -qE '^      SPRING_PROFILES_ACTIVE:' \
+  || fail "(x) ecommerce 렌더에서 payment-service 의 SPRING_PROFILES_ACTIVE 를 찾지 못했습니다 — 탐지식이 깨졌습니다."
+printf '%s' "$x_render" | grep -qE '^      DEMO_PAYMENT_MOCK:' \
+  || fail "(x) ecommerce 렌더에서 web-store 의 DEMO_PAYMENT_MOCK 를 찾지 못했습니다"\
+    $'\n'"→ web-store.environment 에 \`DEMO_PAYMENT_MOCK=\${DEMO_PAYMENT_MOCK:-}\` 가 있어야 합니다."\
+    $'\n'"   compose 는 자기가 이름을 적은 변수만 컨테이너에 넣습니다 — demo.env 값만으로는 도달하지 않습니다."
+
+case ",$x_profiles," in
+  *,demo-pg,*) x_back=1 ;;
+  *)           x_back=0 ;;
+esac
+[ "$x_flag" = "1" ] && x_front=1 || x_front=0
+
+[ "$x_back" = "$x_front" ] || fail "결제 mock 설정이 한쪽만 켜져 있습니다:"\
+  $'\n'"  payment-service SPRING_PROFILES_ACTIVE = '$x_profiles'  (demo-pg: $x_back)"\
+  $'\n'"  web-store       DEMO_PAYMENT_MOCK      = '$x_flag'  (on: $x_front)"\
+  $'\n'"→ 백엔드만 켜짐 = 프런트가 더미 키로 Toss SDK 를 로드하다 실패 배너를 띄웁니다."\
+  $'\n'"→ 프런트만 켜짐 = 지어낸 paymentKey 를 실 Toss 어댑터가 거부해 결제 승인이 죽습니다."\
+  $'\n'"→ 둘 다 infra/demo/demo.env 에서 설정하세요 (ECOMMERCE_PAYMENT_PROFILES / DEMO_PAYMENT_MOCK)."
+
+case ",$x_profiles," in
+  *,prod,*)
+    [ "$x_back" = "0" ] || fail "payment-service 프로파일에 prod 와 demo-pg 가 함께 있습니다: '$x_profiles'"\
+      $'\n'"→ demo-pg 는 **돈을 받지 않고 모든 결제를 승인**합니다. 프로덕션 배포에 실려서는 안 됩니다."\
+      $'\n'"→ payment-service 는 이 조합에서 부팅에 실패합니다(DemoPgProfileGuard). 여기서 먼저 막습니다."
+    ;;
+esac
+
+ok "결제 mock 정합 (payment-service='${x_profiles}' ↔ web-store DEMO_PAYMENT_MOCK='${x_flag}')"
+
+# ---------------------------------------------------------------------------
 if [ "$LIVE" -eq 0 ]; then
   echo "[verify] 정적 검증 PASS (실기동 증명은 --live)"
   exit 0

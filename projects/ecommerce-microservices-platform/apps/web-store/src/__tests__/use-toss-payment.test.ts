@@ -17,10 +17,23 @@ vi.mock('@tosspayments/tosspayments-sdk', () => ({
 
 import { useTossPayment } from '@/features/checkout/model/use-toss-payment';
 
+/**
+ * The hook asks `/api/store-config` before it touches the SDK (TASK-BE-572), so every case has to
+ * say which answer it gets. Defaulting to `demoPayment: false` keeps all the pre-existing cases
+ * describing exactly what they described before: the real Toss path.
+ */
+function stubStoreConfig(demoPayment: boolean) {
+  global.fetch = vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({ demoPayment }),
+  }) as unknown as typeof fetch;
+}
+
 describe('useTossPayment', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockLoadTossPayments.mockResolvedValue({ payment: mockPayment });
+    stubStoreConfig(false);
   });
 
   it('초기화 성공 시 isReady가 true가 된다', async () => {
@@ -85,5 +98,60 @@ describe('useTossPayment', () => {
         orderName: '테스트 주문',
       }),
     ).rejects.toThrow('결제 모듈이 준비되지 않았습니다.');
+  });
+
+  // --- demo-pg mode (TASK-BE-572 AC-4) ------------------------------------------------------
+
+  describe('데모 결제 모드', () => {
+    it('데모 모드에서는 Toss SDK 를 아예 로드하지 않는다 (더미 키 배너의 원인 제거)', async () => {
+      stubStoreConfig(true);
+
+      const { result } = renderHook(() => useTossPayment());
+
+      await waitFor(() => expect(result.current.isReady).toBe(true));
+
+      expect(mockLoadTossPayments).not.toHaveBeenCalled();
+      expect(result.current.error).toBeNull();
+    });
+
+    it('requestPayment 는 Toss 가 보내는 것과 같은 success URL 로 이동한다', async () => {
+      stubStoreConfig(true);
+      const assign = vi.fn();
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: { ...window.location, assign, origin: 'http://web.ecommerce.local' },
+      });
+
+      const { result } = renderHook(() => useTossPayment());
+      await waitFor(() => expect(result.current.isReady).toBe(true));
+
+      await act(async () => {
+        await result.current.requestPayment({
+          orderId: 'order-9',
+          amount: 12900,
+          orderName: '데모 주문',
+        });
+      });
+
+      expect(mockRequestPayment).not.toHaveBeenCalled();
+      expect(assign).toHaveBeenCalledWith(
+        'http://web.ecommerce.local/checkout/payment/success'
+          + '?paymentKey=demo_order-9&orderId=order-9&amount=12900',
+      );
+    });
+
+    /**
+     * Fail-safe direction matters here: an unreachable config endpoint must NOT be read as
+     * "demo mode on". Getting this backwards would let a transient fetch failure turn a real
+     * storefront into one where every payment succeeds without money.
+     */
+    it('설정 조회가 실패하면 데모가 아니라 실 SDK 경로로 떨어진다', async () => {
+      global.fetch = vi.fn().mockRejectedValue(new Error('offline')) as unknown as typeof fetch;
+
+      const { result } = renderHook(() => useTossPayment());
+
+      await waitFor(() => expect(result.current.isReady).toBe(true));
+      expect(mockLoadTossPayments).toHaveBeenCalledWith('test_client_key');
+    });
   });
 });
