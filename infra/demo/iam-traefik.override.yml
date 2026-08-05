@@ -112,6 +112,33 @@ services:
     environment:
       <<: *iam-oidc
       SERVER_FORWARD_HEADERS_STRATEGY: FRAMEWORK
+      # -----------------------------------------------------------------------
+      # assume-tenant 의 배정 확인 홉 (TASK-MONO-505)
+      # -----------------------------------------------------------------------
+      # 토큰 발급 시점에 auth-service 가 admin-service 의
+      # `GET /internal/operator-assignments/check` 를 호출해 운영자가 그 테넌트에
+      # 배정돼 있는지 본다. `docker-compose.e2e.yml` 은 이 URL 을 주지 않으므로
+      # application.yml 의 기본값 `http://localhost:8084` 로 떨어지고, 그 자리에는
+      # 아무것도 없다.
+      #
+      # 🔴 그 실패가 **보안 판정으로 위장한다.** 이 경로는 fail-closed 라
+      # ConnectException 이 `denied` 로 변환되고, 콘솔은 그걸 그대로 받아
+      # `TENANT_FORBIDDEN` 을 띄운다 — 데이터도 배정도 멀쩡한데 "이 테넌트를 고를 수
+      # 없다" 고 말한다. 실측 로그(MONO-505 착수 시 통합 데모에서 재현):
+      #
+      #   assume-tenant assignment check failed (fail-closed deny):
+      #     GET http://localhost:8084/internal/operator-assignments/check → ConnectException
+      #
+      # 파급은 데모 전체다: **테넌트 전환이 불가능하므로 콘솔의 도메인 운영 섹션이
+      # 하나도 열리지 않는다.** 컨테이너는 전부 healthy 이고 로그인도 되므로,
+      # 이 배선이 없으면 데모는 "로그인은 되는데 아무것도 안 보이는" 상태가 된다.
+      #
+      # 포트는 **8085** 다. application.yml 의 기본값 `localhost:8084` 를 보고 8084 로
+      # 적었다가 같은 ConnectException 을 한 번 더 받았다 — 컨테이너가 실제로 여는
+      # 포트는 `docker exec … netstat` 로 확인한 8085 이고(호스트 매핑 18085),
+      # console-bff 의 fed-e2e 배선이 쓰는 값과도 일치한다. **기본값 포트는 그 서비스가
+      # 실제로 듣는 포트가 아니다.**
+      ADMIN_SERVICE_URL: http://admin-service:8085
     networks:
       iam-e2e: null
       traefik-net:

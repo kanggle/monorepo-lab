@@ -784,6 +784,83 @@ if [ -f "$site_html" ]; then
 fi
 
 # ---------------------------------------------------------------------------
+echo "[verify] (u) 콘솔의 '.local' 기본값이 demo.env + compose 로 전부 덮이는가"
+# ---------------------------------------------------------------------------
+# 근거(MONO-505): 콘솔 코드는 도메인 대상 URL 마다 **하드코딩된 `.local` 기본값**을
+# 들고 있다(console-web 의 zod `.default('http://wms.local/...')`, console-bff 의
+# `${KEY:http://wms.local}`). 데모가 그걸 안 덮으면:
+#
+#   로컬 : `.local` 이 hosts 파일 + Traefik alias 로 풀린다  → **우연히 통과한다**
+#   AWS  : 도메인이 `<ip>.sslip.io` 다                       → 아무데도 안 풀린다
+#
+# 즉 이 드리프트의 실패 모드는 **로컬에서 초록**이고 클라우드에서만 터진다. 가드 (i)
+# 와 같은 부류이고, 같은 이유로 사람이 못 잡는다.
+#
+# 술어를 손으로 열거하지 않는다 — 그러면 키가 하나 늘 때 조용히 비어버린다(가드가
+# 아무것도 안 하면서 초록을 준다). **소스에서 `.local` 기본값을 가진 키를 뽑아내고**
+# 그 집합이 demo.env 에 전부 있는지 본다. 새 도메인 키가 코드에 추가되면 이 가드는
+# 자동으로 그것까지 요구한다.
+#
+# 제외: NEXT_PUBLIC_* — Next 가 **빌드타임에 인라인**하므로 런타임 env 로 덮을 수
+# 없다(그것이 CONSOLE_PUBLIC_ORIGIN 이 따로 존재하는 이유다. MONO-358).
+console_web_env="$ROOT/projects/platform-console/apps/console-web/src/shared/config/env.ts"
+console_bff_yml="$ROOT/projects/platform-console/apps/console-bff/src/main/resources/application.yml"
+console_compose="$ROOT/projects/platform-console/docker-compose.yml"
+demo_env_file="$ROOT/infra/demo/demo.env"
+
+for f in "$console_web_env" "$console_bff_yml" "$console_compose" "$demo_env_file"; do
+  [ -r "$f" ] || fail "(u) 읽을 수 없습니다: ${f#$ROOT/}"\
+    $'\n'"→ 콘솔이 이동/개명됐다면 이 가드의 경로도 함께 옮기세요. 파일이 없다고 건너뛰면"\
+    $'\n'"   가드는 아무것도 검사하지 않으면서 초록을 보고합니다."
+done
+
+# console-web: `KEY: z` … `.default('http://<host>.local…')` (여러 줄에 걸쳐 있다)
+web_keys="$(
+  tr -d '\r' < "$console_web_env" | awk '
+    /^  [A-Z][A-Z0-9_]*: z/ { k=$1; sub(/:$/,"",k) }
+    k != "" && /\.default\(.http:\/\/[a-zA-Z0-9.-]*\.local/ { print k; k="" }
+  ' | grep -v '^NEXT_PUBLIC_' | sort -u
+)"
+# console-bff: `${KEY:http://<host>.local…}`
+bff_keys="$(
+  tr -d '\r' < "$console_bff_yml" \
+    | grep -oE '\$\{[A-Z][A-Z0-9_]*:http://[a-zA-Z0-9.-]*\.local' \
+    | sed 's/^\${//; s/:http.*//' | sort -u
+)"
+
+console_keys="$(printf '%s\n%s\n' "$web_keys" "$bff_keys" | grep -v '^$' | sort -u)"
+
+[ -n "$console_keys" ] || fail "(u) 콘솔 소스에서 '.local' 기본값 키를 **하나도** 못 뽑았습니다."\
+  $'\n'"→ 0건은 '없음' 이 아니라 **추출식이 깨졌다**는 신호입니다(zod/yaml 표기 변경 등)."\
+  $'\n'"   추출식을 고치기 전까지 이 가드는 공허합니다."
+
+missing_demo=""
+for k in $console_keys; do
+  grep -qE "^${k}=" "$demo_env_file" || missing_demo="$missing_demo $k"
+done
+
+[ -z "$missing_demo" ] || fail "demo.env 가 덮지 않은 콘솔 '.local' 기본값 키:"\
+  $'\n'"$(printf '  %s\n' $missing_demo)"\
+  $'\n'"→ 이 키들은 데모에서 콘솔 코드의 하드코딩 '.local' 기본값으로 떨어집니다."\
+  $'\n'"→ **로컬에서는 hosts 파일과 Traefik alias 덕에 통과하고, 클라우드에서만 터집니다.**"\
+  $'\n'"   컨테이너는 전부 healthy, 콘솔도 뜨고, 도메인 운영 섹션만 죽습니다."\
+  $'\n'"→ infra/demo/demo.env 에 <domain>.DEMO_DOMAIN 형태로 추가하세요."
+
+# demo.env 에 있어도 compose 가 이름을 안 적으면 컨테이너에 도달하지 않는다.
+missing_compose=""
+for k in $console_keys; do
+  grep -qE "^[[:space:]]+${k}:" "$console_compose" || missing_compose="$missing_compose $k"
+done
+
+[ -z "$missing_compose" ] || fail "콘솔 compose 가 이름을 적지 않은 키(= 컨테이너에 도달하지 않음):"\
+  $'\n'"$(printf '  %s\n' $missing_compose)"\
+  $'\n'"→ 셸 env 는 **compose 가 명시적으로 보간한 자리에만** 들어갑니다. demo.env 에 값을"\
+  $'\n'"   넣어도 이 목록에 없으면 그 값은 조용히 버려집니다 — 값이 있는데 무시되는"\
+  $'\n'"   상태라 진단이 특히 어렵습니다."
+
+ok "콘솔 '.local' 기본값 키 $(printf '%s\n' $console_keys | wc -l | tr -d ' ') 개가 demo.env + compose 양쪽에 있다"
+
+# ---------------------------------------------------------------------------
 if [ "$LIVE" -eq 0 ]; then
   echo "[verify] 정적 검증 PASS (실기동 증명은 --live)"
   exit 0

@@ -79,6 +79,41 @@ services:
       # The GAP OIDC token is never an /api/admin/** credential.
       CONSOLE_TOKEN_EXCHANGE_URL: ${CONSOLE_TOKEN_EXCHANGE_URL:-http://iam.local/api/admin/auth/token-exchange}
       TOKEN_EXCHANGE_TIMEOUT_MS: ${TOKEN_EXCHANGE_TIMEOUT_MS:-5000}
+      # -----------------------------------------------------------------------
+      # Per-domain federation targets (TASK-MONO-505)
+      # -----------------------------------------------------------------------
+      # These must be NAMED here even though every one has a default in the
+      # code: compose only injects variables it names, so a value set in
+      # `infra/demo/demo.env` reaches the container only if this list mentions
+      # the key. Before this block the console fell back to its own defaults,
+      # every one of which is a hardcoded `.local` hostname — which resolves on
+      # a developer laptop (hosts file + Traefik alias) and resolves NOWHERE on
+      # the cloud demo, where the domain is `<ip>.sslip.io`. Containers healthy,
+      # console up, five domain sections dead. Guard (u) enforces the pair.
+      #
+      # Each default below is BYTE-IDENTICAL to the code default, so the thin
+      # `pnpm console:up` stack behaves exactly as before; the demo overrides
+      # them via demo.env with the DEMO_DOMAIN form.
+      #
+      # Why hostnames rather than container DNS: in the integrated demo only
+      # each project's `gateway-service` joins traefik-net — every backend
+      # service stays on its own project network — so the console CANNOT reach
+      # `wms-admin-service` and friends by container name the way the
+      # single-compose federation-hardening-e2e harness does. Going through
+      # `<domain>.<DEMO_DOMAIN>` reaches that project's gateway, which is also
+      # what api-gateway-policy wants. It does NOT leave the host on AWS: the
+      # Traefik container carries a network alias for each of these names
+      # (guard (i)), so Docker's embedded DNS answers internally.
+      IAM_ADMIN_API_BASE: ${IAM_ADMIN_API_BASE:-http://iam.local}
+      CONSOLE_ONBOARDING_URL: ${CONSOLE_ONBOARDING_URL:-http://iam.local/api/admin/onboarding/organizations}
+      WMS_ADMIN_BASE_URL: ${WMS_ADMIN_BASE_URL:-http://wms.local/api/v1/admin}
+      WMS_OUTBOUND_BASE_URL: ${WMS_OUTBOUND_BASE_URL:-http://wms.local/api/v1/outbound}
+      SCM_GATEWAY_BASE_URL: ${SCM_GATEWAY_BASE_URL:-http://scm.local}
+      FINANCE_BASE_URL: ${FINANCE_BASE_URL:-http://finance.local}
+      LEDGER_BASE_URL: ${LEDGER_BASE_URL:-http://finance.local}
+      ERP_BASE_URL: ${ERP_BASE_URL:-http://erp.local}
+      ECOMMERCE_ADMIN_BASE_URL: ${ECOMMERCE_ADMIN_BASE_URL:-http://ecommerce.local/api/admin}
+      ECOMMERCE_PUBLIC_BASE_URL: ${ECOMMERCE_PUBLIC_BASE_URL:-http://ecommerce.local/api}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik-net"
@@ -132,6 +167,26 @@ services:
       SERVER_PORT: "8080"
       # GAP OIDC issuer for RS256 JWKS validation of inbound bearer tokens.
       CONSOLE_BFF_IAM_ISSUER_URL: ${CONSOLE_BFF_IAM_ISSUER_URL:-http://iam.local}
+      # JWKS is an actual FETCH, not a string compare, so it may point at
+      # container DNS while the issuer above stays the public hostname. Unset,
+      # application.yml derives it from the issuer — which works locally and
+      # dies on AWS (an instance cannot reach its own public IP; no IGW
+      # hairpin). demo.env pins it to the iam container.
+      CONSOLE_BFF_JWK_SET_URI: ${CONSOLE_BFF_JWK_SET_URI:-http://iam.local/oauth2/jwks}
+      # Outbound domain legs (TASK-MONO-505) — same reasoning as console-web's
+      # block above: named here so demo.env can reach them, defaults identical
+      # to application.yml so the thin stack is unchanged.
+      CONSOLE_BFF_OUTBOUND_IAM_BASE_URL: ${CONSOLE_BFF_OUTBOUND_IAM_BASE_URL:-http://iam.local}
+      CONSOLE_BFF_OUTBOUND_WMS_BASE_URL: ${CONSOLE_BFF_OUTBOUND_WMS_BASE_URL:-http://wms.local}
+      CONSOLE_BFF_OUTBOUND_SCM_BASE_URL: ${CONSOLE_BFF_OUTBOUND_SCM_BASE_URL:-http://scm.local}
+      CONSOLE_BFF_OUTBOUND_FINANCE_BASE_URL: ${CONSOLE_BFF_OUTBOUND_FINANCE_BASE_URL:-http://finance.local}
+      CONSOLE_BFF_OUTBOUND_ERP_BASE_URL: ${CONSOLE_BFF_OUTBOUND_ERP_BASE_URL:-http://erp.local}
+      # 🔴 The federation-hardening-e2e overlay does NOT set this one, because
+      # ecommerce is not in that harness at all (its rendered service list has
+      # no ecommerce service). So this leg had no prior art to promote — it is
+      # authored here, and its absence is why the console's E-Commerce health
+      # leg has read unavailable in the integrated demo.
+      CONSOLE_BFF_OUTBOUND_ECOMMERCE_BASE_URL: ${CONSOLE_BFF_OUTBOUND_ECOMMERCE_BASE_URL:-http://ecommerce.local}
     # No Traefik labels — deliberately unroutable from the edge (TASK-MONO-362).
     # Do not re-add them: `scripts/check-gateway-drift.sh` (I2) will fail, which is
     # the point. A backend service reachable at the edge without a gateway has no
