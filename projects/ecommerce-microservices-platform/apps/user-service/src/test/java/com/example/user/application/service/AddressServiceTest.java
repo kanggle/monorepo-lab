@@ -7,7 +7,10 @@ import com.example.user.domain.exception.AddressLimitExceededException;
 import com.example.user.domain.exception.AddressNotFoundException;
 import com.example.user.domain.exception.DefaultAddressCannotBeDeletedException;
 import com.example.user.domain.model.Address;
+import com.example.user.domain.exception.UserProfileNotFoundException;
 import com.example.user.domain.repository.AddressRepository;
+import com.example.user.domain.repository.UserProfileRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -33,6 +36,9 @@ class AddressServiceTest {
 
     @Mock
     private AddressRepository addressRepository;
+
+    @Mock
+    private UserProfileRepository userProfileRepository;
 
     @InjectMocks
     private AddressService addressService;
@@ -76,6 +82,12 @@ class AddressServiceTest {
     @Nested
     @DisplayName("createAddress")
     class CreateAddress {
+
+        /** 아래 케이스들은 전부 "프로필이 있는 사용자" 를 다룬다 — 부재 케이스는 별도 @Nested 로 분리했다. */
+        @BeforeEach
+        void profileExists() {
+            given(userProfileRepository.existsByUserId(USER_ID)).willReturn(true);
+        }
 
         @Test
         @DisplayName("첫 번째 주소는 자동으로 기본 주소가 된다")
@@ -129,6 +141,44 @@ class AddressServiceTest {
 
             assertThatThrownBy(() -> addressService.createAddress(command))
                     .isInstanceOf(AddressLimitExceededException.class);
+        }
+    }
+
+    /**
+     * TASK-BE-575 AC-2/AC-4. Before this, a missing profile reached the INSERT and came back
+     * as an FK violation — a 500. The fixture is a state production can be in: a valid IAM
+     * identity whose ecommerce profile has not been projected yet (the whole subject of
+     * TASK-BE-575). Through HTTP the provisioning filter fills that gap before the controller
+     * runs; this asserts what the service itself does when something reaches it without one.
+     */
+    @Nested
+    @DisplayName("createAddress — 프로필이 없는 IAM 신원")
+    class CreateAddressWithoutProfile {
+
+        @Test
+        @DisplayName("FK 위반(500)이 아니라 형제 엔드포인트와 같은 USER_PROFILE_NOT_FOUND 를 던진다")
+        void createAddress_noProfile_throwsUserProfileNotFound() {
+            given(userProfileRepository.existsByUserId(USER_ID)).willReturn(false);
+
+            var command = new CreateAddressCommand(USER_ID, "집", "홍길동", "010-1234-5678",
+                    "12345", "서울시 강남구", null, true);
+
+            assertThatThrownBy(() -> addressService.createAddress(command))
+                    .isInstanceOf(UserProfileNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("주소를 저장하지 않는다 — 검사는 INSERT 앞에 있다")
+        void createAddress_noProfile_neverSaves() {
+            given(userProfileRepository.existsByUserId(USER_ID)).willReturn(false);
+
+            var command = new CreateAddressCommand(USER_ID, "집", "홍길동", "010-1234-5678",
+                    "12345", "서울시 강남구", null, true);
+
+            assertThatThrownBy(() -> addressService.createAddress(command))
+                    .isInstanceOf(UserProfileNotFoundException.class);
+            then(addressRepository).should(never()).save(any());
+            then(addressRepository).should(never()).countByUserId(any());
         }
     }
 

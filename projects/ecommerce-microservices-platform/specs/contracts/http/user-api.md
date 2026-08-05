@@ -40,7 +40,7 @@ Get the authenticated user's profile.
 | Status | Code | Reason |
 |---|---|---|
 | 401 | UNAUTHORIZED | Missing or invalid access token |
-| 404 | USER_PROFILE_NOT_FOUND | Profile not yet created |
+| 404 | USER_PROFILE_NOT_FOUND | No profile for this user. Not reachable for a gateway-authenticated caller since TASK-BE-575 — see § Profile provisioning |
 
 ---
 
@@ -80,7 +80,7 @@ Update the authenticated user's profile.
 |---|---|---|
 | 400 | VALIDATION_ERROR | Missing or invalid field |
 | 401 | UNAUTHORIZED | Missing or invalid access token |
-| 404 | USER_PROFILE_NOT_FOUND | Profile not yet created |
+| 404 | USER_PROFILE_NOT_FOUND | No profile for this user. Not reachable for a gateway-authenticated caller since TASK-BE-575 — see § Profile provisioning |
 
 ---
 
@@ -94,7 +94,7 @@ Get the authenticated user's address list.
 {
   "addresses": [
     {
-      "addressId": "string (UUID)",
+      "id": "string (UUID)",
       "label": "string",
       "recipientName": "string",
       "phone": "string",
@@ -135,15 +135,19 @@ Add a new shipping address.
 **Response 201**
 ```json
 {
-  "addressId": "string (UUID)"
+  "id": "string (UUID)"
 }
 ```
+
+> The field is `id`, verified against a live response (TASK-BE-575 AC-5). This document said
+> `addressId`; `CreateAddressResponse` has always serialised `id`.
 
 **Error responses**
 | Status | Code | Reason |
 |---|---|---|
 | 400 | VALIDATION_ERROR | Missing or invalid field |
 | 401 | UNAUTHORIZED | Missing or invalid access token |
+| 404 | USER_PROFILE_NOT_FOUND | No profile for this user — see § Profile provisioning. Until TASK-BE-575 this case escaped as a **500** from the `fk_user_addresses_user_id` violation |
 | 422 | ADDRESS_LIMIT_EXCEEDED | Maximum number of addresses reached |
 
 ---
@@ -169,7 +173,7 @@ Update an existing address.
 **Response 200**
 ```json
 {
-  "addressId": "string (UUID)"
+  "id": "string (UUID)"
 }
 ```
 
@@ -285,8 +289,26 @@ Get a specific user's profile. Requires admin role.
 }
 ```
 
+## Profile provisioning (TASK-BE-575)
+
+The profile is the ecommerce projection of an IAM identity; the caller never creates it, and
+there is no `POST /api/users`. Two sources create it, and both produce the same row:
+
+| Source | When | Notes |
+|---|---|---|
+| IAM `account.created` consumer | onboarding, asynchronously | ADR-MONO-037 P1. **Dead in the per-project compose topology** — IAM publishes to its own Kafka cluster and this consumer subscribes to ecommerce's (measured: TASK-BE-575 AC-0, tracked as TASK-MONO-511) |
+| Request-time pull-through | first `/api/**` request carrying a gateway-verified `X-User-Id` | The fallback the IAM consumer-integration guide names for an unavailable event stream. Idempotent; the profile lands in the request's `X-Tenant-Id` |
+
+Consequently `404 USER_PROFILE_NOT_FOUND` is **not** reachable on the self-service endpoints for
+a caller the gateway has authenticated — it remains the documented answer for any other caller,
+and for the case where a profile exists for this `user_id` under a different tenant
+(`uq_user_profiles_user_id` is global while reads are tenant-scoped).
+
+`/api/admin/**` is excluded from pull-through: an operator's subject must not become a consumer
+profile in the list they are reading.
+
 ## Notes
-- User ID is the IAM `accountId`, sourced via the IAM `account.created` event (ADR-MONO-037). **Email/name are NOT in that event** (it is emailHash-only) — the profile is created minimal and email/name are populated later from the OIDC token / profile-update; both may be null on a freshly-onboarded profile.
+- User ID is the IAM `accountId`. **Email/name are not available at provisioning time** — the `account.created` payload is emailHash-only, and the SAS access token carries no `email` claim, so the gateway's `X-User-Email` mapping (`skipIfNull`) emits no header (measured 2026-08-05). Both fields are therefore null on a freshly-provisioned profile and are populated later via profile-update; nothing may depend on them being non-null (ADR-MONO-037 P5/P6).
 - user-service must not expose or modify authentication credentials.
 - All profile endpoints use `X-User-Id` header injected by gateway for identity.
 - Maximum 10 addresses per user.
