@@ -173,14 +173,40 @@ systemd(demo-stack.service) → demo-boot.sh → (IMDSv2 로 공인 IP → DEMO_
 
 **가드 (n)** 이 이 세 고리를 전부 지킨다(유닛 → `demo-boot.sh` → export → `demo-up.sh`, + Packer 가 유닛을 저장소에서 설치). AWS 인프라(Packer/Terraform/Lambda/사이트)는 [`aws/`](aws/) 참조.
 
-## 남은 작업 (federation env 배선 — 별도 증분)
+## federation env 배선 (TASK-MONO-505)
 
-이 래퍼는 각 프로젝트를 **표준 구성**으로 띄운다. 콘솔이 5/5 도메인을 실제
-`available:true` 로 렌더하려면 cross-domain OIDC issuer / per-domain base URL /
-seed 등 런타임 federation env 배선이 필요하며, 이는 `tests/federation-hardening-e2e/`
-데모 오버레이(MONO-170/174)가 이미 6도메인에 대해 해둔 것과 겹친다. 데모 호스트
-정식화 시 그 오버레이 env 를 이 래퍼의 프로젝트별 `.env` 로 승격/재사용한다
-(중복 재구현 금지).
+> 이 절의 이전 판은 *"fed-e2e 데모 오버레이가 이미 6도메인에 대해 해둔 것과 겹치므로
+> 그 오버레이 env 를 승격/재사용한다(중복 재구현 금지)"* 였다. **MONO-505 착수 재측정에서
+> 그 전제가 틀렸음이 드러났다** — 아래가 실측 결과다.
+
+- **fed-e2e 값은 그대로 옮길 수 없다.** 그 하네스는 **단일 compose 프로젝트**라 console-bff 가
+  모든 백엔드 서비스와 같은 네트워크에 있고, 그래서 `http://wms-admin-service:8086` 같은
+  컨테이너 이름을 직접 부른다. 통합 데모는 **8개 프로젝트가 각자 `-p <slug>`** 로 뜨고
+  **`traefik-net` 에 합류하는 것은 각 프로젝트의 `gateway-service` 뿐**이다 — 백엔드 서비스
+  이름은 콘솔 쪽에서 **해소되지 않는다**(전부 NXDOMAIN). 그래서 데모는
+  `<domain>.${DEMO_DOMAIN}` 로 **각 도메인의 게이트웨이를 통과**하도록 배선한다
+  (api-gateway-policy 와도 맞고, Traefik alias 덕에 컨테이너 안에서도 해소된다).
+- **ecommerce 는 fed-e2e 에 아예 없다** — 렌더한 서비스 목록에 ecommerce 서비스가 0개다.
+  따라서 콘솔의 E-Commerce 레그는 **승격할 선례가 없었고** 여기서 신규 작성했다.
+- **`demo.env` 만으로는 아무 효과가 없다.** compose 는 **자기가 이름을 적은 변수만**
+  컨테이너에 넣으므로 `projects/platform-console/docker-compose.yml` 의 `environment`
+  목록에도 키가 있어야 한다. 두 곳의 쌍을 **가드 (u)** 가 지킨다 — 그 술어는 "콘솔 코드가
+  `.local` 기본값을 가진 키" 이고 소스에서 뽑아내므로 키가 늘면 자동으로 따라온다.
+
+같은 태스크에서 데모 기동 자체를 막던 결함 2건을 고쳤다:
+
+- `resolve_deps` 가 **console 을 포함하지 않는 모든 요청에 exit 1** 을 냈다(`FULL` 마지막
+  원소에 대한 테스트 결과가 함수 반환값으로 샜다). `demo-up.sh iam` / `demo-up.sh wms`
+  같은 가장 흔한 부분 기동이 usage 를 찍고 죽었고, 메시지는 원인을 정반대로 가리켰다.
+- `iam-traefik.override.yml` 이 auth-service 에 **`ADMIN_SERVICE_URL` 을 주지 않아**
+  assume-tenant 의 배정 확인이 `localhost:8084` 로 나가 ConnectException 을 냈고, 그 경로가
+  fail-closed 라 **"이 테넌트를 고를 수 없다" 는 보안 판정으로 위장**했다. ⇒ 콘솔에서
+  테넌트 전환이 불가능했고, 따라서 **어떤 도메인 섹션도 열릴 수 없었다.**
+
+**아직 남은 것**: 테넌트 전환까지 성립한 뒤에도 도메인 게이트웨이가 assumed 토큰을
+**401 로 거부**한다(ERP 실측). 토큰 자체는 정상이다 — `tenant_id=demo-corp`,
+`entitled_domains` 5개, operator role 5개 + WMS granular, `iss=http://iam.local`.
+env 승격이 아니라 **도메인 게이트웨이의 토큰 수용** 문제이므로 별도 티켓이다.
 
 > AWS Terraform / AMI / start-stop 은 **[`aws/`](aws/) 에 있다.**
 >
