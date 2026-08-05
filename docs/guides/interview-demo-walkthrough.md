@@ -40,6 +40,10 @@ bash infra/demo/demo-up.sh full
 
 # 슬라이스 (하드 의존은 자동 포함 — console 만 줘도 iam 이 함께 뜬다)
 bash infra/demo/demo-up.sh iam ecommerce console
+
+# 팬 표면 (§3). 로컬 메모리로는 스토어와 **동시에** 못 띄운다 — 먼저 내린다
+bash infra/demo/demo-down.sh ecommerce
+bash infra/demo/demo-up.sh iam fan console
 ```
 
 기동 마지막에 **도메인 데이터 시드**가 자동으로 돈다(`infra/demo/seed/`). 끄려면
@@ -112,9 +116,24 @@ commission_accrual  1행 (ACCRUAL)       ← 정산 적립
 `PUBLIC` / `MEMBERS_ONLY` / `PREMIUM` 세 가시성이 **멤버십 등급에 따라** 다르게
 보이는 것이 이 표면의 핵심이다(권한이 UI 가 아니라 서비스에서 강제된다).
 
-> ⚠️ **팬 도메인의 데이터 시드는 아직 이 저장소에 없다.** 기동은 되지만 화면은
-> 비어 있다. 시드 프레임워크(`infra/demo/seed/`)는 준비돼 있고, 팬 전용 시드는
-> `TASK-MONO-509` 로 분리했다 — 사유와 알려진 레시피는 그 티켓에 있다.
+데모 계정은 **`MEMBERS_ONLY` 를 보유**한다. 일부러 `PREMIUM` 이 아니다 —
+프리미엄이면 세 가시성이 전부 열려 게이팅을 보여줄 수 없다.
+
+| 화면 | 무엇을 보나 |
+|---|---|
+| 홈(피드) | 팔로우한 아티스트의 글. **`PREMIUM` 글은 제목·본문이 비고 잠금 표시**가 뜬다 |
+| 아티스트 디렉터리 | 솔로 2 · 그룹 멤버 1 (`PUBLISHED` 만 노출된다) |
+| 아티스트 상세 | 프로필 + 팔로우 버튼 |
+| 게시물 상세 | `PUBLIC` 열림 / `MEMBERS_ONLY` **멤버십으로 열림** / `PREMIUM` "멤버십이 필요합니다" |
+| 멤버십 · 이력 | 현재 구독 + 가입·해지 이력 |
+| 알림 | 멤버십 시작·해지 이벤트로 채워진다(직접 넣지 않는다) |
+| 내 정보 | 토큰 클레임(`tenant_id=fan-platform`, `roles=[FAN]`) |
+
+> 🔴 **여기서 눌리지 않는 것 두 가지** — 시드의 한계가 아니라 제품의 공백이다.
+> 멤버십 **구독 버튼**은 PortOne 키가 없으면 "결제 모듈이 설정되지 않았습니다" 로
+> 막힌다(화면 문구는 "모의 PG" 라고 약속하지만 그 스위치가 없다 — `TASK-FAN-FE-015`).
+> **팬 게시물 작성 화면은 아예 없다**(API 는 되고 시드가 그 경로로 글을 하나 넣어
+> 둔다 — `TASK-FAN-FE-016`).
 
 ---
 
@@ -235,11 +254,15 @@ SHIPPED → IN_TRANSIT → DELIVERED) 자격을 만든다. 그 과정에서 콘�
 | 새로 가입한 계정의 프로필에 **이름·이메일이 비어 있다** | 최소 프로필 설계(ADR-MONO-037 P5/P6)인데 채울 값의 출처가 없다 — 토큰에 `email` 클레임이 없어 `X-User-Email` 이 나가지 않는다 | `TASK-BE-577` |
 | 스토어 "회원가입" 이 **IAM 로그인 화면**에 내려놓는다 — 가입 폼까지 한 클릭 더 | 저장된 `/oauth2/authorize` 요청이 tenant 를 정하므로 IAM `/signup` 직링크는 계정을 `fan-platform` 에 만든다. 그 한 클릭을 없애려면 IAM 이 registration hint 를 받아야 한다 | `TASK-BE-578` |
 | IAM 계정 이벤트가 도메인 서비스에 **도달하지 않는다**(클러스터가 다름) | 데모 동작에는 영향 없음 — 프로필은 요청 시점에 만들어진다. 그러나 `account.deleted` 익명화도 같이 멈춰 있다 | `TASK-MONO-511` |
-| 팬 도메인 데이터 시드 없음 | 미착수 | `TASK-MONO-509` |
+| 팬 **멤버십 구독 버튼**이 눌리지 않는다 | `fan-platform-web` 에 데모 모의 PG 스위치가 없다. PortOne 키 미설정 → 클릭이 요청 전에 거절된다(백엔드 목 PG 는 정상). 게다가 페이지 문구는 "모의 PG 로 처리됩니다" 라고 약속한다 | `TASK-FAN-FE-015` |
+| 팬 **게시물 작성 화면이 없다** | API 는 `FAN_POST` 를 받는다(201). 프런트에 작성 진입점이 0개라 시드가 넣어 둔 글만 보인다 | `TASK-FAN-FE-016` |
+| 팬 **아티스트 글은 어떤 실제 호출자도 쓸 수 없다** | 피드는 `posts.author_account_id ⋈ follows.artist_account_id`(= 아티스트 엔티티 id)로 잇는데 `PublishPostUseCase` 는 저자를 호출자 sub 으로 고정한다. 시드가 직접-DB 를 쓰는 이유 | `TASK-FAN-BE-045` |
+| 팬 도메인에 **발급 가능한 운영자 역할이 없다** | `FAN_OPERATOR` 를 받는 코드는 iam·artist·community 전부에 있는데, `fan` 도메인을 구독한 테넌트가 없어 그 역할이 발급될 수 없다 | `TASK-MONO-512` |
+| 멤버십을 해지해도 **피드는 최대 5분간 열린 채**다 | 피드 캐시가 렌더된 `locked`/제목/본문 미리보기를 담고 TTL(5분)로만 만료된다. 상세 경로는 즉시 403 이다 | `TASK-FAN-BE-046` |
 | WMS · SCM · ERP · Finance 도메인 데이터 시드 없음 | 미착수 | `TASK-MONO-510` |
 | 장바구니는 시드할 수 없다 | `localStorage` 기반(클라이언트 상태) — 면접관이 담으면 즉시 찬다 | — |
 | 상품 이미지가 MinIO 에 없다 | V8 시드의 원격 `thumbnailUrl` 로 표시된다(깨지지 않음) | — |
-| 로컬 호스트에서 8프로젝트 동시 기동 불가 | 실측 35컨테이너 = 9.2 GiB / 도커 가용 11.7 GiB | `TASK-MONO-399` AC-2 |
+| 로컬 호스트에서 8프로젝트 동시 기동 불가 | 실측: `iam+console+ecommerce` 35컨테이너 = 9.2 GiB, `iam+fan+console` 26컨테이너 = **7.7 GiB** (팬 슬라이스 단독 9컨 = 2.4 GiB) / 도커 가용 11.7 GiB ⇒ 스토어와 팬은 **번갈아** 띄운다 | `TASK-MONO-399` AC-2 |
 
 ---
 
