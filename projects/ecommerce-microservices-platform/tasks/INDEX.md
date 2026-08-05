@@ -72,7 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-- `TASK-BE-574-confirm-ignores-authorization-approved.md` — **🟢 READY — `confirm` 이 `PaymentAuthorization.approved()` 를 읽지 않는다 ⇒ 값으로 거절한 게이트웨이의 결제가 `COMPLETED` 로 기록된다.** `BE-572` AC-0 이 발견. **오늘은 잠복**(Toss=예외로만 거절 · standalone=항상 승인 · demo-pg=예외로 구현) 이지만, `libs/payment-core` 는 공유이고 **fan 은 같은 포트를 값으로 쓴다** — 다음 게이트웨이 작성자가 fan 관례를 따르면 그 순간 터진다. **AC-1 은 예외 경로와 같은 결과**로 맞출 것(같은 '거절' 이 표현 방식에 따라 주문 상태가 갈리면 안 된다). **AC-3 = `verify` 호출처 전수 재측정**(선행 숫자 물려받기 금지). 분석=Opus 5 / 구현 권장=**Opus**(결제 상태 전이). [[feedback_recount_population_dont_inherit_scope]]
+_(없음)_
 
 _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DONE. `../../../tasks/done/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
 
@@ -82,7 +82,7 @@ _(없음)_
 
 ## review
 
-_(없음)_
+- `TASK-BE-574-confirm-ignores-authorization-approved.md` — **🟡 REVIEW — `confirm` 이 값으로 온 거절을 거부한다.** 🔴🔴 **티켓이 “다음 게이트웨이가 추가되는 순간” 이라 쓴 도화선은 이미 저장소에 있었다** — `libs/payment-portone` 어댑터가 `verify` 에서 **9곳에서 `declined()` 를 반환**하고 javadoc 이 “this adapter **NEVER** throws” 라고 못 박는다. ecommerce 가 아직 **의존하지 않을 뿐**이라 도화선은 `build.gradle` **한 줄**이고 fan 은 이미 쓴다. 🔵 **포트가 소비자 의무를 명시하고 있었다**(“a consumer wiring a specific adapter must handle that adapter's declared failure shape”) — 유일한 소비자가 두 shape 중 하나만 처리했다. 🔴 **연기된 수렴이 조용히 사라졌다**: 포트 javadoc 이 실패계약 통합을 MONO-479/480 으로 미뤘는데 둘 다 `done` 이고 본문에 `declin`/`approv` 가 **0회**. **AC-3 재계수로 티켓의 추측이 틀렸음 확인** — `PaymentProcessingService` 는 게이트웨이를 주입하지 않고, `RefundablePaymentGateway.refund` 는 **`void`** 라 무시할 값이 없다 ⇒ 형제 결함 **없음**. **AC-1 판정**: `PgGatewayUnavailableException` + **행 미변경** — `declined()` 비트가 Toss 두 예외의 **합집합**이라(PortOne 은 4xx·5xx·네트워크 오류·파싱 실패를 모두 같은 값으로 닫는다) 확정성을 못 담고, **확정거절을 PENDING 으로 두는 비용(재시도 후 재거절)** 과 **일시거절을 FAILED 로 잠그는 비용(이미 결제한 고객의 주문이 죽는다)** 이 비대칭이기 때문. 이 메서드가 이미 불확정 응답에 쓰는 정책과 동일. 판정은 자동환불 가드 **앞**(값-거절=capture 없음). **AC-2 네거티브 실제 확인**: 판정 제거 → 신규 3건 전부 RED. **AC-4**: 단위 208 · 통합 24, 실패 0(Toss 예외 경로는 이 분기 미도달 ⇒ 무변경). 🔴 범위 밖 발견 기록: `PgConfirmFailedException` 분기의 `fail(); save(); throw` 는 `noRollbackFor` 가 없어 **롤백된다** — 단위 테스트는 목 captor 로 `save()` **호출**만 단언해 못 잡는다. impl PR #3211. [[feedback_recount_population_dont_inherit_scope]]
 
 ## done
 

@@ -174,6 +174,72 @@ class PaymentConfirmServiceTest {
         verify(paymentEventPublisher, never()).publishPaymentCompleted(any());
     }
 
+    // ── TASK-BE-574: a decline that arrives as a VALUE, not as an exception ──
+    //
+    // PaymentGatewayPort admits both failure shapes. Every gateway ecommerce wires today
+    // throws, so this input never occurred in production — but the port permits it, the
+    // shared libs/payment-portone adapter returns it from nine places, and fan-platform's
+    // four consumers already branch on it. These tests pin the missing half.
+
+    @Test
+    @DisplayName("TASK-BE-574: approved=false 인 값-거절은 COMPLETED 로 기록되지 않고 PaymentCompleted 도 발행되지 않는다")
+    void confirm_valueDecline_neverCompletesAndPublishesNothing() {
+        Payment payment = Payment.create("order-1", "user-1", 30000L);
+        given(paymentRepository.findByOrderId("order-1")).willReturn(Optional.of(payment));
+        given(paymentGateway.verify(req("pk_test_123", 30000L, "order-1")))
+                .willReturn(PaymentAuthorization.declined());
+
+        assertThatThrownBy(() -> paymentConfirmService.confirm("user-1", "pk_test_123", "order-1", 30000L))
+                .isInstanceOf(PgGatewayUnavailableException.class);
+
+        // The defect this task exists for: without the approved() check the flow fell through
+        // to payment.confirm(...) and published PaymentCompleted, so an order was confirmed,
+        // shipped and settled for money that was never taken.
+        assertThat(payment.getStatus()).isNotEqualTo(PaymentStatus.COMPLETED);
+        verify(paymentEventPublisher, never()).publishPaymentCompleted(any());
+        verify(paymentMetricRecorder, never()).incrementPaymentCompleted();
+        verify(paymentMetricRecorder, never()).addPaymentAmount(anyLong());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-574: 값-거절은 행을 FAILED 로 잠그지 않는다 — 그 비트는 확정 거절과 도달 불가를 구별하지 못한다")
+    void confirm_valueDecline_leavesRowPendingForRetry() {
+        Payment payment = Payment.create("order-1", "user-1", 30000L);
+        given(paymentRepository.findByOrderId("order-1")).willReturn(Optional.of(payment));
+        given(paymentGateway.verify(req("pk_test_123", 30000L, "order-1")))
+                .willReturn(PaymentAuthorization.declined());
+
+        assertThatThrownBy(() -> paymentConfirmService.confirm("user-1", "pk_test_123", "order-1", 30000L))
+                .isInstanceOf(PgGatewayUnavailableException.class);
+
+        // Same treatment the transport-failure branch already gives an indeterminate answer.
+        // Locking FAILED would be right only if the decline were provably permanent, and a
+        // bare approved=false is not: the PortOne adapter fail-closes a 5xx, a network error
+        // and an unparsable body to the very same value. Getting that wrong strands a
+        // customer who has already paid behind a dead order.
+        verify(paymentRepository, never()).save(any());
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-574: 값-거절에서는 자동환불을 부르지 않는다 — capture 자체가 없었으므로 되돌릴 돈이 없다")
+    void confirm_valueDecline_neverCallsRefund() {
+        Payment payment = Payment.create("order-1", "user-1", 30000L);
+        given(paymentRepository.findByOrderId("order-1")).willReturn(Optional.of(payment));
+        given(paymentGateway.verify(req("pk_test_123", 30000L, "order-1")))
+                .willReturn(PaymentAuthorization.declined());
+
+        assertThatThrownBy(() -> paymentConfirmService.confirm("user-1", "pk_test_123", "order-1", 30000L))
+                .isInstanceOf(PgGatewayUnavailableException.class);
+
+        // Ordering assertion, not a coincidence: the approval check sits BEFORE the
+        // post-capture auto-refund guard. Were it placed after, a value-decline would send a
+        // cancel to the PG for a capture that never happened. The fresh re-read that guard
+        // performs must not run either.
+        verifyNoInteractions(paymentRefundGateway);
+        verify(paymentRepository, never()).findByOrderIdFresh(any());
+    }
+
     // ── TASK-BE-435: money-safe confirm-vs-cancel interleave ─────────────────
 
     @Test
