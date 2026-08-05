@@ -233,7 +233,7 @@ SHIPPED → IN_TRANSIT → DELIVERED) 자격을 만든다. 그 과정에서 콘�
 | 항목 | 상태 | 추적 |
 |---|---|---|
 | 새로 가입한 계정의 프로필에 **이름·이메일이 비어 있다** | 최소 프로필 설계(ADR-MONO-037 P5/P6)인데 채울 값의 출처가 없다 — 토큰에 `email` 클레임이 없어 `X-User-Email` 이 나가지 않는다 | `TASK-BE-577` |
-| 스토어 로그인 화면의 **"회원가입" 링크가 실패한다**(`?error=Configuration`) | next-auth v4 시절 URL 을 가리킨다. 가입은 "Global Account 로 로그인" → IAM 로그인 화면의 "회원가입" 으로 하면 된다 | `TASK-FE-097` |
+| 스토어 "회원가입" 이 **IAM 로그인 화면**에 내려놓는다 — 가입 폼까지 한 클릭 더 | 저장된 `/oauth2/authorize` 요청이 tenant 를 정하므로 IAM `/signup` 직링크는 계정을 `fan-platform` 에 만든다. 그 한 클릭을 없애려면 IAM 이 registration hint 를 받아야 한다 | `TASK-BE-578` |
 | IAM 계정 이벤트가 도메인 서비스에 **도달하지 않는다**(클러스터가 다름) | 데모 동작에는 영향 없음 — 프로필은 요청 시점에 만들어진다. 그러나 `account.deleted` 익명화도 같이 멈춰 있다 | `TASK-MONO-511` |
 | 팬 도메인 데이터 시드 없음 | 미착수 | `TASK-MONO-509` |
 | WMS · SCM · ERP · Finance 도메인 데이터 시드 없음 | 미착수 | `TASK-MONO-510` |
