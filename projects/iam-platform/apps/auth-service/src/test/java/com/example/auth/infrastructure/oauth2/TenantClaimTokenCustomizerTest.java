@@ -23,6 +23,7 @@ import org.springframework.security.oauth2.server.authorization.token.JwtEncodin
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -1228,6 +1229,186 @@ class TenantClaimTokenCustomizerTest {
         // partnership widens domain-operating reach, never admin scope).
         assertThat(built.getClaims()).doesNotContainKey("admin_scope");
         assertThat(built.getClaims()).doesNotContainKey("effective_admin_scope");
+    }
+
+    // -----------------------------------------------------------------------
+    // TASK-BE-577 — the OIDC `email` claim
+    //
+    // The claim is gated on TWO things: the `email` scope was granted, and the
+    // principal actually carries an email. Both directions are asserted, because a
+    // test that only proves the claim appears cannot tell "the gate opened" from
+    // "there is no gate" — and the thing being gated is PII.
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("AC-1 authorization_code + email scope: the email claim is injected")
+    void authorizationCode_emailScopeGranted_injectsEmailClaim() {
+        RegisteredClient client = buildClientWithGrantType(
+                "ecommerce|B2C", AuthorizationGrantType.AUTHORIZATION_CODE);
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        when(principal.getDetails()).thenReturn(Map.of(
+                "tenant_id", "ecommerce",
+                "tenant_type", "B2C",
+                "email", "shopper@example.com"
+        ));
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.AUTHORIZATION_CODE);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getPrincipal()).thenReturn(principal);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+        when(context.getAuthorizedScopes()).thenReturn(Set.of("openid", "profile", "email"));
+
+        customizer.customize(context);
+
+        assertThat((String) claimsBuilder.build().getClaim("email")).isEqualTo("shopper@example.com");
+    }
+
+    @Test
+    @DisplayName("AC-2 authorization_code WITHOUT the email scope: no email claim (the negative control)")
+    void authorizationCode_emailScopeNotGranted_omitsEmailClaim() {
+        RegisteredClient client = buildClientWithGrantType(
+                "ecommerce|B2C", AuthorizationGrantType.AUTHORIZATION_CODE);
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        // Same principal, carrying the same email — only the granted scope differs.
+        // That is what makes this a control rather than a second happy path.
+        when(principal.getDetails()).thenReturn(Map.of(
+                "tenant_id", "ecommerce",
+                "tenant_type", "B2C",
+                "email", "shopper@example.com"
+        ));
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.AUTHORIZATION_CODE);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getPrincipal()).thenReturn(principal);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+        when(context.getAuthorizedScopes()).thenReturn(Set.of("openid", "tenant.read"));
+
+        customizer.customize(context);
+
+        assertThat(claimsBuilder.build().getClaims()).doesNotContainKey("email");
+    }
+
+    @Test
+    @DisplayName("email scope granted but the principal carries no email → claim OMITTED, never blank")
+    void authorizationCode_emailScopeButNoEmailDetail_omitsClaim() {
+        RegisteredClient client = buildClientWithGrantType(
+                "fan-platform|B2C", AuthorizationGrantType.AUTHORIZATION_CODE);
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        when(principal.getDetails()).thenReturn(Map.of("tenant_id", "fan-platform", "tenant_type", "B2C"));
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.AUTHORIZATION_CODE);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getPrincipal()).thenReturn(principal);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+        when(context.getAuthorizedScopes()).thenReturn(Set.of("openid", "email"));
+
+        customizer.customize(context);
+
+        // Absent, not "". The ecommerce edge maps this with skipIfNull: an empty string
+        // would travel as a present header and provision a profile with an empty email.
+        assertThat(claimsBuilder.build().getClaims()).doesNotContainKey("email");
+    }
+
+    @Test
+    @DisplayName("a blank email detail is treated as no email — claim omitted")
+    void authorizationCode_blankEmailDetail_omitsClaim() {
+        RegisteredClient client = buildClientWithGrantType(
+                "fan-platform|B2C", AuthorizationGrantType.AUTHORIZATION_CODE);
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        when(principal.getDetails()).thenReturn(Map.of(
+                "tenant_id", "fan-platform",
+                "tenant_type", "B2C",
+                "email", "   "
+        ));
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.AUTHORIZATION_CODE);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getPrincipal()).thenReturn(principal);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+        when(context.getAuthorizedScopes()).thenReturn(Set.of("openid", "email"));
+
+        customizer.customize(context);
+
+        assertThat(claimsBuilder.build().getClaims()).doesNotContainKey("email");
+    }
+
+    @Test
+    @DisplayName("refresh_token + email scope: the rotated access token keeps the email claim")
+    void refreshTokenGrant_emailScopeGranted_injectsEmailClaim() {
+        RegisteredClient client = buildClientWithGrantType(
+                "ecommerce|B2C", AuthorizationGrantType.REFRESH_TOKEN);
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        when(principal.getDetails()).thenReturn(Map.of(
+                "tenant_id", "ecommerce",
+                "tenant_type", "B2C",
+                "email", "shopper@example.com"
+        ));
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.REFRESH_TOKEN);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getPrincipal()).thenReturn(principal);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+        when(context.getAuthorizedScopes()).thenReturn(Set.of("openid", "email"));
+
+        customizer.customize(context);
+
+        // Rotation must not silently drop PII the client still holds a grant for —
+        // an access token that loses the claim on refresh reads as revoked consent.
+        assertThat((String) claimsBuilder.build().getClaim("email")).isEqualTo("shopper@example.com");
+    }
+
+    @Test
+    @DisplayName("authorization_code + email scope: the ID token carries the claim too (OIDC Core's own home for it)")
+    void authorizationCode_idToken_emailScopeGranted_injectsEmailClaim() {
+        RegisteredClient client = buildClientWithGrantType(
+                "ecommerce|B2C", AuthorizationGrantType.AUTHORIZATION_CODE);
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        when(principal.getDetails()).thenReturn(Map.of(
+                "tenant_id", "ecommerce",
+                "tenant_type", "B2C",
+                "email", "shopper@example.com"
+        ));
+
+        when(context.getTokenType()).thenReturn(new OAuth2TokenType("id_token"));
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.AUTHORIZATION_CODE);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getPrincipal()).thenReturn(principal);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+        when(context.getAuthorizedScopes()).thenReturn(Set.of("openid", "email"));
+
+        customizer.customize(context);
+
+        assertThat((String) claimsBuilder.build().getClaim("email")).isEqualTo("shopper@example.com");
+    }
+
+    @Test
+    @DisplayName("client_credentials: NO email claim even if the client somehow holds the email scope — a workload is not an identity")
+    void clientCredentials_neverCarriesEmailClaim() {
+        RegisteredClient client = buildClient("wms|B2B");
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.CLIENT_CREDENTIALS);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        // Structural, not incidental: the cc branch never reaches populateEmail, so the
+        // scope is not even consulted (getAuthorizedScopes is never stubbed here).
+        assertThat(claimsBuilder.build().getClaims()).doesNotContainKey("email");
+        verify(context, never()).getPrincipal();
     }
 
     // -----------------------------------------------------------------------

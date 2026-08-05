@@ -49,12 +49,17 @@ import java.util.UUID;
  *
  * <p>{@code email}/{@code name} are left null exactly as {@link UserProfile#createMinimal}
  * leaves them for the event path (ADR-MONO-037 P5/P6: nothing may depend on them being
- * non-null; PII is sourced later). The caller may pass an email when the edge supplies
- * one — but note that today it never does: ecommerce's gateway maps
- * {@code X-User-Email} with {@code skipIfNull(JwtClaims::email)} and the SAS access
- * token carries no {@code email} claim (measured, TASK-BE-575 AC-0), so the header is
- * absent and the argument arrives null. The wire is honoured rather than assumed —
- * the day the claim appears, profiles start carrying it with no further change.
+ * non-null; PII is sourced later). {@code name} still arrives null — nothing maps an
+ * {@code X-User-Name} header and no claim carries one.
+ *
+ * <p><b>{@code email} now arrives (TASK-BE-577).</b> Until 2026-08-06 it did not: the
+ * gateway mapped {@code X-User-Email} with {@code skipIfNull(JwtClaims::email)} and the
+ * SAS access token carried no {@code email} claim (measured, TASK-BE-575 AC-0), so the
+ * header was absent and the argument was always null. The claim is now minted on
+ * identity-bearing grants that were granted the {@code email} scope, and this code needed
+ * no change to start using it — which is what "honour the wire rather than assume it"
+ * bought. A caller still passing null (no scope, no email known) gets the same minimal
+ * profile as before.
  */
 @Slf4j
 @Service

@@ -28,6 +28,20 @@ public final class PrincipalDetailKeys {
     /** Account id (subject) of the authenticated principal. */
     public static final String ACCOUNT_ID = "account_id";
 
+    /**
+     * Email address of the authenticated principal (TASK-BE-577).
+     *
+     * <p>Both producers already build the principal as
+     * {@code UsernamePasswordAuthenticationToken(email, ...)}, so this value equals
+     * {@code Authentication.getName()} today. It is carried here anyway, for the
+     * reason this whole class exists: the principal-name spelling is a Spring Security
+     * convention a producer may change with no compile error, and a consumer that read
+     * it would then mint <em>some other identifier</em> into an {@code email} claim —
+     * silently, and into a PII field. The details key makes that drift a compile-time
+     * concern instead.
+     */
+    public static final String EMAIL = "email";
+
     private PrincipalDetailKeys() {
     }
 }

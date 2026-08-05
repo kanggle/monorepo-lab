@@ -308,7 +308,7 @@ and for the case where a profile exists for this `user_id` under a different ten
 profile in the list they are reading.
 
 ## Notes
-- User ID is the IAM `accountId`. **Email/name are not available at provisioning time** — the `account.created` payload is emailHash-only, and the SAS access token carries no `email` claim, so the gateway's `X-User-Email` mapping (`skipIfNull`) emits no header (measured 2026-08-05). Both fields are therefore null on a freshly-provisioned profile and are populated later via profile-update; nothing may depend on them being non-null (ADR-MONO-037 P5/P6).
+- User ID is the IAM `accountId`. **`email` arrives at provisioning time when the token carries it; `name` never does.** The `account.created` payload is emailHash-only, so the event path still provisions both as null. On the pull-through path the gateway maps `X-User-Email` with `skipIfNull(JwtClaims::email)`: until 2026-08-06 the SAS access token carried no `email` claim at all, so the header was absent and every profile was born with a null email (measured, TASK-BE-575) — TASK-BE-577 mints the claim on identity-bearing grants that were granted the `email` scope, and a first request through the gateway now provisions the email (measured 2026-08-06). A token without that scope, or a profile born from the event, still yields null. **Nothing may depend on either field being non-null** (ADR-MONO-037 P5/P6) — that has not changed, and `name` in particular has no source: no claim carries a display name and no gateway maps `X-User-Name`.
 - user-service must not expose or modify authentication credentials.
 - All profile endpoints use `X-User-Id` header injected by gateway for identity.
 - Maximum 10 addresses per user.

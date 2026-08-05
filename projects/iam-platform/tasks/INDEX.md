@@ -75,7 +75,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
 
 - `TASK-BE-578-registration-hint-so-signup-links-land-on-the-form.md` — **🟢 READY — 가입 링크가 IAM 가입 화면에 바로 닿게 registration hint 를 받는다(지금은 로그인 화면을 한 번 거친다).** `FE-097` 이 스토어 쪽에서 할 수 있는 데까지 간 뒤 남은 것. 🔴 **스토어만으로는 불가능하고, 그건 우회가 아니라 설계다** — SAS 는 미인증 authorize 를 항상 `/login` 으로 보내고 `SavedRequestTenantResolver` 는 **저장된 `/oauth2/authorize` 요청만** 신뢰한다(임의 saved URL 의 `client_id` 방어가 명시된 주석). IAM `/signup` 직링크는 계정을 `fan-platform` 에 만든다(실측). 선택지 A(표준 `prompt=create`) / B(커스텀 `screen_hint`) / C(서버측 authorize 선행 진입로). **AC-0 이 SAS 가 미지의 `prompt` 값에 무엇을 하는지 먼저 실측하게 한다** — 무시/거부에 따라 A 의 가부가 갈린다. 🔴 **hint 를 tenant 소스로 승격시키지 말 것**(그러면 FE-097 이 피한 구멍이 다시 열린다) — AC-3 이 그것을 잡는다. **AC-2 = hint 없으면 기존과 동일**(회귀 없음). 분석=Opus 5 / 구현 권장=**Opus**(SAS 인증 체인). [[feedback_guard_predicate_wrong_verify_the_artifact]]
-- `TASK-BE-577-access-token-carries-no-email-claim.md` — **🟢 READY — `email` scope 를 받은 액세스 토큰에 `email` 클레임이 없다 ⇒ 게이트웨이의 `X-User-Email` 배선이 전부 무음이고, 소비자 프로필의 이메일·이름이 영구히 빈다.** `BE-575` 실측 중 발견. 토큰 덤프에 `scope:[…,"email"]` 은 있는데 **`email` 클레임 자체가 없다** — `roles`/`entitled_domains` 를 넣는 커스터마이저는 이미 있으므로 새 기전이 아니라 그 자리에 한 줄이고, **그래서 진짜 질문은 "왜 지금까지 없었는가"**(의도적 제외였는지 확인할 것 — `account.created` 를 emailHash 로 마스킹한 ADR-MONO-037 결정과 정면으로 만난다). ecommerce 는 `skipIfNull("X-User-Email", JwtClaims::email)` 이라 **클레임이 없으면 헤더가 아예 없고**, BE-575 이후 프로필은 `email=null, name=null` 로 태어난다. 그 둘을 채울 API 도 없다(`PATCH /api/users/me` 는 nickname/phone/imageUrl 만). 실측 화면: `/my/profile` → "이메일 (빈칸) / 이름 (빈칸)". **AC-0 = `email`/`profile` scope 를 선언하는 클라이언트 전수 재측정**(이 티켓은 `ecommerce-web-store-client` 하나만 봤다 — 팬·콘솔 미확인). **AC-2 는 scope 없을 때 클레임도 없어야 한다**(과다 노출 방지). 분석=Opus 5 / 구현 권장=**Opus**(PII 노출 경계 판단). [[feedback_recount_population_dont_inherit_scope]]
 
 > `TASK-BE-573` 은 착수·구현 완료 — 아래 `## review` 참조.
 
@@ -115,7 +114,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-_(없음)_
+- `TASK-BE-577-access-token-carries-no-email-claim.md` — **🟡 REVIEW — `email` 클레임을 발행한다(scope 게이트).** 🔵 **새 결정이 아니었다 — 이미 계약이었고 구현만 없었다**: `platform/contracts/jwt-standard-claims.md` 는 `email` 을 **Required: Yes** 로 적어 왔고, ADR-MONO-037 P1 은 `account.created` 를 emailHash 로 마스킹한 근거로 “PII 는 OIDC 토큰(정당한 동의 채널)으로 흐른다” 를 명시한다. 🔴🔴 **가드가 못 본 이유 = 방향**: `check-jwt-claims-registry.sh` 는 **minted → registered** 만 검사한다(헤더에 명시). 문서가 요구하고 코드가 안 발행하는 케이스는 **그 가드의 사각지대**. **AC-0 전수 재측**: `email`/`profile` 선언 클라이언트 **6개**, 토큰 획득 가능한 **5/5 가 클레임 0**(3테넌트·공개+기밀 클라이언트). 6번째 `wms-user-flow-client` 는 **계측 불가**(wms 테넌트에 자격증명 0) — “없음” 으로 세지 않았다. **AC-1/AC-2 라이브 5/5**(scope 있으면 present, 없으면 absent). **AC-3 라이브**: 신규 가입 → 게이트웨이 첫 요청 한 번에 `user_profiles` 0행 → 1행 + email 채움. 🔵 **음성 대조는 변경 전 베이스라인이 제공했다** — pull-through 로 태어난 프로필 4개가 전부 빈 email, 이메일을 가진 하나는 시드의 직접-DB 행뿐. impl PR #3209.
 
 ## done
 
