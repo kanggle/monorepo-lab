@@ -45,6 +45,24 @@ export async function Header() {
         <div className="ml-auto flex items-center gap-3">
           {authed ? (
             <>
+              {/* TASK-FAN-FE-016: the compose entry point lives inside the `authed`
+                  branch, so an anonymous visitor is never offered a form they cannot
+                  submit (AC-3). This is the whole of the anonymous-case handling —
+                  there is no second, unguarded link elsewhere. */}
+              <Link
+                href="/compose"
+                data-testid="nav-compose"
+                className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
+              >
+                글쓰기
+              </Link>
+              <Link
+                href="/me/posts"
+                data-testid="nav-my-posts"
+                className="text-sm text-ink-700 hover:text-brand-600 dark:text-ink-200"
+              >
+                내 글
+              </Link>
               <NotificationBell initialItems={recent} initialUnread={unread} />
               <Link
                 href="/me"

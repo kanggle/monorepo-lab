@@ -28,7 +28,15 @@ public class PostRepositoryImpl implements PostRepository {
 
     @Override
     public PageResult<Post> findFeedForFan(String fanAccountId, String tenantId, int page, int size) {
-        Page<Post> jpaPage = jpa.findFeedForFan(fanAccountId, tenantId, PageRequest.of(page, size));
+        return toPageResult(jpa.findFeedForFan(fanAccountId, tenantId, PageRequest.of(page, size)));
+    }
+
+    @Override
+    public PageResult<Post> findByAuthor(String authorAccountId, String tenantId, int page, int size) {
+        return toPageResult(jpa.findByAuthor(authorAccountId, tenantId, PageRequest.of(page, size)));
+    }
+
+    private static PageResult<Post> toPageResult(Page<Post> jpaPage) {
         return new PageResult<>(
                 jpaPage.getContent(),
                 jpaPage.getNumber(),

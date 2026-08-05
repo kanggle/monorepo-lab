@@ -22,4 +22,15 @@ public interface PostRepository {
      * scoped to {@code tenantId}, status=PUBLISHED, deleted_at IS NULL.
      */
     PageResult<Post> findFeedForFan(String fanAccountId, String tenantId, int page, int size);
+
+    /**
+     * Returns posts authored by {@code authorAccountId} within {@code tenantId}, newest first,
+     * excluding DELETED (TASK-FAN-FE-016).
+     *
+     * <p>Deliberately NOT filtered to PUBLISHED, unlike {@link #findFeedForFan}: the only
+     * caller is the author reading their own posts, and a DRAFT or HIDDEN post omitted here
+     * would look lost rather than hidden. Visibility tiers are irrelevant for the same reason
+     * — an author is always entitled to their own post.
+     */
+    PageResult<Post> findByAuthor(String authorAccountId, String tenantId, int page, int size);
 }
