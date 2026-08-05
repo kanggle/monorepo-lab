@@ -1,0 +1,107 @@
+# `infra/demo/seed/` — 데모 도메인 데이터 시드
+
+TASK-MONO-506. 계정과 배선이 갖춰져도 **화면이 비어 있으면 데모는 아무것도 증명하지
+못한다.** 이 디렉터리는 데모 계정(`demo@demo.com`)이 스토어프런트 · 팬 · 콘솔에서
+밟게 될 데이터를 만든다.
+
+`seed-demo-domain.sh`(상위 디렉터리)와 혼동하지 말 것 — 그쪽은 **OIDC redirect_uri**
+를 데모 도메인에 등록하는 배선이고, 여기는 **도메인 데이터**다.
+
+---
+
+## 원칙 하나
+
+> 넣을 수 있는 것은 실제 API 로 넣는다. **넣는 행위 자체가 그 기능의 검증이기 때문이다.**
+
+API 200 을 확인하는 스모크와 API 로 데이터를 만드는 시드는 같은 요청을 보내지만 성질이
+다르다. 후자는 실패하면 데모가 비므로 **아무도 무시할 수 없다.** 이 저장소가 반복해서
+당한 "정적 검증은 전부 초록인데 화면은 비었다" 를 구조적으로 줄인다.
+
+직접-DB 는 금지가 아니라 **유료**다. `dbexec` 는 `--why` 를 **필수 인자**로 받고,
+빠뜨리면 실행되지 않는다:
+
+```bash
+dbexec --why "user-service 에 프로필 생성 엔드포인트가 존재하지 않는다(컨트롤러 4개 전수 확인)" \
+  ecommerce-user-postgres psql user_db user_user <<SQL
+INSERT INTO ... WHERE NOT EXISTS (...);
+SQL
+```
+
+사유를 **주석 규약**이 아니라 **함수 인자**로 요구하는 이유: 주석은 깜빡할 수 있지만
+필수 인자는 그럴 수 없다. 그리고 사유에는 *무엇이 막혔는지*를 적는다 — "API 없음" 이
+아니라 "생성 엔드포인트가 존재하지 않는다(컨트롤러 4개 전수 확인)". 다음 사람이 그
+사유를 **재검증할 수 있어야** 한다.
+
+`verify-demo-wrapper.sh` 의 가드 `(y)` 가 이 게이트를 우회하는 경로(시드 스크립트가
+`docker exec … psql` 을 직접 부르는 것)를 막는다.
+
+---
+
+## 신원 — 시드는 두 개의 토큰으로 일한다
+
+| 토큰 | 얻는 법 | 여는 것 |
+|---|---|---|
+| **소비자** | `user_token` — authorization_code + PKCE, 도메인별 web 클라이언트 | "내 것"(프로필 · 배송지 · 위시리스트 · 리뷰 · 구독) |
+| **운영자** | `operator_token` — 콘솔 로그인 → RFC 8693 assume `demo-corp` | 백오피스(`/api/admin/**`) — **5개 도메인 전부** |
+
+`operator_token` 이 이 시드의 핵심 발견이다. 데모 계정은 각 도메인 테넌트에서
+`CUSTOMER` 일 뿐이라 `/api/admin/**` 에 그대로 가면 **전부 403** 이다(실측 6/6).
+운영자 권한은 계정에 붙어 있지 않고 **`demo-corp` 를 assume 하는 순간 파생된다**
+(`OperatorRoleDerivation.fromEntitledDomains`). 한 번의 교환으로:
+
+```
+roles = [ECOMMERCE_OPERATOR, ERP_OPERATOR, FINANCE_OPERATOR, SCM_OPERATOR,
+         WMS_OPERATOR, OUTBOUND_*, INBOUND_*, INVENTORY_*, MASTER_READ]
+```
+
+그리고 이것은 **면접관이 콘솔에서 밟는 바로 그 경로**다 — 시드가 성립하면 콘솔의
+도메인 운영 섹션이 열린다는 것이 이미 증명된 셈이다.
+
+`user_token` 이 curl 로 OIDC 코드 플로우를 끝까지 밟는 이유도 같다: 그 플로우가
+성립한다는 것 자체가 **면접관이 밟을 로그인 경로가 살아 있다**는 증거다.
+
+---
+
+## 실행
+
+```bash
+# demo-up.sh 가 마지막에 자동 호출한다 (기동된 도메인 목록을 그대로 넘긴다)
+bash infra/demo/demo-up.sh iam ecommerce console
+
+# 끄기
+DEMO_SEED=0 bash infra/demo/demo-up.sh ...
+
+# 단독 실행 / 재실행 (멱등)
+DEMO_DOMAIN=local bash infra/demo/seed/seed.sh ecommerce
+DEMO_DOMAIN=local bash infra/demo/seed/seed-ecommerce.sh
+```
+
+시드는 **데모 기동을 막지 않는다.** 개별 도메인이 실패해도 나머지를 계속 시드하고,
+마지막에 실패한 도메인 이름을 다시 나열한 뒤 비-0 으로 끝난다.
+
+---
+
+## 도메인을 추가하려면
+
+1. `seed-<domain>.sh` 를 만들고 `lib.sh` 를 source 한다. 파일명이 곧 디스패치 키다
+   (`projects.sh` 의 도메인 슬러그와 같아야 한다).
+2. 맨 앞에서 `container_up <게이트웨이>` 로 미기동을 걸러내고 **exit 0** 한다 —
+   그 도메인이 이 슬라이스에 없는 것은 실패가 아니다.
+3. `wait_http` 로 **엔드포인트가 답할 때까지** 기다린다. `container_up` 만으로는
+   부족하다 — 부팅 중인 서비스는 떠 있지만 500 을 낸다(실측).
+4. 생성은 `api_create` / `api_create_unless` 로 한다. 둘 다 2회차 실행에서 수렴한다.
+5. 끝에 `seed_summary` 를 부른다(요약 출력 + 종료코드).
+
+### 흔한 함정 (전부 이 티켓에서 실제로 밟았다)
+
+- **탐지식의 0건은 "없음" 이 아니다.** 목록에서 id 를 뽑는 루프가 0회 돌면 로그에는
+  아무것도 남지 않고 요약은 "실패 0" 이다. 추출 0건은 **반드시 실패로 세라**.
+  (첫 판은 `"productId"` 를 찾고 있었는데 실제 필드는 `"id"` 였다.)
+- **DTO 는 전문을 읽어라.** `grep | head` 로 앞부분만 보면 뒤쪽 필수 필드를 놓친다
+  (`discountValue` 를 놓쳐 400 을 받았다).
+- **enum·제약의 권위는 코드/DB** 이지 스펙 문서가 아니다.
+- **도메인 규칙을 우회하지 마라.** 리뷰는 `DELIVERED` 주문에만 쓸 수 있다. 리뷰 행을
+  직접 INSERT 하면 데모는 **존재할 수 없는 상태**를 보여준다. 시드는 배송을 실제로
+  진행시켜 자격을 만든다 — 그 과정에서 콘솔 「배송」 탭도 함께 찬다.
+- **고정 Idempotency-Key 를 써라.** 매번 새 키면 2회차 실행이 같은 것을 또 만든다.
+- 현재시각 기준 경계(정산 기간 등)도 같은 이유로 **고정 리터럴**로 둔다.

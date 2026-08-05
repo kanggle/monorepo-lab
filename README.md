@@ -24,6 +24,27 @@ cd infra/demo/aws/terraform && terraform apply && terraform output site_url
 
 Full reproduction — AMI bake, terraform stack, required IAM permissions, cost guards, why it's HTTP: [**`infra/demo/aws/`**](infra/demo/aws/). Spend is guarded in three layers (idle-stop · max-runtime · **monthly budget**), because `/start` is a public endpoint and an unguarded one is an unbounded-spend button.
 
+### What to click once it's up
+
+**One credential opens all three surfaces** — storefront, fan platform, and the operator console:
+`demo@demo.com` / `Demo1234!`. The same account resolves to a different tenant and role per
+client; console operator rights are derived at **tenant assume** time, not stored on the account.
+
+Screen-by-screen click paths, what each screen proves, and an explicit list of what does **not**
+work yet: [**`docs/guides/interview-demo-walkthrough.md`**](docs/guides/interview-demo-walkthrough.md).
+
+Domain data is seeded automatically at boot ([`infra/demo/seed/`](infra/demo/seed/), disable with
+`DEMO_SEED=0`). The seed's rule is that **anything that can go in through the real API does** —
+inserting it is itself the check that the feature works. Direct DB writes are possible but priced:
+the helper takes the justification as a **required argument**, so there is no such thing as an
+undocumented one.
+
+Locally:
+
+```bash
+bash infra/demo/demo-up.sh iam ecommerce console     # hard deps resolve automatically
+```
+
 ---
 
 ## 🎯 Projects

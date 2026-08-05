@@ -74,7 +74,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
 
-(empty)
+- `TASK-BE-576-demo-operator-cannot-see-domain-tenant-data.md` — **🟢 READY — 데모 운영자가 `demo-corp` 에만 assign 돼 있어 콘솔의 도메인 목록 화면이 전부 비어 있다. 🔴 게이트웨이는 200 을 내므로 상태코드·헬스·degraded 마커 어느 것도 못 잡는다.** `MONO-506` 라이브 검증이 발견. **면접관이 스토어프런트에서 구매를 완주한 뒤 콘솔 「주문」 탭을 열면 비어 있다.** 두 테넌트가 만나지 않는다 — 구매로 생기는 모든 행은 `tenant_id=ecommerce`(게이트웨이 `required-tenant-id` 가 강제하므로 **다른 값일 수 없다**), 그런데 `operator_tenant_assignment` 실측은 `operator 5 → demo-corp` **한 줄이 전부**이고 `audience=ecommerce` assume 은 `invalid_grant: operator is not assigned to the selected tenant` 다. 🔴 **왜 안 보였나 = 이 티켓의 핵심**: BE-571 이 심은 5도메인 구독 덕에 `trustEntitledDomains()` 가 토큰을 **정상 수용**한다 ⇒ `/api/admin/products` `orders` `users` `/api/shippings` `settlements/accruals` 전부 **200 + 빈 배열**(DB 엔 상품8·주문4·배송3·적립3). **"게이트웨이가 토큰을 받았다" 와 "그 토큰이 데이터를 본다" 는 다른 명제**이고 후자는 원소 수로만 확인된다. 선택지 3안(assignment 추가 / 구매를 demo-corp 로 — 사실상 불가 / `org_scope` 활용 — 토큰에 이미 `["*"]` 가 있다, 도메인 서비스가 읽는지 확인 선행)은 티켓 본문. **AC-0 = WMS·SCM·ERP·Finance 도 같은 구조인지 전수**(같다면 범위가 5배). **AC-1 = 그 주문 id 가 화면에 있는지**로 판정(200 금지 — 그 결함이 200 이었다). `TASK-MONO-510` 이 이 티켓에 블록될 수 있다. 분석=Opus 5 / 구현 권장=**Opus**(테넌트 모델 결정). [[feedback_guard_predicate_wrong_verify_the_artifact]] [[project_single_account_all_domain_demo]]
 
 > `TASK-BE-573` 은 착수·구현 완료 — 아래 `## review` 참조.
 
