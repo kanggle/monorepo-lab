@@ -26,6 +26,12 @@ export default async function MembershipPage({
 }) {
   const { tier } = await searchParams;
   const highlightTier = parseTier(tier);
+  // TASK-FAN-FE-015: the copy below promised a mock PG unconditionally while no such
+  // switch existed, so a visitor read "모의 PG", clicked, and got "결제 모듈이 설정되지
+  // 않았습니다" — the sentence was ahead of the code. Read here, in a Server Component
+  // that already renders per request, so it reports the deployment's actual state
+  // rather than whatever was true when the image was built.
+  const demoPayment = process.env.DEMO_PAYMENT_MOCK === '1';
 
   const session = await getFanSession();
   const memberships = await getMemberships(session.accessToken);
@@ -44,7 +50,8 @@ export default async function MembershipPage({
         <div>
           <h1 className="text-2xl font-bold text-ink-900">멤버십</h1>
           <p className="text-sm text-ink-600">
-            멤버 전용·프리미엄 콘텐츠를 위한 구독입니다. 결제는 데모용 모의 PG로 처리됩니다.
+            멤버 전용·프리미엄 콘텐츠를 위한 구독입니다.
+            {demoPayment ? ' 결제는 데모용 모의 PG로 처리됩니다.' : ''}
           </p>
         </div>
         <Link

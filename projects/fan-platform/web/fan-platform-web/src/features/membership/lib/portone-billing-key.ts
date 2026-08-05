@@ -1,6 +1,8 @@
 'use client';
 import * as PortOne from '@portone/browser-sdk/v2';
 import { env } from '@/shared/config/env';
+import { isDemoPayment } from '@/features/membership/lib/demo-payment';
+import { randomUuid } from '@/shared/lib/random-id';
 import type { CheckoutBuyer } from '@/features/membership/lib/portone-checkout';
 
 export type { CheckoutBuyer };
@@ -36,6 +38,14 @@ const PLACEHOLDER_PHONE = '010-0000-0000';
 export async function requestIssueBillingKey(
   buyer?: CheckoutBuyer,
 ): Promise<IssueBillingKeyResult> {
+  // TASK-FAN-FE-015: auto-renewal is behind the SAME pre-guard as checkout, so fixing
+  // only `requestPortOnePayment` would have left the toggle dead in the demo with an
+  // identical "결제 모듈 미설정" notice. Enrollment stores the key without asking the PG
+  // to validate it (EnrollBillingKeyUseCase), and the later charge runs through the mock
+  // recurring gateway, so a demo-issued key is honoured end to end.
+  if (await isDemoPayment()) {
+    return { ok: true, billingKey: `bkey-demo-${randomUuid()}` };
+  }
   if (!env.portoneStoreId || !env.portoneChannelKey) {
     return { ok: false, message: '결제 모듈이 설정되지 않았습니다 (PortOne 키 미설정).' };
   }

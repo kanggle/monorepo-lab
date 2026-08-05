@@ -309,6 +309,12 @@ services:
       # 자기 공인 IP 로 보낸 트래픽을 되돌려주지 않으므로(IGW hairpin 부재) 공개
       # 호스트명을 쓰면 클라우드에서만 죽는다.
       GATEWAY_URL_INTERNAL: http://gateway-service:8080
+      # 데모 결제 스위치(TASK-FAN-FE-015). `1` 이면 체크아웃과 자동갱신 등록이 PortOne
+      # 결제창을 건너뛰고 백엔드의 목 게이트웨이로 그대로 간다. **여기서 이름을 적어야
+      # 컨테이너에 들어간다** — demo.env 에만 값을 두면 도달하지 않는다(MONO-505 교훈).
+      # 이 값은 `NEXT_PUBLIC_*` 이 아니다: 그건 빌드타임에 인라인되므로 한 번 구운
+      # 이미지의 답이 영원히 고정된다. `/api/payment-config` 가 런타임에 읽는다.
+      DEMO_PAYMENT_MOCK: ${DEMO_PAYMENT_MOCK:-}
     depends_on:
       gateway-service:
         condition: service_started

@@ -3,6 +3,7 @@ import { useEffect, useState, useTransition } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { subscribe, getUpgradeQuote, type UpgradeQuote } from '@/features/membership/api/actions';
 import { requestPortOnePayment, TIER_MONTHLY_KRW } from '@/features/membership/lib/portone-checkout';
+import { isDemoPayment } from '@/features/membership/lib/demo-payment';
 import type { MembershipTier } from '@/entities/membership';
 
 interface TierMeta {
@@ -58,6 +59,19 @@ export function SubscribePanel({
   const [pendingTier, setPendingTier] = useState<MembershipTier | null>(null);
   const [decline, setDecline] = useState<{ tier: MembershipTier; message: string } | null>(null);
   const [upgradeQuote, setUpgradeQuote] = useState<UpgradeQuote | null>(null);
+  // TASK-FAN-FE-015: the line below used to promise a PortOne test window unconditionally,
+  // in a deployment where the window never opened. Read the same runtime flag the checkout
+  // helper reads, so the sentence cannot get ahead of the code again.
+  const [demoPayment, setDemoPayment] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void isDemoPayment().then((v) => {
+      if (!cancelled) setDemoPayment(v);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const held = new Set(heldActiveTiers);
   const hasPremium = held.has('PREMIUM');
@@ -151,7 +165,9 @@ export function SubscribePanel({
           </select>
         </label>
         <p className="flex-1 self-center text-sm text-ink-500">
-          카드 결제는 PortOne 테스트 결제창에서 진행됩니다.
+          {demoPayment
+            ? '결제는 데모용 모의 PG로 처리됩니다 (결제창이 열리지 않습니다).'
+            : '카드 결제는 PortOne 테스트 결제창에서 진행됩니다.'}
         </p>
       </fieldset>
 
