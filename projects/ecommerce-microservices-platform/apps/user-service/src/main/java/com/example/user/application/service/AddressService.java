@@ -5,12 +5,16 @@ import com.example.user.application.command.UpdateAddressCommand;
 import com.example.user.application.result.AddressResult;
 import com.example.user.domain.exception.AddressNotFoundException;
 import com.example.user.domain.exception.DefaultAddressCannotBeDeletedException;
+import com.example.user.domain.exception.UserProfileNotFoundException;
 import com.example.user.domain.model.Address;
 import com.example.user.domain.repository.AddressRepository;
+import com.example.user.domain.repository.UserProfileRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.List;
 import java.util.UUID;
@@ -22,6 +26,7 @@ import java.util.UUID;
 public class AddressService {
 
     private final AddressRepository addressRepository;
+    private final UserProfileRepository userProfileRepository;
 
     public List<AddressResult> getAddresses(UUID userId) {
         return addressRepository.findAllByUserId(userId).stream()
@@ -29,8 +34,27 @@ public class AddressService {
                 .toList();
     }
 
+    /**
+     * <b>Precondition, stated (TASK-BE-575).</b> {@code user_addresses.user_id} is an FK to
+     * {@code user_profiles.user_id}, so a missing profile used to surface as a
+     * {@code DataIntegrityViolationException} at flush — a 500, i.e. "the server is broken",
+     * for what is a missing precondition. Its siblings ({@code GET|PATCH /api/users/me},
+     * {@code POST /api/wishlists}) answer 404 {@code USER_PROFILE_NOT_FOUND} in the same
+     * situation; this now does too.
+     *
+     * <p>{@link com.example.user.presentation.filter.UserProfileProvisioningFilter} means
+     * an HTTP caller carrying a gateway-verified {@code X-User-Id} will not reach this
+     * branch — the profile is provisioned before the controller runs. The check is not
+     * therefore decoration: it is what any other caller of this service (a consumer, a
+     * future internal endpoint, a test) gets instead of an FK stack trace, and it is the
+     * reason the "created" log below can only ever describe a row that exists.
+     */
     @Transactional
     public UUID createAddress(CreateAddressCommand command) {
+        if (!userProfileRepository.existsByUserId(command.userId())) {
+            throw new UserProfileNotFoundException(command.userId());
+        }
+
         int currentCount = addressRepository.countByUserId(command.userId());
         Address.validateAddressLimit(currentCount);
 
@@ -53,7 +77,7 @@ public class AddressService {
         );
 
         Address saved = addressRepository.save(address);
-        log.info("Address created: addressId={}, userId={}", saved.getId(), command.userId());
+        logAfterCommit("Address created: addressId={}, userId={}", saved.getId(), command.userId());
         return saved.getId();
     }
 
@@ -102,7 +126,32 @@ public class AddressService {
         }
 
         addressRepository.delete(address);
-        log.info("Address deleted: addressId={}, userId={}", addressId, userId);
+        logAfterCommit("Address deleted: addressId={}, userId={}", addressId, userId);
     }
 
+    /**
+     * Log a completed mutation only once it is actually durable (TASK-BE-575 AC-3).
+     *
+     * <p>These lines used to be emitted inside the transaction, so a rollback left
+     * {@code INFO Address created: addressId=…} sitting directly above the
+     * {@code ERROR … violates foreign key constraint} that undid it. An operator reading
+     * the log had every reason to believe the address existed. A statement in the past
+     * tense has to be true when it is written; deferring it to {@code afterCommit} is what
+     * makes that so.
+     *
+     * <p>Outside a transaction (a direct service call in a unit test) there is nothing to
+     * wait for, so the line is written immediately — it is already as durable as it will get.
+     */
+    private void logAfterCommit(String format, Object... args) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            log.info(format, args);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                log.info(format, args);
+            }
+        });
+    }
 }

@@ -116,9 +116,18 @@ class WishlistIntegrationTest {
                     .andExpect(jsonPath("$.code").value("ALREADY_IN_WISHLIST"));
         }
 
+        /**
+         * TASK-BE-575 changed this answer, deliberately — see the sibling case in
+         * {@code UserProfileIntegrationTest}. A gateway-verified subject with no profile is
+         * provisioned by the request, so adding to the wishlist succeeds instead of 404'ing.
+         *
+         * <p>The item-existence assertion is kept and flipped: it used to prove that a
+         * rejected request wrote nothing, and now proves the accepted one wrote exactly the
+         * row the caller asked for, under the caller's own id.
+         */
         @Test
-        @DisplayName("user_profiles 행이 없는 유저로 요청하면 404 USER_PROFILE_NOT_FOUND를 반환한다")
-        void addItem_userProfileMissing_returns404() throws Exception {
+        @DisplayName("user_profiles 행이 없는 유저의 요청도 프로필을 만들고 201 을 반환한다 (TASK-BE-575, 이전엔 404)")
+        void addItem_userProfileMissing_provisionsAndReturns201() throws Exception {
             UUID userIdWithoutProfile = UUID.randomUUID();
             UUID productId = UUID.randomUUID();
 
@@ -126,10 +135,9 @@ class WishlistIntegrationTest {
                             .header("X-User-Id", userIdWithoutProfile.toString())
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{\"productId\":\"" + productId + "\"}"))
-                    .andExpect(status().isNotFound())
-                    .andExpect(jsonPath("$.code").value("USER_PROFILE_NOT_FOUND"));
+                    .andExpect(status().isCreated());
 
-            assertThat(wishlistItemRepository.existsByUserIdAndProductId(userIdWithoutProfile, productId)).isFalse();
+            assertThat(wishlistItemRepository.existsByUserIdAndProductId(userIdWithoutProfile, productId)).isTrue();
         }
 
         @Test

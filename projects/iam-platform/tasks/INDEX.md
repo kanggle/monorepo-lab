@@ -74,7 +74,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
 
-(empty)
+- `TASK-BE-577-access-token-carries-no-email-claim.md` — **🟢 READY — `email` scope 를 받은 액세스 토큰에 `email` 클레임이 없다 ⇒ 게이트웨이의 `X-User-Email` 배선이 전부 무음이고, 소비자 프로필의 이메일·이름이 영구히 빈다.** `BE-575` 실측 중 발견. 토큰 덤프에 `scope:[…,"email"]` 은 있는데 **`email` 클레임 자체가 없다** — `roles`/`entitled_domains` 를 넣는 커스터마이저는 이미 있으므로 새 기전이 아니라 그 자리에 한 줄이고, **그래서 진짜 질문은 "왜 지금까지 없었는가"**(의도적 제외였는지 확인할 것 — `account.created` 를 emailHash 로 마스킹한 ADR-MONO-037 결정과 정면으로 만난다). ecommerce 는 `skipIfNull("X-User-Email", JwtClaims::email)` 이라 **클레임이 없으면 헤더가 아예 없고**, BE-575 이후 프로필은 `email=null, name=null` 로 태어난다. 그 둘을 채울 API 도 없다(`PATCH /api/users/me` 는 nickname/phone/imageUrl 만). 실측 화면: `/my/profile` → "이메일 (빈칸) / 이름 (빈칸)". **AC-0 = `email`/`profile` scope 를 선언하는 클라이언트 전수 재측정**(이 티켓은 `ecommerce-web-store-client` 하나만 봤다 — 팬·콘솔 미확인). **AC-2 는 scope 없을 때 클레임도 없어야 한다**(과다 노출 방지). 분석=Opus 5 / 구현 권장=**Opus**(PII 노출 경계 판단). [[feedback_recount_population_dont_inherit_scope]]
 
 > `TASK-BE-573` 은 착수·구현 완료 — 아래 `## review` 참조.
 

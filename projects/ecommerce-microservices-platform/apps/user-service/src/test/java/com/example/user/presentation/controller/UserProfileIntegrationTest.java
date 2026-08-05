@@ -84,15 +84,29 @@ class UserProfileIntegrationTest {
                     .andExpect(jsonPath("$.status").value("ACTIVE"));
         }
 
+        /**
+         * TASK-BE-575 changed this answer, deliberately. The case used to expect 404
+         * {@code USER_PROFILE_NOT_FOUND} — which is exactly the defect that made
+         * {@code /my/profile} unreachable for every account created since identity moved to
+         * IAM. A gateway-verified subject with no profile now has one provisioned by the
+         * request, so the endpoint serves them.
+         *
+         * <p>Restated rather than deleted: what it guards is still that a profile-less
+         * caller does not receive somebody else's profile, and the {@code userId} assertion
+         * is what says so. The null email/name pin the minimal shape (ADR-MONO-037 P5/P6).
+         */
         @Test
-        @DisplayName("프로필이 없으면 404 USER_PROFILE_NOT_FOUND를 반환한다")
-        void getMyProfile_noProfile_returns404() throws Exception {
+        @DisplayName("프로필이 없으면 그 요청이 자기 프로필을 만들고 200을 반환한다 (TASK-BE-575, 이전엔 404)")
+        void getMyProfile_noProfile_provisionsAndReturns200() throws Exception {
             UUID userId = UUID.randomUUID();
 
             mockMvc.perform(get("/api/users/me")
                             .header("X-User-Id", userId.toString()))
-                    .andExpect(status().isNotFound())
-                    .andExpect(jsonPath("$.code").value("USER_PROFILE_NOT_FOUND"));
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.userId").value(userId.toString()))
+                    .andExpect(jsonPath("$.status").value("ACTIVE"))
+                    .andExpect(jsonPath("$.email").doesNotExist())
+                    .andExpect(jsonPath("$.name").doesNotExist());
         }
 
         @Test
