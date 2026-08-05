@@ -8,7 +8,7 @@ IAM 로그인 사용자에게 user-service 프로필이 프로비저닝되지 �
 
 # Status
 
-review
+done
 
 # Owner
 
