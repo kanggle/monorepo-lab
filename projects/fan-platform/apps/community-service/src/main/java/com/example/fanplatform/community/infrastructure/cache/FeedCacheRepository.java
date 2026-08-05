@@ -1,7 +1,7 @@
 package com.example.fanplatform.community.infrastructure.cache;
 
 import com.example.common.page.PageResult;
-import com.example.fanplatform.community.application.FeedItemView;
+import com.example.fanplatform.community.application.FeedItemSnapshot;
 import com.example.fanplatform.community.application.port.out.FeedCache;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -21,23 +21,39 @@ import java.util.Optional;
  * feed query then falls through to Postgres (fail-open per
  * {@code rules/traits/integration-heavy.md} I3).
  *
- * <p>Key shape: {@code feed:&lt;tenantId&gt;:&lt;accountId&gt;:&lt;page&gt;:&lt;size&gt;}.
- * The cached value is the JSON-serialized {@link PageResult}&lt;{@link FeedItemView}&gt;
- * returned by the use case, so a hit can be returned with zero DB round-trips.
+ * <p>Key shape: {@code feed:&lt;version&gt;:&lt;tenantId&gt;:&lt;accountId&gt;:&lt;page&gt;:&lt;size&gt;}.
+ * The cached value is the JSON-serialized {@link PageResult}&lt;{@link FeedItemSnapshot}&gt;
+ * built by the use case, so a hit can be returned with zero DB round-trips.
  *
- * <p><strong>Invalidation strategy</strong>: v1 uses TTL-only expiry
- * ({@value #TTL_MINUTES} minutes). New posts and follow-graph changes are
- * therefore visible after at most this staleness window — see
- * {@code architecture.md} § Read Path. A v2 cache-aware consumer of
- * {@code community.post.published} / {@code community.follow.changed} can do
- * explicit DEL when sub-minute freshness is required.
+ * <p><strong>Why the key carries a version (TASK-FAN-BE-046).</strong> The cached payload used
+ * to be a rendered {@code FeedItemView}, whose {@code title}/{@code bodyPreview} were already
+ * nulled out for whatever was locked when the entry was written. Reading those bytes back as a
+ * {@link FeedItemSnapshot} would deserialize cleanly and be wrong in a quiet way — an entitled
+ * reader would get {@code null} titles until the entry expired. Bumping {@link #KEY_VERSION}
+ * makes pre-change entries unreachable instead of misread, so no deploy-time flush is needed.
+ * {@code TASK-FAN-BE-019} previously had to leave exactly that flush as a manual ops note.
+ *
+ * <p><strong>Invalidation strategy</strong>: TTL-only expiry
+ * ({@value #TTL_MINUTES} minutes), and it covers <em>freshness</em> only. New posts and
+ * follow-graph changes are visible after at most this staleness window — see
+ * {@code architecture.md} § Read Path. A cache-aware consumer of
+ * {@code community.post.published} / {@code community.follow.changed} can do explicit DEL if
+ * sub-minute freshness is ever required. <strong>Entitlement is not on that list</strong>: it
+ * is not cached here at all, so it needs no invalidation — see {@code GetFeedUseCase}.
  */
 @Slf4j
 @Component
 public class FeedCacheRepository implements FeedCache {
 
-    private static final TypeReference<PageResult<FeedItemView>> FEED_PAGE_TYPE = new TypeReference<>() {
+    private static final TypeReference<PageResult<FeedItemSnapshot>> FEED_PAGE_TYPE = new TypeReference<>() {
     };
+
+    /**
+     * Bump whenever the cached payload's shape changes. Exposed so the integration
+     * test builds its expected key from this constant rather than re-typing the literal — a
+     * hand-copied key would keep asserting the old shape after a bump and pass anyway.
+     */
+    public static final String KEY_VERSION = "v2";
 
     static final long TTL_MINUTES = 5;
     private static final Duration TTL = Duration.ofMinutes(TTL_MINUTES);
@@ -65,11 +81,11 @@ public class FeedCacheRepository implements FeedCache {
     }
 
     /**
-     * Best-effort write of the full {@link PageResult}&lt;{@link FeedItemView}&gt;
+     * Best-effort write of the full {@link PageResult}&lt;{@link FeedItemSnapshot}&gt;
      * payload. Failures are logged + counted; the caller's response is
      * unaffected.
      */
-    public void cachePage(String tenantId, String accountId, int page, int size, PageResult<FeedItemView> value) {
+    public void cachePage(String tenantId, String accountId, int page, int size, PageResult<FeedItemSnapshot> value) {
         try {
             String json = objectMapper.writeValueAsString(value);
             redis.opsForValue().set(key(tenantId, accountId, page, size), json, TTL);
@@ -84,18 +100,18 @@ public class FeedCacheRepository implements FeedCache {
     }
 
     /**
-     * Best-effort read of a previously cached {@link PageResult}&lt;{@link FeedItemView}&gt;.
+     * Best-effort read of a previously cached {@link PageResult}&lt;{@link FeedItemSnapshot}&gt;.
      * Returns {@link Optional#empty()} on miss, deserialization error, or Redis
      * unavailability — the caller is expected to fall through to the DB.
      */
-    public Optional<PageResult<FeedItemView>> readPage(String tenantId, String accountId, int page, int size) {
+    public Optional<PageResult<FeedItemSnapshot>> readPage(String tenantId, String accountId, int page, int size) {
         try {
             String value = redis.opsForValue().get(key(tenantId, accountId, page, size));
             if (value == null || value.isEmpty()) {
                 cacheMiss.increment();
                 return Optional.empty();
             }
-            PageResult<FeedItemView> feedPage = objectMapper.readValue(value, FEED_PAGE_TYPE);
+            PageResult<FeedItemSnapshot> feedPage = objectMapper.readValue(value, FEED_PAGE_TYPE);
             cacheHit.increment();
             return Optional.of(feedPage);
         } catch (JsonProcessingException e) {
@@ -113,7 +129,7 @@ public class FeedCacheRepository implements FeedCache {
         }
     }
 
-    private static String key(String tenantId, String accountId, int page, int size) {
-        return "feed:" + tenantId + ":" + accountId + ":" + page + ":" + size;
+    public static String key(String tenantId, String accountId, int page, int size) {
+        return "feed:" + KEY_VERSION + ":" + tenantId + ":" + accountId + ":" + page + ":" + size;
     }
 }
