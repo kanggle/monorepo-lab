@@ -2,7 +2,9 @@ package com.example.fanplatform.community.presentation.controller;
 
 import com.example.fanplatform.community.application.ChangePostStatusUseCase;
 import com.example.fanplatform.community.application.DeletePostUseCase;
+import com.example.fanplatform.community.application.GetMyPostsUseCase;
 import com.example.fanplatform.community.application.GetPostUseCase;
+import com.example.common.page.PageResult;
 import com.example.fanplatform.community.application.PostView;
 import com.example.fanplatform.community.application.PublishPostCommand;
 import com.example.fanplatform.community.application.PublishPostUseCase;
@@ -31,6 +33,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -64,6 +67,9 @@ class PostControllerSliceTest {
 
     @MockitoBean
     GetPostUseCase getPostUseCase;
+
+    @MockitoBean
+    GetMyPostsUseCase getMyPostsUseCase;
 
     @MockitoBean
     UpdatePostUseCase updatePostUseCase;
@@ -191,5 +197,65 @@ class PostControllerSliceTest {
                         .content(body))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("TENANT_FORBIDDEN"));
+    }
+
+    // ------------------------------------------------------------------
+    // GET /mine (TASK-FAN-FE-016)
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("GET /api/community/posts/mine (no Authorization) → 401")
+    void mine_withoutAuth_returns401() throws Exception {
+        mockMvc.perform(get("/api/community/posts/mine"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("GET /api/community/posts/mine → 200 + paged envelope")
+    void mine_returnsPagedEnvelope() throws Exception {
+        Instant now = Instant.now();
+        PostView view = new PostView(
+                "post-9", "fan-platform",
+                PostType.FAN_POST, PostVisibility.PUBLIC, PostStatus.PUBLISHED,
+                "fan-1", "my title", "my body", 2L, 3L, now, now, now);
+        when(getMyPostsUseCase.execute(any(), eq(0), eq(20)))
+                .thenReturn(new PageResult<>(java.util.List.of(view), 0, 20, 1, 1));
+
+        mockMvc.perform(get("/api/community/posts/mine").header("Authorization", fanBearer("fan-1")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].postId").value("post-9"))
+                .andExpect(jsonPath("$.data.content[0].title").value("my title"))
+                .andExpect(jsonPath("$.data.totalElements").value(1))
+                .andExpect(jsonPath("$.data.hasNext").value(false));
+    }
+
+    @Test
+    @DisplayName("🔴 GET /mine 은 GET /{postId} 로 새지 않는다 — 'mine' 이 postId 로 읽히면 안 된다")
+    void mine_isNotRoutedAsAPostIdLookup() throws Exception {
+        when(getMyPostsUseCase.execute(any(), eq(0), eq(20)))
+                .thenReturn(new PageResult<>(java.util.List.of(), 0, 20, 0, 0));
+
+        mockMvc.perform(get("/api/community/posts/mine").header("Authorization", fanBearer("fan-1")))
+                .andExpect(status().isOk());
+
+        // Spring ranks the literal segment above the path variable, but nothing in the code
+        // says so — a later refactor to @GetMapping("/{postId:.+}") or a rename would flip it
+        // silently, and the symptom (404, or an empty list) reads like "no posts yet".
+        org.mockito.Mockito.verify(getPostUseCase, org.mockito.Mockito.never())
+                .execute(eq("mine"), any());
+    }
+
+    @Test
+    @DisplayName("GET /mine?page=2&size=5 → 파라미터가 유스케이스로 그대로 전달된다")
+    void mine_passesPagingParams() throws Exception {
+        when(getMyPostsUseCase.execute(any(), eq(2), eq(5)))
+                .thenReturn(new PageResult<>(java.util.List.of(), 2, 5, 0, 0));
+
+        mockMvc.perform(get("/api/community/posts/mine")
+                        .param("page", "2").param("size", "5")
+                        .header("Authorization", fanBearer("fan-1")))
+                .andExpect(status().isOk());
+
+        org.mockito.Mockito.verify(getMyPostsUseCase).execute(any(), eq(2), eq(5));
     }
 }

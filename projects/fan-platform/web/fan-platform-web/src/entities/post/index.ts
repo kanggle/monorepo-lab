@@ -5,6 +5,7 @@ export type {
   PostStatus,
   FeedItem,
   FeedPage,
+  MyPostsPage,
   ReactionType,
   Comment,
 } from './types';

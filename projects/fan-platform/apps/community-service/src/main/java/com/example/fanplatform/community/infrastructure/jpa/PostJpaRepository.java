@@ -28,4 +28,21 @@ public interface PostJpaRepository extends JpaRepository<Post, String> {
     Page<Post> findFeedForFan(@Param("fanAccountId") String fanAccountId,
                               @Param("tenantId") String tenantId,
                               Pageable pageable);
+
+    /**
+     * The author's own posts (TASK-FAN-FE-016). Ordered by {@code createdAt} rather than
+     * {@code publishedAt} because DRAFT rows have no {@code publishedAt} and would sort into
+     * an arbitrary position — or be dropped entirely by a NULLS-last database default.
+     */
+    @Query("""
+            SELECT p FROM Post p
+            WHERE p.tenantId = :tenantId
+              AND p.authorAccountId = :authorAccountId
+              AND p.status <> com.example.fanplatform.community.domain.post.status.PostStatus.DELETED
+              AND p.deletedAt IS NULL
+            ORDER BY p.createdAt DESC
+            """)
+    Page<Post> findByAuthor(@Param("authorAccountId") String authorAccountId,
+                            @Param("tenantId") String tenantId,
+                            Pageable pageable);
 }

@@ -48,6 +48,21 @@ export interface FeedPage {
   hasNext: boolean;
 }
 
+/**
+ * A page of the caller's own posts (`GET /api/community/posts/mine`).
+ *
+ * Items are full `Post` objects, not `FeedItem`s: the author is always entitled to their own
+ * post, so there is no `locked`/`bodyPreview` redaction to represent here.
+ */
+export interface MyPostsPage {
+  content: Post[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  hasNext: boolean;
+}
+
 export type ReactionType = 'LIKE' | 'LOVE' | 'FIRE' | 'SAD';
 
 export interface Comment {

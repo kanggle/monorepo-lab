@@ -3,6 +3,7 @@ package com.example.fanplatform.community.presentation.controller;
 import com.example.fanplatform.community.application.ActorContext;
 import com.example.fanplatform.community.application.ChangePostStatusUseCase;
 import com.example.fanplatform.community.application.DeletePostUseCase;
+import com.example.fanplatform.community.application.GetMyPostsUseCase;
 import com.example.fanplatform.community.application.GetPostUseCase;
 import com.example.fanplatform.community.application.PublishPostCommand;
 import com.example.fanplatform.community.application.PublishPostUseCase;
@@ -10,6 +11,7 @@ import com.example.fanplatform.community.application.UpdatePostUseCase;
 import com.example.security.servlet.actor.CurrentActor;
 import com.example.fanplatform.community.presentation.dto.ApiEnvelope;
 import com.example.fanplatform.community.presentation.dto.ChangePostStatusRequest;
+import com.example.fanplatform.community.presentation.dto.MyPostsResponse;
 import com.example.fanplatform.community.presentation.dto.PostResponse;
 import com.example.fanplatform.community.presentation.dto.PublishPostRequest;
 import com.example.fanplatform.community.presentation.dto.UpdatePostRequest;
@@ -24,6 +26,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -33,6 +36,7 @@ public class PostController {
 
     private final PublishPostUseCase publishPostUseCase;
     private final GetPostUseCase getPostUseCase;
+    private final GetMyPostsUseCase getMyPostsUseCase;
     private final UpdatePostUseCase updatePostUseCase;
     private final ChangePostStatusUseCase changePostStatusUseCase;
     private final DeletePostUseCase deletePostUseCase;
@@ -46,6 +50,23 @@ public class PostController {
         );
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiEnvelope.of(PostResponse.from(publishPostUseCase.execute(cmd))));
+    }
+
+    /**
+     * The caller's own posts (TASK-FAN-FE-016).
+     *
+     * <p>Declared before {@code GET /{postId}} for readability only — Spring ranks the literal
+     * segment above the path variable regardless of order. {@code PostControllerSliceTest}
+     * pins that so this can never silently degrade into a lookup for a post whose id is
+     * {@code "mine"}, which would answer 404 and look like an empty list at a glance.
+     */
+    @GetMapping("/mine")
+    public ResponseEntity<ApiEnvelope<MyPostsResponse>> mine(
+            @CurrentActor ActorContext actor,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(
+                ApiEnvelope.of(MyPostsResponse.from(getMyPostsUseCase.execute(actor, page, size))));
     }
 
     @GetMapping("/{postId}")

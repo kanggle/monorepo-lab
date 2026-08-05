@@ -102,6 +102,44 @@ Response 200: same shape as Publish response.
 
 Errors: 401, 403 (MEMBERSHIP_REQUIRED for gated posts), 404 (POST_NOT_FOUND).
 
+### `GET /api/community/posts/mine?page=0&size=20` — My posts (TASK-FAN-FE-016)
+
+Auth: bearer. Returns the caller's own posts, newest first.
+
+Scoped to `author_account_id = <caller>` AND the caller's tenant. Because the caller is
+always the author, **no visibility gating applies** — an author can always read their own
+post (this mirrors the `actor.owns(...)` short-circuit in `GET /{id}`). DELETED posts are
+excluded; HIDDEN and DRAFT are included, since the author is the one person entitled to see
+them and hiding them here would make a post look lost.
+
+**Why this endpoint exists**: the feed is follow-based, so a fan's own post never appears in
+their own feed, and `GET /{id}` requires already knowing the id. Without a listing there was
+no path in the product from "I wrote a post" back to that post.
+
+`mine` is a literal segment on the same template as `GET /{id}`; Spring resolves the literal
+ahead of the path variable, and `PostControllerSliceTest` pins that so a future refactor
+cannot silently turn it into a lookup for a post whose id is `"mine"`.
+
+Query params: `page` (default 0, clamped ≥0), `size` (default 20, clamped 1..50 — same bounds
+as the feed).
+
+Response 200:
+```json
+{
+  "data": {
+    "content": [ { "...": "same item shape as the Publish response" } ],
+    "page": 0,
+    "size": 20,
+    "totalElements": 3,
+    "totalPages": 1,
+    "hasNext": false
+  },
+  "meta": { "timestamp": "..." }
+}
+```
+
+Errors: 401.
+
 ### `PATCH /api/community/posts/{id}` — Update content
 
 Auth: post author within 5-minute grace window after PUBLISHED, or any operator.
