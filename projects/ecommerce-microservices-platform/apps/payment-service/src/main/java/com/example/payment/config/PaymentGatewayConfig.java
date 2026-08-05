@@ -22,10 +22,22 @@ import org.springframework.context.annotation.Profile;
  * {@code resilience4j.*.instances.toss-payments} plus {@code toss.payments.*}.
  *
  * <p>Excluded in the {@code standalone} profile, where {@link StandaloneConfig} provides an
- * in-memory stub instead (no DB / no PG).
+ * in-memory stub instead (no DB / no PG), and in {@code demo-pg}, where
+ * {@link DemoPaymentGatewayConfig} provides a mock that approves while every other collaborator —
+ * crucially the event publisher — stays real (TASK-BE-572). Both exclusions are load-bearing, not
+ * cosmetic: those stub beans implement the same three lib ports as {@link TossPaymentsAdapter}, so
+ * leaving the real adapter registered alongside one of them makes every injection point of those
+ * ports ambiguous and the context fails to start.
+ *
+ * <p><strong>The default is unchanged: no profile still means the real PG.</strong> fan-platform
+ * makes its mock the default ({@code @Profile("!portone")}) because its real PG needs a secret CI
+ * does not have; ecommerce is the other way round — the Toss adapter is the production path and
+ * must be what you get when nothing is named. Parity with the sibling is about the mechanism
+ * (profile selection, ADR-MONO-056 D2), not about which side the switch rests on
+ * (TASK-BE-572 AC-3).
  */
 @Configuration
-@Profile("!standalone")
+@Profile("!standalone & !demo-pg")
 @EnableConfigurationProperties(TossPaymentsProperties.class)
 @Import(TossPaymentsAdapter.class)
 public class PaymentGatewayConfig {

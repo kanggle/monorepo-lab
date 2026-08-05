@@ -839,7 +839,15 @@ services:
       - OTEL_TRACES_EXPORTER=otlp
       - OTEL_METRICS_EXPORTER=none
       - OTEL_LOGS_EXPORTER=none
-      - SPRING_PROFILES_ACTIVE=prod
+      # The ONLY service whose profile is overridable, and only so the integrated demo can select
+      # `demo-pg` (TASK-BE-572). Compose passes through exactly the variables it names — a value
+      # in infra/demo/demo.env reaches nothing unless it is interpolated here, which is why this
+      # line has to change rather than the demo env alone (the same trap TASK-MONO-505 hit on the
+      # console). The default is unchanged, so every existing deployment renders byte-identically.
+      #
+      # Setting this to include BOTH `prod` and `demo-pg` fails the boot on purpose
+      # (DemoPgProfileGuard): `demo-pg` approves every payment without taking money.
+      - SPRING_PROFILES_ACTIVE=${ECOMMERCE_PAYMENT_PROFILES:-prod}
     expose:
       - "8087"
     deploy:
@@ -1206,6 +1214,30 @@ services:
     restart: unless-stopped
     environment:
       - API_URL_INTERNAL=http://gateway-service:8080
+      # Runtime (not build-arg) on purpose — the checkout reads it per request via
+      # /api/store-config, so a prebaked image can still be told at boot that the PG is mocked
+      # (TASK-BE-572 AC-4). `NEXT_PUBLIC_TOSS_CLIENT_KEY` above is a build arg precisely because
+      # Next inlines it, which is the thing that made the demo unable to turn Toss off.
+      #
+      # Must agree with ECOMMERCE_PAYMENT_PROFILES on payment-service: the mock PG accepts a
+      # made-up paymentKey and the real Toss adapter does not. infra/demo/demo.env sets both and
+      # verify-demo-wrapper.sh guard (x) asserts they are set together.
+      - DEMO_PAYMENT_MOCK=${DEMO_PAYMENT_MOCK:-}
+      # === next-auth / OIDC — 이 블록은 통째로 빠져 있었다 (TASK-BE-572) ===
+      # 통합 데모에서 **스토어프런트 로그인이 성립한 적이 없다**: `NEXTAUTH_SECRET` 이 없어
+      # next-auth 가 `MissingSecret` 으로 죽고, /api/auth/signin 이 응답하지 않는다.
+      # 형제 `fan-platform-web` 은 TASK-FAN-FE-014 에서 같은 다섯 값을 받았는데 web-store 만
+      # 남겨졌다 — 전형적인 straggler 다. BE-572 의 라이브 완주(AC-5)가 로그인을 전제하므로
+      # 여기서 함께 배선한다.
+      #
+      # 콜백은 IAM 에 **이미 등록돼 있다**(V0012: http://web.ecommerce.local/api/auth/callback/gap)
+      # — 새 마이그레이션은 필요 없다. provider id 는 `iam` 이 아니라 `gap` 이다.
+      # 시크릿 평문 `ecommerce-dev` 는 V0012 시드 해시의 dev 값이다(.env.example 과 동일).
+      - NEXTAUTH_URL=http://web.ecommerce.${DEMO_DOMAIN:-local}
+      - NEXTAUTH_SECRET=${ECOMMERCE_WEB_STORE_NEXTAUTH_SECRET:-ecommerce-demo-session-signing-key}
+      - OIDC_ISSUER_URL=${OIDC_ISSUER_URL:-http://iam.local}
+      - ECOMMERCE_WEB_STORE_CLIENT_ID=${ECOMMERCE_WEB_STORE_CLIENT_ID:-ecommerce-web-store-client}
+      - ECOMMERCE_WEB_STORE_CLIENT_SECRET=${ECOMMERCE_WEB_STORE_CLIENT_SECRET:-ecommerce-dev}
     expose:
       - "3000"
     deploy:
