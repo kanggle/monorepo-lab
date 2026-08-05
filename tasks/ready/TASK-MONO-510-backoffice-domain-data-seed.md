@@ -96,9 +96,95 @@ MONO-506 의 콘솔 전수 스윕(iam + console + ecommerce 슬라이스)에서 
 
 ---
 
+# 🟡 착수 1회차 실측 (2026-08-05) — **AC-0 은 끝났다. 다시 유도하지 말 것**
+
+## AC-0 ① 화면 모집단 = **23** (변동 없음)
+
+`console-nav-config.ts` 재측정: WMS 7 · SCM 6 · Finance 4(`/ledger` 포함) · ERP 6.
+전체 리프 47.
+
+## AC-0 ② 테넌트 — **BE-576 형태의 블록은 WMS 에 없다. 이유가 구조적이다**
+
+세 가지를 실측했고 셋 다 티켓의 가정과 달랐다:
+
+1. **콘솔은 assume 토큰을 쓴다.** 페이지 주석은 *"NOT the IAM exchanged operator token"*
+   이라 적혀 있지만 실제 해석자는
+   `getDomainFacingToken() = getAssumedToken() ?? getAccessToken()` 이다. 실측이 갈랐다:
+
+   ```
+   base 콘솔 토큰    tenant_id=iam        → 전 엔드포인트 403 TENANT_FORBIDDEN
+   assume demo-corp  tenant_id=demo-corp  → 전 엔드포인트 200
+   ```
+
+   ⇒ **주석보다 코드가 권위**였고, 테넌트를 고른 뒤에만 화면이 찬다(워크스루와 일치).
+
+2. **WMS 는 데이터에 테넌트가 거의 없다.** `tenant_id` 컬럼을 가진 테이블은 5개 DB
+   (master/inbound/inventory/outbound/admin) 통틀어 **`outbound_db.outbound_order`
+   하나뿐**이다. 테넌시는 게이트웨이 엣지 admission 으로만 강제된다 ⇒ "200 + 빈 배열"
+   위험은 **구조적으로 해당 없음**. AC-0 의 블록 조건 불성립.
+
+3. 🔴 다만 그 하나가 예외라는 사실 자체가 위험이다 — ecommerce 풀필먼트가 살아 있는
+   슬라이스에서는 `outbound_order` 만 테넌트로 갈리고 그 ASN·재고는 안 갈린다.
+   이 슬라이스에 ecommerce 가 없어 **미측정**이다.
+
+## AC-1 마스터 데이터 — API 로 못 넣는다. 그리고 **직접-DB 도 답이 아니었다**
+
+```
+POST /api/v1/master/warehouses  (assume demo-corp)                 403 FORBIDDEN
+POST /api/v1/master/warehouses  (wms-internal-services-client,
+                                 scope=wms.master.write)           403 FORBIDDEN
+```
+
+master-service 는 `@PreAuthorize("hasRole('MASTER_WRITE') or hasRole('MASTER_ADMIN')")`
+인데 `OperatorRoleDerivation` 은 `MASTER_READ` 까지만 준다(outbound/inbound/inventory 에는
+READ+WRITE 를 주는 **비대칭**). 워크로드 토큰은 **scope 만** 싣고 role 을 안 싣는다.
+→ **`TASK-MONO-514`**.
+
+🔵 **답은 새 SQL 이 아니었다** — 이 저장소가 마스터 시드를 **이미 갖고 있다**
+(`master`/`inbound`/`inventory` 각각 `db/seed/V99..V103`, 고정 UUID). 그 위치는
+`application-dev.yml` 에서만 활성화되므로 데모에서는 한 줄도 돌지 않았다(실측: 5개 테이블
+전부 0행). `infra/demo/wms-devseed.override.yml` 이 `SPRING_FLYWAY_LOCATIONS` 로 그 위치만
+연다. **검증 완료**: 창고 1 · 존 3 · 로케이션 3 · SKU 3 · 거래처 3.
+
+## 이 도메인의 계측 함정 (재현 시 먼저 읽을 것)
+
+- `Idempotency-Key` 는 **UUID** 여야 한다(아니면 400 `must be a UUID`).
+- 🔴 **같은 키는 실패 응답까지 재생한다** — 두 번째 403 의 타임스탬프가 첫 번째와
+  **바이트 단위로 동일**했다. 키를 바꾸기 전까지는 실측이 아니다.
+- 게이트웨이는 `/api/v1/**` 만 받는다(`/api/...` 는 404).
+- 운영자가 **못 가진** 역할: `MASTER_WRITE` · `INVENTORY_RESERVE` · 모든 `*_ADMIN`.
+
+## AC-6 메모리 — S4 실측, S5 는 **거의 확실히 불가**
+
+```
+iam + wms + console = 33 컨테이너 = 9.96 GiB / 가용 11.68  (85%)
+  iam 4,308 MiB · wms 5,589 MiB · console 264 MiB
+```
+
+🔴 이 포화가 실제로 물었다: inbound-service 의 Kafka 컨슈머가 `poll timeout` 으로
+리밸런싱을 반복하고 게이트웨이가 **504 / 500(`NoRouteToHostException`)** 을 냈다.
+관측 사이드카 12개를 내려 21컨까지 줄이고 서비스를 clean recreate 해도 ASN 생성은 500 이
+유지됐다 — **호스트 포화인지 서비스 결함인지 아직 갈리지 않았다.** 다음 착수의 첫 일이다.
+
+S5(iam + scm + erp + finance + console)는 앱만 13개 + 인프라 3세트다. wms 하나(앱 7)가
+5.6 GiB 를 썼으므로 **로컬 동시 기동은 불가로 본다**(AC-6 이 "못 했다도 유효한 측정"
+이라고 적어 두었다). 도메인을 **한 번에 하나씩** 띄우는 슬라이스 분해가 필요하다.
+
+## 남은 것
+
+- WMS **흐름** 시드(ASN → 검수 → 적치 → 재고 → 출고주문). 스크립트를 작성했으나 위 500
+  때문에 **한 번도 성공하지 못했고, 그래서 커밋하지 않았다** — 이 티켓의 전제
+  ("검증하지 않은 시드는 거짓 약속")를 스스로 어기지 않기 위해서다. 엔드포인트·DTO·역할은
+  전부 위에 적어 두었으므로 재작성 비용은 낮다. 🔴 출고는 **주문까지**가 현실적 목표다
+  (예약은 `INVENTORY_RESERVE` 필요, 배송은 도달 불가 TMS 스텁 의존).
+- SCM · ERP · Finance — 미착수. 이미지도 없다(scm 5 · finance 3 서비스 빌드 필요;
+  erp 는 이미지 존재).
+
+---
+
 # Acceptance Criteria
 
-- [ ] **AC-0 (재측정 + 테넌트 확인)** — 화면 모집단을 `console-nav-config.ts` 에서 다시 센다.
+- [x] **AC-0 (재측정 + 테넌트 확인)** — 화면 모집단을 `console-nav-config.ts` 에서 다시 센다.
       **그리고 각 도메인이 `TASK-BE-576` 과 같은 테넌트 분리 증상을 갖는지 먼저 확인한다** —
       운영자 토큰으로 목록 API 를 호출해 **원소 수가 DB 실측과 일치하는지** 본다.
       200 은 판정 근거가 아니다(그 결함은 200 이었다). 불일치하면 이 티켓은 BE-576 에

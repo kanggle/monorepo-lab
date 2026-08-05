@@ -1,0 +1,52 @@
+# =============================================================================
+# infra/demo/wms-devseed.override.yml — wms 마스터 데이터를 데모에서 켠다 (TASK-MONO-510)
+# =============================================================================
+# 🔴 왜 시드 스크립트가 아니라 compose 인가
+# -----------------------------------------------------------------------------
+# wms 마스터 데이터(창고·존·로케이션·SKU·거래처)는 **이 저장소가 이미 갖고 있다** —
+# 각 서비스의 `src/main/resources/db/seed/V99..V103` 이 고정 UUID 로 심는다. 다만 그
+# 위치는 `application-dev.yml` 의 `spring.flyway.locations` 에서만 활성화되고, 데모는
+# `dev` 프로파일로 뜨지 않으므로 한 줄도 실행되지 않는다(실측: 5개 테이블 전부 0행).
+#
+# 그래서 새 SQL 을 쓰지 않는다. 같은 데이터를 시드 스크립트에 복제하면 **두 벌이 갈린다**
+# — 이 저장소가 반복해서 당한 모양이다. Flyway 위치만 열어 준다.
+#
+# 🔴 왜 API 로 못 넣는가 (= `dbexec --why` 를 쓰지 않아도 되는 이유이자, 썼다면 적었을 사유)
+# -----------------------------------------------------------------------------
+# master-service 의 쓰기는 전부 `@PreAuthorize("hasRole('MASTER_WRITE') or
+# hasRole('MASTER_ADMIN')")` 인데, iam 의 `OperatorRoleDerivation` 이 `wms` 엔타이틀먼트로
+# 주는 것은 **`MASTER_READ` 까지**다(OUTBOUND/INBOUND/INVENTORY 는 READ+WRITE 를 주는데
+# master 만 READ 다 — 비대칭이고 그 이유가 코드에 적혀 있지 않다). 실측:
+#
+#   POST /api/v1/master/warehouses  (assume demo-corp 운영자)  403 FORBIDDEN
+#                                    "Insufficient privileges for this operation"
+#   POST /api/v1/master/warehouses  (wms-internal-services-client,
+#                                    scope=wms.master.write)   403 (동일)
+#     ↑ 워크로드 토큰은 **scope 만** 싣고 role 을 싣지 않는다. master-service 는
+#       role 로 인가하므로 scope 는 아무것도 열지 못한다.
+#
+# → TASK-MONO-514 (AC-8).
+#
+# 🔴 재측정 함정: 위 두 403 을 **같은 Idempotency-Key 로** 재현하면 두 번째 응답이
+# 첫 번째의 저장된 결과와 **타임스탬프까지 동일**하다(멱등 재생). 실제로 그렇게 나와
+# "워크로드 클라이언트도 막혔다" 로 결론 낼 뻔했다 — 키를 바꿔 다시 받아야 실측이다.
+# (같은 함정을 TASK-MONO-509 가 멤버십 구독에서 먼저 밟았다.)
+#
+# 🔴 테넌트: wms 는 **데이터에 테넌트가 없다.** 실측으로 `tenant_id` 컬럼을 가진
+# 테이블은 5개 DB 통틀어 `outbound_db.outbound_order` **하나뿐**이다. 테넌시는 게이트웨이
+# 엣지의 admission(`TENANT_FORBIDDEN`)으로만 강제된다 ⇒ 이 시드가 테넌트를 적지 않는
+# 것은 누락이 아니라 스키마가 그렇다. (그래서 `TASK-BE-576` 형태의 "200 + 빈 배열" 위험도
+# wms 에는 없다 — AC-0 이 확인하려던 것이 이것이고, 답은 "구조적으로 해당 없음" 이다.)
+# =============================================================================
+services:
+  master-service:
+    environment:
+      SPRING_FLYWAY_LOCATIONS: classpath:db/migration,classpath:db/seed
+
+  inbound-service:
+    environment:
+      SPRING_FLYWAY_LOCATIONS: classpath:db/migration,classpath:db/seed
+
+  inventory-service:
+    environment:
+      SPRING_FLYWAY_LOCATIONS: classpath:db/migration,classpath:db/seed
