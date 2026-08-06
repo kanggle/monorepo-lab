@@ -46,25 +46,27 @@
 #    나쁜 것은 **눌리는데 실패하는 화면**이다. 갭은 `TASK-MONO-515` 로 분리했다.
 #
 # -----------------------------------------------------------------------------
-# 🔴 이 시드를 돌리면 **차단** 으로 표시되는 경로 (제품 결함, 티켓 있음)
+# ✅ 차단 경로 0건 — 면제를 **전부 회수했다**
 # -----------------------------------------------------------------------------
-#   TASK-ERP-BE-041  상신(submit)이 항상 422 `subject_unresolved` 로 거절된다.
-#                    `MasterDataRestAdapter` 가 masterdata-service 를 **토큰 없이**
-#                    부르고(401), `onStatus(4xx)` 가 그것을 삼켜 "ACTIVE 아님" 이 된다.
-#                    ⇒ 결재는 **DRAFT 로만** 쌓인다.
+# 이 시드는 한때 두 개의 `⛔ 차단` 면제를 달고 있었다. 둘 다 결함이 닫히면서 회수됐다:
 #
-# 시드는 이것을 고칠 수 없다(MONO-510 Scope: 제품 코드 변경은 별도 티켓). 대신 지문을
-# 정확히 매치해 `차단` 으로 세고, 지문이 어긋나면 그대로 **실패**로 센다.
+#   TASK-ERP-BE-042  아웃박스 릴레이 미기동 → 프로젝션 대기가 `seed_fail` 로 복귀
+#                    (실측: 미발행 백로그 16+1 전량 발행, 사원 4/4).
+#   TASK-ERP-BE-041  상신이 항상 422 `subject_unresolved` → 상신 실패가 `seed_fail` 로
+#                    복귀(실측: 차단 2 → 0, `DRAFT 1 · SUBMITTED 2`).
 #
-# ✅ `TASK-ERP-BE-042`(아웃박스 릴레이 미기동)는 **닫혔다** — 릴레이가 돌고 프로젝션이
-#    따라온다(실측: 미발행 백로그 16+1 전량 발행, 사원 4/4). 그래서 프로젝션 대기의
-#    면제를 **회수했다**: 이제 그 자리는 `seed_fail` 이다. 고쳐진 결함의 면제를 남겨 두면
-#    그 면제가 정확히 회귀를 가리는 장치가 된다.
+# 🔴 **고쳐진 결함의 면제를 남겨 두면 그 면제가 정확히 회귀를 가리는 장치가 된다.**
+# 두 경로 모두 이제 실측으로 성립하므로, 앞으로의 실패는 알려진 결함이 아니라 **회귀**다.
+# 그래서 `⛔ 차단` 분류 자체(카운터·헬퍼·요약 줄)도 함께 걷어냈다 — 아무도 세울 수 없는
+# 카운터가 매 실행 `차단 0` 을 찍으면 "우리는 차단을 추적하고 있다" 로 읽히지만 실제로는
+# 아무것도 추적하지 않는다. 다음 결함이 생기면 그때 **의도적으로** 다시 세운다
+# (형태는 `seed/README.md` § 알려진 제품 결함을 시드의 실패와 구별하라 가 보존한다).
 #
-# 🔵 남은 read-model 공백 하나는 **위임 사실 프로젝션**이다 — 릴레이가 살아나자
-#    `erp.approval.delegated.v1` 의 첫 메시지가 곧바로 DLT 로 갔다(approval 봉투에
-#    최상위 `aggregateId`/`tenantId` 가 없는데 소비자는 그것을 필수로 요구한다).
-#    → `TASK-ERP-BE-043`. 이 경로는 시드가 만드는 위임 1건에만 해당하고 나머지는 찬다.
+# 🔵 남은 read-model 공백 하나는 **위임 사실 프로젝션**이다 — approval 봉투에 최상위
+#    `aggregateId`/`tenantId` 가 없는데 소비자는 그것을 필수로 요구해 메시지가 DLT 로
+#    간다(`TASK-ERP-BE-043`). BE-041 이 닫히자 `erp.approval.submitted.v1` 도 같은
+#    운명임이 실측됐다(end-offset 2 / DLT 4). 이것은 **시드가 만드는 행이 아니라 투영**의
+#    문제이므로 시드에는 차단 경로가 없다 — 원본 목록은 전부 정상이다.
 #
 # -----------------------------------------------------------------------------
 # 멱등 (AC-5)
@@ -109,17 +111,6 @@ export SEED_TOKEN
 # --- 도구 -------------------------------------------------------------------
 # Git Bash(msys)에는 /proc/sys/kernel/random/uuid 가 없다.
 uuid() { openssl rand -hex 16 | sed -E 's/(.{8})(.{4})(.{4})(.{4})(.{12})/\1-\2-\3-\4-\5/'; }
-
-# --- 알려진 제품 결함 vs 시드의 실패 -----------------------------------------
-# 이 도메인에는 **티켓이 있는 제품 결함**이 둘 있고(아래), 그 경로는 시드를 아무리 잘
-# 짜도 통과할 수 없다. 그것을 `seed_fail` 로 세면 `demo-up.sh` 가 매 실행 빨개져서
-# 진짜 회귀가 묻힌다. 반대로 조용히 넘기면 데모가 비었는데 시드는 초록이 된다.
-#
-# 그래서 **세 번째 분류**를 둔다: 실패 신호가 그 결함의 **정확한 지문**과 일치할 때만
-# `차단` 으로 세고 티켓 번호를 찍는다. 지문이 다르면 그대로 실패다 — 결함이 고쳐지면
-# 그 경로는 **저절로 다시 성립하고**, 새로운 고장은 여전히 빨개진다.
-SEED_BLOCKED=0
-seed_blocked() { printf '[seed:%s] ⛔ 차단 %s\n' "$SEED_DOMAIN" "$*" >&2; SEED_BLOCKED=$((SEED_BLOCKED + 1)); }
 
 # JSON 배열을 객체당 한 줄로 쪼갠다. 🔴 `sed -E 's/.*"key":"([^"]*)".*/\1/'` 로 통짜
 # 응답을 긁으면 `.*` 가 greedy 라 **마지막** 매치를 집는다(seed-wms.sh 가 밟은 함정).
@@ -311,16 +302,10 @@ ensure_request() { # ensure_request <라벨> <제목> <subjectType> <subjectId> 
   if [ "$do_submit" = "submit" ] && [ "$status" = "DRAFT" ]; then
     if http POST "$ERP/api/erp/approval/requests/$id/submit" '' -H "Idempotency-Key: $(uuid)"; then
       seed_log "진행  $label → 상신"
-    elif [ "$SEED_LAST_STATUS" = "422" ] \
-         && printf '%s' "$SEED_LAST_BODY" | grep -qF '"cause":"subject_unresolved"'; then
-      # TASK-ERP-BE-041 의 지문. approval-service 의 MasterDataRestAdapter 는
-      # masterdata-service 를 **Authorization 헤더 없이** 부른다 → 401 → 그 4xx 를
-      # onStatus 가 삼켜 `data == null` → "ACTIVE 아님" 으로 해석된다. 실측(컨테이너 안):
-      #   wget http://masterdata-service:8080/api/erp/masterdata/departments/<실재 id>
-      #     → HTTP/1.1 401
-      # 즉 마스터는 ACTIVE 로 실재하는데도 상신이 **항상** 거절된다.
-      seed_blocked "$label 상신 — TASK-ERP-BE-041 (subject_unresolved: 내부 호출이 401)"
     else
+      # 🔴 `TASK-ERP-BE-041` 의 면제가 여기 있었다(422 `subject_unresolved` 를 ⛔ 차단으로
+      # 셌다). 그 결함은 닫혔고 이 경로는 실측으로 성립하므로 면제를 회수했다 — 이제
+      # 상신 실패는 알려진 결함이 아니라 **회귀**다.
       seed_fail "$label 상신 — HTTP $SEED_LAST_STATUS ${SEED_LAST_BODY:0:200}"
       return 1
     fi
@@ -398,7 +383,5 @@ if [ "$want" -gt 0 ]; then
   fi
 fi
 
-seed_log "요약 — 생성 $SEED_CREATED · 기존 $SEED_EXISTING · 실패 $SEED_FAILURES · 차단 $SEED_BLOCKED"
-[ "$SEED_BLOCKED" -eq 0 ] \
-  || seed_log "차단 $SEED_BLOCKED 건은 티켓이 있는 제품 결함입니다(ERP-BE-041) — 시드 결함이 아닙니다"
+seed_log "요약 — 생성 $SEED_CREATED · 기존 $SEED_EXISTING · 실패 $SEED_FAILURES"
 exit $(( SEED_FAILURES > 0 ? 1 : 0 ))

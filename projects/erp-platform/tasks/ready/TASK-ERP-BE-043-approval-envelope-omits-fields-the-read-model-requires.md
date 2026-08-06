@@ -69,6 +69,21 @@ delegation_fact_proj           0행
 아직 하나도 없기 때문이다(실측: `erp.approval.submitted.v1` end-offset **0**). BE-041 이
 닫히면 **그 순간 다섯 토픽이 전부 DLT 로 간다.**
 
+> ✅ **2026-08-07 — 이 예측의 절반이 실측으로 승격됐다.** `TASK-ERP-BE-041` 이 닫히고
+> 상신 2건이 실제로 발행되자:
+>
+> ```
+> erp.approval.submitted.v1            end-offset 0 → 2
+> erp.approval.submitted.v1.DLT        end-offset 4     (소비자 2개 × 2건)
+> erp.approval.submitted.v1-retry-0/1  end-offset 0     (재시도 없이 직행)
+> ```
+>
+> 즉 이제 **두 토픽(`delegated`·`submitted`)이 실측 대상**이다. 나머지 넷
+> (`approved`/`rejected`/`withdrawn`/`delegation.revoked`)이 여전히 0 인 것은
+> **막혀서가 아니라 그 전이를 아직 아무도 실행하지 않아서**다 — 승인/반려를 한 번씩
+> 태우면 같은 자리에서 관측된다. AC-0 은 두 토픽을 착수 시 다시 세는 것으로 충족하고,
+> 나머지 넷은 AC-3 의 회귀 범위로 남긴다.
+
 ## 🔴 두 번째 관문이 그 뒤에 있다 (봉투를 고쳐도 남는다)
 
 `DelegationEnvelopeToCommandMapper` 는 파싱 후 `envelope.hasTenant(requiredTenant)` 를 건다.
