@@ -50,7 +50,27 @@ if (cmd.postType() == PostType.ARTIST_POST
   멤버십은 **플랫폼 스코프**다(아티스트별이 아니다).
 - 그래서 팬의 `PREMIUM` 글은 **프리미엄 구독자에게만** 보이는데, 그 구독료는 플랫폼이
   받는다. 글쓴이에게는 수익도, 독자도 없다.
-- 티어는 **아티스트 수익화**를 위해 존재한다(`architecture.md` § Visibility Tiers).
+
+---
+
+## 🔴 정정 (2026-08-06, 착수 시 AC-0 재측정) — 이 티켓의 전제 한 줄이 틀렸다
+
+원문에는 *"티어는 **아티스트 수익화**를 위해 존재한다(`architecture.md` § Visibility Tiers)"* 가
+있었다. **그 절은 그런 말을 하지 않는다.** 실제 § Visibility Tiers 는 **읽기 게이팅 메커니즘만**
+기술한다(어떤 티어가 누구에게 보이는지, `MembershipChecker` 가 fail-closed 인지). **누가 어떤
+티어로 쓸 수 있는가는 어느 스펙에도 없다.** 그 문장은 발굴 당시(`TASK-FAN-FE-016` 과 같은 세션)의
+**추론이 인용처럼 적힌 것**이라 삭제했다.
+
+그리고 침묵보다 강한 사실이 있다 — **스펙이 반대를 적극적으로 규정한다**:
+`specs/integration/v1-e2e-scenarios.md` § Scenario 3 은 팬이 `FAN_POST` 를 `PREMIUM` 과
+`MEMBERS_ONLY` 로 발행하는 것을 **시나리오로 명시**하고, `VisibilityTierE2ETest` 가 그대로
+구현하고 있다(문서가 아니라 산출물로 확인).
+
+⇒ 좁히는 것은 **드리프트 교정이 아니라 새 제약 도입**이며, 아래 체크리스트 네 번째 항목이
+요구한 판정에 따라 **ADR 이 필요하다**.
+판정·실측·선택지 전부: [`docs/adr/ADR-003-fan-post-visibility-authoring-rule.md`](../../docs/adr/ADR-003-fan-post-visibility-authoring-rule.md) (**PROPOSED**).
+
+**이 티켓은 그 ADR 이 ACCEPTED 되기 전까지 착수할 수 없다.**
 
 # Goal
 
@@ -73,17 +93,18 @@ if (cmd.postType() == PostType.ARTIST_POST
 
 ---
 
-# 🔴 착수 전에 반드시 확인할 것
+# 🔴 착수 전에 반드시 확인할 것 — **전부 2026-08-06 에 실측 완료**
 
-- [ ] **기존 데이터** — 이미 만들어진 비-PUBLIC `FAN_POST` 행이 있는가?
-      (2026-08-06 데모 DB 실측: `FAN_POST` 2건 모두 PUBLIC. 다른 환경은 다시 셀 것)
-- [ ] **`UpdatePostUseCase` 로 나중에 바꿀 수 있는가** — 발행만 막고 수정이 열려 있으면
-      규칙이 아니라 속도 방지턱이다
-- [ ] **운영자/아티스트가 팬 글을 대신 만드는 경로가 있는가** — 있으면 그 경로의 기대값도
-      정해야 한다
-- [ ] 계약을 좁히는 변경이므로 **ADR 이 필요한지** `platform/architecture-decision-rule.md`
-      기준으로 판단할 것. 기존 티어 정의를 **적용**하는 것이면 드리프트 교정이고,
-      새 제약을 **도입**하는 것이면 ADR 이다
+- [x] **기존 데이터** — 비-PUBLIC `FAN_POST` 행: **0건**(데모 DB: `FAN_POST` 2건 전부 PUBLIC,
+      `ARTIST_POST` 는 PUBLIC 2 · MEMBERS_ONLY 1 · PREMIUM 1). 다른 환경은 다시 셀 것
+- [x] **`UpdatePostUseCase` 로 나중에 바꿀 수 있는가** → **불가능**. 시그니처가
+      `(postId, actor, title, body, mediaRefs)` 뿐이고 `visibility` 를 받지 않는다 —
+      발행 후 가시성은 **불변**이다. ⇒ 아래 Failure Scenario 의 "PUBLIC 으로 만든 뒤 PREMIUM
+      으로 고친다" 는 **도달 불가한 경로**였다(존재하지 않는 위험을 걱정한 것)
+- [x] **운영자/아티스트가 팬 글을 대신 만드는 경로** → **없다**. `PublishPostUseCase` 는 저자를
+      `actor.accountId()` 로 고정한다(그 고정 자체가 `TASK-FAN-BE-045` 의 주제)
+- [x] **ADR 이 필요한지** → **필요하다**. 스펙이 침묵하는 게 아니라 **반대를 규정**하기 때문
+      (§ 정정 참조). ⇒ `ADR-003` **PROPOSED**
 
 # Acceptance Criteria
 
@@ -108,9 +129,13 @@ if (cmd.postType() == PostType.ARTIST_POST
 
 # Failure Scenarios
 
-- **발행만 막고 `UpdatePostUseCase` 를 빼먹는다** — 팬이 PUBLIC 으로 만든 뒤 PREMIUM 으로
-  고친다
+- ~~**발행만 막고 `UpdatePostUseCase` 를 빼먹는다** — 팬이 PUBLIC 으로 만든 뒤 PREMIUM 으로
+  고친다~~ → **도달 불가로 확인됨**(2026-08-06). `UpdatePostUseCase` 는 `visibility` 를 받지
+  않는다. 남겨 두는 이유는 기록이다 — 이 시나리오를 근거로 범위를 넓히지 말 것
 - **`ARTIST_POST` 까지 함께 막는다** — 게이팅이 존재하는 이유를 없앤다
+- 🔴 **`VisibilityTierE2ETest` 를 빼먹는다** — 안 A(좁히기)를 고르면 그 테스트가 `FAN_POST` 를
+  `PREMIUM`/`MEMBERS_ONLY` 로 발행하므로 **머지 즉시 e2e 가 빨개진다**. 스펙
+  (`v1-e2e-scenarios.md` § Scenario 3)도 함께 고쳐야 한다
 
 # Definition of Done
 
