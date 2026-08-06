@@ -172,37 +172,173 @@ S5(iam + scm + erp + finance + console)는 앱만 13개 + 인프라 3세트다. 
 
 ## 남은 것
 
-- WMS **흐름** 시드(ASN → 검수 → 적치 → 재고 → 출고주문). 스크립트를 작성했으나 위 500
-  때문에 **한 번도 성공하지 못했고, 그래서 커밋하지 않았다** — 이 티켓의 전제
-  ("검증하지 않은 시드는 거짓 약속")를 스스로 어기지 않기 위해서다. 엔드포인트·DTO·역할은
-  전부 위에 적어 두었으므로 재작성 비용은 낮다. 🔴 출고는 **주문까지**가 현실적 목표다
-  (예약은 `INVENTORY_RESERVE` 필요, 배송은 도달 불가 TMS 스텁 의존).
 - SCM · ERP · Finance — 미착수. 이미지도 없다(scm 5 · finance 3 서비스 빌드 필요;
   erp 는 이미지 존재).
 
 ---
 
+# 🟢 착수 2회차 (2026-08-06) — WMS 흐름 시드 **완료**. 1회차의 판정을 정정한다
+
+## ⓪ 🔴🔴 **1회차 AC-0 의 결론이 틀렸다** — 정확히 반대다
+
+1회차는 이렇게 적었다: *"`tenant_id` 컬럼을 가진 테이블은 `outbound_db.outbound_order`
+하나뿐 ⇒ '200 + 빈 배열' 위험은 **구조적으로 해당 없음**."*
+
+**그 하나가 정확히 데모 운영자가 스코프당하는 대상이다.** "하나뿐" 은 위험이 작다는
+뜻이 아니라 **위험이 거기 전부 몰려 있다**는 뜻이었다. 실측:
+
+```
+시드가 실제 API 로 생성   POST /api/v1/outbound/orders           → 201
+DB                        outbound_order SO-DEMO-0001 | PICKING | tenant_id = NULL
+같은 토큰으로 조회         GET  /api/v1/outbound/orders?size=100  → 200 {"content":[]}
+토큰                      tenant_id = "demo-corp"
+```
+
+**만든 주체가 만든 것을 못 본다.** `demo-corp` 는 `wms`·`*` 가 아니라 **restricted** 로
+판정되고, 조회는 `tenant_id=demo-corp` **AND `source=FULFILLMENT_ECOMMERCE`** 로 고정된다
+(`OrderQueryCommand.withTenantScope` Javadoc: *"may only ever see its own ecommerce
+orders"*). 그런데 `withTenantScope` 는 **쿼리 커맨드에만 있고 생성 경로는 `tenant_id` 를
+설정하지 않는다**(호출처 전수 확인) ⇒ 수동 생성 주문은 자기 조건에 **절대** 안 걸린다.
+
+⇒ 콘솔 `/wms/outbound` 는 **시드가 무엇을 넣든 빈다.** → `TASK-BE-581`.
+
+🔵 **왜 1회차가 놓쳤나** — AC-0 을 "테넌트 컬럼이 있는 테이블을 세어" 판정했다.
+그것은 대리지표다. AC-0 이 원래 요구한 것은 **"운영자 토큰으로 목록 API 를 호출해
+원소 수가 DB 실측과 일치하는지"** 였고, 그 술어를 outbound 목록에 대해 실제로
+돌렸으면 1회차에 잡혔다. **200 은 판정 근거가 아니다** 라고 티켓이 스스로 적어 두었는데,
+스키마를 세는 것으로 대체하면서 그 문장을 비켜 갔다.
+
+## ① 500 판별 — **서비스 결함이 아니었다. 그리고 "실패" 도 아니었다**
+
+1회차가 남긴 첫 일("호스트 포화인지 서비스 결함인지")을 갈랐다. **축소 토폴로지**
+(전체 wms 33컨이 아니라 gateway+inbound+inventory+outbound+master+admin+인프라 = 10컨)에서
+같은 `POST /api/v1/inbound/asns` 가 **201 Created**. ⇒ ASN 경로 자체는 결함이 아니다.
+
+🔴 그리고 더 중요한 정정: **504 는 실패가 아니었다.** 504 를 받은 뒤 DB 를 보니
+`inbound_db.asn` 에 `status=CREATED` 행이 **실재**했고, 출고 주문도 504 뒤 재시도가
+`409 ORDER_NO_DUPLICATE` 를 냈다(= 첫 요청이 성공해 있었다는 뜻). 즉 **엣지가 타임아웃
+하는 동안 쓰기는 완료된다.** 1회차의 "ASN 생성은 500 이 유지됐다" 는 관측은 사실이지만
+**결론("생성 불가")은 틀렸을 수 있다** — 그때 DB 를 보지 않았다.
+
+⇒ 이 위양성이 시드에 그대로 새면 중복 생성 또는 허위 실패가 된다. `seed-wms.sh` 는
+그래서 409 를 "이미 존재" 로 센다(lib.sh `api_create` 와 같은 규약).
+
+## ② 진짜 블로커는 따로 있었다 — `TASK-BE-579`
+
+`inventory-service` · `outbound-service` 가 **HTTP 를 한 건도 서빙하지 않는 상태로
+갇힌다.** 컨테이너는 `Up`, Kafka 컨슈머는 계속 도는데 `/actuator/health/liveness`(순수
+in-memory)와 없는 경로 `/nope` 까지 매달린다. 🔴 **기동 경합이 아니다** — 같은 컨테이너가
++3분 healthy → +9분 unhealthy(그 사이 요청 0건). 대조군 `inbound`/`master` 는 같은 순간
+즉답. 단독 `restart` 로 복구(2회). 게이트웨이는 이때 504 를 낸다 ⇒ ①의 위양성과 겹쳐
+1회차에 "서비스 결함" 으로 보였던 것의 정체다.
+
+## ③ WMS 흐름 시드 — 커밋했다 (`infra/demo/seed/seed-wms.sh`)
+
+**볼륨을 지우고 새로 띄운 스택**에서 끝까지 통과한 뒤에만 커밋했다.
+
+```
+[seed:wms] 생성  ASN ASN-DEMO-0001
+[seed:wms] 진행  검수 시작
+[seed:wms] 진행  검수 기록 (합격 95)
+[seed:wms] 진행  적치 지시
+[seed:wms] 진행  적치 확정 → 재고 반영 (비동기)
+[seed:wms] 존재  출고 주문 SO-DEMO-0001 (HTTP 409)
+```
+
+**결과가 DB 에 실제로 있다**(추론 아님):
+
+| 확인 | 값 |
+|---|---|
+| `inbound_db.asn` | `ASN-DEMO-0001` / `PUTAWAY_DONE` |
+| `inbound_db.putaway_instruction` | `COMPLETED` |
+| `inventory_db.inventory` | `available_qty=95`, 창고·로케이션·SKU 일치, `created_by=system:putaway-consumer` |
+| `inventory_db.inventory_movement` | 1행 |
+| `outbound_db.outbound_order` | `SO-DEMO-0001` / `PICKING` |
+
+⇒ **AC-3(프로젝션 의존)이 WMS 재고에 대해 충족**됐다. 적치 확정 → Kafka → 재고 반영이
+실제로 따라왔다.
+
+**AC-5(멱등)**: 2회차 = `생성 0 · 기존 2 · 실패 0`, rc=0.
+
+🔵 **멱등 가드를 "있으면 건너뜀" 으로 만들지 않았다.** ASN 이 **중간 상태**로 남아 있으면
+이전 실행이 흐름 도중 깨졌다는 뜻인데, 그것을 건너뛰면 화면은 빈 채 시드는 초록이 된다.
+그래서 종착 상태(`PUTAWAY_DONE`/`CLOSED`)일 때만 건너뛰고 중간이면 **실패로 센다** —
+실제로 이 가드가 ①의 위양성을 잡아냈다.
+
+## ④ 시드를 쓰며 밟은 함정 (다음 사람 몫)
+
+- 🔴 `sed -E 's/.*"id":"([^"]*)".*/\1/'` 는 `.*` 가 greedy 라 **마지막** `"id"` 를 집는다.
+  ASN 생성 응답에서 그것은 `lines[].id` 라, 뒤이은 호출이 라인 id 를 ASN id 로 보내
+  `404 ASN_NOT_FOUND` 가 났다. `grep -oE ... | head -1` 로 바꿨다.
+- 🔴 같은 `"lines"` 라도 **키가 다르다**: ASN 응답은 `id`, 적치 지시 응답은 `putawayLineId`.
+  틀리면 URL 이 조용히 깨져 curl 이 **상태코드조차 못 낸다**(빈 실패).
+- 출고 필드는 `orderedQty` 가 아니라 **`qtyOrdered`**, `requestedShipDate` 가 아니라
+  **`requiredShipDate`**, `lineNo` **필수**, 그리고 `tenantId` 는 바디에 없다.
+- Git Bash(msys)에는 `/proc/sys/kernel/random/uuid` 가 **없다** → openssl 로 만든다.
+- 🔵 `putaway_confirmation` 은 append-only 를 **트리거와 권한 양쪽으로** 강제한다.
+  그래서 `putaway_line` 삭제의 FK 검사(`SELECT ... FOR KEY SHARE`)까지 막혀 소유자
+  `inbound` 로도 지울 수 없다. 픽스처 정리에서만 부딪혔고 **제품 경로에서 도달
+  가능한지는 미확인** — 그래서 티켓으로 올리지 않고 여기 기록만 남긴다.
+
+## ⑤ AC-6 메모리 — 축소 WMS 슬라이스 실측
+
+```
+wms 축소 슬라이스(앱 6 + 인프라 4 = 10컨) ≈ 1.9 GiB
+  gateway 294 · master 558 · inventory 568 · kafka 380 · postgres 68 · redis 4 MiB
+전체 호스트 27컨(fan 9 + iam 7 + wms 10 + traefik) 시점 VM 사용 ≈ 6.9 / 11.68 GiB
+```
+
+⇒ 1회차의 "wms = 5,589 MiB" 는 **관측 사이드카 12개를 포함한 전체 스택**의 값이다.
+앱만 골라 띄우면 1/3 이다. **S5 도 도메인별로 쪼개면 가능성이 있다** — 1회차의
+"로컬 동시 기동 불가" 는 전체 스택 기준이지 앱 기준이 아니다.
+
+## ⑥ 이번 회차에서 하지 **않은** 것 (조용한 누락 없이)
+
+- **23개 화면 브라우저 검증(AC-2)** — console 을 띄우지 않았다. 시드는 API·DB 로
+  검증했고 화면은 **미확인**이다. "데이터가 있다" 와 "화면이 찬다" 는 다른 명제다.
+- **AC-4(브라우저 쓰기 1건)** — 같은 이유로 미착수.
+- **SCM · ERP · Finance** — 미착수. SCM(5)·Finance(3) 은 이미지부터 없다.
+
+---
+
 # Acceptance Criteria
 
-- [x] **AC-0 (재측정 + 테넌트 확인)** — 화면 모집단을 `console-nav-config.ts` 에서 다시 센다.
+- [~] **AC-0 (재측정 + 테넌트 확인)** — 🔴 **1회차의 [x] 를 되돌린다.** 화면 모집단(23)은
+      맞지만 **테넌트 판정이 틀렸다** — 2회차 ⓪ 참조. WMS 는 `BE-576` 형태로
+      **실제로 블록된다**(`/wms/outbound`). 나머지 3도메인은 여전히 미측정.
+      🔵 판정을 "테넌트 컬럼 있는 테이블 세기" 로 하지 말 것 — 아래 원문이 요구하는 것은
+      **목록 API 원소 수 대 DB 실측의 대조**다.
+      원문: 화면 모집단을 `console-nav-config.ts` 에서 다시 센다.
       **그리고 각 도메인이 `TASK-BE-576` 과 같은 테넌트 분리 증상을 갖는지 먼저 확인한다** —
       운영자 토큰으로 목록 API 를 호출해 **원소 수가 DB 실측과 일치하는지** 본다.
       200 은 판정 근거가 아니다(그 결함은 200 이었다). 불일치하면 이 티켓은 BE-576 에
       **블록된다** — 시드를 아무리 넣어도 화면은 비어 있다
-- [ ] **AC-1 (API 우선)** — `operator_token` 으로 각 도메인의 쓰기 API 를 쓴다. 직접-DB 는
+- [~] **AC-1 (API 우선)** — `operator_token` 으로 각 도메인의 쓰기 API 를 쓴다. 직접-DB 는
       `dbexec --why` 로만, 사유는 재검증 가능하게(막힌 엔드포인트와 실제 응답을 적는다)
+      → **WMS 완료**: 입고 5단계 + 출고 주문 전부 실제 API. 직접-DB 는 outbound 스냅샷
+      1건뿐이고 사유가 코드에 있다(`TASK-BE-580` 이 닫히면 삭제). SCM/ERP/Finance 미착수
 - [ ] **AC-2 (라이브 검증)** — 23개 화면을 **브라우저로** 연다
-- [ ] **AC-3 (프로젝션 의존 화면)** — ERP 통합 조회 · WMS 재고는 read-model 프로젝션에
+      → 🔴 **WMS 도 미확인.** console 미기동. 데이터 존재 ≠ 화면이 찬다
+- [~] **AC-3 (프로젝션 의존 화면)** — ERP 통합 조회 · WMS 재고는 read-model 프로젝션에
       의존한다. **프로듀서만 시드하면 화면은 여전히 빈다** — 프로젝션 서비스 기동을 슬라이스
       정의에 포함하고, 프로젝션이 따라잡을 때까지 기다린 뒤 판정한다
+      → **WMS 재고 충족**: 적치 확정 → Kafka → `inventory.available_qty=95`
+      (`created_by=system:putaway-consumer`) 실측. ERP 미착수
 - [ ] **AC-4 (대표 쓰기)** — 도메인마다 최소 1건의 쓰기 동작이 브라우저에서 성공한다
-      (예: WMS 출고 지시, ERP 결재 승인, Finance 거래 등록)
-- [ ] **AC-5 (멱등)** — 각 시드를 연속 2회 실행해도 수렴한다
-- [ ] **AC-6 (메모리 실측)** — S4 · S5 각각의 컨테이너 수 + 메모리를 기록한다.
+      (예: WMS 출고 지시, ERP 결재 승인, Finance 거래 등록) → 미착수(브라우저 미사용)
+- [~] **AC-5 (멱등)** — 각 시드를 연속 2회 실행해도 수렴한다
+      → **WMS 충족**: 2회차 `생성 0 · 기존 2 · 실패 0`, rc=0
+- [~] **AC-6 (메모리 실측)** — S4 · S5 각각의 컨테이너 수 + 메모리를 기록한다.
       **S5 가 로컬에서 아예 불가능하면 그 사실을 수치와 함께 적는다**(MONO-399 AC-2 의 입력이며,
       "못 했다" 도 유효한 측정이다)
-- [ ] **AC-7 (가드)** — `verify-demo-wrapper.sh` 가드 (y) 통과
-- [ ] **AC-8 (발굴 결함 분리)** — 별도 티켓. 0건이면 "0건" 이라고 적는다
+      → 축소 WMS 슬라이스(10컨 ≈ 1.9 GiB) 실측. 🔴 1회차의 5,589 MiB 는 관측 사이드카
+      포함값이었다 — **앱만이면 1/3**. S5 판정을 그 수치로 다시 해야 한다
+- [x] **AC-7 (가드)** — `verify-demo-wrapper.sh` 가드 (y) 통과
+      → PASS(rc=0). (y) 가 "도메인 시드 **3개** · 전부 dbexec 경유" 로 센다
+- [~] **AC-8 (발굴 결함 분리)** — 별도 티켓. 0건이면 "0건" 이라고 적는다
+      → **3건 기록**: `TASK-BE-579`(서비스가 HTTP 서빙을 멈추고 갇힘) ·
+      `TASK-BE-580`(outbound 만 `db/seed` 없음) · `TASK-BE-581`(데모 운영자가 자기가 만든
+      출고 주문을 못 본다 — 1회차 AC-0 을 뒤집는 건). WMS 범위 한정이며 나머지 3도메인은 미측정
 
 ---
 
