@@ -348,6 +348,121 @@ itself.
 
 ---
 
+## 5. Local verification gate — `pnpm lint` is not optional
+
+**Rule**: before pushing a change to any of this monorepo's Next.js apps, run
+**`pnpm lint`** as well as the typecheck and the unit tests.
+
+```bash
+# console-web (projects/platform-console/apps/console-web)
+pnpm lint && npx tsc --noEmit && pnpm test
+```
+
+**`tsc --noEmit` GREEN + `pnpm test` GREEN does not mean CI is GREEN.** The two
+are blind to a whole class of failure that CI treats as fatal:
+
+| Check | Catches | Blind to |
+|---|---|---|
+| `npx tsc --noEmit` | type errors | **unused imports/vars** — `noUnusedLocals`/`noUnusedParameters` are not enabled, so `tsc` does not consider them errors |
+| `pnpm test` (vitest) | logic regressions | lint entirely — vitest does not run ESLint |
+| `pnpm lint` | `@typescript-eslint/no-unused-vars` and the rest of the Next.js ESLint config | runtime behaviour, navigation (see § 5.2) |
+
+The lint rule that bites most often is `@typescript-eslint/no-unused-vars`, and
+it bites for a mundane reason: **deleting the last use of something rarely
+deletes the import.** Refactor a loader into a generic fallback, drop a
+`<Suspense>`, replace a token bridge — the identifier goes, the `import` line
+stays, and only ESLint objects.
+
+### 5.1 Which CI job enforces it
+
+Lint is a **dedicated CI step for all three frontend apps** — not merely a side
+effect of the build (measured against `.github/workflows/ci.yml`, 2026-08-06):
+
+| App | Job that runs `pnpm lint` | Step |
+|---|---|---|
+| `console-web` | `Frontend unit tests (ecommerce + fan-platform + console-web, vitest)` | `Lint (console-web)` — runs *after* `pnpm test` and `npx tsc --noEmit` in the same job |
+| `web-store` (ecommerce) | `Frontend lint & build (ecommerce + fan-platform)` | `Lint (ecommerce)`, then `Build (ecommerce)` |
+| `fan-platform-web` | `Frontend lint & build (ecommerce + fan-platform)` | `Lint (fan-platform)`, then `Build (fan-platform)` |
+
+There is a **second, independent path** to the same failure: `next build` runs
+ESLint after compiling and reports violations as `Failed to compile`. So
+`Frontend E2E smoke (web-store + fan-platform-web + console-web, Playwright)`
+— which does `pnpm build` for `fan-platform-web` and `console-web` before
+driving Playwright — goes red on a lint violation too, before a single test
+runs.
+
+**Prefer the mechanism over the job name when reasoning about this.** Job names
+get renamed; "lint runs as its own CI step, and `next build` runs it again"
+survives. One consequence of the two paths: a single unused import can take out
+*two* jobs at once, which is what makes the failure look alarming out of
+proportion to its one-line fix.
+
+> Note the asymmetry, so a green run isn't over-read: `console-web` is the only
+> app with an explicit `npx tsc --noEmit` CI step. `web-store` and
+> `fan-platform-web` get their typecheck implicitly, via `pnpm build`.
+
+### 5.2 What this gate does **not** catch
+
+Three GREEN checks locally is a necessary condition, not a sufficient one.
+Known gaps, each owned elsewhere:
+
+- **Playwright smoke URL assertions** — `e2e-smoke/*.spec.ts` asserts URL globs
+  (`page.waitForURL('**/login')`). Change a guard or login redirect (e.g. bare
+  `/login` → `/login?redirect=<dest>`) and the glob stops matching → timeout
+  RED, while lint + tsc + vitest all stay GREEN because unit tests don't
+  navigate. Rule body:
+  [`platform/testing-strategy.md`](../../../../platform/testing-strategy.md)
+  § "Frontend E2E Smoke (Playwright URL assertions)" — repo-universal, so it
+  lives there rather than here.
+- **Testcontainers integration lanes** — untouched by any frontend check; CI
+  Linux is the authority (Docker-on-Windows is unreliable locally).
+- **Nightly-only suites** — the console and web-store full-stack e2e suites run
+  in `nightly-e2e.yml`, not `ci.yml`. A route/nav/testid/heading change can
+  merge green having never been exercised (see `CLAUDE.md` § Git discipline,
+  "Post-merge nightly check").
+
+### 5.3 `web-store` and `fan-platform-web` — same gate, different local reality
+
+The rule applies to all three apps; what differs is **how much of it you can
+actually run on a developer machine**. Measured 2026-08-06 from each app's
+`package.json`:
+
+| App | Next | vitest | `lint` script | Local gate |
+|---|---|---|---|---|
+| `console-web` | `15.0.3` | `^2.1.4` | `next lint` | all three run locally |
+| `web-store` | `^15.1.0` | `^4.1.0` | `next lint` | `pnpm lint` + `tsc` only — **vitest 4 does not start under Node 24**; CI (Node 20) is the authority for its unit tests |
+| `fan-platform-web` | `^15.1.0` | `^3.2.4` | `next lint --dir src` | not measured on this host — do not assume either way |
+
+Two things follow. First, **"CI is the authority" is not a licence to skip the
+part that does run** — `pnpm lint` and `tsc` work fine for `web-store`, and they
+are exactly the checks that catch the unused-import class. Second,
+`fan-platform-web`'s local behaviour has never been measured by the incidents
+behind this section; it is listed as unmeasured rather than assumed green,
+because recording an unmeasured app as passing is how a table like this starts
+lying.
+
+The rule body for all three lives **here**, once — the same decision § 4 made
+for the date/time convention. Only the implementations are per-app.
+
+### Established by
+
+- `#1489` (TASK-PC-FE-076) — the incident: an `ErpUnavailableError` import left
+  unused by an erp-state 4-loader refactor. Local `tsc` + vitest 1351 GREEN,
+  both frontend CI jobs RED, fixed by deleting one import line. The OTEL
+  `module not found` warnings in that build log were pre-existing noise — the
+  real cause is always the line right after `Failed to compile`.
+- TASK-FE-074 / FE-075 / FE-076 / FE-082 / BE-430 — `web-store` task ACs that
+  each restated this gate individually (FE-075 also hit it for real: an unused
+  import left behind after token-bridge removal). Restating a rule in five task
+  bodies is what having no canonical home looks like.
+- TASK-PC-FE-272 — this section (rule moved out of agent memory into the repo).
+
+> Deliberately **not** moved here from the originating agent memory: the
+> worktree `node_modules` junction setup and its teardown-order hazard. That is
+> worktree operations, not a UI convention — it stays in agent memory.
+
+---
+
 ## Provenance / re-verification (AC-1)
 
 This document was written after re-reading the current code (2026-07-14), not
@@ -370,3 +485,4 @@ verdict, and the exact `DelegationFactCard`/`DelegationGrantList`/
 | `DetailHeader` promoted to `shared/ui/` | TASK-PC-FE-237 § F |
 | `StatusBadge` extraction | TASK-PC-FE-158 |
 | `StatusBadge` roll-out to remaining domains | TASK-PC-FE-159 |
+| § 5 local verification gate (`pnpm lint`), CI job names, per-app tooling table | TASK-PC-FE-272 (`#1489` incident; job names + `package.json` versions re-measured 2026-08-06, not copied from the memory note) |
