@@ -265,7 +265,8 @@ SHIPPED → IN_TRANSIT → DELIVERED) 자격을 만든다. 그 과정에서 콘�
 | WMS **출고는 주문까지**만 심는다 | 예약은 `INVENTORY_RESERVE` 를 요구하는데 운영자에게 파생되지 않고, 배송은 도달 불가 TMS 스텁에 의존한다 | `TASK-MONO-514` |
 | WMS **마스터 쓰기는 API 로 불가** | `master-service` 는 `MASTER_WRITE`/`MASTER_ADMIN` 을 요구하는데 `OperatorRoleDerivation` 은 `MASTER_READ` 까지만 준다(형제 3개에는 READ+WRITE 를 주는 비대칭). 데모 마스터 데이터는 Flyway 시드로 들어간다 | `TASK-MONO-514` |
 | 🔴 `inventory-service` · `outbound-service` 가 **HTTP 를 아예 안 받는 상태로 갇힌다** | 컨테이너는 `Up`, Kafka 는 도는데 모든 경로가 매달린다. 기동 실패가 아니라 **뜬 뒤 임의 시점에** 갇히고(+3분 healthy → +9분 unhealthy) 스스로 회복하지 않는다. 단독 `restart` 로 복구. 게이트웨이는 **504 를 내는데 쓰기는 성공해 있을 수 있다** | `TASK-BE-579` |
-| `outbound-service` 의 마스터 read-model 이 **영구히 0행** | 그 스냅샷은 `master.*` 이벤트로만 차는데 데모 마스터는 Flyway 직접 INSERT 라 이벤트가 없다. 형제(inbound·inventory)는 각자 `db/seed/V99` 로 메웠고 **outbound 만 누락**. 현재는 시드가 `dbexec --why` 로 대신 메운다 | `TASK-BE-580` |
+| ~~`outbound-service` 의 마스터 read-model 이 영구히 0행~~ — **해소됨** | 시드 파일은 **있었는데 `db/dev/` 에 있어 한 번도 실행된 적이 없었다**(형제 셋은 `db/seed/` 를 쓰고, 저장소의 어떤 `spring.flyway.locations` 도 `db/dev` 를 부르지 않는다). `db/seed/` 로 옮기고 빠져 있던 `application-dev.yml` 을 더해 살렸다 ⇒ 이제 Flyway 가 채우고 시드의 `dbexec` 는 사라졌다 | `TASK-BE-580` (review) |
+| 🔴 wms 서비스가 **HTTP 를 안 받는 상태로 갇히는 빈도가 높다** | 볼륨 삭제 후 신선 기동 **4회 중 4회** `outbound` 또는 `inventory` 가 갇혔다. 🔴 그동안 `docker ps` 는 최대 **3분간 `healthy` 라고 거짓 보고**한다(`interval 15s × retries 12`) — 헬스가 초록인데 게이트웨이는 504 다. 데모 중 해당 화면이 죽으면 그 서비스만 `docker compose -p wms ... restart <svc>` | `TASK-BE-579` |
 | 장바구니는 시드할 수 없다 | `localStorage` 기반(클라이언트 상태) — 면접관이 담으면 즉시 찬다 | — |
 | 상품 이미지가 MinIO 에 없다 | V8 시드의 원격 `thumbnailUrl` 로 표시된다(깨지지 않음) | — |
 | 로컬 호스트에서 8프로젝트 동시 기동 불가 | 실측: `iam+console+ecommerce` 35컨테이너 = 9.2 GiB, `iam+fan+console` 26컨테이너 = **7.7 GiB** (팬 슬라이스 단독 9컨 = 2.4 GiB) / 도커 가용 11.7 GiB ⇒ 스토어와 팬은 **번갈아** 띄운다 | `TASK-MONO-399` AC-2 |
