@@ -301,6 +301,137 @@ wms 축소 슬라이스(앱 6 + 인프라 4 = 10컨) ≈ 1.9 GiB
 
 ---
 
+# 🟢 착수 4회차 (2026-08-06) — **ERP 시드 완료.** 그리고 이 도메인의 이벤트 평면이 죽어 있었다
+
+## ⓪ AC-0 (erp) — **BE-576 형 분리는 없다.** 이번엔 대리지표가 아니라 원문의 술어로 쟀다
+
+2회차가 스스로 적어 둔 교훈("테넌트 컬럼 세기는 대리지표다 — **목록 API 원소 수 대 DB
+실측**을 대조하라")을 그대로 적용했다:
+
+```
+                      BFF 원소 수   DB COUNT(*)
+departments                3            3
+employees                  4            4
+job-grades                 3            3
+cost-centers               3            3
+business-partners          3            3
+approval/requests          3            3
+approval/delegations       1            1
+```
+
+**전 항목 일치** ⇒ erp 는 "200 + 빈 배열" 이 아니다. 🔵 `information_schema.table_rows`
+는 InnoDB 에서 **추정치**라 판정에 쓰지 않았다 — 전부 `COUNT(*)` 다.
+
+테넌트 게이트도 갈렸다(같은 엔드포인트, 토큰만 교체):
+
+```
+base 콘솔 토큰   tenant_id=iam        → 10/10 엔드포인트 403 TENANT_FORBIDDEN
+assume demo-corp tenant_id=demo-corp  → 10/10 200
+```
+
+게이트웨이 `required-tenant-id` 는 compose 에 `erp` 로 **하드코딩**돼 있는데 `demo-corp`
+가 통과한다 — `tenantGate()` 가 `.trustEntitledDomains()` 를 걸어 두었고 운영자 토큰의
+`entitled_domains` 에 `erp` 가 있기 때문이다. **설정값만 보고 403 을 예단하지 말 것.**
+
+## ① `infra/demo/seed/seed-erp.sh` — 커밋했다. 직접-DB **0건**
+
+**볼륨을 지우고 새로 띄운 스택**에서 통과한 뒤에만 커밋했다. 마스터 5종 + 결재 3건 +
+위임 1건 = **20건 전부 실제 API**. 1회차가 `MASTER_WRITE` 로 막혔던 wms 와 달리 erp 는
+다섯 마스터 전부에 생성 엔드포인트가 있고 운영자 토큰이 그것을 연다.
+
+```
+1회차(깨끗한 볼륨)  생성 20 · 기존  0 · 실패 0 · 차단 3   rc=0
+2회차(멱등)         생성  0 · 기존 20 · 실패 0 · 차단 3   rc=0
+```
+
+**AC-5 충족.** 멱등은 자연키(`code`/`employeeNumber`)를 **목록에서 먼저 찾는** 방식이다 —
+409 응답에는 id 가 없어서 2회차에 하위 마스터를 만들 수 없기 때문이다.
+
+## ② 🔴 시드의 준비성 게이트가 **깨진 술어**였다 (다음 사람 몫)
+
+첫 깨끗한-볼륨 기동에서 **16건 전부 실패**했다. `wait_http` 는 통과했는데:
+
+```
+wait_http /api/erp/masterdata/departments   → 401 ⇒ "살아 있음" 으로 판정, 통과
+POST     /api/erp/masterdata/job-grades     → 500
+게이트웨이 로그: Connection refused: masterdata-service/172.24.0.9:8080
+masterdata 로그: 에러 0건                     ← 요청이 도달조차 하지 않았다
+```
+
+**토큰 없는 401 은 게이트웨이 자신의 시큐리티 필터가 낸다 — 뒤의 서비스에 닿지 않는다.**
+게이트웨이 단독이면 맞는 술어지만, 백엔드 준비성에 대해서는 **아무것도 증명하지 않는다.**
+`seed-erp.sh` 에 `wait_backend`(토큰을 얻은 뒤 **인증된** GET 이 2xx 일 때까지)를 넣고
+masterdata·approval·read-model **셋을 각각** 확인한다 — 하나로 나머지를 추정하면 같은
+함정을 한 겹 아래에서 반복한다.
+
+## ③ 🔴🔴 발굴 결함 3건 — 그중 둘은 **erp 이벤트 평면 전체가 죽어 있다**
+
+| 티켓 | 증상 | 근거 |
+|---|---|---|
+| `TASK-ERP-BE-041` | 상신이 **항상** 422 `subject_unresolved` | `MasterDataRestAdapter` 가 masterdata 를 **토큰 없이** 호출 → 컨테이너 안 실측 `HTTP/1.1 401` → `onStatus(4xx)` 가 삼켜 "ACTIVE 아님" 이 된다 |
+| `TASK-ERP-BE-042` | read-model 프로젝션 **영구 0** | 아웃박스 UNPUBLISHED 17/1, **kafka end-offset 전 토픽 `:0:0`**. `@Scheduled` 는 있는데 `@EnableScheduling` 이 **없다** — erp 5앱 중 notification 하나만 갖고 있다(wms 6/6 · scm · finance 는 전부 보유) |
+| `TASK-MONO-515` | 결재함이 **어떤 콘솔 사용자에게도** 비어 있다 | assume 토큰 `sub` = `platform-console-web`(계정 아님) + 자기결재 금지 + token-exchange grant 클라이언트가 **1개뿐** ⇒ `demo-corp` 의 actorId 는 정확히 하나 |
+
+🔴 **BE-042 의 판정은 소비자가 아니라 브로커에서 냈다.** "프로젝션이 0" 은 지연일 수도
+있고 발행 부재일 수도 있다. `kafka-get-offsets` 이 전 토픽 0 을 보여야 후자가 확정된다.
+
+🔵 **MONO-515 는 결함으로 단정하기 직전에 멈춰서 확인한 것이다.** `sub` 손실을 iam 버그로
+티켓 낼 뻔했는데, `AssumeTenantExchangeIntegrationTest` 가 *"the assumed token's own sub
+is the acting console client … per the RFC 8693 flow"* 라고 **명시적으로 단언**하고
+있었다. 그래서 티켓의 방향이 "버그 수정" 이 아니라 **"문서화된 결정과 erp 결재의 신원
+모델이 충돌한다 → ADR"** 이 됐다.
+
+## ④ 시드가 **알려진 결함**과 **자기 실패**를 구별한다
+
+BE-041/042 는 시드가 고칠 수 없다(Scope: 제품 코드 변경 별도 티켓). 그것을 `seed_fail`
+로 세면 `demo-up.sh` 가 매 실행 빨개져 진짜 회귀가 묻히고, 조용히 넘기면 데모가 비었는데
+시드는 초록이 된다. 그래서 **세 번째 분류(`⛔ 차단`)** 를 뒀다 — 실패 신호가 그 결함의
+**정확한 지문**(`"cause":"subject_unresolved"` / 프로젝션 0)과 맞을 때만 차단으로 세고
+티켓 번호를 찍는다. 지문이 어긋나면 그대로 실패다. ⇒ 결함이 고쳐지면 그 경로는 **저절로
+다시 성립하고**, 새로운 고장은 여전히 빨개진다.
+
+## ⑤ AC-2 (erp 6화면) — BFF 원소 수로 판정
+
+| 화면 | 상류 원소 수 | 판정 |
+|---|---|---|
+| `/erp` 개요 | (마스터 집계) | ✅ |
+| `/erp/guide` | 정적 | ✅ |
+| `/erp/masters` | 3·4·3·3·3 (5탭 전부) | ✅ |
+| `/erp/approval` | 요청 **3** / 결재함 **0** | 🟡 목록만 — 결재함은 `MONO-515` |
+| `/erp/delegation` | 위임 **1** / read-model **0** | 🟡 원본만 — 프로젝션은 `ERP-BE-042` |
+| `/erp/orgview` | **0** | ⛔ `ERP-BE-042` |
+
+⇒ **6화면 중 4개 충족, 2개가 제품 결함에 막혀 있다.**
+
+🔴 **페이지 HTML 로 판정하려던 시도는 오탐을 냈다.** "degrade 문구" 를 grep 했더니 3개
+화면이 걸렸는데, 실제로 매치된 것은 정상 안내 문구(*"권한이 없는 작업은 실행 시
+안내됩니다"*)였다. 콘솔은 클라이언트 렌더라 **판정은 BFF 원소 수로만** 한다.
+
+## ⑥ AC-6 (erp 메모리) — 8컨 **3,854 MiB**
+
+```
+kafka 890 · notification 723 · masterdata 580 · approval 542 · mysql 428
+gateway 310 · read-model 375 · redis 7                       = 3,854 MiB
+iam + console + erp = 25컨,  VM 사용 9.85 / 11.96 GiB
+```
+
+🔵 **S5 판정을 다시 한다.** erp(앱 5) 하나가 3.85 GiB 다. scm(5) + erp(5) + finance(3) +
+iam + console 을 **동시에** 올리면 인프라 3세트까지 더해 10 GiB 를 넘겨 호스트 한계에
+닿는다 ⇒ **S5 동시 기동은 여전히 불가**로 본다. 도메인을 하나씩 올리는 슬라이스 분해가
+정답이고, 이번 회차가 그 방식으로 성립함을 보였다.
+
+🔴 이 회차를 위해 **wms · fan 슬라이스를 내렸다**(`demo-down.sh wms fan`, 볼륨 보존).
+착수 시점 available 이 1.27 GiB, swap 3.68/4.0 GiB 로 포화라 erp 를 올릴 자리가 없었다.
+
+## ⑦ 이번 회차에서 하지 **않은** 것
+
+- **AC-4(브라우저 쓰기 1건)** — erp 의 자연스러운 쓰기는 결재 승인인데 `MONO-515` 로
+  막혀 있다. 부서 생성(콘솔 PC-FE-046 write pilot)이 대안이나 **미실행**이다
+- **SCM · Finance** — 미착수. 이미지부터 없다(scm 5 · finance 3 서비스 빌드 필요)
+- **erp 이벤트 평면 수정** — Scope 상 별도 티켓(`ERP-BE-042`)
+
+---
+
 # Acceptance Criteria
 
 - [~] **AC-0 (재측정 + 테넌트 확인)** — 🔴 **1회차의 [x] 를 되돌린다.** 화면 모집단(23)은
@@ -313,10 +444,15 @@ wms 축소 슬라이스(앱 6 + 인프라 4 = 10컨) ≈ 1.9 GiB
       운영자 토큰으로 목록 API 를 호출해 **원소 수가 DB 실측과 일치하는지** 본다.
       200 은 판정 근거가 아니다(그 결함은 200 이었다). 불일치하면 이 티켓은 BE-576 에
       **블록된다** — 시드를 아무리 넣어도 화면은 비어 있다
+      → **ERP 완료(4회차)**: 7개 목록의 **BFF 원소 수 = DB `COUNT(*)`** 전항 일치 ⇒
+      BE-576 형 분리 **없음**. 🔵 `information_schema.table_rows` 는 InnoDB 추정치라
+      판정에 쓰지 않았다. SCM/Finance 미측정
 - [~] **AC-1 (API 우선)** — `operator_token` 으로 각 도메인의 쓰기 API 를 쓴다. 직접-DB 는
       `dbexec --why` 로만, 사유는 재검증 가능하게(막힌 엔드포인트와 실제 응답을 적는다)
       → **WMS 완료**: 입고 5단계 + 출고 주문 전부 실제 API. 직접-DB 는 outbound 스냅샷
-      1건뿐이고 사유가 코드에 있다(`TASK-BE-580` 이 닫히면 삭제). SCM/ERP/Finance 미착수
+      1건뿐이고 사유가 코드에 있다(`TASK-BE-580` 이 닫히면 삭제).
+      → **ERP 완료(4회차)**: 마스터 5종 + 결재 3 + 위임 1 = **20건 전부 실제 API,
+      직접-DB 0건**. SCM/Finance 미착수
 - [~] **AC-2 (라이브 검증)** — 23개 화면을 **브라우저로** 연다
       → **WMS 7화면 스윕 완료(3회차, 2026-08-06)**: 콘솔 기동 + 헤드리스 로그인 +
       `POST /api/tenant {"tenant":"demo-corp"}` 성립, 7화면 전부 `200`.
@@ -335,26 +471,48 @@ wms 축소 슬라이스(앱 6 + 인프라 4 = 10컨) ≈ 1.9 GiB
       HTML grep 은 전 화면 0건을 내는 **깨진 탐지기**였다. 판정은 BFF API 원소 수로 한다
       (🔵 로그인 진입점도 `/` 가 아니라 **`/api/auth/login`** 이다 — `/` 는 콘솔 자체
       로그인 화면 HTML 만 주고 IAM CSRF 를 못 찾는다)
+      → **ERP 6화면 스윕 완료(4회차)**: `/erp`·`/erp/guide`·`/erp/masters`(5탭 3·4·3·3·3)
+      ·`/erp/delegation`(위임 1) 충족, `/erp/approval` 은 **목록 3 / 결재함 0**(`MONO-515`),
+      `/erp/orgview` **0**(`ERP-BE-042`) ⇒ **4/6.** 🔴 페이지 HTML 로 degrade 를 판정하려던
+      휴리스틱은 **오탐**을 냈다(정상 안내 문구에 매치) — 판정은 BFF 원소 수만.
+      ⇒ 23화면 중 **WMS 7 + ERP 6 = 13 측정 완료**, SCM 6 · Finance 4 미착수
 - [~] **AC-3 (프로젝션 의존 화면)** — ERP 통합 조회 · WMS 재고는 read-model 프로젝션에
       의존한다. **프로듀서만 시드하면 화면은 여전히 빈다** — 프로젝션 서비스 기동을 슬라이스
       정의에 포함하고, 프로젝션이 따라잡을 때까지 기다린 뒤 판정한다
       → **WMS 재고 충족**: 적치 확정 → Kafka → `inventory.available_qty=95`
-      (`created_by=system:putaway-consumer`) 실측. ERP 미착수
+      (`created_by=system:putaway-consumer`) 실측.
+      → **ERP 는 충족 불가로 확정**: 프로젝션이 늦은 게 아니라 **한 번도 발행되지
+      않았다** — 아웃박스 UNPUBLISHED 17/1, kafka end-offset 전 토픽 `:0:0`.
+      원인·티켓 `TASK-ERP-BE-042`. 🔴 이 구분(지연 vs 발행 부재)은 **브로커 offset** 으로만
+      난다. 시드는 그래도 **기다린 뒤** 판정한다(120초 폴링 후 `⛔ 차단`)
 - [ ] **AC-4 (대표 쓰기)** — 도메인마다 최소 1건의 쓰기 동작이 브라우저에서 성공한다
-      (예: WMS 출고 지시, ERP 결재 승인, Finance 거래 등록) → 미착수(브라우저 미사용)
+      (예: WMS 출고 지시, ERP 결재 승인, Finance 거래 등록) → 미착수(브라우저 미사용).
+      🔴 ERP 의 자연스러운 후보였던 **결재 승인은 `MONO-515` 로 도달 불가**다 — 대안은
+      부서 생성(콘솔 PC-FE-046 write pilot)
 - [~] **AC-5 (멱등)** — 각 시드를 연속 2회 실행해도 수렴한다
       → **WMS 충족**: 2회차 `생성 0 · 기존 2 · 실패 0`, rc=0
+      → **ERP 충족**: 깨끗한 볼륨 1회차 `생성 20 · 기존 0 · 실패 0`, 2회차
+      `생성 0 · 기존 20 · 실패 0`, 양쪽 rc=0
 - [~] **AC-6 (메모리 실측)** — S4 · S5 각각의 컨테이너 수 + 메모리를 기록한다.
       **S5 가 로컬에서 아예 불가능하면 그 사실을 수치와 함께 적는다**(MONO-399 AC-2 의 입력이며,
       "못 했다" 도 유효한 측정이다)
       → 축소 WMS 슬라이스(10컨 ≈ 1.9 GiB) 실측. 🔴 1회차의 5,589 MiB 는 관측 사이드카
       포함값이었다 — **앱만이면 1/3**. S5 판정을 그 수치로 다시 해야 한다
+      → **ERP 슬라이스 8컨 = 3,854 MiB** 실측(iam+console 포함 25컨에서 VM 9.85/11.96 GiB).
+      ⇒ **S5 동시 기동은 여전히 불가**로 판정한다 — erp 하나가 3.85 GiB 이므로
+      scm(5앱)+erp(5)+finance(3)+iam+console 은 10 GiB 를 넘긴다. 도메인별 슬라이스가 정답
 - [x] **AC-7 (가드)** — `verify-demo-wrapper.sh` 가드 (y) 통과
-      → PASS(rc=0). (y) 가 "도메인 시드 **3개** · 전부 dbexec 경유" 로 센다
+      → PASS(rc=0). (y) 가 "도메인 시드 **4개**(erp 추가) · 전부 dbexec 경유" 로 센다
 - [~] **AC-8 (발굴 결함 분리)** — 별도 티켓. 0건이면 "0건" 이라고 적는다
-      → **3건 기록**: `TASK-BE-579`(서비스가 HTTP 서빙을 멈추고 갇힘) ·
+      → **WMS 3건**: `TASK-BE-579`(서비스가 HTTP 서빙을 멈추고 갇힘) ·
       `TASK-BE-580`(outbound 만 `db/seed` 없음) · `TASK-BE-581`(데모 운영자가 자기가 만든
-      출고 주문을 못 본다 — 1회차 AC-0 을 뒤집는 건). WMS 범위 한정이며 나머지 3도메인은 미측정
+      출고 주문을 못 본다 — 1회차 AC-0 을 뒤집는 건).
+      → **ERP 3건**: `TASK-ERP-BE-041`(상신이 항상 422 — 내부 호출이 토큰 없이 나가 401) ·
+      `TASK-ERP-BE-042`(아웃박스 릴레이가 한 번도 안 돈다 — `@EnableScheduling` 부재,
+      erp 만 형제 파리티 낙오) · `TASK-MONO-515`(콘솔 운영자가 결재함을 영원히 못 쓴다 —
+      assume 토큰 `sub` 가 클라이언트 id).
+      🔵 MONO-515 는 **결함 단정 직전에 멈춰서** iam IT 의 반대 단언을 찾아냈고, 그래서
+      "버그 수정" 이 아니라 **ADR 필요**로 방향이 바뀌었다. SCM/Finance 미측정
 
 ---
 
