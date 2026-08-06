@@ -21,6 +21,7 @@ const baseAuth = {
   isAuthenticated: false,
   isLoading: false,
   login: vi.fn(),
+  signup: vi.fn(),
   logout: vi.fn(),
 };
 

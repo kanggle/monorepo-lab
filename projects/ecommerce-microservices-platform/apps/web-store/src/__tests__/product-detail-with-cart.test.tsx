@@ -46,6 +46,7 @@ vi.mock('@/features/auth', () => ({
     isLoading: false,
     user: null,
     login: vi.fn(),
+    signup: vi.fn(),
     logout: vi.fn(),
   }),
 }));

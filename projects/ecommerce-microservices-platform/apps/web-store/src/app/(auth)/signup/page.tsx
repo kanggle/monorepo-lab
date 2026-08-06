@@ -28,19 +28,26 @@ import { AuthCardLayout, useAuth } from '@/features/auth';
  *
  * So this goes through the same `signIn('iam')` the login button uses — one
  * mechanism, so the two cannot drift — which reaches IAM carrying the saved
- * authorize request. IAM's login page is where "회원가입" lives; landing the user
- * one click from the form is what this app can do without changing IAM. A
- * registration hint that would skip that click is TASK-BE-578.
+ * authorize request.
+ *
+ * <h2>Landing on the form, not one click from it (TASK-BE-578)</h2>
+ *
+ * This used to reach IAM's *login* page, where the user had to press "회원가입"
+ * a second time; the comment here said skipping that click needed IAM to change,
+ * and BE-578 is that change. `signup()` sends the OIDC standard `prompt=create`
+ * on the authorize request and IAM's entry point routes it to its signup form.
+ * The authorize request itself is otherwise identical, which is what keeps the
+ * new account in the `ecommerce` tenant.
  */
 export default function SignupPage() {
-  const { login } = useAuth();
+  const { signup } = useAuth();
   const started = useRef(false);
 
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    void login('/');
-  }, [login]);
+    void signup('/');
+  }, [signup]);
 
   // Shown while the redirect is in flight — and it is the whole page if JS never
   // runs, so the button is the fallback rather than decoration.
@@ -48,12 +55,11 @@ export default function SignupPage() {
     <AuthCardLayout>
       <h1 className="auth-title">회원가입</h1>
       <p style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--space-6)' }}>
-        회원가입은 Global Account 에서 진행합니다. 이동한 화면에서 &lsquo;회원가입&rsquo; 을
-        선택해 주세요.
+        회원가입은 Global Account 에서 진행합니다. 잠시만 기다려 주세요.
       </p>
       <button
         type="button"
-        onClick={() => void login('/')}
+        onClick={() => void signup('/')}
         className="btn btn-primary btn-lg"
         style={{ width: '100%' }}
       >

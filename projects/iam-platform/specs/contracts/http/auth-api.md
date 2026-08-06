@@ -64,7 +64,7 @@ RSA 공개키 JWK Set. SAS 발급 토큰 검증용. (TASK-BE-398 이전에는 �
 
 Authorization Code + PKCE 플로우 시작. PKCE (`code_challenge_method=S256`) 필수.
 
-**Auth required**: No (사용자 세션 없으면 login 페이지로 redirect)
+**Auth required**: No (사용자 세션 없으면 login 페이지로 redirect — `prompt=create` 면 signup 페이지)
 
 **Query Parameters**:
 
@@ -77,6 +77,7 @@ Authorization Code + PKCE 플로우 시작. PKCE (`code_challenge_method=S256`) 
 | `code_challenge` | Y | S256 방식으로 계산된 PKCE challenge |
 | `code_challenge_method` | Y | `S256` 고정 |
 | `state` | 권장 | CSRF 방어용 opaque 값 |
+| `prompt` | N | 공백 구분 OIDC prompt 목록. **`create` 를 포함하면 registration hint** (TASK-BE-578, 아래) |
 
 **Response**: 302 redirect to `redirect_uri?code=...&state=...`
 
@@ -87,6 +88,38 @@ Authorization Code + PKCE 플로우 시작. PKCE (`code_challenge_method=S256`) 
 | PKCE 미포함 | 400 `invalid_request` |
 | 미등록 client | 400 `invalid_client` |
 | 미등록 redirect_uri | 400 `invalid_request` |
+
+#### Registration hint — `prompt=create` (TASK-BE-578)
+
+가입 의도로 온 사용자를 **미인증 상태에서 로그인 폼이 아니라 가입 폼(`/signup`)으로** 보낸다. OIDC 표준 *Initiating User Registration via OpenID Connect 1.0* 의 `prompt=create` 를 그대로 쓴다.
+
+아래는 전부 **라이브 실측**(auth-service 컨테이너, `ecommerce-web-store-client`)이다.
+
+| 요청 | 미인증 | 인증됨 |
+|---|---|---|
+| `prompt` 없음 | 302 `/login` | 302 `redirect_uri?code=…` |
+| `prompt=create` | **302 `/signup`** | 302 `redirect_uri?code=…` (hint 무효) |
+| `prompt=login` 등 SAS 미구현 값 | 302 `/login` | 302 `redirect_uri?code=…` |
+| `prompt=created` · `prompt=Create` | 302 `/login` (hint 아님) | 302 `redirect_uri?code=…` |
+| `prompt=none` / `prompt=none create` | 302 `redirect_uri?**error=login_required**` (SAS 가 처리) | 302 `redirect_uri?code=…` |
+
+규칙:
+
+- **파싱은 공백 구분 토큰 단위**다(OIDC Core 3.1.2.1). `created` / `recreate` 처럼 `create` 를 *포함만* 하는 값은 hint 가 아니며, 값은 대소문자를 구분한다.
+- **`none` 충돌은 SAS 가 해결한다.** `prompt=none` 은 "어떤 UI 도 띄우지 말라" 는 뜻이라 가입 폼 요청과 상충하는데, **SAS 의 authorization endpoint 필터가 entry point 보다 먼저** `login_required` 로 단락시킨다. 즉 UI 를 안 띄운다는 요구가 그대로 지켜진다. `RegistrationHintRequestMatcher` 에도 `none` 이 `create` 를 이기는 규칙이 있으나 **현재는 도달하지 않는 방어선**이며, 그 규칙 자체는 단위 테스트에서만 검증된다.
+- **인증된 사용자에게는 아무 효과가 없다.** 분기는 미인증 요청에만 도는 entry point 에 있다. 그래서 가입을 마치고 authorize 를 재개할 때 저장된 요청이 hint 를 그대로 달고 있어도 정상적으로 code 가 발급된다.
+
+🔵 **표준값을 고른 근거(실측)**: SAS 는 **자기가 구현하지 않은 `prompt` 값을 거부하지 않고 무시**한다 — `prompt=bogusvalue` 도 hint 없는 요청과 동일하게 동작한다. 그래서 표준 `create` 를 실어도 SAS 검증을 건드리지 않는다. 유일하게 SAS 가 **구현하는** 값이 `none` 이고, 그 동작은 위 표에 그대로 적혀 있다.
+
+🔴 **hint 는 tenant 를 정하지 않는다.** 새 계정의 tenant 는 계속 저장된 `/oauth2/authorize` 요청의 `client_id` 에서만 나온다(`SavedRequestTenantResolver`). hint 를 tenant 출처로 승격시키면 임의 값으로 tenant 를 고르는 구멍이 열린다 — `TASK-FE-097` 이 IAM `/signup` 직링크를 기각한 것과 같은 이유다. 어떤 클라이언트가 hint 를 보내든 tenant 는 그 클라이언트에서 나온다.
+
+🔵 **저장된 요청은 소비되지 않는다.** `ExceptionTranslationFilter` 가 entry point 호출 **전에** 요청을 저장하고 두 분기 모두 리다이렉트만 하므로, 가입 완료 → `/login?registered` → 로그인 → 원래 authorize 재개 경로가 그대로 유지된다.
+
+**호출 측**: `signIn(provider, options, authorizationParams)` 세 번째 인자로 얹는다. 예 — web-store `/signup`:
+
+```ts
+signIn('iam', { callbackUrl: '/' }, { prompt: 'create' });
+```
 
 ---
 

@@ -7,6 +7,7 @@ import com.example.auth.domain.repository.DeviceSessionRepository;
 import com.example.auth.domain.repository.RefreshTokenRepository;
 import com.example.auth.domain.token.TokenReuseDetector;
 import com.example.auth.infrastructure.oauth2.persistence.JpaOAuth2AuthorizationService;
+import com.example.auth.infrastructure.security.RegistrationHintRequestMatcher;
 import org.springframework.jdbc.core.JdbcOperations;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.jwk.JWKSet;
@@ -41,12 +42,16 @@ import org.springframework.security.oauth2.server.authorization.token.OAuth2Toke
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.DelegatingAuthenticationEntryPoint;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
+import java.util.LinkedHashMap;
 
 /**
  * Spring Authorization Server configuration — Phase 2c (TASK-BE-251) + TASK-BE-252.
@@ -255,7 +260,7 @@ public class AuthorizationServerConfig {
                         // TASK-BE-398 has since removed. The HTML-only request matcher
                         // (text/html only) below leaves programmatic API requests untouched.
                         exceptions.defaultAuthenticationEntryPointFor(
-                                new LoginUrlAuthenticationEntryPoint("/login"),
+                                buildBrowserEntryPoint(),
                                 buildHtmlOnlyRequestMatcher()))
                 // TASK-MONO-046-1 (Cluster B): the OIDC userinfo endpoint requires the
                 // bearer access token to be authenticated as a JWT. Without an
@@ -279,6 +284,40 @@ public class AuthorizationServerConfig {
         MediaTypeRequestMatcher matcher = new MediaTypeRequestMatcher(MediaType.TEXT_HTML);
         matcher.setIgnoredMediaTypes(java.util.Set.of(MediaType.ALL));
         return matcher;
+    }
+
+    /**
+     * TASK-BE-578 — where an unauthenticated browser lands: {@code /signup} when
+     * the authorize request carries the registration hint, {@code /login}
+     * otherwise.
+     *
+     * <p>Only IAM can offer this. A store cannot deep-link to {@code /signup}
+     * itself: {@link com.example.auth.infrastructure.security.SavedRequestTenantResolver}
+     * trusts a {@code client_id} only when it came from a saved
+     * {@code /oauth2/authorize} request, so a direct {@code /signup} link has no
+     * saved request and the account is born in the fallback tenant instead of the
+     * initiating client's. Routing the authorize request itself to the signup form
+     * keeps the saved request — and therefore the tenant — intact.
+     *
+     * <p>The default branch is the same {@code LoginUrlAuthenticationEntryPoint("/login")}
+     * this method replaced, so a request without the hint behaves exactly as
+     * before.
+     *
+     * <p>Note what is NOT here: nothing consumes or removes the saved request.
+     * {@code ExceptionTranslationFilter} saves it before calling this entry point,
+     * and both branches only redirect — so after signing up the user still resumes
+     * the original authorize through {@code /login?registered}. An entry point that
+     * cleared the request would strand the user on the login page with nothing to
+     * return to.
+     */
+    private static AuthenticationEntryPoint buildBrowserEntryPoint() {
+        LinkedHashMap<RequestMatcher, AuthenticationEntryPoint> byHint = new LinkedHashMap<>();
+        byHint.put(new RegistrationHintRequestMatcher(),
+                new LoginUrlAuthenticationEntryPoint("/signup"));
+
+        DelegatingAuthenticationEntryPoint entryPoint = new DelegatingAuthenticationEntryPoint(byHint);
+        entryPoint.setDefaultEntryPoint(new LoginUrlAuthenticationEntryPoint("/login"));
+        return entryPoint;
     }
 
     /**

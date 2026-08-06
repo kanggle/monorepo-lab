@@ -30,6 +30,17 @@ export interface AuthContextValue extends AuthState {
    * password is now collected by GAP itself.
    */
   login: (callbackUrl?: string) => Promise<unknown> | unknown;
+  /**
+   * Initiate the same GAP OIDC flow as {@link login}, but ask GAP to open on its
+   * signup form rather than its login form (TASK-BE-578).
+   *
+   * <p>Deliberately a named method rather than a flag on `login`: the two differ
+   * only in where the user lands, and a boolean at the call site would read as a
+   * different kind of sign-in. It is still one mechanism underneath — the hint
+   * rides on the same `signIn('iam')`, so the saved `/oauth2/authorize` request
+   * (and therefore the tenant the account is born into) is identical.
+   */
+  signup: (callbackUrl?: string) => Promise<unknown> | unknown;
   /** Initiate `signOut()` and clear the api-client token bridge. */
   logout: () => Promise<unknown> | unknown;
 }

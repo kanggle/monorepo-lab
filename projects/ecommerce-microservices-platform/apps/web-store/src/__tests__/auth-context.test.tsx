@@ -9,13 +9,14 @@ const mockSignIn = vi.mocked(signIn);
 const mockSignOut = vi.mocked(signOut);
 
 function TestConsumer() {
-  const { user, isAuthenticated, isLoading, login, logout } = useAuth();
+  const { user, isAuthenticated, isLoading, login, signup, logout } = useAuth();
   return (
     <div>
       <span data-testid="loading">{String(isLoading)}</span>
       <span data-testid="authenticated">{String(isAuthenticated)}</span>
       <span data-testid="user">{user ? JSON.stringify(user) : 'null'}</span>
       <button onClick={() => login()}>login</button>
+      <button onClick={() => signup()}>signup</button>
       <button onClick={() => logout()}>logout</button>
     </div>
   );
@@ -111,6 +112,44 @@ describe('AuthContext (NextAuth + GAP)', () => {
 
     await user.click(screen.getByText('login'));
     expect(mockSignIn).toHaveBeenCalledWith('iam', { callbackUrl: '/' });
+  });
+
+  it('TASK-BE-578: signup() 은 login() 과 같은 호출에 registration hint 만 더한다', async () => {
+    mockUseSession.mockReturnValue({
+      data: null,
+      status: 'unauthenticated',
+      update: vi.fn(),
+    } as ReturnType<typeof useSession>);
+
+    const user = userEvent.setup();
+    render(
+      <AuthProvider>
+        <TestConsumer />
+      </AuthProvider>,
+    );
+
+    await user.click(screen.getByText('signup'));
+    expect(mockSignIn).toHaveBeenCalledWith('iam', { callbackUrl: '/' }, { prompt: 'create' });
+  });
+
+  it('TASK-BE-578: login() 에는 hint 가 붙지 않는다 — 로그인하러 온 사람을 가입 폼으로 보내면 안 된다', async () => {
+    mockUseSession.mockReturnValue({
+      data: null,
+      status: 'unauthenticated',
+      update: vi.fn(),
+    } as ReturnType<typeof useSession>);
+
+    const user = userEvent.setup();
+    render(
+      <AuthProvider>
+        <TestConsumer />
+      </AuthProvider>,
+    );
+
+    await user.click(screen.getByText('login'));
+    // 세 번째 인자 자체가 없어야 한다. hint 를 login 에도 달면 IAM 은 기존 사용자를
+    // 가입 폼으로 보내고, 그 사람은 이미 가입돼 있으므로 409 로 막힌다.
+    expect(mockSignIn.mock.calls[0]).toHaveLength(2);
   });
 
   it('logout() 호출 시 end_session URL 조회 → signOut(redirect:false) → GAP 리다이렉트 (RP-initiated logout)', async () => {

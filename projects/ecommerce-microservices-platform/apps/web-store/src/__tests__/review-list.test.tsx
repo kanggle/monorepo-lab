@@ -96,6 +96,7 @@ describe('ReviewList', () => {
       isLoading: false,
       user: null,
       login: vi.fn(),
+      signup: vi.fn(),
       logout: vi.fn(),
     });
     mockGetProductReviewSummary.mockResolvedValue(MOCK_SUMMARY);
@@ -202,6 +203,7 @@ describe('ReviewList', () => {
       isLoading: false,
       user: { userId: 'user-1' } as never,
       login: vi.fn(),
+      signup: vi.fn(),
       logout: vi.fn(),
     });
     mockGetProductReviews.mockResolvedValueOnce(createReviewListResponse(MOCK_REVIEWS));
@@ -224,6 +226,7 @@ describe('ReviewList', () => {
       isLoading: false,
       user: { userId: 'user-1' } as never,
       login: vi.fn(),
+      signup: vi.fn(),
       logout: vi.fn(),
     });
     mockGetProductReviews.mockResolvedValueOnce(createReviewListResponse(MOCK_REVIEWS));
@@ -251,6 +254,7 @@ describe('ReviewList', () => {
       isLoading: false,
       user: { userId: 'user-1' } as never,
       login: vi.fn(),
+      signup: vi.fn(),
       logout: vi.fn(),
     });
     mockGetProductReviews.mockResolvedValueOnce(createReviewListResponse(MOCK_REVIEWS));
@@ -276,6 +280,7 @@ describe('ReviewList', () => {
       isLoading: false,
       user: { userId: 'user-3' } as never,
       login: vi.fn(),
+      signup: vi.fn(),
       logout: vi.fn(),
     });
     mockGetProductReviews.mockResolvedValueOnce(createReviewListResponse(MOCK_REVIEWS));
