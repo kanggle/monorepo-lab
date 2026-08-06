@@ -6,6 +6,7 @@
 |---|---|---|
 | [ADR-001](ADR-001-real-pg-portone-verification-boundary.md) | 실 PG 연동 — PortOne V2 클라이언트 개시 결제 + 서버측 검증 경계(profile 게이팅, mock 은 CI/test 기본값 유지) | Proposed |
 | [ADR-002](ADR-002-billing-key-auto-renewal.md) | 빌링키 기반 자동 갱신(정기결제) — 서버 개시 청구 + `BillingKeyEnrollment` + fail-closed 실패 정책(새 상태 없음, `RenewMembershipUseCase` 재사용). `ADR-MONO-057`(라이브러리 확장)의 컴패니언 | Accepted |
+| [ADR-003](ADR-003-fan-post-visibility-authoring-rule.md) | `FAN_POST` 의 가시성 티어 — 팬이 게이팅된 글을 쓸 수 있는가. 좁히기(A) vs 명시 허용(B, 권고). **스펙이 침묵이 아니라 반대를 규정**한다(`v1-e2e-scenarios.md` § Scenario 3 + `VisibilityTierE2ETest` 가 `FAN_POST` 를 PREMIUM/MEMBERS_ONLY 로 발행) ⇒ 좁히기는 드리프트 교정이 아니라 **새 제약 도입**. `TASK-FAN-BE-047` 을 게이트 | Proposed |
 
 ## ADR 작성 원칙
 
