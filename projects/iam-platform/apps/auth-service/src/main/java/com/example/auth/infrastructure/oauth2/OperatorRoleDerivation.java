@@ -31,6 +31,24 @@ final class OperatorRoleDerivation {
      * service roles outbound/inbound/inventory authorize POST/PUT/PATCH/DELETE on
      * ({@code *_WRITE}) plus read ({@code *_READ}) and {@code MASTER_READ}. ADMIN-tier
      * roles are deliberately excluded (see the switch comment).
+     *
+     * <p><b>{@code MASTER_WRITE} is excluded and that is not an oversight</b>, but the
+     * old wording for it was wrong, so read this before "fixing" the asymmetry
+     * (TASK-MONO-514 AC-4). TASK-BE-433 grouped master-data writes with the ADMIN
+     * tier. {@code master-service} does not: per
+     * {@code wms-platform/specs/contracts/http/master-service-api.md § roles},
+     * create/update are {@code MASTER_WRITE} and only deactivate/reactivate are
+     * {@code MASTER_ADMIN}. So the exclusion is a deliberate decision to keep
+     * master-data writes out of the operator tier — it is NOT an instance of the
+     * "exclude ADMIN-tier" rule, and calling it one made the omission read like a
+     * typo. It is asserted by {@code OperatorRoleDerivationTest#wms_excludesAdminTier}
+     * and by TASK-BE-433 AC-2; reversing it is a role-model decision, not a parity fix.
+     *
+     * <p>Consequence, measured: an operator holding this set gets {@code 403 FORBIDDEN}
+     * on {@code POST /api/v1/master/warehouses}, and no other credential in the
+     * platform carries {@code MASTER_WRITE} either — demo master data therefore
+     * arrives via Flyway seed, not via the API. {@code TASK-MONO-514} owns the
+     * decision about whether that should change.
      */
     private static final List<String> WMS_OPERATOR_ROLES = List.of(
             "WMS_OPERATOR",
@@ -75,8 +93,12 @@ final class OperatorRoleDerivation {
                 // the coarse WMS_OPERATOR. Without these the assume-tenant token carried
                 // only WMS_OPERATOR while outbound/inbound/inventory require their own
                 // *_WRITE roles → every wms-service write 403'd. ADMIN-tier roles
-                // (*_ADMIN / WMS_ADMIN — cancellation, force-saga-fail, master-data
-                // writes) are intentionally NOT granted by the operator entitlement.
+                // (*_ADMIN / WMS_ADMIN — cancellation, force-saga-fail) are
+                // intentionally NOT granted by the operator entitlement, and
+                // MASTER_WRITE is separately withheld — see the WMS_OPERATOR_ROLES
+                // javadoc, which corrects this comment's earlier claim that
+                // master-data writes are an ADMIN-tier role (they are not; the
+                // wms contract puts create/update at MASTER_WRITE). TASK-MONO-514.
                 case "wms" -> WMS_OPERATOR_ROLES;
                 case "ecommerce" -> List.of("ECOMMERCE_OPERATOR");
                 case "scm" -> List.of("SCM_OPERATOR");
