@@ -11,7 +11,7 @@ admin-service 의 프로젝션이 **아무도 발행하지 않는 토픽**을 �
 
 # Status
 
-review
+done
 
 # Owner
 
