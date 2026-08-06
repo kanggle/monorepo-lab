@@ -4,6 +4,30 @@
 
     <springProperty scope="context" name="serviceName" source="spring.application.name" defaultValue="inbound-service"/>
 
+    <!--
+      TASK-BE-579: every appender below is wrapped in an AsyncAppender, and that
+      wrapping is load-bearing, not a throughput tweak.
+
+      These services run with `spring.threads.virtual.enabled: true`, so Spring
+      Boot puts the Kafka listener containers on virtual threads. The Kafka
+      client logs from inside its own `synchronized` sections (rebalance, offset
+      reset), which pins the virtual thread to its carrier on JDK 21. A
+      synchronous ConsoleAppender then makes that pinned thread contend for the
+      appender's ReentrantLock while stdout is a pipe to the container runtime —
+      so it parks ON THE CARRIER. The virtual-thread scheduler's parallelism is
+      `availableProcessors` (4 on the demo host), so four such threads consume
+      every carrier, and the thread actually holding the appender lock can no
+      longer be mounted to release it. The service then accepts connections
+      (Tomcat's Acceptor/Poller are platform threads) and serves NOTHING, while
+      Kafka's own platform threads keep heart-beating so the logs look alive.
+
+      AsyncAppender breaks the necessary condition: the appending thread only
+      offers to an in-memory queue, and the blocking write to stdout happens on
+      logback's own platform worker thread. `neverBlock=true` means a full queue
+      drops log events rather than blocking a request thread — losing a log line
+      is strictly better than losing the service.
+    -->
+
     <!-- Local/dev: human-readable -->
     <springProfile name="default,standalone,dev,integration">
         <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
@@ -11,8 +35,17 @@
                 <pattern>%d{HH:mm:ss.SSS} %-5level [traceId=%X{traceId:-} requestId=%X{requestId:-} actorId=%X{actorId:-}] %logger{36} - %msg%n</pattern>
             </encoder>
         </appender>
-        <root level="INFO">
+        <appender name="ASYNC_CONSOLE" class="ch.qos.logback.classic.AsyncAppender">
             <appender-ref ref="CONSOLE"/>
+            <queueSize>4096</queueSize>
+            <!-- 0 = never drop INFO/DEBUG just because the queue is 80% full;
+                 dropping is governed by neverBlock at the hard limit instead. -->
+            <discardingThreshold>0</discardingThreshold>
+            <neverBlock>true</neverBlock>
+            <includeCallerData>false</includeCallerData>
+        </appender>
+        <root level="INFO">
+            <appender-ref ref="ASYNC_CONSOLE"/>
         </root>
     </springProfile>
 
@@ -26,8 +59,15 @@
                 <customFields>{"service":"${serviceName}"}</customFields>
             </encoder>
         </appender>
-        <root level="INFO">
+        <appender name="ASYNC_JSON" class="ch.qos.logback.classic.AsyncAppender">
             <appender-ref ref="JSON"/>
+            <queueSize>4096</queueSize>
+            <discardingThreshold>0</discardingThreshold>
+            <neverBlock>true</neverBlock>
+            <includeCallerData>false</includeCallerData>
+        </appender>
+        <root level="INFO">
+            <appender-ref ref="ASYNC_JSON"/>
         </root>
     </springProfile>
 </configuration>

@@ -26,7 +26,7 @@ EXPOSE 8086
 ENV JAVA_OPTS=""
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD curl -fsS http://localhost:8086/actuator/health || exit 1
+    CMD curl -fsS -m 5 http://localhost:8086/actuator/health || exit 1
 
 ENTRYPOINT ["/sbin/tini", "--"]
 # ADR-MONO-041 D1: launch via JarLauncher (layered-equivalent of -jar app.jar).
