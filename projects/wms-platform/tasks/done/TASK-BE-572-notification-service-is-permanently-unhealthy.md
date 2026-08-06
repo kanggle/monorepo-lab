@@ -8,7 +8,7 @@ TASK-BE-572
 
 # Status
 
-review
+done
 
 # Owner
 
