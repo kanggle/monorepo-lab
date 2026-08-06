@@ -423,10 +423,18 @@ declares the **projection effect** only.
 | `wms.master.sku.v1` | [`master-events.md`](master-events.md) | Upsert `sku_ref` |
 | `wms.master.partner.v1` | [`master-events.md`](master-events.md) | Upsert `partner_ref` |
 | `wms.master.lot.v1` | [`master-events.md`](master-events.md) | Upsert `lot_ref` |
-| `wms.inbound.asn.v1` [^split-asn] | [`inbound-events.md`](inbound-events.md) | Update `asn_summary` (received / cancelled / closed) |
+| `wms.inbound.asn.received.v1` | [`inbound-events.md`](inbound-events.md) | Upsert `asn_summary` |
+| `wms.inbound.asn.cancelled.v1` | [`inbound-events.md`](inbound-events.md) | Set `asn_summary.status = CANCELLED` |
+| `wms.inbound.asn.closed.v1` | [`inbound-events.md`](inbound-events.md) | Set `asn_summary.status = CLOSED` |
 | `wms.inbound.inspection.completed.v1` | [`inbound-events.md`](inbound-events.md) | Insert / replace `inspection_summary` (1:1 per ASN) |
+| `wms.inbound.putaway.instructed.v1` | [`inbound-events.md`](inbound-events.md) | None (ops-only); dedupe row only |
 | `wms.inbound.putaway.completed.v1` | [`inbound-events.md`](inbound-events.md) | Increment `throughput_inbound_daily` |
-| `wms.outbound.order.v1` [^split-order] | [`outbound-events.md`](outbound-events.md) | Update `order_summary` |
+| `wms.outbound.order.received.v1` | [`outbound-events.md`](outbound-events.md) | Upsert `order_summary` |
+| `wms.outbound.order.cancelled.v1` | [`outbound-events.md`](outbound-events.md) | Set `order_summary.status = CANCELLED` |
+| `wms.outbound.picking.requested.v1` | [`outbound-events.md`](outbound-events.md) | None (saga flow); dedupe row only |
+| `wms.outbound.picking.cancelled.v1` | [`outbound-events.md`](outbound-events.md) | None (saga flow); dedupe row only |
+| `wms.outbound.picking.completed.v1` | [`outbound-events.md`](outbound-events.md) | None (saga flow); dedupe row only |
+| `wms.outbound.packing.completed.v1` | [`outbound-events.md`](outbound-events.md) | None (saga flow); dedupe row only |
 | `wms.outbound.shipping.confirmed.v1` | [`outbound-events.md`](outbound-events.md) | Append `shipment_summary`, increment `throughput_outbound_daily` |
 | `wms.inventory.received.v1` | [`inventory-events.md`](inventory-events.md) | Update `inventory_snapshot` |
 | `wms.inventory.adjusted.v1` | [`inventory-events.md`](inventory-events.md) | Update `inventory_snapshot`, append `adjustment_audit` |
@@ -436,22 +444,22 @@ declares the **projection effect** only.
 | `wms.inventory.confirmed.v1` | [`inventory-events.md`](inventory-events.md) | Update `inventory_snapshot.reserved_qty` (decrease) and `available_qty` indirectly via shipping flow |
 | `wms.inventory.alert.v1` | [`inventory-events.md`](inventory-events.md) | Append `alert_log` |
 
-[^split-asn]: **Logical aggregate.** `inbound-service` actually publishes to
-three split topics — `wms.inbound.asn.received.v1`,
-`wms.inbound.asn.cancelled.v1`, `wms.inbound.asn.closed.v1` — see
-[`inbound-events.md § Topic Layout`](inbound-events.md). The consumer-side
-view in this table folds those into the single conceptual aggregate
-`wms.inbound.asn.v1` for projection bookkeeping. The ProjectionConsumer in
-`admin-service` listens on all three split topics; the rolled-up name is a
-documentation convenience. No production change is implied by this entry —
-producer-side topic split remains authoritative (TASK-BE-048 #7).
-
-[^split-order]: **Logical aggregate.** Mirrors the inbound ASN pattern.
-`outbound-service` publishes to two split topics —
-`wms.outbound.order.received.v1` and `wms.outbound.order.cancelled.v1` —
-see [`outbound-events.md § Topic Layout`](outbound-events.md). The
-consumer-side view here folds those into `wms.outbound.order.v1`. Same
-documentation-only convention as the ASN row above (TASK-BE-048 #7).
+> **This table is a subscription list, not a conceptual view.** It previously
+> carried two rolled-up rows — `wms.inbound.asn.v1` and `wms.outbound.order.v1`
+> — introduced as a documentation convenience over the producers' per-event-type
+> split, with a footnote asserting that "the ProjectionConsumer in
+> `admin-service` listens on all three split topics". **It did not.** The
+> consumer's `@KafkaListener` and `application.yml` had taken the rolled-up
+> names literally, so `inbound.asn.received`, `inbound.putaway.instructed`,
+> `outbound.order.received` and `outbound.picking.requested` were published to
+> topics nobody subscribed to and projected nowhere. Both `admin_asn_summary`
+> and `admin_order_summary` stayed empty for the life of the service, and the
+> console's inbound / outbound screens with them. Fixed in `TASK-BE-582`; the
+> naming is now enforced by `ProjectionTopicWiringTest`.
+>
+> A conceptual grouping that does not name a real topic does not belong in a
+> subscription table. If one is wanted, put it in prose — not in a row that a
+> reader (or a config file) can copy.
 
 ### Projection Idempotency Pattern
 

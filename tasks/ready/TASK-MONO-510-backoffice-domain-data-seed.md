@@ -322,7 +322,15 @@ wms 축소 슬라이스(앱 6 + 인프라 4 = 10컨) ≈ 1.9 GiB
       `POST /api/tenant {"tenant":"demo-corp"}` 성립, 7화면 전부 `200`.
       🔴 **그러나 200 은 판정이 아니었다** — BFF 원소 수로 다시 재니
       **`/wms/inventory` 만 데이터가 있고, `/wms/inbound`·`/wms/outbound` 는 빈 배열,
-      `/wms/operations` 는 403** 이다. 원인은 `TASK-BE-582`. SCM/ERP/Finance 16화면 미착수.
+      `/wms/operations` 는 403** 이었다. SCM/ERP/Finance 16화면 미착수.
+      → **갱신(2026-08-06, BE-582 수정 후 재측정)**: `/wms/inbound` **0 → 2** ✅.
+      남은 것은 `/wms/outbound` **0** (원인은 BE-582 가 아니라 **`TASK-BE-581`**
+      테넌트 스코프 — 프로젝션을 고친 뒤에도 0 인 것으로 확정) 과 `/wms/operations`
+      403(권한, `TASK-MONO-514`). ⇒ **WMS 목록 화면 3개 중 2개 충족.**
+      🔴 **상류를 정적 grep 으로 정하지 마라** — `/wms/outbound` 의 상류를 소스에서
+      `callWmsAdmin('/dashboard/orders')` 로 읽었는데, 그 함수는 **죽은 코드**였고
+      실제로는 outbound-service 원시 API 였다(런타임 로그로 확정). 같은 이름의
+      `listOrders` 가 코드베이스에 셋 있다.
       🔵 **계측 함정**: 콘솔 페이지는 **클라이언트 렌더**라 SSR HTML 에 데이터가 없다 —
       HTML grep 은 전 화면 0건을 내는 **깨진 탐지기**였다. 판정은 BFF API 원소 수로 한다
       (🔵 로그인 진입점도 `/` 가 아니라 **`/api/auth/login`** 이다 — `/` 는 콘솔 자체

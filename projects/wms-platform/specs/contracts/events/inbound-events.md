@@ -73,14 +73,15 @@ Serialization: JSON. Future Avro/Protobuf migration possible but not v1.
 | `wms.inbound.putaway.completed.v1` | `inbound.putaway.completed` | `asnId` |
 | `wms.inbound.asn.closed.v1` [^aggregate] | `inbound.asn.closed` | `asnId` |
 
-[^aggregate]: **ASN topic split is producer-side implementation detail.**
-Consumers (notably `admin-service`'s read-model projection) refer to the
-trio collectively as a single logical aggregate `wms.inbound.asn.v1` in
-[`admin-events.md § Consumed Events`](admin-events.md). This producer-side
-table is authoritative for what is actually published; the consumer-side
-roll-up is a documentation convenience. No production-code coupling
-between the two views — admin-service's listener subscribes to all three
-split topics under one aggregate consumer-group (TASK-BE-048 #7).
+[^aggregate]: **These three topics are the ASN aggregate.** This table is
+authoritative: `inbound-service` publishes one topic per event type, so a
+consumer of the ASN aggregate must subscribe to all three.
+[`admin-events.md`](admin-events.md) used to call the trio a single logical
+aggregate `wms.inbound.asn.v1` and assert that `admin-service` subscribed to
+all three split topics. It did not — it subscribed to the rolled-up name,
+which no producer writes to, and projected no ASN at all until
+`TASK-BE-582`. The roll-up row is gone; do not reintroduce a topic name that
+nothing publishes (TASK-BE-048 #7).
 
 - `v1` in topic name: contract version. Breaking schema changes require a
   parallel `v2` topic with coexistence period (per

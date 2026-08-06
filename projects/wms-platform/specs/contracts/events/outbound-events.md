@@ -99,15 +99,14 @@ Serialization: JSON. Future Avro/Protobuf migration possible but not v1.
   `outbound.picking.cancelled`, `outbound.shipping.confirmed`) are marked
   with `⚠️` and require coordinated schema migration with `inventory-service`.
 
-[^aggregate-order]: **Order topic split is producer-side implementation
-detail.** Consumers (notably `admin-service`'s read-model projection) refer
-to the pair collectively as a single logical aggregate
-`wms.outbound.order.v1` in
-[`admin-events.md § Consumed Events`](admin-events.md). This producer-side
-table is authoritative for what is actually published; the consumer-side
-roll-up is a documentation convenience. No production-code coupling between
-the two views — admin-service's listener subscribes to both split topics
-under one aggregate consumer-group (TASK-BE-048 #7).
+[^aggregate-order]: **These two topics are the order aggregate.** This table
+is authoritative: `outbound-service` publishes one topic per event type, so a
+consumer of the order aggregate must subscribe to both.
+[`admin-events.md`](admin-events.md) used to call the pair a single logical
+aggregate `wms.outbound.order.v1` and assert that `admin-service` subscribed
+to both. It did not — it subscribed to the rolled-up name, so
+`admin_order_summary` never received a row until `TASK-BE-582`. Mirrors the
+ASN case in [`inbound-events.md`](inbound-events.md) (TASK-BE-048 #7).
 
 ---
 

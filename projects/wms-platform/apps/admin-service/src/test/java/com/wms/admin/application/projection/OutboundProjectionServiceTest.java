@@ -61,7 +61,7 @@ class OutboundProjectionServiceTest {
         when(orderRepo.findById(orderId)).thenReturn(Optional.empty());
 
         ProjectionEnvelope env = envelope("outbound.order.received",
-                "wms.outbound.order.v1",
+                "wms.outbound.order.received.v1",
                 "{\"orderId\":\"" + orderId + "\",\"orderNo\":\"ORD-1\",\"warehouseId\":\""
                         + warehouseId + "\",\"lines\":[{}]}");
 
@@ -101,7 +101,7 @@ class OutboundProjectionServiceTest {
         when(orderRepo.findById(orderId)).thenReturn(Optional.of(existing));
 
         ProjectionEnvelope env = envelope("outbound.order.cancelled",
-                "wms.outbound.order.v1",
+                "wms.outbound.order.received.v1",
                 "{\"orderId\":\"" + orderId + "\",\"orderNo\":\"ORD-1\"}");
 
         assertThat(service.project(env)).isEqualTo(DedupeOutcome.APPLIED);

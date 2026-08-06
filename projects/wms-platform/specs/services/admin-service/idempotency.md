@@ -176,8 +176,8 @@ All projection consumers in `admin-service` (consumer group
 | Consumer | Topics |
 |---|---|
 | `MasterRefProjectionConsumer` | `wms.master.warehouse.v1`, `wms.master.zone.v1`, `wms.master.location.v1`, `wms.master.sku.v1`, `wms.master.partner.v1`, `wms.master.lot.v1` |
-| `InboundProjectionConsumer` | `wms.inbound.asn.v1`, `wms.inbound.inspection.completed.v1`, `wms.inbound.putaway.completed.v1` |
-| `OutboundProjectionConsumer` | `wms.outbound.order.v1`, `wms.outbound.shipping.confirmed.v1` |
+| `InboundProjectionConsumer` | `wms.inbound.asn.received.v1`, `wms.inbound.asn.cancelled.v1`, `wms.inbound.asn.closed.v1`, `wms.inbound.inspection.completed.v1`, `wms.inbound.putaway.instructed.v1`, `wms.inbound.putaway.completed.v1` |
+| `OutboundProjectionConsumer` | `wms.outbound.order.received.v1`, `wms.outbound.order.cancelled.v1`, `wms.outbound.picking.requested.v1`, `wms.outbound.picking.cancelled.v1`, `wms.outbound.picking.completed.v1`, `wms.outbound.packing.completed.v1`, `wms.outbound.shipping.confirmed.v1` |
 | `InventoryProjectionConsumer` | `wms.inventory.received.v1`, `wms.inventory.adjusted.v1`, `wms.inventory.transferred.v1`, `wms.inventory.reserved.v1`, `wms.inventory.released.v1`, `wms.inventory.confirmed.v1`, `wms.inventory.alert.v1` |
 
 The grouping is implementation-flavor — one Kafka listener class per source

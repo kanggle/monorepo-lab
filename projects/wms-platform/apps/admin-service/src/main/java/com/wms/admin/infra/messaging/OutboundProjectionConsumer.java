@@ -9,9 +9,15 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 /**
- * Consumes the 2 outbound topics — {@code wms.outbound.order.v1},
- * {@code wms.outbound.shipping.confirmed.v1} — per
- * {@code admin-events.md § Consumed Events}.
+ * Consumes every topic {@code outbound-service} publishes and dispatches to
+ * {@link OutboundProjectionService}.
+ *
+ * <p>Topic names follow {@code outbound-events.md § Topic Layout} — one topic
+ * per event type, {@code wms.<eventType>.v1}. See
+ * {@link InboundProjectionConsumer} for why this list must stay 1:1 with the
+ * dispatched event types; the saga-flow event types
+ * ({@code outbound.picking.*}, {@code outbound.packing.completed}) mutate no
+ * read-model row but are still dispatched, so they belong here.
  */
 @Component
 @Profile("!standalone")
@@ -31,7 +37,12 @@ public class OutboundProjectionConsumer {
 
     @KafkaListener(
             topics = {
-                    "${admin.projection.kafka.topics.outbound-order:wms.outbound.order.v1}",
+                    "${admin.projection.kafka.topics.outbound-order-received:wms.outbound.order.received.v1}",
+                    "${admin.projection.kafka.topics.outbound-order-cancelled:wms.outbound.order.cancelled.v1}",
+                    "${admin.projection.kafka.topics.outbound-picking-requested:wms.outbound.picking.requested.v1}",
+                    "${admin.projection.kafka.topics.outbound-picking-cancelled:wms.outbound.picking.cancelled.v1}",
+                    "${admin.projection.kafka.topics.outbound-picking-completed:wms.outbound.picking.completed.v1}",
+                    "${admin.projection.kafka.topics.outbound-packing-completed:wms.outbound.packing.completed.v1}",
                     "${admin.projection.kafka.topics.outbound-shipping:wms.outbound.shipping.confirmed.v1}"
             },
             groupId = "${spring.kafka.consumer.group-id:admin-projection}"
