@@ -72,10 +72,28 @@ tenant_id ∈ { null, "", "wms"(required-tenant-id), "*" }  → CallerScope.unre
 
 ## 파급
 
-- 콘솔 `/wms/outbound` 목록은 **시드가 무엇을 넣든 빈다.** 채우려면 ecommerce↔wms
-  풀필먼트 루프(ADR-022)가 살아 있어 `demo-corp` 소유의 `FULFILLMENT_ECOMMERCE`
-  주문이 실제로 흘러야 한다 — 즉 **ecommerce 슬라이스가 함께 떠 있어야 한다.**
-- MONO-510 의 AC-2(23화면 브라우저 검증)에서 이 화면은 **시드로는 통과할 수 없다.**
+🔴🔴 **정정 (2026-08-06, `TASK-MONO-510` AC-2 라이브 스윕): 아래 첫 항목이 틀렸다.**
+
+> ~~콘솔 `/wms/outbound` 목록은 이 결함 때문에 빈다~~
+
+**콘솔은 이 엔드포인트를 쓰지 않는다.** 실측하니 콘솔의 출고 화면은
+`callWmsAdmin('/dashboard/orders')` 로 **admin-service 의 프로젝션**을 읽는다. 그리고
+그 프로젝션은 **아무도 발행하지 않는 토픽**(`wms.outbound.order.v1`, 발행은
+`wms.outbound.order.received.v1`)을 구독해 영구히 0행이다 → **`TASK-BE-582`**.
+
+즉 **콘솔 화면이 비는 직접 원인은 BE-582** 이고, 이 티켓(BE-581)은 **원시 API 표면의
+별개 결함**이다 — `GET /api/v1/outbound/orders` 를 직접 부르는 호출자(스크립트·연동·
+향후 화면)에게는 여전히 참이다. 두 결함은 독립이며 **둘 다 고쳐야** 화면이 찬다.
+
+🔵 **왜 틀렸나**: 원시 API 에서 "200 + 빈 배열" 을 확인한 뒤 **콘솔도 같은 경로를 쓸
+것이라고 가정**했다. 콘솔의 호출 스택을 열어 보지 않았다 — 대리지표를 성질로 승격한
+같은 병이다. [[feedback_absence_verdict_from_a_proxy_is_not_a_measurement]]
+
+- MONO-510 의 AC-2 에서 이 화면은 **시드로는 통과할 수 없다** — 다만 이유는
+  BE-582(프로젝션 미수신)가 먼저이고, 그것을 고친 뒤에야 이 티켓의 테넌트 문제가
+  화면에 드러나는지 여부를 물을 수 있다.
+- 원시 API 를 채우려면 ecommerce↔wms 풀필먼트 루프(ADR-022)가 살아 있어 `demo-corp`
+  소유의 `FULFILLMENT_ECOMMERCE` 주문이 실제로 흘러야 한다.
 
 ---
 
