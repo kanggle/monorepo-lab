@@ -66,8 +66,9 @@ GAP 측 선행 작업 (spec-first, [TASK-BE-296](../iam-platform/tasks/ready/TAS
 - **날짜/시간** — `shared/lib/datetime.ts` 의 `formatDateTime`/`formatDate` 만 사용(호출부에서 `toLocale*` 직접 호출 금지). `hourCycle:'h23'`·pinned `Asia/Seoul` 은 취향이 아니라 **버그픽스**(자정 `24:00:00` quirk / SSR-하이드레이션 불일치).
 - **상세/폼 헤더 + `<dl>` 순서** — 공유 `shared/ui/DetailHeader`, 필드 순서 = 명칭 → 상태 → 식별자 → 날짜.
 - **상태칩** — 공유 `shared/ui/StatusBadge`. 상태칩 재구현·색 하드코딩 금지(도메인은 `status → StatusTone` 맵만 소유).
+- **로컬 검증 게이트 (§ 5)** — 푸시 전 **`pnpm lint`** 를 반드시 포함(`pnpm lint && npx tsc --noEmit && pnpm test`). `tsc` 는 미사용 import 를 에러로 보지 않고 vitest 는 lint 를 아예 돌리지 않아서, **두 개가 GREEN 이어도 CI 프런트 잡은 RED** 가 된다. 세 앱(`console-web`·`web-store`·`fan-platform-web`) 전부 lint 가 전용 CI 스텝이며, 앱별 로컬 실행 가능 범위 차이는 § 5.3 표에 있다.
 
-이 규칙들은 **기계 가드가 없다**(문서가 그 이유를 적어 둔다) — 즉 **읽지 않으면 지켜지지 않는다.** 새 화면·새 상태 컬럼·새 날짜 렌더를 추가하기 전에 위 문서를 읽을 것. (TASK-PC-FE-241 신설 / TASK-PC-FE-242 정정·잔여 청산.)
+위 UI 규칙 3종(§ 1–3)은 **기계 가드가 없다**(문서가 그 이유를 적어 둔다) — 즉 **읽지 않으면 지켜지지 않는다.** 새 화면·새 상태 컬럼·새 날짜 렌더를 추가하기 전에 위 문서를 읽을 것. § 5 는 반대로 **가드가 이미 CI 에 있는데 그 사실이 저장소에 안 적혀 있던** 경우다. (TASK-PC-FE-241 신설 / TASK-PC-FE-242 정정·잔여 청산 / TASK-PC-FE-272 § 5 추가.)
 
 ## Local Network
 

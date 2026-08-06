@@ -87,7 +87,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-PC-FE-272-local-verification-gate-not-written-down.md` — **🟢 READY — 프런트엔드 로컬 검증 게이트(`pnpm lint` 필수)가 저장소 규칙 파일 어디에도 없다.** 2026-08-06 audit-memory 실측: `platform/`·`docs/guides/`·`projects/*/docs/`·`PROJECT.md` grep **0건**이고, in-repo 근거는 `tasks/done/` 8곳의 AC 문구뿐(그중 3곳은 규칙 대신 **에이전트 메모리 이름을 인용**한다). `done/` task 는 SoT 가 아니므로 사실상 저장소 밖에만 있는 규칙 — `TASK-PC-FE-241` 이 UI 컨벤션 3종에 내린 것과 동일 진단. 🔴 **새 게이트 도입이 아니다** — lint 는 이미 세 앱 전부에서 전용 CI 스텝이고(`Frontend unit tests …` 의 `Lint (console-web)` / `Frontend lint & build …` 의 `Lint (ecommerce)`·`Lint (fan-platform)`), `next build` 가 두 번째 경로로 또 문다. 즉 **강제는 있는데 문서가 없던** 경우. `frontend-ui.md` § 5 신설(3종 명령 + `tsc`/vitest 가 미사용 import 에 왜 눈먼지 + 이 게이트가 **못 잡는 것** 3종) + `PROJECT.md` 필독 목록 한 줄. 문서-only, 코드 0줄. 분석=Opus 5 / 구현 권장=**Sonnet**(문서 전용).
+_(없음)_
+
 
 _(직전 착수)_ `TASK-PC-BE-015` — console-bff 의 spec-vs-reality resilience 갭 봉합. `architecture.md` § Resilience(D5.A)·`RestClientConfig` javadoc·계약 § 2.4.9 가 모두 "per-leg circuit-breaker keyed by `(domain, route)`" 를 단언하지만 `src/main` 에 resilience4j import 0건(타임아웃 쌍만 존재). `libs/java-common` 의 `ResilienceClientFactory` 를 **그대로 채택**해 13개 `(domain, route)` 레그 전부 CB+bounded retry 뒤로 이동하고, 죽어 있던 `circuit_open`/`CIRCUIT_OPEN` 분류를 실제 emitter 로 살린다(console-web zod `DEGRADED_REASONS` 는 이미 소비 준비 완료). 문서의 `libs/java-web` 인용도 오답(그 모듈엔 resilience 코드 0) → `libs/java-common` 정정. 분석=Opus 5 / 구현 권장=Opus.
 
@@ -115,7 +116,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
-(empty)
+- `TASK-PC-FE-272-local-verification-gate-not-written-down.md` — **🔵 REVIEW — 프런트엔드 로컬 검증 게이트(`pnpm lint` 필수)가 저장소 규칙 파일 어디에도 없다.** 2026-08-06 audit-memory 실측: `platform/`·`docs/guides/`·`projects/*/docs/`·`PROJECT.md` grep **0건**이고, in-repo 근거는 `tasks/done/` 8곳의 AC 문구뿐(그중 3곳은 규칙 대신 **에이전트 메모리 이름을 인용**한다). `done/` task 는 SoT 가 아니므로 사실상 저장소 밖에만 있는 규칙 — `TASK-PC-FE-241` 이 UI 컨벤션 3종에 내린 것과 동일 진단. 🔴 **새 게이트 도입이 아니다** — lint 는 이미 세 앱 전부에서 전용 CI 스텝이고(`Frontend unit tests …` 의 `Lint (console-web)` / `Frontend lint & build …` 의 `Lint (ecommerce)`·`Lint (fan-platform)`), `next build` 가 두 번째 경로로 또 문다. 즉 **강제는 있는데 문서가 없던** 경우. `frontend-ui.md` § 5 신설(3종 명령 + `tsc`/vitest 가 미사용 import 에 왜 눈먼지 + 이 게이트가 **못 잡는 것** 3종) + `PROJECT.md` 필독 목록 한 줄. 문서-only, 코드 0줄. 분석=Opus 5 / 구현=**Opus 5**(직접 구현, 문서 전용). ✅ 구현 완료 — `frontend-ui.md` § 5(+5.1/5.2/5.3) 신설 · `PROJECT.md` 필독 목록 한 줄 · Provenance 행. CI 잡 이름·세 앱 `package.json` 버전은 메모리 인용이 아니라 실측(`ci.yml` 1582/2255/1645).
 
 ## done
 
