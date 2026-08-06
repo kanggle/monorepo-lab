@@ -189,6 +189,92 @@ erp 가 assume-tenant 로 멀티테넌트가 되면서 **구현이 앞서가고 
 AC-3 을 닫으려면 이 리터럴도 함께 정정해야 한다 — 안 그러면 다음 사람이 또 `erp` 를 상수로
 읽고 같은 관문을 만든다.
 
+> 🔴 **정정 (같은 날, 구현 중).** 위 ④ 는 리터럴 `"tenantId": "erp"` 를 **"스테일"** 이라고
+> 단정했다. **읽지 않고 쓴 판정이었고, 거꾸로였다.** `PROJECT.md` 와
+> `read-model-service/architecture.md` § Multi-tenancy 를 열어 보면 erp 는 **단일 테넌트로
+> 선언**돼 있고("All projected rows belong to the `erp` tenant"), 리터럴은 그 모델의 표현이다.
+> 스테일한 쪽은 **프로듀서**다 — 데모가 assume-tenant 로 erp 를 사실상 다중 테넌트로 만들자
+> 두 프로듀서가 고객 테넌트를 싣기 시작했다. 어느 쪽이 옳은지는 **결정 사항**이고,
+> 아래 HARDSTOP-09 로 정지했다.
+
+---
+
+## 🛑 2026-08-07 구현 기록 — 봉투는 고쳤고, **AC-3/AC-5 는 HARDSTOP-09 로 정지**
+
+### 닫힌 것
+
+- **AC-0 ✅** — 착수 시 재측정: `delegated` 1/DLT 2, `submitted` 2/DLT 4,
+  `delegation_fact_proj` **0행**, 대조군 `employee_proj` 4행.
+- **AC-1 ✅** — 계약이 이미 정했다(위 조사 절). 프로듀서를 고쳤다.
+- **AC-2 ✅** — `writeEvent` 한 곳이 여섯 이미터 전부의 봉투를 만들므로 **여섯 토픽이 동시**에
+  고쳐진다. 가드가 여섯을 **표로 열거**해 일곱 번째 이미터가 생기면 RED 다.
+- **AC-4 🟡 절반** — 프로듀서 측 가드 + **물기 실측**(`aggregateId` 한 줄 제거 → RED).
+  🔴 **AC-4 가 요구한 "프로듀서의 실제 산출물을 소비자 매퍼에 먹여라" 는 못 했다** — 두
+  서비스가 **테스트 클래스패스를 공유하지 않고**, 소비자가 프로듀서를 test-depend 하게
+  만드는 것은 이벤트 디커플링을 뒤집는다. 크로스서비스 하네스가 따로 필요하다
+  (scm/fan 에 `E2E … cross-service smoke` 선례 있음, erp 엔 없음).
+
+### 🔴 AC-0 의 두 번째 관문 — **예측이 관측으로 승격됐다**
+
+봉투만 고친 상태에서 실제 이벤트를 흘려보낸 결과(라이브, 같은 스택):
+
+```
+수정 전 : Invalid delegation envelope (missing eventId/aggregateId/payload/grantId)
+수정 후 : Non-erp tenant 'demo-corp' on topic erp.approval.delegated.v1
+          (DelegationEnvelopeToCommandMapper.java:48)
+```
+
+파싱은 통과하고 **테넌트 관문**에서 막힌다. 두 위임 토픽이 **동일하게** 막힌다:
+
+```
+erp.approval.delegated.v1          : 2   DLT 4
+erp.approval.delegation.revoked.v1 : 1   DLT 2     ← 이 티켓이 처음 흘려보냄
+erp.approval.submitted.v1          : 2   DLT 4
+retry-0/1 은 전부 0 (재시도 없이 직행)
+```
+
+🔵 프로브는 **가산적으로만** 했다 — 위임 grant 를 새로 하나 만들어 관측하고 곧바로 revoke
+했다(두 토픽을 한 번에 태우면서 정리까지). 시드 데이터는 그대로다: 시드 grant `ACTIVE`,
+결재 `DRAFT 1 · SUBMITTED 2`.
+
+### 🛑 정지 — AC-3 은 결함 정리가 아니라 **아키텍처 결정**이었다
+
+이 티켓은 AC-3 을 *"위임 매퍼만 테넌트를 강제하는 비대칭을 정리한다"* 로 적었다. **틀린
+전제였다.** 그 관문은 세 문서가 선언한 모델을 **유일하게 집행하는 코드**다:
+
+- `PROJECT.md` § Out of Scope — erp 는 `multi-tenant` 를 **선언하지 않는다**
+- `read-model-service/architecture.md` § Multi-tenancy — "**All projected rows belong to
+  the `erp` tenant**"
+- 같은 문서 — "invalid envelope (…, **non-`erp` tenant**) → immediate DLT" ← 관문의 명세
+- 두 이벤트 계약의 봉투 예시 — `"tenantId": "erp"` 리터럴
+
+실행 중인 시스템은 이미 그 모델 밖에 있다(두 프로듀서 모두 `demo-corp` 를 싣는다). masterdata
+가 조용히 통과한 건 **관문이 없어서**이고, 프로젝션 스키마도 갈려 있다 —
+`delegation_fact_proj` 엔 `tenant_id` 가 **있고** `employee_proj` 엔 **없다**.
+
+🔴 그리고 **설정으로는 못 고친다**: `erpplatform.oauth2.required-tenant-id` 를 HTTP 두 곳은
+**도메인 키**로(→ `demo-corp` 통과), 위임 매퍼는 **테넌트 값**으로(→ 거절) 읽는다. 값 하나로
+양쪽을 동시에 만족시킬 수 없다.
+
+```
+[VIOLATION] HARDSTOP-09: Task `TASK-ERP-BE-043` requires an architecture decision (event
+taxonomy / cross-service contract — erp 이벤트 평면의 테넌트 축) that is not documented in
+`projects/erp-platform/specs/services/read-model-service/architecture.md` or any ADR. 해당
+문서는 정반대(단일 테넌트)를 선언하고 있고, 실행 중인 시스템은 그것을 이미 벗어나 있다.
+[WHY] Architecture decisions made implicitly during implementation produce code that later
+cannot be defended against "why was this chosen" review questions — and shape every
+downstream task that builds on the same service. 여기서 A(단일 테넌트 고수)는 관측된 다중
+테넌트 사실을 버리는 결정이고, B(다중 테넌트 승격)는 PROJECT.md 의 traits 를 바꿔 룰 레이어
+로딩까지 바꾸며, C(데모를 erp 테넌트로 회귀)는 단일 계정 데모 이니셔티브의 전제를 바꾼다.
+[REMEDIATION] Choose one:
+  2. 결정이 중대하므로(크로스서비스 + 다른 서비스의 형태를 좌우) ADR 에 기록하고 ACCEPTED
+     까지 PAUSE — `projects/erp-platform/docs/adr/ADR-001-erp-event-plane-tenant-axis.md`
+     를 이 PR 에서 **Proposed** 로 제출했다. A/B/C 와 각각의 대가가 그 안에 있다.
+[REFERENCE] CLAUDE.md § Layer Rules + platform/architecture-decision-rule.md
+```
+
+**해제 조건**: `ADR-ERP-001 ACCEPTED` + A/B/C 중 선택. 그때 AC-3/AC-5/AC-6 을 잇는다.
+
 # Goal
 
 `erp.approval.*` 이벤트가 read-model 에 **투영된다.** 그리고 봉투 계약이 두 프로듀서
