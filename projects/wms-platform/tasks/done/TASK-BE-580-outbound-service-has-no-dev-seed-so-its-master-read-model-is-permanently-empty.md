@@ -8,7 +8,7 @@ outbound-service 의 dev 시드가 `db/dev/` 에 있어 **한 번도 실행된 �
 
 # Status
 
-review
+done
 
 ---
 
