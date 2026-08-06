@@ -46,17 +46,25 @@
 #    나쁜 것은 **눌리는데 실패하는 화면**이다. 갭은 `TASK-MONO-515` 로 분리했다.
 #
 # -----------------------------------------------------------------------------
-# 🔴 이 시드를 돌리면 **차단** 으로 표시되는 두 경로 (둘 다 제품 결함, 티켓 있음)
+# 🔴 이 시드를 돌리면 **차단** 으로 표시되는 경로 (제품 결함, 티켓 있음)
 # -----------------------------------------------------------------------------
 #   TASK-ERP-BE-041  상신(submit)이 항상 422 `subject_unresolved` 로 거절된다.
 #                    `MasterDataRestAdapter` 가 masterdata-service 를 **토큰 없이**
 #                    부르고(401), `onStatus(4xx)` 가 그것을 삼켜 "ACTIVE 아님" 이 된다.
 #                    ⇒ 결재는 **DRAFT 로만** 쌓인다.
-#   TASK-ERP-BE-042  아웃박스 릴레이가 **한 번도 돌지 않는다**(`@EnableScheduling` 부재).
-#                    ⇒ `/erp/orgview` 와 read-model 위임 화면은 시드와 무관하게 빈다.
 #
-# 이 둘은 시드가 고칠 수 없다(MONO-510 Scope: 제품 코드 변경은 별도 티켓). 대신 지문을
+# 시드는 이것을 고칠 수 없다(MONO-510 Scope: 제품 코드 변경은 별도 티켓). 대신 지문을
 # 정확히 매치해 `차단` 으로 세고, 지문이 어긋나면 그대로 **실패**로 센다.
+#
+# ✅ `TASK-ERP-BE-042`(아웃박스 릴레이 미기동)는 **닫혔다** — 릴레이가 돌고 프로젝션이
+#    따라온다(실측: 미발행 백로그 16+1 전량 발행, 사원 4/4). 그래서 프로젝션 대기의
+#    면제를 **회수했다**: 이제 그 자리는 `seed_fail` 이다. 고쳐진 결함의 면제를 남겨 두면
+#    그 면제가 정확히 회귀를 가리는 장치가 된다.
+#
+# 🔵 남은 read-model 공백 하나는 **위임 사실 프로젝션**이다 — 릴레이가 살아나자
+#    `erp.approval.delegated.v1` 의 첫 메시지가 곧바로 DLT 로 갔다(approval 봉투에
+#    최상위 `aggregateId`/`tenantId` 가 없는데 소비자는 그것을 필수로 요구한다).
+#    → `TASK-ERP-BE-043`. 이 경로는 시드가 만드는 위임 1건에만 해당하고 나머지는 찬다.
 #
 # -----------------------------------------------------------------------------
 # 멱등 (AC-5)
@@ -376,18 +384,21 @@ if [ "$want" -gt 0 ]; then
   if [ "$got" -ge "$want" ] 2>/dev/null; then
     seed_log "프로젝션 사원 $got/$want 반영 확인 (read-model)"
   else
-    # TASK-ERP-BE-042 의 지문: 아웃박스 행은 쌓이는데 **카프카 end-offset 이 0** 이다.
-    # masterdata-service / approval-service 에 `@Scheduled` 아웃박스 퍼블리셔는 있는데
-    # `@EnableScheduling` 이 **없다**(erp 6개 앱 중 notification-service 하나만 갖고 있다)
-    # → 릴레이가 등록조차 되지 않아 조용히 아무 일도 하지 않는다. 실측:
-    #   masterdata_outbox: UNPUBLISHED 17 / PUBLISHED 0
-    #   kafka-get-offsets erp.masterdata.*: 전 토픽 :0:0
-    # 상류가 0 이라는 것을 **소비자 쪽이 아니라 브로커에서** 확인한 값이다.
-    seed_blocked "read-model 프로젝션 사원 $got/$want — TASK-ERP-BE-042 (아웃박스 릴레이 미기동)"
+    # 🔴 이것은 **차단이 아니라 실패**다 — 그리고 그것이 이 분류의 요점이다.
+    #
+    # 원래 여기는 `TASK-ERP-BE-042`(아웃박스 릴레이가 `@EnableScheduling` 부재로 한 번도
+    # 돌지 않던 결함) 때문에 `⛔ 차단` 이었다. 그 티켓이 닫히면서 이 경로는 **실측으로
+    # 성립한다**(사원 4/4, 미발행 백로그 16+1 이 전량 발행). 그러므로 지금 프로젝션이
+    # 따라오지 않는다면 그것은 알려진 결함이 아니라 **회귀**다.
+    #
+    # 고쳐진 결함의 면제를 남겨 두면 그 면제가 정확히 회귀를 가리는 장치가 된다.
+    # 차단 분류의 값은 **고쳐지는 즉시 회수된다**는 데 있다 — 회수하지 않으면 그냥
+    # "조용히 건너뛰기" 와 같아진다.
+    seed_fail "read-model 프로젝션 사원 $got/$want — 릴레이가 멈췄을 수 있습니다(ERP-BE-042 회귀?)"
   fi
 fi
 
 seed_log "요약 — 생성 $SEED_CREATED · 기존 $SEED_EXISTING · 실패 $SEED_FAILURES · 차단 $SEED_BLOCKED"
 [ "$SEED_BLOCKED" -eq 0 ] \
-  || seed_log "차단 $SEED_BLOCKED 건은 티켓이 있는 제품 결함입니다(ERP-BE-041/042) — 시드 결함이 아닙니다"
+  || seed_log "차단 $SEED_BLOCKED 건은 티켓이 있는 제품 결함입니다(ERP-BE-041) — 시드 결함이 아닙니다"
 exit $(( SEED_FAILURES > 0 ? 1 : 0 ))
