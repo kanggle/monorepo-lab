@@ -50,3 +50,16 @@ services:
   inventory-service:
     environment:
       SPRING_FLYWAY_LOCATIONS: classpath:db/migration,classpath:db/seed
+
+  # TASK-BE-580: outbound-service was missing from this list because opening
+  # `classpath:db/seed` for it would have done nothing — its seed migration sat
+  # in `db/dev/` (siblings all use `db/seed/`) and **no** `spring.flyway.locations`
+  # anywhere in the repo names `db/dev`, so the file had never executed. It was
+  # also the only master-read-model consumer without an `application-dev.yml`.
+  # Both are fixed now, so outbound joins its siblings here. Without this entry
+  # the demo keeps a 0-row read model even with the migration on the classpath —
+  # the demo does not boot with the `dev` profile, which is the whole reason
+  # this override file exists.
+  outbound-service:
+    environment:
+      SPRING_FLYWAY_LOCATIONS: classpath:db/migration,classpath:db/seed

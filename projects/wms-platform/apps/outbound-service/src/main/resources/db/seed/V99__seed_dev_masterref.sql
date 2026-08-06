@@ -1,7 +1,27 @@
 -- Dev/standalone seed: master-service read-model snapshots that mirror the
 -- baseline rows seeded by master-service / inventory-service / inbound-service.
--- Activated via spring.flyway.locations in application-dev.yml /
--- application-standalone.yml.
+-- Activated via spring.flyway.locations in application-dev.yml.
+--
+-- TASK-BE-580 — this file existed but had never executed, anywhere, ever:
+--
+--   * it lived in `db/dev/` while master / inbound / inventory all use
+--     `db/seed/`, and every `spring.flyway.locations` in the repo names
+--     `classpath:db/seed`. A repo-wide search found **zero** references to
+--     `db/dev` — no profile, no override, no test.
+--   * the header above used to claim activation "via application-dev.yml /
+--     application-standalone.yml". outbound-service had **neither file**.
+--
+-- Consequence: `outbound_db`'s master read-model stayed at 0 rows forever, so
+-- `POST /api/v1/outbound/orders` was structurally impossible in dev and demo
+-- (PARTNER_INVALID_TYPE / WAREHOUSE_NOT_FOUND). master-service's V103 header
+-- had been claiming alignment with "the inbound + outbound
+-- V99__seed_dev_masterref.sql baseline (SUP-001 / CUST-001)" the whole time —
+-- a reference to a file that was on disk but unreachable.
+--
+-- Fixed by moving the file to `db/seed/` (the convention its three siblings
+-- already follow) and adding the missing `application-dev.yml`. Contents are
+-- unchanged: outbound resolves a CUSTOMER partner, so CUST-001 is what it
+-- needs — SUP-001 belongs to inbound's ASN check, not here.
 
 INSERT INTO warehouse_snapshot (
     id, warehouse_code, status, cached_at, master_version

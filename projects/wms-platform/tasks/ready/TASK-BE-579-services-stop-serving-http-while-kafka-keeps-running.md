@@ -47,6 +47,36 @@ docker exec wms-gateway-service wget -T 8 -qO- http://inbound-service:8082/actua
 그러면서 **Kafka 컨슈머는 계속 동작한다** — 파티션 할당·하트비트 로그가 계속 찍힌다.
 그래서 "죽었다" 로 보이지 않고, 로그만 보면 정상으로 읽힌다.
 
+## 🔴 재현율 — `TASK-BE-580` 착수 중 추가 측정 (2026-08-06)
+
+BE-580 을 검증하며 wms 스택을 **볼륨 삭제 후 신선 기동 4회** 했다. **4회 모두**
+`outbound-service` 또는 `inventory-service`(때로는 둘 다)가 갇혔다.
+
+| 회차 | 갇힌 서비스 |
+|---|---|
+| 1 | inventory |
+| 2 | inventory + outbound |
+| 3 | outbound |
+| 4 | outbound + inventory |
+
+⇒ **"가끔" 이 아니다.** AC-0 이 요구하는 비율은 이 표를 출발점으로 삼되, 신선 기동뿐
+아니라 **재기동 후 재발**까지 세야 한다: `restart` 로 살아난 outbound 가 **몇 분 안에
+다시 갇혔다**(실측 2회). 살아 있는 창을 잡으려면 3초 간격 폴링이 필요했고 살아난 시점은
+16번째 폴링(≈48초)이었다.
+
+## 🔴🔴 Docker 는 갇힌 동안에도 `healthy` 라고 보고한다
+
+`docker ps` 가 `Up 4 minutes (healthy)` 를 내는 **바로 그 순간** 같은 컨테이너에 대한
+직접 HTTP 프로브가 **타임아웃**했다(실측).
+
+원인은 healthcheck 설정이다: `interval: 15s` · `retries: 12` ⇒ 12회 연속 실패해야
+`unhealthy` 로 넘어간다 = **최대 3분간 거짓 초록**. 그 3분 동안 게이트웨이는 504 를 내고
+운영자는 "헬스는 초록인데 왜 504냐" 를 보게 된다.
+
+⇒ AC-4 의 성질이 바뀐다. "healthcheck 가 이 상태를 잡는가" 는 **결국 잡는다** 이지만
+**늦게** 잡고, 그 지연 동안 상태 보고가 **틀린다**. 판정 근거로 `docker ps` 의 health 를
+쓰지 말 것 — 직접 HTTP 를 물어라. [[env_empty_detector_output_is_not_absence]]
+
 ## 갇히는 방식
 
 🔴 **기동 실패가 아니다 — 떴다가 나중에 갇힌다.** 같은 컨테이너를 실측:

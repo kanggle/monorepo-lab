@@ -199,39 +199,22 @@ fi
 #
 # 🔴 `dbexec` 로 `tenant_id` 만 박아 화면을 채우지 **말 것** — `source=MANUAL` 인데
 # 테넌트가 붙은, 제품이 만들 수 없는 행이 된다(README "도메인 규칙을 우회하지 마라").
-# 🔴 outbound-service 의 마스터 read-model 은 **비어 있고, 저절로 차지 않는다.**
+# 🔵 `TASK-BE-580` 이 닫히면서 이 자리의 `dbexec` 블록은 사라졌다. 마스터 read-model 은
+# 이제 **Flyway 가 채운다** — 시드는 주문만 만든다.
 #
-# 실측(2026-08-06): `outbound_db` 의 warehouse/sku/partner_snapshot 전부 0행.
-# 이유가 구조적이다 — 그 스냅샷은 `master.*` Kafka 이벤트로만 채워지는데, 데모의
-# 마스터 데이터는 **Flyway 가 직접 심어서** 이벤트가 한 번도 발행된 적이 없다.
-# inbound·inventory 는 각자 `db/seed/V99__seed_dev_masterref.sql` 로 이 구멍을
-# 메웠는데 **outbound 에는 그 파일이 없다**(실측: 6개 서비스 중 master/inbound/
-# inventory 만 db/seed 보유). 즉 비대칭이고, 그래서 출고 주문은 데모에서
-# 구조적으로 생성 불가였다 — `PARTNER_INVALID_TYPE` / `WAREHOUSE_NOT_FOUND`.
-# → 별도 티켓(AC-8): outbound-service 에 형제와 같은 db/seed 를 추가할 것.
+# 🔴 그 티켓이 고친 것은 "없는 파일 추가" 가 아니라 **죽어 있던 파일 되살리기**였다.
+# outbound 의 `V99__seed_dev_masterref.sql` 은 처음부터 있었는데 `db/dev/` 에 있었고
+# (형제 셋은 전부 `db/seed/`), 저장소의 어떤 `spring.flyway.locations` 도 `db/dev` 를
+# 부르지 않아 **한 번도 실행된 적이 없었다.** `db/seed/` 로 옮기고 빠져 있던
+# `application-dev.yml` 을 더해 살렸다.
 #
-# 그 파일 추가는 **제품 코드 변경**이라 이 티켓의 Out of Scope 다. 그래서 여기서는
-# 티켓이 마련해 둔 유료 경로(`dbexec --why`)로 스냅샷만 채우고, **주문 생성 자체는
-# 실제 API 로** 한다 — 검증되는 것은 주문 엔드포인트이지 INSERT 가 아니다.
-#
-# CUSTOMER 거래처는 어느 시드에도 없다(마스터 V103 은 SUPPLIER 계열만 심는다).
-# `...802` 는 그 시드의 번호 규약을 이어 새로 부여한 고정 UUID 다.
-CUSTOMER_ID=01910000-0000-7000-8000-000000000802
-
-dbexec --why "outbound-service 에는 db/seed 가 없어(형제 inbound/inventory 는 있다) 마스터 read-model 이 영구히 0행이고, master.* 이벤트는 데모에서 발행되지 않는다(마스터 데이터가 Flyway 직접 삽입). 이것 없이는 POST /outbound/orders 가 구조적으로 불가 — 별도 티켓 대상." \
-  wms-postgres psql outbound_db postgres <<SQL
-INSERT INTO warehouse_snapshot (id, warehouse_code, status, cached_at, master_version)
-VALUES ('$WAREHOUSE_ID', 'WH01', 'ACTIVE', '2026-04-18T00:00:00Z', 0)
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO sku_snapshot (id, sku_code, tracking_type, status, cached_at, master_version)
-VALUES ('$SKU_ID', 'SKU-APPLE-001', 'LOT', 'ACTIVE', '2026-04-18T00:00:00Z', 0)
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO partner_snapshot (id, partner_code, partner_type, status, cached_at, master_version)
-VALUES ('$CUSTOMER_ID', 'CUS-001', 'CUSTOMER', 'ACTIVE', '2026-04-18T00:00:00Z', 0)
-ON CONFLICT (id) DO NOTHING;
-SQL
+# 🔴 그리고 `CUST-001`(`...901`)은 **원래 그 파일에 있던 값**이다. 이 스크립트가 잠시
+# 썼던 `...802 / CUS-001` 은 **내가 지어낸 유령**이었다 — `db/seed` 만 글롭해 "시드 없음"
+# 으로 읽고, 마스터 V103 도 열지 않은 채 "SUPPLIER 계열만 심는다" 고 단정했기 때문이다.
+# V103 의 헤더는 그때 이미 *"aligned with the inbound + outbound
+# V99__seed_dev_masterref.sql baseline (SUP-001 / CUST-001)"* 이라고 적고 있었다.
+# **탐지식의 0건은 부재가 아니다** — 글롭 하나를 좁게 잡아 두 번 틀렸다.
+CUSTOMER_ID=01910000-0000-7000-8000-000000000901
 
 if http GET "$GW/api/v1/outbound/orders?size=100" && printf '%s' "$SEED_LAST_BODY" | grep -qF "\"$ORDER_NO\""; then
   SEED_EXISTING=$((SEED_EXISTING + 1)); seed_log "존재  출고 주문 $ORDER_NO"
