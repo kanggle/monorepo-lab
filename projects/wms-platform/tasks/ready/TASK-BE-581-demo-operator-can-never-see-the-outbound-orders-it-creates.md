@@ -72,26 +72,37 @@ tenant_id ∈ { null, "", "wms"(required-tenant-id), "*" }  → CallerScope.unre
 
 ## 파급
 
-🔴🔴 **정정 (2026-08-06, `TASK-MONO-510` AC-2 라이브 스윕): 아래 첫 항목이 틀렸다.**
+🔴🔴 **정정의 정정 (2026-08-06, `TASK-BE-582` 구현 중 런타임 실측).**
 
-> ~~콘솔 `/wms/outbound` 목록은 이 결함 때문에 빈다~~
+이 절에는 하루 전 "콘솔은 이 엔드포인트를 쓰지 않는다 — `/dashboard/orders`(admin
+프로젝션)를 읽는다" 는 정정이 붙어 있었다. **그 정정이 틀렸다. 아래 원문이 맞다.**
 
-**콘솔은 이 엔드포인트를 쓰지 않는다.** 실측하니 콘솔의 출고 화면은
-`callWmsAdmin('/dashboard/orders')` 로 **admin-service 의 프로젝션**을 읽는다. 그리고
-그 프로젝션은 **아무도 발행하지 않는 토픽**(`wms.outbound.order.v1`, 발행은
-`wms.outbound.order.received.v1`)을 구독해 영구히 0행이다 → **`TASK-BE-582`**.
+**측정** — BE-582 를 고쳐 `admin_order_summary` 를 1행으로 채운 직후, 같은 세션 쿠키로
+콘솔을 부르며 `platform-console-web` 로그를 봤다:
 
-즉 **콘솔 화면이 비는 직접 원인은 BE-582** 이고, 이 티켓(BE-581)은 **원시 API 표면의
-별개 결함**이다 — `GET /api/v1/outbound/orders` 를 직접 부르는 호출자(스크립트·연동·
-향후 화면)에게는 여전히 참이다. 두 결함은 독립이며 **둘 다 고쳐야** 화면이 찬다.
+```
+console-web 로그  {"msg":"wms_outbound_ok","path":"/orders?page=0&size=20"}
+env              WMS_OUTBOUND_BASE_URL=http://wms.local/api/v1/outbound
+⇒ 실제 상류       GET /api/v1/outbound/orders     (outbound-service 원시 API)
 
-🔵 **왜 틀렸나**: 원시 API 에서 "200 + 빈 배열" 을 확인한 뒤 **콘솔도 같은 경로를 쓸
-것이라고 가정**했다. 콘솔의 호출 스택을 열어 보지 않았다 — 대리지표를 성질로 승격한
-같은 병이다. [[feedback_absence_verdict_from_a_proxy_is_not_a_measurement]]
+같은 순간
+GET /api/v1/admin/dashboard/orders (운영자 토큰)  totalElements=1  ← 프로젝션은 찼다
+GET /api/wms/outbound (콘솔 BFF, 데모 세션)       elements=0       ← 화면은 여전히 빈다
+```
 
-- MONO-510 의 AC-2 에서 이 화면은 **시드로는 통과할 수 없다** — 다만 이유는
-  BE-582(프로젝션 미수신)가 먼저이고, 그것을 고친 뒤에야 이 티켓의 테넌트 문제가
-  화면에 드러나는지 여부를 물을 수 있다.
+즉 **프로젝션이 차도 콘솔 출고 화면은 비고**, 남은 원인은 이 티켓의 테넌트 스코프다.
+
+🔵 **왜 틀렸나 — 두 번**. 처음엔 원시 API 의 "200 + 빈 배열" 을 보고 콘솔도 같은 경로일
+것이라 가정했다. 정정할 때는 반대로 `wms-ops/api/wms-inventory-api.ts` 의
+`callWmsAdmin('/dashboard/orders')` 를 보고 **그게 배선돼 있다고 가정**했다. 실은 그
+함수는 **어떤 라우트도 호출하지 않는 죽은 코드**이고, 콘솔이 쓰는 건 이름이 같은 다른
+모듈의 `wms-outbound-ops/api/outbound-api.listOrders` 다. 정적 grep 은 같은 이름의 세
+`listOrders` 를 구분해 주지 않는다 — **상류는 런타임 로그로 물어야 한다.**
+[[feedback_absence_verdict_from_a_proxy_is_not_a_measurement]] ·
+[[feedback_data_nobody_renders_is_the_prior_question]]
+
+- MONO-510 의 AC-2 에서 이 화면은 **시드로는 통과할 수 없다** — BE-582 를 고친 뒤에도
+  0 이었다(실측). 남은 원인은 이 티켓 하나다.
 - 원시 API 를 채우려면 ecommerce↔wms 풀필먼트 루프(ADR-022)가 살아 있어 `demo-corp`
   소유의 `FULFILLMENT_ECOMMERCE` 주문이 실제로 흘러야 한다.
 

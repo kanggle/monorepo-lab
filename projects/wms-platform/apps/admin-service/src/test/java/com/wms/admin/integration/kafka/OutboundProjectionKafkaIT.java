@@ -19,10 +19,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 
 /**
- * Per-source-topic Kafka IT for {@code OutboundProjectionConsumer}. Covers the
- * 2 outbound topics ({@code wms.outbound.order.v1},
- * {@code wms.outbound.shipping.confirmed.v1}) plus dedupe-hit, LWW-stale, and
- * DLT routing scenarios.
+ * Per-source-topic Kafka IT for {@code OutboundProjectionConsumer}. Each event
+ * type is produced onto the topic {@code outbound-service} really publishes it
+ * to ({@code outbound-events.md § Topic Layout}) — before {@code TASK-BE-582}
+ * these sends used the rolled-up {@code wms.outbound.order.v1}, which nothing
+ * publishes to. Covers the order / shipping topics plus dedupe-hit, LWW-stale,
+ * and DLT routing scenarios.
  */
 class OutboundProjectionKafkaIT extends ProjectionKafkaIntegrationBase {
 
@@ -45,7 +47,7 @@ class OutboundProjectionKafkaIT extends ProjectionKafkaIntegrationBase {
                 "source":"WEBHOOK_ERP","requiredShipDate":"2026-05-15","lines":[{}]}"""
                 .formatted(orderId, warehouseId);
 
-        kafkaTemplate.send("wms.outbound.order.v1", orderId.toString(),
+        kafkaTemplate.send("wms.outbound.order.received.v1", orderId.toString(),
                 KafkaTestSupport.envelope(eventId, "outbound.order.received", Instant.now(),
                         orderId.toString(), payload));
 
@@ -107,12 +109,12 @@ class OutboundProjectionKafkaIT extends ProjectionKafkaIntegrationBase {
                 {"orderId":"%s","orderNo":"SECOND","warehouseId":"%s","lines":[]}"""
                         .formatted(orderId, warehouseId));
 
-        kafkaTemplate.send("wms.outbound.order.v1", orderId.toString(), first).get();
+        kafkaTemplate.send("wms.outbound.order.received.v1", orderId.toString(), first).get();
         await().atMost(AWAIT).untilAsserted(() ->
                 assertThat(orderRepo.findById(orderId)).isPresent()
                         .get().satisfies(o -> assertThat(o.getOrderNo()).isEqualTo("FIRST")));
 
-        kafkaTemplate.send("wms.outbound.order.v1", orderId.toString(), second).get();
+        kafkaTemplate.send("wms.outbound.order.received.v1", orderId.toString(), second).get();
         Thread.sleep(3_000);
 
         assertThat(orderRepo.findById(orderId).orElseThrow().getOrderNo())
@@ -130,7 +132,7 @@ class OutboundProjectionKafkaIT extends ProjectionKafkaIntegrationBase {
         Instant stale = fresh.minusSeconds(120);
 
         UUID firstId = UUID.randomUUID();
-        kafkaTemplate.send("wms.outbound.order.v1", orderId.toString(),
+        kafkaTemplate.send("wms.outbound.order.received.v1", orderId.toString(),
                 KafkaTestSupport.envelope(firstId, "outbound.order.received", fresh,
                         orderId.toString(),
                         """
@@ -140,7 +142,7 @@ class OutboundProjectionKafkaIT extends ProjectionKafkaIntegrationBase {
                 assertThat(orderRepo.findById(orderId)).isPresent());
 
         UUID staleId = UUID.randomUUID();
-        kafkaTemplate.send("wms.outbound.order.v1", orderId.toString(),
+        kafkaTemplate.send("wms.outbound.order.received.v1", orderId.toString(),
                 KafkaTestSupport.envelope(staleId, "outbound.order.received", stale,
                         orderId.toString(),
                         """
@@ -157,7 +159,7 @@ class OutboundProjectionKafkaIT extends ProjectionKafkaIntegrationBase {
 
     @Test
     void unknownEventType_routedToDlt() {
-        String dltTopic = "wms.outbound.order.v1.DLT";
+        String dltTopic = "wms.outbound.order.received.v1.DLT";
         UUID orderId = UUID.randomUUID();
         // Unknown eventType — UnknownEventTypeException is in
         // ProjectionKafkaConsumerConfig's non-retryable list → immediate DLT.
@@ -168,11 +170,11 @@ class OutboundProjectionKafkaIT extends ProjectionKafkaIntegrationBase {
                 {"orderId":"%s","orderNo":"DLT-UNKNOWN","warehouseId":"%s","lines":[]}"""
                         .formatted(orderId, UUID.randomUUID()));
 
-        double errorBefore = errorCount("wms.outbound.order.v1");
-        kafkaTemplate.send("wms.outbound.order.v1", orderId.toString(), envelope);
+        double errorBefore = errorCount("wms.outbound.order.received.v1");
+        kafkaTemplate.send("wms.outbound.order.received.v1", orderId.toString(), envelope);
 
         await().atMost(AWAIT).untilAsserted(() ->
-                assertThat(errorCount("wms.outbound.order.v1")).isGreaterThan(errorBefore));
+                assertThat(errorCount("wms.outbound.order.received.v1")).isGreaterThan(errorBefore));
 
         var dltRecords = KafkaTestSupport.pollDlt(KAFKA.getBootstrapServers(),
                 dltTopic, Duration.ofSeconds(15));

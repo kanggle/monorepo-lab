@@ -61,7 +61,7 @@ class InboundProjectionServiceTest {
         UUID warehouseId = UUID.randomUUID();
         when(asnRepo.findById(asnId)).thenReturn(Optional.empty());
 
-        ProjectionEnvelope env = envelope("inbound.asn.received", "wms.inbound.asn.v1",
+        ProjectionEnvelope env = envelope("inbound.asn.received", "wms.inbound.asn.received.v1",
                 "{\"asnId\":\"" + asnId + "\",\"asnNo\":\"ASN-001\",\"warehouseId\":\""
                         + warehouseId + "\",\"source\":\"WEBHOOK_ERP\",\"lines\":[]}");
 
@@ -77,7 +77,7 @@ class InboundProjectionServiceTest {
                 null, "CREATED", "MANUAL", null, 0, NOW.minusSeconds(60), null, NOW.minusSeconds(60));
         when(asnRepo.findById(asnId)).thenReturn(Optional.of(existing));
 
-        ProjectionEnvelope env = envelope("inbound.asn.cancelled", "wms.inbound.asn.v1",
+        ProjectionEnvelope env = envelope("inbound.asn.cancelled", "wms.inbound.asn.cancelled.v1",
                 "{\"asnId\":\"" + asnId + "\",\"asnNo\":\"ASN-001\",\"warehouseId\":\""
                         + warehouseId + "\"}");
 
@@ -139,7 +139,7 @@ class InboundProjectionServiceTest {
         when(asnRepo.findById(asnId)).thenReturn(Optional.empty());
 
         ProjectionEnvelope env = envelope(eventId, "inbound.asn.received",
-                "wms.inbound.asn.v1",
+                "wms.inbound.asn.received.v1",
                 "{\"asnId\":\"" + asnId + "\",\"asnNo\":\"ASN-001\",\"warehouseId\":\""
                         + warehouseId + "\",\"lines\":[]}");
 

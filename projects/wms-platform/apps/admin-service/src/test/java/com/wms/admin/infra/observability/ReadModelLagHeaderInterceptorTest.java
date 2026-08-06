@@ -43,7 +43,7 @@ class ReadModelLagHeaderInterceptorTest {
     @Test
     void aboveThreshold_emitsHeaderWithMaxAcrossTopics() {
         recordLag("wms.inventory.adjusted.v1", Duration.ofMillis(2_400));
-        recordLag("wms.inbound.asn.v1", Duration.ofMillis(7_500));
+        recordLag("wms.inbound.asn.received.v1", Duration.ofMillis(7_500));
 
         HttpServletResponse response = invoke();
         assertThat(response.getHeader("X-Read-Model-Lag-Seconds")).isEqualTo("7.5");
@@ -52,8 +52,8 @@ class ReadModelLagHeaderInterceptorTest {
     @Test
     void belowThreshold_omitsHeader_evenWhenManyTopicsRecord() {
         recordLag("wms.inventory.adjusted.v1", Duration.ofMillis(1_000));
-        recordLag("wms.inbound.asn.v1", Duration.ofMillis(2_000));
-        recordLag("wms.outbound.order.v1", Duration.ofMillis(4_900));
+        recordLag("wms.inbound.asn.received.v1", Duration.ofMillis(2_000));
+        recordLag("wms.outbound.order.received.v1", Duration.ofMillis(4_900));
 
         HttpServletResponse response = invoke();
         assertThat(response.getHeader("X-Read-Model-Lag-Seconds")).isNull();

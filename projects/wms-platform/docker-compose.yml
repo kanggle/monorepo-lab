@@ -166,6 +166,15 @@ services:
         MAIN_RETENTION_MS=604800000
         DLQ_RETENTION_MS=2592000000
 
+        # One entry per topic the *-events.md § Topic Layout tables declare.
+        # TASK-BE-582: this list used to also pre-create the rolled-up names
+        # (wms.inbound.asn.v1, wms.outbound.order.v1, wms.inbound.inspection.v1,
+        # wms.inbound.putaway.v1, wms.outbound.{picking,packing,shipped}.v1) and
+        # two pre-versioning alert names (wms.alert.{low-stock,anomaly-detected})
+        # that no code has referenced in any release. Nothing publishes to those,
+        # so a consumer pointed at one produced no error at all — the topic
+        # existed and stayed empty forever. Creating a topic no producer writes
+        # to turns a wiring bug into silence; don't.
         TOPICS=(
           "wms.master.warehouse.v1"
           "wms.master.zone.v1"
@@ -173,25 +182,28 @@ services:
           "wms.master.sku.v1"
           "wms.master.partner.v1"
           "wms.master.lot.v1"
-          "wms.inbound.asn.v1"
-          "wms.inbound.inspection.v1"
-          "wms.inbound.putaway.v1"
+          "wms.inbound.asn.received.v1"
+          "wms.inbound.asn.cancelled.v1"
+          "wms.inbound.asn.closed.v1"
+          "wms.inbound.inspection.completed.v1"
+          "wms.inbound.putaway.instructed.v1"
+          "wms.inbound.putaway.completed.v1"
+          "wms.inventory.received.v1"
           "wms.inventory.adjusted.v1"
           "wms.inventory.transferred.v1"
           "wms.inventory.reserved.v1"
           "wms.inventory.released.v1"
-          "wms.outbound.order.v1"
-          "wms.outbound.picking.v1"
-          "wms.outbound.packing.v1"
-          "wms.outbound.shipped.v1"
-          "wms.alert.low-stock"
-          "wms.alert.anomaly-detected"
+          "wms.inventory.confirmed.v1"
+          "wms.inventory.reserve.failed.v1"
           "wms.inventory.alert.v1"
-          "wms.inventory.adjusted.v1"
-          "wms.inbound.inspection.completed.v1"
-          "wms.inbound.asn.cancelled.v1"
+          "wms.outbound.order.received.v1"
           "wms.outbound.order.cancelled.v1"
+          "wms.outbound.picking.requested.v1"
+          "wms.outbound.picking.cancelled.v1"
+          "wms.outbound.picking.completed.v1"
+          "wms.outbound.packing.completed.v1"
           "wms.outbound.shipping.confirmed.v1"
+          "wms.admin.settings.v1"
           "wms.notification.delivered.v1"
         )
 

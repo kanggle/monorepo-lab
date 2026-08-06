@@ -19,11 +19,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 
 /**
- * Per-source-topic Kafka IT for {@code InboundProjectionConsumer}. Covers the
- * 3 inbound topics ({@code wms.inbound.asn.v1},
- * {@code wms.inbound.inspection.completed.v1},
- * {@code wms.inbound.putaway.completed.v1}) plus dedupe-hit, LWW-stale, and
- * DLT routing scenarios.
+ * Per-source-topic Kafka IT for {@code InboundProjectionConsumer}. Each event
+ * type is produced onto the topic {@code inbound-service} really publishes it
+ * to ({@code inbound-events.md § Topic Layout}) — before {@code TASK-BE-582}
+ * these sends used the rolled-up {@code wms.inbound.asn.v1}, a name no
+ * producer writes to, so the suite was green while production projected
+ * nothing. Covers the ASN / inspection / putaway topics plus dedupe-hit,
+ * LWW-stale, and DLT routing scenarios.
  */
 class InboundProjectionKafkaIT extends ProjectionKafkaIntegrationBase {
 
@@ -48,7 +50,7 @@ class InboundProjectionKafkaIT extends ProjectionKafkaIntegrationBase {
                 "source":"WEBHOOK_ERP","expectedArriveDate":"2026-05-15","lines":[]}"""
                 .formatted(asnId, warehouseId);
 
-        kafkaTemplate.send("wms.inbound.asn.v1", asnId.toString(),
+        kafkaTemplate.send("wms.inbound.asn.received.v1", asnId.toString(),
                 KafkaTestSupport.envelope(eventId, "inbound.asn.received", Instant.now(),
                         asnId.toString(), payload));
 
@@ -73,7 +75,7 @@ class InboundProjectionKafkaIT extends ProjectionKafkaIntegrationBase {
         String received = """
                 {"asnId":"%s","asnNo":"ASN-CANCEL","warehouseId":"%s",
                 "source":"MANUAL","lines":[]}""".formatted(asnId, warehouseId);
-        kafkaTemplate.send("wms.inbound.asn.v1", asnId.toString(),
+        kafkaTemplate.send("wms.inbound.asn.received.v1", asnId.toString(),
                 KafkaTestSupport.envelope(receivedId, "inbound.asn.received", t1,
                         asnId.toString(), received));
         await().atMost(AWAIT).untilAsserted(() -> assertThat(asnRepo.findById(asnId)).isPresent());
@@ -82,7 +84,7 @@ class InboundProjectionKafkaIT extends ProjectionKafkaIntegrationBase {
         String cancel = """
                 {"asnId":"%s","asnNo":"ASN-CANCEL","warehouseId":"%s"}"""
                 .formatted(asnId, warehouseId);
-        kafkaTemplate.send("wms.inbound.asn.v1", asnId.toString(),
+        kafkaTemplate.send("wms.inbound.asn.cancelled.v1", asnId.toString(),
                 KafkaTestSupport.envelope(cancelId, "inbound.asn.cancelled", t2,
                         asnId.toString(), cancel));
 
@@ -164,12 +166,12 @@ class InboundProjectionKafkaIT extends ProjectionKafkaIntegrationBase {
                 {"asnId":"%s","asnNo":"SECOND","warehouseId":"%s",
                 "source":"MANUAL","lines":[]}""".formatted(asnId, warehouseId));
 
-        kafkaTemplate.send("wms.inbound.asn.v1", asnId.toString(), firstEnvelope).get();
+        kafkaTemplate.send("wms.inbound.asn.received.v1", asnId.toString(), firstEnvelope).get();
         await().atMost(AWAIT).untilAsserted(() ->
                 assertThat(asnRepo.findById(asnId)).isPresent()
                         .get().satisfies(a -> assertThat(a.getAsnNo()).isEqualTo("FIRST")));
 
-        kafkaTemplate.send("wms.inbound.asn.v1", asnId.toString(), secondEnvelope).get();
+        kafkaTemplate.send("wms.inbound.asn.received.v1", asnId.toString(), secondEnvelope).get();
         Thread.sleep(3_000);
 
         assertThat(asnRepo.findById(asnId).orElseThrow().getAsnNo())
@@ -190,7 +192,7 @@ class InboundProjectionKafkaIT extends ProjectionKafkaIntegrationBase {
         String fresher = """
                 {"asnId":"%s","asnNo":"FRESH","warehouseId":"%s",
                 "source":"MANUAL","lines":[]}""".formatted(asnId, warehouseId);
-        kafkaTemplate.send("wms.inbound.asn.v1", asnId.toString(),
+        kafkaTemplate.send("wms.inbound.asn.received.v1", asnId.toString(),
                 KafkaTestSupport.envelope(firstId, "inbound.asn.received", fresh,
                         asnId.toString(), fresher));
         await().atMost(AWAIT).untilAsserted(() -> assertThat(asnRepo.findById(asnId)).isPresent());
@@ -199,7 +201,7 @@ class InboundProjectionKafkaIT extends ProjectionKafkaIntegrationBase {
         String staler = """
                 {"asnId":"%s","asnNo":"STALE","warehouseId":"%s",
                 "source":"MANUAL","lines":[]}""".formatted(asnId, warehouseId);
-        kafkaTemplate.send("wms.inbound.asn.v1", asnId.toString(),
+        kafkaTemplate.send("wms.inbound.asn.received.v1", asnId.toString(),
                 KafkaTestSupport.envelope(staleId, "inbound.asn.received", stale,
                         asnId.toString(), staler));
 
@@ -215,16 +217,16 @@ class InboundProjectionKafkaIT extends ProjectionKafkaIntegrationBase {
 
     @Test
     void malformedEnvelope_routedToDlt() {
-        String dltTopic = "wms.inbound.asn.v1.DLT";
+        String dltTopic = "wms.inbound.asn.received.v1.DLT";
         String malformed = """
                 {"eventType":"inbound.asn.received","occurredAt":"2026-05-09T10:00:00Z",
                 "aggregateId":"asn-DLT","payload":{"asnId":"asn-DLT","asnNo":"ASN-DLT"}}""";
 
-        double errorBefore = errorCount("wms.inbound.asn.v1");
-        kafkaTemplate.send("wms.inbound.asn.v1", "dlt-key", malformed);
+        double errorBefore = errorCount("wms.inbound.asn.received.v1");
+        kafkaTemplate.send("wms.inbound.asn.received.v1", "dlt-key", malformed);
 
         await().atMost(AWAIT).untilAsserted(() ->
-                assertThat(errorCount("wms.inbound.asn.v1")).isGreaterThan(errorBefore));
+                assertThat(errorCount("wms.inbound.asn.received.v1")).isGreaterThan(errorBefore));
 
         var dltRecords = KafkaTestSupport.pollDlt(KAFKA.getBootstrapServers(),
                 dltTopic, Duration.ofSeconds(15));

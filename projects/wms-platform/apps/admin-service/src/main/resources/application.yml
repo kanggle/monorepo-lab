@@ -131,10 +131,24 @@ admin:
         master-sku: ${ADMIN_PROJECTION_TOPIC_MASTER_SKU:wms.master.sku.v1}
         master-partner: ${ADMIN_PROJECTION_TOPIC_MASTER_PARTNER:wms.master.partner.v1}
         master-lot: ${ADMIN_PROJECTION_TOPIC_MASTER_LOT:wms.master.lot.v1}
-        inbound-asn: ${ADMIN_PROJECTION_TOPIC_INBOUND_ASN:wms.inbound.asn.v1}
+        # One key per PRODUCED topic. `inbound-events.md` / `outbound-events.md`
+        # § Topic Layout are authoritative: those producers publish one topic
+        # per event type (`wms.<eventType>.v1`). The rolled-up aggregate names
+        # (`wms.inbound.asn.v1`, `wms.outbound.order.v1`) that used to sit here
+        # are a documentation convenience only — nothing publishes to them, so
+        # subscribing to them projected nothing at all (TASK-BE-582).
+        inbound-asn-received: ${ADMIN_PROJECTION_TOPIC_INBOUND_ASN_RECEIVED:wms.inbound.asn.received.v1}
+        inbound-asn-cancelled: ${ADMIN_PROJECTION_TOPIC_INBOUND_ASN_CANCELLED:wms.inbound.asn.cancelled.v1}
+        inbound-asn-closed: ${ADMIN_PROJECTION_TOPIC_INBOUND_ASN_CLOSED:wms.inbound.asn.closed.v1}
         inbound-inspection: ${ADMIN_PROJECTION_TOPIC_INBOUND_INSPECTION:wms.inbound.inspection.completed.v1}
+        inbound-putaway-instructed: ${ADMIN_PROJECTION_TOPIC_INBOUND_PUTAWAY_INSTRUCTED:wms.inbound.putaway.instructed.v1}
         inbound-putaway: ${ADMIN_PROJECTION_TOPIC_INBOUND_PUTAWAY:wms.inbound.putaway.completed.v1}
-        outbound-order: ${ADMIN_PROJECTION_TOPIC_OUTBOUND_ORDER:wms.outbound.order.v1}
+        outbound-order-received: ${ADMIN_PROJECTION_TOPIC_OUTBOUND_ORDER_RECEIVED:wms.outbound.order.received.v1}
+        outbound-order-cancelled: ${ADMIN_PROJECTION_TOPIC_OUTBOUND_ORDER_CANCELLED:wms.outbound.order.cancelled.v1}
+        outbound-picking-requested: ${ADMIN_PROJECTION_TOPIC_OUTBOUND_PICKING_REQUESTED:wms.outbound.picking.requested.v1}
+        outbound-picking-cancelled: ${ADMIN_PROJECTION_TOPIC_OUTBOUND_PICKING_CANCELLED:wms.outbound.picking.cancelled.v1}
+        outbound-picking-completed: ${ADMIN_PROJECTION_TOPIC_OUTBOUND_PICKING_COMPLETED:wms.outbound.picking.completed.v1}
+        outbound-packing-completed: ${ADMIN_PROJECTION_TOPIC_OUTBOUND_PACKING_COMPLETED:wms.outbound.packing.completed.v1}
         outbound-shipping: ${ADMIN_PROJECTION_TOPIC_OUTBOUND_SHIPPING:wms.outbound.shipping.confirmed.v1}
         inventory-received: ${ADMIN_PROJECTION_TOPIC_INVENTORY_RECEIVED:wms.inventory.received.v1}
         inventory-adjusted: ${ADMIN_PROJECTION_TOPIC_INVENTORY_ADJUSTED:wms.inventory.adjusted.v1}
