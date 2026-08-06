@@ -8,7 +8,7 @@ erp 아웃박스 릴레이가 **한 번도 돌지 않는다** — `@Scheduled` �
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -266,3 +266,11 @@ approval 봉투는 **`aggregateId` 도 `tenantId` 도 없다**(`partitionKey` �
 - [x] AC-0~AC-5 충족
 - [x] 두 서비스 `integrationTest` 의 새 가드 GREEN (물기 확인 완료: 되돌리면 2/2 FAILED)
 - [x] Ready for review
+
+---
+
+# 머지 기록
+
+**impl PR [#3236](https://github.com/kanggle/monorepo-lab/pull/3236) — squash `c2ea87e06`, 2026-08-06 머지.** 3차원 검증: (a) `gh pr view` `state=MERGED` · `mergeCommit=c2ea87e06`, (b) `origin/main` tip 이 그 커밋과 일치, (c) 머지 직전 failing 필수 체크 **0건**(pass 9 · skipping 29). 🔵 `Integration (erp-platform, Testcontainers)` 레인이 **새 가드 2개를 실제로 실행**했다 — 로컬 Testcontainers 는 이 호스트에서 권위가 아니므로 이 레인의 통과가 가드가 CI 에서 사는지에 대한 판정이다.
+
+🔵 워크스루 가이드의 한계 표는 이 PR 이 아니라 **`TASK-MONO-510` 슬라이스**에서 갱신했다(`docs/guides/` = 모노레포 레벨 경로).
