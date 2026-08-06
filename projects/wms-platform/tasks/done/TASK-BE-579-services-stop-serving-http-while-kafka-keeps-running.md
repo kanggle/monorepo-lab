@@ -8,7 +8,7 @@ inventory-service · outbound-service 가 HTTP 를 **한 건도** 서빙하지 �
 
 # Status
 
-review
+done
 
 # Owner
 
