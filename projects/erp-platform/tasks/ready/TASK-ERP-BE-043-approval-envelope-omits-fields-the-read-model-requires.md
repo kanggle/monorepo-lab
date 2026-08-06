@@ -78,11 +78,23 @@ delegation_fact_proj           0행
 > erp.approval.submitted.v1-retry-0/1  end-offset 0     (재시도 없이 직행)
 > ```
 >
-> 즉 이제 **두 토픽(`delegated`·`submitted`)이 실측 대상**이다. 나머지 넷
-> (`approved`/`rejected`/`withdrawn`/`delegation.revoked`)이 여전히 0 인 것은
-> **막혀서가 아니라 그 전이를 아직 아무도 실행하지 않아서**다 — 승인/반려를 한 번씩
-> 태우면 같은 자리에서 관측된다. AC-0 은 두 토픽을 착수 시 다시 세는 것으로 충족하고,
-> 나머지 넷은 AC-3 의 회귀 범위로 남긴다.
+> 즉 이제 **두 토픽(`delegated`·`submitted`)이 실측 대상**이다. AC-0 은 이 둘을 착수 시
+> 다시 세는 것으로 충족하고, 나머지 넷은 AC-3 의 회귀 범위로 남긴다.
+>
+> 🔴 **정정 (같은 날, 조금 뒤).** 위 문단은 처음에 *"나머지 넷이 0 인 것은 막혀서가 아니라
+> 아무도 그 전이를 안 눌러서"* 라고 적었다. **확인하지 않고 쓴 문장이었고, 틀렸다.**
+> 넷은 한 덩어리가 아니다 — 실측한 신원으로 갈린다:
+>
+> | 토픽 | 도달 가능? | 근거(실측) |
+> |---|---|---|
+> | `approved` · `rejected` | ❌ **구조적으로 불가** | 요청의 `approverId` = `019fd768-bc95-…`(EMP-0001), 행위 주체는 항상 `platform-console-web`. 유일한 위임은 `delegatorId=platform-console-web` → `delegateId=019fd768-c180-…` 로 **방향이 반대**라 승인 권한을 주지 않는다 ⇒ `TASK-MONO-515` 그 자체 |
+> | `withdrawn` | ⭕ **가능** | withdraw 는 **기안자 전용**이고 `submitterId` = `platform-console-web` = 행위 주체다(발행된 봉투 payload 에서 확인) |
+> | `delegation.revoked` | ⭕ **가능해 보인다** | 그 grant 의 `createdBy` = `platform-console-web` |
+>
+> 🔵 오른쪽 두 칸은 **코드·데이터 읽기로 얻은 도달성 분석이지 아직 쏴 본 적이 없다.**
+> 지금 쏘지 않은 이유는 데모 데이터를 파괴하기 때문이다(`SUBMITTED 2` 가 `1` 로 줄고
+> 시드는 비-DRAFT 를 복구하지 않는다). AC-3 이 봉투 수정과 **같은 실행에서** 태워라 —
+> 그때는 되살아나는 것을 보는 것이므로 파괴가 아니라 검증이다.
 
 ## 🔴 두 번째 관문이 그 뒤에 있다 (봉투를 고쳐도 남는다)
 
