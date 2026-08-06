@@ -99,6 +99,84 @@ delegation_fact_proj           0행
 `demo-corp` 인 마스터 이벤트가 정상 투영됐다(실측: `employee_proj` 4행). **같은 read-model
 안에서 테넌트 정책이 갈려 있다** — 어느 쪽이 의도인지가 이 티켓의 두 번째 질문이다.
 
+## ✅ 2026-08-07 착수 전 조사 — **AC-1 은 이미 답이 있다** (BE-041 작업 중 실측)
+
+이 절은 `TASK-ERP-BE-041` 을 하며 얻은 것이다. 아래 셋은 이 티켓 본문의 **전제를 정정**한다.
+
+### ① 계약은 침묵하지 않는다 — 고칠 쪽은 **프로듀서**다
+
+AC-1 이 "계약 문서를 먼저 열어라, 한쪽을 정했다면 그것이 답" 이라고 했다. 열었다:
+
+```json
+// specs/contracts/events/erp-approval-events.md § Envelope
+{ "eventId":"<uuid>", "eventType":"erp.approval.submitted", "occurredAt":"…",
+  "tenantId":"erp", "source":"erp-platform-approval-service",
+  "aggregateType":"ApprovalRequest", "aggregateId":"<approvalRequestId>",
+  "traceId":"…", "payload":{…} }
+```
+
+> `aggregateType` is `"ApprovalRequest"` on **every** approval event.
+
+⇒ 계약이 **`tenantId`·`aggregateType`·`aggregateId` 셋 다 최상위로 선언**한다.
+프로듀서가 계약 미이행이다. **AC-1 은 판단이 아니라 확인으로 닫힌다.**
+
+🔴 **Related Contracts 의 파일명이 틀렸다** — 실제 경로는 `erp-` 접두사가 붙는다
+(`erp-approval-events.md` / `erp-masterdata-events.md`). 아래 섹션에서 고쳤다.
+
+### ② 🔴 **형제가 이미 같은 결함을 고쳤다 — `TASK-ERP-BE-032`**
+
+`OutboxMasterdataEventPublisher` 의 javadoc 이 그대로 적어 뒀다:
+
+> The legacy `BaseEventPublisher` path emitted a 7-field shape **without a top-level
+> `aggregateId`**; the read-model-service consumer requires a top-level `aggregateId`
+> and **rejected every real event to `.DLT`**. (TASK-ERP-BE-032)
+
+**증상·원인·수정이 이 티켓과 같다.** approval 쌍둥이만 안 따라왔다 — `@EnableScheduling`
+(BE-042)에 이은 **형제 파리티 낙오 두 번째**다. 구현은 masterdata 의 `writeEvent` 를 그대로
+미러링하면 된다(3줄):
+
+```java
+envelope.put("tenantId", payload.get("tenantId"));   // 페이로드의 테넌트
+envelope.put("aggregateType", aggregateType);        // "ApprovalRequest"
+envelope.put("aggregateId", aggregateId);
+```
+
+approval 페이로드는 **이미 `tenantId` 를 싣고 있다**(실측: `"tenantId":"demo-corp"`).
+
+### ③ 🔴🔴 AC-3 의 "비대칭" 은 **한 프로퍼티가 두 축을 겸하는 것**이다
+
+`erpplatform.oauth2.required-tenant-id`(기본 `erp`)를 **세 곳이 서로 다른 뜻으로** 읽는다:
+
+| 읽는 곳 | 해석 | `demo-corp` 결과 |
+|---|---|---|
+| `ServiceLevelOAuth2Config` (HTTP JWT) | **도메인** 키 (`trustEntitledDomains`) | **통과** |
+| `ReadAuthorizationGate` | **도메인** 키 (entitlement) | **통과** |
+| `DelegationEnvelopeToCommandMapper` | **테넌트 값** (`tenantId` 와 등호 비교) | **거절** |
+
+⇒ 같은 값 `erp` 가 HTTP 쪽에선 *"이 도메인에 권한 있으면 통과"*, 이벤트 쪽에선
+*"tenantId 가 문자열 `erp` 여야 함"* 이다. **실측으로 확인**: `tenant_id=demo-corp` 토큰이
+read-model HTTP API 를 정상 통과하고(시드의 `프로젝션 사원 4/4`), 같은 서비스의 위임 매퍼는
+`tenantId=demo-corp` 봉투를 거절한다.
+
+🔴 그래서 **설정값으로는 못 고친다** — `OIDC_REQUIRED_TENANT_ID=demo-corp` 로 바꾸면 이벤트
+관문은 열리지만 **HTTP 인증이 도메인 전체에서 깨진다.** AC-3 은 두 축을 **분리**하는
+결정이어야 한다.
+
+### ④ 🔵 계약의 `"tenantId": "erp"` 리터럴도 현실과 다르다
+
+두 계약 문서 모두 봉투 예시에 `"tenantId": "erp"` 를 **리터럴**로 적어 뒀다(다른 필드는
+`"<uuid>"` 식 플레이스홀더인데 이것만 값이다). 그런데 **두 프로듀서 모두 고객 테넌트를
+싣는다** — 실측(같은 스택·같은 순간):
+
+```
+masterdata 봉투 : "tenantId":"demo-corp"   ← 최상위
+approval  봉투 : (최상위 없음) payload."tenantId":"demo-corp"
+```
+
+erp 가 assume-tenant 로 멀티테넌트가 되면서 **구현이 앞서가고 계약이 안 따라온 것**이다.
+AC-3 을 닫으려면 이 리터럴도 함께 정정해야 한다 — 안 그러면 다음 사람이 또 `erp` 를 상수로
+읽고 같은 관문을 만든다.
+
 # Goal
 
 `erp.approval.*` 이벤트가 read-model 에 **투영된다.** 그리고 봉투 계약이 두 프로듀서
@@ -150,8 +228,11 @@ delegation_fact_proj           0행
 
 # Related Contracts
 
-- `projects/erp-platform/specs/contracts/events/approval-events.md` — 봉투 스키마의 권위
-- `projects/erp-platform/specs/contracts/events/masterdata-events.md` — 동작하는 선례
+- `projects/erp-platform/specs/contracts/events/erp-approval-events.md` — 봉투 스키마의 권위.
+  **이미 `tenantId`/`aggregateType`/`aggregateId` 를 최상위로 선언한다** ⇒ AC-1 의 답
+- `projects/erp-platform/specs/contracts/events/erp-masterdata-events.md` — 동작하는 선례
+- `projects/erp-platform/tasks/done/TASK-ERP-BE-032-masterdata-event-envelope-dlt-mismatch.md`
+  — **같은 결함의 masterdata 판**. 미러링할 수정
 
 # Edge Cases
 
