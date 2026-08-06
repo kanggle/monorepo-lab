@@ -15,6 +15,7 @@ let mockAuthState = {
   isAuthenticated: true,
   isLoading: false,
   login: vi.fn(),
+  signup: vi.fn(),
   logout: vi.fn(),
 };
 
@@ -100,6 +101,7 @@ describe('ProfilePage', () => {
       isAuthenticated: true,
       isLoading: false,
       login: vi.fn(),
+      signup: vi.fn(),
       logout: vi.fn(),
     };
     mockUseRequireAuth.mockReturnValue({ isReady: true });

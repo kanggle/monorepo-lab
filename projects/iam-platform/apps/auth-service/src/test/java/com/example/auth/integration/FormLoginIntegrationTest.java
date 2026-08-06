@@ -22,6 +22,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -62,6 +63,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *   <li><b>Unauthenticated authorize redirect</b> — GET /oauth2/authorize
  *       without a session → 302 to /login (proving the
  *       {@code AuthorizationServerConfig} entry-point edit took effect).</li>
+ *   <li><b>Registration hint (TASK-BE-578)</b> — the same entry point sends an
+ *       unauthenticated request carrying {@code prompt=create} to /signup
+ *       instead, while every other shape (no prompt, another prompt value,
+ *       {@code none} conflicting with {@code create}) still lands on /login,
+ *       and an already-authenticated request carrying the hint completes the
+ *       authorize normally rather than showing the signup form.</li>
  *   <li><b>Logout</b> — POST /logout invalidates the session;
  *       subsequent GET /oauth2/authorize is again unauthenticated and
  *       redirects to /login.</li>
@@ -259,6 +266,111 @@ class FormLoginIntegrationTest extends AbstractIntegrationTest {
                         .queryParam("state", "unauth-redirect-test"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrlPattern("**/login"));
+    }
+
+    // ------------------------------------------------------------------
+    // 3b. TASK-BE-578 — registration hint routes the entry point to /signup
+    //
+    // The hint decides the LANDING PAGE only. The saved /oauth2/authorize
+    // request — and therefore the tenant the account is born into — must be
+    // untouched, which is why these assert on the redirect and nothing else,
+    // and why the no-hint case is re-asserted right beside them.
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("BE-578 AC-1: unauthenticated authorize with prompt=create → 302 /signup")
+    void unauthenticatedAuthorize_withRegistrationHint_redirectsToSignup() throws Exception {
+        mockMvc.perform(authorizeRequest("hint-signup").queryParam("prompt", "create"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrlPattern("**/signup"));
+    }
+
+    @Test
+    @DisplayName("BE-578 AC-2: without the hint the entry point still lands on /login (no regression)")
+    void unauthenticatedAuthorize_withoutHint_stillRedirectsToLogin() throws Exception {
+        mockMvc.perform(authorizeRequest("no-hint"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrlPattern("**/login"));
+    }
+
+    @Test
+    @DisplayName("BE-578: an unrelated prompt value is not a hint — still /login")
+    void unauthenticatedAuthorize_withOtherPrompt_redirectsToLogin() throws Exception {
+        mockMvc.perform(authorizeRequest("prompt-login").queryParam("prompt", "login"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrlPattern("**/login"));
+    }
+
+    @Test
+    @DisplayName("BE-578 edge case: prompt=none conflicts with the hint — SAS answers login_required, the signup form is never shown")
+    void unauthenticatedAuthorize_withNoneAndCreate_isRejectedBySas() throws Exception {
+        MvcResult result = mockMvc.perform(
+                        authorizeRequest("prompt-conflict").queryParam("prompt", "none create"))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+
+        // Measured, and it corrects a wrong first assumption: SAS ignores prompt
+        // values it does not implement, but it DOES implement `none`, and its
+        // authorization endpoint filter short-circuits before any entry point is
+        // consulted. So the conflict is resolved by SAS, not by
+        // RegistrationHintRequestMatcher — whose `none` rule is defence in depth
+        // and is exercised in RegistrationHintRequestMatcherTest instead.
+        //
+        // What matters at this layer is the outcome: a caller who asked for no UI
+        // does not get the signup form.
+        String location = result.getResponse().getHeader("Location");
+        assertThat(location)
+                .isNotNull()
+                .startsWith(REDIRECT_URI)
+                .contains("error=login_required");
+        assertThat(location).doesNotContain("/signup");
+    }
+
+    @Test
+    @DisplayName("BE-578 AC-4: an ALREADY-AUTHENTICATED user carrying the hint proceeds to authorize, not to the signup form")
+    void authenticatedAuthorize_withRegistrationHint_completesNormally() throws Exception {
+        MvcResult loginResult = mockMvc.perform(post("/login")
+                        .session(new MockHttpSession())
+                        .with(csrf())
+                        .param("username", TEST_EMAIL)
+                        .param("password", TEST_PASSWORD))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+        MockHttpSession authedSession =
+                (MockHttpSession) loginResult.getRequest().getSession(false);
+        assertThat(authedSession).isNotNull();
+
+        MvcResult authorizeResult = mockMvc.perform(
+                        authorizeRequest("hint-when-authed")
+                                .session(authedSession)
+                                .queryParam("prompt", "create"))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+
+        // The entry point only fires for UNauthenticated requests, so the hint is
+        // inert here and SAS completes the flow. Measured against a live SAS
+        // before choosing `prompt=create`: it ignores unknown prompt values
+        // rather than rejecting them, so the resumed authorize after signup
+        // still carries the hint harmlessly.
+        String location = authorizeResult.getResponse().getHeader("Location");
+        assertThat(location)
+                .as("authenticated + hint must yield an authorization code, not the signup form")
+                .isNotNull()
+                .startsWith(REDIRECT_URI)
+                .contains("code=");
+    }
+
+    /** Shared authorize request builder — the hint cases differ only in `prompt`. */
+    private MockHttpServletRequestBuilder authorizeRequest(String state) {
+        return get("/oauth2/authorize")
+                .accept(MediaType.TEXT_HTML)
+                .queryParam("response_type", "code")
+                .queryParam("client_id", CLIENT_ID)
+                .queryParam("redirect_uri", REDIRECT_URI)
+                .queryParam("scope", "openid")
+                .queryParam("code_challenge", codeChallenge)
+                .queryParam("code_challenge_method", "S256")
+                .queryParam("state", state);
     }
 
     // ------------------------------------------------------------------

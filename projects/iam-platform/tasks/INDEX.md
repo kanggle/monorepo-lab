@@ -74,7 +74,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
 
-- `TASK-BE-578-registration-hint-so-signup-links-land-on-the-form.md` — **🟢 READY — 가입 링크가 IAM 가입 화면에 바로 닿게 registration hint 를 받는다(지금은 로그인 화면을 한 번 거친다).** `FE-097` 이 스토어 쪽에서 할 수 있는 데까지 간 뒤 남은 것. 🔴 **스토어만으로는 불가능하고, 그건 우회가 아니라 설계다** — SAS 는 미인증 authorize 를 항상 `/login` 으로 보내고 `SavedRequestTenantResolver` 는 **저장된 `/oauth2/authorize` 요청만** 신뢰한다(임의 saved URL 의 `client_id` 방어가 명시된 주석). IAM `/signup` 직링크는 계정을 `fan-platform` 에 만든다(실측). 선택지 A(표준 `prompt=create`) / B(커스텀 `screen_hint`) / C(서버측 authorize 선행 진입로). **AC-0 이 SAS 가 미지의 `prompt` 값에 무엇을 하는지 먼저 실측하게 한다** — 무시/거부에 따라 A 의 가부가 갈린다. 🔴 **hint 를 tenant 소스로 승격시키지 말 것**(그러면 FE-097 이 피한 구멍이 다시 열린다) — AC-3 이 그것을 잡는다. **AC-2 = hint 없으면 기존과 동일**(회귀 없음). 분석=Opus 5 / 구현 권장=**Opus**(SAS 인증 체인). [[feedback_guard_predicate_wrong_verify_the_artifact]]
+_(없음)_
 
 > `TASK-BE-573` 은 착수·구현 완료 — 아래 `## review` 참조.
 
@@ -114,7 +114,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-_(없음)_
+- `TASK-BE-578-registration-hint-so-signup-links-land-on-the-form.md` — **🟡 REVIEW — 안 A(OIDC 표준 `prompt=create`) 채택, ADR 불필요로 판단.** entry point 를 `DelegatingAuthenticationEntryPoint` 로 바꿔 **미인증 + hint → `/signup`**, 그 외 전부 기존 `/login`. **ADR 판단 근거**: `platform/architecture-decision-rule.md` 는 *아키텍처 스타일* 선언과 *cross-service/비가역* 결정을 다루는데 이건 단일 서비스의 **가역적 라우팅 분기 + 계약 파라미터 문서화**다. 아키텍처 결정이 될 뻔한 유일한 축(hint 가 tenant 를 정하는가)은 티켓이 **명시적으로 배제**했고 `SavedRequestTenantResolver` 는 손대지 않았다. 🔴🔴 **AC-0 실측을 한 번 틀렸고 라이브가 정정했다** — 처음엔 `create`/`bogusvalue` 만 재보고 "SAS 는 `prompt` 를 아예 안 본다" 고 적었는데, 배포 후 매트릭스를 돌리니 **`prompt=none` 은 SAS 가 구현한다**(미인증 시 authorization endpoint 필터가 entry point 보다 **먼저** `error=login_required` 로 단락). ⇒ 계약 표 한 줄과 IT 단언 하나가 틀린 채로 나갈 뻔했다. **정정**: 매처의 `none`-wins 규칙은 **현재 도달하지 않는 방어선**이고 충돌을 실제로 해결하는 건 SAS다 — 그렇게 계약·주석·테스트에 적었다. **"안 고른 값도 재라"**. 🔵 **매처는 토큰 단위 파싱**(`created`/`recreate` 는 hint 아님, 대소문자 구분) — 부분문자열 비교였으면 `state` 에 우연히 들어간 단어로도 가입 폼이 뜬다. **라이브 실측(auth-service 재배포 후)**: hint → `/signup` 렌더 → 가입 → **계정 `tenant_id=ecommerce`**(`fan-platform` 아님, AC-3) → 로그인 → **저장된 authorize 가 그대로 재개**되어 code 발급(Failure Scenario "저장된 요청 소비/삭제" 반증). hint 없음/`login`/`created`/`Create` 전부 `/login` 유지(AC-2). 🟠 **범위 판단**: 티켓 Out of Scope 는 스토어 변경을 뺐지만 Test Requirements 는 "스토어 회원가입 → 가입 폼 한 번에" 실주행을 요구한다 — 호출자가 없으면 기능이 죽은 코드라 web-store 한 줄(`signIn('iam', {...}, { prompt: 'create' })`)까지 같은 PR 에 넣었다(cross-project atomic). 🔵 `AuthContextValue.signup` 을 **required** 로 둔 덕에 tsc 가 목 27곳을 전부 잡았다 — optional 로 피하면 그 검증을 버리는 것이라 목을 고쳤다. **검증**: auth-service unit **647/0/0**(신설 매처 테스트 포함), web-store `tsc --noEmit` 0. 🔴 web-store vitest 는 **이 호스트에서 기동 불가**(Node 24 ↔ vitest 4 `#module-evaluator`, 선재 함정) — CI 는 Node 20 이라 거기가 권위. impl PR #TBD. [[env_webstore_vitest4_node24_module_evaluator]]
 
 ## done
 

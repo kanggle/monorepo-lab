@@ -86,6 +86,7 @@ describe('OrderDetailPage', () => {
       isLoading: false,
       user: null,
       login: vi.fn(),
+      signup: vi.fn(),
       logout: vi.fn(),
     });
     mockUseParams.mockReturnValue({ id: 'order-1' });

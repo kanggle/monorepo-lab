@@ -8,7 +8,7 @@ TASK-BE-578
 
 # Status
 
-ready
+review
 
 # Owner
 

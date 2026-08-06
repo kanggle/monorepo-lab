@@ -57,6 +57,7 @@ describe('WishlistButton', () => {
       isLoading: false,
       user: null,
       login: vi.fn(),
+      signup: vi.fn(),
       logout: vi.fn(),
     });
 
@@ -79,6 +80,7 @@ describe('WishlistButton', () => {
       isLoading: true,
       user: null,
       login: vi.fn(),
+      signup: vi.fn(),
       logout: vi.fn(),
     });
 
@@ -98,6 +100,7 @@ describe('WishlistButton', () => {
       isLoading: false,
       user: { userId: 'user-1', email: 'test@test.com', name: 'Test' },
       login: vi.fn(),
+      signup: vi.fn(),
       logout: vi.fn(),
     });
     mockCheckWishlist.mockResolvedValue({ productId: 'product-1', inWishlist: true, wishlistItemId: 'item-1' });
@@ -119,6 +122,7 @@ describe('WishlistButton', () => {
       isLoading: false,
       user: { userId: 'user-1', email: 'test@test.com', name: 'Test' },
       login: vi.fn(),
+      signup: vi.fn(),
       logout: vi.fn(),
     });
     mockCheckWishlist.mockResolvedValue({ productId: 'product-1', inWishlist: false, wishlistItemId: null });
@@ -148,6 +152,7 @@ describe('WishlistButton', () => {
       isLoading: false,
       user: { userId: 'user-1', email: 'test@test.com', name: 'Test' },
       login: vi.fn(),
+      signup: vi.fn(),
       logout: vi.fn(),
     });
     mockCheckWishlist.mockResolvedValue({ productId: 'product-1', inWishlist: true, wishlistItemId: 'item-1' });
@@ -177,6 +182,7 @@ describe('WishlistButton', () => {
       isLoading: false,
       user: { userId: 'user-1', email: 'test@test.com', name: 'Test' },
       login: vi.fn(),
+      signup: vi.fn(),
       logout: vi.fn(),
     });
     mockCheckWishlist.mockResolvedValue({ productId: 'product-1', inWishlist: true, wishlistItemId: 'item-from-check' });
@@ -206,6 +212,7 @@ describe('WishlistButton', () => {
       isLoading: false,
       user: { userId: 'user-1', email: 'test@test.com', name: 'Test' },
       login: vi.fn(),
+      signup: vi.fn(),
       logout: vi.fn(),
     });
     mockCheckWishlist.mockRejectedValue(new Error('Network error'));
@@ -229,6 +236,7 @@ describe('WishlistButton', () => {
       isLoading: false,
       user: { userId: 'user-1', email: 'test@test.com', name: 'Test' },
       login: vi.fn(),
+      signup: vi.fn(),
       logout: vi.fn(),
     });
     mockCheckWishlist.mockResolvedValue({ productId: 'product-1', inWishlist: false, wishlistItemId: null });
@@ -262,6 +270,7 @@ describe('WishlistButton', () => {
       isLoading: false,
       user: { userId: 'user-1', email: 'test@test.com', name: 'Test' },
       login: vi.fn(),
+      signup: vi.fn(),
       logout: vi.fn(),
     });
     mockCheckWishlist.mockResolvedValue({ productId: 'product-1', inWishlist: true, wishlistItemId: null as unknown as string });

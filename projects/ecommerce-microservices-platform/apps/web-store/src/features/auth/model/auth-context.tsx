@@ -37,6 +37,17 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
     return signIn('iam', { callbackUrl: callbackUrl ?? '/' });
   }, []);
 
+  // TASK-BE-578: same flow, but the third `signIn` argument puts extra params on
+  // the authorize URL, and IAM reads `prompt=create` (the OIDC standard
+  // "Initiating User Registration" hint) to open on its signup form instead of
+  // its login form. Everything else is byte-identical to `login`, which is the
+  // point — the saved /oauth2/authorize request is what gives the new account
+  // the `ecommerce` tenant, and a hint that changed the request shape would put
+  // that at risk. IAM ignores the hint for an already-authenticated user.
+  const signup = useCallback((callbackUrl?: string) => {
+    return signIn('iam', { callbackUrl: callbackUrl ?? '/' }, { prompt: 'create' });
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       localStorage.removeItem('cart');
@@ -63,8 +74,8 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, isAuthenticated, isLoading, login, logout }),
-    [user, isAuthenticated, isLoading, login, logout],
+    () => ({ user, isAuthenticated, isLoading, login, signup, logout }),
+    [user, isAuthenticated, isLoading, login, signup, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
