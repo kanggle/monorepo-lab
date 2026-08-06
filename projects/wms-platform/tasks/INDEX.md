@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-572-notification-service-is-permanently-unhealthy.md` — **🟢 READY — `wms-notification-service` 는 구조적으로 통과할 수 없는 헬스체크를 갖고 있다.** `TASK-MONO-510` AC-8 발굴. 실측: 컨테이너는 `Up … (unhealthy)` 인데 **부팅은 정상**이고, 컨테이너 **안에서** `curl localhost:8085/actuator/health` 도 `000`, 로그에 **"Tomcat started on port" 줄이 아예 없다**. 원인은 `build.gradle` 주석 한 문장이 틀린 것 — *"Actuator alone exposes /actuator/health"* 라고 적혀 있지만 **웹 스타터가 없으면 actuator 는 HTTP 표면을 갖지 못한다**(non-web 애플리케이션으로 뜬다). 그런데 `application.yml` 은 `server.port` 를 잡고 compose 헬스체크는 그 포트를 찌른다 ⇒ **절대 초록이 될 수 없다.** 🔴 **왜 아무도 안 걸렸나**: 라우팅 대상이 아니고 `depends_on: service_healthy` 로 기다리는 형제도 없어 스택이 정상적으로 뜬다 — 그래서 **항상 빨간 등**이 되어 아무도 보지 않는 상태가 됐다(꺼진 가드의 거울상). A(프로세스/컨슈머 기준 헬스) vs B(관리 포트로 actuator 를 실제로 연다 — 주석의 원래 의도) 중 택1. 🔴 **AC-2 가 음성 대조를 요구한다** — A 안은 `pgrep` 이 죽은 컨슈머를 못 보므로 양성만 단언하면 **지금과 대칭인 "항상 초록"** 결함이 된다. 지금 고쳐도 아무것도 안 깨진다(위험 낮음). 분석=Opus 5 / 구현 권장=**Sonnet**. [[project_guard_reachability_not_just_bite]]
+(empty)
 
 > 2026-07-20 (`TASK-MONO-451`): 위 두 행은 **디스크에는 `ready/` 에 있는데 이 섹션이 `(empty)` 라고 선언**하고 있었다 — 아래 2026-07-12 노트와 정반대 방향의 같은 결함이다. 그때는 표가 끝난 일을 가리켰고, 이번엔 표가 **살아있는 일을 숨겼다**. 큐를 표로 고르는 사람에게 후자는 **일이 없다는 거짓 보고**다. 이제 `scripts/check-index-queue-drift.sh` 가 양방향으로 대조한다.
 
@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-_(없음)_
+- `TASK-BE-572-notification-service-is-permanently-unhealthy.md` — **🟡 REVIEW — 헬스체크가 실제 상태를 말하게 했다(안 B).** `spring-boot-starter-web` 추가 → actuator 가 처음으로 HTTP 표면을 갖는다. 🔴 **AC-0 재측정에서 티켓보다 더 직접적인 증거가 나왔다** — 컨테이너 안 `netstat -tln` 의 유일한 LISTEN 이 Docker 내장 DNS(`127.0.0.11`)뿐, **JVM 은 아무 포트도 듣지 않았다**(`000` 은 추론이지만 이건 사실 그 자체). 🔴 **선언 사이트가 티켓이 센 것보다 많았다 — 6곳이 아니라 7곳**: `server.port` · `management.endpoints.web.exposure` · compose 헬스체크 · **Dockerfile `HEALTHCHECK`**(티켓 미언급) · `application-integration.yml`("metrics endpoint 추가" 주석이 내내 무효였다) · build.gradle 주석 · **`infra/prometheus/prometheus.yml` 의 8085 스크레이프 잡**(메트릭이 한 번도 나간 적 없다). **전수 스윕**: 웹/게이트웨이 스타터가 없는 Java 서비스는 저장소 45개 중 이 하나뿐(게이트웨이 2개는 `spring-cloud-starter-gateway`=WebFlux). 🔵 **왜 초록 스위트가 못 잡았나** — `NotificationServiceIntegrationBase` 가 `webEnvironment = NONE` 이라 **기존 IT 중 어느 것도 그 표면을 건드린 적이 없다**. 신설 `HealthSurfaceIntegrationTest` 만 실제 서버를 띄운다. **설계 판단**: Slack 서킷브레이커를 헬스 집계에서 **제외**(`management.health.circuitbreakers.enabled: false` + `registerHealthIndicator: false` — 둘을 함께 꺼야 잠복 플립이 없다). 외부 웹훅 다운은 이 컨테이너를 재시작할 이유가 아니고 데모/e2e 는 **의도적으로 도달 불가한 스텁 URL** 을 쓴다 — 묶었으면 BE-572 가 지운 "항상 빨강" 을 그대로 재생산한다. 관측은 `/actuator/prometheus` 의 `resilience4j_circuitbreaker_state` 로 남는다. 테스트는 HealthContributorRegistry 멤버십을 직접 단언한다(`db` 있음 / circuitbreaker 없음) — 200 만 보는 테스트는 "무엇에 대해 답하는가" 를 안 묻는다. **라이브 양방향 실측**: 수정 전 `unhealthy streak=12` · `Tomcat started` 0줄 · 안에서 curl `000` → 수정 후 `Tomcat started on port 8085` · `:::8085 LISTEN` · `200 {"status":"UP"}` · healthy. **음성 대조**: `docker stop wms-postgres` → 엔드포인트 `503 {"status":"DOWN"}`, 컨테이너 `unhealthy`. 🔵 다만 컨테이너가 뒤집힌 **경로는 503 이 아니라 5s 타임아웃**이다(Hikari 30s 커넥션 타임아웃이 헬스체크 5s 를 넘는다) — 판정은 옳지만 기전은 그렇게 보고한다. 재기동 후 `healthy` 복귀까지 확인. **검증**: unitTest 71 / integrationTest (신설 5 포함), 실패 0 스킵 0. impl PR #TBD. [[project_guard_reachability_not_just_bite]]
 
 ## done
 

@@ -22,12 +22,44 @@ and `platform/architecture-decision-rule.md`.
 
 ### Service Type Composition
 
-`notification-service` is a pure event consumer in v1. No REST surface, no
-admin UI. Routing rules are configured via Flyway-seeded rows + environment
-overrides — **operator UX for managing channels / preferences is v2**, owned
-by `admin-service`.
+`notification-service` is a pure event consumer in v1. No **business** REST
+surface, no admin UI. Routing rules are configured via Flyway-seeded rows +
+environment overrides — **operator UX for managing channels / preferences is
+v2**, owned by `admin-service`.
 
 Read `platform/service-types/event-consumer.md`.
+
+#### Management surface (TASK-BE-572)
+
+"Pure event consumer" describes the *functional* surface, not the *operational*
+one. The service listens on `server.port` (8085) and serves actuator only —
+`health`, `info`, `prometheus`, with no `@RestController` anywhere in the
+module. That requires `spring-boot-starter-web`: actuator does not start a
+servlet container by itself, and without it Spring Boot boots a non-web
+application in which `server.port` is silently ignored. Reading the absence of a
+REST surface as "therefore no web starter" is what produced BE-572 — a container
+that could never report healthy, because six declarations (`server.port`,
+`management.endpoints.web.exposure`, the Dockerfile `HEALTHCHECK`, the compose
+health check, `application-integration.yml`, and the build.gradle comment) all
+assumed a surface no dependency created.
+
+Constraints that keep this from becoming a REST surface by drift:
+
+- The exposure list stays `health,info,prometheus`. Adding a business endpoint
+  here is a service-type change, not a config tweak.
+- The port stays `expose:`-only with no Traefik label — reachable from inside
+  the docker network only, which is why unauthenticated actuator is acceptable
+  here while every routed wms service carries OIDC. `show-details` stays
+  `when-authorized`, so an unauthenticated caller gets the status and nothing
+  else.
+- **The Slack circuit breaker is excluded from the health aggregate**
+  (`management.health.circuitbreakers.enabled: false`). Container health answers
+  "should this process be restarted / routed to"; an unreachable external
+  webhook is neither — delivery already fails closed to the outbox, and
+  restarting fixes nothing. Downstream degradation stays observable as
+  `resilience4j_circuitbreaker_state` on `/actuator/prometheus`. In demo and e2e
+  topologies the webhook is a deliberately unreachable stub, so wiring it into
+  health would reproduce the always-red state BE-572 removed.
 
 ---
 
