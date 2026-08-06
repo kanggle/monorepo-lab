@@ -259,7 +259,13 @@ SHIPPED → IN_TRANSIT → DELIVERED) 자격을 만든다. 그 과정에서 콘�
 | 팬 **아티스트 글은 어떤 실제 호출자도 쓸 수 없다** | 피드는 `posts.author_account_id ⋈ follows.artist_account_id`(= 아티스트 엔티티 id)로 잇는데 `PublishPostUseCase` 는 저자를 호출자 sub 으로 고정한다. 시드가 직접-DB 를 쓰는 이유 | `TASK-FAN-BE-045` |
 | 팬 도메인에 **발급 가능한 운영자 역할이 없다** | `FAN_OPERATOR` 를 받는 코드는 iam·artist·community 전부에 있는데, `fan` 도메인을 구독한 테넌트가 없어 그 역할이 발급될 수 없다 | `TASK-MONO-512` |
 | 멤버십을 해지해도 **피드는 최대 5분간 열린 채**다 | 피드 캐시가 렌더된 `locked`/제목/본문 미리보기를 담고 TTL(5분)로만 만료된다. 상세 경로는 즉시 403 이다 | `TASK-FAN-BE-046` |
-| WMS · SCM · ERP · Finance 도메인 데이터 시드 없음 | 미착수 | `TASK-MONO-510` |
+| **WMS 도메인 데이터 시드 있음** — 입고 흐름 한 벌 + 출고 주문 1건 | `seed-wms.sh` 가 ASN → 검수 → 적치 → **재고 반영**(`available_qty=95`, `system:putaway-consumer`) → 출고 주문(`PICKING`)을 **실제 API 로** 심는다. 2회 실행 수렴 확인(2회차 = 생성 0 · 기존 2 · 실패 0) | `TASK-MONO-510` |
+| SCM · ERP · Finance 도메인 데이터 시드 없음 | 미착수. SCM(5)·Finance(3) 은 **이미지도 없어** 빌드가 선행한다 | `TASK-MONO-510` |
+| 🔴 콘솔 **`/wms/outbound` 목록은 빈다** — 시드가 무엇을 넣든 | 데모 운영자(`tenant_id=demo-corp`)는 **restricted** 로 판정돼 `tenant_id=demo-corp` **AND `source=FULFILLMENT_ECOMMERCE`** 인 주문만 볼 수 있다. 시드가 실제 API 로 만든 주문은 `tenant_id=NULL · source=MANUAL` 이라 **만든 주체가 못 본다**(생성 201, 조회 `200 {"content":[]}` 실측). 채우려면 ecommerce 슬라이스가 함께 떠 풀필먼트 주문이 흘러야 한다 | `TASK-BE-581` |
+| WMS **출고는 주문까지**만 심는다 | 예약은 `INVENTORY_RESERVE` 를 요구하는데 운영자에게 파생되지 않고, 배송은 도달 불가 TMS 스텁에 의존한다 | `TASK-MONO-514` |
+| WMS **마스터 쓰기는 API 로 불가** | `master-service` 는 `MASTER_WRITE`/`MASTER_ADMIN` 을 요구하는데 `OperatorRoleDerivation` 은 `MASTER_READ` 까지만 준다(형제 3개에는 READ+WRITE 를 주는 비대칭). 데모 마스터 데이터는 Flyway 시드로 들어간다 | `TASK-MONO-514` |
+| 🔴 `inventory-service` · `outbound-service` 가 **HTTP 를 아예 안 받는 상태로 갇힌다** | 컨테이너는 `Up`, Kafka 는 도는데 모든 경로가 매달린다. 기동 실패가 아니라 **뜬 뒤 임의 시점에** 갇히고(+3분 healthy → +9분 unhealthy) 스스로 회복하지 않는다. 단독 `restart` 로 복구. 게이트웨이는 **504 를 내는데 쓰기는 성공해 있을 수 있다** | `TASK-BE-579` |
+| `outbound-service` 의 마스터 read-model 이 **영구히 0행** | 그 스냅샷은 `master.*` 이벤트로만 차는데 데모 마스터는 Flyway 직접 INSERT 라 이벤트가 없다. 형제(inbound·inventory)는 각자 `db/seed/V99` 로 메웠고 **outbound 만 누락**. 현재는 시드가 `dbexec --why` 로 대신 메운다 | `TASK-BE-580` |
 | 장바구니는 시드할 수 없다 | `localStorage` 기반(클라이언트 상태) — 면접관이 담으면 즉시 찬다 | — |
 | 상품 이미지가 MinIO 에 없다 | V8 시드의 원격 `thumbnailUrl` 로 표시된다(깨지지 않음) | — |
 | 로컬 호스트에서 8프로젝트 동시 기동 불가 | 실측: `iam+console+ecommerce` 35컨테이너 = 9.2 GiB, `iam+fan+console` 26컨테이너 = **7.7 GiB** (팬 슬라이스 단독 9컨 = 2.4 GiB) / 도커 가용 11.7 GiB ⇒ 스토어와 팬은 **번갈아** 띄운다 | `TASK-MONO-399` AC-2 |
