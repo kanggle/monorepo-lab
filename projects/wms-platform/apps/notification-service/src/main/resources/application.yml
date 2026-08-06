@@ -50,6 +50,10 @@ spring:
     virtual:
       enabled: true
 
+# TASK-BE-572: this port carries the management surface ONLY (health / info /
+# prometheus). The service has no @RestController — it is a pure event consumer
+# — so nothing else is served here. It is `expose:`-only in compose and carries
+# no Traefik label, so it is reachable from inside the docker network only.
 server:
   port: ${SERVER_PORT:8085}
   forward-headers-strategy: framework
@@ -64,6 +68,17 @@ management:
       probes:
         enabled: true
       show-details: when-authorized
+  health:
+    # TASK-BE-572: the Slack circuit breaker must NOT reach container health.
+    # Slack is an external webhook: when it is down (or, in demo/e2e topologies,
+    # pointed at a deliberately unreachable stub URL) the breaker opens and that
+    # is the DESIGNED behaviour, not a fault of this container — restarting the
+    # process fixes nothing and delivery already fails closed to the outbox.
+    # Container health answers "should this process be restarted / routed to";
+    # downstream degradation is a metrics question, and it stays observable via
+    # `resilience4j_circuitbreaker_state` on /actuator/prometheus.
+    circuitbreakers:
+      enabled: false
   metrics:
     tags:
       application: ${spring.application.name}
@@ -96,7 +111,12 @@ resilience4j:
         failureRateThreshold: 50
         waitDurationInOpenState: 10s
         permittedNumberOfCallsInHalfOpenState: 3
-        registerHealthIndicator: true
+        # TASK-BE-572: false, and it agrees with
+        # `management.health.circuitbreakers.enabled: false` above. Leaving this
+        # true while the global switch is off would be a latent flip — enabling
+        # the global switch later would silently wire Slack's availability into
+        # this container's health verdict.
+        registerHealthIndicator: false
   retry:
     instances:
       slack:

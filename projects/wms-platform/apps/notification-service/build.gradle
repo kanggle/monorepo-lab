@@ -6,9 +6,22 @@ plugins {
 group = 'com.wms.notification'
 
 dependencies {
-    // Spring Boot starters — note: no `web` starter (no REST surface in v1).
-    // Actuator alone exposes /actuator/health; the rest of the surface is
-    // event-driven only (Kafka in / Kafka-via-outbox out).
+    // Spring Boot starters.
+    //
+    // TASK-BE-572: the `web` starter is here ONLY to give actuator an HTTP
+    // surface. Actuator does not start a servlet container by itself — with no
+    // web starter Spring Boot boots a non-web application, `server.port` is
+    // ignored and /actuator/health is unreachable. This service declared that
+    // surface in six places (server.port, management.endpoints.web.exposure,
+    // the Dockerfile HEALTHCHECK, the compose healthcheck,
+    // application-integration.yml, and this comment) while the dependency that
+    // realises it was missing, so the container could never report healthy.
+    //
+    // There is still NO business REST surface: no @RestController exists and the
+    // exposure list is health/info/prometheus only. Kafka in / Kafka-via-outbox
+    // out remains the whole functional surface (architecture.md § Service Type
+    // Composition).
+    implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-validation'

@@ -1,6 +1,13 @@
 # Integration profile — used by Testcontainers-driven integration tests
 # (NotificationServiceIntegrationBase). Adds metrics endpoint for assertions
 # without relaxing the production actuator exposure.
+#
+# TASK-BE-572: this had never taken effect. The base runs
+# `webEnvironment = NONE`, and until BE-572 the module had no web starter at
+# all, so there were no web endpoints for this list to widen. Only
+# HealthSurfaceIntegrationTest boots a server, and it asserts on the production
+# exposure list — so this stays a test-only convenience, not a load-bearing
+# setting.
 
 management:
   endpoints:

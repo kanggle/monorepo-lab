@@ -8,7 +8,7 @@
 |---|---|
 | Service name | `notification-service` |
 | Project | `wms-platform` |
-| Service Type | `event-consumer` (pure; no REST surface in v1) |
+| Service Type | `event-consumer` (pure; no business REST surface in v1 — actuator-only management surface on 8085, see [architecture.md § Management surface](architecture.md)) |
 | Architecture Style | **Hexagonal (Ports & Adapters)** — see [architecture.md § Architecture Style](architecture.md) |
 | Stack | Java 21, Spring Boot 3.4, PostgreSQL, Kafka (consumer + outbox for audit), Resilience4j (retry / CB), Slack Webhook client |
 | Deployable unit | `apps/notification-service/` |
