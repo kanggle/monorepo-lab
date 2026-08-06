@@ -2,7 +2,7 @@
 <configuration>
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 
-    <springProperty scope="context" name="serviceName" source="spring.application.name" defaultValue="inventory-service"/>
+    <springProperty scope="context" name="serviceName" source="spring.application.name" defaultValue="outbound-service"/>
 
     <!--
       TASK-BE-579: every appender below is wrapped in an AsyncAppender, and that

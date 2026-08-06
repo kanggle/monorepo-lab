@@ -2,6 +2,19 @@
 <configuration>
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 
+    <!--
+      TASK-BE-579: AsyncAppender is load-bearing, not a throughput tweak — see
+      the long note in outbound-service's logback-spring.xml. Short version:
+      this service runs `spring.threads.virtual.enabled: true`, and a virtual
+      thread that logs while pinned parks ON ITS CARRIER waiting for the
+      appender lock; enough of those and the scheduler deadlocks and the
+      service serves no HTTP at all. master-service has no @KafkaListener, so
+      it lacks the path that actually bit outbound/inventory — it is wrapped
+      because the rule is "virtual threads enabled => async logging", not
+      "has Kafka listeners". gateway-service is excluded: it does not enable
+      virtual threads, so the condition cannot arise there.
+    -->
+
     <springProperty scope="context" name="serviceName" source="spring.application.name" defaultValue="master-service"/>
 
     <!-- Local/dev: human-readable -->
@@ -11,8 +24,15 @@
                 <pattern>%d{HH:mm:ss.SSS} %-5level [traceId=%X{traceId:-} requestId=%X{requestId:-} actorId=%X{actorId:-}] %logger{36} - %msg%n</pattern>
             </encoder>
         </appender>
-        <root level="INFO">
+        <appender name="ASYNC_CONSOLE" class="ch.qos.logback.classic.AsyncAppender">
             <appender-ref ref="CONSOLE"/>
+            <queueSize>4096</queueSize>
+            <discardingThreshold>0</discardingThreshold>
+            <neverBlock>true</neverBlock>
+            <includeCallerData>false</includeCallerData>
+        </appender>
+        <root level="INFO">
+            <appender-ref ref="ASYNC_CONSOLE"/>
         </root>
     </springProfile>
 
@@ -26,8 +46,15 @@
                 <customFields>{"service":"${serviceName}"}</customFields>
             </encoder>
         </appender>
-        <root level="INFO">
+        <appender name="ASYNC_JSON" class="ch.qos.logback.classic.AsyncAppender">
             <appender-ref ref="JSON"/>
+            <queueSize>4096</queueSize>
+            <discardingThreshold>0</discardingThreshold>
+            <neverBlock>true</neverBlock>
+            <includeCallerData>false</includeCallerData>
+        </appender>
+        <root level="INFO">
+            <appender-ref ref="ASYNC_JSON"/>
         </root>
     </springProfile>
 </configuration>
