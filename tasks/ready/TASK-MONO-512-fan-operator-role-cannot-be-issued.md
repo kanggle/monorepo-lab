@@ -147,8 +147,24 @@ fan-platform  NULL                              ← 테넌트는 있는데 구�
 `PublishPostUseCase:32` 는 `ARTIST` 역할을 **저작 권한**으로 받는다:
 
 ```java
-if (!actor.hasRole(ROLE_FAN) && !actor.hasRole(ROLE_ARTIST) && !actor.isOperator())
+if (cmd.postType() == PostType.ARTIST_POST
+        && !actor.hasRole(ROLE_ARTIST)
+        && !actor.isOperator()) {
+    throw new PermissionDeniedException("ARTIST role required to publish ARTIST_POST");
+}
 ```
+
+🔴 **정정 (2026-08-07, 같은 날 늦게).** 이 인용문은 처음에 `!hasRole(ROLE_FAN) &&
+!hasRole(ROLE_ARTIST) && !isOperator()` 로 잘못 적혀 PR #3255 로 머지됐다. 실제 조건에
+`ROLE_FAN` 은 **없다**. `ADR-003` 이 같은 코드를 정확히 인용하고 있었는데 나는 그것을
+열지 않고 내 grep 결과를 옮겨 적었다 — **이 세션이 반복해서 벌받은 바로 그 실수**를,
+그 실수를 문서화하는 작업 중에 저질렀다.
+
+🔵 **결론은 바뀌지 않고 오히려 더 강해진다**: `ARTIST_POST` 는 `ARTIST` **또는** 운영자를
+요구하는데, `ARTIST` 는 iam 에 0건이고 fan 의 `isOperator()` 가 받는 `FAN_OPERATOR` 도
+발급 경로가 0 이다(이 티켓 본문). ⇒ **두 갈래가 모두 닫혀 있어** 실제 호출자는
+`ARTIST_POST` 를 만들 수 없다.
+
 
 그런데 `projects/iam-platform` 전체(`*.java`/`*.yml`/`*.sql`)에서 `ARTIST` **0건**.
 
@@ -160,6 +176,24 @@ if (!actor.hasRole(ROLE_FAN) && !actor.hasRole(ROLE_ARTIST) && !actor.isOperator
 — `ARTIST` 만 열면 [[TASK-FAN-BE-045]] 의 저자 문제와 정면으로 얽힌다.
 
 ---
+
+---
+
+# ⏸ PAUSED — `ADR-MONO-059` 대기
+
+AC-0 재측정이 이 티켓과 **`TASK-FAN-BE-045`** 을 같은 코드 한 줄로 수렴시켰다:
+`PublishPostUseCase` 의 `ARTIST_POST` 게이트는 `hasRole("ARTIST")` **또는**
+`isOperator()` 를 요구하는데 **둘 다 발급 경로가 0** 이다.
+
+🔴 **따로 결정하면 한쪽이 다른 쪽을 무효화한다.** 그래서 두 티켓의 결정을
+[`docs/adr/ADR-MONO-059-fan-authoring-identity-plane.md`](../../docs/adr/ADR-MONO-059-fan-authoring-identity-plane.md)
+**하나로 묶었다**(A 아티스트 계정 / B 운영자 대리 저작 / C 조인 재정의 / D 범위 밖 명문화, 추천 = A).
+
+**이 티켓은 그 ADR 이 ACCEPTED 되기 전까지 착수하지 않는다.** 해제는 정확형만:
+
+```
+ADR-MONO-059 ACCEPTED — <A|B|C|D>
+```
 
 # Acceptance Criteria
 
