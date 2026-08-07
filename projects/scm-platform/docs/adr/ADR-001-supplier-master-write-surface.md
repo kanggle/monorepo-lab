@@ -1,9 +1,10 @@
 # ADR-SCM-001 — v1 공급사 마스터의 쓰기 표면
 
-**Status**: Proposed
+**Status**: ACCEPTED
 **Date**: 2026-08-07
-**Deciders**: (미정 — 승격은 `platform/architecture-decision-rule.md § The ACCEPTED Gate`)
-**Gates**: `TASK-SCM-BE-059` 전체
+**History**: Proposed 2026-08-07 (`TASK-SCM-BE-059` 착수 중단 시 제출, PR #3249) · **ACCEPTED 2026-08-07** — 소유자의 정확형 intent `ADR-SCM-001 ACCEPTED — A (자격증명은 v2 유보)`. self-ACCEPT 아님(제출과 인가는 다른 턴의 다른 행위자). **A/B/C 본문과 § Consequences 는 byte-unchanged** — ACCEPT 는 결정을 확정하는 것이지 다시 정하는 것이 아니다.
+**Deciders**: 저장소 소유자 (정확형 intent, 2026-08-07 — `platform/architecture-decision-rule.md § The ACCEPTED Gate`)
+**Gates**: `TASK-SCM-BE-059` 전체 — **해제됨**(§ Decision 참조)
 
 ---
 
@@ -100,7 +101,46 @@ A(Docker fix 실패) · B(크로스프로젝트 소비가 wms 의존) · C(night
 
 ## Decision
 
-**미정 (Proposed).** 위 A/B/C 중 하나를 선택해야 한다.
+**A — procurement-service 에 운영자용 등록/조회 엔드포인트를 둔다. 자격증명은 v2 로 유보.**
+(소유자 정확형 intent, 2026-08-07: `ADR-SCM-001 ACCEPTED — A (자격증명은 v2 유보)`)
+
+⇒ **v1 공급사 마스터는 "운영 대상"이다.** 아래 § 판단의 축이 세운 이지선다 중 *운영 대상*
+쪽을 골랐고, 그래서 마스터를 채우는 주체는 마이그레이션이 아니라 **운영자**다.
+
+### 자격증명 유보가 A 의 무엇을 좁히는가
+
+A 원문은 자격증명을 *"이 티켓 범위 밖으로 두고(별도 엔드포인트/**후속**)"* 라고만 적어 그
+후속의 **시점을 열어 두었다**. 소유자의 rider 가 그 시점을 못박는다 — **v1 에는 자격증명
+입력 경로를 두지 않는다**(v1 후속 티켓으로도 파일하지 않는다). 취급 결정 전체가 `PROJECT.md`
+§ Service Map v2 의 `supplier-service` 로 넘어간다.
+
+세 가지가 여기서 따라 나온다:
+
+1. **자격증명 미보유 공급사가 v1 의 정상 상태다.** 예외가 아니다. 따라서 § Consequences
+   「A 를 고르면」의 *"자격증명 미보유 공급사에 대한 `SupplierAdapterPort` 의 동작을
+   정의해야 한다"* 는 선택적 정리가 아니라 **필수 후속**이다.
+2. 🔴 **`architecture.md` L51-52 와 표면적으로 충돌한다** — *"Maintain a v1 internal
+   `suppliers` master with **AES-GCM-encrypted credentials** (S6)"*. 유보는 마스터가
+   자격증명을 **보유할 능력**(`SupplierCredentialsEncryptor`)을 없애지 않는다. 없는 것은
+   **그것을 채우는 v1 경로**다. 이 구분을 `architecture.md` 에 **명문으로** 적지 않으면
+   다음 세션이 이 조사를 세 번째로 반복한다 — 이 ADR 이 존재하는 이유가 정확히 그것이다.
+3. B(내부 전용)와 C(부재를 결정으로 승격)는 **채택되지 않았다**. C 가 예고했던 조합
+   (`TASK-SCM-BE-060` 과 겹쳐 "공급사도 못 만들고 상신도 못 함")은 v1 의 공식 입장이
+   **아니다** — 공급사는 만들 수 있게 된다. 상신 쪽(`supplier-mock` 의존)은 여전히
+   `TASK-SCM-BE-060` 의 별건이다.
+
+### ACCEPT 게이트 — 통과했지, 우회하지 않았다
+
+`platform/architecture-decision-rule.md § The ACCEPTED Gate` 가 요구하는 **ADR 을 이름으로
+지목한 정확형**이 도착했다. 같은 메시지에 다른 두 ADR(`ADR-MONO-059`/`ADR-MONO-060`)은
+선택지 자리가 **템플릿 플레이스홀더인 채로** 왔고, 그 둘은 **넘기지 않았다** — 에이전트 자신의
+"추천 A" 를 소유자의 선택으로 읽는 것이 이 게이트가 금지하는 바로 그 행위이기 때문이다.
+게이트가 실제로 물었다는 사실은 기록되지 않으면 남지 않으므로 여기 적는다.
+
+> 아래 두 문단은 **결정 전의 판단 근거**로 보존한다(byte-unchanged). 🔴 문단의 "C 를
+> 고르더라도" 는 채택되지 않은 가지에 대한 서술이지만, 그 문단이 요구한 두 정리 작업
+> (픽스처 dangling 인용 교체 · `architecture.md` 명문화)은 § Consequences 「공통」이
+> 말하듯 **어느 안에서도 해야 한다** — A 에서도 유효하다.
 
 🔵 **판단의 축은 "무엇이 쉬운가" 가 아니다.** 물어야 할 것은 **"v1 공급사 마스터가
 운영 대상인가, 배포 산출물인가"** 다. 운영 대상이면 A(운영자가 만든다)이고, 배포

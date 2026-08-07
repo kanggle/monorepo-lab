@@ -49,7 +49,13 @@ POST /api/v1/procurement/po  {supplierId: <신규>, …}  → SUPPLIER_NOT_FOUND
 
 ---
 
-# ⛔ PAUSE — HARDSTOP-09 (2026-08-07, 착수 시 스펙 확인에서 발견)
+# ✅ 게이트 해제 — `ADR-SCM-001` **ACCEPTED (A, 자격증명은 v2 유보)** · 2026-08-07
+
+> 이 티켓은 2026-08-07 에 HARDSTOP-09 로 PAUSE 됐다가 **같은 날 해제**됐다. 아래 PAUSE 기록은
+> **왜 이 결정이 필요했는지**의 근거로 보존한다 — 지우면 다음 세션이 같은 조사를 반복한다.
+> 해제 내용과 그것이 이 티켓을 어떻게 바꾸는지는 이 절 **끝**에 있다.
+
+## (보존) 당시의 PAUSE 근거 — HARDSTOP-09
 
 **이 티켓을 착수하려다 멈췄다. 위 배경은 맞지만 그 다음 문장이 근거 없는 도약이었다.**
 
@@ -93,12 +99,32 @@ downstream task that builds on the same service. 여기서는 v2 `supplier-servi
 [REFERENCE] CLAUDE.md § Layer Rules + platform/architecture-decision-rule.md
 ```
 
-**해제 조건**: `ADR-SCM-001 ACCEPTED` + A/B/C 중 선택.
+## 해제 (2026-08-07) — 무엇이 정해졌고 이 티켓이 어떻게 바뀌는가
 
-🔵 **아래 Goal·AC 는 A 안을 전제하고 쓰여 있다** — 그 전제가 ADR 의 결론을 선취하고
-있었다. 선택된 안에 맞춰 다시 쓸 것. C(부재를 명시적 결정으로 승격)를 고르면 이 티켓은
-**closed-as-decided** 이고, 그때도 픽스처의 dangling 인용 교체와 architecture.md 명문화는
-해야 한다(안 하면 이 조사가 또 반복된다).
+소유자가 **정확형 intent** 로 승인했다:
+
+> **`ADR-SCM-001 ACCEPTED — A (자격증명은 v2 유보)`**
+
+**A 채택** ⇒ v1 공급사 마스터는 *배포 산출물*이 아니라 **운영 대상**이고, 채우는 주체는
+마이그레이션이 아니라 **운영자**다. `procurement-service` 에 운영자용 등록/조회 엔드포인트를
+둔다. 아래 Goal·AC 가 전제하던 A 가 실제로 채택됐으므로 **큰 재작성은 필요 없다** — 다만
+rider 가 범위를 한 군데 좁힌다.
+
+🔴 **rider "자격증명은 v2 유보" 가 좁히는 것.** ADR 의 A 원문은 자격증명을 *"이 티켓 범위 밖
+(별도 엔드포인트/**후속**)"* 이라고만 적어 후속의 **시점을 열어 두었다**. rider 가 그 시점을
+v2 `supplier-service` 로 못박는다 ⇒ **v1 에는 자격증명 입력 경로를 만들지 않고, v1 후속
+티켓으로도 파일하지 않는다.** 따라오는 것 셋:
+
+1. **자격증명 미보유 공급사가 v1 의 정상 상태다**(예외가 아니다). ⇒ 새 **AC-7**.
+2. 🔴 `architecture.md` L51-52(*"Maintain a v1 internal `suppliers` master with
+   AES-GCM-encrypted credentials (S6)"*)와 **표면적으로 충돌한다.** 유보는 마스터가 자격증명을
+   **보유할 능력**(`SupplierCredentialsEncryptor`)을 없애지 않는다 — 없는 것은 **그것을 채우는
+   v1 경로**다. 이 구분을 명문으로 적지 않으면 조사가 세 번째로 반복된다. ⇒ **AC-0**.
+3. `TASK-SCM-BE-060`(상신이 `supplier-mock` 의존)은 **여전히 별건**이다. C 가 예고했던
+   "공급사도 못 만들고 상신도 못 함" 조합은 v1 의 공식 입장이 **아니다** — 공급사 쪽은 열린다.
+
+🔵 **공통 정리 2건 중 하나는 이미 끝났다** — 픽스처 Javadoc 의 dangling 인용은 PR #3249 가
+이미 ADR 참조로 교체했다. 남은 것은 `architecture.md` 명문화이고, 그것이 AC-0 이다.
 
 ---
 
@@ -111,13 +137,18 @@ downstream task that builds on the same service. 여기서는 v2 `supplier-servi
 
 ## In Scope
 
-- 공급사 생성(그리고 최소한의 조회) 엔드포인트
+- 공급사 생성(그리고 최소한의 조회) 엔드포인트 — **최소 필드만**(name·status·계약기간)
 - `specs/contracts/` 갱신 — **구현보다 먼저**
+- `specs/services/procurement-service/architecture.md` 에 ADR-SCM-001 결정 명문화 (AC-0)
 - 이 프로젝트 e2e 의 `ProcurementDbFixtures.insertActiveSupplier` 를 그 API 로 전환
 - `infra/demo/seed/seed-scm.sh` 의 `dbexec` 제거
 
 ## Out of Scope
 
+- 🔴 **공급사 자격증명(S6 AES-GCM) 입력 경로 — v2 `supplier-service` 로 유보**
+  (`ADR-SCM-001` ACCEPT rider). v1 에 자격증명 엔드포인트/필드를 만들지 않고, **v1 후속
+  티켓으로도 파일하지 않는다.** `SupplierCredentialsEncryptor` 는 건드리지 않는다 —
+  없애는 것이 아니라 **채우는 경로를 두지 않는** 것이다
 - 공급사 **관리 화면**(콘솔) — 별도 프런트 티켓
 - 공급사 수정/비활성 라이프사이클 — 이 티켓은 생성·조회까지
 - `TASK-SCM-BE-060`(발주 상신이 supplier-mock 에 의존) — 별개 결함
@@ -126,11 +157,15 @@ downstream task that builds on the same service. 여기서는 v2 `supplier-servi
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (결정 — 선행 게이트)** — `ADR-SCM-001` 의 A/B/C 중 하나가 **ACCEPTED** 되어야
-      아래 AC 를 착수할 수 있다. 🔴 제안자가 자기 ADR 을 승인할 수 없고, 맨 "진행" 은
-      승인이 아니다(`platform/architecture-decision-rule.md § The ACCEPTED Gate`).
-      🔵 **어느 안이든 공통으로 해야 하는 것 둘**: (a) `ProcurementDbFixtures` Javadoc 의
-      **없는 절을 가리키는 인용** 교체 (b) `architecture.md` 에 결정 명문화
+- [x] **AC-0a (결정 게이트)** — ✅ **해제됨**. `ADR-SCM-001` 이 **A(자격증명 v2 유보)** 로
+      ACCEPTED(2026-08-07, 소유자 정확형 intent). 공통 정리 (a) 픽스처 Javadoc 의 dangling
+      인용 교체는 PR #3249 + 본 ACCEPT PR 이 완료
+- [ ] **AC-0b (결정 명문화 — 착수 첫 작업)** — `specs/services/procurement-service/architecture.md`
+      에 ADR-SCM-001 A 를 명문화한다. 🔴 **L51-52 를 그대로 두면 안 된다** — *"Maintain a v1
+      internal `suppliers` master with **AES-GCM-encrypted credentials** (S6)"* 는 자격증명
+      유보와 표면상 충돌한다. 적어야 하는 구분: **마스터는 자격증명을 보유할 능력을 유지하되,
+      v1 에는 그것을 채우는 경로가 없다**(취급 결정은 v2 `supplier-service`). 이 문장이
+      없으면 같은 조사가 세 번째로 반복된다 — 이 ADR 이 존재하는 이유가 정확히 그것이다
 - [ ] **AC-1 (계약 우선)** — `specs/contracts/` 에 공급사 생성/조회 계약이 있고,
       필드·에러코드가 기존 조달 계약의 규약(flat `{code,message,details?,timestamp}`)을 따른다
 - [ ] **AC-2 (생성)** — 인증된 운영자 토큰으로 공급사를 생성할 수 있고, 그 id 로
@@ -147,6 +182,11 @@ downstream task that builds on the same service. 여기서는 v2 `supplier-servi
       (`assume demo-corp` → `SCM_OPERATOR`)이 그것을 **실제로 갖는지** 실측한다.
       🔴 wms 마스터 쓰기가 정확히 여기서 막혔다(`MASTER_WRITE` 를 아무도 못 받는다 —
       `TASK-MONO-514`) — 같은 함정을 반복하지 말 것
+- [ ] **AC-7 (자격증명 미보유가 정상 상태)** — ADR-SCM-001 rider 로 v1 공급사는 자격증명을
+      갖지 않는 것이 **예외가 아니라 정상**이다. `SupplierAdapterPort`(및 그 구현/호출부)가
+      자격증명 없는 공급사를 만났을 때의 동작을 **명시적으로 정의**하고 테스트로 고정한다.
+      🔴 **"아직 그런 행이 없어서 안 터진다" 는 판정이 아니다** — 새 엔드포인트가 만드는
+      공급사는 **전부** 그 상태이므로, 이 티켓이 그 행을 처음으로 정상 경로에 올린다
 
 # Related Specs
 
@@ -169,5 +209,5 @@ downstream task that builds on the same service. 여기서는 v2 `supplier-servi
 
 # Definition of Done
 
-- [ ] AC-1~AC-6 전부
+- [ ] AC-0b · AC-1~AC-7 전부 (AC-0a 는 ACCEPT 로 해제 완료)
 - [ ] Ready for review
