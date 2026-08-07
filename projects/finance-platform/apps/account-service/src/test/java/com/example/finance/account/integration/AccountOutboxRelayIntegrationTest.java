@@ -78,13 +78,25 @@ class AccountOutboxRelayIntegrationTest extends AbstractAccountIntegrationTest {
                                 .orElse(null),
                         r -> r != null);
 
-        // (1b) the persisted payload is the preserved 7-field v1 envelope.
+        // (1b) the persisted payload is the envelope the event contracts define.
+        //
+        // 🔴 This is the SECOND pin on this envelope (the first is in
+        // OutboxAccountEventPublisherTest, which explains at length how a
+        // containsExactly written to prove "the wire did not change" ended up
+        // freezing a missing required field). Both said seven fields; both were
+        // wrong the same way; and fixing only the unit one still left CI red here.
+        // When a pin turns out to guard the wrong thing, count its siblings before
+        // declaring the fix done — the population here is exactly two, and this
+        // comment exists so the next person does not have to rediscover that.
         JsonNode env = readTree(row.getPayload());
         assertThat(env.fieldNames()).toIterable().containsExactly(
-                "eventId", "eventType", "source", "occurredAt", "schemaVersion",
-                "partitionKey", "payload");
+                "eventId", "eventType", "source", "occurredAt", "tenantId",
+                "schemaVersion", "partitionKey", "payload");
         assertThat(env.get("eventId").asText()).isEqualTo(row.getId().toString());
         assertThat(env.get("source").asText()).isEqualTo("finance-platform-account-service");
+        // The account's own tenant, so ledger-service files the entry where its
+        // owner can read it (TASK-FIN-BE-068) instead of defaulting to "finance".
+        assertThat(env.get("tenantId").asText()).isEqualTo(TENANT_FINANCE);
         assertThat(env.get("schemaVersion").asInt()).isEqualTo(1);
         assertThat(env.get("payload").get("accountId").asText()).isEqualTo(accountId);
 

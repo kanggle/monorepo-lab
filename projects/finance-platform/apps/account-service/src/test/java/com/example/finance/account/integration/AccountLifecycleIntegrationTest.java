@@ -45,7 +45,8 @@ class AccountLifecycleIntegrationTest extends AbstractAccountIntegrationTest {
     @DisplayName("F2: hold → capture (partial) → remainder released; balances consistent")
     void holdCapturePartial() {
         AccountView acc = openActiveFullKyc(service, "cust-hcp-1");
-        // Seed ledger via the v1 internal/stub funding source.
+        // Fund through the real operator top-up path — this test's subject is the
+        // hold/capture below, not the funding.
         fundAccount(service, acc.accountId(), 10_000L);
 
         var hold = service.placeHold(new PlaceHoldCommand(
