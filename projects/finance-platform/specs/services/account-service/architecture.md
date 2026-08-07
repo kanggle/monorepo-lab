@@ -68,10 +68,12 @@ core for finance-platform. It MUST:
   machine (§ Account State Machine) — every transition append-only audited (F6).
 - Maintain **available vs ledger balance** with `hold` / `release` / `capture`
   as the single atomic balance-mutation entry point (F2).
-- Process fund movements (`hold`, `capture`, `release`, `transfer`) as
+- Process fund movements (`topup`, `hold`, `capture`, `release`, `transfer`) as
   idempotent transactions driven by a client `Idempotency-Key`, with the
   balance change + transaction state transition + event publish in one
-  transaction via the outbox (F1).
+  transaction via the outbox (F1). `topup` is **operator-only** (TASK-FIN-BE-068)
+  — § Balance Model records why its *source* being internal in v1 does not make
+  its *credit* provisional.
 - Enforce the **KYC/AML compliance gate before every fund movement** —
   KYC-level + AML/sanction screening port; failure → `KYC_*` / `AML_*` /
   `SANCTION_HIT`, sanction hit routed to an operator queue (F4).
@@ -334,6 +336,26 @@ balance mutation + transaction transition + outbox event are one Tx (F1).
 | `release(holdId)` | `held −= holdAmount`; Hold→RELEASED (funds back to available) |
 | `transfer(from→to, amount)` | atomic hold-on-source + capture + credit-target in one Tx; cross-currency → `CURRENCY_MISMATCH` |
 | `topup` / `withdraw` | `ledger ±= amount` (withdraw guarded by available; v1 = internal/stub funding source) |
+
+**`topup` is the v1 funding entry point** (`POST /api/finance/accounts/{id}/topups`,
+operator-only — TASK-FIN-BE-068). Until that task it had **no HTTP mapping and no
+production caller**: the operation existed, the F4 gate ran on it, the outbox event
+published, and ledger-service's Posting Policy mapped `TOPUP` — but nothing could
+invoke it, so every account stayed at balance 0 and `hold` / `capture` / `transfer`
+were all unreachable behind `INSUFFICIENT_AVAILABLE_BALANCE`.
+
+🔴 **"v1 = internal/stub funding source" scopes the *source*, not the operation.**
+The credit, the transaction, the audit row, the gate traversal and the event are
+all production behaviour; what v1 defers is a real bank/PG adapter supplying the
+money (§ Responsibilities MUST-NOT — "v1 has no real external adapter"). Reading
+`stub` as "the operation is provisional, do not expose it" is what left the domain
+with no entry point at all; that reading is rejected here so it is not re-derived.
+
+`withdraw` remains **domain-only** — no endpoint, and TASK-FIN-BE-068 deliberately
+did not add one: an outbound movement's real counterpart is the same v2 bank
+adapter, so a v1 `withdraw` endpoint would have no destination, whereas `topup`
+unblocks four downstream operations. Adding it is a separate decision, not an
+oversight.
 
 `available` never negative. Balance mutated at exactly one place
 (`AccountApplicationService` → domain `Balance`); no other writer. Expired

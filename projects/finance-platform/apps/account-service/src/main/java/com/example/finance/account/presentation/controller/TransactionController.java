@@ -9,6 +9,7 @@ import com.example.finance.account.application.ActorContext;
 import com.example.finance.account.application.command.CaptureHoldCommand;
 import com.example.finance.account.application.command.PlaceHoldCommand;
 import com.example.finance.account.application.command.ReleaseHoldCommand;
+import com.example.finance.account.application.command.TopUpCommand;
 import com.example.finance.account.application.command.TransferCommand;
 import com.example.finance.account.application.view.TransactionView;
 import com.example.finance.account.presentation.dto.ApiEnvelope;
@@ -16,6 +17,7 @@ import com.example.finance.account.presentation.dto.CaptureHoldRequest;
 import com.example.finance.account.presentation.dto.HoldResponse;
 import com.example.finance.account.presentation.dto.MoneyResponse;
 import com.example.finance.account.presentation.dto.PlaceHoldRequest;
+import com.example.finance.account.presentation.dto.TopUpRequest;
 import com.example.finance.account.presentation.dto.TransactionResponse;
 import com.example.finance.account.presentation.dto.TransferRequest;
 import com.example.finance.account.presentation.support.IdempotentExecution;
@@ -49,6 +51,30 @@ public class TransactionController {
 
     private final AccountApplicationService service;
     private final IdempotentExecution idempotency;
+
+    /**
+     * Operator-only internal funding credit — the v1 entry point for money into an
+     * account (account-api.md § POST /{id}/topups). The operator check lives in the
+     * application service, not here: {@code SecurityConfig} admits any
+     * {@code finance.write} scope to POST, so a controller-level check would be the
+     * only guard against a scope-only holder token crediting its own balance.
+     */
+    @PostMapping("/{id}/topups")
+    public ResponseEntity<?> topUp(
+            @PathVariable String id,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @Valid @RequestBody TopUpRequest req) {
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
+        return idempotency.run(actor.tenantId(),
+                "POST /api/finance/accounts/{id}/topups",
+                idempotencyKey, req, () -> {
+                    TransactionView v = service.topUp(new TopUpCommand(
+                            actor, id, req.money().amount(), req.money().currency(),
+                            req.reason()));
+                    return ResponseEntity.ok(
+                            ApiEnvelope.of(TransactionResponse.from(v)));
+                });
+    }
 
     @PostMapping("/{id}/holds")
     public ResponseEntity<?> placeHold(

@@ -57,6 +57,25 @@ Open a new account. Initial status `PENDING_KYC`.
 409 `IDEMPOTENCY_KEY_CONFLICT`, 422 `CURRENCY_MISMATCH` (unsupported currency),
 403 `TENANT_FORBIDDEN`.
 
+## GET /api/finance/accounts — deliberately absent (v1)
+
+There is **no account list / search endpoint**, and TASK-FIN-BE-068 decided not to
+add one. Recorded here rather than left silent, with what it costs:
+
+| | measured 2026-08-07 |
+|---|---|
+| console screens affected | **1** (`/finance/accounts` — the operator types an accountId; the screen already documents this as "honest finance constraint: v1") |
+| accounts an operator would need ids for, in the demo stack | **2** (both printed by `infra/demo/seed/seed-finance.sh`) |
+| repository methods that could back a list today | **0** — `AccountRepository` exposes no `findAll` / `Page` method at all |
+
+The blocker is not wiring. `owner_ref` is **encrypted at rest** (F7 —
+`AccountRepositoryImpl` encrypts on write and decrypts on read, so the column holds
+ciphertext only), so a list that supports the one filter an operator would actually
+want — "find this customer's account" — needs a blind index or searchable-encryption
+scheme. That is an architecture decision (ADR territory), not an omission, and it is
+independent of funding. A list with no owner search would be a tenant-wide dump of
+opaque ids, which is not what the screen needs.
+
 ## GET /api/finance/accounts/{id}
 
 **200**: `{ "data": { "accountId", "status", "currency", "kycLevel",
@@ -80,6 +99,52 @@ Operator raises KYC level; may transition `PENDING_KYC → ACTIVE`.
 
 **200**: `{ "data": [ { "currency", "ledger", "available", "held" } ], ... }`
 (minor-units strings). **Errors**: 404 `ACCOUNT_NOT_FOUND`.
+
+## POST /api/finance/accounts/{id}/topups
+
+**Operator-only** internal funding credit — the v1 path by which money enters an
+account. Credits `ledger` (and therefore `available`) by `money.amount`, emits a
+`TOPUP` transaction, and is auto-journalled by ledger-service as
+DR `CASH_CLEARING` / CR `CUSTOMER_WALLET:{id}`.
+
+**Provenance (v1).** The funding source is **internal**, not an external bank —
+architecture.md § Balance Model (`topup`/`withdraw` … "v1 = internal/stub funding
+source") and § Responsibilities MUST-NOT ("v1 has no real external adapter"). This
+endpoint therefore does **not** represent a customer deposit a bank has confirmed;
+it represents an operator crediting funds the platform received out-of-band. v2
+replaces the *source* (a real bank/PG adapter behind an infrastructure port) while
+keeping this balance/ledger effect — the credit semantics documented here are not
+the deferred part.
+
+**Why operator-only** — a holder-initiated call would let any authenticated
+account-holder mint their own balance. `PERMISSION_DENIED` is enforced in the
+application layer (the same gate as `/kyc/upgrade`), not only by the
+`SecurityConfig` write authorities, so a `finance.write`-scoped non-operator token
+is rejected too.
+
+**Headers**: `Authorization` (req), `Idempotency-Key` (req), `Content-Type: application/json`
+
+**Request**:
+```json
+{ "money": { "amount": "150000", "currency": "KRW" }, "reason": "operator funding" }
+```
+- `money` — required (F5 shape); `currency` must equal the account currency
+- `reason` — optional, ≤ 256
+
+**200**: `{ "data": { "transactionId", "accountId", "type": "TOPUP", "money",
+"status": "COMPLETED" }, ... }`
+
+**Errors**: 404 `ACCOUNT_NOT_FOUND`, 403 `PERMISSION_DENIED` (non-operator),
+409 `ACCOUNT_NOT_ACTIVE` / `ACCOUNT_FROZEN`, 422 `CURRENCY_MISMATCH`,
+422 `AMOUNT_INVALID`, 403 `KYC_REQUIRED` / `KYC_LEVEL_INSUFFICIENT`,
+422 `TRANSACTION_LIMIT_EXCEEDED`, 422 `SANCTION_HIT`,
+400 `IDEMPOTENCY_KEY_REQUIRED`, 409 `IDEMPOTENCY_KEY_CONFLICT`.
+
+> **Idempotency here is stored-response replay, not a balance check.** A repeat of
+> the same key + payload returns the *first* stored 2xx and credits nothing more.
+> There is no second-order "already topped up" state a client can inspect — so a
+> caller (or a seed) MUST NOT infer "this call moved money" from the status code;
+> read the balance back, or count `transactions`.
 
 ## POST /api/finance/accounts/{id}/holds
 

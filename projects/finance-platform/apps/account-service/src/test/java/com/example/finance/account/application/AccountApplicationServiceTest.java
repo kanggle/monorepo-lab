@@ -4,6 +4,7 @@ import com.example.finance.account.application.command.CaptureHoldCommand;
 import com.example.finance.account.application.command.OpenAccountCommand;
 import com.example.finance.account.application.command.PlaceHoldCommand;
 import com.example.finance.account.application.command.ReleaseHoldCommand;
+import com.example.finance.account.application.command.TopUpCommand;
 import com.example.finance.account.application.command.TransferCommand;
 import com.example.finance.account.application.event.AccountEventPublisher;
 import com.example.finance.account.application.port.outbound.ClockPort;
@@ -19,11 +20,15 @@ import com.example.finance.account.domain.audit.AuditLogRepository;
 import com.example.finance.account.domain.balance.Balance;
 import com.example.finance.account.domain.balance.Hold;
 import com.example.finance.account.domain.balance.repository.BalanceRepository;
+import com.example.finance.account.domain.compliance.KycGate;
 import com.example.finance.account.domain.compliance.ScreeningDecision;
 import com.example.finance.account.domain.error.DomainErrors.AccountNotActiveException;
+import com.example.finance.account.domain.error.DomainErrors.CurrencyMismatchException;
 import com.example.finance.account.domain.error.DomainErrors.InsufficientAvailableBalanceException;
 import com.example.finance.account.domain.error.DomainErrors.KycRequiredException;
+import com.example.finance.account.domain.error.DomainErrors.PermissionDeniedException;
 import com.example.finance.account.domain.error.DomainErrors.SanctionHitException;
+import com.example.finance.account.domain.error.DomainErrors.TransactionLimitExceededException;
 import com.example.finance.common.money.Currency;
 import com.example.finance.common.money.Money;
 import com.example.finance.account.domain.transaction.Transaction;
@@ -320,5 +325,112 @@ class AccountApplicationServiceTest {
                         .UpgradeKycCommand(HOLDER, "acc-1", "BASIC", "x")))
                 .isInstanceOf(com.example.finance.account.domain.error
                         .DomainErrors.PermissionDeniedException.class);
+    }
+
+    // ---------------- top-up: the v1 funding entry point ----------------
+    //
+    // TASK-FIN-BE-068. Before this task `topUp` had SIX call sites and not one of
+    // them was about topUp — every one was `openActiveFullKyc(...); topUp(...)`
+    // followed by an assertion on hold / capture / transfer / idempotency / audit.
+    // Its own contract (who may call it, what rejects it, what it credits) had zero
+    // coverage, which is why "expose the stub as-is" was never a small change: the
+    // behaviour had to be pinned before it could be published.
+
+    @Test
+    @DisplayName("topUp credits the ledger, settles a TOPUP txn, and publishes it")
+    void topUpCredits() {
+        Account acc = activeAccount(KycLevel.FULL);
+        Balance bal = balanceWith(0L);
+        when(accountRepository.findById("acc-1", TENANT)).thenReturn(Optional.of(acc));
+        when(balanceRepository.findByAccountId("acc-1", TENANT)).thenReturn(Optional.of(bal));
+        when(compliancePort.screen(any(), any(), any()))
+                .thenReturn(ScreeningDecision.clear("scr-1"));
+
+        var v = service.topUp(new TopUpCommand(
+                OPERATOR, "acc-1", "150000", "KRW", "operator funding"));
+
+        assertThat(v.status()).isEqualTo("COMPLETED");
+        assertThat(v.type()).isEqualTo(TransactionType.TOPUP.name());
+        // The credit lands in `ledger`, and since nothing is held it is fully
+        // available — this is precisely what unblocks hold/capture/transfer.
+        assertThat(bal.ledger().minorUnits()).isEqualTo(150_000L);
+        assertThat(bal.available().minorUnits()).isEqualTo(150_000L);
+        // The COMPLETED event is what ledger-service auto-journals into
+        // DR CASH_CLEARING / CR CUSTOMER_WALLET — without it the ledger stays empty
+        // no matter how correct the balance is.
+        verify(eventPublisher).publishSettledAndCompleted(any());
+        verify(auditLogRepository).save(any(AuditLog.class));
+    }
+
+    @Test
+    @DisplayName("non-operator topUp → PERMISSION_DENIED before the account is even loaded")
+    void topUpNonOperator() {
+        assertThatThrownBy(() -> service.topUp(new TopUpCommand(
+                HOLDER, "acc-1", "150000", "KRW", "self-service")))
+                .isInstanceOf(PermissionDeniedException.class);
+        // Rejected ahead of every repository touch — a holder must not be able to
+        // probe account existence through this endpoint either.
+        verify(accountRepository, never()).findById(any(), any());
+        verify(balanceRepository, never()).save(any(Balance.class));
+    }
+
+    @Test
+    @DisplayName("topUp in a currency other than the account's → CURRENCY_MISMATCH, no credit")
+    void topUpCurrencyMismatch() {
+        Account acc = activeAccount(KycLevel.FULL);
+        when(accountRepository.findById("acc-1", TENANT)).thenReturn(Optional.of(acc));
+
+        assertThatThrownBy(() -> service.topUp(new TopUpCommand(
+                OPERATOR, "acc-1", "150000", "USD", "wrong currency")))
+                .isInstanceOf(CurrencyMismatchException.class);
+        verify(balanceRepository, never()).save(any(Balance.class));
+    }
+
+    @Test
+    @DisplayName("topUp on a PENDING_KYC account → ACCOUNT_NOT_ACTIVE (funding is not an exception)")
+    void topUpNotActive() {
+        Account pending = Account.open("acc-1", TENANT, "cust-1",
+                Currency.KRW, KycLevel.NONE, NOW);
+        when(accountRepository.findById("acc-1", TENANT)).thenReturn(Optional.of(pending));
+
+        assertThatThrownBy(() -> service.topUp(new TopUpCommand(
+                OPERATOR, "acc-1", "150000", "KRW", "too early")))
+                .isInstanceOf(AccountNotActiveException.class);
+        verify(balanceRepository, never()).save(any(Balance.class));
+    }
+
+    @Test
+    @DisplayName("F4: topUp traverses the compliance gate — a sanction hit blocks the credit")
+    void topUpGatedBySanction() {
+        Account acc = activeAccount(KycLevel.FULL);
+        Balance bal = balanceWith(0L);
+        when(accountRepository.findById("acc-1", TENANT)).thenReturn(Optional.of(acc));
+        when(balanceRepository.findByAccountId("acc-1", TENANT)).thenReturn(Optional.of(bal));
+        when(compliancePort.screen(any(), any(), any()))
+                .thenReturn(ScreeningDecision.sanctionHit("scr-1"));
+
+        assertThatThrownBy(() -> service.topUp(new TopUpCommand(
+                OPERATOR, "acc-1", "150000", "KRW", "screened")))
+                .isInstanceOf(SanctionHitException.class);
+        // Money in is screened exactly like money out — the gate is the single path
+        // (F4), so an inbound credit is not a hole in it.
+        assertThat(bal.ledger().minorUnits()).isZero();
+        verify(balanceRepository, never()).save(any(Balance.class));
+    }
+
+    @Test
+    @DisplayName("topUp above the KYC ceiling → TRANSACTION_LIMIT_EXCEEDED, no credit")
+    void topUpOverKycCeiling() {
+        Account acc = activeAccount(KycLevel.BASIC);
+        Balance bal = balanceWith(0L);
+        when(accountRepository.findById("acc-1", TENANT)).thenReturn(Optional.of(acc));
+        when(balanceRepository.findByAccountId("acc-1", TENANT)).thenReturn(Optional.of(bal));
+
+        assertThatThrownBy(() -> service.topUp(new TopUpCommand(
+                OPERATOR, "acc-1",
+                Long.toString(KycGate.BASIC_LIMIT_MINOR + 1), "KRW", "over ceiling")))
+                .isInstanceOf(TransactionLimitExceededException.class);
+        assertThat(bal.ledger().minorUnits()).isZero();
+        verify(balanceRepository, never()).save(any(Balance.class));
     }
 }

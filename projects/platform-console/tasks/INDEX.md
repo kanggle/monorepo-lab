@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-_(없음)_
+- `TASK-PC-FE-273-ledger-fx-rates-feed-503.md` — filed 2026-08-07 (`TASK-FIN-BE-068` AC-4 실측 부산물). 콘솔 `/ledger` **4피드 중 fx-rates 만 503** `{"code":"TIMEOUT"}`, 나머지 3개는 200(trial-balance **3원소**, periods·discrepancies 는 **진짜 빈 배열**). 🔴 **`no-array`(503) 를 `array=0` 으로 세면 이 티켓은 존재조차 안 드러난다** — "없더라" 와 "물어보지도 못했다" 는 다른 사건이다. 🔵 **재현 선행조건**: 갓 로그인한 세션은 활성 테넌트가 `iam` 이라 4피드 **전부 403 TENANT_FORBIDDEN**, `POST /api/tenant {"tenant":"demo-corp"}` 전환 후에야 위 표가 나온다. AC-0 이 세 가설(외부 provider 미도달 / BFF 5s 합성 타임아웃 / 프로파일상 비활성)을 로그·캐시 행 수·직접 호출로 가르게 한다. 🔴 이 피드는 전에 **200 인데 `feedEnabled:false` no-op** 이었던 전례가 있어 200 만으로 닫으면 안 된다. 분석=Opus 5 / 구현 권장=Sonnet (배선 판별 + 화면 문구).
 
 
 _(직전 착수)_ `TASK-PC-BE-015` — console-bff 의 spec-vs-reality resilience 갭 봉합. `architecture.md` § Resilience(D5.A)·`RestClientConfig` javadoc·계약 § 2.4.9 가 모두 "per-leg circuit-breaker keyed by `(domain, route)`" 를 단언하지만 `src/main` 에 resilience4j import 0건(타임아웃 쌍만 존재). `libs/java-common` 의 `ResilienceClientFactory` 를 **그대로 채택**해 13개 `(domain, route)` 레그 전부 CB+bounded retry 뒤로 이동하고, 죽어 있던 `circuit_open`/`CIRCUIT_OPEN` 분류를 실제 emitter 로 살린다(console-web zod `DEGRADED_REASONS` 는 이미 소비 준비 완료). 문서의 `libs/java-web` 인용도 오답(그 모듈엔 resilience 코드 0) → `libs/java-common` 정정. 분석=Opus 5 / 구현 권장=Opus.

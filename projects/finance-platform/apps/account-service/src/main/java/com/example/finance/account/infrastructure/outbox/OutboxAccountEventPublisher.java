@@ -29,14 +29,19 @@ import org.springframework.stereotype.Component;
  * forwards the row to Kafka asynchronously; downstream consumers dedupe on the
  * envelope {@code eventId} (at-least-once).
  *
- * <p><b>Wire-shape preserved.</b> The envelope is the EXACT 7-field shape the
- * previous {@code BaseEventPublisher} path emitted —
- * {@code {eventId, eventType, source, occurredAt, schemaVersion, partitionKey,
- * payload}}, {@code source = "finance-platform-account-service"}, every payload
- * field/order unchanged — so {@code ledger-service} and other {@code finance.*}
- * consumers are unaffected (TASK-FIN-BE-045 AC-2 / F2). The only change: the
- * envelope {@code eventId} now equals the {@code account_outbox} PK (both
- * UUIDv7) so the Kafka {@code eventId} header matches the payload.
+ * <p><b>Wire shape.</b> {@code {eventId, eventType, source, occurredAt, tenantId,
+ * schemaVersion, partitionKey, payload}}, {@code source =
+ * "finance-platform-account-service"}, every payload field/order unchanged.
+ * TASK-FIN-BE-045 preserved the previous {@code BaseEventPublisher} 7-field shape
+ * verbatim (AC-2 / F2) except that the envelope {@code eventId} now equals the
+ * {@code account_outbox} PK (both UUIDv7) so the Kafka {@code eventId} header
+ * matches the payload.
+ *
+ * <p><b>{@code tenantId} added by TASK-FIN-BE-068</b> — it was in both event
+ * contracts all along but never emitted; see {@link #writeEvent} for what that cost
+ * and why adding it is backward-compatible. "Wire-shape preserved" is the reason it
+ * stayed missing through a refactor whose whole point was to change nothing: a field
+ * that was never emitted is not visible in a diff of what IS emitted.
  *
  * <p>Money is always {@code {amount:"<minor-units-string>", currency}} (F5 —
  * never a float); payloads carry ids + amounts only, no regulated PII (F7).
@@ -76,7 +81,7 @@ public class OutboxAccountEventPublisher implements AccountEventPublisher {
         p.put("currency", a.getCurrency().code());
         p.put("kycLevel", a.getKycLevel().name());
         p.put("status", a.getStatus().name());
-        writeEvent(AGG_ACCOUNT, a.getId(), EVENT_ACCOUNT_OPENED, p);
+        writeEvent(a.getTenantId(), AGG_ACCOUNT, a.getId(), EVENT_ACCOUNT_OPENED, p);
     }
 
     @Override
@@ -87,7 +92,7 @@ public class OutboxAccountEventPublisher implements AccountEventPublisher {
         p.put("fromLevel", from.name());
         p.put("toLevel", to.name());
         p.put("resultingStatus", resultingStatus.name());
-        writeEvent(AGG_ACCOUNT, a.getId(), EVENT_ACCOUNT_KYC_UPGRADED, p);
+        writeEvent(a.getTenantId(), AGG_ACCOUNT, a.getId(), EVENT_ACCOUNT_KYC_UPGRADED, p);
     }
 
     @Override
@@ -99,14 +104,14 @@ public class OutboxAccountEventPublisher implements AccountEventPublisher {
         p.put("toStatus", to.name());
         p.put("actorType", actorType.name());
         p.put("reason", reason);
-        writeEvent(AGG_ACCOUNT, a.getId(), EVENT_ACCOUNT_STATUS_CHANGED, p);
+        writeEvent(a.getTenantId(), AGG_ACCOUNT, a.getId(), EVENT_ACCOUNT_STATUS_CHANGED, p);
     }
 
     @Override
     public void publishBalanceHeld(Hold hold, String transactionId, Balance balance) {
         Map<String, Object> p = balanceBase(hold.getAccountId(), hold.getId(),
                 transactionId, hold.amount(), balance);
-        writeEvent(AGG_ACCOUNT, hold.getAccountId(), EVENT_BALANCE_HELD, p);
+        writeEvent(hold.getTenantId(), AGG_ACCOUNT, hold.getAccountId(), EVENT_BALANCE_HELD, p);
     }
 
     @Override
@@ -115,14 +120,14 @@ public class OutboxAccountEventPublisher implements AccountEventPublisher {
         Map<String, Object> p = balanceBase(hold.getAccountId(), hold.getId(),
                 transactionId, captured, balance);
         p.put("released", money(released));
-        writeEvent(AGG_ACCOUNT, hold.getAccountId(), EVENT_BALANCE_CAPTURED, p);
+        writeEvent(hold.getTenantId(), AGG_ACCOUNT, hold.getAccountId(), EVENT_BALANCE_CAPTURED, p);
     }
 
     @Override
     public void publishBalanceReleased(Hold hold, String transactionId, Balance balance) {
         Map<String, Object> p = balanceBase(hold.getAccountId(), hold.getId(),
                 transactionId, hold.amount(), balance);
-        writeEvent(AGG_ACCOUNT, hold.getAccountId(), EVENT_BALANCE_RELEASED, p);
+        writeEvent(hold.getTenantId(), AGG_ACCOUNT, hold.getAccountId(), EVENT_BALANCE_RELEASED, p);
     }
 
     private Map<String, Object> balanceBase(String accountId, String holdId,
@@ -145,17 +150,17 @@ public class OutboxAccountEventPublisher implements AccountEventPublisher {
 
     @Override
     public void publishTransactionSettled(Transaction t) {
-        writeEvent(AGG_TRANSACTION, t.getId(), EVENT_TRANSACTION_SETTLED, txnPayload(t));
+        writeEvent(t.getTenantId(), AGG_TRANSACTION, t.getId(), EVENT_TRANSACTION_SETTLED, txnPayload(t));
     }
 
     @Override
     public void publishTransactionCompleted(Transaction t) {
-        writeEvent(AGG_TRANSACTION, t.getId(), EVENT_TRANSACTION_COMPLETED, txnPayload(t));
+        writeEvent(t.getTenantId(), AGG_TRANSACTION, t.getId(), EVENT_TRANSACTION_COMPLETED, txnPayload(t));
     }
 
     @Override
     public void publishTransactionFailed(Transaction t) {
-        writeEvent(AGG_TRANSACTION, t.getId(), EVENT_TRANSACTION_FAILED, txnPayload(t));
+        writeEvent(t.getTenantId(), AGG_TRANSACTION, t.getId(), EVENT_TRANSACTION_FAILED, txnPayload(t));
     }
 
     @Override
@@ -165,7 +170,7 @@ public class OutboxAccountEventPublisher implements AccountEventPublisher {
         p.put("reversalOfTransactionId", reversal.getReversalOfTransactionId());
         p.put("accountId", reversal.getAccountId());
         p.put("money", money(reversal.money()));
-        writeEvent(AGG_TRANSACTION, reversal.getId(), EVENT_TRANSACTION_REVERSED, p);
+        writeEvent(reversal.getTenantId(), AGG_TRANSACTION, reversal.getId(), EVENT_TRANSACTION_REVERSED, p);
     }
 
     private Map<String, Object> txnPayload(Transaction t) {
@@ -181,23 +186,43 @@ public class OutboxAccountEventPublisher implements AccountEventPublisher {
     }
 
     @Override
-    public void publishSanctionHit(String accountId, String transactionId,
+    public void publishSanctionHit(String tenantId, String accountId, String transactionId,
                                    String screeningRef, String queuedReviewId) {
         Map<String, Object> p = new LinkedHashMap<>();
         p.put("accountId", accountId);
         p.put("transactionId", transactionId);
         p.put("screeningRef", screeningRef);
         p.put("queuedReviewId", queuedReviewId);
-        writeEvent(AGG_ACCOUNT, accountId, EVENT_COMPLIANCE_SANCTION_HIT, p);
+        writeEvent(tenantId, AGG_ACCOUNT, accountId, EVENT_COMPLIANCE_SANCTION_HIT, p);
     }
 
     /**
-     * Wrap {@code payload} in the canonical 7-field envelope (preserved from the
-     * v1 {@code BaseEventPublisher} path), serialise it, and persist a pending
-     * {@code account_outbox} row in the caller's transaction. The generated
+     * Wrap {@code payload} in the canonical envelope, serialise it, and persist a
+     * pending {@code account_outbox} row in the caller's transaction. The generated
      * {@link UuidV7} doubles as the envelope {@code eventId} and the row PK.
+     *
+     * <p><strong>{@code tenantId} (TASK-FIN-BE-068).</strong> Both event contracts
+     * ({@code finance-account-events.md} § Envelope and {@code finance-ledger-events.md})
+     * document {@code tenantId} as an envelope field, but this publisher emitted a
+     * 7-field envelope without it. ledger-service reads
+     * {@code TransactionEnvelope.effectiveTenantId()}, which falls back to the literal
+     * {@code "finance"} when the field is absent — so EVERY journal entry was filed
+     * under tenant {@code finance} regardless of the account's real tenant, and an
+     * operator of any other tenant read an empty trial balance while their entries sat
+     * in the books under a tenant they can never query.
+     *
+     * <p>This was unobservable until now: with no funding endpoint no transaction ever
+     * completed, so no entry was ever posted and the mis-filing had nothing to show up
+     * in. Measured on a live stack — {@code accounts.tenant_id = 'demo-corp'} but all 6
+     * {@code journal_line} rows {@code tenant_id = 'finance'}, broker offsets 3 published
+     * / 3 posted / 0 DLT (the projection worked; the tenant did not).
+     *
+     * <p>Additive and backward-compatible: consumers that ignore the field are
+     * unaffected, and the ledger's fallback still covers any envelope produced before
+     * this change. Entries already written under the wrong tenant are NOT rewritten —
+     * this fixes the producer, not history.
      */
-    private void writeEvent(String aggregateType, String aggregateId,
+    private void writeEvent(String tenantId, String aggregateType, String aggregateId,
                             String eventType, Map<String, Object> payload) {
         UUID eventId = UuidV7.randomUuid();
         Instant occurredAt = Instant.now(clock);
@@ -207,6 +232,7 @@ public class OutboxAccountEventPublisher implements AccountEventPublisher {
         envelope.put("eventType", eventType);
         envelope.put("source", SOURCE);
         envelope.put("occurredAt", occurredAt.toString());
+        envelope.put("tenantId", tenantId);
         envelope.put("schemaVersion", 1);
         envelope.put("partitionKey", aggregateId);
         envelope.put("payload", payload);
