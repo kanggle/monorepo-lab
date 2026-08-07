@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-FIN-BE-068-no-path-for-money-to-enter-an-account.md` — filed 2026-08-07 (`TASK-MONO-510` 5·6회차 발굴). **계좌에 돈이 들어갈 길이 없다.** deposit/topup/credit **HTTP 매핑 0건**, `topUp()` 은 *"internal funding (v1 stub)"* 이고 **프로덕션 호출자 0건**(테스트 6회만), `@KafkaListener` **0건** ⇒ 이체·홀드·캡처가 전부 도달 불가이고 전기가 없어 `/ledger` 4피드가 전부 0. 콘솔에서 **쓰기가 하나도 성립하지 않는 유일한 도메인**이다. 🔴 착수 전 **AC-0 결정 필요**(stub 승격 / 입금 이벤트 컨슈머 / 결제 도메인 계약=ADR) — 🔵 `topUp` 의 테스트 6개를 먼저 읽을 것, 그것이 "무엇이 참이어야 하는가" 를 이미 갖고 있을 수 있다. 분석=Opus 5 / 구현 권장=Opus (자금 모델 + 전기 투영).
+(empty)
 
 ## in-progress
 
@@ -86,7 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-FIN-BE-068-no-path-for-money-to-enter-an-account.md` — **REVIEW (2026-08-07)** — filed 2026-08-07 (`TASK-MONO-510` 5·6회차 발굴), 같은 날 구현. **AC-0 = A**(`topUp` 을 **운영자 전용** `POST /{id}/topups` 로 승격). B(Kafka 컨슈머)/C(결제 도메인 계약)는 선언된 v1 범위와 충돌 — `architecture.md` 가 `event-consumer` 를 **v2 notification-service 로 예약**했고 *"v1 has no real external adapter"* 라고 적혀 있다(추론 아닌 인용). 🔵 **티켓의 기대가 빗나갔다**: *"topUp 의 테스트 6개가 이미 답을 갖고 있을 수 있다"* → **6개 중 topUp 이 주어인 것은 0개**, 전부 다른 것(hold/capture/transfer/멱등/감사)을 단언하는 **픽스처**였다 ⇒ 계약 커버리지 0 이라 "stub 을 그대로 노출" 이 작은 변경일 수 없었고 **행위를 먼저 못박아야** 했다(6건 추가). 🔴 *"v1 stub"* 이 미룬 것은 **출처(은행 어댑터)** 이지 연산이 아니다 — 게이트·감사·이벤트·`PostingPolicy TOPUP` 이 이미 다 있었고 **ledger IT 7개가 TOPUP 이벤트를 손으로 빚고 있었다**(하류가 손으로 만드는 이벤트 = 상류 입구 누락의 지문). 🔴 게이트 없는 `topUp(actor,id,long)` 오버로드는 **남기지 않고 제거**(남기면 운영자 검사가 못 보는 발권 경로 유지). 🔴🔴 **착수 후 두 번째 결함 발견**: 아웃박스 봉투에 `tenantId` 가 없어 ledger 가 리터럴 `"finance"` 로 폴백 ⇒ `demo-corp` 계좌의 전기가 `finance` 테넌트로 적혀 **주인이 자기 장부를 못 읽었다**(브로커 offset 3/3/DLT 0 으로 "지연 vs 발행부재" 를 갈라서 발견 — 둘 다 아니었다). 🔴🔴 **그 결함을 지키던 건 테스트**였다 — `containsExactly` 로 7필드를 못박았고, *"wire 가 안 바뀐다"* 를 **계약과 대조한 적이 없어** 처음부터 빠진 필드를 불변식으로 승격시켰다(**기준선이 현재 산출물인 검사는 처음부터 없던 것을 못 잡는다**). 실측: topup 0→500000 ×2 · transfer A 500000→400000/B 500000→600000 · trial-balance **3계정 DR=CR=1,100,000** · 동일 키 재실행 **잔액 불변** · 콘솔 BFF **4피드 중 1개 non-empty**. AC-6=**안 한다**(영향화면 1 · 계좌 2 · repo 메서드 **0**, 진짜 장벽은 `owner_ref` 암호화 ⇒ blind index 설계 결정). ⚠️ **AC-5 만 미완** — `seed-finance.sh` 편집이 분류기에 하드 차단(3줄 주석도 동일) ⇒ 우회 않고 `infra/demo/seed/TASK-FIN-BE-068-seed-finance.patch.md` 로 인계, 패치가 볼 판정은 프로브로 전부 실측 완료. 후속 `TASK-PC-FE-273`(fx-rates 503) 파일. 분석=Opus 5 / 구현=Opus 5.
 
 ## done
 
