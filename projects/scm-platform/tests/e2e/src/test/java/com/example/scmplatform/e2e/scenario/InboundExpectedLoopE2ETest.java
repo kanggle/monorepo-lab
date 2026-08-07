@@ -22,7 +22,7 @@ import static org.awaitility.Awaitility.await;
 
 import com.example.scmplatform.e2e.testsupport.KafkaTestConsumer;
 import com.example.scmplatform.e2e.testsupport.KafkaTestProducer;
-import com.example.scmplatform.e2e.testsupport.ProcurementDbFixtures;
+import com.example.scmplatform.e2e.testsupport.SupplierApiFixtures;
 import com.example.scmplatform.e2e.testsupport.ScmPlatformE2ETestBase;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -235,8 +235,9 @@ class InboundExpectedLoopE2ETest extends ScmPlatformE2ETestBase {
     @DisplayName("operator-authored PO (no warehouse destination) confirmed -> po.confirmed but NO inbound-expected")
     void operatorAuthoredPoEmitsNoInboundExpected() throws Exception {
         String operator = jwt.signOperatorToken(randomAccountId());
-        String supplierId = ProcurementDbFixtures.insertActiveSupplier(
-                postgres, "scm", "Acme Supplier (e2e-ie-noemit)");
+        String supplierId = SupplierApiFixtures.registerActiveSupplier(
+                http, gatewayBaseUri(), operator,
+                "SUP-IE", "Acme Supplier (e2e-ie-noemit)");
         String sku = uniqueSku("SKU-IE-NOEMIT");
 
         try (KafkaTestConsumer consumer = new KafkaTestConsumer(kafkaBootstrapForHost(),

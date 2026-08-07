@@ -10,7 +10,7 @@ import static com.example.scmplatform.e2e.testsupport.E2ETestFixtures.uniqueIdem
 import static com.example.scmplatform.e2e.testsupport.E2ETestFixtures.uniqueSku;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.example.scmplatform.e2e.testsupport.ProcurementDbFixtures;
+import com.example.scmplatform.e2e.testsupport.SupplierApiFixtures;
 import com.example.scmplatform.e2e.testsupport.ScmPlatformE2ETestBase;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -52,8 +52,9 @@ class CrossTenantIsolationE2ETest extends ScmPlatformE2ETestBase {
     void crossTenantTokenIsBlockedAndScopingHidesData() throws Exception {
         // ----- Setup: scm-tenant draft PO ---------------------------------
         String scmBuyerToken = jwt.signBuyerToken(randomAccountId());
-        String supplierId = ProcurementDbFixtures.insertActiveSupplier(
-                postgres, "scm", "Acme Supplier (e2e-tenant)");
+        String supplierId = SupplierApiFixtures.registerActiveSupplier(
+                http, gatewayBaseUri(), jwt.signOperatorToken(randomAccountId()),
+                "SUP-TEN", "Acme Supplier (e2e-tenant)");
         String sku = uniqueSku("SKU-TEN");
 
         String draftBody = """

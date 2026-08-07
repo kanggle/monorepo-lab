@@ -14,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import com.example.scmplatform.e2e.testsupport.KafkaTestConsumer;
-import com.example.scmplatform.e2e.testsupport.ProcurementDbFixtures;
+import com.example.scmplatform.e2e.testsupport.SupplierApiFixtures;
 import com.example.scmplatform.e2e.testsupport.ScmPlatformE2ETestBase;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -64,8 +64,9 @@ class SupplierAckWebhookE2ETest extends ScmPlatformE2ETestBase {
         // ----- Identity + supplier seed ------------------------------------
         String buyerAccountId = randomAccountId();
         String buyerToken = jwt.signBuyerToken(buyerAccountId);
-        String supplierId = ProcurementDbFixtures.insertActiveSupplier(
-                postgres, "scm", "Acme Supplier (e2e-ack)");
+        String supplierId = SupplierApiFixtures.registerActiveSupplier(
+                http, gatewayBaseUri(), jwt.signOperatorToken(randomAccountId()),
+                "SUP-ACK", "Acme Supplier (e2e-ack)");
 
         String sku = uniqueSku("SKU-ACK");
         String supplierAckRef = uniqueSupplierAckRef("ACK");

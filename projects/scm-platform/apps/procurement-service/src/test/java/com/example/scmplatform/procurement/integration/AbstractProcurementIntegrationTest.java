@@ -135,7 +135,10 @@ public abstract class AbstractProcurementIntegrationTest {
      */
     protected Supplier persistActiveSupplier(String tenantId) {
         String id = UuidV7.randomString();
-        Supplier s = Supplier.create(id, tenantId, "Test Supplier " + id, SupplierStatus.ACTIVE);
+        // code = UPPER(id) mirrors V6's backfill rule, so the helper cannot
+        // collide with itself across tests inside one tenant.
+        Supplier s = Supplier.create(id, tenantId, id.toUpperCase(java.util.Locale.ROOT),
+                "Test Supplier " + id, SupplierStatus.ACTIVE);
         return supplierJpa.save(s);
     }
 

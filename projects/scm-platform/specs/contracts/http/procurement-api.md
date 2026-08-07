@@ -365,8 +365,25 @@ credential — so **a supplier with no credentials is the normal v1 state**. Cre
 handling is deferred whole to the v2 `supplier-service` (ADR-SCM-001 ACCEPT rider).
 Do not add credential fields here; that decision belongs to v2.
 
-**Authorization:** OPERATOR actor (`roles ∋ {OPERATOR, ADMIN, SUPER_ADMIN}`) + `scm.write`.
-A BUYER-actor token → 403 `PERMISSION_DENIED`.
+**Authorization:** OPERATOR actor — `roles ∋ {OPERATOR, ADMIN, SUPER_ADMIN, SCM_OPERATOR}`
+(`ActorContext.isOperator()`). A BUYER-actor token → 403 `PERMISSION_DENIED`.
+
+🔴 **Role only — `scm.write` is deliberately NOT required here, and that is a
+measurement, not a preference.** The assumed operator token carries the
+`platform-console-web` client's *registered* scopes (`openid profile email
+tenant.read erp.write` — auth-service V0015 + V0023); `scm.write` is registered
+on the separate `scm` client (V0013) and is **not** on the console one. Requiring
+it would have made supplier registration unreachable for the only operator
+identity that exists — the same shape as wms master-data writes, where
+`MASTER_WRITE` is granted to nobody (TASK-MONO-514). The role side does resolve:
+a `demo-corp` tenant holds an ACTIVE `scm` subscription →
+`OperatorRoleDerivation` mints `SCM_OPERATOR`.
+
+When a machine client legitimately needs to write suppliers, add
+`hasScope("scm.write") ∨ isOperator()` — the erp masterdata precedent
+(`RoleScopeAuthorizationAdapter`, WRITE arm). That requires giving scm's
+`ActorContext` a scope axis, which it does not have today; do it when a caller
+exists, not before.
 
 **Headers:**
 - `Authorization: Bearer <token>` (required)
@@ -424,7 +441,13 @@ creation once already.
 
 **Errors:** `IDEMPOTENCY_KEY_REQUIRED` (400), `IDEMPOTENCY_KEY_MISMATCH` (422),
 `VALIDATION_ERROR` (400/422), `PERMISSION_DENIED` (403), `TENANT_FORBIDDEN` (403),
-`UNAUTHORIZED` (401).
+`UNAUTHORIZED` (401), `CONFLICT` (409).
+
+`CONFLICT` covers exactly one case: two *concurrent* registrations of the same
+`code`, where both pass the existence check before either commits and the loser
+trips `ux_suppliers_tenant_code`. It is a race outcome, not the answer to a
+sequential re-registration — that one converges with 200 above. Retrying a 409
+converges.
 
 ---
 
@@ -433,11 +456,29 @@ creation once already.
 List suppliers (paginated, tenant-scoped).
 
 **Query:** `code` (exact, optional) · `status` (optional) · `page` (default 0) ·
-`size` (default 20, max 100).
+`size` (default 20).
 
-**Response 200:** `{ "data": [ <supplier>, … ], "meta": { "timestamp", "page", "size", "totalElements", "totalPages" } }`
+**Response 200:**
+```json
+{
+  "data": {
+    "content": [ /* supplier list — element shape identical to the 201 body's data */ ],
+    "page": 0,
+    "size": 20,
+    "totalElements": 3,
+    "totalPages": 1
+  },
+  "meta": { "timestamp": "..." }
+}
+```
 
-Element shape is identical to the 201 body's `data`.
+Sort order: `createdAt DESC` (fixed).
+
+> 🔵 This paginated envelope is `GET /api/procurement/po`'s, unchanged. An
+> earlier draft of this section described a flat `data: [...]` with the page
+> counters on `meta` — a shape this service's `ApiEnvelope` + `PageResponse`
+> pair does not produce, so it would have made the two list endpoints in one
+> file answer in two different formats. Corrected before implementation.
 
 ---
 

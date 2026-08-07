@@ -10,7 +10,7 @@ import static com.example.scmplatform.e2e.testsupport.E2ETestFixtures.uniqueSku;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-import com.example.scmplatform.e2e.testsupport.ProcurementDbFixtures;
+import com.example.scmplatform.e2e.testsupport.SupplierApiFixtures;
 import com.example.scmplatform.e2e.testsupport.ScmPlatformE2ETestBase;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -69,8 +69,9 @@ class SupplierCircuitBreakerE2ETest extends ScmPlatformE2ETestBase {
     @DisplayName("supplier 5xx storm -> circuit opens -> 503 SUPPLIER_UNAVAILABLE on submit")
     void supplierFailureStormOpensCircuitAndYields503() throws Exception {
         String buyerToken = jwt.signBuyerToken(randomAccountId());
-        String supplierId = ProcurementDbFixtures.insertActiveSupplier(
-                postgres, "scm", "Acme Supplier (e2e-cb)");
+        String supplierId = SupplierApiFixtures.registerActiveSupplier(
+                http, gatewayBaseUri(), jwt.signOperatorToken(randomAccountId()),
+                "SUP-CB", "Acme Supplier (e2e-cb)");
 
         // Always-503 mode: every supplier call fails regardless of how many
         // come in (handles the retry / parallel call uncertainty).
