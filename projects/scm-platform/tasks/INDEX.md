@@ -78,6 +78,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
+- `TASK-SCM-BE-058-inbound-expected-e2e-reds-the-nightly-on-main.md` — **🟢 READY — `InboundExpectedLoopE2ETest` 가 main 의 nightly 를 간헐적으로 빨갛게 만든다.** 다른 티켓 작업 중 main 확인하다 발견. 실패 잡은 매번 `E2E full (scm-platform v1 cross-service) @ Build service images, run e2e suite`, 단언은 `Expecting actual not to be null`(= **기다리던 이벤트가 안 왔다**). 🔵 **빨강을 한 덩어리로 세면 안 된다** — 같은 날 nightly 7회 중 하나(`31116442999`)는 `Failed to resolve action download info` 로 **`Set up job` 에서 죽은 GitHub Actions 장애**이고, 넷은 실제 실행 단계 실패이며, 둘은 초록이다 ⇒ 결정론적 회귀 아님. 🔴 그러나 **간헐적이라는 사실이 "인프라 탓" 을 증명하지 않는다**([[env_ci_flake_is_a_hypothesis_not_a_verdict]]). AC-1 이 **브로커 end-offset** 으로 "발행이 없었나 vs 컨슈머가 못 받았나" 를 가르라고 요구하고(소비자 쪽 null 로는 안 갈린다), AC-2 가 **성공 실행과의 대조군**을 요구한다(`Connection refused`·OTLP 4318 잡음이 성공 실행에도 있으면 원인 아님). AC-3 은 타임아웃 증량 시 러너 실측 근거를, AC-4 는 **연속 3회 초록**을 요구한다(1회는 간헐 결함에 무의미). 분석=Opus 5 / 구현 권장=**Opus**(크로스서비스 이벤트 타이밍).
+
 ## in-progress
 
 ## review
