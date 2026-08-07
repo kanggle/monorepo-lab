@@ -81,6 +81,52 @@ Operator raises KYC level; may transition `PENDING_KYC → ACTIVE`.
 **200**: `{ "data": [ { "currency", "ledger", "available", "held" } ], ... }`
 (minor-units strings). **Errors**: 404 `ACCOUNT_NOT_FOUND`.
 
+## POST /api/finance/accounts/{id}/topups
+
+**Operator-only** internal funding credit — the v1 path by which money enters an
+account. Credits `ledger` (and therefore `available`) by `money.amount`, emits a
+`TOPUP` transaction, and is auto-journalled by ledger-service as
+DR `CASH_CLEARING` / CR `CUSTOMER_WALLET:{id}`.
+
+**Provenance (v1).** The funding source is **internal**, not an external bank —
+architecture.md § Balance Model (`topup`/`withdraw` … "v1 = internal/stub funding
+source") and § Responsibilities MUST-NOT ("v1 has no real external adapter"). This
+endpoint therefore does **not** represent a customer deposit a bank has confirmed;
+it represents an operator crediting funds the platform received out-of-band. v2
+replaces the *source* (a real bank/PG adapter behind an infrastructure port) while
+keeping this balance/ledger effect — the credit semantics documented here are not
+the deferred part.
+
+**Why operator-only** — a holder-initiated call would let any authenticated
+account-holder mint their own balance. `PERMISSION_DENIED` is enforced in the
+application layer (the same gate as `/kyc/upgrade`), not only by the
+`SecurityConfig` write authorities, so a `finance.write`-scoped non-operator token
+is rejected too.
+
+**Headers**: `Authorization` (req), `Idempotency-Key` (req), `Content-Type: application/json`
+
+**Request**:
+```json
+{ "money": { "amount": "150000", "currency": "KRW" }, "reason": "operator funding" }
+```
+- `money` — required (F5 shape); `currency` must equal the account currency
+- `reason` — optional, ≤ 256
+
+**200**: `{ "data": { "transactionId", "accountId", "type": "TOPUP", "money",
+"status": "COMPLETED" }, ... }`
+
+**Errors**: 404 `ACCOUNT_NOT_FOUND`, 403 `PERMISSION_DENIED` (non-operator),
+409 `ACCOUNT_NOT_ACTIVE` / `ACCOUNT_FROZEN`, 422 `CURRENCY_MISMATCH`,
+422 `AMOUNT_INVALID`, 403 `KYC_REQUIRED` / `KYC_LEVEL_INSUFFICIENT`,
+422 `TRANSACTION_LIMIT_EXCEEDED`, 422 `SANCTION_HIT`,
+400 `IDEMPOTENCY_KEY_REQUIRED`, 409 `IDEMPOTENCY_KEY_CONFLICT`.
+
+> **Idempotency here is stored-response replay, not a balance check.** A repeat of
+> the same key + payload returns the *first* stored 2xx and credits nothing more.
+> There is no second-order "already topped up" state a client can inspect — so a
+> caller (or a seed) MUST NOT infer "this call moved money" from the status code;
+> read the balance back, or count `transactions`.
+
 ## POST /api/finance/accounts/{id}/holds
 
 Place a hold (reserve funds; `available ≥ amount`).

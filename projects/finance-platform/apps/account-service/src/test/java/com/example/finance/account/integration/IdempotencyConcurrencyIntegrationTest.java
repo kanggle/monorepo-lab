@@ -42,7 +42,7 @@ class IdempotencyConcurrencyIntegrationTest extends AbstractAccountIntegrationTe
     @DisplayName("F1: same key + identical payload concurrently → funds move exactly once")
     void concurrentSameKeyMovesFundsOnce() throws Exception {
         AccountView acc = openActiveFullKyc(service, "cust-idem-1");
-        service.topUp(HOLDER, acc.accountId(), 10_000L);
+        fundAccount(service, acc.accountId(), 10_000L);
 
         String endpoint = "POST /api/finance/accounts/{id}/holds";
         String key = "idem-concurrent-1";

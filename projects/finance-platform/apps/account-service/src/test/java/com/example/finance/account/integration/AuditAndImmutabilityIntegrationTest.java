@@ -35,7 +35,7 @@ class AuditAndImmutabilityIntegrationTest extends AbstractAccountIntegrationTest
     void auditAppendOnly() {
         long before = auditLogJpa.count();
         AccountView acc = openActiveFullKyc(service, "cust-audit-1");
-        service.topUp(HOLDER, acc.accountId(), 5000L);
+        fundAccount(service, acc.accountId(), 5000L);
         service.placeHold(new PlaceHoldCommand(
                 HOLDER, acc.accountId(), "1000", "KRW", 3600, "x"));
         // OPEN_ACCOUNT + UPGRADE_KYC + TOPUP + HOLD ⇒ ≥ 4 new rows; rows are
@@ -47,7 +47,7 @@ class AuditAndImmutabilityIntegrationTest extends AbstractAccountIntegrationTest
     @DisplayName("F3: a SETTLED/COMPLETED transaction cannot be re-mutated in place")
     void settledTransactionImmutable() {
         AccountView acc = openActiveFullKyc(service, "cust-imm-1");
-        service.topUp(HOLDER, acc.accountId(), 5000L);
+        fundAccount(service, acc.accountId(), 5000L);
         var hold = service.placeHold(new PlaceHoldCommand(
                 HOLDER, acc.accountId(), "1000", "KRW", 3600, "x"));
 

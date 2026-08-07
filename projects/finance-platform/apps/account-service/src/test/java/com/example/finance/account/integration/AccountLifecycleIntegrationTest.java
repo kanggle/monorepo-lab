@@ -46,7 +46,7 @@ class AccountLifecycleIntegrationTest extends AbstractAccountIntegrationTest {
     void holdCapturePartial() {
         AccountView acc = openActiveFullKyc(service, "cust-hcp-1");
         // Seed ledger via the v1 internal/stub funding source.
-        service.topUp(HOLDER, acc.accountId(), 10_000L);
+        fundAccount(service, acc.accountId(), 10_000L);
 
         var hold = service.placeHold(new PlaceHoldCommand(
                 HOLDER, acc.accountId(), "4000", "KRW", 3600, "checkout"));
@@ -66,7 +66,7 @@ class AccountLifecycleIntegrationTest extends AbstractAccountIntegrationTest {
     @DisplayName("hold → release returns funds to available")
     void holdRelease() {
         AccountView acc = openActiveFullKyc(service, "cust-hr-1");
-        service.topUp(HOLDER, acc.accountId(), 5000L);
+        fundAccount(service, acc.accountId(), 5000L);
 
         var hold = service.placeHold(new PlaceHoldCommand(
                 HOLDER, acc.accountId(), "3000", "KRW", 3600, "x"));
@@ -84,7 +84,7 @@ class AccountLifecycleIntegrationTest extends AbstractAccountIntegrationTest {
     void transferAtomicity() {
         AccountView from = openActiveFullKyc(service, "cust-tf-from");
         AccountView to = openActiveFullKyc(service, "cust-tf-to");
-        service.topUp(HOLDER, from.accountId(), 10_000L);
+        fundAccount(service, from.accountId(), 10_000L);
 
         var v = service.transfer(new TransferCommand(
                 HOLDER, from.accountId(), to.accountId(), "4000", "KRW", "p2p"));

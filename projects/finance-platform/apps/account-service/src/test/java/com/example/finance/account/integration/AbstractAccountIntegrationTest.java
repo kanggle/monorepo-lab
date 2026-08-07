@@ -3,6 +3,7 @@ package com.example.finance.account.integration;
 import com.example.finance.account.application.AccountApplicationService;
 import com.example.finance.account.application.ActorContext;
 import com.example.finance.account.application.command.OpenAccountCommand;
+import com.example.finance.account.application.command.TopUpCommand;
 import com.example.finance.account.application.command.UpgradeKycCommand;
 import com.example.finance.account.application.view.AccountView;
 import com.example.testsupport.integration.DockerAvailableCondition;
@@ -167,6 +168,22 @@ public abstract class AbstractAccountIntegrationTest {
                 HOLDER, ownerRef, "KRW", "NONE"));
         return service.upgradeKyc(new UpgradeKycCommand(
                 OPERATOR, opened.accountId(), "FULL", "kyc verified"));
+    }
+
+    /**
+     * Fund an account through the real top-up path, for ITs whose subject is a
+     * *downstream* operation (hold / capture / transfer / idempotency / audit) and
+     * that just need a non-zero balance to reach it.
+     *
+     * <p>{@link #OPERATOR}, not {@link #HOLDER} — top-up is operator-only
+     * (TASK-FIN-BE-068). Before that task these call sites invoked an ungated
+     * {@code topUp(actor, id, long)} overload that had no HTTP mapping and no
+     * production caller; the overload is gone, so the fixture now exercises the
+     * same single path an operator's request takes.
+     */
+    protected void fundAccount(AccountApplicationService service, String accountId, long minor) {
+        service.topUp(new TopUpCommand(
+                OPERATOR, accountId, Long.toString(minor), "KRW", "IT fixture funding"));
     }
 
     static {

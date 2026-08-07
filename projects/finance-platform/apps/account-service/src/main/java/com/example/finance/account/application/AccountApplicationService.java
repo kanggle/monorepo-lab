@@ -6,6 +6,7 @@ import com.example.finance.account.application.command.CaptureHoldCommand;
 import com.example.finance.account.application.command.OpenAccountCommand;
 import com.example.finance.account.application.command.PlaceHoldCommand;
 import com.example.finance.account.application.command.ReleaseHoldCommand;
+import com.example.finance.account.application.command.TopUpCommand;
 import com.example.finance.account.application.command.TransferCommand;
 import com.example.finance.account.application.command.UpgradeKycCommand;
 import com.example.finance.account.application.event.AccountEventPublisher;
@@ -324,22 +325,49 @@ public class AccountApplicationService {
     }
 
     /**
-     * v1 internal/stub funding source (architecture.md § Balance Model —
-     * "topup / v1 = internal/stub funding source"). Credits confirmed ledger
-     * funds into an ACTIVE account. Still single-Tx + audited + a TOPUP txn
-     * (F1/F6); used by the funding side of transfers and test seeding. There
-     * is no real external bank adapter in v1 (that is v2).
+     * Operator-initiated internal funding credit — the v1 path by which money
+     * enters an account (account-api.md {@code POST /{id}/topups}). Credits
+     * confirmed ledger funds into an ACTIVE account; single-Tx + audited + a
+     * TOPUP txn traversing the same F4 gate as every other fund movement
+     * (F1/F6). The emitted {@code finance.transaction.completed.v1} is
+     * auto-journalled by ledger-service as DR {@code CASH_CLEARING} / CR
+     * {@code CUSTOMER_WALLET:{id}}.
+     *
+     * <p><strong>Operator-only, enforced here and not only at the HTTP layer.</strong>
+     * {@code SecurityConfig} admits any {@code finance.write} scope to POST, so a
+     * scope-only holder token would otherwise be able to credit its own balance.
+     * Mirrors {@link #upgradeKyc} — the application layer owns the operator gate.
+     *
+     * <p><strong>Why this is the ONLY funding path.</strong> This method previously
+     * existed as {@code topUp(actor, accountId, long)} with no HTTP mapping and no
+     * production caller — reachable only from six test fixtures. Keeping an
+     * ungated internal overload alongside the gated command would recreate exactly
+     * that: a way to mint balance that the operator check does not see. So there is
+     * one signature, and the tests go through it too (TASK-FIN-BE-068).
+     *
+     * <p><strong>"v1 = internal/stub funding source" scopes the source, not the
+     * operation</strong> (architecture.md § Balance Model). What v1 defers is a real
+     * bank/PG adapter supplying the money; the credit itself is production behaviour.
      */
     @Transactional
-    public TransactionView topUp(ActorContext actor, String accountId, long amountMinor) {
+    public TransactionView topUp(TopUpCommand cmd) {
+        ActorContext actor = cmd.actor();
+        if (!actor.isOperator()) {
+            throw new PermissionDeniedException(
+                    "Top-up is operator-only — v1 funding is an internal operator "
+                            + "credit, not a holder-initiated deposit");
+        }
         Instant now = clock.now();
-        Account account = loadAccount(accountId, actor.tenantId());
+        Account account = loadAccount(cmd.accountId(), actor.tenantId());
         account.ensureFundMovementAllowed();
-        Money amount = Money.of(amountMinor, account.getCurrency());
-        Balance balance = loadBalance(accountId, actor.tenantId());
+        Money amount = money(cmd.amountMinor(), cmd.currency());
+        ensureAccountCurrency(account, amount);
+        Balance balance = loadBalance(cmd.accountId(), actor.tenantId());
 
-        Transaction txn = newTxn(actor, accountId, TransactionType.TOPUP,
-                amount, null, null, "internal funding (v1 stub)", now);
+        String reason = cmd.reason() == null || cmd.reason().isBlank()
+                ? "internal operator funding (v1)" : cmd.reason();
+        Transaction txn = newTxn(actor, cmd.accountId(), TransactionType.TOPUP,
+                amount, null, null, reason, now);
         // TOPUP still traverses the single gated path (F4 — no bypass).
         gateOrFail(account, txn, TransactionType.TOPUP, amount, null, now);
 
@@ -348,9 +376,8 @@ public class AccountApplicationService {
         settleAndComplete(txn);
         Transaction savedTxn = transactionRepository.save(txn);
 
-        audit(actor, AGG_BALANCE, accountId, "TOPUP", null,
-                auditField("credited", amount.toMinorString()),
-                "internal funding (v1 stub)", now);
+        audit(actor, AGG_BALANCE, cmd.accountId(), "TOPUP", null,
+                auditField("credited", amount.toMinorString()), reason, now);
         eventPublisher.publishSettledAndCompleted(savedTxn);
         return TransactionView.from(savedTxn);
     }

@@ -33,10 +33,19 @@ unknown fields):
 > (`AccountEventPublisher` `p.put("type", t.getType().name())`). The Posting Policy
 > maps each: `TOPUP`→DR `CASH_CLEARING`/CR wallet; `WITHDRAW`→reverse; `CAPTURE`→DR
 > wallet/CR `SETTLEMENT_SUSPENSE`; `TRANSFER`→DR `CUSTOMER_WALLET:{accountId}`/CR
-> `CUSTOMER_WALLET:{counterpartyAccountId}`; `HOLD`/`RELEASE`→no entry. v1
-> account-service exposes only hold/capture/release/transfer endpoints, so
-> `CAPTURE`/`TRANSFER` are the entries that occur in practice; the policy is
-> complete for all types.
+> `CUSTOMER_WALLET:{counterpartyAccountId}`; `HOLD`/`RELEASE`→no entry. The policy
+> is complete for all types.
+>
+> **Corrected by TASK-FIN-BE-068.** This note previously read "v1 account-service
+> exposes only hold/capture/release/transfer endpoints, so `CAPTURE`/`TRANSFER` are
+> the entries that occur in practice." Both halves were wrong, and the second was
+> wrong *because* of the first: with no funding endpoint, an account could never
+> hold a non-zero balance, so `hold`/`capture`/`transfer` all failed
+> `INSUFFICIENT_AVAILABLE_BALANCE` and the entries that occurred in practice were
+> **none** — measured 2026-08-07, trial balance empty on a fully seeded stack. The
+> enumeration reasoned from *which endpoints exist* to *which entries occur* without
+> checking that any of them was reachable. `POST /{id}/topups` (account-api.md) now
+> supplies the entry point, and `TOPUP` is the first entry of every funded account.
 
 `finance.transaction.reversed.v1`:
 ```json
