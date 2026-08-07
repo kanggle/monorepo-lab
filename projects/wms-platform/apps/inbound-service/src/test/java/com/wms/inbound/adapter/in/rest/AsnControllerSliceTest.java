@@ -187,6 +187,44 @@ class AsnControllerSliceTest {
                 .andExpect(jsonPath("$.page.totalPages").value(2));
     }
 
+    /**
+     * Pins the three JSON names the NIGHTLY federation reader matches on:
+     * {@code $.content}, and each row's {@code source} + {@code status}
+     * ({@code tests/federation-hardening-e2e/specs/scm-inbound-expected-loop.spec.ts}).
+     *
+     * <p>Why this test exists: TASK-BE-568 renamed the list envelope
+     * {@code items → content} and every producer-side assertion moved with it, so
+     * CI was correctly green. The federation reader was the one consumer that did
+     * not move — and it runs only in the nightly workflow, so the break surfaced
+     * seven days and seven commits later, wearing the message "wms inbound-service
+     * creates an Asn" even though wms was creating it every time (TASK-MONO-516).
+     *
+     * <p>The sibling tests above pin {@code $.content[0].id} but never the row's
+     * {@code source}/{@code status}, which is what the federation predicate
+     * actually reads — a rename of either would still ship green. This closes that
+     * gap at PR time rather than at nightly+7d.
+     */
+    @Test
+    void listAsns_rowCarriesSourceAndStatus_theFederationReadersMatchKeys() throws Exception {
+        AsnSummaryResult scmSourced = new AsnSummaryResult(
+                ASN_ID, "ASN-20260429-0001", "SCM_PROCUREMENT",
+                UUID.randomUUID(), UUID.randomUUID(),
+                LocalDate.of(2026, 5, 1), "CREATED", 0L, NOW);
+        when(queryAsnUseCase.list(any(), any(), anyInt(), anyInt()))
+                .thenReturn(new PageResult<>(List.of(scmSourced), 0, 20, 1L, 1));
+
+        mockMvc.perform(get("/api/v1/inbound/asns")
+                        .param("status", "CREATED")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_INBOUND_READ"))))
+                .andExpect(status().isOk())
+                // The federation predicate: content[].source == 'SCM_PROCUREMENT'
+                //                        && content[].status == 'CREATED'
+                .andExpect(jsonPath("$.content[0].source").value("SCM_PROCUREMENT"))
+                .andExpect(jsonPath("$.content[0].status").value("CREATED"))
+                // and NOT the retired hand-rolled carrier the reader used to read
+                .andExpect(jsonPath("$.items").doesNotExist());
+    }
+
     @Test
     void listAsns_sizeAboveMax_returns400() throws Exception {
         mockMvc.perform(get("/api/v1/inbound/asns")
