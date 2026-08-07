@@ -1,8 +1,8 @@
 # ADR-MONO-060 — assume-tenant 토큰의 `sub`: 운영자 행위를 **누구의 것으로** 기록하는가
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 **Date:** 2026-08-07
-**History:** PROPOSED 2026-08-07 (this record). **ACCEPT is a human gate — this record authorises no code.** 승인은 소유자의 **정확형** 지시(`ADR-MONO-060 ACCEPTED — <A|B|C>`)를 요구하며, 일반적인 "진행"/"proceed" 는 이것을 승인하지 않는다. 작성 에이전트는 자기 제안을 스스로 ACCEPT 할 수 없다.
+**History:** PROPOSED 2026-08-07 (this record). **ACCEPT is a human gate — this record authorises no code.** 승인은 소유자의 **정확형** 지시(`ADR-MONO-060 ACCEPTED — <A|B|C>`)를 요구하며, 일반적인 "진행"/"proceed" 는 이것을 승인하지 않는다. 작성 에이전트는 자기 제안을 스스로 ACCEPT 할 수 없다. · **ACCEPTED 2026-08-07 — A** (소유자가 `AskUserQuestion` 에서 `ADR-MONO-060 ACCEPTED — A` 옵션을 선택). 🔴 **게이트가 실제로 물었다**: 직전 메시지의 선택지 자리가 **템플릿 플레이스홀더 `<A|B|C>` 인 채**였고 넘기지 않았다. **self-ACCEPT 아님** · **§ 선택지 / § 추천 / § 결과 는 byte-unchanged**. ⚠️ **`act` 클레임은 이 ACCEPT 가 결정하지 않았다** — 아래 § 결정 참조.
 **Decision driver:** `TASK-MONO-515` 의 AC-0 재측정(2026-08-07)이 이것을 erp 결재함 기능 갭이 아니라 **플랫폼 전역의 귀속(attribution) 문제**로 재분류했다 — 6개 게이트웨이 전부가 `X-User-Id ← sub` 이고, assume 토큰의 `sub` 는 사람이 아니라 콘솔 클라이언트다.
 **Related:** `TASK-MONO-515`(발굴) · `platform/contracts/jwt-standard-claims.md` § `sub`(이 ADR 이 정면으로 다루는 계약 행) · `ADR-MONO-040`(Phase 2/3 — `sub` = 계정 UUID, `X-User-Id ← sub` 복원) · `ADR-MONO-020`(operator multitenant assignment) · `ADR-MONO-032`(단일 신원 모델)
 
@@ -142,12 +142,43 @@ A 는 **계약이 이미 말하고 있는 것**이고, 읽는 쪽 6도메인을 
 
 ---
 
-## The ACCEPTED Gate
+## 결정 — **A** (ACCEPTED 2026-08-07)
 
-이 ADR 은 **PROPOSED** 다. 해제는 정확형만:
+**assume 토큰의 `sub` 를 계정 UUID 로 한다(계약 준수 복원).** 위 § 선택지 A 의 텍스트
+그대로이며, 이 절은 그것을 **확정**할 뿐 재서술하지 않는다.
 
-```
-ADR-MONO-060 ACCEPTED — <A|B|C>
-```
+### 무엇이 구속력을 갖나
 
-그때까지 `TASK-MONO-515` 는 착수하지 않는다.
+| | 구속력 |
+|---|---|
+| **A 자체** — `sub` = 계정 UUID. 읽는 쪽(게이트웨이 6/6 · `ActorClaims`) 변경 0 | **binding** |
+| **B 배제** — 도메인마다 소비자를 새로 만드는 경로는 채택하지 않는다. ⇒ "erp 만 고치고 나머지 5도메인 감사는 `platform-console-web` 으로 남는" 부분 적용 상태를 **만들지 않는다** | **binding** |
+| **C 배제** — ADR 자신이 배제를 권장했고 채택되지 않았다 | **binding** |
+| § 결과 표의 A 행 — `jwt-standard-claims.md` § `sub` 확인 · auth-service 토큰 커스터마이저 · `AssumeTenantExchangeIntegrationTest` 주석/단언 갱신 · 6게이트웨이 회귀 · `MONO-515` 는 **erp 인박스 2곳**이 자동 해결 | **binding**(작업 배분) |
+| § 결과 말미 — **erp 인박스는 2개**(결재 + 알림). 하나만 고치면 형제가 낙오한다 | **binding** |
+
+### ⚠️ `act` 클레임은 **이 ACCEPT 가 결정하지 않았다**
+
+A 본문의 ❌ 는 *"acting client 를 잃는다 ⇒ RFC 8693 의 `act` 를 **함께** 실어 보존해야
+한다(**잃어도 되는 정보인지가 이 안의 실질 질문**)"* 이고, § 추천 은 그것을 `A + act` 배치로
+권했다. 승인 시 소유자에게 **`A`** 와 **`A + act 클레임`** 이 나란히 제시됐고, 소유자는
+**plain `A`** 를 골랐다.
+
+⇒ **`act` 를 싣는 것으로 확정되지 않았다.** 동시에 **싣지 않기로 확정된 것도 아니다** —
+A 자신이 그 질문을 미결로 명명하고 있기 때문이다. 그러므로:
+
+🔴 **`TASK-MONO-515` 는 이 질문에 명시적으로 답하고 그 답을 기록해야 한다.** 조용히
+빠뜨리는 것은 답이 아니다 — acting client 정보가 아무 기록 없이 사라지는 것이 정확히
+이 ADR 이 방어하려는 실패 모드(무증상 귀속 오염)와 같은 모양이다. 답이 "싣지 않는다"
+라면 **무엇을 잃는지**를 티켓에 적고, 소유자가 한 줄로 뒤집을 수 있게 남긴다.
+
+### ACCEPT 가 인가하는 것 / 하지 않는 것
+
+인가되는 것은 `TASK-MONO-515` 의 **착수**뿐이다. 토큰 계약 변경이므로 구현 task 는
+`jwt-standard-claims.md` 확인과 6게이트웨이 회귀를 자기 AC 로 들고 가야 한다(HARDSTOP-09).
+
+### 게이트 — 통과했지, 우회하지 않았다
+
+정확형이 도착한 뒤에만 전환했다. 🔴 직전 시도는 선택지 자리가 `<A|B|C>` 플레이스홀더인
+채로 왔고 넘기지 않았다 — 같은 줄의 "추천 A"(이 ADR 자신의 추천)를 소유자의 선택으로 읽는
+것이 § The ACCEPTED Gate 가 금지하는 행위다. 멈춰서 다시 물었고 그때 A 가 도착했다.

@@ -170,23 +170,33 @@ erp 스택을 띄우지 않았다(메모리 한계로 도메인 슬라이스를 
 
 ---
 
-# ⏸ PAUSED — `ADR-MONO-060` 대기
+# ✅ 게이트 해제 — `ADR-MONO-060` **ACCEPTED — A** (2026-08-07)
 
 AC-0 이 이 티켓을 **erp 결재함 기능 갭에서 플랫폼 전역 귀속 문제로** 재분류했다
 (게이트웨이 6/6 이 `X-User-Id ← sub`). 그리고 이것은 설계 선호가 아니라
-**`jwt-standard-claims.md` § `sub` 계약 위반**이다.
+**`jwt-standard-claims.md` § `sub` 계약 위반**이다. 결정은
+[`docs/adr/ADR-MONO-060-assumed-token-subject-identity.md`](../../docs/adr/ADR-MONO-060-assumed-token-subject-identity.md)
+로 옮겼고, 소유자가 **A(계약 준수 복원 — `sub` = 계정 UUID)** 를 정확형으로 승인했다.
 
 🔴 **이 티켓이 적은 A 안의 대가는 사실이 아니었다** — `AssumeTenantExchangeIntegrationTest`
 의 유일한 `sub` 단언은 **base 토큰** 대상이고, assume 토큰에 대한 진술은 **주석**뿐이다.
-A 는 테스트가 고정한 결정을 뒤집지 않는다.
+A 는 테스트가 고정한 결정을 뒤집지 않는다. ⇒ 아래 **AC-3 의 "반대 단언을 함께 갱신" 이라는
+문구는 틀렸다** — 갱신할 단언이 없고, 갱신 대상은 **주석**이다(그 주석이 `sub`/`act` 를
+RFC 8693 의 반대로 설명하고 있으므로 그대로 두면 다음 세션이 또 속는다).
 
-결정은 [`docs/adr/ADR-MONO-060-assumed-token-subject-identity.md`](../../docs/adr/ADR-MONO-060-assumed-token-subject-identity.md)
-로 옮겼다(A 계약 준수 복원 / B 별도 클레임 / C 배제 권장, 추천 = **A**).
-**ACCEPTED 전까지 착수하지 않는다.** 해제는 정확형만:
+## A 가 지정하는 후속 (ADR § 결과 A 행)
 
-```
-ADR-MONO-060 ACCEPTED — <A|B|C>
-```
+`jwt-standard-claims.md` § `sub` 확인(**변경 불요일 수 있다 — 이미 그렇게 적혀 있다**) ·
+auth-service 토큰 커스터마이저 · `AssumeTenantExchangeIntegrationTest` 주석/단언 갱신 ·
+**6게이트웨이 회귀** · 그 결과로 **erp 인박스 2곳이 자동 해결**.
+
+🔴 **erp 인박스는 2개다**(결재 + 알림). ADR § 결과 말미: *"하나만 고치면 형제가 낙오한다."*
+
+## ⚠️ `act` 클레임은 **결정되지 않았다** — 이 티켓이 답해야 한다
+
+소유자에게 `A` 와 `A + act 클레임` 이 나란히 제시됐고 **plain `A`** 가 선택됐다. 싣기로도
+안 싣기로도 확정되지 않았고, A 본문 자신이 *"잃어도 되는 정보인지가 이 안의 실질 질문"*
+이라고 미결로 명명한다. ⇒ **AC-6**. 조용히 빠뜨리는 것은 답이 아니다.
 
 # Acceptance Criteria
 
@@ -194,11 +204,22 @@ ADR-MONO-060 ACCEPTED — <A|B|C>
       모집단 분류 = erp **3** / fan **6**(사정권 밖) / finance·scm·wms **0건** ·
       🔴 신규: **erp 결재함이 2개**(approval + notification) · ⚠️ 라이브 3종은 미재현(사유 위).
       상세는 위 §
-- [ ] **AC-1 (결정)** — ADR 작성 + 사용자 ACCEPT. 🔴 에이전트가 스스로 ACCEPT 할 수 없다
-- [ ] **AC-2 (구현)** — 결정된 방향 구현
+- [x] **AC-1 (결정) — 완료 2026-08-07.** `ADR-MONO-060` **ACCEPTED — A**(`sub` = 계정 UUID)
+- [ ] **AC-2 (구현)** — auth-service 토큰 커스터마이저에서 assume 토큰의 `sub` 를 계정 UUID
+      로 발급한다. 🔵 **읽는 쪽은 건드리지 않는다** — 게이트웨이 6/6 · `ActorClaims` 는
+      이미 `sub` 를 읽고 있고, 그것이 A 를 고른 이유다
+- [ ] **AC-2b (계약 확인)** — `platform/contracts/jwt-standard-claims.md` § `sub` 를 열어
+      **변경이 필요한지 판정**한다. 🔵 ADR 은 *"변경 불요일 수 있다 — 이미 그렇게 적혀
+      있다"* 고 본다. 변경이 불요라면 **그 사실을 적는다**(안 적으면 다음 세션이 다시 연다)
 - [ ] **AC-3 (회귀 가드)** — 상신자와 승인자가 **서로 다른 actorId** 로 기록되는지
-      단언한다. 🔴 기존 `AssumeTenantExchangeIntegrationTest` 의 반대 단언을 **함께
-      갱신**해야 한다(A 를 고를 경우) — 갱신 없이 머지하면 그 스위트가 RED 다
+      단언한다. 🔴 **"기존 반대 단언을 갱신" 은 잘못된 지시였다** — `AssumeTenantExchange‐
+      IntegrationTest` 의 유일한 `sub` 단언은 **base 토큰** 대상이라 A 로 깨지지 않는다.
+      갱신 대상은 **주석**이고, 그 주석은 `sub`/`act` 를 RFC 8693 의 **반대로** 설명하고
+      있다. 주석을 고치지 않으면 다음 세션이 같은 오독을 상속한다
+- [ ] **AC-6 (`act` 미결 질문에 답한다)** — acting client(`platform-console-web`)를 보존할
+      것인지 명시적으로 결정하고 **티켓에 기록**한다. 보존한다면 `act` 클레임 배치(RFC 8693
+      기준 `sub`=위임 주체 · `act`=행위자), 보존하지 않는다면 **무엇을 잃는지**를 적어
+      소유자가 한 줄로 뒤집을 수 있게 남긴다. 🔴 조용히 빠뜨리는 것은 답이 아니다
 - [ ] **AC-4 (라이브)** — 콘솔에서 상신 → 다른 신원으로 로그인 → 결재함에서 승인이
       실제로 성공한다. BFF 원소 수로 판정한다(콘솔은 클라이언트 렌더 — SSR HTML grep 은
       깨진 탐지기)
@@ -227,13 +248,20 @@ ADR-MONO-060 ACCEPTED — <A|B|C>
 # Failure Scenarios
 
 - **erp 쪽만 고치고 닫음** → 결재함은 살아나는데 다른 도메인의 감사 기록은 여전히
-  클라이언트 id 다. AC-0 의 전수가 그 범위를 정한다
-- **테스트의 반대 단언을 보지 못한 채 A 구현** → 머지 즉시 iam IT 가 RED. AC-3 이 막는다
+  클라이언트 id 다. AC-0 의 전수가 그 범위를 정한다. 🔵 A 는 게이트웨이 6/6 이 이미
+  `sub` 를 읽으므로 **한 번에** 돌아온다 — 이 실패 모드는 B 를 골랐을 때의 것이었다
+- 🔴 ~~**테스트의 반대 단언을 보지 못한 채 A 구현** → 머지 즉시 iam IT 가 RED~~ —
+  **이 시나리오는 실재하지 않는다.** ADR-060 이 실측했다: 그 단언은 base 토큰 대상이다.
+  대신 진짜 위험은 **주석을 안 고치는 것**이다(RFC 8693 을 반대로 설명하는 주석이 남으면
+  다음 세션이 오독을 상속한다)
+- 🔴 **`act` 질문을 답하지 않고 닫는다** → acting client 정보가 **아무 기록 없이** 사라진다.
+  그것이 이 ADR 이 방어하려는 실패 모드(무증상 귀속 오염)와 정확히 같은 모양이다. AC-6
 - **"결함이니 그냥 고친다"** → 문서화된 결정을 뒤집는 것이므로 ADR 없이는 Hard Stop
-  (`HARDSTOP-09`)
+  (`HARDSTOP-09`). 🔵 이제 ADR-060 이 ACCEPTED 이므로 **이 경로는 열렸다**
 
 # Definition of Done
 
-- [ ] ADR ACCEPTED + AC-0~AC-5 충족
+- [x] ADR ACCEPTED — `ADR-MONO-060` A (2026-08-07)
+- [ ] AC-0~AC-6 충족 (AC-6 = `act` 질문에 명시적으로 답하고 기록)
 - [ ] iam + erp 테스트 GREEN
 - [ ] Ready for review
