@@ -454,6 +454,14 @@ iam + console 을 **동시에** 올리면 인프라 3세트까지 더해 10 GiB 
       1건뿐이고 사유가 코드에 있다(`TASK-BE-580` 이 닫히면 삭제).
       → **ERP 완료(4회차)**: 마스터 5종 + 결재 3 + 위임 1 = **20건 전부 실제 API,
       직접-DB 0건**. SCM/Finance 미착수
+      → **SCM 완료(5회차, 2026-08-07)**: config 4건 + PO 3건 전부 실제 API.
+      직접-DB **1건(공급사)** — 사유가 `dbexec --why` 에 있다: **scm 에는 공급사 등록
+      API 가 없다**(저장소 전 컨트롤러 0건, scm e2e 도 `ProcurementDbFixtures` 로 직접
+      넣는다). 이 도메인에선 직접-DB 가 편법이 아니라 **유일한 경로**다.
+      → **Finance 완료(5회차)**: 계좌 2 + KYC 승급 2 전부 실제 API, **직접-DB 0건**.
+      🔵 원장은 **일부러 직접 넣지 않았다** — 이벤트 기반 전기가 `ensureAccountExists`
+      로 계정을 자동 생성하므로, 이체가 성립했다면 `/ledger` 데이터는 *투영이 동작한다*
+      는 증거가 됐을 것이다. 손으로 넣으면 *시드가 넣었다* 는 증거밖에 안 된다.
 - [~] **AC-2 (라이브 검증)** — 23개 화면을 **브라우저로** 연다
       → **WMS 7화면 스윕 완료(3회차, 2026-08-06)**: 콘솔 기동 + 헤드리스 로그인 +
       `POST /api/tenant {"tenant":"demo-corp"}` 성립, 7화면 전부 `200`.
@@ -468,6 +476,18 @@ iam + console 을 **동시에** 올리면 인프라 3세트까지 더해 10 GiB 
       `callWmsAdmin('/dashboard/orders')` 로 읽었는데, 그 함수는 **죽은 코드**였고
       실제로는 outbound-service 원시 API 였다(런타임 로그로 확정). 같은 이름의
       `listOrders` 가 코드베이스에 셋 있다.
+      → **SCM 6화면 완료(5회차, 2026-08-07)**: 전 화면 `page 200`, BFF 원소 수 =
+      `/scm/procurement` **3** · `/scm/config` 정책 **1** + 매핑 **1** ·
+      `/scm/inventory` **0** · `/scm/replenishment` **0** (`/scm`·`/scm/guide` 는 데이터 무의존).
+      ⇒ **4/6 충족.**
+      → **Finance 4화면 완료(5회차)**: 전 화면 `page 200`, `/ledger` 는 trial-balance ·
+      periods · fx-rates · discrepancies **전부 0**. `/finance/accounts` 는 **목록 라우트가
+      아예 없다**(id 조회뿐) — 화면이 뜨지만 "무엇을 보여줄지" 를 운영자가 알 수 없다.
+      🔴 **계측기가 거짓 양성을 냈다** — 처음엔 trial-balance/fx-rates 가 **1** 로 나왔는데
+      실물은 `{"accounts":[],…}` 와 `{"feedEnabled":false,"rates":[]}` 로 **둘 다 빈 배열**
+      이었다. 카운터의 폴백("키 있는 객체 → 1")이 껍데기를 셌다. 도메인 배열을 이름으로
+      찾도록 고쳤다 — [[env_empty_detector_output_is_not_absence]] 의 역방향(부재를 존재로).
+      ⇒ **23화면 중 WMS 7 + ERP 6 + SCM 6 + Finance 4 = 23 전부 측정 완료.**
       🔵 **계측 함정**: 콘솔 페이지는 **클라이언트 렌더**라 SSR HTML 에 데이터가 없다 —
       HTML grep 은 전 화면 0건을 내는 **깨진 탐지기**였다. 판정은 BFF API 원소 수로 한다
       (🔵 로그인 진입점도 `/` 가 아니라 **`/api/auth/login`** 이다 — `/` 는 콘솔 자체
@@ -497,6 +517,13 @@ iam + console 을 **동시에** 올리면 인프라 3세트까지 더해 10 GiB 
       → **WMS 충족**: 2회차 `생성 0 · 기존 2 · 실패 0`, rc=0
       → **ERP 충족**: 깨끗한 볼륨 1회차 `생성 20 · 기존 0 · 실패 0`, 2회차
       `생성 0 · 기존 20 · 실패 0`, 양쪽 rc=0
+      → **SCM 충족**: 3회 실행 후 `purchase_orders` **3행**, `suppliers` **1행** 수렴.
+      🔴 로그 라벨만으로 판정하면 틀린다 — 멱등 replay 도 2xx 라 첫 판은 "생성"이 9번
+      찍혔는데 실제 행은 3이었다. 그래서 시드가 **POST 전후 행 수**를 세어 갈라 적도록
+      고쳤다(`존재 … (멱등 replay — 행 수 N 불변)`).
+      → **Finance 충족**: 여러 회 실행 후 `finance_db.accounts` **2행**(둘 다 ACTIVE/FULL),
+      `idempotency_keys` 6행. mysql 자격증명이 컨테이너 env 안이라 scm 식 행-수 판정을
+      스크립트에 넣지 않았고, **그 한계를 주석에 명시**했다(로그는 요청 수, 수렴 증거는 행 수).
 - [~] **AC-6 (메모리 실측)** — S4 · S5 각각의 컨테이너 수 + 메모리를 기록한다.
       **S5 가 로컬에서 아예 불가능하면 그 사실을 수치와 함께 적는다**(MONO-399 AC-2 의 입력이며,
       "못 했다" 도 유효한 측정이다)
@@ -505,6 +532,33 @@ iam + console 을 **동시에** 올리면 인프라 3세트까지 더해 10 GiB 
       → **ERP 슬라이스 8컨 = 3,854 MiB** 실측(iam+console 포함 25컨에서 VM 9.85/11.96 GiB).
       ⇒ **S5 동시 기동은 여전히 불가**로 판정한다 — erp 하나가 3.85 GiB 이므로
       scm(5앱)+erp(5)+finance(3)+iam+console 은 10 GiB 를 넘긴다. 도메인별 슬라이스가 정답
+      → **5회차 확증(2026-08-07)**: 착수 시 Docker VM **8.95 / 11.68 GiB**(iam 14 + erp 8 +
+      console 2)로 여유 2.7 GiB 였고 scm(5앱)+finance(3앱)+인프라는 ≈5 GiB 가 필요했다
+      ⇒ **S5 동시 기동 불가 재확인**. 2패스로 갈랐다: erp 내림(→4.67 GiB) → scm 8컨 →
+      측정 → scm 내림 → finance 7컨 → 측정. 🔴 **호스트 RAM 이 진짜 제약이다** — 호스트
+      여유 1.0 GiB, `vmmemWSL` 4.44 GB 로 컨테이너 사용량을 따라간다(VM 이 반환한다).
+      🔵 그리고 **디스크는 제약이 아니었다** — 이미지 8개(≈3.7 GB)는 vhdx 안에 들어가고
+      거기엔 18.4 GB 회수분이 있었다. 착수 전 "디스크 때문에 막혔다" 는 전제가 틀렸다.
+      🔴 `demo-up.sh <도메인>` 은 **의존 도메인의 스택 전체를 다시 올린다** — 메모리를
+      아끼려 내려 둔 iam 관측 컨테이너 6개가 되살아났다. 부분 종료로 아낀 분은 상쇄된다.
+# 🔴 5회차(SCM · Finance)가 찾은 구조적 갭 3건 — 후속 티켓 후보
+
+셋 다 **시드의 한계가 아니라 제품의 상태**다. 시드는 이것들을 우회하지 않고 관측으로 남겼다.
+
+| # | 도메인 | 갭 | 실측 근거 | 막히는 화면 |
+|---|---|---|---|---|
+| G1 | scm | **공급사 등록 API 가 없다** | `POST /po` 가 `SUPPLIER_NOT_FOUND`; 저장소 전 컨트롤러에 suppliers 생성 매핑 **0건**; scm e2e 도 `ProcurementDbFixtures.insertActiveSupplier` 로 직접 DB | 공급사 관리 화면 자체가 없음 |
+| G2 | scm | **PO 가 DRAFT 밖으로 못 나간다** | `submit` 이 `http://supplier-mock:9090` 을 실제 호출하는데 그 서비스가 **어느 compose 에도 없다**(application.yml 의 URL 로만 존재). federation 스펙 주석도 같은 말 | `/scm/procurement` 이 DRAFT 만 |
+| G3 | finance | **계좌에 돈을 넣을 수 없다** | deposit/topup/credit 매핑 **0건**; `topUp()` 은 있으나 *"internal funding (v1 stub)"* 이고 **프로덕션 호출자 0건**(테스트 6회만); `@KafkaListener` **0건** | `/ledger` 4피드 전부 0 |
+
+**G3 가 가장 넓다** — 자금 이동이 불가능하므로 이체·홀드·캡처가 전부 도달 불가이고,
+전기가 없으니 원장 전 화면이 빈다. `/finance/accounts` 에 **목록 라우트가 없는 것**
+(id 조회뿐)도 같은 방향의 미완성이다.
+
+🔵 **셋 다 "고칠 수 있었지만 안 한" 것이 아니다.** G1 은 직접-DB 로 우회했고(그 외 길이
+없다), G2·G3 는 우회하면 화면은 차지만 **제품이 하지 못하는 일을 시드가 대신한 것**이
+되므로 하지 않았다. 데모에서 그 화면이 비는 것은 정직한 상태다.
+
 - [x] **AC-7 (가드)** — `verify-demo-wrapper.sh` 가드 (y) 통과
       → PASS(rc=0). (y) 가 "도메인 시드 **4개**(erp 추가) · 전부 dbexec 경유" 로 센다
 - [~] **AC-8 (발굴 결함 분리)** — 별도 티켓. 0건이면 "0건" 이라고 적는다
@@ -543,8 +597,14 @@ iam + console 을 **동시에** 올리면 인프라 3세트까지 더해 10 GiB 
 
 # Definition of Done
 
-- [ ] 도메인 시드 4개 커밋 + 각 2회 실행
-- [ ] 23개 화면 브라우저 증거
-- [ ] S4 · S5 메모리 실측 기록
-- [~] 가이드 한계 표 갱신 — WMS·ERP 행 반영 완료(SCM·Finance 착수 시 재갱신)
-- [ ] Ready for review
+- [x] **도메인 시드 4개 커밋** — `seed-wms.sh` · `seed-erp.sh` · `seed-scm.sh` · `seed-finance.sh`.
+      각 2회 이상 실행하고 **수렴을 행 수로** 확인(AC-5)
+- [x] **23개 화면 증거** — WMS 7 + ERP 6 + SCM 6 + Finance 4. 전부 `page 200`,
+      판정은 **BFF 원소 수**로(클라 렌더라 SSR HTML 은 데이터가 있어도 0건)
+- [x] **S4 · S5 메모리 실측 기록** — S5 동시 기동 **불가** 재확인, 2패스로 수행(AC-6)
+- [~] 가이드 한계 표 갱신 — WMS·ERP 행 반영 완료. **SCM·Finance 행은 G1~G3 를 반영해야 한다**
+- [ ] **AC-4(브라우저 쓰기)** — 미착수. 🔴 그리고 **도메인 3개에서 도달 불가**임이 이번에
+      확정됐다: ERP 결재 승인=`MONO-515`, SCM=G2(supplier-mock 부재), Finance=G3(입금 경로 없음).
+      남는 후보는 WMS 출고 지시와 ERP 부서 생성뿐 — **AC 를 그대로 두면 충족 불가**이므로
+      범위를 다시 정하는 것이 먼저다(사용자 판단)
+- [x] Ready for review
