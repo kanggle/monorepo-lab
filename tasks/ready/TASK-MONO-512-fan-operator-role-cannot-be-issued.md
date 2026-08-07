@@ -108,10 +108,64 @@ assume → `POST /api/v1/artists` 가 201 을 내는 경로가 존재한다. 그
 
 ---
 
+# ✅ AC-0 재측정 (2026-08-07) — 전제 유지, 그리고 **모집단이 티켓보다 넓다**
+
+## 두 갈래 모두 그대로 막혀 있다
+
+```
+assume fan-platform  → 실패 (토큰 발급 안 됨)
+assume fan           → 실패
+assume demo-corp     → 성공 (대조군 — 계측기가 동작한다는 증거)
+```
+
+## 🔴 티켓이 "demo-corp 에 fan 이 없다" 라고 적었는데, 실은 **아무 데도 없다**
+
+`tenant_domain_subscription` 전수(18행, 12테넌트):
+
+```
+ecommerce  2      erp  3      finance  5      scm  3      wms  5
+fan        0   ← 전 테넌트 통틀어 0건
+```
+
+테넌트별로도:
+
+```
+demo-corp     ecommerce,erp,finance,scm,wms     ← fan 없음 (티켓 그대로)
+fan-platform  NULL                              ← 테넌트는 있는데 구독 0행
+```
+
+그리고 `operator_tenant_assignment` 의 테넌트는 **4개뿐**(`acme-corp`·`demo-corp`·
+`ecommerce`·`globex-corp`) — `fan-platform` 행 없음(티켓의 결여 #1 확인).
+
+⇒ 티켓은 이것을 *"demo-corp 의 구독 목록에 fan 이 빠졌다"* 로 읽었지만, 실측은
+**"이 시스템의 어떤 테넌트도 `fan` 을 구독하지 않는다"** 다. 한 행을 더하는 문제가
+아니라 **`fan` 이라는 도메인 키가 구독 평면에 존재한 적이 없다**는 뜻이고, AC-1 의
+결정("팬이 운영자 평면을 갖는가")은 그만큼 더 근본적인 질문이다.
+
+## 🔴🔴 신규 — `FAN_OPERATOR` 만이 아니다. **`ROLE_ARTIST` 도 발급 경로가 0** 이다
+
+`PublishPostUseCase:32` 는 `ARTIST` 역할을 **저작 권한**으로 받는다:
+
+```java
+if (!actor.hasRole(ROLE_FAN) && !actor.hasRole(ROLE_ARTIST) && !actor.isOperator())
+```
+
+그런데 `projects/iam-platform` 전체(`*.java`/`*.yml`/`*.sql`)에서 `ARTIST` **0건**.
+
+🔵 **계측기 검증**: 같은 글롭으로 `FAN_OPERATOR` 는 3건 잡힌다(`DelegatableRoleCatalog`
+등) ⇒ 0건은 탐지 실패가 아니라 진짜 부재다.
+
+⇒ **AC-0 이 요구한 "받는 곳 전수" 의 답은 3곳이 아니라, 역할이 2종이다.**
+`FAN_OPERATOR`(3곳) + `ARTIST`(1곳, 저작 게이트). AC-1 은 두 역할을 함께 결정해야 한다
+— `ARTIST` 만 열면 [[TASK-FAN-BE-045]] 의 저자 문제와 정면으로 얽힌다.
+
+---
+
 # Acceptance Criteria
 
-- [ ] **AC-0 (재측정)** — 위 실측 두 갈래를 **다시 받아 본다**. 응답 문구가 바뀌었으면
-      실제가 이긴다. 그리고 `FAN_OPERATOR` 를 **받는** 곳을 전수로 다시 센다(현재 3곳)
+- [x] **AC-0 (재측정) — 완료 2026-08-07.** 두 갈래 재현 ✅ · 받는 곳 전수 결과
+      **역할이 2종**(`FAN_OPERATOR` 3곳 + `ARTIST` 1곳) · 모집단은 "demo-corp 결여" 가
+      아니라 **`fan` 구독 0/18행**. 상세는 위 §
 - [ ] **AC-1 (결정)** — 팬이 운영자 평면을 갖는지 결정하고 근거를 남긴다.
       B2C 테넌트를 운영자가 assume 하는 것이 새 패턴이면 **ADR** 로 올린다
 - [ ] **AC-2 (도달 가능성)** — "연다" 로 결정했다면 콘솔 로그인 → assume →
