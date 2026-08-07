@@ -8,7 +8,7 @@ TASK-SCM-BE-058
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -143,9 +143,28 @@ InboundExpectedLoopE2ETest > two POs to the same warehouse code
       scm 만 await 를 헬퍼로 뽑으면서 누산기를 함께 안으로 넣었다 — **추상화가 결함을 만들었다.**
       전수 조사 결과 이 패턴의 낙오자는 `InboundExpectedLoopE2ETest` **하나뿐**이다
       (나머지 후보는 전부 단일 await 이거나 이미 누산기를 공유한다)
-- [ ] **AC-4 (연속 초록)** — 수정 후 nightly **연속 3회** 초록 확인. ⏳ **머지 후에만 판정 가능.**
-      🔴 기저 실패율이 ≈55% 이므로 3연속 초록의 우연 확률은 ≈9% — 3회는 최소선이고
-      더 볼수록 좋다
+- [x] **AC-4 (연속 초록) — 충족.** 수정(`560df9f71`) 이후 **3연속 초록**:
+      | # | run | commit | event | scm full e2e 잡 |
+      |---|---|---|---|---|
+      | 1 | `31147594227` | `560df9f71` | push | ✅ success |
+      | 2 | `31148735257` | `63dd12f90` | push | ✅ success |
+      | 3 | `31148785586` | `63dd12f90` | workflow_dispatch | ✅ success |
+
+      🔵 **2·3 이 같은 커밋인 것은 문제가 아니다** — 이 결함은 **경합**이고, 경합은 커밋이
+      아니라 **실행**의 성질이다. 같은 코드의 두 독립 실행은 두 독립 표본이다.
+      (concurrency 그룹이 달라 서로 취소하지 않는 것도 확인했다:
+      push=`nightly-e2e-<sha>` / dispatch=`nightly-e2e-<ref>`.)
+
+      🔴 **잡 초록만으로 판정하지 않았다** — 세 실행 **전부**에서
+      `InboundExpectedLoopE2ETest > two POs …` **두 메서드가 모두 실행**됐고
+      `E2ETest >.*FAILED` 마커는 **0건**임을 로그에서 확인했다. 계측 자체가 도는지도
+      먼저 봤다(통과 테스트명이 실제로 출력된다 — 표본3 기준 8줄).
+      스킵된 초록이었다면 아무것도 증명하지 못했을 것이다
+      ([[env_empty_detector_output_is_not_absence]]).
+
+      🔵 **확률 관점**: 기저 실패율 ≈55%(30실행 중 16실패)에서 3연속 초록이 우연일 확률은
+      `0.45³ ≈ 9%`. 강한 증거이지만 **증명은 아니다** — 재발하면 이 티켓을 다시 열고,
+      기전 논증이 아니라 **새 관측**부터 다시 세라
 
 # Related Specs
 
@@ -194,7 +213,7 @@ InboundExpectedLoopE2ETest > two POs to the same warehouse code
 
 # Definition of Done
 
-- [x] AC-0~AC-3 충족
-- [ ] **AC-4 — nightly 연속 3회 초록** (머지 후 확인)
-- [ ] `:projects:scm-platform:tests:e2e:e2eFullTest` GREEN (nightly)
+- [x] AC-0~AC-4 충족
+- [x] **AC-4 — nightly 연속 3회 초록** ✅
+- [x] `:projects:scm-platform:tests:e2e:e2eFullTest` GREEN (nightly ×3)
 - [x] Ready for review
