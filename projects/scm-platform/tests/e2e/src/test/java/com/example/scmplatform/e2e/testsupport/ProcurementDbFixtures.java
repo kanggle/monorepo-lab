@@ -12,16 +12,23 @@ import org.testcontainers.containers.PostgreSQLContainer;
 /**
  * Direct JDBC fixture helpers for the procurement-service Postgres database.
  *
- * <p>procurement-service v1 has no public "register supplier" endpoint
- * (suppliers are an internal master in v1; supplier-service is a v2
- * deferred). The e2e suite still needs an ACTIVE supplier in the
- * {@code suppliers} table so {@code POST /api/procurement/po} can resolve
- * a real {@code supplierId}. Until v2 lands we seed via JDBC.
- *
- * <p>This is a deliberate trade-off recorded in the task spec § Failure
- * Scenarios — the supplier master row is the only fixture that bypasses the
- * production HTTP API. Everything downstream (PO draft, submit, ack, ASN,
+ * <p>procurement-service v1 has no "register supplier" endpoint, so the e2e
+ * suite seeds an ACTIVE supplier into the {@code suppliers} table via JDBC —
+ * otherwise {@code POST /api/procurement/po} cannot resolve a real
+ * {@code supplierId}. This row is the only fixture that bypasses the
+ * production HTTP API; everything downstream (PO draft, submit, ack, ASN,
  * inventory snapshots) flows through real REST + Kafka surfaces.
+ *
+ * <p><b>Why the endpoint is missing is NOT yet decided</b> — see
+ * {@code docs/adr/ADR-001-supplier-master-write-surface.md} (Proposed) and
+ * {@code TASK-SCM-BE-059}. An earlier version of this Javadoc asserted the
+ * absence was "a deliberate trade-off recorded in the task spec § Failure
+ * Scenarios". That citation was dangling: {@code TASK-SCM-INT-001}'s Failure
+ * Scenarios section covers Docker, cross-project consumption and CI cost, and
+ * says nothing about suppliers. Meanwhile the service's own architecture.md
+ * declares the supplier master IN scope ("Maintain a v1 internal suppliers
+ * master with AES-GCM-encrypted credentials"). Do not treat this fixture as
+ * evidence that the question is settled — it is what raised it.
  */
 public final class ProcurementDbFixtures {
 

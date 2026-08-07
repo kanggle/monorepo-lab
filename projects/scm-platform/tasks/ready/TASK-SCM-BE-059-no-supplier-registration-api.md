@@ -49,6 +49,59 @@ POST /api/v1/procurement/po  {supplierId: <신규>, …}  → SUPPLIER_NOT_FOUND
 
 ---
 
+# ⛔ PAUSE — HARDSTOP-09 (2026-08-07, 착수 시 스펙 확인에서 발견)
+
+**이 티켓을 착수하려다 멈췄다. 위 배경은 맞지만 그 다음 문장이 근거 없는 도약이었다.**
+
+착수 시 `Supplier.create(...)` 와 `SupplierRepository.save(...)` 가 **이미 있고**
+없는 것은 인바운드 표면 하나뿐임을 확인했다 — 여기까지는 티켓대로였다. 그런데 스펙
+세 곳이 서로 다른 말을 한다:
+
+| 출처 | 말하는 것 |
+|---|---|
+| `specs/services/procurement-service/architecture.md` L27 · L51-52 | 공급사 마스터는 **범위 안**이다 — *"**Maintain** a v1 internal `suppliers` master with **AES-GCM-encrypted credentials** (S6). v2 will migrate this responsibility to `supplier-service`."* |
+| `specs/contracts/http/procurement-api.md` | 공급사 엔드포인트 **0건** — 계약이 의도적으로 비워 둔 것으로 읽힌다 |
+| `ProcurementDbFixtures` Javadoc | *"deliberate trade-off **recorded in the task spec § Failure Scenarios**"* |
+
+🔴 **세 번째의 인용이 dangling 이다.** `TASK-SCM-INT-001` 의 § Failure Scenarios 를 열면
+A(Docker fix 실패) · B(크로스프로젝트 소비가 wms 의존) · C(nightly 자원 비용) **셋뿐**이고
+공급사 픽스처 얘기는 **한 줄도 없다.** 즉 "의도적 v1 결정" 이라는 주장은 **출처가 없다** —
+추론이 주석 안에서 인용으로 굳었다.
+
+⇒ **마스터는 범위 안인데 채울 길이 없고, 계약은 비어 있으며, 비어 있는 이유는 기록되지
+않았다.** 이 상태에서는 엔드포인트를 추가하는 것도, 추가하지 않는 것도 어느 스펙의 승인도
+받지 못한다.
+
+**그리고 "그냥 만들면 되는" 일이 아니다** — 마스터는 S6 로 **암호화된 공급사 자격증명**을
+보유하므로(`SupplierCredentialsEncryptor` 실재) 등록 API 는 곧 *"그 자격증명을 누가 어떤
+경로로 넣는가"* 를 정하는 일이고, `PROJECT.md` 가 v2 `supplier-service` 에 배정한 **이관
+경계를 선점**한다.
+
+```
+[VIOLATION] HARDSTOP-09: Task `TASK-SCM-BE-059` requires an architecture decision
+(cross-service contract — v1 공급사 마스터가 쓰기 표면을 갖는가, 그리고 S6 암호화
+자격증명을 어떤 권한 경로로 받는가) that is not documented in
+`projects/scm-platform/specs/services/procurement-service/architecture.md` or any ADR.
+[WHY] Architecture decisions made implicitly during implementation produce code that later
+cannot be defended against "why was this chosen" review questions — and shape every
+downstream task that builds on the same service. 여기서는 v2 `supplier-service` 이관
+경계와 자격증명 취급을 선점한다.
+[REMEDIATION] Choose one:
+  2. 결정이 중대하므로(계약 표면 + 자격증명 + v2 이관 경계) ADR 에 기록하고 ACCEPTED 까지
+     PAUSE — `projects/scm-platform/docs/adr/ADR-001-supplier-master-write-surface.md`
+     를 이 PR 에서 **Proposed** 로 제출했다. A/B/C 와 각각의 대가가 그 안에 있다.
+[REFERENCE] CLAUDE.md § Layer Rules + platform/architecture-decision-rule.md
+```
+
+**해제 조건**: `ADR-SCM-001 ACCEPTED` + A/B/C 중 선택.
+
+🔵 **아래 Goal·AC 는 A 안을 전제하고 쓰여 있다** — 그 전제가 ADR 의 결론을 선취하고
+있었다. 선택된 안에 맞춰 다시 쓸 것. C(부재를 명시적 결정으로 승격)를 고르면 이 티켓은
+**closed-as-decided** 이고, 그때도 픽스처의 dangling 인용 교체와 architecture.md 명문화는
+해야 한다(안 하면 이 조사가 또 반복된다).
+
+---
+
 # Goal
 
 공급사를 **API 로** 등록할 수 있다. 그 결과 `seed-scm.sh` 의 `dbexec` 가 사라지고
@@ -73,6 +126,11 @@ POST /api/v1/procurement/po  {supplierId: <신규>, …}  → SUPPLIER_NOT_FOUND
 
 # Acceptance Criteria
 
+- [ ] **AC-0 (결정 — 선행 게이트)** — `ADR-SCM-001` 의 A/B/C 중 하나가 **ACCEPTED** 되어야
+      아래 AC 를 착수할 수 있다. 🔴 제안자가 자기 ADR 을 승인할 수 없고, 맨 "진행" 은
+      승인이 아니다(`platform/architecture-decision-rule.md § The ACCEPTED Gate`).
+      🔵 **어느 안이든 공통으로 해야 하는 것 둘**: (a) `ProcurementDbFixtures` Javadoc 의
+      **없는 절을 가리키는 인용** 교체 (b) `architecture.md` 에 결정 명문화
 - [ ] **AC-1 (계약 우선)** — `specs/contracts/` 에 공급사 생성/조회 계약이 있고,
       필드·에러코드가 기존 조달 계약의 규약(flat `{code,message,details?,timestamp}`)을 따른다
 - [ ] **AC-2 (생성)** — 인증된 운영자 토큰으로 공급사를 생성할 수 있고, 그 id 로
