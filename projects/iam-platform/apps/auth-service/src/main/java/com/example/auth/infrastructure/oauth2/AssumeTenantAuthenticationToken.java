@@ -28,6 +28,7 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
     private final String selectedTenantType;
     private final List<String> orgScope;
     private final DelegatedScope delegatedScope;
+    private final String subjectAccountId;
 
     /**
      * Converter-side constructor — the selected tenant_type is not yet known at
@@ -89,6 +90,36 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
                                            String selectedTenantType,
                                            List<String> orgScope,
                                            DelegatedScope delegatedScope) {
+        this(clientPrincipal, subjectToken, subjectTokenType, selectedTenantId,
+                selectedTenantType, orgScope, delegatedScope, null);
+    }
+
+    /**
+     * Provider-side constructor (TASK-MONO-515, ADR-MONO-060 option A) — additionally
+     * carries the {@code subjectAccountId}: the account UUID the provider read out of
+     * the <b>validated</b> subject token. It rides the same
+     * {@code getAuthorizationGrant()} copy path as {@code orgScope} so
+     * {@link TenantClaimTokenCustomizer} can set the assumed token's {@code sub} to it.
+     *
+     * <p><b>Why it has to travel this way.</b> The token-exchange principal is the
+     * <i>client</i> ({@code platform-console-web}), so the customizer's usual source for
+     * the account — the principal's {@code details} map — is structurally empty on this
+     * grant. That is exactly why {@code alignSubToAccountId} took its "graceful net-zero"
+     * branch here and the assumed token's {@code sub} stayed the client id, in violation
+     * of {@code platform/contracts/jwt-standard-claims.md} § {@code sub} (account UUID,
+     * required, immutable across all platforms). The account identity was never missing —
+     * the provider had already validated it — it simply had no route to the customizer.
+     *
+     * <p>{@code null} only on the converter-side token (the provider resolves it).
+     */
+    public AssumeTenantAuthenticationToken(Authentication clientPrincipal,
+                                           String subjectToken,
+                                           String subjectTokenType,
+                                           String selectedTenantId,
+                                           String selectedTenantType,
+                                           List<String> orgScope,
+                                           DelegatedScope delegatedScope,
+                                           String subjectAccountId) {
         super(Collections.emptyList());
         this.clientPrincipal = clientPrincipal;
         this.subjectToken = subjectToken;
@@ -97,6 +128,7 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
         this.selectedTenantType = selectedTenantType;
         this.orgScope = orgScope;
         this.delegatedScope = delegatedScope;
+        this.subjectAccountId = subjectAccountId;
         setAuthenticated(false);
     }
 
@@ -153,5 +185,16 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
      */
     public DelegatedScope getDelegatedScope() {
         return delegatedScope;
+    }
+
+    /**
+     * TASK-MONO-515 (ADR-MONO-060 option A) — the account UUID extracted from the
+     * <b>validated</b> subject token (the operator's base GAP OIDC access token). This
+     * is the value the assumed token's {@code sub} must carry: it is the same account
+     * the assignment gate was keyed on, so no new trust is introduced by using it as
+     * the subject. {@code null} on the converter-side token.
+     */
+    public String getSubjectAccountId() {
+        return subjectAccountId;
     }
 }
