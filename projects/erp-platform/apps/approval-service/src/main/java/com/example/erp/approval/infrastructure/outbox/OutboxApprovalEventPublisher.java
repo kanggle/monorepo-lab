@@ -25,14 +25,31 @@ import org.springframework.stereotype.Component;
  * forwards the row to Kafka asynchronously; downstream consumers dedupe on the
  * envelope {@code eventId} (at-least-once).
  *
- * <p><b>Wire-shape preserved.</b> The envelope is the EXACT 7-field shape the
- * previous {@code BaseEventPublisher} path emitted —
- * {@code {eventId, eventType, source, occurredAt, schemaVersion, partitionKey,
- * payload}}, {@code source = "erp-platform-approval-service"}, every payload
- * field/order + every NON_NULL omission unchanged — so {@code erp.approval.*}
- * consumers are unaffected. The only change: the envelope {@code eventId} now
- * equals the {@code approval_outbox} PK (both UUIDv7) so the Kafka {@code eventId}
- * header matches the payload.
+ * <p><b>Envelope conforms to the contract</b>
+ * ({@code specs/contracts/events/erp-approval-events.md} § Envelope,
+ * TASK-ERP-BE-043). This publisher inherited a 7-field shape
+ * ({@code {eventId, eventType, source, occurredAt, schemaVersion, partitionKey,
+ * payload}}) that the contract never declared: the contract has always specified
+ * top-level {@code tenantId}, {@code aggregateType} ("{@code aggregateType} is
+ * {@code ApprovalRequest} on <b>every</b> approval event") and {@code aggregateId},
+ * and both read-model consumers ({@code ApprovalEventEnvelope.isValid()},
+ * {@code DelegationEventEnvelope.isValid()}) require the top-level
+ * {@code aggregateId}. Every {@code erp.approval.*} message therefore routed
+ * straight to {@code .DLT} — unobservable until TASK-ERP-BE-042 started the relay
+ * and TASK-ERP-BE-041 unblocked submit.
+ *
+ * <p>This is the <b>same defect the sibling already fixed</b>: TASK-ERP-BE-032
+ * corrected the identical 7-field omission in
+ * {@code OutboxMasterdataEventPublisher} ("rejected every real event to
+ * {@code .DLT}") and the approval twin was never brought along. The sourcing rule
+ * here is copied from it verbatim — {@code tenantId} off the payload,
+ * {@code aggregateType}/{@code aggregateId} off the call — so the two producers now
+ * emit one shape from one rule. {@code traceId} stays deferred in v1 (the relay
+ * does not propagate W3C trace context; consumers treat it as optional).
+ *
+ * <p>{@code partitionKey} (= {@code aggregateId}) and the envelope {@code eventId}
+ * (= the {@code approval_outbox} PK, both UUIDv7) are unchanged, as is every
+ * payload field/order and every NON_NULL omission.
  */
 @Component
 public class OutboxApprovalEventPublisher implements ApprovalEventPublisher {
@@ -160,9 +177,8 @@ public class OutboxApprovalEventPublisher implements ApprovalEventPublisher {
     }
 
     /**
-     * Wrap {@code payload} in the canonical 7-field envelope (preserved from the
-     * v1 {@code BaseEventPublisher} path), serialise it, and persist a pending
-     * {@code approval_outbox} row in the caller's transaction. The generated
+     * Wrap {@code payload} in the contract envelope, serialise it, and persist a
+     * pending {@code approval_outbox} row in the caller's transaction. The generated
      * {@link UuidV7} doubles as the envelope {@code eventId} and the row PK;
      * {@code partition_key = aggregateId} (the v1 Kafka key).
      */
@@ -177,6 +193,13 @@ public class OutboxApprovalEventPublisher implements ApprovalEventPublisher {
         envelope.put("source", SOURCE);
         envelope.put("occurredAt", occurredAt.toString());
         envelope.put("schemaVersion", SCHEMA_VERSION);
+        // TASK-ERP-BE-043 — the three contract fields this publisher had been
+        // omitting. Sourced exactly as OutboxMasterdataEventPublisher sources them
+        // (TASK-ERP-BE-032), so the two producers now emit ONE envelope shape from
+        // ONE rule rather than two shapes that happened to share five keys.
+        envelope.put("tenantId", payload.get("tenantId"));
+        envelope.put("aggregateType", aggregateType);
+        envelope.put("aggregateId", aggregateId);
         envelope.put("partitionKey", aggregateId);
         envelope.put("payload", payload);
 
