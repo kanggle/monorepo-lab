@@ -8,7 +8,7 @@ Federation Hardening E2E nightly 가 **2026-07-31 이후 매일** 빨갛다 — 
 
 # Status
 
-review
+done
 
 # Task Tags
 
@@ -151,8 +151,23 @@ Federation Hardening nightly 가 `main` 에서 초록이다. 그리고 **7일간
       `wms-inbound-service-1|` 0건 / 빨강 500건) — 컴포즈 로그 덤프는 **실패 시에만** 돈다.
       대조군이 계측기에 오염돼 있었다([[feedback_control_set_contaminated_by_the_instrument]]).
       별개로 1406 은 `auth-service` 가 내는 것이라 ASN 읽기 경로와 무관하다
-- [ ] **AC-4 (수정 + 연속 초록)** — 수정 후 nightly **연속 2회** 초록. 결정론적 결함이므로
-      1회로도 강한 증거지만, 2회가 인프라 잡음과 갈라 준다 ⇒ **머지 후 확인 필요**
+- [x] **AC-4 (수정 + 연속 초록) — 충족.** 수정(`c4e3d86fb`) 이후 `workflow_dispatch` 로 2회:
+      | run | 결과 | 대상 스펙 |
+      |---|---|---|
+      | `31146470201` | **21 passed** (완전 초록) | ✅ |
+      | `31147632427` | 20 passed + **1 flaky** (workflow=success) | ✅ |
+
+      🔴 **초록의 개수가 아니라 그 스펙이 돌았는지를 확인했다.** 초록 실행에서는 통과 스펙명을
+      찍지 않아 `grep 'scm-inbound-expected-loop'` 이 **0건**이었다 — 이것을 부재로 읽지 않고
+      **모집단 산술**로 확정했다: 빨강·초록 모두 `Running 21 tests` 를 수집했고, 빨강은
+      1 failed + 20 passed, 첫 초록은 21 passed ⇒ 실패하던 그 테스트가 통과했다.
+      마지막 초록이 2026-07-30 이었으므로 **8일 만의 회복**이다.
+
+      🔵 **2회차의 `1 flaky` 는 이 결함이 아니다** — `tenant-switch-rescope.spec.ts:106` 이
+      `browserContext.close: Protocol error (Target.disposeBrowserContext)` 로 1차 실패 후
+      재시도 통과했다(브라우저 teardown). 대상 스펙은 두 실행 모두 깨끗했다.
+      **3실행 중 1회만** 관측(빨강 0 / 1회차 0 / 2회차 5줄) — 한 번은 모집단이 아니므로
+      티켓을 만들지 않고 첫 데이터포인트로만 남긴다. 재발하면 그때 센다
 - [x] **AC-5 (재발 방지 — PR 타임 가드)** *(착수 중 추가)* — nightly 전용 소비자가 계약을
       읽는데 PR 타임에 그걸 묶어 두는 것이 없었다. `AsnControllerSliceTest` 에
       **federation 리더가 매칭하는 세 이름**(`$.content`, 행의 `source`/`status`)을 고정하는
