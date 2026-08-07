@@ -54,6 +54,15 @@ if ! SEED_TOKEN="$(operator_token demo-corp)"; then
 fi
 export SEED_TOKEN
 
+# 🔴 위 `wait_http` 는 **엣지**만 잰다. 그것만 믿고 진행했더니 2026-08-07 `demo-up.sh scm`
+# 직후 8건이 전부 500 이었고, 컨테이너가 healthy 가 된 뒤 같은 스크립트를 재실행하니
+# 실패 0 으로 수렴했다 — 시드가 아니라 게이트가 틀렸다. 세 백엔드를 **각각** 본다.
+scm_ready=1
+wait_backend "procurement-service"         "$SCM/api/v1/procurement/po?page=0&size=1"          || scm_ready=0
+wait_backend "demand-planning-service"     "$SCM/api/v1/demand-planning/suggestions?size=1" 60 || scm_ready=0
+wait_backend "inventory-visibility-service" "$SCM/api/v1/inventory-visibility/snapshot?size=1" 60 || scm_ready=0
+[ "$scm_ready" = "1" ] || { seed_summary; exit $?; }
+
 # --- 데모 고정 식별자 (랜덤 금지 — 2회차가 "두 배"가 된다) --------------------
 SUPPLIER_CODE="SUP-DEMO-01"
 SKU_A="SKU-DEMO-A1"

@@ -268,6 +268,9 @@ dbquery() {
 # --- 대기 --------------------------------------------------------------------
 # demo-up.sh 는 `up -d` 로 끝난다 — 여기 도달했을 때 앱이 아직 부팅 중일 수 있다.
 # 시드가 "연결 거부" 로 실패하고 데모가 비는 것이 이 저장소의 반복 실패 모드다.
+#
+# 🔴 `wait_http` 는 **엣지 준비성**만 잰다. 뒤의 백엔드에 대해서는 아무것도 증명하지
+# 않는다 — 아래 `wait_backend` 를 반드시 함께 쓸 것.
 wait_http() {
   local url="$1" timeout="${2:-180}" i
   local host; host="$(printf '%s' "$url" | sed -E 's#^https?://([^/]+).*#\1#')"
@@ -279,6 +282,35 @@ wait_http() {
     case "${sc:-000}" in 2??|30?|401|403) return 0 ;; esac
     sleep 5
   done
+  return 1
+}
+
+# wait_backend <라벨> <절대 URL> [초] — **인증된** 2xx 를 기다린다.
+#
+# 🔴 왜 `wait_http` 만으로는 부족한가 (이 저장소가 **세 도메인에서 각각** 물렸다)
+#
+# `wait_http` 는 401/403 을 "살아 있다" 로 센다. 게이트웨이 자신에 대해서는 맞는
+# 술어지만 **뒤의 서비스에 대해서는 아무것도 증명하지 않는다** — 토큰 없는 요청은
+# 게이트웨이의 시큐리티 필터가 끊어 버려서 백엔드에 닿지도 않기 때문이다.
+#
+#   erp (2026-08-06, 볼륨 초기화 후 첫 기동)
+#     wait_http → 통과(401) → POST /api/erp/masterdata/job-grades → 500
+#     게이트웨이 로그 `Connection refused: masterdata-service`, masterdata 로그 에러 0건
+#     ⇒ 요청이 **도달조차** 하지 않았다.  → 16건 전부 실패
+#   scm · wms (2026-08-07, `demo-up.sh` 직후)
+#     같은 지문으로 각각 **8건 / 2건 전부 500**. 컨테이너가 healthy 가 된 뒤 같은
+#     스크립트를 재실행하면 실패 0 으로 수렴 ⇒ 시드가 아니라 **게이트가 틀렸다**.
+#
+# 그래서 **토큰을 얻은 뒤** 인증된 GET 이 2xx 를 낼 때까지 다시 기다린다.
+# 🔵 서비스를 **각각** 확인할 것 — 하나만 보고 나머지를 추정하면 같은 함정을 한 겹
+# 아래에서 반복한다(그 도메인의 백엔드는 서로 다른 시점에 뜬다).
+wait_backend() {
+  local label="$1" url="$2" timeout="${3:-240}" i
+  for (( i=0; i<timeout; i+=5 )); do
+    http GET "$url" >/dev/null && return 0
+    sleep 5
+  done
+  seed_fail "$label 이 ${timeout}초 안에 인증된 요청에 2xx 를 내지 않았습니다 (마지막 HTTP $SEED_LAST_STATUS)"
   return 1
 }
 

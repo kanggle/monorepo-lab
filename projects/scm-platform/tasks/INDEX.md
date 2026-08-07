@@ -78,6 +78,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
+- `TASK-SCM-BE-059-no-supplier-registration-api.md` — filed 2026-08-07 (`TASK-MONO-510` 6회차 발굴). **공급사를 등록할 API 가 없다.** `POST /po` 가 `SUPPLIER_NOT_FOUND` 인데 저장소 전 컨트롤러에 suppliers 생성 매핑 **0건**이고, 이 프로젝트의 e2e 도 `ProcurementDbFixtures.insertActiveSupplier` 로 직접 DB 에 넣는다 ⇒ 데모 시드의 **유일한 직접-DB 항목**이 이것이다. 우회가 아니라 유일한 경로. 분석=Opus 5 / 구현 권장=Opus (계약 설계 + 픽스처 전환).
+- `TASK-SCM-BE-060-po-submit-depends-on-a-service-that-does-not-exist.md` — filed 2026-08-07 (`TASK-MONO-510` 6회차 발굴). **발주가 `DRAFT` 밖으로 못 나간다** — `submit` 이 `http://supplier-mock:9090` 을 실제 호출하는데 그 서비스가 **어느 compose 에도 없다**(`application.yml` 의 URL 로만 존재). 🔴 착수 전 **AC-0 결정 필요**(mock 추가 / 비동기화=ADR / 폴백 프로파일). 🔵 시드는 우회하지 않고 지문 기반 `⛔ 관측` 으로 남겼으므로 이 티켓이 닫히면 **시드는 한 줄도 안 고쳐도 초록이 된다**. 분석=Opus 5 / 구현 권장=Opus (상태 기계 + 결정).
+
 ## in-progress
 
 ## review
