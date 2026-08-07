@@ -348,6 +348,106 @@ returns the previously-stored ASN with the original receivedAt.
 
 ---
 
+## POST /api/procurement/suppliers
+
+Register a supplier in the v1 internal master. Initial status = `ACTIVE`.
+
+**Decision record:** `ADR-SCM-001` (ACCEPTED 2026-08-08, option A) — the v1 supplier
+master is an **operated** object, so it gets an operator-facing write surface rather
+than being filled by migrations. Before this endpoint existed, `POST /api/procurement/po`
+answered `SUPPLIER_NOT_FOUND` and there was **no** way to create the row through any
+API — the service's own e2e suite and the demo seed both wrote it with direct SQL.
+
+🔴 **Credentials are not part of this endpoint and there is no other v1 path that
+accepts them.** `supplier_credentials` / `SupplierCredentialsEncryptor` exist but have
+zero call sites (measured 2026-08-08), and `SupplierAdapterPort` never reads a
+credential — so **a supplier with no credentials is the normal v1 state**. Credential
+handling is deferred whole to the v2 `supplier-service` (ADR-SCM-001 ACCEPT rider).
+Do not add credential fields here; that decision belongs to v2.
+
+**Authorization:** OPERATOR actor (`roles ∋ {OPERATOR, ADMIN, SUPER_ADMIN}`) + `scm.write`.
+A BUYER-actor token → 403 `PERMISSION_DENIED`.
+
+**Headers:**
+- `Authorization: Bearer <token>` (required)
+- `Idempotency-Key: <string>` (required)
+- `Content-Type: application/json`
+
+**Request body:**
+```json
+{
+  "code": "SUP-ACME-001",
+  "name": "ACME Components Co.",
+  "contractStartedAt": "2026-01-01T00:00:00Z",
+  "contractExpiresAt": "2027-01-01T00:00:00Z"
+}
+```
+
+Validation:
+- `code` — required, ≤ 64 chars, `[A-Z0-9][A-Z0-9_-]*` (the **natural key**; unique
+  per tenant — DB UNIQUE `(tenant_id, code)`)
+- `name` — required, ≤ 200 chars
+- `contractStartedAt` / `contractExpiresAt` — optional ISO-8601 instants;
+  if both present, `contractExpiresAt` **must** be after `contractStartedAt`
+  → else 422 `VALIDATION_ERROR`
+
+**Response 201 (Created):**
+```json
+{
+  "data": {
+    "id": "9b1d4a8c-1f2c-7a90-b1d4-3e6f8a2c9d10",
+    "tenantId": "scm",
+    "code": "SUP-ACME-001",
+    "name": "ACME Components Co.",
+    "status": "ACTIVE",
+    "contractStartedAt": "2026-01-01T00:00:00Z",
+    "contractExpiresAt": "2027-01-01T00:00:00Z",
+    "createdAt": "2026-08-08T08:30:00Z",
+    "updatedAt": "2026-08-08T08:30:00Z"
+  },
+  "meta": { "timestamp": "2026-08-08T08:30:00Z" }
+}
+```
+
+**Idempotency — two different mechanisms, both required:**
+
+| Repeat | Result |
+|---|---|
+| Same `Idempotency-Key` + same payload | replayed **201**, no new row (S2, as every mutating endpoint here) |
+| **Different** `Idempotency-Key`, same `code` | **200 OK** with the existing record — *not* 201, and **no second row** |
+
+🔴 The second line is the one that matters for seeds and reruns, and it is why the
+response code differs: a caller that lost its idempotency key (a re-run seed, a fresh
+CI job) must converge, not duplicate. **Judge it by row count, not by the status
+line** — a naive "created" log on a 2xx made `seed-scm.sh` mis-report a replay as a
+creation once already.
+
+**Errors:** `IDEMPOTENCY_KEY_REQUIRED` (400), `IDEMPOTENCY_KEY_MISMATCH` (422),
+`VALIDATION_ERROR` (400/422), `PERMISSION_DENIED` (403), `TENANT_FORBIDDEN` (403),
+`UNAUTHORIZED` (401).
+
+---
+
+## GET /api/procurement/suppliers
+
+List suppliers (paginated, tenant-scoped).
+
+**Query:** `code` (exact, optional) · `status` (optional) · `page` (default 0) ·
+`size` (default 20, max 100).
+
+**Response 200:** `{ "data": [ <supplier>, … ], "meta": { "timestamp", "page", "size", "totalElements", "totalPages" } }`
+
+Element shape is identical to the 201 body's `data`.
+
+---
+
+## GET /api/procurement/suppliers/{supplierId}
+
+**Response 200:** `{ "data": <supplier>, "meta": { "timestamp" } }`
+**Errors:** `SUPPLIER_NOT_FOUND` (404 — also when the row belongs to another tenant).
+
+---
+
 ## Local management endpoints
 
 | Path | Auth | Description |

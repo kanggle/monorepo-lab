@@ -48,8 +48,29 @@ Supplier master. It MUST:
 
 - Issue, submit, acknowledge, confirm, cancel POs and process supplier-issued
   Advance Shipment Notices (ASN) — full state machine in § PO State Machine.
-- Maintain a v1 internal `suppliers` master with AES-GCM-encrypted credentials
-  (S6). v2 will migrate this responsibility to `supplier-service`.
+- Maintain a v1 internal `suppliers` master. **Operators create and read supplier
+  records through `/api/procurement/suppliers`** — the master is an *operated*
+  object, not a deployment artifact (`ADR-SCM-001`, ACCEPTED 2026-08-08, option A).
+  v2 will migrate this responsibility to `supplier-service`.
+  - 🔴 **Supplier credentials are out of scope in v1, deliberately.** This line
+    previously read *"with AES-GCM-encrypted credentials (S6)"*, which was true of
+    the **schema** and of nothing else. `supplier_credentials` and
+    `SupplierCredentialsEncryptor` exist and are correct, but as of 2026-08-08 they
+    have **zero call sites in the whole project** (measured: the encryptor is
+    referenced only from its own file; the table is never read or written), and
+    `SupplierAdapterPort.submitPurchaseOrder` never asks for a credential. The
+    master has therefore always held **no** credentials — that sentence described a
+    capability, not a behaviour.
+  - Consequently the v1 registration API accepts **no credential fields and opens no
+    ingest path**, and **a supplier without credentials is the normal v1 state**, not
+    an exception. Who supplies supplier credentials, and through which authorization
+    path, is deferred whole to the v2 `supplier-service` (`ADR-SCM-001` ACCEPT
+    rider). The encryptor and its table stay unchanged — what is absent is the path
+    that would fill them, not the ability to hold them.
+  - 🔵 Written down because its absence cost two separate investigations: a test
+    fixture asserted the missing endpoint was *"a deliberate trade-off recorded in
+    the task spec § Failure Scenarios"*, and the section it cited said nothing of the
+    kind — an inference had hardened into a citation.
 - Send POs to suppliers through the `SupplierAdapterPort` outbound port,
   carrying a stable `Idempotency-Key` so the supplier dedupes (S2).
 - Receive supplier callbacks through two webhook endpoints (PO ack, ASN

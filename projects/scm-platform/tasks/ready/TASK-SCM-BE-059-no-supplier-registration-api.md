@@ -160,19 +160,25 @@ v2 `supplier-service` 로 못박는다 ⇒ **v1 에는 자격증명 입력 경�
 - [x] **AC-0a (결정 게이트)** — ✅ **해제됨**. `ADR-SCM-001` 이 **A(자격증명 v2 유보)** 로
       ACCEPTED(2026-08-07, 소유자 정확형 intent). 공통 정리 (a) 픽스처 Javadoc 의 dangling
       인용 교체는 PR #3249 + 본 ACCEPT PR 이 완료
-- [ ] **AC-0b (결정 명문화 — 착수 첫 작업)** — `specs/services/procurement-service/architecture.md`
-      에 ADR-SCM-001 A 를 명문화한다. 🔴 **L51-52 를 그대로 두면 안 된다** — *"Maintain a v1
-      internal `suppliers` master with **AES-GCM-encrypted credentials** (S6)"* 는 자격증명
-      유보와 표면상 충돌한다. 적어야 하는 구분: **마스터는 자격증명을 보유할 능력을 유지하되,
-      v1 에는 그것을 채우는 경로가 없다**(취급 결정은 v2 `supplier-service`). 이 문장이
-      없으면 같은 조사가 세 번째로 반복된다 — 이 ADR 이 존재하는 이유가 정확히 그것이다
-- [ ] **AC-1 (계약 우선)** — `specs/contracts/` 에 공급사 생성/조회 계약이 있고,
-      필드·에러코드가 기존 조달 계약의 규약(flat `{code,message,details?,timestamp}`)을 따른다
+- [x] **AC-0b (결정 명문화) — 완료 (스펙 PR, 2026-08-08).** `architecture.md` L51-52 를
+      정정했다. 🔴 **원문이 표면상 충돌한 게 아니라 그냥 사실이 아니었다**(아래 AC-7 실측):
+      *"with AES-GCM-encrypted credentials (S6)"* 는 **스키마에만** 참이었다. 그래서 적은
+      구분은 "보유 능력은 유지 / 채우는 v1 경로 없음" + **왜 그 문장이 두 번의 조사를
+      낳았는지**까지다
+- [x] **AC-1 (계약 우선) — 완료 (스펙 PR, 2026-08-08).** `procurement-api.md` 에
+      `POST /suppliers` · `GET /suppliers` · `GET /suppliers/{id}` 를 기존 규약대로 추가.
+      🔵 **새 에러코드 0** — `SUPPLIER_NOT_FOUND`(404)·`SUPPLIER_INACTIVE`(422)가 이미 표에
+      있었다. 🔴 **AC-3 의 멱등을 계약이 두 갈래로 명시**한다: 같은 `Idempotency-Key`=201
+      replay / **다른 키 + 같은 `code`=200 + 행 증가 없음**. 시드 재실행·CI 재기동이 키를
+      잃는 경우가 실제 수렴 경로라서, 상태코드를 갈라 두지 않으면 판정이 불가능하다
 - [ ] **AC-2 (생성)** — 인증된 운영자 토큰으로 공급사를 생성할 수 있고, 그 id 로
       `POST /api/v1/procurement/po` 가 `SUPPLIER_NOT_FOUND` 없이 통과한다
 - [ ] **AC-3 (멱등)** — 같은 자연키(코드)로 두 번 호출하면 행이 하나다.
       🔴 **판정은 로그 라벨이 아니라 행 수로** 한다 — 멱등 replay 도 2xx 를 내므로
-      라벨만 보면 "생성" 이 두 번 찍힌다(`seed-scm.sh` 가 실제로 그렇게 오독했다)
+      라벨만 보면 "생성" 이 두 번 찍힌다(`seed-scm.sh` 가 실제로 그렇게 오독했다).
+      🔴 **`suppliers` 에 자연키가 없다** — 현재 UNIQUE 는 PK(`id`) 뿐이고 `name` 도
+      非유니크다(실측). 그래서 구현은 **`code` 컬럼 + `UNIQUE (tenant_id, code)` 마이그레이션**
+      을 먼저 넣어야 한다. 계약(AC-1)이 그 키를 `code` 로 고정해 뒀다
 - [ ] **AC-4 (테스트 전환)** — `ProcurementDbFixtures.insertActiveSupplier` 를 쓰던
       e2e 가 새 API 를 쓴다. 🔵 픽스처를 **지우기만 하지 말 것** — 남은 호출자를
       전수 grep 해서 옮긴다
@@ -182,11 +188,26 @@ v2 `supplier-service` 로 못박는다 ⇒ **v1 에는 자격증명 입력 경�
       (`assume demo-corp` → `SCM_OPERATOR`)이 그것을 **실제로 갖는지** 실측한다.
       🔴 wms 마스터 쓰기가 정확히 여기서 막혔다(`MASTER_WRITE` 를 아무도 못 받는다 —
       `TASK-MONO-514`) — 같은 함정을 반복하지 말 것
-- [ ] **AC-7 (자격증명 미보유가 정상 상태)** — ADR-SCM-001 rider 로 v1 공급사는 자격증명을
-      갖지 않는 것이 **예외가 아니라 정상**이다. `SupplierAdapterPort`(및 그 구현/호출부)가
-      자격증명 없는 공급사를 만났을 때의 동작을 **명시적으로 정의**하고 테스트로 고정한다.
-      🔴 **"아직 그런 행이 없어서 안 터진다" 는 판정이 아니다** — 새 엔드포인트가 만드는
-      공급사는 **전부** 그 상태이므로, 이 티켓이 그 행을 처음으로 정상 경로에 올린다
+- [x] **AC-7 (자격증명 미보유가 정상 상태) — 실측이 이 AC 를 없앴다 (2026-08-08).**
+      🔴🔴 **이 AC 의 전제가 틀렸고, 그 전제를 쓴 ADR 은 내가 썼다.** ADR § Consequences 의
+      *"자격증명 미보유 공급사에 대한 `SupplierAdapterPort` 의 동작을 정의해야 한다"* 는
+      **어댑터가 자격증명을 소비한다는 미검증 가정** 위에 서 있었다. 전수로 재니:
+
+      ```
+      SupplierCredentialsEncryptor   프로젝트 전체 참조 = 자기 파일뿐  (호출부 0건)
+      supplier_credentials 테이블    읽는 코드 0 · 쓰는 코드 0        (DDL 에만 존재)
+      SupplierAdapterPort            submitPurchaseOrder(PurchaseOrder, String)
+                                     — 자격증명 파라미터 자체가 없다
+      RestSupplierAdapter            credential|secret|apiKey 참조 0건
+      ```
+
+      ⇒ **정의할 새 동작이 없다.** "자격증명 미보유" 는 새로 생기는 상태가 아니라 이 서비스에
+      **지금까지 존재한 유일한 상태**다. 그래서 이 AC 는 *동작 정의*가 아니라 **그 사실을
+      문서에 못 박기**로 축소되고, 그건 AC-0b 에서 끝났다.
+      🔵 **rider 의 비용이 0 인 이유가 여기서 드러난다** — "자격증명은 v2 유보" 는 새 제약을
+      거는 것이 아니라 **이미 그러했던 현실을 명문화**한 것이다.
+      🔴 남는 실행 항목 하나: 구현이 자격증명 필드를 **받지 않는다**는 것을 유지 — 계약에
+      명시해 뒀으니(AC-1) 요청 DTO 에 필드를 더하지 말 것
 
 # Related Specs
 
