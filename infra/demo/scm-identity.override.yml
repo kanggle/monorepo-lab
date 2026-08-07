@@ -28,3 +28,19 @@ services:
   inventory-visibility-service:
     networks:
       - traefik-net
+
+  # ---------------------------------------------------------------------------
+  # supplier-mock (TASK-SCM-BE-060) — 데모 테넌트를 알려 준다.
+  #
+  # 🔴 왜 알려 줘야 하나: ack 웹훅(`SupplierAckWebhookRequest`)은 `tenantId` 를
+  # **필수**로 요구하는데, 제출 페이로드(`RestSupplierAdapter.toSupplierPayload`)는
+  # poId/poNumber/supplierId/currency/totalAmount/lines 만 보낸다. 실제 공급사라도
+  # 그 값을 알 길이 없다 — 그것은 구매자 쪽 파티션 키다. 그래서 대역 밖으로 주입한다.
+  #
+  # 데모 시드는 `demo-corp` 를 assume 한 운영자 토큰으로 PO 를 만들므로 그 PO 들의
+  # `tenant_id` 는 `demo-corp` 다. 프로젝트 기본값(`scm`)을 그대로 두면 ack 가
+  # **다른 테넌트의 PO 를 찾다가** 실패하고 PO 는 SUBMITTED 에 멈춘다.
+  # ---------------------------------------------------------------------------
+  supplier-mock:
+    environment:
+      ACK_TENANT_ID: ${SUPPLIER_MOCK_ACK_TENANT_ID:-demo-corp}

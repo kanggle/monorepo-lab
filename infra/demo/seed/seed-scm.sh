@@ -219,15 +219,67 @@ po_status() {
     && printf '%s' "$SEED_LAST_BODY" | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4
 }
 
+# po_rank <status> — PO 상태의 진행 순서. 🔴 `= "$want"` 로 판정하면 안 되는 이유:
+# supplier-mock 이 붙으면 **ack 콜백이 비동기로 도착**해 submit 직후 상태가 이미
+# ACKNOWLEDGED 다(실측 2026-08-07). 정확 일치 술어는 그것을 실패로 세는데, 그건
+# 앞으로 나아간 것이지 실패가 아니다. `>=` 로 판정한다.
+# CANCELED/CLOSED 는 진행이 아니라 종료라 순서에 넣지 않는다(아래 -1 로 걸러진다).
+po_rank() {
+  case "$1" in
+    DRAFT) echo 0 ;;  SUBMITTED) echo 1 ;;  ACKNOWLEDGED) echo 2 ;;
+    CONFIRMED) echo 3 ;;  PARTIALLY_RECEIVED) echo 4 ;;  RECEIVED) echo 5 ;;
+    SETTLED) echo 6 ;;  CLOSED) echo 7 ;;
+    *) echo -1 ;;   # CANCELED · 빈 값 · 미지의 상태 — 전부 "도달 못 함"
+  esac
+}
+
+# po_await_rank <po> <want> <초> — 상태가 want 이상이 될 때까지 기다린다.
+# ack 는 공급사가 **되돌려 부르는** 것이라 즉시 오지 않는다.
+po_await_rank() {
+  local po="$1" want="$2" timeout="${3:-30}" i now
+  for (( i=0; i<timeout; i+=2 )); do
+    now="$(po_status "$po")"
+    [ "$(po_rank "$now")" -ge "$(po_rank "$want")" ] && { printf '%s' "$now"; return 0; }
+    sleep 2
+  done
+  printf '%s' "$now"
+  return 1
+}
+
+po_hist_count() {
+  dbquery "$PG_C" psql "$PG_DB" "$PG_U" "$PG_P" \
+      "select count(*) from po_status_history where po_id = '$1';" 2>/dev/null | tr -d ' \r\n'
+}
+
 po_transition() {
   local label="$1" po="$2" verb="$3" want="$4"
   [ -n "$po" ] || { seed_fail "$label — PO id 가 비어 있다"; return 1; }
+  # 🔴 상태코드로는 "이 실행이 전이시켰나" 를 못 가른다. 고정 `Idempotency-Key` 를
+  # 쓰므로 2회차의 confirm 도 서버가 **저장된 2xx 를 재생**한다(BE-445 규약) — 실제로
+  # 재실행마다 `전이` 로 찍혔다. 이 시드가 PO 생성에서 이미 쓴 해법을 그대로 쓴다:
+  # 판정은 **산출물 수량**(전이 이력 행 수)으로 한다.
+  local hist_before hist_after
+  hist_before="$(po_hist_count "$po")"
   http POST "$SCM/api/v1/procurement/po/$po/$verb" '{}' -H "Idempotency-Key: seed-$po-$verb"
   local st body; st="$SEED_LAST_STATUS"; body="$SEED_LAST_BODY"
+  hist_after="$(po_hist_count "$po")"
 
   local now; now="$(po_status "$po")"
-  if [ "$now" = "$want" ]; then
-    SEED_CREATED=$((SEED_CREATED + 1)); seed_log "전이  $label (status=$now 확인)"
+  if [ "$(po_rank "$now")" -ge "$(po_rank "$want")" ] && [ "$(po_rank "$want")" -ge 0 ]; then
+    # 이력 행이 늘었을 때만 "이 실행이 전이시켰다" 이다.
+    local did_post=0
+    [ "${hist_after:-0}" -gt "${hist_before:-0}" ] 2>/dev/null && did_post=1
+    if [ "$did_post" = "1" ]; then
+      SEED_CREATED=$((SEED_CREATED + 1))
+      if [ "$now" = "$want" ]; then
+        seed_log "전이  $label (status=$now 확인)"
+      else
+        seed_log "전이  $label (status=$now — 전이 후 공급사 ack 콜백이 $want 를 지나갔다)"
+      fi
+    else
+      SEED_EXISTING=$((SEED_EXISTING + 1))
+      seed_log "존재  $label (status=$now — 이미 $want 이상, 멱등 · HTTP $st)"
+    fi
     return 0
   fi
 
@@ -253,11 +305,18 @@ fi
 if create_po "발주 확정 (CONFIRMED)" "seed-scm-po-0003" "$SKU_B"; then
   CONFIRM_PO="$PO_ID"
   po_transition "SCM-PO-0003 → SUBMITTED" "$CONFIRM_PO" "submit" "SUBMITTED"
-  # confirm 은 SUBMITTED 에서만 유효하다 — submit 이 막힌 스택에서는 시도 자체가 무의미하다.
-  if [ "$(po_status "$CONFIRM_PO")" = "SUBMITTED" ]; then
+  # 🔴 confirm 의 선행은 SUBMITTED 가 **아니라 ACKNOWLEDGED** 다 — `PoStatusMachine`
+  # 이 OPERATOR 에게 `ACKNOWLEDGED → CONFIRMED` 만 허용한다(SUBMITTED → ACKNOWLEDGED
+  # 는 SUPPLIER 전이, 즉 ack 웹훅). 이전 주석은 "confirm 은 SUBMITTED 에서만 유효"
+  # 라고 적었는데 상태 기계를 안 열어 보고 쓴 것이었다.
+  # ack 는 되돌아오는 호출이라 즉시 오지 않는다 — 기다린 뒤에 판정한다.
+  ACK_ST="$(po_await_rank "$CONFIRM_PO" "ACKNOWLEDGED" 40)"
+  if [ "$(po_rank "$ACK_ST")" -ge "$(po_rank ACKNOWLEDGED)" ]; then
     po_transition "SCM-PO-0003 → CONFIRMED" "$CONFIRM_PO" "confirm" "CONFIRMED"
   else
-    seed_log "생략  SCM-PO-0003 → CONFIRMED — 선행 SUBMITTED 가 없다(위 관측 참조)"
+    seed_log "관측  SCM-PO-0003 → CONFIRMED 생략 — 40초 안에 공급사 ack 가 오지 않았다 (status=$ACK_ST)"
+    seed_log "      confirm 의 선행은 ACKNOWLEDGED 다. ack 는 supplier-mock 이 되돌려 부르는 호출이므로,"
+    seed_log "      그 컨테이너가 없거나 웹훅 시크릿이 어긋나면 여기서 멈춘다(scm-platform-supplier-mock 로그를 볼 것)"
   fi
 fi
 

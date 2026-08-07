@@ -208,6 +208,58 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      supplier-mock:
+        condition: service_healthy
+    networks:
+      - scm-platform-net
+
+  # ---------------------------------------------------------------------------
+  # supplier-mock — TASK-SCM-BE-060.
+  #
+  # `application.yml` has shipped `${SUPPLIER_MOCK_BASE_URL:http://supplier-mock:9090}`
+  # since procurement-service was written, and **nothing was ever wired to that
+  # name** — so `POST /po/{id}/submit` failed at the adapter and every PO stayed
+  # in DRAFT. The seam was externalised and left empty; this fills it. A wiring
+  # gap, not a design change (which is why it needed no ADR).
+  #
+  # 🔴 It also plays the supplier's ACK CALLBACK, and that is not optional:
+  # `PoStatusMachine` makes SUBMITTED → ACKNOWLEDGED a **SUPPLIER** transition and
+  # CONFIRMED reachable only from ACKNOWLEDGED. A mock that answered the submit
+  # call and stopped would park every PO in SUBMITTED.
+  #
+  # Stdlib-only python mounted read-only — no image to build, no dependency to
+  # keep current. The rationale and the two measured hazards (the ack races the
+  # submit transaction; the ack needs a `tenantId` the submit payload never
+  # sends) are in the script's own header.
+  # ---------------------------------------------------------------------------
+  supplier-mock:
+    image: python:3.12-alpine
+    container_name: scm-platform-supplier-mock
+    restart: unless-stopped
+    expose:
+      - "9090"
+    environment:
+      PORT: "9090"
+      ACK_ENABLED: ${SUPPLIER_MOCK_ACK_ENABLED:-true}
+      ACK_TARGET_URL: ${SUPPLIER_MOCK_ACK_TARGET_URL:-http://procurement-service:8080/api/procurement/webhooks/supplier-ack}
+      # Must match procurement-service's `SUPPLIER_WEBHOOK_SECRET` — same dev
+      # default, so an override has to be applied to BOTH or the ack 401s.
+      WEBHOOK_SECRET: ${SUPPLIER_WEBHOOK_SECRET:-scm-supplier-webhook-secret}
+      # 🔴 Told out of band because the submit payload does not carry it — see
+      # the script header. The demo overrides this to its own tenant.
+      ACK_TENANT_ID: ${SUPPLIER_MOCK_ACK_TENANT_ID:-scm}
+    volumes:
+      - ./infra/supplier-mock/supplier_mock.py:/app/supplier_mock.py:ro
+    command: ["python", "-u", "/app/supplier_mock.py"]
+    healthcheck:
+      # alpine python images carry no curl/wget — probe with the interpreter
+      # that is guaranteed present.
+      test: ["CMD", "python", "-c",
+             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:9090/health', timeout=3).status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
     networks:
       - scm-platform-net
 
