@@ -57,6 +57,25 @@ Open a new account. Initial status `PENDING_KYC`.
 409 `IDEMPOTENCY_KEY_CONFLICT`, 422 `CURRENCY_MISMATCH` (unsupported currency),
 403 `TENANT_FORBIDDEN`.
 
+## GET /api/finance/accounts — deliberately absent (v1)
+
+There is **no account list / search endpoint**, and TASK-FIN-BE-068 decided not to
+add one. Recorded here rather than left silent, with what it costs:
+
+| | measured 2026-08-07 |
+|---|---|
+| console screens affected | **1** (`/finance/accounts` — the operator types an accountId; the screen already documents this as "honest finance constraint: v1") |
+| accounts an operator would need ids for, in the demo stack | **2** (both printed by `infra/demo/seed/seed-finance.sh`) |
+| repository methods that could back a list today | **0** — `AccountRepository` exposes no `findAll` / `Page` method at all |
+
+The blocker is not wiring. `owner_ref` is **encrypted at rest** (F7 —
+`AccountRepositoryImpl` encrypts on write and decrypts on read, so the column holds
+ciphertext only), so a list that supports the one filter an operator would actually
+want — "find this customer's account" — needs a blind index or searchable-encryption
+scheme. That is an architecture decision (ADR territory), not an omission, and it is
+independent of funding. A list with no owner search would be a tenant-wide dump of
+opaque ids, which is not what the screen needs.
+
 ## GET /api/finance/accounts/{id}
 
 **200**: `{ "data": { "accountId", "status", "currency", "kycLevel",

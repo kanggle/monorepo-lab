@@ -57,7 +57,7 @@ public class ComplianceFailureRecorder {
                         + "\",\"screeningRef\":\"" + screeningRef + "\"}",
                 "sanction/watchlist match", now));
         eventPublisher.publishTransactionFailed(failed);
-        eventPublisher.publishSanctionHit(accountId, failed.getId(),
+        eventPublisher.publishSanctionHit(tenantId, accountId, failed.getId(),
                 screeningRef, queued.getId());
     }
 

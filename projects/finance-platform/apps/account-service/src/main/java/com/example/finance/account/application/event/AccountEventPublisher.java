@@ -73,6 +73,11 @@ public interface AccountEventPublisher {
 
     void publishTransactionReversed(Transaction reversal);
 
-    void publishSanctionHit(String accountId, String transactionId,
+    /**
+     * {@code tenantId} is passed explicitly because this is the one publish with no
+     * aggregate to read it from — the sanction path records against ids only
+     * (TASK-FIN-BE-068, which made every envelope carry its tenant).
+     */
+    void publishSanctionHit(String tenantId, String accountId, String transactionId,
                             String screeningRef, String queuedReviewId);
 }
