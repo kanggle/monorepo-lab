@@ -109,10 +109,71 @@ assume 후 토큰     sub = platform-console-web                   (클라이언
 wms/scm/finance 에서 `sub` 를 사람 식별자로 쓰는 지점을 전수로 세라 — 모집단을 물려받지
 말고 다시 세는 것. B 를 고르는 근거는 그 숫자에서 나온다.
 
+# ✅ AC-0 재측정 (2026-08-07) — 핵심 전제 확인, **모집단은 티켓보다 하나 넓다**
+
+## 핵심 주장을 토큰에서 직접 확인했다
+
+```
+assume 토큰 (demo-corp)   sub = "platform-console-web"
+                          aud = "platform-console-web"
+```
+
+⇒ **`sub` 가 사람이 아니라 acting 클라이언트 id 다.** 티켓의 ③ 그대로다. 어느 운영자가
+로그인하든 erp 는 같은 `actorId` 를 본다.
+
+그리고 그 `actorId` 가 어디서 오는지도 공유 라이브러리에서 확인했다 —
+`libs/java-security-servlet` `ActorClaims.from(jwt)`: `String accountId = jwt.getSubject();`
+⇒ **모든 도메인의 `accountId` 가 곧 `sub`** 다(도메인별 파생이 아니다).
+
+## 모집단 전수 — `sub` 를 **사람 식별자로 쓰는** 지점
+
+🔴 원시 grep 카운트(`actor.accountId()|actorId`)는 erp 78 · fan 38 · finance 5 · scm 13 ·
+**wms 733** 이 나왔다. **이건 대리지표다** — wms 의 733 은 전부 `WebhookInbox`
+(이벤트 인박스)로 **사람과 무관**하다. 그래서 "조회 필터 / 동등 비교 업무규칙" 두 부류로
+분류해서 다시 셌다:
+
+| 도메인 | 조회 필터 | 동등 비교 업무규칙 | 계 |
+|---|---|---|---|
+| **erp** | `ApprovalApplicationService.inbox → findInbox(tenantId, actorId)` · `notification QueryInboxUseCase.findInbox(tenantId, recipientId)` | 자기결재 금지 | **3** |
+| **fan** | `findFeedForFan` · `findByAuthor` · `notification findInbox` | `ChangePostStatus`/`UpdatePost` 저자 판정 · self-follow 금지 | **6** |
+| **finance** | 0 | 0 | **0** |
+| **scm** | 0 | 0 | **0** |
+| **wms** | 0 | 0 | **0** |
+
+finance·scm·wms 는 **0건** 이다(AC-0 이 요구한 대로 "0건" 이라고 적는다).
+
+## 🔴🔴 신규 — 결재함이 **하나가 아니라 둘**이다
+
+티켓은 `ApprovalApplicationService.inbox` 만 지목했다. `erp-platform` 의
+**notification-service 도 같은 모양**이다:
+
+```java
+// NotificationInboxController
+private String recipient(Jwt jwt) { return jwt.getSubject(); }   // ← sub
+queryInbox.list(tenantId, recipientId, ...)                       // ← 사람 키 필터
+```
+
+⇒ assume 토큰으로 열면 이 인박스도 **구조적으로 같은 운명**이다. AC-1 의 결정과 AC-2 의
+구현 범위는 **erp 인박스 2개**를 대상으로 해야 한다. 하나만 고치면 형제가 낙오한다.
+
+🔵 **fan 의 6건은 이 결함의 사정권이 아니다** — 팬은 자기 base 토큰으로 로그인하므로
+`sub` 가 실제 계정이다. 영향받는 것은 **assume 토큰으로 도달하는 표면**뿐이다.
+그 구분을 하지 않으면 모집단이 9건으로 부풀어 결정이 틀린 크기로 내려간다.
+
+## ⚠️ 라이브 3종(결재함 0 / 승인 실패)은 이 회차에 재현하지 않았다
+
+erp 스택을 띄우지 않았다(메모리 한계로 도메인 슬라이스를 순차 교대). 대신 **기전의 양 끝**
+— 토큰의 `sub` 실측 + 필터/규칙 코드 — 을 확인했다. 화면 단 재현은 AC-4 가 이미 요구하고
+있으므로 결정 이후 그 단계에서 함께 잰다.
+
+---
+
 # Acceptance Criteria
 
-- [ ] **AC-0 (재현 + 모집단)** — 위 세 실측을 다시 하고, **`sub` 를 사람 식별자로 쓰는
-      지점**을 5개 도메인 전수로 센다. 0건이면 "0건" 이라고 적는다
+- [x] **AC-0 (재현 + 모집단) — 완료 2026-08-07.** `sub = platform-console-web` 토큰 실측 ✅ ·
+      모집단 분류 = erp **3** / fan **6**(사정권 밖) / finance·scm·wms **0건** ·
+      🔴 신규: **erp 결재함이 2개**(approval + notification) · ⚠️ 라이브 3종은 미재현(사유 위).
+      상세는 위 §
 - [ ] **AC-1 (결정)** — ADR 작성 + 사용자 ACCEPT. 🔴 에이전트가 스스로 ACCEPT 할 수 없다
 - [ ] **AC-2 (구현)** — 결정된 방향 구현
 - [ ] **AC-3 (회귀 가드)** — 상신자와 승인자가 **서로 다른 actorId** 로 기록되는지

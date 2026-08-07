@@ -137,10 +137,67 @@ GET /api/wms/outbound (콘솔 BFF, 데모 세션)       elements=0       ← 화
 
 ---
 
+# ✅ AC-0 재측정 (2026-08-07) — 전제 유지, 그리고 **티켓보다 나쁘다**
+
+## DB 실측과 대조한 원소 수 (200 을 근거로 쓰지 않았다)
+
+```
+outbound_db.outbound_order          1행   (SO-DEMO-0001 | PICKING | tenant_id = NULL)
+GET /api/v1/outbound/orders?size=100
+  토큰 tenant_id = demo-corp   →   HTTP 200   totalElements = 0
+```
+
+**DB 1행 ↔ API 0원소.** 200 이므로 엣지·헬스·가드는 전부 초록이다(티켓 그대로).
+
+## 인가 규칙 코드도 티켓 인용 그대로다
+
+`SecurityContextCallerScopeProvider:50-56` — `tenantId == null || isBlank ||
+requiredTenantId.equals(tenantId) || PLATFORM_WILDCARD.equals(tenantId)` → `unrestricted()`,
+그 외 → `restrictedTo(tenantId)`. 변경 없음.
+
+## 🔴🔴 신규 — `unrestricted` 를 주는 테넌트는 **assume 자체가 불가능**하다
+
+티켓은 *"`tenant_id ∈ {null,"",wms,*}` 면 무제한"* 이라고 적어 두고 넘어갔는데,
+그 집합에 **도달할 수 있는지**는 재지 않았다. 재 보니:
+
+```
+assume wms        → 토큰 발급 실패
+assume demo-corp  → 성공 (대조군)
+```
+
+⇒ 콘솔이 얻을 수 있는 토큰은 **전부 `restrictedTo`** 다. 즉 이건 "데모 운영자만 못 본다"
+가 아니라 **콘솔에서 도달 가능한 어떤 신원도 이 행을 볼 수 없다**는 뜻이다.
+`unrestricted` 는 사실상 **Kafka 컨슈머·스케줄러 전용**(`CallerScopeProvider` javadoc 이
+그렇게 적고 있다: *"Internal flows with no security context … resolve to unrestricted"*).
+AC-1 의 A/B/C 는 이 사실 위에서 다시 읽혀야 한다.
+
+## ⚠️ "생성 201" 은 이 슬라이스에서 재현하지 못했다 — 이유를 적는다
+
+`POST /api/v1/outbound/orders` 가 `422 PARTNER_INVALID_TYPE (not found in read model)`
+로 막혔다. outbound 의 파트너/SKU **읽기 모델**은 master-service 이벤트로 채워지는데
+이 측정 슬라이스에는 master-service 를 띄우지 않았다(메모리 한계 — wms 7앱 ≈ 5.6GiB).
+**제품 사실이 아니라 슬라이스의 한계**이므로 "생성이 깨졌다" 로 적지 않는다.
+기존 `SO-DEMO-0001` 행이 그 경로로 만들어진 산물이고 `tenant_id` 가 NULL 이라는 것이
+이 AC 가 실제로 필요로 하는 증거다.
+
+🔴 그리고 이 재측정에서 **내 계측기가 두 번 틀렸다** — 페이로드 필드명(`quantity` →
+`qtyOrdered`)과 `Idempotency-Key` 누락. 둘 다 400 을 냈고, 그것을 제품 결함으로 적었다면
+거짓 보고였다. **수정 후 응답만 제품 사실로 기록했다.**
+
+🔴 세 번째: 처음 기동에서 전건 **401** 이 나왔는데, 이는 내가 compose 를 손으로 부르며
+`demo.env` 를 소스하지 않아 `OIDC_ALLOWED_ISSUERS` 가 컨테이너 기본값
+(`iam-gateway-service:8080`)으로 굳은 탓이었다(토큰의 `iss` 는 `iam.local`).
+**401 은 도메인 판정이 아니다** — "물어보지도 못했다" 이고, 그대로 적었으면 이 티켓에
+없는 결함을 하나 더 만들어 낼 뻔했다.
+
+---
+
 # Acceptance Criteria
 
-- [ ] **AC-0 (재측정)** — 위 3줄(생성 201 / `tenant_id` / 조회 0건)을 다시 잰다.
-      🔴 **200 을 근거로 쓰지 마라** — 이 결함은 200 이다. 원소 수를 DB 실측과 대조한다
+- [x] **AC-0 (재측정) — 완료 2026-08-07.** DB 1행 ↔ API 0원소(HTTP 200) 대조 ✅ ·
+      `tenant_id` NULL ✅ · 인가 규칙 코드 불변 ✅ · 🔴 신규: `unrestricted` 테넌트는
+      **assume 불가** ⇒ 콘솔 도달 가능한 신원 전부가 `restrictedTo` ·
+      ⚠️ "생성 201" 은 master-service 미기동으로 미재현(사유 기록). 상세는 위 §
 - [ ] **AC-1 (선택)** — A/B/C 중 하나를 고르고 근거를 적는다. **B 를 고르면 ADR 이
       선행**한다(`TASK-MONO-304` 의 격리 규칙을 바꾸는 일이므로)
 - [ ] **AC-2 (형제 확인)** — 같은 "쓰기는 되는데 읽기에서 안 보인다" 가 wms 의 다른
