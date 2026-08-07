@@ -1,8 +1,8 @@
 # ADR-MONO-059: fan-platform 의 **저작 신원 평면** — 아티스트 글을 쓸 수 있는 주체를 무엇으로 표현하는가
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 **Date:** 2026-08-07
-**History:** PROPOSED 2026-08-07 (this record). **ACCEPT is a human gate — this record authorises no code.** 이 저장소의 ADR 규약상 승인은 소유자의 **정확형** 지시를 요구하며(`ADR-MONO-059 ACCEPTED — <A|B|C|D>`), 일반적인 "진행"/"proceed" 는 이것을 승인하지 않는다. 작성 에이전트는 자기 제안을 스스로 ACCEPT 할 수 없다.
+**History:** PROPOSED 2026-08-07 (this record). **ACCEPT is a human gate — this record authorises no code.** 이 저장소의 ADR 규약상 승인은 소유자의 **정확형** 지시를 요구하며(`ADR-MONO-059 ACCEPTED — <A|B|C|D>`), 일반적인 "진행"/"proceed" 는 이것을 승인하지 않는다. 작성 에이전트는 자기 제안을 스스로 ACCEPT 할 수 없다. · **ACCEPTED 2026-08-07 — A** (소유자가 `AskUserQuestion` 에서 `ADR-MONO-059 ACCEPTED — A` 옵션을 선택). 🔴 **게이트가 실제로 물었다**: 직전 메시지는 이 ADR 을 이름으로 지목했지만 선택지 자리가 **템플릿 플레이스홀더 `<A|B|C|D>` 인 채**였고, 그것으로는 넘기지 않았다 — 같은 줄의 "추천 A"(이 ADR 자신의 추천)를 소유자의 선택으로 읽는 것이 § The ACCEPTED Gate 가 *"launders an agent's own preference into an accepted decision"* 라며 금지하는 바로 그 행위다. **self-ACCEPT 아님** · **§ 선택지 / § 추천 / § 결과 는 byte-unchanged**(ACCEPT 는 확정이지 재결정이 아니다).
 **Decision driver:** `TASK-MONO-512` 와 `TASK-FAN-BE-045` 의 AC-0 재측정(2026-08-07, PR #3255)이 두 티켓을 **같은 코드 한 줄**로 수렴시켰다 — `PublishPostUseCase` 의 `ARTIST_POST` 게이트가 요구하는 두 통과 경로가 **둘 다 발급 경로 0** 이다.
 **Related:** `TASK-MONO-512`(팬 운영자 역할 발급 불가) · `TASK-FAN-BE-045`(아티스트 저자 부재) · `ADR-003`(fan-platform, `FAN_POST` **가시성 티어** — 같은 use case 를 인용하지만 **다른 질문**: 이 ADR 은 *누가 저자가 될 수 있나*, ADR-003 은 *어떤 티어로 쓸 수 있나*) · `ADR-MONO-019`/`ADR-MONO-020`(운영자 멀티테넌트 배정) · `TASK-BE-576`(권한 테넌트 ≠ 가시성 테넌트)
 
@@ -155,13 +155,35 @@ D 를 고른다면 그것은 축소가 아니라 **범위의 명문화**다.
 
 ---
 
-## The ACCEPTED Gate
+## 결정 — **A** (ACCEPTED 2026-08-07)
 
-이 ADR 은 **PROPOSED** 다. `platform/architecture-decision-rule.md` § The ACCEPTED Gate 에 따라
-에이전트가 스스로 ACCEPT 할 수 없고, 다음 **정확형**만이 PAUSE 를 해제한다:
+**아티스트에게 실제 계정을 준다(`artists.account_id`).** 위 § 선택지 A 의 텍스트 그대로이며,
+이 절은 그것을 **확정**할 뿐 재서술하지 않는다.
 
-```
-ADR-MONO-059 ACCEPTED — <A|B|C|D>
-```
+### 무엇이 구속력을 갖나
 
-그때까지 `TASK-MONO-512` 와 `TASK-FAN-BE-045` 는 **둘 다 착수하지 않는다.**
+| | 구속력 |
+|---|---|
+| **A 자체** — 아티스트 엔티티가 계정을 갖고, 그 계정이 `ARTIST` 역할로 쓴다 | **binding** |
+| **B/C/D 는 채택되지 않았다** — 특히 **B(운영자 대리 저작)는 배제**됐다. ⇒ `B2C_CONSUMER` 테넌트를 운영자가 assume 하는 새 조합은 **열지 않는다** | **binding** |
+| § 결과 표의 A 행 — `FAN-BE-045` = 스키마 + 온보딩 + 조인 검증 · `MONO-512` = **좁혀서 재작성**(역할 발급만) | **binding**(작업 배분) |
+| § 추천 이 남긴 🔴 — *"A 를 고르더라도 512 의 질문은 남는다: `ARTIST` 역할을 누가 발급하나"* | **미해결로 인계**. A 는 그 질문을 없애지 않고 **좁힌다**(테넌트 평면의 새 조합이 아니라 `fan-platform` 안의 역할 부여 문제) |
+| § 결과 말미 — `FollowArtistUseCase` 의 **무검증 저장** | **여전히 답해야 한다.** A 에서는 검증 대상이 생기므로(`artists.account_id` 참조) FAN-BE-045 의 범위 안 |
+
+🔵 **D 도 정당하다고 이 ADR 이 적었지만, 소유자는 D 를 고르지 않았다.** ⇒ `ARTIST_POST` 는
+v1 제품 기능으로 **남는다**. `FAN_OPERATOR` 3곳 · `ARTIST` 1곳 수용부를 죽은 코드로 제거하는
+D 의 정리 작업은 **수행하지 않는다**.
+
+### ACCEPT 가 인가하는 것 / 하지 않는 것
+
+인가되는 것은 `TASK-MONO-512` 와 `TASK-FAN-BE-045` 의 **착수**뿐이다. 각 단계는 여전히
+자기 task 로 실행되고(HARDSTOP-09), 이 ACCEPT 는 어떤 구현도 그 자체로 승인하지 않는다.
+
+### 게이트 — 통과했지, 우회하지 않았다
+
+`platform/architecture-decision-rule.md` § The ACCEPTED Gate 가 요구하는 정확형이 도착한
+뒤에만 전환했다. 🔴 **직전 시도는 넘기지 않았다** — 소유자 메시지가 이 ADR 을 이름으로 지목
+했지만 선택지 자리가 `<A|B|C|D>` **플레이스홀더 그대로**였고, 같은 줄에 이 ADR 자신의
+"추천 A" 가 적혀 있었다. 그 추천을 소유자의 선택으로 읽는 것은 규정 :53-56 이 말하는
+**결정의 귀속가능성**을 파괴한다. 멈춰서 다시 물었고, 그때 A 가 명시적으로 도착했다.
+**게이트가 실제로 물었다는 사실은 기록되지 않으면 남지 않으므로 여기 적는다.**
