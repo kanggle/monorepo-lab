@@ -613,6 +613,23 @@ invoked inside the **submit** use case's transactional path **before** the
   approval request is **never** advanced against a dangling master reference (E1 — no
   approval over a deleted/retired subject).
 
+**Caller-identity propagation (TASK-ERP-BE-041).** `masterdata-service` is an
+independent OIDC **resource server**, not an unauthenticated internal endpoint, so this
+call MUST carry a credential. approval-service forwards the **caller's own bearer
+token**, read off the request-scoped `JwtAuthenticationToken`. A `client_credentials`
+workload token is **not** an acceptable substitute: it is minted with `tenant_id = erp`
+and therefore sees no other tenant's masters at all (measured: workload-token
+`GET /masterdata/departments` → 200 with `totalElements = 0`, while the same query on an
+operator's assumed `demo-corp` token returns that tenant's departments). Propagation also
+keeps the caller's data scope, so the reference check can never resolve a subject the
+caller may not see. The use case's `tenantId` is verified against the propagated token's
+`tenant_id` claim before the call goes out; a mismatch refuses the check rather than
+executing it under whichever identity happens to be on the context.
+
+Because both a 401 and a 404 refuse the submit under the same `APPROVAL_ROUTE_INVALID`
+code, the two MUST stay distinguishable in observability — see § Observability's
+`approval_subject_resolve_failures_total{cause}`, where a 404 is deliberately not counted.
+
 This is minimal by design (one referenced subject id + type) per the first-increment
 constraint. approval-service holds **no** master data and never writes it back (E1 /
 E5 — `masterdata-service` is the single source of record). Cross-aggregate
@@ -953,7 +970,14 @@ treatment; this increment's single stage is not a saga.
     subject_unresolved} (E1 / E3).
   - `approval_already_finalized_total` — re-process-finalized attempts.
   - `approval_subject_resolve_failures_total{cause}` — masterdata reference-check
-    failures (E1, Category B).
+    failures (E1, Category B). `cause` ∈ {`no_credentials`, `tenant_mismatch`, `auth`,
+    `client_error`, `unreachable`} — every value means *the check did not get an
+    answer*. A **404 is an answer** (the subject is absent) and is deliberately NOT
+    counted here; that outcome is already carried by
+    `approval_route_invalid_total{cause = subject_unresolved}`. Keeping the two apart
+    is the whole point of the tag: before TASK-ERP-BE-041 an authentication failure
+    and an absent master were the same silent `false`, so an infrastructure fault was
+    reported to the operator as a verdict about the customer's data.
   - `approval_outbox_publish_failures_total` — outbox publish-side retry signal.
   - `approval_audit_append_failures_total` — audit-fail-closed signal (A10).
 - Tracing OTLP via `micrometer-tracing-bridge-otel`; sampling 1.0 (dev). The submit

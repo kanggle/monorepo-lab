@@ -71,6 +71,12 @@ public abstract class AbstractApprovalIntegrationTest {
     protected static volatile String masterStatus = "ACTIVE";
     protected static volatile int masterHttpStatus = 200;
 
+    /**
+     * The {@code Authorization} header the adapter last sent to the masterdata stub, or
+     * {@code null} if it sent none (TASK-ERP-BE-041).
+     */
+    protected static volatile String masterSeenAuthorization;
+
     private static RSAKey rsaKey;
 
     static {
@@ -87,6 +93,18 @@ public abstract class AbstractApprovalIntegrationTest {
         MASTERDATA.setDispatcher(new Dispatcher() {
             @Override
             public MockResponse dispatch(RecordedRequest request) {
+                // TASK-ERP-BE-041 — the real masterdata-service is an independent OIDC
+                // resource server, so an unauthenticated call gets 401. This stub used to
+                // answer 200 to ANY request, which is precisely why the production adapter
+                // could ship with no Authorization header and every IT stay green. The
+                // stub's predicate is now the resource server's predicate.
+                String authorization = request.getHeader("Authorization");
+                masterSeenAuthorization = authorization;
+                if (authorization == null || !authorization.startsWith("Bearer ")) {
+                    return new MockResponse().setResponseCode(401)
+                            .setHeader("Content-Type", "application/json")
+                            .setBody("{\"code\":\"UNAUTHORIZED\"}");
+                }
                 if (masterHttpStatus != 200) {
                     return new MockResponse().setResponseCode(masterHttpStatus)
                             .setHeader("Content-Type", "application/json")
