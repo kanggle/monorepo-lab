@@ -7,6 +7,7 @@ import com.example.scmplatform.procurement.domain.error.IdempotencyKeyMismatchEx
 import com.example.scmplatform.procurement.domain.error.PoAlreadyConfirmedException;
 import com.example.scmplatform.procurement.domain.error.PoNotFoundException;
 import com.example.scmplatform.procurement.domain.error.PoQuantityExceededException;
+import com.example.scmplatform.procurement.domain.error.PermissionDeniedException;
 import com.example.scmplatform.procurement.domain.error.PoStatusTransitionInvalidException;
 import com.example.scmplatform.procurement.domain.error.SupplierInactiveException;
 import com.example.scmplatform.procurement.domain.error.SupplierNotFoundException;
@@ -34,6 +35,7 @@ import java.util.Map;
  * Status conventions follow rules/domains/scm.md Standard Error Codes:
  *
  * <ul>
+ *   <li>403 — PERMISSION_DENIED (use-case authorization refusal)</li>
  *   <li>404 — PO_NOT_FOUND, SUPPLIER_NOT_FOUND</li>
  *   <li>409 — CONCURRENT_MODIFICATION (optimistic lock),
  *             CONFLICT (unique-constraint data integrity only)</li>
@@ -78,6 +80,18 @@ public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleSupplierNotFound(SupplierNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ErrorResponse.of("SUPPLIER_NOT_FOUND", e.getMessage()));
+    }
+
+    /**
+     * Use-case-level authorization refusal (TASK-SCM-BE-059). The filter chain's
+     * {@code accessDeniedHandler} emits the same code for requests that never
+     * reach a controller; this arm covers the caller that is authenticated and
+     * tenant-admitted but lacks the OPERATOR actor role.
+     */
+    @ExceptionHandler(PermissionDeniedException.class)
+    public ResponseEntity<ErrorResponse> handlePermissionDenied(PermissionDeniedException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of("PERMISSION_DENIED", e.getMessage()));
     }
 
     /**

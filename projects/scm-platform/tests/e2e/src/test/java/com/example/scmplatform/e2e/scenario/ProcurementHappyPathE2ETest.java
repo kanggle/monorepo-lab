@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import com.example.scmplatform.e2e.testsupport.KafkaTestConsumer;
-import com.example.scmplatform.e2e.testsupport.ProcurementDbFixtures;
+import com.example.scmplatform.e2e.testsupport.SupplierApiFixtures;
 import com.example.scmplatform.e2e.testsupport.ScmPlatformE2ETestBase;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -64,8 +64,9 @@ class ProcurementHappyPathE2ETest extends ScmPlatformE2ETestBase {
         String buyerToken = jwt.signBuyerToken(buyerAccountId);
 
         // ----- Supplier seed (suppliers are v1 internal master) ------------
-        String supplierId = ProcurementDbFixtures.insertActiveSupplier(
-                postgres, "scm", "Acme Supplier (e2e-happy)");
+        String supplierId = SupplierApiFixtures.registerActiveSupplier(
+                http, gatewayBaseUri(), jwt.signOperatorToken(randomAccountId()),
+                "SUP-HAP", "Acme Supplier (e2e-happy)");
 
         // ----- Unique fixtures (race avoidance per task spec § Edge Cases) -
         String sku = uniqueSku("SKU-HAP");

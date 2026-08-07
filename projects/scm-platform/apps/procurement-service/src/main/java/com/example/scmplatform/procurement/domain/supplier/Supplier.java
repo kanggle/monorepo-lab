@@ -35,6 +35,14 @@ public class Supplier {
     @Column(name = "tenant_id", length = 64, nullable = false)
     private String tenantId;
 
+    /**
+     * Natural key, unique per tenant (V6 {@code ux_suppliers_tenant_code}).
+     * Registration is idempotent on this column, not on {@link #name} — names
+     * are not unique and never were.
+     */
+    @Column(name = "code", length = 64, nullable = false)
+    private String code;
+
     @Column(name = "name", length = 200, nullable = false)
     private String name;
 
@@ -62,12 +70,35 @@ public class Supplier {
     @Column(name = "version", nullable = false)
     private Long version;
 
-    public static Supplier create(String id, String tenantId, String name, SupplierStatus status) {
+    public static Supplier create(String id, String tenantId, String code, String name,
+                                  SupplierStatus status) {
+        return create(id, tenantId, code, name, status, null, null);
+    }
+
+    /**
+     * Full registration factory (TASK-SCM-BE-059 AC-2).
+     *
+     * <p>Deliberately takes <b>no credential argument</b>. v1 has no path that
+     * accepts supplier credentials at all — that is deferred whole to the v2
+     * {@code supplier-service} (ADR-SCM-001 ACCEPT rider), and a supplier with
+     * none is the normal v1 state rather than a degraded one.
+     */
+    public static Supplier create(String id, String tenantId, String code, String name,
+                                  SupplierStatus status,
+                                  Instant contractStartedAt, Instant contractExpiresAt) {
+        if (contractStartedAt != null && contractExpiresAt != null
+                && !contractExpiresAt.isAfter(contractStartedAt)) {
+            throw new IllegalArgumentException(
+                    "contractExpiresAt must be after contractStartedAt");
+        }
         Supplier s = new Supplier();
         s.id = id;
         s.tenantId = tenantId;
+        s.code = code;
         s.name = name;
         s.status = status;
+        s.contractStartedAt = contractStartedAt;
+        s.contractExpiresAt = contractExpiresAt;
         Instant now = Instant.now();
         s.createdAt = now;
         s.updatedAt = now;

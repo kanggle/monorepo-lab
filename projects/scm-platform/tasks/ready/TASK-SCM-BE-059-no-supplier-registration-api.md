@@ -171,23 +171,44 @@ v2 `supplier-service` 로 못박는다 ⇒ **v1 에는 자격증명 입력 경�
       있었다. 🔴 **AC-3 의 멱등을 계약이 두 갈래로 명시**한다: 같은 `Idempotency-Key`=201
       replay / **다른 키 + 같은 `code`=200 + 행 증가 없음**. 시드 재실행·CI 재기동이 키를
       잃는 경우가 실제 수렴 경로라서, 상태코드를 갈라 두지 않으면 판정이 불가능하다
-- [ ] **AC-2 (생성)** — 인증된 운영자 토큰으로 공급사를 생성할 수 있고, 그 id 로
-      `POST /api/v1/procurement/po` 가 `SUPPLIER_NOT_FOUND` 없이 통과한다
-- [ ] **AC-3 (멱등)** — 같은 자연키(코드)로 두 번 호출하면 행이 하나다.
-      🔴 **판정은 로그 라벨이 아니라 행 수로** 한다 — 멱등 replay 도 2xx 를 내므로
-      라벨만 보면 "생성" 이 두 번 찍힌다(`seed-scm.sh` 가 실제로 그렇게 오독했다).
-      🔴 **`suppliers` 에 자연키가 없다** — 현재 UNIQUE 는 PK(`id`) 뿐이고 `name` 도
-      非유니크다(실측). 그래서 구현은 **`code` 컬럼 + `UNIQUE (tenant_id, code)` 마이그레이션**
-      을 먼저 넣어야 한다. 계약(AC-1)이 그 키를 `code` 로 고정해 뒀다
-- [ ] **AC-4 (테스트 전환)** — `ProcurementDbFixtures.insertActiveSupplier` 를 쓰던
-      e2e 가 새 API 를 쓴다. 🔵 픽스처를 **지우기만 하지 말 것** — 남은 호출자를
-      전수 grep 해서 옮긴다
-- [ ] **AC-5 (시드)** — `seed-scm.sh` 의 공급사 `dbexec` 가 사라지고, 깨끗한 볼륨에서
-      1회차/2회차 모두 실패 0 으로 수렴한다
-- [ ] **AC-6 (권한)** — 어떤 역할이 생성할 수 있는지 명시하고, 데모 운영자 토큰
-      (`assume demo-corp` → `SCM_OPERATOR`)이 그것을 **실제로 갖는지** 실측한다.
-      🔴 wms 마스터 쓰기가 정확히 여기서 막혔다(`MASTER_WRITE` 를 아무도 못 받는다 —
-      `TASK-MONO-514`) — 같은 함정을 반복하지 말 것
+- [x] **AC-2 (생성) — 완료 (구현 PR, 2026-08-08).** `POST /api/procurement/suppliers`
+      (`SupplierController` → `SupplierApplicationService.register`). IT
+      `SupplierRegistrationIntegrationTest#registeredSupplierIsUsableForPoDraft` 가
+      등록한 id 로 `draft()` 가 `SUPPLIER_NOT_FOUND` 없이 통과함을 실측한다
+- [x] **AC-3 (멱등) — 완료 (구현 PR, 2026-08-08).** 선행 마이그레이션
+      `V6__suppliers_natural_key_code.sql`(`code` 컬럼 + `UNIQUE (tenant_id, code)`,
+      백필 `UPPER(id)`)을 먼저 넣었다. 판정은 **행 수**로 한다 —
+      `registerIsIdempotentOnCode` 가 두 번 호출 뒤 `(tenant, code)` 행 수 = 1 을 잰다.
+      🔵 멱등이 **두 층**인 것이 설계다: `Idempotency-Key` 래퍼는 키를 **가진** 재시도를,
+      자연키 검사는 키를 **잃은** 호출자(재실행 시드·새 CI 잡)를 덮는다. 후자가 없으면
+      재실행이 V6 유니크에 걸려 409 가 되지 수렴이 되지 않는다
+- [x] **AC-4 (테스트 전환) — 완료 (구현 PR, 2026-08-08).** 호출자 **6개 전수**
+      (`AsnReceive`·`CrossTenantIsolation`·`InboundExpectedLoop`·`ProcurementHappyPath`·
+      `SupplierAckWebhook`·`SupplierCircuitBreaker`)를
+      `SupplierApiFixtures.registerActiveSupplier` 로 옮기고
+      `ProcurementDbFixtures.insertActiveSupplier` 를 **삭제**했다(deprecate 아님 —
+      같은 행에 이르는 길이 둘이면 픽스처와 제품이 조용히 갈라진다).
+      `countAuditRows`(읽기 전용)는 남는다
+- [~] **AC-5 (시드) — 코드 완료, 라이브 2회차 실행 미실시 (2026-08-08).**
+      `dbexec` 는 사라졌고 `seed_supplier` 가 등록 API 를 호출한다. 🔴 **id 가 더 이상
+      우리가 정하는 값이 아니다** — 예전엔 PK 에 `SUP-DEMO-01` 을 박아 이후 호출이 그
+      문자열을 그대로 supplierId 로 썼지만, 이제 서버가 UUID 를 만들고 그 문자열은
+      `code` 다. 그래서 응답에서 id 를 뽑아 이후 호출에 넘긴다(jq 없음 — lib.sh 규약).
+      🔵 옛 `dbexec` 행이 남은 DB 에서는 V6 백필이 `code='SUP-DEMO-01'` 을 채우므로 이
+      호출이 **그 행으로 수렴**한다(중복 생성 없음).
+      ⚠️ **깨끗한 볼륨 1회차/2회차 실행은 이 PR 에서 하지 않았다.** 미검증분을 정확히
+      적는다 — 아래 § 남은 검증
+- [x] **AC-6 (권한) — 완료·실측 (구현 PR, 2026-08-08).** 게이트는
+      `ActorContext.isOperator()`(= `OPERATOR|ADMIN|SUPER_ADMIN|SCM_OPERATOR`).
+      🔴🔴 **`scm.write` 를 요구하지 않기로 한 것이 이 AC 의 실측 결과다.** assume-tenant
+      토큰의 `scope` 는 `platform-console-web` 클라이언트의 **등록 스코프**
+      (`openid profile email tenant.read erp.write` — auth-service V0015 + V0023)이고,
+      `scm.write` 는 **별개의 `scm` 클라이언트**(V0013)에 달려 있다. 요구했다면 존재하는
+      유일한 운영자 신원이 403 을 받았을 것 — wms `MASTER_WRITE` 와 정확히 같은 모양
+      (`TASK-MONO-514`). 역할 쪽은 성립한다: `demo-corp` 의 `scm` 구독 ACTIVE(V9005) →
+      `OperatorRoleDerivation` 이 `SCM_OPERATOR` 발급 → `isOperator()` 가 이미 수용.
+      🔵 스코프 축은 **그런 호출자가 생기면** 더한다(erp `RoleScopeAuthorizationAdapter`
+      WRITE 선례 `hasScope ∨ isOperator`) — scm `ActorContext` 엔 스코프 축 자체가 없다
 - [x] **AC-7 (자격증명 미보유가 정상 상태) — 실측이 이 AC 를 없앴다 (2026-08-08).**
       🔴🔴 **이 AC 의 전제가 틀렸고, 그 전제를 쓴 ADR 은 내가 썼다.** ADR § Consequences 의
       *"자격증명 미보유 공급사에 대한 `SupplierAdapterPort` 의 동작을 정의해야 한다"* 는
@@ -209,6 +230,37 @@ v2 `supplier-service` 로 못박는다 ⇒ **v1 에는 자격증명 입력 경�
       🔴 남는 실행 항목 하나: 구현이 자격증명 필드를 **받지 않는다**는 것을 유지 — 계약에
       명시해 뒀으니(AC-1) 요청 DTO 에 필드를 더하지 말 것
 
+---
+
+# 🔴 계약(AC-1)의 자기 정정 — 구현이 스펙 PR 의 오류 둘을 잡았다
+
+AC-1 은 스펙 PR 에서 "완료" 로 닫혔지만, 구현하면서 **내가 쓴 계약** 두 곳이 틀린 것을
+발견해 같은 PR 에서 고쳤다. 둘 다 *구현이 계약을 따르려 하자* 드러난 것이다:
+
+1. **`GET /suppliers` 의 봉투 모양** — `data: [...]` + `meta` 에 페이지 카운터로 적어
+   뒀는데, 이 서비스의 `ApiEnvelope`+`PageResponse` 조합이 **낼 수 없는 모양**이고 같은
+   파일의 형제(`GET /po`)는 `data: {content, page, …}` 를 낸다. 그대로 구현했으면 한
+   계약 파일 안의 두 목록 엔드포인트가 서로 다른 형식을 답했을 것이다 ⇒ 형제에 맞춰 정정.
+2. **인가 절의 `+ scm.write`** — AC-6 실측이 이것을 뒤집었다(위 AC-6). 콘솔 클라이언트에
+   그 스코프가 없다.
+
+🔵 교훈은 "계약 우선" 이 틀렸다는 게 아니라 **계약도 형제와 대조해야 한다**는 것이다.
+1번은 형제 엔드포인트를 열어 보기만 했으면 스펙 PR 에서 잡혔다.
+
+---
+
+# ⚠️ 남은 검증 (이 PR 이 재지 않은 것)
+
+- **AC-5 라이브**: 깨끗한 볼륨에서 `demo-up.sh scm` → `seed-scm.sh` **2회** 실행,
+  실패 0 + `suppliers` 행 1. 스크립트 로직이 아니라 **스택 기동**이 비용이라 미실시.
+  🔵 위험의 큰 쪽(게이트웨이 라우팅 · 운영자 토큰 인가 · 멱등)은 CI 의 scm e2e 6개가
+  같은 엔드포인트를 실제 HTTP 로 지나가며 덮는다. 남은 고유 위험은 **bash 파싱**
+  (id 추출 sed/grep)과 **V6 백필이 옛 데모 행에 실제로 도는가** 둘이다
+- **콘솔 화면**: 공급사 관리 화면은 여전히 없다(범위 밖, 별도 프런트 티켓). 즉 이 PR 로
+  운영자는 **API 로는** 공급사를 만들 수 있지만 **화면으로는** 아직 못 만든다
+
+---
+
 # Related Specs
 
 - `specs/contracts/` — 조달 계약(에러 봉투 규약의 출처)
@@ -221,6 +273,8 @@ v2 `supplier-service` 로 못박는다 ⇒ **v1 에는 자격증명 입력 경�
 # Edge Cases
 
 - 이미 존재하는 코드로 생성 → 409 인가 200(멱등)인가. **계약이 먼저 정해야 한다**
+  ✅ 정해졌다: **순차 재등록 = 200 수렴**(키를 잃은 호출자가 정상 경로다), **동시 등록의
+  패자만 409**(유니크에 걸린 경쟁 결과이지 재등록의 답이 아니다). 계약에 갈라 적었다
 - 발주가 참조 중인 공급사의 비활성 — 이 티켓 범위 밖이지만 계약이 문을 열어 두지 말 것
 
 # Failure Scenarios
@@ -230,5 +284,6 @@ v2 `supplier-service` 로 못박는다 ⇒ **v1 에는 자격증명 입력 경�
 
 # Definition of Done
 
-- [ ] AC-0b · AC-1~AC-7 전부 (AC-0a 는 ACCEPT 로 해제 완료)
+- [x] AC-0b · AC-1 · AC-2 · AC-3 · AC-4 · AC-6 · AC-7 (AC-0a 는 ACCEPT 로 해제 완료)
+- [~] AC-5 — 코드 완료, 라이브 2회차 실행만 미실시 (§ 남은 검증)
 - [ ] Ready for review

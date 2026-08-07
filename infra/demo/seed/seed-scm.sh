@@ -71,39 +71,55 @@ CURRENCY="KRW"
 SEED_TENANT="demo-corp"
 
 # =============================================================================
-# 0. 공급사 — 🔴 이 도메인에는 등록 API 가 **없다**
+# 0. 공급사 — ✅ 등록 API 로 만든다 (TASK-SCM-BE-059)
 # =============================================================================
-# `POST /po` 는 `SUPPLIER_NOT_FOUND` 로 거절하는데(실측), 저장소 전체를 훑어도
-# suppliers 를 만드는 컨트롤러가 **한 개도 없다**. scm e2e 도 같은 이유로 직접 DB 에
-# 넣는다(`ProcurementDbFixtures.insertActiveSupplier`) — 즉 직접-DB 는 이 도메인에서
-# 편법이 아니라 **유일한 경로**다.
+# 이 블록은 이 저장소에서 `dbexec` 가 정당화됐던 **유일한 자리**였다. 등록 컨트롤러가
+# 저장소 전체에 0건이었고(실측), 제품 자신의 e2e 도 같은 이유로 직접 DB 에 넣었다.
+# `ADR-SCM-001`(ACCEPTED, A)이 v1 공급사 마스터를 **운영 대상**으로 정하면서
+# `POST /api/v1/procurement/suppliers` 가 생겼고, 직접-DB 우회는 사라졌다.
 #
-# 🔵 그래서 이것은 시드의 한계가 아니라 **제품의 갭**이다: 데모 운영자는 어떤 화면·API
-# 로도 공급사를 만들 수 없다. 콘솔 SCM 섹션에 공급사 관리 화면이 없는 것과 같은 뿌리다.
-# ⇒ 착수자가 판단할 후속 후보로 티켓에 적는다(이 슬라이스에서 고치지 않는다).
+# 🔴 **id 가 더 이상 우리가 정하는 값이 아니다.** 예전엔 PK 에 `SUP-DEMO-01` 을 직접
+# 박아 넣어서 이후 호출이 그 문자열을 그대로 supplierId 로 썼다. 이제 id 는 서버가
+# 만드는 UUID 이고, `SUP-DEMO-01` 은 **자연키(code)** 다. 그래서 응답에서 id 를 꺼내야
+# 한다(jq 없음 — lib.sh 규약).
+#
+# 🔵 **2회차가 왜 안전한가**: 계약이 멱등을 두 갈래로 갈라 뒀다. 같은 Idempotency-Key
+# = 201 replay, **다른 키 + 같은 code = 200 + 행 증가 없음**. 시드는 고정 키를 쓰지만
+# 볼륨을 지우면 키 기록도 사라지므로, 실제로 수렴을 보장하는 것은 후자다.
+# 그리고 예전 `dbexec` 가 남긴 행(id='SUP-DEMO-01')이 있는 DB 에서는 V6 마이그레이션이
+# 그 행에 code='SUP-DEMO-01' 을 채우므로, 이 호출은 **그 행으로 수렴**한다(중복 생성 X).
 PG_C="scm-platform-postgres"; PG_DB="scm_procurement"; PG_U="scm"; PG_P="scm"
 
+SUPPLIER_ID=""
+
 seed_supplier() {
-  local existing
-  existing="$(dbquery "$PG_C" psql "$PG_DB" "$PG_U" "$PG_P" \
-      "select count(*) from suppliers where id='$SUPPLIER_CODE';" 2>/dev/null | tr -d ' \r\n')"
-  if [ "${existing:-0}" = "1" ]; then
-    SEED_EXISTING=$((SEED_EXISTING + 1)); seed_log "존재  공급사 $SUPPLIER_CODE"
-    return 0
+  local body="{\"code\":\"$SUPPLIER_CODE\",\"name\":\"demo supplier\"}"
+  if ! http POST "$SCM/api/v1/procurement/suppliers" "$body" \
+      -H "Idempotency-Key: seed-scm-supplier-$SUPPLIER_CODE"; then
+    seed_fail "공급사 $SUPPLIER_CODE — HTTP $SEED_LAST_STATUS ${SEED_LAST_BODY:0:200}"
+    return 1
   fi
-  if dbexec --why "scm 에는 공급사 등록 API 가 없다 — 저장소 전 컨트롤러 0건이고 scm e2e 도 ProcurementDbFixtures 로 직접 넣는다" \
-      "$PG_C" psql "$PG_DB" "$PG_U" "$PG_P" <<SQL
-INSERT INTO suppliers (id, tenant_id, name, status, created_at, updated_at, version)
-VALUES ('$SUPPLIER_CODE', '$SEED_TENANT', 'demo supplier', 'ACTIVE', now(), now(), 0);
-SQL
-  then
+  # 🔴 라벨이 아니라 상태코드로 가른다 — 201=생성, 200=이미 있음. 둘 다 2xx 라서
+  # "생성"만 찍으면 2회차가 만든 것처럼 보인다(이 스크립트가 실제로 그랬다).
+  if [ "$SEED_LAST_STATUS" = "201" ]; then
     SEED_CREATED=$((SEED_CREATED + 1)); seed_log "생성  공급사 $SUPPLIER_CODE"
-    return 0
+  else
+    SEED_EXISTING=$((SEED_EXISTING + 1)); seed_log "존재  공급사 $SUPPLIER_CODE (HTTP $SEED_LAST_STATUS)"
   fi
-  seed_fail "공급사 $SUPPLIER_CODE 를 넣지 못했습니다 (direct-DB)"
-  return 1
+  SUPPLIER_ID="$(printf '%s' "$SEED_LAST_BODY" \
+      | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 \
+      | sed -E 's/.*"([^"]*)"$/\1/')"
+  if [ -z "$SUPPLIER_ID" ]; then
+    seed_fail "공급사 응답에서 id 를 꺼내지 못했습니다: ${SEED_LAST_BODY:0:200}"
+    return 1
+  fi
+  seed_log "      supplierId=$SUPPLIER_ID (code=$SUPPLIER_CODE)"
+  return 0
 }
-seed_supplier
+if ! seed_supplier; then
+  # 뒤따르는 매핑·발주가 전부 이 id 에 의존한다. 없으면 실패를 N배로 부풀릴 뿐이다.
+  seed_summary; exit $?
+fi
 
 # =============================================================================
 # 1. /scm/config — SKU-공급사 매핑 + 재고 정책
@@ -124,7 +140,7 @@ for sku in "$SKU_A" "$SKU_B"; do
   # MappingRequest(supplierId, defaultOrderQty>=1, leadTimeDays>=0, currency[3])
   put_dp "SKU-공급사 매핑 $sku" \
     "$SCM/api/v1/demand-planning/sku-supplier-map/$sku" \
-    "{\"supplierId\":\"$SUPPLIER_CODE\",\"defaultOrderQty\":100,\"leadTimeDays\":3,\"currency\":\"$CURRENCY\"}"
+    "{\"supplierId\":\"$SUPPLIER_ID\",\"defaultOrderQty\":100,\"leadTimeDays\":3,\"currency\":\"$CURRENCY\"}"
 
   # PolicyRequest(reorderPoint>=0, safetyStock>=0, reorderQty>=1)
   put_dp "재고 정책 $sku" \
@@ -175,7 +191,7 @@ fi
 # poNumber 는 요청에 없다 — 서버가 만든다.
 po_body() {
   cat <<JSON
-{"supplierId":"$SUPPLIER_CODE","currency":"$CURRENCY",
+{"supplierId":"$SUPPLIER_ID","currency":"$CURRENCY",
  "lines":[{"lineNo":1,"sku":"$1","quantity":"100","unitPrice":"1000"}]}
 JSON
 }

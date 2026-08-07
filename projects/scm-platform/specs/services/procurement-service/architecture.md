@@ -52,6 +52,11 @@ Supplier master. It MUST:
   records through `/api/procurement/suppliers`** — the master is an *operated*
   object, not a deployment artifact (`ADR-SCM-001`, ACCEPTED 2026-08-08, option A).
   v2 will migrate this responsibility to `supplier-service`.
+  - The master's natural key is `code`, `UNIQUE (tenant_id, code)` (migration `V6`).
+    It did not exist before TASK-SCM-BE-059: the table's only unique constraint was
+    the primary key and `name` was not unique, so idempotent registration had
+    nothing to key on. `id` remains a server-generated UUID — callers must read it
+    from the response rather than choosing it.
   - 🔴 **Supplier credentials are out of scope in v1, deliberately.** This line
     previously read *"with AES-GCM-encrypted credentials (S6)"*, which was true of
     the **schema** and of nothing else. `supplier_credentials` and
@@ -197,6 +202,7 @@ com.example.scmplatform.procurement/
 └── presentation/                             ← inbound web adapter
     ├── controller/
     │   ├── PurchaseOrderController.java        ← /api/procurement/po/**
+    │   ├── SupplierController.java             ← /api/procurement/suppliers/**
     │   ├── SupplierAckWebhookController.java   ← /api/procurement/webhooks/supplier-ack
     │   └── AsnWebhookController.java           ← /api/procurement/webhooks/asn
     ├── advice/GlobalExceptionHandler.java      ← domain → HTTP envelope mapping
@@ -263,6 +269,9 @@ external `/api/v1/procurement/**` namespace and rewrites the prefix (see
 | `POST` | `/api/procurement/po/{poId}/submit` | JWT | `Idempotency-Key` required | DRAFT → SUBMITTED + supplier dispatch |
 | `POST` | `/api/procurement/po/{poId}/confirm` | JWT (operator) | `Idempotency-Key` required | ACKNOWLEDGED → CONFIRMED |
 | `POST` | `/api/procurement/po/{poId}/cancel` | JWT | `Idempotency-Key` required | DRAFT/SUBMITTED/ACK/CONFIRMED → CANCELED (CONFIRMED only while not-yet-received) |
+| `POST` | `/api/procurement/suppliers` | JWT (operator) | `Idempotency-Key` required **and** `(tenant_id, code)` natural | register a supplier — 201 created / **200 converged on an existing `code`** |
+| `GET` | `/api/procurement/suppliers` | JWT | n/a | list suppliers (paginated) |
+| `GET` | `/api/procurement/suppliers/{supplierId}` | JWT | n/a | fetch one supplier |
 | `POST` | `/api/procurement/webhooks/supplier-ack` | HMAC-SHA256 + timestamp + replay | `(tenantId, poId)` natural | supplier acknowledgement (SUBMITTED → ACK) |
 | `POST` | `/api/procurement/webhooks/asn` | HMAC-SHA256 + timestamp + replay | `(tenantId, supplierAsnRef)` UNIQUE | supplier ASN delivery (CONFIRMED → PARTIAL/RECEIVED) |
 | `GET` | `/actuator/health` | none | n/a | liveness/readiness |

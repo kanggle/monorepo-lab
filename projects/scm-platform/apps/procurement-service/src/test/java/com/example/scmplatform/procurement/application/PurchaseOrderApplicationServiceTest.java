@@ -93,7 +93,7 @@ class PurchaseOrderApplicationServiceTest {
     }
 
     private Supplier activeSupplier() {
-        return Supplier.create(SUPPLIER_ID, TENANT, "Acme", SupplierStatus.ACTIVE);
+        return Supplier.create(SUPPLIER_ID, TENANT, "SUP-ACME", "Acme", SupplierStatus.ACTIVE);
     }
 
     private DraftPurchaseOrderCommand validDraftCommand() {
@@ -138,7 +138,8 @@ class PurchaseOrderApplicationServiceTest {
     @Test
     @DisplayName("draft() throws SupplierInactiveException for non-ACTIVE supplier")
     void draftSupplierInactive() {
-        Supplier inactive = Supplier.create(SUPPLIER_ID, TENANT, "Acme", SupplierStatus.INACTIVE);
+        Supplier inactive = Supplier.create(
+                SUPPLIER_ID, TENANT, "SUP-ACME-INACTIVE", "Acme", SupplierStatus.INACTIVE);
         when(supplierRepository.findById(SUPPLIER_ID, TENANT))
                 .thenReturn(Optional.of(inactive));
 

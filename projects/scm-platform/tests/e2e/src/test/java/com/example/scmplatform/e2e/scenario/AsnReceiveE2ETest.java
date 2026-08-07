@@ -18,6 +18,7 @@ import static org.awaitility.Awaitility.await;
 
 import com.example.scmplatform.e2e.testsupport.KafkaTestConsumer;
 import com.example.scmplatform.e2e.testsupport.ProcurementDbFixtures;
+import com.example.scmplatform.e2e.testsupport.SupplierApiFixtures;
 import com.example.scmplatform.e2e.testsupport.ScmPlatformE2ETestBase;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -68,8 +69,9 @@ class AsnReceiveE2ETest extends ScmPlatformE2ETestBase {
         String buyerAccountId = randomAccountId();
         String buyerToken = jwt.signBuyerToken(buyerAccountId);
         String operatorToken = jwt.signOperatorToken(randomAccountId());
-        String supplierId = ProcurementDbFixtures.insertActiveSupplier(
-                postgres, "scm", "Acme Supplier (e2e-asn)");
+        String supplierId = SupplierApiFixtures.registerActiveSupplier(
+                http, gatewayBaseUri(), operatorToken,
+                "SUP-ASN", "Acme Supplier (e2e-asn)");
 
         String sku = uniqueSku("SKU-ASN");
         int orderedQty = 4;
