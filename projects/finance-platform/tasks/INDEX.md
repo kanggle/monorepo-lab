@@ -78,6 +78,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
+- `TASK-FIN-BE-068-no-path-for-money-to-enter-an-account.md` — filed 2026-08-07 (`TASK-MONO-510` 5·6회차 발굴). **계좌에 돈이 들어갈 길이 없다.** deposit/topup/credit **HTTP 매핑 0건**, `topUp()` 은 *"internal funding (v1 stub)"* 이고 **프로덕션 호출자 0건**(테스트 6회만), `@KafkaListener` **0건** ⇒ 이체·홀드·캡처가 전부 도달 불가이고 전기가 없어 `/ledger` 4피드가 전부 0. 콘솔에서 **쓰기가 하나도 성립하지 않는 유일한 도메인**이다. 🔴 착수 전 **AC-0 결정 필요**(stub 승격 / 입금 이벤트 컨슈머 / 결제 도메인 계약=ADR) — 🔵 `topUp` 의 테스트 6개를 먼저 읽을 것, 그것이 "무엇이 참이어야 하는가" 를 이미 갖고 있을 수 있다. 분석=Opus 5 / 구현 권장=Opus (자금 모델 + 전기 투영).
+
 ## in-progress
 
 (empty)

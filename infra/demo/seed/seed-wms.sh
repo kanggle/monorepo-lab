@@ -95,6 +95,14 @@ SEED_TOKEN="$(operator_token demo-corp)" \
   || { seed_fail "operator_token(demo-corp) 실패 — 인증 경로가 끊겼습니다"; seed_summary; exit $?; }
 export SEED_TOKEN
 
+# 🔴 위 `wait_http` 는 **엣지**만 잰다. 2026-08-07 `demo-up.sh wms` 직후 ASN 생성과
+# 출고 주문이 **둘 다 500** 이었고(게이트웨이는 이미 healthy), 앱이 healthy 가 된 뒤
+# 같은 스크립트를 재실행하니 실패 0 이었다. 이 흐름이 직접 쓰는 두 백엔드를 각각 본다.
+wms_ready=1
+wait_backend "inbound-service"  "$GW/api/v1/inbound/asns?size=1"     || wms_ready=0
+wait_backend "outbound-service" "$GW/api/v1/outbound/orders?size=1" 60 || wms_ready=0
+[ "$wms_ready" = "1" ] || { seed_summary; exit $?; }
+
 # =============================================================================
 # 1) 입고 흐름 — ASN → 검수 → 적치
 # =============================================================================

@@ -155,32 +155,14 @@ ensure_master() {
   return 0
 }
 
-# --- 백엔드 준비성 (🔴 lib 의 wait_http 만으로는 부족하다) --------------------
-# `wait_http` 는 401/403 을 "살아 있음" 으로 센다. 게이트웨이 단독이면 맞는 술어지만
-# **erp 에서는 틀린다** — 토큰 없는 요청은 게이트웨이 자신의 시큐리티 필터가 401 로
-# 끊어 버려서 **뒤의 서비스에 닿지도 않는다**. 즉 401 은 "백엔드가 떴다"를 전혀
-# 증명하지 않는다. 실측(볼륨 초기화 후 첫 기동):
-#
-#   wait_http  → 통과(401)
-#   POST /api/erp/masterdata/job-grades → 500
-#   게이트웨이 로그: Connection refused: masterdata-service/172.24.0.9:8080
-#   masterdata 로그: 에러 0건  ← 요청이 도달조차 하지 않았다
-#
-# 그래서 **토큰을 얻은 뒤** 인증된 GET 이 2xx 를 낼 때까지 다시 기다린다. 세 백엔드를
-# 각각 확인한다 — 하나만 보고 나머지를 추정하면 같은 함정을 한 겹 아래에서 반복한다.
-wait_backend() { # wait_backend <라벨> <경로> [초]
-  local label="$1" path="$2" timeout="${3:-240}" i
-  for (( i=0; i<timeout; i+=5 )); do
-    http GET "$ERP$path" >/dev/null && return 0
-    sleep 5
-  done
-  seed_fail "$label 이 ${timeout}초 안에 인증된 요청에 2xx 를 내지 않았습니다 (마지막 HTTP $SEED_LAST_STATUS)"
-  return 1
-}
+# --- 백엔드 준비성 -----------------------------------------------------------
+# 🔵 `wait_backend` 는 **lib.sh 로 승격**됐다(2026-08-07) — 같은 게이트가 없어서
+# scm 과 wms 도 `demo-up.sh` 직후 전건 500 을 냈기 때문이다. 왜 필요한지는 lib.sh
+# 의 정의부 주석에 세 도메인의 실측과 함께 있다.
 ready=1
-wait_backend "masterdata-service" /api/erp/masterdata/departments || ready=0
-wait_backend "approval-service"   /api/erp/approval/requests   60 || ready=0
-wait_backend "read-model-service" /api/erp/read-model/employees 60 || ready=0
+wait_backend "masterdata-service" "$ERP/api/erp/masterdata/departments" || ready=0
+wait_backend "approval-service"   "$ERP/api/erp/approval/requests"   60 || ready=0
+wait_backend "read-model-service" "$ERP/api/erp/read-model/employees" 60 || ready=0
 [ "$ready" = "1" ] || exit 1
 
 seed_log "시작 — $ERP (운영자 토큰, assume demo-corp)"
