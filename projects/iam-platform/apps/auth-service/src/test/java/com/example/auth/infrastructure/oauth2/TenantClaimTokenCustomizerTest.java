@@ -577,17 +577,71 @@ class TenantClaimTokenCustomizerTest {
     // TASK-BE-327 — assume-tenant (token-exchange) branch (ADR-MONO-020 D2+D3)
     // -----------------------------------------------------------------------
 
+    /**
+     * TASK-MONO-515 (ADR-MONO-060 A): the account UUID the provider reads out of the
+     * validated subject token and now carries onto the resolved grant. Every assume-tenant
+     * helper below supplies it, because the provider always does — a grant without it is a
+     * wiring bug, and {@link #assumeTenant_missingSubjectAccount_failsClosed} pins that.
+     */
+    private static final String ASSUME_ACCOUNT_ID = "0199de70-0000-7000-8000-00000000ad03";
+
     private AssumeTenantAuthenticationToken assumeGrant(String tenantId, String tenantType) {
-        return new AssumeTenantAuthenticationToken(
-                null, "subject", "urn:ietf:params:oauth:token-type:access_token",
-                tenantId, tenantType);
+        return assumeGrant(tenantId, tenantType, null);
     }
 
     private AssumeTenantAuthenticationToken assumeGrant(
             String tenantId, String tenantType, List<String> orgScope) {
         return new AssumeTenantAuthenticationToken(
                 null, "subject", "urn:ietf:params:oauth:token-type:access_token",
-                tenantId, tenantType, orgScope);
+                tenantId, tenantType, orgScope, null, ASSUME_ACCOUNT_ID);
+    }
+
+    @Test
+    @DisplayName("MONO-515 (ADR-060 A) assume-tenant: sub = the validated subject account UUID, not the acting client")
+    void assumeTenant_subIsTheSubjectAccount() {
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
+        when(context.getAuthorizationGrant()).thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE"));
+        when(accountServicePort.listEntitledDomains("acme-corp")).thenReturn(List.of("erp"));
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        assertThat(built.getSubject())
+                .as("jwt-standard-claims.md § sub — account UUID, required, immutable across all platforms. "
+                        + "All six gateways map X-User-Id <- sub, so this value IS the actor everywhere.")
+                .isEqualTo(ASSUME_ACCOUNT_ID);
+        // The negative half: the pre-MONO-515 value was the acting client id. Asserting
+        // only "sub == account" would still pass if the builder happened to carry both;
+        // this pins that the client id is gone from the subject position.
+        assertThat(built.getSubject()).isNotEqualTo("platform-console-web");
+    }
+
+    @Test
+    @DisplayName("MONO-515 assume-tenant: no resolved subject account → fail-CLOSED (never silently mint the client id)")
+    void assumeTenant_missingSubjectAccount_failsClosed() {
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
+        // A grant without the subject account = a wiring bug. Minting anyway would restore
+        // the exact defect ADR-060 fixed, silently: the framework default sub is the client
+        // principal, and nothing downstream would fail — the audit rows would just be wrong.
+        when(context.getAuthorizationGrant()).thenReturn(new AssumeTenantAuthenticationToken(
+                null, "subject", "urn:ietf:params:oauth:token-type:access_token",
+                "acme-corp", "B2B_ENTERPRISE", null, null, null));
+        // Deliberately NOT stubbing context.getClaims(): the guard must reject before any
+        // claim is written. Mockito's strict stubbing enforces that — a stub here would go
+        // unused and fail the test, which is the assertion.
+
+        assertThatThrownBy(() -> customizer.customize(context))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("subject account id is required");
+
+        // Fail-closed means no token, not a half-populated one: the account-service leg
+        // must not even be reached.
+        verify(accountServicePort, never()).listEntitledDomains(any());
     }
 
     @Test
@@ -1115,7 +1169,7 @@ class TenantClaimTokenCustomizerTest {
             OperatorAssignmentPort.DelegatedScope delegatedScope) {
         return new AssumeTenantAuthenticationToken(
                 null, "subject", "urn:ietf:params:oauth:token-type:access_token",
-                tenantId, tenantType, orgScope, delegatedScope);
+                tenantId, tenantType, orgScope, delegatedScope, ASSUME_ACCOUNT_ID);
     }
 
     @Test

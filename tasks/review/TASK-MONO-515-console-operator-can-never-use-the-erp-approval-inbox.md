@@ -8,7 +8,7 @@ TASK-MONO-515
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -205,26 +205,48 @@ auth-service 토큰 커스터마이저 · `AssumeTenantExchangeIntegrationTest` 
       🔴 신규: **erp 결재함이 2개**(approval + notification) · ⚠️ 라이브 3종은 미재현(사유 위).
       상세는 위 §
 - [x] **AC-1 (결정) — 완료 2026-08-07.** `ADR-MONO-060` **ACCEPTED — A**(`sub` = 계정 UUID)
-- [ ] **AC-2 (구현)** — auth-service 토큰 커스터마이저에서 assume 토큰의 `sub` 를 계정 UUID
-      로 발급한다. 🔵 **읽는 쪽은 건드리지 않는다** — 게이트웨이 6/6 · `ActorClaims` 는
-      이미 `sub` 를 읽고 있고, 그것이 A 를 고른 이유다
-- [ ] **AC-2b (계약 확인)** — `platform/contracts/jwt-standard-claims.md` § `sub` 를 열어
-      **변경이 필요한지 판정**한다. 🔵 ADR 은 *"변경 불요일 수 있다 — 이미 그렇게 적혀
-      있다"* 고 본다. 변경이 불요라면 **그 사실을 적는다**(안 적으면 다음 세션이 다시 연다)
-- [ ] **AC-3 (회귀 가드)** — 상신자와 승인자가 **서로 다른 actorId** 로 기록되는지
-      단언한다. 🔴 **"기존 반대 단언을 갱신" 은 잘못된 지시였다** — `AssumeTenantExchange‐
-      IntegrationTest` 의 유일한 `sub` 단언은 **base 토큰** 대상이라 A 로 깨지지 않는다.
-      갱신 대상은 **주석**이고, 그 주석은 `sub`/`act` 를 RFC 8693 의 **반대로** 설명하고
-      있다. 주석을 고치지 않으면 다음 세션이 같은 오독을 상속한다
-- [ ] **AC-6 (`act` 미결 질문에 답한다)** — acting client(`platform-console-web`)를 보존할
-      것인지 명시적으로 결정하고 **티켓에 기록**한다. 보존한다면 `act` 클레임 배치(RFC 8693
-      기준 `sub`=위임 주체 · `act`=행위자), 보존하지 않는다면 **무엇을 잃는지**를 적어
-      소유자가 한 줄로 뒤집을 수 있게 남긴다. 🔴 조용히 빠뜨리는 것은 답이 아니다
-- [ ] **AC-4 (라이브)** — 콘솔에서 상신 → 다른 신원으로 로그인 → 결재함에서 승인이
-      실제로 성공한다. BFF 원소 수로 판정한다(콘솔은 클라이언트 렌더 — SSR HTML grep 은
-      깨진 탐지기)
-- [ ] **AC-5 (데모 반영)** — `infra/demo/seed/seed-erp.sh` 헤더의 "결재함은 채울 수 없다"
-      설명과 `docs/guides/interview-demo-walkthrough.md` 의 한계 표를 갱신한다
+- [x] **AC-2 (구현) — 완료.** `AssumeTenantAuthenticationProvider` 가 이미 검증해 둔
+      `oidcSubject`(= 계정 UUID, 배정 게이트의 키)를 `AssumeTenantAuthenticationToken` 에
+      실어 보내고, `TenantClaimTokenCustomizer.customizeForAssumeTenant` 가 그것을
+      `sub` 로 세운다. **fail-closed** — 계정 id 가 없으면 발급 거부(없으면 프레임워크
+      기본값인 클라이언트 principal 로 조용히 되돌아가 결함을 그대로 재현한다).
+      🔵 **읽는 쪽 변경 0** — 게이트웨이 6/6 · `ActorClaims` 는 이미 `sub` 를 읽는다.
+      🔵 신원이 없던 게 아니라 **커스터마이저까지 갈 경로가 없었다**(token_exchange 의
+      principal 은 클라이언트라 `alignSubToAccountId` 가 net-zero 분기로 빠졌다)
+- [x] **AC-2b (계약 확인) — 완료. 행 자체는 변경 불요였다.** `sub` 행은 이미
+      *"Account ID, globally unique, immutable **across all platforms**"* 다 — 위반한 건
+      계약이 아니라 `token_exchange` 그랜트였다. 새 클레임·타입변경 **0**. 다만 그 사실을
+      **적었다**: `sub` 행에 "카브아웃 없음, 의도적"(`email` 행은 assume-tenant 를 명시
+      카브아웃하므로 대조군) + 변경 이력 1줄. 🔵 안 적으면 다음 세션이 이 질문을 다시 연다
+- [x] **AC-3 (회귀 가드) — 완료.** 유닛 2건(`sub` = 주체 계정 / 계정 부재 → fail-closed,
+      claims 를 건드리기 **전에** 거부하는 것까지 strict-stubbing 으로 고정) + IT 2건
+      (happy path `sub` 단언 · 통합 시나리오에서 `assumed.sub == base.sub == account`).
+      🔴 **틀린 지시를 정정했다** — 갱신할 "반대 단언" 은 없었다(유일한 `sub` 단언은 base
+      토큰 대상). 갱신 대상은 **주석**이었고, 그 주석은 RFC 8693 을 거꾸로 읽고 있었다
+      (RFC: `sub`=위임 주체 · `act`=행위자 — 구현이 둘을 뒤집어 놨다). 주석을 고쳤다
+- [x] **AC-6 (`act` 미결 질문) — 답: `act` 를 싣지 않는다. 잃는 것이 없기 때문이다.**
+      ADR § A 는 "acting client 를 잃는다" 를 이 안의 대가로 적었는데 **실측하니 사실이
+      아니다**: assume 토큰의 `aud`(및 교환을 인증한 `client_id`)가 여전히
+      `platform-console-web` 이다 ⇒ 행위자 정보는 이미 토큰에 남아 있고, `act` 는 그것을
+      **중복**시키면서 계약 레지스트리 항목을 하나 늘린다
+      (`scripts/check-jwt-claims-registry.sh` 가 minted claims 를 계약과 대조한다).
+      🔴 **이 판정을 주석이 아니라 테스트로 고정했다** — `aud ⊇ platform-console-web` 를
+      IT 에서 단언한다. 이 전제가 깨지면 그 단언이 먼저 빨개진다.
+      🔵 **되돌리는 비용은 한 줄**이다(커스터마이저에 `act` 클레임 + 계약 행 1개).
+      소유자가 "acting client 를 별도 클레임으로 보존하라" 고 하면 그때 추가한다
+- [ ] ⚠️ **AC-4 (라이브) — 이번 회차 미수행. 그리고 수행했어도 통과할 수 없다(실측).**
+      🔴 **막힌 것을 고치자 그 아래가 드러났다.** `sub` 수정으로 actorId 는 이제 **콘솔
+      계정마다 하나**다(전에는 통틀어 하나). 그런데 **데모 운영자 계정이 1개뿐**이다 —
+      `R__seed_demo_operator.sql` 의 `admin_operators` INSERT **1건**(실측). 자기결재
+      금지(②)를 만족시킬 두 번째 신원이 여전히 없으므로 결재함은 여전히 0 이다.
+      ⇒ 남은 것은 **토큰 결함이 아니라 데모 데이터 공백**이고, 운영자 계정이 둘이 되는
+      순간 루프가 닫힌다. **후속 후보**: 데모 운영자 2번째 계정 시드(별건 티켓).
+      ⚠️ 스택 미기동으로 BFF 원소 수 판정은 하지 않았다 — **안 한 것을 했다고 적지 않는다**
+- [x] **AC-5 (데모 반영) — 완료.** `seed-erp.sh` 헤더: 사유 **3 → 2**, ③ 을 해소로 표시하고
+      🔴 그 헤더가 인용하던 *"결함이 아니라 명시된 동작"* 근거가 **틀린 인용**이었음을 기록.
+      `interview-demo-walkthrough.md` 한계 행: 🔴 → 🟡, 남은 사유는 **데모 데이터 1건**임을
+      명시. 🔵 두 곳 모두 **눈에 안 보이던 절반**(필터 0건 도메인의 감사 기록 오염)이
+      함께 고쳐졌다는 사실을 적었다 — 안 적으면 "erp 화면 하나 고친 일" 로 읽힌다
 
 # Related Specs
 
@@ -262,6 +284,11 @@ auth-service 토큰 커스터마이저 · `AssumeTenantExchangeIntegrationTest` 
 # Definition of Done
 
 - [x] ADR ACCEPTED — `ADR-MONO-060` A (2026-08-07)
-- [ ] AC-0~AC-6 충족 (AC-6 = `act` 질문에 명시적으로 답하고 기록)
+- [x] AC-0 · AC-1 · AC-2 · AC-2b · AC-3 · AC-5 · AC-6
+- [ ] ⚠️ **AC-4 미충족** — 스택 미기동 + **데모 운영자 계정 1개**(실측)로 현재 데이터에선
+      통과 불가. 남은 것은 토큰이 아니라 데모 데이터 공백 ⇒ 별건 후속
+- [x] 로컬 유닛 GREEN (`auth-service` `TenantClaimTokenCustomizerTest` +
+      `AssumeTenantAuthenticationProviderTest`, 66 tests). IT 는 Testcontainers ⇒ **CI 권위**
+- [ ] Ready for review
 - [ ] iam + erp 테스트 GREEN
 - [ ] Ready for review

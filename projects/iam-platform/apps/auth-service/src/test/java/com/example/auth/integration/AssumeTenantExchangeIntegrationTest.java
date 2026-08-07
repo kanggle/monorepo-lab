@@ -224,6 +224,14 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
         // Same iss as the base login token (federation invariant, AC-5).
         JsonNode basePayload = decodeJwtPayload(base);
         assertThat(assumed.get("iss").asText()).isEqualTo(basePayload.get("iss").asText());
+
+        // TASK-MONO-515 (ADR-MONO-060 A): and the same sub. The assumed token identifies
+        // the OPERATOR, not the console client it was minted through — the account UUID
+        // the provider validated out of the subject token and keyed the assignment gate on.
+        assertThat(assumed.get("sub").asText())
+                .as("the assumed token's sub is the account (jwt-standard-claims.md § sub)")
+                .isEqualTo(basePayload.get("sub").asText())
+                .isEqualTo("assume-op-001");
     }
 
     @Test
@@ -431,15 +439,39 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
                 .as("4b: the operator admits at the domain gateway via roles ONLY (no account_type)")
                 .isFalse();
 
-        // One identity, two role-bindings, one session: the consumer login token is the
-        // ACCOUNT's (sub = the account), and the operator domain token is derived FROM that
-        // same base token (it is the subject_token of the assume-tenant exchange above).
-        // The assumed token's own sub is the acting console client (platform-console-web)
-        // per the RFC 8693 flow — the account linkage is the validated subject token, not a
-        // sub claim on the assumed token.
+        // One identity, two role-bindings, one session: BOTH tokens belong to the account.
+        //
+        // TASK-MONO-515 (ADR-MONO-060 option A) corrected what this block used to say. The
+        // previous comment asserted — in prose, never in code — that "the assumed token's
+        // own sub is the acting console client per the RFC 8693 flow". Two things were
+        // wrong with it. It read the RFC backwards (there `sub` is the subject being acted
+        // FOR and `act` names the actor, so the implementation had the two inverted), and
+        // because it lived in a comment while the only executable `sub` assertion targeted
+        // the BASE token, it looked like a pinned decision while pinning nothing. The real
+        // consequence was downstream: all six gateways map X-User-Id <- sub, so every
+        // console operator was the same actor in every domain.
         assertThat(basePayload.get("sub").asText())
                 .as("the consumer login token belongs to the account (its subject_token drives the operator exchange)")
                 .isEqualTo(account);
+        assertThat(assumed.get("sub").asText())
+                .as("MONO-515/ADR-060 A: the assumed token's sub is the ACCOUNT (jwt-standard-claims.md § sub), "
+                        + "not the acting client — this is the value erp's two inboxes filter on and every "
+                        + "domain's audit trail records")
+                .isEqualTo(account);
+        assertThat(assumed.get("sub").asText())
+                .as("the acting client id must no longer occupy the subject position")
+                .isNotEqualTo("platform-console-web");
+
+        // AC-6 — the `act` question, answered by measurement rather than by adding a claim.
+        // ADR-060 § A listed "acting client is lost" as this option's cost. It is not: the
+        // assumed token's `aud` still names platform-console-web, so who acted is still on
+        // the token. An `act` claim would duplicate that at the price of a new entry in
+        // platform/contracts/jwt-standard-claims.md (check-jwt-claims-registry.sh compares
+        // minted claims against the contract). If that ever stops holding, this assertion
+        // is what fails.
+        assertThat(assumed.get("aud").toString())
+                .as("AC-6: the acting client survives in aud — nothing was lost by moving sub to the account")
+                .contains("platform-console-web");
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

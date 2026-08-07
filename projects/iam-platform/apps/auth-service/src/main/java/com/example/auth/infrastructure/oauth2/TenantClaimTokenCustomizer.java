@@ -358,6 +358,54 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
     }
 
     /**
+     * TASK-MONO-515 (ADR-MONO-060 option A): sets the assume-tenant token's {@code sub}
+     * to the account UUID carried on the resolved grant — the value the provider read out
+     * of the <b>validated</b> subject token and keyed the assignment gate on.
+     *
+     * <p><b>This restores a contract the token was already violating.</b>
+     * {@code platform/contracts/jwt-standard-claims.md} § Standard Claims defines
+     * {@code sub} as a required account-UUID that is immutable across all platforms, and
+     * the same table knows how to carve out the assume-tenant exchange when it means to —
+     * it does so explicitly for {@code email} ("nor on the assume-tenant exchange") and
+     * conspicuously not for {@code sub}. The asymmetry is a signal, not silence.
+     *
+     * <p><b>What it fixes downstream, with no downstream change.</b> All six domain
+     * gateways map {@code X-User-Id <- sub} ({@code JwtHeaderMapping.skipIfNull}) and the
+     * shared {@code ActorClaims.from(jwt)} sets {@code accountId = jwt.getSubject()}. With
+     * {@code sub} = {@code platform-console-web}, every console operator was the same
+     * actor in every domain: erp's approval and notification inboxes filtered to a single
+     * synthetic id (visible — the screen was empty), and every audit row in every domain
+     * recorded the client as the actor (invisible — nothing failed). Option A was chosen
+     * precisely because the reading side is already correct; only the mint was wrong.
+     *
+     * <p><b>Fail-closed.</b> A blank account id here means the provider did not resolve
+     * the subject — the one situation in which minting would silently reproduce the defect
+     * (the framework default {@code sub} is the client principal). Reject instead, matching
+     * the tenant fail-closed immediately above.
+     *
+     * <p><b>The acting client is not lost.</b> RFC 8693 would express it as an {@code act}
+     * claim, and ADR-MONO-060 § A listed that as this option's cost. It is not one here:
+     * the assumed token's {@code aud} (and the {@code client_id} the exchange was
+     * authenticated with) is {@code platform-console-web}, so the acting client is still
+     * on the token, in a claim that was already carrying it. Adding {@code act} would
+     * duplicate that at the price of a new registry entry
+     * ({@code scripts/check-jwt-claims-registry.sh} compares minted claims against the
+     * contract). Asserted in {@code AssumeTenantExchangeIntegrationTest} so the claim
+     * "nothing was lost" is a measurement rather than a remark.
+     */
+    private void alignSubToSubjectAccount(JwtEncodingContext context, String subjectAccountId) {
+        if (subjectAccountId == null || subjectAccountId.isBlank()) {
+            log.error("SECURITY: assume-tenant token issued without a resolved subject account id — "
+                    + "refusing to mint (sub would silently fall back to the acting client).");
+            throw new IllegalStateException(
+                    "subject account id is required for assume-tenant issuance (fail-closed)");
+        }
+        context.getClaims().subject(subjectAccountId);
+        log.debug("TenantClaimTokenCustomizer: assume-tenant — sub aligned to the subject account "
+                + "(jwt-standard-claims.md § sub; value not logged)");
+    }
+
+    /**
      * TASK-BE-577: injects the OIDC {@code email} claim on the identity-bearing grants
      * ({@code authorization_code} and, through the same method, {@code refresh_token}).
      *
@@ -431,11 +479,13 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
         String selectedTenantType = null;
         java.util.List<String> orgScope = null;
         DelegatedScope delegatedScope = null;
+        String subjectAccountId = null;
         if (context.getAuthorizationGrant() instanceof AssumeTenantAuthenticationToken grant) {
             selectedTenantId = grant.getSelectedTenantId();
             selectedTenantType = grant.getSelectedTenantType();
             orgScope = grant.getOrgScope();
             delegatedScope = grant.getDelegatedScope();
+            subjectAccountId = grant.getSubjectAccountId();
         }
 
         if (selectedTenantId == null || selectedTenantId.isBlank()
@@ -445,6 +495,8 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
             throw new IllegalStateException(
                     "selected tenant_id/tenant_type is required for assume-tenant issuance (fail-closed)");
         }
+
+        alignSubToSubjectAccount(context, subjectAccountId);
 
         context.getClaims()
                 .claim("tenant_id", selectedTenantId)

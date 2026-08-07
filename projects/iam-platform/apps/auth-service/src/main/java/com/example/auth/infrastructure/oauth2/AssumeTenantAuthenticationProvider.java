@@ -166,9 +166,16 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
         // TASK-BE-478 (ADR-MONO-045 §3.4 step 2b): also carry the resolved cross-org
         // delegatedScope cap (null for a normal assignment) so the customizer's
         // assume-tenant branch confines entitled_domains/roles to the delegated slice.
+        // TASK-MONO-515 (ADR-MONO-060 option A): carry the VALIDATED subject account
+        // UUID (`oidcSubject`, read out of the subject token in step 1 and already used
+        // as the assignment-gate key) so the customizer can set the assumed token's
+        // `sub` to it. Without this the customizer has no route to the account — the
+        // token-exchange principal is the CLIENT — and `sub` stayed the client id, which
+        // made every console operator indistinguishable downstream (all six gateways map
+        // X-User-Id <- sub).
         AssumeTenantAuthenticationToken resolvedGrant = new AssumeTenantAuthenticationToken(
                 clientPrincipal, exchange.getSubjectToken(), exchange.getSubjectTokenType(),
-                selectedTenantId, CUSTOMER_TENANT_TYPE, orgScope, delegatedScope);
+                selectedTenantId, CUSTOMER_TENANT_TYPE, orgScope, delegatedScope, oidcSubject);
 
         // TASK-BE-336: propagate the client's REGISTERED scopes into the
         // domain-facing token's `scope` claim (was Set.of() — empty). This is
