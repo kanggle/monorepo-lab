@@ -8,7 +8,7 @@ WMS · SCM · ERP · Finance 도메인 데이터 시드 — 콘솔 도메인 운
 
 # Status
 
-review
+done
 
 # Owner
 
