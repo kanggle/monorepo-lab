@@ -78,11 +78,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-SCM-BE-058-inbound-expected-e2e-reds-the-nightly-on-main.md` — **🟢 READY — `InboundExpectedLoopE2ETest` 가 main 의 nightly 를 간헐적으로 빨갛게 만든다.** 다른 티켓 작업 중 main 확인하다 발견. 실패 잡은 매번 `E2E full (scm-platform v1 cross-service) @ Build service images, run e2e suite`, 단언은 `Expecting actual not to be null`(= **기다리던 이벤트가 안 왔다**). 🔵 **빨강을 한 덩어리로 세면 안 된다** — 같은 날 nightly 7회 중 하나(`31116442999`)는 `Failed to resolve action download info` 로 **`Set up job` 에서 죽은 GitHub Actions 장애**이고, 넷은 실제 실행 단계 실패이며, 둘은 초록이다 ⇒ 결정론적 회귀 아님. 🔴 그러나 **간헐적이라는 사실이 "인프라 탓" 을 증명하지 않는다**([[env_ci_flake_is_a_hypothesis_not_a_verdict]]). AC-1 이 **브로커 end-offset** 으로 "발행이 없었나 vs 컨슈머가 못 받았나" 를 가르라고 요구하고(소비자 쪽 null 로는 안 갈린다), AC-2 가 **성공 실행과의 대조군**을 요구한다(`Connection refused`·OTLP 4318 잡음이 성공 실행에도 있으면 원인 아님). AC-3 은 타임아웃 증량 시 러너 실측 근거를, AC-4 는 **연속 3회 초록**을 요구한다(1회는 간헐 결함에 무의미). 분석=Opus 5 / 구현 권장=**Opus**(크로스서비스 이벤트 타이밍).
-
 ## in-progress
 
 ## review
+
+- `TASK-SCM-BE-058-inbound-expected-e2e-reds-the-nightly-on-main.md` — **🔵 REVIEW — 간헐 nightly 빨강, 원인 확정.** `main` 최근 30실행 재계수 **실패 16 / 성공 13**(≈55%), 같은 커밋 `078d230c6` 이 두 번 실패 ⇒ 커밋 특정 아님. 🔴 **AC-1 이 제시한 두 갈래 중 어느 쪽도 아니었다** — 발행도 됐고 컨슈머도 정상 수신했는데 **테스트가 버렸다**. `KafkaTestConsumer.drain()` 이 버퍼를 *비우는데* `awaitEnvelope` 의 누산기가 **호출마다 새로 만드는 지역 변수**여서, 두 이벤트가 같은 배치로 들어오면 첫 await 가 둘 다 빼가고 두 번째 것을 스코프째 버린다 → 다음 await 는 30초 타임아웃. **관측 6종이 전부 이 하나로 설명된다** (간헐 · 두-이벤트 테스트만 실패 · 단일 이벤트 테스트는 **한 번도** 실패 없음 · 두 메서드 번갈아 · 둘 중 하나만 null · 두 PO 를 모두 CONFIRMED 로 몬 뒤 await). 🔵 **형제 파리티**: fan `ArtistAndPostFlowE2ETest` 는 await 3개가 누산기 하나를 공유하고 wms `GatewayMasterE2ETest` 는 이유까지 주석에 적어 뒀다 — scm 만 await 를 헬퍼로 뽑으며 누산기를 안으로 넣었다(**추상화가 결함을 만들었다**). 전수 조사 낙오자 **이 하나뿐**. AC-2 대조군 유효(계측 양쪽 존재 확인 후): `Connection refused`·OTLP 잡음 **둘 다 성공 실행에도 있음** ⇒ 원인 아님. 타임아웃은 안 건드렸다(레코드는 늦은 게 아니라 버려졌다). 수정 1파일 3줄. ⏳ **AC-4(연속 3회 초록)는 머지 후 판정** — 기저 55% 실패율에서 3연속 우연 확률 ≈9%. impl PR 
 
 ## done
 

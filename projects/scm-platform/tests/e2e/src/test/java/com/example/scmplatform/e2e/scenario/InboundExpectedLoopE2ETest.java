@@ -88,6 +88,32 @@ class InboundExpectedLoopE2ETest extends ScmPlatformE2ETestBase {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    /**
+     * Records drained from the shared {@link KafkaTestConsumer}, accumulated for the
+     * whole test method (JUnit's default PER_METHOD lifecycle gives each test a fresh
+     * instance, so this needs no explicit reset).
+     *
+     * <p>It MUST NOT be local to {@code awaitEnvelope}. {@code KafkaTestConsumer.drain()}
+     * "returns all records buffered so far, <b>clearing the buffer</b>" — so a record it
+     * hands back is gone from the consumer for good. When a test awaits two envelopes in
+     * sequence:
+     *
+     * <pre>
+     *   JsonNode payloadA = awaitInboundExpected(consumer, poA);
+     *   JsonNode payloadB = awaitInboundExpected(consumer, poB);
+     * </pre>
+     *
+     * and both events happen to land in the SAME drain batch, the first call matched A
+     * and dropped B into a local list that then went out of scope. The second call
+     * drained an empty buffer and timed out after 30s with "envelope keyed by PO id …
+     * Expecting actual not to be null" — even though B had been produced correctly and
+     * consumed successfully. That is TASK-SCM-BE-058: intermittent by construction
+     * (it needs the two events to share a batch), and it can only ever hit the tests
+     * that await more than one envelope — which is exactly what the nightly showed,
+     * with the single-envelope tests never once failing.
+     */
+    private final List<ConsumerRecord<String, String>> drained = new ArrayList<>();
+
     // ------------------------------------------------------------------
     // AC-1 / AC-3 — happy path (single warehouse), full envelope (smoke)
     // ------------------------------------------------------------------
@@ -436,10 +462,15 @@ class InboundExpectedLoopE2ETest extends ScmPlatformE2ETestBase {
         return awaitEnvelopePayload(consumer, TOPIC_INBOUND_EXPECTED, poId);
     }
 
-    /** Awaits any envelope on {@code topic} keyed by {@code poId} and returns its full JSON. */
+    /**
+     * Awaits any envelope on {@code topic} keyed by {@code poId} and returns its full JSON.
+     *
+     * <p>Accumulates into the test-scoped {@link #drained} buffer, never a local one —
+     * see that field for why a local accumulator loses co-batched records.
+     */
     private JsonNode awaitEnvelope(KafkaTestConsumer consumer, String topic, String poId) {
         AtomicReference<JsonNode> envelopeRef = new AtomicReference<>();
-        List<ConsumerRecord<String, String>> seen = new ArrayList<>();
+        List<ConsumerRecord<String, String>> seen = drained;
         await().atMost(Duration.ofSeconds(30)).pollInterval(Duration.ofMillis(500))
                 .untilAsserted(() -> {
                     seen.addAll(consumer.drain());
