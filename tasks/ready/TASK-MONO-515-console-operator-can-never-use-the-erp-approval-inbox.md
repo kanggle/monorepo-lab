@@ -168,6 +168,26 @@ erp 스택을 띄우지 않았다(메모리 한계로 도메인 슬라이스를 
 
 ---
 
+---
+
+# ⏸ PAUSED — `ADR-MONO-060` 대기
+
+AC-0 이 이 티켓을 **erp 결재함 기능 갭에서 플랫폼 전역 귀속 문제로** 재분류했다
+(게이트웨이 6/6 이 `X-User-Id ← sub`). 그리고 이것은 설계 선호가 아니라
+**`jwt-standard-claims.md` § `sub` 계약 위반**이다.
+
+🔴 **이 티켓이 적은 A 안의 대가는 사실이 아니었다** — `AssumeTenantExchangeIntegrationTest`
+의 유일한 `sub` 단언은 **base 토큰** 대상이고, assume 토큰에 대한 진술은 **주석**뿐이다.
+A 는 테스트가 고정한 결정을 뒤집지 않는다.
+
+결정은 [`docs/adr/ADR-MONO-060-assumed-token-subject-identity.md`](../../docs/adr/ADR-MONO-060-assumed-token-subject-identity.md)
+로 옮겼다(A 계약 준수 복원 / B 별도 클레임 / C 배제 권장, 추천 = **A**).
+**ACCEPTED 전까지 착수하지 않는다.** 해제는 정확형만:
+
+```
+ADR-MONO-060 ACCEPTED — <A|B|C>
+```
+
 # Acceptance Criteria
 
 - [x] **AC-0 (재현 + 모집단) — 완료 2026-08-07.** `sub = platform-console-web` 토큰 실측 ✅ ·
