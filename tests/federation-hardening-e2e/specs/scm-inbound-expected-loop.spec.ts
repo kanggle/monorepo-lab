@@ -155,28 +155,76 @@ test.describe('scm inbound-expected loop — federation live (ADR-MONO-050 leg 2
       // source+status; the nightly DB is fresh per run and this spec is the only
       // injector of an scm inbound-expected event, so a CREATED SCM_PROCUREMENT ASN
       // is unambiguously the one this test drove (poId/poNumber logged for triage).
-      await expect
-        .poll(
-          async () => {
-            const resp = await ctx.request.get(
-              `${WMS_INBOUND_BASE}/api/v1/inbound/asns?status=CREATED&size=100`,
-              { headers: authed },
-            );
-            if (resp.status() !== 200) return false;
-            const body = await resp.json();
-            const items = body.items ?? [];
-            return items.some(
-              (a: { source?: string; status?: string }) =>
-                a.source === 'SCM_PROCUREMENT' && a.status === 'CREATED',
-            );
-          },
-          {
-            message: `wms inbound-service creates an Asn(CREATED, SCM_PROCUREMENT) — poNumber=${poNumber} poId=${poId}`,
-            timeout: 60_000,
-            intervals: [1_000],
-          },
-        )
-        .toBe(true);
+      //
+      // Envelope: `specs/contracts/http/inbound-service-api.md` §Pagination —
+      // `{ content, page:{number,size,totalElements,totalPages}, sort }`.
+      // It is NOT `{ items, ... }`: TASK-BE-568 (ADR-MONO-058 D3) replaced the
+      // hand-rolled `PagedResponse(items, page, size, total)` with the shared
+      // carrier, and this reader kept asking for `items`. `body.items` then read
+      // `undefined` on every poll, so the predicate was false for the full 60s —
+      // and the failure message still said "wms inbound-service creates an Asn",
+      // i.e. a READER bug wearing the producer's name. It reddened the nightly
+      // for 7 consecutive days (TASK-MONO-516) while wms was, in fact, creating
+      // the ASN on every single attempt.
+      //
+      // Hence `lastDiagnostic`: every non-match now records WHY, and the timeout
+      // reports it. A wrong status, a renamed envelope and a genuinely absent row
+      // are three different failures — they must not share one sentence.
+      let lastDiagnostic = 'no request completed';
+      const asnPath = `${WMS_INBOUND_BASE}/api/v1/inbound/asns?status=CREATED&size=100`;
+      try {
+        await expect
+          .poll(
+            async () => {
+              const resp = await ctx.request.get(asnPath, { headers: authed });
+              if (resp.status() !== 200) {
+                // An auth/routing failure is "could not ask", never "not there".
+                lastDiagnostic =
+                  `HTTP ${resp.status()} from the ASN list — ` +
+                  `body=${(await resp.text()).slice(0, 200)}`;
+                return false;
+              }
+              const body = await resp.json();
+              const rows = (body as { content?: unknown }).content;
+              if (!Array.isArray(rows)) {
+                // Contract drift: 200 OK, but not the envelope we contracted for.
+                lastDiagnostic =
+                  `200 OK but no \`content\` array (§Pagination) — ` +
+                  `envelope keys=[${Object.keys(body ?? {}).join(', ')}]`;
+                return false;
+              }
+              const match = (rows as { source?: string; status?: string }[]).some(
+                (a) => a.source === 'SCM_PROCUREMENT' && a.status === 'CREATED',
+              );
+              if (!match) {
+                lastDiagnostic =
+                  `200 OK, content=${rows.length} row(s), none with ` +
+                  `source=SCM_PROCUREMENT status=CREATED — sources=[${
+                    (rows as { source?: string }[])
+                      .map((a) => a.source ?? '?')
+                      .join(', ') || 'none'
+                  }]`;
+              }
+              return match;
+            },
+            {
+              message: `wms inbound-service creates an Asn(CREATED, SCM_PROCUREMENT) — poNumber=${poNumber} poId=${poId}`,
+              timeout: 60_000,
+              intervals: [1_000],
+            },
+          )
+          .toBe(true);
+      } catch (err) {
+        throw new Error(
+          `wms inbound-service did not surface an Asn(CREATED, SCM_PROCUREMENT) ` +
+            `— poNumber=${poNumber} poId=${poId}\n` +
+            `last observed state: ${lastDiagnostic}\n` +
+            `(if this reports a renamed envelope or a non-200, the wms consumer ` +
+            `may well be healthy and THIS reader is the defect — check the ` +
+            `inbound-service log for \`scm_inbound_expected_created\` before ` +
+            `blaming the consumer)\n${(err as Error).message}`,
+        );
+      }
     } finally {
       await ctx.close();
     }
