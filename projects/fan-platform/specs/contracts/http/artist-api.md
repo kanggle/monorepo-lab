@@ -21,6 +21,11 @@
 > The gateway applies a `RewritePath` filter to strip the `/v1/` prefix before
 > forwarding (TASK-FAN-BE-005). Path examples below use the **service-internal**
 > path (i.e., no `/v1/` prefix). Clients must use the external paths above.
+>
+> The **internal** endpoint `/internal/artists/exists` is NOT gateway-routed —
+> it is reachable only on the internal docker network and is authenticated by an
+> IAM `client_credentials` workload-identity JWT (ADR-MONO-005), NOT an end-user
+> token. See § Internal artist-account existence check.
 
 ## Envelope shapes
 
@@ -363,6 +368,68 @@ Response 200: same shape as GET.
 
 Failures: 401, 403 FORBIDDEN, 404 ARTIST_NOT_FOUND, 404 FANDOM_NOT_FOUND,
 422 ARTIST_NOT_PUBLISHED, 422 VALIDATION_ERROR.
+
+---
+
+## Internal artist-account existence check (workload identity — NOT gateway-routed)
+
+`TASK-FAN-BE-045` AC-6 · `ADR-004` (ACCEPTED — A) · `ADR-MONO-059` (ACCEPTED — A).
+
+### `GET /internal/artists/exists?accountId={accountId}&tenantId={tenantId}`
+
+The **remote counterpart** of community-service's port
+`ArtistAccountChecker.isArtistAccount(String accountId, String tenantId) → boolean`,
+called before `FollowArtistUseCase` persists a `follows` row.
+
+**Why this endpoint exists.** `follows.artist_account_id` lives in
+`fanplatform_community` and `artists.account_id` lives in `fanplatform_artist` —
+**separate databases**, so the reference cannot be a foreign key, and
+`specs/services/community-service/architecture.md` § Forbidden dependencies bars a
+DB-level reach-in. `ADR-004` chose the synchronous seam over an event projection
+because the projection would change community-service's declared single-type
+`rest-api` composition.
+
+Auth: **IAM `client_credentials` workload-identity JWT** (ADR-MONO-005). NOT an
+end-user access token. The internal security chain validates issuer + signature +
+a recognized internal client identity; an end-user token → 403 `FORBIDDEN`, no
+token → 401.
+
+Query parameters (1:1 with the port signature):
+
+| Param | Required | Maps to port param | Meaning |
+|---|---|---|---|
+| `accountId` | YES | `accountId` | the account claimed to be an artist |
+| `tenantId` | YES | `tenantId` | tenant scope |
+
+Response 200:
+```json
+{ "exists": true }
+```
+
+`exists` maps **1:1** to the port's `boolean` return value. `exists=true` iff a row
+in `artists` has `account_id = accountId` AND `tenant_id = tenantId`.
+
+**Fail-closed.** Any infrastructure error (DB unavailable, query failure) returns
+`{ "exists": false }` — never `true` on error. The calling adapter is ALSO
+fail-closed: timeout / non-2xx / malformed body → `false`. An unknown account, an
+account belonging to another tenant, and an account that is simply not an artist
+all return `{ "exists": false }` (deny), never leaked as a different status.
+
+> 🔴 **Fail-closed here refuses the follow.** That is deliberate and is what
+> `ADR-004` § Drivers 3 requires: a validation that opens on error is
+> indistinguishable from having no validation. `TASK-FAN-BE-045` AC-6 asserts
+> both halves — a bad `accountId` is refused, **and** taking artist-service down
+> does not open follow.
+
+**Deliberately NOT in this contract** (stated so the omission is a decision, not a
+gap): the artist's `status` (`DRAFT`/`PUBLISHED`/`ARCHIVED`) is **not** exposed and
+**not** consulted. AC-6 requires existence, and gating follow on publication state
+is a product rule nobody has decided. Adding it later is an additive field on this
+response, not a breaking change.
+
+Errors: 401 (no token), 403 (non-workload-identity token), 400 (missing required
+param). Note: a domain "does not exist" is NOT an error — it returns 200 with
+`exists=false`.
 
 ---
 
