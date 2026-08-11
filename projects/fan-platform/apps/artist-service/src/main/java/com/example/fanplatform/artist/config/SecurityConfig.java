@@ -76,6 +76,32 @@ public class SecurityConfig {
     // mutating routes rather than silently 403'd here after passing the gateway (TASK-MONO-417).
     // The JWT converter maps every role to ROLE_<role>, so hasAnyRole("FAN_OPERATOR") matches a
     // FAN_OPERATOR claim. Additive — existing generic operators unaffected.
+    //
+    // TASK-MONO-512 / ADR-MONO-059 ACCEPTED — A: NOBODY CAN PRESENT ANY OF THESE FOUR HERE,
+    // AND THAT IS A DECISION, NOT A GAP.
+    // ---------------------------------------------------------------------------------------
+    // No token reaching this service can carry an admin-tier role today, so every rule below
+    // that names ADMIN_ROLES is unreachable. Two independent reasons, both measured:
+    //
+    //   * FAN_OPERATOR is DERIVED, at assume-tenant, from the selected tenant's ACTIVE
+    //     `tenant_domain_subscription` rows. No tenant subscribes `fan` (0 of 18 rows across
+    //     12 tenants) and no operator is assigned to `fan-platform`; reaching the arm needs
+    //     BOTH rows. ADMIN/OPERATOR/SUPER_ADMIN are granted roles rather than derived ones,
+    //     but nothing grants them in `fan-platform` either.
+    //   * ADR-MONO-059 § Decision excluded option B — an operator authoring on an artist's
+    //     behalf — and records as BINDING that the "an operator assumes a B2C_CONSUMER tenant"
+    //     combination is NOT opened. `fan-platform` is B2C_CONSUMER (account-service V0009),
+    //     so supplying those rows is now out of scope BY DECISION, not merely undone.
+    //
+    // The set is NOT deleted, and that is equally a decision: ADR-MONO-059 offered option D
+    // (declare the fan operator plane dead and strip its four acceptors) and the owner did not
+    // choose it. ARTIST_POST stays a v1 product feature; what changed is WHO authors it — the
+    // artist's own account holding ARTIST (TASK-MONO-512), not an operator through this gate.
+    //
+    // Consequence, written down so it is not rediscovered as a bug: the artist DIRECTORY
+    // (artists, groups, fandoms) consequently has no API caller at all, which is why
+    // infra/demo/seed/seed-fan.sh still creates those rows by direct DB write. TASK-MONO-522
+    // owns that gap. Re-opening this gate is a role-model decision (a new ADR), not a fix.
     private static final String[] ADMIN_ROLES = { "ADMIN", "OPERATOR", "SUPER_ADMIN", "FAN_OPERATOR" };
 
     /**

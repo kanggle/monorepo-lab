@@ -105,6 +105,17 @@ final class OperatorRoleDerivation {
                 case "erp" -> List.of("ERP_OPERATOR");
                 case "finance" -> List.of("FINANCE_OPERATOR");
                 case "mes" -> List.of("MES_OPERATOR");
+                // TASK-MONO-512 / ADR-MONO-059 ACCEPTED — A: this arm is UNREACHABLE, kept
+                // deliberately. It needs a `tenant_domain_subscription` row for `fan`, and
+                // there is none (0 of 18 rows across 12 tenants, measured); `fan-platform`
+                // additionally has no `operator_tenant_assignment` row, so the exchange it
+                // would ride on fails earlier with `invalid_grant`. The ADR excluded option B
+                // (operator-proxied authoring) and records as BINDING that the "operator
+                // assumes a B2C_CONSUMER tenant" combination is not opened — so supplying
+                // either row is out of scope by decision. Option D (delete this arm and the
+                // three fan-side acceptors) was on the table and was not chosen, which is why
+                // the arm remains rather than being stripped. Adding a `fan` subscription is
+                // therefore not a data fix — it silently re-opens B.
                 case "fan", "fan-platform" -> List.of("FAN_OPERATOR");
                 default -> List.of(); // gap / unknown → no operator role
             };
