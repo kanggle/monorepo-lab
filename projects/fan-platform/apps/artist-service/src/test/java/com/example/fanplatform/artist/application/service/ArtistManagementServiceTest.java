@@ -62,14 +62,14 @@ class ArtistManagementServiceTest {
     private static Artist sampleArtist() {
         ArtistProfile profile = new ArtistProfile("STAGE", null, LocalDate.of(2020, 1, 1),
                 null, null, null);
-        return Artist.register(ArtistId.of("a-1"), "fan-platform", ArtistType.SOLO, profile);
+        return Artist.register(ArtistId.of("a-1"), "fan-platform", "acc-artist-1", ArtistType.SOLO, profile);
     }
 
     @Test
     @DisplayName("register: non-admin rejected")
     void register_nonAdminRejected() {
         RegisterArtistCommand cmd = new RegisterArtistCommand(
-                fan, ArtistType.SOLO, "STAGE", null, null, null, null, null);
+                fan, "acc-artist-1", ArtistType.SOLO, "STAGE", null, null, null, null, null);
 
         assertThatThrownBy(() -> service.register(cmd))
                 .isInstanceOf(AdminRoleRequiredException.class);
@@ -82,7 +82,7 @@ class ArtistManagementServiceTest {
     void register_stageNameConflict() {
         when(artistRepository.existsByTenantIdAndStageName("fan-platform", "STAGE")).thenReturn(true);
         RegisterArtistCommand cmd = new RegisterArtistCommand(
-                admin, ArtistType.SOLO, "STAGE", null, null, null, null, null);
+                admin, "acc-artist-1", ArtistType.SOLO, "STAGE", null, null, null, null, null);
 
         assertThatThrownBy(() -> service.register(cmd))
                 .isInstanceOf(StageNameConflictException.class);
@@ -94,10 +94,11 @@ class ArtistManagementServiceTest {
     @DisplayName("register: happy path inserts and emits artist.registered")
     void register_happyPath() {
         when(artistRepository.existsByTenantIdAndStageName("fan-platform", "STAGE")).thenReturn(false);
+        when(artistRepository.existsByTenantIdAndAccountId("fan-platform", "acc-artist-1")).thenReturn(false);
         when(artistRepository.insert(any(Artist.class))).thenAnswer(i -> i.getArgument(0));
 
         RegisterArtistCommand cmd = new RegisterArtistCommand(
-                admin, ArtistType.SOLO, "STAGE", null, null, null, null, null);
+                admin, "acc-artist-1", ArtistType.SOLO, "STAGE", null, null, null, null, null);
         ArtistView view = service.register(cmd);
 
         assertThat(view.status()).isEqualTo(ArtistStatus.DRAFT);

@@ -228,6 +228,18 @@ public abstract class FanPlatformE2ETestBase {
                 // back to AlwaysAllowMembershipChecker (v1 stub). The real HTTP gate
                 // is covered by MembershipGateIntegrationTest + federation-hardening-e2e.
                 .withEnv("COMMUNITY_MEMBERSHIP_SERVICE_ENABLED", "false")
+                // TASK-FAN-BE-045 AC-6/AC-7 — same missing piece, iam. community now
+                // validates every follow target against artist-service over a
+                // client_credentials token, and this trio has nothing to mint one
+                // from, so the fail-closed checker would refuse the follow that
+                // ArtistAndPostFlowE2ETest asserts 201 on. 🔴 Note what is NOT the
+                // reason: artist-service IS in the trio. The token source is the gap.
+                // The real gate (including the artist-service-down fail-closed case)
+                // is covered by community's follow-gate integration test.
+                // The default is `true`; this is the explicit, non-default opt-out,
+                // and ArtistAccountCheckerConfigTest pins that default so a flip
+                // fails a test rather than a demo.
+                .withEnv("COMMUNITY_ARTIST_SERVICE_ENABLED", "false")
                 .waitingFor(Wait.forHttp("/actuator/health")
                         .forStatusCode(200)
                         .withStartupTimeout(Duration.ofMinutes(3)));

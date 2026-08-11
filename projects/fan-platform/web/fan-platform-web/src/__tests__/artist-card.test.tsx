@@ -6,6 +6,10 @@ import type { Artist } from '@/entities/artist';
 const artist: Artist = {
   id: 'a1',
   tenantId: 'fan-platform',
+  // Deliberately NOT 'a1' — accountId and id are different identifiers
+  // (TASK-FAN-BE-045); a fixture where they match would let a consumer that
+  // conflates them pass.
+  accountId: 'acc-a1',
   artistType: 'SOLO',
   status: 'PUBLISHED',
   stageName: 'STAR-A',

@@ -87,22 +87,27 @@ POST_B="0199de81-0000-7000-8000-00000000c004"
 # 시간은 **고정 리터럴**이다. NOW() 면 2회차 실행에서 published_at 이 바뀌어 피드
 # 정렬이 흔들리고, 무엇보다 "행 수가 수렴한다" 를 넘어 "상태가 수렴한다" 가 깨진다.
 if container_up fan-platform-postgres; then
-  dbexec --why "팬 도메인에는 발급 가능한 운영자 역할이 없다 — FAN_OPERATOR 를 파생시키는 tenant_domain_subscription(*, 'fan') 행이 존재하지 않고, demo-corp assume 토큰은 팬 게이트웨이의 required-tenant-id=fan-platform 에 막힌다(실측 403 TENANT_FORBIDDEN). 게다가 ARTIST_POST 는 author_account_id 가 아티스트 엔티티 id 여야 피드/팔로우 조인이 성립하는데 PublishPostUseCase 는 그것을 호출자 sub 으로 고정한다 — TASK-MONO-512 / TASK-FAN-BE-045" \
+  dbexec --why "팬 도메인에는 발급 가능한 운영자 역할이 없다 — FAN_OPERATOR 를 파생시키는 tenant_domain_subscription(*, 'fan') 행이 존재하지 않고, demo-corp assume 토큰은 팬 게이트웨이의 required-tenant-id=fan-platform 에 막힌다(실측 403 TENANT_FORBIDDEN). POST /api/v1/artists 는 hasAnyRole(ADMIN,OPERATOR,SUPER_ADMIN,FAN_OPERATOR) 이므로 어느 쪽으로도 API 로 만들 수 없다 — 남은 차단 사유는 **역할 발급 경로의 부재 하나뿐**이고 그것이 TASK-MONO-512 다. TASK-FAN-BE-045 가 담당한 절반(아티스트에 계정이 없어 저자 id 를 낼 수 없음)은 artists.account_id 로 해소됐다" \
     fan-platform-postgres psql fanplatform_artist fanplatform <<SQL
-INSERT INTO artists (id, tenant_id, artist_type, status, stage_name, real_name, debut_date, agency, bio, created_at, updated_at, published_at, version)
-SELECT '$ARTIST_A', '$TENANT', 'SOLO', 'PUBLISHED', '루미', '김하늘', DATE '2021-03-14', 'Aurora Entertainment',
+-- account_id 는 **엔티티 id 와 동일**하게 넣는다(TASK-FAN-BE-045 V3 의 항등 백필과 같은 값).
+-- 이유: 이 시드는 조인의 양쪽 모두에 아티스트 엔티티 id 를 쓴다 — follows 는 아래 API 호출로,
+-- posts.author_account_id 는 직접-DB 로. 다른 값을 넣으면 팔로우 검증(AC-6)이 이 시드 자신의
+-- 팔로우 호출을 거절한다. 🔴 이 값은 실재하는 IAM subject 가 아니다 — 아무도 이 계정으로
+-- 로그인할 수 없고, 그래서 아래 ARTIST_POST 블록이 아직 직접-DB 인 것이다(TASK-MONO-512).
+INSERT INTO artists (id, tenant_id, account_id, artist_type, status, stage_name, real_name, debut_date, agency, bio, created_at, updated_at, published_at, version)
+SELECT '$ARTIST_A', '$TENANT', '$ARTIST_A', 'SOLO', 'PUBLISHED', '루미', '김하늘', DATE '2021-03-14', 'Aurora Entertainment',
        E'2021년 데뷔한 솔로 아티스트입니다. 어쿠스틱 기반의 자작곡을 주로 발표합니다.\n\n데모 데이터 — TASK-MONO-509',
        TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', 0
 WHERE NOT EXISTS (SELECT 1 FROM artists WHERE id = '$ARTIST_A');
 
-INSERT INTO artists (id, tenant_id, artist_type, status, stage_name, real_name, debut_date, agency, bio, created_at, updated_at, published_at, version)
-SELECT '$ARTIST_B', '$TENANT', 'SOLO', 'PUBLISHED', '노아', '박서준', DATE '2019-08-01', 'Aurora Entertainment',
+INSERT INTO artists (id, tenant_id, account_id, artist_type, status, stage_name, real_name, debut_date, agency, bio, created_at, updated_at, published_at, version)
+SELECT '$ARTIST_B', '$TENANT', '$ARTIST_B', 'SOLO', 'PUBLISHED', '노아', '박서준', DATE '2019-08-01', 'Aurora Entertainment',
        E'프로듀서 겸 솔로 아티스트.\n\n데모 데이터 — TASK-MONO-509',
        TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', 0
 WHERE NOT EXISTS (SELECT 1 FROM artists WHERE id = '$ARTIST_B');
 
-INSERT INTO artists (id, tenant_id, artist_type, status, stage_name, real_name, debut_date, agency, bio, created_at, updated_at, published_at, version)
-SELECT '$ARTIST_C', '$TENANT', 'GROUP_MEMBER', 'PUBLISHED', '세아', '이세아', DATE '2022-05-20', 'Aurora Entertainment',
+INSERT INTO artists (id, tenant_id, account_id, artist_type, status, stage_name, real_name, debut_date, agency, bio, created_at, updated_at, published_at, version)
+SELECT '$ARTIST_C', '$TENANT', '$ARTIST_C', 'GROUP_MEMBER', 'PUBLISHED', '세아', '이세아', DATE '2022-05-20', 'Aurora Entertainment',
        E'그룹 STELLAR 의 리더.\n\n데모 데이터 — TASK-MONO-509',
        TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', 0
 WHERE NOT EXISTS (SELECT 1 FROM artists WHERE id = '$ARTIST_C');
@@ -139,7 +144,7 @@ SQL
   # history 행을 함께 넣는 이유: 도메인은 PUBLISH 시 반드시 이력을 남긴다
   # (PublishPostUseCase). 이력 없는 PUBLISHED 는 도메인이 만들 수 없는 상태이고,
   # 시드가 그런 상태를 보여주면 데모가 거짓말을 한다.
-  dbexec --why "ARTIST_POST 의 author_account_id 는 아티스트 엔티티 id 여야 피드(posts.author_account_id ⋈ follows.artist_account_id)가 성립하는데, PublishPostUseCase 는 그 값을 호출자 JWT sub 으로 고정한다 — 어떤 실제 호출자도 이 행을 만들 수 없다. 게다가 데모 계정이 저자가 되면 actor.owns() 로 게이팅이 통째로 우회돼 AC-3 이 공허해진다 — TASK-FAN-BE-045" \
+  dbexec --why "저자는 artists.account_id 여야 피드(posts.author_account_id ⋈ follows.artist_account_id)가 성립하고 TASK-FAN-BE-045 가 그 컬럼을 만들었지만, 발행하려면 그 계정으로 **로그인**해 ARTIST 역할을 든 토큰이 있어야 한다. 데모 아티스트의 account_id 는 항등 백필값이라 실재하는 IAM subject 가 아니고, ARTIST 역할 자체도 발급 경로가 없다 — 둘 다 TASK-MONO-512. 게다가 데모 계정이 저자가 되면 actor.owns() 로 게이팅이 통째로 우회돼 AC-3 이 공허해진다. ⇒ MONO-512 가 풀릴 때까지 직접-DB 유지(TASK-FAN-BE-045 AC-5 의 명시적 판정)" \
     fan-platform-postgres psql fanplatform_community fanplatform <<SQL
 INSERT INTO posts (id, tenant_id, author_account_id, post_type, visibility, status, title, body, published_at, created_at, updated_at, version)
 SELECT '$POST_PUB', '$TENANT', '$ARTIST_A', 'ARTIST_POST', 'PUBLIC', 'PUBLISHED',

@@ -13,6 +13,14 @@ import java.net.InetAddress;
  * {@code /oauth2/jwks} (the real IAM auth-service route). Bound to all
  * interfaces so containers can reach it via host.docker.internal. Mirrors
  * community-service.
+ *
+ * <p>Both the end-user decoder ({@code spring.security.oauth2.resourceserver
+ * .jwt.jwk-set-uri}) and the workload-identity decoder
+ * ({@code fanplatform.internal.jwt.jwk-set-uri}) resolve to this same
+ * physical endpoint in production ({@code application.yml}'s fallback), so
+ * this mock serves a single path for both. {@link #hostJwksUrl()} and
+ * {@link #hostInternalJwksUrl()} stay as separate accessors — they wire two
+ * distinct Spring properties — mirroring membership-service's copy.
  */
 public final class JwksMockServer implements AutoCloseable {
 
@@ -39,6 +47,10 @@ public final class JwksMockServer implements AutoCloseable {
     }
 
     public String hostJwksUrl() {
+        return "http://" + server.getHostName() + ":" + server.getPort() + "/oauth2/jwks";
+    }
+
+    public String hostInternalJwksUrl() {
         return "http://" + server.getHostName() + ":" + server.getPort() + "/oauth2/jwks";
     }
 

@@ -33,6 +33,14 @@ class ArtistJpaEntity {
     @Column(name = "tenant_id", length = 64, nullable = false, updatable = false)
     private String tenantId;
 
+    /**
+     * {@code updatable = false} is the immutability of {@code accountId} expressed
+     * at the mapping layer — see {@code artist-api.md} § {@code accountId}. A
+     * rebind would strand the community-side rows that carry the old value.
+     */
+    @Column(name = "account_id", length = 36, nullable = false, updatable = false)
+    private String accountId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "artist_type", length = 20, nullable = false, updatable = false)
     private ArtistType artistType;
@@ -79,12 +87,14 @@ class ArtistJpaEntity {
         // JPA-required no-arg constructor
     }
 
-    ArtistJpaEntity(String id, String tenantId, ArtistType artistType, ArtistStatus status,
+    ArtistJpaEntity(String id, String tenantId, String accountId, ArtistType artistType,
+                    ArtistStatus status,
                     String stageName, String realName, LocalDate debutDate, String agency,
                     String bio, String profileImageRef, Instant createdAt, Instant updatedAt,
                     Instant publishedAt, Instant archivedAt, Long version) {
         this.id = id;
         this.tenantId = tenantId;
+        this.accountId = accountId;
         this.artistType = artistType;
         this.status = status;
         this.stageName = stageName;
@@ -102,6 +112,7 @@ class ArtistJpaEntity {
 
     String getId() { return id; }
     String getTenantId() { return tenantId; }
+    String getAccountId() { return accountId; }
     ArtistType getArtistType() { return artistType; }
     ArtistStatus getStatus() { return status; }
     String getStageName() { return stageName; }

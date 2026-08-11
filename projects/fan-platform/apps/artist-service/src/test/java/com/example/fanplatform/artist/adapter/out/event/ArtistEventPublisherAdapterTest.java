@@ -53,7 +53,7 @@ class ArtistEventPublisherAdapterTest {
     }
 
     private static Artist sampleArtist() {
-        return Artist.register(ArtistId.of("a-1"), "fan-platform", ArtistType.SOLO, sampleProfile());
+        return Artist.register(ArtistId.of("a-1"), "fan-platform", "acc-artist-1", ArtistType.SOLO, sampleProfile());
     }
 
     @Test

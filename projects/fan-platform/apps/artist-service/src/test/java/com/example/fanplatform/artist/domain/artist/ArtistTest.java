@@ -19,7 +19,7 @@ class ArtistTest {
     @Test
     @DisplayName("register: creates artist in DRAFT with createdAt=updatedAt")
     void register_createsDraft() {
-        Artist a = Artist.register(ArtistId.of("id-1"), "fan-platform",
+        Artist a = Artist.register(ArtistId.of("id-1"), "fan-platform", "acc-artist-1",
                 ArtistType.SOLO, sampleProfile());
 
         assertThat(a.getStatus()).isEqualTo(ArtistStatus.DRAFT);
@@ -33,7 +33,7 @@ class ArtistTest {
     @Test
     @DisplayName("publish: DRAFT -> PUBLISHED, sets publishedAt")
     void publish_fromDraftSetsPublishedAt() {
-        Artist a = Artist.register(ArtistId.of("id-1"), "fan-platform",
+        Artist a = Artist.register(ArtistId.of("id-1"), "fan-platform", "acc-artist-1",
                 ArtistType.SOLO, sampleProfile());
 
         a.publish();
@@ -45,7 +45,7 @@ class ArtistTest {
     @Test
     @DisplayName("publish: PUBLISHED -> PUBLISHED is forbidden")
     void publish_alreadyPublishedThrows() {
-        Artist a = Artist.register(ArtistId.of("id-1"), "fan-platform",
+        Artist a = Artist.register(ArtistId.of("id-1"), "fan-platform", "acc-artist-1",
                 ArtistType.SOLO, sampleProfile());
         a.publish();
 
@@ -56,7 +56,7 @@ class ArtistTest {
     @Test
     @DisplayName("archive: DRAFT -> ARCHIVED, sets archivedAt")
     void archive_fromDraft() {
-        Artist a = Artist.register(ArtistId.of("id-1"), "fan-platform",
+        Artist a = Artist.register(ArtistId.of("id-1"), "fan-platform", "acc-artist-1",
                 ArtistType.SOLO, sampleProfile());
 
         a.archive();
@@ -68,7 +68,7 @@ class ArtistTest {
     @Test
     @DisplayName("archive: PUBLISHED -> ARCHIVED")
     void archive_fromPublished() {
-        Artist a = Artist.register(ArtistId.of("id-1"), "fan-platform",
+        Artist a = Artist.register(ArtistId.of("id-1"), "fan-platform", "acc-artist-1",
                 ArtistType.SOLO, sampleProfile());
         a.publish();
 
@@ -80,7 +80,7 @@ class ArtistTest {
     @Test
     @DisplayName("archive: already ARCHIVED -> forbidden")
     void archive_alreadyArchivedThrows() {
-        Artist a = Artist.register(ArtistId.of("id-1"), "fan-platform",
+        Artist a = Artist.register(ArtistId.of("id-1"), "fan-platform", "acc-artist-1",
                 ArtistType.SOLO, sampleProfile());
         a.archive();
 
@@ -91,7 +91,7 @@ class ArtistTest {
     @Test
     @DisplayName("updateProfile: ARCHIVED rejects updates")
     void updateProfile_archivedRejects() {
-        Artist a = Artist.register(ArtistId.of("id-1"), "fan-platform",
+        Artist a = Artist.register(ArtistId.of("id-1"), "fan-platform", "acc-artist-1",
                 ArtistType.SOLO, sampleProfile());
         a.archive();
 
@@ -102,7 +102,7 @@ class ArtistTest {
     @Test
     @DisplayName("updateProfile: PUBLISHED accepts updates and bumps updatedAt")
     void updateProfile_publishedSucceeds() {
-        Artist a = Artist.register(ArtistId.of("id-1"), "fan-platform",
+        Artist a = Artist.register(ArtistId.of("id-1"), "fan-platform", "acc-artist-1",
                 ArtistType.SOLO, sampleProfile());
         a.publish();
         ArtistProfile newer = sampleProfile().withStageName("NEW");
@@ -115,7 +115,7 @@ class ArtistTest {
     @Test
     @DisplayName("isPublished: only true when status=PUBLISHED")
     void isPublished_correct() {
-        Artist a = Artist.register(ArtistId.of("id-1"), "fan-platform",
+        Artist a = Artist.register(ArtistId.of("id-1"), "fan-platform", "acc-artist-1",
                 ArtistType.SOLO, sampleProfile());
         assertThat(a.isPublished()).isFalse();
         a.publish();

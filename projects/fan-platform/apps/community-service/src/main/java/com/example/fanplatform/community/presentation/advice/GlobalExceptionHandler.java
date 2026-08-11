@@ -8,6 +8,7 @@ import com.example.fanplatform.community.application.exception.NotFollowingExcep
 import com.example.fanplatform.community.application.exception.PermissionDeniedException;
 import com.example.fanplatform.community.application.exception.PostNotFoundException;
 import com.example.fanplatform.community.application.exception.SelfFollowForbiddenException;
+import com.example.fanplatform.community.application.exception.UnknownArtistAccountException;
 import com.example.fanplatform.community.domain.post.status.InvalidStateTransitionException;
 import com.example.fanplatform.community.presentation.dto.ApiErrorBody;
 import com.example.web.dto.ErrorResponse;
@@ -94,6 +95,20 @@ public class GlobalExceptionHandler extends AbstractDomainExceptionHandler {
     public ResponseEntity<ErrorResponse> handleSelfFollow(SelfFollowForbiddenException e) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
                 .body(ErrorResponse.of("SELF_FOLLOW_FORBIDDEN", "An account cannot follow itself"));
+    }
+
+    /**
+     * TASK-FAN-BE-045 AC-6. 422 rather than 404: the follow target is a rejected
+     * <em>input</em>, and a 404 would say the follow resource is missing. It is
+     * also raised when artist-service could not be reached — the check is
+     * fail-closed, so "could not ask" and "not an artist" answer identically on
+     * purpose (a distinguishable outage answer would be an oracle for probing).
+     */
+    @ExceptionHandler(UnknownArtistAccountException.class)
+    public ResponseEntity<ErrorResponse> handleUnknownArtistAccount(UnknownArtistAccountException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of("UNKNOWN_ARTIST_ACCOUNT",
+                        "Follow target is not a known artist account in this tenant"));
     }
 
     /** Contract: {@code community-api.md} — 422 with {@code details {from, to, actor}}. */

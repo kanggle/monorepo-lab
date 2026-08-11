@@ -16,6 +16,13 @@ interface ArtistJpaRepository extends JpaRepository<ArtistJpaEntity, String> {
 
     boolean existsByTenantIdAndStageName(String tenantId, String stageName);
 
+    /**
+     * Backs both the registration pre-check and
+     * {@code GET /internal/artists/exists}. Served by
+     * {@code uq_artists_tenant_account_id} — no separate index.
+     */
+    boolean existsByTenantIdAndAccountId(String tenantId, String accountId);
+
     boolean existsByIdAndTenantIdAndStatus(String id, String tenantId, ArtistStatus status);
 
     /**

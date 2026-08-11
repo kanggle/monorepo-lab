@@ -12,6 +12,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 
 /**
  * Service-level Resource Server JWT decoder. Mirrors the fan-platform gateway
@@ -39,6 +41,12 @@ public class ServiceLevelOAuth2Config {
     @Value("${fanplatform.oauth2.required-tenant-id:fan-platform}")
     private String requiredTenantId;
 
+    @Value("${fanplatform.internal.jwt.jwk-set-uri:${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}}")
+    private String internalJwkSetUri;
+
+    @Value("${fanplatform.internal.jwt.issuer:${spring.security.oauth2.resourceserver.jwt.issuer-uri}}")
+    private String internalIssuer;
+
     @Bean
     @ConditionalOnMissingBean(JwtDecoder.class)
     public JwtDecoder jwtDecoder() {
@@ -51,6 +59,32 @@ public class ServiceLevelOAuth2Config {
     @Bean
     public OAuth2TokenValidator<Jwt> jwtTokenValidator() {
         return decoderAssembly().buildValidator();
+    }
+
+    /**
+     * Workload-identity decoder for {@code /internal/**} (TASK-FAN-BE-045 AC-6,
+     * ADR-004 A; ADR-MONO-005). Validates an IAM {@code client_credentials} JWT —
+     * issuer + signature + timestamps — and deliberately does NOT pin
+     * {@code tenant_id}: routing it through {@link #decoderAssembly()} would give
+     * the internal surface a tenant gate it must not have, which is the same
+     * reasoning membership-service's copy states.
+     *
+     * <p><strong>Declared in this class, after {@link #jwtDecoder()}, on purpose.</strong>
+     * A second {@code JwtDecoder}-assignable bean in a different {@code @Configuration}
+     * would race the {@code @ConditionalOnMissingBean(JwtDecoder.class)} above and
+     * could silently suppress the end-user decoder. {@code @Bean} methods within one
+     * class are processed top-to-bottom, so the condition always evaluates before
+     * this bean exists.
+     *
+     * <p>Because there are now two decoders, {@code SecurityConfig} pins each chain's
+     * decoder explicitly — Spring Security's by-type resolution no longer has a
+     * single candidate.
+     */
+    @Bean
+    public NimbusJwtDecoder internalJwtDecoder() {
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(internalJwkSetUri).build();
+        decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(internalIssuer));
+        return decoder;
     }
 
     /**
@@ -93,17 +127,33 @@ public class ServiceLevelOAuth2Config {
      * The policy pin asserts the refusal, not just the acceptance (ADR-MONO-049 § 1.9,
      * TASK-MONO-387).
      *
-     * <p>The exemption is {@code PublicPaths} only — the three actuator probes plus the
+     * <h2>{@code /internal/**} is exempt, and that is not a hole</h2>
+     *
+     * The Order(1) workload chain authenticates with {@link #internalJwtDecoder()}, which does
+     * not pin {@code tenant_id} — but it still puts a {@code JwtAuthenticationToken} in the
+     * context, so this filter (registered outside the chains) sees it, and a token whose
+     * {@code tenant_id} it cannot match is exactly what the gate 401s. Without the exemption
+     * every internal call 401s and the follow-target check is dead on arrival — the same
+     * prediction membership-service's copy records after testing it (TASK-MONO-387 AC-6). It is
+     * not a widening: {@code /internal/**} is not an end-user route, and the chain guarding it
+     * requires {@code hasRole("INTERNAL")}, which no end-user token can obtain.
+     *
+     * <p>Otherwise the exemption is {@code PublicPaths} only — the three actuator probes plus the
      * {@code /actuator/health/} subtree. <strong>community's copy reasoned about this axis
      * explicitly and refused the blanket {@code /actuator/} prefix that scm's services shipped</strong>
      * ("a blanket prefix would bypass the tenant gate for endpoints that may be added later …
      * we want a fail-closed posture there"). That judgement is preserved here, where it now
      * holds for the whole project rather than for whoever happened to read that one file.
      */
+    /** The prefix the workload-identity chain owns — kept next to the exemption that needs it. */
+    private static final String INTERNAL_PREFIX = "/internal/";
+
     @Bean
     public TenantClaimEnforcer tenantClaimEnforcer() {
         return TenantClaimEnforcer.forTenant(requiredTenantId)
-                .exempt(PublicPaths::isPublic)
+                .exempt(request -> PublicPaths.isPublic(request)
+                        || (request.getRequestURI() != null
+                                && request.getRequestURI().startsWith(INTERNAL_PREFIX)))
                 .allowSuperAdminWildcard()
                 // no .trustEntitledDomains() — see above
                 .build();

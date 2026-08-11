@@ -720,6 +720,7 @@ Owned by `community-service` (post / comment / reaction / follow).
 | MEMBERSHIP_REQUIRED | 403 | Caller's membership tier insufficient for this content (`MembershipRequiredException`). Was cross-shared with IAM's community-service until TASK-MONO-394 retired it — this code is now fan-only |
 | COMMENT_NOT_FOUND | 404 | Comment does not exist or scope mismatch (`CommentNotFoundException`) |
 | SELF_FOLLOW_FORBIDDEN | 422 | Account cannot follow itself (`SelfFollowForbiddenException`) |
+| UNKNOWN_ARTIST_ACCOUNT | 422 | Follow target is not a live artist account in this tenant (`UnknownArtistAccountException`; TASK-FAN-BE-045 AC-6 / ADR-004). 422 rather than 404 because the target is a rejected *input*, not a missing follow resource. 🔴 Also emitted when artist-service is unreachable — the check is fail-closed and the outage answer is deliberately indistinguishable from a domain deny, so this code cannot be used as an oracle for which accounts exist |
 | EDIT_WINDOW_EXPIRED | 422 | PUBLISHED post is past the edit window (`EditWindowExpiredException`) |
 | ALREADY_FOLLOWING | 409 | Already following this artist (`AlreadyFollowingException`). Was cross-shared with IAM's community-service until TASK-MONO-394 retired it — this code is now fan-only |
 | NOT_FOLLOWING | 404 | Not currently following; unfollow rejected (`NotFollowingException`). Was cross-shared with IAM's community-service until TASK-MONO-394 retired it — this code is now fan-only |
@@ -739,6 +740,7 @@ Owned by `artist-service` (artist identity / fandom metadata).
 | ARTIST_ARCHIVED | 422 | Artist is ARCHIVED; operation rejected (`ArtistArchivedException`) |
 | ARTIST_GROUP_NOT_FOUND | 404 | Artist group not found (`ArtistGroupNotFoundException`) |
 | STAGE_NAME_CONFLICT | 409 | Artist stage name already taken (`StageNameConflictException`) |
+| ARTIST_ACCOUNT_CONFLICT | 409 | The account is already the author of another artist in this tenant — `uq_artists_tenant_account_id` (`ArtistAccountConflictException`; TASK-FAN-BE-045 AC-1b / ADR-MONO-059 A). Whether one person may hold several artist personas is undecided; the constraint takes the conservative side, and relaxing it later drops a constraint rather than breaking the contract |
 | GROUP_NAME_CONFLICT | 409 | Group name already taken — fan-platform artist group (`GroupNameConflictException`), and shared by admin-service operator groups (ADR-MONO-046, same semantic — see the Operator groups section above) |
 | FANDOM_NOT_FOUND | 404 | Fandom record not found (`FandomNotFoundException`) |
 | FANDOM_ALREADY_EXISTS | 422 | Fandom already exists for this artist (`FandomAlreadyExistsException`) |

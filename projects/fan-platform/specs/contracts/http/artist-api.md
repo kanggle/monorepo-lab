@@ -21,6 +21,11 @@
 > The gateway applies a `RewritePath` filter to strip the `/v1/` prefix before
 > forwarding (TASK-FAN-BE-005). Path examples below use the **service-internal**
 > path (i.e., no `/v1/` prefix). Clients must use the external paths above.
+>
+> The **internal** endpoint `/internal/artists/exists` is NOT gateway-routed —
+> it is reachable only on the internal docker network and is authenticated by an
+> IAM `client_credentials` workload-identity JWT (ADR-MONO-005), NOT an end-user
+> token. See § Internal artist-account existence check.
 
 ## Envelope shapes
 
@@ -60,6 +65,7 @@ For paginated list endpoints, `meta` adds `page`, `size`, `totalElements`,
 | 404 | ARTIST_GROUP_NOT_FOUND | missing group OR cross-tenant |
 | 404 | FANDOM_NOT_FOUND | no fandom for the given artist |
 | 409 | STAGE_NAME_CONFLICT | `(tenant_id, stage_name)` collides |
+| 409 | ARTIST_ACCOUNT_CONFLICT | `(tenant_id, account_id)` collides — that account already authors as another artist |
 | 409 | GROUP_NAME_CONFLICT | `(tenant_id, group_name)` collides |
 | 409 | CONFLICT | optimistic-lock collision |
 | 422 | VALIDATION_ERROR | constraint violation (`@Valid`) |
@@ -81,6 +87,7 @@ Auth: admin-tier role (`ADMIN` / `OPERATOR` / `SUPER_ADMIN`).
 Request:
 ```json
 {
+  "accountId": "string (1..36, REQUIRED, unique per tenant)",
   "artistType": "SOLO | GROUP_MEMBER",
   "stageName": "string (1..120, unique per tenant)",
   "realName": "string (max 120, optional)",
@@ -97,6 +104,7 @@ Response 201:
   "data": {
     "id": "0190f3e2-...",
     "tenantId": "fan-platform",
+    "accountId": "0190f3e2-...",
     "artistType": "SOLO",
     "status": "DRAFT",
     "stageName": "STAR-A",
@@ -114,7 +122,70 @@ Response 201:
 }
 ```
 
-Failures: 401, 403 FORBIDDEN, 409 STAGE_NAME_CONFLICT, 422 VALIDATION_ERROR.
+Failures: 401, 403 FORBIDDEN, 409 STAGE_NAME_CONFLICT, 409 ARTIST_ACCOUNT_CONFLICT,
+422 VALIDATION_ERROR.
+
+#### `accountId` — the account that authors as this artist
+
+`TASK-FAN-BE-045` AC-1b · `ADR-MONO-059` (ACCEPTED — A).
+
+The feed joins `posts.author_account_id ⋈ follows.artist_account_id`, and
+`PublishPostUseCase` fixes the author to the authenticated caller
+(`actor.accountId()`). Without this field an artist row has no account at all, so
+**no real caller could ever produce an `ARTIST_POST` that reaches a follower's
+feed** — that is the defect this ticket closes. `accountId` is the IAM subject
+(`sub`) that publishes as this artist.
+
+**REQUIRED, not optional.** A nullable field reproduces the defect in a new
+shape: an artist that appears in the directory but can never be followed, because
+AC-6 refuses any follow whose target is not a live `artists.account_id`. The
+caller always has the value — registration is admin-tier, and `ADR-MONO-059` § A
+assigns account issuance and the `ARTIST` role grant to **IAM**
+(`TASK-MONO-512`), so the account exists before the artist row does.
+
+**Unique per tenant** — `(tenant_id, account_id)`. One account authors as at most
+one artist within a tenant; a second registration with the same account is 409
+`ARTIST_ACCOUNT_CONFLICT`. (Whether one human may hold several artist personas is
+a product question nobody has decided; the constraint is the conservative side and
+relaxing it later is a constraint drop, not a contract break.)
+
+**Immutable — deliberately absent from `PATCH /api/artists/{id}`.** Rebinding an
+artist to a different account cannot be a request field: `follows.artist_account_id`
+and `posts.author_account_id` live in `fanplatform_community`, a **different
+database** that artist-service must not reach into
+(`specs/services/community-service/architecture.md` § Forbidden dependencies).
+A silent rebind would detach every existing follower and orphan every existing
+post of that artist, with no way for this service to repair either. Rebinding is a
+data-migration decision and needs its own ticket, not a PATCH field.
+
+**Deliberately NOT validated against IAM** (stated so the omission is a decision,
+not a gap): artist-service does **not** call IAM to confirm the subject exists.
+`ADR-004` authorized exactly one new cross-service edge — community-service →
+artist-service — and an artist → IAM edge is a separate decision requiring its own
+ADR. Consequence, plainly: a mistyped `accountId` produces an artist nobody can
+author as, and it surfaces on the first publish attempt rather than at
+registration. Accepted because the endpoint is admin-tier only.
+
+**Existing rows (the three demo-seed artists) — backfilled `account_id := id`.**
+`infra/demo/seed/seed-fan.sh` already writes the artist **entity id** into both
+sides of the join: its follows are created through the API with
+`{"artistAccountId": "<artist id>"}` and its `ARTIST_POST` rows are inserted
+direct-DB with `author_account_id = <artist id>`. The identity backfill is
+therefore the only value that keeps AC-6 from rejecting the demo's own follow
+calls on the day it lands. 🔴 The backfilled value is **not a real IAM subject** —
+nobody can log in as it, so those artists still cannot publish through the API;
+that is `TASK-MONO-512`'s half, and it is why AC-5 does not move the seed's
+`dbexec` block. When MONO-512 issues real accounts, moving the demo artists onto
+them is subject to the immutability note above.
+
+**Read exposure.** `accountId` is returned by every read endpoint below. It has to
+be: `web/fan-platform-web/.../artists/[id]/page.tsx` currently passes
+`artistAccountId={artist.id}` to `FollowButton`, which is correct only while
+`account_id == id` (i.e. only for the backfilled demo rows). For an artist
+registered against a real IAM subject that page sends the wrong value and AC-6
+refuses the follow — the page must read `artist.accountId`. It is not secret: the
+feed already exposes `authorAccountId`, and this is precisely the identifier fans
+follow.
 
 ### `GET /api/artists/{id}` — Get one
 
@@ -123,6 +194,7 @@ Auth: any authenticated tenant member.
 - PUBLISHED → 200 OK
 - DRAFT / ARCHIVED → admin sees 200; non-admin sees 404 ARTIST_NOT_FOUND
 - cross-tenant → 404 ARTIST_NOT_FOUND
+- response includes `accountId` (see § `accountId` above)
 
 ### `GET /api/artists?q=&type=&page=&size=` — Directory search
 
@@ -139,7 +211,7 @@ Response 200:
 ```json
 {
   "data": [
-    { "id": "...", "stageName": "...", "artistType": "SOLO", "status": "PUBLISHED", ... }
+    { "id": "...", "accountId": "...", "stageName": "...", "artistType": "SOLO", "status": "PUBLISHED", ... }
   ],
   "meta": {
     "timestamp": "...",
@@ -168,7 +240,14 @@ Request:
 }
 ```
 
-Response 200: same shape as the GET response (envelope `{ data, meta }`).
+`accountId` is **not** patchable — see § `accountId` under `POST /api/artists`.
+The contract requirement is behavioural, not merely an absent field: sending an
+`accountId` key in a PATCH body must **not** change the stored value. Pin it with
+a test — an omission from the request record alone is only as strong as the
+JSON binder's unknown-field default, which this contract does not specify.
+
+Response 200: same shape as the GET response (envelope `{ data, meta }`, including
+`accountId`).
 Failures: 401, 403 FORBIDDEN, 404 ARTIST_NOT_FOUND, 409 STAGE_NAME_CONFLICT, 422.
 
 ### `PATCH /api/artists/{id}/status` — Status transition
@@ -363,6 +442,68 @@ Response 200: same shape as GET.
 
 Failures: 401, 403 FORBIDDEN, 404 ARTIST_NOT_FOUND, 404 FANDOM_NOT_FOUND,
 422 ARTIST_NOT_PUBLISHED, 422 VALIDATION_ERROR.
+
+---
+
+## Internal artist-account existence check (workload identity — NOT gateway-routed)
+
+`TASK-FAN-BE-045` AC-6 · `ADR-004` (ACCEPTED — A) · `ADR-MONO-059` (ACCEPTED — A).
+
+### `GET /internal/artists/exists?accountId={accountId}&tenantId={tenantId}`
+
+The **remote counterpart** of community-service's port
+`ArtistAccountChecker.isArtistAccount(String accountId, String tenantId) → boolean`,
+called before `FollowArtistUseCase` persists a `follows` row.
+
+**Why this endpoint exists.** `follows.artist_account_id` lives in
+`fanplatform_community` and `artists.account_id` lives in `fanplatform_artist` —
+**separate databases**, so the reference cannot be a foreign key, and
+`specs/services/community-service/architecture.md` § Forbidden dependencies bars a
+DB-level reach-in. `ADR-004` chose the synchronous seam over an event projection
+because the projection would change community-service's declared single-type
+`rest-api` composition.
+
+Auth: **IAM `client_credentials` workload-identity JWT** (ADR-MONO-005). NOT an
+end-user access token. The internal security chain validates issuer + signature +
+a recognized internal client identity; an end-user token → 403 `FORBIDDEN`, no
+token → 401.
+
+Query parameters (1:1 with the port signature):
+
+| Param | Required | Maps to port param | Meaning |
+|---|---|---|---|
+| `accountId` | YES | `accountId` | the account claimed to be an artist |
+| `tenantId` | YES | `tenantId` | tenant scope |
+
+Response 200:
+```json
+{ "exists": true }
+```
+
+`exists` maps **1:1** to the port's `boolean` return value. `exists=true` iff a row
+in `artists` has `account_id = accountId` AND `tenant_id = tenantId`.
+
+**Fail-closed.** Any infrastructure error (DB unavailable, query failure) returns
+`{ "exists": false }` — never `true` on error. The calling adapter is ALSO
+fail-closed: timeout / non-2xx / malformed body → `false`. An unknown account, an
+account belonging to another tenant, and an account that is simply not an artist
+all return `{ "exists": false }` (deny), never leaked as a different status.
+
+> 🔴 **Fail-closed here refuses the follow.** That is deliberate and is what
+> `ADR-004` § Drivers 3 requires: a validation that opens on error is
+> indistinguishable from having no validation. `TASK-FAN-BE-045` AC-6 asserts
+> both halves — a bad `accountId` is refused, **and** taking artist-service down
+> does not open follow.
+
+**Deliberately NOT in this contract** (stated so the omission is a decision, not a
+gap): the artist's `status` (`DRAFT`/`PUBLISHED`/`ARCHIVED`) is **not** exposed and
+**not** consulted. AC-6 requires existence, and gating follow on publication state
+is a product rule nobody has decided. Adding it later is an additive field on this
+response, not a breaking change.
+
+Errors: 401 (no token), 403 (non-workload-identity token), 400 (missing required
+param). Note: a domain "does not exist" is NOT an error — it returns 200 with
+`exists=false`.
 
 ---
 

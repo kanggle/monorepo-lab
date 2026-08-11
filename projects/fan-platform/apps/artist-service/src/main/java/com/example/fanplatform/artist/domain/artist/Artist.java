@@ -23,6 +23,15 @@ public final class Artist {
 
     private final ArtistId id;
     private final String tenantId;
+    /**
+     * IAM subject that authors as this artist (TASK-FAN-BE-045, ADR-MONO-059 A).
+     * {@code final} on purpose: re-binding an artist to a different account would
+     * leave {@code follows.artist_account_id} / {@code posts.author_account_id} in
+     * community-service's separate database pointing at the old value, silently
+     * detaching every existing follower — and this service must not reach into
+     * that database to repair it. See {@code artist-api.md} § {@code accountId}.
+     */
+    private final String accountId;
     private final ArtistType artistType;
     private ArtistStatus status;
     private ArtistProfile profile;
@@ -34,6 +43,7 @@ public final class Artist {
 
     private Artist(ArtistId id,
                    String tenantId,
+                   String accountId,
                    ArtistType artistType,
                    ArtistStatus status,
                    ArtistProfile profile,
@@ -44,6 +54,7 @@ public final class Artist {
                    long version) {
         this.id = id;
         this.tenantId = tenantId;
+        this.accountId = accountId;
         this.artistType = artistType;
         this.status = status;
         this.profile = profile;
@@ -57,6 +68,7 @@ public final class Artist {
     /** Factory used by the registration use case — always begins in DRAFT. */
     public static Artist register(ArtistId id,
                                   String tenantId,
+                                  String accountId,
                                   ArtistType artistType,
                                   ArtistProfile profile) {
         Objects.requireNonNull(id, "id");
@@ -64,15 +76,25 @@ public final class Artist {
         if (tenantId.isBlank()) {
             throw new IllegalArgumentException("tenantId must not be blank");
         }
+        // accountId is required, not optional: an artist with no account can never
+        // be followed (the follow validation refuses a target that is not a live
+        // artists.account_id), which would reproduce the defect this field closes
+        // in a new shape — visible in the directory, un-followable forever.
+        Objects.requireNonNull(accountId, "accountId");
+        if (accountId.isBlank()) {
+            throw new IllegalArgumentException("accountId must not be blank");
+        }
         Objects.requireNonNull(artistType, "artistType");
         Objects.requireNonNull(profile, "profile");
         Instant now = Instant.now();
-        return new Artist(id, tenantId, artistType, ArtistStatus.DRAFT, profile, now, now, null, null, 0L);
+        return new Artist(id, tenantId, accountId, artistType, ArtistStatus.DRAFT, profile,
+                now, now, null, null, 0L);
     }
 
     /** Repository-side reconstitution — bypasses invariants intentionally. */
     public static Artist reconstitute(ArtistId id,
                                       String tenantId,
+                                      String accountId,
                                       ArtistType artistType,
                                       ArtistStatus status,
                                       ArtistProfile profile,
@@ -81,7 +103,7 @@ public final class Artist {
                                       Instant publishedAt,
                                       Instant archivedAt,
                                       long version) {
-        return new Artist(id, tenantId, artistType, status, profile, createdAt, updatedAt,
+        return new Artist(id, tenantId, accountId, artistType, status, profile, createdAt, updatedAt,
                 publishedAt, archivedAt, version);
     }
 
@@ -121,6 +143,7 @@ public final class Artist {
 
     public ArtistId getId() { return id; }
     public String getTenantId() { return tenantId; }
+    public String getAccountId() { return accountId; }
     public ArtistType getArtistType() { return artistType; }
     public ArtistStatus getStatus() { return status; }
     public ArtistProfile getProfile() { return profile; }

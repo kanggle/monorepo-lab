@@ -82,6 +82,63 @@ public final class JwtTestHelper {
     }
 
     /**
+     * Workload-identity client_credentials token, faithful to what the real IAM
+     * mints for the artist-service internal client: {@code sub == aud == client_id},
+     * {@code scope=["artist.read"]} (JSON array, the SAS shape), and — like every
+     * IAM grant — a {@code tenant_id} claim (the {@code TenantClaimTokenCustomizer}
+     * stamps it fail-closed; jwt-standard-claims.md). The receiver
+     * ({@link com.example.fanplatform.artist.config.WorkloadIdentityAuthoritiesConverter})
+     * recognizes it by the {@code artist.read} scope, NOT by tenant_id absence
+     * (TASK-FAN-BE-029). No {@code client_id}/{@code azp} claim — the real cc token
+     * has none.
+     */
+    public String signWorkloadToken(String clientId) {
+        return signWorkloadTokenWithScope(clientId, "artist.read");
+    }
+
+    /**
+     * A workload-shaped token carrying the END-USER resource scope
+     * {@code fan-platform.artist.read} instead of the machine scope
+     * {@code artist.read}. {@code WorkloadIdentityAuthoritiesConverter
+     * .REQUIRED_WORKLOAD_SCOPE} discriminates on the exact scope string; a token
+     * carrying this scope instead is what IAM migration {@code V0030} grants the
+     * fan web client and what the demo seed requests on an ordinary user token —
+     * it must NOT clear {@code ROLE_INTERNAL}.
+     */
+    public String signFanResourceScopedToken(String clientId) {
+        return signWorkloadTokenWithScope(clientId, "fan-platform.artist.read");
+    }
+
+    private String signWorkloadTokenWithScope(String clientId, String scope) {
+        Instant now = Instant.now();
+        JWTClaimsSet claims = new JWTClaimsSet.Builder()
+                .subject(clientId)
+                .audience(clientId)
+                .issuer(SAS_ISSUER)
+                .claim("tenant_id", DEFAULT_TENANT_ID)
+                .claim("tenant_type", "B2C")
+                .claim("scope", List.of(scope))
+                .issueTime(Date.from(now))
+                .expirationTime(Date.from(now.plusSeconds(300)))
+                .jwtID(UUID.randomUUID().toString())
+                .build();
+        return sign(claims);
+    }
+
+    private String sign(JWTClaimsSet claims) {
+        JWSHeader header = new JWSHeader.Builder(JWSAlgorithm.RS256)
+                .keyID(rsaJwk.getKeyID())
+                .build();
+        SignedJWT jwt = new SignedJWT(header, claims);
+        try {
+            jwt.sign(signer);
+        } catch (JOSEException e) {
+            throw new IllegalStateException("Failed to sign JWT", e);
+        }
+        return jwt.serialize();
+    }
+
+    /**
      * A token from {@link #FOREIGN_ISSUER} — same key, same tenant, unexpired. Only the issuer
      * allow-list stands between it and the controller.
      */

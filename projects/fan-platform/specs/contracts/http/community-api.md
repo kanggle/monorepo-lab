@@ -48,6 +48,7 @@
 | 422 | POST_STATUS_TRANSITION_INVALID | rejected by `PostStatusMachine` |
 | 422 | EDIT_WINDOW_EXPIRED | author edited PUBLISHED past 5min |
 | 422 | SELF_FOLLOW_FORBIDDEN | actor tries to follow itself |
+| 422 | UNKNOWN_ARTIST_ACCOUNT | follow target is not a live `artists.account_id` in this tenant — including when artist-service is unreachable (fail-closed) |
 
 ---
 
@@ -310,7 +311,30 @@ Response 201:
 }
 ```
 
-Errors: 401, 403, 409 (ALREADY_FOLLOWING), 422 (SELF_FOLLOW_FORBIDDEN).
+Errors: 401, 403, 409 (ALREADY_FOLLOWING), 422 (SELF_FOLLOW_FORBIDDEN),
+422 (UNKNOWN_ARTIST_ACCOUNT).
+
+#### `artistAccountId` is validated against artist-service
+
+`TASK-FAN-BE-045` AC-6 · `ADR-004` (ACCEPTED — A).
+
+`artistAccountId` must be a live `artists.account_id` in the caller's tenant.
+community-service confirms it synchronously against artist-service's
+`GET /internal/artists/exists` (see `artist-api.md`) before persisting the row.
+Anything else — an unknown account, an account in another tenant, an account that
+is simply not an artist — is 422 `UNKNOWN_ARTIST_ACCOUNT`.
+
+> 🔴 **Fail-closed, and the outage answer is deliberately indistinguishable.**
+> If artist-service cannot be reached the follow is **refused** with the same 422
+> `UNKNOWN_ARTIST_ACCOUNT`. Two reasons: a validation that opens on error is
+> indistinguishable from having no validation (`ADR-004` § Drivers 3), and a
+> distinct "validator down" code would be an oracle for probing which accounts
+> exist. `TASK-FAN-BE-045` AC-6 asserts both halves — a bad id is refused, **and**
+> taking artist-service down does not open follow.
+
+Until this landed the field was stored verbatim with no existence check, so the
+feed join (`posts.author_account_id ⋈ follows.artist_account_id`) held only
+because the web app happened to send a value that matched.
 
 ### `DELETE /api/community/follows/{artistAccountId}`
 

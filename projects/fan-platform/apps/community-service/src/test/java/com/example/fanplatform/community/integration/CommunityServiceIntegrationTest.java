@@ -20,6 +20,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.test.context.ContextConfiguration;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -32,7 +33,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>Covers all five controllers in a single flow: publish post → add comment →
  * upsert reaction (twice — verify idempotent) → query feed. Asserts persistence
  * (posts, comments, reactions, follows tables) and outbox enqueue.
+ *
+ * <p>TASK-FAN-BE-045 AC-6 made every follow go through artist-service, which is not
+ * in this suite's compose; this class's subject is the controller round trip, not
+ * the follow gate, so it imports {@link ConfirmAllArtistAccountsTestConfig} (see
+ * that class for why it must not be reused by a gate test).
  */
+@ContextConfiguration(classes = ConfirmAllArtistAccountsTestConfig.class)
 class CommunityServiceIntegrationTest extends CommunityServiceIntegrationBase {
 
     @LocalServerPort

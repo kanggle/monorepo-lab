@@ -40,7 +40,7 @@ class MultiTenantIsolationTest extends ArtistServiceIntegrationBase {
         adminHeaders.setContentType(MediaType.APPLICATION_JSON);
         adminHeaders.setBearerAuth(jwt.signAdminToken("admin-1"));
         String body = """
-                {"artistType":"SOLO","stageName":"DraftHidden-1"}
+                {"accountId":"acc-draft-hidden-1","artistType":"SOLO","stageName":"DraftHidden-1"}
                 """;
         ResponseEntity<String> registerResp = rest.exchange(
                 "/api/artists", HttpMethod.POST,

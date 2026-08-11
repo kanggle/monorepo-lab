@@ -52,7 +52,7 @@ class ArtistDirectoryCacheIntegrationTest extends ArtistServiceIntegrationBase {
         adminHeaders.setContentType(MediaType.APPLICATION_JSON);
         adminHeaders.setBearerAuth(jwt.signAdminToken("admin-1"));
         String body = """
-                {"artistType":"SOLO","stageName":"CacheInvTest-1"}
+                {"accountId":"acc-cacheinv-test-1","artistType":"SOLO","stageName":"CacheInvTest-1"}
                 """;
         ResponseEntity<String> reg = rest.exchange(
                 "/api/artists", HttpMethod.POST,

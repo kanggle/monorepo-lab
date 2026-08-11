@@ -12,6 +12,7 @@ import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -20,6 +21,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -52,6 +54,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <em>before</em> the {@code GET … authenticated()} rules that would otherwise shadow them. Both the
  * gate and the read rule are asserted below on the same paths, so a re-ordering would show up as a
  * 422/403 flip rather than as a silent widening.
+ *
+ * <h2>Second chain: {@code @Order(1)} workload identity on {@code /internal/**} (TASK-FAN-BE-045 AC-6)</h2>
+ *
+ * {@link SecurityConfig} now declares two ordered {@code SecurityFilterChain} beans, so this slice's
+ * {@link ProductionDecoders} must supply both a {@code JwtDecoder} (the end-user chain, by-name
+ * resolution as before) and a {@code NimbusJwtDecoder} named {@code internalJwtDecoder} (the internal
+ * chain) — omitting either leaves {@code UnsatisfiedDependencyException} at context refresh, which is
+ * exactly what this file caught when the chain first landed with no decoder wired here. The
+ * {@link Ordering} nested class below identifies which chain answers {@code /internal/**} by its
+ * <em>message</em>, the same technique membership-service's copy uses, because a status-only assertion
+ * would still pass if the builder's chain ever became the one matching that prefix — which would be an
+ * authorization bypass, not a test error.
  *
  * <h2>What makes the 403/405 probes discriminating, and where the honest limit is</h2>
  *
@@ -97,6 +111,23 @@ class SecurityChainAssemblySliceTest {
 
             NimbusJwtDecoder decoder = NimbusJwtDecoder.withPublicKey(publicKey()).build();
             decoder.setJwtValidator(production.jwtTokenValidator());
+            return decoder;
+        }
+
+        /**
+         * The workload-identity decoder for the {@code @Order(1)} {@code /internal/**} chain.
+         * Deliberately NOT built via {@code production.internalJwtDecoder()} — that method calls
+         * {@code NimbusJwtDecoder.withJwkSetUri(...)}, which would reach out over the network in a
+         * slice test. Instead this decoder verifies against the same local test keypair as the
+         * end-user decoder above and applies the identical issuer-only validator construction
+         * ({@code JwtValidators.createDefaultWithIssuer}) that {@code ServiceLevelOAuth2Config
+         * #internalJwtDecoder()} uses — deliberately no tenant pin, matching that method's own
+         * reasoning.
+         */
+        @Bean
+        NimbusJwtDecoder internalJwtDecoder() {
+            NimbusJwtDecoder decoder = NimbusJwtDecoder.withPublicKey(publicKey()).build();
+            decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(JwtTestHelper.SAS_ISSUER));
             return decoder;
         }
 
@@ -248,5 +279,71 @@ class SecurityChainAssemblySliceTest {
         assertThat(result.getRequest().getSession(false)).isNull();
         assertThat(result.getResponse().getHeaders("Set-Cookie"))
                 .noneMatch(cookie -> cookie.startsWith("JSESSIONID"));
+    }
+
+    // ---- which chain answers which path ------------------------------------------------------
+
+    @Nested
+    @DisplayName("chain ordering: /internal/** is the Order(1) workload chain, everything else Order(2)")
+    class Ordering {
+
+        @Test
+        @DisplayName("/internal/** with no credential -> the INTERNAL chain's 401, by its own message")
+        void internalPathWithNoTokenIsAnsweredByTheInternalChain() throws Exception {
+            mockMvc.perform(get("/internal/artists/exists"))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+                    .andExpect(jsonPath("$.message").value("Missing or invalid internal credentials"));
+        }
+
+        @Test
+        @DisplayName("/internal/** with an END-USER token -> the INTERNAL chain's 403, by its own message")
+        void endUserTokenOnInternalPathIsRefusedByTheInternalChain() throws Exception {
+            mockMvc.perform(get("/internal/artists/exists")
+                            .header("Authorization", bearer(JWT.signFanToken("fan-1"))))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+                    .andExpect(jsonPath("$.message")
+                            .value("Workload identity required for /internal/**"));
+        }
+
+        @Test
+        @DisplayName("🔴 /internal/** with the END-USER resource scope (fan-platform.artist.read) is STILL 403 — the machine scope is artist.read")
+        void fanResourceScopeOnInternalPathIsStillRefused() throws Exception {
+            // Same distinction InternalArtistControllerSliceTest pins, exercised here through the
+            // real production SecurityConfig chain rather than the slice-test security config.
+            mockMvc.perform(get("/internal/artists/exists")
+                            .header("Authorization", bearer(JWT.signFanResourceScopedToken("fan-1"))))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+                    .andExpect(jsonPath("$.message")
+                            .value("Workload identity required for /internal/**"));
+        }
+
+        @Test
+        @DisplayName("/internal/** with a WORKLOAD token clears ROLE_INTERNAL and reaches the dispatcher")
+        void workloadTokenOnInternalPathIsAdmitted() throws Exception {
+            // The positive half. A refusal-only suite would still pass if the internal chain had
+            // become unreachable — 404 (InternalArtistController is not in this @WebMvcTest slice,
+            // which loads only ArtistController) is what proves the ROLE_INTERNAL gate was cleared
+            // rather than never evaluated.
+            mockMvc.perform(get("/internal/artists/exists")
+                            .header("Authorization", bearer(JWT.signWorkloadToken("community-service-client"))))
+                    .andExpect(status().isNotFound());
+        }
+
+        @Test
+        @DisplayName("a WORKLOAD token on /api/artists/** is answered by the END-USER chain, not the internal one")
+        void workloadTokenOnTheEndUserSurfaceIsNotPrivileged() throws Exception {
+            // The cc token carries tenant_id=fan-platform, so the end-user chain admits it as an
+            // authenticated caller. What matters here is which chain decided: it reaches the
+            // controller under the end-user rules rather than meeting the internal chain's
+            // ROLE_INTERNAL gate.
+            MvcResult result = mockMvc.perform(get("/api/artists/a-1")
+                            .header("Authorization", bearer(JWT.signWorkloadToken("community-service-client"))))
+                    .andReturn();
+
+            assertThat(result.getResponse().getStatus()).isNotIn(401, 403);
+        }
     }
 }

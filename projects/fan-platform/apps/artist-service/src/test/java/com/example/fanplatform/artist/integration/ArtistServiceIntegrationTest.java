@@ -33,7 +33,7 @@ class ArtistServiceIntegrationTest extends ArtistServiceIntegrationBase {
 
         // 1) register
         String registerBody = """
-                {"artistType":"SOLO","stageName":"E2ETest-1","agency":"AgencyZ"}
+                {"accountId":"acc-e2etest-1","artistType":"SOLO","stageName":"E2ETest-1","agency":"AgencyZ"}
                 """;
         ResponseEntity<String> registerResp = rest.exchange(
                 "/api/artists", HttpMethod.POST,
