@@ -1140,17 +1140,62 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Shell syntax (bash -n)
+      # TASK-MONO-520 — this step used to name six files by hand. It was written
+      # 2026-07-10 (TASK-MONO-341, #2371), when `infra/demo/seed/` did not exist
+      # (0 files at that commit). TASK-MONO-510 then added eight scripts there
+      # across six sessions (2026-08-05..07) and nobody re-counted the list, so
+      # 10 of the 16 shell scripts under infra/demo/ were checked by nothing.
+      #
+      # What made that worse than no coverage: this job's path filter is
+      # `infra/demo/**`, so editing a seed script WOKE the job, which then never
+      # opened the changed file and reported SUCCESS. PR #3264 changed
+      # infra/demo/seed/seed-scm.sh by 42+/26- and this job was green.
+      #
+      # So the fix is not "add the ten missing names" — a hand-kept list drifting
+      # from its directory IS the defect, and adding names makes it eight lines
+      # bigger. The set is discovered, not declared.
+      - name: Shell syntax (bash -n) — every *.sh under infra/demo/, discovered not listed
         run: |
-          for f in infra/demo/projects.sh \
-                   infra/demo/demo-up.sh \
-                   infra/demo/demo-down.sh \
-                   infra/demo/demo-boot.sh \
-                   infra/demo/seed-demo-domain.sh \
-                   infra/demo/verify-demo-wrapper.sh; do
+          set -euo pipefail
+          mapfile -t files < <(find infra/demo -type f -name '*.sh' | sort)
+
+          # A discovery step that finds nothing reports green over an empty set —
+          # the same failure this guard exists to end. Two reachability asserts:
+          # the set is non-empty, and it actually reaches infra/demo/seed/, the
+          # directory whose absence from the old list is why this ticket exists.
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::found no *.sh under infra/demo/ — the discovery broke, not the tree"
+            exit 1
+          fi
+          if ! printf '%s\n' "${files[@]}" | grep -q '^infra/demo/seed/'; then
+            echo "::error::discovery matched ${#files[@]} file(s) but none under infra/demo/seed/"
+            exit 1
+          fi
+
+          for f in "${files[@]}"; do
             bash -n "$f"
             echo "ok $f"
           done
+          echo "checked ${#files[@]} script(s) under infra/demo/"
+
+      # TASK-MONO-520 AC-2 — MEASUREMENT, NOT A GATE (one-shot, removed once read).
+      # The ticket forbids switching shellcheck on before knowing what it says on
+      # the current tree: a guard that is red on day one gets switched off, and a
+      # switched-off job reports its skip as green (TASK-MONO-360). shellcheck is
+      # not installed on the author's host and the docker daemon was down, so the
+      # count is taken here, once, and the decision recorded in the ticket.
+      - name: shellcheck finding count (measurement for TASK-MONO-520 AC-2 — non-gating)
+        run: |
+          set -uo pipefail
+          sudo apt-get install -y shellcheck >/dev/null 2>&1 || true
+          shellcheck --version || { echo "shellcheck unavailable — AC-2 unmeasured"; exit 0; }
+          mapfile -t files < <(find infra/demo -type f -name '*.sh' | sort)
+          shellcheck -f gcc "${files[@]}" > /tmp/sc.txt 2>&1 || true
+          echo "total findings: $(wc -l < /tmp/sc.txt)"
+          echo "--- by severity ---"
+          grep -oE ' (error|warning|note|style):' /tmp/sc.txt | sort | uniq -c || true
+          echo "--- first 30 ---"
+          head -30 /tmp/sc.txt || true
 
       # TASK-MONO-366 — demo-boot.sh must be safe OFF AWS. The link-local
       # metadata address is a routing black hole outside EC2, so an unbounded
