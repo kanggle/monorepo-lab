@@ -1136,7 +1136,23 @@ jobs:
     # switched-off job's skip reports green (MONO-360).
     timeout-minutes: 15
     needs: changes
-    if: needs.changes.outputs.demo-wrapper == 'true'
+    # TASK-MONO-520 — `workflows` added, and it was NOT a guess: the first push of
+    # this ticket changed ONLY this job's own steps, and the job was SKIPPED while
+    # the PR reported green. So the guard could be rewritten, merged and never once
+    # executed — the same "green over an unopened file" this ticket exists to end,
+    # one level up.
+    #
+    # This file's header already claims the fix at line ~83: "workflow self-change
+    # PR (.github/workflows/** modified): the `workflows` flag catches it → all jobs
+    # activate (regression safety)". Measured: 24 job predicates honour that flag
+    # and this one did not — a sibling-parity straggler, so the claim was true of
+    # the fleet and false here.
+    #
+    # The path filter is NOT touched (AC-4). The filter was right both times; the
+    # job's PREDICATE was wrong both times.
+    if: >-
+      needs.changes.outputs.demo-wrapper == 'true' ||
+      needs.changes.outputs.workflows == 'true'
     steps:
       - uses: actions/checkout@v4
 
