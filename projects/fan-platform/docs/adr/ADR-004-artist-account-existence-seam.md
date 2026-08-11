@@ -1,7 +1,7 @@
 # ADR-004: `Follow.artistAccountId` 의 실재 검증 — 이음매를 어디에 두는가
 
-**Status**: Proposed
-**Date**: 2026-08-11 (proposed)
+**Status**: Accepted — **A**
+**Date**: 2026-08-11 (proposed) · **2026-08-11 ACCEPTED — A** (소유자 정확형)
 **Deciders**: kanggle
 **Supersedes**: —
 **Relates to**: [`ADR-MONO-059`](../../../../docs/adr/ADR-MONO-059-fan-authoring-identity-plane.md)(이 ADR 이 그 전제의 공백을 메운다), `TASK-FAN-BE-045` AC-6(이 ADR 이 게이트한다), `TASK-MONO-512`(후속), `specs/services/community-service/architecture.md` § Service Type Composition · § Forbidden dependencies, `specs/services/artist-service/architecture.md`, `ADR-MONO-005`(`/internal/**` Order(1) 체인)
@@ -189,17 +189,44 @@ C 는 정직하지만 `ADR-MONO-059` 의 A 를 실질적으로 되돌린다. 소
 
 ---
 
-## 게이트
+## 결정 — **A** (ACCEPTED 2026-08-11)
 
-`platform/architecture-decision-rule.md` § The ACCEPTED Gate 에 따라 이 레코드는 **어떤
-코드도 인가하지 않는다.** 승인은 소유자의 **정확형** 지시를 요구한다:
+**동기 internal 엔드포인트.** 위 § 선택지 A 의 텍스트 그대로이며, 이 절은 그것을 **확정**할
+뿐 재서술하지 않는다. § 선택지 / § 추천 / § 결과 는 **byte-unchanged** — ACCEPT 는 확정이지
+재결정이 아니다.
 
-```
-ADR-004 ACCEPTED — <A|B|C>
-```
+### 무엇이 구속력을 갖나
 
-일반적인 "진행"/"proceed" 는 이것을 승인하지 않으며, **작성 에이전트는 자기 제안을 스스로
-ACCEPT 할 수 없다.** 위 § 추천 이 A 를 제안한다는 사실은 소유자의 선택이 아니다.
+| | 구속력 |
+|---|---|
+| **A 자체** — artist-service 에 `/internal/**` 표면을 두고 community-service 가 동기·fail-closed 로 호출해 `Follow.artistAccountId` 를 검증 | **binding** |
+| **B 배제** — community-service 는 인바운드 이벤트 컨슈머가 **되지 않는다**. `architecture.md` L26 (`Event consumption` = `none`) · L33 *"No inbound event-consumer surface"* 는 **유지** | **binding** |
+| **C 배제** — 검증하지 않는 상태를 결정으로 승격하지 않는다. `FAN-BE-045` AC-6 은 **살아 있다** | **binding** |
+| § 결과 표 A 행 — artist-service `/internal/**` 체인 + 컨트롤러 + **계약 선갱신** + community 클라이언트 + 테스트 | **binding**(작업 배분) |
+| `TASK-MONO-512` 는 영향 없음(역할 발급은 별개 축), 다만 선행 순서는 그대로 — `FAN-BE-045` → `MONO-512` | **binding** |
 
-ACCEPTED 까지 `TASK-FAN-BE-045` 는 **AC-6 에 한해 PAUSED** 이며, `TASK-MONO-512` 는
-선행(`FAN-BE-045` 의 스키마 + 온보딩)이 끝나지 않았으므로 착수하지 않는다.
+### 🔴 ACCEPT 가 결정하지 **않은** 것 — e2e 탈출구
+
+§ 추천 말미의 🔵 는 *"A 를 고를 경우 **반드시 함께 결정되는 것** — e2e 탈출구의 모양"* 을
+제기했고, 두 가지를 나란히 놓았다: **탈출구를 두지 않는다** / 두되 **거부 쪽 기본값**.
+도착한 것은 **plain `A`** 이고 이 rider 는 **언급되지 않았다.**
+
+⇒ **싣기로도 안 싣기로도 확정되지 않았다.** 이것은 `ADR-MONO-060` 이 `act` 클레임에서 겪은
+것과 같은 형태이며, 그때의 처리를 그대로 따른다 — **구현이 명시적으로 답하고 그 답을
+기록한다.** 조용히 membership 의 `AlwaysAllowMembershipChecker` 를 복사하는 것은 답이
+아니라 **드라이버 3 위반**(검증을 넣고도 꺼진 채 초록)이다.
+
+### ACCEPT 가 인가하는 것 / 하지 않는 것
+
+인가되는 것은 `TASK-FAN-BE-045` AC-6 의 **착수**뿐이다. 계약(`specs/contracts/http/`)은
+CLAUDE.md § Layer Rules 대로 **구현 전에** 갱신돼야 하고, 이 ACCEPT 는 그 계약의 **내용**을
+승인하지 않는다.
+
+### 게이트 — 통과했지, 우회하지 않았다
+
+`platform/architecture-decision-rule.md` § The ACCEPTED Gate 가 요구하는 정확형
+(`ADR-004 ACCEPTED — A`)이 도착한 뒤에만 전환했다. 🔴 **직전 메시지는 넘기지 않았다** —
+소유자가 *"추천대로 진행"* 이라고 했으나, 같은 문서의 § 추천 이 A 를 제안한다는 사실을
+소유자의 선택으로 읽는 것이 그 규정이 *"launders an agent's own preference into an accepted
+decision"* 이라며 금지하는 바로 그 행위다(`ADR-MONO-059` 가 같은 자리에서 같은 이유로 한 번
+멈춰 선 기록이 있다). 멈춰서 다시 물었고, 그때 정확형이 도착했다. **self-ACCEPT 아님.**

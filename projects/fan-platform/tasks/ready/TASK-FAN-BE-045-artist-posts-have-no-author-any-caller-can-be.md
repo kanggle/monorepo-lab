@@ -249,6 +249,37 @@ cross-service 라는 말이 없다 ⇒ **ADR 이 이 사실을 모르는 채로 
 *"컬럼만 추가하고 조인 검증을 빼먹는다"* 를 Failure Scenario 로 적어 두었으므로, **AC-6 이
 정해지기 전에 AC-1b 만 랜딩하면 그 시나리오를 스스로 실행하는 것**이다 ⇒ ACCEPT 를 기다린다.
 
+---
+
+# ✅ 게이트 해제 — `ADR-004` **ACCEPTED — A** (2026-08-11)
+
+**동기 internal 엔드포인트.** artist-service 에 `/internal/**` 표면을 두고 community-service 가
+동기·**fail-closed** 로 호출해 `Follow.artistAccountId` 를 검증한다
+(`HttpMembershipChecker`/FAN-BE-010 + `ADR-MONO-005` Order(1) 체인과 같은 모양).
+
+**B 배제** ⇒ community-service 는 인바운드 이벤트 컨슈머가 **되지 않는다**
+(`architecture.md` L26/L33 유지). **C 배제** ⇒ AC-6 은 살아 있다.
+
+## 🔴 ACCEPT 가 답하지 않은 것 — e2e 탈출구 (구현이 명시적으로 답한다)
+
+ADR § 추천 말미가 *"A 를 고를 경우 **반드시 함께 결정되는 것**"* 으로 e2e 탈출구의 모양을
+제기하며 두 가지를 나란히 놓았다 — **두지 않는다** / 두되 **거부 쪽 기본값**. 도착한 것은
+**plain `A`** 이고 rider 는 언급되지 않았다 ⇒ **싣기로도 안 싣기로도 확정되지 않았다.**
+
+`ADR-MONO-060` 의 `act` 클레임이 정확히 같은 자리였고, 그때의 처리를 그대로 따른다:
+**구현이 답하고 그 답을 기록한다**(조용히 빠뜨리는 것은 답이 아니다). ⇒ 아래 **AC-7**.
+
+🔴 **membership 의 `AlwaysAllowMembershipChecker` 를 복사하지 말 것** — 그 모양이면 검증을
+넣고도 **꺼진 채 초록**이 된다(ADR § Decision Drivers 3 · `MONO-360`). 기본 권장은 탈출구를
+두지 않는 것이고(artist-service 는 live-trio e2e 에 이미 떠 있다), 두어야 한다면 **거부**가
+기본값이어야 한다.
+
+## 🔴 계약 선갱신 — 코드보다 먼저
+
+ADR § 결과 A 행이 **계약 선갱신**을 명시한다. `specs/contracts/http/` 에 artist-service 의
+새 internal 엔드포인트를 **구현 전에** 올린다(CLAUDE.md § Layer Rules). **ACCEPT 는 그
+계약의 *내용*을 승인하지 않았다** — 형태·상태코드·에러코드는 이 티켓이 정하고 리뷰가 본다.
+
 # Acceptance Criteria
 
 - [x] **AC-0 (재측정) — 완료 2026-08-07.** 세 사실 전부 유지(`artists` 16컬럼 중 계정 0개 ·
@@ -266,9 +297,11 @@ cross-service 라는 말이 없다 ⇒ **ADR 이 이 사실을 모르는 채로 
       양성만으로는 "이어졌다" 와 "모두에게 보인다" 를 구별할 수 없다
 - [x] **AC-4 (B 를 골랐을 때) — 해당 없음.** B 가 배제됐다(ADR-059 ACCEPT). 저자는 인증된
       호출자로 남으므로 "저자 id 를 지정하는 주체" 자체가 존재하지 않는다
-- [ ] **AC-6 (조인 검증 — A 가 새로 요구) — ⛔ `ADR-004` PAUSED (위 § 참조).** 기전이
-      `A`(동기)냐 `B`(투영)냐 `C`(검증 안 함)냐에 따라 이 AC 의 내용 자체가 달라진다 —
-      C 면 "해당 없음" 으로 종결된다. ACCEPT 전 구현 금지.
+- [ ] **AC-6 (조인 검증 — A 가 새로 요구) — 🟢 게이트 해제 (`ADR-004` ACCEPTED — A).**
+      기전은 **동기 internal 엔드포인트 + fail-closed** 로 확정됐다(투영/미검증 배제).
+      🔴 판정은 "클라이언트를 배선했다" 가 아니라 **잘못된 `artistAccountId` 가 실제로
+      거부되는 것**이고, artist-service 를 내렸을 때 **팔로우가 열리지 않는 것**(fail-closed)
+      까지 함께 단언한다 — 열리면 그건 fail-open 이고 검증이 없는 것과 같다.
       `FollowArtistUseCase` 가 받는
       `artistAccountId` 가 **실재하는 `artists.account_id` 인지 검증**하고, 아닌 값은
       거부한다(테스트로 고정). 🔴 지금은 무검증 저장이라 피드 조인이 **우연히만** 성립한다 —
@@ -277,6 +310,13 @@ cross-service 라는 말이 없다 ⇒ **ADR 이 이 사실을 모르는 채로 
       이 결함을 사유로 든다. 풀렸다면 그 블록을 API 로 옮긴다.
       🔴 옮길 때 **저자는 여전히 데모 계정이 아니어야 한다** — 데모 계정이 저자면
       `actor.owns()` 로 가시성 게이팅이 통째로 우회돼 시연이 공허해진다
+- [ ] **AC-7 (ACCEPT 가 남긴 rider 에 답한다 — `ADR-004` § 결정)** — e2e 탈출구를
+      **두는가 두지 않는가**를 명시적으로 답하고, 그 답과 사유를 코드/티켓에 남긴다.
+      🔴 **조용히 빠뜨리는 것은 답이 아니다**(`ADR-MONO-060` 의 `act` 처리와 동형).
+      두지 않기로 하면 live-trio e2e 에서 artist-service 가 실제로 떠 있는지 확인해
+      그 근거를 적고, 두기로 하면 **기본값이 거부**임을 테스트로 고정한다.
+      🔴 `AlwaysAllowMembershipChecker` 형(항상 통과)은 **선택지가 아니다** — 그 모양이면
+      검증이 꺼진 채 초록이 된다(ADR § Drivers 3)
 
 ---
 
@@ -310,8 +350,11 @@ cross-service 라는 말이 없다 ⇒ **ADR 이 이 사실을 모르는 채로 
 # Definition of Done
 
 - [x] 결정 — `ADR-MONO-059` ACCEPTED — A (2026-08-07)
+- [x] 이음매 결정 — `ADR-004` ACCEPTED — A, 동기 internal 엔드포인트 (2026-08-11)
+- [ ] 계약 선갱신 — `specs/contracts/http/` 에 artist-service internal 엔드포인트 (코드보다 먼저)
 - [ ] 스키마(`artists.account_id`) + 온보딩 구현
-- [ ] AC-6 조인 검증(무검증 저장 제거)
+- [ ] AC-6 조인 검증(무검증 저장 제거) + fail-closed 단언
+- [ ] AC-7 e2e 탈출구 rider 에 명시적으로 답하고 기록
 - [ ] AC-2/AC-3 테스트(발행 → 피드 도달, 음성 대조 포함)
 - [ ] `seed-fan.sh` 회수 여부 명시
 - [ ] Ready for review
