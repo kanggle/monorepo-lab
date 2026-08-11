@@ -354,6 +354,45 @@ AC-5 의 *"풀렸다면"* 은 조건부로 옳게 쓰였고, **그 조건의 주
 받아 연결 + 검증**이고, 계정 생성·역할 부여는 IAM 쪽(= `MONO-512`).
 실측 보강: fan 앱 어디에도 IAM provisioning 호출부 **0건**(신설하지 않는다).
 
+## 🔴🔴 2회차 정정 — AC-7 의 근거가 **틀린 것을 재고 있었다**
+
+1회차가 적어 둔 AC-7 근거는 이것이었다:
+
+> live-trio e2e 잡이 띄우는 것은 community-service + artist-service 이고
+> **membership-service 는 없다** ⇒ membership 이 탈출구를 가진 이유가 artist 에는
+> 성립하지 않는다 ⇒ **탈출구를 두지 않는다**
+
+`FanPlatformE2ETestBase` 원문을 열어 보니 그 트리오가 빠뜨린 것은 하나가 더 있다:
+
+```java
+// The live-trio is gateway+community+artist only — membership-service
+// and iam (the workload-identity token source) are out of scope, so
+// HttpMembershipChecker would fail-closed on every ... read.
+.withEnv("COMMUNITY_MEMBERSHIP_SERVICE_ENABLED", "false")
+```
+
+⇒ 탈출구가 지키는 것은 **피호출자의 존재**가 아니라 **client_credentials 토큰을 발급할
+곳(iam)의 존재**다. artist-service 가 트리오에 떠 있는 것은 맞지만 **iam 은 없다** ⇒
+탈출구 없이 랜딩하면 토큰을 못 얻어 fail-closed 로 모든 팔로우가 거절되고,
+`ArtistAndPostFlowE2ETest` 의 팔로우 단계(201 단언)가 **RED** 가 된다.
+🔴 **동작하는 보안 통제와 똑같이 생긴 fail-closed 장애**다.
+
+**⇒ AC-7 의 답을 ADR 이 나란히 놓은 두 번째 선택지로 바꾼다: 두되, 기본값이 거부(검증)다.**
+
+- `community.artist-service.enabled` **기본 true**(검증 켜짐).
+- 허용 경로는 `UnverifiedArtistAccountChecker` — `havingValue="false"` 에만 묶고
+  **`matchIfMissing` 없음**. 설정 부재·빈 순서·오타(오타는 property 부재 → 진짜 checker)
+  어느 것으로도 선택될 수 없다.
+- 🔴 `AlwaysAllowMembershipChecker` 형이 아닌 이유가 정확히 이것이다 — 그쪽은
+  `@ConditionalOnMissingBean` 이라 **사고로** 선택될 수 있고 그러면 게이트가 꺼진 채 초록이다.
+- 이름을 `AlwaysAllow` 가 아니라 `Unverified` 로 둔 것도 의도 — 기동 로그에서 읽으면
+  불안해야 한다.
+- 기본값은 `ArtistAccountCheckerConfigTest` 가 고정한다(뒤집으면 데모가 아니라 **테스트**가 깨진다).
+
+🔵 근본 해법은 **live-trio 에 iam 을 넣어** 어떤 서비스도 e2e 를 위해 탈출구를 갖지 않게
+하는 것이다(membership 의 탈출구도 같이 없어진다). 트리오의 모양을 바꾸는 별도 작업이라
+여기서 몰래 하지 않고 **이름만 남긴다**.
+
 ## ▶️ 다음 세션의 작업 순서
 
 - [x] **계약 2/2 (코드보다 먼저) — 완료 2026-08-11.** `artist-api.md` § `accountId` +
@@ -376,13 +415,23 @@ AC-5 의 *"풀렸다면"* 은 조건부로 옳게 쓰였고, **그 조건의 주
       참조 **0건** — 두 번째 인스턴스가 아니라 신설이다) + `InternalArtistController` +
       community `ArtistAccountChecker` 포트/HTTP 어댑터 + `FollowArtistUseCase` 배선.
       🔴 판정은 배선이 아니라 **잘못된 id 거부 + artist-service 내렸을 때 팔로우가 안 열림**.
-- [ ] **AC-7** — 탈출구 **두지 않는다**로 답하고 근거를 코드/티켓에 적는다.
-      🔵 근거는 측정됐다: live-trio e2e 잡이 띄우는 것은 `community-service` +
-      `artist-service` 이고 **membership-service 는 없다** — 즉 membership 이 탈출구를
-      가진 이유(그 서비스가 e2e 에 없음)가 artist 에는 **성립하지 않는다**.
-      🔴 `AlwaysAllowMembershipChecker` 형 복사 금지.
+- [x] **AC-7 — 완료 2026-08-11(2회차), 단 답이 뒤집혔다.** ~~두지 않는다~~ →
+      **두되 기본값이 거부(검증)**. 사유는 위 § 2회차 정정(1회차 근거가 잰 것이 틀렸다).
+- [x] **크로스프로젝트 — iam `V0032`** (2회차). `community-service-client` 에 machine 스코프
+      `artist.read` 부여. 없으면 SAS 가 `invalid_scope` 로 토큰을 거절 → checker 가
+      fail-closed → **모든 팔로우 거절**. 같은 PR 에 싣는다(CLAUDE.md § Cross-Project Changes).
+      🔴 `fan-platform.artist.read`(V0030, **엔드유저** 스코프)를 재사용하면 로그인한 팬
+      전원이 `ROLE_INTERNAL` 을 얻는다 — 계열이 다르다는 것이 이 표면의 보안 성질 전부다.
+- [x] **시드 — 2회차 실측으로 강제됨.** `account_id` 가 NOT NULL 이 되어 `seed-fan.sh` 의
+      직접-DB `INSERT INTO artists` 3건이 그대로면 **깨진다** ⇒ 항등값으로 채웠다.
+- [x] **프런트 — 2줄이 아니라 4파일이었다.** `artistAccountId={artist.id}` 를 고치니
+      `actions.ts` 의 `revalidatePath('/artists/${artistAccountId}')` 가 드러났다 —
+      라우트는 **엔티티 id** 로 키가 잡히는데 이제 계정 id 를 넣고 있었다. 데모에서는
+      두 값이 같아 증상이 없다(같은 혼동의 두 번째 사례) ⇒ 둘을 분리해 넘긴다.
 - [ ] **AC-2/AC-3** — 발행 → 팔로워 피드 도달(같은 테스트 안에서) + 비팔로워 음성 대조.
-- [ ] **AC-5** — 아래 갱신된 판정대로 "안 옮긴다 + 사유" 를 적고 `MONO-512` 로 넘긴다.
+- [x] **AC-5 — "안 옮긴다 + 사유"를 시드 `--why` 에 기록 완료.** 이 티켓이 담당한 절반
+      (계정 부재)은 해소됐고, 남은 차단은 **로그인 가능한 계정 + ARTIST 역할** 둘 다
+      `MONO-512` 라는 것을 `--why` 본문에 명시했다.
 
 # Acceptance Criteria
 
@@ -392,16 +441,31 @@ AC-5 의 *"풀렸다면"* 은 조건부로 옳게 쓰였고, **그 조건의 주
 - [x] **AC-1 (결정) — 완료 2026-08-07.** `ADR-MONO-059` **ACCEPTED — A**. 결정이
       monorepo-level ADR 로 올라갔으므로 `projects/fan-platform/docs/adr/` 에 별도 ADR 을
       **추가로 올리지 않는다**(같은 결정을 두 곳에 적으면 갈라진다)
-- [ ] **AC-1b (스키마 + 온보딩)** — `artists.account_id` 추가 + 아티스트 계정 발급 경로.
-      🔴 `ARTIST` **역할 부여는 `TASK-MONO-512`** 범위 — 여기서 겹쳐 구현하지 말 것
-- [ ] **AC-2 (도달 가능성)** — 실제 호출자가 `ARTIST_POST` 를 만들고, **같은 테스트 안에서**
-      그 아티스트를 팔로우한 팬의 피드에 그 글이 뜨는 것을 단언한다.
-      🔴 발행 201 만 단언하는 테스트는 이 결함을 재발시킨다 — **조인을 건너뛰기 때문이다**
-- [ ] **AC-3 (음성 대조)** — 팔로우하지 않은 팬의 피드에는 뜨지 않아야 한다.
-      양성만으로는 "이어졌다" 와 "모두에게 보인다" 를 구별할 수 없다
+- [x] **AC-1b (스키마 + 연결) — 완료 2026-08-11.** V3 `artists.account_id NOT NULL` +
+      `UNIQUE (tenant_id, account_id)` + 항등 백필(증명은 `data-model.md` § V3) ·
+      `POST /api/artists` 가 `accountId` 를 **필수**로 받음 · 응답 노출 · PATCH 불가(불변).
+      🔵 "온보딩" 의 경계는 `ADR-MONO-059` A 가 이미 그었다 — **계정 발급·`ARTIST` 역할
+      부여는 iam(`TASK-MONO-512`)**, 이 티켓은 계정 id 를 받아 연결하고 검증하는 데까지.
+      fan 앱에 IAM provisioning 호출부를 신설하지 않았다(1회차 실측: 기존 0건)
+- [x] **AC-2 (도달 가능성) — 완료(⚠️ 로컬 미실행, CI 가 권위).**
+      `ArtistPostReachesFollowerFeedIntegrationTest` **한 메서드 안에서**: 팬이
+      `POST /follows` → ARTIST 역할 호출자가 `POST /posts` 로 `ARTIST_POST` 발행 →
+      조인의 두 끝(`posts.author_account_id` = 실제 발행 결과, `follows.artist_account_id`
+      = 실제 팔로우 결과)이 같음을 **명시 단언** → 팔로워의 `GET /feed` 에 그 글이 있음.
+      `follows`/`posts` 를 손으로 심지 않는다 — 전부 HTTP 로 만든다
+- [x] **AC-3 (음성 대조) — 같은 메서드 안.** 팔로우하지 않은 팬의 피드에는 없고, 그 글이
+      DB 에는 **여전히 존재**함을 함께 확인한다 ⇒ "글이 없어서 안 보인 것" 과 구별된다
 - [x] **AC-4 (B 를 골랐을 때) — 해당 없음.** B 가 배제됐다(ADR-059 ACCEPT). 저자는 인증된
       호출자로 남으므로 "저자 id 를 지정하는 주체" 자체가 존재하지 않는다
-- [ ] **AC-6 (조인 검증 — A 가 새로 요구) — 🟢 게이트 해제 (`ADR-004` ACCEPTED — A).**
+- [x] **AC-6 (조인 검증) — 완료 2026-08-11.** artist `/internal/artists/exists`(Order(1)
+      워크로드 체인 신설) + community `ArtistAccountChecker`/`HttpArtistAccountChecker` +
+      `FollowArtistUseCase` 배선 + 422 `UNKNOWN_ARTIST_ACCOUNT`.
+      판정 3종을 **따로** 고정: ① 확인된 대상 → 201 ② 거부된 대상 → 422 **+ 행 없음**
+      ③ 🔴 **artist-service 소켓을 실제로 닫고** → 422(케이스 ①과 유일한 차이가 소켓뿐).
+      세 케이스 모두 실행 전에 `assertRealCheckerIsWired()` 로 **진짜 checker 가 물렸는지**
+      먼저 확인한다 — AC-7 스위치가 이 스위트에 새어 들어오면 셋 다 초록인데 아무것도
+      증명 못 하기 때문. 어댑터 단위로 8가지 실패 모드를 각각 false 로 단언(합치지 않음).
+      원래 문구:
       기전은 **동기 internal 엔드포인트 + fail-closed** 로 확정됐다(투영/미검증 배제).
       🔴 판정은 "클라이언트를 배선했다" 가 아니라 **잘못된 `artistAccountId` 가 실제로
       거부되는 것**이고, artist-service 를 내렸을 때 **팔로우가 열리지 않는 것**(fail-closed)
@@ -420,13 +484,13 @@ AC-5 의 *"풀렸다면"* 은 조건부로 옳게 쓰였고, **그 조건의 주
       풀렸다면 그 블록을 API 로 옮긴다.
       🔴 옮길 때 **저자는 여전히 데모 계정이 아니어야 한다** — 데모 계정이 저자면
       `actor.owns()` 로 가시성 게이팅이 통째로 우회돼 시연이 공허해진다
-- [ ] **AC-7 (ACCEPT 가 남긴 rider 에 답한다 — `ADR-004` § 결정)** — e2e 탈출구를
-      **두는가 두지 않는가**를 명시적으로 답하고, 그 답과 사유를 코드/티켓에 남긴다.
-      🔴 **조용히 빠뜨리는 것은 답이 아니다**(`ADR-MONO-060` 의 `act` 처리와 동형).
-      두지 않기로 하면 live-trio e2e 에서 artist-service 가 실제로 떠 있는지 확인해
-      그 근거를 적고, 두기로 하면 **기본값이 거부**임을 테스트로 고정한다.
-      🔴 `AlwaysAllowMembershipChecker` 형(항상 통과)은 **선택지가 아니다** — 그 모양이면
-      검증이 꺼진 채 초록이 된다(ADR § Drivers 3)
+- [x] **AC-7 (ACCEPT 가 남긴 rider) — 완료 2026-08-11. 답 = 두 번째 선택지(두되 기본값 거부).**
+      `community.artist-service.enabled` 기본 `true`(검증) · 허용 경로는
+      `havingValue="false"` 전용이라 설정 부재·빈 순서·오타로는 도달 불가 ·
+      `AlwaysAllowMembershipChecker` 형(=`@ConditionalOnMissingBean`, 사고로 선택 가능) 아님 ·
+      기본값을 테스트로 고정. 🔴 1회차가 적어 둔 "두지 않는다" 의 근거는 **틀린 것을
+      재고 있었다** — 탈출구가 지키는 것은 피호출자(artist-service, 트리오에 있음)가 아니라
+      **토큰 발급처(iam, 트리오에 없음)** 다. 상세는 위 § 2회차 정정
 
 ---
 
@@ -463,9 +527,34 @@ AC-5 의 *"풀렸다면"* 은 조건부로 옳게 쓰였고, **그 조건의 주
 - [x] 이음매 결정 — `ADR-004` ACCEPTED — A, 동기 internal 엔드포인트 (2026-08-11)
 - [x] 계약 선갱신 (코드보다 먼저) — 1/2 internal 엔드포인트 · 2/2 `POST /api/artists`
       `accountId` + `data-model.md` (2026-08-11)
-- [ ] 스키마(`artists.account_id`) + 온보딩 구현
-- [ ] AC-6 조인 검증(무검증 저장 제거) + fail-closed 단언
-- [ ] AC-7 e2e 탈출구 rider 에 명시적으로 답하고 기록
-- [ ] AC-2/AC-3 테스트(발행 → 피드 도달, 음성 대조 포함)
-- [ ] `seed-fan.sh` 회수 여부 명시
+- [x] 스키마(`artists.account_id`) + 계정 연결 구현
+- [x] AC-6 조인 검증(무검증 저장 제거) + fail-closed 단언
+- [x] AC-7 e2e 탈출구 rider 에 명시적으로 답하고 기록 (답이 1회차와 **반대**로 뒤집혔다)
+- [x] AC-2/AC-3 테스트(발행 → 피드 도달, 음성 대조 포함)
+- [x] `seed-fan.sh` 회수 여부 명시 — **안 옮긴다**, 사유는 `--why` 본문에
 - [ ] Ready for review
+
+---
+
+# 🧪 검증 상태 — 로컬에서 **실제로 실행된 것과 아닌 것**
+
+| 게이트 | 결과 |
+|---|---|
+| `artist-service:test` | ✅ 실행·통과 (내부 체인/컨트롤러/쿼리서비스 신규 32건 포함) |
+| `community-service:test` | ✅ 실행·통과 (184건) |
+| gateway / membership / notification `:test` | ✅ 실행·통과 |
+| `iam-platform:auth-service:test` | ✅ 실행·통과 |
+| `tests:e2e:compileTestJava` | ✅ |
+| **`integrationTest` (양 서비스)** | ⚠️ **`BUILD SUCCESSFUL` 이지만 전부 SKIPPED** — 이 호스트에 Docker 미기동 |
+
+🔴 **`integrationTest` 의 rc=0 은 "통과"가 아니라 "아무것도 안 돌았다"** 이다
+(artist 15건 · community 38건 전부 SKIPPED). 하필 이 티켓의 **핵심 판정 두 개**가
+거기 있다 — AC-2/AC-3 의 도달성·음성 대조, 그리고 AC-6 의 *artist-service 를 실제로
+내렸을 때 팔로우가 안 열림*. ⇒ **로컬 초록을 근거로 삼지 말 것. CI 가 권위다.**
+(`project_testcontainers_docker_desktop_blocker` 와 같은 상황.)
+
+🔵 하위 에이전트가 자기 테스트에서 flake 하나를 스스로 잡았다: 공유 RestClient 의
+read timeout 을 400ms 로 조여 뒀더니 단독 실행·2회 전체 실행은 통과하고 **세 번째
+전체 실행에서** 콜드 스타트가 400ms 를 넘겨 `exists:true` 케이스가 false 로 뒤집혔다
+— 스위트가 "artist-service 가 아니라고 했다" 고 보고하는 모양. 공유 클라이언트는 운영
+기본값(3000ms)으로 되돌리고 타임아웃 케이스에만 전용 500ms 클라이언트를 줬다.

@@ -96,12 +96,21 @@ services:
       REDIS_PORT: "6379"
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       KAFKA_BOOTSTRAP: kafka:9092
+      # TASK-FAN-BE-045 AC-6: follow-target validation calls artist-service.
+      # Defaults in application.yml already resolve to this host; stated here so
+      # the outbound edge is visible where the wiring is read.
+      ARTIST_SERVICE_BASE_URL: http://artist-service:8080
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
       kafka:
+        condition: service_healthy
+      # Not ordering pedantry: the check is fail-closed, so community coming up
+      # first would refuse every follow until artist-service is healthy — which
+      # in the demo means the seed's own follow calls fail (TASK-FAN-BE-045).
+      artist-service:
         condition: service_healthy
     networks:
       - fan-platform-net

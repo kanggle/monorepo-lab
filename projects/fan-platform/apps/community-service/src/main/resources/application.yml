@@ -110,6 +110,19 @@ community:
     base-url: ${MEMBERSHIP_SERVICE_BASE_URL:http://membership-service:8080}
     connect-timeout-ms: ${MEMBERSHIP_SERVICE_CONNECT_TIMEOUT_MS:2000}
     read-timeout-ms: ${MEMBERSHIP_SERVICE_READ_TIMEOUT_MS:3000}
+  # TASK-FAN-BE-045 AC-6 / ADR-004 A: outbound workload-identity call to
+  # artist-service that validates a follow target.
+  # `enabled` defaults to TRUE — validation on. Setting it to false selects
+  # UnverifiedArtistAccountChecker, which accepts any follow target; that exists
+  # only because the live-trio e2e has no iam to mint a workload token from
+  # (AC-7 — see ArtistAccountCheckerConfig). `scope` is the MACHINE scope
+  # (IAM V0032), NOT the end-user `fan-platform.artist.read`.
+  artist-service:
+    enabled: ${COMMUNITY_ARTIST_SERVICE_ENABLED:true}
+    base-url: ${ARTIST_SERVICE_BASE_URL:http://artist-service:8080}
+    scope: ${ARTIST_SERVICE_WORKLOAD_SCOPE:artist.read}
+    connect-timeout-ms: ${ARTIST_SERVICE_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms: ${ARTIST_SERVICE_READ_TIMEOUT_MS:3000}
 
 # IAM client_credentials token for the /internal/** call above (ADR-MONO-005).
 # Uses the pre-seeded community-service-client (IAM V0009, scope membership.read).

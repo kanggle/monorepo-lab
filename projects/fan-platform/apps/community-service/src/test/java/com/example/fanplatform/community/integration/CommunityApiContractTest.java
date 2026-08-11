@@ -23,6 +23,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.test.context.ContextConfiguration;
 
 import java.util.UUID;
 
@@ -36,7 +37,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  * the error envelope shape ({@code code, message, [details], timestamp}). Not
  * exhaustive on every field — focused on contract-critical fields that the
  * frontend / event consumers depend on.
+ *
+ * <p>TASK-FAN-BE-045 AC-6 made every follow go through artist-service, which is not
+ * in this suite's compose; this class's subject is the response envelope, not the
+ * follow gate, so it imports {@link ConfirmAllArtistAccountsTestConfig} (see that
+ * class for why it must not be reused by a gate test). The self-follow arm below is
+ * unaffected — that guard fires before the checker is consulted.
  */
+@ContextConfiguration(classes = ConfirmAllArtistAccountsTestConfig.class)
 class CommunityApiContractTest extends CommunityServiceIntegrationBase {
 
     @LocalServerPort

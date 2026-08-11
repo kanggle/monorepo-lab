@@ -82,6 +82,13 @@ public abstract class ArtistServiceIntegrationBase {
         registry.add("fanplatform.oauth2.allowed-issuers",
                 () -> JwtTestHelper.SAS_ISSUER + "," + JwtTestHelper.LEGACY_ISSUER);
         registry.add("fanplatform.oauth2.required-tenant-id", () -> "fan-platform");
+        // Workload-identity decoder for /internal/** (TASK-FAN-BE-045 AC-6) — same JWKS
+        // host, pinned issuer. Explicit rather than relying on ServiceLevelOAuth2Config's
+        // fallback to spring.security.oauth2.resourceserver.jwt.issuer-uri, which is NOT
+        // overridden here and stays at application.yml's http://iam.local default — a
+        // mismatch that would reject every workload token this base signs.
+        registry.add("fanplatform.internal.jwt.jwk-set-uri", () -> jwks.hostInternalJwksUrl());
+        registry.add("fanplatform.internal.jwt.issuer", () -> JwtTestHelper.SAS_ISSUER);
         // Disable the outbox poller in integration tests by default; specific
         // tests that exercise the relay path enable it via @TestPropertySource.
         registry.add("outbox.polling.enabled", () -> "false");

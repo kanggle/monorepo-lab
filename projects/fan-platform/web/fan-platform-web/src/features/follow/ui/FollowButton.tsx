@@ -5,9 +5,13 @@ import { followArtist, unfollowArtist } from '@/features/follow/api/actions';
 
 export function FollowButton({
   artistAccountId,
+  artistId,
   initialFollowing = false,
 }: {
+  /** The follow target — `artists.account_id`, what the API validates against. */
   artistAccountId: string;
+  /** The artist entity id — only for revalidating `/artists/[id]`. Not the same value. */
+  artistId: string;
   initialFollowing?: boolean;
 }) {
   const [following, setFollowing] = useState(initialFollowing);
@@ -17,10 +21,10 @@ export function FollowButton({
     startTransition(async () => {
       try {
         if (following) {
-          await unfollowArtist(artistAccountId);
+          await unfollowArtist(artistAccountId, artistId);
           setFollowing(false);
         } else {
-          await followArtist(artistAccountId);
+          await followArtist(artistAccountId, artistId);
           setFollowing(true);
         }
       } catch {

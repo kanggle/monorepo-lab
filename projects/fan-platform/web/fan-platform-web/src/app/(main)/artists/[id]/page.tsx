@@ -27,7 +27,15 @@ async function ArtistProfile({ id }: { id: string }) {
               {artist.debutDate ? ` · 데뷔 ${artist.debutDate}` : ''}
             </p>
             <div className="mt-4">
-              <FollowButton artistAccountId={artist.id} initialFollowing={false} />
+              {/* artist.accountId, NOT artist.id — TASK-FAN-BE-045. The two
+                  coincide only for the backfilled demo rows; for an artist
+                  registered against a real IAM subject, artist.id is the wrong
+                  value and community-service refuses the follow. */}
+              <FollowButton
+                artistAccountId={artist.accountId}
+                artistId={artist.id}
+                initialFollowing={false}
+              />
             </div>
           </div>
         </div>

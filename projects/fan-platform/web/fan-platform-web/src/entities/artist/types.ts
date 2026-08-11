@@ -8,6 +8,13 @@ export type ArtistStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
 export interface Artist {
   id: string;
   tenantId: string;
+  /**
+   * The account that authors as this artist — and the value a follow must
+   * target (TASK-FAN-BE-045). NOT interchangeable with `id`: they coincide only
+   * for the backfilled demo rows, and community-service refuses a follow whose
+   * target is not a live `artists.account_id`.
+   */
+  accountId: string;
   artistType: ArtistType;
   status: ArtistStatus;
   stageName: string;
