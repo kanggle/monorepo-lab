@@ -1136,21 +1136,86 @@ jobs:
     # switched-off job's skip reports green (MONO-360).
     timeout-minutes: 15
     needs: changes
-    if: needs.changes.outputs.demo-wrapper == 'true'
+    # TASK-MONO-520 — `workflows` added, and it was NOT a guess: the first push of
+    # this ticket changed ONLY this job's own steps, and the job was SKIPPED while
+    # the PR reported green. So the guard could be rewritten, merged and never once
+    # executed — the same "green over an unopened file" this ticket exists to end,
+    # one level up.
+    #
+    # This file's header already claims the fix at line ~83: "workflow self-change
+    # PR (.github/workflows/** modified): the `workflows` flag catches it → all jobs
+    # activate (regression safety)". Measured: 24 job predicates honour that flag
+    # and this one did not — a sibling-parity straggler, so the claim was true of
+    # the fleet and false here.
+    #
+    # The path filter is NOT touched (AC-4). The filter was right both times; the
+    # job's PREDICATE was wrong both times.
+    if: >-
+      needs.changes.outputs.demo-wrapper == 'true' ||
+      needs.changes.outputs.workflows == 'true'
     steps:
       - uses: actions/checkout@v4
 
-      - name: Shell syntax (bash -n)
+      # TASK-MONO-520 — this step used to name six files by hand. It was written
+      # 2026-07-10 (TASK-MONO-341, #2371), when `infra/demo/seed/` did not exist
+      # (0 files at that commit). TASK-MONO-510 then added eight scripts there
+      # across six sessions (2026-08-05..07) and nobody re-counted the list, so
+      # 10 of the 16 shell scripts under infra/demo/ were checked by nothing.
+      #
+      # What made that worse than no coverage: this job's path filter is
+      # `infra/demo/**`, so editing a seed script WOKE the job, which then never
+      # opened the changed file and reported SUCCESS. PR #3264 changed
+      # infra/demo/seed/seed-scm.sh by 42+/26- and this job was green.
+      #
+      # So the fix is not "add the ten missing names" — a hand-kept list drifting
+      # from its directory IS the defect, and adding names makes it eight lines
+      # bigger. The set is discovered, not declared.
+      - name: Shell syntax (bash -n) — every *.sh under infra/demo/, discovered not listed
         run: |
-          for f in infra/demo/projects.sh \
-                   infra/demo/demo-up.sh \
-                   infra/demo/demo-down.sh \
-                   infra/demo/demo-boot.sh \
-                   infra/demo/seed-demo-domain.sh \
-                   infra/demo/verify-demo-wrapper.sh; do
+          set -euo pipefail
+          mapfile -t files < <(find infra/demo -type f -name '*.sh' | sort)
+
+          # A discovery step that finds nothing reports green over an empty set —
+          # the same failure this guard exists to end. Two reachability asserts:
+          # the set is non-empty, and it actually reaches infra/demo/seed/, the
+          # directory whose absence from the old list is why this ticket exists.
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::found no *.sh under infra/demo/ — the discovery broke, not the tree"
+            exit 1
+          fi
+          if ! printf '%s\n' "${files[@]}" | grep -q '^infra/demo/seed/'; then
+            echo "::error::discovery matched ${#files[@]} file(s) but none under infra/demo/seed/"
+            exit 1
+          fi
+
+          for f in "${files[@]}"; do
             bash -n "$f"
             echo "ok $f"
           done
+          echo "checked ${#files[@]} script(s) under infra/demo/"
+
+      # TASK-MONO-520 AC-2 — shellcheck is deliberately NOT enabled here, and the
+      # decision was measured rather than assumed. A one-shot non-gating step ran
+      # it on this very job (run 31478823405) and reported, over all 16 scripts:
+      #
+      #   total 27  =  21 note + 6 warning + 0 error
+      #
+      # Non-zero, so enabling it would be red on day one — and a guard that is red
+      # on day one gets switched off, after which its skip reports green
+      # (TASK-MONO-360). That is the failure this whole ticket exists to end, so
+      # reproducing it to gain a nicer-sounding check would be self-defeating.
+      #
+      # The distribution says the findings are mostly structural, not defects:
+      # SC2034 "appears unused" x5 of the 6 warnings, all in projects.sh / lib.sh,
+      # which are SOURCED libraries — their variables are consumed by the sourcing
+      # script, which shellcheck cannot see without following sources. SC1091
+      # ("Not following: ./demo.env") x4 is the same blindness. HYPOTHESIS worth a
+      # follow-up, not a claim: `shellcheck -x` would resolve most of these. It was
+      # not run, so the number above is for plain shellcheck only.
+      #
+      # One finding is a genuine (minor) smell and is left alone here because this
+      # ticket fixes the guard, not the seeds: lib.sh:146 SC2155 (declare and
+      # assign separately to avoid masking return values).
 
       # TASK-MONO-366 — demo-boot.sh must be safe OFF AWS. The link-local
       # metadata address is a routing black hole outside EC2, so an unbounded
