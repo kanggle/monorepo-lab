@@ -74,7 +74,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
 
-_(없음)_
+- `TASK-BE-579-artist-read-grant-has-no-issuer-side-test.md` — **🟢 READY — `V0032` 가 `community-service-client` 에 준 `artist.read` 를 SAS 가 실제로 발급하는지 아무도 확인하지 않는다.** `TASK-FAN-BE-045`(PR #3270)가 크로스프로젝트 원자 PR 로 이 마이그레이션을 iam 티켓 없이 실었다(스코프가 없으면 SAS 가 `invalid_scope` → fan 의 checker 가 fail-closed → **모든 팔로우 거절**, 나눠 내면 main 이 그 상태로 머문다). 이 티켓이 그 **사후 기록이자 미증명분**을 닫는다. 🔴 **실측**: fan 의 `InternalArtistAuthIntegrationTest` 는 토큰을 **직접 서명**하고 `FollowArtistGateIntegrationTest` 는 토큰 엔드포인트를 **스텁**한다 ⇒ *"SAS 가 이 클라이언트에게 그 스코프를 발급한다"* 를 확인하는 테스트는 **양쪽 프로젝트 0건**. 🔵 계측기 검증: 시드 클라이언트를 실제 엔드포인트로 검증하는 **선례가 있다**(`PlatformConsoleOidcClientSeedIntegrationTest`, `V0015`) ⇒ 못 쓰는 게 아니라 안 썼다. 반면 `OAuth2AuthorizationServerIntegrationTest` 의 cc 케이스는 **인메모리 placeholder**(`test-internal-client`)라 시드 행을 안 건드린다. AC-2 음성 대조(없는 스코프 → `invalid_scope`)와 **기존 `account.read`/`membership.read` 보존**까지 단언할 것 — 배열이 덮어써지면 **멤버십 게이트가 fail-closed 로 닫혀 프리미엄 피드가 전면 차단**된다. 분석=Opus 5 / 구현 권장=**Sonnet**.
 
 > `TASK-BE-573` 은 착수·구현 완료 — 아래 `## review` 참조.
 
