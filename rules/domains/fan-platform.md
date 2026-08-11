@@ -57,6 +57,8 @@ fan-platform 도메인에서 공통으로 발생하는 에러는 [../../platform
 - `ARTIST_NOT_FOUND` — 존재하지 않는 아티스트
 - `ARTIST_INACTIVE` — 비활성화된 아티스트에 대한 작업 시도
 - `SELF_FOLLOW_FORBIDDEN` — 자기 자신을 follow 시도 (운영자 계정의 아티스트 동기화 케이스). 레지스트리·`SelfFollowForbiddenException` 이 쓰는 정경 철자로 정합 (TASK-MONO-473 — 이전 `FOLLOW_SELF_FORBIDDEN` 은 토큰 전치 드리프트, 아무도 발행 안 함)
+- `UNKNOWN_ARTIST_ACCOUNT` — follow 대상이 이 테넌트의 실재하는 아티스트 계정이 아님 (422). 🔴 검증이 **fail-closed** 라 아티스트 서비스에 물어보지 못한 경우에도 같은 코드다 — "없다" 와 "못 물어봤다" 를 구별할 수 없게 둔 것이 의도다 (TASK-FAN-BE-045 AC-6)
+- `ARTIST_ACCOUNT_CONFLICT` — 그 계정이 이미 이 테넌트의 다른 아티스트의 저자임 (409, `uq_artists_tenant_account_id`). 한 사람이 여러 페르소나를 갖는지는 미결이라 보수적인 쪽 (TASK-FAN-BE-045 AC-1b)
 
 ### Content
 - `POST_NOT_FOUND` — 존재하지 않는 포스트

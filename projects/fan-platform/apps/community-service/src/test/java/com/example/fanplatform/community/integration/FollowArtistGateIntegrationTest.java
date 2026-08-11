@@ -149,6 +149,22 @@ class FollowArtistGateIntegrationTest extends CommunityServiceIntegrationBase {
         return "http://localhost:" + port + path;
     }
 
+    /**
+     * A realistic account id: a bare UUID, 36 characters.
+     *
+     * <p>🔴 Not a readable prefix + UUID. Account ids are {@code VARCHAR(36)}
+     * throughout this schema and {@code FollowArtistRequest} enforces
+     * {@code @Size(max = 36)}, so {@code "artist-acct-" + UUID} (48) is an input
+     * the product can never produce: it is rejected as {@code VALIDATION_ERROR}
+     * at the controller boundary, <b>before</b> the follow-target check runs.
+     * Every case in this class would then assert 422 for the wrong reason — the
+     * deny case would still "pass" its status assertion while proving nothing
+     * about the gate. CI caught this; the prefixed ids read perfectly well.
+     */
+    private static String accountId() {
+        return UUID.randomUUID().toString();
+    }
+
     private ResponseEntity<String> follow(String fanId, String artistAccountId) {
         return rest.exchange(
                 url("/api/community/follows"),
@@ -178,8 +194,8 @@ class FollowArtistGateIntegrationTest extends CommunityServiceIntegrationBase {
     @DisplayName("artist-service 가 확인해 주는 대상 → POST /api/community/follows 201 + follows 행 생성")
     void followTargetConfirmedByArtistService_created() {
         assertRealCheckerIsWired();
-        String fanId = "fan-" + UUID.randomUUID();
-        String artistAccountId = "artist-acct-" + UUID.randomUUID();
+        String fanId = accountId();
+        String artistAccountId = accountId();
         CONFIRMED_ACCOUNTS.add(artistAccountId);
 
         ResponseEntity<String> res = follow(fanId, artistAccountId);
@@ -194,8 +210,8 @@ class FollowArtistGateIntegrationTest extends CommunityServiceIntegrationBase {
     @DisplayName("artist-service 가 거절하는 대상 → 422 UNKNOWN_ARTIST_ACCOUNT + follows 행 0건")
     void followTargetDeniedByArtistService_rejectedAndNotPersisted() throws Exception {
         assertRealCheckerIsWired();
-        String fanId = "fan-" + UUID.randomUUID();
-        String bogusTarget = "not-an-artist-" + UUID.randomUUID(); // never added to CONFIRMED_ACCOUNTS
+        String fanId = accountId();
+        String bogusTarget = accountId(); // never added to CONFIRMED_ACCOUNTS
 
         ResponseEntity<String> res = follow(fanId, bogusTarget);
 
@@ -230,8 +246,8 @@ class FollowArtistGateIntegrationTest extends CommunityServiceIntegrationBase {
     @DisplayName("🔴 FAIL-CLOSED: artist-service 도달 불가 → 팔로우가 열리지 않는다 (422, 행 0건)")
     void artistServiceUnreachable_followIsRefusedNotAdmitted() throws Exception {
         assertRealCheckerIsWired();
-        String fanId = "fan-" + UUID.randomUUID();
-        String otherwiseValidTarget = "artist-acct-" + UUID.randomUUID();
+        String fanId = accountId();
+        String otherwiseValidTarget = accountId();
         CONFIRMED_ACCOUNTS.add(otherwiseValidTarget); // would be a 201 if the service were up
 
         ARTIST_STUB.shutdown(); // nothing listening → connection refused

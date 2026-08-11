@@ -111,9 +111,16 @@ class ArtistPostReachesFollowerFeedIntegrationTest extends CommunityServiceInteg
     @DisplayName("AC-2+AC-3: ARTIST 역할 호출자가 발행한 ARTIST_POST 가 그 아티스트를 팔로우한 팬의 피드에 뜨고, "
             + "팔로우하지 않은 팬의 피드에는 같은 테스트 안에서 뜨지 않는다")
     void artistPostPublishedByRealCaller_reachesFollowerFeed_andIsAbsentFromNonFollowerFeed() throws Exception {
-        String artistAccountId = "artist-acct-" + UUID.randomUUID();
-        String follower = "fan-follower-" + UUID.randomUUID();
-        String stranger = "fan-stranger-" + UUID.randomUUID();
+        // 🔴 Bare UUIDs (36 chars), NOT a readable prefix + UUID. Account ids are
+        // VARCHAR(36) throughout this schema and FollowArtistRequest enforces
+        // @Size(max = 36), so "artist-acct-<uuid>" (48) is an input the product
+        // can never produce: it is rejected as VALIDATION_ERROR before the
+        // follow-target check is consulted, and the test then proves nothing
+        // about the thing it is named after. CI caught exactly that — the
+        // prefixed form read perfectly well and was impossible.
+        String artistAccountId = UUID.randomUUID().toString();
+        String follower = UUID.randomUUID().toString();
+        String stranger = UUID.randomUUID().toString();
         ConfirmingArtistAccountConfig.CONFIRMED.add(artistAccountId);
 
         // ── 1. A real fan follows the artist account, through the real API ──────
