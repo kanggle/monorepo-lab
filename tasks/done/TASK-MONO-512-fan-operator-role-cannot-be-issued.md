@@ -8,7 +8,7 @@ TASK-MONO-512
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -427,7 +427,11 @@ admin-service 시드도 함께 선언했다(형제를 낙오시키면 다음 사
 - [x] `seed-fan.sh` 회수 여부 명시 — 블록 2 회수 · 블록 1 은 사유 재작성 + `TASK-MONO-522`
 - [x] `FAN_OPERATOR` 3곳을 왜 남기는지 코드에 기록
 - [x] 후속 티켓 — `TASK-MONO-522`(아티스트 디렉터리에 API 호출자가 없다: 결정 필요)
-- [ ] Ready for review
+- [x] Ready for review → **머지 완료 (impl PR [#3274](https://github.com/kanggle/monorepo-lab/pull/3274)
+      squash `318019325`, 2026-08-11).** 3차원 검증: `state=MERGED` · `origin/main` tip 일치 ·
+      머지 시점 failing 체크 **0**(18 pass · 21 skipping · 0 pending · `mergeStateStatus=CLEAN`).
+      🔴 사람 리뷰는 없었다 — 소유자의 스탠딩 자동머지 승인(CI 완전 green)에 따른 self-merge 다.
+      `review/` 큐를 거치지 않고 `ready/ → done/` 로 닫는 이유가 그것이다.
 
 ---
 
@@ -440,7 +444,7 @@ admin-service 시드도 함께 선언했다(형제를 낙오시키면 다음 사
 | `account-service:compileTestJava` | ✅ |
 | `fan-platform:artist-service:test` · `community-service:test` | ✅ 실행·통과 |
 | `bash -n infra/demo/seed/seed-fan.sh` | ✅ (CI 의 demo-wrapper-smoke 가 도는 것과 같은 검사) |
-| **`account-service:integrationTest`** | ⚠️ **로컬 미실행** — Docker 미기동. `FanArtistRoleSeedIntegrationTest` 는 CI `Integration (iam B, Testcontainers)` 샤드가 권위 |
+| **`account-service:integrationTest`** | ⚠️ 로컬 미실행(Docker 미기동) → **CI `Integration (iam B, Testcontainers)` pass** (아래 § CI 참조) |
 | **로컬 데모 스택 전 구간** (로그인 → 토큰 → 201) | ⚠️ **미실행** |
 
 ## 🔴 무엇이 아직 증명되지 않았는지 — 정확히
@@ -456,6 +460,26 @@ account_roles 행이 실재 + 발급 쿼리가 [FAN, ARTIST] 반환   ← FanArt
 ARTIST 든 호출자 → 201 + 팔로워 피드 도달                  ← ArtistPostReachesFollowerFeedIntegrationTest (기존)
 세 시드 파일의 id 합의                                     ← FanArtistDemoSeedTest (신규, bite 검증됨)
 ```
+
+## ✅ CI 결과 (PR #3274) — 그리고 CI 가 답해 주지 **않는** 것
+
+18 pass · 21 skipping · **0 fail · 0 pending** · `mergeStateStatus=CLEAN`. 증거 레인:
+
+| 레인 | 무엇을 확증했나 |
+|---|---|
+| `Integration (iam B, Testcontainers)` **pass** | `account-service:integrationTest` 가 **실제로 실행**됐다 — 태스크 헤더 + 그 잡의 Testcontainers/컨테이너 로그 **6,759줄** ⇒ *"Docker 가 없어 전부 SKIPPED 인데 BUILD SUCCESSFUL"* 모드는 배제된다(이 저장소의 상습 함정) |
+| `Integration (fan-platform, Testcontainers)` **pass** | `ArtistPostReachesFollowerFeedIntegrationTest`(발행 → 팔로워 피드) |
+| `E2E (fan-platform v1 live-trio smoke)` **pass** | 팬 e2e — 단, **iam 이 없는** 트리오다(아래) |
+| `Build & Test (JDK 21, Linux)` **pass** | `auth-service:test` = 새 시드 가드 포함 |
+
+🔴 **그런데 "그 클래스가 몇 건 실행됐다" 는 CI 로 확인하지 못했다.** 통합 리포트 아티팩트는
+**실패 시에만** 업로드되므로(초록 런의 artifacts = `fan-platform-boot-jars` 하나뿐, 실측),
+초록 레인에서는 per-test 실행 기록을 꺼낼 방법이 없다. 확증된 것은 ① 그 태스크가 돌았고
+② 컨테이너가 실제로 떴고 ③ 그 클래스가 상속으로 `@Tag("integration")` 이라 실패했다면 레인이
+빨개졌을 것 — **여기까지이고, "N건 실행" 은 아니다.** 로컬 재확인도 불가했다(이 호스트의
+Docker 데몬 미기동 — `npipe:////./pipe/docker_engine` 연결 실패).
+🔵 잡 로그 `grep` 이 클래스명을 못 찾은 것은 **부재의 증거가 아니다** — Gradle 이 초록 테스트의
+이름을 애초에 찍지 않는다. 그것을 "안 돌았다" 로 읽지 않으려고 위 세 가지를 따로 쟀다.
 
 🔴 **고리마다 초록인 것과 사슬이 이어지는 것은 다르다** — 이 저장소가 반복해서 물린 지점이다.
 사슬 자체를 재는 자리는 데모 스택(`demo-up` → `seed-fan.sh`)이고, 시드가 **매 실행 그것을
