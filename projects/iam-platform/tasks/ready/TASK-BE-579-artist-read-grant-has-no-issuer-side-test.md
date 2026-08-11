@@ -106,17 +106,35 @@ SAS 가 `invalid_scope` 로 토큰을 거절하고 fan 의 checker 가 fail-clos
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (실측)** — 착수 시점에 위 표를 다시 확인한다: fan 양쪽 테스트가 여전히
-      자체 서명/스텁 토큰을 쓰는지, iam 에 시드-클라이언트 토큰 발급 테스트가 여전히 0건인지.
-      🔴 이미 누가 채웠다면 이 티켓은 **닫고 사유를 적는다**(중복 작성 금지)
-- [ ] **AC-1 (양성)** — 시드된 `community-service-client` 로 `client_credentials` 토큰을
-      실제로 발급받고, 그 토큰의 `scope` 에 `artist.read` 가 있음을 단언한다.
-      🔴 인메모리 placeholder 클라이언트가 아니라 **Flyway 가 넣은 행**이어야 한다 —
-      `PlatformConsoleOidcClientSeedIntegrationTest` 가 그 모양의 선례다
-- [ ] **AC-2 (음성 대조)** — 이 클라이언트가 갖지 않은 스코프 요청 → `invalid_scope`.
-      양성만으로는 "이 스코프를 준다" 와 "아무 스코프나 준다" 를 구별할 수 없다
-- [ ] **AC-3 (계약 정합)** — `specs/contracts/http/auth-api.md` § OAuth2 Clients 의
-      `community-service-client` 행이 실제 시드 결과와 일치함을 확인(불일치면 계약을 고친다)
+- [x] **AC-0 (실측) — 완료 2026-08-12.** fan 양쪽은 그대로다: `InternalArtistAuthIntegrationTest`
+      = `JwtTestHelper` 자체 서명 · `FollowArtistGateIntegrationTest` = MockWebServer 가
+      `/oauth2/token` 을 스텁해 `"stub-workload-token"` 문자열을 돌려준다.
+      iam 쪽 `artist.read` 테스트도 **여전히 0건**(전수: 21개 파일에 등장하나 iam 테스트 코드 0).
+      ⇒ **중복 아님, 착수 유효.** 🔴 단, **이 티켓 § 배경의 한 문장이 틀렸다** — 상세는 위 § 정정
+- [x] **AC-1 (양성) — 완료.** `OAuth2AuthorizationServerIntegrationTest` @Order(9):
+      시드된 `community-service-client:secret` → 실제 `POST /oauth2/token` → **JWKS 로 검증한**
+      토큰의 `scope` 에 `artist.read` 적재 확인. `sub == client_id`,
+      `tenant_id == fan-platform` 도 함께 단언한다 — 다른 클라이언트가 우연히 그 스코프를
+      들고 있어도 통과해 버리는 것을 막는다.
+      🔵 인메모리 placeholder 가 아니다. 선례는 `PlatformConsoleOidcClientSeedIntegrationTest`
+      이지만, **같은 클래스의 케이스 7·8이 더 가까운 선례였다**(§ 정정)
+      + @Order(12) 가 **시드 행 자체**를 본다: `oauth_scopes` 카탈로그 행을
+      `(name, tenant_id IS NULL, is_system)` **조합으로** 단언(Edge Case 가 지목한 축) ·
+      `oauth_clients.scopes` 내용 · `V0032` 의 `JSON_SEARCH` 멱등 가드 재실행이 no-op 인지
+      (Flyway 는 재실행하지 않으므로 그 가드는 **다른 무엇도 검증하지 않는다**)
+- [x] **AC-2 (음성 대조) — 완료.** @Order(10): 이 클라이언트가 갖지 않은 `internal.invoke`
+      요청 → **400 `invalid_scope`**. 🔵 없는 문자열이 아니라 **실재하는**(단 `account-service-client`
+      소유) 스코프를 골랐다 — 무의미한 문자열이면 카탈로그가 거절하므로 *클라이언트별 부여*를
+      재는 게 아니게 된다
+- [x] **AC-3 (계약 정합) — 완료, 수정 없음.** `auth-api.md` § OAuth2 Clients 의
+      `community-service-client` 행은 이미
+      `fan-platform` / `client_credentials` / `account.read, membership.read, artist.read` /
+      `V0009 (+V0032 artist.read)` 로 **실제 시드 결과와 일치**한다. ⇒ 계약을 고치지 않고
+      **테스트가 그 행을 지키게** 했다(@Order(9) 의 `tenant_id` 단언 + @Order(11) 의 세 스코프)
+- [x] **Failure Scenario 3 (스코프 보존) — 완료.** @Order(11): `account.read` ·
+      `membership.read` · `artist.read` 를 함께 요청해 셋 다 실린 것을 본다.
+      🔴 `JSON_ARRAY_APPEND` 가 배열을 덮어쓰는 형태였다면 **멤버십 게이트가 fail-closed 로
+      닫혀 프리미엄 피드가 전면 차단**되는데, `artist.read` 만 보면 그게 안 보인다
 
 ---
 
@@ -152,10 +170,37 @@ SAS 가 `invalid_scope` 로 토큰을 거절하고 fan 의 checker 가 fail-clos
 
 # Definition of Done
 
-- [ ] AC-0 실측 기록
-- [ ] 시드 클라이언트 토큰 발급 테스트(양성 + 음성 대조 + 기존 스코프 보존)
-- [ ] CI green (Testcontainers 레인에서 **실제 실행**됨을 로그로 확인 — SKIPPED 아님)
+- [x] AC-0 실측 기록 (+ 이 티켓 전제 1건 정정)
+- [x] 시드 클라이언트 토큰 발급 테스트(양성 + 음성 대조 + 기존 스코프 보존 + 시드 행/멱등)
+- [x] CI green (Testcontainers 레인에서 **실제 실행**됨을 확인 — SKIPPED 아님)
 - [ ] Ready for review
+
+---
+
+# 🧪 "실제 실행됐다" 를 어떻게 증명했나 — 초록 런으로는 못 한다
+
+DoD 의 이 줄이 **초록만으로는 만족될 수 없다**는 것을 어제 `TASK-MONO-512` 가 실측했다:
+통합 리포트 아티팩트는 **실패 시에만** 업로드된다(초록 런 `31501902466` 의 유일한 아티팩트는
+`fan-platform-boot-jars`). ⇒ 초록 런에서는 *"돌았다"* 와 *"조용히 SKIPPED 됐다"* 가 구별되지 않고,
+Gradle 은 초록 테스트의 이름을 로그에 찍지도 않는다.
+
+그래서 **단언 하나를 뒤집어 레인을 한 번만 RED 로 만들고**(커밋 `d9b7f142a`, 다음 커밋에서 회수)
+업로드된 리포트를 받았다. `Integration (iam B, Testcontainers)` / run `31532438336`:
+
+```
+TEST-…OAuth2AuthorizationServerIntegrationTest.xml
+tests="12" skipped="0" failures="1" errors="0"
+
+0.100s  TASK-BE-579 AC-1: SAS actually issues `artist.read` to the SEEDED community-service-client   ← 주입한 실패
+0.083s  TASK-BE-579 AC-2 (negative control): a scope this client does NOT hold → invalid_scope        PASS
+0.117s  TASK-BE-579: V0032 APPENDED — account.read / membership.read survived the JSON_ARRAY_APPEND   PASS
+0.008s  TASK-BE-579 AC-1: the V0032 seed rows themselves — catalog entry + client grant, 멱등          PASS
+```
+
+🔵 **한 번의 RED 가 두 가지를 동시에 증명한다**: ① `skipped="0"` + 네 케이스의 **실행 시간** ⇒
+Testcontainers MySQL 을 상대로 실제로 돌았다(SKIPPED 아님) ② 주입한 곳만 실패하고 **나머지 셋은
+통과** ⇒ `V0032` 의 부여가 실제로 동작한다(음성 대조·스코프 보존·시드 행 전부 참).
+🔴 이것이 이 티켓이 고치려던 결함의 거울상이다 — *"초록이니까 됐다"* 를 한 겹 더 캐물은 것.
 
 ---
 
