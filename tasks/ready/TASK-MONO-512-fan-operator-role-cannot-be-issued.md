@@ -241,29 +241,152 @@ ADMIN_ROLES = { "ADMIN", "OPERATOR", "SUPER_ADMIN", "FAN_OPERATOR" };
 🔵 옮길 때 **저자는 여전히 데모 계정이 아니어야 한다**(데모 계정이 저자면 `actor.owns()`
 로 가시성 게이팅이 통째로 우회돼 시연이 공허해진다 — `FAN-BE-045` AC-5 원문의 경고).
 
+# ✅ 착수 — AC-0 재재측정 (2026-08-11). **이 티켓 본문의 핵심 판단 하나가 틀렸다**
+
+보류가 풀린 뒤 착수 전에 다시 쟀고, 세 가지가 나왔다.
+
+## 🔴🔴 ① "`ARTIST` 가 iam 전체에 0건" 은 맞다. 그것을 **발급 경로의 부재**로 읽은 것이 틀렸다
+
+AC-0(2026-08-07)이 `projects/iam-platform` 전수에서 `ARTIST` **0건**을 찾고 계측기 검증
+(`FAN_OPERATOR` 3건)까지 붙였다. **탐지는 옳았고 해석이 틀렸다** — 역할 평면은 이미 열려 있다:
+
+```
+AccountRoleName.validate()      ^[A-Z][A-Z0-9_]*$ 정규식 **그것뿐**
+                                (화이트리스트·카탈로그·테넌트별 허용목록 0건;
+                                 자기 javadoc 이 그것을 "future task" 로 미룬다)
+AddAccountRoleUseCase           PATCH /internal/tenants/{t}/accounts/{a}/roles:add (멱등)
+TenantClaimTokenCustomizer      저장된 account_roles → roles 클레임
+```
+
+⇒ **`ARTIST` 는 코드가 아니라 행이 없었을 뿐이다.** 이 티켓의 크기가 "새 역할 평면 설계" 에서
+**"프로비저닝 행을 넣고 토큰에 실린 것을 실측"** 으로 줄어든다. 티켓이 처음부터 못박아 둔
+*"DB 에 문자열이 있는 것이 판정이 아니라 토큰에 실린 roles 가 판정"* 은 정확히 이 구조 때문에 옳다.
+
+🔵 대조: `FAN_OPERATOR` 는 **다른 종류의 0건**이다 — `tenant_domain_subscription` 에서
+**파생**되므로 구독 행이 필요하고, 그 행을 넣는 것은 `ADR-MONO-059` 가 배제했다.
+**같은 "0건" 인데 비용이 다르다**(부여 역할 vs 파생 역할).
+
+## 🔴🔴 ② 신규 — 저장된 역할은 시드를 **대체한다.** `ARTIST` 만 주면 `FAN` 이 사라진다
+
+`TenantClaimTokenCustomizer#populateRoles` 원문:
+
+> stored `account_roles` present → **emitted verbatim (no seed)** · 비었을 때만 `RoleSeedPolicy`
+
+`RoleSeedPolicy.seed("fan-platform") = [FAN]` 이므로, 아티스트 계정에 `ARTIST` **한 줄만**
+넣으면 그 계정의 토큰은 `roles=["ARTIST"]` 가 되어 **`FAN` 을 잃는다**.
+
+🔴 이것이 위험한 이유는 지금 **아무 증상도 없기 때문**이다. 실측: 팬 게이트웨이는
+`RoleAdmissions.roleOrScope()` 로 **역할이 있기만 하면** 통과시키고, `"FAN"` 을 읽는
+프로덕션 코드는 fan-platform 전체에 **0건**(테스트 픽스처에만 존재). 즉 지금 넣으면 초록이고,
+누군가 `FAN` 을 읽기 시작하는 날 아티스트만 조용히 떨어져 나간다.
+⇒ **`[FAN, ARTIST]` 둘 다 저장한다.** `FanArtistDemoSeedTest` 가 그것을 고정한다.
+
+## 🔴 ③ AC-5 의 `--why` 는 **한 덩어리가 아니라 두 블록**이고, 차단 사유가 서로 다르다
+
+| 블록 | 무엇 | 차단 사유 | 이 티켓이 푸는가 |
+|---|---|---|---|
+| 1 | 아티스트 · 그룹 · 팬덤 | `POST /api/v1/artists` = `hasAnyRole(ADMIN,OPERATOR,SUPER_ADMIN,**FAN_OPERATOR**)` | ❌ **아니다** |
+| 2 | `ARTIST_POST` × 3 가시성 | 실재하는 계정 + **`ARTIST`** 역할 | ✅ 그렇다 |
+
+블록 1 이 요구하는 것은 **admin-tier 역할**이지 `ARTIST` 가 아니다. 그리고 `ADR-MONO-059` A 가
+B 를 배제하며 *"B2C_CONSUMER 를 운영자가 assume 하는 조합은 열지 않는다"* 를 binding 으로
+확정했으므로, 블록 1 을 여는 것은 **미완의 작업이 아니라 결정에 반하는 작업**이다.
+(`account_roles` 에 `ADMIN` 을 부여하는 우회로가 있지만, 그러면 community 의
+`isOperator()` 가 참이 되어 **배제된 B 가 옆문으로 열린다** — `owns()` 로 테넌트 내 모든
+저자의 게이팅까지 우회된다.)
+
+⇒ **회수는 블록 2 만.** 블록 1 은 `--why` 를 *"MONO-512 가 풀 것"* 에서
+*"결정에 의해 API 호출자가 없다 + 남은 질문은 `TASK-MONO-522`"* 로 **다시 썼다**.
+🔴 해소된 사유를 그대로 두는 것만이 함정이 아니다 — **해소되지 않을 사유를 "곧 풀린다" 로
+남겨 두는 것**도 같은 함정이고, 이쪽이 더 오래 간다.
+
+---
+
+# 🔧 구현 (2026-08-11)
+
+## 발급 경로 — **데이터**이고, iam 코드는 한 줄도 바뀌지 않았다
+
+| 파일 | 내용 |
+|---|---|
+| account-service `migration-dev/V9006` | 아티스트 3명의 `identities` + `accounts` + `account_roles [FAN, ARTIST]` |
+| auth-service `migration-dev/V9002` | 같은 3계정의 `credentials` (`lumi@/noah@/sea@demo.com`, 비밀번호는 데모와 동일) |
+
+🔵 **계정 id = 아티스트 엔티티 id.** `artists.account_id` 를 새 UUID 로 **재지정하지 않고**
+그 항등값에 계정을 **만들었다**. 재지정하면 이미 시드된 데모 DB 의 `follows`(API 로 만들어진
+행)와 기존 게시물이 옛 값을 든 채 남고, 시드의 아티스트 INSERT 는 `WHERE NOT EXISTS` 라
+갱신하지 않으므로 **가장 많이 시연된 스택에서 피드가 조용히 빈다**. 같은 id 로 만들면
+`FAN-BE-045` 의 항등 백필이 **소급해서 참**이 되고 다른 테이블은 움직이지 않는다.
+
+## 시드 (AC-5) — 블록 2 회수
+
+`seed-fan.sh` 가 3단계가 됐다: 직접-DB(아티스트/그룹/팬덤) → **아티스트 토큰(API)** → 소비자 토큰(API).
+아티스트가 **자기 계정으로 로그인해서** 자기 글을 쓴다. 부수 효과로 `post_status_history` 를
+손으로 넣던 블록이 사라졌다 — 이력도 아웃박스 이벤트도 이제 도메인이 만든다.
+🔵 게시물 id 가 서버 생성 UUIDv7 이 되어 고정 리터럴을 쓸 수 없으므로, 발행 후 (저자, 제목)으로
+되찾아 댓글·리액션에 넘긴다. `published_at` 이 고정 리터럴이 아니게 된 대가는 2번 머리에 적었다
+(2회차 실행은 탐지에서 걸러지므로 **상대 순서와 최종 상태는 수렴한다**).
+
+🔴 시드가 스스로 판정한다: 토큰의 `sub` 이 아티스트 엔티티 id 와 같은지, 그리고 **`roles` 에
+`ARTIST` 가 실렸는지**를 발행 전에 확인하고 아니면 사유를 지목해 실패한다. 계정·자격증명만 있고
+`account_roles` 행이 빠지면 로그인은 멀쩡히 되고 토큰도 나오는데 발행만 403 이라, 여기서 안 보면
+원인이 세 겹 밑이다.
+
+## 🔴 가드가 처음엔 물지 않았다 — bite 검증이 잡았다
+
+`FanArtistDemoSeedTest` 는 **세 트리의 파일 3개**(auth `V9002` · account `V9006` ·
+`infra/demo/seed/seed-fan.sh`)를 서로 대조한다. 이들은 서로 다른 3개 DB 에 살아서 FK 도
+컴파일러도 이들을 비교하지 못한다.
+
+그런데 첫 bite 검증에서 **account `V9006` 의 계정 id 를 틀리게 바꿔도 초록**이었다.
+원인은 테스트가 아니라 **Gradle**: 사이드 파일은 `:test` 태스크의 선언된 입력이 아니라
+태스크가 `UP-TO-DATE` 로 건너뛰어졌다. `--rerun-tasks` 로 강제하니 5개 중 3개가 RED —
+**가드는 옳았고 러너가 그것을 실행하지 않았다.**
+⇒ 세 파일을 `inputs.file` 로 선언했다. 재검증: 강제 없이 사이드 파일만 바꿔 **RED(3/5)**,
+되돌려 **GREEN(5/5)**. 같은 사각지대를 갖고 있던 기존 `DemoSeedCredentialTest` 의
+admin-service 시드도 함께 선언했다(형제를 낙오시키면 다음 사람은 기전이 안 듣는다고 결론낸다).
+
+🔴 **남은 사각지대는 명시한다**: `ci.yml` 의 `iam` 경로 필터가 `projects/iam-platform/**` 이라
+**`seed-fan.sh` 만 고친 PR 은 이 레인을 아예 깨우지 않는다.** Gradle 입력으로는 못 고치는
+층이고, `TASK-MONO-522` 가 물려받는다.
+
 # Acceptance Criteria
 
-- [x] **AC-0 (재측정) — 완료 2026-08-07.** 두 갈래 재현 ✅ · 받는 곳 전수 결과
+- [x] **AC-0 (재측정) — 완료 2026-08-07 + 착수 시 재재측정 2026-08-11.** 두 갈래 재현 ✅ · 받는 곳 전수 결과
       **역할이 2종**(`FAN_OPERATOR` 3곳 + `ARTIST` 1곳) · 모집단은 "demo-corp 결여" 가
       아니라 **`fan` 구독 0/18행**. 상세는 위 §
 - [x] **AC-1 (결정) — 완료 2026-08-07.** `ADR-MONO-059` **ACCEPTED — A**. 팬은 **운영자
       평면을 열지 않는다**(B 배제) — 저작 주체는 아티스트 자신의 계정이다
-- [ ] **AC-2 (역할 발급 경로)** — `artists.account_id` 가 가리키는 계정에 **`ARTIST` 역할이
-      실제로 붙는지** 실측한다. 어디서 붙이는지(iam 의 역할 파생 / 온보딩 시 명시 부여)를
-      **코드로 확정**하고, 그 계정으로 발급된 토큰의 `roles` 에 `ARTIST` 가 실린 것을 본다.
-      🔴 토큰 스모크가 아니라 **역할이 실린 토큰**이 판정 대상이다
-- [ ] **AC-3 (도달 가능성)** — 그 계정으로 `POST /api/v1/posts {type: ARTIST_POST}` 가
-      201 이다. 🔴 `PublishPostUseCase` 게이트를 **실제로 통과**하는 것이 판정이지,
-      역할 문자열이 DB 에 있는 것이 판정이 아니다
-- [ ] **AC-4 (음성 대조)** — `ARTIST` 없는 일반 팬 계정으로 같은 요청 → 여전히 403.
-      양성만으로는 "열렸다" 와 "게이트가 사라졌다" 를 구별할 수 없다
-- [ ] **AC-5 (시드 회수)** — `infra/demo/seed/seed-fan.sh` 의 첫 `dbexec --why` 는
-      이 결함을 사유로 든다. 열렸다면 그 블록의 아티스트·그룹·팬덤을 **API 로 옮긴다**.
-      🔴 사유가 해소됐는데 `--why` 블록만 남는 것이 이 저장소가 반복해서 물린 함정이다
-      (고쳐진 결함의 면제를 회수하지 않으면 그 면제가 회귀를 가린다)
-- [ ] **AC-6 (`FAN_OPERATOR` 수용부 3곳)** — D 가 채택되지 않았으므로 **지우지 않는다.**
-      대신 A 하에서 그 3곳이 **여전히 도달 불가**라는 사실을 코드에 적는다(왜 남기는지).
-      🔴 말없이 남기는 것이 이 티켓이 처음 제기한 문제다 — 결정이 바뀌었어도 그 요구는 남는다
+- [x] **AC-2 (역할 발급 경로) — 완료 2026-08-11.** 붙이는 곳을 코드로 확정했다:
+      **프로비저닝 시점의 `account_roles` 부여**(파생 아님) — account-service
+      `migration-dev/V9006` + auth-service `migration-dev/V9002`. iam 코드 변경 **0줄**이며,
+      그 이유(역할 평면이 정규식뿐이라 데이터 문제다)는 위 § ①.
+      🔴 판정 두 겹: `FanArtistRoleSeedIntegrationTest` 가 **실제 MySQL 에 시드를 실행하고
+      토큰 발급 때 auth-service 가 부르는 바로 그 엔드포인트**로 `[FAN, ARTIST]` 를 읽는다
+      (스텁 아님 — `TASK-BE-579` 가 옆 이음매에서 지적한 모양을 반복하지 않는다).
+      그 위에 `TenantClaimTokenCustomizerTest` 의 기존 단언(저장된 역할 → `roles` 클레임
+      verbatim)이 얹힌다. ⚠️ **로그인 → 토큰 → 클레임 전 구간**은 아래 § 검증 상태 참조
+- [x] **AC-3 (도달 가능성) — 완료(⚠️ 로컬 미실행, CI 가 권위).** `ARTIST` 역할 호출자의
+      `POST /posts {ARTIST_POST}` → 201 은 `ArtistPostReachesFollowerFeedIntegrationTest`
+      (`FAN-BE-045`)가 **팔로워 피드 도달까지 함께** 고정하고 있다. 이 티켓이 더한 것은
+      그 호출자가 **실재하게 됐다**는 것이고, 시드가 매 실행 그것을 판정한다(토큰의 `sub`
+      일치 + `roles` 에 `ARTIST` 적재를 발행 **전에** 확인하고 아니면 사유를 지목해 실패)
+- [x] **AC-4 (음성 대조) — 완료.** 두 축을 **따로** 고정했다:
+      ① 역할 없는 팬 actor → `PermissionDeniedException` (`PublishPostUseCaseTest`,
+      `Set.of("FAN")`) ② 부여가 **표적임** — 평범한 fan-platform 계정은 `ARTIST` 를 받지
+      않는다(`FanArtistRoleSeedIntegrationTest#aPlainFanAccountIsNotAnArtist`, 그 계정이
+      같은 쿼리로 실제 조회되는 것을 먼저 확인해 "빈 목록" 이 조회 실패가 아님을 보증).
+      🔴 ①만 있으면 "게이트가 산다" 는 알아도 "부여가 전원에게 새지 않았다" 는 모른다
+- [x] **AC-5 (시드 회수) — 완료, 단 **블록 2 만**.** `--why` 는 한 덩어리가 아니었다(§ ③).
+      · **블록 2(`ARTIST_POST` 3종) → API 로 이동.** 저자는 아티스트 본인 계정이므로
+        *"저자는 여전히 데모 계정이 아니어야 한다"* 는 요구가 **우회가 아니라 구조로** 충족된다
+      · **블록 1(아티스트·그룹·팬덤) → 직접-DB 유지 + `--why` 재작성.** 이 티켓이 그것을
+        **열지 않기로 확정**했으므로 사유에서 `MONO-512` 를 지우고 결정과 `TASK-MONO-522` 를
+        적었다. 🔴 해소되지 않을 사유를 "곧 풀린다" 로 남기는 것도 면제를 남기는 것이다
+- [x] **AC-6 (`FAN_OPERATOR` 수용부 3곳) — 완료.** 세 곳 모두에 **왜 남기는지 + 무엇이
+      바뀌면 열리는지**를 적었다: iam `OperatorRoleDerivation` (`case "fan","fan-platform"`) ·
+      artist-service `ADMIN_ROLES` · community-service `ActorContext.isOperator()`.
+      🔵 community 쪽에는 한 줄 더 적었다 — 그 술어가 참이 되는 순간 `PublishPostUseCase` 의
+      **두 번째 문**이 열려 배제된 B 가 옆문으로 부활하고 `owns()` 로 가시성까지 우회된다
 
 ---
 
@@ -297,10 +420,45 @@ ADMIN_ROLES = { "ADMIN", "OPERATOR", "SUPER_ADMIN", "FAN_OPERATOR" };
 
 # Definition of Done
 
-- [ ] AC-0 재측정 기록
+- [x] AC-0 재측정 기록 (2026-08-07 + 착수 시 재재측정 2026-08-11 — 본문 판단 1건 정정)
 - [x] 결정 — `ADR-MONO-059` ACCEPTED — A (2026-08-07)
-- [ ] `ARTIST` 역할 발급 경로 확정 + 토큰에 실린 것 실측
-- [ ] 실측 증거(양성 + 음성)
-- [ ] `seed-fan.sh` 회수 여부 명시
-- [ ] `FAN_OPERATOR` 3곳을 왜 남기는지 코드에 기록
+- [x] `ARTIST` 역할 발급 경로 확정 (프로비저닝 `account_roles`, iam 코드 0줄) + 실측
+- [x] 실측 증거(양성 + 음성) — 부여 표적성 대조 포함
+- [x] `seed-fan.sh` 회수 여부 명시 — 블록 2 회수 · 블록 1 은 사유 재작성 + `TASK-MONO-522`
+- [x] `FAN_OPERATOR` 3곳을 왜 남기는지 코드에 기록
+- [x] 후속 티켓 — `TASK-MONO-522`(아티스트 디렉터리에 API 호출자가 없다: 결정 필요)
 - [ ] Ready for review
+
+---
+
+# 🧪 검증 상태 — 실제로 실행된 것과 아닌 것
+
+| 게이트 | 결과 |
+|---|---|
+| `auth-service:test` (`*DemoSeed*`) | ✅ 실행·통과 — `FanArtistDemoSeedTest` 5/5, `DemoSeedCredentialTest` 5/5 |
+| **가드 bite 검증** | ✅ 사이드 파일 1바이트 변조 → **RED 3/5**, 되돌려 **GREEN 5/5** (강제 rerun 없이) |
+| `account-service:compileTestJava` | ✅ |
+| `fan-platform:artist-service:test` · `community-service:test` | ✅ 실행·통과 |
+| `bash -n infra/demo/seed/seed-fan.sh` | ✅ (CI 의 demo-wrapper-smoke 가 도는 것과 같은 검사) |
+| **`account-service:integrationTest`** | ⚠️ **로컬 미실행** — Docker 미기동. `FanArtistRoleSeedIntegrationTest` 는 CI `Integration (iam B, Testcontainers)` 샤드가 권위 |
+| **로컬 데모 스택 전 구간** (로그인 → 토큰 → 201) | ⚠️ **미실행** |
+
+## 🔴 무엇이 아직 증명되지 않았는지 — 정확히
+
+전 구간(아티스트 로그인 → iam 이 발급한 **진짜 토큰** → 게이트웨이 → `POST /posts` → 201)은
+**어떤 CI 레인에서도 돌지 않는다**. live-trio e2e 는 gateway+community+artist 만 띄우고
+**iam 이 없기 때문**이다(`TASK-FAN-INT-005` 가 그 사실 자체를 티켓으로 들고 있다).
+지금 증명된 것은 그 사슬의 **각 고리**다:
+
+```
+account_roles 행이 실재 + 발급 쿼리가 [FAN, ARTIST] 반환   ← FanArtistRoleSeedIntegrationTest (CI)
+저장된 roles → 토큰 roles 클레임 verbatim                  ← TenantClaimTokenCustomizerTest (기존)
+ARTIST 든 호출자 → 201 + 팔로워 피드 도달                  ← ArtistPostReachesFollowerFeedIntegrationTest (기존)
+세 시드 파일의 id 합의                                     ← FanArtistDemoSeedTest (신규, bite 검증됨)
+```
+
+🔴 **고리마다 초록인 것과 사슬이 이어지는 것은 다르다** — 이 저장소가 반복해서 물린 지점이다.
+사슬 자체를 재는 자리는 데모 스택(`demo-up` → `seed-fan.sh`)이고, 시드가 **매 실행 그것을
+판정하도록** 만들어 두었다(sub 일치 + `roles` 적재를 발행 전에 확인). 다음 `demo-up` 이
+그 측정이며, 실패하면 사유를 지목해 멈춘다. `TASK-FAN-INT-005` 가 iam 을 트리오에 넣으면
+그때 CI 안으로 들어온다.

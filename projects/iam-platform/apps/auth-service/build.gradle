@@ -75,3 +75,37 @@ dependencyManagement {
         mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
     }
 }
+
+// TASK-MONO-512 — the demo-seed guards read files OUTSIDE this module, and Gradle
+// cannot know that.
+//
+// `DemoSeedCredentialTest` and `FanArtistDemoSeedTest` exist to catch drift between
+// seed files that live in three trees (this module's migration-dev, account-service's
+// and admin-service's, and infra/demo/seed/). They open those files by path, which is
+// invisible to up-to-date checking: change ONLY the sibling file and this `test` task
+// stays UP-TO-DATE, so the guard does not run and the job reports green over exactly
+// the drift it was written to detect.
+//
+// Measured, not assumed: mutating an account id in account-service's V9006 left
+// `:test` UP-TO-DATE and green; forced to re-run against the same tree it failed 3 of
+// 5 cases. Declaring the files as inputs makes the sibling edit invalidate the task.
+//
+// 🔴 Residual gap, stated so it is not mistaken for coverage: ci.yml's `iam` path
+// filter is `projects/iam-platform/**`, so a PR touching ONLY infra/demo/seed/seed-fan.sh
+// does not wake this lane at all — no Gradle input can fix that. TASK-MONO-522 inherits
+// the question of where a cross-tree agreement guard should be scheduled.
+tasks.named('test') {
+    inputs.file(rootProject.file('projects/iam-platform/apps/account-service/src/main/resources/db/migration-dev/V9006__seed_fan_artist_accounts_and_artist_role.sql'))
+            .withPropertyName('fanArtistAccountSeed')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(rootProject.file('infra/demo/seed/seed-fan.sh'))
+            .withPropertyName('fanDemoSeedScript')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    // The pre-existing sibling of the same shape: DemoSeedCredentialTest pins
+    // admin_operators.oidc_subject against this module's iam-tenant credential and had
+    // the same blind spot. Same defect, same line — fixing one and leaving the other is
+    // how the next person concludes the mechanism does not work.
+    inputs.file(rootProject.file('projects/iam-platform/apps/admin-service/src/main/resources/db/migration-dev/R__seed_demo_operator.sql'))
+            .withPropertyName('demoOperatorSeed')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+}
