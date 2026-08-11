@@ -434,10 +434,16 @@ class OAuth2AuthorizationServerIntegrationTest extends AbstractIntegrationTest {
         Jwt jwt = jwksDecoder().decode(
                 mintToken(COMMUNITY_CLIENT_ID, COMMUNITY_CLIENT_SECRET, "artist.read"));
 
+        // ⚠️⚠️ MEASUREMENT-ONLY MUTATION — TASK-BE-579, REVERTED IN THE NEXT COMMIT. ⚠️⚠️
+        // A GREEN integration lane uploads no test report (its artifact step is failure-only —
+        // measured on run 31501902466: the only artifact was fan-platform-boot-jars). So a
+        // green run cannot show that these four cases RAN rather than were silently skipped,
+        // and the DoD asks for exactly that. Inverting one assertion makes the lane RED once,
+        // which uploads the report naming every executed case in this class.
         assertThat(scopesOf(jwt))
                 .as("artist-service's Order(1) internal chain grants ROLE_INTERNAL only on this "
                         + "scope; without it every follow is refused fail-closed (V0032 header)")
-                .contains("artist.read");
+                .doesNotContain("artist.read");
         assertThat(jwt.getSubject())
                 .as("client_credentials principal == client_id (service identity)")
                 .isEqualTo(COMMUNITY_CLIENT_ID);
