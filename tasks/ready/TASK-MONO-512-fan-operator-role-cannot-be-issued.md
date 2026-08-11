@@ -221,6 +221,26 @@ AC-6 을 배정했던 사실을 메운 것이고 **이 티켓의 범위에는 �
 ⇒ 이제 이 티켓의 대기 사유는 게이트가 아니라 **`FAN-BE-045` 의 스키마·온보딩이 아직
 랜딩되지 않은 것** 하나뿐이다. 그것이 머지되면 바로 착수 가능하다.
 
+## 🔴 이 티켓이 인수받는 것 — `FAN-BE-045` AC-5(시드 회수) (2026-08-11 실측)
+
+`FAN-BE-045` 착수 1회차가 재보니 **시드 회수를 막는 것은 그 티켓이 아니라 이 티켓**이다:
+
+```java
+// artist-service config/SecurityConfig.java
+ADMIN_ROLES = { "ADMIN", "OPERATOR", "SUPER_ADMIN", "FAN_OPERATOR" };
+.requestMatchers(HttpMethod.POST, "/api/artists/**", "/api/artists").hasAnyRole(ADMIN_ROLES)
+```
+
+`seed-fan.sh` 가 아티스트 3명을 **직접 DB INSERT** 하는 이유가 이것이다 — API 생성이
+**403 FORBIDDEN**(실측)이고, 그 역할을 발급할 경로가 없다는 것이 **이 티켓의 결함**이다.
+`FAN-BE-045` 는 AC-5 를 *"안 옮긴다 + 사유"* 로 닫고 넘긴다.
+
+⇒ **이 티켓이 닫힐 때 `seed-fan.sh` 의 `dbexec --why` 블록을 함께 회수한다.**
+🔴 고쳐진 결함의 면제를 회수하지 않으면 그 면제가 회귀를 가린다 — 이 저장소가 반복해서
+물린 지점이고, `--why` 원문이 두 티켓을 함께 인용하고 있어 **한쪽만 닫으면 남는다.**
+🔵 옮길 때 **저자는 여전히 데모 계정이 아니어야 한다**(데모 계정이 저자면 `actor.owns()`
+로 가시성 게이팅이 통째로 우회돼 시연이 공허해진다 — `FAN-BE-045` AC-5 원문의 경고).
+
 # Acceptance Criteria
 
 - [x] **AC-0 (재측정) — 완료 2026-08-07.** 두 갈래 재현 ✅ · 받는 곳 전수 결과

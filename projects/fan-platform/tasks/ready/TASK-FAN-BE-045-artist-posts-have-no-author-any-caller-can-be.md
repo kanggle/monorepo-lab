@@ -280,6 +280,69 @@ ADR § 결과 A 행이 **계약 선갱신**을 명시한다. `specs/contracts/ht
 새 internal 엔드포인트를 **구현 전에** 올린다(CLAUDE.md § Layer Rules). **ACCEPT 는 그
 계약의 *내용*을 승인하지 않았다** — 형태·상태코드·에러코드는 이 티켓이 정하고 리뷰가 본다.
 
+---
+
+# 📍 착수 현황 — 1회차 (2026-08-11). 다음 세션은 여기서 이어간다
+
+**브랜치**: `task/fan-be-045-artist-account` (push 완료, `origin/main` 대비 1커밋)
+**worktree**: `C:/Users/kangdow/dev/project/ai-project/wt-fan-artist-identity`
+**PR**: 아직 없음(계약 1건만 있어서 열지 않았다)
+
+## ✅ 끝난 것
+
+1. **AC-6 기전 결정** — `ADR-004` **ACCEPTED — A**(동기 internal 엔드포인트), main 에 랜딩.
+2. **계약 1/2 랜딩(커밋 `0998c70b3`)** — `artist-api.md` 에
+   `GET /internal/artists/exists?accountId=&tenantId=` → `200 {"exists": bool}`.
+   membership 의 `/internal/membership/access` 를 1:1 미러(workload identity /
+   게이트웨이 미라우팅 / fail-closed). 아티스트 `status` 는 **의도적 미노출**(사유는 계약 본문).
+
+## 🔴 1회차 실측이 바꾼 것 두 가지
+
+**① AC-5 는 이 티켓이 풀 수 없다 — `TASK-MONO-512` 가 푼다.**
+`seed-fan.sh` 의 `dbexec --why` 가 두 티켓을 **함께** 사유로 들어서 이 티켓 몫으로 읽히는데,
+실제 차단은 역할이다. 실측:
+
+```java
+// artist-service config/SecurityConfig.java
+ADMIN_ROLES = { "ADMIN", "OPERATOR", "SUPER_ADMIN", "FAN_OPERATOR" };
+.requestMatchers(HttpMethod.POST, "/api/artists/**", "/api/artists").hasAnyRole(ADMIN_ROLES)
+```
+
+⇒ 아티스트를 **API 로 만들려면** 그 역할이 필요하고, **그것을 발급할 경로가 없다는 것이
+정확히 `MONO-512` 의 결함**이다(시드 실측 `POST /api/v1/artists` → **403 FORBIDDEN**).
+AC-5 의 *"풀렸다면"* 은 조건부로 옳게 쓰였고, **그 조건의 주체가 이 티켓이 아니다.**
+⇒ 이 티켓은 **왜 아직 안 옮기는지**를 적고 넘긴다. AC-5 갱신 완료(아래).
+
+**② "온보딩" 의 경계는 이미 ADR 이 정해 뒀다 — 새 게이트 없음.**
+계정을 누가 만드는가가 또 하나의 크로스서비스 **쓰기** 간선이 될까 봐 멈춰서 확인했는데,
+`ADR-MONO-059` § 선택지 A 가 명시한다 — *"계정 발급 + `ARTIST` 역할 부여를 **iam 이 해야
+하고**"*. ⇒ **fan-platform 은 계정을 만들지 않는다.** 이 티켓 몫은 **스키마 + 계정 id 를
+받아 연결 + 검증**이고, 계정 생성·역할 부여는 IAM 쪽(= `MONO-512`).
+실측 보강: fan 앱 어디에도 IAM provisioning 호출부 **0건**(신설하지 않는다).
+
+## ▶️ 다음 세션의 작업 순서
+
+- [ ] **계약 2/2 (코드보다 먼저)** — `artist-api.md` § `POST /api/artists` 에 `accountId`
+      필드 추가. 필수/선택 여부와 기존 3행(`SUP` 아님, 데모 시드 아티스트 A/B/C)의
+      취급을 함께 적을 것. 🔴 **랜딩된 internal 엔드포인트 계약과 별개 건이다.**
+- [ ] **V3 마이그레이션** — `artists.account_id VARCHAR(36)` + `UNIQUE (tenant_id,
+      account_id)`(한 계정이 한 테넌트에서 최대 하나의 아티스트). 🔴 기존 3행 백필 정책을
+      먼저 정할 것 — NOT NULL 을 즉시 걸면 데모 행이 막힌다(`SCM-BE-059` V6 의 백필 교훈:
+      *"NULL 을 남길 수 없고 충돌할 수 없음"* 을 마이그레이션 주석에 증명해 두기).
+- [ ] **도메인/어댑터** — `Artist` 엔티티에 `accountId`(현재 필드: id·tenantId·artistType·
+      status·profile·타임스탬프·version, 계정 컬럼 0개) · `RegisterArtistRequest` · 매퍼.
+- [ ] **AC-6** — artist-service `/internal/**` Order(1) 보안 체인 **신설**(현재 `internal`
+      참조 **0건** — 두 번째 인스턴스가 아니라 신설이다) + `InternalArtistController` +
+      community `ArtistAccountChecker` 포트/HTTP 어댑터 + `FollowArtistUseCase` 배선.
+      🔴 판정은 배선이 아니라 **잘못된 id 거부 + artist-service 내렸을 때 팔로우가 안 열림**.
+- [ ] **AC-7** — 탈출구 **두지 않는다**로 답하고 근거를 코드/티켓에 적는다.
+      🔵 근거는 측정됐다: live-trio e2e 잡이 띄우는 것은 `community-service` +
+      `artist-service` 이고 **membership-service 는 없다** — 즉 membership 이 탈출구를
+      가진 이유(그 서비스가 e2e 에 없음)가 artist 에는 **성립하지 않는다**.
+      🔴 `AlwaysAllowMembershipChecker` 형 복사 금지.
+- [ ] **AC-2/AC-3** — 발행 → 팔로워 피드 도달(같은 테스트 안에서) + 비팔로워 음성 대조.
+- [ ] **AC-5** — 아래 갱신된 판정대로 "안 옮긴다 + 사유" 를 적고 `MONO-512` 로 넘긴다.
+
 # Acceptance Criteria
 
 - [x] **AC-0 (재측정) — 완료 2026-08-07.** 세 사실 전부 유지(`artists` 16컬럼 중 계정 0개 ·
@@ -306,8 +369,14 @@ ADR § 결과 A 행이 **계약 선갱신**을 명시한다. `specs/contracts/ht
       `artistAccountId` 가 **실재하는 `artists.account_id` 인지 검증**하고, 아닌 값은
       거부한다(테스트로 고정). 🔴 지금은 무검증 저장이라 피드 조인이 **우연히만** 성립한다 —
       A 의 요점이 그 우연을 구조로 바꾸는 것이므로, 이것을 빼면 A 를 고른 이유가 사라진다
-- [ ] **AC-5 (시드 회수)** — `infra/demo/seed/seed-fan.sh` 의 두 번째 `dbexec --why` 가
-      이 결함을 사유로 든다. 풀렸다면 그 블록을 API 로 옮긴다.
+- [ ] **AC-5 (시드 회수) — 🔴 이 티켓으로는 안 풀린다(2026-08-11 실측). `MONO-512` 가 푼다.**
+      `dbexec --why` 가 이 티켓과 `MONO-512` 를 **함께** 사유로 들어 이 티켓 몫으로 읽히지만,
+      실제 차단은 **역할**이다: `POST /api/artists` 는 `hasAnyRole(ADMIN, OPERATOR,
+      SUPER_ADMIN, FAN_OPERATOR)` 인데 그 역할을 **발급할 경로가 없다는 것이 `MONO-512`**
+      다(시드 실측 403 FORBIDDEN). ⇒ 이 티켓에서는 **"안 옮긴다 + 사유"** 를 적고 넘긴다.
+      🔵 아래 원문의 *"풀렸다면"* 은 조건부로 옳게 쓰였다 — 틀린 것은 그 조건의 **주체**를
+      이 티켓으로 읽은 것이다. 원문 보존:
+      풀렸다면 그 블록을 API 로 옮긴다.
       🔴 옮길 때 **저자는 여전히 데모 계정이 아니어야 한다** — 데모 계정이 저자면
       `actor.owns()` 로 가시성 게이팅이 통째로 우회돼 시연이 공허해진다
 - [ ] **AC-7 (ACCEPT 가 남긴 rider 에 답한다 — `ADR-004` § 결정)** — e2e 탈출구를
