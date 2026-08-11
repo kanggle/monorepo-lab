@@ -8,7 +8,7 @@ TASK-FAN-BE-045
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -532,7 +532,9 @@ AC-5 의 *"풀렸다면"* 은 조건부로 옳게 쓰였고, **그 조건의 주
 - [x] AC-7 e2e 탈출구 rider 에 명시적으로 답하고 기록 (답이 1회차와 **반대**로 뒤집혔다)
 - [x] AC-2/AC-3 테스트(발행 → 피드 도달, 음성 대조 포함)
 - [x] `seed-fan.sh` 회수 여부 명시 — **안 옮긴다**, 사유는 `--why` 본문에
-- [ ] Ready for review
+- [x] Ready for review → **머지 완료 (impl PR #3270 squash `0414d4d03`, 2026-08-11)**
+      🔴 사람 리뷰는 없었다 — 소유자의 스탠딩 자동머지 승인(CI 완전 green)에 따른 self-merge다.
+      `review/` 큐를 거치지 않고 `ready/ → done/` 로 닫는 이유가 그것이다.
 
 ---
 
@@ -545,13 +547,38 @@ AC-5 의 *"풀렸다면"* 은 조건부로 옳게 쓰였고, **그 조건의 주
 | gateway / membership / notification `:test` | ✅ 실행·통과 |
 | `iam-platform:auth-service:test` | ✅ 실행·통과 |
 | `tests:e2e:compileTestJava` | ✅ |
-| **`integrationTest` (양 서비스)** | ⚠️ **`BUILD SUCCESSFUL` 이지만 전부 SKIPPED** — 이 호스트에 Docker 미기동 |
+| **`integrationTest` (양 서비스)** | ⚠️ 로컬은 **`BUILD SUCCESSFUL` 이지만 전부 SKIPPED**(Docker 미기동) → **CI 에서 실행·통과 확인** |
 
-🔴 **`integrationTest` 의 rc=0 은 "통과"가 아니라 "아무것도 안 돌았다"** 이다
+🔴 **`integrationTest` 의 로컬 rc=0 은 "통과"가 아니라 "아무것도 안 돌았다"** 였다
 (artist 15건 · community 38건 전부 SKIPPED). 하필 이 티켓의 **핵심 판정 두 개**가
-거기 있다 — AC-2/AC-3 의 도달성·음성 대조, 그리고 AC-6 의 *artist-service 를 실제로
-내렸을 때 팔로우가 안 열림*. ⇒ **로컬 초록을 근거로 삼지 말 것. CI 가 권위다.**
-(`project_testcontainers_docker_desktop_blocker` 와 같은 상황.)
+거기 있었다 — AC-2/AC-3 의 도달성·음성 대조, 그리고 AC-6 의 *artist-service 를 실제로
+내렸을 때 팔로우가 안 열림*. (`project_testcontainers_docker_desktop_blocker` 와 같은 상황.)
+
+## 🔴🔴 그리고 CI 는 실제로 그 넷을 **RED** 로 잡았다 — 픽스처가 불가능한 입력
+
+```java
+String artistAccountId = "artist-acct-" + UUID.randomUUID();   // 48자
+// 계정 id 는 스키마 전역 VARCHAR(36), FollowArtistRequest 는 @Size(max = 36)
+```
+
+⇒ 컨트롤러 경계에서 `VALIDATION_ERROR` 로 잘려 **팔로우 대상 검증이 호출되지도 않았다.**
+
+🔴 위험한 것은 실패가 아니라 **거절 케이스가 그대로 통과할 수 있었다는 점**이다 — 422 만
+봤다면 게이트에 대해 아무것도 증명하지 않으면서 초록이었다. 드러난 계기는 201 을 기대한
+케이스가 422 를 받은 것이었고, 거절 케이스가 *코드 문자열까지* 단언한 덕에
+`UNKNOWN_ARTIST_ACCOUNT` 가 아니라 `VALIDATION_ERROR` 라는 게 보였다.
+**접두사 형태는 읽기에는 아무 문제가 없었다 — 그게 요점이다.**
+
+⇒ 맨 UUID(36자)로 교체 + 사유를 헬퍼 javadoc 에 고정. 재실행에서 넷 다 `PASSED`
+(로그로 개별 확인: 스킵이 아니라 실제 실행).
+
+## ✅ 최종 CI (재실행, 41 체크)
+
+failing **0** · pending **0** · `mergeStateStatus=CLEAN`.
+`Integration (fan-platform, Testcontainers)` **pass** — AC-2/AC-3 · fail-closed ·
+internal 인증 매트릭스(엔드유저 스코프 거절 포함) 전부 실제 실행·통과.
+`E2E (fan-platform v1 live-trio smoke)` **pass** — AC-7 을 뒤집어 탈출구를 둔 판단이
+맞았다는 증거다(두지 않았다면 이 잡이 RED).
 
 🔵 하위 에이전트가 자기 테스트에서 flake 하나를 스스로 잡았다: 공유 RestClient 의
 read timeout 을 400ms 로 조여 뒀더니 단독 실행·2회 전체 실행은 통과하고 **세 번째
