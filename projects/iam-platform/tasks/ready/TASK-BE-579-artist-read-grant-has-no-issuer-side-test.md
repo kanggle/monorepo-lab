@@ -48,9 +48,26 @@ SAS 가 `invalid_scope` 로 토큰을 거절하고 fan 의 checker 가 fail-clos
 🔵 계측기 검증: 같은 저장소에 **시드된 클라이언트를 실제 토큰 엔드포인트로 검증하는 선례가
 있다** — `PlatformConsoleOidcClientSeedIntegrationTest`(TASK-BE-296, Flyway `V0015` 시드를
 `RegisteredClientRepository` + 실제 엔드포인트로 확인). 즉 "그런 테스트를 못 쓴다" 가 아니라
-**이번에 안 썼다**. 반면 `OAuth2AuthorizationServerIntegrationTest` 의
+**이번에 안 썼다**. ~~반면 `OAuth2AuthorizationServerIntegrationTest` 의
 `client_credentials` 케이스는 `AuthorizationServerConfig` 의 **인메모리 placeholder**
-(`test-internal-client`)를 쓰므로 시드 행을 전혀 건드리지 않는다.
+(`test-internal-client`)를 쓰므로 시드 행을 전혀 건드리지 않는다.~~
+
+🔴 **취소선 문장은 틀렸다 (AC-0 재측정, 2026-08-12).** 그 클래스의 **케이스 7·8**
+(`TASK-BE-317`/`TASK-BE-515`)은 **`account-service-client`** 를 쓰고, 그것은 `V0019` 가
+**Flyway 로 시드**한 행이다. 실제 토큰 엔드포인트 + JWKS 검증 + **scope 양성/음성**까지
+이미 있고 `scopesOf()` 헬퍼까지 있다.
+
+**내가 어디서 틀렸나**: `test-internal-client` 는 그 클래스의 **클래스 javadoc** 에 적힌
+말이고, 그 javadoc 은 여전히 **Phase 1(`TASK-BE-251`) 시절**을 서술한다. 나는 **케이스를
+읽지 않고 javadoc 을 읽었다** — 그리고 그 한 문장에서 *"이 클래스는 시드 행을 안 건드린다"* 를
+넘어 *"발급자 쪽 선례가 어디에도 없다"* 까지 일반화했다.
+[[feedback_my_own_ticket_cited_a_spec_that_says_otherwise]]
+
+🔵 **그래도 이 티켓은 살아 있다 — 다만 모양이 바뀐다.** 어떤 테스트도
+`community-service-client` 나 `artist.read` 를 건드리지 않는다(전수: `artist.read` 는 21개
+파일에 나오는데 **iam 테스트 코드는 0건**). ⇒ 할 일은 **새 하네스 구축이 아니라 그 클래스에
+케이스 4개 추가**다(기존 헬퍼 재사용 · 컨텍스트/Redis 컨테이너 재사용 — iam 통합 레인은
+벽시계 때문에 샤딩돼 있다, `TASK-MONO-438`).
 
 ## 왜 이것이 실제 위험인가
 

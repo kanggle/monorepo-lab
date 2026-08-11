@@ -16,6 +16,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -43,9 +44,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *       access token + tenant_id claim</li>
  * </ol>
  *
- * <p>The test client ({@code test-internal-client / secret}) is registered as an
+ * <p>The Phase 1 test client ({@code test-internal-client / secret}) is registered as an
  * in-memory placeholder in
  * {@link com.example.auth.infrastructure.oauth2.AuthorizationServerConfig}.
+ *
+ * <p><b>The class has outgrown that sentence, and correcting it is not cosmetic.</b> Cases 7-8
+ * (TASK-BE-317 / TASK-BE-515) authenticate {@code account-service-client} and cases 9-12
+ * (TASK-BE-579) authenticate {@code community-service-client} — both <b>Flyway-seeded</b>
+ * rows (V0019 / V0009+V0032), exercised through the real token endpoint. TASK-BE-579 was
+ * filed on the premise that this class "never touches a seeded row", which is what the
+ * paragraph above still implied; the ticket read the javadoc rather than the cases and
+ * concluded the issuer side had no precedent anywhere. It had one, here.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -73,6 +82,10 @@ class OAuth2AuthorizationServerIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    /** TASK-BE-579: reads the seeded rows directly, so a token assertion and a row assertion can disagree. */
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     // Basic auth header for test-internal-client / secret
     private static final String CLIENT_ID = "test-internal-client";
@@ -339,6 +352,169 @@ class OAuth2AuthorizationServerIntegrationTest extends AbstractIntegrationTest {
         assertThat(scopesOf(decoder.decode(noScopeToken)))
                 .as("no scope param → SAS grants no scopes → internal.invoke absent (the RED mechanism)")
                 .doesNotContain("internal.invoke");
+    }
+
+    // -----------------------------------------------------------------------
+    // 6. TASK-BE-579 — the V0032 `artist.read` grant, verified on the ISSUER side
+    // -----------------------------------------------------------------------
+    //
+    // What was missing. TASK-FAN-BE-045 made community-service validate follow
+    // targets against artist-service synchronously and FAIL-CLOSED, and granted
+    // `community-service-client` the `artist.read` machine scope (V0032) so its
+    // workload token would be accepted. Both tests that covered the seam sit on
+    // the CONSUMER side and mint their own credentials: fan's
+    // InternalArtistAuthIntegrationTest signs its JWTs with JwtTestHelper, and
+    // FollowArtistGateIntegrationTest stubs iam's token endpoint with a
+    // MockWebServer that returns the literal string "stub-workload-token". Both
+    // therefore ASSUME the grant they depend on.
+    //
+    // Why the assumption is worth a test. The ways this grant can fail are all
+    // silent: JSON_ARRAY_APPEND writing the wrong shape, the `oauth_scopes`
+    // catalog row missing, or the is_system/tenant_id combination not matching
+    // the lookup. Every one of them surfaces at RUNTIME as `invalid_scope` →
+    // checker fails closed → EVERY follow refused — and a fail-closed outage is
+    // indistinguishable from a working security control (V0032's own header says
+    // so). Nothing would be red; follows would simply stop.
+    //
+    // Sibling proximity over a new class, deliberately: cases 7-8 above are the
+    // same shape (seeded client, real token endpoint, JWKS-verified, positive +
+    // negative scope) and already carry `scopesOf`. A separate @SpringBootTest
+    // class would mean a second Spring context and a second Redis container on a
+    // lane that is sharded for wall-clock (TASK-MONO-438).
+    //
+    // 🔴 The ticket said this class only exercises the in-memory placeholder
+    // `test-internal-client` and "never touches a seeded row". That is what the
+    // CLASS JAVADOC says — it still describes Phase 1 (TASK-BE-251) — but cases
+    // 7-8 (BE-317/BE-515) use `account-service-client`, which V0019 seeds. The
+    // precedent was inside the class the ticket dismissed.
+
+    /** V0009 seeds this client for tenant `fan-platform`; V0032 appends `artist.read`. */
+    private static final String COMMUNITY_CLIENT_ID = "community-service-client";
+
+    /**
+     * V0009 and V0019 carry the SAME bcrypt hash, and case 7 authenticates
+     * `account-service-client:secret` against it — so the seeded secret is
+     * `secret` for this client too. (Measured, not assumed: if it were not, the
+     * request below would 401 rather than silently pass.)
+     */
+    private static final String COMMUNITY_CLIENT_SECRET = "secret";
+
+    private static String basicAuthFor(String clientId, String clientSecret) {
+        return "Basic " + Base64.getEncoder()
+                .encodeToString((clientId + ":" + clientSecret).getBytes());
+    }
+
+    private String mintToken(String clientId, String clientSecret, String scope) throws Exception {
+        var request = post("/oauth2/token")
+                .header(HttpHeaders.AUTHORIZATION, basicAuthFor(clientId, clientSecret))
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .param("grant_type", "client_credentials");
+        if (scope != null) {
+            request = request.param("scope", scope);
+        }
+        return objectMapper.readTree(mockMvc.perform(request)
+                        .andExpect(status().isOk())
+                        .andReturn().getResponse().getContentAsString())
+                .get("access_token").asText();
+    }
+
+    /** The GAP JWKS decoder — a token that does not verify against it is not one we issued. */
+    private JwtDecoder jwksDecoder() throws Exception {
+        String jwksJson = mockMvc.perform(get("/oauth2/jwks"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        RSAPublicKey publicKey = JWKSet.parse(jwksJson).getKeys().get(0).toRSAKey().toRSAPublicKey();
+        return NimbusJwtDecoder.withPublicKey(publicKey).build();
+    }
+
+    @Test
+    @Order(9)
+    @DisplayName("TASK-BE-579 AC-1: SAS actually issues `artist.read` to the SEEDED community-service-client")
+    void clientCredentials_communityClient_isIssuedArtistReadScope() throws Exception {
+        Jwt jwt = jwksDecoder().decode(
+                mintToken(COMMUNITY_CLIENT_ID, COMMUNITY_CLIENT_SECRET, "artist.read"));
+
+        assertThat(scopesOf(jwt))
+                .as("artist-service's Order(1) internal chain grants ROLE_INTERNAL only on this "
+                        + "scope; without it every follow is refused fail-closed (V0032 header)")
+                .contains("artist.read");
+        assertThat(jwt.getSubject())
+                .as("client_credentials principal == client_id (service identity)")
+                .isEqualTo(COMMUNITY_CLIENT_ID);
+        // Pins the row we believe we are exercising: auth-api.md § OAuth2 Clients lists this
+        // client under tenant `fan-platform`. A token minted from some other client_id that
+        // happened to hold the scope would satisfy the assertion above but not this one.
+        assertThat(jwt.getClaimAsString("tenant_id")).isEqualTo("fan-platform");
+    }
+
+    @Test
+    @Order(10)
+    @DisplayName("TASK-BE-579 AC-2 (negative control): a scope this client does NOT hold → invalid_scope")
+    void clientCredentials_communityClient_unheldScopeIsRejected() throws Exception {
+        // `internal.invoke` is real and held by account-service-client (V0019) — NOT by this
+        // one. A nonsense string would also be rejected, but by the catalog rather than by the
+        // per-client grant, which is the thing under test.
+        mockMvc.perform(post("/oauth2/token")
+                        .header(HttpHeaders.AUTHORIZATION,
+                                basicAuthFor(COMMUNITY_CLIENT_ID, COMMUNITY_CLIENT_SECRET))
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("grant_type", "client_credentials")
+                        .param("scope", "internal.invoke"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("invalid_scope"));
+        // Without this case, AC-1 cannot tell "this client was granted artist.read" from
+        // "this server hands out whatever scope is asked for".
+    }
+
+    @Test
+    @Order(11)
+    @DisplayName("TASK-BE-579: V0032 APPENDED — account.read / membership.read survived the JSON_ARRAY_APPEND")
+    void clientCredentials_communityClient_retainsItsPreExistingScopes() throws Exception {
+        Jwt jwt = jwksDecoder().decode(mintToken(
+                COMMUNITY_CLIENT_ID, COMMUNITY_CLIENT_SECRET,
+                "account.read membership.read artist.read"));
+
+        assertThat(scopesOf(jwt))
+                .as("if V0032 had overwritten the array instead of appending, the membership "
+                        + "gate would fail closed and the premium feed would be blocked "
+                        + "wholesale — a louder failure than the one V0032 was fixing, and one "
+                        + "that asserting artist.read alone would not see")
+                .contains("account.read", "membership.read", "artist.read");
+    }
+
+    @Test
+    @Order(12)
+    @DisplayName("TASK-BE-579 AC-1: the V0032 seed rows themselves — catalog entry + client grant, and the guard is idempotent")
+    void v0032SeedRowsArePresentAndTheAppendIsIdempotent() {
+        // The catalog row. Edge case named by the ticket: it is seeded with tenant_id NULL +
+        // is_system TRUE to join the machine-scope family (account.read / membership.read).
+        // A lookup that filtered by tenant would not find it — assert the combination, not
+        // just the name.
+        Integer catalogRows = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM oauth_scopes "
+                        + "WHERE scope_name = 'artist.read' AND tenant_id IS NULL AND is_system = TRUE",
+                Integer.class);
+        assertThat(catalogRows).as("V0032 catalog row for artist.read").isEqualTo(1);
+
+        String scopesJson = jdbcTemplate.queryForObject(
+                "SELECT scopes FROM oauth_clients WHERE client_id = ?", String.class,
+                COMMUNITY_CLIENT_ID);
+        assertThat(scopesJson).contains("artist.read", "account.read", "membership.read");
+
+        // V0032 guards its UPDATE with JSON_SEARCH so a re-run is a no-op. Flyway will never
+        // re-run it, so nothing else can catch a broken guard — and the demo seed path applies
+        // migrations to long-lived databases where a duplicate would accumulate silently.
+        jdbcTemplate.update(
+                "UPDATE oauth_clients SET scopes = JSON_ARRAY_APPEND(scopes, '$', 'artist.read') "
+                        + "WHERE client_id = ? AND JSON_SEARCH(scopes, 'one', 'artist.read') IS NULL",
+                COMMUNITY_CLIENT_ID);
+
+        String afterReRun = jdbcTemplate.queryForObject(
+                "SELECT scopes FROM oauth_clients WHERE client_id = ?", String.class,
+                COMMUNITY_CLIENT_ID);
+        assertThat(afterReRun)
+                .as("re-applying V0032's guarded UPDATE must change nothing")
+                .isEqualTo(scopesJson);
     }
 
     /** Extract scopes from a JWT {@code scope} claim (space-delimited String or Collection; absent → empty). */
