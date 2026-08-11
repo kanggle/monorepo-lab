@@ -7,6 +7,7 @@
 | [ADR-001](ADR-001-real-pg-portone-verification-boundary.md) | 실 PG 연동 — PortOne V2 클라이언트 개시 결제 + 서버측 검증 경계(profile 게이팅, mock 은 CI/test 기본값 유지) | Proposed |
 | [ADR-002](ADR-002-billing-key-auto-renewal.md) | 빌링키 기반 자동 갱신(정기결제) — 서버 개시 청구 + `BillingKeyEnrollment` + fail-closed 실패 정책(새 상태 없음, `RenewMembershipUseCase` 재사용). `ADR-MONO-057`(라이브러리 확장)의 컴패니언 | Accepted |
 | [ADR-003](ADR-003-fan-post-visibility-authoring-rule.md) | `FAN_POST` 의 가시성 티어 — 팬이 게이팅된 글을 쓸 수 있는가. 좁히기(A) vs 명시 허용(B, 권고). **스펙이 침묵이 아니라 반대를 규정**한다(`v1-e2e-scenarios.md` § Scenario 3 + `VisibilityTierE2ETest` 가 `FAN_POST` 를 PREMIUM/MEMBERS_ONLY 로 발행) ⇒ 좁히기는 드리프트 교정이 아니라 **새 제약 도입**. `TASK-FAN-BE-047` 을 게이트 | Proposed |
+| [ADR-004](ADR-004-artist-account-existence-seam.md) | `Follow.artistAccountId` 의 실재 검증을 **어느 이음매**에 두는가 — 동기 internal 엔드포인트(A, 권고) / 이벤트 투영(B) / 검증 안 함을 명시 결정으로(C). `ADR-MONO-059` 가 A 를 고르며 조인 검증을 `FAN-BE-045` 에 배정했는데 그 근거 문장(*"`artists.account_id` **참조**"*)이 **로컬 참조를 전제**했다 — 실측하니 `follows`(community DB)와 `artists`(artist DB)는 **다른 데이터베이스**이고 reach-in 은 이미 금지돼 있다. 🔴 B 는 세 안 중 유일하게 **선언된 Service Type 을 바꾼다**(community = *"단일타입 rest-api · 인바운드 컨슈머 표면 없음"*). `TASK-FAN-BE-045` AC-6 을 게이트 | Proposed |
 
 ## ADR 작성 원칙
 

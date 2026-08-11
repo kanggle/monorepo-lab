@@ -213,6 +213,42 @@ ADR § 결과 표 A 행: *"`FAN-BE-045` = **스키마 + 온보딩 + 조인 검�
 없으므로 종결**한다. 대신 조인의 두 끝이 같은 id 공간이라는 것이 **정의상** 보장돼야 한다
 (AC-6).
 
+---
+
+# ⛔ AC-6 PAUSED on `ADR-004` (HARDSTOP-09, 2026-08-11 착수 시)
+
+착수 직전 전제 재측정에서 **`ADR-MONO-059` 의 전제 하나가 무너졌다.** A 를 고른 근거 문장은
+
+> `FollowArtistUseCase` 의 무검증 필드에 검증할 대상이 생긴다(`artists.account_id` **참조**)
+
+인데, 그 "참조" 는 **로컬 참조를 전제**한 표현이다. 실측:
+
+| 테이블 | 서비스 | 데이터베이스 |
+|---|---|---|
+| `follows` | community-service | `fanplatform_community` |
+| `artists` | artist-service | `fanplatform_artist` |
+
+**서로 다른 데이터베이스**이고, `specs/services/community-service/architecture.md`
+§ Forbidden dependencies 는 *"community-service does not reach into **artist-service** …
+never a DB-level reach-in"* 으로 우회로를 이미 막아 뒀다. `ADR-MONO-059` 본문 어디에도
+cross-service 라는 말이 없다 ⇒ **ADR 이 이 사실을 모르는 채로 AC-6 을 이 티켓에 배정했다.**
+(같은 형태를 `TASK-SCM-BE-059` 가 *"그 ADR 은 내가 썼다"* 로 이미 겪었다.)
+
+남은 기전은 **동기 호출** 아니면 **이벤트 투영** 뿐이고 **둘 다 새 크로스서비스 간선**이라
+`architecture-decision-rule.md` § Mandatory Rule 2항 → ADR + PAUSE 다.
+⇒ [`docs/adr/ADR-004-artist-account-existence-seam.md`](../../docs/adr/ADR-004-artist-account-existence-seam.md)
+**Proposed** 제출(A 동기 internal 엔드포인트 / B 이벤트 투영 / C 검증 안 함을 명시 결정으로).
+
+🔴 **AC-1 의 "별도 ADR 을 추가로 올리지 않는다" 와 충돌하지 않는다.** 그 문장이 막는 것은
+**같은 결정**(어느 신원 평면인가)을 두 곳에 적는 것이다. `ADR-004` 는 그 결정을 다시 열지
+않고 — A 는 확정이다 — **A 를 어떤 이음매로 실행하는가**만 정한다. `ADR-MONO-059` 는 그
+질문을 제기한 적이 없다.
+
+🔵 **PAUSE 범위는 AC-6 하나뿐이다.** AC-1b(스키마 + 온보딩) · AC-2/AC-3(발행 → 피드 도달 +
+음성 대조) · AC-5(시드 회수)는 세 안 어디서도 같으므로 게이트되지 않는다. 다만 이 티켓은
+*"컬럼만 추가하고 조인 검증을 빼먹는다"* 를 Failure Scenario 로 적어 두었으므로, **AC-6 이
+정해지기 전에 AC-1b 만 랜딩하면 그 시나리오를 스스로 실행하는 것**이다 ⇒ ACCEPT 를 기다린다.
+
 # Acceptance Criteria
 
 - [x] **AC-0 (재측정) — 완료 2026-08-07.** 세 사실 전부 유지(`artists` 16컬럼 중 계정 0개 ·
@@ -230,7 +266,10 @@ ADR § 결과 표 A 행: *"`FAN-BE-045` = **스키마 + 온보딩 + 조인 검�
       양성만으로는 "이어졌다" 와 "모두에게 보인다" 를 구별할 수 없다
 - [x] **AC-4 (B 를 골랐을 때) — 해당 없음.** B 가 배제됐다(ADR-059 ACCEPT). 저자는 인증된
       호출자로 남으므로 "저자 id 를 지정하는 주체" 자체가 존재하지 않는다
-- [ ] **AC-6 (조인 검증 — A 가 새로 요구)** — `FollowArtistUseCase` 가 받는
+- [ ] **AC-6 (조인 검증 — A 가 새로 요구) — ⛔ `ADR-004` PAUSED (위 § 참조).** 기전이
+      `A`(동기)냐 `B`(투영)냐 `C`(검증 안 함)냐에 따라 이 AC 의 내용 자체가 달라진다 —
+      C 면 "해당 없음" 으로 종결된다. ACCEPT 전 구현 금지.
+      `FollowArtistUseCase` 가 받는
       `artistAccountId` 가 **실재하는 `artists.account_id` 인지 검증**하고, 아닌 값은
       거부한다(테스트로 고정). 🔴 지금은 무검증 저장이라 피드 조인이 **우연히만** 성립한다 —
       A 의 요점이 그 우연을 구조로 바꾸는 것이므로, 이것을 빼면 A 를 고른 이유가 사라진다
