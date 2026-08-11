@@ -24,7 +24,7 @@ class StageNameUniquenessIntegrationTest extends ArtistServiceIntegrationBase {
         adminHeaders.setContentType(MediaType.APPLICATION_JSON);
         adminHeaders.setBearerAuth(jwt.signAdminToken("admin-1"));
         String body = """
-                {"artistType":"SOLO","stageName":"UniqueStage-1"}
+                {"accountId":"acc-unique-stage-1","artistType":"SOLO","stageName":"UniqueStage-1"}
                 """;
 
         ResponseEntity<String> first = rest.exchange(
@@ -32,6 +32,9 @@ class StageNameUniquenessIntegrationTest extends ArtistServiceIntegrationBase {
                 new HttpEntity<>(body, adminHeaders), String.class);
         assertThat(first.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
+        // Same body again: stageName is checked before accountId in the
+        // application service, so this still pins STAGE_NAME_CONFLICT
+        // specifically (not ARTIST_ACCOUNT_CONFLICT).
         ResponseEntity<String> second = rest.exchange(
                 "/api/artists", HttpMethod.POST,
                 new HttpEntity<>(body, adminHeaders), String.class);

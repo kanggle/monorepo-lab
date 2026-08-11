@@ -38,7 +38,7 @@ class ArtistApiContractTest extends ArtistServiceIntegrationBase {
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(jwt.signFanToken("fan-1"));
         String body = """
-                {"artistType":"SOLO","stageName":"STAGE-X"}
+                {"accountId":"acc-artist-1","artistType":"SOLO","stageName":"STAGE-X"}
                 """;
         ResponseEntity<String> response = rest.exchange(
                 "/api/artists", HttpMethod.POST,

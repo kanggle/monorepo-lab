@@ -88,6 +88,12 @@ class ArtistAndPostFlowE2ETest extends FanPlatformE2ETestBase {
         String fanAccountId = randomAccountId();
         String fan2AccountId = randomAccountId();
         String artistAccountId = randomAccountId(); // followed via this id
+        // Required RegisterArtistRequest.accountId (TASK-FAN-BE-045) — the IAM
+        // subject that authors as this artist. Deliberately distinct from the
+        // artist resource id AND from artistAccountId above: this is the
+        // artist-service-side registration field, unrelated to the
+        // community-service follow target used in step 3.
+        String registeredArtistAccountId = randomAccountId();
 
         String adminToken = jwt.signAdminToken(adminAccountId);
         String fanToken = jwt.signFanToken(fanAccountId);
@@ -112,12 +118,13 @@ class ArtistAndPostFlowE2ETest extends FanPlatformE2ETestBase {
             // ==============================================================
             String registerBody = """
                     {
+                      "accountId": "%s",
                       "artistType": "SOLO",
                       "stageName": "%s",
                       "agency": "E2E Agency",
                       "bio": "auto-registered by ArtistAndPostFlowE2ETest"
                     }
-                    """.formatted(stageName);
+                    """.formatted(registeredArtistAccountId, stageName);
 
             HttpResponse<String> registerResp = sendString(http, authedJson(
                     gatewayBaseUri().resolve(pathArtistRegister()), adminToken)

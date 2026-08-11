@@ -95,9 +95,11 @@ class ArtistDirectoryBrowseIntegrationTest extends ArtistServiceIntegrationBase 
         HttpHeaders admin = new HttpHeaders();
         admin.setContentType(MediaType.APPLICATION_JSON);
         admin.setBearerAuth(jwt.signAdminToken("admin-be028"));
+        String accountId = "acc-" + stageName;
         ResponseEntity<String> reg = rest.exchange(
                 "/api/artists", HttpMethod.POST,
-                new HttpEntity<>("{\"artistType\":\"" + type + "\",\"stageName\":\"" + stageName + "\"}", admin),
+                new HttpEntity<>("{\"accountId\":\"" + accountId + "\",\"artistType\":\"" + type
+                        + "\",\"stageName\":\"" + stageName + "\"}", admin),
                 String.class);
         assertThat(reg.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         String id = readData(reg.getBody()).path("id").asText();

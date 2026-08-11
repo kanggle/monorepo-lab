@@ -48,7 +48,7 @@ public class ArtistController {
             @CurrentActor ActorContext actor,
             @Valid @RequestBody RegisterArtistRequest req) {
         ArtistView view = registerUseCase.register(new RegisterArtistCommand(
-                actor, req.artistType(), req.stageName(), req.realName(),
+                actor, req.accountId(), req.artistType(), req.stageName(), req.realName(),
                 req.debutDate(), req.agency(), req.bio(), req.profileImageRef()));
         return ResponseEntity.created(URI.create("/api/artists/" + view.id()))
                 .body(ApiEnvelope.of(view));

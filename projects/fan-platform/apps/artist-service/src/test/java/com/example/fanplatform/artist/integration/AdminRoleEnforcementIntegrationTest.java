@@ -28,7 +28,7 @@ class AdminRoleEnforcementIntegrationTest extends ArtistServiceIntegrationBase {
         fanHeaders.setContentType(MediaType.APPLICATION_JSON);
         fanHeaders.setBearerAuth(jwt.signFanToken("fan-1"));
         String body = """
-                {"artistType":"SOLO","stageName":"AdminTest-1"}
+                {"accountId":"acc-admin-test-1","artistType":"SOLO","stageName":"AdminTest-1"}
                 """;
         ResponseEntity<String> fanResponse = rest.exchange(
                 "/api/artists", HttpMethod.POST,
@@ -58,7 +58,7 @@ class AdminRoleEnforcementIntegrationTest extends ArtistServiceIntegrationBase {
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(jwt.signFanOperatorToken("assume-op-1"));
         String body = """
-                {"artistType":"SOLO","stageName":"AssumeTenantOp-1"}
+                {"accountId":"acc-assume-tenant-op-1","artistType":"SOLO","stageName":"AssumeTenantOp-1"}
                 """;
         ResponseEntity<String> response = rest.exchange(
                 "/api/artists", HttpMethod.POST,

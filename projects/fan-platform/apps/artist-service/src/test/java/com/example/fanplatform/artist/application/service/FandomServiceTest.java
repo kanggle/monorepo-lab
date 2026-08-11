@@ -56,14 +56,14 @@ class FandomServiceTest {
     }
 
     private static Artist publishedArtist() {
-        Artist a = Artist.register(ArtistId.of("a-1"), "fan-platform", ArtistType.SOLO,
+        Artist a = Artist.register(ArtistId.of("a-1"), "fan-platform", "acc-artist-1", ArtistType.SOLO,
                 new ArtistProfile("STAGE", null, null, null, null, null));
         a.publish();
         return a;
     }
 
     private static Artist draftArtist() {
-        return Artist.register(ArtistId.of("a-1"), "fan-platform", ArtistType.SOLO,
+        return Artist.register(ArtistId.of("a-1"), "fan-platform", "acc-artist-1", ArtistType.SOLO,
                 new ArtistProfile("STAGE", null, null, null, null, null));
     }
 

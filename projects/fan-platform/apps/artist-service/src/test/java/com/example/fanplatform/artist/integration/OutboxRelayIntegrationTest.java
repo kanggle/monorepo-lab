@@ -49,6 +49,7 @@ class OutboxRelayIntegrationTest extends ArtistServiceIntegrationBase {
      * follow-up assertions would fail (the historic flake).
      */
     private static final String UNIQUE_STAGE_NAME = "OutboxTest-" + System.nanoTime();
+    private static final String UNIQUE_ACCOUNT_ID = "acc-outbox-test-" + System.nanoTime();
 
     @Test
     @DisplayName("register artist → artist.registered.v1 published to Kafka")
@@ -57,8 +58,8 @@ class OutboxRelayIntegrationTest extends ArtistServiceIntegrationBase {
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(jwt.signAdminToken("admin-1"));
         String body = """
-                {"artistType":"SOLO","stageName":"%s"}
-                """.formatted(UNIQUE_STAGE_NAME);
+                {"accountId":"%s","artistType":"SOLO","stageName":"%s"}
+                """.formatted(UNIQUE_ACCOUNT_ID, UNIQUE_STAGE_NAME);
 
         ResponseEntity<String> resp = rest.exchange(
                 "/api/artists", HttpMethod.POST,

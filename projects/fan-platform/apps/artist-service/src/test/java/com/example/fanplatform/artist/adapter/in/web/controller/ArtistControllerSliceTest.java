@@ -53,7 +53,7 @@ class ArtistControllerSliceTest {
     @MockitoBean GetArtistUseCase getUseCase;
 
     private static ArtistView sampleView(ArtistStatus status) {
-        return new ArtistView("a-1", "fan-platform", ArtistType.SOLO, status,
+        return new ArtistView("a-1", "fan-platform", "acc-artist-1", ArtistType.SOLO, status,
                 "STAGE", null, null, null, null, null,
                 Instant.now(), Instant.now(), null, null);
     }
@@ -91,7 +91,7 @@ class ArtistControllerSliceTest {
         when(registerUseCase.register(any(RegisterArtistCommand.class)))
                 .thenReturn(sampleView(ArtistStatus.DRAFT));
         String body = """
-                {"artistType":"SOLO","stageName":"STAGE"}
+                {"accountId":"acc-artist-1","artistType":"SOLO","stageName":"STAGE"}
                 """;
         mockMvc.perform(post("/api/artists")
                         .header("Authorization", "Bearer " + jwt.signAdminToken("admin-1"))
@@ -107,7 +107,7 @@ class ArtistControllerSliceTest {
     @DisplayName("POST /api/artists (missing stageName) → 422 VALIDATION_ERROR")
     void register_missingStageName() throws Exception {
         String body = """
-                {"artistType":"SOLO"}
+                {"accountId":"acc-artist-1","artistType":"SOLO"}
                 """;
         mockMvc.perform(post("/api/artists")
                         .header("Authorization", "Bearer " + jwt.signAdminToken("admin-1"))

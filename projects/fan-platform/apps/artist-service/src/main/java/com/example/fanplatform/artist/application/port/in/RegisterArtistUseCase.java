@@ -12,6 +12,10 @@ public interface RegisterArtistUseCase {
 
     record RegisterArtistCommand(
             ActorContext actor,
+            // IAM subject that will author as this artist. Required — see
+            // artist-api.md § accountId. NOT the registering admin's own
+            // account: the admin registers on the artist's behalf.
+            String accountId,
             ArtistType artistType,
             String stageName,
             String realName,

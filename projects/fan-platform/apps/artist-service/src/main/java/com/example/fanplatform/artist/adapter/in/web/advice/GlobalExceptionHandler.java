@@ -3,6 +3,7 @@ package com.example.fanplatform.artist.adapter.in.web.advice;
 import com.example.fanplatform.artist.adapter.in.web.dto.response.ApiErrorBody;
 import com.example.fanplatform.artist.application.exception.AdminRoleRequiredException;
 import com.example.fanplatform.artist.application.exception.AlreadyMemberException;
+import com.example.fanplatform.artist.application.exception.ArtistAccountConflictException;
 import com.example.fanplatform.artist.application.exception.ArtistArchivedException;
 import com.example.fanplatform.artist.application.exception.ArtistGroupNotFoundException;
 import com.example.fanplatform.artist.application.exception.ArtistNotFoundException;
@@ -30,7 +31,8 @@ import java.util.Map;
  *   <li>401 — UNAUTHORIZED (handled by Spring Security entry point)</li>
  *   <li>403 — TENANT_FORBIDDEN / FORBIDDEN (admin-only)</li>
  *   <li>404 — ARTIST_NOT_FOUND / ARTIST_GROUP_NOT_FOUND / FANDOM_NOT_FOUND</li>
- *   <li>409 — STAGE_NAME_CONFLICT / GROUP_NAME_CONFLICT / CONFLICT (optimistic lock)</li>
+ *   <li>409 — STAGE_NAME_CONFLICT / ARTIST_ACCOUNT_CONFLICT / GROUP_NAME_CONFLICT /
+ *             CONFLICT (optimistic lock)</li>
  *   <li>422 — STATE_TRANSITION_INVALID / ALREADY_MEMBER / FANDOM_ALREADY_EXISTS /
  *             ARTIST_NOT_PUBLISHED / ARTIST_ARCHIVED / VALIDATION_ERROR</li>
  * </ul>
@@ -72,6 +74,12 @@ public class GlobalExceptionHandler extends AbstractDomainExceptionHandler {
     public ResponseEntity<ErrorResponse> handleStageNameConflict(StageNameConflictException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ErrorResponse.of("STAGE_NAME_CONFLICT", e.getMessage()));
+    }
+
+    @ExceptionHandler(ArtistAccountConflictException.class)
+    public ResponseEntity<ErrorResponse> handleArtistAccountConflict(ArtistAccountConflictException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("ARTIST_ACCOUNT_CONFLICT", e.getMessage()));
     }
 
     @ExceptionHandler(GroupNameConflictException.class)

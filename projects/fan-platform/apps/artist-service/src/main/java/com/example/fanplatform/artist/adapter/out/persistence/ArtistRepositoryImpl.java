@@ -78,6 +78,11 @@ class ArtistRepositoryImpl implements ArtistRepository {
     }
 
     @Override
+    public boolean existsByTenantIdAndAccountId(String tenantId, String accountId) {
+        return jpa.existsByTenantIdAndAccountId(tenantId, accountId);
+    }
+
+    @Override
     public boolean existsInStatus(ArtistId id, String tenantId, ArtistStatus status) {
         return jpa.existsByIdAndTenantIdAndStatus(id.value(), tenantId, status);
     }
@@ -85,7 +90,7 @@ class ArtistRepositoryImpl implements ArtistRepository {
     private ArtistJpaEntity toInsertEntity(Artist a) {
         ArtistProfile p = a.getProfile();
         return new ArtistJpaEntity(
-                a.getId().value(), a.getTenantId(), a.getArtistType(), a.getStatus(),
+                a.getId().value(), a.getTenantId(), a.getAccountId(), a.getArtistType(), a.getStatus(),
                 p.stageName(), p.realName(), p.debutDate(), p.agency(), p.bio(), p.profileImageRef(),
                 a.getCreatedAt(), a.getUpdatedAt(), a.getPublishedAt(), a.getArchivedAt(),
                 // version=null on insert so Spring Data treats this as new and runs INSERT.
@@ -100,6 +105,7 @@ class ArtistRepositoryImpl implements ArtistRepository {
         return Artist.reconstitute(
                 ArtistId.of(e.getId()),
                 e.getTenantId(),
+                e.getAccountId(),
                 e.getArtistType(),
                 e.getStatus(),
                 profile,

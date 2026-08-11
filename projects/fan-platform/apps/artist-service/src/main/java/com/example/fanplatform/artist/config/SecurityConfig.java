@@ -12,13 +12,18 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidationException;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
 import org.springframework.security.web.SecurityFilterChain;
 
@@ -73,8 +78,44 @@ public class SecurityConfig {
     // FAN_OPERATOR claim. Additive — existing generic operators unaffected.
     private static final String[] ADMIN_ROLES = { "ADMIN", "OPERATOR", "SUPER_ADMIN", "FAN_OPERATOR" };
 
+    /**
+     * Order(1): the workload-identity {@code /internal/**} chain (TASK-FAN-BE-045
+     * AC-6, ADR-004 A). Authenticates an IAM {@code client_credentials} JWT with
+     * {@code internalJwtDecoder} and requires {@code ROLE_INTERNAL}, which
+     * {@link WorkloadIdentityAuthoritiesConverter} grants only on a machine scope.
+     * No token → 401; a valid end-user token → 403.
+     *
+     * <p>Hand-assembled rather than routed through {@link ResourceServerChainAssembler}:
+     * this is not a stateless <em>end-user</em> resource server. It uses a different
+     * decoder (no tenant pin), a different converter, gates on a role rather than on
+     * public-vs-authenticated paths, and writes different 401/403 bodies. Same
+     * reasoning membership-service's Order(1) chain records.
+     *
+     * <p>NOT gateway-routed — the gateway maps {@code /api/v1/**} only, so this
+     * surface is reachable on the internal docker network alone.
+     */
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    @Order(1)
+    public SecurityFilterChain internalFilterChain(HttpSecurity http,
+                                                   NimbusJwtDecoder internalJwtDecoder) throws Exception {
+        http
+                .securityMatcher("/internal/**")
+                .csrf(AbstractHttpConfigurer::disable)
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth
+                        .anyRequest().hasRole("INTERNAL"))
+                .oauth2ResourceServer(rs -> rs
+                        .jwt(jwt -> jwt
+                                .decoder(internalJwtDecoder)
+                                .jwtAuthenticationConverter(new WorkloadIdentityAuthoritiesConverter()))
+                        .authenticationEntryPoint(SecurityConfig::onInternalAuthFailure)
+                        .accessDeniedHandler(SecurityConfig::onInternalAccessDenied));
+        return http.build();
+    }
+
+    @Bean
+    @Order(2)
+    public SecurityFilterChain filterChain(HttpSecurity http, JwtDecoder jwtDecoder) throws Exception {
         // ADR-MONO-058 § D4. Every rule below stays in artist-service's hands and — critically — in
         // its original registration order: authorizeHttpRequests is first-match-wins, so the
         // method-scoped admin gates MUST still be registered before the GET rules that would
@@ -87,8 +128,10 @@ public class SecurityConfig {
         // be evaluated in the same slot and would shadow nothing today, but it would silently admit a
         // future PUT the admin gates do not name.
         //
-        // No .jwtDecoder(...) call: artist-service declares a single JwtDecoder bean and Spring
-        // Security resolves it from the context, as it did before this chain was assembled here.
+        // The decoder IS pinned explicitly now (TASK-FAN-BE-045): this service declares TWO
+        // decoders since the Order(1) internal chain arrived, so Spring Security's by-type
+        // resolution no longer has a single candidate. Pinning here keeps this chain on the
+        // tenant-pinned end-user decoder — same shape as membership-service's Order(2).
         return ResourceServerChainAssembler.statelessJwtChain(http)
                 .publicPaths(PublicPaths.AS_SET)
                 .authorizeRules(auth -> auth
@@ -106,12 +149,33 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET,    "/api/artist-groups/**", "/api/artist-groups").authenticated()
                         .requestMatchers(HttpMethod.GET,    "/api/fandoms/**").authenticated())
                 .anyRequestDenied()
+                .jwtDecoder(jwtDecoder)
                 .jwtAuthenticationConverter(
                         new ActorContextJwtAuthenticationConverter<>(ActorContext::new))
                 .authenticationEntryPoint(SecurityConfig::onAuthenticationFailure)
                 .accessDeniedHandler(SecurityConfig::onAccessDenied)
                 .build();
     }
+
+    // ----- internal (workload-identity) chain handlers ---------------------
+
+    static void onInternalAuthFailure(HttpServletRequest request,
+                                      HttpServletResponse response,
+                                      org.springframework.security.core.AuthenticationException e)
+            throws IOException {
+        writeError(response, HttpStatus.UNAUTHORIZED.value(),
+                "UNAUTHORIZED", "Missing or invalid internal credentials");
+    }
+
+    static void onInternalAccessDenied(HttpServletRequest request,
+                                       HttpServletResponse response,
+                                       org.springframework.security.access.AccessDeniedException e)
+            throws IOException {
+        writeError(response, HttpStatus.FORBIDDEN.value(),
+                "FORBIDDEN", "Workload identity required for /internal/**");
+    }
+
+    // ----- end-user chain handlers -----------------------------------------
 
     static void onAuthenticationFailure(HttpServletRequest request,
                                         HttpServletResponse response,

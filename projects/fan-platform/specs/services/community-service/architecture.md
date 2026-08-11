@@ -113,7 +113,8 @@ com.example.fanplatform.community/
 - H2 / any in-memory DB (`platform/testing-strategy.md` — Postgres only).
 - `spring-cloud-starter-gateway` (community-service is a downstream service, not an edge gateway).
 - Direct Kafka usage outside the outbox path. Producers MUST go through `CommunityEventPublisher` → outbox → `CommunityOutboxPublisher`.
-- Cross-service repository imports (community-service does not reach into artist-service / membership-service tables; membership access goes over an HTTP client — `HttpMembershipChecker`, FAN-BE-010 — never a DB-level reach-in).
+- Cross-service repository imports (community-service does not reach into artist-service / membership-service tables; membership access goes over an HTTP client — `HttpMembershipChecker`, FAN-BE-010 — and artist-account existence over `HttpArtistAccountChecker` — never a DB-level reach-in).
+  - 🔵 The artist-account check (FAN-BE-045 AC-6, `ADR-004` ACCEPTED — A) is a **second sanctioned outbound HTTP edge, not a relaxation of this rule**. It exists *because* the rule forbids the DB reach-in a same-database foreign key would have been: `follows` lives in `fanplatform_community`, `artists` in `fanplatform_artist`. `ADR-004` chose the synchronous internal endpoint over an event projection precisely so this service does **not** acquire an inbound event-consumer surface (§ Service Type Composition, unchanged).
 
 ### Boundary rules
 

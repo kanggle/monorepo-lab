@@ -14,6 +14,10 @@ import java.time.LocalDate;
 public record ArtistView(
         String id,
         String tenantId,
+        // Exposed on every read endpoint on purpose: it is the identifier fans
+        // follow, and the web app must send it (not the artist entity id) or the
+        // follow-target validation refuses the follow. artist-api.md § accountId.
+        String accountId,
         ArtistType artistType,
         ArtistStatus status,
         String stageName,
@@ -32,6 +36,7 @@ public record ArtistView(
         return new ArtistView(
                 a.getId().value(),
                 a.getTenantId(),
+                a.getAccountId(),
                 a.getArtistType(),
                 a.getStatus(),
                 a.getProfile().stageName(),

@@ -2,6 +2,7 @@ package com.example.fanplatform.artist.application.service;
 
 import com.example.common.id.UuidV7;
 import com.example.fanplatform.artist.application.ActorContext;
+import com.example.fanplatform.artist.application.exception.ArtistAccountConflictException;
 import com.example.fanplatform.artist.application.exception.ArtistNotFoundException;
 import com.example.fanplatform.artist.application.exception.StageNameConflictException;
 import com.example.fanplatform.artist.application.port.in.ArchiveArtistUseCase;
@@ -58,20 +59,30 @@ public class ArtistManagementService implements
         if (artistRepository.existsByTenantIdAndStageName(tenantId, cmd.stageName())) {
             throw new StageNameConflictException(cmd.stageName());
         }
+        // Same pre-check shape for the account: one account authors as at most
+        // one artist per tenant (uq_artists_tenant_account_id is the canonical
+        // guard for races).
+        if (artistRepository.existsByTenantIdAndAccountId(tenantId, cmd.accountId())) {
+            throw new ArtistAccountConflictException(cmd.accountId());
+        }
         ArtistProfile profile = new ArtistProfile(
                 cmd.stageName(), cmd.realName(), cmd.debutDate(),
                 cmd.agency(), cmd.bio(), cmd.profileImageRef());
         Artist artist = Artist.register(
                 ArtistId.of(UuidV7.randomString()),
                 tenantId,
+                cmd.accountId(),
                 cmd.artistType(),
                 profile);
         Artist saved;
         try {
             saved = artistRepository.insert(artist);
         } catch (DataIntegrityViolationException e) {
-            if (mentionsStageNameConstraint(e)) {
+            if (mentionsConstraint(e, STAGE_NAME_CONSTRAINT)) {
                 throw new StageNameConflictException(cmd.stageName());
+            }
+            if (mentionsConstraint(e, ACCOUNT_ID_CONSTRAINT)) {
+                throw new ArtistAccountConflictException(cmd.accountId());
             }
             throw e;
         }
@@ -108,7 +119,7 @@ public class ArtistManagementService implements
         try {
             saved = artistRepository.update(artist);
         } catch (DataIntegrityViolationException e) {
-            if (mentionsStageNameConstraint(e)) {
+            if (mentionsConstraint(e, STAGE_NAME_CONSTRAINT)) {
                 throw new StageNameConflictException(next.stageName());
             }
             throw e;
@@ -172,12 +183,13 @@ public class ArtistManagementService implements
     }
 
     private static final String STAGE_NAME_CONSTRAINT = "uq_artists_tenant_stage_name";
+    private static final String ACCOUNT_ID_CONSTRAINT = "uq_artists_tenant_account_id";
 
-    private static boolean mentionsStageNameConstraint(Throwable t) {
+    private static boolean mentionsConstraint(Throwable t, String constraintName) {
         Throwable cur = t;
         while (cur != null) {
             String msg = cur.getMessage();
-            if (msg != null && msg.toLowerCase().contains(STAGE_NAME_CONSTRAINT)) {
+            if (msg != null && msg.toLowerCase().contains(constraintName)) {
                 return true;
             }
             cur = cur.getCause();

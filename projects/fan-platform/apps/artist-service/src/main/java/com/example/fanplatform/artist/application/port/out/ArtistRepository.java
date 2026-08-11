@@ -46,6 +46,15 @@ public interface ArtistRepository {
 
     boolean existsByTenantIdAndStageName(String tenantId, String stageName);
 
+    /**
+     * True iff some artist in {@code tenantId} is authored by {@code accountId}.
+     * Two callers: the registration pre-check for 409
+     * {@code ARTIST_ACCOUNT_CONFLICT}, and {@code GET /internal/artists/exists},
+     * the remote half of community-service's follow-target validation
+     * (TASK-FAN-BE-045 AC-6, ADR-004 A).
+     */
+    boolean existsByTenantIdAndAccountId(String tenantId, String accountId);
+
     /** True if the artist exists in this tenant with the given status. */
     boolean existsInStatus(ArtistId id, String tenantId, ArtistStatus status);
 }
