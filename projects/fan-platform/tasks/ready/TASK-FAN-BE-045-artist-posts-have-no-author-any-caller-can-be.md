@@ -282,11 +282,11 @@ ADR § 결과 A 행이 **계약 선갱신**을 명시한다. `specs/contracts/ht
 
 ---
 
-# 📍 착수 현황 — 1회차 (2026-08-11). 다음 세션은 여기서 이어간다
+# 📍 착수 현황 — 2회차까지 (2026-08-11). 다음 세션은 여기서 이어간다
 
-**브랜치**: `task/fan-be-045-artist-account` (push 완료, `origin/main` 대비 1커밋)
+**브랜치**: `task/fan-be-045-artist-account`
 **worktree**: `C:/Users/kangdow/dev/project/ai-project/wt-fan-artist-identity`
-**PR**: 아직 없음(계약 1건만 있어서 열지 않았다)
+**PR**: 아직 없음. **계약 2건이 다 올라갔으므로 다음은 코드다**(V3 → 도메인/어댑터 → AC-6).
 
 ## ✅ 끝난 것
 
@@ -295,6 +295,40 @@ ADR § 결과 A 행이 **계약 선갱신**을 명시한다. `specs/contracts/ht
    `GET /internal/artists/exists?accountId=&tenantId=` → `200 {"exists": bool}`.
    membership 의 `/internal/membership/access` 를 1:1 미러(workload identity /
    게이트웨이 미라우팅 / fail-closed). 아티스트 `status` 는 **의도적 미노출**(사유는 계약 본문).
+3. **계약 2/2 랜딩 (2026-08-11, 2회차)** — `POST /api/artists` 에 `accountId`
+   (`artist-api.md` § `accountId`) + `data-model.md` 의 컬럼·제약·V3 백필 의무.
+   **코드는 아직 한 줄도 없다**(계약 선갱신 순서 준수). 정한 것 6가지:
+   - **필수(NOT NULL)** — 선택이면 *디렉터리에는 보이는데 팔로우는 영영 안 되는* 아티스트가
+     생긴다(AC-6 이 거절하므로). 결함이 모양만 바꿔 재발한다. 값은 항상 확보 가능 —
+     `ADR-MONO-059` A 가 계정 발급을 IAM 에 배정했으므로 등록 시점에 계정이 이미 있다.
+   - **`(tenant_id, account_id)` UNIQUE** → 409 `ARTIST_ACCOUNT_CONFLICT`(신규 코드).
+     한 사람이 여러 페르소나를 갖는가는 아무도 안 정했다 ⇒ 보수적인 쪽. 나중에 푸는 것은
+     제약 해제라 계약 파괴가 아니다.
+   - **불변 — PATCH 불가.** 재바인딩하면 `follows`/`posts`(다른 DB)의 옛 값이 남아 **기존
+     팔로워 전원이 조용히 떨어져 나가고** 기존 글이 고아가 되는데, artist-service 는 그쪽을
+     고칠 수 없다(Forbidden dependencies). 데이터 마이그레이션 문제지 요청 필드가 아니다.
+     🔴 판정은 "필드를 안 넣었다" 가 아니라 **PATCH 로 값이 안 바뀐다는 테스트** — 필드 부재의
+     강도는 JSON 바인더의 unknown-field 기본값만큼밖에 안 된다(계약에 명시).
+   - **IAM 실재 검증 안 함(명시적 결정)** — artist → IAM 은 `ADR-004` 가 승인한 간선이
+     아니다(승인된 것은 community → artist 하나). 대가를 그대로 적었다: 오타난 `accountId` 는
+     *아무도 저작할 수 없는 아티스트*를 만들고 첫 발행 시도에서야 드러난다. admin-tier 전용이라
+     수용.
+   - **기존 3행 백필 = `account_id := id`(항등)** — 시드가 이미 조인의 **양쪽 모두**에
+     아티스트 **엔티티 id** 를 쓰고 있다(follows 는 API 로, posts 는 직접-DB). 항등이 아니면
+     AC-6 이 랜딩하는 날 **시드 자신의 팔로우 호출이 거절된다**. 🔴 백필값은 실재하는 IAM
+     subject 가 아니다 — 그 절반은 `MONO-512`.
+   - **읽기 응답에 `accountId` 노출** — 비밀이 아니고(피드가 이미 `authorAccountId` 를 노출),
+     프런트가 팔로우하려면 필요하다.
+
+## 🔴 2회차가 새로 드러낸 것 — 프런트 한 줄이 곧 틀린 값이 된다
+
+`artists/[id]/page.tsx:30` 이 `<FollowButton artistAccountId={artist.id} />` 다.
+이것은 **`account_id == id` 인 동안만** 맞다 — 즉 백필된 데모 3행에서만. 실제 IAM subject 로
+등록된 아티스트에서는 **틀린 값을 보내고 AC-6 이 그 팔로우를 거절한다.**
+⇒ `artist.accountId` 를 읽도록 고쳐야 하고, `entities/artist/types.ts` 의 `Artist` 에도
+필드를 더해야 한다. 🔵 **이 티켓 안에서 처리한다** — AC-1b 의 "온보딩" 이 제품에 도달하는
+마지막 한 칸이고, 두 파일·두 줄이라 별도 티켓을 세울 무게가 아니다.
+🔴 조용히 빠뜨리면 *데모에서만 초록인* 상태로 닫히게 된다(백필 덕에 증상이 안 보인다).
 
 ## 🔴 1회차 실측이 바꾼 것 두 가지
 
@@ -322,15 +356,22 @@ AC-5 의 *"풀렸다면"* 은 조건부로 옳게 쓰였고, **그 조건의 주
 
 ## ▶️ 다음 세션의 작업 순서
 
-- [ ] **계약 2/2 (코드보다 먼저)** — `artist-api.md` § `POST /api/artists` 에 `accountId`
-      필드 추가. 필수/선택 여부와 기존 3행(`SUP` 아님, 데모 시드 아티스트 A/B/C)의
-      취급을 함께 적을 것. 🔴 **랜딩된 internal 엔드포인트 계약과 별개 건이다.**
+- [x] **계약 2/2 (코드보다 먼저) — 완료 2026-08-11.** `artist-api.md` § `accountId` +
+      `data-model.md` 컬럼·제약·V3 백필 의무. 정한 6가지는 위 § 착수 현황 3.
 - [ ] **V3 마이그레이션** — `artists.account_id VARCHAR(36)` + `UNIQUE (tenant_id,
-      account_id)`(한 계정이 한 테넌트에서 최대 하나의 아티스트). 🔴 기존 3행 백필 정책을
-      먼저 정할 것 — NOT NULL 을 즉시 걸면 데모 행이 막힌다(`SCM-BE-059` V6 의 백필 교훈:
-      *"NULL 을 남길 수 없고 충돌할 수 없음"* 을 마이그레이션 주석에 증명해 두기).
+      account_id)`. 🔵 백필 정책은 계약이 정했다(**항등 `account_id := id`**) 그대로 구현.
+      `SCM-BE-059` V6 교훈대로 *"NULL 을 남길 수 없고 충돌할 수 없음"* 증명을 주석에 —
+      **증명 본문은 `data-model.md` § V3 백필 의무에 이미 적혀 있다**(nullable 추가 →
+      `SET account_id = id` → `SET NOT NULL`; `id` 는 PK 라 NULL 없음·전역 유일 ⇒ 더 느슨한
+      키가 안 부딪히므로 더 조인 키도 못 부딪힌다).
 - [ ] **도메인/어댑터** — `Artist` 엔티티에 `accountId`(현재 필드: id·tenantId·artistType·
-      status·profile·타임스탬프·version, 계정 컬럼 0개) · `RegisterArtistRequest` · 매퍼.
+      status·profile·타임스탬프·version, 계정 컬럼 0개) · `RegisterArtistRequest` ·
+      `ArtistView`(응답 노출) · 매퍼. 🔴 `PATCH` 로는 안 바뀐다는 **테스트**까지가 한 벌.
+      🔴 기존 호출부 전수 갱신 필요 — `ArtistApiContractTest` ·
+      `ArtistControllerSliceTest` · `AdminRoleEnforcementIntegrationTest` ·
+      `ArtistAndPostFlowE2ETest` / `E2ETestFixtures` (필수 필드라 전부 컴파일/실행이 깨진다).
+- [ ] **프런트 2줄** — `entities/artist/types.ts` 의 `Artist` 에 `accountId` 추가 +
+      `artists/[id]/page.tsx:30` 을 `artist.accountId` 로. 사유는 위 § 2회차 발견.
 - [ ] **AC-6** — artist-service `/internal/**` Order(1) 보안 체인 **신설**(현재 `internal`
       참조 **0건** — 두 번째 인스턴스가 아니라 신설이다) + `InternalArtistController` +
       community `ArtistAccountChecker` 포트/HTTP 어댑터 + `FollowArtistUseCase` 배선.
@@ -420,7 +461,8 @@ AC-5 의 *"풀렸다면"* 은 조건부로 옳게 쓰였고, **그 조건의 주
 
 - [x] 결정 — `ADR-MONO-059` ACCEPTED — A (2026-08-07)
 - [x] 이음매 결정 — `ADR-004` ACCEPTED — A, 동기 internal 엔드포인트 (2026-08-11)
-- [ ] 계약 선갱신 — `specs/contracts/http/` 에 artist-service internal 엔드포인트 (코드보다 먼저)
+- [x] 계약 선갱신 (코드보다 먼저) — 1/2 internal 엔드포인트 · 2/2 `POST /api/artists`
+      `accountId` + `data-model.md` (2026-08-11)
 - [ ] 스키마(`artists.account_id`) + 온보딩 구현
 - [ ] AC-6 조인 검증(무검증 저장 제거) + fail-closed 단언
 - [ ] AC-7 e2e 탈출구 rider 에 명시적으로 답하고 기록

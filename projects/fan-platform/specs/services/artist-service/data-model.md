@@ -1,7 +1,8 @@
 # artist-service — Data Model
 
 > Persistent schema declared by Flyway in
-> `apps/artist-service/src/main/resources/db/migration/artist/V1__init.sql`.
+> `apps/artist-service/src/main/resources/db/migration/artist/` (`V1__init.sql`
+> onward; `account_id` arrives in V3 — see § V3 backfill obligation below).
 > JPA entities under `adapter/out/persistence/` mirror this schema; the domain
 > aggregates (`domain/{artist,group,fandom}`) are framework-free.
 
@@ -15,6 +16,7 @@
 |---|---|---|
 | `id` | VARCHAR(36) PK | UUID v7 (TASK-MONO-025 머지 완료, BaseEventPublisher) |
 | `tenant_id` | VARCHAR(64) NOT NULL | `fan-platform` v1; isolation key |
+| `account_id` | VARCHAR(36) NOT NULL | IAM subject that authors as this artist (V3 — `TASK-FAN-BE-045`, `ADR-MONO-059` A). Same width as `posts.author_account_id` / `follows.artist_account_id` in `fanplatform_community` — the two sides of the feed join |
 | `artist_type` | VARCHAR(20) NOT NULL | `SOLO` / `GROUP_MEMBER` |
 | `status` | VARCHAR(20) NOT NULL | `DRAFT` / `PUBLISHED` / `ARCHIVED` |
 | `stage_name` | VARCHAR(120) NOT NULL | UNIQUE within tenant |
@@ -33,10 +35,32 @@
 - `ck_artists_artist_type CHECK (artist_type IN ('SOLO','GROUP_MEMBER'))`
 - `ck_artists_status CHECK (status IN ('DRAFT','PUBLISHED','ARCHIVED'))`
 - `uq_artists_tenant_stage_name UNIQUE (tenant_id, stage_name)` ← edge case guard
+- `uq_artists_tenant_account_id UNIQUE (tenant_id, account_id)` ← one account authors
+  as at most one artist per tenant (V3); violation → 409 `ARTIST_ACCOUNT_CONFLICT`
 
 **Indexes**:
 - `idx_artists_tenant_status_stage_name (tenant_id, status, stage_name)` — directory listing
 - `idx_artists_tenant_type_status (tenant_id, artist_type, status)` — type filter
+- the `account_id` lookup behind `GET /internal/artists/exists` is served by
+  `uq_artists_tenant_account_id` — no separate index
+
+#### V3 — `account_id` backfill obligation
+
+`account_id` is `NOT NULL`, so V3 must leave no NULL and cause no unique
+collision. Both are provable, not hoped for:
+
+- **No NULL can survive** — V3 adds the column nullable, sets
+  `account_id = id` for every existing row, then applies `SET NOT NULL`. `id` is
+  `PRIMARY KEY`, hence never NULL, so the update assigns a value to every row.
+- **No collision is possible** — `id` is the primary key and therefore unique
+  across the whole table, so the backfilled `(tenant_id, account_id)` pairs are
+  distinct a fortiori. A tighter key cannot collide where a looser one does not.
+- **Why identity and not NULL/placeholder** — the demo seed already writes the
+  artist *entity* id into both sides of the join in `fanplatform_community`
+  (`follows.artist_account_id` via the API, `posts.author_account_id` direct-DB).
+  Identity is the only backfill under which `TASK-FAN-BE-045` AC-6 does not start
+  rejecting the demo's own follow calls. 🔴 The value is **not** a real IAM
+  subject — see `specs/contracts/http/artist-api.md` § `accountId`.
 
 ### `artist_groups`
 
