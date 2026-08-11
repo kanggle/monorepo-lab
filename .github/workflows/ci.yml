@@ -1194,24 +1194,28 @@ jobs:
           done
           echo "checked ${#files[@]} script(s) under infra/demo/"
 
-      # TASK-MONO-520 AC-2 — MEASUREMENT, NOT A GATE (one-shot, removed once read).
-      # The ticket forbids switching shellcheck on before knowing what it says on
-      # the current tree: a guard that is red on day one gets switched off, and a
-      # switched-off job reports its skip as green (TASK-MONO-360). shellcheck is
-      # not installed on the author's host and the docker daemon was down, so the
-      # count is taken here, once, and the decision recorded in the ticket.
-      - name: shellcheck finding count (measurement for TASK-MONO-520 AC-2 — non-gating)
-        run: |
-          set -uo pipefail
-          sudo apt-get install -y shellcheck >/dev/null 2>&1 || true
-          shellcheck --version || { echo "shellcheck unavailable — AC-2 unmeasured"; exit 0; }
-          mapfile -t files < <(find infra/demo -type f -name '*.sh' | sort)
-          shellcheck -f gcc "${files[@]}" > /tmp/sc.txt 2>&1 || true
-          echo "total findings: $(wc -l < /tmp/sc.txt)"
-          echo "--- by severity ---"
-          grep -oE ' (error|warning|note|style):' /tmp/sc.txt | sort | uniq -c || true
-          echo "--- first 30 ---"
-          head -30 /tmp/sc.txt || true
+      # TASK-MONO-520 AC-2 — shellcheck is deliberately NOT enabled here, and the
+      # decision was measured rather than assumed. A one-shot non-gating step ran
+      # it on this very job (run 31478823405) and reported, over all 16 scripts:
+      #
+      #   total 27  =  21 note + 6 warning + 0 error
+      #
+      # Non-zero, so enabling it would be red on day one — and a guard that is red
+      # on day one gets switched off, after which its skip reports green
+      # (TASK-MONO-360). That is the failure this whole ticket exists to end, so
+      # reproducing it to gain a nicer-sounding check would be self-defeating.
+      #
+      # The distribution says the findings are mostly structural, not defects:
+      # SC2034 "appears unused" x5 of the 6 warnings, all in projects.sh / lib.sh,
+      # which are SOURCED libraries — their variables are consumed by the sourcing
+      # script, which shellcheck cannot see without following sources. SC1091
+      # ("Not following: ./demo.env") x4 is the same blindness. HYPOTHESIS worth a
+      # follow-up, not a claim: `shellcheck -x` would resolve most of these. It was
+      # not run, so the number above is for plain shellcheck only.
+      #
+      # One finding is a genuine (minor) smell and is left alone here because this
+      # ticket fixes the guard, not the seeds: lib.sh:146 SC2155 (declare and
+      # assign separately to avoid masking return values).
 
       # TASK-MONO-366 — demo-boot.sh must be safe OFF AWS. The link-local
       # metadata address is a routing black hole outside EC2, so an unbounded
