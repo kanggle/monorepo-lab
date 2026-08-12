@@ -37,6 +37,12 @@ dependencies {
     testImplementation 'org.testcontainers:postgresql:1.21.3'
     testImplementation 'org.testcontainers:kafka:1.21.3'
     testImplementation 'com.redis:testcontainers-redis:2.2.2'
+    // TASK-FAN-INT-005: `auth_db` for the iam auth-service container (the
+    // workload-identity token source). The JDBC driver is required, not optional —
+    // MySQLContainer extends JdbcDatabaseContainer and its readiness probe opens a
+    // real connection, so without the driver the container never reports started.
+    testImplementation 'org.testcontainers:mysql:1.21.3'
+    testImplementation 'com.mysql:mysql-connector-j:9.1.0'
 
     // Awaitility for outbox -> Kafka eventual-consistency assertions
     testImplementation 'org.awaitility:awaitility:4.2.2'
@@ -101,13 +107,18 @@ def baseE2eConfig = { Test t ->
     t.dependsOn ':projects:fan-platform:apps:gateway-service:bootJar'
     t.dependsOn ':projects:fan-platform:apps:community-service:bootJar'
     t.dependsOn ':projects:fan-platform:apps:artist-service:bootJar'
+    // TASK-FAN-INT-005: iam's auth-service is this stack's workload-identity token
+    // source, so the local-dev ImageFromDockerfile fallback needs its jar as well.
+    // CI excludes it the same way as the other three (`-x …:bootJar`).
+    t.dependsOn ':projects:iam-platform:apps:auth-service:bootJar'
 
     // Forward pre-built image names when set by CI. Local dev (without these
     // properties) falls back to ImageFromDockerfile in FanPlatformE2ETestBase.
     [
         'fan.e2e.gatewayImage',
         'fan.e2e.communityImage',
-        'fan.e2e.artistImage'
+        'fan.e2e.artistImage',
+        'fan.e2e.iamImage'
     ].each { prop ->
         def val = System.getProperty(prop)
         if (val) t.systemProperty prop, val

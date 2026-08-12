@@ -216,6 +216,23 @@ C 는 정직하지만 `ADR-MONO-059` 의 A 를 실질적으로 되돌린다. 소
 기록한다.** 조용히 membership 의 `AlwaysAllowMembershipChecker` 를 복사하는 것은 답이
 아니라 **드라이버 3 위반**(검증을 넣고도 꺼진 채 초록)이다.
 
+#### rider 의 답 — 두 번 기록된다
+
+| 시점 | 답 | 사유 |
+|---|---|---|
+| `TASK-FAN-BE-045` (2026-08-11) | **탈출구를 둔다, 기본값은 거부 쪽** | live-trio e2e 에 **iam 이 없어** `client_credentials` 토큰 자체를 만들 수 없다 ⇒ 탈출구가 없으면 모든 팔로우가 fail-closed 로 닫혀 `ArtistAndPostFlowE2ETest` 가 RED. 진짜 checker 를 `@ConditionalOnMissingBean` 폴백으로 둬 **예상 못 한 설정은 전부 검증 ON** 으로 떨어지게 했다(드라이버 3 준수) |
+| `TASK-FAN-INT-005` (2026-08-12) | **🔴 탈출구를 두지 않는다 — 삭제** | 위 사유가 **소멸**했다. `FanPlatformE2ETestBase` 가 iam 의 auth-service + MySQL 을 함께 띄우고 community 가 **실제 토큰**을 발급받는다 ⇒ ADR 이 애초에 권고한 *"탈출구를 두지 않는다"* 가 이제 **가능**하다. `UnverifiedArtistAccountChecker` · `community.artist-service.enabled` · e2e env 전부 제거 |
+
+🔴 **이 표가 두 행인 것이 요점이다.** 첫 답은 틀리지 않았다 — 그 시점의 스택에서 가능한
+유일한 답이었다. 바뀐 것은 결정이 아니라 **결정을 강제하던 조건**이고, 조건이 사라졌으면
+그 조건이 사 온 면제도 회수하는 것이 규율이다. 남겨 두면 다음 사람은 그것을 *정책*으로
+읽는다.
+
+🔵 membership 쪽 탈출구(`community.membership-service.enabled`)는 **그대로 남는다** —
+같은 "iam 부재" 로 묶이지 않기 때문이다. 그쪽을 지우려면 membership-service 와 함께
+**ACTIVE 멤버십 행**이 필요하고, 그 행은 제품상 PortOne 결제(빌링키)를 거치는 가입 경로로만
+생긴다. `TASK-FAN-INT-006` 이 소유한다.
+
 ### ACCEPT 가 인가하는 것 / 하지 않는 것
 
 인가되는 것은 `TASK-FAN-BE-045` AC-6 의 **착수**뿐이다. 계약(`specs/contracts/http/`)은

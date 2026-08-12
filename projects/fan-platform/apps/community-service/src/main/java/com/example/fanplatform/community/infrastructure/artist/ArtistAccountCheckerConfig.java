@@ -4,7 +4,6 @@ import com.example.fanplatform.community.domain.follow.ArtistAccountChecker;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -17,45 +16,44 @@ import java.time.Duration;
  * Wires the {@link ArtistAccountChecker} bean — the follow-target validation
  * TASK-FAN-BE-045 AC-6 requires and {@code ADR-004} (ACCEPTED — A) shaped.
  *
- * <h2>AC-7 — the rider {@code ADR-004}'s ACCEPT left open, answered explicitly</h2>
+ * <h2>The e2e escape hatch is GONE (TASK-FAN-INT-005)</h2>
  *
- * The ADR asked whether this seam gets an e2e opt-out, and named two acceptable
- * answers: <em>no hatch</em>, or <em>a hatch whose default is the refusing side</em>.
- * <strong>The answer is the second one</strong>, and it changed during
- * implementation because the first premise did not survive measurement.
+ * {@code ADR-004}'s ACCEPT left a rider: does this seam get an e2e opt-out? It named
+ * two acceptable answers — <em>no hatch</em>, or <em>a hatch whose default is the
+ * refusing side</em> — and TASK-FAN-BE-045 chose the second, for a reason it had to
+ * correct mid-implementation. The reason was never that artist-service was missing
+ * (it was in the trio all along); it was that the trio had <b>no IAM</b>, so no
+ * {@code client_credentials} token could be minted at all and a hatchless check
+ * would fail closed on every follow — a fail-closed outage wearing a security
+ * control's clothes.
  *
- * <p>The ticket's own note argued for "no hatch" on the grounds that
- * {@code MembershipCheckerAutoConfig} only needs its switch because
- * membership-service is absent from the v1 live-trio e2e — while artist-service
- * <em>is</em> in that trio. That measured the wrong thing.
- * {@code FanPlatformE2ETestBase} states the actual reason: the trio omits
- * membership-service <b>and iam, "the workload-identity token source"</b>. What
- * the hatch protects is not the callee's presence but the ability to mint a
- * {@code client_credentials} token at all. With no iam in the trio there is no
- * token, so a hatchless check would fail closed on every follow and take
- * {@code ArtistAndPostFlowE2ETest}'s follow step (which asserts 201) red — a
- * fail-closed outage wearing a security control's clothes.
+ * <p><strong>That condition no longer holds.</strong> {@code FanPlatformE2ETestBase}
+ * now boots iam's auth-service and MySQL alongside the fan services, community mints
+ * a real token, and the suite exercises this gate for real. The permissive bean and
+ * the {@code community.artist-service.enabled} property are therefore deleted: the
+ * answer to ADR-004's rider is now <b>no hatch</b> — the option the ADR preferred
+ * in the first place, unavailable until the stack could support it.
  *
- * <p>So: {@code community.artist-service.enabled}, <b>default validate</b>. The
- * permissive path is {@link UnverifiedArtistAccountChecker}, reachable only by the
- * value {@code false} ({@code havingValue} compares case-insensitively, so
- * {@code FALSE} counts too — pinned as its own test case rather than assumed).
+ * <p>🔴 The {@code community.artist-service.*} prefix survives below for
+ * {@code scope} / {@code base-url} / timeouts, and that is deliberate — those are
+ * ordinary configuration. What is gone is the <em>enabled</em> key. No value of
+ * anything selects a permissive checker, and
+ * {@code ArtistAccountCheckerConfigTest} asserts that twice over: behaviourally
+ * (every value of the old key still yields the real checker) and structurally (this
+ * class declares exactly one {@code ArtistAccountChecker} {@code @Bean} method, so
+ * an opt-out reintroduced behind a <em>different</em> key fails too).
  *
- * <p>🔴 Deliberately the <b>inverse</b> of the {@code AlwaysAllowMembershipChecker}
- * shape. There, the permissive bean is the {@code @ConditionalOnMissingBean}
- * fallback, so anything unanticipated lands on the permissive side and the gate
- * ships silently off ({@code ADR-004} § Decision Drivers 3). Here the <em>real</em>
- * checker is the fallback and the permissive one carries the explicit condition,
- * so every accident lands on validation-ON. {@code ArtistAccountCheckerConfigTest}
- * pins that: flipping it fails a test, not a demo.
- *
- * <p>The durable fix is to put iam in the live trio so no service needs a hatch to
- * be end-to-end tested. That is a separate task (it changes the trio's shape for
- * membership too), named here rather than smuggled in.
+ * <p>🔵 Contrast with the sibling {@code MembershipCheckerAutoConfig}, whose switch
+ * is still live: there the permissive bean is the {@code @ConditionalOnMissingBean}
+ * fallback, so anything unanticipated lands on the permissive side and the gate can
+ * ship silently off ({@code ADR-004} § Decision Drivers 3). Removing that one needs
+ * membership-service <em>and</em> an ACTIVE membership row, which the product creates
+ * only through the PortOne-backed subscribe flow — a materially bigger job, split out
+ * as TASK-FAN-INT-006 rather than assumed to be the same size as this one.
  *
  * <p>Tests that need a deterministic verdict override this bean with a
  * {@code @Primary @TestConfiguration} — the same seam the membership gate's tests
- * use — rather than by flipping the production switch.
+ * use. That was always the supported way; it is now the only way.
  *
  * <h2>Why its own token provider</h2>
  *
@@ -71,42 +69,23 @@ import java.time.Duration;
 public class ArtistAccountCheckerConfig {
 
     /**
-     * The explicit opt-out, declared <b>first</b> so the fallback below can back
-     * off from it. Bound to {@code havingValue="false"} — only that exact string
-     * reaches this bean.
-     */
-    @Bean
-    @ConditionalOnProperty(name = "community.artist-service.enabled", havingValue = "false")
-    public ArtistAccountChecker unverifiedArtistAccountChecker() {
-        return new UnverifiedArtistAccountChecker();
-    }
-
-    /**
-     * Production {@link ArtistAccountChecker} — <b>the fallback, on purpose</b>.
+     * The one and only {@link ArtistAccountChecker} — TASK-FAN-INT-005 deleted the
+     * opt-out bean that used to be declared above it.
      *
-     * <p>The safe bean is the {@code @ConditionalOnMissingBean} one and the
-     * permissive bean carries the explicit condition. That inversion is the whole
-     * design: whatever the configuration does that nobody anticipated — property
-     * absent, {@code enabled=TRUE}, {@code =1}, {@code =yes}, a misspelled key —
-     * lands here, with validation ON. The {@code AlwaysAllowMembershipChecker}
-     * shape has it the other way round, so its accidents land on the permissive
-     * side ({@code ADR-004} § Decision Drivers 3).
+     * <p>{@code @ConditionalOnMissingBean} is <b>kept</b>, and not because a
+     * production alternative might appear. It is the seam integration tests use to
+     * substitute a deterministic verdict ({@code @Primary @TestConfiguration}), and
+     * with the property gone it is now the only way to do that. It also keeps the
+     * safe bean on the fallback side, so any future contribution that fails to
+     * register still lands on validation-ON rather than on nothing.
      *
-     * <p>🔴 The first attempt wrote {@code @ConditionalOnProperty(havingValue="true",
-     * matchIfMissing=true)} here. {@code matchIfMissing} only applies when the
-     * property is <em>absent</em>, so a present-but-other value
-     * ({@code enabled=no}) matched <b>neither</b> bean: zero
-     * {@code ArtistAccountChecker} beans and community-service refusing to start.
-     * {@code ArtistAccountCheckerConfigTest} caught it. The gate never opened —
-     * but a deployer typing {@code TRUE} into
-     * {@code COMMUNITY_ARTIST_SERVICE_ENABLED} bricked the service, which is not a
-     * trade this switch is worth.
-     *
-     * <p>Bean order is load-bearing and deterministic: {@code @Bean} methods within
-     * one {@code @Configuration} class are processed top-to-bottom, so this
-     * condition always evaluates after the opt-out above has had its chance —
-     * the same reasoning {@code MembershipCheckerAutoConfig} documents, applied to
-     * the opposite pair.
+     * <p>🔴 History worth keeping, because the shape looks arbitrary otherwise: the
+     * first attempt wrote {@code @ConditionalOnProperty(havingValue="true",
+     * matchIfMissing=true)} here. {@code matchIfMissing} applies only when the
+     * property is <em>absent</em>, so a present-but-other value ({@code enabled=no})
+     * matched <b>neither</b> bean — zero {@code ArtistAccountChecker} beans and
+     * community-service refusing to start. The gate never opened, but a deployer
+     * typing {@code TRUE} would have bricked the service.
      */
     @Bean
     @ConditionalOnMissingBean(ArtistAccountChecker.class)

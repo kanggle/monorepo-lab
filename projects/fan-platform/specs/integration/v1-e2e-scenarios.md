@@ -38,15 +38,56 @@ test can. Per portfolio demo intent, GREEN here is the green light for
    `fan-e2e-kafka:9095` (the default `:9092` listener advertises
    `localhost:MAPPED_PORT` which is unreachable from inside other
    containers — same trick as the wms-platform e2e harness).
-4. **JWKS stand-in** — a `MockWebServer` running in the host JVM, bound to
+4. **MySQL 8** (`mysql:8.0`) — `auth_db` for the iam container below
+   (TASK-FAN-INT-005). Its own engine rather than a schema on the Postgres
+   above: iam is a MySQL lane and its Flyway migrations are MySQL dialect.
+5. **JWKS stand-in** — a `MockWebServer` running in the host JVM, bound to
    `0.0.0.0:<ephemeral>`. Each service container reaches it via
    `host.docker.internal:<port>` (added with `withExtraHost(...)`).
-5. **artist-service** — pre-built image (CI: tagged `fan-platform-artist-service:e2e`,
+6. **iam auth-service** (TASK-FAN-INT-005) — pre-built image (CI:
+   `iam-auth-service:e2e` via `-Dfan.e2e.iamImage`) or `ImageFromDockerfile`
+   (local). Listens on `8081`, runs under iam's own `e2e` Spring profile, and is
+   the stack's **workload-identity token source**. See *Two token planes* below.
+7. **artist-service** — pre-built image (CI: tagged `fan-platform-artist-service:e2e`,
    passed via `-Dfan.e2e.artistImage`) or `ImageFromDockerfile` (local).
-6. **community-service** — same dual path.
-7. **gateway-service** — same dual path; receives a `SPRING_APPLICATION_JSON`
+8. **community-service** — same dual path.
+9. **gateway-service** — same dual path; receives a `SPRING_APPLICATION_JSON`
    override that injects two `RewritePath` filters (see
    *Production routing bug — known issue* below).
+
+> 🔴 **DNS aliases are load-bearing.** iam's production `ENTRYPOINT` blocks on
+> `getent hosts mysql && getent hosts kafka && getent hosts redis` before it
+> execs the JVM (iam's Dockerfile, TASK-BE-048 — it exists so Hikari and Flyway
+> never cache a negative lookup at startup). Those names are hard-coded, so the
+> MySQL / Kafka / Redis containers each carry a **second** network alias matching
+> them. Without it the iam container waits forever and the failure presents as an
+> ordinary startup timeout with no Spring log to read.
+
+### Two token planes (TASK-FAN-INT-005)
+
+The stack signs **end-user** tokens with the host-side JWKS stand-in and
+**workload** (`client_credentials`) tokens with the real iam. Both are RS256 and
+neither shares a key with the other.
+
+| plane | issuer | signed by | validated by |
+|---|---|---|---|
+| end-user | `http://iam.local` (`JwtTestHelper.SAS_ISSUER`) | `JwksMockServer`'s in-JVM keypair | gateway / community / artist end-user decoders (`JWT_JWKS_URI`) |
+| workload | `http://fan-e2e-iam:8081` | iam's own SAS keypair | artist-service's `/internal/**` decoder (`INTERNAL_JWT_JWK_SET_URI` / `INTERNAL_JWT_ISSUER`) |
+
+This is expressible only because artist-service reads its internal decoder from
+its own `fanplatform.internal.jwt.*` keys rather than the end-user ones — keys it
+gained in the same change (they had existed only as `@Value` defaults, so the env
+names membership-service documents reached nothing on artist-service).
+
+**Why it matters.** Before this, community-service ran with
+`COMMUNITY_ARTIST_SERVICE_ENABLED=false` — the follow-target gate switched **off**
+for every e2e run. That switch is deleted. Every follow in this suite now goes
+through `HttpArtistAccountChecker` → a real token minted by iam for
+`community-service-client` (machine scope `artist.read`, IAM `V0032`) →
+artist-service's `/internal/artists/exists`.
+
+🔵 The **membership** gate is still stubbed (`COMMUNITY_MEMBERSHIP_SERVICE_ENABLED=false`),
+and for a different reason — see the note under *Scenario 4* and `TASK-FAN-INT-006`.
 
 ### JWT helper
 
