@@ -8,7 +8,7 @@ auth-service 의 dev 시드가 **V9000 대역**에 있어 이후의 모든 프�
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -329,10 +329,12 @@ DRIFT: exception '' in scripts/walkthrough-ledger-exceptions.txt carries no reas
 
 원인은 예외 파일이 아니라 **줄끝**이다. 이 저장소의 `.gitattributes` 는 `*.sh` 와
 `*.sql` 에만 LF 를 강제하고 `*.txt` 는 안 덮는다 ⇒ `core.autocrlf=true` 인 Windows
-클론에서 그 파일이 CRLF 로 체크아웃되고, 빈 줄이 `""` 로 도착해 `''` 케이스를
+클론에서 그 파일이 CRLF 로 체크아웃되고, 빈 줄이 `"
+"` 로 도착해 `''` 케이스를
 빠져나가 "사유 없는 예외" 로 오판된다. 저장된 blob 은 LF 라 **CI 는 영원히 초록**이다
 (main tip 에서 확인) — 즉 이 가드는 *푸시 전에 돌려 보는 사람*, 곧 그 가드의 대상
-독자에게만 RED 였다. 한 줄(`line="${line%$''}"`)로 고쳤고, 사유 필수 네거티브가
+독자에게만 RED 였다. 한 줄(`line="${line%$'
+'}"`)로 고쳤고, 사유 필수 네거티브가
 여전히 무는지 확인했다(사유 없는 예외 한 줄 추가 → RED, 제거 → GREEN).
 
 🔴 `.gitattributes` 를 고치지 않고 **스크립트**를 고른 이유: 전자는 재체크아웃이 있어야
