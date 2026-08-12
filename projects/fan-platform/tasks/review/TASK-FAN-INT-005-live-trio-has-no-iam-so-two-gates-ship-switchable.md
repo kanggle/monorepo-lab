@@ -121,9 +121,9 @@ live-trio 가 iam 을 포함해 **워크로드 토큰을 실제로 발급**하�
       `ArtistAccountCheckerConfigTest`/`MembershipCheckerAutoConfigTest` 의 "껐을 때" 케이스는
       **삭제가 아니라 반전**시킬 것 — 지우면 아무도 그 축을 다시 안 본다
       → 반전 2건 + **구조 단언 1건 신설**. § AC-3 bite 결과
-- [ ] **AC-4 (e2e 가 느려지는 대가를 잰다)** — iam 추가 전후 live-trio 잡의 벽시계를
+- [x] **AC-4 (e2e 가 느려지는 대가를 잰다)** — iam 추가 전후 live-trio 잡의 벽시계를
       기록한다. 🔴 크게 늘면 그 자체가 판단 재료다(`project_ci_wallclock_playbook`)
-      → before 는 § AC-4 에 기록. after 는 이 PR 의 CI 에서 채운다
+      → § AC-4. before ≈ 2m41s(n=3) / after 3m25s(n=2) ⇒ 델타 ≈ +44s, 상한 14m 대비 여유 10.5분
 
 ---
 
@@ -255,7 +255,43 @@ String artistAccountId = randomAccountId(); // followed via this id
 타임아웃은 10m → **14m**. 이건 기대치가 아니라 **상한**이다 — MySQL 첫 부팅과 Flyway 가
 iam 마이그레이션 전량을 재생하는 시간을 흡수하기 위한 것이고, 실제 델타는 아래가 말한다.
 
-**after** — (이 PR 의 CI 에서 채움)
+**after** — PR #3278:
+
+| 실행 | 벽시계 | 비고 |
+|---|---|---|
+| 2026-08-12 05:55:32→05:58:56 | 3m24s | 첫 런(RED) — **스택은 전부 떴다**, 실패는 팔로우 대상 선택 |
+| 2026-08-12 06:12:07→06:15:32 | **3m25s** | GREEN · 4/4 PASSED · **0 skipped** |
+
+**델타 ≈ +44s**(평균 대비). 🔴 그러나 이 숫자를 성질로 승격하지 않는다 — before 범위가
+2m14s~3m03s 이므로 **3m25s 는 before 의 가장 느린 표본보다 22초 위**일 뿐이고 after 는
+n=2 다. 지지되는 문장은 *"MySQL + SAS 한 대를 더 띄우는 값이 대략 1분 미만"* 까지다.
+컨테이너 기동 내역: MySQL **9.3s**, iam auth-service 는 Flyway 전량 재생을 포함해 기존
+기동 구간에 흡수됐다.
+
+14m 상한 대비 **여유 약 10.5분**. 상한을 다시 낮출지는 after 표본이 쌓인 뒤 판단.
+
+**부수 측정 — `Package boot jars (fan-platform)`** (jar 3개 → 4개):
+
+| | 벽시계 |
+|---|---|
+| before (n=4) | 58s · 70s · 74s · 64s (평균 ≈ 66s) |
+| after (n=1) | **58s** |
+
+측정 가능한 증가 **없음**. 🔴 n=1 이므로 "빨라졌다" 고는 말하지 않는다 — before 범위의
+하단과 같은 값이라는 것까지가 이 표본이 지지하는 전부다.
+
+**AC-1 실행 증거** — 초록 런에서 4건 전부 `PASSED`, `SKIPPED` 0:
+
+```
+ArtistAndPostFlowE2ETest > admin registers + publishes artist; fan follows, posts, reacts; … PASSED
+MultiTenantIsolationE2ETest > fan-platform tenant token -> gateway forwards to community-service (200) PASSED
+MultiTenantIsolationE2ETest > cross-tenant token (tenant_id=wms) -> 403 TENANT_FORBIDDEN PASSED
+MultiTenantIsolationE2ETest > unauthenticated request -> 401 UNAUTHORIZED PASSED
+```
+
+🔵 판정이 강한 형태인 이유: **같은 런 안에서** 등록된 계정 팔로우 = **201** 이고 미등록 계정
+팔로우 = **422** 다. 한쪽만으로는 못 가른다 — 전부 거부면 201 이 깨지고, 전부 허용이면 422 가
+깨진다. 둘이 동시에 성립해야만 게이트가 **판별하고 있다**는 뜻이다.
 
 ---
 
@@ -294,8 +330,8 @@ iam 마이그레이션 전량을 재생하는 시간을 흡수하기 위한 것�
 - [x] iam 이 스택에 들어가고 토큰이 실제로 발급됨 — 판정은 `fan-platform-e2e` GREEN
 - [x] 탈출구 삭제 + grep 잔존 0건(살아 있는 스위치 기준)
 - [x] 탈출구 부재를 단언하는 테스트 — 반전 2건 + 구조 단언 1건, **bite 로 물리는 것 확인**
-- [ ] 벽시계 전후 기록 — before 완료, after 는 CI 후
-- [ ] Ready for review
+- [x] 벽시계 전후 기록 — e2e 잡 + boot-jars 잡 양쪽
+- [x] Ready for review
 
 ---
 
