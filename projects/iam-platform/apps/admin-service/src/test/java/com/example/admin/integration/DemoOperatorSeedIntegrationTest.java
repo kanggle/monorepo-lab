@@ -68,7 +68,7 @@ class DemoOperatorSeedIntegrationTest extends AbstractIntegrationTest {
 
     /**
      * MUST equal the OIDC {@code sub} of the console login — the account UUID on the
-     * matching {@code iam}-tenant credential row (auth-service migration-dev V9001).
+     * matching {@code iam}-tenant credential row (auth-service migration-dev R__01).
      * Operator resolution has been account_id-ONLY since TASK-MONO-299, so a drifted
      * value here does not degrade: it fail-closes to 401.
      */

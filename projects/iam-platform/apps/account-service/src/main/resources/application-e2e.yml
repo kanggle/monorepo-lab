@@ -15,15 +15,41 @@ spring:
     # Flyway (matching the acme-corp production V0020 path) so account-service's
     # keystone reverse-lookup resolves their entitled_domains. NOT loaded in
     # production — these tenants never reach a real DB.
-    #   - V9001 globex-corp [scm,erp]  — TASK-MONO-160 (ADR-020 D4 A↔B switch)
-    #   - V9002 initech-corp [finance,wms] — TASK-MONO-207 (ADR-023 D2 proof)
-    # TASK-MONO-207: dev seeds use a high V9000+ band. The e2e timeline merges
-    # production db/migration + this dir under one version sequence; production
-    # grew a real V0021 (BE-341 status CHECK) that collided with the old globex
-    # V0021. The high band the (gapless) production timeline never reaches keeps
-    # them permanently decoupled.
+    #   - R__01 globex-corp [scm,erp]  — TASK-MONO-160 (ADR-020 D4 A↔B switch)
+    #   - R__02 initech-corp [finance,wms] — TASK-MONO-207 (ADR-023 D2 proof)
+    # TASK-MONO-207 put these seeds in a high V9000+ band because the e2e timeline
+    # merges production db/migration + this dir under ONE version sequence, and
+    # production grew a real V0021 (BE-341 status CHECK) that collided with the
+    # old globex V0021. The band solved that collision and created a worse one —
+    # see out-of-order below. TASK-MONO-524 replaced it with R__ (repeatable),
+    # which has no version at all: nothing to collide with, nothing to be out of
+    # order against, and it runs after every versioned migration by definition.
     locations: classpath:db/migration,classpath:db/migration-dev
     baseline-on-migrate: false
+    # TASK-MONO-524 — LEGACY TOLERANCE, scoped to the only profile that loads
+    # migration-dev. Until 2026-08-12 the seeds above were V9001…V9006; any
+    # database that applied them carries those rows in flyway_schema_history
+    # FOREVER, and 9006 stays the highest applied version. Every production
+    # migration added afterwards therefore resolves BELOW it = out-of-order,
+    # which Flyway rejects → the service does not start.
+    #
+    # 🔴 account_db has NOT crash-looped yet only because production is still at
+    # V0028 and 0028 was already applied. It dies the day V0029 lands — the same
+    # position auth_db was in on 2026-08-10, one migration before V0032 killed it.
+    # Fixing auth alone would have left this sibling to die on schedule.
+    #
+    # 🔴 Converting the files to R__ does NOT fix an existing database. Measured
+    # (TASK-MONO-524 § experiment B): with the V9xxx files gone, Flyway still
+    # refuses — the 9001…9006 HISTORY ROWS are what poison the ordering, and it
+    # silently classifies them as `future` rather than complaining about them.
+    #
+    # Compatibility shim with a stated sunset: once no database in circulation
+    # has a version >= 9000 row (recovery procedure in
+    # projects/iam-platform/docs/flyway-dev-seed-migrations.md) this becomes a
+    # no-op and can be deleted. Deliberately NOT in application.yml — production
+    # and the default profile never load migration-dev, never carry a V9000 row,
+    # and keep ordering as a hard invariant.
+    out-of-order: true
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
 

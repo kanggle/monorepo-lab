@@ -45,7 +45,7 @@ import { switchTenant } from '../fixtures/console-helpers';
  * exchange (claim → card is already proven by MONO-154 / MONO-158, so the cards
  * are not re-asserted here — avoids producer-health flakiness).
  *
- * Isolation: a DEDICATED tenant `initech-corp` ([finance,wms], Flyway-dev V9002
+ * Isolation: a DEDICATED tenant `initech-corp` ([finance,wms], Flyway-dev R__02
  * + seed.sql § 14 assignment) referenced by NO other spec, so the runtime
  * suspend/resume cannot race-break the fullyParallel acme/globex specs; finance
  * is always restored in `finally`, and the per-attempt baseline resume makes the

@@ -208,6 +208,12 @@ jobs:
       # in the walkthrough, or the guard/exception list itself. AND-ing with
       # code-changed would skip it on exactly the diffs it exists to police.
       walkthrough-ledger: ${{ steps.filter.outputs.walkthrough-ledger }}
+      # TASK-MONO-524: raw filter, NOT AND-combined with `code-changed`. The arrival
+      # path is a new `.sql` file under a service's db/ directory; whether that lands
+      # inside `code-changed` is incidental to the defect, and this guard is the only
+      # thing in the repo that can see it at all — no runtime test can, because CI
+      # always migrates a fresh volume where nothing is ever out of order.
+      dev-seed-band: ${{ steps.filter.outputs.dev-seed-band }}
       # TASK-MONO-461: raw filter, NOT AND-combined with `code-changed`. Two of this
       # guard's trigger paths are non-code: the spec (testing-strategy.md) being
       # weakened, and the guard script itself. AND-ing with code-changed would skip
@@ -538,6 +544,17 @@ jobs:
               - 'scripts/walkthrough-ledger-exceptions.txt'
               - 'tasks/**'
               - 'projects/*/tasks/**'
+            # TASK-MONO-524: a dev-only Flyway seed numbered ABOVE its production
+            # timeline makes every later production migration out-of-order, which
+            # Flyway rejects — the service then crash-loops on every host with an
+            # existing volume. auth-service did exactly that on 2026-08-11 and no
+            # test noticed, because CI migrates a FRESH volume where ordering is
+            # never violated. The guard therefore checks file placement, and the
+            # trigger has to be the migration directories themselves.
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            dev-seed-band:
+              - 'projects/*/apps/*/src/main/resources/db/**'
+              - 'scripts/check-dev-seed-migration-band.sh'
             # TASK-MONO-371: platform/contracts/jwt-standard-claims.md declares that
             # every access token MUST carry the claims it lists. It was missing four of
             # them — including tenant_id, which every gateway in the fleet rejects tokens
@@ -752,6 +769,21 @@ jobs:
 
       - name: Guard — every § 6 row whose ticket is done says so
         run: bash scripts/check-walkthrough-ledger-drift.sh
+
+  dev-seed-migration-band:
+    name: Dev Flyway seeds stay inside their production version range
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.dev-seed-band == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-dev-seed-migration-band.sh
+
+      - name: Guard — no dev seed numbered above its production timeline
+        run: bash scripts/check-dev-seed-migration-band.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-468/469 — .claude reference integrity guard (commands + agents).

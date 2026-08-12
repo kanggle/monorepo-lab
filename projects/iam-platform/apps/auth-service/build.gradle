@@ -86,7 +86,7 @@ dependencyManagement {
 // stays UP-TO-DATE, so the guard does not run and the job reports green over exactly
 // the drift it was written to detect.
 //
-// Measured, not assumed: mutating an account id in account-service's V9006 left
+// Measured, not assumed: mutating an account id in account-service's R__06 (then V9006) left
 // `:test` UP-TO-DATE and green; forced to re-run against the same tree it failed 3 of
 // 5 cases. Declaring the files as inputs makes the sibling edit invalidate the task.
 //
@@ -95,7 +95,7 @@ dependencyManagement {
 // does not wake this lane at all — no Gradle input can fix that. TASK-MONO-522 inherits
 // the question of where a cross-tree agreement guard should be scheduled.
 tasks.named('test') {
-    inputs.file(rootProject.file('projects/iam-platform/apps/account-service/src/main/resources/db/migration-dev/V9006__seed_fan_artist_accounts_and_artist_role.sql'))
+    inputs.file(rootProject.file('projects/iam-platform/apps/account-service/src/main/resources/db/migration-dev/R__06_seed_fan_artist_accounts_and_artist_role.sql'))
             .withPropertyName('fanArtistAccountSeed')
             .withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.file(rootProject.file('infra/demo/seed/seed-fan.sh'))

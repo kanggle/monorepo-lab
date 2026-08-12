@@ -49,7 +49,7 @@ import {
  * private docker-network remote address — stay in-range and are unaffected. The
  * whole workflow staying GREEN with the allowlist ON is itself the net-zero proof.
  *
- * Isolation: `ip-pilot-corp` (account-service Flyway-dev V9004) + the
+ * Isolation: `ip-pilot-corp` (account-service Flyway-dev R__04) + the
  * `ip-pilot-target` operator (seed.sql § 16) are referenced by NO other spec; the
  * target never logs in (no session). Every mutation is restored in `finally`, so
  * the suite-default `retries: 2` is safe.

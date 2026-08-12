@@ -99,6 +99,15 @@ fi
 declare -A exception_reason=()
 if [ -f "$EXCEPTIONS" ]; then
     while IFS= read -r line; do
+        # 🔴 TASK-MONO-524 (incidental): strip a trailing CR before anything else.
+        # This repo's .gitattributes forces LF for *.sh and *.sql but not *.txt, so on
+        # a Windows clone with core.autocrlf=true this file checks out CRLF. A blank
+        # line then arrives as "\r" — it does not match the '' case below, survives to
+        # the reason check, and the guard reports `exception '' carries no reason`.
+        # CI never sees it (Linux checkout = LF), so the failure is local-only: the
+        # guard is RED on the machine of anyone who runs it before pushing, which is
+        # exactly the audience it was written for.
+        line="${line%$'\r'}"
         case "$line" in ''|'#'*) continue ;; esac
         id="$(printf '%s' "$line" | awk '{print $1}')"
         reason="$(printf '%s' "$line" | sed -E 's/^[^#]*#[[:space:]]*//')"

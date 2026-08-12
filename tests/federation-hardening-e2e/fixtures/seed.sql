@@ -367,7 +367,7 @@ SELECT o.id, r.id, o.tenant_id, NOW(6), NULL
 -- assignment — to `initech-corp`, the dedicated tenant the
 -- subscription-plane-separation spec mutates at runtime. The matching
 -- account_db side (initech-corp tenant + [finance,wms] subscriptions) is seeded
--- by account-service Flyway-dev V9002 (present at startup, like globex V9001).
+-- by account-service Flyway-dev R__02 (present at startup, like globex R__01).
 --
 -- WHY this is the IAM-plane half of the D2 proof: this operator_tenant_assignment
 -- row is exactly what the assume-tenant exchange's D2 assignment gate checks. The
@@ -388,7 +388,7 @@ SELECT o.id, 'initech-corp', NOW(6), NULL, NULL
 -- TASK-MONO-210 — ADR-MONO-024 § 3.3 step 3 tenant-admin delegation proof.
 --
 -- This block is ADD-ONLY. It seeds, scoped to the DEDICATED `umbrella-corp`
--- tenant (account_db side = account-service Flyway-dev V9003), the two delegated
+-- tenant (account_db side = account-service Flyway-dev R__03), the two delegated
 -- administrators the proof logs in as, plus one throwaway target operator they
 -- manage:
 --
@@ -495,7 +495,7 @@ SELECT o.id, r.id, 'umbrella-corp', NOW(6), NULL
 --
 -- This block is ADD-ONLY. It seeds ONE throwaway target operator
 -- `ip-pilot-target`, scoped to the DEDICATED `ip-pilot-corp` tenant (account_db
--- side = account-service Flyway-dev V9004), which the proof assigns / unassigns
+-- side = account-service Flyway-dev R__04), which the proof assigns / unassigns
 -- to exercise the SOURCE_IP access condition (the 4th authorization gate on the
 -- admin mutation surface, ADR-026 D4 / TASK-BE-351).
 --
@@ -545,7 +545,7 @@ SELECT o.id, r.id, 'ip-pilot-corp', NOW(6), NULL
 -- federation-e2e proof (deterministic — unlike the global-clock TIME_WINDOW).
 --
 -- Two throwaway target operators scoped to the DEDICATED `ip-pilot-corp` tenant
--- (account_db V9004), the OBJECTS of a SUPER_ADMIN role mutation:
+-- (account_db R__04), the OBJECTS of a SUPER_ADMIN role mutation:
 --
 --   (a) `rt-protected-target`  — tags='protected' → a role/status/profile mutation
 --       on it is DENIED (403 ACCESS_CONDITION_UNMET) once the admin-service is
@@ -628,7 +628,7 @@ SELECT o.id, r.id, 'ip-pilot-corp', NOW(6), NULL
 -- ── M3.1 account_db — central identities registry + the co-holder's consumer account.
 --    One identity per customer-tenant operator-person (fixed UUIDs in the 'd' band
 --    paired with each principal's existing 'c'-band account_id). FK
---    fk_identities_tenant_id → tenants: acme-corp (V0020) and umbrella-corp (V9003)
+--    fk_identities_tenant_id → tenants: acme-corp (V0020) and umbrella-corp (R__03)
 --    are present at seed time (GAP/account-service Flyway done before phase 1.5).
 USE `account_db`;
 

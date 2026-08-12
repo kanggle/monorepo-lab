@@ -25,8 +25,8 @@ import org.junit.jupiter.api.Test;
  * foreign key and no other test compares</em>:
  *
  * <ol>
- *   <li>{@code auth-service migration-dev V9002} — the credential (who can log in),</li>
- *   <li>{@code account-service migration-dev V9006} — the account + the {@code ARTIST}
+ *   <li>{@code auth-service migration-dev R__02} — the credential (who can log in),</li>
+ *   <li>{@code account-service migration-dev R__06} — the account + the {@code ARTIST}
  *       grant (what the token will say), and</li>
  *   <li>{@code infra/demo/seed/seed-fan.sh} — {@code artists.id} / {@code account_id}
  *       (who the feed join thinks the author is).</li>
@@ -54,12 +54,12 @@ class FanArtistDemoSeedTest {
     private static final String FAN_TENANT = "fan-platform";
 
     private static final String CREDENTIAL_SEED =
-            "db/migration-dev/V9002__seed_fan_artist_credentials.sql";
+            "db/migration-dev/R__02_seed_fan_artist_credentials.sql";
 
     /** Sibling module — resolved from this module's directory (Gradle test workingDir). */
     private static final Path ACCOUNT_SEED = Path.of("..", "account-service", "src", "main",
             "resources", "db", "migration-dev",
-            "V9006__seed_fan_artist_accounts_and_artist_role.sql");
+            "R__06_seed_fan_artist_accounts_and_artist_role.sql");
 
     /**
      * Repo root, four levels up (auth-service → apps → iam-platform → projects).
@@ -68,17 +68,17 @@ class FanArtistDemoSeedTest {
     private static final Path FAN_DEMO_SEED = Path.of("..", "..", "..", "..",
             "infra", "demo", "seed", "seed-fan.sh");
 
-    /** V9002 tuples: ('<tenant>', '<accountId>', '<email>', '<hash>', ... */
+    /** R__02 tuples: ('<tenant>', '<accountId>', '<email>', '<hash>', ... */
     private static final Pattern CREDENTIAL_ROW = Pattern.compile(
             "\\(\\s*'([a-z-]+)'\\s*,\\s*'([0-9a-f-]{36})'\\s*,\\s*'([^']+)'\\s*,\\s*'(\\$argon2id\\$[^']+)'",
             Pattern.MULTILINE);
 
-    /** V9006 accounts tuples: ('<accountId>', '<identityId>', '<tenant>', '<email>', ... */
+    /** R__06 accounts tuples: ('<accountId>', '<identityId>', '<tenant>', '<email>', ... */
     private static final Pattern ACCOUNT_ROW = Pattern.compile(
             "\\(\\s*'([0-9a-f-]{36})'\\s*,\\s*'([0-9a-f-]{36})'\\s*,\\s*'([a-z-]+)'\\s*,\\s*'([^']+)'",
             Pattern.MULTILINE);
 
-    /** V9006 account_roles tuples: ('<tenant>', '<accountId>', '<roleName>', NULL, ... */
+    /** R__06 account_roles tuples: ('<tenant>', '<accountId>', '<roleName>', NULL, ... */
     private static final Pattern ROLE_ROW = Pattern.compile(
             "\\(\\s*'([a-z-]+)'\\s*,\\s*'([0-9a-f-]{36})'\\s*,\\s*'([A-Z][A-Z0-9_]*)'\\s*,\\s*NULL",
             Pattern.MULTILINE);
@@ -151,7 +151,7 @@ class FanArtistDemoSeedTest {
         assertThat(rows).hasSize(3);
         assertThat(rows).extracting(SeededCredential::tenantId).containsOnly(FAN_TENANT);
         // UNIQUE (tenant_id, email) since V0007 — and a shared email in one tenant would
-        // also collide with the demo consumer credential V9001 already seeds there.
+        // also collide with the demo consumer credential R__01 already seeds there.
         assertThat(rows).extracting(SeededCredential::email).doesNotHaveDuplicates();
         // credentials.account_id carries a GLOBAL unique index (V0001).
         assertThat(rows).extracting(SeededCredential::accountId).doesNotHaveDuplicates();
@@ -190,7 +190,7 @@ class FanArtistDemoSeedTest {
                     .as("account_id is the OIDC `sub`: a mismatch mints a token for an id "
                             + "no artists row points at, and the feed join silently empties")
                     .isEqualTo(credentialsByEmail.get(a.email()));
-            // V9005's rule, restated here because it is easy to "simplify" away: the
+            // R__05's rule, restated here because it is easy to "simplify" away: the
             // identity is a separate registry row, never the account id reused.
             assertThat(a.identityId()).isNotEqualTo(a.accountId());
         }

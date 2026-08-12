@@ -23,6 +23,28 @@ spring:
     # (application.yml = migration; application-e2e.yml = migration + migration-dev).
     locations: classpath:db/migration,classpath:db/migration-dev
     baseline-on-migrate: false
+    # TASK-MONO-524 — LEGACY TOLERANCE, scoped to the only profile that loads
+    # migration-dev. Until 2026-08-12 the dev seeds in that directory were
+    # V9001/V9002; any database that applied them carries those rows in
+    # flyway_schema_history FOREVER, and 9002 stays the highest applied version.
+    # Every production migration added afterwards therefore resolves BELOW it =
+    # out-of-order, which Flyway rejects → the service does not start. That is
+    # not a hypothetical: auth_db crash-looped on V0032 the day it landed.
+    #
+    # 🔴 Converting the files to R__ does NOT fix an existing database. Measured
+    # (TASK-MONO-524 § experiment B): with the V9xxx files gone, Flyway still
+    # refuses — the 9001/9002 HISTORY ROWS are what poison the ordering, and it
+    # silently classifies them as `future` rather than complaining about them.
+    # The defect lives in the history table, not in the file listing.
+    #
+    # So this flag is what actually lets an already-poisoned host boot. It is a
+    # compatibility shim with a stated sunset: once no database in circulation
+    # has a version >= 9000 row (see the recovery procedure in
+    # projects/iam-platform/docs/flyway-dev-seed-migrations.md), it becomes a
+    # no-op and can be deleted. It is deliberately NOT in application.yml —
+    # production and the default profile never load migration-dev, never carry
+    # a V9000 row, and keep ordering as a hard invariant.
+    out-of-order: true
   data:
     redis:
       host: ${REDIS_HOST:redis}
