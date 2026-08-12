@@ -279,13 +279,26 @@ class DelegationFactProjectionIntegrationTest extends AbstractReadModelIntegrati
     @Test
     void anotherTenantIsProjectedAndItsValueIsRecorded() throws Exception {
         String grantId = newId();
-        publish(TOPIC_DELEGATED, grantId, delegationEnvelopeWithTenant(grantId, "other-corp"));
+        try {
+            publish(TOPIC_DELEGATED, grantId, delegationEnvelopeWithTenant(grantId, "other-corp"));
 
-        await().atMost(Duration.ofSeconds(30)).untilAsserted(() ->
-                assertThat(delegationFactJpa.findById(grantId)).isPresent());
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT tenant_id FROM delegation_fact_proj WHERE grant_id = ?",
-                String.class, grantId)).isEqualTo("other-corp");
+            await().atMost(Duration.ofSeconds(30)).untilAsserted(() ->
+                    assertThat(delegationFactJpa.findById(grantId)).isPresent());
+            assertThat(jdbcTemplate.queryForObject(
+                    "SELECT tenant_id FROM delegation_fact_proj WHERE grant_id = ?",
+                    String.class, grantId)).isEqualTo("other-corp");
+        } finally {
+            // 🔴 This row MUST NOT outlive this test. `SingleTenantRatchetIntegrationTest`
+            // asserts a property of the WHOLE schema (distinct tenant_id == 1) against the
+            // same shared Testcontainers MySQL, so a foreign-tenant row left behind here
+            // reads to it exactly like erp having gone multi-tenant. That is not a
+            // hypothetical: the first version of this test had no cleanup, passed when run
+            // alone, and turned the ratchet RED in CI where the whole suite runs together —
+            // the ratchet caught a test artifact, which is the ratchet working, and the
+            // local runs that "verified" each test in isolation never composed them.
+            // In `finally` so a failing assertion above cannot poison a sibling class.
+            jdbcTemplate.update("DELETE FROM delegation_fact_proj WHERE grant_id = ?", grantId);
+        }
     }
 
     /**

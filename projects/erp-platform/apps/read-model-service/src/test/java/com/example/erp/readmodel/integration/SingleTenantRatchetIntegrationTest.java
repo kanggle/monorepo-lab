@@ -68,7 +68,12 @@ class SingleTenantRatchetIntegrationTest extends AbstractReadModelIntegrationTes
 
         assertThat(tenants)
                 .as("ADR-ERP-001 — D ratchet: distinct tenant_id >= 2 anywhere in erp is RED "
-                        + "and means Option B (multi-tenant promotion) must be reopened")
+                        + "and means Option B (multi-tenant promotion) must be reopened. "
+                        + "🔴 If this fires in CI but not when run alone, check first whether a "
+                        + "SIBLING test left a foreign-tenant row in this shared schema — that "
+                        + "is a test artifact, not erp going multi-tenant. "
+                        + "(DelegationFactProjectionIntegrationTest#anotherTenantIsProjected… "
+                        + "deletes its row in a finally block for exactly this reason.)")
                 .hasSize(1);
         assertThat(tenants.get(0))
                 .as("the projection must carry the grant's own tenant, not the column's "
