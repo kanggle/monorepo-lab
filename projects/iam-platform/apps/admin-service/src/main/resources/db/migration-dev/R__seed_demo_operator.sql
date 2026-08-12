@@ -6,6 +6,12 @@
 -- `demo@demo.com` becomes an operator whose home tenant is `demo-corp`
 -- (the all-five-domain tenant seeded by account-service migration-dev V9005).
 --
+-- TASK-MONO-519 added a SECOND operator (§5 at the bottom). The demo still has ONE
+-- login the interviewer types; the second identity is seed-driven and exists
+-- because ERP's Separation-of-Duties gate needs two distinct actors. Read §5 before
+-- concluding the two rows are a duplicate or that the asymmetry between them
+-- (`ecommerce` assignment on the first, none on the second) is an omission.
+--
 -- WHY REPEATABLE (R__) AND NOT A VERSIONED MIGRATION — this is load-bearing
 -- ---------------------------------------------------------------------------
 -- Unlike account-service, admin-service loads `db/migration-dev` in the DEFAULT
@@ -143,3 +149,67 @@ SELECT o.id, 'demo-corp', NOW(6), NULL, NULL
 INSERT IGNORE INTO operator_tenant_assignment (operator_id, tenant_id, granted_at, granted_by, permission_set_id)
 SELECT o.id, 'ecommerce', NOW(6), NULL, NULL
   FROM admin_operators o WHERE o.operator_id = 'demo-operator';
+
+-- ===========================================================================
+-- 5. THE SECOND OPERATOR (TASK-MONO-519) — `demo-requester`.
+--
+-- WHY A SECOND ONE EXISTS
+-- ---------------------------------------------------------------------------
+-- The ERP approval inbox is `approver_id = caller AND status IN (SUBMITTED,
+-- IN_REVIEW)` and `caller` is the JWT `sub` = the account UUID (TASK-MONO-515 /
+-- ADR-MONO-060). Separation of Duties is a CREATE-time gate, not a read filter
+-- (ApprovalRoute.multiStage → SelfApprovalGuard), so a request that lands in
+-- `demo-operator`'s inbox has to be submitted by a DIFFERENT identity. With one
+-- operator in demo-corp there was none, and the inbox was structurally 0 — the
+-- data gap TASK-MONO-515 uncovered under the token defect it fixed.
+--
+-- This identity is the SUBMITTER; `demo-operator` (demo@demo.com) stays the
+-- approver, because that is the account the interviewer actually logs into. The
+-- full reasoning, plus the link key it has to match, is in the auth-service
+-- credential seed `R__seed_demo_second_operator_credential.sql` — kept there rather
+-- than duplicated here so the two halves cannot drift into two explanations.
+--
+-- WHY NO `ecommerce` ASSIGNMENT (deliberate asymmetry — do not "fix" it)
+-- ---------------------------------------------------------------------------
+-- `demo-operator` has one because TASK-BE-576 measured a real symptom: the
+-- storefront writes under `tenant_id = 'ecommerce'`, so administering it from
+-- demo-corp returned 200 with totalElements 0 on five endpoints. That symptom
+-- needs a writer OUTSIDE the console, and this identity has none — it exists only
+-- to submit approval requests through seed-erp.sh, all of which are written and
+-- read inside demo-corp. Adding the row would put a second entry in this
+-- operator's tenant switcher to fix nothing that has been measured. Recorded
+-- because the asymmetry otherwise reads as an omission and gets re-investigated.
+--
+-- 🔵 SUPER_ADMIN is granted (below) for parity, not because the seed needs it:
+-- the assume-tenant exchange enforces only `status = 'ACTIVE'` and derives the
+-- ERP_OPERATOR role from demo-corp's entitlements. It is here so that logging in
+-- as this identity reaches the console shell rather than a broken half-screen.
+-- ===========================================================================
+INSERT INTO admin_operators (
+    operator_id, tenant_id, email, password_hash, display_name, status,
+    oidc_subject, created_at, updated_at, version
+) VALUES (
+    'demo-requester', 'demo-corp', 'requester@demo.com',
+    '$argon2id$v=16$m=65536,t=3,p=1$NR1Seql5fgXB0hQ7CmpFL6RyiXvL86lxeZCobfiBdRxzRlTkkcv6iIZDJq9eQ32QmKQMylwsG+IP25S1aaw9vw$kTFrCq8cQG4HVUKioosaD88eiXZkQesTp5Xc8yylaSM',
+    'Demo Requester', 'ACTIVE',
+    -- == credentials.account_id of the second `iam`-tenant row
+    -- (auth-service migration-dev R__seed_demo_second_operator_credential.sql,
+    --  repeatable for the ordering reason that file's header measures).
+    '0199de70-0000-7000-8000-00000000ad04',
+    NOW(6), NOW(6), 0
+)
+ON DUPLICATE KEY UPDATE
+    tenant_id    = VALUES(tenant_id),
+    oidc_subject = VALUES(oidc_subject),
+    status       = 'ACTIVE',
+    updated_at   = NOW(6);
+
+INSERT IGNORE INTO admin_operator_roles (operator_id, role_id, tenant_id, granted_at, granted_by)
+SELECT o.id, r.id, o.tenant_id, NOW(6), NULL
+  FROM admin_operators o
+  JOIN admin_roles r ON r.name = 'SUPER_ADMIN'
+ WHERE o.operator_id = 'demo-requester';
+
+INSERT IGNORE INTO operator_tenant_assignment (operator_id, tenant_id, granted_at, granted_by, permission_set_id)
+SELECT o.id, 'demo-corp', NOW(6), NULL, NULL
+  FROM admin_operators o WHERE o.operator_id = 'demo-requester';

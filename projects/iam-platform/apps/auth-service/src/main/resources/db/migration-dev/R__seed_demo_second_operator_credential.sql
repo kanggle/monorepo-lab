@@ -1,0 +1,106 @@
+-- !!! DEV/DEMO ONLY — never reaches production. !!!
+-- Loaded via spring.flyway.locations ONLY under the `e2e` profile
+-- (application-e2e.yml); application.yml pins the DEFAULT profile — which is what
+-- production runs, auth-service has no application-prod.yml — to db/migration alone.
+-- The demo stack gets this file because infra/demo/projects.sh hands the iam slug
+-- `docker-compose.e2e.yml` as well as the base file, and that overlay sets
+-- SPRING_PROFILES_ACTIVE=e2e (DemoSeedCredentialTest pins both halves).
+--
+-- TASK-MONO-519 — the SECOND console operator identity. `demo@demo.com` alone
+-- cannot close the ERP approval loop.
+--
+-- WHY A SECOND LOGIN EXISTS AT ALL (this is the whole ticket in one paragraph)
+-- ---------------------------------------------------------------------------
+-- The approval inbox is `approver_id = caller AND status IN (SUBMITTED, IN_REVIEW)`
+-- (ApprovalRequestJpaRepository.findInboxPending), and `caller` is the JWT `sub`,
+-- which TASK-MONO-515 / ADR-MONO-060 made the ACCOUNT UUID. Separation of Duties is
+-- enforced at CREATE time, not at read time: ApprovalRoute.multiStage runs
+-- SelfApprovalGuard.ensureNotSelfApproval(submitterId, approverId) for every stage.
+-- So a request that would land in `demo@demo.com`'s inbox must be SUBMITTED BY
+-- SOMEBODY ELSE — with one identity in `demo-corp` there is no such somebody, and
+-- the inbox is structurally 0. Seeding a row past the guard would be worse than the
+-- empty screen: the buttons would render and then refuse ("not the current stage").
+--
+-- WHY THE SEEDED IDENTITY IS THE SUBMITTER AND `demo@demo.com` IS THE APPROVER
+-- ---------------------------------------------------------------------------
+-- Either assignment closes the loop mechanically; only this one closes it for the
+-- INTERVIEWER. They log in as `demo@demo.com` (the single-identity demo charter),
+-- so that account has to be the one holding a non-empty inbox and clicking 승인.
+-- If it were the submitter instead, the pending item would sit in an account the
+-- interviewer never logs into and the screen they actually open would still be 0.
+-- The same choice is what makes the notification side right: RecipientResolver maps
+-- APPROVAL_SUBMITTED → approverId, so the in-app notification is also addressed to
+-- the account the interviewer is holding.
+--
+-- 🔵 The single-identity charter is intact. `demo@demo.com` / `Demo1234!` still logs
+-- in on all three surfaces and remains the ONLY credential the interviewer types.
+-- This one is seed-driven: infra/demo/seed/seed-erp.sh uses it to author the
+-- approval requests through the API rather than reaching into the database.
+-- (Same shape as the three artist logins in V9002 — TASK-MONO-512.)
+--
+-- 🔴 WHY REPEATABLE (R__) AND **NOT** THE V9000+ BAND ITS TWO SIBLINGS USE
+-- ---------------------------------------------------------------------------
+-- TASK-MONO-519 was written saying "add V9002" (by then taken) and, underneath that,
+-- assuming the V9000+ band was the right home because account-service uses it. It is
+-- not — and the cost is not hypothetical. Measured on this repo's own demo host
+-- while implementing this ticket:
+--
+--   auth_db (existing volume, last migrated 2026-08-05): applied … V0031, then V9001
+--   2026-08-11: TASK-FAN-BE-045 (#3270) adds V0032__grant_community_client_artist_read_scope
+--   → next boot: "Detected resolved migration not applied to database: 0032"
+--   → Flyway validate fails → auth-service CRASH-LOOPS. V9002 never applied either.
+--
+-- A dev seed in a high band is applied at 9001, so every LATER production migration
+-- resolves BELOW the highest applied version — out-of-order, which Flyway rejects by
+-- default (no `out-of-order: true` anywhere in this repo). auth-service's production
+-- timeline is contiguous and still growing, so this recurs on every future migration.
+-- admin-service's R__seed_demo_operator.sql header spells this reasoning out and
+-- chose R__ for exactly it; auth-service adopted the band anyway in TASK-BE-571.
+--
+-- A repeatable migration sidesteps the ordering question entirely: Flyway runs R__
+-- scripts AFTER all versioned ones and they take no part in version ordering, so no
+-- future production migration can be made out-of-order by this file. Re-running on
+-- checksum change is harmless because the statement below is INSERT IGNORE.
+--
+-- 🔵 This does NOT fix V9001/V9002 — they are already applied on real databases and
+-- renumbering them would change their checksums, i.e. trade one crash for another.
+-- That repair is TASK-MONO-524. This file just declines to add a third instance.
+--
+-- WHY tenant `iam`, AND WHY A NEW EMAIL
+-- ---------------------------------------------------------------------------
+-- `credentials` is UNIQUE (tenant_id, email) since V0007, and the console client
+-- `platform-console-web` resolves to tenant `iam` (V0024 renamed it from `gap`), so
+-- the second console login must live in `iam` and therefore needs its own email.
+-- It exists in exactly ONE tenant, so the scoped lookup hits and the cross-tenant
+-- fallback's fail-closed-on-ambiguity branch (TASK-BE-507 D1-a, documented in
+-- V9001) is never reached for it.
+--
+-- account_id is the OIDC `sub` (TenantClaimTokenCustomizer#alignSubToAccountId) and
+-- carries a GLOBAL unique index (V0001) — hence a distinct UUID, adjacent to the
+-- V9001 console row (…ad03) rather than derived from it. It is the link key
+-- `admin_operators.oidc_subject` must equal LITERALLY (operator resolution is
+-- account_id-only since TASK-MONO-299); a mismatch does not degrade, it fail-closes
+-- to a console 401 rendered as `operator_exchange_unavailable` — the SAME text a
+-- load-induced 5s timeout produces, so it reads as "the backend is slow".
+-- DemoSecondOperatorSeedTest compares the two files so that drift is a red test.
+--
+-- The password is the same `Demo1234!`, hence the same Argon2id digest as V9001/V9002
+-- — one published demo password, one hash literal, and the guard re-verifies it with
+-- the login path's own hasher on every build.
+--
+-- Idempotent: INSERT IGNORE (re-runs and pre-existing rows are a no-op) — which is
+-- also what makes R__ safe here.
+
+INSERT IGNORE INTO credentials (
+    tenant_id, account_id, email,
+    credential_hash, hash_algorithm, created_at, updated_at, version
+) VALUES
+-- console (second operator) — client `platform-console-web`, tenant `iam`.
+-- Seeds NO domain roles, exactly like the V9001 console row: a base operator token
+-- carries none, and the ERP_OPERATOR that lets this identity submit is derived at
+-- assume-tenant time from demo-corp's entitled domains (TASK-BE-376).
+(
+    'iam', '0199de70-0000-7000-8000-00000000ad04', 'requester@demo.com',
+    '$argon2id$v=16$m=65536,t=3,p=1$NR1Seql5fgXB0hQ7CmpFL6RyiXvL86lxeZCobfiBdRxzRlTkkcv6iIZDJq9eQ32QmKQMylwsG+IP25S1aaw9vw$kTFrCq8cQG4HVUKioosaD88eiXZkQesTp5Xc8yylaSM',
+    'argon2id', NOW(6), NOW(6), 0
+);
