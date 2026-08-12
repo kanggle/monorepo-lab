@@ -8,7 +8,7 @@ TASK-BE-579
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -173,7 +173,14 @@ SAS 가 `invalid_scope` 로 토큰을 거절하고 fan 의 checker 가 fail-clos
 - [x] AC-0 실측 기록 (+ 이 티켓 전제 1건 정정)
 - [x] 시드 클라이언트 토큰 발급 테스트(양성 + 음성 대조 + 기존 스코프 보존 + 시드 행/멱등)
 - [x] CI green (Testcontainers 레인에서 **실제 실행**됨을 확인 — SKIPPED 아님)
-- [ ] Ready for review
+- [x] Ready for review → **머지 완료 (impl PR [#3276](https://github.com/kanggle/monorepo-lab/pull/3276)
+      squash `1c369002d`, 2026-08-12).** 3차원 검증: `state=MERGED` · `origin/main` tip 일치 ·
+      머지 시점 failing 체크 **0**(9 pass · 30 skipping · 0 pending · `mergeStateStatus=CLEAN`),
+      그리고 **최종 커밋에서 `Integration (iam B, Testcontainers)` = pass**.
+      🔴 사람 리뷰는 없었다 — 소유자의 스탠딩 자동머지 승인(CI 완전 green)에 따른 self-merge 다.
+      `review/` 큐를 거치지 않고 `ready/ → done/` 로 닫는 이유가 그것이다.
+      🔵 이 PR 은 **첫 런이 의도적으로 RED** 였다(위 § 실제 실행 증명). 머지는 mutation 을
+      회수한 뒤의 초록 런에서만 했고, 위 스냅샷은 그 최종 커밋 기준이다.
 
 ---
 
