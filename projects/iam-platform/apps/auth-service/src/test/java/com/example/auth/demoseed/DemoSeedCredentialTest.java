@@ -53,7 +53,7 @@ class DemoSeedCredentialTest {
     private static final String DEMO_PASSWORD = "Demo1234!";
 
     private static final String CREDENTIAL_SEED =
-            "db/migration-dev/V9001__seed_demo_single_identity_credentials.sql";
+            "db/migration-dev/R__01_seed_demo_single_identity_credentials.sql";
     /** Sibling module — resolved from this module's directory (Gradle test workingDir). */
     private static final Path OPERATOR_SEED = Path.of("..", "admin-service", "src", "main",
             "resources", "db", "migration-dev", "R__seed_demo_operator.sql");

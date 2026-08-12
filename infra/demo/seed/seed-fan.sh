@@ -39,7 +39,7 @@
 #        · `TASK-FAN-BE-045` — `artists.account_id` 신설 + 항등 백필로 피드 조인
 #          (`posts.author_account_id` ⋈ `follows.artist_account_id`)의 양 끝을 정의상 일치.
 #        · `TASK-MONO-512` — 그 항등값을 **실재하는 IAM subject 로** 만들고(account-service
-#          migration-dev `V9006` 이 **바로 그 id 로** 계정을 만든다) `ARTIST` 역할을 부여.
+#          migration-dev `R__06` 이 **바로 그 id 로** 계정을 만든다) `ARTIST` 역할을 부여.
 #      ⇒ 아티스트는 이제 **자기 계정으로 로그인해서** 자기 글을 쓴다. 아래 2번이 그것이다.
 #
 # 🔴 왜 데모 사용자가 게이팅 대상 글을 쓰면 안 되는가 — 요구는 그대로, 이제 **충족된다**
@@ -70,7 +70,7 @@ DEMO_SUB="${DEMO_FAN_SUB:-0199de70-0000-7000-8000-00000000fa02}"
 # `WHERE NOT EXISTS` 로 자기 id 를 검사한다). 랜덤이면 멱등이 성립할 수 없다.
 #
 # 🔴 이 세 값은 **iam 의 계정 id 이기도 하다** (TASK-MONO-512). account-service
-# migration-dev `V9006` 이 정확히 이 id 로 `accounts` 행을, auth-service `V9002` 가
+# migration-dev `R__06` 이 정확히 이 id 로 `accounts` 행을, auth-service `R__02` 가
 # 같은 id 로 `credentials` 행을 만든다. 그래서 `artists.account_id`(= 엔티티 id, FAN-BE-045
 # 의 항등 백필)가 **로그인 가능한 진짜 subject** 가 된다. 세 파일이 어긋나면 아무것도
 # 실패하지 않고 피드만 조용히 빈다 ⇒ `FanArtistDemoSeedTest` 가 셋을 대조해 고정한다.
@@ -80,7 +80,7 @@ ARTIST_B="0199de80-0000-7000-8000-00000000a002"   # 디렉터리가 한 줄이 �
 ARTIST_C="0199de80-0000-7000-8000-00000000a003"   # 그룹 멤버 (artist_type=GROUP_MEMBER)
 GROUP_1="0199de80-0000-7000-8000-00000000b001"
 
-# 아티스트 로그인 — auth-service migration-dev V9002 의 이메일. 비밀번호는 데모와 같은
+# 아티스트 로그인 — auth-service migration-dev R__02 의 이메일. 비밀번호는 데모와 같은
 # `Demo1234!` 다(면접관이 타이핑하는 계정은 여전히 demo@demo.com 하나 — 이쪽은 시드만 쓴다).
 ARTIST_A_EMAIL="${DEMO_FAN_ARTIST_A_EMAIL:-lumi@demo.com}"
 ARTIST_B_EMAIL="${DEMO_FAN_ARTIST_B_EMAIL:-noah@demo.com}"
@@ -104,9 +104,9 @@ if container_up fan-platform-postgres; then
 -- posts.author_account_id 도 이제 API 발행 결과로. 다른 값을 넣으면 팔로우 검증(FAN-BE-045
 -- AC-6)이 이 시드 자신의 팔로우 호출을 거절한다.
 -- 🔵 TASK-MONO-512 이후 이 값은 **실재하는 IAM subject 다** — account-service migration-dev
--- V9006 이 바로 이 id 로 계정을, auth-service V9002 가 자격증명을 만든다. 그래서 아래 2번이
+-- R__06 이 바로 이 id 로 계정을, auth-service R__02 가 자격증명을 만든다. 그래서 아래 2번이
 -- 아티스트 **본인 로그인**으로 글을 발행할 수 있다. (재지정이 아니라 그 id 를 실재화한 이유는
--- V9006 헤더에 있다: 이미 시드된 데모 DB 의 follows/posts 가 옛 값을 들고 있기 때문이다.)
+-- R__06 헤더에 있다: 이미 시드된 데모 DB 의 follows/posts 가 옛 값을 들고 있기 때문이다.)
 INSERT INTO artists (id, tenant_id, account_id, artist_type, status, stage_name, real_name, debut_date, agency, bio, created_at, updated_at, published_at, version)
 SELECT '$ARTIST_A', '$TENANT', '$ARTIST_A', 'SOLO', 'PUBLISHED', '루미', '김하늘', DATE '2021-03-14', 'Aurora Entertainment',
        E'2021년 데뷔한 솔로 아티스트입니다. 어쿠스틱 기반의 자작곡을 주로 발표합니다.\n\n데모 데이터 — TASK-MONO-509',
@@ -217,16 +217,16 @@ seed_as_artist() { # <라벨> <email> <기대 account_id>
   local who="$1" email="$2" expected="$3" token sub
   token="$(artist_token_for "$email")"
   if [ -z "${token:-}" ]; then
-    seed_fail "$who 토큰 발급 실패($email) — ARTIST_POST 를 시드하지 못했습니다. iam 의 migration-dev(auth V9002 · account V9006)가 로드됐는지 확인하십시오(e2e 프로파일 전용)"
+    seed_fail "$who 토큰 발급 실패($email) — ARTIST_POST 를 시드하지 못했습니다. iam 의 migration-dev(auth R__02 · account R__06)가 로드됐는지 확인하십시오(e2e 프로파일 전용)"
     return 1
   fi
   sub="$(jwt_sub "$token")"
   if [ "$sub" != "$expected" ]; then
-    seed_fail "$who 의 토큰 sub($sub) != 아티스트 엔티티 id($expected) — 이 계정으로 쓴 글은 팔로워 피드에 뜨지 않습니다(V9006 의 accounts.id 를 확인하십시오)"
+    seed_fail "$who 의 토큰 sub($sub) != 아티스트 엔티티 id($expected) — 이 계정으로 쓴 글은 팔로워 피드에 뜨지 않습니다(R__06 의 accounts.id 를 확인하십시오)"
     return 1
   fi
   if ! jwt_has_role "$token" ARTIST; then
-    seed_fail "$who 의 토큰에 ARTIST 역할이 없습니다 — account_roles(fan-platform, $expected, 'ARTIST') 행을 확인하십시오(account-service V9006). 로그인은 됐으므로 자격증명 문제가 아닙니다"
+    seed_fail "$who 의 토큰에 ARTIST 역할이 없습니다 — account_roles(fan-platform, $expected, 'ARTIST') 행을 확인하십시오(account-service R__06). 로그인은 됐으므로 자격증명 문제가 아닙니다"
     return 1
   fi
   SEED_TOKEN="$token"

@@ -35,7 +35,7 @@
 #   4. ✅ **해소됨 (TASK-MONO-519).** ③ 이 열리자 그 아래에서 **데이터 공백**이 드러났다 —
 #      `demo-corp` 안의 콘솔 신원이 **하나뿐**이라(`R__seed_demo_operator.sql` 의
 #      `admin_operators` INSERT 1건, 실측) ② 를 만족시킬 상대가 없었다. 두 번째 운영자
-#      `demo-requester`(auth `V9003` + admin `R__` §5)가 그 공백을 메운다.
+#      `demo-requester`(auth `R__seed_demo_second_operator_credential` + admin `R__` §5)가 그 공백을 메운다.
 #
 # ⇒ 그래서 §6 은 **두 신원으로** 심는다:
 #
@@ -137,7 +137,7 @@ export SEED_TOKEN
 REQUESTER_EMAIL="${DEMO_REQUESTER_EMAIL:-requester@demo.com}"
 REQUESTER_TOKEN="$(operator_token demo-corp "$REQUESTER_EMAIL" "${DEMO_PASSWORD:-Demo1234!}")"
 if [ -z "$REQUESTER_TOKEN" ]; then
-  seed_fail "상신자 토큰($REQUESTER_EMAIL, assume demo-corp)을 얻지 못했습니다 — auth V9003 / admin R__ §5 시드가 적용됐는지 확인하십시오"
+  seed_fail "상신자 토큰($REQUESTER_EMAIL, assume demo-corp)을 얻지 못했습니다 — auth R__seed_demo_second_operator_credential / admin R__ §5 시드가 적용됐는지 확인하십시오"
   exit 1
 fi
 

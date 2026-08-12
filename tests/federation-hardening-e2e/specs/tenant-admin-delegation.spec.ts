@@ -27,7 +27,7 @@ import {
  * whose authority is confined by its `admin_operator_roles` grant-row tenant_id.
  *
  * Two delegated administrators, both scoped to the DEDICATED `umbrella-corp`
- * tenant (account-service Flyway-dev V9003 + seed.sql § 15):
+ * tenant (account-service Flyway-dev R__03 + seed.sql § 15):
  *
  *   • TENANT_ADMIN (operator.manage + tenant.admin.delegate @ umbrella-corp)
  *       - assigns / scopes / unassigns a target operator within umbrella-corp → 2xx
@@ -64,7 +64,7 @@ test.use({ storageState: { cookies: [], origins: [] } });
 const HOME = 'umbrella-corp'; // the delegated admins' own tenant
 const FOREIGN = 'globex-corp'; // an out-of-scope tenant (exists; never mutated here)
 const TARGET = 'deleg-target-umbrella'; // the operator the TENANT_ADMIN manages
-const BILL_DOMAIN = 'finance'; // umbrella-corp's seeded subscription (V9003)
+const BILL_DOMAIN = 'finance'; // umbrella-corp's seeded subscription (R__03)
 
 // ── admin-surface request helpers (absolute ADMIN_BASE URLs) ──────────────────
 

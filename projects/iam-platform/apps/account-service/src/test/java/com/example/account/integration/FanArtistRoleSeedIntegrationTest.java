@@ -49,7 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * the neighbouring seam ({@code V0032}'s scope grant, verified only by consumers that
  * signed their own tokens).
  *
- * <p><b>Why the seed can fail silently otherwise.</b> V9006 inserts across three tables
+ * <p><b>Why the seed can fail silently otherwise.</b> R__06 inserts across three tables
  * with a composite FK ({@code account_roles} → {@code accounts} + {@code tenants}, V0013)
  * and uses {@code INSERT IGNORE} for idempotence — which is exactly what turns an FK
  * violation, a column-order slip or a stale tenant slug into <em>silence</em> rather than a
@@ -60,7 +60,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * The obvious shape — {@code spring.flyway.locations=db/migration,db/migration-dev} via
  * {@code @DynamicPropertySource} — is <b>wrong here, and it fails loudly for the next
  * class rather than for this one</b>. {@link AbstractIntegrationTest} starts ONE MySQL per
- * JVM and every integration class shares it. Loading the dev band would write V9001..V9006
+ * JVM and every integration class shares it. Loading the dev seeds would write R__01..R__06
  * into that shared {@code flyway_schema_history}, and the next Spring context configured
  * with the production locations alone would find applied migrations it cannot resolve —
  * Flyway validation failure, in a class that changed nothing.
@@ -82,7 +82,7 @@ class FanArtistRoleSeedIntegrationTest extends AbstractIntegrationTest {
 
     /** The artifact under test — the same file the e2e profile hands to Flyway. */
     private static final Path SEED = Path.of("src", "main", "resources", "db", "migration-dev",
-            "V9006__seed_fan_artist_accounts_and_artist_role.sql");
+            "R__06_seed_fan_artist_accounts_and_artist_role.sql");
 
     /** The three artist accounts — same ids as artists.id in infra/demo/seed/seed-fan.sh. */
     private static final List<String> ARTIST_ACCOUNT_IDS = List.of(
@@ -110,7 +110,7 @@ class FanArtistRoleSeedIntegrationTest extends AbstractIntegrationTest {
 
     @BeforeEach
     void applySeed() throws IOException {
-        assertThat(SEED).as("the V9006 seed must be resolvable from this module").exists();
+        assertThat(SEED).as("the R__06 seed must be resolvable from this module").exists();
         String sql = Files.readString(SEED, StandardCharsets.UTF_8);
 
         // Strip line comments before splitting: the header is prose and must never be
@@ -170,7 +170,7 @@ class FanArtistRoleSeedIntegrationTest extends AbstractIntegrationTest {
                     "SELECT COUNT(*) FROM accounts WHERE id = ? AND tenant_id = ?",
                     Integer.class, accountId, FAN_TENANT);
             assertThat(count)
-                    .as("V9006 must have provisioned artist account %s", accountId)
+                    .as("R__06 must have provisioned artist account %s", accountId)
                     .isEqualTo(1);
         }
     }

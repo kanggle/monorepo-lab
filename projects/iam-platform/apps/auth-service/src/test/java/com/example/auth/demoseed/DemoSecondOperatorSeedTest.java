@@ -19,9 +19,9 @@ import org.junit.jupiter.api.Test;
  * TASK-MONO-519 — guards the SECOND demo operator identity.
  *
  * <p><b>Why a separate class rather than more cases in {@link DemoSeedCredentialTest}.</b>
- * That test pins the V9001 file: it asserts exactly three rows in exactly three
+ * That test pins the R__01 file: it asserts exactly three rows in exactly three
  * tenants, which is a correct statement about the single-identity seed and must
- * stay that way. This one pins a different artifact (V9003) and a different
+ * stay that way. This one pins a different artifact (R__seed_demo_second_operator_credential.sql) and a different
  * invariant (two operators, two link keys, no collision between them).
  *
  * <p><b>Why it exists at all.</b> {@code DemoSeedCredentialTest} already compares
@@ -44,7 +44,7 @@ class DemoSecondOperatorSeedTest {
     private static final String DEMO_PASSWORD = "Demo1234!";
 
     private static final String FIRST_CREDENTIAL_SEED =
-            "db/migration-dev/V9001__seed_demo_single_identity_credentials.sql";
+            "db/migration-dev/R__01_seed_demo_single_identity_credentials.sql";
     private static final String SECOND_CREDENTIAL_SEED =
             "db/migration-dev/R__seed_demo_second_operator_credential.sql";
     /** Sibling module — resolved from this module's directory (Gradle test workingDir). */
