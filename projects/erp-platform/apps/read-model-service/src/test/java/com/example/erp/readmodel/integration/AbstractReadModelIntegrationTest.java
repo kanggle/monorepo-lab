@@ -69,6 +69,18 @@ public abstract class AbstractReadModelIntegrationTest {
     protected static final String ISSUER = "http://test-issuer";
     protected static final String KID = "rm-test-key";
 
+    /**
+     * The tenant every erp record actually carries (TASK-ERP-BE-043 / ADR-ERP-001 — D).
+     * These envelopes used to say {@code "erp"}, which is the one value no erp row
+     * has ever had: the console operator reaches erp by assume-tenant, so the
+     * records belong to the customer tenant. With the old fixture the whole
+     * end-to-end suite was green while production sent every message to
+     * {@code .DLT} — a fixture more permissive than reality proves nothing about
+     * reality. Reinstating the tenant comparison in either consumer now turns this
+     * suite RED.
+     */
+    protected static final String TENANT = "demo-corp";
+
     protected static final String TOPIC_DEPARTMENT = "erp.masterdata.department.changed.v1";
     protected static final String TOPIC_EMPLOYEE = "erp.masterdata.employee.changed.v1";
     protected static final String TOPIC_JOBGRADE = "erp.masterdata.jobgrade.changed.v1";
@@ -260,7 +272,7 @@ public abstract class AbstractReadModelIntegrationTest {
         java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
         payload.put("aggregateId", aggregateId);
         payload.put("changeKind", changeKind);
-        payload.put("tenantId", "erp");
+        payload.put("tenantId", TENANT);
         payload.put("occurredAt", Instant.now().toString());
         payload.put("actor", "operator:test");
         payload.put("before", null);
@@ -272,7 +284,7 @@ public abstract class AbstractReadModelIntegrationTest {
         env.put("source", "erp-platform-masterdata-service");
         env.put("occurredAt", Instant.now().toString());
         env.put("schemaVersion", 1);
-        env.put("tenantId", "erp");
+        env.put("tenantId", TENANT);
         env.put("aggregateType", aggregateType);
         env.put("aggregateId", aggregateId);
         env.put("partitionKey", aggregateId);
@@ -300,7 +312,7 @@ public abstract class AbstractReadModelIntegrationTest {
         payload.put("subjectId", subjectId);
         payload.put("approverId", approverId);
         payload.put("submitterId", submitterId);
-        payload.put("tenantId", "erp");
+        payload.put("tenantId", TENANT);
         payload.put("occurredAt", Instant.now().toString());
         payload.put("actor", submitterId);
         if (finalizedAt != null) {
@@ -313,7 +325,7 @@ public abstract class AbstractReadModelIntegrationTest {
         env.put("eventId", eventId);
         env.put("eventType", eventType);
         env.put("occurredAt", Instant.now().toString());
-        env.put("tenantId", "erp");
+        env.put("tenantId", TENANT);
         env.put("source", "erp-platform-approval-service");
         env.put("aggregateType", "ApprovalRequest");
         env.put("aggregateId", approvalRequestId);
@@ -366,14 +378,14 @@ public abstract class AbstractReadModelIntegrationTest {
         if (scopeRequestId != null) {
             payload.put("scopeRequestId", scopeRequestId);
         }
-        payload.put("tenantId", "erp");
+        payload.put("tenantId", TENANT);
         payload.put("occurredAt", Instant.now().toString());
         payload.put("actor", delegatorId);
         java.util.Map<String, Object> env = new java.util.LinkedHashMap<>();
         env.put("eventId", eventId);
         env.put("eventType", eventType);
         env.put("occurredAt", Instant.now().toString());
-        env.put("tenantId", "erp");
+        env.put("tenantId", TENANT);
         env.put("source", "erp-platform-approval-service");
         env.put("aggregateType", "DelegationGrant");
         env.put("aggregateId", grantId);

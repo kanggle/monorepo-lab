@@ -48,10 +48,29 @@ public record DelegationEventEnvelope(
                 && payloadString("grantId") != null && !payloadString("grantId").isBlank();
     }
 
-    /** {@code true} when the envelope/payload tenant resolves to the required tenant. */
-    public boolean hasTenant(String requiredTenant) {
-        String t = tenantId != null ? tenantId : payloadString("tenantId");
-        return requiredTenant.equals(t);
+    /**
+     * The tenant this fact belongs to: the top-level {@code tenantId}, falling
+     * back to {@code payload.tenantId}; {@code null} when neither is present or
+     * both are blank.
+     *
+     * <p><b>ADR-ERP-001 — D (TASK-ERP-BE-043).</b> This replaced
+     * {@code hasTenant(String requiredTenant)}, which compared the resolved value
+     * against {@code erpplatform.oauth2.required-tenant-id} (default
+     * {@code "erp"}). That property is the HTTP <b>domain key</b> — the same value
+     * means "domain erp" to {@code ServiceLevelOAuth2Config} /
+     * {@code ReadAuthorizationGate} and meant "tenant literal erp" here, so no
+     * single value could satisfy both axes. Every erp record actually carries the
+     * customer tenant (measured: one distinct value, {@code demo-corp}; zero rows
+     * carrying the string {@code erp}), so the comparison rejected every real
+     * delegation event to {@code .DLT}. The tenant is now <b>carried, not
+     * compared</b> — only its <b>absence</b> is invalid.
+     */
+    public String resolvedTenantId() {
+        if (tenantId != null && !tenantId.isBlank()) {
+            return tenantId;
+        }
+        String fromPayload = payloadString("tenantId");
+        return fromPayload == null || fromPayload.isBlank() ? null : fromPayload;
     }
 
     public String payloadString(String key) {

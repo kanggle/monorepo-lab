@@ -13,10 +13,25 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * <b>TASK-ERP-BE-043 / ADR-ERP-001 — D.</b> Every fixture here used to pass the
+ * tenant literal {@code "erp"}, and two cases ({@code nonErpTenantIsInvalid},
+ * {@code nonErpTenantDelegationIsInvalid}) pinned the rejection of anything else.
+ * Both facts were wrong about production: erp records carry {@code demo-corp}
+ * (the console operator reaches erp by assume-tenant) and <b>zero</b> erp rows
+ * have ever carried the string {@code erp} — so the suite was green on a value
+ * the system never produces while the real value went to {@code .DLT} and the ERP
+ * inbox sat at {@code totalElements 0}. The fixtures now use the real tenant, and
+ * the two rejection cases are replaced by the invariant that actually survives
+ * the ADR: an envelope naming <b>no</b> tenant is invalid.
+ */
 class EnvelopeToCommandMapperTest {
 
+    /** The tenant erp records actually carry — never the literal "erp". */
+    private static final String TENANT = "demo-corp";
+
     private final ObjectMapper om = new ObjectMapper();
-    private final EnvelopeToCommandMapper mapper = new EnvelopeToCommandMapper(om, "erp");
+    private final EnvelopeToCommandMapper mapper = new EnvelopeToCommandMapper(om);
 
     private String envelope(String eventId, String tenantId, String approverId, String submitterId,
                             String reason) {
@@ -46,11 +61,13 @@ class EnvelopeToCommandMapperTest {
     @Test
     void mapsValidEnvelope() {
         NotifyOnApprovalCommand cmd = mapper.map(
-                envelope("evt-1", "erp", "emp-approver", "emp-submitter", null),
+                envelope("evt-1", TENANT, "emp-approver", "emp-submitter", null),
                 "erp.approval.submitted.v1", NotificationType.APPROVAL_SUBMITTED);
         assertThat(cmd.event().eventId()).isEqualTo("evt-1");
         assertThat(cmd.event().approverId()).isEqualTo("emp-approver");
         assertThat(cmd.event().type()).isEqualTo(NotificationType.APPROVAL_SUBMITTED);
+        // The customer tenant is carried onto the notification, not rejected.
+        assertThat(cmd.event().tenantId()).isEqualTo(TENANT);
     }
 
     @Test
@@ -62,24 +79,38 @@ class EnvelopeToCommandMapperTest {
     @Test
     void nullEventIdIsInvalid() {
         assertThatThrownBy(() -> mapper.map(
-                envelope(null, "erp", "emp-approver", "emp-submitter", null),
+                envelope(null, TENANT, "emp-approver", "emp-submitter", null),
                 "t", NotificationType.APPROVAL_SUBMITTED))
                 .isInstanceOf(InvalidEnvelopeException.class);
     }
 
+    /**
+     * Replaces {@code nonErpTenantIsInvalid}. Any tenant is accepted (the ratchet,
+     * not this gate, is what notices erp going multi-tenant) — only an envelope
+     * that names no tenant at all is invalid.
+     */
     @Test
-    void nonErpTenantIsInvalid() {
+    void anotherTenantIsAcceptedAndCarried() {
+        NotifyOnApprovalCommand cmd = mapper.map(
+                envelope("evt-1", "other-corp", "emp-approver", "emp-submitter", null),
+                "erp.approval.submitted.v1", NotificationType.APPROVAL_SUBMITTED);
+        assertThat(cmd.event().tenantId()).isEqualTo("other-corp");
+    }
+
+    @Test
+    void anEnvelopeThatNamesNoTenantAnywhereIsInvalid() {
         assertThatThrownBy(() -> mapper.map(
-                envelope("evt-1", "other", "emp-approver", "emp-submitter", null),
+                envelope("evt-1", null, "emp-approver", "emp-submitter", null),
                 "t", NotificationType.APPROVAL_SUBMITTED))
-                .isInstanceOf(InvalidEnvelopeException.class);
+                .isInstanceOf(InvalidEnvelopeException.class)
+                .hasMessageContaining("Missing tenantId");
     }
 
     @Test
     void nullResolvedRecipientFieldIsInvalid() {
         // submitted → approver is the recipient; a null approverId cannot deliver.
         assertThatThrownBy(() -> mapper.map(
-                envelope("evt-1", "erp", null, "emp-submitter", null),
+                envelope("evt-1", TENANT, null, "emp-submitter", null),
                 "t", NotificationType.APPROVAL_SUBMITTED))
                 .isInstanceOf(InvalidEnvelopeException.class);
     }
@@ -114,7 +145,7 @@ class EnvelopeToCommandMapperTest {
     @Test
     void mapsValidDelegationEnvelope() {
         NotifyOnDelegationCommand cmd = mapper.mapDelegation(
-                delegationEnvelope("evt-d", "erp", "emp-D", "2026-12-31T23:59:59Z", "휴가 대결"),
+                delegationEnvelope("evt-d", TENANT, "emp-D", "2026-12-31T23:59:59Z", "휴가 대결"),
                 "erp.approval.delegated.v1");
         assertThat(cmd.event().eventId()).isEqualTo("evt-d");
         assertThat(cmd.event().grantId()).isEqualTo("dgr-1");
@@ -128,7 +159,7 @@ class EnvelopeToCommandMapperTest {
     @Test
     void delegationOpenEndedHasNullValidTo() {
         NotifyOnDelegationCommand cmd = mapper.mapDelegation(
-                delegationEnvelope("evt-d", "erp", "emp-D", null, null),
+                delegationEnvelope("evt-d", TENANT, "emp-D", null, null),
                 "erp.approval.delegated.v1");
         assertThat(cmd.event().validTo()).isNull();
         assertThat(cmd.event().reason()).isNull();
@@ -138,17 +169,27 @@ class EnvelopeToCommandMapperTest {
     void nullDelegateIdIsInvalid() {
         // delegateId is the recipient; absent → cannot deliver → DLT.
         assertThatThrownBy(() -> mapper.mapDelegation(
-                delegationEnvelope("evt-d", "erp", null, null, null),
+                delegationEnvelope("evt-d", TENANT, null, null, null),
                 "erp.approval.delegated.v1"))
                 .isInstanceOf(InvalidEnvelopeException.class);
     }
 
+    /** Replaces {@code nonErpTenantDelegationIsInvalid} — see the class javadoc. */
     @Test
-    void nonErpTenantDelegationIsInvalid() {
+    void delegationWithAnotherTenantIsAcceptedAndCarried() {
+        NotifyOnDelegationCommand cmd = mapper.mapDelegation(
+                delegationEnvelope("evt-d", "other-corp", "emp-D", null, null),
+                "erp.approval.delegated.v1");
+        assertThat(cmd.event().tenantId()).isEqualTo("other-corp");
+    }
+
+    @Test
+    void delegationEnvelopeThatNamesNoTenantIsInvalid() {
         assertThatThrownBy(() -> mapper.mapDelegation(
-                delegationEnvelope("evt-d", "other", "emp-D", null, null),
+                delegationEnvelope("evt-d", null, "emp-D", null, null),
                 "erp.approval.delegated.v1"))
-                .isInstanceOf(InvalidEnvelopeException.class);
+                .isInstanceOf(InvalidEnvelopeException.class)
+                .hasMessageContaining("Missing tenantId");
     }
 
     // ---- TASK-ERP-BE-016: mapDelegationRevoked ----
@@ -178,7 +219,7 @@ class EnvelopeToCommandMapperTest {
     @Test
     void mapsValidRevokedEnvelope() {
         NotifyOnDelegationRevokedCommand cmd = mapper.mapDelegationRevoked(
-                revokedEnvelope("evt-r", "erp", "emp-D", "휴가 복귀"),
+                revokedEnvelope("evt-r", TENANT, "emp-D", "휴가 복귀"),
                 "erp.approval.delegation.revoked.v1");
         assertThat(cmd.event().eventId()).isEqualTo("evt-r");
         assertThat(cmd.event().grantId()).isEqualTo("dgr-1");
@@ -191,7 +232,7 @@ class EnvelopeToCommandMapperTest {
     @Test
     void revokedWithoutReasonHasNullReason() {
         NotifyOnDelegationRevokedCommand cmd = mapper.mapDelegationRevoked(
-                revokedEnvelope("evt-r", "erp", "emp-D", null),
+                revokedEnvelope("evt-r", TENANT, "emp-D", null),
                 "erp.approval.delegation.revoked.v1");
         assertThat(cmd.event().reason()).isNull();
     }
@@ -199,7 +240,7 @@ class EnvelopeToCommandMapperTest {
     @Test
     void nullDelegateIdRevokedIsInvalid() {
         assertThatThrownBy(() -> mapper.mapDelegationRevoked(
-                revokedEnvelope("evt-r", "erp", null, null),
+                revokedEnvelope("evt-r", TENANT, null, null),
                 "erp.approval.delegation.revoked.v1"))
                 .isInstanceOf(InvalidEnvelopeException.class);
     }

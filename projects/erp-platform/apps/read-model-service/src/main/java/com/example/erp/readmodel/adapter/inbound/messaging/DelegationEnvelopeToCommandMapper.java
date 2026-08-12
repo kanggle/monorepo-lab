@@ -3,7 +3,6 @@ package com.example.erp.readmodel.adapter.inbound.messaging;
 import com.example.erp.readmodel.application.command.DelegationFactCommand;
 import com.example.erp.readmodel.domain.delegation.DelegationFactStatus;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -14,10 +13,26 @@ import java.time.Instant;
  * is derived from the caller-supplied topic (one handler per topic) — NOT trusted
  * from the payload — so the projected status is tied to the subscribed topic. A
  * malformed JSON, an invalid envelope (null {@code eventId}/{@code aggregateId}/
- * {@code payload}/{@code grantId}), or a non-{@code erp} tenant is rejected with
- * {@link InvalidEnvelopeException} so the consumer routes it straight to the DLT
- * without retry. All Kafka / Jackson types stay in this adapter — the application
- * layer receives a pure command (E5 boundary).
+ * {@code payload}/{@code grantId}), or an envelope carrying <b>no</b> tenant at
+ * all is rejected with {@link InvalidEnvelopeException} so the consumer routes it
+ * straight to the DLT without retry. All Kafka / Jackson types stay in this
+ * adapter — the application layer receives a pure command (E5 boundary).
+ *
+ * <p><b>ADR-ERP-001 — D (TASK-ERP-BE-043) — the tenant is carried, not compared.</b>
+ * This mapper used to reject any envelope whose tenant was not
+ * {@code erpplatform.oauth2.required-tenant-id} (default {@code "erp"}). That
+ * rejection fired on <b>every real event</b>: erp records carry the customer
+ * tenant ({@code demo-corp}) because the console operator reaches erp by
+ * assume-tenant, and the property is the HTTP domain key rather than a tenant
+ * value. The gate was also the <b>only</b> one of the six read-model consumers to
+ * have it, so the invariant it claimed to protect was already broken by 16 rows in
+ * the five ungated projections while this one projection stayed at zero. The
+ * resolved tenant now flows into {@link DelegationFactCommand} and is persisted on
+ * the projection row, so {@code delegation_fact_proj.tenant_id} agrees with its
+ * source of record ({@code approval-service.delegation_grant.tenant_id}) instead
+ * of falling back to the column's legacy {@code DEFAULT 'erp'}. erp staying
+ * single-tenant is enforced by the distinct-{@code tenant_id}-≥-2 ratchet
+ * (AC-7) rather than by refusing events here.
  *
  * <p>The {@code delegated} payload carries the validity window
  * ({@code validFrom}/{@code validTo}); the {@code revoked} payload does not (a
@@ -29,23 +44,19 @@ import java.time.Instant;
 public class DelegationEnvelopeToCommandMapper {
 
     private final ObjectMapper objectMapper;
-    private final String requiredTenant;
 
-    public DelegationEnvelopeToCommandMapper(
-            ObjectMapper objectMapper,
-            @Value("${erpplatform.oauth2.required-tenant-id:erp}") String requiredTenant) {
+    public DelegationEnvelopeToCommandMapper(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
-        this.requiredTenant = requiredTenant == null || requiredTenant.isBlank()
-                ? "erp" : requiredTenant;
     }
 
     public DelegationFactCommand map(String rawValue, String topic, DelegationFactStatus status) {
         DelegationEventEnvelope envelope = EnvelopeParsing.parseAndValidate(
                 objectMapper, rawValue, topic, DelegationEventEnvelope.class, "delegation ",
                 "eventId/aggregateId/payload/grantId", DelegationEventEnvelope::isValid);
-        if (!envelope.hasTenant(requiredTenant)) {
-            throw new InvalidEnvelopeException("Non-" + requiredTenant + " tenant '"
-                    + envelope.tenantId() + "' on topic " + topic);
+        String tenantId = envelope.resolvedTenantId();
+        if (tenantId == null) {
+            throw new InvalidEnvelopeException("Missing tenantId (envelope and payload) on topic "
+                    + topic + " — a fact that cannot name its tenant is not projectable");
         }
 
         Instant occurredAt = envelope.effectiveOccurredAt();
@@ -60,6 +71,7 @@ public class DelegationEnvelopeToCommandMapper {
 
         return new DelegationFactCommand(
                 envelope.eventId(),
+                tenantId,
                 topic,
                 envelope.payloadString("grantId"),
                 status,

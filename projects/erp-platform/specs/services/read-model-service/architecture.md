@@ -110,7 +110,9 @@ source of record (`masterdata-service`).
 > the approval-fact blueprint 1:1: the handlers join the existing
 > `erp-read-model-v1` consumer group, reuse the `processed_events` dedupe (T8) +
 > `@RetryableTopic` DLT resilience (ADR-MONO-005 Category C); invalid envelope
-> (null `eventId`/`grantId`/`payload`, non-`erp` tenant) → immediate DLT. The
+> (null `eventId`/`grantId`/`payload`, **absent** `tenantId`) → immediate DLT.
+> (The clause used to read *non-`erp` tenant* — superseded by ADR-ERP-001 — D
+> / TASK-ERP-BE-043; see § Multi-tenancy.) The
 > projection is **sticky-terminal REVOKED** (last-event-wins; a late `delegated`
 > after `revoked` never reverts) + **out-of-order tolerant** (a `revoked` before
 > any `delegated` upserts a REVOKED row with the validity window ABSENT — no
@@ -394,7 +396,34 @@ straight to DLT (cannot key the dedupe table).
 
 **N/A as SaaS row-level isolation — single-tenant by project classification.**
 `erp-platform` does not declare `multi-tenant` (PROJECT.md § Out of Scope; IAM is
-the multi-tenant IdP). All projected rows belong to the `erp` tenant.
+the multi-tenant IdP). erp runs with **exactly one** tenant.
+
+> **[Amendment — ADR-ERP-001 — D (ACCEPTED 2026-08-12) / TASK-ERP-BE-043]
+> that one tenant is not named `erp`.** This section used to say *"All projected
+> rows belong to the `erp` tenant"*, and `DelegationEnvelopeToCommandMapper` was
+> the only code enforcing it. Measurement (`GROUP BY tenant_id` over every erp
+> table that has the column) found **one** distinct value — `demo-corp` — and
+> **zero** rows carrying the string `erp`: the console operator reaches erp by
+> assume-tenant, so the records belong to the customer tenant. The invariant was
+> therefore already violated by 16 rows across the five projections that have
+> **no** gate, while the one projection that had a gate (`delegation_fact_proj`)
+> was the only one starved. Per ADR-ERP-001 — D:
+>
+> - The event plane **no longer compares** the envelope `tenantId` to a
+>   configured value. `erpplatform.oauth2.required-tenant-id` is the HTTP
+>   **domain key** (below) and is not read by any consumer.
+> - The envelope carries the fact and the projection **persists that value**
+>   (`delegation_fact_proj.tenant_id` = the grant's own tenant), so the
+>   projection agrees with its source of record in `approval-service`.
+> - An **absent/blank** `tenantId` is still invalid → immediate DLT.
+> - erp staying single-tenant is now a **ratchet, not a rejection**: distinct
+>   `tenant_id` ≥ 2 anywhere in erp is RED, and that is the moment to reopen
+>   ADR-ERP-001 Option B (multi-tenant promotion). The accepted trade-off is
+>   that the event plane detects after the fact instead of refusing at the door.
+>
+> Out of scope for that amendment (explicitly, per the ADR): PROJECT.md traits,
+> a read-path tenant filter, and adding `tenant_id` columns to the masterdata
+> projections.
 
 The domain claim is still **fail-closed enforced** at the gate via
 **entitlement-trust dual-accept** (ADR-MONO-019 § D5, single-tenant gate,

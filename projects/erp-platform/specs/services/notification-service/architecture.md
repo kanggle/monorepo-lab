@@ -636,7 +636,32 @@ Invalid envelopes (null `eventId` / `payload`) bypass dedupe → DLT.
 
 **N/A as SaaS row-level isolation — single-tenant by project classification.**
 `erp-platform` does not declare `multi-tenant` (`PROJECT.md` § Out of Scope; IAM
-is the multi-tenant IdP). All notifications belong to the `erp` tenant.
+is the multi-tenant IdP). erp runs with **exactly one** tenant.
+
+> **[Amendment — ADR-ERP-001 — D (ACCEPTED 2026-08-12) / TASK-ERP-BE-043] that
+> one tenant is not named `erp`, and this service held the *second* copy of the
+> gate that assumed it was.** This section used to say *"All notifications belong
+> to the `erp` tenant"*; `EnvelopeToCommandMapper` enforced it by comparing the
+> envelope `tenantId` to `erpplatform.oauth2.required-tenant-id`. Measurement:
+> every erp record carries `demo-corp` (the console operator reaches erp by
+> assume-tenant) and **zero** rows carry the string `erp`, so the comparison
+> rejected **every `erp.approval.*` type** and the ERP inbox was structurally
+> empty (`GET /api/erp/notifications` → `200` / `totalElements 0`, `notification`
+> 0 rows). Per the ADR:
+>
+> - The consumer takes the envelope `tenantId` **verbatim** and persists it on
+>   `notification` / `notification_delivery`. Absent/blank → invalid → DLT.
+> - It does **not** compare that value to `required-tenant-id`. That property is
+>   the HTTP **domain key** (below) — the same value means "domain `erp`" on the
+>   HTTP axis and meant "tenant literal `erp`" on the event axis, which is the
+>   whole defect.
+> - **The inbox read path had the same confusion** and is fixed with it:
+>   `NotificationInboxController` used to scope its query by that constant, so a
+>   row written with the real tenant could never be read back. The query tenant
+>   is now the caller's own validated `tenant_id` claim — the write axis and the
+>   read axis are the same axis again.
+> - erp staying single-tenant is now a **ratchet**: distinct `tenant_id` ≥ 2
+>   anywhere in erp is RED (reopen ADR-ERP-001 Option B at that point).
 
 The domain claim is still **fail-closed enforced** on the inbox surface via
 **entitlement-trust dual-accept** (ADR-MONO-019 § D5, single-tenant gate,
@@ -651,13 +676,17 @@ IAM has not populated `entitled_domains` the claim is absent → only the legacy
 path applies → **production net-zero** (ADR-MONO-019 dual-accept window).
 
 Config keys (mirrors masterdata / approval `application.yml`):
-`erpplatform.oauth2.allowed-issuers` + `.required-tenant-id=erp`. Every
-persistence table carries `tenant_id VARCHAR(64) NOT NULL DEFAULT 'erp'`;
-repository methods always embed `tenant_id` in `WHERE`.
+`erpplatform.oauth2.allowed-issuers` + `.required-tenant-id=erp` — **HTTP domain
+key only** (`entitled_domains ∋ erp`); no persistence or event-plane code reads
+it as a tenant value. Every persistence table carries `tenant_id VARCHAR(64) NOT
+NULL DEFAULT 'erp'`; repository methods always embed `tenant_id` in `WHERE`. The
+`DEFAULT 'erp'` is a legacy DDL fallback that no live row uses — every row is
+written with an explicit tenant taken from the envelope / the caller's claim.
 
-The Kafka consumer trusts the producer's `tenantId = erp` envelope field
-(same-project internal topic) and persists it on each row; a non-`erp` envelope
-(out-of-contract) routes to DLT.
+The Kafka consumer trusts the producer's `tenantId` envelope field (same-project
+internal topic) and persists it verbatim on each row; an envelope with **no**
+`tenantId` (neither top-level nor in the payload) is out-of-contract and routes
+to DLT.
 
 ---
 
@@ -776,7 +805,7 @@ A dedicated `data-model.md` is a low-priority follow-up if the model grows
 | 2 | Invalid envelope (null `eventId` / `payload`) | immediate `<topic>.DLT`, no retry |
 | 3 | Unrecognized `eventType` (out-of-contract topic body) | routed to `<topic>.DLT` (never silently dropped) |
 | 4 | Transient consume processing error | `@RetryableTopic` 3 retries (exponential) → `<topic>.DLT` on exhaustion |
-| 5 | Non-`erp` envelope `tenantId` (out-of-contract) | routed to DLT (single-tenant invariant) |
+| 5 | Envelope carries **no** `tenantId` (neither top-level nor `payload`) | routed to DLT (a fact that cannot name its tenant is not deliverable). A *different* tenant value is **accepted and persisted** — ADR-ERP-001 — D replaced the rejection with the distinct-`tenant_id`-≥-2 ratchet |
 | 6 | IN_APP delivery (v1) | persist commits → `DELIVERED`, `attempt_count=1`, same Tx as `Notification` + dedupe (no retry loop) |
 | 7 | External delivery transient fail (**v2**) | `markRetryable` → `PENDING` + `scheduled_retry_at`; `DeliveryRetryScheduler` re-attempts; cap 5 → `FAILED` + `DELIVERY_RETRY_EXHAUSTED` |
 | 8 | Cross-tenant JWT on inbox — `tenant_id ∉ {erp, *}` **and** `entitled_domains ∌ erp` | 403 `TENANT_FORBIDDEN` |
