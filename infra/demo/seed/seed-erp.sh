@@ -13,38 +13,56 @@
 # 운영자 토큰이 그것을 연다(실측: `POST /api/erp/masterdata/departments` → 201).
 #
 # -----------------------------------------------------------------------------
-# 🔴 이 도메인의 제약 — **결재함(inbox)은 아직 이 데모에서 채울 수 없다.**
-#    다만 2026-08-07 이후 사유가 **셋에서 둘로 줄었다.**
+# ✅ 결재함(inbox)이 찬다 — 사유가 **전부** 해소됐다 (TASK-MONO-519, 2026-08-12)
 # -----------------------------------------------------------------------------
+# 이 헤더는 오랫동안 *"결재함은 이 데모에서 채울 수 없다"* 였다. 네 가지가 맞물려
+# 있었고 하나씩 떨어져 나갔다:
+#
 #   1. 결재함은 `findInbox(tenantId, actorId)` — **호출자가 현재 단계 승인자인 건**만
-#      돌려준다. `actorId` = JWT `sub`.
-#   2. 라우트 검증이 **자기결재를 거부한다**(`ApprovalRoute.multiStage`: "submitter ∈
-#      any stage" → `ApprovalRouteInvalidException`). 즉 제출자와 승인자는 달라야 한다.
-#   3. ✅ **해소됨 (TASK-MONO-515 / ADR-MONO-060 옵션 A, 2026-08-07).** assume 토큰의
-#      `sub` 가 이제 **계정 UUID** 다(전에는 `platform-console-web` 이라는 클라이언트 id).
+#      돌려준다. `actorId` = JWT `sub`. (그대로 — 결함이 아니라 명세다.)
+#   2. 라우트 검증이 **자기결재를 거부한다**(`ApprovalRoute.multiStage` →
+#      `SelfApprovalGuard`). 🔴 조회 필터가 아니라 **생성 시점 게이트**다 — 제출자와
+#      승인자가 같으면 결재함이 "비어 보이는" 게 아니라 **넣을 행이 안 만들어진다**.
+#   3. ✅ **해소됨 (TASK-MONO-515 / ADR-MONO-060 A, 2026-08-07).** assume 토큰의 `sub`
+#      가 **계정 UUID** 가 됐다(전에는 `platform-console-web` 이라는 클라이언트 id).
+#      ⇒ actorId 가 **콘솔 계정마다 하나**다(전에는 통틀어 하나).
 #
-#      🔴 이 헤더는 그것을 *"결함이 아니라 명시된 동작"* 이라고 적으면서
-#      `AssumeTenantExchangeIntegrationTest` 를 근거로 들었는데, **그 인용이 틀렸다** —
+#      🔴 그때 이 헤더는 그것을 *"결함이 아니라 명시된 동작"* 이라 적으면서
+#      `AssumeTenantExchangeIntegrationTest` 를 근거로 들었는데 **그 인용이 틀렸다** —
 #      그 테스트의 유일한 `sub` 단언은 **base 토큰** 대상이었고 assume 토큰에 대한
-#      진술은 주석뿐이었다. 게다가 그 주석은 RFC 8693 을 거꾸로 읽고 있었다
-#      (RFC 에서 `sub` = 위임의 주체, `act` = 행위자). 즉 아무것도 고정하지 않는
-#      주석이 "결정된 사항" 으로 읽혀 조사를 한 번 멈춰 세웠다.
+#      진술은 주석뿐이었다. 게다가 그 주석은 RFC 8693 을 거꾸로 읽고 있었다.
+#      아무것도 고정하지 않는 주석이 "결정된 사항" 으로 읽혀 조사를 멈춰 세웠다.
+#   4. ✅ **해소됨 (TASK-MONO-519).** ③ 이 열리자 그 아래에서 **데이터 공백**이 드러났다 —
+#      `demo-corp` 안의 콘솔 신원이 **하나뿐**이라(`R__seed_demo_operator.sql` 의
+#      `admin_operators` INSERT 1건, 실측) ② 를 만족시킬 상대가 없었다. 두 번째 운영자
+#      `demo-requester`(auth `V9003` + admin `R__` §5)가 그 공백을 메운다.
 #
-# ⇒ 이제 `demo-corp` 안의 actorId 는 **콘솔 계정마다 하나**다(전에는 통틀어 하나).
-#   그런데 **데모 운영자 계정이 1개뿐이다**(`R__seed_demo_operator.sql` — `admin_operators`
-#   INSERT 1건, 실측). 그래서 ②를 만족시킬 두 번째 신원이 여전히 없고, 운영자 결재함은
-#   여전히 0 이다. **막힌 것을 고치자 그 아래가 드러난 것** — 남은 것은 토큰 결함이
-#   아니라 **데모 데이터 공백**이고, 운영자 계정이 둘이 되는 순간 루프가 닫힌다.
+# ⇒ 그래서 §6 은 **두 신원으로** 심는다:
 #
-# 그래서 이 시드는 여전히 **결재 목록**만 채운다. 운영자는 `isOperator()` 라서 목록 조회가
-# `findAll(tenantId)` 로 가고(실측: `ApprovalApplicationService.list`), 승인자가 누구든
-# 테넌트 전체가 보인다. 승인자에는 **시드가 만든 사원 id** 를 쓴다 — 실재하는 주체이고,
-# 프로덕션에서 그 사원이 자기 계정으로 로그인하면 그대로 결재함에 뜨는 **도달 가능한
-# 상태**다(존재할 수 없는 상태를 만들지 않는다 — README 의 규약).
+#     상신자 = `requester@demo.com`  (시드 전용 로그인 — 면접관은 이 주소를 안 친다)
+#     승인자 = `demo@demo.com`       (면접관이 실제로 로그인하는 그 계정)
 #
-# 🔵 직접-DB 로 결재함을 채우지 않은 이유: 그렇게 하면 화면은 차지만 **버튼이 동작하지
-#    않는다**(승인 요청이 401/403 이 아니라 "현재 단계가 아니다" 로 거절된다). 빈 화면보다
-#    나쁜 것은 **눌리는데 실패하는 화면**이다.
+#   🔴 방향이 이쪽인 이유: 반대로 하면 루프는 기계적으로 닫히지만 **면접관이 여는 화면**은
+#   여전히 0 이다 — 대기 건이 아무도 로그인하지 않는 계정에 쌓인다. "결재함이 찼다" 를
+#   행 개수로만 판정하면 이 두 배치를 구별하지 못한다. 알림 쪽도 같은 이유로 이 방향이
+#   맞다: `RecipientResolver` 가 `APPROVAL_SUBMITTED → approverId` 이므로 인앱 알림도
+#   면접관이 쥔 계정으로 간다.
+#
+# 🔵 승인자에 **사원 마스터 id 를 쓰지 않는다** — 예전 방식이 그랬고, 그것이 정확히
+#    결재함이 0 이던 이유다(그 사원으로는 아무도 로그인할 수 없다). 초안 1건만 사원
+#    승인자를 유지한다: 프로덕션에서 실제로 일어나는 형태이고, 면접관이 그 초안을
+#    상신해도 **자기 결재함에 안 뜨는 것이 옳다**(만든 사람은 승인자가 될 수 없다).
+#
+# 🔵 직접-DB 로 결재함을 채우지 않은 이유는 그대로다: 그러면 화면은 차지만 **버튼이
+#    동작하지 않는다**(승인이 401/403 이 아니라 "현재 단계가 아니다" 로 거절된다). 빈
+#    화면보다 나쁜 것은 **눌리는데 실패하는 화면**이다. 이제는 그럴 필요 자체가 없다.
+#
+# 🔴 **알림함(erp notification-service)은 아직 0 이고, 그것은 이 시드 탓이 아니다.**
+#    `EnvelopeToCommandMapper` L67 이 `tenantId == "erp"` 를 강제하는데 데모 이벤트는
+#    `demo-corp` 를 싣는다 ⇒ `erp.approval.*` 이 전량 DLT 로 간다. 콘솔
+#    `/erp/delegation` 의 read-model 뷰가 비는 것과 **같은 관문**이다(소비자 2개가 같은
+#    코드를 갖는다). 결정은 `ADR-ERP-001`(Proposed)이 쥐고 있고 실행은
+#    `TASK-ERP-BE-043` 이 HARDSTOP-09 로 정지 중이다 — **여기서 우회하지 않는다.**
 #
 # 🔵 ③ 이 해소되면서 **눈에 안 보이던 절반이 함께 고쳐졌다**: 게이트웨이 6/6 이
 #    `X-User-Id ← sub` 이므로, 필터가 0건인 도메인(finance·scm·wms)도 감사 기록의
@@ -113,6 +131,44 @@ if [ -z "$SEED_TOKEN" ]; then
   exit 1
 fi
 export SEED_TOKEN
+
+# --- 두 번째 신원 (TASK-MONO-519) -------------------------------------------
+# 상신자 토큰. 이것이 없으면 §6 의 두 건은 자기결재로 **생성 자체가** 거절된다.
+REQUESTER_EMAIL="${DEMO_REQUESTER_EMAIL:-requester@demo.com}"
+REQUESTER_TOKEN="$(operator_token demo-corp "$REQUESTER_EMAIL" "${DEMO_PASSWORD:-Demo1234!}")"
+if [ -z "$REQUESTER_TOKEN" ]; then
+  seed_fail "상신자 토큰($REQUESTER_EMAIL, assume demo-corp)을 얻지 못했습니다 — auth V9003 / admin R__ §5 시드가 적용됐는지 확인하십시오"
+  exit 1
+fi
+
+# 🔴 두 `sub` 가 **실제로 다른지**를 여기서 판정한다. 이것이 이 시드에서 가장 중요한
+#    술어다: 두 시드의 `oidc_subject` 가 겹치면 TASK-MONO-515 가 고친 결함이 데이터
+#    층에서 되살아나(둘이 다시 한 사람이 된다) 결재 생성이 자기결재로 거절되는데,
+#    증상은 "상신이 실패한다" 로만 보여 원인이 **신원 겹침**임을 가리지 못한다.
+#    토큰에서 직접 읽는다 — 시드 파일의 리터럴을 믿지 않는다(그 둘이 어긋난 것을
+#    잡으려는 검사이므로 한쪽만 봐서는 성립하지 않는다).
+APPROVER_SUB="$(jwt_sub "$SEED_TOKEN")"
+REQUESTER_SUB="$(jwt_sub "$REQUESTER_TOKEN")"
+if [ -z "$APPROVER_SUB" ] || [ -z "$REQUESTER_SUB" ]; then
+  seed_fail "토큰에서 sub 를 읽지 못했습니다 (승인자 '${APPROVER_SUB:-<빈값>}' · 상신자 '${REQUESTER_SUB:-<빈값>}')"
+  exit 1
+fi
+if [ "$APPROVER_SUB" = "$REQUESTER_SUB" ]; then
+  seed_fail "승인자와 상신자의 sub 가 같습니다($APPROVER_SUB) — 두 신원이 같은 계정으로 해소됐습니다(oidc_subject 겹침?). 자기결재 금지로 결재 생성이 거절됩니다"
+  exit 1
+fi
+seed_log "신원 2건 확인 — 승인자 sub=$APPROVER_SUB · 상신자 sub=$REQUESTER_SUB ($REQUESTER_EMAIL)"
+
+# with_token <토큰> <명령...> — 그 호출 동안만 SEED_TOKEN 을 바꾼다.
+# `http` 가 매 호출 `$SEED_TOKEN` 을 읽으므로 이 스왑만으로 신원이 갈린다.
+with_token() {
+  local t="$1"; shift
+  local saved="$SEED_TOKEN" rc=0
+  SEED_TOKEN="$t"
+  "$@" || rc=$?
+  SEED_TOKEN="$saved"
+  return $rc
+}
 
 # --- 도구 -------------------------------------------------------------------
 # Git Bash(msys)에는 /proc/sys/kernel/random/uuid 가 없다.
@@ -256,7 +312,10 @@ ensure_master "거래처 겸업사"     /api/erp/masterdata/business-partners co
 # 6. 결재 요청 — 제목으로 탐지한다(자연키 없음).
 #
 #    subjectId 는 **실재하는 마스터**여야 한다(submit 시 `MasterDataPort` 가 해소한다).
-#    approverId 는 위 헤더의 이유로 사원 id 를 쓴다.
+#    approverId 는 **참조 검증을 받지 않는다** — 실측: `ApprovalApplicationService.submit`
+#    은 `masterDataPort.isSubjectActive(subject, …)` 만 부르고 승인자는 안 본다. 그래서
+#    승인자에 계정 UUID(콘솔 로그인의 `sub`)를 넣을 수 있고, 그것이 결재함을 채우는
+#    유일한 방법이다(결재함 술어가 `approver_id = JWT sub` 이므로).
 #
 #    🔵 상태를 셋 만든다 — DRAFT 1 · SUBMITTED 2. 목록 화면이 상태 필터를 가지므로
 #       한 가지 상태만 넣으면 필터가 아무것도 증명하지 못한다.
@@ -264,10 +323,22 @@ ensure_master "거래처 겸업사"     /api/erp/masterdata/business-partners co
 ensure_request() { # ensure_request <라벨> <제목> <subjectType> <subjectId> <approverId> <submit?>
   local label="$1" title="$2" stype="$3" sid="$4" approver="$5" do_submit="$6"
   [ -n "$sid" ] && [ -n "$approver" ] || { seed_fail "$label — subjectId/approverId 가 비어 있습니다"; return 1; }
-  local id="" status=""
+  local id="" status="" had_approver=""
   if http GET "$ERP/api/erp/approval/requests?size=100"; then
     local o; o="$(obj_by "$SEED_LAST_BODY" title "$title")"
     id="$(field "$o" id)"; status="$(field "$o" status)"
+    had_approver="$(field "$o" approverId)"
+  fi
+
+  # 🔴 이미 있는 행의 승인자가 **기대와 다르면 실패로 센다.**
+  # TASK-MONO-519 이전 시드는 승인자에 사원 마스터 id 를 넣었다. 그 시절에 만들어진
+  # 데모 DB 에 이 시드를 다시 돌리면 제목 탐지가 그 행을 찾아 `존재` 로 세고 조용히
+  # 넘어가는데, 결재함은 여전히 **0** 이다 — "생성 0 · 기존 N · 실패 0" 이라는 완벽한
+  # 요약과 함께. 결재 요청에는 승인자 변경 API 가 없으므로 여기서 고칠 수도 없다.
+  # 그래서 **선언한다**: 볼륨을 지우고 다시 심어야 한다고. 조용한 성공보다 낫다.
+  if [ -n "$id" ] && [ -n "$had_approver" ] && [ "$had_approver" != "$approver" ]; then
+    seed_fail "$label — 기존 행의 승인자가 '$had_approver' 입니다(기대 '$approver'). TASK-MONO-519 이전에 심긴 데이터입니다 — 승인자 변경 API 가 없으므로 erp DB 볼륨을 초기화한 뒤 다시 심으십시오"
+    return 1
   fi
   if [ -z "$id" ]; then
     if http POST "$ERP/api/erp/approval/requests" \
@@ -301,10 +372,19 @@ ensure_request() { # ensure_request <라벨> <제목> <subjectType> <subjectId> 
   return 0
 }
 
-ensure_request "결재 운영본부 개편" "운영본부 조직 개편 승인 요청" \
-  DEPARTMENT "${DEPT[OPS]:-}" "${EMP[EMP-0001]:-}" submit
-ensure_request "결재 사원 배치"     "최사원 부서 배치 승인 요청" \
-  EMPLOYEE   "${EMP[EMP-0004]:-}" "${EMP[EMP-0001]:-}" submit
+# 🔴 앞의 두 건은 **상신자 토큰으로** 만들고 상신한다. 승인자는 면접관이 로그인하는
+#    계정의 `sub` 다 ⇒ `/erp/approval` 결재함에 그대로 뜬다. 만드는 쪽이 상신자여야
+#    한다는 것이 핵심이다: 라우트는 **생성 시점**에 고정되고 자기결재 검사도 그때
+#    돈다(`ApprovalRoute.multiStage`) — 상신만 남의 토큰으로 해도 소용없다.
+with_token "$REQUESTER_TOKEN" \
+  ensure_request "결재 운영본부 개편" "운영본부 조직 개편 승인 요청" \
+    DEPARTMENT "${DEPT[OPS]:-}" "$APPROVER_SUB" submit
+with_token "$REQUESTER_TOKEN" \
+  ensure_request "결재 사원 배치"     "최사원 부서 배치 승인 요청" \
+    EMPLOYEE   "${EMP[EMP-0004]:-}" "$APPROVER_SUB" submit
+
+# 🔵 초안은 **운영자 자신이** 만들고 승인자는 사원 마스터 id 로 남긴다 — 위 헤더의
+#    이유(프로덕션 형태 보존 + 면접관이 상신해도 자기 결재함에 안 뜨는 것이 옳다).
 ensure_request "결재 재무팀 초안"   "재무팀 예산 코드 신설 (초안)" \
   DEPARTMENT "${DEPT[FIN]:-}" "${EMP[EMP-0003]:-}" draft
 
@@ -369,6 +449,51 @@ if [ "$want" -gt 0 ]; then
     # "조용히 건너뛰기" 와 같아진다.
     seed_fail "read-model 프로젝션 사원 $got/$want — 릴레이가 멈췄을 수 있습니다(ERP-BE-042 회귀?)"
   fi
+fi
+
+# =============================================================================
+# 9. 결재함 판정 (TASK-MONO-519) — 이 시드가 존재하는 이유를 **재는** 단계.
+#
+# 🔴 "결재함 ≥ 1" 로 재지 않는다. 면접관이 데모에서 승인 버튼을 누르면 그 수는 정상적으로
+#    줄고, 다음 실행이 그 정상 동작을 실패로 신고하게 된다. 그러면 그 실패가 늘 켜져 있는
+#    경고가 되어 **진짜 회귀를 가린다.**
+#
+#    대신 **결재함 필터 자체**를 잰다: 승인자가 나이고 상태가 대기(SUBMITTED/IN_REVIEW)인
+#    행의 수(목록 API 에서 셈) == 결재함이 돌려주는 원소 수. 이 등식은 승인이 몇 건
+#    일어났든 성립해야 하고, 깨지면 그것은 **술어가 틀렸다**는 뜻이다 — 정확히
+#    TASK-MONO-515/519 가 두 번 밟은 축(`sub` 가 무엇인가 / 그런 `sub` 가 존재하는가).
+#
+# 🔴 원소 수는 **BFF/API 로** 잰다. 콘솔 `/erp/approval` 은 클라이언트 렌더라 SSR HTML
+#    grep 은 구조적으로 0건이고, 그 0 은 "비어 있다" 와 구별되지 않는다.
+# =============================================================================
+inbox_expected=""
+if http GET "$ERP/api/erp/approval/requests?size=100"; then
+  inbox_expected="$(json_objects "$SEED_LAST_BODY" \
+    | grep -F "\"approverId\":\"$APPROVER_SUB\"" \
+    | grep -cE '"status":"(SUBMITTED|IN_REVIEW)"' || true)"
+fi
+inbox_actual=""
+if http GET "$ERP/api/erp/approval/inbox?size=100"; then
+  inbox_actual="$(printf '%s' "$SEED_LAST_BODY" | grep -oE '"totalElements":[0-9]+' | head -1 | cut -d: -f2)"
+fi
+
+if [ -z "$inbox_expected" ] || [ -z "$inbox_actual" ]; then
+  # 🔴 추출 0건은 "0 건" 이 아니라 **계측 실패**다. 같은 값으로 접으면 결함이 초록이 된다.
+  seed_fail "결재함 판정 불가 — 기대치 '${inbox_expected:-<추출 실패>}' · 실측 '${inbox_actual:-<추출 실패>}' (마지막 HTTP $SEED_LAST_STATUS)"
+elif [ "$inbox_expected" != "$inbox_actual" ]; then
+  seed_fail "결재함 원소 수 $inbox_actual — 승인자 sub=$APPROVER_SUB 로 대기 중인 행은 $inbox_expected 건입니다. 결재함 술어(approver_id = JWT sub)가 어긋났습니다"
+elif [ "$inbox_actual" = "0" ] && [ "$SEED_FAILURES" -gt 0 ]; then
+  # 🔴 등식은 성립하지만 **원인을 여기서 진단하지 않는다.** 앞 단계가 이미 실패했으면
+  #    0 은 그 실패의 결과이지 별개의 사실이 아니다. 실측(2026-08-12): 레거시 승인자
+  #    때문에 §6 이 2건 실패한 실행에서 이 자리가 "이미 처리된 DB 입니다" 를 찍었다 —
+  #    **틀린 진단**이었고, 진짜 원인(승인자 불일치)을 다른 이야기로 덮었다.
+  seed_log "결재함 0건 (대기 행도 0) — 위 실패 $SEED_FAILURES 건의 결과입니다. 그 메시지를 보십시오"
+elif [ "$inbox_actual" = "0" ]; then
+  # 실패가 없는데 0 — 등식이 성립하므로 술어는 옳고, 시드가 심은 건이 이미 승인/반려된
+  # 상태다. 즉 데모를 한 번 돌린 DB.
+  seed_log "결재함 0건 (대기 행도 0) — 시드 결재가 이미 처리된 DB 입니다. 다시 보려면 볼륨 초기화 후 재시드"
+else
+  seed_log "결재함 $inbox_actual 건 = 대기 행 $inbox_expected 건 (승인자 sub=$APPROVER_SUB) — 상신 → 승인 루프가 닫혀 있습니다"
 fi
 
 seed_log "요약 — 생성 $SEED_CREATED · 기존 $SEED_EXISTING · 실패 $SEED_FAILURES"

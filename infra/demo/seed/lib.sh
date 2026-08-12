@@ -178,7 +178,15 @@ user_token() {
   printf '%s' "$out" | sed -E 's/.*"access_token":"([^"]*)".*/\1/'
 }
 
-# operator_token [tenant] — 5개 도메인 백오피스를 여는 **하나의** 토큰.
+# operator_token [tenant] [email] [password] — 5개 도메인 백오피스를 여는 토큰.
+#
+# 🔵 email/password 인자는 TASK-MONO-519 가 추가했다. 기본값은 그대로 데모 단일
+#    신원(`demo@demo.com`)이라 기존 호출부는 한 글자도 안 바뀐다. 두 번째 신원이
+#    필요한 이유는 erp 결재의 자기결재 금지가 **생성 시점 게이트**라서다 — 상신자와
+#    승인자가 같은 `sub` 면 행이 아예 안 만들어진다(seed-erp.sh §6 참조).
+#    🔴 인자를 넘길 때는 그 신원이 `admin_operators` + `operator_tenant_assignment`
+#    양쪽에 있어야 한다. 자격증명만 있으면 로그인은 되고 assume 이 `invalid_grant`
+#    로 떨어지는데, 두 실패는 호출자 입장에서 똑같이 "토큰을 못 얻었다" 로 보인다.
 #
 # 이것이 이 시드에서 가장 중요한 발견이다. 데모 계정은 각 도메인 테넌트에서
 # `CUSTOMER` 일 뿐이라 `/api/admin/**` 에 그대로 가면 **전부 403** 이다(실측 6/6).
@@ -195,11 +203,11 @@ user_token() {
 # 그리고 이 경로는 **면접관이 콘솔에서 밟는 바로 그 경로**다 — 시드가 성립하면
 # 콘솔의 도메인 운영 섹션이 열린다는 것이 이미 증명된 셈이다.
 operator_token() {
-  local tenant="${1:-demo-corp}"
+  local tenant="${1:-demo-corp}" email="${2:-}" pass="${3:-}"
   local iam="http://iam.${DEMO_DOMAIN}"
   local base
   base="$(user_token "platform-console-web" "" "http://console.${DEMO_DOMAIN}/api/auth/callback" \
-            "openid profile email tenant.read erp.write")" || return 1
+            "openid profile email tenant.read erp.write" "$email" "$pass")" || return 1
   local -a R; mapfile -t R < <(seed_resolve_args "iam.${DEMO_DOMAIN}")
   local -a T=(-s); [ "${#R[@]}" -gt 0 ] && T+=("${R[@]}")
   local out; out="$(curl "${T[@]}" \
