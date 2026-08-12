@@ -182,6 +182,39 @@ community 의 `ARTIST_SERVICE_BASE_URL` 기본값은 `http://artist-service:8080
 않았고, 켜는 순간 **모든 팔로우가 fail-closed 로 거부**됐을 값이다. e2e 에서 명시 설정했다.
 🔵 같은 함정이 membership 쪽 `MEMBERSHIP_SERVICE_BASE_URL` 에도 그대로 있다 — INT-006 에 기재.
 
+## ⑥ 🔴🔴 첫 CI 런이 잡은 것 — **탈출구가 e2e 자신의 낡은 전제를 가리고 있었다**
+
+첫 실행에서 `ArtistAndPostFlowE2ETest` 의 팔로우가 **422** 로 떨어졌다. 배선 결함이 아니라
+**게이트가 옳게 동작한 것**이다.
+
+테스트 원문(주석 포함):
+
+```java
+String artistAccountId = randomAccountId(); // followed via this id
+// v1 has no enforcement that artistAccountId resolves to a real artist
+// account on artist-service ... there's no cross-service join in the v1 follow path
+```
+
+⇒ 이 테스트는 **1단계에서 등록한 아티스트가 아니라 합성 UUID 를 팔로우**하고 있었다.
+그 전제는 `TASK-FAN-BE-045` 가 **정확히 그 조인을 추가하면서 무효**가 됐는데, 같은 티켓이
+같은 스위트에 탈출구를 켜 둔 탓에 **낡은 주석이 계속 참인 것처럼 보였다.** 탈출구를 지운
+첫 실행이 그것을 드러냈다.
+
+🔵 **판정을 로그의 부재로 확정했다**(대리지표 아님): `HttpArtistAccountChecker` 는 **어떤
+예외에도** WARN 을 남기는데 잡 로그 1,861줄에서 그 WARN 이 **0건**이다 ⇒ 토큰 취득 ·
+`/internal/**` 인증 · HTTP 왕복이 **전부 성공**했고 artist-service 가 `200 {exists:false}` 를
+돌려준 것이다. **즉 AC-1 은 이 실패 런에서 이미 증명됐다** — 실패한 것은 대상 선택이지
+배선이 아니다.
+
+**수정 두 가지**:
+1. 등록한 아티스트의 `accountId` 를 팔로우한다 ⇒ 이 단언이 이제 **크로스서비스 조인을 증명**한다
+2. 🔴 **거부 케이스를 함께 넣었다** — 통과만 단언하면 "동작하는 게이트" 와 "허용 checker" 를
+   구별할 수 없고, 그게 방금까지 이 스위트가 있던 상태다. 같은 경로·같은 토큰·대상만 다르게
+   해서 **미등록 계정 → 422 `UNKNOWN_ARTIST_ACCOUNT`** 를 단언한다
+
+🔵 형제 점검: 팔로우를 수행하는 e2e 는 이 클래스 하나뿐(`VisibilityTierE2ETest` ·
+`MultiTenantIsolationE2ETest` 은 0건) — 낙오 없음.
+
 ---
 
 # AC-3 bite 결과 — 속성 기반 케이스만으로는 **못 잡는다** (실측)
