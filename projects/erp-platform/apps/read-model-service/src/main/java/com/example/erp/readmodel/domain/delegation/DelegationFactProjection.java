@@ -31,6 +31,14 @@ import java.util.Objects;
 public final class DelegationFactProjection {
 
     private final String grantId;
+    /**
+     * The tenant the grant belongs to (TASK-ERP-BE-043 / ADR-ERP-001 — D). Taken
+     * verbatim from the event envelope and refreshed by every applied event
+     * (last-event-wins, like the delegator/delegate ids). Never a constant: the
+     * projection must agree with its source of record, and a hard-coded {@code
+     * "erp"} here would by itself make erp look multi-tenant to the ratchet.
+     */
+    private String tenantId;
     private DelegationFactStatus status;
     private String delegatorId;
     private String delegateId;
@@ -43,12 +51,13 @@ public final class DelegationFactProjection {
     private String scope;
     private String scopeRequestId;
 
-    public DelegationFactProjection(String grantId, DelegationFactStatus status,
+    public DelegationFactProjection(String grantId, String tenantId, DelegationFactStatus status,
                                     String delegatorId, String delegateId,
                                     Instant validFrom, Instant validTo, String reason,
                                     Instant revokedAt, Instant lastEventAt, String lastEventId,
                                     String scope, String scopeRequestId) {
         this.grantId = Objects.requireNonNull(grantId, "grantId");
+        this.tenantId = tenantId;
         this.status = status;
         this.delegatorId = delegatorId;
         this.delegateId = delegateId;
@@ -66,12 +75,13 @@ public final class DelegationFactProjection {
      * Factory for a brand-new {@code ACTIVE} fact (the grant's first projected
      * event in normal ordering — the {@code delegated} event).
      */
-    public static DelegationFactProjection ofGranted(String grantId, String delegatorId,
+    public static DelegationFactProjection ofGranted(String grantId, String tenantId,
+                                                     String delegatorId,
                                                      String delegateId, Instant validFrom,
                                                      Instant validTo, String reason,
                                                      Instant lastEventAt, String lastEventId,
                                                      String scope, String scopeRequestId) {
-        return new DelegationFactProjection(grantId, DelegationFactStatus.ACTIVE,
+        return new DelegationFactProjection(grantId, tenantId, DelegationFactStatus.ACTIVE,
                 delegatorId, delegateId, validFrom, validTo, reason,
                 null, lastEventAt, lastEventId, scope, scopeRequestId);
     }
@@ -84,11 +94,12 @@ public final class DelegationFactProjection {
      * neither the validity window nor the scope — a later {@code delegated} fills
      * the scope without reverting the status). {@code revokedAt} = the event instant.
      */
-    public static DelegationFactProjection ofRevoked(String grantId, String delegatorId,
+    public static DelegationFactProjection ofRevoked(String grantId, String tenantId,
+                                                     String delegatorId,
                                                      String delegateId, String reason,
                                                      Instant revokedAt, Instant lastEventAt,
                                                      String lastEventId) {
-        return new DelegationFactProjection(grantId, DelegationFactStatus.REVOKED,
+        return new DelegationFactProjection(grantId, tenantId, DelegationFactStatus.REVOKED,
                 delegatorId, delegateId, null, null, reason,
                 revokedAt, lastEventAt, lastEventId, null, null);
     }
@@ -110,10 +121,12 @@ public final class DelegationFactProjection {
      * event WITHOUT reverting the REVOKED status (the {@code delegated} event is the
      * authoritative source for the scope; TASK-ERP-BE-018).
      */
-    public void applyGrant(String delegatorId, String delegateId, Instant validFrom,
+    public void applyGrant(String tenantId, String delegatorId, String delegateId,
+                           Instant validFrom,
                            Instant validTo, String reason,
                            Instant lastEventAt, String lastEventId,
                            String scope, String scopeRequestId) {
+        this.tenantId = tenantId;
         this.delegatorId = delegatorId;
         this.delegateId = delegateId;
         this.validFrom = validFrom;
@@ -138,9 +151,10 @@ public final class DelegationFactProjection {
      * delegator/delegate ids are refreshed (the revoke payload carries them).
      * {@code reason} is updated when supplied.
      */
-    public void applyRevoke(String delegatorId, String delegateId, String reason,
+    public void applyRevoke(String tenantId, String delegatorId, String delegateId, String reason,
                             Instant revokedAt, Instant lastEventAt, String lastEventId) {
         this.status = DelegationFactStatus.REVOKED;
+        this.tenantId = tenantId;
         this.delegatorId = delegatorId;
         this.delegateId = delegateId;
         if (reason != null) {
@@ -173,6 +187,7 @@ public final class DelegationFactProjection {
     }
 
     public String grantId() { return grantId; }
+    public String tenantId() { return tenantId; }
     public DelegationFactStatus status() { return status; }
     public String delegatorId() { return delegatorId; }
     public String delegateId() { return delegateId; }

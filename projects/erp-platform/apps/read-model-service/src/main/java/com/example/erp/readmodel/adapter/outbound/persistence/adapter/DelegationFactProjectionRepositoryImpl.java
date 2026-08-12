@@ -59,6 +59,7 @@ public class DelegationFactProjectionRepositoryImpl implements DelegationFactPro
         DelegationFactProjJpaEntity e = jpa.findById(projection.grantId())
                 .orElseGet(DelegationFactProjJpaEntity::new);
         e.setGrantId(projection.grantId());
+        e.setTenantId(projection.tenantId());
         e.setDelegatorId(projection.delegatorId());
         e.setDelegateId(projection.delegateId());
         e.setValidFrom(projection.validFrom());
@@ -116,6 +117,7 @@ public class DelegationFactProjectionRepositoryImpl implements DelegationFactPro
     private DelegationFactProjection toDomain(DelegationFactProjJpaEntity e) {
         return new DelegationFactProjection(
                 e.getGrantId(),
+                e.getTenantId(),
                 e.getStatus() == null ? null : DelegationFactStatus.valueOf(e.getStatus()),
                 e.getDelegatorId(), e.getDelegateId(),
                 e.getValidFrom(), e.getValidTo(), e.getReason(),

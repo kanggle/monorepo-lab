@@ -95,7 +95,7 @@ new shape**. This consumer reads:
   "eventId": "<uuid>",
   "eventType": "erp.approval.submitted",
   "occurredAt": "<ISO-8601 UTC>",
-  "tenantId": "erp",
+  "tenantId": "<tenantId>",
   "source": "erp-platform-approval-service",
   "aggregateType": "ApprovalRequest",
   "aggregateId": "<approvalRequestId>",
@@ -104,6 +104,12 @@ new shape**. This consumer reads:
 }
 ```
 
+- `tenantId` — the tenant the fact belongs to, taken **verbatim** from the
+  envelope (falling back to `payload.tenantId`) and written to
+  `Notification.tenantId` / `NotificationDelivery.tenantId`. Absent/blank →
+  invalid → immediate DLT. It is **NOT** compared against a configured constant
+  (ADR-ERP-001 — D; `erpplatform.oauth2.required-tenant-id` is the HTTP domain
+  key, not a tenant value — reading it here rejected every real event).
 - `eventId` — dedupe key (`processed_events` PK). Null → invalid → immediate DLT.
 - `eventType` — selects the recipient-resolution + `Notification.type` row above.
 - `aggregateId` (= `approvalRequestId`) — partition key (per-request ordering);

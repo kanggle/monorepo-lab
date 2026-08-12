@@ -68,6 +68,15 @@ public abstract class AbstractNotificationIntegrationTest {
     protected static final String ISSUER = "http://test-issuer";
     protected static final String KID = "ntf-test-key";
 
+    /**
+     * The tenant every erp record actually carries (TASK-ERP-BE-043 / ADR-ERP-001 — D).
+     * These envelopes used to say {@code "erp"}, which is the one value no erp row
+     * has ever had — so this suite was green while the live ERP inbox sat at
+     * {@code totalElements 0} because the consumer rejected the real tenant.
+     * Reinstating that comparison now turns this suite RED.
+     */
+    protected static final String TENANT = "demo-corp";
+
     protected static final String TOPIC_SUBMITTED = "erp.approval.submitted.v1";
     protected static final String TOPIC_APPROVED = "erp.approval.approved.v1";
     protected static final String TOPIC_REJECTED = "erp.approval.rejected.v1";
@@ -173,9 +182,25 @@ public abstract class AbstractNotificationIntegrationTest {
     // JWT minting
     // ------------------------------------------------------------------------
 
-    /** Token for a given recipient (sub) with tenant_id=erp + erp.read scope. */
+    /**
+     * Token for a given recipient (sub), shaped like the <b>real</b> console
+     * operator token: {@code tenant_id = demo-corp} (assume-tenant) admitted by the
+     * entitlement branch of the dual-accept gate ({@code entitled_domains ∋ erp}),
+     * plus {@code erp.read}.
+     *
+     * <p>TASK-ERP-BE-043: this used to mint {@code tenant_id=erp}, which matched
+     * the old envelope fixtures and therefore kept the inbox assertions green. Live,
+     * the notification rows carry {@code demo-corp} and the inbox query used a
+     * constant {@code erp} — {@code totalElements 0} over a full table. Aligning
+     * both axes on the value production actually uses is what makes this suite able
+     * to fail on that bug: the write tenant (envelope) and the read tenant (claim)
+     * are now the same value for the same reason they are the same value live.
+     */
     protected String erpTokenForRecipient(String sub) {
-        return token(c -> c.subject(sub).claim("tenant_id", "erp").claim("scope", "erp.read"));
+        return token(c -> c.subject(sub)
+                .claim("tenant_id", TENANT)
+                .claim("entitled_domains", java.util.List.of("erp"))
+                .claim("scope", "erp.read"));
     }
 
     protected String token(java.util.function.Consumer<JWTClaimsSet.Builder> customizer) {
@@ -224,7 +249,7 @@ public abstract class AbstractNotificationIntegrationTest {
         payload.put("subjectId", "dept-1");
         payload.put("approverId", approverId);
         payload.put("submitterId", submitterId);
-        payload.put("tenantId", "erp");
+        payload.put("tenantId", TENANT);
         payload.put("occurredAt", Instant.now().toString());
         payload.put("actor", submitterId);
         if (finalizedAt != null) payload.put("finalizedAt", finalizedAt);
@@ -233,7 +258,7 @@ public abstract class AbstractNotificationIntegrationTest {
         env.put("eventId", eventId);
         env.put("eventType", eventType);
         env.put("occurredAt", Instant.now().toString());
-        env.put("tenantId", "erp");
+        env.put("tenantId", TENANT);
         env.put("source", "erp-platform-approval-service");
         env.put("aggregateType", "ApprovalRequest");
         env.put("aggregateId", approvalRequestId);
@@ -259,14 +284,14 @@ public abstract class AbstractNotificationIntegrationTest {
         payload.put("validFrom", Instant.now().toString());
         if (validTo != null) payload.put("validTo", validTo);
         if (reason != null) payload.put("reason", reason);
-        payload.put("tenantId", "erp");
+        payload.put("tenantId", TENANT);
         payload.put("occurredAt", Instant.now().toString());
         payload.put("actor", delegatorId);
         Map<String, Object> env = new LinkedHashMap<>();
         env.put("eventId", eventId);
         env.put("eventType", "erp.approval.delegated");
         env.put("occurredAt", Instant.now().toString());
-        env.put("tenantId", "erp");
+        env.put("tenantId", TENANT);
         env.put("source", "erp-platform-approval-service");
         env.put("aggregateType", "DelegationGrant");
         env.put("aggregateId", grantId);
@@ -290,14 +315,14 @@ public abstract class AbstractNotificationIntegrationTest {
         payload.put("delegatorId", delegatorId);
         payload.put("delegateId", delegateId);
         if (reason != null) payload.put("reason", reason);
-        payload.put("tenantId", "erp");
+        payload.put("tenantId", TENANT);
         payload.put("occurredAt", Instant.now().toString());
         payload.put("actor", delegatorId);
         Map<String, Object> env = new LinkedHashMap<>();
         env.put("eventId", eventId);
         env.put("eventType", "erp.approval.delegation.revoked");
         env.put("occurredAt", Instant.now().toString());
-        env.put("tenantId", "erp");
+        env.put("tenantId", TENANT);
         env.put("source", "erp-platform-approval-service");
         env.put("aggregateType", "DelegationGrant");
         env.put("aggregateId", grantId);

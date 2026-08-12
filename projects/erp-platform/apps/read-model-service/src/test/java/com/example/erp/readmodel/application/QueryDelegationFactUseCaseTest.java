@@ -51,6 +51,8 @@ class QueryDelegationFactUseCaseTest {
     private static final Instant FROM = Instant.parse("2026-06-01T00:00:00Z");
     private static final Instant TO = Instant.parse("2026-06-30T00:00:00Z");
     private static final Instant ACTIVE_AT = Instant.parse("2026-06-15T00:00:00Z");
+    /** The tenant erp records actually carry (TASK-ERP-BE-043 — never the literal "erp"). */
+    private static final String TENANT = "demo-corp";
 
     @BeforeEach
     void setDepthBound() {
@@ -63,7 +65,7 @@ class QueryDelegationFactUseCaseTest {
     }
 
     private DelegationFactProjection grant(String delegatorId) {
-        return DelegationFactProjection.ofGranted("dgr-1", delegatorId, "emp-d",
+        return DelegationFactProjection.ofGranted("dgr-1", TENANT, delegatorId, "emp-d",
                 FROM, TO, "vacation", FROM, "evt-1", "GLOBAL", null);
     }
 

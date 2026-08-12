@@ -41,15 +41,18 @@ class ApplyDelegationFactUseCaseTest {
     private static final Instant TO = Instant.parse("2026-06-30T00:00:00Z");
     private static final Instant T_GRANT = Instant.parse("2026-06-01T00:00:00Z");
     private static final Instant T_REVOKE = Instant.parse("2026-06-10T00:00:00Z");
+    /** The tenant erp records actually carry (TASK-ERP-BE-043 — never the literal "erp"). */
+    private static final String TENANT = "demo-corp";
 
     private DelegationFactCommand granted(String eventId) {
-        return new DelegationFactCommand(eventId, "erp.approval.delegated.v1", "dgr-1",
+        return new DelegationFactCommand(eventId, TENANT, "erp.approval.delegated.v1", "dgr-1",
                 DelegationFactStatus.ACTIVE, "emp-a", "emp-d", FROM, TO, "vacation",
                 T_GRANT, null, "REQUEST", "appr-1");
     }
 
     private DelegationFactCommand revoked(String eventId) {
-        return new DelegationFactCommand(eventId, "erp.approval.delegation.revoked.v1", "dgr-1",
+        return new DelegationFactCommand(eventId, TENANT,
+                "erp.approval.delegation.revoked.v1", "dgr-1",
                 DelegationFactStatus.REVOKED, "emp-a", "emp-d", null, null, "back",
                 T_REVOKE, T_REVOKE, null, null);
     }
@@ -71,13 +74,17 @@ class ApplyDelegationFactUseCaseTest {
         // AC-1: the REQUEST scope + scopeRequestId are projected.
         assertThat(captor.getValue().scope()).isEqualTo("REQUEST");
         assertThat(captor.getValue().scopeRequestId()).isEqualTo("appr-1");
+        // TASK-ERP-BE-043 — the envelope's own tenant lands on the row rather than
+        // the column's legacy DEFAULT 'erp'; a constant here would make erp look
+        // multi-tenant to the single-tenant ratchet all by itself.
+        assertThat(captor.getValue().tenantId()).isEqualTo(TENANT);
         verify(dedupeService).markProcessed("evt-1", "erp.approval.delegated.v1", "dgr-1");
     }
 
     @Test
     void revokeOnExistingActiveTransitionsToRevoked() {
         DelegationFactProjection existing = DelegationFactProjection.ofGranted(
-                "dgr-1", "emp-a", "emp-d", FROM, TO, "vacation", T_GRANT, "evt-1",
+                "dgr-1", TENANT, "emp-a", "emp-d", FROM, TO, "vacation", T_GRANT, "evt-1",
                 "GLOBAL", null);
         when(dedupeService.isDuplicate("evt-2")).thenReturn(false);
         when(delegationRepository.findById("dgr-1")).thenReturn(Optional.of(existing));
@@ -111,7 +118,7 @@ class ApplyDelegationFactUseCaseTest {
     @Test
     void stickyTerminal_grantAfterRevokeDoesNotRevert() {
         DelegationFactProjection revokedRow = DelegationFactProjection.ofRevoked(
-                "dgr-1", "emp-a", "emp-d", "back", T_REVOKE, T_REVOKE, "evt-2");
+                "dgr-1", TENANT, "emp-a", "emp-d", "back", T_REVOKE, T_REVOKE, "evt-2");
         when(dedupeService.isDuplicate("evt-late")).thenReturn(false);
         when(delegationRepository.findById("dgr-1")).thenReturn(Optional.of(revokedRow));
 

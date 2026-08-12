@@ -52,6 +52,9 @@ class DelegationFactControllerSliceTest {
     @MockitoBean
     ReadAuthorizationGate readGate;
 
+    /** The tenant erp records actually carry (TASK-ERP-BE-043 — never the literal "erp"). */
+    private static final String TENANT = "demo-corp";
+
     @BeforeEach
     void platformScopeByDefault() {
         lenient().when(readGate.orgScope(any())).thenReturn(OrgScope.platform());
@@ -59,7 +62,7 @@ class DelegationFactControllerSliceTest {
 
     private DelegationFactProjection activeGrant() {
         // REQUEST-scoped grant: both scope + scopeRequestId present.
-        return DelegationFactProjection.ofGranted("dgr-1", "emp-a", "emp-d",
+        return DelegationFactProjection.ofGranted("dgr-1", TENANT, "emp-a", "emp-d",
                 Instant.parse("2026-06-01T00:00:00Z"), Instant.parse("2026-06-30T00:00:00Z"),
                 "vacation", Instant.parse("2026-06-01T00:00:00Z"), "evt-1",
                 "REQUEST", "appr-1");
@@ -87,7 +90,7 @@ class DelegationFactControllerSliceTest {
 
     @Test
     void getOneGlobalGrantOmitsScopeRequestId() throws Exception {
-        DelegationFactProjection global = DelegationFactProjection.ofGranted("dgr-g", "emp-a",
+        DelegationFactProjection global = DelegationFactProjection.ofGranted("dgr-g", TENANT, "emp-a",
                 "emp-d", Instant.parse("2026-06-01T00:00:00Z"),
                 Instant.parse("2026-06-30T00:00:00Z"), "vacation",
                 Instant.parse("2026-06-01T00:00:00Z"), "evt-1", "GLOBAL", null);
@@ -103,7 +106,7 @@ class DelegationFactControllerSliceTest {
     @Test
     void getOneRevokedShowsRevokedAt() throws Exception {
         DelegationFactProjection revoked = DelegationFactProjection.ofRevoked(
-                "dgr-2", "emp-a", "emp-d", "back", Instant.parse("2026-06-10T00:00:00Z"),
+                "dgr-2", TENANT, "emp-a", "emp-d", "back", Instant.parse("2026-06-10T00:00:00Z"),
                 Instant.parse("2026-06-10T00:00:00Z"), "evt-2");
         when(useCase.getOne("dgr-2", null)).thenReturn(revoked);
 

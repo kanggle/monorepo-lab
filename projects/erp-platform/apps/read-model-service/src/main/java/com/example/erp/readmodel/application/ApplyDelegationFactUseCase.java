@@ -45,13 +45,14 @@ public class ApplyDelegationFactUseCase {
         if (cmd.isGranted()) {
             if (existing == null) {
                 delegationRepository.save(DelegationFactProjection.ofGranted(
-                        id, cmd.delegatorId(), cmd.delegateId(), cmd.validFrom(),
+                        id, cmd.tenantId(), cmd.delegatorId(), cmd.delegateId(), cmd.validFrom(),
                         cmd.validTo(), cmd.reason(), cmd.occurredAt(), cmd.eventId(),
                         cmd.scope(), cmd.scopeRequestId()));
             } else {
                 // Sticky-terminal: applyGrant is a status no-op on a REVOKED row, but
                 // scope (like the validity window) is filled unconditionally.
-                existing.applyGrant(cmd.delegatorId(), cmd.delegateId(), cmd.validFrom(),
+                existing.applyGrant(cmd.tenantId(), cmd.delegatorId(), cmd.delegateId(),
+                        cmd.validFrom(),
                         cmd.validTo(), cmd.reason(), cmd.occurredAt(), cmd.eventId(),
                         cmd.scope(), cmd.scopeRequestId());
                 delegationRepository.save(existing);
@@ -61,11 +62,12 @@ public class ApplyDelegationFactUseCase {
             if (existing == null) {
                 // Out-of-order: revoke before grant → validity window ABSENT (E5).
                 delegationRepository.save(DelegationFactProjection.ofRevoked(
-                        id, cmd.delegatorId(), cmd.delegateId(), cmd.reason(),
+                        id, cmd.tenantId(), cmd.delegatorId(), cmd.delegateId(), cmd.reason(),
                         cmd.revokedAt(), cmd.occurredAt(), cmd.eventId()));
             } else {
                 // Last-revoke-wins; never reverts to ACTIVE.
-                existing.applyRevoke(cmd.delegatorId(), cmd.delegateId(), cmd.reason(),
+                existing.applyRevoke(cmd.tenantId(), cmd.delegatorId(), cmd.delegateId(),
+                        cmd.reason(),
                         cmd.revokedAt(), cmd.occurredAt(), cmd.eventId());
                 delegationRepository.save(existing);
             }

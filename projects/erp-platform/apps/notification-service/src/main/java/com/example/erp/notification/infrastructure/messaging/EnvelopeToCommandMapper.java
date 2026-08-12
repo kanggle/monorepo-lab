@@ -8,45 +8,55 @@ import com.example.erp.notification.domain.render.ApprovalEvent;
 import com.example.erp.notification.domain.render.DelegationEvent;
 import com.example.erp.notification.domain.render.DelegationRevokedEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
  * Maps a raw Kafka record value (approval envelope JSON) to a
  * {@link NotifyOnApprovalCommand}. Malformed JSON, an invalid envelope (null
- * {@code eventId} / {@code aggregateId} / {@code payload}), a non-{@code erp}
- * tenant (single-tenant invariant), or a null on the type's resolved-recipient
- * field is rejected with {@link InvalidEnvelopeException} so the consumer routes
- * it straight to the DLT without retry (Failure Modes 2 / 3 / 5). All Kafka /
+ * {@code eventId} / {@code aggregateId} / {@code payload}), an envelope that
+ * names <b>no</b> tenant, or a null on the type's resolved-recipient field is
+ * rejected with {@link InvalidEnvelopeException} so the consumer routes it
+ * straight to the DLT without retry (Failure Modes 2 / 3 / 5). All Kafka /
  * Jackson types stay in this adapter — the application layer receives a pure
  * command.
+ *
+ * <p><b>ADR-ERP-001 — D (TASK-ERP-BE-043) — the tenant is carried, not compared.</b>
+ * This mapper used to require {@code tenantId ==
+ * erpplatform.oauth2.required-tenant-id} (default {@code "erp"}) and reject
+ * everything else as an "out-of-contract tenantId (single-tenant invariant)". It
+ * was the <b>second copy</b> of the same gate — the first is
+ * {@code read-model-service}'s {@code DelegationEnvelopeToCommandMapper} — and
+ * because this one guards <b>every</b> {@code erp.approval.*} type rather than
+ * just the two delegation topics, it made the whole ERP inbox structurally empty
+ * ({@code totalElements 0}, {@code notification} 0 rows). erp records carry the
+ * customer tenant ({@code demo-corp}) because the console operator reaches erp by
+ * assume-tenant, while that property is the HTTP <b>domain key</b> used by
+ * {@code ServiceLevelOAuth2Config} / {@code ReadAuthorizationGate} — one value
+ * could not mean both. The resolved tenant is now persisted verbatim on
+ * {@code Notification} / {@code NotificationDelivery}; only its <b>absence</b> is
+ * invalid. erp staying single-tenant is enforced by the
+ * distinct-{@code tenant_id}-≥-2 ratchet instead.
  */
 @Component
 public class EnvelopeToCommandMapper {
 
     private final ObjectMapper objectMapper;
-    private final String requiredTenantId;
 
-    public EnvelopeToCommandMapper(
-            ObjectMapper objectMapper,
-            @Value("${erpplatform.oauth2.required-tenant-id:erp}") String requiredTenantId) {
+    public EnvelopeToCommandMapper(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
-        this.requiredTenantId = requiredTenantId == null || requiredTenantId.isBlank()
-                ? "erp" : requiredTenantId;
     }
 
     /**
      * The shared mapper prologue result: the parsed + validity-checked envelope
-     * and its resolved (and tenant-invariant-checked) {@code tenantId}.
+     * and its resolved {@code tenantId} (guaranteed non-blank).
      */
     private record ValidatedEnvelope(ApprovalEventEnvelope envelope, String tenantId) {
     }
 
     /**
-     * Parses + validates the envelope and resolves/checks the tenant (extracted
-     * dedup — the byte-identical prologue of {@link #map} / {@link #mapDelegation}
-     * / {@link #mapDelegationRevoked}). The {@link InvalidEnvelopeException}
-     * messages are preserved verbatim.
+     * Parses + validates the envelope and resolves the tenant (extracted dedup —
+     * the byte-identical prologue of {@link #map} / {@link #mapDelegation} /
+     * {@link #mapDelegationRevoked}).
      */
     private ValidatedEnvelope parseAndValidateTenant(String rawValue, String topic) {
         ApprovalEventEnvelope envelope;
@@ -64,9 +74,9 @@ public class EnvelopeToCommandMapper {
         if (tenantId == null || tenantId.isBlank()) {
             tenantId = envelope.tenantId();
         }
-        if (tenantId == null || !requiredTenantId.equals(tenantId)) {
-            throw new InvalidEnvelopeException("Out-of-contract tenantId '" + tenantId
-                    + "' on topic " + topic + " (single-tenant invariant: " + requiredTenantId + ")");
+        if (tenantId == null || tenantId.isBlank()) {
+            throw new InvalidEnvelopeException("Missing tenantId (envelope and payload) on topic "
+                    + topic + " — a fact that cannot name its tenant is not deliverable");
         }
         return new ValidatedEnvelope(envelope, tenantId);
     }

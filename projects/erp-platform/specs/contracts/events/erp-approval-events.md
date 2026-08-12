@@ -78,7 +78,7 @@ This contract is the forward interface for those v2 consumers.
 >   ```json
 >   { "grantId": "dgr-...", "delegatorId": "emp-A-...", "delegateId": "emp-D-...",
 >     "validFrom": "<ISO-8601 UTC>", "validTo": "<ISO-8601 UTC; ABSENT = open-ended>",
->     "reason": "<≤512; ABSENT when none>", "tenantId": "erp",
+>     "reason": "<≤512; ABSENT when none>", "tenantId": "<tenantId>",
 >     "occurredAt": "<ISO-8601 UTC>", "actor": "<JWT sub of the grant creator>" }
 >   ```
 >   This was a **producer-only forward interface** at v2.1 — the four existing
@@ -114,7 +114,7 @@ This contract is the forward interface for those v2 consumers.
 >   row (atomic; A7). Payload:
 >   ```json
 >   { "grantId": "dgr-...", "delegatorId": "emp-A-...", "delegateId": "emp-D-...",
->     "reason": "<≤512; ABSENT when none>", "tenantId": "erp",
+>     "reason": "<≤512; ABSENT when none>", "tenantId": "<tenantId>",
 >     "occurredAt": "<ISO-8601 UTC>", "actor": "<JWT sub of the revoker>" }
 >   ```
 >   The validity window (`validFrom`/`validTo`) is **NOT** in the revoke payload (a
@@ -151,7 +151,7 @@ This contract is the forward interface for those v2 consumers.
 >   { "grantId": "dgr-...", "delegatorId": "emp-A-...", "delegateId": "emp-D-...",
 >     "validFrom": "<ISO-8601 UTC>", "validTo": "<ISO-8601 UTC; ABSENT = open-ended>",
 >     "reason": "<≤512; ABSENT when none>", "scope": "GLOBAL | REQUEST",
->     "scopeRequestId": "<approvalRequestId; ABSENT when GLOBAL>", "tenantId": "erp",
+>     "scopeRequestId": "<approvalRequestId; ABSENT when GLOBAL>", "tenantId": "<tenantId>",
 >     "occurredAt": "<ISO-8601 UTC>", "actor": "<JWT sub of the grant creator>" }
 >   ```
 >
@@ -195,7 +195,7 @@ invent a new shape.
   "eventId": "<uuid>",
   "eventType": "erp.approval.submitted",
   "occurredAt": "<ISO-8601 UTC>",
-  "tenantId": "erp",
+  "tenantId": "<tenantId>",
   "source": "erp-platform-approval-service",
   "aggregateType": "ApprovalRequest",
   "aggregateId": "<approvalRequestId>",
@@ -205,6 +205,29 @@ invent a new shape.
 ```
 
 `aggregateType` is `"ApprovalRequest"` on **every** approval event.
+
+> **`tenantId` is a placeholder, NOT the constant `"erp"`** (ADR-ERP-001 — D,
+> ACCEPTED 2026-08-12). Until then this contract wrote the literal `"tenantId":
+> "erp"` while every other field used a `"<…>"` placeholder, and both consumers
+> read that literal as a **value to compare against**, so every real event (whose
+> tenant is the customer tenant the record actually belongs to — `demo-corp` in
+> the demo) was rejected to `.DLT`. The producer MUST stamp the envelope
+> `tenantId` from the aggregate's own `tenant_id`, and a consumer MUST NOT
+> compare it to a configured constant — see § Consumer tenant handling below.
+
+### Consumer tenant handling (ADR-ERP-001 — D)
+
+- The envelope `tenantId` MUST be **present and non-blank**; absent → invalid
+  envelope → immediate DLT (a fact that cannot name its tenant is not projectable).
+- A consumer MUST NOT reject an envelope because its `tenantId` differs from a
+  configured value. In particular `erpplatform.oauth2.required-tenant-id` is the
+  **domain key** used by the HTTP entitlement gates (`entitled_domains ∋ erp`) —
+  it is not a tenant value and MUST NOT be read on the event plane.
+- A consumer that persists the fact MUST persist **the envelope's** `tenantId`,
+  not a constant, so the projection agrees with its source of record.
+- The removed rejection is replaced by an after-the-fact ratchet: **erp going
+  multi-tenant (distinct `tenant_id` ≥ 2) is RED** — that is the moment to
+  reopen ADR-ERP-001 Option B.
 
 ---
 
@@ -237,7 +260,7 @@ Common to every approval payload:
   "subjectId": "dept-... | emp-...",
   "approverId": "emp-approver-...",
   "submitterId": "emp-submitter-...",
-  "tenantId": "erp",
+  "tenantId": "<tenantId>",
   "occurredAt": "<ISO-8601 UTC>",
   "actor": "<JWT sub of the transition actor>" }
 ```
@@ -248,7 +271,7 @@ no `reason`):
 { "approvalRequestId": "appr-...",
   "subjectType": "DEPARTMENT", "subjectId": "dept-...",
   "approverId": "emp-approver-...", "submitterId": "emp-submitter-...",
-  "tenantId": "erp", "occurredAt": "<ISO-8601 UTC>",
+  "tenantId": "<tenantId>", "occurredAt": "<ISO-8601 UTC>",
   "actor": "emp-submitter-..." }
 ```
 
@@ -258,7 +281,7 @@ if the approver supplied one (optional on approve, so usually ABSENT):
 { "approvalRequestId": "appr-...",
   "subjectType": "DEPARTMENT", "subjectId": "dept-...",
   "approverId": "emp-approver-...", "submitterId": "emp-submitter-...",
-  "tenantId": "erp", "occurredAt": "<ISO-8601 UTC>",
+  "tenantId": "<tenantId>", "occurredAt": "<ISO-8601 UTC>",
   "actor": "emp-approver-...",
   "finalizedAt": "<ISO-8601 UTC>",
   "reason": "<ABSENT when approver gave none>" }
@@ -270,7 +293,7 @@ if the approver supplied one (optional on approve, so usually ABSENT):
 { "approvalRequestId": "appr-...",
   "subjectType": "DEPARTMENT", "subjectId": "dept-...",
   "approverId": "emp-approver-...", "submitterId": "emp-submitter-...",
-  "tenantId": "erp", "occurredAt": "<ISO-8601 UTC>",
+  "tenantId": "<tenantId>", "occurredAt": "<ISO-8601 UTC>",
   "actor": "emp-approver-...",
   "finalizedAt": "<ISO-8601 UTC>",
   "reason": "예산 근거 부족" }
@@ -282,7 +305,7 @@ if the approver supplied one (optional on approve, so usually ABSENT):
 { "approvalRequestId": "appr-...",
   "subjectType": "DEPARTMENT", "subjectId": "dept-...",
   "approverId": "emp-approver-...", "submitterId": "emp-submitter-...",
-  "tenantId": "erp", "occurredAt": "<ISO-8601 UTC>",
+  "tenantId": "<tenantId>", "occurredAt": "<ISO-8601 UTC>",
   "actor": "emp-submitter-...",
   "finalizedAt": "<ISO-8601 UTC>",
   "reason": "기안 내용 수정 필요" }

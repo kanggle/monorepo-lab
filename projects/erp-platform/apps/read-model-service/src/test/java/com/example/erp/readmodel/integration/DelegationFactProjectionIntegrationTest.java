@@ -240,28 +240,65 @@ class DelegationFactProjectionIntegrationTest extends AbstractReadModelIntegrati
         assertThat(getDelegation(grantOut, erpReadToken()).statusCode()).isEqualTo(200);
     }
 
-    @Test
-    void nonErpTenantEventRoutesToDltAndIsNotProjected() throws Exception {
-        String grantId = newId();
-        // Non-erp tenant envelope → invalid → immediate DLT, not projected.
+    /**
+     * Builds a delegation envelope with an explicit tenant — or with <b>none</b>
+     * when {@code tenantId} is null. The shared helper deliberately cannot produce
+     * either shape.
+     */
+    private String delegationEnvelopeWithTenant(String grantId, String tenantId)
+            throws Exception {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("grantId", grantId);
         payload.put("delegatorId", "emp-a");
         payload.put("delegateId", "emp-d");
         payload.put("validFrom", FROM);
-        payload.put("tenantId", "other");
+        if (tenantId != null) payload.put("tenantId", tenantId);
         payload.put("occurredAt", Instant.now().toString());
         payload.put("actor", "emp-a");
         Map<String, Object> env = new LinkedHashMap<>();
         env.put("eventId", newId());
         env.put("eventType", "erp.approval.delegated");
         env.put("occurredAt", Instant.now().toString());
-        env.put("tenantId", "other");
+        if (tenantId != null) env.put("tenantId", tenantId);
         env.put("source", "erp-platform-approval-service");
         env.put("aggregateType", "DelegationGrant");
         env.put("aggregateId", grantId);
         env.put("payload", payload);
-        publish(TOPIC_DELEGATED, grantId, objectMapper.writeValueAsString(env));
+        return objectMapper.writeValueAsString(env);
+    }
+
+    /**
+     * <b>Replaces {@code nonErpTenantEventRoutesToDltAndIsNotProjected}</b>
+     * (TASK-ERP-BE-043 / ADR-ERP-001 — D). That test pinned the rejection of any
+     * tenant other than {@code erp} — and that rejection is exactly what sent every
+     * real event to {@code .DLT}, because no erp row has ever carried the string
+     * {@code erp}. The tenant is now <b>carried, not compared</b>: another tenant
+     * projects normally and its own value lands on the row, where the single-tenant
+     * ratchet — not this consumer — is what notices erp going multi-tenant.
+     */
+    @Test
+    void anotherTenantIsProjectedAndItsValueIsRecorded() throws Exception {
+        String grantId = newId();
+        publish(TOPIC_DELEGATED, grantId, delegationEnvelopeWithTenant(grantId, "other-corp"));
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() ->
+                assertThat(delegationFactJpa.findById(grantId)).isPresent());
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT tenant_id FROM delegation_fact_proj WHERE grant_id = ?",
+                String.class, grantId)).isEqualTo("other-corp");
+    }
+
+    /**
+     * The one tenant condition that survives ADR-ERP-001 — D: an envelope naming
+     * <b>no</b> tenant anywhere is invalid → immediate DLT, never projected. Kept
+     * as a live assertion rather than only a unit test, because it is what stops
+     * "carried, not compared" from writing null-tenant rows that the ratchet could
+     * not see.
+     */
+    @Test
+    void anEnvelopeThatNamesNoTenantIsNotProjected() throws Exception {
+        String grantId = newId();
+        publish(TOPIC_DELEGATED, grantId, delegationEnvelopeWithTenant(grantId, null));
 
         Thread.sleep(3000);
         assertThat(delegationFactJpa.findById(grantId)).isEmpty();

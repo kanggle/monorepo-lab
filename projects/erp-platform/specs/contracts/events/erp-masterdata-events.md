@@ -92,13 +92,25 @@ This contract is the v1 forward interface for those v2 consumers.
   "source": "erp-platform-masterdata-service",
   "occurredAt": "<ISO-8601 UTC>",
   "schemaVersion": 1,
-  "tenantId": "erp",
+  "tenantId": "<tenantId>",
   "aggregateType": "department|employee|jobgrade|costcenter|businesspartner",
   "aggregateId": "<id>",
   "partitionKey": "<id>",
   "payload": { ... }
 }
 ```
+
+> **`tenantId` is a placeholder, NOT the constant `"erp"`** (ADR-ERP-001 — D,
+> ACCEPTED 2026-08-12). This contract used to write the literal `"tenantId":
+> "erp"` while every other field used a `"<…>"` placeholder. The masterdata
+> consumers never compared it, so nothing broke here — but the sibling approval
+> contract carried the same literal and *its* consumers did compare it, which is
+> how every `erp.approval.*` event ended up in `.DLT`. The rule is one for both
+> contracts: the producer stamps the aggregate's own `tenant_id`, and a consumer
+> MUST NOT compare it against a configured constant
+> (`erpplatform.oauth2.required-tenant-id` is the HTTP **domain key**, not a
+> tenant value). See [`erp-approval-events.md`](erp-approval-events.md)
+> § Consumer tenant handling.
 
 ---
 
@@ -130,7 +142,7 @@ This contract is the v1 forward interface for those v2 consumers.
 ```json
 { "aggregateId": "dept-...",
   "changeKind": "CREATED|UPDATED|RETIRED|PARENT_MOVED",
-  "tenantId": "erp",
+  "tenantId": "<tenantId>",
   "occurredAt": "<ISO-8601 UTC>",
   "actor": "<JWT sub or operator id>",
   "before": { "code", "name", "parentId", "status", "effectivePeriod" } | null,
@@ -142,7 +154,7 @@ This contract is the v1 forward interface for those v2 consumers.
 ```json
 { "aggregateId": "emp-...",
   "changeKind": "CREATED|UPDATED|RETIRED",
-  "tenantId": "erp",
+  "tenantId": "<tenantId>",
   "occurredAt": "<ISO-8601 UTC>",
   "actor": "...",
   "before": { "employeeNumber", "name", "departmentId", "costCenterId",
@@ -155,7 +167,7 @@ This contract is the v1 forward interface for those v2 consumers.
 ```json
 { "aggregateId": "jg-...",
   "changeKind": "CREATED|UPDATED|RETIRED",
-  "tenantId": "erp",
+  "tenantId": "<tenantId>",
   "occurredAt": "<ISO-8601 UTC>",
   "actor": "...",
   "before": { "code", "name", "displayOrder", "status", "effectivePeriod" } | null,
@@ -167,7 +179,7 @@ This contract is the v1 forward interface for those v2 consumers.
 ```json
 { "aggregateId": "cc-...",
   "changeKind": "CREATED|UPDATED|RETIRED",
-  "tenantId": "erp",
+  "tenantId": "<tenantId>",
   "occurredAt": "<ISO-8601 UTC>",
   "actor": "...",
   "before": { "code", "name", "departmentId", "status", "effectivePeriod" } | null,
@@ -179,7 +191,7 @@ This contract is the v1 forward interface for those v2 consumers.
 ```json
 { "aggregateId": "bp-...",
   "changeKind": "CREATED|UPDATED|RETIRED",
-  "tenantId": "erp",
+  "tenantId": "<tenantId>",
   "occurredAt": "<ISO-8601 UTC>",
   "actor": "...",
   "before": { "code", "name", "partnerType", "paymentTerms", "status",

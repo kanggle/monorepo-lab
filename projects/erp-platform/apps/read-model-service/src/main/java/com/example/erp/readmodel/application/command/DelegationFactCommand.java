@@ -21,9 +21,16 @@ import java.time.Instant;
  * grant-time scoping (TASK-ERP-BE-018); they are non-null only on a {@code delegated}
  * event (a revoke restates neither), and {@code scopeRequestId} is non-null only when
  * {@code scope == REQUEST}.
+ *
+ * <p>{@code tenantId} is the envelope's own tenant, resolved by the mapper and
+ * guaranteed non-blank (an envelope naming no tenant is invalid → DLT). It is
+ * persisted on the projection row so {@code delegation_fact_proj.tenant_id} agrees
+ * with its source of record instead of taking the column's legacy
+ * {@code DEFAULT 'erp'} (ADR-ERP-001 — D, TASK-ERP-BE-043).
  */
 public record DelegationFactCommand(
         String eventId,
+        String tenantId,
         String topic,
         String grantId,
         DelegationFactStatus status,

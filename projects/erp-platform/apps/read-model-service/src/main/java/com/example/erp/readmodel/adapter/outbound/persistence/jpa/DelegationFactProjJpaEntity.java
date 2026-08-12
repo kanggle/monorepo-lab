@@ -30,6 +30,18 @@ public class DelegationFactProjJpaEntity {
     @Column(name = "grant_id", nullable = false, length = 64)
     private String grantId;
 
+    /**
+     * The tenant the grant belongs to, taken from the event envelope
+     * (TASK-ERP-BE-043 / ADR-ERP-001 — D). The column has carried a legacy
+     * {@code DEFAULT 'erp'} since V3 and was previously never mapped, so any row
+     * this consumer wrote would have silently disagreed with its source of record
+     * in {@code approval-service} (whose {@code delegation_grant.tenant_id} is the
+     * customer tenant) — and would have tripped the single-tenant ratchet by
+     * introducing a second distinct value into erp on its own.
+     */
+    @Column(name = "tenant_id", nullable = false, length = 64)
+    private String tenantId;
+
     @Column(name = "delegator_id", length = 64)
     private String delegatorId;
 
