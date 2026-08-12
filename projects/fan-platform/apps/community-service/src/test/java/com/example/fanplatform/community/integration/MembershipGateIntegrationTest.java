@@ -150,7 +150,7 @@ class MembershipGateIntegrationTest extends CommunityServiceIntegrationBase {
     }
 
     /**
-     * Replaces the default {@link com.example.fanplatform.community.infrastructure.membership.AlwaysAllowMembershipChecker}
+     * Replaces the production {@link com.example.fanplatform.community.infrastructure.membership.HttpMembershipChecker}
      * with a checker that denies every request, simulating a non-member fan.
      */
     @TestConfiguration

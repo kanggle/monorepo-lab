@@ -6,10 +6,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.client.RestClient;
 
 /**
- * Real {@link MembershipChecker} that calls membership-service's internal
- * access-check endpoint over workload identity (ADR-MONO-005). Replaces the v1
- * {@code AlwaysAllowMembershipChecker} stub (wired by
- * {@code MembershipCheckerAutoConfig}).
+ * The {@link MembershipChecker} — it calls membership-service's internal
+ * access-check endpoint over workload identity (ADR-MONO-005). Since
+ * TASK-FAN-INT-006 it is the ONLY implementation: the v1 always-allow stub and
+ * the property that selected it are deleted (see {@code MembershipCheckerAutoConfig}).
  *
  * <p>Remote contract (membership-service architecture.md § Internal Access-Check
  * Contract — 1:1 with this port):

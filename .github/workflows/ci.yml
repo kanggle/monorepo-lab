@@ -1586,6 +1586,7 @@ jobs:
           :projects:fan-platform:apps:gateway-service:bootJar
           :projects:fan-platform:apps:community-service:bootJar
           :projects:fan-platform:apps:artist-service:bootJar
+          :projects:fan-platform:apps:membership-service:bootJar
           :projects:iam-platform:apps:auth-service:bootJar
           --no-daemon --stacktrace
 
@@ -1601,6 +1602,7 @@ jobs:
             projects/fan-platform/apps/gateway-service/build/libs/gateway-service.jar
             projects/fan-platform/apps/community-service/build/libs/community-service.jar
             projects/fan-platform/apps/artist-service/build/libs/artist-service.jar
+            projects/fan-platform/apps/membership-service/build/libs/membership-service.jar
           retention-days: 1
 
       # TASK-FAN-INT-005 — SEPARATE artifact, and that is load-bearing. Adding the
@@ -2477,6 +2479,7 @@ jobs:
           {"name":"gateway-service","image":"fan-platform-gateway-service:e2e","prop":"fan.e2e.gatewayImage"},
           {"name":"community-service","image":"fan-platform-community-service:e2e","prop":"fan.e2e.communityImage"},
           {"name":"artist-service","image":"fan-platform-artist-service:e2e","prop":"fan.e2e.artistImage"},
+          {"name":"membership-service","image":"fan-platform-membership-service:e2e","prop":"fan.e2e.membershipImage"},
           {"name":"auth-service","image":"iam-auth-service:e2e","prop":"fan.e2e.iamImage",
            "dir":"projects/iam-platform/apps/auth-service",
            "context":"projects/iam-platform/",

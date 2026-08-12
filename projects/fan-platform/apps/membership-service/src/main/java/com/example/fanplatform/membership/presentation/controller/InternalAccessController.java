@@ -18,8 +18,8 @@ import org.springframework.web.bind.annotation.RestController;
  * the response field {@code allowed} corresponds exactly to its boolean return
  * value — including the fail-closed (deny-on-error) contract delegated to
  * {@link CheckAccessUseCase#hasAccess}. The FAN-BE-010 {@code HttpMembershipChecker}
- * adapter is therefore a drop-in replacement for the v1
- * {@code AlwaysAllowMembershipChecker}.
+ * adapter is therefore a drop-in replacement for the v1 always-allow stub, which
+ * TASK-FAN-INT-006 deleted once this endpoint was in the live e2e stack.
  *
  * <p>A domain "deny" is NOT an error — it returns 200 with {@code allowed=false}.
  * Authentication is workload-identity ({@code client_credentials} JWT) via the

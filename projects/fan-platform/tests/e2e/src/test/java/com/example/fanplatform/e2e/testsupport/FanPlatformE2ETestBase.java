@@ -99,6 +99,7 @@ public abstract class FanPlatformE2ETestBase {
     protected static final String MYSQL_ALIAS = "fan-e2e-mysql";
     protected static final String COMMUNITY_ALIAS = "fan-e2e-community";
     protected static final String ARTIST_ALIAS = "fan-e2e-artist";
+    protected static final String MEMBERSHIP_ALIAS = "fan-e2e-membership";
     protected static final String GATEWAY_ALIAS = "fan-e2e-gateway";
     protected static final String IAM_ALIAS = "fan-e2e-iam";
 
@@ -129,6 +130,14 @@ public abstract class FanPlatformE2ETestBase {
     private static final String DB_PASSWORD = "fanplatform";
     private static final String DB_NAME_COMMUNITY = "fanplatform_community";
     private static final String DB_NAME_ARTIST = "fanplatform_artist";
+    /**
+     * TASK-FAN-INT-006. The init script already creates this database — it reads
+     * {@code POSTGRES_DB_MEMBERSHIP} and has since membership-service existed
+     * ({@code infra/postgres/init/01-create-databases.sh}), so the only thing that
+     * was missing here is the env var telling it to. Verified rather than assumed:
+     * the script's {@code create_db_if_missing} line names this exact variable.
+     */
+    private static final String DB_NAME_MEMBERSHIP = "fanplatform_membership";
 
     /** iam auth_db credentials — must match auth-service's `e2e` profile defaults. */
     private static final String IAM_DB_NAME = "auth_db";
@@ -150,6 +159,8 @@ public abstract class FanPlatformE2ETestBase {
             "apps/community-service/build/libs/community-service.jar");
     private static final Path ARTIST_JAR = locateOptionalJar(
             "apps/artist-service/build/libs/artist-service.jar");
+    private static final Path MEMBERSHIP_JAR = locateOptionalJar(
+            "apps/membership-service/build/libs/membership-service.jar");
     /** iam lives in a sibling project — repo-root-relative, unlike the three above. */
     private static final Path IAM_JAR = locateOptionalJar(
             "projects/iam-platform/apps/auth-service/build/libs/auth-service.jar");
@@ -158,6 +169,7 @@ public abstract class FanPlatformE2ETestBase {
     private static final Path GATEWAY_DOCKERFILE = locateFile("apps/gateway-service/Dockerfile");
     private static final Path COMMUNITY_DOCKERFILE = locateFile("apps/community-service/Dockerfile");
     private static final Path ARTIST_DOCKERFILE = locateFile("apps/artist-service/Dockerfile");
+    private static final Path MEMBERSHIP_DOCKERFILE = locateFile("apps/membership-service/Dockerfile");
     private static final Path IAM_DOCKERFILE = locateFile(
             "projects/iam-platform/apps/auth-service/Dockerfile");
 
@@ -183,6 +195,7 @@ public abstract class FanPlatformE2ETestBase {
     protected GenericContainer<?> iam;
     protected GenericContainer<?> community;
     protected GenericContainer<?> artist;
+    protected GenericContainer<?> membership;
     protected GenericContainer<?> gateway;
 
     protected JwtTestHelper jwt;
@@ -225,6 +238,7 @@ public abstract class FanPlatformE2ETestBase {
                 .withNetworkAliases(POSTGRES_ALIAS)
                 .withEnv("POSTGRES_DB_COMMUNITY", DB_NAME_COMMUNITY)
                 .withEnv("POSTGRES_DB_ARTIST", DB_NAME_ARTIST)
+                .withEnv("POSTGRES_DB_MEMBERSHIP", DB_NAME_MEMBERSHIP)
                 .withCopyFileToContainer(
                         org.testcontainers.utility.MountableFile.forHostPath(
                                 locateFile("infra/postgres/init/01-create-databases.sh").toString()),
@@ -354,6 +368,57 @@ public abstract class FanPlatformE2ETestBase {
                         .withStartupTimeout(Duration.ofMinutes(3)));
         artist.start();
 
+        // ----- membership-service ------------------------------------------
+        // TASK-FAN-INT-006. The fourth service, and the one that let the last
+        // switchable gate be deleted.
+        //
+        // 🔵 Two token planes again (the shape TASK-FAN-INT-005 established): the
+        // END-USER plane is the host-side JWKS mock (OIDC_ISSUER_URL/JWT_JWKS_URI)
+        // because the e2e mints its own reader/subscriber tokens; the WORKLOAD plane
+        // is the real iam, because community calls /internal/membership/access with a
+        // client_credentials token that only iam can sign. Unlike artist-service,
+        // membership-service already declared INTERNAL_JWT_* in its application.yml —
+        // so here the env names reach something without a yml change.
+        membership = buildServiceContainer(
+                "fan.e2e.membershipImage", MEMBERSHIP_JAR, MEMBERSHIP_DOCKERFILE)
+                .withNetwork(network)
+                .withNetworkAliases(MEMBERSHIP_ALIAS)
+                .withExtraHost("host.docker.internal", "host-gateway")
+                .withEnv("SERVER_PORT", String.valueOf(SERVICE_PORT))
+                // 🔴 NOT the `portone` profile. MockPaymentGatewayAdapter is
+                // @Profile("!portone"), so leaving the profile at `default` is what
+                // makes the product subscribe path usable here at all — see AC-0 in
+                // TASK-FAN-INT-006 for why that decided the whole approach.
+                .withEnv("SPRING_PROFILES_ACTIVE", "default")
+                .withEnv("POSTGRES_HOST", POSTGRES_ALIAS)
+                .withEnv("POSTGRES_PORT", "5432")
+                .withEnv("POSTGRES_DB_MEMBERSHIP", DB_NAME_MEMBERSHIP)
+                .withEnv("POSTGRES_USER", DB_USERNAME)
+                .withEnv("POSTGRES_PASSWORD", DB_PASSWORD)
+                .withEnv("KAFKA_BOOTSTRAP", KAFKA_ALIAS + ":" + KAFKA_INTERNAL_PORT)
+                .withEnv("OIDC_ISSUER_URL", JwtTestHelper.SAS_ISSUER)
+                .withEnv("JWT_JWKS_URI", jwks.containerJwksUrl())
+                .withEnv("OIDC_REQUIRED_TENANT_ID", JwtTestHelper.DEFAULT_TENANT_ID)
+                .withEnv("INTERNAL_JWT_JWK_SET_URI", IAM_ISSUER + "/oauth2/jwks")
+                .withEnv("INTERNAL_JWT_ISSUER", IAM_ISSUER)
+                // application.yml declares this one with NO default, so an unset value
+                // is an unresolvable placeholder at binding time rather than a runtime
+                // 401 — a boot failure that reads like a container problem. The value
+                // is never used: the PortOne adapter only exists under the `portone`
+                // profile, which is not active here.
+                .withEnv("FAN_PAYMENT_PORTONE_API_SECRET", "e2e-unused")
+                // Background sweepers off. They are correct in production and pure
+                // noise here — an expiry sweep or auto-renew firing mid-suite would
+                // mutate the very rows the assertions read, and the resulting flake
+                // would look like a gate defect rather than a scheduler.
+                .withEnv("EXPIRY_SWEEP_ENABLED", "false")
+                .withEnv("AUTO_RENEW_ENABLED", "false")
+                .withEnv("OUTBOX_POLLING_INTERVAL_MS", "500")
+                .waitingFor(Wait.forHttp("/actuator/health")
+                        .forStatusCode(200)
+                        .withStartupTimeout(Duration.ofMinutes(3)));
+        membership.start();
+
         // ----- community-service -------------------------------------------
         community = buildServiceContainer("fan.e2e.communityImage", COMMUNITY_JAR, COMMUNITY_DOCKERFILE)
                 .withNetwork(network)
@@ -373,20 +438,22 @@ public abstract class FanPlatformE2ETestBase {
                 .withEnv("JWT_JWKS_URI", jwks.containerJwksUrl())
                 .withEnv("OIDC_REQUIRED_TENANT_ID", JwtTestHelper.DEFAULT_TENANT_ID)
                 .withEnv("OUTBOX_POLLING_INTERVAL_MS", "500")
-                // membership-service is still out of this stack, so HttpMembershipChecker
-                // would fail-closed on every MEMBERS_ONLY/PREMIUM read. Opt out via the
-                // documented escape hatch so community falls back to
-                // AlwaysAllowMembershipChecker (v1 stub). The real HTTP gate is covered
-                // by MembershipGateIntegrationTest + federation-hardening-e2e.
+                // 🔴 TASK-FAN-INT-006 — the membership hatch is GONE too (bean, property
+                // and the `COMMUNITY_MEMBERSHIP_SERVICE_ENABLED=false` that used to sit
+                // here). membership-service is in the stack above and every
+                // MEMBERS_ONLY/PREMIUM read in this suite now goes through
+                // HttpMembershipChecker for real, both ways.
                 //
-                // 🔴 TASK-FAN-INT-005 AC-0 — this switch stays, and the reason is NOT
-                // the one the old comment gave. iam is present now; what is still
-                // missing is membership-service AND an ACTIVE membership row, which
-                // the product only creates through the PortOne-backed subscribe flow
-                // (`POST /api/fan/memberships` + a billing key). Deleting this hatch is
-                // therefore a materially bigger job than deleting the artist one and
-                // is split out — see TASK-FAN-INT-006.
-                .withEnv("COMMUNITY_MEMBERSHIP_SERVICE_ENABLED", "false")
+                // 🔴 Same trap as ARTIST_SERVICE_BASE_URL below, and it was equally
+                // invisible: the default is `http://membership-service:8080`, a name
+                // that does not resolve on this network. While the gate was switched
+                // off nothing ever dialled it, so the wrong value sat here harmlessly.
+                // It would now be a fail-closed deny on every gated read — which looks
+                // exactly like a working gate, and would have made the "deny" half of
+                // AC-1 pass for the wrong reason. That is why AC-1 also asserts the
+                // ALLOW half in the same run.
+                .withEnv("MEMBERSHIP_SERVICE_BASE_URL",
+                        "http://" + MEMBERSHIP_ALIAS + ":" + SERVICE_PORT)
                 // TASK-FAN-INT-005 — the artist-side hatch is GONE (bean, property and
                 // this env). community now mints a real client_credentials token from
                 // the iam container above and every follow in this suite goes through
@@ -414,6 +481,12 @@ public abstract class FanPlatformE2ETestBase {
                 .withEnv("REDIS_PORT", "6379")
                 .withEnv("COMMUNITY_SERVICE_URI", "http://" + COMMUNITY_ALIAS + ":" + SERVICE_PORT)
                 .withEnv("ARTIST_SERVICE_URI", "http://" + ARTIST_ALIAS + ":" + SERVICE_PORT)
+                // TASK-FAN-INT-006 — routes /api/v1/memberships/** → the service's
+                // /api/fan/memberships/**. The e2e subscribes through this route rather
+                // than calling membership-service directly, so the ACTIVE row that opens
+                // the gate is created by the same path a real fan uses.
+                .withEnv("MEMBERSHIP_SERVICE_URI",
+                        "http://" + MEMBERSHIP_ALIAS + ":" + SERVICE_PORT)
                 .withEnv("OIDC_ISSUER_URL", JwtTestHelper.SAS_ISSUER)
                 .withEnv("JWT_JWKS_URI", jwks.containerJwksUrl())
                 .withEnv("OIDC_REQUIRED_TENANT_ID", JwtTestHelper.DEFAULT_TENANT_ID)
@@ -438,6 +511,7 @@ public abstract class FanPlatformE2ETestBase {
         if (gateway != null) gateway.stop();
         if (community != null) community.stop();
         if (artist != null) artist.stop();
+        if (membership != null) membership.stop();
         if (iam != null) iam.stop();
         if (kafka != null) kafka.stop();
         if (redis != null) redis.stop();
@@ -570,6 +644,7 @@ public abstract class FanPlatformE2ETestBase {
             dumpContainerLogs("gateway", suite.gateway);
             dumpContainerLogs("community", suite.community);
             dumpContainerLogs("artist", suite.artist);
+            dumpContainerLogs("membership", suite.membership);
             // TASK-FAN-INT-005 — iam last but not least: a follow that 403s now has
             // three candidate causes (token not minted / token minted without
             // artist.read / artist-service rejected it), and only this log separates

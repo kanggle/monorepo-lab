@@ -57,7 +57,7 @@
 ## Out of scope (this increment)
 
 - **production code** — FAN-BE-009 (skeleton + domain + PG mock + endpoints + outbox + infra).
-- **community-service 어댑터 교체** (`HttpMembershipChecker` 가 `AlwaysAllowMembershipChecker` stub 대체) — FAN-BE-010 (workload-identity provider 포함).
+- **community-service 어댑터 교체** (`HttpMembershipChecker` 가 v1 always-allow stub 대체) — FAN-BE-010 (workload-identity provider 포함). 🔵 `TASK-FAN-INT-006` 이 그 stub 과 선택 프로퍼티를 **삭제**해, 이제 교체가 아니라 유일한 구현이다.
 - **frontend 멤버십 게이트 / 구독 UI** — FAN-FE 후속.
 - **notification-service** (membership 이벤트 소비) — PROJECT.md § v2 별건.
 - **실 PG 연동** — mock 경계만. admin-service 무관.

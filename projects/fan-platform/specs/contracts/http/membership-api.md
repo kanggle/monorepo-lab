@@ -412,8 +412,9 @@ lookup all return `{ "allowed": false }` (deny), never leaked as a different sta
 > `MembershipChecker.hasAccess(accountId, tier, tenantId)`, and the boolean field
 > `allowed` corresponds exactly to its boolean return value, including the
 > fail-closed (deny-on-error) contract. This is the AC-2 / AC-7 guarantee that the
-> FAN-BE-010 adapter swap is a drop-in replacement for the v1
-> `AlwaysAllowMembershipChecker`.
+> FAN-BE-010 adapter swap was a drop-in replacement for the v1 always-allow stub.
+> 🔵 That stub no longer exists — `TASK-FAN-INT-006` deleted it and the property
+> that selected it, so this endpoint is the only answer community can get.
 
 Errors: 401 (no token), 403 (non-workload-identity token), 400 (missing required
 param). Note: a domain "deny" is NOT an error — it returns 200 with

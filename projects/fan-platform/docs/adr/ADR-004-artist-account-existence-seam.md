@@ -76,7 +76,7 @@ followRepository.save(Follow.create(actor.accountId(), artistAccountId, actor.te
 | `/internal/**` 컨트롤러 | `InternalAccessController` · `GET /internal/membership/access` | **없음** |
 | `/internal/**` Order(1) 보안 체인 (`ADR-MONO-005`) | 있음 | **없음** (`grep -rn "internal"` → **0건**) |
 | community 쪽 클라이언트 | `HttpMembershipChecker`(workload identity, **fail-closed**) | 없음 |
-| e2e 탈출구 | `community.membership-service.enabled=false` → inert fallback | 없음 |
+| e2e 탈출구 | ~~`community.membership-service.enabled=false` → inert fallback~~ — **`TASK-FAN-INT-006` 이 삭제** | 없음 |
 
 ⇒ 동기 안은 "기존 패턴을 한 번 더" 가 아니라 **artist-service 에 없는 표면을 신설**하는
 일이고, 그래서 계약 선갱신 대상이다.
@@ -228,10 +228,16 @@ C 는 정직하지만 `ADR-MONO-059` 의 A 를 실질적으로 되돌린다. 소
 그 조건이 사 온 면제도 회수하는 것이 규율이다. 남겨 두면 다음 사람은 그것을 *정책*으로
 읽는다.
 
-🔵 membership 쪽 탈출구(`community.membership-service.enabled`)는 **그대로 남는다** —
-같은 "iam 부재" 로 묶이지 않기 때문이다. 그쪽을 지우려면 membership-service 와 함께
-**ACTIVE 멤버십 행**이 필요하고, 그 행은 제품상 PortOne 결제(빌링키)를 거치는 가입 경로로만
-생긴다. `TASK-FAN-INT-006` 이 소유한다.
+~~🔵 membership 쪽 탈출구(`community.membership-service.enabled`)는 **그대로 남는다**~~
+✅ **2026-08-12 — `TASK-FAN-INT-006` 이 그것도 지웠다.** 위 문단은 그 탈출구를 남기는 근거로
+*"ACTIVE 멤버십 행은 PortOne 결제(빌링키)를 거치는 가입 경로로만 생긴다"* 를 들었다.
+🔴 **그 근거가 틀렸다** — `MockPaymentGatewayAdapter` 가 `@Profile("!portone")` 라, PortOne
+프로파일을 켜지 않는 모든 스택(CI·e2e·키 없는 로컬)에서 **이미 그것이 결제 어댑터**다.
+세울 결제 평면이 없었고, 그래서 e2e 는 제품 경로 그대로 구독한다.
+
+🔵 그래서 이 ADR § Decision Drivers 3 이 지목한 모양 — 허용 빈이 **폴백**으로 선택되는 것 —
+은 이제 저장소에 남아 있지 않다. artist 쪽(`havingValue="false"`, 명시 선택)은 INT-005 가,
+membership 쪽(`@ConditionalOnMissingBean`, 폴백 선택)은 INT-006 이 지웠다.
 
 ### ACCEPT 가 인가하는 것 / 하지 않는 것
 
