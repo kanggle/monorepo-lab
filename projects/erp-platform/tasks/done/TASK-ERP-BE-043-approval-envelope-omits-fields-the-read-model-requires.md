@@ -8,7 +8,7 @@ approval-service 의 이벤트 봉투가 read-model 이 **필수로 요구하는
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -355,6 +355,19 @@ iam dev 시드를 `R__` 로 옮겼으므로 **기존 볼륨의 데모 데이터�
 🔴 **AC-0 을 재개할 때 물려받지 말 것**: 위 숫자는 2026-08-12 것이고, 이 티켓 본문 위쪽의
 end-offset 표는 **그 이전** 것이다. `approved` 토픽은 `MONO-519` 의 라이브 승인으로 이번에
 처음 발생했으므로 지금 트래픽이 있는 토픽은 셋이 아니라 **넷**이다.
+
+---
+
+## ✅ 2026-08-12 (UTC) DONE — 3차원 검증
+
+impl PR [#3289](https://github.com/kanggle/monorepo-lab/pull/3289) squash `396fc982c`.
+(a) `state=MERGED` · `mergedAt=2026-08-12T16:54:14Z` · `mergeCommit=396fc982c96874987476418b0a338e0bf6f9482d`
+(b) `origin/main` tip = `396fc982c` (일치)  (c) 머지 전 스냅샷 **failing 0 · pending 0**
+(11 pass / 29 skipping — `Integration (erp-platform, Testcontainers)` **실행 확인** 4m1s).
+
+🔴 **첫 푸시에서 CI 가 RED 였고, 잡은 것은 내 래칫이었다.** `SingleTenantRatchetIntegrationTest` 가 `Expected size: 1 but was: 2` 로 떨어졌는데, 원인은 같은 PR 이 새로 넣은 `anotherTenantIsProjectedAndItsValueIsRecorded` 가 `other-corp` 행을 **공유 스키마에 남긴 것**이었다 — 전역 불변식 단언에게는 그것이 *"erp 가 다중 테넌트가 됐다"* 와 구별되지 않는다. 🔴 **로컬이 초록이었던 이유는 그 둘을 한 번도 같이 돌리지 않았기 때문**이다(래칫만 `--tests`, 위임 IT 만 `--tests`). 조각을 각각 확인한 것은 전체를 확인한 것이 아니다. 고친 방향은 **래칫 완화가 아니라 오염원이 `finally` 로 자기 행을 지우는 것**이고, 래칫 실패 메시지에 *"CI 에서만 울면 형제 테스트의 잔여 행부터 의심하라"* 를 적었다(안 적으면 다음 사람이 래칫을 완화한다 — 그러면 D 가 맞바꾼 탐지까지 잃는다). 수정 후 두 스위트를 **함께** 돌려 read-model 28/0 · notification 12/0.
+
+🔵 남은 것(이 티켓 밖): **`TASK-MONO-526`** — erp Kafka 볼륨이 Kafka 가 쓰지 않는 경로에 마운트돼 있다(7개 중 5개 동일). 그리고 기존 데모 볼륨에서는 수정 이전 이벤트가 소급 투영되지 않으므로(원본 `delegation_grant` 4 vs 투영 1) 완전한 데모는 볼륨 초기화 + 재시드가 필요하다 — 그 필요성은 `TASK-MONO-526` 이 없애야 한다.
 
 ---
 
