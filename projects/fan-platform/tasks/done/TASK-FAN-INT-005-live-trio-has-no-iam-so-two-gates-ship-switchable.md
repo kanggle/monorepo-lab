@@ -8,7 +8,7 @@ live-trio e2e 에 **iam 이 없어서** 게이트 두 개가 "끌 수 있는 상
 
 # Status
 
-review
+done
 
 # Owner
 
