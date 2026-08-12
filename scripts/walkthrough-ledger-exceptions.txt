@@ -1,0 +1,22 @@
+# Accepted exceptions for check-walkthrough-ledger-drift.sh (TASK-MONO-518).
+#
+# Format:  TASK-ID  # reason
+#
+# 🔴 The reason is MANDATORY and the guard rejects a bare id. A list of ids with no
+# reasons reads as "things we wave through", and that is where the next genuinely
+# stale row gets parked — which would make this guard worse than none, because it
+# would look like the row had been examined.
+#
+# An entry belongs here only when the row is CORRECT AS IT STANDS despite citing a
+# ticket in done/. Every entry below is the same shape: the ticket closed, and what
+# the row states is a MEASUREMENT or a DECISION that is still true — so its 🟡 is
+# accurate and demanding a ✅ would be demanding a lie.
+#
+# If instead the row is simply out of date, do not add it here — FIX THE ROW. Four
+# rows were fixed rather than excepted while this guard was written
+# (FAN-BE-045, SCM-BE-059, MONO-512, BE-579); that ratio is the intended one.
+
+TASK-PC-FE-273   # 조사 종결(결함 아님)로 닫혔다. 행이 서술하는 사실(`/ledger` 4피드 중 시산표만 참, 나머지 셋은 **정상적으로** 빔 — 환율은 문서화된 기본값 `enabled=false`)은 여전히 참이므로 🟡 가 정확하다.
+TASK-FIN-BE-068  # 행 자체가 "**만들지 않기로** 하고 숫자를 남겼다"는 결정 기록이다(`/finance/accounts` 목록 라우트 없음 — 영향 화면 1 · 데모 계좌 2 · 받쳐줄 repository 메서드 0). 티켓이 닫혔다고 그 결정이 뒤집히지 않는다.
+TASK-MONO-510    # 행은 실측치다 — "콘솔 화면에서 쓰기가 되는 도메인 4개 중 2개"(ERP·SCM 성립 / WMS 3중 차단 / Finance 콘솔 쓰기 라우트 없음). 티켓은 그 측정을 **한** 티켓이고 측정 결과는 그대로 유효하다. 행이 스스로 "도메인 능력과 콘솔 표면은 다른 축" 이라고 그 구분을 적어 두었다.
+TASK-SCM-BE-060  # ④ 는 그 티켓이 고친 결함이 아니라 **설계 제약의 기록**이다: ack 웹훅이 요구하는 `tenantId` 를 제출 페이로드가 알려주지 않아 mock 에 대역 밖 주입한다. 🔴 데모 테넌트를 바꾸면 그 값도 같이 바꿔야 한다는 경고가 이 행의 존재 이유다.

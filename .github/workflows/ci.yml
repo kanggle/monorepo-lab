@@ -203,6 +203,11 @@ jobs:
       # those PRs `code-changed` is false by construction, so AND-combining would
       # give the guard a green skip on 100% of its defect class (§ F1).
       index-queue: ${{ steps.filter.outputs.index-queue }}
+      # TASK-MONO-518: raw filter, NOT AND-combined with `code-changed`. Every arrival
+      # path for this drift is non-code — a task file moving into `done/`, a row edited
+      # in the walkthrough, or the guard/exception list itself. AND-ing with
+      # code-changed would skip it on exactly the diffs it exists to police.
+      walkthrough-ledger: ${{ steps.filter.outputs.walkthrough-ledger }}
       # TASK-MONO-461: raw filter, NOT AND-combined with `code-changed`. Two of this
       # guard's trigger paths are non-code: the spec (testing-strategy.md) being
       # weakened, and the guard script itself. AND-ing with code-changed would skip
@@ -520,6 +525,19 @@ jobs:
             adr-index:
               - 'docs/adr/**'
               - 'scripts/check-adr-index-drift.sh'
+            # TASK-MONO-518: docs/guides/interview-demo-walkthrough.md § 6 is read by an
+            # interviewer, and a row whose ticket closed keeps saying a fixed defect is
+            # live. TASK-MONO-517 measured 7 of 26 ticket-citing rows stale in one audit,
+            # five of them invisible to a `🔴` skim. Nothing failed, because the ledger is
+            # prose. 🔴 The queue paths are load-bearing triggers, not decoration: the
+            # commonest arrival is a CLOSE CHORE that touches no walkthrough line at all.
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            walkthrough-ledger:
+              - 'docs/guides/interview-demo-walkthrough.md'
+              - 'scripts/check-walkthrough-ledger-drift.sh'
+              - 'scripts/walkthrough-ledger-exceptions.txt'
+              - 'tasks/**'
+              - 'projects/*/tasks/**'
             # TASK-MONO-371: platform/contracts/jwt-standard-claims.md declares that
             # every access token MUST carry the claims it lists. It was missing four of
             # them — including tenant_id, which every gateway in the fleet rejects tokens
@@ -719,6 +737,21 @@ jobs:
 
       - name: Guard — every INDEX queue listing matches its queue directory
         run: bash scripts/check-index-queue-drift.sh
+
+  walkthrough-ledger-drift:
+    name: Walkthrough limitation ledger drift (§ 6 rows vs task queues)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.walkthrough-ledger == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-walkthrough-ledger-drift.sh
+
+      - name: Guard — every § 6 row whose ticket is done says so
+        run: bash scripts/check-walkthrough-ledger-drift.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-468/469 — .claude reference integrity guard (commands + agents).
