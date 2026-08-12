@@ -20,10 +20,14 @@ import org.springframework.context.annotation.Primary;
  *
  * <p>🔴 It must NOT be imported by a test whose subject IS the follow gate. An
  * always-confirm checker makes a disabled validation look exactly like a working
- * one — the failure mode {@code ADR-004} § Decision Drivers 3 names. Production has
- * a same-shaped bean ({@code UnverifiedArtistAccountChecker}), reachable only via an
- * explicit {@code community.artist-service.enabled=false}; that is precisely why no
- * gate test may get its verdict from a permissive checker. The gate's own
+ * one — the failure mode {@code ADR-004} § Decision Drivers 3 names. That risk grew
+ * rather than shrank: TASK-FAN-INT-005 deleted production's same-shaped bean
+ * ({@code UnverifiedArtistAccountChecker}, which was reachable via
+ * {@code community.artist-service.enabled=false}), so this class is now the ONLY
+ * accept-everything {@code ArtistAccountChecker} left anywhere, and a stray
+ * {@code @Import} is the only remaining way to switch the gate off. That is
+ * precisely why no gate test may get its verdict from a permissive checker. The
+ * gate's own
  * assertions live in {@code FollowArtistGateIntegrationTest} (real
  * {@code HttpArtistAccountChecker}, stubbed far side, including the unreachable
  * case) and {@code ArtistPostReachesFollowerFeedIntegrationTest} (a whitelist

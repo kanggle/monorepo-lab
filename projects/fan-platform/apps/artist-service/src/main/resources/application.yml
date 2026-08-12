@@ -118,6 +118,37 @@ fanplatform:
     # in the same commit.
     allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://iam.local}}
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:fan-platform}
+
+  # Workload-identity (ADR-MONO-005) — the /internal/** security chain validates
+  # an IAM client_credentials JWT, NOT an end-user token. Separate JWKS + issuer
+  # so app startup is not coupled to auth-service availability (JWKS fetched
+  # lazily on first verification). The end-user (tenant-pinned) decoder above is
+  # intentionally NOT reused: the two planes can be signed by different keys.
+  #
+  # TASK-FAN-INT-005 — these two keys existed only as `@Value` defaults inside
+  # ServiceLevelOAuth2Config, so the env names membership-service documents
+  # (INTERNAL_JWT_JWK_SET_URI / INTERNAL_JWT_ISSUER) reached nothing here: this
+  # service could not be pointed at a different internal issuer at all. Declared
+  # now, byte-identical to membership-service's block, which is what lets the
+  # live-trio e2e keep END-USER tokens on the host-side JWKS stand-in while the
+  # WORKLOAD token comes from a real IAM.
+  #
+  # 🔴 Say the delta precisely rather than calling it net-zero: the OLD default
+  # chained through the END-USER key (`@Value("${fanplatform.internal.jwt.
+  # jwk-set-uri:${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}}")`), so
+  # it also honoured OIDC_JWK_SET_URI / JWT_JWKS_URI. The new default does not.
+  # Measured: every deployment that sets both points them at the SAME IdP
+  # (.env.example and docker-compose.yml pair `OIDC_ISSUER_URL=http://iam.local`
+  # with `JWT_JWKS_URI=http://iam.local/oauth2/jwks`; infra/demo/demo.env pairs
+  # IAM_PUBLIC_URL with IAM_JWKS_URL), so the resolved URL is unchanged
+  # everywhere it is set today. The ONE place the two diverge is this suite —
+  # which is exactly why it now sets INTERNAL_JWT_* explicitly instead of
+  # inheriting.
+  internal:
+    jwt:
+      jwk-set-uri: ${INTERNAL_JWT_JWK_SET_URI:${OIDC_ISSUER_URL:http://iam.local}/oauth2/jwks}
+      issuer: ${INTERNAL_JWT_ISSUER:${OIDC_ISSUER_URL:http://iam.local}}
+
   artist:
     cache:
       directory:

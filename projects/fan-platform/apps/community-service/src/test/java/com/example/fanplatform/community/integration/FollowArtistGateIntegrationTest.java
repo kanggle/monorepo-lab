@@ -175,13 +175,19 @@ class FollowArtistGateIntegrationTest extends CommunityServiceIntegrationBase {
     }
 
     /**
-     * Guards the whole class. Production carries an explicit opt-out
-     * ({@code community.artist-service.enabled=false} → {@code
-     * UnverifiedArtistAccountChecker}, AC-7). If that switch — or an env var, or a
-     * future test-profile default — ever flipped for this suite, every case below
-     * would still be green while proving nothing: an accept-everything checker
-     * answers 201 for the confirmed target too. So the bean type is asserted, not
-     * assumed.
+     * Guards the whole class. If a permissive checker were ever wired into this
+     * suite, every case below would still be green while proving nothing — an
+     * accept-everything checker answers 201 for the confirmed target too. So the
+     * bean type is asserted, not assumed.
+     *
+     * <p>🔴 Keep this assertion even though TASK-FAN-INT-005 deleted production's
+     * opt-out ({@code community.artist-service.enabled=false} →
+     * {@code UnverifiedArtistAccountChecker}, AC-7). Removing the property removed
+     * one route in; it did not remove the failure mode. A stray
+     * {@code @Import(ConfirmAllArtistAccountsTestConfig.class)} — the sibling
+     * suites use it legitimately — substitutes an accept-everything bean through
+     * the {@code @ConditionalOnMissingBean} seam and is invisible to every
+     * property-driven check.
      */
     private void assertRealCheckerIsWired() {
         assertThat(artistAccountChecker)

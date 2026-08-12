@@ -173,6 +173,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
+- `TASK-MONO-523-platform-e2e-reusable-cannot-host-a-cross-project-service.md` — **🟡 REVIEW (impl PR 대기) — `_platform-e2e.yml` 이 한 프로젝트짜리 스택만 표현할 수 있었다.** `TASK-FAN-INT-005` AC-0 이 발굴: 재사용 워크플로가 서비스마다 jar 복원 경로·Dockerfile·빌드 컨텍스트·`-x …:bootJar` 를 전부 `$PROJECT_DIR/apps/$name/` 로 하드코딩해, 다른 프로젝트의 서비스를 e2e 스택에 넣을 방법이 없었다. 🔴 **"아티팩트에 jar 한 줄 더" 는 기존 3종을 깬다** — `upload-artifact@v4` 가 최장 공통 접두사를 잘라내므로 `projects/fan-platform/apps/` 가 `projects/` 로 짧아지며 fan 3종의 복원 경로가 전부 어긋난다(경로 버그로 보고되지 않고 이미지가 그냥 없다) ⇒ **별도 아티팩트** 입력 신설. 🔴 **프로젝트마다 도커 빌드 컨텍스트가 다르다**(fan=서비스 디렉터리 / iam=프로젝트 루트, `COPY apps/auth-service/build/libs/`) ⇒ `context` 를 서비스별로 말할 수 있어야 한다. 해법 = `services` 항목의 **선택** 필드 4개(`dir`/`context`/`jar`/`bootjar`) + 선택 입력 2개. **AC-1 판정은 초록이 아니라 문자열 대조** — wms/fan/scm 세 호출자가 만들어 내는 `mv`·`docker build`·`-x` 문자열 **36건이 변경 전과 byte-identical**(기본 `context` 의 후행 슬래시까지 보존). AC-4 는 `jq -r '… // ""'` — 맨 `.dir` 은 미지정 시 리터럴 `null` 을 뱉어 경로에 섞이고 **나중에 엉뚱한 곳에서 죽는다**. `TASK-FAN-INT-005` 와 **한 PR** (CLAUDE.md § Cross-Project Changes). 분석=Opus 5 / 구현=Opus.
+
 
 
 

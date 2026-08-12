@@ -22,6 +22,19 @@ name: _platform-e2e (reusable)
 # Caller keeps its own name / needs / if gating; check surfaces as
 # `<caller name> / e2e`. main is unprotected (verified 2026-07-04) so the
 # rename breaks no required status check.
+#
+# TASK-MONO-523 — a `services` entry may live OUTSIDE the caller's project-dir.
+# Every path below used to be derived from `$PROJECT_DIR/apps/$name`, which made
+# a one-project stack the only expressible shape. Four OPTIONAL per-service
+# fields now let an entry state its own: `dir` (service directory), `context`
+# (docker build context — NOT always the service dir: iam's auth-service
+# Dockerfile does `COPY apps/auth-service/build/libs/`, so its context is the
+# project root), `jar` (where the staged jar landed) and `bootjar` (the Gradle
+# task path to exclude). Omitted → the previous expression, byte-identical.
+# `extra-boot-jars-artifact` downloads a SECOND artifact for those services:
+# upload-artifact@v4 strips the longest common prefix, so folding a foreign jar
+# into the caller's own artifact would silently re-root — and break — the
+# caller's existing services.
 
 on:
   workflow_call:
@@ -50,8 +63,22 @@ on:
         required: false
         type: string
         default: ''
+      extra-boot-jars-artifact:
+        description: 'TASK-MONO-523. Optional SECOND boot-jars artifact, for services that live outside project-dir (boot-jars-mode=download only). Its own artifact rather than extra paths in the caller''s, because upload-artifact@v4 re-roots on the longest common prefix.'
+        required: false
+        type: string
+        default: ''
+      extra-download-path:
+        description: 'Directory the extra artifact is downloaded into. Services referencing it must say so via their `jar` field.'
+        required: false
+        type: string
+        default: artifact-staging-extra
       services:
-        description: 'JSON array of {name,image,prop}: service dir under apps/, the :e2e image tag to build, and the <proj>.e2e.*Image sysprop key.'
+        description: >-
+          JSON array of {name,image,prop} plus the optional TASK-MONO-523 fields
+          {dir,context,jar,bootjar}: service dir under apps/, the :e2e image tag to
+          build, and the <proj>.e2e.*Image sysprop key. Omit the optional fields for
+          a service under the caller''s own project-dir.
         required: true
         type: string
       gradle-target:
@@ -90,6 +117,14 @@ jobs:
           name: ${{ inputs.boot-jars-artifact }}
           path: ${{ inputs.download-path }}
 
+      # TASK-MONO-523 — cross-project services arrive in their own artifact.
+      - name: Download extra boot jars
+        if: inputs.boot-jars-mode == 'download' && inputs.extra-boot-jars-artifact != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.extra-boot-jars-artifact }}
+          path: ${{ inputs.extra-download-path }}
+
       - name: Build boot jars in-job
         if: inputs.boot-jars-mode == 'build'
         run: >-
@@ -126,15 +161,29 @@ jobs:
             name=$(jq -r '.name' <<<"$svc")
             image=$(jq -r '.image' <<<"$svc")
             prop=$(jq -r '.prop' <<<"$svc")
+            # TASK-MONO-523 — four optional per-service overrides. `// ""` and not
+            # a bare `.dir`: under `set -u` a missing key would otherwise become the
+            # literal string "null" and be spliced into a path, which does not fail
+            # here — it fails later, somewhere else, looking like a different bug.
+            # Each default below reproduces the pre-523 expression verbatim,
+            # trailing slash on the build context included.
+            dir=$(jq -r '.dir // ""' <<<"$svc")
+            [ -n "$dir" ] || dir="$PROJECT_DIR/apps/$name"
+            context=$(jq -r '.context // ""' <<<"$svc")
+            [ -n "$context" ] || context="$dir/"
+            jar=$(jq -r '.jar // ""' <<<"$svc")
+            [ -n "$jar" ] || jar="$DOWNLOAD_PATH/$name/build/libs/$name.jar"
+            bootjar=$(jq -r '.bootjar // ""' <<<"$svc")
+            [ -n "$bootjar" ] || bootjar="${GRADLE_PATH}:apps:${name}:bootJar"
             if [ "$BOOT_MODE" = "download" ]; then
-              mkdir -p "$PROJECT_DIR/apps/$name/build/libs/"
-              mv "$DOWNLOAD_PATH/$name/build/libs/$name.jar" \
-                 "$PROJECT_DIR/apps/$name/build/libs/$name.jar"
+              mkdir -p "$dir/build/libs/"
+              mv "$jar" \
+                 "$dir/build/libs/$name.jar"
             fi
             docker build -t "$image" \
-              -f "$PROJECT_DIR/apps/$name/Dockerfile" \
-              "$PROJECT_DIR/apps/$name/"
-            XARGS="$XARGS -x ${GRADLE_PATH}:apps:${name}:bootJar"
+              -f "$dir/Dockerfile" \
+              "$context"
+            XARGS="$XARGS -x ${bootjar}"
             DARGS="$DARGS -D${prop}=${image}"
           done < <(jq -c '.[]' <<<"$SERVICES")
           echo "[e2e] gradle: $GRADLE_TARGET$XARGS $DARGS"

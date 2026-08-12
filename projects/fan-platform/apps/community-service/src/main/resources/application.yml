@@ -112,13 +112,17 @@ community:
     read-timeout-ms: ${MEMBERSHIP_SERVICE_READ_TIMEOUT_MS:3000}
   # TASK-FAN-BE-045 AC-6 / ADR-004 A: outbound workload-identity call to
   # artist-service that validates a follow target.
-  # `enabled` defaults to TRUE — validation on. Setting it to false selects
-  # UnverifiedArtistAccountChecker, which accepts any follow target; that exists
-  # only because the live-trio e2e has no iam to mint a workload token from
-  # (AC-7 — see ArtistAccountCheckerConfig). `scope` is the MACHINE scope
-  # (IAM V0032), NOT the end-user `fan-platform.artist.read`.
+  #
+  # 🔴 TASK-FAN-INT-005 — `enabled` is DELETED, not defaulted. It selected
+  # UnverifiedArtistAccountChecker (accept any follow target) and existed for one
+  # reason: the live-trio e2e had no iam to mint a workload token from. The trio
+  # boots iam now, so the reason is gone and so is the switch — no value of any
+  # key turns this gate off. Do not re-add it for a stack that "has no iam yet";
+  # add iam, the way FanPlatformE2ETestBase does.
+  #
+  # `scope` is the MACHINE scope (IAM V0032), NOT the end-user
+  # `fan-platform.artist.read`.
   artist-service:
-    enabled: ${COMMUNITY_ARTIST_SERVICE_ENABLED:true}
     base-url: ${ARTIST_SERVICE_BASE_URL:http://artist-service:8080}
     scope: ${ARTIST_SERVICE_WORKLOAD_SCOPE:artist.read}
     connect-timeout-ms: ${ARTIST_SERVICE_CONNECT_TIMEOUT_MS:2000}

@@ -8,7 +8,13 @@
 | Redis 7 | NO | feed read-through cache | fail-open — feed query bypasses cache and emits `community_feed_cache_unavailable_total` |
 | Kafka 3.7 | YES (eventual) | outbox relay target | outbox rows accumulate as PENDING; metric `community_outbox_publish_failures_total` increments; on broker recovery rows drain. Service writes still succeed. |
 | IAM IdP (OIDC) | YES | JWKS for JWT signature verification | service returns 5xx on token validation (cannot validate without JWKS). 5-minute JWKS cache mitigates short-lived blips. |
-| **membership-service** | YES (v1, FAN-BE-010) | `HttpMembershipChecker` — `MembershipChecker.hasAccess` over workload-identity HTTP | **fail-closed**: on error/timeout/unreachable, MEMBERS_ONLY & PREMIUM reads are denied (403 `MEMBERSHIP_REQUIRED`). Stacks without membership-service opt out via `community.membership-service.enabled=false` → inert `AlwaysAllowMembershipChecker` `@ConditionalOnMissingBean` fallback (live-trio e2e escape-hatch). |
+| **membership-service** | YES (v1, FAN-BE-010) | `HttpMembershipChecker` — `MembershipChecker.hasAccess` over workload-identity HTTP | **fail-closed**: on error/timeout/unreachable, MEMBERS_ONLY & PREMIUM reads are denied (403 `MEMBERSHIP_REQUIRED`). Stacks without membership-service opt out via `community.membership-service.enabled=false` → inert `AlwaysAllowMembershipChecker` `@ConditionalOnMissingBean` fallback (e2e escape-hatch; removal owned by TASK-FAN-INT-006). |
+| **artist-service** | YES (v1, FAN-BE-045 / ADR-004 A) | `HttpArtistAccountChecker` — `GET /internal/artists/exists` over workload-identity HTTP, validating every follow target | **fail-closed**: token-acquisition failure, timeout, unreachable, non-2xx or malformed body all deny the follow. 🔴 **No opt-out.** The `community.artist-service.enabled` switch was deleted by TASK-FAN-INT-005 once the e2e stack gained a real IAM to mint the token from; there is no property value that selects a permissive checker. A stack that carries this service must also carry a token issuer. |
+
+> Row added by TASK-FAN-INT-005. It was missing since FAN-BE-045 introduced the
+> dependency — tolerable while the gate had an opt-out, wrong now that it does not:
+> a deployer reading this table would not have known an IAM token endpoint is a
+> hard prerequisite for follows to work at all.
 
 ## Build dependencies
 

@@ -75,24 +75,24 @@ class ArtistAndPostFlowE2ETest extends FanPlatformE2ETestBase {
     @DisplayName("admin registers + publishes artist; fan follows, posts, reacts; feed contains the fan's post")
     void fullArtistAndPostFlow() throws Exception {
         // ----- Identities --------------------------------------------------
-        // The artist's account id is the JWT subject of the admin token? No —
-        // the contract says fan follows by `artistAccountId`. The admin token
-        // identifies the admin who registers; the artist resource's id is a
-        // distinct UUID. For follow purposes we use a synthetic
-        // artistAccountId (a UUID that the FAN is meant to follow) — v1 has
-        // no enforcement that artistAccountId resolves to a real artist
-        // account on artist-service (community-service stores the follow
-        // relation alone; artist-service is the master-data source but
-        // there's no cross-service join in the v1 follow path).
+        // The contract says a fan follows by `artistAccountId`. The admin token
+        // identifies the admin who registers; the artist RESOURCE id is a
+        // separate UUID again.
+        //
+        // 🔴 TASK-FAN-INT-005 removed a fourth identity that used to live here —
+        // a synthetic `artistAccountId` the fan followed, justified by "v1 has no
+        // enforcement that artistAccountId resolves to a real artist account".
+        // TASK-FAN-BE-045 added that enforcement; the comment simply went stale,
+        // and the suite could not tell because it was running with the gate
+        // switched off. There is now ONE artist account: the one registered in
+        // step 1 and followed in step 3.
         String adminAccountId = randomAccountId();
         String fanAccountId = randomAccountId();
         String fan2AccountId = randomAccountId();
-        String artistAccountId = randomAccountId(); // followed via this id
-        // Required RegisterArtistRequest.accountId (TASK-FAN-BE-045) — the IAM
-        // subject that authors as this artist. Deliberately distinct from the
-        // artist resource id AND from artistAccountId above: this is the
-        // artist-service-side registration field, unrelated to the
-        // community-service follow target used in step 3.
+        // RegisterArtistRequest.accountId (TASK-FAN-BE-045) — the IAM subject that
+        // authors as this artist. Still distinct from the artist RESOURCE id, which
+        // is what artist-service mints for the row; the two are different axes and
+        // step 3 needs this one.
         String registeredArtistAccountId = randomAccountId();
 
         String adminToken = jwt.signAdminToken(adminAccountId);
@@ -202,28 +202,69 @@ class ArtistAndPostFlowE2ETest extends FanPlatformE2ETestBase {
                     });
 
             // ==============================================================
-            // Step 3 — fan follows the artist
+            // Step 3 — fan follows the artist REGISTERED IN STEP 1
             //
-            // Note on artistAccountId vs artist resource id: the contract
-            // (community-api § Follows) uses an externally-supplied
-            // `artistAccountId` UUID. v1 community-service treats this as
-            // an opaque key (no cross-service lookup), so we use a synthetic
-            // UUID rather than the artist resource id from step 1.
+            // 🔴 TASK-FAN-INT-005: this step used to follow a SYNTHETIC UUID,
+            // on the stated premise that "v1 community-service treats this as
+            // an opaque key (no cross-service lookup)". That premise stopped
+            // being true when TASK-FAN-BE-045 added exactly that lookup —
+            // HttpArtistAccountChecker calls artist-service's
+            // /internal/artists/exists and REFUSES a target it cannot confirm.
+            //
+            // The suite did not notice, because it was simultaneously running
+            // with COMMUNITY_ARTIST_SERVICE_ENABLED=false: the gate was off, so
+            // the synthetic id kept working and the stale comment kept reading
+            // as true. Deleting that switch is what surfaced it — the first run
+            // without the hatch answered 422, correctly.
+            //
+            // So the follow target is now the account the artist was actually
+            // registered with, which is the whole point of the seam: this
+            // assertion now proves the cross-service join, not just that
+            // community-service can write a row.
             // ==============================================================
-            String followBody = "{\"artistAccountId\":\"" + artistAccountId + "\"}";
+            String followBody = "{\"artistAccountId\":\"" + registeredArtistAccountId + "\"}";
             HttpResponse<String> followResp = sendString(http, authedJson(
                     gatewayBaseUri().resolve(pathCommunityFollow()), fanToken)
                     .POST(HttpRequest.BodyPublishers.ofString(followBody))
                     .build());
 
             assertThat(followResp.statusCode())
-                    .as("POST /api/v1/community/follows -> 201")
+                    .as("POST /api/v1/community/follows -> 201 (target confirmed by artist-service "
+                            + "over a real IAM client_credentials token — TASK-FAN-INT-005)")
                     .isEqualTo(201);
             JsonNode followJson = objectMapper.readTree(followResp.body());
             assertThat(followJson.get("data").get("artistAccountId").asText())
-                    .isEqualTo(artistAccountId);
+                    .isEqualTo(registeredArtistAccountId);
             assertThat(followJson.get("data").get("fanAccountId").asText())
                     .isEqualTo(fanAccountId);
+
+            // ==============================================================
+            // Step 3b — 🔴 the negative half, and it is not optional
+            //
+            // A 201 on a confirmed target does not distinguish a working gate
+            // from a permissive one — an accept-everything checker answers 201
+            // too. That is precisely the state this suite was in until now. So
+            // assert the refusal as well: an account artist-service has never
+            // heard of must be rejected, on the same request path, with the
+            // same token, differing only in the target.
+            // ==============================================================
+            String unknownArtistAccountId = randomAccountId();
+            HttpResponse<String> unknownFollowResp = sendString(http, authedJson(
+                    gatewayBaseUri().resolve(pathCommunityFollow()), fanToken)
+                    .POST(HttpRequest.BodyPublishers.ofString(
+                            "{\"artistAccountId\":\"" + unknownArtistAccountId + "\"}"))
+                    .build());
+
+            assertThat(unknownFollowResp.statusCode())
+                    .as("POST /api/v1/community/follows with an unregistered account -> 422 "
+                            + "(if this is 201 the follow-target gate is off, and the 201 above "
+                            + "proves nothing)")
+                    .isEqualTo(422);
+            // GlobalExceptionHandler returns libs/java-web ErrorResponse, which is
+            // a FLAT record (code, message, timestamp) — not nested under "error".
+            assertThat(objectMapper.readTree(unknownFollowResp.body()).get("code").asText())
+                    .as("the refusal carries the contract's code (community-api.md § Follows)")
+                    .isEqualTo("UNKNOWN_ARTIST_ACCOUNT");
 
             // ==============================================================
             // Step 4 — fan publishes a PUBLIC FAN_POST
@@ -296,10 +337,11 @@ class ArtistAndPostFlowE2ETest extends FanPlatformE2ETestBase {
             // — NOT the fan's own posts. Per GetFeedUseCase javadoc + the
             // PostRepository.findFeedForFan port contract.
             //
-            // In this scenario the artist (registered in steps 1–2) has not
-            // authored any community post; the artistAccountId in step 3 is a
-            // synthetic UUID with no posts of its own. So the *content* of the
-            // feed page is correctly empty here. The deterministic assertion
+            // In this scenario the artist (registered in steps 1–2, and the
+            // account followed in step 3 since TASK-FAN-INT-005) has not authored
+            // any COMMUNITY post — artist-service publishes artist master data,
+            // not community posts. So the *content* of the feed page is correctly
+            // empty here, for the same reason as before. The deterministic assertion
             // is therefore the contract envelope (200 OK + well-formed
             // pagination), not the presence of any specific post.
             // (TASK-MONO-044f-2 RC: e2e fixture vs contract drift — earlier
