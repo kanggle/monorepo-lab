@@ -273,7 +273,40 @@ downstream task that builds on the same service. 여기서 A(단일 테넌트 �
 [REFERENCE] CLAUDE.md § Layer Rules + platform/architecture-decision-rule.md
 ```
 
-**해제 조건**: `ADR-ERP-001 ACCEPTED` + A/B/C 중 선택. 그때 AC-3/AC-5/AC-6 을 잇는다.
+**해제 조건**: `ADR-ERP-001 ACCEPTED` + **A/B/C/D 중 선택**. 그때 AC-3/AC-5/AC-6 을 잇는다.
+
+---
+
+## 🛑 2026-08-12 — 정지 유지. 다만 **ADR 의 전제가 틀렸던 것을 고쳤다**
+
+`TASK-MONO-519` 의 라이브 검증(iam + erp 동시 기동)에서 이 티켓의 관문에 대한 새 실측이
+나왔다. 결정은 여전히 소유자 몫이라 **이 티켓은 `ready/` 에 그대로 두고**, 잘못된 전제 위에서
+결정이 내려지지 않도록 ADR 쪽만 갱신했다(doc-only, Status 는 `Proposed` 유지).
+
+세 가지가 이 티켓 본문과 다르다:
+
+1. 🔴 **"데이터가 다중 테넌트" 가 아니다.** `tenant_id` 컬럼을 가진 erp 테이블 전수
+   `GROUP BY tenant_id`: 존재하는 값은 **`demo-corp` 하나**, 문자열 `erp` 는 **0행**.
+   불일치는 *단일 vs 다중* 이 아니라 **그 하나를 뭐라고 부르는가**다.
+2. 🔴 **관문은 두 곳이고 하나는 다른 서비스다.** 이 티켓의 전수 확인은 read-model 안에서만
+   셌다. `notification-service` 의 `EnvelopeToCommandMapper` L67 이 같은 프로퍼티를 같은
+   의미로 읽고 **`erp.approval.*` 전 타입**을 막는다 ⇒ 막히는 화면이 `/erp/delegation`
+   하나가 아니라 **ERP 알림함까지 둘**이다(실측 `200 / totalElements 0`, DB 0행).
+   🔵 이 사실은 `MONO-519` 가 두 번째 콘솔 신원을 심어 결재함을 채운 **뒤에야** 관측
+   가능해졌다 — 그전에는 알림을 받을 신원 자체가 없어 "0" 의 원인이 갈리지 않았다.
+3. 🔴🔴 **관문은 이미 불변식을 못 지키고 있다.** 같은 DB·같은 런:
+   `approval_fact_proj` **2** · `department_proj` **4** · `employee_proj` **4** ·
+   `cost_center_proj` **3** · `job_grade_proj` **3** 이 전부 `demo-corp` 데이터로 들어가 있고
+   (**16행**), 관문이 있는 소비자는 read-model 6개 중 **1개**(`delegation_fact_proj` **0행**)다.
+   ⇒ 관문을 남기는 것은 "불변식을 지킨다" 가 아니라 **"소비자 하나를 굶긴다"** 이다.
+
+⇒ 그래서 ADR 에 **Option D**(관문을 값-등호에서 존재검사로 낮추고 봉투는 사실을 싣는다 +
+"distinct tenant_id ≥ 2 이면 RED" 래칫)를 추가했다. 구현자 추천은 D 이지만 **추천은 결정이
+아니다** — `deciders` 의 정확형 intent 없이는 AC-3/AC-5 를 재개하지 않는다.
+
+🔴 **AC-0 을 재개할 때 물려받지 말 것**: 위 숫자는 2026-08-12 것이고, 이 티켓 본문 위쪽의
+end-offset 표는 **그 이전** 것이다. `approved` 토픽은 `MONO-519` 의 라이브 승인으로 이번에
+처음 발생했으므로 지금 트래픽이 있는 토픽은 셋이 아니라 **넷**이다.
 
 # Goal
 
