@@ -4,7 +4,7 @@
 
 | # | 제목 | 상태 |
 |---|---|---|
-| [ADR-001](ADR-001-erp-event-plane-tenant-axis.md) | erp 이벤트 평면의 테넌트 축 — 선언(`PROJECT.md`·read-model 스펙 = **단일 테넌트**, "All projected rows belong to the `erp` tenant")과 저장된 값(`demo-corp`)이 갈라져 있다. **A**(선언 고수) / **B**(다중 테넌트 승격) / **C**(데모 회귀) / **D**(관문을 존재검사로 낮추고 봉투는 사실을 싣는다 — 2026-08-12 추가, 구현자 추천). 🔴 **설정으로는 못 고친다** — `required-tenant-id` 를 HTTP 세 곳은 *도메인 키*로, 이벤트 매퍼 **두 곳**은 *테넌트 값*으로 읽는다. 🛑 **2026-08-12 재측정이 전제를 고쳤다**: 데이터는 다중이 아니라 **단일인데 이름이 다르고**(존재하는 tenant 값 1종 · `erp` 0행), 관문은 read-model 소비자 6개 중 **1개**에만 있어 불변식을 **이미 16행이 깨고 있으며**, 두 번째 사본이 `notification-service` 에 있어 막히는 화면이 `/erp/delegation` **하나가 아니라 둘**(알림함 포함)이다. `TASK-ERP-BE-043` 의 AC-3/AC-5 를 게이트 | Proposed |
+| [ADR-001](ADR-001-erp-event-plane-tenant-axis.md) | erp 이벤트 평면의 테넌트 축 — 선언(`PROJECT.md`·read-model 스펙 = **단일 테넌트**, "All projected rows belong to the `erp` tenant")과 저장된 값(`demo-corp`)이 갈라져 있다. **A**(선언 고수) / **B**(다중 테넌트 승격) / **C**(데모 회귀) / **D**(관문을 존재검사로 낮추고 봉투는 사실을 싣는다 — 2026-08-12 추가, 구현자 추천). 🔴 **설정으로는 못 고친다** — `required-tenant-id` 를 HTTP 세 곳은 *도메인 키*로, 이벤트 매퍼 **두 곳**은 *테넌트 값*으로 읽는다. 🛑 **2026-08-12 재측정이 전제를 고쳤다**: 데이터는 다중이 아니라 **단일인데 이름이 다르고**(존재하는 tenant 값 1종 · `erp` 0행), 관문은 read-model 소비자 6개 중 **1개**에만 있어 불변식을 **이미 16행이 깨고 있으며**, 두 번째 사본이 `notification-service` 에 있어 막히는 화면이 `/erp/delegation` **하나가 아니라 둘**(알림함 포함)이다. ✅ **2026-08-12 ACCEPTED — D**(소유자 정확형): 두 관문이 `required-tenant-id` 를 안 읽고, 봉투는 사실(`demo-corp`)을 싣는다. traits 불변(B 배제) · 데모 회귀 없음(C 배제) · 계약 리터럴 → 플레이스홀더 · **거부를 "distinct tenant_id ≥ 2 → RED" 래칫과 맞바꾼다**. `TASK-ERP-BE-043` HARDSTOP-09 해제(AC-7/8/9 신설) | **Accepted — D** |
 
 ## ADR 작성 원칙
 

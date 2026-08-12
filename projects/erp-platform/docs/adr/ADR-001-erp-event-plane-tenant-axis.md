@@ -1,7 +1,7 @@
 # ADR-001: erp 이벤트 평면의 테넌트 축 — 선언된 단일 테넌트 vs 데모가 만든 다중 테넌트
 
-**Status**: Proposed
-**Date**: 2026-08-07 (proposed) · 2026-08-12 (전제 재측정 + Option D 추가 — **결정은 여전히 미결**)
+**Status**: Accepted — **D**
+**Date**: 2026-08-07 (proposed) · 2026-08-12 (전제 재측정 + Option D 추가) · **2026-08-12 ACCEPTED — D** (소유자 정확형)
 **Deciders**: kanggle
 **Supersedes**: —
 **Relates to**: `TASK-ERP-BE-043`(이 ADR 이 게이트하는 티켓), `TASK-ERP-BE-032`(masterdata 봉투 선례), `TASK-MONO-510`(데모 시드), `projects/erp-platform/PROJECT.md` § Out of Scope, `specs/services/read-model-service/architecture.md` § Multi-tenancy, `specs/contracts/events/erp-approval-events.md` § Envelope
@@ -202,6 +202,70 @@ D 는 **이벤트 평면의 테넌트 거부를 사후 탐지와 맞바꾸는 �
 
 🔵 **구현자의 추천은 D 다**(위 ①~④의 실측 근거로). 다만 이것은 추천이지 결정이 아니며,
 `deciders` 의 **정확형 intent** 없이는 어느 것도 ACCEPTED 가 되지 않는다.
+
+---
+
+## 결정 — **D** (ACCEPTED 2026-08-12)
+
+**관문을 값-등호에서 존재검사로 낮추고, 봉투는 사실을 그대로 싣는다.** 위 § Decision 의
+Option D 텍스트 그대로이며, 이 절은 그것을 **확정**할 뿐 재서술하지 않는다.
+§ Context / § 재측정 ①~④ / § 설정으로는 못 고친다 / § Decision(A·B·C·D) / § 왜 구현자가
+못 고르나 는 **byte-unchanged** — ACCEPT 는 확정이지 재결정이 아니다.
+
+### 무엇이 구속력을 갖나
+
+| | 구속력 |
+|---|---|
+| **D 자체** — 이벤트 평면의 관문 **두 곳**(`read-model`/`DelegationEnvelopeToCommandMapper` · `notification`/`EnvelopeToCommandMapper`)이 `erpplatform.oauth2.required-tenant-id` 를 **더 이상 읽지 않는다** | **binding** |
+| **봉투는 사실을 싣는다** — `tenantId` 에 `demo-corp`(실제 값). 투영이 출처와 일치하고 나머지 6개 프로젝션의 값과도 같아진다 | **binding** |
+| **A 배제** — 선언된 이름에 맞추려고 저장된 값과 다른 값을 쓰지 않는다. ④의 "출처와 어긋나는 프로젝션" 을 만들지 않는다 | **binding** |
+| **B 배제** — `PROJECT.md` 의 traits 는 **바꾸지 않는다.** erp 는 단일 테넌트로 남고, 룰 레이어 로딩 변경·읽기 테넌트 필터 신설·프로젝션 스키마 마이그레이션은 **범위 밖** | **binding** |
+| **C 배제** — 데모를 `erp` 테넌트로 되돌리지 않는다. `TASK-MONO-519` 가 닫은 결재 루프(`demo-corp` 위)는 **유지** | **binding** |
+| **계약 리터럴 정정** — 두 계약 문서의 봉투 예시 `"tenantId": "erp"` 를 플레이스홀더로. 다른 필드가 `"<uuid>"` 형태인데 이것만 값이라, 안 고치면 다음 사람이 또 상수로 읽고 같은 관문을 만든다 | **binding** |
+| **래칫** — "erp 전체에서 distinct `tenant_id` 가 2 이상이면 RED". 잃는 알람의 대체물이며, 울리는 그때가 B 를 다시 논의할 시점이다 | **binding** |
+| **교환의 수용** — 이벤트 평면에서 테넌트 **거부**가 사라지고 **사후 탐지**로 바뀐다 | **binding** |
+
+### 🔵 rider 점검 — 남은 미결이 **없다**
+
+§ Decision 의 D 는 말미에 *"이 교환을 받아들일지가 D 의 유일한 질문이다"* 라고 자기 안의
+질문을 명명해 두었다. **D 를 고르는 것이 그 질문에 대한 "예" 다** — 질문이 D *안쪽*에
+남아 있는 형태가 아니라, D 의 선택 그 자체가 답인 형태다. 따라서 `ADR-MONO-060` 의
+plain `A`(본문이 `act` 를 미결로 명명해 두어 선택으로 확정되지 않았던 경우)나
+`ADR-004` 의 e2e 탈출구 rider 와 **다르다**. 미결로 승격할 항목은 없다.
+
+🔴 다만 **래칫이 어디서 도는지는 D 가 말하지 않는다.** 그것은 아키텍처 결정이 아니라
+구현이므로 이 ACCEPT 가 정할 일이 아니지만, 정하지 않으면 래칫은 코드가 아니라 주석이
+된다(`TASK-MONO-518`/`524` 에서 두 번 밟았다: 술어만 있고 도는 레인이 없는 가드는 영원히
+초록이다). `TASK-ERP-BE-043` 의 **AC-7** 로 승격했다 — 도는 레인 + 무는지 확인까지.
+
+### ACCEPT 가 인가하는 것 / 하지 않는 것
+
+인가되는 것은 `TASK-ERP-BE-043` 의 **AC-3 / AC-5 / AC-6 착수**뿐이다(HARDSTOP-09 해제).
+계약(`specs/contracts/events/`)은 CLAUDE.md § Layer Rules 대로 **구현 전에** 갱신돼야 하고,
+이 ACCEPT 는 그 계약의 **내용**(필드 형태·플레이스홀더 표기)을 승인하지 않는다 — 그것은
+그 티켓이 제안하고 리뷰가 검사할 몫이다.
+
+🔵 아래 § Consequences 는 **byte-unchanged 로 남긴다.** 제목의 *"(미결 상태의)"* 는 그
+절이 **결정 전 상태**를 기록한 것임을 뜻하며, 무엇이 언제 풀리는지는 위 표와 `BE-043` 이
+말한다. 두 화면(위임 뷰 · 알림함)은 **ACCEPT 로 차지 않는다** — 구현이 차게 한다.
+
+### 게이트 — 통과했지, 우회하지 않았다
+
+`platform/architecture-decision-rule.md` § The ACCEPTED Gate 가 요구하는 정확형이
+도착한 뒤에만 전환했다:
+
+```
+ADR-ERP-001 ACCEPTED — D
+```
+
+🔴 **직전 메시지는 넘기지 않았다.** 소유자가 *"추천 D로 결정"* 이라고 보냈고 글자 `D` 가
+분명히 적혀 있었지만, 같은 문장 안의 **"추천" 은 이 문서 § 왜 구현자가 못 고르나 의 🔵 —
+즉 구현자 자신의 선호**다. 그것을 승인으로 읽는 것이 규정이 *"launders an agent's own
+preference into an accepted decision"* 이라며 금지하는 형태와 구별되지 않는다. 멈춰서
+정확형을 요청했고, 그때 위 한 줄이 도착했다. **self-ACCEPT 아님.**
+(같은 자리에서 같은 이유로 멈춘 기록: `ADR-MONO-059` · `ADR-004`.)
+
+---
 
 ## Consequences (미결 상태의)
 
