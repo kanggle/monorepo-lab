@@ -3,8 +3,6 @@ package com.example.fanplatform.community.infrastructure.membership;
 import com.example.fanplatform.community.domain.membership.MembershipChecker;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -16,29 +14,39 @@ import java.time.Duration;
 /**
  * Wires the {@link MembershipChecker} bean.
  *
- * <p><strong>Bean ordering is deterministic by design.</strong> The real
- * {@link HttpMembershipChecker} {@code @Bean} is declared FIRST; the v1
- * {@link AlwaysAllowMembershipChecker} {@code @Bean} is declared SECOND with
- * {@code @ConditionalOnMissingBean}. Within a single {@code @Configuration} class
- * Spring processes {@code @Bean} methods top-to-bottom, so the stub's condition
- * always evaluates AFTER the real bean is registered → the stub backs off. This
- * avoids the {@code @ConditionalOnMissingBean}-against-component-scan
- * non-determinism (memory §19): the conditional only ever sees beans defined
- * earlier in the same class.
+ * <p><strong>There is exactly one implementation, and it cannot be switched off.</strong>
+ * {@link HttpMembershipChecker} is the only {@code MembershipChecker} {@code @Bean}
+ * declared here, unconditionally.
  *
- * <p>Tests override the production bean with a {@code @Primary @TestConfiguration}
- * {@code MembershipChecker} (e.g. {@code MembershipGateIntegrationTest}'s
- * deny-all), so the gate can be exercised without a live membership-service.
+ * <p><strong>Why the escape hatch is gone (TASK-FAN-INT-006).</strong> Until this
+ * ticket the class declared a second bean — an inert {@code AlwaysAllowMembershipChecker}
+ * behind {@code @ConditionalOnMissingBean}, reachable by setting
+ * {@code community.membership-service.enabled=false}. It existed because the v1
+ * live-trio e2e (gateway+community+artist) had no membership-service, so the real
+ * gate had nothing to call.
  *
- * <p><strong>Escape hatch.</strong> Setting
- * {@code community.membership-service.enabled=false} (env
- * {@code COMMUNITY_MEMBERSHIP_SERVICE_ENABLED=false}) excludes the HTTP bean, so
- * the {@link AlwaysAllowMembershipChecker} fallback is selected instead. This is
- * how the v1 live-trio e2e (gateway+community+artist, TASK-FAN-INT-001) runs
- * without membership-service / iam in the stack — the real gate is covered
- * deterministically by {@code MembershipGateIntegrationTest} (MockWebServer) and
- * end-to-end by federation-hardening-e2e. Default ({@code matchIfMissing=true})
- * keeps production on {@link HttpMembershipChecker}.
+ * <p>That shape was worse than the artist-side hatch TASK-FAN-INT-005 deleted, and
+ * {@code ADR-004} § Decision Drivers 3 named why: the artist hatch selected the
+ * permissive bean only on an <em>explicit</em> {@code havingValue="false"}, while
+ * this one selected it as a {@code @ConditionalOnMissingBean} <em>fallback</em>.
+ * A fallback is chosen by ABSENCE, so any failure to register the real bean — for
+ * any reason, including ones nobody predicted — lands on "allow everything" and the
+ * service still starts green. That is the wrong side for an accident to land on.
+ *
+ * <p>TASK-FAN-INT-006 put membership-service into the live stack and made the e2e
+ * subscribe through the product path, so the hatch has no remaining caller. It is
+ * deleted rather than left unused: an unused permissive fallback is a defect waiting
+ * for a bean-registration failure, and it costs nothing until the day it costs
+ * everything. {@code MembershipCheckerAutoConfigTest} now asserts <em>structurally</em>
+ * that this class declares exactly one {@code MembershipChecker} {@code @Bean}
+ * method — a property-keyed test cannot catch a hatch that returns behind a
+ * different key, which TASK-FAN-INT-005 measured on the artist side (all 7
+ * property cases stayed green against an injected hatch; only the structural one
+ * went red).
+ *
+ * <p>Tests may still override the bean with a {@code @Primary @TestConfiguration}
+ * {@code MembershipChecker} (e.g. {@code MembershipGateIntegrationTest}'s deny-all).
+ * That is a test-scope override, not a production-reachable switch.
  */
 @Configuration
 public class MembershipCheckerAutoConfig {
@@ -83,15 +91,10 @@ public class MembershipCheckerAutoConfig {
      * surfaces as an exception inside the call and is caught fail-closed by
      * {@link HttpMembershipChecker}.
      *
-     * <p>Gated by {@code community.membership-service.enabled} (default true) so
-     * deployments without a reachable membership-service / iam (the e2e
-     * live-trio) can opt out and fall back to {@link AlwaysAllowMembershipChecker}.
+     * <p>Unconditional since TASK-FAN-INT-006 — there is no deployment shape left
+     * that needs a reachable-membership-service opt-out (see the class javadoc).
      */
     @Bean
-    @ConditionalOnProperty(
-            name = "community.membership-service.enabled",
-            havingValue = "true",
-            matchIfMissing = true)
     public MembershipChecker httpMembershipChecker(
             IamClientCredentialsTokenProvider tokenProvider,
             @Value("${community.membership-service.base-url:http://membership-service:8080}") String baseUrl,
@@ -112,18 +115,5 @@ public class MembershipCheckerAutoConfig {
                 })
                 .build();
         return new HttpMembershipChecker(restClient);
-    }
-
-    /**
-     * v1 fallback — selected ONLY when no other {@link MembershipChecker} is
-     * present. Declared after {@link #httpMembershipChecker} so this never wins in
-     * production; retained as an explicit escape hatch (e.g. profiles that exclude
-     * the HTTP bean) and to keep the documented {@code @ConditionalOnMissingBean}
-     * seam.
-     */
-    @Bean
-    @ConditionalOnMissingBean(MembershipChecker.class)
-    public MembershipChecker defaultMembershipChecker() {
-        return new AlwaysAllowMembershipChecker();
     }
 }

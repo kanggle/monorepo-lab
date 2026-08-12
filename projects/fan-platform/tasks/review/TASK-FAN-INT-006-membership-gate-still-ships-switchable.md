@@ -8,7 +8,7 @@ membership 게이트는 아직 **끌 수 있는 상태로 배포된다** — 그
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -56,6 +56,112 @@ community.membership-service.enabled=false  →  AlwaysAllowMembershipChecker  (
 게이트가 **조용히 꺼진 채** 서비스가 정상 기동하고 초록으로 보인다.
 
 ---
+
+---
+
+# 🛑 2026-08-12 실측 기록 — AC-0 의 답이 **티켓의 전제를 뒤집었다**
+
+## AC-0 — ① 제품 경로. 고른 것이 아니라 **재고 나니 다른 둘이 이유를 잃었다**
+
+세 후보(① 결제 스텁 + 제품 경로 / ② Flyway e2e 시드 / ③ 직접 INSERT)를 재기 전에, 이
+티켓이 ① 의 비용으로 적은 문장을 먼저 확인했다:
+
+> *"그 앞에 **빌링키(PortOne)** 가 있다 … e2e 가 게이트를 통과하는 케이스를 만들려면
+> 결제 평면을 세우거나 DB 직접 시드를 도입해야 한다"*
+
+🔴 **틀렸다.** `MockPaymentGatewayAdapter` 는 `@Profile("!portone")` 다 — 즉 PortOne
+프로파일을 **켜지 않는 모든 스택**(CI · 통합테스트 · 키 없는 로컬 · 이 e2e)에서 이미
+`PaymentGatewayPort` 다. 세울 결제 평면이 없었다. 그 한 줄이 ①의 비용을 ②·③ 과 같게
+만들고, 그러면 남는 질문은 **무엇을 증명하느냐** 하나뿐이다:
+
+| 후보 | 구독 경로 증명 | 게이트 증명 | 비용(실측 후) |
+|---|---|---|---|
+| ① 제품 경로 | ✅ | ✅ | 컨테이너 1개 + 배선 |
+| ② Flyway 시드 | ❌ | ✅ | 컨테이너 1개 + 새 마이그레이션 대역 |
+| ③ 직접 INSERT | ❌ | ✅ | 컨테이너 1개 + 테스트에서 DB 접근 |
+
+⇒ **①**. e2e 가 의존하는 ACTIVE 행은 실제 `SubscribeUseCase` 가 만든다(금액 계산 · 멱등키
+· 아웃박스 전부 진짜). ②·③ 은 행의 *모양*만 맞춘다.
+
+🔵 **스텁이 실물보다 관대한 것은 사실이다.** 그 관대함은 **결제 승인 단계**에 갇혀 있고,
+이 티켓이 증명하려는 것은 멤버십 게이트다. 그리고 AC-1 의 거부 케이스는 결제를 아예 거치지
+않는다 — 즉 스텁의 관대함이 판정을 통과시킬 수 있는 경로가 없다.
+
+## AC-1 — 판정을 **셋**으로 만들었다 (티켓은 둘을 요구했다)
+
+티켓의 "있는 독자 200 / 없는 독자 403" 은 **한 방향으로 고장난 게이트로도 만족된다.**
+`MEMBERSHIP_SERVICE_BASE_URL` 이 틀리면 `HttpMembershipChecker` 가 fail-closed 로 **전건
+403** 을 내는데, 거부 케이스만 보는 스위트는 그 완전히 죽은 게이트 위에서 초록이 된다.
+그래서 세 번째를 넣었다:
+
+```
+MEMBERS_ONLY 글
+  멤버십 없음                    → 403 MEMBERSHIP_REQUIRED
+  ACTIVE MEMBERS_ONLY 구독자      → 200            (같은 실행에서)
+
+PREMIUM 글
+  멤버십 없음                    → 403
+  ACTIVE **MEMBERS_ONLY** 구독자  → 403   🔴 티어 거부
+    └ 같은 계정이 MEMBERS_ONLY 글은 → 200   ← 이것이 대조군
+  ACTIVE PREMIUM 구독자           → 200
+```
+
+🔴 **티어 거부가 load-bearing 이다.** 도달 불가한 membership-service 는 *모두를* 거부하므로
+그 상태로는 위 대조군(같은 계정이 자기 티어는 통과)이 성립할 수 없다. 즉 이 한 쌍만이
+**"게이트가 답한다"** 와 **"게이트에 닿는다"** 를 가른다. 근거는 `AccessPolicy` 의
+`PREMIUM ⊇ MEMBERS_ONLY`(역은 아님).
+
+🔵 그리고 stub 의 bypass WARN 이 **한 번도 안 찍히는 것**을 별도로 단언한다 — 위 읽기들이
+실제로 일어난 실행에서의 부재이므로 공허하지 않다.
+
+## AC-2 — 🔴 **술어가 그대로는 성립할 수 없다.** 고쳐서 적용했다
+
+티켓은 *"빈·property·env·문서 언급 잔존 `grep` 0건"* 을 요구했다. 그 술어는 **만족될 수
+없다** — 탈출구를 지웠다는 사실 자체를 어딘가에 적어야 하고, 그 설명에는 이름이 들어간다.
+0건을 강제하면 남는 선택지는 *"설명을 쓰지 않는 것"* 뿐이고, 그것은 다음 사람이 같은
+탈출구를 다시 만드는 조건이다.
+
+**대신 쓴 술어**: *어떤 활성 파일도 그 탈출구가 **존재한다/쓸 수 있다** 고 말하지 않는다.*
+전수 확인 결과 잔존 언급은 두 종류로 갈렸고, 후자만 고쳤다:
+
+- 🔵 **남긴 것** — 삭제를 *설명*하는 문장(빈 클래스 javadoc · 반전 테스트의 케이스 이름 ·
+  `ADR-004` 가 "복사하지 말라" 고 논증하는 대목).
+- 🔴 **고친 것 6곳** — 아직 있다고 서술하던 문서:
+  `contracts/http/membership-api.md` · `integration/v1-e2e-scenarios.md`(시나리오 본문) ·
+  `services/community-service/architecture.md`(**파일 트리에 삭제된 파일이 남아 있었다**) ·
+  `services/community-service/overview.md` · `services/membership-service/architecture.md` ·
+  `services/membership-service/overview.md`.
+
+## AC-3 — 반전 + 구조 단언, 그리고 **bite 로 재현**
+
+"껐을 때" 케이스를 지우지 않고 **반전**했다(`enabled=false` → *여전히* `HttpMembershipChecker`).
+지웠으면 그 축이 감사에서 사라졌을 것이다. 대소문자·무의미값 케이스도 함께 둔다.
+
+**bite 실측** — 탈출구를 **다른 키**(`community.membership.legacy`) 뒤로 되살려 실행:
+
+```
+7 tests completed, 1 failed
+  ✗ structurally: exactly one MembershipChecker @Bean method is declared
+  ✓ 나머지 6건(속성 기반) 전부 GREEN
+```
+
+⇒ `TASK-FAN-INT-005` 가 artist 쪽에서 잰 것과 **같은 결과**다. 속성 기반 케이스는 되살아난
+탈출구를 구조적으로 못 본다.
+
+## AC-4 — 벽시계
+
+- 기준선(`TASK-FAN-INT-005` 머지 시점, iam 포함 4컨테이너): `E2E (fan-platform v1 live-trio
+  smoke)` **3m25s**
+- 이번(멤버십 포함 5서비스 + postgres/redis/kafka/mysql): **이 PR 의 CI 런에서 기록**
+
+# 후속 / 안 한 것
+
+- 🔵 `MEMBERSHIP_SERVICE_BASE_URL` 은 INT-005 가 artist 쪽에서 밟은 함정과 **같은 것**이었다
+  (기본값이 이 네트워크에서 해소되지 않는 이름, 게이트가 꺼져 있는 동안 무해하게 앉아 있음).
+  이번에 명시했다. 남은 같은 모양이 또 있는지는 세지 않았다 — 세지 않았다고 적어 둔다.
+- 🔵 `EXPIRY_SWEEP_ENABLED` / `AUTO_RENEW_ENABLED` 를 e2e 에서 껐다. 프로덕션에서는 옳고
+  여기서는 단언이 읽는 행을 실행 중에 바꾼다 — 그 플레이크는 스케줄러가 아니라 **게이트
+  결함**처럼 보인다.
 
 # Goal
 

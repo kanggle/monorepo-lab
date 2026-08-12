@@ -107,6 +107,9 @@ def baseE2eConfig = { Test t ->
     t.dependsOn ':projects:fan-platform:apps:gateway-service:bootJar'
     t.dependsOn ':projects:fan-platform:apps:community-service:bootJar'
     t.dependsOn ':projects:fan-platform:apps:artist-service:bootJar'
+    // TASK-FAN-INT-006 — the fourth service; deleting the membership escape hatch
+    // means the real gate must have something to call.
+    t.dependsOn ':projects:fan-platform:apps:membership-service:bootJar'
     // TASK-FAN-INT-005: iam's auth-service is this stack's workload-identity token
     // source, so the local-dev ImageFromDockerfile fallback needs its jar as well.
     // CI excludes it the same way as the other three (`-x …:bootJar`).
@@ -118,6 +121,7 @@ def baseE2eConfig = { Test t ->
         'fan.e2e.gatewayImage',
         'fan.e2e.communityImage',
         'fan.e2e.artistImage',
+        'fan.e2e.membershipImage',
         'fan.e2e.iamImage'
     ].each { prop ->
         def val = System.getProperty(prop)

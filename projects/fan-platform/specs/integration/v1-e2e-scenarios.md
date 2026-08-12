@@ -86,8 +86,12 @@ through `HttpArtistAccountChecker` → a real token minted by iam for
 `community-service-client` (machine scope `artist.read`, IAM `V0032`) →
 artist-service's `/internal/artists/exists`.
 
-🔵 The **membership** gate is still stubbed (`COMMUNITY_MEMBERSHIP_SERVICE_ENABLED=false`),
-and for a different reason — see the note under *Scenario 4* and `TASK-FAN-INT-006`.
+✅ The **membership** gate is no longer stubbed either (`TASK-FAN-INT-006`).
+membership-service is the fourth service in the stack and community reaches it over the
+same workload-identity plane, with `MEMBERSHIP_SERVICE_BASE_URL` pointed at
+`fan-e2e-membership` — the default `http://membership-service:8080` does not resolve here,
+and while the gate was switched off nothing ever dialled it, so the wrong value sat
+harmlessly. There is now **no switchable gate left in this suite**.
 
 ### JWT helper
 
@@ -256,7 +260,7 @@ posts by `visibility ∈ { PUBLIC, MEMBERS_ONLY, PREMIUM }`:
 
 - `PUBLIC` — any authenticated tenant member.
 - `MEMBERS_ONLY` — author + members confirmed by `MembershipChecker`.
-- `PREMIUM` — gated by `MembershipChecker`, same as MEMBERS_ONLY. **Production** uses `HttpMembershipChecker` (membership-service call, fail-closed; FAN-BE-010). This live-trio e2e deliberately opts out via `COMMUNITY_MEMBERSHIP_SERVICE_ENABLED=false` (FAN-INT-002) so the inert `AlwaysAllowMembershipChecker` stub is selected — the scenarios below therefore assert the stub's always-pass + WARN behaviour, **not** the production gate (covered separately by `MembershipGateIntegrationTest` + federation-hardening-e2e).
+- `PREMIUM` — gated by `MembershipChecker`, same as MEMBERS_ONLY, and since `TASK-FAN-INT-006` this suite asserts the **production** gate: `HttpMembershipChecker` → membership-service `/internal/membership/access`, fail-closed (FAN-BE-010). The ACTIVE membership that opens it is created through the product path (`POST /api/v1/memberships` via the gateway) rather than seeded, because `MockPaymentGatewayAdapter` is `@Profile("!portone")` and is therefore already the payment adapter here — there was no payment plane to stand up. 🔴 Three verdicts are asserted, not two: allow, deny-by-absence, and **deny-by-tier** (a MEMBERS_ONLY subscriber refused a PREMIUM post while being granted its own tier in the same run). The tier case is the one broken wiring cannot fake — an unreachable membership-service denies *everyone*, which a deny-only suite would read as a working gate.
 
 ### Sub-cases
 
@@ -268,11 +272,21 @@ posts by `visibility ∈ { PUBLIC, MEMBERS_ONLY, PREMIUM }`:
   stdout via `GenericContainer.getLogs()` and asserts it contains
   `PREMIUM gate bypassed` AND the post id, verifying the WARN log fires
   per the production code path.
-- **MEMBERS_ONLY (v1 stub only)** — author publishes with
-  `visibility=MEMBERS_ONLY`. A different fan reads -> 200 because v1 wires
-  `AlwaysAllowMembershipChecker` (`@ConditionalOnMissingBean`) which
-  always returns `true`. The test asserts the corresponding
-  `Membership gate bypassed (v1 stub)` WARN line appears in container logs.
+- **MEMBERS_ONLY / PREMIUM (real gate, `TASK-FAN-INT-006`)** — author publishes;
+  a different fan reads. Three verdicts are asserted, and they are asserted
+  **in the same run**:
+  1. no membership → **403 `MEMBERSHIP_REQUIRED`**
+  2. ACTIVE membership at the required tier → **200**
+  3. ACTIVE membership at a LOWER tier (MEMBERS_ONLY reading PREMIUM) → **403**,
+     while that same account is granted a MEMBERS_ONLY read → **200**
+
+  🔴 (3) is the load-bearing one. An unreachable membership-service fail-closes
+  and denies *everyone*, so (1) alone would go green on a completely dead gate.
+  Only a verdict that differs **for the same account across two tiers** separates
+  "the gate answers" from "the gate is unreachable".
+
+  The suite also asserts the old stub's bypass WARN never appears — an absence
+  that is meaningful precisely because the reads above did happen.
 
 ### v1 limitation acknowledged
 

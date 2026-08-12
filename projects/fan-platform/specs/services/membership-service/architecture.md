@@ -327,8 +327,8 @@ parameters, and the boolean `allowed` maps to the port's return value:
 | `tenantId` | `tenantId` | tenant scope |
 | return `boolean` | `allowed` (boolean) | true = grant, false = deny |
 
-The FAN-BE-010 `HttpMembershipChecker` adapter (replacing the v1
-`AlwaysAllowMembershipChecker` via `@ConditionalOnMissingBean(MembershipChecker.class)`)
+The FAN-BE-010 `HttpMembershipChecker` adapter — since `TASK-FAN-INT-006` the **only**
+`MembershipChecker`, with the always-allow fallback and its selecting property deleted —
 calls this endpoint and returns `allowed` directly, **fail-closed on any error**
 (timeout, 5xx, non-2xx, malformed body → `false`). The endpoint itself also
 evaluates the § Access Semantics fail-closed (infra error → `allowed=false`).

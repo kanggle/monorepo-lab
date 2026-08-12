@@ -14,51 +14,121 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * Scenario 3 — visibility tier gating (TASK-FAN-INT-001 § In Scope #3,
- * realigned by TASK-FAN-INT-002 after TASK-FAN-BE-010).
+ * Scenario 3 — visibility tier gating, against the <b>real</b> membership gate
+ * (TASK-FAN-INT-006; originally TASK-FAN-INT-001 § In Scope #3, realigned once by
+ * TASK-FAN-INT-002).
  *
- * <p>The live-trio stack is gateway+community+artist only — membership-service
- * and iam (the workload-identity token source) are out of scope. After
- * TASK-FAN-BE-010 made {@code HttpMembershipChecker} the production default, the
- * community container would fail-closed on every MEMBERS_ONLY/PREMIUM read in
- * this stack. The container therefore opts out via the documented escape hatch
- * {@code COMMUNITY_MEMBERSHIP_SERVICE_ENABLED=false} (see
- * {@code MembershipCheckerAutoConfig}), so community falls back to
- * {@code AlwaysAllowMembershipChecker} — the v1 stub. The real HTTP gate (incl.
- * the 403 {@code MEMBERSHIP_REQUIRED} deny branch) is covered deterministically
- * by {@code MembershipGateIntegrationTest} (MockWebServer, PR-gated) and
- * end-to-end by federation-hardening-e2e; this class covers the cross-service
- * wiring under the stub:
+ * <p><b>What changed.</b> This class used to assert the behaviour of an inert stub.
+ * The stack had no membership-service, so community ran with
+ * {@code COMMUNITY_MEMBERSHIP_SERVICE_ENABLED=false} and
+ * {@code AlwaysAllowMembershipChecker} answered every gated read with "yes" plus a
+ * WARN line — which is what these tests asserted. membership-service is now in the
+ * stack, the escape hatch is deleted, and every assertion below exercises
+ * {@code HttpMembershipChecker} → {@code /internal/membership/access} for real.
  *
- * <ul>
- *   <li>{@code PUBLIC}: any authenticated tenant member -&gt; 200 (no checker
- *       call).</li>
- *   <li>{@code MEMBERS_ONLY}: stub {@code hasAccess()=true} -&gt; 200 + WARN
- *       log.</li>
- *   <li>{@code PREMIUM}: stub {@code hasAccess()=true} -&gt; 200 + WARN log.</li>
- * </ul>
+ * <h2>Why the ACTIVE membership is created through the product path</h2>
  *
- * <p>The bypass WARN is verified by tailing the community container stdout via
- * {@code GenericContainer.getLogs()} after the request and grepping for the
- * characteristic message — {@code AlwaysAllowMembershipChecker.hasAccess} calls
- * {@code log.warn("Membership gate bypassed (inert fallback stub selected ...):
- * account=.. tier=.. tenant=..")} on every gated read, so the fail-open is loud
- * in logs/observability.
+ * <p>TASK-FAN-INT-006 AC-0 weighed three ways to get an ACTIVE row: a payment stub,
+ * an e2e-only Flyway seed, or a direct INSERT. The product path won on a measured
+ * fact rather than on preference — {@code MockPaymentGatewayAdapter} is
+ * {@code @Profile("!portone")}, so it is already the {@code PaymentGatewayPort} in
+ * any stack that does not opt into PortOne. There was no payment plane to stand up.
+ * At equal cost the product path proves strictly more: the row these tests rely on
+ * is written by the real {@code SubscribeUseCase} — real amount computation, real
+ * idempotency key, real outbox — not by a fixture that only resembles one.
+ *
+ * <p>🔵 The stub PG is more permissive than the real one. That permissiveness is
+ * confined to the payment AUTHORIZATION step, which is not what this class proves;
+ * what it proves is the membership gate, and the membership row is genuine.
+ *
+ * <h2>Why there are three verdicts, not two</h2>
+ *
+ * <p>"Member gets 200, non-member gets 403" is satisfiable by a gate that is broken
+ * in one direction. If {@code MEMBERSHIP_SERVICE_BASE_URL} were wrong, every read
+ * would fail-closed to 403 — and a suite that only checked the deny case would go
+ * green on a completely dead gate. So the deny cases are always paired with an
+ * allow case in the same run, and one deny is a <b>tier</b> deny: a MEMBERS_ONLY
+ * subscriber reading a PREMIUM post. That one cannot be produced by broken wiring,
+ * because the same subscriber is granted a MEMBERS_ONLY read moments earlier. It is
+ * the case that distinguishes "the gate answers" from "the gate is reachable".
  */
 @Tag("full")
 class VisibilityTierE2ETest extends FanPlatformE2ETestBase {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    /** External gateway path; rewritten to {@code /api/fan/memberships} downstream. */
+    private static final String PATH_MEMBERSHIPS = "/api/v1/memberships";
+
+    /**
+     * Subscribes {@code accountId} at {@code tier} through the gateway and returns
+     * the created membership id. Asserts 201 — a silent non-2xx here would make
+     * every later assertion a measurement of the wrong thing.
+     */
+    private String subscribe(String accountId, String tier) throws Exception {
+        String token = jwt.signFanToken(accountId);
+        String body = """
+                {
+                  "tier": "%s",
+                  "planMonths": 1,
+                  "paymentId": "e2e-%s"
+                }
+                """.formatted(tier, UUID.randomUUID());
+
+        HttpResponse<String> resp = sendString(http, authedJson(
+                gatewayBaseUri().resolve(PATH_MEMBERSHIPS), token)
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build());
+
+        assertThat(resp.statusCode())
+                .as("subscribe %s for %s must succeed — body=%s", tier, accountId, resp.body())
+                .isEqualTo(201);
+        JsonNode json = objectMapper.readTree(resp.body()).get("data");
+        assertThat(json.get("status").asText())
+                .as("the row the gate will read must actually be ACTIVE")
+                .isEqualTo("ACTIVE");
+        assertThat(json.get("tier").asText()).isEqualTo(tier);
+        return json.get("membershipId").asText();
+    }
+
+    /** Publishes a post at {@code visibility} and returns its id. */
+    private String publish(String visibility, String marker) throws Exception {
+        String authorToken = jwt.signFanToken(randomAccountId());
+        String body = uniquePostBody(marker);
+        String createBody = """
+                {
+                  "postType": "FAN_POST",
+                  "visibility": "%s",
+                  "title": "%s visibility test",
+                  "body": "%s"
+                }
+                """.formatted(visibility, visibility, body);
+
+        HttpResponse<String> resp = sendString(http, authedJson(
+                gatewayBaseUri().resolve(pathCommunityPosts()), authorToken)
+                .POST(HttpRequest.BodyPublishers.ofString(createBody))
+                .build());
+        assertThat(resp.statusCode()).isEqualTo(201);
+        return objectMapper.readTree(resp.body()).get("data").get("postId").asText();
+    }
+
+    private HttpResponse<String> readAs(String postId, String accountId) throws Exception {
+        return sendString(http, authedGet(
+                gatewayBaseUri().resolve(pathCommunityPostById(postId)),
+                jwt.signFanToken(accountId))
+                .GET().build());
+    }
+
     @Test
-    @DisplayName("PUBLIC post -> any authenticated tenant member sees 200")
+    @DisplayName("PUBLIC post -> any authenticated tenant member sees 200 (gate not consulted)")
     void publicPostIsReadableByAnyTenantMember() throws Exception {
-        // Author publishes
         String authorAccountId = randomAccountId();
         String authorToken = jwt.signFanToken(authorAccountId);
         String body = uniquePostBody("e2e-public");
@@ -79,128 +149,95 @@ class VisibilityTierE2ETest extends FanPlatformE2ETestBase {
         String postId = objectMapper.readTree(createResp.body())
                 .get("data").get("postId").asText();
 
-        // A different fan reads -> expects 200, body field present.
-        String readerToken = jwt.signFanToken(randomAccountId());
-        HttpResponse<String> readResp = sendString(http, authedGet(
-                gatewayBaseUri().resolve(pathCommunityPostById(postId)), readerToken)
-                .GET().build());
+        HttpResponse<String> readResp = readAs(postId, randomAccountId());
         assertThat(readResp.statusCode())
-                .as("PUBLIC post readable by any tenant member")
+                .as("PUBLIC post readable by any tenant member, with no membership at all")
                 .isEqualTo(200);
         JsonNode readJson = objectMapper.readTree(readResp.body());
         assertThat(readJson.get("data").get("body").asText()).isEqualTo(body);
         assertThat(readJson.get("data").get("visibility").asText()).isEqualTo("PUBLIC");
     }
 
-    /**
-     * Asserts the behaviour of the <b>inert fallback stub</b>, not the production gate.
-     * This live trio deliberately sets {@code COMMUNITY_MEMBERSHIP_SERVICE_ENABLED=false}
-     * (FAN-INT-002) so {@code AlwaysAllowMembershipChecker} is selected instead of
-     * {@code HttpMembershipChecker}; the always-pass + WARN is that stub's escape-hatch
-     * behaviour. <b>Production hard fail-closes on PREMIUM</b> (FAN-BE-010) — covered by
-     * {@code MembershipGateIntegrationTest} and federation-hardening-e2e.
-     *
-     * <p>The name used to read "v1 always-pass", which is how a reader grepping for
-     * always-pass kept finding a test that appeared to assert an open PREMIUM gate in
-     * production (TASK-MONO-354).
-     */
     @Test
-    @DisplayName("PREMIUM post -> inert stub (membership-service disabled) always-passes + WARN log "
-            + "captured in container stdout — NOT the production gate, which fail-closes")
-    void premiumPostBypassesGateAndLogsWarn() throws Exception {
-        String authorAccountId = randomAccountId();
-        String authorToken = jwt.signFanToken(authorAccountId);
-        String body = uniquePostBody("e2e-premium");
-        String createBody = """
-                {
-                  "postType": "FAN_POST",
-                  "visibility": "PREMIUM",
-                  "title": "PREMIUM visibility test",
-                  "body": "%s"
-                }
-                """.formatted(body);
+    @DisplayName("MEMBERS_ONLY -> subscriber 200 AND non-subscriber 403 MEMBERSHIP_REQUIRED, same run")
+    void membersOnlyGrantsSubscribersAndDeniesEveryoneElse() throws Exception {
+        String postId = publish("MEMBERS_ONLY", "e2e-members-only");
 
-        HttpResponse<String> createResp = sendString(http, authedJson(
-                gatewayBaseUri().resolve(pathCommunityPosts()), authorToken)
-                .POST(HttpRequest.BodyPublishers.ofString(createBody))
-                .build());
-        assertThat(createResp.statusCode()).isEqualTo(201);
-        String postId = objectMapper.readTree(createResp.body())
-                .get("data").get("postId").asText();
+        // Deny half — no membership row exists for this account at all.
+        String strangerId = randomAccountId();
+        HttpResponse<String> denied = readAs(postId, strangerId);
+        assertThat(denied.statusCode())
+                .as("no membership -> the real gate denies (this is the assertion the "
+                        + "AlwaysAllow stub could never satisfy) — body=%s", denied.body())
+                .isEqualTo(403);
+        assertThat(objectMapper.readTree(denied.body()).get("code").asText())
+                .isEqualTo("MEMBERSHIP_REQUIRED");
 
-        // Different reader. Under the v1 stub (COMMUNITY_MEMBERSHIP_SERVICE_ENABLED
-        // =false) AlwaysAllowMembershipChecker.hasAccess returns true, so the
-        // PostAccessGuard PREMIUM branch passes and a non-author non-operator
-        // gets 200. The bypass is auditable via the stub's WARN log.
-        String readerToken = jwt.signFanToken(randomAccountId());
-        HttpResponse<String> readResp = sendString(http, authedGet(
-                gatewayBaseUri().resolve(pathCommunityPostById(postId)), readerToken)
-                .GET().build());
-        assertThat(readResp.statusCode())
-                .as("PREMIUM under v1 stub: non-author readers get 200")
+        // Allow half — in the SAME run, so a fail-closed gate (wrong base URL,
+        // unreachable service, token failure) cannot make the deny above pass.
+        String memberId = randomAccountId();
+        subscribe(memberId, "MEMBERS_ONLY");
+        HttpResponse<String> allowed = readAs(postId, memberId);
+        assertThat(allowed.statusCode())
+                .as("ACTIVE MEMBERS_ONLY membership -> 200 — body=%s", allowed.body())
                 .isEqualTo(200);
-
-        // Capture container stdout and grep for the canonical WARN line.
-        // GenericContainer.getLogs() returns aggregated stdout+stderr since
-        // the container started; the substring match below is stable as long
-        // as AlwaysAllowMembershipChecker keeps the same message template.
-        String containerLogs = community.getLogs();
-        assertThat(containerLogs)
-                .as("community-service emits a WARN log line for every stub bypass")
-                .contains("Membership gate bypassed (inert fallback stub selected");
-        assertThat(containerLogs)
-                .as("WARN line names the required tier so audit pipelines can correlate")
-                .contains("tier=PREMIUM");
     }
 
     @Test
-    @DisplayName("MEMBERS_ONLY post -> v1 stub allows access (follow-up: bean-swap test profile)")
-    void membersOnlyPostUnderV1StubAllowsAccess() throws Exception {
-        // v1 production registers AlwaysAllowMembershipChecker via
-        // @ConditionalOnMissingBean (see MembershipCheckerAutoConfig). Until
-        // a test-only deny profile lands (filed as a follow-up; see class
-        // javadoc), MEMBERS_ONLY behaves identically to PUBLIC in e2e.
-        // Asserting the 200 path here at least guards against a regression
-        // where MEMBERS_ONLY breaks the happy path entirely.
-        String authorAccountId = randomAccountId();
-        String authorToken = jwt.signFanToken(authorAccountId);
-        String body = uniquePostBody("e2e-members-only");
-        String createBody = """
-                {
-                  "postType": "FAN_POST",
-                  "visibility": "MEMBERS_ONLY",
-                  "title": "MEMBERS_ONLY visibility test",
-                  "body": "%s"
-                }
-                """.formatted(body);
+    @DisplayName("PREMIUM -> PREMIUM subscriber 200, MEMBERS_ONLY subscriber 403 (tier deny), "
+            + "non-subscriber 403")
+    void premiumDistinguishesTierNotJustPresence() throws Exception {
+        String postId = publish("PREMIUM", "e2e-premium");
 
-        HttpResponse<String> createResp = sendString(http, authedJson(
-                gatewayBaseUri().resolve(pathCommunityPosts()), authorToken)
-                .POST(HttpRequest.BodyPublishers.ofString(createBody))
-                .build());
-        assertThat(createResp.statusCode()).isEqualTo(201);
-        String postId = objectMapper.readTree(createResp.body())
-                .get("data").get("postId").asText();
+        // 1. No membership at all.
+        HttpResponse<String> stranger = readAs(postId, randomAccountId());
+        assertThat(stranger.statusCode()).isEqualTo(403);
+        assertThat(objectMapper.readTree(stranger.body()).get("code").asText())
+                .isEqualTo("MEMBERSHIP_REQUIRED");
 
-        String readerToken = jwt.signFanToken(randomAccountId());
-        HttpResponse<String> readResp = sendString(http, authedGet(
-                gatewayBaseUri().resolve(pathCommunityPostById(postId)), readerToken)
-                .GET().build());
-        // Under v1 stub: AlwaysAllowMembershipChecker -> hasAccess()=true ->
-        // PostAccessGuard.ensureVisibilityAccessible passes. Asserting 200
-        // here documents the v1 behaviour explicitly so the deny path can
-        // be added by a future task without ambiguity.
-        assertThat(readResp.statusCode())
-                .as("v1 AlwaysAllowMembershipChecker grants access — 200 expected")
+        // 2. 🔴 The load-bearing case. This account HAS an ACTIVE membership and is
+        // still denied, because MEMBERS_ONLY does not grant PREMIUM (AccessPolicy:
+        // PREMIUM ⊇ MEMBERS_ONLY, not the reverse). Broken wiring cannot produce
+        // this verdict selectively — the same account is granted its own tier below.
+        String lesserMemberId = randomAccountId();
+        subscribe(lesserMemberId, "MEMBERS_ONLY");
+        HttpResponse<String> insufficient = readAs(postId, lesserMemberId);
+        assertThat(insufficient.statusCode())
+                .as("MEMBERS_ONLY membership must NOT open PREMIUM — body=%s", insufficient.body())
+                .isEqualTo(403);
+        assertThat(objectMapper.readTree(insufficient.body()).get("code").asText())
+                .isEqualTo("MEMBERSHIP_REQUIRED");
+
+        // 2b. The control for case 2: the very same account reads a MEMBERS_ONLY post
+        // successfully. Without this, case 2 is indistinguishable from "the gate
+        // denies everything".
+        String membersOnlyPostId = publish("MEMBERS_ONLY", "e2e-tier-control");
+        assertThat(readAs(membersOnlyPostId, lesserMemberId).statusCode())
+                .as("the tier-denied account is granted its OWN tier — proves the 403 above "
+                        + "is a tier verdict, not an unreachable membership-service")
                 .isEqualTo(200);
 
-        // The stub also emits a WARN log per call. Cross-check it surfaces.
-        String containerLogs = community.getLogs();
-        assertThat(containerLogs)
-                .as("AlwaysAllowMembershipChecker emits a WARN line on every bypass call")
-                .contains("Membership gate bypassed (inert fallback stub selected");
-        assertThat(containerLogs)
-                .as("WARN line names the required tier for the MEMBERS_ONLY read")
-                .contains("tier=MEMBERS_ONLY");
+        // 3. Allow half.
+        String premiumMemberId = randomAccountId();
+        subscribe(premiumMemberId, "PREMIUM");
+        HttpResponse<String> allowed = readAs(postId, premiumMemberId);
+        assertThat(allowed.statusCode())
+                .as("ACTIVE PREMIUM membership -> 200 — body=%s", allowed.body())
+                .isEqualTo(200);
+    }
+
+    @Test
+    @DisplayName("the inert stub's bypass WARN never appears — the hatch is gone, not just unused")
+    void noStubBypassWarnIsEverEmitted() {
+        // TASK-FAN-INT-006. The stub logged this line on every gated read. Its absence
+        // after a run that made several gated reads is a direct, executable statement
+        // that HttpMembershipChecker — not the fallback — answered them.
+        //
+        // 🔵 This asserts an ABSENCE, so it is only meaningful because the tests above
+        // ran gated reads in this same container. Kept in this class for that reason
+        // rather than in a standalone one.
+        assertThat(community.getLogs())
+                .as("AlwaysAllowMembershipChecker is deleted; its bypass WARN must be unreachable")
+                .doesNotContain("Membership gate bypassed");
     }
 }
