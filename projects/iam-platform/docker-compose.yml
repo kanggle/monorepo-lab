@@ -132,6 +132,15 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_NUM_PARTITIONS: 3
+      # 🔴 TASK-MONO-526 — 이 줄이 없으면 아래 `kafka-data` 볼륨은 **아무것도 담지 않는다.**
+      # apache/kafka 이미지는 로그 디렉터리를 컨테이너 `/tmp/kafka-logs` 에 잡는다(이미지의
+      # config 파일에는 `/tmp/kraft-*-logs` 라고 적혀 있어 grep 으로도 안 보인다). 실측:
+      # 토픽 3건 produce → `down` → `up` ⇒ 오프셋이 아니라 **토픽 자체가 사라졌다.**
+      # 위의 KAFKA_LOG_RETENTION_HOURS: 24 도 그동안 무의미했다 — 리텐션 24시간을 선언해도
+      # 재기동이 그보다 먼저 전부 지웠기 때문이다.
+      # ⚠️ 이제 볼륨이 실제로 포맷되므로 CLUSTER_ID 를 바꾸면 브로커가 기동을 거부한다
+      #    (복구: `docker volume rm iam_kafka-data`). 근거·전수: scripts/check-kafka-log-dirs.sh
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
     volumes:
       - kafka-data:/var/lib/kafka/data
     healthcheck:
