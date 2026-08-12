@@ -8,7 +8,7 @@ membership 게이트는 아직 **끌 수 있는 상태로 배포된다** — 그
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -152,7 +152,10 @@ PREMIUM 글
 
 - 기준선(`TASK-FAN-INT-005` 머지 시점, iam 포함 4컨테이너): `E2E (fan-platform v1 live-trio
   smoke)` **3m25s**
-- 이번(멤버십 포함 5서비스 + postgres/redis/kafka/mysql): **이 PR 의 CI 런에서 기록**
+- 이번(멤버십 포함 5서비스 + postgres/redis/kafka/mysql): **4m38s** (PR #3282, 머지 런)
+- 델타 **+73초 (+36%)** — 서비스 하나(컨테이너 기동 + Flyway + 실 게이트 왕복 다수)치고 타당하다.
+  🔵 이 숫자는 **한 번의 측정**이지 성질이 아니다. 다음 서비스의 비용을 여기서 외삽하지 말 것 —
+  INT-005 의 +? 와 이번 +73초는 서로 다른 서비스이고 기동 비용도 다르다.
 
 # 후속 / 안 한 것
 
