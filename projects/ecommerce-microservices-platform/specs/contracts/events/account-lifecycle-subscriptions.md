@@ -8,6 +8,18 @@ Authoritative producer schemas: **IAM** [`account-events.md`](../../../../iam-pl
 
 ---
 
+## Delivery topology (TASK-MONO-511 / [ADR-MONO-062](../../../../../docs/adr/ADR-MONO-062-cross-project-event-delivery.md) — ACCEPTED B)
+
+**These consumers were correct and were receiving nothing.** IAM publishes to its own broker (`iam-kafka` on `iam-net`); every service below consumes from ecommerce's own (`ecommerce-kafka` on `ecommerce-net`); no path existed between the two. Measured 2026-08-13: a real signup moved IAM's `account.created` offset `0:0 → 0:1` while the ecommerce side had **no such topic at all**, and broker-to-broker DNS resolution failed **6/6** with each broker resolving its own `kafka` **3/3** as the control. The GDPR obligation carried by `account.deleted` (TASK-BE-258) therefore never executed.
+
+🔴 **The empty topic is the trap.** With a consumer attached, the ecommerce broker auto-creates `account.created`, so the topic exists and the wiring looks done. Its existence is the *consumer's* artefact, not the producer's. Never read "the topic is there" as delivery — the guard below is deliberately built on a different predicate.
+
+**How they arrive now.** Per-project Kafka isolation is kept (it is intentional — `TASK-MONO-507`). A relay (MirrorMaker 2, `infra/demo/relay/mm2.properties`) copies exactly the whitelisted topics into each consuming project's own cluster, **preserving topic names**. Consumers are unchanged and still read `kafka:9092`; a second bootstrap address appearing in a consumer would mean option A, which this ADR excluded.
+
+**What keeps this section honest.** `scripts/check-cross-project-topic-relay.sh` asserts set *equality* between the cross-project `@KafkaListener` topics in code and the relay whitelist, in both directions. A consumer added here without a relay route fails CI; a relay route nobody reads fails too.
+
+---
+
 ## Consumer Groups
 
 | Service | Group | Subscribes |
