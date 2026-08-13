@@ -69,6 +69,69 @@ skip"(§ 590/607). 즉 컨슈머 코드는 그 전제 위에서 옳게 쓰였고
 
 ---
 
+# 🟢 착수 (2026-08-13 UTC) — AC-0 정적 절반 완료. **이 티켓은 자기 범위를 3배 작게 잡고 있었다**
+
+## 🔴🔴 전수는 5가 아니라 **16 리스너 / 3계열**이다
+
+AC-0 이 요구한 *"다른 프로젝트가 IAM 토픽을 구독하는지, 역방향도 같은 상태인지"* 를 재니
+**같은 결함이 세 갈래로 있었다.** 티켓이 센 것은 그중 하나다:
+
+| 계열 | 소비 서비스 / 리스너 | 토픽 | 다리 |
+|---|---|---|---|
+| **iam → ecommerce** (`account.*`) | user(2) · order(1) · product(1) · notification(1) = **5** | 3 | 없음 |
+| **wms → ecommerce** (`wms.*`) | order(1) · product(3) · shipping(2) = **6** | 4 | 없음 |
+| **wms → scm** (`wms.*`) | demand-planning(1) · inventory-visibility(3) · logistics(1) = **5** | 5 | 🔴 **반쯤 지어져 있다**(아래) |
+
+🔵 **역방향(ecommerce → iam)은 0건이다.** ecommerce 의 `user.user.withdrawn` 컨슈머 2개는
+ecommerce 자기 토픽을 읽는다. AC-0 의 그 질문에는 *"없다"* 가 답이고, 그것도 산출물이다.
+
+## 🔴🔴 wms→scm 에는 **이 문제를 위한 파라미터가 이미 있고, 주석의 전제가 틀렸다**
+
+`projects/scm-platform/docker-compose.yml:374`:
+
+```yaml
+# WMS_KAFKA_BOOTSTRAP: cross-project event source. In dev, same cluster.
+KAFKA_BOOTSTRAP: ${WMS_KAFKA_BOOTSTRAP:-kafka:9092}
+```
+
+`TASK-SCM-BE-003` 이 *"cross-project source — 동일 클러스터일 수도 별도일 수도"* 라고 적으며
+심어 둔 이음매다. 그런데:
+
+- **"In dev, same cluster" 가 거짓이다** — scm 은 `scm-platform-kafka`(on `scm-platform-net`),
+  wms 는 `wms-kafka`(on `wms-net`). 같은 클러스터인 적이 없다.
+- `WMS_KAFKA_BOOTSTRAP` 은 **저장소 어디에서도 값이 할당되지 않는다.** 유일한 등장이 위 주석이고,
+  scm 의 `.env.example` 에도 **없다**(대조군: 같은 탐지식이 그 파일의 `KAFKA_BOOTSTRAP=kafka:9092`
+  는 찾는다). ⇒ 폴백이 항상 이겨서 **scm 이 자기 클러스터를 읽는다.**
+
+⇒ [[project_externalised_seam_with_no_counterpart]] 의 그 모양이다 — **외부화된 이음매에 짝이 0건**.
+그리고 이 이음매의 존재가 문제를 **더 안 보이게** 만들었다: 변수가 있으니 배선된 것처럼 읽힌다.
+
+## 구조 판정 — 오프셋보다 강한 술어
+
+AC-3 이 *"토픽이 존재한다를 술어로 쓰지 말라"* 고 요구한다. 오프셋보다 더 강한 술어가 있어서
+그것부터 썼다 — **두 클러스터 사이에 네트워크 경로가 있는가**:
+
+- 4개 프로젝트 compose 전부 자기 `name:` · 자기 `*-net` · 자기 `kafka` 컨테이너를 갖는다.
+- **모든 브로커가 자기 프로젝트 net 에만 붙어 있다**(iam-net / ecommerce-net / wms-net /
+  scm-platform-net). 공유되는 유일한 네트워크는 `traefik-net`(`external: true`)이고
+  **어느 브로커도 거기 붙어 있지 않다.**
+- 저장소 전체의 bootstrap 값은 전부 `kafka:9092` — 즉 **자기 net 안**으로만 해소된다.
+
+🔴 이 술어는 auto-create 된 빈 토픽에 속지 않는다. 오프셋은 "이번엔 안 왔다" 를 보이지만,
+경로 부재는 **올 수 없음**을 보인다.
+
+🔵 **결정에 미치는 영향**: `traefik-net` 이라는 **이미 존재하는 공유 외부 네트워크**가 있으므로
+선택지 A 의 비용이 티켓이 가정한 것보다 낮다. 다만 그것은 HTTP 라우팅용 네트워크이고
+브로커를 거기 올리는 것은 격리 축을 바꾸는 일이라 **그 자체가 ADR 사안**이다.
+
+## ⏸ 남은 것 — AC-0 의 라이브 절반
+
+오프셋 재측정은 **Docker 데몬이 꺼져 있어** 아직 못 했다(`npipe:////./pipe/docker_engine` 연결 실패).
+구조 판정이 이미 결론을 내지만, 티켓이 요구한 재측정이므로 기동 후 수행한다.
+🔴 그리고 그때 **세 계열을 다 재야 한다** — 티켓의 표 하나만 재면 같은 실수를 반복한다.
+
+---
+
 # Goal
 
 IAM 이 발행한 계정 생명주기 이벤트가 소비자 프로젝트의 컨슈머에 도달한다. 그리고 도달하지
@@ -107,9 +170,13 @@ IAM 이 발행한 계정 생명주기 이벤트가 소비자 프로젝트의 컨
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (재측정)** — 착수 시 위 오프셋 실측을 **다시 한다.** 그리고 죽은 컨슈머 표를
-      전수로 다시 센다(이 티켓은 `account.*` 만 셌다 — 다른 프로젝트가 IAM 토픽을 구독하는지,
-      역방향(ecommerce→IAM)도 같은 상태인지 확인할 것)
+- [~] **AC-0 (재측정)** — **정적 절반 완료, 라이브 절반 대기.**
+      🔴🔴 전수는 **5가 아니라 16 리스너 / 3계열**이었다(iam→ecommerce 5 · wms→ecommerce 6 ·
+      wms→scm 5). 🔵 역방향(ecommerce→iam)은 **0건**. 구조 판정으로 세 계열 모두 경로 부재를
+      확인했다(모든 브로커가 자기 net 에만, 공유 `traefik-net` 에는 브로커 0). 🔴 wms→scm 에는
+      `${WMS_KAFKA_BOOTSTRAP:-kafka:9092}` 이음매가 이미 있으나 **값이 어디에도 없고 주석의
+      "In dev, same cluster" 가 거짓**이다. ⏸ 오프셋 라이브 재측정은 Docker 기동 후
+      — **세 계열 전부** 잰다
 - [ ] **AC-1** — 가입 한 번에 소비자 클러스터의 `account.created` 오프셋이 증가하고,
       user-service 로그에 온보딩이 남는다
 - [ ] **AC-2** — IAM 에서 계정을 삭제하면 ecommerce 프로필이 `WITHDRAWN` 이 되고,
