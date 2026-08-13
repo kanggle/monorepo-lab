@@ -267,10 +267,18 @@ WMS 마스터 데이터를 **API 로** 만들 수 있는 자격증명이 존재�
 **D(v1 범위 밖 확정)** 로 명시 선택지가 됐다. ADR 은 여기에 실측 비용을 붙여 둔다
 (cc 클라이언트 12 · `roles`→authority 서비스 19 / 6 프로젝트 · `MASTER_WRITE` 술어 24).
 
-🔴 **구현은 `ADR-MONO-061 ACCEPTED — <A|B|C|D>` 정확형 전까지 멈춘다.** 2026-08-13 세션에서
-소유자가 선택지 목록에서 *"③(추천)"* 을 골랐지만, 그 글자의 출처가 **에이전트의 추천 라벨**
-이고 그 시점에 ADR 문서가 존재하지 않았으므로 ACCEPT 로 승격하지 않았다
-(`platform/architecture-decision-rule.md` § The ACCEPTED Gate).
+🟢 **`ADR-MONO-061 ACCEPTED — C` (2026-08-13, 소유자 정확형).** AC-1 은 이것으로 답해졌다:
+**워크로드 토큰에 `roles` 클레임**. A·B·D 는 배제 — `OperatorRoleDerivation` 의 wms 집합에
+`MASTER_WRITE` 는 계속 넣지 않고 `wms_excludesAdminTier` 테스트도 **유지**한다.
+🔴 게이트가 실제로 한 번 물었다(직전 라운드의 *"③(추천)"* 은 글자의 출처가 에이전트 추천
+라벨이라 넘기지 않았다) — 그 사실이 ADR § 결정 에 기록돼 있다.
+
+🔴 **구현 순서가 구속력을 갖는다**: `jwt-standard-claims.md` 의 machine 인가 축 개정이
+**먼저**다(계약이 스펙이다). cc 클라이언트 12개의 role 집합은 **기본값 빈 집합**(fail-closed).
+
+⚠️ **이 ACCEPT 가 결정하지 않은 것**: fan artist-service 의 `ADMIN_ROLES` 매처를 워크로드
+신원에 여는가 — rider 대조 결과 *"답하지 않고도 C 를 고를 수 있다"* 이므로 **미결**이고
+`TASK-MONO-522` 가 명시적으로 답해 기록해야 한다. 빈 집합 기본값이 그때까지 자동으로 닫아 둔다.
 
 ---
 

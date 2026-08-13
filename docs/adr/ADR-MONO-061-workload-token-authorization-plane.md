@@ -1,8 +1,8 @@
 # ADR-MONO-061 — 워크로드(machine) 토큰의 인가 평면: scope 만 싣는 토큰이 role 로 지키는 표면에 도달할 수 있는가
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 **Date:** 2026-08-13
-**History:** PROPOSED 2026-08-13 (this record). **ACCEPT is a human gate — this record authorises no code.** 승인은 소유자의 **정확형** 지시(`ADR-MONO-061 ACCEPTED — <A|B|C|D>`)를 요구하며, 일반적인 "진행"/"proceed"/"추천대로" 는 이것을 승인하지 않는다. 작성 에이전트는 자기 제안을 스스로 ACCEPT 할 수 없다.
+**History:** PROPOSED 2026-08-13. **ACCEPT is a human gate — this record authorises no code by itself.** 승인은 소유자의 **정확형** 지시(`ADR-MONO-061 ACCEPTED — <A|B|C|D>`)를 요구하며, 일반적인 "진행"/"proceed"/"추천대로" 는 이것을 승인하지 않는다. 작성 에이전트는 자기 제안을 스스로 ACCEPT 할 수 없다. · **ACCEPTED 2026-08-13 — C** (소유자가 `ADR-MONO-061 ACCEPTED — C` 를 직접 타이핑). 🔴 **게이트가 실제로 한 번 물었다**: 직전 라운드에서 소유자가 `AskUserQuestion` 목록의 *"③(추천)"* 을 골랐고, 그 글자의 출처가 **작성 에이전트의 추천 라벨**이며 그 시점에 이 문서가 존재하지 않았으므로 넘기지 않고 PROPOSED 로 기록한 뒤 정확형을 요청했다. **self-ACCEPT 아님** · **§ 선택지 / § 추천 / § 결과 는 byte-unchanged**(finalise 이지 re-decide 아님). ⚠️ **fan artist-service 의 admin 매처를 여는 것은 이 ACCEPT 가 결정하지 않았다** — 아래 § 결정 참조.
 **Decision driver:** `TASK-MONO-514` — `master-service` 의 쓰기 42개 술어 중 24개가 `MASTER_WRITE`/`MASTER_ADMIN` 을 요구하는데 **그 역할을 발급하는 경로가 저장소에 0건**이다. 워크로드 클라이언트는 `wms.master.write` **scope** 를 발급받지만, 인가는 **role** 로 하므로 이름이 맞는 scope 를 들고도 403 이다.
 **Related:** `TASK-MONO-514`(발굴·실측) · `TASK-MONO-521`(폭발반경을 셀 수 있게 한 모집단 측정) · `TASK-MONO-522`(선택지 C 를 고르면 **같이 답해야 하는** 티켓) · `ADR-MONO-059`(fan 저작 신원 평면 — C 가 그 binding 을 건드린다) · `platform/contracts/jwt-standard-claims.md` · `platform/security-rules.md` · `TASK-BE-433`(선택지 A 가 뒤집는 user-chosen 결정)
 
@@ -184,16 +184,50 @@ excluded**"*, AC-2: *"no `*_ADMIN` / `WMS_ADMIN` / **`MASTER_WRITE`** in the wms
 
 ---
 
-## 결정
+## 결정 — **C** (ACCEPTED 2026-08-13)
 
-**PENDING.** 이 ADR 은 아직 ACCEPT 되지 않았다.
+머신 신원은 **`roles` 클레임으로 인가를 표현한다.** scope 축은 남되(`/internal/**` 의 두
+판정기는 그대로), 도메인 API 표면에 도달하려면 role 이 필요하다는 현실을 토큰 모델이
+따라간다.
 
-🔴 **게이트 기록**: 2026-08-13 세션에서 소유자가 `AskUserQuestion` 을 통해 선택지 목록에서
-*"③ 워크로드 토큰에 role 클레임"* 을 선택했다. **그 항목에는 작성 에이전트가 붙인 "(추천)"
-라벨이 있었고**, 이 저장소의 규정(`platform/architecture-decision-rule.md` § The ACCEPTED
-Gate)은 *"글자가 있어도 그 글자의 출처가 에이전트의 추천이면 게이트는 열리지 않는다"* 를
-요구한다. 또한 그 시점에 **이 ADR 문서 자체가 존재하지 않았다** — 선택지 고르기는 ADR 을
-*쓸 근거*이지 ADR 의 ACCEPT 가 아니다.
+### 무엇이 구속력을 갖나
 
-⇒ 그래서 그 선택을 ACCEPT 로 승격하지 않고 이 문서를 PROPOSED 로 작성했다. 승인은
-**`ADR-MONO-061 ACCEPTED — C`**(또는 A/B/D)의 정확형으로 받는다.
+1. **A · B · D 는 배제된다.** 특히 A 는 `TASK-BE-433` 의 user-chosen 결정을 뒤집지 않는다 —
+   `OperatorRoleDerivation` 의 wms 집합에 `MASTER_WRITE` 는 **계속 들어가지 않는다**.
+   `OperatorRoleDerivationTest#wms_excludesAdminTier` 는 **그대로 유지**한다.
+2. **`jwt-standard-claims.md` 의 machine 인가 축 진술을 개정한다.** 지금 문장은
+   *"machine (`client_credentials`) tokens authorize on the `scope` axis"* 이고, C 는 그것을
+   좁게 참이 아니게 만든다. **개정이 구현보다 먼저다**(계약이 스펙이다 — CLAUDE.md
+   § Source of Truth Priority).
+3. **기본값은 빈 role 집합이다.** cc 클라이언트 12개 각각에 대해 role 집합을 **명시적으로**
+   정하고, 정하지 않은 클라이언트는 **아무 role 도 받지 않는다**. 이 fail-closed 기본값이
+   "19개 서비스가 갑자기 열린다" 와 "필요한 곳만 열린다" 를 가르는 유일한 장치다.
+
+### ⚠️ 이 ACCEPT 가 **결정하지 않은 것** — rider 대조 결과
+
+규정대로 반사가 아니라 **대조**했다: *"이 질문에 답하지 않고도 C 를 고를 수 있는가?"*
+
+| 질문 | 답 없이 C 를 고를 수 있나 | 처리 |
+|---|---|---|
+| fan artist-service 의 `ADMIN_ROLES` 매처를 워크로드 신원에 여는가 | **가능하다** (C 는 *능력*을 만들 뿐, 어떤 cc 클라이언트에 admin-tier role 을 줄지는 별개) | 🔴 **미결** — `TASK-MONO-522` 로 남는다 |
+| 어느 cc 클라이언트에 어떤 role 을 주는가 | 가능하다 | **구현 AC** (`TASK-MONO-514`) |
+| `jwt-standard-claims.md` 를 개정하는가 | **불가능** — C 를 고르는 것이 곧 그 문장을 참이 아니게 한다 | rider 아님, 위 § 무엇이 구속력을 갖나 2 |
+
+🔴🔴 **따라서 이 ACCEPT 는 `ADR-MONO-059` 의 binding 을 건드리지 않는다.** 소유자는 plain `C`
+를 골랐고, `C + fan admin 개방` 이 나란히 제시된 적이 없다. plain 선택은 그것을 여는 것으로도
+닫는 것으로도 확정되지 않으므로, **`TASK-MONO-522` 가 명시적으로 답하고 그 답을 기록해야
+한다** — 조용히 빠뜨리는 것은 답이 아니다. 그때까지 어떤 cc 클라이언트도
+`ADMIN`/`OPERATOR`/`SUPER_ADMIN`/`FAN_OPERATOR` 를 받지 않는다(위 fail-closed 기본값이
+그것을 자동으로 보장한다).
+
+### ACCEPT 가 인가하는 것 / 하지 않는 것
+
+인가한다: `TASK-MONO-514` 가 § 결과 의 1~5 를 수행하는 것. 인가하지 않는다: 그 밖의 role
+부여, 522 의 개방, 다른 ADR 의 재해석. 로드맵 각 단계는 별도 task 다(HARDSTOP-09).
+
+### 게이트 — 통과했지, 우회하지 않았다
+
+직전 라운드의 *"③(추천)"* 선택을 ACCEPT 로 읽지 않고 멈춰 정확형을 요청했고,
+`ADR-MONO-061 ACCEPTED — C` 가 소유자 타이핑으로 도착했다. 왕복 1회 비용 vs 아키텍처 결정의
+귀속이 영구히 흐려지는 비용의 교환이며, **그 사실 자체를 여기 적어 둔다** — 안 적으면 다음
+세션엔 "그냥 통과된 것" 과 구별되지 않는다.
