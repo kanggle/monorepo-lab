@@ -27,21 +27,53 @@ class CallerScopeTest {
     }
 
     @Test
-    void restricted_scopeListQuery_pinsTenantAndEcommerceSource() {
+    void restricted_scopeListQuery_pinsTenant() {
         OrderQueryCommand scoped = CallerScope.restrictedTo("ecommerce")
                 .scopeListQuery(emptyQuery());
         assertThat(scoped.tenantId()).isEqualTo("ecommerce");
-        assertThat(scoped.source()).isEqualTo(OrderSource.FULFILLMENT_ECOMMERCE.name());
     }
 
+    /**
+     * ADR-MONO-064 § D2 — the inverse of {@code restricted_scopeListQuery_overridesClientSuppliedSource},
+     * which asserted the {@code source} override this decision removed.
+     *
+     * <p>The override was redundant while {@code tenant_id} was populated on the
+     * fulfilment path only (pinning the tenant already implied the source), and became
+     * harmful once § D1 started stamping the caller's tenant onto its own
+     * {@code MANUAL} orders: it filtered out exactly the rows the operator had just
+     * created. Isolation is carried by {@code tenant_id} alone — see
+     * {@link #restricted_scopeListQuery_stillPinsTenant_whenClientAsksForAnotherSource}
+     * for the half that must not move.
+     */
     @Test
-    void restricted_scopeListQuery_overridesClientSuppliedSource() {
-        OrderQueryCommand withForeignSource = new OrderQueryCommand(
+    void restricted_scopeListQuery_keepsClientSuppliedSource() {
+        OrderQueryCommand withManualSource = new OrderQueryCommand(
                 null, null, null, "MANUAL", null, null, null, null, null, null, 0, 20);
-        OrderQueryCommand scoped = CallerScope.restrictedTo("ecommerce")
-                .scopeListQuery(withForeignSource);
-        assertThat(scoped.source()).isEqualTo(OrderSource.FULFILLMENT_ECOMMERCE.name());
-        assertThat(scoped.tenantId()).isEqualTo("ecommerce");
+        OrderQueryCommand scoped = CallerScope.restrictedTo("demo-corp")
+                .scopeListQuery(withManualSource);
+        assertThat(scoped.source())
+                .as("§ D2: the client's source filter is honoured, not overridden")
+                .isEqualTo("MANUAL");
+        assertThat(scoped.tenantId()).isEqualTo("demo-corp");
+    }
+
+    /**
+     * AC-4 (isolation must not weaken). § D2 widened what a caller sees <em>within</em>
+     * its tenant; it must not have loosened the tenant pin itself. A client that names
+     * someone else's source — or, below, someone else's tenant — still cannot escape
+     * its own {@code tenant_id}.
+     */
+    @Test
+    void restricted_scopeListQuery_stillPinsTenant_whenClientAsksForAnotherSource() {
+        OrderQueryCommand clientSupplied = new OrderQueryCommand(
+                null, null, null, OrderSource.FULFILLMENT_ECOMMERCE.name(), null,
+                "acme-corp" /* a client-supplied tenant filter is NOT trusted */,
+                null, null, null, null, 0, 20);
+        OrderQueryCommand scoped = CallerScope.restrictedTo("demo-corp")
+                .scopeListQuery(clientSupplied);
+        assertThat(scoped.tenantId())
+                .as("the signed claim overwrites any client-supplied tenant filter")
+                .isEqualTo("demo-corp");
     }
 
     @Test

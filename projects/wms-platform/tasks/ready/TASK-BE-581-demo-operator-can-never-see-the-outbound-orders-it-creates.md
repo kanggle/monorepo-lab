@@ -192,20 +192,116 @@ AC-1 의 A/B/C 는 이 사실 위에서 다시 읽혀야 한다.
 
 ---
 
+# ✅ 3회차 측정 (2026-08-13) — 전제 유지. **결함이 티켓이 적은 것보다 크고, 선택지가 늘었다**
+
+전문은 [`ADR-MONO-064`](../../../../docs/adr/ADR-MONO-064-wms-outbound-tenant-visibility-plane.md)
+§ 실측(M1~M6). 여기엔 티켓의 판정을 바꾸는 것만 적는다.
+
+## 전제 재확인 (손대지 않은 볼륨 `wms_postgres-data`)
+
+```
+outbound_order   1행   SO-DEMO-0001 | PICKING | MANUAL | tenant_id = NULL      ← 2회차와 동일
+information_schema 전수  6 DB · 91 테이블  ⇒  tenant 컬럼은 outbound_order.tenant_id 하나
+그 컬럼의 non-null 값     0건  ⇒ wms 의 테넌트 축은 값을 가진 적이 없다
+```
+
+🔴 계측 함정 하나를 밟고 빠져나왔다: `docker compose -f …` 를 그냥 부르면 프로젝트명이
+디렉터리명(`wms-platform`)이 되어 **새 빈 볼륨**을 만든다. 데모 볼륨은 `wms_postgres-data`
+(짧은 슬러그 `wms`)다. 그대로 쟀으면 "신선 볼륨" 위에서 전부 0을 보고 결론지을 뻔했다.
+
+## 🔴 2회차의 신규 항목은 **결론은 맞고 사유가 틀렸다**
+
+2회차는 *"`assume wms` → 토큰 발급 실패"* 를 보고 *"콘솔 도달 가능한 어떤 신원도 이 행을 볼 수
+없다"* 로 갔다. 결론은 맞다. 그러나 **왜 실패하는지는 재지 않았고**, 그 사유가 선택지를 바꾼다:
+
+| 2회차의 함의 | 실측 |
+|---|---|
+| 테넌트 `wms` 에 닿을 수 없다 | ❌ **테넌트 `wms` 는 존재한다** (`tenants` + `tenant_domain_subscription` 에 `wms\|wms\|ACTIVE`) |
+| 구조적으로 불가 | ❌ **`operator_tenant_assignment` 에 `wms` 행이 없을 뿐** — 선례가 바로 윗줄에 있다: `(operator 5, 'ecommerce')` 를 `TASK-BE-576` 이 2026-08-05 에 넣었다 |
+| — | 🔴 그리고 `admin_operators` 3명이 home tenant `*` 를 들고 있다 — 2회차가 "어떤 신원도" 라고 적을 때 세지 않은 신원이다 |
+
+⇒ **선택지 A 는 "불가능" 이 아니라 "행 하나"** 다. (그럼에도 A 는 추천하지 않는다 — ADR § A.)
+
+## M3 — 결함의 크기 (AC-2 의 답)
+
+`CallerScope` 호출처 8개 중 **7개가 403**, 가드 없는 하나가 생성. 이미 통과 중인 단위 테스트
+`CallerScopeTest.restricted_requireOrderAccess_deniesNullTenant` 가 이 판정을 핀하고 있다
+(추정이 아니다). ⇒ 데모 운영자는 자기가 만든 주문을 **읽지도 취소하지도 못한다.**
+
+🔵 부수 귀결: "데모가 `RESERVED` 에서 멈춘다" 의 진짜 원인이기도 하다 — 시드가 피킹 확정을
+안 부르는 것으로 기록돼 있으나(`picking_confirmation` 0건, 재확인), **불렀더라도 403 이었다.**
+
+## M4 — 🔴🔴 `*` 축이 두 계층에서 반대로 판정된다 (라이더 R1)
+
+입장 게이트는 `*` 를 **의도적으로 거부**하는데(`ADR-MONO-048` § D5 — wms 만) 스코핑 축은
+`*` 를 **무제한**으로 연다. 오늘 안 터지는 이유는 `tenant_domain_subscription` 에 `*` 행이
+없어서일 뿐 — **설계가 아니라 데이터가 막고 있다.** 구독 행 하나면 조용히 열린다.
+
+## M5 — 🔴🔴🔴 격리 불변식은 **이미 형제 표면이 깨고 있다** (라이더 R2)
+
+`admin-service`/`OrderDashboardController` 는 `@PreAuthorize("hasRole('WMS_VIEWER')")` 뿐,
+**테넌트 필터가 없다**(`admin_db` 22개 테이블 전부 테넌트 컬럼 없음). 그리고 지금 그 행을
+보여주고 있다 — 같은 운영자 토큰으로 admin 프로젝션 `totalElements=1`, 원시 API `0`.
+
+⇒ 현재 배치는 격리의 **비용을 전부 치르고 편익은 0** 이다. 이 관측이 *"MONO-304 의 규칙을
+건드리는 값이 크다"* 는 티켓의 전제를 무효화한다.
+
+## M6 — 기록만 (판정 근거 아님)
+
+- 시드 `seed-wms.sh:245` 의 존재 확인 GET 이 이 결함으로 영원히 0을 내므로 **"존재" 빠른
+  경로는 죽은 분기**다(409 로 흡수돼 실패로 안 보인다).
+- `outbound_order.status=PICKING` vs `admin_order_summary.status=RECEIVED` — 프로젝션 지연.
+  **이 티켓 밖**(BE-582 계열).
+
+---
+
 # Acceptance Criteria
 
-- [x] **AC-0 (재측정) — 완료 2026-08-07.** DB 1행 ↔ API 0원소(HTTP 200) 대조 ✅ ·
-      `tenant_id` NULL ✅ · 인가 규칙 코드 불변 ✅ · 🔴 신규: `unrestricted` 테넌트는
-      **assume 불가** ⇒ 콘솔 도달 가능한 신원 전부가 `restrictedTo` ·
+- [x] **AC-0 (재측정) — 완료 2026-08-07, 재확인 2026-08-13.** DB 1행 ↔ API 0원소(HTTP 200)
+      대조 ✅ · `tenant_id` NULL ✅ · 인가 규칙 코드 불변 ✅ ·
       ⚠️ "생성 201" 은 master-service 미기동으로 미재현(사유 기록). 상세는 위 §
-- [ ] **AC-1 (선택)** — A/B/C 중 하나를 고르고 근거를 적는다. **B 를 고르면 ADR 이
-      선행**한다(`TASK-MONO-304` 의 격리 규칙을 바꾸는 일이므로)
-- [ ] **AC-2 (형제 확인)** — 같은 "쓰기는 되는데 읽기에서 안 보인다" 가 wms 의 다른
-      엔드포인트에도 있는지 센다. `tenant_id` 를 가진 테이블은 이 하나뿐이므로 범위는
-      좁지만, **`CallerScope` 를 쓰는 호출처 전수**로 확인한다. 0건이면 "0건" 이라고 적는다
-- [ ] **AC-3 (라이브)** — 콘솔 `/wms/outbound` 에서 브라우저로 목록이 찬다
-- [ ] **AC-4 (회귀)** — 테넌트 격리가 **약해지지 않았음**을 테스트로 고정한다.
-      다른 테넌트의 주문이 보이면 안 된다 — 이 티켓이 그 반대로 가는 것을 막는다
+      🔴 **2회차의 신규 항목("`unrestricted` 테넌트는 assume 불가 ⇒ 콘솔 도달 가능한 신원
+      전부가 `restrictedTo`")은 결론은 맞고 사유가 틀렸다** — 3회차 § 참조
+- [x] **AC-2 (형제 확인) — 완료 2026-08-13. 🔴 예상("0건")과 정반대다.**
+      `CallerScope` 호출처 전수 = **8개 지점**. 그중 7개가 `requireOrderAccess` 로
+      restricted 호출자 × `tenant_id=NULL` 주문에 **403** 을 던진다. 가드가 없는 유일한
+      지점이 **생성**(검사할 기존 주문이 없어서). ⇒ 결함은 "안 보인다" 가 아니라
+      **"만들고 나면 읽기·피킹·패킹·출하·취소가 전부 막힌다"** 이다. 상세는 3회차 § M3
+- [x] **AC-1 (선택) — 완료 2026-08-13.**
+      [`ADR-MONO-064`](../../../../docs/adr/ADR-MONO-064-wms-outbound-tenant-visibility-plane.md)
+      **ACCEPTED — B** (소유자 지정). 선택지가 A/B/C → A~E 로 늘어난 뒤 B 로 닫혔다.
+      라이더 **R1 = 스코핑 축의 `*` 분기 제거**(§ D3, 이 티켓에서 구현) ·
+      **R2 = 별도 티켓**(§ D4 → `TASK-BE-583`).
+      🔴 게이트가 물었다 — 직전 응답 *"추천대로 진행"* 은 `B` 의 출처가 내 추천이라
+      넘기지 않았고, 선택지를 명시 제시해 다시 받았다
+- [x] **AC-4 (회귀) — 완료 2026-08-13.** 격리가 약해지지 않았음을 네 곳에 고정:
+      `CallerScopeTest.restricted_scopeListQuery_stillPinsTenant_whenClientAsksForAnotherSource`
+      (클라이언트가 보낸 테넌트 필터를 서명된 클레임이 덮는다) · 기존
+      `restricted_requireOrderAccess_deniesForeignTenant` / `…_deniesNullTenant` (불변) ·
+      🔴 **새로 채운 칸**: `OrderJpaRepositoryFilterIT.findFiltered_byTenantId_isolatesManualOrdersAcrossTenants`
+      — `source` pin 이 사라졌으므로 **`MANUAL` 행에 대해서도** 테넌트 필터 하나가
+      버텨야 하는데 기존 IT 는 `FULFILLMENT_ECOMMERCE` 행만 썼다(둘째 방어선이
+      첫째와 구별된 적이 없었다). 대조군 포함
+- [ ] **AC-3 (라이브) — 미완. 시도하지 않았고, 그 이유를 실측으로 적는다.**
+
+      🔴 **기존 `SO-DEMO-0001` 로는 확인할 수 없다** — § D1 은 소급 stamp 를 금지하므로
+      그 행은 `tenant_id=NULL` 인 채 영원히 안 보인다. 확인 경로는 둘 중 하나:
+      (a) 수정된 outbound-service 로 **새 주문을 만들어** 같은 토큰으로 조회, 또는
+      (b) 볼륨 초기화 + 재시드(🔴 `docker compose down -v` 는 분류기 차단 — 사장님 실행).
+
+      ⚠️ **호스트 자원 부족으로 (a) 도 시도하지 않았다** (2026-08-13 실측):
+      ```
+      RAM 15.7GB 총 / 여유 3.6GB     ← wms 슬라이스 단독이 ≈5.6GiB (이 티켓 2회차 기록)
+      demo-up 은 iam + wms 둘 다 필요 (iam 이 OIDC IdP)
+      ```
+      기동을 밀어붙이면 이 호스트의 알려진 OOM 캐스케이드(페이징 파일 고갈 → JDT.LS
+      누수 → Docker 행)를 부른다. **"돌려봤는데 안 됐다" 가 아니라 "돌리지 않았다"** 이며,
+      초록도 빨강도 주장하지 않는다.
+
+      🔵 대신 이 축에서 확보한 것: 유닛 차등 대조군(restricted→stamp / unrestricted→null,
+      bite 확인) + `OrderJpaRepositoryFilterIT` 의 실 Postgres 교차테넌트 칸(CI 가 권위).
+      이것들은 라이브를 **대체하지 못한다** — 이 결함이 정확히 "유닛은 초록인데 표면이
+      200+빈배열" 이었기 때문이다. AC-3 는 열린 채로 둔다.
 
 ---
 

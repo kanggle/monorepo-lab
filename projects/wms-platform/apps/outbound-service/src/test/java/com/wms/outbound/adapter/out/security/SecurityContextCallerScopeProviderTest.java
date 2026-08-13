@@ -51,10 +51,28 @@ class SecurityContextCallerScopeProviderTest {
         assertThat(provider.current().isRestricted()).isFalse();
     }
 
+    /**
+     * ADR-MONO-064 § D3. This assertion is the inverse of the one it replaces.
+     *
+     * <p>The wildcard used to resolve to {@code unrestricted}, which put this class in
+     * direct contradiction with the edge in front of it: wms is the only platform that
+     * refuses the SUPER_ADMIN {@code "*"} at admission
+     * ({@code WmsTenantGatePolicyTest.TheWildcardIsRefused}), and this axis then handed
+     * that same identity every tenant's orders. It stayed closed only because no tenant
+     * named {@code "*"} holds a domain subscription, so no such token carries the
+     * {@code entitled_domains} claim that would admit it — data, not design.
+     *
+     * <p>Restricting to the literal {@code "*"} is the fail-closed landing: no order
+     * carries that string as its tenant, so such a caller matches nothing.
+     */
     @Test
-    void platformWildcardTenant_isUnrestricted() {
+    void platformWildcardTenant_isRestricted_notUnrestricted() {
         authenticateWithTenant("*");
-        assertThat(provider.current().isRestricted()).isFalse();
+        CallerScope scope = provider.current();
+        assertThat(scope.isRestricted())
+                .as("wms refuses '*' at the edge; the scoping axis must not readmit it")
+                .isTrue();
+        assertThat(scope.tenantId()).isEqualTo("*");
     }
 
     @Test

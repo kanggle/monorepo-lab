@@ -2,30 +2,43 @@ package com.wms.outbound.application.security;
 
 import com.wms.outbound.application.command.OrderQueryCommand;
 import com.wms.outbound.domain.exception.TenantScopeDeniedException;
-import com.wms.outbound.domain.model.OrderSource;
 import java.util.UUID;
 
 /**
  * The outbound-order visibility scope of the current caller, derived from the
- * authenticated JWT (TASK-MONO-304 / ADR-MONO-022 § D9).
+ * authenticated JWT (TASK-MONO-304 / ADR-MONO-022 § D9, amended by
+ * ADR-MONO-064).
  *
  * <p>Two shapes:
  * <ul>
- *   <li><b>unrestricted</b> — a native wms operator ({@code tenant_id=wms}),
- *       a platform-scope operator ({@code tenant_id=*}), or an unauthenticated
- *       internal flow (Kafka consumer / no security context). Sees every
- *       outbound order; behaviour is unchanged from before this feature.</li>
- *   <li><b>restricted</b> — a customer-tenant operator (e.g. an ecommerce
- *       operator with {@code tenant_id=ecommerce}, admitted to wms via the
- *       {@code entitled_domains} dual-accept). Sees ONLY their own tenant's
- *       {@code FULFILLMENT_ECOMMERCE} orders; any other order yields 403.</li>
+ *   <li><b>unrestricted</b> — a native wms operator ({@code tenant_id=wms}) or an
+ *       unauthenticated internal flow (Kafka consumer / scheduler / no security
+ *       context). Sees every outbound order.</li>
+ *   <li><b>restricted</b> — every other authenticated caller, i.e. a customer-tenant
+ *       operator (e.g. {@code tenant_id=demo-corp} or {@code ecommerce}, admitted to
+ *       wms via the {@code entitled_domains} dual-accept). Sees ONLY its own tenant's
+ *       orders; any other order yields 403.</li>
  * </ul>
  *
- * <p>The isolation key is {@code OrderEntity.tenant_id}, which is populated
- * ONLY for {@code FULFILLMENT_ECOMMERCE} orders (ADR-MONO-022 facet d) and is
- * NULL for B2B / standalone orders — so a restricted caller can never match a
- * non-ecommerce order. The list path additionally pins
- * {@code source=FULFILLMENT_ECOMMERCE} to make the policy explicit.
+ * <h2>ADR-MONO-064 changed two sentences that used to stand here</h2>
+ *
+ * <p><b>The platform wildcard is no longer a caller shape (§ D3).</b> This javadoc
+ * used to name "a platform-scope operator ({@code tenant_id=*})" as unrestricted.
+ * wms's own admission gate <em>refuses</em> that token by deliberate decision
+ * (ADR-MONO-048 § D5 — wms is the only platform that does), so the application layer
+ * was extending unrestricted visibility to precisely the identity the edge was written
+ * to turn away. A {@code "*"} token that reaches here (it can be admitted on its
+ * {@code entitled_domains} rather than on the wildcard) is now
+ * {@code restrictedTo("*")}, and no order carries that string, so it sees nothing.
+ *
+ * <p><b>{@code tenant_id} is no longer ecommerce-only (§ D1).</b> The old text said the
+ * isolation key "is populated ONLY for {@code FULFILLMENT_ECOMMERCE} orders … so a
+ * restricted caller can never match a non-ecommerce order" — and that was the defect,
+ * not the design: a tenant-scoped operator could create an order (the create path is
+ * the one operation with no prior order to check) and then could not read, pick, pack,
+ * ship or even cancel it. The create path now stamps the caller's signed tenant, so a
+ * restricted caller owns what it creates, and the list path no longer pins
+ * {@code source} (see {@link OrderQueryCommand#withTenantScope}).
  */
 public final class CallerScope {
 
@@ -58,15 +71,16 @@ public final class CallerScope {
     /**
      * Returns a list-query command scoped to this caller. For an unrestricted
      * caller the command is returned unchanged; for a restricted caller it is
-     * pinned to {@code tenantId == this.tenantId} AND
-     * {@code source == FULFILLMENT_ECOMMERCE} (overriding any client-supplied
-     * source filter).
+     * pinned to {@code tenantId == this.tenantId} — and to nothing else
+     * (ADR-MONO-064 § D2; the {@code source == FULFILLMENT_ECOMMERCE} override
+     * this used to apply is gone, and {@link OrderQueryCommand#withTenantScope}
+     * carries the reasoning).
      */
     public OrderQueryCommand scopeListQuery(OrderQueryCommand command) {
         if (!restricted) {
             return command;
         }
-        return command.withTenantScope(tenantId, OrderSource.FULFILLMENT_ECOMMERCE.name());
+        return command.withTenantScope(tenantId);
     }
 
     /**
