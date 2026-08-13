@@ -85,11 +85,26 @@ ADMIN_ROLES = { "ADMIN", "OPERATOR", "SUPER_ADMIN", "FAN_OPERATOR" };
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (실측)** — 착수 시점에 다시 잰다: `tenant_domain_subscription` 의 `fan` 행 수,
+- [x] **AC-0 (실측)** — ✅ **완료 2026-08-13. 세 숫자 전부 `0` ⇒ 전제가 산다**(되돌리는 작업 아님).
+      전문 기록: [`ADR-MONO-063` § 실측](../../docs/adr/ADR-MONO-063-artist-directory-write-plane.md).
+      **소스**(마이그레이션·시드 전수)와 **라이브 DB**(`iam_mysql-data` 볼륨) 양면으로 쟀고 각
+      숫자에 대조군을 붙였다 — `tenants=12 subs=18` 은 `ADR-MONO-059` 의 2026-08-07 모집단과
+      **정확히 일치**(그 사이 아무도 열지 않았다) · 5개 도메인 18행 중 `fan` 만 부재 ·
+      fan-platform 의 `account_roles` 는 `ARTIST 3 · FAN 3` 으로 **읽힌다**(⇒ 이 0 은 조회
+      실패가 아니다). 🔵 곁다리 확증: 라이브 `oauth_clients` **10 cc / 16 total** 이
+      `WorkloadRoleCatalog` 키 집합과 정확히 일치하고 admin-tier 는 어느 워크로드에도 없다 —
+      `ADR-MONO-061` 의 fail-closed 기본값이 실제로 잠겨 있다.
+      ↓ 원문 AC (판정 근거로 보존)
+- [ ] ~~**AC-0 (실측)** — 착수 시점에 다시 잰다: `tenant_domain_subscription` 의 `fan` 행 수,
       `fan-platform` 의 `operator_tenant_assignment` 행, `fan-platform` 테넌트 계정 중
       admin-tier `account_roles` 를 든 것. 🔴 셋 다 **0 이어야 이 티켓의 전제가 산다** —
-      누군가 이미 열었다면 그것은 `ADR-MONO-059` 위반이고 이 티켓은 **되돌리는 작업**이 된다
+      누군가 이미 열었다면 그것은 `ADR-MONO-059` 위반이고 이 티켓은 **되돌리는 작업**이 된다~~
 - [ ] **AC-1 (결정)** — 연다 / 닫는다를 소유자가 정확형으로 승인한다.
+      🔵 **초안 제출됨 2026-08-13**: [`ADR-MONO-063`](../../docs/adr/ADR-MONO-063-artist-directory-write-plane.md)
+      **PROPOSED** — 선택지 **A / B / C / D1 / D2**, 추천 D1(제안일 뿐 결정 아님).
+      🔴 **대기 중**: 소유자 정확형 `ADR-MONO-063 ACCEPTED — <A|B|C|D1|D2>`.
+      이 ADR 은 `ADR-MONO-061` 이 명시 인계한 rider(*"fan artist-service 의 `ADMIN_ROLES`
+      매처를 워크로드 신원에 여는가"*)를 선택지별 표로 함께 답한다 — A=예, B/C/D=아니오.
       🔴 `ADR-MONO-059` 의 binding 을 건드리므로 새 ADR 로 올린다(그 ADR 을 개정하는 형태든,
       후속 ADR 이든). 이 티켓이 스스로 판정하지 않는다
 - [ ] **AC-2 (열기로 했다면)** — 발급 평면을 구현하고, 그 역할을 든 토큰으로
@@ -132,8 +147,8 @@ ADMIN_ROLES = { "ADMIN", "OPERATOR", "SUPER_ADMIN", "FAN_OPERATOR" };
 
 # Definition of Done
 
-- [ ] AC-0 실측 기록
-- [ ] ADR 승인(정확형) — 열기 / 닫기
+- [x] AC-0 실측 기록 — `ADR-MONO-063` § 실측 (세 숫자 전부 0, 대조군 포함)
+- [ ] ADR 승인(정확형) — 열기 / 닫기 ⏸️ **여기서 멈춰 있다** (`ADR-MONO-063` PROPOSED)
 - [ ] 구현 또는 명시적 기록
 - [ ] `seed-fan.sh` `--why` 의 잠정성 제거
 - [ ] Ready for review
