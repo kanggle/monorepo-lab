@@ -1,6 +1,6 @@
 # ADR-001: erp 이벤트 평면의 테넌트 축 — 선언된 단일 테넌트 vs 데모가 만든 다중 테넌트
 
-**Status**: Accepted — **D**
+**Status:** Accepted — **D**
 **Date**: 2026-08-07 (proposed) · 2026-08-12 (전제 재측정 + Option D 추가) · **2026-08-12 ACCEPTED — D** (소유자 정확형)
 **Deciders**: kanggle
 **Supersedes**: —

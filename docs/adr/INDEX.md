@@ -4,6 +4,18 @@ Architecture Decision Records that span the entire monorepo (shared library
 boundary, cross-project workflow, infrastructure conventions). Project-internal
 ADRs live under `projects/<name>/docs/adr/`.
 
+> **이 범위 한정은 의도적이다 — 두 색인을 합치지 마라** (TASK-MONO-525).
+> 프로젝트는 각자 `projects/<name>/docs/adr/README.md` 를 색인으로 쓰고, ADR 을 가진
+> 6개 프로젝트가 이제 전부 그 형태다. 여기로 합치면 **두 색인을 검사 가능하게 만드는
+> 성질이 깨진다**: 프로젝트 ADR 의 id 는 전역 유일이 아니다 — `ADR-001` 이 다섯 개
+> 있다(ecommerce · erp · fan · finance · scm). 하나의 id-keyed 표는 파일 어디에도 적혀
+> 있지 않은 접두사를 지어내지 않고서는 이들을 담을 수 없다.
+> 두 모집단은 **같은 수준으로 따로** 지켜진다 — 이 파일은
+> `scripts/check-adr-index-drift.sh`, 프로젝트 README 는
+> `scripts/check-project-adr-index-drift.sh`(CI 잡 `project-adr-index`).
+> 공유되는 것은 아래 **Authoring Convention** 이며, 프로젝트 ADR 의 `**Status:**` 표기도
+> MONO-525 에서 그 규약으로 통일됐다.
+
 | ADR | Title | Status | Date |
 |---|---|---|---|
 | [ADR-MONO-001](ADR-MONO-001-port-prefix-scaling.md) | PORT_PREFIX 슬롯 부족과 7개+ 프로젝트 동시 운영 정책 | ACCEPTED | 2026-05-02 |

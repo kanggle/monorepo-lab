@@ -1,6 +1,6 @@
 # ADR-001: 실 PG 연동 — PortOne V2 클라이언트 개시 결제 + 서버측 검증 경계
 
-**Status**: Proposed
+**Status:** Proposed
 **Date**: 2026-07-24 (proposed)
 **Deciders**: kanggle
 **Supersedes**: —

@@ -1,6 +1,6 @@
 # ADR-006: At-Least-Once Delivery Policy (per-service decisions)
 
-- **Status**: ACCEPTED (2026-05-11)
+- **Status:** ACCEPTED (2026-05-11)
 - **Date**: 2026-05-11
 - **Authors**: backend (TASK-BE-135 audit)
 - **Supersedes**: —

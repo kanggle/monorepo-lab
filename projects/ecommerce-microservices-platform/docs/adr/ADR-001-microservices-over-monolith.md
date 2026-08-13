@@ -1,6 +1,6 @@
 # ADR-001: 단일 판매자 B2C에서 모놀리식이 아닌 MSA를 택한 이유
 
-- **Status**: Accepted
+- **Status:** Accepted
 - **Date**: 2026-03
 - **Tags**: architecture, microservices
 

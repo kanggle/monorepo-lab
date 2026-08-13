@@ -1,6 +1,6 @@
 # ADR-008: 내부 전용 엔드포인트(`/api/internal/**`)의 인증 경계를 네트워크-단독에서 앱-레이어 방어심층으로 승격
 
-- **Status**: WITHDRAWN (2026-06-29)
+- **Status:** WITHDRAWN (2026-06-29)
 - **Date**: 2026-06-29
 - **Authors**: backend (code-marker discovery sweep — `TASK-BE-118-fix-002` 미티켓 TODO 승격)
 - **Supersedes**: —

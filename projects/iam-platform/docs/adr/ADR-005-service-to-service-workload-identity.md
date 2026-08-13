@@ -1,6 +1,6 @@
 # ADR-005: 서비스 간(Workload) 인증 — `client_credentials` 단기 JWT
 
-**Status**: ACCEPTED
+**Status:** ACCEPTED
 **Date**: 2026-05-29 (proposed) → 2026-05-30 (accepted)
 **Deciders**: kanggle
 **Supersedes**: —

@@ -1,6 +1,6 @@
 # ADR-004: OAuth Callback IT — CI Linux 503 Deeper Isolation Strategy
 
-**Status**: ACCEPTED — Phase 2 옵션 1 (HTTP/1.1 강제) 으로 5/5 IT 회복 (CI run `25594196693`, 2026-05-09)
+**Status:** ACCEPTED — Phase 2 옵션 1 (HTTP/1.1 강제) 으로 5/5 IT 회복 (CI run `25594196693`, 2026-05-09)
 **Date**: 2026-05-09 (proposed) / 2026-05-09 (Phase 1 진단 + retry 검증 → flaky 확정 + RC 식별) / 2026-05-09 (Phase 2 옵션 1 PASS — ACCEPTED)
 **Deciders**: kanggle
 **Supersedes**: —

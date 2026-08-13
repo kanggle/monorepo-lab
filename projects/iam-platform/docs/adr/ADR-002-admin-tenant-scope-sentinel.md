@@ -1,6 +1,6 @@
 # ADR-002: Admin Service — Tenant Scope Sentinel for Multi-Tenant Operator Isolation
 
-**Status**: ACCEPTED
+**Status:** ACCEPTED
 **Date**: 2026-05-02
 **Deciders**: kanggle
 **Supersedes**: —

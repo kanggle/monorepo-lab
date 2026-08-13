@@ -1,6 +1,6 @@
 # ADR-003: `Money`/`Currency` 값객체를 account-service·ledger-service 중복에서 프로젝트 범위 공유 위치로
 
-- **Status**: ACCEPTED (2026-07-30)
+- **Status:** ACCEPTED (2026-07-30)
 - **Date**: 2026-07-30
 - **Authors**: architecture (naming-convention 감사 산물 — finance-platform 세 번째 프로젝트 ADR)
 - **Supersedes**: —

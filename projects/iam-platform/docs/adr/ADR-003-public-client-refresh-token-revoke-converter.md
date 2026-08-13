@@ -1,6 +1,6 @@
 # ADR-003: SAS Public-Client AuthenticationConverter for `refresh_token` and `revoke` Grants
 
-**Status**: ACCEPTED — 옵션 B closure (Cluster A 3/3 + 모든 enabled IT PASS, 회귀 0)
+**Status:** ACCEPTED — 옵션 B closure (Cluster A 3/3 + 모든 enabled IT PASS, 회귀 0)
 **Date**: 2026-05-09 (proposed) / 2026-05-09 (옵션 A partial) / 2026-05-09 (옵션 B closure)
 **Deciders**: kanggle
 **Supersedes**: —

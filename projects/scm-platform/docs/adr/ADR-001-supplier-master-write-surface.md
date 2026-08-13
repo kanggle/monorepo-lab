@@ -1,6 +1,6 @@
 # ADR-SCM-001 — v1 공급사 마스터의 쓰기 표면
 
-**Status**: ACCEPTED
+**Status:** ACCEPTED
 **Date**: 2026-08-07
 **History**: Proposed 2026-08-07 (`TASK-SCM-BE-059` 착수 중단 시 제출, PR #3249) · **ACCEPTED 2026-08-07** — 소유자의 정확형 intent `ADR-SCM-001 ACCEPTED — A (자격증명은 v2 유보)`. self-ACCEPT 아님(제출과 인가는 다른 턴의 다른 행위자). **A/B/C 본문과 § Consequences 는 byte-unchanged** — ACCEPT 는 결정을 확정하는 것이지 다시 정하는 것이 아니다.
 **Deciders**: 저장소 소유자 (정확형 intent, 2026-08-07 — `platform/architecture-decision-rule.md § The ACCEPTED Gate`)

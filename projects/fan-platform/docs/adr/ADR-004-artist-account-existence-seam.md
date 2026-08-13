@@ -1,6 +1,6 @@
 # ADR-004: `Follow.artistAccountId` 의 실재 검증 — 이음매를 어디에 두는가
 
-**Status**: Accepted — **A**
+**Status:** Accepted — **A**
 **Date**: 2026-08-11 (proposed) · **2026-08-11 ACCEPTED — A** (소유자 정확형)
 **Deciders**: kanggle
 **Supersedes**: —
