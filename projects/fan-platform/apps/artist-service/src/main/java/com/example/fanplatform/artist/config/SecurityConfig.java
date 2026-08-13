@@ -4,6 +4,7 @@ import com.example.fanplatform.artist.adapter.in.web.security.PublicPaths;
 import com.example.fanplatform.artist.application.ActorContext;
 import com.example.security.oauth2.TenantClaimValidator;
 import com.example.security.servlet.ResourceServerChainAssembler;
+import com.example.security.servlet.WorkloadIdentityAuthoritiesConverter;
 import com.example.security.servlet.actor.ActorContextJwtAuthenticationConverter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -71,6 +72,30 @@ public class SecurityConfig {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
+    /**
+     * The workload scope that opens this service's {@code /internal/artists/**} surface.
+     *
+     * <h2>Why it is {@code artist.read} and NOT {@code fan-platform.artist.read}</h2>
+     *
+     * Those are two different scopes in two different families, and picking the wrong one would
+     * make the discriminator discriminate nothing:
+     *
+     * <ul>
+     *   <li>{@code fan-platform.artist.read} is an <b>end-user resource scope</b>. IAM migration
+     *       {@code V0030} grants it to the fan web client, and the demo seed requests it on the
+     *       ordinary user token. If this surface keyed on it, every logged-in fan would hold
+     *       {@code ROLE_INTERNAL} and could call the internal endpoint directly.</li>
+     *   <li>{@code artist.read} joins the <b>machine scope</b> family ({@code account.read},
+     *       {@code membership.read}) that IAM grants only to {@code client_credentials}
+     *       clients. Only a machine token carries it.</li>
+     * </ul>
+     *
+     * <p>This constant is <b>policy and stays here</b>. Only the matching mechanism was promoted to
+     * {@link WorkloadIdentityAuthoritiesConverter} (TASK-MONO-521) — deliberately, so that the
+     * reasoning above cannot be flattened into a sibling service's choice.
+     */
+    public static final String REQUIRED_WORKLOAD_SCOPE = "artist.read";
+
     // FAN_OPERATOR is the assume-tenant operator role iam mints on token-exchange
     // (OperatorRoleDerivation); included so a cross-tenant console operator is admitted on the
     // mutating routes rather than silently 403'd here after passing the gateway (TASK-MONO-417).
@@ -133,7 +158,8 @@ public class SecurityConfig {
                 .oauth2ResourceServer(rs -> rs
                         .jwt(jwt -> jwt
                                 .decoder(internalJwtDecoder)
-                                .jwtAuthenticationConverter(new WorkloadIdentityAuthoritiesConverter()))
+                                .jwtAuthenticationConverter(
+                                        new WorkloadIdentityAuthoritiesConverter(REQUIRED_WORKLOAD_SCOPE)))
                         .authenticationEntryPoint(SecurityConfig::onInternalAuthFailure)
                         .accessDeniedHandler(SecurityConfig::onInternalAccessDenied));
         return http.build();

@@ -5,7 +5,7 @@ import com.example.security.servlet.actor.ActorContextJwtAuthenticationConverter
 import com.example.security.oauth2.AllowedIssuersValidator;
 import com.example.fanplatform.membership.infrastructure.security.SecurityConfig;
 import com.example.security.oauth2.TenantClaimValidator;
-import com.example.fanplatform.membership.infrastructure.security.WorkloadIdentityAuthoritiesConverter;
+import com.example.security.servlet.WorkloadIdentityAuthoritiesConverter;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.jwk.RSAKey;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -89,7 +89,8 @@ public class SliceTestSecurityConfig {
                 .oauth2ResourceServer(rs -> rs
                         .jwt(jwt -> jwt
                                 .decoder(internalJwtDecoder())
-                                .jwtAuthenticationConverter(new WorkloadIdentityAuthoritiesConverter()))
+                                .jwtAuthenticationConverter(new WorkloadIdentityAuthoritiesConverter(
+                                        SecurityConfig.REQUIRED_WORKLOAD_SCOPE)))
                         .authenticationEntryPoint(SecurityConfig::onInternalAuthFailure)
                         .accessDeniedHandler(SecurityConfig::onInternalAccessDenied));
         return http.build();

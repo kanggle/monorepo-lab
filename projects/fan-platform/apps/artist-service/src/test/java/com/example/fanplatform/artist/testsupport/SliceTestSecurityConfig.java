@@ -1,7 +1,7 @@
 package com.example.fanplatform.artist.testsupport;
 
 import com.example.fanplatform.artist.application.ActorContext;
-import com.example.fanplatform.artist.config.WorkloadIdentityAuthoritiesConverter;
+import com.example.security.servlet.WorkloadIdentityAuthoritiesConverter;
 import com.example.security.servlet.actor.ActorContextJwtAuthenticationConverter;
 import com.example.security.oauth2.AllowedIssuersValidator;
 import com.example.security.oauth2.TenantClaimValidator;
@@ -130,8 +130,10 @@ public class SliceTestSecurityConfig {
     /**
      * Order(1): the workload-identity {@code /internal/**} chain, mirroring
      * production {@code SecurityConfig#internalFilterChain}. Uses the real
-     * {@link WorkloadIdentityAuthoritiesConverter} — not a restatement — so the
-     * scope discriminator a slice test exercises is the genuine one.
+     * {@link WorkloadIdentityAuthoritiesConverter} — not a restatement — and the real
+     * {@code SecurityConfig.REQUIRED_WORKLOAD_SCOPE}, so the scope discriminator a slice
+     * test exercises is the genuine one. Restating the scope here instead would let this
+     * config keep passing after production's scope changed (TASK-MONO-521).
      */
     @Bean
     @Order(1)
@@ -146,7 +148,8 @@ public class SliceTestSecurityConfig {
                 .oauth2ResourceServer(rs -> rs
                         .jwt(jwt -> jwt
                                 .decoder(internalJwtDecoder)
-                                .jwtAuthenticationConverter(new WorkloadIdentityAuthoritiesConverter()))
+                                .jwtAuthenticationConverter(new WorkloadIdentityAuthoritiesConverter(
+                                        com.example.fanplatform.artist.config.SecurityConfig.REQUIRED_WORKLOAD_SCOPE)))
                         .authenticationEntryPoint((req, resp, e) ->
                                 writeError(resp, HttpStatus.UNAUTHORIZED.value(),
                                         "UNAUTHORIZED", "Missing or invalid internal credentials"))
