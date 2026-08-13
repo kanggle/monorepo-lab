@@ -8,7 +8,7 @@ TASK-BE-581
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -282,26 +282,38 @@ information_schema 전수  6 DB · 91 테이블  ⇒  tenant 컬럼은 outbound_
       — `source` pin 이 사라졌으므로 **`MANUAL` 행에 대해서도** 테넌트 필터 하나가
       버텨야 하는데 기존 IT 는 `FULFILLMENT_ECOMMERCE` 행만 썼다(둘째 방어선이
       첫째와 구별된 적이 없었다). 대조군 포함
-- [ ] **AC-3 (라이브) — 미완. 시도하지 않았고, 그 이유를 실측으로 적는다.**
+- [x] **AC-3 (라이브) — 통과 2026-08-13.** 살아 있는 iam + wms 스택, 실제 데모 운영자
+      토큰(`assume demo-corp`), 콘솔이 실제로 읽는 그 엔드포인트에 대고 측정했다.
 
-      🔴 **기존 `SO-DEMO-0001` 로는 확인할 수 없다** — § D1 은 소급 stamp 를 금지하므로
-      그 행은 `tenant_id=NULL` 인 채 영원히 안 보인다. 확인 경로는 둘 중 하나:
-      (a) 수정된 outbound-service 로 **새 주문을 만들어** 같은 토큰으로 조회, 또는
-      (b) 볼륨 초기화 + 재시드(🔴 `docker compose down -v` 는 분류기 차단 — 사장님 실행).
-
-      ⚠️ **호스트 자원 부족으로 (a) 도 시도하지 않았다** (2026-08-13 실측):
       ```
-      RAM 15.7GB 총 / 여유 3.6GB     ← wms 슬라이스 단독이 ≈5.6GiB (이 티켓 2회차 기록)
-      demo-up 은 iam + wms 둘 다 필요 (iam 이 OIDC IdP)
+      토큰       tenant_id = demo-corp · roles ∋ OUTBOUND_READ/WRITE
+      before     GET /api/v1/outbound/orders  →  totalElements = 0   (SO-DEMO-0001 안 보임)
+      POST       /api/v1/outbound/orders      →  201  (SO-AC3-181910)
+      after      GET /api/v1/outbound/orders  →  totalElements = 1   ✅ 만든 것을 본다
+      DB         SO-DEMO-0001  | MANUAL | <NULL>       ← 소급 stamp 안 함(§D1 대로)
+                 SO-AC3-181910 | MANUAL | demo-corp    ← D1 이 실제로 박았다
       ```
-      기동을 밀어붙이면 이 호스트의 알려진 OOM 캐스케이드(페이징 파일 고갈 → JDT.LS
-      누수 → Docker 행)를 부른다. **"돌려봤는데 안 됐다" 가 아니라 "돌리지 않았다"** 이며,
-      초록도 빨강도 주장하지 않는다.
 
-      🔵 대신 이 축에서 확보한 것: 유닛 차등 대조군(restricted→stamp / unrestricted→null,
-      bite 확인) + `OrderJpaRepositoryFilterIT` 의 실 Postgres 교차테넌트 칸(CI 가 권위).
-      이것들은 라이브를 **대체하지 못한다** — 이 결함이 정확히 "유닛은 초록인데 표면이
-      200+빈배열" 이었기 때문이다. AC-3 는 열린 채로 둔다.
+      🔵 **두 행이 테넌트만 다르다** — 같은 엔드포인트·같은 토큰에서 하나는 보이고 하나는
+      안 보이므로, 이 판정은 "200 이 왔다" 가 아니라 **차등 대조군**이다. HTTP 200 을
+      근거로 쓰지 않고 DB 를 함께 읽었다(이 결함이 정확히 "200 + 빈 배열" 이었으므로).
+
+      🔴 **M3 의 403 잠금도 라이브에서 풀렸다** — 단건 조회는 이전에 둘 다 403 이었다:
+      ```
+      자기 주문 (tenant=demo-corp) → 200      ← 이전 403
+      B2B      (tenant=NULL)      → 403      ← 격리 유지 (AC-4 가 라이브에서도 성립)
+      ```
+      **고친 것만 정확히 열렸다.**
+
+      ⚠️ **범위 — 콘솔 렌더 계층은 태우지 않았다.** 기동 중 커밋 차지가 92%(여유 2.6GB)에
+      도달해, 이 호스트의 알려진 캐스케이드(커밋 고갈)를 피해 console-bff/web 추가를
+      중단했다. 남은 미검증 구간은 *"BFF/React 가 비어 있지 않은 배열을 실제로 렌더하는가"*
+      뿐이며, **콘솔이 바로 이 엔드포인트를 이 토큰으로 읽는다는 것은 이 티켓 § 파급이
+      런타임 로그로 이미 확정**해 둔 사실이다. 그 한 칸은 열려 있다고 적는다.
+
+      🔵 부수 발견(제품 아님): 기존 데모 볼륨의 DB 롤 비밀번호가 현재
+      `projects/wms-platform/.env` 값과 어긋나 전 서비스가 Flyway 단계에서 크래시 루프였다.
+      `ALTER USER` 로 맞춰 해소했다 — **환경 드리프트이지 이 변경의 회귀가 아니다.**
 
 ---
 
