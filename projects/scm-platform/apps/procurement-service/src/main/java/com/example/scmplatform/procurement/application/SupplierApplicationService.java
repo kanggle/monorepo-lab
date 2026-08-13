@@ -117,7 +117,13 @@ public class SupplierApplicationService {
      * does <b>not</b> contain {@code scm.write}. Requiring that scope would have
      * made supplier registration unreachable for the only operator there is,
      * which is precisely the trap wms master-data writes fell into
-     * ({@code MASTER_WRITE} is granted to nobody — TASK-MONO-514).
+     * ({@code MASTER_WRITE} was granted to nobody — TASK-MONO-514). That trap has
+     * since been sprung on the wms side: ADR-MONO-061 lets a workload client carry
+     * roles, and the wms workload client now receives {@code MASTER_WRITE} on the
+     * {@code wms.master.write} scope. The lesson this sentence was citing is
+     * unchanged, and the reasoning below is unaffected — no scm client is enumerated
+     * for any role, so scm's operator gate still has exactly one identity that
+     * reaches it.
      *
      * <p>The role side does resolve: a {@code demo-corp} tenant carries an ACTIVE
      * {@code scm} subscription, {@code OperatorRoleDerivation} maps that domain

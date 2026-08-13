@@ -55,6 +55,13 @@ import org.springframework.stereotype.Component;
  * recursion-safe, mirroring {@link #populateEntitledDomains} — NEVER reachable on
  * {@code client_credentials}.
  *
+ * <p>TASK-MONO-514 (ADR-MONO-061 option C) — adds a <b>separate</b> roles leg to the
+ * {@code client_credentials} grant ({@link #populateWorkloadRoles}), sourced from the static
+ * {@link WorkloadRoleCatalog}. The sentence above still holds for the BE-369 leg, which is the
+ * one that performs I/O and therefore the one the recursion guard is about; the workload leg
+ * does none. A client absent from the catalog receives no roles, so the token nine of the ten
+ * registered workload clients receive is byte-unchanged.
+ *
  * <p>TASK-MONO-263 (ADR-MONO-035 4b-2b / ADR-032 D5 step 4) — stops emitting the
  * {@code account_type} claim on every grant (the column is dropped, no consumer remains)
  * and decouples {@link RoleSeedPolicy} from {@code account_type} (consumer seed keyed on
@@ -106,10 +113,21 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
      * {@code roles} claim. Emitted on account-bearing grants
      * ({@code authorization_code} / {@code refresh_token}) — sourced from the stored
      * {@code account_roles} if present, else the aud-default seed
-     * ({@link RoleSeedPolicy}). Omitted for {@code client_credentials} (a workload is
-     * not an identity — recursion guard). TASK-MONO-263: the {@code account_type} claim
+     * ({@link RoleSeedPolicy}). TASK-MONO-263: the {@code account_type} claim
      * is no longer emitted (ADR-032 D5 step 4); {@code roles} is the sole authorization
      * surface.
+     *
+     * <p><b>TASK-MONO-514 (ADR-MONO-061 option C) corrects the sentence that stood here.</b>
+     * It read "Omitted for {@code client_credentials} (a workload is not an identity —
+     * recursion guard)", which conflated two different reasons and left the second one load-
+     * bearing. The recursion guard binds the <em>account-service lookup</em>, not the claim:
+     * a static per-client table performs no I/O and is therefore reachable on that grant. And
+     * "a workload is not an identity" remains true — it is why the grant mints no
+     * {@code email} and why {@code sub} stays the client — but it never implied a workload
+     * has no authority, only that its authority is not a person's. The claim is now emitted
+     * on {@code client_credentials} for explicitly enumerated clients
+     * ({@link WorkloadRoleCatalog}), and omitted for every other, which is all of them until
+     * a decision adds one.
      *
      * <p>TASK-BE-370 (ADR-MONO-033 S4 assume-tenant — completes ADR-MONO-032 D5 step 2):
      * also emitted on the {@code token_exchange} (assume-tenant) path.
@@ -223,6 +241,57 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
 
         log.debug("TenantClaimTokenCustomizer: injected tenant_id={}, tenant_type={} for clientId={}",
                 tenantInfo.tenantId(), tenantInfo.tenantType(), clientId);
+
+        populateWorkloadRoles(context, clientId);
+    }
+
+    /**
+     * TASK-MONO-514 (ADR-MONO-061 option C): injects the {@code roles} claim on the
+     * {@code client_credentials} grant, from the per-client {@link WorkloadRoleCatalog}.
+     *
+     * <p><b>Why this method exists and {@link #populateRoles} could not be reused.</b> That
+     * method resolves roles by calling account-service, and a {@code client_credentials}
+     * issuance is what mints the Bearer used to make that call — invoking it here would
+     * re-enter this customizer without bound. The javadoc on both {@code populateRoles} and
+     * {@link #populateEntitledDomains} states the recursion guard, and it still holds: nothing
+     * on this path performs I/O. The catalog is a static table precisely so the roles leg is
+     * reachable on this grant at all.
+     *
+     * <p><b>Gated on the granted scope, not on the client alone.</b> The catalog hangs each
+     * role off the scope it belongs to, so a caller that asked for {@code wms.master.read} does
+     * not receive {@code MASTER_WRITE} merely because its registration could have. Without that,
+     * the registration would decide the token instead of the request, and per-token least
+     * privilege would hold for humans and not for workloads. Same shape as
+     * {@link #populateEmail}'s scope gate, and for the same reason.
+     *
+     * <p><b>Fail-closed by absence.</b> A client with no catalog entry gets an empty list, and
+     * an empty list omits the claim — byte-identical to the token this grant has always minted
+     * (a workload token carried no {@code roles} before ADR-MONO-061). Nine of the ten
+     * registered workload clients are in exactly that state today, so this change is a no-op
+     * for them, and the one it is not a no-op for is the one the ADR was written about.
+     *
+     * <p><b>Why the claim is omitted rather than emitted as {@code []}.</b> Every consumer
+     * treats an absent {@code roles} claim as "no authorities"; an empty array would travel as
+     * a present claim through {@code JwtGrantedAuthoritiesConverter} to the same result, but
+     * would also change what nineteen services observe on a token they observe today without
+     * it. The smaller change is the one that cannot surprise anyone.
+     *
+     * <p><b>A workload is still not an identity</b> ({@code jwt-standard-claims.md} § roles):
+     * this grant continues to mint no {@code email}, and {@code sub} remains the client. The
+     * claim says what the workload may do, never who it is.
+     */
+    private void populateWorkloadRoles(JwtEncodingContext context, String clientId) {
+        java.util.List<String> roles =
+                WorkloadRoleCatalog.rolesFor(clientId, context.getAuthorizedScopes());
+        if (roles.isEmpty()) {
+            return;
+        }
+        // SecurityJackson2Modules allowlist (see populateRoles / BE-376): List.of returns an
+        // ImmutableCollections list, which the JdbcOAuth2AuthorizationService store cannot
+        // read back. Wrap in a mutable ArrayList.
+        context.getClaims().claim(CLAIM_ROLES, new java.util.ArrayList<>(roles));
+        log.debug("TenantClaimTokenCustomizer: client_credentials — injected workload roles={} "
+                + "for clientId={} (WorkloadRoleCatalog, ADR-MONO-061)", roles, clientId);
     }
 
     /**
