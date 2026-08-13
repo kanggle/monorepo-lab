@@ -8,7 +8,7 @@ repo-root `libs/` 13개 중 **6개만 CI에서 자기 `check` 를 돌린다** �
 
 # Status
 
-review
+done
 
 # Owner
 
