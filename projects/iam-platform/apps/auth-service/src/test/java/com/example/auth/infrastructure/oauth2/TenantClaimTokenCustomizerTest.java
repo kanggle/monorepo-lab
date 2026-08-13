@@ -1470,7 +1470,7 @@ class TenantClaimTokenCustomizerTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("client_credentials: an enumerated workload client receives its catalog roles")
+    @DisplayName("client_credentials: an enumerated workload client receives its catalog roles for the scope it was granted")
     void clientCredentials_enumeratedClient_receivesWorkloadRoles() {
         RegisteredClient client = buildCcClient("wms-internal-services-client", "wms|B2B_ENTERPRISE");
         JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
@@ -1479,6 +1479,7 @@ class TenantClaimTokenCustomizerTest {
         when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.CLIENT_CREDENTIALS);
         when(context.getRegisteredClient()).thenReturn(client);
         when(context.getClaims()).thenReturn(claimsBuilder);
+        when(context.getAuthorizedScopes()).thenReturn(Set.of("wms.master.write"));
 
         customizer.customize(context);
 
@@ -1501,12 +1502,33 @@ class TenantClaimTokenCustomizerTest {
         when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.CLIENT_CREDENTIALS);
         when(context.getRegisteredClient()).thenReturn(client);
         when(context.getClaims()).thenReturn(claimsBuilder);
+        when(context.getAuthorizedScopes()).thenReturn(Set.of("internal.invoke"));
 
         customizer.customize(context);
 
         // Omitted, not emitted as [] — nineteen services observe this token today without a
         // roles claim, and "we decided none" must look identical to them.
         assertThat(claimsBuilder.build().getClaims()).doesNotContainKey("roles");
+    }
+
+    @Test
+    @DisplayName("client_credentials: the SAME enumerated client asking for the read scope receives only the read role")
+    void clientCredentials_narrowerScope_getsOnlyTheReadRole() {
+        RegisteredClient client = buildCcClient("wms-internal-services-client", "wms|B2B_ENTERPRISE");
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.CLIENT_CREDENTIALS);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+        when(context.getAuthorizedScopes()).thenReturn(Set.of("wms.master.read"));
+
+        customizer.customize(context);
+
+        // Same client, same registration — only the request differs. This is what makes the
+        // grant a property of the token rather than of the client row.
+        assertThat((List<String>) claimsBuilder.build().getClaim("roles"))
+                .containsExactly("MASTER_READ");
     }
 
     @Test
@@ -1519,6 +1541,9 @@ class TenantClaimTokenCustomizerTest {
         when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.CLIENT_CREDENTIALS);
         when(context.getRegisteredClient()).thenReturn(client);
         when(context.getClaims()).thenReturn(claimsBuilder);
+        // Deliberately the scope that DOES carry a grant — for the one client enumerated for
+        // it. An unlisted client presenting it still gets nothing, which is the property.
+        when(context.getAuthorizedScopes()).thenReturn(Set.of("wms.master.write"));
 
         customizer.customize(context);
 
@@ -1535,6 +1560,7 @@ class TenantClaimTokenCustomizerTest {
         when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.CLIENT_CREDENTIALS);
         when(context.getRegisteredClient()).thenReturn(client);
         when(context.getClaims()).thenReturn(claimsBuilder);
+        when(context.getAuthorizedScopes()).thenReturn(Set.of("wms.master.write"));
 
         customizer.customize(context);
 

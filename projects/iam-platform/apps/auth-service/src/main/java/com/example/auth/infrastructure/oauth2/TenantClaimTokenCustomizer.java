@@ -257,6 +257,13 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
      * on this path performs I/O. The catalog is a static table precisely so the roles leg is
      * reachable on this grant at all.
      *
+     * <p><b>Gated on the granted scope, not on the client alone.</b> The catalog hangs each
+     * role off the scope it belongs to, so a caller that asked for {@code wms.master.read} does
+     * not receive {@code MASTER_WRITE} merely because its registration could have. Without that,
+     * the registration would decide the token instead of the request, and per-token least
+     * privilege would hold for humans and not for workloads. Same shape as
+     * {@link #populateEmail}'s scope gate, and for the same reason.
+     *
      * <p><b>Fail-closed by absence.</b> A client with no catalog entry gets an empty list, and
      * an empty list omits the claim — byte-identical to the token this grant has always minted
      * (a workload token carried no {@code roles} before ADR-MONO-061). Nine of the ten
@@ -274,7 +281,8 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
      * claim says what the workload may do, never who it is.
      */
     private void populateWorkloadRoles(JwtEncodingContext context, String clientId) {
-        java.util.List<String> roles = WorkloadRoleCatalog.rolesFor(clientId);
+        java.util.List<String> roles =
+                WorkloadRoleCatalog.rolesFor(clientId, context.getAuthorizedScopes());
         if (roles.isEmpty()) {
             return;
         }

@@ -1,12 +1,16 @@
 package com.example.auth.infrastructure.oauth2;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 /**
  * TASK-MONO-514 (ADR-MONO-061, ACCEPTED 2026-08-13 — option C): the role set a
- * {@code client_credentials} (workload) client receives on its access token.
+ * {@code client_credentials} (workload) client receives on its access token, per client and
+ * per granted scope.
  *
  * <p>The third principal kind gets the third policy table. Consumers are seeded by
  * {@link RoleSeedPolicy} (keyed on platform), operators are derived by
@@ -35,6 +39,18 @@ import java.util.Set;
  * binding, and {@code WorkloadRoleCatalogTest} asserts that every seeded
  * {@code client_credentials} client appears here explicitly — an unlisted client is a
  * decision nobody made, not a client that happens to need nothing.
+ *
+ * <h3>Keyed on the granted scope, not on the client alone</h3>
+ *
+ * <p>A role is emitted only when the request was actually granted the scope it hangs off. A
+ * client-only table would hand {@code MASTER_WRITE} to a caller that asked for
+ * {@code scope=wms.master.read} — the registration would decide the token instead of the
+ * request, and per-token least privilege ({@code jwt-standard-claims.md} § Identity Model)
+ * would hold for humans and not for workloads. Scope-gating also keeps the two axes from
+ * drifting apart: the role a workload receives is the role its scope was already named for,
+ * so the answer to "what does this scope open" stops depending on which service you ask.
+ * Same shape as the {@code email} claim, gated on the {@code email} scope for the same reason
+ * (TASK-BE-577) — consent, or in this case request, is what makes the grant legitimate.
  *
  * <h3>No admin-tier role is granted here, deliberately</h3>
  *
@@ -68,9 +84,10 @@ final class WorkloadRoleCatalog {
             Set.of("ADMIN", "OPERATOR", "SUPER_ADMIN", "FAN_OPERATOR");
 
     /**
-     * Every registered {@code client_credentials} client, with the roles it receives.
+     * Every registered {@code client_credentials} client, mapping each scope that carries a
+     * role grant to the roles it carries.
      *
-     * <p>All ten are listed, empty sets included. An empty list here means "measured, and the
+     * <p>All ten are listed, empty maps included. An empty map here means "measured, and the
      * answer is none"; an <em>absent</em> client means nobody looked. The distinction is the
      * point of enumerating clients that get nothing — and it is why the completeness test
      * compares this key set against the Flyway seeds rather than against itself.
@@ -82,57 +99,79 @@ final class WorkloadRoleCatalog {
      * also recorded {@code wms-user-flow-client} as a cc client — V0010 seeds it
      * {@code ["authorization_code","refresh_token"]}.
      */
-    private static final Map<String, List<String>> GRANTS = Map.ofEntries(
+    private static final Map<String, Map<String, List<String>>> GRANTS = Map.ofEntries(
             // --- wms (tenant: wms) ---
             // The one grant this ticket exists for. master-service gates create/update on
-            // MASTER_WRITE (deactivate/reactivate on MASTER_ADMIN, which is NOT granted:
-            // the ticket's Goal is "master data can be created through the API", and a
-            // deactivate is a different, higher decision). The client already holds the
-            // wms.master.write scope, so the scope and role axes now agree instead of the
-            // scope naming a capability the token could not exercise.
-            Map.entry("wms-internal-services-client", List.of("MASTER_WRITE")),
+            // MASTER_WRITE; MASTER_ADMIN (deactivate/reactivate) is NOT granted — the Goal is
+            // "master data can be created through the API", and a deactivate is a different,
+            // higher decision. Each role hangs off the scope the client was already registered
+            // with (V0010), whose name promised exactly this.
+            //
+            // MASTER_READ is granted alongside because the first live measurement found the
+            // write-only shape and it is not a shape anyone would have chosen: the workload
+            // could POST a warehouse and then receive 403 reading back the row it had just
+            // created (measured — GET /api/v1/master/warehouses returned FORBIDDEN on a token
+            // that had just returned 201). A seam wired in one direction is the failure mode
+            // this repo keeps paying for, and reading is strictly less than the writing that is
+            // already granted here.
+            Map.entry("wms-internal-services-client", Map.of(
+                    "wms.master.write", List.of("MASTER_WRITE"),
+                    "wms.master.read", List.of("MASTER_READ"))),
 
             // --- iam platform infrastructure (tenant: global-account-platform) ---
             // These four authenticate to /internal/** surfaces, which gate on scope or a
             // subject allow-list — never on roles. Granting them roles would widen them onto
             // domain surfaces they have no business reaching. Measured, and the answer is none.
-            Map.entry("admin-service-client", List.of()),
-            Map.entry("auth-service-client", List.of()),
-            Map.entry("security-service-client", List.of()),
-            Map.entry("account-service-client", List.of()),
+            Map.entry("admin-service-client", Map.of()),
+            Map.entry("auth-service-client", Map.of()),
+            Map.entry("security-service-client", Map.of()),
+            Map.entry("account-service-client", Map.of()),
 
             // --- fan-platform (tenant: fan-platform) ---
             // community-service calls membership/artist read surfaces with the account.read /
             // membership.read / artist.read scopes it was granted (V0009/V0030/V0032). Those
             // surfaces are scope-gated. Whether it may reach artist-service's ADMIN_ROLES
             // matcher is TASK-MONO-522's open question — deliberately not answered here.
-            Map.entry("community-service-client", List.of()),
-            Map.entry("test-internal-client", List.of()),
+            Map.entry("community-service-client", Map.of()),
+            Map.entry("test-internal-client", Map.of()),
 
             // --- other domain workload clients ---
             // Registered ahead of their callers; none has a role-gated surface it currently
             // fails to reach. When one does, it gets a line here and a measurement, not a
             // default.
-            Map.entry("erp-platform-internal-services-client", List.of()),
-            Map.entry("finance-platform-internal-services-client", List.of()),
-            Map.entry("scm-platform-internal-services-client", List.of()));
+            Map.entry("erp-platform-internal-services-client", Map.of()),
+            Map.entry("finance-platform-internal-services-client", Map.of()),
+            Map.entry("scm-platform-internal-services-client", Map.of()));
 
     private WorkloadRoleCatalog() {
     }
 
     /**
-     * Returns the roles granted to a workload client.
+     * Returns the roles granted to a workload client for the scopes its request was actually
+     * granted.
      *
-     * @param clientId the registered client's {@code client_id}; null/blank/unknown → {@code []}
-     * @return an immutable list of role names, possibly empty, never null. An empty result
-     *         means the {@code roles} claim is omitted from the token entirely (the shape the
-     *         fleet has always seen on a workload token).
+     * @param clientId         the registered client's {@code client_id}; null/blank/unknown →
+     *                         {@code []}
+     * @param authorizedScopes the scopes granted on this token
+     *                         ({@code JwtEncodingContext#getAuthorizedScopes}); null/empty →
+     *                         {@code []}
+     * @return an immutable list of role names in declaration order, de-duplicated, possibly
+     *         empty, never null. An empty result means the {@code roles} claim is omitted from
+     *         the token entirely (the shape the fleet has always seen on a workload token).
      */
-    static List<String> rolesFor(String clientId) {
-        if (clientId == null || clientId.isBlank()) {
+    static List<String> rolesFor(String clientId, Collection<String> authorizedScopes) {
+        if (clientId == null || clientId.isBlank() || authorizedScopes == null || authorizedScopes.isEmpty()) {
             return List.of();
         }
-        return GRANTS.getOrDefault(clientId.trim(), List.of());
+        Map<String, List<String>> byScope = GRANTS.get(clientId.trim());
+        if (byScope == null || byScope.isEmpty()) {
+            return List.of();
+        }
+        Set<String> roles = new LinkedHashSet<>();
+        for (String scope : authorizedScopes) {
+            roles.addAll(byScope.getOrDefault(scope, List.of()));
+        }
+        return List.copyOf(new ArrayList<>(roles));
     }
 
     /**
@@ -141,5 +180,17 @@ final class WorkloadRoleCatalog {
      */
     static Set<String> enumeratedClientIds() {
         return GRANTS.keySet();
+    }
+
+    /**
+     * Every role this table can emit for a client, across all of its scopes. Used by the tests
+     * that bound the blast radius; not a runtime path — issuance always goes through
+     * {@link #rolesFor(String, Collection)}, which is the scope-gated one.
+     */
+    static List<String> allGrantableRoles(String clientId) {
+        Map<String, List<String>> byScope = GRANTS.getOrDefault(clientId, Map.of());
+        Set<String> roles = new LinkedHashSet<>();
+        byScope.values().forEach(roles::addAll);
+        return List.copyOf(new ArrayList<>(roles));
     }
 }

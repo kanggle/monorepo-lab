@@ -14,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -92,34 +93,56 @@ class WorkloadRoleCatalogTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("the wms workload client receives MASTER_WRITE — the grant this ticket exists for")
+    @DisplayName("the wms workload client receives MASTER_WRITE when granted the wms.master.write scope — the grant this ticket exists for")
     void wmsWorkloadClientReceivesMasterWrite() {
-        assertThat(WorkloadRoleCatalog.rolesFor("wms-internal-services-client"))
+        assertThat(WorkloadRoleCatalog.rolesFor("wms-internal-services-client", Set.of("wms.master.write")))
                 .containsExactly("MASTER_WRITE");
     }
 
     @Test
-    @DisplayName("MASTER_ADMIN is NOT granted — deactivate/reactivate is a higher decision than 'create master data through the API'")
+    @DisplayName("the SAME client asking for the read scope receives ONLY the read role — the registration must not decide the token")
+    void narrowerScopeYieldsOnlyTheReadRole() {
+        // The sharpest control available: same client, same secret, same tenant — only the
+        // requested scope differs. Without the gate, a caller that asked to read would receive
+        // the authority to write, and per-token least privilege would hold for humans only.
+        assertThat(WorkloadRoleCatalog.rolesFor("wms-internal-services-client", Set.of("wms.master.read")))
+                .containsExactly("MASTER_READ");
+        assertThat(WorkloadRoleCatalog.rolesFor("wms-internal-services-client", Set.of()))
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("both scopes together yield both roles, de-duplicated")
+    void bothScopesYieldBothRoles() {
+        assertThat(WorkloadRoleCatalog.rolesFor("wms-internal-services-client",
+                List.of("wms.master.read", "wms.master.write", "wms.master.read")))
+                .containsExactlyInAnyOrder("MASTER_READ", "MASTER_WRITE");
+    }
+
+    @Test
+    @DisplayName("MASTER_ADMIN is NOT grantable at all — deactivate/reactivate is a higher decision than 'create master data through the API'")
     void wmsWorkloadClientDoesNotReceiveMasterAdmin() {
-        assertThat(WorkloadRoleCatalog.rolesFor("wms-internal-services-client"))
+        // Asked of every scope this client could ever present, not just the one it uses —
+        // "not granted on this path" and "not grantable" are different claims.
+        assertThat(WorkloadRoleCatalog.allGrantableRoles("wms-internal-services-client"))
                 .doesNotContain("MASTER_ADMIN");
     }
 
     @Test
-    @DisplayName("no workload client holds an admin-tier role — TASK-MONO-522 has not answered whether workload identity may reach fan's admin surface")
+    @DisplayName("no workload client can be granted an admin-tier role — TASK-MONO-522 has not answered whether workload identity may reach fan's admin surface")
     void noWorkloadClientHoldsAnAdminTierRole() {
         for (String clientId : WorkloadRoleCatalog.enumeratedClientIds()) {
-            assertThat(WorkloadRoleCatalog.rolesFor(clientId))
+            assertThat(WorkloadRoleCatalog.allGrantableRoles(clientId))
                     .as("client %s", clientId)
                     .doesNotContainAnyElementsOf(WorkloadRoleCatalog.ADMIN_TIER_ROLES);
         }
     }
 
     @Test
-    @DisplayName("exactly one workload client is granted anything — the change is a no-op for the other nine")
+    @DisplayName("exactly one workload client is grantable anything — the change is a no-op for the other nine")
     void exactlyOneWorkloadClientIsGrantedAnything() {
         List<String> granted = WorkloadRoleCatalog.enumeratedClientIds().stream()
-                .filter(id -> !WorkloadRoleCatalog.rolesFor(id).isEmpty())
+                .filter(id -> !WorkloadRoleCatalog.allGrantableRoles(id).isEmpty())
                 .sorted()
                 .toList();
 
@@ -130,11 +153,13 @@ class WorkloadRoleCatalogTest {
     }
 
     @Test
-    @DisplayName("an unknown, null or blank client id yields no roles")
+    @DisplayName("an unknown, null or blank client id — and a null scope set — yield no roles")
     void unknownClientYieldsNoRoles() {
-        assertThat(WorkloadRoleCatalog.rolesFor("some-client-registered-tomorrow")).isEmpty();
-        assertThat(WorkloadRoleCatalog.rolesFor(null)).isEmpty();
-        assertThat(WorkloadRoleCatalog.rolesFor("   ")).isEmpty();
+        Set<String> anyScope = Set.of("wms.master.write");
+        assertThat(WorkloadRoleCatalog.rolesFor("some-client-registered-tomorrow", anyScope)).isEmpty();
+        assertThat(WorkloadRoleCatalog.rolesFor(null, anyScope)).isEmpty();
+        assertThat(WorkloadRoleCatalog.rolesFor("   ", anyScope)).isEmpty();
+        assertThat(WorkloadRoleCatalog.rolesFor("wms-internal-services-client", null)).isEmpty();
     }
 
     // -----------------------------------------------------------------------

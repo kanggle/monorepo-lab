@@ -8,7 +8,7 @@ WMS 마스터 데이터를 쓸 수 있는 자격증명이 이 플랫폼에 없�
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -239,6 +239,149 @@ fan artist-service 의 쓰기 매처는 `hasAnyRole(ADMIN, OPERATOR, SUPER_ADMIN
 
 ---
 
+# 🟢 구현 (2026-08-13 UTC) — ADR-MONO-061 C 이행. AC-1 · AC-2 · AC-3 완료
+
+## ⓪ 🔴🔴 모집단이 또 틀렸다 — **cc 클라이언트는 12개가 아니라 10개**
+
+2회차가 적은 *"cc 12 / 비-cc 4"* 를 물려받지 않고 다시 셌다(마이그레이션을 문(statement)
+단위로 파싱하고 DELETE 까지 재생). 결과:
+
+| | 2회차 기록 | 재계수 (2026-08-13) |
+|---|---|---|
+| 전체 등록 클라이언트 | — | **16** |
+| `client_credentials` | 12 | **10** |
+| 비-cc(브라우저) | 4 | **6** |
+
+교차검증: `INSERT INTO oauth_clients` **17건** = cc 리터럴 11 + authz 리터럴 6이고, 그중
+`membership-service-client` 를 V0029 가 지운다 ⇒ 16 = 10 + 6. 두 방법이 일치한다.
+
+🔴 2회차의 *"곁다리: `wms-user-flow-client` 가 cc 그랜트를 갖고 있다(이름과 다르다)"* 는
+**틀렸다** — V0010 은 그것을 `["authorization_code","refresh_token"]` 로 심는다. 대조군이라며
+적어 둔 4개가 실은 6개였다. **"탐지식이 전부를 매치하지는 않는다" 는 그때의 안심 근거가, 정작
+다른 수를 세면서 성립하고 있었다.** [[feedback_recount_population_dont_inherit_scope]]
+
+## ① 계약 먼저 (ADR 이 구속력을 준 순서)
+
+`platform/contracts/jwt-standard-claims.md`:
+
+- § Gateway Enforcement Rules 의 *"machine tokens authorize on the `scope` axis, **not** `roles`"*
+  를 개정했다. 🔴 그 문장은 **엣지에 대해 참이고 그 뒤 전부에 대해 거짓**이었다 — 입장(admission)
+  은 바깥 문일 뿐이고, 도메인 서비스 안의 모든 `@PreAuthorize` 는 `roles` 로 권한을 만든다.
+- `roles` 행 `Required: Yes` → **`Conditional`**. 워크로드 토큰에 대해 `Yes` 는 이 계약이 쓰인
+  날부터 참인 적이 없었다(`email` 이 BE-577 에서 겪은 것과 같은 방향의 오류).
+- 제약 **4개**를 계약에 명시했다: 클라이언트별 명시 열거 · **요청이 받은 scope 로 게이팅** ·
+  없는 것이 기본값 · `/internal/**` 의 scope 축 불변.
+- Change log 갱신. `check-jwt-claims-registry.sh` **rc=0**(새 클레임이 아니라 기존 `roles` 행이다).
+
+## ② 배선 — `WorkloadRoleCatalog`
+
+`customizeForClientCredentials` → `populateWorkloadRoles`. 표는 **정적**이다. 🔴 `populateRoles`
+를 재사용할 수 없는 이유가 바로 그것이다 — cc 발급이 곧 account-service 를 부를 Bearer 를 만드는
+행위라서, 이 경로에서의 조회는 커스터마이저를 무한 재진입시킨다. **정적 표는 I/O 가 없고, 그래서
+이 그랜트에서 roles 다리가 애초에 가능해진다.** 그 이유를 코드에 적어 뒀다.
+
+🔴 **처음 구현은 클라이언트 단위였고, 그건 최소권한 구멍이었다.** `wms.master.read` 만 요청해도
+`MASTER_WRITE` 가 실렸다 — **등록이 토큰을 결정**하고 요청은 무의미해진다. scope 단위로 바꿨다
+(`email` 이 `email` scope 로 게이팅되는 것과 같은 모양). 그 결과가 아래 실측의 **가장 날카로운
+대조군**이 됐다: *같은 클라이언트·같은 시크릿, 다른 것은 요청 scope 뿐*.
+
+**부여 = 10개 중 1개뿐**:
+
+| 클라이언트 | scope | role |
+|---|---|---|
+| `wms-internal-services-client` | `wms.master.write` | `MASTER_WRITE` |
+| `wms-internal-services-client` | `wms.master.read` | `MASTER_READ` |
+| 나머지 **9개** | — | **없음**(명시적 빈 집합) |
+
+🔵 `MASTER_READ` 는 **첫 실측이 찾아낸 반쪽 배선** 때문에 함께 넣었다 — write 만 주니 워크로드가
+`POST` 로 창고를 만들고 **방금 만든 그 행을 읽는 데 403** 을 받았다(§③ 1차 매트릭스 3행). 한
+방향만 뚫린 이음매는 이 저장소가 반복해 대가를 치른 모양이고, 읽기는 이미 준 쓰기보다 엄격히
+작다. [[project_externalised_seam_with_no_counterpart]]
+
+🔴 `MASTER_ADMIN` 은 **주지 않는다** — 티켓 Goal 은 "API 로 마스터를 만든다" 이고 deactivate 는
+다른, 더 높은 결정이다.
+
+## ③ AC-2 / AC-3 — 라이브 2×2 매트릭스 (iam + wms 실기동, auth-service 재빌드·재배포)
+
+토큰 클레임 실측:
+
+```
+scope=["wms.master.write"]  roles=["MASTER_WRITE"]
+scope=["wms.master.read"]   roles=["MASTER_READ"]      ← 같은 클라이언트·같은 시크릿
+```
+
+| # | 토큰 | 호출 | 기대 | **실측** |
+|---|---|---|---|---|
+| 1 | write-scope | `POST /api/v1/master/warehouses` | 201 | **201** ✅ **AC-2** |
+| 2 | read-scope | `POST /api/v1/master/warehouses` | 403 | **403** ✅ **AC-3** |
+| 3 | read-scope | `GET /api/v1/master/warehouses` | 200 | **200** |
+| 4 | write-scope | `POST /{id}/deactivate` (`MASTER_ADMIN`) | 403 | **403** ✅ **AC-3** |
+
+**왜 이 네 칸인가** — 양성 하나로는 *"열렸다"* 와 *"게이트가 사라졌다"* 를 구별할 수 없다.
+2행은 **클라이언트·시크릿·테넌트·엔드포인트가 전부 같고 요청 scope 만 다르다** ⇒ 열린 것은
+role 이지 호출자가 아니다. 4행은 **토큰조차 같고 role 술어만 다르다** ⇒ 게이트는 살아 있다.
+3행은 2행의 403 이 "토큰이 죽었다" 가 아니라 **인가**임을 보인다(같은 토큰이 200 을 받는다).
+
+응답의 `createdBy = wms-internal-services-client` — 워크로드가 행위자로 기록된다.
+
+🔴 **400 은 판정이 아니다**(배경의 경고가 두 번 발화했다): `warehouseCode` 정규식(`^WH\d{2,3}$`)과
+`version` 필수를 몰라 각각 `400 VALIDATION_ERROR` 가 났다. 빈 검증은 `@PreAuthorize` **이전**에
+돈다 — 그 400 들은 인가에 대해 아무것도 말하지 않으므로 판정으로 쓰지 않았다.
+🔴 재측정은 매번 **새 `Idempotency-Key`**(멱등 재생 함정).
+
+## ④ 19개 서비스 회귀 (ADR § 결과 4)
+
+- `OperatorRoleDerivationTest` **8/8 통과**, `wms_excludesAdminTier` 가
+  `.doesNotContain(…, "MASTER_WRITE")` 를 **그대로** 강제한다 ⇒ `TASK-BE-433` 의 user-chosen
+  결정은 뒤집히지 않았다(ADR 구속력 1).
+- 도달 범위를 다시 쟀다 — `MASTER_WRITE`/`MASTER_READ` 를 술어로 쓰는 곳은 여전히 **wms
+  master-service 하나**뿐이고, 부여된 토큰은 `tenant_id=wms` 라 다른 5개 프로젝트 엣지가
+  테넌트에서 거부한다.
+- **fan artist-service `ADMIN_ROLES` 는 열리지 않았다** — `WorkloadRoleCatalogTest` 가 *어떤*
+  워크로드 클라이언트도 `ADMIN`/`OPERATOR`/`SUPER_ADMIN`/`FAN_OPERATOR` 를 **부여받을 수 없음**을
+  단언한다(그 클라이언트가 제시 가능한 **모든 scope** 에 대해). 가드는 **발급자 쪽**에 둔다 —
+  결정이 거기 있고, 매처는 바뀌지 않은 코드이기 때문이다.
+- 테스트: auth-service 전체 · fan artist-service · ecommerce order-service · wms master-service
+  **전부 green**.
+
+## ⑤ 가드 bite — 세 번, 전부 물었고 전부 지목이 정확했다
+
+| 주입 | 결과 |
+|---|---|
+| 카탈로그에서 seed 된 cc 클라이언트 1개 제거 | 완전성 테스트 **RED** (그 하나만) |
+| `community-service-client` 에 `FAN_OPERATOR` 부여 | admin-tier 테스트 + 폭발반경 테스트 **RED** |
+| **새 cc 클라이언트를 마이그레이션에 추가**(카탈로그엔 없음) | 완전성 + 비공허성 테스트 **RED** |
+
+세 번째가 이 가드의 존재 이유다 — *내일 등록될 클라이언트*는 안전한 기본값을 받고 **아무도
+결정하지 않은 클라이언트가 된다**. 복원 후 tree clean·rc=0 재확인.
+
+🔵 비공허성은 **구조적**이다: 단언이 비어 있지 않은 카탈로그와의 **집합 동등**이라, 파서가 0건을
+읽으면 통과가 아니라 실패한다(탐지식의 0건은 부재의 증거가 아니다).
+
+## ⑥ ADR-061 이 거짓으로 만든 주석 **4곳**을 고쳤다
+
+가드가 아니라 **산문**이 이 저장소에서 반복해 대가를 치르는 자리다. 넷 다 원문이 왜 그렇게
+쓰였는지와 무엇이 바뀌었는지를 함께 남겼다:
+
+1. `TenantClaimTokenCustomizer` — *"Omitted for client_credentials (a workload is not an identity —
+   recursion guard)"*. 🔴 두 이유를 뭉쳐 놓아 **두 번째가 하중을 받고 있었다**. 재귀 가드는
+   *account-service 조회*를 묶는 것이지 클레임을 묶지 않는다.
+2. fan `artist-service SecurityConfig` — *"Two independent reasons, both measured"* 는 머신 토큰이
+   **구조적으로** role 을 못 싣던 동안에만 전수였다. 이제 **세 번째 경로**가 존재하고, 그것이
+   닫혀 있는 이유는 구조가 아니라 **결정**임을 적었다.
+3. ecommerce `SystemClientSubjectValidator` — 판별자로 *"carries no roles claim"* 을 함께 적어
+   두고 있었다. `sub` 만이 술어였고 그게 더 강하므로 그 문장을 지웠다.
+4. scm `SupplierApplicationService` — *"`MASTER_WRITE` is granted to nobody — TASK-MONO-514"* 를
+   인용해 자기 논거로 삼고 있었다. 인용된 사실이 오늘 바뀌었다.
+
+## ⑦ 이 티켓이 답하지 **않은** 것
+
+- **`INVENTORY_RESERVE`** — §③ 이 *"이 티켓에서 묶지 않는다"* 로 명시 제외했고 그대로 둔다.
+  ADR-061 C 가 그것을 **가능하게** 만들었을 뿐 부여는 별도 결정이다.
+- **fan artist-service 의 admin 매처 개방** — `TASK-MONO-522` 소유. 빈 기본값이 그때까지 닫아 둔다.
+
+---
+
 # Goal
 
 WMS 마스터 데이터를 **API 로** 만들 수 있는 자격증명이 존재한다 — 또는 존재하지 않는 것이
@@ -289,7 +432,9 @@ WMS 마스터 데이터를 **API 로** 만들 수 있는 자격증명이 존재�
       **0건**. 🔴 발급처 후보 `PermissionCatalog` 는 **JWT 로 흐르지 않는 미끼**였다.
       🔵 워크로드 레그는 시크릿이 없어 **라이브 재측정 안 함** — 코드 경로로만 확인했고
       그렇게 적었다.
-- [ ] **AC-1 (결정) — 🔴 사용자 결정 대기.** 세 안 모두 ADR 급(§⑤). **2회차에서 비용을
+- [x] **AC-1 (결정) — 완료.** `ADR-MONO-061 ACCEPTED — C`(소유자 정확형, 2026-08-13) ⇒
+      **워크로드 토큰에 `roles`**. A·B·D 배제. 구현은 § 구현 ①②. 아래 원문 유지:
+- [ ] ~~**AC-1 (결정) — 🔴 사용자 결정 대기.**~~ 세 안 모두 ADR 급(§⑤). **2회차에서 비용을
       실측해 붙였다**: ① = `OperatorRoleDerivation` 상수 1 + 테스트 assertion 1(그러나
       BE-433 *user-chosen* 뒤집기) / ② = 새 발급 평면 + master-service **42개 술어** 범위 결정 /
       ③ = 변경 지점 **1곳**이지만 효과가 **cc 클라이언트 12 × 서비스 19 / 프로젝트 6** 에
@@ -299,10 +444,12 @@ WMS 마스터 데이터를 **API 로** 만들 수 있는 자격증명이 존재�
       ② 마스터 전용 운영 역할 신설
       ③ 워크로드 클라이언트 토큰에 role 클레임 부여(scope↔role 간극 자체를 메운다)
       역할 모델 변경이면 **ADR**
-- [ ] **AC-2 (도달 가능성)** — AC-1 결정 이후.  — 실제 호출자가 `POST /api/v1/master/warehouses` 로 201 을
-      받는다. 토큰 발급 성공만으로는 부족하다(그것이 이 결함의 모양이다)
-- [ ] **AC-3 (음성 대조)** — 그 자격증명이 **없는** 호출자는 여전히 403 이어야 한다.
-      양성만으로는 "열렸다" 와 "게이트가 사라졌다" 를 구별할 수 없다
+- [x] **AC-2 (도달 가능성)** — 완료(§③ 1행). 라이브 `POST /api/v1/master/warehouses` → **201**,
+      `createdBy=wms-internal-services-client`. 토큰 발급만이 아니라 **호출이 통과**했다.
+- [x] **AC-3 (음성 대조)** — 완료(§③ 2·4행). 대조군을 **두 축**으로 세웠다: ② 같은 클라이언트가
+      **좁은 scope** 로 받은 토큰 → 403(호출자가 아니라 role 이 연다) · ④ **같은 토큰**이
+      `MASTER_ADMIN` 술어에 → 403(게이트는 살아 있다). 3행이 그 403 들이 죽은 토큰이 아니라
+      **인가**임을 보인다(같은 토큰 GET 200).
 - [x] **AC-4 (주석 정합)** — 완료(§④). `OperatorRoleDerivation` 의 두 주석이 이제
       계약의 티어링(create/update=`MASTER_WRITE`)과 일치하고, 제외가 의도이며 어디서
       강제되는지를 가리킨다. **동작 변경 없음.**
@@ -330,6 +477,6 @@ WMS 마스터 데이터를 **API 로** 만들 수 있는 자격증명이 존재�
 
 # Definition of Done
 
-- [ ] 결정 + (필요시) ADR
-- [ ] AC-2/AC-3 실측 증거
-- [ ] Ready for review
+- [x] 결정 + ADR — [`ADR-MONO-061`](../../docs/adr/ADR-MONO-061-workload-token-authorization-plane.md) ACCEPTED — C
+- [x] AC-2/AC-3 실측 증거 — § 구현 ③ 라이브 2×2 매트릭스
+- [x] Ready for review
