@@ -1,0 +1,30 @@
+# =============================================================================
+# infra/demo/scm-relay.override.yml — scm 브로커에 RELAY 리스너를 더한다 (TASK-MONO-511)
+# =============================================================================
+# 근거 전문: infra/demo/iam-relay.override.yml 헤더.
+#
+# 요약: 네 브로커가 전부 자기를 `kafka:9092` 로 광고하므로, 네 네트워크에 동시에 붙는
+# 릴레이에게 그 이름은 **모호하다**. 부트스트랩 주소를 정확히 적어도 사라지지 않는다 —
+# 클라이언트는 응답으로 받은 advertised listener 로 다시 접속하기 때문이고, 그때 증상은
+# 연결 실패가 아니라 **조용한 오배송**이다. 그래서 전역 유일 이름
+# (`RELAY://scm-platform-kafka:9095`)으로 광고하는 리스너를 하나 더 단다.
+#
+# 🔵 컨테이너명이 `scm-platform-kafka` 다(다른 셋과 달리 프로젝트 슬러그가 아니라 디렉터리
+# 이름을 따른다). 릴레이 설정의 bootstrap 도 이 이름이어야 한다 — 여기서 `scm-kafka` 라고
+# 적으면 DNS 가 안 풀리고, 그건 다행히 **시끄럽게** 실패하는 쪽이다.
+#
+# 브로커는 `scm-platform-net` 에 그대로 있다 — 여기서 네트워크를 추가하지 않는다.
+# 소비자는 그대로 `kafka:9092` 를 읽는다(ADR-MONO-062 § 무엇이 구속력을 갖나 3).
+#
+# 🔴 스칼라는 치환되므로 base 값을 전부 다시 적었다 ⇒
+# `scripts/check-cross-project-topic-relay.sh` 가 base 리스너 목록이 이 값의 접두인지 검사한다.
+# =============================================================================
+services:
+  kafka:
+    expose:
+      - "9092"
+      - "9095"
+    environment:
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,RELAY://0.0.0.0:9095
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,RELAY://scm-platform-kafka:9095
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,RELAY:PLAINTEXT
