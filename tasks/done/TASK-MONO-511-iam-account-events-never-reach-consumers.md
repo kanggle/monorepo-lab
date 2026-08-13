@@ -8,7 +8,7 @@ IAM 계정 이벤트가 소비자 프로젝트에 **한 건도 도달하지 않�
 
 # Status
 
-review
+done
 
 # Owner
 
