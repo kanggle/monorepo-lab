@@ -8,7 +8,7 @@ WMS 마스터 데이터를 쓸 수 있는 자격증명이 이 플랫폼에 없�
 
 # Status
 
-review
+done
 
 # Owner
 
