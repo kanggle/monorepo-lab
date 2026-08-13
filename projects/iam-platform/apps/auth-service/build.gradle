@@ -92,8 +92,16 @@ dependencyManagement {
 //
 // 🔴 Residual gap, stated so it is not mistaken for coverage: ci.yml's `iam` path
 // filter is `projects/iam-platform/**`, so a PR touching ONLY infra/demo/seed/seed-fan.sh
-// does not wake this lane at all — no Gradle input can fix that. TASK-MONO-522 inherits
-// the question of where a cross-tree agreement guard should be scheduled.
+// does not wake this lane at all — no Gradle input can fix that.
+//
+// 🔴 THIS GAP IS UNOWNED, and that correction matters. The line here used to read
+// "TASK-MONO-522 inherits the question of where a cross-tree agreement guard should be
+// scheduled." TASK-MONO-522 closed (ADR-MONO-063 ACCEPTED — D1) WITHOUT taking it: D1 is a
+// decision about the artist directory's write plane, and the CI path-filter question is a
+// different axis it never touched. Left as written, the sentence would have named a closed
+// ticket as the owner — which reads as covered and is the more expensive of the two errors
+// (nobody re-files work that appears assigned). ADR-MONO-063 § rider 대조 records it as
+// explicitly unassigned. It needs its own ticket; it does not have one.
 tasks.named('test') {
     inputs.file(rootProject.file('projects/iam-platform/apps/account-service/src/main/resources/db/migration-dev/R__06_seed_fan_artist_accounts_and_artist_role.sql'))
             .withPropertyName('fanArtistAccountSeed')

@@ -128,8 +128,17 @@ class WorkloadRoleCatalogTest {
                 .doesNotContain("MASTER_ADMIN");
     }
 
+    /**
+     * 🔴 The assertion below is byte-unchanged from TASK-MONO-514; its REASON is not. It was
+     * written as a <em>hold</em> — "TASK-MONO-522 has not answered whether workload identity may
+     * reach fan's admin surface" — and a hold whose ticket has since closed reads as a
+     * constraint that outlived its cause, which is to say as something safe to delete.
+     * ADR-MONO-063 (ACCEPTED — D1) answered that question with <b>no</b>, so this test now
+     * enforces a decision. Reversing it takes an amendment to that ADR; a closed ticket is not
+     * enough.
+     */
     @Test
-    @DisplayName("no workload client can be granted an admin-tier role — TASK-MONO-522 has not answered whether workload identity may reach fan's admin surface")
+    @DisplayName("no workload client can be granted an admin-tier role — ADR-MONO-063 (D1) closed fan's admin surface to workload identity")
     void noWorkloadClientHoldsAnAdminTierRole() {
         for (String clientId : WorkloadRoleCatalog.enumeratedClientIds()) {
             assertThat(WorkloadRoleCatalog.allGrantableRoles(clientId))

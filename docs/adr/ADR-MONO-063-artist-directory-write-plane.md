@@ -1,8 +1,8 @@
 # ADR-MONO-063 — 아티스트 디렉터리의 **쓰기 평면**: 아티스트·그룹·팬덤을 누가 만드는가 (그리고 워크로드 신원이 그 문에 닿는가)
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 **Date:** 2026-08-13
-**History:** PROPOSED 2026-08-13 (this record). **ACCEPT is a human gate — this record authorises no code by itself.** 승인은 소유자의 **정확형** 지시(`ADR-MONO-063 ACCEPTED — <A|B|C|D1|D2>`)를 요구하며, 일반적인 "진행"/"proceed"/"추천대로"/"1번" 은 이것을 승인하지 않는다. 작성 에이전트는 자기 제안을 스스로 ACCEPT 할 수 없다(`platform/architecture-decision-rule.md` § The ACCEPTED Gate). 🔴 이 문서의 § 추천 은 **작성 에이전트의 선호**이며, 그것을 소유자의 선택으로 읽는 것이 그 규정이 금지하는 바로 그 행위다 — `ADR-MONO-059` 와 `ADR-MONO-061` 의 History 가 각각 그 이유로 한 번씩 멈춘 기록을 갖고 있다.
+**History:** PROPOSED 2026-08-13 (this record). **ACCEPT is a human gate — this record authorises no code by itself.** 승인은 소유자의 **정확형** 지시(`ADR-MONO-063 ACCEPTED — <A|B|C|D1|D2>`)를 요구하며, 일반적인 "진행"/"proceed"/"추천대로"/"1번" 은 이것을 승인하지 않는다. 작성 에이전트는 자기 제안을 스스로 ACCEPT 할 수 없다(`platform/architecture-decision-rule.md` § The ACCEPTED Gate). 🔴 이 문서의 § 추천 은 **작성 에이전트의 선호**이며, 그것을 소유자의 선택으로 읽는 것이 그 규정이 금지하는 바로 그 행위다 — `ADR-MONO-059` 와 `ADR-MONO-061` 의 History 가 각각 그 이유로 한 번씩 멈춘 기록을 갖고 있다. · **ACCEPTED 2026-08-13 — D1** (소유자가 `ADR-MONO-063 ACCEPTED — D1` 을 직접 타이핑). **§ 선택지 / § rider 대조 / § 추천 / § 결과 는 byte-unchanged** — ACCEPT 는 확정이지 재결정이 아니다. 🔵 이번에는 게이트가 **물 필요가 없었다**: 제안 라운드에서 `AskUserQuestion` 을 쓰지 않고 정확형을 요구하는 텍스트만 제시했고, 소유자가 그 형식 그대로 회신했다. 059·061 이 각각 한 번씩 멈춰서 얻은 형태를 처음부터 적용한 것이며, **그 사실을 여기 적어 둔다** — 안 적으면 다음 세션엔 "그냥 통과된 것" 과 구별되지 않는다.
 **Decision driver:** `TASK-MONO-522` AC-0 재측정(2026-08-13) — 세 숫자가 **전부 0** 으로 재확인됐고, 그래서 이 티켓의 전제가 산다. 아티스트 디렉터리의 9개 쓰기 매처는 **어떤 호출자로도 도달할 수 없다**.
 **Related:** `TASK-MONO-522`(이 결정의 소유 티켓) · `ADR-MONO-059`(fan 저작 신원 평면 — B 배제가 **binding**, 이 ADR 이 그 경계에 붙는다) · `ADR-MONO-061`(워크로드 토큰 인가 평면 — **rider 를 이 티켓에 명시 인계**) · `TASK-MONO-512`(매처를 열지 않기로 확정하며 이 갭을 발견) · `TASK-MONO-514`(`WorkloadRoleCatalog` 구현 — admin-tier 를 이 ADR 까지 보류) · `TASK-FAN-BE-045`/`ADR-004`(artist-service 의 `/internal/**` 워크로드 체인) · `platform/security-rules.md` · `platform/contracts/jwt-standard-claims.md`
 
@@ -158,3 +158,36 @@ public boolean owns(String authorAccountId) { return authorAccountId.equals(acco
 ### ACCEPT 가 인가할 것 / 하지 않을 것
 
 인가한다: `TASK-MONO-522` 가 위 표의 **선택된 행**을 수행하는 것. 인가하지 않는다: 다른 행의 작업, `ADR-MONO-059`/`ADR-MONO-061` 의 재해석, `FAN_OPERATOR` 수용부 4곳의 일괄 정리(D2 가 명시 승인하는 1곳 제외), 콘솔에 fan 제품 엔트리를 여는 것. 각 단계는 여전히 자기 task 다(HARDSTOP-09).
+
+---
+
+## 결정 — **D1** (ACCEPTED 2026-08-13)
+
+**아티스트 디렉터리의 쓰기 평면을 열지 않는다.** 9개 매처와 `ADMIN_ROLES` 는 **유지**하고, 그것이 도달 불가인 이유를 *"아직 아무도 안 정했다"* 가 아니라 **이 결정**으로 확정한다. 위 § 선택지 D1 의 텍스트 그대로이며, 이 절은 그것을 **확정**할 뿐 재서술하지 않는다.
+
+### 무엇이 구속력을 갖나
+
+| | 구속력 |
+|---|---|
+| **아티스트·그룹·팬덤의 쓰기 표면은 v1 제품 범위 밖이다.** 9개 매처는 도달 불가인 채로 남고, 그것은 갭이 아니라 결정이다 | **binding** |
+| **A·B·C·D2 는 채택되지 않았다.** 특히 **A(워크로드 개방)가 배제**됐다 ⇒ 어떤 cc 클라이언트도 `ADMIN`/`OPERATOR`/`SUPER_ADMIN`/`FAN_OPERATOR` 를 받지 않는다. `WorkloadRoleCatalog` 의 빈 기본값과 `WorkloadRoleCatalogTest#noWorkloadClientHoldsAnAdminTierRole` 는 **그대로 유지**하되, 그 근거가 *"522 를 기다리는 보류"* 에서 **"이 ADR 이 내린 결정"** 으로 바뀐다 | **binding** |
+| **D2 를 고르지 않았다** ⇒ 매처를 **제거하지 않는다**. `ADR-MONO-059` 의 미채택 옵션 D(수용부 제거)는 **재개되지 않으며**, 이 ADR 은 `ADR-MONO-059` 의 어떤 binding 도 건드리지 않는다 | **binding** |
+| `seed-fan.sh` 첫 `dbexec --why` 는 **"결정에 의해 영구히 직접-DB"** 로 확정된다. *"이 티켓이 답할 때까지"* 라는 잠정 표현은 제거된다 | **binding** |
+| § 추천 이 적은 *"개방안의 유일한 호출자가 데모 시드"* 라는 근거 | 판단 근거이지 구속력은 아니다. 🔵 **콘솔에 fan 관리 화면이 생기는 날 이 결정은 다시 열려야 한다** — 그때는 호출자가 생기므로 근거가 사라진다 |
+
+### ⚠️ 이 ACCEPT 가 **결정하지 않은 것** — rider 대조 결과
+
+규정대로 반사가 아니라 **대조**했다: *"이 질문에 답하지 않고도 D1 을 고를 수 있는가?"*
+
+| 질문 | 답 없이 D1 을 고를 수 있나 | 처리 |
+|---|---|---|
+| fan artist-service 의 `ADMIN_ROLES` 매처를 워크로드 신원에 여는가 (`ADR-MONO-061` 인계) | **불가능** — D1 을 고르는 것이 곧 *"열지 않는다"* 이다 | rider 아님. **답했다: 아니오.** 위 § 무엇이 구속력을 갖나 2 |
+| `FAN_OPERATOR` 수용부 4곳을 정리하는가 | 가능하다 (D1 은 매처 유지를 고른 것이고, 나머지 3곳은 이 ADR 의 범위 밖) | 🔴 **미결로 남는다** — 별도 티켓/ADR 사안. `ADR-MONO-059` 가 D 를 채택하지 않았다는 사실은 그대로다 |
+| `INVENTORY_RESERVE` 에 워크로드 role 을 주는가 | 가능하다 (`ADR-MONO-061` § 결과 가 이미 별도 결정으로 분리) | rider 아님. `ADR-MONO-061` 소관 |
+| `seed-fan.sh` 만 고친 PR 이 iam CI 레인을 안 깨우는 문제 | 가능하다 (경로 필터 문제이지 쓰기 평면 결정이 아니다) | 🔴 **미결·무소유** — `auth-service/build.gradle` 주석이 이것을 *"`TASK-MONO-522` 가 인수한다"* 고 적어 두었으나 **D1 은 그것을 다루지 않는다.** 그 주석을 사실대로 정정한다(아래 § 결과) |
+
+🔴🔴 **`ADR-MONO-061` 이 넘긴 rider 는 이로써 닫혔다.** 그 ADR 은 *"조용히 빠뜨리는 것은 답이 아니다"* 라고 적었고, 답은 **아니오**다 — 워크로드 신원은 이 매처에 닿지 않는다. 그때까지의 fail-closed 기본값이 **영구 상태**가 되며, 그것을 뒤집으려면 이 ADR 을 개정하는 새 결정이 필요하다.
+
+### ACCEPT 가 인가하는 것 / 하지 않는 것
+
+인가한다: `TASK-MONO-522` 가 § 결과 표의 **D1 행**을 수행하는 것 — 매처 유지 + 주석 4곳 정합 + 시드 `--why` 잠정성 제거. 인가하지 않는다: 매처 제거(D2), 어떤 역할 발급, `FAN_OPERATOR` 수용부 3곳의 정리, 콘솔 fan 엔트리. 각 단계는 여전히 자기 task 다(HARDSTOP-09).

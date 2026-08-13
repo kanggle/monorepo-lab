@@ -125,24 +125,38 @@ public class SecurityConfig {
     //
     // Consequence, written down so it is not rediscovered as a bug: the artist DIRECTORY
     // (artists, groups, fandoms) consequently has no API caller at all, which is why
-    // infra/demo/seed/seed-fan.sh still creates those rows by direct DB write. TASK-MONO-522
-    // owns that gap. Re-opening this gate is a role-model decision (a new ADR), not a fix.
+    // infra/demo/seed/seed-fan.sh creates those rows by direct DB write.
     //
-    // TASK-MONO-514 / ADR-MONO-061 ACCEPTED — C: A THIRD WAY IN NOW EXISTS, AND IS HELD SHUT.
+    // TASK-MONO-522 / ADR-MONO-063 ACCEPTED — D1: THAT IS NOW JUDGED, NOT PENDING.
+    // ---------------------------------------------------------------------------------------
+    // What stood here said TASK-MONO-522 "owns that gap", which was true while the question was
+    // open and became a lie the moment it was answered. It was answered: the directory write
+    // surface is OUT OF v1 PRODUCT SCOPE. The matchers below are retained rather than deleted
+    // (option D2 was offered and NOT chosen), so ADR-MONO-059's un-adopted option D is not
+    // reopened here either. Re-opening this gate is an amendment to ADR-MONO-063, not a fix.
+    //
+    // 🔵 The decision is not eternal, and its expiry is written down: it rests on there being
+    // no caller — the console has no `fan` product entry, so no screen manages this. If such a
+    // screen is ever built, the ground for D1 is gone and the decision must be retaken.
+    //
+    // TASK-MONO-514 / ADR-MONO-061 ACCEPTED — C: A THIRD WAY IN EXISTED, AND IS NOW HELD SHUT
+    // BY DECISION RATHER THAN BY DEFAULT.
     // ---------------------------------------------------------------------------------------
     // The two reasons above were exhaustive only while a machine token structurally could not
     // carry roles. ADR-MONO-061 removed that: a client_credentials token MAY now carry the
     // `roles` claim, and community-service-client (fan-platform's workload client) reaches this
     // service. So "nobody can present an admin-tier role here" turned from a structural fact
-    // into a question about ISSUANCE.
+    // into a question about ISSUANCE — the one rider ADR-MONO-061 left open and handed to
+    // TASK-MONO-522.
     //
-    // It is still true, by decision and by test. ADR-MONO-061's ACCEPT was contrasted for
-    // riders and left exactly one question open — whether workload identity may reach THIS
-    // matcher — and assigned it to TASK-MONO-522. Until 522 answers, auth-service's
-    // WorkloadRoleCatalog grants community-service-client no roles at all, its default for an
-    // unlisted client is likewise none, and WorkloadRoleCatalogTest asserts that NO workload
-    // client holds any of the four names below. The guard lives at the issuer because that is
-    // where the decision is; this matcher is unchanged code.
+    // ADR-MONO-063 § 결정 answered it: NO. Workload identity does not reach this matcher.
+    // auth-service's WorkloadRoleCatalog grants community-service-client no roles, its default
+    // for an unlisted client is likewise none, and WorkloadRoleCatalogTest asserts that NO
+    // workload client holds any of the four names below — all three unchanged in behaviour, but
+    // their REASON changed from "a hold pending TASK-MONO-522" to "a decision". That
+    // distinction is the whole point: a hold silently expires when its ticket closes, a
+    // decision does not. The guard lives at the issuer because that is where the decision is;
+    // this matcher is unchanged code.
     private static final String[] ADMIN_ROLES = { "ADMIN", "OPERATOR", "SUPER_ADMIN", "FAN_OPERATOR" };
 
     /**

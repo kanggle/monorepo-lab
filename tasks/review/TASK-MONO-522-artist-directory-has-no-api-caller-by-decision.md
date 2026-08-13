@@ -8,7 +8,7 @@ TASK-MONO-522
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -99,24 +99,31 @@ ADMIN_ROLES = { "ADMIN", "OPERATOR", "SUPER_ADMIN", "FAN_OPERATOR" };
       `fan-platform` 의 `operator_tenant_assignment` 행, `fan-platform` 테넌트 계정 중
       admin-tier `account_roles` 를 든 것. 🔴 셋 다 **0 이어야 이 티켓의 전제가 산다** —
       누군가 이미 열었다면 그것은 `ADR-MONO-059` 위반이고 이 티켓은 **되돌리는 작업**이 된다~~
-- [ ] **AC-1 (결정)** — 연다 / 닫는다를 소유자가 정확형으로 승인한다.
-      🔵 **초안 제출됨 2026-08-13**: [`ADR-MONO-063`](../../docs/adr/ADR-MONO-063-artist-directory-write-plane.md)
-      **PROPOSED** — 선택지 **A / B / C / D1 / D2**, 추천 D1(제안일 뿐 결정 아님).
-      🔴 **대기 중**: 소유자 정확형 `ADR-MONO-063 ACCEPTED — <A|B|C|D1|D2>`.
-      이 ADR 은 `ADR-MONO-061` 이 명시 인계한 rider(*"fan artist-service 의 `ADMIN_ROLES`
-      매처를 워크로드 신원에 여는가"*)를 선택지별 표로 함께 답한다 — A=예, B/C/D=아니오.
-      🔴 `ADR-MONO-059` 의 binding 을 건드리므로 새 ADR 로 올린다(그 ADR 을 개정하는 형태든,
-      후속 ADR 이든). 이 티켓이 스스로 판정하지 않는다
-- [ ] **AC-2 (열기로 했다면)** — 발급 평면을 구현하고, 그 역할을 든 토큰으로
-      `POST /api/v1/artists` 가 **201** 임을 실측한다. 🔴 그리고 그 역할이
-      `ActorContext.isOperator()` 를 참으로 만드는지 **반드시 함께 판정한다** —
-      참이 되면 배제된 B 가 열린 것이므로 ADR 이 그것을 명시적으로 허용해야 한다
-- [ ] **AC-3 (닫기로 했다면)** — 9개 매처와 `ADMIN_ROLES` 를 **어떻게 할지** 정한다
-      (제거 / 유지 + 사유). 유지라면 이미 `TASK-MONO-512` 가 적어 둔 주석을 이 결정으로 갱신한다
-- [ ] **AC-4 (시드)** — 첫 `dbexec --why` 를 최종 상태로 만든다: 열렸으면 **회수**(API 로 이동),
-      닫혔으면 사유를 *"결정에 의해 영구히 직접-DB"* 로 확정한다.
-      🔴 지금 문구는 *"이 티켓이 답할 때까지"* 라는 **잠정** 표현이다 — 그 잠정성을 없애는 것이
-      이 AC 다
+- [x] **AC-1 (결정)** — ✅ **완료 2026-08-13**:
+      [`ADR-MONO-063`](../../docs/adr/ADR-MONO-063-artist-directory-write-plane.md)
+      **ACCEPTED — D1** (소유자 정확형 `ADR-MONO-063 ACCEPTED — D1` 직접 타이핑).
+      ⇒ **닫는다**: 아티스트 디렉터리의 쓰기 평면은 **v1 제품 범위 밖**. A·B·C·D2 배제.
+      🔴 이 ADR 은 `ADR-MONO-061` 이 명시 인계한 rider(*"fan artist-service 의 `ADMIN_ROLES`
+      매처를 워크로드 신원에 여는가"*)를 함께 답했다 — **아니오**. 어떤 cc 클라이언트도
+      admin-tier 를 받지 않으며, 그 근거가 *"522 를 기다리는 보류"* 에서 **"결정"** 으로 바뀌었다.
+      🔵 D2 를 안 골랐으므로 매처를 제거하지 않는다 ⇒ `ADR-MONO-059` 의 어떤 binding 도
+      건드리지 않았다
+- [x] **AC-2 (열기로 했다면)** — ⛔ **해당 없음** — D1 은 닫는 결정이라 발급 평면도, `201` 실측도
+      존재하지 않는다. 🔵 다만 이 AC 가 요구한 판정(*"그 역할이 `isOperator()` 를 참으로
+      만드는가"*)은 **선택지 심사 단계에서 수행됐고 그것이 D1 을 고른 핵심 근거다**:
+      `ADMIN_ROLES` 의 네 이름이 community-service `isOperator()` 가 받는 바로 그 넷이라,
+      사람이든 기계든 발급하면 `owns()` 로 테넌트 내 전 저자의 게이팅 콘텐츠가 열린다
+      (= `ADR-MONO-059` 가 배제한 B). `ADR-MONO-063` § 폭발반경 에 기록
+- [x] **AC-3 (닫기로 했다면)** — ✅ **유지 + 사유 갱신**. 9개 매처와 `ADMIN_ROLES` 를 **유지**한다
+      (제거 = D2, 미채택). `TASK-MONO-512`/`TASK-MONO-514` 가 적어 둔 주석을 이 결정으로 갱신했고,
+      🔴 **면제 회수 지점 3곳**을 함께 처리했다 — `WorkloadRoleCatalog` javadoc · 그 테스트의
+      `noWorkloadClientHoldsAnAdminTierRole` DisplayName · `SecurityConfig` 주석. 셋 다
+      동작 무변경이고 **근거만** "보류" → "결정" 으로 바뀌었다(보류는 티켓이 닫히면 조용히
+      만료되지만 결정은 그러지 않는다). `ActorContext.isOperator()` 주석도 같은 결정으로 정합
+- [x] **AC-4 (시드)** — ✅ 첫 `dbexec --why` 의 **잠정성 제거 완료**. *"...는 TASK-MONO-522
+      소관이다"* → *"**결정에 의해 영구히 직접-DB 다** (ADR-MONO-063 ACCEPTED — D1)"*.
+      🔵 되돌리려면 ADR 개정이 필요하다는 것과, 근거(*"호출자가 없다"*)가 콘솔에 fan 관리
+      화면이 생기면 사라진다는 것을 함께 적었다
 
 ---
 
@@ -148,11 +155,43 @@ ADMIN_ROLES = { "ADMIN", "OPERATOR", "SUPER_ADMIN", "FAN_OPERATOR" };
 # Definition of Done
 
 - [x] AC-0 실측 기록 — `ADR-MONO-063` § 실측 (세 숫자 전부 0, 대조군 포함)
-- [ ] ADR 승인(정확형) — 열기 / 닫기 ⏸️ **여기서 멈춰 있다** (`ADR-MONO-063` PROPOSED)
-- [ ] 구현 또는 명시적 기록
-- [ ] `seed-fan.sh` `--why` 의 잠정성 제거
-- [ ] Ready for review
+- [x] ADR 승인(정확형) — **닫기**. `ADR-MONO-063 ACCEPTED — D1` (2026-08-13, 소유자 타이핑)
+- [x] 구현 또는 명시적 기록 — **명시적 기록**(코드 동작 변경 0). 매처 9개 유지 · 주석 5곳 정합
+      (`SecurityConfig` · `ActorContext` · `WorkloadRoleCatalog` javadoc 2곳 · 그 테스트
+      DisplayName) · `build.gradle` 의 잘못된 소유권 주장 정정 · 워크스루 § 6 행 갱신
+- [x] `seed-fan.sh` `--why` 의 잠정성 제거
+- [x] Ready for review
 
 ---
 
-분석=Opus 5 / 구현 권장=**Opus** — 신원 평면 결정이고 ADR 게이트가 앞에 있다.
+## 착수 기록 (2026-08-13)
+
+**산출물은 코드가 아니라 판정이다** — 티켓 본문이 그렇게 적었고, 실제로 그렇게 끝났다.
+동작 변경 **0**, 바뀐 것은 **왜 그런지에 대한 기록**이다.
+
+🔴 **이번 작업의 핵심은 "면제 회수" 였다.** `TASK-MONO-514` 가 남긴 세 지점은 전부
+*"`TASK-MONO-522` 가 답할 때까지"* 라는 **보류**로 쓰여 있었다. 보류는 그 티켓이 닫히는
+순간 **근거가 만료되고**, 다음 사람에게는 "이미 끝난 것을 기다리는 제약" = 지워도 되는 것으로
+읽힌다. D1 은 그 셋을 **결정**으로 바꿨다(같은 바이트, 다른 지위). 회수 지점:
+
+| 지점 | 이전 | 이후 |
+|---|---|---|
+| `WorkloadRoleCatalog` javadoc | "522 가 답할 때까지 admin-tier 금지" | ADR-063 D1 이 **아니오**로 답함 |
+| `WorkloadRoleCatalogTest` DisplayName | "522 has not answered…" | "ADR-MONO-063 (D1) closed…" |
+| `SecurityConfig` 주석 | "TASK-MONO-522 owns that gap" | "그 갭은 **판정됐다** — v1 범위 밖" |
+
+🔴 **그리고 반대 방향의 오류도 하나 고쳤다.** `auth-service/build.gradle` 주석이
+*"`TASK-MONO-522` inherits the question of where a cross-tree agreement guard should be
+scheduled"* 라고 적고 있었는데, **D1 은 그것을 다루지 않았다**(CI 경로필터는 다른 축이다).
+닫힌 티켓을 소유자로 남겨 두면 **커버된 것처럼 읽히고**, 그게 둘 중 더 비싼 오류다
+(할당된 것처럼 보이는 일은 아무도 다시 파일하지 않는다) ⇒ **무소유로 명시 정정**했고
+`ADR-MONO-063` § rider 대조 에도 미결로 기록했다.
+
+🔵 **미결로 남긴 것 2건**(ADR § rider 대조 에 명시): `FAN_OPERATOR` 수용부 나머지 3곳 정리
+(별도 사안 — `ADR-MONO-059` 의 D 미채택은 불변) · 위 CI 경로필터 갭(무소유, 티켓 없음).
+
+🔵 **이 결정에는 만료 조건이 있다** — 근거가 *"호출자가 없다"* 이므로(콘솔에 `fan` 제품
+엔트리 없음), 콘솔에 fan 관리 화면이 생기는 날 근거가 사라진다. ADR·`SecurityConfig`·시드
+`--why` 세 곳에 그 조건을 적어 두었다.
+
+분석·구현=Opus 5 — 신원 평면 결정이고 ADR 게이트가 앞에 있었다.
