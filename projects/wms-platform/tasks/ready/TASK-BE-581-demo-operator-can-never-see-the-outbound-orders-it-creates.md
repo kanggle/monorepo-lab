@@ -267,13 +267,26 @@ information_schema 전수  6 DB · 91 테이블  ⇒  tenant 컬럼은 outbound_
       restricted 호출자 × `tenant_id=NULL` 주문에 **403** 을 던진다. 가드가 없는 유일한
       지점이 **생성**(검사할 기존 주문이 없어서). ⇒ 결함은 "안 보인다" 가 아니라
       **"만들고 나면 읽기·피킹·패킹·출하·취소가 전부 막힌다"** 이다. 상세는 3회차 § M3
-- [ ] **AC-1 (선택)** — [`ADR-MONO-064`](../../../../docs/adr/ADR-MONO-064-wms-outbound-tenant-visibility-plane.md)
-      로 승격(PROPOSED). 선택지가 A/B/C → **A~E 로 늘었다**(3회차 측정이 D·E 를 열었다).
-      🔴 **소유자 정확형 대기** — 스스로 ACCEPT 하지 않는다.
-      라이더 R1(`*` 축 모순) · R2(admin 무필터 표면)도 함께 답해야 한다
-- [ ] **AC-3 (라이브)** — 콘솔 `/wms/outbound` 에서 브라우저로 목록이 찬다
-- [ ] **AC-4 (회귀)** — 테넌트 격리가 **약해지지 않았음**을 테스트로 고정한다.
-      다른 테넌트의 주문이 보이면 안 된다 — 이 티켓이 그 반대로 가는 것을 막는다
+- [x] **AC-1 (선택) — 완료 2026-08-13.**
+      [`ADR-MONO-064`](../../../../docs/adr/ADR-MONO-064-wms-outbound-tenant-visibility-plane.md)
+      **ACCEPTED — B** (소유자 지정). 선택지가 A/B/C → A~E 로 늘어난 뒤 B 로 닫혔다.
+      라이더 **R1 = 스코핑 축의 `*` 분기 제거**(§ D3, 이 티켓에서 구현) ·
+      **R2 = 별도 티켓**(§ D4 → `TASK-BE-583`).
+      🔴 게이트가 물었다 — 직전 응답 *"추천대로 진행"* 은 `B` 의 출처가 내 추천이라
+      넘기지 않았고, 선택지를 명시 제시해 다시 받았다
+- [x] **AC-4 (회귀) — 완료 2026-08-13.** 격리가 약해지지 않았음을 네 곳에 고정:
+      `CallerScopeTest.restricted_scopeListQuery_stillPinsTenant_whenClientAsksForAnotherSource`
+      (클라이언트가 보낸 테넌트 필터를 서명된 클레임이 덮는다) · 기존
+      `restricted_requireOrderAccess_deniesForeignTenant` / `…_deniesNullTenant` (불변) ·
+      🔴 **새로 채운 칸**: `OrderJpaRepositoryFilterIT.findFiltered_byTenantId_isolatesManualOrdersAcrossTenants`
+      — `source` pin 이 사라졌으므로 **`MANUAL` 행에 대해서도** 테넌트 필터 하나가
+      버텨야 하는데 기존 IT 는 `FULFILLMENT_ECOMMERCE` 행만 썼다(둘째 방어선이
+      첫째와 구별된 적이 없었다). 대조군 포함
+- [ ] **AC-3 (라이브)** — 콘솔 `/wms/outbound` 에서 목록이 찬다.
+      🔴 **기존 `SO-DEMO-0001` 로는 확인할 수 없다** — § D1 은 소급 stamp 를 금지하므로
+      그 행은 `tenant_id=NULL` 인 채 영원히 안 보인다. 확인 경로는 둘 중 하나:
+      (a) 수정된 outbound-service 로 **새 주문을 만들어** 같은 토큰으로 조회, 또는
+      (b) 볼륨 초기화 + 재시드(🔴 `docker compose down -v` 는 분류기 차단 — 사장님 실행)
 
 ---
 
