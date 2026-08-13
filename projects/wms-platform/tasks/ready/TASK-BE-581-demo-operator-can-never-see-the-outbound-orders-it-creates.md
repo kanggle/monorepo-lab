@@ -282,11 +282,26 @@ information_schema 전수  6 DB · 91 테이블  ⇒  tenant 컬럼은 outbound_
       — `source` pin 이 사라졌으므로 **`MANUAL` 행에 대해서도** 테넌트 필터 하나가
       버텨야 하는데 기존 IT 는 `FULFILLMENT_ECOMMERCE` 행만 썼다(둘째 방어선이
       첫째와 구별된 적이 없었다). 대조군 포함
-- [ ] **AC-3 (라이브)** — 콘솔 `/wms/outbound` 에서 목록이 찬다.
+- [ ] **AC-3 (라이브) — 미완. 시도하지 않았고, 그 이유를 실측으로 적는다.**
+
       🔴 **기존 `SO-DEMO-0001` 로는 확인할 수 없다** — § D1 은 소급 stamp 를 금지하므로
       그 행은 `tenant_id=NULL` 인 채 영원히 안 보인다. 확인 경로는 둘 중 하나:
       (a) 수정된 outbound-service 로 **새 주문을 만들어** 같은 토큰으로 조회, 또는
-      (b) 볼륨 초기화 + 재시드(🔴 `docker compose down -v` 는 분류기 차단 — 사장님 실행)
+      (b) 볼륨 초기화 + 재시드(🔴 `docker compose down -v` 는 분류기 차단 — 사장님 실행).
+
+      ⚠️ **호스트 자원 부족으로 (a) 도 시도하지 않았다** (2026-08-13 실측):
+      ```
+      RAM 15.7GB 총 / 여유 3.6GB     ← wms 슬라이스 단독이 ≈5.6GiB (이 티켓 2회차 기록)
+      demo-up 은 iam + wms 둘 다 필요 (iam 이 OIDC IdP)
+      ```
+      기동을 밀어붙이면 이 호스트의 알려진 OOM 캐스케이드(페이징 파일 고갈 → JDT.LS
+      누수 → Docker 행)를 부른다. **"돌려봤는데 안 됐다" 가 아니라 "돌리지 않았다"** 이며,
+      초록도 빨강도 주장하지 않는다.
+
+      🔵 대신 이 축에서 확보한 것: 유닛 차등 대조군(restricted→stamp / unrestricted→null,
+      bite 확인) + `OrderJpaRepositoryFilterIT` 의 실 Postgres 교차테넌트 칸(CI 가 권위).
+      이것들은 라이브를 **대체하지 못한다** — 이 결함이 정확히 "유닛은 초록인데 표면이
+      200+빈배열" 이었기 때문이다. AC-3 는 열린 채로 둔다.
 
 ---
 
