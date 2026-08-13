@@ -190,6 +190,55 @@ BE-433 AC-2 + 테스트가 지킨다는 것, (b) 그것이 "ADMIN 티어라서" 
 
 ---
 
+# 🟢 착수 2회차 (2026-08-13 UTC) — AC-1 의 세 안에 **숫자를 붙였다** (결정은 여전히 오너)
+
+`TASK-MONO-521` 이 워크로드 신원 판정기 모집단을 재고 나서야 ③의 비용을 셀 수 있게 됐다.
+아래는 **결정 준비**이지 결정이 아니다 — 셋 다 ADR 급이라는 §⑤의 결론은 그대로다.
+
+## 변경 지점 vs 도달 범위 — ③은 그 둘이 크게 다르다
+
+| 안 | 코드 변경 지점 | **효과가 닿는 범위** | `INVENTORY_RESERVE` |
+|---|---|---|---|
+| ① 운영자에 `MASTER_WRITE` | `OperatorRoleDerivation` 상수 1곳 + `OperatorRoleDerivationTest#wms_excludesAdminTier` **assertion 1개** | wms 운영자 토큰만 | ❌ 계약이 금지(§③) |
+| ② 마스터 전용 역할 신설 | 새 역할의 **발급 평면**(파생 or 부여) + master-service **42개 술어** 중 어디까지 인정할지 | wms 만 | ❌ |
+| ③ 워크로드 토큰에 role 클레임 | `TenantClaimTokenCustomizer#customizeForClientCredentials` **1곳** | 🔴🔴 **cc 클라이언트 12개 × 그 클레임으로 authority 를 만드는 서비스 19개 / 6개 프로젝트** | ✅ **유일** |
+
+**측정 근거**:
+
+- **cc 클라이언트 12개** — 마이그레이션의 INSERT 를 **문(statement) 단위**로 파싱해 셌다
+  (줄 단위로 세면 여러 줄에 걸친 seed 를 놓친다). 🔵 대조군: 비-cc 4개가 정확히
+  브라우저 클라이언트(`demo-spa` · `ecommerce-admin-dashboard` · `ecommerce-web-store` ·
+  `fan-platform-user-flow`)로 떨어졌다 — 탐지식이 전부를 매치하는 상태가 아님이 확인된다.
+  🔴 곁다리: `wms-user-flow-client` 가 cc 그랜트를 갖고 있다(이름과 다르다).
+- **19개 서비스** — `roles` 클레임을 authority 로 바꾸는 지점의 전수:
+  `libs/java-security-servlet` 의 `ActorClaims` 를 통해 erp 4 · fan 4 · finance 2 · scm 4 ·
+  wms 5. wms 5개는 그 위에 자기 `setAuthoritiesClaimName("roles")` 도 갖고 있다.
+
+⇒ **③은 "한 줄 고치기" 로 보이지만 wms 변경이 아니다.** 클레임이 생기는 순간
+**6개 프로젝트 19개 서비스가 동시에** 머신 토큰에 authority 를 부여하기 시작한다.
+어떤 cc 클라이언트에 어떤 role 을 줄지는 그 다음 문제이고, **비어 있는 role 집합으로
+시작하더라도 그 순간부터 "무엇을 넣으면 어디가 열리는가" 가 전 저장소 질문이 된다.**
+
+## 🔴 ③은 `ADR-MONO-059`(그리고 `TASK-MONO-522`)와 맞물린다
+
+fan artist-service 의 쓰기 매처는 `hasAnyRole(ADMIN, OPERATOR, SUPER_ADMIN, FAN_OPERATOR)`
+이고, 그 체인은 `ActorContextJwtAuthenticationConverter`(= `roles` 를 읽는 위 19개 중 하나)를
+쓴다. **지금 머신 토큰이 role 을 안 실어서 그 게이트는 머신에게 닫혀 있다.** ③은 그 전제를
+없앤다 ⇒ `TASK-MONO-522` 의 Edge Case *"관리 API 를 워크로드 신원으로 연다"* 가
+**실현 가능해지고**, 동시에 `ADR-MONO-059` 가 닫아 둔 평면에 새 문이 생기는지를
+그 ADR 이 명시적으로 답해야 한다.
+
+⇒ **③을 고르면 514 와 522 는 한 ADR 에서 같이 답해야 한다.** ①/② 를 고르면 둘은 독립이다.
+이것이 두 티켓의 순서를 묶는 실제 이유다(추측이 아니라 위 배선에서 나온다).
+
+## 결정에 필요한 것
+
+세 안 중 하나를 **정확형으로** 골라 주면 그 안의 ADR 초안 + 배선 + AC-2/AC-3 실측까지
+진행한다. 🔴 이 티켓은 스스로 고르지 않는다 — ①은 사용자가 고른 BE-433 결정을 뒤집는
+것이고, ②③은 역할/토큰 모델 변경이다.
+
+---
+
 # Goal
 
 WMS 마스터 데이터를 **API 로** 만들 수 있는 자격증명이 존재한다 — 또는 존재하지 않는 것이
@@ -219,9 +268,12 @@ WMS 마스터 데이터를 **API 로** 만들 수 있는 자격증명이 존재�
       **0건**. 🔴 발급처 후보 `PermissionCatalog` 는 **JWT 로 흐르지 않는 미끼**였다.
       🔵 워크로드 레그는 시크릿이 없어 **라이브 재측정 안 함** — 코드 경로로만 확인했고
       그렇게 적었다.
-- [ ] **AC-1 (결정) — 🔴 사용자 결정 대기 (§⑤).** 착수 결과 **세 안이 모두 ADR 급**임이
-      드러났다: ①은 `TASK-BE-433` 의 *user-chosen* 결정을 뒤집는 것이고 테스트가 지킨다.
-      아래 원문 유지:
+- [ ] **AC-1 (결정) — 🔴 사용자 결정 대기.** 세 안 모두 ADR 급(§⑤). **2회차에서 비용을
+      실측해 붙였다**: ① = `OperatorRoleDerivation` 상수 1 + 테스트 assertion 1(그러나
+      BE-433 *user-chosen* 뒤집기) / ② = 새 발급 평면 + master-service **42개 술어** 범위 결정 /
+      ③ = 변경 지점 **1곳**이지만 효과가 **cc 클라이언트 12 × 서비스 19 / 프로젝트 6** 에
+      동시 도달, `INVENTORY_RESERVE` 를 푸는 **유일한** 안, 그리고 🔴 `ADR-MONO-059` ·
+      `TASK-MONO-522` 와 **한 ADR 에서 같이 답해야** 한다. 아래 원문 유지:
       ① 운영자 엔타이틀먼트에 `MASTER_WRITE` 추가(다른 세 서비스와 대칭)
       ② 마스터 전용 운영 역할 신설
       ③ 워크로드 클라이언트 토큰에 role 클레임 부여(scope↔role 간극 자체를 메운다)
