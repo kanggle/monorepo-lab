@@ -1,6 +1,6 @@
 # ADR-002: 빌링키 기반 자동 갱신(정기결제) — 서버 개시 청구 + BillingKeyEnrollment + fail-closed 실패 정책
 
-**Status**: Accepted
+**Status:** Accepted
 **Date**: 2026-07-25 (proposed) · 2026-07-25 (accepted — owner exact-form intent **"ADR-002 ACCEPTED"**, given together with the companion **"ADR-MONO-057 ACCEPTED"**)
 **Deciders**: kanggle
 **Supersedes**: —

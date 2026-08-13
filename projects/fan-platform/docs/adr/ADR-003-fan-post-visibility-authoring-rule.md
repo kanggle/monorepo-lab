@@ -1,6 +1,6 @@
 # ADR-003: `FAN_POST` 의 가시성 티어 — 팬이 게이팅된 글을 쓸 수 있는가
 
-**Status**: Proposed
+**Status:** Proposed
 **Date**: 2026-08-06 (proposed)
 **Deciders**: kanggle
 **Supersedes**: —

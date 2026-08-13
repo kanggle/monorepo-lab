@@ -71,6 +71,24 @@
 #     preamble scopes itself to monorepo-level ADRs; pulling them in would be
 #     red on day one.
 #
+#     TASK-MONO-525 measured why, and the answer was not what this comment
+#     implied: the project ADRs' Status VALUES were fine (drift 0 across all 17
+#     that were comparable). What differed was the NOTATION — `- **Status**:`
+#     (11), `**Status**:` (11), `**Status:**` (1) — and this script's parser only
+#     reads the third, so 22 of 23 would have been reported as NO-STATUS. "Red on
+#     day one" was true; "the values are wrong" was not. The distinction matters,
+#     because it means the fix was cosmetic, not a decision review.
+#
+#     They are now guarded, by a SEPARATE script:
+#         scripts/check-project-adr-index-drift.sh   (CI job `project-adr-index`)
+#     Separate rather than an extension of this one, because the two populations
+#     are different data structures, not two cases of one rule: project ADR ids
+#     are not globally unique (`ADR-001` exists five times), the index is a
+#     per-directory README rather than one INDEX.md, and those READMEs carry no
+#     Date column. See that file's header for the full argument.
+#     🔴 Do not "fix" this exclusion by pulling them in here — that would
+#     reintroduce the id collisions the split exists to avoid.
+#
 # Usage: bash scripts/check-adr-index-drift.sh
 # Exit:  0 = in sync, 1 = drift (offending ADRs are printed), 2 = cannot run
 

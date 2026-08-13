@@ -1,6 +1,6 @@
 # ADR-002: 실시간 FX 환율 피드 — 수동 환율 입력에서 config-gated 외부 피드 + 캐시·staleness 가드로
 
-- **Status**: ACCEPTED (2026-06-15)
+- **Status:** ACCEPTED (2026-06-15)
 - **Date**: 2026-06-14
 - **Authors**: architecture (ledger-service 22번째 증분 방향 — finance-platform 두 번째 프로젝트 ADR, 첫 외부 HTTP 통합)
 - **Supersedes**: —

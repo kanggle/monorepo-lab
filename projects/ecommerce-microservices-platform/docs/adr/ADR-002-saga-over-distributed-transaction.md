@@ -1,6 +1,6 @@
 # ADR-002: Order + Payment + Inventory에 Saga + Outbox를 택한 이유
 
-- **Status**: Accepted
+- **Status:** Accepted
 - **Date**: 2026-03
 - **Tags**: transactional, saga, outbox, idempotency
 

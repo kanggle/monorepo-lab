@@ -1,6 +1,6 @@
 # ADR-005: Elasticsearch 한국어 analyzer로 `nori` 채택
 
-- **Status**: Accepted
+- **Status:** Accepted
 - **Date**: 2026-04
 - **Tags**: search, elasticsearch, korean, i18n
 

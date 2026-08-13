@@ -1,6 +1,6 @@
 # ADR-001: 외화 포지션 원가흐름(cost-flow)을 가중평균에서 FIFO 로트(lot) 추적으로 — per-tenant 설정·opt-in
 
-- **Status**: ACCEPTED (2026-06-14)
+- **Status:** ACCEPTED (2026-06-14)
 - **Date**: 2026-06-14
 - **Authors**: architecture (ledger-service 15번째 증분 방향 — finance-platform 첫 프로젝트 ADR)
 - **Supersedes**: —

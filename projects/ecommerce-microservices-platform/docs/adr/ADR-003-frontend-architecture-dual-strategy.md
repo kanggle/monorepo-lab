@@ -1,6 +1,6 @@
 # ADR-003: web-store / admin-dashboard 아키텍처 이원화
 
-- **Status**: Superseded by ADR-MONO-031
+- **Status:** Superseded by ADR-MONO-031
 - **Date**: 2026-03
 - **Tags**: frontend, architecture, nextjs
 

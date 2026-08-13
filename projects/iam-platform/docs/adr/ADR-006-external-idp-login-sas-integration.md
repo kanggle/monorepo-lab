@@ -1,6 +1,6 @@
 # ADR-006: 외부 IdP(소셜) 로그인의 SAS 브라우저 플로우 통합 — Upstream Identity Brokering
 
-**Status**: ACCEPTED
+**Status:** ACCEPTED
 **Date**: 2026-06-17 (proposed) → 2026-06-17 (accepted)
 **Deciders**: kanggle
 **Supersedes**: — (단, 본 ADR 채택 시 `specs/features/oauth-social-login.md` 의 토큰 발급·플로우 절은 갱신 필요)

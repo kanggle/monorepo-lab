@@ -1,6 +1,6 @@
 # ADR-007: 택배 연동을 단일 택배사 직연동이 아닌 물류 중개 플랫폼(aggregator)으로 수렴한 이유
 
-- **Status**: ACCEPTED (2026-06-12)
+- **Status:** ACCEPTED (2026-06-12)
 - **Date**: 2026-06-12
 - **Authors**: backend (carrier-integration 회고 + aggregator 방향 결정)
 - **Supersedes**: —

@@ -254,6 +254,11 @@ jobs:
       # guard on literally every change it exists to catch, and a skipped job
       # reports green.
       adr-index: ${{ steps.filter.outputs.adr-index }}
+      # TASK-MONO-525: raw filter, NOT AND-combined with `code-changed`. An ADR is a
+      # markdown file and its index is a markdown table — `code-changed` is false on
+      # 100% of this guard's defect class, so AND-ing would switch it off entirely.
+      # Same reasoning as `adr-index` above, one level down.
+      project-adr-index: ${{ steps.filter.outputs.project-adr-index }}
       # TASK-MONO-371: raw filter, NOT AND-combined with `code-changed`.
       #
       # The task specified an AND here, reasoning that this drift arrives as a
@@ -536,6 +541,15 @@ jobs:
             adr-index:
               - 'docs/adr/**'
               - 'scripts/check-adr-index-drift.sh'
+            # TASK-MONO-525: the same drift class one level down. Until now nothing
+            # looked at project-internal ADRs at all — `iam-platform` had six with no
+            # index of any kind, and the root guard deliberately excludes the whole
+            # population (see its header). The root `adr-index` filter does not match
+            # these paths either, so this needs its own filter and its own job.
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            project-adr-index:
+              - 'projects/*/docs/adr/**'
+              - 'scripts/check-project-adr-index-drift.sh'
             # TASK-MONO-518: docs/guides/interview-demo-walkthrough.md § 6 is read by an
             # interviewer, and a row whose ticket closed keeps saying a fixed defect is
             # live. TASK-MONO-517 measured 7 of 26 ticket-citing rows stale in one audit,
@@ -986,6 +1000,41 @@ jobs:
 
       - name: Guard — every ADR is indexed, no phantom rows, Status matches
         run: bash scripts/check-adr-index-drift.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-525 — the same guarantee for project-internal ADRs.
+  #
+  # `projects/<name>/docs/adr/` was a guard-less surface. It surfaced when moving
+  # ADR-ERP-001 to ACCEPTED (#3287): the `adr-index` job skipped, and biting it
+  # proved the filter was not the cause — the root guard excludes this population
+  # by design, so nothing anywhere compared these ADRs to their index.
+  # `iam-platform` had six ADRs and no README at all: six decisions in no index.
+  #
+  # `--self-test` runs FIRST and is required, not a courtesy. The risk here is
+  # concentrated in the parser (three Status notations, bold in either position,
+  # option letters like `— D`), and a parser that stops matching reports "no
+  # drift" and "did not look" with the same green tick — which is literally how
+  # this ticket was born (#3287's body claimed an ADR had no Status header; it
+  # had one, in a notation the scanner could not read).
+  # Cheap (a few hundred ms of bash).
+  # ---------------------------------------------------------------------------
+  project-adr-index:
+    name: Project ADR index drift (projects/*/docs/adr vs their README)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.project-adr-index == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-project-adr-index-drift.sh
+
+      - name: Self-test the predicate (bites on a real ADR tree, mutated)
+        run: bash scripts/check-project-adr-index-drift.sh --self-test
+
+      - name: Guard — every project ADR is indexed and its Status matches
+        run: bash scripts/check-project-adr-index-drift.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-374 — post-merge baseline reachability.

@@ -1,6 +1,6 @@
 # ADR-004: 분류(domain/trait) 기반 규칙 시스템을 도입한 이유
 
-- **Status**: Accepted
+- **Status:** Accepted
 - **Date**: 2026-03
 - **Tags**: governance, rules, ai-agent, automation
 
