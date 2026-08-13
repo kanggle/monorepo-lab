@@ -36,6 +36,17 @@ public record ActorContext(String accountId, String tenantId, Set<String> roles)
         // could publish ARTIST_POSTs, and `owns()` below would hand them edit and full
         // visibility over every author's gated content in the tenant. That is an ADR-level
         // change, not a configuration one.
+        //
+        // TASK-MONO-522 / ADR-MONO-063 ACCEPTED — D1: a THIRD way to make it true was
+        // considered and declined. ADR-MONO-061 made a client_credentials token able to carry
+        // `roles`, so a workload — not only a human — could have been issued one of these four
+        // names in order to reach artist-service's directory matchers. D1 chose not to: the
+        // artist directory's write surface is out of v1 product scope, and no workload client
+        // receives an admin-tier role (auth-service's WorkloadRoleCatalog, asserted by its
+        // test). The side door above is therefore shut against machines as well as people, and
+        // this predicate stays permanently false in the fan domain BY DECISION — which is a
+        // stronger statement than the "no caller" one above, because it survives someone
+        // registering a new workload client.
         return hasRole("OPERATOR") || hasRole("ADMIN") || hasRole("SUPER_ADMIN")
                 || hasRole("FAN_OPERATOR");
     }

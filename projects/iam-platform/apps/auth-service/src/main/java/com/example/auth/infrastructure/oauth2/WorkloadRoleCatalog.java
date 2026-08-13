@@ -57,8 +57,17 @@ import java.util.Set;
  * <p>ADR-MONO-061's ACCEPT was contrasted for riders and left exactly one question open:
  * whether fan artist-service's {@code ADMIN_ROLES} matcher
  * ({@code ADMIN}/{@code OPERATOR}/{@code SUPER_ADMIN}/{@code FAN_OPERATOR}) opens to workload
- * identity. That is {@code TASK-MONO-522}'s to answer. Until it does, no workload client may
- * hold one of those roles, and the test enforces it rather than trusting this comment.
+ * identity. <b>{@code TASK-MONO-522} has now answered it — ADR-MONO-063 ACCEPTED — D1: no.</b>
+ * The artist directory's write surface is out of v1 product scope, so no workload client holds
+ * one of those roles, and the test enforces it rather than trusting this comment.
+ *
+ * <p><b>Nothing about the table changed, and that is exactly why this paragraph had to.</b>
+ * What stood here was "until {@code TASK-MONO-522} does, no workload client may hold one" — a
+ * hold, whose stated reason expires the moment that ticket closes. Read a month from now it
+ * would say the constraint was waiting on something already finished, and the natural next act
+ * is to lift it. It is now a decision: reversing it takes an amendment to ADR-MONO-063, not a
+ * closed ticket. Same bytes, different standing (see {@code feedback: retract the exemption
+ * when the defect is fixed}).
  *
  * <h3>Not an account-service lookup — and it must not become one</h3>
  *
@@ -72,9 +81,17 @@ import java.util.Set;
 final class WorkloadRoleCatalog {
 
     /**
-     * Roles that describe a human admin tier. No workload client may hold one until
-     * {@code TASK-MONO-522} decides whether workload identity may reach fan artist-service's
-     * admin surface (ADR-MONO-061 § "이 ACCEPT 가 결정하지 않은 것").
+     * Roles that describe a human admin tier. No workload client may hold one — <b>by decision,
+     * not pending one</b>: ADR-MONO-063 (ACCEPTED — D1) settled the rider ADR-MONO-061 left open
+     * (§ "이 ACCEPT 가 결정하지 않은 것") and closed fan artist-service's admin surface to
+     * workload identity.
+     *
+     * <p>🔴 These four names are not local to artist-service. They are the same four
+     * community-service's {@code ActorContext.isOperator()} accepts, so granting any of them to
+     * a {@code fan-platform} workload would — as a side effect of reaching a directory
+     * matcher — make {@code owns()} true over every author's gated content in the tenant, which
+     * is the option ADR-MONO-059 excluded. The blast radius is why the constraint sits here at
+     * the issuer rather than in the matcher.
      *
      * <p>Declared here rather than only in the test so the constraint is readable at the
      * decision site; asserted in {@code WorkloadRoleCatalogTest} so it is checked rather than
@@ -131,7 +148,8 @@ final class WorkloadRoleCatalog {
             // community-service calls membership/artist read surfaces with the account.read /
             // membership.read / artist.read scopes it was granted (V0009/V0030/V0032). Those
             // surfaces are scope-gated. Whether it may reach artist-service's ADMIN_ROLES
-            // matcher is TASK-MONO-522's open question — deliberately not answered here.
+            // matcher was TASK-MONO-522's open question; ADR-MONO-063 (ACCEPTED — D1) answered
+            // no, so this empty map is now a decision rather than a placeholder for one.
             Map.entry("community-service-client", Map.of()),
             Map.entry("test-internal-client", Map.of()),
 
