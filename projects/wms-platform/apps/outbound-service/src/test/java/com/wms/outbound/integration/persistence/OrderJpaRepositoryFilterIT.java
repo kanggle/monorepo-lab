@@ -107,6 +107,47 @@ class OrderJpaRepositoryFilterIT {
                 .isEqualTo(2L);
     }
 
+    /**
+     * TASK-BE-581 AC-4 / ADR-MONO-064 § D2 — the cell this suite did not have.
+     *
+     * <p>Until § D2 the list path pinned {@code source = FULFILLMENT_ECOMMERCE} on top of
+     * the tenant filter, so a {@code MANUAL} row could not reach a tenant-scoped caller
+     * even if the tenant filter had leaked: the source pin was a second line of defence
+     * that no test ever had to distinguish from the first. § D1 now stamps tenants onto
+     * {@code MANUAL} orders and § D2 removed that second line, so <b>the tenant filter
+     * alone</b> has to hold for exactly the row shape this decision introduced.
+     *
+     * <p>The two {@code MANUAL} rows below differ only in tenant. If the filter were
+     * ever weakened to "tenant matches OR the row is MANUAL" — the shape of mistake §
+     * D2 makes reachable — the sibling row would appear here and nowhere else in the
+     * suite.
+     */
+    @Test
+    @DisplayName("findFiltered — :tenantId isolates MANUAL rows too, now that they carry tenants")
+    void findFiltered_byTenantId_isolatesManualOrdersAcrossTenants() {
+        OrderEntity mine = persistedOrder("ORD-MAN-DEMO", "MANUAL", "demo-corp");
+        OrderEntity theirs = persistedOrder("ORD-MAN-ACME", "MANUAL", "acme-corp");
+        OrderEntity theirEcommerce = persistedOrder("ORD-EC-ACME", "FULFILLMENT_ECOMMERCE", "acme-corp");
+        orderRepository.saveAll(List.of(mine, theirs, theirEcommerce));
+
+        List<OrderEntity> scoped = orderRepository.findFiltered(
+                null, null, null, null, null, "demo-corp", null, null, null, null,
+                PageRequest.of(0, 20));
+
+        assertThat(scoped)
+                .as("a demo-corp caller sees its own MANUAL order and nobody else's")
+                .extracting(OrderEntity::getOrderNo)
+                .containsExactly("ORD-MAN-DEMO");
+        assertThat(orderRepository.countFiltered(
+                null, null, null, null, null, "demo-corp", null, null, null, null))
+                .isEqualTo(1L);
+        // Control: the sibling rows really are present, so the single result above is
+        // isolation and not an empty fixture.
+        assertThat(orderRepository.countFiltered(
+                null, null, null, null, null, "acme-corp", null, null, null, null))
+                .isEqualTo(2L);
+    }
+
     private static OrderEntity persistedOrder(String orderNo, String source, String tenantId) {
         Instant now = Instant.now();
         return new OrderEntity(

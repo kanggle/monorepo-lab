@@ -49,28 +49,50 @@ Responses:
 Enforced at the application layer, not in controllers. Roles are propagated
 through the command record and checked in the use-case service.
 
-#### Tenant scoping (TASK-MONO-304 / ADR-MONO-022 § D9)
+#### Tenant scoping (TASK-MONO-304 / ADR-MONO-022 § D9, amended by ADR-MONO-064)
 
 Beyond the role gate, every order read and mutation is **tenant-scoped** from
 the SIGNED `tenant_id` claim of the access token (never a client header):
 
-- **Native wms callers** (`tenant_id = wms`), platform callers (`tenant_id = *`),
-  and internal flows (no security context) are **unrestricted** — they see and
-  may act on every outbound order. Behaviour is unchanged.
-- **Customer-tenant callers** — e.g. an ecommerce operator admitted to wms via
-  the `entitled_domains` dual-accept (ADR-MONO-019 § D5), whose `tenant_id` is
-  their own tenant (`ecommerce`, …) — are **restricted** to their own tenant's
-  `FULFILLMENT_ECOMMERCE` orders:
-  - `GET /orders` is forced to `tenantId = <caller tenant>` **and**
-    `source = FULFILLMENT_ECOMMERCE` (any client-supplied `source` is overridden).
+- **Native wms callers** (`tenant_id = wms`) and internal flows (no security
+  context — Kafka consumer, scheduler, webhook inbox processor) are
+  **unrestricted**: they see and may act on every outbound order.
+- **Every other authenticated caller** — a customer-tenant operator admitted to
+  wms via the `entitled_domains` dual-accept (ADR-MONO-019 § D5), whose
+  `tenant_id` is its own tenant (`demo-corp`, `ecommerce`, …) — is **restricted**
+  to its own tenant's orders:
+  - `GET /orders` is forced to `tenantId = <caller tenant>`. **No other filter is
+    imposed** — a client-supplied `source` is honoured, not overridden.
   - Any single-order read or mutation (`GET /orders/{id}`, `…/saga`,
     `…/picking-requests`, cancel, pick-confirm, packing create/seal/confirm,
     shipping confirm) on an order whose `tenant_id` does not match the
     caller — including B2B / `null`-tenant orders — returns **403
     `TENANT_SCOPE_DENIED`**.
+- **`POST /orders` stamps the caller's own tenant** onto the created order when
+  the caller is restricted (ADR-MONO-064 § D1). The value comes from the signed
+  claim; the request body has no tenant field and must not gain one. An
+  unrestricted caller creates a tenant-less (B2B / standalone) order as before,
+  and a tenant already carried on the event plane
+  (`FulfillmentRequestedConsumer`) is never overwritten.
 
-The isolation key is `orders.tenant_id`, populated only for
-`FULFILLMENT_ECOMMERCE` orders (ADR-MONO-022 facet d) and `null` otherwise.
+The isolation key is `orders.tenant_id`, and it is the **only** isolation axis.
+
+> 🔴 **Correction (ADR-MONO-064, 2026-08-13).** This section previously stated that
+> `tenant_id` is *"populated only for `FULFILLMENT_ECOMMERCE` orders … and `null`
+> otherwise"*, that `GET /orders` also pins `source = FULFILLMENT_ECOMMERCE`, and
+> that a platform caller (`tenant_id = *`) is unrestricted. All three are now wrong,
+> and the first two described a defect rather than a design: because `POST /orders`
+> did not stamp a tenant, a restricted operator could create an order and then hit
+> **403 on every subsequent operation on it** — read, pick, pack, ship, even cancel —
+> since `requireOrderAccess` denies a tenant-scoped caller access to a `null`-tenant
+> order. Measured on the demo volume 2026-08-13: `outbound_order` 1 row,
+> `tenant_id = NULL`, `GET /orders` → `200` / `totalElements = 0` for the very
+> operator that created it.
+>
+> The third (`tenant_id = *` unrestricted) contradicted wms's own admission gate,
+> which refuses the SUPER_ADMIN wildcard deliberately and uniquely in the fleet
+> (ADR-MONO-048 § D5). A `*` caller is now **restricted**, and no order carries that
+> string as its tenant — see `SecurityContextCallerScopeProvider`.
 
 ### Error Envelope
 

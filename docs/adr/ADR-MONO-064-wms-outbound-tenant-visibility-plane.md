@@ -1,6 +1,6 @@
 # ADR-MONO-064 — wms 출고 주문의 테넌트 가시성 평면
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 **Date:** 2026-08-13
 **주관 티켓:** `TASK-BE-581` (AC-1)
 **선행:** `TASK-MONO-304` · [`ADR-MONO-022`](ADR-MONO-022-ecommerce-wms-fulfillment-integration.md) § D9 (격리 규칙의 출처) · [`ADR-MONO-048`](ADR-MONO-048-shared-reactive-gateway-library.md) § D5 (네 게이트 정책 · wms 만 `*` 를 거부) · [`ADR-MONO-019`](ADR-MONO-019-platform-console-customer-tenant-model.md) § D5/D6 (그 네 게이트의 권위)
@@ -8,7 +8,15 @@
 
 ## History
 
-- 2026-08-13 — PROPOSED. 선택지 A~E 제시. **소유자 결정 대기.**
+- 2026-08-13 — PROPOSED. 선택지 A~E 제시. 소유자 결정 대기.
+- 2026-08-13 — **ACCEPTED — B** (+ R1 = 스코핑 축의 `*` 분기 제거 · R2 = 별도 티켓 분리).
+  § 실측(M1~M6) · § 선택지 · § 추천 은 **byte-unchanged** — finalise 이지 re-decide 가 아니다.
+
+  🔴 **게이트가 실제로 물었다.** 직전 턴의 소유자 응답은 **`"추천대로 진행"`** 이었고,
+  넘기지 않았다. `B` 라는 글자의 출처가 **이 문서의 § 추천**, 즉 에이전트 선호이므로
+  그대로 ACCEPT 하면 규정이 금지하는 *"launders an agent's own preference into an accepted
+  decision"* 과 형태가 구별되지 않는다. 선택지를 명시 제시해 다시 물었고 **B · R1-제거 ·
+  R2-분리** 가 소유자로부터 지정됐다. (같은 결과가 나왔다는 사실은 판단의 정당성과 무관하다.)
 
 ---
 
@@ -241,17 +249,50 @@ wms 는 `PROJECT.md` 가 **multi-tenant 를 명시적 out-of-scope** 로 선언�
 
 ---
 
-## 결과
+## 결정 — B (ACCEPTED 2026-08-13)
 
-**대기 중.** 소유자가 아래 정확형 중 하나를 입력하면 이 문서를 ACCEPTED 로 전환하고
-`TASK-BE-581` AC-1 을 닫는다.
+**B 를 binding 으로 고정하고 A · C · D · E 를 배제한다.**
 
-```
-ADR-MONO-064 ACCEPTED — A
-ADR-MONO-064 ACCEPTED — B
-ADR-MONO-064 ACCEPTED — C
-ADR-MONO-064 ACCEPTED — D
-ADR-MONO-064 ACCEPTED — E
-```
+### D1 — 생성 경로가 호출자의 검증된 테넌트를 `tenant_id` 에 stamp 한다
 
-R1 · R2 에 대한 답을 함께 적어 주면 같은 PR 에서 처리한다.
+restricted 호출자가 만든 주문에 **그 호출자의 서명된 `tenant_id`** 를 박는다.
+클라이언트가 보낸 값이 아니라 `CallerScope` 가 JWT 에서 해석한 값이다(스푸핑 불가).
+
+- unrestricted 호출자(Kafka 컨슈머 · 스케줄러 · 보안 컨텍스트 없음)는 **stamp 하지 않는다** —
+  `FulfillmentRequestedConsumer` 가 명시적으로 싣는 ecommerce 테넌트가 그대로 보존된다.
+- 명령이 이미 `tenantId` 를 지니면 **덮어쓰지 않는다**(이벤트 평면이 권위다).
+
+### D2 — 목록 조회의 `source` pin 을 걷는다. 테넌트 pin 은 유지한다
+
+`CallerScope.scopeListQuery` 는 `tenantId` 만 고정하고 `source` 는 클라이언트 필터를
+그대로 둔다. **격리 축은 `tenant_id` 하나**이며, `source=FULFILLMENT_ECOMMERCE` pin 은
+D1 이전에 "테넌트를 가진 주문 = ecommerce 주문" 이었기에 중복이었던 것이고, D1 이후에는
+정확히 **이 결정이 보이게 하려는 주문을 배제**한다.
+
+🔴 **`requireOrderAccess` 는 byte-unchanged 다.** 그 술어(테넌트 등호, null → 거부)는
+옳았다 — 틀린 것은 주문에 테넌트가 안 박히던 쪽이다.
+
+### D3 (R1) — 스코핑 축에서 `*` → `unrestricted` 분기를 제거한다
+
+`SecurityContextCallerScopeProvider` 는 `PLATFORM_WILDCARD` 를 더 이상 특별 취급하지 않는다.
+`CallerScope` · `CallerScopeProvider` javadoc 의 *"a platform-scope operator (`tenant_id=*`)"*
+문장도 **회수한다** — wms 입장 게이트가 거부하기로 한 신원을 애플리케이션 계층이 무제한으로
+대접하던 모순이 이로써 닫힌다(`ADR-MONO-048` § D5 의 유예는 **거부 쪽으로** 정산됐다).
+
+fail-closed 방향이다: `*` 토큰이 entitlement 로 입장하더라도 이제 `restrictedTo("*")` 이고,
+그 문자열을 `tenant_id` 로 가진 주문은 없으므로 아무것도 보지 못한다.
+
+### D4 (R2) — admin-service 의 무필터 읽기 표면은 **별도 티켓**이다
+
+M5 는 이 ADR 의 근거로 쓰였을 뿐 여기서 고치지 않는다. 범위가 dashboard 컨트롤러 6개 +
+`admin_db` 스키마(22 테이블 전부 테넌트 컬럼 없음)라 성격이 다르다.
+**M5 가 사실이라는 것은 이 ADR 이 확정한다** — 후속 티켓이 이 문서를 근거로 쓸 수 있다.
+
+### 이 결정이 **하지 않는** 것
+
+- `admin-service` 에 테넌트 축을 넣지 않는다 (D4).
+- 기존 `tenant_id IS NULL` 행에 **소급 stamp 하지 않는다** — `source=MANUAL` 인데 테넌트가
+  붙은, 제품이 만들 수 없는 행이 된다(티켓 § Out of Scope). 기존 데모 볼륨의
+  `SO-DEMO-0001` 은 계속 안 보인다. **복구 경로는 볼륨 초기화 + 재시드**다.
+- `ADR-MONO-048` § D5 의 입장-게이트 거부를 건드리지 않는다 — D3 은 **애플리케이션 축을
+  그 거부에 맞추는** 방향이다. `WmsTenantGatePolicyTest` 의 거절 단언은 그대로 유지된다.

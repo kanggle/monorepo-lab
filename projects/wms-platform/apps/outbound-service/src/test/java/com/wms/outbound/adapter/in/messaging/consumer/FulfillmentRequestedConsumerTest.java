@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.example.messaging.dedupe.EventDedupePort;
 import com.wms.outbound.application.service.ReceiveOrderService;
+import com.wms.outbound.application.service.fakes.FakeCallerScopeProvider;
 import com.wms.outbound.application.service.fakes.FakeMasterReadModelPort;
 import com.wms.outbound.application.service.fakes.FakeOrderPersistencePort;
 import com.wms.outbound.application.service.fakes.FakeOutboxWriterPort;
@@ -57,8 +58,12 @@ class FulfillmentRequestedConsumerTest {
         masterReadModel = new FakeMasterReadModelPort();
         dedupePort = new FakeEventDedupePort();
 
+        // ADR-MONO-064 § D1: the consumer runs with no security context, so the
+        // provider's default (unrestricted) is the production shape here — the
+        // tenant on the order comes from the event envelope, never from a caller.
         ReceiveOrderService receiveOrderService = new ReceiveOrderService(
-                orderPersistence, sagaPersistence, outboxWriter, masterReadModel, clock);
+                orderPersistence, sagaPersistence, outboxWriter, masterReadModel,
+                new FakeCallerScopeProvider(), clock);
         consumer = new FulfillmentRequestedConsumer(
                 new EventEnvelopeParser(new ObjectMapper()),
                 dedupePort,
