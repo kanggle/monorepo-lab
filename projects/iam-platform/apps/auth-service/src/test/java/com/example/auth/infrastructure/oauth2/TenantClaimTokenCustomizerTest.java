@@ -1466,8 +1466,104 @@ class TenantClaimTokenCustomizerTest {
     }
 
     // -----------------------------------------------------------------------
+    // client_credentials — workload roles (TASK-MONO-514 / ADR-MONO-061 option C)
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("client_credentials: an enumerated workload client receives its catalog roles")
+    void clientCredentials_enumeratedClient_receivesWorkloadRoles() {
+        RegisteredClient client = buildCcClient("wms-internal-services-client", "wms|B2B_ENTERPRISE");
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.CLIENT_CREDENTIALS);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        // The defect this ADR was written about: the client held the wms.master.write SCOPE
+        // and master-service gates on hasRole('MASTER_WRITE'), so the token was admitted at
+        // the edge and refused by the service. The role is what closes that.
+        assertThat((List<String>) claimsBuilder.build().getClaim("roles"))
+                .containsExactly("MASTER_WRITE");
+        // Still tenant-scoped: a role on a workload token does not widen its audience.
+        assertThat((String) claimsBuilder.build().getClaim("tenant_id")).isEqualTo("wms");
+    }
+
+    @Test
+    @DisplayName("client_credentials: an enumerated client whose decided role set is empty gets NO roles claim")
+    void clientCredentials_enumeratedButEmpty_omitsRolesClaim() {
+        RegisteredClient client = buildCcClient("account-service-client", "global-account-platform|INTERNAL");
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.CLIENT_CREDENTIALS);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        // Omitted, not emitted as [] — nineteen services observe this token today without a
+        // roles claim, and "we decided none" must look identical to them.
+        assertThat(claimsBuilder.build().getClaims()).doesNotContainKey("roles");
+    }
+
+    @Test
+    @DisplayName("client_credentials: a client absent from the catalog gets NO roles — the default is the safety property")
+    void clientCredentials_unenumeratedClient_getsNoRoles() {
+        RegisteredClient client = buildCcClient("some-client-registered-tomorrow", "wms|B2B_ENTERPRISE");
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.CLIENT_CREDENTIALS);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        assertThat(claimsBuilder.build().getClaims()).doesNotContainKey("roles");
+    }
+
+    @Test
+    @DisplayName("client_credentials: the workload roles leg performs NO account-service call (the recursion guard still binds)")
+    void clientCredentials_workloadRoles_makeNoAccountServiceCall() {
+        RegisteredClient client = buildCcClient("wms-internal-services-client", "wms|B2B_ENTERPRISE");
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.CLIENT_CREDENTIALS);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        // A cc issuance is what mints the Bearer used to call account-service. If the roles
+        // leg on this grant ever grows a lookup, issuance re-enters this customizer without
+        // bound — so "no call" is the property, not an incidental consequence of the table
+        // being static today.
+        verify(accountServicePort, never()).listAccountRoles(any(), any());
+        verify(accountServicePort, never()).listEntitledDomains(any());
+    }
+
+    // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
+
+    /**
+     * Builds a {@code client_credentials} {@link RegisteredClient} with a caller-chosen
+     * {@code clientId} — the key {@link WorkloadRoleCatalog} is looked up by. The existing
+     * {@link #buildClient} helper hardcodes {@code test-internal-client}, so the workload-role
+     * cases need their own.
+     */
+    private RegisteredClient buildCcClient(String clientId, String clientName) {
+        return RegisteredClient.withId(UUID.randomUUID().toString())
+                .clientId(clientId)
+                .clientName(clientName)
+                .clientSecret("{noop}secret")
+                .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
+                .build();
+    }
 
     private RegisteredClient buildClient(String clientName) {
         return RegisteredClient.withId(UUID.randomUUID().toString())

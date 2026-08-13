@@ -27,10 +27,17 @@ import java.util.Set;
  * <p>Per {@code auth-service}'s {@code TenantClaimTokenCustomizer}, a {@code client_credentials}
  * access token's {@code sub} is the client-id (the framework default — the customizer only
  * overrides {@code sub} to the account UUID on the {@code authorization_code}/{@code refresh_token}
- * paths, never for {@code client_credentials}), and it carries no {@code roles} claim. An
- * ordinary CUSTOMER token has {@code sub = <account UUID>}. So pinning {@code sub} to the
- * reserved client-id is a positive, fail-closed allow-list: a user token (sub = UUID) and any
- * other platform's client (sub = its own client-id) are rejected with 401.
+ * paths, never for {@code client_credentials}). An ordinary CUSTOMER token has
+ * {@code sub = <account UUID>}. So pinning {@code sub} to the reserved client-id is a positive,
+ * fail-closed allow-list: a user token (sub = UUID) and any other platform's client (sub = its
+ * own client-id) are rejected with 401.
+ *
+ * <p>This paragraph used to add "and it carries no {@code roles} claim" as a second
+ * discriminator. ADR-MONO-061 (TASK-MONO-514) made that no longer universally true — a
+ * workload client may now be granted roles explicitly — so the sentence is removed rather than
+ * left to be relied on by the next reader. Nothing here changes: {@code sub} was always the
+ * predicate, and it is a strictly stronger one, since a role set says what a caller may do and
+ * this validator asks which caller it is.
  *
  * <p>Runs as a decoder-level {@link OAuth2TokenValidator} (alongside {@link AudienceValidator}),
  * so a wrong-subject token fails verification → {@code 401 UNAUTHORIZED} via the existing

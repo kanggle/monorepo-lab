@@ -127,6 +127,22 @@ public class SecurityConfig {
     // (artists, groups, fandoms) consequently has no API caller at all, which is why
     // infra/demo/seed/seed-fan.sh still creates those rows by direct DB write. TASK-MONO-522
     // owns that gap. Re-opening this gate is a role-model decision (a new ADR), not a fix.
+    //
+    // TASK-MONO-514 / ADR-MONO-061 ACCEPTED — C: A THIRD WAY IN NOW EXISTS, AND IS HELD SHUT.
+    // ---------------------------------------------------------------------------------------
+    // The two reasons above were exhaustive only while a machine token structurally could not
+    // carry roles. ADR-MONO-061 removed that: a client_credentials token MAY now carry the
+    // `roles` claim, and community-service-client (fan-platform's workload client) reaches this
+    // service. So "nobody can present an admin-tier role here" turned from a structural fact
+    // into a question about ISSUANCE.
+    //
+    // It is still true, by decision and by test. ADR-MONO-061's ACCEPT was contrasted for
+    // riders and left exactly one question open — whether workload identity may reach THIS
+    // matcher — and assigned it to TASK-MONO-522. Until 522 answers, auth-service's
+    // WorkloadRoleCatalog grants community-service-client no roles at all, its default for an
+    // unlisted client is likewise none, and WorkloadRoleCatalogTest asserts that NO workload
+    // client holds any of the four names below. The guard lives at the issuer because that is
+    // where the decision is; this matcher is unchanged code.
     private static final String[] ADMIN_ROLES = { "ADMIN", "OPERATOR", "SUPER_ADMIN", "FAN_OPERATOR" };
 
     /**

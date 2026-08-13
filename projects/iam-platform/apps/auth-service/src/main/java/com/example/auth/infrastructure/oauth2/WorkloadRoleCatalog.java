@@ -1,0 +1,145 @@
+package com.example.auth.infrastructure.oauth2;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * TASK-MONO-514 (ADR-MONO-061, ACCEPTED 2026-08-13 — option C): the role set a
+ * {@code client_credentials} (workload) client receives on its access token.
+ *
+ * <p>The third principal kind gets the third policy table. Consumers are seeded by
+ * {@link RoleSeedPolicy} (keyed on platform), operators are derived by
+ * {@link OperatorRoleDerivation} (keyed on the selected tenant's entitled domains), and a
+ * workload is neither — it has no account, no entitlement subscription and no platform seed,
+ * so its roles can only be a decision recorded per client. This is that record.
+ *
+ * <h3>Why a workload needs roles at all</h3>
+ *
+ * <p>Because authorization behind the gateway is roles, and only the <em>edge</em> ever looked
+ * at scope. {@code master-service} gates 24 write predicates on
+ * {@code hasRole('MASTER_WRITE') or hasRole('MASTER_ADMIN')}; the wms workload client holds the
+ * {@code wms.master.write} <em>scope</em>, is admitted by the wms gateway on the scope leg
+ * ({@code RoleAdmissions.roleOrScope()}), and is then refused by the service, because a scope
+ * produces no authority. Repo-wide, the number of credentials able to produce
+ * {@code MASTER_WRITE} was <b>zero</b> — not restricted, absent (TASK-MONO-514 AC-0). The
+ * scope's name was right and it opened nothing; that a name exists is not evidence that it
+ * grants anything.
+ *
+ * <h3>Empty by default, and that is the security property</h3>
+ *
+ * <p>A client absent from {@link #GRANTS} receives no roles — including a client registered
+ * tomorrow, which is the case that matters. The {@code roles} claim is read by <b>19 services
+ * across 6 projects</b> (every one that maps it to authorities), so a grant that arrives by
+ * default arrives fleet-wide. ADR-MONO-061 § "무엇이 구속력을 갖나" 3 makes the empty default
+ * binding, and {@code WorkloadRoleCatalogTest} asserts that every seeded
+ * {@code client_credentials} client appears here explicitly — an unlisted client is a
+ * decision nobody made, not a client that happens to need nothing.
+ *
+ * <h3>No admin-tier role is granted here, deliberately</h3>
+ *
+ * <p>ADR-MONO-061's ACCEPT was contrasted for riders and left exactly one question open:
+ * whether fan artist-service's {@code ADMIN_ROLES} matcher
+ * ({@code ADMIN}/{@code OPERATOR}/{@code SUPER_ADMIN}/{@code FAN_OPERATOR}) opens to workload
+ * identity. That is {@code TASK-MONO-522}'s to answer. Until it does, no workload client may
+ * hold one of those roles, and the test enforces it rather than trusting this comment.
+ *
+ * <h3>Not an account-service lookup — and it must not become one</h3>
+ *
+ * <p>This table is consulted from the {@code client_credentials} branch of
+ * {@link TenantClaimTokenCustomizer}, where {@link TenantClaimTokenCustomizer#populateRoles}
+ * and {@code populateEntitledDomains} are both structurally forbidden: a cc issuance is what
+ * mints the Bearer used to call account-service, so an account-service call on that path
+ * re-invokes this customizer — infinite recursion. A pure static table does no I/O, which is
+ * what makes the roles leg reachable on this grant at all. Do not replace it with a lookup.
+ */
+final class WorkloadRoleCatalog {
+
+    /**
+     * Roles that describe a human admin tier. No workload client may hold one until
+     * {@code TASK-MONO-522} decides whether workload identity may reach fan artist-service's
+     * admin surface (ADR-MONO-061 § "이 ACCEPT 가 결정하지 않은 것").
+     *
+     * <p>Declared here rather than only in the test so the constraint is readable at the
+     * decision site; asserted in {@code WorkloadRoleCatalogTest} so it is checked rather than
+     * merely stated.
+     */
+    static final Set<String> ADMIN_TIER_ROLES =
+            Set.of("ADMIN", "OPERATOR", "SUPER_ADMIN", "FAN_OPERATOR");
+
+    /**
+     * Every registered {@code client_credentials} client, with the roles it receives.
+     *
+     * <p>All ten are listed, empty sets included. An empty list here means "measured, and the
+     * answer is none"; an <em>absent</em> client means nobody looked. The distinction is the
+     * point of enumerating clients that get nothing — and it is why the completeness test
+     * compares this key set against the Flyway seeds rather than against itself.
+     *
+     * <p>Population recounted from the auth-service migrations at statement level
+     * (2026-08-13): 16 registered clients, <b>10</b> with the {@code client_credentials}
+     * grant and 6 without. {@code membership-service-client} was revoked by V0029 and is
+     * therefore not here. The count corrects TASK-MONO-514's earlier "12 cc / 4 non-cc", which
+     * also recorded {@code wms-user-flow-client} as a cc client — V0010 seeds it
+     * {@code ["authorization_code","refresh_token"]}.
+     */
+    private static final Map<String, List<String>> GRANTS = Map.ofEntries(
+            // --- wms (tenant: wms) ---
+            // The one grant this ticket exists for. master-service gates create/update on
+            // MASTER_WRITE (deactivate/reactivate on MASTER_ADMIN, which is NOT granted:
+            // the ticket's Goal is "master data can be created through the API", and a
+            // deactivate is a different, higher decision). The client already holds the
+            // wms.master.write scope, so the scope and role axes now agree instead of the
+            // scope naming a capability the token could not exercise.
+            Map.entry("wms-internal-services-client", List.of("MASTER_WRITE")),
+
+            // --- iam platform infrastructure (tenant: global-account-platform) ---
+            // These four authenticate to /internal/** surfaces, which gate on scope or a
+            // subject allow-list — never on roles. Granting them roles would widen them onto
+            // domain surfaces they have no business reaching. Measured, and the answer is none.
+            Map.entry("admin-service-client", List.of()),
+            Map.entry("auth-service-client", List.of()),
+            Map.entry("security-service-client", List.of()),
+            Map.entry("account-service-client", List.of()),
+
+            // --- fan-platform (tenant: fan-platform) ---
+            // community-service calls membership/artist read surfaces with the account.read /
+            // membership.read / artist.read scopes it was granted (V0009/V0030/V0032). Those
+            // surfaces are scope-gated. Whether it may reach artist-service's ADMIN_ROLES
+            // matcher is TASK-MONO-522's open question — deliberately not answered here.
+            Map.entry("community-service-client", List.of()),
+            Map.entry("test-internal-client", List.of()),
+
+            // --- other domain workload clients ---
+            // Registered ahead of their callers; none has a role-gated surface it currently
+            // fails to reach. When one does, it gets a line here and a measurement, not a
+            // default.
+            Map.entry("erp-platform-internal-services-client", List.of()),
+            Map.entry("finance-platform-internal-services-client", List.of()),
+            Map.entry("scm-platform-internal-services-client", List.of()));
+
+    private WorkloadRoleCatalog() {
+    }
+
+    /**
+     * Returns the roles granted to a workload client.
+     *
+     * @param clientId the registered client's {@code client_id}; null/blank/unknown → {@code []}
+     * @return an immutable list of role names, possibly empty, never null. An empty result
+     *         means the {@code roles} claim is omitted from the token entirely (the shape the
+     *         fleet has always seen on a workload token).
+     */
+    static List<String> rolesFor(String clientId) {
+        if (clientId == null || clientId.isBlank()) {
+            return List.of();
+        }
+        return GRANTS.getOrDefault(clientId.trim(), List.of());
+    }
+
+    /**
+     * The client ids this table has an explicit answer for — the set the completeness test
+     * compares against the Flyway seeds.
+     */
+    static Set<String> enumeratedClientIds() {
+        return GRANTS.keySet();
+    }
+}
