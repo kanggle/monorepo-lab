@@ -219,6 +219,10 @@ jobs:
       # and "the guard was weakened" is one of this drift's two arrival paths, so an
       # AND would switch the guard off on exactly the diff that disables it.
       kafka-log-dirs: ${{ steps.filter.outputs.kafka-log-dirs }}
+      # TASK-MONO-527: raw filter, NOT AND-combined with `code-changed`. A libs module
+      # silently losing its CI entry is a workflow-only diff, and a module gaining an
+      # entry in settings.gradle is a build-script diff — neither is `code-changed`.
+      libs-ci-coverage: ${{ steps.filter.outputs.libs-ci-coverage }}
       # TASK-MONO-461: raw filter, NOT AND-combined with `code-changed`. Two of this
       # guard's trigger paths are non-code: the spec (testing-strategy.md) being
       # weakened, and the guard script itself. AND-ing with code-changed would skip
@@ -584,6 +588,15 @@ jobs:
               - '**/docker-compose*.yml'
               - '**/docker-compose*.yaml'
               - 'scripts/check-kafka-log-dirs.sh'
+            # TASK-MONO-527: raw filter, NOT AND-combined with `code-changed`. Both
+            # arrival paths of this drift are non-Java: a module added to
+            # settings.gradle, and the CI task list losing an entry. `code-changed`
+            # keys on source files, so AND-ing it would switch the guard off on the
+            # exact two diffs it exists to police. Pure-positive (MONO-074/075 quirk).
+            libs-ci-coverage:
+              - 'settings.gradle'
+              - '.github/workflows/**'
+              - 'scripts/check-libs-ci-coverage.sh'
             # TASK-MONO-371: platform/contracts/jwt-standard-claims.md declares that
             # every access token MUST carry the claims it lists. It was missing four of
             # them — including tenant_id, which every gateway in the fleet rejects tokens
@@ -851,6 +864,36 @@ jobs:
 
       - name: Guard — every kafka volume is the broker's actual log dir
         run: bash scripts/check-kafka-log-dirs.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-527 — every shared-library module runs its own :check in CI.
+  #
+  # A Gradle module reached only as a compile dependency is BUILT, not TESTED: its
+  # `test` task and anything wired to its `check` never enter the task graph. Seven
+  # of thirteen repo-root libs modules were in that state, holding 206 test cases,
+  # `assertNoServletOnReactiveEdge` and `assertClasspathNeutrality` — none of which
+  # had ever run. Nothing went red, because the modules still compiled.
+  #
+  # This job compares settings.gradle's included libs modules against the task list
+  # in this file. Cheap (a few hundred ms of bash).
+  # ---------------------------------------------------------------------------
+  libs-ci-coverage:
+    name: Shared-lib CI coverage (every libs module runs its own :check)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.libs-ci-coverage == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-libs-ci-coverage.sh
+
+      - name: Self-test the predicate (bites on the real tree, mutated)
+        run: bash scripts/check-libs-ci-coverage.sh --self-test
+
+      - name: Guard — no shared-library module is missing from the CI task list
+        run: bash scripts/check-libs-ci-coverage.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-468/469 — .claude reference integrity guard (commands + agents).
@@ -1486,20 +1529,33 @@ jobs:
         # --dry-run` reaches :libs:java-security-servlet at `compileJava → jar` and stops —
         # its `test` and its `assertClasspathNeutrality` guard are absent from the graph.
         # A module is verified here ONLY if its own `:check` is spelled out on this list.
-        # java-security-servlet was added when TASK-MONO-521 promoted a security verdict
-        # class into it; the modules still missing (java-gateway, java-notification,
-        # java-web-servlet, payment-core/portone/toss) and the root-project
-        # `assertNoApiOnSharedLibs` are tracked by TASK-MONO-527 — do not read their absence
-        # as a decision.
+        #
+        # TASK-MONO-527 completed the list: all 13 repo-root libs modules are named here.
+        # Turning on the six that had never run added 206 test cases plus
+        # `assertNoServletOnReactiveEdge` (ADR-MONO-048 § D1). `:assertNoApiOnSharedLibs`
+        # is the ROOT PROJECT's task and is named explicitly: it hangs off the root
+        # `check`, and CI never invokes a bare root `:check`, so its own comment claiming
+        # it was "reachable on every code change" had been false since it was written.
+        #
+        # `scripts/check-libs-ci-coverage.sh` (job `libs-ci-coverage`) fails if a module
+        # is included by settings.gradle and missing from this list. Do not delete an
+        # entry to make a build pass — that restores the silence the guard exists to end.
         run: >-
           ./gradlew
+          :assertNoApiOnSharedLibs
           :libs:java-common:check
+          :libs:java-gateway:check
           :libs:java-messaging:check
+          :libs:java-notification:check
           :libs:java-observability:check
           :libs:java-security:check
           :libs:java-security-servlet:check
           :libs:java-test-support:check
           :libs:java-web:check
+          :libs:java-web-servlet:check
+          :libs:payment-core:check
+          :libs:payment-portone:check
+          :libs:payment-toss:check
           :projects:wms-platform:apps:gateway-service:check
           :projects:wms-platform:apps:inbound-service:check
           :projects:wms-platform:apps:inventory-service:check

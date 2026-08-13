@@ -117,7 +117,21 @@ tasks.register('assertNoApiOnSharedLibs') {
     }
 }
 
-// The root `check` runs in CI's "Build & Test (JDK 21, Linux)" job, so this assertion is
-// reachable on every code change — not only when someone happens to build the module they
-// broke. A guard that does not run reports green (TASK-MONO-359 / TASK-MONO-360).
+// ---------------------------------------------------------------------------
+// REACHABILITY — including a correction of what this comment used to claim.
+//
+// It read: "The root `check` runs in CI's 'Build & Test (JDK 21, Linux)' job, so this
+// assertion is reachable on every code change." That was FALSE from the day it was
+// written, and TASK-MONO-527 measured it: the job invokes an explicit task list
+// (`./gradlew :libs:…:check :projects:…:check`) and never a bare root `:check`, so the
+// root project's own `check` was never in the task graph. The assertion had not run once.
+//
+// The sentence that comment cited — "a guard that does not run reports green"
+// (TASK-MONO-359 / TASK-MONO-360) — was describing itself.
+//
+// The wiring below STAYS: it is what puts the assertion into a developer's local
+// `./gradlew check`. CI reachability is a SEPARATE surface and comes from naming
+// `:assertNoApiOnSharedLibs` explicitly on that job's task list, which is where it now
+// is. Do not infer either surface from the other — that inference is the whole defect.
+// ---------------------------------------------------------------------------
 tasks.named('check') { dependsOn 'assertNoApiOnSharedLibs' }
