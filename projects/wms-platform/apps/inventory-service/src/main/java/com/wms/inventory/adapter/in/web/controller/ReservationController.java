@@ -41,6 +41,33 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>Method-level {@code @PreAuthorize} mirrors the contract's role table:
  * RESERVE for create / confirm; RESERVE or ADMIN for release; READ for queries.
+ *
+ * <h2>This is the MANUAL surface — the saga does not come through here (TASK-MONO-528)</h2>
+ *
+ * <p>Measured 2026-08-13: <b>zero callers repo-wide</b>. The outbound saga allocates over
+ * Kafka — {@code ReceiveOrderService} publishes {@code outbound.picking.requested} in the
+ * same transaction as order creation (saga step 1), and
+ * {@code PickingRequestedConsumer} invokes {@code ReserveStockService}, the very use case
+ * {@link #create} wraps. A Kafka consumer carries no JWT, so <b>that path evaluates no
+ * role at all</b>; it is trusted by being inside the boundary.
+ *
+ * <p>Live proof from an untouched demo database: {@code outbound.order.received}
+ * 09:42:03.860 → {@code outbound.picking.requested} 09:42:03.885 → {@code reservation}
+ * row {@code RESERVED} 09:42:05.464 (+ {@code inventory_movement} {@code PICKING} ×2).
+ * {@code PickingFlowIntegrationTest} pins the same path in CI.
+ *
+ * <p><b>Why that matters here, and why nothing was granted.</b> Two documents used to say
+ * {@code outbound-service} calls this surface with an {@code INVENTORY_RESERVE}
+ * service-account JWT ({@code inventory-service-api.md} § Authorization, and this
+ * service's {@code SecurityConfig}); both were false — {@code outbound-service} declares
+ * no HTTP client of any kind. Reading them, {@code TASK-MONO-528} was filed to find a
+ * workload credential for a reserve step that was never blocked. It decided to grant
+ * {@code INVENTORY_RESERVE} to <b>no</b> client: issuing it would open a surface with no
+ * caller, which is how a permission ends up wider than anything that uses it.
+ *
+ * <p>These endpoints stay, deliberately — they are the out-of-band path for operator
+ * recovery, and {@code ReservationControllerSliceTest} keeps their role gate honest.
+ * If a caller ever appears, the grant is a decision to take then, with a caller to point at.
  */
 @RestController
 @RequestMapping("/api/v1/inventory/reservations")

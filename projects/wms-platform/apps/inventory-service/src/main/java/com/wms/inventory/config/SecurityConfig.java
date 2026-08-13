@@ -36,8 +36,13 @@ import org.springframework.security.web.access.AccessDeniedHandler;
  *   <li>{@code INVENTORY_READ} — query endpoints</li>
  *   <li>{@code INVENTORY_WRITE} — adjustments / mark-damaged / transfers</li>
  *   <li>{@code INVENTORY_ADMIN} — write-off-damaged / RESERVED-bucket adjustment / manual release</li>
- *   <li>{@code INVENTORY_RESERVE} — service account used by {@code outbound-service}
- *       for the reservation REST surface</li>
+ *   <li>{@code INVENTORY_RESERVE} — guards the <b>manual</b> reservation REST surface.
+ *       🔴 This line used to read "service account used by {@code outbound-service}", and
+ *       that was measured false (TASK-MONO-528, 2026-08-13): {@code outbound-service}
+ *       makes no HTTP calls at all. The outbound saga allocates over Kafka
+ *       ({@code outbound.picking.requested} → {@code PickingRequestedConsumer} →
+ *       {@code ReserveStockService}), a path that evaluates no role because a consumer
+ *       carries no JWT. Nothing holds this role today and nothing calls these endpoints.</li>
  * </ul>
  *
  * <p>JWT role claims may appear under {@code role} (single string or array) or
