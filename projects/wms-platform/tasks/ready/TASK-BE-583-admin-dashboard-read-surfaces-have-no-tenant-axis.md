@@ -91,15 +91,104 @@ admin_db  information_schema 전수  22개 테이블  ⇒  tenant 컬럼 0개 (�
 
 ---
 
+# ✅ AC-0 실측 (2026-08-13) — 전제 유지. 그리고 **누출 경로가 티켓이 적은 것과 다르다**
+
+## ① 컨트롤러 전수 — **8개**다 (티켓의 "6개로 추정" 은 틀렸다)
+
+`admin-service` 컨트롤러 **13개** 중 `/api/v1/admin/dashboard/**` 읽기 표면은 **8개**:
+
+| 컨트롤러 | 경로 | 인가 |
+|---|---|---|
+| `AdjustmentAuditController` | `…/dashboard/adjustments` | `hasRole('WMS_VIEWER')` |
+| `AlertDashboardController` | `…/dashboard/alerts` | `hasRole('WMS_VIEWER')` |
+| `AsnDashboardController` | `…/dashboard/asns` | `hasRole('WMS_VIEWER')` |
+| `InventoryDashboardController` | `…/dashboard/inventory` | `hasRole('WMS_VIEWER')` |
+| `MasterRefController` | `…/dashboard/refs` | `hasRole('WMS_VIEWER')` |
+| `OrderDashboardController` | `…/dashboard/orders` | `hasRole('WMS_VIEWER')` |
+| `ShipmentDashboardController` | `…/dashboard/shipments` | `hasRole('WMS_VIEWER')` |
+| `ThroughputDashboardController` | `…/dashboard/throughput` | `hasRole('WMS_VIEWER')` |
+
+나머지 5개는 이 티켓 밖: `Assignment`/`Role`/`User` = `hasAnyRole('WMS_ADMIN','WMS_SUPERADMIN')`,
+`Operations` = `hasRole('WMS_ADMIN')`, `Settings` = 컨트롤러엔 술어 없음(아래 ③).
+
+## ② 🔴 테넌트 처리가 **어느 계층에도 없다** — 컨트롤러만 본 게 아니다
+
+`admin-service` `src/main/java` 전체에서 `tenant` 를 grep 하면 **18건이고 전부 보안 설정
+2파일**(`SecurityConfig`, `OAuth2ResourceServerConfig`)이다 — 즉 *토큰을 들일지 말지*만 정하고,
+**컨트롤러·서비스·리포지토리·프로젝션에는 0건**이다.
+
+```
+tenant grep (main 전체)   18건  ← 전부 SecurityConfig / OAuth2ResourceServerConfig
+대조군 repository grep    389건 ← 탐지기가 전 트리를 훑는다는 증거
+admin_db 테넌트 컬럼      0개   (대조군: 22 테이블 · 217 컬럼을 스캔했다)
+```
+
+## ③ 🔵 `SettingsController` 의 "인가 없음" 은 **내 오탐이었다**
+
+컨트롤러에 `@PreAuthorize` 가 없어 `PUT /{key}` 가 열려 있는 줄 알았다. 실제로는
+`SettingsService.upsert` 에 `@PreAuthorize("hasAnyRole('WMS_ADMIN','WMS_SUPERADMIN')")` 가
+있고 `SettingsServiceAuthzTest` 가 OPERATOR 거부까지 단언한다. **인가는 서비스 계층에 있다**
+— 이 저장소가 명시한 패턴이다. 🔴 컨트롤러 애너테이션은 "인가되는가" 의 **대리지표**였고,
+그래서 ② 도 컨트롤러가 아니라 전 계층으로 다시 쟀다.
+
+## ④ 🔴🔴 진짜 누출 경로 — `WMS_VIEWER` 는 **entitlement 만으로 합성**된다
+
+```java
+// admin-service SecurityConfig — JwtGrantedAuthoritiesConverter
+if (TenantClaimValidator.isEntitled(jwt, ENTITLEMENT_DOMAIN)) {   // entitled_domains ∋ "wms"
+    authorities.add(new SimpleGrantedAuthority(VIEWER_ROLE));     // ROLE_WMS_VIEWER
+}
+```
+
+⇒ `WMS_VIEWER` 보유자는 *"그 역할을 부여받은 운영자"* 가 아니라 **wms-entitled 테넌트의 모든
+토큰**이다. 실측 모집단(`tenant_domain_subscription` where `domain_key='wms'`):
+
+```
+acme-corp · demo-corp · ecommerce · initech-corp · wms      (5개 — 고객 테넌트 4 + 네이티브 1)
+```
+
+그리고 `OperatorRoleDerivation` 의 `WMS_OPERATOR_ROLES` 에는 **`WMS_VIEWER` 가 없다**
+(`WMS_OPERATOR` · `OUTBOUND_READ/WRITE` · `INBOUND_READ/WRITE` · `INVENTORY_READ/WRITE` ·
+`MASTER_READ` 뿐) ⇒ **VIEWER 로 가는 유일한 경로가 이 합성**이다.
+
+⇒ **고객 테넌트 4곳이 서로의 창고 데이터를 8개 대시보드에서 전부 읽는다.**
+
+## ⑤ 노출은 **실재하되 현재 부피가 작다** — 그리고 `ADR-MONO-064` 가 이것을 키웠다
+
+```
+admin_order_summary 1 · admin_asn_summary 1 · admin_inventory_snapshot 1 ·
+admin_throughput_inbound_daily 1 · 나머지 4개 0행
+outbound_order:  SO-DEMO-0001 <NULL> · SO-AC3-181910 demo-corp
+```
+
+기계는 완전히 살아 있고 데이터만 적다. 🔴 그리고 정직하게 적는다 — 누출 자체는
+`FULFILLMENT_ECOMMERCE` 주문에 대해 **이전부터 있었고**(그 주문들은 원래 테넌트를 지녔다),
+`ADR-MONO-064` § D1 이 `MANUAL` 주문까지 테넌트를 갖게 하면서 **대상 집합이 넓어졌다.**
+D1 이 결함을 만든 것은 아니지만, D1 이후 이 티켓은 더 미룰 수 없다.
+
+---
+
 # Acceptance Criteria
 
-- [ ] **AC-0 (실측)** — dashboard 컨트롤러 전수 + 인가 술어 표 · `admin_db` 테넌트 컬럼
-      재확인 · `WMS_VIEWER` 를 얻는 신원 전수. 🔴 0건이면 "0건" 이라 적고 **대조군**을 남긴다
-- [ ] **AC-1 (결정)** — A/B 중 하나 + 근거. **B 면 ADR ACCEPTED 선행**
+- [x] **AC-0 (실측) — 완료 2026-08-13.** 컨트롤러 8개(추정 6 → 실측 8) · 전 계층 tenant 0건
+      (대조군 389) · `admin_db` 0/217 컬럼 · 🔴🔴 신규: `WMS_VIEWER` 는 **entitlement 합성**이
+      유일 경로이고 모집단이 **고객 테넌트 4곳**이다 · 🔵 `SettingsController` 인가 부재는
+      **내 오탐**(서비스 계층에 있음). 상세는 위 §
+- [ ] **AC-1 (결정)** — A/B 중 하나 + 근거. **B 면 ADR ACCEPTED 선행**.
+      🔴 **AC-0 이 A 의 전제를 깼다** — A("전역 뷰로 명문화")는 보유자가 *wms 네이티브
+      운영자*일 때만 정직하다. 실측 보유자는 **고객 테넌트 4곳**이므로, 지금 상태를 그대로
+      명문화하면 *"고객사가 서로의 창고 데이터를 본다"* 를 제품 사양으로 적는 것이 된다.
+      ⇒ A 를 고르려면 **합성 범위를 함께 좁혀야** 하고, 그러면 `WMS_VIEWER` 를 주는 경로가
+      저장소에 하나도 남지 않아(④) **콘솔 wms 대시보드가 전부 막힌다**. 즉 A 도 무비용이 아니다
 - [ ] **AC-2 (구현)** — 결정대로. A 면 컨트롤러 javadoc + 계약 문서에 전역 뷰임을 명문화
       (주석만이 아니라 **계약**에), B 면 마이그레이션 + 프로젝션 + 필터 + 회귀 테스트
-- [ ] **AC-3 (형제 전수)** — 같은 "관문 없는 읽기 표면" 이 wms 의 다른 서비스에도 있는지.
-      `admin-service` 만이라는 보장이 없다
+- [x] **AC-3 (형제 전수) — 완료 2026-08-13. 답은 "구조적으로 admin-service 하나".**
+      `information_schema` 전수(손으로 안 적음) 6개 DB · **91개 테이블**에서 테넌트 컬럼은
+      `outbound_db.outbound_order.tenant_id` **하나**뿐이다. ⇒ 다른 서비스(inbound ·
+      inventory · master · notification)는 **누출할 테넌트 데이터 자체가 없다**.
+      테넌트 축을 가진 서비스는 outbound 하나이고, 그것을 지키는 `CallerScope` 도
+      outbound 에만 있으며, `admin-service` 는 그 데이터를 **축 없이 프로젝션**한다.
+      🔵 즉 "0건" 이 아니라 **"모집단이 1이고 그 1이 이 티켓"** 이다
 
 ---
 
