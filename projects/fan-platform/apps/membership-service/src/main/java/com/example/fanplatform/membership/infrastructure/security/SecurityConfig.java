@@ -2,6 +2,7 @@ package com.example.fanplatform.membership.infrastructure.security;
 
 import com.example.security.oauth2.TenantClaimValidator;
 import com.example.security.servlet.ResourceServerChainAssembler;
+import com.example.security.servlet.WorkloadIdentityAuthoritiesConverter;
 import com.example.security.servlet.actor.ActorContextJwtAuthenticationConverter;
 
 import com.example.fanplatform.membership.application.ActorContext;
@@ -65,6 +66,19 @@ public class SecurityConfig {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     /**
+     * The workload scope IAM grants {@code community-service-client} for this service's
+     * {@code /internal/membership/**} surface (seed migration V0009). Only a machine token issued
+     * for that client carries it, which is what makes it usable as a positive discriminator: it
+     * joins the machine scope family ({@code account.read}, {@code artist.read}) that IAM grants
+     * only to {@code client_credentials} clients, never to a web client on a user token.
+     *
+     * <p>This constant is <b>policy and stays here</b>. The matching mechanism was promoted to
+     * {@link WorkloadIdentityAuthoritiesConverter} (TASK-MONO-521); the scope was not, so a change
+     * to what opens this service's internal surface cannot silently change a sibling's.
+     */
+    public static final String REQUIRED_WORKLOAD_SCOPE = "membership.read";
+
+    /**
      * Order(1): the workload-identity {@code /internal/**} chain. Separate
      * {@code SecurityFilterChain} from the end-user chain (AC-5).
      */
@@ -81,7 +95,8 @@ public class SecurityConfig {
                 .oauth2ResourceServer(rs -> rs
                         .jwt(jwt -> jwt
                                 .decoder(internalJwtDecoder)
-                                .jwtAuthenticationConverter(new WorkloadIdentityAuthoritiesConverter()))
+                                .jwtAuthenticationConverter(
+                                        new WorkloadIdentityAuthoritiesConverter(REQUIRED_WORKLOAD_SCOPE)))
                         // No token → 401.
                         .authenticationEntryPoint(SecurityConfig::onInternalAuthFailure)
                         // Valid token but not a workload identity (end-user) → 403.

@@ -1480,12 +1480,24 @@ jobs:
         # - 11 ecommerce backend services run (auth-service removed by TASK-BE-132).
         # Use :check (not :test) on every entry — matches the wms style, and
         # picks up jacoco / lint where defined.
+        #
+        # A libs module reached only as a COMPILE DEPENDENCY never runs its own tests.
+        # TASK-MONO-521 measured it: `:projects:fan-platform:apps:artist-service:check
+        # --dry-run` reaches :libs:java-security-servlet at `compileJava → jar` and stops —
+        # its `test` and its `assertClasspathNeutrality` guard are absent from the graph.
+        # A module is verified here ONLY if its own `:check` is spelled out on this list.
+        # java-security-servlet was added when TASK-MONO-521 promoted a security verdict
+        # class into it; the modules still missing (java-gateway, java-notification,
+        # java-web-servlet, payment-core/portone/toss) and the root-project
+        # `assertNoApiOnSharedLibs` are tracked by TASK-MONO-527 — do not read their absence
+        # as a decision.
         run: >-
           ./gradlew
           :libs:java-common:check
           :libs:java-messaging:check
           :libs:java-observability:check
           :libs:java-security:check
+          :libs:java-security-servlet:check
           :libs:java-test-support:check
           :libs:java-web:check
           :projects:wms-platform:apps:gateway-service:check
