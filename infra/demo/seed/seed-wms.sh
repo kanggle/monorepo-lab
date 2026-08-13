@@ -23,11 +23,29 @@
 #  전문은 wms-devseed.override.yml 헤더.)
 #
 # -----------------------------------------------------------------------------
-# 🔴 출고는 **주문 생성까지**가 현실적 목표다
+# 🔴 출고는 **주문 생성까지**가 이 시드의 몫이다 — 다만 그 사유가 틀려 있었다
 # -----------------------------------------------------------------------------
-# 예약(allocation)은 `INVENTORY_RESERVE` 역할을 요구하는데 `OperatorRoleDerivation`
-# 이 그것을 주지 않고, 배송은 도달 불가 TMS 스텁(`WMS_TMS_BASE_URL`)에 의존한다.
-# 주문까지 넣으면 `/wms/outbound` 화면은 채워진다 — 그 이상은 이 시드의 몫이 아니다.
+# 이 블록은 *"예약(allocation)은 `INVENTORY_RESERVE` 역할을 요구하는데
+# `OperatorRoleDerivation` 이 그것을 주지 않는다"* 라고 적고 있었다.
+# **틀렸다** (TASK-MONO-528, 2026-08-13 실측).
+#
+# 예약은 막혀 있지 않다 — **주문을 넣는 순간 자동으로 일어난다.** `ReceiveOrderService`
+# 가 주문 생성과 같은 트랜잭션에서 `outbound.picking.requested` 를 발행하고(사가 step 1),
+# inventory-service 의 `PickingRequestedConsumer` 가 받아 `ReserveStockService` 를 부른다.
+# **Kafka 컨슈머에는 JWT 가 없으므로 role 검사 자체가 없다.**
+# 실측(직전 데모 DB, 손대지 않은 상태): `outbound.order.received` 09:42:03.860 →
+# `outbound.picking.requested` 09:42:03.885 → `reservation` 행 `RESERVED` 09:42:05.464,
+# `inventory_movement` `PICKING` 2건, `outbound_saga` = `RESERVED`.
+#
+# 🔴 그때 본 403 은 **운영자 토큰으로 manual REST**(`POST /api/v1/inventory/reservations`)
+# 를 부른 것이고, 그 표면은 사가가 쓰지 않는다(저장소 전체 호출자 0건). 사가는 그 403 이
+# 찍히던 순간에도 예약에 성공하고 있었다 — **이름이 같은 두 경로를 한 사건으로 읽은 것**이
+# 오독의 원인이다.
+#
+# 그래서 이 시드가 주문에서 멈추는 진짜 이유는 예약이 아니라 **그다음**이다: 피킹 확정을
+# 이 시드가 부르지 않고(`picking_confirmation` 0건), 배송은 도달 불가 TMS 스텁
+# (`WMS_TMS_BASE_URL`)에 의존한다. 주문까지 넣으면 `/wms/outbound` 화면은 채워지고
+# **예약은 덤으로 따라온다** — 그 이상은 이 시드의 몫이 아니다.
 #
 # -----------------------------------------------------------------------------
 # 🔴 계측 함정 (재현 시 먼저 읽을 것)

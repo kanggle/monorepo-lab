@@ -153,6 +153,15 @@ final class WorkloadRoleCatalog {
             Map.entry("community-service-client", Map.of()),
             Map.entry("test-internal-client", Map.of()),
 
+            // TASK-MONO-528 asked whether INVENTORY_RESERVE belongs on one of the entries
+            // below, and the answer measured out as NO — so nothing changed, deliberately.
+            // The wms outbound saga was believed to be blocked on that role; it is not. It
+            // allocates over Kafka (outbound.picking.requested -> PickingRequestedConsumer ->
+            // ReserveStockService), and a consumer carries no JWT, so no role is evaluated on
+            // that path at all. The REST surface INVENTORY_RESERVE guards has zero callers
+            // repo-wide. Granting it would have widened a credential onto code nobody
+            // invokes — the exact shape this catalog's empty default exists to prevent.
+            //
             // --- other domain workload clients ---
             // Registered ahead of their callers; none has a role-gated surface it currently
             // fails to reach. When one does, it gets a line here and a measurement, not a

@@ -73,6 +73,33 @@ class OperatorRoleDerivationTest {
                         "INVENTORY_ADMIN", "MASTER_ADMIN", "MASTER_WRITE");
     }
 
+    /**
+     * TASK-MONO-528 AC-4 — the human plane never acquires {@code INVENTORY_RESERVE}.
+     *
+     * <p>The wms contract states it as a rule, not a preference
+     * ({@code inventory-service-api.md} § Authorization): <em>"`INVENTORY_RESERVE` is a
+     * machine-to-machine scope. Human users do not hold it."</em> Every operator role this
+     * class can derive is, by construction, held by a human, so widening any arm to include
+     * it would break that sentence.
+     *
+     * <p>Asserted across <b>every</b> domain key the table knows rather than wms alone: the
+     * contract binds the role, not one domain's arm, and a future arm is exactly where this
+     * would slip in unnoticed. {@code TASK-MONO-528} measured that nothing calls the REST
+     * surface this role guards, so the pressure to "just grant it somewhere" is real and
+     * this test is what makes that a decision instead of an edit.
+     */
+    @Test
+    @DisplayName("no domain derives INVENTORY_RESERVE — the contract forbids humans holding it (TASK-MONO-528 AC-4)")
+    void noDomain_derivesInventoryReserve() {
+        List<String> everyKnownDomain =
+                List.of("wms", "ecommerce", "scm", "erp", "finance", "mes", "fan", "fan-platform");
+
+        assertThat(OperatorRoleDerivation.fromEntitledDomains(everyKnownDomain))
+                .as("union across every known domain key")
+                .isNotEmpty()                       // non-vacuity: an empty union would pass trivially
+                .doesNotContain("INVENTORY_RESERVE");
+    }
+
     @Test
     @DisplayName("multiple domains → union of operator roles, stable input order")
     void multipleDomains_unionStableOrder() {

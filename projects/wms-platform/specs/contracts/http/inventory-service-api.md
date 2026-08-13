@@ -38,13 +38,32 @@ Responses:
 | `INVENTORY_READ` | All GET endpoints |
 | `INVENTORY_WRITE` | POST adjustments, transfers, mark-damaged |
 | `INVENTORY_ADMIN` | Write-off damaged, manual reservation release |
-| `INVENTORY_RESERVE` | Service-account scope — `outbound-service` creates / confirms / releases reservations |
+| `INVENTORY_RESERVE` | Service-account scope — guards the **manual** reservation REST surface (§4.1–4.3). No caller holds it today; see the correction below |
 
 Enforced at the application layer, not in controllers.
 
 `INVENTORY_RESERVE` is a machine-to-machine scope. Human users do not hold it.
-`outbound-service` presents a service-account JWT with this scope for synchronous
-reservation calls. See `platform/security-rules.md` for service-account flow.
+
+> 🔴 **Correction — TASK-MONO-528 (measured 2026-08-13).** This paragraph used to read
+> *"`outbound-service` presents a service-account JWT with this scope for synchronous
+> reservation calls."* **That never happened.** `outbound-service` makes no HTTP calls at
+> all — it declares no `RestClient`/`WebClient`/`RestTemplate`/`FeignClient`, and neither
+> does any other wms service: the domain integrates over Kafka.
+>
+> **The outbound saga reserves over events, not over this surface.** `ReceiveOrderService`
+> publishes `outbound.picking.requested` in the same transaction as order creation (saga
+> step 1); inventory-service's `PickingRequestedConsumer` consumes it and invokes
+> `ReserveStockService` — the same use case §4.1 wraps. A Kafka consumer carries no JWT, so
+> **no role is evaluated on that path**; it is trusted by being inside the boundary.
+>
+> Live evidence, from an untouched prior demo run: `outbound.order.received` 09:42:03.860 →
+> `outbound.picking.requested` 09:42:03.885 → `reservation` `RESERVED` 09:42:05.464, with
+> `inventory_movement` `PICKING` ×2. `PickingFlowIntegrationTest` pins the same path.
+>
+> §4.1–4.3 therefore describe a **manual / recovery** surface. It is reachable in principle
+> and **unreached in practice** — repo-wide, zero callers. TASK-MONO-528 decided to issue
+> `INVENTORY_RESERVE` to no workload client, because granting it would open a surface
+> nobody calls. See `platform/security-rules.md` for the service-account flow itself.
 
 ### Error Envelope
 
@@ -488,8 +507,15 @@ Query: pagination + `warehouseId`, `sourceLocationId`, `targetLocationId`, `skuI
 
 ## 4. Reservations
 
-Used by `outbound-service` (service-account scope `INVENTORY_RESERVE`) for the
-W4 two-phase allocation. Human operators with `INVENTORY_ADMIN` may release manually.
+The **manual / recovery** surface over the W4 two-phase allocation. Human operators with
+`INVENTORY_ADMIN` may release manually.
+
+🔴 **Not the saga's path** (TASK-MONO-528, measured 2026-08-13). This section used to say
+*"Used by `outbound-service` (service-account scope `INVENTORY_RESERVE`)"* — it is not, and
+never was. The outbound saga allocates over Kafka (`outbound.picking.requested` →
+`PickingRequestedConsumer` → `ReserveStockService`), which evaluates no role because a
+consumer carries no JWT. These endpoints wrap the same use cases for out-of-band use and
+currently have **zero callers repo-wide**. Full argument + evidence: § Authorization above.
 
 ### 4.1 POST `/api/v1/inventory/reservations` — Create reservation
 
