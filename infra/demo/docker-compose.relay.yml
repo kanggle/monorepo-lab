@@ -1,0 +1,74 @@
+# =============================================================================
+# infra/demo/docker-compose.relay.yml — 크로스프로젝트 이벤트 릴레이 (TASK-MONO-511)
+# =============================================================================
+# ADR-MONO-062 ACCEPTED — B. 자기 compose 프로젝트(`-p relay`)로 뜨고, 네 프로젝트의
+# 네트워크에 **external 로** 참여한다.
+#
+# ## 여기가 A 와 갈리는 지점이다 — 읽는 사람이 헷갈릴 유일한 곳이라 명시한다
+#
+# 릴레이는 네 네트워크에 붙는다. 브로커는 **한 곳도 움직이지 않는다.**
+#
+#   * 브로커끼리는 여전히 서로 못 본다(경로 없음). 릴레이만 각각을 본다.
+#   * 공유 네트워크에 브로커를 올리지 않았다 — `traefik-net` 에도, 새 전용 망에도.
+#   * 소비자 설정은 한 글자도 안 바뀐다. 여전히 `kafka:9092`.
+#
+# 🔴 ADR 의 판정 문장 그대로: *"소비자에 두 번째 브로커 주소가 들어가기 시작하면 그건
+# B 가 아니라 A 다."* 이 파일은 소비자를 건드리지 않는다.
+#
+# ## 네트워크 이름이 `<compose 프로젝트>_<net>` 인 이유
+#
+# 각 프로젝트가 자기 `-p <slug>` 로 뜨므로 네트워크 실명은 그 슬러그가 접두로 붙는다
+# (`iam_iam-net` 등). 🔴 slug 는 디렉터리명이 아니라 compose 의 `name:` 이다 —
+# scm 은 디렉터리가 `scm-platform` 인데 네트워크는 `scm_scm-platform-net` 이다.
+# 이름을 틀리면 `network not found` 로 **시끄럽게** 실패한다(다행인 쪽이다).
+#
+# ## 기동 순서
+#
+# `depends_on` 은 compose 프로젝트를 넘지 못한다. `demo-up.sh` 가 릴레이를 **맨 마지막**
+# 에 올리는 것으로 대신한다. 브로커가 늦어도 MM2 는 재시도하므로 치명적이지 않지만,
+# 로그가 깨끗한 편이 낫다.
+# =============================================================================
+name: relay
+
+services:
+  mirror-maker:
+    image: apache/kafka:3.7.0
+    container_name: demo-event-relay
+    restart: unless-stopped
+    # 🔵 데모 메모리 예산(TASK-MONO-399)을 위해 힙을 명시적으로 낮춘다. MM2 는 커넥터
+    # 5개(대상 클러스터 3곳의 herder)를 한 JVM 에서 돌리고, 이 트래픽 양에서는 256m 로
+    # 충분하다. 기본값(1G)을 그대로 두면 데모 한 칸을 통째로 먹는다.
+    environment:
+      KAFKA_HEAP_OPTS: "-Xmx256m -Xms128m"
+    volumes:
+      - ./relay/mm2.properties:/opt/kafka/config/mm2.properties:ro
+    command: ["/opt/kafka/bin/connect-mirror-maker.sh", "/opt/kafka/config/mm2.properties"]
+    healthcheck:
+      # 🔴 "컨테이너가 살아 있다" 는 도달 판정이 아니다(이 티켓의 결함이 정확히 그
+      # 모양이었다). 이 프로브는 기동 여부만 본다 — 실제 도달 판정은
+      # `scripts/check-cross-project-topic-relay.sh`(정적)와
+      # `infra/demo/relay/probe-relay.sh`(라이브)가 한다.
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server iam-kafka:9095 >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - iam-net
+      - ecommerce-net
+      - wms-net
+      - scm-net
+
+networks:
+  iam-net:
+    external: true
+    name: iam_iam-net
+  ecommerce-net:
+    external: true
+    name: ecommerce_ecommerce-net
+  wms-net:
+    external: true
+    name: wms_wms-net
+  scm-net:
+    external: true
+    name: scm_scm-platform-net

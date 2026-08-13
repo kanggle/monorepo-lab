@@ -291,7 +291,11 @@ services:
       POSTGRES_DB: scm_demand_planning
       POSTGRES_USER: ${POSTGRES_USER:-scm}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scm}
-      KAFKA_BOOTSTRAP: ${WMS_KAFKA_BOOTSTRAP:-kafka:9092}
+      # TASK-MONO-511 / ADR-MONO-062 B — was `${WMS_KAFKA_BOOTSTRAP:-kafka:9092}`. This
+      # site carried no comment at all, which made it the easiest of the three to miss;
+      # the variable was equally inert here. `wms.inventory.alert.v1` now arrives on scm's
+      # own broker via the relay.
+      KAFKA_BOOTSTRAP: kafka:9092
       OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://iam.local}
       JWT_JWKS_URI: ${JWT_JWKS_URI:-http://iam.local/oauth2/jwks}
     depends_on:
@@ -330,8 +334,13 @@ services:
       POSTGRES_DB: scm_logistics
       POSTGRES_USER: ${POSTGRES_USER:-scm}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scm}
-      # Cross-project seam source (wms outbound.shipping.confirmed). Same cluster in dev.
-      KAFKA_BOOTSTRAP: ${WMS_KAFKA_BOOTSTRAP:-kafka:9092}
+      # TASK-MONO-511 / ADR-MONO-062 B — was `${WMS_KAFKA_BOOTSTRAP:-kafka:9092}` under
+      # "Cross-project seam source (wms outbound.shipping.confirmed). Same cluster in dev."
+      # The second sentence was never true (see the inventory-visibility-service block
+      # below for the full account). `wms.outbound.shipping.confirmed.v1` now arrives on
+      # scm's own broker via the relay, so this consumer needs no second address — and
+      # must not have one, since that would be option A.
+      KAFKA_BOOTSTRAP: kafka:9092
       OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://iam.local}
       JWT_JWKS_URI: ${JWT_JWKS_URI:-http://iam.local/oauth2/jwks}
       # EasyPost dispatch — test key via env (§6). Absent key → DISPATCH_FAILED on
@@ -371,8 +380,19 @@ services:
       POSTGRES_DB: scm_inventory_visibility
       POSTGRES_USER: ${POSTGRES_USER:-scm}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scm}
-      # WMS_KAFKA_BOOTSTRAP: cross-project event source. In dev, same cluster.
-      KAFKA_BOOTSTRAP: ${WMS_KAFKA_BOOTSTRAP:-kafka:9092}
+      # TASK-MONO-511 / ADR-MONO-062 B — this read `${WMS_KAFKA_BOOTSTRAP:-kafka:9092}`
+      # under the comment "cross-project event source. In dev, same cluster."
+      # Both halves were false. scm and wms have never shared a cluster
+      # (scm-platform-kafka on scm-platform-net, wms-kafka on wms-net), and
+      # WMS_KAFKA_BOOTSTRAP was assigned nowhere in the repository — an externalised seam
+      # with no counterpart, whose presence made the wiring look done. The fallback always
+      # won, so this service read its own cluster and the wms events it waits for never
+      # arrived.
+      # 🔴 The variable is removed, not just re-commented: under B, pointing a consumer at
+      # another project's broker IS option A, which this ADR excludes. Leaving the knob
+      # would leave the wrong turn one env var away. wms topics now arrive on scm's own
+      # broker via the relay (infra/demo/relay/mm2.properties).
+      KAFKA_BOOTSTRAP: kafka:9092
       REDIS_HOST: redis
       OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://iam.local}
       JWT_JWKS_URI: ${JWT_JWKS_URI:-http://iam.local/oauth2/jwks}

@@ -587,7 +587,14 @@ public void onAccountDeleted(ConsumerRecord<String, AccountEvent> rec) {
 ### 컨슈머 규칙 요약
 
 - **멱등 처리 필수** — `eventId` (UUID v7) 기반 dedupe. Redis + DB 이중 방어 권장.
-- **`tenant_id` 필터링** — 단일 Kafka 클러스터를 다수 테넌트가 공유하므로 자기 테넌트 외 이벤트는 skip.
+- **`tenant_id` 필터링** — 자기 테넌트 외 이벤트는 skip. 🔴 **이 규칙의 *이유*는 개정됐다**
+  (TASK-MONO-511 / [`ADR-MONO-062`](../../../../docs/adr/ADR-MONO-062-cross-project-event-delivery.md) B):
+  원문은 *"단일 Kafka 클러스터를 다수 테넌트가 공유하므로"* 였는데, 실제 토폴로지는 **프로젝트마다
+  자기 클러스터**다(`TASK-MONO-507` 이 확인한 의도된 격리). 그 전제 위에서 쓰인 컨슈머 코드는
+  **옳았고**, 갈라진 것은 배포 토폴로지였다 — 그래서 `account.*` 는 소비자에게 **한 건도**
+  도달하지 않았다. 지금은 릴레이가 화이트리스트 토픽만 각 소비자 클러스터로 **이름을 보존해**
+  복제하므로, 소비자가 보는 스트림에는 **여러 테넌트의 이벤트가 그대로 섞여 있다** ⇒ 규칙 자체는
+  **불변이고 여전히 필수다.** 바뀐 것은 "왜 섞여 있는가" 뿐이다(공유 클러스터가 아니라 릴레이).
 - **schema tolerance** — 알 수 없는 필드는 무시 (forward-compatible). `schemaVersion` 미지원 시 DLQ.
 - **DLQ** — `<topic>.dlq`. 3회 지수 백오프 재시도 후 이관.
 - **순서** — `accountId` 단일 파티션 키. 같은 사용자의 이벤트는 발행 순서대로 도착하지만 다른 사용자 사이의 순서는 보장 없음.

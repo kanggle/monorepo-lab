@@ -1,0 +1,32 @@
+# =============================================================================
+# infra/demo/wms-relay.override.yml — wms 브로커에 RELAY 리스너를 더한다 (TASK-MONO-511)
+# =============================================================================
+# 근거 전문: infra/demo/iam-relay.override.yml 헤더.
+#
+# 요약: 네 브로커가 전부 자기를 `kafka:9092` 로 광고하므로, 네 네트워크에 동시에 붙는
+# 릴레이에게 그 이름은 **모호하다**. 부트스트랩 주소를 정확히 적어도 사라지지 않는다 —
+# 클라이언트는 응답으로 받은 advertised listener 로 다시 접속하기 때문이고, 그때 증상은
+# 연결 실패가 아니라 **조용한 오배송**이다. 그래서 전역 유일 이름
+# (`RELAY://wms-kafka:9095`)으로 광고하는 리스너를 하나 더 단다.
+#
+# 브로커는 `wms-net` 에 그대로 있다 — 여기서 네트워크를 추가하지 않는다. 새 리스너도 그
+# 네트워크 위에 있고, 거기 붙은 릴레이만 닿는다. 브로커끼리는 여전히 서로 못 본다.
+# 소비자는 그대로 `kafka:9092` 를 읽는다(ADR-MONO-062 § 무엇이 구속력을 갖나 3).
+#
+# 🔴 스칼라는 치환되므로 base 값을 전부 다시 적었다. base 가 바뀌면 여기가 조용히 낡는다 ⇒
+# `scripts/check-cross-project-topic-relay.sh` 가 base 의 리스너 목록이 이 값의 **접두**인지
+# 검사한다.
+#
+# 🔵 wms 는 **네 계열 중 셋에 관여한다** — 소스로 두 번(→ecommerce, →scm), 목적지로 두 번
+# (←ecommerce, ←scm). 즉 이 브로커의 RELAY 리스너는 읽기와 쓰기 양쪽에 쓰인다.
+# =============================================================================
+services:
+  kafka:
+    expose:
+      - "9092"
+      - "9093"
+      - "9095"
+    environment:
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:9093,CONTROLLER://0.0.0.0:9094,RELAY://0.0.0.0:9095
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://kafka:9093,RELAY://wms-kafka:9095
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT,RELAY:PLAINTEXT

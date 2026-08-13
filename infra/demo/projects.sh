@@ -25,16 +25,23 @@ declare -A COMPOSE=(
   # 가둬 두기 때문에, 데모에서는 traefik-net 합류 + Traefik 라우터 + 다른 도메인이 부르는
   # 이름의 alias 를 얹어야 한다. 이것이 없으면 96 컨테이너가 전부 healthy 로 떠도
   # **로그인이 불가능**하다(도달할 iam 엣지가 없다). 상세: iam-traefik.override.yml
-  [iam]="projects/iam-platform/docker-compose.yml projects/iam-platform/docker-compose.e2e.yml infra/demo/iam-traefik.override.yml"
+  # `*-relay.override.yml` — 브로커에 **전역 유일 이름으로 광고하는 RELAY 리스너**를 하나
+  # 더 단다(TASK-MONO-511 / ADR-MONO-062 B). 네 브로커가 전부 자기를 `kafka:9092` 로
+  # 광고해서, 네 네트워크에 동시에 붙는 릴레이에게 그 이름이 **모호**하기 때문이다. 🔴 이
+  # 모호함은 부트스트랩 주소를 컨테이너명으로 정확히 적어도 사라지지 않는다(클라이언트는
+  # 응답의 advertised listener 로 다시 접속한다) — 증상이 연결 실패가 아니라 **조용한
+  # 오배송**이라 특히 나쁘다. 브로커는 자기 네트워크에 그대로 있고, 소비자는 그대로
+  # `kafka:9092` 를 읽는다. 전문: infra/demo/iam-relay.override.yml 헤더.
+  [iam]="projects/iam-platform/docker-compose.yml projects/iam-platform/docker-compose.e2e.yml infra/demo/iam-traefik.override.yml infra/demo/iam-relay.override.yml"
   # `*-identity.override.yml` — 각 도메인의 **백엔드 리소스 서버**를 traefik-net 에 붙인다
   # (TASK-MONO-507). 붙이지 않으면 그 서비스들은 JWKS 를 fetch 할 주소(`iam-auth-service`,
   # traefik-net 위에만 있는 alias)를 해소하지 못하고, Spring 이 그 UnknownHost 를
   # fail-closed 로 **401 "Authentication required"** 로 바꾼다. 게이트웨이는 토큰을 정상
   # 수락한 뒤였으므로 증상은 "엣지가 좋은 토큰을 거부한다" 로 보인다. 상세 + 실측:
   # infra/demo/erp-identity.override.yml 헤더. 가드 (v) 가 이 정합을 강제한다.
-  [wms]="projects/wms-platform/docker-compose.yml projects/wms-platform/docker-compose.e2e.yml infra/demo/wms-identity.override.yml infra/demo/wms-devseed.override.yml"
-  [ecommerce]="projects/ecommerce-microservices-platform/docker-compose.yml"
-  [scm]="projects/scm-platform/docker-compose.yml infra/demo/scm-identity.override.yml"
+  [wms]="projects/wms-platform/docker-compose.yml projects/wms-platform/docker-compose.e2e.yml infra/demo/wms-identity.override.yml infra/demo/wms-devseed.override.yml infra/demo/wms-relay.override.yml"
+  [ecommerce]="projects/ecommerce-microservices-platform/docker-compose.yml infra/demo/ecommerce-relay.override.yml"
+  [scm]="projects/scm-platform/docker-compose.yml infra/demo/scm-identity.override.yml infra/demo/scm-relay.override.yml"
   [fan]="projects/fan-platform/docker-compose.yml infra/demo/fan-identity.override.yml"
   [finance]="projects/finance-platform/docker-compose.yml infra/demo/finance-identity.override.yml"
   [erp]="projects/erp-platform/docker-compose.yml infra/demo/erp-identity.override.yml"
@@ -43,6 +50,20 @@ declare -A COMPOSE=(
 
 # 공유 edge (traefik-net 정의자) — 항상 선행 기동
 TRAEFIK_COMPOSE="infra/traefik/docker-compose.yml"
+
+# ---------------------------------------------------------------------------
+# 크로스프로젝트 이벤트 릴레이 (TASK-MONO-511 / ADR-MONO-062 B)
+# ---------------------------------------------------------------------------
+# 릴레이는 자기 compose 프로젝트(`-p relay`)로 뜨고 네 프로젝트 네트워크에 external 로
+# 참여한다. 그래서 **네 도메인이 전부 떠 있을 때만** 기동할 수 있다 — 없는 네트워크를
+# external 로 참조하면 compose 가 거부한다.
+#
+# 🔴 `demo-core` 는 scm 을 포함하지 않는다(CORE=iam ecommerce wms console) ⇒ 기본 데모
+# 프로파일에서는 릴레이가 **뜨지 않는다.** 조용히 넘기지 않고 demo-up.sh 가 어느 도메인이
+# 빠졌는지 이름을 대며 알린다. 이 티켓이 고친 결함이 정확히 *"배선이 없는데 아무도 모른다"*
+# 였으므로, 릴레이가 없다는 사실 자체가 침묵해서는 안 된다.
+RELAY_COMPOSE="infra/demo/docker-compose.relay.yml"
+RELAY_DOMAINS=(iam ecommerce wms scm)
 
 # 기동 순서: iam 먼저(모두가 OIDC 검증 대상인 IdP), console 마지막(federation 소비자)
 FULL=(iam wms scm finance erp ecommerce fan console)

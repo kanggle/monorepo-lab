@@ -79,6 +79,25 @@ for p in "${SET[@]}"; do
   docker compose -p "$p" "${ARGS[@]}" up -d $build_flag
 done
 
+# 크로스프로젝트 이벤트 릴레이 (TASK-MONO-511 / ADR-MONO-062 B). 브로커가 전부 뜬 뒤
+# 마지막에 올린다 — `depends_on` 은 compose 프로젝트 경계를 넘지 못하므로 순서가 대신한다.
+# 🔴 릴레이가 없으면 크로스프로젝트 이벤트는 **한 건도 건너가지 않는다.** 그것이 이 티켓이
+# 고친 결함이고, 그 상태는 어떤 에러도 내지 않으므로 여기서 소리를 내야 한다.
+relay_missing=()
+for d in "${RELAY_DOMAINS[@]}"; do
+  [[ " ${SET[*]} " == *" $d "* ]] || relay_missing+=("$d")
+done
+if [ ${#relay_missing[@]} -eq 0 ]; then
+  echo "[demo] up: relay  ($RELAY_COMPOSE)  — 크로스프로젝트 이벤트 릴레이"
+  docker compose -p relay -f "$ROOT/$RELAY_COMPOSE" up -d
+else
+  echo "[demo] ⚠ 이벤트 릴레이 생략 — 이번 기동에 없는 도메인: ${relay_missing[*]}"
+  echo "[demo]   ⇒ 크로스프로젝트 이벤트가 한 건도 건너가지 않습니다(iam→ecommerce 계정 3종 ·"
+  echo "[demo]     wms→ecommerce · wms→scm · ecommerce→wms · scm→wms). 릴레이는 네 도메인"
+  echo "[demo]     (${RELAY_DOMAINS[*]})이 모두 필요합니다 — external 네트워크 참조이기 때문입니다."
+  echo "[demo]     전부 띄우려면: bash infra/demo/demo-up.sh full"
+fi
+
 # OIDC 클라이언트의 redirect_uri 는 마이그레이션에 `.local` 로 박혀 있다. 데모 도메인은
 # 부팅 때 정해지므로 마이그레이션이 알 수 없다 → 여기서 등록한다. DEMO_DOMAIN=local 이면
 # no-op. (자세한 근거는 seed-demo-domain.sh 헤더. 가드 (k) 가 이 호출을 지킨다.)

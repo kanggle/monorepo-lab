@@ -8,7 +8,7 @@ IAM 계정 이벤트가 소비자 프로젝트에 **한 건도 도달하지 않�
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -171,6 +171,169 @@ AC-1~AC-4 는 **AC-1(토폴로지 ADR) 결정 이후**다. 지금 상태에서 �
 
 ---
 
+# 🟢 구현 (2026-08-13 UTC) — `ADR-MONO-062 ACCEPTED — B` 이행. AC-1~AC-4 완료
+
+## ⓪ 🔴🔴 계열은 3개가 아니라 **5개**였다 — ADR 의 숫자까지 과소계수를 물려받았다
+
+1회차가 *"16 리스너 / 3계열"* 로 티켓을 3배 키웠고, `ADR-MONO-062` 는 그 숫자를 그대로
+받아 *"3계열 12토픽"* 을 구속력으로 적었다. **독립적으로 다시 세니 5계열 / 17라우트 /
+20리스너다:**
+
+| 계열 | 토픽 | 리스너 | 1회차·ADR 이 셌나 |
+|---|---|---|---|
+| iam → ecommerce | 3 | 5 | ✅ |
+| wms → ecommerce | 5 | 6 | ✅ (토픽 수는 4로 적었다) |
+| wms → scm | 5 | 5 | ✅ |
+| **ecommerce → wms** | **2** | **2** | ❌ **아무도 안 셌다** |
+| **scm → wms** | **2** | **2** | ❌ **아무도 안 셌다** |
+
+🔵 1회차의 *"역방향은 0건"* 은 **`ecommerce→iam` 에 대해서만 참**이었다. 그 질문에 답하고
+나서 `ecommerce→wms` 는 묻지 않았다 — **한 방향을 확인한 것이 모든 방향을 확인한 것으로
+읽혔다.**
+
+🔴 소유자가 정확형으로 **측정된 5계열 전부**를 골랐다(2026-08-13). ADR 본문의 "3계열
+12토픽" 은 발굴 티켓의 과소계수에서 왔다는 사실을 `mm2.properties` 에 적어 뒀다.
+
+**🔴🔴 판독기가 세 번 틀렸고, 세 번 다 내 술어였다** — 그래서 두 개의 독립 계측기로
+교차검증했다(node 파서 / bash 가드, **양쪽 다 17라우트**):
+
+1. **발행처 탐지가 전건 실패**(`owner=(none found)`) — 토픽명이 발행 서비스의 아웃박스
+   퍼블리셔 **상수**로 살고 `.send("리터럴")` 이 아니었다. 🔴 그리고 wms 는 아예 **계산**한다
+   (`"wms.master." + aggregate + ".v1"`) ⇒ 리터럴 grep 의 0건은 부재가 아니라 **계측기의
+   한계**였다. 소유는 접두 규약으로 정하고 그렇게 적었다.
+2. **scm 리스너를 통째로 놓쳤다** — scm 컨슈머는 전부 `topics = TOPIC`(상수)이라 리터럴만
+   보는 판독기에는 **0건**으로 보였다. 그 상태로 "scm 은 크로스프로젝트가 없다" 로 끝낼 뻔했다.
+3. **유효성 술어가 빨갛게 떴다**(어노테이션 108 vs 귀속 102) — 추적하니 wms
+   notification-service `AlertConsumer` 의 6건이 `${prop}` 플레이스홀더였고, **wms→wms
+   내부**라 결론은 안 바뀌었다. 🔵 안 붙여 놨으면 그 6건이 조용히 빠진 채 "일치" 를 봤다.
+
+## ① 배선 — MirrorMaker 2, 한 프로세스, 4클러스터 5흐름
+
+구현체 선택은 ADR 이 구현 AC 로 위임한 rider 다. **MM2**를 골랐다: 코드 0줄, 이미지는
+**브로커가 이미 쓰는 `apache/kafka:3.7.0`**, 그리고 다중 클러스터가 원래 이 도구의 용도라
+흐름 5개를 한 JVM 이 처리한다(브리지를 흐름마다 띄우면 데모 메모리 예산 `MONO-399` 를 그만큼
+깎는다). 오프셋·재시도·재기동 중복은 이미 풀린 문제다.
+
+🔴 **`IdentityReplicationPolicy` 가 없으면 전부 조용히 실패한다.** MM2 기본 정책은 대상에
+`<source>.` 접두를 붙여 `iam.account.created` 를 만든다 — 소비자는 `account.created` 를
+구독하므로 **토픽은 생기고 데이터는 흐르는데 아무도 안 읽는다.** 그건 이 티켓이 고치려는
+결함과 **똑같이 생겼다.**
+
+🔴 **이름을 보존하면 순환이 문제가 된다.** 실제로 양방향 쌍(`ecommerce↔wms`)이 있다. 안전한
+이유는 화이트리스트가 **접두로 서로소**라서인데, 그건 우연이 아니라 **불변식**이므로 가드가
+단언한다(주석은 다음 사람이 안 읽는다).
+
+## ② 🔴🔴 B 의 진짜 난관은 복제가 아니라 **주소**였다
+
+네 브로커가 **전부 자기를 `kafka:9092` 로 광고한다.** 네 네트워크에 동시에 붙는 릴레이에게
+그 이름은 모호하고, **부트스트랩 주소를 컨테이너명으로 정확히 적어도 사라지지 않는다** —
+클라이언트는 응답으로 받은 advertised listener 로 다시 접속하기 때문이다. 증상이 연결 실패가
+아니라 **조용한 오배송**이라 특히 나쁘다.
+
+⇒ 브로커마다 **전역 유일 이름으로 광고하는 `RELAY` 리스너**를 하나 더 단다
+(`infra/demo/*-relay.override.yml`, 4개). 프로젝트 compose 는 **안 건드린다** — 릴레이는
+데모 합성의 관심사이고, `*-identity.override.yml` 이 같은 이유로 존재한다.
+
+**이것은 A 가 아니다** — 브로커는 한 곳도 안 움직이고, 공유망에 안 올라가고, 서로 여전히
+못 본다. 소비자 설정은 한 글자도 안 바뀐다. 🔵 **그 격리를 실측했다**: `iam-kafka` 안에서
+`iam-kafka:9095` 만 응답하고 나머지 셋은 **닿지 않는다.**
+
+## ③ AC-1 · AC-3 — 라이브 도달 (증분이 술어, 존재가 아니다)
+
+`infra/demo/relay/probe-relay.sh` — 5계열 전부 **양성 + 음성 대조**:
+
+```
+✓ iam → ecommerce   account.created                    2 → 3
+✓ (음성) iam ↛ wms · scm                                0 유지
+✓ wms → ecommerce   wms.inventory.adjusted.v1          0 → 1
+✓ wms → scm         wms.inventory.adjusted.v1          0 → 1
+✓ wms → ecommerce   wms.master.sku.v1                  1 → 2
+✓ (음성) wms ↛ scm   wms.master.sku.v1                  0 유지   ← 화이트리스트에 없다
+✓ ecommerce → wms   ecommerce.fulfillment.requested.v1 0 → 1
+✓ scm → wms         scm.procurement.inbound-expected.v1 1 → 2
+✓ (음성) 나머지 목적지 전부 0 유지
+```
+
+🔵 **`wms.master.sku.v1` 이 ecommerce 엔 가고 scm 엔 안 가는 칸이 가장 날카롭다** — 화이트
+리스트가 **선택적**이지 통짜 다리가 아님을 보인다. 양성만 있으면 *"복제가 된다"* 와
+*"전부 복제된다"* 를 구별할 수 없고, 후자는 ADR 이 지키려던 격리를 조용히 되돌린다.
+
+**엔드투엔드**(실제 가입 → ecommerce DB):
+
+```
+가입 201  accountId=1b5ee08e-…
+iam       account.created  2:0 → 2:1
+ecommerce account.created  2:0 → 2:1        ← 같은 증분
+ecommerce user_profiles     그 accountId 로 행 생성 (ACTIVE)
+```
+
+🔴🔴 **이 회차의 판정이 원 티켓보다 강한 이유**: ecommerce 쪽에 **컨슈머를 한 개도 안 띄운
+상태**에서 토픽이 생기고 채워졌다 ⇒ 그 토픽은 **컨슈머의 산물일 수 없다.** 원 티켓이 속았던
+빈 auto-created 토픽과 정확히 반대되는 증거다.
+
+## ④ AC-2 — GDPR 익명화가 **실제로 실행됐다**
+
+`account.deleted` 2단계를 iam 클러스터에 넣고 ecommerce 프로필을 관찰:
+
+```
+before          ACTIVE    | probe@demo.com | MONO511 Probe
+phase 1 (anonymized=false, grace)   iam 2→3 · ecommerce 2→3
+                WITHDRAWN | probe@demo.com | MONO511 Probe   ← 상태만, PII 유지(정상)
+phase 2 (anonymized=true, post-grace) iam 3→4 · ecommerce 3→4
+                WITHDRAWN | <null>         | <null>          ← PII 실제 삭제
+```
+
+🔵 **IAM 의 삭제 API 는 안 탔다** — 깨져 있던 절반은 IAM 의 발행이 아니라 **도달**이었으므로,
+릴레이→컨슈머→DB 라는 그 절반을 쟀다. 그렇게 적는다.
+
+🔴 **첫 시도는 아무 반응이 없었고, 원인은 내 탐침이었다.** 삭제 이벤트에 `tenantId=ecommerce`
+를 넣었는데 그 프로필의 테넌트는 `fan-platform` 이었다(가입이 `X-Tenant-Id` 헤더를 안 따랐다) ⇒
+테넌트 스코프 조회가 정확히 아무것도 안 건드렸다. **의도치 않게 테넌트 격리의 음성 대조가
+됐다** — 배선이 아니라 탐침을 고쳐야 했다.
+🔵 곁다리 관측(이 티켓 범위 아님): `POST /api/accounts/signup` 이 `X-Tenant-Id: ecommerce` 를
+무시하고 `fan-platform` 으로 계정을 만들었다. 확인만 하고 손대지 않았다.
+
+## ⑤ AC-3 정적 가드 — 술어는 **집합 동등**
+
+`scripts/check-cross-project-topic-relay.sh`: *코드의 리스너 집합* ≡ *릴레이 화이트리스트*,
+**양방향**. 한쪽에만 있으면 둘 다 결함이다(영원히 조용한 리스너 / 아무도 안 읽는데 경계를
+넘는 복제). 추가로 **순환 서로소**와 **override 리스너 드리프트**(compose 는 스칼라를 병합
+하지 않고 치환하므로 base 값이 override 값의 접두여야 한다)를 단언한다.
+
+**bite 5회, 전부 물었고 각자 자기 단언만 건드렸다**: 화이트리스트에서 토픽 제거 / 순환 주입 /
+아무도 안 읽는 토픽 추가 / 흐름 `.enabled=false` / override 가 base 리스너를 잃음.
+🔴 **첫 bite 는 "안 물었다" 로 보였는데 실은 sed 이스케이프가 틀려 주입이 안 됐던 것**이다 —
+주입 여부를 먼저 확인하는 규율이 그대로 발화했다.
+
+**🔴🔴 가드 자신의 술어가 세 번 틀렸다**: ① 이벤트 *타입* 문자열을 토픽으로 세어 없는 라우트
+3건을 만들었다 ② `KAFKA_ADVERTISED_LISTENERS` 를 **자기 주석이 인용해 둔 문장에서** 읽어
+"base 와 override 가 다르다: 둘 다 같은 값" 이라는 말이 안 되는 실패를 냈다 ③ `${prop:default}`
+바인딩을 버려서 wms 로 들어오는 두 계열이 통째로 안 보였다. 그리고 ④ **5분 넘게 걸렸다**
+(파일 1500개를 하나씩 grep) — 느린 가드는 언젠가 꺼지고, **꺼진 가드는 초록을 보고한다.**
+
+## ⑥ AC-4 문서 정합 + 거짓 진술 제거
+
+- `account-lifecycle-subscriptions.md` — § Delivery topology 신설(실측 + *"빈 토픽은 컨슈머의
+  산물"* 함정 명시).
+- `user-api.md` — *"cross-project deletion wiring is live"* 가 **컨슈머에 대해 참이고 도달에
+  대해 거짓**이었음을 적었다.
+- `consumer-integration-guide.md` — *"단일 Kafka 클러스터를 다수 테넌트가 공유하므로"* 개정.
+  🔵 **규칙 자체는 불변이고 여전히 필수다**(릴레이가 이름을 보존하므로 여러 테넌트가 여전히
+  한 스트림에 섞인다) — 바뀐 것은 *이유*뿐이다.
+- `WMS_KAFKA_BOOTSTRAP` **3곳 제거**(주석 2곳이 *"same cluster in dev"* 로 거짓). 🔴 주석만
+  고치지 않고 **변수를 없앴다** — B 아래에서 소비자를 남의 브로커로 돌리는 것은 곧 **A** 라,
+  손잡이를 남겨 두면 잘못된 길이 env 하나 거리에 놓인다. 🔵 세 번째 자리는 **주석이 아예 없어서**
+  가장 놓치기 쉬웠다.
+
+## ⑦ 남는 한계 — 조용히 넘기지 않는다
+
+릴레이는 네 프로젝트 네트워크에 external 로 붙으므로 **네 도메인이 다 떠야** 기동한다.
+`demo-core` 는 scm 을 포함하지 않아 **기본 데모에서는 릴레이가 안 뜬다** ⇒ `demo-up.sh` 가
+빠진 도메인 이름을 대며 경고한다. *"배선이 없는데 아무도 모른다"* 가 이 티켓의 결함이었으므로
+그 상태가 침묵해서는 안 된다.
+
+---
+
 # Goal
 
 IAM 이 발행한 계정 생명주기 이벤트가 소비자 프로젝트의 컨슈머에 도달한다. 그리고 도달하지
@@ -232,11 +395,18 @@ IAM 이 발행한 계정 생명주기 이벤트가 소비자 프로젝트의 컨
       컨슈머의 산물이었음이 같은 실험에서 보였다. 🔴 wms 두 계열은 **구조 판정만**(앱 미기동)
 - [ ] **AC-1** — 가입 한 번에 소비자 클러스터의 `account.created` 오프셋이 증가하고,
       user-service 로그에 온보딩이 남는다
-- [ ] **AC-2** — IAM 에서 계정을 삭제하면 ecommerce 프로필이 `WITHDRAWN` 이 되고,
-      post-grace 이벤트로 PII 가 실제로 지워진다 (TASK-BE-258 의무의 **실행** 확인)
-- [ ] **AC-3** — 도달이 끊기면 실패하는 검사가 있다. 컨슈머 lag 알람이든 e2e 든,
-      **"토픽이 존재한다" 를 술어로 쓰지 않는다** — 빈 auto-created 토픽이 바로 그 함정이었다
-- [ ] **AC-4** — 문서와 실제가 일치한다
+- [x] **AC-2** — 완료(§④). `account.deleted` 2단계 실측: grace(`anonymized=false`) →
+      `ACTIVE→WITHDRAWN`(PII 유지, 정상) / post-grace(`true`) → **email·name 이 실제로
+      NULL**. 오프셋이 릴레이 전달을 확인했다(iam 2→3→4 · ecommerce 2→3→4).
+      🔵 IAM 삭제 API 는 안 탔다 — 깨져 있던 절반은 발행이 아니라 **도달**이었으므로
+      릴레이→컨슈머→DB 를 쟀고, 그렇게 적는다. 🔴 첫 시도 무반응의 원인은 **내 탐침의
+      테넌트**였다(의도치 않게 테넌트 격리의 음성 대조가 됐다).
+- [x] **AC-3** — 완료(§③·§⑤). **둘 다** 만들었다: 정적
+      `scripts/check-cross-project-topic-relay.sh`(리스너 집합 ≡ 화이트리스트 **양방향**
+      + 순환 서로소 + override 드리프트, **bite 5/5**) · 라이브
+      `infra/demo/relay/probe-relay.sh`(술어 = **목적지 레코드 수 증분**, 라우트마다
+      **음성 대조** 동반). 🔴 어느 쪽도 *"토픽이 존재한다"* 를 술어로 쓰지 않는다.
+- [x] **AC-4** — 완료(§⑥). `account-lifecycle-subscriptions.md` § Delivery topology 신설 · `user-api.md` 의 "live" 가 어느 절반에 대해 참이었는지 명시 · `consumer-integration-guide.md` 의 "단일 클러스터" 전제 개정(**규칙은 불변, 이유만 바뀐다**) · `WMS_KAFKA_BOOTSTRAP` **3곳 제거**(주석만 고치지 않고 변수를 없앴다 — 남기면 A 가 env 하나 거리에 놓인다).
 
 ---
 
@@ -272,7 +442,7 @@ IAM 이 발행한 계정 생명주기 이벤트가 소비자 프로젝트의 컨
 
 # Definition of Done
 
-- [ ] ADR + 배선
-- [ ] 도달 테스트
-- [ ] 문서 정합
-- [ ] Ready for review
+- [x] ADR + 배선 — [`ADR-MONO-062`](../../docs/adr/ADR-MONO-062-cross-project-event-delivery.md) ACCEPTED — B, MirrorMaker 2 한 프로세스 / 4클러스터 / 5흐름 / 17라우트
+- [x] 도달 테스트 — 정적 가드 + 라이브 탐침(5계열 양성 + 음성 대조 전부 통과)
+- [x] 문서 정합
+- [x] Ready for review

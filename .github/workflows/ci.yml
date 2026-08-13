@@ -223,6 +223,11 @@ jobs:
       # silently losing its CI entry is a workflow-only diff, and a module gaining an
       # entry in settings.gradle is a build-script diff — neither is `code-changed`.
       libs-ci-coverage: ${{ steps.filter.outputs.libs-ci-coverage }}
+      # TASK-MONO-511: raw filter, NOT AND-combined with `code-changed`. Two of the three
+      # arrival paths are non-code — the relay whitelist (`mm2.properties`) and the broker
+      # advertised-listener overrides. AND-ing would skip the guard on exactly the diff
+      # that silently stops cross-project delivery.
+      cross-project-relay: ${{ steps.filter.outputs.cross-project-relay }}
       # TASK-MONO-461: raw filter, NOT AND-combined with `code-changed`. Two of this
       # guard's trigger paths are non-code: the spec (testing-strategy.md) being
       # weakened, and the guard script itself. AND-ing with code-changed would skip
@@ -597,6 +602,19 @@ jobs:
               - 'settings.gradle'
               - '.github/workflows/**'
               - 'scripts/check-libs-ci-coverage.sh'
+            # TASK-MONO-511: a cross-project listener arrives as a new @KafkaListener in
+            # any project's main sources; the other side of the drift is an edit to the
+            # relay whitelist or to a broker's advertised listeners. All three arrival
+            # paths are listed, and this filter is NOT AND-combined with `code-changed` —
+            # two of them (mm2.properties, the override yml) are not code, and AND-ing
+            # would switch the guard off on exactly the diff that breaks delivery.
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            cross-project-relay:
+              - 'projects/*/apps/*/src/main/**/*.java'
+              - 'projects/*/docker-compose.yml'
+              - 'infra/demo/relay/**'
+              - 'infra/demo/*-relay.override.yml'
+              - 'scripts/check-cross-project-topic-relay.sh'
             # TASK-MONO-371: platform/contracts/jwt-standard-claims.md declares that
             # every access token MUST carry the claims it lists. It was missing four of
             # them — including tenant_id, which every gateway in the fleet rejects tokens
@@ -894,6 +912,36 @@ jobs:
 
       - name: Guard — no shared-library module is missing from the CI task list
         run: bash scripts/check-libs-ci-coverage.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-511 / ADR-MONO-062 B — cross-project event relay drift.
+  #
+  # Five families of consumers had never received a single event, and the state
+  # produced no error at all: each project runs its own Kafka, and a consumer
+  # subscribing to a topic nobody bridges just sits there. The relay whitelist is now
+  # the only thing that crosses a project boundary, so it must be compared against the
+  # listeners in code — a hand-kept list nothing checks is how this defect was born
+  # (same class as MONO-345/-352/-360/-363/-371/-527).
+  #
+  # 🔴 The predicate is NOT "the topic exists". A consumer's own subscription
+  # auto-creates the topic, so its existence is the consumer's artefact rather than
+  # evidence of wiring — that empty topic is exactly what hid this. ADR-MONO-062
+  # § 결과 3 forbids it by name.
+  # ---------------------------------------------------------------------------
+  cross-project-relay:
+    name: Cross-project event relay (listeners vs relay whitelist)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.cross-project-relay == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-cross-project-topic-relay.sh
+
+      - name: Guard — every cross-project listener has a relay route, and vice versa
+        run: bash scripts/check-cross-project-topic-relay.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-468/469 — .claude reference integrity guard (commands + agents).

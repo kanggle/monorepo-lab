@@ -64,6 +64,23 @@ if [ "$PARTIAL" = "1" ]; then
   done
 fi
 
+# 릴레이를 **먼저** 내린다 (TASK-MONO-511). 네 프로젝트 네트워크에 external 로 붙어 있어서,
+# 그 프로젝트를 먼저 내리면 도커가 "네트워크에 엔드포인트가 남아 있다" 며 네트워크 삭제를
+# 거부하고 다음 기동이 stale 네트워크를 만난다.
+# 🔵 부분 종료라도 릴레이는 내린다 — 네 도메인 중 하나만 사라져도 그 흐름은 죽고, 반쯤
+# 살아 있는 릴레이는 "배선이 있다" 는 잘못된 인상만 남긴다(이 티켓이 고친 결함의 모양이다).
+for x in "${!DOWNSET[@]}"; do
+  case " ${RELAY_DOMAINS[*]} " in
+    *" $x "*)
+      if [ -n "$(docker ps -aq --filter 'label=com.docker.compose.project=relay' 2>/dev/null)" ]; then
+        echo "[demo] down: relay (크로스프로젝트 이벤트 릴레이 — 네트워크 소유자보다 먼저)"
+        docker compose -p relay -f "$ROOT/$RELAY_COMPOSE" down --remove-orphans || true
+      fi
+      break
+      ;;
+  esac
+done
+
 # DOWN_ORDER 순서로 종료.
 for p in "${DOWN_ORDER[@]}"; do
   [ -n "${DOWNSET[$p]+x}" ] || continue
