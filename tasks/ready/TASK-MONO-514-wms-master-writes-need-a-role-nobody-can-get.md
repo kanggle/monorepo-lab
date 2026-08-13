@@ -261,6 +261,19 @@ WMS 마스터 데이터를 **API 로** 만들 수 있는 자격증명이 존재�
 
 ---
 
+# 선택지 → **[`ADR-MONO-061`](../../docs/adr/ADR-MONO-061-workload-token-authorization-plane.md) 로 승격됨 (PROPOSED, 2026-08-13)**
+
+§⑤ 의 세 안이 ADR 의 A/B/C 가 되고, 티켓 Goal 이 이미 허용하던 *"존재하지 않는 것이 의도"* 가
+**D(v1 범위 밖 확정)** 로 명시 선택지가 됐다. ADR 은 여기에 실측 비용을 붙여 둔다
+(cc 클라이언트 12 · `roles`→authority 서비스 19 / 6 프로젝트 · `MASTER_WRITE` 술어 24).
+
+🔴 **구현은 `ADR-MONO-061 ACCEPTED — <A|B|C|D>` 정확형 전까지 멈춘다.** 2026-08-13 세션에서
+소유자가 선택지 목록에서 *"③(추천)"* 을 골랐지만, 그 글자의 출처가 **에이전트의 추천 라벨**
+이고 그 시점에 ADR 문서가 존재하지 않았으므로 ACCEPT 로 승격하지 않았다
+(`platform/architecture-decision-rule.md` § The ACCEPTED Gate).
+
+---
+
 # Acceptance Criteria
 
 - [x] **AC-0 (재측정)** — 완료(§①·§②). 운영자 403 을 **서로 다른 키 2회**로 재확인
