@@ -1,4 +1,4 @@
-# memory-budget-check fixture — 2 negative (allow) + 2 positive (block) + 1 debounce.
+﻿# memory-budget-check fixture — 2 negative (allow) + 2 positive (block) + 1 debounce.
 #
 # TASK-MONO-530. The hook this covers (`memory-budget-check.ps1`) reads a file that
 # lives OUTSIDE the repo (`~/.claude/projects/<slug>/memory/MEMORY.md`), so the
@@ -71,25 +71,25 @@ function New-FakeIndex {
     $sb = [System.Text.StringBuilder]::new()
     [void]$sb.AppendLine('> index header')
     [void]$sb.AppendLine()
-    [void]$sb.AppendLine('## A. 지속 규칙')
+    [void]$sb.AppendLine('## A. Standing rules')
     [void]$sb.AppendLine()
-    [void]$sb.AppendLine('### A2. 측정·검증 규율')
+    [void]$sb.AppendLine('### A2. Measurement discipline')
     [void]$sb.AppendLine()
     $half = [math]::Max(1, [int][math]::Floor($TrapPointers / 2))
-    for ($i = 0; $i -lt $half; $i++) { [void]$sb.AppendLine("- [t$i](trap_a2_$i.md) 함정") }
+    for ($i = 0; $i -lt $half; $i++) { [void]$sb.AppendLine("- [t$i](trap_a2_$i.md) trap") }
     [void]$sb.AppendLine()
-    [void]$sb.AppendLine('### B5. 프런트/콘솔')
+    [void]$sb.AppendLine('### B5. Frontend hazards')
     [void]$sb.AppendLine()
-    for ($i = $half; $i -lt $TrapPointers; $i++) { [void]$sb.AppendLine("- [t$i](trap_b5_$i.md) 함정") }
+    for ($i = $half; $i -lt $TrapPointers; $i++) { [void]$sb.AppendLine("- [t$i](trap_b5_$i.md) trap") }
     [void]$sb.AppendLine()
-    [void]$sb.AppendLine('## C. 절차·플레이북')
+    [void]$sb.AppendLine('## C. Procedures')
     [void]$sb.AppendLine()
     $mhalf = [math]::Max(1, [int][math]::Floor($MovablePointers / 2))
-    for ($i = 0; $i -lt $mhalf; $i++) { [void]$sb.AppendLine("- [m$i](proc_c_$i.md) 절차") }
+    for ($i = 0; $i -lt $mhalf; $i++) { [void]$sb.AppendLine("- [m$i](proc_c_$i.md) procedure") }
     [void]$sb.AppendLine()
-    [void]$sb.AppendLine('## F. 전략/판정')
+    [void]$sb.AppendLine('## F. Strategy')
     [void]$sb.AppendLine()
-    for ($i = $mhalf; $i -lt $MovablePointers; $i++) { [void]$sb.AppendLine("- [m$i](strat_f_$i.md) 전략") }
+    for ($i = $mhalf; $i -lt $MovablePointers; $i++) { [void]$sb.AppendLine("- [m$i](strat_f_$i.md) strategy") }
     Set-Content -LiteralPath $Path -Value $sb.ToString() -Encoding UTF8
 }
 
@@ -137,14 +137,14 @@ try {
     # The whole point of this hook is that bytes are the wrong primary metric
     # (measured: merging 6 lines saved 188B / 0.8%). If the stanza stopped naming the
     # pointer count, the remediation would read as "compress harder" again.
-    if ($reason -notmatch '포인터 240') {
-        throw "Stanza does not report the measured pointer count (expected '포인터 240'): $reason"
+    if ($reason -notmatch '240\s*/') {
+        throw "Stanza does not report the measured pointer count (expected '240 /' in the 'pointers / quota' slot): $reason"
     }
     "PASS: positive-2 (stanza reports the measured pointer count, not just bytes)"
 
     # --- Negative 3: THE ONE THAT MATTERS — traps are not movable candidates ------
     # Candidate list lives on the "후보:" line of [REMEDIATION] item 2.
-    $candLine = ($reason -split "`r?`n" | Where-Object { $_ -match '후보:' })
+    $candLine = ($reason -split "`r?`n" | Where-Object { $_ -match 'PLAYBOOKS\.md' })
     if (-not $candLine) { throw "No candidate line in the remediation block: $reason" }
     $candLine = ($candLine | Out-String).Trim()
     foreach ($trap in @('A2', 'B5')) {

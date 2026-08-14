@@ -1,4 +1,4 @@
-# memory-budget-check.ps1 — Stop hook: MEMORY.md 인덱스 예산 감시 (TASK-MONO-529 후속)
+﻿# memory-budget-check.ps1 — Stop hook: MEMORY.md 인덱스 예산 감시 (TASK-MONO-529 후속)
 #
 # 왜 훅인가: MEMORY.md 는 매 세션 자동 로드돼 크기가 곧 토큰 비용인데, 리포 CI 는
 # 그 파일이 리포 밖(`~/.claude/projects/<slug>/memory/`)이라 원리적으로 못 본다.
