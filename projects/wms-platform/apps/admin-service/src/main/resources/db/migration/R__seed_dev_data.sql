@@ -1,15 +1,56 @@
--- admin-service v1 seed data — dev / standalone profile only.
+-- admin-service v1 seed data — built-in roles, bootstrap user, default settings.
 --
 -- Authoritative reference:
 --   specs/services/admin-service/domain-model.md § Reference Data Snapshot
 --   specs/services/admin-service/architecture.md § Security § Roles
 --   specs/services/admin-service/domain-model.md § 4 Seed Settings (v1)
 --
--- Production deployments must run a separate manual procedure (or per-env
--- migration) to provision built-in roles + an initial admin user. V99 is
--- safe to skip in prod because Flyway numbers ascending and the prod
--- migration profile gates this file out via callback / location filter at
--- the platform level.
+-- WHY THIS IS `R__` AND NOT `V99` (TASK-BE-585 — measured, not theoretical)
+-- ---------------------------------------------------------------------------
+-- This file used to be `V99__seed_dev_data.sql` in this same always-on
+-- `db/migration` location. Because 99 sits far above the production timeline it
+-- became the HIGHEST APPLIED version in every admin_db that ever booted. When
+-- `ADR-MONO-065` later added `V3__order_shipment_tenant_axis.sql`, that new
+-- migration resolved BELOW the applied 99 — an out-of-order migration, which
+-- Flyway rejects by default:
+--
+--     Validate failed: Migrations have failed validation
+--     Detected resolved migration not applied to database: 3.
+--
+-- admin-service then crash-looped on every host with an existing volume and all
+-- eight `/api/v1/admin/dashboard/**` surfaces returned 500 (measured 2026-08-14,
+-- TASK-BE-584 AC-0: restarts=12, gateway connect failure).
+--
+-- 🔴 A FRESH VOLUME IS PERMANENTLY GREEN ON THIS. V1·V2·V3·R__ all apply in
+-- order, so CI, Testcontainers, and any reseeded demo cannot fail on it — the
+-- defect lives in the history TABLE, not in this file's contents. Hence the fix
+-- is the file's KIND (a repeatable carries no version, so it can never be out of
+-- order and always runs after the versioned ones), not its number.
+--
+-- Same defect class as iam auth-service (TASK-MONO-524, 2026-08-11), which chose
+-- `R__` for the same reason and documented the recovery procedure for databases
+-- already carrying the watermark row:
+--   projects/iam-platform/docs/flyway-dev-seed-migrations.md § 6
+--
+-- 🔴 EVERY STATEMENT HERE MUST STAY IDEMPOTENT (`ON CONFLICT DO NOTHING`).
+-- A repeatable re-runs whenever its checksum changes, and on an existing
+-- database it runs the moment this stops being V99 — straight into the rows V99
+-- already inserted. Without the conflict clause that is a duplicate-key crash on
+-- exactly the hosts this change exists to rescue.
+--
+-- 🔴 DO NOT RENAME THIS FILE once applied. Flyway tolerates a missing VERSIONED
+-- migration (classified `future`) but NOT a missing repeatable — the description
+-- is its identity, so a rename fails validation (TASK-MONO-524 § finding 2).
+--
+-- ⚠️ SCOPE NOTE (not fixed here — TASK-BE-587): the header this replaced claimed
+-- *"the prod migration profile gates this file out via callback / location
+-- filter at the platform level"*. No such gate exists — admin-service has one
+-- `application.yml` with `locations: classpath:db/migration`, no profile
+-- variant, and it is absent from `infra/demo/wms-devseed.override.yml` (which
+-- lists master/inbound/inventory/outbound). This seed is also the ONLY source of
+-- `admin_role`, so simply removing it would leave an environment with no
+-- built-in roles. Whether admin-service should seed roles in production is a
+-- product decision, filed separately.
 --
 -- The seed UUIDs are stable so dev tools / e2e fixtures can refer to them
 -- without round-tripping through the DB. Built-in roles ALWAYS use these
@@ -58,7 +99,8 @@ INSERT INTO admin_role (
         '["INVENTORY_READ","INVENTORY_WRITE","INBOUND_READ","INBOUND_WRITE","OUTBOUND_READ","OUTBOUND_WRITE","MASTER_READ","MASTER_WRITE","ALERT_READ","ALERT_ACKNOWLEDGE","ADMIN_USER_WRITE","ADMIN_ROLE_WRITE","ADMIN_ASSIGNMENT_WRITE","ADMIN_SETTINGS_WRITE","ADMIN_FORCE_OVERRIDE"]'::jsonb,
         'ACTIVE', TRUE, 0,
         now(), 'system:bootstrap', now(), 'system:bootstrap'
-    );
+    )
+ON CONFLICT DO NOTHING;
 
 -- ---------------------------------------------------------------------------
 -- Seed user — admin@wms.internal as WMS_SUPERADMIN (global scope).
@@ -75,7 +117,8 @@ INSERT INTO admin_user (
     'ACTIVE',
     NULL,
     0, now(), 'system:bootstrap', now(), 'system:bootstrap'
-);
+)
+ON CONFLICT DO NOTHING;
 
 INSERT INTO admin_user_role_assignment (
     id, user_id, role_id, warehouse_id, granted_at, granted_by,
@@ -88,7 +131,8 @@ INSERT INTO admin_user_role_assignment (
     now(), 'system:bootstrap',
     NULL, NULL,
     'ACTIVE', 0, now(), now()
-);
+)
+ON CONFLICT DO NOTHING;
 
 -- ---------------------------------------------------------------------------
 -- Default settings (4 — domain-model.md § 4).
@@ -136,4 +180,5 @@ INSERT INTO admin_setting (
         '{"type":"integer","minimum":5,"maximum":3600}'::jsonb,
         'Outbound saga sweeper tick interval (seconds)',
         0, now(), 'system:bootstrap', now(), 'system:bootstrap'
-    );
+    )
+ON CONFLICT DO NOTHING;
