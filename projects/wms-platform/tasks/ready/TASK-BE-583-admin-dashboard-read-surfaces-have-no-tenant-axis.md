@@ -174,14 +174,46 @@ D1 이 결함을 만든 것은 아니지만, D1 이후 이 티켓은 더 미룰 
       (대조군 389) · `admin_db` 0/217 컬럼 · 🔴🔴 신규: `WMS_VIEWER` 는 **entitlement 합성**이
       유일 경로이고 모집단이 **고객 테넌트 4곳**이다 · 🔵 `SettingsController` 인가 부재는
       **내 오탐**(서비스 계층에 있음). 상세는 위 §
-- [ ] **AC-1 (결정)** — A/B 중 하나 + 근거. **B 면 ADR ACCEPTED 선행**.
+- [~] **AC-1 (결정) — 방향 지정 `B` 도착(2026-08-14). ADR 열림, 아직 안 닫힘.**
+      소유자가 **B(테넌트 축 신설)** 를 지정했고, AC-1 자신이 *"B 면 ADR ACCEPTED 선행"* 이라
+      적으므로 [`ADR-MONO-065`](../../../../docs/adr/ADR-MONO-065-wms-admin-read-plane-tenant-axis.md)
+      를 **PROPOSED** 로 열었다. 🔴 **닫히지 않는 이유는 그 ADR 의 실측이 B 안에서 새 분기를
+      열었기 때문이다**:
+      **(M2)** 8개 중 테넌트 소유 데이터를 투영하는 표면은 **2개**뿐이고 나머지 6개는 상류에
+      테넌트가 **존재한 적이 없다**(창고 운영 데이터) ⇒ 아래 AC-2 가 적은 *"마이그레이션 +
+      프로젝션 + 필터"* 의 대상이 8이 아니라 2다 ·
+      **(M3)** 그 2개조차 **행을 만드는 이벤트**(`outbound.order.received.v1`)에 테넌트가 없어
+      **이벤트 계약 변경**이 포함된다 ·
+      **(M6)** `multi-tenant` 재분류는 `rules/traits/multi-tenant.md` 의 M1/M3/M7 **당일 위반**이다
+      (특히 M3 의 404-over-403 은 `ADR-MONO-064` 가 옳다며 byte-unchanged 로 유지한 술어를 뒤집는다).
+      ⇒ **`B1`**(소유 데이터 2개에만 축 + 나머지 6개는 창고 전역으로 명문화, `traits` 불변) 과
+      **`B2`**(재분류) 중 정확형 지정을 다시 받는다. 🔵 그리고 ADR 의 **M4** 가 A 의 전제를 한 번
+      더 깼다 — 저장소 문서 **세 곳**(`admin-service-api.md` L33 · console `wms-client.ts` ·
+      console-integration-contract § 2.4.5)이 *"admin-service 는 `tenant_id=wms` 를 enforce 한다"* 고
+      적고 있어, A 는 명문화가 아니라 **세 문서를 뒤집는 결정**이다.
+      🔵 M1 은 아래 원문의 *"콘솔이 전부 막힌다"* 를 **확증**했다(콘솔은 base URL + 상대경로 2단계로
+      조립하므로 리터럴 grep 이 2건만 잡는다 — 올바른 술어로 **8/8**).
+
+      원문(2026-08-13 판정) — A/B 중 하나 + 근거. **B 면 ADR ACCEPTED 선행**.
       🔴 **AC-0 이 A 의 전제를 깼다** — A("전역 뷰로 명문화")는 보유자가 *wms 네이티브
       운영자*일 때만 정직하다. 실측 보유자는 **고객 테넌트 4곳**이므로, 지금 상태를 그대로
       명문화하면 *"고객사가 서로의 창고 데이터를 본다"* 를 제품 사양으로 적는 것이 된다.
       ⇒ A 를 고르려면 **합성 범위를 함께 좁혀야** 하고, 그러면 `WMS_VIEWER` 를 주는 경로가
       저장소에 하나도 남지 않아(④) **콘솔 wms 대시보드가 전부 막힌다**. 즉 A 도 무비용이 아니다
 - [ ] **AC-2 (구현)** — 결정대로. A 면 컨트롤러 javadoc + 계약 문서에 전역 뷰임을 명문화
-      (주석만이 아니라 **계약**에), B 면 마이그레이션 + 프로젝션 + 필터 + 회귀 테스트
+      (주석만이 아니라 **계약**에), B 면 마이그레이션 + 프로젝션 + 필터 + 회귀 테스트.
+      🔴 **`ADR-MONO-065` M2/M3 이 이 문장의 대상 수를 바꿨다** — B1 이면 마이그레이션은
+      **2 테이블**(`admin_order_summary` · `admin_shipment_summary`)이고, 나머지 6개 표면은
+      *"창고 전역"* 을 **계약에 적는 쪽**이 산출물이다. 그리고 B1/B2 어느 쪽이든
+      `outbound.order.received.v1` 봉투에 `tenantId` 를 additive 로 싣는 **이벤트 계약 개정이
+      선행**한다(CLAUDE.md § Layer Rules — 계약 먼저)
+- [ ] **AC-4 (계약 드리프트 정정 · `ADR-MONO-065` R2)** — `ADR-MONO-064` D1/D2 이후 거짓이 된
+      세 문장을 정정한다: `specs/contracts/events/outbound-events.md` L63 의
+      *"Omitted / null for B2B (MANUAL/WEBHOOK_ERP) orders"*(→ `CancelOrderService:132` 가
+      `saved.getTenantId()` 를 그대로 싣는다) · *"wms does not interpret it, filter rows by it"*
+      (→ D2 가 필터한다) · `docs/adr/ADR-MONO-030` § 1.1 facet-d 의 *"opaque correlation column
+      (NOT an isolation key … no row filter)"*. 🔵 **결정이 아니라 사실 정정**이므로 ADR 지정을
+      기다리지 않는다 — 다만 AC-2 가 같은 파일을 여므로 함께 내는 것이 자연스럽다
 - [x] **AC-3 (형제 전수) — 완료 2026-08-13. 답은 "구조적으로 admin-service 하나".**
       `information_schema` 전수(손으로 안 적음) 6개 DB · **91개 테이블**에서 테넌트 컬럼은
       `outbound_db.outbound_order.tenant_id` **하나**뿐이다. ⇒ 다른 서비스(inbound ·
@@ -195,6 +227,7 @@ D1 이 결함을 만든 것은 아니지만, D1 이후 이 티켓은 더 미룰 
 # Related Specs
 
 - [`docs/adr/ADR-MONO-064`](../../../../docs/adr/ADR-MONO-064-wms-outbound-tenant-visibility-plane.md) § M5 · § D4 — 이 티켓의 출처
+- [`docs/adr/ADR-MONO-065`](../../../../docs/adr/ADR-MONO-065-wms-admin-read-plane-tenant-axis.md) — **AC-1 의 결정 문서(PROPOSED)**. 선택지 A/B1/B2/C/D + 실측 M1~M8 + 라이더 R1/R2
 - `projects/wms-platform/PROJECT.md` § Out of Scope (`multi-tenant`)
 - `projects/wms-platform/specs/contracts/http/admin-service-api.md` § 1.3
 - `TASK-MONO-304` — outbound 격리 규칙의 출처
@@ -223,7 +256,9 @@ D1 이 결함을 만든 것은 아니지만, D1 이후 이 티켓은 더 미룰 
 
 # Definition of Done
 
-- [ ] AC-0 실측 기록
-- [ ] A/B 결정 + 근거 (B 면 ADR ACCEPTED 선행)
+- [x] AC-0 실측 기록
+- [~] A/B 결정 + 근거 (B 면 ADR ACCEPTED 선행) — 방향 `B` 지정됨, `ADR-MONO-065` PROPOSED,
+      `B1`/`B2` 정확형 대기
 - [ ] 구현 + 계약 문서 일치
+- [ ] `ADR-MONO-064` 가 남긴 이벤트 계약 드리프트 3문장 정정 (AC-4)
 - [ ] Ready for review
