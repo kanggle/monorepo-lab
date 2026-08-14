@@ -63,3 +63,36 @@ services:
   outbound-service:
     environment:
       SPRING_FLYWAY_LOCATIONS: classpath:db/migration,classpath:db/seed
+
+  # ---------------------------------------------------------------------------
+  # admin-service — 호환 슬림 (TASK-BE-585). 위 네 서비스와 성질이 다르다.
+  # ---------------------------------------------------------------------------
+  # admin 은 여기서 seed 위치를 열지 않는다 — 자기 시드가 이미 항상 켜지는
+  # `db/migration` 안에 있기 때문이다(그래서 이 목록에 없었다). 이 항목이 여는 것은
+  # **기존 볼륨의 복구 경로**다.
+  #
+  # 무슨 일이 있었나: 그 시드가 `V99__seed_dev_data.sql` 이라, 한 번이라도 뜬 admin_db 는
+  # **적용된 최고 버전이 99** 가 됐다. 나중에 `ADR-MONO-065` 가 `V3` 를 추가하자 그것이
+  # 99 **아래**로 해소되어 out-of-order 가 됐고, Flyway 기본값이 거부하면서 admin-service 가
+  # 크래시 루프에 빠졌다(실측 2026-08-14, `TASK-BE-584` AC-0: restarts=12, 대시보드 8개 전건 500).
+  #
+  # 🔴 파일을 `R__` 로 바꾸는 것만으로는 **기존 DB 가 낫지 않는다.** 결함은 파일이 아니라
+  # **이력 테이블**에 있다 — version=99 행이 그대로 남아 `V3` 는 여전히 그 아래다.
+  # (`TASK-MONO-524` 가 iam 에서 같은 것을 실측했다 — R__ 전환만 골랐다면 그 티켓의 AC-3 을
+  # 통과하지 못했을 것이라고 적고 있다.) 그래서 이 한 줄이 필요하다.
+  # 🔵 신선 볼륨에서는 **no-op** 이다 — 적용/해소 순서가 이미 맞다.
+  #
+  # 🔴 왜 `application.yml` 이 아니라 여기인가: out-of-order 는 순서 보증을 푸는 것이라
+  # 프로덕션 정책으로 굳히면 안 된다. 고아 이력 행을 가진 것은 **데모 볼륨**이므로 슬림도
+  # 데모에만 둔다.
+  #
+  # **일몰 조건**: 유통 중인 admin_db 중 `version='99'` 행을 가진 것이 하나도 없으면 이 항목을
+  # 지운다. 한 줄로 깨끗해진다(가리키는 시드가 이제 매번 재적용되는 `R__` 이고 전 문장이
+  # `ON CONFLICT DO NOTHING` 이라 안전하다):
+  #
+  #     DELETE FROM flyway_schema_history WHERE version = '99';
+  #
+  # 선례와 절차: projects/iam-platform/docs/flyway-dev-seed-migrations.md § 6
+  admin-service:
+    environment:
+      SPRING_FLYWAY_OUT_OF_ORDER: "true"
