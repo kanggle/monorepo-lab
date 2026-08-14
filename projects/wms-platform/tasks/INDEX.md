@@ -67,7 +67,13 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-BE-583-admin-dashboard-read-surfaces-have-no-tenant-axis.md` — **READY.** 🔴 `admin-service` 대시보드 읽기 표면에 **테넌트 축이 아예 없다.** `OrderDashboardController` 는 `@PreAuthorize("hasRole('WMS_VIEWER')")` 뿐이고 `CallerScope` 도 테넌트 필터도 안 쓴다. `admin_db` 는 `information_schema` 전수 **22개 테이블에 tenant 컬럼 0개** — 구조적으로 테넌트를 모른다. 실측(2026-08-13, 같은 운영자 토큰): admin 프로젝션 `totalElements=1` · outbound 원시 API `totalElements=0` ⇒ **관문 있는 표면은 굶고 관문 없는 형제가 같은 행을 무필터로 내준다**(erp `ADR-001` §3 와 같은 모양: *"관문 없는 형제 5개가 매일 깨고 있었고 관문이 있는 하나만 굶었다"*). 🔴 이 티켓은 "격리를 넣는다" 가 아니다 — 저장소 안에서 두 진술이 충돌한다: `PROJECT.md` § Out of Scope 는 **multi-tenant 를 의도적 제외**("단일 물류 센터 가정")로 선언하고 `TASK-MONO-304`/`ADR-MONO-022` §D9 는 outbound 를 테넌트로 격리한다. **어느 쪽인지가 AC-1**(A=전역 뷰로 명문화 / B=테넌트 축 신설 → **ADR 선행**). 🔴 B 면 마이그레이션이 코드 문제 이전에 **데이터 문제**다 — 기존 프로젝션 행에 테넌트가 없고 원본에도 `NULL` 행이 있으며 `ADR-MONO-064` 가 소급 stamp 를 금지했다. AC-0 은 dashboard 컨트롤러 전수(6개로 **추정** — 세지 않고 시작하면 낙오)와 `WMS_VIEWER` 를 얻는 신원 전수. `ADR-MONO-064` §M5·§D4 산물. 분석=Opus 5 / 구현 권장=Opus (A/B 판단 + 스키마 결정).
+(empty)
+
+<details><summary>직전 점유 (2026-08-13~14, `TASK-BE-583` — 지금 review/)</summary>
+
+- **READY.** 🔴 `admin-service` 대시보드 읽기 표면에 **테넌트 축이 아예 없다.** `OrderDashboardController` 는 `@PreAuthorize("hasRole('WMS_VIEWER')")` 뿐이고 `CallerScope` 도 테넌트 필터도 안 쓴다. `admin_db` 는 `information_schema` 전수 **22개 테이블에 tenant 컬럼 0개** — 구조적으로 테넌트를 모른다. 실측(2026-08-13, 같은 운영자 토큰): admin 프로젝션 `totalElements=1` · outbound 원시 API `totalElements=0` ⇒ **관문 있는 표면은 굶고 관문 없는 형제가 같은 행을 무필터로 내준다**(erp `ADR-001` §3 와 같은 모양: *"관문 없는 형제 5개가 매일 깨고 있었고 관문이 있는 하나만 굶었다"*). 🔴 이 티켓은 "격리를 넣는다" 가 아니다 — 저장소 안에서 두 진술이 충돌한다: `PROJECT.md` § Out of Scope 는 **multi-tenant 를 의도적 제외**("단일 물류 센터 가정")로 선언하고 `TASK-MONO-304`/`ADR-MONO-022` §D9 는 outbound 를 테넌트로 격리한다. **어느 쪽인지가 AC-1**(A=전역 뷰로 명문화 / B=테넌트 축 신설 → **ADR 선행**). 🔴 B 면 마이그레이션이 코드 문제 이전에 **데이터 문제**다 — 기존 프로젝션 행에 테넌트가 없고 원본에도 `NULL` 행이 있으며 `ADR-MONO-064` 가 소급 stamp 를 금지했다. AC-0 은 dashboard 컨트롤러 전수(6개로 **추정** — 세지 않고 시작하면 낙오)와 `WMS_VIEWER` 를 얻는 신원 전수. `ADR-MONO-064` §M5·§D4 산물. 분석=Opus 5 / 구현 권장=Opus (A/B 판단 + 스키마 결정).
+
+</details>
 
 > 2026-07-20 (`TASK-MONO-451`): 위 두 행은 **디스크에는 `ready/` 에 있는데 이 섹션이 `(empty)` 라고 선언**하고 있었다 — 아래 2026-07-12 노트와 정반대 방향의 같은 결함이다. 그때는 표가 끝난 일을 가리켰고, 이번엔 표가 **살아있는 일을 숨겼다**. 큐를 표로 고르는 사람에게 후자는 **일이 없다는 거짓 보고**다. 이제 `scripts/check-index-queue-drift.sh` 가 양방향으로 대조한다.
 
@@ -79,7 +85,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-_(없음)_
+- `TASK-BE-583-admin-dashboard-read-surfaces-have-no-tenant-axis.md` — **REVIEW (2026-08-14).** AC-0/AC-1/AC-2/AC-3/AC-4 전부 닫혔다. **AC-1 = [`ADR-MONO-065`](../../../docs/adr/ADR-MONO-065-wms-admin-read-plane-tenant-axis.md) ACCEPTED — `B1` + `R1=a`** (소유자 지정). 🔴 실측이 티켓의 처방을 바꿨다 — 8개 표면 중 **테넌트 소유 데이터를 투영하는 건 2개뿐**이고(`admin_order_summary` · `admin_shipment_summary`) 나머지 6개는 상류 91테이블 어디에도 소유자가 없는 **창고 운영 데이터**라 *"8개에 필터"* 는 실행 불가능한 기술이었다(없는 컬럼에 거는 필터는 상수 비교가 되고 가드는 영원히 초록이다). ⇒ **D1** 축은 2개 테이블에만이고 필터 값의 출처는 **JWT**(요청 파라미터 아님) · **D2** 그 값은 `order.received.v1` **봉투**가 싣고 오며 프로젝션은 **그대로 기록**한다(orderNo 재조회·source 추론 금지) · **D3(R1=a)** 나머지 6개는 wms-entitled 테넌트 전체에 공개됨을 **계약에 명문화**(주석 아님) · **D4** `traits` 불변 ⇒ multi-tenant M1/M3/M7 당일 위반을 피하고 064 가 유지한 **403 이 그대로** · **D5** 064 가 남긴 계약 드리프트 3문장 정정(AC-4). 산출물: 계약 2건 + `V3__order_shipment_tenant_axis.sql` + `ReadScope`/`ReadScopeProvider`/`SecurityContextReadScopeProvider` + 회귀 테스트 **14건**. 🔴 **bite 로 무는지 검증** — 컨트롤러 필터 무력화 시 유닛 4건 RED · 프로젝션 stamp 무력화 시 2건 RED · JPQL 테넌트 술어 항진식화 시 **IT 2건** RED, 전부 복원 후 GREEN. 🔵 `list_nativeWmsTenant_isUnrestricted` 는 첫 bite 에 안 물었고 그게 맞다(그 셀은 "무제한이어야 한다" 는 **대조군**이라 돌연변이 결과와 기대가 일치한다). 🔴 `test` 태스크는 `integration` 태그를 **제외**하므로 유닛 초록만으로는 cross-tenant IT 를 증명하지 못한다 — `integrationTest` 를 따로 돌렸다(54건 · skipped 0 · 실패 0, 실 PostgreSQL + V3 적용). 🔴 **기존 프로젝션 행은 소급 채우지 않는다** — 복구 경로는 064 와 같은 볼륨 초기화 + 재시드이고 두 결정이 **같은 재시드 한 번**으로 함께 풀린다. 분석=Opus 5 / 구현=Opus.
 
 ## done
 

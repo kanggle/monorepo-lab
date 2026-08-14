@@ -8,7 +8,7 @@ TASK-BE-583
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -206,7 +206,20 @@ D1 이 결함을 만든 것은 아니지만, D1 이후 이 티켓은 더 미룰 
       명문화하면 *"고객사가 서로의 창고 데이터를 본다"* 를 제품 사양으로 적는 것이 된다.
       ⇒ A 를 고르려면 **합성 범위를 함께 좁혀야** 하고, 그러면 `WMS_VIEWER` 를 주는 경로가
       저장소에 하나도 남지 않아(④) **콘솔 wms 대시보드가 전부 막힌다**. 즉 A 도 무비용이 아니다
-- [ ] **AC-2 (구현) — `ADR-MONO-065` D1~D4 대로.** 순서가 구속력을 갖는다(계약 먼저):
+- [x] **AC-2 (구현) — 완료 2026-08-14.** 6단계 전부 아래 순서대로 착수했다. 산출물:
+      계약 2건 · 마이그레이션 `V3__order_shipment_tenant_axis.sql` · `OrderReceivedEvent.tenantId`
+      + `ReceiveOrderService` 발행 · `ProjectionEnvelope.tenantId` + 파서 + 두 엔티티/프로젝션 ·
+      `ReadScope`/`ReadScopeProvider`/`SecurityContextReadScopeProvider` + 두 컨트롤러·리포지토리 ·
+      회귀 테스트 **14건**.
+      🔴 **bite 로 검증했다**(가드가 실제로 무는지 — 술어만 있고 안 무는 가드를 피하려고):
+      컨트롤러 필터를 `null` 로 바꾸니 유닛 **4건**(orders 2 · shipments 2)이 RED,
+      프로젝션 stamp 를 `null` 로 바꾸니 **2건**이 RED, JPQL 테넌트 술어를 항진식으로 바꾸니
+      **IT 2건**이 RED. 전부 복원 후 재실행 GREEN.
+      🔵 `list_nativeWmsTenant_isUnrestricted` 는 첫 bite 에 **안 물었고 그게 맞다** — 그 셀은
+      "무제한이어야 한다" 는 대조군이라 돌연변이의 결과와 기대가 일치한다.
+      🔴 **`test` 태스크는 `integration` 태그를 제외한다** — 유닛 초록만으로는 cross-tenant IT 에
+      대해 아무것도 말하지 못하므로 `integrationTest` 를 따로 돌렸다(54건 · skipped 0 · 실패 0,
+      실 PostgreSQL + V3 적용). 상세 절차:
       1. **이벤트 계약 개정(D2)** — `specs/contracts/events/outbound-events.md` 에
          `wms.outbound.order.received.v1` 봉투의 `tenantId` 를 additive 로 정의하고,
          *"wms does **not** interpret it, filter rows by it"* 문장을 **철회**한다
@@ -224,7 +237,14 @@ D1 이 결함을 만든 것은 아니지만, D1 이후 이 티켓은 더 미룰 
          존재하는 픽스처). 🔴 대조군 없는 필터 테스트는 상수 비교와 구별되지 않는다
          (§ Failure Scenarios 1번)
       🔵 `traits` 는 건드리지 않는다(D4) — `PROJECT.md` · `rules/traits/` 변경 **없음**
-- [ ] **AC-4 (계약 드리프트 정정 · `ADR-MONO-065` R2)** — `ADR-MONO-064` D1/D2 이후 거짓이 된
+- [x] **AC-4 (계약 드리프트 정정 · `ADR-MONO-065` R2) — 완료 2026-08-14.** 세 문장 전부
+      정정했다: `outbound-events.md` 는 봉투 `tenantId` 행을 다시 쓰고 § Tenant semantics 를
+      신설해 옛 문장 셋을 **명시적으로 철회**했으며(두 return-leg 이벤트의 per-event 주석도
+      같이), `ADR-MONO-030` 은 ACCEPTED 문서이므로 본문을 고치지 않고 facet-d 아래
+      **additive 정정 주석 + audit-trail 행**을 넣었다(그 ADR 자신의 2026-06-12 정정 선례와
+      같은 형식). 🔵 결정은 하나도 뒤집히지 않는다 — facet d 가 정하는 *왕복*은 byte-identical
+      이고, 바뀐 것은 wms 가 자기 쪽에서 그 컬럼으로 무엇을 하느냐다. 원문:
+      `ADR-MONO-064` D1/D2 이후 거짓이 된
       세 문장을 정정한다: `specs/contracts/events/outbound-events.md` L63 의
       *"Omitted / null for B2B (MANUAL/WEBHOOK_ERP) orders"*(→ `CancelOrderService:132` 가
       `saved.getTenantId()` 를 그대로 싣는다) · *"wms does not interpret it, filter rows by it"*
@@ -275,6 +295,7 @@ D1 이 결함을 만든 것은 아니지만, D1 이후 이 티켓은 더 미룰 
 
 - [x] AC-0 실측 기록
 - [x] A/B 결정 + 근거 (B 면 ADR ACCEPTED 선행) — `ADR-MONO-065` **ACCEPTED — `B1` + `R1=a`**
-- [ ] 구현 + 계약 문서 일치
-- [ ] `ADR-MONO-064` 가 남긴 이벤트 계약 드리프트 3문장 정정 (AC-4)
-- [ ] Ready for review
+- [x] 구현 + 계약 문서 일치 — 계약이 코드보다 **먼저** 갱신됐고(§ Layer Rules), 계약이 적은
+      두 클래스(격리 2 / 창고 전역 6)가 코드의 실제 필터 배치와 일치한다
+- [x] `ADR-MONO-064` 가 남긴 이벤트 계약 드리프트 3문장 정정 (AC-4)
+- [x] Ready for review

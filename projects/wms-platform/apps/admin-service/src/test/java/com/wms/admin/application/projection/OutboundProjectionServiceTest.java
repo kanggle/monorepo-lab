@@ -28,6 +28,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -97,7 +98,7 @@ class OutboundProjectionServiceTest {
         UUID orderId = UUID.randomUUID();
         OrderSummaryEntity existing = new OrderSummaryEntity(orderId, "ORD-1",
                 UUID.randomUUID(), null, null, "RECEIVED", null, null, 1, null,
-                NOW.minusSeconds(60), null, NOW.minusSeconds(60));
+                NOW.minusSeconds(60), null, NOW.minusSeconds(60), "demo-corp");
         when(orderRepo.findById(orderId)).thenReturn(Optional.of(existing));
 
         ProjectionEnvelope env = envelope("outbound.order.cancelled",
@@ -108,9 +109,138 @@ class OutboundProjectionServiceTest {
         assertThat(existing.getStatus()).isEqualTo("CANCELLED");
     }
 
+    // ── Envelope tenant recorded verbatim (ADR-MONO-065 § D2) ─────────────────
+    //
+    // The projection is the ONLY place admin-service learns an order's tenant, so
+    // these assert the stored value, not just that a save happened.
+
+    @Test
+    void orderReceived_storesTheEnvelopeTenantOnTheRow() throws Exception {
+        UUID orderId = UUID.randomUUID();
+        UUID warehouseId = UUID.randomUUID();
+        when(orderRepo.findById(orderId)).thenReturn(Optional.empty());
+
+        ProjectionEnvelope env = envelope("outbound.order.received",
+                "wms.outbound.order.received.v1",
+                "{\"orderId\":\"" + orderId + "\",\"orderNo\":\"ORD-1\",\"warehouseId\":\""
+                        + warehouseId + "\",\"lines\":[{}]}",
+                "demo-corp");
+
+        assertThat(service.project(env)).isEqualTo(DedupeOutcome.APPLIED);
+        ArgumentCaptor<OrderSummaryEntity> saved =
+                ArgumentCaptor.forClass(OrderSummaryEntity.class);
+        verify(orderRepo).save(saved.capture());
+        assertThat(saved.getValue().getTenantId()).isEqualTo("demo-corp");
+    }
+
+    /**
+     * Control for the test above: an envelope with no tenant must leave the column
+     * null rather than inventing one. Without this cell, a projection that hard-wired
+     * a constant would pass the positive case.
+     */
+    @Test
+    void orderReceived_withoutAnEnvelopeTenant_leavesTheRowTenantless() throws Exception {
+        UUID orderId = UUID.randomUUID();
+        UUID warehouseId = UUID.randomUUID();
+        when(orderRepo.findById(orderId)).thenReturn(Optional.empty());
+
+        ProjectionEnvelope env = envelope("outbound.order.received",
+                "wms.outbound.order.received.v1",
+                "{\"orderId\":\"" + orderId + "\",\"orderNo\":\"ORD-1\",\"warehouseId\":\""
+                        + warehouseId + "\",\"lines\":[{}]}");
+
+        assertThat(service.project(env)).isEqualTo(DedupeOutcome.APPLIED);
+        ArgumentCaptor<OrderSummaryEntity> saved =
+                ArgumentCaptor.forClass(OrderSummaryEntity.class);
+        verify(orderRepo).save(saved.capture());
+        assertThat(saved.getValue().getTenantId()).isNull();
+    }
+
+    /**
+     * The tenant is taken from the envelope, never from the payload — a payload-level
+     * {@code tenantId} is whoever composed the payload's claim, not a signed one.
+     * (The parser enforces the same split; this pins it end-to-end at the projection.)
+     */
+    @Test
+    void orderReceived_ignoresATenantIdInThePayload() throws Exception {
+        UUID orderId = UUID.randomUUID();
+        UUID warehouseId = UUID.randomUUID();
+        when(orderRepo.findById(orderId)).thenReturn(Optional.empty());
+
+        ProjectionEnvelope env = envelope("outbound.order.received",
+                "wms.outbound.order.received.v1",
+                "{\"orderId\":\"" + orderId + "\",\"orderNo\":\"ORD-1\",\"warehouseId\":\""
+                        + warehouseId + "\",\"tenantId\":\"acme-corp\",\"lines\":[{}]}",
+                "demo-corp");
+
+        assertThat(service.project(env)).isEqualTo(DedupeOutcome.APPLIED);
+        ArgumentCaptor<OrderSummaryEntity> saved =
+                ArgumentCaptor.forClass(OrderSummaryEntity.class);
+        verify(orderRepo).save(saved.capture());
+        assertThat(saved.getValue().getTenantId()).isEqualTo("demo-corp");
+    }
+
+    @Test
+    void shippingConfirmed_storesTheEnvelopeTenantOnTheShipment() throws Exception {
+        UUID shipmentId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        UUID warehouseId = UUID.randomUUID();
+        when(shipmentRepo.findById(shipmentId)).thenReturn(Optional.empty());
+        when(orderRepo.findById(orderId)).thenReturn(Optional.empty());
+        when(throughputRepo.upsertIncrement(any(LocalDate.class), eq(warehouseId), anyInt(),
+                any(Instant.class))).thenReturn(1);
+
+        ProjectionEnvelope env = envelope("outbound.shipping.confirmed",
+                "wms.outbound.shipping.confirmed.v1",
+                "{\"shipmentId\":\"" + shipmentId + "\",\"orderId\":\"" + orderId
+                        + "\",\"warehouseId\":\"" + warehouseId
+                        + "\",\"shippedAt\":\"2026-05-09T15:00:00Z\","
+                        + "\"lines\":[{\"qtyConfirmed\":100}]}",
+                "demo-corp");
+
+        assertThat(service.project(env)).isEqualTo(DedupeOutcome.APPLIED);
+        ArgumentCaptor<ShipmentSummaryEntity> saved =
+                ArgumentCaptor.forClass(ShipmentSummaryEntity.class);
+        verify(shipmentRepo).save(saved.capture());
+        // Note the order row is absent here (findById → empty): the shipment carries
+        // its own tenant precisely so it does not depend on the order projection
+        // having arrived.
+        assertThat(saved.getValue().getTenantId()).isEqualTo("demo-corp");
+    }
+
+    /**
+     * Out-of-order cancellation creates a thin row. It must carry the tenant too:
+     * the received event that would otherwise have supplied it is exactly the one the
+     * LWW guard will skip, so the row would be permanently invisible to its own owner.
+     */
+    @Test
+    void orderCancelledBeforeReceived_stampsTheTenantOnTheThinRow() throws Exception {
+        UUID orderId = UUID.randomUUID();
+        when(orderRepo.findById(orderId)).thenReturn(Optional.empty());
+
+        ProjectionEnvelope env = envelope("outbound.order.cancelled",
+                "wms.outbound.order.cancelled.v1",
+                "{\"orderId\":\"" + orderId + "\",\"orderNo\":\"ORD-1\"}",
+                "demo-corp");
+
+        assertThat(service.project(env)).isEqualTo(DedupeOutcome.APPLIED);
+        ArgumentCaptor<OrderSummaryEntity> saved =
+                ArgumentCaptor.forClass(OrderSummaryEntity.class);
+        verify(orderRepo).save(saved.capture());
+        assertThat(saved.getValue().getTenantId()).isEqualTo("demo-corp");
+        assertThat(saved.getValue().getStatus()).isEqualTo("CANCELLED");
+    }
+
     private ProjectionEnvelope envelope(String eventType, String topic, String payloadJson)
             throws Exception {
+        return envelope(eventType, topic, payloadJson, null);
+    }
+
+    /** Envelope-level {@code tenantId} — the isolation axis, ADR-MONO-065 § D2. */
+    private ProjectionEnvelope envelope(String eventType, String topic, String payloadJson,
+                                        String tenantId) throws Exception {
         JsonNode payload = MAPPER.readTree(payloadJson);
-        return new ProjectionEnvelope(UUID.randomUUID(), eventType, NOW, "agg", topic, payload);
+        return new ProjectionEnvelope(UUID.randomUUID(), eventType, NOW, "agg", topic,
+                tenantId, payload);
     }
 }

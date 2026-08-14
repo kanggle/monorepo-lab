@@ -40,12 +40,23 @@ public sealed interface OutboundDomainEvent
     String actorId();
 
     /**
-     * Opaque ecommerce-tenant correlation echoed onto the outer envelope
-     * (ADR-MONO-022 facet d, TASK-MONO-296). Only the cross-project return-leg
-     * events ({@link ShippingConfirmedEvent}, {@link OrderCancelledEvent}) carry
-     * one for {@code FULFILLMENT_ECOMMERCE}-origin orders; every other event and
-     * all B2B / standalone orders return {@code null}, in which case the
-     * serializer omits the field (additive). wms never interprets it.
+     * The owning customer tenant of the order, echoed onto the outer envelope.
+     *
+     * <p>Three events override this: {@link ShippingConfirmedEvent} and
+     * {@link OrderCancelledEvent} (the cross-project return leg — ADR-MONO-022
+     * facet d, TASK-MONO-296) and {@link OrderReceivedEvent} (ADR-MONO-065 § D2 —
+     * the only point at which admin-service can learn an order's tenant). Every
+     * other event returns {@code null} and the serializer omits the field
+     * (additive).
+     *
+     * <p>🔴 <b>Not an opaque correlation any more.</b> Until ADR-MONO-064 this value
+     * only ever came from an inbound ecommerce envelope and wms never read it back.
+     * Since ADR-MONO-064 § D1/D2 it is <em>also</em> the caller's signed tenant for
+     * REST-created orders and <em>is</em> the isolation axis wms filters rows by —
+     * so it is now carried for {@code MANUAL} orders too, not just
+     * {@code FULFILLMENT_ECOMMERCE} ones. {@code null} means the order genuinely has
+     * no tenant (unrestricted caller, or predating ADR-MONO-064), never "not
+     * applicable to this order type".
      */
     default String tenantId() {
         return null;

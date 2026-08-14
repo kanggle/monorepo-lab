@@ -206,6 +206,6 @@ class InventoryProjectionServiceTest {
     private ProjectionEnvelope envelope(String eventType, String topic, String payloadJson)
             throws Exception {
         JsonNode payload = MAPPER.readTree(payloadJson);
-        return new ProjectionEnvelope(UUID.randomUUID(), eventType, NOW, "agg", topic, payload);
+        return new ProjectionEnvelope(UUID.randomUUID(), eventType, NOW, "agg", topic, null, payload);
     }
 }

@@ -60,19 +60,43 @@ event-specific data.
 | `aggregateId` | UUID string | Aggregate root id — varies per event type; see each event |
 | `traceId` | string | OTel trace id; propagated from REST request, webhook, or consumed Kafka event |
 | `actorId` | string or null | JWT subject for REST-driven; `system:erp-webhook` for webhook-origin; `system:saga-sweeper` for sweeper-re-emitted events |
-| `tenantId` | string or null | **Additive correlation passthrough (ADR-MONO-022 facet d, TASK-MONO-296).** Present only on the cross-project return-leg events (`outbound.shipping.confirmed`, `outbound.order.cancelled`) for `FULFILLMENT_ECOMMERCE`-origin orders: the ecommerce `tenant_id` captured from the inbound `ecommerce.fulfillment.requested.v1` envelope and **echoed back unchanged**. wms does **not** interpret it, filter rows by it, or change any gate — it is an opaque correlation field alongside `orderNo` (D5). Omitted / `null` for B2B (`MANUAL`/`WEBHOOK_ERP`) orders and for all other event types. wms stays single-tenant (ADR-MONO-030 §1.1). Additive ⇒ existing consumers (inventory-service, scm, admin-service) ignore the unknown field. |
+| `tenantId` | string or null | **The owning customer tenant of the order — an isolation key** (ADR-MONO-064 D1/D2, ADR-MONO-065 D2). Carried on `outbound.order.received` (ADR-MONO-065 D2) and on the two cross-project return-leg events (`outbound.shipping.confirmed`, `outbound.order.cancelled`). The value is always the order row's `tenant_id`, whose two sources are: (a) the **caller's signed JWT** `tenant_id` when a tenant-scoped caller creates the order over REST (ADR-MONO-064 D1 — never a client-supplied field), or (b) the ecommerce `tenant_id` captured from the inbound `ecommerce.fulfillment.requested.v1` envelope for `FULFILLMENT_ECOMMERCE`-origin orders (ADR-MONO-022 facet d, TASK-MONO-296) — echoed back unchanged on the return leg. `null` when no tenant could be resolved: orders created by an **unrestricted** caller (Kafka consumer / scheduler / no security context) and orders that predate ADR-MONO-064 (**not** back-stamped — see § Tenant semantics). Additive ⇒ consumers that do not scope by tenant (inventory-service, scm) ignore the field. |
 | `payload` | object | Defined per `eventType` below |
 
 Serialization: JSON. Future Avro/Protobuf migration possible but not v1.
 
-> **`tenantId` is envelope-level, not payload.** The two return-leg topics
-> (`wms.outbound.shipping.confirmed.v1`, `wms.outbound.order.cancelled.v1`) carry
-> the echoed ecommerce tenant on the outer envelope (mirroring the inbound
-> `ecommerce.fulfillment.requested.v1` envelope which carries `tenantId`
-> top-level). The ecommerce return consumers bind it into their `TenantContext`
+> **`tenantId` is envelope-level, not payload.** The three topics that carry it
+> (`wms.outbound.order.received.v1`, `wms.outbound.shipping.confirmed.v1`,
+> `wms.outbound.order.cancelled.v1`) put it on the outer envelope, mirroring the
+> inbound `ecommerce.fulfillment.requested.v1` envelope which carries `tenantId`
+> top-level. The ecommerce return consumers bind it into their `TenantContext`
 > (with a local-row fallback by `orderNo` when absent — older wms / standalone).
 > See `ecommerce-fulfillment-subscriptions.md` § Return leg and the ecommerce
 > `wms-shipment-subscriptions.md`.
+
+### Tenant semantics — what wms does with `tenantId`
+
+🔴 **Corrected 2026-08-14 (TASK-BE-583 / ADR-MONO-065 D2 + D5).** Until this
+revision this document stated that wms *"does **not** interpret it, filter rows by
+it, or change any gate"*, that it is *"omitted / null for B2B (`MANUAL`/`WEBHOOK_ERP`)
+orders"*, and that *"wms stays single-tenant"*. **All three became false when
+ADR-MONO-064 was accepted (2026-08-13)** and were not corrected in that ticket's PR,
+which revised only the HTTP contract. The accurate statement:
+
+- **wms interprets it and filters rows by it.** `outbound_order.tenant_id` is the
+  single isolation axis for the outbound REST plane (ADR-MONO-064 D2: a tenant-scoped
+  caller sees only its own tenant's orders, across every `source`) and — from
+  ADR-MONO-065 D1 — for the `admin-service` order/shipment dashboards.
+- **It is not restricted to `FULFILLMENT_ECOMMERCE`.** A `MANUAL` order created by a
+  tenant-scoped REST caller carries that caller's tenant (ADR-MONO-064 D1), so the
+  return-leg events for such an order carry it too.
+- **It is never back-stamped.** Orders that predate ADR-MONO-064 keep `tenant_id =
+  NULL` and stay invisible to tenant-scoped callers; the recovery path is a volume
+  reset + reseed, not a migration (ADR-MONO-064 § 이 결정이 하지 않는 것).
+- **The projection consumer records the envelope value verbatim.** `admin-service`
+  must not derive the tenant by looking the order up by `orderNo`, nor infer it from
+  `source` — a projection that reconstructs an isolation key is a second, divergent
+  source of truth (ADR-MONO-065 D2).
 
 ---
 
@@ -163,6 +187,18 @@ Partition key: `orderId`
 | `lines[].lotId` | UUID | yes | Null if any-lot or no lot required |
 | `lines[].qtyOrdered` | int | no | EA |
 
+> **Envelope `tenantId` — additive, new in ADR-MONO-065 D2 (TASK-BE-583).** The outer
+> envelope carries the created order's `tenant_id`: the creating REST caller's
+> **signed** tenant (ADR-MONO-064 D1) or the ecommerce tenant captured from
+> `ecommerce.fulfillment.requested.v1` (ADR-MONO-022 facet d). `null` when the order
+> has no tenant (unrestricted caller — Kafka consumer / scheduler / no security
+> context). Additive ⇒ a consumer that ignores it is unaffected.
+>
+> 🔴 This is the **only** point at which `admin-service` learns an order's tenant.
+> The projection must record the envelope value verbatim — it may not look the order
+> up by `orderNo`, nor infer the tenant from `source` (ADR-MONO-065 D2). See
+> § Tenant semantics.
+
 Consumer expectations:
 
 - `admin-service`: projects into `OutboundDashboard` and `OrderAuditLog`
@@ -206,13 +242,15 @@ Partition key: `orderId`
 | `reason` | string | no | free text for manual cancel; `INSUFFICIENT_STOCK` for auto-backorder |
 | `cancelledAt` | ISO-8601 UTC | no | for auto-backorder = the reserve-fail timestamp |
 
-> **Envelope `tenantId` (ADR-MONO-022 facet d, TASK-MONO-296).** When the cancelled
-> order originated from ecommerce (`source=FULFILLMENT_ECOMMERCE`), the outer
-> envelope carries the echoed ecommerce `tenantId` (captured at intake, stored as
-> an opaque correlation column on the wms order). The ecommerce `order-service`
-> consumer (`order-service-wms`) binds it into `TenantContext` so the auto-cancel
-> + emitted `order.cancelled` resolve the correct tenant. `null`/omitted for B2B
-> orders or when no inbound tenant was supplied. wms does not interpret it.
+> **Envelope `tenantId` (ADR-MONO-022 facet d, TASK-MONO-296; semantics revised by
+> ADR-MONO-064 D1 + ADR-MONO-065 D2).** The outer envelope carries the cancelled
+> order's `tenant_id` — the ecommerce tenant echoed from intake for
+> `source=FULFILLMENT_ECOMMERCE`, **or the creating REST caller's signed tenant for a
+> `MANUAL` order** (ADR-MONO-064 D1). The ecommerce `order-service` consumer
+> (`order-service-wms`) binds it into `TenantContext` so the auto-cancel + emitted
+> `order.cancelled` resolve the correct tenant. `null` only when the order itself has
+> no tenant (created by an unrestricted caller, or pre-ADR-MONO-064).
+> 🔴 **wms does interpret it** — see § Tenant semantics.
 
 Consumer expectations:
 
@@ -494,12 +532,14 @@ Partition key: `sagaId`
 | `lines[].locationId` | UUID | no | Source location that was picked (from `PickingConfirmationLine.actual_location_id`) |
 | `lines[].qtyConfirmed` | int | no | EA; equals `order_line.qty_ordered` in v1 |
 
-> **Envelope `tenantId` (ADR-MONO-022 facet d, TASK-MONO-296).** For
-> `FULFILLMENT_ECOMMERCE`-origin orders the outer envelope carries the echoed
-> ecommerce `tenantId` (captured at intake, stored as an opaque correlation
-> column on the wms order). The ecommerce `shipping-service` consumer binds it
-> into `TenantContext` for the `markShipped` transition (local-row fallback by
-> `orderNo` when absent). `null`/omitted for B2B orders. wms does not interpret it.
+> **Envelope `tenantId` (ADR-MONO-022 facet d, TASK-MONO-296; semantics revised by
+> ADR-MONO-064 D1 + ADR-MONO-065 D2).** The outer envelope carries the shipped
+> order's `tenant_id` — the ecommerce tenant echoed from intake for
+> `FULFILLMENT_ECOMMERCE`-origin orders, **or the creating REST caller's signed
+> tenant for a `MANUAL` order** (ADR-MONO-064 D1). The ecommerce `shipping-service`
+> consumer binds it into `TenantContext` for the `markShipped` transition (local-row
+> fallback by `orderNo` when absent). `null` only when the order itself has no tenant.
+> 🔴 **wms does interpret it** — see § Tenant semantics.
 
 > **⚠️ Authoritative cross-service contract.** This event is consumed by
 > `inventory-service` (`ShippingConfirmedConsumer`) to call

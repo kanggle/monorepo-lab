@@ -2,6 +2,7 @@ package com.wms.admin.api.dashboard;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -11,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.wms.admin.api.advice.GlobalExceptionHandler;
 import com.wms.admin.config.SecurityConfig;
+import com.wms.admin.infra.security.SecurityContextReadScopeProvider;
 import com.wms.admin.readmodel.outbound.ShipmentSummaryEntity;
 import com.wms.admin.readmodel.outbound.ShipmentSummaryRepository;
 import java.time.Instant;
@@ -27,8 +29,11 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+/** {@link SecurityContextReadScopeProvider} imported, not mocked — see the sibling
+ *  {@code OrderDashboardControllerSliceTest} for why. */
 @WebMvcTest(controllers = ShipmentDashboardController.class)
-@Import({SecurityConfig.class, GlobalExceptionHandler.class})
+@Import({SecurityConfig.class, GlobalExceptionHandler.class,
+        SecurityContextReadScopeProvider.class})
 class ShipmentDashboardControllerSliceTest {
 
     @Autowired MockMvc mockMvc;
@@ -38,14 +43,15 @@ class ShipmentDashboardControllerSliceTest {
 
     private ShipmentSummaryEntity sample() {
         return new ShipmentSummaryEntity(UUID.randomUUID(), UUID.randomUUID(), "ORD-1",
-                UUID.randomUUID(), "SHP-1", "DHL", "TRACK-1", NOW, 100, NOW);
+                UUID.randomUUID(), "SHP-1", "DHL", "TRACK-1", NOW, 100, NOW, "demo-corp");
     }
 
     @Test
     void list_viewer_returns200() throws Exception {
         Page<ShipmentSummaryEntity> page = new PageImpl<>(List.of(sample()),
                 PageRequest.of(0, 20), 1);
-        when(repository.search(any(), any(), any(), any(), any(), any())).thenReturn(page);
+        when(repository.search(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(page);
 
         mockMvc.perform(get("/api/v1/admin/dashboard/shipments")
                         .with(jwt().jwt(j -> j.claim("tenant_id", "wms"))
@@ -57,7 +63,8 @@ class ShipmentDashboardControllerSliceTest {
     @Test
     void list_dateRangeFilter_passedToRepository() throws Exception {
         Page<ShipmentSummaryEntity> page = new PageImpl<>(List.of(), PageRequest.of(0, 20), 0);
-        when(repository.search(any(), any(), any(), any(), any(), any())).thenReturn(page);
+        when(repository.search(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(page);
 
         Instant from = Instant.parse("2026-05-09T00:00:00Z");
         Instant to = Instant.parse("2026-05-09T23:59:59Z");
@@ -69,7 +76,59 @@ class ShipmentDashboardControllerSliceTest {
                                 .authorities(new SimpleGrantedAuthority("ROLE_WMS_VIEWER"))))
                 .andExpect(status().isOk());
 
-        verify(repository).search(any(), any(), any(), eq(from), eq(to), any());
+        verify(repository).search(any(), any(), any(), any(), eq(from), eq(to), any());
+    }
+
+    // ── Tenant scoping (ADR-MONO-065 § D1) ─────────────────────────────────────
+
+    @Test
+    void list_customerTenant_pinsThatTenantOnTheQuery() throws Exception {
+        Page<ShipmentSummaryEntity> page = new PageImpl<>(List.of(), PageRequest.of(0, 20), 0);
+        when(repository.search(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(page);
+
+        mockMvc.perform(get("/api/v1/admin/dashboard/shipments")
+                        .with(jwt().jwt(j -> j.claim("tenant_id", "demo-corp"))
+                                .authorities(new SimpleGrantedAuthority("ROLE_WMS_VIEWER"))))
+                .andExpect(status().isOk());
+
+        verify(repository).search(eq("demo-corp"), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void list_nativeWmsTenant_isUnrestricted() throws Exception {
+        Page<ShipmentSummaryEntity> page = new PageImpl<>(List.of(), PageRequest.of(0, 20), 0);
+        when(repository.search(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(page);
+
+        mockMvc.perform(get("/api/v1/admin/dashboard/shipments")
+                        .with(jwt().jwt(j -> j.claim("tenant_id", "wms"))
+                                .authorities(new SimpleGrantedAuthority("ROLE_WMS_VIEWER"))))
+                .andExpect(status().isOk());
+
+        verify(repository).search(isNull(), any(), any(), any(), any(), any(), any());
+    }
+
+    /**
+     * {@code ?orderId=} narrowing does not bypass the tenant filter — the two are
+     * ANDed, so asking for another tenant's order id still carries this caller's
+     * tenant into the query (and therefore returns nothing).
+     */
+    @Test
+    void list_orderIdNarrowing_stillCarriesTheTenant() throws Exception {
+        Page<ShipmentSummaryEntity> page = new PageImpl<>(List.of(), PageRequest.of(0, 20), 0);
+        when(repository.search(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(page);
+        UUID otherTenantsOrder = UUID.randomUUID();
+
+        mockMvc.perform(get("/api/v1/admin/dashboard/shipments")
+                        .param("orderId", otherTenantsOrder.toString())
+                        .with(jwt().jwt(j -> j.claim("tenant_id", "demo-corp"))
+                                .authorities(new SimpleGrantedAuthority("ROLE_WMS_VIEWER"))))
+                .andExpect(status().isOk());
+
+        verify(repository).search(eq("demo-corp"), any(), eq(otherTenantsOrder), any(), any(),
+                any(), any());
     }
 
     @Test

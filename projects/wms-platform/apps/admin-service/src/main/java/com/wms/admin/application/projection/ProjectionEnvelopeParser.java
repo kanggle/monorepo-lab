@@ -33,11 +33,27 @@ public class ProjectionEnvelopeParser {
             Instant occurredAt = parseInstant(root.path("occurredAt").asText());
             JsonNode payload = root.has("payload") ? root.get("payload") : objectMapper.nullNode();
             return new ProjectionEnvelope(eventId, eventType, occurredAt, aggregateId,
-                    sourceTopic, payload);
+                    sourceTopic, optionalText(root, "tenantId"), payload);
         } catch (JsonProcessingException e) {
             throw new IllegalArgumentException(
                     "Malformed projection envelope for topic=" + sourceTopic, e);
         }
+    }
+
+    /**
+     * Envelope-level optional string. Absent, JSON {@code null}, non-text and blank
+     * all collapse to {@code null} — for {@code tenantId} that distinction does not
+     * exist downstream ("no tenant" is one state), and a blank string reaching the
+     * read model would be a tenant nobody can ever match. Never throws: an unknown
+     * or malformed optional envelope field must not DLT an otherwise-valid event.
+     */
+    private static String optionalText(JsonNode parent, String field) {
+        JsonNode node = parent.get(field);
+        if (node == null || node.isNull() || !node.isTextual()) {
+            return null;
+        }
+        String value = node.asText();
+        return value.isBlank() ? null : value;
     }
 
     private static String requireText(JsonNode parent, String field) {
