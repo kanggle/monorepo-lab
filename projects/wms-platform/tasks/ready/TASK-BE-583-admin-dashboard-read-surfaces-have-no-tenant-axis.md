@@ -174,11 +174,17 @@ D1 이 결함을 만든 것은 아니지만, D1 이후 이 티켓은 더 미룰 
       (대조군 389) · `admin_db` 0/217 컬럼 · 🔴🔴 신규: `WMS_VIEWER` 는 **entitlement 합성**이
       유일 경로이고 모집단이 **고객 테넌트 4곳**이다 · 🔵 `SettingsController` 인가 부재는
       **내 오탐**(서비스 계층에 있음). 상세는 위 §
-- [~] **AC-1 (결정) — 방향 지정 `B` 도착(2026-08-14). ADR 열림, 아직 안 닫힘.**
-      소유자가 **B(테넌트 축 신설)** 를 지정했고, AC-1 자신이 *"B 면 ADR ACCEPTED 선행"* 이라
-      적으므로 [`ADR-MONO-065`](../../../../docs/adr/ADR-MONO-065-wms-admin-read-plane-tenant-axis.md)
-      를 **PROPOSED** 로 열었다. 🔴 **닫히지 않는 이유는 그 ADR 의 실측이 B 안에서 새 분기를
-      열었기 때문이다**:
+- [x] **AC-1 (결정) — 완료 2026-08-14. `ADR-MONO-065` ACCEPTED — `B1` + `R1=a`.**
+      소유자가 두 번 지정했다: ① 티켓 방향 **`B`**(축을 넣는다) ② ADR 정확형 **`B1`**(소유 데이터
+      2개 테이블에만 축, `traits` 불변) + **`R1=a`**(창고 전역 6개는 wms-entitled 테넌트 전체에
+      공개). 결정 본문 D1~D5 는
+      [`ADR-MONO-065` § 결정](../../../../docs/adr/ADR-MONO-065-wms-admin-read-plane-tenant-axis.md)
+      이며, 이 ACCEPT 가 인가하는 것은 **AC-2 착수뿐**이다(HARDSTOP-09 해제 — 계약의 *내용*은
+      승인되지 않았다).
+      🔵 **A · B2 · C · D 는 배제**됐다. B2(재분류)는 **영구 배제가 아니며**, 창고 운영 데이터에
+      소유자가 생기는 시점(3PL 전환)에 다시 열린다.
+
+      ① 과 ② 사이에 ADR 을 연 이유(실측이 B 안에서 새 분기를 열었다):
       **(M2)** 8개 중 테넌트 소유 데이터를 투영하는 표면은 **2개**뿐이고 나머지 6개는 상류에
       테넌트가 **존재한 적이 없다**(창고 운영 데이터) ⇒ 아래 AC-2 가 적은 *"마이그레이션 +
       프로젝션 + 필터"* 의 대상이 8이 아니라 2다 ·
@@ -186,8 +192,8 @@ D1 이 결함을 만든 것은 아니지만, D1 이후 이 티켓은 더 미룰 
       **이벤트 계약 변경**이 포함된다 ·
       **(M6)** `multi-tenant` 재분류는 `rules/traits/multi-tenant.md` 의 M1/M3/M7 **당일 위반**이다
       (특히 M3 의 404-over-403 은 `ADR-MONO-064` 가 옳다며 byte-unchanged 로 유지한 술어를 뒤집는다).
-      ⇒ **`B1`**(소유 데이터 2개에만 축 + 나머지 6개는 창고 전역으로 명문화, `traits` 불변) 과
-      **`B2`**(재분류) 중 정확형 지정을 다시 받는다. 🔵 그리고 ADR 의 **M4** 가 A 의 전제를 한 번
+      ⇒ **`B1`** 과 **`B2`** 중 정확형 지정을 다시 받았고, **`B1`** 이 왔다. 🔵 그리고 ADR 의
+      **M4** 가 A 의 전제를 한 번
       더 깼다 — 저장소 문서 **세 곳**(`admin-service-api.md` L33 · console `wms-client.ts` ·
       console-integration-contract § 2.4.5)이 *"admin-service 는 `tenant_id=wms` 를 enforce 한다"* 고
       적고 있어, A 는 명문화가 아니라 **세 문서를 뒤집는 결정**이다.
@@ -200,13 +206,24 @@ D1 이 결함을 만든 것은 아니지만, D1 이후 이 티켓은 더 미룰 
       명문화하면 *"고객사가 서로의 창고 데이터를 본다"* 를 제품 사양으로 적는 것이 된다.
       ⇒ A 를 고르려면 **합성 범위를 함께 좁혀야** 하고, 그러면 `WMS_VIEWER` 를 주는 경로가
       저장소에 하나도 남지 않아(④) **콘솔 wms 대시보드가 전부 막힌다**. 즉 A 도 무비용이 아니다
-- [ ] **AC-2 (구현)** — 결정대로. A 면 컨트롤러 javadoc + 계약 문서에 전역 뷰임을 명문화
-      (주석만이 아니라 **계약**에), B 면 마이그레이션 + 프로젝션 + 필터 + 회귀 테스트.
-      🔴 **`ADR-MONO-065` M2/M3 이 이 문장의 대상 수를 바꿨다** — B1 이면 마이그레이션은
-      **2 테이블**(`admin_order_summary` · `admin_shipment_summary`)이고, 나머지 6개 표면은
-      *"창고 전역"* 을 **계약에 적는 쪽**이 산출물이다. 그리고 B1/B2 어느 쪽이든
-      `outbound.order.received.v1` 봉투에 `tenantId` 를 additive 로 싣는 **이벤트 계약 개정이
-      선행**한다(CLAUDE.md § Layer Rules — 계약 먼저)
+- [ ] **AC-2 (구현) — `ADR-MONO-065` D1~D4 대로.** 순서가 구속력을 갖는다(계약 먼저):
+      1. **이벤트 계약 개정(D2)** — `specs/contracts/events/outbound-events.md` 에
+         `wms.outbound.order.received.v1` 봉투의 `tenantId` 를 additive 로 정의하고,
+         *"wms does **not** interpret it, filter rows by it"* 문장을 **철회**한다
+      2. **HTTP 계약 개정(D3)** — `specs/contracts/http/admin-service-api.md` 에
+         (a) orders/shipments 두 표면은 **호출자 테넌트로 격리**됨을, (b) 나머지 **6개는
+         wms-entitled 테넌트 전체에 공개되는 창고 전역 뷰**임을 명문화한다.
+         🔴 동시에 L33 의 *"`tenant_id=wms` enforced"* 를 정정한다(M4)
+      3. **마이그레이션 2 테이블(D1)** — `admin_order_summary` · `admin_shipment_summary` 에
+         `tenant_id` (nullable — 기존 행은 소급 채우지 않는다)
+      4. **생산 측(D2)** — `OrderReceivedEvent` 가 주문의 `tenantId` 를 싣고,
+         `OutboundProjectionConsumer` 가 봉투 값을 **그대로** 기록한다(조회·추론 금지)
+      5. **읽기 측(D1)** — `admin-service` 에 호출자-테넌트 해석기를 두고(지금 전 계층 0건)
+         두 컨트롤러가 **JWT 의** 테넌트로 필터한다. 클라이언트 파라미터를 신뢰하지 않는다
+      6. **회귀 테스트** — cross-tenant 읽기 차단 단언(대조군 = 다른 테넌트의 행이 실제로
+         존재하는 픽스처). 🔴 대조군 없는 필터 테스트는 상수 비교와 구별되지 않는다
+         (§ Failure Scenarios 1번)
+      🔵 `traits` 는 건드리지 않는다(D4) — `PROJECT.md` · `rules/traits/` 변경 **없음**
 - [ ] **AC-4 (계약 드리프트 정정 · `ADR-MONO-065` R2)** — `ADR-MONO-064` D1/D2 이후 거짓이 된
       세 문장을 정정한다: `specs/contracts/events/outbound-events.md` L63 의
       *"Omitted / null for B2B (MANUAL/WEBHOOK_ERP) orders"*(→ `CancelOrderService:132` 가
@@ -227,7 +244,7 @@ D1 이 결함을 만든 것은 아니지만, D1 이후 이 티켓은 더 미룰 
 # Related Specs
 
 - [`docs/adr/ADR-MONO-064`](../../../../docs/adr/ADR-MONO-064-wms-outbound-tenant-visibility-plane.md) § M5 · § D4 — 이 티켓의 출처
-- [`docs/adr/ADR-MONO-065`](../../../../docs/adr/ADR-MONO-065-wms-admin-read-plane-tenant-axis.md) — **AC-1 의 결정 문서(PROPOSED)**. 선택지 A/B1/B2/C/D + 실측 M1~M8 + 라이더 R1/R2
+- [`docs/adr/ADR-MONO-065`](../../../../docs/adr/ADR-MONO-065-wms-admin-read-plane-tenant-axis.md) — **AC-1 의 결정 문서. ACCEPTED — `B1` + `R1=a`.** 실측 M1~M8 · 선택지 A/B1/B2/C/D · 결정 D1~D5
 - `projects/wms-platform/PROJECT.md` § Out of Scope (`multi-tenant`)
 - `projects/wms-platform/specs/contracts/http/admin-service-api.md` § 1.3
 - `TASK-MONO-304` — outbound 격리 규칙의 출처
@@ -257,8 +274,7 @@ D1 이 결함을 만든 것은 아니지만, D1 이후 이 티켓은 더 미룰 
 # Definition of Done
 
 - [x] AC-0 실측 기록
-- [~] A/B 결정 + 근거 (B 면 ADR ACCEPTED 선행) — 방향 `B` 지정됨, `ADR-MONO-065` PROPOSED,
-      `B1`/`B2` 정확형 대기
+- [x] A/B 결정 + 근거 (B 면 ADR ACCEPTED 선행) — `ADR-MONO-065` **ACCEPTED — `B1` + `R1=a`**
 - [ ] 구현 + 계약 문서 일치
 - [ ] `ADR-MONO-064` 가 남긴 이벤트 계약 드리프트 3문장 정정 (AC-4)
 - [ ] Ready for review
