@@ -363,6 +363,13 @@ Full schema reflection lives in [`database-design.md`](database-design.md); doma
 - Authorisation enforced **inside admin-service application layer** (not in
   controllers). Spring Security method-level checks (`@PreAuthorize`).
 - Role-to-permission mapping stored in `admin_role.permissions_json`.
+  🔴 **Stored, not enforced from** (measured TASK-BE-587). `@PreAuthorize` names
+  role strings directly and the authorities come from the JWT — `SecurityConfig`
+  reads the token's role claim and synthesises `ROLE_WMS_VIEWER` from an
+  `entitled_domains` containing `wms`. No authorisation decision reads this
+  column; it is surfaced only through the role CRUD API (`RoleResponse`). That
+  is why an empty `admin_role` table closes no dashboard, and it is the premise
+  the dev-seed placement decision rests on — check it here before changing it.
 - Other services receive role claims in JWT; they enforce their own
   finer-grained permissions (e.g., `INVENTORY_WRITE` mapped from
   `WMS_OPERATOR`).

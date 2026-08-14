@@ -41,16 +41,44 @@
 -- 🔴 DO NOT RENAME THIS FILE once applied. Flyway tolerates a missing VERSIONED
 -- migration (classified `future`) but NOT a missing repeatable — the description
 -- is its identity, so a rename fails validation (TASK-MONO-524 § finding 2).
+-- 🔵 TASK-BE-587 MOVED it (db/migration → db/seed) without renaming it, and that
+-- distinction is the whole reason the move is safe: a repeatable's identity is
+-- its description, and `script` is recorded relative to the location root, so
+-- both stay `R__seed_dev_data.sql`. That is not an assumption — the two
+-- `existingDatabase*` cells of DevSeedScopeIT reconstruct a database that applied
+-- this file from the old location and then boot it from the new one, with and
+-- without `db/seed` on the classpath.
 --
--- ⚠️ SCOPE NOTE (not fixed here — TASK-BE-587): the header this replaced claimed
--- *"the prod migration profile gates this file out via callback / location
--- filter at the platform level"*. No such gate exists — admin-service has one
--- `application.yml` with `locations: classpath:db/migration`, no profile
--- variant, and it is absent from `infra/demo/wms-devseed.override.yml` (which
--- lists master/inbound/inventory/outbound). This seed is also the ONLY source of
--- `admin_role`, so simply removing it would leave an environment with no
--- built-in roles. Whether admin-service should seed roles in production is a
--- product decision, filed separately.
+-- 🔴 WHERE THIS FILE LIVES IS THE GATE (TASK-BE-587). `db/seed` is NOT on
+-- `spring.flyway.locations` by default — `application.yml` names only
+-- `classpath:db/migration`. Exactly two things open this location, and both are
+-- non-production:
+--
+--     src/main/resources/application-dev.yml       (SPRING_PROFILES_ACTIVE=dev)
+--     infra/demo/wms-devseed.override.yml          (the local demo stack)
+--
+-- so a production deployment applies not one statement of this file. That is the
+-- arrangement the four sibling wms services have always used; admin-service was
+-- the odd one out.
+--
+-- 🔴 WHY IT MOVED. Until 2026-08-15 this file sat in `db/migration`, which is
+-- always on, while its own header claimed *"the prod migration profile gates
+-- this file out via callback / location filter at the platform level"*. TASK-BE-587
+-- measured that claim: admin-service had exactly one `application.yml`, zero
+-- profile variants, and zero callbacks or location filters anywhere in the repo.
+-- The gate did not exist — so this seed applied in EVERY environment, planting a
+-- bootstrap `admin@wms.internal` account holding a global `WMS_SUPERADMIN`
+-- assignment under a UUID this file itself publishes. Moving the file is what
+-- makes the sentence above true instead of aspirational.
+--
+-- 🔵 AND REMOVING IT FROM PRODUCTION CLOSES NOTHING. The obvious objection —
+-- "this is the only source of `admin_role`, so the eight dashboards die" — was
+-- measured and is false. Authorisation here reads the JWT, never the table:
+-- `SecurityConfig` builds authorities from the token's role claim plus the
+-- `entitled_domains` → `ROLE_WMS_VIEWER` synthesis, and `@PreAuthorize` checks
+-- those. `admin_role.permissions_json` is only ever read back out through the
+-- role CRUD API; no authorisation decision consults it. The four tables here are
+-- management data, not the security substrate.
 --
 -- The seed UUIDs are stable so dev tools / e2e fixtures can refer to them
 -- without round-tripping through the DB. Built-in roles ALWAYS use these

@@ -899,7 +899,10 @@ retrospective contract introduced by TASK-BE-157).
 - [`../outbound-service/database-design.md`](../outbound-service/database-design.md) — sibling (BE-163)
 - `../../../apps/admin-service/src/main/resources/db/migration/V1__init.sql`
 - `../../../apps/admin-service/src/main/resources/db/migration/V2__init_readmodel.sql`
-- `../../../apps/admin-service/src/main/resources/db/migration/V99__seed_dev_data.sql`
+- `../../../apps/admin-service/src/main/resources/db/migration/V3__order_shipment_tenant_axis.sql`
+- `../../../apps/admin-service/src/main/resources/db/seed/R__seed_dev_data.sql`
+  — dev/demo only; was `db/migration/V99__seed_dev_data.sql` until TASK-BE-585
+  (versioned → repeatable) and TASK-BE-587 (production location → `db/seed`)
 - `../../../../../rules/domains/wms.md` — Admin / Operations bounded context
 - `../../../../../rules/traits/transactional.md` — T1, T3, T4, T5, T8
 - `../../../../../platform/architecture.md` — system-level architecture

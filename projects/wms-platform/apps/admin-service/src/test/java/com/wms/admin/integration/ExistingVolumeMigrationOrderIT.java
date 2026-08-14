@@ -69,7 +69,7 @@ class ExistingVolumeMigrationOrderIT {
     private void seedPreExistingDatabase(DataSource ds) throws Exception {
         Flyway.configure()
                 .dataSource(ds)
-                .locations("classpath:db/migration")
+                .locations(DEMO_LOCATIONS)
                 .baselineOnMigrate(true)
                 .target(org.flywaydb.core.api.MigrationVersion.fromVersion("2"))
                 .load()
@@ -86,10 +86,24 @@ class ExistingVolumeMigrationOrderIT {
         }
     }
 
+    /**
+     * Exactly what the demo boots with: {@code application.yml}'s
+     * {@code db/migration} plus the {@code db/seed} that
+     * {@code infra/demo/wms-devseed.override.yml} opens.
+     *
+     * <p>🔴 This used to be {@code db/migration} alone and that was the same
+     * thing, because the dev seed lived there. TASK-BE-587 moved it, so naming
+     * only {@code db/migration} here would no longer reconstruct a demo volume —
+     * it would reconstruct a production one, which is a different question that
+     * {@link DevSeedScopeIT} owns. The subject of this class is the volume that
+     * actually crash-looped, and that volume is a demo volume.
+     */
+    private static final String[] DEMO_LOCATIONS = {"classpath:db/migration", "classpath:db/seed"};
+
     private Flyway realConfig(DataSource ds, boolean outOfOrder) {
         return Flyway.configure()
                 .dataSource(ds)
-                .locations("classpath:db/migration") // exactly application.yml
+                .locations(DEMO_LOCATIONS)
                 .baselineOnMigrate(true)
                 .outOfOrder(outOfOrder)
                 .load();

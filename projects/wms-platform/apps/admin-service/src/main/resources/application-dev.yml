@@ -1,0 +1,20 @@
+# Dev profile: connects to the docker-compose Postgres/Kafka/Redis stack.
+# Activated with SPRING_PROFILES_ACTIVE=dev.
+#
+# Adds the seed migration location so Flyway inserts the dev built-in roles,
+# bootstrap user and default settings (db/seed/R__seed_dev_data.sql).
+#
+# TASK-BE-587: admin-service had no profile variant at all — one application.yml
+# naming `classpath:db/migration` — while its dev seed sat inside that always-on
+# location and its header claimed a production gate that did not exist. The seed
+# moved to `db/seed`, which means the gate is now the location, and this file is
+# one of the exactly two things that open it (the other is
+# infra/demo/wms-devseed.override.yml). Production names neither.
+#
+# The `spring.flyway.locations` value below is deliberately identical to the
+# master / inbound / inventory / outbound copies; a difference here would be one
+# nobody intended.
+
+spring:
+  flyway:
+    locations: classpath:db/migration,classpath:db/seed

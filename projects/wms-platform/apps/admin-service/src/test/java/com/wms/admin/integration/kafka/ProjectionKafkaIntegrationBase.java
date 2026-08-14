@@ -81,7 +81,11 @@ public abstract class ProjectionKafkaIntegrationBase {
                     "spring.datasource.username=" + POSTGRES.getUsername(),
                     "spring.datasource.password=" + POSTGRES.getPassword(),
                     "spring.flyway.enabled=true",
-                    "spring.flyway.locations=classpath:db/migration",
+                    // Same list as the other admin integration classes — see the
+                    // note in ReadModelPersistenceIntegrationTest. TASK-BE-587
+                    // moved the dev seed to db/seed, and an applied repeatable
+                    // that a later boot cannot resolve blocks Flyway entirely.
+                    "spring.flyway.locations=classpath:db/migration,classpath:db/seed",
                     "spring.jpa.hibernate.ddl-auto=validate",
                     "spring.kafka.bootstrap-servers=" + KAFKA.getBootstrapServers(),
                     // Redis is required because the production AdminServiceConfig
