@@ -30,7 +30,8 @@ $fixtures = @(
     'format-alignment.ps1',
     'protect-main-branch.ps1',
     'verify-worktree-isolation.ps1',
-    'warn-shared-checkout-switch.ps1'
+    'warn-shared-checkout-switch.ps1',
+    'memory-budget-check.ps1'
 )
 
 $failed = @()
