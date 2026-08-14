@@ -1,6 +1,6 @@
 # ADR-MONO-065 — wms admin 읽기 평면의 테넌트 축
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 **Date:** 2026-08-14
 **주관 티켓:** `TASK-BE-583` (AC-1)
 **선행:** [`ADR-MONO-064`](ADR-MONO-064-wms-outbound-tenant-visibility-plane.md) § D4 (이 결정을 여기로 분리) · [`ADR-MONO-019`](ADR-MONO-019-platform-console-customer-tenant-model.md) § D5 (entitlement-trust) · [`ADR-MONO-020`](ADR-MONO-020-operator-multitenant-assignment.md) § D3 (assume-tenant 최소권한) · [`ADR-MONO-022`](ADR-MONO-022-ecommerce-wms-fulfillment-integration.md) § D9 + `TASK-MONO-304` (outbound 격리) · [`ADR-MONO-030`](ADR-MONO-030-ecommerce-multivendor-marketplace-saas.md) § 1.1 (*"wms 는 단일 테넌트"*)
@@ -17,6 +17,14 @@
   (티켓이 쓴 "B = 스키마 + 프로젝션 + 8개 필터" 는 M2 앞에서 성립하지 않는다 — 8개 중 6개는 필터할
   테넌트가 상류에 아예 없다). 따라서 아래 § 선택지의 `B1`/`B2` 는 **AC-1 의 B 안에서 처음 갈리는
   분기**이며, `platform/architecture-decision-rule.md` § The ACCEPTED Gate 의 정확형 지정을 다시 받는다.
+
+- 2026-08-14 — **ACCEPTED — B1** (+ **R1 = a** · 창고 전역 6개 표면은 wms-entitled 테넌트 전체에
+  공개되는 것으로 확정). § 실측(M1~M8) · § 선택지 · § 추천 은 **byte-unchanged** — finalise 이지
+  re-decide 가 아니다.
+
+  🔵 **게이트는 두 번 물었고 두 번 다 소유자 출처의 글자를 받았다.** 첫 번째(AC-1 방향 `B`)는
+  이 문서를 *여는* 근거였을 뿐 ACCEPT 로 쓰지 않았고 — 위 PROPOSED 항목이 그 판단을 기록한다 —
+  두 번째(`B1` + `R1=a`)에서 선택지를 명시 제시해 받았다. **어느 글자도 § 추천을 경유하지 않았다.**
 
 ---
 
@@ -316,6 +324,81 @@ no row filter"*. **이 ADR 의 결정 사항이 아니라 사실 정정**이며,
 
 ---
 
-## 결정
+## 결정 — B1 + R1-a (ACCEPTED 2026-08-14)
 
-*(PROPOSED — 소유자의 정확형 지정 대기.)*
+**B1 을 binding 으로 고정하고 A · B2 · C · D 를 배제한다.**
+
+### D1 — 테넌트 축은 **테넌트가 소유한 데이터에만** 놓인다
+
+`admin_order_summary` · `admin_shipment_summary` 두 테이블에 `tenant_id` 를 추가하고, 두
+컨트롤러가 호출자의 **서명된** 테넌트로 필터한다. **나머지 6개 표면에는 축을 놓지 않는다** —
+M2 가 잰 대로 그 데이터에는 상류에 소유자가 존재한 적이 없고, 없는 소유자를 발명하는 것은
+`PROJECT.md` 가 배제한 3PL 모델링이다.
+
+- 🔴 **필터 값의 출처는 JWT 다.** 클라이언트가 보낸 쿼리 파라미터가 아니다 — `ADR-MONO-064` D1 이
+  생성 경로에 세운 것과 같은 규율(스푸핑 불가).
+- 🔵 `admin_shipment_summary` 는 `order_id` 를 지니므로 주문에서 파생할 수 있으나, **자기 컬럼을
+  갖는다**(조인 없이 필터 가능해야 하고, 프로젝션은 서로 독립적으로 도착한다).
+
+### D2 — 그 축의 값은 **이벤트가 싣고 온다**. 프로젝션이 추론하지 않는다
+
+`wms.outbound.order.received.v1` 봉투에 `tenantId` 를 **additive** 로 싣는다(M3 — 지금은 return-leg
+2개 이벤트만 싣는다). 프로젝션 컨슈머는 봉투의 값을 **그대로 기록**하며, `orderNo` 로 조회해
+채우거나 `source` 로 추론하지 않는다.
+
+🔴 **계약이 구현보다 먼저다**(CLAUDE.md § Layer Rules) — `specs/contracts/events/outbound-events.md`
+개정이 코드보다 앞선다. 그리고 그 개정은 *"wms does **not** interpret it, filter rows by it"* 이라는
+현재 문장을 **철회**해야 한다: 이 결정 이후 wms 는 그것을 해석하고 그것으로 행을 거른다.
+
+### D3 (R1 = a) — 창고 전역 6개 표면은 **wms-entitled 테넌트 전체에 공개**된다
+
+재고 스냅샷 · 입고 예정 · 조정 이력 · 알림 · 마스터 참조 · 일별 처리량은 **창고 운영 정보**이며
+입주 고객 테넌트에게 공개된다. `WMS_VIEWER` entitlement 합성은 **이 6개에 대해 유지**된다.
+
+- ✅ 코드 변경 0 · 콘솔 영향 0(M1 — 콘솔이 8개를 전부 읽는다).
+- 🔴 **계약에 적는 것이 산출물이다.** *"이 6개는 wms-entitled 테넌트 전체에 공개되는 창고 전역
+  뷰이며 테넌트로 나뉘지 않는다"* 를 `admin-service-api.md` 에 명문화한다. 주석이 아니라 계약이다
+  — 티켓 § Failure Scenarios 의 두 번째 항목이 정확히 이 실패를 적고 있다.
+- 🔴 이 결정은 **M4 의 세 문장을 거짓으로 확정**한다. `admin-service-api.md` L33 의 *"`tenant_id=wms`
+  enforced"* · console `wms-client.ts` javadoc · console-integration-contract § 2.4.5 의
+  *"wms rejects cross-tenant producer-side"* 는 **전부 정정 대상**이다(D5).
+
+### D4 — `PROJECT.md` 의 `traits` 는 **바꾸지 않는다**
+
+wms 는 `[transactional, integration-heavy]` 로 남는다. `rules/traits/multi-tenant.md` 는 로딩되지
+않으며 M1~M7 은 구속하지 않는다.
+
+- ⇒ **M6 의 당일 위반 3건이 발생하지 않는다.** 특히 M3(404-over-403)이 구속하지 않으므로
+  `ADR-MONO-064` 가 *"그 술어는 옳았다"* 며 byte-unchanged 로 유지한 **403 은 그대로**다.
+- 🔵 그리고 실측상 그 분기 자체가 생기지 않는다 — 테넌트 축이 놓이는 두 컨트롤러는
+  `@GetMapping` **하나씩뿐인 목록 표면**이고 단건 조회가 없다(2026-08-14 확인). 존재 누출
+  (404 vs 403) 판단이 필요한 지점이 **0개**다.
+- 🔵 **B2 를 영구 배제하지 않는다.** B1 은 B2 로 가는 길을 막지 않으며, B2 의 첫 단계가 곧 B1 이다.
+  재분류가 필요해지는 시점은 *창고 운영 데이터에 소유자가 생길 때*(3PL 로의 제품 전환)이고,
+  그때 이 결정을 다시 연다.
+
+### D5 (R2) — M8 의 계약 드리프트는 **결정이 아니라 사실 정정**이다
+
+`ADR-MONO-064` D1/D2 이후 거짓이 된 세 문장(`outbound-events.md` L63 의 *"omitted for MANUAL"* ·
+*"does not interpret it, filter rows by it"*, `ADR-MONO-030` § 1.1 facet-d 의 *"opaque correlation …
+no row filter"*)은 **선택지와 무관하게** 정정돼야 한다. `TASK-BE-583` **AC-4** 로 이미 승격돼
+있으며, D2 가 같은 파일을 열므로 함께 낸다.
+
+### 이 결정이 **하지 않는** 것
+
+- **소급 채움을 하지 않는다.** 기존 프로젝션 행에는 테넌트가 없고, 원본 조인도 `tenant_id IS NULL`
+  행에 막힌다(`ADR-MONO-064` 가 소급 stamp 를 금지). ⇒ **복구 경로는 볼륨 초기화 + 재시드**로
+  064 와 동일하다. 데모 재현 시 이 두 결정은 **같은 재시드 한 번**으로 함께 해소된다.
+- **`WMS_VIEWER` 합성을 제거하지 않는다**(D 배제). entitlement-trust 는 5개 도메인 공통 모델이고
+  wms 만 이탈시키지 않는다.
+- **입장 게이트를 건드리지 않는다**(C 배제). `trustEntitledDomains()` 는 유지되며, 격리는
+  입장이 아니라 **행 수준**에서 이뤄진다 — `ADR-MONO-019` § D5 가 *"isolation invariants preserved
+  while the allowed-set widens"* 로 전제한 분업(M5)을 wms 가 비로소 양쪽 다 구현하는 것이다.
+
+### ACCEPT 가 인가하는 것 / 하지 않는 것
+
+인가되는 것은 `TASK-BE-583` **AC-2 착수**뿐이다(HARDSTOP-09 해제). 계약(`specs/contracts/`)은
+구현 **전에** 갱신돼야 하고, 이 ACCEPT 는 그 계약의 **내용**(필드 표기 · 마이그레이션 형태 ·
+호출자-테넌트 해석기의 배치)을 승인하지 않는다 — 그것은 그 티켓이 제안하고 리뷰가 검사할 몫이다.
+
+🔴 **AC-4(D5)는 이 ACCEPT 를 기다리지 않는다** — 사실 정정이므로 인가 대상이 아니다.
