@@ -8,7 +8,7 @@ API 는 팬이 유료 글을 쓰는 것을 허용한다 — `PublishPostUseCase`
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -70,7 +70,7 @@ if (cmd.postType() == PostType.ARTIST_POST
 요구한 판정에 따라 **ADR 이 필요하다**.
 판정·실측·선택지 전부: [`docs/adr/ADR-003-fan-post-visibility-authoring-rule.md`](../../docs/adr/ADR-003-fan-post-visibility-authoring-rule.md) (**PROPOSED**).
 
-**이 티켓은 그 ADR 이 ACCEPTED 되기 전까지 착수할 수 없다.**
+~~**이 티켓은 그 ADR 이 ACCEPTED 되기 전까지 착수할 수 없다.**~~ → **해제 2026-08-14** — `ADR-FAN-003 ACCEPTED — B`(소유자 정확형). 🔴 게이트가 실제로 물었다 — 먼저 도착한 것은 **`B` 한 글자**였고, 글자는 소유자가 직접 타이핑했지만 `architecture-decision-rule.md` § The ACCEPTED Gate 가 *"names the ADR"* 를 요구하므로 넘기지 않고 정확형을 다시 받았다.
 
 # Goal
 
@@ -108,13 +108,43 @@ if (cmd.postType() == PostType.ARTIST_POST
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (재측정)** — 위 네 항목을 실측한다. 특히 `PublishPostUseCase` 가 그때도
-      `visibility` 를 안 보는지 다시 읽는다
-- [ ] **AC-1** — `FAN_POST` + 비-PUBLIC 발행 시도가 명시적으로 거절되거나(400/403),
-      허용하기로 했다면 **그 결정과 근거가 계약 문서에 적혀 있다**
-- [ ] **AC-2 (음성 대조)** — `ARTIST_POST` 의 비-PUBLIC 발행은 **여전히 된다**.
-      게이팅 자체를 없애면 아티스트 수익화가 죽는다
-- [ ] **AC-3** — 계약 문서와 실제가 일치한다
+> **결정 = [`ADR-003`](../../docs/adr/ADR-003-fan-post-visibility-authoring-rule.md) ACCEPTED — B.**
+> 세 티어를 계속 허용하고 **코드는 바꾸지 않는다.** 그래서 AC-1 은 "거절" 이 아니라 "근거를
+> 계약에 적는다" 분기로 닫힌다. 🔵 산출물이 문서와 가드뿐인 것은 미달이 아니라 **B 의 정의**다.
+
+- [x] **AC-0 (재측정) — 완료 2026-08-14.** ① `PublishPostUseCase` 는 여전히 `visibility` 를
+      **안 본다**(L43 `cmd.visibility()` 가 유일한 등장, 검사 0) ② `UpdatePostUseCase.execute(
+      postId, actor, title, body, mediaRefs)` — `visibility` **없음**, 발행 후 불변 ③ 대신
+      만들어 주는 경로 없음(저자 = `actor.accountId()` 고정) ④ ADR 필요 → **ACCEPTED**.
+      🔵 곁다리: 티켓 § 정정이 이미 적용돼 있음을 확인했고(*"티어는 아티스트 수익화를 위해
+      존재한다"* 인용은 2026-08-06 삭제), `architecture.md` § Visibility Tiers 를 직접 열어
+      **읽기 게이팅 표뿐 저작 규칙 0글자**임을 재확인했다
+- [x] **AC-1 — 완료.** `community-api.md` § `POST /api/community/posts` 에
+      *"`visibility` is unrestricted by `postType` — deliberately"* 절 신설. 표가 담을 수 없는
+      **근거 4가지**(유출 없음·경제적 이상함 / 스펙이 반대를 **적극 규정**(Scenario 3 + e2e) /
+      `visibility` write-once / 제품 표면이 선택지를 안 준다)와 재개봉 조건을 적었다
+- [x] **AC-2 (음성 대조) — 완료.** `ARTIST_POST` 의 비-PUBLIC 은 여전히 된다 — **코드 무변경**
+      이라 자동으로 지켜진다. `git diff -- apps/ tests/ specs/integration/` **비어 있음**으로
+      확인(게이팅·`VisibilityTierE2ETest`·Scenario 3 전부 무변경). community-service 유닛 GREEN
+- [x] **AC-3 — 완료.** 계약이 적는 것과 코드가 하는 것이 일치한다. 🔴 **B 에서 이 AC 가 가장
+      약하다 — 코드를 안 바꿨으므로 원래부터 일치했다.** 그래서 "일치를 만들었다" 가 아니라
+      **"일치가 유지되는지 지키는 것"** 을 AC-4/AC-5 로 뒀다
+- [x] **AC-4 (재개봉 트리거에 숫자를 준다) — 완료. `ADR-003` § 결정 이 승격한 항목.**
+      ADR 은 *"아티스트별 멤버십이 생기면 supersede"* 라고만 적었는데 **아무도 그 문장을
+      평가하지 않으므로 영영 참이 되지 않는다.** ⇒ `MembershipScopeIsPlatformWideTest` 신설:
+      `MembershipChecker` 포트가 **저자/아티스트 축을 갖지 않음**을 단언하고, 실패 메시지가
+      *"버그가 아니라 트리거다 — 테스트를 고치지 말고 ADR-003 을 다시 열어라"* 를 말한다.
+      🔴 **행위가 아니라 포트의 형태를 단언한 것이 핵심** — *"팬이 PREMIUM 을 쓸 수 있다"* 류
+      행위 테스트는 **바로 그 변경을 통과시킨다**(아티스트별 멤버십은 발행을 막지 않고 발행의
+      *의미*를 바꾼다). 움직이는 관측량은 포트의 저자 의존성이다.
+      **bite**: ① 포트에 메서드 추가(컴파일 유지) → RED ② 단언을 4-파라미터로 겨눔 → RED,
+      둘 다 복원 후 GREEN
+- [x] **AC-5 (B 의 가역성이 얹힌 가드를 명시) — 완료. 같은 승격 항목.**
+      B 가 되돌릴 수 있는 근거는 *"게이팅된 `FAN_POST` 행이 쌓이지 않는다"* 이고, 그 이유가
+      작성 화면의 `visibility:'PUBLIC'` 하드코딩 + `fan-post-publish-action.test.ts` 의 **바디
+      전체 `toEqual`** 이다. **사실이지 보장이 아니었다** — `toMatchObject` 로 완화하면 행이
+      쌓이기 시작하고 **가드가 아니라 ADR-003 의 전제가 무너진다**. 그 인과를 주석에 박아
+      완화가 **결정 변경으로 읽히게** 했다(vitest 7건 GREEN)
 
 # Related Specs
 
@@ -139,7 +169,7 @@ if (cmd.postType() == PostType.ARTIST_POST
 
 # Definition of Done
 
-- [ ] 결정 + (필요시 ADR) + 구현
-- [ ] AC-1/AC-2 양방향 테스트
-- [ ] 계약 문서 정합
-- [ ] Ready for review
+- [x] 결정 + ADR(`ADR-003` ACCEPTED — B) + 구현(B = 계약 명문화 + 가드 2건, 코드 무변경)
+- [x] AC-1/AC-2 양방향 — AC-1 = 계약 절 신설, AC-2 = 코드·e2e 무변경을 `git diff` 로 확인
+- [x] 계약 문서 정합 + 그 정합을 **지키는** 트리거/가드(AC-4·AC-5, 둘 다 bite 확인)
+- [x] Ready for review
