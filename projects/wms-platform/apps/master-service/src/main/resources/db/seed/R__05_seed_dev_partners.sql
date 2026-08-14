@@ -2,11 +2,18 @@
 -- manual walk-throughs exercise the partner routes plus the supplier/customer
 -- validation paths downstream (inbound ASN supplier check, outbound order
 -- customer check).
--- Activated via spring.flyway.locations in application-dev.yml.
--- ON CONFLICT DO NOTHING keeps this idempotent across re-runs.
+-- Activated via spring.flyway.locations in application-dev.yml and by
+-- infra/demo/wms-devseed.override.yml.
+--
+-- 🔴 REPEATABLE (R__), NOT VERSIONED — TASK-MONO-531; full rationale in
+-- R__01_seed_dev_warehouse.sql. This was V103__seed_dev_partners.sql. The `05_`
+-- prefix is the run order (Flyway sorts repeatables by DESCRIPTION).
+--
+-- ON CONFLICT DO NOTHING keeps this idempotent across re-runs — a repeatable
+-- re-runs on every checksum change, over live data.
 --
 -- partner_code values are intentionally aligned with the inbound + outbound
--- V99__seed_dev_masterref.sql baseline (SUP-001 / CUST-001) so dev e2e flows
+-- R__seed_dev_masterref.sql baseline (SUP-001 / CUST-001) so dev e2e flows
 -- between master and the consumer services without code drift. BOTH-001 is
 -- new — only emitted into the master read-model once a downstream consumer
 -- pulls the partner.created event.

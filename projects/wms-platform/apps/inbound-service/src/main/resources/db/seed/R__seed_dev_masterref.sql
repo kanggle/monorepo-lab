@@ -1,6 +1,18 @@
 -- Dev/standalone seed: master-service read-model snapshots that mirror the
--- baseline rows seeded by master-service's V99–V102 seeds. Activated via
--- spring.flyway.locations in application-dev.yml.
+-- baseline rows seeded by master-service's R__01–R__05 seeds. Activated via
+-- spring.flyway.locations in application-dev.yml and by
+-- infra/demo/wms-devseed.override.yml.
+--
+-- 🔴 REPEATABLE (R__), NOT VERSIONED — TASK-MONO-531. Do not renumber this back.
+-- This was V99__seed_dev_masterref.sql, and inbound production is only at V9, so
+-- once V99 applied it became the highest APPLIED version of inbound_db and every
+-- later production migration would resolve BELOW it — an out-of-order migration,
+-- which Flyway rejects by default. wms admin-service crash-looped on exactly that
+-- on 2026-08-14 (TASK-BE-584 AC-0); iam auth-service on 2026-08-11
+-- (TASK-MONO-524). A repeatable carries no version, so it cannot be out of order.
+-- Every statement here must stay idempotent — a repeatable re-runs on every
+-- checksum change, over live data. Renaming an already-applied repeatable makes
+-- Flyway reject the database, so this name is final.
 --
 -- Rationale: inbound-service in v1 boots with an empty master read-model and
 -- waits for `master.*` consumer events to populate it. For local-dev
