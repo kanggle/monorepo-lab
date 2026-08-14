@@ -8,7 +8,7 @@ dev-seed 밴드 가드가 **wms 가 쓰는 디렉터리를 보지 못한다** �
 
 # Status
 
-review
+done
 
 # Owner
 
