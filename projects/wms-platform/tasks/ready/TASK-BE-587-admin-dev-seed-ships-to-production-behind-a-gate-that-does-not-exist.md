@@ -93,7 +93,9 @@ admin_role 을 INSERT 하는 파일 전수 = 1개 (이 시드)
 ## Out of Scope
 
 - 마이그레이션 **순서** 문제 — `TASK-BE-585` 가 닫았다
-- 형제 4개의 `db/seed/` 밴드 — `TASK-BE-588`
+- 형제 4개의 `db/seed/` 밴드 — **`TASK-MONO-531`** (2026-08-15 닫힘: 8개 전부 `R__` 전환).
+  🔴 이 줄은 원래 존재하지 않는 `TASK-BE-588` 을 가리키고 있었다 — 그 밴드는 공유 가드
+  (`scripts/check-dev-seed-migration-band.sh`)를 함께 고쳐야 해서 root 티켓으로 갔다
 
 ---
 

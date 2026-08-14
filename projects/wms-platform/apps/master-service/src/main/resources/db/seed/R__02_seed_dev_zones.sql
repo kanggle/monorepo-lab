@@ -1,7 +1,16 @@
 -- Dev/standalone seed: three zones under WH01 so manual walk-throughs exercise
--- the nested routes. Activated via spring.flyway.locations in application-dev.yml.
--- Depends on V99 having seeded the WH01 warehouse row; ON CONFLICT DO NOTHING
--- keeps this idempotent across re-runs.
+-- the nested routes. Activated via spring.flyway.locations in application-dev.yml
+-- and by infra/demo/wms-devseed.override.yml.
+--
+-- 🔴 REPEATABLE (R__), NOT VERSIONED — TASK-MONO-531; full rationale in
+-- R__01_seed_dev_warehouse.sql. This was V100__seed_dev_zones.sql.
+--
+-- 🔴 Depends on R__01 having seeded the WH01 warehouse row. Flyway runs
+-- repeatables in DESCRIPTION order, so `01` < `02` is the only thing making that
+-- true — the prefix is load-bearing, not decoration.
+--
+-- ON CONFLICT DO NOTHING keeps this idempotent; a repeatable re-runs on every
+-- checksum change, over live data.
 
 INSERT INTO zones (
     id, warehouse_id, zone_code, name, zone_type, status, version,

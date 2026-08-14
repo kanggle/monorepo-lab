@@ -139,7 +139,7 @@ Two facts make this interim cheap rather than a debt accruing interest: the vend
 
 This ADR schedules no implementation. It is reopened as *work* — not as a decision — on the first of:
 
-1. **a second warehouse actually operated** — the dev seed contains only `WH01` ([V99__seed_dev_warehouse.sql](../../projects/wms-platform/apps/master-service/src/main/resources/db/seed/V99__seed_dev_warehouse.sql)); multi-warehouse is structurally supported and operationally unused, so cross-warehouse transfer currently has no subject; or
+1. **a second warehouse actually operated** — the dev seed contains only `WH01` ([R__01_seed_dev_warehouse.sql](../../projects/wms-platform/apps/master-service/src/main/resources/db/seed/R__01_seed_dev_warehouse.sql) — was `V99__seed_dev_warehouse.sql` until TASK-MONO-531 converted it to a repeatable; content unchanged); multi-warehouse is structurally supported and operationally unused, so cross-warehouse transfer currently has no subject; or
 2. **a real TMS vendor** replacing the `tms.example.com` placeholder — at which point D7's interim stops being free, because vendor-specific logic would accrue in the wrong project; or
 3. **a 3PL destination that must be honoured** rather than DLT'd — today's rejection is correct precisely because no adapter exists (ADR-050 §5 says so); or
 4. **a redistribution decision anyone intends to act on** — ① is the only one of the five that could be built without ②–⑤, and building it first would produce recommendations nothing can execute.
@@ -221,7 +221,7 @@ Each claim is checkable; re-run before citing this ADR as current. Every row bel
 | wms holds the only live carrier-side integration | `adapter/out/tms/` in `outbound-service`; it is that service's only non-vendor-free outbound HTTP client |
 | The TMS vendor is a placeholder | `base-url` default `https://tms.example.com/api/v1` |
 | wms rejects 3PL destinations | `CreateScmInboundExpectationService` whitelist gate; IT `thirdPartyNodeTypeCreatesNoAsn` |
-| Only one warehouse is seeded | `V99__seed_dev_warehouse.sql` → `WH01` only |
+| Only one warehouse is seeded | `R__01_seed_dev_warehouse.sql` (ex-`V99__…`, TASK-MONO-531) → `WH01` only |
 | scm claims carrier + origin/destination routing | `rules/domains/scm.md:24` |
 | The portfolio declared itself closed at seven domains | `README.md:46`, `docs/project-overview.md:190` |
 | `tms` is not a taxonomy domain; `logistics` is | `rules/taxonomy.md` — 41 domains, `logistics` at §Logistics & Mobility, no `tms` |

@@ -8,7 +8,10 @@
 # this file — master / inbound / inventory all had it (census: 6 services;
 # admin and notification have no master read-model, so their absence is
 # correct). Its seed migration therefore had nothing to activate it and had
-# never executed. See db/seed/V99__seed_dev_masterref.sql for the full story.
+# never executed. See db/seed/R__seed_dev_masterref.sql for the full story
+# (it was V99__seed_dev_masterref.sql until TASK-MONO-531 made it a repeatable —
+# at V99 it outranked outbound's whole production timeline, which tops out at
+# V18, so any migration added after it would have been out-of-order).
 #
 # The `spring.flyway.locations` value below is deliberately identical to the
 # inbound and inventory copies; a difference here would be one nobody intended.

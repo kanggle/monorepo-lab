@@ -240,6 +240,12 @@ fi
 # V103 의 헤더는 그때 이미 *"aligned with the inbound + outbound
 # V99__seed_dev_masterref.sql baseline (SUP-001 / CUST-001)"* 이라고 적고 있었다.
 # **탐지식의 0건은 부재가 아니다** — 글롭 하나를 좁게 잡아 두 번 틀렸다.
+#
+# 🔵 위 파일명들은 **당시** 이름이다. `TASK-MONO-531` 이 wms dev 시드 8개를 전부
+# repeatable 로 바꿨다 — `V99__seed_dev_masterref.sql` → `R__seed_dev_masterref.sql`,
+# master 의 `V99~V103` → `R__01`~`R__05`. **내용과 UUID 는 한 글자도 바뀌지 않았고**
+# 위 서술도 그대로 유효하다. 바뀐 것은 버전이 없어졌다는 것뿐이다(V99 가 production
+# 타임라인 위에 앉아 이후 마이그레이션을 전부 out-of-order 로 만들고 있었다).
 CUSTOMER_ID=01910000-0000-7000-8000-000000000901
 
 if http GET "$GW/api/v1/outbound/orders?size=100" && printf '%s' "$SEED_LAST_BODY" | grep -qF "\"$ORDER_NO\""; then

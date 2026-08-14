@@ -1,7 +1,16 @@
 -- Dev/standalone seed: three SKUs covering both tracking types so manual
 -- walk-throughs exercise the SKU routes and the LOT path under TASK-BE-006.
--- Activated via spring.flyway.locations in application-dev.yml.
--- ON CONFLICT DO NOTHING keeps this idempotent across re-runs.
+-- Activated via spring.flyway.locations in application-dev.yml and by
+-- infra/demo/wms-devseed.override.yml.
+--
+-- 🔴 REPEATABLE (R__), NOT VERSIONED — TASK-MONO-531; full rationale in
+-- R__01_seed_dev_warehouse.sql. This was V102__seed_dev_skus.sql. The `04_`
+-- prefix is the run order (Flyway sorts repeatables by DESCRIPTION); skus carry
+-- no FK to warehouse/zone/location, but keeping one sequence for the directory
+-- is what makes the ordering rule checkable at a glance.
+--
+-- ON CONFLICT DO NOTHING keeps this idempotent across re-runs — a repeatable
+-- re-runs on every checksum change, over live data.
 --
 -- Mix:
 --   - SKU-BOX-001 / BOX / NONE — bulk packaged item, no lot tracking

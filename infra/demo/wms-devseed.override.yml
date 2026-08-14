@@ -38,18 +38,46 @@
 # 것은 누락이 아니라 스키마가 그렇다. (그래서 `TASK-BE-576` 형태의 "200 + 빈 배열" 위험도
 # wms 에는 없다 — AC-0 이 확인하려던 것이 이것이고, 답은 "구조적으로 해당 없음" 이다.)
 # =============================================================================
+#
+# 🔴 `SPRING_FLYWAY_OUT_OF_ORDER` 는 왜 다섯 서비스 전부에 붙어 있나 (TASK-MONO-531)
+# -----------------------------------------------------------------------------
+# 이 오버레이가 여는 `db/seed` 는 `db/migration` 과 **하나의 Flyway 시퀀스로 합쳐진다.**
+# 시드가 `V99`~`V103` 이던 동안, 이 오버레이로 한 번이라도 뜬 DB 는 **적용된 최고 버전이
+# 99~103** 이 됐다 — production 타임라인은 master V8 · inbound V9 · inventory V6 ·
+# outbound V18 이라 한참 아래다. 다음 production 마이그레이션이 추가되는 순간 그것은 99
+# **아래**로 해소되어 out-of-order 가 되고, Flyway 기본값이 거부하면서 서비스가 크래시
+# 루프에 빠진다. admin-service 가 정확히 그렇게 죽었다(아래 항목 참조).
+#
+# `TASK-MONO-531` 이 시드 8개를 전부 `R__` 로 바꿔 **앞으로 생길 DB** 에서는 이 일이
+# 불가능해졌다. 그러나 **이미 유통 중인 데모 볼륨은 낫지 않는다** — 결함은 파일이 아니라
+# `flyway_schema_history` 의 `version=99..103` 행에 있고, 그 행은 그대로 남는다.
+#
+# 🔵 오늘은 no-op 이다(99 아래에 미적용 마이그레이션이 아직 없다). 필요해지는 시점은
+# **다음 production 마이그레이션이 추가되는 순간**이고 그때는 이미 늦다 — 그래서 지금 둔다.
+# 🔴 `application.yml` 이 아니라 여기인 이유: out-of-order 는 순서 보증을 푸는 것이라
+# 프로덕션 정책으로 굳히면 안 된다. 고아 이력 행을 가진 것은 **데모 볼륨**뿐이다.
+#
+# **일몰 조건**: 유통 중인 wms DB 중 아래 행을 가진 것이 하나도 없으면 이 설정을 지운다.
+#
+#     DELETE FROM flyway_schema_history WHERE version IN ('99','100','101','102','103');
+#
+# 선례와 절차: projects/iam-platform/docs/flyway-dev-seed-migrations.md § 6
+# =============================================================================
 services:
   master-service:
     environment:
       SPRING_FLYWAY_LOCATIONS: classpath:db/migration,classpath:db/seed
+      SPRING_FLYWAY_OUT_OF_ORDER: "true"
 
   inbound-service:
     environment:
       SPRING_FLYWAY_LOCATIONS: classpath:db/migration,classpath:db/seed
+      SPRING_FLYWAY_OUT_OF_ORDER: "true"
 
   inventory-service:
     environment:
       SPRING_FLYWAY_LOCATIONS: classpath:db/migration,classpath:db/seed
+      SPRING_FLYWAY_OUT_OF_ORDER: "true"
 
   # TASK-BE-580: outbound-service was missing from this list because opening
   # `classpath:db/seed` for it would have done nothing — its seed migration sat
@@ -60,9 +88,14 @@ services:
   # the demo keeps a 0-row read model even with the migration on the classpath —
   # the demo does not boot with the `dev` profile, which is the whole reason
   # this override file exists.
+  #
+  # 🔴 outbound 는 넷 중 절벽에 가장 가까웠다: production 이 이미 V18 이고
+  # `TASK-BE-586` 이 그 위에 더 얹으려는 참이다. `V99` 인 채로 그 마이그레이션이
+  # 들어왔으면 기존 데모 볼륨 전부가 기동 실패했다.
   outbound-service:
     environment:
       SPRING_FLYWAY_LOCATIONS: classpath:db/migration,classpath:db/seed
+      SPRING_FLYWAY_OUT_OF_ORDER: "true"
 
   # ---------------------------------------------------------------------------
   # admin-service — 호환 슬림 (TASK-BE-585). 위 네 서비스와 성질이 다르다.
