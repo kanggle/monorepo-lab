@@ -60,6 +60,73 @@ description: Audit all auto-memory entries for staleness, contradictions, dangli
   - Yes → CLAUDE.md 또는 해당 `platform/`/`rules/` 파일 승격 후보
   - No (개인 작업 스타일, 특정 프로젝트 일회성 결정) → 메모리에 유지
 
+#### 2-6. 인덱스 예산 (TASK-MONO-529)
+
+인덱스는 **매 세션 자동 로드**되므로 크기가 곧 토큰 비용이다. 그런데 이 한도를 검사하는
+것은 이 단계뿐이다 — 훅(`.claude/hooks/`)은 분류기 차단이고, `MEMORY.md` 는 리포 밖
+(`~/.claude/projects/<slug>/memory/`)이라 CI 가 원리적으로 못 본다.
+
+**① 1차 지표는 바이트가 아니라 포인터 개수다.**
+
+```bash
+cd <memory-dir>
+tot=$(wc -c < MEMORY.md); ptr=$(grep -oE '\]\([a-z0-9_]+\.md\)' MEMORY.md | wc -l)
+echo "$tot B / $ptr 포인터 = 포인터당 $((tot/ptr))B"
+grep -oE '\]\([a-z0-9_]+\.md\)' MEMORY.md | wc -c   # 파일명 합계(압축 불가분)
+```
+
+🔴 **정원을 상수로 믿지 말고 그 자리서 계산하라** — 파일명이 길어지면 포인터당 바이트가
+올라간다. `정원 = 24576 ÷ (포인터당 바이트)`.
+
+**② 실측 상수 (2026-08-14) — 이걸 몰라서 세 번 헛수고했다.**
+
+| | 분리 전 | 분리 후 |
+|---|---|---|
+| 포인터당 | **120B** | **130B** |
+| 그중 파일명 | 43% | 40% — 주소라 **압축 불가** |
+| 산술 상한(24576÷) | 200 포인터 | 189 포인터 |
+| 줄 병합 효과 | **6줄 합쳐 188B (0.8%)** | 사실상 무효 |
+
+⇒ **바이트는 *줄* 이 아니라 *포인터* 에 붙는다.**
+
+🔴 **같은 날에도 값이 움직였다** — 짧은 줄이 `PLAYBOOKS.md` 로 빠지자 남은 줄이 더
+조밀해져 포인터당 120B → 130B 가 됐다. **표의 숫자를 쓰지 말고 ① 을 다시 돌려라.**
+이 표는 *"압축은 답이 아니다"* 를 보이기 위한 것이지 계산에 쓰라고 있는 게 아니다.
+
+**③ 초과 시 지시는 "압축" 이 아니라 "구조 변경" 이다.**
+
+압축은 **이벤트**고 성장은 **프로세스**다 — 2026-08-08 에 1KB 를 확보했는데 같은 날 오후
+한 세션이 도로 먹었다. 초과가 잡히면 아래 순서로 지시한다:
+
+1. **완료분 → `ARCHIVE.md`**
+2. **절차·플레이북·외부참조 → `PLAYBOOKS.md`** (lazy-load)
+3. 1·2 로도 안 되면 **정원을 늘릴지(= 매 세션 토큰을 더 쓸지) 사용자에게 묻는다.**
+   조용히 더 깎지 않는다 — 라벨은 회수(recall)를 담고 있어 그때부터는 압축이 곧 손실이다.
+
+🔴 **금지 — 이건 개선이 아니라 사고다**
+
+- **함정(§A2 측정·검증 규율 · §B 함정/해저드)을 lazy-load 로 내리지 말 것.**
+  안 로드된 함정은 **다시 밟는다.** 내려도 되는 것은 *절차·전략* 뿐이다.
+- **줄 병합으로 해결하려 들지 말 것** (위 실측 0.8%).
+- **항목 삭제 금지.** 옮기는 것이지 지우는 것이 아니다.
+
+**④ 유효성 술어 — 옮기기 전후 포인터 집합이 같아야 한다.**
+
+```bash
+# 이동 전
+cat MEMORY.md PLAYBOOKS.md ARCHIVE.md | grep -oE '\]\([a-z0-9_]+\.md\)' | sort -u > /tmp/before.txt
+# ... 이동 ...
+cat MEMORY.md PLAYBOOKS.md ARCHIVE.md | grep -oE '\]\([a-z0-9_]+\.md\)' | sort -u > /tmp/after.txt
+comm -23 /tmp/before.txt /tmp/after.txt   # 비어야 한다 = 손실 0
+```
+
+🔴 이 술어 없이 섹션을 통째로 옮기면 **한 줄 흘려도 모른다.**
+🔴 덮어쓰기는 **임시파일 + rename** (truncate-then-fail 이 인덱스를 0바이트로 만든 적 있다).
+
+**⑤ 참고 — `*_detail_*` / `*_history_*` 파일이 인덱스에 없는 것은 정상이다.**
+부모 메모리가 `[[wikilink]]` 로 가리키는 분할본이다. 인덱스 링크(`](x.md)`)만 세면
+"고아" 로 오판한다 — 고아 판정 전에 `[[x]]` 형태도 함께 세라.
+
 ### Phase 3: 보고서 출력
 
 검사 결과를 아래 형식으로 출력한다. `--dry-run` 플래그가 있으면 여기서 종료한다.
@@ -82,6 +149,13 @@ description: Audit all auto-memory entries for staleness, contradictions, dangli
 ### 5. 공통 규칙 후보
 - [file.md] 승격 대상 규칙 요약 — 승격 위치 제안
 
+### 6. 인덱스 예산
+- MEMORY.md: N B / P 포인터 (포인터당 B) — 정원 Q, 잔여 R
+- PLAYBOOKS.md: N B / P 포인터   ·   ARCHIVE.md: N B / P 포인터
+- 판정: WITHIN / OVER
+- (OVER 인 경우) 구조 변경 후보: <절차성 섹션과 그 포인터 수>
+  🔴 함정 섹션(§A2·§B)은 후보에서 제외했음을 명시
+
 ### Summary
 - 파일 감사: N개
 - Stale: N
@@ -89,6 +163,7 @@ description: Audit all auto-memory entries for staleness, contradictions, dangli
 - 댕글링 참조: N
 - CLAUDE.md 중복: N
 - 공통 규칙 후보: N
+- 인덱스 예산: N B / P 포인터 (정원 Q) — WITHIN / OVER
 - 상태: PASS / NEEDS_FIX
 ```
 
@@ -104,6 +179,7 @@ description: Audit all auto-memory entries for staleness, contradictions, dangli
 | 댕글링 참조 (본문 경로) | 경로 수정 또는 관련 설명 삭제 |
 | CLAUDE.md 중복 | 메모리 파일 삭제 + `MEMORY.md` 인덱스 항목 제거 |
 | 공통 규칙 후보 | 사용자와 승격 여부 합의 후, 합의 시 CLAUDE.md 해당 섹션에 추가 + 메모리 삭제 |
+| 인덱스 예산 초과 | 2-6 ③ 순서대로 **이동**(완료분→ARCHIVE, 절차→PLAYBOOKS). 🔴 압축·삭제·함정 강등 금지. 이동 후 2-6 ④ 포인터 집합 동등성 검사 필수 |
 
 수정 후 `MEMORY.md` 인덱스가 실제 파일 목록과 일치하는지 재확인한다.
 
