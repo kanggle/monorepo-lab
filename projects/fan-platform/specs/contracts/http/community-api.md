@@ -94,6 +94,31 @@ Response 201:
 
 Errors: 401, 403 (PERMISSION_DENIED if non-artist publishes ARTIST_POST), 422 (VALIDATION_ERROR).
 
+#### `visibility` is unrestricted by `postType` — deliberately
+
+**Any author may publish at any of the three tiers, including a `FAN` publishing a
+`FAN_POST` at `MEMBERS_ONLY` or `PREMIUM`.** This is a decision, not an unclosed hole:
+[`ADR-003`](../../../docs/adr/ADR-003-fan-post-visibility-authoring-rule.md) **ACCEPTED — B**
+(2026-08-14). The rationale, because the table above cannot carry it:
+
+- **Nothing is leaked by this.** Gating works; a fan's `PREMIUM` post is served only to
+  premium members. What is odd is *economic*, not access: memberships are **platform-scoped**
+  (`MembershipChecker.hasAccess(accountId, tier, tenantId)` takes no artist), so such a post
+  earns its author nothing and merely narrows its own audience.
+- **The spec actively requires it** rather than being silent — `specs/integration/v1-e2e-scenarios.md`
+  § Scenario 3 and `VisibilityTierE2ETest` both publish a fan-authored `FAN_POST` at
+  `MEMBERS_ONLY` and at `PREMIUM`. Restricting `postType`→`visibility` would not be correcting
+  drift; it would introduce a new constraint and break a specified scenario.
+- **`visibility` is write-once.** `UpdatePostUseCase` takes `(postId, actor, title, body,
+  mediaRefs)` — no `visibility` — so the tier is fixed at publish and cannot be escalated later.
+- **No product surface offers the choice.** The compose screen hardcodes `visibility: 'PUBLIC'`
+  (`TASK-FAN-FE-016`), so gated fan posts arise only from direct API calls.
+
+🔴 **This rests on one fact and reopens if it changes** — that memberships are platform-scoped.
+If membership is ever scoped **per artist**, a fan's gated post acquires a real audience and this
+decision must be revisited. `TASK-FAN-BE-047` AC-4 carries the named trigger; AC-5 carries the
+guard the reversibility depends on.
+
 ### `GET /api/community/posts/{id}` — Get
 
 Auth: bearer. Visibility check: PUBLIC/MEMBERS_ONLY/PREMIUM gating per

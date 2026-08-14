@@ -39,6 +39,15 @@ describe('publishFanPost', () => {
     expect(gatewayFetch.mock.calls[0][0]).toBe('/api/v1/community/posts');
     // 필드 하나씩이 아니라 **바디 전체**를 고정한다. 부분 단언은 누군가 visibility 를
     // 파라미터로 바꿔도 통과한다 — 그게 이 티켓이 막으려는 변경이다.
+    //
+    // 🔴 ADR-003 (ACCEPTED — B) · TASK-FAN-BE-047 AC-5 — 이 `toEqual` 은 스타일이 아니다.
+    // ADR-003 은 팬이 게이팅된 글을 쓸 수 있게 두기로 했고, 그 결정이 **되돌릴 수 있다**는
+    // 근거가 "그런 행이 실제로는 쌓이지 않는다" 였다. 쌓이지 않는 이유가 바로 이 줄이다 —
+    // 작성 화면이 PUBLIC 을 하드코딩하고, 이 단언이 바디 전체를 고정하므로 누구도 조용히
+    // visibility 선택을 붙일 수 없다. 이걸 `toMatchObject` 로 완화하면 가드가 사라지는 게
+    // 아니라 **ADR-003 의 전제가 사라진다**(행이 쌓이기 시작하고, 그 행들은 write-once 라
+    // 나중에 방향을 틀 때 마이그레이션 대상이 된다).
+    // ⇒ 완화하려면 테스트가 아니라 ADR-003 을 먼저 열어라.
     expect(sentBody()).toEqual({
       postType: 'FAN_POST',
       visibility: 'PUBLIC',
