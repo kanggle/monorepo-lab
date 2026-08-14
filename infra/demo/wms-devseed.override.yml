@@ -98,10 +98,17 @@ services:
       SPRING_FLYWAY_OUT_OF_ORDER: "true"
 
   # ---------------------------------------------------------------------------
-  # admin-service — 호환 슬림 (TASK-BE-585). 위 네 서비스와 성질이 다르다.
+  # admin-service — 시드 위치 + 호환 슬림 (TASK-BE-585 · TASK-BE-587).
   # ---------------------------------------------------------------------------
-  # admin 은 여기서 seed 위치를 열지 않는다 — 자기 시드가 이미 항상 켜지는
-  # `db/migration` 안에 있기 때문이다(그래서 이 목록에 없었다). 이 항목이 여는 것은
+  # 🔴 `TASK-BE-587` 로 admin 도 형제 넷과 같은 모양이 됐다. 그전까지 admin 의 시드는
+  # **항상 켜지는 `db/migration` 안**에 있었고(그래서 이 목록에 없었다) 파일 헤더는
+  # *"프로덕션 프로파일이 location filter 로 걸러낸다"* 고 적고 있었다 — **그런 게이트는
+  # 존재하지 않았다**(프로파일 변형 0개·콜백 0건). 즉 그 시드는 **모든 환경**에 적용됐고,
+  # 공개된 고정 UUID 로 전역 `WMS_SUPERADMIN` 부트스트랩 계정을 심고 있었다.
+  # 이제 시드는 `db/seed/R__seed_dev_data.sql` 이고, **위치가 곧 게이트**다 — 그것을 여는
+  # 것은 admin 의 `application-dev.yml` 과 이 파일뿐이다.
+  #
+  # 아래 두 번째 줄(`SPRING_FLYWAY_OUT_OF_ORDER`)은 성질이 다르다. 이 항목이 여는 것은
   # **기존 볼륨의 복구 경로**다.
   #
   # 무슨 일이 있었나: 그 시드가 `V99__seed_dev_data.sql` 이라, 한 번이라도 뜬 admin_db 는
@@ -126,6 +133,12 @@ services:
   #     DELETE FROM flyway_schema_history WHERE version = '99';
   #
   # 선례와 절차: projects/iam-platform/docs/flyway-dev-seed-migrations.md § 6
+  #
+  # 🔴 `SPRING_FLYWAY_LOCATIONS` 를 여기서 빼면 데모의 admin_role·admin_user·
+  # admin_setting 이 **빈 채로 뜬다**(대시보드는 JWT 인가라 그대로 열리지만, 역할·사용자·
+  # 설정 관리 화면이 빈 목록이 된다). `TASK-BE-587` 전에는 이 줄이 필요 없었다 —
+  # 시드가 프로덕션 위치에 있었기 때문이고, 그것이 정확히 그 티켓이 고친 결함이다.
   admin-service:
     environment:
+      SPRING_FLYWAY_LOCATIONS: classpath:db/migration,classpath:db/seed
       SPRING_FLYWAY_OUT_OF_ORDER: "true"

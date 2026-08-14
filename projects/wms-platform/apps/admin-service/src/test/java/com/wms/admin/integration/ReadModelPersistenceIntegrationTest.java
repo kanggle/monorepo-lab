@@ -44,7 +44,19 @@ import org.springframework.transaction.annotation.Transactional;
 @Tag("integration")
 @SpringBootTest(classes = com.wms.admin.AdminServiceApplication.class,
         properties = {
-                "spring.flyway.locations=classpath:db/migration",
+                // 🔴 Must match every other class sharing AdminServiceIntegrationBase's
+                // container. This class does not care about the dev seed, but it
+                // inherits the same Postgres, and once a sibling applies the
+                // repeatable from db/seed a location list that omits db/seed no
+                // longer RESOLVES it — Flyway then refuses to boot with
+                // "applied migration not resolved locally: seed dev data".
+                // Before TASK-BE-587 the two lists were accidentally identical
+                // because the seed lived in db/migration, so this agreement was
+                // never a choice anyone had to make. It is now. (Measured: this
+                // class went 16/16 RED on exactly that when only its sibling was
+                // updated — each class was right on its own and the composition
+                // was not.)
+                "spring.flyway.locations=classpath:db/migration,classpath:db/seed",
                 "spring.autoconfigure.exclude="
                         + "org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration,"
                         + "org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration,"

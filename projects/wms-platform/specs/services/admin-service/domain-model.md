@@ -606,9 +606,10 @@ and dedupe.
 
 ---
 
-## Reference Data Snapshot (v1 Seed)
+## Reference Data Snapshot (dev / demo only)
 
-Flyway `V99__seed_dev_data.sql`, profile `dev` or `standalone`:
+Flyway `db/seed/R__seed_dev_data.sql` — a **repeatable** in a **non-production
+location**:
 
 - 4 built-in Roles: `WMS_VIEWER`, `WMS_OPERATOR`, `WMS_ADMIN`, `WMS_SUPERADMIN`
   with default `permissions_json` as declared in architecture.md
@@ -616,6 +617,38 @@ Flyway `V99__seed_dev_data.sql`, profile `dev` or `standalone`:
 - Default Settings per the seed table in §4
 - Read-model tables empty at seed time; populated by replaying `master.*`,
   `inbound.*`, `outbound.*`, `inventory.*` topics from offset 0
+
+**Where it applies is the gate.** `application.yml` names only
+`classpath:db/migration`; exactly two things add `classpath:db/seed`:
+
+| opener | environment |
+|---|---|
+| `src/main/resources/application-dev.yml` | `SPRING_PROFILES_ACTIVE=dev` |
+| `infra/demo/wms-devseed.override.yml` | the local demo stack |
+
+A production deployment names neither, so it applies none of this seed and
+**provisions its own roles, users and settings through the admin API**.
+
+> 🔴 **This paragraph used to be false, and the file used to say so itself**
+> (TASK-BE-587). The seed was `V99__seed_dev_data.sql` and then
+> `R__seed_dev_data.sql` inside the always-on `db/migration`, while its header
+> claimed *"the prod migration profile gates this file out via callback /
+> location filter at the platform level"*. Measured 2026-08-14: one
+> `application.yml`, zero profile variants, zero callbacks, zero location
+> filters. The seed therefore applied in **every** environment — including a
+> global `WMS_SUPERADMIN` assignment under a UUID this repository publishes.
+>
+> Removing it from production closes no surface: authorisation reads the JWT
+> (`SecurityConfig` role claim + `entitled_domains` → `ROLE_WMS_VIEWER`
+> synthesis), never `admin_role`, and `permissions_json` is only ever read back
+> out through the role CRUD API. `DevSeedScopeIT` pins both halves.
+>
+> 🔴 A database seeded under the old arrangement **will refuse to boot with
+> production locations** — Flyway rejects an applied repeatable it can no longer
+> resolve (`applied migration not resolved locally: seed dev data`). This is
+> deliberate rather than suppressed; such a database also still holds the
+> bootstrap SUPERADMIN. One-time repair:
+> `DELETE FROM flyway_schema_history WHERE version IS NULL AND description = 'seed dev data';`
 
 ---
 

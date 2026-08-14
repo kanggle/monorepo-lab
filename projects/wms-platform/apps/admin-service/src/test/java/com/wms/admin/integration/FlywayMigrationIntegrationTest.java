@@ -12,15 +12,27 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.ContextConfiguration;
 
 /**
- * Verifies V1 + V99 Flyway migrations apply cleanly against a real Postgres
+ * Verifies the Flyway migrations apply cleanly against a real Postgres
  * container, all 6 tables exist, and the seed data is present (4 built-in
  * roles + 1 admin user + global assignment + 4 default settings). Covers
  * AC-04.
+ *
+ * <p>🔴 The location list below names {@code db/seed} deliberately, and it did
+ * not have to before TASK-BE-587. Until 2026-08-15 the dev seed sat inside the
+ * always-on {@code db/migration}, so this class asserted seeded rows while
+ * pinning {@code locations=classpath:db/migration} — i.e. it pinned "production
+ * locations produce a bootstrap SUPERADMIN", which was the defect, not the
+ * contract. The seed now lives in {@code db/seed} and this class states which
+ * environment it is testing: dev/demo.
+ *
+ * <p>Whether that placement is right — that production seeds nothing and that
+ * nothing breaks when it does not — is not this class's question. It belongs to
+ * {@link DevSeedScopeIT}, which measures both sides of the location variable.
  */
 @Tag("integration")
 @SpringBootTest(classes = com.wms.admin.AdminServiceApplication.class,
         properties = {
-                "spring.flyway.locations=classpath:db/migration",
+                "spring.flyway.locations=classpath:db/migration,classpath:db/seed",
                 "spring.autoconfigure.exclude="
                         + "org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration,"
                         + "org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration,"
