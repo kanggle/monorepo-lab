@@ -112,11 +112,86 @@ PickingController:42       @RequestMapping("/api/v1/outbound/picking-requests")
 
 ---
 
+# ✅ AC-0 실측 (2026-08-14) — **티켓의 전제가 작았다. 배선 결함이 아니라 미구현 컴포넌트다**
+
+티켓은 이것을 *"엔드포인트 405 + 사가가 행을 안 만듦"* 으로 적었다. 둘 다 사실이지만 **원인이 아니다.**
+
+## ① 🔴🔴 행을 만드는 코드가 **아예 없다** — 포트는 있고 호출처가 0이다
+
+```
+포트        application/port/out/PickingPersistencePort.java          save(PickingRequest) 선언
+어댑터      adapter/out/persistence/adapter/PickingRepositoryImpl:35   구현돼 있다
+
+프로덕션 호출처   0건   ← application 계층 전수. Confirm/Query 서비스는 findBy* 만 쓴다
+테스트 호출처     2건   ConfirmPickingServiceTest:202 · ConfirmShippingServiceTest:217
+```
+
+⇒ **테스트가 제품이 만들 수 없는 상태를 포트로 직접 심고** 그 위에서 확정·출하 로직을 검증한다.
+그래서 *"피킹 요청이 존재한다" 는 전제가 프로덕션에서 성립한 적이 없다*는 사실을 **어떤 테스트도 볼 수 없다.**
+[[env_test_fixture_impossible_input_proves_nothing]]
+
+## ② 컨슈머도 만들지 않는다
+
+`InventoryReservedConsumer` 는 사가를 `RESERVED` 로 올릴 뿐이다(javadoc 원문:
+*"advances the matching saga to RESERVED"*). outbound 컨슈머 8개 어디에도 저장이 없다(①의 0건과 같은 사실).
+
+## ③ 🔴🔴 스펙은 담당자를 **이름까지 지정**한다. 그 이름은 코드에 없다
+
+```
+outbound-saga.md:92     "4. `PickingPlanner` (domain service) computes per-line `location_id` …"
+domain-model.md:185     "assigned by `PickingPlanner` domain service at `RequestPickingUseCase` time"
+outbound-events.md:300  "Assigned picking source location (`PickingPlanner` domain service result)"
+
+PickingPlanner 구현        0건
+PickingPlanner 언급(Java)  1건 — ReceiveOrderService:269 의 주석
+    null /* locationId — assigned by inventory until PickingPlanner ships in BE-038 */
+```
+
+⇒ 스펙은 **outbound 의 `PickingPlanner`**, 코드 주석은 **inventory** 를 소유자로 가리킨다.
+**소유자가 둘이다.** 그리고 `TASK-BE-038` 은 `done/` 이라 그 주석은 가리킬 티켓을 잃었다.
+
+## ④ 🔴 § 2.1 만 구현해도 **데모는 안 풀린다**
+
+계약 § 2.1 은 *"saga 가 `REQUESTED` 를 지났으면 422"* 다. 실측:
+
+```
+outbound_order.status = PICKING    ✅        picking_request 0행  ✅
+outbound_saga.status  = RESERVED   ❌ 이미 지났다  →  422
+```
+
+예약은 주문 생성과 **같은 TX** 에서 자동 시작된다(`TASK-MONO-528` 실측) ⇒ 운영자가 § 2.1 을 부를
+창이 사실상 없다. **재진입 엔드포인트만 만드는 것은 이 결함을 고치지 못한다.**
+
+## ⑤ 🔵 inventory 는 이미 로케이션을 정해서 실어 보내고 있다
+
+`wms.inventory.reserved.v1` 페이로드에 `lines[].locationId` 가 있다(계약 § 4). 사가도
+`pickingRequestId` 를 이미 들고 있다 ⇒ **새 도메인 로직 없이** 행을 만들 수 있는 경로가 존재한다.
+
+## ⑥ `TASK-BE-038` 에 대한 사실 기록 (🔵 소유자 지정: 본문 수정 없음)
+
+`TASK-BE-038`(pick-pack-ship 도메인)은 `done/` 이고 `TASK-BE-040` 이 후속 정리까지 끝냈다.
+그런데 그 도메인의 **입구가 프로덕션에 존재한 적이 없다.** 닫힘이 성립한 것은 ①의 픽스처 때문이다.
+🔵 **`done/` 본문은 고치지 않는다**(review/done 편집 금지) — 사실은 이 티켓과 원장에만 적고,
+같은 방식으로 닫힌 티켓의 전수 감사는 열지 않는다(2026-08-14 소유자 지정).
+
+---
+
+# 🔴 AC-1 은 `ADR-MONO-066` ACCEPT 대기 (HARDSTOP-09)
+
+③이 **소유권 충돌**을 드러냈으므로 `platform/architecture-decision-rule.md` § The ACCEPTED Gate 에
+걸린다. [`ADR-MONO-066`](../../../../docs/adr/ADR-MONO-066-wms-picking-request-creation-and-location-ownership.md)
+을 **PROPOSED** 로 발행했다 — 실측 M1~M7 · 선택지 A/B/C/D · 라이더 R1~R3.
+🔴 **에이전트 self-ACCEPT 금지.** 정확형(`A`|`B` + `R1-a|b` + `R2-a|b|c`) 지정을 받은 뒤 착수한다.
+
+---
+
 # Acceptance Criteria
 
-- [ ] **AC-0 (실측)** — `picking_request` 를 만드는 코드 경로 전수. 없으면 "없다" 를,
-      있는데 안 돌면 **왜 안 도는지**를 실측으로 적는다(로그·오프셋·컨슈머 상태)
-- [ ] **AC-1 (결정 + 구현)** — 계약 § 2.1 구현 / 계약에서 삭제 중 하나 + 근거.
+- [x] **AC-0 (실측)** — 완료. 답은 **"있는데 안 도는 것" 이 아니라 "없다"** 다: 포트 `save()` 의
+      프로덕션 호출처 **0건**(테스트 2건) · 컨슈머 0건 · 스펙이 지목한 `PickingPlanner` **미존재** ·
+      § 2.1 만으로는 422 라 못 푼다 · inventory 는 이미 로케이션을 실어 보낸다. 상세는 위 §. 원문:
+- [ ] **AC-1 (결정 + 구현)** — 🔴 **`ADR-MONO-066` ACCEPT 선행**(소유자 정확형 지정). 원문:
+      계약 § 2.1 구현 / 계약에서 삭제 중 하나 + 근거.
       계약과 구현이 **일치**하는 것이 이 AC 의 통과 조건이다
 - [ ] **AC-2 (라이브)** — 신선 데모에서 운영자 토큰만으로 `SHIPPED` 도달.
       `shipment` ≥1행 · `admin_shipment_summary` ≥1행을 DB 로 확인
