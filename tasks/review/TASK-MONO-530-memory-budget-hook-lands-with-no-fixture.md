@@ -103,7 +103,7 @@ Stop hook`)가 `.claude/hooks/memory-budget-check.ps1`(108줄) + `settings.json`
 
 # Acceptance Criteria
 
-> **AC-0~AC-3 완료 2026-08-14. AC-4 는 이 PR 의 CI 가 나와야 닫힌다** — 그 전에 체크하면
+> **✅ AC-0~AC-4 전부 완료 2026-08-14.** AC-4 는 CI 가 나온 뒤에 닫았다 — 그 전에 체크하면
 > 그건 측정이 아니라 선언이다. 실행 기록은 각 AC 아래 `→` 줄. 훅 자체는 **한 바이트도 안
 > 고쳤다**(`git diff` 로 확인) — 이 티켓은 계측기를 붙이는 일이었고 그대로 끝났다.
 
@@ -139,9 +139,9 @@ Stop hook`)가 `.claude/hooks/memory-budget-check.ps1`(108줄) + `settings.json`
       상태로 남았다. `git status` 로 발견해 커밋된 blob 에서 복원했다. ⇒ 돌연변이 하네스는
       **1회 호출 = 1 돌연변이 + 즉시 복원**으로 쪼갰다. 타임아웃이 있는 실행기에서 `finally`
       는 복원을 보장하지 않는다
-- [ ] **AC-4 (CI)** — PR 에서 `Hook fixtures (Windows PowerShell)` 잡이 **SKIPPED 가 아니라
+- [x] **AC-4 (CI)** — PR 에서 `Hook fixtures (Windows PowerShell)` 잡이 **SKIPPED 가 아니라
       실행**되고 통과함을 확인한다. 스킵된 잡은 이 변경에 대해 아무 말도 하지 않는다
-      → PR 오픈 후 확인 예정. 🔵 대조군은 이미 있다 — `TASK-MONO-530` 티켓만 담은 PR
+      → **완료 — 그리고 첫 실행에서 진짜 결함을 잡았다.** 1회차 **FAIL**: 이 fixture 가 BOM 없는 UTF-8 이라 windows-latest 의 PowerShell 5.1 이 ANSI 코드페이지로 파싱해 `전략` 이 `ì „ëžµ` 로 깨졌고 **파서가 죽었다**(`Missing ')' in method call`). 단언 실패가 아니라 파스 실패다. 전수 결과 **훅 스크립트 27개 중 26개가 BOM 보유**, 없는 둘이 이 fixture 와 **훅 자신**(non-ASCII 3,201B)이었다 → 둘 다 BOM 추가(훅은 본문 sha256 바이트 동일). 2회차 **PASS** — 러너 로그에 `--- Running memory-budget-check.ps1 ---` + 6칸 PASS + `All fixtures PASS` 확인(= 잡의 초록이 아니라 **칸이 실제로 돌았다**는 증거). 🔴 ⇒ 로컬 전건 초록은 이것을 볼 수 없었다 — 이 호스트의 코드페이지가 받아줬기 때문이고, 그게 AC-4 가 존재하는 이유다. 🔵 대조군은 이미 있다 — `TASK-MONO-530` 티켓만 담은 PR
       [#3320](https://github.com/kanggle/monorepo-lab/pull/3320) 에서 이 잡은 **SKIPPED** 였고
       (`tasks/` 만 건드렸으므로 정상), 이 PR 은 `.claude/hooks/**` 를 건드리므로 **실행돼야**
       한다. 두 PR 이 경로 필터의 양쪽 칸을 이룬다
@@ -198,5 +198,5 @@ Stop hook`)가 `.claude/hooks/memory-budget-check.ps1`(108줄) + `settings.json`
 - [x] AC-0 재측정 기록 (훅 술어 · 러너 형태 · 현재 포인터/정원)
 - [x] fixture 6칸 + `run-all.ps1` 배선
 - [x] AC-3 돌연변이 4종 RED → 복원 GREEN, 판정은 종료 상태로
-- [ ] PR 에서 `Hook fixtures` 잡 실행(SKIPPED 아님) + 통과
+- [x] PR 에서 `Hook fixtures` 잡 실행(SKIPPED 아님) + 통과
 - [x] Ready for review
