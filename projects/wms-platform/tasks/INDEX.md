@@ -67,7 +67,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-BE-584-tenant-axis-never-measured-against-the-screen.md` — **READY.** 🔴 `ADR-MONO-064`·`065` 가 각각 **정확히 한 칸**을 열어 둔 채 닫혔고 **둘 다 같은 재시드 한 번으로 풀린다**: `TASK-BE-581` AC-3 는 *"콘솔 렌더 계층은 태우지 않았다"*(기동 중 커밋 차지 92% 도달로 중단; DoD 의 "콘솔 목록 브라우저 증거" 가 지금도 미체크) · `TASK-BE-583` AC-2 는 *"기존 프로젝션 행은 소급 채우지 않는다 — 복구 경로는 064 와 같은 볼륨 초기화 + 재시드"*. 🔴 **손대지 않은 볼륨에서 지금 재면 판정 불가다** — `OrderSummaryRepository:24`/`ShipmentSummaryRepository:22` 의 술어가 `(:tenantId IS NULL OR o.tenantId = :tenantId)` 이고 `V3` 가 기존 행을 소급 stamp 하지 않았으므로, `demo-corp`(→`restrictedTo`) 에게 `NULL = 'demo-corp'` 는 UNKNOWN 이라 **기존 행이 제외된다** ⇒ **0원소**가 나오고 그 0 은 "격리 동작" · "프로젝션 비었음" · "컨슈머 사망" · "엔드포인트 오타" 를 **전부 같은 값**으로 낸다. 🔵 유도가 맞다면 `TASK-BE-583` 이 축 도입 **전** 실측한 `/dashboard/orders totalElements=1` 은 지금 **0** 이고, 즉 **현재 데모의 wms 대시보드는 비어 있다**(결함이 아니라 그 행이 축보다 오래됐다) — ⚠️ 이건 JPQL+행상태에서 **유도한 예측이고 라이브 미측정**이라 **AC-0 이 확정/반증**한다. 판정 = **BFF 응답 원소 수**(HTML grep 금지 — 콘솔은 클라 렌더라 SSR 0건). 🔴 **대조군이 이 티켓의 핵심**: AC-3 은 `demo-corp` ≥1 vs **타 테넌트** 0 의 차등이고(한 테넌트만 재면 필터 유무와 무관하게 같은 값 = 상수 비교), AC-4 는 `R1=a` 의 **나머지 절반** — 같은 타 테넌트가 창고 전역 6개(`adjustments`·`alerts`·`asns`·`inventory`·`refs`·`throughput`)에서 **막히지 않아야** 한다(짝 축 한쪽만 열리면 거의 결함). 🔴 AC-0 이 **타 테넌트 assume 가능성**을 먼저 재다 — `assume wms` 는 실패가 실측돼 있고(`TASK-BE-581` 2회차), 하나도 안 되면 AC-3/4 는 **판정 불가로 기록**한다(단일 테넌트 대체 초록 금지). ⚠️ 기동은 **`iam`+`wms`+`console` 만**(`demo-up.sh wms console`) — 🔴 `MONO-399` AC-2 의 *"31.5GB 중 여유 2.8GB"* 는 **`free -m` = AWS 인스턴스**이지 이 호스트가 아니다(이 머신 실측 **물리 15.7GB / 커밋 한도 31.4GB**, 2026-08-14). 분석=Opus 5 / 구현 권장=Sonnet 5 (판단은 ADR 두 건에서 끝났고 남은 건 실행+계측).
 
 <details><summary>직전 점유 (2026-08-13~14, `TASK-BE-583` — 지금 done/)</summary>
 
