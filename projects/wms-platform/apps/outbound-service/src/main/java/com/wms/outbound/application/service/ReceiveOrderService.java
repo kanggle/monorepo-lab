@@ -257,6 +257,9 @@ public class ReceiveOrderService implements ReceiveOrderUseCase {
                 saved.getRequiredShipDate(),
                 saved.getShipTo(),
                 eventLines,
+                saved.getTenantId() /* ADR-MONO-065 D2 — the persisted tenant, never the
+                                       command's raw input; resolveTenantId() already
+                                       decided what the aggregate owns */,
                 now,
                 command.actorId()));
 

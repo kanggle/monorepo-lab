@@ -127,12 +127,14 @@ public class OutboundProjectionService {
                     null,
                     occurredAt,
                     null,
-                    occurredAt);
+                    occurredAt,
+                    envelope.tenantId());
             orderRepo.save(row);
         } else {
             row.applyReceived(text(p, "orderNo"), uuid(p, "warehouseId"), customerId,
                     customerName, optionalText(p, "source"),
-                    optionalDate(p, "requiredShipDate"), lineCount, occurredAt, occurredAt);
+                    optionalDate(p, "requiredShipDate"), lineCount, occurredAt, occurredAt,
+                    envelope.tenantId());
         }
         return DedupeOutcome.APPLIED;
     }
@@ -149,13 +151,22 @@ public class OutboundProjectionService {
             // Out-of-order: cancelled before received. Insert a thin row;
             // received event (if it ever arrives) will not re-CREATE because
             // the LWW guard sees this row's last_event_at and skips.
+            //
+            // The tenant is stamped here too — order.cancelled carries the same
+            // order's tenant on its envelope. Without this the thin row would be
+            // permanently tenant-less and therefore invisible to its own owner,
+            // since the received event that would have supplied it is exactly the
+            // one the LWW guard above will skip.
             row = new OrderSummaryEntity(
                     orderId,
                     optionalText(p, "orderNo") == null ? "" : optionalText(p, "orderNo"),
                     new UUID(0, 0),
-                    null, null, "CANCELLED", null, null, 0, null, null, null, occurredAt);
+                    null, null, "CANCELLED", null, null, 0, null, null, null, occurredAt,
+                    envelope.tenantId());
             orderRepo.save(row);
         } else {
+            // An existing row already holds the tenant from order.received (the
+            // authoritative statement); cancellation does not restate ownership.
             row.applyCancelled(occurredAt);
         }
         return DedupeOutcome.APPLIED;
@@ -193,12 +204,14 @@ public class OutboundProjectionService {
                     optionalText(p, "trackingNo"),
                     effectiveShipped,
                     totalQty,
-                    occurredAt);
+                    occurredAt,
+                    envelope.tenantId());
             shipmentRepo.save(ship);
         } else {
             ship.apply(orderId, optionalText(p, "orderNo"), warehouseId,
                     optionalText(p, "shipmentNo"), optionalText(p, "carrierCode"),
-                    optionalText(p, "trackingNo"), effectiveShipped, totalQty, occurredAt);
+                    optionalText(p, "trackingNo"), effectiveShipped, totalQty, occurredAt,
+                    envelope.tenantId());
         }
 
         // Cross-aggregate denorm: also stamp the order_summary row.

@@ -11,6 +11,7 @@ import com.wms.outbound.application.service.fakes.FakeMasterReadModelPort;
 import com.wms.outbound.application.service.fakes.FakeOrderPersistencePort;
 import com.wms.outbound.application.service.fakes.FakeOutboxWriterPort;
 import com.wms.outbound.application.service.fakes.FakeSagaPersistencePort;
+import com.wms.outbound.domain.event.OutboundDomainEvent;
 import com.wms.outbound.domain.exception.PartnerInvalidTypeException;
 import com.wms.outbound.domain.exception.SkuInactiveException;
 import com.wms.outbound.domain.model.masterref.PartnerSnapshot;
@@ -157,6 +158,45 @@ class ReceiveOrderServiceTest {
         assertThat(persistedTenantOf("ORD-T1"))
                 .as("§ D1: a restricted caller owns what it creates")
                 .isEqualTo("demo-corp");
+    }
+
+    /**
+     * ADR-MONO-065 § D2 — the stamped tenant must also leave on the
+     * {@code outbound.order.received} envelope, because that event is the <b>only</b>
+     * point at which {@code admin-service} can learn an order's tenant. Persisting it
+     * without publishing it would leave the projection unable to isolate, which is the
+     * defect ADR-MONO-065 closes: the row would be correct in outbound-service and
+     * still readable by every tenant through the admin dashboards.
+     */
+    @Test
+    void restrictedCaller_alsoPutsItsTenantOnTheReceivedEvent() {
+        callerScope.restrictTo("demo-corp");
+
+        service.receive(manualOrder("ORD-T1E"));
+
+        OutboundDomainEvent received = outboxWriter.published.stream()
+                .filter(e -> e.eventType().equals("outbound.order.received"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(received.tenantId()).isEqualTo("demo-corp");
+    }
+
+    /**
+     * Control for the above: an unrestricted caller publishes no tenant, so the
+     * serializer omits the field and the projection stores null. Without this cell an
+     * event hard-wired to a constant would pass the positive case.
+     */
+    @Test
+    void unrestrictedCaller_publishesAReceivedEventWithNoTenant() {
+        callerScope.unrestrict();
+
+        service.receive(manualOrder("ORD-T2E"));
+
+        OutboundDomainEvent received = outboxWriter.published.stream()
+                .filter(e -> e.eventType().equals("outbound.order.received"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(received.tenantId()).isNull();
     }
 
     /**

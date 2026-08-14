@@ -159,6 +159,6 @@ class InboundProjectionServiceTest {
     private ProjectionEnvelope envelope(UUID eventId, String eventType, String topic,
                                         String payloadJson) throws Exception {
         JsonNode payload = MAPPER.readTree(payloadJson);
-        return new ProjectionEnvelope(eventId, eventType, NOW, "agg", topic, payload);
+        return new ProjectionEnvelope(eventId, eventType, NOW, "agg", topic, null, payload);
     }
 }

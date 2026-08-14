@@ -30,7 +30,7 @@ Every request:
 
 | Header | Required | Notes |
 |---|---|---|
-| `Authorization` | yes | `Bearer <oauth2-access-token>` issued by IAM (OIDC, ADR-001). RS256 JWT validated against IAM JWKS by both gateway and admin-service; `tenant_id=wms` enforced. See [`specs/integration/iam-integration.md`](../../integration/iam-integration.md). |
+| `Authorization` | yes | `Bearer <oauth2-access-token>` issued by IAM (OIDC, ADR-001). RS256 JWT validated against IAM JWKS by both gateway and admin-service. 🔴 **Admission is entitlement-trust, not a fixed slug** — any token whose signed `entitled_domains` claim contains `wms` is admitted, whatever its `tenant_id` (`TenantClaimValidator.forTenant(...).trustEntitledDomains()`, ADR-MONO-019 § D5). *Corrected 2026-08-14 (TASK-BE-583): this row previously read `tenant_id=wms` enforced, which has not been true since entitlement-trust shipped.* What a tenant may **see** once admitted is § 1.0. See [`specs/integration/iam-integration.md`](../../integration/iam-integration.md). |
 | `X-Request-Id` | yes | Generated/echoed by gateway. Surfaced in logs + traces |
 | `X-Actor-Id` | yes | User id from JWT claim, set by gateway |
 | `Idempotency-Key` | yes for POST / PATCH / PUT / DELETE on `/users`, `/roles`, `/assignments`, `/settings` | UUID. TTL 24h. Scope `(Idempotency-Key, method, path)` |
@@ -185,7 +185,54 @@ other services' events. They are eventually consistent (typically < 5 s lag
 under normal load; see `architecture.md § Observability` for the
 `admin.projection.lag.seconds` SLI).
 
+### 1.0 Tenant visibility — which rows a caller sees
+
+**Authoritative: [`ADR-MONO-065`](../../../../../docs/adr/ADR-MONO-065-wms-admin-read-plane-tenant-axis.md)
+(ACCEPTED 2026-08-14 — B1 + R1=a).** Admission (§ Global Conventions → Headers) admits
+**any wms-entitled tenant**. This section says what each of them may then read. The
+eight dashboards split into two classes, and **the split is not a policy preference —
+it follows what the data is**:
+
+| Class | Surfaces | Visibility |
+|---|---|---|
+| **Tenant-owned** | § 1.3 `GET /dashboard/orders` · `GET /dashboard/shipments` | 🔴 **Isolated.** A caller sees only rows whose `tenantId` equals its own signed `tenant_id` claim |
+| **Warehouse-global** | § 1.1 inventory · § 1.2 throughput · § 1.4 ASN · § 1.5 adjustments · § 1.6 alerts · § 1.7 master refs | **Not partitioned by tenant.** Every wms-entitled tenant reads the same rows |
+
+**Why the second class is not isolated** — those projections carry no owner, and
+neither does anything upstream of them: across the six wms databases (91 tables)
+the *only* tenant column is `outbound_order.tenant_id` (ADR-MONO-065 § M2, measured
+2026-08-14). Inventory levels, ASNs, stock adjustments, alerts, master references and
+daily throughput describe **the warehouse's own operation**, not any one customer's
+holdings. Partitioning them would require modelling wms as a 3PL — which
+[`PROJECT.md`](../../../PROJECT.md) § Out of Scope explicitly excludes ("단일 물류 센터
+가정"). Adding a filter column with no upstream source would produce a constant
+comparison: a guard that is permanently green and protects nothing.
+
+**Isolation mechanics for the tenant-owned class:**
+
+- The filter value comes from the caller's **signed JWT** `tenant_id` claim. There is
+  no tenant query parameter, request header, or body field — a client cannot widen or
+  redirect its own scope.
+- A caller whose token carries no usable tenant (the native `wms` operator plane) is
+  **unrestricted** and sees every row, mirroring
+  [`ADR-MONO-064`](../../../../../docs/adr/ADR-MONO-064-wms-outbound-tenant-visibility-plane.md)
+  D1's treatment of the raw outbound API.
+- Rows whose `tenantId` is `null` — orders created before ADR-MONO-064, or by an
+  unrestricted caller — are visible **only** to unrestricted callers. They are never
+  back-stamped; the recovery path is a volume reset + reseed.
+- Both surfaces are **list-only** (no by-id read), so no existence-leak choice
+  (404-over-403) arises. wms is not classified `multi-tenant`
+  (`PROJECT.md` `traits`), so `rules/traits/multi-tenant.md` M3 does not bind here.
+
+🔵 Consistency with the raw outbound API: `GET /api/v1/outbound/orders` applies the
+same axis via `CallerScope` (ADR-MONO-064 D2). Before ADR-MONO-065 the two disagreed
+— the raw API isolated and this projection did not — which is the defect that ADR
+closed.
+
 ### 1.1 Inventory Snapshot
+
+**Warehouse-global** (§ 1.0) — not partitioned by tenant. Every wms-entitled tenant
+reads the same rows.
 
 #### `GET /api/v1/admin/dashboard/inventory` — List inventory snapshot rows
 
@@ -253,6 +300,9 @@ to zero stock.
 
 ### 1.2 Throughput
 
+**Warehouse-global** (§ 1.0) — daily aggregates of the warehouse's own operation;
+not partitioned by tenant.
+
 #### `GET /api/v1/admin/dashboard/throughput` — Daily inbound + outbound counters
 
 Auth: `WMS_VIEWER` or higher.
@@ -290,27 +340,45 @@ Errors: `VALIDATION_ERROR` (400) if range > 90 days or `to < from`.
 
 ### 1.3 Order / Shipment Summary
 
+🔴 **These two surfaces are the tenant-owned class (§ 1.0)** — the only dashboards
+partitioned by tenant. A tenant-scoped caller sees only its own rows; an unrestricted
+caller sees all. The filter is applied server-side from the signed JWT and **is not a
+query parameter**.
+
 #### `GET /api/v1/admin/dashboard/orders` — List outbound orders
 
-Auth: `WMS_VIEWER` or higher.
+Auth: `WMS_VIEWER` or higher. **Tenant-isolated** (§ 1.0).
 
 Query parameters: `warehouseId`, `customerPartnerId`, `status`,
 `requiredShipDateFrom/To`, `sagaState`, pagination (default
 `receivedAt,desc`).
 
 Response `200`: paginated list of `OrderSummary` rows (see
-[`domain-model.md § 8`](../../services/admin-service/domain-model.md)).
+[`domain-model.md § 8`](../../services/admin-service/domain-model.md)), restricted to
+the caller's tenant.
 
 #### `GET /api/v1/admin/dashboard/shipments` — List shipments
 
-Auth: `WMS_VIEWER` or higher.
+Auth: `WMS_VIEWER` or higher. **Tenant-isolated** (§ 1.0).
 
 Query parameters: `warehouseId`, `orderId`, `carrierCode`, `shippedAtFrom/To`,
 pagination (default `shippedAt,desc`).
 
-Response `200`: paginated list of `ShipmentSummary` rows.
+Response `200`: paginated list of `ShipmentSummary` rows, restricted to the caller's
+tenant.
+
+> A shipment inherits its order's tenant. It is carried as the shipment projection's
+> **own column** rather than joined at query time, because the order and shipment
+> projections arrive independently (ADR-MONO-065 D1). A shipment whose order has not
+> been projected yet therefore still carries the correct tenant.
+>
+> 🔵 `?orderId=` narrowing does **not** bypass the tenant filter: asking for another
+> tenant's order id yields an empty page, not that tenant's shipment.
 
 ### 1.4 Inbound (ASN) Summary
+
+**Warehouse-global** (§ 1.0) — ASNs are keyed by supplier partner, not by customer
+tenant; not partitioned.
 
 #### `GET /api/v1/admin/dashboard/asns` — List ASN summaries
 
@@ -330,6 +398,9 @@ Errors: `NOT_FOUND` (404) if no inspection has been projected yet.
 
 ### 1.5 Adjustment Audit
 
+**Warehouse-global** (§ 1.0) — stock adjustments are warehouse operations;
+not partitioned by tenant.
+
 #### `GET /api/v1/admin/dashboard/adjustments` — List adjustments
 
 Auth: `WMS_VIEWER` or higher.
@@ -343,6 +414,9 @@ This endpoint is the dashboard view onto the appended audit log. It is
 **append-only** from the projection — there is no PATCH / DELETE here.
 
 ### 1.6 Alerts
+
+**Warehouse-global** (§ 1.0) — not partitioned by tenant, and neither is the
+acknowledge mutation.
 
 #### `GET /api/v1/admin/dashboard/alerts` — List alert log
 
@@ -373,6 +447,9 @@ itself, not derived from any other service's event. Treated as a domain-tier
 write, but persisted into the projection table for join-free dashboard queries.
 
 ### 1.7 Master Reference Tables
+
+**Warehouse-global** (§ 1.0) — master data (warehouses, zones, locations, SKUs, lots,
+partners) is shared reference data; not partitioned by tenant.
 
 #### `GET /api/v1/admin/dashboard/refs/{type}` — List a master reference projection
 

@@ -14,13 +14,19 @@ public interface ShipmentSummaryRepository extends JpaRepository<ShipmentSummary
     // `:shippedAtFrom IS NULL` binds an untyped null PostgreSQL cannot type
     // (42P18) on an unfiltered call → 500. Same fix as AlertLogRepository
     // (TASK-BE-331); the >=/<= comparison keeps temporal typing. TASK-BE-332.
+    // :tenantId is the ISOLATION filter (ADR-MONO-065 D1), bound from
+    // ReadScope.tenantFilter() and never from a request parameter. It is ANDed with
+    // :orderId, so narrowing by another tenant's order id yields an empty page rather
+    // than that tenant's shipment.
     @Query("SELECT s FROM ShipmentSummaryEntity s "
-            + "WHERE (:warehouseId IS NULL OR s.warehouseId = :warehouseId) "
+            + "WHERE (:tenantId IS NULL OR s.tenantId = :tenantId) "
+            + "AND (:warehouseId IS NULL OR s.warehouseId = :warehouseId) "
             + "AND (:orderId IS NULL OR s.orderId = :orderId) "
             + "AND (:carrierCode IS NULL OR s.carrierCode = :carrierCode) "
             + "AND (CAST(:shippedAtFrom AS string) IS NULL OR s.shippedAt >= :shippedAtFrom) "
             + "AND (CAST(:shippedAtTo AS string) IS NULL OR s.shippedAt <= :shippedAtTo)")
-    Page<ShipmentSummaryEntity> search(@Param("warehouseId") UUID warehouseId,
+    Page<ShipmentSummaryEntity> search(@Param("tenantId") String tenantId,
+                                       @Param("warehouseId") UUID warehouseId,
                                        @Param("orderId") UUID orderId,
                                        @Param("carrierCode") String carrierCode,
                                        @Param("shippedAtFrom") Instant shippedAtFrom,

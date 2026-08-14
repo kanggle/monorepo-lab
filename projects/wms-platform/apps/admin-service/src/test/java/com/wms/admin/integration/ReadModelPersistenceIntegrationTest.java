@@ -95,11 +95,13 @@ class ReadModelPersistenceIntegrationTest extends AdminServiceIntegrationBase {
         UUID orderId = UUID.randomUUID();
         UUID warehouseId = UUID.randomUUID();
         orderRepo.save(new OrderSummaryEntity(orderId, "ORD-1", warehouseId, null, null,
-                "RECEIVED", "WEBHOOK_ERP", LocalDate.of(2026, 5, 15), 2, null, NOW, null, NOW));
+                "RECEIVED", "WEBHOOK_ERP", LocalDate.of(2026, 5, 15), 2, null, NOW, null, NOW,
+                "demo-corp"));
 
         var loaded = orderRepo.findById(orderId).orElseThrow();
         assertThat(loaded.getStatus()).isEqualTo("RECEIVED");
         assertThat(loaded.getRequiredShipDate()).isEqualTo(LocalDate.of(2026, 5, 15));
+        assertThat(loaded.getTenantId()).isEqualTo("demo-corp");
     }
 
     @Test
@@ -212,12 +214,60 @@ class ReadModelPersistenceIntegrationTest extends AdminServiceIntegrationBase {
     void orderSummary_search_allNullFilters_doesNotFailPgTypeInference() {
         UUID orderId = UUID.randomUUID();
         orderRepo.save(new OrderSummaryEntity(orderId, "ORD-1", UUID.randomUUID(), null, null,
-                "RECEIVED", "WEBHOOK_ERP", LocalDate.of(2026, 5, 15), 2, null, NOW, null, NOW));
+                "RECEIVED", "WEBHOOK_ERP", LocalDate.of(2026, 5, 15), 2, null, NOW, null, NOW,
+                null));
 
         Page<OrderSummaryEntity> result =
-                orderRepo.search(null, null, null, null, null, null, PageRequest.of(0, 20));
+                orderRepo.search(null, null, null, null, null, null, null, PageRequest.of(0, 20));
 
         assertThat(result.getContent()).anyMatch(o -> o.getOrderId().equals(orderId));
+    }
+
+    /**
+     * Cross-tenant isolation for the order dashboard (TASK-BE-583, ADR-MONO-065 § D1).
+     *
+     * <p>The control is the point: a row belonging to <b>another</b> tenant is
+     * physically present for every assertion below. Without it a filter hard-wired to
+     * a constant — or one that silently matches nothing — would pass just as well.
+     *
+     * <p>Three cells, because the axis has three interesting values:
+     * the caller's own tenant, another tenant, and no tenant at all (a pre-ADR-064
+     * row, which ADR-MONO-064 forbids back-stamping and which must therefore stay
+     * invisible to every tenant-scoped caller while remaining visible to the
+     * unrestricted operator plane).
+     */
+    @Test
+    void orderSummary_search_byTenant_isolatesAcrossTenants() {
+        UUID mine = UUID.randomUUID();
+        UUID theirs = UUID.randomUUID();
+        UUID tenantless = UUID.randomUUID();
+        orderRepo.save(new OrderSummaryEntity(mine, "ORD-MINE", UUID.randomUUID(), null, null,
+                "RECEIVED", "MANUAL", null, 1, null, NOW, null, NOW, "demo-corp"));
+        orderRepo.save(new OrderSummaryEntity(theirs, "ORD-THEIRS", UUID.randomUUID(), null,
+                null, "RECEIVED", "MANUAL", null, 1, null, NOW, null, NOW, "acme-corp"));
+        orderRepo.save(new OrderSummaryEntity(tenantless, "ORD-LEGACY", UUID.randomUUID(), null,
+                null, "RECEIVED", "MANUAL", null, 1, null, NOW, null, NOW, null));
+
+        Page<OrderSummaryEntity> scoped = orderRepo.search("demo-corp", null, null, null, null,
+                null, null, PageRequest.of(0, 100));
+        assertThat(scoped.getContent()).extracting(OrderSummaryEntity::getOrderId)
+                .contains(mine)
+                .doesNotContain(theirs)
+                .doesNotContain(tenantless);
+
+        // The control cell: the other tenant's row exists and is reachable — the
+        // assertion above is an isolation result, not an empty table.
+        Page<OrderSummaryEntity> theirScope = orderRepo.search("acme-corp", null, null, null,
+                null, null, null, PageRequest.of(0, 100));
+        assertThat(theirScope.getContent()).extracting(OrderSummaryEntity::getOrderId)
+                .contains(theirs)
+                .doesNotContain(mine);
+
+        // Unrestricted (null filter) still sees everything, including the tenant-less row.
+        Page<OrderSummaryEntity> unrestricted = orderRepo.search(null, null, null, null, null,
+                null, null, PageRequest.of(0, 100));
+        assertThat(unrestricted.getContent()).extracting(OrderSummaryEntity::getOrderId)
+                .contains(mine, theirs, tenantless);
     }
 
     /**
@@ -244,12 +294,49 @@ class ReadModelPersistenceIntegrationTest extends AdminServiceIntegrationBase {
     void shipmentSummary_search_allNullFilters_doesNotFailPgTypeInference() {
         UUID shipmentId = UUID.randomUUID();
         shipmentRepo.save(new ShipmentSummaryEntity(shipmentId, UUID.randomUUID(), "ORD-1",
-                UUID.randomUUID(), "SH-1", "CARRIER-A", "TRK-1", NOW, 5, NOW));
+                UUID.randomUUID(), "SH-1", "CARRIER-A", "TRK-1", NOW, 5, NOW, null));
 
         Page<ShipmentSummaryEntity> result =
-                shipmentRepo.search(null, null, null, null, null, PageRequest.of(0, 20));
+                shipmentRepo.search(null, null, null, null, null, null, PageRequest.of(0, 20));
 
         assertThat(result.getContent()).anyMatch(s -> s.getShipmentId().equals(shipmentId));
+    }
+
+    /**
+     * Cross-tenant isolation for the shipment dashboard (TASK-BE-583, ADR-MONO-065 § D1),
+     * with the other tenant's shipment present as the control.
+     *
+     * <p>The last cell is the one worth having: narrowing by {@code orderId} is the
+     * console's actual call shape (`?orderId=…&size=1`), and it must not become a way
+     * to fetch another tenant's shipment by guessing an id. The tenant filter is ANDed,
+     * so the answer is an empty page.
+     */
+    @Test
+    void shipmentSummary_search_byTenant_isolatesAcrossTenants() {
+        UUID mine = UUID.randomUUID();
+        UUID theirs = UUID.randomUUID();
+        UUID theirOrderId = UUID.randomUUID();
+        shipmentRepo.save(new ShipmentSummaryEntity(mine, UUID.randomUUID(), "ORD-MINE",
+                UUID.randomUUID(), "SH-MINE", "CARRIER-A", "TRK-1", NOW, 5, NOW, "demo-corp"));
+        shipmentRepo.save(new ShipmentSummaryEntity(theirs, theirOrderId, "ORD-THEIRS",
+                UUID.randomUUID(), "SH-THEIRS", "CARRIER-B", "TRK-2", NOW, 7, NOW, "acme-corp"));
+
+        Page<ShipmentSummaryEntity> scoped = shipmentRepo.search("demo-corp", null, null, null,
+                null, null, PageRequest.of(0, 100));
+        assertThat(scoped.getContent()).extracting(ShipmentSummaryEntity::getShipmentId)
+                .contains(mine)
+                .doesNotContain(theirs);
+
+        // Control: their row is reachable under their own scope.
+        Page<ShipmentSummaryEntity> theirScope = shipmentRepo.search("acme-corp", null, null,
+                null, null, null, PageRequest.of(0, 100));
+        assertThat(theirScope.getContent()).extracting(ShipmentSummaryEntity::getShipmentId)
+                .contains(theirs);
+
+        // Knowing the other tenant's orderId does not fetch their shipment.
+        Page<ShipmentSummaryEntity> guessed = shipmentRepo.search("demo-corp", null,
+                theirOrderId, null, null, null, PageRequest.of(0, 100));
+        assertThat(guessed.getContent()).isEmpty();
     }
 
     @Test
