@@ -8,7 +8,7 @@ TASK-MONO-530
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -103,23 +103,48 @@ Stop hook`)가 `.claude/hooks/memory-budget-check.ps1`(108줄) + `settings.json`
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (재측정)** — 착수 시점에 다시 잰다: ① `run-all.ps1` 목록이 여전히 하드코딩인가
+> **AC-0~AC-3 완료 2026-08-14. AC-4 는 이 PR 의 CI 가 나와야 닫힌다** — 그 전에 체크하면
+> 그건 측정이 아니라 선언이다. 실행 기록은 각 AC 아래 `→` 줄. 훅 자체는 **한 바이트도 안
+> 고쳤다**(`git diff` 로 확인) — 이 티켓은 계측기를 붙이는 일이었고 그대로 끝났다.
+
+- [x] **AC-0 (재측정)** — 착수 시점에 다시 잰다: ① `run-all.ps1` 목록이 여전히 하드코딩인가
       (열거로 바뀌었으면 이 티켓의 절반이 사라진다) ② 훅의 포인터 술어가 여전히
       `audit-memory.md` 스니펫과 같은가 ③ 현재 포인터/정원. 🔴 **표의 숫자를 인용하지 말고
       다시 돌려라** — MONO-529 가 같은 자리에서 자기 상수(120B)를 착수 당일 반증했다(→130B)
-- [ ] **AC-1 (fixture)** — 최소 6칸. WITHIN 무출력 · 메모리 디렉터리 부재 시 무출력 ·
+      → **전제 3개 전부 유지.** ① `run-all.ps1` 은 여전히 하드코딩(`Get-ChildItem` **0건**,
+      목록 12개) ② 술어 `\]\([a-z0-9_]+\.md\)` 가 훅 **2회** · `audit-memory.md` **4회**로
+      문자 그대로 같다 ③ **22,369B / 170 포인터**, 정원 180 ⇒ WITHIN
+- [x] **AC-1 (fixture)** — 최소 6칸. WITHIN 무출력 · 메모리 디렉터리 부재 시 무출력 ·
       OVER 시 `decision=block` + `MEMORY-BUDGET-01` 4-block 스탠자 · 스탠자가 **포인터 수**를
       보고할 것(바이트만이 아니라) · **허용리스트: C/F 는 후보에 있고 A2/B5 는 없을 것** ·
       디바운스(같은 날 2회차는 조용)
-- [ ] **AC-2 (배선)** — `run-all.ps1` 목록에 추가하고, 러너를 통째로 돌려 새 칸이 실제로
+      → **6칸 신설, 전부 PASS.** 🔴 `_helpers.ps1` 의 `Invoke-Hook` 은 **쓸 수 없었다** —
+      훅이 메모리 경로를 `(Get-Location).Path` 로 유도하는데 그 헬퍼는 자식의 작업 디렉터리를
+      정할 수단이 없다(그리고 `Push-Location` 은 이 호스트에서 프로세스 cwd 와 갈린다).
+      `cmd /c "cd /d <dir> && …"` 로 프로세스 cwd 를 명시하는 로컬 invoker 를 뒀다.
+      🔵 `$Home` 은 읽기 전용 자동 변수라 파라미터명을 `$HomeDir` 로 바꿔야 했다(실측 1회 실패)
+- [x] **AC-2 (배선)** — `run-all.ps1` 목록에 추가하고, 러너를 통째로 돌려 새 칸이 실제로
       실행됨을 확인한다. 🔴 fixture 파일만 추가하고 목록을 빼먹으면 **정확히 이 티켓이
       고치려는 상태**가 재생산된다
-- [ ] **AC-3 (무는지 확인)** — 훅을 **돌연변이**시켜 fixture 가 RED 가 되는지 본다. 최소 4종:
+      → 목록에 추가 후 러너 전체 실행: `--- Running memory-budget-check.ps1 ---` 출력 +
+      6칸 PASS + `All fixtures PASS`, 러너 **exit 0**
+- [x] **AC-3 (무는지 확인)** — 훅을 **돌연변이**시켜 fixture 가 RED 가 되는지 본다. 최소 4종:
       허용리스트를 넓힘 · 정원을 도달 불가하게 올림 · 마커 기록 제거 · 포인터 정규식 무력화.
       전부 복원 후 GREEN 확인. 🔴 **판정은 러너의 종료 상태로 하고 stdout 정규식으로 하지
       말 것**(§ Failure Scenarios 2번)
+      → **4/4 RED**(M1 허용리스트 `^[CDFG]`→`^[A-G]` · M2 정원 180→9999 · M3 마커 기록 제거 ·
+      M4 포인터 정규식 무력화), 복원 후 GREEN, 훅 **바이트 동일** 확인.
+      🔴 **하네스가 한 번 훅을 오염시켰다** — 러너 전체(5회 × ~25초)를 한 호출에 돌렸다가
+      2분 타임아웃에 걸렸고, 프로세스가 죽으면서 `finally` 복원이 **실행되지 않아** 훅이 M1
+      상태로 남았다. `git status` 로 발견해 커밋된 blob 에서 복원했다. ⇒ 돌연변이 하네스는
+      **1회 호출 = 1 돌연변이 + 즉시 복원**으로 쪼갰다. 타임아웃이 있는 실행기에서 `finally`
+      는 복원을 보장하지 않는다
 - [ ] **AC-4 (CI)** — PR 에서 `Hook fixtures (Windows PowerShell)` 잡이 **SKIPPED 가 아니라
       실행**되고 통과함을 확인한다. 스킵된 잡은 이 변경에 대해 아무 말도 하지 않는다
+      → PR 오픈 후 확인 예정. 🔵 대조군은 이미 있다 — `TASK-MONO-530` 티켓만 담은 PR
+      [#3320](https://github.com/kanggle/monorepo-lab/pull/3320) 에서 이 잡은 **SKIPPED** 였고
+      (`tasks/` 만 건드렸으므로 정상), 이 PR 은 `.claude/hooks/**` 를 건드리므로 **실행돼야**
+      한다. 두 PR 이 경로 필터의 양쪽 칸을 이룬다
 
 ---
 
@@ -170,8 +195,8 @@ Stop hook`)가 `.claude/hooks/memory-budget-check.ps1`(108줄) + `settings.json`
 
 # Definition of Done
 
-- [ ] AC-0 재측정 기록 (훅 술어 · 러너 형태 · 현재 포인터/정원)
-- [ ] fixture 6칸 + `run-all.ps1` 배선
-- [ ] AC-3 돌연변이 4종 RED → 복원 GREEN, 판정은 종료 상태로
+- [x] AC-0 재측정 기록 (훅 술어 · 러너 형태 · 현재 포인터/정원)
+- [x] fixture 6칸 + `run-all.ps1` 배선
+- [x] AC-3 돌연변이 4종 RED → 복원 GREEN, 판정은 종료 상태로
 - [ ] PR 에서 `Hook fixtures` 잡 실행(SKIPPED 아님) + 통과
-- [ ] Ready for review
+- [x] Ready for review
