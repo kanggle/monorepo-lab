@@ -37,6 +37,24 @@ Lambda/S3/CloudFront 프론트도어 자체가 전량 삭제된 상태(AC-5 의 
 중 최소 한쪽이 `done`인 시점** (완전히 다 끝날 때까지 무기한 대기가 아니라, 그 배치가 실제로 도착하면
 그때 한 번에 굽는다).
 
+## ✅ 2026-08-15 — **AC-6 의 착수 조건이 충족됐다** (게이트 재측정)
+
+| 티켓 | 상태 |
+|---|---|
+| `TASK-BE-398-legacy-custom-jwt-flow-sunset-removal` | **`tasks/done/`** |
+| `TASK-MONO-367-fleet-wide-legacy-issuer-sunset` | **`tasks/done/`** |
+| `TASK-BE-390` | 🔵 저장소 전체에 **그 ID 의 파일이 없다** — 어느 큐에도 없고 archive 에도 없다. 위 서술이 붙일 때 예정만 하고 별도 ID 로 접혔거나 필요 없어진 것으로 보인다. **없는 티켓을 기다리지 말 것** |
+
+조건은 *"셋 중 최소 한쪽이 `done`"* 이었고 **둘이 done** 이다 ⇒ **이중 bake 회피 사유는 해소됐다.**
+
+🔴 **그래도 자동 착수하지 않는다.** AC-6 은 `packer build`(~57분) + `terraform apply` 이고 이
+티켓 자신이 두 곳에서 **사용자 승인 필요**라고 명시한다(§ AC-5·AC-6 각주). 실비용도 발생한다
+(1회 기동 ≈ $0.3, bake 별도). ⇒ **승인 대기가 남은 유일한 게이트**다.
+
+🔵 착수 시 재확인할 것: 위 서술이 *"방문자 노출 리스크 없음"* 의 근거로 든 **AWS 자원 0개**
+상태는 2026-07-28 실측이다. 그 사이 누가 켰을 수 있으므로 **굽기 전에 다시 세라**
+(`terraform state list` 가 아니라 실제 AWS 조회 — state 없음 ≠ 자원 없음).
+
 1회 기동(`terraform apply` → `/start` → SSM 측정 → `terraform destroy`), 실비용 ≈ 인스턴스 27분 $0.23(packer 미수행). 원시 로그: 세션 scratchpad `measure_out.txt`.
 
 ## AC-0 — 인계 숫자 재측정 (달랐다 — 그 사실이 먼저다)
