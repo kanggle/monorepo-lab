@@ -63,8 +63,10 @@ ERP                gateway-service          outbound-service           Postgres
                                  │── for each: ReceiveOrderUseCase  (atomic — see §1c)
                                  │      ├─ resolve customer_partner from MasterReadModel
                                  │      ├─ create Order (status=RECEIVED → startPicking → PICKING) + OrderLines
-                                 │      ├─ create OutboundSaga (state=REQUESTED)
-                                 │      ├─ create PickingRequest + PickingRequestLines (PickingPlanner assigns location_id)
+                                 │      ├─ create OutboundSaga (state=REQUESTED, mints picking_request_id)
+                                 │      ├─ (PickingRequest is NOT created here — ADR-MONO-066 B:
+                                 │      │   it is created when inventory.reserved comes back,
+                                 │      │   carrying the location_id inventory assigned)
                                  │      ├─ write outbox: outbound.order.received
                                  │      ├─ write outbox: outbound.picking.requested
                                  │      └─ update erp_order_webhook_inbox.status=APPLIED
@@ -126,12 +128,15 @@ Operator             gateway-service          outbound-service          Postgres
 2. `OrderLine` rows inserted.
 3. `Order.startPicking()` invoked → status flipped to `PICKING` (T4: only
    via domain method).
-4. `PickingPlanner` (domain service) computes `location_id` per line by
-   consulting `MasterReadModel.LocationSnapshot` (v1: deterministic
-   first-active-location-with-stock heuristic; per-line allocation
-   delegated to inventory in v2).
-5. `PickingRequest` + `PickingRequestLine` rows inserted.
-6. `OutboundSaga` row inserted (state=`REQUESTED`, version=0).
+4. `OutboundSaga` row inserted (state=`REQUESTED`, version=0), minting the
+   `picking_request_id` that the eventual `PickingRequest` will carry.
+
+   > 🔴 Steps 4–5 used to read *"`PickingPlanner` computes `location_id` per
+   > line"* then *"`PickingRequest` + `PickingRequestLine` rows inserted"*.
+   > Neither existed in code (TASK-BE-586 AC-0), so no order ever got past
+   > `PICKING`. Per **ADR-MONO-066 (ACCEPTED, option B)** the rows are created on
+   > the `inventory.reserved` reply, with the `location_id` **inventory** chose
+   > while reserving.
 7. Two outbox rows inserted:
    - `outbound.order.received` (partition_key=`order_id`)
    - `outbound.picking.requested` (partition_key=`saga_id`)

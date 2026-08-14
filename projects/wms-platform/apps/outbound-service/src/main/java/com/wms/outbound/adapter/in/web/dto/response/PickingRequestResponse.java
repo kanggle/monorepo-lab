@@ -7,7 +7,7 @@ import java.util.UUID;
 
 /**
  * Wire shape for a picking-request, per
- * {@code outbound-service-api.md} §2.1/§2.2/§2.4.
+ * {@code outbound-service-api.md} §2.2/§2.4 (there is no create endpoint — ADR-MONO-066 B).
  *
  * <p>Used by the §2.4 list-by-order endpoint. The {@code lines} array carries
  * the planned {@code locationId} and {@code qtyToPick} each §2.3 confirmation

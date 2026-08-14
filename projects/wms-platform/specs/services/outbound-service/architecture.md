@@ -139,7 +139,9 @@ com.wms.outbound/
 │   ├── event/                   # OrderReceived, PickingRequested, PickingConfirmed,
 │   │                            #   PackingCompleted, ShippingConfirmed, OrderCancelled
 │   └── service/                 # Domain services (OrderStateMachine, SagaStateMachine,
-│                                #   PickingPlanner, ShipmentBuilder)
+│                                #   ShipmentBuilder). 🔴 No PickingPlanner —
+│                                #   ADR-MONO-066 (ACCEPTED, B) put source-location
+│                                #   assignment in inventory-service
 └── config/
 ```
 

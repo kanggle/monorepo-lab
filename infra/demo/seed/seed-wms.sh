@@ -47,6 +47,14 @@
 # (`WMS_TMS_BASE_URL`)에 의존한다. 주문까지 넣으면 `/wms/outbound` 화면은 채워지고
 # **예약은 덤으로 따라온다** — 그 이상은 이 시드의 몫이 아니다.
 #
+# 🔴 **2026-08-15 (TASK-BE-586): 위 문단의 "그 이상은 이 시드의 몫이 아니다" 도 절반만
+# 맞았다.** *"시드가 피킹 확정을 부르지 않는다"* 는 사실이지만 원인이 아니다 — **부를 수가
+# 없었다.** `PickingRequest` 를 만드는 프로덕션 경로가 존재하지 않아(`PickingPersistencePort
+# .save()` 의 프로덕션 호출처 **0건** · 테스트 2건) 확정 API 에 넘길 id 자체가 없었다.
+# `ADR-MONO-066`(ACCEPTED, B)이 예약 회신에서 그 행을 만들게 하면서 부를 수 있게 됐고,
+# 이 시드는 이제 **출하까지 민다**(아래 `push_outbound_to_shipped`). TMS 스텁 의존은
+# `ADR-MONO-053` §D8 이후 사라졌다 — outbound 는 TMS 를 부르지 않는다.
+#
 # -----------------------------------------------------------------------------
 # 🔴 계측 함정 (재현 시 먼저 읽을 것)
 # -----------------------------------------------------------------------------
@@ -74,7 +82,7 @@ SKU_ID=01910000-0000-7000-8000-000000000403
 SUPPLIER_ID=01910000-0000-7000-8000-000000000801
 
 ASN_NO="ASN-DEMO-0001"
-ORDER_NO="SO-DEMO-0001"
+ORDER_NO="${ORDER_NO:-SO-DEMO-0001}"
 QTY=100
 QTY_PASSED=95
 QTY_DAMAGED=3
@@ -266,5 +274,82 @@ elif [ "$SEED_LAST_STATUS" = "409" ]; then
 else
   seed_fail "출고 주문 $ORDER_NO — HTTP $SEED_LAST_STATUS ${SEED_LAST_BODY:0:200}"
 fi
+
+# ---------------------------------------------------------------------------
+# 출고를 SHIPPED 까지 민다 (TASK-BE-586 / ADR-MONO-066 옵션 B)
+# ---------------------------------------------------------------------------
+# 🔴 이 블록이 없던 이유는 시드가 게을러서가 아니라 **부를 수 없었기 때문**이다.
+# `PickingRequest` 를 만드는 프로덕션 경로가 없어서(포트 `save()` 의 프로덕션 호출처
+# **0건**) 모든 출고 주문이 `PICKING` 에서 영구히 멈췄고, 확정 API 에 넘길 id 자체가
+# 존재하지 않았다. `TASK-MONO-528` 이 *"시드가 안 부른다"* 고 적은 것은 원인의 절반이다.
+# ADR-MONO-066(B)이 예약 회신에서 그 행을 만들게 하면서 비로소 부를 수 있게 됐다.
+#
+# 🔵 여기서 실패해도 **데모를 빨갛게 만들지 않는다** — 주문은 이미 만들어졌고 주문 화면은
+# 뜬다. 출하 화면만 비므로 경고로 남긴다. (시드 실패는 데모 전체의 신호라 아껴 써야 한다.)
+LOT_ID=01910000-0000-7000-8000-000000000601   # L-20260418-A — 확정 시 운영자가 고르는 실물 lot
+
+# 첫 매칭 값 하나를 뽑는다. jq 는 데모 호스트에 없다(lib.sh 와 같은 제약).
+pick1() { printf '%s' "$2" | sed -n "s/.*\"$1\":\"\([^\"]*\)\".*/\1/p" | head -1; }
+pick1n() { printf '%s' "$2" | sed -n "s/.*\"$1\":\([0-9]*\).*/\1/p" | head -1; }
+
+push_outbound_to_shipped() {
+  local order_id order_line_id pr_id loc_id qty ver pu_id body
+
+  http GET "$GW/api/v1/outbound/orders?size=100" || return 1
+  # 목록에서 이 주문의 조각만 잘라 낸다(다른 주문의 id 를 집는 것을 막는다).
+  body="$(printf '%s' "$SEED_LAST_BODY" | tr '{' '\n' | grep -F "\"$ORDER_NO\"" | head -1)"
+  order_id="$(pick1 orderId "$body")"
+  [ -n "$order_id" ] || { seed_warn "주문 목록에서 $ORDER_NO 의 orderId 를 찾지 못했습니다"; return 1; }
+
+  http GET "$GW/api/v1/outbound/orders/$order_id" || return 1
+  case "$SEED_LAST_BODY" in
+    *'"status":"SHIPPED"'*) seed_log "존재  출고 $ORDER_NO 이미 SHIPPED"; return 0 ;;
+  esac
+
+  # 예약 회신이 picking_request 를 만들 때까지 기다린다(보통 1~3초).
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    http GET "$GW/api/v1/outbound/orders/$order_id/picking-requests" || return 1
+    pr_id="$(pick1 pickingRequestId "$SEED_LAST_BODY")"
+    [ -n "$pr_id" ] && break
+    sleep 2
+  done
+  [ -n "$pr_id" ] || { seed_warn "picking request 가 생기지 않았습니다 — ADR-MONO-066 경로를 확인하십시오"; return 1; }
+
+  order_line_id="$(pick1 orderLineId "$SEED_LAST_BODY")"
+  loc_id="$(pick1 locationId "$SEED_LAST_BODY")"
+  qty="$(pick1n qtyToPick "$SEED_LAST_BODY")"
+  [ -n "$order_line_id" ] && [ -n "$loc_id" ] && [ -n "$qty" ] || {
+    seed_warn "picking request 응답에서 라인 정보를 읽지 못했습니다"; return 1; }
+
+  # 🔴 데모 SKU 는 LOT 추적이라 확정 시 lot 이 필수다(LOT_REQUIRED). 예약은 lot 없이
+  # 성립하고(재고 행의 lot_id 가 NULL) 운영자가 확정 시점에 실물 lot 을 고른다.
+  idem POST "$GW/api/v1/outbound/picking-requests/$pr_id/confirmations" "$(cat <<JSON
+{"orderId":"$order_id","confirmedBy":"seed","notes":"데모 피킹 확정",
+ "lines":[{"orderLineId":"$order_line_id","skuId":"$SKU_ID","lotId":"$LOT_ID",
+           "actualLocationId":"$loc_id","qtyConfirmed":$qty}]}
+JSON
+)" || { seed_warn "피킹 확정 실패 HTTP $SEED_LAST_STATUS ${SEED_LAST_BODY:0:160}"; return 1; }
+
+  idem POST "$GW/api/v1/outbound/orders/$order_id/packing-units" "$(cat <<JSON
+{"cartonNo":"BOX-DEMO-1","packingType":"BOX","weightGrams":1000,
+ "lines":[{"orderLineId":"$order_line_id","skuId":"$SKU_ID","lotId":"$LOT_ID","qty":$qty}]}
+JSON
+)" || { seed_warn "포장 단위 생성 실패 HTTP $SEED_LAST_STATUS ${SEED_LAST_BODY:0:160}"; return 1; }
+  pu_id="$(pick1 packingUnitId "$SEED_LAST_BODY")"
+
+  idem PATCH "$GW/api/v1/outbound/packing-units/$pu_id" '{"version":0}' \
+    || { seed_warn "포장 봉인 실패 HTTP $SEED_LAST_STATUS ${SEED_LAST_BODY:0:160}"; return 1; }
+
+  http GET "$GW/api/v1/outbound/orders/$order_id" || return 1
+  ver="$(pick1n version "$SEED_LAST_BODY")"
+  idem POST "$GW/api/v1/outbound/orders/$order_id/shipments" \
+    "{\"carrierCode\":\"DEMO-CARRIER\",\"version\":${ver:-0}}" \
+    || { seed_warn "출하 확정 실패 HTTP $SEED_LAST_STATUS ${SEED_LAST_BODY:0:160}"; return 1; }
+
+  SEED_CREATED=$((SEED_CREATED + 1)); seed_log "생성  출하 $ORDER_NO → SHIPPED"
+}
+
+push_outbound_to_shipped \
+  || seed_warn "출고 흐름이 SHIPPED 까지 가지 못했습니다 — 주문 화면은 정상이고 출하 화면만 빕니다"
 
 seed_summary

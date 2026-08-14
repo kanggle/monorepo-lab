@@ -1,6 +1,6 @@
 # ADR-MONO-066 — wms 피킹 요청의 생성 지점과 로케이션 배정 소유권
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 **Date:** 2026-08-14
 **주관 티켓:** `TASK-BE-586` (AC-1)
 **선행:** [`ADR-MONO-022`](ADR-MONO-022-ecommerce-wms-fulfillment-integration.md) § D9 (풀필먼트 사가) · `TASK-BE-038` / `TASK-BE-040` (pick-pack-ship 도메인 — 둘 다 `done/`)
@@ -14,6 +14,10 @@
   누가 메울 것인가에 대해 **스펙과 코드 주석이 서로 다른 소유자**를 가리킨다. 소유권 결정이므로
   `platform/architecture-decision-rule.md` § The ACCEPTED Gate 에 걸린다.
   🔴 **ACCEPT 는 소유자가 한다.** 아래 § 추천은 추천일 뿐이다.
+- 2026-08-15 — **ACCEPTED: `B + R1-a + R2-b`** (소유자 정확형 지정). 추천과 일치하지만
+  **추천이 승인이 된 것이 아니라** 소유자가 별도로 지정했다 — `platform/architecture-decision-rule.md`
+  § The ACCEPTED Gate 는 `진행`/`추천대로` 같은 긍정 신호로는 열리지 않는다. `TASK-BE-586` AC-1
+  착수 가능.
 
 ---
 
@@ -226,5 +230,58 @@ inventory 는 예약하면서 어차피 다시 고른다(그것이 실제 재고
 
 ## 결정
 
-*(대기 — 소유자 지정 필요. 🔴 에이전트 self-ACCEPT 금지. 정확형으로 지정할 것:
-`A` 또는 `B`, 그리고 `R1-a|b` · `R2-a|b|c`.)*
+**`ADR-MONO-066 ACCEPTED — B + R1-a + R2-b`** (소유자 지정, 2026-08-15).
+
+| 항목 | 확정 |
+|---|---|
+| **B** | 피킹 요청은 `wms.inventory.reserved.v1` 을 받는 지점에서 만든다. `lines[].locationId` 는 **inventory 가 정한 값**을 그대로 기록한다 |
+| **R1-a** | `PickingPlanner` 를 소유자로 지목하는 스펙 문장을 **철회하고** 실제 소유자를 적는다 |
+| **R2-b** | 계약 § 2.1(재진입 엔드포인트)은 **계약에서 걷어낸다** |
+
+### 로케이션 소유권 — 이것이 이 ADR 의 본론이다
+
+**`inventory-service` 가 소유한다.** 예약하면서 고르는 로케이션이 **실제 재고를 잠그는 결정**이고,
+그 값은 이미 `wms.inventory.reserved.v1` 로 넘어와 있다(M6). outbound 는 **기록만** 한다 —
+다시 고르지 않으므로 *"둘이 다르면 누가 이기는가"* 라는 질문 자체가 생기지 않는다.
+
+**`PickingPlanner` 는 만들지 않는다.** 그 이름은 스펙에만 있었고 구현은 0건이었다(M4).
+
+### 확정된 흐름
+
+```
+POST /orders  ─┬─ Order(PICKING) + OrderLines + OutboundSaga(REQUESTED)
+   같은 TX     └─ outbox: outbound.picking.requested   (lines[].locationId = null)
+                                    │
+        inventory: 라인마다 로케이션을 고르고 예약          ← 소유권은 여기
+                                    │
+wms.inventory.reserved.v1 ─┬─ saga REQUESTED → RESERVED
+   같은 TX (consumer)      └─ PickingRequest(SUBMITTED) + Lines 생성   ← BE-586 이 더한 것
+                                    │
+        이후는 이미 있던 경로: 피킹확정 → 포장 → 출하 → admin_shipment_summary
+```
+
+### `order_line_id` 는 왜 여기서 조인하는가
+
+`inventory.reserved` 는 `orderLineId` 를 **싣지 않는다** — inventory 는 자기 `reservationLineId`
+로 키를 잡는다. 그래서 매핑이 outbound 몫이고, 틀리면 **엉뚱한 주문 라인에 피킹 지시가 박힌다.**
+추측이 아니라 두 사실로 정확하다:
+
+1. inventory 는 요청 라인당 예약 라인을 **정확히 하나** 만든다(`ReserveStockService` 가
+   `command.lines()` 를 순회 — 분할도 병합도 없다)
+2. 요청 라인은 `order.getLines()` 에서 만들어졌다
+
+⇒ `(skuId, lotId)` 로 조인하고, 같은 키가 반복되면 **순서대로** 소진한다. 개수가 안 맞거나
+매칭이 없으면 **던진다** — 그럴듯한 행을 쓰면 확정·포장·출하가 전부 그 위에 쌓인다.
+
+### 이 결정이 닫는 것
+
+- 출고가 **제품 API 만으로** `PICKING → SHIPPED` 까지 간다
+- `admin_shipment_summary` 가 채워져 `ADR-MONO-065` 의 **격리 표면 2개 중 나머지 1개**가
+  처음으로 행사된다(`TASK-BE-584` AC-3 의 열린 칸)
+- `TASK-BE-038` 이 남긴 *"until PickingPlanner ships"* 임시 주석이 **세 번째로 미뤄지지 않는다**
+
+### 명시적으로 하지 않는 것
+
+- 로케이션 **최적화**(피킹 동선 등)는 여기 없다. outbound 가 나중에 갖고 싶어지면 **이 ADR 을
+  바꾸는** 별도 결정이 필요하다
+- `TASK-BE-038` 종료 방식의 전수 감사는 열지 않는다(R3 — 2026-08-14 소유자 지정)
