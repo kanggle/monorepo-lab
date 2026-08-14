@@ -266,7 +266,15 @@ public class ReceiveOrderService implements ReceiveOrderUseCase {
         List<PickingRequestedEvent.Line> pickingLines = saved.getLines().stream()
                 .map(l -> new PickingRequestedEvent.Line(
                         l.getId(), l.getSkuId(), l.getLotId(),
-                        null /* locationId — assigned by inventory until PickingPlanner ships in BE-038 */,
+                        // locationId is null by design, permanently. ADR-MONO-066
+                        // (ACCEPTED, option B) placed source-location assignment with
+                        // inventory-service: it picks a location while reserving — the
+                        // decision that actually locks stock — and returns it on
+                        // wms.inventory.reserved.v1, where RecordReservedPickingService
+                        // writes it into the PickingRequest. This comment used to say
+                        // "until PickingPlanner ships in BE-038"; BE-038 closed without
+                        // shipping it, and the temporary became the arrangement.
+                        null,
                         l.getQtyOrdered()))
                 .toList();
         outboxWriter.publish(new PickingRequestedEvent(

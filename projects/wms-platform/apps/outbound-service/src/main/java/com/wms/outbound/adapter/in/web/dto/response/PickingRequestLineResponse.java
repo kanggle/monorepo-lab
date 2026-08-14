@@ -5,7 +5,7 @@ import java.util.UUID;
 
 /**
  * Wire shape for a single picking-request line, per
- * {@code outbound-service-api.md} §2.4 (and §2.1/§2.2 picking shape).
+ * {@code outbound-service-api.md} §2.4 (and §2.2 picking shape).
  */
 public record PickingRequestLineResponse(
         UUID pickingRequestLineId,

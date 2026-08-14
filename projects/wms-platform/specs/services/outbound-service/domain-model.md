@@ -182,7 +182,7 @@ Order.
 | `order_line_id` | UUID (FK) | no | The OrderLine being filled |
 | `sku_id` | UUID | no | Denormalized |
 | `lot_id` | UUID | yes | Denormalized |
-| `location_id` | UUID | no | Picking source location (assigned by `PickingPlanner` domain service at `RequestPickingUseCase` time) |
+| `location_id` | UUID | no | Picking source location. **Assigned by `inventory-service` while reserving** and echoed on `wms.inventory.reserved.v1`; outbound records it (ADR-MONO-066 ACCEPTED, option B). This cell previously named a `PickingPlanner` domain service in outbound — that service was never implemented and no `PickingRequest` row was ever created in production (TASK-BE-586 AC-0) |
 | `qty_to_pick` | Integer (>0) | no | EA; must ≤ `order_line.qty_ordered` |
 
 ### Invariants

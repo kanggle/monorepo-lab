@@ -400,80 +400,34 @@ without `OUTBOUND_ADMIN`), `CONFLICT` (409), `DUPLICATE_REQUEST` (409).
 
 ## 2. Picking
 
-### 2.1 POST `/api/v1/outbound/orders/{id}/picking-requests` — Create Picking Request
-
-Auth: `OUTBOUND_WRITE`.
-Requires `Idempotency-Key`.
-
-In the normal flow this is called implicitly by `POST /orders` (saga starts
-automatically). This endpoint exists for **re-entry / manual saga recovery**
-where an operator needs to explicitly trigger the picking step. Allowed only
-when `Order.status == PICKING` AND no `PickingRequest` yet exists for the
-order.
-
-If a `PickingRequest` already exists for this order, returns `409 CONFLICT`
-(the saga already started this step). If the saga has advanced past
-`REQUESTED`, returns `422 STATE_TRANSITION_INVALID`.
-
-Request:
-
-```json
-{
-  "lines": [
-    {
-      "orderLineId": "uuid",
-      "locationId": "uuid",
-      "qtyToPick": 50
-    }
-  ]
-}
-```
-
-Validation:
-
-- `lines`: required, must match all `OrderLine` ids for this order.
-- `lines[].orderLineId`: required UUID; must belong to this order.
-- `lines[].locationId`: required UUID; must resolve to `ACTIVE` Location in the
-  same `warehouseId` as the order.
-- `lines[].qtyToPick`: required, > 0, ≤ `order_line.qty_ordered`. Else
-  `PICKING_QUANTITY_EXCEEDED`.
-
-Response `201`:
-
-```json
-{
-  "pickingRequestId": "uuid",
-  "orderId": "uuid",
-  "sagaId": "uuid",
-  "warehouseId": "uuid",
-  "status": "SUBMITTED",
-  "lines": [
-    {
-      "pickingRequestLineId": "uuid",
-      "orderLineId": "uuid",
-      "skuId": "uuid",
-      "lotId": "uuid-or-null",
-      "locationId": "uuid",
-      "qtyToPick": 50
-    }
-  ],
-  "version": 0,
-  "createdAt": "2026-04-29T10:00:00Z",
-  "createdBy": "user-uuid"
-}
-```
-
-Side-effect: outbox `outbound.picking.requested` (§3) — triggers
-`inventory-service` to reserve stock.
-
-Errors: `ORDER_NOT_FOUND` (404), `STATE_TRANSITION_INVALID` (422),
-`PICKING_QUANTITY_EXCEEDED` (422), `CONFLICT` (409), `DUPLICATE_REQUEST` (409),
-`VALIDATION_ERROR` (400).
+> ### 2.1 — removed (ADR-MONO-066 ACCEPTED, rider R2-b)
+>
+> This section declared `POST /api/v1/outbound/orders/{id}/picking-requests` as a
+> **re-entry / manual saga recovery** endpoint. It was **never implemented** —
+> live, with an operator token holding `OUTBOUND_WRITE`, it answered
+> `405 METHOD_NOT_ALLOWED`, which is routing telling the truth (TASK-BE-586 AC-0).
+>
+> It is removed rather than implemented because its own preconditions made it
+> unreachable: it required `saga.status == REQUESTED`, and reservation starts in
+> the **same transaction** as order creation, so by the time any operator could
+> call it the saga is already `RESERVED` and the answer is `422`. There was no
+> window.
+>
+> The gap it was meant to cover is now closed by the normal flow instead: the
+> `PickingRequest` is created when `wms.inventory.reserved.v1` comes back
+> (§ 2.3 below is then reachable without operator intervention). If a genuine
+> recovery need appears later, it needs a design that starts from a state the
+> product can actually be in — file it then rather than leaving an endpoint in
+> the contract that nothing answers.
+>
+> Section numbers below are unchanged so existing references keep resolving.
 
 ### 2.2 GET `/api/v1/outbound/picking-requests/{id}` — Get Picking Request
 
 Auth: `OUTBOUND_READ`.
-Response `200`: same shape as §2.1 create response with current `status`.
+Response `200`: the picking-request shape shown in §2.4, with current `status`.
+The row is created by the saga when `wms.inventory.reserved.v1` arrives
+(ADR-MONO-066 B) — there is no create endpoint.
 Errors: `PICKING_REQUEST_NOT_FOUND` (404).
 Headers: `ETag: "v{version}"`.
 
@@ -569,7 +523,7 @@ only reachable by a caller that captured the `pickingRequestId` out-of-band at
 saga-creation time.
 
 Response `200` (not paginated — bounded by the order; each element matches the
-§2.1 / §2.2 picking-request shape):
+§2.2 / §2.4 picking-request shape):
 
 ```json
 {
@@ -892,7 +846,6 @@ the state change. Kafka publish is asynchronous (outbox publisher SLA). See
 |---|---|
 | `POST /orders` | `outbound.order.received` + `outbound.picking.requested` |
 | `POST /orders/{id}:cancel` | `outbound.order.cancelled` (+ `outbound.picking.cancelled` if saga has active reservation) |
-| `POST /orders/{id}/picking-requests` | `outbound.picking.requested` |
 | `POST /picking-requests/{id}/confirmations` | `outbound.picking.completed` |
 | `POST /orders/{id}/packing-units` | none (unit creation is internal lifecycle) |
 | `PATCH /packing-units/{id}` | `outbound.packing.completed` (only when all units sealed and all quantities packed) |

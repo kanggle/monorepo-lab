@@ -297,7 +297,7 @@ Partition key: `sagaId`
 | `lines[].orderLineId` | UUID | no | |
 | `lines[].skuId` | UUID | no | |
 | `lines[].lotId` | UUID | yes | Null if operator picks any available lot |
-| `lines[].locationId` | UUID | no | Assigned picking source location (`PickingPlanner` domain service result) |
+| `lines[].locationId` | UUID | **yes** | **Always `null` on this event.** Outbound does not choose a source location — `inventory-service` assigns one while reserving and returns it on `wms.inventory.reserved.v1` (ADR-MONO-066 ACCEPTED, option B). This cell previously read *"Assigned picking source location (`PickingPlanner` domain service result)"* and declared `no`; the producer has always sent `null` and that service never existed (TASK-BE-586 AC-0) |
 | `lines[].qtyToReserve` | int | no | EA; equals `order_line.qty_ordered` in v1 |
 
 > **⚠️ Authoritative cross-service contract.** This event is consumed by

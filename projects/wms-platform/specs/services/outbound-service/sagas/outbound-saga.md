@@ -89,16 +89,26 @@ processor).
 1. Insert `Order` (status=`RECEIVED`).
 2. Order.startPicking() → status=`PICKING`.
 3. Insert `OrderLine`s.
-4. `PickingPlanner` (domain service) computes per-line `location_id` from
-   MasterReadModel.
-5. Insert `PickingRequest` (status=`PENDING`) and `PickingRequestLine`s
-   (`picking_request.id` doubles as the inventory-side `reservation_id`).
-6. Insert `OutboundSaga` (state=`REQUESTED`, version=0).
-7. Insert outbox row: `outbound.order.received`
+4. Insert `OutboundSaga` (state=`REQUESTED`, version=0). Its `picking_request_id`
+   is minted here and is the id the `PickingRequest` will later carry.
+5. Insert outbox row: `outbound.order.received`
    (partition_key=`order_id`).
-8. Insert outbox row: `outbound.picking.requested`
+6. Insert outbox row: `outbound.picking.requested`
    (partition_key=`saga_id`, payload includes `sagaId`,
-   `reservationId=picking_request.id`, lines).
+   `reservationId=saga.picking_request_id`, lines with `locationId=null`).
+
+> 🔴 **`PickingRequest` is NOT created here** — ADR-MONO-066 (ACCEPTED, option B).
+> This step list used to read *"`PickingPlanner` (domain service) computes per-line
+> `location_id` from MasterReadModel"* followed by *"insert `PickingRequest`"*, and
+> **neither ever existed**: `PickingPlanner` was never implemented and
+> `PickingPersistencePort.save` had zero production callers (TASK-BE-586 AC-0).
+> Every outbound order therefore stopped at `PICKING` and the whole pick-pack-ship
+> path was unreachable in production while its tests stayed green on
+> fixture-seeded rows.
+>
+> The row is now created on the **reply** leg — see § `inventory.reserved` below —
+> because that is where a real `location_id` exists: inventory assigns one while
+> reserving, which is the decision that actually locks stock, and returns it.
 
 **Outcome**:
 - Saga state: `REQUESTED`
@@ -129,7 +139,19 @@ processor).
      (already-applied — see [`../idempotency.md`](../idempotency.md) §4).
    - If state == `RESERVE_FAILED` or `CANCELLED`: log WARN, throw (DLT
      route).
-4. Update `PickingRequest.status = SUBMITTED`.
+4. **Insert `PickingRequest` (status=`SUBMITTED`) and its `PickingRequestLine`s**
+   from the reply's `lines[]`, unless one already exists for the order
+   (ADR-MONO-066 option B). `picking_request.id` = the `pickingRequestId` the
+   reply echoes, which is the id the saga minted at creation.
+   - `location_id` per line comes from **inventory's** `lines[].locationId`.
+     Outbound records the assignment; it does not compute one.
+   - `order_line_id` is resolved here, because `inventory.reserved` does not
+     carry it: inventory keys its lines by its own `reservationLineId`. The
+     join is on `(skuId, lotId)`, resolved positionally where an order repeats
+     a pair — exact because inventory builds **one reservation line per
+     requested line** (never split, never merged). A count mismatch or an
+     unmatched key is a contract break and **throws** rather than writing a
+     plausible-looking row.
 5. Commit.
 
 **Outcome**:
