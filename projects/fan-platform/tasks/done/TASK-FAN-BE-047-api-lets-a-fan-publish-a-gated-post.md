@@ -8,7 +8,7 @@ API 는 팬이 유료 글을 쓰는 것을 허용한다 — `PublishPostUseCase`
 
 # Status
 
-review
+done
 
 # Owner
 
