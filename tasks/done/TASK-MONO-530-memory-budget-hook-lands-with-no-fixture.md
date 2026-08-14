@@ -8,7 +8,7 @@ TASK-MONO-530
 
 # Status
 
-review
+done
 
 # Owner
 
