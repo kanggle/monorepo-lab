@@ -33,6 +33,78 @@ monorepo
 
 ---
 
+# 🔍 AC-0 실측 #1 (2026-08-15) — **트리거 미관측 → STOP. 보류 유지.**
+
+재는 김에 **이 티켓의 페이오프 추정치도 재봤고, 그쪽이 더 중요한 결과다.**
+
+## 트리거 ① — 프로젝트 추가로 `if:` 갱신을 누락한 사건: **0건**
+
+`ci.yml` 에서 프로젝트 필터를 참조하는 잡 **21개 전수**의 게이팅 집합을 뽑아 각 잡의
+**이름·실제 스텝**과 대조했다. 빠진 프로젝트를 가진 잡은 **없다.**
+
+한 건 의심했다가 **읽어 보고 철회**했다: `frontend-checks` 는 `platform-console` 을 게이팅에
+넣지 않는데, 잡 이름이 *"Frontend lint & build (ecommerce + fan-platform)"* 이고 스텝도 그 둘만
+돈다 — console 의 lint/typecheck 는 `frontend-unit-tests` 안에 있고 그 잡은 `platform-console` 을
+**넣고 있다**. ⇒ 누락이 아니라 정확한 게이팅이다. (술어가 의심스러우면 산출물을 열어라.
+이 티켓이 우려하는 것이 바로 "게이팅이 안 보여서 오해하는 것" 이므로 더더욱.)
+
+**가까웠지만 트리거가 아닌 두 사건** — 둘 다 이 티켓의 hoist 로는 예방되지 않는다:
+
+| 사건 | 왜 트리거가 아닌가 |
+|---|---|
+| `TASK-MONO-407` — 프로젝트 필터 8개가 전부 항상-참 | 방향이 **반대**다(오-skip 이 아니라 **전량 오-run**). 원인도 필터 **정의**의 negation 이고, 이 티켓은 필터 정의를 **Out of Scope** 로 명시한다 |
+| nightly-e2e 서비스 추가 드리프트 | 손으로 유지하는 것이 `if:` 가 아니라 잡 **안의 스텝 목록 4곳**(bootJar·업로드·복원 배열·`.env`)이다. named 플래그는 스텝 목록을 건드리지 않는다 |
+
+## 트리거 ② — 게이팅 오류로 e2e 가 skip 되어 회귀가 main 에 샌 사건: **0건**
+
+기록에 남은 main-RED 사건(`TASK-MONO-516` federation nightly RED · nightly 전용 스펙이 초록으로
+머지된 뒤 main RED)의 원인은 **nightly 전용 커버리지**(설계상 PR CI 에 없음)이지 `if:`/path-filter
+**오류**가 아니다. 잡이 잘못 skip 된 것이 아니라 **애초에 PR 에서 도는 잡이 아니었다.**
+⇒ 트리거 문구("돌아야 할 e2e 가 skip 되어")에 해당하지 않는다. 그 축의 개선은 별개 문제다.
+
+## 🔴 더 중요한 결과 — **페이오프 추정치가 틀렸다 (21 → 17, 절약 4)**
+
+이 티켓은 *"OR-패턴 ~15복사 제거"* 라고 적었다. 실측:
+
+```
+프로젝트 필터를 참조하는 잡      21
+서로 다른 게이팅 집합            17      ← 거의 전부가 유일하다
+중복으로 절약되는 블록            4      (x3 wms · x2 ecommerce · x2 scm)
+```
+
+named 플래그를 도입해도 **플래그 17개가 잡 21개를 게이팅**한다 — 1:1 에 가깝다.
+*"~15복사"* 는 **잡 인스턴스를 센 것**이지 **서로 다른 게이팅 집합을 센 것**이 아니었다.
+§ Scope 의 *"대략 8~12개 플래그"* 도 낙관이었다(실측 **17**).
+
+⇒ 이득 축이 줄었으므로 **보류 판단은 오히려 강해졌다.** 손실(가시성 저하)과 리스크
+(correctness-critical 오-skip)는 그대로인데 이득만 1/4 이다.
+
+## 다음에 다시 잴 때 쓸 명령 (손으로 세지 말 것)
+
+```bash
+python - <<'PY'   # 잡별 needs.changes.outputs.* 집합을 뽑아 서명별로 묶는다
+import re, io
+from collections import defaultdict
+s = io.open('.github/workflows/ci.yml', encoding='utf-8').read()
+P = {'wms','ecommerce','iam','fan','scm','finance','erp','platform-console'}
+sig = defaultdict(list)
+for j in re.split(r'\n  (?=[a-zA-Z0-9_-]+:\n)', s):
+    m = re.match(r'([a-zA-Z0-9_-]+):\n', j)
+    i = re.search(r'\n    if: (>-\n(?:      .*\n)+|.*\n)', j)
+    if not (m and i):
+        continue
+    o = tuple(sorted(set(re.findall(r'needs\.changes\.outputs\.([a-z0-9-]+)', i.group(1)))))
+    if set(o) & P:
+        sig[o].append(m.group(1))
+print(sum(len(v) for v in sig.values()), len(sig))
+PY
+```
+
+**재착수 조건은 그대로다** — 위 두 트리거 중 하나가 실제로 관측될 때. 그때 이 숫자(21/17/4)를
+**다시 재고** 시작하라. 프로젝트가 늘면 잡도 같이 늘어 비율이 달라질 수 있다.
+
+---
+
 # Goal
 
 `TASK-MONO-326`은 CI 잡 **본문** 중복(composite + reusable)을 제거했으나 **게이팅 로직**은 의도적으로 보존했다. 각 잡의 `if:`가 아래 OR-블록을 ~15회 반복한다:
@@ -71,7 +143,7 @@ GitHub Actions는 `if:`를 공유하는 프리미티브가 없다(reusable로 �
 
 | | |
 |---|---|
-| 이득 | 게이팅 SoT 확보, OR-패턴 ~15복사 제거, 신규 프로젝트 추가 시 실수↓ |
+| 이득 | 게이팅 SoT 확보, ~~OR-패턴 ~15복사 제거~~ → **실측 절약은 4** (잡 21 · 서로 다른 게이팅 집합 **17**, 2026-08-15), 신규 프로젝트 추가 시 실수↓ |
 | 손실 | 게이팅이 잡에서 **덜 보임** — "왜 이 잡이 도나"를 알려면 `changes` 잡을 봐야 함(지금은 잡마다 `if:` 명시 = 더 투명) |
 | 리스크 | correctness-critical — 플래그 하나 틀리면 잡 오-skip/run → main 회귀. MONO-326과 동일한 "동작 보존" CI 매트릭스 대조 필요 |
 | 결론 | 페이오프 中·리스크 中·통증 신호 無 → **신호 올 때만** |
@@ -80,7 +152,10 @@ GitHub Actions는 `if:`를 공유하는 프리미티브가 없다(reusable로 �
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (verify-then-act, 필수 선행)**: § DEFERRAL GUARD의 착수 트리거 2개 중 최소 1개가 실제 관측됨을 확인. **관측 없으면 STOP — 구현하지 않고 task를 그대로 둔다.** (관측 근거를 이 task 또는 PR에 기록.)
+- [x] **AC-0 (verify-then-act, 필수 선행)**: § DEFERRAL GUARD의 착수 트리거 2개 중 최소 1개가 실제 관측됨을 확인. **관측 없으면 STOP — 구현하지 않고 task를 그대로 둔다.** (관측 근거를 이 task 또는 PR에 기록.)
+      → **2026-08-15 수행: 트리거 2개 모두 미관측 ⇒ STOP.** 근거는 § AC-0 실측 #1.
+      아래 AC 들은 **의도적으로 미착수**다(no-op = 올바른 구현). 이 체크는 "구현했다" 가 아니라
+      **"게이트를 실제로 재고 그 결과를 기록했다"** 는 뜻이다.
 - [ ] `changes.outputs`에 잡-유형별 named 플래그 추가, 기존 output 조합만 사용(필터 정의 무수정).
 - [ ] 다운스트림 잡 `if:`가 named 플래그 읽기로 축약, 게이팅 의미 무변경.
 - [ ] **동작 보존 대조**: 최소 ① markdown-only PR = 전 skip ② 워크플로 self-change PR = 전 run 두 케이스의 잡 집합이 리팩토링 전과 동일함을 CI 매트릭스로 확인.
