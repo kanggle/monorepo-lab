@@ -8,7 +8,7 @@ TASK-MONO-535
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -160,3 +160,71 @@ monorepo
   방법은 본문이 못박았다.
 - `TASK-MONO-533`·`TASK-MONO-534` 와 같은 라이브 세션에서 나왔다. 셋 다 *"데모를 실제로
   띄우기 전에는 아무도 묻지 않았던 것"* 이다.
+
+---
+
+# ✅ 실행 결과 (2026-08-15)
+
+## AC-0 — 재현과 모집단
+
+주문별 `picking_request`(🔴 PK 는 `outbound_order.id`):
+
+| 주문 | 생성(UTC) | `picking_request` | 상태 |
+|---|---|---|---|
+| `SO-DEMO-0001` | 08-14 12:42 | **0** | `PICKING` |
+| `SO-BE586-0002` | 08-14 17:38 | 1 | `SHIPPED` |
+| `SO-DEMO-0003` | 08-14 17:58 | 1 | `SHIPPED` |
+
+## AC-1 — 요약 줄이 구별한다 (bite + 대조군, 서로 다른 두 실행)
+
+| 상태 | 요약 줄 (마지막 줄) |
+|---|---|
+| **멈춘 주문 있음** | `생성 0 · 기존 2 · 실패 0 · ⚠ 경고 5 (실패는 아니지만 **화면이 빕니다** …)` |
+| **정상(전부 SHIPPED)** | `생성 3 · 기존 0 · 실패 0` — **경고 표시 없음** |
+
+⇒ 마지막 줄만 읽어도 갈리고, **정상일 때는 안 붙는다**(늘 켜져 있는 경고가 아니다).
+
+## 🔴 구현 중 같은 결함을 다른 모양으로 되살릴 뻔했다
+
+경고를 **셸 변수**로 셌더니, `operator_token` 처럼 `$(...)` 명령 치환 안에서 나는 경고가
+**서브셸과 함께 사라졌다** — 실측으로 화면에 ⚠ 가 찍혔는데 요약은 `경고 0` 이었다. 그것은
+*"요약이 진실을 말하지 않는다"* 는 이 티켓의 결함 그 자체다. **파일 기반**으로 바꾸고
+(export 하지 않는다: 서브셸은 부모 파일에 세고 도메인별 자식은 자기 파일을 만든다)
+회귀 확인했다 — 서브셸 1 + 직접 1 = **경고 2**.
+
+## AC-2 — 경고가 지시하는 복구를 **실제로 실행**했다
+
+경고 문구를 *"ADR-MONO-066 경로를 확인하십시오"*(→ 정상 코드를 감사하러 간다)에서
+원인·불가역성·복구 명령·데이터 손실 고지로 바꾸고, **그 명령을 그대로 실행**했다:
+
+```
+bash infra/demo/demo-down.sh wms && docker volume rm wms_postgres-data && bash infra/demo/demo-up.sh wms
+```
+
+결과 — 시드가 간판 주문을 **끝까지 민다**:
+
+```
+[seed:wms] 생성  출하 SO-DEMO-0001 → SHIPPED
+[seed:wms] 요약 — 생성 3 · 기존 0 · 실패 0
+```
+
+DB 확인: `SO-DEMO-0001` **SHIPPED** · `picking_request` 1 · `picking_confirmation` 1 ·
+`packing_unit` 1 · `shipment` 1 · `outbound_saga` **SHIPPED** ·
+`admin_shipment_summary` **demo-corp × 1**.
+
+🔵 **부수 관측**: 실행 중 `demo-down.sh` 가 Hyper-V 소켓 오류로 중단돼 인프라 컨테이너가
+남았고, 그 상태에서 `docker volume rm` 은 `volume is in use` 로 거부됐다. 문서의 복구
+명령은 **`down` 이 완주했을 때만** 성립한다 — 실패하면 남은 컨테이너를 먼저 지워야 한다.
+(이 호스트 고유의 사정이라 문서에 넣지 않고 여기 기록만 남긴다.)
+
+## AC-3 — 워크스루 정정
+
+- §6 `TASK-MONO-510` 행: *"출하까지 심는다"* 에 **빈 볼륨 전제**를 명시하고, 원인이 코드가
+  아니라 데이터 이력이라는 것(같은 DB 의 다른 주문 둘은 `SHIPPED`)과 복구 수단을 적었다.
+- §7 에 증상 행 추가: *"`/wms/outbound` 은 찼는데 `/wms/shipments` 만 비었다"* →
+  **시드 로그의 마지막 줄(`⚠ 경고 N`)** 을 보라 + 복구 명령 + 데이터 손실 고지.
+
+## 가드
+
+`check-walkthrough-ledger-drift` OK · `check-index-queue-drift` OK ·
+`bash -n` 문법 검사 통과(lib.sh · seed-wms.sh)
