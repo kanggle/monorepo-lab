@@ -4,7 +4,7 @@ TASK-MONO-534
 
 # Title
 
-도커가 한 번 재시작되면 **데모의 IdP 가 돌아오지 않는다** — e2e 오버레이의 앱 12개에 `restart:` 가 없다
+도커가 한 번 재시작되면 **데모의 IdP 가 돌아오지 않는다** — iam 앱 5개에 `restart:` 가 없다
 
 # Status
 
@@ -48,15 +48,25 @@ Redis health 경고일 뿐 기동 실패가 아니다. **재시작 정책이 없
   다시 선언해도 그 값은 **병합으로 살아남는다** ⇒ 인프라 9개가 복귀했다.
 - **앱 서비스는 오버레이에만 정의된다** ⇒ 상속받을 `restart:` 가 없다.
 
-전수로 세면 **12개**다 — `docker-compose.e2e.yml` 의 앱 서비스 전부:
+영향받는 것은 **iam 앱 5개뿐**이다:
 
-| 파일 | `restart:` 없는 앱 서비스 |
+| 프로젝트 | 앱 서비스의 **실효** `restart` (병합 결과) |
 |---|---|
-| `projects/iam-platform/docker-compose.e2e.yml` | auth · account · security · admin · gateway (**5**) |
-| `projects/wms-platform/docker-compose.e2e.yml` | gateway · master · inbound · inventory · outbound · notification · admin (**7**) |
+| `iam` (auth · account · security · admin · gateway) | **없음** ⇒ 이 티켓의 대상 |
+| `wms` (gateway · master · inbound · inventory · outbound · notification · admin) | **`unless-stopped`** — `x-wms-app-common` **앵커**가 갖고 있다 ⇒ 대상 아님 |
 
-(같은 파일의 `kafka-init` 은 `restart:` 를 갖고 있다 — 즉 **의도적으로 붙인 자리가 있고**
-앱에는 안 붙어 있는 것이다.)
+`kafka-init` 은 양쪽 다 `restart: "no"` 를 **명시**한다(일회성 작업이므로 옳다). 즉 이 파일들은
+이 필드를 모르는 것이 아니고, **iam 의 앱만 아무 값도 갖지 않는다.**
+
+## 🔴 이 표는 한 번 틀렸다 — 그 오류 자체가 AC-0 의 근거다
+
+최초 작성 시 **"iam 5 + wms 7 = 12개"** 로 적었다. 서비스 블록을 파싱해 `restart:` 줄을 센
+것이었고, **`<<: *wms-app-common` 앵커로 상속되는 값을 보지 못했다.** wms 앱 7개는 처음부터
+정상이었다(라이브로도 확인된다 — 메모리가 부족한 동안 wms 앱들이 `RestartCount=7` 로
+**실제로 재시작되고 있었다**. 재시작 정책이 없었다면 한 번 죽고 끝이다).
+
+⇒ **선언 파일을 세면 틀린다.** 판정은 `docker compose config` 의 **병합 결과**여야 한다.
+AC-0 이 그것을 요구하는 이유는 이 티켓 본인이 그 함정에 먼저 빠졌기 때문이다.
 
 ## 왜 이게 데모에서 나쁜가
 
@@ -79,10 +89,13 @@ Redis health 경고일 뿐 기동 실패가 아니다. **재시작 정책이 없
 
 **In scope**
 
-- **데모 전용 오버레이**(`infra/demo/iam-traefik.override.yml` · `infra/demo/wms-identity.override.yml`
-  또는 필요하면 신설 파일)에 앱 서비스의 `restart: unless-stopped` 를 얹는다.
-  🔵 두 오버레이는 **이미 이 앱 서비스들을 재선언하고 있다**(iam 5/5, wms 5/7) — 자리는
-  이미 있고, wms 의 `gateway-service`·`notification-service` 두 개만 갈 곳을 정하면 된다.
+- **데모 전용 오버레이**(`infra/demo/iam-traefik.override.yml`)에 **iam 앱 5개**의
+  `restart: unless-stopped` 를 얹는다.
+  🔵 그 오버레이는 **이미 이 5개를 전부 재선언하고 있다**(`gateway`·`auth`·`account`·
+  `admin`·`security`) — 새 파일도, 새 서비스 블록도 필요 없다.
+  🔵 **모범 답안이 형제 프로젝트에 이미 있다**: `x-wms-app-common` 앵커가 `restart:
+  unless-stopped` 를 담고 앱 7개가 그것을 머지한다. iam 도 같은 모양으로 갈지, 오버레이에
+  서비스별로 얹을지만 정하면 된다(오버레이 쪽이 CI 파일을 안 건드린다는 점에서 유리하다).
 - 재시작 정책이 **효과적으로** 붙었는지 병합 결과에서 확인(`docker compose config`).
 - 실제 복귀 실측(AC-2).
 
@@ -92,18 +105,22 @@ Redis health 경고일 뿐 기동 실패가 아니다. **재시작 정책이 없
   재시작이 없는 것이 **옳다** — 앱이 죽으면 런이 실패해야 하지 조용히 되살아나면 안 된다.
   거기에 `unless-stopped` 를 넣으면 **CI 가 크래시를 재시작으로 가리게 된다.** 이것이 이
   티켓에서 가장 위험한 오수정이다.
-- **패턴 2 프로젝트**(ecommerce · console · scm · fan · finance · erp) — 이미 갖고 있고
-  실측으로 복귀를 확인했다. 건드리지 않는다.
+- **ecommerce · console** — 라이브 복귀를 실측했다(33/33 · 2/2). 건드리지 않는다.
+  🔵 **`scm`·`fan`·`finance`·`erp` 는 "범위 밖"이 아니라 "아직 안 쟀다"** — 이번 기동에
+  떠 있지도 않았다. AC-0 이 재는 대상이고, 거기서 빠진 것이 나오면 그때 범위에 들어온다.
+  *"패턴 2 니까 괜찮다"* 는 추론이지 측정이 아니다.
 - **일회성 init 컨테이너** — `kafka-init` 류에 `unless-stopped` 를 붙이면 무한 재실행이 된다.
 
 # Acceptance Criteria
 
 **AC-0 — 모집단을 다시 센다 (verify-then-act).**
-위 12개는 **파일 두 개를 읽어 센 것**이다. 착수 시에는 **병합 결과**에서 다시 센다 —
-`docker compose -p <slug> <-f …> config` 로 8개 도메인 전부의 서비스별 **효과적** restart
-정책을 뽑아 표로 만든다. 🔴 **선언 파일을 세면 틀린다**: base 의 값이 오버레이 병합으로
-살아남는 경우가 실제로 있고(iam 인프라 9개가 그래서 복귀했다), 그 구분을 놓치면 이미
-멀쩡한 서비스를 고치거나 빠진 것을 놓친다.
+`docker compose -p <slug> <-f …> config` 로 **8개 도메인 전부**의 서비스별 **실효** restart
+정책을 뽑아 표로 만든다. 위 표는 iam·wms 두 도메인만 그렇게 잰 것이고, **나머지 6개는
+아직 안 쟀다**(패턴 2 라서 괜찮을 것이라는 것은 추론이지 측정이 아니다 — ecommerce·console
+33+2 는 라이브 복귀로 확인됐지만 scm·fan·finance·erp 는 이번에 떠 있지도 않았다).
+🔴 **선언 파일을 세면 틀린다** — 두 경로로 틀린다: ① base 의 값이 오버레이 병합으로
+살아남고(iam 인프라 9개가 그래서 복귀했다) ② **YAML 앵커로 상속된다**(wms 앱 7개).
+이 티켓이 ②에 먼저 걸려 대상을 12개로 과다 집계했다.
 
 **AC-1 — 데모 오버레이에 얹고, 효과를 병합 결과에서 확인한다.**
 `config` 출력에서 대상 앱 서비스가 `restart: unless-stopped` 를 갖는 것을 확인한다.
@@ -128,7 +145,8 @@ Redis health 경고일 뿐 기동 실패가 아니다. **재시작 정책이 없
 
 - `infra/demo/projects.sh` — 패턴 1/2 구분과 `MONO-358` 실패 모드 서술의 출처
 - `projects/iam-platform/docker-compose.e2e.yml` · `projects/wms-platform/docker-compose.e2e.yml` — **읽기 전용**(Out of scope)
-- `infra/demo/iam-traefik.override.yml` · `infra/demo/wms-identity.override.yml` — 수정 대상 후보
+- `infra/demo/iam-traefik.override.yml` — **수정 대상**(iam 앱 5개를 이미 전부 재선언한다)
+- `projects/wms-platform/docker-compose.e2e.yml` § `x-wms-app-common` — **모범 답안**(형제 프로젝트가 이미 올바르다). 수정 대상 아님
 - `infra/demo/demo-down.sh` — 명시적 정지와의 상호작용(Edge Cases)
 - `docs/guides/interview-demo-walkthrough.md` § 6 · § 7
 
