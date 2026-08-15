@@ -8,7 +8,7 @@ TASK-MONO-534
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -182,3 +182,65 @@ AC-0 이 그것을 요구하는 이유는 이 티켓 본인이 그 함정에 먼
   부분(어디를 고치면 안 되는가, 무엇을 판정으로 삼는가)은 이 본문이 이미 못박았다.
 - 발단: `TASK-MONO-533`(낡은 이미지) 과 같은 라이브 세션에서 나왔다. 둘 다 *"데모를 실제로
   띄워 보기 전에는 아무도 묻지 않았던 것"* 이라는 공통점이 있다.
+
+---
+
+# ✅ 실행 결과 (2026-08-15)
+
+## AC-0 — 8개 도메인 전수 (`docker compose config` 병합 결과)
+
+| 도메인 | 서비스 | `restart` 없음 |
+|---|---|---|
+| **iam** | 15 | **5** — `auth` · `account` · `security` · `admin` · `gateway` |
+| wms | 17 | 0 |
+| scm | 9 | 0 |
+| finance | 7 | 0 |
+| erp | 8 | 0 |
+| ecommerce | 34 | 0 |
+| fan | 9 | 0 |
+| console | 2 | 0 |
+| **합계** | **101** | **5** |
+
+🔴 **첫 측정은 6개 도메인에서 끊겨 있었다**(도구 타임아웃). `fan`·`console` 과 `ecommerce`
+후반이 통째로 빠진 채였고, 그 상태의 "5개" 는 **우연히** 정답과 같았다 — 빠진 두 도메인에
+결함이 있었다면 그대로 놓쳤을 것이다. 8/8 을 다시 재고 나서야 숫자를 확정했다.
+🔴 파싱 스크립트가 msys `/tmp` 에 쓴 파일을 Windows 네이티브 `python.exe` 가 못 읽어
+`FileNotFoundError` 가 났다(같은 경계 함정). 스크래치패드 절대경로로 해소.
+
+## AC-1 — 수정 후 (같은 방법)
+
+iam 앱 5개 전부 `unless-stopped`, **없음 0개**. `git diff` 로 `projects/` **무변경** 확인
+(CI 하네스 미접촉 — Out of scope 준수).
+
+## AC-2 — 문다: **술어를 네 번 만에 맞췄다**
+
+| # | 자극 | 결과 | 왜 틀렸나 |
+|---|---|---|---|
+| 1 | `docker kill` | 정책 있어도 안 돌아옴 | 도커가 **사용자 정지**로 기록 ⇒ 정책 미적용. **정책 유무와 무관하게 같은 답** = 아무것도 재지 않는다 |
+| 2 | `exec kill -9 1` | 두 칸 모두 `restarts 0 → 0` | 커널이 **네임스페이스 init 을 같은 네임스페이스發 시그널로부터 보호**(핸들러 없는 SIGKILL 포함) ⇒ 안 죽었다. 성공 조건이 *"60초 안에 running"* 이라 **안 죽으면 자동 통과**였다 |
+| 3 | VM 호스트에서 SIGKILL | `No such process` | 컨테이너 PID 가 `rancher-desktop` 배포판 `/proc` 에 **없다**. 게다가 stderr 를 버려서 실패가 안 보였다 |
+| 4 | `exec kill -15 1` | ✅ 성립 | JVM 이 **SIGTERM 핸들러**를 갖는다 ⇒ 전달됨. `docker stop` 이 아니므로 사용자 정지도 아니다 |
+
+**최종 판정 (같은 컨테이너 · 같은 자극 · 정책만 차등)**
+
+| 칸 | 정책 | 결과 |
+|---|---|---|
+| 대조군 | `no` | `exited(143)` · restarts **0 → 0** — 안 살아남 |
+| 판정 | `unless-stopped` | 10초 만에 `running` · restarts **0 → 1** — 살아남 |
+
+🔴 **2번을 잡은 것은 대조군이다.** 판정 칸만 봤다면 *"60초 안에 running"* 을 통과로 읽고
+**아무것도 죽이지 않은 실험을 초록으로 보고**했을 것이다. 대조군이 같은 답을 낸 것이
+술어가 틀렸다는 유일한 신호였다.
+
+## AC-3 · AC-4 — 문서
+
+- §7 에 두 행: *"재시작했더니 로그인만 안 된다"*(스택 전체 재기동 대신 **exited 된 iam 앱**을 보라) ·
+  *"재시작 직후 몇 분간 안 된다"*(**정상** — `iam-kafka` healthy 까지 실측 **약 8분**, 판정은
+  `docker ps` 가 아니라 `iam.local/actuator/health` 200)
+- §6 에 ✅ 해소 행 — 복귀 실측(33/33 · 2/2 · 1/1 · 9/9 vs **0/5**), 고친 자리가 CI 파일이
+  아닌 이유, 그리고 판정이 선언이 아니라 복귀였다는 것
+
+## 가드
+
+`verify-demo-wrapper.sh` **PASS** · `check-walkthrough-ledger-drift` OK ·
+`check-index-queue-drift` OK · `check-task-id-collision` OK · `check-claude-reference-integrity` OK
