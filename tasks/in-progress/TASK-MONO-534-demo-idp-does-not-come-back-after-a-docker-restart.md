@@ -8,7 +8,7 @@ TASK-MONO-534
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
