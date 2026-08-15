@@ -72,7 +72,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-- `TASK-BE-588-order-api-contract-says-recipientname-server-wants-recipient.md` — **🟢 READY — 계약서대로 `POST /api/orders` 를 보내면 `400 VALIDATION_ERROR "recipient is required"` 다(2026-08-15 라이브 실측).** 계약은 `shippingAddress.recipientName`, 서버 DTO·도메인·JPA·이벤트·DB 컬럼·web-store 전송은 전부 `recipient`. 🔴 **같은 문서가 자기와도 어긋난다** — 41행(요청)·130행(단건 응답)은 `recipientName`, 336행(admin 응답)은 `recipient` ⇒ **3분의 2가 틀린 부분 갱신**. 방향은 **문서를 구현에 맞춘다**(반대는 마이그레이션+이벤트 계약+프런트를 함께 움직여야 하고 얻는 게 이름 취향뿐). 🔴 이웃 필드 전수 대조 필수 — 발견 자체가 *"하나 틀린 김에 세어 보니 2/3"* 였다. 🔴 네거티브(수정 전 예시 → 400) 없이 201 만 보면 "원래도 됐던 것"과 구별 불가
+_(없음)_
+
 
 _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DONE. `../../../tasks/done/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
 
@@ -82,7 +83,8 @@ _(없음)_
 
 ## review
 
-_(없음)_
+- `TASK-BE-588-order-api-contract-says-recipientname-server-wants-recipient.md` — **🟣 REVIEW (impl PR, 2026-08-15) — AC-1~5 충족. 🔴 차등 판정으로 닫았다**: 수정 **전** 계약서 예시 → **HTTP 400** `"recipient is required"` / 수정 **후** 예시 → **HTTP 201** `{"orderId":"246d75d5-…"}`, 그리고 단건 조회 응답이 `"recipient"` 를 담고 `recipientName` 등장 **0회**. 🔵 **네거티브를 먼저 쟀다** — 고친 뒤 201 만 보면 *"원래도 통과했을"* 가능성을 배제하지 못한다. 🔵 **AC-4 전 필드 대조 결과 어긋난 곳은 정확히 2건**(요청 41행 · 단건 응답 130행)이고 `items[]` 7필드 · `shippingAddress` 나머지 4필드 · 최상위 7필드는 **전부 일치**했다 ⇒ 이웃 확산 없음. admin 응답(336행)이 **이미 옳았다는 사실이 "옛 이름 관행" 가설을 배제**한다 — 문서 전체가 낡은 게 아니라 **부분만 갱신**된 것이었다. 🔵 코드·DTO·DB·이벤트 **무변경**(문서만 수정), 새 테스트 없음 — 판정은 실행된 요청으로 했다. **이하 원 서술**: 계약서대로 `POST /api/orders` 를 보내면 `400 VALIDATION_ERROR "recipient is required"` 다(2026-08-15 라이브 실측). 계약은 `shippingAddress.recipientName`, 서버 DTO·도메인·JPA·이벤트·DB 컬럼·web-store 전송은 전부 `recipient`. 🔴 **같은 문서가 자기와도 어긋난다** — 41행(요청)·130행(단건 응답)은 `recipientName`, 336행(admin 응답)은 `recipient` ⇒ **3분의 2가 틀린 부분 갱신**. 방향은 **문서를 구현에 맞춘다**(반대는 마이그레이션+이벤트 계약+프런트를 함께 움직여야 하고 얻는 게 이름 취향뿐). 🔴 이웃 필드 전수 대조 필수 — 발견 자체가 *"하나 틀린 김에 세어 보니 2/3"* 였다. 🔴 네거티브(수정 전 예시 → 400) 없이 201 만 보면 "원래도 됐던 것"과 구별 불가
+
 
 ## done
 
