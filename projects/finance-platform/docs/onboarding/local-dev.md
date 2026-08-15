@@ -13,7 +13,7 @@ for the full ordered procedure and the cross-project matrix.
 |---|---|
 | Up / down | `pnpm finance:up` / `pnpm finance:down` |
 | Status / logs | `pnpm finance:ps` / `pnpm finance:logs` |
-| Entry hostname(s) | `finance.local`, `ledger.local` |
+| Entry hostname(s) | `finance.local` (only — see note below) |
 | Needs IAM first | ✅ `pnpm iam:up` before this stack |
 
 Quick start (from repo root):
@@ -32,7 +32,7 @@ curl -i http://finance.local/actuator/health
 
 Authoritative inventory: [`docker-compose.yml`](../../docker-compose.yml). At a glance:
 
-- **Edge**: `finance-platform-gateway` (`finance.local`, IAM OIDC consumer); the ledger service is exposed at `ledger.local`.
+- **Edge**: `finance-platform-gateway` (`finance.local`, IAM OIDC consumer) — **the only edge**. 🔴 `ledger-service` is **not** reachable at `ledger.local`; it is `expose:`-only and answers through the gateway. It did hold its own router once, and `TASK-MONO-357` / `ADR-MONO-048` removed it (a backend service on the shared edge violates `platform/api-gateway-policy.md` L13/L14). This line kept naming the dead hostname until 2026-08-15 (TASK-MONO-532).
 - **Backend services**: `finance-platform-account`, `finance-platform-ledger`.
 - **Backing resources**: `finance-platform-mysql` (account), `finance-platform-ledger-mysql` (ledger has its own DB), `finance-platform-redis`.
 
