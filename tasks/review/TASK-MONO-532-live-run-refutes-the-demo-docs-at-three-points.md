@@ -8,7 +8,7 @@ TASK-MONO-532
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -261,9 +261,103 @@ console-web 로그가 원인을 정확히 말한다:
 
 ---
 
+# AC-2 실행 결과 (2026-08-15) — 🔴 누락이 2개가 아니라 **6개**였고, 반대 방향 드리프트도 하나 나왔다
+
+전 compose 의 `Host(...)` 를 전수 추출해 `TEMPLATE.md` 스니펫과 대조했다.
+**티켓 작성 시점에 알던 것은 2건뿐이었다.**
+
+| 라우터 호스트명 | 소유 compose | 수정 전 스니펫 | 판정 |
+|---|---|---|---|
+| `ecommerce.local` · `wms.local` · `iam.local` · `fan-platform.local` · `scm.local` · `erp.local` · `finance.local` · `console.local` | 각 프로젝트 게이트웨이 | ✅ 있음 | 확인함 |
+| **`web.ecommerce.local`** | ecommerce (web-store) | ❌ **없음** | 추가 |
+| **`web.fan-platform.local`** | fan (fan-platform-web) | ❌ **없음** | 추가 |
+| **`grafana.iam.local`** | iam | ❌ **없음** | 추가 |
+| **`grafana.wms.local`** | wms | ❌ **없음** | 추가 |
+| **`kafka.iam.local`** | iam | ❌ **없음** | 추가 |
+| **`kafka.wms.local`** | wms | ❌ **없음** | 추가 |
+
+🔵 뒤 넷(grafana / kafka UI)은 **브라우저용 HTTP UI** 인데 스니펫에 없었다. `TEMPLATE.md`
+§ Database / queue tools 는 **TCP 도구**(DBeaver · Redis Insight)만 다루고 이 HTTP UI 들은
+어디에도 적혀 있지 않았다 ⇒ 같은 결함의 덜 아픈 사례. 선택 항목으로 표시해 추가했다.
+
+## 🔴 반대 방향 — 문서가 **없는 라우터**를 약속한다 (`ledger.local`)
+
+추출 집합에 `ledger.local` 이 **없다**. 그런데 두 문서가 그것을 진입 호스트명으로 적고 있었다:
+
+- `TEMPLATE.md` bring-up matrix, finance 행 → `finance.local, ledger.local`
+- `projects/finance-platform/docs/onboarding/local-dev.md` 2곳
+
+`TASK-MONO-357` / `ADR-MONO-048` 이 finance 에 게이트웨이를 세우면서 `ledger-service` 를
+`expose:` 전용으로 바꿨다(백엔드가 공유 엣지에 라우터를 갖는 것은 `api-gateway-policy.md`
+L13/L14 위반). **라우터는 그때 사라졌고 문서만 남았다.**
+
+⇒ 이 방향도 함께 고쳤다. 🔵 프로젝트 문서(`projects/finance-platform/docs/`)를 root 태스크가
+건드리는 근거는 `CLAUDE.md` § Required Workflow(monorepo-level)의 *"enumerate any
+`projects/<name>/` impact"* 다 — 같은 사실의 두 사본이라 한쪽만 고치면 드리프트가 남는다.
+
+🔵 **교훈**: 이 티켓의 발단은 *"2개 빠졌다"* 였는데 세어 보니 **6개 + 반대 방향 1개**였다.
+하나를 발견한 것은 다 발견한 것이 아니다 — 모집단을 **다시 세는** 단계가 AC 에 있어서 잡혔다.
+
+---
+
+# 구현 노트 (2026-08-15)
+
+- **①** `TEMPLATE.md` 스니펫을 3블록(게이트웨이 / 브라우저 프런트엔드 / 도구 UI)으로 나누고,
+  `web.*` 가 게이트웨이와 **다른 라우터**라는 것과 판별법(Host 헤더 200 ↔ 브라우저 실패)을
+  적었다. bring-up matrix 의 fan 행에 `web.fan-platform.local` 추가, finance 행에서
+  `ledger.local` 제거(각주 ² 로 사유 보존). 워크스루 §1 에도 같은 함정을 경고로 넣었다.
+- **②** compose 는 이미 `${TOKEN_EXCHANGE_TIMEOUT_MS:-5000}` / `${REGISTRY_TIMEOUT_MS:-5000}`
+  를 전달하고 있었다 — **배선은 있었고 값만 없었다**. `demo.env` 에 둘 다 `30000` 설정.
+  값 근거와 트레이드오프(진짜 장애 시 30초 매달림)를 주석에 남겼다.
+  🔵 `REGISTRY_TIMEOUT_MS` 도 함께 올린 이유: 콜드 캐스케이드는 두 교환을 **모두** 친다
+  (registry + operator-exchange). 하나만 올리면 나머지가 같은 자리에서 끊는다.
+- **③** §5 에 전제 블록(시드 로그 2줄 + 재시드 명령), §2 「내 리뷰」 행에 단서, §7 에 증상
+  2행 추가. 🔴 기존 `redirect_uri` 행은 **지우지 않고** 구별 문구를 달았다.
+
+---
+
+# AC-3 / AC-4 실행 결과 (2026-08-15) — 🔴 콜드에서 재현·소거했다
+
+**AC-3 (값이 도달하는가)** — 선언이 아니라 컨테이너에서 확인:
+
+```
+수정 전 (라이브 컨테이너)  TOKEN_EXCHANGE_TIMEOUT_MS=5000   REGISTRY_TIMEOUT_MS=5000
+수정 후 (재생성 후)        TOKEN_EXCHANGE_TIMEOUT_MS=30000  REGISTRY_TIMEOUT_MS=30000
+```
+
+**AC-4 (콜드 1회차)** — `iam-admin-service` 를 재시작해 콜드를 만들고(health UP 까지 **39초**),
+UP 직후 **첫 로그인**을 쟀다:
+
+```
+1회차 최종 URL : /dashboards/overview        ← 에러 파라미터 없음
+1회차 소요     : 16,907 ms
+console-web 로그: operator_exchange_ok       (operator_exchange_timeout 건수 = 0)
+POST /api/tenant {"tenant":"ecommerce"} → 200
+```
+
+🔴 **이 숫자가 판정의 전부다: 16.9초는 옛 한계 5초의 3배가 넘는다.** 즉 이 런은 수정 전이었다면
+`operator_exchange_timeout` 으로 **반드시 실패했다**. 오늘 오전 같은 스택에서 잰 수정 전 1회차가
+정확히 그랬다(`/login?error=operator_exchange_unavailable`). 웜 재시도는 양쪽 다 성공하므로
+**웜으로는 이 차이를 볼 수 없다** — AC 가 콜드를 요구한 이유다.
+
+🔵 **판정 중 내 술어가 두 번 틀렸다** (둘 다 결함이 아니었다):
+- admin-service 프로브를 **8080** 으로 짰다 — 실제 포트는 **8085**(컨테이너 healthcheck 가
+  권위다). "연결 거부" 를 "아직 안 떴다" 로 읽고 무한 대기했다.
+- 세션 쿠키를 `authjs.session-token` 이름으로 찾았다 — 그건 **스토어프런트**의 이름이고
+  콘솔은 다르다. 로그인은 `/dashboards/overview` 도달과 `POST /api/tenant` **200** 으로
+  이미 증명돼 있었다.
+
+🔵 **회귀 아님 확인**: 직후 `/api/ecommerce/shippings` 가 **503** 을 냈으나 웜 3회 연속
+**200 · `totalElements` 1** 이고 게이트웨이 직결(운영자 토큰)도 **1** 로 일치한다 ⇒ 워크스루
+§6 이 이미 적은 **콜드 BFF 레그**이지 이번 변경의 산물이 아니다.
+
+**AC-7** — `bash infra/demo/verify-demo-wrapper.sh` → **정적 검증 PASS**(rc=0, FAIL 0건).
+
+---
+
 # Definition of Done
 
-- [ ] AC-1 ~ AC-7 충족
-- [ ] 라이브 판정 4종 실행 + 결과를 PR 본문에 기록
-- [ ] `tasks/INDEX.md` 갱신
-- [ ] Ready for review
+- [x] AC-1 ~ AC-7 충족
+- [x] AC-2 전수 대조 실행 + 결과 기록(위 표)
+- [x] `tasks/INDEX.md` 갱신
+- [x] Ready for review

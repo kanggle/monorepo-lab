@@ -528,10 +528,33 @@ New projects pick an unused `*.local` hostname and register it in this table in 
 Append to `/etc/hosts` (Linux/macOS) or `C:\Windows\System32\drivers\etc\hosts` (Windows):
 
 ```
+# Gateways (one per project)
 127.0.0.1  ecommerce.local wms.local iam.local fan-platform.local scm.local erp.local finance.local console.local
+
+# Browser frontends — these are SEPARATE names from their project's gateway
+127.0.0.1  web.ecommerce.local web.fan-platform.local
+
+# Observability / queue UIs (optional; only needed if you open them)
+127.0.0.1  grafana.iam.local grafana.wms.local kafka.iam.local kafka.wms.local
 ```
 
-(Or run dnsmasq with `address=/.local/127.0.0.1` for a wildcard.)
+(Or run dnsmasq with `address=/.local/127.0.0.1` for a wildcard — that covers every
+name below without maintaining this list.)
+
+> 🔴 **The `web.*` names are not optional decoration.** `web.ecommerce.local` and
+> `web.fan-platform.local` are the storefront and fan web — two of the three entry URLs
+> the [interview demo walkthrough](docs/guides/interview-demo-walkthrough.md) § 1 hands a
+> first-time reader, and the hostnames `demo-up.sh` prints when it finishes. A project's
+> gateway (`ecommerce.local`) and its frontend (`web.ecommerce.local`) are **different
+> Traefik routers on different containers**; registering only the gateway leaves the
+> frontend unreachable from a browser while `curl -H 'Host: web.ecommerce.local'` still
+> answers 200 — so the failure reads as "the demo did not come up" rather than "a name is
+> missing". Measured 2026-08-15 (TASK-MONO-532): both names failed DNS resolution on a
+> host set up from this snippet, while Traefik routed them correctly.
+
+**This list is derived from the `Host(...)` router rules in the project compose files.**
+When adding or renaming a router, update it here in the same change — nothing checks the
+two against each other.
 
 ### Local bring-up sequence
 
@@ -554,13 +577,15 @@ Tear down with the matching `:down` command (named volumes are preserved).
 | iam-platform | `pnpm iam:up` / `iam:down` | `iam.local`¹ | — (identity provider) |
 | ecommerce-microservices-platform | `pnpm ecommerce:up` / `ecommerce:down` | `ecommerce.local`, `web.ecommerce.local` | ✅ |
 | wms-platform | `pnpm wms:up` / `wms:down` | `wms.local`¹ | ✅ |
-| fan-platform | `pnpm fan-platform:up` / `fan-platform:down` | `fan-platform.local` | ✅ |
+| fan-platform | `pnpm fan-platform:up` / `fan-platform:down` | `fan-platform.local`, `web.fan-platform.local` | ✅ |
 | scm-platform | `pnpm scm:up` / `scm:down` | `scm.local` | ✅ |
 | erp-platform | `pnpm erp:up` / `erp:down` | `erp.local` | ✅ |
-| finance-platform | `pnpm finance:up` / `finance:down` | `finance.local`, `ledger.local` | ✅ |
+| finance-platform | `pnpm finance:up` / `finance:down` | `finance.local`² | ✅ |
 | platform-console | `pnpm console:up` / `console:down` | `console.local` | ✅ |
 
 ¹ **Not reachable from `pnpm <name>:up` alone** — see the callout under step 3 above. Both hostnames map to the primary gateway of an infra-only compose file; the gateway itself needs a `bootRun` or the demo overlay to answer.
+
+² `ledger.local` **used to be listed here and no longer exists.** `TASK-MONO-357` / `ADR-MONO-048` gave finance a gateway, and `ledger-service` became `expose:`-only — a backend service holding its own edge router violated `platform/api-gateway-policy.md` L13/L14. The compose file has carried no `Host(\`ledger.local\`)` rule since. Removed here 2026-08-15 (TASK-MONO-532): a matrix entry for a route that does not exist sends the reader looking for a bring-up failure that never happened.
 
 Each project's `docs/onboarding/local-dev.md` records that stack's service/resource inventory (or points to its `docker-compose.yml` as the authoritative inventory) plus any project-specific bring-up notes. **The full resource list for a project is always its `docker-compose.yml`** — this matrix is the ordering contract, not the inventory.
 

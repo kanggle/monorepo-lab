@@ -63,8 +63,15 @@ bash infra/demo/demo-up.sh iam erp console
 | 스토어프런트 | `http://web.ecommerce.local` |
 | 팬 | `http://web.fan-platform.local` |
 
-`*.local` 은 hosts 파일에 `127.0.0.1` 로 등록돼 있어야 한다(TEMPLATE.md § Local
-Network Convention). EC2 데모는 `<ip>.sslip.io` 를 쓰므로 hosts 등록이 필요 없다.
+`*.local` 은 hosts 파일에 `127.0.0.1` 로 등록돼 있어야 한다
+([TEMPLATE.md § One-time developer setup](../../TEMPLATE.md)). EC2 데모는 `<ip>.sslip.io` 를
+쓰므로 hosts 등록이 필요 없다.
+
+> 🔴 **위 세 이름 중 둘은 게이트웨이 이름이 아니다.** `web.ecommerce.local` 과
+> `web.fan-platform.local` 은 프런트엔드 컨테이너의 **별도 Traefik 라우터**이고,
+> `ecommerce.local` / `fan-platform.local`(게이트웨이)을 등록했다고 딸려오지 **않는다**.
+> 빠뜨리면 브라우저가 "사이트에 연결할 수 없음" 을 내는데, 그 화면은 **스택이 안 뜬 것과
+> 구별되지 않는다** — 실제로는 Traefik 이 정상 라우팅 중이다. §7 첫 행이 판별법을 준다.
 
 ---
 
@@ -108,7 +115,7 @@ commission_accrual  1행 (ACCRUAL)       ← 정산 적립
 | 위시리스트 | 사용자 소유 데이터의 CRUD |
 | 배송지 관리 | 체크아웃이 참조하는 마스터 데이터 |
 | 쿠폰 | 프로모션에서 **발급된** 쿠폰(쿠폰을 직접 만들지 않는다) |
-| 내 리뷰 | **배송 완료된 주문에만** 쓸 수 있다(구매자 리뷰 규칙) |
+| 내 리뷰 | **배송 완료된 주문에만** 쓸 수 있다(구매자 리뷰 규칙). 🔴 **처음 여는 데모에서는 비어 있는 것이 정상** — 배송 완료된 주문이 아직 없기 때문이다. 채우려면 위 구매를 완주한 뒤 시드를 한 번 더 돌린다(§5 의 주석) |
 | 알림 · 알림 설정 | 알림 구독/수신 설정 |
 
 ---
@@ -250,6 +257,22 @@ GET /api/admin/orders   200  totalElements 0      (DB 에는 4건)
 있으므로, 시드는 리뷰 행을 직접 넣는 대신 **배송을 실제로 진행시켜**(PREPARING →
 SHIPPED → IN_TRANSIT → DELIVERED) 자격을 만든다. 그 과정에서 콘솔 「배송」 탭도 함께 찬다.
 
+> 🔴 **단, 그 블록에는 전제가 있다 — 주문이 이미 있어야 한다.** 시드는 주문을 **만들지
+> 않는다**(그것은 §2 에서 당신이 할 일이다). 그래서 **갓 초기화한 볼륨의 첫 기동에서는
+> 이 구간이 통째로 건너뛰어진다**:
+>
+> ```
+> [seed:ecommerce] ⚠ 데모 계정의 주문이 없습니다 — 배송 진행과 리뷰 시드를 건너뜁니다
+> [seed:ecommerce] 진행할 배송 건이 없습니다 — 리뷰 자격(DELIVERED)을 만들지 않습니다
+> ```
+>
+> 결과: **처음 여는 데모에서 「내 리뷰」와 콘솔 「배송」 탭은 비어 있다.** 이것은 결함이
+> 아니라 *"아직 아무도 사지 않았다"* 이다 — 시드가 주문을 지어내면 그게 오히려 존재할 수
+> 없는 상태를 보여주는 것이다.
+>
+> 🔵 **§2 의 구매를 완주한 뒤 시드를 한 번 더 돌리면** 위 서술대로 배송이 진행되고 리뷰
+> 자격이 생긴다: `bash infra/demo/seed/seed.sh ecommerce` (실측 2026-08-15, `TASK-MONO-532`).
+
 ---
 
 ## 6. 알려진 한계 (조용한 누락 없이)
@@ -318,7 +341,9 @@ SHIPPED → IN_TRANSIT → DELIVERED) 자격을 만든다. 그 과정에서 콘�
 
 | 증상 | 먼저 볼 것 |
 |---|---|
-| 로그인 후 되돌아오지 못한다 | `infra/demo/seed-demo-domain.sh` 로그 — redirect_uri 가 데모 도메인에 등록됐는지 |
+| **브라우저가 스토어프런트/팬 웹에 아예 연결되지 않는다** | 🔴 **먼저 hosts 를 의심하라 — 스택 문제가 아닐 가능성이 높다.** `web.ecommerce.local` · `web.fan-platform.local` 은 게이트웨이(`ecommerce.local`)와 **다른 이름**이라 따로 등록해야 한다(`TEMPLATE.md` § One-time developer setup). 판별 한 줄: `curl -o /dev/null -w '%{http_code}' -H 'Host: web.ecommerce.local' http://127.0.0.1/` 가 **200 인데** 브라우저는 못 간다면 이름 해소 문제다(스택은 멀쩡하다) |
+| **콘솔 로그인이 `/login?error=operator_exchange_unavailable` 로 끝난다** | 🔴 **redirect_uri 가 아니다 — 아래 행과 헷갈리지 말 것.** `docker logs platform-console-web` 에서 **`operator_exchange_timeout`** 을 찾아라. 있으면 **콜드스타트**이고 **그냥 다시 로그인하면 성공한다**(IAM JVM 이 워밍되기 전 토큰 교환이 타임아웃한 것). `demo.env` 의 `TOKEN_EXCHANGE_TIMEOUT_MS` 가 이 여유를 준다 — 그 줄이 없으면 기본 5초라 콜드 1회차가 거의 항상 실패한다. `operator_exchange_timeout` 이 **없다면** 다른 사건이니 그때 아래 행으로 간다 |
+| 로그인 후 되돌아오지 못한다 (위와 다른 증상 — 에러 코드가 없거나 `invalid_state`) | `infra/demo/seed-demo-domain.sh` 로그 — redirect_uri 가 데모 도메인에 등록됐는지 |
 | 콘솔 도메인 섹션이 전부 degrade | 그 도메인 스택이 떠 있는지 (`docker ps`), `demo.env` 의 `CONSOLE_BFF_OUTBOUND_*` |
 | 백엔드가 401 "Authentication required" | 그 서비스가 `traefik-net` 에 붙어 JWKS 를 해소하는지 (`infra/demo/*-identity.override.yml`) |
 | 화면은 200 인데 목록이 비었다 | **테넌트를 의심하라** — §4 의 사례가 정확히 그 모양이다 |
