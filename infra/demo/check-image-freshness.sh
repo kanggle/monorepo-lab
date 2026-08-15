@@ -62,7 +62,7 @@ source "$HERE/projects.sh"
 [ "$#" -gt 0 ] || { echo "usage: check-image-freshness.sh <domain>..." >&2; exit 0; }
 
 stale=0 fresh=0 undecidable=0
-stale_lines=() und_lines=()
+stale_lines=() und_lines=() rebuild_mods=()
 oldest_image_epoch=""
 
 for slug in "$@"; do
@@ -119,8 +119,11 @@ for slug in "$@"; do
 
     if [ "$img_epoch" -lt "$src_epoch" ]; then
       stale=$((stale+1))
-      stale_lines+=("$(printf '%-34s 이미지 %s  <  소스 %s' "$img" \
+      stale_lines+=("$(printf '%-40s 이미지 %s  <  소스 %s' "$img" \
         "$(date -u -d "@$img_epoch" '+%m-%d %H:%MZ')" "$(date -u -d "@$src_epoch" '+%m-%d %H:%MZ')")")
+      # 🔵 조치까지 적는다. *"낡았습니다"* 만으로는 읽는 사람이 **어느 모듈을** 구워야
+      # 하는지 모른다 — gradle 경로는 여기서 이미 알고 있다(프로젝트 디렉터리 + 서비스명).
+      rebuild_mods+=(":projects:$(basename "$projdir"):apps:${svc}:bootJar")
     else
       fresh=$((fresh+1))
     fi
@@ -130,7 +133,8 @@ done
 if [ "$stale" -gt 0 ]; then
   echo "[freshness] 🔴 코드보다 낡은 이미지 ${stale}개 — 그대로 띄우면 **고친 결함이 그대로 보인다**"
   for l in "${stale_lines[@]}"; do echo "[freshness]   $l"; done
-  echo "[freshness]   다시 굽기: ./gradlew <모듈>:bootJar 후  DEMO_BUILD=1 bash infra/demo/demo-up.sh $*"
+  echo "[freshness]   다시 굽기:  ./gradlew ${rebuild_mods[*]}"
+  echo "[freshness]   그 다음:    DEMO_BUILD=1 bash infra/demo/demo-up.sh $*"
 fi
 if [ "$undecidable" -gt 0 ]; then
   echo "[freshness] ⚠ 판정 불가 ${undecidable}건 (초록이 아니다 — 재지 못한 것이다)"
