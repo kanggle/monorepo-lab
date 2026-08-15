@@ -67,6 +67,13 @@ fi
 build_flag=""
 [ "$BUILD" = "1" ] && build_flag="--build"
 
+# 이미지가 코드보다 낡았는지 **기동 전에** 알린다 (TASK-MONO-533).
+# `DEMO_BUILD=1` 이면 지금 새로 구우므로 물어볼 것이 없다. 게이트가 아니라 고지이므로
+# 실패해도 기동을 막지 않는다 — 상세와 근거는 check-image-freshness.sh 헤더.
+if [ "$BUILD" != "1" ]; then
+  bash "$HERE/check-image-freshness.sh" "${SET[@]}" || true
+fi
+
 echo "[demo] profile=$PROFILE  build=$BUILD"
 echo "[demo] ensuring shared traefik-net + edge router"
 docker compose -p traefik -f "$ROOT/$TRAEFIK_COMPOSE" up -d
