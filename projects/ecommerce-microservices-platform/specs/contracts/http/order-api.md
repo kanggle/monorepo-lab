@@ -38,7 +38,7 @@ Place a new order.
     }
   ],
   "shippingAddress": {
-    "recipientName": "string",
+    "recipient": "string",
     "phone": "string",
     "zipCode": "string",
     "address1": "string",
@@ -46,6 +46,15 @@ Place a new order.
   }
 }
 ```
+
+> 🔴 **The field is `recipient`, not `recipientName` — and the neighbouring address API
+> disagrees on purpose.** `/api/users/me/addresses` (user-api.md) uses `recipientName`;
+> the checkout screen maps that to `recipient` when it builds this payload (web-store
+> `use-shipping-address-state.ts`). Both names are correct in their own API, and that
+> seam is where this document drifted: it said `recipientName` here until 2026-08-15
+> (`TASK-BE-588`), so a request built from this very example was rejected with
+> `400 VALIDATION_ERROR "recipient is required"`. Authoritative shape:
+> `PlaceOrderRequest.ShippingAddressRequest`.
 
 `items[].sellerId` (inner marketplace axis — ADR-MONO-030 Step 3 §3.2) is the
 owning seller of the line, supplied by the client as a denormalized snapshot
@@ -127,7 +136,7 @@ Get order detail for the authenticated user.
     }
   ],
   "shippingAddress": {
-    "recipientName": "string",
+    "recipient": "string",
     "phone": "string",
     "zipCode": "string",
     "address1": "string",

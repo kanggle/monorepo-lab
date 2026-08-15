@@ -8,7 +8,7 @@ TASK-BE-588
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -185,9 +185,69 @@ e2e, 또는 AI 에이전트 — 은 **반드시 400 을 맞는다.** 이번에 �
 
 ---
 
+# AC-4 전 필드 대조 결과 (2026-08-15) — 어긋난 곳은 **정확히 2건**, 나머지는 전부 일치
+
+계약서의 JSON 예시를 `PlaceOrderRequest` / `OrderDetailResponse` 와 필드 단위로 맞췄다.
+🔵 **이미 맞았던 항목도 적는다** — 무엇을 *안 봤는지*가 드러나야 한다.
+
+## § POST /api/orders 요청 ↔ `PlaceOrderRequest`
+
+| 블록 | 계약서 필드 | DTO | 판정 |
+|---|---|---|---|
+| `items[]` | `productId` · `variantId` · `productName` · `optionName` · `quantity` · `unitPrice` · `sellerId` | 동일 7개 | ✅ 7/7 확인함 |
+| `shippingAddress` | **`recipientName`** | **`recipient`** (`@NotNull "recipient is required"`) | ❌ **정정** |
+| `shippingAddress` | `phone` · `zipCode` · `address1` · `address2` | 동일 4개 | ✅ 확인함 |
+
+## § GET /api/orders/{orderId} 응답 ↔ `OrderDetailResponse`
+
+| 블록 | 계약서 필드 | DTO | 판정 |
+|---|---|---|---|
+| 최상위 | `orderId` · `status` · `totalPrice` · `items` · `shippingAddress` · `createdAt` · `updatedAt` | 동일 7개 | ✅ 확인함 |
+| `items[]` | 위와 동일 7개 | 동일 | ✅ 확인함 |
+| `shippingAddress` | **`recipientName`** | **`recipient`** | ❌ **정정** |
+| `shippingAddress` | `phone` · `zipCode` · `address1` · `address2` | 동일 4개 | ✅ 확인함 |
+
+## § GET /api/admin/orders/{orderId} — 손대지 않음
+
+이미 `recipient` 로 옳았다(336행). **이 한 곳이 옳았다는 사실이 "옛 이름 관행" 가설을
+배제한다** — 문서 전체가 낡은 게 아니라 **부분만 갱신된** 것이다.
+
+⇒ `optionName` · `address2` 의 nullable 서술, `items[].sellerId` optional 서술,
+`Idempotency-Key` 헤더 서술은 전부 구현과 일치해 **무변경**이다.
+
+---
+
+# AC-3 / AC-5 라이브 판정 (2026-08-15, `demo-up.sh iam ecommerce console` 스택)
+
+🔴 **네거티브를 먼저 쟀다** — 고친 뒤 201 만 보면 *"원래도 통과했을"* 가능성을 못 배제한다.
+
+```
+수정 전 계약서 예시  {"shippingAddress":{"recipientName": ...}}
+  → HTTP 400  {"code":"VALIDATION_ERROR","message":"recipient is required"}
+
+수정 후 계약서 예시  {"shippingAddress":{"recipient": ...}}
+  → HTTP 201  {"orderId":"246d75d5-78ee-403d-b389-79a2b3f8fbcd"}
+```
+
+응답부도 실물로 확인:
+
+```
+GET /api/orders/246d75d5-...  → 200
+"shippingAddress":{"recipient":"데모 구매자","phone":"010-1234-5678",
+                   "zipCode":"06232","address1":"서울 강남구 테헤란로 1","address2":"3층"}
+응답에 "recipientName" 등장 횟수: 0
+```
+
+⇒ **계약서만 보고 만든 요청이 통과한다**(AC-3), **수정 전 예시는 여전히 거절된다**(AC-5).
+
+🔵 새 테스트는 추가하지 않았다 — 이 태스크는 문서 수정이고, 판정은 **실행된 요청**으로 했다.
+코드·DTO·DB·이벤트는 한 글자도 바뀌지 않았다.
+
+---
+
 # Definition of Done
 
-- [ ] AC-1 ~ AC-5 충족
-- [ ] 전 필드 대조표 + 수정 방향의 근거를 PR 본문에 기록
-- [ ] `projects/ecommerce-microservices-platform/tasks/INDEX.md` 갱신
-- [ ] Ready for review
+- [x] AC-1 ~ AC-5 충족
+- [x] 전 필드 대조표 + 수정 방향의 근거 기록(위)
+- [x] `projects/ecommerce-microservices-platform/tasks/INDEX.md` 갱신
+- [x] Ready for review
