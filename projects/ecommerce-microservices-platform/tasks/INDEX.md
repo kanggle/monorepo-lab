@@ -72,7 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-_(없음)_
+- `TASK-BE-588-order-api-contract-says-recipientname-server-wants-recipient.md` — **🟢 READY — 계약서대로 `POST /api/orders` 를 보내면 `400 VALIDATION_ERROR "recipient is required"` 다(2026-08-15 라이브 실측).** 계약은 `shippingAddress.recipientName`, 서버 DTO·도메인·JPA·이벤트·DB 컬럼·web-store 전송은 전부 `recipient`. 🔴 **같은 문서가 자기와도 어긋난다** — 41행(요청)·130행(단건 응답)은 `recipientName`, 336행(admin 응답)은 `recipient` ⇒ **3분의 2가 틀린 부분 갱신**. 방향은 **문서를 구현에 맞춘다**(반대는 마이그레이션+이벤트 계약+프런트를 함께 움직여야 하고 얻는 게 이름 취향뿐). 🔴 이웃 필드 전수 대조 필수 — 발견 자체가 *"하나 틀린 김에 세어 보니 2/3"* 였다. 🔴 네거티브(수정 전 예시 → 400) 없이 201 만 보면 "원래도 됐던 것"과 구별 불가
 
 _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DONE. `../../../tasks/done/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
 
