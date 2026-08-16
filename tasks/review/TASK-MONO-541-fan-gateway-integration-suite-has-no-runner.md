@@ -216,3 +216,69 @@ CI 첫 실행에서 빨간불로 나타났을 것이다.
 | `GatewayRateLimitIntegrationTest` | 1 | 0 | 0 |
 | `GatewayRouteRewriteTest` | 10 | 0 | 0 |
 | **합계** | **20** | **0** | **0** |
+
+## AC-1 후반 · AC-2 — 잡 산출물에서 잰 값
+
+`report-paths` 의 `apps/*` 글롭이 게이트웨이 산출물을 **실제로 집었다**(가정하지 않고
+아티팩트를 내려받아 확인). CI 첫 실행:
+
+| 클래스 | tests | fail | err | skip |
+|---|---|---|---|---|
+| `GatewayBootstrapIntegrationTest` | 5 | **1** | 0 | 0 |
+| `GatewayHealthCheckIntegrationTest` | 2 | 0 | 0 | 0 |
+| `GatewayPrometheusIsolationTest` | 2 | 0 | 0 | 0 |
+| `GatewayRateLimitIntegrationTest` | 1 | 0 | 0 | 0 |
+| `GatewayRouteRewriteTest` | 10 | 0 | 0 | 0 |
+| **합계** | **20** | **1** | 0 | **0** |
+
+🔴 **로컬 20/20 초록이 CI 에서 유지되지 않았다.** 실패는 `tamperedTokenSignatureReturns401`
+의 `Timeout on blocking read for 5000000000 NANOSECONDS` 하나다. 이 경로는 게이트웨이가
+토큰을 거절하는 지점이라 **다운스트림에 닿지 않는다** ⇒ 내가 고친 큐 누수와 무관하다.
+
+### 🔴 아티팩트가 최신 시도를 반영하지 않는다 (판정 도구의 함정)
+
+재실행 후 잡은 `success` 인데 `gh run download` 로 받은 아티팩트는 **여전히 `fail=1`**
+이었다. 확인하니 그 이름의 아티팩트는 **하나뿐이고 생성 시각이 1차 시도**(16:56)다 —
+재실행은 새 아티팩트를 올리지 않았다. ⇒ **"아티팩트에서 네 값을 읽는다" 는 조용히 낡은
+시도를 잴 수 있다.** 이 회차의 권위는 **잡 로그**였고, 로그는 태스크가 실제로 다시 돌아
+(`> Task :…:gateway-service:integrationTest`) 그 테스트가 **PASSED**, `BUILD SUCCESSFUL`
+임을 보였다.
+
+### `tamperedTokenSignatureReturns401` — 3회 관측, 판정 보류
+
+| 회차 | 결과 |
+|---|---|
+| 1차 (첫 CI 실행) | **FAIL** — 5s blocking read timeout |
+| 2차 (재실행) | PASS |
+| 3차 (bite 커밋 실행) | PASS |
+
+🔴 **"flake 다" 라고 결론짓지 않는다.** 이 스위트는 **CI 에서 처음 도는 것이라 기준선이
+없고**, 1적 2녹은 원인을 가리지 못한다(콜드 컨텍스트 워밍업 · 러너 포화 · 실제 타임아웃
+여유 부족이 전부 부합한다). 사실만 적는다: **첫 실행이 빨갛고 이후 둘이 초록이었다.**
+⇒ 이 레인이 main 에 들어가면 그 테스트가 간헐적으로 main 을 빨갛게 만들 수 있다.
+
+## AC-3 (bite) — 잡이 이 스위트를 **본다**
+
+베이스의 `route[0]` 재작성 타깃을 `/api/community` → `/api/BITE` 로 일부러 깨고 push:
+
+- 잡 결과 **failure** ✅
+- 실패가 **컴파일이 아니라 단언**이다 — `GatewayRouteRewriteTest` **10 중 4** 실패,
+  나머지 4개 클래스는 전부 초록.
+- 🔵 **정확히 4개인 것이 이 bite 의 정밀도**다. 깬 것은 `route[0]`(community) 하나이고
+  artist/artist-groups/fandoms 는 인덱스 1~3 에 따로 배선돼 있다 ⇒ community 를 겨냥한
+  케이스 **정확히 4개**만 죽었다. "잡이 빨개졌다" 가 아니라 **"잡이 내가 깬 바로 그것을
+  본다"** 가 증명된다.
+- 🔵 첫 bite 커밋은 주석을 괄호 안에 넣어 **컴파일 에러**를 냈다. 그것은 약한 bite 다 —
+  잡이 모듈을 빌드한다는 것만 보이고 스위트의 단언이 읽히는지는 증명하지 못한다. 그래서
+  문법을 고쳐 **단언으로 실패하게** 다시 냈다.
+- bite 는 되돌렸다(pre-bite 커밋 대비 이 파일 diff 없음).
+
+## AC-5 — 잡 시간
+
+| | |
+|---|---|
+| 게이트웨이 합류 전 (참고: 같은 런의 다른 통합 잡들) | erp 3m57s · finance 3m44s · scm 3m19s |
+| **팬 통합 잡 (게이트웨이 포함)** | **2m56s ~ 2m44s** |
+
+Redis 컨테이너 1개가 추가됐지만 잡 시간은 형제 통합 잡들과 같은 대역이고 타임아웃에서
+멀다 ⇒ **분리 불필요**(추측으로 나누지 않고 측정값을 남긴다).
