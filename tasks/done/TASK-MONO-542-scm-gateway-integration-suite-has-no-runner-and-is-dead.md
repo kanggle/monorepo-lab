@@ -8,7 +8,7 @@ scm 게이트웨이 통합 스위트도 러너가 없고 **이미 죽어 있다*
 
 # Status
 
-review
+done
 
 # Owner
 
