@@ -8,7 +8,7 @@ Finance 시드가 **9일 전에 반증된 사실**을 매 실행 인쇄한다 �
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
