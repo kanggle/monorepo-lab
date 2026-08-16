@@ -8,7 +8,7 @@ TASK-MONO-541
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -93,21 +93,21 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (전제 재확인)** — 착수 시 팬 통합 잡의 `gradle-tasks` 에 게이트웨이가
+- [x] **AC-0 (전제 재확인)** — 착수 시 팬 통합 잡의 `gradle-tasks` 에 게이트웨이가
       **여전히 없는지** 확인한다. 있으면 **STOP**(누군가 이미 넣었다).
-- [ ] **AC-1** — 팬 통합 잡이 `gateway-service:integrationTest` 를 포함한다.
-- [ ] **AC-2 (실행 증거 — 이것이 판정이다)** — 그 잡의 산출물에서
+- [x] **AC-1** — 팬 통합 잡이 `gateway-service:integrationTest` 를 포함한다.
+- [x] **AC-2 (실행 증거 — 이것이 판정이다)** — 그 잡의 산출물에서
       `GatewayRouteRewriteTest` 의 `tests` · `failures` · `errors` · **`skipped`** 네
       값을 모두 읽어 적는다. 🔴 **`BUILD SUCCESSFUL` 도 잡 초록도 판정이 아니다** —
       `BE-049` 에서 실제로 `rc=0 · BUILD SUCCESSFUL` 인데 XML 이 `skipped=10` 인 회차가
       나왔다(Docker 미검출 → `disabledWithoutDocker` 전량 스킵). **`skipped=0` 과
       `tests≥10` 을 함께** 단언한다.
-- [ ] **AC-3 (bite — 레인이 실제로 무는가)** — 라우트를 일부러 깨서(예: 재작성 정규식의
+- [x] **AC-3 (bite — 레인이 실제로 무는가)** — 라우트를 일부러 깨서(예: 재작성 정규식의
       접두사를 바꿔) **그 잡이 빨개지는지** 확인하고 되돌린다. 🔴 초록만 보면 "잡이
       추가됐다" 와 "잡이 그 스위트를 본다" 가 구별되지 않는다.
-- [ ] **AC-4 (모집단)** — 위 Scope 의 두 집합을 8개 프로젝트에 대해 세고 차집합을 티켓
+- [x] **AC-4 (모집단)** — 위 Scope 의 두 집합을 8개 프로젝트에 대해 세고 차집합을 티켓
       본문에 표로 남긴다. 0 건이면 0 건이라고 적는다. 발견된 낙오마다 후속 티켓 ID 를 적는다.
-- [ ] **AC-5** — 잡 시간 증가를 적는다. 팬 통합 잡이 타임아웃에 접근하면 분리를 제안하되
+- [x] **AC-5** — 잡 시간 증가를 적는다. 팬 통합 잡이 타임아웃에 접근하면 분리를 제안하되
       **이 티켓에서 분리하지는 않는다**(추측으로 나누지 말고 측정값을 남긴다).
 
 ---
@@ -143,3 +143,76 @@ monorepo
 - **bite 를 생략한다** → 잡이 스위트를 실제로 보는지 모른 채 "추가했다" 로 닫힌다(AC-3).
 - **발견된 낙오를 한 PR 에 묶는다** → 서비스별 첫 CI 실행이 각자 하네스 갭을 드러내므로,
   무엇이 왜 빨간지 갈리지 않는다(이 저장소의 반복 관측).
+
+---
+
+# ✅ 실행 결과 (2026-08-17)
+
+## AC-4 (모집단 재계수) — **이것이 이 티켓의 진짜 산출물이었고, 실제로 두 번째를 찾았다**
+
+`integrationTest` 를 **선언한** 모듈 **39** ↔ 어느 CI 잡에 **나열된** 모듈 **41**.
+스크립트로 전수 대조했다(하드코딩 목록 대조 금지 — 그것이 이 결함의 구조다).
+
+| 차집합에 나타난 모듈 | 판정 |
+|---|---|
+| `projects/fan-platform/apps/gateway-service` | 🔴 **진짜 낙오** — 이 티켓이 닫음 |
+| `projects/scm-platform/apps/gateway-service` | 🔴 **진짜 낙오 — 새 발견** ⇒ `TASK-MONO-542` |
+| `projects/iam-platform` (루트) | 🔵 **계수 인공물** — `subprojects { }`(L7) 에서 선언하므로 5개 앱이 상속하고 그 5개는 전부 나열돼 있다 |
+
+🔵 세 번째 행을 지우지 않는다 — 결함이 아니지만, 적지 않으면 다음 사람이 같은 계수를 하고
+같은 의심을 반복한다.
+
+**scm 은 추측이 아니다 — 돌려 봤다**: `files=5 tests=5 failures=5 skipped=0`,
+`jwks is null` 6회. **팬과 글자 그대로 같은 결함**(`@TestInstance(PER_CLASS)` +
+`@BeforeAll` 초기화)이고 같은 이유로 안 보였다. 진단을 `TASK-MONO-542` 본문에 그대로
+넘겼으므로 그 티켓은 미스터리가 아니라 **답을 들고 시작한다**.
+
+⇒ *"게이트웨이 한 줄만 넣고 닫으면 다음 낙오를 못 잡는다"* 는 Scope 의 우려가 **맞았다.**
+
+## 🔴 레인을 붙이려다 내가 BE-049 에서 만든 결함을 밟았다
+
+`TASK-FAN-BE-049` 는 이 스위트를 **한 클래스만**(`--tests '*GatewayRouteRewriteTest*'`)
+돌려 10/10 초록을 보고했다. **스위트 전체를 돌리자 20개 중 9개가 실패했다.**
+
+| 실행 방식 | 결과 |
+|---|---|
+| `GatewayRouteRewriteTest` 단독 | **10/10 초록** |
+| 스위트 전체 | **20 중 9 실패** (전부 `GatewayRouteRewriteTest`) |
+
+원인은 **BE-049 가 `@AfterAll` 의 managed stop 을 제거한 것의 이면**이다. 공유
+`MockWebServer` 가 이제 스위트 전체에서 **하나**인데, `GatewayRateLimitIntegrationTest`
+가 **50개를 enqueue 하고 리미터가 통과시킨 소수만 소비**한다 ⇒ 남은 **~45개의 stale
+`200 {}`** 가 큐에 앉아 이후 테스트에 먼저 응답된다. 증상이 정확히 그 모양이었다:
+`expected:<201 CREATED> but was:<200 OK>` 3건 + 기록된 경로 불일치 6건.
+
+🔴 **"격리 통과" 는 "스위트 통과" 가 아니다.** BE-049 의 보고는 그 클래스에 대해서는
+참이었지만, 레인이 돌리는 것은 **스위트**다 — 러너를 붙이는 이 티켓이 아니었으면 그 차이는
+CI 첫 실행에서 빨간불로 나타났을 것이다.
+
+**고침**: 베이스에 `@BeforeEach` 로 공유 큐를 리셋한다 —
+`setDispatcher(new QueueDispatcher())`(응답 큐엔 clear() 가 없으므로 새 큐로 교체) +
+기록된 요청 드레인. 서버 자체를 클래스별로 만들 수는 없다: 라우트 URI 가
+`@DynamicPropertySource` 로 배선되고 Spring 이 스위트 전체에 **하나의 컨텍스트를 캐시**
+하므로, 클래스별 서버는 캐시된 라우트를 죽은 포트로 남긴다.
+
+## AC 판정
+
+| AC | 판정 | 근거 |
+|---|---|---|
+| AC-0 | ✅ | 착수 시 팬 통합 잡 `gradle-tasks` 에 게이트웨이 부재 확인 |
+| AC-1 | ✅ | 잡에 `:projects:fan-platform:apps:gateway-service:integrationTest` 추가. `report-paths` 는 `apps/*` 글롭이라 구조상 포함 — **아티팩트로 확인**(AC-2) |
+| AC-2 | ✅ | 아래 수치 — 로컬 **20/0/0/skip 0**, CI 잡 산출물로 재확인 |
+| AC-3 | ✅ | bite — 아래 참조 |
+| AC-4 | ✅ | 위 재계수 표. 차집합 3 중 **진짜 2 · 인공물 1** |
+| AC-5 | ✅ | 잡 시간 — 아래 |
+
+로컬 실측(XML 네 값 전부, `BUILD SUCCESSFUL` 로 판정하지 않음):
+
+| 클래스 | tests | fail | skip |
+|---|---|---|---|
+| `GatewayBootstrapIntegrationTest` | 5 | 0 | 0 |
+| `GatewayHealthCheckIntegrationTest` | 2 | 0 | 0 |
+| `GatewayPrometheusIsolationTest` | 2 | 0 | 0 |
+| `GatewayRateLimitIntegrationTest` | 1 | 0 | 0 |
+| `GatewayRouteRewriteTest` | 10 | 0 | 0 |
+| **합계** | **20** | **0** | **0** |
