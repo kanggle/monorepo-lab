@@ -8,7 +8,7 @@ ERP 위임 read-model 을 채우고 있는 것은 **검증이 자기를 위해 �
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
