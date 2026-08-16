@@ -8,7 +8,7 @@ TASK-FAN-BE-048
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -106,21 +106,21 @@ fan 은 컨텍스트가 프로젝트 루트인데(lockfile·workspace 파일이 
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (verify-then-act)** — 착수 시 **호스트에 `projects/fan-platform/**/node_modules`
+- [x] **AC-0 (verify-then-act)** — 착수 시 **호스트에 `projects/fan-platform/**/node_modules`
       가 있는지 먼저 확인**한다. 없으면 이 결함은 재현되지 않는다 ⇒ **재현 조건을 만든 뒤**
       착수한다(`pnpm install` 1회). 🔴 조건 없이 "고쳤다" 를 선언하면 **아무것도 재지 않은
       실험**이 된다 — `TASK-MONO-534` 가 술어를 네 번 만에 맞춘 그 자리다.
-- [ ] **AC-1 (대조군 → 판정)** — 같은 호스트·같은 명령으로 두 칸:
+- [x] **AC-1 (대조군 → 판정)** — 같은 호스트·같은 명령으로 두 칸:
       | 칸 | `.dockerignore` | 기대 |
       |---|---|---|
       | 대조군 | 없음 | `Cannot find module … next` 로 **실패** |
       | 판정 | 있음 | **성공**, `fan-platform-web` 이미지 생성 |
-- [ ] **AC-2 (백엔드 회귀 없음)** — 같은 실행에서 백엔드 5개 이미지
+- [x] **AC-2 (백엔드 회귀 없음)** — 같은 실행에서 백엔드 5개 이미지
       (gateway·community·artist·membership·notification)가 **여전히 구워진다.**
       🔴 `**/build` 제외가 `apps/*/build/libs` 를 삼키면 여기서 잡힌다. 이 칸을 빼지 말 것.
-- [ ] **AC-3 (라이브)** — `demo-up.sh fan` 이 **9/9**(web 포함) 로 뜨고
+- [x] **AC-3 (라이브)** — `demo-up.sh fan` 이 **9/9**(web 포함) 로 뜨고
       `http://web.fan-platform.local` 이 응답한다. 판정은 컨테이너 상태가 아니라 **HTTP 응답**.
-- [ ] **AC-4 (문서)** — §6 해소 행 + §7 증상 행. `check-walkthrough-ledger-drift` OK.
+- [x] **AC-4 (문서)** — §6 해소 행 + §7 증상 행. `check-walkthrough-ledger-drift` OK.
 
 ---
 
@@ -191,8 +191,8 @@ N/A — 빌드 컨텍스트 위생. ADR 불필요.
 
 # Definition of Done
 
-- [ ] `.dockerignore` 신설, AC-0~AC-4 닫힘.
-- [ ] 워크스루 §6/§7 갱신, 가드 GREEN.
+- [x] `.dockerignore` 신설, AC-0~AC-4 닫힘.
+- [x] 워크스루 §6/§7 갱신, 가드 GREEN.
 - [ ] `projects/fan-platform/tasks/INDEX.md` done entry(close chore 시).
 
 ---
@@ -205,3 +205,86 @@ N/A — 빌드 컨텍스트 위생. ADR 불필요.
 PREMIUM **403**)은 모두 확인했다. **웹 UI 자체는 이 티켓이 닫히기 전까지 미검증이다.**
 
 분석=Opus 5(1M) / 구현 권장=**Sonnet** (파일 1개 + 대조군 검증).
+
+---
+
+# ✅ 실행 결과 (2026-08-16)
+
+## AC-0 — 재현 조건 확인
+
+호스트에 둘 다 실재: `<팬>/node_modules` **536M** · `<팬>/web/fan-platform-web/node_modules`
+**136K**. ⇒ 대조군이 유효한 질문을 던질 수 있는 상태.
+
+## 🔴 발굴 서술 정정 — 원인은 **크기가 아니라 링크**다
+
+파일링 시점 서술 두 군데가 부정확했다. 구현 중 실측으로 바로잡는다.
+
+1. **"호스트 `node_modules` 가 심링크 트리를 덮어써 `next` 를 지운다"** → 더 정확히는
+   **댕글링 심링크로 바꾼다.** 이 호스트의 pnpm 은 그 링크를 **절대 경로**로 만든다:
+   ```
+   next -> /c/Users/…/projects/fan-platform/node_modules/.pnpm/next@15.5.15_…/node_modules/next
+   ```
+   도커는 심링크를 심링크 그대로 싣고 컨테이너 안에 그 경로는 없다 ⇒ 링크가 끊긴다.
+   그래서 **디렉터리가 136K 로 작아도 치명적**이다.
+2. **"COPY 가 25초 걸린다 — 소스만이면 그럴 수 없다(그것이 증거다)"** → **약한 근거였다.**
+   컨텍스트 전체가 작다(`src` 490K · `tsbuildinfo` 220K · `node_modules` 136K). 25초는 Windows
+   파일시스템으로도 설명된다. **증거는 시간이 아니라 심링크의 대상 경로다.**
+
+## AC-1 — 대조군 → 판정 (같은 호스트 · 같은 명령 · `.dockerignore` 유무만 차등)
+
+`docker compose -p fan … build fan-platform-web`
+
+| 칸 | `.dockerignore` | 결과 |
+|---|---|---|
+| **대조군** | 없음 | **rc=1** — `Cannot find module '/app/web/fan-platform-web/node_modules/next/dist/bin/next'` · `failed to solve` |
+| **판정** | 있음 | **rc=0** — `✓ Compiled successfully in 97s` · `naming to docker.io/fan-platform/fan-platform-web:local` |
+
+🔵 대조군은 이 세션에서 **다시 돌려** 잡았다(발굴 때 로그를 재활용하지 않았다) — 그 사이
+18개 jar 재빌드가 있었으므로 같은 상태에서의 차등이어야 한다.
+
+## AC-2 — 백엔드 회귀 없음 (`!apps/*/build/libs` 예외가 실제로 먹는가)
+
+🔴 **첫 확인이 무효였다.** 5개 서비스 빌드가 `rc=0` · `naming to` 5회였지만 **이미지 시각이
+갱신되지 않았다**(14:59 그대로) ⇒ 전부 **캐시 히트**였고, 캐시된 통과는 **새 컨텍스트를
+증명하지 않는다.** `--no-cache` 로 강제해 다시 판정:
+
+```
+docker compose -p fan … build --no-cache gateway-service   → rc=0
+  naming to docker.io/fan-platform/gateway-service:local
+  fan-platform/gateway-service   2026-08-16 19:30:46 KST     ← 시각 갱신
+```
+
+⇒ jar 이 여전히 컨텍스트에 있다(제외됐다면 `COPY build/libs/…` 가 파일 없음으로 죽는다).
+
+## AC-3 — 라이브
+
+`bash infra/demo/demo-up.sh fan` → **9/9 healthy**, `fan-platform-web` 포함(이전엔 이미지
+자체가 없던 컨테이너다). 판정은 `docker ps` 가 아니라 **HTTP 응답**으로 했다:
+
+| 경로 | HTTP | 본문 |
+|---|---|---|
+| `/login` | **200** | 10,065 bytes · `<title>fan-platform` |
+| `/` | 307 | 미인증 리다이렉트(정상) |
+| `/artists` | 307 | 미인증 리다이렉트(정상) |
+
+🔵 기동 중 **Hyper-V 소켓 고갈이 또 났고**(이 세션 4회째) `fan-platform-community` 가
+`Created` 로 남았다 — `docker start` 로 이어 올려 9/9 를 만들었다. **빌드 결함이 아니다**;
+§ Implementation Notes 가 예고한 그대로다.
+
+## AC-4 — 문서
+
+- §6 에 ✅ 해소 행(원인이 크기가 아니라 절대 경로 심링크 · `pnpm install` 레이어는 성공하므로
+  로그 앞부분이 정상으로 읽힌다 · **CI 가 이 결함을 만들 수 없다** · `**/build` ↔
+  `!apps/*/build/libs` 짝을 빠뜨리면 백엔드가 대신 죽는다).
+- §7 에 증상 행(`Cannot find module … next`).
+- 🔴 이 편집이 **HARDSTOP-03 훅에 한 번 막혔다** — 공유 경로 `docs/guides/` 파일에
+  `projects/fan-platform/` **경로 토큰**을 넣었기 때문이다. 훅이 제시한 3번(추상화)을 택해
+  *"팬 프로젝트 루트의 `.dockerignore`"* 로 바꿔 통과. 표 행 사이에 `<!-- hardstop-allow -->`
+  주석을 넣는 것은 표를 깨므로 선택지가 아니었다.
+- 🔴 본문 기록도 한 번 막혔다(**HARDSTOP-05**) — 파일이 이미 `in-progress/` 였다. 문서화된
+  절차대로 `ready/` 로 되돌려 본문을 쓰고 다시 내보냈다(물리 hop 은 커밋 이력에 보존).
+
+## 가드
+
+`check-index-queue-drift` OK · `check-walkthrough-ledger-drift` OK ·
+`check-task-id-collision` OK · `verify-demo-wrapper.sh` OK

@@ -335,6 +335,7 @@ SHIPPED → IN_TRANSIT → DELIVERED) 자격을 만든다. 그 과정에서 콘�
 | 🔵 장바구니는 시드할 수 없다 | `localStorage` 기반(클라이언트 상태) — 면접관이 담으면 즉시 찬다 | — |
 | 🔵 상품 이미지가 MinIO 에 없다 | V8 시드의 원격 `thumbnailUrl` 로 표시된다(깨지지 않음) | — |
 | 🔵 로컬 호스트에서 8프로젝트 동시 기동 불가 | 실측: `iam+console+ecommerce` 35컨테이너 = 9.2 GiB, `iam+fan+console` 26컨테이너 = **7.7 GiB** (팬 슬라이스 단독 9컨 = 2.4 GiB) / 도커 가용 11.7 GiB ⇒ 스토어와 팬은 **번갈아** 띄운다 | `TASK-MONO-399` AC-2 |
+| ✅ ~~팬 웹 이미지가 **로컬에서 빌드되지 않는다**~~ (2026-08-16 고침) | 원래 서술: `DEMO_BUILD=1 bash infra/demo/demo-up.sh fan` 이 `Cannot find module '…/node_modules/next/dist/bin/next'` 로 죽어 **로컬에서 한 번이라도 `pnpm install` 을 한 사람에게 팬 도메인이 100% 기동 불가**였다. 🔴 원인은 크기가 아니라 **링크**다 — 호스트의 `node_modules` 가 빌드 컨텍스트에 실려 들어오는데, 그 안의 `next` 는 이 호스트의 pnpm 이 만든 **절대 경로 심링크**라 컨테이너 안에서 끊긴다(디렉터리는 136K 에 불과하다). `pnpm install` 레이어는 **성공**하므로 로그 앞부분은 정상으로 읽힌다. 🔴 **CI 는 이 결함을 만들 수 없다** — 새 체크아웃엔 `node_modules` 가 없다 ⇒ 깨끗한 체크아웃에서 영구 초록이고 결함은 **데모를 띄우는 바로 그 머신에만** 산다. 수정 = 팬 프로젝트 루트에 `.dockerignore` 신설(형제 넷은 이미 갖고 있었다). 🔴 gradle 쪽과 짝을 이뤄야 한다: `**/build` 를 막으면서 `!apps/*/build/libs` 를 빠뜨리면 **백엔드 5개가 대신 죽는다** | `TASK-FAN-BE-048` |
 
 ---
 
@@ -352,5 +353,6 @@ SHIPPED → IN_TRANSIT → DELIVERED) 자격을 만든다. 그 과정에서 콘�
 | **도커/노트북을 재시작했더니 로그인만 안 된다** (컨테이너는 전부 `healthy`) | 🔴 **iam 앱이 안 돌아온 것이다 — 스택 전체를 다시 올리지 마라.** `docker ps -a --filter name=iam- --filter status=exited` 로 `auth`/`gateway`/`admin`/`account`/`security` 를 확인한다. `TASK-MONO-534` 이후로는 `restart: unless-stopped` 가 붙어 **스스로 돌아온다**(데모 오버레이 `infra/demo/iam-traefik.override.yml`). 그래도 없으면 `bash infra/demo/demo-up.sh iam` |
 | 재시작 직후 **몇 분 동안** 로그인이 안 된다 | 🔵 **정상이다. 기다려라.** 재시작 정책은 *"놔두면 돌아온다"* 를 만들 뿐 *"즉시 쓸 수 있다"* 를 만들지 않는다 — 실측(2026-08-15)으로 `iam-kafka` 가 `healthy` 가 되기까지 **약 8분**(중간에 `unhealthy` 구간 포함)이 걸렸고 앱들은 그것을 기다린다. 판정은 `docker ps` 가 아니라 `curl -s -o /dev/null -w '%{http_code}' http://iam.local/actuator/health` 가 200 이 되는 시점 |
 | **`/wms/outbound` 은 차 있는데 `/wms/shipments` 만 비었다** | 🔵 **시드 로그의 마지막 줄을 보라 — `⚠ 경고 N` 이 붙어 있으면 그것이 답이다.** `ADR-MONO-066` 이전에 예약이 끝난 주문은 `picking_request` 가 없어 `PICKING` 에 영구히 멈추고, **재실행으로는 낫지 않는다.** 🔴 이것은 코드 결함이 아니다 — 같은 DB 의 다른 주문은 `SHIPPED` 까지 간다. 복구(⚠ wms 데이터 전부 삭제, 시드가 다시 심는다): `bash infra/demo/demo-down.sh wms && docker volume rm wms_postgres-data && bash infra/demo/demo-up.sh wms` |
+| **팬 기동이 빌드에서 죽는다** — `Cannot find module '…/node_modules/next/dist/bin/next'` | 🔵 **고쳐졌다 (2026-08-16, `TASK-FAN-BE-048`).** 이 오류가 다시 보이면 **팬 프로젝트 루트의 `.dockerignore`** 가 있는지부터 보라. 원인은 호스트의 `node_modules` 가 빌드 컨텍스트에 실려 컨테이너 안 pnpm 링크를 **절대 경로 댕글링 심링크**로 바꾸는 것이다 — `pnpm install` 레이어는 **성공**하므로 로그 앞부분만 보면 정상으로 읽힌다. 🔴 **CI 초록은 이 축의 증거가 아니다**: 러너는 새 체크아웃이라 `node_modules` 가 없어 이 결함을 애초에 만들 수 없다 |
 
 전 항목 정적 검증: `bash infra/demo/verify-demo-wrapper.sh`

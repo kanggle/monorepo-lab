@@ -1,0 +1,60 @@
+# =============================================================================
+# fan-platform — 빌드 컨텍스트 제외 목록 (TASK-FAN-BE-048)
+# =============================================================================
+# 이 프로젝트는 **한 컨텍스트에 두 종류의 빌드**가 있다:
+#   · 백엔드 5개 — `apps/<svc>/build/libs/<svc>.jar` 를 COPY 한다 (gradle 산출물)
+#   · fan-platform-web — pnpm 워크스페이스 루트가 컨텍스트다 (lockfile·workspace 파일이
+#     여기 있어서 그렇게 잡혀 있다 — 근거는 web/fan-platform-web/Dockerfile 헤더)
+# 그래서 제외 규칙이 서로를 죽이지 않도록 아래 두 블록이 짝을 이룬다.
+#
+# 🔴 왜 이 파일이 필요한가 — 없으면 팬은 **로컬에서 한 번이라도 `pnpm install` 을 한
+# 사람에게 100% 기동 불가**였다:
+#
+#   COPY web/fan-platform-web/ web/fan-platform-web/
+#   → RUN pnpm --filter fan-platform-web build
+#     Error: Cannot find module '/app/web/fan-platform-web/node_modules/next/dist/bin/next'
+#
+# `pnpm install` 레이어는 **성공한다**(576 resolved). 죽는 것은 그 다음 COPY 다.
+# 정확한 메커니즘은 "덮어써서 지운다" 가 아니라 **댕글링 심링크로 바꾼다** 이다 —
+# 이 호스트의 pnpm 은 `web/fan-platform-web/node_modules/next` 를
+# `/c/Users/…/projects/fan-platform/node_modules/.pnpm/next@…/node_modules/next`
+# 라는 **절대 경로** 심링크로 만들고, 도커는 심링크를 심링크 그대로 싣는다.
+# 컨테이너 안에 그 경로는 존재하지 않으므로 링크가 끊긴다.
+# (그래서 디렉터리가 136K 로 작아도 결과는 치명적이다 — 크기가 아니라 링크가 문제다.)
+#
+# 🔴 **CI 는 이것을 원리적으로 못 본다.** 러너는 새 체크아웃이라 `node_modules` 가 없어
+# COPY 가 덮어쓸 것이 없다 ⇒ 깨끗한 체크아웃에서 영구 초록이고 결함은 개발자 머신에만
+# 산다. 데모를 띄우는 곳이 정확히 거기다.
+#
+# 형제 파리티: 저장소에 `.dockerignore` 는 루트 · iam · ecommerce · console-web(앱
+# 디렉터리 = 그 컨텍스트) 넷이 있었고 **팬만 없었다.**
+# =============================================================================
+
+# --- JS/웹 (fan-platform-web 을 지킨다) --------------------------------------
+**/node_modules
+**/.next
+**/.turbo
+**/*.tsbuildinfo
+**/playwright-report
+**/test-results
+**/coverage
+
+# --- gradle -----------------------------------------------------------------
+# 🔴 `**/build` 를 제외하면서 `!apps/*/build/libs` 를 빠뜨리면 **백엔드 5개가 대신
+#    죽는다** — 그 Dockerfile 들이 정확히 그 경로의 jar 를 COPY 하기 때문이다.
+#    루트 / iam 의 `.dockerignore` 가 같은 짝을 쓴다.
+**/.gradle
+**/build
+!apps/*/build/libs
+
+# --- 저장소 잡동사니 ---------------------------------------------------------
+.git
+.claude
+docs
+specs
+tasks
+knowledge
+infra
+*.log
+replay_pid*.log
+hs_err_pid*.log
