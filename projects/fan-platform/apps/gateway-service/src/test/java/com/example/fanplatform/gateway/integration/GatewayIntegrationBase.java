@@ -5,8 +5,6 @@ import com.example.fanplatform.gateway.testsupport.JwtTestHelper;
 import com.redis.testcontainers.RedisContainer;
 import java.io.IOException;
 import okhttp3.mockwebserver.MockWebServer;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -31,6 +29,28 @@ import org.testcontainers.utility.DockerImageName;
  *
  * <p>Tests subclass this and use {@link WebTestClient} bound to the random
  * gateway port to drive HTTP traffic.
+ *
+ * <h2>🔴 Why the shared infra starts in a static initializer, not {@code @BeforeAll}</h2>
+ *
+ * It used to start in a {@code @BeforeAll}, and every subclass of this base failed
+ * with {@code initializationError} — {@code NullPointerException: ... "jwks" is null}
+ * — because {@code @DynamicPropertySource} suppliers are evaluated while the Spring
+ * context is built, and under {@link TestInstance.Lifecycle#PER_CLASS} the test
+ * instance (and therefore the context load) is created <em>before</em>
+ * {@code @BeforeAll} runs. The fields the suppliers close over were still null.
+ *
+ * <p>A static initializer runs on class load, which is unconditionally before any of
+ * that, so the ordering hazard disappears rather than being re-tuned. Teardown is
+ * left to Ryuk and JVM exit instead of an {@code @AfterAll}: a managed stop here
+ * tears the container down after the first subclass while Spring's context cache
+ * keeps handing the next subclass a connection to it (the singleton-container
+ * pattern this repo already adopted for batch-worker).
+ *
+ * <p>🔵 This was invisible for as long as it existed because
+ * {@code gateway-service:integrationTest} has no CI lane — {@code check} excludes
+ * the {@code integration} tag by design, and the fan-platform integration workflow
+ * lists community/artist/membership/notification only. Found while adding
+ * TASK-FAN-BE-049 AC-6; the missing lane is tracked separately.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -51,20 +71,19 @@ public abstract class GatewayIntegrationBase {
     @Autowired
     protected WebTestClient webTestClient;
 
-    @BeforeAll
-    static void startSharedInfra() throws IOException {
-        REDIS.start();
-        jwt = new JwtTestHelper();
-        jwks = new JwksMockServer(jwt);
-        downstream = new MockWebServer();
-        downstream.start();
-    }
-
-    @AfterAll
-    static void stopSharedInfra() throws IOException {
-        if (downstream != null) downstream.shutdown();
-        if (jwks != null) jwks.close();
-        if (REDIS != null) REDIS.stop();
+    static {
+        // Runs on class load — before the test instance exists, and therefore before
+        // any @DynamicPropertySource supplier below can be evaluated. See the class
+        // javadoc for what @BeforeAll did instead.
+        try {
+            REDIS.start();
+            jwt = new JwtTestHelper();
+            jwks = new JwksMockServer(jwt);
+            downstream = new MockWebServer();
+            downstream.start();
+        } catch (IOException e) {
+            throw new ExceptionInInitializerError(e);
+        }
     }
 
     @DynamicPropertySource
