@@ -8,7 +8,7 @@ community 에 **"내가 이 아티스트를 팔로우하는가"** 를 물을 방
 
 # Status
 
-review
+done
 
 # Owner
 
