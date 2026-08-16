@@ -8,7 +8,7 @@ TASK-FAN-FE-017
 
 # Status
 
-review
+done
 
 # Owner
 
