@@ -4,11 +4,7 @@ import com.example.scmplatform.gateway.testsupport.JwksMockServer;
 import com.example.scmplatform.gateway.testsupport.JwtTestHelper;
 import com.redis.testcontainers.RedisContainer;
 import java.io.IOException;
-import java.time.Duration;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.QueueDispatcher;
 import org.junit.jupiter.api.BeforeEach;
@@ -80,9 +76,6 @@ public abstract class GatewayIntegrationBase {
     protected static JwksMockServer jwks;
     protected static MockWebServer downstream;
 
-    /** Ports of the gateway servers already warmed up — see {@link #warmUpOncePerServer()}. */
-    private static final Set<Integer> WARMED_PORTS = ConcurrentHashMap.newKeySet();
-
     @LocalServerPort
     protected int gatewayPort;
 
@@ -130,69 +123,22 @@ public abstract class GatewayIntegrationBase {
      *
      * <p>The precedent is TASK-MONO-541, where the fan gateway suite passed 10/10 in
      * isolation and failed 9-of-those-10 as a suite for exactly this reason.
-     * <strong>Isolation passing is not the suite passing</strong>, so this guard ships
-     * with the harness fix rather than after CI rediscovers it.
+     * <strong>Isolation passing is not the suite passing</strong>, so this guard shipped
+     * with the harness fix rather than after CI rediscovered it.
+     *
+     * <p>🔵 Measured on this suite rather than inherited from fan-platform: disabling the
+     * body of this method makes {@code GatewayRouteRewriteTest} fail on
+     * {@code inventoryVisibilityRouteRewritesV1Prefix} and
+     * {@code procurementRoutePreservesPathVariablesAndSegments} — precisely the tests that
+     * assert on {@code takeRequest().getPath()}. Porting a fix is not measuring that the
+     * destination needs it.
      */
     @BeforeEach
-    void warmUpThenResetDownstreamQueues() throws InterruptedException {
-        warmUpOncePerServer();
+    void resetDownstreamQueues() throws InterruptedException {
         downstream.setDispatcher(new QueueDispatcher());
         while (downstream.takeRequest(1, TimeUnit.MILLISECONDS) != null) {
-            // discard a sibling test's recorded request (and the warm-up's, above)
+            // discard a sibling test's recorded request
         }
-    }
-
-    /**
-     * 🔴 Pays the gateway's cold-start cost in setup, so no test body is charged for it.
-     *
-     * <p>The first request through a freshly-loaded context initialises the route
-     * locator, the Netty client, the Redis rate-limiter connection and — the expensive
-     * one — the JWKS fetch that the resource server needs before it can verify any
-     * signature. Measured on this suite: whichever test runs first takes 2.5–8s while
-     * every later test in the same class takes 0.03–0.8s. Control: run
-     * {@code validScmTokenPassesThroughToDownstream} first and alone and it takes 2.5s
-     * instead of its usual 0.2s — <em>the cost attaches to the position, not to what
-     * the test asserts</em>.
-     *
-     * <p>That mattered because {@code WebTestClient}'s default response timeout is 5s,
-     * so the first-positioned test intermittently failed with
-     * {@code IllegalStateException: Timeout on blocking read for 5000000000 NANOSECONDS}
-     * — a harness constant expiring, dressed up as an assertion about tampered
-     * signatures. JUnit's method ordering is deterministic, so the victim was always
-     * {@code tamperedTokenSignatureReturns401} and the failure looked domain-specific.
-     * Fan-platform's gateway suite red-flagged the identically-named test in
-     * TASK-MONO-541 and it was left open there as a possible flake; this is the
-     * mechanism, and it is not flakiness.
-     *
-     * <p>Warming up here rather than raising the timeout keeps the 5s budget as a real
-     * per-test guard: a genuine hang still fails fast.
-     *
-     * <p>Keyed by {@code gatewayPort} rather than a plain boolean because this suite
-     * runs <em>two</em> cached contexts — {@link GatewayRouteRewriteTest} contributes
-     * its own {@code @DynamicPropertySource} — and each gets its own server and
-     * therefore its own cold start. A single static flag would warm the first and leave
-     * the second paying full price.
-     *
-     * <p>Uses a token for a dedicated {@code warmup} account so the rate limiter (keyed
-     * per account) hands out a fresh bucket and no test's burst budget is spent here.
-     * The response it enqueues and the request it records are both discarded by the
-     * queue reset that runs immediately after it.
-     */
-    private void warmUpOncePerServer() {
-        if (!WARMED_PORTS.add(gatewayPort)) {
-            return;
-        }
-        downstream.enqueue(new MockResponse()
-                .setResponseCode(200)
-                .setHeader("Content-Type", "application/json")
-                .setBody("{}"));
-        webTestClient.mutate()
-                .responseTimeout(Duration.ofSeconds(30))
-                .build()
-                .get().uri("/api/v1/procurement/po")
-                .header("Authorization", "Bearer " + jwt.signScmToken("warmup"))
-                .exchange()
-                .expectStatus().isOk();
     }
 
     @DynamicPropertySource

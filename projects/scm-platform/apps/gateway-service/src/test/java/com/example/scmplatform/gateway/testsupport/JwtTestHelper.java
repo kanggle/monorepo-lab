@@ -7,9 +7,11 @@ import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
+import com.nimbusds.jose.util.Base64URL;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -144,5 +146,51 @@ public final class JwtTestHelper {
 
     public String keyId() {
         return rsaJwk.getKeyID();
+    }
+
+    /**
+     * Returns {@code token} with its signature altered so that verification is
+     * guaranteed to fail.
+     *
+     * <h2>🔴 Why this is a method and not three lines at the call site</h2>
+     *
+     * It used to be three lines at the call site, and they were wrong. They flipped the
+     * <em>last</em> character of the signature ({@code 'A'} → {@code 'B'}, anything else
+     * → {@code 'A'}), which for an RS256/2048 signature is the one character that mostly
+     * does not matter: 256 bytes is 2048 bits, base64url packs 6 bits per character, and
+     * 2048 = 6 × 341 + 2 — so the 342nd character carries only <strong>2 real bits</strong>
+     * plus 4 bits of padding. {@code 'A'} is {@code 000000} and {@code 'B'} is
+     * {@code 000001}: identical in the two bits that count. Whenever the signature ended
+     * in {@code 'A'}, the "tampered" token decoded to <strong>byte-identical</strong>
+     * signature bytes and stayed perfectly valid.
+     *
+     * <p>Measured over 400 freshly signed tokens: the last character is always one of
+     * {@code A Q g w} (the four with four zero padding bits), and the mutation left the
+     * signature bytes unchanged <strong>107 times — 26.75%</strong>, every one of them an
+     * {@code 'A'}. So roughly a quarter of runs sent a <em>valid</em> token to a test
+     * asserting 401. The gateway did the correct thing and routed it downstream, the
+     * MockWebServer had nothing queued and blocked, and the test died five seconds later
+     * on {@code Timeout on blocking read} — a failure that reads like a gateway or
+     * infrastructure problem and is neither.
+     *
+     * <p>This mutates the <em>first</em> signature character instead, where all six bits
+     * are real, and then verifies that the decoded bytes actually changed. A negative test
+     * that cannot confirm its own premise is not a negative test, and the cost of finding
+     * that out through an intermittent CI red is what this method exists to prevent.
+     */
+    public static String tamperSignature(String token) {
+        String[] parts = token.split("\\.");
+        if (parts.length != 3) {
+            throw new IllegalArgumentException("not a signed JWT: " + token);
+        }
+        char[] signature = parts[2].toCharArray();
+        signature[0] = (signature[0] == 'A') ? 'B' : 'A';
+        String tampered = new String(signature);
+        if (Arrays.equals(new Base64URL(parts[2]).decode(), new Base64URL(tampered).decode())) {
+            throw new IllegalStateException(
+                    "tamperSignature() left the signature bytes unchanged — the token would "
+                            + "still verify, so the caller would be asserting on a valid token");
+        }
+        return parts[0] + "." + parts[1] + "." + tampered;
     }
 }

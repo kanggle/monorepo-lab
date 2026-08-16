@@ -10,6 +10,7 @@ import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.proc.JWSKeySelector;
 import com.nimbusds.jose.proc.JWSVerificationKeySelector;
 import com.nimbusds.jose.proc.SecurityContext;
+import com.nimbusds.jose.util.Base64URL;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.proc.ConfigurableJWTProcessor;
 import com.nimbusds.jwt.proc.DefaultJWTProcessor;
@@ -88,6 +89,71 @@ class JwtTestHelperTest {
         RSAKey rsa = (RSAKey) set.getKeys().get(0);
         assertThat(rsa.isPrivate()).isFalse();
         assertThat(rsa.getKeyID()).isEqualTo(helper.keyId());
+    }
+
+    /**
+     * 🔴 TASK-MONO-542 regression guard. The tampering used to be three lines inlined in
+     * {@code GatewayBootstrapIntegrationTest}, and it flipped the LAST signature
+     * character — which for RS256/2048 carries 2 real bits and 4 padding bits, so
+     * {@code 'A'} → {@code 'B'} changed nothing that mattered. Measured over 400 tokens
+     * before the fix: the signature bytes survived intact 107 times (26.75%), every one
+     * of them a signature ending in {@code 'A'}. Roughly a quarter of runs therefore sent
+     * a VALID token to a test asserting 401, and failed five seconds later on a
+     * downstream read timeout that looked like flaky infrastructure.
+     *
+     * <p>Run over many tokens on purpose. A single sample passes ~73% of the time by luck,
+     * which is exactly how the original defect stayed invisible — a guard that samples once
+     * would have shipped green and proved nothing.
+     */
+    @Test
+    void tamperSignatureAlwaysProducesATokenThatFailsVerification() {
+        int samples = 300;
+        int stillValid = 0;
+
+        for (int i = 0; i < samples; i++) {
+            String tampered = JwtTestHelper.tamperSignature(helper.signScmToken("probe-" + i));
+            try {
+                decodeAndVerify(tampered);
+                stillValid++;
+            } catch (Exception expected) {
+                // correct: the signature no longer verifies
+            }
+        }
+
+        assertThat(stillValid)
+                .as("tamperSignature must invalidate every token; %d of %d still verified",
+                        stillValid, samples)
+                .isZero();
+    }
+
+    /**
+     * The byte-level half of the same guard. Also multi-sample, and deliberately so: a
+     * one-token version of this assertion was written first, and it would have caught the
+     * original defect only about a quarter of the time — the same coin-flip that let the
+     * defect live in CI. Measured with the old logic restored, this loop reports 73 of 300
+     * tokens surviving intact; a single sample reports "pass" three times out of four.
+     */
+    @Test
+    void tamperSignatureChangesTheDecodedSignatureBytes() {
+        int samples = 300;
+        int unchanged = 0;
+
+        for (int i = 0; i < samples; i++) {
+            String token = helper.signScmToken("probe-" + i);
+            String original = token.split("\\.")[2];
+            String tampered = JwtTestHelper.tamperSignature(token).split("\\.")[2];
+
+            assertThat(tampered).hasSameSizeAs(original);
+            if (java.util.Arrays.equals(new Base64URL(original).decode(),
+                    new Base64URL(tampered).decode())) {
+                unchanged++;
+            }
+        }
+
+        assertThat(unchanged)
+                .as("the point of tampering is that the BYTES differ, not that the text does; "
+                        + "%d of %d tokens decoded to identical signature bytes", unchanged, samples)
+                .isZero();
     }
 
     private JWTClaimsSet decodeAndVerify(String token) throws Exception {

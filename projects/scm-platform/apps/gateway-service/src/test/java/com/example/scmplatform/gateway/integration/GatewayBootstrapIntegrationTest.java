@@ -1,5 +1,6 @@
 package com.example.scmplatform.gateway.integration;
 
+import com.example.scmplatform.gateway.testsupport.JwtTestHelper;
 import okhttp3.mockwebserver.MockResponse;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -100,13 +101,14 @@ class GatewayBootstrapIntegrationTest extends GatewayIntegrationBase {
 
     @Test
     void tamperedTokenSignatureReturns401() {
-        String token = jwt.signScmToken("buyer-1");
-        // Mangle the last byte of the signature segment so the token fails
-        // signature verification at the gateway.
-        String[] parts = token.split("\\.");
-        String tampered = parts[0] + "." + parts[1] + "." +
-                (parts[2].endsWith("A") ? parts[2].substring(0, parts[2].length() - 1) + "B"
-                        : parts[2].substring(0, parts[2].length() - 1) + "A");
+        // TASK-MONO-542: this used to mangle the LAST signature character inline, which for
+        // RS256/2048 carries only 2 real bits. Measured over 400 tokens, that left the
+        // signature bytes unchanged 26.75% of the time, so a quarter of runs handed a
+        // perfectly VALID token to a test asserting 401 — the gateway correctly routed it
+        // downstream, the MockWebServer had nothing queued and blocked, and the test died
+        // on a 5s read timeout that looked like flakiness. tamperSignature() mutates the
+        // first signature character and verifies the decoded bytes actually changed.
+        String tampered = JwtTestHelper.tamperSignature(jwt.signScmToken("buyer-1"));
 
         webTestClient.get().uri("/api/v1/procurement/po")
                 .header("Authorization", "Bearer " + tampered)
