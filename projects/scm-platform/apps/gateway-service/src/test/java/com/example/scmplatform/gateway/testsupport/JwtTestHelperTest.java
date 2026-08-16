@@ -10,7 +10,6 @@ import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.proc.JWSKeySelector;
 import com.nimbusds.jose.proc.JWSVerificationKeySelector;
 import com.nimbusds.jose.proc.SecurityContext;
-import com.nimbusds.jose.util.Base64URL;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.proc.ConfigurableJWTProcessor;
 import com.nimbusds.jwt.proc.DefaultJWTProcessor;
@@ -92,68 +91,54 @@ class JwtTestHelperTest {
     }
 
     /**
-     * 🔴 TASK-MONO-542 regression guard. The tampering used to be three lines inlined in
-     * {@code GatewayBootstrapIntegrationTest}, and it flipped the LAST signature
-     * character — which for RS256/2048 carries 2 real bits and 4 padding bits, so
-     * {@code 'A'} → {@code 'B'} changed nothing that mattered. Measured over 400 tokens
-     * before the fix: the signature bytes survived intact 107 times (26.75%), every one
-     * of them a signature ending in {@code 'A'}. Roughly a quarter of runs therefore sent
-     * a VALID token to a test asserting 401, and failed five seconds later on a
-     * downstream read timeout that looked like flaky infrastructure.
+     * 🔴 TASK-MONO-542 regression guard for {@link JwtTestHelper#signForgedSignatureToken}.
      *
-     * <p>Run over many tokens on purpose. A single sample passes ~73% of the time by luck,
-     * which is exactly how the original defect stayed invisible — a guard that samples once
-     * would have shipped green and proved nothing.
+     * <p>The integration suite used to tamper inline by flipping the LAST base64url character
+     * of the signature. For RS256/2048 that character carries 2 significant bits and 4 padding
+     * bits, so {@code 'A'} → {@code 'B'} changed nothing that mattered: measured on scm over
+     * 400 tokens, the decoded signature survived intact 107 times (26.75%), every one of them
+     * a signature ending in {@code 'A'}. A quarter of runs therefore sent a VALID token to a
+     * test asserting 401 and died five seconds later on a downstream read timeout that read
+     * like flaky infrastructure. erp and wms were fixed for this in TASK-MONO-458 and finance
+     * in MONO-461; scm and fan were the two the sweep missed.
+     *
+     * <p><strong>Looped on purpose.</strong> Signing with a foreign key is deterministic, so
+     * one sample would be enough to test today's implementation — but the failure mode worth
+     * guarding is a future "simplification" back to a probabilistic mutation, and a
+     * single-sample guard would pass on ~73% of runs against exactly that. Do not reduce this
+     * to one token.
      */
     @Test
-    void tamperSignatureAlwaysProducesATokenThatFailsVerification() {
-        int samples = 300;
+    void forgedSignatureTokenNeverVerifies() {
+        int samples = 200;
         int stillValid = 0;
 
         for (int i = 0; i < samples; i++) {
-            String tampered = JwtTestHelper.tamperSignature(helper.signScmToken("probe-" + i));
             try {
-                decodeAndVerify(tampered);
+                decodeAndVerify(helper.signForgedSignatureToken("forged-" + i));
                 stillValid++;
             } catch (Exception expected) {
-                // correct: the signature no longer verifies
+                // correct: signed by a key that is not in the JWKS
             }
         }
 
         assertThat(stillValid)
-                .as("tamperSignature must invalidate every token; %d of %d still verified",
-                        stillValid, samples)
+                .as("signForgedSignatureToken must never produce a verifiable token; "
+                        + "%d of %d verified", stillValid, samples)
                 .isZero();
     }
 
     /**
-     * The byte-level half of the same guard. Also multi-sample, and deliberately so: a
-     * one-token version of this assertion was written first, and it would have caught the
-     * original defect only about a quarter of the time — the same coin-flip that let the
-     * defect live in CI. Measured with the old logic restored, this loop reports 73 of 300
-     * tokens surviving intact; a single sample reports "pass" three times out of four.
+     * The forged token must still advertise the REAL {@code kid}. Otherwise the resource
+     * server fails to select a key and rejects for the wrong reason — the test would pass
+     * while no longer exercising signature verification at all.
      */
     @Test
-    void tamperSignatureChangesTheDecodedSignatureBytes() {
-        int samples = 300;
-        int unchanged = 0;
+    void forgedSignatureTokenKeepsTheRealKeyIdSoTheFailureIsSignatureVerification() throws Exception {
+        String forged = helper.signForgedSignatureToken("forged-kid");
 
-        for (int i = 0; i < samples; i++) {
-            String token = helper.signScmToken("probe-" + i);
-            String original = token.split("\\.")[2];
-            String tampered = JwtTestHelper.tamperSignature(token).split("\\.")[2];
-
-            assertThat(tampered).hasSameSizeAs(original);
-            if (java.util.Arrays.equals(new Base64URL(original).decode(),
-                    new Base64URL(tampered).decode())) {
-                unchanged++;
-            }
-        }
-
-        assertThat(unchanged)
-                .as("the point of tampering is that the BYTES differ, not that the text does; "
-                        + "%d of %d tokens decoded to identical signature bytes", unchanged, samples)
-                .isZero();
+        assertThat(com.nimbusds.jwt.SignedJWT.parse(forged).getHeader().getKeyID())
+                .isEqualTo(helper.keyId());
     }
 
     private JWTClaimsSet decodeAndVerify(String token) throws Exception {

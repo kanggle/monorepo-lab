@@ -7,11 +7,9 @@ import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
-import com.nimbusds.jose.util.Base64URL;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +38,8 @@ public final class JwtTestHelper {
 
     private final RSAKey rsaJwk;
     private final RSASSASigner signer;
+    /** A second keypair, never published in the JWKS — see {@link #signForgedSignatureToken}. */
+    private final RSASSASigner foreignSigner;
 
     public JwtTestHelper() {
         try {
@@ -51,6 +51,8 @@ public final class JwtTestHelper {
         }
         try {
             this.signer = new RSASSASigner(rsaJwk);
+            RSAKey foreignJwk = new RSAKeyGenerator(2048).keyID(rsaJwk.getKeyID()).generate();
+            this.foreignSigner = new RSASSASigner(foreignJwk);
         } catch (JOSEException e) {
             throw new IllegalStateException("Failed to build RSA signer", e);
         }
@@ -149,48 +151,47 @@ public final class JwtTestHelper {
     }
 
     /**
-     * Returns {@code token} with its signature altered so that verification is
-     * guaranteed to fail.
+     * An scm token whose claims are all valid but whose signature is produced by a foreign key
+     * NOT in the JWKS (while advertising the real {@code kid}), so verification ALWAYS fails → 401.
      *
-     * <h2>🔴 Why this is a method and not three lines at the call site</h2>
+     * <p>Replaces a byte-flip tamper — the same TASK-MONO-458 residual that erp and wms were
+     * fixed for in MONO-458 and finance in MONO-461. scm and fan were the two gateways the
+     * sweep did not reach, so this flaw sat here until TASK-MONO-542 put the suite in CI and
+     * it started reporting.
      *
-     * It used to be three lines at the call site, and they were wrong. They flipped the
-     * <em>last</em> character of the signature ({@code 'A'} → {@code 'B'}, anything else
-     * → {@code 'A'}), which for an RS256/2048 signature is the one character that mostly
-     * does not matter: 256 bytes is 2048 bits, base64url packs 6 bits per character, and
-     * 2048 = 6 × 341 + 2 — so the 342nd character carries only <strong>2 real bits</strong>
-     * plus 4 bits of padding. {@code 'A'} is {@code 000000} and {@code 'B'} is
-     * {@code 000001}: identical in the two bits that count. Whenever the signature ended
-     * in {@code 'A'}, the "tampered" token decoded to <strong>byte-identical</strong>
-     * signature bytes and stayed perfectly valid.
+     * <p>Why the byte-flip was wrong: flipping the LAST base64url character of an RSA-2048
+     * signature only touches padding bits about a quarter of the time. 256 bytes is 2048 bits,
+     * base64url packs 6 bits per character, and 2048 = 6 × 341 + 2 — so the 342nd character
+     * carries 2 significant bits plus 4 padding bits, and {@code 'A'} ({@code 000000}) and
+     * {@code 'B'} ({@code 000001}) are identical in the two that count.
      *
-     * <p>Measured over 400 freshly signed tokens: the last character is always one of
-     * {@code A Q g w} (the four with four zero padding bits), and the mutation left the
-     * signature bytes unchanged <strong>107 times — 26.75%</strong>, every one of them an
-     * {@code 'A'}. So roughly a quarter of runs sent a <em>valid</em> token to a test
-     * asserting 401. The gateway did the correct thing and routed it downstream, the
-     * MockWebServer had nothing queued and blocked, and the test died five seconds later
-     * on {@code Timeout on blocking read} — a failure that reads like a gateway or
-     * infrastructure problem and is neither.
-     *
-     * <p>This mutates the <em>first</em> signature character instead, where all six bits
-     * are real, and then verifies that the decoded bytes actually changed. A negative test
-     * that cannot confirm its own premise is not a negative test, and the cost of finding
-     * that out through an intermittent CI red is what this method exists to prevent.
+     * <p>Measured here on scm over 400 freshly signed tokens: the final character is always
+     * one of {@code A Q g w}, and the mutation left the decoded signature <strong>byte-identical
+     * 107 times — 26.75%</strong>, every one of them an {@code 'A'}. The "tampered" token then
+     * verified, the gateway correctly routed it downstream, the shared MockWebServer had nothing
+     * queued and blocked, and the test died five seconds later on {@code Timeout on blocking
+     * read} — a test defect that reads like flaky infrastructure. Signing with a foreign key
+     * never verifies, for any key, on any run.
      */
-    public static String tamperSignature(String token) {
-        String[] parts = token.split("\\.");
-        if (parts.length != 3) {
-            throw new IllegalArgumentException("not a signed JWT: " + token);
+    public String signForgedSignatureToken(String subject) {
+        Instant now = Instant.now();
+        JWTClaimsSet claims = new JWTClaimsSet.Builder()
+                .subject(subject)
+                .issuer(SAS_ISSUER)
+                .claim("tenant_id", DEFAULT_TENANT_ID)
+                .claim("role", "BUYER")
+                .claim("roles", List.of("BUYER"))
+                .issueTime(Date.from(now.minusSeconds(5)))
+                .expirationTime(Date.from(now.plusSeconds(300)))
+                .jwtID(UUID.randomUUID().toString())
+                .build();
+        JWSHeader header = new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(rsaJwk.getKeyID()).build();
+        SignedJWT jwt = new SignedJWT(header, claims);
+        try {
+            jwt.sign(foreignSigner);
+        } catch (JOSEException e) {
+            throw new IllegalStateException("Failed to sign JWT with the foreign key", e);
         }
-        char[] signature = parts[2].toCharArray();
-        signature[0] = (signature[0] == 'A') ? 'B' : 'A';
-        String tampered = new String(signature);
-        if (Arrays.equals(new Base64URL(parts[2]).decode(), new Base64URL(tampered).decode())) {
-            throw new IllegalStateException(
-                    "tamperSignature() left the signature bytes unchanged — the token would "
-                            + "still verify, so the caller would be asserting on a valid token");
-        }
-        return parts[0] + "." + parts[1] + "." + tampered;
+        return jwt.serialize();
     }
 }

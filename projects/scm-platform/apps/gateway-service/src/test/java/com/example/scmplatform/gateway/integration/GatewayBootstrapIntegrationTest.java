@@ -1,6 +1,5 @@
 package com.example.scmplatform.gateway.integration;
 
-import com.example.scmplatform.gateway.testsupport.JwtTestHelper;
 import okhttp3.mockwebserver.MockResponse;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -101,14 +100,15 @@ class GatewayBootstrapIntegrationTest extends GatewayIntegrationBase {
 
     @Test
     void tamperedTokenSignatureReturns401() {
-        // TASK-MONO-542: this used to mangle the LAST signature character inline, which for
-        // RS256/2048 carries only 2 real bits. Measured over 400 tokens, that left the
-        // signature bytes unchanged 26.75% of the time, so a quarter of runs handed a
-        // perfectly VALID token to a test asserting 401 — the gateway correctly routed it
-        // downstream, the MockWebServer had nothing queued and blocked, and the test died
-        // on a 5s read timeout that looked like flakiness. tamperSignature() mutates the
-        // first signature character and verifies the decoded bytes actually changed.
-        String tampered = JwtTestHelper.tamperSignature(jwt.signScmToken("buyer-1"));
+        // TASK-MONO-542: this used to flip the LAST base64url character of the signature
+        // inline. For RS256/2048 that character carries 2 significant bits and 4 padding
+        // bits, so measured over 400 tokens it left the signature byte-identical 26.75% of
+        // the time — a quarter of runs handed a perfectly VALID token to this test, the
+        // gateway correctly routed it downstream, the MockWebServer had nothing queued and
+        // blocked, and the test died on a 5s read timeout that looked like flakiness.
+        // Do not reintroduce the flip; signing with a foreign key never verifies.
+        // (Same fix erp/wms took in MONO-458 and finance in MONO-461.)
+        String tampered = jwt.signForgedSignatureToken("buyer-1");
 
         webTestClient.get().uri("/api/v1/procurement/po")
                 .header("Authorization", "Bearer " + tampered)
