@@ -68,11 +68,19 @@ build_flag=""
 [ "$BUILD" = "1" ] && build_flag="--build"
 
 # 이미지가 코드보다 낡았는지 **기동 전에** 알린다 (TASK-MONO-533).
-# `DEMO_BUILD=1` 이면 지금 새로 구우므로 물어볼 것이 없다. 게이트가 아니라 고지이므로
-# 실패해도 기동을 막지 않는다 — 상세와 근거는 check-image-freshness.sh 헤더.
-if [ "$BUILD" != "1" ]; then
-  bash "$HERE/check-image-freshness.sh" "${SET[@]}" || true
+# 게이트가 아니라 고지이므로 실패해도 기동을 막지 않는다 — 근거는 check-image-freshness.sh 헤더.
+#
+# 🔴 `DEMO_BUILD=1` 이어도 **건너뛰지 않는다** (TASK-MONO-538). 이 스크립트는 **컴파일하지
+# 않으므로**(위 헤더) 지금 굽는 이미지는 **디스크에 있는 jar 그대로**다. jar 이 코드보다
+# 낡았다면 굽는 행위가 그것을 *새 이미지로 세탁*하고, 그 뒤로는 첫 축(이미지 vs 소스)이
+# 영원히 초록이 된다. 검사의 두 번째 축(jar vs 소스)이 정확히 그 창을 본다 ⇒ **굽기 직전이
+# 그것을 말할 수 있는 마지막 순간**이다.
+if [ "$BUILD" = "1" ]; then
+  # 🔵 무엇을 굽는지 이름을 댄다 — 하드 의존이 함께 구워지므로 사용자가 요청한 것보다 넓다.
+  echo "[demo] DEMO_BUILD=1 — 다시 구울 도메인: ${SET[*]} (하드 의존 포함)"
+  echo "[demo]   이 스크립트는 컴파일하지 않는다. jar 이 낡았다면 먼저 ./gradlew …:bootJar"
 fi
+bash "$HERE/check-image-freshness.sh" "${SET[@]}" || true
 
 echo "[demo] profile=$PROFILE  build=$BUILD"
 echo "[demo] ensuring shared traefik-net + edge router"
