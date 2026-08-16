@@ -66,9 +66,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-
-
-
+- `TASK-FAN-FE-017-artist-detail-follow-button-never-knows-it-is-already-following.md` — **🟢 READY (2026-08-16 발굴, 브라우저 대조군 실측).** 아티스트 상세가 `initialFollowing={false}` 를 **상수로** 넘겨, 서버가 아는 팔로우 관계가 화면에 한 번도 도달하지 않는다 ⇒ 이미 팔로우한 아티스트도 언제나 `팔로우 / aria-pressed=false`. 🔴 **소스만 읽고 세운 첫 가설은 틀렸다** — *"재팔로우가 409 로 떨어지고 빈 `catch` 가 삼킨다"* 로 적었는데, **눌러 보니 서버 액션이 멱등이라 POST 200 이고 버튼도 `팔로잉` 으로 바뀐다.** ⇒ **버튼은 작동한다**; 결함은 **초기 상태가 서버에서 오지 않는다**는 것 하나로 좁혀졌다. **대조군이 판정이다** — 팔로우 중인 **노아**와 안 한 **세아**가 **구별되지 않는 것**(둘 다 `팔로우`/`false` → 클릭 후 둘 다 `팔로잉`)이 지문이고, 그래서 AC-2 는 두 칸이 **갈라지는지**를 묻는다(한쪽만 보면 지금도 통과한다). 피해: ①상세가 관계를 말하지 않는다 ②**언팔로우가 한 번에 안 닿는다**(의도치 않은 재팔로우를 반드시 거쳐야 한다) ③🔴 **피드가 이 거짓을 가린다** — 팔로우한 아티스트 글만 뜨는 피드는 정상이라 "팔로우가 안 됐나" 로 오진하기 쉽다. 🔴 **Scope 는 계약이 가른다** — 단건 조회 有→그대로 / 목록만 有→포함 여부 / 둘 다 無→**HARDSTOP-08**(계약 먼저). 🔴 축 함정: 팔로우 API 가 검증하는 것은 `artist.accountId` 이고 `artist.id` 가 아닌데(`TASK-FAN-BE-045`) **데모 행에서는 두 값이 우연히 일치**해 틀린 축을 써도 초록이다. 🔵 실측 중 팔로우한 세아는 되눌러 **원상복구**했다. 분석=Opus 5 / 구현 권장=**Sonnet**(단일 값 배선 + 테스트). [[feedback_my_verification_predicate_is_the_likeliest_defect]] [[feedback_a_control_smaller_than_the_failure_cannot_see_it]] [[feedback_the_safe_constant_is_a_different_item_not_a_typical_one]]
 
 ## in-progress
 
