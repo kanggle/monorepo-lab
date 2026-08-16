@@ -4,9 +4,10 @@ import com.example.scmplatform.gateway.testsupport.JwksMockServer;
 import com.example.scmplatform.gateway.testsupport.JwtTestHelper;
 import com.redis.testcontainers.RedisContainer;
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 import okhttp3.mockwebserver.MockWebServer;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
+import okhttp3.mockwebserver.QueueDispatcher;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -32,6 +33,35 @@ import org.testcontainers.utility.DockerImageName;
  *
  * <p>Tests subclass this and use {@link WebTestClient} bound to the random
  * gateway port to drive HTTP traffic.
+ *
+ * <h2>🔴 Why the shared infra starts in a static initializer, not {@code @BeforeAll}</h2>
+ *
+ * It used to start in a {@code @BeforeAll}, and all five subclasses of this base failed
+ * with {@code initializationError} — {@code NullPointerException: ... "jwks" is null}
+ * — because {@code @DynamicPropertySource} suppliers are evaluated while the Spring
+ * context is built, and under {@link TestInstance.Lifecycle#PER_CLASS} the test
+ * instance (and therefore the context load) is created <em>before</em>
+ * {@code @BeforeAll} runs. The fields the suppliers close over were still null.
+ *
+ * <p>A static initializer runs on class load, which is unconditionally before any of
+ * that, so the ordering hazard disappears rather than being re-tuned. Teardown is
+ * left to Ryuk and JVM exit instead of an {@code @AfterAll}: a managed stop here
+ * tears the container down after the first subclass while Spring's context cache
+ * keeps handing the next subclass a connection to it (the singleton-container
+ * pattern this repo already adopted for batch-worker). That second hazard is not
+ * hypothetical here the way it was for fan-platform's single-class suite — this
+ * suite has five subclasses across two cached contexts
+ * ({@link GatewayRouteRewriteTest} contributes its own {@code @DynamicPropertySource},
+ * which gives it a distinct context cache key), so an {@code @AfterAll} would fire
+ * with live consumers still bound to the container.
+ *
+ * <p>🔵 This was invisible for as long as it existed because
+ * {@code gateway-service:integrationTest} had no CI lane — {@code check} excludes the
+ * {@code integration} tag by design, and the scm-platform integration workflow listed
+ * procurement/inventory-visibility/demand-planning/logistics only. Identical defect,
+ * identical cause and identical invisibility to fan-platform's gateway
+ * (TASK-FAN-BE-049); both were found by the population recount in TASK-MONO-541 AC-4
+ * and this one is closed by TASK-MONO-542, which adds the lane in the same change.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -52,20 +82,63 @@ public abstract class GatewayIntegrationBase {
     @Autowired
     protected WebTestClient webTestClient;
 
-    @BeforeAll
-    static void startSharedInfra() throws IOException {
-        REDIS.start();
-        jwt = new JwtTestHelper();
-        jwks = new JwksMockServer(jwt);
-        downstream = new MockWebServer();
-        downstream.start();
+    static {
+        // Runs on class load — before the test instance exists, and therefore before
+        // any @DynamicPropertySource supplier below can be evaluated. See the class
+        // javadoc for what @BeforeAll did instead.
+        try {
+            REDIS.start();
+            jwt = new JwtTestHelper();
+            jwks = new JwksMockServer(jwt);
+            downstream = new MockWebServer();
+            downstream.start();
+        } catch (IOException e) {
+            throw new ExceptionInInitializerError(e);
+        }
     }
 
-    @AfterAll
-    static void stopSharedInfra() throws IOException {
-        if (downstream != null) downstream.shutdown();
-        if (jwks != null) jwks.close();
-        if (REDIS != null) REDIS.stop();
+    /**
+     * 🔴 Resets the shared {@code downstream} queues before every test.
+     *
+     * <p>One MockWebServer is shared by every subclass and cannot be per-class: the
+     * route URIs are wired through {@code @DynamicPropertySource} and Spring caches the
+     * context, so a per-class server would leave a cached route pointing at a dead port.
+     * Sharing it means its two queues — enqueued responses, and recorded requests — are
+     * suite-global state.
+     *
+     * <p>That state leaks, and this suite leaks harder than fan-platform's did.
+     * {@link GatewayRateLimitIntegrationTest} enqueues 50 responses on purpose,
+     * {@code break}s out of its loop at the first 429 (typically around the 6th
+     * request), and never calls {@code takeRequest} at all — so it leaves roughly 44
+     * stale {@code 200 {}} responses AND every request it made sitting in the recorded
+     * queue. {@link GatewayRouteRewriteTest} then asserts on
+     * {@code takeRequest().getPath()}, so it would read a sibling's request and compare
+     * it against its own expected path.
+     *
+     * <p>{@code setDispatcher(new QueueDispatcher())} installs a fresh, empty response
+     * queue (there is no clear() on the old one); the drain loop empties the recorded
+     * request side. Safe because no subclass installs a Dispatcher of its own — verified,
+     * not assumed: the only {@code setDispatcher} call in this module's test sources is
+     * {@code JwksMockServer}'s, on its own separate server instance.
+     *
+     * <p>The precedent is TASK-MONO-541, where the fan gateway suite passed 10/10 in
+     * isolation and failed 9-of-those-10 as a suite for exactly this reason.
+     * <strong>Isolation passing is not the suite passing</strong>, so this guard shipped
+     * with the harness fix rather than after CI rediscovered it.
+     *
+     * <p>🔵 Measured on this suite rather than inherited from fan-platform: disabling the
+     * body of this method makes {@code GatewayRouteRewriteTest} fail on
+     * {@code inventoryVisibilityRouteRewritesV1Prefix} and
+     * {@code procurementRoutePreservesPathVariablesAndSegments} — precisely the tests that
+     * assert on {@code takeRequest().getPath()}. Porting a fix is not measuring that the
+     * destination needs it.
+     */
+    @BeforeEach
+    void resetDownstreamQueues() throws InterruptedException {
+        downstream.setDispatcher(new QueueDispatcher());
+        while (downstream.takeRequest(1, TimeUnit.MILLISECONDS) != null) {
+            // discard a sibling test's recorded request
+        }
     }
 
     @DynamicPropertySource

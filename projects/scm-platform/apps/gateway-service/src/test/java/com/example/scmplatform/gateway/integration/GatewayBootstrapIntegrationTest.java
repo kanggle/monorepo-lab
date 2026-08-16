@@ -100,13 +100,15 @@ class GatewayBootstrapIntegrationTest extends GatewayIntegrationBase {
 
     @Test
     void tamperedTokenSignatureReturns401() {
-        String token = jwt.signScmToken("buyer-1");
-        // Mangle the last byte of the signature segment so the token fails
-        // signature verification at the gateway.
-        String[] parts = token.split("\\.");
-        String tampered = parts[0] + "." + parts[1] + "." +
-                (parts[2].endsWith("A") ? parts[2].substring(0, parts[2].length() - 1) + "B"
-                        : parts[2].substring(0, parts[2].length() - 1) + "A");
+        // TASK-MONO-542: this used to flip the LAST base64url character of the signature
+        // inline. For RS256/2048 that character carries 2 significant bits and 4 padding
+        // bits, so measured over 400 tokens it left the signature byte-identical 26.75% of
+        // the time — a quarter of runs handed a perfectly VALID token to this test, the
+        // gateway correctly routed it downstream, the MockWebServer had nothing queued and
+        // blocked, and the test died on a 5s read timeout that looked like flakiness.
+        // Do not reintroduce the flip; signing with a foreign key never verifies.
+        // (Same fix erp/wms took in MONO-458 and finance in MONO-461.)
+        String tampered = jwt.signForgedSignatureToken("buyer-1");
 
         webTestClient.get().uri("/api/v1/procurement/po")
                 .header("Authorization", "Bearer " + tampered)
