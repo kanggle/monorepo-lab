@@ -73,6 +73,58 @@ class JwtTestHelperTest {
         assertThat(rsa.getKeyID()).isEqualTo(helper.keyId());
     }
 
+    /**
+     * 🔴 TASK-MONO-543 regression guard for {@link JwtTestHelper#signForgedSignatureToken}.
+     *
+     * <p>The integration suite used to tamper inline by flipping the LAST base64url character
+     * of the signature. For RS256/2048 that character carries 2 significant bits and 4 padding
+     * bits, so {@code 'A'} → {@code 'B'} changed nothing that mattered: measured on fan's own
+     * keys over 400 tokens, the decoded signature survived intact 104 times (26.0%), every one
+     * of them a signature ending in {@code 'A'}. A quarter of runs therefore sent a VALID token
+     * to a test asserting 401 and died five seconds later on a downstream read timeout that
+     * read like flaky infrastructure — including on TASK-MONO-542's own PR, which touched
+     * nothing in fan. erp and wms were fixed for this in TASK-MONO-458, finance in MONO-461,
+     * scm in MONO-542; fan was the last straggler.
+     *
+     * <p><strong>Looped on purpose.</strong> Signing with a foreign key is deterministic, so one
+     * sample would be enough to test today's implementation — but the failure mode worth
+     * guarding is a future "simplification" back to a probabilistic mutation, and a
+     * single-sample guard would pass on ~74% of runs against exactly that. Do not reduce this
+     * to one token.
+     */
+    @Test
+    void forgedSignatureTokenNeverVerifies() {
+        int samples = 200;
+        int stillValid = 0;
+
+        for (int i = 0; i < samples; i++) {
+            try {
+                decodeAndVerify(helper.signForgedSignatureToken("forged-" + i));
+                stillValid++;
+            } catch (Exception expected) {
+                // correct: signed by a key that is not in the JWKS
+            }
+        }
+
+        assertThat(stillValid)
+                .as("signForgedSignatureToken must never produce a verifiable token; "
+                        + "%d of %d verified", stillValid, samples)
+                .isZero();
+    }
+
+    /**
+     * The forged token must still advertise the REAL {@code kid}. Otherwise the resource server
+     * fails to select a key and rejects for the wrong reason — the integration test would stay
+     * green while no longer exercising signature verification at all.
+     */
+    @Test
+    void forgedSignatureTokenKeepsTheRealKeyIdSoTheFailureIsSignatureVerification() throws Exception {
+        String forged = helper.signForgedSignatureToken("forged-kid");
+
+        assertThat(com.nimbusds.jwt.SignedJWT.parse(forged).getHeader().getKeyID())
+                .isEqualTo(helper.keyId());
+    }
+
     private JWTClaimsSet decodeAndVerify(String token) throws Exception {
         return buildProcessor(helper.jwksJson()).process(token, null);
     }
