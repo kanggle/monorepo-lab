@@ -48,6 +48,40 @@ if ! SEED_TOKEN="$(operator_token demo-corp)"; then
 fi
 export SEED_TOKEN
 
+# --- 백엔드 준비성 (TASK-MONO-537) -------------------------------------------
+# 🔴 위 `wait_http` 는 **엣지 준비성만** 잰다 — 401/403 을 "살아 있다" 로 세기 때문에
+# 뒤의 서비스에 대해서는 아무것도 증명하지 않는다(lib.sh 의 `wait_backend` 주석이 erp·scm·wms
+# 세 도메인의 같은 사고를 이미 기록해 두었다). **finance 만 그 게이트가 없었다.**
+#
+# 실측 (2026-08-16, `demo-up.sh finance` 직후 자동 시드):
+#   ✗ 계좌 A/B — HTTP 500 · ✗ KYC ×2 · ✗ 이체 생략 · ✗ 시산표 — HTTP 500  ⇒ 요약 `실패 6`
+# 그 시각 account-service·ledger-service 는 `health: starting` 이었고, healthy 확인 후
+# 같은 명령을 재실행하니 `생성 4 · 실패 0` 이었다 — 코드 결함이 아니라 **너무 일찍 물은 것**.
+#
+# 🔴 account-service 에는 **id 없이 2xx 를 내는 GET 이 없다**(`/{id}`, `/{id}/balances`,
+# `/{id}/transactions` 뿐) ⇒ 2xx 를 요구하는 `wait_backend` 를 그대로 쓸 수 없다. 여기서
+# 옳은 술어는 *"백엔드가 **답했는가**"* 다: 없는 id 에 대한 **404 는 도달의 증거**이고,
+# 게이트웨이가 내는 **5xx(`Connection refused`)가 미도달의 증거**다. 그 둘을 가른다.
+# 🔵 ledger-service 는 id 없는 2xx 엔드포인트가 있으므로 형제들과 같이 `wait_backend` 를 쓴다.
+wait_backend_answered() { # <라벨> <url> [초] — 5xx/무응답이 아닐 때까지. 4xx 는 "답했다".
+  local label="$1" url="$2" timeout="${3:-240}" i
+  for (( i=0; i<timeout; i+=5 )); do
+    http GET "$url" >/dev/null
+    case "${SEED_LAST_STATUS:-000}" in 2??|4??) return 0 ;; esac
+    sleep 5
+  done
+  seed_fail "$label 이 ${timeout}초 안에 응답하지 않았습니다 (마지막 HTTP ${SEED_LAST_STATUS:-none})"
+  return 1
+}
+
+fin_ready=1
+wait_backend_answered "account-service" "$FIN/api/finance/accounts/00000000-0000-0000-0000-000000000000" || fin_ready=0
+wait_backend          "ledger-service"  "$FIN/api/finance/ledger/trial-balance" 120                       || fin_ready=0
+if [ "$fin_ready" != 1 ]; then
+  seed_fail "finance 백엔드가 준비되지 않았습니다 — 아래 항목은 시도하지 않습니다(빈 화면보다 이 줄이 낫다)"
+  seed_summary; exit $?
+fi
+
 CURRENCY="KRW"
 OWNER_A="demo-owner-a"
 OWNER_B="demo-owner-b"
@@ -108,28 +142,80 @@ activate() {
 activate "계좌 A KYC" "$ACC_A"
 activate "계좌 B KYC" "$ACC_B"
 
+# --- 입금 (자금 유입) --------------------------------------------------------
+# 🔵 `POST /{id}/topups` 는 **운영자 전용**이다(TASK-FIN-BE-068). 이 시드는 이미 운영자
+# 토큰으로 돌고 있으므로 그대로 통한다.
+#
+# 🔴 **잔액을 다시 읽어서 판정한다 — 응답 코드로는 갈 수 없다.** 고정 `Idempotency-Key` 를
+# 쓰므로 2회차는 서버가 **저장된 2xx 를 재생**하고, 재생된 본문은 최초 시점 것이다. 즉
+# "이번 실행이 돈을 넣었나" 는 200 으로 판별 불가능하다. 여기서는 **잔액 자체**가 술어다:
+# 목표 이상이면 도달, 미만이면 실패 — 재생이든 최초든 결론이 같다.
+ledger_of() { # <account> — ledger 잔액(minor). 못 읽으면 빈 문자열
+  http GET "$FIN/api/finance/accounts/$1/balances" >/dev/null || { printf ''; return 1; }
+  printf '%s' "$SEED_LAST_BODY" | grep -o '"ledger":"[0-9]*"' | head -1 | cut -d'"' -f4
+}
+
+TOPUP_MINOR=500000   # ₩5,000.00 — 이체 100,000 + 홀드 여유
+topup() {
+  local label="$1" acc="$2" want="$3" before after
+  [ -n "$acc" ] || { seed_fail "$label — 계좌 id 가 비어 있다"; return 1; }
+  before="$(ledger_of "$acc")"
+  if ! http POST "$FIN/api/finance/accounts/$acc/topups" \
+       "{\"money\":{\"amount\":\"$TOPUP_MINOR\",\"currency\":\"$CURRENCY\"},\"reason\":\"데모 시드 입금\"}" \
+       -H "Idempotency-Key: seed-fin-topup-$acc"; then
+    seed_fail "$label — HTTP $SEED_LAST_STATUS ${SEED_LAST_BODY:0:200}"
+    return 1
+  fi
+  after="$(ledger_of "$acc")"
+  if [ -z "$after" ]; then
+    seed_fail "$label — 입금은 2xx 인데 잔액을 다시 읽지 못했다"
+    return 1
+  fi
+  if [ "$after" -ge "$want" ] 2>/dev/null; then
+    if [ "$after" != "$before" ]; then
+      SEED_CREATED=$((SEED_CREATED + 1)); seed_log "생성  $label — ledger $before → $after"
+    else
+      SEED_EXISTING=$((SEED_EXISTING + 1)); seed_log "기존  $label — ledger $after (재생, 이중 입금 없음)"
+    fi
+    return 0
+  fi
+  seed_fail "$label — 입금 후 ledger=$after 로 목표 $want 미만이다"
+  return 1
+}
+
+topup "계좌 A 입금" "$ACC_A" "$TOPUP_MINOR"
+topup "계좌 B 입금" "$ACC_B" "$TOPUP_MINOR"
+
 # --- 이체 (→ 원장 이벤트) ----------------------------------------------------
 # 이체가 원장 전기를 낳고, 그 전기가 ledger_account 를 자동 생성한다.
 # 🔴 첫 판은 `409|422 → "존재"` 로 뭉갰다. 첫 실행에는 이미 존재할 것이 없는데도 초록으로
-# 보였다 — 실제 409 는 `ACCOUNT_NOT_ACTIVE`(승급 전)였고 422 는 아래의 잔액 부족이다.
+# 보였다 — 실제 409 는 `ACCOUNT_NOT_ACTIVE`(승급 전)였고 422 는 잔액 부족이다.
 # status 코드를 상태로 번역하지 않는다: **본문의 code 로 갈라 판정**한다.
+#
+# 🔵 그 잔액 부족은 2026-08-07 까지 **입금 경로가 아예 없어서** 구조적으로 풀 수 없었고,
+# 이 스크립트는 그 사실을 로그로 설명하고 넘어갔다. `TASK-FIN-BE-068` 이 `POST /{id}/topups`
+# 를 열면서 그 서술은 **거짓이 됐는데 9일 동안 인쇄되고 있었다**(TASK-MONO-537 이 그것을
+# 걷어냈다). 이제 `INSUFFICIENT_AVAILABLE_BALANCE` 는 관측이 아니라 **회귀**다 — 입금이
+# 먼저 성공했는데도 잔액이 모자란다는 뜻이기 때문이다.
+TRANSFER_MINOR=100000
 if [ -n "$ACC_A" ] && [ -n "$ACC_B" ]; then
+  b_before="$(ledger_of "$ACC_B")"
   if http POST "$FIN/api/finance/accounts/$ACC_A/transfers" \
-       "{\"toAccountId\":\"$ACC_B\",\"money\":{\"amount\":\"100000\",\"currency\":\"$CURRENCY\"},\"reason\":\"데모 이체\"}" \
+       "{\"toAccountId\":\"$ACC_B\",\"money\":{\"amount\":\"$TRANSFER_MINOR\",\"currency\":\"$CURRENCY\"},\"reason\":\"데모 이체\"}" \
        -H "Idempotency-Key: seed-fin-transfer-1"; then
-    SEED_CREATED=$((SEED_CREATED + 1)); seed_log "생성  이체 A→B 1,000.00 $CURRENCY"
+    # 🔴 2xx 로 판정하지 않는다 — **양쪽 잔액을 다시 읽는다**(위 입금과 같은 이유).
+    a_after="$(ledger_of "$ACC_A")"; b_after="$(ledger_of "$ACC_B")"
+    if [ -z "$a_after" ] || [ -z "$b_after" ]; then
+      seed_fail "이체 A→B — 2xx 인데 잔액을 다시 읽지 못했다"
+    elif [ "$b_after" != "$b_before" ]; then
+      SEED_CREATED=$((SEED_CREATED + 1))
+      seed_log "생성  이체 A→B $TRANSFER_MINOR $CURRENCY (A=$a_after · B=$b_before→$b_after)"
+    else
+      SEED_EXISTING=$((SEED_EXISTING + 1))
+      seed_log "기존  이체 A→B (재생 — 잔액 불변 A=$a_after B=$b_after)"
+    fi
   elif printf '%s' "$SEED_LAST_BODY" | grep -q 'INSUFFICIENT_AVAILABLE_BALANCE'; then
-    # ── 이 도메인의 구조적 벽 (실측 2026-08-07) ──────────────────────────────
-    # 계좌는 잔액 0 으로 열리고, **입금 경로가 API 에 없다**:
-    #   · account-service 컨트롤러에 deposit/topup/credit 매핑 0건
-    #   · 애플리케이션에 `topUp(actor, accountId, amountMinor)` 이 있으나
-    #     "internal funding (v1 stub)" 이고 **프로덕션 호출자 0건**(테스트에서만 6회)
-    #   · `@KafkaListener` 0건 — 다른 도메인 이벤트로 들어오지도 않는다
-    # ⇒ 이체·홀드·캡처는 영원히 불가능하고, 자금 이동이 없으니 `/ledger` 도 영원히 빈다.
-    #   이것은 시드의 한계가 아니라 **제품의 갭**이다. 후속 티켓 후보로 적는다.
-    seed_log "관측  이체 A→B 불가 — 잔액 0, 그리고 입금 API 가 존재하지 않는다"
-    seed_log "      topUp() 은 있으나 프로덕션 호출자 0건(테스트 전용), Kafka 리스너 0건"
-    seed_log "      ⇒ 자금 이동이 불가능하므로 /ledger 는 이 스택에서 채울 수 없다"
+    seed_fail "이체 A→B — 입금이 선행했는데도 잔액 부족이다(회귀): ${SEED_LAST_BODY:0:160}"
   elif printf '%s' "$SEED_LAST_BODY" | grep -q 'ACCOUNT_NOT_ACTIVE'; then
     seed_fail "이체 A→B — 계좌가 ACTIVE 가 아니다(KYC 승급이 안 먹었다): ${SEED_LAST_BODY:0:160}"
   else
@@ -162,8 +248,10 @@ fi
 # 🔵 원장은 **투영 결과**다. 이체 직후엔 아직 안 왔을 수 있으므로 잠깐 기다린다.
 await_ledger() {
   local i
-  for (( i=0; i<15; i+=5 )); do
+  for (( i=0; i<60; i+=5 )); do
     if http GET "$FIN/api/finance/ledger/trial-balance"; then
+      # 🔴 필드명은 `ledgerAccountCode` 다 — `accountCode` 로 세면 실제로 찬 시산표를
+      #    "비었다" 로 읽는다(TASK-MONO-537 발굴 중 실제로 그 오답을 냈다).
       if printf '%s' "$SEED_LAST_BODY" | grep -q '"ledgerAccountCode"'; then
         seed_log "확인  원장 시산표에 계정이 있다 (이체 이벤트의 투영 동작)"
         return 0
@@ -174,10 +262,15 @@ await_ledger() {
     fi
     sleep 5
   done
-  seed_log "관측  원장 시산표 — 200 인데 15초 동안 계정 0건"
-  seed_log "      예상된 결과다: 자금 이동이 한 건도 성립하지 않았으므로(위 관측) 전기가 없다."
-  seed_log "      /ledger 를 채우려면 입금 경로가 먼저 있어야 한다 — 코드 결함이 아니라 미구현이다"
-  return 2
+  # 🔴 **이제는 "예상된 결과" 가 아니다.** 이 자리의 옛 문구는 *"입금 경로가 없어서 전기가
+  # 없다 — 코드 결함이 아니라 미구현"* 이었는데, `TASK-FIN-BE-068`(2026-08-07)이 입금을
+  # 열었고 위 단계가 그것을 실제로 태운다. 입금·이체가 성립했는데 전기가 없으면 그건 결함이다.
+  seed_fail "원장 시산표 — 200 인데 60초 동안 계정 0건. 입금·이체가 성립했으므로 전기가 따라와야 한다"
+  seed_log  "      갈라 볼 것 ①브로커: finance.transaction.completed.v1 과 그 .DLT 의 offset"
+  seed_log  "      ②테넌트: journal_line.tenant_id 가 계좌의 tenant_id 와 같은지"
+  seed_log  "        (FIN-BE-068 에서 봉투에 tenantId 가 없어 원장이 리터럴 'finance' 로"
+  seed_log  "         폴백했고, 발행 3·전기 3·DLT 0 인데 화면만 비는 모양이었다)"
+  return 1
 }
 await_ledger
 
