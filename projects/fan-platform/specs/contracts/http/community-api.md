@@ -367,6 +367,71 @@ Response: 204.
 
 Errors: 401, 404 (NOT_FOLLOWING).
 
+### `GET /api/community/follows/{artistAccountId}` — Am I following this artist?
+
+`TASK-FAN-BE-049`.
+
+Auth: bearer. Answers **about the caller only** — there is no way to ask about
+another fan's follows.
+
+Response 200:
+```json
+{
+  "data": {
+    "artistAccountId": "...",
+    "following": true
+  },
+  "meta": { "timestamp": "..." }
+}
+```
+
+Errors: 401.
+
+#### Why this is 200 + a boolean and never 404
+
+The sibling `DELETE` uses 404 `NOT_FOLLOWING` for the same underlying condition,
+so 404 is the locally consistent choice — and it is the wrong one **here**. On a
+read, 404 has two possible meanings that the caller cannot separate:
+
+| The caller wants to know | 404 would mean |
+|---|---|
+| "I do not follow this artist" | ✅ intended |
+| "there is no such artist" | ❌ also 404 |
+
+A UI that renders a follow button off a 404 therefore draws a *live, unfollowed
+artist* and a *nonexistent artist* identically. `TASK-FAN-FE-017` is exactly that
+UI, so the ambiguity would land in the first consumer. `200 {following: false}`
+has no such second reading.
+
+#### This read does **not** validate that the artist exists
+
+Deliberate, and the opposite of the `POST` on the same path. Two reasons:
+
+1. **An outage must not blank the profile page.** `POST` is fail-closed against
+   artist-service by `ADR-004` — an unreachable validator refuses the follow. If
+   this read inherited that, an artist-service outage would take out the follow
+   button on every artist page rather than degrading it. The write is the place
+   where a wrong target has consequences (it corrupts the feed join); a read of
+   the caller's own row has none.
+2. **Not validating keeps it from being an existence oracle.** `artist-api.md`
+   already refuses to distinguish "unknown account" from "validator down" for
+   precisely that reason. A read that answered 404-for-unknown-artist would hand
+   back the distinction the write path spends an ADR avoiding.
+
+⇒ `following: false` means **"you have no follow row for this id"**. It does *not*
+assert that the id names a live artist. A caller that needs existence asks
+`artist-api.md`'s `GET /api/artists/{id}`.
+
+#### Shape: single target, not a list
+
+Rejected alternative: `GET /api/community/follows?page=&size=` (the caller's whole
+follow list). The known consumer is an artist **detail** page, which holds one id
+and would have to page through an unbounded list to answer a yes/no about it —
+cost that grows with the fan's follow count for a question whose answer is one row.
+The list form becomes worth adding when a screen needs *many* answers at once (a
+directory badge, a "following" tab); it is additive and does not conflict with this
+endpoint.
+
 ---
 
 ## Health / metrics

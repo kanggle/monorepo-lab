@@ -295,6 +295,47 @@ class GatewayRouteRewriteTest extends GatewayIntegrationBase {
                 .isEqualTo("/api/fandoms");
     }
 
+    /**
+     * TASK-FAN-BE-049 AC-6.
+     *
+     * <p>🔴 The route predicate is {@code Path=/api/v1/community/**} — method-agnostic
+     * by inspection — so it is tempting to declare a new GET reachable without
+     * testing it. That reasoning is what this case refuses: the verdict for "is this
+     * endpoint reachable" belongs to the gateway, not to a reading of its config, and
+     * a later method-scoped predicate or filter would break it silently while every
+     * community-service test stayed green.
+     *
+     * <p>Being unreachable would be worse than a 404 in a log: {@code TASK-FAN-FE-017}
+     * renders a follow button off this response and a failed read degrades to "not
+     * following" — the exact appearance of the defect that endpoint exists to fix.
+     */
+    @Test
+    void communityRouteRewritesFollowStatusRead() throws Exception {
+        downstream.enqueue(new MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"data\":{\"artistAccountId\":\"a\",\"following\":true}}"));
+
+        String artistAccountId = "0190f3e2-dddd-7abc-8def-000000000005";
+        String token = jwt.signFanToken("fan-rewrite-follow-status");
+
+        webTestClient.get()
+                .uri("/api/v1/community/follows/{artistAccountId}", artistAccountId)
+                .header("Authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus().isOk();
+
+        RecordedRequest received = downstream.takeRequest(5, TimeUnit.SECONDS);
+        assertThat(received).as("downstream did not receive the request").isNotNull();
+        assertThat(received.getMethod())
+                .as("the read must arrive as a GET — a route forwarding only the write "
+                        + "methods would still deliver something here")
+                .isEqualTo("GET");
+        assertThat(received.getPath())
+                .as("GET /api/v1/community/follows/{id} must rewrite to /api/community/follows/{id}")
+                .isEqualTo("/api/community/follows/" + artistAccountId);
+    }
+
     @Test
     void fandomsRouteRewritesV1PrefixToInternalFandomsPath() throws Exception {
         downstream.enqueue(new MockResponse()

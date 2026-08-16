@@ -1,6 +1,7 @@
 package com.example.fanplatform.community.presentation.controller;
 
 import com.example.fanplatform.community.application.FollowArtistUseCase;
+import com.example.fanplatform.community.application.IsFollowingArtistUseCase;
 import com.example.fanplatform.community.application.UnfollowArtistUseCase;
 import com.example.fanplatform.community.application.exception.SelfFollowForbiddenException;
 import com.example.fanplatform.community.presentation.advice.GlobalExceptionHandler;
@@ -22,6 +23,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -48,6 +50,9 @@ class FollowControllerSliceTest {
 
     @MockitoBean
     UnfollowArtistUseCase unfollowArtistUseCase;
+
+    @MockitoBean
+    IsFollowingArtistUseCase isFollowingArtistUseCase;
 
     private String fanBearer(String sub) {
         return "Bearer " + jwt.signFanToken(sub);
@@ -104,5 +109,51 @@ class FollowControllerSliceTest {
                 .andExpect(status().isNoContent());
 
         verify(unfollowArtistUseCase).execute(eq("artist-1"), any());
+    }
+
+    // ---- TASK-FAN-BE-049: GET /api/community/follows/{artistAccountId} -------
+
+    @Test
+    @DisplayName("GET /api/community/follows/{id} (no Authorization) → 401")
+    void isFollowing_withoutAuth_returns401() throws Exception {
+        mockMvc.perform(get("/api/community/follows/artist-1"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    /**
+     * 🔴 Control pair. Either half alone is passed by a constant — an
+     * always-false implementation satisfies the "not following" case and an
+     * always-true one satisfies the "following" case. Only the two together
+     * measure anything, so they stay adjacent and are named as a pair.
+     */
+    @Test
+    @DisplayName("GET /api/community/follows/{id} (following) → 200 following=true")
+    void isFollowing_whenFollowing_returnsTrue() throws Exception {
+        when(isFollowingArtistUseCase.execute(eq("artist-1"), any()))
+                .thenReturn(new IsFollowingArtistUseCase.FollowStatus("artist-1", true));
+
+        mockMvc.perform(get("/api/community/follows/artist-1")
+                        .header("Authorization", fanBearer("fan-1")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.artistAccountId").value("artist-1"))
+                .andExpect(jsonPath("$.data.following").value(true))
+                .andExpect(jsonPath("$.meta.timestamp").exists());
+    }
+
+    @Test
+    @DisplayName("🔴 GET /api/community/follows/{id} (not following) → 200 following=false, NOT 404")
+    void isFollowing_whenNotFollowing_returns200False_not404() throws Exception {
+        when(isFollowingArtistUseCase.execute(eq("artist-2"), any()))
+                .thenReturn(new IsFollowingArtistUseCase.FollowStatus("artist-2", false));
+
+        mockMvc.perform(get("/api/community/follows/artist-2")
+                        .header("Authorization", fanBearer("fan-1")))
+                // The sibling DELETE answers 404 NOT_FOLLOWING for this same
+                // condition. Copying that here would make "not following" and
+                // "no such artist" the same response — see community-api.md.
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.artistAccountId").value("artist-2"))
+                .andExpect(jsonPath("$.data.following").value(false));
     }
 }
