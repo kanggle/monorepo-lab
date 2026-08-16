@@ -31,6 +31,17 @@
 #    (더티 트리에서 구울 수 있다). 보장되는 것은 한 방향뿐이다 —
 #    **이미지가 더 낡으면 그 커밋은 확실히 없다.** 그래서 "최신입니다" 는 말하지 않는다.
 #
+# 🔴 **축이 둘인 이유 — 이 검사는 자기 치료법의 절반으로 꺼질 수 있었다 (TASK-MONO-538).**
+#    낡음을 찾으면 아래 두 줄을 순서대로 인쇄한다: ① `./gradlew …:bootJar` ②
+#    `DEMO_BUILD=1 demo-up.sh …`. 그런데 **`demo-up.sh` 는 컴파일하지 않는다** ⇒ ②만
+#    실행하면 도커가 **디스크의 옛 jar 를 그대로 COPY** 해 이미지를 다시 굽고 `Created` 를
+#    지금으로 찍는다. 첫 축(이미지 vs 소스)은 그 순간부터 **영원히 초록**이고, 그 안의
+#    바이너리는 여전히 옛것이다. 그래서 **jar 자신의 시각**을 두 번째 축으로 잰다:
+#    `이미지 ≥ 소스` 인데 `jar < 소스` 이면 `옛-jar` 로 따로 센다.
+#    🔵 실제로 이 결함을 발견한 경로: `DEMO_BUILD=1 demo-up.sh scm` 이 **하드 의존 iam 까지**
+#    다시 구웠는데 iam 의 jar 은 만들지 않은 상태였다(그때는 우연히 jar 이 최신이라 피해가
+#    없었다). 세탁 표면은 **요청한 도메인보다 넓다.**
+#
 # 🔴 **시각 축을 맞춘다.** `docker image inspect` 의 `Created` 는 RFC3339(UTC 오프셋
 #    포함), `git log %ct` 는 epoch 이다. 둘 다 epoch 로 바꿔 비교한다 — 이 호스트는
 #    UTC+9 라 안 맞추면 9시간짜리 거짓 경보/거짓 침묵이 난다.
@@ -61,8 +72,8 @@ source "$HERE/projects.sh"
 
 [ "$#" -gt 0 ] || { echo "usage: check-image-freshness.sh <domain>..." >&2; exit 0; }
 
-stale=0 fresh=0 undecidable=0
-stale_lines=() und_lines=() rebuild_mods=()
+stale=0 fresh=0 undecidable=0 laundered=0
+stale_lines=() und_lines=() rebuild_mods=() laundered_lines=() laundered_mods=()
 oldest_image_epoch=""
 
 for slug in "$@"; do
@@ -125,7 +136,39 @@ for slug in "$@"; do
       # 하는지 모른다 — gradle 경로는 여기서 이미 알고 있다(프로젝트 디렉터리 + 서비스명).
       rebuild_mods+=(":projects:$(basename "$projdir"):apps:${svc}:bootJar")
     else
-      fresh=$((fresh+1))
+      # ── 두 번째 축: **이미지는 새로운데 jar 가 낡았는가** (TASK-MONO-538) ──────────
+      # `demo-up.sh` 는 **컴파일하지 않는다**(그 파일 헤더가 명시한다). 그래서
+      # `DEMO_BUILD=1` 만 실행하면 도커가 **디스크의 옛 jar 를 그대로 COPY** 해 이미지를
+      # 다시 굽고 `Created` 를 지금으로 찍는다 ⇒ 위 첫 축은 그 순간부터 **영원히 초록**이다.
+      #
+      # 🔴 즉 이 검사는 **자기가 인쇄한 두 줄 중 두 번째만 실행하면 꺼진다.** 래칫이 자기
+      # 계측기를 끄는 모양이고, 그것을 볼 수 있는 유일한 자리가 jar 자신의 시각이다.
+      #
+      # 🔴 여기서도 **낡음만 단언한다** — jar 가 소스보다 새롭다고 그 커밋을 담았다는
+      # 보장은 없다(더티 트리 빌드). 역방향만 보장된다.
+      # 🔵 jar 가 아예 없으면 낡음이 아니라 **판정 불가**다(빌드 산출물을 청소했을 수 있다).
+      jar="$(ls "$moddir"/build/libs/*.jar 2>/dev/null | grep -v -- '-plain\.jar$' | head -1)"
+      if [ -z "$jar" ]; then
+        fresh=$((fresh+1))
+        undecidable=$((undecidable+1))
+        und_lines+=("$img: 이미지는 소스보다 새롭지만 **jar 가 없다** — 이 이미지가 무엇으로 구워졌는지 판정 불가")
+      else
+        jar_epoch="$(date -r "$jar" +%s 2>/dev/null)"
+        if [ -z "$jar_epoch" ]; then
+          fresh=$((fresh+1))
+          undecidable=$((undecidable+1))
+          und_lines+=("$img: jar 시각을 읽지 못했다('$jar') — 판정 불가")
+        elif [ "$jar_epoch" -lt "$src_epoch" ]; then
+          laundered=$((laundered+1))
+          laundered_lines+=("$(printf '%-40s 이미지 %s (새로움)  ·  jar %s  <  소스 %s' "$img" \
+            "$(date -u -d "@$img_epoch" '+%m-%d %H:%MZ')" \
+            "$(date -u -d "@$jar_epoch" '+%m-%d %H:%MZ')" \
+            "$(date -u -d "@$src_epoch" '+%m-%d %H:%MZ')")")
+          laundered_mods+=(":projects:$(basename "$projdir"):apps:${svc}:bootJar")
+        else
+          fresh=$((fresh+1))
+        fi
+      fi
     fi
   done
 done
@@ -133,8 +176,16 @@ done
 if [ "$stale" -gt 0 ]; then
   echo "[freshness] 🔴 코드보다 낡은 이미지 ${stale}개 — 그대로 띄우면 **고친 결함이 그대로 보인다**"
   for l in "${stale_lines[@]}"; do echo "[freshness]   $l"; done
-  echo "[freshness]   다시 굽기:  ./gradlew ${rebuild_mods[*]}"
-  echo "[freshness]   그 다음:    DEMO_BUILD=1 bash infra/demo/demo-up.sh $*"
+  echo "[freshness]   ① 먼저:    ./gradlew ${rebuild_mods[*]}"
+  echo "[freshness]   ② 그 다음:  DEMO_BUILD=1 bash infra/demo/demo-up.sh $*"
+  # 🔴 순서가 load-bearing 이다 — ② 만 하면 `demo-up.sh` 는 컴파일하지 않으므로 **옛 jar 로**
+  #    이미지가 다시 구워지고, 그 순간부터 이 검사는 그 서비스를 영원히 "신선" 으로 본다.
+  echo "[freshness]   ⚠ 순서를 지킬 것 — ②만 실행하면 **옛 jar 로 이미지만 새로 구워져** 이 검사가 그 서비스를 영영 못 잡는다"
+fi
+if [ "$laundered" -gt 0 ]; then
+  echo "[freshness] 🔴 이미지는 새로운데 **jar 가 코드보다 낡은** 서비스 ${laundered}개 — 새 이미지 안에 옛 바이너리가 들어 있다"
+  for l in "${laundered_lines[@]}"; do echo "[freshness]   $l"; done
+  echo "[freshness]   다시 굽기:  ./gradlew ${laundered_mods[*]}  →  DEMO_BUILD=1 bash infra/demo/demo-up.sh $*"
 fi
 if [ "$undecidable" -gt 0 ]; then
   echo "[freshness] ⚠ 판정 불가 ${undecidable}건 (초록이 아니다 — 재지 못한 것이다)"
@@ -152,5 +203,5 @@ fi
 # 🔴 요약은 **언제나** 낸다. 첫 판은 판정 불가가 있으면 요약을 삼켰고, 그래서 "몇 개가
 # 실제로 신선했는지" 를 아무도 알 수 없었다 — 판정 불가만 보이면 검사가 아무것도 못 한
 # 것처럼 읽힌다.
-echo "[freshness] 요약 — 신선 ${fresh} · 낡음 ${stale} · 판정 불가 ${undecidable} (낡음만 판정한다 — '최신'을 뜻하지는 않는다)"
+echo "[freshness] 요약 — 신선 ${fresh} · 낡음 ${stale} · 옛-jar ${laundered} · 판정 불가 ${undecidable} (낡음만 판정한다 — '최신'을 뜻하지는 않는다)"
 exit 0
