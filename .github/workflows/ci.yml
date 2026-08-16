@@ -2445,7 +2445,16 @@ jobs:
       )
     uses: ./.github/workflows/_integration.yml
     with:
+      # gateway-service joined in TASK-MONO-542. It declared `integrationTest` but was
+      # listed by no job, so its 5 classes had rotted: every one of them failed with
+      # `initializationError` / `"jwks" is null` and nothing reported it, because `check`
+      # excludes the `integration` tag by design. Joining the lane is the act that
+      # surfaces the bug — the same sequence the fan-platform gateway went through in
+      # TASK-FAN-BE-049 + TASK-MONO-541, and these two were the only real stragglers the
+      # population recount in TASK-MONO-541 AC-4 found. Do not drop this line without
+      # re-running that recount.
       gradle-tasks: >-
+        :projects:scm-platform:apps:gateway-service:integrationTest
         :projects:scm-platform:apps:procurement-service:integrationTest
         :projects:scm-platform:apps:inventory-visibility-service:integrationTest
         :projects:scm-platform:apps:demand-planning-service:integrationTest
