@@ -4,7 +4,10 @@ import com.example.fanplatform.gateway.testsupport.JwksMockServer;
 import com.example.fanplatform.gateway.testsupport.JwtTestHelper;
 import com.redis.testcontainers.RedisContainer;
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 import okhttp3.mockwebserver.MockWebServer;
+import okhttp3.mockwebserver.QueueDispatcher;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -83,6 +86,35 @@ public abstract class GatewayIntegrationBase {
             downstream.start();
         } catch (IOException e) {
             throw new ExceptionInInitializerError(e);
+        }
+    }
+
+    /**
+     * 🔴 Resets the shared {@code downstream} queues before every test — TASK-MONO-541.
+     *
+     * <p>One MockWebServer is shared by every subclass and cannot be per-class: the
+     * route URI is wired through {@code @DynamicPropertySource} and Spring caches one
+     * context for the whole suite, so a per-class server would leave the cached route
+     * pointing at a dead port. Sharing it means its two queues are suite-global state.
+     *
+     * <p>That state leaks. {@code GatewayRateLimitIntegrationTest} enqueues 50 responses
+     * on purpose and consumes only the handful the limiter lets through, so ~45 stale
+     * {@code 200 {}} responses sit in the queue and are served to whatever runs next.
+     * Measured: run one class alone → 10/10 green; run the suite → 9 of those same 10
+     * fail with {@code expected:<201 CREATED> but was:<200 OK>} and mismatched recorded
+     * paths. **Isolation passing is not the suite passing**, and this class is where the
+     * difference lives.
+     *
+     * <p>{@code setDispatcher(new QueueDispatcher())} installs a fresh, empty response
+     * queue (there is no clear() on the old one); the drain loop empties the recorded
+     * request side. Safe because no subclass installs a Dispatcher of its own — they all
+     * use {@code enqueue}.
+     */
+    @BeforeEach
+    void resetDownstreamQueues() throws InterruptedException {
+        downstream.setDispatcher(new QueueDispatcher());
+        while (downstream.takeRequest(1, TimeUnit.MILLISECONDS) != null) {
+            // discard a sibling test's recorded request
         }
     }
 

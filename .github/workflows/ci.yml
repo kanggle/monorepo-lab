@@ -2314,6 +2314,17 @@ jobs:
     # §19a (containers @BeforeAll → static block), §19c (outbox repo deleteAll →
     # JdbcTemplate TRUNCATE), and an artist application-test.yml YAML scalar quote.
     # TASK-FAN-BE-013: notification-service joins (event-consumer + inbox ITs).
+    # TASK-MONO-541: gateway-service joins — it was the one fan module declaring an
+    # `integrationTest` task that no job ever named. `check` excludes the
+    # `integration` tag by design (Docker-free fast loop) and this list held four
+    # services, so its route-contract suite ran nowhere. It had rotted in exactly the
+    # way §19a above describes: `@DynamicPropertySource` suppliers are evaluated at
+    # context build, which under `@TestInstance(PER_CLASS)` happens BEFORE
+    # `@BeforeAll`, so the fields they close over were null and all 10 tests died at
+    # `initializationError`. That the sibling services hit the same bug *when they
+    # joined this job* is the point — joining the lane is what surfaces it, and the
+    # gateway never joined. TASK-FAN-BE-049 fixed its harness; this line is what
+    # keeps it fixed.
     # Activate for fan changes or cross-project (libs/workflows).
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
@@ -2330,6 +2341,7 @@ jobs:
         :projects:fan-platform:apps:artist-service:integrationTest
         :projects:fan-platform:apps:membership-service:integrationTest
         :projects:fan-platform:apps:notification-service:integrationTest
+        :projects:fan-platform:apps:gateway-service:integrationTest
       artifact-name: fan-integration-test-reports
       report-paths: |
         projects/fan-platform/apps/*/build/reports/tests/integrationTest/
