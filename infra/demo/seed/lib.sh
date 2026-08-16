@@ -27,7 +27,19 @@ SEED_LIB_LOADED=1
 # --- 로깅 --------------------------------------------------------------------
 SEED_DOMAIN="${SEED_DOMAIN:-?}"
 seed_log()  { printf '[seed:%s] %s\n' "$SEED_DOMAIN" "$*"; }
-seed_warn() { printf '[seed:%s] ⚠ %s\n' "$SEED_DOMAIN" "$*" >&2; }
+# 🔴 경고는 **세어야 한다** (TASK-MONO-535). 세지 않으면 요약 줄이
+# `생성 0 · 기존 2 · 실패 0` 으로 끝나는데, 그것은 **완전히 정상인 재실행과 글자 하나
+# 다르지 않다.** 데모를 켜는 사람이 읽는 마지막 줄이 "실패 0" 이므로 스택은 초록으로
+# 읽히고 화면만 빈다 — 실측(2026-08-15)으로 정확히 그 상태였다(`SO-DEMO-0001` 이
+# `PICKING` 에 멈춘 채 요약은 "실패 0").
+# 🔴 셸 변수로 세면 **조용히 빠진다.** `operator_token` 처럼 `$(...)` 명령 치환 안에서
+# 불리는 경고는 서브셸에서 증가하고 그 서브셸과 함께 사라진다 — 실측으로 ⚠ 가 찍혔는데
+# 요약은 `경고 0` 이었다. 그것은 원래 결함을 다른 모양으로 되살리는 것이므로 파일로 센다.
+# (export 하지 않는다: 서브셸은 이 변수를 물려받아 **같은 파일**에 세고, 도메인별 자식
+#  프로세스는 자기 파일을 새로 만든다 ⇒ 서브셸은 포함, 다른 도메인은 불포함.)
+SEED_WARN_FILE="$(mktemp)"
+trap 'rm -f "$SEED_WARN_FILE"' EXIT
+seed_warn() { printf '[seed:%s] ⚠ %s\n' "$SEED_DOMAIN" "$*" >&2; printf 'w\n' >> "$SEED_WARN_FILE"; }
 seed_fail() { printf '[seed:%s] ✗ %s\n' "$SEED_DOMAIN" "$*" >&2; SEED_FAILURES=$((SEED_FAILURES + 1)); }
 SEED_FAILURES=0
 SEED_CREATED=0
@@ -325,6 +337,12 @@ wait_backend() {
 container_up() { docker ps --format '{{.Names}}' | grep -qx "$1"; }
 
 seed_summary() {
-  seed_log "요약 — 생성 $SEED_CREATED · 기존 $SEED_EXISTING · 실패 $SEED_FAILURES"
+  # 🔴 `경고` 축이 여기 있는 이유 (TASK-MONO-535): 이 줄이 데모를 켠 사람이 읽는 **마지막
+  # 줄**이다. 경고를 빼면 *"화면이 빌 것을 이미 아는 실행"* 과 *"전부 정상인 실행"* 이
+  # 같은 문장을 낸다. 차이는 위쪽 ⚠ 줄뿐인데 그것은 스크롤로 지나간다.
+  local w="" n=0
+  [ -f "$SEED_WARN_FILE" ] && n="$(wc -l < "$SEED_WARN_FILE" | tr -d ' ')"
+  [ "${n:-0}" -gt 0 ] && w=" · ⚠ 경고 $n (실패는 아니지만 **화면이 빕니다** — 위 ⚠ 줄의 복구 명령을 읽으십시오)"
+  seed_log "요약 — 생성 $SEED_CREATED · 기존 $SEED_EXISTING · 실패 $SEED_FAILURES${w}"
   return $(( SEED_FAILURES > 0 ? 1 : 0 ))
 }

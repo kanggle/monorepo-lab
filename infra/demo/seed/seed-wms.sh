@@ -313,7 +313,20 @@ push_outbound_to_shipped() {
     [ -n "$pr_id" ] && break
     sleep 2
   done
-  [ -n "$pr_id" ] || { seed_warn "picking request 가 생기지 않았습니다 — ADR-MONO-066 경로를 확인하십시오"; return 1; }
+  # 🔴 예전 문구는 *"ADR-MONO-066 경로를 확인하십시오"* 였다. 그 조언을 따르는 사람은
+  # **정상 동작하는 코드를 감사하러 간다** — 실측(2026-08-15)으로 같은 DB 의 다른 두 주문은
+  # `SHIPPED` 까지 갔다. 원인은 코드가 아니라 **이 볼륨의 데이터 이력**이다: `PickingRequest`
+  # 는 예약 회신 이벤트를 소비할 때만 생기는데(ADR-MONO-066 B), 이 주문의 예약은 그 코드가
+  # 있기 전에 이미 소비돼 끝났고 재생되지 않는다. 시드는 멱등이라 새 예약도 안 일어난다.
+  # 계약 § 2.1(수동 재진입)은 BE-586 R2-b 가 도달 불가라 삭제했으므로 되살릴 API 도 없다.
+  # ⇒ **남은 복구 수단은 볼륨 초기화뿐이고, 경고는 그 명령을 줘야 한다.**
+  [ -n "$pr_id" ] || {
+    seed_warn "$ORDER_NO 에 picking request 가 없습니다 — **코드 결함이 아니라 이 볼륨의 데이터 이력** 문제입니다"
+    seed_warn "  ADR-MONO-066 이전에 예약이 소비된 주문이라 재실행으로는 낫지 않습니다(수동 재진입 API 도 없습니다)"
+    seed_warn "  복구: bash infra/demo/demo-down.sh wms && docker volume rm wms_postgres-data && bash infra/demo/demo-up.sh wms"
+    seed_warn "  ⚠ 그 명령은 wms 데이터를 **전부** 지웁니다(입고·재고 포함) — 시드가 다시 심습니다"
+    return 1
+  }
 
   order_line_id="$(pick1 orderLineId "$SEED_LAST_BODY")"
   loc_id="$(pick1 locationId "$SEED_LAST_BODY")"
@@ -350,6 +363,6 @@ JSON
 }
 
 push_outbound_to_shipped \
-  || seed_warn "출고 흐름이 SHIPPED 까지 가지 못했습니다 — 주문 화면은 정상이고 출하 화면만 빕니다"
+  || seed_warn "출고 흐름이 SHIPPED 까지 가지 못했습니다 — 주문 화면은 정상이고 **출하 화면만 빕니다**(위 복구 명령 참조)"
 
 seed_summary
