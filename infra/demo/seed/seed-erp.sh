@@ -496,5 +496,55 @@ else
   seed_log "결재함 $inbox_actual 건 = 대기 행 $inbox_expected 건 (승인자 sub=$APPROVER_SUB) — 상신 → 승인 루프가 닫혀 있습니다"
 fi
 
-seed_log "요약 — 생성 $SEED_CREATED · 기존 $SEED_EXISTING · 실패 $SEED_FAILURES"
-exit $(( SEED_FAILURES > 0 ? 1 : 0 ))
+# =============================================================================
+# 10. 위임 프로젝션 판정 (TASK-MONO-536)
+#
+# 🔴 §8 은 **사원** 프로젝션만 센다. 위임도 같은 릴레이·같은 봉투를 타는데 아무도 세지
+#    않았고, 그 사각에서 실제 결함이 살아 있었다 — 실측(2026-08-16, 기존 볼륨):
+#    `approval/delegations` **2** ↔ `read-model/delegations` **1**. 없는 쪽이 하필
+#    **데모 시드가 만든 위임**이고, 있는 쪽은 `TASK-ERP-BE-043` 검증 세션이 자기 확인용으로
+#    만든 프로브 행이었다. ⇒ 화면은 차 있는데 **그것을 채운 것은 검증 자신**이었다.
+#
+# 🔴 왜 재실행으로 안 낫나: 위임 생성은 멱등이라(`존재  위임 …`) **이벤트를 다시 쏘지
+#    않는다.** 봉투 결함 시절(ERP-BE-043 이전) 발행된 이벤트는 버려졌고 재생 경로가 없다.
+#    ⇒ 이 볼륨에서의 복구 수단은 **초기화 + 재시드**뿐이다.
+#
+# 🔵 신선 볼륨에서는 이 등식이 성립한다(수정된 바이너리가 봉투를 제대로 싣는다). 그래서
+#    이것은 코드 결함이 아니라 **데이터 이력**의 문제이고, 경고 문구가 그렇게 말해야 한다 —
+#    `TASK-MONO-535` 가 세운 규칙(원인·불가역성·복구 명령·데이터 손실 고지)을 따른다.
+#
+# 🔴 판정은 **원소 수**로 한다. 200 도, `meta.warning` 부재도 증거가 아니다. 그리고
+#    read-model 은 최종적 일관성이므로 **짧게 재시도한 뒤** 판정한다(한 번 읽고 어긋났다고
+#    경고하면 정상 지연을 결함으로 신고한다).
+# =============================================================================
+del_src=""; del_proj=""
+if http GET "$ERP/api/erp/approval/delegations?size=100"; then
+  del_src="$(printf '%s' "$SEED_LAST_BODY" | grep -oE '"totalElements":[0-9]+' | head -1 | cut -d: -f2)"
+fi
+for _ in $(seq 1 12); do
+  if http GET "$ERP/api/erp/read-model/delegations?size=100"; then
+    del_proj="$(printf '%s' "$SEED_LAST_BODY" | grep -oE '"totalElements":[0-9]+' | head -1 | cut -d: -f2)"
+  fi
+  [ -n "$del_src" ] && [ "${del_proj:-x}" = "$del_src" ] && break
+  sleep 5
+done
+
+if [ -z "$del_src" ] || [ -z "$del_proj" ]; then
+  # 🔴 추출 실패는 "0 건" 이 아니다 — 같은 값으로 접으면 결함이 초록이 된다(§9 와 같은 규율).
+  seed_fail "위임 프로젝션 판정 불가 — 원본 '${del_src:-<추출 실패>}' · 투영 '${del_proj:-<추출 실패>}' (마지막 HTTP $SEED_LAST_STATUS)"
+elif [ "$del_src" = "$del_proj" ]; then
+  seed_log "위임 프로젝션 $del_proj/$del_src 반영 확인 (read-model)"
+else
+  seed_warn "위임이 read-model 에 $del_proj/$del_src 건만 반영됐습니다 — 콘솔 /erp/delegation 이 실제보다 적게 보입니다"
+  seed_log  "      원인은 이 볼륨의 데이터 이력입니다: ADR/ERP-BE-043 이전에 발행된 위임 이벤트는"
+  seed_log  "      봉투가 불완전해 버려졌고, 위임 생성은 멱등이라 **재실행해도 다시 쏘지 않습니다**"
+  seed_log  "      복구(⚠ erp 데이터 전부 삭제, 시드가 다시 심습니다):"
+  seed_log  "      bash infra/demo/demo-down.sh erp && docker volume rm erp_mysql-data && bash infra/demo/demo-up.sh erp"
+fi
+
+# 🔴 요약은 `seed_summary` 로 낸다 — 이 스크립트는 **6개 시드 중 유일하게** 자기 요약 줄을
+#    손으로 찍고 있었고(나머지 5개는 전부 `seed_summary`), 그 결과 `TASK-MONO-535` 가 만든
+#    `⚠ 경고 N` 이 **erp 의 마지막 줄에는 도달하지 않았다.** 위 위임 경고가 정확히 그 줄에
+#    실려야 하므로 함께 고친다. 종료 코드 규칙은 동일하다(실패>0 이면 1).
+seed_summary
+exit $?
