@@ -218,7 +218,7 @@ public abstract class GatewayIntegrationBase {
         registry.add("spring.cloud.gateway.routes[0].predicates[0]",
                 () -> "Path=/api/v1/procurement/**");
         registry.add("spring.cloud.gateway.routes[0].filters[0]",
-                () -> "RewritePath=/api/v1/procurement/(?<segment>.*), /api/BITE-AC3/${segment}");
+                () -> "RewritePath=/api/v1/procurement/(?<segment>.*), /api/procurement/${segment}");
         registry.add("spring.cloud.gateway.routes[0].filters[1].name",
                 () -> "RequestRateLimiter");
         registry.add("spring.cloud.gateway.routes[0].filters[1].args.redis-rate-limiter.replenishRate",
