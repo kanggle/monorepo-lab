@@ -36,6 +36,13 @@ public final class JwtTestHelper {
 
     private final RSAKey rsaJwk;
     private final RSASSASigner signer;
+    /**
+     * A second keypair, deliberately never published in the JWKS, used by
+     * {@link #signForgedSignatureToken}. Carries the same {@code kid} as the real key so
+     * the resource server still selects a key and the rejection is genuinely a signature
+     * failure rather than "no key found".
+     */
+    private final RSASSASigner foreignSigner;
 
     public JwtTestHelper() {
         try {
@@ -47,6 +54,8 @@ public final class JwtTestHelper {
         }
         try {
             this.signer = new RSASSASigner(rsaJwk);
+            RSAKey foreignJwk = new RSAKeyGenerator(2048).keyID(rsaJwk.getKeyID()).generate();
+            this.foreignSigner = new RSASSASigner(foreignJwk);
         } catch (JOSEException e) {
             throw new IllegalStateException("Failed to build RSA signer", e);
         }
@@ -121,6 +130,52 @@ public final class JwtTestHelper {
     public String signNoRoleToken(String subject) {
         return signToken(subject, null, DEFAULT_TENANT_ID, 300,
                 Map.of("email", subject + "@test.local"));
+    }
+
+    /**
+     * A fan-platform token whose claims are all valid but whose signature is produced by a
+     * foreign key NOT in the JWKS (while advertising the real {@code kid}), so verification
+     * ALWAYS fails → 401.
+     *
+     * <p>Replaces a byte-flip tamper — the last straggler of the sweep that fixed erp and wms
+     * in TASK-MONO-458 and finance in MONO-461. scm was closed by TASK-MONO-542, which is also
+     * where this one was found: fan reddened MONO-542's own PR run on a change that touched
+     * nothing in fan.
+     *
+     * <p>Why the byte-flip was wrong: flipping the LAST base64url character of an RSA-2048
+     * signature only touches padding bits about a quarter of the time. 256 bytes is 2048 bits,
+     * base64url packs 6 bits per character, and 2048 = 6 × 341 + 2 — so the 342nd character
+     * carries 2 significant bits plus 4 padding bits, and {@code 'A'} ({@code 000000}) and
+     * {@code 'B'} ({@code 000001}) are identical in the two that count.
+     *
+     * <p>Measured here on fan's own keys over 400 freshly signed tokens (TASK-MONO-543 AC-1,
+     * deliberately not inherited from scm's run): the final character is always one of
+     * {@code A Q g w}, and the mutation left the decoded signature <strong>byte-identical 104
+     * times — 26.0%</strong>, every one of them an {@code 'A'}. The "tampered" token then
+     * verified, the gateway correctly routed it downstream, the shared MockWebServer had
+     * nothing queued and blocked, and the test died five seconds later on {@code Timeout on
+     * blocking read}. Signing with a foreign key never verifies, for any key, on any run.
+     */
+    public String signForgedSignatureToken(String subject) {
+        Instant now = Instant.now();
+        JWTClaimsSet claims = new JWTClaimsSet.Builder()
+                .subject(subject)
+                .issuer(SAS_ISSUER)
+                .claim("tenant_id", DEFAULT_TENANT_ID)
+                .claim("role", "FAN")
+                .claim("roles", List.of("FAN"))
+                .issueTime(Date.from(now.minusSeconds(5)))
+                .expirationTime(Date.from(now.plusSeconds(300)))
+                .jwtID(UUID.randomUUID().toString())
+                .build();
+        JWSHeader header = new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(rsaJwk.getKeyID()).build();
+        SignedJWT jwt = new SignedJWT(header, claims);
+        try {
+            jwt.sign(foreignSigner);
+        } catch (JOSEException e) {
+            throw new IllegalStateException("Failed to sign JWT with the foreign key", e);
+        }
+        return jwt.serialize();
     }
 
     public String keyId() {
