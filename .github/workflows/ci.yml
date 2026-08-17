@@ -1505,6 +1505,16 @@ jobs:
           tmp="$(mktemp -d)"
           cp infra/demo/demo-boot.sh "$tmp/"
           printf '%s\n' 'echo "DEMO_DOMAIN=[${DEMO_DOMAIN}]"' > "$tmp/demo-up.sh"
+          # TASK-MONO-550 added a step to the boot contract, so this harness has to
+          # model it — the same reason demo-up.sh is stubbed above. Stubbed rather
+          # than copied: the real script would find no projects/*/.env.example under
+          # a bare temp dir and refuse (by design), which would fail this step for a
+          # reason that has nothing to do with what it asserts.
+          #
+          # This does NOT weaken the provisioning check. That is guard (z3) in
+          # verify-demo-wrapper.sh, which builds a tree with no `.env` and runs the
+          # real scripts on it. This step only asserts the DEMO_DOMAIN fallback.
+          printf '%s\n' 'echo "[provision-env] (stub)"' > "$tmp/provision-demo-env.sh"
           out="$(cd "$tmp" && timeout 30 bash demo-boot.sh full)"
           echo "$out"
           echo "$out" | grep -qx 'DEMO_DOMAIN=\[local\]' \
