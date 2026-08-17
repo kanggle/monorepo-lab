@@ -136,6 +136,7 @@ jobs:
         run: docker info
 
       - name: Build service images, run e2e suite
+        id: e2e
         # ADR-MONO-041 D2: service images `FROM monorepo/java-service-base:v1`;
         # no registry, so build the shared base locally first. Then, per service
         # in the `services` JSON: (download mode) move the downloaded jar back to
@@ -188,6 +189,21 @@ jobs:
           done < <(jq -c '.[]' <<<"$SERVICES")
           echo "[e2e] gradle: $GRADLE_TARGET$XARGS $DARGS"
           ./gradlew "$GRADLE_TARGET" $XARGS $DARGS --no-daemon --stacktrace
+
+      # TASK-MONO-545. Six caller jobs share this lane (wms / fan / scm × smoke+full),
+      # and every one of them used to end a green run with no record of what it ran —
+      # the upload below is `if: failure()`. An e2e suite is also among the easiest to
+      # empty by accident: `e2eSmokeTest` / `e2eFullTest` select by @Tag, so dropping
+      # the tag from the last @Tag("smoke") class leaves the task succeeding over
+      # nothing at all. `gradle-target` is the population — it is what this job claimed
+      # to run, and unlike `report-paths` it cannot match nothing and agree with itself.
+      - name: Summarise e2e results and fail on an empty suite
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/summarise-test-results
+        with:
+          lane: e2e
+          gradle-tasks: ${{ inputs.gradle-target }}
+          run-outcome: ${{ steps.e2e.outcome }}
 
       - name: Upload e2e test reports on failure
         if: failure()

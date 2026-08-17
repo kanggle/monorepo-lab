@@ -608,7 +608,27 @@ jobs:
           NEXTAUTH_SECRET: ci-iam-e2e-secret
           NEXTAUTH_URL: http://localhost:3001
           AUTH_TRUST_HOST: 'true'
+        id: logout-spec
         run: pnpm --filter web-store exec playwright test rp-initiated-logout.spec.ts
+
+      # TASK-MONO-545. This lane runs ONE spec file, named on the command line. A rename
+      # or a move of `rp-initiated-logout.spec.ts` makes `playwright test <path>` fail
+      # loudly ("No tests found"), but `SKIP_GAP_E2E` and the spec's own guards can leave
+      # it selected-and-skipped, which the step's exit code cannot distinguish from
+      # selected-and-passed. Reading the count is what tells those two apart, and the
+      # `skipped` column is where it shows.
+      #
+      # The path is anchored at `github.workspace`: this job sets a job-level
+      # `defaults.run.working-directory`, and the reporter's own path resolves against
+      # the config's directory — three bases in one job is two too many to leave implicit.
+      - name: Summarise GAP logout e2e results and fail on an empty suite
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/summarise-test-results
+        with:
+          lane: web-store-iam-logout-e2e
+          report-files: |
+            rp-initiated-logout=${{ github.workspace }}/projects/ecommerce-microservices-platform/apps/web-store/test-results/junit.xml
+          run-outcome: ${{ steps.logout-spec.outcome }}
 
       - name: Tear down lean GAP stack
         if: always()
@@ -789,10 +809,22 @@ jobs:
         run: docker build -t monorepo/java-service-base:v1 docker/java-service-base
 
       - name: Run iam docker-compose e2e full suite
+        id: gradle
         run: >-
           ./gradlew
           :projects:iam-platform:tests:e2e:e2eFullTest
           --no-daemon --stacktrace
+
+      # TASK-MONO-545 — see `.github/actions/summarise-test-results`. `e2eFullTest`
+      # selects `@Tag("full")`; an empty selection reports green and leaves no artifact
+      # behind, and this lane runs nightly, where nobody is looking at a diff at the time.
+      - name: Summarise iam e2e full results and fail on an empty suite
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/summarise-test-results
+        with:
+          lane: iam-e2e-full
+          gradle-tasks: ':projects:iam-platform:tests:e2e:e2eFullTest'
+          run-outcome: ${{ steps.gradle.outcome }}
 
       - name: Upload iam e2e full test reports on failure
         if: failure()
@@ -858,6 +890,7 @@ jobs:
           build_img shipping-service ecommerce-shipping-service:e2e 8090
 
       - name: Run fulfillment loop e2e full suite
+        id: gradle
         run: >-
           ./gradlew
           :projects:ecommerce-microservices-platform:tests:e2e:e2eFullTest
@@ -866,6 +899,18 @@ jobs:
           -Decommerce.e2e.orderImage=ecommerce-order-service:e2e
           -Decommerce.e2e.shippingImage=ecommerce-shipping-service:e2e
           --no-daemon --stacktrace
+
+      # TASK-MONO-545 — see `.github/actions/summarise-test-results`. This lane holds a
+      # single cross-project scenario (ADR-MONO-022 §D7 ④); "one test ran" and "no test
+      # ran" were previously indistinguishable from the outside, and the difference is
+      # the whole value of the job.
+      - name: Summarise fulfillment e2e results and fail on an empty suite
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/summarise-test-results
+        with:
+          lane: ecommerce-fulfillment-e2e-full
+          gradle-tasks: ':projects:ecommerce-microservices-platform:tests:e2e:e2eFullTest'
+          run-outcome: ${{ steps.gradle.outcome }}
 
       - name: Upload ecommerce fulfillment e2e reports on failure
         if: failure()

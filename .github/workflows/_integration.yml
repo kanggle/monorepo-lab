@@ -80,125 +80,23 @@ jobs:
           --no-daemon --stacktrace
           ${{ inputs.gradle-args }}
 
-      # TASK-MONO-544. A green integration job used to record nothing at all: the
-      # upload below is `if: failure()`, so a passing run leaves no artifact, and
-      # Gradle prints no counts. That made two things impossible.
-      #
-      # (1) The repo's standard acceptance phrasing — "read tests/failures/errors/
-      #     skipped from the job artifact" — could not be satisfied on a green run.
-      #     TASK-MONO-542 had to read its numbers from a deliberately-failed bite
-      #     run instead.
-      # (2) A suite that silently discovers ZERO tests passes. Gradle's test task
-      #     succeeds when it finds nothing, so a tag-filter change, a module
-      #     misconfiguration or a class-naming change empties a suite and reports
-      #     green, with no artifact left behind to notice it later.
-      #
-      # This step closes both. The population comes from `gradle-tasks` rather than
-      # from the `report-paths` globs, because that input is the authoritative list
-      # of what this job claimed to run — a glob can quietly match nothing and agree
-      # with itself.
-      #
-      # Deliberately NOT solved by relaxing the upload to `if: !cancelled()`:
-      #   - it fails in exactly the case it would exist for. Zero discovered tests
-      #     means zero XML files, so upload-artifact would upload nothing and the
-      #     green run would still record nothing.
-      #   - upload-artifact@v4 rejects a second upload under the same name, so a
-      #     re-run would error or keep serving the first attempt's artifact. That
-      #     is precisely the symptom TASK-MONO-541 recorded and misattributed to
-      #     gh's re-run behaviour; re-creating it would re-create the confusion.
-      #   - an artifact has to be downloaded to be read. These counts go to the job
-      #     log and the step summary, where both humans and `gh api .../logs` find
-      #     them without a second request.
+      # TASK-MONO-544 closed the "a green job records nothing / an empty suite is
+      # still green" gap here, inline. TASK-MONO-545 found the same gap open in
+      # seven more lanes, five of them needing this identical parser, and moved the
+      # body verbatim into `.github/actions/summarise-test-results` — where the
+      # rationale, the population argument and the two log-reading traps now live.
+      # This lane's behaviour is unchanged except the marker word: what used to print
+      # `INTEGRATION-SUMMARY tests=…` now prints `TEST-SUMMARY lane=integration tests=…`.
+      # (The 12 integration lanes are also the action's widest first-day exercise;
+      # their known total — 1,451 tests, 0 skipped, measured by TASK-MONO-544 — is
+      # the control that says the move changed no numbers.)
       - name: Summarise integration results and fail on an empty suite
         if: ${{ !cancelled() }}
-        env:
-          GRADLE_TASKS: ${{ inputs.gradle-tasks }}
-          GRADLE_OUTCOME: ${{ steps.gradle.outcome }}
-        run: |
-          # GitHub runs `run:` blocks as `bash -e`, and `set -o pipefail` would make it
-          # worse here: a grep that legitimately finds nothing exits 1 and would abort the
-          # whole step, and `grep | head -1` can take SIGPIPE. Either one would make this
-          # guard silently not run, which is the exact failure class it exists to catch.
-          # Status is accumulated explicitly below instead.
-          set +e
-          set -u
-
-          total_tests=0; total_failures=0; total_errors=0; total_skipped=0
-          empty_modules=""; unparsable=""
-          table="| module | tests | failures | errors | skipped |\n|---|---|---|---|---|\n"
-
-          for task in $GRADLE_TASKS; do
-            # :projects:foo:apps:bar:integrationTest -> projects/foo/apps/bar
-            module="${task#:}"; module="${module%:integrationTest}"; module="${module//://}"
-            results="$module/build/test-results/integrationTest"
-
-            m_tests=0; m_failures=0; m_errors=0; m_skipped=0; found=0
-            for xml in "$results"/TEST-*.xml; do
-              [ -e "$xml" ] || continue
-              found=1
-              suite=$(tr '\n' ' ' < "$xml" | grep -o '<testsuite [^>]*>' | head -1)
-              if [ -z "$suite" ]; then unparsable="$unparsable $xml"; continue; fi
-              for attr in tests failures errors skipped; do
-                value=$(printf '%s' "$suite" | grep -o "$attr=\"[0-9]*\"" | head -1 | grep -o '[0-9]*')
-                # An absent attribute is a parser problem, not a zero. Say so.
-                if [ -z "$value" ]; then unparsable="$unparsable $xml($attr)"; value=0; fi
-                case "$attr" in
-                  tests)    m_tests=$((m_tests + value)) ;;
-                  failures) m_failures=$((m_failures + value)) ;;
-                  errors)   m_errors=$((m_errors + value)) ;;
-                  skipped)  m_skipped=$((m_skipped + value)) ;;
-                esac
-              done
-            done
-
-            if [ "$found" -eq 0 ] || [ "$m_tests" -eq 0 ]; then
-              empty_modules="$empty_modules $module"
-            fi
-            total_tests=$((total_tests + m_tests))
-            total_failures=$((total_failures + m_failures))
-            total_errors=$((total_errors + m_errors))
-            total_skipped=$((total_skipped + m_skipped))
-            table="$table| \`${module##*/}\` | $m_tests | $m_failures | $m_errors | $m_skipped |\n"
-          done
-
-          table="$table| **total** | **$total_tests** | **$total_failures** | **$total_errors** | **$total_skipped** |\n"
-
-          # stdout so `gh api .../jobs/<id>/logs` can read it; step summary for humans.
-          # 🔴 Match this line with the DIGITS required, e.g.
-          #   grep -oE 'INTEGRATION-SUMMARY tests=[0-9]+ failures=[0-9]+ errors=[0-9]+ skipped=[0-9]+'
-          # A bare `grep INTEGRATION-SUMMARY` finds the wrong line first: Actions echoes this
-          # whole script into the log before running it, so the literal marker appears with
-          # `tests=$total_tests` still unexpanded — and it appears even if the step never ran.
-          # Measured the mistake while writing TASK-MONO-544's own AC-3.
-          #
-          # Same trap on the errors below, with a usable discriminator: the echoed source
-          # keeps the literal `::error::`, while the runtime line is rewritten to `##[error]`.
-          # Grep for `##[error]` to read what actually happened.
-          echo "INTEGRATION-SUMMARY tests=$total_tests failures=$total_failures errors=$total_errors skipped=$total_skipped"
-          # %b, not a bare format string: the table is data and must never be parsed as one.
-          printf '### Integration results\n\n%b\n' "$table" >> "$GITHUB_STEP_SUMMARY"
-          printf '%b' "$table"
-
-          status=0
-          if [ -n "$unparsable" ]; then
-            echo "::error::Could not read testsuite counts from:$unparsable — the numbers above are not trustworthy."
-            printf "\n:x: **Unparsable result files**:%s\n" "$unparsable" >> "$GITHUB_STEP_SUMMARY"
-            status=1
-          fi
-          if [ -n "$empty_modules" ]; then
-            echo "::error::These modules were asked to run integrationTest and produced no tests:$empty_modules"
-            echo "::error::A suite that discovers nothing passes silently — that is what this check exists to stop."
-            printf "\n:x: **Ran zero tests**:%s\n" "$empty_modules" >> "$GITHUB_STEP_SUMMARY"
-            status=1
-          fi
-
-          # Do not manufacture a second, confusing failure when Gradle already failed
-          # (a compile error legitimately leaves no results). The report above still prints.
-          if [ "$GRADLE_OUTCOME" != "success" ]; then
-            echo "Gradle step outcome was '$GRADLE_OUTCOME'; reporting only, not failing here."
-            exit 0
-          fi
-          exit $status
+        uses: ./.github/actions/summarise-test-results
+        with:
+          lane: integration
+          gradle-tasks: ${{ inputs.gradle-tasks }}
+          run-outcome: ${{ steps.gradle.outcome }}
 
       - name: Upload integration test reports on failure
         if: failure()

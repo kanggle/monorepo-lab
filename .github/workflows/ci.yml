@@ -1552,6 +1552,80 @@ jobs:
       needs.changes.outputs.erp == 'true' ||
       needs.changes.outputs.platform-console == 'true'
 
+    # TASK-MONO-545 — the eight task lists moved out of their `run:` blocks and into
+    # env, so that the summarise step at the end of this job can be handed the SAME
+    # strings the gradle steps were invoked with. Repeating the lists in the step's
+    # `with:` instead would have been worse than merely duplicative: `libs-ci-coverage`
+    # decides a module is covered by grepping this file for `:<module>:check`, so a
+    # second copy would keep that guard green while the actual invocation lost the
+    # module. One definition, two consumers.
+    env:
+      GRADLE_TASKS_CORE: >-
+        :assertNoApiOnSharedLibs
+        :libs:java-common:check
+        :libs:java-gateway:check
+        :libs:java-messaging:check
+        :libs:java-notification:check
+        :libs:java-observability:check
+        :libs:java-security:check
+        :libs:java-security-servlet:check
+        :libs:java-test-support:check
+        :libs:java-web:check
+        :libs:java-web-servlet:check
+        :libs:payment-core:check
+        :libs:payment-portone:check
+        :libs:payment-toss:check
+        :projects:wms-platform:apps:gateway-service:check
+        :projects:wms-platform:apps:inbound-service:check
+        :projects:wms-platform:apps:inventory-service:check
+        :projects:wms-platform:apps:outbound-service:check
+        :projects:wms-platform:apps:master-service:check
+        :projects:wms-platform:apps:notification-service:check
+        :projects:wms-platform:apps:admin-service:check
+        :projects:ecommerce-microservices-platform:apps:batch-worker:check
+        :projects:ecommerce-microservices-platform:apps:gateway-service:check
+        :projects:ecommerce-microservices-platform:apps:notification-service:check
+        :projects:ecommerce-microservices-platform:apps:order-service:check
+        :projects:ecommerce-microservices-platform:apps:payment-service:check
+        :projects:ecommerce-microservices-platform:apps:product-service:check
+        :projects:ecommerce-microservices-platform:apps:promotion-service:check
+        :projects:ecommerce-microservices-platform:apps:review-service:check
+        :projects:ecommerce-microservices-platform:apps:search-service:check
+        :projects:ecommerce-microservices-platform:apps:settlement-service:check
+        :projects:ecommerce-microservices-platform:apps:shipping-service:check
+        :projects:ecommerce-microservices-platform:apps:user-service:check
+      GRADLE_TASKS_IAM: >-
+        :projects:iam-platform:apps:auth-service:check
+        :projects:iam-platform:apps:account-service:check
+        :projects:iam-platform:apps:admin-service:check
+        :projects:iam-platform:apps:gateway-service:check
+        :projects:iam-platform:apps:security-service:check
+        :projects:iam-platform:tests:e2e:check
+      GRADLE_TASKS_FAN: >-
+        :projects:fan-platform:apps:gateway-service:check
+        :projects:fan-platform:apps:community-service:check
+        :projects:fan-platform:apps:artist-service:check
+        :projects:fan-platform:apps:membership-service:check
+        :projects:fan-platform:apps:notification-service:check
+        :projects:fan-platform:tests:e2e:check
+      GRADLE_TASKS_SCM: >-
+        :projects:scm-platform:apps:gateway-service:check
+        :projects:scm-platform:apps:procurement-service:check
+        :projects:scm-platform:apps:inventory-visibility-service:check
+        :projects:scm-platform:apps:demand-planning-service:check
+        :projects:scm-platform:apps:logistics-service:check
+      GRADLE_TASKS_FINANCE: >-
+        :projects:finance-platform:libs:finance-common:check
+        :projects:finance-platform:apps:account-service:check
+        :projects:finance-platform:apps:ledger-service:check
+      GRADLE_TASKS_ERP: >-
+        :projects:erp-platform:apps:masterdata-service:check
+        :projects:erp-platform:apps:read-model-service:check
+        :projects:erp-platform:apps:approval-service:check
+        :projects:erp-platform:apps:notification-service:check
+      GRADLE_TASKS_CONSOLE: >-
+        :projects:platform-console:apps:console-bff:check
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -1588,42 +1662,11 @@ jobs:
         # `scripts/check-libs-ci-coverage.sh` (job `libs-ci-coverage`) fails if a module
         # is included by settings.gradle and missing from this list. Do not delete an
         # entry to make a build pass — that restores the silence the guard exists to end.
-        run: >-
-          ./gradlew
-          :assertNoApiOnSharedLibs
-          :libs:java-common:check
-          :libs:java-gateway:check
-          :libs:java-messaging:check
-          :libs:java-notification:check
-          :libs:java-observability:check
-          :libs:java-security:check
-          :libs:java-security-servlet:check
-          :libs:java-test-support:check
-          :libs:java-web:check
-          :libs:java-web-servlet:check
-          :libs:payment-core:check
-          :libs:payment-portone:check
-          :libs:payment-toss:check
-          :projects:wms-platform:apps:gateway-service:check
-          :projects:wms-platform:apps:inbound-service:check
-          :projects:wms-platform:apps:inventory-service:check
-          :projects:wms-platform:apps:outbound-service:check
-          :projects:wms-platform:apps:master-service:check
-          :projects:wms-platform:apps:notification-service:check
-          :projects:wms-platform:apps:admin-service:check
-          :projects:ecommerce-microservices-platform:apps:batch-worker:check
-          :projects:ecommerce-microservices-platform:apps:gateway-service:check
-          :projects:ecommerce-microservices-platform:apps:notification-service:check
-          :projects:ecommerce-microservices-platform:apps:order-service:check
-          :projects:ecommerce-microservices-platform:apps:payment-service:check
-          :projects:ecommerce-microservices-platform:apps:product-service:check
-          :projects:ecommerce-microservices-platform:apps:promotion-service:check
-          :projects:ecommerce-microservices-platform:apps:review-service:check
-          :projects:ecommerce-microservices-platform:apps:search-service:check
-          :projects:ecommerce-microservices-platform:apps:settlement-service:check
-          :projects:ecommerce-microservices-platform:apps:shipping-service:check
-          :projects:ecommerce-microservices-platform:apps:user-service:check
-          --no-daemon --stacktrace
+        # The task list itself is in this job's `env:` block (TASK-MONO-545) so the
+        # summarise step can be given the same string. Unquoted on purpose — it must
+        # word-split into separate Gradle arguments.
+        id: gradle-core
+        run: ./gradlew $GRADLE_TASKS_CORE --no-daemon --stacktrace
 
       - name: Build and check IAM backend (Docker-free)
         # IAM integration tests carry @Tag("integration") (either directly or
@@ -1633,30 +1676,16 @@ jobs:
         # therefore stays Docker-free. The tests/e2e module's default `test`
         # carries `excludeTags 'e2e'` (fan/scm pattern, TASK-MONO-080) so its
         # `:check` invocation is also Docker-free.
-        run: >-
-          ./gradlew
-          :projects:iam-platform:apps:auth-service:check
-          :projects:iam-platform:apps:account-service:check
-          :projects:iam-platform:apps:admin-service:check
-          :projects:iam-platform:apps:gateway-service:check
-          :projects:iam-platform:apps:security-service:check
-          :projects:iam-platform:tests:e2e:check
-          --no-daemon --stacktrace
+        id: gradle-iam
+        run: ./gradlew $GRADLE_TASKS_IAM --no-daemon --stacktrace
 
       - name: Build and check fan-platform backend (Docker-free)
         # fan-platform integration tests carry @Tag("integration"); the e2e
         # module's tests carry @Tag("e2e"). Both are excluded from default
         # :test/:check tasks (see each module's build.gradle). The e2e job
         # below runs them with Docker.
-        run: >-
-          ./gradlew
-          :projects:fan-platform:apps:gateway-service:check
-          :projects:fan-platform:apps:community-service:check
-          :projects:fan-platform:apps:artist-service:check
-          :projects:fan-platform:apps:membership-service:check
-          :projects:fan-platform:apps:notification-service:check
-          :projects:fan-platform:tests:e2e:check
-          --no-daemon --stacktrace
+        id: gradle-fan
+        run: ./gradlew $GRADLE_TASKS_FAN --no-daemon --stacktrace
 
       - name: Build and check scm-platform backend (Docker-free)
         # scm-platform integration tests carry @Tag("integration") and are
@@ -1668,14 +1697,8 @@ jobs:
         # TASK-SCM-BE-003: inventory-visibility-service
         # TASK-SCM-BE-024: demand-planning-service
         # TASK-SCM-BE-042: logistics-service
-        run: >-
-          ./gradlew
-          :projects:scm-platform:apps:gateway-service:check
-          :projects:scm-platform:apps:procurement-service:check
-          :projects:scm-platform:apps:inventory-visibility-service:check
-          :projects:scm-platform:apps:demand-planning-service:check
-          :projects:scm-platform:apps:logistics-service:check
-          --no-daemon --stacktrace
+        id: gradle-scm
+        run: ./gradlew $GRADLE_TASKS_SCM --no-daemon --stacktrace
 
       - name: Build and check finance-platform backend (Docker-free)
         # finance-platform integration tests carry @Tag("integration") and are
@@ -1689,12 +1712,8 @@ jobs:
         # compile dependency of the two services never runs its own `test` task: the
         # services would compile against it and its unit tests would report nothing,
         # forever. A guard that does not run reports green.
-        run: >-
-          ./gradlew
-          :projects:finance-platform:libs:finance-common:check
-          :projects:finance-platform:apps:account-service:check
-          :projects:finance-platform:apps:ledger-service:check
-          --no-daemon --stacktrace
+        id: gradle-finance
+        run: ./gradlew $GRADLE_TASKS_FINANCE --no-daemon --stacktrace
 
       - name: Build and check erp-platform backend (Docker-free)
         # erp-platform integration tests carry @Tag("integration") and are
@@ -1703,13 +1722,8 @@ jobs:
         # on dev environments / erp-integration-tests job below.
         # TASK-ERP-BE-001: masterdata-service / TASK-ERP-BE-007: read-model-service
         # TASK-ERP-BE-009: approval-service / TASK-ERP-BE-011: notification-service
-        run: >-
-          ./gradlew
-          :projects:erp-platform:apps:masterdata-service:check
-          :projects:erp-platform:apps:read-model-service:check
-          :projects:erp-platform:apps:approval-service:check
-          :projects:erp-platform:apps:notification-service:check
-          --no-daemon --stacktrace
+        id: gradle-erp
+        run: ./gradlew $GRADLE_TASKS_ERP --no-daemon --stacktrace
 
       - name: Build and check platform-console backend (Docker-free)
         # platform-console console-bff integration tests carry @Tag("integration")
@@ -1717,10 +1731,59 @@ jobs:
         # build.gradle). Docker-backed integrationTest is invoked separately
         # in the platform-console-bff-integration-tests job below.
         # TASK-PC-BE-001: console-bff (ADR-MONO-017 ACCEPTED post-ACCEPTED execution)
-        run: >-
-          ./gradlew
-          :projects:platform-console:apps:console-bff:check
-          --no-daemon --stacktrace
+        id: gradle-console
+        run: ./gradlew $GRADLE_TASKS_CONSOLE --no-daemon --stacktrace
+
+      # TASK-MONO-545. This is the biggest lane in the repo — every shared library and
+      # every backend service's unit suite — and until now a green run of it recorded
+      # nothing whatsoever, so "zero tests discovered" and "everything passed" were the
+      # same observable outcome. That matters most precisely here: if this job silently
+      # ran nothing, the run verified nothing.
+      #
+      # `run-outcome` is a conjunction of all eight gradle steps: a step that already
+      # failed legitimately leaves no results behind, and this action must then report
+      # without manufacturing a second, differently-worded failure over the first.
+      #
+      # allow-empty — three modules produce zero tests BY DESIGN. Listed by name rather
+      # than matched by pattern, so that adding a fourth is a decision somebody makes.
+      #
+      #   * the two `tests/e2e` modules: each sets `useJUnitPlatform { excludeTags 'e2e' }`
+      #     on the default `test` task while every class in the module carries @Tag("e2e")
+      #     (iam via E2EBase, TASK-MONO-078/080). Written down in their build files, not
+      #     inferred here. Their real suites run in the `*-e2e-*` jobs via
+      #     `e2eSmokeTest`/`e2eFullTest`, which this same action now counts there.
+      #   * `libs:java-test-support` has NO `src/test` at all — it is a pure
+      #     `java-test-fixtures` module (its main jar is deliberately empty so
+      #     Testcontainers cannot leak onto a consumer's production classpath). A module
+      #     with no test source set cannot have a suite to lose, so this is a shape, not
+      #     a regression. It was the guard's day-one finding: `libs-ci-coverage` requires
+      #     every libs module's `:check` to be on this list, and `:check` on a
+      #     fixtures-only module has always run zero tests without saying so.
+      #     What that leaves genuinely uncovered — `DockerAvailableCondition` and the
+      #     fixture base classes have no direct tests of their own — is a real gap and a
+      #     separate piece of work; it is recorded rather than smuggled in here.
+      - name: Summarise unit results and fail on an empty suite
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/summarise-test-results
+        with:
+          lane: build-and-test
+          gradle-tasks: >-
+            ${{ env.GRADLE_TASKS_CORE }} ${{ env.GRADLE_TASKS_IAM }}
+            ${{ env.GRADLE_TASKS_FAN }} ${{ env.GRADLE_TASKS_SCM }}
+            ${{ env.GRADLE_TASKS_FINANCE }} ${{ env.GRADLE_TASKS_ERP }}
+            ${{ env.GRADLE_TASKS_CONSOLE }}
+          allow-empty: >-
+            projects/iam-platform/tests/e2e
+            projects/fan-platform/tests/e2e
+            libs/java-test-support
+          run-outcome: >-
+            ${{ (steps.gradle-core.outcome == 'success'
+              && steps.gradle-iam.outcome == 'success'
+              && steps.gradle-fan.outcome == 'success'
+              && steps.gradle-scm.outcome == 'success'
+              && steps.gradle-finance.outcome == 'success'
+              && steps.gradle-erp.outcome == 'success'
+              && steps.gradle-console.outcome == 'success') && 'success' || 'failure' }}
 
       - name: Upload test reports on failure
         if: failure()
@@ -2056,6 +2119,7 @@ jobs:
         run: pnpm --filter web-store exec playwright install --with-deps chromium
 
       - name: Run smoke E2E (ecommerce)
+        id: smoke-ecommerce
         working-directory: projects/ecommerce-microservices-platform
         run: pnpm e2e:smoke
 
@@ -2075,6 +2139,7 @@ jobs:
         run: pnpm --filter fan-platform-web exec playwright install --with-deps chromium
 
       - name: Run smoke E2E (fan-platform-web)
+        id: smoke-fan
         working-directory: projects/fan-platform
         run: pnpm e2e:smoke
 
@@ -2097,8 +2162,39 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Run smoke E2E (platform-console-web)
+        id: smoke-console
         working-directory: projects/platform-console/apps/console-web
         run: pnpm e2e:smoke
+
+      # TASK-MONO-545. Three apps run here and a green run recorded none of them.
+      #
+      # The population is the three `junit` reporter files the configs were told to
+      # write — not a glob. A missing file therefore reads as "the run this job claims
+      # to have done did not happen", which is the correct verdict: `pnpm e2e:smoke`
+      # resolves through turbo / `pnpm -r`, and a filter that stops matching a package
+      # makes the step succeed having run nothing at all in it. That is invisible in
+      # the step's exit code and was invisible in the artifacts too.
+      #
+      # `playwright test` itself refuses a zero-test selection ("No tests found",
+      # unless --pass-with-no-tests), so per-spec emptiness is already fatal upstream;
+      # what it cannot see is a whole app being skipped by the runner above it.
+      #
+      # Paths are anchored at `github.workspace` because these steps use
+      # `working-directory` and the reporter paths resolve against each config's own
+      # directory — two different bases that must not be confused here.
+      - name: Summarise smoke e2e results and fail on an empty suite
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/summarise-test-results
+        with:
+          lane: frontend-e2e-smoke
+          report-files: |
+            web-store=${{ github.workspace }}/projects/ecommerce-microservices-platform/apps/web-store/test-results-smoke/junit.xml
+            fan-platform-web=${{ github.workspace }}/projects/fan-platform/web/fan-platform-web/test-results-smoke/junit.xml
+            console-web=${{ github.workspace }}/projects/platform-console/apps/console-web/test-results-smoke/junit.xml
+          run-outcome: >-
+            ${{ (steps.smoke-ecommerce.outcome == 'success'
+              && steps.smoke-fan.outcome == 'success'
+              && steps.smoke-console.outcome == 'success') && 'success' || 'failure' }}
 
       - name: Upload Playwright report on failure
         if: failure()
@@ -2413,10 +2509,24 @@ jobs:
         # `:e2eSmokeTest`. Full suite (@Tag("full")) runs nightly + push to
         # main via the separate `iam-e2e-full` job in nightly-e2e.yml
         # (ADR-MONO-011 Phase 3).
+        id: gradle
         run: >-
           ./gradlew
           :projects:iam-platform:tests:e2e:e2eSmokeTest
           --no-daemon --stacktrace
+
+      # TASK-MONO-545. This job exists to prove ComposeFixture is exercised on every PR
+      # (TASK-MONO-088) — a claim that is only true while the smoke suite actually has
+      # tests in it. `e2eSmokeTest` selects `@Tag("smoke")`, so it would keep reporting
+      # green over an empty selection, which is the precise shape of the 7-cycle
+      # archaeology this job was created to prevent recurring.
+      - name: Summarise iam e2e smoke results and fail on an empty suite
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/summarise-test-results
+        with:
+          lane: iam-e2e-smoke
+          gradle-tasks: ':projects:iam-platform:tests:e2e:e2eSmokeTest'
+          run-outcome: ${{ steps.gradle.outcome }}
 
       - name: Upload iam e2e smoke test reports on failure
         if: failure()
