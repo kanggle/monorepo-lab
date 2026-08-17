@@ -82,6 +82,12 @@ if [ "$BUILD" = "1" ]; then
 fi
 bash "$HERE/check-image-freshness.sh" "${SET[@]}" || true
 
+# TASK-MONO-548 — 🔴 이것은 고지가 아니라 **게이트**다. 위의 이미지 신선도 검사와 성격이
+# 다르다: 낡은 이미지는 다시 구우면 되지만, 여기서 잘못된 비밀번호로 데이터 볼륨이
+# 초기화되면 **재기동으로 절대 되돌릴 수 없다**(DB init 은 빈 데이터 디렉터리에서만 돈다).
+# 그래서 실패를 삼키지 않는다 — 멈출 수 있는 마지막 순간이 기동 직전이다.
+bash "$HERE/check-env-preflight.sh" "${SET[@]}" || exit 1
+
 echo "[demo] profile=$PROFILE  build=$BUILD"
 echo "[demo] ensuring shared traefik-net + edge router"
 docker compose -p traefik -f "$ROOT/$TRAEFIK_COMPOSE" up -d
