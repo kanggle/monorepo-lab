@@ -30,7 +30,16 @@ export default defineConfig({
   fullyParallel: false,
   retries: process.env.CI ? 1 : 0,
   workers: 1,
-  reporter: [['list'], ['html', { outputFolder: 'playwright-report-smoke', open: 'never' }]],
+  // TASK-MONO-545 — `junit` is the only reporter here that writes a count a machine can
+  // read: `list` goes to stdout, `html` embeds a zipped blob. CI's summarise step reads
+  // this file, so a green run records how many specs actually ran instead of leaving
+  // "3 passed" and "0 discovered" indistinguishable from outside the job.
+  // `test-results-smoke/` is already gitignored and already inside the upload path.
+  reporter: [
+    ['list'],
+    ['html', { outputFolder: 'playwright-report-smoke', open: 'never' }],
+    ['junit', { outputFile: 'test-results-smoke/junit.xml' }],
+  ],
   outputDir: 'test-results-smoke',
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000',

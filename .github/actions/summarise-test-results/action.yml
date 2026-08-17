@@ -1,0 +1,251 @@
+name: Summarise test results
+description: >-
+  Print tests/failures/errors/skipped for what a job actually ran, and fail when a
+  unit that was asked to run discovered nothing. TASK-MONO-545.
+
+# TASK-MONO-545. TASK-MONO-544 closed this gap for `_integration.yml` with an inline
+# step; the same gap was open in seven more lanes. Five of them are Gradle/JUnit-XML
+# lanes needing the identical ~80 lines, so the parser lives here once instead of
+# five (six, counting the integration lane) times. Two copies of a parser drift, and
+# the half that drifts is the half nobody reads.
+#
+# WHAT IT GUARDS
+#   (1) A green job records nothing. The report artifacts in this repo are uploaded
+#       `if: failure()`, so the standard acceptance phrasing — "read tests/failures/
+#       errors/skipped from the job artifact" — cannot be satisfied on a passing run.
+#       TASK-MONO-542 had to read its numbers from a deliberately-failed bite instead.
+#   (2) A suite that discovers ZERO tests passes. Gradle's Test task succeeds when it
+#       finds nothing, so a tag filter, a module registration or a class-naming change
+#       can empty a suite and still report green, leaving no artifact to notice it by.
+#
+# POPULATION — the authoritative list of what the job CLAIMED to run: the Gradle task
+# paths it invoked, or the reporter files it configured. Never a glob over the tree. A
+# glob that matches nothing agrees with itself, which is the same silence being fixed.
+#
+# NOT SOLVED by relaxing the uploads to `if: !cancelled()`: zero discovered tests means
+# zero result files, so the upload would carry nothing in exactly the case it exists
+# for; upload-artifact@v4 also rejects a second upload under one name, which is the
+# symptom TASK-MONO-541 recorded. Counts belong in the log, where `gh api …/logs`
+# reaches them without a download.
+
+inputs:
+  lane:
+    description: 'Label for the marker line and the step-summary heading, e.g. `build-and-test`.'
+    required: true
+  gradle-tasks:
+    description: >-
+      Space-separated fully-qualified Gradle task paths this job invoked, e.g.
+      `:libs:java-common:check :projects:wms-platform:apps:gateway-service:check`.
+      Each is mapped to its module's `build/test-results/<results-dir>`.
+    required: false
+    default: ''
+  report-files:
+    description: >-
+      Newline-separated `<label>=<path>` entries pointing at JUnit XML written by a
+      non-Gradle runner (Playwright's `junit` reporter). A missing file is a failure,
+      not a zero — the runner was asked to write it.
+    required: false
+    default: ''
+  allow-empty:
+    description: >-
+      Space-separated module paths (slash form, e.g. `projects/iam-platform/tests/e2e`)
+      whose zero-test result is DELIBERATE and documented at the call site. Keep this
+      list as short as the truth allows: every entry is a place the guard is switched
+      off, and an entry that stops being true fails open, silently.
+    required: false
+    default: ''
+  run-outcome:
+    description: >-
+      `steps.<id>.outcome` of the step that ran the tests. When it is not `success`
+      this action reports and exits 0 — a compile error legitimately leaves no results,
+      and a second, differently-worded failure on the same run only obscures the first.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Summarise ${{ inputs.lane }} results and fail on an empty suite
+      shell: bash
+      env:
+        LANE: ${{ inputs.lane }}
+        GRADLE_TASKS: ${{ inputs.gradle-tasks }}
+        REPORT_FILES: ${{ inputs.report-files }}
+        ALLOW_EMPTY: ${{ inputs.allow-empty }}
+        RUN_OUTCOME: ${{ inputs.run-outcome }}
+      run: |
+        # An explicit `shell: bash` — which a composite action requires — runs as
+        # `bash --noprofile --norc -eo pipefail`. That is NOT the same as a workflow
+        # `run:` block (`bash -e`), and pipefail is actively wrong here: a grep that
+        # legitimately matches nothing exits 1, and `grep … | head -1` takes SIGPIPE.
+        # Either would abort this step, and a guard that silently does not run is the
+        # exact failure class it exists to catch. Status is accumulated by hand below.
+        set +e
+        set +o pipefail
+        set -u
+
+        total_tests=0; total_failures=0; total_errors=0; total_skipped=0
+        empty_units=""; unparsable=""; ignored_tasks=""; counted=0
+        table="| unit | tests | failures | errors | skipped |\n|---|---|---|---|---|\n"
+
+        # Sums every `<testsuite ` element in one file. Gradle writes exactly one per
+        # file, so this is identical to reading the first. Playwright's junit reporter
+        # writes ONE file holding one `<testsuite>` per spec file under a `<testsuites>`
+        # root — reading only the first would undercount it to the first spec. The
+        # trailing space in the pattern is load-bearing: it is what stops the root
+        # `<testsuites …>` element from being counted a second time on top of its own
+        # children.
+        # Sets: f_tests f_failures f_errors f_skipped f_suites
+        read_file() {
+          local xml="$1" flat suite attr value
+          f_tests=0; f_failures=0; f_errors=0; f_skipped=0; f_suites=0
+          flat=$(tr '\n' ' ' < "$xml")
+          while IFS= read -r suite; do
+            [ -n "$suite" ] || continue
+            f_suites=$((f_suites + 1))
+            for attr in tests failures errors skipped; do
+              value=$(printf '%s' "$suite" | grep -o "$attr=\"[0-9]*\"" | head -1 | grep -o '[0-9]*')
+              # An absent attribute is a parser problem, not a zero. Say so rather
+              # than quietly contributing 0 to a total someone will trust.
+              if [ -z "$value" ]; then unparsable="$unparsable $xml($attr)"; value=0; fi
+              case "$attr" in
+                tests)    f_tests=$((f_tests + value)) ;;
+                failures) f_failures=$((f_failures + value)) ;;
+                errors)   f_errors=$((f_errors + value)) ;;
+                skipped)  f_skipped=$((f_skipped + value)) ;;
+              esac
+            done
+          done <<EOF
+        $(printf '%s' "$flat" | grep -o '<testsuite [^>]*>')
+        EOF
+        }
+
+        # Adds one unit's numbers to the totals and to the table.
+        # add_unit <label> <module-key> <tests> <failures> <errors> <skipped> <found>
+        add_unit() {
+          local label="$1" key="$2" u_tests="$3" u_fail="$4" u_err="$5" u_skip="$6" found="$7"
+          counted=$((counted + 1))
+          if [ "$found" -eq 0 ] || [ "$u_tests" -eq 0 ]; then
+            case " $ALLOW_EMPTY " in
+              *" $key "*) label="$label _(empty by design)_" ;;
+              *)          empty_units="$empty_units $key" ;;
+            esac
+          fi
+          total_tests=$((total_tests + u_tests))
+          total_failures=$((total_failures + u_fail))
+          total_errors=$((total_errors + u_err))
+          total_skipped=$((total_skipped + u_skip))
+          table="$table| $label | $u_tests | $u_fail | $u_err | $u_skip |\n"
+        }
+
+        # ---- Gradle task paths -------------------------------------------------
+        # :projects:foo:apps:bar:integrationTest -> projects/foo/apps/bar, dir
+        # `integrationTest`. `check` is an aggregate; its tests land under `test`.
+        for task in $GRADLE_TASKS; do
+          t="${task#:}"
+          name="${t##*:}"
+          path="${t%:*}"
+          # A root-project task (`:assertNoApiOnSharedLibs`) has no module segment, and
+          # a non-test task has no results directory. Both are listed rather than
+          # dropped, so a new test-task name shows up here instead of vanishing.
+          if [ "$path" = "$t" ]; then ignored_tasks="$ignored_tasks $task"; continue; fi
+          case "$name" in
+            check)                            sub=test ;;
+            test|integrationTest)             sub="$name" ;;
+            e2eTest|e2eSmokeTest|e2eFullTest) sub="$name" ;;
+            *) ignored_tasks="$ignored_tasks $task"; continue ;;
+          esac
+
+          module="${path//://}"
+          results="$module/build/test-results/$sub"
+          m_tests=0; m_failures=0; m_errors=0; m_skipped=0; found=0
+          for xml in "$results"/TEST-*.xml; do
+            [ -e "$xml" ] || continue
+            found=1
+            read_file "$xml"
+            if [ "$f_suites" -eq 0 ]; then unparsable="$unparsable $xml"; continue; fi
+            m_tests=$((m_tests + f_tests)); m_failures=$((m_failures + f_failures))
+            m_errors=$((m_errors + f_errors)); m_skipped=$((m_skipped + f_skipped))
+          done
+          add_unit "\`${module##*/}:$name\`" "$module" \
+                   "$m_tests" "$m_failures" "$m_errors" "$m_skipped" "$found"
+        done
+
+        # ---- Explicit reporter files ------------------------------------------
+        while IFS= read -r entry; do
+          entry="${entry%%$'\r'}"
+          [ -n "$entry" ] || continue
+          label="${entry%%=*}"
+          file="${entry#*=}"
+          r_tests=0; r_failures=0; r_errors=0; r_skipped=0; found=0
+          if [ -e "$file" ]; then
+            found=1
+            read_file "$file"
+            if [ "$f_suites" -eq 0 ]; then
+              # A junit file with no `<testsuite>` at all is what a zero-discovery run
+              # would leave. Report it as empty, not as unparsable, so the message names
+              # the real problem.
+              found=0
+            else
+              r_tests=$f_tests; r_failures=$f_failures
+              r_errors=$f_errors; r_skipped=$f_skipped
+            fi
+          else
+            echo "::warning::$LANE: no report file at '$file' — the runner was configured to write one."
+          fi
+          add_unit "\`$label\`" "$label" \
+                   "$r_tests" "$r_failures" "$r_errors" "$r_skipped" "$found"
+        done <<EOF
+        $REPORT_FILES
+        EOF
+
+        table="$table| **total** | **$total_tests** | **$total_failures** | **$total_errors** | **$total_skipped** |\n"
+
+        # stdout so `gh api .../jobs/<id>/logs` can read it; step summary for humans.
+        # 🔴 Match this line with the DIGITS required, e.g.
+        #   grep -oE 'TEST-SUMMARY lane=[a-z0-9-]+ tests=[0-9]+ failures=[0-9]+ errors=[0-9]+ skipped=[0-9]+'
+        # A bare `grep TEST-SUMMARY` finds the wrong line first: Actions echoes this whole
+        # script into the log before running it, so the marker appears with `tests=$total_tests`
+        # still unexpanded — and it appears even when the step never ran. Measured while
+        # writing TASK-MONO-544's own AC-3, which is why it is written down twice.
+        #
+        # Same trap on the errors below, with a usable discriminator: the echoed source keeps
+        # the literal `::error::`, while the runtime line is rewritten to `##[error]`.
+        #
+        # (TASK-MONO-544 emitted this as `INTEGRATION-SUMMARY`; that lane now uses this
+        # action and the marker is `TEST-SUMMARY lane=integration`. A grep written against
+        # the old marker returns nothing, which reads as "the step did not run".)
+        echo "TEST-SUMMARY lane=$LANE tests=$total_tests failures=$total_failures errors=$total_errors skipped=$total_skipped"
+        # %b, not a bare format string: the table is data and must never be parsed as one.
+        printf '### %s results\n\n%b\n' "$LANE" "$table" >> "$GITHUB_STEP_SUMMARY"
+        printf '%b' "$table"
+        if [ -n "$ignored_tasks" ]; then
+          echo "Not test tasks, nothing counted for them:$ignored_tasks"
+        fi
+
+        status=0
+        # Fail closed on an empty POPULATION. A call site that passes neither input would
+        # otherwise print a clean zero table and exit 0 — a guard reporting OK having
+        # examined nothing, which is the shape of the defect, not of a pass.
+        if [ "$counted" -eq 0 ]; then
+          echo "::error::$LANE: nothing to summarise — neither gradle-tasks nor report-files named a unit."
+          printf "\n:x: **%s: no units to summarise** — this action was wired with an empty population.\n" \
+                 "$LANE" >> "$GITHUB_STEP_SUMMARY"
+          status=1
+        fi
+        if [ -n "$unparsable" ]; then
+          echo "::error::$LANE: could not read testsuite counts from:$unparsable — the numbers above are not trustworthy."
+          printf "\n:x: **Unparsable result files**:%s\n" "$unparsable" >> "$GITHUB_STEP_SUMMARY"
+          status=1
+        fi
+        if [ -n "$empty_units" ]; then
+          echo "::error::$LANE: asked to run, produced no tests:$empty_units"
+          echo "::error::A suite that discovers nothing passes silently — that is what this check exists to stop."
+          printf "\n:x: **Ran zero tests**:%s\n" "$empty_units" >> "$GITHUB_STEP_SUMMARY"
+          status=1
+        fi
+
+        if [ "$RUN_OUTCOME" != "success" ]; then
+          echo "The test step's outcome was '$RUN_OUTCOME'; reporting only, not failing here."
+          exit 0
+        fi
+        exit $status

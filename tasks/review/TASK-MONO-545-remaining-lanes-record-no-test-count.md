@@ -8,7 +8,7 @@ TASK-MONO-545
 
 # Status
 
-ready
+review
 
 # Owner
 
