@@ -85,6 +85,19 @@ fi
 
 echo "[boot] profile=$PROFILE  DEMO_DOMAIN=$DEMO_DOMAIN"
 
+# 🔴 `.env` 프로비저닝은 `demo-up.sh` **앞**이어야 한다 (TASK-MONO-550).
+# -----------------------------------------------------------------------------
+# `demo-up.sh` 는 `check-env-preflight.sh`(MONO-548)를 부르고, 그 가드는 `.env` 가 없으면
+# wms·ecommerce 의 기동을 **중단**한다 — compose 폴백 자격이 데이터 볼륨에 각인되기
+# 때문이다. AMI 는 fresh clone 이고 `.env` 는 gitignored 라 존재할 수 없으므로,
+# 이 줄이 없으면 부팅은 **컨테이너 0개로 조용히 끝난다**(2026-08-17 실측: 9개 도메인
+# 전부 `total:0`, 에러는 systemd 저널에만).
+#
+# 순서가 load-bearing 이다. 나중에 만들면 preflight 은 이미 지나갔고, 더 나쁘게는
+# 볼륨이 폴백 자격으로 초기화된 **뒤에** 의도한 값이 나타나 앱이 영구히 인증 실패한다
+# — 가드가 막으려던 바로 그 상태다.
+bash "$HERE/provision-demo-env.sh"
+
 # `demo-up.sh` 는 `demo.env` 를 스스로 source 한다. 거기서 `DEMO_DOMAIN` 은 반드시
 # `${DEMO_DOMAIN:-local}` 형태여야 한다 — bare 대입이면 `set -a; source` 가 **여기서
 # export 한 값을 덮어쓴다**(358 에서 실제로 당했다). 가드 (n) 이 그 형태를 지킨다.

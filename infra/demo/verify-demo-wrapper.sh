@@ -1315,6 +1315,75 @@ if [ -f "$z2_pkr" ] && [ -f "$z2_self" ]; then
 fi
 
 # ---------------------------------------------------------------------------
+echo "[verify] (z3) fresh clone 에서 데모 부팅이 env-preflight 을 통과하는가"
+# ---------------------------------------------------------------------------
+# 근거(MONO-550, 2026-08-17 실측): 재굽기한 AMI 로 apply 한 첫 부팅에서 **컨테이너 0개**.
+# `check-env-preflight.sh`(MONO-548)가 `.env` 없이 뜨면 볼륨에 잘못된 자격이 각인되는
+# wms·ecommerce 를 중단시켰다. **AMI 는 fresh clone 이고 `.env` 는 gitignored** 라 없다.
+# 에러는 systemd 저널에만 있었고 페이지는 조용히 "전부 down" 을 그렸다.
+#
+# 🔴 이 가드가 **왜 워킹트리를 안 보는가**: 개발자 머신에는 `.env` 가 있다. 그 트리에서
+# 물으면 술어는 언제나 초록이고, 정확히 그래서 이 결함이 로컬에서 한 번도 안 보였다.
+# 그래서 **`.env` 를 애초에 복사하지 않는 임시 트리를 만들어** 그 위에서 진짜 스크립트를
+# 돌린다 — fresh clone 조건이 우연이 아니라 **구성으로** 보장된다.
+#
+# 🔴 그리고 **대조군이 먼저다**: 프로비저닝 전에 preflight 이 rc=1 로 **막는지** 본다.
+# 그게 아니면(예: 임시 트리에 compose 가 빠져서 아무것도 검사되지 않으면) 뒤이은
+# "통과" 는 아무것도 증명하지 않는다 — 통과가 무효일 수 있다.
+z3_prov="$ROOT/infra/demo/provision-demo-env.sh"
+z3_boot="$ROOT/infra/demo/demo-boot.sh"
+[ -f "$z3_prov" ] || fail "infra/demo/provision-demo-env.sh 가 없습니다 — fresh clone 에서 데모가 뜰 수 없습니다."\
+  $'\n'"→ env-preflight 이 wms·ecommerce 기동을 중단시키고 부팅은 컨테이너 0개로 끝납니다(MONO-550)."
+
+# (1) 순서 — 프로비저닝은 demo-up.sh **앞**이어야 한다. 뒤면 preflight 은 이미 지나갔고,
+#     볼륨이 폴백 자격으로 초기화된 뒤 의도한 값이 나타나 영구 인증 실패가 된다.
+z3_body="$(sed 's/#.*//' "$z3_boot")"
+z3_pl="$(printf '%s\n' "$z3_body" | grep -n 'provision-demo-env\.sh' | head -1 | cut -d: -f1 || true)"
+z3_ul="$(printf '%s\n' "$z3_body" | grep -n 'demo-up\.sh'            | head -1 | cut -d: -f1 || true)"
+[ -n "$z3_pl" ] || fail "demo-boot.sh 가 provision-demo-env.sh 를 호출하지 않습니다 (주석 제외 본문 기준)."
+[ -n "$z3_ul" ] || fail "demo-boot.sh 가 demo-up.sh 를 호출하지 않습니다."
+[ "$z3_pl" -lt "$z3_ul" ] || fail "demo-boot.sh 가 demo-up.sh 뒤에 .env 를 프로비저닝합니다"\
+  $'\n'"   (provision=L$z3_pl, demo-up=L$z3_ul) — preflight 은 이미 지나간 뒤입니다."
+
+# (2) fresh clone 조건을 구성한다. `.env` 는 **한 번도 복사하지 않는다**.
+z3_tmp="$(mktemp -d)"
+mkdir -p "$z3_tmp/infra"
+cp -r "$ROOT/infra/demo" "$z3_tmp/infra/demo"
+[ -d "$ROOT/infra/traefik" ] && cp -r "$ROOT/infra/traefik" "$z3_tmp/infra/traefik"
+for z3_d in "$ROOT"/projects/*/; do
+  z3_n="$(basename "$z3_d")"
+  mkdir -p "$z3_tmp/projects/$z3_n"
+  for z3_f in "$z3_d"*.yml "$z3_d".env.example; do
+    [ -f "$z3_f" ] && cp "$z3_f" "$z3_tmp/projects/$z3_n/"
+  done
+done
+# 구성이 의도대로인지 단언한다 — `.env` 가 하나라도 섞여 들어가면 이 시험은 무효다.
+z3_leak=$(ls "$z3_tmp"/projects/*/.env 2>/dev/null | wc -l | tr -d ' ')
+[ "$z3_leak" = "0" ] || { rm -rf "$z3_tmp"; fail "(z3) 임시 트리에 .env 가 ${z3_leak}개 섞였습니다 — fresh clone 조건이 깨져 시험이 무효입니다."; }
+
+# (3) 🔴 대조군 — 프로비저닝 전에는 **막혀야** 한다.
+z3_before=0
+bash "$z3_tmp/infra/demo/check-env-preflight.sh" "${FULL[@]}" >/dev/null 2>&1 || z3_before=$?
+[ "$z3_before" -ne 0 ] || { rm -rf "$z3_tmp"; fail "(z3) 대조군 실패 — .env 없는 트리에서 preflight 이 통과했습니다."\
+  $'\n'"→ 임시 트리가 실제 조건을 재현하지 못했거나(compose 누락 등) preflight 이 무력화됐습니다."\
+  $'\n'"   이 경우 뒤이은 '통과' 는 아무것도 증명하지 않습니다 — 통과가 무효일 수 있습니다."; }
+
+# (4) 프로비저닝 후에는 통과해야 한다 — 진짜 스크립트로, 진짜 조건에서.
+z3_prov_rc=0
+bash "$z3_tmp/infra/demo/provision-demo-env.sh" >/dev/null 2>&1 || z3_prov_rc=$?
+[ "$z3_prov_rc" = "0" ] || { rm -rf "$z3_tmp"; fail "(z3) provision-demo-env.sh 가 실패했습니다 (rc=$z3_prov_rc)."; }
+
+z3_after=0
+bash "$z3_tmp/infra/demo/check-env-preflight.sh" "${FULL[@]}" >/dev/null 2>&1 || z3_after=$?
+rm -rf "$z3_tmp"
+[ "$z3_after" = "0" ] || fail "fresh clone 에서 데모 부팅이 여전히 env-preflight 에 막힙니다 (rc=$z3_after)"\
+  $'\n'"→ 프로비저닝이 preflight 이 요구하는 것을 충족하지 못합니다. 부팅은 컨테이너 0개로 끝나고,"\
+  $'\n'"   에러는 systemd 저널에만 남습니다(페이지는 조용히 '전부 down' 을 그립니다 — MONO-550)."\
+  $'\n'"→ 가드를 끄는 방향으로 고치지 마세요. 막는 위험(볼륨에 각인된 자격)은 실재합니다."
+
+ok "fresh clone 부팅이 env-preflight 을 통과 (대조군 rc=$z3_before → 프로비저닝 후 rc=0 · demo-boot 순서 L$z3_pl<L$z3_ul)"
+
+# ---------------------------------------------------------------------------
 if [ "$LIVE" -eq 0 ]; then
   echo "[verify] 정적 검증 PASS (실기동 증명은 --live)"
   exit 0
