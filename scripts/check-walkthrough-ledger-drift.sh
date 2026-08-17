@@ -64,11 +64,127 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-LEDGER="docs/guides/interview-demo-walkthrough.md"
+# TASK-MONO-549 — overridable so the self-test can run the predicate against a MUTATED
+# COPY of the real ledger. Only the ledger moves: the ticket index still comes from
+# this repo's real `git ls-files`, because a hand-built world is more forgiving than
+# the real one and would prove less.
+LEDGER="${WALKTHROUGH_LEDGER_FILE:-docs/guides/interview-demo-walkthrough.md}"
 EXCEPTIONS="scripts/walkthrough-ledger-exceptions.txt"
 SECTION_HEADING='^## 6[.] '
 
 cd "$ROOT"
+
+# ---------------------------------------------------------------------------
+# self-test — TASK-MONO-549. Mutates COPIES of the real ledger, never a fixture.
+# ---------------------------------------------------------------------------
+# A hand-built table is more forgiving than the real one: it has the shape whoever
+# wrote it expected, which is the shape the parser already handles. Everything below
+# starts from `docs/guides/interview-demo-walkthrough.md` as it stands.
+self_test() {
+    local pass=0 fail_n=0 tmp
+    tmp="$(mktemp -d)"
+    trap 'rm -rf "$tmp"' RETURN
+
+    # Rewrites the leading marker of the § 6 row containing <needle>. `new` may be empty,
+    # which removes the marker entirely — the evasion path this rule has to close.
+    mutate() {  # mutate <src> <dst> <needle> <new-marker>
+        awk -v needle="$3" -v new="$4" '
+            index($0, needle) && /^\|/ && !done {
+                sub(/^\|[[:space:]]*(🔴|🟡|🔵|✅)[[:space:]]*/, "| " (new == "" ? "" : new " "))
+                done = 1
+            }
+            { print }
+        ' "$1" > "$2"
+    }
+    # Blanks the tracking column of the row containing <needle>.
+    uncite() {  # uncite <src> <dst> <needle>
+        awk -v needle="$3" '
+            index($0, needle) && /^\|/ && !done {
+                sub(/\|[[:space:]]*`?TASK-[^|]*\|[[:space:]]*$/, "| — |"); done = 1
+            }
+            { print }
+        ' "$1" > "$2"
+    }
+
+    run() { WALKTHROUGH_LEDGER_FILE="$1" bash "$ROOT/scripts/check-walkthrough-ledger-drift.sh" >/dev/null 2>&1; }
+    expect() {  # expect <label> <want-rc> <ledger>
+        local got=0; run "$3" || got=$?
+        if [ "$got" = "$2" ]; then echo "  PASS  $1 (rc=$got)"; pass=$((pass + 1))
+        else echo "  FAIL  $1 (want $2, got $got)"; fail_n=$((fail_n + 1)); fi
+    }
+
+    echo "self-test: predicate against mutated copies of the real ledger"
+
+    local real="$ROOT/docs/guides/interview-demo-walkthrough.md"
+    local base="$tmp/base.md"
+    cp "$real" "$base"
+
+    # 0. The real entry point, own process, errexit active. Every case below runs behind
+    #    `|| got=$?`, which suppresses errexit — a script that aborts would report PASS
+    #    there while the real invocation dies with no output.
+    local rc0=0
+    bash "$ROOT/scripts/check-walkthrough-ledger-drift.sh" >/dev/null 2>&1 || rc0=$?
+    if [ "$rc0" = 0 ]; then echo "  PASS  real entry point, separate process (rc=0)"; pass=$((pass + 1))
+    else echo "  FAIL  real entry point, separate process (rc=$rc0)"; fail_n=$((fail_n + 1)); fi
+
+    # 1. Unmutated copy passes. Without this an always-FAIL guard looks identical.
+    expect "unmutated ledger passes" 0 "$base"
+
+    # 2. 🔴 That control is only meaningful if uncited rows EXIST in it — otherwise case 1
+    #    passes because the new rule has nothing to look at, and every case below would be
+    #    testing a rule that never fires on real data. The 🔴-only version of this rule had
+    #    exactly that problem (0 red rows), which is why the rule keys on "unresolved".
+    #    🔵 Counted on the TRACKING COLUMN, the same field the guard judges — not "a
+    #    TASK id appears anywhere in the row". Those differ by one on the real ledger:
+    #    the ERP row narrates TASK-ERP-BE-042 in its prose while tracking `—`. Using the
+    #    looser predicate here reported 5 where the guard reports 6, and two numbers that
+    #    disagree for an unexplained reason are how a reader stops trusting either.
+    local uncited_n
+    uncited_n="$(awk -F'|' '
+        /^## 6[.] / { inside = 1; next }
+        inside && /^## / { inside = 0 }
+        inside && /^\|/ && $0 !~ /^\|[[:space:]]*(항목|---)/ {
+            if ($(NF-1) !~ /TASK-[A-Z]+(-[A-Z]+)*-[0-9]+/) n++
+        }
+        END { print n + 0 }
+    ' "$base")"
+    if [ "$uncited_n" -gt 0 ]; then
+        echo "  PASS  reachability: the control ledger holds $uncited_n uncited row(s) for the rule to see"
+        pass=$((pass + 1))
+    else
+        echo "  FAIL  reachability: no uncited rows — cases below would prove nothing"
+        fail_n=$((fail_n + 1))
+    fi
+
+    # 3/4/5. An uncited row that is NOT marked resolved must fail, however it got there.
+    local needle='장바구니는 시드할 수 없다'
+    mutate "$base" "$tmp/red.md"  "$needle" '🔴'
+    expect "uncited row marked 🔴 fails"                1 "$tmp/red.md"
+    mutate "$base" "$tmp/amber.md" "$needle" '🟡'
+    expect "uncited row marked 🟡 fails (the live population)" 1 "$tmp/amber.md"
+    mutate "$base" "$tmp/bare.md" "$needle" ''
+    expect "uncited row with NO marker fails (deleting the marker is not an exit)" 1 "$tmp/bare.md"
+
+    # 6. The original rule must still bite: a row citing a done ticket, with its
+    #    resolution marker stripped. Guards get replaced by their successors' bugs.
+    mutate "$base" "$tmp/wasdone.md" '/wms/operations' '🟡'
+    expect "cited done ticket without a resolution marker still fails (original rule)" 1 "$tmp/wasdone.md"
+
+    # 7. And a resolved row that loses its citation must stay silent — this is the case
+    #    that stops the new rule from demanding tickets for statements of fact.
+    uncite "$base" "$tmp/uncited-ok.md" '/wms/operations'
+    expect "resolved row with its citation removed passes (fact, not open work)" 0 "$tmp/uncited-ok.md"
+
+    echo "self-test: ${pass} passed, ${fail_n} failed"
+    [ "$fail_n" -eq 0 ]
+}
+
+case "${1:-}" in
+    --self-test) self_test; exit $? ;;
+    -h|--help)   printf 'usage: check-walkthrough-ledger-drift.sh [--self-test]\n'; exit 0 ;;
+    "")          ;;
+    *)           printf 'unknown argument: %s\n' "$1" >&2; exit 2 ;;
+esac
 
 fail_count=0
 fail() { printf 'DRIFT: %s\n' "$*" >&2; fail_count=$((fail_count + 1)); }
@@ -149,6 +265,8 @@ fi
 # --- the check ----------------------------------------------------------------
 checked_rows=0
 cited_ids=0
+unowned_rows=0     # unresolved marker AND no citation — TASK-MONO-549's rule
+informational=0    # resolved marker and no citation — legitimately outside the predicate
 
 while IFS= read -r row; do
     [ -n "$row" ] || continue
@@ -156,8 +274,6 @@ while IFS= read -r row; do
     # a trailing empty field after the final pipe and the last real column is NF-1.
     tracking="$(printf '%s' "$row" | awk -F'|' '{print $(NF-1)}')"
     ids="$(printf '%s' "$tracking" | grep -oE 'TASK-[A-Z]+(-[A-Z]+)*-[0-9]+' | sort -u || true)"
-    [ -n "$ids" ] || continue
-    checked_rows=$((checked_rows + 1))
 
     # The row's own label, trimmed, for readable failure output.
     label="$(printf '%s' "$row" | awk -F'|' '{print $2}' | cut -c1-90)"
@@ -179,6 +295,40 @@ while IFS= read -r row; do
     case "$first_col" in
         "✅"*|"🔵"*|"~~"*) resolved=1 ;;
     esac
+
+    # --- TASK-MONO-549: an unresolved row must have an owner ------------------
+    # The original predicate reads "for each CITED ticket, is it done while the row
+    # still says otherwise" — so a row with `—` in its tracking column was dropped
+    # before any judgement, and the summary line reported `OK` beside a count that
+    # meant "and N rows were not looked at". Both TASK-MONO-547 and TASK-MONO-548 sat
+    # in exactly that gap: live 🔴 defects, in no queue, while this guard was green.
+    # One had its citation deleted when the ticket it named turned out to be about
+    # something else; the other never had an owner. A person reading the eight uncited
+    # rows by hand is what found them.
+    #
+    # 🔵 The rule reuses `resolved` rather than testing for 🔴 — deliberately, and the
+    # numbers are why. Closing 547/548 took the 🔴 count to ZERO, so a 🔴-only rule
+    # would examine nothing today, pass, and have no way to build a bite out of real
+    # data. Inverting the existing predicate gives it a live population (4 rows carry
+    # 🟡, all of them already citing) and closes the marker-deletion path in the same
+    # move: a row with NO marker is not resolved either, so it must cite too.
+    #
+    # 🔵 A row that IS resolved (✅ / 🔵 / ~~) needs no ticket. All 6 uncited rows are
+    # of that kind — which screens fill, that `demo.env` must be sourced, that the cart
+    # is localStorage-backed. Demanding tickets there manufactures empty ones.
+    if [ -z "$ids" ]; then
+        if [ "$resolved" -eq 1 ]; then
+            informational=$((informational + 1))
+        else
+            unowned_rows=$((unowned_rows + 1))
+            fail "row [$label ] carries an unresolved marker but cites no ticket. Nothing "\
+"schedules it and — until TASK-MONO-549 — nothing checked it either: the tracking "\
+"column is what puts a row inside this guard's predicate. File a ticket and cite it, "\
+"or if the row is a statement of fact rather than an open defect, mark it 🔵."
+        fi
+        continue
+    fi
+    checked_rows=$((checked_rows + 1))
 
     while IFS= read -r id; do
         [ -n "$id" ] || continue
@@ -214,6 +364,13 @@ if [ "$fail_count" -gt 0 ]; then
     exit 1
 fi
 
-printf 'check-walkthrough-ledger-drift: OK — %s of %s § 6 rows cite a ticket (%s citations); '\
-'every cited ticket resolves to a queue, and every done one is marked resolved '\
-'(%s documented exception(s)).\n' "$checked_rows" "$row_count" "$cited_ids" "${#exception_reason[@]}"
+# 🔴 TASK-MONO-549 — the summary says what was NOT judged, not just what was. The
+# previous wording ("42 of 48 rows cite a ticket") already carried that number and
+# nobody read it as "6 rows were not looked at"; it sat next to the word OK. Now every
+# row is accounted for by one of the three counts below, and the informational tally
+# names the reason it is safe rather than leaving a remainder to be inferred.
+printf 'check-walkthrough-ledger-drift: OK — %s of %s § 6 rows judged by citation (%s citations); '\
+'%s row(s) cite nothing and are marked resolved (✅/🔵/~~), so they are statements of '\
+'fact rather than open work; %s unowned row(s). Every cited ticket resolves to a queue, '\
+'every done one is marked resolved (%s documented exception(s)).\n' \
+"$checked_rows" "$row_count" "$cited_ids" "$informational" "$unowned_rows" "${#exception_reason[@]}"

@@ -827,8 +827,17 @@ jobs:
       - name: Shell syntax (bash -n)
         run: bash -n scripts/check-walkthrough-ledger-drift.sh
 
-      - name: Guard — every § 6 row whose ticket is done says so
+      - name: Guard — every § 6 row whose ticket is done says so, and every unresolved row has an owner
         run: bash scripts/check-walkthrough-ledger-drift.sh
+
+      # TASK-MONO-549. The guard passing says the ledger is clean; it does not say the
+      # guard still bites. That distinction is what this ticket is about — the previous
+      # predicate was green for the whole time two ownerless 🔴 rows sat in § 6, because
+      # rows with no citation were dropped before any judgement. The self-test mutates
+      # copies of the REAL ledger and asserts both directions, including the control
+      # that a resolved row without a citation must stay silent.
+      - name: Guard self-test (mutated copies of the real ledger)
+        run: bash scripts/check-walkthrough-ledger-drift.sh --self-test
 
   dev-seed-migration-band:
     name: Dev Flyway seeds stay inside their production version range
