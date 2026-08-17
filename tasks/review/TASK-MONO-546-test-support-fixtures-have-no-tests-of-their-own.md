@@ -8,7 +8,7 @@ TASK-MONO-546
 
 # Status
 
-ready
+review
 
 # Owner
 

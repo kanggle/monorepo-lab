@@ -18,6 +18,19 @@ dependencies {
     // API so consuming services pick up the extension transitively when they
     // wire AbstractIntegrationTest.
     testFixturesApi 'org.junit.jupiter:junit-jupiter-api'
+
+    // TASK-MONO-546. This module had no `src/test` at all, so its two classes — the
+    // base class every Testcontainers integration test in this repo extends, and the
+    // ExecutionCondition wired onto it — had no tests of their own. The
+    // `java-test-fixtures` plugin already puts the testFixtures output and its api
+    // dependencies on the `test` source set's classpath, so only the engine and the
+    // assertion library are added here. Versions come from the Spring Boot BOM, the
+    // same convention every sibling libs module uses.
+    //
+    // These tests are Docker-free by construction and must stay that way: this
+    // module's `test` runs in the `build-and-test` lane, which boots nothing.
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.assertj:assertj-core'
 }
 
 dependencyManagement {
