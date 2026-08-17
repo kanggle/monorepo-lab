@@ -1744,13 +1744,24 @@ jobs:
       # failed legitimately leaves no results behind, and this action must then report
       # without manufacturing a second, differently-worded failure over the first.
       #
-      # allow-empty — the two `tests/e2e` modules produce zero tests BY DESIGN, and it is
-      # written down in their build files, not inferred here: each sets
-      # `useJUnitPlatform { excludeTags 'e2e' }` on the default `test` task while every
-      # class in the module carries @Tag("e2e") (iam via E2EBase, TASK-MONO-078/080).
-      # Their real suites run in the `*-e2e-*` jobs via `e2eSmokeTest`/`e2eFullTest`,
-      # which this same action now counts there. They are listed by name rather than
-      # by pattern so that adding a third one is a decision somebody has to make.
+      # allow-empty — three modules produce zero tests BY DESIGN. Listed by name rather
+      # than matched by pattern, so that adding a fourth is a decision somebody makes.
+      #
+      #   * the two `tests/e2e` modules: each sets `useJUnitPlatform { excludeTags 'e2e' }`
+      #     on the default `test` task while every class in the module carries @Tag("e2e")
+      #     (iam via E2EBase, TASK-MONO-078/080). Written down in their build files, not
+      #     inferred here. Their real suites run in the `*-e2e-*` jobs via
+      #     `e2eSmokeTest`/`e2eFullTest`, which this same action now counts there.
+      #   * `libs:java-test-support` has NO `src/test` at all — it is a pure
+      #     `java-test-fixtures` module (its main jar is deliberately empty so
+      #     Testcontainers cannot leak onto a consumer's production classpath). A module
+      #     with no test source set cannot have a suite to lose, so this is a shape, not
+      #     a regression. It was the guard's day-one finding: `libs-ci-coverage` requires
+      #     every libs module's `:check` to be on this list, and `:check` on a
+      #     fixtures-only module has always run zero tests without saying so.
+      #     What that leaves genuinely uncovered — `DockerAvailableCondition` and the
+      #     fixture base classes have no direct tests of their own — is a real gap and a
+      #     separate piece of work; it is recorded rather than smuggled in here.
       - name: Summarise unit results and fail on an empty suite
         if: ${{ !cancelled() }}
         uses: ./.github/actions/summarise-test-results
@@ -1761,7 +1772,10 @@ jobs:
             ${{ env.GRADLE_TASKS_FAN }} ${{ env.GRADLE_TASKS_SCM }}
             ${{ env.GRADLE_TASKS_FINANCE }} ${{ env.GRADLE_TASKS_ERP }}
             ${{ env.GRADLE_TASKS_CONSOLE }}
-          allow-empty: projects/iam-platform/tests/e2e projects/fan-platform/tests/e2e
+          allow-empty: >-
+            projects/iam-platform/tests/e2e
+            projects/fan-platform/tests/e2e
+            libs/java-test-support
           run-outcome: >-
             ${{ (steps.gradle-core.outcome == 'success'
               && steps.gradle-iam.outcome == 'success'
