@@ -165,6 +165,20 @@ build {
       "sudo /tmp/aws/install",
       "rm -rf /tmp/aws /tmp/awscliv2.zip",
       "aws --version",
+      // 🔴 7단계가 이 AMI 안에서 `verify-demo-wrapper.sh` 를 돌리고, 그 정적 가드
+      // (t) 는 페이지의 `demoHost()` 규칙을 **실행해서** 부팅 파생과 대조한다
+      // (`node -e`). node 가 없으면 (t) 는 skip 하지 않고 **FAIL** 한다 — 의도된
+      // 설계다(조용한 skip 이 초록으로 보고되는 것을 MONO-360 이 금지했다).
+      //
+      // 이 의존은 MONO-389 가 (t) 를 추가하면서 생겼고, 마지막 성공 bake 는 그
+      // **하루 전**이다. 그래서 그 뒤로 아무도 굽지 않는 동안 잠복해 있다가
+      // 이미지 8개를 다 굽고 20분을 태운 뒤 7단계에서 터졌다(2026-08-17 실측).
+      // 가드 (z2) 가 이제 이 부류를 정적으로 잡는다.
+      //
+      // noble 아카이브 인덱스로 존재 확인함(main+universe/binary-amd64):
+      //   nodejs=1건 · unzip=1건 · **awscli=0건**(아는 결함을 대조군으로 확인).
+      "sudo apt-get install -y nodejs",
+      "node --version",
       "sudo usermod -aG docker ubuntu",
       "sudo systemctl enable --now docker",
     ]
