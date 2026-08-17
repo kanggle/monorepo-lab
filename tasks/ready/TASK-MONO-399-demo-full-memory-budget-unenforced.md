@@ -22,6 +22,34 @@ monorepo
 
 ---
 
+# ✅✅ AC-6(재굽기) 완료 — 2026-08-17
+
+`TASK-MONO-477` AC-8 과 **한 번의 bake 로 합쳐** 처리했다(이 티켓이 계획한 그대로).
+새 AMI **`ami-008695099ec898477`**(`portfolio-demo-1786963374`), 대상 커밋 **main `d7ded4429`**,
+`packer build` 59분33초 · `PACKER_RC=0` · `deregister`/`Deleted snapshot` 0건(MONO-379 함정 회피).
+
+**"구운 것을 믿지 않는다" — 인스턴스 `i-0968541e8f2b80b4c` 안에서 런타임 단언:**
+
+| AC-6 이 요구한 것 | 실측 |
+|---|---|
+| `git -C /opt/monorepo-lab log -1` 이 397 이후 커밋인가 | ✅ `d7ded44298686d36ca6fe41225b5c154fc76e14e` |
+| `docker inspect ecommerce-kafka` 의 `Memory` == `1073741824` | ✅ **`1073741824`** (선언이 아니라 런타임) |
+| kafka 재시작 0회 | ✅ `RestartCount=0` |
+| (추가) `finance-platform-kafka` — 동결 AMI 에 없던 서비스 | ✅ Up (healthy) |
+
+⇒ **397 의 kafka 1G 와 FIN-BE-059 의 브로커가 마침내 데모에 도달했다.** 동결 이후 871 커밋
+(baked 층 615)이 함께 실렸다.
+
+🔵 **AC-2 의 clean 재측정은 아직이다.** 이 티켓이 *"세 fix 배포 후에야 clean 측정이 가능하다"* 고
+적었는데, 이번 부팅은 `TASK-MONO-550`(env-preflight 이 부팅을 중단) 때문에 **손으로 `.env` 를 만든 뒤**
+뜬 상태다. 그 손댐이 없는 부팅에서 다시 재야 한다 — 그리고 `finance-platform-kafka` 가 추가됐으므로
+사이징도 **인계하지 말고 다시 세라**. 참고 실측: `df -h /` = 96G 중 **24G 사용**(인계된 36GB 아님).
+
+**남은 뒷정리(사용자 결정 대기)**: 옛 AMI `ami-0b6b962d3f3f23865` + `snap-0e96353c6bb20a2e8` 삭제,
+`terraform destroy` 복귀. `tfvars` 의 `ami_id` 갱신은 완료.
+
+---
+
 # 🔬 실측 결과 (2026-07-23, 데모 호스트 `i-070c54a...`, AMI `ami-0b6b962d3f3f23865` = as-baked `f5288a7b1`)
 
 **AC-0~AC-5 완료 · AC-6 은 [`TASK-ERP-BE-035`](../../projects/erp-platform/tasks/ready/TASK-ERP-BE-035-shared-erp-db-flyway-history-collision.md) 머지 후로 연기(사용자 판단 2026-07-23 — 이중 bake 회피).**

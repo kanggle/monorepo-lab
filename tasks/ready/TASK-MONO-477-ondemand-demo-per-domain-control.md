@@ -39,7 +39,51 @@ monorepo
 
 **남은 것 = AC-7(AWS 실증) · AC-8(재굽기, `TASK-MONO-399` AC-6과 병합) 뿐이다.**
 
-## ✅ 2026-08-17 — 헬스 발행자 작성 완료 (AC-7 선행 작업). **라이브 검증은 아직이다.**
+## ✅✅ 2026-08-17 — AC-7 · AC-8 라이브 실증 **완료** (AMI `ami-008695099ec898477`, main `d7ded4429`)
+
+`packer build`(59분33초, `PACKER_RC=0`) → `terraform apply`(34 added, 0 error) → 라이브 검증.
+`site_url = https://d38c06ry1h6rnn.cloudfront.net` · `instance i-0968541e8f2b80b4c`.
+
+**AC-8 재굽기 · MONO-399 AC-6 — 구운 것을 믿지 않고 인스턴스 안에서 단언했다:**
+
+| 단언 | 실측값 |
+|---|---|
+| `git -C /opt/monorepo-lab log -1` | **`d7ded44298686d36ca6fe41225b5c154fc76e14e`** = 구우려던 커밋 |
+| `docker inspect ecommerce-kafka .HostConfig.Memory` | **`1073741824`** — MONO-397 의 1G 가 마침내 데모에 도달 |
+| 그 컨테이너 `RestartCount` | **0** |
+| `finance-platform-kafka` | **Up (healthy)** — FIN-BE-059 브로커 존재 |
+| `aws` / `node` | `aws-cli/2.36.24` / `v18.19.1` |
+| `df -h /` | 96G 중 **24G 사용** ← 다음 bake 의 `volume_gb` 근거(인계된 36GB 가 아니다) |
+
+🔵 `git log` 는 처음에 **빈 출력**이었다 — root 가 ubuntu 소유 repo 를 읽어 `dubious ownership` 로
+죽었는데 stderr 를 안 봤다. `finance-kafka` 도 `NO_CONTAINER` 였는데 실제 이름은
+`finance-platform-kafka` 였다. **둘 다 부재가 아니라 계측 실패다.**
+
+**AC-7 라이브 실증 — 발행자와 토글이 처음으로 실행됐다:**
+
+- SSM 파라미터 Version **7→8→9, 35초 간격 갱신**. `systemctl list-timers` = active, NEXT 28s.
+  간격이 ~60초가 **아닌 것**이 `AccuracySec=5s` 가 일한다는 증거다.
+- `POST /domain/stop {scm}` → scm `up 9/9` → `up 1/1` → **`down 0/0`**.
+  그 동안 **traefik `up 1/1` · iam `partial 14/15` 유지** ⇒ **마지막 소비자 가드가 실제로 물었다(AC-2).**
+- `POST /domain/start {scm}` → 되살아남. iam 15/15 · finance 7/7 · erp 8/8 · fan 9/9 · console 2/2.
+- **내려가는 방향을 봤다** — 올라가는 방향만 보면 한 방향으로만 고장 난 게이트를 못 잡는다.
+
+⚠️ **행사되지 못한 것 = 예산 소진 429.** 600분을 태우지 않고는 라이브에서 행사할 수 없다
+(`test_handler.py` 가 목으로 덮는다). **"검증됨" 으로 적지 않는다.**
+
+🔴 **그러나 데모는 자력으로 뜨지 못했다** — 첫 부팅에서 컨테이너 **0개**. `env-preflight`(MONO-548)이
+fresh clone 에 `.env` 가 없다며 부팅을 중단시켰고, 위 실증은 **SSM 으로 손수 `cp .env.example .env`**
+한 뒤에야 가능했다. 그 파일은 볼륨에만 있다 ⇒ **저장소만으로는 데모가 재현되지 않는다.**
+⇒ **[`TASK-MONO-550`](TASK-MONO-550-demo-host-cannot-boot-env-preflight.md) 로 분리해 파일했다.**
+이 티켓의 토글·헬스 기전은 증명됐고, 부팅 경로 결함은 별건이다.
+
+**남은 뒷정리(사용자 결정 대기)**: `terraform destroy` 복귀 · 옛 AMI `ami-0b6b962d3f3f23865` +
+`snap-0e96353c6bb20a2e8` 삭제. `tfvars` 의 `ami_id` 갱신은 완료. destroy 는 되돌릴 수 없고 현재
+인스턴스의 손수 만든 `.env` 도 함께 사라지므로 승인 대상으로 남긴다.
+
+---
+
+## ✅ 2026-08-17 — 헬스 발행자 작성 완료 (AC-7 선행 작업)
 
 아래 "알려진 갭"이 가리키던 조각이 이제 저장소에 있다:
 
