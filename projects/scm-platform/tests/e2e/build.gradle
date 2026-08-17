@@ -161,7 +161,7 @@ tasks.register('e2eTest', Test) {
 
 tasks.register('e2eSmokeTest', Test) {
     description = '@Tag("smoke") subset only — PR-time CI (ADR-MONO-010 D1/D2).'
-    useJUnitPlatform { includeTags 'smoke' }
+    useJUnitPlatform { includeTags 'mono545bite' }
     baseE2eConfig.call(it)
 }
 

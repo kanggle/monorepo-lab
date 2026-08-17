@@ -115,7 +115,7 @@ tasks.register('e2eTest', Test) {
 tasks.register('e2eSmokeTest', Test) {
     description = '@Tag("smoke") subset only — equivalent to default `test` in gap (ADR-MONO-010 D1/D2/D5 step 4).'
     group = 'verification'
-    useJUnitPlatform { includeTags 'smoke' }
+    useJUnitPlatform { includeTags 'mono545bite' }
     baseE2eConfig.call(it)
 }
 
