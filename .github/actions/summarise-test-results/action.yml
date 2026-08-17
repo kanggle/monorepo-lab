@@ -208,8 +208,14 @@ runs:
         # still unexpanded — and it appears even when the step never ran. Measured while
         # writing TASK-MONO-544's own AC-3, which is why it is written down twice.
         #
-        # Same trap on the errors below, with a usable discriminator: the echoed source keeps
-        # the literal `::error::`, while the runtime line is rewritten to `##[error]`.
+        # Same trap on the errors below. TASK-MONO-544 gave the discriminator as "the echoed
+        # source keeps the literal `::error::` while the runtime line is rewritten"; that is
+        # true but not sufficient, and this comment is the counter-example. Grepping a GREEN
+        # run of this action for the rewritten form still returned a hit — from this very
+        # paragraph being echoed. Anchor the match at the start of the log line, after the
+        # timestamp, so prose ABOUT the marker cannot be mistaken for the marker:
+        #   grep -cE '^[0-9T:.Z-]+ ##\[error\]'      # 0 on that green run
+        #   grep -c  '##\[error\]'                   # 1 — this comment
         #
         # (TASK-MONO-544 emitted this as `INTEGRATION-SUMMARY`; that lane now uses this
         # action and the marker is `TEST-SUMMARY lane=integration`. A grep written against
