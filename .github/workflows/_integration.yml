@@ -164,6 +164,12 @@ jobs:
           table="$table| **total** | **$total_tests** | **$total_failures** | **$total_errors** | **$total_skipped** |\n"
 
           # stdout so `gh api .../jobs/<id>/logs` can read it; step summary for humans.
+          # 🔴 Match this line with the DIGITS required, e.g.
+          #   grep -oE 'INTEGRATION-SUMMARY tests=[0-9]+ failures=[0-9]+ errors=[0-9]+ skipped=[0-9]+'
+          # A bare `grep INTEGRATION-SUMMARY` finds the wrong line first: Actions echoes this
+          # whole script into the log before running it, so the literal marker appears with
+          # `tests=$total_tests` still unexpanded — and it appears even if the step never ran.
+          # Measured the mistake while writing TASK-MONO-544's own AC-3.
           echo "INTEGRATION-SUMMARY tests=$total_tests failures=$total_failures errors=$total_errors skipped=$total_skipped"
           # %b, not a bare format string: the table is data and must never be parsed as one.
           printf '### Integration results\n\n%b\n' "$table" >> "$GITHUB_STEP_SUMMARY"
