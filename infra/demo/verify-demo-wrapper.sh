@@ -1346,20 +1346,35 @@ z3_ul="$(printf '%s\n' "$z3_body" | grep -n 'demo-up\.sh'            | head -1 |
   $'\n'"   (provision=L$z3_pl, demo-up=L$z3_ul) — preflight 은 이미 지나간 뒤입니다."
 
 # (2) fresh clone 조건을 구성한다. `.env` 는 **한 번도 복사하지 않는다**.
+# ⚠️ 이 블록은 `set -euo pipefail` 아래에서 돈다. `[ ... ] && cmd` 는 조건이 거짓일 때
+#    상태 1 을 내고 **스크립트를 그 자리에서 죽인다** — 메시지 없이. 그리고 `ls` 는 매치가
+#    0건이면 **2** 로 끝나는데, `pipefail` 이 그것을 파이프라인 상태로 올리고 대입문이
+#    그 상태를 이어받는다 ⇒ `z3_leak=$(ls ... | wc -l)` 한 줄이 **exit 2, 출력 0줄**로
+#    가드를 죽인다. CI 에서 실제로 그렇게 죽었다(로컬 재현은 이 줄을 빼고 돌려서 초록이었다).
+#    그래서 아래는 전부 if/fi 와 glob 순회로 쓴다.
 z3_tmp="$(mktemp -d)"
 mkdir -p "$z3_tmp/infra"
 cp -r "$ROOT/infra/demo" "$z3_tmp/infra/demo"
-[ -d "$ROOT/infra/traefik" ] && cp -r "$ROOT/infra/traefik" "$z3_tmp/infra/traefik"
+if [ -d "$ROOT/infra/traefik" ]; then cp -r "$ROOT/infra/traefik" "$z3_tmp/infra/traefik"; fi
 for z3_d in "$ROOT"/projects/*/; do
   z3_n="$(basename "$z3_d")"
   mkdir -p "$z3_tmp/projects/$z3_n"
   for z3_f in "$z3_d"*.yml "$z3_d".env.example; do
-    [ -f "$z3_f" ] && cp "$z3_f" "$z3_tmp/projects/$z3_n/"
+    if [ -f "$z3_f" ]; then cp "$z3_f" "$z3_tmp/projects/$z3_n/"; fi
   done
 done
 # 구성이 의도대로인지 단언한다 — `.env` 가 하나라도 섞여 들어가면 이 시험은 무효다.
-z3_leak=$(ls "$z3_tmp"/projects/*/.env 2>/dev/null | wc -l | tr -d ' ')
+z3_leak=0
+for z3_f in "$z3_tmp"/projects/*/.env; do
+  if [ -f "$z3_f" ]; then z3_leak=$(( z3_leak + 1 )); fi
+done
 [ "$z3_leak" = "0" ] || { rm -rf "$z3_tmp"; fail "(z3) 임시 트리에 .env 가 ${z3_leak}개 섞였습니다 — fresh clone 조건이 깨져 시험이 무효입니다."; }
+# 반대 방향도 확인한다: 아무것도 안 옮겨졌으면 뒤이은 판정은 빈 트리에 대고 묻는 것이다.
+z3_ex=0
+for z3_f in "$z3_tmp"/projects/*/.env.example; do
+  if [ -f "$z3_f" ]; then z3_ex=$(( z3_ex + 1 )); fi
+done
+[ "$z3_ex" -gt 0 ] || { rm -rf "$z3_tmp"; fail "(z3) 임시 트리에 .env.example 이 0건입니다 — 트리 구성이 실패했고 이후 판정은 공허합니다."; }
 
 # (3) 🔴 대조군 — 프로비저닝 전에는 **막혀야** 한다.
 z3_before=0
