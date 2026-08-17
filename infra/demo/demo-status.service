@@ -1,0 +1,29 @@
+# =============================================================================
+# infra/demo/demo-status.service — 헬스 스냅샷 발행 1회 (TASK-MONO-477)
+# =============================================================================
+# AMI 빌드가 이 파일을 **저장소에서** /etc/systemd/system/ 로 복사한다.
+# demo-stack.service 와 같은 이유로 저장소가 유닛을 소유한다: 계약이 두 곳에
+# 나뉘면 한쪽만 바뀐다(TASK-MONO-358/366 의 worked incident).
+#
+# 이 유닛은 타이머(demo-status.timer)가 부른다. [Install] 이 없는 것은 의도다 —
+# 이 유닛 자체를 enable 하면 부팅 때 한 번 돌고 끝난다.
+#
+# ⚠️ demo-stack.service 에 의존하지 **않는다.** 스택이 안 떠 있을 때도 발행해야
+#    한다 — 그때의 정답은 "전 도메인 down" 이고, 그것도 페이지가 알아야 할 사실이다.
+#    발행이 스택과 함께 죽으면 파라미터는 마지막 "up" 에 얼어붙는다.
+# =============================================================================
+[Unit]
+Description=Publish per-domain demo health snapshot to SSM (TASK-MONO-477)
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/monorepo-lab
+
+# docker ps 를 읽고 aws ssm put-parameter 를 친다. root 로 돈다(systemd 기본) —
+# ubuntu 사용자의 docker 그룹 소속에 기대지 않는다.
+ExecStart=/usr/bin/bash /opt/monorepo-lab/infra/demo/demo-status-publish.sh
+
+# 30초 주기보다 짧게 끊는다. 한 번의 발행이 다음 주기를 밀어내면 안 된다.
+TimeoutStartSec=25

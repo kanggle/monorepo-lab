@@ -39,7 +39,44 @@ monorepo
 
 **남은 것 = AC-7(AWS 실증) · AC-8(재굽기, `TASK-MONO-399` AC-6과 병합) 뿐이다.**
 
-**🔴 알려진 갭 — 인스턴스 헬스 발행자가 코드에 없다.** PR #2940 본문이 명시적으로 이렇게 적었다:
+## ✅ 2026-08-17 — 헬스 발행자 작성 완료 (AC-7 선행 작업). **라이브 검증은 아직이다.**
+
+아래 "알려진 갭"이 가리키던 조각이 이제 저장소에 있다:
+
+| 파일 | 역할 |
+|---|---|
+| `infra/demo/demo-status-publish.sh` | `demo-status.sh` 출력을 SSM 파라미터에 발행. 리전은 IMDSv2 로 파생(하드코딩 없음) |
+| `infra/demo/demo-status.service` | oneshot. 저장소 소유 유닛(MONO-366 과 같은 이유) |
+| `infra/demo/demo-status.timer` | `OnUnitActiveSec=30s` + **`AccuracySec=5s`** |
+| `demo-ami.pkr.hcl` | `awscli` 설치(+`aws --version` 확증) · 두 유닛을 저장소 경로에서 설치 · **타이머**를 enable |
+| `verify-demo-wrapper.sh` 가드 (z) | 발행 경로 5고리 + **파라미터 이름 3곳 대조** |
+
+**설계 판단 두 가지 (근거를 남긴다):**
+
+1. **실패 시 `{}` 를 쓴다 — 직전 값을 남기지 않는다.** 남기면 파라미터가 마지막으로 성공한
+   "전부 up" 에 얼어붙고 페이지는 죽은 도메인을 초록으로 그린다(이 티켓 Failure Scenario 가
+   금지하는 fail-open). `{}` 는 `handler.py:domains()` 가 빈 dict 로 읽고 페이지는 "확인 중" 을
+   그린다 — 이미 있는 소비자 동작을 그대로 쓴다. 발행 **자체**가 실패하면 non-zero 로 죽어
+   journald 에 남기고 30초 뒤 재시도한다(성공한 척하지 않는다).
+2. **`AccuracySec=5s` 는 장식이 아니다.** systemd 기본 AccuracySec 은 **1분**이라 그것 없이
+   `OnUnitActiveSec=30s` 만 적으면 실제 주기가 ~1분이 된다 — 유닛의 선언과 실제가 벌어지고,
+   "표시 지연을 정직하게 적는다" 는 AC-5 요구의 근거가 무너진다. 가드 (z)가 이 줄을 지킨다.
+
+**검증한 것 / 안 한 것:**
+
+- ✅ `bash -n` · `packer init && packer validate` (rc=0) · 정적 `verify-demo-wrapper.sh` 전체 PASS
+- ✅ **bite 4/4** — ① `AccuracySec` 제거 ② 발행자 파라미터명만 변경(3곳 대조) ③ packer 가
+  timer 대신 service 를 enable ④ 실제 `put-parameter` 호출만 무력화하고 **주석은 남김**.
+  ④ 는 순진한 substring grep 이라면 통과했을 조건이다(주석 1건이 남아 있다) — 주석 제거 후
+  본문을 무는 술어라야 문다는 것을 그 자리에서 확인했다.
+- ❌ **라이브 검증 0** — `systemctl status demo-status.timer`, SSM `GetParameter` 값 갱신,
+  페이지 배지 반영은 **전부 AC-7 에서 처음 돈다.** 이 티켓 자신의 규율대로 *미리 써두고 나중에
+  믿지 않는다* — 위의 초록은 전부 정적이다. `packer validate` 통과가 동작을 뜻하지 않는다는
+  것은 이 PoC 가 이미 다섯 번 배운 명제다.
+
+---
+
+**🔴 (해소됨 — 위 절 참조) 알려진 갭 — 인스턴스 헬스 발행자가 코드에 없다.** PR #2940 본문이 명시적으로 이렇게 적었다:
 > 인스턴스 헬스 발행자(`demo-status-publish.sh` + `demo-status.timer` + packer + user_data)는 baked
 > 라 살아있는 인스턴스에서만 검증 가능하므로 AWS/재굽기 증분(AC-7/8, MONO-399 AC-6 와 합침)으로 연기.
 
@@ -197,12 +234,20 @@ AWS 경로는 인스턴스 실증.
 페이지에 반영되는지 브라우저(Playwright/headless fetch)로 실증. **끝나면 `terraform destroy` 즉시 복귀.**
 ⚠️ `terraform apply`/`destroy`/`packer build` 는 **사용자 승인 필요**.
 
-**🔴 AC-7 착수 전 선행 작업 — 인스턴스 헬스 발행자를 여기서 함께 짠다.**
-위 "진행 상황" 절 참조: `demo-status-publish.sh`(HEALTH_PARAM 대상으로 `aws ssm put-parameter`) +
-`demo-status.timer`(30초 주기) + `demo-ami.pkr.hcl` 배선(설치·enable) + `demo-stack.service` 와 동일하게
-**저장소가 소유**하는 systemd 유닛. AC-7 실증이 곧 이 스크립트의 첫 실검증이므로 **먼저 써두고 나중에
-믿지 말 것** — 라이브 인스턴스에서 `systemctl status demo-status.timer` + SSM `GetParameter` 로 값이
-실제로 갱신되는지 그 자리에서 확인한다.
+**🔴 AC-7 착수 전 선행 작업 — 인스턴스 헬스 발행자. ✅ 작성 완료 (2026-08-17, 위 절 참조).**
+`demo-status-publish.sh` + `demo-status.service`/`.timer` + `demo-ami.pkr.hcl` 배선 + 가드 (z) 가 저장소에
+들어왔다. **그러나 이 파일들은 한 번도 실행된 적이 없다** — 정적 검사와 bite 만 통과했다.
+AC-7 실증이 곧 이 스크립트의 **첫 실검증**이므로 **써뒀다고 믿지 말 것.** 라이브 인스턴스에서 이 순서로
+그 자리에서 확인한다:
+
+1. `systemctl status demo-status.timer` — active(waiting), 다음 발화 시각이 30초 안쪽인가
+2. `systemctl status demo-status.service` + `journalctl -u demo-status` — `[status-publish] … ← N bytes`
+3. `aws ssm get-parameter --name /portfolio-demo/domains-health` — **값이 `{}` 가 아니고**,
+   `LastModifiedDate` 가 **30초 이내로 계속 갱신되는가**(한 번 찍힌 값과 갱신되는 값은 다른 명제다)
+4. 페이지의 8개 배지가 그 값을 반영하는가 — 그리고 **도메인 하나를 내렸을 때 배지가 따라 내려가는가**
+   (올라가는 방향만 보면 한 방향으로만 고장 난 게이트를 못 잡는다)
+5. `awscli` 가 실제로 AMI 에 들어왔는가 — `command -v aws`. 없으면 발행자가 매 30초 죽고 증상은
+   "배지가 안 뜬다" 라서 페이지 결함처럼 보인다
 
 **AC-8 — 재굽기 (측정·실증이 끝난 뒤, MONO-399 와 합침 가능). ⏳ 잔존.**
 항목 1~4가 baked 이므로 최종 도달에 재굽기 필요. `MONO-399` AC-6 이 이미 재굽기를 예약했으므로 **가능하면
