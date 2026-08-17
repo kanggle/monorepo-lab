@@ -21,7 +21,13 @@ import org.testcontainers.DockerClientFactory;
  * "the verdict agrees with the host and carries that branch's message" rather than
  * pretending both branches are covered, and
  * {@link #verdictMatchesTheHostAndSaysWhichBranchRan()} prints the branch that
- * actually ran so a reader of the CI log does not have to assume.
+ * actually ran.
+ *
+ * <p>Where that line ends up, measured rather than assumed: Gradle does not forward
+ * test stdout to the console, so the marker appears in this module's test report
+ * (and in a local run's XML) but <strong>not</strong> in the CI job log — grepping a
+ * green CI run for it returns nothing. It is a record for whoever opens the report,
+ * not a signal a CI query can read.
  *
  * <p>Reaching both branches deterministically would mean making the probe
  * injectable — a change to production behaviour, deliberately outside this task.
@@ -89,6 +95,7 @@ class DockerAvailableConditionTest {
     void verdictMatchesTheHostAndSaysWhichBranchRan() {
         // Printed, not asserted: it stops "the test passed" from being read as "both
         // outcomes were covered". Only one of them can be, on any given host.
+        // Lands in this module's test report, not in the CI job log — see the class javadoc.
         System.out.println("DOCKER-CONDITION-BRANCH exercised="
                 + (HOST_HAS_DOCKER ? "enabled" : "disabled")
                 + " unexercised=" + (HOST_HAS_DOCKER ? "disabled" : "enabled"));
