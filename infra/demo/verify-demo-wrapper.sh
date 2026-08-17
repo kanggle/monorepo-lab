@@ -1152,6 +1152,106 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+echo "[verify] (z) 도메인 헬스 스냅샷 발행 경로가 끊기지 않았는가"
+# ---------------------------------------------------------------------------
+# 근거(MONO-477): 컨트롤 플레인의 `GET /domains` 는 SSM 파라미터를 **읽기만** 한다.
+# 그 값을 채우는 것은 인스턴스의 demo-status.timer 다. 발행자가 없으면 파라미터는
+# terraform 초기값 `{}` 에 머물고, 페이지의 8개 배지는 스택이 멀쩡히 떠 있어도
+# 영원히 "확인 중" 이다. **아무것도 에러를 내지 않는다** — 이 저장소가 반복해서
+# 데인 무증상 실패의 모양이다(96 컨테이너 healthy + 도달 불가).
+#
+# 이 가드가 static 구역에 있는 것은 의도다. --live 뒤에 두면 CI 의 "Demo wrapper
+# smoke" 와 packer 7단계가 이것을 **한 번도 돌리지 않는다** — 러너 없는 가드는 썩는다.
+z_pub="$ROOT/infra/demo/demo-status-publish.sh"
+z_svc="$ROOT/infra/demo/demo-status.service"
+z_tmr="$ROOT/infra/demo/demo-status.timer"
+z_pkr="$ROOT/infra/demo/aws/packer/demo-ami.pkr.hcl"
+z_tf="$ROOT/infra/demo/aws/terraform/main.tf"
+z_lam="$ROOT/infra/demo/aws/terraform/lambda/handler.py"
+
+[ -f "$z_pub" ] || fail "infra/demo/demo-status-publish.sh 가 없습니다 — 헬스 스냅샷을 채울 주체가 없습니다."\
+  $'\n'"→ Lambda 는 읽기만 합니다. 발행자가 없으면 /domains 는 terraform 초기값 {} 만 돌려줍니다."
+[ -f "$z_svc" ] || fail "infra/demo/demo-status.service 가 없습니다 (유닛은 저장소가 소유해야 합니다 — MONO-366)."
+[ -f "$z_tmr" ] || fail "infra/demo/demo-status.timer 가 없습니다."
+
+# (1) 발행자가 실제로 생산자와 발행처를 잇는가. 주석은 걷어내고 본다 —
+#     이 스크립트의 헤더가 `aws ssm put-parameter` 를 **설명하느라** 언급하므로
+#     순진한 grep 은 본문을 통째로 지워도 자기 주석에 매치해 통과한다((k)/(n) 의 함정).
+z_pub_body="$(sed 's/#.*//' "$z_pub")"
+printf '%s\n' "$z_pub_body" | grep -q 'demo-status\.sh' \
+  || fail "demo-status-publish.sh 가 demo-status.sh 를 호출하지 않습니다 (주석 제외 본문 기준)."
+printf '%s\n' "$z_pub_body" | grep -q 'put-parameter' \
+  || fail "demo-status-publish.sh 가 put-parameter 를 호출하지 않습니다 (주석 제외 본문 기준)."
+
+# (2) 유닛이 발행자를 부르는가 + 타이머가 그 유닛을 부르는가.
+z_svc_exec="$(sed 's/#.*//' "$z_svc" | grep -E '^[[:space:]]*ExecStart=' || true)"
+case "$z_svc_exec" in
+  *demo-status-publish.sh*) : ;;
+  *) fail "demo-status.service 의 ExecStart 가 demo-status-publish.sh 를 부르지 않습니다: ${z_svc_exec:-<없음>}" ;;
+esac
+sed 's/#.*//' "$z_tmr" | grep -qE '^[[:space:]]*Unit=demo-status\.service' \
+  || fail "demo-status.timer 가 Unit=demo-status.service 를 가리키지 않습니다."
+
+# (3) 🔴 AccuracySec 이 없으면 '30초 주기' 는 거짓이다.
+#     systemd 기본 AccuracySec 은 1분이라 커널이 타이머를 뭉쳐 깨운다 — 유닛에는
+#     30s 라고 적혀 있고 실제 주기는 ~1분이 된다. 페이지가 표시 지연을 정직하게
+#     적으라는 티켓 요구의 근거가 여기서 무너지므로, 선언과 실제를 벌리지 않는다.
+sed 's/#.*//' "$z_tmr" | grep -qE '^[[:space:]]*AccuracySec=' \
+  || fail "demo-status.timer 에 AccuracySec 이 없습니다 — systemd 기본값 1분이 30초 주기를 삼킵니다."\
+     $'\n'"→ 유닛이 선언한 주기와 실제 주기가 달라집니다(선언은 아무것도 강제하지 않는다)."
+
+# (4) Packer 가 둘 다 **저장소에서** 설치하고, 서비스가 아니라 **타이머**를 enable 하는가.
+#     서비스를 enable 하면 부팅 때 한 번 돌고 끝난다(주기 발행이 사라진다).
+if [ -f "$z_pkr" ]; then
+  grep -q '/opt/monorepo-lab/infra/demo/demo-status.service' "$z_pkr" \
+    || fail "packer 가 demo-status.service 를 저장소 경로에서 설치하지 않습니다."
+  grep -q '/opt/monorepo-lab/infra/demo/demo-status.timer' "$z_pkr" \
+    || fail "packer 가 demo-status.timer 를 저장소 경로에서 설치하지 않습니다."
+  grep -qE 'systemctl enable demo-status\.timer' "$z_pkr" \
+    || fail "packer 가 demo-status.timer 를 enable 하지 않습니다."\
+       $'\n'"→ demo-status.service 를 enable 하면 부팅 시 1회만 돌고 주기 발행이 사라집니다."
+  # 발행자는 aws CLI 로 씁니다. AMI 가 CLI 를 설치하지 않으면 스크립트는 매 30초
+  # 죽고, 증상은 "페이지 배지가 안 뜬다" 라 원인이 페이지 쪽처럼 보입니다.
+  grep -qE 'apt-get install -y awscli' "$z_pkr" \
+    || fail "packer 가 awscli 를 설치하지 않습니다 — demo-status-publish.sh 가 매 주기 죽습니다."
+fi
+
+# (5) 🔴 파라미터 이름은 **세 곳**에 있다 — 발행자 · Lambda 기본값 · terraform.
+#     한 사실이 세 곳에 있으면 한 곳만 고쳐지고, 어긋난 순간 발행자는 아무도 읽지 않는
+#     파라미터에 성실하게 쓴다. 전부 초록이고 배지만 안 뜬다. 여기서 셋을 대조한다.
+#     추출 실패는 통과가 아니라 실패다((x) 와 같은 이유) — 못 읽었으면 모르는 것이다.
+z_pub_param="$(printf '%s\n' "$z_pub_body" \
+  | sed -n 's/^HEALTH_PARAM="\${HEALTH_PARAM:-\(.*\)}"$/\1/p' | head -1)"
+[ -n "$z_pub_param" ] || fail "demo-status-publish.sh 에서 HEALTH_PARAM 기본값을 추출하지 못했습니다"\
+  $'\n'"→ 형태가 바뀌었다면 이 가드도 함께 고치세요. 추출 실패를 통과로 보고하지 않습니다."
+
+if [ -f "$z_lam" ]; then
+  z_lam_param="$(grep -E '^HEALTH_PARAM[[:space:]]*=' "$z_lam" \
+    | sed -n 's/.*,[[:space:]]*"\([^"]*\)").*/\1/p' | head -1)"
+  [ -n "$z_lam_param" ] || fail "handler.py 에서 HEALTH_PARAM 기본값을 추출하지 못했습니다."
+  [ "$z_lam_param" = "$z_pub_param" ] \
+    || fail "헬스 파라미터 이름이 어긋났습니다 — 발행자='$z_pub_param' ↔ handler.py='$z_lam_param'"\
+       $'\n'"→ 발행자는 아무도 읽지 않는 이름에 쓰고, /domains 는 영원히 비어 있게 됩니다."
+fi
+
+if [ -f "$z_tf" ]; then
+  # health_param = "/${var.project}/domains-health" + variable "project" 의 default
+  z_tf_suffix="$(grep -E '^[[:space:]]*health_param[[:space:]]*=' "$z_tf" \
+    | sed -n 's/.*"\/\${var\.project}\(.*\)".*/\1/p' | head -1)"
+  z_tf_project="$(sed -n '/^variable "project"/,/^}/p' \
+    "$ROOT/infra/demo/aws/terraform/variables.tf" \
+    | sed -n 's/^[[:space:]]*default[[:space:]]*=[[:space:]]*"\(.*\)".*/\1/p' | head -1)"
+  [ -n "$z_tf_suffix" ] && [ -n "$z_tf_project" ] \
+    || fail "terraform 에서 health_param 을 조립하지 못했습니다 (suffix='$z_tf_suffix' project='$z_tf_project')."
+  [ "/$z_tf_project$z_tf_suffix" = "$z_pub_param" ] \
+    || fail "헬스 파라미터 이름이 어긋났습니다 — 발행자='$z_pub_param' ↔ terraform='/$z_tf_project$z_tf_suffix'"\
+       $'\n'"→ terraform 이 만드는 파라미터와 인스턴스가 쓰는 파라미터가 다릅니다."\
+       $'\n'"   IAM 정책도 terraform 쪽 ARN 으로 좁혀져 있으므로 put-parameter 가 AccessDenied 로 죽습니다."
+fi
+
+ok "헬스 발행 경로 유지 (타이머 → 유닛 → 발행자 → demo-status.sh → SSM '$z_pub_param' · 3곳 이름 일치)"
+
+# ---------------------------------------------------------------------------
 if [ "$LIVE" -eq 0 ]; then
   echo "[verify] 정적 검증 PASS (실기동 증명은 --live)"
   exit 0

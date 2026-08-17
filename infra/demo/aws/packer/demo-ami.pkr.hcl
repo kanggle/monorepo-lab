@@ -143,6 +143,16 @@ build {
       // noble 의 openjdk-21 은 Temurin 21 과 동일한 OpenJDK 21 이다.
       "sudo apt-get install -y openjdk-21-jdk-headless",
       "java -version",
+      // demo-status-publish.sh 가 `aws ssm put-parameter` 로 헬스 스냅샷을 올린다
+      // (TASK-MONO-477). CLI 가 없으면 그 스크립트는 매 30초 죽고 페이지의 도메인
+      // 배지는 영원히 "확인 중" 에 머문다 — 그 증상은 페이지 결함처럼 보인다.
+      //
+      // 설치를 **조용히 지나가게 두지 않는다.** 이 저장소는 이미 한 번 당했다:
+      // sync-portfolio.sh 의 `apk add git >/dev/null 2>&1` 이 네트워크 실패를
+      // 삼켜서 뒤따르는 도구가 엉뚱한 곳에서 죽고 원인이 미궁이 됐다(MONO-203).
+      // apt 를 silence 하지 않고, 설치 직후 실행으로 확증한다.
+      "sudo apt-get install -y awscli",
+      "aws --version",
       "sudo usermod -aG docker ubuntu",
       "sudo systemctl enable --now docker",
     ]
@@ -310,6 +320,25 @@ build {
       "grep -q 'demo-boot.sh' /etc/systemd/system/demo-stack.service",
       "test -x /opt/monorepo-lab/infra/demo/demo-boot.sh || sudo chmod +x /opt/monorepo-lab/infra/demo/demo-boot.sh",
       // AMI 굽는 시점에는 start 하지 않는다 (부팅 시 기동)
+
+      // -----------------------------------------------------------------------
+      // 헬스 스냅샷 발행자 (TASK-MONO-477) — 같은 이유로 **저장소에서** 설치한다
+      // -----------------------------------------------------------------------
+      // 컨트롤 플레인의 `GET /domains` 는 SSM 파라미터를 읽기만 한다. 그 값을
+      // 채우는 것이 이 타이머다. 없으면 terraform 초기값 `{}` 가 그대로 남아
+      // 페이지의 8개 배지가 영원히 "확인 중" 이다 — 스택이 멀쩡히 떠 있어도.
+      //
+      // enable 하는 것은 **타이머**다. 서비스를 enable 하면 부팅 때 한 번 돌고
+      // 끝난다(그래서 demo-status.service 에는 [Install] 이 없다).
+      "sudo install -m 0644 /opt/monorepo-lab/infra/demo/demo-status.service /etc/systemd/system/demo-status.service",
+      "sudo install -m 0644 /opt/monorepo-lab/infra/demo/demo-status.timer /etc/systemd/system/demo-status.timer",
+      "sudo systemctl daemon-reload",
+      "sudo systemctl enable demo-status.timer",
+      // 설치가 됐다는 것과 systemd 가 그것을 받아들였다는 것은 다른 명제다.
+      // 유닛 문법 오류는 enable 을 통과하고 **부팅 후에야** 드러난다.
+      "systemctl cat demo-status.timer >/dev/null",
+      "systemctl cat demo-status.service >/dev/null",
+      "test -f /etc/systemd/system/timers.target.wants/demo-status.timer",
     ]
   }
 

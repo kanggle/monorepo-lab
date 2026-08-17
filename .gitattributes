@@ -6,3 +6,12 @@
 
 *.sh  text eol=lf
 *.sql text eol=lf
+
+# systemd 유닛도 같은 이유로 고정한다 (TASK-MONO-477). CRLF 로 체크아웃되면
+# `ExecStart=/usr/bin/bash /opt/…/demo-status-publish.sh\r` 가 되어 systemd 가
+# 경로 끝의 `\r` 까지 인자로 넘긴다 — "No such file or directory" 로 죽는데,
+# 유닛 파일을 눈으로 보면 아무 문제가 없다. 지금은 core.autocrlf=true 인
+# 클라이언트가 커밋 시 정규화해 주어 blob 이 LF 지만, autocrlf=false 인 Windows
+# 클라이언트 하나면 CRLF 가 blob 에 들어간다. 우연에 기대지 않는다.
+*.service text eol=lf
+*.timer   text eol=lf
