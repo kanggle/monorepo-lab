@@ -147,11 +147,23 @@ build {
       // (TASK-MONO-477). CLI 가 없으면 그 스크립트는 매 30초 죽고 페이지의 도메인
       // 배지는 영원히 "확인 중" 에 머문다 — 그 증상은 페이지 결함처럼 보인다.
       //
+      // 🔴 **apt 로는 안 된다 — noble 에 `awscli` 패키지가 없다.** (#3382 가 그렇게
+      // 적었고 그 줄은 한 번도 실행된 적이 없었다. ubuntu:24.04 에서 실측:
+      //   E: Package 'awscli' has no installation candidate   (rc=100)
+      // universe 는 켜져 있다 — 저장소 설정 문제가 아니라 패키지 자체가 없다.
+      // 클라우드 이미지도 같은 아카이브를 쓰므로 빌드가 1단계에서 죽었을 것이다.)
+      //
+      // 그래서 AWS 공식 설치기(v2)를 쓴다. apt 저장소 구성에 의존하지 않는다.
+      //
       // 설치를 **조용히 지나가게 두지 않는다.** 이 저장소는 이미 한 번 당했다:
       // sync-portfolio.sh 의 `apk add git >/dev/null 2>&1` 이 네트워크 실패를
       // 삼켜서 뒤따르는 도구가 엉뚱한 곳에서 죽고 원인이 미궁이 됐다(MONO-203).
-      // apt 를 silence 하지 않고, 설치 직후 실행으로 확증한다.
-      "sudo apt-get install -y awscli",
+      // 다운로드·압축해제·설치를 silence 하지 않고, 직후 실행으로 확증한다.
+      "sudo apt-get install -y unzip",
+      "curl -fsSL 'https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip' -o /tmp/awscliv2.zip",
+      "unzip -q /tmp/awscliv2.zip -d /tmp",
+      "sudo /tmp/aws/install",
+      "rm -rf /tmp/aws /tmp/awscliv2.zip",
       "aws --version",
       "sudo usermod -aG docker ubuntu",
       "sudo systemctl enable --now docker",

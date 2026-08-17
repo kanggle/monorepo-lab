@@ -1212,8 +1212,20 @@ if [ -f "$z_pkr" ]; then
        $'\n'"→ demo-status.service 를 enable 하면 부팅 시 1회만 돌고 주기 발행이 사라집니다."
   # 발행자는 aws CLI 로 씁니다. AMI 가 CLI 를 설치하지 않으면 스크립트는 매 30초
   # 죽고, 증상은 "페이지 배지가 안 뜬다" 라 원인이 페이지 쪽처럼 보입니다.
-  grep -qE 'apt-get install -y awscli' "$z_pkr" \
-    || fail "packer 가 awscli 를 설치하지 않습니다 — demo-status-publish.sh 가 매 주기 죽습니다."
+  #
+  # 🔴 이 술어는 한 번 **결함을 핀으로 고정했다.** 처음 판(#3382)은
+  #    `apt-get install -y awscli` 를 요구했는데 **noble 에는 그 패키지가 없다**
+  #    (ubuntu:24.04 실측: rc=100, "Package 'awscli' has no installation candidate";
+  #    universe 는 켜져 있으므로 저장소 구성 문제가 아니다). 가드는 초록이었고 그 줄은
+  #    한 번도 실행된 적이 없었다 — 가드가 지킨 것은 동작이 아니라 **내가 적은 문자열**
+  #    이었다. 그래서 지금은 apt 저장소 구성에 의존하지 않는 공식 설치기를 요구한다.
+  grep -q 'awscli-exe-linux' "$z_pkr" \
+    || fail "packer 가 AWS CLI 공식 설치기를 내려받지 않습니다 — demo-status-publish.sh 가 매 주기 죽습니다."\
+       $'\n'"→ apt 의 awscli 패키지는 Ubuntu noble 에 존재하지 않습니다(no installation candidate)."\
+       $'\n'"   awscli-exe-linux-x86_64.zip 공식 설치기를 쓰세요."
+  grep -q 'aws --version' "$z_pkr" \
+    || fail "packer 가 설치 직후 aws --version 으로 확증하지 않습니다."\
+       $'\n'"→ 설치가 조용히 실패하면 AMI 는 CLI 없이 완성되고, 그 사실은 라이브 인스턴스에서야 드러납니다."
 fi
 
 # (5) 🔴 파라미터 이름은 **세 곳**에 있다 — 발행자 · Lambda 기본값 · terraform.

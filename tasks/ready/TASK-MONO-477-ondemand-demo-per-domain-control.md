@@ -48,8 +48,32 @@ monorepo
 | `infra/demo/demo-status-publish.sh` | `demo-status.sh` 출력을 SSM 파라미터에 발행. 리전은 IMDSv2 로 파생(하드코딩 없음) |
 | `infra/demo/demo-status.service` | oneshot. 저장소 소유 유닛(MONO-366 과 같은 이유) |
 | `infra/demo/demo-status.timer` | `OnUnitActiveSec=30s` + **`AccuracySec=5s`** |
-| `demo-ami.pkr.hcl` | `awscli` 설치(+`aws --version` 확증) · 두 유닛을 저장소 경로에서 설치 · **타이머**를 enable |
+| `demo-ami.pkr.hcl` | AWS CLI 설치(+`aws --version` 확증) · 두 유닛을 저장소 경로에서 설치 · **타이머**를 enable |
 | `verify-demo-wrapper.sh` 가드 (z) | 발행 경로 5고리 + **파라미터 이름 3곳 대조** |
+
+### 🔴 그리고 그 PR 은 한 번도 실행된 적 없는 줄을 실었다 — 가드가 그것을 핀으로 고정했다
+
+`②packer build` 착수 **직전**에 새로 넣은 `sudo apt-get install -y awscli` 한 줄을 같은 베이스
+OS(`ubuntu:24.04`)에서 돌려봤다. **없는 패키지였다:**
+
+```
+E: Package 'awscli' has no installation candidate      (rc=100)
+```
+
+universe 는 켜져 있다 — 저장소 구성 문제가 아니라 **noble 에 그 패키지가 없다.** 클라우드 이미지도
+같은 아카이브를 쓰므로 **빌드는 1단계에서 죽었을 것이다**(57분짜리 빌드의 3분 지점).
+
+이 사건의 값어치는 실패 자체가 아니라 **가드가 초록이었다는 것**이다. 가드 (z)는
+`apt-get install -y awscli` 라는 **문자열의 존재**를 물었고, 그 문자열은 거기 있었다.
+⇒ 가드가 지킨 것은 동작이 아니라 **내가 적은 문장**이다. 이 저장소가 반복해서 배우는 명제의
+또 한 사례다 — *정적 검사 통과 ≠ 동작*, 그리고 *핀은 자기가 지키려던 결함을 얼릴 수 있다.*
+
+**고침**: apt 저장소 구성에 의존하지 않는 **AWS CLI v2 공식 설치기**(`awscli-exe-linux-x86_64.zip`)
+로 교체. 가드 (z)의 술어도 설치기 + `aws --version` 확증 **양쪽**을 요구하도록 바꿨고,
+이번엔 **`ubuntu:24.04` 컨테이너에서 실제로 설치·실행되는 것을 확인한 뒤** 커밋했다.
+
+🔵 교훈(다음 착수자에게): **AMI 에 새 패키지를 추가할 때는 커밋 전에 그 베이스 OS 컨테이너에서
+한 번 돌려라.** `packer validate` 도 가드도 이 층을 보지 못한다. 비용은 몇 분, 안 하면 57분이다.
 
 **설계 판단 두 가지 (근거를 남긴다):**
 
