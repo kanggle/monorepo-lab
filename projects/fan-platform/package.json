@@ -7,7 +7,7 @@
     "build": "pnpm -r run build",
     "lint": "pnpm -r run lint",
     "test": "pnpm -r run test",
-    "e2e:smoke": "pnpm -r --filter fan-platform-web-typo run e2e:smoke"
+    "e2e:smoke": "pnpm -r run e2e:smoke"
   },
   "packageManager": "pnpm@9.15.0",
   "engines": {
