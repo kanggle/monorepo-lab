@@ -91,7 +91,7 @@ tasks.register('integrationTest', Test) {
     description = 'Runs Testcontainers-backed integration tests (requires Docker).'
     group = 'verification'
     useJUnitPlatform {
-        includeTags 'BITE-AC2-no-such-tag'
+        includeTags 'integration'
     }
     shouldRunAfter tasks.named('test')
 

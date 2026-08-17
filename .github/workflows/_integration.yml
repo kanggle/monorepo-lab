@@ -170,6 +170,10 @@ jobs:
           # whole script into the log before running it, so the literal marker appears with
           # `tests=$total_tests` still unexpanded — and it appears even if the step never ran.
           # Measured the mistake while writing TASK-MONO-544's own AC-3.
+          #
+          # Same trap on the errors below, with a usable discriminator: the echoed source
+          # keeps the literal `::error::`, while the runtime line is rewritten to `##[error]`.
+          # Grep for `##[error]` to read what actually happened.
           echo "INTEGRATION-SUMMARY tests=$total_tests failures=$total_failures errors=$total_errors skipped=$total_skipped"
           # %b, not a bare format string: the table is data and must never be parsed as one.
           printf '### Integration results\n\n%b\n' "$table" >> "$GITHUB_STEP_SUMMARY"
