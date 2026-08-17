@@ -1452,6 +1452,15 @@ jobs:
           done
           echo "checked ${#files[@]} script(s) under infra/demo/"
 
+      # TASK-MONO-548. The env preflight gate carries its own self-test, and a guard
+      # with no runner rots. `.env` is gitignored, so nothing on a runner ever sits in
+      # the state this guard exists for — which is why the self-test CONSTRUCTS both
+      # states (moves any real `.env` aside, then builds one from `.env.example`)
+      # instead of depending on what the machine happens to have. An earlier version
+      # skipped both of those cases here and still reported all-pass.
+      - name: Env preflight self-test (constructs both .env states)
+        run: bash infra/demo/check-env-preflight.sh --self-test
+
       # TASK-MONO-520 AC-2 — shellcheck is deliberately NOT enabled here, and the
       # decision was measured rather than assumed. A one-shot non-gating step ran
       # it on this very job (run 31478823405) and reported, over all 16 scripts:
