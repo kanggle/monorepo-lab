@@ -174,10 +174,11 @@ with_token() {
 # Git Bash(msys)에는 /proc/sys/kernel/random/uuid 가 없다.
 uuid() { openssl rand -hex 16 | sed -E 's/(.{8})(.{4})(.{4})(.{4})(.{12})/\1-\2-\3-\4-\5/'; }
 
-# JSON 배열을 객체당 한 줄로 쪼갠다. 🔴 `sed -E 's/.*"key":"([^"]*)".*/\1/'` 로 통짜
-# 응답을 긁으면 `.*` 가 greedy 라 **마지막** 매치를 집는다(seed-wms.sh 가 밟은 함정).
-# 객체 단위로 자른 뒤 그 안에서 찾으면 필드 순서에도 의존하지 않는다.
-json_objects() { printf '%s' "$1" | sed 's/},{/}\n{/g'; }
+# 🔵 `json_objects` 는 **lib.sh 로 승격**됐다(2026-08-18, TASK-MONO-556) — finance 시드도
+# 같은 파싱이 필요해졌고, `wait_backend` 때와 같은 이유로 한 집만 둔다. 원래 주석이 적어
+# 둔 근거는 그대로 유효하다: `sed -E 's/.*"key":"([^"]*)".*/\1/'` 로 통짜 응답을 긁으면
+# `.*` 가 greedy 라 **마지막** 매치를 집는다(seed-wms.sh 가 밟은 함정). 객체 단위로 자른
+# 뒤 그 안에서 찾으면 필드 순서에도 의존하지 않는다.
 
 # obj_by <body> <key> <value> — 그 키=값을 가진 첫 객체(한 줄)
 obj_by() { json_objects "$1" | grep -F "\"$2\":\"$3\"" | head -1; }

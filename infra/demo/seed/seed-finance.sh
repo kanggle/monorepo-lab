@@ -146,18 +146,43 @@ activate "계좌 B KYC" "$ACC_B"
 # 🔵 `POST /{id}/topups` 는 **운영자 전용**이다(TASK-FIN-BE-068). 이 시드는 이미 운영자
 # 토큰으로 돌고 있으므로 그대로 통한다.
 #
-# 🔴 **잔액을 다시 읽어서 판정한다 — 응답 코드로는 갈 수 없다.** 고정 `Idempotency-Key` 를
-# 쓰므로 2회차는 서버가 **저장된 2xx 를 재생**하고, 재생된 본문은 최초 시점 것이다. 즉
-# "이번 실행이 돈을 넣었나" 는 200 으로 판별 불가능하다. 여기서는 **잔액 자체**가 술어다:
-# 목표 이상이면 도달, 미만이면 실패 — 재생이든 최초든 결론이 같다.
+# 🔴 **응답 코드로는 갈 수 없다.** 고정 `Idempotency-Key` 를 쓰므로 2회차는 서버가
+# **저장된 2xx 를 재생**하고, 재생된 본문은 최초 시점 것이다. 즉 "이번 실행이 돈을
+# 넣었나" 는 200 으로 판별 불가능하다.
+#
+# 🔴🔴 **그렇다고 잔액을 술어로 쓸 수도 없다 — 첫 판이 그렇게 했고 틀렸다(TASK-MONO-556).**
+# `after >= TOPUP_MINOR` 는 *"잔액은 입금 말고는 안 변한다"* 를 전제하는데 **바로 다음
+# 단계인 이체 A→B 가 그 전제를 깬다**: A 는 400,000 으로 내려가고, 2회차 입금은 재생이라
+# 잔액을 못 올린다 ⇒ **재시작마다 결정론적으로 실패**했다(= 한 번도 재실행된 적 없는
+# 계좌에서만 통과). 지문은 **A 만 실패하고 B 는 통과하는 비대칭**이었다 — B 는 이체를
+# *받아서* 600,000 이 되므로 실패 방향이 정확히 이체 방향과 일치했다.
+# 🔵 답은 바로 아래 상수의 주석에 이미 있었다: 작성자는 이체가 잔액을 깎는 것을 **알고**
+# 입금액을 그만큼 키웠는데, 같은 함수의 술어만 그 사실을 안 넣었다.
+#
+# ⇒ 술어를 **입금 사실 자체**로 옮긴다: `GET /{id}/transactions?type=TOPUP` 에 이 시드가
+# 넣은 금액의 TOPUP 거래가 **존재하는가**. 잔액이 나중에 어떻게 쓰이든 무관하고 시드 내부
+# 순서에 결합하지 않는다 — **이체 금액을 바꿔도 안 깨진다**. 잔액은 계속 읽지만 그건
+# 판정이 아니라 *생성/재생* 을 가르는 **보고용**이다. 그 둘을 한 값에 겹쳐 쓴 것이 결함이었다.
 ledger_of() { # <account> — ledger 잔액(minor). 못 읽으면 빈 문자열
   http GET "$FIN/api/finance/accounts/$1/balances" >/dev/null || { printf ''; return 1; }
   printf '%s' "$SEED_LAST_BODY" | grep -o '"ledger":"[0-9]*"' | head -1 | cut -d'"' -f4
 }
 
+# topup_txns <account> <amount-minor> — 그 금액의 TOPUP 거래 **건수**.
+# 🔴 조회가 실패하면 빈 문자열이다 — **"0건" 이 아니라 "판정 불가"**. 그 둘을 섞으면
+# 계측 실패가 "입금이 없다" 로 읽힌다.
+# 🔴 `json_objects` 로 **객체 단위**로 자른 뒤 한 줄 안에서 두 조건을 본다. 통짜 grep 은
+# 서로 다른 거래의 필드를 합쳐 **키메라 행**을 만든다(TRANSFER 의 type + TOPUP 의 금액).
+topup_txns() {
+  http GET "$FIN/api/finance/accounts/$1/transactions?type=TOPUP&size=100" >/dev/null \
+    || { printf ''; return 1; }
+  json_objects "$SEED_LAST_BODY" \
+    | grep -F '"type":"TOPUP"' | grep -cF "\"amount\":\"$2\""
+}
+
 TOPUP_MINOR=500000   # ₩5,000.00 — 이체 100,000 + 홀드 여유
 topup() {
-  local label="$1" acc="$2" want="$3" before after
+  local label="$1" acc="$2" before after txns
   [ -n "$acc" ] || { seed_fail "$label — 계좌 id 가 비어 있다"; return 1; }
   before="$(ledger_of "$acc")"
   if ! http POST "$FIN/api/finance/accounts/$acc/topups" \
@@ -166,25 +191,30 @@ topup() {
     seed_fail "$label — HTTP $SEED_LAST_STATUS ${SEED_LAST_BODY:0:200}"
     return 1
   fi
-  after="$(ledger_of "$acc")"
-  if [ -z "$after" ]; then
-    seed_fail "$label — 입금은 2xx 인데 잔액을 다시 읽지 못했다"
+  txns="$(topup_txns "$acc" "$TOPUP_MINOR")"
+  if [ -z "$txns" ]; then
+    seed_fail "$label — 입금은 2xx 인데 거래내역을 읽지 못했다(판정 불가)"
     return 1
   fi
-  if [ "$after" -ge "$want" ] 2>/dev/null; then
-    if [ "$after" != "$before" ]; then
-      SEED_CREATED=$((SEED_CREATED + 1)); seed_log "생성  $label — ledger $before → $after"
-    else
-      SEED_EXISTING=$((SEED_EXISTING + 1)); seed_log "기존  $label — ledger $after (재생, 이중 입금 없음)"
-    fi
-    return 0
+  if [ "$txns" -lt 1 ] 2>/dev/null; then
+    # 🔴 2xx 를 받고도 TOPUP 거래가 0건 = 입금이 성립하지 않았다. 이 시드가 지키는 회귀
+    # (`INSUFFICIENT_AVAILABLE_BALANCE`)의 상류가 정확히 여기다.
+    seed_fail "$label — 입금이 2xx 인데 $TOPUP_MINOR $CURRENCY TOPUP 거래가 0건이다"
+    return 1
   fi
-  seed_fail "$label — 입금 후 ledger=$after 로 목표 $want 미만이다"
-  return 1
+  after="$(ledger_of "$acc")"
+  if [ -n "$after" ] && [ "$after" != "$before" ]; then
+    SEED_CREATED=$((SEED_CREATED + 1))
+    seed_log "생성  $label — ledger $before → $after (TOPUP 거래 ${txns}건)"
+  else
+    SEED_EXISTING=$((SEED_EXISTING + 1))
+    seed_log "기존  $label — TOPUP 거래 ${txns}건 확인 (재생, 이중 입금 없음)"
+  fi
+  return 0
 }
 
-topup "계좌 A 입금" "$ACC_A" "$TOPUP_MINOR"
-topup "계좌 B 입금" "$ACC_B" "$TOPUP_MINOR"
+topup "계좌 A 입금" "$ACC_A"
+topup "계좌 B 입금" "$ACC_B"
 
 # --- 이체 (→ 원장 이벤트) ----------------------------------------------------
 # 이체가 원장 전기를 낳고, 그 전기가 ledger_account 를 자동 생성한다.
