@@ -290,7 +290,11 @@ build {
     inline_shebang  = "/bin/bash -e"
     inline = [
       "set -eux",
-      "trap 'rc=$?; set +x; echo \"===== DIED rc=$rc =====\"; df -h /; free -m; echo \"--- dmesg tail ---\"; dmesg | tail -40; echo \"--- docker ---\"; docker system df || true; exit $rc' EXIT",
+      // 🔴 진단 덤프는 **실패했을 때만** 흘린다 (TASK-MONO-555).
+      // 이전 모양은 EXIT trap 이라 **성공해도** dmesg 40줄 + docker system df 를 쏟았다.
+      // 이 단계의 꼬리는 이미 출력이 몰리는 자리이고(아래 참조), 성공 경로에서 그 위에
+      // 진단을 더 얹을 이유가 없다 — 실패했을 때 필요한 것은 그대로 남는다.
+      "trap 'rc=$?; set +x; if [ \"$rc\" -ne 0 ]; then echo \"===== DIED rc=$rc =====\"; df -h /; free -m; echo \"--- dmesg tail ---\"; dmesg | tail -40; echo \"--- docker ---\"; docker system df || true; fi; exit $rc' EXIT",
       "cd /opt/monorepo-lab",
       "export ROOT=/opt/monorepo-lab",
       "source infra/demo/projects.sh",
@@ -316,10 +320,32 @@ build {
       //      EC2 를 실제로 부팅해서야 스택이 33/43 에서 멈추는 것으로 드러났다
       //      (TASK-MONO-353). pull 이 있었다면 빌드가 그 자리에서 실패했다.
       "for p in \"$${SET[@]}\"; do mapfile -t ARGS < <(compose_args \"$p\"); echo \"[ami] build: $p  ($(df -h / | awk 'NR==2{print $4\" free\"}') / $(free -m | awk 'NR==2{print $7\"MB avail\"}'))\"; if ! docker compose -p \"$p\" \"$${ARGS[@]}\" build >\"/var/log/ami-build-$p.log\" 2>&1; then echo \"!!! build FAILED: $p\"; tail -80 \"/var/log/ami-build-$p.log\"; exit 1; fi; if ! docker compose -p \"$p\" \"$${ARGS[@]}\" pull --ignore-buildable >>\"/var/log/ami-build-$p.log\" 2>&1; then echo \"!!! pull FAILED: $p (레지스트리에서 사라진 이미지?)\"; tail -40 \"/var/log/ami-build-$p.log\"; exit 1; fi; echo \"[ami]   ok: $p\"; done",
-      "docker image prune -f",    // dangling 만 (태그된 이미지 보존)
-      "docker builder prune -af", // 빌드캐시는 AMI 에 불필요
-      "docker image ls",
-      "df -h /; free -m",
+      // ---- 꼬리 정리 — 출력은 파일로, SSH 로는 한 줄만 (TASK-MONO-555) ----------
+      //
+      // 이 자리에서 4회차 굽기가 죽었다: 할 일은 전부 끝났고 스크립트는 스스로 rc=0 으로
+      // 끝났는데 packer 가 **123** 을 받았다(에러 메시지 0건, OOM 0건, 디스크 75G·메모리
+      // 30GB 여유, 8개 빌드 로그 전부 정상 종료).
+      //
+      // 실측 — 이 꼬리가 SSH 로 쏟는 줄 수 **523줄**:
+      //     docker builder prune -af  → 422줄  ← 캐시 항목을 한 줄씩 나열한다
+      //     docker image ls           →  57줄
+      //     df/free + trap 의 dmesg   →  26줄
+      //     기타                      →  18줄
+      //
+      // 위 build/pull 출력은 이미 파일로 돌려 놨는데(같은 증상의 이전 처방) **이 네 줄만
+      // 그 처방 밖에 남아 있었다.** 그래서 같은 처방을 여기에도 적용한다.
+      //
+      // 🔴 이것은 가설에 대한 조치이지 원인 규명이 아니다. 123 의 출처는 여전히 모른다.
+      //    이 결함은 서로 다른 세 지점에서 죽은 것이 관측됐으므로(위 주석), 한 번 성공한다고
+      //    "출력 폭주가 원인이었다" 로 승격하지 말 것 — 적을 수 있는 것은 N회 성공뿐이다.
+      //
+      // 🔵 프로젝트별 `[ami] build: <p>` 한 줄은 **유지한다.** 15분 넘게 도는 단계라
+      //    그것마저 없으면 "도는 중"과 "멈춤"을 구별할 수 없다.
+      // 🔵 버린 출력은 잃지 않는다 — 아래 error-cleanup-provisioner 가 이 파일들을 tail 한다.
+      "docker image prune -f    >/var/log/ami-prune-image.log   2>&1", // dangling 만 (태그된 이미지 보존)
+      "docker builder prune -af >/var/log/ami-prune-builder.log 2>&1", // 빌드캐시는 AMI 에 불필요
+      "docker image ls          >/var/log/ami-images.log        2>&1",
+      "echo \"[ami] 정리 완료 — 이미지 $(($(wc -l </var/log/ami-images.log) - 1))개 · $(df -h / | awk 'NR==2{print $4\" free\"}') · $(free -m | awk 'NR==2{print $7\"MB avail\"}')\"",
     ]
     timeout = "90m"
   }
@@ -404,6 +430,11 @@ build {
       "(docker info >/dev/null 2>&1 && echo 'daemon: reachable') || echo 'daemon: UNREACHABLE'",
       "echo '--- 각 프로젝트 빌드 로그 tail ---'",
       "for f in /var/log/ami-build-*.log; do echo \"### $f\"; tail -5 \"$f\"; done 2>/dev/null || echo '(no build logs)'",
+      // TASK-MONO-555 — 꼬리 정리 출력도 파일로 돌렸다. **여기서 다시 꺼내지 않으면
+      // 그 고침은 "안 보이니까 조용해졌다" 가 되고, 다음 실패는 이번보다 덜 알게 된다.**
+      // 실패했을 때만 도는 프로비저너이므로 여기서는 흘려도 비용이 없다.
+      "echo '--- 꼬리 정리 로그 tail (prune / image ls) ---'",
+      "for f in /var/log/ami-prune-image.log /var/log/ami-prune-builder.log /var/log/ami-images.log; do echo \"### $f ($(wc -l <\"$f\" 2>/dev/null || echo 0) lines)\"; tail -5 \"$f\"; done 2>/dev/null || echo '(no cleanup logs)'",
       "echo '--- 마지막 커널 메시지 ---'",
       "dmesg | tail -25",
     ]
