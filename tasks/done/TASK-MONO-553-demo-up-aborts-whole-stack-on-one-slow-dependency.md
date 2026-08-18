@@ -8,7 +8,7 @@ TASK-MONO-553
 
 # Status
 
-review
+done
 
 # Owner
 
