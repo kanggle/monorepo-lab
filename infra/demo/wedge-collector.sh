@@ -37,10 +37,13 @@ while :; do
   mem=$(awk '/^MemTotal:/{t=$2} /^MemAvailable:/{a=$2} /^Cached:/{c=$2} /^SwapFree:/{sf=$2}
              END{printf "total=%dM avail=%dM cached=%dM swapfree=%dM", t/1024, a/1024, c/1024, sf/1024}' /proc/meminfo)
 
-  # PSI — 결정적 계측기
-  pm=$(awk '/^some/{s=$2} /^full/{f=$2} END{printf "mem_some=%s mem_full=%s", s, f}' /proc/pressure/memory 2>/dev/null)
-  pi=$(awk '/^some/{s=$2} /^full/{f=$2} END{printf "io_some=%s io_full=%s", s, f}' /proc/pressure/io 2>/dev/null)
-  pc=$(awk '/^some/{s=$2} END{printf "cpu_some=%s", s}' /proc/pressure/cpu 2>/dev/null)
+  # PSI — 결정적 계측기.
+  # 🔴 avg10 만 찍으면 안 된다: 소수점 둘째 자리 반올림이라 **작은 압력이 0.00 으로 사라진다**
+  # (2026-08-18 1차 측정에서 25분간 mem_full=0.00 을 보고 "압력 없음" 으로 결론 낼 뻔했다).
+  # `total=` 은 단조 증가하는 마이크로초 카운터라 반올림되지 않는다 — **차분이 진짜 신호**다.
+  pm=$(awk '/^some/{s=$2; st=$5} /^full/{f=$2; ft=$5} END{printf "mem_some=%s mem_full=%s mem_someT=%s mem_fullT=%s", s, f, st, ft}' /proc/pressure/memory 2>/dev/null)
+  pi=$(awk '/^some/{s=$2; st=$5} /^full/{f=$2; ft=$5} END{printf "io_some=%s io_full=%s io_someT=%s io_fullT=%s", s, f, st, ft}' /proc/pressure/io 2>/dev/null)
+  pc=$(awk '/^some/{s=$2; st=$5} END{printf "cpu_some=%s cpu_someT=%s", s, st}' /proc/pressure/cpu 2>/dev/null)
 
   # major fault 누적 + 스왑 인/아웃
   vm=$(awk '/^pgmajfault /{mf=$2} /^pswpin /{si=$2} /^pswpout /{so=$2}

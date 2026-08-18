@@ -18,12 +18,28 @@ variable "ami_id" {
 variable "instance_type" {
   description = <<-EOT
     데모 스택을 돌릴 인스턴스 타입.
-    실측 기반 사이징: JVM 앱 서비스 평균 ~390 MiB RSS (live fed-e2e 21개 컨테이너 측정).
-    full 이 의도대로(iam/wms 앱 포함) 뜨면 JVM ~40개 ≈ 15.6 GiB + 백킹/관측 ~7 GiB ≈ 22 GiB steady.
-    → 32GB(m6i.2xlarge) 로 충분, 64GB(m6i.4xlarge) 는 기동 스파이크까지 여유.
+
+    🔴 과거 산정("JVM ~40개 ≈ 15.6 GiB + 백킹/관측 ~7 GiB ≈ 22 GiB steady → 32GB 로 충분")은
+    **틀렸다. TASK-MONO-552 AC-0 이 라이브 호스트에서 반증했다**:
+      · 정상 상태 실측 = 31.5 GiB 중 **약 29 GiB 사용 / MemAvailable 2.4 GiB**
+      · 그 여유로는 **어떤 추가 작업이든**(시드 · 컨테이너 재생성 · 동시 접속) 방아쇠가 된다
+      · 실제로 3회 중 3회 굳었다. 마지막 회차 실측:
+          MemAvailable 2,387M → **113M** · Cached 2,485M → 377M
+          pressure/memory full **0.00 → 41.16** · pgmajfault **+436k / 5분**
+          수집기 스케줄 지연 **196초** · load 356 (runnable 4 = 나머지는 D 상태)
+      · 스왑이 없어 OOM kill 이 아니라 **파일 페이지 thrashing** 으로 간다 ⇒ 커널 로그가 조용하다.
+
+    ⇒ 사이징 기준은 "합계 추정" 이 아니라 **정상 상태 MemAvailable 6~8 GiB 확보** 다.
+
+    r6i.2xlarge(8 vCPU / 64 GiB)를 쓴다. m6i.4xlarge 도 64 GiB 지만 vCPU 가 16 이라 더 비싸고,
+    **AC-0 이 CPU 는 병목이 아니라고 측정했다**(웜업 구간 외 pressure/cpu some 10~15%).
+    메모리만 사면 된다.
+
+    🔵 바꾼 뒤에는 `infra/demo/wedge-collector.sh` 로 **정상 상태 MemAvailable 을 다시 재라**.
+       같은 계측기라야 before/after 가 비교된다.
   EOT
   type        = string
-  default     = "m6i.2xlarge"
+  default     = "r6i.2xlarge"
 }
 
 # VPC / 서브넷은 "결정사항"이 아니다 — 모든 계정에 default VPC + 퍼블릭 서브넷이 있다.
