@@ -8,7 +8,7 @@ AMI 굽기가 **할 일을 다 끝낸 뒤** 아무 에러 없이 123 으로 죽�
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -116,9 +116,31 @@ Build 'amazon-ebs.demo' errored after 19 minutes 28 seconds:
 
 # Acceptance Criteria
 
-**AC-0 — 재확인 (verify-then-act).**
+**AC-0 — 재확인 (verify-then-act).** ✅ **완료 (2026-08-18)**
 `origin/main` 에서 5번 프로비저너와 `error-cleanup-provisioner` 를 다시 읽고, **성공 경로에서
 SSH 로 흘러나가는 줄 수를 실제로 센다**(이번 실패 로그가 표본이다). 인계된 "약 470줄"은 가설이다.
+
+> 실패 로그의 해당 구간(L1284~1806)을 세었다 — **523줄**로, 인계된 "약 470" 보다 크다.
+>
+> | 출처 | 줄 |
+> |---|---|
+> | `docker builder prune -af` (캐시 항목 나열) | **422** |
+> | `docker image ls` | 57 |
+> | `df` / `free` | 10 |
+> | trap 의 `dmesg` / 커널 | 16 |
+> | 기타 | 18 |
+>
+> 🔴 **범인의 8할이 `builder prune` 하나였다.** 배경의 문장은 네 줄을 뭉뚱그렸지만 실제로는
+> 한 명령이 압도적이다 — 세지 않았으면 넷을 똑같이 취급했을 것이다.
+
+**AC-1 · AC-2 — 저장소 층 ✅ 완료.**
+꼬리 세 명령을 `/var/log/ami-{prune-image,prune-builder,images}.log` 로 돌리고 **요약 한 줄**만
+남겼다. EXIT trap 은 `rc != 0` 일 때만 진단을 흘린다. `error-cleanup-provisioner` 는 새 로그
+셋을 tail 한다(AC-2). 🔵 대조군: **로그 파일이 없는 상태**(그 줄들에 닿기 전에 죽은 경우)로
+같은 루프를 돌려 `0 lines` 로 보고하고 **중단되지 않는** 것을 확인했다.
+🔴 로컬 검증에서 `docker builder prune -af` 는 **일부러 돌리지 않았다** — 이 머신의 빌드
+캐시를 지우기 때문이다. 세 줄의 리다이렉트 형태는 동일하므로 `docker image ls` 로 대표 검증했고,
+그 사실을 여기 적는다(대표 1건은 전수의 증거가 아니다).
 
 **AC-1 — 성공 경로가 조용하다.** 고침 후 5번 프로비저너의 꼬리에서 나가는 줄 수가
 **한 자릿수**다. 판정은 다음 굽기 로그의 해당 구간을 **세어서** 한다 — "조용해 보인다"가 아니라.
