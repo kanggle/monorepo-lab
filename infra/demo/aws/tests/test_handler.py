@@ -381,24 +381,109 @@ class DomainControlTest(unittest.TestCase):
         self.assertTrue(
             FAKE_SSM.sent[0]["params"]["commands"][0].rstrip().endswith("demo-down.sh"))
 
-    def test_domains_reads_snapshot_when_running(self):
+    # ---- 헬스 스냅샷 신선도 (TASK-MONO-551 결함 B) ---------------------------
+    #
+    # 발행자가 죽어도 SSM 파라미터는 마지막 값 그대로 남는다. 예전 domains() 는 그것을
+    # 타임스탬프 없이 반환했으므로 *"방금 잰 값"* 과 *"13분 전 값"* 이 **바이트 단위로
+    # 구별 불가**였다 — 실측된 12.8분 묵은 `99/102 정상` 이 그렇게 읽혔고, 그 순간
+    # 호스트는 15분째 무응답이었다.
+    #
+    # 🔴 대조군이 이 묶음의 본체다. "전부 stale 로 만든다" 는 구현도 아래 stale 케이스를
+    #    전부 통과시키므로, **신선한 스냅샷이 up 으로 남는지**를 반드시 함께 본다.
+    #    (이 클래스의 첫 버전은 평평한 스냅샷을 up 으로 단언했다 — 그 단언이 곧 결함이었다.)
+
+    def _publish(self, at, **domains):
+        """발행자가 쓰는 것과 같은 모양으로 스냅샷을 심는다."""
         FAKE_SSM.store["/t/health"] = json.dumps(
-            {"iam": {"state": "up", "healthy": 5, "total": 5}})
-        resp = handler.domains()
+            {"published_at": at, "domains": domains})
+
+    def test_domains_reads_fresh_snapshot_when_running(self):
+        # 대조군 — 방금 발행된 스냅샷은 그대로 up 이어야 한다.
+        self._publish(T0, iam={"state": "up", "healthy": 5, "total": 5})
+        with mock.patch.object(handler, "_now", return_value=T0):
+            resp = handler.domains()
         self.assertEqual(resp["statusCode"], 200)
         self.assertEqual(body(resp)["domains"]["iam"]["state"], "up")
+        self.assertFalse(body(resp)["health_stale"])
+        self.assertEqual(body(resp)["health_age_seconds"], 0)
+
+    def test_domains_snapshot_older_than_threshold_is_stale(self):
+        self._publish(T0, iam={"state": "up", "healthy": 5, "total": 5})
+        # 실측된 얼어붙음은 12.8분(768초)이었다. 그 값 그대로 재현한다.
+        with mock.patch.object(handler, "_now", return_value=T0 + 768):
+            resp = handler.domains()
+        b = body(resp)
+        self.assertTrue(b["health_stale"])
+        self.assertEqual(b["health_age_seconds"], 768)
+        self.assertEqual(b["domains"]["iam"]["state"], "stale",
+                         "플래그만 얹고 up 을 남기면 그 플래그를 안 보는 소비자는 초록을 그린다")
+        # healthy/total 은 진단용으로 남긴다 — 지우면 왜 stale 인지 볼 수 없다.
+        self.assertEqual(b["domains"]["iam"]["healthy"], 5)
+
+    def test_domains_just_at_threshold_is_not_stale(self):
+        # 경계 — 한 번 놓친 발행으로 빨개지면 그 판정은 곧 무시된다.
+        self._publish(T0, iam={"state": "up", "healthy": 5, "total": 5})
+        with mock.patch.object(handler, "_now",
+                               return_value=T0 + handler.HEALTH_STALE_AFTER_SECONDS):
+            resp = handler.domains()
+        self.assertFalse(body(resp)["health_stale"])
+        self.assertEqual(body(resp)["domains"]["iam"]["state"], "up")
+
+    def test_domains_snapshot_without_published_at_is_stale(self):
+        """🔴 이 티켓의 핵심 축 — **부재를 신선함으로 읽지 않는다.**
+
+        구 AMI 가 쓴 평평한 스냅샷에는 published_at 이 없다. 없는 것을 '0초 전' 으로
+        읽으면 재굽기 전의 데모가 영원히 초록으로 보고된다.
+        """
+        FAKE_SSM.store["/t/health"] = json.dumps(
+            {"iam": {"state": "up", "healthy": 5, "total": 5}})
+        with mock.patch.object(handler, "_now", return_value=T0):
+            resp = handler.domains()
+        b = body(resp)
+        self.assertTrue(b["health_stale"])
+        self.assertIsNone(b["health_age_seconds"])
+        self.assertEqual(b["domains"]["iam"]["state"], "stale")
+
+    def test_domains_terraform_initial_empty_object_is_stale(self):
+        # apply 직후 파라미터는 `{}` 다. '도메인이 없다' 가 아니라 '아직 모른다' 이다.
+        FAKE_SSM.store["/t/health"] = "{}"
+        with mock.patch.object(handler, "_now", return_value=T0):
+            resp = handler.domains()
+        self.assertTrue(body(resp)["health_stale"])
+        self.assertEqual(body(resp)["domains"], {})
+
+    def test_domains_published_at_true_is_not_an_epoch(self):
+        # bool 은 int 의 서브클래스다 — 타입을 명시적으로 거르지 않으면 True 가 epoch 1 로
+        # 통과한다. 그러면 우연히 stale 이 되지만, 우연히 맞는 것은 맞는 것이 아니다.
+        FAKE_SSM.store["/t/health"] = json.dumps(
+            {"published_at": True, "domains": {"iam": {"state": "up"}}})
+        with mock.patch.object(handler, "_now", return_value=T0):
+            resp = handler.domains()
+        self.assertIsNone(body(resp)["health_age_seconds"])
+        self.assertTrue(body(resp)["health_stale"])
+
+    def test_domains_clock_skew_forward_does_not_yield_negative_age(self):
+        # 인스턴스 시계가 Lambda 보다 앞서면 age 가 음수가 된다. 응답에 말이 안 되는
+        # 숫자가 실리고, 임계 비교의 의미도 흐려진다.
+        self._publish(T0 + 5, iam={"state": "up", "healthy": 5, "total": 5})
+        with mock.patch.object(handler, "_now", return_value=T0):
+            resp = handler.domains()
+        self.assertEqual(body(resp)["health_age_seconds"], 0)
+        self.assertFalse(body(resp)["health_stale"])
 
     def test_domains_hides_stale_snapshot_when_stopped(self):
         FAKE_EC2.state = "stopped"
-        FAKE_SSM.store["/t/health"] = json.dumps(
-            {"iam": {"state": "up", "healthy": 5, "total": 5}})
+        self._publish(T0, iam={"state": "up", "healthy": 5, "total": 5})
         resp = handler.domains()
         self.assertEqual(body(resp)["domains"], {}, "VM 이 꺼졌으면 스냅샷은 stale — 전부 감춘다")
 
     def test_domains_corrupt_snapshot_is_empty_not_crash(self):
         FAKE_SSM.store["/t/health"] = "}{ not json"
-        resp = handler.domains()
+        with mock.patch.object(handler, "_now", return_value=T0):
+            resp = handler.domains()
         self.assertEqual(body(resp)["domains"], {})
+        self.assertTrue(body(resp)["health_stale"],
+                        "파싱 실패는 '도메인이 없다' 가 아니라 '모른다' 다")
 
 
 if __name__ == "__main__":

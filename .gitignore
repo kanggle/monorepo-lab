@@ -71,3 +71,9 @@ infra/demo/aws/terraform/tfplan*
 infra/demo/aws/terraform/*.tfplan
 infra/demo/aws/terraform/lambda/__pycache__/
 infra/demo/aws/terraform/*.zip
+# 테스트를 한 번이라도 돌리면 여기에도 __pycache__ 가 생긴다. 위 한 줄은 lambda/ 만
+# 막았고, 그래서 `git add infra/` 한 번에 .pyc 가 실제로 커밋에 끼어들었다(TASK-MONO-551).
+# 경로를 하나 더 나열하는 대신 이름으로 막는다 — 다음에 파이썬이 도는 디렉터리가
+# 생겨도 따라온다.
+__pycache__/
+*.pyc
