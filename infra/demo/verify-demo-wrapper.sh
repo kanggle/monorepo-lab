@@ -1495,6 +1495,83 @@ fi
 ok "부분 실패 격리 — 정상 rc=0 · wms 실패 시 console 까지 진행하고 rc=$z4_bad_rc 로 보고"
 
 # ---------------------------------------------------------------------------
+echo "[verify] (z6) 헬스 발행이 스냅샷에 **발행 시각**을 싣는가"
+# ---------------------------------------------------------------------------
+# TASK-MONO-551 결함 B. 발행자가 죽어도 SSM 파라미터는 **마지막 값 그대로 남는다.**
+# 그것을 타임스탬프 없이 반환하면 *"방금 잰 값"* 과 *"13분 전 값"* 이 **바이트 단위로
+# 구별 불가**다 — 2026-08-17 실측에서 12.8분 묵은 `99/102 정상` 이 그렇게 읽혔고,
+# 그 순간 호스트는 15분째 무응답이었다.
+#
+# 🔴 판정은 **발행자가 실제로 내보내는 값**으로 한다. `aws` 를 대역으로 바꿔 `--value` 를
+#    가로채고 그 문자열을 본다 — 소스 grep 이 아니다(이 파일도 `published_at` 이라는 낱말을
+#    주석에 담으므로 grep 술어는 자기 문서에 걸린다).
+#
+# 🔴 그리고 **음성 대조군을 스스로 들고 있는다**: 옛 모양(감싸지 않은 평평한 스냅샷)과
+#    낡은 타임스탬프를 같은 술어에 먹여 **거부되는지** 먼저 본다. 아무거나 통과시키는
+#    술어는 통과해도 아무것도 증명하지 않는다.
+z6_tmp="$(mktemp -d)"
+mkdir -p "$z6_tmp/bin"
+cat > "$z6_tmp/bin/aws" <<'Z6SHIM'
+#!/bin/sh
+# `aws ssm put-parameter … --value <json>` 의 값만 가로채 파일로 남긴다.
+while [ $# -gt 0 ]; do
+  if [ "$1" = "--value" ]; then printf '%s' "$2" > "$Z6_CAPTURE"; exit 0; fi
+  shift
+done
+exit 0
+Z6SHIM
+chmod +x "$z6_tmp/bin/aws"
+
+# 술어는 한 곳에만 둔다 — 대조군과 본 판정이 **같은 술어**를 써야 대조군에 의미가 있다.
+z6_wrapped() {  # $1=발행된 값 → 감싼 모양이고 published_at 이 최근이면 0
+  local at now
+  printf '%s' "$1" | grep -qE '^\{"published_at":[0-9]+,"domains":\{' || return 1
+  at="$(printf '%s' "$1" | sed -n 's/^{"published_at":\([0-9][0-9]*\).*/\1/p')"
+  [ -n "$at" ] || return 1
+  now="$(date -u +%s)"
+  # 값이 있기만 하면 되는 게 아니다 — **지금** 찍힌 값이어야 한다. 하드코딩된 상수나
+  # 부팅 시각이 실려도 모양은 통과하므로 나이를 본다.
+  [ "$(( now - at ))" -ge -60 ] && [ "$(( now - at ))" -le 300 ]
+}
+
+# (1) 음성 대조군 — 옛 평평한 모양은 반드시 거부돼야 한다.
+if z6_wrapped '{"iam":{"state":"up","healthy":5,"total":5}}'; then
+  rm -rf "$z6_tmp"
+  fail "(z6) 술어가 **옛 평평한 스냅샷을 통과시켰습니다** — 이 술어로는 아무것도 증명할 수 없습니다."
+fi
+# (2) 두 번째 음성 대조군 — 모양은 맞지만 시각이 낡은 값.
+if z6_wrapped '{"published_at":1000000000,"domains":{}}'; then
+  rm -rf "$z6_tmp"
+  fail "(z6) 술어가 **2001년 타임스탬프를 신선하다고 판정했습니다** — 나이를 안 보고 있습니다."
+fi
+
+# (3) 진짜 발행자를 돌린다. AWS_REGION 을 주어 IMDS 경로를 타지 않게 한다(러너는 EC2 가 아니다).
+Z6_CAPTURE="$z6_tmp/value.json"
+export Z6_CAPTURE
+z6_rc=0
+( PATH="$z6_tmp/bin:$PATH" AWS_REGION=ap-northeast-2 \
+    HEALTH_PARAM=/verify/z6 bash "$ROOT/infra/demo/demo-status-publish.sh" ) >/dev/null 2>&1 || z6_rc=$?
+if [ "$z6_rc" != "0" ]; then
+  rm -rf "$z6_tmp"
+  fail "(z6) demo-status-publish.sh 가 rc=$z6_rc 로 실패했습니다 — 발행 경로가 깨졌습니다."
+fi
+if [ ! -f "$Z6_CAPTURE" ]; then
+  rm -rf "$z6_tmp"
+  fail "(z6) 발행자가 put-parameter 를 부르지 않았습니다 — 값을 가로채지 못했습니다."\
+    $'\n'"→ 대역이 안 걸렸거나 발행자가 조용히 빠져나갔습니다. 어느 쪽이든 뒤이은 판정은 무효입니다."
+fi
+z6_value="$(cat "$Z6_CAPTURE")"
+rm -rf "$z6_tmp"
+if ! z6_wrapped "$z6_value"; then
+  fail "(z6) 발행된 값에 최근 발행 시각이 없습니다:"\
+    $'\n'"   $(printf '%s' "$z6_value" | cut -c1-120)"\
+    $'\n'"→ 기대 모양: {\"published_at\":<epoch UTC>,\"domains\":{…}}"\
+    $'\n'"→ 시각이 없으면 소비자는 얼어붙은 스냅샷과 방금 잰 값을 구별할 수 없습니다(MONO-551 B)."\
+    $'\n'"   실측: 12.8분 묵은 '99/102 정상' 이 그대로 읽혔고 그때 호스트는 15분째 무응답이었습니다."
+fi
+ok "헬스 발행이 발행 시각을 싣는다 (음성 대조군 2종 거부 확인 · 실제 발행 값 ${#z6_value} bytes)"
+
+# ---------------------------------------------------------------------------
 if [ "$LIVE" -eq 0 ]; then
   echo "[verify] 정적 검증 PASS (실기동 증명은 --live)"
   exit 0
@@ -1852,5 +1929,68 @@ fi
 cleanup_z5
 trap - EXIT
 ok "라벨 드리프트 탐지 — 대조군 rc=0 · bite rc=$z5_bite(이름 명시) · 기동 대상 밖은 경고만 rc=0"
+
+# ---------------------------------------------------------------------------
+echo "[verify] (z7) 정상 종료한 일회성 작업이 실패로 계상되지 않는가 (대조군 포함)"
+# ---------------------------------------------------------------------------
+# TASK-MONO-551 결함 A. 이전 술어는 `total = docker ps -a`(종료 포함) / `healthy = running`
+# 이었다. 그래서 **정상적으로 끝난 init 컨테이너가 영원히 실패로 계상**됐다:
+#   ecommerce-minio-init · wms-kafka-init · iam-kafka-init — 전부 `Exited (0)`
+#   ⇒ iam 14/15 · wms 16/17 · ecommerce 33/34 = 정상인데 **영구 partial**.
+# 그 세 도메인은 **어떤 상태에서도 up 이 될 수 없었다.**
+#
+# 🔴 대조군이 이 가드의 본체다. `Exited (0)` 이 up 이 되는 것만 보면 **"exited 는 다
+#    봐준다"** 는 구현과 구별되지 않고, 그 구현은 **크래시 루프를 초록으로 만든다** —
+#    이 고침이 만들 수 있는 최악의 결과다. 그래서 같은 자리를 `Exited (1)` 로 바꿔
+#    partial 로 떨어지는지 함께 본다.
+#
+# 🔴 그리고 **모집단부터 단언한다.** 이 가드를 쓰다가 실제로 당했다: 남아 있던 `erp`
+#    컨테이너 5개(전부 `Exited (137)`)가 슬러그를 오염시켜 고침 전/후가 **똑같이 partial**
+#    로 나왔고, 하마터면 "안 고쳐졌다" 로 읽을 뻔했다. 빈 슬러그임을 먼저 증명한다.
+z7_slug=finance      # 라이브 가드 (f) 는 scm·fan 을 쓴다 — 겹치지 않는 슬러그를 고른다
+z7_verdict() { bash "$ROOT/infra/demo/demo-status.sh" \
+                 | grep -o "\"$z7_slug\":{\"state\":\"[a-z]*\"" | sed 's/.*"state":"//;s/"//'; }
+
+cleanup_z7() { docker rm -f z7-svc z7-init z7-bad >/dev/null 2>&1 || true; }
+trap cleanup_z7 EXIT
+cleanup_z7
+
+z7_pre="$(docker ps -a --filter "label=com.docker.compose.project=$z7_slug" -q | wc -l | tr -d ' ')"
+[ "$z7_pre" = "0" ] || fail "(z7) 모집단 오염 — 슬러그 '$z7_slug' 에 이미 컨테이너 $z7_pre 개가 있습니다."\
+  $'\n'"→ 남의 컨테이너가 섞이면 판정이 이 가드가 만든 조건을 반영하지 않습니다(통과도 실패도 무효)."
+
+docker run -d --name z7-svc --label "com.docker.compose.project=$z7_slug" busybox sleep 300 >/dev/null
+docker run -d --name z7-init --label "com.docker.compose.project=$z7_slug" busybox sh -c 'exit 0' >/dev/null
+# exited 로 확정될 때까지 기다린다 — `created`/`running` 상태로 읽히면 판정이 엉뚱해진다.
+z7_wait=0
+while [ "$(docker inspect -f '{{.State.Status}}' z7-init 2>/dev/null)" != "exited" ] && [ "$z7_wait" -lt 30 ]; do
+  sleep 1; z7_wait=$(( z7_wait + 1 ))
+done
+[ "$(docker inspect -f '{{.State.Status}}' z7-init)" = "exited" ] \
+  || fail "(z7) 주입 실패 — z7-init 이 exited 로 가지 않았습니다. 판정 전에 조건이 안 섰습니다."
+[ "$(docker inspect -f '{{.State.ExitCode}}' z7-init)" = "0" ] \
+  || fail "(z7) 주입 실패 — z7-init 의 종료코드가 0 이 아닙니다. 세우려던 조건이 아닙니다."
+
+z7_ok="$(z7_verdict)"
+[ "$z7_ok" = "up" ] || fail "(z7) 정상 종료한 일회성 작업(Exited 0)이 여전히 실패로 계상됩니다 — '$z7_slug' = $z7_ok"\
+  $'\n'"→ iam·wms·ecommerce 는 이 술어 아래에서 **어떤 상태에서도 up 이 될 수 없습니다.**"\
+  $'\n'"→ 런처는 면접관에게 항상 노란 배지 3개를 보여줍니다(MONO-551 A)."
+
+# 대조군 — 같은 자리를 Exited (1) 로.
+docker rm -f z7-init >/dev/null 2>&1 || true
+docker run -d --name z7-bad --label "com.docker.compose.project=$z7_slug" busybox sh -c 'exit 1' >/dev/null
+z7_wait=0
+while [ "$(docker inspect -f '{{.State.Status}}' z7-bad 2>/dev/null)" != "exited" ] && [ "$z7_wait" -lt 30 ]; do
+  sleep 1; z7_wait=$(( z7_wait + 1 ))
+done
+[ "$(docker inspect -f '{{.State.ExitCode}}' z7-bad)" = "1" ] \
+  || fail "(z7) 대조군 주입 실패 — z7-bad 의 종료코드가 1 이 아닙니다."
+z7_bad="$(z7_verdict)"
+cleanup_z7
+trap - EXIT
+[ "$z7_bad" != "up" ] || fail "(z7) 대조군 실패 — Exited (1) 컨테이너가 있는데도 '$z7_slug' 가 up 입니다."\
+  $'\n'"→ 종료코드를 안 보고 'exited 는 다 봐주는' 구현입니다. **크래시 루프가 초록이 됩니다** —"\
+  $'\n'"   이 티켓이 만들 수 있는 최악의 결과이고, 대조군은 정확히 그것을 막으려고 있습니다."
+ok "일회성 작업 계상 — Exited(0) → up · 대조군 Exited(1) → $z7_bad (모집단 사전 확인 0개)"
 
 echo "[verify] 전체 PASS (정적 + 실기동 증명)"

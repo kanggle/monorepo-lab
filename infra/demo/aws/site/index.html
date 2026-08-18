@@ -30,6 +30,7 @@
     .b-up { background: #16a34a2e; color: #16a34a; }
     .b-partial { background: #d977062e; color: #d97706; }
     .b-down { background: #8883; }
+    .b-stale { background: #dc26262e; color: #dc2626; }
     .b-unknown { background: #8882; opacity: .7; }
     .dbtn { font-size: .82rem; padding: 6px 14px; }
     .dbtn.up { background: #555; color: #fff; }
@@ -167,6 +168,12 @@
     const DLABEL = {
       up: ["🟢 실행 중", "b-up"], partial: ["🟡 일부", "b-partial"],
       down: ["⚪ 꺼짐", "b-down"], unknown: ["… 확인 중", "b-unknown"],
+      // TASK-MONO-551 결함 B — 헬스 발행이 끊긴 상태. 백엔드만 고치고 여기를 그대로 두면
+      // 면접관에게는 **아무것도 안 바뀐다**(이 결함의 사용자 표면은 배지다).
+      // "확인 중"(회색)이 아니라 빨강인 이유: 이 상태의 뜻은 "아직 모른다" 가 아니라
+      // **"인스턴스가 답을 밀어 올리지 못하고 있다"** 이고, 실측에서 그때 호스트는
+      // 15분째 무응답이었다.
+      stale: ["🔴 응답 없음", "b-stale"],
     };
 
     function buildDomainRows() {
@@ -187,7 +194,9 @@
         const [text, cls] = DLABEL[st];
         const badge = row.querySelector("[data-badge]");
         badge.className = "badge " + cls;
-        badge.textContent = (info.total != null && st !== "unknown")
+        // stale 에는 개수를 붙이지 않는다 — 그 숫자야말로 **낡은 것**이고,
+        // "🔴 응답 없음 14/15" 는 부분 정보가 있는 것처럼 읽힌다.
+        badge.textContent = (info.total != null && st !== "unknown" && st !== "stale")
           ? `${text} ${info.healthy}/${info.total}` : text;
         const btn = row.querySelector("[data-act]");
         const isUp = (st === "up" || st === "partial");
@@ -200,7 +209,16 @@
     async function pollDomains() {
       try {
         const { ok, body } = await api("/domains");
-        if (ok && body.domains) renderDomains(body.domains);
+        if (!ok) return;
+        if (body.domains) renderDomains(body.domains);
+        // 발행이 끊긴 이유는 배지가 말해 주지 않는다 — 나이를 함께 적는다(MONO-551 B).
+        // 🔴 `body.domains` 가 비어 있어도 이 줄은 갱신돼야 한다: 스냅샷이 통째로 사라진
+        //    경우가 바로 발행이 죽은 경우이고, 위 `if` 는 그때 아무것도 안 그린다.
+        if (body.health_stale) {
+          const age = (body.health_age_seconds == null)
+            ? "발행 시각 없음" : `${body.health_age_seconds}초 전`;
+          $("dmsg").textContent = `⚠ 헬스 정보가 갱신되지 않고 있습니다 (${age}) — 배지는 신뢰할 수 없습니다`;
+        }
       } catch (e) { /* 다음 상태 폴링이 재시도한다 */ }
     }
 

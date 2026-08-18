@@ -32,7 +32,36 @@ source "$HERE/projects.sh"
 
 # 도메인 하나의 헬스를 집계해 JSON 조각으로 반환: {"state":..,"healthy":N,"total":M}
 #   state: down(컨테이너 0) | up(전부 healthy) | partial(일부만)
-#   healthy = running 이고 (헬스체크 없음 | healthy). unhealthy / health:starting 은 제외.
+#   healthy = (running 이고 헬스체크 없음|healthy) | (exited 이고 **종료코드 0**)
+#
+# 🔴 종료코드를 보는 이유 — TASK-MONO-551 결함 A
+# -----------------------------------------------------------------------------
+# 이전 술어는 `total = docker ps -a`(종료 포함) / `healthy = running` 이었다. 그래서
+# **정상적으로 끝난 일회성 작업이 영원히 실패로 계상**됐다:
+#
+#   ecommerce-minio-init · wms-kafka-init · iam-kafka-init  — 전부 `Exited (0)`
+#   ⇒ iam 14/15 · wms 16/17 · ecommerce 33/34 = 정상인데 **영구 `partial`**
+#
+# 이 세 도메인은 **어떤 상태에서도 `up` 이 될 수 없었다.** 런처는 면접관에게 항상
+# 노란 배지 3개를 보여줬다. `Exited (0)` 은 실패가 아니라 **성공**이다.
+#
+# 🔴 그러나 "exited 는 다 봐준다" 로 가면 **크래시 루프가 초록이 된다** — 이 고침이
+#    만들 수 있는 최악의 결과다. 그래서 **종료코드 0 만** 센다. `Exited (1)`·`Exited (137)`
+#    은 그대로 실패다.
+#
+# 목록을 손으로 나열하지 않는다 — 새 init 컨테이너가 생기면 그 순간 드리프트가 시작된다
+# (이 저장소가 이미 두 번 데인 실패 모드). **종료코드라는 성질**로 판정한다.
+#
+# 🔵 이 술어가 **구분하지 못하는 것**(측정해서 적는다, 숨기지 않는다): SIGTERM 을 곱게
+#    받아 0 으로 끝난 **서비스**는 여기서 healthy 로 읽힌다. 데모 자신의 종료 경로는
+#    `demo-down.sh` → `docker compose down --remove-orphans` 라 컨테이너를 **지우므로**
+#    (total=0 ⇒ `down`) 그 경로로는 도달할 수 없고, 손으로 `docker stop` 을 친 경우에만
+#    남는다. 재시작 정책을 두 번째 축으로 쓰는 안을 검토했으나 **측정해 보고 버렸다**:
+#    선언 비율이 34/51 · 1/10 · 0/8 처럼 들쭉날쭉해서 두 모집단을 가르지 못한다.
+#
+# 종료코드는 `docker ps` 의 `{{.Status}}` 문자열에서 읽는다(`Exited (0) 3 minutes ago`).
+# `{{.State}}` 는 exited 여부만 알려 주고 종료코드 필드는 없으며, `docker inspect` 로
+# 가면 컨테이너마다 프로세스를 하나씩 더 띄워야 한다.
 domain_json() {
   local slug="$1" total=0 healthy=0 state status st
   while IFS='|' read -r state status; do
@@ -42,6 +71,11 @@ domain_json() {
       case "$status" in
         *'(unhealthy)'* | *'(health: starting)'*) : ;;
         *) healthy=$(( healthy + 1 )) ;;
+      esac
+    elif [ "$state" = "exited" ]; then
+      # 앞자리 고정 매치다 — `Exited (10)`·`Exited (137)` 은 여기 걸리지 않는다.
+      case "$status" in
+        'Exited (0)'*) healthy=$(( healthy + 1 )) ;;
       esac
     fi
   done < <(docker ps -a --filter "label=com.docker.compose.project=$slug" \

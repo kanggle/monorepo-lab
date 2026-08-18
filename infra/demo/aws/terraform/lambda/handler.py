@@ -35,6 +35,15 @@ BEAT_PARAM = os.environ["BEAT_PARAM"]
 STARTED_PARAM = os.environ["STARTED_PARAM"]
 USAGE_PARAM = os.environ["USAGE_PARAM"]
 HEALTH_PARAM = os.environ.get("HEALTH_PARAM", "/portfolio-demo/domains-health")
+# 헬스 스냅샷이 이 나이를 넘으면 stale 로 본다 (TASK-MONO-551 결함 B).
+# 발행 주기는 30초(demo-status.timer)이므로 3주기 = 90초. 한 번 놓친 발행으로 빨개지지
+# 않으면서, 발행자가 죽은 것은 1분 반 안에 드러난다. 인스턴스 시계와 Lambda 시계가 다르지만
+# 둘 다 UTC + chrony 이므로 오차는 이 임계보다 훨씬 작다.
+#
+# 🔵 terraform 에 env 로 심지 않는다 — 이 값은 사실 하나이고, `HEALTH_PARAM` 처럼 세 곳에
+#    복제되면 한 곳만 고쳐진다(가드 (z) 가 존재하는 이유가 그것이다). 필요하면 Lambda 콘솔
+#    env 로 덮을 수 있게 os.environ 은 열어 둔다.
+HEALTH_STALE_AFTER_SECONDS = int(os.environ.get("HEALTH_STALE_AFTER_SECONDS", "90"))
 IDLE_MINUTES = int(os.environ.get("IDLE_MINUTES", "20"))
 MAX_MINUTES = int(os.environ.get("MAX_RUNTIME_MINUTES", "180"))
 BUDGET_MINUTES = int(os.environ.get("MONTHLY_BUDGET_MINUTES", "600"))
@@ -237,23 +246,66 @@ def _body_name(event):
     return name.strip() if isinstance(name, str) else ""
 
 
+def _parse_health(raw):
+    """(domains, published_at) — 두 스냅샷 모양을 다 읽는다.
+
+    새 모양: {"published_at": <epoch>, "domains": {...}}   ← demo-status-publish.sh
+    옛 모양: {"iam": {...}, ...}                            ← 구 AMI / terraform 초기값 {}
+
+    옛 모양에는 published_at 이 **없으므로 None** 을 돌려주고, 호출자가 그것을 stale 로
+    떨어뜨린다. 부재를 신선함으로 읽지 않는다.
+    """
+    try:
+        parsed = json.loads(raw) if raw else {}
+    except (ValueError, TypeError):
+        return {}, None
+    if not isinstance(parsed, dict):
+        return {}, None
+
+    inner = parsed.get("domains")
+    if isinstance(inner, dict):
+        at = parsed.get("published_at")
+        # bool 은 int 의 서브클래스다 — True 가 epoch 1 로 통과하면 안 된다.
+        if isinstance(at, (int, float)) and not isinstance(at, bool):
+            return inner, int(at)
+        return inner, None
+    return parsed, None
+
+
 def domains():
     """인스턴스 상태 + 도메인별 헬스 스냅샷.
 
     스냅샷은 인스턴스의 demo-status.timer 가 SSM 에 발행한다(비동기). VM 이 running 이
     아니면 스냅샷은 stale 이므로 전부 down 으로 본다 — 손상/부재를 '전부 up' 으로 읽지 않는다.
+
+    🔴 TASK-MONO-551 결함 B — **발행이 끊긴 것과 정상인 것이 구별 가능해야 한다.**
+    발행자가 죽어도 SSM 파라미터는 마지막 값 그대로 남는다. 이 함수는 예전에 그것을
+    타임스탬프 없이 반환했고, 그래서 12.8분 묵은 `99/102 정상` 이 *"지금 상태"* 로 읽혔다
+    — 그 순간 호스트는 15분째 무응답이었다. 나는 이 화면을 근거로 "곧 테스트 가능" 이라고
+    보고할 뻔했고, 면접관도 같은 화면을 본다: **런처는 초록인데 아무 링크도 안 열린다.**
+
+    🔴 stale 일 때 도메인 상태를 **그대로 실어 보내지 않는다.** 상단에 플래그만 얹고 원래
+    state 를 남기면, 그 플래그를 안 보는 소비자는 여전히 초록을 그린다 — 그리고 이 결함의
+    사용자 표면은 정확히 그 배지다. 그래서 각 도메인의 `state` 자체를 `"stale"` 로 바꾼다.
+    healthy/total 은 진단용으로 남긴다.
     """
     state, ip, _ = _state()
-    snap = {}
-    if state == "running":
-        raw = _get(HEALTH_PARAM)
-        try:
-            parsed = json.loads(raw) if raw else {}
-            if isinstance(parsed, dict):
-                snap = parsed
-        except (ValueError, TypeError):
-            snap = {}
-    return _resp({"state": state, "ip": ip, "domains": snap})
+    if state != "running":
+        # 인스턴스가 꺼져 있다는 사실은 state 가 이미 정확히 말한다. 발행이 없는 게
+        # 정상인 구간이므로 stale 이라고 부르지 않는다 — 그건 다른 사실이다.
+        return _resp({"state": state, "ip": ip, "domains": {},
+                      "health_age_seconds": None, "health_stale": False})
+
+    snap, published_at = _parse_health(_get(HEALTH_PARAM))
+    age = None if published_at is None else max(0, _now() - published_at)
+    # 시계 오차로 age 가 음수가 되는 쪽(인스턴스 시계가 앞섬)은 max(0,…) 이 흡수한다.
+    # 임계는 발행 주기(30초)의 3배 — chrony 오차보다 충분히 크다.
+    stale = age is None or age > HEALTH_STALE_AFTER_SECONDS
+    if stale:
+        snap = {k: (dict(v, state="stale") if isinstance(v, dict) else v)
+                for k, v in snap.items()}
+    return _resp({"state": state, "ip": ip, "domains": snap,
+                  "health_age_seconds": age, "health_stale": stale})
 
 
 def domain_start(event):
