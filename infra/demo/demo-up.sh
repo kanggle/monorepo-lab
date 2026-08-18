@@ -90,14 +90,75 @@ bash "$HERE/check-env-preflight.sh" "${SET[@]}" || exit 1
 
 echo "[demo] profile=$PROFILE  build=$BUILD"
 echo "[demo] ensuring shared traefik-net + edge router"
+# 🔴 여기는 아래 루프와 달리 **격리하지 않는다.** 이 compose 가 `traefik-net` 을 *정의*하고
+# 나머지 8개는 그것을 external 로 참조하므로, 실패하면 8개가 전부 같은 이유로 실패한다 —
+# 격리해 봐야 재시도 예산만 태우고 결과는 같다. 여기서 멈추는 편이 진단이 정확하다.
 docker compose -p traefik -f "$ROOT/$TRAEFIK_COMPOSE" up -d
 
+# =============================================================================
+# 프로젝트별 기동 — TASK-MONO-553
+# =============================================================================
+# 이전 모양은 `docker compose … up -d` 를 `set -e` 아래 그냥 불렀다. 그래서 **한 도메인의
+# 기동 실패가 스크립트 전체를 끝냈다** — 나머지 7개는 손도 못 대고, 재시작 정책이 되살려
+# 둔 **옛 라벨 컨테이너가 그대로 서빙**한다. 결과는 "스택은 도는데 새 주소가 전부 404".
+#
+# AC-0 재확인 (문서가 아니라 이 호출 지점에서):
+#   · 이 스크립트는 `--wait` 도 `--wait-timeout` 도 주지 않는다 ⇒ **compose 레벨 대기
+#     타임아웃이라는 것은 존재하지 않는다.** 대기는 전부 각 프로젝트 compose 의
+#     `depends_on: condition: service_healthy` 가 하고, 그 한도는 **의존 대상 자신의
+#     healthcheck** 다. iam-kafka 기준(projects/iam-platform/docker-compose.yml:146):
+#         interval 15s · timeout 10s · retries 10 · start_period 30s
+#     ⇒ start_period 를 지난 뒤 연속 10회 실패하면 `unhealthy` 가 되고, 그 순간 compose 가
+#       `dependency failed to start: container iam-kafka is unhealthy` 로 **포기**한다.
+#   · 그 healthcheck 는 `kafka-broker-api-versions.sh` — **JVM 을 새로 띄운다.** 8개 도메인이
+#     동시에 재기동해 I/O 가 경합하면 10초 timeout 을 넘기는 것이 이상한 일이 아니다.
+#     2026-08-17 실증에서 iam-kafka 는 `__consumer_offsets` 50 파티션을 로딩 중이었고
+#     **1~2분 뒤 healthy 가 됐다** — 손상이 아니라 레이스다.
+#
+# 그래서 두 가지를 한다:
+#   (A) 한 프로젝트의 실패가 나머지를 막지 않는다. 🔴 단 **삼키지 않는다** — 실패한 도메인
+#       이름을 모아 두고 마지막에 비-0 로 끝낸다. `|| true` 로 넘기면 systemd 유닛이
+#       초록이 되고, 이 저장소가 반복해서 당한 *"아무것도 안 보면서 초록"* 이 된다.
+#   (B) 느린 의존성에는 재시도를 준다. 실패의 성격이 **레이스**이므로 같은 명령을 조금 뒤에
+#       다시 부르면 성공한다(compose 는 멱등하다 — 이미 healthy 한 것은 두고 못 뜬 것만
+#       다시 시도한다). 타임아웃을 늘리는 쪽은 택하지 않았다: healthcheck 파라미터는
+#       8개 프로젝트 compose 에 흩어져 있고 CI 도 그 값을 쓰는데, 여기서 필요한 것은
+#       **데모 부팅이라는 한 상황의 경합 내성**이기 때문이다.
+#
+# 🔴 재시도 예산을 **전역으로** 묶는다. 도메인마다 독립적으로 재시도하면 최악의 경우
+#    8 × (attempts-1) × sleep 이 되어 `demo-stack.service` 의 TimeoutStartSec=1200 을
+#    넘긴다 — 그러면 systemd 가 SIGTERM 을 보내고, "부분 실패를 견디는 고침" 이 오히려
+#    **전체를 죽인다.** 예산이 바닥나면 더 기다리지 않고 실패로 기록하고 넘어간다.
+UP_ATTEMPTS="${DEMO_UP_ATTEMPTS:-3}"
+UP_RETRY_SLEEP="${DEMO_UP_RETRY_SLEEP:-60}"
+retry_budget="${DEMO_UP_RETRY_BUDGET:-360}"
+
+failed=()
 for p in "${SET[@]}"; do
   mapfile -t ARGS < <(compose_args "$p")
-  echo "[demo] up: $p  (${COMPOSE[$p]})"
-  # -f 를 ROOT 절대경로로 주면 project-directory 가 첫 파일의 디렉터리로 잡혀
-  # 각 프로젝트의 .env 로딩과 상대 build: 컨텍스트가 올바르게 해소된다.
-  docker compose -p "$p" "${ARGS[@]}" up -d $build_flag
+  attempt=1
+  while :; do
+    if [ "$attempt" -eq 1 ]; then
+      echo "[demo] up: $p  (${COMPOSE[$p]})"
+    else
+      echo "[demo] up: $p  재시도 $attempt/$UP_ATTEMPTS (남은 재시도 예산 ${retry_budget}s)"
+    fi
+    # -f 를 ROOT 절대경로로 주면 project-directory 가 첫 파일의 디렉터리로 잡혀
+    # 각 프로젝트의 .env 로딩과 상대 build: 컨텍스트가 올바르게 해소된다.
+    if docker compose -p "$p" "${ARGS[@]}" up -d $build_flag; then
+      [ "$attempt" -eq 1 ] || echo "[demo] ✔ $p — 재시도 $attempt 회차에 기동 성공"
+      break
+    fi
+    if [ "$attempt" -ge "$UP_ATTEMPTS" ] || [ "$retry_budget" -lt "$UP_RETRY_SLEEP" ]; then
+      failed+=("$p")
+      echo "[demo] ✖ $p 기동 실패 — 나머지 도메인은 계속 진행합니다(이 실패는 마지막에 비-0 로 보고됩니다)" >&2
+      break
+    fi
+    attempt=$(( attempt + 1 ))
+    retry_budget=$(( retry_budget - UP_RETRY_SLEEP ))
+    echo "[demo] … $p 기동 실패 — ${UP_RETRY_SLEEP}s 뒤 다시 시도합니다(느린 의존성의 healthcheck 가 아직 안 붙었을 수 있습니다)" >&2
+    sleep "$UP_RETRY_SLEEP"
+  done
 done
 
 # 크로스프로젝트 이벤트 릴레이 (TASK-MONO-511 / ADR-MONO-062 B). 브로커가 전부 뜬 뒤
@@ -110,7 +171,12 @@ for d in "${RELAY_DOMAINS[@]}"; do
 done
 if [ ${#relay_missing[@]} -eq 0 ]; then
   echo "[demo] up: relay  ($RELAY_COMPOSE)  — 크로스프로젝트 이벤트 릴레이"
-  docker compose -p relay -f "$ROOT/$RELAY_COMPOSE" up -d
+  # 릴레이도 격리한다(TASK-MONO-553 A). 네 브로커 중 하나가 못 떠서 릴레이가 실패해도
+  # 이미 뜬 도메인들을 여기서 끝낼 이유가 없다 — 다만 **조용히 넘기지도 않는다.**
+  docker compose -p relay -f "$ROOT/$RELAY_COMPOSE" up -d || {
+    failed+=("relay")
+    echo "[demo] ✖ relay 기동 실패 — 크로스프로젝트 이벤트가 한 건도 건너가지 않습니다" >&2
+  }
 else
   echo "[demo] ⚠ 이벤트 릴레이 생략 — 이번 기동에 없는 도메인: ${relay_missing[*]}"
   echo "[demo]   ⇒ 크로스프로젝트 이벤트가 한 건도 건너가지 않습니다(iam→ecommerce 계정 3종 ·"
@@ -133,6 +199,32 @@ fi
 seed_rc=0
 bash "$HERE/seed/seed.sh" "${SET[@]}" || seed_rc=$?
 
+# 라벨 드리프트 판정 (TASK-MONO-553 C) — 이 결함의 **직접적인 술어**다. 왜 다른 신호로는
+# 안 되는지, 왜 모집단을 둘로 나누는지는 check-label-drift.sh 헤더에 있다. 별도 스크립트인
+# 이유는 **그것만 따로 물릴 수 있어야** 하기 때문이다(AC-3 bite).
+drift_rc=0
+bash "$HERE/check-label-drift.sh" "${SET[@]}" || drift_rc=$?
+
 echo "[demo] up complete — profile=$PROFILE"
 [ "$seed_rc" -eq 0 ] || echo "[demo] ⚠ 도메인 데이터 시드가 일부 실패했습니다(위 [seed] 로그 참조) — 해당 화면은 빌 수 있습니다"
 echo "[demo] 호스트: console.${DEMO_DOMAIN} / web.ecommerce.${DEMO_DOMAIN} / wms.${DEMO_DOMAIN} / <domain>.${DEMO_DOMAIN} (Traefik)"
+
+# -----------------------------------------------------------------------------
+# 최종 종료코드 — 🔴 여기서 삼키면 위의 모든 보고가 장식이 된다 (TASK-MONO-553 A)
+# -----------------------------------------------------------------------------
+# `demo-boot.sh` 가 이 스크립트를 `exec` 하므로 이 종료코드가 곧 `demo-stack.service` 의
+# 결과다(Type=oneshot). 비-0 로 끝나도 **이미 뜬 컨테이너는 내리지 않는다** — 유닛이
+# `failed` 로 표시될 뿐이고, 그것이 정확히 우리가 원하는 것이다: 부분 실패는 부분 실패로
+# 보여야 한다.
+#
+# 🔵 시드 실패(`seed_rc`)도 여기 포함시킨다. 바로 위 주석은 이미 *"비-0 로 끝나되 기동은
+#    유지"* 라고 계약을 적어 두었는데 **코드는 그렇게 하지 않고 있었다**(마지막 echo 의
+#    종료코드 0 으로 끝났다). 주석과 코드가 어긋나 있었고, 어긋난 쪽은 코드였다.
+final_rc=0
+if [ ${#failed[@]} -gt 0 ]; then
+  final_rc=1
+  echo "[demo] ✖ 기동 실패 도메인: ${failed[*]}" >&2
+fi
+[ "$drift_rc" -eq 0 ] || final_rc=1
+[ "$seed_rc"  -eq 0 ] || final_rc=1
+exit "$final_rc"
