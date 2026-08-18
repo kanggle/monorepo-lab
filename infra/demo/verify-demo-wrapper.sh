@@ -1399,6 +1399,102 @@ rm -rf "$z3_tmp"
 ok "fresh clone 부팅이 env-preflight 을 통과 (대조군 rc=$z3_before → 프로비저닝 후 rc=0 · demo-boot 순서 L$z3_pl<L$z3_ul)"
 
 # ---------------------------------------------------------------------------
+echo "[verify] (z4) 한 도메인의 기동 실패가 나머지 도메인을 막지 않는가"
+# ---------------------------------------------------------------------------
+# TASK-MONO-553. 2026-08-17 실증: `/stop`→`/start` 뒤 iam-kafka 의 healthcheck 가
+# 경합으로 늦게 붙었고, compose 가 `dependency failed to start` 로 포기했다.
+# `demo-up.sh` 는 `set -e` 아래 있었으므로 **거기서 스크립트가 끝났다** — 나머지 7개
+# 도메인은 손도 못 댔고, 재시작 정책이 되살려 둔 옛 라벨 컨테이너가 계속 서빙했다.
+# 결과: 스택은 도는데 **새 주소가 전부 404**.
+#
+# 🔴 이 가드는 네 칸을 **모두** 본다. 첫째 칸만 보면 "실패를 `|| true` 로 삼키는" 구현과
+#    구별되지 않는다 — 그리고 그 구현이야말로 이 저장소가 반복해서 당한 실패 모드다.
+#      (1) 정상 경로는 여전히 초록인가          ← 대조군. 빨간 가드는 곧 꺼진다.
+#      (2) 실패 뒤의 도메인도 기동을 시도하는가  ← 격리 그 자체
+#      (3) 성공으로 보고하지 않는가             ← 삼킴 금지
+#      (4) 실패한 도메인 이름을 대는가          ← 진단 가능성
+#
+# docker 는 **대역으로 바꾼다.** 진짜 스택을 띄워 kafka 를 굶기는 방식은 러너에서
+# 재현 불가능하고(그게 TASK-MONO-552 다), 재현되더라도 무엇이 실패했는지 통제할 수 없다.
+# 여기서 묻는 것은 "compose 가 비-0 를 냈을 때 **스크립트가** 어떻게 행동하는가" 이므로,
+# 통제해야 하는 것은 정확히 compose 의 종료코드 하나다.
+#
+# 🔵 물리는지 확인함: 이 본문을 고침 **전**의 `demo-up.sh`(origin/main @ 4d328cfd0)에
+#    대고 돌리면 (2) 에서 FAIL 한다 — console 기동 줄이 로그에 없다.
+z4_tmp="$(mktemp -d)"
+mkdir -p "$z4_tmp/infra" "$z4_tmp/bin"
+cp -r "$ROOT/infra/demo" "$z4_tmp/infra/demo"
+if [ -d "$ROOT/infra/traefik" ]; then cp -r "$ROOT/infra/traefik" "$z4_tmp/infra/traefik"; fi
+for z4_d in "$ROOT"/projects/*/; do
+  z4_n="$(basename "$z4_d")"
+  mkdir -p "$z4_tmp/projects/$z4_n"
+  for z4_f in "$z4_d"*.yml "$z4_d".env.example; do
+    if [ -f "$z4_f" ]; then cp "$z4_f" "$z4_tmp/projects/$z4_n/"; fi
+  done
+done
+if ! bash "$z4_tmp/infra/demo/provision-demo-env.sh" >/dev/null 2>&1; then
+  rm -rf "$z4_tmp"
+  fail "(z4) 임시 트리 .env 프로비저닝 실패 — 이후 판정이 env-preflight 에 막혀 무효가 됩니다."
+fi
+
+cat > "$z4_tmp/bin/docker" <<'Z4SHIM'
+#!/bin/sh
+# `docker compose -p <FAILDOM> … up -d` 만 비-0. 나머지 docker 호출은 전부 성공.
+case "$1" in
+  compose)
+    shift; z4p=""
+    while [ $# -gt 0 ]; do
+      case "$1" in -p) z4p="$2"; shift 2 ;; *) shift ;; esac
+    done
+    if [ "$z4p" = "${FAILDOM:-}" ]; then
+      echo "dependency failed to start: container ${z4p}-kafka is unhealthy" >&2
+      exit 1
+    fi
+    exit 0 ;;
+  *) exit 0 ;;
+esac
+Z4SHIM
+chmod +x "$z4_tmp/bin/docker"
+
+z4_run() {  # $1=FAILDOM ('' = 실패 없음) → 로그는 $z4_tmp/run.log, rc 를 echo
+  local z4_rc=0
+  ( cd "$z4_tmp" && PATH="$z4_tmp/bin:$PATH" FAILDOM="$1" DEMO_SEED=0 DEMO_DOMAIN=local \
+      DEMO_UP_ATTEMPTS=2 DEMO_UP_RETRY_SLEEP=1 \
+      bash infra/demo/demo-up.sh iam wms console ) > "$z4_tmp/run.log" 2>&1 || z4_rc=$?
+  echo "$z4_rc"
+}
+
+# (1) 대조군 — 아무도 실패하지 않으면 초록이어야 한다.
+z4_ok_rc="$(z4_run '')"
+if [ "$z4_ok_rc" != "0" ]; then
+  z4_tail="$(tail -12 "$z4_tmp/run.log")"; rm -rf "$z4_tmp"
+  fail "(z4) 대조군 실패 — 아무 도메인도 실패하지 않았는데 demo-up.sh 가 rc=$z4_ok_rc 로 끝났습니다."\
+    $'\n'"→ 정상 부팅이 빨간 가드는 곧 꺼지고, 꺼진 가드의 skip 은 초록으로 보고됩니다(MONO-360)."\
+    $'\n'"--- 마지막 로그 ---"$'\n'"$z4_tail"
+fi
+
+# (2)(3)(4) bite — 가운데 도메인(wms)만 실패시킨다. iam 은 앞, console 은 뒤에 있다.
+z4_bad_rc="$(z4_run wms)"
+z4_log="$(cat "$z4_tmp/run.log")"
+rm -rf "$z4_tmp"
+
+if ! printf '%s\n' "$z4_log" | grep -q '^\[demo\] up: console'; then
+  fail "(z4) wms 기동 실패가 그 뒤의 console 기동을 막았습니다 — 부분 실패가 격리되지 않습니다."\
+    $'\n'"→ 실제 결과: 재시작 뒤 옛 라벨 컨테이너가 계속 서빙하고 **새 주소는 전부 404** 입니다."\
+    $'\n'"→ demo-up.sh 의 기동 루프에서 compose 실패를 잡아 다음 도메인으로 진행하세요(TASK-MONO-553 A)."
+fi
+if [ "$z4_bad_rc" = "0" ]; then
+  fail "(z4) 도메인 하나가 기동에 실패했는데 demo-up.sh 가 **성공(rc=0)** 으로 끝났습니다."\
+    $'\n'"→ 실패를 삼킨 것입니다. 그러면 demo-stack.service 가 초록이 되고, 이 저장소가 반복해서"\
+    $'\n'"   당한 *\"아무것도 안 보면서 초록\"* 이 됩니다."\
+    $'\n'"→ 실패한 도메인을 모아 마지막에 비-0 로 끝내세요(격리 ≠ 무시)."
+fi
+if ! printf '%s\n' "$z4_log" | grep -q 'wms'; then
+  fail "(z4) 실패한 도메인(wms)의 이름이 출력에 없습니다 — 어느 도메인이 죽었는지 알 수 없습니다."
+fi
+ok "부분 실패 격리 — 정상 rc=0 · wms 실패 시 console 까지 진행하고 rc=$z4_bad_rc 로 보고"
+
+# ---------------------------------------------------------------------------
 if [ "$LIVE" -eq 0 ]; then
   echo "[verify] 정적 검증 PASS (실기동 증명은 --live)"
   exit 0
@@ -1690,5 +1786,71 @@ grep -qE '^[[:space:]]*ADMIN_OIDC_JWKS_URI:[[:space:]]' "$ov" || adm_missing="$a
   $'\n'"→ admin-service.environment 에 ADMIN_OIDC_ISSUER(공개 호스트, 토큰 iss 와 문자열 일치) +"\
   $'\n'"   ADMIN_OIDC_JWKS_URI(컨테이너 DNS /internal/auth/jwks) 를 넣으세요."
 ok "admin-service subject-token validator env(issuer+jwks) 유지"
+
+# ---------------------------------------------------------------------------
+echo "[verify] (z5) 라벨 드리프트 탐지가 실제로 무는가 (대조군 포함)"
+# ---------------------------------------------------------------------------
+# TASK-MONO-553 (C). `check-label-drift.sh` 는 이 결함의 **직접적인 술어**다 —
+# 재시작 뒤 라우터 라벨이 옛 공인 IP 를 가리키면 그 컨테이너는 **옛 주소로만** 열린다.
+#
+# 🔴 이 가드는 라이브 구간에 있다. 정적으로는 물릴 수 없다: 술어의 입력이 **실행 중인
+#    컨테이너의 라벨**이기 때문이고, 소스를 grep 하는 술어는 이 저장소 주석에 널린 예시
+#    호스트명에 **자기 자신이 걸린다**(가드가 자기 문서를 물면 그것은 술어가 아니다).
+#
+# 세 칸을 본다 — 하나라도 빠지면 판정이 공허하다:
+#   (1) 현재 도메인만 있는 상태에서 **안 무는가**   ← 대조군. 늘 무는 탐지기는 탐지기가 아니다.
+#   (2) 기동 대상에 옛 도메인을 넣으면 **무는가**   ← bite
+#   (3) 기동 대상 **밖**의 옛 도메인은 실패로 세지 않는가
+#       ← `demo-core` 부팅에서 나머지 4개 도메인이 옛 라벨로 남는 것은 정상이다.
+#         이걸 실패로 세면 정상 부팅이 빨개지고, 빨개지는 가드는 꺼진다.
+z5_cur="1-2-3-4.sslip.io"
+z5_old="9-9-9-9.sslip.io"
+z5_drift="$ROOT/infra/demo/check-label-drift.sh"
+[ -f "$z5_drift" ] || fail "(z5) infra/demo/check-label-drift.sh 가 없습니다 — 라벨 드리프트 판정이 사라졌습니다(TASK-MONO-553 C)."
+z5_out="$(mktemp)"
+
+cleanup_z5() { docker rm -f z5-cur z5-old z5-out >/dev/null 2>&1 || true; rm -f "$z5_out"; }
+trap cleanup_z5 EXIT
+cleanup_z5
+
+z5_mk() {  # $1=이름 $2=compose 프로젝트 $3=호스트명
+  docker run -d --name "$1" \
+    --label "com.docker.compose.project=$2" \
+    --label "traefik.http.routers.z5.rule=Host(\`console.$3\`)" \
+    busybox sleep 300 >/dev/null
+}
+z5_run() { local rc=0; DEMO_DOMAIN="$z5_cur" bash "$z5_drift" iam wms > "$z5_out" 2>&1 || rc=$?; echo "$rc"; }
+
+# (1) 대조군
+z5_mk z5-cur iam "$z5_cur"
+z5_ctl="$(z5_run)"
+[ "$z5_ctl" = "0" ] || fail "(z5) 대조군 실패 — 라벨이 전부 현재 도메인인데 드리프트로 판정했습니다 (rc=$z5_ctl)."\
+  $'\n'"$(cat "$z5_out")"
+
+# (2) bite
+z5_mk z5-old iam "$z5_old"
+z5_bite="$(z5_run)"
+[ "$z5_bite" != "0" ] || fail "(z5) bite 실패 — 기동 대상(iam)에 옛 도메인($z5_old) 라벨 컨테이너가 있는데 통과했습니다."\
+  $'\n'"→ 이 상태가 2026-08-17 실증의 상태입니다: 컨테이너는 전부 healthy 하고 새 주소는 404 입니다."
+if ! grep -q 'z5-old' "$z5_out"; then
+  fail "(z5) 드리프트를 탐지했지만 **어느 컨테이너인지** 대지 않습니다 — 진단할 수 없는 실패입니다."
+fi
+if grep -q 'z5-cur' "$z5_out"; then
+  fail "(z5) 현재 도메인 라벨 컨테이너(z5-cur)를 드리프트로 고발했습니다 — 술어가 도메인을 비교하지 않고 있습니다."
+fi
+
+# (3) 기동 대상 밖은 경고, 실패 아님
+docker rm -f z5-old >/dev/null 2>&1 || true
+z5_mk z5-out fan "$z5_old"
+z5_out_rc="$(z5_run)"
+[ "$z5_out_rc" = "0" ] || fail "(z5) 이번 기동 대상이 아닌 도메인(fan)의 옛 라벨을 **실패**로 셌습니다 (rc=$z5_out_rc)."\
+  $'\n'"→ demo-core 부팅에서는 나머지 4개 도메인이 옛 라벨로 남는 것이 정상입니다. 정상 부팅이 빨개집니다."
+if ! grep -q 'z5-out' "$z5_out"; then
+  fail "(z5) 기동 대상 밖의 드리프트를 **조용히** 넘겼습니다 — 경고로라도 이름을 대야 합니다."
+fi
+
+cleanup_z5
+trap - EXIT
+ok "라벨 드리프트 탐지 — 대조군 rc=0 · bite rc=$z5_bite(이름 명시) · 기동 대상 밖은 경고만 rc=0"
 
 echo "[verify] 전체 PASS (정적 + 실기동 증명)"
