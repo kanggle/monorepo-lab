@@ -1571,6 +1571,142 @@ if ! z6_wrapped "$z6_value"; then
 fi
 ok "헬스 발행이 발행 시각을 싣는다 (음성 대조군 2종 거부 확인 · 실제 발행 값 ${#z6_value} bytes)"
 
+echo "[verify] (z8) finance 시드의 입금 술어가 **재실행**에도 정직한가"
+# ---------------------------------------------------------------------------
+# TASK-MONO-556. 첫 판의 술어는 `입금 후 잔액 >= TOPUP_MINOR` 였고, **같은 시드의 다음
+# 단계인 이체 A→B 가 그 전제를 깼다** — A 는 400,000 으로 내려가고 2회차 입금은 재생이라
+# 잔액을 못 올린다 ⇒ 재시작마다 결정론적 실패. 1회차만 통과했으므로 **첫 부팅 테스트로는
+# 절대 안 보인다**(볼륨이 새로 생기면 늘 1회차다).
+#
+# 🔴 그래서 이 가드는 **왕복을 재현한다** — 1회차 → 이체 → 2회차. 한 번만 돌리면 고침
+#    전 코드도 통과하고, 그러면 이 가드는 아무것도 안 지킨다.
+#
+# 🔴 `curl` 이 아니라 `http` 를 대역으로 둔다. 통제해야 하는 것은 정확히 **서버가 무엇을
+#    돌려주는가** 이고, 진짜 finance 스택을 띄우는 것은 러너에서 불가능할뿐더러 무엇이
+#    실패했는지 통제할 수 없다.
+#
+# 네 칸을 본다 — 하나라도 빠지면 판정이 공허하다:
+#   (1) 1회차가 통과하는가                 ← 대조군. 정상 경로가 빨간 가드는 곧 꺼진다.
+#   (2) **이체 뒤 2회차**가 통과하는가      ← bite. 이것이 이 티켓 그 자체다.
+#   (3) 입금이 **성립하지 않으면** 실패하는가 ← 음성 대조군. 없으면 "술어를 지워서
+#                                            통과시킨" 구현과 구별되지 않는다.
+#   (4) 거래내역을 **못 읽으면** 실패하는가  ← 계측 실패를 "입금 없음" 으로 읽지 않는다.
+
+z8_tmp="$(mktemp -d)"
+trap 'rm -rf "$z8_tmp"' EXIT
+
+# --- 실제 코드에서 판정 대상 3함수를 그대로 떼어 온다 -------------------------
+# 🔴 복사본을 두지 않는다 — 복사본을 검사하는 가드는 **원본이 갈라져도 초록**이다.
+#    추출이 빗나가면(리팩터링으로 앵커가 사라지면) 조용히 통과하지 않고 **여기서 죽는다**.
+awk '/^ledger_of\(\) \{/{f=1} f{print} /^topup "계좌 A 입금"/{exit}' "$ROOT/infra/demo/seed/seed-finance.sh" > "$z8_tmp/topup.sh"
+# 🔴 여기에는 **추출 기계장치의 앵커만** 넣는다. `topup_txns()`(= 정직한 술어의 구현)를
+#    이 목록에 넣으면 안 된다 — 실측했다: 고침 전 코드를 물리면 행위 셀 (2) 가 아니라 이
+#    점검에서 죽고, 실패가 *"앵커가 갈라졌다"* 로 보고된다. **엉뚱한 이름에 귀속된 실패**라
+#    다음 사람은 술어 결함이 아니라 리팩터링 사고를 찾으러 간다.
+#    구현이 있는지는 **행위가 판정한다**(아래 (2)).
+for z8_need in 'ledger_of()' 'topup()' 'TOPUP_MINOR='; do
+  grep -qF "$z8_need" "$z8_tmp/topup.sh" \
+    || fail "(z8) seed-finance.sh 에서 \`$z8_need\` 를 추출하지 못했습니다 — 앵커가 갈라졌습니다."$'\n'"→ 가드가 검사할 대상을 잃었습니다. 추출 범위를 고치세요(조용히 통과시키지 말 것)."
+done
+# 마지막 줄(`topup "계좌 A 입금" …` 호출)은 떼어 낸다 — 호출은 우리가 직접 한다.
+sed -i '/^topup "계좌 A 입금"/d' "$z8_tmp/topup.sh"
+
+# --- 가짜 finance 서버 (상태를 파일로 들고 있는다) ---------------------------
+cat > "$z8_tmp/harness.sh" <<'Z8H'
+set -uo pipefail
+SEED_DOMAIN=finance
+SEED_CREATED=0; SEED_EXISTING=0; SEED_FAILURES=0
+seed_log()  { printf '    [seed] %s\n' "$*"; }
+seed_fail() { printf '    [seed] ✗ %s\n' "$*"; SEED_FAILURES=$((SEED_FAILURES + 1)); }
+json_objects() { printf '%s' "$1" | sed 's/},{/}\n{/g'; }
+FIN="http://finance.test"; CURRENCY="KRW"
+
+# 상태: $ST/<acc>.bal (잔액) · $ST/<acc>.txn (TOPUP 거래 JSON 조각)
+ST="$STATE_DIR"
+bal_of() { cat "$ST/$1.bal" 2>/dev/null || echo 0; }
+
+# MODE: ok | nodeposit(2xx 인데 아무것도 기록 안 함) | txnfail(거래내역 조회가 5xx)
+http() {
+  local method="$1" url="$2" body="${3:-}" acc
+  acc="$(printf '%s' "$url" | sed -E 's#.*/accounts/([^/?]+).*#\1#')"
+  case "$method $url" in
+    "POST "*"/topups")
+      if [ "${MODE:-ok}" != "nodeposit" ] && [ ! -f "$ST/$acc.done" ]; then
+        touch "$ST/$acc.done"
+        echo $(( $(bal_of "$acc") + 500000 )) > "$ST/$acc.bal"
+        printf '{"transactionId":"t-%s","type":"TOPUP","status":"SETTLED","money":{"amount":"500000","currency":"KRW"}}' "$acc" >> "$ST/$acc.txn"
+      fi
+      SEED_LAST_STATUS=200; SEED_LAST_BODY='{"data":{"type":"TOPUP"}}'; return 0 ;;
+    "GET "*"/balances")
+      SEED_LAST_STATUS=200; SEED_LAST_BODY="{\"data\":{\"ledger\":\"$(bal_of "$acc")\",\"available\":\"$(bal_of "$acc")\"}}"; return 0 ;;
+    "GET "*"/transactions"*)
+      if [ "${MODE:-ok}" = "txnfail" ]; then SEED_LAST_STATUS=503; SEED_LAST_BODY='{"error":"down"}'; return 1; fi
+      local content; content="$(cat "$ST/$acc.txn" 2>/dev/null)"
+      # 🔵 TRANSFER 도 한 건 섞어 둔다 — 통짜 grep 이면 그 type 과 TOPUP 의 금액이 합쳐져
+      #    키메라 행이 되므로, 객체 단위 파싱을 안 하면 여기서 갈린다.
+      local other='{"transactionId":"x","type":"TRANSFER","status":"SETTLED","money":{"amount":"100000","currency":"KRW"}}'
+      SEED_LAST_STATUS=200
+      if [ -n "$content" ]; then SEED_LAST_BODY="{\"data\":{\"content\":[$content,$other]}}"
+      else SEED_LAST_BODY="{\"data\":{\"content\":[$other]}}"; fi
+      return 0 ;;
+  esac
+  SEED_LAST_STATUS=404; SEED_LAST_BODY='{}'; return 1
+}
+Z8H
+
+z8_run() { # $1=MODE $2=라벨 → 실패 건수를 echo, 로그는 $z8_tmp/run.log
+  ( set +e
+    export STATE_DIR="$z8_state" MODE="$1"
+    # shellcheck disable=SC1090
+    source "$z8_tmp/harness.sh"
+    source "$z8_tmp/topup.sh"
+    topup "계좌 A 입금" "acc-a" 500000
+    topup "계좌 B 입금" "acc-b" 500000
+    echo "RC:$SEED_FAILURES"
+  ) > "$z8_tmp/run.log" 2>&1
+  grep -o 'RC:[0-9]*' "$z8_tmp/run.log" | tail -1 | cut -d: -f2
+}
+
+z8_state="$z8_tmp/state1"; mkdir -p "$z8_state"
+
+# (1) 1회차 — 대조군
+z8_first="$(z8_run ok first)"
+[ "$z8_first" = "0" ] || fail "(z8) 대조군 실패 — 첫 실행인데 실패 $z8_first 건입니다."$'\n'"$(cat "$z8_tmp/run.log")"
+
+# --- 이체 A→B 를 재현한다 (시드가 실제로 하는 그 일) -------------------------
+# 이것이 결함의 방아쇠다: A 가 목표 아래로 내려간다.
+echo $(( $(cat "$z8_state/acc-a.bal") - 100000 )) > "$z8_state/acc-a.bal"
+echo $(( $(cat "$z8_state/acc-b.bal") + 100000 )) > "$z8_state/acc-b.bal"
+[ "$(cat "$z8_state/acc-a.bal")" = "400000" ] \
+  || fail "(z8) 해네스 자기점검 실패 — 이체 후 A 가 400000 이어야 하는데 $(cat "$z8_state/acc-a.bal") 입니다."
+
+# (2) 2회차 — bite
+z8_second="$(z8_run ok second)"
+if [ "$z8_second" != "0" ]; then
+  fail "(z8) **재실행이 실패했습니다**(실패 $z8_second 건) — 입금 술어가 여전히 잔액 수준에 묶여 있습니다."\
+    $'\n'"→ 이체 A→B 가 A 를 400,000 으로 내렸고, 2회차 입금은 재생이라 잔액을 못 올립니다."\
+    $'\n'"→ 결과: demo-stack.service 가 **첫 재시작 이후 항상 failed**(TASK-MONO-556)."\
+    $'\n'"→ 술어를 잔액이 아니라 **입금 사실**(TOPUP 거래의 존재)로 옮기세요."\
+    $'\n'"$(cat "$z8_tmp/run.log")"
+fi
+
+# (3) 음성 대조군 — 입금이 성립하지 않으면 **여전히 실패**해야 한다
+z8_state="$z8_tmp/state2"; mkdir -p "$z8_state"
+z8_nodep="$(z8_run nodeposit control)"
+[ "$z8_nodep" != "0" ] || fail "(z8) 음성 대조군 실패 — 입금이 한 건도 성립하지 않았는데 통과했습니다."\
+  $'\n'"→ 술어를 **지워서** 통과시킨 것입니다. 그러면 이 시드가 지키던 회귀"\
+  $'\n'"   (INSUFFICIENT_AVAILABLE_BALANCE)를 전부 놓칩니다."
+
+# (4) 계측 실패 ≠ 입금 없음
+z8_state="$z8_tmp/state3"; mkdir -p "$z8_state"
+z8_txnfail="$(z8_run txnfail control)"
+[ "$z8_txnfail" != "0" ] || fail "(z8) 거래내역 조회가 5xx 인데 통과했습니다 — **판정 불가를 통과로** 셌습니다."
+grep -q '판정 불가' "$z8_tmp/run.log" \
+  || fail "(z8) 조회 실패를 실패로 세긴 했으나 **이유가 '입금 없음' 으로 보고**됩니다 — 계측 실패와 구별되어야 합니다."
+
+ok "입금 술어 — 1회차 rc=0 · **이체 뒤 2회차 rc=0** · 미입금 대조군 실패 · 조회불가 실패(사유 구분)"
+
+# ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 if [ "$LIVE" -eq 0 ]; then
   echo "[verify] 정적 검증 PASS (실기동 증명은 --live)"
