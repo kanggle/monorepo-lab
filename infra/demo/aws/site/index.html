@@ -35,6 +35,15 @@
     .dbtn { font-size: .82rem; padding: 6px 14px; }
     .dbtn.up { background: #555; color: #fff; }
     .dbtn.down { background: #2563eb; color: #fff; }
+    /* 로그인 계정 (TASK-MONO-561) */
+    .creds h2 { font-size: 1.05rem; margin: 0 0 4px; }
+    .creds p { margin: 0 0 14px; font-size: .92rem; }
+    .crow { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
+    .crow dt { width: 68px; flex: none; font-size: .85rem; opacity: .7; }
+    .crow dd { margin: 0; display: flex; align-items: center; gap: 8px; }
+    .crow code { font-size: 1rem; padding: 4px 10px; border-radius: 7px; background: #8882; user-select: all; }
+    .copy { font-size: .78rem; padding: 5px 11px; background: #8883; }
+    .copy.done { background: #16a34a2e; color: #16a34a; }
   </style>
 </head>
 <body>
@@ -55,6 +64,54 @@
     <div id="bar"><i></i></div>
     <div id="msg">상태 확인 중…</div>
     <a class="open" id="open" target="_blank" rel="noopener">데모 사이트 열기 →</a>
+  </div>
+
+  <!--
+    로그인 계정 (TASK-MONO-561).
+
+    이 블록이 없어서 방문자가 못 들어갔다. 로그인 화면은 나오는데 계정을 모르니
+    "회원가입" 을 누르게 되고, 그 경로는 콘솔 클라이언트에서 **구조적으로 불가능**하며
+    (TASK-BE-581 — 예약 슬러그 `iam` 에는 테넌트 행이 없다) 실패 메시지마저 틀렸다
+    (TASK-BE-580 — 영구 404 를 "일시적 장애" 로 보고). 두 결함은 방문자가 이 구멍을
+    메우려다 밟은 것이다.
+
+    🔵 비밀번호를 여기 적는 것은 새로운 노출이 아니다. `Demo1234!` 는 이미 저장소에
+    있고 마이그레이션 주석이 스스로를 "one published demo password" 라고 부른다.
+    데모 전체가 무인증 공개이고(/start 포함), 지출 상한은 계정이 아니라 **월 예산
+    가드**가 지킨다. 🔴 여기 오는 것은 **데모 시드 계정뿐이다** — AWS 자격증명·API 키는
+    오지 않는다(TASK-MONO-557 이 세운 경계).
+
+    🔴 값을 손으로 고치지 마라. `verify-demo-wrapper.sh` (z11) 이 이 두 값을
+    `infra/demo/seed/lib.sh` 의 `user_token()` 기본값과 **양방향으로** 대조한다.
+    lib.sh 쪽이 권위인 이유: 그 값은 부팅마다 **실제로 로그인에 쓰인다**(시드가 통과하면
+    로그인은 이미 검증된 것이다). 시드 마이그레이션의 평문은 주석일 뿐이고 컬럼에 든
+    것은 Argon2id 해시라 대조할 수 없다.
+  -->
+  <div class="card creds">
+    <h2>로그인 계정</h2>
+    <p>세 화면(운영 콘솔 · 이커머스 · 팬 플랫폼) 모두 <strong>같은 계정</strong>으로 들어갑니다.</p>
+    <dl style="margin:0">
+      <div class="crow">
+        <dt>이메일</dt>
+        <dd><code id="c-email">demo@demo.com</code><button class="copy" data-copy="c-email">복사</button></dd>
+      </div>
+      <div class="crow">
+        <dt>비밀번호</dt>
+        <dd><code id="c-pass">Demo1234!</code><button class="copy" data-copy="c-pass">복사</button></dd>
+      </div>
+    </dl>
+    <!--
+      🔴 이 줄은 장식이 아니다. `seed/lib.sh` 가 실측으로 적어 뒀다: 이 계정은 각 도메인
+      테넌트에서 CUSTOMER 일 뿐이라 /api/admin/** 에 그대로 가면 **전부 403**(실측 6/6).
+      운영자 권한은 계정에 붙어 있지 않고 **demo-corp 를 assume 하는 순간 파생된다**
+      (OperatorRoleDerivation.fromEntitledDomains — demo-corp 가 5개 도메인을 구독한다).
+      즉 로그인만 하고 테넌트를 안 고르면 방문자는 빈 화면과 403 을 보고 "고장났다" 로
+      읽는다 — 계정이 모자라서가 아니다.
+    -->
+    <p class="hint" style="margin-top:14px">
+      콘솔에 로그인한 뒤 <strong>테넌트를 <code>demo-corp</code> 로 선택</strong>하세요.
+      5개 도메인(이커머스 · WMS · SCM · ERP · 재무)의 운영자 권한은 그 시점에 부여됩니다.
+    </p>
   </div>
 
   <!--
@@ -256,6 +313,37 @@
       render("stopping");
       stopHeartbeat();
     };
+
+    // 계정 복사 (TASK-MONO-561).
+    // 🔴 `navigator.clipboard` 는 **secure context 전용**이다. 이 페이지는 https 라
+    //    있지만, 없을 때 조용히 아무 일도 안 일어나면 방문자는 **복사된 줄 안다** —
+    //    그 침묵이 이 코드의 유일한 위험이다. 그래서 실패하면 텍스트를 선택해 주고
+    //    버튼 문구로 그 사실을 말한다(선택 상태면 Ctrl+C 가 바로 먹는다).
+    for (const btn of document.querySelectorAll(".copy")) {
+      btn.onclick = async () => {
+        const el = $(btn.dataset.copy);
+        const text = el.textContent;
+        let copied = false;
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+            copied = true;
+          }
+        } catch (e) {
+          copied = false; // 권한 거부 등 — 아래 폴백으로 떨어진다
+        }
+        if (!copied) {
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          const sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+        btn.textContent = copied ? "복사됨" : "Ctrl+C";
+        btn.classList.toggle("done", copied);
+        setTimeout(() => { btn.textContent = "복사"; btn.classList.remove("done"); }, 1800);
+      };
+    }
 
     poll();
     pollTimer = setInterval(poll, 10000); // 10초마다 상태 폴링
