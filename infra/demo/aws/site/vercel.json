@@ -1,8 +1,18 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+
+  "//installCommand": [
+    "🔴 이 줄이 없으면 Vercel 이 저장소 **루트의 pnpm-lock.yaml** 을 찾아 올라가",
+    "monorepo 전체에 pnpm install 을 시도한다(TASK-MONO-557, 2026-08-19 실측:",
+    "빌드 로그가 'Detected pnpm-lock.yaml 9' 로 시작했다).",
+    "이 페이지는 의존성이 **0개**인 정적 HTML 한 장이다 — 설치할 것이 없다.",
+    "Root Directory 를 site/ 로 지정해도 패키지 매니저 탐지는 상위로 올라간다."
+  ],
+  "installCommand": "echo '[site] 의존성 없음 — install 건너뜀'",
+
   "buildCommand": "bash ./build.sh",
   "outputDirectory": "public",
-  "framework": null,
   "cleanUrls": true,
   "headers": [
     {
