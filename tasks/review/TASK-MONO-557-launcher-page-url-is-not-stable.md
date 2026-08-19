@@ -202,7 +202,7 @@ content = "window.DEMO_API_BASE = ${jsonencode(aws_apigatewayv2_api.api.api_endp
 ① `var.allowed_origin` = `""` ② Lambda `ALLOWED_ORIGIN` = `""` ③ CORS 3칸 대조군 결과 동일
 ④ `portfolio-demo-idle-check` = `rate(5 minutes)` `ENABLED`. 주소도 그대로
 (`d38c06ry1h6rnn.cloudfront.net` · `r1tljg51qa.execute-api…`).
-🔵 **덤으로 AC-2 의 before 대조군이 확보됐다**: `Origin: https://portfolio-demo.vercel.app`
+🔵 **덤으로 AC-2 의 before 대조군이 확보됐다**: `Origin: https://kanggle-portfolio.vercel.app`
 는 **지금 CORS 헤더를 못 받는다**. 고친 뒤 그 자리가 바뀌는 것이 bite 다.
 
 **AC-1 — 페이지가 Vercel 에서 뜬다.** ⏳ **저장소 측 완료, 배포는 사용자 계정 필요.**
@@ -263,23 +263,36 @@ Vercel 이 뜨기 전까지 론처가 죽는 창이 생기고, 그 창은 *"데�
 
 # 🔴 남은 절차 — 사용자 계정이 필요한 부분 (에이전트가 못 한다)
 
-Vercel 프로젝트 생성·연결·배포는 계정 인증이 필요하다. 저장소 측은 전부 끝나 있으므로
-아래 세 단계만 남는다.
+**✅ 1단계는 완료됐다 (2026-08-19).** 실제 주소는 **`https://kanggle-portfolio.vercel.app`** 다.
 
-**1. Vercel 프로젝트 생성** — 이 저장소를 import 하고 설정 세 개만 맞춘다:
-
-| 항목 | 값 |
+| 항목 | 실제 값 |
 |---|---|
-| Project Name | `portfolio-demo` (⇒ `portfolio-demo.vercel.app`) |
+| Project Name | **`kanggle-portfolio`** |
 | Root Directory | `infra/demo/aws/site` |
 | Framework Preset | Other (빌드/출력은 `vercel.json` 이 지정한다) |
-| Environment Variable | `DEMO_API_BASE` = `terraform output -raw api_base_url` 의 값 |
+| Environment Variable | `DEMO_API_BASE` = `https://r1tljg51qa.execute-api.ap-northeast-2.amazonaws.com` |
 
-⚠️ **Project Name 이 곧 주소다.** 다른 이름으로 만들면 `allowed_origins` 도 그 이름으로
-바꿔야 한다(그리고 이 티켓이 얻으려던 *"이름에 묶인 주소"* 의 이름이 그것이다).
+라이브 3칸으로 확인했다: `/` **200**(SSO 리다이렉트 없음) · `/config.js` 가 **우리 값**을 서빙 ·
+`<title>Portfolio — Live Demo</title>`. 두 번째 칸이 결정적이다 — 남의 사이트에서는 그 자리가 404 였다.
 
-**2. `terraform apply`** — 🔴 **사용자 승인 대상.** `terraform.tfvars` 에는 이미
-`allowed_origins = ["https://portfolio-demo.vercel.app"]` 이 들어가 있다.
+## 🔴 여기서 두 가지를 배웠다 (계획이 틀렸던 지점)
+
+**(1) `*.vercel.app` 서브도메인은 전 Vercel 계정에 걸쳐 전역 고유다.** 이 티켓은 처음에
+`portfolio-demo` 를 지정했는데 **그 이름은 이미 남이 쓰고 있었다** — 열어 보면 Next.js Blog
+Starter Kit 이 서빙되고 `/config.js` 는 404 다. 원하는 이름이 선점돼 있으면 Vercel 은
+`<project>-<팀슬러그>.vercel.app` 로 배정한다.
+🔴 **`allowed_origins` 에 남의 오리진을 박을 뻔했다.** 그대로 apply 했으면 우리 페이지는
+계속 막히고, CORS 는 "설정했는데 안 된다" 로 보였을 것이다 — 원인이 오리진 문자열 자체에
+있으니 어느 층을 봐도 안 나온다. **이름은 정하는 것이 아니라 *확보되는지 확인하는* 것이다.**
+
+**(2) Vercel Deployment Protection 이 기본으로 켜져 있었다.** 첫 배포는 빌드 success 였는데
+`/` 가 `302 → vercel.com/sso-api` 였다. **빌드 성공은 "열린다"가 아니다.** 이 데모의 방문자는
+로그인 없는 면접관이므로, 그 상태로 옮겼다면 **접근성이 나빠지는 이전**이 됐다.
+Settings → Deployment Protection → Vercel Authentication → Production **Disabled** 로 해소.
+🔵 Preview 는 켜 둬도 무방하다(PR 배포는 내부용).
+
+**2. `terraform apply`** — 🔴 **사용자 승인 대상.** `terraform.tfvars` 에는
+`allowed_origins = ["https://kanggle-portfolio.vercel.app"]` 이 들어가 있다.
 
 ```
 cd infra/demo/aws/terraform
@@ -294,7 +307,7 @@ terraform apply
 
 ```
 A=$(terraform output -raw api_base_url)
-curl -s -D - -o /dev/null -H "Origin: https://portfolio-demo.vercel.app" $A/status | grep -i access-control   # ← 값이 되돌아와야 한다
+curl -s -D - -o /dev/null -H "Origin: https://kanggle-portfolio.vercel.app" $A/status | grep -i access-control   # ← 값이 되돌아와야 한다
 curl -s -D - -o /dev/null -H "Origin: https://d38c06ry1h6rnn.cloudfront.net" $A/status | grep -i access-control   # ← 병행: 여전히 허용
 curl -s -D - -o /dev/null -H "Origin: https://example.com" $A/status | grep -i access-control   # ← 대조군: 아무것도 안 나와야 한다
 ```
