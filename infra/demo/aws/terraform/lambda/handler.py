@@ -11,8 +11,8 @@
 왜 월 예산 가드가 있는가 (MONTHLY_BUDGET_MINUTES)
 -------------------------------------------------------------------------------
 /start 는 공개 정적 사이트가 부르는 **인증 없는** 엔드포인트다. 토큰을 숨길 곳이
-없다 — 정적 사이트에 넣으면 그 토큰도 같이 공개된다. CORS(ALLOWED_ORIGIN)는
-브라우저 정책일 뿐 서버를 지키지 못한다(curl 한 줄이면 우회).
+없다 — 정적 사이트에 넣으면 그 토큰도 같이 공개된다. CORS(= API Gateway 의
+`cors_configuration`)는 브라우저 정책일 뿐 서버를 지키지 못한다(curl 한 줄이면 우회).
 
 따라서 "URL 을 아는 누구나 인스턴스를 켤 수 있다"는 전제를 받아들이고, 대신
 **지출의 상한**을 서버 쪽에 둔다. idle-stop 과 max-runtime 만으로는 부족하다:
@@ -47,7 +47,25 @@ HEALTH_STALE_AFTER_SECONDS = int(os.environ.get("HEALTH_STALE_AFTER_SECONDS", "9
 IDLE_MINUTES = int(os.environ.get("IDLE_MINUTES", "20"))
 MAX_MINUTES = int(os.environ.get("MAX_RUNTIME_MINUTES", "180"))
 BUDGET_MINUTES = int(os.environ.get("MONTHLY_BUDGET_MINUTES", "600"))
-ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "*")
+
+# 🔴 CORS 는 여기서 다루지 않는다 — **API Gateway 의 `cors_configuration` 이 유일한 집**이다
+# (TASK-MONO-557). 예전에는 이 파일도 `ALLOWED_ORIGIN` 을 읽어 `_resp()` 에 실었고, 그래서
+# 같은 사실이 두 집을 갖고 있었다. 2026-08-18 실측이 그 구조가 이미 어긋나 있었음을 보였다:
+#
+#   · terraform 의 `var.allowed_origin` 은 `""` 였고, API Gateway 는 그 빈 값을 보고 폴백해
+#     CloudFront 도메인을 허용했다(참조라서 정확).
+#   · 그런데 같은 `""` 가 이 파일에는 **그대로** 왔다 — `os.environ.get` 은 키가 존재하면
+#     기본값 `"*"` 를 쓰지 않으므로 `Access-Control-Allow-Origin: ""` 를 실었다.
+#
+# 라이브 3칸 대조군(허용 오리진 / 임의 오리진 / preflight)에서 응답에 나타난 값은 **전부
+# API Gateway 쪽**이었고 이 파일의 빈 문자열은 어디에도 없었다 ⇒ 죽은 코드가 틀린 값을
+# 들고 있었던 것이다. (a)를 걷어내는 변경이 오는 날 그 빈 문자열이 전면에 나서서 **모든
+# 오리진을 차단**한다.
+#
+# 그래서 두 집 중 **일하지 않는 쪽을 지웠다.** 헤더를 여기서 또 실으면 API Gateway 가 넣는
+# 것과 겹쳐 `Access-Control-Allow-Origin` 이 두 번 나갈 수 있고, 브라우저는 중복을 거부한다.
+# 🔵 이 방향이 안전한 실패 쪽이기도 하다: 만약 API Gateway 의 CORS 설정이 사라지면 헤더가
+# **아예 없어져 브라우저에서 즉시 깨진다** — `"*"` 로 폴백해 조용히 전부 허용하는 것보다 낫다.
 
 # 데모 호스트에 저장소가 클론된 경로(packer 단계 2). demo-boot.sh/demo-down.sh 가 여기 있다.
 REPO = "/opt/monorepo-lab"
@@ -119,12 +137,8 @@ def _state():
 def _resp(body, code=200):
     return {
         "statusCode": code,
-        "headers": {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
-            "Access-Control-Allow-Headers": "content-type",
-            "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-        },
+        # CORS 헤더는 여기서 싣지 않는다 — API Gateway 가 유일한 집이다(위 § 참조).
+        "headers": {"Content-Type": "application/json"},
         "body": json.dumps(body, ensure_ascii=False),
     }
 
