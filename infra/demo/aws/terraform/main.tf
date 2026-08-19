@@ -27,6 +27,17 @@ locals {
 
   vpc_id    = var.vpc_id != "" ? var.vpc_id : data.aws_vpc.default[0].id
   subnet_id = var.subnet_id != "" ? var.subnet_id : data.aws_subnets.default[0].ids[0]
+
+  # CORS 허용 오리진 (TASK-MONO-557). 사이트 자신의 CloudFront 오리진은 **항상 참조로**
+  # 포함하고, 다른 곳에서 서빙되는 사본(Vercel 등)만 var.allowed_origins 로 더한다.
+  #
+  # 🔴 CloudFront 를 조건부로 만들지 않는 것이 요점이다. 이전 판은 `var.allowed_origin` 에
+  # 값이 들어오면 CloudFront 를 **대체**했고, 그래서 호스팅을 옮기는 동안 두 오리진을
+  # 동시에 허용할 방법이 없었다 — 옮기는 과정에 반드시 론처가 죽는 창이 생겼다.
+  cors_allowed_origins = distinct(concat(
+    ["https://${aws_cloudfront_distribution.site.domain_name}"],
+    var.allowed_origins,
+  ))
 }
 
 # ---------------------------------------------------------------------------
@@ -253,7 +264,10 @@ resource "aws_lambda_function" "control" {
       IDLE_MINUTES           = tostring(var.idle_minutes)
       MAX_RUNTIME_MINUTES    = tostring(var.max_runtime_minutes)
       MONTHLY_BUDGET_MINUTES = tostring(var.monthly_budget_minutes)
-      ALLOWED_ORIGIN         = var.allowed_origin
+      # 🔴 `ALLOWED_ORIGIN` 은 **의도적으로 없다**(TASK-MONO-557). CORS 의 유일한 집은
+      # 아래 `cors_configuration` 이다. 예전에는 이 자리가 두 번째 집이었고, 실측 결과
+      # 그 두 집은 이미 어긋나 있었다 — 같은 `""` 가 API Gateway 에서는 폴백으로 해소되고
+      # Lambda 에서는 `Access-Control-Allow-Origin: ""` 가 됐다. 여기에 다시 넣지 말 것.
     }
   }
 }
@@ -265,15 +279,15 @@ resource "aws_apigatewayv2_api" "api" {
   name          = "${local.name}-api"
   protocol_type = "HTTP"
   cors_configuration {
-    # 기본값은 사이트 자신의 오리진 — 배포 시점에야 정해지므로 CloudFront 도메인을
-    # **참조**한다. 변수에 손으로 박으면 그건 결함 2(커밋된 리터럴)의 재현이다.
-    # var.allowed_origin 을 명시하면 그쪽이 이긴다(로컬에서 파일을 열어보는 경우 등).
+    # 🔴 **CORS 의 유일한 집이다.** Lambda 는 더 이상 Access-Control-* 를 싣지 않는다
+    # (TASK-MONO-557). 두 곳에서 실으면 헤더가 중복되고 브라우저가 거부한다.
+    #
+    # 사이트 자신의 CloudFront 오리진은 **항상 참조로** 들어간다 — 손으로 박으면
+    # 재생성마다 썩는다(결함 2: 커밋된 리터럴). 추가 오리진은 var.allowed_origins.
     #
     # ⚠️ CORS 는 보안 경계가 아니다 — 브라우저 정책일 뿐이고 curl 로 우회된다.
     # `/start` 의 실질적 상한은 여전히 Lambda 의 월 예산 가드뿐이다.
-    allow_origins = [
-      var.allowed_origin != "" ? var.allowed_origin : "https://${aws_cloudfront_distribution.site.domain_name}"
-    ]
+    allow_origins = local.cors_allowed_origins
     allow_methods = ["GET", "POST", "OPTIONS"]
     allow_headers = ["content-type"]
   }

@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# =============================================================================
+# infra/demo/aws/site/build.sh — Vercel 빌드 (TASK-MONO-557)
+# =============================================================================
+# 론처 페이지를 `public/` 로 조립한다. 하는 일은 두 가지뿐이다:
+#   1. index.html 복사
+#   2. `config.js` 를 **환경변수에서** 생성
+#
+# -----------------------------------------------------------------------------
+# 🔴 왜 API 주소를 커밋하지 않는가
+# -----------------------------------------------------------------------------
+# `index.html` 에는 예전에 API 주소가 리터럴로 박혀 있었고, 재생성마다 썩었다
+# (그 파일의 주석이 그것을 *"결함 2"* 라고 이름 붙여 두었다 — TASK-MONO-389).
+# 지금 CloudFront 판은 terraform 이 apply 때 자기 상태에서 `config.js` 를 렌더해 S3 에
+# 넣는다. Vercel 에는 terraform 이 쓸 수 있는 자리가 없으므로, **같은 값을 빌드 환경변수로
+# 받는다.** 리터럴을 다시 커밋해서 해결하지 말 것 — 그러면 원래 고침이 무효가 된다.
+#
+# -----------------------------------------------------------------------------
+# 🔴 값이 없으면 조용히 넘어가지 않는다
+# -----------------------------------------------------------------------------
+# 빈 `config.js` 를 내보내면 Vercel 빌드는 성공하고 페이지는 200 을 주며 **아무 버튼도
+# 동작하지 않는다**. 그 상태는 "배포됐다" 로 보고되므로 아무도 안 본다. 여기서 죽는 편이
+# 낫다. (페이지 자신도 `window.DEMO_API_BASE` 부재에 크게 실패하도록 짜여 있다 —
+# `index.html:85-91`. 이 스크립트는 그 가드의 빌드 측 짝이다.)
+# =============================================================================
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+OUT="$HERE/public"
+
+if [ -z "${DEMO_API_BASE:-}" ]; then
+  cat >&2 <<'EOF'
+[site/build] ✗ DEMO_API_BASE 가 설정되지 않았습니다.
+
+  이 값은 제어 API 의 베이스 URL 입니다(예: https://xxxx.execute-api.<region>.amazonaws.com).
+  terraform 출력에서 가져오세요:
+
+      terraform -chdir=infra/demo/aws/terraform output -raw api_base_url
+
+  Vercel: Project Settings → Environment Variables → DEMO_API_BASE
+
+  🔴 리터럴을 index.html 에 박아 우회하지 마세요 — 재생성마다 썩습니다(결함 2).
+EOF
+  exit 1
+fi
+
+# 🔴 값 검증. 빈 문자열만 막으면 오타(`http://`, 끝 슬래시, 따옴표 포함)가 그대로 통과해
+# 브라우저에서만 깨진다 — 그 실패는 "API 가 죽었다" 처럼 보인다.
+case "$DEMO_API_BASE" in
+  https://*) ;;
+  *) echo "[site/build] ✗ DEMO_API_BASE 는 https:// 로 시작해야 합니다: '$DEMO_API_BASE'" >&2; exit 1 ;;
+esac
+case "$DEMO_API_BASE" in
+  */) echo "[site/build] ✗ DEMO_API_BASE 끝의 슬래시를 빼세요 (페이지가 경로를 이어 붙입니다): '$DEMO_API_BASE'" >&2; exit 1 ;;
+esac
+
+rm -rf "$OUT"
+mkdir -p "$OUT"
+cp "$HERE/index.html" "$OUT/index.html"
+
+# terraform 의 `aws_s3_object.config` 와 **같은 모양**을 낸다. 두 배포 경로가 다른 모양을
+# 내면 한쪽에서만 되는 상태가 만들어지고, 그건 진단이 가장 오래 걸리는 종류다.
+printf 'window.DEMO_API_BASE = "%s";\n' "$DEMO_API_BASE" > "$OUT/config.js"
+
+echo "[site/build] ✔ public/ 조립 완료 — DEMO_API_BASE=$DEMO_API_BASE"

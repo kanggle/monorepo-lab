@@ -89,7 +89,11 @@ os.environ.update({
     "IDLE_MINUTES": "20",
     "MAX_RUNTIME_MINUTES": "180",
     "MONTHLY_BUDGET_MINUTES": "60",  # 테스트는 1시간 예산
-    "ALLOWED_ORIGIN": "*",
+    # 🔴 `ALLOWED_ORIGIN` 은 **일부러 남겨 심는다**(TASK-MONO-557). 핸들러가 이걸 다시
+    # 읽기 시작하면 `test_responses_carry_no_cors_headers` 가 물어야 하는데, 환경변수를
+    # 지워 버리면 그 테스트는 *"값이 없어서"* 통과한다 — 행사된 적 없는 네거티브 테스트가
+    # 되고, 정작 회귀는 못 본다. 눈에 띄는 값을 넣어 두면 새는 순간 그 문자열이 나온다.
+    "ALLOWED_ORIGIN": "https://should-not-appear.example",
 })
 
 import handler  # noqa: E402
@@ -484,6 +488,57 @@ class DomainControlTest(unittest.TestCase):
         self.assertEqual(body(resp)["domains"], {})
         self.assertTrue(body(resp)["health_stale"],
                         "파싱 실패는 '도메인이 없다' 가 아니라 '모른다' 다")
+
+
+class CorsHasOneHome(unittest.TestCase):
+    """TASK-MONO-557 — CORS 의 집은 API Gateway 하나다.
+
+    예전에는 이 핸들러도 `ALLOWED_ORIGIN` 을 읽어 헤더를 실었고, 같은 사실이 두 집을
+    갖고 있었다. 2026-08-18 실측이 그 두 집이 **이미 어긋나 있었음**을 보였다: terraform
+    의 `var.allowed_origin` 이 `""` 였는데 API Gateway 는 그걸 폴백으로 해소한 반면,
+    `os.environ.get` 은 키가 존재하므로 기본값 `"*"` 를 쓰지 않고 `""` 를 그대로 실었다
+    (`Access-Control-Allow-Origin: ""`). 라이브 응답에 나타난 값은 전부 API Gateway 쪽
+    이었으므로, 그 헤더는 **틀린 값을 든 죽은 코드**였다.
+
+    두 곳에서 실으면 헤더가 중복되어 브라우저가 거부하기도 한다. 그래서 일하지 않는
+    쪽을 지웠고, 이 테스트가 그게 돌아오지 못하게 한다.
+    """
+
+    def _all_responses(self):
+        """헤더를 내는 경로를 **모아서** 본다 — 한 곳만 보면 나머지로 샌다."""
+        FAKE_EC2.state = "stopped"
+        FAKE_SSM.store.clear()
+        with mock.patch.object(handler, "_now", return_value=T0):
+            return {
+                "status": handler.status(),
+                "domains": handler.domains(),
+            }
+
+    def test_responses_carry_no_cors_headers(self):
+        for name, resp in self._all_responses().items():
+            with self.subTest(response=name):
+                keys = [k for k in resp["headers"] if k.lower().startswith("access-control-")]
+                self.assertEqual(
+                    keys, [],
+                    f"{name} 이 CORS 헤더를 실었습니다: {keys}. "
+                    "CORS 의 집은 API Gateway 의 cors_configuration 하나입니다 "
+                    "(TASK-MONO-557) — 두 곳에서 실으면 값이 갈라지고 헤더가 중복됩니다.",
+                )
+
+    def test_the_env_var_is_actually_present(self):
+        """🔴 위 테스트가 *행사되는지* 를 단언한다.
+
+        `ALLOWED_ORIGIN` 을 픽스처에서 지우면 위 테스트는 값이 없어서 통과하고, 그건
+        네거티브 테스트가 한 번도 행사되지 않는 상태다. 이 저장소가 반복해서 밟은 축이라
+        주입 자체를 단언한다.
+        """
+        self.assertEqual(os.environ.get("ALLOWED_ORIGIN"), "https://should-not-appear.example")
+
+    def test_content_type_is_still_there(self):
+        """대조군 — 헤더를 통째로 지운 구현과 구별한다."""
+        for name, resp in self._all_responses().items():
+            with self.subTest(response=name):
+                self.assertEqual(resp["headers"].get("Content-Type"), "application/json")
 
 
 if __name__ == "__main__":

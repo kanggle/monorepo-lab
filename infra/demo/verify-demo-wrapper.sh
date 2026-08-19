@@ -705,16 +705,29 @@ echo "[verify] (r) 배포될 페이지가 API URL 을 리터럴로 들고 있지
 #
 # 고친 방향은 "값" 이 아니라 **모양** 이다: terraform 이 자기 상태에서 config.js 를 렌더한다
 # ⇒ 배포된 페이지가 자기 API 와 어긋나는 것이 표현 불가능해진다. 이 가드는 그 모양을 지킨다.
+# 🔴 **`git grep` 이다. `grep -r` 이 아니다** — 형제 가드 (s) 가 이미 배운 것을 이 가드는
+# 2026-08-19 까지 배우지 못했다(TASK-MONO-557 에서 발견). 명제는 *"리터럴이 **커밋**돼
+# 있는가"* 인데 `grep -r` 은 파일시스템을 본다. 두 술어는 site/ 에 **빌드 산출물이 생기기
+# 전까지만** 같은 답을 냈고, Vercel 이전이 정확히 그 산출물을 만든다: `site/build.sh` 가
+# `site/public/config.js` 를 렌더하며 API URL 리터럴을 쓴다. 그건 **의도된 동작**이고
+# (생성될 뿐 커밋되지 않는다 — `site/.gitignore` 가 막는다) `grep -r` 은 그걸 결함으로
+# 신고했다(실측: 이 티켓 작업 중 RED). 술어와 모집단이 어긋난 것이다.
+#
+# `--untracked` 인 이유: tracked 만 보면 **아직 커밋 안 된 새 파일**의 리터럴을 놓친다.
+# `--untracked` 는 untracked 를 포함하되 **gitignore 는 존중**하므로 술어가 정확히
+# *"커밋될 수 있는가"* 가 된다.
 site_dir="$ROOT/infra/demo/aws/site"
 if [ -d "$site_dir" ]; then
   # 주석 안의 예시 URL 은 잡지 않는다 — 첫날 RED 인 가드는 꺼지고,
   # 꺼진 잡의 skip 은 초록으로 보고된다(MONO-360). 코드 줄의 리터럴만 본다.
-  hits="$(grep -rnE '^[^#/*]*["'"'"'][^"'"'"']*execute-api[^"'"'"']*["'"'"']' "$site_dir" 2>/dev/null || true)"
+  hits="$(git -C "$ROOT" grep --untracked -nIE '^[^#/*]*["'"'"'][^"'"'"']*execute-api[^"'"'"']*["'"'"']' \
+            -- 'infra/demo/aws/site/' 2>/dev/null || true)"
   [ -z "$hits" ] || fail "배포될 페이지가 API Gateway URL 을 **리터럴로** 들고 있습니다:"\
     $'\n'"$hits"\
     $'\n'"→ API id 는 terraform 재생성마다 바뀝니다. 커밋된 리터럴은 **커밋되는 순간부터 썩습니다.**"\
-    $'\n'"→ terraform 이 config.js 를 렌더하게 하세요 (aws_s3_object.config)."
-  ok "site/ 에 API URL 리터럴 없음 (terraform 이 config.js 를 렌더)"
+    $'\n'"→ CloudFront 판은 terraform 이 config.js 를 렌더하고(aws_s3_object.config),"\
+    $'\n'"   Vercel 판은 site/build.sh 가 DEMO_API_BASE 환경변수에서 렌더합니다."
+  ok "site/ 에 커밋 가능한 API URL 리터럴 없음 (빌드 산출물은 gitignore 로 제외)"
 fi
 
 echo "[verify] (s) 저장소 어디에도 배포마다 바뀌는 엔드포인트가 박혀 있지 않은가"
@@ -1706,6 +1719,59 @@ grep -q '판정 불가' "$z8_tmp/run.log" \
 
 ok "입금 술어 — 1회차 rc=0 · **이체 뒤 2회차 rc=0** · 미입금 대조군 실패 · 조회불가 실패(사유 구분)"
 
+echo "[verify] (z9) CORS 의 집이 하나로 유지되는가 (terraform 쪽)"
+# ---------------------------------------------------------------------------
+# TASK-MONO-557. 허용 오리진은 한때 **두 집**을 갖고 있었다 — API Gateway 의
+# `cors_configuration` 과 Lambda 의 `ALLOWED_ORIGIN` 환경변수. 2026-08-18 실측이 그 둘이
+# **이미 어긋나 있었음**을 보였다: 같은 `""` 가 (a)에서는 CloudFront 폴백으로 해소되고
+# (b)에서는 `Access-Control-Allow-Origin: ""` 가 됐다(`os.environ.get` 은 키가 존재하면
+# 기본값을 쓰지 않는다). 라이브 응답에 나타난 값은 전부 (a) 쪽이었다 — (b)는 틀린 값을
+# 든 죽은 코드였고, (a)를 걷어내는 날 전면 차단으로 살아났을 것이다.
+#
+# 🔵 핸들러 쪽은 `tests/test_handler.py::CorsHasOneHome` 이 본다(러너 = 같은 CI 잡의
+#    pytest 스텝). 여기서는 **terraform 쪽**만 본다 — 두 번째 집이 되돌아오는 경로가
+#    거기이기 때문이다.
+z9_tf="$ROOT/infra/demo/aws/terraform/main.tf"
+[ -f "$z9_tf" ] || fail "(z9) $z9_tf 가 없습니다 — 가드가 검사할 대상을 잃었습니다."
+
+# (1) Lambda environment 블록에 ALLOWED_ORIGIN 이 **없어야** 한다.
+#     🔴 파일 전체 grep 이 아니라 environment 블록만 본다 — 주석에 그 이름이 나오는 것은
+#        정상이고(왜 없는지 설명해야 하니까), 통짜 grep 은 자기 설명 문구에 걸린다.
+# `aws_lambda_function "control"` 리소스 블록 전체를 뜬다(열림 → 컬럼 0 의 `}`).
+# 🔴 들여쓰기에 앵커를 걸지 않는다 — 첫 판이 그렇게 했다가 실제 파일(2칸)과 어긋나
+#    추출이 빈 문자열이 됐다. 그때 가드는 조용히 통과하지 않고 **여기서 죽었고**,
+#    그게 이 자기점검이 있는 이유다.
+z9_env="$(awk '/^resource "aws_lambda_function" "control"/{f=1} f{print} f&&/^\}/{exit}' "$z9_tf")"
+[ -n "$z9_env" ] || fail "(z9) main.tf 에서 Lambda environment 블록을 찾지 못했습니다 — 앵커가 갈라졌습니다."
+if printf '%s' "$z9_env" | grep -qE '^[^#]*ALLOWED_ORIGIN'; then
+  fail "(z9) Lambda environment 에 ALLOWED_ORIGIN 이 되돌아왔습니다 — CORS 가 다시 두 집을 갖습니다."\
+    $'\n'"→ 실측(2026-08-18): 그 두 집은 이미 어긋나 있었고, Lambda 쪽은 \`Access-Control-Allow-Origin: \"\"\` 를 실었습니다."\
+    $'\n'"→ 두 곳에서 실으면 헤더가 중복되어 브라우저가 거부하기도 합니다."\
+    $'\n'"→ CORS 의 집은 API Gateway 의 cors_configuration 하나입니다."
+fi
+
+# (2) 허용 오리진 목록이 CloudFront 도메인을 **참조로** 들고 있어야 한다.
+#     리터럴을 박으면 재생성마다 썩는다 — TASK-MONO-389 가 고친 그 결함(결함 2)이다.
+z9_local="$(awk '/cors_allowed_origins = distinct\(concat\(/{f=1} f{print} f&&/\)\)/{exit}' "$z9_tf")"
+[ -n "$z9_local" ] || fail "(z9) local.cors_allowed_origins 를 찾지 못했습니다 — 앵커가 갈라졌습니다."
+printf '%s' "$z9_local" | grep -q 'aws_cloudfront_distribution.site.domain_name' \
+  || fail "(z9) 허용 오리진 목록이 CloudFront 도메인을 **참조**하지 않습니다."\
+    $'\n'"→ 배포 시점에야 정해지는 값이라 손으로 박으면 재생성마다 썩습니다(결함 2, TASK-MONO-389)."
+if printf '%s' "$z9_local" | grep -qE '"https://[a-z0-9.-]*(cloudfront|execute-api)'; then
+  fail "(z9) 허용 오리진 목록에 AWS 가 발급하는 주소가 **리터럴로** 박혀 있습니다."\
+    $'\n'"→ 그 값은 재생성마다 바뀝니다. 참조로 두거나 var.allowed_origins 로 받으세요."
+fi
+
+# (3) 대조군 — 가드가 (1)을 실제로 볼 수 있는가.
+#     🔴 environment 블록 추출이 빈 껍데기면 (1)은 **항상 통과**한다. 다른 변수가 그
+#        블록에 실제로 보이는지 확인해 추출이 살아 있음을 증명한다.
+printf '%s' "$z9_env" | grep -q 'MONTHLY_BUDGET_MINUTES' \
+  || fail "(z9) 대조군 실패 — environment 블록 추출에 MONTHLY_BUDGET_MINUTES 가 안 보입니다."\
+    $'\n'"→ 추출이 빈 껍데기이므로 (1)의 통과는 **아무것도 증명하지 않습니다**."
+
+ok "CORS 단일 집 (terraform) — Lambda env 에 ALLOWED_ORIGIN 없음(대조군으로 추출 유효 확인) · 오리진 목록은 CloudFront 를 참조"
+
+# ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 if [ "$LIVE" -eq 0 ]; then

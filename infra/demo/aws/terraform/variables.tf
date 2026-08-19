@@ -72,15 +72,25 @@ variable "admin_ssh_cidr" {
   type        = string
 }
 
-variable "allowed_origin" {
+variable "allowed_origins" {
   description = <<-EOT
-    CORS 허용 오리진. **비워두면 사이트 자신의 CloudFront 도메인**이 쓰인다(권장) —
-    그 값은 배포 시점에야 정해지므로 terraform 이 참조한다. 손으로 박으면 재생성마다
-    썩는다(TASK-MONO-389 가 고친 결함이 정확히 그것이다).
-    로컬에서 index.html 을 파일로 열어보려면 "*" 를 명시하라.
+    CORS 로 **추가** 허용할 오리진 목록.
+
+    사이트 자신의 CloudFront 도메인은 여기 적지 않는다 — 항상 **참조로** 자동 포함된다
+    (`local.cors_allowed_origins`). 손으로 박으면 재생성마다 썩는다(TASK-MONO-389 가
+    고친 결함이 정확히 그것이다).
+
+    여기 적는 것은 **다른 곳에서 서빙되는 사본**의 오리진이다. 예:
+      allowed_origins = ["https://portfolio-demo.vercel.app"]
+
+    🔴 문자열 하나가 아니라 목록인 이유(TASK-MONO-557): 이전 문자열 판은 값을 넣는 순간
+    CloudFront 폴백이 **꺼졌다**. 그래서 호스팅을 옮기는 동안 두 오리진을 동시에 허용할
+    방법이 없었고, 옮기는 과정에 반드시 론처가 죽는 창이 생겼다.
+
+    로컬에서 index.html 을 파일로 열어보려면 ["*"] 를 명시하라.
   EOT
-  type        = string
-  default     = ""
+  type        = list(string)
+  default     = []
 }
 
 variable "idle_minutes" {

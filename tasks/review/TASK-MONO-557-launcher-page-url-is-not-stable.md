@@ -8,7 +8,7 @@ TASK-MONO-557
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -198,31 +198,108 @@ content = "window.DEMO_API_BASE = ${jsonencode(aws_apigatewayv2_api.api.api_endp
 
 # Acceptance Criteria
 
-**AC-0 — 재확인 (verify-then-act).** 착수 시점에 다시 잴 것. 이 티켓의 숫자는 전부
-2026-08-18 실측이고, 그 사이 apply 가 있었으면 **CloudFront 도메인·API ID 가 달라진다**
-(이 티켓이 다루는 바로 그 성질이다). 특히 ① `var.allowed_origin` 이 여전히 `""` 인가
-② Lambda `ALLOWED_ORIGIN` 이 여전히 `""` 인가 ③ 위 CORS 3칸 대조군의 결과가 그대로인가.
+**AC-0 — 재확인 (verify-then-act).** ✅ **완료 (2026-08-19 UTC) — 네 항목 전부 어제와 동일.**
+① `var.allowed_origin` = `""` ② Lambda `ALLOWED_ORIGIN` = `""` ③ CORS 3칸 대조군 결과 동일
+④ `portfolio-demo-idle-check` = `rate(5 minutes)` `ENABLED`. 주소도 그대로
+(`d38c06ry1h6rnn.cloudfront.net` · `r1tljg51qa.execute-api…`).
+🔵 **덤으로 AC-2 의 before 대조군이 확보됐다**: `Origin: https://portfolio-demo.vercel.app`
+는 **지금 CORS 헤더를 못 받는다**. 고친 뒤 그 자리가 바뀌는 것이 bite 다.
 
-**AC-1 — 페이지가 Vercel 에서 뜬다.** 그 주소로 론처가 렌더되고 `/status` 를 읽어
-현재 상태를 표시한다. 🔴 **`window.DEMO_API_BASE` 리터럴 커밋 금지**(위 § 배선).
+**AC-1 — 페이지가 Vercel 에서 뜬다.** ⏳ **저장소 측 완료, 배포는 사용자 계정 필요.**
+`site/vercel.json` + `site/build.sh` 를 추가했다. 빌드는 `DEMO_API_BASE` 환경변수에서
+`public/config.js` 를 렌더한다 — terraform 의 `aws_s3_object.config` 와 **같은 모양**이다
+(두 배포 경로가 다른 모양을 내면 한쪽에서만 되는 상태가 생기고 진단이 가장 오래 걸린다).
 
-**AC-2 — 허용 오리진이 두 곳 다 맞다. 🔴 대조군 필수.**
-Vercel 오리진에서 `access-control-allow-origin` 이 **그 값으로 되돌아온다**.
-**그리고 대조군**: 아무 오리진(`https://example.com`)에는 **여전히 CORS 헤더가 없어야**
-한다. 대조군 없이 통과만 보면 *"모든 오리진을 허용해서 통과시킨"* 구현과 구별되지 않는다.
-🔴 판정에 **200 을 쓰지 말 것** — 거부되는 오리진도 200 이다(실측).
-🔴 (a)와 (b) **둘 다** 확인할 것. 하나만 고치면 오늘은 통과하고 나중에 갈린다.
+🔴 **리터럴은 커밋하지 않았다.** 값이 없거나 이상하면 빌드가 죽는다 — 실측 대조군 4종:
+미설정 / `""` / `http://…`(https 아님) / 끝 슬래시 → **전부 rc=1**, 정상 값만 rc=0.
+빈 `config.js` 를 내보내면 빌드는 성공하고 페이지는 200 을 주며 **아무 버튼도 안 듣는다**.
+그 상태는 "배포됨" 으로 보고되므로 아무도 안 본다.
 
-**AC-3 — 브라우저에서 실제 조작이 된다.** `/start` 를 눌러 인스턴스가 뜬다.
-🔴 `curl` 로는 이 AC 를 만족시킬 수 없다 — CORS 는 브라우저 정책이라 curl 이 우회한다.
-**인스턴스 기동은 예산을 쓴다(사용자 승인 대상).** 실측 잔여 291/600분(2026-08-18).
+**AC-2 — 허용 오리진이 두 곳 다 맞다.** ✅ **저장소 측 완료 — 다만 "두 곳" 을 "한 곳" 으로 만들었다.**
 
-**AC-4 — 제어 평면이 안 움직였다.** `portfolio-demo-idle-check` 가 여전히
-`rate(5 minutes)` `ENABLED` 이고, Vercel 에 **AWS 자격 증명이 하나도 없다.**
-🔴 이건 형식적 확인이 아니다 — 이 티켓이 만들 수 있는 최악의 결과가 정확히 그 둘이다.
+두 집을 맞추는 대신 **일하지 않는 쪽을 지웠다.** 실측이 (b)가 죽은 코드임을 보였기 때문이다
+— 라이브 응답에 나타난 값은 전부 (a) 쪽이었고 (b)의 `""` 는 어디에도 없었다. 두 곳에서
+실으면 `Access-Control-Allow-Origin` 이 중복될 수 있고 브라우저는 중복을 거부한다.
+🔵 실패 방향도 이쪽이 안전하다: (a)가 사라지면 헤더가 **아예 없어져 즉시 깨진다** —
+`"*"` 로 폴백해 조용히 전부 허용하는 것보다 낫다.
 
-**AC-5 — 옛 경로 처리를 결정하고 적는다.** 제거/병행/리다이렉트 중 하나. 병행을 고르면
-**두 오리진이 다 허용되는지** AC-2 의 대조군과 함께 확인할 것.
+- `handler.py`: `ALLOWED_ORIGIN` 과 `Access-Control-*` 제거
+- `main.tf`: Lambda env 에서 `ALLOWED_ORIGIN` 제거
+- `variables.tf`: `allowed_origin`(string) → **`allowed_origins`(list)**.
+  🔴 목록인 이유: 문자열 판은 값을 넣는 순간 CloudFront 폴백이 **꺼졌다** ⇒ 옮기는 동안
+  두 오리진을 동시에 허용할 방법이 없어 **론처가 죽는 창이 반드시 생겼다**.
+  이제 CloudFront 는 `local.cors_allowed_origins` 가 **항상 참조로** 넣고 여기 적은 것이 더해진다.
+
+가드 2종, 둘 다 **주입을 증명한 뒤** bite 확인:
+- `tests/test_handler.py::CorsHasOneHome` — 응답에 `Access-Control-*` 이 **없다**.
+  고침 전 핸들러에 물린다(두 응답 경로 모두 FAIL). 대조군으로 `Content-Type` 은 남아
+  있는지도 본다(헤더를 통째로 지운 구현과 구별). 🔴 픽스처의 `ALLOWED_ORIGIN` 은
+  **일부러 남겼다** — 지우면 그 테스트는 *"값이 없어서"* 통과하는 **행사된 적 없는
+  네거티브 테스트**가 된다. 그것까지 별도 테스트로 단언한다.
+- `verify-demo-wrapper.sh (z9)` — terraform 쪽. Lambda env 에 `ALLOWED_ORIGIN` 이
+  되돌아오면 물고, 오리진 목록이 CloudFront 를 **참조**하지 않으면 문다(리터럴 주입으로 확인).
+  대조군: 추출한 블록에 `MONTHLY_BUDGET_MINUTES` 가 보이는지 — 추출이 빈 껍데기면
+  통과가 아무것도 증명하지 않기 때문이다.
+
+🔴🔴 **z9 의 bite 를 한 번 잘못 읽을 뻔했다.** `ALLOWED_ORIGIN` 을 되돌리는 주입이
+**CRLF 때문에 0건**이었는데 결과는 *"안 물었다"* 로 보였다. 주입 건수를 먼저 세니 1건이
+되고 그때 정확히 물었다. **판정 전에 주입을 증명할 것.**
+
+**AC-3 — 브라우저에서 실제 조작이 된다.** ⏳ **미완 — Vercel 배포 + `terraform apply` + 인스턴스 기동이 필요하다(전부 사용자 승인 대상).**
+🔴 `curl` 로는 만족시킬 수 없다 — CORS 는 브라우저 정책이라 curl 이 우회한다.
+🔴 판정에 **200 을 쓰지 말 것**: 거부되는 오리진도 200 이다(AC-0 에서 재확인).
+잔여 예산 291/600분.
+
+**AC-4 — 제어 평면이 안 움직였다.** ✅ **저장소 측 확인.** `portfolio-demo-idle-check` =
+`rate(5 minutes)` `ENABLED`(AC-0 실측), 이 변경은 EventBridge·Lambda 권한·IAM 역할을
+**전혀 건드리지 않았다**. Vercel 쪽에 들어가는 환경변수는 `DEMO_API_BASE` **하나**이고
+그건 공개 URL 이다 — **AWS 자격 증명 0개**. 배포 후 재확인은 AC-3 과 같은 실행에서.
+
+**AC-5 — 옛 경로 처리.** ✅ **결정 = 병행(parallel).** 이유: CloudFront 를 먼저 끊으면
+Vercel 이 뜨기 전까지 론처가 죽는 창이 생기고, 그 창은 *"데모가 고장났다"* 로 보인다.
+`local.cors_allowed_origins` 가 **둘 다** 허용하므로 병행이 표현 가능해졌다(그게 문자열을
+목록으로 바꾼 이유다). CloudFront 제거는 Vercel 이 실증된 뒤 **별도 판단**으로 남긴다 —
+지금 지우면 롤백 자리가 없어진다.
+
+# 🔴 남은 절차 — 사용자 계정이 필요한 부분 (에이전트가 못 한다)
+
+Vercel 프로젝트 생성·연결·배포는 계정 인증이 필요하다. 저장소 측은 전부 끝나 있으므로
+아래 세 단계만 남는다.
+
+**1. Vercel 프로젝트 생성** — 이 저장소를 import 하고 설정 세 개만 맞춘다:
+
+| 항목 | 값 |
+|---|---|
+| Project Name | `portfolio-demo` (⇒ `portfolio-demo.vercel.app`) |
+| Root Directory | `infra/demo/aws/site` |
+| Framework Preset | Other (빌드/출력은 `vercel.json` 이 지정한다) |
+| Environment Variable | `DEMO_API_BASE` = `terraform output -raw api_base_url` 의 값 |
+
+⚠️ **Project Name 이 곧 주소다.** 다른 이름으로 만들면 `allowed_origins` 도 그 이름으로
+바꿔야 한다(그리고 이 티켓이 얻으려던 *"이름에 묶인 주소"* 의 이름이 그것이다).
+
+**2. `terraform apply`** — 🔴 **사용자 승인 대상.** `terraform.tfvars` 에는 이미
+`allowed_origins = ["https://portfolio-demo.vercel.app"]` 이 들어가 있다.
+
+```
+cd infra/demo/aws/terraform
+terraform plan     # 변경이 CORS·Lambda env 두 곳뿐인지 먼저 확인
+terraform apply
+```
+
+기대 변경: API Gateway CORS 오리진이 **1개 → 2개**, Lambda 환경변수에서 `ALLOWED_ORIGIN`
+**제거**. 🔴 인스턴스·EBS·AMI 가 계획에 나오면 **멈출 것** — 이 티켓의 범위가 아니다.
+
+**3. AC-2 판정** — apply 뒤. 🔴 **200 이 아니라 헤더를 본다.**
+
+```
+A=$(terraform output -raw api_base_url)
+curl -s -D - -o /dev/null -H "Origin: https://portfolio-demo.vercel.app" $A/status | grep -i access-control   # ← 값이 되돌아와야 한다
+curl -s -D - -o /dev/null -H "Origin: https://d38c06ry1h6rnn.cloudfront.net" $A/status | grep -i access-control   # ← 병행: 여전히 허용
+curl -s -D - -o /dev/null -H "Origin: https://example.com" $A/status | grep -i access-control   # ← 대조군: 아무것도 안 나와야 한다
+```
+
+세 번째 줄이 비어 있지 않으면 **모든 오리진을 허용해 버린 것**이고, 그건 통과가 아니다.
 
 # Related Specs
 
