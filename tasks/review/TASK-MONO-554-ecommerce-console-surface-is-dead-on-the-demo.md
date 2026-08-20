@@ -8,7 +8,7 @@ TASK-MONO-554
 
 # Status
 
-ready
+review
 
 # Owner
 
