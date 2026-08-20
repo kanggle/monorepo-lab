@@ -22,6 +22,75 @@ monorepo
 
 ---
 
+# ✅ 2026-08-20 UTC — AC-0·AC-2 완료, AC-1 은 측정으로 닫고 **apply 한 줄만 잔존**
+
+## AC-0 재측정 — 결함은 그대로다. 그리고 **plan 은 1건이 아니라 2건**이었다
+
+live state(`terraform.tfstate`, 마지막 apply 08-19 20:43)와 `terraform plan`(읽기 전용,
+`-lock=false`, state **사본** 위에서 — 원본은 건드리지 않았다)으로 다시 쟀다.
+
+산술은 티켓 기록과 **정확히 일치**한다. 티켓엔 잘린 endpoint 만 있었는데 이번엔 전체로 확인했다:
+
+```
+md5("window.DEMO_API_BASE = \"https://r1tljg51qa.execute-api.ap-northeast-2.amazonaws.com\";\n")
+  = 82e241f6e9ed4180b6784450c7638864   ← state 의 etag = S3 가 돌려준 값
+md5("https://r1tljg51qa.execute-api.ap-northeast-2.amazonaws.com")
+  = 3b63e987fa7ba5986164c5411200415c   ← 선언이 주장하던 값
+```
+
+**그런데 plan 은 `2 to change` 였다** — 티켓이 예상한 1건이 아니다:
+
+| 리소스 | etag 변화 | 성격 |
+|---|---|---|
+| `aws_s3_object.config` | `82e241f6…` → `3b63e987…` | 🔴 **구조적으로 수렴 불가** — 다른 것을 잰다 |
+| `aws_s3_object.index` | `6c7f9fd4…` → `2f4c44af…` | ✅ **진짜 드리프트** — 올바르게 잰 결과다 |
+
+`index` 는 결함이 아니다. `filemd5(로컬 site/index.html)` 을 직접 계산하니
+**`2f4c44af…` 로 plan 의 new etag 와 정확히 일치**했다 — 즉 그 etag 는 **같은 것을 재고
+있고**, 다만 로컬 파일이 마지막 apply 이후 실제로 바뀌었다(`d7797ac4f` = `TASK-MONO-561`,
+론처 로그인 안내). S3 에는 **561 이전 페이지**가 올라가 있다.
+
+🔴🔴 **그래서 이 티켓이 말한 피해가 이미 실현돼 있었다.** *"진짜 드리프트가 늘 있던 한 줄과
+섞여 아무도 눈치채지 못한다"* — 지금 plan 이 정확히 그 모양이다. 영구 가짜 한 줄 옆에
+**방문자에게 보이는 진짜 staleness** 가 나란히 앉아 있고, `2 to change` 를 흘려보면 둘 다 놓친다.
+
+## AC-1 — 고침 후 plan: 가짜는 사라지고 **진짜는 그대로 잡힌다**
+
+| | plan |
+|---|---|
+| 고침 전 | `0 to add, **2** to change, 0 to destroy` — config + index |
+| **고침 후** | `0 to add, **1** to change, 0 to destroy` — **index 만** |
+
+`terraform fmt -check` rc=0 · `terraform validate` Success.
+
+🔴 **대조군을 조작하지 않았다.** AC-1 은 *"진짜 드리프트를 만들면 plan 이 여전히 잡아야
+한다"* 고 요구했는데, **이미 실재하는 드리프트(index)** 가 그 역할을 했다. 이것이
+`lifecycle { ignore_changes = [etag] }` 구현을 **정면으로 배제**한다 — 그 구현이었다면
+index 도 함께 조용해졌을 것이다.
+
+🔵 **plan 은 refresh 를 포함한다.** 이 결함이 무서웠던 이유가 *"apply 로 사라진 것처럼
+보이다 refresh 에서 되살아난다"* 였는데, 그 refresh 를 거친 뒤 `config` 가 **plan 에서
+사라졌다** ⇒ 영구 diff 기전은 끊겼다.
+
+⏳ **문자 그대로의 `No changes` 는 apply 한 번이 남는다** — `index` 를 실제로 올려야 하고
+`terraform apply` 는 **사용자 승인 대상**이다. 🔵 그 apply 는 덤으로 **561 의 론처 페이지를
+S3 판에 올린다**(`TASK-MONO-557` AC-5 의 결정이 *병행* 이므로 S3/CloudFront 경로도 아직 산다).
+
+## AC-2 — 형제 전수 (무엇을 어떻게 셌는지)
+
+`main.tf` 를 파싱해 `aws_s3_object` 블록을 **전수 열거**하고 각 블록의 `content`/`source`/`etag` 를 뽑았다.
+
+| 리소스 | 업로드되는 것 | etag 가 재는 것 | 판정 |
+|---|---|---|---|
+| `index` | `source = <site/index.html>` | `filemd5(<같은 파일>)` | ✅ **같은 것을 잰다** |
+| `config` | `content = "…JS 한 줄…"` | `md5(api_endpoint)` | 🔴 **다른 것을 잰다** |
+
+⇒ 전수 **2건 중 1건**이 결함. 다만 `index` 도 **경로 문자열을 두 번 적고** 있어 같은 종류의
+어긋남이 생길 수 있으므로, 두 리소스 모두 `locals` 로 **출처를 하나로** 묶었다
+(티켓이 요구한 *"두 자리가 같은 표현식을 참조하게"* 를 형제에도 적용).
+
+---
+
 # 배경 — 2026-08-19(UTC) `TASK-MONO-557` apply 중에 발견
 
 Vercel 오리진을 여는 apply 의 plan 이 **3건**이었는데, 내가 예상한 건 2건이었다.
@@ -124,13 +193,13 @@ apply 가 성공해도 refresh 가 state 의 etag 를 **S3 가 준 `md5(내용)`
 
 # Acceptance Criteria
 
-**AC-0 — 재확인 (verify-then-act).** 착수 시점에 `terraform plan` 을 돌려 **여전히
+**AC-0 — 재확인 (verify-then-act). ✅ 완료 (2026-08-20 UTC) — 결함 그대로 재현, 그리고 plan 은 1건이 아니라 2건이었다(위 § AC-0).** 착수 시점에 `terraform plan` 을 돌려 **여전히
 `aws_s3_object.config` 1건이 더러운지** 확인한다. 이미 깨끗하면 누군가 고친 것이므로
 phantom 으로 기록하고 **건드리지 않는다**.
 🔴 두 etag 값이 각각 무엇의 md5 인지도 **그때 다시 산술로** 확인할 것 — `api_endpoint` 가
 바뀌었으면 두 값이 다 달라진다.
 
-**AC-1 — plan 이 `No changes` 를 말한다. 🔴 대조군 필수.**
+**AC-1 — plan 이 `No changes` 를 말한다. 🔴 대조군 필수. ◑ 측정 완료 · apply 한 줄 잔존 — 고침 후 plan 에서 `config` 가 사라지고 진짜 드리프트(`index`)는 그대로 잡힌다(위 § AC-1). 문자 그대로의 `No changes` 는 `terraform apply`(사용자 승인 대상)가 필요하다.**
 고친 뒤 `terraform apply` → **곧바로 `terraform plan` 재실행** → `No changes`.
 **apply 직후 한 번만 보고 닫지 말 것** — 이 결함은 apply 로 사라지는 것처럼 보였다가
 refresh 에서 되살아난다(그게 이 티켓의 발견 경로다).
@@ -141,7 +210,7 @@ S3 의 `config.js` 를 콘솔/CLI 로 다른 내용으로 덮은 뒤 plan 이 �
 구별되지 않는다 — 그 구현은 **진짜 드리프트도 못 본다**. `ignore_changes` 로 덮는 안이
 정확히 그것이므로 **채택하지 말 것**.
 
-**AC-2 — 형제를 세라.** `main.tf` 의 `aws_s3_object` 전수를 읽고 각각의 `etag` 가
+**AC-2 — 형제를 세라. ✅ 완료 — 전수 2건 중 1건 결함, 방법과 결과는 위 § AC-2.** `main.tf` 의 `aws_s3_object` 전수를 읽고 각각의 `etag` 가
 **업로드되는 내용과 같은 것을 재는지** 확인해 결과를 적는다. 0건이면 0건이라고 적되
 **무엇을 어떻게 셌는지** 함께.
 

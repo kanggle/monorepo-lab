@@ -453,11 +453,38 @@ resource "aws_s3_bucket_policy" "site" {
   policy = data.aws_iam_policy_document.site.json
 }
 
+# -----------------------------------------------------------------------------
+# 🔴 TASK-MONO-558 — etag 는 **업로드되는 바로 그것**을 재야 한다
+# -----------------------------------------------------------------------------
+# S3 가 돌려주는 ETag 는 **언제나 객체 내용의 md5** 다. 그러므로 `etag =` 에 내용이
+# 아닌 다른 값을 주면 그 둘은 **구조적으로 절대 일치할 수 없고**, plan 은 영원히
+# 그 한 줄을 더럽게 들고 있는다.
+#
+# 실측(2026-08-19 apply 중 발견 → 2026-08-20 state 로 재확인):
+#   state 의 etag          = 82e241f6e9ed4180b6784450c7638864 = md5(내용)   ← S3 가 준 값
+#   선언이 주장하던 etag   = 3b63e987fa7ba5986164c5411200415c = md5(endpoint)
+# apply 를 해도 refresh 가 state 를 `md5(내용)` 으로 되돌리므로 **매번 되살아난다.**
+#
+# 🔴 두 자리가 **같은 표현식을 참조**하게 만드는 것이 요점이다. 값을 손으로 맞춰 놓는
+#    것으로는 부족하다 — 한쪽만 바뀌는 날 또 갈리고, 이 결함이 정확히 그 형태였다
+#    (`content` 는 URL 을 JS 한 줄로 감쌌는데 `etag` 는 감싸기 전 URL 을 쟀다).
+#    개행 하나까지 md5 에 들어가므로 문자열을 두 번 적는 것 자체가 위험하다.
+#
+# 🔵 왜 `lifecycle { ignore_changes = [etag] }` 가 아닌가: 그러면 plan 은 조용해지지만
+#    **진짜 드리프트도 안 보인다.** 고쳐야 하는 것은 소음이 아니라 **판정 능력**이다.
+locals {
+  # 업로드되는 내용과 그 md5 의 **단일 출처**.
+  site_config_js = "window.DEMO_API_BASE = ${jsonencode(aws_apigatewayv2_api.api.api_endpoint)};\n"
+  # index 의 etag 는 이미 같은 것(그 파일)을 재고 있었다. 다만 경로 문자열이 두 번
+  # 적혀 있어 같은 종류의 어긋남이 생길 수 있으므로 여기서도 출처를 하나로 묶는다.
+  site_index_html = "${path.module}/../site/index.html"
+}
+
 resource "aws_s3_object" "index" {
   bucket        = aws_s3_bucket.site.id
   key           = "index.html"
-  source        = "${path.module}/../site/index.html"
-  etag          = filemd5("${path.module}/../site/index.html")
+  source        = local.site_index_html
+  etag          = filemd5(local.site_index_html)
   content_type  = "text/html; charset=utf-8"
   cache_control = "public, max-age=60"
 }
@@ -468,8 +495,8 @@ resource "aws_s3_object" "index" {
 resource "aws_s3_object" "config" {
   bucket        = aws_s3_bucket.site.id
   key           = "config.js"
-  content       = "window.DEMO_API_BASE = ${jsonencode(aws_apigatewayv2_api.api.api_endpoint)};\n"
+  content       = local.site_config_js
   content_type  = "application/javascript; charset=utf-8"
   cache_control = "public, max-age=60"
-  etag          = md5(aws_apigatewayv2_api.api.api_endpoint)
+  etag          = md5(local.site_config_js)
 }
