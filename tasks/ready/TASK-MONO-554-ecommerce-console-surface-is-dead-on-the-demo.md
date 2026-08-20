@@ -22,6 +22,102 @@ monorepo
 
 ---
 
+# ✅ 2026-08-20 UTC — AC-0 재측정 + AC-1 가드 완료. **인계된 모집단이 틀렸고, 형제 낙오가 하나 더 있었다.**
+
+## AC-0 — 인계된 표를 다시 셌다 (달랐다, 그 사실이 먼저다)
+
+`origin/main` `d7797ac4f` 에서 데모 compose 집합 8도메인을 **렌더해서** 셌다(선언이 아니라 렌더).
+
+| 항목 | 인계(이 티켓 § 설정 대조) | 실측 |
+|---|---|---|
+| 게이트웨이 수 | 6 (wms·scm·erp·finance·fan·ecommerce) | **7** — iam 자신의 `gateway-service` 가 빠져 있었다 |
+| `OIDC_ALLOWED_ISSUERS` 를 받는 서비스 | "게이트웨이" | **게이트웨이 + wms 리소스 서버 5개**(admin·inbound·inventory·master·outbound) |
+| issuer/JWKS 를 나르는 env 총량 | 세지 않음 | **83건** (8도메인 전수) |
+
+⇒ **"게이트웨이 전수" 라는 모집단 자체가 틀렸다.** AC-1 이 요구한 대로 하드코딩 목록을 피해도,
+*게이트웨이* 라는 **셰이프**로 모집단을 정의했다면 wms 리소스 서버 5개는 사각지대였다.
+그래서 가드는 서비스 이름도 키 이름도 박지 않는다 — **렌더된 env 에서 발견**한다.
+
+## 🔴 그리고 그 모집단을 넓히자 **같은 결함이 fan 에 한 벌 더 있었다**
+
+```
+fan:membership-service  INTERNAL_JWT_ISSUER      = http://iam.local
+fan:membership-service  INTERNAL_JWT_JWK_SET_URI = http://iam.local/oauth2/jwks
+```
+
+`projects/fan-platform/docker-compose.yml:194` 가 `${INTERNAL_JWT_ISSUER:-http://iam.local}` 로
+**항상 값을 채워** `application.yml:150` 의 안전한 폴백(`${INTERNAL_JWT_ISSUER:${OIDC_ISSUER_URL:…}}`)을
+덮는다 — **ecommerce 와 글자 그대로 같은 모양**이다. 이 티켓의 Out of Scope 가
+*"다음 프로젝트가 같은 형태를 복사하면 같은 결함이 재생산된다"* 고 적었는데, **이미 복사돼 있었다.**
+
+무엇이 깨지는가: `membership-service` 의 `/internal/**` 체인이 이 값으로 워크로드 신원 issuer 를
+**핀**하고, `community-service` 가 IAM client_credentials 토큰으로 `GET /internal/membership/access`
+를 부른다(`HttpMembershipChecker`). 데모에서 그 토큰의 iss 는 `http://iam.<데모도메인>` 이라
+**핀과 불일치**한다. JWKS 쪽은 더 나쁘다 — `http://iam.local` 은 데모 호스트에서 **해소조차 되지
+않아** Spring 이 fail-closed 401 로 바꾼다(MONO-507 과 같은 기전).
+
+🔵 **값의 근거는 추측이 아니라 형제다**: 같은 서비스의 다른 디코더가 이미 `JWT_JWKS_URI` 로
+`iam-auth-service` 를 쓰고(그 alias 는 데모에서 실제로 해소된다), `artist-service` 의 기본값
+체인도 `${OIDC_ISSUER_URL:…}` 로 폴백한다. ⇒ 고침 = `demo.env` 에 두 줄 추가.
+
+## 🔴🔴 이 결함이 지금까지 보이지 않은 이유 — **판정 축이 대조 축과 같은 문자열이었다**
+
+`demo.env` 의 기본값은 `DEMO_DOMAIN=${DEMO_DOMAIN:-local}` 이다. 그 값으로 렌더하면 데모 issuer
+자체가 `http://iam.local` 이 되어 **하드코딩된 `iam.local` 이 정답과 구별되지 않는다.**
+데모 호스트의 `DEMO_DOMAIN` 은 IMDSv2 파생이라 결코 `local` 이 아니므로 결함은 거기서만 나타난다.
+
+**음성 대조군으로 확정했다** — 같은 술어를 `DEMO_DOMAIN=local` 로 돌린 판:
+
+| 판 | OIDC_ALLOWED_ISSUERS 결함 | INTERNAL_JWT_* 결함 |
+|---|---|---|
+| 프로브 도메인(`z12-probe.invalid`) | **위반 1건 검출** | **위반 2건 검출** |
+| `local`(저장소 기본값) | ✅ **위반 0건 — 초록** | ✅ **위반 0건 — 초록** |
+
+⇒ CI 의 기본 환경은 이 결함을 **구조적으로 볼 수 없었다.** 가드 (w)(JWKS 도달성)도 같은 이유로
+못 봤고, 추가로 **서비스당 JWK env 를 첫 건만** 본다(`membership-service` 는 두 개를 갖는다).
+
+## AC-1 — 가드 (z12) 신설
+
+`verify-demo-wrapper.sh` **정적 구간**(CI "Demo wrapper smoke" + nightly `--require-coverage`
++ packer 7단계가 전부 실행). 술어: 프로브 도메인으로 렌더한 뒤, `ISSUER|JWK` 를 나르는 모든 env 의
+호스트가 **프로브 파생**이거나 **점 없는 컨테이너 이름**이어야 한다. 점이 있는데 프로브 밖이면 FAIL.
+
+검증 — **실제 `verify-demo-wrapper.sh` 를 돌린 판**(술어만 떼어낸 하네스가 아니다):
+
+| 칸 | 주입 확인 | rc | 가드가 댄 이름 |
+|---|---|---|---|
+| 대조군 | `OIDC_…`=1줄 · `INTERNAL_JWT_`=2줄 | **0** | `ok: … 83건 · 도메인 8개 전수` |
+| bite A | `OIDC_…`=**0줄** | **1** | `ecommerce:gateway-service OIDC_ALLOWED_ISSUERS = http://iam.local` |
+| bite B | `INTERNAL_JWT_`=**0줄**, `OIDC_…`=**1줄** | **1** | `fan:membership-service` 두 키 모두 |
+
+- ✅ **주입을 판정보다 먼저 증명했다** — 각 칸마다 `grep -c` 로 그 줄이 실제로 사라졌는지(그리고 다른
+  칸의 주입이 남아 있지 않은지) 확인하고, 어긋나면 하네스를 즉시 중단시켰다. bite B 칸이
+  `OIDC_…`=1줄임을 확인했으므로 **그 실패는 bite A 의 잔재가 아니다**.
+- ✅ **0건 방어 2중** — 총 추출 0건이면 FAIL(0건을 "없음" 으로 읽지 않는다), **도메인마다도** 0건이면
+  FAIL(한 도메인의 렌더가 조용히 실패해도 합계는 멀쩡하다)
+- ✅ **음성 대조군** — 위 표. 프로브를 `local` 로 되돌리면 두 결함 모두 통과 ⇒ 프로브가 load-bearing
+- ✅ **로컬 무영향** — `DEMO_DOMAIN=local` 에서 fan 렌더가 **바이트 동일**(diff 0). 이 고침은
+  도메인 치환 한 축만 움직인다.
+
+### 🔴 계측 사고 기록 — 첫 bite 판정은 **폐기했다**
+
+이 표는 **두 번째** 하네스의 결과다. 첫 하네스는 판정을 낼 수 없는 상태였고, 그 사실이 로그
+타임스탬프로만 드러났다:
+
+- `TaskStop` 으로 멈춘 하네스가 **실제로는 계속 돌았다**(멈춘 뒤 15분 동안 3개 로그를 더 씀).
+  그 사이 두 번째 하네스를 띄워 **두 프로세스가 가드와 그 입력을 동시에 고쳐 썼다.**
+  한쪽이 wrapper 를 `probe="local"` 로 sed 한 창에서 다른 쪽이 bite 를 재는 식이라, control 을
+  포함해 어느 칸도 자기가 의도한 판을 재지 않았다.
+- 증상은 *"bite B 가 안 물었다"* 였다. 그런데 **주입 확인부터 했더니 원본에 그 줄이 0개**였다 —
+  결함이 아니라 계측 실패였다.
+- 더 나쁜 것: 셸 cwd 가 어느 시점에 **main 체크아웃**으로 돌아가 있어서, 상대경로로 돌던 하네스가
+  worktree 가 아니라 main 을 물어뜯고 있었다. main 의 변경이 worktree 와 동일한 사본임을 diff 로
+  확인한 뒤 `git restore` 로 정리했다.
+
+⇒ 두 번째 하네스는 **worktree 절대경로를 박고 브랜치 이름까지 단언**한 뒤에야 돈다. 교훈은
+*"bite 가 안 물면 술어를 의심하라"* 보다 한 칸 앞이다: **하네스가 어느 트리를 재고 있는지,
+그리고 그 트리를 나 말고 누가 또 쓰고 있는지를 먼저 확정하라.**
+
 # 배경 — 2026-08-18 UTC 라이브 화면 커버리지 측정 중 발견
 
 `TASK-MONO-552` (b) 로 호스트를 키운 뒤 **면접관이 로그인 직후 무엇을 보는가**를
@@ -166,6 +262,10 @@ A 를 고친 뒤 이커머스 화면이 200 이 되었으나 **원소가 전부 
 ## In Scope
 
 - **A 뿐이다**: `demo.env` 의 `OIDC_ALLOWED_ISSUERS` 치환(적용 완료) + **가드** + 재굽기 실증.
+- 🔴 **A 의 형제 낙오 (2026-08-20 추가)**: `demo.env` 의 `INTERNAL_JWT_ISSUER` /
+  `INTERNAL_JWT_JWK_SET_URI` 치환. **가드 (z12) 가 main 에서 이것을 물기 때문에 같은 PR 에 넣는다** —
+  빨간 가드는 머지할 수 없고, 고침은 A 와 글자 그대로 같은 한 줄짜리 데모 층 치환이다.
+  범위 확대가 아니라 **가드가 자기 모집단에서 찾아낸 것**이다(위 § 형제 낙오).
 - ~~B~~ 는 **반증됐다**(위 § 참조) — 결함이 아니라 활성 테넌트를 잘못 건 내 측정이었다.
   이 티켓에서 고칠 것이 없다.
 
@@ -179,22 +279,38 @@ A 를 고친 뒤 이커머스 화면이 200 이 되었으나 **원소가 전부 
 
 # Acceptance Criteria
 
-**AC-0 — 재확인.** `origin/main` 에서 위 3개 파일(compose:1146 · application.yml:233 · demo.env)을
-다시 읽고, 게이트웨이 전수의 `OIDC_ALLOWED_ISSUERS` 를 **다시 센다**. 인계된 표는 가설이다.
+**AC-0 — 재확인. ✅ 완료 (2026-08-20 UTC).** `origin/main` 에서 위 3개 파일(compose:1146 ·
+application.yml:233 · demo.env)을 다시 읽고, 게이트웨이 전수의 `OIDC_ALLOWED_ISSUERS` 를 **다시 센다**.
+인계된 표는 가설이다. → **가설이 틀렸다**: 게이트웨이는 6이 아니라 7이고, 이 변수를 받는 것은
+게이트웨이만이 아니었다(wms 리소스 서버 5개). 상세는 위 § AC-0.
 
-**AC-1 — A 의 가드.** 저장소만 보고 *"데모에서 모든 게이트웨이의 허용 issuer 가 데모 issuer 를
-포함하는가"* 를 판정한다. `verify-demo-wrapper.sh` 정적 구간(CI + packer 7단계가 실제로 돌린다).
+**AC-1 — A 의 가드. ✅ 완료 (2026-08-20 UTC) — 가드 (z12).** 저장소만 보고 *"데모에서 모든 게이트웨이의
+허용 issuer 가 데모 issuer 를 포함하는가"* 를 판정한다. `verify-demo-wrapper.sh` 정적 구간(CI + packer
+7단계가 실제로 돌린다).
 🔴 **하드코딩 목록 금지** — 게이트웨이를 **인벤토리로 발견**해야 한다(compose 에서 `gateway` 서비스를
 열거). 손으로 나열하면 그 순간 드리프트가 시작된다(이 저장소가 두 번 데인 실패 모드).
 🔴 **bite**: `demo.env` 에서 그 줄을 지우면 빨개져야 한다.
+
+🔴 **이 AC 의 지시 한 줄에서 벗어났고, 그 이유를 적는다.** AC 는 *"compose 에서 `gateway` 서비스를
+열거"* 하라고 적었지만 실측 결과 **그 모집단이 결함을 다 담지 못한다**(wms 리소스 서버 5개 · fan 의
+다른 키 이름). 하드코딩 목록을 피하라는 이 AC 의 **의도**를 지키려면 `gateway` 라는 셰이프도 함께
+버려야 했다 — 셰이프로 정의한 모집단은 새 셰이프에 무반응 초록이기 때문이다. 그래서 (z12) 는
+**issuer/JWKS 를 나르는 env 전수**를 모집단으로 삼는다. 이 확장이 곧 fan 낙오를 찾아냈다.
 
 **AC-2 — 회귀 방지 실측.** 고침 후 콘솔에서 **활성 테넌트를 `ecommerce` 로 두고**
 이커머스 목록이 DB 행수와 일치하는지 확인한다(현재 기준선: products **8** · sellers **1** · users **1**).
 🔴 **활성 테넌트를 반드시 기록할 것** — 그것을 안 적으면 다음 사람이 `demo-corp` 로 재서
 "0 건 = 결함" 이라고 다시 결론 낸다. **내가 정확히 그렇게 했다.**
 
-**AC-3 — 라이브 실증.** 재굽기 후 새 AMI 로 `/start` → **손대지 않고** 콘솔 이커머스 화면이
-200 + 데이터를 보인다. ⚠️ `packer build`/`terraform apply` 는 **사용자 승인 대상**.
+**AC-3 — 라이브 실증. ⏳ 잔존 (재굽기 필요 — `infra/demo/demo.env` 는 baked 층).**
+재굽기 후 새 AMI 로 `/start` → **손대지 않고** 콘솔 이커머스 화면이 200 + 데이터를 보인다.
+⚠️ `packer build`/`terraform apply` 는 **사용자 승인 대상**.
+
+🔴 **형제 낙오도 같은 기동에서 실증한다** — fan 의 `INTERNAL_JWT_*` 고침은 **라이브에서 한 번도
+행사된 적이 없다**(정적 가드와 bite 만 통과했다. 이 저장소가 다섯 번 배운 명제: `packer validate`
+통과가 동작을 뜻하지 않는다). 판정은 `community-service` → `membership-service` 의
+`GET /internal/membership/access` 가 **200 을 내는가**로 한다 — 컨테이너 healthy 는 이 축의 판정이
+아니다(이 결함은 healthy 인 채로 401 을 낸다).
 
 # Related Specs
 
