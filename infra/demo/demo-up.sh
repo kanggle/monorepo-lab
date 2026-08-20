@@ -131,17 +131,65 @@ docker compose -p traefik -f "$ROOT/$TRAEFIK_COMPOSE" up -d
 #    **전체를 죽인다.** 예산이 바닥나면 더 기다리지 않고 실패로 기록하고 넘어간다.
 UP_ATTEMPTS="${DEMO_UP_ATTEMPTS:-3}"
 UP_RETRY_SLEEP="${DEMO_UP_RETRY_SLEEP:-60}"
-retry_budget="${DEMO_UP_RETRY_BUDGET:-360}"
+
+# ---------------------------------------------------------------------------
+# 🔴 TASK-MONO-559 결함 B — 예산이 선착순이라 **목록 앞이 전부 먹었다**
+# ---------------------------------------------------------------------------
+# 위 문단의 "전역 예산" 판단 자체는 옳다(독립 재시도는 TimeoutStartSec 을 넘긴다).
+# 틀린 것은 **상한이 아니라 배분**이었다. 2026-08-19 라이브 실측:
+#
+#   iam 재시도 2/3 (남은 300s) → 3/3 (남은 240s)   ← iam 이 120s 를 먹고 실패
+#   wms 재시도 2/3 (남은 180s) → 성공
+#   fan 재시도 2/3 (남은 120s) → 3/3 (남은  60s)   ← fan 은 60s 를 남기고 통과
+#
+# `fan` 은 경계에서 **60s** 떨어져 있었다. 한 도메인만 더 느렸다면, 또는 `fan` 뒤의
+# `console` 이 한 번이라도 재시도가 필요했다면, 그 도메인은 **재시도를 단 한 번도 받지
+# 못한 채** 실패로 기록된다 — 자기가 느려서가 아니라 **앞이 먼저 썼기 때문에.**
+# `SET` 배열 순서가 곧 우선순위였고 iam 이 첫 번째다.
+#
+# 고침: **뒤에 남은 도메인 수만큼을 항상 예약해 둔다.** 어떤 도메인에게 재시도를 주기
+# 전에 `풀 - sleep >= sleep × (뒤에 남은 도메인 수)` 를 요구하면, 마지막 도메인까지
+# 각자 최소 1회가 보장된다. 앞 도메인이 1회에 성공하면 그 몫은 풀에 남아 **필요한
+# 도메인에게 흘러간다** — 하한을 주면서 유휴 용량을 버리지 않는다.
+#
+# 🔴 총 상한은 **상수가 아니라 도메인 수에서 파생**한다. 상수로 두면 프로필이 커질 때
+#    TimeoutStartSec 을 넘겨 systemd 가 SIGTERM 을 보낸다(위 문단이 경고한 그 모양).
+#
+#    산술 (`TimeoutStartSec=1200`, demo-stack.service):
+#      재시도 최대 총합 = 도메인 수 × UP_RETRY_SLEEP = 8 × 60 = **480s**
+#      기동 자체        = **540s**  ← 2026-08-19 실측(총 840s 중 sleep 300s 를 뺀 값)
+#      합               = 1020s ≤ 1200s   (여유 180s)
+#
+#    ⚠️ 540s 는 **관측 1건**이지 상수가 아니다. 그래서 이 산술을 주석에만 두지 않고
+#    `verify-demo-wrapper.sh` 가드가 `FULL` 크기로 다시 계산해 상한을 넘으면 FAIL 한다.
+#    프로필이 커지면 여기서가 아니라 **CI 에서** 먼저 빨개진다.
+n_domains=${#SET[@]}
+retry_pool="${DEMO_UP_RETRY_BUDGET:-$(( n_domains * UP_RETRY_SLEEP ))}"
+
+# 🔴 하한이 **산술적으로 불가능한** 경우를 조용히 넘기지 않는다.
+# 풀이 `도메인 수 × sleep` 보다 작으면 모두에게 1회씩 줄 수 없다. 그때 예약 규칙은
+# 편향을 없애는 게 아니라 **앞에서 뒤로 옮길 뿐**이다(앞 도메인이 예약을 못 채워 거절되고
+# 뒤가 받는다). 그 상태를 말없이 돌리면 다음 사람은 "공평해졌다" 고 믿는다.
+# 기본값은 파생되므로 이 경고는 **누가 명시적으로 낮춰 잡았을 때만** 나온다.
+if [ "$retry_pool" -lt $(( n_domains * UP_RETRY_SLEEP )) ]; then
+  echo "[demo] ⚠ 재시도 풀 ${retry_pool}s < 도메인 ${n_domains}개 × ${UP_RETRY_SLEEP}s = $(( n_domains * UP_RETRY_SLEEP ))s" >&2
+  echo "[demo]   ⇒ **도메인당 1회 하한을 보장할 수 없습니다.** 이 설정에서는 예약 규칙이 편향을" >&2
+  echo "[demo]     없애지 못하고 앞에서 뒤로 옮깁니다. DEMO_UP_RETRY_BUDGET 을 낮춰 잡았다면 의도한 것인지 확인하세요." >&2
+fi
 
 failed=()
+declare -A retries_used=()   # 도메인 → 실제로 쓴 재시도 횟수
+declare -A denied=()         # 도메인 → 예약 규칙이 막은 재시도 횟수 (AC-2 의 신호)
+dom_idx=0
 for p in "${SET[@]}"; do
+  dom_idx=$(( dom_idx + 1 ))
   mapfile -t ARGS < <(compose_args "$p")
   attempt=1
   while :; do
     if [ "$attempt" -eq 1 ]; then
       echo "[demo] up: $p  (${COMPOSE[$p]})"
     else
-      echo "[demo] up: $p  재시도 $attempt/$UP_ATTEMPTS (남은 재시도 예산 ${retry_budget}s)"
+      echo "[demo] up: $p  재시도 $attempt/$UP_ATTEMPTS (남은 재시도 예산 ${retry_pool}s)"
     fi
     # -f 를 ROOT 절대경로로 주면 project-directory 가 첫 파일의 디렉터리로 잡혀
     # 각 프로젝트의 .env 로딩과 상대 build: 컨텍스트가 올바르게 해소된다.
@@ -149,13 +197,25 @@ for p in "${SET[@]}"; do
       [ "$attempt" -eq 1 ] || echo "[demo] ✔ $p — 재시도 $attempt 회차에 기동 성공"
       break
     fi
-    if [ "$attempt" -ge "$UP_ATTEMPTS" ] || [ "$retry_budget" -lt "$UP_RETRY_SLEEP" ]; then
+    # 뒤에 남은 도메인 각자의 1회분을 예약한다 — 이것이 하한을 만든다.
+    reserve=$(( (n_domains - dom_idx) * UP_RETRY_SLEEP ))
+    if [ "$attempt" -ge "$UP_ATTEMPTS" ]; then
       failed+=("$p")
-      echo "[demo] ✖ $p 기동 실패 — 나머지 도메인은 계속 진행합니다(이 실패는 마지막에 비-0 로 보고됩니다)" >&2
+      echo "[demo] ✖ $p 기동 실패 — 재시도 $UP_ATTEMPTS 회를 다 썼습니다(나머지 도메인은 계속 진행합니다)" >&2
+      break
+    fi
+    if [ $(( retry_pool - UP_RETRY_SLEEP )) -lt "$reserve" ]; then
+      # 🔴 이 분기는 "안 떠서" 가 아니라 "예산 배분이 막아서" 다. 마지막 요약에서
+      #    반드시 구별해 보고한다(AC-2) — 두 사유가 섞이면 진단이 통째로 틀어진다.
+      denied[$p]=$(( ${denied[$p]:-0} + 1 ))
+      failed+=("$p")
+      echo "[demo] ✖ $p 기동 실패 — **재시도 예산이 남지 않아** 여기서 포기합니다" >&2
+      echo "[demo]   (풀 ${retry_pool}s · 뒤에 남은 $(( n_domains - dom_idx ))개 도메인 예약 ${reserve}s — 이 도메인이 느린 것이 아닙니다)" >&2
       break
     fi
     attempt=$(( attempt + 1 ))
-    retry_budget=$(( retry_budget - UP_RETRY_SLEEP ))
+    retry_pool=$(( retry_pool - UP_RETRY_SLEEP ))
+    retries_used[$p]=$(( ${retries_used[$p]:-0} + 1 ))
     echo "[demo] … $p 기동 실패 — ${UP_RETRY_SLEEP}s 뒤 다시 시도합니다(느린 의존성의 healthcheck 가 아직 안 붙었을 수 있습니다)" >&2
     sleep "$UP_RETRY_SLEEP"
   done
@@ -220,11 +280,84 @@ echo "[demo] 호스트: console.${DEMO_DOMAIN} / web.ecommerce.${DEMO_DOMAIN} / 
 # 🔵 시드 실패(`seed_rc`)도 여기 포함시킨다. 바로 위 주석은 이미 *"비-0 로 끝나되 기동은
 #    유지"* 라고 계약을 적어 두었는데 **코드는 그렇게 하지 않고 있었다**(마지막 echo 의
 #    종료코드 0 으로 끝났다). 주석과 코드가 어긋나 있었고, 어긋난 쪽은 코드였다.
-final_rc=0
+# -----------------------------------------------------------------------------
+# 🔴 TASK-MONO-559 결함 A — 판정을 한 순간에 찍고 다시는 안 봤다
+# -----------------------------------------------------------------------------
+# `failed` 는 compose 가 **포기한 시각**의 기록이다. 그런데 그 포기는 손상이 아니라
+# 레이스인 경우가 많다(위 § AC-0 주석: kafka healthcheck 창이 열려 있는 동안 compose 가
+# 먼저 포기한다). 2026-08-19 실측이 그것을 그대로 보여줬다:
+#
+#   11:57:40  [demo] ✖ iam 기동 실패        → 12:07:17 exit 1 → 유닛 failed
+#   같은 시각 /domains: iam {"state":"up","healthy":15,"total":15}
+#   docker inspect iam-kafka: healthy · **restarts=0**
+#
+# `restarts=0` 이 핵심이다 — kafka 는 죽지도 되살아나지도 않았다. 즉 **스택이 완전히
+# 정상인 채로 유닛이 `failed`** 였다. 그래서 여기서 **다시 잰다.**
+#
+# 🔴 삼키는 것과 재는 것은 다르다. `|| true` 가 아니다 — 재측정이고, 진짜로 안 뜬
+#    도메인은 **여전히 비-0** 으로 끝난다.
+# 🔴 판정 술어는 새로 쓰지 않고 `demo-status.sh` 를 쓴다(TASK-MONO-551 이 고친 그 술어).
+#    두 번째 술어를 만들면 둘이 갈라지고, 갈라진 순간 어느 쪽이 맞는지 아무도 모른다.
+# 🔴 SSM 헬스 스냅샷은 쓰지 않는다 — 그건 `demo-status` 타이머가 쓰는 값이고 부팅 종료
+#    시점에 최신이라는 보장이 없다(551 이 `health_stale` 을 만든 이유가 그것이다).
+late=(); still=(); undecidable=()
 if [ ${#failed[@]} -gt 0 ]; then
-  final_rc=1
-  echo "[demo] ✖ 기동 실패 도메인: ${failed[*]}" >&2
+  # 🔴🔴 재측정에는 **생존 프로브**가 먼저 필요하다.
+  # `demo-status.sh` 는 설계상 도커가 없어도 에러를 내지 않고 **전 도메인 `down`** 을
+  # 돌려준다(그 파일 헤더가 그렇게 적어 뒀고, 가드로 쓰기 위한 의도적 선택이다).
+  # 그래서 그 출력만 보면 *"도커가 죽어서 못 쟀다"* 와 *"정말 안 떴다"* 가
+  # **바이트 단위로 구별 불가**다 — 계측 실패가 도메인 판정으로 번역된다.
+  # rc 는 어차피 비-0 이라 넘어가고 싶어지지만, 그러면 다음 사람은 "안 떴다" 는
+  # **틀린 사유**를 물려받는다. 그래서 도커에게 한 번 직접 묻는다.
+  docker_alive=1
+  docker ps -a -q >/dev/null 2>&1 || docker_alive=0
+  status_json=""
+  [ "$docker_alive" = 1 ] && { status_json="$(bash "$HERE/demo-status.sh" 2>/dev/null)" || status_json=""; }
+  for p in "${failed[@]}"; do
+    if [ "$p" = "relay" ]; then still+=("$p"); continue; fi   # 릴레이는 도메인이 아니다
+    if [ "$docker_alive" != 1 ]; then undecidable+=("$p"); continue; fi
+    frag="$(printf '%s' "$status_json" | grep -o "\"$p\":{[^}]*}" || true)"
+    st="$(printf '%s' "$frag" | sed -n 's/.*"state":"\([a-z]*\)".*/\1/p')"
+    case "$st" in
+      up)           late+=("$p") ;;
+      down|partial) still+=("$p") ;;
+      # 🔴 (4) 재측정이 이 도메인에 대해 아무 말도 안 했다. 이걸 빼면 "안 뜬 것"이
+      #    "늦게 수렴"으로 오분류되어 **영구 초록**이 된다. 판정 불가는 판정 불가다.
+      *)            undecidable+=("$p") ;;
+    esac
+  done
 fi
+
+final_rc=0
+if [ ${#still[@]} -gt 0 ]; then
+  final_rc=1
+  echo "[demo] ✖ 기동 실패 도메인: ${still[*]}" >&2
+  for p in "${still[@]}"; do
+    echo "[demo]   $p — 받은 재시도 ${retries_used[$p]:-0}회 / 예산이 막은 재시도 ${denied[$p]:-0}회" >&2
+  done
+fi
+if [ ${#undecidable[@]} -gt 0 ]; then
+  final_rc=1
+  echo "[demo] ✖ 판정 불가 도메인: ${undecidable[*]} — 재측정이 상태를 돌려주지 않았습니다" >&2
+  echo "[demo]   (도커가 응답하지 않았거나 demo-status.sh 가 실패했습니다. '늦게 수렴' 으로 읽지 않습니다.)" >&2
+fi
+if [ ${#late[@]} -gt 0 ]; then
+  # 🔵 초록이지만 침묵하지 않는다 — compose 는 포기했는데 스택은 수렴했다는 사실 자체가
+  #    healthcheck 창이 빠듯하다는 신호다.
+  echo "[demo] ◑ 늦게 수렴: ${late[*]} — 기동 중에는 실패로 기록됐으나 재측정에서 up 입니다(실패로 세지 않습니다)"
+fi
+
+# 🔴 AC-2 — 예산 고갈은 **AC-1 의 재측정 결과와 무관하게** 남긴다.
+#    A 의 고침이 B 의 유일한 증상을 지우기 때문이다: 예산이 없어 재시도를 못 받은
+#    도메인도 어차피 나중에 수렴하므로 위에서 "늦게 수렴" 초록이 되고, 그러면 운영자는
+#    배분이 빠듯했다는 사실을 **알 방법이 없다.**
+if [ ${#denied[@]} -gt 0 ]; then
+  for p in "${!denied[@]}"; do
+    echo "[demo] ⚠ 재시도 배분: $p 는 예산이 없어 재시도 ${denied[$p]}회를 못 받았습니다(느려서가 아닙니다)" >&2
+  done
+  echo "[demo]   ⇒ 재시도 총 상한 = 도메인 ${n_domains}개 × ${UP_RETRY_SLEEP}s. 이 값이 빠듯하면 UP_RETRY_SLEEP 이나 healthcheck 창을 보세요." >&2
+fi
+
 [ "$drift_rc" -eq 0 ] || final_rc=1
 [ "$seed_rc"  -eq 0 ] || final_rc=1
 exit "$final_rc"
