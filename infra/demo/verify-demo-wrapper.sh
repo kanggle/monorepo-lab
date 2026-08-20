@@ -1962,6 +1962,189 @@ ok "issuer/JWKS 주입 ${z12_seen}건 전부 데모 도메인 파생 또는 컨�
 rm -f "$z12_rows"
 
 # ---------------------------------------------------------------------------
+echo "[verify] (z13) 부팅 판정이 스냅샷이 아니라 재측정인가 — 그리고 예산 고갈이 보이는가"
+# ---------------------------------------------------------------------------
+# TASK-MONO-559. 2026-08-19 라이브: `demo-stack.service` 가 **스택이 완전히 정상인 채로**
+# `failed` 였다.
+#
+#   11:57:40  [demo] ✖ iam 기동 실패        → 12:07:17 exit 1 → 유닛 failed
+#   같은 시각 /domains: iam {"state":"up","healthy":15,"total":15}
+#   docker inspect iam-kafka: healthy · **restarts=0**
+#
+# `restarts=0` 이 핵심이다 — kafka 는 죽지도 되살아나지도 않았다. compose 가 healthcheck
+# 창이 열려 있는 동안 먼저 포기했을 뿐이다. `failed` 는 **포기한 시각의 스냅샷**이고,
+# 그 뒤로 아무도 다시 보지 않았다.
+#
+# 🔴 그리고 A 를 고치면 B 가 영원히 안 보인다. A 의 고침("끝에서 다시 재고 수렴했으면
+#    초록")은 **예산이 없어 재시도를 못 받은 도메인도 똑같이 초록으로** 만든다 — 어차피
+#    나중에 수렴하기 때문이다. 그래서 이 가드는 둘을 **같이** 본다.
+#
+# 네 칸을 모두 본다. 하나라도 빼면 다음 구현과 구별되지 않는다:
+#   (1) 전부 정상          → rc=0 · "늦게 수렴" 0건      ← 대조군(빨간 가드는 곧 꺼진다)
+#   (2) 늦게 수렴 (bite)   → rc=0 · 그 도메인 **이름이 찍힘**
+#   (3) 끝내 안 뜸 (대조군)→ rc≠0                        ← 삼킴 금지
+#   (4) 재측정 실패        → rc≠0 · **"판정 불가" 로 구별**  ← 이걸 빼면 (3)이 (2)로 오분류
+#   (5) 예산 고갈 + 수렴   → rc=0 이면서 **예산 신호가 남는가**  ← A 의 고침이 B 를 지우는 자리
+#
+# 🔴🔴 (4)를 빼면 왜 치명적인가: `demo-status.sh` 는 **설계상** 도커가 없어도 에러가
+#    아니라 전 도메인 `down` 을 돌려준다. 그 출력만 보면 *"못 쟀다"* 와 *"안 떴다"* 가
+#    구별 불가라, 계측 실패가 **도메인 판정으로 번역**된다(rc 는 어차피 비-0 이라 그냥
+#    넘어가고 싶어지지만, 그러면 다음 사람이 틀린 사유를 물려받는다).
+#
+# docker 는 대역으로 바꾼다 — (z4) 와 같은 이유다. 여기서 통제해야 하는 것은 정확히
+# 두 개다: compose 의 종료코드, 그리고 **재측정이 보는 컨테이너 상태**.
+z13_tmp="$(mktemp -d)"
+mkdir -p "$z13_tmp/infra" "$z13_tmp/bin"
+cp -r "$ROOT/infra/demo" "$z13_tmp/infra/demo"
+if [ -d "$ROOT/infra/traefik" ]; then cp -r "$ROOT/infra/traefik" "$z13_tmp/infra/traefik"; fi
+for z13_d in "$ROOT"/projects/*/; do
+  z13_n="$(basename "$z13_d")"
+  mkdir -p "$z13_tmp/projects/$z13_n"
+  for z13_f in "$z13_d"*.yml "$z13_d".env.example; do
+    if [ -f "$z13_f" ]; then cp "$z13_f" "$z13_tmp/projects/$z13_n/"; fi
+  done
+done
+if ! bash "$z13_tmp/infra/demo/provision-demo-env.sh" >/dev/null 2>&1; then
+  rm -rf "$z13_tmp"
+  fail "(z13) 임시 트리 .env 프로비저닝 실패 — 이후 판정이 env-preflight 에 막혀 무효가 됩니다."
+fi
+
+# 대역: `compose … -p <FAILDOM> … up -d` 만 비-0.
+#       `ps -a --filter label=…project=<slug>` 는 RECHECK 에 따라 답을 바꾼다.
+#       `ps -a -q`(생존 프로브)는 DOCKER_DEAD 일 때만 비-0.
+cat > "$z13_tmp/bin/docker" <<'Z13SHIM'
+#!/bin/sh
+if [ "$1" = "compose" ]; then
+  shift; p=""
+  while [ $# -gt 0 ]; do
+    case "$1" in -p) p="$2"; shift 2 ;; *) shift ;; esac
+  done
+  if [ "$p" = "${FAILDOM:-}" ]; then
+    echo "dependency failed to start: container ${p}-kafka is unhealthy" >&2
+    exit 1
+  fi
+  exit 0
+fi
+if [ "$1" = "ps" ]; then
+  [ "${DOCKER_DEAD:-0}" = "1" ] && { echo "cannot connect to the docker daemon" >&2; exit 1; }
+  # 생존 프로브(`ps -a -q`) — 여기까지 왔으면 살아 있다.
+  case " $* " in *" -q "*) echo "deadbeef"; exit 0 ;; esac
+  slug=""
+  for a in "$@"; do
+    case "$a" in label=com.docker.compose.project=*) slug="${a##*=}" ;; esac
+  done
+  if [ "$slug" = "${FAILDOM:-}" ] && [ "${RECHECK:-up}" = "down" ]; then
+    exit 0            # 컨테이너 0개 ⇒ demo-status.sh 가 state=down 으로 읽는다
+  fi
+  echo "running|Up 3 minutes (healthy)"
+  exit 0
+fi
+exit 0
+Z13SHIM
+chmod +x "$z13_tmp/bin/docker"
+
+z13_run() {  # $1=FAILDOM  $2=RECHECK(up|down)  $3=DOCKER_DEAD(0|1) → rc 를 echo
+  local rc=0
+  ( cd "$z13_tmp" && PATH="$z13_tmp/bin:$PATH" \
+      FAILDOM="$1" RECHECK="$2" DOCKER_DEAD="$3" \
+      DEMO_SEED=0 DEMO_DOMAIN=local DEMO_UP_ATTEMPTS=2 DEMO_UP_RETRY_SLEEP=1 \
+      bash infra/demo/demo-up.sh iam wms console ) > "$z13_tmp/run.log" 2>&1 || rc=$?
+  echo "$rc"
+}
+z13_die() { rm -rf "$z13_tmp"; fail "$@"; }
+
+# (1) 대조군 — 아무도 실패하지 않으면 초록이고, "늦게 수렴" 은 0건이어야 한다.
+z13_rc1="$(z13_run '' up 0)"
+z13_log1="$(cat "$z13_tmp/run.log")"
+[ "$z13_rc1" = "0" ] || z13_die "(z13) 대조군 실패 — 아무 도메인도 실패하지 않았는데 rc=$z13_rc1 입니다."\
+  $'\n'"→ 정상 부팅이 빨간 가드는 곧 꺼지고, 꺼진 가드의 skip 은 초록으로 보고됩니다."
+printf '%s\n' "$z13_log1" | grep -q '^\[demo\] ◑ 늦게 수렴:' \
+  && z13_die "(z13) 대조군에서 '늦게 수렴' 이 보고됐습니다 — 아무도 실패하지 않았는데 재측정이 뭔가를 만들어 냈습니다."
+
+# (2) bite — wms 의 up 은 실패하지만 재측정에서는 healthy. 초록이되 **이름이 찍혀야** 한다.
+z13_rc2="$(z13_run wms up 0)"
+z13_log2="$(cat "$z13_tmp/run.log")"
+[ "$z13_rc2" = "0" ] || z13_die "(z13) 늦게 수렴한 도메인이 여전히 실패로 끝났습니다 (rc=$z13_rc2)."\
+  $'\n'"→ 이것이 이 티켓의 결함 A 다: compose 가 포기한 **시각의 스냅샷**을 종료코드로 쓰고 있습니다."\
+  $'\n'"→ 2026-08-19 실측에서 iam 은 15/15 healthy · kafka restarts=0 인데 유닛이 failed 였습니다."\
+  $'\n'"→ 마지막에 demo-status.sh 로 **다시 재고**, 수렴했으면 종료코드에서 빼세요(삼키는 것이 아니라 재는 것)."
+printf '%s\n' "$z13_log2" | grep -q 'wms' \
+  || z13_die "(z13) 늦게 수렴한 도메인의 **이름이 어디에도 없습니다** — 초록이지만 무슨 일이 있었는지 알 수 없습니다."
+
+# (3) 대조군 — 끝내 안 뜬 도메인은 여전히 비-0 이어야 한다. 재측정은 삼킴이 아니다.
+z13_rc3="$(z13_run wms down 0)"
+z13_log3="$(cat "$z13_tmp/run.log")"
+[ "$z13_rc3" != "0" ] && [ -n "$z13_rc3" ] \
+  || z13_die "(z13) 끝내 안 뜬 도메인이 있는데 **성공(rc=0)** 으로 끝났습니다."\
+  $'\n'"→ 재측정을 \`|| true\` 처럼 쓴 것입니다. 그러면 유닛이 항상 초록이 되고, 이 저장소가"\
+  $'\n'"   반복해서 당한 *\"아무것도 안 보면서 초록\"* 이 됩니다(재측정 ≠ 삼킴)."
+printf '%s\n' "$z13_log3" | grep -q '^\[demo\] ◑ 늦게 수렴:' \
+  && z13_die "(z13) 끝내 안 뜬 도메인이 '늦게 수렴' 으로 보고됐습니다 — (3)이 (2)로 오분류됩니다."
+
+# (4) 재측정 자체가 실패 — rc≠0 이되 사유가 **'판정 불가'** 로 구별돼야 한다.
+z13_rc4="$(z13_run wms up 1)"
+z13_log4="$(cat "$z13_tmp/run.log")"
+[ "$z13_rc4" != "0" ] \
+  || z13_die "(z13) 재측정이 실패했는데 성공으로 끝났습니다 — 못 잰 것을 통과로 읽었습니다."
+printf '%s\n' "$z13_log4" | grep -q '^\[demo\] ✖ 판정 불가 도메인:' \
+  || z13_die "(z13) 재측정 실패가 **'판정 불가' 로 구별되지 않습니다.**"\
+  $'\n'"→ demo-status.sh 는 설계상 도커가 없어도 에러가 아니라 전 도메인 \`down\` 을 돌려줍니다."\
+  $'\n'"→ 그래서 그 출력만 보면 '못 쟀다' 와 '안 떴다' 가 **구별 불가**이고, 계측 실패가"\
+  $'\n'"   도메인 판정으로 번역됩니다. 재측정 앞에 도커 생존 프로브를 두세요."
+printf '%s\n' "$z13_log4" | grep -q '^\[demo\] ◑ 늦게 수렴:' \
+  && z13_die "(z13) 재측정이 실패했는데 '늦게 수렴' 으로 보고됐습니다 — 못 잰 것을 수렴으로 읽었습니다."
+
+# (5) 🔴🔴 AC-2 의 핵심 — **A 의 고침이 B 의 유일한 증상을 지우지 않는가.**
+# 예산이 없어 재시도를 못 받은 도메인도 어차피 나중에 수렴하므로, (2)의 고침만 있으면
+# 그 도메인은 "늦게 수렴" 초록이 되고 **운영자는 배분이 빠듯했다는 사실을 알 방법이 없다.**
+# 그래서 예산을 일부러 굶긴 판에서 **두 신호가 함께** 나오는지 본다: 초록이면서도
+# 예산 고갈이 이름과 함께 남아야 한다.
+z13_starve() {
+  local rc=0
+  ( cd "$z13_tmp" && PATH="$z13_tmp/bin:$PATH" \
+      FAILDOM="$1" RECHECK=up DOCKER_DEAD=0 \
+      DEMO_SEED=0 DEMO_DOMAIN=local DEMO_UP_ATTEMPTS=3 DEMO_UP_RETRY_SLEEP=1 \
+      DEMO_UP_RETRY_BUDGET=1 \
+      bash infra/demo/demo-up.sh iam wms console ) > "$z13_tmp/run.log" 2>&1 || rc=$?
+  echo "$rc"
+}
+z13_rc5="$(z13_starve iam)"
+z13_log5="$(cat "$z13_tmp/run.log")"
+printf '%s\n' "$z13_log5" | grep -q '재시도 예산이 남지 않아' \
+  || z13_die "(z13) 예산을 굶겼는데 **예산 때문에 포기했다는 말이 없습니다.**"\
+  $'\n'"→ 그러면 '안 떠서 실패' 와 '예산이 없어서 포기' 가 구별되지 않습니다."
+printf '%s\n' "$z13_log5" | grep -q '^\[demo\] ⚠ 재시도 배분:' \
+  || z13_die "(z13) 예산 고갈이 **최종 요약에 남지 않습니다** — 이것이 이 티켓의 결함 B 입니다."\
+  $'\n'"→ AC-1 의 재측정이 그 도메인을 '늦게 수렴' 초록으로 만들면, 예산이 빠듯했다는 사실은"\
+  $'\n'"   **어디에도 남지 않고 사라집니다**(A 의 고침이 B 의 유일한 증상을 지운다)."\
+  $'\n'"→ 예산 고갈은 재측정 결과와 **무관하게** 보고하세요."
+printf '%s\n' "$z13_log5" | grep -q '^\[demo\] ◑ 늦게 수렴:' \
+  || z13_die "(z13) (5)번 칸의 전제가 성립하지 않습니다 — 굶긴 도메인이 '늦게 수렴' 으로 잡히지 않았습니다."\
+  $'\n'"→ 이 칸은 **초록인 채로도** 예산 신호가 남는지를 묻습니다. 전제가 깨지면 판정이 무의미합니다."
+[ "$z13_rc5" = "0" ] \
+  || z13_die "(z13) (5)번 칸이 rc=$z13_rc5 로 끝났습니다 — 수렴했으므로 초록이어야 하고, 그 초록 위에서 예산 신호가 남는지가 이 칸의 질문입니다."
+
+# (6) AC-2 — 재시도 총 상한이 TimeoutStartSec 아래인가. 🔴 산술을 주석에 두지 않고 여기서 다시 센다.
+#     `FULL` 이 커지면 여기서 빨개진다 — 데모 호스트에서 systemd 가 SIGTERM 을 보내기 전에.
+z13_unit="$ROOT/infra/demo/demo-stack.service"
+z13_timeout="$(sed -n 's/^TimeoutStartSec=\([0-9][0-9]*\).*/\1/p' "$z13_unit" | head -1)"
+[ -n "$z13_timeout" ] || z13_die "(z13) demo-stack.service 에서 TimeoutStartSec 을 못 읽었습니다 — 상한 계산을 할 수 없습니다."
+z13_sleep="$(sed -n 's/^UP_RETRY_SLEEP="\${DEMO_UP_RETRY_SLEEP:-\([0-9][0-9]*\)}".*/\1/p' "$ROOT/infra/demo/demo-up.sh" | head -1)"
+[ -n "$z13_sleep" ] || z13_die "(z13) demo-up.sh 에서 UP_RETRY_SLEEP 기본값을 못 읽었습니다."
+# 기동 자체에 드는 시간 — 2026-08-19 실측(총 840s 중 sleep 300s 를 뺀 540s).
+# 🔵 이것은 **관측 1건**이지 상수가 아니다. 그래서 여유를 넉넉히 두고, 넘으면 FAIL 한다.
+z13_base=540
+z13_worst=$(( ${#FULL[@]} * z13_sleep + z13_base ))
+[ "$z13_worst" -le "$z13_timeout" ] \
+  || z13_die "(z13) 재시도 최대 총합이 TimeoutStartSec 을 넘습니다: ${#FULL[@]}도메인 × ${z13_sleep}s + 기동 ${z13_base}s = ${z13_worst}s > ${z13_timeout}s"\
+  $'\n'"→ 이 상태로 데모가 느리게 뜨면 systemd 가 SIGTERM 을 보내고, '부분 실패를 견디는 고침' 이"\
+  $'\n'"   오히려 **전체를 죽입니다**(demo-up.sh 의 예산 문단이 경고한 그 모양)."\
+  $'\n'"→ UP_RETRY_SLEEP 을 줄이거나 TimeoutStartSec 을 올리세요. 하한을 상수로 되돌리지는 마세요."
+
+rm -rf "$z13_tmp"
+ok "부팅 판정이 재측정이다 — 정상 rc=0 · 늦게수렴 rc=0(이름 찍힘) · 미기동 rc=$z13_rc3 · 재측정실패 rc=$z13_rc4(판정 불가) · 재시도 상한 ${z13_worst}s ≤ ${z13_timeout}s"
+
+# ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
