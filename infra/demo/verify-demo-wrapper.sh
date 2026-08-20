@@ -2145,6 +2145,168 @@ rm -rf "$z13_tmp"
 ok "부팅 판정이 재측정이다 — 정상 rc=0 · 늦게수렴 rc=0(이름 찍힘) · 미기동 rc=$z13_rc3 · 재측정실패 rc=$z13_rc4(판정 불가) · 재시도 상한 ${z13_worst}s ≤ ${z13_timeout}s"
 
 # ---------------------------------------------------------------------------
+echo "[verify] (z14) 방문자 화면 링크가 전부 있고, 안 뜬 화면은 열리지 않는가"
+# ---------------------------------------------------------------------------
+# TASK-MONO-560. 론처에 링크가 **하나뿐**이었고 목적지는 콘솔이었다. 나머지 두 화면
+# (이커머스 스토어·팬 플랫폼)은 **존재를 알 방법이 없었다** — 소유자 본인이 자기 데모에서
+# 그 둘을 못 찾은 것이 발견 경로다.
+#
+# 🔴 그러나 "링크가 3개 있는가" 만 물으면 안 된다. 부팅에 약 10분이 걸리고 그 창에서 각
+#    화면은 404 이며, 안 뜬 화면에 링크를 주면 방문자는 **"고장났다"** 로 읽는다.
+#    그래서 이 가드는 **판정을 실행해서** 네 칸을 본다(문자열 grep 이 아니다 —
+#    grep 술어는 자기 문서에 걸린다. 이 저장소가 (z12)에서 그 함정을 밟았다).
+#
+#   (1) 도메인 up        → 링크 활성 + href 가 demoHost() 파생
+#   (2) down/unknown     → **비활성**, href 자체가 없다 (bite)
+#   (3) partial          → 명시된 결정대로 **비활성**
+#   (4) health_stale     → state 가 up 이어도 **비활성** (551 이 만든 필드)
+#
+# 🔵 (4)를 빼지 마라. stale 일 때 up 을 믿으면 **꺼진 스택의 링크를 초록으로** 준다.
+z14_site="$ROOT/infra/demo/aws/site/index.html"
+[ -f "$z14_site" ] || fail "(z14) index.html 이 없습니다: $z14_site"
+
+# 마크업에서 화면 목록을 **인벤토리로** 뽑는다 — 손으로 나열하면 그 순간 드리프트가 시작된다.
+z14_rows="$(sed -n 's/.*data-surface[[:space:]]*data-domain="\([a-z-]*\)"[[:space:]]*data-host="\([a-z.-]*\)".*/\1|\2/p' "$z14_site")"
+[ -n "$z14_rows" ] || fail "(z14) index.html 에서 data-surface 링크를 한 개도 뽑지 못했습니다"\
+  $'\n'"→ 0건은 '링크가 없다' 가 아니라 **추출식이 깨진 것**입니다(마크업이 바뀌었다면 이 술어도 함께 고치세요)."
+
+# 🔴 추출이 **조용히 한 줄을 흘리지 않았는지** 본다. 속성 하나만 오타가 나도 위 정규식은
+#    그 행을 통째로 빠뜨리고, 그러면 이 가드는 "링크 2개" 를 정상으로 보고한다.
+# 🔵 `<a ...>` 만 센다 — JS 의 querySelectorAll("[data-surface]") 도 같은 낱말을 담는다
+#    (그것까지 세면 이 대조가 늘 1 어긋나고, 그 어긋남은 결함처럼 보인다).
+z14_loose="$(grep -c '<a [^>]*data-surface' "$z14_site" || true)"
+z14_got="$(printf '%s\n' "$z14_rows" | grep -c . || true)"
+[ "$z14_loose" = "$z14_got" ] || fail "(z14) data-surface 는 ${z14_loose}개인데 속성까지 파싱된 것은 ${z14_got}개입니다"\
+  $'\n'"→ 한 행의 data-domain/data-host 가 예상과 다른 모양입니다. 그 행은 판정에서 **통째로 빠집니다**."
+
+# 🔴 화면 수 하한. 2026-08-20 에 Traefik Host 규칙을 전수로 세어 확정한 값이다:
+#    브라우저 화면 3(console · web.ecommerce · web.fan-platform) · API 게이트웨이 7 · 관측 도구 4.
+#    admin.ecommerce 는 화면이 아니다 — IAM 시드에 콜백이 남아 있으나 그 앱은 제거됐고
+#    (TASK-MONO-259) 운영자 UI 는 platform-console 로 갔다(시드 회수 마이그레이션만 미뤄져 있다).
+#    화면이 늘면 이 숫자를 **올려야** 한다 — 그 순간이 링크를 추가할 자리다.
+z14_floor=3
+[ "$z14_got" -ge "$z14_floor" ] || fail "(z14) 방문자 화면 링크가 ${z14_got}개뿐입니다(하한 ${z14_floor})"\
+  $'\n'"→ 링크가 빠진 화면은 **존재를 알 방법이 없습니다**. 이 티켓이 고친 결함이 정확히 그것입니다."
+
+# 각 링크의 도메인이 실재하는 도메인인가 — projects.sh 가 단일 출처다(하드코딩 금지).
+while IFS='|' read -r z14_d z14_h; do
+  [ -n "$z14_d" ] || continue
+  [ -n "${COMPOSE[$z14_d]+x}" ] \
+    || fail "(z14) 링크가 존재하지 않는 도메인을 가리킵니다: '$z14_d' (유효: ${!COMPOSE[*]})"\
+      $'\n'"→ 그 링크는 영원히 비활성이 됩니다 — 헬스 스냅샷에 그 키가 없기 때문입니다."
+done <<< "$z14_rows"
+
+# 🔴 하드코딩된 sslip 호스트가 있으면 AC-3 회귀다. 단 GUARD-T-ANCHOR 줄은 정본이므로 제외.
+# 🔴🔴 주석을 **먼저 걷어낸다.** 이 페이지는 sslip 표기 함정(MONO-389)을 주석으로 길게
+#    설명하고 있어서 순진한 grep 은 **자기 문서에 걸린다** — 판정 축과 검색 축이 같은
+#    매체가 되는 그 함정이다(이 저장소가 반복해서 밟는다). `//` 줄주석과 `<!-- -->`
+#    블록을 지운 뒤 본문만 본다.
+z14_code="$(awk '
+  /<!--/ { inc = 1 }
+  inc    { if (/-->/) inc = 0; next }
+  /^[[:space:]]*\/\// { next }
+  { print FNR "\t" $0 }
+' "$z14_site")"
+# 대조군 — 걷어내기가 본문까지 먹으면 이 술어는 **빈 입력**을 보게 되고 늘 통과한다.
+printf '%s\n' "$z14_code" | grep -q 'GUARD-T-ANCHOR' \
+  || fail "(z14) 주석 제거가 본문까지 지웠습니다 — GUARD-T-ANCHOR 줄이 남아 있지 않습니다."\
+    $'\n'"→ 빈 입력에 대고 grep 하면 언제나 통과합니다. 그 통과는 아무것도 증명하지 않습니다."
+z14_hard="$(printf '%s\n' "$z14_code" | grep 'sslip\.io' | grep -v 'GUARD-T-ANCHOR' || true)"
+[ -z "$z14_hard" ] || fail "(z14) index.html 본문에 sslip 호스트가 직접 적혀 있습니다:"$'\n'"$z14_hard"\
+  $'\n'"→ 재기동마다 IP 가 바뀝니다. 한 곳이라도 직접 조립하면 **그 링크만** 죽고 나머지가"\
+  $'\n'"   멀쩡해서 원인이 안 보입니다. 전부 demoHost() 를 통과시키세요."
+
+# 판정 로직을 **실행한다.** 앵커가 없으면 통과가 아니라 실패다(못 읽었으면 모르는 것이다).
+z14_b="$(grep -n 'GUARD-Z14-BEGIN' "$z14_site" | head -1 | cut -d: -f1)"
+z14_e="$(grep -n 'GUARD-Z14-END' "$z14_site" | head -1 | cut -d: -f1)"
+{ [ -n "$z14_b" ] && [ -n "$z14_e" ] && [ "$z14_e" -gt "$z14_b" ]; } \
+  || fail "(z14) index.html 에서 GUARD-Z14 앵커 구간을 찾지 못했습니다 — **가드가 공허합니다.**"
+z14_anchor="$(sed -n 's/^[[:space:]]*\(const demoHost =.*\); \/\/ GUARD-T-ANCHOR.*/\1/p' "$z14_site")"
+[ -n "$z14_anchor" ] || fail "(z14) GUARD-T-ANCHOR 를 찾지 못했습니다 — demoHost 를 실행할 수 없습니다."
+
+z14_js="$(mktemp)"
+{
+  printf '%s;\n' "$z14_anchor"
+  sed -n "$(( z14_b + 1 )),$(( z14_e - 1 ))p" "$z14_site"
+  cat <<'Z14DRV'
+// --- 최소 DOM 대역 ---------------------------------------------------------
+const _msg = { textContent: "" };
+function $(id) { return _msg; }
+function mkA(domain, host) {
+  return { dataset: { domain, host }, _cls: new Set(), href: undefined,
+           classList: { toggle(c, on) { on ? this._o._cls.add(c) : this._o._cls.delete(c); } },
+           removeAttribute(k) { delete this[k]; } };
+}
+// 🔴 앵커 목록은 **마크업에서 온다**(Z14_ROWS 로 주입). 여기 하드코딩하면 드라이버의
+//    모집단이 트리와 어긋나도 모르고, 링크를 지워도 가드가 조용히 통과한다 —
+//    실제로 그렇게 통과했다(이 가드를 쓰면서 그 자리에서 물렸다).
+const _as = process.env.Z14_ROWS.trim().split("\n").map((l) => l.split("|"))
+  .map(([d,h]) => { const a = mkA(d,h); a.classList._o = a; return a; });
+global.document = { querySelectorAll: () => _as };
+function run(ip, snap, stale) {
+  lastIp = ip; lastSnap = snap; lastStale = stale;
+  renderSurfaces();
+  return _as.map(a => ({ d: a.dataset.domain, off: a._cls.has("off"), href: a.href }));
+}
+const IP = "1.2.3.4";
+const out = {
+  up:      run(IP, { console:{state:"up"}, ecommerce:{state:"up"}, fan:{state:"up"} }, false),
+  down:    run(IP, { console:{state:"down"}, ecommerce:{state:"unknown"}, fan:{state:"up"} }, false),
+  partial: run(IP, { console:{state:"partial"}, ecommerce:{state:"up"}, fan:{state:"up"} }, false),
+  stale:   run(IP, { console:{state:"up"}, ecommerce:{state:"up"}, fan:{state:"up"} }, true),
+};
+const say = (k) => out[k].map(r => `${r.d}:${r.off ? "off" : "on"}:${r.href || "-"}`).join(" ");
+console.log("UP|" + say("up"));
+console.log("DOWN|" + say("down"));
+console.log("PARTIAL|" + say("partial"));
+console.log("STALE|" + say("stale"));
+Z14DRV
+} > "$z14_js"
+
+z14_out="$(Z14_ROWS="$z14_rows" node "$z14_js" 2>&1)" || { rm -f "$z14_js"; fail "(z14) 링크 판정 실행 실패:"$'\n'"$z14_out"; }
+rm -f "$z14_js"
+z14_line() { printf '%s\n' "$z14_out" | sed -n "s/^$1|//p"; }
+
+# (1) 전부 up → 셋 다 활성이고 href 가 demoHost() 파생이어야 한다.
+z14_up="$(z14_line UP)"
+case "$z14_up" in
+  *"console:on:http://console.1-2-3-4.sslip.io/"*) : ;;
+  *) fail "(z14) (1) 도메인이 up 인데 콘솔 링크가 열리지 않거나 주소가 틀립니다: $z14_up" ;;
+esac
+case "$z14_up" in
+  *"ecommerce:on:http://web.ecommerce.1-2-3-4.sslip.io/"*"fan:on:http://web.fan-platform.1-2-3-4.sslip.io/"*) : ;;
+  *) fail "(z14) (1) 이커머스/팬 화면 링크가 없거나 주소가 틀립니다: $z14_up"\
+      $'\n'"→ 이 티켓의 본체입니다: 방문자 화면 셋 중 하나만 링크돼 있었습니다." ;;
+esac
+
+# (2) bite — down/unknown 은 비활성이고 href 가 **아예 없어야** 한다.
+z14_down="$(z14_line DOWN)"
+case "$z14_down" in
+  *"console:off:-"*"ecommerce:off:-"*"fan:on:"*) : ;;
+  *) fail "(z14) (2) 안 뜬 화면이 열려 있습니다: $z14_down"\
+      $'\n'"→ 부팅 창에서 그 화면은 404 이고, 방문자는 그것을 **\"고장났다\"** 로 읽습니다."\
+      $'\n'"→ 비활성은 보기만 흐린 것으로는 부족합니다 — href 를 제거하세요(클릭도 새 탭도 없어야 합니다)." ;;
+esac
+
+# (3) partial — 명시된 결정(비활성)대로 동작하는가.
+case "$(z14_line PARTIAL)" in
+  *"console:off:-"*) : ;;
+  *) fail "(z14) (3) partial 도메인의 링크가 열려 있습니다: $(z14_line PARTIAL)"\
+      $'\n'"→ partial 은 그 도메인의 일부가 unhealthy 라는 뜻이고, 웹 표면이 그중 하나인지"\
+      $'\n'"   이 페이지는 알 수 없습니다. 결정은 **비활성**이며 index.html 에 근거가 적혀 있습니다." ;;
+esac
+
+# (4) stale — state 가 전부 up 이어도 비활성이어야 한다.
+case "$(z14_line STALE)" in
+  *"console:off:-"*"ecommerce:off:-"*"fan:off:-"*) : ;;
+  *) fail "(z14) (4) 헬스가 stale 인데 링크가 열려 있습니다: $(z14_line STALE)"\
+      $'\n'"→ health_stale 은 TASK-MONO-551 이 만든 필드이고, 참일 때 up 을 믿으면"\
+      $'\n'"   **꺼진 스택의 링크를 초록으로** 줍니다(실측 당시 호스트는 15분째 무응답이었습니다)." ;;
+esac
+
+ok "방문자 화면 링크 $(printf '%s\n' "$z14_rows" | grep -c .)개 — up 활성 · down/unknown·partial·stale 비활성(href 제거) · 전부 demoHost() 파생"
+
+# ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------

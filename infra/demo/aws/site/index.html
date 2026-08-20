@@ -18,6 +18,11 @@
     @keyframes slide { 0% { margin-left: -30%; } 100% { margin-left: 100%; } }
     #msg { margin-top: 8px; font-size: .95rem; opacity: .85; }
     a.open { display: none; margin-top: 14px; font-weight: 600; }
+    /* TASK-MONO-560 — 안 뜬 화면은 **클릭되지 않아야** 한다. 회색으로 보이기만 하고
+       클릭이 되면 방문자는 404 를 보고 "고장" 으로 읽는다(pointer-events 가 요점). */
+    a.open.off { opacity: .45; pointer-events: none; cursor: default; }
+    #surfaces a.open + a.open { margin-top: 6px; }
+    #smsg { margin-top: 8px; font-size: .82rem; color: #666; }
     .hint { font-size: .82rem; opacity: .6; margin-top: 20px; }
     /* 도메인별 선택 (TASK-MONO-477) */
     .domains { display: none; }
@@ -63,7 +68,23 @@
     <button id="stop" disabled>■ 데모 종료</button>
     <div id="bar"><i></i></div>
     <div id="msg">상태 확인 중…</div>
-    <a class="open" id="open" target="_blank" rel="noopener">데모 사이트 열기 →</a>
+    <!--
+      방문자 화면 (TASK-MONO-560).
+
+      예전에는 이 자리에 링크가 **하나뿐**이었고 목적지는 콘솔이었다. 그래서 나머지 두
+      화면(이커머스 스토어·팬 플랫폼)은 **존재를 알 방법이 없었다** — 소유자 본인이 자기
+      데모에서 그 둘을 못 찾은 것이 이 티켓의 발견 경로다. 면접관이 찾을 리 없다.
+
+      🔴 그냥 링크를 박으면 안 된다. 부팅에 약 10분이 걸리고 그 창에서 각 화면은 404 이며,
+      안 뜬 화면에 링크를 주면 방문자는 **"고장났다"** 로 읽는다. 그래서 각 링크는 자기
+      화면을 실제로 서빙하는 **도메인의 헬스에 묶인다**(아래 SURFACES).
+    -->
+    <div id="surfaces">
+      <a class="open" data-surface data-domain="console"   data-host="console"          target="_blank" rel="noopener">🖥️ 운영자 콘솔 열기 →</a>
+      <a class="open" data-surface data-domain="ecommerce" data-host="web.ecommerce"    target="_blank" rel="noopener">🛒 이커머스 스토어 열기 →</a>
+      <a class="open" data-surface data-domain="fan"       data-host="web.fan-platform" target="_blank" rel="noopener">🎤 팬 플랫폼 열기 →</a>
+      <div id="smsg"></div>
+    </div>
   </div>
 
   <!--
@@ -163,7 +184,41 @@
     //
     // 가드 (t) 가 이 함수와 demo-boot.sh 의 파생을 **같은 IP 로 실행해 대조**한다.
     const demoHost = (ip) => `${ip.replace(/\./g, "-")}.sslip.io`; // GUARD-T-ANCHOR
-    const demoUrl = (ip) => `http://console.${demoHost(ip)}/`;
+
+    // -----------------------------------------------------------------------
+    // 방문자 화면 링크 (TASK-MONO-560)
+    // -----------------------------------------------------------------------
+    // 🔴 모든 링크는 **반드시 demoHost() 를 통과**한다. 한 곳이라도 IP 를 직접 조립하면
+    //    다음 재기동에서 그 링크만 죽고 나머지가 멀쩡해 **원인이 안 보인다**(AC-3).
+    //    호스트 접두사는 마크업의 data-host 에 있고 여기서 조립만 한다.
+    // GUARD-Z14-BEGIN — (z14) 가 이 구간을 **실행해서** 링크 판정을 대조한다.
+    const surfaceUrl = (ip, prefix) => `http://${prefix}.${demoHost(ip)}/`;
+
+    // 🔴 `partial` 을 **비활성으로 정한다** — 그리고 그 결정을 여기 적는다(AC-2 (3)).
+    // partial 은 그 도메인의 컨테이너 일부가 unhealthy 라는 뜻이고, 웹 표면이 그중
+    // 하나일지 아닐지 이 페이지는 알 수 없다. 활성으로 두면 방문자가 눌러서 404/500 을
+    // 보고 **"고장났다"** 로 읽는다 — 이 티켓의 발견 경로가 정확히 그 오독이다.
+    // 조금 더 기다리게 하는 쪽이 잘못된 인상을 주는 쪽보다 낫다.
+    const SURFACE_LIVE = (st) => st === "up";
+    let lastIp = null, lastSnap = null, lastStale = false;
+
+    function renderSurfaces() {
+      let off = 0, on = 0;
+      for (const a of document.querySelectorAll("[data-surface]")) {
+        const st = (lastSnap && lastSnap[a.dataset.domain] || {}).state || "unknown";
+        // 🔴 health_stale 이면 **어떤 state 도 믿지 않는다**(AC-2 (4)). 그 필드는
+        //    TASK-MONO-551 이 만든 것이고, 참일 때 `up` 을 믿으면 **꺼진 스택의 링크를
+        //    초록으로** 준다. 실측에서 그때 호스트는 15분째 무응답이었다.
+        const live = lastIp && !lastStale && SURFACE_LIVE(st);
+        a.classList.toggle("off", !live);
+        if (live) { a.href = surfaceUrl(lastIp, a.dataset.host); on++; }
+        else { a.removeAttribute("href"); off++; }   // href 자체를 없앤다 — 클릭도 새 탭도 없다
+      }
+      $("smsg").textContent = !off ? ""
+        : lastStale ? "⚠ 헬스 정보가 갱신되지 않아 링크를 열지 않습니다 — 배지를 확인하세요"
+        : `아직 준비되지 않은 화면 ${off}개는 비활성입니다 (해당 도메인이 🟢 실행 중이 되면 열립니다)`;
+    }
+    // GUARD-Z14-END
 
     const $ = (id) => document.getElementById(id);
     let beatTimer = null, pollTimer = null;
@@ -188,9 +243,10 @@
       $("start").disabled = isRun || state === "pending" || state === "starting";
       $("stop").disabled = !isRun;
       $("bar").style.display = (state === "pending" || state === "starting") ? "block" : "none";
-      $("open").style.display = (isRun && ip) ? "inline-block" : "none";
+      $("surfaces").style.display = (isRun && ip) ? "block" : "none";
       $("domains").style.display = isRun ? "block" : "none";
-      if (ip) $("open").href = demoUrl(ip);
+      lastIp = ip || null;
+      renderSurfaces();
       const label = {
         stopped: "🟢 대기 중 — 시작을 누르세요",
         pending: "🟡 인스턴스 기동 중…",
@@ -268,6 +324,11 @@
         const { ok, body } = await api("/domains");
         if (!ok) return;
         if (body.domains) renderDomains(body.domains);
+        // 링크 판정은 배지와 **같은 스냅샷**을 쓴다 — 두 출처를 두면 배지는 초록인데
+        // 링크는 죽어 있는(또는 그 반대) 상태가 생기고, 그건 진단이 가장 오래 걸린다.
+        lastSnap = body.domains || null;
+        lastStale = !!body.health_stale;
+        renderSurfaces();
         // 발행이 끊긴 이유는 배지가 말해 주지 않는다 — 나이를 함께 적는다(MONO-551 B).
         // 🔴 `body.domains` 가 비어 있어도 이 줄은 갱신돼야 한다: 스냅샷이 통째로 사라진
         //    경우가 바로 발행이 죽은 경우이고, 위 `if` 는 그때 아무것도 안 그린다.
