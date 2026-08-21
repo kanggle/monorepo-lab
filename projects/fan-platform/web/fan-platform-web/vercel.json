@@ -1,4 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "pnpm install --no-frozen-lockfile",
   "ignoreCommand": "bash \"$(git rev-parse --show-toplevel)/scripts/vercel-should-build.sh\" ':/projects/fan-platform/web' ':/projects/fan-platform/package.json' ':/projects/fan-platform/pnpm-lock.yaml' ':/projects/fan-platform/pnpm-workspace.yaml' ':/scripts/vercel-should-build.sh'"
 }

@@ -8,7 +8,7 @@ TASK-MONO-563
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -144,6 +144,107 @@ curl -sL https://kanggle-fan.vercel.app/
 
 🔵 두 형태 중 **배포 URL 이 붙은 것**(`dpl_GQp5ks8xrB8Ksdm2YyHVvKsDj1XH`, `dpl_GbR77kk91nzn5TcVErVUpL1Xp4Zt`)
 이 로그가 남아 있을 가능성이 높다 — 거기부터 열어라.
+
+## 🔴🔴 2026-08-21 AC-0 (부분) — **Root Directory 를 소유자가 읽었고, 후보 (a)가 죽었다**
+
+소유자가 대시보드에서 확인한 값:
+
+```
+kanggle-fan → Settings → Root Directory = projects/fan-platform/web/fan-platform-web
+```
+
+⇒ **`TASK-MONO-562` 가 후보 두 자리에 둔 규칙 중 깊은 쪽이 읽히는 자리다.**
+그 자리에는 `vercel.json` 이 **있다.** 따라서 위 § 의 후보 (a) *"Root Directory 가 두 위치 중
+어느 것도 아니라 규칙이 읽히지 않는다"* 는 **반증됐다.**
+
+🔵 그리고 얕은 쪽(`projects/fan-platform/vercel.json`)은 읽히지 않는 것이 확정됐으므로 **삭제했다.**
+읽히지 않는 설정 사본은 무해가 아니라 **거짓 증거**다 — 규칙이 두 벌이면 다음 사람은 어느 쪽이
+행사되는지 모른 채 한쪽만 고치고, 그 사실이 아무 데서도 드러나지 않는다.
+
+### 🔴 후보 (b)가 강화된다 — portfolio 가 판정자 도달 가능성을 이미 증명했다
+
+`kanggle-portfolio` 의 `ignoreCommand` 도 `$(git rev-parse --show-toplevel)/scripts/…` 로
+**저장소 루트 스크립트**를 부르고, 그것이 `#3414`·`#3415` 에서 `Canceled by Ignored Build Step`
+을 실제로 냈다. ⇒ 무시 단계는 전체 클론을 본다(적어도 그 프로젝트에서는).
+그런데 fan 은 규칙이 제자리에 있는데도 **두 커밋 다 발화하지 않았다.**
+⇒ **fan 의 배포는 무시 단계에 도달하기 전에 죽는다**(후보 (b)).
+
+## 🔴 2026-08-21 실측 — 설치 지점이 CI 와 다르고, 그 차이는 **첫 명령에서 치명적**이다
+
+Root Directory 가 확정되자 검사 가능한 명제가 생겼다: **거기엔 lockfile 이 없다.**
+`pnpm-lock.yaml` 과 `pnpm-workspace.yaml` 은 한 단계 위 `projects/fan-platform/` 에 있고,
+이 앱은 그 워크스페이스의 **멤버**다. 두 컨텍스트를 각각 만들어 실제로 돌렸다
+(`git archive` 로 커밋된 트리만 떼어냄):
+
+| 설치 지점 | `CI=1 pnpm install --frozen-lockfile` | `pnpm build` |
+|---|---|---|
+| 워크스페이스 루트가 보일 때 | ✅ rc=0 (39.6s) | ✅ rc=0 · 14 라우트 |
+| **Root Directory 만** | ❌ `ERR_PNPM_NO_LOCKFILE` — **첫 명령에서 사망** | 도달 못 함 |
+| Root Directory 만 + `--no-frozen-lockfile` | ✅ rc=0 (48.2s) | ✅ rc=0 · 14 라우트 |
+
+pnpm 자신이 그 실패에 이렇게 덧붙인다: *"Note that in CI environments this setting is true by
+default."* Vercel 은 `CI=1` 이므로 **아무도 요청하지 않아도 frozen 이 켜진다.**
+
+🔵 **폐기한 가설도 적는다** — 처음 의심한 것은 *"lockfile 이 낡았다"* 였다(CI 의 fan 스텝만
+`--no-frozen-lockfile` 이라 그것을 숨길 수 있다). **틀렸다**: 워크스페이스 루트에서
+`CI=1 pnpm install --frozen-lockfile --lockfile-only` 이 **rc=0** 이다. lockfile 은 매니페스트와
+동기 상태다(둘 다 `22c4d7105` 에서 같이 바뀌었다). 결함은 lockfile 의 **내용**이 아니라 **위치**다.
+
+🔵 CI 주석도 낡았다: *"No lockfile checked in yet"* 이라 적혀 있으나 `projects/fan-platform/pnpm-lock.yaml`
+은 217KB 로 존재한다. (이 티켓의 범위 밖 — 고치려면 fan 스텝을 `--frozen-lockfile` 로 되돌리는
+별도 작업이고, 그건 이 수정의 대조군을 오염시킨다.)
+
+## 이번 변경 — 세 줄
+
+1. `projects/fan-platform/web/fan-platform-web/vercel.json` 에 **`"installCommand": "pnpm install --no-frozen-lockfile"`**.
+   🔵 새 정책이 아니라 **CI 의 fan 스텝 3곳이 이미 쓰는 그 명령**이다.
+2. `projects/fan-platform/vercel.json` **삭제**(읽히지 않는 자리).
+3. `VERCEL.md` — Root Directory 확정값, 위 실측표, 그리고 아래 § 판별 절차.
+
+가드 `scripts/check-vercel-build-triggers.sh` 재실행: 본검사 rc=0(설정 2개), `--self-test` 4칸 전부
+문다 — 특히 **(c) 설정 1개 삭제(총 2, 하한 2) → 하한 위반으로 문다**. 모집단이 3→2 로 줄었어도
+그 칸이 공허해지지 않았다(전에 정확히 그 자리에서 공허해져 CI 가 잡아냈다).
+
+## 🔴🔴 아직 원인이 **확정된 것이 아니다**
+
+확정된 것은 *"이 기전은 실재하고, 이 한 줄이 그것을 없앤다"* 까지다.
+**Vercel 빌드 로그는 여전히 아무도 읽지 못했다**(인증이 소유자 승인 대상) — AC-0 이 요구하는
+것은 로그이고 위 표는 그 대체물이 아니다. 이 저장소가 이미 이름 붙인 함정이다:
+**검증 가능한 기전은 원인이 아니다.**
+
+⇒ **이 PR 의 `Vercel – kanggle-fan` 체크가 그 자체로 측정이다.**
+
+| PR 에서 그 체크가 | 읽는 법 |
+|---|---|
+| **성공** | 설치 컨텍스트가 원인이었다. AC-1 후보 성립 → 되돌림 대조군(AC-2)으로 확정 |
+| **여전히 실패, 문구가 바뀜** | 첫 결함은 넘었고 **두 번째**가 있다. 새 문구가 다음 단서 |
+| **여전히 실패, 문구 동일** | 설치 이전에 죽는다 ⇒ 로그 없이는 못 간다. 질문이 훨씬 좁아짐 |
+
+## 남은 갈림길 — `tasks/**` 만 바꾼 다음 커밋이 스스로 가른다
+
+Vercel 의 *"Root Directory 바깥 소스를 빌드 단계에 포함"* 도 대시보드 전용 값이다.
+**OFF 라면** 판정자(`/scripts/vercel-should-build.sh`)가 빌드 컨텍스트에 없어
+`ignoreCommand` 는 영원히 발화하지 못하고, fan 은 **모든 커밋에 배포를 굽는다**
+(= 이 티켓 § "(a)라면 …" 이 경고한 상태가 (b) 경로로도 성립한다).
+
+| 배포가 성공하기 시작한 뒤, `tasks/**` 만 바꾼 커밋에서 fan 이 | 결론 |
+|---|---|
+| `Canceled by Ignored Build Step` | 포함 **ON** — 규칙이 행사된다 |
+| 빌드하고 돌았다 | 포함 **OFF** — 대시보드에서 켜야 한다(소유자 승인 대상) |
+
+🔴 이 칸은 **fan 이 한 번은 배포에 성공한 뒤에만** 읽을 수 있다. 그 전에는 실패가 두 원인을
+다시 같은 문구로 덮는다 — 이 티켓이 태어난 바로 그 이유.
+
+## AC 진행 상태
+
+| AC | 상태 |
+|---|---|
+| AC-0 | **부분** — Root Directory 는 읽었고 후보 (a)를 반증했다. **빌드 로그는 못 읽었다**(승인 대상) |
+| AC-1 | **미결** — 이 PR 의 fan 체크가 1차 판정 |
+| AC-2 | **부분** — 원인 후보와 실측이 `VERCEL.md` + 이 절에 남았다. **되돌림 대조군 미실행** |
+| AC-3 | **미착수** — 신선도 축은 성공한 배포가 존재해야 만들 수 있다(현재 `DEPLOYMENT_NOT_FOUND`) |
+| AC-4 | **충족** — 이 티켓의 집계가 문구가 아니라 *성공한 배포의 존재* 로 판단하고 있다 |
+
 
 # Goal
 
