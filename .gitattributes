@@ -15,3 +15,12 @@
 # 클라이언트 하나면 CRLF 가 blob 에 들어간다. 우연에 기대지 않는다.
 *.service text eol=lf
 *.timer   text eol=lf
+
+# 론처 정적 페이지도 LF 로 고정한다 (TASK-MONO-562).
+# terraform 의 `aws_s3_object.index` 는 `source = <작업 트리 파일>` 이라 **체크아웃된 바이트**를
+# 그대로 S3 에 올린다. `*.html` 이 고정돼 있지 않으면 core.autocrlf=true 인 Windows 클라이언트가
+# CRLF 로 체크아웃하고, 그 판이 업로드된다 ⇒ (1) `filemd5` 가 호스트 의존이 되어 Linux 에서
+# apply 할 때마다 `index` 가 더러워졌다 깨끗해졌다 하는 **핑퐁 드리프트**가 생기고,
+# (2) Vercel(리눅스, blob=LF)과 S3(윈도우, CRLF)가 **같은 커밋에서 다른 바이트**를 서빙한다.
+# 2026-08-21 실측: 두 판이 413 바이트 차이(= CR 413개)였다.
+infra/demo/aws/site/*.html text eol=lf

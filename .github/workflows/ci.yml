@@ -223,6 +223,11 @@ jobs:
       # silently losing its CI entry is a workflow-only diff, and a module gaining an
       # entry in settings.gradle is a build-script diff — neither is `code-changed`.
       libs-ci-coverage: ${{ steps.filter.outputs.libs-ci-coverage }}
+      # TASK-MONO-562: raw filter, NOT AND-combined with `code-changed`. Every arrival
+      # path of this drift is non-code: a `vercel.json` losing its `ignoreCommand`, a
+      # new Vercel project landing without one, or the judge script being weakened.
+      # AND-ing with `code-changed` would switch the guard off on exactly those diffs.
+      vercel-build-triggers: ${{ steps.filter.outputs.vercel-build-triggers }}
       # TASK-MONO-511: raw filter, NOT AND-combined with `code-changed`. Two of the three
       # arrival paths are non-code — the relay whitelist (`mm2.properties`) and the broker
       # advertised-listener overrides. AND-ing would skip the guard on exactly the diff
@@ -602,6 +607,15 @@ jobs:
               - 'settings.gradle'
               - '.github/workflows/**'
               - 'scripts/check-libs-ci-coverage.sh'
+            # TASK-MONO-562: a Vercel project that builds on every commit arrives three
+            # ways — a new `vercel.json` anywhere in the tree, an existing one losing its
+            # `ignoreCommand`, or the shared judge being weakened. All three are non-code,
+            # so this filter is NOT AND-combined with `code-changed`.
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            vercel-build-triggers:
+              - '**/vercel.json'
+              - 'scripts/vercel-should-build.sh'
+              - 'scripts/check-vercel-build-triggers.sh'
             # TASK-MONO-511: a cross-project listener arrives as a new @KafkaListener in
             # any project's main sources; the other side of the drift is an edit to the
             # relay whitelist or to a broker's advertised listeners. All three arrival
@@ -921,6 +935,42 @@ jobs:
 
       - name: Guard — no shared-library module is missing from the CI task list
         run: bash scripts/check-libs-ci-coverage.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-562 — Vercel build triggers.
+  #
+  # The repo has two Vercel projects, so one commit bakes two deployments. A
+  # 13-PR documentation rush did exactly that and hit the free plan's daily
+  # limit; every PR went red for 24 hours.
+  #
+  # 🔴 The red check was not the damage. While the limit held, the launcher kept
+  # serving its last successful build — TASK-MONO-560's visitor-surface links
+  # were merged and still absent from the page a day later, and the URL returned
+  # 200 the whole time. "Merged + main green" is not "the visitor sees it".
+  #
+  # 🔴 The predicate is NOT "the config mentions ignoreCommand". This guard builds
+  # throwaway git repos and *runs* the judge, reading its exit code — a grep would
+  # go greener the better the file is documented.
+  # ---------------------------------------------------------------------------
+  vercel-build-triggers:
+    name: Vercel build triggers (an unrelated commit must not bake a deploy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.vercel-build-triggers == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: |
+          bash -n scripts/check-vercel-build-triggers.sh
+          bash -n scripts/vercel-should-build.sh
+
+      - name: Self-test the predicate (bites on the real configs, mutated)
+        run: bash scripts/check-vercel-build-triggers.sh --self-test
+
+      - name: Guard — every Vercel project builds on its own paths and skips the rest
+        run: bash scripts/check-vercel-build-triggers.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-511 / ADR-MONO-062 B — cross-project event relay drift.

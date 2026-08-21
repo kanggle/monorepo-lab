@@ -109,6 +109,32 @@ finance kafka 1G 는 커밋 `47d2a6bc1`(FIN-BE-059, *"add the missing Kafka brok
 
 `free -m`: **used ~28GB / total 31.5GB / available ~2.8GB** (vs MONO-366 *"26GB / 여유 5.5GB"*). ⚠️ **as-baked 스택은 3중 크래시루프로 완전 안정화하지 않으므로**(kafka+finance+erp) 이 값은 루프 중 관측치다 — clean 측정은 세 fix 배포(AC-6) 후에야 가능. 호스트 의존 값이라 **가드로 승격하지 않고 문서만 고친다**(397 이 이 축에서 두 번 실패).
 
+### ✅✅ 2026-08-21 UTC — **clean 재측정 완료.** 그런데 이 숫자는 앞의 것과 **비교할 수 없다**
+
+AMI `ami-0c768f12eb9a024ce`(main `270ed172f`) / 인스턴스 `i-078f944162632b333` / **r6i.2xlarge(64GB)** /
+`profile=full`. 이 티켓이 기다리던 세 fix(kafka 1G · finance 브로커 · erp Flyway)가 전부 배포된 판이다.
+
+| | 값 |
+|---|---|
+| `free -m` total | **63,257 MB** |
+| used | **36,004 → 38,929 MB** (두 시점) |
+| available | **27,253 → 24,328 MB** |
+| 컨테이너 | **100 running · 3 exited(0)** |
+| **unhealthy** | **0** |
+| **크래시루프** | **0** — 재시작이 있는 컨테이너는 `erp/finance/scm-platform-gateway` 각 **1회**(웜업 transient)뿐 |
+
+🔴 **드디어 크래시루프 없는 관측치다** — 이전 값은 *"3중 크래시루프 중"* 이라는 단서를 달고 있었고,
+이제 그 단서가 사라졌다. AC-2 가 요구한 clean 측정은 **이것**이다.
+
+🔴🔴 **그러나 28GB → 36~39GB 를 "메모리를 더 먹게 됐다" 로 읽지 마라.** 두 측정은
+**호스트가 다르다**(32GB m6i → 64GB r6i, `TASK-MONO-552` 의 고침). 리밋을 선언하지 않는 6개
+프로젝트의 JVM 은 **천장이 없어 가용 메모리에 맞춰 힙을 잡는다** — 이 티켓이 스스로 적어 둔
+바로 그 성질이다. 즉 커진 `used` 는 **부하 증가가 아니라 여유 증가의 결과**일 수 있고,
+두 숫자는 같은 축 위에 있지 않다. **한 쪽만 인용해 추세를 만들지 마라.**
+
+🔵 그리고 두 시점 사이에 used 가 2.9GB 움직였다(시드 재실행 중) — **단일 표본을 상수로 승격하지
+않는다**는 이 티켓의 기존 판단은 그대로 유효하다. 가드로 올리지 않는다.
+
 ## AC-3 — 512M→1G 인과 확인 ✅
 
 `docker update --memory 1G ecommerce-kafka` 라이브 적용 후 **150초간 재시작 0회**(41 고정), status=running, oom=false, dmesg 신규 OOM 없음. → MONO-397 의 1G 가 데모 호스트에서 OOM 루프를 멈춘다.

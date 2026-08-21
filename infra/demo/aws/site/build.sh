@@ -38,6 +38,31 @@
 # 🔵 그리고 사이트는 마지막 성공 배포가 계속 서빙해서 **겉으로는 멀쩡했다** —
 # **배포가 죽은 것과 사이트가 죽은 것은 다른 사건이다.** URL 만 찔러서는 안 보인다.
 # ⇒ **설정 파일에 설명을 끼워 넣지 말 것.** 설명의 집은 이 스크립트다.
+#
+# -----------------------------------------------------------------------------
+# Vercel 배선 — `kanggle-portfolio` (TASK-MONO-562)
+# -----------------------------------------------------------------------------
+#   Vercel 프로젝트   kanggle-portfolio  (= 방문자가 여는 정문. CORS `allowed_origins` 가
+#                     이 오리진 하나만 허용한다 — CloudFront 사본은 버튼이 막힌다)
+#   Root Directory    infra/demo/aws/site  (이 디렉터리)
+#   ignoreCommand     scripts/vercel-should-build.sh 에 이 디렉터리 pathspec 을 넘긴다
+#
+# 저장소에 Vercel 프로젝트가 **둘**이라(여기 + `kanggle-fan`) 커밋 하나가 배포 **둘**을 굽고,
+# 문서 전용 PR 도 예외가 아니었다 ⇒ 무료 플랜 한도. 판정 규약과 fail-open 설계는
+# `scripts/vercel-should-build.sh` 헤더에 있다.
+#
+# -----------------------------------------------------------------------------
+# 🔴🔴 `build-info.json` — 배포가 낡았다는 사실이 보이게 하는 유일한 수단
+# -----------------------------------------------------------------------------
+# rate limit 이든 스키마 오류든, **배포가 실패해도 사이트는 마지막 성공 판을 계속 서빙한다.**
+# 그 상태에서 URL 은 200 이고 우리 쪽 증거는 "머지됨 + main 초록" 이라 **아무도 안 본다.**
+# 2026-08-21 실측: 론처가 `TASK-MONO-561` 판(08-19)을 서빙하는 동안 `TASK-MONO-560` 은
+# 머지된 지 하루가 지나도 방문자에게 도달하지 않았다.
+#
+# ⇒ 서빙 중인 페이지가 **자기가 어느 커밋에서 나왔는지** 말하게 한다.
+# 🔴 `config.js` 가 아니라 **별도 파일**에 쓰는 이유: `config.js` 는 terraform 의
+# `aws_s3_object.config` 와 **바이트 모양이 같아야 한다**(위 § 참조 — 두 배포 경로가 다른
+# 모양을 내면 한쪽에서만 되는 상태가 만들어진다). 여기에 SHA 를 끼우면 그 불변식이 깨진다.
 # =============================================================================
 set -euo pipefail
 
@@ -78,4 +103,21 @@ cp "$HERE/index.html" "$OUT/index.html"
 # 내면 한쪽에서만 되는 상태가 만들어지고, 그건 진단이 가장 오래 걸리는 종류다.
 printf 'window.DEMO_API_BASE = "%s";\n' "$DEMO_API_BASE" > "$OUT/config.js"
 
+# --- build-info.json — 이 배포가 어느 커밋에서 나왔는가 (TASK-MONO-562 AC-3) ----
+# Vercel 이 주는 값을 쓰고, 없으면(로컬 실행) git 에 묻는다. 🔴 둘 다 없으면 `unknown` 을
+# 쓰되 **빌드를 죽이지는 않는다** — 신선도 판정은 `check-launcher-fresh.sh` 가 하고, 그쪽이
+# `unknown` 을 **통과가 아니라 판정 불가**로 다룬다. 여기서 죽이면 SHA 를 모르는 정당한
+# 환경(로컬 미리보기)에서 페이지를 못 만든다.
+BUILD_SHA="${VERCEL_GIT_COMMIT_SHA:-}"
+if [ -z "$BUILD_SHA" ]; then
+  BUILD_SHA="$(git -C "$HERE" rev-parse HEAD 2>/dev/null || echo unknown)"
+fi
+BUILD_REF="${VERCEL_GIT_COMMIT_REF:-$(git -C "$HERE" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)}"
+INDEX_MD5="$(md5sum "$OUT/index.html" 2>/dev/null | cut -d' ' -f1)"
+[ -n "$INDEX_MD5" ] || INDEX_MD5=unknown
+
+printf '{"commit":"%s","ref":"%s","index_md5":"%s"}\n' \
+  "$BUILD_SHA" "$BUILD_REF" "$INDEX_MD5" > "$OUT/build-info.json"
+
 echo "[site/build] ✔ public/ 조립 완료 — DEMO_API_BASE=$DEMO_API_BASE"
+echo "[site/build] ✔ build-info.json — commit=$BUILD_SHA ref=$BUILD_REF index_md5=$INDEX_MD5"
