@@ -1,4 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "ignoreCommand": "bash \"$(git rev-parse --show-toplevel)/scripts/vercel-should-build.sh\" ':/projects/fan-platform/web' ':/projects/fan-platform/package.json' ':/projects/fan-platform/pnpm-lock.yaml' ':/projects/fan-platform/pnpm-workspace.yaml' ':/scripts/vercel-should-build.sh'"
+  "ignoreCommand": "bash \"$(git rev-parse --show-toplevel)/scripts/vercel-should-build.sh\" ':/projects/fan-platform/web' ':/projects/fan-platform/package.json' ':/projects/fan-platform/pnpm-lock.yaml' ':/projects/fan-platform/pnpm-workspace.yaml' ':/projects/fan-platform/vercel.json' ':/scripts/vercel-should-build.sh'"
 }

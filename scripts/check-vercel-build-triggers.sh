@@ -201,11 +201,18 @@ self_test() {
   git -C "$t" commit -qam mutate
   _expect "(b) 주석 키 삽입 -> 문다" 1 "$(_run "$t")"; rm -rf "$t"
 
-  # (c) 설정 하나를 지운다 -> 모집단이 하한 아래로
+  # (c) 모집단을 하한 **아래로** 떨어뜨린다.
+  # 🔴 "1개만 지운다" 로 썼다가 이 칸이 **조용히 무의미해졌다**: 설정이 2개일 때는 1개만
+  #    지워도 하한(2)을 깼지만, 세 번째 vercel.json 을 추가하자 3-1=2 로 여전히 하한을
+  #    만족해 칸이 통과했다. 모집단을 바꾸면 그 모집단에 기대는 칸도 같이 썩는다.
+  #    ⇒ 지울 개수를 **하한에서 계산**한다. 모집단이 몇 개든 이 칸은 항상 하한을 깬다.
   t="$(_mk)"
-  out="$(cd "$t" && git ls-files '*vercel.json' | head -1)"
-  git -C "$t" rm -q "$out"; git -C "$t" commit -qam mutate
-  _expect "(c) 설정 1개 삭제 -> 하한 위반으로 문다" 1 "$(_run "$t")"; rm -rf "$t"
+  local total del
+  total="$(cd "$t" && git ls-files '*vercel.json' | wc -l)"
+  del=$(( total - FLOOR + 1 ))
+  (cd "$t" && git ls-files '*vercel.json' | head -n "$del" | xargs -r git rm -q --)
+  git -C "$t" commit -qam mutate
+  _expect "(c) 설정 ${del}개 삭제(총 ${total}, 하한 ${FLOOR}) -> 하한 위반으로 문다" 1 "$(_run "$t")"; rm -rf "$t"
 
   # (d) pathspec 모양을 바꾼다 -> 추출 0건. **조용히 통과하면 안 된다.**
   t="$(_mk)"
