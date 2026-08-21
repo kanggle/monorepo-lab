@@ -43,6 +43,16 @@ ROOT="${VERCEL_GUARD_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 # 프로젝트에 트리거 규칙을 붙일 자리다. 2026-08-21 기준 = kanggle-portfolio + kanggle-fan.
 FLOOR="${VERCEL_GUARD_FLOOR:-2}"
 
+# 🔴🔴 Vercel 스키마는 명령 문자열에 **maxLength=256** 을 건다
+# (https://openapi.vercel.sh/vercel.json — 2026-08-21 실측: 최상위 property 40개,
+# `additionalProperties: false`). `TASK-MONO-562` 가 fan 의 `ignoreCommand` 에
+# pathspec 5개를 직접 넣어 **261자**가 됐고, 그래서 `vercel.json` 이 거부되어
+# **모든 배포가 0초에 죽었다** — 빌드 로그조차 남지 않았고 상태 문구는
+# `Deployment failed.` + project-configuration 링크였다(557 이 모르는 키로 받았던
+# 바로 그 링크). **557 은 모르는 키로, 562 는 길이로 같은 방에 들어갔다.**
+# 이 칸이 없는 동안 5자 초과가 조용히 통과했다.
+MAXLEN="${VERCEL_GUARD_MAXLEN:-256}"
+
 COMMENT_KEY_RE='^[[:space:]]*"//'
 
 fail=0
@@ -54,7 +64,37 @@ extract_pathspecs() {
   # 작은따옴표로 감싼 :/... 토큰만 뽑는다. 셸 인용을 흉내내는 것이 아니라, 이 저장소가
   # 쓰기로 한 **한 가지 모양**만 인정하는 것이다 — 모양이 바뀌면 추출이 0건이 되고
   # 칸 (4)가 발화한다(조용히 통과하지 않는다).
-  grep -o "':/[^']*'" "$1" 2>/dev/null | tr -d "'"
+  local f="$1" out w
+  out="$(grep -o "':/[^']*'" "$f" 2>/dev/null | tr -d "'")"
+  [ -n "$out" ] && { printf '%s
+' "$out"; return 0; }
+
+  # 🔵 목록이 JSON 안에 없으면 **프로젝트 소유 래퍼**에 있다(`TASK-MONO-563`).
+  #    256자 제한 때문에 목록을 문자열 밖으로 뺐고, 가드는 그 자리를 따라가야 한다
+  #    — 안 따라가면 추출 0건이 되어 칸 (4)가 **정상 설정에 오발화**한다.
+  for w in $(grep -o '[A-Za-z0-9_./-]*vercel-ignore\.sh' "$f" 2>/dev/null | sort -u); do
+    w="${w#/}"
+    [ -f "$ROOT/$w" ] || continue
+    grep -o "':/[^']*'" "$ROOT/$w" 2>/dev/null | tr -d "'"
+  done
+}
+
+# --- 최상위 문자열 값의 **디코드된** 길이 -------------------------------------
+# 🔴 원문 바이트가 아니라 값의 길이여야 한다. `\"` 는 원문 2자 · 값 1자이므로
+#    grep/wc 로 세면 틀린 수가 나온다 — 그리고 이 검사의 임계는 5자 차이로 갈렸다.
+_JSLEN=""
+json_string_lengths() {
+  if [ -z "$_JSLEN" ]; then
+    _JSLEN="$(mktemp)"
+    cat > "$_JSLEN" <<'JS'
+const fs = require('fs');
+const cfg = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+for (const [k, v] of Object.entries(cfg)) {
+  if (k !== '$schema' && typeof v === 'string') console.log(k + '	' + v.length);
+}
+JS
+  fi
+  node "$_JSLEN" "$1"
 }
 
 run_cell() {
@@ -87,6 +127,10 @@ main() {
 
   [ -f "$judge" ] || { bad "판정자가 없습니다: scripts/vercel-should-build.sh"; return 1; }
 
+  # 🔴 칸 (5)는 JSON 을 실제로 파싱해야 한다. node 가 없으면 **조용히 건너뛰지 말고**
+  #    크게 실패한다 — 검사기가 죽은 것과 위반이 없는 것은 다른 사건이다.
+  command -v node >/dev/null 2>&1 || { bad "node 가 없습니다 — 칸 (5)(스키마 길이)를 수행할 수 없습니다."; return 1; }
+
   local cfg abs specs=() s p first_file tmp
   for cfg in "${configs[@]}"; do
     abs="$ROOT/$cfg"
@@ -98,6 +142,15 @@ main() {
     if grep -qE "$COMMENT_KEY_RE" "$abs"; then
       bad "설명용 주석 키가 있습니다 — Vercel 스키마가 거부합니다 (TASK-MONO-557)."
     fi
+
+    # --- (5) 스키마 길이 제한. 562 가 여기서 깨졌고 아무 가드도 이 축을 안 봤다. ---
+    local kv k v
+    while IFS=$'	' read -r k v; do
+      [ -n "$k" ] || continue
+      if [ "$v" -gt "$MAXLEN" ]; then
+        bad "(5) $k 가 ${v}자입니다 — Vercel 스키마 한도 ${MAXLEN}자 초과 ⇒ vercel.json 이 거부되고 배포가 0초에 죽습니다 (TASK-MONO-563)."
+      fi
+    done < <(json_string_lengths "$abs")
 
     if ! grep -q '"ignoreCommand"' "$abs"; then
       bad "ignoreCommand 가 없습니다 — 이 프로젝트는 모든 커밋에 배포를 굽습니다."
@@ -169,7 +222,7 @@ self_test() {
 
   _mk() {   # 진짜 트리의 vercel.json + 판정자를 임시 저장소로 복제
     local d; d="$(mktemp -d)"
-    ( cd "$src" && git ls-files '*vercel.json' scripts/vercel-should-build.sh ) | while IFS= read -r f; do
+    ( cd "$src" && git ls-files '*vercel.json' '*vercel-ignore.sh' scripts/vercel-should-build.sh ) | while IFS= read -r f; do
       mkdir -p "$d/$(dirname "$f")"; cp "$src/$f" "$d/$f"
     done
     git -C "$d" init -q; git -C "$d" config user.email t@l; git -C "$d" config user.name t
@@ -220,6 +273,36 @@ self_test() {
   sed -i "s/':\//'X\//g" "$t/$out"
   git -C "$t" commit -qam mutate
   _expect "(d) pathspec 모양 변경 -> 추출 0건으로 문다" 1 "$(_run "$t")"; rm -rf "$t"
+
+  # (e) 명령 문자열을 한도 위로 늘린다 -> 스키마가 거부할 모양. **이것이 562 의 결함이다.**
+  # 🔴 261자가 몇 주 동안 조용히 통과했다. 칸이 없으면 위반은 "실패" 가 아니라 **무음**이다.
+  t="$(_mk)"
+  out="$(cd "$t" && git ls-files '*vercel.json' | head -1)"
+  pad="$(printf '#%.0s' $(seq 1 $((MAXLEN + 8))))"
+  sed -i "s|\"ignoreCommand\": \"|\"ignoreCommand\": \"$pad |" "$t/$out"
+  # 🔴🔴 **무는지 읽기 전에 주입됐는지 단언한다.** 주입이 0건이면 "안 물었다" 와
+  #    "시험한 적이 없다" 가 구별되지 않고, 후자는 초록으로 보인다.
+  if ! grep -q '##########' "$t/$out"; then
+    echo "  x  (e) 주입 실패 — 이 칸은 아무것도 시험하지 않았습니다."; rc=1
+  else
+    git -C "$t" commit -qam mutate
+    _expect "(e) 명령 문자열이 한도(${MAXLEN}자) 초과 -> 문다" 1 "$(_run "$t")"
+  fi
+  rm -rf "$t"
+
+  # (f) **래퍼 쪽** pathspec 모양을 바꾼다 -> 가드가 래퍼를 따라가지 않으면 조용히 통과한다.
+  # 🔵 (d)는 JSON 안에 목록이 있는 설정만 시험한다. 563 이 목록을 래퍼로 옮겼으므로
+  #    그 자리도 같은 칸이 필요하다 — 아니면 fan 쪽 추출이 죽어도 아무도 모른다.
+  t="$(_mk)"
+  out="$(cd "$t" && git ls-files '*vercel-ignore.sh' | head -1)"
+  if [ -n "$out" ]; then
+    sed -i "s/':\//'X\//g" "$t/$out"
+    git -C "$t" commit -qam mutate
+    _expect "(f) 래퍼의 pathspec 모양 변경 -> 추출 0건으로 문다" 1 "$(_run "$t")"
+  else
+    echo "  x  (f) 래퍼(*vercel-ignore.sh)를 찾지 못했습니다 — 이 칸이 아무것도 시험하지 않습니다."; rc=1
+  fi
+  rm -rf "$t"
 
   [ "$rc" -eq 0 ] && echo "[vercel-triggers] --self-test ok" || echo "[vercel-triggers] --self-test 실패"
   return "$rc"

@@ -614,6 +614,7 @@ jobs:
             # Pure-positive (no negation — MONO-074/075 quirk rule).
             vercel-build-triggers:
               - '**/vercel.json'
+              - '**/vercel-ignore.sh'
               - 'scripts/vercel-should-build.sh'
               - 'scripts/check-vercel-build-triggers.sh'
             # TASK-MONO-511: a cross-project listener arrives as a new @KafkaListener in
@@ -965,6 +966,10 @@ jobs:
         run: |
           bash -n scripts/check-vercel-build-triggers.sh
           bash -n scripts/vercel-should-build.sh
+          # TASK-MONO-563: 프로젝트 소유 무시-래퍼들. 가드는 이 파일에서 pathspec 을
+          # **grep 으로** 뽑으므로 문법 오류를 못 본다 — 목록은 멀쩡해 보이는데
+          # 배포 시점에 래퍼가 죽는다. 그래서 문법은 여기서 따로 본다.
+          git ls-files '*vercel-ignore.sh' | while read -r f; do bash -n "$f"; done
 
       - name: Self-test the predicate (bites on the real configs, mutated)
         run: bash scripts/check-vercel-build-triggers.sh --self-test
