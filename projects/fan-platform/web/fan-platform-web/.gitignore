@@ -1,5 +1,8 @@
 node_modules/
 .next/
+# TASK-MONO-563: `pnpm build` 가 매 빌드 생성한다. 커밋되면 작업 트리 SHA 가
+# 배포판의 사실인 척하게 된다 — 판정자가 읽어야 할 것은 **빌드가 쓴 값**이다.
+public/build-info.json
 out/
 .turbo/
 coverage/

@@ -5,7 +5,7 @@
   "description": "fan-platform Next.js 15 App Router frontend — feed / artists / posts / login.",
   "scripts": {
     "dev": "next dev --port 3002",
-    "build": "next build",
+    "build": "node scripts/write-build-info.mjs && next build",
     "start": "next start --port 3002",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
