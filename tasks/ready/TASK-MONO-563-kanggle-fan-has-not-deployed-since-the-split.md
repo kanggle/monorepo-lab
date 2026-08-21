@@ -34,7 +34,7 @@ monorepo
 
 562 가 fan 에 `vercel.json` 을 신설했으므로 **그 변경이 원인처럼 보였다.** 갈랐다.
 
-## ✅ 원인이 아님을 대조군으로 확정했다 (562 의 변경은 무죄)
+## ◑ 대조군이 확정한 것 = **최초 원인이 아니다** ("무죄" 까지는 아니다 — 아래 § 추가 참조)
 
 `origin/main` 에서 `projects/fan-platform/web/` 아래 파일 하나만 추가한 커밋을 만들어 브랜치로 밀었다.
 **그 시점 main 에는 fan `vercel.json` 이 존재하지 않는다.** 결과:
@@ -45,6 +45,8 @@ Vercel – kanggle-fan   failure   Deployment has failed —
 ```
 
 ⇒ **설정 없이도 깨진다.** `kanggle-fan` 은 562 이전부터 깨져 있었다.
+
+🔴 **단 여기서 멈춰라.** 이것이 증명하는 것은 *"562 의 변경이 최초 원인이 아니다"* 뿐이다. *"562 의 변경이 아무 기여도 하지 않는다"* 는 **증명되지 않았고**, 아래 § 의 문구 두 종류가 그 가능성을 살려 둔다. 이 티켓의 초판은 이 자리에 "무죄 확정" 이라고 적었고 그건 과했다.
 
 🔵 같은 실행에서 `kanggle-portfolio` 는 `Canceled by Ignored Build Step` 으로 **success** 를 냈다
 (그 프로젝트에는 대시보드에만 있는 무시 규칙이 있다 — 562 § 부수 발견).
@@ -101,6 +103,47 @@ CI 잡 **`Frontend lint & build (ecommerce + fan-platform)` 이 통과한다.** 
 🔴 **(a)라면 이 티켓의 고침은 "빌드를 고치는 것" 만으로 끝나지 않는다** — Root Directory 를
 확인해 규칙을 그 자리에 두는 것까지가 범위다. 그렇지 않으면 빌드를 고친 뒤에도 fan 은
 **모든 커밋에 배포를 계속 굽는다**(562 가 없애려던 바로 그 상태).
+
+## 🔴🔴 2026-08-21 추가 — **배포가 "낡은" 게 아니라 하나도 없다**, 그리고 실패 문구가 **두 종류**다
+
+### (1) `kanggle-fan.vercel.app` 은 아무것도 서빙하지 않는다
+
+```
+curl -sL https://kanggle-fan.vercel.app/
+  → HTTP 404   "The deployment could not be found on Vercel."   DEPLOYMENT_NOT_FOUND
+```
+
+🔵 **론처와 다른 상태다.** 론처는 배포가 막힌 동안 *마지막 성공 판을 계속 서빙*해서 겉으로 멀쩡했다
+(그게 `TASK-MONO-562` 가 잡은 무성음 실패다). fan 은 **성공한 배포 자체가 없어서** 주소가 죽어 있다.
+⇒ 이 프로젝트에는 "낡은 판" 이라는 상태가 존재한 적이 없다.
+
+### (2) 실패 문구가 두 종류이고, 그 차이가 진단의 출발점이다
+
+| 커밋 | fan `vercel.json` | description / target_url |
+|---|---|---|
+| `270ed172f` (562 이전 main) | 없음 | `Deployment rate limited` / `upgradeToPro=build-rate-limit` |
+| **대조군 프로브** (main 기반) | **없음** | `Deployment has failed — npx vercel inspect dpl_GbR77…` / **배포 URL** |
+| `25ac714d7` (#3413 head) | 있음 | `Deployment has failed — npx vercel inspect dpl_GQp5k…` / **배포 URL** |
+| `0d5adb306` · `d1f263aa3` · `5d6f46212` (main) | 있음 | **`Deployment failed.`** / **`/docs/concepts/projects/project-configuration`** |
+| `4ec303d21` · `8438cffc3` (PR head) | 있음 | 위와 같음 |
+
+- **배포 URL 형태** = 배포가 생성되고 **빌드**가 실패했다 ⇒ `vercel inspect <id> --logs` 로 읽을 것이 있다.
+- **project-configuration 문서 형태** = **설정 거부**의 모양. `TASK-MONO-557` 이 `"//installCommand"`
+  주석 키로 배포를 깼을 때와 같은 링크다.
+
+🔴 **이 표가 뒤집는 것:** 이 티켓의 초판은 *"562 의 변경은 무죄로 **확정**"* 이라고 적었다.
+대조군이 증명한 것은 **"그 설정 없이도 실패한다"**(= 최초 원인이 아니다) 까지이고,
+**두 문구가 갈린다는 사실은 그 설정이 기존 결함 위에 두 번째 실패 모드를 얹었을 가능성을
+배제하지 못한다.** 게다가 `25ac714d7` 은 설정이 있는데도 빌드-실패 형태라 깔끔하게 갈리지도 않는다.
+⇒ **"무죄 확정" 이 아니라 "최초 원인 아님 + 추가 기여 여부 미결" 이 정확한 상태다.**
+
+### (3) AC-0 을 이 두 값으로 시작하라 — 한 번의 접속이면 된다
+
+1. **Settings → Root Directory** — 규칙이 읽히는 자리인지(위 § 비대칭의 후보 (a)).
+2. **최신 실패 배포의 Build Logs 첫 에러 줄** — 설정 거부인지 빌드 실패인지.
+
+🔵 두 형태 중 **배포 URL 이 붙은 것**(`dpl_GQp5ks8xrB8Ksdm2YyHVvKsDj1XH`, `dpl_GbR77kk91nzn5TcVErVUpL1Xp4Zt`)
+이 로그가 남아 있을 가능성이 높다 — 거기부터 열어라.
 
 # Goal
 
