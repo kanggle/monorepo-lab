@@ -29,13 +29,14 @@
 # -----------------------------------------------------------------------------
 # 🔴🔴 대조군 — 같은 값끼리 비교하면 언제나 통과한다
 # -----------------------------------------------------------------------------
-# 이 판정자가 **실제로 구별하는지** 는 오리진 두 개로 확인한다(2026-08-21 실측):
+# `--self-test` 가 **같은 오리진에 기준만 바꿔** 두 결론이 갈리는지 본다:
+#   기준 = 현재 ref        → 신선 (0)
+#   기준 = 그 파일의 이전 판 → 낡음 (1)
 #
-#   CloudFront (terraform apply 직후)  → 신선   (exit 0)
-#   Vercel     (rate limit 로 배포 정지) → 낡음   (exit 1)
-#
-# 같은 판정자, 같은 시각, **반대 결론**. 이것이 대조군이다 — 자기 자신과 비교해서 통과하는
-# 것이 아님을 두 결과의 어긋남이 증명한다. `--self-test` 가 이 왕복을 그대로 돌린다.
+# 🔴 초판은 "오리진 두 개(Vercel vs CloudFront)가 서로 다른 판정을 내는가" 였고, 그날은
+# 성립했다 — 한쪽 배포가 멈춰 있었기 때문이다. **둘 다 고쳐지는 순간 그 대조군은 소진된다.**
+# 대조군이 *결함의 존재*에 의존하고 있었던 것이고, 고치면 죽는 대조군은 대조군이 아니다.
+# 지금 형태는 배포가 건강해도 영원히 성립한다.
 # =============================================================================
 set -uo pipefail
 
@@ -67,25 +68,49 @@ strip_cr() { tr -d '\r'; }
 # 로컬 수정이 기준이 되면 "내 트리와 같다" 를 "배포됐다" 로 오독한다.
 expected_bytes() { git -C "$HERE" show "$REF:infra/demo/aws/site/index.html" 2>/dev/null; }
 
-verdict_for() {
-  local origin="$1" exp_md5="$2" exp_sha="$3"
-  local body sha_served md5_served code
+# 🔴🔴 **방문자가 여는 경로를 재라 — `/index.html` 이 아니라 `/` 다.**
+# 2026-08-21 실측: `vercel.json` 의 `cleanUrls: true` 때문에 `/index.html` 은 **308 리다이렉트**이고
+# 본문이 **15 바이트**다. 그런데 `curl -f` 는 3xx 에서 죽지 않으므로, 이 판정자는 그 스텁을
+# 해싱하면서 **"낡음" 을 확신에 차서 보고했다** — 정작 정문(`/`)은 그 순간 main 과 바이트가
+# 정확히 같았다(`6437f1fe…`, 방문자 화면 링크 3개). 판정 축이 사용자 축과 달랐던 것이다.
+# ⇒ **리다이렉트를 따라가고(`-L`), 최종 상태가 200 이 아니면 '낡음' 이 아니라 '판정 불가'** 로 낸다.
+fetch_doc() { # <origin> <outfile>  -> "<http_code>|<final-url>"
+  curl -sSL --max-time 20 -o "$2" -w '%{http_code}|%{url_effective}' "$1/" 2>/dev/null || echo "000|"
+}
 
-  body="$(curl -fsS --max-time 20 "$origin/index.html" 2>/dev/null)"; code=$?
-  if [ $code -ne 0 ] || [ -z "$body" ]; then
-    say "✖ $origin — index.html 을 못 읽었습니다 (curl rc=$code) ⇒ 판정 불가"
-    return 2
+verdict_for() {
+  local origin="$1" exp_md5="$2" exp_sha="$3" label="${4:-$REF}"
+  local sha_served md5_served meta http final tmpf
+  tmpf="$(mktemp)"
+
+  say "── $origin"
+  meta="$(fetch_doc "$origin" "$tmpf")"
+  http="${meta%%|*}"; final="${meta#*|}"
+  if [ "$http" != "200" ]; then
+    say "✖ $origin/ — 최종 HTTP $http (final=$final) ⇒ **판정 불가**(낡음이 아니다)"
+    rm -f "$tmpf"; return 2
   fi
-  local cr
-  cr="$(printf '%s' "$body" | tr -cd '\r' | wc -c | tr -d ' ')"
-  md5_served="$(printf '%s' "$body" | strip_cr | md5sum | cut -d' ' -f1)"
+  if [ ! -s "$tmpf" ]; then
+    say "✖ $origin/ — 본문이 비어 있습니다 ⇒ 판정 불가"
+    rm -f "$tmpf"; return 2
+  fi
+
+  local cr bytes
+  cr="$(tr -cd '\r' < "$tmpf" | wc -c | tr -d ' ')"
+  bytes="$(wc -c < "$tmpf" | tr -d ' ')"
+  md5_served="$(strip_cr < "$tmpf" | md5sum | cut -d' ' -f1)"
+  say "   최종 URL = $final  ($bytes B)"
+  rm -f "$tmpf"
 
   sha_served="$(curl -fsS --max-time 20 "$origin/build-info.json" 2>/dev/null \
                  | tr -d ' \n' | sed -n 's/.*"commit":"\([0-9a-f]*\)".*/\1/p')"
 
-  say "── $origin"
+  local md5_claimed
+  md5_claimed="$(curl -fsS --max-time 20 "$origin/build-info.json" 2>/dev/null \
+                  | tr -d ' \n' | sed -n 's/.*"index_md5":"\([0-9a-f]*\)".*/\1/p')"
+
   say "   서빙 md5 = $md5_served   (CR $cr개 걷어낸 뒤)"
-  say "   기대 md5 = $exp_md5   ($REF)"
+  say "   기대 md5 = $exp_md5   ($label)"
   if [ -n "$sha_served" ]; then
     say "   서빙 커밋 = $sha_served"
     say "   기대 커밋 = $exp_sha"
@@ -93,27 +118,51 @@ verdict_for() {
     say "   서빙 커밋 = (build-info.json 없음 — 562 이전 배포이거나 S3 사본)"
   fi
 
+  # 🔴 **두 축이 어긋나면 그 자체가 발견이다.** build-info.json 은 빌드가 *조립한* 파일의
+  # md5 를 적고, 위의 서빙 md5 는 *실제로 나온* 바이트다. 둘이 다르면 배포 후 누가(CDN·엣지·
+  # 미들웨어) 문서를 바꾼 것이고, 그건 "낡음" 과 전혀 다른 사건이다. 조용히 넘기지 마라.
+  if [ -n "$md5_claimed" ] && [ "$md5_claimed" != "$md5_served" ]; then
+    say "   ⚠ build-info 가 적은 index_md5=$md5_claimed 와 실제 서빙 바이트가 다릅니다"
+    say "     — 배포 후 문서가 변형됐거나, 재는 경로가 서빙 경로와 다릅니다."
+  fi
+
   if [ "$md5_served" = "$exp_md5" ]; then
-    say "   ✔ 신선 — 서빙 중인 바이트가 $REF 과 같습니다."
+    say "   ✔ 신선 — 서빙 중인 바이트가 $label 과 같습니다."
     return 0
   fi
 
   if [ -n "$sha_served" ] && [ "$sha_served" != "$exp_sha" ]; then
     local behind
-    behind="$(git -C "$HERE" rev-list --count "$sha_served..$REF" 2>/dev/null || echo '?')"
-    say "   ✖ 낡음 — $REF 보다 커밋 $behind 개 뒤처져 있습니다."
+    # 🔴 한 방향만 세면 거짓말이 된다. 서빙본이 기준보다 **앞서** 있을 수도 있고
+    #    (대조군이 옛 판을 기준으로 댈 때가 정확히 그 경우다), 그때 "0개 뒤처짐" 은
+    #    "같다" 처럼 읽힌다. 양방향을 세서 어느 쪽인지 말한다.
+    local ahead
+    behind="$(git -C "$HERE" rev-list --count "$sha_served..$exp_sha" 2>/dev/null || echo '?')"
+    ahead="$(git -C "$HERE" rev-list --count "$exp_sha..$sha_served" 2>/dev/null || echo '?')"
+    if [ "$behind" != "0" ]; then
+      say "   ✖ 낡음 — $label 보다 커밋 $behind 개 뒤처져 있습니다."
+    elif [ "$ahead" != "0" ]; then
+      say "   ✖ 다름 — 서빙본이 $label 보다 커밋 $ahead 개 **앞서** 있습니다(내용도 다름)."
+    else
+      say "   ✖ 다름 — 커밋은 같은데 바이트가 다릅니다(배포 후 변형 의심)."
+    fi
   else
-    say "   ✖ 낡음 — 서빙 중인 바이트가 $REF 과 다릅니다."
+    say "   ✖ 낡음 — 서빙 중인 바이트가 $label 과 다릅니다."
   fi
   return 1
 }
 
-exp_bytes="$(expected_bytes)"
-if [ -z "$exp_bytes" ]; then
+# 🔴 기대값도 **파일로** 읽는다. `$(...)` 는 끝의 개행을 먹으므로, 한쪽만 명령치환으로
+# 만들면 두 값이 **같은 문서인데도 다른 md5** 가 된다 — 실제로 그랬다(`48fc5c57…` vs 파일
+# md5 `6437f1fe…`). 그러면 `build-info.json` 의 `index_md5` 와도 대조가 안 된다.
+EXP_FILE="$(mktemp)"
+expected_bytes > "$EXP_FILE"
+if [ ! -s "$EXP_FILE" ]; then
   say "✖ $REF 에서 index.html 을 읽지 못했습니다 (fetch 가 필요할 수 있습니다) ⇒ 판정 불가"
-  exit 2
+  rm -f "$EXP_FILE"; exit 2
 fi
-EXP_MD5="$(printf '%s' "$exp_bytes" | strip_cr | md5sum | cut -d' ' -f1)"
+EXP_MD5="$(strip_cr < "$EXP_FILE" | md5sum | cut -d' ' -f1)"
+rm -f "$EXP_FILE"
 EXP_SHA="$(git -C "$HERE" rev-parse "$REF" 2>/dev/null || echo unknown)"
 
 if [ "$SELFTEST" -eq 0 ]; then
@@ -121,29 +170,49 @@ if [ "$SELFTEST" -eq 0 ]; then
   exit $?
 fi
 
-# --- --self-test: 판정자가 실제로 구별하는지 -----------------------------------
-# 🔴 두 오리진의 결론이 **같으면** 그건 판정자가 아무것도 안 재고 있다는 뜻이다.
-say "▶ 대조군 왕복 — 판정자가 두 오리진을 다르게 판정하는지 확인합니다."
-# 대조 오리진 = S3/CloudFront 사본. terraform 이 `site_url` 로 알고 있으므로 거기서 묻고,
-# terraform 이 없는 환경(CI)에서는 `CONTROL_ORIGIN` 으로 넘긴다. 🔴 리터럴 기본값을 두지
-# 않는다 — CloudFront 도메인은 재생성마다 바뀌고, 박아두면 그 순간부터 썩는다(MONO-389).
-CF="${CONTROL_ORIGIN:-}"
-if [ -z "$CF" ] && command -v terraform >/dev/null 2>&1; then
-  CF="$(terraform -chdir="$HERE/../terraform" output -raw site_url 2>/dev/null || true)"
-fi
-if [ -z "$CF" ]; then
-  say "✖ 대조 오리진을 모릅니다 — CONTROL_ORIGIN 을 주거나 terraform 이 필요합니다 ⇒ 판정 불가"
+# =============================================================================
+# --self-test — 판정자가 **실제로 구별하는지**
+# =============================================================================
+# 🔴🔴 초판은 "오리진 두 개(Vercel vs CloudFront)가 서로 다른 판정을 내는가" 였다.
+# 그날은 성립했다(한쪽은 배포가 멈춰 낡았고 한쪽은 방금 apply 해서 신선했다). **그런데 둘 다
+# 고쳐지는 순간 그 대조군은 소진된다** — 건강한 세상에서는 영원히 만족될 수 없는 조건이라,
+# 대조군이 *결함의 존재*에 의존하고 있었던 것이다. 고치면 죽는 대조군은 대조군이 아니다.
+#
+# 지금은 **같은 오리진 · 같은 판정자 · 두 기준**으로 가른다. 언제나 성립한다:
+#   (1) 기준 = 현재 ref      -> 신선(0) 이어야 한다
+#   (2) 기준 = 그 파일의 이전 판 -> **낡음(1)** 이어야 한다
+# (2)가 0 을 내면 판정자는 무엇을 대도 "같다" 고 말하는 것이다.
+say "▶ 대조군 — 같은 오리진에 기준만 바꿔 두 결론이 갈리는지 확인합니다."
+
+# 이 파일을 **실제로 바꾼** 직전 커밋을 기준으로 쓴다. `HEAD~n` 같은 상수는 그 사이에
+# 무관한 커밋이 쌓이면 "내용이 같은 옛 커밋" 을 집어 (2)를 조용히 무효로 만든다.
+# 🔴 `git log -- <path>` 는 **cwd 기준**이고 `git show <ref>:<path>` 는 **저장소 루트 기준**이다.
+# 두 술어를 같은 문자열로 쓰면 한쪽이 조용히 0건이 된다(실측: 대조군이 "이전 커밋 없음" 으로
+# 죽었다). 루트 앵커 `:/` 를 붙여 둘의 축을 맞춘다.
+PREV_SHA="$(git -C "$HERE" log -2 --format=%H -- ':/infra/demo/aws/site/index.html' 2>/dev/null | tail -1)"
+if [ -z "$PREV_SHA" ] || [ "$PREV_SHA" = "$EXP_SHA" ]; then
+  say "✖ index.html 을 바꾼 이전 커밋을 못 찾았습니다 ⇒ 대조군 성립 불가(판정 불가)"
   exit 2
 fi
-
-verdict_for "$CF" "$EXP_MD5" "$EXP_SHA"; a=$?
-verdict_for "$ORIGIN" "$EXP_MD5" "$EXP_SHA"; b=$?
-
-say "── 대조군 결과: CloudFront=$a  Vercel=$b"
-if [ "$a" -eq "$b" ]; then
-  say "✖ 두 오리진이 **같은 판정**을 냈습니다 — 대조군이 성립하지 않습니다."
-  say "  (둘 다 신선하면 이 대조군은 소진된 것이고, 둘 다 낡았으면 판정자를 의심하라.)"
+PREV_FILE="$(mktemp)"
+git -C "$HERE" show "$PREV_SHA:infra/demo/aws/site/index.html" > "$PREV_FILE" 2>/dev/null
+PREV_MD5="$(strip_cr < "$PREV_FILE" | md5sum | cut -d' ' -f1)"
+rm -f "$PREV_FILE"
+if [ "$PREV_MD5" = "$EXP_MD5" ]; then
+  say "✖ 이전 판의 내용이 현재와 **같습니다** — 이 기준으로는 아무것도 구별할 수 없습니다 ⇒ 판정 불가"
   exit 2
 fi
-say "✔ 판정자가 두 오리진을 구별했습니다 (한쪽 신선 / 한쪽 낡음)."
+say "   대조 기준 = ${PREV_SHA:0:9} (md5 $PREV_MD5) vs 현재 $EXP_MD5"
+
+verdict_for "$ORIGIN" "$EXP_MD5"  "$EXP_SHA"  "$REF (현재)";               a=$?
+verdict_for "$ORIGIN" "$PREV_MD5" "$PREV_SHA" "${PREV_SHA:0:9} (이전 판)"; b=$?
+
+say "── 대조군 결과: 현재기준=$a  이전판기준=$b"
+if [ "$a" -ne 0 ] || [ "$b" -ne 1 ]; then
+  say "✖ 기대는 현재기준=0(신선) · 이전판기준=1(낡음) 이었습니다."
+  say "  둘이 같으면 판정자가 무엇을 대도 같은 답을 내는 것이고, 현재기준이 0 이 아니면"
+  say "  **배포가 실제로 낡은 것**이다 — 그때는 판정자가 아니라 배포를 봐라."
+  exit 2
+fi
+say "✔ 판정자가 같은 오리진을 두 기준으로 갈랐습니다 (현재=신선 / 이전판=낡음)."
 exit 0
