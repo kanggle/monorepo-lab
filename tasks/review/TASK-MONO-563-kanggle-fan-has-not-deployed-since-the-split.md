@@ -354,6 +354,26 @@ Vercel 의 *"Root Directory 바깥 소스를 빌드 단계에 포함"* 도 대�
 `kanggle-fan.vercel.app` 은 여전히 **404**(프로덕션 배포는 `main` 에서만 생긴다).
 AC-1 의 판정은 *"머지 후 프로덕션이 그 커밋을 서빙하는가"* 이고, 그것은 머지 이후에 잰다.
 
+## ✅ 2026-08-21 15:20 UTC — **무시 규칙이 fan 에서 처음 발화했다. 남은 갈림길이 닫혔다**
+
+`62a43e817` 은 `tasks/**` 만 건드린다 — 이 티켓이 세워 둔 판별 칸이 그대로 돌았다.
+
+```
+Vercel – kanggle-fan        success   Canceled by Ignored Build Step
+Vercel – kanggle-portfolio  success   Canceled by Ignored Build Step
+```
+
+⇒ **"Root Directory 바깥 소스를 빌드 단계에 포함" 은 ON 이다.** 판정자
+(`/scripts/vercel-should-build.sh`)와 래퍼가 빌드 컨텍스트에서 도달 가능하다.
+**대시보드 변경은 필요 없다.**
+
+🔵 그리고 이것이 원인 진단을 한 번 더 확증한다 — 규칙 자체는 562 때부터 옳았고,
+**`vercel.json` 이 거부되어 실행될 기회가 없었을 뿐이다.** 길이를 고치자 같은 규칙이
+아무 수정 없이 발화했다.
+
+🔵 `TASK-MONO-562` 의 절감 효과가 이제 **두 프로젝트 모두**에서 실현된다
+(562 는 *"fan 쪽은 아직 발화하지 않는다 — 그때까지 절감은 portfolio 쪽만"* 으로 닫혔다).
+
 ## AC 진행 상태
 
 | AC | 상태 |
