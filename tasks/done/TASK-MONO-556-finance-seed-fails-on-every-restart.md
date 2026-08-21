@@ -8,7 +8,7 @@ finance 시드가 **재시작마다** 실패한다 — 술어가 "입금이 성�
 
 # Status
 
-review
+done
 
 # Owner
 
