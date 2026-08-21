@@ -61,8 +61,13 @@ ENV NEXT_OUTPUT_STANDALONE=1
 # without this every rebuild compiles cold. NOT copied into the runner image.
 RUN --mount=type=cache,target=/app/web/fan-platform-web/.next/cache \
     pnpm --filter fan-platform-web build
-# The app ships no `public/` directory today. Create it so the runner's COPY has
-# a source either way, and so adding one later needs no Dockerfile change.
+# TASK-MONO-563: the build now writes `public/build-info.json`, so `public/` exists
+# after every build. The mkdir stays as a belt — if the generator is ever removed
+# the runner's COPY must not start failing instead of saying what changed.
+# NOTE the value it writes HERE is `commit=unknown`: this build context has no
+# `.git` and no `VERCEL_GIT_*`. That is deliberate — the freshness judge reads
+# `unknown` as **undecidable**, never as fresh. An absent file and a file that
+# says "I do not know" are different states.
 RUN mkdir -p /app/web/fan-platform-web/public
 
 FROM base AS runner

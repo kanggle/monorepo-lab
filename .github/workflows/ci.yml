@@ -617,6 +617,13 @@ jobs:
               - '**/vercel-ignore.sh'
               - 'scripts/vercel-should-build.sh'
               - 'scripts/check-vercel-build-triggers.sh'
+              # TASK-MONO-563: the two deployment-freshness judges. They are manual
+              # tools (they need the live origin, so no PR-time job runs them), which
+              # is exactly why their syntax must be gated somewhere — a tool nobody
+              # ever executes rots silently and is discovered at the moment it is
+              # needed. This job is the only Vercel-adjacent owner in CI.
+              - 'infra/demo/aws/site/check-launcher-fresh.sh'
+              - '**/check-fan-fresh.sh'
             # TASK-MONO-511: a cross-project listener arrives as a new @KafkaListener in
             # any project's main sources; the other side of the drift is an edit to the
             # relay whitelist or to a broker's advertised listeners. All three arrival
@@ -970,6 +977,9 @@ jobs:
           # **grep 으로** 뽑으므로 문법 오류를 못 본다 — 목록은 멀쩡해 보이는데
           # 배포 시점에 래퍼가 죽는다. 그래서 문법은 여기서 따로 본다.
           git ls-files '*vercel-ignore.sh' | while read -r f; do bash -n "$f"; done
+          # 배포 신선도 판정자들 (TASK-MONO-563). 위 주석 참조 — 실행되는 곳이 없으므로
+          # 문법만이라도 여기서 잡는다.
+          git ls-files '*check-fan-fresh.sh' 'infra/demo/aws/site/check-launcher-fresh.sh'             | while read -r f; do bash -n "$f"; done
 
       - name: Self-test the predicate (bites on the real configs, mutated)
         run: bash scripts/check-vercel-build-triggers.sh --self-test
