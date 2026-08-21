@@ -76,6 +76,16 @@ served_commit() { # <origin> -> stdout: sha  |  rc 2 = 판정 불가
     say "  ⇒ **판정 불가**(낡음이 아니다). build-info.json 이전 판이거나 자산이 안 올라갔다."
     rm -f "$tmp"; return 2
   fi
+  # 🔴🔴 **200 이 곧 JSON 은 아니다.** Vercel 의 Deployment Protection 은 인증 벽 HTML 을
+  #    **HTTP 200 으로** 낸다(프리뷰 배포에서 실측: <!DOCTYPE html> + data-dpl-id).
+  #    그것을 "commit 을 못 뽑았다" 로 뭉뚱그리면 다음 사람이 **빌드를 의심하며** 시간을
+  #    쓴다 — 실제로는 **읽을 권한이 없는 것**이고, 그건 전혀 다른 사건이다.
+  if head -c 200 "$tmp" | grep -qiE "<!doctype html|<html"; then
+    say "✖ $origin/build-info.json — 200 인데 본문이 **HTML** 입니다."
+    say "  ⇒ Vercel Deployment Protection(인증 벽) 의심 ⇒ **판정 불가**."
+    say "     프리뷰 배포는 기본으로 보호된다 — 프로덕션 오리진으로 재라."
+    rm -f "$tmp"; return 2
+  fi
   sha="$(tr -d ' \n\r' < "$tmp" | sed -n 's/.*"commit":"\([0-9a-zA-Z]*\)".*/\1/p')"
   rm -f "$tmp"
   # 🔴 `unknown` 을 신선으로 읽지 않는다. 빌드가 커밋을 못 읽었다고 **적어 둔** 상태이고,
