@@ -8,7 +8,7 @@ Vercel 무료 플랜의 **배포 rate limit** 이 모든 PR 을 빨갛게 만들
 
 # Status
 
-ready
+review
 
 # Owner
 
