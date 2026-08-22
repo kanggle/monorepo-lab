@@ -60,6 +60,31 @@
 - 예약어 (`admin`, `internal`, `system`, `null`, `default`, `public`, `gap`, `iam`, `auth`, `oauth`, `me`) 는 `tenantId` 로 등록 불가 (`400 TENANT_ID_RESERVED`).
 - 테넌트 삭제 미지원 — 감사 트레일·외부 토큰 정합으로 인해 SUSPEND 만 가능.
 
+#### `oauth_clients.tenant_id` 가 실재 테넌트가 아닌 경우 (TASK-BE-581)
+
+`auth_db.oauth_clients.tenant_id` 는 `account_db.tenants` 를 가리키지만 **두 DB가 갈라져 있어
+FK 로 강제할 수 없고 마이그레이션도 각자 돈다**. 값은 세 범주 중 하나여야 하며, 그 외는 결함이다.
+
+| 범주 | 뜻 | `tenants` 행 | 예 |
+|---|---|---|---|
+| 실재 테넌트 | 정상 | **있어야 함** | `ecommerce`, `wms`, `fan-platform` |
+| **예약 슬러그** | 위 예약어. 플랫폼 자신의 운영 슬러그이므로 아무도 등록할 수 없다 | **없는 것이 정상** | `iam` (`platform-console-web`, `V0024`) |
+| **INTERNAL 워크로드 센티넬** | 제품 테넌트에 묶이지 않는 GAP 내부 서비스 신원. 클라이언트 행의 `tenant_type='INTERNAL'` 이 판별자 | **없는 것이 정상** | `global-account-platform` (`V0019` 의 4개 client_credentials 클라이언트) |
+
+- 뒤 두 범주는 `tenants` 행이 없는 것이 **설계대로**이므로, 브라우저 가입 경로가 그 값에 닿으면
+  가입은 100% `404 TENANT_NOT_FOUND` 다. 그래서 [signup.md § 브라우저 회원가입 화면의 제시
+  조건](signup.md) 이 그 경로를 막는다.
+- INTERNAL 센티넬 클라이언트는 `client_credentials` 전용이어야 한다 — `authorization_code` 를
+  얻는 순간 브라우저 경로가 생기고 `iam` 과 동일한 결함이 된다.
+- 🔴 **미해소 인접 결함**: `global-account-platform` 은 위 예약어 목록에 **없고** 슬러그 정규식
+  `^[a-z][a-z0-9-]{1,31}$` 을 통과하므로, 현재 소비자가 그 이름으로 테넌트를 등록할 수 있다.
+  등록되면 내부 워크로드 센티넬이 실재 제품 테넌트와 충돌한다. 예약어 추가는 admin-api 계약
+  변경이라 별도 티켓으로 다룬다 (TASK-BE-581 범위 밖 — 발견만 기록).
+
+가드: `OAuthClientTenantReferenceIntegrationTest` (auth-service, `@Tag("integration")`).
+모집단은 **production 마이그레이션만 적용한 DB** 에서 읽는다 — dev 시드가 섞이면 production 에서
+깨진 상태에 초록이 된다.
+
 ---
 
 ## Org Node Model (ADR-MONO-047)

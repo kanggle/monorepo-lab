@@ -42,7 +42,11 @@
     <!-- fix-001: errors are rendered server-side after the proxy call (no client fetch). -->
     <div class="error" th:if="${error != null}" th:text="${error}" role="alert">error</div>
 
-    <form th:action="@{/signup}" method="post" id="signup-form">
+    <!-- TASK-BE-581: when the initiating client's tenant cannot accept a signup at all, the
+         form is not rendered. Leaving it visible and letting the POST fail is what produced
+         the reported defect: a permanent 404 TENANT_NOT_FOUND surfaced as "the auth service
+         is temporarily unavailable" (TASK-BE-580). -->
+    <form th:if="${!signupBlocked}" th:action="@{/signup}" method="post" id="signup-form">
         <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
 
         <label for="email">Email</label>
@@ -70,7 +74,10 @@
 
 <!-- Progressive enhancement: block an obvious mismatch/short password before the round-trip.
      The server re-validates regardless (source of truth). -->
-<script th:inline="none">
+<!-- TASK-BE-581: suppressed together with the form. This script does
+     document.getElementById('signup-form').addEventListener(...) unconditionally, so leaving
+     it on a page that renders no form throws a TypeError on load. -->
+<script th:if="${!signupBlocked}" th:inline="none">
     (function () {
         var form = document.getElementById('signup-form');
         form.addEventListener('submit', function (e) {

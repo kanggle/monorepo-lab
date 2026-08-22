@@ -151,4 +151,34 @@ public interface AccountServicePort {
      *         if account-service is down (5xx / circuit-open / timeout / IO)
      */
     Optional<String> getTenantType(String tenantId);
+
+    /**
+     * Looks up a tenant's registry record — {@code tenant_type} AND {@code status}.
+     *
+     * <p>TASK-BE-581. {@link #getTenantType(String)} answers only "what type", discarding
+     * the {@code status} field that {@code GET /internal/tenants/{tenantId}} already
+     * returns. The browser signup surface needs BOTH, because the predicate that actually
+     * decides whether an account can be born in a tenant is account-service's
+     * {@code ActiveTenantGuard} — <b>row exists AND status is ACTIVE</b>. A caller that
+     * sees only existence reports a suspended tenant as signup-capable and the user then
+     * hits a 403 from the surface that just offered them the form.</p>
+     *
+     * <p>Same failure mapping as {@link #getTenantType(String)}: a 404 is "no such tenant"
+     * (empty), and any NON-404 4xx / 5xx / timeout is an outage, not an answer.</p>
+     *
+     * @param tenantId the tenant to look up
+     * @return the tenant record, or empty if the tenant does not exist (404)
+     * @throws com.example.auth.application.exception.AccountServiceUnavailableException
+     *         if account-service is down (5xx / circuit-open / timeout / IO)
+     */
+    Optional<TenantLookupResult> getTenant(String tenantId);
+
+    /**
+     * A tenant registry record as account-service reports it.
+     *
+     * @param tenantType the authoritative {@code tenant_type} (e.g. {@code B2C})
+     * @param status     the tenant lifecycle status (e.g. {@code ACTIVE}, {@code SUSPENDED})
+     */
+    record TenantLookupResult(String tenantType, String status) {
+    }
 }
