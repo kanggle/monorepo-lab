@@ -75,6 +75,18 @@ class OAuthClientTenantReferenceIntegrationTest extends AbstractIntegrationTest 
     /** Client-row {@code tenant_type} marking a GAP-internal workload identity (V0019). */
     private static final String INTERNAL_TENANT_TYPE = "INTERNAL";
 
+    /**
+     * 🔴 These scratch databases are created and read as {@code root}, not as the container's
+     * configured user.
+     *
+     * <p>Verified against {@code MySQLContainer.configure()} (testcontainers 1.20.4): it sets
+     * {@code MYSQL_USER}/{@code MYSQL_PASSWORD} and {@code MYSQL_ROOT_PASSWORD} to the same
+     * password, and the official MySQL entrypoint grants the non-root user privileges on
+     * {@code MYSQL_DATABASE} <b>only</b>. So {@code CREATE DATABASE} as {@code test} is denied.
+     * Root shares the password, which is why no extra container configuration is needed.
+     */
+    private static final String ROOT_USER = "root";
+
     private static final String AUTH_DB = "be581_auth";
     private static final String ACCOUNT_PROD_DB = "be581_account_prod";
     private static final String ACCOUNT_DEV_DB = "be581_account_dev";
@@ -432,11 +444,11 @@ class OAuthClientTenantReferenceIntegrationTest extends AbstractIntegrationTest 
 
     private static void createDatabase(String name) throws SQLException {
         try (Connection c = DriverManager.getConnection(
-                MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
+                MYSQL.getJdbcUrl(), ROOT_USER, MYSQL.getPassword());
              Statement s = c.createStatement()) {
             s.execute("DROP DATABASE IF EXISTS " + name);
             s.execute("CREATE DATABASE " + name
-                    + " DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+                    + " CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
         }
     }
 
@@ -446,7 +458,7 @@ class OAuthClientTenantReferenceIntegrationTest extends AbstractIntegrationTest 
             urls[i] = "filesystem:" + locations[i].toAbsolutePath();
         }
         Flyway.configure()
-                .dataSource(jdbcUrl(database), MYSQL.getUsername(), MYSQL.getPassword())
+                .dataSource(jdbcUrl(database), ROOT_USER, MYSQL.getPassword())
                 .locations(urls)
                 .load()
                 .migrate();
@@ -454,7 +466,7 @@ class OAuthClientTenantReferenceIntegrationTest extends AbstractIntegrationTest 
 
     private static Connection connect(String database) throws SQLException {
         return DriverManager.getConnection(
-                jdbcUrl(database), MYSQL.getUsername(), MYSQL.getPassword());
+                jdbcUrl(database), ROOT_USER, MYSQL.getPassword());
     }
 
     private static String jdbcUrl(String database) {
