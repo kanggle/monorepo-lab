@@ -8,7 +8,7 @@ TASK-MONO-550
 
 # Status
 
-ready
+done
 
 # Owner
 
