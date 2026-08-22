@@ -1,6 +1,6 @@
 # TASK-BE-580 — 회원가입의 **영구** 실패(404 `TENANT_NOT_FOUND`)가 *"잠시 후 다시 시도해 주세요"* 로 보고된다
 
-- **Status**: ready
+- **Status**: review
 - **Project**: iam-platform
 - **Service**: auth-service (SAS browser signup surface)
 - **Type**: bug fix
@@ -136,3 +136,110 @@ rate-limit 이 걸린 사용자에게 *"다시 시도하지 마세요"* 라고 �
   AC-1 (1)·(4) 가 그 대조군이다.
 - **로그에 본문 전체를 찍으면**: 지금 본문엔 PII 가 없지만 계약이 바뀌면 샌다. `code` 만
   찍어라.
+
+
+---
+
+# 실행 기록 (2026-08-22 UTC)
+
+## AC-0 — 전수. 🔴 **티켓의 추론이 틀렸고, 그 자리에 404보다 나쁜 결함이 있었다**
+
+티켓은 *"403(테넌트 비활성/정지)"* 를 후보로 적었다. account-service `GlobalExceptionHandler`
+를 실제로 읽으니 **`TenantSuspendedException` → `409 CONFLICT` (`TENANT_SUSPENDED`)** 다.
+
+그리고 auth-service 는 **모든 `409` 를 이메일 중복으로** 분류하고 있었다:
+
+> 정지된 테넌트에서 가입 시도 → *"이미 가입된 이메일입니다. **로그인해 주세요.**"*
+
+🔴 **이쪽이 404 케이스보다 나쁘다.** 404 는 최소한 *"서비스 문제"* 라고 (틀리게나마) 말했지만,
+이건 **거짓인데다 행동 가능해 보이는 지시**라 사용자를 **역시 실패할 로그인으로** 보낸다.
+403 이었다면 미분류 4xx 로 떨어져 *"잠시 후 다시"* 가 됐을 것이다 — 즉 **틀린 추론이 이 칸을
+숨기고 있었다.** 이미 옳아 보이는 가지에 떨어졌기 때문이다.
+
+⇒ **설계 귀결: 상태 코드만으로는 분류가 불가능하다.** `409` 하나가 정반대 두 뜻을 나른다.
+판별자는 **본문 `code`** 여야 한다.
+
+### `POST /api/accounts/signup` 이 낼 수 있는 4xx 전수 (핸들러에서 확인)
+
+| 상태 | `code` | 도달 경로 | 분류 |
+|---|---|---|---|
+| `409` | `ACCOUNT_ALREADY_EXISTS` | `AccountAlreadyExistsException` | 기존 유지 — 이메일 중복 |
+| **`409`** | **`TENANT_SUSPENDED`** | `ActiveTenantGuard` | **영구** (신규) |
+| **`404`** | **`TENANT_NOT_FOUND`** | `ActiveTenantGuard` | **영구** (신규) |
+| `422` | `VALIDATION_ERROR` | `PasswordPolicyViolationException` | 기존 유지 |
+| `400` | — | `@Valid` / 이메일 형식 | 기존 유지 |
+| `429` | `RATE_LIMITED` | `RateLimitedException` | 기존 유지 — **진짜 일시적** |
+
+🔵 `403 TENANT_SCOPE_DENIED` 는 이 엔드포인트에 **도달하지 않는다**(내부/관리 경로 전용).
+가입 경로는 `ActiveTenantGuard` 만 통과한다.
+
+## AC-1 / AC-4 — 대조군 포함 판정 (`AccountServiceClientSignupClassificationTest`, 10칸)
+
+| 칸 | 응답 | 기대 | 결과 |
+|---|---|---|---|
+| (1) **대조군** | `429 RATE_LIMITED` | 지금 그대로 *"잠시 후 다시"* | ✅ |
+| (2) **bite** | `404 TENANT_NOT_FOUND` | 영구 | ✅ |
+| (AC-0 발견) **bite** | `409 TENANT_SUSPENDED` | 영구 | ✅ |
+| (3) 회귀 대조군 | `409 ACCOUNT_ALREADY_EXISTS` | 이메일 중복 유지 | ✅ |
+| (3) 회귀 대조군 | `400` · `422` | 입력값 안내 유지 | ✅ |
+| (4) 회귀 대조군 | `503` · 연결 리셋 | *"일시적"* 유지 | ✅ |
+| 판정 불가 | 빈 본문 / 비-JSON / 처음 보는 `code` | **기존 동작 유지** | ✅ |
+
+### 🔴 bite 확인 — 고침 전 코드에 대고 (칸을 **격리**해서 실행)
+
+처음엔 스위트 전체로 돌렸는데 **콘솔 로그와 결과 XML 이 서로 다른 테스트 이름에 실패를
+귀속**시켰다. 그 상태의 계측기로 bite 를 보고할 수 없어 칸을 하나씩 격리해 다시 쟀다.
+
+| 칸 | 고침 전 |
+|---|---|
+| `notFoundTenantIsPermanent` (bite) | **FAILED — 문다** |
+| `suspendedTenantIsPermanentNotAnEmailConflict` (bite) | **FAILED — 문다** |
+| `rateLimitedStaysTransient` (대조군) | passed — 초록 유지 |
+| `unknownCodeIsNotJudgedPermanent` (대조군) | passed — 초록 유지 |
+
+정확히 bite 두 칸만 물고 대조군은 그대로다. 주입은 `git diff --numstat` 으로 **주입됐음을
+먼저 확인**한 뒤 실행했다.
+
+### 🔴 그 과정에서 내 코드의 실제 버그를 대조군이 잡았다
+
+`Set.of(...).contains(null)` 은 `false` 를 반환하지 않고 **NPE 를 던진다**. `code` 는 본문을
+못 읽으면 `null` 이므로, 판정 불가 칸 전부가 NPE 로 죽었다. 대조군이 없었다면 bite 두 칸만
+초록인 채 **모든 미분류 4xx 가 NPE** 인 상태로 나갔을 것이다.
+
+## AC-2 — 진단이 로그에 남는다
+
+`log.warn("Signup proxy got client error {} code={} ...")` — 상태 코드에 **본문 `code`** 를
+더했다. 이전엔 상태만 찍혀서 `TENANT_NOT_FOUND` 인지 다른 404 인지 로그만 봐선 알 수 없었고,
+그래서 원 결함을 **컨테이너 로그를 손으로 읽어** 찾아야 했다.
+🔵 본문 **전체는 찍지 않는다** — 지금은 PII 가 없지만 계약이 넓어지면 샌다. `code` 만.
+파싱 실패는 `<unparsed>` 로 찍어 *"코드가 없었다"* 와 *"파싱을 못 했다"* 를 구별한다.
+
+## AC-3 — 사용자 문구
+
+`"이 경로로는 회원가입할 수 없습니다. 계정 생성은 관리자에게 문의해 주세요."`
+
+🔴 **TASK-BE-581 의 게이트 문구와 같은 상수를 쓴다.** 사용자 입장에서 같은 상황이고, 이
+저장소는 *"한 사실이 두 절에 있으면 한쪽만 고쳐진다"* 에 반복해서 데였다. 원래 581 의 문구는
+*"계정은 관리자가 생성합니다"* 였는데, **정지된 테넌트**에는 참이 아니라 양쪽에 참인 문장으로
+바꿨다. 갈라야 할 이유가 생기면 **의도적으로** 갈라라.
+
+## 🔴 581 에서 내가 쓴 틀린 문장 2곳을 정정했다
+
+581 을 구현할 때 *"suspended → 403"* 이라고 적었다. AC-0 실측이 **409** 임을 밝혔으므로
+`TenantSignupEligibilityPort` javadoc 과 `TenantSignupEligibilityResolver` 주석, 그리고
+`specs/features/signup.md` 의 해당 문장을 고쳤다. 방금 머지한 내 텍스트라도 틀린 건 틀린 것이다.
+
+## 변경된 것
+
+- `SignupNotPossibleException`(신규) — `errorCode` 를 나른다.
+- `AccountServiceClient.classifySignupClientError(...)` — 본문 `code` 기반 분류.
+  영구 목록은 **상태 규칙이 아니라 `code` allowlist** 다: 처음 보는 4xx 는 기존 동작(일시적)으로
+  떨어져야 한다. 상태 규칙이면 **아무도 안 본 실패를 영구로 단정**해 사용자에게 포기하라고 한다.
+- `SignupPageController` — `SignupNotPossibleException` 렌더 + 문구 상수 통합.
+- `specs/features/signup.md` § 실패의 종류를 구별해 보고한다 (신규).
+
+## 남은 것
+
+**AC-3 의 문구가 라이브에서 실제로 보이는지는 확인하지 않았다.** 데모 인스턴스가 정지 상태이고
+현재 AMI(`e632e3b54`)에는 이 변경도 581 도 없다 — `TASK-MONO-399` 가 기록한 대로 다음 재굽기가
+필요하다. 🔵 581 AC-4 와 **같은 기동에 묶으면** 한 번으로 끝난다.
