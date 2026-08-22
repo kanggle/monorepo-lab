@@ -16,7 +16,10 @@ package com.example.auth.application.port;
  * <b>exist</b> AND be <b>ACTIVE</b>. This port asks the same two questions of the same
  * record, rather than testing membership in a hardcoded reserved-slug list. A list would
  * answer "is this one of the values we thought about", which is a different question that
- * goes stale, and would miss the suspended-tenant case entirely (a 403, not a 404).
+ * goes stale, and would miss the suspended-tenant case entirely.
+ * TASK-BE-580 measured what that case actually is: account-service returns
+ * {@code 409 TENANT_SUSPENDED}, not the {@code 403} assumed here originally — and 409 was
+ * already being read as "email already registered", so it was the worse of the two defects.
  *
  * <p><b>This is a UX gate, not an authorization boundary.</b> {@code ActiveTenantGuard}
  * remains the authority; nothing here can admit an account the backend would reject. That

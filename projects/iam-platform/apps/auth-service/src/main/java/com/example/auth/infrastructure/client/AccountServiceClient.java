@@ -3,6 +3,7 @@ package com.example.auth.infrastructure.client;
 import com.example.auth.application.exception.AccountServiceUnavailableException;
 import com.example.auth.application.exception.SignupEmailConflictException;
 import com.example.auth.application.exception.SignupInvalidException;
+import com.example.auth.application.exception.SignupNotPossibleException;
 import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.application.result.AccountProfileResult;
 import com.example.auth.application.result.AccountStatusLookupResult;
@@ -22,10 +23,14 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Supplier;
 
 /**
@@ -43,6 +48,14 @@ public class AccountServiceClient implements AccountServicePort {
 
     /** Property key for the account-service base URL. */
     static final String BASE_URL_PROPERTY = "auth.account-service.base-url";
+
+    /**
+     * TASK-BE-580: parses the {@code code} out of an error body. Deliberately a plain local
+     * mapper rather than the injected application one — this reads a foreign service's error
+     * contract, so it must not inherit serialization config that exists for our own payloads,
+     * and adding a constructor parameter would ripple into every test that builds this client.
+     */
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     private final Environment environment;
     private final int connectTimeoutMs;
@@ -201,23 +214,99 @@ public class AccountServiceClient implements AccountServicePort {
                     .retrieve()
                     .toBodilessEntity();
         } catch (HttpClientErrorException e) {
-            int status = e.getStatusCode().value();
-            if (status == 409) {
-                throw new SignupEmailConflictException("Email already registered");
-            }
-            if (status == 400 || status == 422) {
-                throw new SignupInvalidException("Signup validation failed");
-            }
-            // 429 (rate limit) or any other 4xx from the public endpoint: treat as a
-            // transient failure so the page shows the generic "try again" message
-            // rather than misreporting it as a validation problem.
-            log.warn("Signup proxy got client error {} from account-service", e.getStatusCode());
-            throw new AccountServiceUnavailableException("Signup temporarily unavailable", e);
+            classifySignupClientError(e);
+            throw new IllegalStateException("unreachable", e);
         } catch (RuntimeException e) {
             log.error("Signup proxy failed: msg={} type={} cause={}",
                     e.getMessage(), e.getClass().getName(),
                     e.getCause() == null ? "null" : e.getCause().getClass().getName(), e);
             throw new AccountServiceUnavailableException("Account service is unavailable", e);
+        }
+    }
+
+    /**
+     * TASK-BE-580 — splits account-service's signup 4xx into <b>retry helps</b> and
+     * <b>retry cannot help</b>. Always throws.
+     *
+     * <h2>Why the status code alone is not enough</h2>
+     * 🔴 {@code 409} carries two opposite meanings on this endpoint, measured from
+     * account-service's {@code GlobalExceptionHandler}:
+     * <ul>
+     *   <li>{@code 409 ACCOUNT_ALREADY_EXISTS} — the visitor already has an account. "Log in
+     *       instead" is correct advice.</li>
+     *   <li>{@code 409 TENANT_SUSPENDED} — the tenant is suspended. Before TASK-BE-580 this
+     *       was reported as <i>"이미 가입된 이메일입니다. 로그인해 주세요."</i>, which is false
+     *       AND sends the visitor to a login that also fails. The ticket predicted a
+     *       {@code 403} here; the handler actually returns {@code 409}, which is precisely
+     *       how it stayed hidden — it landed in the branch that already looked correct.</li>
+     * </ul>
+     * So the discriminator is the body's {@code code}, not the status.
+     *
+     * <h2>Unclassified is not "permanent"</h2>
+     * An empty / non-JSON / unrecognised body cannot be judged. The safe side of "cannot
+     * judge" is the <b>pre-existing behaviour</b> (transient), because claiming permanence
+     * wrongly tells a visitor to stop trying something that would have worked.
+     */
+    private void classifySignupClientError(HttpClientErrorException e) {
+        int status = e.getStatusCode().value();
+        String code = extractErrorCode(e);
+
+        // TASK-BE-580 AC-2: the body's `code` goes in the log. Before this, only the status was
+        // logged, so the log could not tell TENANT_NOT_FOUND from any other 404 — which is why
+        // the original defect had to be found by reading container logs by hand.
+        // 🔵 The body carries no PII today; log the code ONLY, so widening it later cannot leak.
+        log.warn("Signup proxy got client error {} code={} from account-service",
+                e.getStatusCode(), code == null ? "<unparsed>" : code);
+
+        // `code` is null when the body could not be read. Java's immutable Set.contains(null)
+        // throws NPE rather than returning false, so the null check is load-bearing, not
+        // defensive noise — without it every unparseable 4xx becomes an NPE.
+        if (code != null && SIGNUP_PERMANENT_ERROR_CODES.contains(code)) {
+            throw new SignupNotPossibleException(code,
+                    "Signup cannot succeed for this tenant: " + code);
+        }
+        if (status == 409) {
+            throw new SignupEmailConflictException("Email already registered");
+        }
+        if (status == 400 || status == 422) {
+            throw new SignupInvalidException("Signup validation failed");
+        }
+        // 429 (rate limit) — genuinely transient — and any 4xx whose code we could not read.
+        throw new AccountServiceUnavailableException("Signup temporarily unavailable", e);
+    }
+
+    /**
+     * Error codes for which retrying the signup can never change the answer.
+     *
+     * <p>Enumerated from account-service's {@code GlobalExceptionHandler} (TASK-BE-580 AC-0),
+     * not inferred: {@code TENANT_NOT_FOUND} is a {@code 404} and {@code TENANT_SUSPENDED} is
+     * a {@code 409}. Both come from {@code ActiveTenantGuard}, the single predicate deciding
+     * whether an account may be born in a tenant at all.
+     *
+     * <p>🔴 Deliberately a <b>code</b> allowlist rather than a status rule: a future 4xx that
+     * this list has not seen falls through to the transient branch, which is the pre-580
+     * behaviour. A status rule would classify unknown futures as permanent and tell visitors
+     * to give up on failures nobody has looked at yet.
+     */
+    private static final Set<String> SIGNUP_PERMANENT_ERROR_CODES =
+            Set.of("TENANT_NOT_FOUND", "TENANT_SUSPENDED");
+
+    /**
+     * Reads {@code code} out of account-service's error body, or {@code null} when it is
+     * absent, empty, or not JSON. {@code null} means "cannot judge" — never "permanent".
+     */
+    private String extractErrorCode(HttpClientErrorException e) {
+        try {
+            String body = e.getResponseBodyAsString();
+            if (body == null || body.isBlank()) {
+                return null;
+            }
+            JsonNode code = objectMapper.readTree(body).get("code");
+            return code != null && code.isTextual() && !code.asText().isBlank()
+                    ? code.asText()
+                    : null;
+        } catch (RuntimeException | com.fasterxml.jackson.core.JsonProcessingException ex) {
+            return null;
         }
     }
 
