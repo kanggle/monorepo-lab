@@ -248,8 +248,18 @@ fi
 # OIDC 클라이언트의 redirect_uri 는 마이그레이션에 `.local` 로 박혀 있다. 데모 도메인은
 # 부팅 때 정해지므로 마이그레이션이 알 수 없다 → 여기서 등록한다. DEMO_DOMAIN=local 이면
 # no-op. (자세한 근거는 seed-demo-domain.sh 헤더. 가드 (k) 가 이 호출을 지킨다.)
+# 🔴🔴 종료코드를 포착한다 (TASK-MONO-552 AC-3 구현 중 발견).
+# 이 호출은 `set -e` 아래에서 **rc 를 안 받고** 있었다. 그래서 이 시드가 실패하면
+# (실측: DB 가 안 뜬 판에서 5분 대기 후 exit 1) `demo-up.sh` 가 **그 자리서 죽고**,
+# 아래의 최종 판정 블록 — 도메인 재측정 보고 · HTTP 표면 검사 · 예산 고갈 경고 —
+# 이 **한 줄도 실행되지 않는다.** 유닛은 `[seed] !!!` 한 줄만 남기고 failed 가 된다.
+#
+# 🔵 바로 아래 형제 호출(`seed/seed.sh`)은 이미 그 계약을 갖고 있다:
+#    *"실패해도 이미 떠 있는 스택을 내리지 않는다 — `|| true` 가 아니라 종료코드를
+#    보존해 마지막 줄에서 알린다"*. **이 호출만 낙오해 있었다.**
+domain_seed_rc=0
 if [[ " ${SET[*]} " == *" iam "* ]]; then
-  bash "$HERE/seed-demo-domain.sh"
+  bash "$HERE/seed-demo-domain.sh" || domain_seed_rc=$?
 fi
 
 # 도메인 데이터 시드 (TASK-MONO-506). 계정과 배선이 갖춰져도 화면이 비어 있으면
@@ -267,6 +277,7 @@ bash "$HERE/check-label-drift.sh" "${SET[@]}" || drift_rc=$?
 
 echo "[demo] up complete — profile=$PROFILE"
 [ "$seed_rc" -eq 0 ] || echo "[demo] ⚠ 도메인 데이터 시드가 일부 실패했습니다(위 [seed] 로그 참조) — 해당 화면은 빌 수 있습니다"
+[ "$domain_seed_rc" -eq 0 ] || echo "[demo] ⚠ OIDC 리다이렉트 URI 등록이 실패했습니다(위 [seed] 로그 참조) — 로그인이 데모 도메인에서 되돌아오지 못할 수 있습니다"
 echo "[demo] 호스트: console.${DEMO_DOMAIN} / web.ecommerce.${DEMO_DOMAIN} / wms.${DEMO_DOMAIN} / <domain>.${DEMO_DOMAIN} (Traefik)"
 
 # -----------------------------------------------------------------------------
@@ -328,6 +339,75 @@ if [ ${#failed[@]} -gt 0 ]; then
   done
 fi
 
+# =============================================================================
+# 🔴🔴 TASK-MONO-552 AC-3 — 부팅 완료 판정이 **HTTP 표면**을 본다
+# =============================================================================
+# 이 티켓의 발견이 그것이다: 컨테이너 **99/102 가 healthy 인 채로 표면이 전멸**했다.
+# 그래서 컨테이너 수도, 컨테이너 헬스의 재측정도 이 명제의 증거가 아니다 —
+# **방문자가 여는 것은 HTTP 다.** 위 재측정(559)은 인접 축을 덮었지 이 축이 아니다.
+#
+# 🔴 **목록을 여기 적지 않는다.** 출처는 **방문자에게 약속하는 그 목록** — 론처의
+#    `data-surface` 항목이다. 두 벌이면 하나만 고쳐지고, 그 어긋남은 로그가 아니라
+#    **"약속했는데 안 열리는 화면"** 으로 나타난다.
+# 🔴 **추출 0건은 판정 불가다.** 빈 목록이면 이 검사는 아무것도 안 하면서 초록이 된다
+#    — 이 저장소가 반복해서 당한 모양이다. 하한을 provenance 와 함께 박는다.
+# 🔴 **도메인이 안 뜬 표면은 찌르지 않는다.** 그건 이미 위에서 실패로 세어졌고, 여기서
+#    또 세면 한 결함이 두 줄로 보고돼 원인이 두 개인 것처럼 읽힌다.
+# -----------------------------------------------------------------------------
+SURFACE_SRC="${DEMO_SURFACE_SRC:-$HERE/aws/site/index.html}"
+# 하한 = 2026-08-21 전수(console · web.ecommerce · web.fan-platform). 늘면 올려라 —
+# 그 순간이 새 표면을 부팅 판정에 넣을 자리다.
+SURFACE_FLOOR="${DEMO_SURFACE_FLOOR:-3}"
+SURFACE_ATTEMPTS="${DEMO_SURFACE_ATTEMPTS:-12}"
+SURFACE_SLEEP="${DEMO_SURFACE_SLEEP:-10}"
+
+surfaces=()
+while IFS= read -r sline; do
+  sdom="$(printf '%s' "$sline" | sed -n 's/.*data-domain="\([^"]*\)".*/\1/p')"
+  shost="$(printf '%s' "$sline" | sed -n 's/.*data-host="\([^"]*\)".*/\1/p')"
+  [ -n "$sdom" ] && [ -n "$shost" ] && surfaces+=("$sdom $shost")
+done < <(grep -o 'data-surface[^>]*' "$SURFACE_SRC" 2>/dev/null | grep 'data-domain=')
+
+surf_bad=(); surf_undecidable=(); surf_skipped=(); surf_ok=()
+if [ "${#surfaces[@]}" -lt "$SURFACE_FLOOR" ]; then
+  surf_undecidable+=("추출:${#surfaces[@]}/${SURFACE_FLOOR}")
+elif ! command -v curl >/dev/null 2>&1; then
+  # 🔴 계측기가 없는 것과 표면이 죽은 것은 다른 사건이다.
+  surf_undecidable+=("curl-없음")
+elif [ -z "${DEMO_DOMAIN:-}" ] || [ "${DEMO_DOMAIN}" = "local" ]; then
+  # AWS 밖이다 — 호스트명이 해석되지 않으므로 **잴 수 없다.** 조용히 넘어가지 않는다.
+  echo "[demo] ◑ HTTP 표면 검사 건너뜀 — DEMO_DOMAIN='${DEMO_DOMAIN:-}' (AWS 밖에서는 호스트명이 해석되지 않습니다)"
+else
+  for entry in "${surfaces[@]}"; do
+    sdom="${entry%% *}"; shost="${entry#* }"
+    skip=0
+    for d in "${still[@]}" "${undecidable[@]}"; do [ "$d" = "$sdom" ] && skip=1; done
+    if [ "$skip" = 1 ]; then surf_skipped+=("$shost($sdom)"); continue; fi
+
+    code=""; n=0
+    while [ "$n" -lt "$SURFACE_ATTEMPTS" ]; do
+      n=$((n + 1))
+      # 🔴 리다이렉트를 **따라가지 않는다.** 콘솔은 `/login` 으로 302 를 내고 그것이
+      #    정상 응답이다(AC-1: "2xx/3xx 를 낸다"). 따라가면 실패 모드만 늘어난다.
+      code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://${shost}.${DEMO_DOMAIN}/" 2>/dev/null || echo 000)"
+      case "$code" in 2??|3??) break ;; esac
+      [ "$n" -lt "$SURFACE_ATTEMPTS" ] && sleep "$SURFACE_SLEEP"
+    done
+    case "$code" in
+      2??|3??) surf_ok+=("$shost=$code") ;;
+      *)       surf_bad+=("$shost.${DEMO_DOMAIN}=$code") ;;
+    esac
+  done
+  # 🔵 `if` 로 쓴 이유는 **가독성**이다. 초판 주석은 이것을 `set -e` 함정이라고 적었는데
+  #    **틀렸다 — 재봤다**: AND 리스트의 앞 명령이 실패해도 `set -e` 는 발동하지 않는다
+  #    (`set -euo pipefail; a=(); [ "${#a[@]}" -gt 0 ] && echo x; echo 도달` → 도달한다).
+  #    다만 그 형태가 **스크립트의 마지막 문장**이 되면 종료코드가 1 이 되므로, 이 블록이
+  #    나중에 파일 끝으로 옮겨질 때를 대비한 보험이기도 하다. 틀린 근거는 남기지 않는다.
+  if [ "${#surf_ok[@]}" -gt 0 ]; then
+    echo "[demo] ✔ HTTP 표면 ${#surf_ok[@]}/${#surfaces[@]}: ${surf_ok[*]}"
+  fi
+fi
+
 final_rc=0
 if [ ${#still[@]} -gt 0 ]; then
   final_rc=1
@@ -347,6 +427,20 @@ if [ ${#late[@]} -gt 0 ]; then
   echo "[demo] ◑ 늦게 수렴: ${late[*]} — 기동 중에는 실패로 기록됐으나 재측정에서 up 입니다(실패로 세지 않습니다)"
 fi
 
+if [ ${#surf_bad[@]} -gt 0 ]; then
+  final_rc=1
+  echo "[demo] ✖ HTTP 표면 미도달: ${surf_bad[*]}" >&2
+  echo "[demo]   (도메인은 up 인데 방문자가 여는 주소가 응답하지 않습니다 — 컨테이너 헬스로는 안 보이는 상태입니다.)" >&2
+fi
+if [ ${#surf_undecidable[@]} -gt 0 ]; then
+  final_rc=1
+  echo "[demo] ✖ HTTP 표면 판정 불가: ${surf_undecidable[*]}" >&2
+  echo "[demo]   (표면 목록을 못 읽었거나 계측기가 없습니다. '표면이 정상' 으로 읽지 않습니다.)" >&2
+fi
+if [ ${#surf_skipped[@]} -gt 0 ]; then
+  echo "[demo] ◑ HTTP 표면 미검사: ${surf_skipped[*]} — 해당 도메인이 위에서 이미 실패로 보고됐습니다"
+fi
+
 # 🔴 AC-2 — 예산 고갈은 **AC-1 의 재측정 결과와 무관하게** 남긴다.
 #    A 의 고침이 B 의 유일한 증상을 지우기 때문이다: 예산이 없어 재시도를 못 받은
 #    도메인도 어차피 나중에 수렴하므로 위에서 "늦게 수렴" 초록이 되고, 그러면 운영자는
@@ -358,6 +452,7 @@ if [ ${#denied[@]} -gt 0 ]; then
   echo "[demo]   ⇒ 재시도 총 상한 = 도메인 ${n_domains}개 × ${UP_RETRY_SLEEP}s. 이 값이 빠듯하면 UP_RETRY_SLEEP 이나 healthcheck 창을 보세요." >&2
 fi
 
+[ "$domain_seed_rc" -eq 0 ] || final_rc=1
 [ "$drift_rc" -eq 0 ] || final_rc=1
 [ "$seed_rc"  -eq 0 ] || final_rc=1
 exit "$final_rc"
