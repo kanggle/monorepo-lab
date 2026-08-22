@@ -174,7 +174,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 _(없음)_
 ## review
 
-_(없음)_
+- `TASK-MONO-565-adr67-ac0-client-bundle-population.md` — **🟡 REVIEW (신규, 2026-08-22 UTC) — ADR-MONO-067 AC-0 ① 완료: 프런트 번들 산출물에서 모집단을 다시 셌다.** ADR 이 단계 순서를 정할 때 쓴 표는 **소스 정규식 대리지표**였다. 세 앱을 빌드해 **클라이언트 청크(`.next/static/**/*.js`)에서** 다시 셌다(`.next/server/**` 는 안 센다 — 서버는 평문 HTTP 를 불러도 되고 (B) 가 그것을 전제로 한다). 🔴 **양성 대조군이 먼저**: 한 빌드에 두 값을 넣어 **반대 방향**으로 갈렸다 — `NEXT_PUBLIC_TOSS_CLIENT_KEY`(클라가 읽음) client=1 / `NEXT_PUBLIC_API_URL`(서버 분기 전용) client=0. ⇒ web-store 의 0 은 **스캐너 장님이 아니라 진짜 0**. **실측**: web-store **0**(클라 분기가 상대경로 `/api/bff` 리터럴) · fan **2**(`fan-platform.local`·`iam.local`) · console **7**(8도메인 게이트웨이, 전부 **한 청크**의 zod `.default(...)`). 🔴 **숫자를 두 번 고쳤다** — 미니파이 조각(`http://n`)을 오리진으로 셌고, 그다음엔 `localhost` 를 전부 백엔드로 셌다. **출처를 열어 보고서야** 알았다(web-store 의 `localhost` 는 NextAuth 자기 오리진·`startsWith()` 비교용 리터럴). 숫자만 비교했으면 **둘 다 틀린 채 나란히** 적었을 것이다. 🔵 **세 앱이 아니라 두 종류의 문제**였다 — fan·console 은 원인 동일(서버 env 모듈이 클라 번들에서 도달 가능), 고치는 모양도 동일(**모듈 경계 분리**). web-store 는 이미 그어 놨다. 🔴 **"문자열이 있다" 보다 나쁘다**: 비공개 env 는 어느 번들에도 인라인되지 않으므로(실측 client=0/server=0), 브라우저는 fan 의 `oidcIssuerUrl` **기본값 `http://iam.local` 에 못 박힌다** — 배포에서 뭘 설정하든. (단 잰 것은 **존재**이지 **사용**이 아니다.) 🔵 **시크릿 유출 없음 — 실측**(`OIDC_CLIENT_SECRET` client=0/server=0). **단계 순서는 바꾸지 않는다** — 노출 건수(console 7 > fan 2)와 이관 비용은 다른 축이고, console 의 7건은 **고칠 지점이 하나**인 반면 fan 은 프록시 층을 **새로 만들어야** 한다. 🔵 부수 발견: web-store 는 **이 호스트에서 빌드가 실패한다**(`output: standalone` 의 symlink EPERM) — 실패가 클라 청크 생성 **이후**라 측정은 유효. CI(Linux)에선 통과해 지금껏 안 보였다. 분석·구현=**Opus 5**.
 
 
 
