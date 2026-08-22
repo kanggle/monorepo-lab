@@ -500,27 +500,47 @@ public class AccountServiceClient implements AccountServicePort {
 
     @Override
     public Optional<String> getTenantType(String tenantId) {
+        return tenantLookup("tenant-type", () -> doGetTenantType(tenantId));
+    }
+
+    @Override
+    public Optional<TenantLookupResult> getTenant(String tenantId) {
+        return tenantLookup("tenant", () -> doGetTenant(tenantId));
+    }
+
+    /**
+     * The shared failure policy for the two {@code GET /internal/tenants/{tenantId}} readers.
+     *
+     * <p>Extracted by TASK-BE-581 when {@link #getTenant(String)} joined
+     * {@link #getTenantType(String)} on the same endpoint. The policy below is the one
+     * TASK-BE-407 established; it is stated once so the two callers cannot drift into
+     * disagreeing about what a 403 means.</p>
+     *
+     * <ul>
+     *   <li><b>404</b> → {@link Optional#empty()}. "No such tenant" is an <i>answer</i>,
+     *       not an outage — the caller applies its own policy to it.</li>
+     *   <li><b>Any NON-404 4xx</b> (401 / 403 / 429 / 422 …) → outage. Treating it as empty
+     *       would let a caller fall back to the B2C default and silently misclassify the
+     *       tenant — the exact bug class TASK-BE-407 fixes.</li>
+     *   <li><b>5xx / circuit-open / timeout / IO</b> → outage.</li>
+     * </ul>
+     *
+     * @param label short name of the lookup, used verbatim in the log + exception message
+     */
+    private <T> Optional<T> tenantLookup(String label, Supplier<Optional<T>> call) {
         try {
-            return callResilient(() -> doGetTenantType(tenantId));
+            return callResilient(call);
         } catch (HttpClientErrorException.NotFound e) {
-            // Unknown tenant — surface as empty so the resolver can apply its policy
-            // without treating a 404 as an infrastructure outage.
             return Optional.empty();
         } catch (HttpClientErrorException e) {
-            // Any NON-404 4xx (401 / 403 / 429 / 422 …) is an account-service failure,
-            // NOT "unknown tenant". Treating it as empty would let the resolver fall
-            // back to the B2C default and silently misclassify the tenant_type claim —
-            // the exact bug class TASK-BE-407 fixes. Mirror listAccountRoles /
-            // getAccountStatus's non-404 handling: surface as an outage so the caller
-            // (TenantTypeResolver) fails closed.
-            log.warn("Account service tenant-type lookup returned client error {}: {}",
-                    e.getStatusCode(), e.getMessage());
+            log.warn("Account service {} lookup returned client error {}: {}",
+                    label, e.getStatusCode(), e.getMessage());
             throw new AccountServiceUnavailableException(
-                    "Account service tenant-type lookup failed", e);
+                    "Account service " + label + " lookup failed", e);
         } catch (RuntimeException e) {
-            log.error("Account service tenant-type lookup failed after retries: "
+            log.error("Account service {} lookup failed after retries: "
                             + "msg={} type={} cause={} causeType={}",
-                    e.getMessage(), e.getClass().getName(),
+                    label, e.getMessage(), e.getClass().getName(),
                     e.getCause() == null ? "null" : e.getCause().getMessage(),
                     e.getCause() == null ? "null" : e.getCause().getClass().getName(), e);
             throw new AccountServiceUnavailableException("Account service is unavailable", e);
@@ -547,6 +567,45 @@ public class AccountServiceClient implements AccountServicePort {
             Object tenantType = body.get("tenantType");
             if (tenantType instanceof String tt && !tt.isBlank()) {
                 return Optional.of(tt);
+            }
+            return Optional.empty();
+        } catch (HttpClientErrorException.NotFound e) {
+            return Optional.empty();
+        } catch (HttpClientErrorException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new RuntimeException("Account service communication error", e);
+        }
+    }
+
+    /**
+     * TASK-BE-581: reads BOTH fields the browser signup surface needs from the same
+     * {@code GET /internal/tenants/{tenantId}} response {@code doGetTenantType} already
+     * calls. A 200 whose {@code status} is missing/blank yields empty — an unreadable
+     * record must not be reported as a healthy tenant, because the caller's safe direction
+     * is "cannot confirm signup is possible".
+     */
+    @SuppressWarnings("unchecked")
+    private Optional<TenantLookupResult> doGetTenant(String tenantId) {
+        try {
+            // account-service returns
+            //   { tenantId, displayName, tenantType, status, createdAt, updatedAt }
+            Map<String, Object> body = restClient().get()
+                    .uri("/internal/tenants/{tid}", tenantId)
+                    // TASK-BE-318c: GAP client_credentials Bearer JWT.
+                    .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
+                    .retrieve()
+                    .onStatus(HttpStatusCode::is4xxClientError, MAP_4XX)
+                    .body(Map.class);
+
+            if (body == null) {
+                return Optional.empty();
+            }
+            Object tenantType = body.get("tenantType");
+            Object status = body.get("status");
+            if (tenantType instanceof String tt && !tt.isBlank()
+                    && status instanceof String st && !st.isBlank()) {
+                return Optional.of(new TenantLookupResult(tt, st));
             }
             return Optional.empty();
         } catch (HttpClientErrorException.NotFound e) {

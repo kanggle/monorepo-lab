@@ -78,8 +78,14 @@
        th:href="@{'/login/oauth/' + ${provider.slug()}}"
        th:text="${provider.name()}">PROVIDER</a>
 
-    <!-- TASK-BE-470: entry point to the self-service signup page (was a dead-end before). -->
-    <p style="margin-top:24px;font-size:13px;text-align:center;color:#555;">
+    <!-- TASK-BE-470: entry point to the self-service signup page (was a dead-end before).
+         TASK-BE-581: now conditional. `signupAvailable` is false only when the OIDC client
+         that started this flow points at a tenant that cannot accept a signup at all — the
+         console's reserved `iam` slug, or a suspended tenant. It is TRUE for every consumer
+         client and for a direct visit with no saved authorize request, so BE-470's fix to
+         the general user path stands. Do NOT simplify this to "hide it for the console" —
+         the predicate is the tenant's own signup capability, asked of account-service. -->
+    <p th:if="${signupAvailable}" style="margin-top:24px;font-size:13px;text-align:center;color:#555;">
         계정이 없으신가요? <a th:href="@{/signup}" style="color:#2563eb;text-decoration:none;">회원가입</a>
     </p>
 </div>

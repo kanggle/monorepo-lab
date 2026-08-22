@@ -3,6 +3,7 @@ package com.example.auth.presentation;
 import com.example.auth.application.exception.SignupEmailConflictException;
 import com.example.auth.application.exception.SignupInvalidException;
 import com.example.auth.application.port.AccountServicePort;
+import com.example.auth.application.port.TenantSignupEligibilityPort;
 import com.example.auth.infrastructure.security.SavedRequestTenantResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -37,6 +38,7 @@ class SignupPageControllerSliceTest {
 
     private AccountServicePort accountServicePort;
     private SavedRequestTenantResolver savedRequestTenantResolver;
+    private TenantSignupEligibilityPort tenantSignupEligibilityPort;
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -57,7 +59,12 @@ class SignupPageControllerSliceTest {
         // guard against the "/signup" handler URL. "redirect:" is still special-cased.
         viewResolver.setPrefix("/WEB-INF/views/");
         viewResolver.setSuffix(".jsp");
-        mockMvc = MockMvcBuilders.standaloneSetup(new SignupPageController(accountServicePort, savedRequestTenantResolver))
+        // TASK-BE-581: by default the resolved tenant CAN accept a signup — every pre-581
+        // case below is a consumer-path case and must keep behaving exactly as it did.
+        tenantSignupEligibilityPort = mock(TenantSignupEligibilityPort.class);
+        when(tenantSignupEligibilityPort.isSignupOffered(any())).thenReturn(true);
+        mockMvc = MockMvcBuilders.standaloneSetup(new SignupPageController(
+                        accountServicePort, savedRequestTenantResolver, tenantSignupEligibilityPort))
                 .setViewResolvers(viewResolver)
                 .build();
     }

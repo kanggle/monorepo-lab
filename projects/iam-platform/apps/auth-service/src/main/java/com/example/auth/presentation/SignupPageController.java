@@ -4,6 +4,7 @@ import com.example.auth.application.exception.AccountServiceUnavailableException
 import com.example.auth.application.exception.SignupEmailConflictException;
 import com.example.auth.application.exception.SignupInvalidException;
 import com.example.auth.application.port.AccountServicePort;
+import com.example.auth.application.port.TenantSignupEligibilityPort;
 import com.example.auth.infrastructure.security.SavedRequestTenantResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -59,6 +60,24 @@ public class SignupPageController {
     private final SavedRequestTenantResolver savedRequestTenantResolver;
 
     /**
+     * TASK-BE-581: whether the resolved tenant can accept a signup at all. The link on
+     * {@code login.html} is hidden for an ineligible tenant, but {@code /signup} is
+     * {@code permitAll} and reachable by URL, bookmark, or back-button — so hiding the link
+     * alone would leave the defect on exactly the path a returning visitor takes. The gate
+     * lives on BOTH surfaces on purpose.
+     */
+    private final TenantSignupEligibilityPort tenantSignupEligibilityPort;
+
+    /**
+     * Shown when the tenant behind this flow can never accept a signup. Deliberately NOT
+     * "try again later": the condition is structural (a reserved slug has no tenants row and
+     * may never get one) or administrative (a suspended tenant). Telling the visitor to
+     * retry is the defect TASK-BE-580 addresses on the message axis; this is its cause.
+     */
+    private static final String SIGNUP_NOT_AVAILABLE_MESSAGE =
+            "이 경로에서는 회원가입할 수 없습니다. 계정은 관리자가 생성합니다 — 관리자에게 문의해 주세요.";
+
+    /**
      * TASK-BE-472: mirror account-service's {@code Email} value-object regex
      * ({@code account.domain.account.Email}) so a malformed email is caught here with a
      * precise message instead of being proxied and coming back as an opaque 400 that the
@@ -70,8 +89,29 @@ public class SignupPageController {
             Pattern.compile("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
 
     @GetMapping("/signup")
-    public String signupPage() {
+    public String signupPage(HttpServletRequest request, HttpServletResponse response,
+                             Model model) {
+        applySignupAvailability(request, response, model);
         return "signup";
+    }
+
+    /**
+     * Resolves the tenant this flow would create the account in and records on the model
+     * whether signup is possible there at all. Sets {@code signupBlocked} unconditionally so
+     * the template never has to interpret an absent attribute.
+     *
+     * @return {@code true} when signup is blocked for this flow
+     */
+    private boolean applySignupAvailability(HttpServletRequest request,
+                                            HttpServletResponse response, Model model) {
+        String tenantId = savedRequestTenantResolver.resolve(request, response).tenantId();
+        boolean blocked = !tenantSignupEligibilityPort.isSignupOffered(tenantId);
+        model.addAttribute("signupBlocked", blocked);
+        if (blocked) {
+            model.addAttribute("error", SIGNUP_NOT_AVAILABLE_MESSAGE);
+            log.info("Signup not available for tenantId={} — form suppressed", tenantId);
+        }
+        return blocked;
     }
 
     @PostMapping("/signup")
@@ -83,6 +123,13 @@ public class SignupPageController {
             HttpServletRequest request,
             HttpServletResponse response,
             Model model) {
+
+        // TASK-BE-581: refuse before validating anything. A tenant that cannot accept a
+        // signup makes every field irrelevant, and validating first would answer a question
+        // the visitor cannot act on ("your password is too short") ahead of the one they can.
+        if (applySignupAvailability(request, response, model)) {
+            return "signup";
+        }
 
         String normalizedEmail = email == null ? "" : email.trim();
         String normalizedDisplayName = displayName == null ? "" : displayName.trim();
@@ -115,6 +162,9 @@ public class SignupPageController {
         // TASK-BE-507: the account is created in the tenant of the client that sent the user
         // here (a web-store client → ecommerce), NOT in a hard-coded fan-platform. Resolved
         // from the saved /oauth2/authorize request — the same source the social path uses.
+        // TASK-BE-581 re-resolves rather than threading the value down from the gate above:
+        // the resolver is a pure read of the same session-held saved request, and keeping
+        // one call site per concern is what stops the gate and the act from drifting apart.
         String tenantId = savedRequestTenantResolver.resolve(request, response).tenantId();
 
         try {
