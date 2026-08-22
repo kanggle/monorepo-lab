@@ -8,7 +8,7 @@ ADR-MONO-067 AC-0 ① — 프런트 **번들 산출물**에서 절대 백엔드 
 
 # Status
 
-review
+done
 
 # Owner
 
