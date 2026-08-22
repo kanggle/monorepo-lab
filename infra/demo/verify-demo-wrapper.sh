@@ -2522,6 +2522,80 @@ esac
 
 ok "정적 칸이 --live 게이트에 갇히지 않았다 — 갇힌 칸 0건(칸 선언 ${z16_all}건 추출) · 주입 확인 후 bite"
 
+# =============================================================================
+# (z17) DB 데이터가 **자격 출처보다 오래 살 수 없는가** — TASK-MONO-550 AC-4
+# =============================================================================
+# 🔴 AC-4 는 원래 *"기존 볼륨 위 재기동에서 DB 초기화 값과 앱이 쓰는 값이 어긋나는가"* 를
+#    라이브로 재려 했다. 2026-08-22 에 구조를 읽어 보니 **그 명제는 반증 불가능하다**:
+#      · EBS 는 루트 볼륨 하나뿐 — 별도 데이터 볼륨도 attachment 도 없다 ⇒ docker 볼륨이 루트에 산다.
+#      · `ami = var.ami_id` 라 AMI 를 바꾸면 인스턴스가 **교체**되고 루트 볼륨째 사라진다.
+#      · `provision-demo-env.sh` 는 **커밋된 `.env.example` 을 복사**하고 `.env` 가 있으면 건너뛴다
+#        — 생성기도 난수도 없다.
+#    ⇒ `/stop`→`/start` 는 `.env` 도 DB 도 그대로 살아남아 **값이 같을 수밖에 없고**, AMI 를 바꾸면
+#      볼륨이 통째로 사라져 애초에 시험되지 않는다. **틀린 입력이 없는 판정은 초록이어도 공허하다.**
+# 🔴 그러므로 이 AC 를 부팅으로 재지 않는다. 재는 대신 **그 불변식을 지킨다** — 오염이 가능해지려면
+#    아래 셋 중 하나가 깨져야 하고, 그때 빨개지는 것이 이 칸의 일이다.
+#      (1) DB 데이터가 루트 밖(별도 EBS)에 살기 시작한다
+#      (2) 루트가 인스턴스 종료 뒤에도 남는다 (`delete_on_termination = false`)
+#      (3) AMI 변경이 교체를 일으키지 않는다 (`ignore_changes` 에 `ami`)
+# 🔵 08-17 라이브 판정(비-루프백 `psql`, 대조군 rc=2 거부, `master@master_db` rc=0)은 유효하지만
+#    그것이 증명한 것은 **신선 볼륨에서 값이 일치한다** 이다. 위 불변식이 그것을 항구화한다.
+echo "[verify] (z17) DB 데이터가 자격 출처보다 오래 살 수 없는가 (TASK-MONO-550 AC-4)"
+z17_tf="$ROOT/infra/demo/aws/terraform/main.tf"
+[ -f "$z17_tf" ] || fail "(z17) terraform main.tf 를 찾지 못했습니다: $z17_tf"
+
+# 위반 코드를 줄 단위로 낸다. 추출이 성립하지 않으면 **빈 출력(통과)이 아니라 사유 코드**를 낸다.
+z17_probe() {
+  grep -q '^resource "aws_instance"' "$1"  || { echo "__NOINSTANCE__"; return 0; }
+  grep -q 'root_block_device' "$1"         || { echo "__NOROOTBLK__";  return 0; }
+  grep -q '^resource "aws_ebs_volume"' "$1"       && echo "EBS_VOLUME"
+  grep -q '^resource "aws_volume_attachment"' "$1" && echo "VOLUME_ATTACHMENT"
+  grep -qE '^[[:space:]]*ebs_block_device[[:space:]]*\{' "$1" && echo "EBS_BLOCK_DEVICE"
+  # (2) root_block_device 블록 **안에서만** 본다 — 파일 전체 grep 이면 남의 블록에 걸린다.
+  awk '/root_block_device[[:space:]]*\{/{i=1}
+       i && /delete_on_termination[[:space:]]*=[[:space:]]*false/{print "ROOT_PERSISTS"; exit}
+       i && /^[[:space:]]*\}[[:space:]]*$/{i=0}' "$1"
+  # (3) ignore_changes 의 대괄호 안을 토큰으로 쪼갠다 — 부분문자열 매칭은 실재 오답을 만든다.
+  awk '/ignore_changes[[:space:]]*=/{ l=$0; gsub(/.*\[|\].*/,"",l); n=split(l,a,/[ ,]+/);
+       for(j=1;j<=n;j++) if(a[j]=="ami") print "AMI_IGNORED" }' "$1"
+  return 0
+}
+
+# (1) 본체 — 위반 0건이어야 한다.
+z17_bad="$(z17_probe "$z17_tf")"
+case "$z17_bad" in
+  *__NOINSTANCE__*) fail "(z17) main.tf 에서 aws_instance 를 찾지 못했습니다 — 판정 불가(구조가 바뀌었습니다)." ;;
+  *__NOROOTBLK__*)  fail "(z17) main.tf 에서 root_block_device 를 찾지 못했습니다 — 판정 불가." ;;
+esac
+[ -z "$z17_bad" ] || fail "(z17) DB 데이터가 자격 출처보다 오래 살 수 있게 됐습니다: $(echo $z17_bad)"\
+  $'\n'"→ EBS_VOLUME / VOLUME_ATTACHMENT / EBS_BLOCK_DEVICE = DB 데이터가 루트 밖에 산다는 뜻입니다."\
+  $'\n'"→ ROOT_PERSISTS = 인스턴스가 사라져도 루트가 남습니다."\
+  $'\n'"→ AMI_IGNORED = AMI 를 바꿔도 인스턴스가 교체되지 않습니다."\
+  $'\n'"이 중 하나라도 참이면 **옛 자격으로 초기화된 DB 가 새 `.env` 를 만나는 상태**가 가능해집니다"\
+  $'\n'"(TASK-MONO-550 AC-4 가 걱정한 바로 그 조건). 그때는 이 가드가 아니라 **라이브 판정**이 필요하며,"\
+  $'\n'"비-루프백에서 재야 합니다 — `pg_hba` 의 `127.0.0.1/32 trust` 는 틀린 비밀번호도 통과시킵니다."
+
+# (2)~(4) bite — 세 갈래를 각각 주입해 물리는지 본다.
+#     🔴 주입이 실제로 됐는지를 **먼저** 확인한다. 안 물린 것과 안 넣어진 것을 구별하지 못하면
+#        이 칸은 아무것도 시험하지 않는다(이 저장소가 반복해서 데인 자리다).
+z17_bite() {   # $1=설명  $2=기대코드  $3=주입 sed/awk 프로그램  $4=주입확인 grep 패턴
+  z17_cp="$(mktemp)"
+  awk "$3" "$z17_tf" > "$z17_cp"
+  if ! grep -qE "$4" "$z17_cp"; then
+    rm -f "$z17_cp"; fail "(z17) bite '$1' 의 **주입이 실패했습니다** — 이 칸은 아무것도 시험하지 않았습니다."
+  fi
+  z17_got="$(z17_probe "$z17_cp")"; rm -f "$z17_cp"
+  case " $(echo $z17_got) " in
+    *" $2 "*) : ;;
+    *) fail "(z17) bite '$1': $2 를 주입했는데 술어가 **물지 않았습니다** (반환='$(echo $z17_got)')" ;;
+  esac
+}
+z17_bite "별도 EBS 볼륨"        "EBS_VOLUME"   '{print} END{print "resource \"aws_ebs_volume\" \"z17probe\" {"; print "  size = 1"; print "}"}' '^resource "aws_ebs_volume" "z17probe"'
+z17_bite "루트가 살아남음"       "ROOT_PERSISTS" '{print} /root_block_device[[:space:]]*\{/{print "    delete_on_termination = false"}' 'delete_on_termination = false'
+z17_bite "AMI 변경이 무시됨"     "AMI_IGNORED"  '{ if ($0 ~ /ignore_changes[[:space:]]*=/) sub(/\[user_data\]/, "[user_data, ami]"); print }' 'ignore_changes = \[user_data, ami\]'
+
+ok "DB 데이터가 자격 출처보다 오래 살 수 없다 — 별도 EBS 0건 · 루트 종료시 삭제 · AMI 변경이 교체를 강제 · bite 3/3(주입 확인 후)"
+
 if [ "$LIVE" -eq 0 ]; then
 
   echo "[verify] 정적 검증 PASS (실기동 증명은 --live)"
