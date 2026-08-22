@@ -117,3 +117,29 @@ tasks.named('test') {
             .withPropertyName('demoOperatorSeed')
             .withPathSensitivity(PathSensitivity.RELATIVE)
 }
+
+// TASK-BE-581 — same blind spot, different task. OAuthClientTenantReferenceIntegrationTest
+// derives its verdict from files OUTSIDE this module: account-service's tenant migrations (the
+// population it judges against), admin-service's reserved-word constant, and multi-tenancy.md.
+// Without these declarations, adding an oauth client that points at a tenant nobody seeds — or
+// deleting the tenant a client depends on — leaves `integrationTest` UP-TO-DATE and the lane
+// reports green over exactly the drift the guard was written to detect.
+//
+// Declared on `integrationTest` (not `test`) because the guard is @Tag("integration"); the
+// `test` task excludes that tag, so an input there would gate a task that never runs it.
+// `tasks.matching` rather than `tasks.named` — `integrationTest` is registered by the parent
+// project's `subprojects {}` block, so this file must not depend on evaluation order.
+tasks.matching { it.name == 'integrationTest' }.configureEach {
+    inputs.dir(rootProject.file('projects/iam-platform/apps/account-service/src/main/resources/db/migration'))
+            .withPropertyName('accountServiceProdMigrations')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(rootProject.file('projects/iam-platform/apps/account-service/src/main/resources/db/migration-dev'))
+            .withPropertyName('accountServiceDevMigrations')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(rootProject.file('projects/iam-platform/apps/admin-service/src/main/java/com/example/admin/application/tenant/CreateTenantUseCase.java'))
+            .withPropertyName('reservedTenantSlugSource')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(rootProject.file('projects/iam-platform/specs/features/multi-tenancy.md'))
+            .withPropertyName('multiTenancySpec')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+}

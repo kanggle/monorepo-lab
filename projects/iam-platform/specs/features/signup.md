@@ -38,6 +38,34 @@
 - 가입 직후 상태: `ACTIVE`
 - 이메일 검증: 초기 스코프에서 선택사항 (검증 없이 가입 완료 가능). 검증 필수화는 백로그
 
+## 브라우저 회원가입 화면의 제시 조건 (TASK-BE-581)
+
+SAS 브라우저 화면(`/login`, `/signup`)은 **모든 OIDC 클라이언트가 공유**한다. 계정이 태어날
+테넌트는 그 흐름을 시작한 클라이언트의 `oauth_clients.tenant_id` 로 결정된다
+(`SavedRequestTenantResolver`, TASK-BE-507). 따라서 화면 하나가 **가입이 가능한 테넌트와
+불가능한 테넌트 양쪽에** 동시에 노출된다.
+
+- **제시 조건**: 해석된 테넌트에 대해 account-service 의 `ActiveTenantGuard` 가 통과할 때에만
+  회원가입을 제시한다 — 즉 `tenants` 행이 **존재**하고 **`status=ACTIVE`** 일 때.
+  - 조건 불충족 → `/login` 의 회원가입 링크를 렌더하지 않고, `/signup` 은 폼 없이 **영구적**
+    사유를 표시하며 account-service 를 호출하지 않는다.
+  - 판정 근거는 예약어 목록이 아니라 **테넌트 레코드 자체**다. 목록은 "우리가 생각해 둔 값인가"
+    라는 다른 질문에 답하며, 정지(`SUSPENDED`) 테넌트 칸을 통째로 놓친다(404 가 아니라 403).
+- **예약 슬러그는 구조적으로 가입 불가**다. `iam` 은 콘솔 자신의 운영 슬러그이며
+  ([multi-tenancy.md](multi-tenancy.md) 예약어, `V0024`), `tenants` 행이 없는 것이 **정상**이고
+  앞으로도 생기지 않는다. 콘솔 경로의 회원가입은 일시적 실패가 아니라 **구조적 불가능**이었다.
+- **콘솔 운영자는 셀프 가입 대상이 아니다.** 운영자는 `admin_operators` 에 살고 SUPER_ADMIN 이
+  `POST /api/admin/operators` 로 생성한다([operator-management.md](operator-management.md)).
+  OIDC 로그인 후 admin-service 토큰 교환이 `sub`(account_id) → `admin_operators` 를 해석하며
+  미매핑이면 `401 TOKEN_INVALID` 로 fail-closed 한다
+  ([admin-service security.md](../services/admin-service/security.md)). 그러므로 `iam` 테넌트를
+  실재시켜 가입을 201 로 만들어도 **콘솔에 로그인할 수는 없다** — 실패 지점이 가입에서 로그인
+  루프로 옮겨갈 뿐이다.
+- **가용성 정책**: account-service 가 응답하지 못하면 **제시한다**(fail-open). 이 판정은 UX
+  게이트이며 권한 경계가 아니다 — 권위는 `ActiveTenantGuard` 다. 닫는 쪽으로 실패시키면
+  account-service 장애 동안 **모든 소비자 화면**에서 회원가입이 사라져 TASK-BE-470 을 조용히
+  되돌린다.
+
 ## Edge Cases
 
 - 동시 중복 가입 → 두 번째 요청이 DB unique constraint에 걸림 → 409
