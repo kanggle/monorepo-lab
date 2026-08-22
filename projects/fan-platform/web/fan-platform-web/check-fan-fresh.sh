@@ -40,7 +40,7 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-APP_PATH='projects/fan-platform/web/fan-platform-web'
+IGNORE_WRAPPER="$HERE/vercel-ignore.sh"   # 트리거 경로의 **단일 출처** (TASK-MONO-563)
 ORIGIN="https://kanggle-fan.vercel.app"
 REF="origin/main"
 SELFTEST=0
@@ -122,10 +122,41 @@ verdict_for() { # <served-sha> <expected-sha> <label>
   return 1
 }
 
-EXP_SHA="$(git -C "$HERE" rev-parse "$REF" 2>/dev/null)"
-if [ -z "$EXP_SHA" ]; then
-  say "✖ ref 를 해석하지 못했습니다: $REF ⇒ 판정 불가"; exit 2
+# =============================================================================
+# 🔴🔴 기대값은 `<ref>` 의 **tip 이 아니다** (TASK-MONO-564)
+# =============================================================================
+# 이 프로젝트에는 `ignoreCommand` 가 있다 — 트리거 경로가 안 바뀐 커밋은 **의도적으로**
+# 배포를 건너뛴다. 그러므로 `서빙 커밋 == origin/main` 은 **틀린 불변식**이고, 문서 전용
+# PR 이 머지될 때마다 **건강한 배포에 빨간불**이 켜진다(563 직후 실측: chore 하나에 "1개
+# 뒤처짐", 그 다음 문서 PR 에 "2개 뒤처짐" — 거짓 경보가 자란다).
+#
+# 🔴 **늑대를 부르는 계기판은 꺼진 계기판보다 나쁘다.** 사람은 그 신호를 무시하는 법을
+#    배우고, 그 다음에 진짜 배포가 죽으면 같은 빨간불이 켜진다.
+#
+# 옳은 축: **`<ref>` 에서 이 앱의 트리거 경로를 마지막으로 바꾼 커밋.**
+# 그 목록은 `vercel-ignore.sh` 에 **단일 출처**로 있다 — 여기 복사하지 않는다. 복사하면
+# 한쪽만 고쳐지고, 그 어긋남은 "낡음" 이 아니라 **조용한 오판**으로 나타난다.
+# -----------------------------------------------------------------------------
+SPECS=()
+while IFS= read -r sp; do [ -n "$sp" ] && SPECS+=("$sp"); done \
+  < <(grep -o "':/[^']*'" "$IGNORE_WRAPPER" 2>/dev/null | tr -d "'")
+
+# 🔴🔴 추출이 죽으면 **조용히 통과시키면 안 된다.** `git log -1 <ref> --` 는 인자가 없으면
+#    **모든 경로**를 뜻해 tip 을 돌려주고, 그러면 이 판정자가 고치려는 결함이 **그대로
+#    부활하면서 초록으로 보인다.** 0건은 "제한 없음" 이 아니라 **판정 불가**다.
+if [ "${#SPECS[@]}" -eq 0 ]; then
+  say "✖ $IGNORE_WRAPPER 에서 ':/...' pathspec 을 하나도 못 뽑았습니다 ⇒ 판정 불가"
+  say "  (추출이 죽은 채로 진행하면 기대값이 ref 의 tip 이 되어 결함이 되살아난다)"
+  exit 2
 fi
+
+EXP_SHA="$(git -C "$HERE" log -1 --format=%H "$REF" -- "${SPECS[@]}" 2>/dev/null)"
+if [ -z "$EXP_SHA" ]; then
+  say "✖ $REF 에서 트리거 경로를 바꾼 커밋을 못 찾았습니다 ⇒ 판정 불가"
+  say "  pathspec: ${SPECS[*]}"
+  exit 2
+fi
+say "   트리거 경로 ${#SPECS[@]}개 · 마지막으로 바꾼 커밋 = ${EXP_SHA:0:9}"
 
 say "── $ORIGIN"
 SERVED="$(served_commit "$ORIGIN")" || exit 2
@@ -138,7 +169,7 @@ say "   정문 / = HTTP $DOCHTTP ($DOCBYTES B)"
 [ "$DOCHTTP" = "200" ] || say "   ⚠ 정문이 200 이 아닙니다 — 신선도와 별개의 사건입니다."
 
 if [ "$SELFTEST" -eq 0 ]; then
-  verdict_for "$SERVED" "$EXP_SHA" "$REF"
+  verdict_for "$SERVED" "$EXP_SHA" "$REF 의 트리거 경로 tip"
   exit $?
 fi
 
@@ -149,13 +180,13 @@ fi
 #    같은 문자열을 두 술어에 쓰면 한쪽이 조용히 0건이 된다(562 실측: 대조군이 "이전 커밋
 #    없음" 으로 죽었다). 루트 앵커 `:/` 로 축을 맞춘다.
 say "▶ 대조군 — 같은 오리진에 기준만 바꿔 두 결론이 갈리는지 확인합니다."
-PREV_SHA="$(git -C "$HERE" log -2 --format=%H "$EXP_SHA" -- ":/$APP_PATH" 2>/dev/null | tail -1)"
+PREV_SHA="$(git -C "$HERE" log -2 --format=%H "$EXP_SHA" -- "${SPECS[@]}" 2>/dev/null | tail -1)"
 if [ -z "$PREV_SHA" ] || [ "$PREV_SHA" = "$EXP_SHA" ]; then
-  say "✖ 이 앱을 바꾼 이전 커밋을 못 찾았습니다 ⇒ 대조군 성립 불가(판정 불가)"; exit 2
+  say "✖ 트리거 경로를 바꾼 이전 커밋을 못 찾았습니다 ⇒ 대조군 성립 불가(판정 불가)"; exit 2
 fi
 say "   대조 기준 = ${PREV_SHA:0:9} (이전 판) vs 현재 ${EXP_SHA:0:9}"
 
-verdict_for "$SERVED" "$EXP_SHA"  "$REF (현재)";                a=$?
+verdict_for "$SERVED" "$EXP_SHA"  "$REF 의 트리거 경로 tip (현재)";  a=$?
 verdict_for "$SERVED" "$PREV_SHA" "${PREV_SHA:0:9} (이전 판)";  b=$?
 
 say "── 대조군 결과: 현재기준=$a  이전판기준=$b"

@@ -163,7 +163,31 @@ if [ ! -s "$EXP_FILE" ]; then
 fi
 EXP_MD5="$(strip_cr < "$EXP_FILE" | md5sum | cut -d' ' -f1)"
 rm -f "$EXP_FILE"
-EXP_SHA="$(git -C "$HERE" rev-parse "$REF" 2>/dev/null || echo unknown)"
+# 🔴🔴 커밋 축의 기대값은 `<ref>` 의 **tip 이 아니다** (TASK-MONO-564)
+# 이 프로젝트에도 `ignoreCommand` 가 있다 — 트리거 경로가 안 바뀐 커밋은 **의도적으로**
+# 배포를 건너뛴다. tip 을 기대값으로 쓰면 문서 전용 PR 이 머지될 때마다 서빙 커밋이
+# "뒤처진" 것처럼 보인다. 여기서는 md5 축이 먼저 일치해서 그 오판이 **가려져 있었을 뿐**이고
+# (실측: `✔ 신선` 옆에 서빙 `d1f263aa3` ≠ 기대 `b651b115b` 가 그대로 찍혔다), 사람은 그
+# 불일치를 보고 둘 중 하나를 불신하게 된다. fan 쪽에서는 같은 결함이 md5 축이 없어
+# **그대로 빨간불**로 나타났다(TASK-MONO-564 의 발견 경로).
+#
+# 목록은 `vercel.json` 의 `ignoreCommand` 에 **단일 출처**로 있다 — 여기 복사하지 않는다.
+SPECS=()
+while IFS= read -r sp; do [ -n "$sp" ] && SPECS+=("$sp"); done \
+  < <(grep -o "':/[^']*'" "$HERE/vercel.json" 2>/dev/null | tr -d "'")
+
+# 🔴 추출이 죽으면 조용히 통과시키지 않는다. `git log -1 <ref> --` 는 인자가 없으면
+#    **모든 경로**를 뜻해 tip 을 돌려주고, 그러면 이 수정이 **초록인 채로 무효**가 된다.
+if [ "${#SPECS[@]}" -eq 0 ]; then
+  say "✖ vercel.json 에서 ':/...' pathspec 을 하나도 못 뽑았습니다 ⇒ 판정 불가"
+  exit 2
+fi
+EXP_SHA="$(git -C "$HERE" log -1 --format=%H "$REF" -- "${SPECS[@]}" 2>/dev/null)"
+if [ -z "$EXP_SHA" ]; then
+  say "✖ $REF 에서 트리거 경로를 바꾼 커밋을 못 찾았습니다 ⇒ 판정 불가"
+  exit 2
+fi
+say "   트리거 경로 ${#SPECS[@]}개 · 마지막으로 바꾼 커밋 = ${EXP_SHA:0:9}"
 
 if [ "$SELFTEST" -eq 0 ]; then
   verdict_for "$ORIGIN" "$EXP_MD5" "$EXP_SHA"

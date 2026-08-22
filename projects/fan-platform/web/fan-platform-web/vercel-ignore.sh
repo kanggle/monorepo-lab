@@ -38,6 +38,12 @@ ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
 # 🔴 `projects/fan-platform/apps/**` 는 일부러 뺐다 — Java 서비스라 Next 빌드에
 #    들어가지 않는다. 🔴 목록을 좁히는 쪽이 위험하다: 빠뜨린 경로는 "배포 실패" 가
 #    아니라 **"조용히 건너뜀"** 으로 나타난다.
+# 🔴🔴 **이 목록에는 소비자가 둘이다** (TASK-MONO-564):
+#   ① Vercel 의 `ignoreCommand` — 이 커밋에 배포를 구울지 결정한다.
+#   ② `check-fan-fresh.sh` — "서빙 중인 판이 최신인가" 의 **기대값**을 이 목록으로 계산한다.
+# 둘은 **같은 모집단이어야 한다.** 어긋나면 판정자가 *건강한 배포에 빨간불을 켜거나*
+# (기대값이 트리거보다 넓을 때) *죽은 배포를 신선하다고* 한다(좁을 때).
+# 그래서 목록은 여기 한 벌만 있고, 판정자는 이 파일을 **읽는다**(복사하지 않는다).
 SPECS=(
   ':/projects/fan-platform/web'
   ':/projects/fan-platform/package.json'
