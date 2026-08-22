@@ -3,6 +3,7 @@ package com.example.auth.presentation;
 import com.example.auth.application.exception.AccountServiceUnavailableException;
 import com.example.auth.application.exception.SignupEmailConflictException;
 import com.example.auth.application.exception.SignupInvalidException;
+import com.example.auth.application.exception.SignupNotPossibleException;
 import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.application.port.TenantSignupEligibilityPort;
 import com.example.auth.infrastructure.security.SavedRequestTenantResolver;
@@ -69,13 +70,22 @@ public class SignupPageController {
     private final TenantSignupEligibilityPort tenantSignupEligibilityPort;
 
     /**
-     * Shown when the tenant behind this flow can never accept a signup. Deliberately NOT
-     * "try again later": the condition is structural (a reserved slug has no tenants row and
-     * may never get one) or administrative (a suspended tenant). Telling the visitor to
-     * retry is the defect TASK-BE-580 addresses on the message axis; this is its cause.
+     * Shown when signup cannot succeed for this tenant, whether that was decided <b>before</b>
+     * the call (TASK-BE-581's eligibility gate) or reported <b>by</b> the call
+     * (TASK-BE-580's {@link SignupNotPossibleException}).
+     *
+     * <p>🔴 One constant for both on purpose. They are the same situation from the visitor's
+     * side, and the repository has been bitten by the same fact living in two places where
+     * only one of them later gets fixed. If this wording ever needs to differ per cause, split
+     * it deliberately — do not let it drift.
+     *
+     * <p>Deliberately NOT "try again later": the condition is structural (a reserved slug has
+     * no tenants row and may never get one) or administrative (a suspended tenant). It also
+     * has to be more than "an error occurred" — that leaves the visitor with nothing to do —
+     * so it names the next step.
      */
     private static final String SIGNUP_NOT_AVAILABLE_MESSAGE =
-            "이 경로에서는 회원가입할 수 없습니다. 계정은 관리자가 생성합니다 — 관리자에게 문의해 주세요.";
+            "이 경로로는 회원가입할 수 없습니다. 계정 생성은 관리자에게 문의해 주세요.";
 
     /**
      * TASK-BE-472: mirror account-service's {@code Email} value-object regex
@@ -173,6 +183,15 @@ public class SignupPageController {
             return "redirect:/login?registered";
         } catch (SignupEmailConflictException e) {
             model.addAttribute("error", "이미 가입된 이메일입니다. 로그인해 주세요.");
+            return "signup";
+        } catch (SignupNotPossibleException e) {
+            // TASK-BE-580: account-service refused for a reason retrying cannot change. This is
+            // reachable even with TASK-BE-581's gate in front: the gate fails OPEN during an
+            // account-service outage, and a tenant can be suspended between the check and the
+            // call. The gate stops the common path; this stops the rest.
+            log.info("Signup refused permanently: code={}", e.getErrorCode());
+            model.addAttribute("signupBlocked", true);
+            model.addAttribute("error", SIGNUP_NOT_AVAILABLE_MESSAGE);
             return "signup";
         } catch (SignupInvalidException e) {
             // TASK-BE-472: a 400/422 from account-service can be an email- OR password-format

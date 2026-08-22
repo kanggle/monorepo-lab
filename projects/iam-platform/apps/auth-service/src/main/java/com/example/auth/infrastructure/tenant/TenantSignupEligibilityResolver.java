@@ -85,7 +85,8 @@ public class TenantSignupEligibilityResolver implements TenantSignupEligibilityP
             }
             String status = tenant.get().status();
             if (!STATUS_ACTIVE.equalsIgnoreCase(status)) {
-                // ActiveTenantGuard would throw TenantSuspendedException (403), not a 404.
+                // ActiveTenantGuard would throw TenantSuspendedException — measured by TASK-BE-580 as
+                // 409 TENANT_SUSPENDED, not the 403 originally assumed here, and not a 404.
                 log.debug("signup not offered: tenantId={} status={}", tenantId, status);
                 return false;
             }
