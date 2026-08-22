@@ -8,7 +8,7 @@ TASK-MONO-552
 
 # Status
 
-review
+ready
 
 # Owner
 
@@ -333,6 +333,20 @@ status-context 는 `.state` 로 **서로 다르다.**
 
 ⏳ **AC-4(재굽기) 잔존** — `infra/demo/**` 는 **baked 층**이라, 이 판정이 실제 데모 호스트에서
 돌려면 `packer build` + `terraform apply` 가 필요하다. **사용자 승인 대상**이라 이 PR 범위 밖이다.
+
+
+## ✅ 2026-08-22 UTC — AC-3 랜딩. **AC-4 만 남아 이 티켓은 `ready/` 에 머문다.**
+
+PR [#3423](https://github.com/kanggle/monorepo-lab/pull/3423) 이 `main` 에 squash-merge 됐다
+(`8ab80fd40`). 3축 검증: `state=MERGED` · `origin/main` tip 일치 · 머지 직전 실패 필수체크 **0건**
+(48개 = 40 SKIPPED + 8 SUCCESS, **버킷 합 = total** 로 분류 안 된 몫이 없음을 확인).
+
+🔴 **`done/` 으로 보내지 않는다** — **AC-4(재굽기)가 실제로 안 끝났다.** `infra/demo/**` 는
+baked 층이라, 이 판정이 실제 데모 호스트에서 돌려면 `packer build` + `terraform apply` 가
+필요하고 그것은 **사용자 승인 대상**이다. 여기서 닫으면 "부팅 판정이 HTTP 표면을 본다" 가
+**저장소에서만 참이고 데모에서는 거짓**인 상태를 완료로 기록하게 된다.
+
+**남은 것은 AC-4 하나뿐이다.** AC-0(원인 확정) · AC-1 · AC-2(717초) · AC-3(가드) 는 모두 닫혔다.
 
 ---
 
