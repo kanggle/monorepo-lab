@@ -2311,6 +2311,150 @@ ok "방문자 화면 링크 $(printf '%s\n' "$z14_rows" | grep -c .)개 — up �
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 if [ "$LIVE" -eq 0 ]; then
+
+# =============================================================================
+# (z15) 부팅 완료 판정이 **HTTP 표면**을 보는가 — TASK-MONO-552 AC-3
+# =============================================================================
+# 🔴 이 티켓의 발견: 컨테이너 **99/102 가 healthy 인 채로 표면이 전멸**했다. 그러니
+#    컨테이너 헬스(그 재측정 포함, MONO-559)는 이 명제의 증거가 아니다.
+# 🔴 형제 가드 (z13)은 이 축을 **못 본다** — `DEMO_DOMAIN=local` 로 돌기 때문에 표면
+#    검사가 건너뛰기 가지로만 간다. 즉 z13 이 초록인 것은 이 코드가 옳다는 뜻이 아니다.
+#    (통과가 무효일 수 있다 — 그래서 여기서 **찌르는 경로 자체**를 돌린다.)
+# 🔴 그래서 `curl` 을 스텁으로 갈아끼우고 **응답 코드를 우리가 정한다.**
+echo "[verify] (z15) 부팅 판정이 HTTP 표면을 보는가 (TASK-MONO-552 AC-3)"
+# 🔴 트리 준비는 형제 가드 (z13) 과 **같은 모양**이어야 한다. 초판은 `projects/*/`의
+#    compose 파일을 안 옮겼고, 그러면 `demo-up.sh` 가 없는 파일을 붙들고 재시도를 돌아
+#    **가드가 끝나지 않는다**(실측: 600s 타임아웃). 초록도 빨강도 아닌 그 상태가 제일 나쁘다.
+z15_tmp="$(mktemp -d)"
+mkdir -p "$z15_tmp/infra" "$z15_tmp/bin"
+cp -r "$ROOT/infra/demo" "$z15_tmp/infra/demo"
+if [ -d "$ROOT/infra/traefik" ]; then cp -r "$ROOT/infra/traefik" "$z15_tmp/infra/traefik"; fi
+for z15_d in "$ROOT"/projects/*/; do
+  z15_n="$(basename "$z15_d")"
+  mkdir -p "$z15_tmp/projects/$z15_n"
+  for z15_f in "$z15_d"*.yml "$z15_d".env.example; do
+    if [ -f "$z15_f" ]; then cp "$z15_f" "$z15_tmp/projects/$z15_n/"; fi
+  done
+done
+if ! bash "$z15_tmp/infra/demo/provision-demo-env.sh" >/dev/null 2>&1; then
+  rm -rf "$z15_tmp"
+  fail "(z15) 임시 트리 .env 프로비저닝 실패 — 이후 판정이 env-preflight 에 막혀 무효가 됩니다."
+fi
+# 🔴 `seed-demo-domain.sh` 는 **`DEMO_DOMAIN=local` 일 때만 no-op** 이다. 이 가드는 표면을
+#    찌르려고 **진짜 모양의 도메인**을 써야 하므로 그 no-op 가지로 못 간다 — 그러면 없는 DB 를
+#    5분 기다리다 실패하고, **표면과 무관한 이유로** 대조군이 빨개진다(실측: z15 초판이 그랬다).
+#    형제 (z13)이 이 함정을 안 밟는 것은 `DEMO_DOMAIN=local` 로 돌기 때문이고, 그것이 곧
+#    z13 이 이 축을 못 보는 이유이기도 하다. 시험 대상이 아닌 것은 대역으로 바꾼다.
+printf '#!/usr/bin/env bash
+exit 0
+' > "$z15_tmp/infra/demo/seed-demo-domain.sh"
+chmod +x "$z15_tmp/infra/demo/seed-demo-domain.sh"
+
+cat > "$z15_tmp/bin/docker" <<'Z15DOCKER'
+#!/usr/bin/env bash
+if [ "$1" = "compose" ]; then
+  p=""; while [ $# -gt 0 ]; do case "$1" in -p) p="$2"; shift 2 ;; *) shift ;; esac; done
+  if [ "$p" = "${FAILDOM:-}" ]; then echo "dependency failed: ${p}" >&2; exit 1; fi
+  exit 0
+fi
+if [ "$1" = "ps" ]; then
+  case " $* " in *" -q "*) echo "deadbeef"; exit 0 ;; esac
+  slug=""; for a in "$@"; do case "$a" in label=com.docker.compose.project=*) slug="${a##*=}" ;; esac; done
+  if [ "$slug" = "${FAILDOM:-}" ] && [ "${RECHECK:-up}" = "down" ]; then exit 0; fi
+  echo "running|Up 3 minutes (healthy)"; exit 0
+fi
+exit 0
+Z15DOCKER
+chmod +x "$z15_tmp/bin/docker"
+
+# 🔴 스텁 curl 은 **요청한 URL 을 파일에 적는다.** "안 물었다" 와 "찌른 적이 없다" 는
+#    다른 사건이고, 후자는 초록으로 보인다 — 무는지 읽기 전에 **주입을 증명한다.**
+cat > "$z15_tmp/bin/curl" <<'Z15CURL'
+#!/usr/bin/env bash
+url=""; for a in "$@"; do case "$a" in http://*) url="$a" ;; esac; done
+[ -n "$url" ] && echo "$url" >> "${Z15_PROBE_LOG:-/dev/null}"
+case "$url" in
+  *"${Z15_DEAD_HOST:-@@none@@}"*) printf '000' ;;
+  *) printf '%s' "${Z15_CODE:-200}" ;;
+esac
+Z15CURL
+chmod +x "$z15_tmp/bin/curl"
+
+z15_run() {  # $1=FAILDOM  $2=RECHECK  $3=DEAD_HOST  $4=SURFACE_SRC(옵션) → rc 를 echo
+  local rc=0
+  # 🔴 조건부 할당 접두사로 쓰지 마라. bash 는 **할당 접두사를 확장 전에** 판별하므로
+  #    그 확장 결과는 할당이 아니라 **명령**으로 실행되고 rc=127 이 된다. 초판이 그랬고,
+  #    아래 첫 검사(rc != 0)가 그 127 을 **"제대로 빨개졌다" 로 통과시켰다** — 문구 검사가
+  #    없었으면 이 칸은 아무것도 시험하지 않으면서 초록이었다. 항상 값을 정해 넘긴다.
+  local src="${4:-$z15_tmp/infra/demo/aws/site/index.html}"
+  : > "$z15_tmp/probe.log"
+  ( cd "$z15_tmp" && PATH="$z15_tmp/bin:$PATH" \
+      FAILDOM="$1" RECHECK="$2" Z15_DEAD_HOST="$3" Z15_PROBE_LOG="$z15_tmp/probe.log" \
+      DEMO_SEED=0 DEMO_DOMAIN=1-2-3-4.sslip.io DEMO_UP_ATTEMPTS=2 DEMO_UP_RETRY_SLEEP=1 \
+      DEMO_SURFACE_ATTEMPTS=1 DEMO_SURFACE_SLEEP=0 DEMO_SURFACE_SRC="$src" \
+      bash infra/demo/demo-up.sh console ecommerce fan ) > "$z15_tmp/run.log" 2>&1 || rc=$?
+  echo "$rc"
+}
+z15_die() { rm -rf "$z15_tmp"; fail "$@"; }
+
+# (1) 대조군 — 표면이 전부 응답하면 초록이고, 검사했다는 사실이 보여야 한다.
+z15_rc1="$(z15_run '' up '')"
+z15_log1="$(cat "$z15_tmp/run.log")"
+z15_probe1="$(cat "$z15_tmp/probe.log")"
+[ "$z15_rc1" = "0" ] || z15_die "(z15) 대조군 실패 — 표면이 전부 200 인데 rc=$z15_rc1 입니다."\
+  $'\n'"→ 정상 부팅을 빨갛게 만드는 가드는 곧 꺼진다. 로그: $z15_log1"
+# 🔴🔴 **주입 증명이 먼저다.** 찌른 적이 없으면 아래 bite 는 아무것도 시험하지 않는다.
+z15_n="$(printf '%s\n' "$z15_probe1" | grep -c 'http://' || true)"
+[ "$z15_n" -ge 3 ] || z15_die "(z15) 표면을 **찌른 적이 없습니다** (요청 $z15_n 건)."\
+  $'\n'"→ 판정이 HTTP 를 보지 않는다는 뜻이고, 이 가드의 나머지 칸은 전부 공허해집니다."\
+  $'\n'"→ 컨테이너 99/102 가 healthy 인 채로 표면이 전멸한 것이 이 티켓의 발견입니다."
+printf '%s\n' "$z15_log1" | grep -q 'HTTP 표면 3/3' \
+  || z15_die "(z15) 표면을 몇 개 봤는지 로그가 말하지 않습니다 — 셀 수 없는 검사는 줄어도 모릅니다."
+
+# (2) bite — 도메인은 up 인데 표면 하나가 안 뜬다. **빨개져야 하고 이름이 찍혀야 한다.**
+z15_rc2="$(z15_run '' up 'web.ecommerce')"
+z15_log2="$(cat "$z15_tmp/run.log")"
+[ "$z15_rc2" != "0" ] || z15_die "(z15) 표면이 안 뜨는데 **성공으로 끝났습니다.**"\
+  $'\n'"→ 이것이 이 티켓 그 자체다: 컨테이너는 전부 healthy 인데 방문자가 여는 주소가 404 다."\
+  $'\n'"→ 판정이 컨테이너만 보면 면접관이 보는 화면과 부팅 결과가 갈라집니다."
+printf '%s\n' "$z15_log2" | grep -q 'HTTP 표면 미도달.*web.ecommerce' \
+  || z15_die "(z15) 안 뜬 표면의 **이름이 없습니다** — 빨간데 어디가 문제인지 알 수 없습니다."
+
+# (3) 대조군 — 도메인 자체가 안 뜬 표면은 **찌르지 않는다.**
+# 🔴 찌르면 한 결함이 두 줄로 보고돼 원인이 둘인 것처럼 읽히고, 실패 사유가 흐려진다.
+z15_rc3="$(z15_run ecommerce down '')"
+z15_log3="$(cat "$z15_tmp/run.log")"
+z15_probe3="$(cat "$z15_tmp/probe.log")"
+printf '%s\n' "$z15_probe3" | grep -q 'web.ecommerce' \
+  && z15_die "(z15) 도메인이 안 떴는데 그 표면을 찔렀습니다 — 한 결함이 두 줄로 보고됩니다."
+printf '%s\n' "$z15_log3" | grep -q 'HTTP 표면 미검사.*web.ecommerce' \
+  || z15_die "(z15) 안 찌른 표면을 **침묵으로** 넘겼습니다 — 검사하지 않았다는 사실이 남아야 합니다."
+
+# (4) 판정 불가 — 표면 목록을 못 읽으면 **초록이면 안 된다.**
+# 🔴 빈 목록이면 이 검사는 아무것도 안 하면서 통과한다. 하한이 그것을 막는지 본다.
+: > "$z15_tmp/empty.html"
+z15_rc4="$(z15_run '' up '' "$z15_tmp/empty.html")"
+z15_log4="$(cat "$z15_tmp/run.log")"
+[ "$z15_rc4" != "0" ] || z15_die "(z15) 표면 목록이 **비었는데 초록**입니다 — 아무것도 안 보면서 통과합니다."
+# 🔴 127 은 "가드가 물었다" 가 아니라 "하네스가 죽었다" 다. 둘을 섞으면 칸이 공허해진다.
+[ "$z15_rc4" != "127" ] || z15_die "(z15) 하네스가 죽었습니다(rc=127) — 이 칸은 아무것도 시험하지 않았습니다."
+printf '%s\n' "$z15_log4" | grep -q 'HTTP 표면 판정 불가' \
+  || z15_die "(z15) 목록을 못 읽은 것이 '판정 불가' 로 구별되지 않습니다 — '표면 정상' 과 섞입니다."
+
+# (5) 🔴 목록이 **론처 마크업에서 온다**는 것 — 복사본이 아니라 그 파일을 읽는가.
+# 마크업에 표면을 하나 더 넣고 판정이 **따라오는지** 본다. 안 따라오면 어딘가에 두 번째
+# 목록이 있는 것이고, 그 어긋남은 "약속했는데 안 열리는 화면" 으로 나타난다.
+sed 's#<div id="smsg"></div>#<a class="open" data-surface data-domain="wms" data-host="z15probe" target="_blank"></a><div id="smsg"></div>#' \
+  "$ROOT/infra/demo/aws/site/index.html" > "$z15_tmp/extra.html"
+z15_rc5="$(z15_run '' up '' "$z15_tmp/extra.html")"
+z15_probe5="$(cat "$z15_tmp/probe.log")"
+printf '%s\n' "$z15_probe5" | grep -q 'z15probe' \
+  || z15_die "(z15) 마크업에 표면을 추가했는데 판정이 **찌르지 않았습니다.**"\
+  $'\n'"→ 목록을 그 파일에서 읽지 않고 어딘가에 **복사해 둔** 것입니다. 한쪽만 고쳐집니다."
+
+rm -rf "$z15_tmp"
+ok "부팅 판정이 HTTP 표면을 본다 — 3/3 확인 · 표면 하나 죽이면 bite · 안 뜬 도메인은 미검사 · 목록 0건은 판정 불가 · 목록은 론처 마크업에서 읽음"
+
   echo "[verify] 정적 검증 PASS (실기동 증명은 --live)"
   exit 0
 fi
