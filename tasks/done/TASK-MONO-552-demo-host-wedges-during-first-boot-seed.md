@@ -8,7 +8,7 @@ TASK-MONO-552
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -362,8 +362,53 @@ baked 층이라, 이 판정이 실제 데모 호스트에서 돌려면 `packer b
 **AC-3 — 가드.** ✅ **완료(2026-08-22 UTC — 위 § 참조).** 부팅 완료 판정 경로가 HTTP 표면을 본다. **bite**: 표면이 안 뜨는 상태를
 만들면 빨개져야 한다.
 
-**AC-4 — 재굽기.** `demo-boot.sh`·`demo-up.sh`·시드는 **baked 층**이다.
+**AC-4 — 재굽기.** ✅ **완료(2026-08-22 UTC — AMI `ami-08df900798bc99c83`. 위 § 참조).** `demo-boot.sh`·`demo-up.sh`·시드는 **baked 층**이다.
 ⚠️ `packer build`/`terraform apply` 는 **사용자 승인 대상**.
+
+
+## ✅✅ 2026-08-22 UTC — **AC-4 완료. 티켓 종결.** 판정이 실제 데모 호스트에서 돌았다
+
+AMI **`ami-08df900798bc99c83`** (`packer build` 59분29초, `PACKER_RC=0`) → `terraform apply`
+(`1 add / 2 change / 1 destroy` — 교체는 `aws_instance.demo` 하나, 나머지 2건은 `INSTANCE_ID`
+의존에 따른 하위 효과) → 인스턴스 `i-033a3820845432e16`.
+
+🔴 **구운 것을 믿지 않고 인스턴스 안에서 단언했다** — packer 로그는 `git clone --branch main`
+만 적고 해석된 SHA 를 남기지 않으므로 그것으로는 *무엇이 구워졌는가* 가 증명되지 않는다:
+
+```
+git -c safe.directory=/opt/monorepo-lab -C /opt/monorepo-lab log -1 --format=%H
+→ e632e3b54036048ff30ae53ed4c8c96151a166db   (기대와 일치)
+```
+
+**AC-4 판정 — `demo-stack.service` 저널이 직접 말한다** (두 번의 부팅 모두):
+
+```
+[demo] ✔ HTTP 표면 3/3: console=307 web.ecommerce=200 web.fan-platform=307
+```
+
+🔵 **console 이 200 이 아니라 307 이었다.** 표면 검사가 *리다이렉트를 따라가지 않고 3xx 를 통과로
+받도록* 짜인 것이 첫 실전에서 곧바로 값을 했다 — `curl -fL` 이었다면 다른 답이 나왔을 자리다.
+도메인은 `/domains` 기준 **9/9 up · 컨테이너 102/102 healthy**, 부팅 → `up complete` **644초**
+(직전 실측 717초).
+
+### 🔴 판정 도구가 세 번 틀렸다 — 셋 다 "분류되지 않은 값이 조용히 흘러간" 모양
+
+1. **`code="$(curl -w '%{http_code}' … || echo 000)"` → `307000`.** `||` 는 대체가 아니라 **연결**이다.
+   curl 이 코드를 찍고 나서 종료코드가 0이 아니면 두 값이 이어붙고, 그 문자열은 `2??|3??` 에도
+   `000` 에도 안 걸려 **영원히 실패로 읽힌다.** 이렇게 924초를 태웠다 — 사이트는 그동안 떠 있었다.
+   ⇒ 출력과 rc 를 **따로** 받고 `[0-9][0-9][0-9]` 유효성 술어로 거른다.
+2. **맨몸 `bash infra/demo/seed/seed.sh finance`.** `seed.sh:34` 의 `export DEMO_DOMAIN="${DEMO_DOMAIN:-local}"`
+   가 먹어 **`finance.local`** 을 쟀다. AWS 에서 해석될 리 없는 주소라 240초 타임아웃은 필연이었다.
+   **결함은 시드가 아니라 내 계측 경로에 있었다** — 부팅 경로는 IMDS 에서 도메인을 파생한다.
+3. **SSM 폴링 상한(300초) < 시드의 게이트웨이 대기(240초+).** 돌아온 `-1` 은 실패가 아니라
+   **내가 안 기다린 것**이다.
+
+🔵 셋 다 **거짓 초록이 아니라 `판정 불가` 로 떨어졌다** — 술어를 *"부재를 통과로 읽지 않는다"* 로
+짜 둔 덕이다. 틀리더라도 **안전한 방향으로** 틀리게 만드는 것이 요점이다.
+
+**⇒ AC-0 · AC-1 · AC-2 · AC-3 · AC-4 전부 완료. 이 티켓은 닫는다.**
+
+---
 
 # Related Specs
 
