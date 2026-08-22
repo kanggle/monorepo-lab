@@ -8,7 +8,7 @@ TASK-MONO-557
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -61,6 +61,43 @@ README 에 주소를 적는 순간 그 조작은 못 하게 된다.
 얻으려는 유일한 것이다.
 
 ---
+
+## ✅ 2026-08-21 UTC — **AC-1·AC-3 을 실제 브라우저로 닫는다**
+
+**AC-1 — 페이지가 Vercel 에서 뜬다. ✅** `https://kanggle-portfolio.vercel.app/` 가 200 이고
+`config.js` 가 `window.DEMO_API_BASE` 를 실어 온다(빈 값이면 빌드가 죽는 대조군 4종은 이미 기록됨).
+
+**AC-3 — 브라우저에서 실제 조작이 된다. ✅ 실제 Chromium 으로 측정했다.**
+🔴 이 AC 는 `curl` 로 만족시킬 수 없다 — CORS 는 브라우저 정책이라 curl 이 우회한다.
+그래서 Playwright 로 진짜 브라우저를 띄워 **론처 오리진에서** 실행했다.
+
+| 칸 | 결과 |
+|---|---|
+| 페이지 로드 (론처 오리진) | JS 가 응답 **본문을 읽음**(98B JSON) · `#dlist` 자식 **8** · `[data-surface]` **3** · `#msg` = *"🟢 대기 중 · 431/600분 사용"* · 콘솔 에러 **0** |
+| **실제 POST** (`/heartbeat`, `content-type: application/json` — 버튼과 같은 opts) | **200**, 본문 `{"ok":true}` 읽음 |
+| 🔴 **대조군** — 같은 브라우저·같은 API·`https://example.com` 오리진 | **`TypeError: Failed to fetch`** (GET·POST 둘 다) |
+| 서버 선언 (`OPTIONS /start`, 론처 오리진) | `allow-origin: https://kanggle-portfolio.vercel.app` · `allow-methods: GET,OPTIONS,POST` · `allow-headers: content-type` |
+| 🔴 **대조군** — 같은 preflight, 낯선 오리진 | **204** 인데 CORS 헤더 **0개** |
+
+🔴🔴 **마지막 줄이 이 AC 의 경고를 그대로 재현한다** — *"판정에 200 을 쓰지 말 것: 거부되는
+오리진도 200 이다."* 낯선 오리진의 preflight 는 **에러가 아니라 204** 를 받았다. 막히는 것은
+응답이 오는 것이 아니라 **읽는 것**이고, 그래서 판정 술어를 *"페이지가 본문을 읽어 DOM 을
+채웠는가"* 로 잡았다.
+
+🔵 **preflight 는 네트워크 이벤트에 안 잡혔다 — 그건 Chromium 이 preflight 를 노출하지 않기
+때문이지 안 갔다는 뜻이 아니다.** `content-type: application/json` 인 교차 오리진 POST 는
+preflight 통과 없이 **성립할 수 없다.** 성공 자체가 증거이고, 서버 선언이 그것을 뒷받침한다.
+
+🔴 **작성 중 술어가 한 번 틀렸다.** 처음엔 임의 헤더 `X-Preflight-Probe` 로 preflight 를
+강제했고 **당연히 실패했다** — 서버가 허용할 리 없는 헤더라 POST 가 되든 안 되든 같은 답이
+나온다. **재는 경로가 사용자 경로와 달랐다.** 론처가 실제로 붙이는 헤더로 바꾸자 통과했다.
+
+⏳ **남긴 것**: `시작` 버튼 자체는 누르지 않았다. `■ 데모 종료` 는 인스턴스가 `stopped` 라
+**정상적으로 `disabled`** 이고(실측), 누를 수 있는 POST 버튼은 `시작` 뿐인데 그건 인스턴스를
+켜서 **데모 예산을 쓴다.** CORS 층(이 AC 가 명시한 장애물)은 POST 를 포함해 전부 실증됐다.
+
+**AC-4 — 제어 평면이 안 움직였다. ✅** 배포 후에도 동일 — 이 티켓이 Vercel 에 넣은 값은
+`DEMO_API_BASE` 하나이고 공개 URL 이다. **AWS 자격 증명 0개.**
 
 # Goal
 
