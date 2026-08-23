@@ -8,7 +8,11 @@ ADR-MONO-067 **AC-0 ②** 를 실측한다 — Vercel 함수에서 **평문 HTTP
 
 # Status
 
-ready
+in-progress
+
+> **⏸️ AC-4 가 막혔다 — Vercel 배포 rate limit (2026-08-23 UTC).** 구현은 `main` 에 들어갔고
+> (`dca2408f2`, PR #3438) **AC-1·2·3 완료 / AC-4 미측정**이다. 아래 § 진행 기록 참조.
+> 🔴 **프로브를 아직 지우지 마라(AC-5)** — 한 번도 배포된 적이 없어서 지우면 영영 못 잰다.
 
 # Owner
 
@@ -150,3 +154,60 @@ PR 프리뷰 URL 로 `GET /api/ac0-probe` 를 호출한 **원문 JSON** 을 티�
   배선 문제이므로 공개 경로 목록을 먼저 고친다.
 - **프로브를 지우는 것을 잊는다** → 앱에 인증 없는 아웃바운드 호출 라우트가 남는다.
   대상 URL 이 **하드코딩**이라 SSRF 는 아니지만 부산물이다. AC-5 가 이것을 막는다.
+
+---
+
+# 진행 기록 (2026-08-23 UTC)
+
+## ✅ AC-1 · AC-2 · AC-3 — 완료 (PR #3438, squash `dca2408f2`)
+
+세 칸 프로브 + 리다이렉트 술어 + 원인별 오류 보고를 구현했다. 판정 로직은 `route.ts` 가 아니라
+`verdict.ts` 에 있다 — 🔴 Next 라우트 모듈은 **HTTP 핸들러와 라우트 config 외의 값 export 를
+금지**하고, `decideVerdict` 를 route 에서 내보내면 생성된 라우트 타입검사가
+(`OmitWithTag<…>` → `never`) 실패해 **lint 가 아니라 `next build` 가 깨진다.**
+
+### 🔴 판정 술어를 라이브 출력보다 **먼저** 증명했다
+
+프로브의 JSON 은 술어가 맞든 틀리든 **똑같이 권위 있어 보인다.** 그래서 합성 칸으로 bite 했고,
+주입 여부를 매번 **파일을 되읽어** 확인했다.
+
+| bite | 주입 | 결과 |
+|---|---|---|
+| BITE-1 | `cleanPlaintext` 에서 `location === null` 제거 | 1 failed — *"a 2xx that carries a location header is not a clean plaintext success either"* |
+| BITE-2 | `httpsControl` 가드 무력화 | 1 failed — *"refuses to judge when the https control also failed"* |
+
+🔴🔴 **BITE-2 가 이 티켓의 존재 이유를 보여줬다.** 대조군 가드를 끄자 *이그레스 전무* 상태가
+`PLAINTEXT_HTTP_EGRESS_BLOCKED` 로 보고됐다 — **평문에 대해 아무 말도 하지 않는 증거로 ADR 을
+침몰시키는 거짓 판정**이다.
+
+🔵 **301 케이스는 BITE-1 에 물지 않았다**(그 칸은 `ok:false` 라 양쪽 다 실패). 두 테스트가 술어의
+**서로 다른 절반**을 지킨다는 뜻이고, 그래서 `200 + location` 칸을 따로 둔 것이다.
+
+**게이트는 bite 이후 최종 트리에서 다시 돌렸다**: `tsc --noEmit` 0 · `pnpm lint` clean ·
+`vitest` **139/139**(22 파일) · `pnpm build` 완주 + 산출물에 `ƒ /api/ac0-probe`.
+
+## ⏸️ AC-4 — **측정하지 못했다**
+
+| 시도 | 결과 |
+|---|---|
+| 프리뷰 배포(`kanggle-l7sv54tjt-…vercel.app`) | ❌ **Vercel Deployment Protection** — `302 → vercel.com/sso-api`. 앱이 실행조차 안 됐다 |
+| 프로덕션 별칭(`kanggle-fan.vercel.app`) | 🔵 **공개다** — 기존 `/api/payment-config` 가 `200`. 보호는 **배포 URL 에만** 걸려 있고 별칭엔 없다 |
+| 머지 후 프로덕션 배포 | ❌ **배포가 생기지 않았다** — `Deployment rate limited — retry in 24 hours` |
+
+🔴 **rate limit 판별자가 다시 참이었다**: `kanggle-fan` 은 `pending` **없이 단발 failure**,
+같은 초에 `kanggle-portfolio` 는 `pending → success` 를 거쳤다. **문구가 아니라 `pending` 통과
+여부**가 판별자다.
+
+⇒ 프로브는 `main` 에 있으나 **한 번도 배포된 적이 없다.** 24시간 뒤 fan 경로를 건드리는 커밋이
+생기면 배포되고, 그때 `https://kanggle-fan.vercel.app/api/ac0-probe` 를 부르면 된다.
+
+## 🔴 부수 발견 — `scripts/vercel-should-build.sh` 의 판정 창이 한 커밋이다
+
+판정이 `git diff HEAD^ HEAD` 라, **여러 커밋을 한 번에 push 하면 앞 커밋의 앱 변경이 창 밖으로
+나가** 배포가 조용히 건너뛰어진다. 이 세션에서 실제로 발생했다(앱 변경 커밋 + INDEX 커밋을 함께
+push → `Canceled by Ignored Build Step`, 프리뷰에 프로브가 없었다).
+
+그 스크립트 헤더가 스스로 경고한 모양 그대로다 — *"고장은 반드시 더 굽는 쪽으로 나야 한다…
+증상은 배포가 조용히 건너뛰어졌다"* — 인데, **작성자가 고려하지 않은 문으로 들어왔다.**
+🔵 `main` 은 squash 머지라 한 커밋에 전부 담기므로 **프로덕션은 안전하고, 프리뷰만 뚫린다.**
+별도 티켓 사안(이 티켓의 범위 밖).
