@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { decideVerdict, type ProbeResult } from './verdict';
 
 /**
  * ⏳ TEMPORARY — TASK-MONO-571 / ADR-MONO-067 AC-0 ②. Delete after measuring (AC-5).
@@ -7,6 +8,10 @@ import { NextResponse } from 'next/server';
  * The ADR picked (B) "browser talks only to Vercel over HTTPS, the Next server proxies to the
  * plaintext-HTTP demo backend" — and that proxy half has never once been exercised. If it turns
  * out to be false, the ADR does not hold and needs a superseding decision.
+ *
+ * The running launcher is NOT evidence for this: it reads the IP from /status and builds a link,
+ * and the browser then performs a top-level navigation, which is outside the mixed-content rule
+ * entirely. That proves the discovery half, not the proxy half.
  *
  * Why three cells and not one:
  *
@@ -26,16 +31,6 @@ import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-interface ProbeResult {
-  url: string;
-  ok: boolean;
-  status: number | null;
-  /** Set when the server redirected — a 3xx here means the plaintext call did NOT stand on its own. */
-  location: string | null;
-  /** Populated only on a thrown fetch. `cause.code` separates DNS from connection refusal. */
-  error: { name: string; message: string; code: string | null } | null;
-}
 
 async function probe(url: string): Promise<ProbeResult> {
   try {
@@ -74,25 +69,10 @@ export async function GET() {
     probe('https://example.com/'),
   ]);
 
-  // A plaintext call only counts when it reached 2xx on its own — no redirect hop.
-  const cleanPlaintext = (r: ProbeResult) => r.ok && r.location === null;
-
-  let verdict: string;
-  if (!httpsControl.ok) {
-    // Control down → the subject cells carry no information at all.
-    verdict = 'UNJUDGEABLE — https control also failed; this is not evidence that plaintext is blocked';
-  } else if (cleanPlaintext(plaintextA) || cleanPlaintext(plaintextB)) {
-    verdict = 'PLAINTEXT_HTTP_EGRESS_WORKS';
-  } else if (plaintextA.location || plaintextB.location) {
-    verdict = 'INCONCLUSIVE — plaintext answered only with a redirect, which is not a plaintext success';
-  } else {
-    verdict = 'PLAINTEXT_HTTP_EGRESS_BLOCKED';
-  }
-
   return NextResponse.json({
     task: 'TASK-MONO-571',
     adr: 'ADR-MONO-067 AC-0 (2)',
-    verdict,
+    verdict: decideVerdict({ plaintextA, plaintextB, httpsControl }),
     // Stated so a passing result is not over-read: this measures Vercel's ability to speak
     // plaintext HTTP, NOT that our EC2 demo is reachable from it.
     notMeasured: ['sslip.io DNS resolution', 'EC2 security-group ingress from Vercel egress', 'non-80 ports'],
