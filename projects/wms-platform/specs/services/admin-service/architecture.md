@@ -11,7 +11,7 @@ and `platform/architecture-decision-rule.md`.
 | Field | Value |
 |---|---|
 | Service name | `admin-service` |
-| Service Type | `rest-api` + `event-consumer` (dual; consumer feeds CQRS read model) |
+| Service Type | `rest-api + event-consumer` (dual; consumer feeds CQRS read model) |
 | Architecture Style | **Layered** (deliberate exception — see Rationale) |
 | Primary language / stack | Java 21, Spring Boot |
 | Bounded Context | **Admin / Operations** (per `rules/domains/wms.md`) |

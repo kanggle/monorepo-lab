@@ -203,6 +203,11 @@ jobs:
       # those PRs `code-changed` is false by construction, so AND-combining would
       # give the guard a green skip on 100% of its defect class (§ F1).
       index-queue: ${{ steps.filter.outputs.index-queue }}
+      # TASK-MONO-570: raw filter, NOT AND-combined with `code-changed`. The arrival
+      # path is a spec edit — a service's `architecture.md` Service Type row, or the
+      # catalog it is validated against. Those diffs carry no code, so AND-combining
+      # would skip the guard on exactly the changes it exists to police.
+      service-type-notation: ${{ steps.filter.outputs.service-type-notation }}
       # TASK-MONO-518: raw filter, NOT AND-combined with `code-changed`. Every arrival
       # path for this drift is non-code — a task file moving into `done/`, a row edited
       # in the walkthrough, or the guard/exception list itself. AND-ing with
@@ -460,6 +465,10 @@ jobs:
               - 'projects/*/tasks/in-progress/**'
               - 'projects/*/tasks/done/**'
               - 'scripts/check-index-queue-drift.sh'
+            service-type-notation:
+              - 'projects/*/specs/services/*/architecture.md'
+              - 'platform/service-types/INDEX.md'
+              - 'scripts/check-service-type-notation.sh'
             # TASK-MONO-461: controller web-slice naming (*ControllerSliceTest).
             # Triggers on any test .java (a mis-named slice arrives there), the spec,
             # and the guard script. Pure-positive (no negation — MONO-074/075 quirk
@@ -836,6 +845,31 @@ jobs:
 
       - name: Guard — every INDEX queue listing matches its queue directory
         run: bash scripts/check-index-queue-drift.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-570. A composite `Service Type` must sit in ONE backtick span.
+  # Two notations were in circulation because the rule existed only as examples
+  # in platform/service-types/INDEX.md; whichever form a parser assumes, the
+  # other group fails entirely. Runs on spec diffs, which carry no code — hence
+  # the raw (not code-changed-AND-ed) filter above.
+  # ---------------------------------------------------------------------------
+  service-type-notation:
+    name: Service Type notation (composite types in one backtick span)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.service-type-notation == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-service-type-notation.sh
+
+      - name: Self-test the predicate against known positives and negatives
+        run: bash scripts/check-service-type-notation.sh --self-test
+
+      - name: Guard — every composite Service Type sits in one backtick span
+        run: bash scripts/check-service-type-notation.sh
 
   walkthrough-ledger-drift:
     name: Walkthrough limitation ledger drift (§ 6 rows vs task queues)

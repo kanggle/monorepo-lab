@@ -12,7 +12,7 @@ and `platform/architecture-decision-rule.md`.
 |---|---|
 | Service name | `product-service` |
 | Project | `ecommerce-microservices-platform` |
-| Service Type | `rest-api` (primary) + `event-consumer` (reservation saga, IAM lifecycle, WMS reconciliation) — dual-type, see Service Type Composition |
+| Service Type | `rest-api + event-consumer` (primary rest-api; event-consumer leg = reservation saga, IAM lifecycle, WMS reconciliation) — dual-type, see Service Type Composition |
 | Architecture Style | **DDD-style Architecture** (4-layer + domain/port) |
 | Domain | ecommerce |
 | Primary language / stack | Java 21, Spring Boot |

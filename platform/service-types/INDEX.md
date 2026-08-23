@@ -26,6 +26,15 @@ Every service declared under `specs/services/<service>/architecture.md` MUST dec
 1. A service declares **one primary** `Service Type` from the catalog. Hybrid responsibilities (e.g., a REST service that also consumes events for a CQRS read model or saga orchestration) may be expressed inline as `<primary> + <secondary>[ + <secondary> …]` — the **leftmost type is canonically the primary**, and one or more secondaries MAY follow when a service genuinely carries that many capabilities (e.g., `event-consumer + batch-job + rest-api`). The primary alone determines which `platform/service-types/<type>.md` spec is read per `platform/entrypoint.md` (exactly one file — secondaries never add reads). Each secondary capability adds context for readers and SHOULD also be documented under "Integration Rules" with concrete topic / consumer-group / saga details.
 2. The `Service Type` is chosen at service inception and may not change without an architecture decision recorded in the service spec. Adding `+ <secondary>` to an existing service after launch is a clarification, not a re-classification — no ADR required, but the inline parenthetical SHOULD explain the trigger (e.g., `+ event-consumer (CQRS read model, BE-046)`).
 3. Adding a new `Service Type` to this catalog requires updating this INDEX, creating a matching `<type>.md`, and adding the matching skill under `.claude/skills/service-types/<type>-setup/SKILL.md`.
+4. **Notation — a composite `Service Type` occupies exactly one backtick span.** Write `` `<primary> + <secondary>` ``, never `` `<primary>` `` + `` `<secondary>` ``. Any explanatory parenthetical goes **outside** the span and names its types in plain text, so the row keeps a single span:
+
+   ```
+   | Service Type | `rest-api + event-consumer` (primary rest-api; event-consumer leg = CQRS read model) |
+   ```
+
+   **Why this is a rule and not a preference.** This value is read by tooling that extracts one identifier per backtick span. With two notations in circulation, whichever form a checker assumes, the other group fails *entirely* — a 2026-08-23 sweep reported ten conforming services as violations for exactly this reason, and a checker written the other way would have mis-reported the other thirteen instead. One notation is what makes one extractor correct.
+
+   🔴 Until 2026-08-23 this existed only as **examples** in this file: every composite example here used the single-span form and none used the split form, yet thirteen services had grown the split form without violating anything anyone had written down. **Examples do not constrain; sentences do.** `scripts/check-service-type-notation.sh` now enforces it.
 
 ---
 

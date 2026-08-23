@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Service Name | `inventory-visibility-service` |
-| Service Type | `rest-api` + `event-consumer` |
+| Service Type | `rest-api + event-consumer` |
 | Architecture Style | **Hexagonal** |
 | Domain | scm |
 | Traits | transactional, integration-heavy, batch-heavy |

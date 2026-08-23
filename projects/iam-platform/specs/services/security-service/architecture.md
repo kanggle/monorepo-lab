@@ -12,7 +12,7 @@ and `platform/architecture-decision-rule.md`.
 |---|---|
 | Service name | `security-service` |
 | Project | `iam-platform` |
-| Service Type | `event-consumer` + `rest-api` (dual; see Service Type Composition below) |
+| Service Type | `event-consumer + rest-api` (dual; see Service Type Composition below) |
 | Architecture Style | **Layered (Consumer-Driven)** |
 | Domain | saas |
 | Primary language / stack | Java 21, Spring Boot |
