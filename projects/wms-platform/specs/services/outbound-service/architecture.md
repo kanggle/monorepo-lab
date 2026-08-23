@@ -11,7 +11,7 @@ and `platform/architecture-decision-rule.md`.
 | Field | Value |
 |---|---|
 | Service name | `outbound-service` |
-| Service Type | `rest-api` + `event-consumer` (dual; saga orchestrator) |
+| Service Type | `rest-api + event-consumer` (dual; saga orchestrator) |
 | Architecture Style | **Hexagonal (Ports & Adapters)** |
 | Primary language / stack | Java 21, Spring Boot |
 | Bounded Context | **Outbound** (per `rules/domains/wms.md`) |

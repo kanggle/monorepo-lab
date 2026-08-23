@@ -12,7 +12,7 @@ and `platform/architecture-decision-rule.md`.
 |---|---|
 | Service name | `notification-service` |
 | Project | `ecommerce-microservices-platform` |
-| Service Type | `event-consumer` (primary) + `rest-api` (in-app inbox / preferences / push-subscription / templates) — dual-type, see Service Type Composition |
+| Service Type | `event-consumer + rest-api` (primary event-consumer; rest-api leg = in-app inbox / preferences / push-subscription / templates) — dual-type, see Service Type Composition |
 | Architecture Style | **Hexagonal Architecture** (Ports & Adapters) |
 | Domain | ecommerce |
 | Primary language / stack | Java 21, Spring Boot |

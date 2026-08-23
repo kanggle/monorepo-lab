@@ -127,7 +127,7 @@ and the rule files indexed by `PROJECT.md`'s declared `domain` (`erp`) and
 |---|---|
 | Service Name | `notification-service` |
 | Project | `erp-platform` |
-| Service Type | `event-consumer` (primary) + `rest-api` (in-app inbox read) — dual-type, see Service Type Composition |
+| Service Type | `event-consumer + rest-api` (primary event-consumer; rest-api leg = in-app inbox read) — dual-type, see Service Type Composition |
 | Architecture Style | **Hexagonal** (Ports & Adapters) |
 | Domain | erp |
 | Traits | internal-system, transactional, audit-heavy (project-level; this service exercises `transactional` T8 event idempotency + `internal-system` I1/I2/I6 boundaries + `audit-heavy` A2/A3/A7 dispatch traceability. It is **not** an approval/master state-owning write surface — see § Scope discipline) |

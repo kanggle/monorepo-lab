@@ -11,7 +11,7 @@ and `platform/architecture-decision-rule.md`.
 | Field | Value |
 |---|---|
 | Service name | `inbound-service` |
-| Service Type | `rest-api` (primary) + `event-consumer` (master-data read-model snapshots) — dual-type, see Service Type Composition |
+| Service Type | `rest-api + event-consumer` (primary rest-api; event-consumer leg = master-data read-model snapshots) — dual-type, see Service Type Composition |
 | Architecture Style | **Hexagonal (Ports & Adapters)** |
 | Primary language / stack | Java 21, Spring Boot |
 | Bounded Context | **Inbound** (per `rules/domains/wms.md`) |

@@ -8,7 +8,7 @@ domain service, lifted from PROJECT.md's v2-deferred Service Map.
 | Field | Value |
 |---|---|
 | Service Name | `demand-planning-service` |
-| Service Type | `event-consumer` + `batch-job` + `rest-api` |
+| Service Type | `event-consumer + batch-job + rest-api` |
 | Architecture Style | **Hexagonal** |
 | Domain | scm |
 | Traits | transactional, integration-heavy, batch-heavy |
