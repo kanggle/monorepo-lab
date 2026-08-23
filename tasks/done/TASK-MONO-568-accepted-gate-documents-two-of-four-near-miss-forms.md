@@ -8,7 +8,7 @@ ACCEPTED 게이트가 **네 얼굴 중 둘만** 적어 두었다 — 맨 "진행
 
 # Status
 
-review
+done
 
 # Owner
 
