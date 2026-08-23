@@ -228,6 +228,11 @@ jobs:
       # silently losing its CI entry is a workflow-only diff, and a module gaining an
       # entry in settings.gradle is a build-script diff — neither is `code-changed`.
       libs-ci-coverage: ${{ steps.filter.outputs.libs-ci-coverage }}
+      # TASK-MONO-566: raw filter, NOT AND-combined with `code-changed`. Both arrival
+      # paths are workflow-only diffs — an upload-artifact block gaining a wrong
+      # retention, or the guard being weakened — so AND-ing `code-changed` would switch
+      # the guard off on exactly the diffs it exists to police.
+      artifact-retention: ${{ steps.filter.outputs.artifact-retention }}
       # TASK-MONO-562: raw filter, NOT AND-combined with `code-changed`. Every arrival
       # path of this drift is non-code: a `vercel.json` losing its `ignoreCommand`, a
       # new Vercel project landing without one, or the judge script being weakened.
@@ -616,6 +621,14 @@ jobs:
               - 'settings.gradle'
               - '.github/workflows/**'
               - 'scripts/check-libs-ci-coverage.sh'
+            # TASK-MONO-566: a build artifact kept for 7 days instead of 1. It arrives
+            # exactly two ways — a workflow gains or edits an upload-artifact block, or
+            # the guard itself is weakened — and neither is a source file, so this is a
+            # raw filter and NOT AND-combined with `code-changed`.
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            artifact-retention:
+              - '.github/workflows/**'
+              - 'scripts/check-artifact-retention.sh'
             # TASK-MONO-562: a Vercel project that builds on every commit arrives three
             # ways — a new `vercel.json` anywhere in the tree, an existing one losing its
             # `ignoreCommand`, or the shared judge being weakened. All three are non-code,
@@ -977,6 +990,37 @@ jobs:
 
       - name: Guard — no shared-library module is missing from the CI task list
         run: bash scripts/check-libs-ci-coverage.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-566 — build-artifact retention.
+  #
+  # `retention-days: 7` is this repo's convention for things a HUMAN opens later
+  # (test reports, traces; three are `if: failure()`). `1` is for build outputs a
+  # downstream job consumes inside the same run. `wms-boot-jars` sat at 7 for four
+  # months — not by decision, but because it was written nine days BEFORE the
+  # convention existed, by the first CI commit, alongside `test-reports: 7`. It
+  # held 23.0 GB, 38% of all live artifact bytes.
+  #
+  # Nothing ever turns red from a too-long retention; it just bills storage. Only
+  # this comparison notices. Cheap (a few hundred ms of bash).
+  # ---------------------------------------------------------------------------
+  artifact-retention:
+    name: Artifact retention (build outputs expire in 1 day, not 7)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.artifact-retention == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-artifact-retention.sh
+
+      - name: Self-test the predicate (bites on the real workflows, mutated)
+        run: bash scripts/check-artifact-retention.sh --self-test
+
+      - name: Guard — every boot-jars upload declares retention-days 1
+        run: bash scripts/check-artifact-retention.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-562 — Vercel build triggers.
@@ -1953,7 +1997,12 @@ jobs:
             projects/wms-platform/apps/gateway-service/build/libs/gateway-service.jar
             projects/wms-platform/apps/notification-service/build/libs/notification-service.jar
             projects/wms-platform/apps/admin-service/build/libs/admin-service.jar
-          retention-days: 7
+          # 1, not 7: this artifact is consumed inside THIS run only — the wms e2e job
+          # below (`needs: [changes, boot-jars]`) downloads it minutes later, and nightly
+          # rebuilds instead (`boot-jars-mode: build`; see _platform-e2e.yml's header,
+          # "no cross-workflow artifact reuse"). If that ever changes to cross-run reuse,
+          # this premise breaks and the number has to be revisited. TASK-MONO-566.
+          retention-days: 1
 
   ecommerce-boot-jars:
     name: Package boot jars (ecommerce)
