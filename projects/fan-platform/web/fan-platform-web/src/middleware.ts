@@ -15,6 +15,10 @@ export async function middleware(request: NextRequest) {
   if (
     pathname.startsWith('/login') ||
     pathname.startsWith('/api/auth') ||
+    // ⏳ TEMPORARY — TASK-MONO-571 / ADR-MONO-067 AC-0 ②. Removed with the probe route (AC-5).
+    // Without this the probe is swallowed by the session gate and answers with a login redirect,
+    // whose body is not JSON — a wiring failure that would read as a measurement failure.
+    pathname.startsWith('/api/ac0-probe') ||
     pathname.startsWith('/_next') ||
     pathname === '/favicon.ico'
   ) {

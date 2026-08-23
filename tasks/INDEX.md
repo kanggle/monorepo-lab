@@ -170,6 +170,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 
+- `TASK-MONO-571-ac0-plaintext-http-from-a-vercel-function.md` — **🟢 READY — `ADR-MONO-067` AC-0 ② 를 라이브에서 1건으로 잰다: Vercel 함수에서 평문 HTTP 업스트림 호출이 되는가.** 그 ADR 이 고른 (B) 는 *"브라우저는 Vercel(HTTPS)만 부르고 백엔드 호출은 Next 서버가 평문 HTTP 로 프록시한다"* 인데 **그 프록시 절반이 한 번도 행사된 적이 없다**. AC-0 원문이 *"실패하면 이 ADR 의 추천이 통째로 무너진다"* 고 적어 둔 항목이다. 🔴 **기동 론처가 도는 것은 증거가 아니다** — 론처는 `/status` 로 IP 를 조회해 **링크를 만들 뿐**이고 그 다음은 브라우저의 **최상위 내비게이션**이라 애초에 mixed content 규칙 밖이다(조회 절반만 증명). **AC-1 세 칸**: 주제=`http://neverssl.com` + `http://example.com` (**두 출처** — 한 호스트면 "그 호스트가 죽었다"와 "평문이 막혔다"가 같은 출력), 🔴 **양성 대조군=`https://example.com`**(없으면 *이그레스 전무*와 *평문만 차단*이 구별 불가 ⇒ **판정 불가**). **AC-2 리다이렉트 술어**: `redirect:'manual'` — `301 → https` 는 평문 성공이 **아닌데** fetch 가 자동 추적하면 200 이 돌아와 **성공으로 오독**된다. 참은 *리다이렉트 없이 2xx* 뿐. **AC-3**: 실패는 `cause.code` 까지 실어 `ENOTFOUND`(DNS)/`ECONNREFUSED`(연결)/정책차단을 가른다. **AC-4**: PR **프리뷰**에서 원문 JSON 확보(프리뷰가 Deployment Protection 에 막히면 기록 후 프로덕션으로 — `kanggle-fan` 은 아무도 링크하지 않는다). **AC-5 프로브 제거가 티켓의 일부**. **AC-6**: 결과를 ADR § AC-0 에 기록하되 🔴 **통과해도 (B) 성립이 아니다** — 남은 것은 sslip.io DNS · EC2 SG 이그레스 허용 · 포트. 벡터=`kanggle-fan`(Next route handler=확실히 함수 + 아무도 링크 안 함); 론처는 `framework:null` 이라 `api/` 픽업이 불확실하고 **살아있는 포트폴리오 페이지**라 제외. 분석=Opus 5 / 구현=Opus 5 직접. [[env_top_level_navigation_is_exempt_from_mixed_content]] [[project_vercel_surface_migration_adr067]] [[feedback_control_group_design_four_axes]]
 ## in-progress
 
 _(없음)_
