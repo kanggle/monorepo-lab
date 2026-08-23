@@ -55,6 +55,59 @@ on the record, knowing it was a decision. A gate that any affirmative noise can 
 launders an agent's own preference into an accepted decision, which is exactly what § Prohibited Decisions
 forbids.
 
+## The three requirements do not substitute for each other
+
+An accepting message must carry **all three**: the **ADR's name**, the word **`ACCEPTED`**, and — when the ADR
+offers options — the **option letter, actually designated**. Check them **separately**. Two of three passing is
+not "close enough"; it is the shape every near-miss below takes.
+
+The two cases above (bare "진행", self-ACCEPT) are the easy ones. The dangerous shape is the message that is
+*almost* right — where the temptation to wave it through is highest, and where waving it through is
+indistinguishable from the laundering that § Prohibited Decisions forbids. All four below actually happened.
+
+| Form | Why it looks like it passes | Verdict | Do this |
+|---|---|---|---|
+| ① **Placeholder letter** — `ADR-X-0NN ACCEPTED — <A\|B\|C>` (or a blank, or "추천대로") | Names the ADR, says `ACCEPTED` | **Not designated.** A template placeholder echoed back is not a choice — and a "recommended: A" beside it is *the agent's own*. | Stop; re-ask. |
+| ② **Letter routed through a recommendation** — "decided per the recommendation, D" | The owner typed `D`; the verb is "decided" | **Source is the agent.** If "the recommendation" points at the implementer preference inside the ADR, accepting it is formally identical to self-ACCEPT. | Stop; re-ask. |
+| ③ **Letter with no ADR named** — a bare `B` | Owner-typed, not agent-sourced, may even follow visible deliberation | **Names nothing.** The gate's whole purpose is attribution; one character attributes nothing. | Stop; re-ask. |
+| ④ **Plain `A` offered beside `A + rider`** | Reads as a clean, decisive pick | **Does not settle the rider** when A's own body names it as an open question. | Record as open; promote to an AC. |
+
+**Partial invalidity does not stop everything.** When one message carries several ADRs and only some are
+malformed, ACCEPT and proceed with the valid ones, then re-ask about the rest. Halting all of them is its own
+error.
+
+**Prevention — most of these round-trips are the agent's fault.** When asking an owner to decide, hand them
+the **exact form as a copy-pasteable line**: `ADR-<scope>-0NN ACCEPTED — <letter>`. Case ③ arose because the
+agent asked for *"just one letter — A / B / C"*: it knew the gate requires the ADR's name and then requested a
+format the gate does not accept. The owner answered exactly as asked.
+
+**Record that the gate was exercised.** Write into the ADR's `History` that it stopped and re-asked — and, if
+the cause was the agent's own request format, that too. Without this, a gate that *challenged* something is
+indistinguishable from a gate that was never tested.
+
+## Riders — a plain choice is not a rejection of the rider
+
+When an ADR's own body names a sub-question as unresolved, choosing that option **plainly** settles neither
+way. Reading it in either direction is the error.
+
+- **Rider absent from the reply** → record it as **still open** and promote it to an acceptance criterion on
+  the implementing task, phrased so the owner can reverse it in one line. Silently dropping it is not an
+  answer.
+- **Rider actually supplied** (e.g. `ACCEPTED — A (credentials deferred to v2)`) → leave the option's body
+  **byte-unchanged** and write separately, under § Decision, what the rider narrows. A rider pins a timing or
+  scope the option left open; it does not re-decide the option.
+- **Check for a rider by comparison, not reflex — there may not be one.** The test: *can this option be chosen
+  without answering that question?* If it cannot, the question is inside the choice and there is no rider.
+  **Record that the check was performed and what it found** — "none" is also an output.
+- **A predicate with no wiring is not a rider; it is an implementation AC.** If the ADR fixed a rule but not
+  where it runs, promote it — an unwired ratchet is a comment, not code.
+
+## What this section is not
+
+These are prose rules with **no automated guard**, deliberately. What they judge is the shape of a message a
+human sent, which is not a thing that can be counted in the repository. Do not add a detector over ADR files
+as a stand-in for it — a proxy here would report on the wrong population.
+
 ---
 
 # Selection Guidelines

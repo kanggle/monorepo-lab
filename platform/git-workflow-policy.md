@@ -133,40 +133,68 @@ Chaining `git commit … && git push …` in a **single** Bash-tool invocation l
 
 ---
 
-## `.claude/` Self-Modification — Which Paths the Classifier Actually Blocks
+## Agent Self-Modification — What the Classifier Actually Keys On
 
-The auto-mode classifier (the same higher-safety layer as mass `push --delete`) blocks agent self-modification
-of the **hook machinery only**. The measured map:
+**The axis is the edit, not the path.** The auto-mode classifier (the same higher-safety layer as mass
+`push --delete`) gates edits that **change what is permitted** — the hook machinery that constrains the agent,
+and, separately, authorization data anywhere in the tree:
 
-| Path | Agent edit + commit | Note |
+- **Permission-changing edits bite outside `.claude/` too.** An edit to a role catalog, a permission matrix,
+  or an authorization constant in ordinary domain code has been blocked as privilege escalation
+  (TASK-MONO-522).
+- **The same file's prose passes.** Editing the comments or documentation around that table is not a
+  permission change and goes through (TASK-MONO-528). The classifier reads what the edit *does*, not where it
+  lives.
+- Reading a path table alone, an agent that gets blocked outside `.claude/` cannot find the cause — and will
+  wave through a genuine privilege edit because "the path isn't on the list".
+
+### Observation log — not a guarantee
+
+The rows below are **the last observed result for each path, with when and where it was observed**. This is an
+external policy that can change, and it has been seen to change **inside a single session**: `gh pr merge` was
+blocked on PR #3319 and passed on #3322 in the same run. Treat a row as evidence about a moment, not as a
+property of the path.
+
+| Path | Last observed | When / where |
 |---|---|---|
-| `.claude/hooks/` | ❌ **hard-blocked** | **Intent-resistant** — an explicit user instruction does *not* clear it. |
-| `.claude/settings.json` | ❌ **hard-blocked** | Not a hook file, but hook **wiring** — same treatment. |
-| `.claude/commands/` | ✅ passes | edit + commit + push + merge (TASK-MONO-396, PR #2525) |
-| `.claude/agents/` | ✅ passes | edit + commit + push + merge (TASK-MONO-409, PR #2616) |
-| `.claude/config/` | ✅ passes | (TASK-MONO-167, PR #1021) |
-| `.claude/skills/` | ⚠️ passes with **explicit per-action** authorization | vague agreement is not enough (TASK-MONO-234) |
-| `platform/` | ✅ not subject | only `.claude/` trips this |
+| `.claude/hooks/` | ✅ passed — edit + commit + push | TASK-MONO-530 (2026-08-14). Supersedes an earlier observation that it was blocked even under explicit instruction. |
+| `.claude/settings.json` | ❓ **not re-verified** | Observed blocked before 2026-08-14; **not** re-tested since `hooks/` was seen to pass. Unknown — which is not the same as blocked. |
+| `.claude/commands/` | ✅ passed — edit + commit + push + merge | TASK-MONO-396, PR #2525 |
+| `.claude/agents/` | ✅ passed — edit + commit + push + merge | TASK-MONO-409, PR #2616 |
+| `.claude/config/` | ✅ passed | TASK-MONO-167, PR #1021 |
+| `.claude/skills/` | ⚠️ passed with **explicit per-action** authorization | vague agreement is not enough (TASK-MONO-234) |
+| `platform/` | ✅ never observed to trip the path axis | — (the permission axis above still applies) |
 
-For the blocked rows: hand the exact patch to the user to apply + commit; **do not attempt a shell-write
-bypass** — that dodges the denial's intent, and the block is real.
+**How to update this table.** After any attempt, replace that row with: passed/blocked, the date, and the task
+or PR that observed it. A table nothing can fail on will drift — and this one **did**: it asserted `hooks/`
+was hard-blocked and intent-resistant long after that stopped reproducing.
 
-For every other row: **do not pre-emptively hand off on assumption.** This map is an *observation of an
-external policy that can change silently*, not a guarantee. Attempt the edit once; hand it over only if it is
-**actually** blocked. The asymmetry is the argument — a wasted attempt costs one round-trip, while a wrong
-assumption costs a needless human hand-off **and files a false completion note in the ticket**. That is not
-hypothetical: this section previously asserted `agents/` and `commands/` were blocked, TASK-MONO-409's own
-preamble repeated the claim, and the agent that tried anyway landed PR #2616 directly. The over-broad wording
-had been propagating unchallenged, and the correction was recorded only in that task's DONE note — a place
-nobody greps when asking "am I allowed to edit this?". (Agent personal-memory detail, this host:
+If an edit **is** actually blocked: hand the exact patch to the user to apply + commit; **do not attempt a
+shell-write bypass** — that dodges the denial's intent, and a real block is real.
+
+**For every row: do not pre-emptively hand off on assumption.** Attempt the edit once; hand it over only if it
+is **actually** blocked. The asymmetry is the argument — a wasted attempt costs one round-trip, while a wrong
+assumption costs a needless human hand-off **and files a false completion note in the ticket**.
+
+That is not hypothetical, and it has now happened **twice with the same wording in this very section**:
+
+1. It asserted `agents/` and `commands/` were blocked; TASK-MONO-409's own preamble repeated the claim, and the
+   agent that tried anyway landed PR #2616 directly.
+2. It then asserted `.claude/hooks/` was hard-blocked *and intent-resistant*; TASK-MONO-530 measured edit +
+   commit + push passing.
+
+Both times the over-broad wording propagated unchallenged, and both times the correction was recorded only in
+a task's DONE note — a place nobody greps when asking "am I allowed to edit this?". **The recurrence is why
+the table above records observations with dates instead of verdicts**: fixing one row's value leaves the next
+row free to make the same claim. (Agent personal-memory detail, this host:
 `env_classifier_claude_self_mod_block`.)
 
 ---
 
 ## Self-Merge and Force-Push Require Explicit Authorization
 
-Two actions get blocked by the auto-mode classifier independent of, and via a different trigger than, the
-`.claude/` self-modification rule above:
+These get gated by the auto-mode classifier independent of, and via a different trigger than, the
+self-modification rule above:
 
 1. **Self-merging a PR the agent itself just authored** (`gh pr merge <n> --squash`). A general "proceed to
    completion / don't stop for confirmation" instruction is read as generic autonomy, not as naming
@@ -175,6 +203,8 @@ Two actions get blocked by the auto-mode classifier independent of, and via a di
 2. **`git push --force-with-lease`** — blocked as history-rewriting unless the user explicitly named a force
    push. If a rebase needs re-pushing and the user hasn't asked for a force push, push to a **new ref** instead
    (`git push origin HEAD:<branch>-v2`) rather than forcing over the existing one.
+3. **`docker volume rm`** — gated as destructive-and-irreversible, on the same axis and with no relation to
+   any path. Named here so a block on it is not mis-diagnosed as a self-modification block.
 
 ---
 
