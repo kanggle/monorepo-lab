@@ -7,7 +7,7 @@ Activated by **[ADR-MONO-053](../../../../../docs/adr/ADR-MONO-053-logistics-ser
 | Field | Value |
 |---|---|
 | Service Name | `logistics-service` |
-| Service Type | `event-consumer` + `rest-api` |
+| Service Type | `event-consumer + rest-api` |
 | Architecture Style | **Hexagonal** |
 | Domain | scm |
 | Traits | transactional, integration-heavy, batch-heavy |

@@ -24,7 +24,7 @@ and the relevant trait rules (`rules/traits/integration-heavy.md`,
 |---|---|
 | Service name | `notification-service` |
 | Project | `fan-platform` |
-| Service Type | `event-consumer` (primary) + thin `rest-api` inbox surface — see Service Type Composition |
+| Service Type | `event-consumer + rest-api` (primary event-consumer; rest-api leg = thin inbox surface) — see Service Type Composition |
 | Architecture Style | **Layered** |
 | Domain | fan-platform |
 | Primary language / stack | Java 21, Spring Boot 3.4, Spring Kafka, Spring Web (Servlet), Spring Data JPA, Spring Security OAuth2 Resource Server |

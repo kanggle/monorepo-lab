@@ -11,7 +11,7 @@ and the rule files indexed by `PROJECT.md`'s declared `domain` (`erp`) and
 | Field | Value |
 |---|---|
 | Service Name | `read-model-service` |
-| Service Type | `rest-api` + `event-consumer` |
+| Service Type | `rest-api + event-consumer` |
 | Architecture Style | **Hexagonal** |
 | Domain | erp |
 | Traits | internal-system, transactional, audit-heavy (project-level; this service exercises `transactional` T8 event idempotency + `internal-system` E5/E6/E7 boundaries — it is **not** an `audit-heavy` write surface, see § Outbox + audit_log invariants) |
