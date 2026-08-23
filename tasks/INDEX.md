@@ -87,6 +87,8 @@ A new monorepo-level task may land directly in `ready/` when:
 ## ready → in-progress
 Allowed only when implementation starts.
 
+- `TASK-MONO-572-vercel-ignore-window-is-one-commit-wide.md` — **🟢 READY — Vercel "Ignored Build Step" 판정이 `git diff HEAD^ HEAD`, 즉 **마지막 커밋 하나**만 본다.** 여러 커밋을 한 번에 push 하면 앞 커밋의 앱 변경이 창 밖으로 나가 **배포가 조용히 건너뛰어진다** — 실패가 아니라 `Canceled by Ignored Build Step` **성공**으로 표시되고 PR 체크는 초록이다. 🔴 **2026-08-23 실제 발생**(TASK-MONO-571): `[프로브 라우트 커밋, INDEX 커밋]` 을 함께 push → 프리뷰에 프로브가 **없었다**. 🔴 **스크립트가 스스로 경고한 고장 모양이다** — 헤더가 *"고장은 반드시 더 굽는 쪽으로… 증상은 배포가 조용히 건너뛰어졌다"* 라고 적고 판정 불가(얕은 clone·git 없음·인자 없음)를 전부 fail-open 으로 막아 뒀는데, **이 경우는 판정 불가가 아니다**: 스크립트가 자신 있게 "변경 없음"이라 답했다. **틀린 것은 fail-open 이 아니라 창의 크기다.** 🔵 **프로덕션은 안전**(main 은 squash 라 한 커밋에 전부) — **뚫리는 것은 프리뷰**이고, 그래서 프리뷰에서 재는 모든 측정이 **틀린 산출물을 잰다**. **AC-0 재측정 먼저**: Vercel 이 ignoreCommand 시점에 주는 것을 **문서 말고 `env | sort` 로 찍어라** — `VERCEL_GIT_PREVIOUS_SHA` 유무와 클론 깊이가 해법을 가른다(깊이 1이면 범위 확대가 아니라 다른 신호여야 한다). **AC-2 bite=배치**: `[앱,문서]`→빌드 / 🔴 대조군① `[문서,문서]`→건너뜀(**없으면 "항상 빌드"라는 자명한 오답이 통과**하고 rate limit 이 다시 온다 — 그 한도가 562 를 낳았고 이번 세션에도 두 번 물렸다) / 대조군② `[앱]` 단독→빌드. **AC-3**: 경로 목록의 **소비자가 둘**이다(ignoreCommand + `check-fan-fresh.sh` 의 기대값) — 어긋나면 **죽은 배포를 신선하다고** 한다. **AC-4**: `check-vercel-build-triggers.sh` 에 창 크기 칸 추가. 분석=Opus 5 / 구현 권장=Sonnet. [[project_guard_design_requirements]] [[feedback_a_negative_test_that_does_not_bite_indicts_the_predicate]] [[env_vercel_json_string_maxlength_256]]
+
 ## in-progress → review
 Allowed only when:
 - implementation is complete
