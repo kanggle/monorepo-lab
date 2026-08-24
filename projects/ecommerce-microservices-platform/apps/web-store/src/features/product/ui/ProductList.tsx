@@ -1,7 +1,7 @@
 import type { ProductSummary } from '@repo/types';
 import { ProductCard } from '@/entities/product';
 import { EmptyState } from '@repo/ui';
-import styles from './ProductList.module.css';
+import { ProductGrid } from '@/shared/ui/ProductGrid';
 
 interface ProductListProps {
   products: ProductSummary[];
@@ -14,7 +14,7 @@ export function ProductList({ products, renderAction }: ProductListProps) {
   }
 
   return (
-    <div className={styles.grid}>
+    <ProductGrid>
       {products.map((product) => (
         <ProductCard
           key={product.id}
@@ -22,6 +22,6 @@ export function ProductList({ products, renderAction }: ProductListProps) {
           action={renderAction?.(product)}
         />
       ))}
-    </div>
+    </ProductGrid>
   );
 }

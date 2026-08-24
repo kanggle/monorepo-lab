@@ -1,4 +1,5 @@
 import styles from './Skeleton.module.css';
+import { ProductGrid } from './ProductGrid';
 
 interface SkeletonProps {
   width?: string;
@@ -39,11 +40,11 @@ export function SkeletonCard() {
 
 export function SkeletonProductGrid({ count = 8 }: { count?: number }) {
   return (
-    <div className={styles.grid}>
+    <ProductGrid>
       {Array.from({ length: count }).map((_, i) => (
         <SkeletonCard key={i} />
       ))}
-    </div>
+    </ProductGrid>
   );
 }
 
