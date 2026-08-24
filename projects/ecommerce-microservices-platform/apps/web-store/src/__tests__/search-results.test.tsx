@@ -60,4 +60,29 @@ describe('SearchResults', () => {
     const links = screen.getAllByRole('link');
     expect(links).toHaveLength(2);
   });
+
+  // 전체 상품 목록에는 하트가 붙고 검색 결과에만 없던 것이 TASK-FE-099 의 결함이다.
+  // 술어는 "액션이 카드마다 붙는가" — 위시리스트라는 구체 구현이 아니라 배선을 잡는다.
+  it('renderAction 을 받으면 카드마다 액션을 붙인다', () => {
+    render(
+      <SearchResults
+        items={items}
+        query="테스트"
+        renderAction={(product) => (
+          <button type="button" data-testid="card-action" data-product-id={product.id} />
+        )}
+      />,
+    );
+
+    const actions = screen.getAllByTestId('card-action');
+    expect(actions).toHaveLength(2);
+    // 매핑도 함께 고정한다: 액션은 검색 응답의 productId 로 만들어진 상품을 받는다
+    expect(actions.map((el) => el.getAttribute('data-product-id'))).toEqual(['p1', 'p2']);
+  });
+
+  it('renderAction 이 없으면 액션 없이 렌더링한다', () => {
+    render(<SearchResults items={items} query="테스트" />);
+
+    expect(screen.queryByTestId('card-action')).not.toBeInTheDocument();
+  });
 });

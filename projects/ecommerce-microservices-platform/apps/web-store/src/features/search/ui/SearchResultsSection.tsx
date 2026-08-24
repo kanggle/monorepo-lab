@@ -4,14 +4,16 @@ import { Pagination } from '@/shared/ui';
 import { SearchBar } from './SearchBar';
 import { SearchFilters } from './SearchFilters';
 import { SearchResults } from './SearchResults';
-import type { SearchResponse } from '@repo/types';
+import type { ProductSummary, SearchResponse } from '@repo/types';
 
 interface SearchResultsSectionProps {
   result: SearchResponse;
   searchParams: Record<string, string>;
+  /** 카드 액션 주입점 — 그대로 `SearchResults` 로 전달한다 (계층 근거는 그쪽 주석). */
+  renderAction?: (product: ProductSummary) => React.ReactNode;
 }
 
-export function SearchResultsSection({ result, searchParams }: SearchResultsSectionProps) {
+export function SearchResultsSection({ result, searchParams, renderAction }: SearchResultsSectionProps) {
   return (
     <div className="container" style={{ paddingTop: 'var(--space-8)', paddingBottom: 'var(--space-16)' }}>
       <div style={{ marginBottom: 'var(--space-6)' }}>
@@ -25,7 +27,7 @@ export function SearchResultsSection({ result, searchParams }: SearchResultsSect
       <p style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)', fontSize: 'var(--font-size-sm)' }}>
         &quot;{result.query}&quot; 검색 결과 {result.totalElements}건
       </p>
-      <SearchResults items={result.content} query={result.query} />
+      <SearchResults items={result.content} query={result.query} renderAction={renderAction} />
       <div style={{ marginTop: 'var(--space-8)' }}>
         <Pagination currentPage={result.page} totalElements={result.totalElements} pageSize={result.size} baseHref="/products" searchParams={searchParams} />
       </div>
