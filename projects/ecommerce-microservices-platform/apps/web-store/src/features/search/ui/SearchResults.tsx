@@ -1,5 +1,6 @@
 import type { SearchProductItem } from '@repo/types';
 import { ProductCard } from '@/entities/product';
+import { ProductGrid } from '@/shared/ui/ProductGrid';
 import { EmptyState } from '@repo/ui';
 
 interface SearchResultsProps {
@@ -13,13 +14,7 @@ export function SearchResults({ items, query }: SearchResultsProps) {
   }
 
   return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-        gap: 'var(--space-6)',
-      }}
-    >
+    <ProductGrid>
       {items.map((item) => (
         <ProductCard
           key={item.productId}
@@ -33,6 +28,6 @@ export function SearchResults({ items, query }: SearchResultsProps) {
           }}
         />
       ))}
-    </div>
+    </ProductGrid>
   );
 }

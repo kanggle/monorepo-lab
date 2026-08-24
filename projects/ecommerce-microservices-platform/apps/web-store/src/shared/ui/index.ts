@@ -5,6 +5,7 @@ export { PhoneFieldError } from './PhoneFieldError';
 export { PriceDisplay } from './PriceDisplay';
 export { NarrowContainer } from './NarrowContainer';
 export { Pagination } from './Pagination';
+export { ProductGrid } from './ProductGrid';
 export { PaginationNav } from './PaginationNav';
 export { Skeleton, SkeletonText, SkeletonCard, SkeletonProductGrid, SkeletonList, SkeletonListItem } from './Skeleton';
 export { StatusBadge } from './StatusBadge';
