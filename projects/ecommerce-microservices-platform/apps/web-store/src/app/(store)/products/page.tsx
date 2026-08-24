@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 import { getProducts } from '@/entities/product';
 import { searchProducts, SearchBar, SearchResultsSection } from '@/features/search';
 import { ProductListWithWishlist } from '@/widgets/product-list-with-wishlist';
+import { WishlistButton } from '@/features/wishlist';
 import { Pagination } from '@/shared/ui';
 import { ErrorMessage, LoadingSpinner } from '@repo/ui';
 import type { SearchSortOrder } from '@repo/types';
@@ -39,7 +40,15 @@ export default async function ProductsPage({ searchParams }: Props) {
     : null;
 
   if (searchResult) {
-    return <SearchResultsSection result={searchResult} searchParams={params as Record<string, string>} />;
+    // 카드 액션은 여기서 주입한다 — 전체 상품 목록이 `ProductListWithWishlist` 로 받는 것과
+    // 같은 하트다. feature 가 위젯을 직접 import 하면 계층이 뒤집히므로 app 레이어가 넘긴다.
+    return (
+      <SearchResultsSection
+        result={searchResult}
+        searchParams={params as Record<string, string>}
+        renderAction={(product) => <WishlistButton productId={product.id} />}
+      />
+    );
   }
 
   const searchFailed = !!query && !searchResult;

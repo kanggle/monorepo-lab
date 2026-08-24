@@ -16,8 +16,20 @@ vi.mock('@/features/search/ui/SearchFilters', () => ({
 }));
 
 vi.mock('@/features/search/ui/SearchResults', () => ({
-  SearchResults: ({ items, query }: { items: unknown[]; query: string }) => (
-    <div data-testid="search-results" data-count={items.length} data-query={query} />
+  SearchResults: ({
+    items,
+    query,
+    renderAction,
+  }: {
+    items: Array<{ productId: string }>;
+    query: string;
+    renderAction?: (product: { id: string }) => React.ReactNode;
+  }) => (
+    <div data-testid="search-results" data-count={items.length} data-query={query}>
+      {items.map((item) => (
+        <span key={item.productId}>{renderAction?.({ id: item.productId })}</span>
+      ))}
+    </div>
   ),
 }));
 
@@ -72,6 +84,21 @@ describe('SearchResultsSection', () => {
     const results = screen.getByTestId('search-results');
     expect(results).toHaveAttribute('data-count', '1');
     expect(results).toHaveAttribute('data-query', '노트북');
+  });
+
+  it('renderAction 을 SearchResults 로 그대로 전달한다', () => {
+    render(
+      <SearchResultsSection
+        result={baseResult}
+        searchParams={{ q: '노트북' }}
+        renderAction={(product) => (
+          <button type="button" data-testid="card-action" data-product-id={product.id} />
+        )}
+      />,
+    );
+
+    const action = screen.getByTestId('card-action');
+    expect(action).toHaveAttribute('data-product-id', 'p1');
   });
 
   it('Pagination을 렌더링한다', () => {
