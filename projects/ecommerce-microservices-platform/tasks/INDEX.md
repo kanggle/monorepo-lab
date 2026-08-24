@@ -72,9 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-| ID | Title | Service | Tags |
-|---|---|---|---|
-| TASK-FE-099 | 검색으로 찾은 상품은 목록에서 찜할 수 없다 — 검색 결과 카드에만 위시리스트 버튼이 없다 | web-store | code, test |
+_(없음)_
 
 
 _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DONE. `../../../tasks/done/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
@@ -88,6 +86,7 @@ _(없음)_
 | ID | Title | Service | Tags |
 |---|---|---|---|
 | TASK-FE-098 | 검색 결과 그리드가 다른 목록 페이지와 열이 어긋난다 — 인라인 사본이 모바일 2열 규칙을 안 가진다 (impl PR [#3445](https://github.com/kanggle/monorepo-lab/pull/3445), squash `4a53f0e3d`) | web-store | code |
+| TASK-FE-099 | 검색으로 찾은 상품은 목록에서 찜할 수 없다 — 검색 결과 카드에만 위시리스트 버튼이 없다 (impl PR [#3447](https://github.com/kanggle/monorepo-lab/pull/3447), squash `387c66e6a`) | web-store | code, test |
 
 
 
