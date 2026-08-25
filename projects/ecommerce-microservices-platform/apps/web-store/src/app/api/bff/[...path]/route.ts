@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getWebStoreSession } from '@/shared/auth/session';
+import { resolveUpstreamBaseUrl } from '@/shared/config/demo-backend';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -25,13 +26,15 @@ export const dynamic = 'force-dynamic';
  * `getWebStoreSession()` directly and call the gateway server-side.
  */
 
-function backendBaseUrl(): string {
-  return (
-    process.env.API_URL_INTERNAL ??
-    process.env.NEXT_PUBLIC_API_URL ??
-    'http://localhost:8080'
-  );
-}
+// DEMO-RESOLVER: web-store   (ADR-MONO-068 — 두 번째가 생기면 CI 가 RED)
+//
+// 🔴 업스트림 주소를 여기서 **다시 조립하지 않는다.** 예전에는 이 함수가 env 사슬을
+//    자기 자리에 적어 뒤고 `shared/config/api.ts` 가 **같은 사슬을 또** 적고 있었다 —
+//    한 사실이 두 곳에 있으면 한쪽만 고쳐진다. 이제 둘 다 `demo-backend.ts` 를 쓴다.
+//
+// 🔵 `dynamic = 'force-dynamic'` 이라 이 핸들러는 요청마다 돈다 ⇒ 해석 결과가 빌드
+//    산출물에 박히지 않는다(ADR-MONO-067 D2 가 요구하는 것이 정확히 그것이다).
+const backendBaseUrl = resolveUpstreamBaseUrl;
 
 // Hop-by-hop / host-specific headers that must not be forwarded verbatim.
 const STRIPPED_REQUEST_HEADERS = new Set([
@@ -49,12 +52,15 @@ const STRIPPED_RESPONSE_HEADERS = new Set([
   'connection',
 ]);
 
-function buildTargetUrl(req: NextRequest, segments: string[]): string {
+async function buildTargetUrl(
+  req: NextRequest,
+  segments: string[],
+): Promise<string> {
   const path = segments.map((s) => encodeURIComponent(s)).join('/');
   const search = req.nextUrl.search ?? '';
   // Backend gateway paths are rooted at `/` (e.g. `/api/orders`). The
   // `[...path]` segments already exclude the `/api/bff` prefix.
-  return `${backendBaseUrl()}/${path}${search}`;
+  return `${await backendBaseUrl()}/${path}${search}`;
 }
 
 async function forward(
@@ -65,7 +71,7 @@ async function forward(
   const segments = Array.isArray(path) ? path : [path];
 
   const session = await getWebStoreSession();
-  const targetUrl = buildTargetUrl(req, segments);
+  const targetUrl = await buildTargetUrl(req, segments);
 
   const headers = new Headers();
   req.headers.forEach((value, key) => {

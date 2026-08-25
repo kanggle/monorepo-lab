@@ -7,6 +7,20 @@ import type { ApiErrorResponse } from '@repo/types';
 
 export interface ApiClientConfig {
   baseURL: string;
+  /**
+   * 요청마다 baseURL 을 **다시 정하고 싶을 때** (TASK-MONO-580 / ADR-MONO-067 D2).
+   *
+   * 🔴 왜 필요한가: `baseURL` 은 인스턴스 생성 시점에 한 번 굳는다. 그런데 데모 배포에서는
+   * 백엔드 주소가 **부팅마다 바뀌므로** 굳은 값이 곧 썩는다. 이 훅이 있으면 요청 인터셉터가
+   * 매 요청 그 결과로 덮어쓴다.
+   *
+   * 🔵 **추가일 뿐 기존 동작을 바꾸지 않는다** — 안 넘기면 예전과 완전히 같다.
+   * `null`/`undefined` 를 돌려주면 그 요청은 생성 시점의 `baseURL` 을 쓴다. 즉 "해석 실패"
+   * 의 안전한 쪽이 **기존 동작**이다.
+   *
+   * 🔴 여기서 던지지 마라 — 던지면 그 요청이 죽는다. 해석 실패는 `null` 로 표현한다.
+   */
+  resolveBaseURL?: () => Promise<string | null | undefined>;
   getAccessToken?: () => string | null;
   getRefreshToken?: () => string | null;
   onTokenRefreshed?: (accessToken: string, refreshToken: string) => void;
@@ -47,7 +61,21 @@ export class ApiClient {
     });
 
     this.instance.interceptors.request.use(
-      (reqConfig: InternalAxiosRequestConfig) => {
+      async (reqConfig: InternalAxiosRequestConfig) => {
+        // TASK-MONO-580 — 요청 시점 baseURL 재해석 (선택). 훅이 없으면 이 블록은
+        // 통째로 건너뛰므로 기존 동작과 **바이트 단위로 같다**.
+        //
+        // 🔴 훅이 던지거나 null 을 내면 **덮어쓰지 않는다** — 생성 시점 baseURL 이 남는다.
+        //    해석 실패의 안전한 쪽은 "기존 동작" 이지 "요청 실패" 가 아니다.
+        if (this.config.resolveBaseURL) {
+          try {
+            const resolved = await this.config.resolveBaseURL();
+            if (resolved) reqConfig.baseURL = resolved;
+          } catch {
+            // 그대로 둔다 (위 주석 참조).
+          }
+        }
+
         const url = reqConfig.url ?? '';
         if (!this.isPublicPath(url) && this.config.getAccessToken) {
           const token = this.config.getAccessToken();
