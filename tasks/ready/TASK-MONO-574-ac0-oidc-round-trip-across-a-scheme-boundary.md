@@ -22,14 +22,61 @@ monorepo
 
 ---
 
-# ⏳ 선행
+# ⏳ 선행 — **실측으로 다시 썼다 (2026-08-25). 기동만으로는 못 잰다.**
 
-| 선행 | 왜 |
-|---|---|
-| `TASK-MONO-571`(AC-0 ②) | ② 가 거짓이면 (B) 가 통째로 무너져 이 측정이 무의미해진다 |
-| **데모 인스턴스 기동** | 🔴 **사용자 승인 대상.** 실제 IdP 가 떠 있어야 왕복이 성립한다. 컨트롤 API `POST /start` 로만 기동(예산 회계). 부팅 약 11분 |
+| # | 선행 | 상태 | 누가 |
+|---|---|---|---|
+| 1 | `TASK-MONO-571` (AC-0 ②) | ✅ **해소** — `PLAINTEXT_HTTP_EGRESS_WORKS` | — |
+| 2 | **Vercel `kanggle-fan` 의 OIDC env** | ❌ **미설정 (실측)** | 🔴 **소유자 대시보드** |
+| 3 | **IdP 에 Vercel 도메인 `redirect_uri` 등록** | ❌ **없음 (실측)** | 저장소 + 재시드 |
+| 4 | 데모 인스턴스 기동 | ⏸️ | 🔴 **사용자 승인** (예산 차감, 부팅 ~11분) |
 
-**② 통과 + 기동 승인 전에는 시작하지 마라.**
+🔴 **2·3 없이 기동하면 예산만 쓰고 아무것도 못 잰다.** 그래서 기동 전에 이 둘을 먼저 확인했다.
+
+## 실측 ① — Vercel 의 fan 은 OIDC 가 설정되어 있지 않다
+
+```
+GET https://kanggle-fan.vercel.app/api/auth/signin/iam
+  → 302  Location: https://kanggle-fan.vercel.app/login?error=Configuration
+
+GET https://kanggle-fan.vercel.app/api/auth/providers
+  → {"message":"There was a problem with the server configuration. …"}
+```
+
+**소유자가 대시보드에서 채워야 하는 값** (`src/shared/config/env.ts` 전수):
+
+| 변수 | 값 | 비고 |
+|---|---|---|
+| `NEXTAUTH_URL` | `https://kanggle-fan.vercel.app` | 🔵 이게 `https://` 라 `secureCookie` 가 **자동으로 켜진다** |
+| `NEXTAUTH_SECRET` | (생성) | 없으면 next-auth 가 통째로 `error=Configuration` |
+| `OIDC_ISSUER_URL` | `http://iam.<ip-대시>.sslip.io` | 🔴 아래 § 참조 — **부팅마다 바뀐다** |
+| `OIDC_CLIENT_ID` | `fan-platform-user-flow-client` | 기본값과 동일 |
+| `OIDC_CLIENT_SECRET` | (시드의 값) | 기본값이 빈 문자열 |
+
+## 실측 ② — IdP 에 Vercel 도메인이 등록돼 있지 않다
+
+`fan-platform-user-flow-client` 의 등록된 `redirect_uri` (마이그레이션 시드 전수):
+
+```
+http://fan-platform.local/api/auth/callback/iam
+http://localhost:3000/api/auth/callback/iam
+```
+
+**`https://kanggle-fan.vercel.app/api/auth/callback/iam` 이 없다.** env 를 다 채워도 IdP 가
+콜백을 거절하므로, 그 상태로 재면 얻는 것은 *"스킴 경계가 문제다"* 가 아니라
+**"설정이 안 됐다"** 이고 — 그건 이 티켓이 묻는 질문이 아니다.
+
+## 🔴🔴 실측 ③ — 그리고 더 큰 것: **issuer 주소가 부팅마다 바뀐다**
+
+`OIDC_ISSUER_URL` 은 Vercel env 라 **배포 시점에 고정**된다. 그런데 데모 IdP 주소는
+`iam.<ip-대시>.sslip.io` 이고 **부팅마다 IP 가 바뀐다.** 한 번 채워도 다음 부팅에 낡는다.
+
+⇒ **D2(주소는 런타임 조회여야 한다)가 인증 축에서도 그대로 재현된다.** 그런데 여기서는 더
+어렵다 — next-auth 는 `issuer` 를 **설정값**으로 받고, 그 값은 discovery 문서와 토큰의
+`iss` 클레임 **양쪽**에 묶인다.
+
+🔵 이것은 `TASK-MONO-576`(D4 ADR)의 **입력이 하나 더 늘었다**는 뜻이다. D4 는 *"왕복이 되는가"*
+만이 아니라 **"움직이는 issuer 를 어떻게 고정하는가"** 도 답해야 한다.
 
 ---
 
