@@ -8,7 +8,7 @@ TASK-MONO-578
 
 # Status
 
-ready
+review
 
 # Owner
 
