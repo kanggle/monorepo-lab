@@ -28,16 +28,25 @@ locals {
   vpc_id    = var.vpc_id != "" ? var.vpc_id : data.aws_vpc.default[0].id
   subnet_id = var.subnet_id != "" ? var.subnet_id : data.aws_subnets.default[0].ids[0]
 
-  # CORS 허용 오리진 (TASK-MONO-557). 사이트 자신의 CloudFront 오리진은 **항상 참조로**
-  # 포함하고, 다른 곳에서 서빙되는 사본(Vercel 등)만 var.allowed_origins 로 더한다.
+  # CORS 허용 오리진 (TASK-MONO-557 → TASK-MONO-579).
   #
-  # 🔴 CloudFront 를 조건부로 만들지 않는 것이 요점이다. 이전 판은 `var.allowed_origin` 에
-  # 값이 들어오면 CloudFront 를 **대체**했고, 그래서 호스팅을 옮기는 동안 두 오리진을
-  # 동시에 허용할 방법이 없었다 — 옮기는 과정에 반드시 론처가 죽는 창이 생겼다.
-  cors_allowed_origins = distinct(concat(
-    ["https://${aws_cloudfront_distribution.site.domain_name}"],
-    var.allowed_origins,
-  ))
+  # 이전 판은 사이트 자신의 **CloudFront 오리진을 항상 참조로** 포함하고, 다른 곳에서
+  # 서빙되는 사본(Vercel 등)만 `var.allowed_origins` 로 더했다. 그 CloudFront 배포가
+  # `ADR-MONO-067` D3 으로 폐기되면서(론처의 집 = Vercel 하나) **참조할 대상이 없어졌다.**
+  #
+  # 🔴 그런데 그 참조는 **구멍 하나를 가려 주고 있었다** — 목록이 항상 최소 1개였던 것은
+  #    CloudFront 덕분이지 규칙 덕분이 아니었다. 그것을 치우면 빈 `allowed_origins` 가
+  #    **plan 을 통과하고**, 실패는 런타임에 **론처의 Start 버튼이 조용히 죽는 모양**으로 온다.
+  #    (그리고 `terraform.tfvars.example` 은 바로 그 빈 목록을 예시로 권하고 있었다.)
+  #
+  # 🔵 그래서 같은 변경에서 `var.allowed_origins` 에 **fail-closed validation** 을 걸었다
+  #    (variables.tf). 실패 시점이 **런타임 → plan** 으로 옮겨진다. 여기서 다시 검사하지
+  #    않는 이유: 검사가 두 자리에 있으면 한쪽만 고쳐진다.
+  #
+  # 🔴 리터럴 금지는 그대로다 — AWS 가 발급하는 주소(`*.cloudfront.net` ·
+  #    `*.execute-api.*`)를 여기 손으로 박으면 재생성마다 썩는다(TASK-MONO-389 가 고친
+  #    결함). `verify-demo-wrapper.sh` (z9)(2) 가 그 명제를 계속 지킨다.
+  cors_allowed_origins = distinct(var.allowed_origins)
 }
 
 # ---------------------------------------------------------------------------
@@ -356,147 +365,30 @@ resource "aws_lambda_permission" "events" {
 }
 
 # ---------------------------------------------------------------------------
-# 정적 "Start Demo" 사이트 — S3(비공개) + CloudFront(OAC)  [TASK-MONO-389]
+# 정적 "Start Demo" 사이트 — **여기서 서빙하지 않는다** (TASK-MONO-579, ADR-MONO-067 D3)
 #
-# 이것이 없던 동안 데모에는 **정문이 없었다**. 저장소는 방문자가 버튼을 누른다고
-# 적었지만 그 버튼은 어디에도 배포되지 않았고, `site/index.html` 의 `API_BASE` 는
-# **git 에 커밋된 리터럴**이라 재생성마다 죽었다(실제로 죽어 있었다).
+# 이 자리에는 S3(비공개) + CloudFront(OAC) 배포가 있었다(TASK-MONO-389). 지웠다.
+# 지운 이유는 그것이 틀려서가 아니라 **론처가 두 집을 갖고 있었기 때문**이다:
 #
-# 그래서 여기서 고치는 것은 "값" 이 아니라 **모양** 이다: 페이지는 API URL 을
-# 들고 있지 않고, terraform 이 **자기 상태에서** `config.js` 한 줄을 렌더한다.
-# ⇒ 배포된 페이지가 자기 API 와 어긋나는 것이 **표현 불가능해진다.**
+#   Vercel 판(`kanggle-portfolio.vercel.app`)  ← 커밋마다 자동으로 다시 구워진다
+#   S3/CloudFront 판                            ← `terraform apply` 때만 갱신된다
 #
-# HTML 자체를 templatefile 로 렌더하지 않는 이유: 이 페이지의 JS 는 템플릿
-# 리터럴(`${ip}` `${label}` `${status}`)을 여럿 쓰는데 그건 terraform 의 보간
-# 문법과 **같은 글자**다. 하나라도 이스케이프를 빠뜨리면 조용히 깨진다.
-# 생성되는 것을 한 줄로 격리하면 그 함정이 아예 사라진다.
+# 🔴 그 비대칭 때문에 드리프트는 **우연이 아니라 설계상 일어나는 일**이었다. apply 는
+#    소유자 승인 대상이라 몇 주씩 안 돌 수 있고, 그동안 두 판은 조용히 갈라진다.
+#    그리고 두 사본은 **판정 능력조차 대칭이 아니었다** — S3 판에는 `build-info.json`
+#    이 없어서 *"내용이 같은가"* 만 물을 수 있고 *"어느 판인가"* 는 못 물었다.
+#
+# 🔵 동일성 가드를 새로 만드는 길도 있었고, 실제로 도구는 **이미 있었다**
+#    (`site/check-launcher-fresh.sh --origin <URL>`). 그런데 CloudFront 주소는
+#    저장소에 없고 **terraform state 안에만** 있다 ⇒ CI 가 그 축을 잴 방법이 원리적으로
+#    없다. **집이 하나면 잴 것도 하나다** — 그래서 가드가 아니라 폐기를 골랐다.
+#
+# 론처의 집은 이제 **Vercel 하나**다(ADR-MONO-067 D3 = Vercel 정본).
+# `config.js` 는 `site/build.sh` 가 `DEMO_API_BASE` 환경변수에서 만들고, 그 값이 없으면
+# **빌드를 죽인다**(fail-closed). 즉 이 파일이 렌더하던 한 줄의 자리를 그쪽이 이미 갖고 있다.
+#
+# 🔴 **되돌리려면**: 이 블록을 되살리는 것만으로는 부족하다. `local.cors_allowed_origins`
+#    가 다시 CloudFront 를 참조해야 하고, `verify-demo-wrapper.sh` (z9)(2) 의 핀도 함께
+#    되돌려야 한다. 세 자리가 한 사실을 나눠 갖고 있다.
 # ---------------------------------------------------------------------------
 data "aws_caller_identity" "current" {}
-
-resource "aws_s3_bucket" "site" {
-  bucket        = "${local.name}-site-${data.aws_caller_identity.current.account_id}"
-  force_destroy = true
-}
-
-resource "aws_s3_bucket_public_access_block" "site" {
-  bucket                  = aws_s3_bucket.site.id
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-resource "aws_cloudfront_origin_access_control" "site" {
-  name                              = "${local.name}-site-oac"
-  origin_access_control_origin_type = "s3"
-  signing_behavior                  = "always"
-  signing_protocol                  = "sigv4"
-}
-
-resource "aws_cloudfront_distribution" "site" {
-  enabled             = true
-  default_root_object = "index.html"
-  comment             = "${local.name} on-demand demo launcher"
-  price_class         = "PriceClass_200"
-
-  origin {
-    domain_name              = aws_s3_bucket.site.bucket_regional_domain_name
-    origin_id                = "s3-site"
-    origin_access_control_id = aws_cloudfront_origin_access_control.site.id
-  }
-
-  default_cache_behavior {
-    target_origin_id       = "s3-site"
-    viewer_protocol_policy = "redirect-to-https"
-    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
-    cached_methods         = ["GET", "HEAD"]
-
-    # 캐시를 짧게 둔다. `config.js` 는 재생성마다 바뀌고, 캐시된 옛 값이 살아 있으면
-    # 결함 2(죽은 API_BASE)가 **캐시 층에서 부활한다**.
-    min_ttl     = 0
-    default_ttl = 60
-    max_ttl     = 300
-
-    forwarded_values {
-      query_string = false
-      cookies { forward = "none" }
-    }
-  }
-
-  restrictions {
-    geo_restriction { restriction_type = "none" }
-  }
-
-  viewer_certificate {
-    cloudfront_default_certificate = true
-  }
-}
-
-data "aws_iam_policy_document" "site" {
-  statement {
-    actions   = ["s3:GetObject"]
-    resources = ["${aws_s3_bucket.site.arn}/*"]
-    principals {
-      type        = "Service"
-      identifiers = ["cloudfront.amazonaws.com"]
-    }
-    condition {
-      test     = "StringEquals"
-      variable = "AWS:SourceArn"
-      values   = [aws_cloudfront_distribution.site.arn]
-    }
-  }
-}
-
-resource "aws_s3_bucket_policy" "site" {
-  bucket = aws_s3_bucket.site.id
-  policy = data.aws_iam_policy_document.site.json
-}
-
-# -----------------------------------------------------------------------------
-# 🔴 TASK-MONO-558 — etag 는 **업로드되는 바로 그것**을 재야 한다
-# -----------------------------------------------------------------------------
-# S3 가 돌려주는 ETag 는 **언제나 객체 내용의 md5** 다. 그러므로 `etag =` 에 내용이
-# 아닌 다른 값을 주면 그 둘은 **구조적으로 절대 일치할 수 없고**, plan 은 영원히
-# 그 한 줄을 더럽게 들고 있는다.
-#
-# 실측(2026-08-19 apply 중 발견 → 2026-08-20 state 로 재확인):
-#   state 의 etag          = 82e241f6e9ed4180b6784450c7638864 = md5(내용)   ← S3 가 준 값
-#   선언이 주장하던 etag   = 3b63e987fa7ba5986164c5411200415c = md5(endpoint)
-# apply 를 해도 refresh 가 state 를 `md5(내용)` 으로 되돌리므로 **매번 되살아난다.**
-#
-# 🔴 두 자리가 **같은 표현식을 참조**하게 만드는 것이 요점이다. 값을 손으로 맞춰 놓는
-#    것으로는 부족하다 — 한쪽만 바뀌는 날 또 갈리고, 이 결함이 정확히 그 형태였다
-#    (`content` 는 URL 을 JS 한 줄로 감쌌는데 `etag` 는 감싸기 전 URL 을 쟀다).
-#    개행 하나까지 md5 에 들어가므로 문자열을 두 번 적는 것 자체가 위험하다.
-#
-# 🔵 왜 `lifecycle { ignore_changes = [etag] }` 가 아닌가: 그러면 plan 은 조용해지지만
-#    **진짜 드리프트도 안 보인다.** 고쳐야 하는 것은 소음이 아니라 **판정 능력**이다.
-locals {
-  # 업로드되는 내용과 그 md5 의 **단일 출처**.
-  site_config_js = "window.DEMO_API_BASE = ${jsonencode(aws_apigatewayv2_api.api.api_endpoint)};\n"
-  # index 의 etag 는 이미 같은 것(그 파일)을 재고 있었다. 다만 경로 문자열이 두 번
-  # 적혀 있어 같은 종류의 어긋남이 생길 수 있으므로 여기서도 출처를 하나로 묶는다.
-  site_index_html = "${path.module}/../site/index.html"
-}
-
-resource "aws_s3_object" "index" {
-  bucket        = aws_s3_bucket.site.id
-  key           = "index.html"
-  source        = local.site_index_html
-  etag          = filemd5(local.site_index_html)
-  content_type  = "text/html; charset=utf-8"
-  cache_control = "public, max-age=60"
-}
-
-# **이 한 줄이 이 task 의 본체다.** 저장소는 API URL 을 들고 있지 않는다 —
-# terraform 이 자기 상태에서 만든다. 재생성으로 API id 가 바뀌면 이 객체도 함께
-# 바뀐다. 사람이 고칠 것이 없고, 따라서 고치는 것을 잊을 수도 없다.
-resource "aws_s3_object" "config" {
-  bucket        = aws_s3_bucket.site.id
-  key           = "config.js"
-  content       = local.site_config_js
-  content_type  = "application/javascript; charset=utf-8"
-  cache_control = "public, max-age=60"
-  etag          = md5(local.site_config_js)
-}

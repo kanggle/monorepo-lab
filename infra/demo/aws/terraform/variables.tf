@@ -74,23 +74,55 @@ variable "admin_ssh_cidr" {
 
 variable "allowed_origins" {
   description = <<-EOT
-    CORS 로 **추가** 허용할 오리진 목록.
+    CORS 허용 오리진 목록. **이것이 목록의 전부다** (TASK-MONO-579).
 
-    사이트 자신의 CloudFront 도메인은 여기 적지 않는다 — 항상 **참조로** 자동 포함된다
-    (`local.cors_allowed_origins`). 손으로 박으면 재생성마다 썩는다(TASK-MONO-389 가
-    고친 결함이 정확히 그것이다).
+    🔴 이전 판에서는 "**추가** 허용할" 목록이었다 — 사이트 자신의 CloudFront 도메인이
+    `local.cors_allowed_origins` 에 **항상 참조로** 붙었고 이 변수는 그 위에 더해졌다.
+    `ADR-MONO-067` D3 으로 CloudFront 판을 폐기하면서 그 자동 항목이 사라졌고,
+    **이제 허용 목록은 이 변수 하나가 전부다.**
 
-    여기 적는 것은 **다른 곳에서 서빙되는 사본**의 오리진이다. 예:
-      allowed_origins = ["https://portfolio-demo.vercel.app"]
+    여기 적는 것은 론처가 실제로 서빙되는 오리진이다. 예:
+      allowed_origins = ["https://kanggle-portfolio.vercel.app"]
 
-    🔴 문자열 하나가 아니라 목록인 이유(TASK-MONO-557): 이전 문자열 판은 값을 넣는 순간
-    CloudFront 폴백이 **꺼졌다**. 그래서 호스팅을 옮기는 동안 두 오리진을 동시에 허용할
-    방법이 없었고, 옮기는 과정에 반드시 론처가 죽는 창이 생겼다.
+    🔴 AWS 가 발급하는 주소(*.cloudfront.net · *.execute-api.*)를 손으로 박지 마라 —
+    재생성마다 썩는다(TASK-MONO-389 가 고친 결함). 그 명제는
+    infra/demo/verify-demo-wrapper.sh (z9)(2) 가 계속 지킨다.
+
+    🔵 문자열 하나가 아니라 목록인 이유(TASK-MONO-557): 호스팅을 옮기는 동안 **두 오리진을
+    동시에** 허용할 수 있어야 한다. 그래야 옮기는 과정에 론처가 죽는 창이 생기지 않는다.
 
     로컬에서 index.html 을 파일로 열어보려면 ["*"] 를 명시하라.
   EOT
   type        = list(string)
-  default     = []
+
+  # 🔴🔴 이 변수의 안전장치는 기본값이 아니라 **아래 validation** 이다. CloudFront 참조가
+  # 사라진 지금 빈 목록은 "허용 오리진 0개" = 브라우저가 컨트롤 API 를 못 부른다 =
+  # **론처의 Start 버튼이 죽는다.** 그런데 그 실패는 plan 에서 안 보이고 런타임에 조용히
+  # 온다. validation 이 그 실패를 plan 으로 끌어온다.
+  #
+  # 🔵 기본값에 Vercel 주소를 박지 않는 이유: 이 모듈은 자기가 어디에 서빙되는지 모른다.
+  # 박아 두면 **틀린 값이 조용히 통과**하고, 그건 빈 값보다 나쁘다 — 빈 값은 아래에서
+  # 큰 소리로 죽는다.
+  default = []
+
+  validation {
+    condition     = length(var.allowed_origins) > 0
+    error_message = "allowed_origins 가 비어 있습니다. CloudFront 자동 포함이 폐기된 뒤(TASK-MONO-579) 이 목록이 CORS 의 전부이므로, 빈 목록은 론처의 Start 버튼이 죽는다는 뜻입니다. 론처가 서빙되는 오리진을 적으세요."
+  }
+
+  validation {
+    # "*" 는 로컬에서 file:// 로 열어보는 용도로 문서화되어 있다 — 계속 허용한다.
+    condition     = alltrue([for o in var.allowed_origins : o == "*" || startswith(o, "https://")])
+    error_message = "allowed_origins 의 각 항목은 https:// 로 시작하거나 * 여야 합니다. 론처는 HTTPS 로 서빙됩니다."
+  }
+
+  validation {
+    # 브라우저가 보내는 Origin 헤더에는 끝 슬래시가 없다. 붙여 두면 **아무것과도 매칭되지
+    # 않는데 plan 은 통과한다** — site/build.sh 가 DEMO_API_BASE 에 대해 이미 같은 검사를
+    # 하는 것과 같은 함정이다.
+    condition     = alltrue([for o in var.allowed_origins : !endswith(o, "/")])
+    error_message = "allowed_origins 항목 끝에 슬래시를 붙이지 마세요. 브라우저의 Origin 헤더에는 끝 슬래시가 없어 어느 것과도 매칭되지 않습니다."
+  }
 }
 
 variable "idle_minutes" {

@@ -758,7 +758,9 @@ hits="$(git -C "$ROOT" grep -nIE "$volatile_re" -- \
 [ -z "$hits" ] || fail "배포마다 바뀌는 엔드포인트가 저장소에 커밋돼 있습니다:"\
   $'\n'"$hits"\
   $'\n'"→ API Gateway id 와 CloudFront 도메인은 **terraform 상태이지 소스가 아닙니다.**"\
-  $'\n'"→ destroy/재생성 한 번이면 죽습니다. 유일한 출처는 \`terraform output site_url\` 입니다."
+  $'\n'"→ destroy/재생성 한 번이면 죽습니다. 유일한 출처는 \`terraform output api_base_url\` 입니다."\
+  $'\n'"→ (이 문구는 TASK-MONO-579 에서 고쳤다: 예전엔 \`site_url\` 을 가리켰는데 그 output 은 CloudFront 판과 함께 폐기됐다."\
+  $'\n'"   가드의 실패 메시지도 **지시**이므로 같이 썩는다 — 그리고 (q) 는 자기 자신을 안 본다.)"
 ok "저장소에 휘발성 엔드포인트 리터럴 없음"
 
 echo "[verify] (t) 페이지가 만드는 데모 도메인이 부팅이 파생하는 것과 같은가"
@@ -1750,26 +1752,58 @@ if printf '%s' "$z9_env" | grep -qE '^[^#]*ALLOWED_ORIGIN'; then
     $'\n'"→ CORS 의 집은 API Gateway 의 cors_configuration 하나입니다."
 fi
 
-# (2) 허용 오리진 목록이 CloudFront 도메인을 **참조로** 들고 있어야 한다.
-#     리터럴을 박으면 재생성마다 썩는다 — TASK-MONO-389 가 고친 그 결함(결함 2)이다.
-z9_local="$(awk '/cors_allowed_origins = distinct\(concat\(/{f=1} f{print} f&&/\)\)/{exit}' "$z9_tf")"
+# (2) 허용 오리진 목록의 **출처**가 옳은가.
+#
+# 🔴🔴 **이 칸은 2026-08-26 에 뒤집혔다 (TASK-MONO-579).** 이전 판은 이렇게 단언했다:
+#      *"목록이 `aws_cloudfront_distribution.site.domain_name` 을 **참조**해야 한다."*
+#      그 핀이 지키려던 주제는 **옳았고 지금도 옳다** — AWS 가 발급하는 주소를 손으로 박으면
+#      재생성마다 썩는다(결함 2, TASK-MONO-389).
+#
+#      틀렸던 것은 핀이 그 주제를 **"CloudFront 를 참조하라"로 좁혀 적었다**는 것이다.
+#      `ADR-MONO-067` D3 으로 CloudFront 판이 폐기되자, 그 문장은 주제를 지키는 대신
+#      **주제의 해소를 막는 문장**이 됐다. ⇒ 지우지 않고 **뒤집었다.**
+#      금지 명제(리터럴 금지)는 그대로 두고, "CloudFront 참조" 만 "비면 안 된다"로 옮겼다.
+z9_local="$(awk '/cors_allowed_origins = distinct\(/{print; exit}' "$z9_tf")"
 [ -n "$z9_local" ] || fail "(z9) local.cors_allowed_origins 를 찾지 못했습니다 — 앵커가 갈라졌습니다."
-printf '%s' "$z9_local" | grep -q 'aws_cloudfront_distribution.site.domain_name' \
-  || fail "(z9) 허용 오리진 목록이 CloudFront 도메인을 **참조**하지 않습니다."\
-    $'\n'"→ 배포 시점에야 정해지는 값이라 손으로 박으면 재생성마다 썩습니다(결함 2, TASK-MONO-389)."
+
+# (2a) 목록은 **변수에서** 와야 한다. 목록을 리소스 안에 직접 적으면 배포처를 바꿀 때
+#      terraform 코드를 고쳐야 하고, 그러면 tfvars 가 거짓말을 하게 된다.
+printf '%s' "$z9_local" | grep -q 'var.allowed_origins' \
+  || fail "(z9) 허용 오리진 목록이 var.allowed_origins 에서 오지 않습니다."\
+    $'\n'"→ 배포처는 환경마다 다릅니다. 목록의 출처는 변수 하나여야 합니다."
+
+# (2b) 🔴 **주제 보존** — AWS 발급 주소를 리터럴로 박으면 안 된다. 이 명제는 CloudFront
+#      폐기와 무관하게 살아 있다(`execute-api` 는 지금도 매 재생성마다 바뀐다).
 if printf '%s' "$z9_local" | grep -qE '"https://[a-z0-9.-]*(cloudfront|execute-api)'; then
   fail "(z9) 허용 오리진 목록에 AWS 가 발급하는 주소가 **리터럴로** 박혀 있습니다."\
-    $'\n'"→ 그 값은 재생성마다 바뀝니다. 참조로 두거나 var.allowed_origins 로 받으세요."
+    $'\n'"→ 그 값은 재생성마다 바뀝니다. var.allowed_origins 로 받으세요(결함 2, TASK-MONO-389)."
 fi
 
-# (3) 대조군 — 가드가 (1)을 실제로 볼 수 있는가.
-#     🔴 environment 블록 추출이 빈 껍데기면 (1)은 **항상 통과**한다. 다른 변수가 그
-#        블록에 실제로 보이는지 확인해 추출이 살아 있음을 증명한다.
+# (2c) 🔴🔴 **빈 목록을 무엇이 막는가.** CloudFront 참조가 사라진 지금, 목록이 비면 CORS 는
+#      아무 오리진도 허용하지 않고 **론처의 Start 버튼이 조용히 죽는다** — 그리고 그 실패는
+#      `plan` 에 안 보인다. 그것을 막는 것은 `variables.tf` 의 validation 하나뿐이므로,
+#      그것이 지워지면 **구멍이 소리 없이 돌아온다.** 여기서 그 존재를 핀으로 잡는다.
+#      🔵 예전에는 CloudFront 참조가 이 구멍을 **우연히** 가려 주고 있었다. 우연을 규칙으로
+#         바꾸는 것이 이 칸의 몫이다.
+z9_vars="$ROOT/infra/demo/aws/terraform/variables.tf"
+z9_ao="$(awk '/^variable "allowed_origins"/{f=1} f{print} f&&/^\}/{exit}' "$z9_vars")"
+[ -n "$z9_ao" ] || fail "(z9) variables.tf 에서 allowed_origins 블록을 찾지 못했습니다 — 앵커가 갈라졌습니다."
+printf '%s' "$z9_ao" | grep -q 'length(var.allowed_origins) > 0' \
+  || fail "(z9) allowed_origins 에 **비어 있으면 실패**하는 validation 이 없습니다."\
+    $'\n'"→ CloudFront 자동 포함이 폐기된 뒤(TASK-MONO-579) 빈 목록 = 허용 오리진 0개 = Start 버튼 사망입니다."\
+    $'\n'"→ 그 실패는 plan 에 안 보이고 런타임에 옵니다. validation 이 그것을 plan 으로 끌어옵니다."
+
+# (3) 대조군 — 가드가 (1)·(2c)를 실제로 볼 수 있는가.
+#     🔴 블록 추출이 빈 껍데기면 그 단언들은 **항상 통과**한다. 각 추출에 반드시 있는
+#        다른 것이 보이는지 확인해 추출이 살아 있음을 증명한다.
 printf '%s' "$z9_env" | grep -q 'MONTHLY_BUDGET_MINUTES' \
   || fail "(z9) 대조군 실패 — environment 블록 추출에 MONTHLY_BUDGET_MINUTES 가 안 보입니다."\
     $'\n'"→ 추출이 빈 껍데기이므로 (1)의 통과는 **아무것도 증명하지 않습니다**."
+printf '%s' "$z9_ao" | grep -q 'type        = list(string)' \
+  || fail "(z9) 대조군 실패 — allowed_origins 블록 추출에 type 선언이 안 보입니다."\
+    $'\n'"→ 추출이 빈 껍데기이므로 (2c)의 통과는 **아무것도 증명하지 않습니다**."
 
-ok "CORS 단일 집 (terraform) — Lambda env 에 ALLOWED_ORIGIN 없음(대조군으로 추출 유효 확인) · 오리진 목록은 CloudFront 를 참조"
+ok "CORS 단일 집 (terraform) — Lambda env 에 ALLOWED_ORIGIN 없음 · 목록 출처 = var.allowed_origins · AWS 발급 주소 리터럴 없음 · 빈 목록을 막는 validation 존재 (대조군 2개로 추출 유효 확인)"
 
 echo "[verify] (z10) vercel.json 이 Vercel 이 받아들이는 모양인가"
 # ---------------------------------------------------------------------------

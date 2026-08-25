@@ -35,17 +35,32 @@ aws configure                     # 또는 AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS
 cd infra/demo/aws/packer
 packer init . && packer build -var "repo_ref=main" demo-ami.pkr.hcl
 
-# 2) 인프라 + 정적 사이트 (CloudFront 배포 때문에 apply 가 5~15분 걸린다)
+# 2) 인프라 (EC2 + Lambda + API Gateway)
 cd ../terraform
 cp terraform.tfvars.example terraform.tfvars   # ami_id + admin_ssh_cidr 채우기
 terraform init && terraform apply
 
-# 3) 방문자가 열 주소 — 이게 데모의 정문이다
-terraform output site_url
+# 3) 제어 API 주소를 Vercel 에 넣는다
+terraform output api_base_url
+#    → Vercel 프로젝트 `kanggle-portfolio` → Environment Variables → DEMO_API_BASE
 ```
 
-**3단계에 손으로 넣을 값이 없다.** 제어 API 의 URL 은 `terraform` 이 `config.js` 로
-렌더해 사이트에 자동 주입한다(`aws_s3_object.config`). 저장소에는 그 URL 이 **없다.**
+**방문자가 여는 주소는 terraform 이 모른다.** 론처의 집은 **Vercel 하나**다
+(`https://kanggle-portfolio.vercel.app` — `ADR-MONO-067` D3, `TASK-MONO-579`).
+
+> 🔴 예전에는 여기에 `terraform output site_url`(CloudFront 도메인)이 있었고, 정적 사이트가
+> **S3 + CloudFront 에도** 배포됐다. 론처가 **두 집**을 갖고 있었던 것이고, Vercel 판은 커밋마다
+> 자동으로 다시 구워지는데 S3 판은 `apply` 때만 갱신되므로 **드리프트가 설계상 일어났다.**
+> `TASK-MONO-579` 가 그 사본을 폐기했다. `site_url` output 도 함께 없앴다 — terraform 이
+> 소유하지 않는 주소를 terraform 출력으로 두면 **거짓 출처**가 되기 때문이다.
+
+**🔴 3단계는 손으로 하는 배선이고, 자동으로 묶여 있지 않다.** 예전에는 terraform 이 S3 사본의
+`config.js` 를 자기 상태에서 렌더했으므로 사람이 볼 일이 없었다. 그 사본이 사라진 지금,
+Vercel 은 `DEMO_API_BASE` **환경변수**로 이 값을 받는다(`site/build.sh` 가 그것으로 `config.js` 를
+만들고, **없으면 빌드를 죽인다** — fail-closed).
+
+⇒ **API 를 재생성하면 `api_base_url` 이 바뀌고, Vercel 의 `DEMO_API_BASE` 도 함께 고쳐야 한다.**
+저장소에는 그 URL 이 **없다**(리터럴로 박으면 재생성마다 썩는다 — `TASK-MONO-389`).
 
 > 예전에는 여기가 *"`terraform output api_endpoint` 를 `site/index.html` 의 `API_BASE` 에
 > 넣는다"* 였다. **`api_endpoint` 라는 output 은 존재한 적이 없고**(실제 이름은 `api_base_url`),
