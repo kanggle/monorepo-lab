@@ -55,14 +55,53 @@ if ! git rev-parse --verify --quiet HEAD^ >/dev/null 2>&1; then
   exit 1
 fi
 
+# -----------------------------------------------------------------------------
+# 🔴🔴 판정 창은 **푸시된 범위**여야 한다 — `HEAD^..HEAD` 는 한 커밋뿐이다 (TASK-MONO-572)
+# -----------------------------------------------------------------------------
+# 원래 판정은 `HEAD^..HEAD`, 즉 **마지막 커밋 하나**만 봤다. 커밋 여러 개를 한 번에 push 하면
+# 앞 커밋의 앱 변경이 그 창 밖으로 나가고, 배포가 **조용히 건너뛰어진다.**
+#
+# 2026-08-23 에 실제로 발생했다: `[프로브 라우트 커밋, tasks/INDEX 커밋]` 을 함께 push →
+# Vercel 이 head 에서 판정 → fan 경로에 변경 없음 → `Canceled by Ignored Build Step`.
+# **프리뷰에 그 프로브가 없었고**, 상태는 실패가 아니라 **성공**이며 PR 체크는 초록이었다.
+#
+# 🔴 이 파일 맨 위가 경고한 바로 그 모양인데(*"증상은 배포가 조용히 건너뛰어졌다… 아무도 안
+#    본다"*), **판정 불가가 아니어서** fail-open 울타리를 그냥 통과했다. 스크립트는 자신 있게
+#    "변경 없음"이라고 답했다. **틀린 것은 fail-open 이 아니라 창의 크기였다.**
+#
+# 🔵 `main` 은 squash 머지라 한 커밋에 전부 담긴다 ⇒ **프로덕션은 원래도 옳았다.**
+#    뚫리는 것은 **프리뷰**이고, 그래서 프리뷰에서 재는 모든 측정이 틀린 산출물을 잰다.
+#
+# 기준점 선택 순서:
+#   1. `VERCEL_GIT_PREVIOUS_SHA` — Vercel 이 주면 그것이 **직전에 배포를 판정한 지점**이다.
+#   2. 없거나 못 쓰면 `HEAD^` — 기존 동작 그대로. **더 나빠지지 않는다.**
+#
+# 🔴 1을 쓰기 전에 **세 가지를 확인**한다. 하나라도 아니면 2로 내려간다 — 조용히 이상한 집합을
+#    비교하느니 좁게 보는 편이 낫고, 좁게 보는 것은 지금까지의 동작이다.
+#   (a) 값이 비어 있지 않다        (b) 이 클론에 그 객체가 실재한다 (얕은 clone 이면 없다)
+#   (c) HEAD 의 **조상**이다        — force-push 뒤에는 조상이 아니고, `A..B` 가 무의미해진다.
+BASE="HEAD^"
+if [ -n "${VERCEL_GIT_PREVIOUS_SHA:-}" ]; then
+  if ! git cat-file -e "${VERCEL_GIT_PREVIOUS_SHA}^{commit}" 2>/dev/null; then
+    log "· VERCEL_GIT_PREVIOUS_SHA=${VERCEL_GIT_PREVIOUS_SHA} 가 이 클론에 없습니다 — HEAD^ 로 판정합니다."
+  elif ! git merge-base --is-ancestor "$VERCEL_GIT_PREVIOUS_SHA" HEAD 2>/dev/null; then
+    log "· VERCEL_GIT_PREVIOUS_SHA=${VERCEL_GIT_PREVIOUS_SHA} 가 HEAD 의 조상이 아닙니다 (force-push?) — HEAD^ 로 판정합니다."
+  else
+    BASE="$VERCEL_GIT_PREVIOUS_SHA"
+    log "· 판정 창 = VERCEL_GIT_PREVIOUS_SHA..HEAD ($(git rev-list --count "$BASE..HEAD" 2>/dev/null || echo '?') 커밋)"
+  fi
+else
+  log "· VERCEL_GIT_PREVIOUS_SHA 가 없습니다 — HEAD^ 로 판정합니다 (창이 한 커밋)."
+fi
+
 # --- 판정 -------------------------------------------------------------------
 # `git diff --quiet` 는 차이가 없으면 0, 있으면 1 을 낸다 — Vercel 규약과 **그대로 맞는다.**
 # 그러니 종료코드를 뒤집지 마라. 우연이 아니라 이 규약이 그렇게 설계돼 있다.
-if git diff --quiet HEAD^ HEAD -- "$@"; then
-  log "↷ 건너뜀 — HEAD^..HEAD 에 다음 경로의 변경이 없습니다: $*"
+if git diff --quiet "$BASE" HEAD -- "$@"; then
+  log "↷ 건너뜀 — ${BASE}..HEAD 에 다음 경로의 변경이 없습니다: $*"
   exit 0
 fi
 
-log "▶ 빌드 — HEAD^..HEAD 가 다음 경로를 건드렸습니다: $*"
-git diff --name-only HEAD^ HEAD -- "$@" | sed 's/^/[vercel-ignore]   /' >&2
+log "▶ 빌드 — ${BASE}..HEAD 가 다음 경로를 건드렸습니다: $*"
+git diff --name-only "$BASE" HEAD -- "$@" | sed 's/^/[vercel-ignore]   /' >&2
 exit 1

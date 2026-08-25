@@ -99,9 +99,17 @@ JS
 
 run_cell() {
   # run_cell <설명> <기대rc> <임시저장소> <judge> <pathspec...>
+  #
+  # 🔴 판정 **창**을 재는 칸((6)(7))은 `CELL_PREV_SHA` 를 세팅한 뒤 부른다. 비어 있으면
+  #    환경변수를 **명시적으로 지우고** 부른다 — 호스트에 그 변수가 살아 있으면 창 칸이 아닌
+  #    칸들까지 넓은 창으로 판정되어, 통과가 무엇을 증명한 것인지 알 수 없게 된다.
   local desc="$1" want="$2" repo="$3" judge="$4"; shift 4
   local got
-  ( cd "$repo" && bash "$judge" "$@" >/dev/null 2>&1 ); got=$?
+  if [ -n "${CELL_PREV_SHA:-}" ]; then
+    ( cd "$repo" && VERCEL_GIT_PREVIOUS_SHA="$CELL_PREV_SHA" bash "$judge" "$@" >/dev/null 2>&1 ); got=$?
+  else
+    ( cd "$repo" && env -u VERCEL_GIT_PREVIOUS_SHA bash "$judge" "$@" >/dev/null 2>&1 ); got=$?
+  fi
   if [ "$got" -ne "$want" ]; then
     bad "$desc — rc=$got 인데 $want 를 기대했습니다."
     return 1
@@ -201,6 +209,46 @@ main() {
     echo changed > "$tmp/$first_file"
     git -C "$tmp" commit -qam own
     run_cell "(1) $first_file 이 바뀐 커밋 -> 빌드" 1 "$tmp" "$judge" "${specs[@]}"
+
+    # -------------------------------------------------------------------------
+    # (6)(7) 판정 **창** — TASK-MONO-572
+    # -------------------------------------------------------------------------
+    # 위 칸들은 전부 **커밋 하나**를 본다. 창이 한 커밋으로 좁아도 전부 통과한다.
+    # 실제로 그랬다: 판정이 `HEAD^..HEAD` 였고, 커밋 **여럿을 한 번에 push** 하면 앞 커밋의
+    # 앱 변경이 창 밖으로 나가 배포가 **조용히 건너뛰어졌다**. 2026-08-23 관측 —
+    # `[프로브 라우트, tasks/INDEX]` 를 함께 push 했더니 프리뷰에 프로브가 없었고, 상태는
+    # 실패가 아니라 `Canceled by Ignored Build Step` = **성공**이었다.
+    #
+    # 🔴 그래서 이 두 칸의 단위는 커밋이 아니라 **배치**다.
+    local base_sha
+    base_sha="$(git -C "$tmp" rev-parse HEAD)"
+
+    # (6) bite — 앱 변경이 **앞** 커밋에 있고 뒤에 무관한 커밋이 얹힌다 -> 빌드해야 한다.
+    echo win > "$tmp/$first_file"
+    git -C "$tmp" commit -qam "own (배치 앞)"
+    echo win > "$tmp/tasks/ready/unrelated.md"
+    git -C "$tmp" commit -qam "unrelated (배치 뒤)"
+    CELL_PREV_SHA="$base_sha" \
+      run_cell "(6) [자기경로, 무관] 배치 -> 빌드 (창이 배치를 덮는가)" 1 "$tmp" "$judge" "${specs[@]}"
+
+    # 🔵 같은 배치를 창 없이 재면 **건너뛴다** — 이것이 고치기 전의 동작이고,
+    #    (6)이 창을 재고 있다는 증거다(둘이 갈리지 않으면 (6)은 아무것도 증명하지 않는다).
+    run_cell "(6b) 같은 배치, PREVIOUS_SHA 없음 -> 건너뜀 (옛 동작)" 0 "$tmp" "$judge" "${specs[@]}"
+
+    # (7) 🔴 대조군 — 무관한 커밋만 있는 배치는 **여전히 건너뛰어야** 한다.
+    #     이 칸이 없으면 *"항상 빌드"* 라는 자명한 오답이 (6)을 통과하고, 그것은 이 스크립트를
+    #     태어나게 한 배포 rate limit 을 도로 불러온다(2026-08-23 하루에 두 번 물렸다).
+    local base2
+    base2="$(git -C "$tmp" rev-parse HEAD)"
+    echo c1 > "$tmp/tasks/ready/unrelated.md"; git -C "$tmp" commit -qam "unrelated 1"
+    echo c2 > "$tmp/tasks/ready/unrelated.md"; git -C "$tmp" commit -qam "unrelated 2"
+    CELL_PREV_SHA="$base2" \
+      run_cell "(7) [무관, 무관] 배치 -> 건너뜀 (대조군)" 0 "$tmp" "$judge" "${specs[@]}"
+
+    # (8) 폴백 — 쓸 수 없는 PREVIOUS_SHA 는 창을 넓히지 말고 `HEAD^` 로 내려가야 한다.
+    #     넓히기가 실패했을 때도 **기존 동작**이 남는 것이 안전한 방향이다.
+    CELL_PREV_SHA="0000000000000000000000000000000000000000" \
+      run_cell "(8) 존재하지 않는 PREVIOUS_SHA -> HEAD^ 로 폴백 (건너뜀)" 0 "$tmp" "$judge" "${specs[@]}"
 
     rm -rf "$tmp"
   done
