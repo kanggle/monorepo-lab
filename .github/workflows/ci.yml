@@ -233,6 +233,9 @@ jobs:
       # retention, or the guard being weakened — so AND-ing `code-changed` would switch
       # the guard off on exactly the diffs it exists to police.
       artifact-retention: ${{ steps.filter.outputs.artifact-retention }}
+      # TASK-MONO-577 / ADR-MONO-068: 승격 트리거. 도착 경로가 **앱 소스**이므로 그쪽이 바뀔 때
+      # 돌아야 하고, 가드 자신이 약해지는 것도 봐야 한다. 두 경로 모두 순수 positive 필터다.
+      demo-resolver-copies: ${{ steps.filter.outputs.demo-resolver-copies }}
       # TASK-MONO-562: raw filter, NOT AND-combined with `code-changed`. Every arrival
       # path of this drift is non-code: a `vercel.json` losing its `ignoreCommand`, a
       # new Vercel project landing without one, or the judge script being weakened.
@@ -629,6 +632,12 @@ jobs:
             artifact-retention:
               - '.github/workflows/**'
               - 'scripts/check-artifact-retention.sh'
+            # TASK-MONO-577 / ADR-MONO-068 — 해석기가 두 번째로 생기는 순간 RED.
+            # 두 번째는 **앱 소스**로 도착하므로 그 경로를 본다. 순수 positive.
+            demo-resolver-copies:
+              - 'projects/*/apps/*/src/**'
+              - 'projects/*/web/*/src/**'
+              - 'scripts/check-demo-resolver-copies.sh'
             # TASK-MONO-562: a Vercel project that builds on every commit arrives three
             # ways — a new `vercel.json` anywhere in the tree, an existing one losing its
             # `ignoreCommand`, or the shared judge being weakened. All three are non-code,
@@ -1021,6 +1030,34 @@ jobs:
 
       - name: Guard — every boot-jars upload declares retention-days 1
         run: bash scripts/check-artifact-retention.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-577 / ADR-MONO-068 — 데모 백엔드 해석기의 **두 번째 사본**.
+  #
+  # 그 ADR 은 A(앱별 구현)를 골랐고 근거는 '소비자가 하나' 였다. 두 번째가 생기면 그 근거가
+  # 사라지는데, 두 번째는 **조용히** 생긴다 — 다른 앱의 티켓에서 옆 앱을 복사해서.
+  # 비용 0 인 '나중에 승격' 은 물지 않으면 오지 않는다. 이 잡이 그 숫자(2)를 문다.
+  #
+  # 🔵 오늘 실제 대상은 0개다(단계 2 미착수). 그래서 라이브 실행은 아무것도 증명하지 않고,
+  #    self-test 가 합성 트리로 물기를 증명한다 — 그것이 이 잡의 본체다.
+  # ---------------------------------------------------------------------------
+  demo-resolver-copies:
+    name: Demo resolver copies (the second one is a decision, not a copy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.demo-resolver-copies == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-demo-resolver-copies.sh
+
+      - name: Self-test the predicate (bites on synthetic trees)
+        run: bash scripts/check-demo-resolver-copies.sh --self-test
+
+      - name: Guard — at most one app implements the resolver
+        run: bash scripts/check-demo-resolver-copies.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-562 — Vercel build triggers.
