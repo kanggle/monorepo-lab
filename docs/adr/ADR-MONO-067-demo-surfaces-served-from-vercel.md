@@ -239,8 +239,28 @@ AC-0 실측 뒤 필요하면 후속 ADR 로 가른다. 🔴 **이 축이 안 풀
 
 1. ✅ **완료(2026-08-22, `TASK-MONO-565`) — 위 § 참조.** ~~모집단을 다시 세라.~~ 위 fetch 표는 정규식 대리지표다. 브라우저 번들을 실제로 빌드해
    `sslip.io`/절대 백엔드 URL 이 몇 건 남는지 **산출물에서** 센다(구조가 아니라 행위).
-2. **(B) 가 실제로 되는가** — Vercel 함수에서 평문 HTTP 업스트림 호출이 성공하는지 1건으로 확인.
-   실패하면 이 ADR 의 추천이 통째로 무너진다.
+2. ✅ **완료(2026-08-25, `TASK-MONO-571`) — 참이다. 이 ADR 은 무너지지 않는다.**
+   ~~**(B) 가 실제로 되는가** — Vercel 함수에서 평문 HTTP 업스트림 호출이 성공하는지 1건으로 확인.
+   실패하면 이 ADR 의 추천이 통째로 무너진다.~~
+
+   `kanggle-fan` **프로덕션**의 `nodejs` route handler 에서 잰 **원문 응답**:
+
+   ```json
+   { "verdict": "PLAINTEXT_HTTP_EGRESS_WORKS",
+     "cells": {
+       "plaintextA":   { "url": "http://neverssl.com/", "ok": true, "status": 200, "location": null },
+       "plaintextB":   { "url": "http://example.com/",  "ok": true, "status": 200, "location": null },
+       "httpsControl": { "url": "https://example.com/", "ok": true, "status": 200, "location": null } } }
+   ```
+
+   **판정이 유효한 이유** — 대조군(`httpsControl`)이 통과했다. 그것이 같이 죽었다면 *이그레스가
+   아예 없는 런타임*과 *평문만 막힌 런타임*이 **같은 출력**을 내어 판정 불가였다. 그리고 두 평문
+   칸이 **`location: null` 인 2xx** 다 — `redirect: 'manual'` 로 불렀으므로 `301 → https` 승격을
+   성공으로 오독한 것이 아니다. 주제는 **두 독립 출처**에서 일치했다.
+
+   🔴 **이 통과가 (B) 의 성립을 뜻하지는 않는다.** 잰 것은 *"Vercel 함수가 평문 HTTP 로 나갈 수
+   있다"* 이고, 남은 것은 **`sslip.io` DNS 해석 · EC2 보안그룹의 Vercel 이그레스 허용 ·
+   80 이외 포트**다(프로브 응답의 `notMeasured` 가 그 셋을 명시한다). 과대주장하지 않는다.
 3. **OIDC 왕복** — HTTPS 프런트 ↔ 평문 IdP 에서 로그인이 끝까지 되는지. 🔴 *"안 될 것 같다"* 가
    아니라 **실측**이어야 한다. 이 저장소는 쿠키 축에서 두 방향 모두 데인 적이 있다.
 4. **Vercel 무료 플랜의 한도** — 배포 rate limit 외에 함수 호출/실행시간 한도가 데모 트래픽을
