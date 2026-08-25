@@ -8,7 +8,7 @@ TASK-MONO-580
 
 # Status
 
-in-progress
+review
 
 # Owner
 
