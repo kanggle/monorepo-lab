@@ -1,4 +1,5 @@
 import { ApiClient } from '@repo/api-client';
+import { resolveDemoBackend } from '@/shared/config/demo-backend';
 
 /**
  * web-store axios client.
@@ -30,12 +31,31 @@ const isServer = typeof window === 'undefined';
 
 const SAME_ORIGIN_BFF = '/api/bff';
 
+// DEMO-RESOLVER: web-store   (ADR-MONO-068 — 두 번째가 생기면 CI 가 RED)
+//
+// 🔴 서버 쪽 baseURL 은 **생성 시점에 굳으면 안 된다** (TASK-MONO-580 / ADR-MONO-067 D2).
+//    데모 백엔드 주소는 부팅마다 바뀌는데 이 모듈은 프로세스당 한 번만 평가된다 ⇒ 굳은
+//    값은 다음 부팅에 곧바로 썩는다. 그래서 **요청마다** `resolveBaseURL` 이 다시 정한다.
+//
+// 🔵 아래 `baseURL` 은 이제 **폴백**이다. 해석기가 `null` 을 내면(로컬·CI·데모 꺼짐·조회
+//    실패) 이 값이 그대로 쓰이므로 로컬 개발과 CI 의 동작은 예전과 같다.
+//
+// 🔵 **클라이언트 분기는 손대지 않았다** — 브라우저는 상대경로 `/api/bff` 만 알아야 하고
+//    (ADR-MONO-067 D1), 그 프록시 라우트가 서버에서 같은 해석기를 쓴다.
 const baseURL = isServer
   ? process.env.API_URL_INTERNAL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080'
   : SAME_ORIGIN_BFF;
 
 export const apiClient = new ApiClient({
   baseURL,
+  // 🔴 서버에서만 건다. 브라우저에서 이 훅이 돌면 백엔드 오리진이 클라이언트 코드의
+  //    관심사가 되어 D1 이 무너진다.
+  resolveBaseURL: isServer
+    ? async () => {
+        const demo = await resolveDemoBackend();
+        return demo?.baseUrl ?? null;
+      }
+    : undefined,
   // Client: tokens are server-only (F2) — the BFF proxy attaches the bearer.
   // Server: direct fetches use `getWebStoreSession()`; the shared client adds
   // no token here.

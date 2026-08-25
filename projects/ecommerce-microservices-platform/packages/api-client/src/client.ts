@@ -7,6 +7,20 @@ import type { ApiErrorResponse } from '@repo/types';
 
 export interface ApiClientConfig {
   baseURL: string;
+  /**
+   * 요청마다 baseURL 을 **다시 정하고 싶을 때** (TASK-MONO-580 / ADR-MONO-067 D2).
+   *
+   * 🔴 왜 필요한가: `baseURL` 은 인스턴스 생성 시점에 한 번 굳는다. 그런데 데모 배포에서는
+   * 백엔드 주소가 **부팅마다 바뀌므로** 굳은 값이 곧 썩는다. 이 훅이 있으면 요청 인터셉터가
+   * 매 요청 그 결과로 덮어쓴다.
+   *
+   * 🔵 **추가일 뿐 기존 동작을 바꾸지 않는다** — 안 넘기면 예전과 완전히 같다.
+   * `null`/`undefined` 를 돌려주면 그 요청은 생성 시점의 `baseURL` 을 쓴다. 즉 "해석 실패"
+   * 의 안전한 쪽이 **기존 동작**이다.
+   *
+   * 🔴 여기서 던지지 마라 — 던지면 그 요청이 죽는다. 해석 실패는 `null` 로 표현한다.
+   */
+  resolveBaseURL?: () => Promise<string | null | undefined>;
   getAccessToken?: () => string | null;
   getRefreshToken?: () => string | null;
   onTokenRefreshed?: (accessToken: string, refreshToken: string) => void;
@@ -46,16 +60,41 @@ export class ApiClient {
       timeout: config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
     });
 
+    // 토큰 부착 — 예전부터 있던 부분. 아래 두 경로가 **같은 함수**를 쓴다.
+    const attachAuth = (
+      reqConfig: InternalAxiosRequestConfig,
+    ): InternalAxiosRequestConfig => {
+      const url = reqConfig.url ?? '';
+      if (!this.isPublicPath(url) && this.config.getAccessToken) {
+        const token = this.config.getAccessToken();
+        if (token) {
+          reqConfig.headers.Authorization = `Bearer ${token}`;
+        }
+      }
+      return reqConfig;
+    };
+
     this.instance.interceptors.request.use(
       (reqConfig: InternalAxiosRequestConfig) => {
-        const url = reqConfig.url ?? '';
-        if (!this.isPublicPath(url) && this.config.getAccessToken) {
-          const token = this.config.getAccessToken();
-          if (token) {
-            reqConfig.headers.Authorization = `Bearer ${token}`;
-          }
-        }
-        return reqConfig;
+        // TASK-MONO-580 — 요청 시점 baseURL 재해석 (선택).
+        //
+        // 🔴🔴 **훅이 없으면 동기로 돌려준다.** 첫 판은 인터셉터 전체를 `async` 로 만들었고
+        //    docblock 에는 *"안 넘기면 예전과 완전히 같다"* 고 적었다 — **거짓이었다.**
+        //    `async` 는 훅과 무관하게 반환값을 Promise 로 바꾸므로, 인터셉터를 **직접 불러
+        //    동기로 단언하던 기존 테스트 9개가 `TypeError` 로 죽었다**(CI 가 잡았다).
+        //    "추가일 뿐" 이라는 주장은 **반환 모양까지** 같아야 참이다.
+        //
+        // 🔴 훅이 던지거나 null 을 내면 덮어쓰지 않는다 — 해석 실패의 안전한 쪽은
+        //    "기존 동작" 이지 "요청 실패" 가 아니다.
+        const resolve = this.config.resolveBaseURL;
+        if (!resolve) return attachAuth(reqConfig);
+
+        return resolve()
+          .catch(() => null)
+          .then((resolved) => {
+            if (resolved) reqConfig.baseURL = resolved;
+            return attachAuth(reqConfig);
+          });
       },
     );
 
