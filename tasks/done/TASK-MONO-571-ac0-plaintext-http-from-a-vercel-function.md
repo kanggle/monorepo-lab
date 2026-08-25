@@ -8,7 +8,10 @@ ADR-MONO-067 **AC-0 ②** 를 실측한다 — Vercel 함수에서 **평문 HTTP
 
 # Status
 
-review
+done
+
+> **✅ DONE — 3축 검증 완료 (2026-08-25).** impl PR #3450 squash `02cf68fc9` ·
+> `state=MERGED` · squash 커밋이 `origin/main` 에 실재 · **머지 시점 CheckRun 48개 중 실패 0**.
 
 > **✅ AC-1~6 완료 (2026-08-25). 판정 = `PLAINTEXT_HTTP_EGRESS_WORKS`.**
 > 프로브는 AC-5 로 **회수했다**. 결과는 `ADR-MONO-067` § AC-0 2번에 기록.
