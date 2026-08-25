@@ -83,14 +83,14 @@ _(없음)_
 
 ## review
 
-| ID | Title | Service | Tags |
-|---|---|---|---|
-| TASK-FE-098 | 검색 결과 그리드가 다른 목록 페이지와 열이 어긋난다 — 인라인 사본이 모바일 2열 규칙을 안 가진다 (impl PR [#3445](https://github.com/kanggle/monorepo-lab/pull/3445), squash `4a53f0e3d`) | web-store | code |
-| TASK-FE-099 | 검색으로 찾은 상품은 목록에서 찜할 수 없다 — 검색 결과 카드에만 위시리스트 버튼이 없다 (impl PR [#3447](https://github.com/kanggle/monorepo-lab/pull/3447), squash `387c66e6a`) | web-store | code, test |
+_(없음)_
 
 
 
 ## done
+
+- `TASK-FE-098-search-results-grid-diverges-from-the-product-list-grid.md` — **✅ DONE (2026-08-26, 3차원 검증 — impl PR [#3445](https://github.com/kanggle/monorepo-lab/pull/3445) squash `4a53f0e3d`; `state=MERGED` · `origin/main` tip 대조 · 머지 전 체크 52건 **실패 0**)** — 검색 결과 목록이 다른 상품 목록 페이지와 **모든 폭에서 같은 열 수·같은 간격**으로 깔린다. 결함의 정체는 스타일 값이 아니라 **인라인 사본**이었다 — 검색 결과가 `ProductList` 를 쓰지 않고 그리드 클래스를 자기 자리에 다시 적었고, 그 사본에 **모바일 2열 규칙만 빠져** 있었다. 🔵 그래서 고침도 값 조정이 아니라 **사본을 없애는 쪽**이다(같은 사실이 두 곳에 있으면 한쪽만 고쳐진다). 분석=Opus 5 / 구현=Sonnet.
+- `TASK-FE-099-search-results-cards-have-no-wishlist-button.md` — **✅ DONE (2026-08-26, 3차원 검증 — impl PR [#3447](https://github.com/kanggle/monorepo-lab/pull/3447) squash `387c66e6a`; `state=MERGED` · `origin/main` tip 대조 · 머지 전 체크 52건 **실패 0**)** — 검색 결과 카드에서도 전체 목록과 똑같이 하트로 찜을 추가/해제한다. 🔵 회귀 테스트가 같이 들어갔다(`products-page-search-action.test.tsx`) — **검색 경로만 버튼이 없던 것**이라, 목록 경로만 보는 테스트는 이 결함에 계속 초록이었다. 분석=Opus 5 / 구현=Sonnet.
 
 - `TASK-BE-588-order-api-contract-says-recipientname-server-wants-recipient.md` — **✅ DONE (2026-08-15, 3차원 검증 — impl PR [#3338](https://github.com/kanggle/monorepo-lab/pull/3338) squash `c3d8672da`; 머지 전 실패 필수 체크 0건) — AC-1~5 충족. 🔴 차등 판정으로 닫았다**: 수정 **전** 계약서 예시 → **HTTP 400** `"recipient is required"` / 수정 **후** 예시 → **HTTP 201** `{"orderId":"246d75d5-…"}`, 그리고 단건 조회 응답이 `"recipient"` 를 담고 `recipientName` 등장 **0회**. 🔵 **네거티브를 먼저 쟀다** — 고친 뒤 201 만 보면 *"원래도 통과했을"* 가능성을 배제하지 못한다. 🔵 **AC-4 전 필드 대조 결과 어긋난 곳은 정확히 2건**(요청 41행 · 단건 응답 130행)이고 `items[]` 7필드 · `shippingAddress` 나머지 4필드 · 최상위 7필드는 **전부 일치**했다 ⇒ 이웃 확산 없음. admin 응답(336행)이 **이미 옳았다는 사실이 "옛 이름 관행" 가설을 배제**한다 — 문서 전체가 낡은 게 아니라 **부분만 갱신**된 것이었다. 🔵 코드·DTO·DB·이벤트 **무변경**(문서만 수정), 새 테스트 없음 — 판정은 실행된 요청으로 했다. **이하 원 서술**: 계약서대로 `POST /api/orders` 를 보내면 `400 VALIDATION_ERROR "recipient is required"` 다(2026-08-15 라이브 실측). 계약은 `shippingAddress.recipientName`, 서버 DTO·도메인·JPA·이벤트·DB 컬럼·web-store 전송은 전부 `recipient`. 🔴 **같은 문서가 자기와도 어긋난다** — 41행(요청)·130행(단건 응답)은 `recipientName`, 336행(admin 응답)은 `recipient` ⇒ **3분의 2가 틀린 부분 갱신**. 방향은 **문서를 구현에 맞춘다**(반대는 마이그레이션+이벤트 계약+프런트를 함께 움직여야 하고 얻는 게 이름 취향뿐). 🔴 이웃 필드 전수 대조 필수 — 발견 자체가 *"하나 틀린 김에 세어 보니 2/3"* 였다. 🔴 네거티브(수정 전 예시 → 400) 없이 201 만 보면 "원래도 됐던 것"과 구별 불가
 
