@@ -8,7 +8,10 @@ TASK-MONO-572
 
 # Status
 
-review
+done
+
+> **✅ DONE — 3축 검증 완료 (2026-08-25).** impl PR #3449 squash `53bb4712c` ·
+> `state=MERGED` · squash 커밋이 `origin/main` 에 실재 · **머지 시점 CheckRun 48개 중 실패 0**.
 
 > **AC-0~4 완료. 남은 것은 라이브 확인 한 가지** — Vercel 이 `VERCEL_GIT_PREVIOUS_SHA` 를
 > 실제로 주는지는 **이 PR 자신이 증명한다**(아래 § 라이브 절반).
