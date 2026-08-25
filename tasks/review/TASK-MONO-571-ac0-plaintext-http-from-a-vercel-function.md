@@ -8,11 +8,10 @@ ADR-MONO-067 **AC-0 ②** 를 실측한다 — Vercel 함수에서 **평문 HTTP
 
 # Status
 
-in-progress
+review
 
-> **⏸️ AC-4 가 막혔다 — Vercel 배포 rate limit (2026-08-23 UTC).** 구현은 `main` 에 들어갔고
-> (`dca2408f2`, PR #3438) **AC-1·2·3 완료 / AC-4 미측정**이다. 아래 § 진행 기록 참조.
-> 🔴 **프로브를 아직 지우지 마라(AC-5)** — 한 번도 배포된 적이 없어서 지우면 영영 못 잰다.
+> **✅ AC-1~6 완료 (2026-08-25). 판정 = `PLAINTEXT_HTTP_EGRESS_WORKS`.**
+> 프로브는 AC-5 로 **회수했다**. 결과는 `ADR-MONO-067` § AC-0 2번에 기록.
 
 # Owner
 
@@ -211,3 +210,54 @@ push → `Canceled by Ignored Build Step`, 프리뷰에 프로브가 없었다).
 증상은 배포가 조용히 건너뛰어졌다"* — 인데, **작성자가 고려하지 않은 문으로 들어왔다.**
 🔵 `main` 은 squash 머지라 한 커밋에 전부 담기므로 **프로덕션은 안전하고, 프리뷰만 뚫린다.**
 별도 티켓 사안(이 티켓의 범위 밖).
+
+---
+
+# ✅ AC-4 완료 (2026-08-25 UTC) — **`PLAINTEXT_HTTP_EGRESS_WORKS`**
+
+`https://kanggle-fan.vercel.app/api/ac0-probe` **HTTP 200**, 원문:
+
+```json
+{ "task": "TASK-MONO-571", "adr": "ADR-MONO-067 AC-0 (2)",
+  "verdict": "PLAINTEXT_HTTP_EGRESS_WORKS",
+  "notMeasured": ["sslip.io DNS resolution",
+                  "EC2 security-group ingress from Vercel egress",
+                  "non-80 ports"],
+  "cells": {
+    "plaintextA":   { "url": "http://neverssl.com/", "ok": true, "status": 200, "location": null, "error": null },
+    "plaintextB":   { "url": "http://example.com/",  "ok": true, "status": 200, "location": null, "error": null },
+    "httpsControl": { "url": "https://example.com/", "ok": true, "status": 200, "location": null, "error": null } } }
+```
+
+## 왜 이 판정이 유효한가
+
+| 설계 요소 | 이 결과에서 무엇을 했나 |
+|---|---|
+| **대조군** `httpsControl` | 통과했다 ⇒ 판정 가능. 같이 죽었다면 *이그레스 전무*와 *평문만 차단*이 **같은 출력**이라 판정 불가였다 |
+| **리다이렉트 술어** | 두 평문 칸이 `location: null` 인 2xx ⇒ `301 → https` 승격을 성공으로 **오독한 것이 아니다** |
+| **두 번째 출처** | `neverssl.com` 과 `example.com` 이 **일치** ⇒ "그 호스트가 죽었다"와 구별됨 |
+
+## 🔴 통과해도 (B) 성립은 아니다
+
+잰 것은 *"Vercel 함수가 평문 HTTP 로 나갈 수 있다"* 뿐이다. 남은 것은 프로브 자신이
+`notMeasured` 로 적은 **셋**: `sslip.io` DNS · EC2 보안그룹의 Vercel 이그레스 허용 · 80 이외 포트.
+
+## 이 측정이 왜 이렇게 오래 걸렸나 — 두 겹의 차단
+
+| 차단 | 해소 |
+|---|---|
+| ① Vercel **배포 rate limit** (2026-08-23, 하루 두 번) | 시간 경과 |
+| ② **프로브가 배포되지 않음** — 프로브 머지 후의 커밋들이 fan 감시 경로에 안 닿았다 | `TASK-MONO-572` 가 `scripts/` 를 고치면서 **그 배포가 프로브를 실어 날랐다** |
+
+🔵 ②는 결함이 아니라 무시 규칙이 **설계대로** 동작한 것이다. 다만 *"머지했으니 배포됐겠지"* 가
+거짓이라는 사례가 하나 더 늘었다.
+
+## ✅ AC-5 — 프로브 회수
+
+`route.ts` · `verdict.ts` · `ac0-probe-verdict.test.ts` 삭제, 미들웨어 공개 경로 1줄 원복.
+`grep -rn "ac0-probe" projects/fan-platform/` **0건**으로 확인.
+
+## ✅ AC-6 — ADR 기록
+
+`ADR-MONO-067` § AC-0 2번을 ✅ 로 갱신하고 원문 응답·유효성 근거·**측정하지 못한 잔여 셋**을
+함께 적었다.
