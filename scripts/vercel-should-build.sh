@@ -72,27 +72,77 @@ fi
 # 🔵 `main` 은 squash 머지라 한 커밋에 전부 담긴다 ⇒ **프로덕션은 원래도 옳았다.**
 #    뚫리는 것은 **프리뷰**이고, 그래서 프리뷰에서 재는 모든 측정이 틀린 산출물을 잰다.
 #
-# 기준점 선택 순서:
-#   1. `VERCEL_GIT_PREVIOUS_SHA` — Vercel 이 주면 그것이 **직전에 배포를 판정한 지점**이다.
-#   2. 없거나 못 쓰면 `HEAD^` — 기존 동작 그대로. **더 나빠지지 않는다.**
+# 🔴🔴 **직전 배포는 첫 push 에 존재하지 않는다 — 그리고 첫 push 가 이 결함의 본거지다** (실측)
 #
-# 🔴 1을 쓰기 전에 **세 가지를 확인**한다. 하나라도 아니면 2로 내려간다 — 조용히 이상한 집합을
-#    비교하느니 좁게 보는 편이 낫고, 좁게 보는 것은 지금까지의 동작이다.
-#   (a) 값이 비어 있지 않다        (b) 이 클론에 그 객체가 실재한다 (얕은 clone 이면 없다)
-#   (c) HEAD 의 **조상**이다        — force-push 뒤에는 조상이 아니고, `A..B` 가 무의미해진다.
+# 2026-08-25, 이 수정의 1차 판을 `[scripts 커밋, tasks 커밋]` 배치로 올려 라이브에서 쟀다.
+# 결과: **여전히 `Canceled by Ignored Build Step`.** 고쳐진 스크립트가 돌았는데도 그랬다.
+# 이유는 결함이 아니라 정의였다 — **새 브랜치의 첫 push 에는 "직전 배포"가 없다.**
+# 그런데 이 저장소는 태스크마다 브랜치를 새로 만들고, **커밋 여러 개를 한 번에 올리는 것은
+# 정확히 그 첫 push** 다. 즉 1차 판은 **결함이 가장 잘 나는 경우를 못 덮었다.**
+#
+# PR 브랜치에서 올바른 기준점은 *직전 배포*가 아니라 **`main` 과의 merge-base** 다 —
+# "이 브랜치가 보태는 전부"라는 뜻이고, **첫 push 에도 정의된다.**
+#
+# 기준점 선택 순서 (위에서부터, 쓸 수 있는 첫 번째):
+#   1. `VERCEL_GIT_PREVIOUS_SHA`      — 두 번째 이후 push. Vercel 이 주면 가장 정확하다.
+#   2. `merge-base(<기본브랜치>, HEAD)` — 브랜치가 보태는 전부. **첫 push 를 덮는다.**
+#   3. `HEAD^`                        — 기존 동작. **더 나빠지지 않는다.**
+#
+# 🔴 어느 후보든 쓰기 전에 **세 가지를 확인**한다. 하나라도 아니면 다음으로 내려간다 —
+#    조용히 이상한 집합을 비교하느니 좁게 보는 편이 낫고, 좁게 보는 것이 지금까지의 동작이다.
+#   (a) 비어 있지 않다   (b) 이 클론에 객체가 실재한다(얕은 clone 이면 없다)
+#   (c) HEAD 의 **조상**이다 — force-push 뒤엔 조상이 아니고 `A..B` 가 무의미해진다.
+#
+# 🔵 2번은 **production 브랜치에서는 쓰면 안 된다.** 거기서 merge-base 는 HEAD 자신이라
+#    창이 비고 **모든 것이 건너뛰어진다** — 정확히 반대 방향의 고장이다. main 은 squash 머지라
+#    한 커밋에 전부 담기므로 `HEAD^` 가 이미 옳다.
+
+# 후보가 쓸 만한지 본다. 쓸 만하면 0, 아니면 1(과 이유 로그).
+usable_base() {
+  local cand="$1" why="$2"
+  [ -n "$cand" ] || return 1
+  if ! git cat-file -e "${cand}^{commit}" 2>/dev/null; then
+    log "· ${why}=${cand} 가 이 클론에 없습니다 (얕은 clone?) — 다음 후보로."
+    return 1
+  fi
+  if ! git merge-base --is-ancestor "$cand" HEAD 2>/dev/null; then
+    log "· ${why}=${cand} 가 HEAD 의 조상이 아닙니다 (force-push?) — 다음 후보로."
+    return 1
+  fi
+  return 0
+}
+
+# Vercel 의 production 브랜치. 안 주면 `main` 으로 본다.
+PROD_REF="${VERCEL_GIT_REPO_DEFAULT_BRANCH:-main}"
+CUR_REF="${VERCEL_GIT_COMMIT_REF:-}"
+
 BASE="HEAD^"
-if [ -n "${VERCEL_GIT_PREVIOUS_SHA:-}" ]; then
-  if ! git cat-file -e "${VERCEL_GIT_PREVIOUS_SHA}^{commit}" 2>/dev/null; then
-    log "· VERCEL_GIT_PREVIOUS_SHA=${VERCEL_GIT_PREVIOUS_SHA} 가 이 클론에 없습니다 — HEAD^ 로 판정합니다."
-  elif ! git merge-base --is-ancestor "$VERCEL_GIT_PREVIOUS_SHA" HEAD 2>/dev/null; then
-    log "· VERCEL_GIT_PREVIOUS_SHA=${VERCEL_GIT_PREVIOUS_SHA} 가 HEAD 의 조상이 아닙니다 (force-push?) — HEAD^ 로 판정합니다."
-  else
-    BASE="$VERCEL_GIT_PREVIOUS_SHA"
-    log "· 판정 창 = VERCEL_GIT_PREVIOUS_SHA..HEAD ($(git rev-list --count "$BASE..HEAD" 2>/dev/null || echo '?') 커밋)"
+BASE_WHY="HEAD^ (기본)"
+
+if usable_base "${VERCEL_GIT_PREVIOUS_SHA:-}" "VERCEL_GIT_PREVIOUS_SHA"; then
+  BASE="$VERCEL_GIT_PREVIOUS_SHA"
+  BASE_WHY="VERCEL_GIT_PREVIOUS_SHA (직전 배포)"
+elif [ -n "$CUR_REF" ] && [ "$CUR_REF" != "$PROD_REF" ]; then
+  # PR 브랜치다. `main` 을 여러 이름으로 찾아본다 — 얕은/부분 clone 에서 무엇이 있는지 모른다.
+  MB=""
+  for ref in "origin/$PROD_REF" "$PROD_REF" "refs/remotes/origin/$PROD_REF"; do
+    git rev-parse --verify --quiet "$ref" >/dev/null 2>&1 || continue
+    MB="$(git merge-base "$ref" HEAD 2>/dev/null)" || MB=""
+    [ -n "$MB" ] && break
+  done
+  if [ -z "$MB" ]; then
+    log "· 기본 브랜치(${PROD_REF})를 이 클론에서 찾지 못했습니다 — HEAD^ 로 판정합니다."
+  elif [ "$MB" = "$(git rev-parse HEAD 2>/dev/null)" ]; then
+    log "· merge-base 가 HEAD 자신입니다 (브랜치가 기본과 같음) — HEAD^ 로 판정합니다."
+  elif usable_base "$MB" "merge-base(${PROD_REF})"; then
+    BASE="$MB"
+    BASE_WHY="merge-base(${PROD_REF}) — 이 브랜치가 보태는 전부"
   fi
 else
-  log "· VERCEL_GIT_PREVIOUS_SHA 가 없습니다 — HEAD^ 로 판정합니다 (창이 한 커밋)."
+  log "· production 브랜치(${PROD_REF}) 이거나 ref 를 모릅니다 — HEAD^ 로 판정합니다(squash 머지라 그것이 옳다)."
 fi
+
+log "· 판정 창 = ${BASE_WHY} · $(git rev-list --count "$BASE..HEAD" 2>/dev/null || echo '?') 커밋"
 
 # --- 판정 -------------------------------------------------------------------
 # `git diff --quiet` 는 차이가 없으면 0, 있으면 1 을 낸다 — Vercel 규약과 **그대로 맞는다.**

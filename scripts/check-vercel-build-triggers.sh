@@ -105,11 +105,13 @@ run_cell() {
   #    칸들까지 넓은 창으로 판정되어, 통과가 무엇을 증명한 것인지 알 수 없게 된다.
   local desc="$1" want="$2" repo="$3" judge="$4"; shift 4
   local got
-  if [ -n "${CELL_PREV_SHA:-}" ]; then
-    ( cd "$repo" && VERCEL_GIT_PREVIOUS_SHA="$CELL_PREV_SHA" bash "$judge" "$@" >/dev/null 2>&1 ); got=$?
-  else
-    ( cd "$repo" && env -u VERCEL_GIT_PREVIOUS_SHA bash "$judge" "$@" >/dev/null 2>&1 ); got=$?
-  fi
+  # `CELL_REF`/`CELL_PROD` 는 브랜치 축((9)(10)(11))을 재는 칸이 세운다. 세우지 않은 칸에서는
+  # 셋 다 **명시적으로 지운다** — 호스트에 남아 있으면 그 칸이 무엇을 증명했는지 알 수 없다.
+  local pre=(env -u VERCEL_GIT_PREVIOUS_SHA -u VERCEL_GIT_COMMIT_REF -u VERCEL_GIT_REPO_DEFAULT_BRANCH)
+  [ -n "${CELL_PREV_SHA:-}" ] && pre+=("VERCEL_GIT_PREVIOUS_SHA=$CELL_PREV_SHA")
+  [ -n "${CELL_REF:-}" ]      && pre+=("VERCEL_GIT_COMMIT_REF=$CELL_REF")
+  [ -n "${CELL_PROD:-}" ]     && pre+=("VERCEL_GIT_REPO_DEFAULT_BRANCH=$CELL_PROD")
+  ( cd "$repo" && "${pre[@]}" bash "$judge" "$@" >/dev/null 2>&1 ); got=$?
   if [ "$got" -ne "$want" ]; then
     bad "$desc — rc=$got 인데 $want 를 기대했습니다."
     return 1
@@ -250,6 +252,45 @@ main() {
     CELL_PREV_SHA="0000000000000000000000000000000000000000" \
       run_cell "(8) 존재하지 않는 PREVIOUS_SHA -> HEAD^ 로 폴백 (건너뜀)" 0 "$tmp" "$judge" "${specs[@]}"
 
+    # -------------------------------------------------------------------------
+    # (9)(10) **첫 push** — 직전 배포가 없을 때 (TASK-MONO-572, 2026-08-25 라이브 실측)
+    # -------------------------------------------------------------------------
+    # 🔴 (6)은 `PREVIOUS_SHA` 가 **주어졌을 때**만 통과한다. 그런데 라이브에서 재 보니
+    #    **새 브랜치의 첫 push 에는 직전 배포가 없어서** 창이 안 넓어졌다 — 그리고 이 저장소는
+    #    태스크마다 브랜치를 새로 만들므로 **커밋 여럿을 한 번에 올리는 것이 바로 그 첫 push** 다.
+    #    즉 (6)만 있으면 **결함이 가장 잘 나는 경우가 안 덮인다.**
+    #    PR 브랜치의 기준점은 *직전 배포*가 아니라 **merge-base(main)** 여야 한다.
+    local mb_repo="$tmp-mb"
+    rm -rf "$mb_repo"; git init -q "$mb_repo"
+    git -C "$mb_repo" config user.email t@t; git -C "$mb_repo" config user.name t
+    git -C "$mb_repo" config commit.gpgsign false; git -C "$mb_repo" config core.autocrlf false
+    mkdir -p "$mb_repo/$(dirname "$first_file")" "$mb_repo/tasks/ready"
+    echo base > "$mb_repo/$first_file"; echo base > "$mb_repo/tasks/ready/unrelated.md"
+    git -C "$mb_repo" add -A >/dev/null; git -C "$mb_repo" commit -qm base
+    git -C "$mb_repo" branch -M main
+    git -C "$mb_repo" checkout -q -b feature
+    echo w1 > "$mb_repo/$first_file";            git -C "$mb_repo" commit -qam "app (배치 앞)"
+    echo w2 > "$mb_repo/tasks/ready/unrelated.md"; git -C "$mb_repo" commit -qam "docs (배치 뒤)"
+
+    # (9) bite — PREVIOUS_SHA 가 **없는** 첫 push 인데도 배치를 덮어야 한다.
+    CELL_REF="feature" CELL_PROD="main" \
+      run_cell "(9) 첫 push [자기경로, 무관] (PREVIOUS_SHA 없음) -> 빌드" 1 "$mb_repo" "$judge" "${specs[@]}"
+
+    # (10) 🔴 대조군 — **production 브랜치에서는 merge-base 를 쓰면 안 된다.**
+    #      거기서 merge-base 는 HEAD 자신이라 창이 비고 **전부 건너뛴다** — 반대 방향의 고장이다.
+    #      main 은 squash 머지라 `HEAD^` 가 이미 옳다. 이 칸은 그 축이 지켜지는지 본다:
+    #      main 위에서 자기 경로를 바꾼 커밋은 **여전히 빌드**해야 한다.
+    git -C "$mb_repo" checkout -q main
+    echo prod > "$mb_repo/$first_file"; git -C "$mb_repo" commit -qam "app on main"
+    CELL_REF="main" CELL_PROD="main" \
+      run_cell "(10) production 브랜치의 자기경로 커밋 -> 빌드 (대조군)" 1 "$mb_repo" "$judge" "${specs[@]}"
+
+    # (11) 대조군 — production 브랜치에서 무관한 커밋은 건너뛴다(창이 비지 않았음을 확인).
+    echo prod2 > "$mb_repo/tasks/ready/unrelated.md"; git -C "$mb_repo" commit -qam "docs on main"
+    CELL_REF="main" CELL_PROD="main" \
+      run_cell "(11) production 브랜치의 무관 커밋 -> 건너뜀 (대조군)" 0 "$mb_repo" "$judge" "${specs[@]}"
+
+    rm -rf "$mb_repo"
     rm -rf "$tmp"
   done
 
