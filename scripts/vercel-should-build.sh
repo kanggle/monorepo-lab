@@ -124,6 +124,25 @@ if usable_base "${VERCEL_GIT_PREVIOUS_SHA:-}" "VERCEL_GIT_PREVIOUS_SHA"; then
   BASE_WHY="VERCEL_GIT_PREVIOUS_SHA (직전 배포)"
 elif [ -n "$CUR_REF" ] && [ "$CUR_REF" != "$PROD_REF" ]; then
   # PR 브랜치다. `main` 을 여러 이름으로 찾아본다 — 얕은/부분 clone 에서 무엇이 있는지 모른다.
+  #
+  # 🔴🔴 **2차 판도 라이브에서 실패했다** (2026-08-25, 두 번째 측정).
+  #    `tasks/` 만 건드리는 커밋을 이 브랜치에 올렸다 — merge-base 가 살아 있으면 브랜치 범위에
+  #    `scripts/` 변경이 들어 있으므로 **빌드**해야 했다. 결과는 **양쪽 다 건너뜀**이었다.
+  #
+  #    좁혀진 원인: `HEAD^` 는 되는데(판정이 실제로 나오고 있다) 기준 브랜치를 못 찾는다.
+  #    **Vercel 의 빌드 클론은 얕고, 배포 대상 ref 만 가져온다** — `origin/main` 이 없으면
+  #    merge-base 를 계산할 대상 자체가 없다.
+  #
+  # ⇒ 그러면 **가져오면 된다.** 아래 fetch 는 fail-safe 다: 실패하면 그냥 없는 것이고, 루프가
+  #    못 찾아 `HEAD^` 로 내려간다. **더 나빠지지 않는다.**
+  #    🔵 `--depth` 를 넉넉히 주는 이유 — 얕게 가져오면 공통 조상까지 못 닿아 merge-base 가
+  #    빈손으로 끝나고, 그건 "기준 브랜치가 없다" 와 **구별되지 않는 실패**가 된다.
+  if ! git rev-parse --verify --quiet "origin/$PROD_REF" >/dev/null 2>&1; then
+    log "· 기준 브랜치가 클론에 없습니다 — origin/${PROD_REF} 를 가져와 봅니다(실패해도 진행)."
+    git fetch --quiet --depth=200 origin "+refs/heads/${PROD_REF}:refs/remotes/origin/${PROD_REF}" 2>/dev/null \
+      || log "· fetch 실패 — 기준 브랜치 없이 판정합니다."
+  fi
+
   MB=""
   for ref in "origin/$PROD_REF" "$PROD_REF" "refs/remotes/origin/$PROD_REF"; do
     git rev-parse --verify --quiet "$ref" >/dev/null 2>&1 || continue
