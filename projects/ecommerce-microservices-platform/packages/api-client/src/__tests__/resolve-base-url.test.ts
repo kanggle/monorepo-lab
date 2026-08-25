@@ -78,11 +78,26 @@ describe('resolveBaseURL', () => {
     expect(out.baseURL).toBe('http://built-in:8080');
   });
 
-  it('🔵 훅을 안 넘기면 예전과 완전히 같다 (추가일 뿐이다)', async () => {
+  it('🔴 훅을 안 넘기면 **동기로** 돌려준다 — 반환 모양까지 예전과 같아야 한다', () => {
     new ApiClient({ baseURL: 'http://built-in:8080' });
 
-    const out = await requestInterceptor()(reqConfig());
-    expect(out.baseURL).toBe('http://built-in:8080');
+    const out = requestInterceptor()(reqConfig());
+
+    // 🔴 이 단언이 이 파일에서 가장 비싸게 배운 줄이다. 첫 판은 인터셉터 전체를 `async`
+    //    로 만들었고 "안 넘기면 예전과 같다" 고 적었는데, `async` 는 훅과 무관하게 반환을
+    //    Promise 로 바꾼다 ⇒ 인터셉터를 직접 부르던 **기존 테스트 9개가 TypeError** 로
+    //    죽었다. "추가일 뿐" 은 **반환 모양까지** 같아야 참이다.
+    expect(out).not.toBeInstanceOf(Promise);
+    expect((out as { baseURL: string }).baseURL).toBe('http://built-in:8080');
+  });
+
+  it('🔵 훅이 있으면 Promise 다 (그때만 비동기로 바뀐다)', () => {
+    new ApiClient({
+      baseURL: 'http://built-in:8080',
+      resolveBaseURL: async () => 'http://resolved',
+    });
+
+    expect(requestInterceptor()(reqConfig())).toBeInstanceOf(Promise);
   });
 
   it('🔵 baseURL 재해석이 토큰 부착을 방해하지 않는다 (두 관심사가 같은 인터셉터에 산다)', async () => {

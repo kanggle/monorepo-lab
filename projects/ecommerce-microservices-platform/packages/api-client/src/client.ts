@@ -60,30 +60,41 @@ export class ApiClient {
       timeout: config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
     });
 
-    this.instance.interceptors.request.use(
-      async (reqConfig: InternalAxiosRequestConfig) => {
-        // TASK-MONO-580 — 요청 시점 baseURL 재해석 (선택). 훅이 없으면 이 블록은
-        // 통째로 건너뛰므로 기존 동작과 **바이트 단위로 같다**.
-        //
-        // 🔴 훅이 던지거나 null 을 내면 **덮어쓰지 않는다** — 생성 시점 baseURL 이 남는다.
-        //    해석 실패의 안전한 쪽은 "기존 동작" 이지 "요청 실패" 가 아니다.
-        if (this.config.resolveBaseURL) {
-          try {
-            const resolved = await this.config.resolveBaseURL();
-            if (resolved) reqConfig.baseURL = resolved;
-          } catch {
-            // 그대로 둔다 (위 주석 참조).
-          }
+    // 토큰 부착 — 예전부터 있던 부분. 아래 두 경로가 **같은 함수**를 쓴다.
+    const attachAuth = (
+      reqConfig: InternalAxiosRequestConfig,
+    ): InternalAxiosRequestConfig => {
+      const url = reqConfig.url ?? '';
+      if (!this.isPublicPath(url) && this.config.getAccessToken) {
+        const token = this.config.getAccessToken();
+        if (token) {
+          reqConfig.headers.Authorization = `Bearer ${token}`;
         }
+      }
+      return reqConfig;
+    };
 
-        const url = reqConfig.url ?? '';
-        if (!this.isPublicPath(url) && this.config.getAccessToken) {
-          const token = this.config.getAccessToken();
-          if (token) {
-            reqConfig.headers.Authorization = `Bearer ${token}`;
-          }
-        }
-        return reqConfig;
+    this.instance.interceptors.request.use(
+      (reqConfig: InternalAxiosRequestConfig) => {
+        // TASK-MONO-580 — 요청 시점 baseURL 재해석 (선택).
+        //
+        // 🔴🔴 **훅이 없으면 동기로 돌려준다.** 첫 판은 인터셉터 전체를 `async` 로 만들었고
+        //    docblock 에는 *"안 넘기면 예전과 완전히 같다"* 고 적었다 — **거짓이었다.**
+        //    `async` 는 훅과 무관하게 반환값을 Promise 로 바꾸므로, 인터셉터를 **직접 불러
+        //    동기로 단언하던 기존 테스트 9개가 `TypeError` 로 죽었다**(CI 가 잡았다).
+        //    "추가일 뿐" 이라는 주장은 **반환 모양까지** 같아야 참이다.
+        //
+        // 🔴 훅이 던지거나 null 을 내면 덮어쓰지 않는다 — 해석 실패의 안전한 쪽은
+        //    "기존 동작" 이지 "요청 실패" 가 아니다.
+        const resolve = this.config.resolveBaseURL;
+        if (!resolve) return attachAuth(reqConfig);
+
+        return resolve()
+          .catch(() => null)
+          .then((resolved) => {
+            if (resolved) reqConfig.baseURL = resolved;
+            return attachAuth(reqConfig);
+          });
       },
     );
 
