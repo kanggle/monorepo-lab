@@ -32,7 +32,12 @@ monorepo
 
 # Goal
 
-`ADR-MONO-067` 이 **의도적으로 미룬** D4 를 별도 ADR(`ADR-MONO-068`, PROPOSED)로 쓴다.
+`ADR-MONO-067` 이 **의도적으로 미룬** D4 를 별도 ADR(**`ADR-MONO-069`**, PROPOSED)로 쓴다.
+
+🔴 **번호가 바뀌었다 (2026-08-26).** 이 티켓이 쓰일 때 비어 있던 `ADR-MONO-068` 은
+그 뒤 `TASK-MONO-577` 이 **해석기 위치 결정**으로 가져갔다
+(`docs/adr/ADR-MONO-068-where-the-demo-backend-resolver-lives.md`, ACCEPTED).
+착수 시 **`docs/adr/` 를 다시 세고 그다음 번호를 쓴다** — 이 줄의 `069` 도 오늘 값이다.
 
 ADR-067 본문:
 
@@ -45,7 +50,7 @@ ADR-067 본문:
 
 ## 포함
 
-- `docs/adr/ADR-MONO-068-*.md` **PROPOSED** 작성.
+- `docs/adr/ADR-MONO-069-*.md` **PROPOSED** 작성 (🔴 번호는 착수 시 재확인 — 위 §).
 - 선택지 열거 + 각각의 근거·비용·되돌리기 비용.
 - `docs/adr/INDEX.md` 행 추가.
 
