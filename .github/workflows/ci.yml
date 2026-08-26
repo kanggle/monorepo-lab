@@ -203,6 +203,9 @@ jobs:
       # those PRs `code-changed` is false by construction, so AND-combining would
       # give the guard a green skip on 100% of its defect class (§ F1).
       index-queue: ${{ steps.filter.outputs.index-queue }}
+      # TASK-MONO-584: raw filter, NOT AND-combined with `code-changed`. The arrival
+      # path for a domain drift is a doc/terraform edit that carries no code at all.
+      public-domains: ${{ steps.filter.outputs.public-domains }}
       # TASK-MONO-570: raw filter, NOT AND-combined with `code-changed`. The arrival
       # path is a spec edit — a service's `architecture.md` Service Type row, or the
       # catalog it is validated against. Those diffs carry no code, so AND-combining
@@ -473,6 +476,17 @@ jobs:
               - 'projects/*/tasks/in-progress/**'
               - 'projects/*/tasks/done/**'
               - 'scripts/check-index-queue-drift.sh'
+            # TASK-MONO-584: the public domain must not drift from its canonical
+            # table. The table is in TEMPLATE.md; the consumers are terraform and
+            # README. The value appears in five places, so "only one of them gets
+            # fixed" is the default failure mode. This filter has to catch BOTH the
+            # canonical file and the consumers — catching only the consumers means a
+            # commit that edits the table alone never runs this job.
+            public-domains:
+              - 'TEMPLATE.md'
+              - 'README.md'
+              - 'infra/demo/aws/terraform/**'
+              - 'scripts/check-public-domains.sh'
             service-type-notation:
               - 'projects/*/specs/services/*/architecture.md'
               - 'platform/service-types/INDEX.md'
@@ -867,6 +881,38 @@ jobs:
 
       - name: Guard — every INDEX queue listing matches its queue directory
         run: bash scripts/check-index-queue-drift.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-584. The demo's public domain lands in at least five places
+  # (two terraform sites, the root README, the IdP redirect_uri seed, and the
+  # launcher's links). This repo has been bitten repeatedly by "one fact in two
+  # sections, only one gets fixed" — TASK-MONO-579 spent a whole ticket undoing
+  # the launcher's two homes. The guard derives its population from the
+  # canonical table in TEMPLATE.md, so the script itself names no domain.
+  #
+  # `--self-test` runs FIRST and is required, not a courtesy: a parser that
+  # stops matching reports "no drift" and "did not look" with the same green
+  # tick. The first version of this guard passed while measuring the wrong
+  # axis entirely — it scraped the table's *.local column into its population
+  # and settled on the wrong apex. Cell (0b) exists because of that.
+  # ---------------------------------------------------------------------------
+  public-domains:
+    name: Public domains (consumers vs the canonical table)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.public-domains == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-public-domains.sh
+
+      - name: Self-test the predicate (bites on the real tree, mutated)
+        run: bash scripts/check-public-domains.sh --self-test
+
+      - name: Guard — every public hostname in the tree is declared in TEMPLATE.md
+        run: bash scripts/check-public-domains.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-570. A composite `Service Type` must sit in ONE backtick span.

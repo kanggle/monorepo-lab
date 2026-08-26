@@ -62,8 +62,20 @@ root_volume_gb = 100
 # 🔴 AWS 가 발급하는 주소(*.cloudfront.net · *.execute-api.*)를 여기 적지 마라 —
 # 재생성마다 바뀐다.
 #
-# 론처가 실제로 서빙되는 오리진을 적는다:
-allowed_origins = ["https://kanggle-portfolio.vercel.app"]
+# 론처가 실제로 서빙되는 오리진을 적는다.
+#
+# 🔴 **둘 다 적혀 있는 것이 정상이다** (TASK-MONO-584). 소유자가 `hubwang.com` 을 등록했고
+# 론처는 apex 로 옮겨 가는 중인데, **옮기는 동안 두 오리진이 동시에 살아 있다** — Vercel 에
+# 커스텀 도메인을 붙여도 기존 `*.vercel.app` 주소는 계속 응답한다. 한쪽만 적으면 전환 창에서
+# **Start 버튼이 조용히 죽는다.** 557 이 이 변수를 목록으로 만든 이유가 정확히 그것이다.
+# 🔵 `vercel.app` 회수는 전환이 끝난 뒤의 **별건**이다. 지금 지우지 마라.
+# 🔴 `www.hubwang.com` 은 apex 와 **다른 오리진**이지만 여기 적지 않는다 — 301 로 합칠
+#    주소이고, 리다이렉트되는 주소를 허용 목록에 남기면 정본 표와 어긋난다.
+# 정본: TEMPLATE.md § 공개 호스트명 배분
+allowed_origins = [
+  "https://hubwang.com",
+  "https://kanggle-portfolio.vercel.app",
+]
 #
 # index.html 을 file:// 로 열어 로컬 디버깅할 때만 ["*"] 를 명시하라.
 

@@ -82,7 +82,12 @@ variable "allowed_origins" {
     **이제 허용 목록은 이 변수 하나가 전부다.**
 
     여기 적는 것은 론처가 실제로 서빙되는 오리진이다. 예:
-      allowed_origins = ["https://kanggle-portfolio.vercel.app"]
+      allowed_origins = ["https://hubwang.com", "https://kanggle-portfolio.vercel.app"]
+
+    🔴 위 예시가 **두 개인 것이 요점이다** (TASK-MONO-584). 커스텀 도메인으로 옮기는 동안
+    Vercel 은 두 주소 모두에 응답하므로 목록도 둘이어야 한다. 정본은
+    TEMPLATE.md § 공개 호스트명 배분 이고, scripts/check-public-domains.sh 가 그 표와
+    이 파일의 일치를 잰다.
 
     🔴 AWS 가 발급하는 주소(*.cloudfront.net · *.execute-api.*)를 손으로 박지 마라 —
     재생성마다 썩는다(TASK-MONO-389 가 고친 결함). 그 명제는
