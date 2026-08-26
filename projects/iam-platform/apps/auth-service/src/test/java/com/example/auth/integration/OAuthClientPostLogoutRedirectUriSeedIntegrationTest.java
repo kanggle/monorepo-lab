@@ -152,12 +152,21 @@ class OAuthClientPostLogoutRedirectUriSeedIntegrationTest extends AbstractIntegr
                 .as("post-logout-redirect-uris must round-trip to the exact seeded List<String> "
                         + "(V0028 TASK-MONO-460 appended the localhost:3002 dev-port landing; "
                         + "V0031 TASK-BE-573 appended the web.fan-platform demo host, inserted "
-                        + "directly after fan-platform.local by that migration's REPLACE anchor)")
+                        + "directly after fan-platform.local by that migration's REPLACE anchor; "
+                        + "V0033 TASK-BE-582 appended the Vercel production domain, anchored on "
+                        + "web.fan-platform.local so it lands at the tail -- this list reads as a "
+                        + "migration-ordered history, which is why it is containsExactly and not "
+                        + "contains: loosening it would make the registered set unreadable)")
                 .containsExactly(
                         "http://localhost:3000/",
                         "http://localhost:3002/",
                         "http://fan-platform.local/",
-                        "http://web.fan-platform.local/");
+                        "http://web.fan-platform.local/",
+                        // V0033 TASK-BE-582 -- ADR-MONO-067 phase 4. The FIRST https entry in
+                        // this table: Vercel is HTTPS-only. seed-demo-domain.sh rewrites only
+                        // `%.local/%`, so unlike its siblings this one is never rewritten at
+                        // boot -- it is registered once and stays.
+                        "https://fan.hubwang.com/");
 
         // Standard SAS settings + core fields intact on the repaired row.
         assertThat(client.getClientSettings().isRequireProofKey()).isTrue();
@@ -174,7 +183,12 @@ class OAuthClientPostLogoutRedirectUriSeedIntegrationTest extends AbstractIntegr
                 // V0031 TASK-BE-573 — the containerized fan web's demo host. Without
                 // this registration the browser round trip dies at the callback with a
                 // 401 that names neither the client nor the redirect_uri.
-                "http://web.fan-platform.local/api/auth/callback/iam");
+                "http://web.fan-platform.local/api/auth/callback/iam",
+                // V0033 TASK-BE-582 -- the Vercel production callback. Without this
+                // registration the round trip dies at the callback with a 401 that names
+                // neither the client nor the redirect_uri, while every container stays
+                // healthy and the login form still returns 200.
+                "https://fan.hubwang.com/api/auth/callback/iam");
         assertThat(client.getScopes()).contains("openid", "profile", "email", "tenant.read");
         assertThat(client.getClientSettings().<String>getSetting("custom.tenant_id"))
                 .isEqualTo("fan-platform");
