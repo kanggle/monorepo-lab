@@ -1,4 +1,4 @@
-import { env } from '@/shared/config/env';
+import { resolveUpstreamBaseUrl } from '@/shared/config/demo-backend';
 import { ApiError, toApiError } from '@/shared/api/errors';
 
 /**
@@ -38,8 +38,14 @@ export interface RequestOptions {
   signal?: AbortSignal;
 }
 
-function buildUrl(path: string, query?: RequestOptions['query']): string {
-  const base = env.gatewayInternalUrl.replace(/\/+$/, '');
+/**
+ * 🔴 **비동기다.** TASK-MONO-586 (ADR-MONO-067 D2) 이후 게이트웨이 주소는
+ * 빌드 타임 env 가 아니라 **요청 시점의 조회 결과**다 — 데모 IP 는 부팅마다 바뀌고
+ * `NEXT_PUBLIC_*` 은 빌드에 인라인되므로 env 로는 따라갈 수 없다.
+ * 해석 불가면 `resolveUpstreamBaseUrl()` 이 **기존 env 사슬**로 떨어진다.
+ */
+async function buildUrl(path: string, query?: RequestOptions['query']): Promise<string> {
+  const base = (await resolveUpstreamBaseUrl()).replace(/\/+$/, '');
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
   if (!query) return `${base}${cleanPath}`;
   const search = new URLSearchParams();
@@ -59,7 +65,7 @@ export async function gatewayFetch<TBody = unknown>(
   path: string,
   opts: RequestOptions,
 ): Promise<Envelope<TBody>> {
-  const url = buildUrl(path, opts.query);
+  const url = await buildUrl(path, opts.query);
   const headers: Record<string, string> = {
     Accept: 'application/json',
   };

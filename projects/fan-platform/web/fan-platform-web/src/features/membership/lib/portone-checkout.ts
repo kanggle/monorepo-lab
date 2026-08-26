@@ -1,6 +1,6 @@
 'use client';
 import * as PortOne from '@portone/browser-sdk/v2';
-import { env } from '@/shared/config/env';
+import { publicEnv } from '@/shared/config/public-env';
 import { isDemoPayment } from '@/features/membership/lib/demo-payment';
 import { randomUuid } from '@/shared/lib/random-id';
 import type { MembershipTier } from '@/entities/membership';
@@ -69,7 +69,7 @@ export async function requestPortOnePayment(
     // skipped; everything after this point is the path production runs.
     return { ok: true, paymentId: `pay-${randomUuid()}` };
   }
-  if (!env.portoneStoreId || !env.portoneChannelKey) {
+  if (!publicEnv.portoneStoreId || !publicEnv.portoneChannelKey) {
     return { ok: false, message: '결제 모듈이 설정되지 않았습니다 (PortOne 키 미설정).' };
   }
   // A fresh unique id per attempt — reusing one would collide with the backend's
@@ -78,8 +78,8 @@ export async function requestPortOnePayment(
   let response: Awaited<ReturnType<typeof PortOne.requestPayment>>;
   try {
     response = await PortOne.requestPayment({
-      storeId: env.portoneStoreId,
-      channelKey: env.portoneChannelKey,
+      storeId: publicEnv.portoneStoreId,
+      channelKey: publicEnv.portoneChannelKey,
       paymentId,
       orderName,
       totalAmount: amountKrw,
