@@ -1,6 +1,6 @@
 'use client';
 import * as PortOne from '@portone/browser-sdk/v2';
-import { env } from '@/shared/config/env';
+import { publicEnv } from '@/shared/config/public-env';
 import { isDemoPayment } from '@/features/membership/lib/demo-payment';
 import { randomUuid } from '@/shared/lib/random-id';
 import type { CheckoutBuyer } from '@/features/membership/lib/portone-checkout';
@@ -46,14 +46,14 @@ export async function requestIssueBillingKey(
   if (await isDemoPayment()) {
     return { ok: true, billingKey: `bkey-demo-${randomUuid()}` };
   }
-  if (!env.portoneStoreId || !env.portoneChannelKey) {
+  if (!publicEnv.portoneStoreId || !publicEnv.portoneChannelKey) {
     return { ok: false, message: '결제 모듈이 설정되지 않았습니다 (PortOne 키 미설정).' };
   }
   let response: Awaited<ReturnType<typeof PortOne.requestIssueBillingKey>>;
   try {
     response = await PortOne.requestIssueBillingKey({
-      storeId: env.portoneStoreId,
-      channelKey: env.portoneChannelKey,
+      storeId: publicEnv.portoneStoreId,
+      channelKey: publicEnv.portoneChannelKey,
       billingKeyMethod: 'CARD',
       // Mandatory for KG이니시스-class PGs (email); prefer the authenticated fan's
       // identity, fall back to demo-safe values so issuance never hard-blocks.
