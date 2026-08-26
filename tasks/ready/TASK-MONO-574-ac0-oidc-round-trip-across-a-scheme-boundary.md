@@ -56,10 +56,16 @@ monorepo
 |---|---|---|---|
 | 1 | `TASK-MONO-571` (AC-0 ②) | ✅ **해소** — `PLAINTEXT_HTTP_EGRESS_WORKS` | — |
 | 2 | **Vercel `kanggle-fan` 의 OIDC env** | ❌ **미설정 (실측)** | 🔴 **소유자 대시보드** |
-| 3 | **IdP 에 Vercel 도메인 `redirect_uri` 등록** | ❌ **없음 (실측)** | 저장소 + 재시드 |
+| 3 | **IdP 에 Vercel 도메인 `redirect_uri` 등록** | 🟡 **티켓 생김** → [`TASK-BE-582`](../../projects/iam-platform/tasks/ready/TASK-BE-582-register-the-fan-vercel-callback-nobody-owned-this.md) | iam-platform |
 | 4 | 데모 인스턴스 기동 | ⏸️ | 🔴 **사용자 승인** (예산 차감, 부팅 ~11분) |
 
 🔴 **2·3 없이 기동하면 예산만 쓰고 아무것도 못 잰다.** 그래서 기동 전에 이 둘을 먼저 확인했다.
+
+🔴🔴 **선행 3 은 아무 티켓도 안 들고 있었다 (2026-08-26 발견).**
+`TASK-MONO-584` 는 *"`redirect_uri` 시드 → **574**(이미 소유)"* 라 적었고, **이 티켓은**
+§ Related Contracts 에서 *"**변경은 이 티켓 범위 밖**(측정만 한다)"* 라 적었다. **둘 다 안 들었다.**
+→ `TASK-BE-582` 를 새로 기안했다. 🔵 그 티켓은 **소유자 대시보드와 독립**이라
+DNS 배선을 기다리지 않고 지금 진행할 수 있다 — 즉 **이 티켓의 선행 중 하나가 먼저 없어진다.**
 
 ## 실측 ① — Vercel 의 fan 은 OIDC 가 설정되어 있지 않다
 

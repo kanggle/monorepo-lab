@@ -72,7 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-_(없음)_
+- `TASK-BE-582-register-the-fan-vercel-callback-nobody-owned-this.md` — **🔴 READY (신규, 2026-08-26 UTC) — 일을 **두 티켓이 서로에게 떠넘겨** 아무도 안 들고 있었다.** `TASK-MONO-584` 은 «IdP `redirect_uri` 시드 → 574(이미 소유)» 라 적었고, `TASK-MONO-574` 는 «변경은 이 티켓 범위 밖(측정만 한다)» 라 적었다. 🔴 584 는 **같은 커밋에서** «같은 일을 두 티켓이 들면 한쪽만 답을 받는다» 를 경고했는데, 여기서 일어난 것은 **반대 — 둘 다 안 들어서 일이 사라졌다**. 중복은 답이 와서 티가 나지만 공백은 **기동 창을 한 번 낭비한 뒤에야** 드러난다(잔여 예산 104분, 부팅 1회 ~11분). 🔵 실측: 등록된 `redirect_uri` **14건이 전부 `http://`** — `https://` 는 이게 첫 번째다. 🔵 데모 시드 `seed-demo-domain.sh` 는 `LIKE '%.local/%'` 만 재작성하므로(**REWRITE하지 INVENT하지 않는다**, V0031 헤더) `fan.hubwang.com` 은 **한 번 넣으면 고정** — 574 가 적은 «자체 도메인은 시드가 한 번으로 끝난다» 의 기전. 🔴 **fan 하나만 등록한다** — 콜백 경로 모양이 **4종**(`/api/auth/callback` · `/gap` · `/iam` · `/callback`) 공존해 console·store 것을 지금 넣으면 실측이 아니라 **추측**이고, 틀리면 `redirect_uri_mismatch` 가 **어느 URI 가 틀렸는지 말하지 않는다. 🔵 **가드가 물다** — `OAuthClientPostLogoutRedirectUriSeedIntegrationTest` 의 `containsExactly(4개)` 하드 핀. 🔴 **`contains` 로 완화해 통과시키지 마라** — 그 핀이 있어서 오늘 «왜 4개인지» 를 읽을 수 있었다. 🔴 미등록의 지문은 **컨테이너 전부 healthy + 로그인 폼 200 + 콜백만 401**이라, 이 티켓 없이 574 를 재면 그 401 을 **«스킴 경계 문제» 로 오독**해 D4 결정이 틀린 근거 위에 서게 된다. 선행 = 없음(소유자 대시보드와 **독립**). 후속 = `TASK-MONO-574` AC-5. 분석=**Opus 5** / 구현 권장=**Sonnet**(선례 `V0031` 이 모양을 다 정해 둔 마이그레이션 1개 + 테스트 1줄).
 
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
