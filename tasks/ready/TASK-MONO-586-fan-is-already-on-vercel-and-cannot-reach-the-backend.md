@@ -127,8 +127,99 @@ src/shared/api/client.ts:42:  const base = env.gatewayInternalUrl.replace(/\/+$/
 - OIDC/쿠키 → **D4**, `TASK-MONO-574` · `TASK-MONO-576`
 - Vercel 프로젝트 생성 → **불필요**(이미 있다)
 - `NEXTAUTH_URL` · 도메인 연결 → `TASK-MONO-584` AC-5(소유자)
+- 🔵 **`NEXT_PUBLIC_PORTONE_STORE_ID` / `_CHANNEL_KEY`** → 소유자 (Vercel env). 로컬 `.env.local` 이 주던 값이라 **Vercel 에는 없다** — 아래 선실측 § 참조
 
 ---
+
+---
+
+# ✅ AC-0 ①③ 선실측 완료 (2026-08-26) — 그리고 소스의 자기 서술 하나가 틀렸다
+
+**측정한 트리**: `monorepo-lab` 본 체크아웃 `c5edff16b`(clean). 이 브랜치와 팬 소스가
+**바이트 동일**함을 먼저 확인했다(`git diff --stat c5edff16b HEAD -- projects/fan-platform/` = 빈 출력).
+빌드는 그 자리에서 새로 했다(`rm -rf .next` 선행) — 🔴 *pull 한 체크아웃은 낡은 빌드를 갖고 있다.*
+
+**양성 대조군**: `NEXT_PUBLIC_GATEWAY_URL=http://ac0-probe.invalid` 주입.
+판정을 읽기 **전에** 착지부터 확인했다 → `.next/static/chunks/992-33060dded47555d9.js`. ✅
+
+## ① 산출물 오리진 재계수 — **`TASK-MONO-565` 의 «2» 는 그대로 유효하다**
+
+| 버킷 | 건수 | 내용 |
+|---|---:|---|
+| backend | 4 | 프로브 1 + **`fan-platform.local` · `iam.local` · `localhost:3002`** |
+| thirdParty | 1 | `cdn.portone.io` |
+| benign | 4 | `w3.org` · `react.dev` · `nextjs.org` · `github.com` |
+
+🔴 **스크립트는 3 이라 하고 565 는 2 라 한다. 여기서 "565 가 과소계수했다" 로 닫으면 틀린다.**
+셋째 `localhost:3002` 는 `env.nextAuthUrl` 이고, 565 는 **web-store 에서 같은 종류를 이미
+손으로 제외**했다(그 티켓 § *"localhost 3건은 NextAuth 자기 오리진 … 부를 주소가 아니다"*).
+즉 **두 숫자는 서로 다른 술어**다 — 스크립트=「번들에 오리진 모양 문자열이 있다」,
+565 의 표=「브라우저가 **부를** 백엔드 오리진」.
+
+**그 제외가 옳은지 실측으로 확인했다** (추론이 아니라 대조군 있는 측정):
+
+| 검사 | 클라이언트 `.next/static` | 서버 `.next/server` |
+|---|---|---|
+| `post_logout_redirect_uri` | **0건** | `chunks/493.js` ✅ |
+| `end_session` | **0건** | — |
+
+`env.nextAuthUrl` 의 **유일한 독자**는 `src/shared/auth/federated-logout.ts:66` 이고,
+그 파일의 특징 문자열이 클라 번들에 **없다**(서버 번들엔 있다 = 내 검색 술어가 작동한다는 대조군).
+⇒ **서버 전용. 제외가 옳다. 팬의 백엔드 오리진은 여전히 2건이고, 4일간 드리프트 없다.**
+
+## ③ 「주소를 만드는 지점 1곳」 재계수 — 유효
+
+`client.ts:42` 그대로. ①의 2건과 모순이 아니다 — **fetch 호출 지점 수**와
+**번들에 박힌 오리진 수**는 다른 축이다.
+
+## 🔴🔴 그리고 처방 하나가 여기서도 반증됐다 — `TASK-MONO-585` 와 **같은 기전**
+
+프로브가 `fan-platform.local` 을 **대체하지 않고 옆에 나타났다.**
+
+```
+NEXT_PUBLIC_GATEWAY_URL=http://ac0-probe.invalid 로 빌드
+→ 청크 992 에 ac0-probe.invalid 와 fan-platform.local 이 **둘 다** 있음
+```
+
+`?? 'http://fan-platform.local'` 의 리터럴이 **소스에 있으니 env 가 뭐든 컴파일돼 들어간다.**
+⇒ *"Vercel 환경변수를 채우면 된다"* 는 처방은 **팬에서도 틀렸다.** 585 는 zod `.default()`,
+586 은 `??` 폴백 — 문법만 다르고 **고칠 곳은 똑같이 모듈 경계**다.
+
+🔵 **이것이 `ADR-MONO-068` 승격 트리거가 발화하는 자리다.** 두 앱에서 원인이 같다는 것이
+이제 산문이 아니라 **양쪽 다 프로브 대조군으로 실측**됐다.
+
+## 🔴 `env.ts` 가 자기에 대해 적은 말이 틀렸다
+
+```ts
+// src/shared/config/env.ts:6-8
+// Browser-exposed values MUST start with NEXT_PUBLIC_*. The non-public ones
+// are accessed only from server components / server actions / route handlers
+// so leaking into the client bundle is rejected at build time.
+```
+
+**클라이언트 청크 992 의 실제 내용:**
+
+```js
+...(d=c.env.OIDC_CLIENT_SECRET)?d:"",nextAuthUrl:null!=(o=c.env.NEXTAUTH_URL)?o:"http://localhost:3002",portoneStoreId:"store-675f..."
+```
+
+빌드가 막는 것은 비공개 env 의 **값**이지 **모듈**이 아니다. `env` 객체 리터럴 전체가
+브라우저로 간다 — 비공개 3개(`oidcIssuerUrl` · `oidcClientId` · `nextAuthUrl`)의
+**기본값 리터럴까지 함께**. 🔴 **이 주석을 믿고 «비공개니까 안전» 으로 판단하면 안 된다.**
+(565 가 `iam.local` 에 대해 이미 같은 것을 발견했다. 여기서는 **파일 자신의 반대 진술**과 대조됐다.)
+
+## 🔵 `.env.local` — 이 체크아웃의 빌드는 Vercel 의 빌드가 아니다
+
+본 체크아웃에 **untracked `.env.local`** 이 있다(`NEXT_PUBLIC_GATEWAY_URL` ·
+`NEXT_PUBLIC_PORTONE_STORE_ID` · `NEXT_PUBLIC_PORTONE_CHANNEL_KEY` + 비공개 5개).
+Vercel 빌드에는 **없다.** 위 청크에 박힌 `portoneStoreId:"store-675f..."` 는
+**로컬 파일이 준 값**이고 Vercel 에서는 `''` 가 된다.
+
+🔵 다만 **과대주장하지 않는다** — 소스가 이미 그렇게 적어 뒀다(`env.ts:31`):
+*"Empty when unset → the checkout helper reports «결제 모듈 미설정» instead of crashing."*
+⇒ 조용한 파손이 아니라 **명시적 미설정 표시**다. 그래도 소유자 체크리스트에는 올린다.
+
+**⇒ AC-0 의 ①③ 은 이 절로 답이 됐다. 남은 것은 ②(승격 결정)와 ④(도메인 응답)뿐이고 둘 다 소유자다.**
 
 # Acceptance Criteria
 
