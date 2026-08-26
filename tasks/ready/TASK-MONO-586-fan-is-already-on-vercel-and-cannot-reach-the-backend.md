@@ -219,6 +219,24 @@ Vercel 빌드에는 **없다.** 위 청크에 박힌 `portoneStoreId:"store-675f
 *"Empty when unset → the checkout helper reports «결제 모듈 미설정» instead of crashing."*
 ⇒ 조용한 파손이 아니라 **명시적 미설정 표시**다. 그래도 소유자 체크리스트에는 올린다.
 
+## 🔴🔴 그리고 «로그인 없이 데이터만» 은 성립하지 않는다 — 라우트로 셌다
+
+*"로그인이 안 풀려도 데이터 표시부터 옮기면 방문자에게 보이는 변화가 생긴다"* 는 길이
+있는지 물었다. **없다.**
+
+| 앱 | `page.tsx` 전수 | 익명으로 도달 가능 | 가드 |
+|---|---:|---:|---|
+| `console-web` | **67** | **1** (`(auth)/login`) | `(console)/layout.tsx:92` `if (!(await isAuthenticated())) redirect(...)` — 64개 전부. `(onboarding)` 도 익명이면 `/login`. `src/app/page.tsx` 는 `redirect('/dashboards/overview')` 라 **루트조차 가드 안쪽** |
+| `fan-platform-web` | **11** | **1** (`(auth)/login`) | `src/middleware.ts` — `/login`·`/api/auth`·`/_next`·`favicon` 외 **전부** `auth()` 검사 후 `/login?from=…` |
+
+🔵 **이것이 `ADR-MONO-067` 의 주장을 실측으로 바꾼다.** 그 ADR 은
+*"D4 축이 안 풀리면 단계 3·4 는 못 간다"* 고 **적기만** 했다. 이제 라우트 수준에서 세어졌다:
+**두 앱 모두 익명 표면이 1/67 · 1/11 이고 그 하나는 로그인 화면 자신**이다.
+
+🔴 **따라서 이 티켓의 구현은 계속 진행하되, «방문자에게 보이는 변화» 를 AC 로 적지 마라.**
+모듈 경계 정리는 D4 와 무관하게 **선행 작업**이지만, 그 결과가 **보이는** 것은 D4 이후다.
+그리고 이 실측은 **`TASK-MONO-574` 의 우선순위를 올린다** — 그것이 두 단계 전부의 유일한 관문이다.
+
 **⇒ AC-0 의 ①③ 은 이 절로 답이 됐다. 남은 것은 ②(승격 결정)와 ④(도메인 응답)뿐이고 둘 다 소유자다.**
 
 # Acceptance Criteria
