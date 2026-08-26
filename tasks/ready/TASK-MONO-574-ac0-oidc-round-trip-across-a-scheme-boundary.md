@@ -43,11 +43,25 @@ GET https://kanggle-fan.vercel.app/api/auth/providers
   → {"message":"There was a problem with the server configuration. …"}
 ```
 
+🔴🔴 **2026-08-26 — 이 절의 주소가 바뀌었다. 위의 실측 블록은 고치지 않았다.**
+
+`TASK-MONO-584` 가 랜딩하면서 팬의 공개 호스트명이 **`fan.hubwang.com`** 으로 정해졌다
+(정본 표: `TEMPLATE.md` § 공개 호스트명 배분).
+
+- ✅ **위 «실측 ①» 의 `kanggle-fan.vercel.app` 응답은 그대로 둔다** — 그것은 2026-08-23 에
+  **실제로 관측된 것**이고, 관측 기록을 나중 사실로 덮어쓰면 그 측정이 언제 무엇을 잰 것인지
+  복구할 수 없게 된다.
+- 🔴 **처방(아래 표)만 갱신한다.** `NEXTAUTH_URL` 은 이제 `vercel.app` 이 아니다.
+- 🔴 **선행 3(`redirect_uri` 시드)도 대상이 바뀐다** — 등록할 값은
+  `https://fan.hubwang.com/api/auth/callback/iam` 이다. 🔵 이것은 오히려 **유리한 변화**다:
+  `vercel.app` 은 배포마다 preview URL 이 달라 고정 `redirect_uri` 를 못 박았는데,
+  **자체 도메인은 고정**이라 시드가 한 번으로 끝난다.
+
 **소유자가 대시보드에서 채워야 하는 값** (`src/shared/config/env.ts` 전수):
 
 | 변수 | 값 | 비고 |
 |---|---|---|
-| `NEXTAUTH_URL` | `https://kanggle-fan.vercel.app` | 🔵 이게 `https://` 라 `secureCookie` 가 **자동으로 켜진다** |
+| `NEXTAUTH_URL` | 🔴 **`https://fan.hubwang.com`** (← 갱신, 아래 §) | 🔵 이게 `https://` 라 `secureCookie` 가 **자동으로 켜진다** |
 | `NEXTAUTH_SECRET` | (생성) | 없으면 next-auth 가 통째로 `error=Configuration` |
 | `OIDC_ISSUER_URL` | `http://iam.<ip-대시>.sslip.io` | 🔴 아래 § 참조 — **부팅마다 바뀐다** |
 | `OIDC_CLIENT_ID` | `fan-platform-user-flow-client` | 기본값과 동일 |
