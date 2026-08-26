@@ -92,6 +92,20 @@ monorepo
 | ③ | `TASK-MONO-579` 소유자 절차 — `terraform apply` 후속 확인 | `tasks/done/` AC-5 | ❌ | ⚠️ 기동 없이 프리플라이트로 |
 | ④ | `TASK-MONO-580` 라이브 확인 — Vercel 스토어가 데모 백엔드에 실제로 닿는가 | 이 배치의 단계 2 | ❌(Vercel) | ✅ |
 | ⑤ | **데모 호스트의 `web-store` 컨테이너 제거** | 단계 2 의 ③조각 | ✅ | ✅ |
+| ⑥ | 🔴 **`TASK-BE-582` 의 «기존 볼륨» 판정** — `V0033` 이 실제로 행을 바꿨는지 | `TASK-BE-582` AC-4 (2026-08-26 추가) | ❌ | ✅ |
+
+🔴🔴 **⑥ 이 왜 여기 있나 — CI 로는 영원히 못 잡는 축이다.**
+`TASK-BE-582`(`V0033`)는 CI 의 Testcontainers 에서 초록이지만 **CI 는 항상 신선 볼륨**이다.
+신선 볼륨에서는 마이그레이션이 순서대로 전부 돌아 항상 맞고, **마이그레이션 순서/멱등성
+결함은 «이미 이력이 있는» 볼륨에서만 발화**한다. 데모 호스트가 바로 그 볼륨이다.
+판정은 파일이 아니라 행으로 한다:
+
+```sql
+SELECT redirect_uris FROM oauth_clients WHERE client_id='fan-platform-user-flow-client';
+-- https://fan.hubwang.com/api/auth/callback/iam 이 실제로 있는가
+```
+
+🔵 재굽기는 **불필요**하다 — Flyway 는 기동 시 돌므로 기동만으로 판정된다.
 
 🔵 ③은 재굽기와 무관하지만 **같은 방문에 끝난다** — `apply` 후 CORS 프리플라이트는 **기동 없이** 잰다.
 

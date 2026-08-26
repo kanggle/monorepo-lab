@@ -56,7 +56,7 @@ monorepo
 |---|---|---|---|
 | 1 | `TASK-MONO-571` (AC-0 ②) | ✅ **해소** — `PLAINTEXT_HTTP_EGRESS_WORKS` | — |
 | 2 | **Vercel `kanggle-fan` 의 OIDC env** | ❌ **미설정 (실측)** | 🔴 **소유자 대시보드** |
-| 3 | **IdP 에 Vercel 도메인 `redirect_uri` 등록** | 🟡 **티켓 생김** → [`TASK-BE-582`](../../projects/iam-platform/tasks/ready/TASK-BE-582-register-the-fan-vercel-callback-nobody-owned-this.md) | iam-platform |
+| 3 | **IdP 에 Vercel 도메인 `redirect_uri` 등록** | ✅ **해소 (2026-08-26)** — [`TASK-BE-582`](../../projects/iam-platform/tasks/review/TASK-BE-582-register-the-fan-vercel-callback-nobody-owned-this.md) `V0033` (PR #3477, CI 13/13) | iam-platform |
 | 4 | 데모 인스턴스 기동 | ⏸️ | 🔴 **사용자 승인** (예산 차감, 부팅 ~11분) |
 
 🔴 **2·3 없이 기동하면 예산만 쓰고 아무것도 못 잰다.** 그래서 기동 전에 이 둘을 먼저 확인했다.

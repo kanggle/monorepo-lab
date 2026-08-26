@@ -8,7 +8,7 @@ TASK-BE-582
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -212,6 +212,69 @@ SELECT redirect_uris FROM oauth_clients WHERE client_id='fan-platform-user-flow-
 
 574 의 선행 3(`redirect_uri` 등록)을 ✅ 로 바꾸고 **이 티켓을 근거로 링크**한다.
 🔴 574 의 **실측 블록(2026-08-23 관측)은 고치지 마라** — 처방과 선행 표만 손댄다.
+
+---
+
+# ✅ 구현 결과 (2026-08-26, PR #3477)
+
+`V0033__add_fan_vercel_domain_redirect_uri.sql` + 핀 테스트 갱신. CI 13/13 초록.
+
+## AC-0 — 4/4, 그리고 🔴 **게이트가 내 술어를 잡았다**
+
+첫 grep 이 `-A6` 창을 넘어 **console 테스트의 `console.local/login` 을 fan 목록으로**
+끌어왔다 — `must round-trip` 이 **두 테스트에**(152행 fan / 294행 console) 있다.
+줄 범위로 다시 셌고 **4개**를 확인했다. 🔵 **게이트를 형식적으로 돌렸으면
+4개를 6개로 읽은 채** 진행했을 것이다.
+
+🔴 **그리고 이것은 모집군 경고기도 된다** — 같은 파일에 post-logout `containsExactly`
+핀이 **네 개**(fan 156 / web-store 195 / admin-dashboard 219 / console 296) 있다.
+console·store 표면을 등록할 때 **자기 핀을 같이 고쳐야 한다.**
+
+## 🔵 Docker 없이 검증 가능한 것을 만들었다 — 그리고 하네스가 먼저 틀렸다
+
+이 호스트는 Docker 미가동이라 Testcontainers IT 를 못 돌린다. 대신 `V0011` 시드 원문에
+`WHERE client_id` 를 존중하며 `V0024`→`V0028`→`V0031`→`V0033` 의 REPLACE 사슬을
+재생해 핀이 단언하는 최종 상태와 대조했다.
+
+🔴 **첫 판은 하네스가 틀렸다** — `WHERE` 를 무시해 web-store 의 `localhost:3001` 이
+fan 행에 섞였고, `/gap→/iam` 재작성 파일명을 잘못 짚었다(실제 =
+`V0024__rename_gap_slug_to_iam`). **불일치의 원인은 마이그레이션이 아니라 내 하네스였다.**
+
+🔴 그리고 **일치만으로 닫지 않았다** — 대조군 4칸으로 **하네스가 눈이 있음을 먼저 증명**:
+
+| 대조군 | 기대 | 결과 |
+|---|---|---|
+| ① 실제 코드 | 일치 | ✅ |
+| ② `V0033` 앵커 오타 | 불일치 | ✅ 새 항목이 안 붙는다 |
+| ③ 새 값 스킴을 `http` 로 | 불일치 | ✅ `http://fan.hubwang.com/` 로 붙는다 |
+| ④ `V0031` 무력화 | 불일치 | ✅ 사슬 의존이 실재한다 |
+
+**그 뒤에** 읽은 결과가 post-logout **5/5 exact 일치**, `redirect_uris` **5/5 포함**.
+
+## AC-3 — `https` 가 처음이라는 것
+
+등록된 14건이 전부 `http://` 였다. `src/main/java` 에서 스킴 검증을 찾았고 **0건**이다.
+🔵 **찾은 자리를 적는다**: `InvalidOAuthRedirectUriException` 은 **소셜 로그인 provider
+allowlist** 축이라 SAS 의 등록 클라이언트 검증과 **별개**고, 컬럼은 `JSON NOT NULL` 이라
+길이 제약도 없다. exact match 는 SAS 자신이 하며 절대 URI 면 스킴을 가리지 않는다.
+
+## AC-4 — 🔴 **절반만 충족됐다. 나머지를 적는다.**
+
+| 축 | 상태 |
+|---|---|
+| **신선 볼륨** 판정 | ✅ CI `Integration (iam A/B, Testcontainers)` — 실제 MySQL 에 Flyway 를 돌리고 `JpaRegisteredClientRepository` 로 행을 읽었다. **파일이 아니라 DB 판정이다** |
+| **기존 볼륨** 판정 | ⏳ **미수행** — 🔴 CI 는 항상 신선 볼륨이라 **마이그레이션 순서 결함에 영구히 초록**이다. 데모 호스트는 기존 볼륨을 쓴다 |
+
+⇒ 🔴 **기동 창에서 확인할 항목이 하나 생겼다** — `TASK-MONO-581` 번들에 넣어야 한다:
+
+```sql
+SELECT redirect_uris FROM oauth_clients WHERE client_id='fan-platform-user-flow-client';
+-- https://fan.hubwang.com/api/auth/callback/iam 이 실제로 있는가
+```
+
+## AC-5 — `TASK-MONO-574` 선행표 3행 ✅ 전환 됨
+
+🔴 574 의 실측 블록(2026-08-23 관측)은 손대지 않았다.
 
 ---
 
