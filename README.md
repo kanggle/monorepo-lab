@@ -16,7 +16,9 @@ A monorepo for developing multiple domain projects side-by-side, accumulating a 
 
 The whole portfolio (**8 projects / 96 containers**) runs as one federated stack on a single EC2 host. A visitor presses **Start Demo**, the host wakes, the stack comes up (~2–4 min), and it **stops itself** once idle. Nobody using it ⇒ **compute cost is zero**.
 
-The front door is **[`kanggle-portfolio.vercel.app`](https://kanggle-portfolio.vercel.app)** — a **name-bound** address, not deployment state (`ADR-MONO-067` D3 · `TASK-MONO-579`).
+The front door is **[`hubwang.com`](https://hubwang.com)** — a **name-bound** address, not deployment state (`ADR-MONO-067` D3 · `TASK-MONO-579` · `TASK-MONO-584`).
+
+> ⏳ **The domain is registered; the DNS/Vercel wiring is not done yet.** Until it is, the launcher answers on [`kanggle-portfolio.vercel.app`](https://kanggle-portfolio.vercel.app) and **both origins stay in the control API's CORS list** — dropping the old one would open a window where the Start button is dead. The per-surface allocation (`fan.` / `store.` / `console.`, and what is reserved) is in [`TEMPLATE.md` § 공개 호스트명 배분](TEMPLATE.md); a guard keeps this line and that table from drifting apart.
 
 > 🔴 This paragraph used to say *"there is no permanent public URL in this file, and that is deliberate."* That was **right at the time**: the front door was a CloudFront distribution terraform created, its domain was **deployment state, not source**, and a URL pasted here would have been a fresh literal that dies at the next `destroy` — exactly the defect `TASK-MONO-389` was filed to kill (the demo page used to carry a hardcoded, by-then-dead API Gateway URL). `TASK-MONO-557` gave the launcher a name-bound address and `TASK-MONO-579` retired the CloudFront copy, so that constraint no longer binds **this** line.
 

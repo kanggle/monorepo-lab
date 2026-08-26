@@ -509,6 +509,44 @@ New projects pick an unused `*.local` hostname and register it in this table in 
 >
 > `console-bff` **deliberately has no hostname** (TASK-MONO-362). It is reached by `console-web` on the docker network (`http://console-bff:8080`) — every call is server-side, the browser never touches it. **This is not a missing entry; do not add one.** `scripts/check-gateway-drift.sh` (I2) fails if any backend service acquires a Traefik router.
 
+### 공개 호스트명 배분 — **정본** (`TASK-MONO-584`)
+
+데모의 공개 도메인은 **`hubwang.com`** 이다(소유자 2026-08-26 등록). 위 `*.local` 표와
+**행 단위로 대응**한다 — 로컬과 데모의 경로가 갈라지는 것이 `ADR-MONO-067` 이 명시한
+알려진 위험(§ Consequences: *"로컬에서 초록인 것이 데모를 증명하지 않게 된다"*)이므로,
+두 표는 **같은 자리에서 나란히** 읽혀야 한다.
+
+🔴 **이 표가 정본이다.** `scripts/check-public-domains.sh` 가 여기서 모집단을 **파생**해
+소비자와 대조한다 — 스크립트에는 도메인이 적혀 있지 않다. 여기를 고치면 가드가 따라온다.
+
+🔴 **상태 열을 지우지 마라.** 상태 없이 호스트명만 적으면 다음 사람이 *"이미 붙어 있다"* 로
+읽는다. 이 표는 **선언**이지 배포 사실이 아니다.
+
+<!-- PUBLIC-HOSTNAMES-BEGIN — check-public-domains.sh 가 이 구간을 파싱한다 -->
+
+| 화면 | 공개 호스트명 | 대응 `*.local` | Vercel 프로젝트 | 상태 |
+|---|---|---|---|---|
+| **launcher** (기동 사이트) | `hubwang.com` | — (론처는 로컬에 없다) | `kanggle-portfolio` | ⏳ 도메인 연결 대기 |
+| fan | `fan.hubwang.com` | `fan-platform.local` | `kanggle-fan` | ⏳ 도메인 연결 대기 |
+| web-store | `store.hubwang.com` | `web.ecommerce.local` | *미생성* | ⏳ `TASK-MONO-575` 게이트 |
+| console | `console.hubwang.com` | `console.local` | *미생성* | ⏳ 단계 3 |
+| *(리다이렉트)* | `www.hubwang.com` | — | `kanggle-portfolio` | ↪️ apex 로 301 |
+| *(예약)* | `auth.hubwang.com` | `iam.local` | — | 🚫 예약 — `D4`/`TASK-MONO-576` 전까지 쓰지 마라 |
+| *(예약)* | `api.hubwang.com` | — | — | 🚫 예약 — 컨트롤 API |
+
+<!-- PUBLIC-HOSTNAMES-END -->
+
+**`launcher` 행이 특별하다** — 그 호스트명이 컨트롤 API 의 CORS `allowed_origins` 에
+들어가야 하고(`infra/demo/aws/terraform/terraform.tfvars.example`), 가드가 그 일치를 잰다.
+빠지면 **론처의 Start 버튼이 조용히 죽는다**(`TASK-MONO-579` § CORS 구멍).
+
+🔴 **`www` 와 apex 는 서로 다른 오리진이다.** 301 로 합치더라도 리다이렉트가 걸리기 전에
+`www` 로 들어온 방문자의 프리플라이트는 실패한다 — 그래서 도메인 추가에 순서가 있다
+(`TASK-MONO-584` AC-5).
+
+🔵 **예약을 적어 두는 이유**는 그 이름을 **나중에 다른 뜻으로 쓰는 것을 막기 위해서**다.
+빈 줄로 두면 다음 사람이 `api.` 를 게이트웨이에 붙인다.
+
 ### Frontend dev-server ports (standalone `next dev`)
 
 **Distinct from the Traefik hostnames above.** The `*.local` names route containerised frontends on port 80 — inside their container every Next.js app listens on 3000, and there is no collision. This table governs only **standalone `next dev` / `next start`** (running an app directly on the host, outside Docker), where every app defaulting to :3000 means no two can run at once and OIDC callbacks collide. Each browser-facing frontend gets a **fixed** host port (TASK-MONO-460):
