@@ -1,0 +1,211 @@
+# Task ID
+
+TASK-MONO-586
+
+# Title
+
+`ADR-MONO-067` **단계 4** — 팬은 **이미 Vercel 에 있는데 백엔드에 못 닿는다.** 주소를 만드는 지점은 **1곳**이다.
+
+# Status
+
+ready
+
+# Owner
+
+monorepo
+
+# Task Tags
+
+- adr
+- frontend
+- demo
+
+---
+
+# ⏳ 선행 — **둘. 그리고 「Vercel 프로젝트」는 선행이 아니다.**
+
+| # | 선행 | 상태 |
+|---|---|---|
+| 1 | `ADR-MONO-068` **승격 트리거**가 이 티켓에서 발화한다 | 🔴 **소유자 결정 사안** — 아래 § |
+| 2 | `ADR-MONO-067` AC-0 ③ **OIDC 왕복** | ❌ `TASK-MONO-574` — 🔴 팬은 D4 축에 걸린다 |
+| ~~3~~ | ~~Vercel 프로젝트~~ | ✅ **이미 있다 (`kanggle-fan`)** |
+
+🔵🔵 **그래서 이 티켓은 `TASK-MONO-575`(배포 한도)에 걸리지 않는다.** 새 Vercel 프로젝트를
+만들지 않기 때문이다. **단계 2(store)·단계 3(console)과 다른 점이 정확히 이것**이고,
+`ADR-MONO-067` History 의 **3↔4 순서 열린 질문**에 들어갈 사실이다.
+🔴 **그렇다고 내가 순서를 바꾸지 않는다** — `단계 1~4` 는 ACCEPT 된 결정의 일부이고
+재지정은 **소유자 정확형 지정** 사안이다. 사실만 올린다.
+
+---
+
+# Goal
+
+**팬의 서버가 백엔드 주소를 런타임에 얻게 한다.** 화면은 이미 Vercel 에서 뜨는데
+**데이터가 오지 않는다** — 이 티켓이 그 한 홉이다.
+
+---
+
+# Context — 실측 (2026-08-26)
+
+## 🔴 지금 팬은 Vercel 에서 **껍데기**다
+
+```ts
+// src/shared/config/env.ts
+gatewayUrl:         process.env.NEXT_PUBLIC_GATEWAY_URL ?? … ?? 'http://fan-platform.local',
+gatewayInternalUrl: process.env.GATEWAY_URL_INTERNAL   ?? … ?? 'http://fan-platform.local',
+```
+
+🔴 **`NEXT_PUBLIC_*` 은 빌드 타임에 값이 박힌다.** 그런데 데모 IP 는 **부팅마다 바뀐다**
+— 그 자리에 넣을 수 있는 고정값이 **존재하지 않는다.** Vercel 에 배포된 판은
+`fan-platform.local` 을 부르려 하고, 방문자 브라우저는 그 이름을 해석하지 못한다.
+
+**이것이 `ADR-MONO-067` D2 가 존재하는 이유이고, 팬에는 아직 안 들어갔다:**
+
+```
+$ bash scripts/check-demo-resolver-copies.sh
+해석기를 가진 앱 1 개 (상한 1)      ← web-store 뿐이다
+```
+
+## 🔵 좋은 소식 — 고칠 지점이 **1곳**이다
+
+```
+$ grep -rn "gatewayInternalUrl" src --exclude-dir=__tests__ | grep -v config/env.ts
+src/shared/api/client.ts:42:  const base = env.gatewayInternalUrl.replace(/\/+$/, '');
+```
+
+**주소를 조립하는 곳은 여기 하나**다. `TASK-MONO-578` 이 ADR 을 정정하며 적은 그대로다 —
+*"프록시 신설이 아니다. 주소를 만드는 지점 1곳 + D4."*
+
+## 🔴 「Server Action 5파일」 을 다시 세면 **17** 이 나온다 — 둘 다 맞다
+
+`ADR-MONO-067` 은 정정 ① 에서 팬의 서버 경계를 **`'use server'` 5파일**이라고 적었다.
+순진하게 다시 세면 **17** 이 나오고, 그러면 ADR 이 틀린 것처럼 보인다. **아니다:**
+
+| 술어 | 개수 |
+|---|---:|
+| **모듈 최상단** `'use server'` (첫 3줄) | **5** ← ADR 이 센 것 |
+| 함수 **내부 인라인** `'use server'` | 12 |
+| 합계 | 17 |
+
+🔵 **모듈 최상단이 「이 파일이 서버 경계다」의 술어**이고, 인라인은 그 파일 안의 개별 액션이다.
+⇒ **ADR 의 5는 정확하다.** 이 표를 여기 남기는 이유는, 다음 사람이 17 을 보고
+*"ADR 이 낡았다"* 로 오독하는 것을 막기 위해서다. **술어가 다르면 숫자가 다르다.**
+
+## 🔴🔴 이 티켓은 `ADR-MONO-068` 의 승격 트리거를 발화시킨다
+
+`ADR-MONO-068` = *"앱별로 구현한다. 단 **두 번째 구현이 생기는 순간 CI 가 RED**"*, 숫자는 **2**.
+지금 해석기를 가진 앱은 **하나**(web-store)다. ⇒ **이 티켓이 두 번째면 가드가 RED 다.
+결함이 아니라 설계된 동작이다.**
+
+그 시점의 선택지와 대가:
+
+| 선택지 | 대가 |
+|---|---|
+| **공유 패키지로 승격** | 🔴 세 프로젝트가 **각각 별도 pnpm 워크스페이스**다 — `ecommerce: apps/*+packages/*` · `fan: **web/***` · `console-web: 단독`. 게다가 팬은 `workspace:*` 의존이 **0건**이라 받을 자리조차 없다 ⇒ **루트 워크스페이스 신설**. `ADR-MONO-068` 이 되돌리기 비용으로 명시한 그 항목이다 |
+| **두 번째 사본 감수** | 트리거를 2 → 3 으로 올려야 하고 **트리거가 스스로 약해진다** |
+| **repo-root `libs/` 의 TS 판** | 해석 로직 자체는 project-agnostic 이라 HARDSTOP-03 을 통과할 여지가 있으나, **거기엔 TS 모듈이 없다**(Java 전용) |
+
+🔴 **이 티켓은 고르지 않는다.** `ADR-MONO-068` 의 결정을 바꾸는 일 = **소유자 정확형 지정**.
+⇒ **AC-0 에서 멈추고 올린다.**
+
+🔵 **`TASK-MONO-585`(단계 3, console)와 이 결정을 공유한다** — 먼저 착수하는 쪽이 만난다.
+
+---
+
+# Scope
+
+**In:**
+
+- `projects/fan-platform/web/fan-platform-web/src/shared/api/client.ts` — 주소를 얻는 방식
+- 해석기 — `ADR-MONO-068` 의 답이 정한 자리
+- 데모 꺼짐 상태 표현(web-store 의 `DemoBackendNotice` 와 같은 요구)
+- `TEMPLATE.md` § 공개 호스트명 배분 — `fan.hubwang.com` 상태 갱신
+
+**Out:**
+
+- 🔴 **승격 여부** → 소유자 (AC-0 에서 올린다)
+- OIDC/쿠키 → **D4**, `TASK-MONO-574` · `TASK-MONO-576`
+- Vercel 프로젝트 생성 → **불필요**(이미 있다)
+- `NEXTAUTH_URL` · 도메인 연결 → `TASK-MONO-584` AC-5(소유자)
+
+---
+
+# Acceptance Criteria
+
+## AC-0 — 착수 전에 **올리고, 답을 받고, 재측정한다**
+
+1. 🔴 **승격 트리거 결정을 소유자에게 올린다**(위 § 표). 답 전에는 해석기를 **두 번째로
+   구현하지 않는다** — 구현하고 나서 물으면 그 답은 **이미 정해진 것**이 된다.
+2. `TASK-MONO-574`(AC-0 ③)의 상태 확인. **미해결이면 로그인은 이 티켓 밖**임을 명시한다.
+   🔵 데이터 표시는 로그인 없이도 성립하는 화면이 있는지 **먼저 확인**한다 — 있으면
+   이 티켓만으로 방문자에게 보이는 변화가 생긴다.
+3. **주소를 만드는 지점을 다시 센다.** 위 «1곳» 은 오늘 값이다.
+4. 🔴 **`fan.hubwang.com` 이 실제로 응답하는지** 확인한다(`TASK-MONO-584` AC-5 는
+   소유자 대시보드 작업이라 저장소가 못 잰다). 안 붙어 있어도 **이 티켓은 진행 가능**하지만,
+   «라이브 확인» 을 AC 로 적을 수 없다.
+
+## AC-1 — 서버가 주소를 **런타임에** 얻는다
+
+동작은 web-store 판(`TASK-MONO-580`)과 **같은 세 가지 「하지 않는 것」**:
+`DEMO_API_BASE` 부재 → **부르지 않음** · `state != running` → **주소를 안 만듦**
+(조용히 옛 IP 로 붙으면 AWS 가 회수·재할당한 **남의 인스턴스**) · `/status` 실패 →
+**기존 env 사슬**(판정 불가를 «꺼짐» 으로도 «켜짐» 으로도 번역하지 않는다).
+
+🔵 팬의 백엔드는 **하나**(`fan-platform` 게이트웨이)다 — console 의 여덟 곳과 다르다.
+
+## AC-2 — 마커 (`ADR-MONO-068` D2)
+
+구현에 `DEMO-RESOLVER:` 마커를 단다. 🔴 **마커가 없으면 트리거가 그 구현을 못 센다** —
+승격 트리거가 조용히 무력해진다.
+
+## AC-3 — 데모가 꺼져 있을 때
+
+화면은 뜨고 **데이터만 없다.** 침묵하면 방문자가 빈 목록을 «고장» 으로 읽는다.
+🔴 로컬·CI 에서는 **아무것도 렌더하지 않는다**(데모가 아닌 곳에서 «꺼졌다» 는 거짓말).
+
+## AC-4 — 검증
+
+- 해석기 단위 테스트(부재 · `running` 아님 · 타임아웃 · TTL)
+- 🔴 **`check-demo-resolver-copies.sh` 의 상태를 명시**한다. RED 라면 **왜 RED 인지와
+  AC-0 ① 의 답**을 함께 적는다. **초록으로 만들려고 마커를 빼지 마라.**
+- 산출물에서 백엔드 오리진 재계수 — `TASK-MONO-565` 는 팬에 **2건**(`fan-platform.local`·
+  `iam.local`)을 셌다. 이 티켓이 첫 번째를 없앤다. 🔵 **`iam.local` 은 남는다**(D4 축).
+- 🔴 vitest 는 이 호스트에서 못 돈다(Node 24 + vitest 4) ⇒ **CI 권위**
+
+---
+
+# Related Specs
+
+- [`docs/adr/ADR-MONO-067-demo-surfaces-served-from-vercel.md`](../../docs/adr/ADR-MONO-067-demo-surfaces-served-from-vercel.md) — 단계 4 · 정정 ① · D4
+- [`docs/adr/ADR-MONO-068-where-the-demo-backend-resolver-lives.md`](../../docs/adr/ADR-MONO-068-where-the-demo-backend-resolver-lives.md) — 승격 트리거
+- `TASK-MONO-580` — 따라야 할 형태 · `TASK-MONO-585` — 단계 3, **승격 결정을 공유**
+- `TASK-MONO-574` — 팬의 OIDC 왕복 · `TASK-MONO-584` — 도메인
+
+# Related Contracts
+
+없음.
+
+---
+
+# Edge Cases
+
+- 🔴 `client.ts` 는 **서버·클라 양쪽에서 임포트될 수 있다.** 해석기를 거기 직접 부르면
+  클라 번들에 `DEMO_API_BASE` 참조가 들어간다 — `TASK-MONO-580` 이 web-store 에서
+  **서버 분기에만** 붙인 이유가 그것이다.
+- 🔴 `env.ts` 는 **한 모듈**이고 `oidcIssuerUrl` 같은 서버 전용 값도 담는다.
+  `TASK-MONO-578` 은 *"클라 독자 0"* 이라 확인했지만 **그건 그때의 값**이다 — 산출물에서 본다.
+- 🔴 팬의 `gatewayUrl`(공개)과 `gatewayInternalUrl`(서버)이 **서로 폴백**한다.
+  한쪽만 고치면 다른 쪽이 옛 값을 계속 공급한다.
+- 팬은 **nightly-e2e 에만 도는 스위트**가 있다 — 머지 시점에 한 번도 안 돌아 본 채 초록일 수 있다.
+
+# Failure Scenarios
+
+| 실패 | 증상 | 방어 |
+|---|---|---|
+| 해석기를 먼저 만들고 승격을 나중에 물음 | 답이 **이미 정해진 것**이 된다 | AC-0 ① |
+| 마커 누락 | 승격 트리거가 **조용히 무력화** | AC-2 |
+| 트리거를 초록으로 만들려고 마커 제거 | 같은 결과, 더 나쁨(고의) | AC-4 |
+| 클라 경로에서 해석기 호출 | `DEMO_API_BASE` 가 **클라 번들로** | Edge Cases 1 |
+| `gatewayUrl` 만 고침 | `gatewayInternalUrl` 이 옛 값 공급 | Edge Cases 3 |
+| 「17파일」 로 오독해 ADR 을 낡았다고 판단 | 없는 문제를 고친다 | Context § 술어 표 |
+| D4 를 이 티켓에서 풀려 함 | 범위 폭발 | Scope Out |
