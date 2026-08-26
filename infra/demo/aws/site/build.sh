@@ -53,7 +53,8 @@
 #   Root Directory    infra/demo/aws/site  (이 디렉터리)
 #   ignoreCommand     scripts/vercel-should-build.sh 에 이 디렉터리 pathspec 을 넘긴다
 #
-# 저장소에 Vercel 프로젝트가 **둘**이라(여기 + `kanggle-fan`) 커밋 하나가 배포 **둘**을 굽고,
+# 저장소에 Vercel 프로젝트가 **셋**이라(여기 + `kanggle-fan` + web-store) 커밋 하나가
+# 배포 **셋**을 굽고,
 # 문서 전용 PR 도 예외가 아니었다 ⇒ 무료 플랜 한도. 판정 규약과 fail-open 설계는
 # `scripts/vercel-should-build.sh` 헤더에 있다.
 #

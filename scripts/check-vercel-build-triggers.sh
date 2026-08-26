@@ -2,8 +2,9 @@
 # =============================================================================
 # check-vercel-build-triggers.sh — 무관한 커밋이 Vercel 배포를 굽지 않는다 (TASK-MONO-562)
 # =============================================================================
-# 저장소에 Vercel 프로젝트가 **둘** 이라 커밋 하나가 배포 **둘** 을 굽는다. 문서 전용 PR 도
+# 저장소에 Vercel 프로젝트가 **셋** 이라 커밋 하나가 배포 **셋** 을 굽는다. 문서 전용 PR 도
 # 예외가 아니어서 무료 플랜의 일일 한도에 닿았고, 24시간 동안 모든 PR 이 빨개졌다.
+# (둘이던 시절의 사고다. 셋이 된 것은 `TASK-MONO-582` — web-store. 아래 FLOOR 참조.)
 # 🔴 진짜 피해는 색깔이 아니라 **그동안 론처가 낡은 판을 계속 서빙한 것**이다.
 #
 #   bash scripts/check-vercel-build-triggers.sh [--self-test]
@@ -40,8 +41,12 @@ SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]
 ROOT="${VERCEL_GUARD_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
 # 🔴 하한은 **provenance 와 함께** 박는다. 늘어나면 올려야 하고, 그 순간이 새 Vercel
-# 프로젝트에 트리거 규칙을 붙일 자리다. 2026-08-21 기준 = kanggle-portfolio + kanggle-fan.
-FLOOR="${VERCEL_GUARD_FLOOR:-2}"
+# 프로젝트에 트리거 규칙을 붙일 자리다.
+#   2026-08-21 = 2 (kanggle-portfolio + kanggle-fan)
+#   2026-08-26 = 3 (+ web-store — `TASK-MONO-582`, `ADR-MONO-067` 단계 2)
+# 🔴 올리는 것을 잊으면 **새 프로젝트를 지워도 이 가드는 안 문다** — 하한이 남은 개수보다
+#    낮으면 삭제가 그냥 통과하기 때문이다. 파일을 놓는 커밋과 **같은 커밋에서** 올려라.
+FLOOR="${VERCEL_GUARD_FLOOR:-3}"
 
 # 🔴🔴 Vercel 스키마는 명령 문자열에 **maxLength=256** 을 건다
 # (https://openapi.vercel.sh/vercel.json — 2026-08-21 실측: 최상위 property 40개,
@@ -97,6 +102,73 @@ JS
   node "$_JSLEN" "$1"
 }
 
+# --- (12) 워크스페이스 의존이 전부 트리거 목록에 덮이는가 --------------------
+# 🔴 이 칸이 없는 동안 **목록에서 `packages/` 를 통째로 빼도 가드는 통과했다**(실측:
+#    TASK-MONO-582 의 bite 2, rc=0). 다른 칸들은 *목록에 적힌 경로가 옳게 동작하는가*만
+#    보고, **적혀야 하는데 안 적힌 것**은 아무도 안 봤다. 그 구멍의 증상은 "배포 실패" 가
+#    아니라 **"배포가 조용히 건너뛰어짐"** 이고 CI 는 초록이다.
+#
+# 🔴 모집단은 **앱의 package.json 에서 파생**한다 — 여기 목록을 적지 않는다(HARDSTOP-03,
+#    그리고 하드코딩한 모집단은 대상이 바뀌어도 자기가 적어둔 것을 계속 통과시킨다).
+# 🔴 이름 해석은 **그 앱의 워크스페이스 안에서만** 한다. 프로젝트가 여럿이라 `@repo/ui`
+#    같은 이름이 두 워크스페이스에 각각 있을 수 있고, 전역으로 찾으면 **엉뚱한 디렉터리**를
+#    덮여 있다고 판정한다.
+_WSCOV=""
+workspace_dep_coverage() {
+  # workspace_dep_coverage <config-rel-path> <pathspec...>   (stdin: 추적되는 package.json 목록)
+  if [ -z "$_WSCOV" ]; then
+    _WSCOV="$(mktemp)"
+    cat > "$_WSCOV" <<'WSJS'
+const fs = require('fs'), path = require('path');
+const [, , root, cfgRel, ...specs] = process.argv;
+// 🔴 백슬래시 리터럴을 쓰지 않는다 — 이 페이로드는 이스케이프를 세 겹 지나고,
+//    한 겹이 벗겨지면 node 가 SyntaxError 로 죽는다(TASK-MONO-582 에서 실제로 죽었다).
+const SEP = String.fromCharCode(92);
+const norm = (s) => s.split(SEP).join('/');
+const dir = path.dirname(cfgRel);
+const pkgPath = path.join(root, dir, 'package.json');
+if (!fs.existsSync(pkgPath)) { console.log('SKIP	package.json 이 없는 프로젝트입니다'); process.exit(0); }
+let pkg;
+try { pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8')); }
+catch (e) { console.log('UNRESOLVED	' + dir + '/package.json 파싱 실패'); process.exit(0); }
+const deps = Object.entries({ ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) })
+  .filter(([, v]) => typeof v === 'string' && v.startsWith('workspace:'))
+  .map(([k]) => k);
+if (!deps.length) { console.log('SKIP	workspace:* 의존이 없습니다'); process.exit(0); }
+// 워크스페이스 루트를 위로 걸어 찾는다 — 이름 해석의 범위다.
+let ws = dir;
+for (;;) {
+  if (fs.existsSync(path.join(root, ws, 'pnpm-workspace.yaml'))) break;
+  const up = path.dirname(ws);
+  if (up === ws || ws === '.') { ws = null; break; }
+  ws = up;
+}
+if (!ws) { console.log('UNRESOLVED	' + dir + ' 위에서 pnpm-workspace.yaml 을 못 찾았습니다'); process.exit(0); }
+const prefix = norm(ws) + '/';
+const byName = new Map();
+const NL = String.fromCharCode(10);
+for (const rel of fs.readFileSync(0, 'utf8').split(NL).filter(Boolean)) {
+  const r = norm(rel);
+  if (!r.startsWith(prefix)) continue;             // 다른 워크스페이스는 보지 않는다
+  try {
+    const n = JSON.parse(fs.readFileSync(path.join(root, r), 'utf8')).name;
+    if (n && !byName.has(n)) byName.set(n, norm(path.dirname(r)));
+  } catch (e) { /* 파싱 못 하는 것은 이름을 제공하지 않는다 */ }
+}
+const covered = specs.map((s) => (s.indexOf(':/') === 0 ? s.slice(2) : s));
+let ok = 0;
+for (const d of deps) {
+  const dd = byName.get(d);
+  if (!dd) { console.log('UNRESOLVED	' + d + ' 의 디렉터리를 워크스페이스에서 못 찾았습니다'); continue; }
+  if (covered.some((c) => dd === c || dd.startsWith(c + '/'))) ok++;
+  else console.log('UNCOVERED	' + d + '	' + dd);
+}
+console.log('COUNT	' + deps.length + '	' + ok);
+WSJS
+  fi
+  node "$_WSCOV" "$ROOT" "$@"
+}
+
 run_cell() {
   # run_cell <설명> <기대rc> <임시저장소> <judge> <pathspec...>
   #
@@ -129,7 +201,7 @@ main() {
     < <(git -C "$ROOT" ls-files '*vercel.json' 2>/dev/null | sort)
 
   if [ "${#configs[@]}" -lt "$FLOOR" ]; then
-    bad "vercel.json 을 ${#configs[@]}개만 찾았습니다 (하한 $FLOOR — 2026-08-21 전수로 확정)."
+    bad "vercel.json 을 ${#configs[@]}개만 찾았습니다 (하한 $FLOOR — provenance 는 위 FLOOR 선언 참조)."
     bad "  줄었다면 트리거 규칙이 사라진 것이고, 늘었다면 하한을 올려라."
     return 1
   fi
@@ -175,6 +247,36 @@ main() {
       continue
     fi
     note "pathspec ${#specs[@]}개: ${specs[*]}"
+
+    # --- (12) 워크스페이스 의존 커버리지 -----------------------------------
+    # 🔴🔴 **fail-closed.** 초판은 이 자리를 파이프로만 읽었고, node 가 SyntaxError 로
+    #    죽었을 때 `while read` 가 빈 스트림을 돌아 **아무 줄도 안 내고 rc=0** 이 됐다.
+    #    죽은 검사기가 초록을 보고한 것이다 — 이 파일의 헤더가 경고하는 바로 그 부류다.
+    #    ⇒ 종료코드를 읽고, **판정 줄(COUNT/SKIP)이 하나도 없으면 실패**시킨다.
+    local wsout wsrc wskind wsa wsb wstot="" wsok=""
+    wsout="$(mktemp)"
+    git -C "$ROOT" ls-files '*package.json'       | workspace_dep_coverage "$cfg" "${specs[@]}" > "$wsout" 2>&1
+    wsrc=$?
+    if [ "$wsrc" -ne 0 ]; then
+      bad "(12) 워크스페이스 의존 검사가 죽었습니다 (rc=$wsrc) — 위반이 없는 것과 다른 사건입니다:"
+      while IFS= read -r wsa; do bad "     $wsa"; done < <(head -5 "$wsout")
+    elif ! grep -qE '^(COUNT|SKIP)' "$wsout"; then
+      bad "(12) 검사가 판정 줄(COUNT/SKIP)을 하나도 내지 않았습니다 — **판정 불가**입니다."
+    else
+    while IFS=$'	' read -r wskind wsa wsb; do
+      case "$wskind" in
+        SKIP)       note "(12) 워크스페이스 의존 검사 해당 없음 — $wsa" ;;
+        UNRESOLVED) bad "(12) $wsa"
+                    bad "     → 해석이 죽은 것과 위반이 없는 것은 다른 사건입니다. 조용히 통과시키지 않습니다." ;;
+        UNCOVERED)  bad "(12) 워크스페이스 의존 '$wsa' ($wsb) 가 트리거 목록에 없습니다."
+                    bad "     → 그 패키지만 바뀐 커밋은 **배포가 조용히 건너뛰어집니다** — CI 는 초록이고"
+                    bad "       사이트는 마지막 성공 배포를 계속 서빙하므로 URL 을 찔러도 200 입니다." ;;
+        COUNT)      wstot="$wsa"; wsok="$wsb" ;;
+      esac
+    done < "$wsout"
+    [ -z "$wstot" ] || note "(12) workspace:* 의존 ${wstot}개 중 ${wsok}개가 트리거 목록에 덮임"
+    fi
+    rm -f "$wsout"
 
     # --- 임시 저장소로 판정자를 실제로 돌린다 -------------------------------
     tmp="$(mktemp -d)"
@@ -310,8 +412,13 @@ self_test() {
   local rc=0 t out
 
   _mk() {   # 진짜 트리의 vercel.json + 판정자를 임시 저장소로 복제
+    # 🔴 `*package.json` 과 `pnpm-workspace.yaml` 도 복제한다 — 칸 (12)가 그것으로
+    #    모집단을 파생하기 때문이다. 안 복제하면 (12)는 사본에서 늘 SKIP 이 되고,
+    #    **self-test 는 (12)를 한 번도 행사하지 않으면서 초록**이 된다.
+    #    (실측 2026-08-26: 13 + 2 개 파일이라 복제 비용은 무시할 수준이다.)
     local d; d="$(mktemp -d)"
-    ( cd "$src" && git ls-files '*vercel.json' '*vercel-ignore.sh' scripts/vercel-should-build.sh ) | while IFS= read -r f; do
+    ( cd "$src" && git ls-files '*vercel.json' '*vercel-ignore.sh' scripts/vercel-should-build.sh \
+        '*package.json' '*pnpm-workspace.yaml' ) | while IFS= read -r f; do
       mkdir -p "$d/$(dirname "$f")"; cp "$src/$f" "$d/$f"
     done
     git -C "$d" init -q; git -C "$d" config user.email t@l; git -C "$d" config user.name t
@@ -390,6 +497,32 @@ self_test() {
     _expect "(f) 래퍼의 pathspec 모양 변경 -> 추출 0건으로 문다" 1 "$(_run "$t")"
   else
     echo "  x  (f) 래퍼(*vercel-ignore.sh)를 찾지 못했습니다 — 이 칸이 아무것도 시험하지 않습니다."; rc=1
+  fi
+  rm -rf "$t"
+
+  # (g) 워크스페이스 의존을 덮던 pathspec 을 **하나 지운다** -> 칸 (12)가 물어야 한다.
+  # 🔴 이 칸이 왜 있는가: TASK-MONO-582 에서 목록에서 `packages/` 를 통째로 빼고 가드를
+  #    돌렸더니 **rc=0 이었다.** 다른 칸들은 *적힌 경로가 옳게 동작하는가* 만 보고,
+  #    **적혀야 하는데 안 적힌 것**은 아무도 안 봤다. 그 구멍의 증상은 배포 실패가 아니라
+  #    **무음**이다.
+  t="$(_mk)"
+  out="$(cd "$t" && git ls-files '*vercel-ignore.sh' | head -1)"
+  if [ -n "$out" ]; then
+    # 워크스페이스 의존을 덮는 pathspec = `packages` 로 끝나는 줄. 그것만 지운다.
+    local before after
+    before="$(grep -c "packages'" "$t/$out" || true)"
+    sed -i "/packages'/d" "$t/$out"
+    after="$(grep -c "packages'" "$t/$out" || true)"
+    # 🔴🔴 **무는지 읽기 전에 주입됐는지 단언한다.** (e)가 세운 규율이고, 여기서도 같다:
+    #    지운 줄이 0이면 "안 물었다" 와 "시험한 적이 없다" 가 구별되지 않는다.
+    if [ "$before" -eq 0 ] || [ "$after" -ne 0 ]; then
+      echo "  x  (g) 주입 실패 (before=$before after=$after) — 이 칸은 아무것도 시험하지 않았습니다."; rc=1
+    else
+      git -C "$t" commit -qam mutate
+      _expect "(g) 워크스페이스 의존을 덮던 pathspec 삭제 -> 칸 (12)가 문다" 1 "$(_run "$t")"
+    fi
+  else
+    echo "  x  (g) 래퍼(*vercel-ignore.sh)를 찾지 못했습니다 — 이 칸이 아무것도 시험하지 않습니다."; rc=1
   fi
   rm -rf "$t"
 
