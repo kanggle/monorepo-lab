@@ -8,7 +8,7 @@ This document defines task lifecycle, naming, and move rules for the **platform-
 
 backlog → ready → in-progress → review → done → archive
 
-Only tasks in `ready/` may be implemented.
+Implementation is picked up only from `ready/`. The task file then moves to `in-progress/` and is the working document there until it moves on.
 
 ---
 
@@ -48,7 +48,8 @@ Allowed only after review approval.
 - Tasks in `review/` must not be re-implemented directly.
 - If a review reveals a bug or missing requirement, create a new fix task in `ready/` referencing the original task.
 - Fix tasks must include the original task ID in their Goal section.
-- Do not modify a task file after it moves to `review/` or `done/`.
+- Do not modify a task file after it moves to `review/` or `done/`. Editing one rewrites the record of what was reviewed and what was decided.
+- `in-progress/` is deliberately **not** in that list. The lifecycle moves a task there when implementation starts, so that file is the working document until it moves to `review/` — recording what the implementation measured or corrected belongs in it. `TASK-MONO-589` fixed the hook that contradicted this.
 
 ### PR Separation Rule (lifecycle ↔ PR boundary)
 
@@ -69,7 +70,10 @@ The repo-root [tasks/INDEX.md](../../../tasks/INDEX.md) is the authoritative def
 
 # Rule
 
-Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/`, or `archive/`.
+Implementation must not be **started** from `backlog/`, `in-progress/`, `review/`, `done/`, or `archive/`.
+It starts from `ready/`, and the task file moves to `in-progress/` as it starts —
+continuing there is the lifecycle working as designed, not an exception to it.
+`review/` and `done/` stay frozen either way.
 
 ---
 

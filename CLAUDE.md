@@ -74,7 +74,7 @@ Agents/skills split: `common/` (always) vs `domain/<domain>/` (matched domain on
 
 - Specifications are the source of truth.
 - Work must be executed through tasks.
-- Only tasks in the target project's `tasks/ready/` may be implemented.
+- Implementation is picked up only from the target project's `tasks/ready/`. The task file then moves to `in-progress/` and is the working document there until it moves to `review/`; `review/` and `done/` are the frozen stages.
 - Follow the standard workflow: plan → implement → test → review.
 - If specifications are missing, unclear, or conflicting, **stop and report**.
 

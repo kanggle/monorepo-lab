@@ -62,7 +62,7 @@ Rationale: [`docs/adr/ADR-MONO-006-lint-remediation-as-agent-context.md`](../doc
 
 ```
 [VIOLATION] HARDSTOP-05: Task `<task-id>` is not in the appropriate `tasks/ready/` directory at `<path>`.
-[WHY] Only tasks in `ready/` may be implemented; `in-progress/` / `review/` / `done/` tasks are frozen, and unfiled work bypasses lifecycle review. The ready-queue signal is the public surface external observers read to know what's available.
+[WHY] `review/` and `done/` task files are frozen: editing one rewrites the record of what was reviewed and what was decided. `in-progress/` is NOT frozen — the lifecycle moves a task there when implementation starts, so that file is the working document (`tasks/INDEX.md` § Move Rules). Unfiled work still bypasses lifecycle review, and the ready-queue signal is the public surface external observers read to know what's available.
 [REMEDIATION] Choose one:
   1. If the work is new, author the task file in the correct `tasks/ready/` (root `tasks/ready/` for monorepo-level work per `tasks/INDEX.md`; `projects/<name>/tasks/ready/` for project-internal work) and land it via a spec PR before any impl commits.
   2. If the work is a fix to an already-merged task, create a new fix task in `ready/` referencing the original task ID in its Goal section (per `tasks/INDEX.md` § Review Rules).
