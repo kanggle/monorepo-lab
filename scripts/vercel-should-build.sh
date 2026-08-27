@@ -97,6 +97,50 @@ fi
 # 🔵 2번은 **production 브랜치에서는 쓰면 안 된다.** 거기서 merge-base 는 HEAD 자신이라
 #    창이 비고 **모든 것이 건너뛰어진다** — 정확히 반대 방향의 고장이다. main 은 squash 머지라
 #    한 커밋에 전부 담기므로 `HEAD^` 가 이미 옳다.
+#
+# -----------------------------------------------------------------------------
+# 🔴🔴 후보가 **HEAD 자신**이면 창은 0 커밋이고, 그것은 "변경 없음" 이 **아니다**
+#      (TASK-MONO-594)
+# -----------------------------------------------------------------------------
+# 위 (a)(b)(c) 는 `cand == HEAD` 를 **셋 다 통과시킨다** — 커밋은 자기 자신의 조상이므로
+# (c) 가 못 거른다. 그러면 `BASE..HEAD` 가 **빈 범위**가 되어 `git diff --quiet` 가 언제나
+# 0(=차이 없음)을 내고, Vercel 규약상 그것은 **건너뜀**이다. 즉 그 배포는 무엇이 바뀌었든
+# **반드시 취소된다.**
+#
+# 2026-08-27 라이브 관측(`dpl_9AZiTx4H6a7mtR7wEChGvm1Uw9Bq`, `kanggle-fan`, Production):
+# `VERCEL_GIT_PREVIOUS_SHA` = `8e43a4db9…` 인데 클론된 커밋도 `8e43a4d` — **같은 커밋**이고,
+# 로그가 스스로 `· 판정 창 = … · 0 커밋` 이라 적은 채 건너뛰었다. 그 배포가 **대시보드 수동
+# Redeploy** 라는 지문은 둘이다: `Skipping build cache, deployment was triggered without
+# cache`, 그리고 클론된 커밋이 그 시각 `main` 의 tip 이 아니었다는 것.
+#
+# 🔴 고칠 것은 "무시 규칙이 너무 넓다" 가 아니라 **창이 비었는데도 자신 있게 답했다** 는
+#    것이다. `TASK-MONO-572` 와 **같은 클래스**(창의 크기)이고, 이 파일 맨 위가 못박은
+#    *"고장은 반드시 「더 굽는」 쪽으로 나야 한다"* 의 **정확히 반대 방향**으로 고장 나 있었다.
+#
+# 🔵 **왜 "다음 후보" 가 아니라 `exit 1`(빌드) 인가** — 갈래가 둘이었고 결과가 다르다.
+#   (B) 다음 후보(`HEAD^`)로 내려간다: 아래 merge-base 갈래와 "일관성" 은 얻는다. 🔴 그러나
+#       **env 를 반영하려는 Redeploy 는 여전히 안 굽는다** — 그 커밋이 앱 경로를 안 건드렸다면
+#       `HEAD^..HEAD` 도 "건너뜀" 이기 때문이다. 함정이 안 고쳐진다.
+#   (A) 빈 창 = **판정 불가** ⇒ 이 파일이 이미 선언한 규약(*"판정할 수 없는 상황은 전부 빌드
+#       진행"*)을 그대로 적용한다. 수동 Redeploy 는 **사람이 명시적으로 빌드를 요청한 행위**라
+#       fail-open 방향과도 일치한다. 대가는 Redeploy 1건이 항상 배포 슬롯을 쓰는 것이고,
+#       그것은 사람이 누른 비용이다.
+#   ⇒ **(A) 를 골랐다.** 그래서 아래 검사는 `return 1` 이 아니라 `exit 1` 이다.
+#
+# 🔵 왜 이것이 실제로 다른 티켓을 막고 있었나: Vercel 의 **env 변경은 새 배포에서만 반영된다.**
+#    소유자가 env 를 넣고 취할 자연스러운 다음 행동이 Settings → Redeploy 이고, 그 배포가
+#    7초 만에 Canceled 된다. 관측되는 것은 *"env 를 넣고 재배포했는데 그대로다"* 이고,
+#    **틀린 결론이 남의 티켓에 기록된다**(`TASK-FAN-FE-018` · `TASK-MONO-586`).
+#
+# 🔴🔴 **`TASK-MONO-590` 이 랜딩해도 이 갈래는 살아 있어야 한다.** 590 은 배포가 *만들어지는
+#    것 자체*를 Deploy Hook 축에서 줄이는 티켓이고, 그 AC-3 은 훅 없는 프로젝트에서
+#    `ignoreCommand` 를 살려 두기로 했다. 그리고 **수동 Redeploy 는 훅 경로를 지나가지 않는다.**
+#    590 이 이 파일을 "거의 죽은 기전" 으로 만들어도 이 검사와
+#    `check-vercel-build-triggers.sh` 의 칸 (13)은 **지우면 안 된다.**
+#
+# 🔵 2번 갈래(merge-base)에는 같은 검사가 **이미 있다**(아래 `MB = HEAD` elif). 즉 저자는
+#    "창이 비면 전부 건너뛴다" 를 알고 있었고 **한 곳에만 적용했다.** 아래 (d) 는 1번 갈래의
+#    몫이다 — 2번은 그 elif 가 `usable_base` 에 닿기 전에 가로챈다.
 
 # 후보가 쓸 만한지 본다. 쓸 만하면 0, 아니면 1(과 이유 로그).
 usable_base() {
@@ -106,6 +150,28 @@ usable_base() {
     log "· ${why}=${cand} 가 이 클론에 없습니다 (얕은 clone?) — 다음 후보로."
     return 1
   fi
+  # >>> MONO-594-EMPTY-WINDOW-GUARD
+  # 🔴 이 두 표식(`>>>` / `<<<`)은 장식이 아니다. `check-vercel-build-triggers.sh` 의
+  #    `--self-test` 칸 (h)가 **이 사이를 통째로 지운 사본**으로 가드를 돌려, 칸 (13)이
+  #    실제로 무는지(= 고치기 전 판에서 빨개지는지) 증명한다. 표식을 지우면 그 칸은
+  #    "주입 실패" 로 빨개진다 — 조용히 초록이 되지는 않는다. 이름도 ASCII 로 고정한다.
+  #
+  # 🔴🔴 (d) 후보가 **HEAD 자신**인가 — 창이 0 커밋이면 "변경 없음" 이 아니라 **판정 불가**다.
+  #     (TASK-MONO-594. 위 § 참조 — `return 1`(다음 후보)이 아니라 `exit 1`(빌드)인 이유도.)
+  #
+  # 🔴 문자열이 아니라 `git rev-parse` 로 **정규화해서** 비교한다. `VERCEL_GIT_PREVIOUS_SHA`
+  #    는 40자 full SHA 로 오고 HEAD 는 ref 다. 축약형/ref 표기가 섞이면 같은 커밋을 다르다고
+  #    읽어 이 검사가 **조용히 안 문다** — 그 실패는 고치기 전과 구별되지 않는다.
+  local cand_sha head_sha
+  cand_sha="$(git rev-parse --verify --quiet "${cand}^{commit}" 2>/dev/null)" || cand_sha=""
+  head_sha="$(git rev-parse --verify --quiet 'HEAD^{commit}' 2>/dev/null)" || head_sha=""
+  if [ -n "$cand_sha" ] && [ "$cand_sha" = "$head_sha" ]; then
+    log "· ${why}=${cand} 가 HEAD 자신입니다 — 판정 창이 **0 커밋**입니다 (수동 Redeploy 의 지문)."
+    log "✖ 빈 창으로는 판정할 수 없습니다 — 빌드를 진행합니다 (TASK-MONO-594)."
+    exit 1
+  fi
+  # <<< MONO-594-EMPTY-WINDOW-GUARD
+
   if ! git merge-base --is-ancestor "$cand" HEAD 2>/dev/null; then
     log "· ${why}=${cand} 가 HEAD 의 조상이 아닙니다 (force-push?) — 다음 후보로."
     return 1

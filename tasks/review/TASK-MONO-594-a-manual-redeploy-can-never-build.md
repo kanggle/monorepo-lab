@@ -9,7 +9,7 @@ TASK-MONO-594
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -267,3 +267,158 @@ configuration` ⇒ 진단은 *"`AUTH_SECRET`/`NEXTAUTH_SECRET` 계열 env 가 Ve
 | 라이브 관측 1건을 «항상 그렇다» 로 적는다 | 재현 안 되면 티켓 서술 전체가 의심받는다 | ⑥ + AC-0 2 |
 | `vercel ls` 의 7초 Canceled 20건을 전부 이 결함으로 귀속 | 590 의 실측(73건 정상 동작)과 모순되고, 없는 문제를 고친다 | ⑥ 둘째 항목 |
 | 590 착수자가 칸 (13) 을 «죽은 기전» 으로 지운다 | 결함이 조용히 돌아온다 | AC-4 — 헤더에 이유를 박는다 |
+
+---
+
+# ✅ 구현 (2026-08-27 UTC) — **(A) 를 골랐다. 빈 창은 «변경 없음» 이 아니라 판정 불가다.**
+
+## AC-0 ① — `usable_base()` 를 **읽고** 시작했다. 티켓 서술 그대로였다.
+
+`scripts/vercel-should-build.sh:102-114` 의 검사는 **정확히 셋**이었고 `cand == HEAD` 검사는
+없었다. 그 사이 다른 티켓이 이 파일을 고치지 않았다는 것도 확인했다 —
+`git log --all -- scripts/vercel-should-build.sh` 의 최신 커밋은 `c75ffb06d`(web-store 배선,
+`TASK-MONO-582`)이고, 이 파일을 건드리는 **열린 PR 은 없다**.
+
+②의 기전도 이 트리에서 다시 실행했다: `is-ancestor` rc=0 · `cat-file -e` rc=0 ·
+빈 범위 `git diff --quiet` rc=0(=«차이 없음»=건너뜀). **셋 다 통과한다**는 서술이 재현됐다.
+
+## AC-0 ② — 🔴 **둘째 «라이브» 관측은 못 만들었다. 정직하게 적는다.**
+
+AC-0 ②는 대시보드에서 Redeploy 를 눌러 `vercel inspect --logs` 로 `· 0 커밋` 줄이 다시
+나오는지 보라고 했다. **못 했고, 이유는 둘이며 둘 다 이 세션이 넘을 수 없다:**
+
+1. 이 호스트에 `vercel` CLI 가 없고(`command -v vercel` → 부재), 대시보드는 소유자 접근이다.
+2. 🔴🔴 **더 결정적인 것** — 계정이 `Deployments Created per Day` 천장에 걸려 있어
+   **지금은 Redeploy 를 눌러도 배포가 「생성」되지 않는다.** 08-27 08:37Z 이후 `main` 의 모든
+   커밋이 두 프로젝트 모두에서 `Deployment rate limited — retry in 24 hours` 를 받았다
+   (`b6b5d4174` · `7465c8499`(fan) · `4e750c183` · `a7d790815`). 배포가 생성되지 않으면
+   `ignoreCommand` 는 **아예 실행되지 않으므로**, 지금 누른 Redeploy 는 «0 커밋» 로그를
+   만들지도 못하고 «재현 안 됨» 으로 읽히기만 한다. ⇒ **판정 불가 구간이다.**
+
+🔵 **대신 ②보다 강한 «스크립트 쪽» 재현을 만들었다 — 그러나 그것은 AC-0 ②가 아니다.**
+고치기 **전** 판정자(`origin/main:scripts/vercel-should-build.sh`)를 이 트리에서
+`VERCEL_GIT_PREVIOUS_SHA=$(git rev-parse HEAD)` 로 직접 돌렸더니 라이브 로그의 두 줄이
+**문자 그대로** 나왔다:
+
+```
+[vercel-ignore] · 판정 창 = VERCEL_GIT_PREVIOUS_SHA (직전 배포) · 0 커밋
+[vercel-ignore] ↷ 건너뜀 — a7d7908155…..HEAD 에 다음 경로의 변경이 없습니다: :/projects/fan-platform/web
+rc=0   ← 건너뜀
+```
+
+🔴 **이것이 무엇을 증명하고 무엇을 증명하지 않는지 갈라 적는다.** 증명한 것은 *"`PREVIOUS_SHA`
+가 HEAD 와 같게 들어오면 이 스크립트는 반드시 건너뛴다"* — **기전의 스크립트 쪽**이다.
+증명하지 **않은** 것은 *"Vercel 이 수동 Redeploy 에서 항상 `PREVIOUS_SHA` 를 HEAD 와 같게
+준다"* — **Vercel 쪽**이고, 그것은 여전히 **관측 1건**이다. ⑥의 단서는 **그대로 유효하며
+이 재현으로 격상되지 않는다.** 티켓 서술을 고쳐 적을 사유(관측이 반증됨)는 발생하지 않았다.
+
+⇒ **AC-0 ②는 남는다.** 한도가 풀린 뒤 소유자가 Redeploy 1회 + `vercel inspect --logs` 로
+닫아야 하고, 그때 양성 대조군(팬 경로를 건드리는 push 가 `▶ 빌드` 로 나오는지)도 같이 본다.
+
+## AC-1 — **(A) 를 골랐다**. 근거는 코드 옆에 있다.
+
+`scripts/vercel-should-build.sh` 헤더의 새 절
+(*"후보가 HEAD 자신이면 창은 0 커밋이고, 그것은 «변경 없음» 이 아니다"*)에 선택지 둘과
+고른 이유를 적었다. 요지:
+
+- **(B) 다음 후보(`HEAD^`)로 폴백**은 아래 merge-base 갈래와의 «일관성» 만 얻고,
+  🔴 **env 반영용 Redeploy 는 여전히 안 굽는다** — 그 커밋이 앱 경로를 안 건드렸으면
+  `HEAD^..HEAD` 도 «건너뜀» 이기 때문이다. ⑤의 함정이 **안 고쳐진다.**
+- **(A) `exit 1`(빌드)** 는 이 파일이 맨 위에 이미 선언해 둔 규약(*"판정할 수 없는 상황은
+  전부 빌드 진행"*)을 그대로 적용한다. 수동 Redeploy 는 **사람이 명시적으로 빌드를 요청한
+  행위**라 fail-open 방향과도 맞고, 대가(Redeploy 1건이 항상 슬롯을 쓴다)는 사람이 누른
+  비용이다.
+
+🔵 **(B) 를 안 골랐으므로 `VERCEL.md` 함정 기록은 산출물이 아니다.** 대신 ⑤의 함정은
+**해소되는 쪽**으로 처리됐다 — 다만 그 해소는 «이 수정이 담긴 커밋의 배포» 에만 적용되고,
+**이미 배포돼 있는 낡은 커밋을 Redeploy 하면 그 커밋에 담긴 옛 판정자가 돈다.**
+`ignoreCommand` 는 **클론된 커밋의 트리에서** 실행되기 때문이다. 이 단서는 아래 §부수 발견과
+직결된다.
+
+## AC-2 — 수정
+
+`usable_base()` 에 검사 (d) 를 넣었다. `>>> MONO-594-EMPTY-WINDOW-GUARD` /
+`<<< MONO-594-EMPTY-WINDOW-GUARD` 두 ASCII 표식 사이가 그 블록이다(표식의 용도는 AC-3 참조).
+
+- 🔴 **문자열 비교가 아니라 `git rev-parse "<cand>^{commit}"` 로 정규화해서 비교한다.**
+  실측으로 확인: full SHA(`a7d79081552887293f9b6db32ec642ed24d7fd98`)와
+  **축약형**(`a7d790815`) **둘 다** 잡혀 `rc=1`(빌드)이 나온다. 문자열 비교였으면 축약형이
+  조용히 빠져나갔을 것이고, 그 실패는 고치기 전과 **구별되지 않는다.**
+- 🔴 **로그를 남긴다.** 이 결함이 안 보인 이유가 «0 커밋» 을 아무도 이상하게 안 읽은 것이므로,
+  새 경로는 무엇을 왜 했는지 두 줄로 적는다:
+
+```
+[vercel-ignore] · VERCEL_GIT_PREVIOUS_SHA=a7d7908155… 가 HEAD 자신입니다 — 판정 창이 **0 커밋**입니다 (수동 Redeploy 의 지문).
+[vercel-ignore] ✖ 빈 창으로는 판정할 수 없습니다 — 빌드를 진행합니다 (TASK-MONO-594).
+rc=1   ← 빌드
+```
+
+🔵 **2번 갈래(merge-base)의 동작은 안 건드렸다.** 그쪽엔 `MB = HEAD` elif 가 **먼저** 있어
+`usable_base` 에 닿지 않는다 — 칸 (10)(11)이 그 축을 계속 지킨다(둘 다 통과).
+
+## AC-3 — 칸 (13)·(13b) 신설 + **bite 를 CI 에 상주시켰다**
+
+- **칸 (13)** — `CELL_PREV_SHA` 를 HEAD 와 같게 세우고 **자기 경로를 건드린 커밋**을 HEAD 에
+  둔다 → 기대 `rc=1`(빌드). 고장 난 판은 여기서 `rc=0`(건너뜀)을 낸다.
+- **칸 (13b) — 픽스처 대조군.** 🔴 고친 판에서 (13)은 **커밋 내용과 무관하게** `rc=1` 이다
+  (빈 창이면 즉시 빌드). 그러니 (13) 혼자서는 *"HEAD 가 정말 자기 경로를 건드렸는가"* 를
+  증명하지 못하고, 픽스처가 조용히 무관한 커밋으로 바뀌어도 초록으로 남는다. (13b)는 **같은
+  HEAD 를 정상 창(1 커밋)으로** 재서 여전히 `rc=1` 임을 본다 — 둘 사이에서 달라지는 것이
+  창의 크기뿐이므로, (13)이 재는 것이 **창** 이라는 뜻이 된다.
+- 🔴🔴 **bite 는 일회성 수동 확인이 아니라 `--self-test` 칸 (h) 로 만들었다.** `_mk` 가 진짜
+  트리의 `scripts/vercel-should-build.sh` 를 사본에 복제하고 `_run` 이 그 사본의 판정자를
+  쓰므로, **표식 사이를 sed 로 지운 «되돌린 판»** 으로 가드를 돌릴 수 있다. 실측 결과:
+  `ok: (h) 빈 창 가드(MONO-594)를 되돌림 -> 칸 (13)이 문다 (rc=1)`. 이것이 티켓이 요구한
+  *"되돌린 사본에서 실패"* 를 **영구히** 확인한다 — 한 번 손으로 보고 지나가면 칸 (12)가
+  그랬듯 죽은 채 초록이 된다.
+- 🔴 **주입 착지부터 단언한다**((e)(g)가 세운 규율): 표식이 삭제 **전 정확히 2개**,
+  삭제 **후 0개** 여야 한다. 아니면 «안 물었다» 와 «시험한 적이 없다» 가 구별되지 않는다.
+  추가로 되돌린 사본에 `bash -n` 을 건다 — 문법이 깨지면 가드가 아니라 **sed 를** 시험하게
+  되고, 그때도 rc=1 이 나와 **통과처럼 보인다.**
+
+## AC-4 — `TASK-MONO-590` 과의 관계를 파일에 못박았다
+
+`vercel-should-build.sh` 헤더와 칸 (13) 주석 **양쪽에** 적었다:
+**수동 Redeploy 는 Deploy Hook 경로를 지나가지 않는다.** 590 은 배포가 *만들어지는 것 자체*를
+훅 축에서 줄이는 티켓이고 그 AC-3 이 훅 없는 프로젝트에서 `ignoreCommand` 를 살려 두기로
+했으므로, 590 이 이 파일을 «거의 죽은 기전» 으로 만들어도 이 갈래와 칸 (13)은 남아야 한다.
+
+## AC-5 — 검증 (숫자 없는 «통과» 없음)
+
+| 게이트 | 결과 |
+|---|---|
+| `bash -n scripts/vercel-should-build.sh` | rc=0 |
+| `bash -n scripts/check-vercel-build-triggers.sh` | rc=0 |
+| `bash scripts/check-vercel-build-triggers.sh` | **rc=0 · ok 칸 36개** (설정 3개 × 12칸; 수정 전 30 = 3 × 10) |
+| 칸 (13)·(13b) 발화 | 3개 설정 **전부**에서 각각 1회 = 6줄 (론처 · web-store · `kanggle-fan`) |
+| `bash scripts/check-vercel-build-triggers.sh --self-test` | **rc=0 · 칸 9개** (무망가 + (a)~(h); 수정 전 8) |
+| 그중 새 칸 (h) | `ok: (h) 빈 창 가드(MONO-594)를 되돌림 -> 칸 (13)이 문다 (rc=1)` |
+| A/B — 고치기 **전** 판정자 + `PREVIOUS_SHA=HEAD` | **rc=0 (건너뜀)** — 라이브 로그 두 줄을 문자 그대로 재현 |
+| A/B — 고친 판정자 + `PREVIOUS_SHA=HEAD` | **rc=1 (빌드)** |
+| 정규화 — **축약형** `PREVIOUS_SHA` | **rc=1 (빌드)** — 문자열 비교였으면 빠져나갔을 경로 |
+
+**🔴 CI 러너를 확인하고 적는다 (러너 없는 스위트는 썩는다).**
+잡 = `.github/workflows/ci.yml` 의 **`vercel-build-triggers`**
+(*"Vercel build triggers (an unrelated commit must not bake a deploy)"*), `ubuntu-latest`,
+`timeout-minutes: 5`. 스텝 셋: `bash -n` → `--self-test` → 가드 본 실행.
+🔵 **도달성도 확인했다** — `changes` 잡의 `vercel-build-triggers` path-filter 에
+`scripts/vercel-should-build.sh` 와 `scripts/check-vercel-build-triggers.sh` 가 **둘 다** 있고
+`code-changed` 와 AND 되어 있지 않다. 이 PR 은 두 파일을 모두 건드리므로 잡이 **돈다.**
+
+---
+
+# 🔵 부수 발견 — 이 수정이 랜딩하는 것 자체가 **팬의 «준비된 트리거»** 다
+
+`projects/fan-platform/web/fan-platform-web/vercel-ignore.sh` 의 `SPECS` 에
+`':/scripts/vercel-should-build.sh'` 가 **들어 있다**(*"판정자와 이 래퍼. 고쳤으면 한 번은
+행사돼야 한다"*). 즉 이 PR 이 `main` 에 스쿼시되면 그 커밋은 `kanggle-fan` 의 트리거 목록을
+건드리므로 **팬 프로덕션 빌드가 하나 구워지고**, 그 빌드가 소유자가 이미 넣어 둔
+`AUTH_SECRET` 계열 env 를 **반영한다**(`TASK-FAN-FE-018` · `TASK-MONO-574` 선행 2).
+
+🔴 **다만 «머지하면 팬이 산다» 로 읽지 마라. 조건이 하나 남는다** — 위 AC-0 ②가 잰 대로
+계정이 배포 생성 한도에 걸려 있는 동안에는 **배포가 생성조차 되지 않는다.** 이 커밋은
+슬롯이 있을 때 팬을 굽는 트리거이지, 슬롯 자체를 만들지 않는다.
+
+🔵 그리고 이것이 AC-1 에 적은 단서와 짝을 이룬다: `ignoreCommand` 는 **클론된 커밋의 트리**
+에서 돌기 때문에, 이 수정이 담기지 **않은** 옛 커밋을 Redeploy 하면 옛 판정자가 돌아 여전히
+취소된다. ⇒ 팬을 살리는 경로는 «옛 배포를 Redeploy» 가 아니라 **«이 커밋을 배포»** 다.
