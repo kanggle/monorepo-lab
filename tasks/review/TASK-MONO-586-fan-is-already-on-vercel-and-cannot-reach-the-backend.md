@@ -8,7 +8,7 @@ TASK-MONO-586
 
 # Status
 
-in-progress
+review
 
 # Owner
 
