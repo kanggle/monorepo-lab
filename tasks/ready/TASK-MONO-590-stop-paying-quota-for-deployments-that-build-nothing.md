@@ -116,6 +116,47 @@ projects/fan-platform/web/fan-platform-web/vercel-ignore.sh
 
 `scripts/check-vercel-build-triggers.sh` 의 `FLOOR=3` 이 이 셋을 하한으로 지킨다.
 
+## 🔴🔴 ⑥ `ignoreCommand` 는 **훅이 만든 배포에도 그대로 돈다** (2026-08-27 실측)
+
+**이 티켓의 설계에 구멍이 하나 있고, 오늘 그것에 실제로 걸렸다.**
+
+`ignoreCommand` 는 배포가 **어떻게 생겼는지** 를 묻지 않는다 — git push 든, 대시보드
+Redeploy 든, **Deploy Hook 이든** 생성된 뒤에 똑같이 돈다. 그러니 AC-1 이 훅을 쏴도
+**ignore 스텝이 그 배포를 취소할 수 있다.**
+
+### 실측 — 오늘 재배포가 정확히 그렇게 죽었다
+
+소유자가 `kanggle-fan` Production 에 OIDC env 4개를 넣고 대시보드에서 **Redeploy** 를
+눌렀다. 결과: **취소**. 그리고 `/api/auth/session` 은 그대로 **500**.
+
+원인은 가드가 아니라 **질문의 모양**이다:
+
+> `ignoreCommand` 가 묻는 것은 **«이 프로젝트 파일이 바뀌었나»** 다.
+> 그런데 **env 변경을 위한 재배포는 정의상 파일 변경이 0** 이다.
+> ⇒ **env 를 반영하려는 배포를, ignore 스텝이 정확히 골라서 취소한다.**
+
+당시 `main` tip 이 건드린 것은 `.claude/` · `platform/` · `tasks/` · `CLAUDE.md` ·
+`.github/` 와 `projects/*/tasks/INDEX.md` 였고, 팬의 pathspec 은 `:/projects/fan-platform/web`
+이하다. `projects/fan-platform/tasks/INDEX.md` 는 그 아래가 **아니다** → 건너뜀.
+🔵 **가드는 정확히 작동했다.** 우리가 원한 판정이 그것이 아니었을 뿐이다.
+
+### 🔵 그래서 AC-1 이 답해야 할 것이 하나 늘었다
+
+훅으로 생성을 게이트하면 **판정이 이미 훅 쪽에서 났다**(같은 `vercel-ignore.sh` 술어를 쓴다).
+그 뒤에 같은 술어를 **한 번 더** 돌리는 `ignoreCommand` 는 중복이고, 위 사례처럼
+**해로울 수 있다** — «파일은 안 바뀌었지만 이 배포는 필요하다» 를 표현할 방법이 없기 때문이다.
+
+⇒ AC-1 은 셋 중 하나를 **명시적으로 고른다**:
+
+| # | 안 | 대가 |
+|---|---|---|
+| **1** | `deploymentEnabled:false` 인 프로젝트에서는 `ignoreCommand` 를 **뺀다** | 🔵 판정이 한 곳에만 산다. 🔴 훅이 잘못 쏘면 막을 것이 없다 |
+| **2** | 둘 다 남기고, **훅이 쏘는 배포는 항상 빌드되게** 한다 | ignore 스크립트가 «훅이 쐈다» 를 알 방법이 필요하다(env 변수?) — **미조사** |
+| **3** | 그대로 두고 «가끔 훅이 헛방» 을 수용 | 🔴 **env 변경은 영원히 이 경로로 못 간다** — 오늘 그것이 실제 비용이었다 |
+
+🔴 **AC-3 의 `check-vercel-build-triggers.sh` 재작성도 이 선택에 걸린다** — 1번을 고르면
+그 가드가 지키던 대상이 프로젝트마다 달라진다.
+
 ---
 
 # Acceptance Criteria
