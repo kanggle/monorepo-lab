@@ -9,7 +9,7 @@ INDEX 는 *"구현이 시작될 때 거기로 옮긴다"* 고 한다. 머지된 
 
 # Status
 
-ready
+in-progress
 
 # Owner
 

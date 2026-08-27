@@ -18,7 +18,8 @@ Project-internal work (anything inside `projects/<name>/apps/`, `specs/`,
 
 ready → in-progress → review → done
 
-Only tasks in `ready/` may be implemented.
+Implementation is picked up only from `ready/`. The task file then moves to
+`in-progress/` and is the working document there until it moves on.
 
 ---
 
@@ -104,7 +105,8 @@ Allowed only after review approval.
 - Tasks in `review/` must not be re-implemented directly.
 - If review reveals a bug or missing requirement, create a new fix task in `ready/` referencing the original task ID.
 - Fix tasks must include the original task ID in their Goal section (e.g. "Fix issue found in TASK-MONO-002").
-- Do not modify a task file after it moves to `review/` or `done/`.
+- Do not modify a task file after it moves to `review/` or `done/`. Editing one rewrites the record of what was reviewed and what was decided.
+- `in-progress/` is deliberately **not** in that list. The lifecycle moves a task there when implementation starts, so that file is the working document until it moves to `review/` — recording what the implementation measured or corrected belongs in it. `TASK-MONO-589` fixed the hook that contradicted this.
 
 ### PR Separation Rule (lifecycle ↔ PR boundary)
 Each lifecycle transition lands in its own PR. **Never bundle task spec authoring with implementation in the same PR.**
@@ -147,7 +149,10 @@ that, use the root task lifecycle.
 
 # Rule
 
-Tasks must not be implemented from `in-progress/`, `review/`, or `done/`.
+Implementation must not be **started** from `in-progress/`, `review/`, or `done/`.
+It starts from `ready/`, and the task file moves to `in-progress/` as it starts —
+continuing there is the lifecycle working as designed, not an exception to it.
+`review/` and `done/` stay frozen either way.
 The single exception is a self-bootstrapping task that creates the root
 lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
@@ -184,12 +189,13 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 - `TASK-MONO-587-the-image-quota-nobody-asked-about-is-already-over.md` — **🔴 READY (신규, 2026-08-26 UTC) — 아무도 묻지 않은 축이 이미 초과돼 있다.** `TASK-MONO-575` 는 한도를 **네 축**(일일 배포·함수 호출·함수 시간·대역폭)으로 물었고 그 넷은 전부 여유였는데, 소유자가 붙여넣은 사용량 **전체** 목록에 **초과 2건**이 있었다 — **Image Transformations 5.6K/5K(112%)** · **Image Cache Writes 320K/100K(320%)**. 🔵 **일반화: 「계정 값이 진실이다」를 지켜도 「어느 축을 볼지」는 내가 미리 골랐고, 고른 목록 밖에 초과가 있었다.** 🔵 지금 배포된 것들은 무관하다 — `next/image` 사용: fan **0** · console **0** · 론처 **0**(정적). 🔴 **그런데 `web-store` 는 5곳**이고 `TASK-MONO-582` 가 올리려는 게 정확히 그 앱이다 ⇒ 올리면 **이미지가 전부 402** 로 죽을 수 있다. 🔴 **단계 2 만 막는다** — 단계 3·4 는 이 축을 안 쓴다. 🔵 `(B)` 가 쓰는 축은 전부 여유 ⇒ **575 AC-2 의 답은 «통과», 막는 건 이미지 축 하나**. 분석=**Opus 5** / 구현 권장=**Sonnet**(조회 + 기록).
 
-- `TASK-MONO-589-the-hook-freezes-in-progress-but-the-lifecycle-says-implement-there.md` — **🔴 READY (신규, 2026-08-27 UTC) — 훅과 `tasks/INDEX.md` 가 `in-progress/` 에 대해 정반대를 말한다.** `hardstop-detect.ps1:149` 의 HARDSTOP-05 정규식은 `(in-progress|review|done)` 이라 `in-progress/` 태스크 **본문 편집을 차단**하는데, INDEX § Review Rules 는 동결 대상을 **`review/`·`done/` 둘만** 적는다. 🔴 **INDEX 는 오히려 `in-progress/` 를 «작업 중인 자리»로 정의한다** — `ready → in-progress` = *"Allowed only when **implementation starts**"* · PR Separation Rule = *"impl PR — moves the task file **through `in-progress/`** to `review/`"*. ⇒ 구현 기간 내내 본문 편집이 막히면 **구현 중 알게 된 것을 태스크에 적을 자리가 없다**. 🔴 **머지된 커밋이 INDEX 쪽으로 실행됐다**: `51c0cff53`(#3452)가 `tasks/in-progress/TASK-MONO-575-*.md` 본문을 수정해 `main` 에 있다 — 훅이 막는 편집이 실제로 머지되고 있다. 08-27 세션에서 **두 번 차단**됐고 두 번 다 셸 우회 없이 멈췄다. 🔴🔴 **더 깊은 모순**: INDEX 가 자기 자신과도 안 맞는다 — `:87-88`(구현 시작 시 in-progress 로) ↔ `:150`(*"must not be **implemented from** in-progress/…"*) 를 동시에 참으로 만드는 상태가 **없다**. 🔵 **증거는 A(훅을 `(review|done)` 로 좁힌다) 쪽으로 기운다** — 훅 stanza 자신의 `[WHY]` 가 보호 대상으로 지목하는 것이 **`ready/` 큐의 신호**이지 `in-progress/` 파일의 불변성이 아니다. 🔴 **그러나 기울기는 판정이 아니고, B(INDEX 를 넓힌다)도 정합한 답이다** — B 를 고르면 «구현 중 알게 된 것은 어디에 적는가» 를 같은 문서에서 답해야 한다. **AC-0 모집단**: 훅 정규식이 `(?:^|/)tasks/` 라 **프로젝트 태스크에도 문다** ⇒ 루트만 고치면 8개 프로젝트에 같은 결함이 남는다. **AC-2 한-커밋**: 정규식 + stanza 문구 + `platform/hardstop-rules.md` 정경 + INDEX ⑥ 두 문장 — 🔴 `TASK-MONO-402` 가 **반대 방향의 같은 갈라짐**(정규식엔 `done` 없고 문구엔 있었다)을 고친 선례다. **AC-3 픽스처는 음성 대조군 필수**(`review/`·`done/` 은 여전히 block — 없으면 «전부 allow» 가 초록으로 보인다). **AC-5**: `__tests__/run-all.ps1` 이 CI 에서 실제로 도는지 확인 — 🔴 `TASK-MONO-405`(*"hook fixtures run nowhere"*)가 이 저장소에서 이미 일어났다. 🔴 **이 티켓이 안 푸는 것**: `done/TASK-MONO-575-*.md` 헤더 blockquote ↔ 본문 모순은 **A 를 골라도 안 풀린다**(`done/` 은 양쪽 안 모두에서 동결) — 별도 티켓. 분석=**Opus 5** / 구현 권장=**Sonnet**. [[feedback_one_fact_in_two_sections_only_one_gets_fixed]] [[project_guard_design_requirements]] [[feedback_recount_population_dont_inherit_scope]]
 
 - `TASK-MONO-590-stop-paying-quota-for-deployments-that-build-nothing.md` — **🔴 READY (신규, 2026-08-27 UTC) — 한도의 ~73% 를 «빌드하지 않기로 한 배포» 가 쓰고 있다.** `ignoreCommand` 는 배포를 **만든 뒤** 취소하는데 Vercel 이 세는 것은 **Deployments *Created* per Day** 다 ⇒ 취소된 배포도 슬롯을 그대로 먹는다. 판정을 생성 **앞**으로 옮긴다: `git.deploymentEnabled:false` + **Deploy Hook** + **이미 있는 `vercel-ignore.sh` 술어**. 🔵 **문서가 두 가지를 확정해 줬다**: 한도 행 이름이 **Created**(588 의 «건너뛴 배포도 먹는다» 가 낱말에 박혀 있다)이고 **`scope=owner`**(575 가 «같은 초 동시 빨강» 으로 추론한 **계정 전체 공유 카운터**를 독립 출처가 확인). 🔵 **술어는 새로 만들 게 없다** — 각 프로젝트 `vercel-ignore.sh` 가 pathspec 을 들고 공용 `scripts/vercel-should-build.sh` 가 판정하며, `rc=0`=건너뜀/`rc=1`=빌드에 **판정 불가는 rc=1 로 fail-open** ⇒ 훅 쪽에서도 «모르면 배포» 라 안전한 쪽이다. **24h 실측(08-26T08:00Z→08-27T09:00Z)**: ktg main **39** + mono main **17×2=34** + 브랜치 **27** ≈ **100**. 🔴 **측정기 고지 — Vercel 은 커밋이 아니라 푸시마다 배포한다**; main 은 스쿼시라 1:1 이므로 **73 은 단단**하고 브랜치 칸은 과대(한 푸시에 여러 커밋)·force-push/수동 Redeploy 는 과소인 **양방향 오차**다. 🔴🔴 **AC-0 이 전부다 — 전제가 미측정이다**: 588 은 **객체 형태**만 쟀고 §AC-2 에서 *"전역 off 형태는 main 을 포함하니 이 결과를 그리로 옮기지 마라"* 라 스스로 막았다. **불리언 `false` 가 main 생성까지 막는가**를 먼저 잰다 — 🔵 **대조군을 «다른 프로젝트» 로** 잡아 안전하게: 키는 **fan 에만**(어차피 프로덕션이 500), **론처가 대조군**, 그리고 **A–B–A 역방향**(키 제거 시 배포가 돌아오는가) + **이력 간격 30배 대기** + **계측기 2개 교차**. **세 갈래 전부 결정을 바꾼다**: A=막힌다→훅 필수 / **B=프리뷰만 막히고 main 은 산다 → 🟢 훅 불필요, 티켓 대폭 축소** / C=아무것도 안 막힘 → 🔴 **설계 사망, STOP**. 🔴 **B 를 «A 의 약한 판» 으로 읽지 마라 — 정반대다.** **AC-2 가드**: 이 설계가 들여오는 새 실패 모드는 **조용한 낡음**(`check-vercel-build-triggers.sh` 헤더가 이미 *"진짜 피해는 색깔이 아니라 론처가 낡은 판을 계속 서빙한 것"* 이라 적었다) ⇒ **선언 grep 금지, 배포된 커밋 vs 그 경로를 마지막으로 건드린 main 커밋**을 본다. **AC-3**: `check-vercel-build-triggers.sh` 의 **전제가 바뀐다** — 배포가 안 생기면 `ignoreCommand` 는 죽은 기전이라 **아무도 안 쓰는 것을 테스트하며 영원히 초록**이 된다(지우지 말고 다시 쓴다; `FLOOR=3` 은 **파일 3 / 살아 있는 프로젝트 2** 라 혼동 금지). **AC-4 안 고치는 것**: 🔴 **이미지 축(587) 무관**(112%/320% 초과 그대로, web-store 올리면 402) · Hobby 비상업 조항 · 🔴 **ktg 39/일은 같은 계정이라 이 저장소를 0 으로 만들어도 39% 가 남는다** · 🔴 **프리뷰 URL 상실 ⇒ 머지 전에 화면 보는 수단이 0**(프런트 e2e 가 nightly 전용, `TASK-FAN-FE-018` 이 같은 구멍의 다른 얼굴). **Edge**: 🔴 **착수 시 한도가 안 풀렸으면 측정 불가** — 거절된 배포와 키가 막은 배포가 **같은 부재**를 내므로 대조군이 배포를 **받는 것**부터 확인. 🔵 대안 축(소유자 결정): **Pro $20/월**(platform fee, seat 1 포함, $20 크레딧 포함 — 100→6,000/일이고 587 의 이미지 초과분 ≈$1~1.5 도 크레딧 안에 들어간다). 분석=**Opus 5** / 구현 권장=**Opus**(AC-0 측정 설계가 본체). [[feedback_control_group_design_four_axes]] [[env_empty_detector_output_is_not_absence]] [[feedback_one_fact_in_two_sections_only_one_gets_fixed]] [[feedback_a_reported_figure_must_name_what_was_measured]]
 
 
 ## in-progress
+
+- `TASK-MONO-589-the-hook-freezes-in-progress-but-the-lifecycle-says-implement-there.md` — **🔴 READY (신규, 2026-08-27 UTC) — 훅과 `tasks/INDEX.md` 가 `in-progress/` 에 대해 정반대를 말한다.** `hardstop-detect.ps1:149` 의 HARDSTOP-05 정규식은 `(in-progress|review|done)` 이라 `in-progress/` 태스크 **본문 편집을 차단**하는데, INDEX § Review Rules 는 동결 대상을 **`review/`·`done/` 둘만** 적는다. 🔴 **INDEX 는 오히려 `in-progress/` 를 «작업 중인 자리»로 정의한다** — `ready → in-progress` = *"Allowed only when **implementation starts**"* · PR Separation Rule = *"impl PR — moves the task file **through `in-progress/`** to `review/`"*. ⇒ 구현 기간 내내 본문 편집이 막히면 **구현 중 알게 된 것을 태스크에 적을 자리가 없다**. 🔴 **머지된 커밋이 INDEX 쪽으로 실행됐다**: `51c0cff53`(#3452)가 `tasks/in-progress/TASK-MONO-575-*.md` 본문을 수정해 `main` 에 있다 — 훅이 막는 편집이 실제로 머지되고 있다. 08-27 세션에서 **두 번 차단**됐고 두 번 다 셸 우회 없이 멈췄다. 🔴🔴 **더 깊은 모순**: INDEX 가 자기 자신과도 안 맞는다 — `:87-88`(구현 시작 시 in-progress 로) ↔ `:150`(*"must not be **implemented from** in-progress/…"*) 를 동시에 참으로 만드는 상태가 **없다**. 🔵 **증거는 A(훅을 `(review|done)` 로 좁힌다) 쪽으로 기운다** — 훅 stanza 자신의 `[WHY]` 가 보호 대상으로 지목하는 것이 **`ready/` 큐의 신호**이지 `in-progress/` 파일의 불변성이 아니다. 🔴 **그러나 기울기는 판정이 아니고, B(INDEX 를 넓힌다)도 정합한 답이다** — B 를 고르면 «구현 중 알게 된 것은 어디에 적는가» 를 같은 문서에서 답해야 한다. **AC-0 모집단**: 훅 정규식이 `(?:^|/)tasks/` 라 **프로젝트 태스크에도 문다** ⇒ 루트만 고치면 8개 프로젝트에 같은 결함이 남는다. **AC-2 한-커밋**: 정규식 + stanza 문구 + `platform/hardstop-rules.md` 정경 + INDEX ⑥ 두 문장 — 🔴 `TASK-MONO-402` 가 **반대 방향의 같은 갈라짐**(정규식엔 `done` 없고 문구엔 있었다)을 고친 선례다. **AC-3 픽스처는 음성 대조군 필수**(`review/`·`done/` 은 여전히 block — 없으면 «전부 allow» 가 초록으로 보인다). **AC-5**: `__tests__/run-all.ps1` 이 CI 에서 실제로 도는지 확인 — 🔴 `TASK-MONO-405`(*"hook fixtures run nowhere"*)가 이 저장소에서 이미 일어났다. 🔴 **이 티켓이 안 푸는 것**: `done/TASK-MONO-575-*.md` 헤더 blockquote ↔ 본문 모순은 **A 를 골라도 안 풀린다**(`done/` 은 양쪽 안 모두에서 동결) — 별도 티켓. 분석=**Opus 5** / 구현 권장=**Sonnet**. [[feedback_one_fact_in_two_sections_only_one_gets_fixed]] [[project_guard_design_requirements]] [[feedback_recount_population_dont_inherit_scope]]
 
 
 

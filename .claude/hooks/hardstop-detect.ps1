@@ -146,12 +146,21 @@ try {
         }
     }
 
-    if (-not $isLifecycleMove -and $relFromRoot -match '(?:^|/)tasks/(in-progress|review|done)/[^/]+\.md$') {
+    # 🔴 `in-progress/` is deliberately NOT in this set (TASK-MONO-589). It used to be, and
+    # that contradicted every `tasks/INDEX.md` in the repo — all 9 name `review/` and `done/`
+    # as the frozen stages and none names `in-progress/`, while the same files define
+    # `ready -> in-progress` as "Allowed only when implementation starts" and the impl PR as
+    # one that "moves the task file through `in-progress/` to `review/`". A task therefore
+    # sits in `in-progress/` for the whole implementation, and freezing it left nowhere to
+    # record what that implementation found. Practice had already picked the INDEX side:
+    # 51c0cff53 (#3452) edits an `in-progress/` body and is an ancestor of `main`.
+    # The 08-27 session hit this block twice and stopped both times.
+    if (-not $isLifecycleMove -and $relFromRoot -match '(?:^|/)tasks/(review|done)/[^/]+\.md$') {
         $stage  = $matches[1]
         $taskId = (($relFromRoot -split '/') | Select-Object -Last 1) -replace '\.md$', ''
         $stanza = @"
-[VIOLATION] HARDSTOP-05: Task ``$taskId`` is being edited under ``$relFromRoot`` which is in ``tasks/$stage/`` — frozen per lifecycle rules (only tasks in ``ready/`` may be implemented; ``in-progress`` / ``review`` / ``done`` files must not be modified except via lifecycle Status-field moves).
-[WHY] Only tasks in ``ready/`` may be implemented; ``in-progress/`` / ``review/`` / ``done/`` tasks are frozen, and unfiled work bypasses lifecycle review. The ready-queue signal is the public surface external observers read to know what's available.
+[VIOLATION] HARDSTOP-05: Task ``$taskId`` is being edited under ``$relFromRoot`` which is in ``tasks/$stage/`` — frozen per lifecycle rules (``review/`` and ``done/`` task files must not be modified except via lifecycle Status-field moves).
+[WHY] ``review/`` and ``done/`` task files are frozen: editing one rewrites the record of what was reviewed and what was decided. ``in-progress/`` is NOT frozen — the lifecycle moves a task there when implementation starts, so that file is the working document (``tasks/INDEX.md`` § Move Rules). Unfiled work still bypasses lifecycle review, and the ready-queue signal is the public surface external observers read to know what's available.
 [REMEDIATION] Choose one:
   1. If the work is new, author the task file in the correct ``tasks/ready/`` (root ``tasks/ready/`` for monorepo-level work per ``tasks/INDEX.md``; ``projects/<name>/tasks/ready/`` for project-internal work) and land it via a spec PR before any impl commits.
   2. If the work is a fix to an already-merged task, create a new fix task in ``ready/`` referencing the original task ID in its Goal section (per ``tasks/INDEX.md`` § Review Rules).

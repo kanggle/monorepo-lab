@@ -366,6 +366,12 @@ jobs:
             hooks:
               - '.claude/hooks/**'
               - '.claude/settings.json'
+              # TASK-MONO-589: the canonical HARDSTOP stanzas live here, and
+              # __tests__/hardstop-body-canonical-sync.ps1 exists to prove the hook's
+              # hardcoded [WHY]/[REFERENCE] still match them byte-for-byte. Without this
+              # entry the fixture only ran when the HOOK side changed — a commit editing
+              # only the platform body landed with its own drift detector never invoked.
+              - 'platform/hardstop-rules.md'
             workflows:
               - '.github/workflows/**'
             # TASK-MONO-407 — NO NEGATION PATTERNS HERE. Do not "helpfully" re-add
