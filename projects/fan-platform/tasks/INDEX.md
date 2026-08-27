@@ -66,6 +66,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
+- `TASK-FAN-FE-018-the-route-guard-does-not-run-in-production.md` — 🔴 **라우트 가드가 프로덕션에서 안 돈다.** `fan.hubwang.com` 의 보호 경로가 로그인 없이 전부 **200**(`/me` · `/artists`), 리다이렉트가 **하나도** 없다. 🔴 **판별자는 `/nonexistent-xyz` 가 404 라는 것** — 미들웨어는 라우팅보다 먼저 도므로 미인증이면 경로 존재 여부와 무관하게 `/login` 으로 **먼저** 꺾여야 한다. 응답에 `x-middleware-*` 도 없고 `X-Matched-Path: /me` 로 페이지에 곧장 갔다. 🔵 **유출은 아니다** — `/me` 는 클레임 세 칸이 전부 빈 값(`—`)인 껍데기만 렌더한다. 고칠 것은 **선언과 실제가 다르다**는 것이고, `/me` 가 실데이터를 렌더하는 순간 그 간극이 유출로 바뀐다. 🔵 **흔한 오진 하나는 미리 지웠다** — `next`=^15.1.0 이라 `src/middleware.ts` 는 **맞는 이름**이고 Next16 의 `proxy.ts` 개명 함정이 **아니다**; 파일도 배포 커밋 소스에 **있다**(02cf68fc9). 🔴 **가설 둘이 아직 안 갈렸다** — (A) 미들웨어가 배포에 안 실렸다 / (B) `await auth()` 가 던지고 페이지로 흘러내린다. `/api/auth/{providers,session,csrf}` 가 전부 **500 «server configuration»** 이라 **`AUTH_SECRET` 미투입**이 같은 뿌리일 수 있다(ADR-067 단계 3 «넣었는지 미확인»). 🔴 **무게는 A 쪽**(B 라면 보통 500 이 나는데 페이지는 전부 깨끗한 200/404) **이나 판정은 아니다**. **AC-1 이 싼 것부터 가른다**: env 투입 → `/api/auth/session` 200 **확인**(이걸 건너뛰면 «넣었는데 안 고쳐짐» 과 «여전히 안 들어감» 이 같은 출력을 낸다) → `/nonexistent-xyz` 재측정. 🔴 **AC-4 가 본체다** — 미들웨어가 안 돌면 빨개지는 테스트가 **하나도 없어서** 08-25 부터 조용히 안 돌았다. 선언 파일 grep 가드는 **안 된다**(파일은 내내 있었다) — **요청의 결과**를 봐야 하고, **어디서 도는가**(ci vs nightly)를 먼저 정해야 한다. 🔵 AC-3 에 음성 대조군 `/login`=200 을 넣어 «전부 302» 라는 잘못된 고침이 초록으로 보이는 것을 막는다. 분석=Opus 5 / 구현 권장=Sonnet.
+
 
 ## in-progress
 
