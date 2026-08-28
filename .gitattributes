@@ -24,3 +24,22 @@
 # (2) Vercel(리눅스, blob=LF)과 S3(윈도우, CRLF)가 **같은 커밋에서 다른 바이트**를 서빙한다.
 # 2026-08-21 실측: 두 판이 413 바이트 차이(= CR 413개)였다.
 infra/demo/aws/site/*.html text eol=lf
+
+# required status check 이름 핀도 LF 로 고정한다 (TASK-MONO-599).
+# 이 파일의 각 줄은 GitHub 에 **등록된 context 문자열 그 자체**이고, 가드는 그것을
+# `grep -qxF` 로 **등호** 비교한다. CRLF 로 체크아웃되면 모든 이름 끝에 `\r` 이 붙어
+# 넷 다 «없음» 이 되고, **Windows 에서만 빨간 가드**가 된다 — 원인이 내용이 아니라
+# **체크아웃 바이트**라 진단이 오래 걸리는 종류다. 🔵 가드 자신도 `\r` 을 벗겨서
+# 읽지만(이중 방어, self-test 칸 (g)), blob 을 우연에 맡기지 않는다.
+scripts/required-check-names.txt text eol=lf
+
+# 🔴🔴 INDEX 큐 파일도 LF 로 고정한다 — **착수 중 실제로 당해서 넣는다** (TASK-MONO-599).
+# 이 파일들은 프로그램이 다시 쓴다(행 이동 스크립트). 그런데 `core.autocrlf=true` 인 이
+# 호스트에서 **체크아웃은 LF→CRLF 로 바꿔 주는데 `git add` 는 CRLF→LF 로 되돌리지
+# 않았다** — 한 방향만 도는 변환이다. 결과: 한 줄만 고친 커밋이 **985 줄 전체를 CRLF 로
+# 다시 쓴 diff**(985+/985−)로 나왔고, 내용 변경이 그 안에 묻혔다. blame 도 같이 죽는다.
+# 🔵 짐작되는 이유는 이 파일들이 한국어·이모지가 대부분이라 git 의 text/binary 휴리스틱이
+# 한쪽에서 «binary» 로 판정하는 것이지만, **판정 기전보다 관측이 중요하다** — 고정해 두면
+# 어느 쪽이든 안 생긴다.
+tasks/INDEX.md            text eol=lf
+projects/*/tasks/INDEX.md text eol=lf

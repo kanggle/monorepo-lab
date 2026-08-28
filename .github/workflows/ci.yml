@@ -222,6 +222,10 @@ jobs:
       # in the walkthrough, or the guard/exception list itself. AND-ing with
       # code-changed would skip it on exactly the diffs it exists to police.
       walkthrough-ledger: ${{ steps.filter.outputs.walkthrough-ledger }}
+      # TASK-MONO-599: raw filter, NOT AND-combined with `code-changed`. Every arrival
+      # path is a workflow `name:` or a markdown line — neither is code, so AND-ing
+      # would skip the guard on exactly the diffs that can deadlock `main`.
+      required-check-names: ${{ steps.filter.outputs.required-check-names }}
       # TASK-MONO-524: raw filter, NOT AND-combined with `code-changed`. The arrival
       # path is a new `.sql` file under a service's db/ directory; whether that lands
       # inside `code-changed` is incidental to the defect, and this guard is the only
@@ -643,6 +647,21 @@ jobs:
               - 'scripts/walkthrough-ledger-exceptions.txt'
               - 'tasks/**'
               - 'projects/*/tasks/**'
+            # TASK-MONO-599: a required status check is matched by STRING. Renaming a
+            # job's `name:` in this file makes the registered context match no check run
+            # at all — permanently pending — so `main` goes BLOCKED on every PR, while
+            # the renaming PR itself merges green. The change cannot block itself, which
+            # is why this needs a guard rather than review attention.
+            # 🔴 `ci.yml` is the load-bearing trigger here, not the docs: the docs
+            # drifting is a wrong instruction, the job rename is an outage.
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            required-check-names:
+              - '.github/workflows/ci.yml'
+              - 'scripts/check-required-check-names.sh'
+              - 'scripts/required-check-names.txt'
+              - 'CLAUDE.md'
+              - 'platform/git-workflow-policy.md'
+              - '.claude/commands/review-task.md'
             # TASK-MONO-524: a dev-only Flyway seed numbered ABOVE its production
             # timeline makes every later production migration out-of-order, which
             # Flyway rejects — the service then crash-loops on every host with an
@@ -1015,6 +1034,57 @@ jobs:
 
       - name: Guard — every composite Service Type sits in one backtick span
         run: bash scripts/check-service-type-notation.sh
+
+  required-check-names:
+    name: Required check names (protection pin vs ci.yml vs the rule's three homes)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.required-check-names == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-required-check-names.sh
+
+      # TASK-MONO-599. A required status check is matched by STRING. TASK-MONO-598
+      # turned protection on and proved the gate bites — by reading the LIVE
+      # configuration. The four names it wrote into three documents the same day were
+      # never compared against it, and three of the four were wrong (every parenthetical
+      # dropped). Re-registering from those names makes three contexts permanently
+      # pending and deadlocks `main` — the exact failure 598 excluded tier 3 to avoid.
+      # It survived a day because the string is true or false depending on the tool:
+      # substring `grep` matched, equality did not.
+      - name: Guard — the four registered context names still exist in ci.yml and in the rule
+        run: bash scripts/check-required-check-names.sh
+
+      # The guard passing says the names agree today; it does not say the guard still
+      # bites. Cell (e) is the defect itself — the full name present AND a shortened
+      # code span alongside it, which a presence-only check would wave through.
+      - name: Guard self-test (mutated copies of the real files)
+        run: bash scripts/check-required-check-names.sh --self-test
+
+      # 🔴 One-shot probe, TASK-MONO-599 AC-2: can a workflow token read branch
+      # protection at all? The guard deliberately does NOT depend on this — a guard
+      # that cannot run reports green — but the answer decides whether a follow-up can
+      # close the direction this guard is blind to (someone changing protection
+      # itself). Never fails the job; it is a measurement, not a gate.
+      - name: Probe — is required_status_checks readable from a runner? (informational)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          out=$(gh api "repos/${{ github.repository }}/branches/main/protection/required_status_checks" --jq '.contexts[]' 2>&1)
+          rc=$?
+          echo "rc=$rc"
+          echo "--- response (first 400 chars) ---"
+          echo "${out:0:400}"
+          if [ "$rc" -eq 0 ]; then
+            echo "PROBE-RESULT: readable — a protection-side guard is possible"
+          else
+            echo "PROBE-RESULT: not readable — the pin axis is the only one available"
+          fi
 
   walkthrough-ledger-drift:
     name: Walkthrough limitation ledger drift (§ 6 rows vs task queues)
