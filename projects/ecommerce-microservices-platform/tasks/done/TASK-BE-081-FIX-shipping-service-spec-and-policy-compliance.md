@@ -8,11 +8,7 @@ TASK-BE-081-FIX-shipping-service-spec-and-policy-compliance
 
 # Status
 
-<<<<<<<< HEAD:tasks/done/TASK-BE-081-FIX-shipping-service-spec-and-policy-compliance.md
 done
-========
-review
->>>>>>>> worktree-agent-ac4cdd70:tasks/review/TASK-BE-081-FIX-shipping-service-spec-and-policy-compliance.md
 
 # Owner
 
