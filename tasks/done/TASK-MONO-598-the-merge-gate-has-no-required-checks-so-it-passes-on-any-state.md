@@ -10,7 +10,7 @@ TASK-MONO-598
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -276,3 +276,23 @@ gh pr merge 3510 --squash → "the base branch policy prohibits the merge."
   세 문서 모두에 그렇게 적었다.
 - approval 은 안 걸었다. self-merge 는 그대로 돌아간다.
 - 티어 2 의 33개는 **미결**이다. 열려면 skipped 의미론을 실측해야 하고, 그건 별도 판단이다.
+
+---
+
+# 🔵 랜딩 후 실황 (2026-08-28) — **첫 PR 이 설계를 그대로 보여줬다**
+
+impl PR **#3511** 자신이 새 게이트를 통과한 모습:
+
+```
+required 4개  → 전부 pass
+비-required   → FAILURE 2 (Vercel 계정 레이트리밋)
+mergeStateStatus = UNSTABLE   ← BLOCKED 아님. 머지 허용됨
+```
+
+⇒ **의도한 두 성질이 한 화면에 나왔다**: ⑴ 어떤 커밋으로도 못 고치는 Vercel 한도 실패가
+**머지를 막지 않는다**(required 에서 뺐기 때문) ⑵ 그리고 동시에 **`UNSTABLE` 은 «빨간 것이
+있다» 는 뜻**이라, (c) 통과가 «전부 초록» 이 아니라는 이 티켓의 단서가 문서가 아니라
+**상태값으로** 확인된다.
+
+🔵 AC-4 의 프로브(#3510)가 `BLOCKED` 였고 이 PR 이 `UNSTABLE` 이었다는 **대비**가
+게이트의 분해능을 증명한다 — required 가 빨가면 막고, 비-required 가 빨가면 안 막는다.
