@@ -146,6 +146,61 @@ try {
         }
     }
 
+    # ===== TASK-MONO-591: two narrow repairs on a frozen file =====
+    #
+    # The freeze is right and stays. What was missing is a correction PATH — "the record is
+    # wrong" and "it cannot be fixed" came out of the same rule (TASK-MONO-589 named this
+    # and deferred it). AC-0 measured the population before prescribing. Across 2303 done/
+    # task files: 500 whose Status field states something FALSE, 714 with no Status heading
+    # at all, 2 carrying unresolved merge-conflict markers, 1 with the prose-header shape
+    # the ticket was written about.
+    #
+    # The 500 are deliberately NOT corrected (owner decision, 2026-08-28). The leak already
+    # stopped — every wrong file carries an early ID (root's highest wrong is 73 against a
+    # queue reaching 597; erp/finance/console have zero) — they are an immutable log of what
+    # was written at the time, and a guard over them would be RED on 500 files on day one,
+    # which is precisely how a guard gets switched off. The 714 with no heading state
+    # nothing false; absence is not a wrong claim. Only the 2 + 1 below are repaired.
+    #
+    # 🔴 Both rules are shaped so they CANNOT widen into arbitrary editing. Opening that is
+    #    the failure this ticket was told to avoid — it would undo TASK-MONO-402.
+
+    # (R1) Conflict-marker repair. `new_string` must be a BARE lifecycle token, and that
+    # token must already appear as one of the sides inside the conflict. So the edit can
+    # only collapse a conflict to a value the file already held; it cannot introduce one.
+    $isConflictRepair = $false
+    if ($oldString -and $newString -and ($oldString -match '(?m)^<{7}')) {
+        $trimmedNew = $newString.Trim()
+        if ($lifecycleTokens -contains $trimmedNew -and
+            $oldString -match ('(?m)^\s*' + [regex]::Escape($trimmedNew) + '\s*$')) {
+            $isConflictRepair = $true
+        }
+    }
+
+    # (R2) Append-only correction block. `new_string` must START WITH `old_string` character
+    # for character, so nothing existing can be removed or altered — a correction is an
+    # ADDITION, never a rewrite. Without that prefix requirement this exception would be a
+    # hole rather than a door: the repo's discipline is that an observation recorded at the
+    # time stays recorded (TASK-MONO-574 kept its superseded measurement block for exactly
+    # this reason), and the thing being corrected is a stale STATE DECLARATION, not an
+    # observation.
+    #
+    # The heading anchor is deliberately ASCII. This file is PowerShell on a CP949 host,
+    # where comparing against a Korean literal is one codepage away from silently never
+    # matching — and a predicate that never matches turns this into a permanent block with
+    # no error to explain it. The prose after the anchor may be in any language.
+    $isCorrectionAppend = $false
+    if ($oldString -and $newString -and
+        $newString.Length -gt $oldString.Length -and $newString.StartsWith($oldString)) {
+        $appended = $newString.Substring($oldString.Length)
+        $firstContent = ($appended -split "`n" | Where-Object { $_.Trim() -ne '' } | Select-Object -First 1)
+        if ($firstContent -and $firstContent.Trim() -match '^##\s+CORRECTION\b') {
+            $isCorrectionAppend = $true
+        }
+    }
+
+    $isFrozenRepair = $isLifecycleMove -or $isConflictRepair -or $isCorrectionAppend
+
     # 🔴 `in-progress/` is deliberately NOT in this set (TASK-MONO-589). It used to be, and
     # that contradicted every `tasks/INDEX.md` in the repo — all 9 name `review/` and `done/`
     # as the frozen stages and none names `in-progress/`, while the same files define
@@ -155,7 +210,7 @@ try {
     # record what that implementation found. Practice had already picked the INDEX side:
     # 51c0cff53 (#3452) edits an `in-progress/` body and is an ancestor of `main`.
     # The 08-27 session hit this block twice and stopped both times.
-    if (-not $isLifecycleMove -and $relFromRoot -match '(?:^|/)tasks/(review|done)/[^/]+\.md$') {
+    if (-not $isFrozenRepair -and $relFromRoot -match '(?:^|/)tasks/(review|done)/[^/]+\.md$') {
         $stage  = $matches[1]
         $taskId = (($relFromRoot -split '/') | Select-Object -Last 1) -replace '\.md$', ''
         $stanza = @"
@@ -165,6 +220,7 @@ try {
   1. If the work is new, author the task file in the correct ``tasks/ready/`` (root ``tasks/ready/`` for monorepo-level work per ``tasks/INDEX.md``; ``projects/<name>/tasks/ready/`` for project-internal work) and land it via a spec PR before any impl commits.
   2. If the work is a fix to an already-merged task, create a new fix task in ``ready/`` referencing the original task ID in its Goal section (per ``tasks/INDEX.md`` § Review Rules).
   3. If unclear which lifecycle applies, consult ``tasks/INDEX.md`` § "When to Use Root vs Project Tasks" decision table.
+  4. If the frozen file's own STATE DECLARATION is now false (it says work is pending that has since been decided), append a correction section — a heading matching ``## CORRECTION`` at the END of the file, adding only, deleting nothing (TASK-MONO-591). A correction states what is true now; it never edits or removes what was recorded then. If instead you want to change an observation, you do not — that measurement is a fact about its own date.
 [REFERENCE] CLAUDE.md § Task Rules + tasks/INDEX.md § Move Rules
 "@
         Write-Block $stanza

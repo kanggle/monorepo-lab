@@ -145,3 +145,95 @@ $sameShapeUnderReview = Invoke-Hook -HookName 'hardstop-detect.ps1' -Payload @{
 }
 Assert-Stanza -Output $sameShapeUnderReview -ExpectedId 'HARDSTOP-05' -ExpectedDecision 'block'
 "PASS: HARDSTOP-05 positive-3 (same edit shape under review/ still blocks) — MONO-589"
+
+# ===== TASK-MONO-591: two narrow repairs on a frozen file =====
+#
+# 🔴 The danger this ticket was warned about is that a correction exception quietly
+# widens into arbitrary editing and undoes TASK-MONO-402. Every cell below therefore
+# comes in pairs: the permitted shape, and the SAME shape mutated just past the rule.
+
+# --- (R1) conflict-marker repair -------------------------------------------------
+# Real shape, measured: two ecommerce done/ files carry an unresolved conflict where
+# both sides are lifecycle tokens, committed verbatim from a worktree-agent-* branch.
+$conflictOld = "<<<<<<<< HEAD:tasks/done/TASK-BE-080-FIX.md`ndone`n========`nreview`n>>>>>>>> worktree-agent-a250ba6d:tasks/review/TASK-BE-080-FIX.md"
+
+$r1Allow = Invoke-Hook -HookName 'hardstop-detect.ps1' -Payload @{
+    tool_name  = 'Edit'
+    tool_input = @{ file_path = $doneFile; old_string = $conflictOld; new_string = "done" }
+    cwd = $repoRoot
+}
+Assert-Allowed -Output $r1Allow
+"PASS: HARDSTOP-05 allow-3 (conflict block collapsed to a side it already held) — MONO-591"
+
+# 🔴 new_string must be a BARE token. A token plus anything else is a body edit wearing
+# a repair's clothes — this is the cell that keeps R1 from becoming a hole.
+$r1Block = Invoke-Hook -HookName 'hardstop-detect.ps1' -Payload @{
+    tool_name  = 'Edit'
+    tool_input = @{ file_path = $doneFile; old_string = $conflictOld; new_string = "done`n`n# Goal`n`nRewritten." }
+    cwd = $repoRoot
+}
+Assert-Stanza -Output $r1Block -ExpectedId 'HARDSTOP-05' -ExpectedDecision 'block'
+"PASS: HARDSTOP-05 positive-4 (conflict repair carrying extra body still blocks) — MONO-591"
+
+# 🔴 The token must already be a SIDE of the conflict. Otherwise the 'repair' invents a
+# status the file never held.
+$r1Invent = Invoke-Hook -HookName 'hardstop-detect.ps1' -Payload @{
+    tool_name  = 'Edit'
+    tool_input = @{ file_path = $doneFile; old_string = $conflictOld; new_string = "backlog" }
+    cwd = $repoRoot
+}
+Assert-Stanza -Output $r1Invent -ExpectedId 'HARDSTOP-05' -ExpectedDecision 'block'
+"PASS: HARDSTOP-05 positive-5 (conflict repair to a value not in the conflict blocks) — MONO-591"
+
+# --- (R2) append-only correction block --------------------------------------------
+$tailOld = "## AC-3`n`nOriginal closing text."
+
+$r2Allow = Invoke-Hook -HookName 'hardstop-detect.ps1' -Payload @{
+    tool_name  = 'Edit'
+    tool_input = @{
+        file_path  = $doneFile
+        old_string = $tailOld
+        new_string = "$tailOld`n`n## CORRECTION (post-close, 2026-08-28)`n`nThe header said AC-0/2 were pending; they were decided on 08-25."
+    }
+    cwd = $repoRoot
+}
+Assert-Allowed -Output $r2Allow
+"PASS: HARDSTOP-05 allow-4 (append-only correction block) — MONO-591"
+
+# 🔴🔴 THE CELL THAT MATTERS. Same correction heading, but one character of the original
+# is altered. If this passes, the exception is a rewrite channel and the freeze is gone.
+$r2Mutate = Invoke-Hook -HookName 'hardstop-detect.ps1' -Payload @{
+    tool_name  = 'Edit'
+    tool_input = @{
+        file_path  = $doneFile
+        old_string = $tailOld
+        new_string = "## AC-3`n`nOriginal closing text REWRITTEN.`n`n## CORRECTION (post-close)`n`nappended too."
+    }
+    cwd = $repoRoot
+}
+Assert-Stanza -Output $r2Mutate -ExpectedId 'HARDSTOP-05' -ExpectedDecision 'block'
+"PASS: HARDSTOP-05 positive-6 (correction that alters the original still blocks) — MONO-591"
+
+# 🔴 An append whose first content line is NOT the correction heading is just an append.
+# Without this cell, R2 would allow appending anything at all to a frozen file.
+$r2Unlabelled = Invoke-Hook -HookName 'hardstop-detect.ps1' -Payload @{
+    tool_name  = 'Edit'
+    tool_input = @{
+        file_path  = $doneFile
+        old_string = $tailOld
+        new_string = "$tailOld`n`n## Extra Findings`n`nSmuggled in without the label."
+    }
+    cwd = $repoRoot
+}
+Assert-Stanza -Output $r2Unlabelled -ExpectedId 'HARDSTOP-05' -ExpectedDecision 'block'
+"PASS: HARDSTOP-05 positive-7 (unlabelled append still blocks) — MONO-591"
+
+# 🔵 The close chore must still work. This is the AC-2 cell whose failure would break
+# every close chore in the repo, so it is asserted last and explicitly.
+$closeChoreStillWorks = Invoke-Hook -HookName 'hardstop-detect.ps1' -Payload @{
+    tool_name  = 'Edit'
+    tool_input = @{ file_path = $doneFile; old_string = "# Status`n`nreview"; new_string = "# Status`n`ndone" }
+    cwd = $repoRoot
+}
+Assert-Allowed -Output $closeChoreStillWorks
+"PASS: HARDSTOP-05 allow-5 (close chore Status move survives both new exceptions) — MONO-591"

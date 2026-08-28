@@ -67,8 +67,15 @@ Rationale: [`docs/adr/ADR-MONO-006-lint-remediation-as-agent-context.md`](../doc
   1. If the work is new, author the task file in the correct `tasks/ready/` (root `tasks/ready/` for monorepo-level work per `tasks/INDEX.md`; `projects/<name>/tasks/ready/` for project-internal work) and land it via a spec PR before any impl commits.
   2. If the work is a fix to an already-merged task, create a new fix task in `ready/` referencing the original task ID in its Goal section (per `tasks/INDEX.md` § Review Rules).
   3. If unclear which lifecycle applies, consult `tasks/INDEX.md` § "When to Use Root vs Project Tasks" decision table.
+  4. If the frozen file's own STATE DECLARATION is now false (it says work is pending that has since been decided), append a correction section — a heading matching `## CORRECTION` at the END of the file, adding only, deleting nothing (TASK-MONO-591). A correction states what is true now; it never edits or removes what was recorded then. If instead you want to change an observation, you do not — that measurement is a fact about its own date.
 [REFERENCE] CLAUDE.md § Task Rules + tasks/INDEX.md § Move Rules
 ```
+
+> **Why option 4 exists, and why it is shaped that way** (`TASK-MONO-591`). Before it, "the record is wrong" and "it cannot be fixed" came out of the same rule — `TASK-MONO-589` named that gap and deferred it to a separate ticket. The hook enforces the shape mechanically: `new_string` must start with `old_string` character for character, so a correction can only ever be **appended**, never a rewrite. That preserves the discipline the freeze exists for — an observation recorded at the time stays recorded (`TASK-MONO-574` deliberately kept its superseded measurement block) — while giving a stale *state declaration* somewhere to be answered.
+>
+> A second, narrower repair is also allowed: collapsing an unresolved **merge-conflict block** in the Status field to one of the values already inside it. `new_string` must be a bare lifecycle token that already appears as a side of that conflict, so the edit cannot introduce a value the file never held. Two files needed it — `TASK-BE-080-FIX` and `TASK-BE-081-FIX` in `ecommerce`, both landed from a `worktree-agent-*` branch with the conflict committed verbatim.
+>
+> 🔴 What option 4 is **not** for: the 500 `done/` files whose `Status` field states something false. Those were measured (`TASK-MONO-591` AC-0, across 2303 `done/` files — 500 false, 714 with no `Status` heading at all, 2 conflicted, 1 prose header) and deliberately left alone by owner decision on 2026-08-28. The leak had already stopped — every wrong file carries an early task ID, and the three most recently bootstrapped projects have none — and a guard over that backlog would be RED on 500 files on day one, which is how a guard gets switched off rather than obeyed.
 
 ## HARDSTOP-06 — Required specifications missing or in conflict
 
