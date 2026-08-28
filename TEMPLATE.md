@@ -201,6 +201,10 @@ touch projects/<new-project>/tasks/{backlog,ready,in-progress,review,done,archiv
 
 > `specs/integration/` is created here because the `PROJECT.md` IAM IdP section references `specs/integration/iam-integration.md` (see Step 2 and §"IAM IdP Integration Pattern"). `tasks/backlog/` is required by the project-level lifecycle defined in Step 3.
 
+> 🔴 **The `touch …/.gitkeep` line is not cosmetic — it is the entire reason those directories still exist after the first task moves out** (TASK-MONO-592). git does not track empty directories, so a lifecycle stage with no keeper disappears from the checkout the moment its queue empties, and every `projects/*/tasks/<stage>` sweep then drops that project from its population with no error and no warning. `wms-platform` and `fan-platform` were bootstrapped without these keepers and both lost a stage this way; on 2026-08-27 a census reported 7 projects when there were 8.
+>
+> This is enforced, not merely documented. `scripts/check-lifecycle-stage-dirs.sh` derives its population from `projects/*/PROJECT.md` and its stage list from each `tasks/INDEX.md` `# Lifecycle` line, so a bootstrap PR that skips the keepers turns the `lifecycle-stage-dirs` CI job red on the very commit that adds `PROJECT.md`. **A stage directory holding only task `.md` files fails too** — it exists today and vanishes one close-chore later, which is the same defect with a delay. If Step 3 declares a stage that is not in the list above, add a keeper for it as well.
+
 #### 2. Write `PROJECT.md`
 
 Copy the frontmatter structure from an existing project (e.g., `projects/wms-platform/PROJECT.md`). The required frontmatter fields are:

@@ -203,6 +203,12 @@ jobs:
       # those PRs `code-changed` is false by construction, so AND-combining would
       # give the guard a green skip on 100% of its defect class (§ F1).
       index-queue: ${{ steps.filter.outputs.index-queue }}
+      # TASK-MONO-592: raw filter, NOT AND-combined with `code-changed`. The two
+      # arrival paths are a project bootstrap (a `PROJECT.md` + a `tasks/INDEX.md`
+      # and a set of `.gitkeep` files) and a keeper deletion. Both are pure-`.md`
+      # /empty-file diffs carrying no code, so AND-combining would switch the guard
+      # off for 100% of its defect class — the same shape as `index-queue` above.
+      lifecycle-dirs: ${{ steps.filter.outputs.lifecycle-dirs }}
       # TASK-MONO-584: raw filter, NOT AND-combined with `code-changed`. The arrival
       # path for a domain drift is a doc/terraform edit that carries no code at all.
       public-domains: ${{ steps.filter.outputs.public-domains }}
@@ -482,6 +488,29 @@ jobs:
               - 'projects/*/tasks/in-progress/**'
               - 'projects/*/tasks/done/**'
               - 'scripts/check-index-queue-drift.sh'
+            # TASK-MONO-592: a declared lifecycle stage must survive an empty queue.
+            # git does not track empty directories, so a queue that empties out takes
+            # its directory with it and every `projects/*/tasks/<stage>` sweep drops
+            # that project silently. The trigger follows the defect's ARRIVAL PATH
+            # (§ G1), and the arrival path here is NOT a task move — the guard's
+            # predicate never looks at `.md` files. It is:
+            #   (a) a project bootstrap — `PROJECT.md` is the population source, and
+            #       `tasks/INDEX.md` is where the stage list is declared. wms and fan
+            #       were bootstrapped WITHOUT the keepers (TASK-MONO-592 § ③), so the
+            #       bootstrap PR is precisely the moment this guard has to bite. A
+            #       filter that omitted `PROJECT.md` would skip the new project on the
+            #       one commit that could still fix it cheaply.
+            #   (b) a keeper deletion/addition — `.gitkeep` under any lifecycle dir.
+            #   (c) an INDEX edit that adds or renames a stage (the guard reads the
+            #       `# Lifecycle` line, so a new stage becomes a new requirement).
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            lifecycle-dirs:
+              - 'tasks/INDEX.md'
+              - 'tasks/*/.gitkeep'
+              - 'projects/*/PROJECT.md'
+              - 'projects/*/tasks/INDEX.md'
+              - 'projects/*/tasks/*/.gitkeep'
+              - 'scripts/check-lifecycle-stage-dirs.sh'
             # TASK-MONO-584: the public domain must not drift from its canonical
             # table. The table is in TEMPLATE.md; the consumers are terraform and
             # README. The value appears in five places, so "only one of them gets
@@ -887,6 +916,48 @@ jobs:
 
       - name: Guard — every INDEX queue listing matches its queue directory
         run: bash scripts/check-index-queue-drift.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-592. git does not track empty directories, so a lifecycle stage
+  # whose queue empties out disappears from the checkout — and every
+  # `projects/*/tasks/<stage>` sweep then drops that project from its population
+  # with no error and no warning. On 2026-08-27 a sweep reported 7 projects as a
+  # census; there were 8. `wms-platform` had no `tasks/ready/` and nothing
+  # distinguished "7" from "8".
+  #
+  # This is deliberately NOT the same axis as `index-queue-drift` above, which
+  # counts `git ls-files "<dir>/*.md"`. That predicate scores "the directory does
+  # not exist" and "the directory is empty" identically at 0, so it is structurally
+  # blind to this property — not broken, out of scope. The neighbouring guard
+  # existing on the neighbouring axis is exactly why this one was missing.
+  #
+  # The filter is NOT AND-combined with `code-changed` — see the outputs block.
+  #
+  # `--self-test` runs FIRST and is a required step, not a courtesy. The guard
+  # derives BOTH its population (from `PROJECT.md`) and its stage list (from each
+  # INDEX's `# Lifecycle` line) rather than hardcoding them, so a parser that
+  # quietly stops matching would check zero stages and report green. The fixture
+  # asserts the bite on a real-tree copy, including the LATENT shape — a stage
+  # directory holding only `.md` files, which exists on disk today and vanishes
+  # the moment its last ticket moves on.
+  # ---------------------------------------------------------------------------
+  lifecycle-stage-dirs:
+    name: Lifecycle stage dirs (declared stages survive an empty queue)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.lifecycle-dirs == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-lifecycle-stage-dirs.sh
+
+      - name: Self-test the guard against known positives
+        run: bash scripts/check-lifecycle-stage-dirs.sh --self-test
+
+      - name: Guard — every declared lifecycle stage has a tracked keeper
+        run: bash scripts/check-lifecycle-stage-dirs.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-584. The demo's public domain lands in at least five places
