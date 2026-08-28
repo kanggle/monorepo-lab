@@ -300,3 +300,90 @@ Redeploy 든, **Deploy Hook 이든** 생성된 뒤에 똑같이 돈다. 그러�
 | `check-vercel-build-triggers.sh` 를 안 건드린다 | 죽은 기전을 테스트하며 영원히 초록 | AC-3 |
 | «배포 문제를 고쳤다» 로 587 을 덮는다 | `web-store` 를 올리는 순간 이미지가 402 | AC-4 표 |
 | 랜딩 후 효과를 추정으로 적는다 | ktg 가 그대로라 실제로는 여전히 한도에 닿는데 «해결» 로 기록 | AC-5 — 같은 방법으로 **다시 센다** |
+
+---
+
+# ✅ 외부 실측 — `korea-travel-guide` 가 **객체 형태 + 와일드카드**로 브랜치 배포를 0 으로 만들었다 (2026-08-28 UTC)
+
+이 티켓이 이름으로 지목한 저장소(§Context ②·③ 의 「`korea-travel-guide` 가 같은 계정이고 같이
+한도에 걸린다」)에서 오늘 랜딩했다. **이 티켓의 AC-0 을 대신하지 않는다** — 아래 §「무엇을 답하지
+않는가」를 먼저 읽어라.
+
+## 넣은 것
+
+```json
+// korea-travel-guide/vercel.json  (PR #781 → #782)
+{ "git": { "deploymentEnabled": {
+    "*": false, "**": false, "main": true, "preview/*": true } } }
+```
+
+🔴 **`*` 만으로는 거의 아무것도 못 잡는다.** minimatch 의 `*` 는 `/` 를 넘지 않고, 이 계정의
+브랜치 이름은 대부분 슬래시를 갖는다(`content/…`, `docs/…`, dependabot 은 `dependabot/npm_and_yarn/
+keystatic/core-0.6.8` 로 **셋**). `*` 만 넣었다면 사실상 전 브랜치가 기본값 `true` 로 남으면서
+**설정은 들어간 것처럼 보였을 것**이다 — 아무것도 물지 않는 가드.
+[[feedback_why_a_guard_does_not_bite]]
+
+## 물린 것 — 네 규칙 전부, 대조군과 함께
+
+| 대상 | 기대 | 관측 |
+|---|---|---|
+| `vercel-preview-off` (슬래시 없음) | 배포 없음 | Vercel status **none** |
+| `probe/vercel-check` (슬래시 1개) | 배포 없음 | **none** (+4분, +15분 재확인) |
+| `main` 머지 커밋 | 배포 **있음** | **`Vercel=success`** ← 양성 대조군 |
+| `preview/hatch-check` | 배포 **있음** | `pending` → **`success`** (~2.5분) |
+| `probe/hatch-control` (동시 푸시) | 배포 없음 | **none** ← 음성 대조군 |
+
+🔵 **마지막 두 줄을 같은 시각에 푸시한 것이 판정의 근거다.** 하나만 봤다면 「배포가 생겼다」가
+패턴 덕인지 Vercel 이 그냥 다시 다 굽기 시작한 건지 구별되지 않는다. 이 티켓의 Failure
+Scenarios 가 「대조군 없이 «배포가 안 생겼다» 를 판정으로 쓴다」로 미리 적어둔 그 함정이다.
+
+## 이 티켓의 산술에 미치는 영향 — **7 건, 그 이상은 아니다**
+
+§Context ② 의 24h 표 기준:
+
+| 행 | 이전 | 이후 | 비고 |
+|---|---:|---:|---|
+| ktg PR 브랜치 (dependabot 6건 포함) | 7 | **0** | 이 변경이 지운 전부 |
+| ktg main | 39 | 39 | **그대로** — `main: true` 를 의도적으로 남겼다 |
+| mono PR 브랜치 | 20 | 20 | 같은 객체 형태를 쓰면 0 이 될 수 있다(미적용) |
+| mono main | 34 | 34 | **AC-0/AC-1 이 겨냥하는 진짜 덩어리** |
+
+🔴 **73 은 손대지 않았다.** 이 티켓이 옳게 지적한 대로 한도의 대부분은 **main 커밋**이고, 그것을
+줄이려면 여전히 불리언 + Deploy Hook 설계가 필요하다. 브랜치 억제는 **27 중 7 을 지웠을 뿐**이다.
+AC-5 가 「랜딩 후 효과를 추정으로 적는다」를 실패 시나리오로 못박아 둔 만큼, 이 줄도 추정이 아니라
+위 표의 행 하나로 읽어야 한다.
+
+## 🔴 무엇을 답하지 **않는가** — AC-0 은 그대로 열려 있다
+
+AC-0 이 묻는 것은 **불리언 `deploymentEnabled: false`** 가 production 생성까지 막는가이다.
+위 실측은 **객체 형태**이고, `main: true` 를 **명시적으로 담고 있다.** 두 형태는 다른 것이며,
+`TASK-MONO-588` 이 자기 결과의 이전을 금지한 것과 **같은 이유로** 이 결과도 이전 금지다.
+[[feedback_a_verifiable_mechanism_is_not_the_cause]]
+
+🔵 다만 **문서화된 동점 규칙 하나는 실측됐다** — 「여러 규칙에 걸리면 하나라도 `true` 면 배포」.
+`main` 이 `**: false` 와 `main: true` 에 동시에 걸리고도 배포됐고, `preview/*` 도 같은 방식으로
+열렸다. AC-1 이 객체 형태를 쓰기로 한다면 이 규칙에 기댈 수 있다.
+
+## 🔵 §⑥ 의 삼지선다에 대한 실물 한 표 — ktg 는 **1번 안**의 작동 사례다
+
+ktg 에는 `ignoreCommand` 가 **없다**. 게이트는 `git.deploymentEnabled` 하나뿐이고, 그래서
+§⑥ 가 기록한 사고 — 「env 변경을 위한 재배포를 ignore 스텝이 정확히 골라서 취소한다」 — 가
+구조적으로 일어나지 않는다. `git.deploymentEnabled` 는 **git 이 트리거한 배포만** 다스리므로
+대시보드 Redeploy 와 Deploy Hook 은 지나간다.
+
+🔴 대가도 같이 적는다: git 쪽 판정이 **경로를 모른다.** ktg 는 단일 앱이라 「main 이면 굽는다」로
+충분하지만, 이 저장소는 프로젝트가 여럿이라 **어느 경로가 어느 프로젝트를 굽는가**가 필요하고
+그 술어는 `vercel-ignore.sh` 에만 있다. 1번 안을 고르면 그 술어의 거처가 훅 쪽으로 옮겨간다 —
+AC-1.2 가 이미 「스크립트를 **호출**한다」로 정해둔 그 지점이다.
+
+## 재현
+
+```bash
+gh api repos/<owner>/<repo>/commits/<sha>/status \
+  --jq '[.statuses[]|"\(.context)=\(.state)"]|join(",")'
+```
+
+브랜치 푸시 직후 ~30초부터 붙는다. **부재 판정에는 반드시 같은 창에서 배포가 붙는 대조군을
+함께 둔다** — 부재는 한도·인증·webhook 어느 것으로도 만들어진다.
+[[feedback_absence_verdict_from_a_proxy_is_not_a_measurement]]
+
