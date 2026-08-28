@@ -313,7 +313,28 @@ AC-4 가 «안 고칠 것» 을 못박아 뒀지만 이건 **범위 확장이 �
 행 문자열 뒤에 텍스트를 이어 붙여 `\r` 이 줄 **중간**에 들어갔기 때문이고, `\r\n`→`\n` 치환은
 그것을 못 지운다. CR 을 **전수로 세어 0** 을 확인했다.
 
-## 🔴 닫기 전에 남은 것 하나
+## ✅ probe 의 답 — **못 읽는다.** 추정이 아니라 실측이다
 
-**probe 의 답.** 첫 CI 런의 `PROBE-RESULT:` 줄을 읽고 여기에 적어야 닫힌다 — 그 전에 닫으면
-AC-2 가 「권한을 **먼저 실측**」이라고 적어 둔 것을 **추정으로** 대체하는 것이 된다.
+impl PR #3515 의 첫 런(`33169913385`, job `98844292219`, `2026-08-28T12:09:20Z`):
+
+```
+rc=1
+{"message":"Resource not accessible by integration",
+ "documentation_url":".../branches/branch-protection#get-status-checks-protection",
+ "status":"403"}
+PROBE-RESULT: not readable — the pin axis is the only one available
+```
+
+⇒ **워크플로 `GITHUB_TOKEN` 은 `required_status_checks` 를 못 읽는다**(403). AC-2 가
+「권한을 **먼저 실측**하고, 안 되면 다른 축을 고른다」로 정해 둔 그대로 **핀 축이 유일한
+선택지**였음이 확인됐다. 🔵 이 줄이 없었다면 같은 결론을 «아마 admin 이 필요할 것» 이라는
+**추정**으로 적었을 것이고, 다음 사람이 그걸 의심하며 같은 실험을 반복했을 것이다.
+
+🔴 **그러므로 「못 무는 방향」은 당분간 영구적이다** — protection 쪽 변경(집합 추가·제거·개명)은
+이 가드가 **못 본다**. 유일한 대안은 admin PAT 을 secret 으로 들이는 것이고, 그것은
+**새 비밀 하나를 들이는 결정**이라 Edge Cases 가 미리 «별도로 승인받는다» 로 못박아 뒀다 ⇒
+🔴 **이 티켓에서 하지 않는다.** 소유자가 required 집합을 바꾸면 **핀을 API 로 다시 만들어야
+한다**(핀 파일 헤더에 명령이 적혀 있다).
+
+🔵 같은 런에서 `--self-test` **7/7**, 새 잡 `Required check names (…)` **SUCCESS**,
+required 넷도 전부 SUCCESS 였다.
