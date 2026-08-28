@@ -9,7 +9,7 @@ TASK-MONO-594
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -422,3 +422,37 @@ rc=1   ← 빌드
 🔵 그리고 이것이 AC-1 에 적은 단서와 짝을 이룬다: `ignoreCommand` 는 **클론된 커밋의 트리**
 에서 돌기 때문에, 이 수정이 담기지 **않은** 옛 커밋을 Redeploy 하면 옛 판정자가 돌아 여전히
 취소된다. ⇒ 팬을 살리는 경로는 «옛 배포를 Redeploy» 가 아니라 **«이 커밋을 배포»** 다.
+
+---
+
+# 🔵 종료 검증 (2026-08-28 UTC) — 3-dim, 그리고 **(c)의 편차를 숨기지 않는다**
+
+impl PR **#3492**, squash **`37e234616`**.
+
+| 축 | 결과 |
+|---|---|
+| (a) `gh pr view 3492 --json state,mergeCommit` | `state=MERGED` · `sha=37e234616bcda5c159031eec6636da4eec9e4751` |
+| (b) `origin/main` 조상 | `git merge-base --is-ancestor 37e234616 origin/main` → **rc=0** |
+| (c) 머지 시점 rollup | 5 SUCCESS · 44 SKIPPED · **2 FAILURE** ← **편차** |
+
+## 🔴 (c)의 FAILURE 2건 — 코드 실패가 아니라 **계정 레이트리밋**이다
+
+```
+name=Vercel – kanggle-fan          desc=null  url=…/khakiman-projects?upgradeToPro=build-rate-limit
+name=Vercel – kanggle-portfolio    desc=null  url=…/khakiman-projects?upgradeToPro=build-rate-limit
+```
+
+`description=null` 이고 **사유가 `targetUrl` 쿼리에만** 있는 것이 이 지문이다
+(`?upgradeToPro=build-rate-limit`). 이 티켓 본문 §AC-0 ② 가 이미 같은 상태를 «판정 불가
+구간» 으로 적어 뒀고, `TASK-MONO-587`·`590`·`596` 이 그 한도 자체를 다루는 티켓들이다.
+
+**닫아도 되는 근거는 «실패가 없다» 가 아니라 «main 회귀가 없다» 이다** — CLAUDE.md 의 (c)가
+막으려는 해악이 그것이다:
+
+- `37e234616` 의 **main push 런 = success** (저장소 자체 CI, ci.yml).
+- 이 저장소 `main` 에는 **branch protection 이 없다** ⇒ required check 집합이 **비어 있고**,
+  문구상 「0 failing **required** checks」는 공허하게 성립한다.
+  🔴 그 공허한 성립 자체가 결함이라 **`TASK-MONO-598`** 로 분리해 걸었다 — 이 종료 판정이
+  「가드가 안 물어서 통과」에 기대고 있다는 사실을 기록으로 남기기 위해서다.
+
+⇒ 소유자 확인 후 진행(2026-08-28). 편차를 기록으로 남기고 닫는다.
