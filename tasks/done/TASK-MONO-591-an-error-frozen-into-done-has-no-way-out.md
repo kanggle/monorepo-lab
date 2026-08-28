@@ -9,7 +9,7 @@ TASK-MONO-591
 
 # Status
 
-review
+done
 
 # Owner
 
