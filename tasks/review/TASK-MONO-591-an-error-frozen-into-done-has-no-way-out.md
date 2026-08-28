@@ -9,7 +9,7 @@ TASK-MONO-591
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -311,3 +311,54 @@ runs"*) 가 요구하는 그 질문이다.
 `.claude/settings.json` · `platform/hardstop-rules.md`). 이 PR 은 `.claude/hooks/**` 와
 `platform/hardstop-rules.md` **둘 다** 건드리므로 필터에 확실히 걸린다. 새 가드를 다른 곳에
 두지 않았다 — 러너를 추가로 확인할 것이 없다.
+
+---
+
+# ✅ AC-3 완료 (2026-08-28 UTC) — **경로가 랜딩한 뒤, 그 경로로 3건을 수리했다**
+
+훅 PR **#3503** (squash `de2e507c6`) 가 `main` 에 들어가고 메인 체크아웃이 그것을 집은 뒤
+수리를 실행했다. **같은 편집이 30분 전에는 차단됐다** — 그것이 이 경로의 bite 증명이다.
+
+## R1 — 충돌 마커 2건
+
+| 파일 | 전 | 후 |
+|---|---|---|
+| `ecommerce/…/TASK-BE-080-FIX-wishlist-contract-and-infra.md` | `<<<<<<<< HEAD:…` / `done` / `========` / `review` / `>>>>>>>> worktree-agent-a250ba6d:…` | `done` |
+| `ecommerce/…/TASK-BE-081-FIX-shipping-service-spec-and-policy-compliance.md` | 같은 모양 (`worktree-agent-ac4cdd70`) | `done` |
+
+🔵 **판단이 개입하지 않았다** — 두 값이 이미 파일 안에 있었고, 파일이 `done/` 에 있다는
+사실이 어느 쪽인지 말해 준다. 훅도 그 이상을 허용하지 않는다(토큰은 충돌의 한쪽 변이어야 한다).
+
+🔵 원인은 `worktree-agent-*` 브랜치 — `Agent(isolation:"worktree")` 의 하네스 스캐폴드
+브랜치가 충돌을 그대로 커밋했다.
+
+**검증**: `grep -rln '^<<<<<<<' --include='*.md' tasks/ projects/ platform/ rules/ docs/`
+→ **0건** (저장소 전체).
+
+## R2 — `575` 정정 블록
+
+`## CORRECTION (post-close, 2026-08-28)` 을 파일 **맨 끝**에 붙였다. 13행의
+*"AC-0·2 는 소유자 대시보드 대기"* 는 **지우지 않았다** — 그 문장은 08-23 시점의 사실이고,
+정정은 그것을 덮어쓰는 것이 아니라 **답한다**.
+
+**기계적 검증 둘**:
+
+```
+origin/main:575 의 13행  vs  수정본 13행   → cmp: identical
+git diff --numstat 575                     → 22  0   (추가 22 · 삭제 0)
+```
+
+🔴 **삭제 0** 이 R2 의 안전 성질 그 자체다. 훅이 `new_string.StartsWith(old_string)` 을
+요구하므로 이것은 우연이 아니라 **강제된 것**이다.
+
+## 🔵 AC-0 모집단의 이동
+
+| | 착수 시 | 지금 |
+|---|---:|---:|
+| Status 가 거짓 | 500 | **498** (충돌 2건이 `done` 이 됨) |
+| 충돌 마커 | 2 | **0** |
+| 산문 헤더 | 1 | **0** (답이 달림) |
+| no-heading | 714 | 714 (의도적 제외) |
+
+🔴 **498건은 그대로 남는다 — AC-1 의 D 를 재확인한다.** 조용히 남기는 것이 아니라
+`platform/hardstop-rules.md` · 훅 주석 · 이 티켓 세 곳에 수용이 적혀 있다.
