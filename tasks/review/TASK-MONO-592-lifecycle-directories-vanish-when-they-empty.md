@@ -9,7 +9,7 @@ TASK-MONO-592
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -188,3 +188,131 @@ AC-0 이 센 모집단 전부에 keeper 를 넣는다. 🔵 형태는 기존과 
 | 단계 목록 파서가 죽는다 | 0단계 검사 → 초록 | AC-2 — 0이면 **판정 불가로 실패** |
 | 루트 `tasks/` 에 6단계를 강요한다 | 루트가 거짓 RED → 가드를 끈다 | Edge Cases 1행 |
 | 필터가 좁아 새 프로젝트에서 안 돈다 | 부트스트랩 시점에 정확히 안 잡힘 | AC-3 |
+
+---
+
+# ✅ 구현 결과 (2026-08-28 UTC · 브랜치 `task/mono-592-lifecycle-stage-dirs`)
+
+## AC-0 — 다시 셌다. ② 의 표와 **일치한다**
+
+모집단은 `git ls-files 'projects/*/PROJECT.md'` → 8개. 여섯 단계 전부, 루트 4단계까지 세었다.
+🔵 **양성 대조군 전부 «없음» 으로 잡혔다** — `wms/ready` · `fan`/`erp`/`finance`/`iam` 의
+`backlog`, 그리고 ② 가 잠복이라고 지목한 `fan/ready` 까지 **6개**. 술어가 틀리지 않았다.
+
+🔵 상속하지 않았다는 증거: 이 표는 티켓 본문을 옮겨 적은 것이 아니라 새 가드가 스스로 낸
+출력이고(아래 §AC-2), 그 출력이 ② 와 같은 6칸을 지목했다.
+
+## AC-1 — keeper 6개
+
+`erp`·`fan`·`finance`·`iam` 의 `backlog/`, `fan`·`wms` 의 `ready/`.
+형태는 기존과 동일 — 빈 `.gitkeep` (blob `e69de29`, 기존 keeper 와 **같은 해시**).
+새 관행을 만들지 않았다.
+
+## AC-2 — `scripts/check-lifecycle-stage-dirs.sh` (본체)
+
+**술어 = «추적되는 non-`.md` 파일이 있는가».** 세 후보 중 둘을 명시적으로 버렸다:
+
+| 후보 | 왜 안 되는가 |
+|---|---|
+| `git ls-files "<dir>/*.md" \| wc -l` | ④ 가 지적한 그것. «없음» 과 «비었음» 이 **똑같이 0** — 구조적으로 못 본다 |
+| `[ -d "<dir>" ]` | 재려는 것은 «신선한 체크아웃에서 살아남나» 인데 이건 «내 디스크에 지금 있나» 다. 커밋 안 된 빈 디렉터리 → **로컬 초록 / CI 빨강** |
+| **추적되는 non-`.md`** | `.md` 는 설계상 떠난다. 큐가 비었을 때 디렉터리를 붙잡는 건 keeper 뿐 |
+
+🔵 keeper **이름은 안 박았다** — `.keep` 같은 다른 관행이 조용히 거짓 빨강이 되지 않도록.
+
+- **모집단**: `projects/*/PROJECT.md`. 글롭 금지 — 글롭이면 디렉터리 없는 프로젝트를 스스로
+  건너뛰어 **가드가 이 결함 자신에게 당한다**. 부수 효과로 `projects/bin/` 자동 제외(Edge 2행).
+- **단계 목록의 출처 = 각 INDEX 의 `# Lifecycle` 선언** (박지 않고 파싱). 루트는 4단계,
+  프로젝트는 6단계라 박으면 **루트가 거짓 RED** → 가드가 꺼진다(Edge 1행).
+  파싱의 대가는 «파서가 죽으면 0단계 → 초록» 이므로 **0 은 판정 불가로 실패**:
+  INDEX 수 하한(9) + INDEX 당 단계 수 하한(2) + 총 검사 단계 0 시 실패, 셋 다 걸었다.
+- **범위 밖(명시)**: 선언 안 된 여분 디렉터리는 안 본다 — 루트 `tasks/templates/` 가 그
+  모양이라 거짓 RED 가 된다.
+
+### 무망가 상태 (음성 대조군)
+
+```
+[lifecycle-dirs] ok — INDEX 9개 · 선언 단계 52개 전부 keeper 보유
+  (1) tasks  4단계 — ○ready ○in-progress ○review ○done
+  (1) projects/wms-platform/tasks  6단계 — ○backlog ○ready ○in-progress ○review ○done ○archive
+  …  (8 프로젝트 × 6) + 루트 4 = 52
+```
+
+### bite — `--self-test` 5칸, **주입 착지를 먼저 단언한 뒤** 무는지 읽는다
+
+| 칸 | 주입 | 기대 | 결과 |
+|---|---|---|---|
+| (0) | 없음. 사본에 keeper 만 담아 **모든 큐를 빈 상태로** 만든다 | rc=0 | ok |
+| (a) | keeper 하나 `git rm` | rc=1 | ok |
+| (b) | **잠복** — keeper 를 지우고 그 자리에 `.md` 를 넣는다 | rc=1 | ok |
+| (c) | `# Lifecycle` 화살표 줄 파괴 | rc=1 (판정 불가) | ok |
+| (d) | `PROJECT.md` 제거 → 모집단 축소 | rc=1 (하한) | ok |
+| (e) | 없음 — 루트가 6단계를 강요당하지 않는지 | 4단계만 검사 | ok |
+
+🔴🔴 **(b) 가 (a) 와 다른 것을 시험한다 — 이 칸이 «새 축을 재고 있다» 의 증거다.**
+(b) 의 상태에서 세 술어를 **실측**했다(스크래치 리포):
+
+```
+디렉터리 존재 = yes                       ← [ -d ] 였다면 초록
+git ls-files 'tasks/ready/*.md' | wc -l = 1  ← 옛 술어였다면 초록
+추적되는 non-.md keeper = ''                 ← 새 술어 → 빨강
+```
+
+🔵 (0) 은 본 검사의 중복이 아니다. 본 검사는 `.md` 가 큐를 붙잡고 있는 실제 트리를 보지만
+(0) 은 **전부 비워 놓고** 본다 — 잠복은 거기서만 드러난다. 개발 중 실측으로 확인했다:
+keeper 6개를 넣기 **전에는 (0) 칸이 정확히 빨강이었다.**
+
+## AC-3 — `ci.yml` 잡 `lifecycle-stage-dirs` + 필터 확인
+
+- 필터 `lifecycle-dirs` = `tasks/INDEX.md` · `tasks/*/.gitkeep` ·
+  `projects/*/PROJECT.md` · `projects/*/tasks/INDEX.md` · `projects/*/tasks/*/.gitkeep` ·
+  `scripts/check-lifecycle-stage-dirs.sh`. 순수 positive(negation 없음).
+- 🔴 **`code-changed` 와 AND 하지 않았다** — 두 도착 경로(부트스트랩·keeper 삭제)가 전부
+  markdown/빈 파일 diff 라, AND 하면 **자기 결함 클래스의 100%에서 초록 skip** 이 된다.
+- 🔴 **`PROJECT.md` 를 필터에 넣은 것이 AC-3 의 요점이다.** 새 프로젝트 부트스트랩 PR 이
+  이 가드가 물어야 할 바로 그 순간이고(③), `PROJECT.md` 없이는 그 커밋에서 안 돈다.
+- 🔵 **글롭을 추측하지 않고 실측했다** — `dorny/paths-filter` 가 쓰는 매처
+  `picomatch@4.0.4` 로 13 케이스(양성 9 + 음성 4) 대조, `dot:true`/`dot:false` **양쪽 동일**,
+  불일치 0. 음성에 «평범한 태스크 이동» 을 넣어 close chore 마다 깨어나지 않음을 확인했다
+  (가드의 술어가 `.md` 를 안 보므로 그때 돌 이유가 없다).
+
+## AC-4 — 재발 방지 자리 = `TEMPLATE.md` § Option A 1단계
+
+③ 이 말한 원인은 «부트스트랩 산출물의 차이» 인데, **`touch …/.gitkeep` 줄은 이미 거기
+있었다.** 없었던 것은 «그게 왜 필요한가» 와 «무엇이 그걸 강제하는가» 다. 둘 다 적었다:
+없으면 무엇이 깨지는지(7 vs 8 실측), `lifecycle-stage-dirs` 잡이 `PROJECT.md` 를 추가하는
+그 커밋에서 RED 가 된다는 것, **`.md` 만 있는 단계도 실패한다**는 것, 그리고 3단계가 목록에
+없는 단계를 선언하면 keeper 도 같이 추가하라는 것.
+
+## Edge Cases 처리
+
+| 케이스 | 결과 |
+|---|---|
+| 루트 `tasks/` 4단계 | ✅ 각 INDEX 선언을 읽으므로 4단계만 검사. self-test (e) 가 회귀를 막는다 |
+| `bin` 은 프로젝트가 아니다 | ✅ `PROJECT.md` 기준이라 자동 제외 |
+| keeper 때문에 큐가 «안 비었다» 로 세어진다 | ✅ **소비자 전수 확인**: `check-index-queue-drift.sh` 는 `"…/*.md"` 글롭, `check-task-id-collision.sh` 는 `grep -E '…\.md$'`. **`.md` 아닌 것을 세는 소비자는 없다** |
+| AC-0 이 «전부 있음» 을 낸다 | 해당 없음 — 6개 결손이 잡혔고 `wms/ready` 양성 대조군도 잡혔다 |
+| 새 단계 추가 | ✅ INDEX 선언을 읽으므로 자동으로 따라간다 |
+
+## 로컬 게이트 (스테이지 **후** 실행 — 각각 독립 실행, `&&` 체인 아님)
+
+```
+lifecycle-stage-dirs               rc=0
+lifecycle-stage-dirs --self-test   rc=0   (5칸 전부 ok)
+index-queue-drift --selftest       rc=0
+index-queue-drift                  rc=0   ← keeper 추가가 이웃 가드를 안 깨뜨림
+task-id-collision                  rc=0
+public-domains --self-test / 본체  rc=0   ← TEMPLATE.md 를 건드렸으므로
+ci-baseline-reachable              rc=0
+ci.yml YAML 파싱 + 잡/필터/outputs 배선  확인
+```
+
+🔴 `git ls-files` 술어이므로 **스테이지 후에 돌렸다** — 스테이지 전 실행은 이 저장소에서
+3회 재발한 가짜 판정이다. [[env_a_guard_reading_git_ls_files_is_blind_to_unstaged_work]]
+
+## 🔵 범위 밖으로 남긴 것
+
+- 선언되지 않은 여분 `tasks/<something>/` 디렉터리 검사 — 루트 `tasks/templates/` 가 거짓
+  RED 가 된다. 스크립트 헤더에 «범위 밖(의도적)» 로 명시했다.
+- ① 이 언급한 `iam-platform` `review/` 3건은 이 티켓의 축이 아니다(모집단이 줄어 가려졌던
+  항목일 뿐). 별도 큐 정리 사안으로 남긴다.
