@@ -10,7 +10,7 @@ TASK-MONO-598
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -180,3 +180,99 @@ required 를 켰다면, **일부러 빨강인 PR** 을 만들어 머지 버튼�
 | `CLAUDE.md` 만 고친다 | `git-workflow-policy.md` 사본이 옛 문구로 남음 | AC-3 마지막 항목 |
 | approval 축까지 켠다 | 현재 작업 방식이 멈추고 규칙이 꺼진다 | AC-2 |
 | 소유자 확인 없이 적용한다 | 🔴 «무엇이 허용되는지» 를 바꾸는 변경이다 | AC-2 |
+
+---
+
+# ✅ 구현 (2026-08-28 UTC) — **켰다. 티어 1 네 개.**
+
+## AC-0 — 다시 쟀고, «404 = 권한 부족» 도 배제했다
+
+```
+protection      → 404 {"message":"Branch not protected"}
+rulesets        → 0
+rules/branches  → 0
+control  repos/… → ok, private=false
+gh auth scopes  → gist, read:org, repo, user, workflow
+```
+
+🔵 **양성 대조군이 살아 있고**(대조 엔드포인트 정상 응답) 토큰에 `repo` 스코프가 있으며 메시지가
+특정적(`Branch not protected`, `Not Found` 아님)이므로, Edge Case 의 «404 를 부재로 읽는» 함정은
+배제된다.
+
+## AC-1 — 24개 PR 실측. 🔴 **이 티켓의 전제가 반만 맞았다**
+
+체크 이름 집합이 PR 마다 다르다(**51 · 52 · 53 · 54 · 56**). 스킵된 잡도 체크런으로
+보고되지만, **재사용 워크플로의 자식 잡은 실행될 때만 이름이 생긴다** — `TASK-MONO-597` 이
+찾은 ` / <job>` 접미 규칙이 여기서 다시 나온다.
+
+| 티어 | 개수 | 실측 | required 가능? |
+|---|---:|---|---|
+| **1** | **4** | 24/24 PR 에서 **항상 SUCCESS** | ✅ 위험 0 |
+| 2 | 33 | 24/24 존재하나 자주 SKIPPED | ⚠️ skipped 를 통과로 세는가에 달림 — **켜보기 전엔 검증 불가** |
+| 3 | 29 | 일부 PR 에 **이름이 없음**(자식 잡 4/24 · `Vercel Preview Comments` 20/24) | ❌ 영구 pending |
+| 제외 | 2 | Vercel 배포 체크, FAILURE 5~6건(계정 한도) | ❌ 걸면 24시간 머지 불가 |
+
+**채택 = 티어 1 전체**:
+
+```
+changes
+INDEX queue drift (INDEX.md tables vs queue directories)
+Task ID collision (duplicate IDs in active queues)
+Walkthrough limitation ledger drift (§ 6 rows vs task queues)
+```
+
+🔵 우연이 아니다 — 이 넷은 **마크다운 전용 diff 에서도 도는 큐/라이프사이클 가드**이고,
+(c)가 지키려는 결함 클래스(마감 chore)가 정확히 그것이다.
+
+🔵 **aggregate 잡은 채택하지 않았고 이유를 적는다**: 티어 1 이 공짜로 존재해 지금은 불필요하다.
+도입하면 `if: always()` + 명시적 상태 집계가 필요하고, **집계가 틀리면 아무것도 안 막는 잡이
+하나 더** 생기는데 protection 을 켜기 전엔 그것을 시험할 방법이 없다.
+
+🔴 **검증 못 한 전제 하나를 남긴다**: GitHub 이 skipped Actions 잡을 required 만족으로 세는가.
+티어 2(33개)의 가부가 여기 달렸다. **티어 1 만 걸면 이 질문을 통째로 우회한다** — 그래서 골랐다.
+
+## AC-2 — 소유자 결정 (2026-08-28): **티어 1 만**
+
+적용값:
+
+| 항목 | 값 | 이유 |
+|---|---|---|
+| `contexts` | 위 4개 | AC-1 |
+| `enforce_admins` | **true** | 🔴 false 면 이 저장소의 **유일한 사용자**가 우회 가능해 (c)가 다시 공허해진다 |
+| `required_pull_request_reviews` | **null** | 🔴 AC-2 가 «approval 축을 끌어들이지 마라» — self-merge 워크플로가 멈춘다 |
+| `restrictions` | null | 푸시 주체 제한 없음 |
+| `strict` | **false** | true 면 브랜치가 항상 최신이어야 해 불필요한 리베이스를 강요한다 |
+
+## AC-3 — 규칙의 집이 **둘이 아니라 셋**이었다
+
+| 파일 | 상태 | 처리 |
+|---|---|---|
+| `CLAUDE.md:117` | 카탈로그 | required 집합이 **무엇인지** + 빌드/통합/e2e 는 **required 가 아니라는 것** 명시 |
+| `platform/git-workflow-policy.md:246` | CLAUDE.md 를 **가리키기만** 함 | 워크드 인시던트가 *"a required integration check"* 라고 말하는데 지금 구성에선 거짓이라 단서 추가 |
+| 🔴 `.claude/commands/review-task.md:54-56` | **티켓이 안 적은 셋째 집** | 술어를 그대로 재진술한다. **에이전트가 실제 실행하는 절차**라 산문보다 강하게 전파된다 — `TASK-MONO-595` 의 템플릿 발견과 같은 클래스 |
+
+🔴 셋 다 **같은 커밋**에서 고쳤다.
+
+## AC-4 — 🔴🔴 **설정이 아니라 «막는가» 를 찍었다**
+
+일부러 빨강인 PR(#3510): `tasks/INDEX.md` 에서 ready 행 하나를 지워 `INDEX queue drift` 를
+RED 로 만들었다(가짜 task ID 를 만들지 않는 쪽을 골랐다). 로컬에서 rc=1 을 먼저 확인하고
+PR 을 썼다.
+
+```
+INDEX queue drift            = fail
+mergeable=MERGEABLE  mergeStateStatus=BLOCKED
+gh pr merge 3510 --squash → "the base branch policy prohibits the merge."
+```
+
+⇒ **막았다.** 프로브는 머지하지 않고 닫고 브랜치까지 삭제했다.
+
+🔴 **부수 관측**: `gh pr merge` 는 **거부하고도 `rc=0`** 을 냈다. 종료코드로 판정하면
+«머지됐다» 로 읽힌다 — 이 저장소가 `gh pr checks` 에서 이미 배운 것과 같은 함정이 머지 쪽에도 있다.
+
+## 🔵 이 변경이 **하지 않는** 것
+
+- 빌드·통합·e2e 는 여전히 **강제되지 않는다.** (c) 통과는 «스위트가 초록이었다» 가 아니다.
+  세 문서 모두에 그렇게 적었다.
+- approval 은 안 걸었다. self-merge 는 그대로 돌아간다.
+- 티어 2 의 33개는 **미결**이다. 열려면 skipped 의미론을 실측해야 하고, 그건 별도 판단이다.
