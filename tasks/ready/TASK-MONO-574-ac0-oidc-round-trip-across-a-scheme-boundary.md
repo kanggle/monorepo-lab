@@ -55,11 +55,46 @@ monorepo
 | # | 선행 | 상태 | 누가 |
 |---|---|---|---|
 | 1 | `TASK-MONO-571` (AC-0 ②) | ✅ **해소** — `PLAINTEXT_HTTP_EGRESS_WORKS` | — |
-| 2 | **Vercel `kanggle-fan` 의 OIDC env** | ❌ **미설정 (실측)** | 🔴 **소유자 대시보드** |
+| 2 | **Vercel `kanggle-fan` 의 OIDC env** | ✅ **해소 (2026-08-28 재측정)** — 아래 §재측정 | 소유자 (완료) |
 | 3 | **IdP 에 Vercel 도메인 `redirect_uri` 등록** | ✅ **해소 (2026-08-26)** — [`TASK-BE-582`](../../projects/iam-platform/tasks/review/TASK-BE-582-register-the-fan-vercel-callback-nobody-owned-this.md) `V0033` (PR #3477, CI 13/13) | iam-platform |
 | 4 | 데모 인스턴스 기동 | ⏸️ | 🔴 **사용자 승인** (예산 차감, 부팅 ~11분) |
 
 🔴 **2·3 없이 기동하면 예산만 쓰고 아무것도 못 잰다.** 그래서 기동 전에 이 둘을 먼저 확인했다.
+
+## 🟢 재측정 (2026-08-28 UTC) — **선행 넷 중 셋이 해소됐다. 남은 것은 기동 하나뿐이다**
+
+🔴 **이 절은 위 표를 «다시 읽어서» 쓴 것이 아니라 라이브를 찔러서 쓴 것이다.** 위 표는
+08-26 판이고, 그 사이 소유자가 DNS·도메인·env 를 전부 넣고 재배포가 성공했다 —
+**표만 읽고 «소유자 3단계가 남았다» 로 보고하면 이미 끝난 일을 다시 시키게 된다.**
+[[feedback_measure_the_plans_premise_before_starting_the_phase]] [[feedback_a_figure_nothing_can_fail_on_will_drift]]
+
+| 찌른 곳 | 응답 | 뜻 |
+|---|---|---|
+| `https://fan.hubwang.com/api/auth/session` | **200** | DNS 위임 · 도메인 연결 · `NEXTAUTH_URL`/`SECRET` **전부 됨** |
+| `https://fan.hubwang.com/artists` | **307** → `/login?from=%2Fartists` | 🔵 **라우트 가드가 프로덕션에서 실제로 돈다** (`TASK-FAN-FE-018` 가설 B 의 라이브 확인) |
+| `https://fan.hubwang.com/api/auth/providers` | `{"iam":{…,"callbackUrl":"https://fan.hubwang.com/api/auth/callback/iam"}}` | OIDC provider 등록됨. 🔵 콜백이 **`TASK-BE-582` 가 시드한 값과 일치** |
+| `https://fan.hubwang.com/api/auth/signin/iam` | **302** → `/login?error=Configuration` | 🔴 **로그인은 아직 실패한다** |
+| 컨트롤 플레인 `/status` | `{"state":"stopped","ip":null,"used_minutes":496,"budget_minutes":600}` | 🔴 **데모 인스턴스가 꺼져 있다** |
+
+### 🔴 `error=Configuration` 의 **의미가 08-23 과 다르다**
+
+§실측 ① 의 08-23 관측은 `/api/auth/providers` **자체가** 에러 문서를 냈다(= `NEXTAUTH_SECRET`
+부재). 지금은 **providers 가 정상이고 signin 만** 실패한다. 같은 문자열, **다른 결함**이다 —
+문구가 같다고 같은 원인으로 접지 마라. [[feedback_if_the_symptom_survives_the_fix_it_was_not_the_cause]]
+
+🔵 **관측과 정합적인 가설**: `OIDC_ISSUER_URL` 이 `http://iam.<ip>.sslip.io` 인데 `/status` 가
+`ip: null` 이므로 issuer discovery 가 도달할 곳이 없다. 🔴 **그러나 이것은 가설이다** —
+issuer 값이 무엇으로 채워져 있는지는 대시보드 사안이라 저장소에서 못 본다. **기동 뒤 같은
+요청이 통과하면 확정되고, 안 통과하면 이 티켓의 본 측정이 시작된다.**
+[[feedback_a_verifiable_mechanism_is_not_the_cause]]
+
+### 예산 — 티켓이 적은 값과 **같다**
+
+`used=496 / budget=600` ⇒ **잔여 104분**. § 소유자 지정(08-26)이 적은 «잔여 104분» 과 동일하므로
+**그 사이 기동이 한 번도 없었다.** 9-01 리셋.
+
+⇒ **남은 선행은 4번(기동) 하나**이고, `TASK-MONO-581` 이 그 창에 다섯 검증을 묶어 두었다.
+🔴 재배포·Vercel 한도는 **이 티켓의 블로커가 아니다** — 그쪽은 이미 다 됐다.
 
 🔴🔴 **선행 3 은 아무 티켓도 안 들고 있었다 (2026-08-26 발견).**
 `TASK-MONO-584` 는 *"`redirect_uri` 시드 → **574**(이미 소유)"* 라 적었고, **이 티켓은**
