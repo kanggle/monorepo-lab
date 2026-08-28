@@ -115,32 +115,42 @@ try {
 
     New-Item -ItemType Directory -Path $memDir -Force | Out-Null
 
-    # --- Negative 2: WITHIN quota -> silent allow --------------------------------
+    # --- Negative 2: WITHIN the line limit -> silent allow ------------------------
     New-FakeIndex -Path $index -TrapPointers 6 -MovablePointers 4
     $n2 = Invoke-BudgetHook -Cwd $fakeCwd -HomeDir $fakeHome
     Assert-Allowed -Output $n2
     if (Test-Path -LiteralPath $marker) { throw "WITHIN must not write the debounce marker" }
-    "PASS: negative-2 (10 pointers, within quota -> silent allow, no marker)"
+    "PASS: negative-2 (small index, within the line limit -> silent allow, no marker)"
 
-    # --- Positive 1: OVER quota -> block with the 4-block stanza ------------------
-    # 240 pointers is comfortably over the hook's 180 tunable; the fixture does not
-    # hardcode 180 itself, so raising the quota does not silently un-bite this test.
+    # --- Positive 1: OVER the line limit -> block with the 4-block stanza ---------
+    # 240 pointers is one per line plus section overhead, comfortably past the hook's
+    # 140-line tunable. The fixture does not hardcode 140 here, so changing the
+    # tunable does not silently un-bite this test.
     New-FakeIndex -Path $index -TrapPointers 120 -MovablePointers 120
     $p1 = Invoke-BudgetHook -Cwd $fakeCwd -HomeDir $fakeHome
-    Assert-Blocked -Output $p1 -Case 'positive-1 (240 pointers)'
+    Assert-Blocked -Output $p1 -Case 'positive-1 (large index)'
     Assert-Stanza -Output $p1 -ExpectedId 'MEMORY-BUDGET-01' -ExpectedDecision 'block'
-    "PASS: positive-1 (240 pointers, over quota -> block + MEMORY-BUDGET-01 stanza)"
+    "PASS: positive-1 (large index, over the line limit -> block + MEMORY-BUDGET-01 stanza)"
 
     $reason = (ConvertFrom-HookOutput -Output $p1).reason
 
-    # --- Positive 2: the measurement is reported, and it is POINTERS --------------
-    # The whole point of this hook is that bytes are the wrong primary metric
-    # (measured: merging 6 lines saved 188B / 0.8%). If the stanza stopped naming the
-    # pointer count, the remediation would read as "compress harder" again.
-    if ($reason -notmatch '240\s*/') {
-        throw "Stanza does not report the measured pointer count (expected '240 /' in the 'pointers / quota' slot): $reason"
+    # --- Positive 2: the stanza names WHICH axis judged, and labels the rest -------
+    # TASK-MONO-596. The defect this replaces was a verdict on a fabricated pointer
+    # quota while the real numbers were reported alongside it, so a reader could not
+    # tell which one decided. Now exactly one axis judges (lines) and the others must
+    # be marked as reporting-only — otherwise the next reader mistakes one for a
+    # threshold, which is how 180 and 24576 both happened.
+    $measuredLines = (Get-Content -LiteralPath $index -Raw -Encoding UTF8) -split "`r?`n"
+    if ($reason -notmatch ("{0}\s*줄\s*/" -f $measuredLines.Count)) {
+        throw "Stanza does not report the measured LINE count as the verdict axis (expected '$($measuredLines.Count) 줄 /'): $reason"
     }
-    "PASS: positive-2 (stanza reports the measured pointer count, not just bytes)"
+    if ($reason -notmatch '보고 전용') {
+        throw "Stanza does not mark the non-judging numbers as reporting-only: $reason"
+    }
+    if ($reason -notmatch '240\s*포인터') {
+        throw "Stanza stopped reporting the pointer count entirely — it is context the remediation needs: $reason"
+    }
+    "PASS: positive-2 (stanza names the judging axis and labels the rest reporting-only) — MONO-596"
 
     # --- Negative 3: THE ONE THAT MATTERS — traps are not movable candidates ------
     # Candidate list lives on the "후보:" line of [REMEDIATION] item 2.
@@ -166,6 +176,108 @@ try {
     $p2 = Invoke-BudgetHook -Cwd $fakeCwd -HomeDir $fakeHome
     Assert-Allowed -Output $p2
     "PASS: debounce (second over-quota run same day -> silent allow)"
+
+    # ===== TASK-MONO-596 AC-4: bite at the BOUNDARY, both directions ==============
+    #
+    # 🔴 One direction proves nothing. A hook that is always silent and a hook that is
+    #    correctly silent look identical from the WITHIN side; a hook that always fires
+    #    and one that correctly fires look identical from the OVER side. Only the pair,
+    #    one line apart, separates them.
+    #
+    # 🔴 The threshold is READ FROM THE HOOK, not retyped. Retyping it makes the fixture
+    #    a second home for the same constant, and this ticket exists because a constant
+    #    with two homes drifted.
+    $limit = [int](Select-String -LiteralPath $hook -Pattern '^\s*\$LineLimit\s*=\s*(\d+)' |
+                   ForEach-Object { $_.Matches[0].Groups[1].Value } | Select-Object -First 1)
+    if (-not $limit) { throw "Could not read `$LineLimit from the hook — the fixture cannot test a boundary it cannot locate." }
+    "  (boundary cells read LineLimit = $limit from the hook source)"
+
+    # Build an index with an EXACT line count. Content shape is irrelevant here; what is
+    # under test is the line predicate.
+    function New-IndexWithLines {
+        param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][int]$Lines)
+        $sb = [System.Text.StringBuilder]::new()
+        [void]$sb.AppendLine('> index header')
+        [void]$sb.AppendLine('## C. Procedures')
+        for ($i = 0; $i -lt ($Lines - 3); $i++) { [void]$sb.AppendLine("- [p$i](proc_c_$i.md) filler") }
+        [void]$sb.Append('- [last](proc_c_last.md) filler')
+        Set-Content -LiteralPath $Path -Value $sb.ToString() -Encoding UTF8 -NoNewline
+    }
+
+    # 🔴🔴 ASSERT THE INJECTION BEFORE READING THE BITE. If the builder is off by one,
+    #    "did not fire" and "was never at the boundary" are indistinguishable — and the
+    #    first reads as a passing test.
+    function Assert-IndexLines {
+        param([Parameter(Mandatory)][int]$Want, [Parameter(Mandatory)][string]$Case)
+        $got = ((Get-Content -LiteralPath $index -Raw -Encoding UTF8) -split "`r?`n").Count
+        if ($got -ne $Want) { throw "$Case`: injection did not land — built $got lines, wanted $Want. This cell tested nothing." }
+        return $got
+    }
+
+    # 🔴 The daily debounce marker silently converts "fired" into "allowed". Every
+    #    boundary cell must clear it first, or the second of the pair is a false green.
+    function Clear-Debounce { Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue }
+
+    # --- boundary A: exactly one line UNDER the limit -> silent -------------------
+    Clear-Debounce
+    New-IndexWithLines -Path $index -Lines ($limit - 1)
+    $got = Assert-IndexLines -Want ($limit - 1) -Case 'boundary-under'
+    $bU = Invoke-BudgetHook -Cwd $fakeCwd -HomeDir $fakeHome
+    Assert-Allowed -Output $bU
+    if (Test-Path -LiteralPath $marker) { throw "boundary-under wrote the debounce marker — it must not have fired at all" }
+    "PASS: boundary-under ($got lines = limit-1 -> silent, no marker) — MONO-596"
+
+    # --- boundary B: exactly AT the limit -> fires --------------------------------
+    # The hook's predicate is `lines -lt limit`, mirroring the harness wording "under
+    # 140". So `= limit` is already over.
+    Clear-Debounce
+    New-IndexWithLines -Path $index -Lines $limit
+    $got = Assert-IndexLines -Want $limit -Case 'boundary-at'
+    $bA = Invoke-BudgetHook -Cwd $fakeCwd -HomeDir $fakeHome
+    Assert-Blocked -Output $bA -Case "boundary-at ($limit lines)"
+    Assert-Stanza -Output $bA -ExpectedId 'MEMORY-BUDGET-01' -ExpectedDecision 'block'
+    "PASS: boundary-at ($got lines = limit -> fires) — MONO-596"
+
+    # --- AC-3: when the movable inventory is empty, SAY SO -----------------------
+    # Measured 2026-08-28 on the real MEMORY.md: §C and §F hold 0 pointers, so this
+    # fallback is the live path, not a theoretical one. A hook that instead printed an
+    # empty candidate list would be prescribing a lever that has no stock.
+    #
+    # 🔴 `New-FakeIndex` CANNOT build this case: its `[math]::Max(1, …)` floors the
+    #    movable count at 1, so asking for 0 still emits one movable pointer. The first
+    #    version of this cell used it and the candidate list came back
+    #    "C. Procedures = 1 포인터" — the cell would have been testing the opposite of
+    #    what it claims. The injection assertion below is what caught that.
+    Clear-Debounce
+    $sb = [System.Text.StringBuilder]::new()
+    [void]$sb.AppendLine('> index header')
+    [void]$sb.AppendLine('## A2. Measurement discipline')
+    for ($i = 0; $i -lt 200; $i++) { [void]$sb.AppendLine("- [t$i](trap_a2_$i.md) trap") }
+    [void]$sb.AppendLine('## C. Procedures')
+    [void]$sb.AppendLine('(전부 이관 완료 — 포인터 없음)')
+    Set-Content -LiteralPath $index -Value $sb.ToString() -Encoding UTF8
+
+    # Assert the injection: the movable sections must hold ZERO pointers, or this cell
+    # exercises the populated path and silently proves nothing.
+    $movablePtrs = 0; $sec = ''
+    foreach ($l in ((Get-Content -LiteralPath $index -Raw -Encoding UTF8) -split "`r?`n")) {
+        if ($l -match '^##+\s*(.+)$') { $sec = $Matches[1].Trim() }
+        if ($l -match '^\-\s' -and $sec -match '^[CDFG][\.\d]') {
+            $movablePtrs += ([regex]::Matches($l, '\]\([a-z0-9_]+\.md\)')).Count
+        }
+    }
+    if ($movablePtrs -ne 0) { throw "empty-movable-inventory: injection did not land — $movablePtrs movable pointers present, wanted 0. This cell tested the populated path." }
+
+    $e1 = Invoke-BudgetHook -Cwd $fakeCwd -HomeDir $fakeHome
+    Assert-Blocked -Output $e1 -Case 'empty-movable-inventory'
+    $eReason = (ConvertFrom-HookOutput -Output $e1).reason
+    if ($eReason -notmatch '없음') {
+        throw "With zero movable pointers the stanza must say the lever is empty, not print a blank list: $eReason"
+    }
+    if ($eReason -notmatch '소유자 결정') {
+        throw "The remaining lever (sibling consolidation) must be marked an owner decision: $eReason"
+    }
+    "PASS: empty-movable-inventory (says '없음' + flags the owner decision) — MONO-596 AC-3"
 }
 finally {
     Remove-Item -LiteralPath $tmpRoot -Recurse -Force -ErrorAction SilentlyContinue
