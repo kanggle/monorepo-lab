@@ -1,0 +1,26 @@
+# =============================================================================
+# main 의 required status check **context 이름** — 핀  (TASK-MONO-599)
+# =============================================================================
+# 🔴 이 목록의 출처는 이 저장소가 아니라 **GitHub 의 branch protection 설정**이다.
+#    2026-08-28 UTC 에 아래 명령의 출력을 **그대로** 넣었다 — 손으로 타이핑하지 않았다.
+#    (TASK-MONO-598 이 이 넷을 required 로 정했고, TASK-MONO-599 는 세 문서가 그 넷의
+#     이름을 괄호 없이 적어 둔 것을 고쳤다. 넷 중 셋이 틀려 있었다.)
+#
+#   gh api repos/:owner/:repo/branches/main/protection/required_status_checks \
+#     --jq '.contexts[]'
+#
+# 🔴🔴 **왜 핀이 필요한가**: required context 는 **문자열로** 매칭된다. `ci.yml` 의
+#    `name:` 을 한 글자만 다듬어도 등록된 문자열에 대응하는 체크런이 안 생기고,
+#    required 는 **영구 pending** 이 되어 `main` 이 모든 PR 에서 BLOCKED 된다.
+#    그 리네임 PR 자신은 **초록으로 머지된다** — 자기를 막지 못한다.
+#
+# 🔵 `changes` 만 짧은 이유: 그 job 에는 `name:` 이 없어서 **job id 가 그대로 context**
+#    가 된다. 괄호가 «생략 가능» 한 것이 아니다 — 나머지 셋은 **다른 문자열**이다.
+#
+# 🔴 갱신 방법: 소유자가 required 집합을 바꿨다면 **위 명령의 출력으로 이 파일을 다시
+#    만든다.** `ci.yml` 을 보고 채우지 마라 — 그러면 핀이 결함을 얼린다.
+# -----------------------------------------------------------------------------
+changes
+INDEX queue drift (INDEX.md tables vs queue directories)
+Task ID collision (duplicate IDs in active queues)
+Walkthrough limitation ledger drift (§ 6 rows vs task queues)

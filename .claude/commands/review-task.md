@@ -54,8 +54,20 @@ It may run only after the task's impl PR is **objectively merge-verified** — a
 1. `gh pr view <n> --json state,mergedAt,mergeCommit,statusCheckRollup` → `state == MERGED`
 2. `git log origin/main` tip matches that squash commit
 3. the impl PR's **pre-merge** `gh pr checks <n>` snapshot had **0 failing required checks**
-   🔴 **What "required" means here is a set of exactly four contexts** (`TASK-MONO-598`, 2026-08-28):
-   `changes` · `INDEX queue drift` · `Task ID collision` · `Walkthrough limitation ledger drift`.
+   🔴 **What "required" means here is a set of exactly four contexts** (`TASK-MONO-598`, 2026-08-28).
+   🔴 **Match them by equality, and copy the parentheses** — they are part of the registered string,
+   not decoration (`TASK-MONO-599`):
+   - `changes`
+   - `INDEX queue drift (INDEX.md tables vs queue directories)`
+   - `Task ID collision (duplicate IDs in active queues)`
+   - `Walkthrough limitation ledger drift (§ 6 rows vs task queues)`
+
+   Only the first is short, because that job has no `name:` so its job id becomes the context
+   verbatim. Re-registering protection with the shortened forms would make three contexts
+   **permanently pending** and `main` `BLOCKED` on every PR. The pin lives at
+   `scripts/required-check-names.txt` and `scripts/check-required-check-names.sh` keeps these
+   three files and `ci.yml` from drifting apart.
+
    They were picked because they are the only checks SUCCESS in **24/24** sampled PRs, so requiring
    them cannot deadlock. 🔴 **Builds, integration and e2e are NOT required** — (c) passing does not
    mean the suites were green. Read the rollup, not just the verdict. Before 598 the required set was
