@@ -1285,9 +1285,13 @@ jobs:
           # **grep 으로** 뽑으므로 문법 오류를 못 본다 — 목록은 멀쩡해 보이는데
           # 배포 시점에 래퍼가 죽는다. 그래서 문법은 여기서 따로 본다.
           git ls-files '*vercel-ignore.sh' | while read -r f; do bash -n "$f"; done
-          # 배포 신선도 판정자들 (TASK-MONO-563). 위 주석 참조 — 실행되는 곳이 없으므로
-          # 문법만이라도 여기서 잡는다.
-          git ls-files '*check-fan-fresh.sh' 'infra/demo/aws/site/check-launcher-fresh.sh'             | while read -r f; do bash -n "$f"; done
+          # 배포 표면 판정자들 (TASK-MONO-563 · TASK-MONO-600).
+          # 🔴 TASK-MONO-600 이 이 줄의 전제를 바꿨다 — 이전 주석은 *"실행되는 곳이
+          # 없으므로 문법만이라도"* 였는데, 이제 `nightly-e2e.yml` 의 `fan-surface-watch`
+          # 가 fan 쪽 둘을 **실제로 실행한다**. 그래도 이 스텝은 남는다: 문법 오류를
+          # 머지 시점에 잡는 것과 12시간 뒤 야간 런에서 잡는 것은 다르고, 론처 판정자는
+          # 여전히 부르는 잡이 없다.
+          git ls-files '*check-fan-fresh.sh' '*check-fan-guard-live.sh' 'infra/demo/aws/site/check-launcher-fresh.sh'             | while read -r f; do bash -n "$f"; done
 
       - name: Self-test the predicate (bites on the real configs, mutated)
         run: bash scripts/check-vercel-build-triggers.sh --self-test
