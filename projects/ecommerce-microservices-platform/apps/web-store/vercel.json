@@ -1,5 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "**": false,
+      "main": true,
+      "preview/*": true
+    }
+  },
   "installCommand": "pnpm install --no-frozen-lockfile",
   "ignoreCommand": "bash \"$(git rev-parse --show-toplevel)/projects/ecommerce-microservices-platform/apps/web-store/vercel-ignore.sh\""
 }
