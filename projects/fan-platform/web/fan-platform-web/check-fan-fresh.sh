@@ -92,10 +92,10 @@ served_commit() { # <origin> -> stdout: sha  |  rc 2 = 판정 불가
     #    부르는 잡이 없어 아무도 몰랐다 — «러너 없는 스위트는 썩는다» 의 실현판.
     case "$final" in
       "$origin"/login\?*|"$origin"/login)
-        say "  ⇒ 최종 URL 이 **이 오리진의 `/login`** 이다(final=$final)."
+        say "  ⇒ 최종 URL 이 **이 오리진의 \`/login\`** 이다(final=$final)."
         say "     인증 벽이 아니라 **이 앱의 라우트 가드**가 꺾은 것이다 ⇒ **판정 불가**."
-        say "     고칠 곳은 Vercel 설정이 아니라 `src/middleware.ts` 의 matcher 다 —"
-        say "     `build-info.json` 은 robots.txt·sitemap.xml 과 같은 공개 메타데이터로 제외돼야 한다."
+        say "     고칠 곳은 Vercel 설정이 아니라 \`src/middleware.ts\` 의 matcher 다 —"
+        say "     \`build-info.json\` 은 robots.txt·sitemap.xml 과 같은 공개 메타데이터로 제외돼야 한다."
         ;;
       *)
         say "  ⇒ Vercel Deployment Protection(인증 벽) 의심 ⇒ **판정 불가**(final=$final)."

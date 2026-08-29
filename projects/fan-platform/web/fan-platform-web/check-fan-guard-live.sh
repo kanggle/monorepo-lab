@@ -192,7 +192,7 @@ case "$code" in
   000) say "✖ /api/auth/providers — 도달 불가 ⇒ 판정 불가"; unreachable=1 ;;
   500)
     say "✖ /api/auth/providers — **500**. auth.js 가 설정 결핍 상태로 떠 있다."
-    say "   🔴 이것은 018 이 프로덕션에서 만난 그 상태다. `TASK-FAN-FE-019` 이후로는 그래도"
+    say "   🔴 이것은 018 이 프로덕션에서 만난 그 상태다. \`TASK-FAN-FE-019\` 이후로는 그래도"
     say "   가드가 닫히므로 ①은 초록일 수 있다 — 「닫혔다」와 「설정이 깨졌다」는 다른 사건이다."
     rc=1 ;;
   *) say "✖ /api/auth/providers — $code ⇒ 예상 밖."; rc=1 ;;
