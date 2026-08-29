@@ -1,8 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "pnpm install --no-frozen-lockfile",
-  "ignoreCommand": "bash \"$(git rev-parse --show-toplevel)/projects/fan-platform/web/fan-platform-web/vercel-ignore.sh\"",
-  "git": {
-    "deploymentEnabled": false
-  }
+  "ignoreCommand": "bash \"$(git rev-parse --show-toplevel)/projects/fan-platform/web/fan-platform-web/vercel-ignore.sh\""
 }
