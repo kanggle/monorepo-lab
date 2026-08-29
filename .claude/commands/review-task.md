@@ -73,6 +73,15 @@ It may run only after the task's impl PR is **objectively merge-verified** — a
    mean the suites were green. Read the rollup, not just the verdict. Before 598 the required set was
    **empty**, so (c) was satisfied in every state, a fully red `ci.yml` included.
 
+   🔴🔴 **Four are required; on most PRs fewer than four actually run** (`TASK-MONO-601`, 2026-08-29).
+   Three of them are gated on `tasks/**` paths, so a PR touching no task file leaves all three
+   `SKIPPED` — and `SKIPPED` does not block a merge. On such a PR **(c) is true with only `changes`
+   having executed.** Measured over 70 merged PRs: 2 were code-only (`#3523`, `#3479`) and showed
+   exactly that; the other 68 ran all four. 🔵 The skipping is correct — those guards watch task-queue
+   drift and a code-only PR is not on that arrival path. 🔴 So when you verify (c), read each of the
+   four conclusions and **say which ones actually ran**; "0 failing required" alone can mean one
+   signal, not four.
+
 If any dimension fails: **STOP.** CI-RED-at-merge creates a `main` regression and requires a separate
 fix task that restores `main` GREEN *before* the close chore.
 
