@@ -8,7 +8,7 @@ TASK-MONO-583
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -385,3 +385,50 @@ Vercel 판은 **데모가 꺼져 있어도 떠야 한다.** 그것이 `ADR-MONO-
   없어 못 돌렸다. 이 판정은 **(z14)·(z15) 두 칸에 한정**된다. 나머지는 CI 가 잰다.
 - 부팅 판정의 **실기동** 확인은 안 했다 — `demo-up.sh` 는 스텁 `curl`/`docker` 위에서만
   돌았다. 실기동은 재굽기+기동 창(`TASK-MONO-581`)에서 처음 확인된다.
+
+## CORRECTION (2026-08-29, 머지 후 라이브)
+
+**AC 는 전부 충족됐고 CI 도 초록이다. 그런데 이 티켓의 Goal 은 절반만 달성됐다.**
+그 사실을 여기 적는다 — 안 적으면 다음 사람이 *"단계 2 는 끝났다"* 로 읽는다.
+
+### ✅ 먼저, 닫힌 것
+
+| 축 | 결과 |
+|---|---|
+| 3-dim | `state=MERGED` · `mergedAt=2026-08-29T13:17:35Z` · 스쿼시 **`aabdf0748`** = `origin/main` 조상 · 머지 시점 required **4/4 SUCCESS · 실패 0** |
+| **본문이 「못 쟀다」고 적은 칸이 CI 에서 돌았다** | `Demo wrapper smoke (infra/demo)` = `verify-demo-wrapper.sh --live` **전문**, **1m45s SUCCESS** ⇒ Docker 부재로 못 돌린 나머지 칸 전부 초록. 🔵 남은 미측정은 **부팅 판정의 실기동** 하나뿐이고 재굽기 창에서 처음 확인된다 |
+| 론처 재배포 | 머지 **40초 안** — 커밋 상태 `Vercel – kanggle-portfolio \| Deployment has completed`. 🔵 형제 둘은 `Canceled by Ignored Build Step` ⇒ `vercel-should-build.sh` 의 프로젝트별 경로 판별이 **실커밋에서** 옳게 갈랐다 |
+| 서빙된 마크업 | `https://hubwang.com/` **200**(27,015 B) · `data-served` **8건** · `store.hubwang.com` **1건** · 옛 `data-host="web.ecommerce"` **0건** ⇒ 리포가 아니라 **서빙본**이 새 판이다 |
+
+### 🔴🔴 그리고, 안 닫힌 것 — **행 정책은 옳은데 컨테이너가 막는다**
+
+```js
+// index.html  render() — GUARD-Z14 구간 **바깥**
+$("surfaces").style.display = (isRun && ip) ? "block" : "none";
+```
+
+같은 순간 컨트롤 플레인 `/status` = `{"state":"stopped","ip":null}` ⇒ `isRun && ip` = **false**
+⇒ `<div id="surfaces">` 가 **통째로 `display:none`**. 🛒 행은 `<a>` 로서 열려 있으나
+**그것을 담은 블록이 안 보인다.**
+
+⇒ 이 티켓의 Goal(*"580 이 만든 Vercel 판은 아무도 안 본다 … 마지막 한 홉"*) 중
+**주소와 정책은 바뀌었고 가시성은 안 바뀌었다.** 그리고 데모는 **대부분의 시간 꺼져 있다**
+— 그것이 `ADR-MONO-067` 이 이관을 한 이유 자체이므로, 이 구멍은 예외가 아니라 **기본 상태**다.
+
+### 🔴🔴 왜 bite 8/8 이 이걸 하나도 안 지났나
+
+**내용물에 건 가드는 컨테이너에 건 가드가 아니다.** `(z14)` 는 `GUARD-Z14-BEGIN/END`
+구간을 잘라 실행하는데 그 구간은 `renderSurfaces()` 만 감싼다. 문제의 줄은 **`render()`
+안**, 즉 **가드가 한 번도 실행해 본 적 없는 코드**다. bite 8종은 전부 참이었고 전부
+**행 축**만 쟀다. 🔵 이 티켓이 만든 결함이 아니라 **이 티켓이 드러낸** 결함이다 — 그 줄은
+모든 방문자 화면이 데모 호스트에 있던 시절엔 **옳았다.**
+
+⇒ **후속 `TASK-MONO-603`** 에 넘겼다(가시성을 `data-served` 선언에서 파생 + 가드 구간을
+`render()` 까지 넓혀 컨테이너 축을 실행 대조 + 꺼진 데모에서의 bite). 🔴 **가드 구간을 안
+넓히면 그 고침도 다음에 똑같이 조용히 되돌아간다.**
+
+### 🔵 부수 실측 — 데모 예산
+
+같은 프로브에서 `used_minutes: 496 / budget_minutes: 600` ⇒ **잔여 104분.**
+`TASK-MONO-581` AC-0 (c) 가 요구하는 값이고, 재굽기+기동 창은 이 안에서 끝나야 한다.
+🔴 이 수치는 **2026-08-29T13:18Z 단일 시점**이다 — 착수 시 **다시 재라.**
