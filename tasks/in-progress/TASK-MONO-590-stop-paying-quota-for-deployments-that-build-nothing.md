@@ -9,7 +9,7 @@ TASK-MONO-590
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
