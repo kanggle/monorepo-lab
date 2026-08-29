@@ -9,7 +9,7 @@ TASK-MONO-601
 
 # Status
 
-review
+done
 
 # Owner
 
