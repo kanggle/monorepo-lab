@@ -353,23 +353,51 @@ fi
 #    — 이 저장소가 반복해서 당한 모양이다. 하한을 provenance 와 함께 박는다.
 # 🔴 **도메인이 안 뜬 표면은 찌르지 않는다.** 그건 이미 위에서 실패로 세어졌고, 여기서
 #    또 세면 한 결함이 두 줄로 보고돼 원인이 두 개인 것처럼 읽힌다.
+#
+# 🔴🔴 TASK-MONO-583 — **찌를 것만 찌른다.** `ADR-MONO-067` 이 일부 화면을 Vercel 로
+#    옮겼고, 그 화면은 **데모 호스트에 존재하지 않는다.** 그대로 두면 부팅 판정이
+#    영원히 열리지 않는 표면을 12번 재시도하며 기다리고, 그 실패는 **"데모가 안 떴다"**
+#    로 읽힌다. 그래서 마크업의 `data-served` 선언을 **여기서도 읽어** 데모 호스트 행만
+#    찌른다(선언의 출처는 여전히 한 벌이다 — 두 벌이면 하나만 고쳐진다).
+# 🔴 선언이 없거나 모르는 값인 행은 **판정 불가**다. 조용히 건너뛰면 새 출처가 생겼을 때
+#    그 화면이 부팅 판정에서 **소리 없이 빠진다**.
 # -----------------------------------------------------------------------------
 SURFACE_SRC="${DEMO_SURFACE_SRC:-$HERE/aws/site/index.html}"
-# 하한 = 2026-08-21 전수(console · web.ecommerce · web.fan-platform). 늘면 올려라 —
-# 그 순간이 새 표면을 부팅 판정에 넣을 자리다.
-SURFACE_FLOOR="${DEMO_SURFACE_FLOOR:-3}"
+# 하한 ①: **론처가 약속하는 화면의 총 수** = 3 (console · web.ecommerce · web.fan-platform,
+# 2026-08-21 전수). 서빙 출처가 갈려도 줄지 않는다 — 이 값은 «추출이 깨졌는가» 를 잰다.
+# 가드 (z14) 의 `z14_floor` 와 **같은 축·같은 값**이다.
+SURFACE_ROW_FLOOR="${DEMO_SURFACE_ROW_FLOOR:-3}"
+# 하한 ②: **부팅 때 실제로 찌를 표면의 수** = 2 (console · web.fan-platform).
+# provenance: 위 3 에서 web.ecommerce 를 뺀 값 — TASK-MONO-583 이 그 행을 Vercel 로
+# 옮겼고(ADR-MONO-067 단계 2), Vercel 표면은 데모 호스트가 꺼져 있어도 뜨므로 부팅
+# 완료의 증거가 될 수 없다. 🔴 **다른 축이다** — 화면이 늘어도 그것이 Vercel 이면
+# 여기는 안 오른다. 데모 호스트 화면이 늘 때만 올려라.
+SURFACE_FLOOR="${DEMO_SURFACE_FLOOR:-2}"
 SURFACE_ATTEMPTS="${DEMO_SURFACE_ATTEMPTS:-12}"
 SURFACE_SLEEP="${DEMO_SURFACE_SLEEP:-10}"
 
-surfaces=()
+surfaces=(); surf_rows=0; surf_badsrc=()
 while IFS= read -r sline; do
   sdom="$(printf '%s' "$sline" | sed -n 's/.*data-domain="\([^"]*\)".*/\1/p')"
+  [ -n "$sdom" ] || continue
+  surf_rows=$((surf_rows + 1))
+  ssrc="$(printf '%s' "$sline" | sed -n 's/.*data-served="\([^"]*\)".*/\1/p')"
   shost="$(printf '%s' "$sline" | sed -n 's/.*data-host="\([^"]*\)".*/\1/p')"
-  [ -n "$sdom" ] && [ -n "$shost" ] && surfaces+=("$sdom $shost")
-done < <(grep -o 'data-surface[^>]*' "$SURFACE_SRC" 2>/dev/null | grep 'data-domain=')
+  case "$ssrc" in
+    demo-host)
+      if [ -n "$shost" ]; then surfaces+=("$sdom $shost"); else surf_badsrc+=("$sdom:host없음"); fi ;;
+    vercel)    : ;;   # 데모 호스트에 없다 — 찌르지 않는다(그것이 이관의 목적이다)
+    *)         surf_badsrc+=("$sdom:출처='${ssrc:-없음}'") ;;
+  esac
+done < <(grep '<a [^>]*data-surface' "$SURFACE_SRC" 2>/dev/null)
 
 surf_bad=(); surf_undecidable=(); surf_skipped=(); surf_ok=()
-if [ "${#surfaces[@]}" -lt "$SURFACE_FLOOR" ]; then
+if [ "$surf_rows" -lt "$SURFACE_ROW_FLOOR" ]; then
+  surf_undecidable+=("행추출:${surf_rows}/${SURFACE_ROW_FLOOR}")
+elif [ "${#surf_badsrc[@]}" -gt 0 ]; then
+  # 🔴 모르는 출처를 건너뛰기로 처리하면 그 화면이 판정에서 조용히 빠진다.
+  surf_undecidable+=("출처선언:${surf_badsrc[*]}")
+elif [ "${#surfaces[@]}" -lt "$SURFACE_FLOOR" ]; then
   surf_undecidable+=("추출:${#surfaces[@]}/${SURFACE_FLOOR}")
 elif ! command -v curl >/dev/null 2>&1; then
   # 🔴 계측기가 없는 것과 표면이 죽은 것은 다른 사건이다.

@@ -78,11 +78,24 @@
       🔴 그냥 링크를 박으면 안 된다. 부팅에 약 10분이 걸리고 그 창에서 각 화면은 404 이며,
       안 뜬 화면에 링크를 주면 방문자는 **"고장났다"** 로 읽는다. 그래서 각 링크는 자기
       화면을 실제로 서빙하는 **도메인의 헬스에 묶인다**(아래 SURFACES).
+
+      🔴🔴 TASK-MONO-583 — 그 문장은 이제 **행마다 다르다.** `ADR-MONO-067` 이 일부 화면을
+      Vercel 로 옮겼고, 그 화면은 **데모가 꺼져 있어도 뜬다**(그것이 이관의 목적이다).
+      그래서 각 행은 **자기가 어디서 서빙되는지를 선언한다** — `data-served`:
+
+        data-served="demo-host" → data-host 필수 · demoHost() 파생 · 도메인 헬스에 묶인다
+        data-served="vercel"    → data-url 필수 · 정적 주소 · 헬스와 무관하게 **항상 활성**
+
+      🔴 **기본값이 없다.** 선언이 없거나 모르는 값이면 이 페이지는 그 링크를 **열지 않고**
+      (모르는 것은 통과가 아니다 — 방문자에게 깨진 링크를 주는 쪽이 더 나쁘다), 가드 (z14)
+      는 **빨개진다.** 두 속성은 **상호 배타**다: vercel 행에 data-host 를 남겨 두면 그것은
+      아무도 안 쓰는 낡은 값이 되고, 다음 사람은 그것을 보고 그 화면이 여전히 데모 호스트에
+      있다고 읽는다. `demo-up.sh` 의 부팅 판정도 **같은 선언**을 읽어 찌를 행을 고른다.
     -->
     <div id="surfaces">
-      <a class="open" data-surface data-domain="console"   data-host="console"          target="_blank" rel="noopener">🖥️ 운영자 콘솔 열기 →</a>
-      <a class="open" data-surface data-domain="ecommerce" data-host="web.ecommerce"    target="_blank" rel="noopener">🛒 이커머스 스토어 열기 →</a>
-      <a class="open" data-surface data-domain="fan"       data-host="web.fan-platform" target="_blank" rel="noopener">🎤 팬 플랫폼 열기 →</a>
+      <a class="open" data-surface data-domain="console"   data-served="demo-host" data-host="console"          target="_blank" rel="noopener">🖥️ 운영자 콘솔 열기 →</a>
+      <a class="open" data-surface data-domain="ecommerce" data-served="vercel"    data-url="https://store.hubwang.com/" target="_blank" rel="noopener">🛒 이커머스 스토어 열기 →</a>
+      <a class="open" data-surface data-domain="fan"       data-served="demo-host" data-host="web.fan-platform" target="_blank" rel="noopener">🎤 팬 플랫폼 열기 →</a>
       <div id="smsg"></div>
     </div>
   </div>
@@ -188,11 +201,28 @@
     // -----------------------------------------------------------------------
     // 방문자 화면 링크 (TASK-MONO-560)
     // -----------------------------------------------------------------------
-    // 🔴 모든 링크는 **반드시 demoHost() 를 통과**한다. 한 곳이라도 IP 를 직접 조립하면
-    //    다음 재기동에서 그 링크만 죽고 나머지가 멀쩡해 **원인이 안 보인다**(AC-3).
+    // 🔴 **데모 호스트에서 서빙되는 링크는** 반드시 demoHost() 를 통과한다. 한 곳이라도 IP 를
+    //    직접 조립하면 다음 재기동에서 그 링크만 죽고 나머지가 멀쩡해 **원인이 안 보인다**.
     //    호스트 접두사는 마크업의 data-host 에 있고 여기서 조립만 한다.
+    //
+    // 🔴🔴 TASK-MONO-583 — 이 문장은 **예전에 "모든 링크는"** 이었고, 그것이 더 이상 참이
+    //    아니다. 왜 예외가 생겼는지 적어 둔다 — 값만 고치면 다음 사람이 "일관성" 이라는
+    //    이유로 원복하기 때문이다:
+    //
+    //      `ADR-MONO-067` 이 일부 방문자 화면을 Vercel 로 옮겼다. 그 화면의 **존재 이유가
+    //      데모 호스트를 안 타는 것**이다 — 데모가 꺼져 있어도(= 대부분의 시간) 떠야 하고,
+    //      그래서 주소가 IP 에 파생되면 안 된다. demoHost() 를 통과시키면 그 화면은
+    //      **데모가 꺼진 동안 죽고**, 이관은 아무 일도 하지 않은 것이 된다.
+    //
+    //    🔴 그렇다고 "스토어는 예외" 로 느슨하게 만들지 마라. 그러면 **데모 호스트 행에
+    //    실수로 정적 주소를 쓰는 것**도 같이 통과한다. 축은 예외가 아니라 **선언**이다:
+    //    행이 `data-served` 로 자기 출처를 말하고, 두 정책이 각각 **끝까지** 집행된다.
+    //    (z14) 가 두 정책을 **양쪽 다** 실행 대조하고, 양쪽 모집단이 각각 ≥1 임을 단언한다.
     // GUARD-Z14-BEGIN — (z14) 가 이 구간을 **실행해서** 링크 판정을 대조한다.
     const surfaceUrl = (ip, prefix) => `http://${prefix}.${demoHost(ip)}/`;
+
+    // 서빙 출처 — 마크업의 `data-served` 가 유일한 출처이고 **기본값이 없다.**
+    const SERVED_DEMO = "demo-host", SERVED_VERCEL = "vercel";
 
     // 🔴 `partial` 을 **비활성으로 정한다** — 그리고 그 결정을 여기 적는다(AC-2 (3)).
     // partial 은 그 도메인의 컨테이너 일부가 unhealthy 라는 뜻이고, 웹 표면이 그중
@@ -205,6 +235,26 @@
     function renderSurfaces() {
       let off = 0, on = 0;
       for (const a of document.querySelectorAll("[data-surface]")) {
+        const served = a.dataset.served;
+
+        // ── Vercel 행 — 데모 상태와 **무관하게** 항상 활성. demoHost() 를 안 탄다.
+        //    주소가 없으면 활성으로 두지 않는다(자리표시자 href 는 방문자에게 404 다).
+        if (served === SERVED_VERCEL) {
+          if (a.dataset.url) { a.href = a.dataset.url; a.classList.toggle("off", false); on++; }
+          else { a.classList.toggle("off", true); a.removeAttribute("href"); off++; }
+          continue;
+        }
+
+        // ── 선언이 없거나 모르는 값 — **열지 않는다.** 안전한 쪽이 폴백이다.
+        //    (z14) 가 이 경우를 별도로 빨갛게 만든다. 여기서 조용히 데모 호스트 정책을
+        //    주면 새 출처가 생겼을 때 그 행이 **한쪽 정책을 조용히 받는다** — 이 티켓이
+        //    막아야 하는 실패가 정확히 그것이다.
+        if (served !== SERVED_DEMO) {
+          a.classList.toggle("off", true); a.removeAttribute("href"); off++;
+          continue;
+        }
+
+        // ── 데모 호스트 행 — 기존 네 칸 그대로.
         const st = (lastSnap && lastSnap[a.dataset.domain] || {}).state || "unknown";
         // 🔴 health_stale 이면 **어떤 state 도 믿지 않는다**(AC-2 (4)). 그 필드는
         //    TASK-MONO-551 이 만든 것이고, 참일 때 `up` 을 믿으면 **꺼진 스택의 링크를
