@@ -5,11 +5,33 @@
 
 | | |
 |---|---|
-| Vercel 프로젝트 | **⏳ 아직 없다 — 소유자가 만들어야 한다** (아래 § 소유자 절차) |
+| Vercel 프로젝트 | ✅ **`kanggle-store`** — 소유자가 **2026-08-29** 에 생성 |
 | Root Directory | `projects/ecommerce-microservices-platform/apps/web-store` |
 | 프레임워크 | Next.js 15 App Router — **감지는 대시보드에 맡긴다** |
 | `vercel.json` 이 선언하는 것 | `installCommand` + `ignoreCommand` 둘뿐 |
 | 무시 규칙의 경로 목록 | **[`vercel-ignore.sh`](./vercel-ignore.sh)** — JSON 안이 아니다 |
+| 공개 호스트명 | `store.hubwang.com` — 🔴 **아직 미연결**(`404`, 08-29 실측). 정본 표는 [`TEMPLATE.md § 공개 호스트명 배분`](../../../../../TEMPLATE.md) |
+
+## ✅ 생성 확인 (2026-08-29) — **배선이 살아 있다**
+
+프로젝트가 생기자마자 **커밋 상태 행이 셋이 됐다**(`61fe38721`):
+
+```
+Vercel – kanggle-portfolio | success | Canceled by Ignored Build Step
+Vercel – kanggle-fan       | success | Canceled by Ignored Build Step
+Vercel – kanggle-store     | success | Canceled by Ignored Build Step   ← 새 프로젝트
+```
+
+🔵 **첫 배포가 「취소」인 것은 정상이고, 오히려 배선이 옳다는 증거다** — 그 커밋은 `tasks/` 만
+건드렸으므로 `vercel-ignore.sh` 의 pathspec 에 안 걸린다. 🔴 **이것을 「실패」로 읽지 마라.**
+
+🔴 **판정 술어가 바뀐다** — 이제 *"`vercel.json` 이 셋인가"* 가 아니라 **"커밋 상태 행에
+`Vercel – ` 컨텍스트가 셋인가"** 로 본다. 파일은 08-29 이전에도 셋이었지만 프로젝트가 없으면
+Vercel 은 그 파일을 **읽지 않았다**. [[feedback_declaration_files_are_not_the_runtime_state]]
+
+🔵 **로그를 오독하지 않도록**: Vercel 은 배포를 **만들고 clone 까지 한 뒤** `ignoreCommand` 를
+돌린다. 그래서 *"Cloning completed"* 가 찍힌 뒤에 취소되는 것이 정상이다 — clone 로그를 보고
+*"빌드가 돌고 있다"* 로 읽으면 틀린다(`TASK-MONO-590` 이 잰 그 순서다).
 
 ---
 

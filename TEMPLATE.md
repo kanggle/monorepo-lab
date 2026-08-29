@@ -530,10 +530,10 @@ New projects pick an unused `*.local` hostname and register it in this table in 
 
 | 화면 | 공개 호스트명 | 대응 `*.local` | Vercel 프로젝트 | 상태 |
 |---|---|---|---|---|
-| **launcher** (기동 사이트) | `hubwang.com` | — (론처는 로컬에 없다) | `kanggle-portfolio` | ⏳ 도메인 연결 대기 |
-| fan | `fan.hubwang.com` | `fan-platform.local` | `kanggle-fan` | ⏳ 도메인 연결 대기 |
-| web-store | `store.hubwang.com` | `web.ecommerce.local` | *미생성* | ⏳ `TASK-MONO-575` 게이트 |
-| console | `console.hubwang.com` | `console.local` | *미생성* | ⏳ 단계 3 |
+| **launcher** (기동 사이트) | `hubwang.com` | — (론처는 로컬에 없다) | `kanggle-portfolio` | ✅ 연결됨 (`200`, 08-29 실측) |
+| fan | `fan.hubwang.com` | `fan-platform.local` | `kanggle-fan` | ✅ 연결됨 (`307`, 08-29 실측) |
+| web-store | `store.hubwang.com` | `web.ecommerce.local` | `kanggle-store` | ⏳ 프로젝트 ✅ (08-29) · **도메인 미연결** (`404`) |
+| console | `console.hubwang.com` | `console.local` | *미생성* | ⏳ 단계 3 (`404`) |
 | *(리다이렉트)* | `www.hubwang.com` | — | `kanggle-portfolio` | ↪️ apex 로 301 |
 | *(예약)* | `auth.hubwang.com` | `iam.local` | — | 🚫 예약 — `D4`/`TASK-MONO-576` 전까지 쓰지 마라 |
 | *(예약)* | `api.hubwang.com` | — | — | 🚫 예약 — 컨트롤 API |
