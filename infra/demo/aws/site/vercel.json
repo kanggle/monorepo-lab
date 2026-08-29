@@ -1,14 +1,13 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": null,
   "git": {
     "deploymentEnabled": {
-      "*": false,
       "**": false,
       "main": true,
       "preview/*": true
     }
   },
+  "framework": null,
   "installCommand": "echo '[site] no dependencies - install skipped'",
   "buildCommand": "bash ./build.sh",
   "ignoreCommand": "bash \"$(git rev-parse --show-toplevel)/scripts/vercel-should-build.sh\" ':/infra/demo/aws/site' ':/scripts/vercel-should-build.sh'",
