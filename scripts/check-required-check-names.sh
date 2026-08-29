@@ -29,7 +29,19 @@
 #    이유가 정확히 그것이다 — `grep 'INDEX queue drift'` 는 맞고
 #    `select(.name=="INDEX queue drift")` 는 틀렸다. ②는 `name:` 줄 **전체**와 등호로,
 #    ③은 문서 안에서 **고정 문자열**로 본다(문서는 산문이라 등호를 걸 수 없다 — 그
-#    대신 «괄호를 뺀 짧은 형태가 단독으로 있는가» 를 **따로** 잡는다, 아래 (4)).
+#    대신 «괄호를 뺀 짧은 형태가 단독으로 있는가» 를 **따로** 잡는다, 아래 (3)).
+#
+# 🔴🔴 **(4) 는 이름이 아니라 «몇 개가 실제로 도는가» 를 지킨다** (TASK-MONO-601):
+#    required 넷 중 셋은 `if: needs.changes.outputs.<필터>` 로 게이팅돼 있고 그 필터들은
+#    전부 `tasks/**` 경로만 나열한다 ⇒ **태스크 파일을 안 건드리는 PR 에서 셋이 SKIPPED**
+#    이고, GitHub 은 SKIPPED 를 실패로 세지 않으므로 차원 (c)는 **`changes` 하나만 실제로
+#    돈 상태로도 참**이다. 실측(2026-08-29, 머지 PR 70건): 코드 전용 **2건**(#3523·#3479)이
+#    정확히 그랬고 나머지 68건은 넷 다 돌았다. 🔵 건너뛰는 것 자체는 **옳다** — 그 가드들은
+#    태스크 큐 드리프트를 보고, 코드 전용 PR 은 그 도착 경로가 아니다. 결함은 «넷이
+#    required» 가 «넷이 돌았다» 로 읽히는 것이고, 그래서 문서 셋에 그 문장을 넣고
+#    (4)가 **게이팅 모양**을 고정한다.
+#    🔴 **(4)가 못 보는 것**: 개별 PR 의 실제 conclusion. 그건 런타임이지 저장소 상태가
+#    아니다 — 그 축은 사람이 rollup 을 읽어야 한다.
 #
 # 사용법:
 #   bash scripts/check-required-check-names.sh            # 저장소 판정
@@ -135,6 +147,23 @@ if [ "${1:-}" = "--self-test" ]; then
     od -c "$t/scripts/required-check-names.txt" | grep -q '\\r' || { echo "  ⚠ (g) 주입 실패 — CR 이 안 들어감"; exit 3; }
   st_cell "(g) 핀이 CRLF 여도 통과" 0 "$t"
 
+  # (h) 🔴🔴 TASK-MONO-601 칸 (4) — 게이팅을 하나 **떼면** 빨개져야 한다.
+  #     이게 안 물면 «넷 중 셋이 SKIPPED» 라는 문서 문장이 아무 가드도 없이 떠다닌다.
+  t="$(st_mk)"
+  before=$(grep -c "if: needs.changes.outputs.index-queue == 'true'" "$t/.github/workflows/ci.yml")
+  sed -i "/if: needs.changes.outputs.index-queue == 'true'/d" "$t/.github/workflows/ci.yml"
+  after=$(grep -c "if: needs.changes.outputs.index-queue == 'true'" "$t/.github/workflows/ci.yml")
+  [ "$before" -gt 0 ] && [ "$after" -eq 0 ] || { echo "  ⚠ (h) 주입 실패 ($before→$after)"; exit 3; }
+  st_cell "(h) required 하나의 게이팅 제거 → RED" 1 "$t"
+
+  # (i) 문서에서 601 문단이 사라지면 빨개져야 한다 — 사실의 «집» 이 비는 것을 잡는다.
+  t="$(st_mk)"
+  before=$(grep -cF 'TASK-MONO-601' "$t/platform/git-workflow-policy.md")
+  sed -i 's/TASK-MONO-601/TASK-MONO-XXX/g' "$t/platform/git-workflow-policy.md"
+  after=$(grep -cF 'TASK-MONO-601' "$t/platform/git-workflow-policy.md")
+  [ "$before" -gt 0 ] && [ "$after" -eq 0 ] || { echo "  ⚠ (i) 주입 실패 ($before→$after)"; exit 3; }
+  st_cell "(i) 문서에서 601 문단 소실 → RED" 1 "$t"
+
   echo "[required-names] --self-test $pass/$total"
   [ "$pass" -eq "$total" ] && exit 0 || exit 1
 fi
@@ -205,11 +234,40 @@ for n in "${names[@]}"; do
   done
 done
 
+# --- (4) 🔴🔴 «몇 개가 실제로 도는가» — 게이팅 모양 (TASK-MONO-601) --------------
+# required 넷 중 셋이 `if: needs.changes.outputs.<필터>` 로 조건부다. 그 숫자가 바뀌면
+# 문서 셋의 「셋이 SKIPPED 된다」가 거짓이 되는데, 문서는 스스로 못 틀린다.
+# 🔴 이 칸은 **모양**을 잰다(조건부인 job 이 몇 개인가), 개별 PR 의 conclusion 이 아니다.
+GATED_EXPECTED=3
+gated=0
+gated_names=""
+for n in "${names[@]}"; do
+  [ "$n" = "changes" ] && continue           # 필터 job 자신은 자기를 needs 할 수 없다
+  ln="$(grep -nxF "    name: $n" "$CI" | head -1 | cut -d: -f1)"
+  [ -z "$ln" ] && continue                   # ci.yml 에 없는 것은 (1)이 이미 잡았다
+  if sed -n "$((ln+1)),$((ln+4))p" "$CI" | grep -q 'if: needs\.changes\.outputs\.'; then
+    gated=$((gated+1)); gated_names="$gated_names «$n»"
+  fi
+done
+if [ "$gated" -ne "$GATED_EXPECTED" ]; then
+  note "✖ 조건부 게이팅된 required 가 ${gated}개입니다 — 기대 ${GATED_EXPECTED}개."
+  note "  → 게이팅을 넓히거나 좁혔다면 «넷 중 셋이 SKIPPED 될 수 있다» 가 더 이상 참이 아닙니다."
+  note "     문서 ${#DOCS[@]}곳의 TASK-MONO-601 문단을 같이 고치고 이 숫자를 갱신하세요."
+  note "     지금 조건부인 것:$gated_names"
+  fail=1
+fi
+# 그 사실이 문서 셋에 **살아 있는가** — 앵커로 본다(산문이라 등호를 못 건다).
+for d in "${DOCS[@]}"; do
+  grep -qF -- 'TASK-MONO-601' "$ROOT/$d" \
+    || { note "✖ $d 에 TASK-MONO-601 문단이 없습니다 — «넷이 required» 가 «넷이 돌았다» 로 읽힙니다."; fail=1; }
+done
+
 if [ "$fail" -ne 0 ]; then
   echo "[required-names] ✖ required check 이름이 어긋났습니다." >&2
   exit 1
 fi
 
 echo "[required-names] ok — 핀 ${#names[@]}개가 ci.yml 과 문서 ${#DOCS[@]}곳에서 일치."
+echo "  (그중 ${gated}개는 조건부 게이팅 — 태스크 파일을 안 건드리는 PR 에서는 SKIPPED 된다.)"
 echo "  (🔴 branch protection 쪽 변경은 이 가드가 **못 봅니다** — 헤더 §못 무는 것 참조.)"
 exit 0
