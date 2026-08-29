@@ -8,7 +8,7 @@ TASK-MONO-603
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -162,3 +162,104 @@ $("surfaces").style.display = (isRun && ip) ? "block" : "none";
 | 가드 구간을 안 넓힘 | 다음에 **똑같이 조용히 되돌아감** | AC-2 첫 칸 |
 | `running` 상태에서 판정 | **아무것도 확인 안 하고** 초록 | AC-0 ② |
 | DOM 대역을 실물보다 관대하게 | 가드가 통과해도 브라우저에서 다름 | AC-2 마지막 칸 |
+
+---
+
+# ✅ 구현 결과 (2026-08-29 UTC)
+
+## AC-0 — 전제 재측정 (착수 전)
+
+| # | 측정 | 결과 |
+|---|---|---|
+| ① | **서빙된** 마크업에 `data-served` 가 있는가 | `https://hubwang.com/` **200** · `data-served` **8건** ⇒ 583 판이 실제로 서빙 중 |
+| ② | 컨트롤 플레인 `state` | **`stopped`** (`{"state":"stopped","ip":null,"used_minutes":496,"budget_minutes":600}`) ⇒ **결함이 보이는 상태에서 판정했다** |
+
+🔵 ②가 `running` 이었다면 이 결함은 안 보이고 「고쳤다」를 잘못 얻는다. 그 조건이 참이었다.
+
+## AC-1 — 컨테이너 가시성이 **행에서 파생**된다
+
+```js
+const anyAlwaysOpenSurface = () => {
+  for (const a of document.querySelectorAll("[data-surface]")) {
+    if (a.dataset.served === SERVED_VERCEL && a.dataset.url) return true;
+  }
+  return false;
+};
+function surfacesVisible(isRun, ip) {
+  const shown = !!(isRun && ip) || anyAlwaysOpenSurface();
+  $("surfaces").style.display = shown ? "block" : "none";
+  return shown;
+}
+```
+
+- 🔴 **상수화하지 않았다.** 술어가 마크업의 `data-served` 선언을 **읽는다** — 583 이 만든
+  그 선언이 유일한 출처다. 단계 3·4 가 행을 옮기거나 되돌리면 술어가 **따라온다.**
+- 🔴 **`data-url` 없는 vercel 행은 안 센다.** 그 행은 `renderSurfaces` 가 비활성으로 두므로,
+  세면 **아무것도 열 수 없는 빈 블록**을 방문자에게 보여 주게 된다.
+- 🔵 **조건을 넓힌 것이지 대체한 것이 아니다** — `(isRun && ip)` 는 그대로 살아 있다.
+  가드가 그것도 따로 단언한다(vercel-0 판에서 `UP` 은 여전히 `block`).
+- 🔵 `#smsg` 문구는 그대로 뒀다 — 꺼진 데모에서 *"아직 준비되지 않은 화면 2개는 비활성입니다
+  (해당 도메인이 🟢 실행 중이 되면 열립니다)"* 는 **demo-host 행에 대해 여전히 참**이고,
+  블록이 보이게 된 지금 그 문구가 오히려 필요하다(왜 둘은 회색인지 설명한다).
+
+## AC-2 — `(z14)` 가 **컨테이너 축을 실행 대조**한다
+
+**가드 구간을 `render()` 까지 넓혔다.** `GUARD-Z14-END` 를 `renderSurfaces()` 뒤에서
+`render()` 뒤로 옮겼다 ⇒ 이제 그 줄이 **실제로 실행된다.**
+
+🔴 그리고 **넓어진 채로 있는지를 가드가 스스로 단언한다** — 잘라낸 구간에 `function render(`
+가 없으면 실패. 앵커가 다시 좁아지면 이 축은 조용히 사라지는데, 그때 빨개진다.
+
+**드라이버 변경:**
+
+- `renderSurfaces()` 가 아니라 **`render(state, ip, usage)`** 를 부른다.
+- 🔴🔴 **DOM 대역이 관대했다** — 초판 `$` 는 **모든 id 에 같은 객체**를 돌려줬다. 그 상태로
+  구간을 넓히면 `#bar` 의 `display` 가 `#surfaces` 의 `display` 를 **덮어써도 모른다.**
+  ⇒ id 마다 다른 객체를 주는 `getElementById` 대역으로 바꿨다. **대역을 넓힐 때
+  관대해지는 것**이 이 저장소의 반복 함정이고, 여기서 그 자리를 지났다.
+- 🔵 드라이버에서 `$` 를 **정의하지 않는다** — 넓어진 구간이 `const $ = (id) => …` 를
+  포함하므로 또 선언하면 **중복 선언으로 죽는다.**
+- **여섯 번째 판 `STOPPED`** 추가 — `run("stopped", null, {}, false)`. 이것이 **대부분의 시간**이다.
+
+**단언:**
+
+| 판정 | 단언 |
+|---|---|
+| `UP`·`DOWN`·`UNKNOWN`·`PARTIAL`·`STALE`·**`STOPPED`** | `#surfaces` = **`block`** |
+| vercel 행 | **여섯 판 전부** 활성 + 선언된 정적 주소 |
+| demo-host 행 | `UP` 활성(파생) · `DOWN`/`UNKNOWN`/**`STOPPED`**/`PARTIAL`/`STALE` **비활성·href 없음** |
+| **vercel-0 대조군** | 같은 드라이버를 **demo-host 행만**으로 한 번 더 실행 ⇒ `STOPPED` = **`none`**, `UP` = **`block`** |
+
+🔵 대조군은 **코드가 아니라 입력이 다르다** — 그래서 「선언에서 파생」과 「상수 true」를 가른다.
+
+## AC-3 — 검증
+
+| 칸 | 결과 |
+|---|---|
+| `(z14)` 실행 | ✅ `… vercel 1행(여섯 상태 전부 활성) · 컨테이너 축(꺼진 데모에서도 보임 · vercel-0 대조군은 숨김 유지)` |
+| `(z15)` 실행 | ✅ 영향 없음 확인 — `HTTP 표면 2/2 · Vercel 행은 안 찌름` |
+| `demo-up.sh` 추출 드라이런 | ✅ 행 3/3 · 찌를표면 2/2 · 대조군 둘 다 판정 불가 |
+| `bash -n` | ✅ |
+| **bite** | ✅ **11/11** (583 의 8 + 603 의 3) |
+
+**603 이 추가한 bite 3종 — 전부 물었다:**
+
+| # | 주입 | 결과 |
+|---|---|---|
+| 8 | `surfacesVisible(isRun, ip)` → 옛 `(isRun && ip)` 삼항식 | ✅ `[STOPPED] #surfaces 가 보이지 않습니다 (display='none')` |
+| 9 | `shown` 을 **상수 `true`** 로 굳힘 | ✅ **대조군이 물었다** — `vercel 행이 0개인데 … 보입니다 … 상수로 굳은 것` |
+| 10 | `GUARD-Z14-END` 를 `render()` **앞으로** 되돌림 | ✅ `가드 구간이 render() 를 포함하지 않습니다` |
+
+🔵 **(10)이 이 티켓의 자기 방어다** — 앵커가 다시 좁아지면 빨개진다. 그것이 없으면
+이 고침도 583 처럼 **조용히 되돌아간다.**
+
+🔴 세 칸 모두 **주입을 먼저 증명**했다(치환 전후 개수를 세고, 안 바뀌었으면 그 칸을
+**무효**로 표시). 583 에서 그 증명이 없어 「가드가 공허하다」를 잘못 얻은 자리다.
+
+## 🔴 안 잰 것
+
+- **브라우저에서 눈으로** 확인하지 않았다. `display:none` 여부는 JS 가 런타임에 정하므로
+  커맨드라인으로는 못 잰다 ⇒ 저장소 쪽 판정은 **마크업 + 실행 대조**이고, 시각 확인은
+  머지·배포 후 별도다(AC-3 마지막 칸).
+- Docker 가 없어 `verify-demo-wrapper.sh` **전체**는 못 돌렸다 — 이 판정은 `(z14)`·`(z15)`
+  두 칸 한정이고 나머지는 CI 의 `Demo wrapper smoke` 가 잰다.

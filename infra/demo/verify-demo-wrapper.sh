@@ -2343,14 +2343,38 @@ z14_e="$(grep -n 'GUARD-Z14-END' "$z14_site" | head -1 | cut -d: -f1)"
 z14_anchor="$(sed -n 's/^[[:space:]]*\(const demoHost =.*\); \/\/ GUARD-T-ANCHOR.*/\1/p' "$z14_site")"
 [ -n "$z14_anchor" ] || fail "(z14) GUARD-T-ANCHOR 를 찾지 못했습니다 — demoHost 를 실행할 수 없습니다."
 
+# 🔴🔴 TASK-MONO-603 — 가드 구간이 **`render()` 를 포함해야** 한다.
+# 583 은 행 정책을 고쳤고 bite 8/8 이 전부 참이었는데, 방문자 경로는 **안 바뀌었다**:
+# 블록의 가시성을 정하는 줄이 `render()` 안, 즉 **이 구간 바깥**에 있어서 가드가 그 코드를
+# 한 번도 실행해 본 적이 없었기 때문이다(*내용물에 건 가드는 컨테이너에 건 가드가 아니다*).
+# ⇒ 구간을 넓혔고, **넓어진 채로 있는지 여기서 단언한다.** 앵커가 다시 좁아지면 이 축은
+#   조용히 사라진다 — 그때 이 줄이 빨개진다.
+printf '%s\n' "$z14_code" | grep -q 'function render(' \
+  || fail "(z14) GUARD-Z14 구간 밖으로 render() 가 나갔거나 이름이 바뀌었습니다 — 컨테이너 축을 실행할 수 없습니다."
+sed -n "$(( z14_b + 1 )),$(( z14_e - 1 ))p" "$z14_site" | grep -q 'function render(' \
+  || fail "(z14) **가드 구간이 render() 를 포함하지 않습니다.**"\
+    $'\n'"→ 그러면 \`#surfaces\` 의 가시성을 정하는 줄이 **한 번도 실행되지 않습니다.**"\
+    $'\n'"→ TASK-MONO-583 이 정확히 그렇게 통과했습니다: 행 정책 bite 8/8 이 전부 참인데"\
+    $'\n'"   링크는 활성인 채로 영영 안 보였습니다(TASK-MONO-603)."
+
 z14_js="$(mktemp)"
 {
   printf '%s;\n' "$z14_anchor"
   sed -n "$(( z14_b + 1 )),$(( z14_e - 1 ))p" "$z14_site"
   cat <<'Z14DRV'
 // --- 최소 DOM 대역 ---------------------------------------------------------
-const _msg = { textContent: "" };
-function $(id) { return _msg; }
+// 🔴🔴 TASK-MONO-603 — 구간이 render() 까지 넓어졌으므로 대역도 넓어진다. render() 는
+//    start/stop/bar/surfaces/domains/msg 를, renderSurfaces 는 smsg 를 만진다.
+// 🔴 초판 대역은 `$` 가 **모든 id 에 같은 객체**를 돌려줬다 — 그 상태로 이 구간을 넓히면
+//    #bar 의 display 가 #surfaces 의 display 를 덮어써도 모른다(**실물보다 관대한 스텁**).
+//    id 마다 다른 객체를 준다. 대역을 넓힐 때 관대해지는 것이 이 저장소의 반복 함정이다.
+// 🔵 `$` 를 여기서 정의하지 않는다 — 구간 안에 `const $ = (id) => document.getElementById(id)`
+//    가 있으므로, 여기서 또 선언하면 **중복 선언으로 죽는다.** 대신 getElementById 를 준다.
+const _els = {};
+function _el(id) {
+  if (!_els[id]) _els[id] = { id, textContent: "", disabled: false, style: {} };
+  return _els[id];
+}
 function mkA(domain, served, host, url) {
   // 🔵 빈 문자열은 **속성이 없는 것**으로 만든다 — 브라우저의 dataset 도 없는 속성에는
   //    undefined 를 준다. 빈 문자열을 그대로 두면 `if (a.dataset.url)` 같은 술어가
@@ -2368,32 +2392,44 @@ function mkA(domain, served, host, url) {
 //    실제로 그렇게 통과했다(이 가드를 쓰면서 그 자리에서 물렸다).
 const _as = process.env.Z14_ROWS.trim().split("\n").map((l) => l.split("|"))
   .map(([d,s,h,u]) => { const a = mkA(d,s,h,u); a.classList._o = a; return a; });
-global.document = { querySelectorAll: () => _as };
-function run(snap, stale) {
-  lastIp = IP; lastSnap = snap; lastStale = stale;
-  renderSurfaces();
-  return _as.map(a => ({ d: a.dataset.domain, off: a._cls.has("off"), href: a.href }));
-}
+global.document = { querySelectorAll: () => _as, getElementById: _el };
 const IP = "1.2.3.4";
+// 🔴🔴 TASK-MONO-603 — renderSurfaces() 가 아니라 **render() 를 부른다.** 컨테이너
+//    가시성은 그 안에 있고, 그것을 안 부르면 583 이 통과한 그 구멍이 그대로 남는다.
+function run(state, ip, snap, stale) {
+  lastSnap = snap; lastStale = stale;
+  render(state, ip, null);
+  return {
+    rows: _as.map(a => ({ d: a.dataset.domain, off: a._cls.has("off"), href: a.href })),
+    disp: _el("surfaces").style.display,
+  };
+}
 // 🔴🔴 TASK-MONO-583 — 스냅샷을 **도메인마다 다르게** 주지 않고 **한 상태로 통일**한다.
 //    초판은 상태별로 도메인을 섞어 놓아서 각 칸이 사실상 한 행씩만 쟀다. 통일하면
 //    **모든 데모 호스트 행이 네 칸 전부**를 받고, Vercel 행은 **다섯 상태 전부에서**
 //    활성이어야 한다는 뒤집힌 단언을 받는다. 모집단이 늘어도 자동으로 덮인다.
 const all = (st) => Object.fromEntries(_as.map(a => [a.dataset.domain, { state: st }]));
 const out = {
-  up:      run(all("up"), false),
-  down:    run(all("down"), false),
-  unknown: run({}, false),        // 스냅샷에 키가 없다 → "unknown"
-  partial: run(all("partial"), false),
-  stale:   run(all("up"), true),  // state 는 전부 up 인데 헬스가 stale
+  // 아래 다섯은 **데모가 떠 있는** 판이다(도메인별 헬스만 다르다).
+  up:      run("running", IP, all("up"), false),
+  down:    run("running", IP, all("down"), false),
+  unknown: run("running", IP, {}, false),        // 스냅샷에 키가 없다 → "unknown"
+  partial: run("running", IP, all("partial"), false),
+  stale:   run("running", IP, all("up"), true),  // state 는 전부 up 인데 헬스가 stale
+  // 🔴🔴 TASK-MONO-603 의 칸 — **데모가 꺼져 있다.** ip 도 없다. 이것이 대부분의 시간이다.
+  stopped: run("stopped", null, {}, false),
 };
-const say = (k) => out[k].map(r => `${r.d}:${r.off ? "off" : "on"}:${r.href || "-"}`).join(" ");
-for (const k of ["up","down","unknown","partial","stale"]) console.log(k.toUpperCase() + "|" + say(k));
+const say = (k) => out[k].disp + "|" +
+  out[k].rows.map(r => `${r.d}:${r.off ? "off" : "on"}:${r.href || "-"}`).join(" ");
+for (const k of ["up","down","unknown","partial","stale","stopped"])
+  console.log(k.toUpperCase() + "|" + say(k));
 Z14DRV
 } > "$z14_js"
 
 z14_out="$(Z14_ROWS="$z14_rows" node "$z14_js" 2>&1)" || { rm -f "$z14_js"; fail "(z14) 링크 판정 실행 실패:"$'\n'"$z14_out"; }
-rm -f "$z14_js"
+# 🔵 TASK-MONO-603 — 드라이버를 아직 지우지 않는다. 아래 **vercel-0 대조군**이 같은
+#    드라이버를 **다른 행 집합**으로 한 번 더 돌린다(대조군은 코드가 아니라 입력이 다르다).
+z14_js2="$z14_js"
 z14_line() { printf '%s\n' "$z14_out" | sed -n "s/^$1|//p"; }
 
 # 🔴 판정은 **행마다 자기 정책으로** 본다. 아래 두 루프가 AC-2 의 표를 그대로 집행한다:
@@ -2403,13 +2439,14 @@ z14_line() { printf '%s\n' "$z14_out" | sed -n "s/^$1|//p"; }
 #   demo-host| 활성(파생)     | **비활성 · href 없음**
 #
 z14_has() { case "$(z14_line "$1")" in *"$2"*) return 0 ;; *) return 1 ;; esac; }
+z14_disp() { z14_line "$1" | cut -d'|' -f1; }
 
 while IFS='|' read -r z14_d z14_s z14_h z14_u; do
   [ -n "$z14_d" ] || continue
   if [ "$z14_s" = "vercel" ]; then
     # 🔴🔴 뒤집힌 칸 — **다섯 상태 전부에서** 활성이고 주소는 선언된 정적 주소 그대로다.
     #    값을 여기 다시 적지 않는다(두 벌이면 하나만 고쳐진다) — 마크업이 선언한 값을 쓴다.
-    for z14_k in UP DOWN UNKNOWN PARTIAL STALE; do
+    for z14_k in UP DOWN UNKNOWN PARTIAL STALE STOPPED; do
       z14_has "$z14_k" "$z14_d:on:$z14_u" \
         || fail "(z14) [$z14_k] Vercel 에서 서빙되는 '$z14_d' 링크가 열리지 않거나 주소가 틀립니다:"\
           $'\n'"   $(z14_line "$z14_k")"\
@@ -2426,8 +2463,10 @@ while IFS='|' read -r z14_d z14_s z14_h z14_u; do
       || fail "(z14) (1) 도메인이 up 인데 '$z14_d' 링크가 열리지 않거나 주소가 demoHost() 파생이 아닙니다:"\
         $'\n'"   $(z14_line UP)"\
         $'\n'"→ 한 곳이라도 IP 를 직접 조립하면 **그 링크만** 죽고 나머지가 멀쩡해 원인이 안 보입니다."
-    # (2) bite — down/unknown 은 비활성이고 href 가 **아예 없어야** 한다.
-    for z14_k in DOWN UNKNOWN; do
+    # (2) bite — down/unknown/데모정지 는 비활성이고 href 가 **아예 없어야** 한다.
+    # 🔵 STOPPED 는 TASK-MONO-603 이 넣었다 — 컨테이너가 보이게 된 뒤에도 **데모 호스트
+    #    행은 여전히 닫혀 있어야** 한다. 안 그러면 방문자에게 404 를 주게 된다.
+    for z14_k in DOWN UNKNOWN STOPPED; do
       z14_has "$z14_k" "$z14_d:off:-" \
         || fail "(z14) (2) [$z14_k] 안 뜬 화면 '$z14_d' 가 열려 있습니다: $(z14_line "$z14_k")"\
           $'\n'"→ 부팅 창에서 그 화면은 404 이고, 방문자는 그것을 **\"고장났다\"** 로 읽습니다."\
@@ -2446,7 +2485,43 @@ while IFS='|' read -r z14_d z14_s z14_h z14_u; do
   fi
 done <<< "$z14_rows"
 
-ok "방문자 화면 링크 ${z14_got}개 — demo-host ${z14_n_demo}행(up 활성·down/unknown/partial/stale 비활성·href 제거·demoHost() 파생) · vercel ${z14_n_vercel}행(다섯 상태 전부 활성·정적 주소)"
+# ---------------------------------------------------------------------------
+# 🔴🔴 TASK-MONO-603 — **컨테이너 축.** 행이 열려 있어도 블록이 숨겨져 있으면 안 보인다.
+# ---------------------------------------------------------------------------
+# 583 은 이 축을 하나도 안 쟀고, 그래서 링크 정책을 다 고쳐 놓고도 방문자 경로가 안
+# 바뀌었다(실측: 서빙본은 새 마크업인데 `/status`=stopped 라 `display:none` 이었다).
+for z14_k in UP DOWN UNKNOWN PARTIAL STALE STOPPED; do
+  [ "$(z14_disp "$z14_k")" = "block" ] \
+    || fail "(z14) [$z14_k] #surfaces 가 보이지 않습니다 (display='$(z14_disp "$z14_k")')."\
+      $'\n'"→ 데모가 떠 있으면 당연히 보여야 하고, **꺼져 있어도 Vercel 행이 있으면 보여야** 합니다."\
+      $'\n'"→ 행만 활성으로 두고 블록을 숨기면 그 링크는 **활성인 채로 영영 안 보입니다.**"\
+      $'\n'"   그것이 TASK-MONO-583 이 통과하면서 남긴 구멍이고 TASK-MONO-603 이 닫은 것입니다."
+done
+
+# 🔴🔴 **대조군 — vercel 행이 0개면 예전 동작(숨김)이 유지돼야 한다.**
+# 이것이 없으면 "항상 보이게" 로 바꾼 것과 구별되지 않는다. 그 구별이 이 칸의 전부다:
+# 술어가 **마크업 선언에서 파생**됐는지, 아니면 그냥 상수 true 가 됐는지를 가른다.
+z14_rows_demo="$(printf '%s\n' "$z14_rows" | awk -F'|' '$2=="demo-host"')"
+if [ -n "$z14_rows_demo" ]; then
+  z14_out_d="$(Z14_ROWS="$z14_rows_demo" node "$z14_js2" 2>&1)" \
+    || fail "(z14) vercel-0 대조군 실행 실패:"$'\n'"$z14_out_d"
+  z14_disp_d="$(printf '%s\n' "$z14_out_d" | sed -n 's/^STOPPED|//p' | cut -d'|' -f1)"
+  [ "$z14_disp_d" = "none" ] \
+    || fail "(z14) 대조군 실패 — vercel 행이 **0개**인데 데모가 꺼진 상태에서 #surfaces 가 보입니다 (display='$z14_disp_d')."\
+      $'\n'"→ 가시성이 마크업 선언에서 파생되지 않고 **상수로 굳은 것**입니다."\
+      $'\n'"→ 그러면 ADR-MONO-067 단계 3·4 가 행을 옮기거나 되돌릴 때 그 상수는 **조용히 거짓**이 되고,"\
+      $'\n'"   방문자는 아무것도 열 수 없는 빈 블록을 봅니다."
+  # 🔵 그 대조군 판에서도 **데모가 떠 있으면** 보여야 한다 — 예전 동작을 잃지 않았는지.
+  z14_disp_du="$(printf '%s\n' "$z14_out_d" | sed -n 's/^UP|//p' | cut -d'|' -f1)"
+  [ "$z14_disp_du" = "block" ] \
+    || fail "(z14) 대조군 실패 — vercel 행이 없어도 **데모가 떠 있으면** #surfaces 는 보여야 합니다 (display='$z14_disp_du')."\
+      $'\n'"→ 이 티켓은 조건을 **넓힌 것**이지 예전 조건을 대체한 것이 아닙니다."
+else
+  fail "(z14) demo-host 행이 0개라 vercel-0 대조군을 만들 수 없습니다 — 이 칸이 공허해집니다."
+fi
+rm -f "$z14_js2"
+
+ok "방문자 화면 링크 ${z14_got}개 — demo-host ${z14_n_demo}행(up 활성·down/unknown/partial/데모정지 비활성·href 제거·demoHost() 파생) · vercel ${z14_n_vercel}행(여섯 상태 전부 활성·정적 주소) · 컨테이너 축(꺼진 데모에서도 보임 · vercel-0 대조군은 숨김 유지)"
 
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------

@@ -232,6 +232,38 @@
     const SURFACE_LIVE = (st) => st === "up";
     let lastIp = null, lastSnap = null, lastStale = false;
 
+    // -----------------------------------------------------------------------
+    // 🔴🔴 TASK-MONO-603 — **블록의 가시성은 «데모가 떴는가» 가 아니다**
+    // -----------------------------------------------------------------------
+    // 이 줄은 원래 `(isRun && ip)` 였고, 모든 방문자 화면이 데모 호스트에 있던 시절엔
+    // **옳았다** — 데모가 꺼져 있으면 셋 다 못 여니 블록째 숨기는 것이 맞았다.
+    //
+    // `ADR-MONO-067` 이 **데모를 안 타는 화면**을 만들면서 그 전제가 깨졌다.
+    // `TASK-MONO-583` 은 그것을 **행 단위**에서만 반영했고(스토어 행은 다섯 상태 전부
+    // 활성), 그 결과 **활성인 채로 영영 안 보이는 링크**가 생겼다 — 실측(2026-08-29):
+    // 서빙본은 새 마크업인데 `/status` 가 `stopped` 라 블록이 `display:none` 이었다.
+    //
+    // ⇒ 물어야 할 것은 **«지금 열 수 있는 화면이 하나라도 있는가»** 다.
+    //
+    // 🔴 「스토어가 있으니 항상 보인다」로 **상수화하지 마라.** 단계 3·4 가 행을 옮기거나
+    //    되돌리면 그 상수는 **조용히 거짓**이 된다. 술어는 마크업의 `data-served`
+    //    선언에서 **파생**된다 — 583 이 만든 그 선언이 유일한 출처다.
+    // 🔴 `data-url` 이 없는 vercel 행은 세지 않는다. 그 행은 renderSurfaces 가 비활성으로
+    //    두므로, 세면 **아무것도 열 수 없는 빈 블록**을 보여 주게 된다.
+    const anyAlwaysOpenSurface = () => {
+      for (const a of document.querySelectorAll("[data-surface]")) {
+        if (a.dataset.served === SERVED_VERCEL && a.dataset.url) return true;
+      }
+      return false;
+    };
+    // 🔵 값을 돌려주지 않고 **직접 쓴다** — 호출부가 결과를 버리면 (z14) 가 render() 를
+    //    실행해도 컨테이너가 안 바뀌므로, 그 실수를 가드가 그대로 잡는다.
+    function surfacesVisible(isRun, ip) {
+      const shown = !!(isRun && ip) || anyAlwaysOpenSurface();
+      $("surfaces").style.display = shown ? "block" : "none";
+      return shown;
+    }
+
     function renderSurfaces() {
       let off = 0, on = 0;
       for (const a of document.querySelectorAll("[data-surface]")) {
@@ -268,7 +300,6 @@
         : lastStale ? "⚠ 헬스 정보가 갱신되지 않아 링크를 열지 않습니다 — 배지를 확인하세요"
         : `아직 준비되지 않은 화면 ${off}개는 비활성입니다 (해당 도메인이 🟢 실행 중이 되면 열립니다)`;
     }
-    // GUARD-Z14-END
 
     const $ = (id) => document.getElementById(id);
     let beatTimer = null, pollTimer = null;
@@ -293,7 +324,10 @@
       $("start").disabled = isRun || state === "pending" || state === "starting";
       $("stop").disabled = !isRun;
       $("bar").style.display = (state === "pending" || state === "starting") ? "block" : "none";
-      $("surfaces").style.display = (isRun && ip) ? "block" : "none";
+      // 🔴🔴 TASK-MONO-603 — 이 줄이 «(isRun && ip)» 였고, 그래서 583 이 스토어 링크를
+      //    다섯 상태 전부에서 활성으로 만들어 놓고도 **방문자 경로는 안 바뀌었다.**
+      //    행은 열려 있는데 그 행을 담은 블록이 통째로 숨겨져 있었다.
+      surfacesVisible(isRun, ip);
       $("domains").style.display = isRun ? "block" : "none";
       lastIp = ip || null;
       renderSurfaces();
@@ -308,6 +342,7 @@
         ? `${label}  ·  이번 달 ${usage.used}/${usage.budget}분 사용`
         : label;
     }
+    // GUARD-Z14-END
 
     function startHeartbeat() {
       stopHeartbeat();
