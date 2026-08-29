@@ -1,6 +1,6 @@
 # TASK-BE-580 — 회원가입의 **영구** 실패(404 `TENANT_NOT_FOUND`)가 *"잠시 후 다시 시도해 주세요"* 로 보고된다
 
-- **Status**: review
+- **Status**: done
 - **Project**: iam-platform
 - **Service**: auth-service (SAS browser signup surface)
 - **Type**: bug fix
@@ -243,3 +243,48 @@ rate-limit 이 걸린 사용자에게 *"다시 시도하지 마세요"* 라고 �
 **AC-3 의 문구가 라이브에서 실제로 보이는지는 확인하지 않았다.** 데모 인스턴스가 정지 상태이고
 현재 AMI(`e632e3b54`)에는 이 변경도 581 도 없다 — `TASK-MONO-399` 가 기록한 대로 다음 재굽기가
 필요하다. 🔵 581 AC-4 와 **같은 기동에 묶으면** 한 번으로 끝난다.
+
+## CORRECTION (2026-08-29) — **AC-3 문구가 라이브에서 확인됐다. 남은 것 없음.**
+
+위 § 남은 것이 *"AC-3 의 문구가 라이브에서 실제로 보이는지는 확인하지 않았다"* 로 닫혀
+있었다. `TASK-MONO-581` 이 묶은 재굽기 + 기동 한 창에서 **확인했다.**
+
+| | |
+|---|---|
+| AMI | `ami-0caf015f7cd9144fd` — `main` **`6bc2a44e7`** 에서 구움 |
+| 창 | 2026-08-29 15:50~17:08Z · IdP `iam.3-38-176-240.sslip.io` |
+
+**측정** — 콘솔 OIDC flow(`client_id=platform-console-web`)의 세션으로 `GET /signup`:
+
+| | 문구 `이 경로로는 회원가입할 수 없습니다. 계정 생성은 관리자에게 문의해 주세요.` | `type="password"` |
+|---|---|---|
+| **콘솔 flow** (2,965 B) | **1건** | **0** |
+| **대조군 · 세션 없음** (4,695 B) | 0건 | **2** (정상 가입 폼) |
+
+렌더된 자리도 확인했다: `<div class="error" role="alert">…</div>`.
+
+🔵 **판정은 「문구가 있다」가 아니라 「폼이 사라지고 그 자리에 문구가 온다」이다.** 두 판은
+같은 URL·같은 순간이고 **saved request 만 다르다** — 그것이 이 대조군의 전부다.
+
+🔴 **첫 시도는 공허했다.** `oauth2/authorize` 가 `401 · 0 바이트`를 돌려줬는데, 그 빈 본문에
+grep 하면 어떤 문구든 0건이다. **401 은 「없다」가 아니라 「물어보지도 못했다」**이므로,
+그 응답의 `Set-Cookie: JSESSIONID` 를 들고 다시 요청해야 판정이 성립했다.
+[[env_gateway_401_is_not_backend_readiness]] [[env_empty_detector_output_is_not_absence]]
+
+⇒ **AC-3 충족. 이 티켓에 남은 미측정은 없다.**
+
+### 3-dim 검증 (close chore, 2026-08-29)
+
+| 축 | 결과 |
+|---|---|
+| (a) | `state=MERGED` — PR [#3433](https://github.com/kanggle/monorepo-lab/pull/3433) |
+| (b) | 스쿼시 `ce8169406` = `origin/main` 조상 ✔ |
+| (c) | 🔴 **실패 체크가 있었다 — 그러나 전부 `Vercel – …` 행이다** |
+
+🔴 **(c) 를 「0건」으로 적으면 거짓이다.** 실제로는 2건(`Vercel – kanggle-fan` · `Vercel – kanggle-portfolio`) 이 FAILURE 였다.
+🔵 **다만 코드 체크는 하나도 안 빨갰다** — 빌드·테스트·가드 잡 전부 통과했고, 빨간 것은
+배포 행뿐이다. 이 PR 이 머지된 **2026-08-22 는 `TASK-MONO-562`(*"Vercel build rate limit
+reds every PR"*)가 물던 시기**이고, 그 축은 이 저장소의 코드와 무관하다.
+🔴 그리고 이때는 `main` 의 **required 집합이 비어 있었다**(`TASK-MONO-598` 이 08-28 에 넷을
+등록하기 전) ⇒ 규칙 문구 그대로의 «실패 required 0건» 은 **어떤 상태에서도 참**이었다.
+그래서 그 문구에 기대지 않고 **무엇이 빨갰는지 열어서** 판정했다.
