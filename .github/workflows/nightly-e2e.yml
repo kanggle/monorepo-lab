@@ -139,6 +139,84 @@ jobs:
       - name: Guard — every compose-referenced image still exists in its registry
         run: bash infra/demo/verify-demo-wrapper.sh --require-coverage
 
+  # TASK-MONO-600 — the deployed fan surface. Nothing pokes it.
+  #
+  # TASK-FAN-FE-018 found every protected route on fan.hubwang.com answering 200
+  # without a login, and it found it because a person typed `curl`. Through those
+  # three days `ci.yml`'s `frontend-e2e-smoke` was green on every PR — what that
+  # job measures is a Next server the runner just booted, not the deployment.
+  # This job is the axis nobody had.
+  #
+  # It lives here, like `demo-image-liveness`, because it needs a TIME trigger:
+  # the surface can rot with no diff at all (an owner clears an env var, a deploy
+  # is skipped, a domain unbinds), so no paths-filtered job can ever reach it.
+  #
+  # 🔴 Cadence is nightly and the number has a reason: the defect above lived
+  # THREE days. Nightly bounds that at one, i.e. 3× faster than the only
+  # observation we have. Tighten it when a second occurrence is measured to have
+  # opened and closed inside a day — not before, because this account has been
+  # billed to a standstill by scheduled work more than once.
+  #
+  # 🔴 Deliberately NOT on `push`. Vercel takes 75 s – 5 min to publish after a
+  # merge, so a post-merge run would read the PREVIOUS build and call it stale —
+  # a guard that is red for a reason nobody can fix is a guard someone switches
+  # off. The post-merge axis belongs to whatever waits on the deployment, not
+  # here.
+  #
+  # Who sees a failure (AC-4): identical to the rest of this workflow — a failing
+  # scheduled run on the default branch turns the main badge red and GitHub mails
+  # the repository owner. That is the channel this repo already relies on, and
+  # its limits are written down in this file's header (v2 = issue auto-create /
+  # webhook, ADR-MONO-011 § 6.1, still outstanding).
+  fan-surface-watch:
+    name: Deployed fan surface (the guard runs, and the build is main)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.repository == 'kanggle/monorepo-lab' && github.event_name != 'push'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # `check-fan-fresh.sh` compares the served commit against the last
+          # commit that touched fan's trigger paths on `origin/main`. A shallow
+          # clone cannot answer that and the script would exit 2 for a reason
+          # that has nothing to do with the surface.
+          fetch-depth: 0
+
+      # 🔵 The classifier first. If it cannot tell a redirect-to-our-login from a
+      # redirect-to-somewhere-else, every verdict below is decoration. This is a
+      # fixed-input table, so it holds whether the site is healthy or dead — and
+      # it earned its place on its first run by catching a glob in the script
+      # that accepted `https://evil.example.com/login` as a healthy guard.
+      - name: Self-test the live-guard classifier (fixed inputs, both directions)
+        working-directory: projects/fan-platform/web/fan-platform-web
+        run: bash check-fan-guard-live.sh --self-test
+
+      # Axis 1 — does the route guard actually close on the deployed surface?
+      # `/nonexistent-xyz` is the discriminator: middleware runs BEFORE routing,
+      # so an unauthenticated request must bounce to /login whether or not the
+      # page exists. A 404 there means the request reached routing, i.e. the
+      # guard did not run. That is the exact cell that split A from B in 018.
+      - name: Axis 1 — the route guard closes on fan.hubwang.com
+        id: guard
+        working-directory: projects/fan-platform/web/fan-platform-web
+        run: bash check-fan-guard-live.sh --origin https://fan.hubwang.com
+
+      # Axis 2 — is the thing being guarded even the current build?
+      #
+      # 🔴 Neither axis covers the other. 018's defect was a FRESH build that was
+      # wide open: axis 2 alone would have been green all three days. The mirror
+      # case — a healthy guard on a build that is weeks behind — is green on axis
+      # 1 alone. Both, or neither is worth running.
+      #
+      # `!cancelled()` so an axis-1 failure cannot hide an axis-2 failure; the
+      # job still fails if either did.
+      - name: Axis 2 — the serving build is main
+        if: ${{ !cancelled() }}
+        working-directory: projects/fan-platform/web/fan-platform-web
+        run: bash check-fan-fresh.sh --origin https://fan.hubwang.com
+
   # Build all ecommerce backend boot jars needed for docker compose.
   # Separated from the e2e job so the jar-build step appears clearly in the
   # Actions UI and the artifact is available for re-use / debugging.

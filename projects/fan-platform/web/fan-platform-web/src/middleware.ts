@@ -122,8 +122,25 @@ export const config = {
      *  - /api/auth (next-auth handler)
      *  - /_next/static, /_next/image
      *  - /favicon.ico, /robots.txt, /sitemap.xml
+     *  - /build-info.json (see below)
      *  - All public asset extensions handled by the negative lookahead
+     *
+     * TASK-MONO-600 — `build-info.json` joins the public-metadata list, because
+     * leaving it out made a verdict impossible rather than merely inconvenient.
+     * `scripts/write-build-info.mjs` writes it so `check-fan-fresh.sh` can ask
+     * "is the serving build actually main?". While it sat inside the matcher an
+     * unauthenticated fetch got 307 → /login and the script read the login HTML,
+     * so from 2026-08-27 — the day the guard started working — that freshness
+     * verdict was permanently "판정 불가". Nobody saw it because no job called
+     * the script. Measured 2026-08-29 UTC against fan.hubwang.com.
+     *
+     * 🔵 It carries no secret: `{ commit, ref, builtAt }` of a PUBLIC repo — the
+     * same class as robots.txt/sitemap.xml. What it does carry is the only
+     * machine-readable answer to "which commit is live", which is exactly what a
+     * watcher outside the deployment has to be able to read.
+     * 🔴 Re-gating it silently blinds that watcher, so `auth-guard.spec.ts`
+     * asserts this exclusion — do not drop the cell.
      */
-    '/((?!api/auth|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)',
+    '/((?!api/auth|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|build-info.json).*)',
   ],
 };

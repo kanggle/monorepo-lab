@@ -82,8 +82,26 @@ served_commit() { # <origin> -> stdout: sha  |  rc 2 = 판정 불가
   #    쓴다 — 실제로는 **읽을 권한이 없는 것**이고, 그건 전혀 다른 사건이다.
   if head -c 200 "$tmp" | grep -qiE "<!doctype html|<html"; then
     say "✖ $origin/build-info.json — 200 인데 본문이 **HTML** 입니다."
-    say "  ⇒ Vercel Deployment Protection(인증 벽) 의심 ⇒ **판정 불가**."
-    say "     프리뷰 배포는 기본으로 보호된다 — 프로덕션 오리진으로 재라."
+    # 🔴🔴 HTML 을 다 «인증 벽» 으로 부르면 다음 사람이 Vercel 설정을 뒤진다.
+    #    HTML 을 내는 원인은 최소 둘이고 **고치는 곳이 완전히 다르다**:
+    #      (i)  Vercel Deployment Protection — 최종 URL 이 그대로이거나 vercel 쪽 SSO
+    #      (ii) 이 앱의 **라우트 가드** — 최종 URL 이 이 오리진의 `/login?from=…`
+    #    (ii) 는 TASK-MONO-600 이 실측했다: `src/middleware.ts` 의 matcher 가
+    #    `build-info.json` 을 제외하지 않아 미인증 요청이 307 로 `/login` 에 꺾였고,
+    #    그래서 이 판정자는 08-27(가드가 살아난 날)부터 **줄곧 판정 불가**였다.
+    #    부르는 잡이 없어 아무도 몰랐다 — «러너 없는 스위트는 썩는다» 의 실현판.
+    case "$final" in
+      "$origin"/login\?*|"$origin"/login)
+        say "  ⇒ 최종 URL 이 **이 오리진의 `/login`** 이다(final=$final)."
+        say "     인증 벽이 아니라 **이 앱의 라우트 가드**가 꺾은 것이다 ⇒ **판정 불가**."
+        say "     고칠 곳은 Vercel 설정이 아니라 `src/middleware.ts` 의 matcher 다 —"
+        say "     `build-info.json` 은 robots.txt·sitemap.xml 과 같은 공개 메타데이터로 제외돼야 한다."
+        ;;
+      *)
+        say "  ⇒ Vercel Deployment Protection(인증 벽) 의심 ⇒ **판정 불가**(final=$final)."
+        say "     프리뷰 배포는 기본으로 보호된다 — 프로덕션 오리진으로 재라."
+        ;;
+    esac
     rm -f "$tmp"; return 2
   fi
   sha="$(tr -d ' \n\r' < "$tmp" | sed -n 's/.*"commit":"\([0-9a-zA-Z]*\)".*/\1/p')"
