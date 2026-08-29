@@ -8,7 +8,7 @@ TASK-MONO-603
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -263,3 +263,55 @@ function surfacesVisible(isRun, ip) {
   머지·배포 후 별도다(AC-3 마지막 칸).
 - Docker 가 없어 `verify-demo-wrapper.sh` **전체**는 못 돌렸다 — 이 판정은 `(z14)`·`(z15)`
   두 칸 한정이고 나머지는 CI 의 `Demo wrapper smoke` 가 잰다.
+
+## CORRECTION (2026-08-29, 머지 후 라이브)
+
+**AC-3 의 마지막 칸이 닫혔다 — 그리고 「눈으로 본다」보다 나은 방법으로 닫았다.**
+
+본문은 *"브라우저에서 눈으로 확인하지 않았다 … 시각 확인은 배포 후 별도"* 라고 적었다.
+실제로는 **배포된 산출물의 판정 로직을 그대로 실행**해서 쟀다 — 눈보다 강한 증거다.
+사람 눈은 *"블록이 보인다"* 까지만 말하지, **href 가 무엇인지·나머지 둘이 왜 회색인지**를
+말하지 못한다.
+
+### 절차 (🔴 리포 파일이 아니라 **서빙본**을 잘랐다)
+
+`https://hubwang.com/` 을 내려받아 그 HTML 에서 `GUARD-Z14-BEGIN/END` 구간과
+`GUARD-T-ANCHOR` 를 잘라 node 로 실행했다. 🔴 자르기 전에 **그 구간에 `function render(`
+가 있는지 먼저 확인**했다 — 없으면 배포본이 옛 판이라는 뜻이고 그 실행은 무효다.
+
+### 결과 — `state="stopped"`, `ip=null` (= 대부분의 시간)
+
+```
+#surfaces display = "block"
+  console   : off  href=-
+  ecommerce : ON   href=https://store.hubwang.com/
+  fan       : off  href=-
+#msg  = 🟢 대기 중 — 시작을 누르세요
+#smsg = 아직 준비되지 않은 화면 2개는 비활성입니다 (해당 도메인이 🟢 실행 중이 되면 열립니다)
+```
+
+⇒ **데모가 꺼진 채로 🛒 가 보이고, 목적지가 Vercel 스토어이며, 나머지 둘은 닫힌 채로
+왜 닫혔는지 설명된다.** 이 티켓의 Goal 그대로다.
+
+🔵 서빙본이 새 판인지도 따로 확인했다: `surfacesVisible(` **2건**(정의+호출) ·
+`anyAlwaysOpenSurface` **2건** · 옛 삼항식 `style.display = (isRun && ip)` **0건** ·
+`GUARD-Z14-END` 가 **345번 줄**(= `render()` 뒤).
+
+### 3-dim
+
+`state=MERGED` · `mergedAt=2026-08-29T14:10:30Z` · 스쿼시 **`28ad5af37`** = `origin/main` 조상 ·
+머지 시점 required **4/4 SUCCESS · 실패 0**. 🔵 `Demo wrapper smoke (infra/demo)` =
+`verify-demo-wrapper.sh --live` **전문**, **1m53s SUCCESS** ⇒ Docker 부재로 못 돌린 칸이
+CI 에서 닫혔다(**구간을 `render()` 까지 넓히면서 드라이버가 깨질 여지가 가장 컸던 변경**인데
+Docker 있는 러너에서도 초록이다).
+
+**론처 재배포는 머지 80초 안** — `Vercel – kanggle-portfolio | Deployment has completed`,
+형제 둘은 `Canceled by Ignored Build Step`.
+
+### 🔵 이로써 `ADR-MONO-067` 단계 2 가 **방문자 경로까지** 닫혔다
+
+`580`(런타임 해석) → `582`(Vercel 배선 + 프로젝트) → `583`(링크 주소·정책) →
+**`603`(가시성)**. 네 티켓이 걸렸고, 뒤의 두 축은 **가드가 실행해서** 지킨다.
+
+🔴 **남은 미측정은 하나**: `demo-up.sh` 의 부팅 판정이 **실기동**에서 데모 호스트 행만
+찌르는지. 스텁 위에서만 돌았고, 재굽기+기동 창(`TASK-MONO-581`)에서 처음 확인된다.
