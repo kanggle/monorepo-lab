@@ -105,6 +105,79 @@ PY
 
 ---
 
+# 🔍 AC-0 실측 #2 (2026-08-29) — **트리거 여전히 미관측 → STOP. 보류 유지.**
+
+창 = `2026-08-15 → 2026-08-29`(실측 #1 이후). 🔵 **AC-0 재측정은 게이트가 안 걸린 작업**이고,
+이 티켓이 `ready/` 에 «보류» 로 앉아 있는 이유가 바로 이 측정이므로 다시 쟀다.
+
+## 트리거 ① — 프로젝트 추가로 `if:` 갱신을 누락한 사건: **0건**
+
+🔵 **입력 자체가 없다** — 이 창에서 신규 프로젝트/서비스가 **0개**다:
+
+| 술어 | 결과 |
+|---|---|
+| `projects/*/PROJECT.md` **추가**(`--diff-filter=A`) | **0건** |
+| `settings.gradle` 의 커밋 | **0건** |
+
+⇒ 트리거 문구가 요구하는 *"신규 프로젝트/서비스 추가 시"* 라는 **선행 사건이 일어나지 않았다.**
+🔴 **없는 사건의 결과를 «0» 으로 적는 것과, 사건은 있었는데 누락이 0 인 것은 다르다** — 이 창은
+전자다. [[env_empty_detector_output_is_not_absence]]
+
+🔵 **그래도 게이팅 드리프트는 따로 쟀다** — `ci.yml` 은 이 창에서 **18회** 바뀌었으므로
+«프로젝트 추가 없이도 게이팅이 어긋났을» 가능성이 남는다. 실측 #1 과 **같은 단위(잡)** 로 셌다:
+
+```bash
+awk '/^  [a-zA-Z0-9_-]+:$/{job=$1}
+     /changes\.outputs\.(fan|ecommerce|wms|iam|scm|platform-console|finance|erp)/{if(job)print job}' \
+    .github/workflows/ci.yml | sort -u | wc -l
+```
+
+⇒ **21** — 실측 #1 의 **21 과 같다.** 잡 목록도 같은 21개다.
+
+## 트리거 ② — 게이팅 오류로 e2e 가 skip 되어 회귀가 main 에 샌 사건: **0건**
+
+🔵 **이번엔 티켓 기록이 아니라 `main` 의 실제 CI 이력으로 쟀다**(실측 #1 은 «기록에 남은 사건» 을
+읽었다 — 그건 *누가 적었는가*를 재는 축이라 좁다).
+[[feedback_a_census_measures_where_you_looked_not_what_exists]]
+
+`gh run list --branch main --workflow ci.yml --status failure` 에서 이 창의 실패 = **5건**.
+**다섯 건 전부 «잡이 실제로 돌아서 실패»했다**:
+
+| 실패한 잡 | |
+|---|---|
+| `Integration (iam A, Testcontainers)` | 돌았다 |
+| `Integration (master + notification + outbound, Testcontainers)` | 돌았다 |
+| `Frontend lint & build (ecommerce + fan-platform)` | 돌았다 |
+| `Frontend E2E smoke (web-store + fan-platform-web + console-web, Playwright)` | 돌았다 |
+| `Demo wrapper smoke (infra/demo)` | 돌았다 |
+
+🔴 **잡이 돌아서 빨간 것은 게이팅이 «작동한» 지문이지 트리거②가 아니다.** 트리거②의 지문은
+정반대다 — **PR 에서 skip 됐고 main 은 초록인데 실제로는 깨진** 상태.
+
+🔵 **정밀 확인 한 칸** — 유일한 e2e 실패(`Frontend E2E smoke`, main `466b6e607`)에 대해
+*"그 PR 에서 skip 됐던 것 아닌가"* 를 직접 물었다:
+
+```
+PR #3370 → Frontend E2E smoke ... -> SUCCESS
+```
+
+⇒ **그 PR 에서 실행되어 통과했다.** skip 이 아니므로 트리거② 해당 없음.
+🔴 main 에서만 빨간 이유는 이 티켓의 축이 아니다 — «flake» 로 단정하지도 않는다
+(`env_ci_flake_is_a_hypothesis_not_a_verdict`). 여기서 필요한 답은 **«skip 이었는가»** 뿐이고
+그 답이 **아니오**다.
+
+🔵 **같이 확인한 것 — 이 창의 CI 관련 결함 둘은 트리거②가 아니다**: `TASK-MONO-598`(머지 게이트에
+required 가 **하나도 없었다**)·`TASK-MONO-601`(코드-only PR 에서 required 4 중 3이 SKIPPED)은
+**required check 등록/경로 게이팅**의 문제이지 *"돌아야 할 e2e 를 `if:`/path-filter 가 잘못
+skip"* 이 아니다. 특히 601 은 그 SKIP 이 **옳다**고 판정했다.
+
+## ⇒ 판정: **STOP. 보류 유지.** (실측 #1 과 같은 결론, 다른 근거로)
+
+재착수 조건은 그대로다. 🔵 다음 재측정 때 쓸 **한 줄 술어**를 남긴다 —
+«이 창에 신규 프로젝트가 있었는가» 가 **0** 이면 트리거①은 더 볼 것이 없다.
+
+---
+
 # Goal
 
 `TASK-MONO-326`은 CI 잡 **본문** 중복(composite + reusable)을 제거했으나 **게이팅 로직**은 의도적으로 보존했다. 각 잡의 `if:`가 아래 OR-블록을 ~15회 반복한다:
@@ -154,6 +227,7 @@ GitHub Actions는 `if:`를 공유하는 프리미티브가 없다(reusable로 �
 
 - [x] **AC-0 (verify-then-act, 필수 선행)**: § DEFERRAL GUARD의 착수 트리거 2개 중 최소 1개가 실제 관측됨을 확인. **관측 없으면 STOP — 구현하지 않고 task를 그대로 둔다.** (관측 근거를 이 task 또는 PR에 기록.)
       → **2026-08-15 수행: 트리거 2개 모두 미관측 ⇒ STOP.** 근거는 § AC-0 실측 #1.
+      → **2026-08-29 재수행: 트리거 2개 모두 여전히 미관측 ⇒ STOP.** 근거는 § AC-0 실측 #2.
       아래 AC 들은 **의도적으로 미착수**다(no-op = 올바른 구현). 이 체크는 "구현했다" 가 아니라
       **"게이트를 실제로 재고 그 결과를 기록했다"** 는 뜻이다.
 - [ ] `changes.outputs`에 잡-유형별 named 플래그 추가, 기존 output 조합만 사용(필터 정의 무수정).
