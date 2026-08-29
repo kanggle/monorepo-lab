@@ -29,16 +29,49 @@ monorepo
 기동 창은 **하나**다. 그 창이 열리기 전에 **아래가 다 서 있어야** 한다 — 안 그러면
 `TASK-MONO-574` 가 스스로 적은 대로 *"예산만 쓰고 아무것도 못 잰다"*:
 
-| 순서 | 할 일 | 누가 |
-|---:|---|---|
-| 1 | `hubwang.com` 를 Vercel 네임서버로 위임 | 🔴 소유자 |
-| 2 | `hubwang.com` + `www`(301) → `kanggle-portfolio` · `fan.hubwang.com` → `kanggle-fan` | 🔴 소유자 |
-| 3 | 🔴 **2 가 끝난 뒤에** `NEXTAUTH_URL=https://fan.hubwang.com` + `NEXTAUTH_SECRET` + OIDC 4종 | 🔴 소유자 |
-| 4 | IdP 에 `https://fan.hubwang.com/api/auth/callback/iam` 재시드 | 저장소 |
-| 5 | **AMI 재굽기 → 기동 1회** — 이 창에서 `TASK-MONO-581` 의 남은 항목 + `TASK-MONO-574` 를 **전부** | 승인 완료 |
+> 🔴🔴 **이 표는 08-26 판이고 1·2·3 은 이미 끝났다 (08-28 완료 · 08-29 라이브 재확인).**
+> **아래 § 재측정 을 읽지 않고 이 표만 보면 「소유자가 DNS 부터 해야 한다」로 읽힌다** —
+> 그리고 **2026-08-29 에 내가 정확히 그렇게 보고했다.** 재측정 절이 *"표만 읽고 «소유자
+> 3단계가 남았다» 로 보고하면 이미 끝난 일을 다시 시키게 된다"* 라고 **하루 전에 경고해
+> 뒀는데도** 그렇게 됐다. 🔴 그래서 이번엔 **표 자신을 고친다** — 경고를 아래에만 두면
+> 위를 먼저 읽는 사람은 계속 틀린다.
+> [[feedback_one_fact_in_two_sections_only_one_gets_fixed]]
+> [[feedback_measure_the_plans_premise_before_starting_the_phase]]
+
+| 순서 | 할 일 | 누가 | 상태 |
+|---:|---|---|---|
+| 1 | `hubwang.com` 를 Vercel 네임서버로 위임 | 소유자 | ✅ **완료** — `hubwang.com` **200** (08-29 재확인) |
+| 2 | `hubwang.com` + `www`(301) → `kanggle-portfolio` · `fan.hubwang.com` → `kanggle-fan` | 소유자 | ✅ **완료** — `fan.hubwang.com` 응답함 |
+| 3 | 🔴 **2 가 끝난 뒤에** `NEXTAUTH_URL=https://fan.hubwang.com` + `NEXTAUTH_SECRET` + OIDC 4종 | 소유자 | ✅ **입력됨** — `/api/auth/session` **200** · `/api/auth/providers` **200**(iam 등록, 콜백=커스텀 도메인). 🔵 **값의 «정확성»은 아직 미판정** — 아래 |
+| 4 | IdP 에 `https://fan.hubwang.com/api/auth/callback/iam` 재시드 | 저장소 | ✅ **완료** — `TASK-BE-582` `V0033` (PR #3477) |
+| **5** | **AMI 재굽기 → 기동 1회** — 이 창에서 `TASK-MONO-581` 의 남은 항목 + `TASK-MONO-574` 를 **전부** | 승인 완료 | ⏸️ **여기만 남았다** |
 
 🔴 **3 의 순서를 지켜야 한다** — 도메인을 붙이기 전에 `NEXTAUTH_URL` 을 넣으면
-그 값이 빌드에 인라인돼 굳는다.
+그 값이 빌드에 인라인돼 굳는다. (지켜졌다 — 2 → 3 순으로 들어갔고 재배포가 성공했다.)
+
+### 🔵 3 이 «입력됨」이지 «옳다»가 아닌 이유 — 이것이 이 티켓의 측정 대상이다
+
+`https://fan.hubwang.com/api/auth/signin/iam` 은 **08-28 과 08-29 둘 다 302 → `?error=Configuration`**
+이다. 🔵 관측과 정합적인 가설은 `OIDC_ISSUER_URL` 이 `http://iam.<ip>.sslip.io` 인데
+컨트롤 플레인이 `ip: null`(`stopped`)이라 **issuer discovery 가 도달할 곳이 없다**는 것이다.
+🔴 **가설이다** — issuer 에 무슨 값이 들어 있는지는 대시보드 사안이라 저장소에서 못 본다.
+⇒ **기동 뒤 같은 요청이 통과하면 확정되고, 안 통과하면 이 티켓의 본 측정이 거기서 시작된다.**
+🔴 그러므로 3 을 «미완» 으로 되돌려 소유자에게 다시 시키지 마라 — **다음 동작은 5(기동)다.**
+
+### ✅ 2026-08-29 라이브 재확인 (기록도 단일표본이므로 다시 쟀다)
+
+```
+hubwang.com                              200
+fan.hubwang.com/api/auth/session         200
+fan.hubwang.com/api/auth/providers       200   iam / callbackUrl=https://fan.hubwang.com/api/auth/callback/iam
+fan.hubwang.com/artists                  307 → /login?from=%2Fartists     (라우트 가드 작동)
+fan.hubwang.com/api/auth/signin/iam      302 → /login?error=Configuration (기동 전이므로 예상됨)
+control-plane /status                    {"state":"stopped","ip":null,"used_minutes":496,"budget_minutes":600}
+```
+
+🔵 `used_minutes` 가 **496 그대로** — 08-26·08-28 기록과 같으므로 **그 사이 기동이 없었다.**
+🔵 `TASK-MONO-581` AC-0 도 같은 날 쟀다: 승인 ✅ · **AMI 는 최신이 아니어서 재굽기 필요** ·
+예산 104분 충분. ⇒ **5 를 지금 실행할 수 있다.**
 
 🔵 **자체 도메인은 오히려 유리하다** — `vercel.app` 은 preview URL 이 배포마다 달라
 고정 `redirect_uri` 를 못 박았는데, `fan.hubwang.com` 은 고정이라 4의 시드가 **한 번으로 끝난다.**
