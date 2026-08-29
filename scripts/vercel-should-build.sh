@@ -3,7 +3,8 @@
 # scripts/vercel-should-build.sh — Vercel "Ignored Build Step" 판정 (TASK-MONO-562)
 # =============================================================================
 # 커밋 하나가 굽는 Vercel 배포 수를 줄인다. 이 저장소는 Vercel 프로젝트가 **셋**이라
-# (`kanggle-portfolio` = 론처, `kanggle-fan` = fan 프런트, web-store = `TASK-MONO-582`)
+# (`kanggle-portfolio` = 론처, `kanggle-fan` = fan 프런트, `kanggle-store` = web-store —
+#  2026-08-29 생성, `TASK-MONO-582`. 그 전까지 셋째는 파일만 있고 프로젝트가 없었다)
 # 커밋 하나가 배포 **셋**을 굽고,
 # 문서 전용 PR 도 예외가 아니었다 ⇒ 무료 플랜의 일일 한도에 닿아 24시간 동안 모든 PR 이
 # 빨개지고, 그동안 **론처는 낡은 판을 계속 서빙했다.**
