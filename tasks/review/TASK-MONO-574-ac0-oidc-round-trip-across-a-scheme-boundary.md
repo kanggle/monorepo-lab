@@ -8,7 +8,7 @@ TASK-MONO-574
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -384,3 +384,161 @@ IdP 가 광고하는 issuer 가 IP 파생이라 **부팅마다 바뀐다.** Verc
 🔴 **그러므로 이 티켓을 「라이브로」 닫는 것은 `ADR-MONO-067` 의 D4 가 먼저 정해져야 한다**
 (`TASK-MONO-576`). 매 부팅마다 소유자가 env 를 고치고 재배포하는 것은 절차가 아니다 —
 그리고 그 재배포 하나하나가 Vercel 일일 배포 한도를 먹는다(`TASK-MONO-590`).
+
+---
+
+# 🔴🔴 후보 제거 — **의존성 코드를 직접 읽었다** (2026-08-30, 기동 없이)
+
+위 § 라이브 측정이 *"남은 후보는 앱/라이브러리 축 하나"* 로 닫혔다. 그 하나를 **기동 없이**
+쟀다 — `node_modules` 가 `projects/fan-platform/node_modules/.pnpm/` 아래에 **있었다**
+(앱 디렉터리 밑에서만 찾다 «없다» 로 보고할 뻔했다).
+
+**해석된 버전**: `next-auth@5.0.0-beta.25` → `@auth/core@0.37.2` → `oauth4webapi@3.8.6`.
+
+## ✅ 기전은 실재한다 — `oauth4webapi` 는 기본적으로 평문을 거부한다
+
+```js
+// oauth4webapi/build/index.js
+async function performDiscovery(input, urlName, transform, options) {
+    checkProtocol(input, options?.[allowInsecureRequests] !== true);   // 기본 = 강제
+export function checkProtocol(url, enforceHttps) {
+    if (enforceHttps && url.protocol !== 'https:')
+        throw OPE('only requests to HTTPS are allowed', HTTP_REQUEST_FORBIDDEN, url);
+}
+```
+
+🔵 **그러나 그 기전이 우리 경로에서 발동하지 않는다.** `@auth/core@0.37.2` 의 discovery
+호출부 **전부**가 그 플래그를 켠다:
+
+| 호출부 | `allowInsecureRequests` |
+|---|---|
+| `lib/actions/signin/authorization-url.js:18` | ✅ `true` (주석: *"TODO: move away from allowing insecure HTTP requests"*) |
+| `lib/actions/callback/oauth/callback.js:38` | ✅ `true` |
+
+⇒ **「라이브러리가 평문 issuer 를 거부한다」는 반증됐다.** (가설 ③)
+
+## ✅ 끝 슬래시 불일치도 아니다 (가설 ④)
+
+`processDiscoveryResponse` 는 **양쪽을 정규화해서** 비교한다:
+
+```js
+if (expected !== _nodiscoverycheck && new URL(json.issuer).href !== expected.href)
+```
+
+`new URL('http://iam.x.sslip.io').href` 는 양쪽 다 `http://iam.x.sslip.io/` 가 된다.
+⇒ 슬래시 유무는 이 비교를 못 깬다.
+
+## ✅ `clientSecret` 누락도 **이 오류**를 만들지 않는다 (가설 ⑤)
+
+`env.ts:36` 이 `oidcClientSecret: process.env.OIDC_CLIENT_SECRET ?? ''` 로 **빈 문자열**을
+기본값으로 준다. 🔴 그래서 «Vercel 에 그 값이 없으면?» 을 의심했는데, `@auth/core` 의
+`assertConfig` 는 **`clientSecret` 을 검사하지 않는다**(`MissingSecret`·`InvalidEndpoints`·
+`MissingAuthorize`·`UntrustedHost` 등만 본다) ⇒ 이 경로의 `Configuration` 사유가 아니다.
+
+🔵 **다만 이건 따로 확인할 가치가 있다** — 빈 secret 은 **토큰 교환에서** 죽고, 그때
+증상은 signin 이 아니라 callback 이다. **지금 증상과 다른 결함이지 없는 결함이 아니다.**
+
+## 📋 지금까지 죽은 가설 — **여섯**
+
+| # | 가설 | 어떻게 죽었나 |
+|---|---|---|
+| ① | `ip:null` 이라 discovery 도달 불가 | IP 생기고 discovery **200** 인데 증상 그대로 |
+| ② | Vercel env 가 낡은 IP | 현재 IP 로 넣고 **재배포 확인** — 그대로 |
+| ③ | 라이브러리가 평문 issuer 거부 | 호출부 전부가 `allowInsecureRequests: true` |
+| ④ | issuer 끝 슬래시 불일치 | 비교 전에 **양쪽 정규화** |
+| ⑤ | `clientSecret` 누락 | `assertConfig` 가 그 필드를 안 본다 |
+| ⑥ | Vercel 이 평문 HTTP 에 못 닿음 | **같은 순간** 형제 `store.hubwang.com` 이 성공 |
+
+🔴 **여섯 번 틀렸다는 것 자체가 정보다** — 이 증상(`error=Configuration`)은 **원인을 안
+말해 주는 문구**이고, 그래서 밖에서 추론하는 것으로는 못 좁힌다.
+[[feedback_a_verifiable_mechanism_is_not_the_cause]]
+
+## 🎯 남은 한 수 — **서버 로그를 읽는다.** 추론을 그만둔다.
+
+`@auth/core` 는 실패 시 서버에서 `[auth][error]` 로 **실제 원인**을 찍는다. 그 줄 하나가
+위 여섯 번의 추론보다 정확하다.
+
+- **어디서**: Vercel 대시보드 → `kanggle-fan` → **Logs** (Runtime Logs)
+- **무엇을**: `/api/auth/signin/iam` 요청의 `[auth][error]` 줄
+- **언제 것**: **2026-08-29T17:03Z 전후** — 소유자가 env 를 넣고 재배포한 뒤의 시도.
+  🔵 Pro 플랜이라 보관 기간이 길다.
+
+🔴 **지금 다시 시도해서 얻는 로그는 다른 오류다** — 데모가 정지돼 IP 가 반납됐으므로
+그때는 **연결 실패**가 찍힌다. 원래 원인을 보려면 **그때의 로그**여야 한다.
+
+🔵 그리고 이것으로 이 티켓의 성격이 바뀐다: 남은 것은 **측정이 아니라 조회**이고,
+기동도 예산도 필요 없다.
+
+---
+
+# ✅ AC 판정 (2026-08-30) — **판정 «거짓». 그러나 끊긴 곳이 이 티켓이 예상한 곳이 아니다.**
+
+## AC-0 — 전제 재확인 ✅
+
+| 전제 | 확인 | 근거 |
+|---|---|---|
+| `TASK-MONO-571` AC-0 ② 가 참 | ✅ | `PLAINTEXT_HTTP_EGRESS_WORKS` (ADR-067 § AC-0 ②) |
+| 데모가 `running` 이고 IdP 가 응답 | ✅ | `TASK-MONO-581` 기동 창(2026-08-29). discovery **200** |
+| `redirect_uri` 등록값이 티켓이 적은 것과 같다 | ✅ | 시드 파일 grep — `V0033`(`TASK-BE-582`, PR #3477). 🔵 **기억이 아니라 정의 파일** |
+
+## AC-1 — 왕복을 단계별로 ✅ (그리고 **어디까지 갔는지가 판정의 본체다**)
+
+| 홉 | 관측 | 판정 |
+|---|---|---|
+| ① 앱 → `/api/auth/signin/iam` | **302 → `/login?error=Configuration`** | 🔴 **여기서 끊긴다.** 목적지가 IdP 가 **아니다** |
+| ② 브라우저 → IdP authorize | — | ⚪ **미측정** (① 이 authorize URL 을 안 만들었다) |
+| ③ IdP → 앱 콜백 (`state`/PKCE 쿠키) | — | ⚪ **미측정** |
+| ④ 앱 서버 → IdP token | — | ⚪ **미측정** |
+| ⑤ 세션 쿠키 속성 | — | ⚪ **미측정** |
+
+🔴🔴 **⚪ 는 «실패» 가 아니다.** 이 티켓이 *"③ 이 이 티켓의 본체다"* 라고 적어 둔 축 —
+평문 → HTTPS 크로스사이트 콜백에서 `SameSite=Lax` 쿠키가 살아 돌아오는가 — 은 **한 번도 잰
+적이 없다.** 첫 홉이 죽어서 거기까지 못 갔다. 이것을 «쿠키 축이 깨졌다» 로 기록하면 **후속
+결정의 입력이 통째로 거짓**이 된다. [[feedback_absence_verdict_from_a_proxy_is_not_a_measurement]]
+
+## AC-2 — 로그아웃 ⚪ **미측정, 그리고 측정 불가였다**
+
+`/connect/logout` 은 **세션이 있어야** 재는 것이고 ① 이 죽어 세션이 생기지 않았다.
+🔴 *"로그인만 재고 왕복 OK 라고 적지 않는다"* 의 **거울상**이다 — 로그인이 죽었다고
+로그아웃을 «같이 죽었다»로 적지도 않는다.
+
+## AC-3 — 무엇이 거짓인지 + 판정하지 못한 것 ✅
+
+**무엇이 거짓인가**: 왕복이 **성립하지 않는다.** 끊기는 지점은 **앱 서버가 authorize
+리다이렉트를 구성하는 단계**이고, 원인 문구는 `error=Configuration` 이다.
+
+🔴 **그 문구는 원인이 아니라 «원인을 안 말해 주는 라벨» 이다.** 가설 **여섯 개를 죽였는데도**
+좁혀지지 않았다 — 위 § 라이브 측정(①②⑥) · § 후보 제거(③④⑤). 여섯 번 틀렸다는 것이
+이 티켓의 실질 산출물이고, 그래서 **일곱 번째 추론을 하지 않는다.**
+
+**판정하지 못한 것** (후속이 이것을 «판정됨» 으로 상속하면 안 된다):
+
+- 홉 ②③④⑤ 전부 — 특히 **③ 쿠키 축**. 이 ADR 이 두 방향으로 데였다던 그 축이다.
+- 로그아웃(`/connect/logout`).
+- **잰 앱은 `kanggle-fan` 하나다.** console·web-store 가 같은 라이브러리를 쓴다는 것은
+  **가설이지 측정이 아니다**(AC-3 이 명시적으로 금지한 일반화).
+- 빈 `clientSecret` 의 영향 — `assertConfig` 는 안 보지만 **토큰 교환(홉 ④)에서 죽는다.**
+  🔵 **지금 증상과 다른 결함이지, 없는 결함이 아니다.**
+
+## AC-4 — `ADR-MONO-067` § AC-0 ③ 에 기록 ✅
+
+`docs/adr/ADR-MONO-067-demo-surfaces-served-from-vercel.md` § AC-0 항목 3 을 **완료로 갱신**
+했다(이 PR). 원문은 취소선으로 보존. 🔴 이 티켓은 **결정을 내리지 않는다** — D4 는
+`TASK-MONO-576`.
+
+---
+
+# 🎯 잔여 작업의 **소유자를 명시한다** (일이 사라지지 않게)
+
+🔴🔴 **두 티켓이 서로에게 떠넘기면 일이 사라진다 — 중복보다 공백이 조용하다.**
+그래서 남은 두 조각을 각각 **한 곳에** 붙였다.
+
+| 잔여 | 어디로 | 상태 |
+|---|---|---|
+| Vercel `kanggle-fan` Runtime Logs 의 `[auth][error]` 한 줄 (**2026-08-29T17:03Z 전후**) | `TASK-MONO-576` **AC-0 입력** (이 PR 에서 그 티켓에 명시) | 🙋 **소유자 조회** |
+| 홉 ②③④⑤ + 로그아웃 실측 | 🔴 **아직 티켓이 없다.** D4(`576`)가 «어느 배선으로 갈지» 를 정하기 전에는 **무엇을 잴지가 안 정해진다** — `576` AC-2 가 그 조건을 적는다 | ⏸️ `576` 이후 |
+
+🔵 **이 티켓을 여기서 닫는 이유**: AC-4 가 *"거짓이면 D4 의 후속 결정(`576`)의 입력이 된다.
+이 티켓은 결정을 내리지 않는다"* 라고 못 박았다. 판정은 났고 기록도 갔다. 남은 것은
+**이 티켓의 일이 아니라 `576` 의 입력**이고, 조회는 저장소가 할 수 없는 일이다.
+🔴 **기동도 예산도 더 필요 없다** — 이 티켓을 열어 두는 것으로 얻는 것이 없다.
