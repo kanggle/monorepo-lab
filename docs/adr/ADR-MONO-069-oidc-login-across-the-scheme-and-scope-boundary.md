@@ -2,7 +2,7 @@
 
 **Status:** PROPOSED
 **Date:** 2026-08-30
-**주관 티켓:** [`TASK-MONO-576`](../../tasks/review/TASK-MONO-576-adr-d4-auth-across-the-scheme-boundary-proposed.md)
+**주관 티켓:** [`TASK-MONO-576`](../../tasks/done/TASK-MONO-576-adr-d4-auth-across-the-scheme-boundary-proposed.md) (`done/`, 2026-08-30 종료 — 🔵 **이 ADR 이 PROPOSED 인 것은 그 티켓의 미완이 아니라 산출물이다**)
 **선행:** [`ADR-MONO-067`](ADR-MONO-067-demo-surfaces-served-from-vercel.md) § D4 (*"OIDC/쿠키 축은 별도 결정이다"*) · `TASK-MONO-574`(AC-0 ③ 왕복 실측, `done/`) · [`ADR-MONO-068`](ADR-MONO-068-where-the-demo-backend-resolver-lives.md)(런타임 해석기 — 이 ADR 의 선택지 D 가 그것을 재사용한다)
 **출처:** `ADR-MONO-067` 이 D4 를 **의도적으로 미뤘고**, `TASK-MONO-574` 가 그 축을 실측해 *"단계 3·4 를 막는 것은 쿠키가 아니라 범위 불일치"* 를 남겼다
 
