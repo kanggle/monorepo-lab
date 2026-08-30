@@ -9,7 +9,7 @@ TASK-MONO-581
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -592,3 +592,16 @@ AC-1 은 `packer build` 까지만 적었다. 그러나 terraform 이 `ami_id` �
 
 `used_minutes` 496 → **566** ⇒ **34분 남았다**(9-01 리셋). 정지는 **명시적으로 요청**했다 —
 유휴 정지를 기다리면 20분을 더 태운다.
+
+## CORRECTION (2026-08-30) — close chore, 3-dim 검증
+
+| 축 | 결과 |
+|---|---|
+| (a) | `state=MERGED` · `mergedAt=2026-08-30T03:52:18Z` — impl PR [#3544](https://github.com/kanggle/monorepo-lab/pull/3544) |
+| (b) | 스쿼시 **`ca708a88f`** = `origin/main` 조상 ✔ |
+| (c) | required **4/4 SUCCESS · 실패 0** |
+
+🔵 이 티켓은 AC-5 대로 **닫히면서 사라진다.** 남은 일은 각자 제 티켓에 있다:
+`TASK-MONO-604`(⑤) · `TASK-MONO-605`(⑥) · `TASK-MONO-574`(후보 하나로 좁혀짐).
+🔴 **이 티켓을 다시 열어 재사용하지 마라** — 다음에 검증이 밀리면 **새 번들 티켓**을 만들고,
+그 AC-0 에 이 티켓이 남긴 교훈 셋(§ 종결)을 반영해라.
