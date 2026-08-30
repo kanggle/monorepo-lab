@@ -8,7 +8,7 @@ TASK-MONO-574
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -542,3 +542,27 @@ if (expected !== _nodiscoverycheck && new URL(json.issuer).href !== expected.hre
 이 티켓은 결정을 내리지 않는다"* 라고 못 박았다. 판정은 났고 기록도 갔다. 남은 것은
 **이 티켓의 일이 아니라 `576` 의 입력**이고, 조회는 저장소가 할 수 없는 일이다.
 🔴 **기동도 예산도 더 필요 없다** — 이 티켓을 열어 두는 것으로 얻는 것이 없다.
+
+---
+
+## ✅ CLOSE (2026-08-30) — **3-dim 검증 후 `review` → `done`**
+
+| 축 | 관측 |
+|---|---|
+| (a) PR 상태 | `#3546` **`state=MERGED`** · `mergedAt=2026-08-30T08:20:57Z` |
+| (b) 스쿼시 커밋 | `e5a83c4f78e7b1908db83028d06255a7cb369cc9` — 검증 시점 `origin/main` tip 과 일치 |
+| (c) 머지 시점 required | **4/4 SUCCESS, 실패 0** (`changes` · `INDEX queue drift (…)` · `Task ID collision (…)` · `Walkthrough limitation ledger drift (…)`) + `ADR index drift (…)` · `Lifecycle stage dirs (…)` 도 SUCCESS |
+
+🔴 **그리고 3-dim 은 «머지됐나»이지 «AC 가 닫혔나»가 아니므로 AC 절을 다시 열어서 봤다:**
+
+| AC | 상태 | 근거 |
+|---|---|---|
+| AC-0 전제 재확인 | ✅ | 571 참 · 데모 `running` · `redirect_uri` 를 **시드 파일 grep** 으로 확인 |
+| AC-1 홉별 기록 | ✅ | ① 302 `error=Configuration` 기록, ②③④⑤ 를 **⚪ 미측정로 구분해** 기록 |
+| AC-2 로그아웃 | ⚪ **미측정 — 그리고 이것이 이 AC 의 답이다** | ① 이 죽어 세션이 안 생겼다 ⇒ **구조적으로 측정 불가**. AC-3 이 *"판정하지 못한 것을 함께 적는다"* 를 요구하고 그대로 적었다. 🔵 **«측정 불가» 를 기록한 것이 이 AC 의 충족이지, 미완이 아니다** |
+| AC-3 무엇이 거짓인지 + 못 판정한 것 | ✅ | 죽은 가설 6 + 미판정 4종(홉 ②③④⑤ · 로그아웃 · 잰 앱은 fan 하나 · 빈 `clientSecret` 은 다른 결함) |
+| AC-4 ADR 기록 | ✅ | `ADR-MONO-067` § AC-0 ③ 을 완료로 갱신, 원문 취소선 보존 |
+
+**잔여는 이 티켓의 일이 아니다** — AC-4 가 *"거짓이면 D4 의 후속 결정(`TASK-MONO-576`)의
+입력이 된다. 이 티켓은 결정을 내리지 않는다"* 라고 못 박았고, 소유자 조회 한 건은
+`TASK-MONO-576` **AC-0 의 명시 입력**으로 넘어갔다(같은 PR). ⇒ **닫는다.**
