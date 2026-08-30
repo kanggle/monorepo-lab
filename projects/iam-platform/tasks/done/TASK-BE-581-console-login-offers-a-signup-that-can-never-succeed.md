@@ -1,6 +1,6 @@
 # TASK-BE-581 — 콘솔 로그인에서 제공하는 **회원가입은 절대 성공할 수 없다** (예약 슬러그 `iam` 에는 테넌트 행이 없다)
 
-- **Status**: review
+- **Status**: done
 - **Project**: iam-platform
 - **Service**: auth-service (SAS browser login/signup surface)
 - **Type**: bug fix (design decision required)
@@ -342,3 +342,54 @@ here."* 판별자는 문서가 아니라 **클라이언트 행의 `tenant_type='
 
 580 은 이제 **지울 문구가 아니라 쓸 문구**를 갖는다: 콘솔 경로의 404 는 581 이 먼저 막으므로,
 580 이 다룰 영구 4xx 는 *"이 집합에 또 뭐가 참인가"*(403 정지·401·410) 쪽으로 좁혀진다.
+
+## CORRECTION (2026-08-29) — **AC-4 라이브 판정 완료. 채택안대로 동작한다.**
+
+AC-4 가 *"미충족 — 데모 인스턴스가 정지 상태"* 로 닫혀 있었다. `TASK-MONO-581` 이 묶은
+재굽기 + 기동 한 창에서 **판정했다.**
+
+| | |
+|---|---|
+| AMI | `ami-0caf015f7cd9144fd` — `main` **`6bc2a44e7`** |
+| 창 | 2026-08-29 15:50~17:08Z · IdP `iam.3-38-176-240.sslip.io` |
+
+**측정** — `console/api/auth/login` 이 만드는 authorize 요청으로 세션을 만들고, 그 쿠키로
+IdP 의 `/login` 을 받았다:
+
+| | `signup` 문자열 | **`<a href="…signup…">`** |
+|---|---|---|
+| **대조군 · 세션 없음** (4,247 B) | 5건 | **있다** — `href="/signup"` |
+| **콘솔 flow** (4,052 B) | 4건 | **없다** — 남은 4건은 전부 HTML 주석 |
+
+🔴 **문자열 개수로 판정하면 틀린다.** 5→4 는 «줄었다» 일 뿐이고, 판정 대상은 **앵커의 유무**다.
+남은 4건은 `TASK-BE-470`/`TASK-BE-581` 을 설명하는 주석이라 **링크가 사라져도 남는다** —
+순진한 `grep -c signup` 이면 «여전히 있다» 로 읽힌다.
+
+🔵 AC-4 가 *"SSR HTML grep 으로 판정하지 마라 — console-web 은 클라이언트 렌더"* 라고 경고한
+그 함정은 **console-web 의 페이지**에 대한 것이다. 여기서 판정한 페이지는 auth-service 가
+**서버 렌더**하는 `login.html` 이므로 HTML 판정이 유효하다. 🔴 다만 위 문단이 보이듯
+**같은 매체에 다른 함정**이 있었다(주석이 판정 문자열을 담는다).
+[[feedback_a_discriminator_can_match_its_own_documentation]]
+
+🔵 그리고 이 판정은 술어의 **경로 전체**를 지난다: saved request → `client_id=platform-console-web`
+→ `oauth_clients.tenant_id='iam'` → `tenants` 에 없는 예약 슬러그 → `signupAvailable=false`.
+세션이 없으면 폴백 테넌트를 받아 링크가 **살아 있는** 것도 같이 확인했다 — 즉 게이트가
+«항상 끄는» 것이 아니라 **테넌트에 따라 갈린다.**
+
+⇒ **AC-4 충족.**
+
+### 3-dim 검증 (close chore, 2026-08-29)
+
+| 축 | 결과 |
+|---|---|
+| (a) | `state=MERGED` — PR [#3430](https://github.com/kanggle/monorepo-lab/pull/3430) |
+| (b) | 스쿼시 `def5fe981` = `origin/main` 조상 ✔ |
+| (c) | 🔴 **실패 체크가 있었다 — 그러나 전부 `Vercel – …` 행이다** |
+
+🔴 **(c) 를 「0건」으로 적으면 거짓이다.** 실제로는 1건(`Vercel – kanggle-portfolio`) 이 FAILURE 였다.
+🔵 **다만 코드 체크는 하나도 안 빨갰다** — 빌드·테스트·가드 잡 전부 통과했고, 빨간 것은
+배포 행뿐이다. 이 PR 이 머지된 **2026-08-22 는 `TASK-MONO-562`(*"Vercel build rate limit
+reds every PR"*)가 물던 시기**이고, 그 축은 이 저장소의 코드와 무관하다.
+🔴 그리고 이때는 `main` 의 **required 집합이 비어 있었다**(`TASK-MONO-598` 이 08-28 에 넷을
+등록하기 전) ⇒ 규칙 문구 그대로의 «실패 required 0건» 은 **어떤 상태에서도 참**이었다.
+그래서 그 문구에 기대지 않고 **무엇이 빨갰는지 열어서** 판정했다.
