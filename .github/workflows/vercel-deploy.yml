@@ -1,0 +1,132 @@
+# =============================================================================
+# vercel-deploy.yml — main 에 랜딩한 커밋이 실제로 그 앱을 건드렸을 때만 Vercel 을 굽는다
+# =============================================================================
+# TASK-MONO-607 (TASK-MONO-590 AC-1~AC-4 의 분리분).
+#
+# 왜 이 워크플로가 생겼나 — **`ignoreCommand` 로는 이 축을 못 줄인다**
+# -----------------------------------------------------------------------------
+# `TASK-MONO-590` AC-5 실측(창 `08-29T07:29Z → 08-30T07:29Z`, 계측기 = GitHub
+# commit-status 중 context 가 `Vercel – *` 인 행):
+#
+#   main 축  20 커밋 → 50행 (커밋당 2.5)   그중 실제로 구워진 것 6, 나머지 44 는 아무것도 안 구움
+#   브랜치 축 20 PR   →  0행               (AC-6 이 `deploymentEnabled` 로 닫았다)
+#
+# 🔴 `ignoreCommand` 는 **옳게 판별하고 있다** — 구워진 6건은 전부 그 앱이 실제로 바뀐
+#    커밋이다. 문제는 판별이 아니라 **판별하려면 먼저 배포가 「생성」돼야 한다**는 것이고,
+#    한도와 과금은 **생성**을 센다(`TASK-MONO-590` § Context ⑥ 실측: *"건너뛴 배포도
+#    한도를 먹는다"* — 74건 중 69건이 `Canceled by Ignored Build Step` 이었는데도 한도에 닿았다).
+#
+# ⇒ 레버는 **배포가 아예 안 만들어지게** 하는 것이다: 각 `vercel.json` 의
+#   `git.deploymentEnabled.main` 을 `false` 로 두고, **여기서 Deploy Hook 을 쏜다.**
+#
+# 🔴🔴 판정자를 복제하지 않는다 — **프로젝트가 가진 그 스크립트를 그대로 부른다**
+# -----------------------------------------------------------------------------
+# 각 프로젝트의 `vercel-ignore.sh` 는 `ignoreCommand` 가 부르는 바로 그 파일이다.
+# 여기서 pathspec 을 다시 적으면 **같은 사실이 두 곳에 생기고 한쪽만 고쳐진다** — 이
+# 저장소가 반복해서 데인 모양이다. 그래서 matrix 는 **경로 목록이 아니라 판정자 경로**를 든다.
+# (그러려고 `TASK-MONO-607` 이 론처의 인라인 pathspec 을 래퍼로 뽑았다.)
+#
+# 🔵 그 결과 **워크플로와 `ignoreCommand` 는 구성상 같은 답을 낸다.** 훅이 만든 배포에도
+#    `ignoreCommand` 는 그대로 도는데(`590` 실측), 둘이 같은 판정자를 쓰므로 「훅을 쐈는데
+#    취소됨」이 생기지 않는다.
+#
+# 🔴 그리고 `ignoreCommand` 를 **지우지 않는다.** `scripts/vercel-should-build.sh` 가 못 박았다:
+#    *"수동 Redeploy 는 훅 경로를 지나가지 않는다 … 590 이 이 파일을 「거의 죽은 기전」으로
+#    만들어도 이 검사와 칸 (13)은 지우면 안 된다."* 대시보드에서 누른 Redeploy 는 여기를
+#    안 지나가고, 그때 유일한 방어가 `ignoreCommand` 다.
+#
+# 실패 모드와 그 방어
+# -----------------------------------------------------------------------------
+# 🔴 이 설계가 들여오는 실패는 **조용한 낡음**이다 — 자동 배포를 껐는데 훅이 안 쏘면
+#    사이트는 마지막 성공 배포를 계속 서빙하고 CI 는 초록이며 URL 은 200 을 준다.
+#    그래서 아래 두 가지가 **필수**다:
+#      (a) 훅 응답이 2xx 가 아니면 **잡을 빨갛게 만든다** (아래 Fire 스텝)
+#      (b) 프로젝트가 늘었는데 matrix 에 안 들어오면 **가드가 문다**
+#          (`scripts/check-vercel-build-triggers.sh` 칸 (14)~(16))
+#
+# 🔴 secret 은 로그에 안 찍는다. `secrets.*` 는 Actions 가 자동 마스킹하지만
+#    `set -x` 를 켜면 그 마스킹을 우회할 수 있는 모양이 생긴다 — 켜지 마라.
+# =============================================================================
+name: Vercel deploy hooks
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# 🔴 main 에 커밋이 연달아 들어오면 훅이 순서 없이 발사된다. 앞선 실행을 **취소하지 않는다** —
+#    취소하면 그 커밋의 배포가 영영 안 만들어지고, 그것이 이 워크플로의 유일한 실패 모드다.
+concurrency:
+  group: vercel-deploy-hooks
+  cancel-in-progress: false
+
+jobs:
+  fire:
+    name: ${{ matrix.project }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 🔴 `judge` 는 그 프로젝트의 `vercel.json` 이 `ignoreCommand` 로 부르는 것과
+          #    **같은 파일**이어야 한다. 가드 칸 (16)이 그 동일성을 검사한다.
+          - project: kanggle-portfolio
+            judge: infra/demo/aws/site/vercel-ignore.sh
+            secret: VERCEL_DEPLOY_HOOK_PORTFOLIO
+          - project: kanggle-fan
+            judge: projects/fan-platform/web/fan-platform-web/vercel-ignore.sh
+            secret: VERCEL_DEPLOY_HOOK_FAN
+          - project: kanggle-store
+            judge: projects/ecommerce-microservices-platform/apps/web-store/vercel-ignore.sh
+            secret: VERCEL_DEPLOY_HOOK_STORE
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # 🔴 판정자는 main 에서 `HEAD^` 를 기준으로 삼는다(squash 머지라 그것이 옳다).
+          #    depth=1 이면 부모가 없어 **fail-open 으로 언제나 빌드**가 되고, 이 워크플로의
+          #    존재 이유가 사라진다.
+          fetch-depth: 2
+
+      - id: judge
+        name: 이 커밋이 ${{ matrix.project }} 를 건드렸나
+        run: |
+          set -uo pipefail
+          # 🔴 종료코드가 뒤집혀 있다 (Vercel 규약): 0 = 건너뜀, 1 = 빌드.
+          # 🔴🔴 **`|| rc=$?` 로 받아야 한다.** Actions 의 기본 셸은 `bash -e {0}` 이라
+          #    판정자가 「빌드」(exit 1)를 낼 때마다 스텝이 **즉시 실패**한다 — 그러면 굽는
+          #    커밋마다 CI 가 빨개지고, 고치려다 `should_build` 를 무시하게 된다.
+          rc=0
+          bash "${{ matrix.judge }}" || rc=$?
+          case "$rc" in
+            0) echo "should_build=false" >> "$GITHUB_OUTPUT"
+               echo "↷ 건너뜀 — 이 커밋은 ${{ matrix.project }} 경로를 안 건드렸습니다." ;;
+            1) echo "should_build=true"  >> "$GITHUB_OUTPUT"
+               echo "▶ 빌드 — 훅을 쏩니다." ;;
+            *) echo "::error::판정자가 예상 밖 종료코드 rc=$rc 를 냈습니다 — 0/1 만 규약입니다."
+               exit 1 ;;
+          esac
+
+      - name: Deploy Hook 발사
+        if: steps.judge.outputs.should_build == 'true'
+        env:
+          HOOK: ${{ secrets[matrix.secret] }}
+        run: |
+          set -uo pipefail
+          if [ -z "${HOOK:-}" ]; then
+            echo "::error::secret ${{ matrix.secret }} 이 비어 있습니다 — 훅을 쏠 대상이 없습니다."
+            echo "         Vercel → Settings → Git → Deploy Hooks 에서 만들고 이 저장소 secret 에 넣으세요."
+            exit 1
+          fi
+          # 🔴 URL 을 echo 하지 않는다. 본문만 보고 코드로 판정한다.
+          code="$(curl -sS -o /tmp/hook-resp -w '%{http_code}' -X POST --max-time 30 "$HOOK")" || code=000
+          echo "HTTP $code"
+          head -c 400 /tmp/hook-resp || true
+          echo
+          case "$code" in
+            2*) echo "✅ ${{ matrix.project }} 배포를 요청했습니다." ;;
+            *)  echo "::error::훅이 HTTP $code 를 냈습니다 — 배포가 만들어지지 않았습니다."
+                echo "         이것을 무시하면 사이트가 낡은 채로 CI 는 초록입니다."
+                exit 1 ;;
+          esac

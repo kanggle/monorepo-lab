@@ -3,14 +3,14 @@
   "git": {
     "deploymentEnabled": {
       "**": false,
-      "main": true,
+      "main": false,
       "preview/*": true
     }
   },
   "framework": null,
   "installCommand": "echo '[site] no dependencies - install skipped'",
   "buildCommand": "bash ./build.sh",
-  "ignoreCommand": "bash \"$(git rev-parse --show-toplevel)/scripts/vercel-should-build.sh\" ':/infra/demo/aws/site' ':/scripts/vercel-should-build.sh'",
+  "ignoreCommand": "bash \"$(git rev-parse --show-toplevel)/infra/demo/aws/site/vercel-ignore.sh\"",
   "outputDirectory": "public",
   "cleanUrls": true,
   "headers": [

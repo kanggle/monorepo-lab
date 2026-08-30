@@ -8,7 +8,7 @@ main 축은 여전히 **커밋 1건당 배포 2~3건**을 만들고 그중 굽�
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -173,6 +173,91 @@ AC-0 ③ 의 before 와 **같은 계측기·같은 창 길이**로 after 를 잰
   «늘었다» 로 보인다. **커밋당** 으로 비교하라. [[feedback_comparing_two_extracts_measures_the_extractors]]
 - 🔴 **잰 축의 이름을 적어라** — commit-status 행이지 과금 축이 아니다.
   [[feedback_a_reported_figure_must_name_what_was_measured]]
+
+---
+
+# ✅ 구현 (2026-08-30) — AC-1 · AC-2 · AC-3
+
+## 무엇을 바꿨는가
+
+| 파일 | 변경 |
+|---|---|
+| `infra/demo/aws/site/vercel-ignore.sh` | 🆕 론처의 pathspec 래퍼 — 아래 § 드리프트 참조 |
+| `infra/demo/aws/site/vercel.json` | `main: true → false` · `ignoreCommand` → 새 래퍼 (129자 → **76자**) |
+| `projects/fan-platform/web/fan-platform-web/vercel.json` | `main: true → false` |
+| `projects/ecommerce-microservices-platform/apps/web-store/vercel.json` | `main: true → false` |
+| `.github/workflows/vercel-deploy.yml` | 🆕 push→main 에서 판정 후 Deploy Hook 발사 |
+| `scripts/check-vercel-build-triggers.sh` | 칸 **(14)(15)(16)** + self-test 주입 **(i)** |
+| `.github/workflows/ci.yml` | `vercel-build-triggers` 필터에 새 워크플로 경로 추가 |
+
+🔵 **`preview/*` 해치와 `**: false` 는 셋 다 그대로 뒀다**(프로브가 쓴다).
+
+## 🔴🔴 설계 — **판정자를 복제하지 않았다**
+
+워크플로의 matrix 는 **경로 목록이 아니라 판정자 경로**를 든다. 그 판정자는 `ignoreCommand`
+가 부르는 바로 그 파일이다 ⇒ **구성상 둘은 같은 답을 낸다.** 훅이 만든 배포에도
+`ignoreCommand` 는 그대로 도는데(`TASK-MONO-590` 실측), 같은 판정자를 쓰므로
+「훅을 쐈는데 취소됨」이 생기지 않는다.
+
+🔴 그러려면 론처가 걸림돌이었다 — 셋 중 그것만 pathspec 이 `vercel.json` 에 **인라인**이었고,
+워크플로가 그걸 복제했으면 **같은 사실이 두 곳에 생겨 한쪽만 고쳐졌다.**
+⇒ 형제들처럼 래퍼로 뽑았다. 🔵 부수 효과로 `ignoreCommand` 가 **129 → 76자**로 줄어
+Vercel 스키마의 `maxLength=256`(`TASK-MONO-562` 가 넘겨 **모든 배포가 0초에 죽은** 그 한도)에서 멀어졌다.
+
+🔴 **`ignoreCommand` 를 지우지 않았다.** `scripts/vercel-should-build.sh` 가 **이 티켓을
+이름으로 지명해** 못 박아 뒀다:
+
+> *"`TASK-MONO-590` 이 랜딩해도 이 갈래는 살아 있어야 한다 … **수동 Redeploy 는 훅 경로를
+> 지나가지 않는다.** … 이 검사와 칸 (13)은 지우면 안 된다."*
+
+대시보드에서 누른 Redeploy 는 워크플로를 안 지나가고, 그때 유일한 방어가 `ignoreCommand` 다.
+
+## 🔴 구현 중 버그를 하나 잡았다 — `bash -e`
+
+초안은 `bash "$judge"` 를 부르고 **다음 줄에서** `rc=$?` 를 읽었다. 🔴 Actions 의 기본 셸은
+**`bash -e {0}`** 이라, 판정자가 「빌드」(규약상 `exit 1`)를 낼 때마다 **스텝이 즉시 실패**한다
+— 즉 **구워야 하는 커밋마다 CI 가 빨개진다.** 그 증상을 「판정자가 이상하다」로 읽고
+`should_build` 를 무시하는 것이 자연스러운 다음 수인데, 그러면 **항상 발사**로 끝나
+이 티켓이 없어진다. `|| rc=$?` 로 받았다.
+
+## AC-2 · AC-3 — 가드 칸 (14)(15)(16)
+
+| 칸 | 무엇을 보나 |
+|---|---|
+| **(14)** | `main=false` 인 모든 `vercel.json` 에 대해 **워크플로가 그 프로젝트의 판정자를 부르는가** |
+| **(15)** | matrix 항목 수 ≥ `FLOOR` · `judge` 와 `secret` 의 짝 · 부르는 판정자가 실재하는가 |
+| **(16)** | `main=false` 인데 `ignoreCommand` 가 래퍼를 안 부르면 — **인라인은 복제를 부른다** |
+
+🔴 **모집단을 가드에 적지 않았다** — `git ls-files '*vercel.json'` 으로 파생하고, 각 설정이
+스스로 가리키는 래퍼를 워크플로와 대조한다. 루트 `scripts/` 는 project-agnostic 이어야
+하고(HARDSTOP-03), 하드코딩한 모집단은 대상이 바뀌어도 자기가 적어둔 것을 계속 통과시킨다.
+
+## 🔴 그리고 가드가 **안 도는** 구멍 하나를 막았다
+
+`ci.yml` 의 `vercel-build-triggers` 필터는 `vercel.json` · `vercel-ignore.sh` · 판정자 ·
+가드 네 경로만 보고 있었다. ⇒ **워크플로에서 matrix 항목만 지우는 PR 은 가드를 아예 안
+돌렸다** — 칸 (14)가 잡으려는 바로 그 도착 경로다. 필터에 추가했다.
+
+## 🔴 self-test 주입 (i) — 「무는가」를 따로 증명한다
+
+matrix 항목 하나를 지운 사본으로 가드를 돌려 **칸 (14)가 빨개지는지** 본다.
+🔵 그리고 **주입이 실제로 일어났는지를 먼저 단언**한다(`judge:` 개수 before/after) —
+안 바뀐 사본으로 「문다」를 보고하면 그 칸은 공허하다. 이 저장소가 여러 번 겪은 모양이다.
+
+🔴 `_mk()` 가 복제하는 목록에 **배포 워크플로를 추가**했다 — 안 하면 새 칸이 사본에서
+「워크플로가 없다」로 발화해 **무망가 사본이 빨개진다.** 실제로 처음 한 번 그렇게 나왔고,
+원인은 그 파일이 아직 untracked 여서 `git ls-files` 가 못 본 것이었다.
+
+## ⏸️ AC-4′ · AC-5 — **랜딩 후에만 잴 수 있다**
+
+🔴 **이 PR 은 「효과」를 재지 않는다.** AC-5 의 before/after 는 이 변경이 `main` 에 있어야
+성립하고, 랜딩 커밋 자체가 첫 관측이 된다.
+
+🔵 **예측을 먼저 적어 둔다**(나중에 결과에 맞춰 고치지 않기 위해): 이 PR 의 스쿼시 커밋은
+`infra/demo/aws/site/**` · `projects/fan-platform/web/**` · `projects/ecommerce-…/apps/web-store/**`
+를 전부 건드리므로 **세 훅이 다 발사**돼야 하고, 그 배포들은 `Deployment has completed` 로
+끝나야 한다. 🔴 **하나라도 안 쏘거나 취소되면 배선이 틀린 것**이고, 그것이 이 설계의
+유일한 치명적 실패 모드(**조용한 낡음**)의 첫 신호다.
 
 ---
 

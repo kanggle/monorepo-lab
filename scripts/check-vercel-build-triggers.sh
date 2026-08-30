@@ -51,6 +51,11 @@ ROOT="${VERCEL_GUARD_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 #    낮으면 삭제가 그냥 통과하기 때문이다. 파일을 놓는 커밋과 **같은 커밋에서** 올려라.
 FLOOR="${VERCEL_GUARD_FLOOR:-3}"
 
+# 🔴 TASK-MONO-607: `git.deploymentEnabled.main` 이 false 인 프로젝트는 **이 워크플로가
+#    Deploy Hook 을 쏘지 않으면 영영 배포되지 않는다.** 그 배선이 끊기는 증상은 "배포 실패"
+#    가 아니라 **"사이트가 낡은 채 CI 초록"** 이라 아무도 안 본다 ⇒ 칸 (14)~(16)이 본다.
+DEPLOY_WF="${VERCEL_DEPLOY_WORKFLOW:-.github/workflows/vercel-deploy.yml}"
+
 # 🔴🔴 Vercel 스키마는 명령 문자열에 **maxLength=256** 을 건다
 # (https://openapi.vercel.sh/vercel.json — 2026-08-21 실측: 최상위 property 40개,
 # `additionalProperties: false`). `TASK-MONO-562` 가 fan 의 `ignoreCommand` 에
@@ -195,6 +200,77 @@ run_cell() {
   return 0
 }
 
+# =============================================================================
+# 칸 (14)(15)(16) — **훅 배선**. `TASK-MONO-607`
+# =============================================================================
+# 앞의 칸들은 전부 *"배포가 만들어진 뒤 취소되는가"* 를 본다. 607 이 `main` 축의 자동
+# 배포를 끄면서 **"배포가 만들어지기는 하는가"** 라는 축이 새로 생겼고, 그 축이 끊기는
+# 증상은 이 파일이 반복해서 경고하는 그 모양이다 — **사이트가 낡은 채 CI 는 초록**이다.
+#
+# 🔴 모집단은 여기 적지 않는다. `vercel.json` 전수에서 파생하고, 각 설정이 스스로
+#    가리키는 래퍼(`vercel-ignore.sh`)를 **워크플로가 부르는 것과 대조**한다.
+#    ⇒ 새 Vercel 프로젝트가 배선 없이 들어오면 (14)가 문다.
+check_hook_wiring() {
+  local wf="$ROOT/$DEPLOY_WF"
+  if [ ! -f "$wf" ]; then
+    bad "(14) 배포 워크플로가 없습니다: $DEPLOY_WF"
+    bad "     → main 자동 배포가 꺼진 프로젝트는 **아무도 굽지 않습니다.**"
+    return
+  fi
+
+  local wf_judges n_wf
+  wf_judges="$(grep -oE '^[[:space:]]*judge:[[:space:]]*[^[:space:]]+' "$wf" | awk '{print $2}' | sort -u)"
+  n_wf="$(printf '%s\n' "$wf_judges" | grep -c . || true)"
+  note "(15) 워크플로 matrix 판정자 ${n_wf}개"
+  if [ "$n_wf" -lt "$FLOOR" ]; then
+    bad "(15) matrix 항목이 ${n_wf}개입니다 — 하한 ${FLOOR}. 프로젝트가 배선 없이 남아 있습니다."
+  fi
+
+  # 🔴 secret 을 안 든 항목은 «쏠 대상이 없는» 항목이다. 이름만 검사한다(값은 못 본다).
+  local n_sec
+  n_sec="$(grep -cE '^[[:space:]]*secret:[[:space:]]*[A-Z0-9_]+' "$wf" || true)"
+  if [ "$n_sec" -ne "$n_wf" ]; then
+    bad "(15) matrix 판정자 ${n_wf}개 vs secret ${n_sec}개 — 짝이 안 맞습니다."
+  fi
+
+  # 워크플로가 부르는 판정자가 트리에 실재하는가
+  local j
+  for j in $wf_judges; do
+    [ -f "$ROOT/$j" ] || bad "(15) 워크플로가 없는 판정자를 부릅니다: $j"
+  done
+
+  # --- 설정별 대조 ----------------------------------------------------------
+  local cfg abs mainval wrap
+  while IFS= read -r cfg; do
+    [ -n "$cfg" ] || continue
+    abs="$ROOT/$cfg"
+    mainval="$(node -e '
+const fs=require("fs");
+try{const d=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+const v=((d.git||{}).deploymentEnabled||{}).main;
+console.log(v===undefined?"absent":String(v));}catch(e){console.log("unreadable");}' "$abs")"
+    case "$mainval" in
+      true)
+        note "(14) $cfg : main=true — 자동 배포. 훅 배선을 요구하지 않습니다." ;;
+      absent|unreadable)
+        bad "(14) $cfg : git.deploymentEnabled.main 을 읽을 수 없습니다 ($mainval) — 판정 불가입니다." ;;
+      false)
+        wrap="$(grep -o '[A-Za-z0-9_./-]*vercel-ignore\.sh' "$abs" 2>/dev/null | sed 's#^/##' | sort -u | head -1)"
+        if [ -z "$wrap" ]; then
+          bad "(16) $cfg : main=false 인데 ignoreCommand 가 래퍼(vercel-ignore.sh)를 안 부릅니다."
+          bad "     → pathspec 이 JSON 안에 인라인이면 워크플로가 그것을 **복제**하게 되고,"
+          bad "       그 순간 같은 사실이 두 곳에 생겨 한쪽만 고쳐집니다. 래퍼로 빼세요."
+        elif printf '%s\n' "$wf_judges" | grep -qxF "$wrap"; then
+          note "(14) $cfg : main=false + 워크플로가 $wrap 를 부릅니다 — 배선 ok"
+        else
+          bad "(14) $cfg : main=false 인데 **워크플로가 이 프로젝트를 안 굽습니다.**"
+          bad "     → ignoreCommand 는 $wrap 를 부르는데 $DEPLOY_WF 의 matrix 에 그 항목이 없습니다."
+          bad "     → 이 프로젝트는 배포가 **만들어지지 않습니다**. 사이트는 낡은 채 CI 는 초록입니다."
+        fi ;;
+    esac
+  done < <(git -C "$ROOT" ls-files '*vercel.json' 2>/dev/null | sort)
+}
+
 main() {
   local judge="$ROOT/scripts/vercel-should-build.sh"
   echo "[vercel-triggers] Vercel 빌드 트리거 규칙 검사  (root=$ROOT)"
@@ -209,6 +285,8 @@ main() {
     return 1
   fi
   note "발견한 vercel.json ${#configs[@]}개 (하한 $FLOOR)"
+
+  check_hook_wiring
 
   [ -f "$judge" ] || { bad "판정자가 없습니다: scripts/vercel-should-build.sh"; return 1; }
 
@@ -450,8 +528,10 @@ self_test() {
     #    **self-test 는 (12)를 한 번도 행사하지 않으면서 초록**이 된다.
     #    (실측 2026-08-26: 13 + 2 개 파일이라 복제 비용은 무시할 수준이다.)
     local d; d="$(mktemp -d)"
+    # 🔴 TASK-MONO-607: 배포 워크플로도 복제한다 — 안 하면 칸 (14)~(16)이 사본에서
+    #    **언제나 «워크플로가 없다»로 발화**하거나(무망가 사본이 빨개짐) 헛돈다.
     ( cd "$src" && git ls-files '*vercel.json' '*vercel-ignore.sh' scripts/vercel-should-build.sh \
-        '*package.json' '*pnpm-workspace.yaml' ) | while IFS= read -r f; do
+        '*package.json' '*pnpm-workspace.yaml' "$DEPLOY_WF" ) | while IFS= read -r f; do
       mkdir -p "$d/$(dirname "$f")"; cp "$src/$f" "$d/$f"
     done
     git -C "$d" init -q; git -C "$d" config user.email t@l; git -C "$d" config user.name t
@@ -496,12 +576,32 @@ self_test() {
   git -C "$t" commit -qam mutate
   _expect "(c) 설정 ${del}개 삭제(총 ${total}, 하한 ${FLOOR}) -> 하한 위반으로 문다" 1 "$(_run "$t")"; rm -rf "$t"
 
-  # (d) pathspec 모양을 바꾼다 -> 추출 0건. **조용히 통과하면 안 된다.**
+  # (d) 목록의 **거처**를 해석 불가로 만든다 -> 추출 0건. **조용히 통과하면 안 된다.**
+  #
+  # 🔴🔴 이 칸은 원래 첫 `vercel.json` 안의 인라인 `':/...'` 모양을 바꿨다. `TASK-MONO-607`
+  #    이 마지막 인라인(론처)을 래퍼로 뽑으면서 **주입 대상이 사라졌고**, 그 순간 이 칸은
+  #    "아무것도 안 바꾸고 통과" 가 됐다 — 실측 `rc=0`, `git commit` 은 *nothing to commit*.
+  #    🔵 다행히 «문다» 를 기대하는 칸이라 **시끄럽게** 실패했다. 조용히 초록이 될 수도 있는
+  #    모양이었다면 아무도 몰랐다.
+  #
+  # 🔴 교훈: 주입 대상을 **위치로**(`head -1`) 고르면 모집단이 바뀔 때 그 성질이 사라진다.
+  #    **그 칸이 필요로 하는 성질로** 고르고, **주입이 일어났는지 단언**해야 한다.
+  #
+  # ⇒ 이제 시험하는 것은 **간접의 JSON 쪽**이다: `ignoreCommand` 가 없는 래퍼를 가리키면
+  #   추출이 0건이 되어야 한다. (f)는 래퍼 **안**의 모양을 시험하므로 겹치지 않는다.
   t="$(_mk)"
   out="$(cd "$t" && git ls-files '*vercel.json' | head -1)"
-  sed -i "s/':\//'X\//g" "$t/$out"
-  git -C "$t" commit -qam mutate
-  _expect "(d) pathspec 모양 변경 -> 추출 0건으로 문다" 1 "$(_run "$t")"; rm -rf "$t"
+  local d_before d_after
+  d_before="$(grep -c 'vercel-ignore\.sh' "$t/$out" || true)"
+  sed -i 's/vercel-ignore\.sh/vercel-ignore-GONE.sh/g' "$t/$out"
+  d_after="$(grep -c 'vercel-ignore-GONE\.sh' "$t/$out" || true)"
+  if [ "$d_before" -eq 0 ] || [ "$d_after" -eq 0 ]; then
+    echo "  x  (d) 주입 실패 (before=$d_before after=$d_after) — 이 칸은 아무것도 시험하지 않았습니다."; rc=1
+  else
+    git -C "$t" commit -qam mutate
+    _expect "(d) JSON 이 없는 래퍼를 가리킴 -> 추출 0건으로 문다" 1 "$(_run "$t")"
+  fi
+  rm -rf "$t"
 
   # (e) 명령 문자열을 한도 위로 늘린다 -> 스키마가 거부할 모양. **이것이 562 의 결함이다.**
   # 🔴 261자가 몇 주 동안 조용히 통과했다. 칸이 없으면 위반은 "실패" 가 아니라 **무음**이다.
@@ -538,8 +638,11 @@ self_test() {
   #    돌렸더니 **rc=0 이었다.** 다른 칸들은 *적힌 경로가 옳게 동작하는가* 만 보고,
   #    **적혀야 하는데 안 적힌 것**은 아무도 안 봤다. 그 구멍의 증상은 배포 실패가 아니라
   #    **무음**이다.
+  # 🔴 대상을 **위치가 아니라 성질로** 고른다 — 첫 래퍼가 워크스페이스 의존을 안 덮을 수
+  #    있다(`TASK-MONO-607` 이 론처 래퍼를 추가하면서 실제로 그렇게 됐다: 알파벳 순으로
+  #    첫 래퍼가 `packages'` 를 안 든다 ⇒ before=0 ⇒ 이 칸이 아무것도 안 시험했다).
   t="$(_mk)"
-  out="$(cd "$t" && git ls-files '*vercel-ignore.sh' | head -1)"
+  out="$(cd "$t" && git ls-files '*vercel-ignore.sh' | xargs -r grep -l "packages'" 2>/dev/null | head -1)"
   if [ -n "$out" ]; then
     # 워크스페이스 의존을 덮는 pathspec = `packages` 로 끝나는 줄. 그것만 지운다.
     local before after
@@ -586,6 +689,36 @@ self_test() {
     fi
   else
     echo "  x  (h) 판정자($out)를 사본에서 찾지 못했습니다 — 이 칸이 아무것도 시험하지 않습니다."; rc=1
+  fi
+  rm -rf "$t"
+
+  # (i) 🔴 워크플로 matrix 에서 **한 항목을 지운다** -> 칸 (14)가 물어야 한다 (TASK-MONO-607).
+  #     이것이 이 티켓이 들여온 실패 모드의 정확한 모양이다: 프로젝트는 main 자동 배포가
+  #     꺼져 있는데 훅을 쏘는 사람이 없다 ⇒ **사이트가 낡은 채 CI 는 초록.**
+  #     🔵 주입이 실제로 일어났는지 먼저 단언한다 — 안 바뀐 사본으로 «문다» 를 보고하면
+  #        그 칸은 공허하다(이 저장소가 여러 번 겪은 모양).
+  t="$(_mk)"
+  if [ -f "$t/$DEPLOY_WF" ]; then
+    local before after
+    before="$(grep -c 'judge:' "$t/$DEPLOY_WF" || true)"
+    # 🔴 중첩 sed 범위(`0,/re/{/re/,+2d}`)는 이 호스트의 sed 에서 **아무것도 안 지웠다**
+    #    (실측: before=3 after=3). 주입 단언이 그것을 잡았다 — 없었다면 이 칸은 «문다» 를
+    #    공허하게 보고했을 것이다. awk 로 첫 항목 3줄을 지운다.
+    awk 'BEGIN{d=0;s=0}
+         /^[[:space:]]*- project:/ && d==0 {d=1; s=3}
+         {if(s>0){s--; next} print}' "$t/$DEPLOY_WF" > "$t/$DEPLOY_WF.new" \
+      && mv "$t/$DEPLOY_WF.new" "$t/$DEPLOY_WF"
+    after="$(grep -c 'judge:' "$t/$DEPLOY_WF" || true)"
+    git -C "$t" commit -qam mutate
+    if [ "$after" -ge "$before" ]; then
+      echo "  x  (i) 주입 실패 — matrix 항목이 안 지워졌습니다 ($before -> $after). 이 칸은 판정 불가입니다."
+      rc=1
+    else
+      _expect "(i) matrix 항목 1개 삭제($before -> $after) -> 칸 (14)가 문다" 1 "$(_run "$t")"
+    fi
+  else
+    echo "  x  (i) 사본에 $DEPLOY_WF 가 없습니다 — _mk 가 복제하지 않았습니다."
+    rc=1
   fi
   rm -rf "$t"
 
