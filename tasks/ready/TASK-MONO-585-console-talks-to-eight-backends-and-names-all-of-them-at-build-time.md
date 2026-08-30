@@ -29,6 +29,31 @@ monorepo
 | 1 | `ADR-MONO-067` AC-0 ③ **OIDC 왕복** | ❌ `TASK-MONO-574` — 🔴 **콘솔은 D4 축에 정면으로 걸린다** |
 | 2 | `ADR-MONO-068` **승격 트리거**가 이 티켓에서 발화한다 | ✅ **결정 끝났다 (2026-08-26, `C`)** — 🔴 다만 **성격이 바뀌었다**, 아래 §정정 |
 | 3 | Vercel 프로젝트를 하나 더 만들어도 되는가 | ⏳ `TASK-MONO-575` |
+| **4** | 🔴 **콘솔의 `redirect_uri` 를 IdP 에 시드한다** — 아래 § 신규 | ❗ **아무 티켓도 안 들고 있었다 (2026-08-30 발견)** |
+
+## 🔴🔴 신규 선행 4 (2026-08-30, `TASK-MONO-576`/`ADR-MONO-069` 가 발견) — **콘솔 콜백이 IdP 에 없다**
+
+`platform-console-web` 클라이언트에 등록된 `redirect_uri` 를 **시드 파일에서** 세면 두 개뿐이다:
+
+```
+V0015__seed_platform_console_oidc_client.sql   http://console.local/api/auth/callback
+                                                http://localhost:3000/api/auth/callback
+V0021__add_post_logout_redirect_uris_...sql     http://console.local/login
+                                                http://localhost:3000/login
+```
+
+**`https://console.hubwang.com/…` 가 없다.** 이 티켓을 `redirect_uri`/`seed`/`V00` 로 grep 하면
+**0건**이고, 다른 어느 티켓도 이것을 들고 있지 않다.
+
+🔴 **`TASK-MONO-574` 가 팬에서 정확히 같은 공백을 밟았다** — 두 티켓이 서로에게 떠넘겨
+아무도 안 들고 있었고, 그래서 `TASK-BE-582`(`V0033`)를 새로 기안해야 했다.
+*"중복보다 공백이 조용하다."*
+
+🔵 **이것은 D4 의 선택지와 무관한 공통 선행이다** — `ADR-MONO-069` 의 A·B·C·D 어느 쪽이든
+필요하다(`redirect_uri` 는 **앱 주소**라 issuer 를 어떻게 고정하든 안 바뀐다).
+⇒ **이 티켓이 소유한다.** 착수 시 `TASK-BE-582` 와 같은 모양의 iam-platform 마이그레이션을
+기안하거나, 이 티켓의 AC 로 승격하라. 🔴 **선행 1(D4)이 안 풀려도 이건 지금 할 수 있다** —
+`TASK-BE-582` 가 그랬듯 소유자 대시보드와 독립이다.
 
 🔴 **1번이 이 티켓의 진짜 게이트다.** `ADR-MONO-067` § D4 가 *"이 축이 안 풀리면 3·4단계는
 못 간다"* 라고 명시했고, 콘솔은 **운영자 로그인이 화면의 전부**다 — 로그인이 안 되면 이관해도
