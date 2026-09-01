@@ -161,6 +161,16 @@ Vercel 이 TLS 를 끝내고 HTTP 로 포워딩하면 IdP 는 평문으로 되�
 «원래 https 였다» 와 구별되지 않는다. 빼면 http 로 되돌아가므로 **그 헤더가 원인**이다.
 ⇒ `server.forward-headers-strategy` 가 이미 켜져 있다.
 
+🔴🔴 **그런데 그것은 «앱의 성질» 이 아니라 «오버레이의 조건» 이다.** 확인해 보니
+`auth-service/application.yml` 에는 `forward-headers-strategy` 가 **없고**, 내가 잰
+컨테이너는 그 값을 **env 로** 받고 있었다: `SERVER_FORWARD_HEADERS_STRATEGY=FRAMEWORK`.
+
+⇒ **축 2 의 통과는 그 env 가 붙어 있는 동안만 참이다.** 단일 측정을 성질로 승격시키면
+안 되는 자리다. 🔵 **다행히 가드가 이미 있다** — `verify-demo-wrapper.sh` 의 (l) 이
+*"iam-oidc 라우터와 SERVER_FORWARD_HEADERS_STRATEGY 는 항상 함께 있어야 하는 한 쌍"*
+이라며 한쪽만 있으면 빨간불을 낸다. 그 가드가 이 축을 지킨다.
+[[feedback_local_proves_behaviour_not_performance]]
+
 ### 축 3 — `Set-Cookie` 의 `Domain` · **✅ 통과, 그리고 기본값이 이미 옳다**
 
 ```
@@ -200,6 +210,115 @@ ADR § 선택지 C 가 *"issuer 를 검증하는 모든 것이 같이 움직인�
   compose override · 앱 env · 시드 SQL · 하드코딩을 각각 센다.
 - 🔴 **모집단 ≥ 1 을 단언**하라. 0 이 나오면 그것은 «옮길 게 없다» 가 아니라 **술어가 틀린 것**이다.
 - 옮긴 뒤 **남은 평문 issuer 참조가 0건**임을 같은 술어로 확인한다(before/after 를 둘 다 적어라).
+
+## ✅ AC-1 실측 (2026-09-01) — **ADR 의 «한 곳에 모여 있다» 는 12/17 만 맞다**
+
+### 🔴 먼저 — **내 술어가 세 번 틀렸다**. 그 셋이 다 모집단을 줄이는 쪽이었다
+
+| # | 결함 | 증상 |
+|---|---|---|
+| 1 | 중첩 기본값 `${A:${B:…}}` 에서 **바깥 변수만** 봤다 | 「미커버 23건」이라는 **거짓 경보** |
+| 2 | 정규식이 `iam\.\$\{DEMO_DOMAIN\}` — 닫는 `}` 를 요구했다 | 실제 문자열은 `iam.${DEMO_DOMAIN:-local}` ⇒ **override 의 issuer 를 통째로 못 봤다** |
+| 3 | 리터럴을 찾으려고 `${VAR:-…}` 을 **먼저 지웠다** | 그 제거가 `http://iam.${DEMO_DOMAIN:-local}` 의 **도메인 부분을 파괴** ⇒ 「공개 이름 리터럴 0건」 |
+
+🔴🔴 **셋 다 «0건» 또는 «작은 수» 로 실패했다** — 즉 **찾던 결론과 같은 모양**이었다.
+AC-1 이 *"0 이 나오면 술어가 틀린 것"* 이라고 미리 적어 둔 것이 정확히 이것을 잡았다.
+[[feedback_my_verification_predicate_is_the_likeliest_defect]]
+[[feedback_absence_verdict_from_a_proxy_is_not_a_measurement]]
+
+### 모집단 — **양성 대조군을 먼저 찍었다**
+
+```
+주석 제거 후 `iam.local` / `iam.${DEMO_DOMAIN` 를 담은 compose 줄 = 60 건
+  🔵 demo.env 가 덮는 `${VAR:-…}` 안 = 51 건
+  🔴 그 밖                           =  9 건
+```
+
+🔵 **51 이 «필터 전 발견» 이자 «커버됨» 이다** — 필터 전이 0이었다면 정규식이 깨진 것이고,
+그 경우 「9건」은 결과가 아니다. 그래서 두 수를 **둘 다** 적는다.
+
+| 모집단 | 개수 | 판정 |
+|---|---:|---|
+| **P1** `demo.env` 에서 `${IAM_PUBLIC_URL}` 파생 | **12** | ✅ ADR 의 숫자가 맞다. 공짜로 따라온다 |
+| **P2** compose 기본값 중 demo.env 가 **안 주는** 변수 | **0** (발견 51 / 커버 51) | ✅ compose 층은 완전히 덮인다 |
+| **P3-a** 🔴 **issuer 를 스스로 재조립**하는 리터럴 | **2** | 🔴 ADR 이 못 본 것 — 아래 |
+| **P3-b** Traefik 라우터 규칙 · 네트워크 alias (**서빙 측**) | **3** | ⏭️ AC-2 |
+| **P3-c** `kafka.iam.…` · `grafana.iam.…` | **4** | 🔵 issuer 무관(관측 도구 호스트명) |
+| **P4** 앱 `application.yml` 기본값 | **4** (발견 66 / 커버 62) | 🔴 아래 — **demo.env 로는 못 고친다** |
+
+### 🔴 P3-a — **`IAM_PUBLIC_URL` 을 거치지 않고 이름을 재조립하는 두 줄**
+
+```
+infra/demo/iam-traefik.override.yml:48    OIDC_ISSUER_URL:   http://iam.${DEMO_DOMAIN:-local}
+infra/demo/iam-traefik.override.yml:232   ADMIN_OIDC_ISSUER: http://iam.${DEMO_DOMAIN:-local}
+```
+
+🔵 **리터럴이어야 하는 제약 자체는 진짜다** — 그 파일 헤더가 적어 뒀다:
+`docker-compose.e2e.yml` 이 `OIDC_ISSUER_URL` 을 **리터럴로** 박으므로 override 도
+리터럴로 이겨야 한다. 🔴 **그러나 그 제약은 «`${DEMO_DOMAIN}` 을 쓰라» 가 아니다** —
+`${IAM_PUBLIC_URL:-…}` 도 compose 가 해석하는 셸 치환이라 제약을 똑같이 지킨다.
+
+⇒ **두 줄을 `${IAM_PUBLIC_URL:-http://iam.local}` 로 바꿨다. 값은 오늘과 완전히 동일하다.**
+바뀐 것은 **누가 이 문자열을 소유하는가** 뿐이고, 그래야 나중 전환이 **한 줄**이 된다.
+
+🔴 **왜 이게 중요한가**: 이 줄이 남아 있으면 issuer 를 옮길 때 **여기만 옛 이름으로 남고**,
+증상은 **「전 도메인 401」**이며 어느 파일이 원인인지 말해 주지 않는다 —
+그 파일 헤더가 기록한 **바로 그 실패 모드**다.
+
+### 🔴 P4 — 소셜 로그인 허용목록 **4건은 `demo.env` 로 못 고친다**
+
+`auth-service/application.yml` 의 `OAUTH_{GOOGLE,KAKAO,MICROSOFT,NAVER}_ALLOWED_REDIRECT_URIS`
+기본값에 `http://iam.local/login/oauth/<provider>/callback` 이 들어 있다.
+
+🔴🔴 **그런데 `projects/iam-platform/docker-compose.yml` 은 `OAUTH_` 를 하나도 전달하지
+않는다(실측 `0`건).** ⇒ demo.env 에 넣어도 **컨테이너에 안 간다.** 고치려면 compose 를
+건드려야 한다. **AC-1 이 경고한 «선언 파일 grep ≠ 런타임 모집단» 이 정확히 이것이다.**
+
+🔵 **다만 오늘은 불활성이다** — `demo.env` 는 `OAUTH_` 를 0건 주고 `client-id` 기본값이
+`test-google-client-id` 다. 데모에서 소셜 로그인은 **애초에 동작하지 않는다.**
+⇒ **지금 고치지 않는다. 트리거를 적는다: 누군가 실제 provider 자격증명을 넣는 순간**
+이 4건이 살아나고, 그때 issuer 가 옮겨져 있으면 소셜 로그인만 조용히 죽는다.
+
+### ✅ before / after — **같은 술어로**
+
+| | 커버 | 미커버 |
+|---|---:|---:|
+| **before** | 51 | **9** |
+| **after** | 53 | **7** |
+
+남은 7 = 서빙 측 3(AC-2) + 관측 도구 4(무관). **issuer 소비자 축은 0이 됐다.**
+
+### ✅ 런타임 검증 — **파일이 아니라 합성된 config 에서 읽었다**
+
+```
+$ DEMO_DOMAIN=<값> docker compose --env-file infra/demo/demo.env \
+    -f projects/iam-platform/docker-compose.yml \
+    -f projects/iam-platform/docker-compose.e2e.yml \
+    -f infra/demo/iam-traefik.override.yml \
+    -f infra/demo/iam-relay.override.yml config
+```
+
+| `DEMO_DOMAIN` | `OIDC_ISSUER_URL` | `ADMIN_OIDC_ISSUER` |
+|---|---|---|
+| `local` | `http://iam.local` | `http://iam.local` |
+| `3-38-176-240.sslip.io` | `http://iam.3-38-176-240.sslip.io` | `http://iam.3-38-176-240.sslip.io` |
+
+`rc=0`, stderr **0바이트**. 🔵 `-f` 사슬은 `infra/demo/projects.sh:35` 의 `[iam]` 정의
+그대로다 — 내가 고른 것이 아니다.
+
+🔵 출력에 `OIDC_ISSUER_URL: http://auth-service:8081` 한 줄이 남는데, **대조군으로
+`origin/main` 의 override 를 넣어 돌려도 똑같이 1건**이다 ⇒ **내 변경이 만든 것이 아니다.**
+들여쓰기 2칸에 `DB_PORT`·`KAFKA_BOOTSTRAP_SERVERS` 와 나란한 것으로 보아 **서비스가 아니라
+YAML 앵커 정의**가 `config` 출력에 찍힌 것이다(그 앵커를 쓰는 서비스들은 override 가
+병합돼 `http://iam.local` 로 나온다).
+
+### 🔴 **값은 안 바꿨다**
+
+`IAM_PUBLIC_URL` 을 `https://auth.hubwang.com` 으로 **뒤집지 않았다.** Vercel 프로젝트와
+DNS 가 없는 상태에서 뒤집으면 **데모 로그인이 통째로 죽는다.** 이 AC 가 한 일은
+**뒤집기를 한 줄로 만드는 것**이다.
+
+---
 
 ## AC-2 — 🔴 **헤어핀** — 데모 내부가 새 issuer 에 닿는가 (ADR V6)
 
