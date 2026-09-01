@@ -60,6 +60,34 @@ done
 fail() { echo "  FAIL: $*" >&2; exit 1; }
 ok()   { echo "  ok: $*"; }
 
+# -----------------------------------------------------------------------------
+# LIVE 게이트 앵커 — 🔴 **한 곳에만 적는다** (TASK-MONO-609)
+# -----------------------------------------------------------------------------
+# `TASK-MONO-608` 이 (z16) 의 앵커를 «열 0 + 전체 줄» 로 고쳤지만 그때 (z2) 는 범위 밖이었다.
+# 그래서 이 파일에 **서로 다른 두 앵커**가 남았고, (z2) 의 느슨한 쪽은 이 파일의 **주석**에
+# 먼저 걸려 자기 정적 구간을 **215줄 짧게** 잡고 있었다(608 AC-3 이 셌다. 당시 두 경계가
+# 뽑는 도구 집합이 우연히 같아서 아무 증상도 없었다 — **잠복이지 부재가 아니다**).
+#
+# 🔴 리터럴을 다시 여러 곳에 적으면 다음에 또 한쪽만 고쳐진다. 그래서 **한 상수**로 둔다.
+#    608 시점에 이 리터럴은 코드에 **5곳**(z2 1 + z16 4) 있었다.
+# 🔵 정규식이 아니라 **고정 문자열**이다. `grep -x -F` 와 awk 의 `$0 == gate` 가 같은 뜻으로
+#    읽으며, awk 의 **동적 정규식 이스케이프**(`\[`·`\$` 를 awk 가 어떻게 읽는지)에 의존하지 않는다.
+LIVE_GATE_LINE='if [ "$LIVE" -eq 0 ]; then'
+
+# 게이트 줄 번호를 stdout 으로. **종료코드가 «몇 개였나» 를 말한다**:
+#   0 = 정확히 하나(줄 번호 출력) · 1 = 없음 · 2 = 둘 이상(개수 출력)
+# 🔴 판정 **문구**는 부르는 쪽이 정한다 — 칸마다 그 사실이 뜻하는 결함이 다르다.
+#    다만 «둘 이상 = 판정 불가» 라는 **결론은 같아야** 한다(둘의 판정이 갈리면 안 된다).
+live_gate_line() { # $1=파일
+  local n
+  n="$(grep -c -x -F "$LIVE_GATE_LINE" "$1" || true)"
+  case "$n" in
+    0) return 1 ;;
+    1) grep -n -x -F "$LIVE_GATE_LINE" "$1" | cut -d: -f1; return 0 ;;
+    *) echo "$n"; return 2 ;;
+  esac
+}
+
 render() { # $1=slug ('traefik' 특수) → 렌더된 YAML 을 stdout 으로
   if [ "$1" = "traefik" ]; then
     docker compose -p verify-traefik -f "$ROOT/$TRAEFIK_COMPOSE" config 2>/dev/null
@@ -1297,8 +1325,16 @@ z2_self="$ROOT/infra/demo/verify-demo-wrapper.sh"
 if [ -f "$z2_pkr" ] && [ -f "$z2_self" ]; then
   # 정적 구간 = 파일 처음부터 LIVE 게이트까지. 게이트를 못 찾으면 구간을 특정할 수
   # 없으므로 **통과가 아니라 실패**다((x) 와 같은 이유 — 못 읽었으면 모르는 것이다).
-  z2_live="$(grep -n 'if \[ "\$LIVE" -eq 0 \]' "$z2_self" | head -1 | cut -d: -f1)"
-  [ -n "$z2_live" ] || fail "(z2) 이 스크립트에서 LIVE 게이트를 찾지 못했습니다 — 정적 구간을 특정할 수 없습니다."
+  #
+  # 🔴 TASK-MONO-609: 예전 앵커는 `grep -n 'if \[ "\$LIVE" -eq 0 \]' | head -1` 이었다. 열을 안 봐서
+  #    **첫 매치가 (z16) 의 주석**이었고, 이 구간이 215줄 짧았다. 이제 공용 `live_gate_line` 을 쓴다.
+  z2_rc=0
+  z2_live="$(live_gate_line "$z2_self")" || z2_rc=$?
+  case "$z2_rc" in
+    1) fail "(z2) 이 스크립트에서 LIVE 게이트를 찾지 못했습니다 — 정적 구간을 특정할 수 없습니다." ;;
+    2) fail "(z2) LIVE 게이트가 ${z2_live}개입니다 — 어느 것이 정적 구간의 끝인지 판정할 수 없습니다."\
+         $'\n'"→ (z16) 도 같은 이유로 판정 불가로 세웁니다. 두 칸의 판정이 갈리면 안 됩니다." ;;
+  esac
 
   z2_seen=""; z2_missing=""
   for z2_t in $(head -n "$z2_live" "$z2_self" \
@@ -2721,10 +2757,11 @@ z16_self="$ROOT/infra/demo/verify-demo-wrapper.sh"
 #    원인을 지목하는 메시지에는 그 원인만 무는 술어가 붙어야 하기 때문이다.
 # 🔴 게이트가 **둘 이상**이면 `head -1` 이 다시 위험해진다 ⇒ 판정 불가로 세운다.
 z16_trapped() {
-  z16_n="$(grep -c '^if \[ "\$LIVE" -eq 0 \]; then$' "$1" || true)"
-  if [ "$z16_n" -eq 0 ]; then echo "__NOGATE__"; return 0; fi
-  if [ "$z16_n" -gt 1 ]; then echo "__MULTIGATE__:$z16_n"; return 0; fi
-  z16_g="$(grep -n '^if \[ "\$LIVE" -eq 0 \]; then$' "$1" | cut -d: -f1)"
+  # 🔵 TASK-MONO-609: 앵커 리터럴은 이제 `live_gate_line` 안에만 있다.
+  local z16_rc=0
+  z16_g="$(live_gate_line "$1")" || z16_rc=$?
+  if [ "$z16_rc" -eq 1 ]; then echo "__NOGATE__"; return 0; fi
+  if [ "$z16_rc" -eq 2 ]; then echo "__MULTIGATE__:$z16_g"; return 0; fi
   z16_fi="$(awk -v s="$z16_g" 'NR>s && /^fi$/ {print NR; exit}' "$1")"
   [ -n "$z16_fi" ] || { echo "__NOFI__"; return 0; }
   sed -n "${z16_g},${z16_fi}p" "$1" > "$z16_region"
@@ -2771,10 +2808,10 @@ esac
 #    앵커를 써서, 둘이 같은 잘못된 구간에 동의한 채 bite 가 초록으로 보고됐다 —
 #    **주입기와 판정기가 같은 오류를 공유하면 대조군이 되지 못한다.**
 z16_copy="$(mktemp)"
-awk '{print} /^if \[ "\$LIVE" -eq 0 \]; then$/ && !d {print "  echo \"[verify] (zz9) 주입된 가짜 칸\""; d=1}' \
+awk -v gate="$LIVE_GATE_LINE" '{print} $0 == gate && !d {print "  echo \"[verify] (zz9) 주입된 가짜 칸\""; d=1}' \
   "$z16_self" > "$z16_copy"
 # 🔴 «파일 어딘가에 zz9 가 있다» 로는 부족하다 — **게이트 블록 «안»에** 들어갔는지를 묻는다.
-z16_ig="$(grep -n '^if \[ "\$LIVE" -eq 0 \]; then$' "$z16_copy" | head -1 | cut -d: -f1)"
+z16_ig="$(live_gate_line "$z16_copy" || true)"
 z16_ifi="$(awk -v s="${z16_ig:-0}" 'NR>s && /^fi$/ {print NR; exit}' "$z16_copy")"
 if [ -z "$z16_ig" ] || [ -z "$z16_ifi" ] || ! sed -n "${z16_ig},${z16_ifi}p" "$z16_copy" | grep -q 'zz9'; then
   rm -f "$z16_region" "$z16_copy"
