@@ -484,3 +484,30 @@ aws ec2 describe-snapshots --snapshot-ids snap-09449008990589c36
 - 🔴 **AC-4′ 는 그대로 열려 있다.** 로그인 왕복은 기동이 필요하고, 이 삭제는 그 축과 무관하다.
   이 티켓은 **`review/` 에 남는다.**
 - § AC-2 의 실측 수치는 그대로 유효하다 — 픽스처가 사라진 것이지 측정이 사라진 것이 아니다.
+
+## CORRECTION (2026-09-01 UTC) — 같은 시체의 **두 번째 집**이 있었고, 이 티켓은 그 집을 몰랐다
+
+`TASK-MONO-611` 이 `ADR-MONO-069` § R1 을 조사하다가 **`3-38-176-240`** 을 이 티켓이 보는
+곳이 아닌 데서 또 만났다:
+
+| 집 | 무엇 | 이 티켓이 보나 |
+|---|---|---|
+| IdP DB `oauth_clients` | 등록된 `redirect_uri` / post-logout | ✅ 이 티켓의 대상 |
+| **Vercel `kanggle-store` 프로덕션 env** | `OIDC_ISSUER_URL=http://iam.3-38-176-240.sslip.io` (08-29 생성) | 🔴 **아니다** — 이 티켓 전문에 `vercel` **0건** |
+
+⇒ 같은 죽은 IP 가 **두 시스템**에 박혀 있었는데, 티켓은 한쪽만 알았다. 발견 경로도 가드가
+아니라 **다른 티켓의 곁가지**였다.
+
+### 처분 — 611 이 했다. **이 티켓의 범위는 넓히지 않는다**
+
+- Vercel 쪽 값은 **삭제됐다**(2026-09-01, 소유자 지정. 삭제 전 2개 → 후 1개 확인).
+- 원장은 `projects/ecommerce-microservices-platform/apps/web-store/VERCEL.md` § OIDC 축 —
+  그 문서가 *"넣은 값과 그 이유를 여기에 적는다"* 라고 **지시하고 있었는데 08-29 의 값이
+  한 줄도 없었다.**
+- 🔵 **이 티켓의 AC 는 하나도 바뀌지 않는다.** IdP DB 축은 그대로이고 **AC-4′ 도 그대로
+  열려 있다**(기동 창 필요). 이 CORRECTION 은 *"저 IP 를 다 치웠다"* 가 **아니라**
+  *"이 티켓이 세는 모집단이 전부가 아니었다"* 를 남기는 것이다.
+
+🔴 **다음에 죽은 IP 를 셀 때는 «IdP DB» 가 아니라 «그 문자열을 담을 수 있는 시스템 전부» 로
+모집단을 잡아라** — 최소한 IdP DB · Vercel env(4 프로젝트) · `infra/demo/*.env` ·
+terraform tfvars. [[feedback_recount_population_dont_inherit_scope]]
