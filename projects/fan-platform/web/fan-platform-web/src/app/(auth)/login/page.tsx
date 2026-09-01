@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { signIn } from '@/shared/auth/auth';
+import { assertOidcIssuerConfigured } from '@/shared/config/env';
 import { Button } from '@/shared/ui/Button';
 
 /**
@@ -46,6 +47,12 @@ export default async function LoginPage({
           className="mt-6"
           action={async () => {
             'use server';
+            // 🔴 Request-scoped, on purpose. `signIn` is where OIDC discovery
+            // actually goes over the network, so this is the last point before
+            // the fetch -- and the first point at which throwing costs nothing
+            // but this one sign-in attempt. Asserting at module scope instead
+            // breaks `next build` outright (TASK-MONO-611, measured).
+            assertOidcIssuerConfigured();
             await signIn('iam', { redirectTo: callbackUrl });
           }}
         >

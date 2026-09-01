@@ -8,7 +8,7 @@ TASK-MONO-611
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -262,6 +262,207 @@ http://iam.3-38-176-240.sslip.io/.well-known/openid-configuration   →  code=00
 | ③ | `TASK-MONO-585` 선행 3 갱신 | 585 는 *"프로젝트를 하나 더 만들어도 되는가 → ⏳ `TASK-MONO-575`"* 로 적고 있는데 **575 는 `done`** 이고 08-29 Pro 전환으로 배포 rate limit 이 안 문다(575 § CORRECTION 의 프로브 8/8 실측). **이미 답이 나온 행이 ⏳ 로 남아 있었다** |
 
 ---
+
+---
+
+# 구현 결과 (2026-09-01 UTC)
+
+## ✅ AC-0 — 착수 시 다시 쟀다 (verify-then-act)
+
+| # | 물음 | 오늘 값 | 티켓 기안 시점과 |
+|---|---|---|---|
+| 1 | `vercel whoami` | `khakiman`, **rc=0** | 같다 ✅ |
+| 2 | `kanggle-fan` 에 `OIDC_ISSUER_URL` | 🔴 **여전히 없다** (4개 전부 `6d ago`) | 같다 ✅ |
+| 3 | `kanggle-store` 의 값 | **`http://iam.3-38-176-240.sslip.io`**, `3d ago` | 같다 ✅ — **아무도 부팅하지 않았다** |
+| 4 | 로그 보존 | 여전히 약 1일 — 오히려 **더 좁혔다**(§ AC-3) | Observability Plus 안 켜짐 ✅ |
+
+🔵 **③ 의 값을 «목록» 이 아니라 «값» 으로 확인했다** — `env ls` 는 값을 암호화해 보여 주므로
+`3d ago` 만으로는 «같은 값» 을 못 말한다. `env pull` 로 그 한 줄을 읽고 **파일을 지웠다**
+(삭제 확인 포함). [[feedback_declaration_files_are_not_the_runtime_state]]
+
+🔴 **죽음도 다시 쟀다** — 그리고 **음성 대조군을 붙였다**:
+
+| 프로브 | 결과 |
+|---|---|
+| `http://iam.3-38-176-240.sslip.io/.well-known/openid-configuration` | 🔴 **timeout (curl 28)** |
+| 양성 ① `https://store.hubwang.com/` | `200` / 34,940 B |
+| 양성 ② `https://…execute-api.ap-northeast-2.amazonaws.com` (`DEMO_API_BASE`) | `404` / 23 B ⇒ **살아 있다** |
+| 🔵 음성 `http://neverssl.com/` (평문 http, 반드시 살아 있음) | `200` / **3,961 B** |
+
+음성 대조군이 필요한 이유: 이 호스트에서 캡티브 포털이 **평문 http 를 전부 먹어** 200 을
+내던 전례가 있다. 오늘은 neverssl 이 **진짜 자기 페이지**(3,961 B, 포털의 794 B 가 아니다)를
+냈다 ⇒ **timeout 은 포털 탓이 아니다.** [[env_captive_portal_answers_every_plain_http_request]]
+
+---
+
+## ✅ AC-1 — 폴백을 fail-fast 로. 🔴🔴 **그런데 순진한 판이 배포를 죽인다 — 실측했다**
+
+### 🔴🔴 이 AC 에서 가장 중요한 것은 «던진다» 가 아니라 «어디서 던지느냐» 다
+
+가장 먼저 떠오르는 판은 `env.ts` 의 object literal 안에서 던지는 것이다. **돌려 봤다.**
+
+| 빌드 (`VERCEL=1`, `OIDC_ISSUER_URL` 없음, 같은 트리·같은 명령) | rc |
+|---|---|
+| **대조군** — 손대지 않은 코드 | **0** ✅ (12/12 정적 페이지) |
+| **순진한 판** — object literal 안에서 `throw` | 🔴 **1** — `Failed to collect page data for /api/auth/[...nextauth]` |
+
+기전: `middleware.ts` · `widgets/header/Header.tsx` · `app/api/auth/[...nextauth]/route.ts` 가
+**전부** `shared/auth/auth.ts` 를 물고, 그것이 이 모듈을 문다. `next build` 의
+**「Collecting page data」가 그 모듈을 실제로 평가한다.**
+
+⇒ 순진한 fail-fast 는 «깨진 로그인» 이 아니라 **앱의 모든 향후 배포**를 죽인다. auth 와
+무관한 변경까지. 그리고 값을 넣으려면 `TASK-MONO-610` 이 먼저 이름을 만들어야 하므로,
+그 정지는 **며칠짜리**다.
+
+🔴 **티켓의 Failure Scenario 는 «로컬·CI 를 깬다» 만 경고했다.** 실제로 더 큰 반경은
+**배포 파이프라인**이었고, 그것은 **빌드를 돌려 봐야만** 보였다.
+[[feedback_a_verifiable_mechanism_is_not_the_cause]]
+
+### ⇒ 채택한 모양 — 진단은 모듈에서, **던지기는 요청 스코프에서**
+
+| 층 | 무엇 | 왜 |
+|---|---|---|
+| `env.ts` 모듈 최상단 | `console.error` **한 줄** (`ON_VERCEL && !OIDC_ISSUER_URL`) | 콜드 스타트마다 **변수 이름**이 로그에 남는다. 아무것도 안 죽인다 |
+| `env.ts` 내보내기 | `assertOidcIssuerConfigured()` | 부르는 쪽이 시점을 고른다 |
+| `login/page.tsx` 서버 액션 | `signIn('iam')` **직전**에 호출 | 네트워크로 나가기 **직전**, 그리고 던져도 **그 로그인 시도 하나만** 잃는다 |
+
+**술어는 «값이 없다» 가 아니라 «`VERCEL` 인데 값이 없다» 다.** 🔴 `NODE_ENV === 'production'`
+이었다면 **데모 호스트가 깨진다** — 거기도 production 빌드이고 거기서는 `iam.local` 이
+**맞는 값**이다. `VERCEL` 이 실제로 주입되는지는 문서를 믿지 않고 **이 프로젝트의 프로덕션
+env 키 목록에서 확인**했다(`VERCEL` · `VERCEL_ENV` · `VERCEL_TARGET_ENV` 존재).
+
+🔵 **안 덮은 것을 적는다**: Auth.js 자신의 엔드포인트를 **직접** 때리는
+`POST /api/auth/signin/iam` 은 서버 액션을 거치지 않으므로 여전히 `fetch failed` 다.
+catch-all 라우트를 감싸면 `/api/auth/session` 까지 함께 막혀 **모든 페이지**가 영향받는다 —
+UI 가 절대 타지 않는 경로를 위해 치를 값이 아니다. **미검사이지 통과가 아니다.**
+
+### 🔵 형제 grep — 그리고 **안 고친 것과 그 이유**
+
+| 자리 | 모양 | 처분 |
+|---|---|---|
+| `fan` `oidcIssuerUrl` | `?? 'http://iam.local'` | ✅ 이 AC 가 고쳤다 |
+| `fan` `oidcClientSecret` | `?? ''` | 🔵 **안 고쳤다 — 주석으로 명시.** `kanggle-fan` 프로덕션에 **값이 있다**(오늘 실측) ⇒ 살아 있는 구멍이 아니다. 게다가 정직한 로컬 기본값은 `''` 이 아니라 시드된 `fan-platform-dev` 이고, 그건 **로컬 동작을 바꾸는 다른 결정**이다 |
+| `console-web` `OIDC_ISSUER_URL` | `z.string().url()` — 기본값 **없음** | 🔵 이미 옳은 모양. 콘솔은 로컬 compose 가 항상 준다 |
+| `web-store` `OIDC_ISSUER_URL` | `?? 'http://iam.local'` | 🔴 **같은 모양이 남아 있다.** AC-1 의 범위는 fan 이고, web-store 는 `ADR-MONO-067` 로 이관 중이라 그 축이 610/604 에 걸려 있다 — **여기서 즉흥으로 안 바꾼다.** 대신 § AC-2 의 원장에 적었다 |
+
+### 게이트 — 전부 자기 rc 로 확인 (파이프로 가리지 않았다)
+
+| 게이트 | rc |
+|---|---|
+| `pnpm test` (fan 워크스페이스) | **0** — 24 파일 / **159 테스트** (신규 6 포함) |
+| `npx tsc --noEmit` | **0** |
+| `pnpm lint` | **0** |
+| `pnpm build` (`VERCEL=1`, issuer 없음) | **0** |
+| `pnpm build` (로컬, 둘 다 없음) | **0** |
+
+### 🔴 bite — 초록이 공허하지 않다는 증명
+
+주입 자체를 먼저 단언하고(치환됐는지 문자열로 확인) 두 칸을 껐다:
+
+| 끈 것 | 결과 |
+|---|---|
+| `assertOidcIssuerConfigured()` 의 `throw` | 🔴 «변수 이름을 부르며 던진다» 빨강 |
+| 모듈 최상단 `console.error` | 🔴 «진단을 한 번 낸다» 빨강 |
+| (나머지 4칸 = 폴백·음성 대조군) | 🔵 초록 유지 — **올바른 비대칭** |
+
+⇒ **2 failed / 4 passed.** 복원 후 6/6 초록. [[feedback_assert_the_injection_before_reading_the_bite]]
+
+🔵 이 스위트가 지키는 **둘째 성질이 첫째보다 중요하다**: *「모듈 import 만으로는 절대 안
+던진다」*. 위 표의 배포-사망 실측을 **테스트로 고정한 것**이다.
+
+🔵 러너 확인: `.github/workflows/ci.yml` 의 `frontend-unit-tests` 가
+`working-directory: projects/fan-platform` 에서 `pnpm test`(= `pnpm -r run test`)를 돌리고,
+`fan` 필터가 `projects/fan-platform/**` 다 ⇒ **이 파일은 CI 에서 실제로 돈다.**
+[[feedback_two_correct_exclusions_compose_into_a_hole]]
+
+---
+
+## ✅ AC-2 — store 의 죽은 IP 를 **지웠다** (소유자 지정)
+
+🔵 **라이브 Vercel 설정이라 임의로 손대지 않고 소유자에게 세 선택지를 올렸고, «지운다» 를
+받았다.** 실행·확인:
+
+```
+vercel env rm OIDC_ISSUER_URL production   →  Removed Environment Variable
+before: OIDC_ISSUER_URL + DEMO_API_BASE (2개)
+after :                    DEMO_API_BASE (1개)
+```
+
+🔴 **왜 «둔다» 보다 «지운다» 인가 — 취향이 아니다.** 방금 fan 에 넣은 가드의 술어는
+**«값이 있나»** 다. **시체는 그 검사를 통과한다.** 부재는 탐지되고 시체는 안 된다 ⇒
+죽은 값은 «자리 표시» 가 아니라 **가드를 무력화하는 값**이다.
+🔵 오늘 동작 차이는 **0**(시체도 폴백도 똑같이 해소 실패)이고, env 변경은 **다음 배포부터**
+적용되므로 살아 있는 배포는 안 건드렸다. 되돌리려면 기록된 값을 다시 넣으면 된다.
+
+### 🔴🔴 그런데 진짜 결함은 «죽은 값» 이 아니라 **«원장이 비어 있었다»** 는 것이다
+
+`web-store/VERCEL.md` 는 그 변수에 대해 이렇게 **지시하고 있었다**:
+
+> 🔴 OIDC 축 전체(`OIDC_ISSUER_URL` · …)는 `ADR-MONO-067` 이 D4 로 떼어 낸 별도 결정이다.
+> **여기서 즉흥으로 정하지 마라** … **빌드만 통과시키면 되는 경우라도, 넣은 값과 그 이유를
+> 여기에 적는다.**
+
+**08-29 에 값이 들어갔고, 그 문서엔 한 줄도 없었다.** 저장소 안에서는 발견할 방법이 없었고,
+611 이 **형제 프로젝트의 env 목록을 세다가** 우연히 잡았다. ⇒ 그 절에 **원장 표**를 만들었다
+(값 · 생성일 · 죽음 실측 · 처분 · 되돌리는 법 · 「IP 를 다시 박지 마라」).
+
+🔵 `TASK-MONO-606` 은 이 자리를 못 본다(전문에 `vercel` 0건) — 606 은 `review/` 라 얼어 있어
+**`## CORRECTION` 순수 추가**로 「같은 시체의 두 번째 집은 611 이 처리했다」를 남긴다.
+[[feedback_one_fact_in_two_sections_only_one_gets_fixed]]
+
+---
+
+## ✅ AC-3 — 로그 보존을 사실로 기록. **더 좁혔다: `22.7h ≤ T < 24.6h`**
+
+티켓은 «27시간 공백» 하나를 갖고 있었다. **관측을 한 번 더 해서 구간으로 만들었다** —
+경계를 만드는 방법이 이 절의 핵심이다.
+
+| | 관측 A `09-01T11:26Z` | 관측 B `09-01T14:27Z` |
+|---|---|---|
+| 최고참 로그 | `08-31T13:51:40Z` | `08-31T15:47:23Z` |
+| 창 (now − 최고참) | **21.6h** | **22.7h** |
+| 배포 생성(`08-30T10:47:41Z`) 과의 공백 | 27h | **29h** ← **자랐다** |
+| 행 수 | **20** | **25** |
+
+- **하한** = B 에서 아직 살아 있는 줄 ⇒ `T ≥ 22.7h`
+- **상한** = A 에서 살아 있다가 B 에서 사라진 줄(`13:51:40Z`) ⇒ `T < 24.6h`
+
+🔵 **대조군 둘**로 «페이지 한계» 해석을 죽였다: ① 08-29 배포에 같은 조회 → **0행**
+② 같은 배포의 행 수가 **20 → 25 로 늘었다**(고정 개수 페이지네이션이면 불가능).
+
+🔴 **플랜에 딸린 값일 수 있다** — 측정은 **Pro** 에서 했다. 다른 티어에 인용 금지.
+
+**집 = [`ADR-MONO-067`](../../docs/adr/ADR-MONO-067-demo-surfaces-served-from-vercel.md)
+§ Context** (이 저장소의 Vercel 정본) + History 항목. `ADR-MONO-069` § R1 은 **숫자를
+복사하지 않고 가리킨다** — 같은 숫자가 두 곳에 있으면 한쪽만 갱신된다.
+
+---
+
+## 🔴🔴 범위 밖 발견 — **내가 어제 철회한 거짓이 세 번째 절에서 살아 있었다**
+
+`ADR-MONO-069` § Outstanding follow-ups **1번**이 오늘까지 이렇게 적혀 있었다:
+
+> 🙋 **소유자 조회 (§ R1)** … 저장소가 대신 할 수 없다 — 이 호스트의 Vercel CLI 는
+> 인증돼 있지 않다(2026-08-30 확인).
+
+611 을 기안한 PR(#3570)은 § R1 과 § Decision **두 곳**을 고쳤고 **이 절을 놓쳤다.** 그래서
+**같은 거짓이 하루 더**, 그것도 «남은 일» 목록이라 **가장 자주 읽히는 절**에 남아 있었다.
+⇒ 취소선 + 철회 사유로 고치고, **맞았던 절반**(*"지금 재시도해 얻는 로그는 다른 오류다"*)은
+남겼다 — 오늘 재현이 `fetch failed` 였으니 그 문장은 적중했다.
+
+🔵 **그리고 이 발견을 만든 것은 가드가 아니라 «형제 절을 읽어라» 였다.** 아무 CI 체크도
+ADR 본문의 철회를 세지 않는다. [[feedback_grep_the_siblings_before_fixing_it_yourself]]
+
+---
+
+# 🙋 남는 것
+
+**없다 — 이 티켓의 AC 4개는 전부 닫혔다.** 🔴 다만 **닫힌 것과 해결된 것을 구별한다**:
+
+- `kanggle-fan` 의 `OIDC_ISSUER_URL` 은 **여전히 비어 있다.** AC-1 은 그 결핍을 **들리게**
+  만든 것이지 **채운** 것이 아니다. 채우는 것은 `TASK-MONO-610` AC-4b 이고, 넣을 이름
+  (`auth.hubwang.com`)이 아직 없다.
+- `web-store` 의 같은 폴백도 그대로다(§ AC-1 표).
 
 # Related Specs
 
