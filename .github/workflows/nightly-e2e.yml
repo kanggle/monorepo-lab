@@ -217,6 +217,73 @@ jobs:
         working-directory: projects/fan-platform/web/fan-platform-web
         run: bash check-fan-fresh.sh --origin https://fan.hubwang.com
 
+  # TASK-MONO-602 — the launcher's deployment-freshness judge. Nothing ran it.
+  #
+  # This guard existed and worked, but it had never once produced a verdict in
+  # CI: `ci.yml` only checks its SYNTAX (`bash -n`), and its default origin was
+  # `https://kanggle-portfolio.vercel.app`, which is dead (404 — measured
+  # 2026-08-29 and again 2026-09-01, with `https://hubwang.com` returning 200 in
+  # the same breath, so it is not the network). Its own `--self-test` used the
+  # same dead origin, so the guard could not even prove that it BITES.
+  #
+  # 🔴 The two sibling judges (`check-fan-guard-live.sh`, `check-fan-fresh.sh`)
+  # already live in this file and already point at a custom domain. The launcher
+  # missed BOTH migrations. A sibling's edit history is the straggler list.
+  #
+  # 🔴 And the silence had a cost: `TASK-MONO-607` moved this project's pathspec
+  # out of `vercel.json` into `vercel-ignore.sh` — a correct change that matched
+  # the siblings — and this judge, which grepped `vercel.json`, has returned
+  # "cannot judge" ever since. With this lane in place that would have been red
+  # inside 607's own PR.
+  #
+  # Same reasoning as `fan-surface-watch` for the trigger and the cadence: this
+  # axis needs a CLOCK, because the launcher can go stale with no diff at all (a
+  # deploy is skipped, a domain unbinds, an alias dies — which is exactly what
+  # happened). No paths-filtered job can ever reach it. Deliberately NOT on
+  # `push`: Vercel takes 75 s – 5 min to publish, so a post-merge run would read
+  # the previous build and call it stale.
+  #
+  # Who sees a failure: identical to the rest of this workflow — a failing
+  # scheduled run on the default branch turns the main badge red and mails the
+  # repository owner (this file's header records the limits of that channel).
+  launcher-freshness-watch:
+    name: Launcher freshness (the judge runs, and the serving bytes are main)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.repository == 'kanggle/monorepo-lab' && github.event_name != 'push'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # The judge compares the served commit against the last commit that
+          # touched the launcher's trigger paths on `origin/main`. A shallow
+          # clone cannot answer that and the script would exit 2 for a reason
+          # that has nothing to do with the deployment.
+          fetch-depth: 0
+
+      # 🔵 The self-test first, and it is not decoration: this is the axis that
+      # was impossible before this ticket. It drives the SAME origin with two
+      # different baselines and requires the verdicts to differ (current =
+      # fresh, previous = stale). A judge that cannot separate those two is not
+      # measuring anything, and until now nobody could tell.
+      #
+      # It is deliberately run WITHOUT `--origin`: that also exercises deriving
+      # the default from the canonical hostname table. If the derivation breaks,
+      # this step is where it surfaces.
+      - name: Self-test the judge (same origin, two baselines, verdicts must differ)
+        run: bash infra/demo/aws/site/check-launcher-fresh.sh --self-test
+
+      # The live verdict. `!cancelled()` so a self-test failure cannot hide this
+      # one; the job still fails if either did.
+      #
+      # 🔴 exit 2 is "cannot judge", not "fine". It fails this job on purpose —
+      # this repo's recurring failure is translating "I could not check" into
+      # "it is OK", and that is precisely how this guard stayed broken.
+      - name: The serving launcher is main
+        if: ${{ !cancelled() }}
+        run: bash infra/demo/aws/site/check-launcher-fresh.sh
+
   # Build all ecommerce backend boot jars needed for docker compose.
   # Separated from the e2e job so the jar-build step appears clearly in the
   # Actions UI and the artifact is available for re-use / debugging.

@@ -9,7 +9,7 @@ TASK-MONO-602
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -279,3 +279,118 @@ launcher 호스트를 뽑는 함수를 갖고 있으므로 **같은 방식**을 
 
 분석=**Opus 5** / 구현 권장=**Sonnet** (형태가 형제 레인에 이미 다 정해져 있다 — 판단이 아니라
 이식이 본체다. 🔴 다만 AC-1 의 «정본 표 파생» 과 AC-3 의 bite 두 칸은 베끼기가 아니다).
+
+---
+
+# ✅ 구현 (2026-09-01)
+
+## ✅ AC-0 — 전제는 그대로였다 (양성 대조군 포함)
+
+```
+https://kanggle-portfolio.vercel.app  = 404      ← 여전히 죽었다
+https://hubwang.com                   = 200 / 29 KB   ← 양성 대조군
+```
+
+⇒ STOP 조건(별칭이 되살아남)에 해당하지 않는다. 🔵 두 줄을 **같이** 찍은 이유는 티켓이 적은
+그대로다 — 네트워크·캡티브 포털이 404 하나를 그대로 낸다.
+
+## 🔴🔴 착수하자마자 **세 번째 결함**이 나왔다 — 이 티켓의 논지가 자기 자신에게 적중했다
+
+기본 오리진을 고치고 처음으로 인자 없이 돌려 봤더니, 오리진이 아니라 **다른 데서** 죽었다:
+
+```
+[launcher-fresh] ✖ vercel.json 에서 ':/...' pathspec 을 하나도 못 뽑았습니다 ⇒ 판정 불가
+```
+
+**`TASK-MONO-607` 이 이 프로젝트의 pathspec 을 `vercel.json` 인라인에서 `vercel-ignore.sh`
+래퍼로 뽑아냈다.** 그 자체는 형제 둘의 모양을 따른 **옳은 변경**이다. 그런데 이 판정자는
+`vercel.json` 을 grep 하고 있었으므로 **그날부터 판정 불가**였고 —
+🔴 **아무 데서도 발화하지 않았다. 러너가 없었기 때문이다.**
+
+⇒ 이 티켓의 두 결함(죽은 오리진 · 러너 없음)이 **세 번째를 낳았다.** 그리고 그 인과는
+반대로도 성립한다: **이 레인이 있었다면 607 의 PR 에서 즉시 빨간불**이었을 것이다.
+
+🔵 **답은 형제에 있었다** — `check-fan-fresh.sh` 는 처음부터 `$IGNORE_WRAPPER` 에서 읽는다.
+소비자 전수(`grep -o "':/[^']*'"` 를 쓰는 곳 5군데)를 세어 낙오한 것이 이 파일 하나임을 확인했다.
+[[feedback_grep_the_siblings_before_fixing_it_yourself]] [[feedback_deletion_leaves_survivors_grep_the_consumers]]
+
+## ✅ AC-1 — 기본 오리진을 **정본 표에서 파생**한다. 🔴 파서는 복사하지 않았다
+
+`TEMPLATE.md` § 공개 호스트명 배분의 launcher 행이 정본이고, 그것을 파싱하는 코드는
+`scripts/check-public-domains.sh` 에 **이미 있었다**(`table_rows` / `launcher_host`,
+그리고 «행 전체를 grep 하면 안 된다» 는 사고 기록까지 주석으로).
+
+🔴 **여기로 복사하지 않았다.** 대신 그 스크립트에 **조회 모드 `--print-launcher-host`** 를
+붙이고(가드 본체 실행 전에 빠져나온다), 판정자는 그것을 부른다. **정의는 한 곳에 남는다.**
+
+```
+$ bash scripts/check-public-domains.sh --print-launcher-host
+hubwang.com
+$ bash infra/demo/aws/site/check-launcher-fresh.sh
+[launcher-fresh] 기본 오리진을 정본 표에서 파생: https://hubwang.com
+… ✔ 신선 — 서빙 중인 바이트가 origin/main 과 같습니다.     rc=0
+```
+
+🔵 **fail-closed 를 실측했다** — 파생을 일부러 깨뜨리면(`PUBDOM_GUARD_ROOT=/nonexistent`)
+옛 기본값으로 떨어지지 않고 **rc=2(판정 불가)** 이고, 메시지가 *"옛 기본값으로 떨어지지
+않습니다 — 그렇게 하면 이 가드가 죽은 주소를 다시 가리키면서 초록으로 보일 것"* 을 말한다.
+
+## ✅ AC-2 — nightly 레인 신설. 형제를 따랐다
+
+`nightly-e2e.yml` 에 `launcher-freshness-watch` 를 넣었다. fan 레인의 규약을 그대로:
+`fetch-depth: 0` · **자가검사 먼저** · 라이브 판정 · 두 스텝이 서로를 못 가리게 `!cancelled()`.
+
+🔵 **AC-2 문구에서 한 가지 벗어났고, 강해지는 쪽이다.** AC-2 는 라이브 스텝을
+`--origin <파생된 launcher 호스트>` 로 부르라고 적었는데, **인자 없이** 불렀다 —
+AC-1 이 기본값을 그 파생값으로 만들었으므로 **값은 같고**, 추가로 **파생 경로 자체가
+러너에서 검증된다**. 파생이 깨지면 그 스텝이 그것을 말한다.
+
+## ✅ AC-3 — bite. 🔴 세 값이 **전부** 갈린다
+
+| 입력 | rc | 무엇 |
+|---|---|---|
+| `--self-test` (같은 오리진, 두 기준) | **0** | `현재기준=0 신선 / 이전판기준=1 낡음` — 판정자가 눈이 있다 |
+| `--origin https://kanggle-portfolio.vercel.app` (죽은 주소) | **2** | *"최종 HTTP 404 ⇒ **판정 불가**(낡음이 아니다)"* |
+| `--origin https://store.hubwang.com` (**살아 있지만 다른 사이트**) | **1** | *"낡음 — 서빙 중인 바이트가 origin/main 과 다릅니다"* |
+
+🔵 **셋째 줄이 이 표를 대조군으로 만든다.** 404 만 봤다면 «2 를 내는 것»과 «아무 때나 2 를
+내는 것»이 구별되지 않는다. 살아 있는 다른 오리진이 **1** 을 내므로, `2` 는 «못 봤다» 를,
+`1` 은 «봤는데 다르다» 를 뜻한다는 것이 실측으로 갈린다.
+
+## ✅ AC-4 — `ci.yml` 의 낡은 주석을 고쳤다
+
+원문은 *"They are **manual tools** (they need the live origin, so no PR-time job runs them)"*.
+
+🔵 **괄호 안은 지금도 참이다** — PR 타임에 라이브 오리진은 없다. 🔴 **틀린 것은 «그러므로
+manual» 이라는 결론**이고, 그것은 `nightly-e2e.yml` 이 생기기 전까지만 참이었다. fan 둘은
+거기로 갔고 론처만 남았는데, **문장이 여전히 참으로 읽혀서 아무도 다시 묻지 않았다.**
+
+⇒ **어디서 도는지**를 명시했다(fan 둘 + 론처 = nightly). 🔵 `bash -n` 게이팅은 **그대로 뒀다** —
+그 판단은 옳았고, 문법 오류를 nightly 가 하루 뒤에 발견하는 것보다 PR 에서 잡는 게 낫다.
+
+## ✅ AC-5 — 이 티켓이 **안 고치는 것**
+
+| # | 안 고치는 것 | 왜 |
+|---|---|---|
+| 1 | 동결된 티켓·문서에 증거로 적힌 `*.vercel.app` URL | 🔴 **그 날짜의 사실이다.** 지금 404 인 것은 기록이 틀려서가 아니다. 고치면 그때 무엇을 쟀는지가 사라진다 |
+| 2 | `*.vercel.app` 별칭이 **왜** 죽었는지 | Vercel 대시보드 사안이고 이 판정에 필요 없다 — 필요한 것은 «무엇을 가리켜야 하는가» 이고 답은 정본 표에 있다 |
+| 3 | `store.hubwang.com` 연결 | 소유자 · `TASK-MONO-582` |
+| 4 | 🔴 **다른 «단일 출처 이동»이 또 있는지** | 이 티켓은 `':/...'` pathspec 소비자 **5곳**만 셌다. 다른 종류의 출처 이동은 안 봤다 |
+| 5 | `check-fan-*` 두 가드 | **이미 옳다.** 안 건드렸다 |
+
+🔴 **«가드를 고쳤다»가 «Vercel 주소 문제를 고쳤다»로 읽히면 안 된다** — 죽은 별칭은 그대로 죽어 있고,
+이 티켓이 한 일은 **판정자가 그것을 안 가리키게** 한 것이다.
+
+## 🔵 곁가지 — 개행을 한 번 섞었다가 잡았다
+
+`nightly-e2e.yml` 은 **CRLF** 파일인데 새 레인을 LF 로 끼워 넣어 **bare-LF 67줄**이 생겼다.
+쓰고 나서 개행을 세어 보다 발견해 전부 CRLF 로 되돌렸다(`.yml`=CRLF, `.sh`=LF 확인).
+🔴 산출물을 세지 않았으면 리뷰에 안 보이는 diff 로 남았을 것이다.
+
+## 검증
+
+- `check-launcher-fresh.sh` — 라이브 **0/1/2** 세 방향 + `--self-test` rc=0 + fail-closed rc=2
+- `check-public-domains.sh` — 라이브 rc=0 · **`--self-test` rc=0**(조회 모드를 붙였으므로 필수)
+- `check-vercel-build-triggers.sh` — 라이브 rc=0
+- `ci.yml` · `nightly-e2e.yml` — **YAML 파서로** 로드 확인(51잡 / 13잡), 새 잡·스텝 3개 존재
+- 🔴 docker 데몬이 없어 `verify-demo-wrapper.sh` 전체는 못 돌렸다(이 티켓은 그 파일을 안 건드린다)

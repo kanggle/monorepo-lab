@@ -295,6 +295,21 @@ self_test() {
   return "$rc"
 }
 
+# 🔵 TASK-MONO-602 — 정본 표의 launcher 호스트를 **조회만** 하는 모드.
+#    `infra/demo/aws/site/check-launcher-fresh.sh` 가 자기 기본 오리진을 여기서 얻는다.
+#    🔴 파서를 그쪽으로 **복사하지 않는다** — 표의 열 구조가 바뀌면 한쪽만 고쳐지고,
+#    그때 낡은 쪽은 «틀린 답» 이 아니라 **조용한 통과**를 낸다(이 파일 § HOST_COL 주석이
+#    바로 그 사고를 기록해 두었다).
+#    exit 3 = 못 찾음. 부르는 쪽이 fail-closed 로 다루라는 뜻이다.
+if [ "${1:-}" = "--print-launcher-host" ]; then
+  _lh="$(launcher_host)"
+  if [ -z "$_lh" ]; then
+    echo "정본 표($CANON)에서 'launcher' 행의 호스트명을 찾지 못했습니다." >&2
+    exit 3
+  fi
+  printf '%s\n' "$_lh"; exit 0
+fi
+
 if [ "${1:-}" = "--self-test" ]; then
   self_test; exit $?
 fi
