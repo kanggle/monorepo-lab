@@ -455,6 +455,44 @@ ADR 본문의 철회를 세지 않는다. [[feedback_grep_the_siblings_before_fi
 
 ---
 
+## ✅ 라이브 검증 — **프로덕션에서 실제로 울렸다** (2026-09-01T15:07Z, 머지 직후)
+
+🔴 AC-1 의 술어는 *"`VERCEL` 이 실제로 주입된다"* 에 걸려 있었고, 여기까지는
+**env 키 목록**(선언)으로만 확인한 상태였다. 선언은 런타임이 아니다.
+[[feedback_declaration_files_are_not_the_runtime_state]] ⇒ 머지가 만든 배포에
+요청을 넣어 **로그를 직접 읽었다.**
+
+| | |
+|---|---|
+| 새 프로덕션 배포 | `kanggle-mahtw3jl0` — 머지 **2분** 뒤 `Ready` (전체 40자 SHA `48609932…` 로 대조) |
+| `GET https://fan.hubwang.com/` | `307` (정상 리다이렉트) |
+| `GET https://fan.hubwang.com/login` | **`200` / 10,879 B** ⇒ 🔵 **사이트 무회귀** |
+| 런타임 로그 | **2행, 둘 다 새 진단** |
+
+```
+2026-09-01T15:07:39Z | edge-middleware | /login
+  [env] OIDC_ISSUER_URL is not set while running on Vercel. OIDC sign-in will
+  fail: the fallback (http://iam.local) resolves nowhere from a serverless
+  function. See TASK-MONO-610 for the public IdP name.
+```
+
+⇒ **어제까지 아무 신호도 없던 자리에 변수 이름이 찍힌다.** 그 전의 유일한 흔적은
+변수 이름이 어디에도 없는 `[auth][error] TypeError: fetch failed` 였다.
+
+🔵 **부수 실측 — 이 모듈은 Edge 런타임에서도 돈다.** 로그의 `source` 가
+**`edge-middleware`** 다(Node 서버리스가 아니라). `process.env.VERCEL` 이 Edge 에서도
+읽힌다는 뜻이고, 이건 예상이 아니라 **관측**이다.
+
+🔴 **대가를 적는다: 진단이 요청당 한 줄 날 수 있다.** 요청 2건 → 로그 2행이었다
+(Edge 아이솔레이트가 매번 새로 뜨면 모듈이 매번 평가된다). 단위 테스트의
+`toHaveBeenCalledTimes(1)` 은 **모듈 로드당 1회**를 말하는 것이지 «프로세스당 1회» 가
+아니다 — 그 둘을 같은 것으로 읽지 마라. 지금은 트래픽이 사실상 0 이고 `TASK-MONO-610`
+이 값을 넣는 순간 조건 자체가 사라지므로 감수한다. 🔵 **트래픽이 붙는데도 값이 안
+들어와 있으면 그때는 이 줄이 노이즈다** — 그 시점의 처방은 «한 번만 찍기» 가 아니라
+**«값을 넣어라»** 다.
+
+---
+
 # 🙋 남는 것
 
 **없다 — 이 티켓의 AC 4개는 전부 닫혔다.** 🔴 다만 **닫힌 것과 해결된 것을 구별한다**:
