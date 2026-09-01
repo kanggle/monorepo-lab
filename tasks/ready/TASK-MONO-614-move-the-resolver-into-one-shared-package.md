@@ -46,8 +46,13 @@ monorepo
 
 **포함**
 
-- 공유 패키지 신설 — 🔴 **이 저장소 최초의 TS 공유 모듈이다**(실측: 루트 `libs/` 는 전부
-  Java, TS/JS **0개**; `projects/*/libs/` 도 Java). 둘 곳과 이름은 **AC-1** 에서 정한다.
+- 공유 패키지 신설 — 🔵 **최초가 아니다** (`ADR-MONO-068 § D6.2` 정정):
+  `projects/ecommerce-microservices-platform/packages/` 에 **`@repo/*` 여섯 개**가 이미
+  있고 `web-store` 가 **`workspace:*`** 로 쓴다. 관용구도 있다(`@repo/<name>` ·
+  `main: ./src/index.ts` · `private: true`) — **그것을 따르라.**
+  🔴 **새로운 것은 「패키지」가 아니라 「워크스페이스를 건너는 연결」이다** —
+  `fan-platform-web` 은 **다른 pnpm 워크스페이스**(`web/*`)에 있고 `workspace:*` 는 그
+  경계를 못 넘는다. 둘 곳과 이름은 **AC-1** 에서 정한다.
 - 소비자 전환 **둘** — `web-store` · `fan-platform-web`
 - 🔴 **가드 교체** — `scripts/check-demo-resolver-copies.sh` (§ D5.3: 삭제가 아니라 교체)
 - 🔵 Vercel «Root Directory 밖 포함» 축의 **관측**(AC-4)
