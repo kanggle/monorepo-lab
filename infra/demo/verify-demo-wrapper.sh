@@ -2708,17 +2708,31 @@ echo "[verify] (z16) 정적 칸이 --live 게이트 안에 갇혀 있지 않은�
 z16_self="$ROOT/infra/demo/verify-demo-wrapper.sh"
 [ -f "$z16_self" ] || fail "(z16) 자기 자신을 찾지 못했습니다: $z16_self"
 
-# 게이트 블록 = `if [ "$LIVE" -eq 0 ]; then` 부터 열 0의 첫 `fi` 까지.
+# 게이트 블록 = **열 0 의** `if [ "$LIVE" -eq 0 ]; then` 부터 열 0 의 첫 `fi` 까지.
 # 그 안에 있어도 되는 것은 "정적 검증 PASS" 와 `exit 0` 뿐이다.
+#
+# 🔴🔴 앵커는 **열 0 고정**이다 (TASK-MONO-608). 예전 앵커는 열을 안 봤고, 이 파일에서
+#    그 문자열의 첫 등장은 게이트가 아니라 **바로 위 이 주석**이었다 ⇒ `head -1` 이
+#    (z16) 자기 본문을 집었다. 그리고 안전망이 «구간에 '정적 검증 PASS' 가 있나» 를
+#    물은 탓에 — 잘못 집힌 구간이 하필 그 문자열을 세 번 언급하는 코드라 — 통과했다.
+#    **파수꾼이 「내가 맞는 방을 봤나」를 물었는데, 잘못 든 방이 그 답을 벽에 적어 둔 방이었다.**
+# 🔴 그래서 안전망도 **문자열이 아니라 구조**로 묻는다: 구간이 자기 본문과 겹치지 않고
+#    (`z16_` 토큰이 없고), `exit 0` 이 있고, 짧아야 한다. 사유마다 다른 값을 돌려준다 —
+#    원인을 지목하는 메시지에는 그 원인만 무는 술어가 붙어야 하기 때문이다.
+# 🔴 게이트가 **둘 이상**이면 `head -1` 이 다시 위험해진다 ⇒ 판정 불가로 세운다.
 z16_trapped() {
-  z16_g="$(grep -n 'if \[ "\$LIVE" -eq 0 \]; then' "$1" | head -1 | cut -d: -f1)"
-  [ -n "$z16_g" ] || { echo "__NOGATE__"; return 0; }
+  z16_n="$(grep -c '^if \[ "\$LIVE" -eq 0 \]; then$' "$1" || true)"
+  if [ "$z16_n" -eq 0 ]; then echo "__NOGATE__"; return 0; fi
+  if [ "$z16_n" -gt 1 ]; then echo "__MULTIGATE__:$z16_n"; return 0; fi
+  z16_g="$(grep -n '^if \[ "\$LIVE" -eq 0 \]; then$' "$1" | cut -d: -f1)"
   z16_fi="$(awk -v s="$z16_g" 'NR>s && /^fi$/ {print NR; exit}' "$1")"
   [ -n "$z16_fi" ] || { echo "__NOFI__"; return 0; }
   sed -n "${z16_g},${z16_fi}p" "$1" > "$z16_region"
   # 블록을 제대로 집었는지 먼저 확인한다 — 엉뚱한 구간에서 "0건" 이 나오면 그건
   # 통과가 아니라 **판정 불가**다.
-  grep -q '정적 검증 PASS' "$z16_region" || { echo "__WRONGBLOCK__"; return 0; }
+  if grep -q 'z16_' "$z16_region"; then echo "__WRONGBLOCK__:self"; return 0; fi
+  if ! grep -qE '^[[:space:]]*exit 0$' "$z16_region"; then echo "__WRONGBLOCK__:noexit"; return 0; fi
+  if [ "$(wc -l < "$z16_region")" -gt 12 ]; then echo "__WRONGBLOCK__:toolong"; return 0; fi
   sed -n 's/.*echo "\[verify\] (\([A-Za-z0-9]*\)).*/\1/p' "$z16_region"
 }
 
@@ -2732,24 +2746,40 @@ z16_all="$(sed -n 's/.*echo "\[verify\] (\([A-Za-z0-9]*\)).*/\1/p' "$z16_self" |
 # (1) 본체 — 게이트 안에 갇힌 칸이 하나도 없어야 한다.
 z16_bad="$(z16_trapped "$z16_self")"
 case "$z16_bad" in
-  __NOGATE__)     rm -f "$z16_region"; fail "(z16) LIVE 게이트를 찾지 못했습니다 — 구간을 특정할 수 없습니다." ;;
+  __NOGATE__)     rm -f "$z16_region"; fail "(z16) 열 0 의 LIVE 게이트를 찾지 못했습니다 — 구간을 특정할 수 없습니다."\
+                    $'\n'"→ 게이트가 들여쓰기됐다면 고칠 것은 가드가 아니라 **게이트**입니다." ;;
+  __MULTIGATE__:*) rm -f "$z16_region"; fail "(z16) 열 0 의 LIVE 게이트가 ${z16_bad#__MULTIGATE__:}개입니다 — 어느 것이 그 게이트인지 판정할 수 없습니다."\
+                    $'\n'"→ 하나로 합치거나, 이 술어에 «어느 것을 보는가» 를 명시하세요." ;;
   __NOFI__)       rm -f "$z16_region"; fail "(z16) LIVE 게이트의 닫는 fi 를 찾지 못했습니다 — 구간을 특정할 수 없습니다." ;;
-  __WRONGBLOCK__) rm -f "$z16_region"; fail "(z16) 게이트 블록에 '정적 검증 PASS' 가 없습니다 — 엉뚱한 구간을 집었습니다." ;;
+  __WRONGBLOCK__:self)
+                  rm -f "$z16_region"; fail "(z16) 집힌 구간이 **(z16) 자기 본문**입니다(`z16_` 토큰이 들어 있습니다) — 판정 불가입니다."\
+                    $'\n'"→ TASK-MONO-608 이 고친 결함이 되돌아온 것입니다. 앵커가 다시 열을 안 보고 있습니다." ;;
+  __WRONGBLOCK__:noexit)
+                  rm -f "$z16_region"; fail "(z16) 집힌 구간에 \`exit 0\` 이 없습니다 — 게이트 블록이 아닙니다. 판정 불가입니다." ;;
+  __WRONGBLOCK__:toolong)
+                  rm -f "$z16_region"; fail "(z16) 집힌 구간이 12줄을 넘습니다 — 게이트 블록이 아닙니다. 판정 불가입니다." ;;
 esac
 [ -z "$z16_bad" ] || { rm -f "$z16_region"; fail "(z16) 이 칸들이 \`--live\` 게이트 안에 갇혀 있습니다: $(echo $z16_bad)"\
   $'\n'"→ CI 의 'Demo wrapper smoke' 와 packer 7단계는 **--live 로만** 돌립니다."\
   $'\n'"   갇힌 칸은 러너에서 한 번도 실행되지 않으면서 체크는 초록입니다."\
-  $'\n'"→ 게이트(`if [ \"\$LIVE\" -eq 0 ]`) **위쪽** 정적 구간으로 옮기세요."; }
+  $'\n'"→ 게이트(\`^if [ \"\$LIVE\" -eq 0 ]; then\`) **위쪽** 정적 구간으로 옮기세요."; }
 
 # (2) bite — 갇힌 칸을 하나 만들어 넣으면 술어가 반드시 물어야 한다.
 #     🔴 주입이 실제로 됐는지를 **먼저** 확인한다(안 물린 게 아니라 안 넣어진 경우와
 #        구별되지 않으면 이 칸은 아무것도 시험하지 않는다).
+# 🔴🔴 주입 앵커도 **열 0 고정**이다 (TASK-MONO-608). 예전에는 추출기와 **같은** 느슨한
+#    앵커를 써서, 둘이 같은 잘못된 구간에 동의한 채 bite 가 초록으로 보고됐다 —
+#    **주입기와 판정기가 같은 오류를 공유하면 대조군이 되지 못한다.**
 z16_copy="$(mktemp)"
-awk '{print} /if \[ "\$LIVE" -eq 0 \]; then/ && !d {print "  echo \"[verify] (zz9) 주입된 가짜 칸\""; d=1}' \
+awk '{print} /^if \[ "\$LIVE" -eq 0 \]; then$/ && !d {print "  echo \"[verify] (zz9) 주입된 가짜 칸\""; d=1}' \
   "$z16_self" > "$z16_copy"
-if ! grep -q 'zz9' "$z16_copy"; then
+# 🔴 «파일 어딘가에 zz9 가 있다» 로는 부족하다 — **게이트 블록 «안»에** 들어갔는지를 묻는다.
+z16_ig="$(grep -n '^if \[ "\$LIVE" -eq 0 \]; then$' "$z16_copy" | head -1 | cut -d: -f1)"
+z16_ifi="$(awk -v s="${z16_ig:-0}" 'NR>s && /^fi$/ {print NR; exit}' "$z16_copy")"
+if [ -z "$z16_ig" ] || [ -z "$z16_ifi" ] || ! sed -n "${z16_ig},${z16_ifi}p" "$z16_copy" | grep -q 'zz9'; then
   rm -f "$z16_region" "$z16_copy"
-  fail "(z16) bite 하네스가 가짜 칸을 **주입하지 못했습니다** — 이 칸은 아무것도 시험하지 않았습니다."
+  fail "(z16) bite 하네스가 가짜 칸을 **게이트 블록 안에 주입하지 못했습니다** — 이 칸은 아무것도 시험하지 않았습니다."\
+    $'\n'"→ 주입 앵커와 판정 앵커가 어긋났습니다. 둘 다 열 0 고정이어야 합니다(TASK-MONO-608)."
 fi
 z16_bit="$(z16_trapped "$z16_copy")"
 rm -f "$z16_region" "$z16_copy"
