@@ -265,6 +265,44 @@ class PlatformConsoleOidcClientSeedIntegrationTest extends AbstractIntegrationTe
         // Redirect uri per console-registry-api.md / multi-tenancy.md.
         assertThat(client.getRedirectUris()).contains(CONSOLE_REDIRECT_URI);
 
+        // TASK-BE-589 (V0034) — the FULL registered callback set.
+        //
+        // containsExactlyInAnyOrder, not containsExactly: RegisteredClient exposes
+        // these as a Set, so asserting order here would assert the SET's iteration
+        // order, not the migration order. (The post-logout array IS asserted in
+        // order — it round-trips as a List through the custom ClientSettings key,
+        // where order is real. Different container, different honest predicate.)
+        //
+        // Note the path shape: /api/auth/callback with NO /iam suffix. Four shapes
+        // coexist in this table (V0033's header enumerates them), and registering a
+        // hostname with the wrong one fails as redirect_uri_mismatch — an error that
+        // names neither the URI nor the client. TASK-MONO-460 recorded the console's
+        // shape; TASK-BE-589 re-measured it at app/api/auth/callback/route.ts rather
+        // than inheriting it.
+        //
+        // The https entry is not rewritten at boot: seed-demo-domain.sh substitutes
+        // only URIs matching `%.local/%`, so it appends demo-domain copies of the
+        // console.local entry and leaves this one byte-identical.
+        assertThat(client.getRedirectUris())
+                .as("V0015 seeded two http callbacks; V0034 TASK-BE-589 appended the Vercel "
+                        + "production callback (ADR-MONO-067 phase 3). Vercel is HTTPS-only and "
+                        + "terminates TLS itself, so the https scheme is not optional — an http "
+                        + "spelling of the same host would never be sent by the browser and "
+                        + "nothing in this service validates the scheme (OAuthClientMapper passes "
+                        + "each stored URI straight into builder.redirectUri)")
+                .containsExactlyInAnyOrder(
+                        "http://console.local/api/auth/callback",
+                        "http://localhost:3000/api/auth/callback",
+                        "https://console.hubwang.com/api/auth/callback");
+
+        // …and the assertion above CANNOT see the failure mode V0034 actually has.
+        // V0034 appends by string REPLACE on the serialized JSON array; a REPLACE
+        // that matches twice duplicates the element. The mapper loads the array into
+        // a Set, which silently dedupes — so a duplicated row would pass every
+        // assertion above. Count it at the raw column instead.
+        assertNoDuplicateRegistration("redirect_uris", "https://console.hubwang.com/api/auth/callback");
+        assertNoDuplicateRegistration("client_settings", "https://console.hubwang.com/login");
+
         // Scopes per contract. TASK-BE-336 (V0023): erp.write is granted as a
         // delegated domain-write scope so the assume-tenant token can carry it
         // and erp masterdata-service authorizes a department WRITE (the console
@@ -478,6 +516,48 @@ class PlatformConsoleOidcClientSeedIntegrationTest extends AbstractIntegrationTe
         assertThat(String.valueOf(row.get("tenant_id")))
                 .as("%s tenant_id must be unchanged by V0015", clientId)
                 .isEqualTo(expectedTenantId);
+    }
+
+    /**
+     * Asserts that {@code uri} appears exactly once as a complete JSON string
+     * element inside the named raw column of the {@code platform-console-web}
+     * row.
+     *
+     * <p>TASK-BE-589. This exists because the {@link RegisteredClient}-level
+     * assertions structurally cannot see the defect V0034 can produce. V0034
+     * appends by string {@code REPLACE} over the serialized JSON; if its anchor
+     * ever matched twice, the element would be duplicated in the array — and
+     * both the {@code Set<String>} of redirect URIs and the {@code Set} of
+     * post-logout URIs dedupe on load, so every mapped assertion would still
+     * pass. The raw column is the only place the duplicate is visible.
+     *
+     * <p>The needle is QUOTED on both sides so it matches a whole array element
+     * and nothing else. Unquoted, a later migration registering a longer URI
+     * with this one as its prefix (the {@code /api/auth/callback} vs
+     * {@code /api/auth/callback/iam} pair already coexists in this table for
+     * other clients) would push the count to 2 and this guard would report a
+     * duplicate that is not there — a predicate tripping on something other
+     * than the cause it names.
+     */
+    private void assertNoDuplicateRegistration(String column, String uri) {
+        String raw = jdbcTemplate.queryForObject(
+                "SELECT " + column + " FROM oauth_clients WHERE client_id = ?",
+                String.class, CONSOLE_CLIENT_ID);
+        assertThat(raw)
+                .as("%s must be readable for %s", column, CONSOLE_CLIENT_ID)
+                .isNotNull();
+
+        String needle = "\"" + uri + "\"";
+        int count = 0;
+        for (int i = raw.indexOf(needle); i >= 0; i = raw.indexOf(needle, i + needle.length())) {
+            count++;
+        }
+        assertThat(count)
+                .as("%s must carry %s exactly once — 0 means the V0034 UPDATE hit no row "
+                        + "(a REPLACE whose anchor does not match is a silent no-op, rc=0), "
+                        + "and >1 means its anchor matched more than once and duplicated the "
+                        + "element. Raw column: %s", column, needle, raw)
+                .isEqualTo(1);
     }
 
     // -----------------------------------------------------------------------
