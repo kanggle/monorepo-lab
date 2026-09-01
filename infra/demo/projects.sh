@@ -40,7 +40,12 @@ declare -A COMPOSE=(
   # 수락한 뒤였으므로 증상은 "엣지가 좋은 토큰을 거부한다" 로 보인다. 상세 + 실측:
   # infra/demo/erp-identity.override.yml 헤더. 가드 (v) 가 이 정합을 강제한다.
   [wms]="projects/wms-platform/docker-compose.yml projects/wms-platform/docker-compose.e2e.yml infra/demo/wms-identity.override.yml infra/demo/wms-devseed.override.yml infra/demo/wms-relay.override.yml"
-  [ecommerce]="projects/ecommerce-microservices-platform/docker-compose.yml infra/demo/ecommerce-relay.override.yml"
+  # `ecommerce-vercel.override.yml` — 방문자 스토어가 Vercel 로 옮겨갔으므로
+  # (ADR-MONO-067 단계 2) 데모에서는 web-store 를 **띄우지 않는다**. 억제는 그
+  # 파일 한 곳에 선언돼 있고, 로컬(base 단독)과 CI 는 영향받지 않는다 — 어느 CI
+  # 잡도 이 compose 의 web-store 서비스를 띄우지 않는다(TASK-MONO-604 AC-0 ②
+  # 전수). 효력은 가드 (z19)가 렌더로 확인한다.
+  [ecommerce]="projects/ecommerce-microservices-platform/docker-compose.yml infra/demo/ecommerce-relay.override.yml infra/demo/ecommerce-vercel.override.yml"
   [scm]="projects/scm-platform/docker-compose.yml infra/demo/scm-identity.override.yml infra/demo/scm-relay.override.yml"
   [fan]="projects/fan-platform/docker-compose.yml infra/demo/fan-identity.override.yml"
   [finance]="projects/finance-platform/docker-compose.yml infra/demo/finance-identity.override.yml"

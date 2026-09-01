@@ -76,7 +76,13 @@ services:
           - iam.${DEMO_DOMAIN:-local}
           - console.${DEMO_DOMAIN:-local}
           - ecommerce.${DEMO_DOMAIN:-local}
-          - web.ecommerce.${DEMO_DOMAIN:-local}
+          # web.ecommerce 는 여기 없다 — 스토어는 Vercel(`store.hubwang.com`)로
+          # 옮겨갔고 데모는 그 사본을 띄우지 않는다(TASK-MONO-604 /
+          # infra/demo/ecommerce-vercel.override.yml). 🔴 alias 와 Host() 라우터는
+          # **짝으로만** 존재해야 한다 — 가드 (i) 가 그 짝을 강제하고, 이 줄을
+          # 되살리면 «라우터가 없는 고아 alias» 로 문다. 스토어를 데모로 되돌리려면
+          # 그 오버라이드를 먼저 걷어라. (형제 `web.fan-platform` 은 단계 4 —
+          # TASK-MONO-586 — 이 같은 자리를 밟는다.)
           - wms.${DEMO_DOMAIN:-local}
           - scm.${DEMO_DOMAIN:-local}
           - erp.${DEMO_DOMAIN:-local}

@@ -57,11 +57,27 @@ bash infra/demo/demo-up.sh iam erp console
 
 진입 URL (로컬 기준 — `DEMO_DOMAIN` 이 `local` 이 아니면 그 도메인으로 치환):
 
-| 표면 | URL |
-|---|---|
-| 콘솔 | `http://console.local` |
-| 스토어프런트 | `http://web.ecommerce.local` |
-| 팬 | `http://web.fan-platform.local` |
+| 표면 | URL | 🔴 EC2 데모에서도 같은가 |
+|---|---|---|
+| 콘솔 | `http://console.local` | ✅ 그렇다 |
+| 스토어프런트 | `http://web.ecommerce.local` | ❌ **아니다** — 아래 § |
+| 팬 | `http://web.fan-platform.local` | ✅ 아직 그렇다 (단계 4 = `TASK-MONO-586` 이 바꾼다) |
+
+> 🔴🔴 **스토어프런트만 「도메인으로 치환」이 성립하지 않는다** (`TASK-MONO-604` /
+> `ADR-MONO-067` 단계 2). 방문자 스토어는 **Vercel** 로 옮겨갔고
+> (`https://store.hubwang.com`), EC2 데모는 그 사본을 **띄우지 않는다** —
+> `web.ecommerce.<DEMO_DOMAIN>` 은 **404 가 정상**이다. 그 404 는 「스택이 안 떴다」와
+> 눈으로 구별되지 않으므로, 여기 적어 둔다.
+>
+> 🔵 **로컬은 그대로다.** 억제는 데모 체인에만 걸려 있고
+> (`infra/demo/ecommerce-vercel.override.yml`), 로컬 `docker compose up` /
+> `npm run ecommerce:up` 은 지금까지처럼 `web.ecommerce.local` 을 서빙한다.
+> 아래 §2 의 클릭 경로는 **로컬에서 그대로 유효**하다.
+>
+> 🔴 데모에서 스토어를 보려면 `https://store.hubwang.com` 을 열되, **데모 스택이 켜져
+> 있어야 상품이 보인다** — Vercel 판은 상품 데이터를 데모 백엔드에서 런타임에 가져온다
+> (`apps/web-store/src/shared/config/demo-backend.ts`). 꺼져 있으면 200 을 내면서
+> *"데모 서버가 꺼져 있어 상품 데이터를 불러올 수 없습니다"* 를 그린다 — 2026-09-01 실측.
 
 `*.local` 은 hosts 파일에 `127.0.0.1` 로 등록돼 있어야 한다
 ([TEMPLATE.md § One-time developer setup](../../TEMPLATE.md)). EC2 데모는 `<ip>.sslip.io` 를
