@@ -720,11 +720,23 @@ jobs:
               # matrix 항목이 사라지거나 secret 이름이 바뀌는 것. 그 diff 는 코드가
               # 아니고 `vercel.json` 도 아니라, 이 줄이 없으면 **가드가 아예 안 돈다.**
               - '.github/workflows/vercel-deploy.yml'
-              # TASK-MONO-563: the two deployment-freshness judges. They are manual
-              # tools (they need the live origin, so no PR-time job runs them), which
-              # is exactly why their syntax must be gated somewhere — a tool nobody
-              # ever executes rots silently and is discovered at the moment it is
-              # needed. This job is the only Vercel-adjacent owner in CI.
+              # TASK-MONO-563: the deployment-freshness judges. They need a LIVE
+              # origin, so no PR-time job can run them — which is exactly why their
+              # syntax must be gated somewhere: a tool nobody ever executes rots
+              # silently and is discovered at the moment it is needed.
+              #
+              # 🔴 TASK-MONO-602 corrects what this comment used to say. It called
+              # them "manual tools", and that reading held only until
+              # `nightly-e2e.yml` existed. The fan pair moved there; the launcher
+              # did not, and the sentence stayed TRUE ENOUGH that nobody re-asked.
+              # Excluding PR-time is right; concluding "therefore manual" was the
+              # hole — the remaining option was nightly. Both fan judges and now
+              # `check-launcher-fresh.sh` run in `nightly-e2e.yml`, so this entry
+              # guards their SYNTAX at PR time while the verdict runs on a clock.
+              #
+              # 🔴 Keep this filter anyway. A syntax error here would otherwise be
+              # discovered by a nightly run, i.e. up to a day after the PR that
+              # introduced it, on a branch nobody is looking at.
               - 'infra/demo/aws/site/check-launcher-fresh.sh'
               - '**/check-fan-fresh.sh'
             # TASK-MONO-511: a cross-project listener arrives as a new @KafkaListener in

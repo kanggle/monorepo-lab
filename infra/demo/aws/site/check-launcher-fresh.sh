@@ -41,9 +41,30 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ORIGIN="https://kanggle-portfolio.vercel.app"
+ROOT="$(cd "$HERE/../../../.." && pwd)"
+ORIGIN=""
 REF="origin/main"
 SELFTEST=0
+
+# -----------------------------------------------------------------------------
+# 🔴🔴 기본 오리진은 **정본 표에서 파생한다** — 하드코딩하지 않는다 (TASK-MONO-602)
+# -----------------------------------------------------------------------------
+# 예전 기본값은 `https://kanggle-portfolio.vercel.app` 였고 **죽었다**(404 — 2026-08-29,
+# 2026-09-01 재측, 같은 시각 `https://hubwang.com` 은 200 이라 네트워크 탓이 아니다).
+# 🔴 그 사실이 **아무 데서도 발화하지 않았다**: 이 파일을 도는 러너가 없었고, 자가검사조차
+#    같은 죽은 오리진을 써서 «판정 불가» 로 끝났다 — **자기가 무는지조차 증명 못 하는 상태**였다.
+#
+# 정본은 `TEMPLATE.md` § 공개 호스트명 배분의 launcher 행이고, 그것을 파싱하는 코드는
+# `scripts/check-public-domains.sh` 에 **이미 있다**. 🔴 여기로 **복사하지 않는다** —
+# 표가 바뀌면 한쪽만 고쳐지고, 낡은 쪽은 «틀린 답» 이 아니라 **조용한 통과**를 낸다.
+#
+# 🔵 파생이 실패하면 **fail-closed**: 옛 기본값으로 조용히 떨어지지 않고 rc=2(판정 불가)다.
+derive_origin() {
+  local h
+  h="$(bash "$ROOT/scripts/check-public-domains.sh" --print-launcher-host 2>/dev/null)" || return 1
+  [ -n "$h" ] || return 1
+  printf 'https://%s\n' "$h"
+}
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -55,6 +76,19 @@ while [ $# -gt 0 ]; do
 done
 
 say() { echo "[launcher-fresh] $*"; }
+
+# --origin 을 안 줬으면 정본 표에서 파생한다. 🔴 실패는 «판정 불가»(2)이지 «신선»(0)이 아니다.
+if [ -z "$ORIGIN" ]; then
+  if ! ORIGIN="$(derive_origin)"; then
+    say "✖ 정본 표에서 launcher 오리진을 파생하지 못했습니다 — **판정 불가**입니다."
+    say "  → TEMPLATE.md 의 PUBLIC-HOSTNAMES 표에 launcher 행이 있는지,"
+    say "     scripts/check-public-domains.sh --print-launcher-host 가 도는지 보세요."
+    say "  → 🔴 옛 기본값으로 떨어지지 않습니다. 그렇게 하면 이 가드가 죽은 주소를"
+    say "     다시 가리키면서 초록으로 보일 것이고, 그것이 TASK-MONO-602 의 결함입니다."
+    exit 2
+  fi
+  say "기본 오리진을 정본 표에서 파생: $ORIGIN"
+fi
 
 # 🔴 줄끝만 정규화한다. 왜 필요했는지: 2026-08-21 실측에서 S3 사본은 CRLF(윈도우 작업 트리를
 # 그대로 업로드), Vercel 판은 LF(리눅스 빌드) 여서 **같은 커밋이 413 바이트 다른 두 판**으로
@@ -171,15 +205,26 @@ rm -f "$EXP_FILE"
 # 불일치를 보고 둘 중 하나를 불신하게 된다. fan 쪽에서는 같은 결함이 md5 축이 없어
 # **그대로 빨간불**로 나타났다(TASK-MONO-564 의 발견 경로).
 #
-# 목록은 `vercel.json` 의 `ignoreCommand` 에 **단일 출처**로 있다 — 여기 복사하지 않는다.
+# 목록은 **단일 출처**에 있다 — 여기 복사하지 않는다.
+#
+# 🔴🔴 TASK-MONO-602: 그 «단일 출처» 가 **옮겨갔는데 이 파일만 몰랐다.**
+#    예전에는 `vercel.json` 의 `ignoreCommand` 에 pathspec 이 **인라인**이었고 여기서 그것을
+#    긁었다. `TASK-MONO-607` 이 그것을 `vercel-ignore.sh` 로 뽑아내면서 — 형제 둘의 모양을
+#    따른 옳은 변경이다 — 이 grep 은 **0건**이 됐고, 이 판정자는 그날부터 **판정 불가**였다.
+#    🔴 그 사실이 **아무 데서도 발화하지 않았다**: 이 파일을 도는 러너가 없었기 때문이다.
+#    ⇒ 이 티켓의 두 결함(죽은 오리진 · 러너 없음)이 **세 번째를 낳았다**. 러너가 있었다면
+#      607 의 PR 에서 즉시 빨간불이었을 것이다.
+#    🔵 형제 `check-fan-fresh.sh` 는 처음부터 래퍼에서 읽고 있었다 — **답이 형제에 있었다.**
+IGNORE_WRAPPER="$HERE/vercel-ignore.sh"
 SPECS=()
 while IFS= read -r sp; do [ -n "$sp" ] && SPECS+=("$sp"); done \
-  < <(grep -o "':/[^']*'" "$HERE/vercel.json" 2>/dev/null | tr -d "'")
+  < <(grep -o "':/[^']*'" "$IGNORE_WRAPPER" 2>/dev/null | tr -d "'")
 
 # 🔴 추출이 죽으면 조용히 통과시키지 않는다. `git log -1 <ref> --` 는 인자가 없으면
 #    **모든 경로**를 뜻해 tip 을 돌려주고, 그러면 이 수정이 **초록인 채로 무효**가 된다.
 if [ "${#SPECS[@]}" -eq 0 ]; then
-  say "✖ vercel.json 에서 ':/...' pathspec 을 하나도 못 뽑았습니다 ⇒ 판정 불가"
+  say "✖ $IGNORE_WRAPPER 에서 ':/...' pathspec 을 하나도 못 뽑았습니다 ⇒ 판정 불가"
+  say "  (추출이 죽은 채로 진행하면 기대값이 ref 의 tip 이 되어 결함이 되살아난다)"
   exit 2
 fi
 EXP_SHA="$(git -C "$HERE" log -1 --format=%H "$REF" -- "${SPECS[@]}" 2>/dev/null)"
