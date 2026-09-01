@@ -278,7 +278,11 @@ bash "$HERE/check-label-drift.sh" "${SET[@]}" || drift_rc=$?
 echo "[demo] up complete — profile=$PROFILE"
 [ "$seed_rc" -eq 0 ] || echo "[demo] ⚠ 도메인 데이터 시드가 일부 실패했습니다(위 [seed] 로그 참조) — 해당 화면은 빌 수 있습니다"
 [ "$domain_seed_rc" -eq 0 ] || echo "[demo] ⚠ OIDC 리다이렉트 URI 등록이 실패했습니다(위 [seed] 로그 참조) — 로그인이 데모 도메인에서 되돌아오지 못할 수 있습니다"
-echo "[demo] 호스트: console.${DEMO_DOMAIN} / web.ecommerce.${DEMO_DOMAIN} / wms.${DEMO_DOMAIN} / <domain>.${DEMO_DOMAIN} (Traefik)"
+# 🔴 web.ecommerce 는 더 이상 이 목록에 없다 — 스토어는 Vercel 로 옮겨갔고 데모는
+# 그 사본을 띄우지 않는다(TASK-MONO-604). 여기에 남겨 두면 방문자에게 **없는 주소**를
+# 안내하게 되고, 그 404 는 "스택이 안 떴다" 와 구별되지 않는다.
+echo "[demo] 호스트: console.${DEMO_DOMAIN} / wms.${DEMO_DOMAIN} / <domain>.${DEMO_DOMAIN} (Traefik)"
+echo "[demo] 스토어는 Vercel: https://store.hubwang.com (web.ecommerce.${DEMO_DOMAIN} 는 404 가 정상)"
 
 # -----------------------------------------------------------------------------
 # 최종 종료코드 — 🔴 여기서 삼키면 위의 모든 보고가 장식이 된다 (TASK-MONO-553 A)

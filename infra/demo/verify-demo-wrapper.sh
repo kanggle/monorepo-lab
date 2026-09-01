@@ -1063,10 +1063,30 @@ x_flag="$(printf '%s' "$x_render" | awk '
 # 두 값이 모두 빈 문자열이 되어 "둘 다 꺼짐" 으로 조용히 합격할 수 있다.
 printf '%s' "$x_render" | grep -qE '^      SPRING_PROFILES_ACTIVE:' \
   || fail "(x) ecommerce 렌더에서 payment-service 의 SPRING_PROFILES_ACTIVE 를 찾지 못했습니다 — 탐지식이 깨졌습니다."
-printf '%s' "$x_render" | grep -qE '^      DEMO_PAYMENT_MOCK:' \
-  || fail "(x) ecommerce 렌더에서 web-store 의 DEMO_PAYMENT_MOCK 를 찾지 못했습니다"\
-    $'\n'"→ web-store.environment 에 \`DEMO_PAYMENT_MOCK=\${DEMO_PAYMENT_MOCK:-}\` 가 있어야 합니다."\
-    $'\n'"   compose 는 자기가 이름을 적은 변수만 컨테이너에 넣습니다 — demo.env 값만으로는 도달하지 않습니다."
+# 🔴🔴 모집단이 **줄었다** — TASK-MONO-604 가 데모에서 web-store 를 억제했다.
+# 그러면 이 가드의 «프런트 절반» 은 렌더에서 사라진다. 여기서 두 가지를 다 피해야 한다:
+#   · 그냥 통과시키면 → 빈 문자열 둘이 "둘 다 꺼짐" 으로 **공허 합격**한다.
+#   · 그냥 FAIL 시키면 → 소유자가 Vercel env 를 넣기 전까지 main 이 **영구 빨강**이고,
+#     빨간 가드는 꺼진다(TASK-MONO-360).
+# ⇒ 사라진 것이 **선언된 억제 때문인지** 를 먼저 확인하고, 맞으면 백엔드 절반만 재되
+#   프런트 절반이 **어디로 갔는지·누가 들고 있는지**를 매 실행마다 이름으로 남긴다.
+x_store_present=0
+printf '%s' "$x_render" | grep -qE '^  web-store:' && x_store_present=1
+x_suppressed="infra/demo/ecommerce-vercel.override.yml"
+
+if [ "$x_store_present" = "0" ]; then
+  case " ${COMPOSE[ecommerce]:-} " in
+    *" $x_suppressed "*) : ;;
+    *) fail "(x) 데모 렌더에 web-store 가 없는데, 선언된 억제($x_suppressed)도 체인에 없습니다."\
+        $'\n'"→ 즉 «누가 지웠는지 모르는» 상태입니다. 결제 mock 정합의 프런트 절반이 사라졌는데"\
+        $'\n'"  사유가 기록돼 있지 않으면, 다음 사람은 이 가드를 «원래 그런 것» 으로 읽습니다." ;;
+  esac
+else
+  printf '%s' "$x_render" | grep -qE '^      DEMO_PAYMENT_MOCK:' \
+    || fail "(x) ecommerce 렌더에서 web-store 의 DEMO_PAYMENT_MOCK 를 찾지 못했습니다"\
+      $'\n'"→ web-store.environment 에 \`DEMO_PAYMENT_MOCK=\${DEMO_PAYMENT_MOCK:-}\` 가 있어야 합니다."\
+      $'\n'"   compose 는 자기가 이름을 적은 변수만 컨테이너에 넣습니다 — demo.env 값만으로는 도달하지 않습니다."
+fi
 
 case ",$x_profiles," in
   *,demo-pg,*) x_back=1 ;;
@@ -1074,7 +1094,7 @@ case ",$x_profiles," in
 esac
 [ "$x_flag" = "1" ] && x_front=1 || x_front=0
 
-[ "$x_back" = "$x_front" ] || fail "결제 mock 설정이 한쪽만 켜져 있습니다:"\
+[ "$x_store_present" = "0" ] || [ "$x_back" = "$x_front" ] || fail "결제 mock 설정이 한쪽만 켜져 있습니다:"\
   $'\n'"  payment-service SPRING_PROFILES_ACTIVE = '$x_profiles'  (demo-pg: $x_back)"\
   $'\n'"  web-store       DEMO_PAYMENT_MOCK      = '$x_flag'  (on: $x_front)"\
   $'\n'"→ 백엔드만 켜짐 = 프런트가 더미 키로 Toss SDK 를 로드하다 실패 배너를 띄웁니다."\
@@ -1089,7 +1109,15 @@ case ",$x_profiles," in
     ;;
 esac
 
-ok "결제 mock 정합 (payment-service='${x_profiles}' ↔ web-store DEMO_PAYMENT_MOCK='${x_flag}')"
+if [ "$x_store_present" = "1" ]; then
+  ok "결제 mock 정합 (payment-service='${x_profiles}' ↔ web-store DEMO_PAYMENT_MOCK='${x_flag}')"
+else
+  # 🔴 «검사했다» 가 아니라 «반쪽만 검사했다» 라고 말한다. 미집행 축은 매 실행마다
+  #    이름이 찍혀야 한다 — 조용한 공백은 다음 사람에게 «원래 그런 것» 으로 읽힌다.
+  ok "결제 mock — 백엔드만 검사 (payment-service='${x_profiles}'). 프런트 절반은 데모에 없다:"\
+     $'\n'"     스토어가 Vercel 로 옮겨가 DEMO_PAYMENT_MOCK 의 집이 kanggle-store 의 프로젝트 env 다."\
+     $'\n'"     저장소는 그 값을 렌더할 수 없다 ⇒ **이 축은 CI 에서 미집행**이다. 소유 티켓: TASK-MONO-612."
+fi
 
 # ---------------------------------------------------------------------------
 echo "[verify] (x2) 팬 결제 mock 이 프런트·백엔드 양쪽에서 같은 상태인가"
@@ -2947,6 +2975,94 @@ z18s_expect NOCOVER 1 0  10   # 질의 실패를 «이상 없음» 으로 세지
 z18s_expect NOCOVER 0 '' 10   # 빈 출력을 0 으로 세지 않는다
 z18s_expect NOCOVER 0 0  0    # 모집단 0 을 통과로 세지 않는다
 ok "(z18s) 판정기 6/6 — 죽은 것은 물고, «질의 실패»·«빈 출력»·«모집단 0» 중 어느 것도 초록이 아니다"
+
+echo "[verify] (z19) 데모에서 web-store 가 억제되는가 (TASK-MONO-604 / ADR-MONO-067 단계 2)"
+# -----------------------------------------------------------------------------
+# 방문자 스토어는 Vercel(`store.hubwang.com`)로 옮겨갔는데 데모 호스트가 자기 사본을
+# 계속 서빙했다. 억제는 `infra/demo/ecommerce-vercel.override.yml` 한 곳에 선언돼 있다.
+#
+# 🔴 이 가드가 «없음» 만 보면 안 되는 이유: 렌더가 깨지면 서비스 목록이 통째로 비고,
+#    그 0행은 «억제됨» 과 **구별되지 않는다.** 그래서 네 칸을 같이 본다 —
+#      (1) 억제 파일을 뺀 렌더에는 **있어야** 한다      ← 주입 확인(bite 기준선)
+#      (2) 실제 체인 렌더에는 **없어야** 한다
+#      (3) base 단독(로컬 모양)에는 **있어야** 한다     ← 대조군
+#      (4) (1)과 (2)의 차이가 **정확히 web-store 하나**여야 한다
+#    그리고 어떤 렌더든 서비스 수가 바닥 아래면 FATAL 로 세운다(공허 통과 금지).
+z19_chain="${COMPOSE[ecommerce]:-}"
+[ -n "$z19_chain" ] || fail "(z19) projects.sh 에 [ecommerce] 체인이 없습니다."
+z19_supp="infra/demo/ecommerce-vercel.override.yml"
+
+case " $z19_chain " in
+  *" $z19_supp "*) : ;;
+  *) fail "(z19) 억제 파일 '$z19_supp' 이 [ecommerce] 체인에 등록돼 있지 않습니다."\
+      $'\n'"→ 선언은 두 곳입니다: 그 파일(무엇을 끄는가) + projects.sh 의 체인(어디에 거는가)."\
+      $'\n'"  파일만 있고 체인에 없으면 아무 효력이 없고, 그 상태는 조용합니다." ;;
+esac
+
+z19_render() {  # $@ = compose 파일들 → 서비스 이름 목록(정렬)
+  local a=() f
+  for f in "$@"; do a+=(-f "$ROOT/$f"); done
+  (cd "$ROOT" && docker compose --env-file "$HERE/demo.env" "${a[@]}" config --services 2>/dev/null) | sort
+}
+
+z19_floor=20   # ecommerce 스택은 30개대다. 이 아래면 «억제» 가 아니라 «렌더 실패» 다.
+
+z19_before_files=""
+for z19_f in $z19_chain; do
+  [ "$z19_f" = "$z19_supp" ] && continue
+  z19_before_files="$z19_before_files $z19_f"
+done
+
+z19_before="$(z19_render $z19_before_files)"
+z19_after="$(z19_render $z19_chain)"
+z19_local="$(z19_render projects/ecommerce-microservices-platform/docker-compose.yml)"
+
+z19_nb="$(printf '%s\n' "$z19_before" | grep -c . || true)"
+z19_na="$(printf '%s\n' "$z19_after"  | grep -c . || true)"
+z19_nl="$(printf '%s\n' "$z19_local"  | grep -c . || true)"
+
+for z19_pair in "억제전:$z19_nb" "억제후:$z19_na" "로컬:$z19_nl"; do
+  z19_name="${z19_pair%%:*}"; z19_cnt="${z19_pair##*:}"
+  [ "$z19_cnt" -ge "$z19_floor" ] || fail \
+    "(z19) '$z19_name' 렌더가 서비스 ${z19_cnt}개뿐입니다 (바닥 ${z19_floor})."\
+    $'\n'"→ 이것은 «억제됐다» 가 아니라 **렌더가 실패했다** 입니다. 0행을 부재로 읽지 않으려고"\
+    $'\n'"  이 바닥이 있습니다. 먼저 \`docker compose ... config\` 를 손으로 돌려 사유를 보세요."
+done
+
+printf '%s\n' "$z19_before" | grep -qx 'web-store' || fail \
+  "(z19) 억제 파일을 **뺀** 렌더에도 web-store 가 없습니다."\
+  $'\n'"→ 그러면 이 가드는 아무것도 증명하지 못합니다 — 억제한 것이 이 파일인지 다른 것인지"\
+  $'\n'"  구별할 수 없기 때문입니다. base compose 에서 서비스가 사라졌는지 먼저 확인하세요."
+
+! printf '%s\n' "$z19_after" | grep -qx 'web-store' || fail \
+  "(z19) 데모 렌더에 web-store 가 여전히 있습니다 — 억제가 안 걸렸습니다."\
+  $'\n'"→ 데모 호스트가 Vercel 로 옮겨간 스토어의 **사본을 다시 서빙**하게 됩니다."\
+  $'\n'"  방문자 경로는 https://store.hubwang.com 이고, 사본은 아무도 안 보는 컨테이너입니다."\
+  $'\n'"→ 고치는 곳: $z19_supp (그 파일의 \`profiles:\` 가 억제 기전입니다)."
+
+printf '%s\n' "$z19_local" | grep -qx 'web-store' || fail \
+  "(z19) **로컬(base 단독) 렌더에서도** web-store 가 사라졌습니다."\
+  $'\n'"→ 이 티켓의 Scope Out 을 넘었습니다. 억제는 데모 체인에만 걸려야 하고, base 는"\
+  $'\n'"  로컬 워크스루(docs/guides/interview-demo-walkthrough.md §2)와 \`npm run ecommerce:up\`"\
+  $'\n'"  이 그대로 씁니다. base compose 에서 profiles/삭제를 되돌리세요."
+
+z19_diff="$(comm -23 <(printf '%s\n' "$z19_before") <(printf '%s\n' "$z19_after") | grep -c . || true)"
+z19_only="$(comm -23 <(printf '%s\n' "$z19_before") <(printf '%s\n' "$z19_after") | tr '\n' ' ')"
+[ "$z19_diff" = "1" ] || fail \
+  "(z19) 억제 파일이 서비스 ${z19_diff}개를 지웁니다 (기대: 1개, web-store 만)."\
+  $'\n'"  지워진 것: ${z19_only}"\
+  $'\n'"→ 이 파일의 권한은 «Vercel 로 옮겨간 표면 하나» 입니다. 다른 서비스를 같이 끄면"\
+  $'\n'"  데모의 다른 도메인이 조용히 반쪽이 됩니다."
+
+z19_dangling="$( (cd "$ROOT" && docker compose --env-file "$HERE/demo.env" \
+  $(for z19_f in $z19_chain; do printf -- '-f %s ' "$ROOT/$z19_f"; done) config 2>/dev/null) \
+  | grep -c 'web-store' || true)"
+[ "$z19_dangling" = "0" ] || fail \
+  "(z19) 억제 뒤에도 렌더 안에 'web-store' 참조가 ${z19_dangling}건 남았습니다 (depends_on 등)."\
+  $'\n'"→ compose 는 없는 서비스에 대한 depends_on 을 기동 시점에 거부합니다 — 증상은 이"\
+  $'\n'"  스택 전체가 안 뜨는 것이고, 렌더는 통과하므로 가드 (a)로는 안 잡힙니다."
+
+ok "(z19) 데모에서 web-store 억제 — 억제전 ${z19_nb} → 억제후 ${z19_na} (차이 1개, web-store) · 로컬 ${z19_nl}개엔 남아 있다(대조군) · 유령 참조 0건"
 
 if [ "$LIVE" -eq 0 ]; then
 
