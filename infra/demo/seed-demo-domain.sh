@@ -84,7 +84,10 @@ done
 # 이유: MySQL 이 JSON 을 재직렬화하며 공백/키순서를 정규화하므로 텍스트 조작은
 # 깨지기 쉽다(V0016 의 교훈). 파싱된 트리 위에서만 다룬다.
 docker exec -i "$MYSQL_CONTAINER" mysql -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" <<SQL
-SET @dom = '.${DEMO_DOMAIN}/';
+SET @dom     = '.${DEMO_DOMAIN}/';
+SET @dombare = '${DEMO_DOMAIN}';
+
+START TRANSACTION;
 
 UPDATE oauth_clients c
 JOIN (
@@ -117,6 +120,64 @@ SET c.client_settings = JSON_SET(
         JSON_EXTRACT(c.client_settings, '\$."settings.client.post-logout-redirect-uris"[1]'),
         x.extra))
 WHERE CAST(c.client_settings AS CHAR) NOT LIKE CONCAT('%', @dom, '%');
+
+-- ---------------------------------------------------------------------------
+-- 회수 (TASK-MONO-606) — 덧붙이기와 **같은 트랜잭션**이다
+-- ---------------------------------------------------------------------------
+-- 위 두 UPDATE 는 «덧붙이기만» 한다. 그것이 의도였다(원본 \`.local\` 을 지우면 같은
+-- DB 를 로컬로 못 쓴다). 그런데 **걷어내기가 없어서** 부팅마다 죽은 공인 IP 가
+-- 하나씩 쌓였다 — 실측: 재굽기 전 볼륨에 sslip 세대 **3개 / URI 30개**.
+--
+-- 죽은 등록은 «있어도 그만»이 아니다: 그 IP 를 나중에 할당받은 사람이 **등록된**
+-- redirect_uri 를 갖게 되고, IdP 의 exact-match 검증을 통과한다. PKCE 는 이 축을
+-- 막지 못한다(공격자가 요청자 자신이라 verifier 를 자기가 고른다). 막는 것은
+-- \`client_secret\` 뿐인데 \`platform-console-web\` 은 **public 클라이언트**다
+-- (V0015 / iam ADR-003 — 의도된 설계다).
+--
+-- 술어: **sslip.io 이면서 현재 DEMO_DOMAIN 이 아닌 것**. 🔴 «http 이면 삭제» 같은
+-- 넓은 술어를 쓰지 마라 — \`.local\`·\`localhost\`·\`hubwang.com\` 을 같이 지운다
+-- (실측 24개가 그 대상이 된다).
+--
+-- 🔴 배열을 비우지 않는다: \`kept_n >= 1\` 이어야 UPDATE 가 걸린다. 남길 것이 0개면
+-- JOIN 이 그 행을 안 만들므로 배열은 **손대지 않은 채로 남는다**(fail-safe).
+--   🔵 원래부터 \`[]\` 인 클라이언트가 **10개** 있다(client_credentials 서비스 클라이언트).
+--      그래서 "모든 클라이언트의 원소 수 ≥ 1" 은 **가드로 쓰면 첫날부터 빨갛다.**
+
+UPDATE oauth_clients c
+JOIN (
+  SELECT c2.client_id,
+         JSON_ARRAYAGG(jt.uri) AS kept,
+         COUNT(*)               AS kept_n
+  FROM oauth_clients c2,
+       JSON_TABLE(c2.redirect_uris, '\$[*]' COLUMNS (uri VARCHAR(512) PATH '\$')) jt
+  WHERE NOT (jt.uri LIKE '%sslip.io%' AND jt.uri NOT LIKE CONCAT('%', @dombare, '%'))
+  GROUP BY c2.client_id
+) x ON x.client_id = c.client_id
+SET c.redirect_uris = x.kept
+WHERE x.kept_n >= 1
+  AND CAST(c.redirect_uris AS CHAR) LIKE '%sslip.io%';
+
+UPDATE oauth_clients c
+JOIN (
+  SELECT c2.client_id,
+         JSON_ARRAYAGG(jt.uri) AS kept,
+         COUNT(*)               AS kept_n
+  FROM oauth_clients c2,
+       JSON_TABLE(
+         JSON_EXTRACT(c2.client_settings, '\$."settings.client.post-logout-redirect-uris"[1]'),
+         '\$[*]' COLUMNS (uri VARCHAR(512) PATH '\$')
+       ) jt
+  WHERE NOT (jt.uri LIKE '%sslip.io%' AND jt.uri NOT LIKE CONCAT('%', @dombare, '%'))
+  GROUP BY c2.client_id
+) x ON x.client_id = c.client_id
+SET c.client_settings = JSON_SET(
+      c.client_settings,
+      '\$."settings.client.post-logout-redirect-uris"[1]',
+      x.kept)
+WHERE x.kept_n >= 1
+  AND CAST(c.client_settings AS CHAR) LIKE '%sslip.io%';
+
+COMMIT;
 SQL
 
 echo "[seed] 등록된 redirect_uri:"
@@ -131,4 +192,24 @@ if [ "${hit:-0}" -eq 0 ]; then
   echo "[seed] !!! 치환된 redirect_uri 가 하나도 없다 — 로그인은 실패한다" >&2
   exit 1
 fi
+
+# 회수 사후조건 (TASK-MONO-606) — 「덧붙였다」와 「걷어냈다」는 다른 주장이다.
+# 위 hit 검사는 *현재* 도메인이 등록됐는지만 본다. 죽은 세대가 남아 있어도 통과한다.
+stale=$(docker exec "$MYSQL_CONTAINER" mysql -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -N -B -e "
+  SELECT COUNT(*) FROM (
+    SELECT jt.uri FROM oauth_clients c,
+      JSON_TABLE(c.redirect_uris, '\$[*]' COLUMNS (uri VARCHAR(512) PATH '\$')) jt
+     WHERE jt.uri LIKE '%sslip.io%' AND jt.uri NOT LIKE '%${DEMO_DOMAIN}%'
+    UNION ALL
+    SELECT jt.uri FROM oauth_clients c,
+      JSON_TABLE(JSON_EXTRACT(c.client_settings,
+        '\$.\"settings.client.post-logout-redirect-uris\"[1]'),
+        '\$[*]' COLUMNS (uri VARCHAR(512) PATH '\$')) jt
+     WHERE jt.uri LIKE '%sslip.io%' AND jt.uri NOT LIKE '%${DEMO_DOMAIN}%'
+  ) u;")
+if [ "${stale:-1}" -ne 0 ]; then
+  echo "[seed] !!! 죽은 sslip 등록이 ${stale} 건 남아 있다 — 회수가 동작하지 않았다" >&2
+  exit 1
+fi
+echo "[seed] OK — 죽은 sslip 등록 0건 (회수 확인)"
 echo "[seed] OK — $hit 개 클라이언트가 $DEMO_DOMAIN 콜백을 갖는다"
