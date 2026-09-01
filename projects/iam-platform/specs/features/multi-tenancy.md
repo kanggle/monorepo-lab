@@ -349,9 +349,19 @@ IAM 는 두 가지 producer-side 선행물을 제공한다.
 - auth-service `oauth_clients` 에 Flyway 시드 (V0015) 된 **public client**:
   `client_id=platform-console-web`, `client_authentication_methods=["none"]`
   (client secret 없음), `authorization_grant_types=authorization_code,refresh_token`,
-  PKCE 필수 (`require-proof-key=true`), redirect
-  `http://console.local/api/auth/callback`, scope = `openid` `profile` `email`
+  PKCE 필수 (`require-proof-key=true`), scope = `openid` `profile` `email`
   `tenant.read`.
+- 등록된 `redirect_uri` (OAuth2 **정확 일치** 검증이므로 전수를 적는다):
+  | URI | 시드 |
+  |---|---|
+  | `http://console.local/api/auth/callback` | `V0015` |
+  | `http://localhost:3000/api/auth/callback` | `V0015` |
+  | `https://console.hubwang.com/api/auth/callback` | `V0034` (TASK-BE-589, `ADR-MONO-067` 단계 3) |
+
+  콜백 경로에 **`/iam` 접미사가 없다** — 이 저장소의 다른 클라이언트와 다르다
+  (`TASK-MONO-460`). 데모 부팅 시 `infra/demo/seed-demo-domain.sh` 가 `.local` 항목의
+  데모-도메인 사본을 **덧붙이지만**, `.hubwang.com` 항목은 그 술어(`LIKE '%.local/%'`)에
+  걸리지 않아 부팅마다 그대로 남는다.
 - refresh token 회전·재사용 탐지는 기존 public-client lineage 와 **동일 경로**
   (`PublicClientRefreshTokenAuthenticationConverter` +
   `PublicClientRevokeAuthenticationConverter` +

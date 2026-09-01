@@ -295,7 +295,8 @@ class OAuthClientPostLogoutRedirectUriSeedIntegrationTest extends AbstractIntegr
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("V0021: platform-console-web resolves; post-logout-redirect-uris == [console.local/login, localhost:3000/login]")
+    @DisplayName("V0021+V0034: platform-console-web resolves; post-logout-redirect-uris == "
+            + "[console.local/login, localhost:3000/login, console.hubwang.com/login]")
     void platformConsoleClient_hasV0021PostLogoutRedirectUris() {
         dumpRawClientSettings("platform-console-web");
         RegisteredClient console =
@@ -306,10 +307,21 @@ class OAuthClientPostLogoutRedirectUriSeedIntegrationTest extends AbstractIntegr
         List<String> postLogout = console.getClientSettings().getSetting(PLR_KEY);
         assertThat(postLogout)
                 .as("V0021 post-logout-redirect-uris must round-trip to the exact seeded List<String> "
-                        + "(typed-array form) so the console RP-initiated logout post_logout_redirect_uri matches")
+                        + "(typed-array form) so the console RP-initiated logout post_logout_redirect_uri "
+                        + "matches; V0034 TASK-BE-589 appended the Vercel production landing, anchored on "
+                        + "the localhost:3000 entry so it lands at the tail -- this list reads as a "
+                        + "migration-ordered history, which is why it is containsExactly and not "
+                        + "contains: loosening it would make the registered set unreadable")
                 .containsExactly(
                         "http://console.local/login",
-                        "http://localhost:3000/login");
+                        "http://localhost:3000/login",
+                        // V0034 TASK-BE-589 -- ADR-MONO-067 phase 3. The FIRST https entry on
+                        // THIS client (V0033 was the first in the table, on the fan client).
+                        // Note the PATH: the console lands on /login, not on / the way fan does
+                        // -- app/api/auth/logout/route.ts builds new URL('/login',
+                        // publicOrigin(env)). seed-demo-domain.sh rewrites only `%.local/%`, so
+                        // unlike the two siblings above this one is never rewritten at boot.
+                        "https://console.hubwang.com/login");
 
         // THE load-bearing assertion (TASK-BE-328): the custom ClientSettings key
         // above is INERT on its own — SAS's OidcLogoutAuthenticationProvider
@@ -322,7 +334,12 @@ class OAuthClientPostLogoutRedirectUriSeedIntegrationTest extends AbstractIntegr
                         + "from the custom setting, else SAS rejects the console's post_logout_redirect_uri")
                 .containsExactlyInAnyOrder(
                         "http://console.local/login",
-                        "http://localhost:3000/login");
+                        "http://localhost:3000/login",
+                        // V0034 TASK-BE-589. This is the assertion that would have caught a
+                        // V0034 that edited only the custom setting: the mapper copy is what
+                        // SAS actually validates against, so the new landing has to arrive
+                        // HERE too, not just in the list above.
+                        "https://console.hubwang.com/login");
 
         // Core V0015 fields intact alongside the V0021 addition.
         assertThat(console.getClientSettings().isRequireProofKey()).isTrue();
