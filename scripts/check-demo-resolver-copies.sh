@@ -29,10 +29,20 @@
 #    이 파일을 읽는 사람이 "왜 상한이 1이 아닌가" 를 물을 수 있어야 한다.
 #
 # -----------------------------------------------------------------------------
-# 무엇을 세는가 — **앱**이지 파일이 아니다
+# 무엇을 세는가 — **앱**이지 파일이 아니다. 그리고 «앱» 은 **선언**으로 정한다
 # -----------------------------------------------------------------------------
 # 한 앱의 해석기가 두 파일로 나뉘는 것은 정상이다(설정 + 호출). 공유 여부를 가르는 단위는
-# **앱**이므로 `projects/<p>/apps/<a>` · `projects/<p>/web/<a>` 접두사로 접어서 센다.
+# **앱**이므로 앱 디렉터리로 접어서 센다.
+#
+# 🔴 **모집단의 권위는 «경로 규약» 이 아니라 «선언» 이다** (TASK-MONO-613, 2026-09-01).
+#    이전 판은 `APP_RE='^projects/[^/]+/(apps|web)/[^/]+'` 로 앱을 **경로 모양**으로 정의했다.
+#    그러면 `projects/` 밖의 Next 앱은 **모집단 밖**이고, 그 앱이 해석기를 가져도 승격
+#    트리거가 **조용히 안 문다** — 즉 `ADR-MONO-068` 이 강제하려던 **결정을 디렉터리 선택으로
+#    건너뛸 수 있다.** 실측 bite: `infra/demo/_x/{next.config.ts,src/demo-backend.ts}` 를
+#    스테이지해도 이전 판은 «앱 2 개 · rc=0» 을 그대로 냈다.
+#    ⇒ 이제 **`next.config.*` 가 있는 디렉터리는 어디에 있든 앱**이다.
+#
+# 🔵 그 변경이 칸 (3)의 전제를 건드린다 — 아래 (3b)를 보라.
 #
 # -----------------------------------------------------------------------------
 # 🔴🔴 이 가드가 스스로에게 물어야 하는 것들 (하나라도 빠지면 조용한 초록이 된다)
@@ -100,24 +110,59 @@ say()  { echo "[resolver-copies] $*"; }
 die1() { say "✗ $*"; exit 1; }
 die2() { say "? $*"; exit 2; }
 
-APP_RE='^projects/[^/]+/(apps|web)/[^/]+'
+# 🔵 론처는 모집단 **밖**이어야 한다 — 칸 (3)이 그 사실 위에 서 있다. (3b)가 지킨다.
+LAUNCHER_DIR='infra/demo/aws/site'
 
-# 모집단 — 세 앱의 소스. `git ls-files` 다(파일시스템이 아니라 **커밋된 것**을 본다).
-# 🔴 호출자는 스테이지 뒤에 돌려야 한다 — 이 저장소가 네 번 데인 자리다.
+# 앱 목록의 **권위** = `next.config.*` 가 있는 디렉터리. 경로 접두사를 묻지 않는다.
+# 🔴 `git ls-files` 다(파일시스템이 아니라 **커밋된 것**). 호출자는 스테이지 뒤에 돌려야
+#    한다 — 이 저장소가 네 번 데인 자리다.
+declared_apps() {
+  git -C "$ROOT" ls-files 2>/dev/null \
+    | grep -E '(^|/)next\.config\.[a-z]+$' \
+    | sed -E 's#(^|/)next\.config\.[a-z]+$##' \
+    | awk 'NF == 0 { print "."; next } { print }' \
+    | sort -u
+}
+
+# 모집단 — **어떤 `src/` 아래의 TS 든** 전부다. 선언된 앱으로 좁히지 않는다.
+#
+# 🔴🔴 **가드는 「무는 쪽」으로 실패해야 한다** (TASK-MONO-613). 모집단을 «선언된 앱» 으로
+#    좁히면, `next.config.*` 가 **없는** 디렉터리(= Next 가 아닌 앱·서비스)에 해석기를 두는
+#    것으로 승격 트리거를 또 피할 수 있다 — 방금 메운 구멍과 **같은 모양의 새 구멍**이다.
+#    그래서 탐지는 넓게 하고, «앱» 으로 접는 일은 fold_to_app 이 (선언 우선 + 폴백) 처리한다.
+#
+# 🔵 넓힌 대가 실측 (2026-09-01): 1191 → **1233** (+42, 전부
+#    `projects/ecommerce-microservices-platform/packages/*/src/` = `@repo/*`).
+#    그 42개는 내용 패턴 **0건** · 마커 **0건** 이라 판정을 바꾸지 않는다.
+#    저장소 전체에서 모집단 밖 `src/` 의 내용 패턴 적중도 **0건** 이었다.
+#
+# 🔴 `git ls-files` 다(파일시스템이 아니라 **커밋된 것**). 스테이지 뒤에 돌려야 한다.
 app_files() {
-  git -C "$ROOT" ls-files -- projects 2>/dev/null \
-    | grep -E "${APP_RE}/src/.*\.(ts|tsx)$" \
+  git -C "$ROOT" ls-files 2>/dev/null \
+    | grep -E '(^|/)src/.*\.(ts|tsx)$' \
     | grep -vE '(__tests__|\.test\.|\.spec\.)'
 }
 
-# 앱 목록의 권위 = `next.config.*` 가 있는 디렉터리. 모집단이 이들을 **전부** 담아야 한다.
-declared_apps() {
-  git -C "$ROOT" ls-files -- projects 2>/dev/null \
-    | grep -E "${APP_RE}/next\.config\.[a-z]+$" \
-    | sed -E 's#/next\.config\.[a-z]+$##' | sort -u
+# 파일 → 앱 디렉터리. **선언 우선, 폴백은 `src/` 의 부모.**
+#
+# 🔵 선언(`next.config.*`)이 있으면 **가장 긴** 접두사를 고른다 — 앱이 중첩돼도 안쪽이 이긴다.
+# 🔴 선언이 없으면 **버리지 않는다.** `<dir>/src/...` 의 `<dir>` 로 접는다 — 선언 없는
+#    디렉터리에 구현을 두는 것으로 트리거를 피하지 못하게 한다(§ app_files 의 「무는 쪽」).
+fold_to_app() {
+  local apps
+  apps="$(declared_apps)"
+  awk -v apps="$apps" '
+    BEGIN { n = split(apps, A, "\n") }
+    {
+      best = ""
+      for (i = 1; i <= n; i++)
+        if (A[i] != "" && index($0, A[i] "/") == 1 && length(A[i]) > length(best)) best = A[i]
+      if (best != "") { print best; next }
+      if (match($0, /\/src\//)) { print substr($0, 1, RSTART - 1); next }
+      # `src/` 도 없다 — 파일이 있는 디렉터리로 접는다. 세지 못하는 것보다 낫다.
+      if (match($0, /\/[^\/]*$/)) print substr($0, 1, RSTART - 1)
+    }'
 }
-
-fold_to_app() { sed -E "s#(${APP_RE#^})/.*#\1#"; }
 
 # ---------------------------------------------------------------------------
 # 정규화 — **프로젝트 고유 축을 지우고 나머지는 그대로 둔다** (ADR-MONO-068 § D5.1)
@@ -169,6 +214,18 @@ $declared
 EOF
   [ -z "$missing" ] || die2 "선언된 앱인데 모집단에 안 보입니다:
 $missing→ 글롭이 그 앱의 소스 배치를 놓칩니다. 그 앱에 해석기가 생겨도 이 가드는 **못 봅니다**."
+
+  # (3b) 🔴 대조군 보호 — 론처가 모집단 **안**으로 들어오면 칸 (3)은 자기 자신을 재게 된다.
+  #      오늘 론처는 정적 HTML 이라 `next.config.*` 가 없어 선언 기반 모집단에 안 들어온다.
+  #      🔴 그 안전은 **우연이다** — 론처가 Next 로 바뀌는 날 이 가드는 조용히 눈이 먼다.
+  #      그래서 우연을 단언으로 고정한다 (TASK-MONO-613 AC-3).
+  local launcher_in
+  launcher_in="$(printf '%s\n' "$declared" | grep -c "^${LAUNCHER_DIR}\(/\|$\)" || true)"
+  [ "$launcher_in" = "0" ] \
+    || die2 "론처($LAUNCHER_DIR)가 모집단 **안**에 들어왔습니다 — 칸 (3)의 대조군이 무효입니다.
+→ (3)은 '모집단 밖의 알려진 사용처에서도 패턴이 보이는가' 로 탐지기 생존을 잽니다.
+   대상이 모집단 안이면 그 질문은 자기 자신을 재는 것이 되어 **아무것도 증명하지 않습니다**.
+→ 론처가 Next 앱이 됐다면 대조군을 **다른 모집단 밖 사용처**로 옮기세요."
 
   # (3) 탐지기 생존 대조군 — 모집단 밖의 알려진 사용처(론처)에서 같은 패턴이 보여야 한다
   local control
@@ -290,8 +347,16 @@ selftest() {
     rm -rf "$d"; mkdir -p "$d/scripts" "$d/infra/demo/aws/site"
     cp "$ROOT/scripts/check-demo-resolver-copies.sh" "$d/scripts/"
     printf 'window.DEMO_API_BASE = "x";\n' > "$d/infra/demo/aws/site/index.html"
-    local i app
-    for app in projects/p1/apps/a1 projects/p2/web/a2; do
+    # 🔴 앱 목록을 **하드코딩하지 않는다** (TASK-MONO-613). 이전 판은 두 앱을 손으로
+    #    적어 두었고, 그래서 세 번째 앱을 쓰는 칸이 «선언 없는 앱» 이 되어 모집단 밖으로
+    #    빠졌다 — 픽스처가 **자기가 만든 것을 선언하지 않는** 상태였다. 이제 인자로 받은
+    #    파일 경로에서 앱 디렉터리를 **유도**한다.
+    local i app derived
+    derived="$(for spec in "$@"; do
+        p="${spec%%:*}"; case "$p" in */src/*) printf '%s\n' "${p%%/src/*}" ;; esac
+      done | sort -u)"
+    for app in $(printf '%s\n%s\n' "projects/p1/apps/a1
+projects/p2/web/a2" "$derived" | grep . | sort -u); do
       mkdir -p "$d/$app/src"
       printf 'export default {};\n' > "$d/$app/next.config.ts"
       # 🔵 앱당 120 개인 이유: 마지막 대조군이 한 앱의 `src/` 를 통째로 지운다. 60 개였을
@@ -370,6 +435,22 @@ const TTL = 60000;"
   #    🔴 칸 이름에 `/` 를 넣지 마라 — `build_case` 가 `$tmp/$name` 을 디렉터리로
   #    쓰므로 경로가 갈라져 모집단이 0이 되고, rc 는 2로 **맞지만 이유가 틀린다**.
   #    비교를 조용히 건너뛰면 "드리프트 없음" 과 "비교 못 함" 이 같은 초록이 된다.
+  # 🔴🔴 TASK-MONO-613 — `projects/` **밖**의 앱도 모집단에 들어와야 한다.
+  #    이전 판(`APP_RE='^projects/…'`)에서 이 칸은 **rc=0 으로 통과**했다(= 눈이 멀었다).
+  #    라이브 bite 로도 확인했다: `infra/demo/_x/{next.config.ts,src/demo-backend.ts}` 를
+  #    스테이지해도 이전 판은 「앱 2 개 · rc=0」을 냈다.
+  cell "🔴 projects 밖 앱도 센다" 1 "전제가 소진" \
+    "projects/p1/apps/a1/src/demo-backend.ts:$IMPL_A" \
+    "projects/p2/web/a2/src/demo-backend.ts:$IMPL_B" \
+    "infra/demo/auth-gw/src/demo-backend.ts:$IMPL_A"
+
+  # 🔵 그리고 **선언이 없어도** 센다 — `next.config.*` 없이 `src/` 만 있는 디렉터리.
+  #    모집단을 «선언된 앱» 으로 좁혔다면 이 칸이 조용히 통과했을 것이다.
+  cell "🔴 선언 없는 디렉터리도 센다" 1 "전제가 소진" \
+    "projects/p1/apps/a1/src/demo-backend.ts:$IMPL_A" \
+    "projects/p2/web/a2/src/demo-backend.ts:$IMPL_B" \
+    "services/notifier/src/demo-backend.ts:$IMPL_A"
+
   cell "🔴 마커는 있고 구현 없음 = 판정불가" 2 "구현 파일을 못 찾았습니다" \
     "projects/p1/apps/a1/src/demo-backend.ts:// DEMO-RESOLVER: web-store
 const b = process.env.DEMO_API_BASE;" \
