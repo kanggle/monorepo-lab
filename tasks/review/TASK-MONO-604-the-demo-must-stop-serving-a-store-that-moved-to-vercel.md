@@ -8,7 +8,7 @@ TASK-MONO-604
 
 # Status
 
-in-progress
+review
 
 # Owner
 
