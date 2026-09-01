@@ -2835,11 +2835,98 @@ z17_bite "AMI 변경이 무시됨"     "AMI_IGNORED"  '{ if ($0 ~ /ignore_change
 
 ok "DB 데이터가 자격 출처보다 오래 살 수 없다 — 별도 EBS 0건 · 루트 종료시 삭제 · AMI 변경이 교체를 강제 · bite 3/3(주입 확인 후)"
 
+# ---------------------------------------------------------------------------
+# (z18) 죽은 sslip OAuth 콜백이 0건인가 — TASK-MONO-606
+# ---------------------------------------------------------------------------
+# `seed-demo-domain.sh` 는 부팅마다 `.local/` 콜백의 사본을 현재 데모 도메인으로
+# 만들어 **덧붙인다.** 원본을 지우지 않는 것은 의도지만(같은 DB 를 로컬로도 쓴다),
+# **걷어내기가 없어서** 죽은 공인 IP 가 등록된 채 쌓였다 — 실측 3세대 / 30 URI.
+#
+# 죽은 등록은 그 IP 를 나중에 할당받은 사람에게 **등록된 redirect_uri** 를 준다.
+# PKCE 는 이 축을 막지 않고(공격자가 요청자 자신이라 verifier 를 자기가 고른다),
+# 막는 것은 `client_secret` 인데 `platform-console-web` 은 의도된 **public 클라이언트**다
+# (V0015 / iam ADR-003).
+#
+# 🔴 판정을 **순수 함수로 분리한 이유**: 본체는 라이브 DB 를 읽지만 «무는가» 는 DB 없이
+# 증명할 수 있어야 한다. 그리고 이 가드가 조용히 통과할 수 있는 길이 셋이다 —
+# ① 질의 실패 ② 빈 출력 ③ **모집단 0**(DEMO_DOMAIN=local 이라 시드가 early-exit 한 경우:
+# AMI 를 굽는 중이 정확히 그 상태다). 셋 다 «초록» 이 아니라 «판정 안 함» 으로 갈라 두고
+# `--require-coverage` 가 그것을 FAIL 로 승격한다 — 가드 (h) 와 같은 규율이다.
+#
+# 출력: FAIL:<사유> | NOCOVER:<사유> | OK:<판정한 sslip URI 수>
+judge_stale_sslip() { # $1=질의 rc  $2=죽은 수  $3=전체 sslip 수
+  local rc="$1" dead="$2" total="$3"
+  [ "$rc" -ne 0 ] && { echo "NOCOVER:질의 실패(IdP DB 에 닿지 못했다, rc=$rc)"; return 0; }
+  case "$dead"  in ''|*[!0-9]*) echo "NOCOVER:죽은-수를 못 읽었다('$dead')";   return 0 ;; esac
+  case "$total" in ''|*[!0-9]*) echo "NOCOVER:전체-수를 못 읽었다('$total')"; return 0 ;; esac
+  [ "$total" -eq 0 ] && { echo "NOCOVER:sslip 등록이 0건 — 판정할 모집단이 없다"; return 0; }
+  [ "$dead" -gt 0 ]  && { echo "FAIL:죽은 sslip 등록 ${dead}건 (전체 sslip ${total}건)"; return 0; }
+  echo "OK:$total"
+}
+
+echo "[verify] (z18s) 죽은 sslip 판정기가 무는가 — 주입 6칸"
+z18s_expect() { # $1=기대 접두어, 나머지=judge 인자
+  local want="$1"; shift
+  local got; got="$(judge_stale_sslip "$@")"
+  case "$got" in
+    "$want"*) ;;
+    *) fail "(z18s) 인자 [$*] 에서 '$want*' 를 기대했는데 '$got' 이 나왔다" ;;
+  esac
+}
+z18s_expect FAIL    0 1  10   # 죽은 1건 → 문다
+z18s_expect FAIL    0 3  30   # 죽은 3건 → 문다
+z18s_expect OK      0 0  10   # 깨끗하고 모집단 있음 → 통과
+z18s_expect NOCOVER 1 0  10   # 질의 실패를 «이상 없음» 으로 세지 않는다
+z18s_expect NOCOVER 0 '' 10   # 빈 출력을 0 으로 세지 않는다
+z18s_expect NOCOVER 0 0  0    # 모집단 0 을 통과로 세지 않는다
+ok "(z18s) 판정기 6/6 — 죽은 것은 물고, «질의 실패»·«빈 출력»·«모집단 0» 중 어느 것도 초록이 아니다"
+
 if [ "$LIVE" -eq 0 ]; then
 
   echo "[verify] 정적 검증 PASS (실기동 증명은 --live)"
   exit 0
 fi
+
+echo "[verify] (z18) --live: 죽은 sslip OAuth 콜백이 0건인가 (TASK-MONO-606)"
+z18_container="${IAM_MYSQL_CONTAINER:-iam-mysql}"
+z18_dom="${DEMO_DOMAIN:-local}"
+z18_sql="
+SELECT
+  SUM(CASE WHEN u.uri NOT LIKE '%${z18_dom}%' THEN 1 ELSE 0 END),
+  COUNT(*)
+FROM (
+  SELECT jt.uri FROM oauth_clients c,
+    JSON_TABLE(c.redirect_uris, '\$[*]' COLUMNS (uri VARCHAR(512) PATH '\$')) jt
+   WHERE jt.uri LIKE '%sslip.io%'
+  UNION ALL
+  SELECT jt.uri FROM oauth_clients c,
+    JSON_TABLE(JSON_EXTRACT(c.client_settings,
+      '\$.\"settings.client.post-logout-redirect-uris\"[1]'),
+      '\$[*]' COLUMNS (uri VARCHAR(512) PATH '\$')) jt
+   WHERE jt.uri LIKE '%sslip.io%'
+) u;"
+z18_out="$(docker exec "$z18_container" mysql \
+             -u"${AUTH_DB_USERNAME:-auth_user}" -p"${AUTH_DB_PASSWORD:-auth_pass}" \
+             "${AUTH_DB_NAME:-auth_db}" -N -B -e "$z18_sql" 2>/dev/null)" && z18_rc=0 || z18_rc=$?
+z18_dead="$(printf '%s' "$z18_out" | awk 'NR==1{print $1}')"
+z18_total="$(printf '%s' "$z18_out" | awk 'NR==1{print $2}')"
+# 모집단이 0이면 SUM() 은 NULL 이고 mysql 은 그것을 'NULL' 로 찍는다 — 숫자가 아니다.
+# judge 가 NOCOVER 로 잡긴 하지만 사유가 «못 읽었다» 로 잘못 붙으므로 여기서 정규화한다.
+[ "${z18_dead:-}" = "NULL" ] && [ "${z18_total:-}" = "0" ] && z18_dead=0
+z18_verdict="$(judge_stale_sslip "$z18_rc" "${z18_dead:-}" "${z18_total:-}")"
+case "$z18_verdict" in
+  FAIL:*)
+    fail "(z18) ${z18_verdict#FAIL:} — DEMO_DOMAIN=$z18_dom"\
+      $'\n'"→ 그 IP 는 더 이상 우리 것이 아니고, 등록된 redirect_uri 는 IdP 의 exact-match 를 통과합니다."\
+      $'\n'"→ infra/demo/seed-demo-domain.sh 의 회수 절이 돌았는지 확인하세요(덧붙이기와 같은 트랜잭션)." ;;
+  NOCOVER:*)
+    if [ "$REQUIRE_COVERAGE" -eq 1 ]; then
+      fail "(z18) 판정 못 함: ${z18_verdict#NOCOVER:} — --require-coverage 이므로 FAIL 입니다."
+    fi
+    echo "  skip: (z18) 판정 못 함 — ${z18_verdict#NOCOVER:} (컨테이너=$z18_container · DEMO_DOMAIN=$z18_dom)" ;;
+  OK:*)
+    ok "(z18) 죽은 sslip 등록 0건 — 판정한 sslip URI ${z18_verdict#OK:}건 · DEMO_DOMAIN=$z18_dom" ;;
+esac
 
 echo "[verify] (f) --live: 같은 서비스 키 'redis' 가 별도 -p 로 공존하는가"
 # ---------------------------------------------------------------------------
