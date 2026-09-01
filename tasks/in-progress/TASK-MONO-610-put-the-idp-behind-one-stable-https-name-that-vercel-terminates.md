@@ -329,6 +329,85 @@ DNS 가 없는 상태에서 뒤집으면 **데모 로그인이 통째로 죽는�
 나갔다 되돌아오는» 경로이고, C2 에서는 **Vercel 을 경유해** 되돌아온다. 그 경로는 **미측정**이다.
 🔴 **개수를 세라** — 12개 중 몇 개를 실제로 찔렀는지 적고, 안 찌른 것은 «통과» 가 아니라 **미검사**다.
 
+## 🟡 AC-2 **정적 절반** (2026-09-01) — 모집단이 **12 가 아니라 34 였고, 헤어핀은 5 다**
+
+🔴 **이 AC 는 아직 안 닫혔다.** 여기 있는 것은 «몇 개를 찔러야 하는가» 이고,
+«찔렀더니 200 이더라» 는 **새 이름이 실재해야** 잴 수 있다(⇒ 기동 창 + Vercel 프로젝트).
+
+### 🔴 「소비자 12개」가 틀렸다 — 그 12 는 **키** 수다
+
+AC-2 의 «12» 는 `ADR-MONO-069` 의 *"`IAM_PUBLIC_URL` 로부터 파생되는 키 12개"* 를
+그대로 옮긴 것이다. **키와 컨테이너는 다른 축이다** — 키 하나가 여러 서비스로 퍼진다.
+
+**측정 방법**: `DEMO_DOMAIN` 에 **센티넬**(`ac2probe.invalid`)을 주입하고 8개 스택의
+합성 `docker compose config --format json` 을 읽어 **서비스 단위**로 셌다.
+🔵 센티넬이 0건이면 치환이 안 된 것이지 «소비자가 없다» 가 아니다 — 그 단언을 넣었다.
+
+| | 값 |
+|---|---:|
+| issuer 를 값으로 받는 **서비스** | **34** |
+| 전달되는 **env 키** | **49** |
+| AC-2 가 적었던 수 | ~~12~~ ← **키 축의 수였다** |
+
+스택별: iam 5/15 · wms 6/17 · ecommerce 2/34 · scm 5/9 · fan 6/9 · finance 3/7 ·
+erp 5/8 · console 2/2.
+
+### 🔴🔴 그런데 34 가 전부 헤어핀은 아니다 — 그리고 **내 첫 분류가 틀렸다**
+
+헤어핀이 필요한 것은 «`iss` 를 문자열로 비교하는 것» 이 아니라 **네트워크로 가져오는 것**
+이다. `demo.env` 헤더가 그 설계를 명시했다: *"issuer 만 공개 호스트명으로 올리고,
+fetch 대상은 컨테이너 DNS 로 못박는다."*
+
+**첫 시도는 «키 이름» 으로 갈랐다**(`JWK|TOKEN_URI|REGISTRY|…`) → 3개.
+**두 번째는 «JWKS 키를 받는가, 그 값이 어디를 가리키는가» 로 갈랐다** → 다른 3개 + 1개.
+
+| 축 | 값 |
+|---|---:|
+| JWKS 키를 **하나도 안 받음** (Next.js 프런트 3종 — discovery 를 직접 한다) | **3** |
+| JWKS 를 **공개 이름**으로 받음 (`fan/membership-service`) | **1** |
+| JWKS 를 **컨테이너 DNS** 로 받음 | **30** |
+| 합계 | **34** ✅ 앞 census 와 일치 |
+
+🔴🔴 **두 대리지표가 서로 다른 답을 냈고, 그 불일치가 답이다.** 키 이름 축은
+`web-store`·`fan-platform-web` 을 **놓쳤고**(JWKS 키 자체가 없어서), JWKS 축은
+`console-bff` 의 **REST 대상**(`CONSOLE_BFF_OUTBOUND_IAM_BASE_URL`)을 놓쳤다.
+**어느 하나만 썼으면 표면을 과소평가했다.**
+[[feedback_comparing_two_extracts_measures_the_extractors]]
+[[feedback_absence_verdict_from_a_proxy_is_not_a_measurement]]
+
+### ⇒ **공개 이름이 데모 안에서 도달돼야 하는 서비스 = 5개** (합집합)
+
+| # | 서비스 | 왜 |
+|---|---|---|
+| 1 | `ecommerce/web-store` | JWKS 키 없음 ⇒ OIDC **discovery** 를 직접 |
+| 2 | `fan/fan-platform-web` | 〃 |
+| 3 | `console/console-web` | 〃 **+** registry·token-exchange·onboarding·admin-api **REST** |
+| 4 | `console/console-bff` | `CONSOLE_BFF_OUTBOUND_IAM_BASE_URL` **REST** (JWKS 는 컨테이너 DNS 라 안전) |
+| 5 | `fan/membership-service` | `INTERNAL_JWT_JWK_SET_URI` 가 **공개 이름**을 가리킨다 |
+
+🔵 **30개는 헤어핀을 안 탄다** — `iss` 는 문자열 비교이고 JWKS 는 컨테이너 DNS 다.
+설계가 의도한 대로였고, 그것을 **선언이 아니라 합성 config 에서** 확인했다.
+
+🔵 **1·2 는 성격이 다르다**: `web-store`·`fan-platform-web` 은 `ADR-MONO-067` 로
+**Vercel 로 이전 중**이다. Vercel 에서 도는 인스턴스에겐 이것은 헤어핀이 아니라 **평범한
+외부 fetch** 다. 🔴 그러나 **데모 호스트에서도 여전히 돈다**(`TASK-MONO-604` 가 그 사실
+자체를 다루는 티켓이다) ⇒ **두 자리 모두 세야 한다.**
+
+### 🔴 **찌른 것은 0개다. 미검사이지 통과가 아니다**
+
+AC-2 는 *"12개 중 몇 개를 실제로 찔렀는지 적고, 안 찌른 것은 «통과» 가 아니라 **미검사**"*
+라고 요구했다. 오늘 기준:
+
+| | |
+|---|---:|
+| 찔러야 하는 서비스 | **5** |
+| 컨테이너 **안에서** discovery/JWKS 200 을 확인한 것 | **0** |
+
+🔴 지금은 **잴 수 없다** — `auth.hubwang.com` 이 아직 없다. DNS + 네 번째 Vercel
+프로젝트가 선행이고, 그건 **소유자 몫**이다.
+
+---
+
 ## AC-3 — § Verification V1–V7 을 **안별로** 채운다
 
 `TASK-MONO-574` 가 홉 ②③④⑤ 를 «미측정» 으로 남겼고, 이 티켓의 산출물이 **그 칸을 처음 채우는 것**이다.
