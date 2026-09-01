@@ -8,7 +8,7 @@ TASK-MONO-610
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -121,6 +121,75 @@ Vercel 서버리스 함수는 그 이름을 해소할 수 없다. `vercel activi
 측정값을 이 티켓에 적고 **소유자에게 재지정을 요청**한다.
 
 🔵 **통과여도 «C2 가 된다» 가 아니다** — 두 축이 안 죽었다는 뜻일 뿐이다.
+
+## ✅ AC-0 실측 (2026-09-01) — **두 축 다 안 죽었다. `C2` 는 살아 있다**
+
+로컬 Docker 의 `iam-auth-service-1` 하나로 쟀다(AC-0 이 허용한 «전체 스택 기동 불요»).
+**AWS 데모 기동 0회, 예산 0원.**
+
+### 🔴 먼저 — 첫 두 시도는 **공허했다**
+
+`/oauth2/authorize` 가 **`401` · 본문 0바이트**를 냈다. 쿠키를 들고 다시 쳐도 같았다.
+🔵 **기전을 찾았다: 콘텐츠 협상이다.** Spring Security 의 엔트리포인트가 `Accept` 로 갈린다 —
+`Accept: text/html` 을 붙이자 **`302` + `Location`** 이 나왔다.
+
+⇒ **`401` 은 «막혔다» 가 아니라 «물어보지도 못했다» 였고, 그 상태에서 `Location` 이 없다고
+«재작성 안 한다» 로 읽었으면 판정 전체가 거짓이 됐다.**
+[[env_gateway_401_is_not_backend_readiness]] [[env_empty_detector_output_is_not_absence]]
+
+### 축 2 — `Host` 와 `Location` 재작성 · **✅ 통과**
+
+**(2-a) 절대 URL 은 `Host` 를 따라온다** — 설정된 `iam.local` 로 되돌아가지 **않는다**:
+
+| 보낸 `Host` | 받은 `Location` |
+|---|---|
+| `localhost:18081` | `http://localhost:18081/login` |
+| **`auth.hubwang.com`** | **`http://auth.hubwang.com/login`** |
+
+**(2-b) 그런데 스킴이 평문이었다** — 그리고 그것이 이 축의 진짜 실패 모드다.
+Vercel 이 TLS 를 끝내고 HTTP 로 포워딩하면 IdP 는 평문으로 되돌려 보낸다.
+
+**(2-c) `X-Forwarded-Proto` 를 존중하는가 — 존중한다:**
+
+| 조건 | `Location` |
+|---|---|
+| `X-Forwarded-Proto: https` | **`https://auth.hubwang.com/login`** ✅ |
+| + `X-Forwarded-Host` + `X-Forwarded-Port: 443` | 동일 ✅ |
+| 🔵 **음성 대조군** — `X-Forwarded-Proto` 없음 | `http://auth.hubwang.com/login` |
+
+🔵🔵 **대조군이 반대로 움직였다.** 「https 를 넣으면 https 가 나온다」만 봤다면
+«원래 https 였다» 와 구별되지 않는다. 빼면 http 로 되돌아가므로 **그 헤더가 원인**이다.
+⇒ `server.forward-headers-strategy` 가 이미 켜져 있다.
+
+### 축 3 — `Set-Cookie` 의 `Domain` · **✅ 통과, 그리고 기본값이 이미 옳다**
+
+```
+Set-Cookie: JSESSIONID=...; Path=/; HttpOnly
+```
+
+두 `Host` 모두 **`Domain` 속성이 없다**. Domain 없는 쿠키는 **호스트 한정**이므로
+`auth.hubwang.com` 에만 심긴다 — 소유자 rider(*"apex 쿠키는 호스트 한정"*)가 요구한
+바로 그 동작이고, **손대지 않아도 그렇다**. ⇒ **AC-4 의 배선은 «바꾸는 일» 이 아니라
+«유지되는지 지키는 일»** 이다.
+
+### ⇒ **판정: `C2` 는 탈락하지 않는다. `C1` 재지정은 필요 없다**
+
+🔵 그러나 AC-0 자신이 미리 적어 둔 대로 — **«통과여도 C2 가 된다» 가 아니다. 두 축이 안
+죽었다는 뜻일 뿐이다.**
+
+### 🔴 이 측정이 **덮지 않는 것** — 그리고 하나는 새로 찾은 위험이다
+
+| # | 무엇 | 어디로 |
+|---|---|---|
+| 1 | 🔴🔴 **`Secure` 도 `SameSite` 도 안 붙는다** — `X-Forwarded-Proto: https` 를 줘도 `JSESSIONID` 는 `Path=/; HttpOnly` 뿐이다. HTTPS 뒤에서 **비-Secure 세션 쿠키**는 실재 결함이다 | **V3** (AC-3). 🔵 AC-0 의 축이 아니라 여기서 처음 적는다 |
+| 2 | 🔴 **`OIDC_ISSUER_URL` 을 안 바꾸면 discovery 가 `iam.local` 을 계속 광고한다** — 실측: 컨테이너 env 가 `http://iam.local` 이고 discovery 의 `issuer`/`authorization_endpoint` 가 **두 `Host` 에서 바이트 동일**하다(이 값만은 `Host` 가 아니라 **설정**에서 온다). 리다이렉트는 `auth.hubwang.com` 인데 `iss` 는 `iam.local` 이면 RP 가 거절한다 | **AC-1** — 이 실측이 AC-1 의 필요성을 확인한다 |
+| 3 | 🔴 **돌린 이미지가 낡았다** — Flyway 가 *"latest available migration (**0032**)"* 라고 찍는다. `V0033`(08-26)·`V0034`(09-01) 이 없는 이미지다 | 🔵 이 두 축은 **프레임워크 동작**이라 마이그레이션 무관이다. 다만 **적어 둔다** — 이 컨테이너로 «로그인이 된다» 를 재면 그건 거짓이다 |
+| 4 | 실제 왕복 | **V1–V7** — 기동 창 |
+
+🔵 **3번이 중요하다**: AC-0 은 «두 축이 안 죽었나» 만 물었고 그건 낡은 이미지로도 답할 수
+있다. 그러나 **V1–V7 은 그럴 수 없다** — 그때는 `V0034` 를 담은 이미지여야 한다.
+
+---
 
 ## AC-1 — 🔴 **`issuer` 의 소비자를 세고, 전수를 옮긴다**
 
