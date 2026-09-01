@@ -8,7 +8,7 @@ TASK-MONO-611
 
 # Status
 
-in-progress
+done
 
 # Owner
 
