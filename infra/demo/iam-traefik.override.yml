@@ -45,7 +45,21 @@
 # 그래서 issuer 만 공개 호스트명으로 올리고, fetch 대상은 컨테이너 DNS 로 못박는다
 # (auth-service 의 self-call 이 굳이 Traefik 을 한 번 더 타지 않도록).
 x-iam-oidc: &iam-oidc
-  OIDC_ISSUER_URL: http://iam.${DEMO_DOMAIN:-local}
+  # TASK-MONO-610 AC-1: `${IAM_PUBLIC_URL}` 로 파생시킨다. 값은 오늘과 **완전히
+  # 동일**하다(`demo.env` 가 `IAM_PUBLIC_URL=http://iam.${DEMO_DOMAIN}` 로 준다).
+  # 바뀌는 것은 «누가 이 문자열을 소유하는가» 뿐이다.
+  #
+  # 왜: AC-1 전수 조사에서 이 줄이 `IAM_PUBLIC_URL` 을 **거치지 않고** 이름을
+  # 스스로 재조립하고 있었다. `ADR-MONO-069` 는 파생이 «한 곳에 모여 있다» 고
+  # 적었지만 실측은 그렇지 않았다 — compose 줄 60건 중 51건만 그 변수를 거친다.
+  # 이 줄이 남아 있으면 issuer 를 옮길 때 **여기만 옛 이름으로 남고**, 그 증상은
+  # 「전 도메인 401」이며 어느 파일이 원인인지 말해 주지 않는다(이 파일 헤더가
+  # 기록한 바로 그 실패 모드다).
+  #
+  # 🔴 리터럴이어야 한다는 제약은 그대로다 — `docker-compose.e2e.yml` 이
+  # `OIDC_ISSUER_URL` 을 리터럴로 박으므로 이 override 도 리터럴로 이겨야 한다.
+  # `${IAM_PUBLIC_URL:-...}` 은 compose 가 해석하는 셸 치환이라 그 제약을 지킨다.
+  OIDC_ISSUER_URL: ${IAM_PUBLIC_URL:-http://iam.local}
   OIDC_JWK_SET_URI: http://auth-service:8081/oauth2/jwks
   OIDC_TOKEN_URI: http://auth-service:8081/oauth2/token
 
@@ -229,7 +243,11 @@ services:
       # ADMIN_OIDC_* binds admin.oidc.* by Spring relaxed binding; the names mirror
       # platform-console/docker-compose.e2e.yml, the canonical wiring of this same
       # validator for the console login flow (sibling parity).
-      ADMIN_OIDC_ISSUER: http://iam.${DEMO_DOMAIN:-local}
+      # TASK-MONO-610 AC-1 — 위 `x-iam-oidc` 와 같은 이유로 파생시킨다.
+      # 이 값은 *iam-oidc 의 OIDC_ISSUER_URL 과 **반드시 같아야** 하고(바로 위
+      # 주석이 그렇게 적었다), 둘이 서로 다른 소스에서 조립되면 그 «반드시»는
+      # 아무도 안 지킨다.
+      ADMIN_OIDC_ISSUER: ${IAM_PUBLIC_URL:-http://iam.local}
       ADMIN_OIDC_JWKS_URI: http://auth-service:8081/internal/auth/jwks
     networks:
       iam-e2e: null
