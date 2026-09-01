@@ -8,7 +8,7 @@ TASK-BE-589
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -368,3 +368,61 @@ Docker 미가동이라 Testcontainers IT 를 로컬에서 못 돌린다. 그래�
   의도한 자리에 안 붙었다는 뜻이다.
 - **Flyway 플레이스홀더 미해결** → *"No value provided for placeholder"* 로 **auth-service
   기동 자체가 죽는다**. AC-1 의 마지막 행.
+
+## CORRECTION (2026-09-01 UTC)
+
+**AC-4 § 신선 볼륨 칸이 ⏳ 로 적혀 있다. 그 칸은 닫혔다.** — 아래는 순수 추가이며 위의
+어떤 관측도 고치지 않는다(그 문장들은 그것이 쓰인 시점의 사실이다).
+
+### ① 신선 볼륨 = ✅ **닫혔다. 그리고 「통과」가 아니라 «행» 으로 닫혔다**
+
+impl PR `#3568` · 스쿼시 `3b7c3b3b9` · CheckRun **실패 0 / SUCCESS 15 / SKIPPED 37**.
+
+🔴 **초록만 보고 적지 않았다 — 두 단계 더 갔다:**
+
+| 단계 | 왜 | 실측 |
+|---|---|---|
+| **어느 잡이 돌렸나** | 스위트가 A/B 로 쪼개져 있다. 한쪽만 보면 「돌았다」를 못 짓는다 | `iam A` = 두 IT **언급 0건** · `iam B` = 각각 12 / 20건 |
+| **등장 ≠ 통과** | `SKIPPED` 도 이름은 로그에 찍힌다 | 두 IT 케이스 **9/9 `PASSED`, `SKIPPED` 0** |
+
+🔵🔵 **그리고 `BE-297` 이 남겨 둔 진단 덤프가 마이그레이션 이후의 «생컬럼» 을 찍어 줬다** —
+파일도 아니고 매핑된 객체도 아닌, **행 자체**다:
+
+```
+"settings.client.post-logout-redirect-uris":
+  ["java.util.ArrayList", ["http://console.local/login",
+                           "http://localhost:3000/login",
+                           "https://console.hubwang.com/login"]]
+```
+
+- **타입 태그가 원소 [0] 에 그대로** — 앵커 splice 가 배열을 밀지 않았다
+- 새 항목이 **꼬리에**, **정확히 1회** (중복 없음)
+- 🔵 MySQL 이 `", "` 간격으로 렌더한 것까지 AC-2 시뮬레이션의 가정과 일치한다
+
+`redirect_uris` 쪽은 출력되지 않지만 이 티켓이 새로 넣은 JDBC 카운트 단언
+(`assertNoDuplicateRegistration`)이 `= 1` 로 통과했다 — 그것도 **행을 센 것**이다.
+
+### ② 기존 볼륨 = 🔴 **여전히 열려 있다. 그러나 「미해결」이 아니라 「이관됨」이다**
+
+이 구별이 이 티켓을 닫는 근거다. `TASK-BE-582` 는 같은 칸을 **주인 없이** 열어 둔 채
+닫혔고, 그래서 3-dim 이 셋 다 통과하는데도 close 가 **오추천**됐으며 줍는 데
+`TASK-MONO-605` 가 더 들었다. 589 는 착수 시점에 `TASK-MONO-610` AC-3 **`V8` 행**으로
+넘겼다(기동 창 공유 · `flyway_schema_history` 최대 버전이 `V0034` 미만인지 확인하는
+유효성 술어 포함).
+
+⇒ **AC-4 는 자기가 선언한 대로 충족됐다.** 그 AC 의 동사는 *"판정은 DB 에서 한다"* +
+*"기존 볼륨은 이 티켓이 닫지 않는다. AC-5 로 넘긴다"* 였고, 둘 다 참이다.
+
+🔴 **다음에 이 줄을 읽는 사람에게**: `TASK-MONO-610` 이 `V8` 없이 닫히면 이 판정은
+다시 주인을 잃는다. 610 을 닫을 때 `V8` 칸을 열어 보라.
+
+### ③ 3-dim (2026-09-01)
+
+| 축 | 결과 |
+|---|---|
+| (a) | `#3568` `state=MERGED` · `mergedAt=2026-09-01T11:05:31Z` |
+| (b) | 스쿼시 `3b7c3b3b9b450e45fd3e2b0d5b8ace93aa4594a4` — `origin/main` 의 **조상 확인** (`merge-base --is-ancestor` rc=0) |
+| (c) | CheckRun **실패 0**. required 넷(`changes` · `Task ID collision …` · `INDEX queue drift …` · `Walkthrough limitation ledger drift …`) **전부 실행**됐다 |
+
+🔵 **37 SKIPPED 는 결함이 아니다** — path-filter 가 이 PR 이 안 닿는 프로젝트의 잡을
+건너뛴 것이다. 🔴 다만 「52개가 초록」이라고 적으면 거짓이다: **실제로 일한 것은 15개**다.
