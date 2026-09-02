@@ -117,3 +117,57 @@ undici 는 자기가 붙인 `Accept-Encoding` 때문에 본문을 **자동 해�
 🔴 **그리고 그 뒤에도 «로그인이 된다» 는 증명되지 않았다.** `ADR-MONO-069` § Consequences:
 *"어느 안도 «지금 당장 로그인이 된다» 를 보장하지 않는다."* 판정은 `TASK-MONO-610` 의
 **V1–V8**(기동 창)이 한다.
+
+### ✅ 1~4 실측 원장 (2026-09-02 UTC)
+
+소유자가 1~4 를 실행했고, **선언이 아니라 조회로** 확인한 것만 적는다.
+
+| # | 실측 | 출처 |
+|---|---|---|
+| 1 | 프로젝트 `kanggle-auth` **존재** | `vercel env ls --project kanggle-auth` 가 응답 |
+| 2 | `auth.hubwang.com` 이 **이 계정으로 붙었다** | 그 호스트가 Vercel `icn1` 에서 응답(당시 배포가 없어 `404 DEPLOYMENT_NOT_FOUND`) |
+| 3 | `DEMO_API_BASE` = **`Production, Preview`** | `vercel env ls` 두 환경 모두에서 조회됨. 🔵 값이 정본과 **바이트 동일**함을 두 출처로 대조했다 — `terraform output api_base_url` ↔ `kanggle-store` 의 실배선 |
+| 4 | secret `VERCEL_DEPLOY_HOOK_AUTH` **등록** (`2026-09-02T10:19:56Z`) | `gh secret list` — 🔵 **이름과 시각만** 본다. 그 URL 자체가 인증이므로 값은 조회하지 않는다 |
+
+🔵 **`DEMO_API_BASE` 는 Preview 에도 넣어야 한다.** `vercel.json` 이 `preview/*` 브랜치는
+배포하도록 두므로, Production 에만 넣으면 프리뷰가 **«데모 아님» 모드로 조용히 돈다**
+(배포는 초록이다). 처음 등록은 Production 만이었고 이 원장을 쓰다가 잡았다.
+
+### 🔴🔴 그런데 **첫 배포는 만들어지지 않았다** — 그리고 그것이 옳았다
+
+프로젝트 Import 가 만든 배포는 **7초 만에 `Canceled`** 였다. install 에 닿지도 않았다.
+
+```
+Age  Project       Deployment                    Status     Environment  Duration
+6m   kanggle-auth  …-g1oodqfde-…vercel.app       Canceled   Production   7s
+```
+
+기전: Import 는 그때의 `main`(`e5bc99e` = 무관한 클로즈 chore)을 클론했고,
+`vercel-ignore.sh` 가 *"이 커밋은 위 `SPECS` 를 안 건드렸다"* 로 **건너뜀**을 냈다.
+**판정자는 정확히 설계대로 동작했다.**
+
+🔴 **그래서 새 프로젝트에는 「첫 배포가 영원히 안 생기는」 구간이 있다.** 대시보드
+Redeploy 도 **같은 커밋**을 다시 재므로 또 `Canceled` 다. 빠져나오는 길은 하나뿐이다 —
+**`SPECS` 안의 경로를 건드리는 커밋**. (이 절이 실린 커밋이 그것이다: 이 파일이
+`:/infra/demo/auth-forwarder` 아래에 있다.)
+
+🔵 **이것을 판정자의 결함으로 고치지 마라.** 목록을 넓히면 무관한 커밋마다 배포가
+나고, 그 비용은 계정 전체가 공유하는 한도에서 나간다(`ADR-MONO-067`). 대가가 큰 쪽은
+**«한 번의 수동 트리거»** 가 아니라 **«매 커밋 배포»** 다.
+
+### ⏳ 아직 판정되지 않은 것 — **Root Directory 밖 포함**
+
+이 앱은 `"@demo/backend-resolver": "link:../backend-resolver"` 로 **Root Directory 밖**을
+가리킨다. Vercel 프로젝트 설정의 *"Include files outside of the Root Directory in the
+Build Step"* 이 꺼져 있으면 install 이 죽는다.
+
+🔴 **그 설정은 대시보드에서만 읽을 수 있고, 지금까지 어떤 빌드도 install 에 닿지 않았다**
+⇒ **미측정**이다. 형제(`kanggle-fan`·`kanggle-store`)가 켜져 있다는 사실을 이리로
+**이전하지 마라** — `TASK-MONO-590` 이 같은 종류의 이전을 두 번 금지했다.
+판정은 **이 커밋이 만드는 첫 빌드의 install 단계**가 한다:
+
+| 결과 | 뜻 |
+|---|---|
+| `Packages: +N` 뒤 빌드 진행 | ✅ 켜져 있다 |
+| `ERR_PNPM_LINKED_PKG_DIR_NOT_FOUND` / `ENOENT … backend-resolver` | 🔴 꺼져 있다 ⇒ 대시보드에서 켜고 재배포 |
+
