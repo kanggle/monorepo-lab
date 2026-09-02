@@ -205,13 +205,31 @@ class OAuthClientPostLogoutRedirectUriSeedIntegrationTest extends AbstractIntegr
 
         List<String> postLogout = client.getClientSettings().getSetting(PLR_KEY);
         assertThat(postLogout)
-                .as("V0028 TASK-MONO-460 appended the localhost:3001 dev-port landing")
-                .containsExactly("http://localhost:3000/", "http://localhost:3001/", "http://web.ecommerce.local/");
+                .as("V0028 TASK-MONO-460 appended the localhost:3001 dev-port landing; "
+                        + "V0035 TASK-BE-590 appended the Vercel production domain, anchored on "
+                        + "web.ecommerce.local so it lands at the tail -- this list reads as a "
+                        + "migration-ordered history, which is why it is containsExactly and not "
+                        + "contains: loosening it would make the registered set unreadable")
+                .containsExactly(
+                        "http://localhost:3000/",
+                        "http://localhost:3001/",
+                        "http://web.ecommerce.local/",
+                        // V0035 TASK-BE-590 -- ADR-MONO-067 phase 2. The store's Vercel
+                        // production landing. seed-demo-domain.sh rewrites only `%.local/%`,
+                        // so like its fan sibling this one is never rewritten at boot.
+                        "https://store.hubwang.com/");
 
         assertThat(client.getRedirectUris()).contains(
                 "http://localhost:3000/api/auth/callback/iam",
                 "http://localhost:3001/api/auth/callback/iam", // V0028 TASK-MONO-460 dev-port
-                "http://web.ecommerce.local/api/auth/callback/iam");
+                "http://web.ecommerce.local/api/auth/callback/iam",
+                // V0035 TASK-BE-590 -- the Vercel production callback. The path shape
+                // (/api/auth/callback/iam) was measured twice independently before it was
+                // registered: the NextAuth provider id in web-store's auth.ts, and the live
+                // DB census in TASK-MONO-606 AC-4. Registering the wrong shape fails as
+                // `redirect_uri_mismatch`, an error that names neither the URI nor the
+                // client -- which is why V0033 refused to guess this one.
+                "https://store.hubwang.com/api/auth/callback/iam");
         assertThat(client.getClientSettings().isRequireProofKey()).isTrue();
         assertThat(client.getScopes())
                 .contains("openid", "profile", "email", "tenant.read", "ecommerce.consumer");

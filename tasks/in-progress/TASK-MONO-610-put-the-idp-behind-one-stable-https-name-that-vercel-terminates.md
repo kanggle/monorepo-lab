@@ -655,8 +655,8 @@ env 가 없고 `/api/auth/*` 가 전부 500"* 까지다. [[feedback_control_grou
 | 1 | `OIDC_ISSUER_URL` | 새 issuer (`https://auth.hubwang.com`) |
 | 2 | `NEXTAUTH_URL` | `https://store.hubwang.com` |
 | 3 | `NEXTAUTH_SECRET` | 🙋 **소유자 생성** (fan 과 같은 값일 필요 없다) |
-| 4 | `OIDC_CLIENT_ID` | `ecommerce-web-store-client` — 🔴 **단, V0035 선행**(아래) |
-| 5 | `OIDC_CLIENT_SECRET` | 같은 클라이언트의 시크릿 — 🔴 **단, V0035 선행** |
+| 4 | `OIDC_CLIENT_ID` | `ecommerce-web-store-client` — ✅ **선행 해소**(아래) |
+| 5 | `OIDC_CLIENT_SECRET` | 같은 클라이언트의 시크릿 — ✅ **선행 해소** |
 
 #### 🔴🔴 그 확인을 했다 — **4·5 는 대시보드 작업이 아니다. IdP 마이그레이션이 선행이다**
 
@@ -678,6 +678,20 @@ env 가 없고 `/api/auth/*` 가 전부 500"* 까지다. [[feedback_control_grou
 떠넘기지 않기 위해 적어 둔다 — **이 행은 `projects/iam-platform/` 의 프로젝트 티켓이고
 `610` 도 `612` 도 아니다** ⇒ **별도 spec PR 로 큐에 올린다.**
 [[feedback_the_unguarded_operation_is_where_the_invariant_breaks]]
+
+##### ✅ 그 선행이 해소됐다 (`TASK-BE-590`, 2026-09-02)
+
+`V0035__add_store_vercel_domain_redirect_uri.sql` 가 `ecommerce-web-store-client` 에
+`https://store.hubwang.com/api/auth/callback/iam` 과 post-logout `https://store.hubwang.com/`
+를 등록한다. 🔵 경로 모양은 **독립 2회**로 확인됐다(소스의 provider `id: 'iam'` ↔ `606`
+AC-4 의 라이브 DB 전수) — `V0033` 이 요구한 「추정 말고 측정」이 그것이다.
+
+🔴 **그래도 「닫혔다」가 아니다.** 등록은 **필요조건**이고, 소유자가 위 다섯 줄을 넣기
+전까지 `store.hubwang.com` 의 `/api/auth/*` 는 **500** 그대로다(실측 2026-09-02).
+최종 판정은 여전히 **로그인이 되는가**(V1–V8)이지 등록됐는가가 아니다.
+
+🔵 **순서**: `V0035` 머지 → env 5줄 → 기동 창. 4·5 를 먼저 넣으면 `redirect_uri_mismatch`
+를 만나고, 그 오류는 URI 도 클라이언트도 이름으로 대지 않는다.
 
 🔵 **왜 이걸 아무도 안 봤나**: `TASK-MONO-582` 는 `NEXTAUTH_SECRET` 을 «빌드를 죽이나» 로만
 봤고 *"✅ 빌드를 안 죽였다"* 로 닫았다 — **잰 것이 빌드였다**. `TASK-MONO-611` 은 죽은
