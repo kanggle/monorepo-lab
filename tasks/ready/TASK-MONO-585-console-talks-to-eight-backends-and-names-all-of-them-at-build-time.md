@@ -478,3 +478,143 @@ web-store 의 `DemoBackendNotice` 와 **같은 요구**다. 🔴 콘솔은 **여
 | 트리거를 초록으로 만들려고 마커 제거 | 승격 트리거가 **영구 무력화** | AC-5 — 상태를 명시하되 회피 금지 |
 | D4 미해결인데 착수 | 화면은 뜨는데 **로그인이 안 됨** = 빈 껍데기 | AC-0 ④ — 멈춘다 |
 | `FLOOR` 미상향 | 새 `vercel.json` 을 지워도 **안 문다** | AC-4 |
+
+---
+
+# 📏 AC-0 실측 (2026-09-02 UTC) — **네 칸 모두 쟀고, 결론은 🛑 STOP 이다**
+
+🔵 **먼저 결론**: ④가 STOP 을 낸다. 그러나 ①②③ 을 먼저 잰 것이 헛수고가 아니다 —
+**③ 이 이 티켓의 가장 큰 미결 비용을 지웠다.**
+
+## ① 모집단 재계수 — 🔴 **기록된 「12」는 오산이었다** (드리프트가 아니다)
+
+`env.ts` 의 zod `.default('http…')` 를 **전수**로 세면 **14** 다:
+
+| 호스트 | 개수 |
+|---|---:|
+| `iam.local` | 4 |
+| `wms.local` · `finance.local` · `ecommerce.local` · `console.local` | 각 2 |
+| `scm.local` · `erp.local` | 각 1 |
+| **합계** | **14** (서로 다른 호스트 **7종**) |
+
+기록(`ADR`/INDEX)은 *"12개(iam 4 · wms 2 · finance 2 · scm/erp/ecommerce 각 1 · console 1)"*
+였다. 차이는 **ecommerce 1→2** 와 **console 1→2** 다.
+
+🔵 **어느 쪽이 낡았나를 이력으로 갈랐다** — 두 «추가분» 은 아주 오래된 커밋에서 왔다:
+
+```
+ecommerce.local/api/admin · ecommerce.local/api  →  13c4670af (#1504, TASK-PC-FE-081)
+ClientEnvSchema (두 번째 console.local)          →  debc68499 (#569,  TASK-PC-FE-001)
+```
+
+⇒ **모집단이 자란 것이 아니라 그때의 계수가 틀렸다.** 🔵 그리고 `console.local` 이 두 번
+나오는 것은 **중복 키 결함이 아니다** — `ClientEnvSchema`(L34)와 `ServerEnvSchema`(L288)에
+각각 한 번씩이다. 「두 스키마」를 모르면 결함으로 오독하기 쉬워 여기 적는다.
+
+### 🔴 그리고 **`env.ts` 밖에** 백엔드 오리진이 하나 더 있다 — 아무 계수에도 안 잡혔다
+
+```
+console-web/next.config.mjs:20
+  "form-action 'self' http://iam.local http://localhost:3000",
+```
+
+**CSP 헤더**다. `fetch` 가 아니라서 ADR 의 *"절대 fetch N건"* 계수에 안 잡히고, zod 가
+아니라서 *"`.default()` N개"* 에도 안 잡힌다. 🔴 **그러나 이관하면 반드시 바뀌어야 한다** —
+IdP 가 `https://auth.hubwang.com` 이 되면 이 목록이 옛 오리진만 들고 있고, 증상은
+**「로그인 폼 제출만 조용히 차단」** 이다. ⇒ 이 티켓 AC 에 넣어라.
+[[feedback_recount_population_dont_inherit_scope]]
+
+## ② 산출물 — 🔴 **7개가 클라이언트 청크에 있다. 소스 경계는 지켜졌는데도.**
+
+`scripts/scan-client-bundle-origins.mjs` (`.next/static/**/*.js` 만, `.next/server/**` 제외):
+
+```
+verdict=MEASURED  jsFiles=277  backendCount=8
+  console.local · iam.local · wms.local · scm.local · finance.local · erp.local · ecommerce.local
+  + ac0-probe.invalid
+```
+
+🔵 **8번째는 카나리아다.** `ac0-probe.invalid` 는 `TASK-MONO-565` 가 주입한 프로브이고
+스캐너 술어(`BACKENDISH`)에 이름이 박혀 있다 ⇒ **이 산출물에서 스캐너에 눈이 있다는
+대역 내 양성 대조군**이다. 실제 백엔드 오리진은 **7** 이고 565 의 실측과 같다.
+
+🔴 **소스 경계는 지켜져 있다** — `getServerEnv()` 를 부르는 파일 **27개** 중 `'use client'`
+는 **0개**. 그런데도 산출물에는 있다. AC-0 ②가 미리 지목한 그대로다: `env.ts` 가 **한
+모듈**이라 클라 청크에서 도달 가능하다. **선언 경계 ≠ 번들 경계.**
+
+### 🔵 낡은 산출물을 재지 않았음을 먼저 확인했다
+
+로컬 `.next` 는 **2026-08-26** 산이다. 그대로 재면 일주일 전을 재는 것이라, **그 사이
+소스가 바뀌었는지**를 먼저 봤다:
+
+```
+08-26 18:45 이후 console-web(src·next.config·package.json) 커밋 =   0
+같은 기간 저장소 전체 커밋                                    = 120   ← 양성 대조군
+```
+
+⇒ 산출물은 **대표성이 있다**. 대조군 120 이 없었다면 「0건」은 술어가 죽은 것과 구별되지 않는다.
+[[env_pulled_checkout_holds_a_stale_build]] [[feedback_measurement_needs_a_validity_predicate]]
+
+## ③ (3a) 콘솔은 해석기를 **필요로 한다** — 🔴🔴 **그러나 (3b)의 전제가 낡았다**
+
+**필요하다**: 백엔드 오리진 7개가 **클라이언트 번들에** 있다 ⇒ 브라우저가 `http://iam.local`
+을 알고 있고, HTTPS 프런트에서는 **mixed content 로 차단**된다. D1(브라우저가 오리진을
+모른다)과 D2(주소는 런타임 조회) **둘 다** 필요하다.
+
+### 🔴🔴 그런데 「세 번째 사본 → `B` 승격」 청구서는 **오지 않는다**
+
+이 티켓의 (3b)는 *"§ D5.4 가 «세 번째 사본이 오면 `B` 로 승격» 이라 못 박았으므로
+`B`(루트 워크스페이스 신설)가 이 티켓의 범위에 들어온다 — lockfile 5개/20,580줄 병합 ·
+세 Vercel 프로젝트의 install 단계"* 라고 적는다. **그 문장은 낡았다.**
+
+`ADR-MONO-068` History 가 스스로 정정해 뒀다:
+
+> 🔴 **§ D5.4 의 *"그때 `B` 로 승격"* 은 근거 표의 문장이지 ACCEPT 가 아니다.**
+> § D6 이 그 문장을 포함해 다섯 안을 실측 비용과 함께 늘어놓고, 지정은 소유자 몫으로 남긴다.
+
+그리고 § D6 은 **`B2` 로 ACCEPTED**(2026-09-01, 소유자 정확형 지정)됐고
+**2026-09-02 에 구현 완료**(`TASK-MONO-614`)다. 실측 — 소비자 **3개가 이미** 패키지 하나를
+`link:` 로 쓴다:
+
+```
+infra/demo/auth-forwarder/package.json          "@demo/backend-resolver": "link:../backend-resolver"
+…/apps/web-store/package.json                   "link:../../../../infra/demo/backend-resolver"
+…/fan-platform-web/package.json                 "link:../../../../infra/demo/backend-resolver"
+```
+
+⇒ **콘솔은 「세 번째 사본」이 아니라 「네 번째 소비자」이고, 그것은 `package.json` 한 줄이다.**
+루트 워크스페이스도, lockfile 병합도, 세 프로젝트의 install 변경도 **없다.**
+🔵 **(3c)(범위 재절단 상신)도 발동하지 않는다.**
+
+🔴 **다만 콘솔은 백엔드가 여섯 접두사**(iam·wms·scm·finance·erp·ecommerce)다. 해석기는
+`servicePrefix` 하나를 받으므로 **인스턴스가 여섯 개** 필요하고, 각 인스턴스가 **자기
+캐시**를 가진다(팩토리 클로저) ⇒ 컨트롤 플레인 `/status` 호출이 요청당 최대 6회다.
+**이것은 AC-2 의 설계 문제이지 AC-0 의 정지 사유가 아니다.** 여기 적어 두고 넘긴다.
+
+## ④ `TASK-MONO-574` 의 상태 — 🛑 **미해결. 여기서 멈춘다.**
+
+574 AC-1 의 홉 표:
+
+| 홉 | 결과 |
+|---|---|
+| ① 앱 → authorize URL 생성 | **실패** |
+| ② 브라우저 → IdP authorize | ⚪ **미측정**(①이 URL 을 안 만들었다) |
+| ③ IdP → 앱 콜백 · ④ 토큰 · ⑤ 세션 쿠키 | ⚪ **미측정** |
+
+🔵 **오늘 독립적으로도 같은 그림을 봤다**: `https://store.hubwang.com/api/auth/*` 가 **전부
+500**(형제 `kanggle-fan` 은 같은 순간 **200**). 왕복은 여전히 안 닫혔다.
+
+⇒ **AC-0 ④ 의 지시 그대로 여기서 멈춘다.** 이 티켓은 `ready/` 에 남는다.
+
+---
+
+# 📌 이 측정이 바꾼 것
+
+| | 전 | 후 |
+|---|---|---|
+| 단계 3 의 최대 미결 비용 | **`B` 루트 워크스페이스 승격**(lockfile 5개/20,580줄 · 세 Vercel install) | 🔵 **없다** — 네 번째 소비자 = `package.json` 한 줄 |
+| 모집단 | 「12」 | **14**(7 호스트) + 🔴 **CSP 한 줄**(계수 밖) |
+| 클라 번들 | ADR 의 「5」 | **7** (565 와 일치, 카나리아로 유효성 확인) |
+| 착수 가능? | 「선행 셋」 | 🛑 **선행 1(OIDC 왕복)만 남았고, 그것이 막는다** |
+
+🙋 **이 티켓을 여는 열쇠는 하나다** — `TASK-MONO-610` 의 기동 창에서 왕복이 닫히는 것.
