@@ -650,13 +650,45 @@ env 가 없고 `/api/auth/*` 가 전부 500"* 까지다. [[feedback_control_grou
 
 **⇒ AC-4b 의 소유자 작업이 store 쪽에서는 다섯 줄이다**(fan 은 한 줄 그대로):
 
-| # | `kanggle-store` 프로덕션 env | 값 |
+| # | `kanggle-store` 프로덕션 env | 값 | 언제 |
+|---|---|---|---|
+| 1 | `OIDC_ISSUER_URL` | `https://auth.hubwang.com` | 🔴 **뒤집기 뒤** |
+| 2 | `NEXTAUTH_URL` | `https://store.hubwang.com` | 지금 |
+| 3 | `NEXTAUTH_SECRET` | 🙋 **소유자 생성**(fan 과 같을 필요 없다) | 지금 |
+| 4 | **`ECOMMERCE_WEB_STORE_CLIENT_ID`** | `ecommerce-web-store-client` | 🔵 생략 가능(기본값이 같다) |
+| 5 | **`ECOMMERCE_WEB_STORE_CLIENT_SECRET`** | `ecommerce-dev` (`V0012` 시드, dev 전용 평문) | 지금 |
+
+##### 🔴🔴 정정 (2026-09-02) — **위 4·5 의 이름이 틀렸었다. 형제의 이름을 복사했다**
+
+이 표의 초판은 4·5 를 `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` 로 적었다. **그건 팬의
+이름이다.** web-store 가 실제로 읽는 것은 다르다:
+
+```
+web-store/src/shared/auth/auth-callbacks.ts:34-38
+  process.env.OIDC_ISSUER_URL                    ?? 'http://iam.local'
+  process.env.ECOMMERCE_WEB_STORE_CLIENT_ID      ?? 'ecommerce-web-store-client'
+  process.env.ECOMMERCE_WEB_STORE_CLIENT_SECRET  ?? ''
+
+fan-platform-web/src/shared/config/env.ts:121,131
+  process.env.OIDC_CLIENT_ID                     ?? 'fan-platform-user-flow-client'
+  process.env.OIDC_CLIENT_SECRET                 ?? ''
+```
+
+🔴 **틀린 이름을 넣었으면 아무것도 «실패» 하지 않았을 것이다** — 앱은 기본값으로 떨어져
+클라이언트 id 는 맞고 **시크릿만 빈 문자열**이 된다. 증상은 토큰 교환 401 이고, 그 오류는
+어느 env 가 비었는지 말하지 않는다. 🔵 그리고 4는 **기본값이 이미 옳아서** 넣든 안 넣든
+같다 — 즉 **틀린 이름의 유일한 실질 피해자는 5번**이고, 그것이 가장 안 보이는 자리다.
+
+🔵 **어떻게 생겼나**: 형제(`kanggle-fan`)의 env 목록을 보고 «같은 앱 계열이니 같은 이름»
+이라고 읽었다. 두 앱은 같은 저장소·같은 프레임워크지만 **env 이름 규약이 다르다.**
+[[feedback_grep_the_siblings_before_fixing_it_yourself]]
+
+##### 🔵 그래서 이 다섯 줄은 **두 층**이다
+
+| 층 | 무엇 | 효과 |
 |---|---|---|
-| 1 | `OIDC_ISSUER_URL` | 새 issuer (`https://auth.hubwang.com`) |
-| 2 | `NEXTAUTH_URL` | `https://store.hubwang.com` |
-| 3 | `NEXTAUTH_SECRET` | 🙋 **소유자 생성** (fan 과 같은 값일 필요 없다) |
-| 4 | `OIDC_CLIENT_ID` | `ecommerce-web-store-client` — ✅ **선행 해소**(아래) |
-| 5 | `OIDC_CLIENT_SECRET` | 같은 클라이언트의 시크릿 — ✅ **선행 해소** |
+| **지금** | 2·3·5 | `/api/auth/*` 의 **500 이 풀린다**(next-auth 가 `secret` 부재로 모듈 최상위에서 죽던 것) |
+| **뒤집기 뒤** | 1 | issuer 일치. 지금 넣으면 IdP 는 `http://iam.<도메인>` 을 광고하는데 앱은 `https://auth.hubwang.com` 을 기대해 **거절**된다 |
 
 #### 🔴🔴 그 확인을 했다 — **4·5 는 대시보드 작업이 아니다. IdP 마이그레이션이 선행이다**
 

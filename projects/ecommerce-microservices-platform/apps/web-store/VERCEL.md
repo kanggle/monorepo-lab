@@ -275,6 +275,28 @@ Toss 어댑터는 거부하므로, 한쪽만 켜면 체크아웃이 죽는다.
 `TASK-MONO-610` AC-4b 에 넣었다. 🔴 **여기서 즉흥으로 값을 넣지 마라** — 무엇을 왜 넣었는지
 이 표에 적는 것이 이 문서의 규칙이고, 그 규칙이 지켜지지 않아 바로 위 절이 생겼다.
 
+### ✅ 그 규칙대로 적는다 — 소유자가 넣은 값 (2026-09-02 UTC)
+
+| Key | 값 | 환경 | 왜 |
+|---|---|---|---|
+| `NEXTAUTH_SECRET` | 🙋 소유자 생성 (`openssl rand -base64 32`) | Production | `auth.ts:69` 가 모듈 최상위에서 `NextAuth({secret})` 를 부른다. **부재가 `/api/auth/*` 전부를 500 으로 만들고 있었다** |
+| `NEXTAUTH_URL` | `https://store.hubwang.com` | Production·Preview | `federated-logout.ts:30` 의 기본값이 `http://localhost:3001` 이다 |
+| `ECOMMERCE_WEB_STORE_CLIENT_SECRET` | `ecommerce-dev` | Production·Preview | `V0012` 시드의 dev 전용 평문. 🔴 이름이 **`OIDC_CLIENT_SECRET` 이 아니다** — 그건 팬의 규약이다(`auth-callbacks.ts:37`) |
+| `DEMO_PAYMENT_MOCK` | `1` | Production·Preview | `TASK-MONO-612` AC-1. 데모 백엔드가 `demo-pg` 이므로 프런트도 mock 이어야 한다 |
+
+🔴 **아직 안 넣은 것: `OIDC_ISSUER_URL`.** `infra/demo/demo.env` 의 `IAM_PUBLIC_URL` 이
+뒤집힌 **뒤**다. 먼저 넣으면 issuer 불일치로 거절되고, 지금(500)보다 나아지는 게 없다.
+
+🔵 `ECOMMERCE_WEB_STORE_CLIENT_ID` 는 **안 넣었다** — 코드 기본값이 이미
+`ecommerce-web-store-client` 다(`auth-callbacks.ts:35`). 넣어도 무해하지만 넣을 이유가 없다.
+
+🔵 `NEXTAUTH_SECRET` 만 **Production 전용**이다(형제 `kanggle-fan` 과 같은 모양). 프리뷰
+배포의 `/api/auth/*` 는 계속 500 이다 — 알고 두는 것이지 누락이 아니다.
+
+🔴 **env 는 다음 배포부터 적용된다.** 넣은 직후 실측: `/api/auth/providers` **여전히 500**
+(그 시점 라이브는 env 이전 배포다). 이 문단이 실린 커밋이 `web-store` 경로를 건드리므로
+판정자가 **빌드**로 판정하고, 그 배포가 첫 반영본이다.
+
 ---
 
 ## 무시 규칙 — 왜 목록이 JSON 밖에 있는가
