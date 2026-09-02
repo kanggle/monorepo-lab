@@ -3165,6 +3165,137 @@ esac
 
 ok "(z21s) 추출기 3/3 — 실제 문서(/connect /oauth2) · 음성 대조군 0건 · 양성 대조군이 새 접두사를 잡는다"
 
+echo "[verify] (z22) projects/*/.env.example 에 같은 키가 두 번 선언돼 있지 않은가 (TASK-MONO-615 B2)"
+# ---------------------------------------------------------------------------
+# 근거(TASK-MONO-610 기동 창 V1): 팬 로그인이 `?error=Configuration` 으로 죽었고
+# 런타임 `OIDC_CLIENT_SECRET` 이 `replace-with-secret-from-iam-seed` 였다. 값이
+# **틀리게 적혀 있었던 게 아니다** — `projects/fan-platform/.env.example` 이 같은 키를
+# 두 번 선언했고(25행 = 시드와 맞는 값, 73행 = 자리표시자), dotenv 는 **마지막 선언이
+# 이긴다.** `provision-demo-env.sh` 가 그 파일을 그대로 `.env` 로 복사하므로 데모
+# 호스트의 유효 값은 73행이었다.
+#
+# 🔵 두 선언은 **서로 다른 절**에 있었다(백엔드 절 · 프런트 절). 한 사실이 두 절에
+#    있으면 한쪽만 고쳐진다 — 73행의 주석은 아직도 "이 클라이언트를 V0011 시드에
+#    추가해야 한다" 고 적혀 있었지만 V0011 은 이미 그 클라이언트를 시드하고 있었다.
+#    고쳐진 결함의 자리표시자가 회수되지 않은 것이다.
+# 🔴 술어를 「fan 의 OIDC_CLIENT_SECRET 이 맞는가」로 쓰지 않는다. **재선언 자체**를
+#    문다 — 다음에 다른 파일 다른 키에서 나도 물어야 하기 때문이다.
+# 🔴 이 칸은 **정적**이다(게이트 앞). 데모 호스트가 없어도 물어야 한다 — 결함의 출처는
+#    저장소의 파일이고, 라이브에서만 도는 칸은 IdP 가 없으면 skip 이다.
+# ---------------------------------------------------------------------------
+z22_files=0
+z22_keys=0
+z22_bad=""
+for z22_f in "$ROOT"/projects/*/.env.example; do
+  [ -f "$z22_f" ] || continue
+  z22_files=$(( z22_files + 1 ))
+  z22_proj="$(basename "$(dirname "$z22_f")")"
+
+  # 주석·빈 줄을 뺀 `KEY=` 의 키 부분만. `|| true` 는 필수다 — grep 0건은 종료코드 1
+  # 이고 `set -e` 아래 명령치환 실패는 스크립트를 **아무 메시지 없이** 죽인다.
+  z22_all="$(grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' "$z22_f" | tr -d '=' || true)"
+  z22_n="$(printf '%s' "$z22_all" | grep -c . || true)"
+  z22_keys=$(( z22_keys + z22_n ))
+
+  z22_dup="$(printf '%s' "$z22_all" | sort | uniq -d || true)"
+  for z22_k in $z22_dup; do
+    z22_lines="$(grep -n "^$z22_k=" "$z22_f" | cut -d: -f1 | tr '\n' ' ' || true)"
+    z22_bad="$z22_bad
+  - $z22_proj/.env.example : $z22_k (행 $z22_lines)"
+  done
+done
+
+# 0건은 "재선언이 없다"가 아니라 "아무 파일도 못 찾았다"일 수 있다.
+[ "$z22_files" -ge 1 ] || fail "(z22) projects/*/.env.example 을 하나도 찾지 못했습니다 (ROOT=$ROOT) — **모집단 0 은 통과가 아니라 고장입니다.**"
+[ "$z22_keys" -ge 1 ] || fail "(z22) $z22_files 개 파일에서 키를 **하나도** 못 뽑았습니다 — 술어가 형태를 놓쳤습니다(가드가 공허해집니다)."
+
+[ -z "$z22_bad" ] || fail "(z22) .env.example 이 같은 키를 두 번 선언합니다:$z22_bad"\
+  $'\n'"→ dotenv 는 **마지막 선언이 이깁니다.** compose 는 파일 옆의 .env 를 자동 로드하므로"\
+  $'\n'"  런타임 값은 아래쪽 선언이고, 위쪽의 옳은 값은 아무 효력이 없습니다."\
+  $'\n'"→ 선언을 하나로 합치세요. 절이 둘이면 아래 절에는 값 대신 위를 가리키는 주석만 두세요."
+
+ok "(z22) .env.example 재선언 0건 — 파일 $z22_files 개 · 키 $z22_keys 개 검사"
+
+echo "[verify] (z23) .env.example 의 OIDC 클라이언트 시크릿이 IAM 시드가 아는 값인가 (TASK-MONO-615 B2)"
+# ---------------------------------------------------------------------------
+# (z22) 는 **재선언**을 문다. 그러나 재선언 없이 값 하나만 틀려도 로그인은 똑같이 죽고,
+# 증상은 `?error=Configuration` 이라 **어느 env 가 틀렸는지 말하지 않는다.** 그래서 값
+# 자체를 시드와 대조한다.
+#
+# 왜 이 대조가 성립하나 — 시드는 BCrypt 해시를 저장하므로 평문을 되읽을 수 없다.
+# 대신 각 시드 SQL 이 평문을 주석으로 **문서화**한다("matches \"scm-dev\"").
+# 그 주석이 유일한 기계가독 연결고리다. 형식이 바뀌면 아래 하한이 문다.
+#
+# 모집단 판별 — `*CLIENT_SECRET` 전부가 대상이 **아니다**. IAM 자신의 .env.example 에는
+# 구글·카카오·MS 시크릿이 있는데 그건 **상류 소셜 IdP 자격**이지 이 IdP 에 등록된
+# 클라이언트가 아니다. 그래서 **형제 `*CLIENT_ID` 의 값이 시드에 등록된 client_id 인
+# 것만** 센다 — 프로젝트 이름을 하드코딩한 제외가 아니라 **증거로 걸러낸다.**
+# 실측(2026-09-03): 시크릿 키 8개 → 소셜 3개는 형제 ID 가 시드에 없어 자동 제외,
+# 나머지 5개가 모집단(ecommerce 는 형제 ID 가 .env.example 이 아니라 compose 기본값에
+# 있어서 거기까지 찾는다 — 안 찾으면 그 한 칸이 조용히 미커버로 남는다).
+#
+# 🔴 이 블록은 **sed 후방참조를 안 쓴다.** B1 에서 `s|...|/\1|` 이 삽입 경로를 지나며
+#    제어문자 0x01 로 접혔고, 함수는 rc=0 으로 빈 값을 뱉었다 — 자체 검사가 없었으면
+#    가드는 태어날 때부터 공허했다. 여기서는 후방참조 대신 `grep -o` 로 두 번 거른다.
+#    (남은 백슬래시는 fail 메시지의 `$'\n'` 뿐이고, 이 블록은 삽입 경로가 아니라
+#     파일로 직접 작성됐다.)
+# ---------------------------------------------------------------------------
+z23_mig="$ROOT/projects/iam-platform/apps/auth-service/src/main/resources/db/migration"
+[ -d "$z23_mig" ] || fail "(z23) IAM 시드 디렉터리가 없습니다: $z23_mig"\
+  $'\n'"→ 경로가 바뀌었다면 이 칸의 술어도 같이 바꿔야 합니다. 못 찾은 것을 '검사할 게 없다'로 읽지 않습니다."
+
+# 시드가 문서화한 평문 집합. 후방참조를 안 쓰려고 두 번 거른다.
+z23_plain="$(grep -rhoE '(matches|literal string) "[^"]+"' "$z23_mig"/*.sql | grep -oE '"[^"]+"' | tr -d '"' | sort -u || true)"
+z23_nplain="$(printf '%s' "$z23_plain" | grep -c . || true)"
+[ "${z23_nplain:-0}" -ge 1 ] || fail "(z23) 시드 SQL 에서 평문 시크릿을 **하나도** 못 뽑았습니다 — 주석 형식이 바뀌었습니다."\
+  $'\n'"→ 시드는 BCrypt 해시만 저장하므로 주석이 유일한 기계가독 연결고리입니다."\
+  $'\n'"  주석을 고쳤다면 이 칸의 추출 패턴도 같이 고치세요. 0건을 통과로 읽지 않습니다."
+
+# 시드에 등록된 client_id 집합.
+z23_ids="$(grep -rhoE "'[a-z0-9-]+-client'" "$z23_mig"/*.sql | tr -d "'" | sort -u || true)"
+z23_nids="$(printf '%s' "$z23_ids" | grep -c . || true)"
+[ "${z23_nids:-0}" -ge 1 ] || fail "(z23) 시드 SQL 에서 client_id 를 **하나도** 못 뽑았습니다 — 모집단을 정할 수 없습니다."
+
+z23_checked=0
+z23_bad=""
+for z23_f in "$ROOT"/projects/*/.env.example; do
+  [ -f "$z23_f" ] || continue
+  z23_proj="$(basename "$(dirname "$z23_f")")"
+  z23_dir="$(dirname "$z23_f")"
+
+  for z23_k in $(grep -oE '^[A-Z0-9_]*CLIENT_SECRET=' "$z23_f" | tr -d '=' | sort -u || true); do
+    z23_idk="${z23_k%CLIENT_SECRET}CLIENT_ID"
+
+    # 형제 ID — 같은 파일의 **마지막** 선언(dotenv 의미론), 없으면 compose 기본값.
+    z23_idv="$(grep "^$z23_idk=" "$z23_f" | tail -1 | cut -d= -f2- || true)"
+    if [ -z "$z23_idv" ]; then
+      z23_idv="$(grep -hoE "$z23_idk:-[^}]+" "$z23_dir"/docker-compose*.yml 2>/dev/null | head -1 | sed "s/.*$z23_idk:-//" || true)"
+    fi
+
+    # 형제 ID 가 시드에 없으면 이 시크릿은 이 IdP 의 것이 아니다(상류 소셜 자격 등).
+    printf '%s' "$z23_ids" | grep -qx "$z23_idv" || continue
+
+    z23_checked=$(( z23_checked + 1 ))
+    z23_v="$(grep "^$z23_k=" "$z23_f" | tail -1 | cut -d= -f2- || true)"
+    printf '%s' "$z23_plain" | grep -qx "$z23_v" || z23_bad="$z23_bad
+  - $z23_proj/.env.example : $z23_k=$z23_v (클라이언트 $z23_idv)"
+  done
+done
+
+# 🔵 하한을 1 로 둔 이유 — 이 모집단은 「대기실」이 아니라 안정된 규약(프로젝트마다
+#    등록 클라이언트 하나)이다. 0 이 되는 길은 둘뿐이고 **둘 다 이 칸을 고쳐야 하는
+#    사건**이다: 키 이름 규약이 바뀌었거나, 시드에서 클라이언트가 사라졌거나.
+[ "$z23_checked" -ge 1 ] || fail "(z23) 대조할 클라이언트 시크릿을 **하나도** 찾지 못했습니다 — 0건은 '검사할 게 없다'가 아닙니다."\
+  $'\n'"→ 키 이름 규약(*CLIENT_SECRET / *CLIENT_ID)이 바뀌었다면 이 칸의 술어도 같이 바꾸세요."
+
+[ -z "$z23_bad" ] || fail "(z23) .env.example 의 시크릿을 IAM 시드가 모릅니다:$z23_bad"\
+  $'\n'"→ 이 값은 `.env` 로 복사돼 런타임 자격이 됩니다(provision-demo-env.sh). 시드는 BCrypt"\
+  $'\n'"  해시를 갖고 있으므로 `.env` 쪽을 바꿔야 맞습니다 — 토큰 요청이 invalid_client 401 로"\
+  $'\n'"  떨어지고, 브라우저에는 `?error=Configuration` 만 보여 원인을 말하지 않습니다."\
+  $'\n'"→ 시드가 아는 평문: $(printf '%s' "$z23_plain" | tr '\n' ' ')"
+
+ok "(z23) 클라이언트 시크릿 ${z23_checked}건이 시드 평문 ${z23_nplain}건 안에 있다 — 등록 client_id ${z23_nids}건 기준으로 모집단 판별"
+
 if [ "$LIVE" -eq 0 ]; then
 
   echo "[verify] 정적 검증 PASS (실기동 증명은 --live)"
