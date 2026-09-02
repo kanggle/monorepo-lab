@@ -26,7 +26,7 @@ export const dynamic = 'force-dynamic';
  * `getWebStoreSession()` directly and call the gateway server-side.
  */
 
-// DEMO-RESOLVER: web-store   (ADR-MONO-068 — 두 번째가 생기면 CI 가 RED)
+// DEMO-RESOLVER-CONSUMER: web-store   (ADR-MONO-068 § D6 = B2 — 구현은 @demo/backend-resolver 하나뿐이다)
 //
 // 🔴 업스트림 주소를 여기서 **다시 조립하지 않는다.** 예전에는 이 함수가 env 사슬을
 //    자기 자리에 적어 뒤고 `shared/config/api.ts` 가 **같은 사슬을 또** 적고 있었다 —

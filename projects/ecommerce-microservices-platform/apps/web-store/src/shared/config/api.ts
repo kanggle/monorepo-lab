@@ -31,7 +31,7 @@ const isServer = typeof window === 'undefined';
 
 const SAME_ORIGIN_BFF = '/api/bff';
 
-// DEMO-RESOLVER: web-store   (ADR-MONO-068 — 두 번째가 생기면 CI 가 RED)
+// DEMO-RESOLVER-CONSUMER: web-store   (ADR-MONO-068 § D6 = B2 — 구현은 @demo/backend-resolver 하나뿐이다)
 //
 // 🔴 서버 쪽 baseURL 은 **생성 시점에 굳으면 안 된다** (TASK-MONO-580 / ADR-MONO-067 D2).
 //    데모 백엔드 주소는 부팅마다 바뀌는데 이 모듈은 프로세스당 한 번만 평가된다 ⇒ 굳은

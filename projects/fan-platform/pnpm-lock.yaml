@@ -10,6 +10,9 @@ importers:
 
   web/fan-platform-web:
     dependencies:
+      '@demo/backend-resolver':
+        specifier: link:../../../../infra/demo/backend-resolver
+        version: link:../../../../infra/demo/backend-resolver
       '@portone/browser-sdk':
         specifier: ^0.1.9
         version: 0.1.9

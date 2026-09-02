@@ -139,39 +139,57 @@ if (!fs.existsSync(pkgPath)) { console.log('SKIP	package.json 이 없는 프로�
 let pkg;
 try { pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8')); }
 catch (e) { console.log('UNRESOLVED	' + dir + '/package.json 파싱 실패'); process.exit(0); }
-const deps = Object.entries({ ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) })
-  .filter(([, v]) => typeof v === 'string' && v.startsWith('workspace:'))
-  .map(([k]) => k);
-if (!deps.length) { console.log('SKIP	workspace:* 의존이 없습니다'); process.exit(0); }
-// 워크스페이스 루트를 위로 걸어 찾는다 — 이름 해석의 범위다.
-let ws = dir;
-for (;;) {
-  if (fs.existsSync(path.join(root, ws, 'pnpm-workspace.yaml'))) break;
-  const up = path.dirname(ws);
-  if (up === ws || ws === '.') { ws = null; break; }
-  ws = up;
-}
-if (!ws) { console.log('UNRESOLVED	' + dir + ' 위에서 pnpm-workspace.yaml 을 못 찾았습니다'); process.exit(0); }
-const prefix = norm(ws) + '/';
-const byName = new Map();
-const NL = String.fromCharCode(10);
-for (const rel of fs.readFileSync(0, 'utf8').split(NL).filter(Boolean)) {
-  const r = norm(rel);
-  if (!r.startsWith(prefix)) continue;             // 다른 워크스페이스는 보지 않는다
-  try {
-    const n = JSON.parse(fs.readFileSync(path.join(root, r), 'utf8')).name;
-    if (n && !byName.has(n)) byName.set(n, norm(path.dirname(r)));
-  } catch (e) { /* 파싱 못 하는 것은 이름을 제공하지 않는다 */ }
-}
+// 🔴🔴 **로컬 경로 의존은 두 가지다** (TASK-MONO-614, 2026-09-02).
+//    이 검사는 `workspace:*` 만 봤다. 그런데 `ADR-MONO-068 § D6 = B2` 가 채택되면서
+//    Root Directory **밖**의 공유 패키지를 **`file:` 상대경로**로 의존하게 됐다 — 그리고
+//    `file:` 은 정의상 워크스페이스 **밖**을 가리키므로 `workspace:` 만 보는 이 검사에는
+//    **한 건도 안 잡힌다**. 즉 B2 가 만든 의존이 정확히 이 칸의 사각지대로 들어왔다.
+//    그 패키지만 바뀐 커밋은 배포가 조용히 건너뛰어지고 앱은 낡은 판을 계속 서빙한다.
+// 🔵 `file:` 쪽은 **경로가 곧 답이라** 워크스페이스 이름 해석이 필요 없다.
+const all = Object.entries({ ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) })
+  .filter(([, v]) => typeof v === 'string' && (v.startsWith('workspace:') || v.startsWith('file:')));
+if (!all.length) { console.log('SKIP	로컬 경로 의존(workspace: / file:)이 없습니다'); process.exit(0); }
+const wsDeps = all.filter(([, v]) => v.startsWith('workspace:')).map(([k]) => k);
+const fileDeps = all.filter(([, v]) => v.startsWith('file:'));
 const covered = specs.map((s) => (s.indexOf(':/') === 0 ? s.slice(2) : s));
+const isCovered = (dd) => covered.some((c) => dd === c || dd.startsWith(c + '/'));
 let ok = 0;
-for (const d of deps) {
-  const dd = byName.get(d);
-  if (!dd) { console.log('UNRESOLVED	' + d + ' 의 디렉터리를 워크스페이스에서 못 찾았습니다'); continue; }
-  if (covered.some((c) => dd === c || dd.startsWith(c + '/'))) ok++;
-  else console.log('UNCOVERED	' + d + '	' + dd);
+for (const [name, spec] of fileDeps) {
+  const dd = norm(path.normalize(path.join(dir, spec.slice(5))));
+  if (isCovered(dd)) ok++;
+  else console.log('UNCOVERED	' + name + '	' + dd);
 }
-console.log('COUNT	' + deps.length + '	' + ok);
+if (wsDeps.length) {
+  // 워크스페이스 루트를 위로 걸어 찾는다 — 이름 해석의 범위다.
+  let ws = dir;
+  for (;;) {
+    if (fs.existsSync(path.join(root, ws, 'pnpm-workspace.yaml'))) break;
+    const up = path.dirname(ws);
+    if (up === ws || ws === '.') { ws = null; break; }
+    ws = up;
+  }
+  if (!ws) { console.log('UNRESOLVED	' + dir + ' 위에서 pnpm-workspace.yaml 을 못 찾았습니다'); }
+  else {
+    const prefix = norm(ws) + '/';
+    const byName = new Map();
+    const NL = String.fromCharCode(10);
+    for (const rel of fs.readFileSync(0, 'utf8').split(NL).filter(Boolean)) {
+      const r = norm(rel);
+      if (!r.startsWith(prefix)) continue;         // 다른 워크스페이스는 보지 않는다
+      try {
+        const n = JSON.parse(fs.readFileSync(path.join(root, r), 'utf8')).name;
+        if (n && !byName.has(n)) byName.set(n, norm(path.dirname(r)));
+      } catch (e) { /* 파싱 못 하는 것은 이름을 제공하지 않는다 */ }
+    }
+    for (const d of wsDeps) {
+      const dd = byName.get(d);
+      if (!dd) { console.log('UNRESOLVED	' + d + ' 의 디렉터리를 워크스페이스에서 못 찾았습니다'); continue; }
+      if (isCovered(dd)) ok++;
+      else console.log('UNCOVERED	' + d + '	' + dd);
+    }
+  }
+}
+console.log('COUNT	' + all.length + '	' + ok);
 WSJS
   fi
   node "$_WSCOV" "$ROOT" "$@"
@@ -339,23 +357,23 @@ main() {
     git -C "$ROOT" ls-files '*package.json'       | workspace_dep_coverage "$cfg" "${specs[@]}" > "$wsout" 2>&1
     wsrc=$?
     if [ "$wsrc" -ne 0 ]; then
-      bad "(12) 워크스페이스 의존 검사가 죽었습니다 (rc=$wsrc) — 위반이 없는 것과 다른 사건입니다:"
+      bad "(12) 로컬 경로 의존 검사가 죽었습니다 (rc=$wsrc) — 위반이 없는 것과 다른 사건입니다:"
       while IFS= read -r wsa; do bad "     $wsa"; done < <(head -5 "$wsout")
     elif ! grep -qE '^(COUNT|SKIP)' "$wsout"; then
       bad "(12) 검사가 판정 줄(COUNT/SKIP)을 하나도 내지 않았습니다 — **판정 불가**입니다."
     else
     while IFS=$'	' read -r wskind wsa wsb; do
       case "$wskind" in
-        SKIP)       note "(12) 워크스페이스 의존 검사 해당 없음 — $wsa" ;;
+        SKIP)       note "(12) 로컬 경로 의존 검사 해당 없음 — $wsa" ;;
         UNRESOLVED) bad "(12) $wsa"
                     bad "     → 해석이 죽은 것과 위반이 없는 것은 다른 사건입니다. 조용히 통과시키지 않습니다." ;;
-        UNCOVERED)  bad "(12) 워크스페이스 의존 '$wsa' ($wsb) 가 트리거 목록에 없습니다."
+        UNCOVERED)  bad "(12) 로컬 경로 의존 '$wsa' ($wsb) 가 트리거 목록에 없습니다."
                     bad "     → 그 패키지만 바뀐 커밋은 **배포가 조용히 건너뛰어집니다** — CI 는 초록이고"
                     bad "       사이트는 마지막 성공 배포를 계속 서빙하므로 URL 을 찔러도 200 입니다." ;;
         COUNT)      wstot="$wsa"; wsok="$wsb" ;;
       esac
     done < "$wsout"
-    [ -z "$wstot" ] || note "(12) workspace:* 의존 ${wstot}개 중 ${wsok}개가 트리거 목록에 덮임"
+    [ -z "$wstot" ] || note "(12) 로컬 경로 의존(workspace: / file:) ${wstot}개 중 ${wsok}개가 트리거 목록에 덮임"
     fi
     rm -f "$wsout"
 
