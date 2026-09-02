@@ -26,6 +26,18 @@
 
 ---
 
+- 2026-09-02 — ✅ **`B2` 구현 완료 (§ D6.3).** 구현은 `infra/demo/backend-resolver`
+  (`@demo/backend-resolver`) 하나이고 두 앱이 `file:` 로 의존한다. 루트 워크스페이스는
+  **안 만들었다**. 가드는 § D5.3 대로 **교체**됐고(새 명제 = «앱이 자기 구현을 갖지 않는가»),
+  그 필요를 **A/B 로 쟀다** — 옛 가드는 승격 완료 세계에서 **rc=0**(공허한 초록), 앱이
+  되찾아온 세계에서 **rc=2 + 틀린 사유**(«판별 패턴이 죽었습니다»)를 낸다.
+  🔴🔴 구현이 **도달성 구멍 셋**을 찾아 같이 막았다(판정자 `PATHSPECS` · 트리거 가드 칸 (12)의
+  `file:` 사각지대 · `ci.yml` 필터가 613 의 넓힌 술어를 안 따라간 것).
+  🔵 AC-4 는 **반쪽 확정** — `kanggle-store` 는 「Root Directory 밖 포함」 **ON 이 실측으로
+  확정**됐고(`workspace:*` × 6 + 라이브 200), `kanggle-fan` 은 **미지수**라 브랜치를
+  `preview/…` 로 내 **머지 전에** 관측한다. 🔴 ㉯ 는 **로컬 빌드**의 관측이라 fan 의 증거가
+  아니다 — 그 칸을 제자리에 표시했다.
+
 - 2026-09-01 (3) — 🔴🔴 **§ D6 실측 표의 ㉰ 칸이 거짓이었다 (§ D6.2 정정). 결정은 유지된다.**
   *"TS 공유 모듈 선례 0건"* 은 `libs/` 라는 **이름만** 보고 `packages/` 를 안 본 결과다 —
   `projects/ecommerce-microservices-platform/packages/` 에 **`@repo/*` 여섯 개**가 있고
@@ -305,7 +317,7 @@ web-store 의 마커 파일 4개 중 3개가 소비자(`route.ts` · `config/api
 | # | 잰 것 | 값 | 어느 안에 걸리는가 |
 |---|---|---|---|
 | ㉮ | 루트 `pnpm-lock.yaml` | 🔵 **이미 있다** — 9줄, `importers: { .: {} }`. 루트 `package.json` 은 deps·devDeps·packageManager **전부 없음** | `B` 계열 |
-| ㉯ | Next 빌드가 그 루트 lockfile 을 **본다** | 🔴 실측 로그: *"We detected multiple lockfiles and selected the directory of `<repo-root>/pnpm-lock.yaml` as the root directory"* — fan 빌드에서 **매번** 뜬다 | `B` 계열 |
+| ㉯ | Next 빌드가 그 루트 lockfile 을 **본다** | 🔴 실측 로그: *"We detected multiple lockfiles and selected the directory of `<repo-root>/pnpm-lock.yaml` as the root directory"* — fan 빌드에서 **매번** 뜬다. 🔴🔴 **단 이것은 «로컬» 빌드의 관측이다 — § D6.3 참조.** Vercel 의 「Root Directory 밖 포함」 설정을 **증명하지 않는다** | `B` 계열 |
 | ㉰ | 저장소의 **TS 공유 모듈 선례** | 🔴🔴 **이 칸은 거짓이었다 — § D6.2 정정.** ~~0건. 루트 `libs/` 는 전부 Java(TS/JS 파일 0개), `projects/*/libs/` 도 Java~~ 실제로는 **프로젝트 안에 6개**가 있다(`@repo/*`). **프로젝트를 건너는 선례만** 0건이다 | `B`·`B2` |
 | ㉱ | `hubwang.com` 의 등록·NS | 🔵 **둘 다 Vercel** ⇒ `auth.` 추가는 **대시보드 한 번**, 외부 DNS 쓰기·인증서 **불필요** | 모든 안 (C2 의 전제 확인) |
 | ㉲ | Host 기반 라우팅 **선례** | 🔴 **0건** (저장소 소스에서 `headers().get('host')` 분기 0). middleware 파일은 3개지만 전부 경로 기반 | `B3` |
@@ -444,6 +456,71 @@ Vercel 의 *"Root Directory 바깥 소스를 빌드 단계에 포함"* 설정은
 남은 것(AC-2 동적 · AC-3 · AC-4/4b · AC-5)은 전부 그 앱의 존재를 전제한다.
 🔵 **`TASK-MONO-613`(가드 모집단의 구멍)은 이 지정과 독립**이며, 오히려 **지정 전에** 닫는
 편이 낫다 — 그래야 어떤 안을 고르든 트리거가 **확실히** 문다.
+
+### D6.3 — ✅ **`B2` 가 구현됐다** (`TASK-MONO-614`, 2026-09-02)
+
+구현은 **`infra/demo/backend-resolver`**(`@demo/backend-resolver`) 하나이고, `web-store` 와
+`fan-platform-web` 은 그것을 **`file:` 상대경로**로 의존해 설정 셋만 넘긴다. 루트
+`pnpm-workspace.yaml` 은 **만들지 않았다** — 그것이 `B2` 를 `B` 와 가르는 한 줄이다.
+
+**자리 선택의 근거와 기각한 후보 셋**은 [`infra/demo/backend-resolver/README.md § 자리`]
+(../../infra/demo/backend-resolver/README.md) 에 있다. 요약: `DEMO_API_BASE` 라는 **계약**을
+정하는 `build.sh` 와 같은 계약의 다른 클라이언트(론처)가 이미 `infra/demo/` 에 산다.
+
+### 🔴 공유 대상의 크기 — § D4 가 맞았다
+
+두 사본은 **주석을 벗기면 코드 71줄 중 4줄**만 달랐고, 그 넷이 전부 프로젝트 고유 축이었다
+(`SERVICE_PREFIX` · 폴백 env 이름 2개 · 폴백 기본값). ⇒ `DemoBackendResolverConfig` 의 필드가
+**정확히 그 셋**이다. 🔵 § D5 의 정규화가 실측해 둔 것이 그대로 API 가 됐다 —
+**이전 판의 가드가 다음 판의 설계를 낳았다.**
+
+### 🔴🔴 가드는 «교체» 됐고, 그 필요를 A/B 로 쟀다
+
+옛 가드를 `git show origin/main:` 으로 꺼내 같은 두 세계에 돌렸다:
+
+| 세계 | 옛 가드 (§ D5) | 새 가드 (§ D6) |
+|---|---|---|
+| **A** — 승격 완료 | **rc=0**. 스스로 *"정규화 비교 **0 쌍** · 이 통과는 '갈라지지 않았다' 가 아니라 '비교할 것이 없다'"* 를 출력한다 | rc=0 · «앱이 구현을 갖지 않는다» |
+| **B** — 앱이 구현을 되찾아옴 | 🔴 **rc=2**, 사유가 *"판별 패턴이 죽었습니다"* | **rc=1** + 정확한 처방 |
+
+🔴🔴 **B 가 A 보다 나쁘다.** 옛 가드는 침묵하지 않고 **가드 자신을 의심하라고 말한다** —
+그 오진의 자연스러운 다음 행동이 **§ D3 이 금지한 완화**다. ⇒ § D5.3 의 *"삭제가 아니라
+교체"* 는 «초록이 공허해지니까» 만이 아니라 **«빨강이 엉뚱한 곳을 가리키니까»** 이기도 하다.
+
+새 명제는 **«앱이 자기 구현을 갖지 않는가»** 이고, 구현 지문은 셋의 OR 다 —
+① `process.env.DEMO_API_BASE` 를 **읽는다** ② 구현 마커 `DEMO-RESOLVER:` ③ 옛 시그니처.
+🔵 § D2 의 마커는 **유지**되고 의미만 바뀌었다(세는 표시 → 「여기 구현이 있다」).
+소비자 마커는 `DEMO-RESOLVER-CONSUMER:` 로 갈랐다.
+
+### 🔴🔴 이 결정이 만든 **세 개의 도달성 구멍** — 구현이 찾아 같이 막았다
+
+`B2` 의 비용은 § D6 표가 «Root Directory 밖 포함» 한 축으로 좁혀 놓았지만, 실제로는 **가드가
+불리는 경로**에도 있었다:
+
+| # | 구멍 | 증상 |
+|---|---|---|
+| ① | 두 `vercel-ignore.sh` 의 `PATHSPECS` 에 패키지 자리가 없다 | 해석기를 고쳐도 **재배포가 안 된다** — CI 초록 · 사이트는 낡은 판 |
+| ② | 트리거 가드 칸 (12)가 `workspace:*` 만 본다 | `B2` 는 정의상 `file:` 이고 `file:` 은 워크스페이스 **밖**이라, **이 결정이 만든 의존이 정확히 그 칸의 사각지대**로 들어온다 |
+| ③ | `ci.yml` 의 `demo-resolver-copies` 필터가 `projects/*/{apps,web}/*/src/**` | `TASK-MONO-613` 이 **술어**를 넓히고 self-test 에 «선언 없는 디렉터리» 칸까지 넣었는데 **도달성**은 그대로였다 ⇒ 그 칸이 지키려던 자리에서 가드가 **아예 안 돈다** |
+
+🔵 셋 다 같은 부류다: **판정은 옳은데 불리지 않는다.** 결정을 강제하는 가드를 바꿀 때는
+술어·모집단만이 아니라 **그 가드가 어느 diff 에서 도는가**를 함께 옮겨야 한다.
+
+### 🔵 AC-4 — 「Root Directory 밖 포함」은 **반쪽이 확정됐다**
+
+| 프로젝트 | 값 | 근거 |
+|---|---|---|
+| `kanggle-store` | ✅ **ON** | Root Directory 는 `apps/web-store` 인데 `@repo/*` **6개를 `workspace:*`** 로 의존한다(그 패키지들은 `packages/*` = **밖**). `workspace:` 는 워크스페이스 루트 없이 해석이 **불가능**하고 패키지가 `private: true` 라 레지스트리 폴백도 없다. 그런데 `store.hubwang.com` 이 **200 · `Server: Vercel` · Next 렌더**를 서빙한다 |
+| `kanggle-fan` | 🔴 **미지수** | fan 은 `workspace:*` 의존이 **없다** ⇒ 배포 성공이 이 축을 증명하지 않는다 |
+
+🔴🔴 **㉯ 를 fan 의 증거로 쓰면 안 된다** — 그 *"multiple lockfiles"* 로그는 **로컬 빌드**의
+관측이고, 저장소 어디에도 그것이 Vercel 빌드 로그였다는 출처가 없다. 위 표에서 그 칸을
+제자리에 표시해 두었다. 🔵 이 저장소가 이미 아는 실패다: **로컬 절대값으로 제품 결정을
+사지 마라.**
+
+🔵 **그래서 관측을 머지 앞으로 당겼다.** 세 `vercel.json` 이 `"preview/*": true` 를 두고
+있으므로 구현 브랜치 이름을 `preview/…` 로 하면 **머지 전에 실제 Vercel 빌드가 돈다.**
+실패해도 Preview 환경이라 프로덕션 URL 은 그대로다.
 
 ## Consequences
 

@@ -19,6 +19,9 @@ import type { NextConfig } from 'next';
  * nothing about it reaches the running server.
  */
 const nextConfig: NextConfig = {
+  // 🔴 `@demo/backend-resolver` 은 TS 소스를 그대로 내보낸다(`main: ./src/index.ts`).
+  //    이 목록에 없으면 `next build` 가 node_modules 안 TS 를 만나 죽는다 — TASK-MONO-614.
+  transpilePackages: ['@demo/backend-resolver'],
   ...(process.env.NEXT_OUTPUT_STANDALONE === '1'
     ? { output: 'standalone' as const }
     : {}),

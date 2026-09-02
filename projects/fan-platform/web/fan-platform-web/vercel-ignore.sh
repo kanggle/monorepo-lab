@@ -49,6 +49,9 @@ SPECS=(
   ':/projects/fan-platform/package.json'
   ':/projects/fan-platform/pnpm-lock.yaml'
   ':/projects/fan-platform/pnpm-workspace.yaml'
+  # 🔴 해석기 구현이 사는 자리 (TASK-MONO-614 / ADR-MONO-068 § D6 = B2). 없으면 그 패키지만
+  #    바뀜 커밋이 **배포를 조용히 건너뛰고**, 앱은 낡은 해석기를 계속 서빙한다.
+  ':/infra/demo/backend-resolver'
   ':/scripts/vercel-should-build.sh'
 )
 

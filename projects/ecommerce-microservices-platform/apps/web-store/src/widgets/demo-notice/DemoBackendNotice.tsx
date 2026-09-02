@@ -1,4 +1,4 @@
-// DEMO-RESOLVER: web-store   (ADR-MONO-068 — 두 번째가 생기면 CI 가 RED)
+// DEMO-RESOLVER-CONSUMER: web-store   (ADR-MONO-068 § D6 = B2 — 구현은 @demo/backend-resolver 하나뿐이다)
 //
 // 🔵 이 파일은 해석기를 **소비**할 뿐 자기가 주소를 만들지 않는다. 그래도 마커를 단다:
 //    가드의 내용 탐지는 `DEMO_API_BASE` 라는 문자열을 보고, 아래 주석이 그 이름을 설명하기

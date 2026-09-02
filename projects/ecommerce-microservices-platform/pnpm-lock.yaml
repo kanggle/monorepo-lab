@@ -17,6 +17,9 @@ importers:
 
   apps/web-store:
     dependencies:
+      '@demo/backend-resolver':
+        specifier: file:../../../../infra/demo/backend-resolver
+        version: file:../../infra/demo/backend-resolver
       '@repo/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
@@ -323,6 +326,9 @@ packages:
   '@csstools/css-tokenizer@4.0.0':
     resolution: {integrity: sha512-QxULHAm7cNu72w97JUNCBFODFaXpbDg+dP8b/oWFAZ2MTRppA3U00Y2L1HqaS4J6yBqxwa/Y3nMBaxVKbB/NsA==}
     engines: {node: '>=20.19.0'}
+
+  '@demo/backend-resolver@file:../../infra/demo/backend-resolver':
+    resolution: {directory: ../../infra/demo/backend-resolver, type: directory}
 
   '@emnapi/core@1.9.1':
     resolution: {integrity: sha512-mukuNALVsoix/w1BJwFzwXBN/dHeejQtuVzcDsfOEsdpCumXb/E9j8w11h5S54tT1xhifGfbbSm/ICrObRb3KA==}
@@ -1772,6 +1778,7 @@ packages:
   eslint@9.39.4:
     resolution: {integrity: sha512-XoMjdBOwe/esVgEvLmNsD3IRHkm7fbKIUGvrleloJXUZgDHig2IPWNniv+GwjyJXzuNqVjlr5+4yVUZjycJwfQ==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+    deprecated: This version is no longer supported. Please see https://eslint.org/version-support for other options.
     hasBin: true
     peerDependencies:
       jiti: '*'
@@ -3246,6 +3253,8 @@ snapshots:
   '@csstools/css-tokenizer@3.0.4': {}
 
   '@csstools/css-tokenizer@4.0.0': {}
+
+  '@demo/backend-resolver@file:../../infra/demo/backend-resolver': {}
 
   '@emnapi/core@1.9.1':
     dependencies:
