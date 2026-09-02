@@ -15,6 +15,10 @@ bin/
 dist/
 .gradle/
 .next/
+# 🔵 `tsc --noEmit` + `incremental: true` 가 tsconfig 옆에 남기는 캐시.
+#    형제 Next 앱 셋 중 아무도 커밋하지 않는다 — 규칙이 없어 우연히 안 들어갔을 뿐이라
+#    (TASK-MONO-610 에서 실제로 한 번 스테이지됐다) 여기서 못 박는다.
+*.tsbuildinfo
 *.class
 
 # IDE

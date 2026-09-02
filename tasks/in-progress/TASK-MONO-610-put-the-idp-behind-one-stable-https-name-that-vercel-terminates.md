@@ -519,6 +519,108 @@ SELECT redirect_uris FROM oauth_clients WHERE client_id='platform-console-web';
 
 🔵 **기동이 필요하다** ⇒ 소유자 승인·예산 사안이다. AC-0/1 은 그것 없이 진행할 수 있다.
 
+## ✅ 포워더 구현 (2026-09-02) — `infra/demo/auth-forwarder`, Vercel 프로젝트 `kanggle-auth`
+
+`§ D6.1` 순서의 **3번**이다(1=613, 2=614 는 둘 다 머지됐다). `@demo/backend-resolver` 를
+**import** 해서 그날 IP 를 얻는 catch-all 라우트 핸들러 하나짜리 Next 앱이다.
+자리·형태·소유자 작업은 [`infra/demo/auth-forwarder/README.md`](../../infra/demo/auth-forwarder/README.md).
+
+🔵 **형태를 Next 로 고른 이유는 «실측된 것을 고른다» 다.** 프레임워크 없는 `api/` 함수가
+더 가볍지만, `link:` 로 연결한 TS 소스 패키지를 그 번들러가 어떻게 다루는지는 **미측정**이다.
+반면 `transpilePackages` + `link:` 는 `TASK-MONO-614` 에서 **두 앱이 프로덕션까지 통과**했다.
+
+### 🔴 두 설계 결정 — AC-0 의 실측이 그대로 코드가 됐다
+
+| # | 결정 | 근거 |
+|---|---|---|
+| ① | 업스트림에 보내는 `Host` 는 **`iam.<DEMO_DOMAIN>`** (공개 이름이 아니다) | 데모 앞단 Traefik 은 라우터를 `Host` 로 고른다. 공개 이름을 넘기면 DNS·TCP 는 성공하는데 **404** 가 난다 |
+| ② | 공개 이름은 **`X-Forwarded-*`** 로 | AC-0 축 2 실측: 그 헤더를 **빼면 `http://`, 넣으면 `https://`** 로 `Location` 이 갈렸다(음성 대조군이 반대로 움직였다) |
+
+### 🔴🔴 로컬 하네스를 만들어 종단 간으로 쟀고, **결함 둘을 잡았다**
+
+스텁 IdP(:80) + 스텁 컨트롤 플레인(:19099) + `next start`. **12칸.**
+🔵 IdP 스텁은 **받은 헤더를 그대로 되돌려 준다** — 포워더가 무엇을 보냈는지 «추론» 이 아니라
+**헤더로** 판정한다(AC-0 이 요구한 관측 지점과 같다).
+
+| 결함 | 무엇이 틀렸나 | 왜 조용한가 |
+|---|---|---|
+| **(a)** `X-Forwarded-Host` 를 `new URL(req.url).host` 로 만들었다 | 그것은 들어온 `Host` 헤더가 **아니다**. 실측: `Host: 127.0.0.1:3003` 으로 불렀는데 값은 **`localhost:3003`** 이었다 | 🔴 Vercel 에서는 커스텀 도메인이 아니라 **배포 URL** 이 될 수 있다 ⇒ IdP 가 `https://<deployment>.vercel.app/login` 을 광고한다. **이 프로젝트의 존재 이유가 무너지는데 아무것도 «실패» 하지 않는다** |
+| **(b)** 응답의 `content-encoding` 을 통과시켰다 | undici 는 본문을 **자동 해제하면서 헤더는 남긴다**(실측: `content-encoding: gzip` + `content-length: 35` 가 남고 본문은 이미 평문) | 증상이 «프록시가 죽었다» 가 아니라 **«어떤 페이지만 깨진다»** 다 |
+
+🔵 **그리고 하네스 자신이 한 번 거짓말했다.** 앞 실행의 `next start` 가 3003 을 물고 있어
+새 서버가 못 붙었고, 테스트는 **낡은 빌드**를 쟀다 — 코드를 두 군데 고쳤는데 결과가 하나도
+안 바뀌어 «수정이 안 먹는다» 로 오진할 뻔했다. ⇒ 하네스가 **시작 전에 포트가 비어 있음을
+단언**하고, 끝나면 포트를 물고 있는 PID 를 직접 죽이도록 고쳤다.
+[[feedback_a_harness_must_pin_which_tree_it_measures]]
+
+### ✅ 실측 결과
+
+| 축 | 결과 |
+|---|---|
+| 업스트림이 받은 `Host` | ✅ `iam.127-0-0-1.sslip.io` (① 이 성립한다) |
+| `X-Forwarded-Proto` / `-Host` / `-Port` | ✅ `https` / **들어온 Host 헤더** / `443` |
+| `Location` 통과 | ✅ **302 를 따라가지 않고** `https://<들어온 Host>/login` 을 그대로 넘긴다 |
+| `Set-Cookie` **2개** | ✅ 합쳐지지 않는다(`getSetCookie()` + `append`) |
+| gzip 응답 | ✅ `content-encoding` 제거 · 본문 평문 |
+| 경로·쿼리·POST 본문 | ✅ `/a/b?x=1&y=2` · `POST` 보존 |
+| **V7 — 데모 `stopped`** | ✅ **503 + 정의된 화면**(502 아님) |
+| **로컬·CI (`DEMO_API_BASE` 없음)** | ✅ 503 + *"데모 컨트롤 플레인이 설정되어 있지 않습니다"* |
+
+🔴 **이것은 «로그인이 된다» 가 아니다.** 스텁은 Spring 의 `ForwardedHeaderFilter` 동작을
+흉내낸 것이고, 진짜 IdP·진짜 브라우저·진짜 왕복은 **V1–V8**(기동 창)이 잰다.
+
+### ✅ AC-5 — 넷째 Vercel 프로젝트의 배선 부채를 **같은 PR 에서** 갚았다
+
+| 무엇 | 조치 |
+|---|---|
+| `vercel-deploy.yml` matrix + secret | `kanggle-auth` 항목 추가(판정자 4개 · secret 4개). 🔴 없으면 칸 (14)가 *"main=false 인데 워크플로가 이 프로젝트를 안 굽습니다"* 로 문다 |
+| `check-vercel-build-triggers.sh` `FLOOR` | **3 → 4** |
+| `vercel.json` `deploymentEnabled.main` | `false` (607 의 훅 축을 따른다) + `preview/*: true` |
+| `ci.yml` | `auth-forwarder` paths-filter + 프런트 잡에 **install/typecheck/build** 3스텝 |
+
+🔴 **`VERCEL_DEPLOY_HOOK_AUTH` 는 소유자가 프로젝트를 만든 뒤에야 생긴다.** 그때까지
+`kanggle-auth` 잡은 *"secret 이 비어 있습니다"* 로 **빨갛다** — 그리고 **그것이 정확한
+신호다**: 앱은 저장소에 있는데 배포할 곳이 없다. 🔵 판정자가 이 앱의 경로를 안 건드린
+커밋은 건너뛰므로 **매 커밋 빨간 것은 아니다**.
+
+### 🔴🔴 그리고 `TASK-MONO-614` 가 만든 **조용한 회귀**를 찾아 고쳤다
+
+가드가 스스로 말했다 — 포워더에 대해 *"로컬 경로 의존이 **없습니다**"*.
+
+614 는 칸 (12)에 **`file:`** 를 더했는데, 같은 티켓이 그 뒤 vitest 문제로 의존을
+**`file:` → `link:`** 로 바꿨다. 그러자 그 칸은 다시 눈이 멀었다:
+
+| | 614 중간 | 614 최종(= main) | 지금 |
+|---|---|---|---|
+| web-store | 7/7 | 🔴 **6/6** | ✅ 7/7 |
+| fan | 1/1 | 🔴 **SKIP** | ✅ 1/1 |
+| auth-forwarder | — | — | ✅ 1/1 |
+
+🔴 **두 수정은 각각 옳았고, 그 사이의 구멍만 아무도 안 봤다.** 그리고 그 회귀는
+**빨간불을 하나도 안 냈다** — 가드가 조용해지는 방향이었기 때문이다.
+⇒ 칸 (12)가 `link:` 도 보게 했다. **bite**: 포워더의 pathspec 을 빼자(제거를 먼저 단언)
+`1개 중 0개` · rc=1. self-test 는 칸 (i)가 `4 -> 3` 으로 따라간다.
+[[feedback_two_correct_exclusions_compose_into_a_hole]] [[feedback_why_a_guard_does_not_bite]]
+
+### 🔵 `TASK-MONO-613` 이 예견한 «첫 번째 예외»가 도착했다
+
+613 은 *"오늘 그 구멍은 잠재적이다 — 그러나 610 이 만들려는 것이 정확히 첫 번째 예외다"*
+라고 적었다. 이 앱이 `projects/` **밖의 첫 Next 앱**이고, 해석기 가드는 지금
+**선언 앱 4개**를 본다. 🔴 613 이 없었다면 이 앱은 모집단 **밖**이었을 것이다.
+
+### 🔴 이 티켓은 **아직 `in-progress`** 다 — 닫히지 않은 AC 가 셋 있다
+
+| AC | 왜 안 닫혔나 |
+|---|---|
+| AC-2 라이브 절반 | 새 이름이 **실재해야** 헤어핀을 잰다 ⇒ 소유자 1~3 + 기동 창 |
+| AC-3 (V1–V8) | 기동 창. 🔴 **V5 는 부팅 2회**를 요구한다 |
+| AC-4b | `kanggle-fan` · `kanggle-store` 의 `OIDC_ISSUER_URL` 을 새 issuer 로 — 대시보드 |
+
+🔵 **`review/` 로 올리지 않는 것이 옳다.** `review/` 는 frozen 이라 남은 AC 를
+CORRECTION 으로만 적게 되고, 그러면 «위를 먼저 읽는 사람» 이 닫힌 티켓으로 오해한다.
+
+---
+
 ## AC-4b — 🔴 **새 issuer 이름을 실제로 «꽂는다»** (`TASK-MONO-611` 이 발견)
 
 C2 가 stable HTTPS 이름을 만들어도 **아무도 그 값을 앱에 넣지 않으면** 로그인은 그대로
