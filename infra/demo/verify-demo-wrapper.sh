@@ -1114,9 +1114,24 @@ if [ "$x_store_present" = "1" ]; then
 else
   # 🔴 «검사했다» 가 아니라 «반쪽만 검사했다» 라고 말한다. 미집행 축은 매 실행마다
   #    이름이 찍혀야 한다 — 조용한 공백은 다음 사람에게 «원래 그런 것» 으로 읽힌다.
-  ok "결제 mock — 백엔드만 검사 (payment-service='${x_profiles}'). 프런트 절반은 데모에 없다:"\
-     $'\n'"     스토어가 Vercel 로 옮겨가 DEMO_PAYMENT_MOCK 의 집이 kanggle-store 의 프로젝트 env 다."\
-     $'\n'"     저장소는 그 값을 렌더할 수 없다 ⇒ **이 축은 CI 에서 미집행**이다. 소유 티켓: TASK-MONO-612."
+  #
+  # 🔴🔴 TASK-MONO-612 가 이 축의 처분을 정했다 — **선택지 2: 판정 불가를 명시적으로
+  #    수용하고, 문구를 «누가·언제 손으로 확인하는가» 로 바꾼다.** 나머지 둘을 왜 안
+  #    골랐는지는 그 티켓에 있다(요약: 토큰 가드는 소유자·보안 사안이고 **그래도 선언만
+  #    잰다** — env 변경은 다음 배포부터다 · 프런트 절반을 코드로 유도하는 안은 AC-1 의
+  #    방향을 코드로 선점한다).
+  # 🔴 **날짜 박힌 실측값을 여기에 넣지 않는다.** 소유자가 값을 넣는 순간 거짓이 되는데
+  #    이 스크립트에는 그것을 빨갛게 만들 수단이 없다. 실측값은 원장과 티켓이 든다.
+  ok "결제 mock — 백엔드만 검사 (payment-service='${x_profiles}'). 프런트 절반은 저장소 밖이다:"\
+     $'\n'"     DEMO_PAYMENT_MOCK 의 집은 Vercel 프로젝트 kanggle-store 의 env 다 — compose 가 아니다."\
+     $'\n'"     ⇒ CI 도 이 스크립트도 이 축을 **판정할 수 없다**. TASK-MONO-612 가 그것을 수용했고,"\
+     $'\n'"       그래서 판정은 사람이 한다:"\
+     $'\n'"         누가·언제 : 소유자가 — 데모 기동 창마다, 그리고 kanggle-store 의 env 를 만질 때마다"\
+     $'\n'"         명령      : vercel env ls production --project kanggle-store | grep DEMO_PAYMENT_MOCK"\
+     $'\n'"         기대값    : DEMO_PAYMENT_MOCK=1   (백엔드가 demo-pg 인 한 — 위 '${x_profiles}' 가 그 절반이다)"\
+     $'\n'"         원장      : projects/ecommerce-microservices-platform/apps/web-store/VERCEL.md"\
+     $'\n'"     🔴 env 목록에 있다 = 켜져 있다 가 **아니다**. env 변경은 다음 배포부터 적용되고,"\
+     $'\n'"       최종 판정은 /api/store-config 가 {\"demoPayment\":true} 를 내는 것이다(로그인 필요)."
 fi
 
 # ---------------------------------------------------------------------------
