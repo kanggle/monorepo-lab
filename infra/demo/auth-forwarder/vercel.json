@@ -7,6 +7,7 @@
       "preview/*": true
     }
   },
+  "framework": "nextjs",
   "installCommand": "pnpm install --no-frozen-lockfile",
   "ignoreCommand": "bash \"$(git rev-parse --show-toplevel)/infra/demo/auth-forwarder/vercel-ignore.sh\""
 }

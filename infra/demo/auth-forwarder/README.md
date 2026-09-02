@@ -171,3 +171,40 @@ Build Step"* 이 꺼져 있으면 install 이 죽는다.
 | `Packages: +N` 뒤 빌드 진행 | ✅ 켜져 있다 |
 | `ERR_PNPM_LINKED_PKG_DIR_NOT_FOUND` / `ENOENT … backend-resolver` | 🔴 꺼져 있다 ⇒ 대시보드에서 켜고 재배포 |
 
+#### ✅ 판정됨 — **켜져 있다** (2026-09-02, 첫 install)
+
+```
++ @demo/backend-resolver 0.0.0 <- ../backend-resolver
+Done in 4.3s using pnpm v10.28.0
+```
+
+`../backend-resolver` 는 Root Directory **밖**이다. pnpm 이 그것을 해소했다는 것이 곧
+그 설정이 켜져 있다는 뜻이다. 🔵 **CI 의 초록은 이 축을 재지 못한다** — CI 는 저장소
+전체를 체크아웃한 자리에서 설치하므로 그 경로가 **당연히** 있다. Vercel 만이 「Root
+Directory 밖」이라는 제약 아래에서 설치한다.
+
+### 🔴🔴 그 첫 빌드가 **다른 이유로** 실패했다 — Framework 자동 감지
+
+```
+✓ Compiled successfully in 3.2s
+...
+Error: No Output Directory named "public" found after the Build completed.
+```
+
+`next build` 는 **성공했다**(라우트 `ƒ /[[...path]]` 까지 나왔다). 실패는 그 **뒤**다 —
+Vercel 이 이 프로젝트의 Framework 를 **`Other` 로 잡아** 산출물을 정적 사이트처럼
+`public/` 에서 찾았다.
+
+🔵 **형제 셋은 `vercel.json` 에 `framework` 를 선언하지 않는다** — 자동 감지가 맞혔기
+때문이다. 이 앱에서만 빗나간 이유는 대시보드 설정이라 저장소에서 읽을 수 없다.
+🔴 **그래서 감지에 다시 기대지 않고 선언한다**: `vercel.json` 의 `"framework": "nextjs"`.
+대시보드 프리셋보다 우선하고, **버전 관리되며**, 프로젝트를 다시 만들어도 재현된다.
+같은 종류의 「대시보드에만 있는 진실」이 이 저장소를 이미 한 번 물었다
+(`TASK-MONO-611` — 아무 문서에도 없던 `OIDC_ISSUER_URL`).
+
+🔵 **남은 경고 하나는 고치지 않았다.** `next build` 가
+*"We detected multiple lockfiles and selected /vercel/path0/pnpm-lock.yaml as the root"*
+라고 경고한다. 🔴 그 추론은 **이 앱에서는 맞다** — `@demo/backend-resolver` 가 앱 디렉터리
+**밖**에 있으므로, 추적 루트를 앱 디렉터리로 좁히면 그 패키지가 함수 번들에서 **빠진다.**
+경고를 없애려고 `outputFileTracingRoot` 를 좁히지 마라. 넓은 쪽이 옳다.
+
