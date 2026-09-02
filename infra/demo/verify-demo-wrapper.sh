@@ -2181,10 +2181,20 @@ fi
 cat > "$z13_tmp/bin/docker" <<'Z13SHIM'
 #!/bin/sh
 if [ "$1" = "compose" ]; then
-  shift; p=""
+  shift; p=""; is_up=0
+  # 🔴 매달림 대역은 **`up` 호출에만** 건다. 이 스크립트는 같은 슬러그로 `config` 도
+  #    부르고(신선도 검사), 거기까지 매달리면 대조군과의 차이가 «매달림» 이 아니라
+  #    «대역이 아무 데서나 잔다» 가 된다 — 첫 판본이 그 때문에 34s 차를 냈다.
+  case " $* " in *" up "*) is_up=1 ;; esac
   while [ $# -gt 0 ]; do
     case "$1" in -p) p="$2"; shift 2 ;; *) shift ;; esac
   done
+  if [ "$is_up" = "1" ] && [ "$p" = "${HANGDOM:-}" ]; then
+    # 매달림 대역 — 실제 창에서 본 모양이다: compose 가 의존 대기 줄만 찍고 돌아오지 않는다.
+    echo "Container ${p}-kafka Waiting" >&2
+    sleep "${HANG_SECS:-30}"
+    exit 0
+  fi
   if [ "$p" = "${FAILDOM:-}" ]; then
     echo "dependency failed to start: container ${p}-kafka is unhealthy" >&2
     exit 1
@@ -2212,7 +2222,7 @@ chmod +x "$z13_tmp/bin/docker"
 z13_run() {  # $1=FAILDOM  $2=RECHECK(up|down)  $3=DOCKER_DEAD(0|1) → rc 를 echo
   local rc=0
   ( cd "$z13_tmp" && PATH="$z13_tmp/bin:$PATH" \
-      FAILDOM="$1" RECHECK="$2" DOCKER_DEAD="$3" \
+      FAILDOM="$1" RECHECK="$2" DOCKER_DEAD="$3" HANGDOM="${HANGDOM:-}" \
       DEMO_SEED=0 DEMO_DOMAIN=local DEMO_UP_ATTEMPTS=2 DEMO_UP_RETRY_SLEEP=1 \
       bash infra/demo/demo-up.sh iam wms console ) > "$z13_tmp/run.log" 2>&1 || rc=$?
   echo "$rc"
@@ -2290,6 +2300,84 @@ printf '%s\n' "$z13_log5" | grep -q '^\[demo\] ◑ 늦게 수렴:' \
 [ "$z13_rc5" = "0" ] \
   || z13_die "(z13) (5)번 칸이 rc=$z13_rc5 로 끝났습니다 — 수렴했으므로 초록이어야 하고, 그 초록 위에서 예산 신호가 남는지가 이 칸의 질문입니다."
 
+# (7) 🔴🔴 TASK-MONO-615 B4 — `up -d` 가 **매달려도** 스크립트가 돌아오는가
+# ---------------------------------------------------------------------------
+# 2026-09-02 기동 창(V5, 두 번째 부팅): 14:24:01 의존 대기 줄 뒤로 **17분 침묵**, 그 사이
+# 다음 도메인의 `[demo] up:` 줄이 하나도 없었고 systemd 가 1200s 에 SIGTERM 을 보냈다.
+# 즉 호출 하나가 매달렸고, 그러면 재시도·수렴 재측정·요약·상태 발행이 **전부 실행되지
+# 않는다.** 이 칸은 그 모양을 대역으로 재현해 세 가지를 묻는다:
+#   ① 스크립트가 돌아오는가(묶였는가) ② 매달림이 '기동 실패' 와 **다른 말**로 남는가
+#   ③ 뒤의 도메인이 계속 시도되는가
+# 🔵 이 칸은 경합 자체를 재지 않는다 — 경합은 기동 창의 몫이다. 여기서 지키는 것은
+#    「매달렸을 때 진단이 남는다」는 성질이고, 그것이 다음 창에서 B4 를 잴 수 있게 한다.
+# $1=매달릴 도메인 ('' = 없음)  $2=빨리 실패할 도메인 ('' = 없음)
+# 🔴 표면 재시도(기본 12회 × 10s)를 1회·0s 로 고정한다. 그 잡음이 아래 대조군 비교를
+#    통째로 삼킨다 — 첫 판본이 그것 때문에 42s 차를 «안 묶였다» 로 읽었다.
+z13_hang() {
+  local rc=0
+  ( cd "$z13_tmp" && PATH="$z13_tmp/bin:$PATH" \
+      FAILDOM="$2" RECHECK=up DOCKER_DEAD=0 HANGDOM="$1" HANG_SECS=30 \
+      DEMO_SEED=0 DEMO_DOMAIN=local DEMO_UP_ATTEMPTS=2 DEMO_UP_RETRY_SLEEP=1 \
+      DEMO_UP_CALL_TIMEOUT=2 DEMO_UP_TOTAL_BUDGET=60 \
+      DEMO_SURFACE_ATTEMPTS=1 DEMO_SURFACE_SLEEP=0 \
+      bash infra/demo/demo-up.sh iam wms console ) > "$z13_tmp/run.log" 2>&1 || rc=$?
+  echo "$rc"
+}
+# 🔴🔴 **대조군을 먼저 돌린다.** 「끊었는가」를 총 실행시간의 절대값으로 판정하면 안 된다 —
+#    이 스크립트는 up 루프 말고도 신선도·preflight·재측정·표면검사를 하고, 그 시간이 대역
+#    sleep 보다 길다. (이 칸의 첫 판본이 정확히 그렇게 틀렸다: 묶기는 제대로 묶었는데
+#    총 40s 를 «안 묶였다» 로 읽었다.) 재는 것은 **매달림이 더한 시간**이다.
+# 🔴🔴 대조군은 «실패가 없는 판» 이 아니라 **«같은 도메인이 빨리 실패하는 판»** 이다.
+#    실패가 없으면 수렴 재측정·표면 검사 경로 자체를 안 타므로 두 판의 차이가
+#    «매달림» 이 아니라 «실패 경로의 유무» 가 된다 — 그 대조군은 다른 것을 잰다.
+z13_t0="$(date +%s)"
+z13_rc7base="$(z13_hang '' iam)"
+z13_base_elapsed=$(( $(date +%s) - z13_t0 ))
+z13_t1="$(date +%s)"
+z13_rc7="$(z13_hang iam '')"
+z13_hang_elapsed=$(( $(date +%s) - z13_t1 ))
+z13_delta=$(( z13_hang_elapsed - z13_base_elapsed ))
+z13_log7="$(cat "$z13_tmp/run.log")"
+
+# ① 묶였는가 — **직접 증거는 아래 ②의 문구**다(그 줄은 종료코드 124, 즉 timeout 이 실제로
+#    끊었을 때만 나온다). 여기서는 그 위에 대조군 한 겹을 더 얹는다: 안 묶였다면 시도 2회 ×
+#    대역 sleep 30s = 최소 60s 가 대조군 위에 얹힌다. 묶였다면 몇 초다.
+[ "$z13_delta" -lt 30 ] \
+  || z13_die "(z13) 매달린 up -d 를 **끊지 못했습니다** — 대조군 ${z13_base_elapsed}s → 매달림 판 ${z13_hang_elapsed}s (차 ${z13_delta}s, 대역 sleep 30s × 시도 2회)."\
+  $'\n'"→ 그러면 데모 호스트에서는 systemd TimeoutStartSec 이 유일한 상한이고, 요약도 상태 발행도 못 합니다."\
+  $'\n'"→ demo-up.sh 의 up_call() 이 timeout 으로 묶는지, HAVE_TIMEOUT 이 1 인지 보세요."
+# 🔵 대조군 자신이 성립하는지도 본다 — 대조군이 실패로 끝나면 위 비교의 기준이 무의미하다.
+[ "$z13_rc7base" = "0" ] \
+  || z13_die "(z13) (7)번 칸의 **대조군**(빨리 실패)이 rc=$z13_rc7base 로 끝났습니다 — 두 판이 같은 하류 경로를 타는지부터 다시 보세요."
+
+# ② 매달림이 '기동 실패' 와 구별되는가.
+printf '%s\n' "$z13_log7" | grep -q '매달림' \
+  || z13_die "(z13) 매달림이 **'기동 실패' 와 구별되지 않습니다.**"\
+  $'\n'"→ 두 사유는 진단이 다릅니다: '떠서 실패' 는 의존이 unhealthy 로 끝난 것이고,"\
+  $'\n'"  '매달림' 은 그 healthcheck 가 대기를 **묶지 못했다**는 뜻입니다(615 B4 가 찾는 신호)."
+
+# ③ 뒤의 도메인이 계속 시도되는가 — 한 도메인의 매달림이 나머지를 삼키면 안 된다.
+printf '%s\n' "$z13_log7" | grep -q '^\[demo\] up: wms' \
+  || z13_die "(z13) 앞 도메인이 매달리자 **뒤 도메인이 시도조차 되지 않았습니다.**"\
+  $'\n'"→ 한 도메인의 매달림이 나머지를 삼키면, 고쳐 둔 '부분 실패 내성' 이 무효가 됩니다."
+
+# ④ 🔴🔴 **초록인 채로도 신호가 남는가** — 칸 (5)와 같은 축이다.
+#    이 스크립트의 설계는 「compose 는 포기했지만 스택이 수렴했으면 초록」이다. 그래서
+#    매달린 도메인도 재시도 뒤 수렴하면 rc=0 이 **옳다**. 위험한 것은 그때 매달림이
+#    함께 사라지는 것이다 — 그러면 B4 가 찾는 유일한 증상이 «늦게 수렴» 초록에 먹힌다.
+#    (A 의 고침이 B 의 유일한 증상을 지운다 — 이 저장소가 559 에서 이미 당한 모양.)
+[ "$z13_rc7" = "0" ] \
+  || z13_die "(z13) (7)번 칸의 전제가 깨졌습니다 — 대역은 수렴을 답하는데 rc=$z13_rc7 입니다."\
+  $'\n'"→ 이 칸은 **초록 위에서** 매달림 신호가 살아남는지를 묻습니다. 전제가 깨지면 판정이 무의미합니다."
+printf '%s\n' "$z13_log7" | grep -q '^\[demo\] ◑ 늦게 수렴:' \
+  || z13_die "(z13) (7)번 칸에서 매달린 도메인이 '늦게 수렴' 으로 잡히지 않았습니다 — 전제가 성립하지 않습니다."
+printf '%s\n' "$z13_log7" | grep -q '^\[demo\] ⏱ 매달림:' \
+  || z13_die "(z13) 수렴 초록이 **매달림 신호를 지웠습니다.**"\
+  $'\n'"→ 매달림은 재측정 결과와 무관하게 최종 요약에 남아야 합니다. 안 남으면 다음 기동 창에서"\
+  $'\n'"  B4 를 잴 방법이 사라집니다 — 유닛은 초록이고 아무도 매달렸다는 것을 모릅니다."
+
+ok "(z13) 매달린 up -d 를 끊는다 — 대조군(빨리 실패) ${z13_base_elapsed}s → 매달림 ${z13_hang_elapsed}s (차 ${z13_delta}s · 대역 sleep 30s×2) · 뒤 도메인 계속 시도 · '늦게 수렴' 초록 위에서도 매달림 신호 유지"
+
 # (6) AC-2 — 재시도 총 상한이 TimeoutStartSec 아래인가. 🔴 산술을 주석에 두지 않고 여기서 다시 센다.
 #     `FULL` 이 커지면 여기서 빨개진다 — 데모 호스트에서 systemd 가 SIGTERM 을 보내기 전에.
 z13_unit="$ROOT/infra/demo/demo-stack.service"
@@ -2300,6 +2388,15 @@ z13_sleep="$(sed -n 's/^UP_RETRY_SLEEP="\${DEMO_UP_RETRY_SLEEP:-\([0-9][0-9]*\)}
 # 기동 자체에 드는 시간 — 2026-08-19 실측(총 840s 중 sleep 300s 를 뺀 540s).
 # 🔵 이것은 **관측 1건**이지 상수가 아니다. 그래서 여유를 넉넉히 두고, 넘으면 FAIL 한다.
 z13_base=540
+# 🔴 615 B4 — 전역 기동 예산(demo-up.sh 의 UP_TOTAL_BUDGET)도 같은 상한 아래여야 한다.
+#    이 값이 TimeoutStartSec 을 넘으면 «묶었다» 는 말이 거짓이 된다: 스크립트가 자기
+#    마감에 닿기 전에 systemd 가 먼저 SIGTERM 을 보낸다.
+z13_total="$(sed -n 's/^UP_TOTAL_BUDGET="\${DEMO_UP_TOTAL_BUDGET:-\([0-9][0-9]*\)}".*/\1/p' "$ROOT/infra/demo/demo-up.sh" | head -1)"
+[ -n "$z13_total" ] || z13_die "(z13) demo-up.sh 에서 UP_TOTAL_BUDGET 기본값을 못 읽었습니다 — 마감이 상한 아래인지 셀 수 없습니다."
+[ "$z13_total" -lt "$z13_timeout" ] \
+  || z13_die "(z13) 전역 기동 예산이 TimeoutStartSec 이상입니다: ${z13_total}s >= ${z13_timeout}s"\
+  $'\n'"→ 그러면 demo-up.sh 가 자기 마감에 닿기 전에 systemd 가 SIGTERM 을 보냅니다 —"\
+  $'\n'"  묶어 둔 의미가 사라지고 요약도 상태 발행도 다시 잃습니다."
 z13_worst=$(( ${#FULL[@]} * z13_sleep + z13_base ))
 [ "$z13_worst" -le "$z13_timeout" ] \
   || z13_die "(z13) 재시도 최대 총합이 TimeoutStartSec 을 넘습니다: ${#FULL[@]}도메인 × ${z13_sleep}s + 기동 ${z13_base}s = ${z13_worst}s > ${z13_timeout}s"\
