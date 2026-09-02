@@ -469,3 +469,36 @@ pnpm 의 `file:` 은 **가상 스토어로 복사**하고, `link:` 는 **심링�
 🔵 `tsconfig.json` 은 **남겨 두었다.** 수정은 아니었지만 형제 넷이 전부 갖고 있는 모양이고,
 `link:` 인 지금은 realpath 가 저장소 안이라 **실제로 발견된다.** `files` 의 `tsconfig.json`
 항목도 남겼다 — 누군가 `file:` 로 되돌리면 그 함정이 되살아난다.
+
+## CORRECTION (3) — ✅ **AC-4 가 관측으로 닫혔다: fan 도 «포함 ON» 이다** (2026-09-02)
+
+구현 결과 절은 AC-4 를 **반쪽**으로 남겨 두었다 — `kanggle-store` 는 ON 확정, `kanggle-fan` 은
+**미지수**. 브랜치를 `preview/…` 로 낸 것이 정확히 그 나머지 반쪽을 **머지 전에** 재기
+위해서였다. 그 관측이 도착했다.
+
+`gh api repos/…/commits/<sha>/status` 의 **description** (SUCCESS 만 보면 안 된다 — 「빌드했다」
+와 「건너뛰었다」가 같은 초록이기 때문이다):
+
+| 프로젝트 | description | 읽는 법 |
+|---|---|---|
+| `kanggle-portfolio` | `Canceled by Ignored Build Step` | 🔵 이 PR 은 론처를 안 건드린다 ⇒ **판정자가 옳게 건너뛰었다** |
+| `kanggle-fan` | ✅ **`Deployment has completed`** | **실제로 빌드했다** |
+| `kanggle-store` | ✅ **`Deployment has completed`** | 실제로 빌드했다 |
+
+### ⇒ 판정
+
+두 소비자 모두 **Root Directory 밖**(`infra/demo/backend-resolver`)을 가리키는 의존을 가진
+채 **install 과 build 를 통과**했다. 그 경로가 빌드 컨텍스트에 없었다면 `pnpm install` 이
+죽거나 `next build` 가 `Module not found` 로 죽는다 — 이 패키지는 `demo-backend.ts` →
+`route.ts` / `client.ts` 경로로 **빌드 그래프 안**에 있다.
+⇒ **「Include files outside root directory」 는 `kanggle-fan` · `kanggle-store` 둘 다 ON 이다.**
+
+🔵 부수 확인: 론처가 `Canceled by Ignored Build Step` 을 냈다는 것은, `preview/*` 브랜치에서
+`ignoreCommand` 가 **저장소 루트에 접근해 정상 발화**했다는 뜻이기도 하다
+(`vercel-ignore.sh` 가 `$(git rev-parse --show-toplevel)` 을 쓴다).
+
+### 🔵 그래서 이 절이 «되돌리기» 를 은퇴시키는가 — 아니다
+
+`README.md § 되돌리는 법` 은 그대로 둔다. 그 절은 **이 관측이 없었다면** 필요했을 절차이고,
+누군가 네 번째 Vercel 프로젝트를 만들거나 Root Directory 를 바꾸면 **같은 질문이 다시**
+열린다. 🔴 지금 확정된 것은 «이 두 프로젝트의 오늘 설정» 이지 «Vercel 이 늘 그렇다» 가 아니다.

@@ -511,16 +511,22 @@ Vercel 의 *"Root Directory 바깥 소스를 빌드 단계에 포함"* 설정은
 | 프로젝트 | 값 | 근거 |
 |---|---|---|
 | `kanggle-store` | ✅ **ON** | Root Directory 는 `apps/web-store` 인데 `@repo/*` **6개를 `workspace:*`** 로 의존한다(그 패키지들은 `packages/*` = **밖**). `workspace:` 는 워크스페이스 루트 없이 해석이 **불가능**하고 패키지가 `private: true` 라 레지스트리 폴백도 없다. 그런데 `store.hubwang.com` 이 **200 · `Server: Vercel` · Next 렌더**를 서빙한다 |
-| `kanggle-fan` | 🔴 **미지수** | fan 은 `workspace:*` 의존이 **없다** ⇒ 배포 성공이 이 축을 증명하지 않는다 |
+| `kanggle-fan` | ✅ **ON — 2026-09-02 관측으로 확정** | 과거의 배포 성공은 이 축을 증명하지 못했다(fan 은 `workspace:*` 가 **없다**). 그래서 구현 브랜치를 `preview/…` 로 내 **실제 Vercel 빌드**를 돌렸고 `Deployment has completed` 를 받았다 — Root Directory **밖**을 가리키는 의존을 가진 채 install·build 를 통과했다. 🔴 판정은 `SUCCESS` 가 아니라 **description** 으로 했다: 같은 커밋에서 론처는 `success` 지만 `Canceled by Ignored Build Step` 이었다 |
 
 🔴🔴 **㉯ 를 fan 의 증거로 쓰면 안 된다** — 그 *"multiple lockfiles"* 로그는 **로컬 빌드**의
 관측이고, 저장소 어디에도 그것이 Vercel 빌드 로그였다는 출처가 없다. 위 표에서 그 칸을
 제자리에 표시해 두었다. 🔵 이 저장소가 이미 아는 실패다: **로컬 절대값으로 제품 결정을
 사지 마라.**
 
-🔵 **그래서 관측을 머지 앞으로 당겼다.** 세 `vercel.json` 이 `"preview/*": true` 를 두고
-있으므로 구현 브랜치 이름을 `preview/…` 로 하면 **머지 전에 실제 Vercel 빌드가 돈다.**
-실패해도 Preview 환경이라 프로덕션 URL 은 그대로다.
+🔵 **그래서 관측을 머지 앞으로 당겼고, 그 관측이 도착했다.** 세 `vercel.json` 이
+`"preview/*": true` 를 두고 있으므로 구현 브랜치 이름을 `preview/…` 로 하면 **머지 전에 실제
+Vercel 빌드가 돈다** — 실패해도 Preview 환경이라 프로덕션 URL 은 그대로다.
+⇒ **`B2` 의 유일한 미지수 축이 머지 전에 닫혔다.** § D6 표가 `B2` 를 추천하며 *"비용이 한
+축으로 좁혀지고 그 축은 관측으로 가를 수 있다"* 고 적은 것이 그대로 실행됐다.
+
+🔴 **다만 확정된 것은 «이 두 프로젝트의 오늘 설정» 이지 «Vercel 이 늘 그렇다» 가 아니다.**
+네 번째 프로젝트가 생기거나 Root Directory 가 바뀌면 같은 질문이 다시 열린다 —
+`infra/demo/backend-resolver/README.md § 되돌리는 법` 을 지우지 않는 이유가 그것이다.
 
 ## Consequences
 

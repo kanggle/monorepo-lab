@@ -196,10 +196,15 @@ node -e "console.log(require('fs').realpathSync('node_modules/@demo/backend-reso
 | 프로젝트 | Root Directory 밖 포함 | 근거 |
 |---|---|---|
 | `kanggle-store` | ✅ **ON** | Root Directory 는 `apps/web-store` 인데 `@repo/*` **6개를 `workspace:*`** 로 의존한다. 그 패키지들은 `packages/*` — **밖**이다. `workspace:` 는 워크스페이스 루트 없이 해석이 **불가능**하고 (패키지가 `private: true` 라 레지스트리 폴백도 없다), 그런데 `https://store.hubwang.com` 이 **Next 렌더를 200 으로 서빙한다**(`Server: Vercel`, `X-Matched-Path: /`) |
-| `kanggle-fan` | 🔴 **미지수** | fan 은 `workspace:*` 의존이 **없다**. 그래서 fan 의 배포 성공은 이 축에 대해 **아무것도 증명하지 않는다** |
+| `kanggle-fan` | ✅ **ON — 2026-09-02 관측으로 확정** | fan 은 `workspace:*` 가 **없어** 과거의 배포 성공은 이 축을 증명하지 못했다. 그래서 이 패키지를 도입하는 브랜치를 `preview/…` 로 내 **실제 Vercel 빌드**를 돌렸고, `Vercel – kanggle-fan` 이 **`Deployment has completed`** 를 냈다 — Root Directory **밖**을 가리키는 의존을 가진 채 install·build 를 통과한 것이다 |
 
-🔵 `ADR-MONO-068` 표의 ㉯(*"Next 빌드가 루트 lockfile 을 본다"*)는 **로컬 빌드**의 관측이다.
-Vercel 의 설정을 증명하지 않는다.
+🔵 `ADR-MONO-068` 표의 ㉯(*"Next 빌드가 루트 lockfile 을 본다"*)는 **로컬 빌드**의 관측이라
+Vercel 의 설정을 증명하지 않는다 — 위 표는 그것과 **무관하게** 얻은 값이다.
+
+🔴 **`SUCCESS` 만 보면 안 된다.** 같은 커밋에서 `kanggle-portfolio` 도 `success` 였지만
+description 은 **`Canceled by Ignored Build Step`** 이었다(이 PR 은 론처를 안 건드린다).
+「빌드했다」와 「건너뛰었다」가 **같은 초록**이므로, 판정은 `gh api
+repos/…/commits/<sha>/status` 의 **description** 으로 해야 한다.
 
 **그래서 관측을 머지 앞으로 당겼다.** 세 `vercel.json` 이 `git.deploymentEnabled` 에
 `"preview/*": true` 를 두고 있으므로, 이 작업의 브랜치 이름을 `preview/...` 로 하면
