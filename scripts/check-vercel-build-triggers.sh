@@ -49,7 +49,7 @@ ROOT="${VERCEL_GUARD_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 #   살아 있는 프로젝트는 2개였다. 파일 수와 프로젝트 수는 다른 축이다.
 # 🔴 올리는 것을 잊으면 **새 프로젝트를 지워도 이 가드는 안 문다** — 하한이 남은 개수보다
 #    낮으면 삭제가 그냥 통과하기 때문이다. 파일을 놓는 커밋과 **같은 커밋에서** 올려라.
-FLOOR="${VERCEL_GUARD_FLOOR:-3}"
+FLOOR="${VERCEL_GUARD_FLOOR:-4}"
 
 # 🔴 TASK-MONO-607: `git.deploymentEnabled.main` 이 false 인 프로젝트는 **이 워크플로가
 #    Deploy Hook 을 쏘지 않으면 영영 배포되지 않는다.** 그 배선이 끊기는 증상은 "배포 실패"
@@ -142,15 +142,20 @@ catch (e) { console.log('UNRESOLVED	' + dir + '/package.json 파싱 실패'); pr
 // 🔴🔴 **로컬 경로 의존은 두 가지다** (TASK-MONO-614, 2026-09-02).
 //    이 검사는 `workspace:*` 만 봤다. 그런데 `ADR-MONO-068 § D6 = B2` 가 채택되면서
 //    Root Directory **밖**의 공유 패키지를 **`file:` 상대경로**로 의존하게 됐다 — 그리고
-//    `file:` 은 정의상 워크스페이스 **밖**을 가리키므로 `workspace:` 만 보는 이 검사에는
+//    `file:`/`link:` 는 정의상 워크스페이스 **밖**을 가리키므로 `workspace:` 만 보는 이 검사에는
 //    **한 건도 안 잡힌다**. 즉 B2 가 만든 의존이 정확히 이 칸의 사각지대로 들어왔다.
 //    그 패키지만 바뀐 커밋은 배포가 조용히 건너뛰어지고 앱은 낡은 판을 계속 서빙한다.
-// 🔵 `file:` 쪽은 **경로가 곧 답이라** 워크스페이스 이름 해석이 필요 없다.
+// 🔵 `file:`/`link:` 쪽은 **경로가 곧 답이라** 워크스페이스 이름 해석이 필요 없다.
+// 🔴🔴 **`link:` 를 빠뜨렸다가 조용한 회귀를 만들었다** (TASK-MONO-610, 2026-09-02).
+//    614 는 `file:` 만 더했는데, 그 뒤 같은 티켓이 vitest 문제로 **`file:` → `link:`** 로
+//    바꿨다. 그러자 이 칸은 web-store 를 7/7 에서 **6/6** 으로, fan 을 아예 **SKIP** 으로
+//    되돌렸다 — 즉 **고친 칸이 다시 눈이 멀었고 아무것도 빨개지지 않았다.**
+//    두 수정은 각각 옳았고, 그 사이의 구멍만 아무도 안 봤다.
 const all = Object.entries({ ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) })
-  .filter(([, v]) => typeof v === 'string' && (v.startsWith('workspace:') || v.startsWith('file:')));
-if (!all.length) { console.log('SKIP	로컬 경로 의존(workspace: / file:)이 없습니다'); process.exit(0); }
+  .filter(([, v]) => typeof v === 'string' && (v.startsWith('workspace:') || v.startsWith('file:') || v.startsWith('link:')));
+if (!all.length) { console.log('SKIP	로컬 경로 의존(workspace: / file: / link:)이 없습니다'); process.exit(0); }
 const wsDeps = all.filter(([, v]) => v.startsWith('workspace:')).map(([k]) => k);
-const fileDeps = all.filter(([, v]) => v.startsWith('file:'));
+const fileDeps = all.filter(([, v]) => v.startsWith('file:') || v.startsWith('link:'));
 const covered = specs.map((s) => (s.indexOf(':/') === 0 ? s.slice(2) : s));
 const isCovered = (dd) => covered.some((c) => dd === c || dd.startsWith(c + '/'));
 let ok = 0;
@@ -373,7 +378,7 @@ main() {
         COUNT)      wstot="$wsa"; wsok="$wsb" ;;
       esac
     done < "$wsout"
-    [ -z "$wstot" ] || note "(12) 로컬 경로 의존(workspace: / file:) ${wstot}개 중 ${wsok}개가 트리거 목록에 덮임"
+    [ -z "$wstot" ] || note "(12) 로컬 경로 의존(workspace: / file: / link:) ${wstot}개 중 ${wsok}개가 트리거 목록에 덮임"
     fi
     rm -f "$wsout"
 

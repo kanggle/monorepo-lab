@@ -248,6 +248,8 @@ jobs:
       artifact-retention: ${{ steps.filter.outputs.artifact-retention }}
       # TASK-MONO-577 / ADR-MONO-068: 승격 트리거. 도착 경로가 **앱 소스**이므로 그쪽이 바뀔 때
       # 돌아야 하고, 가드 자신이 약해지는 것도 봐야 한다. 두 경로 모두 순수 positive 필터다.
+      # TASK-MONO-610: 넷째 Vercel 프로젝트(auth-forwarder)의 빌드 축. 순수 positive.
+      auth-forwarder: ${{ steps.filter.outputs.auth-forwarder }}
       demo-resolver-copies: ${{ steps.filter.outputs.demo-resolver-copies }}
       # TASK-MONO-562: raw filter, NOT AND-combined with `code-changed`. Every arrival
       # path of this drift is non-code: a `vercel.json` losing its `ignoreCommand`, a
@@ -702,6 +704,13 @@ jobs:
               - 'scripts/check-artifact-retention.sh'
             # TASK-MONO-577 / ADR-MONO-068 — 해석기가 두 번째로 생기는 순간 RED.
             # 두 번째는 **앱 소스**로 도착하므로 그 경로를 본다. 순수 positive.
+            auth-forwarder:
+              # 🔴 TASK-MONO-610 — `auth.hubwang.com` 포워더. 이 앱은 어느 pnpm 워크스페이스의
+              #    멤버도 아니라 기존 `ecommerce`/`fan` 필터가 **하나도 안 덮는다**.
+              #    이 줄이 없으면 앱이 CI 에서 **한 번도 빌드되지 않는다** — Vercel 만이
+              #    유일한 빌드 게이트가 되고, 그것은 머지 **뒤**에 돈다.
+              - 'infra/demo/auth-forwarder/**'
+              - 'infra/demo/backend-resolver/**'
             demo-resolver-copies:
               # 🔴🔴 **도달성을 술어의 모집단에 맞춘다** (TASK-MONO-614, 2026-09-02).
               # TASK-MONO-613 이 가드의 모집단을 «어떤 `src/` 아래의 TS 든» 으로 넓히고
@@ -3210,7 +3219,8 @@ jobs:
       needs.changes.outputs.libs == 'true' ||
       needs.changes.outputs.workflows == 'true' ||
       needs.changes.outputs.ecommerce == 'true' ||
-      needs.changes.outputs.fan == 'true'
+      needs.changes.outputs.fan == 'true' ||
+      needs.changes.outputs.auth-forwarder == 'true'
 
     steps:
       - name: Checkout
@@ -3222,6 +3232,7 @@ jobs:
           cache-dependency-path: |
             projects/ecommerce-microservices-platform/pnpm-lock.yaml
             projects/fan-platform/pnpm-lock.yaml
+            infra/demo/auth-forwarder/pnpm-lock.yaml
 
       - name: Install dependencies (ecommerce)
         working-directory: projects/ecommerce-microservices-platform
@@ -3247,6 +3258,22 @@ jobs:
         working-directory: projects/fan-platform
         env:
           NEXT_PUBLIC_GATEWAY_URL: http://fan-platform.local
+        run: pnpm build
+
+      # 🔴 TASK-MONO-610 — `auth.hubwang.com` 포워더. 어느 워크스페이스의 멤버도 아니므로
+      #    자기 자리에서 따로 설치한다. eslint 설정이 없어(화면이 없다) lint 대신
+      #    **typecheck** 를 돌린다 — 라우트 핸들러 하나짜리 앱에서 타입이 곧 계약이다.
+      # 🔵 이것이 없으면 이 앱의 유일한 빌드 게이트가 **머지 뒤에 도는 Vercel** 이 된다.
+      - name: Install dependencies (auth-forwarder)
+        working-directory: infra/demo/auth-forwarder
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck (auth-forwarder)
+        working-directory: infra/demo/auth-forwarder
+        run: pnpm typecheck
+
+      - name: Build (auth-forwarder)
+        working-directory: infra/demo/auth-forwarder
         run: pnpm build
 
   # frontend-e2e (full-stack web-store) has been moved to nightly-e2e.yml.

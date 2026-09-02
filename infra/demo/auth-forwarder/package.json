@@ -1,0 +1,23 @@
+{
+  "name": "auth-forwarder",
+  "version": "0.1.0",
+  "private": true,
+  "description": "auth.hubwang.com catch-all forwarder to the day's demo IdP (ADR-MONO-069 C2 / TASK-MONO-610).",
+  "scripts": {
+    "dev": "next dev --port 3003",
+    "build": "next build",
+    "start": "next start --port 3003",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@demo/backend-resolver": "link:../backend-resolver",
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "typescript": "^5.5.0"
+  }
+}

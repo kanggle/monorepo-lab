@@ -81,6 +81,16 @@ jobs:
           - project: kanggle-store
             judge: projects/ecommerce-microservices-platform/apps/web-store/vercel-ignore.sh
             secret: VERCEL_DEPLOY_HOOK_STORE
+          # 🔴🔴 TASK-MONO-610 — 넷째 프로젝트. `auth.hubwang.com` 의 포워더(ADR-MONO-069 C2).
+          #    이 항목이 없으면 가드 칸 (14)가 *"main=false 인데 워크플로가 이 프로젝트를
+          #    안 굽습니다"* 로 문다 — 그리고 그 말이 맞다: 배포가 **만들어지지 않는다**.
+          # 🔴 `VERCEL_DEPLOY_HOOK_AUTH` 는 **소유자가 Vercel 프로젝트를 만든 뒤에야** 생긴다.
+          #    그때까지 이 잡은 *"secret 이 비어 있습니다"* 로 **빨갛다** — 그것이 정확한
+          #    신호다(앱은 저장소에 있는데 배포할 곳이 없다). 🔵 판정자가 이 앱의 경로를
+          #    안 건드린 커밋은 건너뛰므로 **매 커밋 빨간 것은 아니다**.
+          - project: kanggle-auth
+            judge: infra/demo/auth-forwarder/vercel-ignore.sh
+            secret: VERCEL_DEPLOY_HOOK_AUTH
     steps:
       - uses: actions/checkout@v4
         with:
