@@ -105,6 +105,54 @@ level"* 이라고 적어 두었다. 그 문장을 지키는 자리를 골랐다.
 
 ---
 
+## 🔴🔴 `tsconfig.json` 은 장식이 아니다 — 없으면 소비자의 테스트가 **기동하다 죽는다**
+
+CI 실측 (2026-09-02, `web-store` 의 vitest 4.1.0):
+
+```
+[BUNDLER_INITIALIZE_ERROR] Invalid jsx option: `automatic`.
+  File: .../node_modules/@demo/backend-resolver/src/index.ts
+```
+
+이 패키지는 **TS 소스를 그대로** 내보내므로(`main: ./src/index.ts`) 소비자의 변환기가 이
+파일을 **직접 파싱**한다. 그때 변환기는 그 파일을 기준으로 tsconfig 를 찾아 올라가는데,
+`node_modules/` 안의 이 패키지 위에는 아무 tsconfig 도 없어 기본값으로 떨어지고 거기서
+`jsx: automatic` 이라는 **유효하지 않은 값**이 나온다.
+
+🔵 **형제들과의 차이가 정확히 이것이었다.**
+`projects/ecommerce-microservices-platform/packages/{api-client,types,ui,utils}` 는 **넷 다
+자기 `tsconfig.json` 을 갖는다** — 같은 방식(TS 소스 직접 노출)으로 같은 vitest 4 를 통과하는
+이유가 그것이다. 🔴 그리고 **넷 다 `jsx` 를 설정하지 않는다** ⇒ 여기서도 설정하지 않는다.
+관측된 실패 문구가 `jsx` 였다고 해서 `jsx` 를 **박아 넣는** 것은, 동작이 확인된 개체(형제)와
+다른 값을 고르는 일이다. 값은 `@repo/tsconfig/base.json` 을 **그대로** 옮겼다.
+
+🔴 그들처럼 `@repo/tsconfig/library.json` 을 `extends` 할 수는 **없다** — 그 패키지는
+ecommerce 워크스페이스의 멤버이고 이 패키지는 그 밖에 산다(`B2` 가 루트 워크스페이스를
+만들지 않기로 한 결과다). 그래서 자족적으로 적었다.
+
+🔵 이 저장소의 tsconfig 13개 중 **주석을 쓰는 것은 0개**라, 이 설명을 JSON 안에 두지 않고
+여기 둔다.
+
+### 🔴🔴 그리고 `files` 에 **`tsconfig.json` 을 넣어야** 한다
+
+pnpm 의 `file:` 프로토콜은 **심링크가 아니라 가상 스토어로 복사**한다(실측 경로:
+`node_modules/.pnpm/@demo+backend-resolver@file+..+..+infra+demo+backend-resolver/…`).
+그리고 그 복사는 `package.json` 의 **`files` 를 따른다.**
+
+🔴 `files: ["src"]` 였을 때 소비자가 실제로 받은 것은 `README.md · package.json · src` **뿐**
+이었다 — 즉 위 `tsconfig.json` 은 **트리에는 있는데 소비자에게는 없는** 상태가 된다.
+그러면 이 절의 수정이 **아무 일도 하지 않으면서 고쳐진 것처럼 보인다.**
+🔵 실측으로 확인하는 법:
+
+```bash
+ls "$(ls -d node_modules/.pnpm/@demo+backend-resolver*/node_modules/@demo/backend-resolver)"
+```
+
+**부수 효과 하나**: 복사이므로 이 패키지를 고쳐도 **소비자는 재설치 전까지 옛 판을 본다.**
+로컬에서 이 패키지를 만질 때는 그 워크스페이스에서 `pnpm install` 을 다시 돌려라.
+
+---
+
 ## 🔴 이 패키지는 자기 테스트를 갖지 않는다 — 의도다
 
 두 소비자의 기존 스위트(각 196줄)가 이 구현을 **각자의 설정으로** 통과시키고, 그 둘이 바로

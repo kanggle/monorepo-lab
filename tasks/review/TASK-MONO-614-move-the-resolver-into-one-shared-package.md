@@ -344,3 +344,64 @@ node_modules 안 TS 를 만나 죽는다. web-store 는 목록에 한 줄 추가
 | bite 없이 새 가드를 믿는다 | 새 명제가 원래도 참이었을 수 있다 | AC-3 둘째 칸 |
 | 한 소비자만 전환 | 그 창에서 main 이 깨진다 | § 크로스 프로젝트 |
 | Root Directory 밖 포함을 **추정** | 세 프로젝트 배포가 동시에 죽는다 | AC-4 |
+
+## CORRECTION — 🔴 CI 가 물었다: 패키지에 `tsconfig.json` 이 없어 소비자 테스트가 **기동하다 죽었다** (2026-09-02)
+
+`#3586` 첫 런에서 **`Frontend unit tests` 가 FAILURE** 였다. 이 티켓의 구현 결과 절이
+*"web-store 스위트는 로컬 실행 불가 ⇒ 권위는 CI"* 라고 적은 **바로 그 축**이다.
+
+```
+[BUNDLER_INITIALIZE_ERROR] Invalid jsx option: `automatic`.
+  File: .../node_modules/@demo/backend-resolver/src/index.ts
+```
+
+**기전**: 이 패키지는 TS 소스를 그대로 내보내므로(`main: ./src/index.ts`) 소비자의 변환기가
+그 파일을 **직접 파싱**하고, 그때 **그 파일 기준으로** tsconfig 를 찾아 올라간다.
+`node_modules/` 안의 이 패키지 위에는 아무 tsconfig 도 없어 기본값으로 떨어지고, 거기서
+`jsx: automatic` 이라는 **유효하지 않은 값**이 나온다. 🔵 fan 은 vitest 3 이라 통과했다 —
+**두 소비자가 서로 다른 것을 재고 있었다**는 뜻이고, 그래서 fan 15/15 는 이 축을 못 봤다.
+
+### 🔵 수정은 «형제를 grep» 에서 나왔다 — 관측 문구를 따라가지 않았다
+
+`packages/{api-client,types,ui,utils}` 는 **넷 다 자기 `tsconfig.json` 을 갖는다**. 같은
+방식(TS 소스 직접 노출)으로 **같은 vitest 4** 를 통과하는 이유가 그것이다.
+🔴 그리고 **넷 다 `jsx` 를 설정하지 않는다** ⇒ 여기서도 설정하지 않았다. 오류 문구가 `jsx`
+였다고 `jsx` 를 박아 넣는 것은 **동작이 확인된 개체와 다른 값을 고르는 일**이다.
+값은 `@repo/tsconfig/base.json` 을 그대로 옮겼다(`extends` 는 못 한다 — 그 패키지는
+ecommerce 워크스페이스 멤버이고 이 패키지는 그 밖에 산다).
+
+### 🔴🔴 그런데 그 파일을 만드는 것만으로는 **아무 일도 일어나지 않았을 것이다**
+
+CI 오류 경로가 `node_modules/.pnpm/@demo+backend-resolver@file+..+..+infra+demo+backend-resolver/…`
+였다 — pnpm 의 `file:` 은 **심링크가 아니라 가상 스토어로 복사**하고, 그 복사는
+`package.json` 의 **`files` 를 따른다**. 이 패키지의 `files` 는 `["src"]` 였다.
+
+**실측** (고치기 전, 소비자가 실제로 받은 것):
+
+```
+README.md   package.json   src
+```
+
+⇒ `tsconfig.json` 은 **트리에는 있는데 소비자에게는 없는** 상태가 된다. 그러면 이 수정은
+**아무 일도 하지 않으면서 고쳐진 것처럼 보이고**, 다음 CI 런이 **같은 오류**를 낸다.
+`files` 에 `tsconfig.json` 을 넣고 **재설치 후 사본을 다시 세어** 확인했다:
+
+```
+README.md   package.json   src   tsconfig.json      ← 두 워크스페이스 모두
+```
+
+🔵 이 저장소가 이미 아는 부류다 — **선언 파일 grep ≠ 런타임 모집단.** 파일을 «만들었다» 는
+것과 그것이 «소비자에게 도달한다» 는 것은 다른 사건이고, 후자는 **따로 재야 한다.**
+
+### 재검증
+
+| | |
+|---|---|
+| 소비자 사본에 tsconfig | ✅ ecommerce · fan **둘 다** 실린다(재설치 후 실측) |
+| fan 해석기 스위트 | ✅ 15/15 (회귀 없음) |
+| fan `tsc --noEmit` | ✅ rc=0 |
+| 가드 | resolver self-test **13/0** · 라이브 rc=0 · vercel-triggers rc=0 · index/task-id/walkthrough rc=0 |
+| 🔴 web-store vitest | **여전히 로컬 판정 불가**(vitest 4 × Node 24) — **CI 가 권위다** |
+
+🔵 **부수 효과 하나를 README 에 적었다**: `file:` 이 복사이므로 이 패키지를 고쳐도 소비자는
+**재설치 전까지 옛 판을 본다.**

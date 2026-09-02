@@ -9,6 +9,7 @@
     ".": "./src/index.ts"
   },
   "files": [
-    "src"
+    "src",
+    "tsconfig.json"
   ]
 }
