@@ -517,3 +517,35 @@ D4 이후에 생긴다.
 빨강이 612 를 낳았다. 팬은 **옮기는 PR 안에서** 같이 처리하면 그 왕복이 없다.
 [[feedback_two_correct_exclusions_compose_into_a_hole]]
 [[feedback_the_unguarded_operation_is_where_the_invariant_breaks]]
+
+---
+
+# 🔴 CORRECTION (2026-09-02 UTC) — 라이브 축은 **여전히 미측정**이다 (`TASK-MONO-610` 기동 창)
+
+데모가 떠 있는 창에서 팬의 Vercel 표면을 쟀다. **「해석기가 백엔드에 닿는다」는 닫히지 않았다.**
+
+| 잰 것 | 값 |
+|---|---|
+| `https://fan.hubwang.com/` | 307 / 15 B |
+| `https://fan.hubwang.com/login` | **200 / 10,879 B** — 정상 렌더(문구·CTA 정상) |
+| 음성 대조군 `/zzz-nope-586` | 307 / 15 B ⇒ `/` 와 **구별 불가** (catch-all 리다이렉트) |
+| 산출물에 그날 IP(`43-202-166-3`) 문자열 | **0건** |
+
+## 🔴 그래서 이것은 **증거가 아니다**
+
+이 티켓 자신이 적었다 — *"팬의 익명 도달 페이지는 11개 중 1개(`/login`)뿐이고 나머지는
+**D4** 가 풀려야 보인다"*. 해석기는 **서버에서 요청마다** 도는 것이라 HTML 에 흔적을
+남기지 않는다. ⇒ `/login` 의 200 은 **앱이 뜬다**는 증거이지 **백엔드에 닿는다**는 증거가
+아니다. [[feedback_absence_verdict_from_a_proxy_is_not_a_measurement]]
+
+## 🔵 닫히려면 무엇이 필요한가 — 이 창에서 한 칸 전진했다
+
+로그인 왕복이 필요하고, 그 선행이 **`OIDC_ISSUER_URL`** 이다.
+`TASK-MONO-611` 이 부재를 실측했고, 이 창에서 **`kanggle-fan` 프로덕션에
+`OIDC_ISSUER_URL=https://auth.hubwang.com` 을 넣었다.** 콜백
+(`https://fan.hubwang.com/api/auth/callback/iam`)은 **`V0033` 으로 이미 등록돼 있다**
+(데모 호스트 DB 전수로 확인).
+
+🔴 **그러나 발효되지 않았다** — 같은 커밋의 `vercel redeploy` 를 `ignoreCommand` 가
+*"이 커밋은 팬 경로를 안 건드렸다"* 로 **취소**한다. ⇒ **다음 「팬 경로를 건드리는」
+배포에서 발효되고, 그때 이 축을 다시 재야 한다.**

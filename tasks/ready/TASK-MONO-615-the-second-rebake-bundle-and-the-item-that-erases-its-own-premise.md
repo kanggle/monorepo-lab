@@ -1,0 +1,258 @@
+# Task ID
+
+TASK-MONO-615
+
+# Title
+
+⏳ **재굽기 번들 ②** — `TASK-MONO-610` 기동 창이 남긴 미결을 한 번의 재굽기로 정리한다.
+🔴🔴 **그런데 항목 하나(V8)는 재굽기가 그 전제를 지운다 — 순서가 내용보다 먼저다.**
+
+# Status
+
+ready
+
+# Owner
+
+monorepo
+
+# Task Tags
+
+- demo
+- rebake
+- adr-followup
+
+---
+
+# 🔎 어디서 왔나
+
+`TASK-MONO-581`(**done**)이 「재굽기 한 번이 밀린 확인 여섯 개를 정리한다 — 나눠 쓰지 마라」
+로 첫 번째 번들을 닫았고, 지금 도는 AMI(`6bc2a44e7`, 2026-08-29)가 그 산출물이다.
+`TASK-MONO-610` 기동 창(2026-09-02 UTC)이 **그 뒤로 쌓인 미결**을 실측으로 확정했다.
+
+🔴 **이 티켓은 「재굽기를 하자」가 아니다.** 재굽기 **전에** 반드시 끝나야 하는 것과,
+재굽기가 **비로소** 가능하게 하는 것을 가르는 것이 본체다.
+
+---
+
+# 🔴🔴 먼저 — **재굽기가 스스로 지우는 전제**
+
+`TASK-MONO-610` V8 은 *"`V0034` 행이 **기존 볼륨** 위에 실제로 들어갔는가"* 를 묻는다.
+CI 는 **항상 신선 볼륨**이라 마이그레이션 순서·멱등성 결함에 영구히 초록이고, 그 결함은
+기존 볼륨에서만 드러난다. 기동 창 실측:
+
+```
+flyway_schema_history 최대 version = 0033   (2026-08-29 15:54 적용)
+→ V8 의 전제 「V0034 미만」이 성립하는 볼륨은 지금 이것 하나다
+→ 그 볼륨은 EC2 부팅 2회를 견뎠다 (demo-down.sh 에 -v 가 없다)
+```
+
+🔴 **재굽은 AMI 로 인스턴스를 갈면 docker 볼륨이 첫 부팅에 새로 생긴다** ⇒ V8 은 그것이
+금지한 **신선 볼륨 판정의 재탕**이 된다. **한 번 재굽으면 V8 은 영원히 못 잰다.**
+
+⇒ **순서가 강제된다:**
+
+| | 무엇 | 왜 |
+|---|---|---|
+| **0** | 🔴 **V8 을 살아 있는 볼륨 위에서 먼저 잰다** | 아래 § 항목 A |
+| 1 | 코드 수정 4건을 main 에 랜딩 | 재굽기가 그것을 굽는다 |
+| 2 | 재굽기 + 기동 창 | § 항목 C 를 정리 |
+
+🔵 이것이 `TASK-MONO-581` 이 겪지 않은 형태다 — 581 의 여섯 항목은 서로 독립이었다.
+[[feedback_measure_the_plans_premise_before_starting_the_phase]]
+
+---
+
+# 항목 A — 🔴 **재굽기 「전에」 해야 하는 것 (되돌릴 수 없다)**
+
+## A1. V8 — 기존 볼륨 위의 마이그레이션 판정
+
+**왜 저장소 갱신만으로 안 되나** (기동 창 실측): 마이그레이션은 호스트 파일이 아니라
+**이미지 안**에 있다.
+
+```
+docker exec iam-auth-service-1 → /app/BOOT-INF/classes/db/migration/V0033__… (마지막)
+image created = 2026-08-29T14:37:51Z · 바인드마운트 없음
+```
+
+⇒ **살아 있는 데모 호스트에서 `iam-auth-service` 이미지만 재빌드**하고 iam 스택만
+재기동해 flyway 가 `V0034`·`V0035` 를 **그 볼륨**에 적용하는지 본다.
+
+- 🔴 판정 전에 `flyway_schema_history` 최대가 **`V0034` 미만**임을 다시 확인한다
+  (아니면 신선 볼륨 판정의 재탕이다).
+- 🔴 **마이그레이션 파일을 grep 하지 마라** — 파일에 있는 것과 **행에 들어간 것**은 다른 축이다.
+- 판정 SQL: `SELECT redirect_uris FROM oauth_clients WHERE client_id='platform-console-web';`
+  → `https://console.hubwang.com/api/auth/callback` 이 **행에 있는가**.
+- 🔵 같은 재빌드가 `V0035`(`store.hubwang.com`)도 넣으므로 **`TASK-MONO-612` AC-0 ②**
+  (store 런타임 값)와 **store 로그인**의 선행도 함께 풀린다.
+- 🔴 실패 시 이전 이미지 태그로 롤백 가능하지만 **IdP 가 몇 분 내려간다** — 소유자 승인 사안.
+
+---
+
+# 항목 B — **코드 수정 4건. 재굽기 전에 main 에 있어야 한다**
+
+## B1. 🔴 V4 — 라우터가 `/connect` 를 auth-service 로 보내지 않는다
+
+```
+iam-oidc.rule = Host(iam.<도메인>) && (PathPrefix(/oauth2) || /login || /signup || /.well-known)
+```
+
+discovery 는 `end_session_endpoint: …/connect/logout` 을 **광고하는데** 그 경로가 목록에
+없다 ⇒ 바깥에서 **404**. 컨테이너 직격은 **401**(엔드포인트는 존재한다).
+
+- 자리: `infra/demo/iam-traefik.override.yml`
+- 🔴 **가드가 필요하다**: 「discovery 가 광고하는 모든 엔드포인트의 경로 접두사가 라우터
+  규칙에 포함되는가」. 지금 이 결함은 **아무것도 빨갛게 만들지 않는다** — `TASK-MONO-574`
+  AC-2 가 「V4 공백」을 경고했고 그 공백이 정확히 이것이었다.
+- 🔵 술어를 「`/connect` 가 있는가」로 쓰지 마라. **discovery 문서에서 파생**해야 다음
+  엔드포인트가 추가될 때도 문다.
+  [[feedback_a_guard_that_names_a_cause_needs_a_predicate_only_that_cause_trips]]
+
+## B2. 🔴 `provision-demo-env.sh` 의 자리표시자가 팬 로그인을 죽인다
+
+`fan-platform-web` 의 런타임 `OIDC_CLIENT_SECRET` = **`replace-with…`**.
+`demo-boot.sh` → `provision-demo-env.sh` 가 `projects/*/.env.example` 을 그대로 복사하고,
+compose 는 파일 옆의 `.env` 를 자동 로드해 **기본값 `${OIDC_CLIENT_SECRET:-fan-platform-dev}`
+를 덮는다.**
+
+- **대조군**: 같은 토큰 POST 를 `ecommerce-web-store-client:ecommerce-dev` 로 보내면
+  **`invalid_grant` 400**(=인증 통과). 팬만 **`invalid_client` 401**.
+- 증상은 `?error=Configuration` 이라 **어느 env 가 틀렸는지 말하지 않는다.**
+- 🔴 **모집단을 세라** — `.env.example` 을 가진 프로젝트 전부에서 「예제 값이 compose
+  기본값을 덮어 죽은 값이 되는」 키가 몇 개인지. 팬 하나만 고치면 형제가 낙오한다.
+  [[feedback_grep_the_siblings_before_fixing_it_yourself]]
+- 🔵 `TASK-MONO-550` 은 preflight 가드를 **정당하게** 충족시켰다. 그 정당한 조치가 바로
+  이 자리에서 로그인을 죽였다 — 되돌리지 말고 **값의 출처**를 고쳐라.
+  [[feedback_a_fallback_is_not_a_placeholder]] [[feedback_two_correct_exclusions_compose_into_a_hole]]
+
+## B3. 🔴 가드 (w) 가 C2 아래서 위양성이고, 그 FAIL 이 (z18) 을 가린다
+
+`verify-demo-wrapper.sh` (w) 의 술어 = *"JWKS 호스트가 이 서비스의 **docker 네트워크
+alias** 인가"*. `IAM_PUBLIC_URL` 이 `https://auth.hubwang.com` 으로 뒤집히면 그 이름은
+alias 가 아니라 **공개 DNS** 라 FAIL 한다. 런타임은 반증한다 —
+`getent hosts auth.hubwang.com` = `216.150.16.129`, `curl JWKS` = **200 433B**, 오류 로그 0건.
+
+- alias 는 도달 가능의 **충분조건이지 필요조건이 아니다.** C2 가 두 번째 경로를 만든다.
+- 🔴 **완화하지 마라 — 넓혀라**: 「alias 이거나, **공개 DNS 로 해소되고 그 컨테이너가
+  egress 를 갖는다**」로. 그리고 (w) 의 원래 근거(MONO-507: 해소 실패가 401 로 위장한다)는
+  여전히 참이므로 **술어를 지우면 안 된다.**
+- 🔴 이 FAIL 이 실행을 중단시켜 **`TASK-MONO-606` AC-4′ ②((z18))가 미도달**로 남았다.
+  B3 없이는 그 칸을 잴 수 없다.
+- 🔴 **남은 공백**: 「JVM 이 그 JWKS 로 토큰을 실제로 검증했다」는 아직 **미측정**이다
+  (유효한 팬 토큰이 필요하고 그건 B2 에 막혀 있다). B2+B3 이 끝나면 그것부터 재라.
+
+## B4. 🔴🔴 V5 — 두 번째 부팅이 스스로 뜨지 못한다 (**경합**)
+
+```
+14:23:21  iam-auth-service-1     Recreate
+14:24:01  iam-gateway-service-1  Recreated
+14:24:01  Container iam-kafka Waiting / iam-redis Waiting / iam-mysql Waiting
+          → 두 컨테이너가 「Created」로 남음 (started=0001-01-01T00:00:00Z)
+14:41:03  demo-stack.service: start operation timed out → failed
+```
+
+**기전**: EC2 부팅에서 `restart=unless-stopped` 컨테이너가 dockerd 와 함께 먼저 살아난다.
+그 뒤 `docker compose up -d` 는 **Traefik 라벨에 `DEMO_DOMAIN` 이 박힌 서비스를 매 부팅
+recreate** 하고(도메인이 부팅마다 바뀌므로 **항상** 해당) `depends_on: service_healthy` 를
+기다린다. 방금 살아난 kafka/mysql/redis 가 아직 healthy 가 아니면 **recreate 된 앱이
+시작되지 못한 채 남는다.**
+
+- 🔵 **자원 고갈이 아니다**: 메모리 63GB 중 **31.6GB 여유** · 디스크 26%.
+- 🔵 **손으로 `docker start` 하면 즉시 healthy** 가 되고 왕복도 성립한다 ⇒ 이미지·설정
+  문제가 아니라 **순서 문제**다.
+- 🔴 **1회차는 성공하고 2회차는 실패했다 ⇒ 결정론이 아니라 경합이다.** 단일 성공을
+  성질로 승격시키지 마라. [[feedback_local_proves_behaviour_not_performance]]
+- 🔴 **이것이 `ADR-MONO-069` 축 ②(「사람 손 없이 두 부팅을 건넌다」)를 막고 있다.**
+  🔵 다만 원인이 issuer 이름과 **독립**이므로 **C1/C2 재지정 근거는 아니다** — 세 IP 를
+  건너 같은 이름이 왕복을 성립시킨 것은 별도로 관측됐다.
+- 후보(고르지 않았다 — 실측 후 결정): ⓐ 부팅 시 `demo-down.sh` 를 먼저 돌려 잔존
+  컨테이너를 정리 ⓑ compose 의 의존 대기 타임아웃/조건 조정 ⓒ `restart` 정책을 데모
+  프로파일에서 바꾼다 ⓓ 라벨에서 `DEMO_DOMAIN` 을 빼 recreate 자체를 없앤다.
+  🔴 ⓓ 는 Traefik 라우팅의 근간이라 **범위가 크다** — 고르기 전에 `TASK-MONO-358` 계보를 읽어라.
+
+---
+
+# 항목 C — **재굽기가 「비로소」 정리하는 것**
+
+| # | 무엇 | 지금 왜 못 닫나 |
+|---|---|---|
+| C1 | **`TASK-MONO-604` AC-4** — `web.ecommerce.<도메인>` 이 404 | 🔴 **지금의 404 는 억제가 아니라 stale label 이다**(604 § CORRECTION). 억제 선언보다 오래된 컨테이너는 `profiles:` 게이트 밖이고 `--remove-orphans` 가 안 지운다 ⇒ 그 컨테이너가 **애초에 없는** AMI 가 필요하다 |
+| C2 | `auth-forwarder`·`backend-resolver` 가 호스트 저장소에 존재 | 기동 창에서는 `git reset --hard` 로 임시 충족시켰다 — **호스트 로컬 상태이지 AMI 가 아니다** |
+| C3 | `IAM_PUBLIC_URL` 뒤집기가 **저장소 판본**으로 | 지금은 **호스트 로컬 한 줄**이다. main 의 `demo.env` 는 아직 `http://iam.${DEMO_DOMAIN}` |
+
+🔴 **C3 을 main 에 랜딩하는 PR 은 B3(가드 (w))을 같은 PR 에 넣어야 한다** — 안 그러면
+그 PR 이 `verify --live` 를 빨갛게 만든다. 한 변경이 가드를 무효화하면 **같은 PR 에서 갚는다.**
+
+---
+
+# Goal
+
+`TASK-MONO-610` 기동 창이 남긴 미결을, **순서를 지켜** 한 번의 재굽기로 정리한다.
+
+# Scope
+
+- **포함**: A1(볼륨 위 V8) · B1–B4(코드 수정) · C1–C3(재굽기가 정리하는 것)
+- **제외**: `ADR-MONO-069` 재지정 — B4 는 이름 축과 독립이므로 결정을 다시 열지 않는다
+- **제외**: `TASK-MONO-612` AC-1(소유자 Vercel 지정) — 별 축
+
+# Acceptance Criteria
+
+## AC-0 — 🔴 **착수 시 재측정한다 (verify-then-act)**
+
+1. `flyway_schema_history` 최대가 **여전히 `V0034` 미만**인가 — 아니면 **A1 은 이미
+   불가능**하고 이 티켓의 순서 제약이 사라진다(그 사실을 적고 항목 A 를 STOP 으로 닫아라).
+2. B1–B4 가 **아직 참인가** — 넷 다 재현 절차가 위에 있다. 하나라도 이미 고쳐졌으면
+   그 항목을 지우지 말고 **「해소됨 + 무엇이 고쳤나」** 로 남겨라.
+3. 🔴 **항목 간 상충을 다시 본다** — 이 티켓의 존재 이유가 「한 항목의 수단이 다른 항목의
+   전제를 지운다」이므로, 새로 추가된 항목이 있으면 그 축을 먼저 검사한다.
+
+## AC-1 — A1 을 **재굽기 전에** 닫는다
+
+- 이미지 재빌드 → iam 스택 재기동 → `flyway_schema_history` 에 `V0034`·`V0035` 가
+  **행으로** 들어갔는가. 🔴 파일 grep 은 판정이 아니다.
+- 🔴 실패해도 **재굽기로 넘어가지 마라** — 넘어가면 이 축은 영구히 닫힌다.
+
+## AC-2 — B1–B4 를 main 에 랜딩한다
+
+- B1·B3 은 **가드를 동반**한다(수정만 하고 가드를 안 만들면 조용히 되돌아간다).
+- B2 는 **모집단 전수**를 먼저 센다.
+- B4 는 **경합**이므로 「한 번 됐다」로 닫지 마라 — **부팅 2회 연속**이 기준이다.
+
+## AC-3 — 재굽기 + 기동 창으로 C1–C3 을 닫는다
+
+- C1 판정: `web.ecommerce.<새 도메인>` 이 404 이고, **그 404 가 stale label 이 아님**을
+  같이 보인다(컨테이너가 **존재하지 않아야** 한다). 🔴 상태 코드만으로 판정하지 마라.
+- C3 판정: 새 AMI 의 `demo.env` 가 저장소 판본이고, 호스트 로컬 수정이 **0건**이다.
+
+## AC-4 — 🔴 이 티켓이 **안 고치는 것**을 적는다
+
+- `TASK-MONO-586` 라이브 축 · `TASK-MONO-610` AC-4b 발효 — 둘 다 **Vercel 배포**가
+  선행이고, 이 저장소의 네 Vercel 프로젝트 모두 *"판정자가 이 커밋은 그 앱을 안 건드렸다고
+  보면 배포가 안 생긴다"* 는 구간을 갖는다(`kanggle-auth`·`kanggle-fan` 에서 **2회 관측**).
+  🔴 **재굽기는 그것을 안 고친다.**
+
+# Related Specs
+
+- [`docs/adr/ADR-MONO-069`](../../docs/adr/) — 축 ②(사람 손 없이 두 부팅)
+- [`docs/adr/ADR-MONO-067`](../../docs/adr/) — 단계 2·4
+- `TASK-MONO-581` — 첫 번째 번들(선례) · `TASK-MONO-610` § 기동 창 실측 원장 — 이 티켓의 근거 전부
+- `TASK-MONO-604` § CORRECTION · `TASK-MONO-606` § CORRECTION · `TASK-MONO-612` § AC-0 실측
+
+# Related Contracts
+
+없음.
+
+# Edge Cases
+
+- 🔴 A1 의 이미지 재빌드가 실패하면 **IdP 가 내려간 채로 남을 수 있다** — 이전 이미지
+  태그를 먼저 확보하고 롤백 경로를 적어 둔 뒤 시작한다.
+- 🔴 재굽기 뒤 `terraform.tfvars` 의 AMI 핀을 갱신하지 않으면 **구운 것을 아무도 안 가리킨다.**
+- 🔴 인스턴스 교체는 **볼륨 소멸**을 뜻한다 — A1 이 끝나지 않았으면 그 순간 이 티켓은 실패다.
+
+# Failure Scenarios
+
+| 상황 | 잘못된 처리 | 옳은 처리 |
+|---|---|---|
+| A1 이 번거로워 재굽기부터 한다 | 「어차피 재굽으면 다 되니까」 | 🔴 **그 순간 V8 은 영원히 못 잰다.** 순서가 이 티켓의 본체다 |
+| C1 을 상태 코드로 판정 | `404` 를 보고 「억제 성공」 | 🔴 컨테이너 **존재 여부**를 같이 본다. 기동 창에서 정확히 이렇게 오독했다 |
+| B3 을 「가드 끄기」로 처리 | 상한 완화 / 예외 추가 | 🔴 술어를 **넓혀라**. (w) 의 원래 근거는 여전히 참이다 |
+| B4 를 한 번의 성공으로 닫는다 | 「이번엔 떴다」 | 🔴 **경합**이다. 부팅 2회 연속이 기준이다 |

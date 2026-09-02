@@ -129,6 +129,41 @@ OIDC_ISSUER_URL   (TASK-MONO-611 이 삭제)      DEMO_API_BASE
 
 ---
 
+---
+
+# 📏 AC-0 실측 (2026-09-02 UTC, `TASK-MONO-610` 기동 창)
+
+AC-0 의 세 칸 중 **둘을 쟀고 하나는 미측정**이다. AC-0 이 *"「없으니까 false 다」로
+넘어가지 마라"* 라고 못 박았으므로 그 규율대로 적는다.
+
+| # | 물음 | 실측 |
+|---|---|---|
+| ① | `kanggle-store` 프로덕션에 `DEMO_PAYMENT_MOCK` 이 여전히 없는가 | 🔴 **미확인** — 이 창에서 조회한 것은 `kanggle-fan` 뿐이다. store 는 안 열었다 |
+| ② | **런타임 값**을 실제로 읽는다 | 🔴 **미측정** — `/api/store-config` 는 인증 게이트 뒤이고, `store.hubwang.com` 로그인은 **성립할 수 없다**(아래) |
+| ③ | 데모 백엔드가 여전히 `demo-pg` 인가 | ✅ **그렇다** — `infra/demo/demo.env`: `ECOMMERCE_PAYMENT_PROFILES=demo-pg` · `DEMO_PAYMENT_MOCK=1` |
+
+## 🔴 ② 가 이 창에서 원리적으로 닫힐 수 없었던 이유
+
+`store.hubwang.com` 로그인에는 **두 선행**이 다 필요하고 둘 다 미충족이었다:
+
+1. **`V0035` 가 데모 호스트의 IdP 에 적용돼 있어야 한다.** 실측 — 그 호스트의 flyway
+   최대 version 은 **`0033`** 이고, 마이그레이션은 저장소 파일이 아니라 **`auth-service`
+   이미지 안**(`/app/BOOT-INF/classes/db/migration/`)에 있다(이미지 생성 2026-08-29T14:37Z).
+   ⇒ 저장소를 갱신해도 안 들어간다. **이미지 재빌드가 선행**이고, 소유자 지정으로
+   이번 창의 범위 밖이었다.
+2. **소유자의 Vercel env 다섯 줄**(`TASK-MONO-610` AC-4b) — 넣지 않았다.
+
+⇒ AC-0 ②는 **「미측정」으로 남긴다.** 🔵 AC-0 이 미리 허용한 세 번째 갈래(⑶)가 이것이다.
+
+## 🔵 AC-3(팬 축)에 붙일 사실 하나
+
+같은 창에서 `kanggle-fan` 프로덕션 env 를 전수 조회했다 —
+`OIDC_CLIENT_ID` · `OIDC_CLIENT_SECRET` · `NEXTAUTH_URL` · `NEXTAUTH_SECRET` **넷뿐**이고
+`DEMO_PAYMENT_MOCK` 은 **없다**. ⇒ `demo.env:279` 가 적은 *"한 값, 두 프런트"* 는
+**Vercel 쪽에서는 아직 한 프런트도 그 값을 안 받는다**는 뜻이다.
+🔴 이 줄은 「팬도 틀렸다」가 아니라 **「팬 축도 같은 모양으로 반쪽이 될 것」** 이라는
+AC-3 의 예측이 실측으로 확인됐다는 뜻이다.
+
 # Related Specs
 
 - [`docs/adr/ADR-MONO-067-demo-surfaces-served-from-vercel.md`](../../docs/adr/ADR-MONO-067-demo-surfaces-served-from-vercel.md) § 단계 2

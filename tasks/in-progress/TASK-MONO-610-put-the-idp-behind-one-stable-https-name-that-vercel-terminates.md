@@ -769,6 +769,146 @@ issuer 를 지우며 *"오늘 동작 차이는 0"* 이라 적었다 — 맞다, 
 
 ---
 
+---
+
+# 🟢🔴 기동 창 실측 원장 (2026-09-02 UTC)
+
+소유자가 데모를 켰고, **`IAM_PUBLIC_URL` 을 뒤집기 전에 AC-2 를 먼저 쟀다.** 통과했으므로
+뒤집고 **EC2 부팅 2회**를 돌렸다. 아래는 선언이 아니라 **그 창에서 관측한 것**이다.
+
+## 창의 구조적 제약 — 🔴🔴 **호스트는 pull 하지 않는다**
+
+AMI 가 구운 커밋은 **`6bc2a44e7` (2026-08-29 23:27 KST, #3543)** 이고 `demo-boot.sh` 에
+갱신 단계가 없다(`git clone --depth 1` 이 전부다). ⇒ 그 뒤 머지된 것은 **호스트에 없다.**
+
+| 산출물 | 창 시작 시점의 호스트 |
+|---|---|
+| `infra/demo/ecommerce-vercel.override.yml` (604 억제) | 🔴 없음 |
+| 606 회수 시드 문구 | 🔴 0건 |
+| 마이그레이션 | 🔴 **V0033 이 마지막** — `V0034`·`V0035` 부재 |
+
+⇒ 소유자 지정(**C**)에 따라 `/opt/monorepo-lab` 을 `origin/main` 으로 갱신하고
+`IAM_PUBLIC_URL` **한 줄만** 호스트 로컬로 뒤집었다. 🔵 안전 근거는 실측이다 —
+`6bc2a44e7..origin/main` 에 **프로젝트 compose 변경 0건 · `image:` 줄 변경 0건**.
+
+🔴🔴 **그리고 「재굽기하면 된다」가 틀린다 — 재굽기는 V8 을 영구히 측정 불가로 만든다.**
+V8 은 *기존 볼륨*을 요구하는데 재굽은 AMI 로 인스턴스를 갈면 docker 볼륨이 첫 부팅에
+새로 생긴다. 이 창의 볼륨은 `flyway=0033` 이었고(=V8 의 전제 성립) 부팅 2회를 견뎠다.
+**V8 을 재려면 이 볼륨 위에서 `auth-service` 이미지만 재빌드해야 한다** — 마이그레이션은
+호스트 파일이 아니라 **이미지 안**(`/app/BOOT-INF/classes/db/migration/`)에 있다.
+
+## 판정표
+
+| # | 축 | 판정 | 근거 |
+|---|---|---|---|
+| **AC-2 / V6** | 헤어핀 | 🟢 **PASS 5/5 · 미검사 0** | 5개 컨테이너 **안에서** discovery 200 / JWKS 200 |
+| **AC-1 라이브 절반** | 뒤집기 | 🟢 착지 | `issuer: https://auth.hubwang.com` |
+| **V1** | 홉① 목적지 | 🟢 PASS | `Location: https://auth.hubwang.com/oauth2/authorize?…` |
+| **V2** | state/PKCE 왕복 | 🟢 PASS | code 128자 · `state` 일치 · 토큰 **200** · `id_token.iss=https://auth.hubwang.com` |
+| **V3** | 세션 쿠키 실제 속성 | 🟡 실측 | `JSESSIONID=…; Path=/; HttpOnly` — **`Domain` 없음 ⇒ host-only ⇒ AC-4 rider 성립**. 🔴 **`Secure` 없음**, `SameSite` 미설정 |
+| **V4** | 로그아웃 | 🔴 **FAIL** | `/connect/logout` → **404** |
+| **V5** | 부팅 2회 연속 | 🔴 **FAIL** | 2회차가 **스스로 뜨지 못했다** |
+| **V7** | 정지 중 화면 | 🟢 PASS | 503 + 정의된 화면(**502 아님**), `cache-control: no-store` |
+| **V8** | 기존 볼륨 마이그 | ⛔ **미측정** | 이미지 재빌드가 선행 (소유자 지정으로 이번 창에서 제외) |
+
+### 🔵 AC-2 의 기전 — 왜 헤어핀이 성립하는가
+
+컨테이너 안에서 `auth.hubwang.com` 은 **`216.150.x.x` (Vercel anycast)** 로 해소된다.
+`demo.env` 가 경고한 *"AWS 는 인스턴스가 **자기 공인 IP** 로 보내는 트래픽을 되돌려주지
+않는다(IGW hairpin 부재)"* 는 **이 경로에 해당하지 않는다** — 이름이 자기 EIP 가 아니라
+제3자로 해소되기 때문이다. **그것이 C2 가 성립하는 이유다.**
+
+🔴 **단서 둘**(판정을 뒤집지 않는다): ① 음성 대조군이 DNS 실패가 아니라 **404** 였다
+(`*.hubwang.com` 와일드카드) ⇒ 술어는 판별하지만 **DNS 축을 판별한 것은 아니다**.
+② `console-bff`·`membership` 은 **curl** 로 쟀고 실제 fetch 는 **JVM** 이 한다 — 대리지표다.
+
+### 🟢🟢 C2 의 본안 — **세 IP 를 건너 같은 이름이 살아남았다**
+
+`43.202.166.3` → `3.38.132.31` → `3.38.188.25`. 세 번 모두 `https://auth.hubwang.com`
+이 IdP 를 서빙했고, 왕복이 `iss=https://auth.hubwang.com` 으로 끝까지 성립했다.
+**이 결정이 사려던 성질은 관측됐다.**
+
+### 🔴 V4 — 라우터 경로 목록에 `/connect` 가 없다
+
+```
+iam-oidc.rule = Host(`iam.<도메인>`) && (PathPrefix(`/oauth2`) || `/login` || `/signup` || `/.well-known`)
+```
+
+discovery 는 `end_session_endpoint: …/connect/logout` 을 **광고하는데** 그 경로가
+auth-service 로 라우팅되지 않는다. 컨테이너 직격은 **401**(=엔드포인트는 존재).
+🔵 **뒤집기와 무관한 선재 결함**이고 `TASK-MONO-574` AC-2 가 경고한 «V4 공백» 의 실체다.
+
+### 🔴🔴 V5 — 두 번째 부팅이 스스로 뜨지 못했다. 그리고 **이름 탓이 아니다**
+
+```
+14:23:21  iam-auth-service-1     Recreate
+14:24:01  iam-gateway-service-1  Recreated
+14:24:01  Container iam-kafka Waiting / iam-redis Waiting / iam-mysql Waiting
+          → 두 컨테이너가 «Created» 로 남았다 (started=0001-01-01T00:00:00Z)
+14:41:03  demo-stack.service: start operation timed out → failed
+```
+
+**기전**: EC2 부팅에서 `unless-stopped` 컨테이너가 dockerd 와 함께 먼저 살아난다. 그 뒤
+`docker compose up -d` 는 **Traefik 라벨에 `DEMO_DOMAIN` 이 박힌 서비스를 매 부팅 recreate**
+하고(도메인이 부팅마다 바뀌므로 **항상** 해당된다) `depends_on: service_healthy` 를
+기다린다. 방금 살아난 kafka/mysql/redis 가 아직 healthy 가 아니면 **recreate 된 앱이
+시작되지 못한 채 남는다.** 1회차는 되고 2회차는 안 됐다 ⇒ **경합이지 결정론이 아니다.**
+
+🔵 **자원 고갈이 아니다**: 메모리 63GB 중 31.6GB 여유 · 디스크 26%.
+🔵 **판정 뒤에** 그 두 컨테이너를 손으로 `docker start` 했더니 즉시 healthy 가 됐고
+왕복도 성립했다 — 즉 **C2 는 이 실패에 연루되지 않았다.** 🔴 그 `start` 는 **진단이지
+V5 를 구제하는 수리가 아니다.** V5 의 판정은 개입 **전에** 났다.
+
+⇒ **`ADR-MONO-069` 의 축 ②(«사람 손 없이 두 부팅을 건넌다»)는 아직 참이 아니다.**
+그러나 그 원인은 C1/C2 선택과 **독립**이므로 **이 결정을 재지정할 근거는 아니다.**
+
+## 🔴 이 창이 새로 찾은 결함 둘 — 둘 다 «값이 있나» 가드를 통과한다
+
+### ① `provision-demo-env.sh` 의 자리표시자가 팬 로그인을 죽인다
+
+`fan-platform-web` 의 런타임 `OIDC_CLIENT_SECRET` 이 **`replace-with…`** 였다.
+출처는 `demo-boot.sh` → `provision-demo-env.sh` 가 `projects/*/.env.example` 을 그대로
+복사한 `.env` 이고, compose 는 파일 옆의 `.env` 를 자동 로드해 **compose 기본값
+`${OIDC_CLIENT_SECRET:-fan-platform-dev}` 를 덮는다.**
+
+**증상**: 토큰 교환이 `invalid_client` 401. NextAuth 는 그것을 `?error=Configuration`
+으로 번역하므로 **어느 env 가 틀렸는지 말하지 않는다.**
+**대조군**: 같은 POST 를 `ecommerce-web-store-client:ecommerce-dev` 로 보내면
+**`invalid_grant` 400** — 즉 클라이언트 인증은 통과한다. 기전은 **팬 한 곳**이다.
+🔵 `TASK-MONO-550` 이 preflight 가드를 정당하게 충족시키려고 만든 것이 바로 그 자리에서
+로그인을 죽였다. [[feedback_a_fallback_is_not_a_placeholder]]
+
+### ② 가드 (w) 가 C2 아래서 **위양성**이고, 그 FAIL 이 (z18) 을 가린다
+
+`verify-demo-wrapper.sh` (w) 의 술어는 *"JWKS 호스트가 이 서비스의 **docker 네트워크
+alias** 인가"* 다. 뒤집기 전에는 공개 이름이 `iam.<도메인>` 이라 traefik alias 여서 통과했고,
+뒤집은 뒤엔 `auth.hubwang.com` 이 공개 DNS 라 alias 목록에 없다 ⇒ FAIL.
+
+**런타임은 술어를 반증한다** — 그 컨테이너 안에서 `getent hosts auth.hubwang.com`
+= `216.150.16.129`, `curl JWKS` = **200 433B**, JWKS/UnknownHost 로그 **0건**.
+⇒ alias 는 도달 가능의 **충분조건이지 필요조건이 아니다**. C2 가 두 번째 경로를 만든다.
+
+🔴 **그리고 그 FAIL 이 실행을 (z18) 이전에 중단시킨다** ⇒ `TASK-MONO-606` AC-4′ ② 는
+**미측정**이다(‘skip’ 도 아니고 **미도달**).
+🔴 **남은 공백**: 「JVM 이 그 JWKS 로 토큰을 실제로 검증했다」는 **안 쟀다.** 그러려면
+유효한 팬 토큰이 필요하고 그것은 위 ①에 막혀 있다 — 두 결함이 같은 지점에서 만난다.
+[[feedback_guard_predicate_wrong_verify_the_artifact]]
+
+## AC-4b — 팬 절반은 **넣었고, 발효는 대기**다
+
+`kanggle-fan` 프로덕션 env 를 조회해 `OIDC_ISSUER_URL` **부재**를 재확인하고
+(`OIDC_CLIENT_ID`·`OIDC_CLIENT_SECRET`·`NEXTAUTH_URL`·`NEXTAUTH_SECRET` 4개만 존재)
+`https://auth.hubwang.com` 을 **Production 에 추가했다.**
+
+🔴 **그런데 배포가 만들어지지 않는다.** 같은 커밋의 `vercel redeploy` 는
+`ignoreCommand`(`vercel-ignore.sh`)가 *"이 커밋은 팬 경로를 안 건드렸다"* 로 **취소**한다.
+⇒ **발효는 다음 «팬 경로를 건드리는» 배포다.**
+🔴🔴 이것은 이 원장이 `kanggle-auth` 에 대해 이미 적은 *"첫 배포가 영원히 안 생기는 구간"*
+의 **두 번째 사례**다. 한 번은 우연이지만 **둘이면 패턴**이고, 이 저장소의 네 Vercel
+프로젝트 전부가 같은 모양을 갖는다.
+🔵 로컬 트리를 CLI 로 밀어 프로덕션을 갈아치우는 길은 **택하지 않았다** — 지금 멀쩡히
+서빙 중인 배포를 로컬 산출물로 바꾸는 것이기 때문이다.
+
 # Related Specs
 
 - [`docs/adr/ADR-MONO-069-…md`](../../docs/adr/ADR-MONO-069-oidc-login-across-the-scheme-and-scope-boundary.md) § Decision · § 선택지 C · § Verification · § R1–R3
