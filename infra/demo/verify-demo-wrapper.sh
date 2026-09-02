@@ -1903,20 +1903,12 @@ z10_vj="$ROOT/infra/demo/aws/site/vercel.json"
 if [ -f "$z10_vj" ]; then
   # (1) 주석 흉내 키 — 우리가 실제로 밟은 그 함정.
   z10_bad="$(grep -nE '^[[:space:]]*"(//|#)' "$z10_vj" || true)"
-  [ -z "$z10_bad" ] || fail "(z10) vercel.json 에 **주석 흉내 키**가 있습니다:"    $'
-'"$z10_bad"    $'
-'"→ JSON 에는 주석이 없고, Vercel 은 모르는 최상위 키를 거부합니다."    $'
-'"→ 2026-08-19 에 정확히 이것으로 배포가 두 번 연속 죽었습니다(사이트는 마지막"    $'
-'"   성공 배포가 계속 서빙해서 겉으로는 멀쩡했습니다)."    $'
-'"→ 설명은 site/build.sh 주석에 두세요 — 거기가 설명의 집입니다."
+  [ -z "$z10_bad" ] || fail "(z10) vercel.json 에 **주석 흉내 키**가 있습니다:"    $'\n'"$z10_bad"    $'\n'"→ JSON 에는 주석이 없고, Vercel 은 모르는 최상위 키를 거부합니다."    $'\n'"→ 2026-08-19 에 정확히 이것으로 배포가 두 번 연속 죽었습니다(사이트는 마지막"    $'\n'"   성공 배포가 계속 서빙해서 겉으로는 멀쩡했습니다)."    $'\n'"→ 설명은 site/build.sh 주석에 두세요 — 거기가 설명의 집입니다."
 
   # (2) 이 프로젝트가 의존하는 세 키가 실제로 있는가.
   #     🔴 (1)만 보면 **키를 전부 지워서 통과** 와 구별되지 않는다.
   for z10_k in buildCommand outputDirectory installCommand; do
-    grep -q "\"$z10_k\"" "$z10_vj" || fail "(z10) vercel.json 에 \`$z10_k\` 가 없습니다."      $'
-'"→ buildCommand 가 없으면 build.sh 가 안 돌아 public/ 이 안 만들어지고,"      $'
-'"   outputDirectory 가 없으면 엉뚱한 디렉터리가 배포되며,"      $'
-'"   installCommand 가 없으면 루트 pnpm-lock.yaml 을 찾아 monorepo 전체를 설치합니다."
+    grep -q "\"$z10_k\"" "$z10_vj" || fail "(z10) vercel.json 에 \`$z10_k\` 가 없습니다."      $'\n'"→ buildCommand 가 없으면 build.sh 가 안 돌아 public/ 이 안 만들어지고,"      $'\n'"   outputDirectory 가 없으면 엉뚱한 디렉터리가 배포되며,"      $'\n'"   installCommand 가 없으면 루트 pnpm-lock.yaml 을 찾아 monorepo 전체를 설치합니다."
   done
   ok "vercel.json 모양 유지 (주석 흉내 키 없음 · build/output/install 3키 존재)"
 fi
@@ -3079,6 +3071,100 @@ z19_dangling="$( (cd "$ROOT" && docker compose --env-file "$HERE/demo.env" \
 
 ok "(z19) 데모에서 web-store 억제 — 억제전 ${z19_nb} → 억제후 ${z19_na} (차이 1개, web-store) · 로컬 ${z19_nl}개엔 남아 있다(대조군) · 유령 참조 0건"
 
+# ---------------------------------------------------------------------------
+# idp_path_prefixes <discovery-json> — URL 값 필드에서 경로의 **첫 세그먼트** 집합
+# ---------------------------------------------------------------------------
+# idp_path_prefixes <discovery-json> — URL 값 필드에서 경로의 **첫 세그먼트** 집합
+# ---------------------------------------------------------------------------
+# (z21) 이 라이브 문서에 돌리고, (z21s) 가 **같은 함수**를 픽스처로 검사한다.
+# 🔴 함수로 뽑은 이유가 그것이다 — 자체 검사가 사본을 재면 「검사한 코드」와
+#    「도는 코드」가 갈라진다.
+# issuer 처럼 경로 없는 URL 은 마지막 `grep '^/'` 에서 걸러진다.
+# 🔴 `|| true`: grep 0건은 종료코드 1 이고 `set -e` 아래 명령치환 실패는 스크립트를
+#    **아무 메시지 없이** 죽인다. 호출부가 «0건» 을 직접 판정해야 한다.
+# 🔴 sed 구분자가 `|` 인 이유: 경로 문자 클래스가 `#` 를 포함하므로 `s#...#...#` 는
+#    구분자와 클래스 문자가 겹쳐 읽기 어렵다. 겹치지 않는 구분자를 쓴다.
+idp_path_prefixes() {
+  printf '%s' "$1" \
+    | grep -oE '"https?://[^"]+"' \
+    | tr -d '"' \
+    | sed -E 's|^https?://[^/]+||' \
+    | sed -E 's|^/([^/?#]+).*|/\1|' \
+    | grep '^/' \
+    | sort -u \
+    || true
+}
+
+echo "[verify] (z20) IdP 라우터가 discovery 가 광고하는 경로를 전부 덮는가 (TASK-MONO-615 B1)"
+# ---------------------------------------------------------------------------
+# 근거(TASK-MONO-610 기동 창 V4): discovery 가 `end_session_endpoint` 로
+# `<issuer>/connect/logout` 을 **광고하는데** iam-oidc 라우터의 PathPrefix 목록에
+# `/connect` 가 없었다 ⇒ 바깥에서 404. 컨테이너 직격은 401 이라 **엔드포인트는 존재**한다.
+# 즉 「로그아웃이 없다」가 아니라 **「가는 길이 없다」**이고, 로그인만 재는 검증은 이것을
+# 영원히 못 본다. 같은 결함이 `/signup` 으로 이미 한 번 났다(TASK-MONO-380, 가드 (p)).
+#
+# 🔵 이 칸은 (p) 의 형제다 — (p) 는 **로그인 템플릿의 링크**에서, 이 칸은 **discovery 가
+#    광고하는 경로**에서 파생한다. 목록을 손으로 열거하는 한 다음 엔드포인트에서 또 난다.
+# 🔴 이 칸은 **정적**이다(게이트 앞). 라이브 IdP 가 없는 CI 에서도 물어야 하기 때문이다 —
+#    라이브에서만 도는 칸은 IdP 가 없으면 skip 이고, skip 은 판정이 아니다.
+# ---------------------------------------------------------------------------
+z20_ovr="$ROOT/infra/demo/iam-traefik.override.yml"
+z20_pin="$ROOT/infra/demo/idp-advertised-path-prefixes.txt"
+[ -f "$z20_ovr" ] || fail "(z20) $z20_ovr 가 없습니다."
+[ -f "$z20_pin" ] || fail "(z20) 핀 파일이 없습니다: $z20_pin"\
+  $'\n'"→ 이 파일이 없으면 라우터가 무엇을 덮어야 하는지 아무도 모릅니다."
+
+z20_rule="$(grep -m1 'routers\.iam-oidc\.rule=' "$z20_ovr" || true)"
+[ -n "$z20_rule" ] || fail "(z20) iam-oidc 라우터 규칙을 못 찾았습니다 — **술어가 형태를 놓쳤습니다**(0건은 '없음'이 아닙니다)."
+
+z20_have="$(printf '%s' "$z20_rule" | grep -oE 'PathPrefix\(`[^`]+`\)' | sed 's/PathPrefix(`//; s/`)//' | sort -u || true)"
+z20_nhave="$(printf '%s\n' "$z20_have" | grep -c '^/' || true)"
+[ "${z20_nhave:-0}" -ge 1 ] || fail "(z20) 규칙에서 PathPrefix 를 **하나도** 못 뽑았습니다 — 파싱이 깨졌습니다(가드가 공허해집니다)."
+
+# 🔴 `|| true` 가 없으면 안 된다: grep 이 0건이면 종료코드 1 이고, `set -e` 아래
+#    명령치환 실패로 스크립트가 **아무 메시지 없이** 죽는다 — 빌드는 멈추는데
+#    원인을 대는 문장이 안 나온다. (이 줄의 결함을 아래 bite ③ 이 잡았다.)
+z20_want="$(grep -vE '^[[:space:]]*(#|$)' "$z20_pin" | sort -u || true)"
+z20_nwant="$(printf '%s\n' "$z20_want" | grep -c '^/' || true)"
+[ "${z20_nwant:-0}" -ge 1 ] || fail "(z20) 핀이 비어 있습니다 ($z20_pin) — **모집단 0 은 통과가 아니라 고장입니다.**"
+
+z20_missing="$(comm -23 <(printf '%s\n' "$z20_want") <(printf '%s\n' "$z20_have") | tr '\n' ' ')"
+[ -z "${z20_missing// /}" ] || fail "(z20) discovery 가 광고하는 경로인데 라우터가 안 덮습니다: ${z20_missing}"\
+  $'\n'"→ 그 경로는 iam 게이트웨이 라우터로 떨어져 **404** 가 됩니다. 컨테이너 직격은 401 이므로"\
+  $'\n'"  엔드포인트는 존재합니다 — 「없다」가 아니라 「가는 길이 없다」입니다."\
+  $'\n'"→ infra/demo/iam-traefik.override.yml 의 iam-oidc.rule 에 PathPrefix 를 더하세요."
+
+printf '%s\n' "$z20_have" | grep -qx '/\.well-known' || fail "(z20) 라우터가 \`/.well-known\` 을 안 덮습니다."\
+  $'\n'"→ discovery 문서 자신이 거기 삽니다. 안 덮으면 이 핀을 만들 수조차 없습니다."\
+  $'\n'"  (그래서 이 접두사는 핀이 아니라 여기서 따로 단언합니다 — 문서는 자기 자신을 광고하지 않습니다.)"
+
+ok "(z20) IdP 라우터가 광고 경로를 전부 덮는다 — 핀 ${z20_nwant}건($(printf '%s' "$z20_want" | tr '\n' ' ')) ⊆ 라우터 ${z20_nhave}건 · /.well-known 별도 확인"
+
+echo "[verify] (z21s) discovery 접두사 추출기가 무는가 — 픽스처 3칸 (TASK-MONO-615 B1)"
+# ---------------------------------------------------------------------------
+# (z21) 은 라이브 IdP 가 있어야 돌고, 없으면 skip 이다 — **skip 은 판정이 아니다.**
+# 그래서 그 칸이 쓰는 추출기만이라도 **정적으로** 증명한다. (z18s) 와 같은 형태다.
+# 픽스처 ①은 지어낸 것이 아니라 TASK-MONO-610 기동 창에서 **실제로 받은 바이트**다.
+# ---------------------------------------------------------------------------
+z21s_real='{"issuer":"http://iam.43-202-166-3.sslip.io","authorization_endpoint":"http://iam.43-202-166-3.sslip.io/oauth2/authorize","device_authorization_endpoint":"http://iam.43-202-166-3.sslip.io/oauth2/device_authorization","token_endpoint":"http://iam.43-202-166-3.sslip.io/oauth2/token","token_endpoint_auth_methods_supported":["client_secret_basic"],"jwks_uri":"http://iam.43-202-166-3.sslip.io/oauth2/jwks","userinfo_endpoint":"http://iam.43-202-166-3.sslip.io/oauth2/userinfo","end_session_endpoint":"http://iam.43-202-166-3.sslip.io/connect/logout","revocation_endpoint":"http://iam.43-202-166-3.sslip.io/oauth2/revoke"}'
+z21s_got="$(idp_path_prefixes "$z21s_real" | tr '\n' ' ')"
+[ "${z21s_got% }" = "/connect /oauth2" ] || fail "(z21s) 실제 문서에서 기대한 접두사가 안 나왔습니다: '"'"'${z21s_got}'"'"' (기대 '"'"'/connect /oauth2'"'"')"
+
+# 음성 대조군 — 경로 없는 URL 만 있으면 0건이어야 한다. 0건이 나와야 (z21) 의
+# "하나도 못 뽑았습니다" 단언이 **공허하지 않다**.
+z21s_none="$(idp_path_prefixes '{"issuer":"https://auth.example.com"}' | grep -c '^/' || true)"
+[ "${z21s_none:-0}" -eq 0 ] || fail "(z21s) 음성 대조군에서 ${z21s_none}건이 나왔습니다 — 추출기가 경로 없는 URL 을 접두사로 셉니다."
+
+# 양성 대조군 — **새 접두사가 섞이면 반드시 보여야 한다.** 이것이 (z21) 의 존재 이유
+# (핀이 낡는 축)이므로, 안 잡히면 그 칸은 영원히 초록이다.
+z21s_new="$(idp_path_prefixes '{"a":"https://x/registration/new","b":"https://x/oauth2/token"}' | tr '\n' ' ')"
+case "$z21s_new" in
+  *"/registration"*) : ;;
+  *) fail "(z21s) 양성 대조군에서 새 접두사 /registration 을 못 잡았습니다: ${z21s_new}"       $'\n'"→ 그러면 (z21) 은 핀이 낡아도 영원히 초록입니다." ;;
+esac
+
+ok "(z21s) 추출기 3/3 — 실제 문서(/connect /oauth2) · 음성 대조군 0건 · 양성 대조군이 새 접두사를 잡는다"
+
 if [ "$LIVE" -eq 0 ]; then
 
   echo "[verify] 정적 검증 PASS (실기동 증명은 --live)"
@@ -3125,6 +3211,62 @@ case "$z18_verdict" in
   OK:*)
     ok "(z18) 죽은 sslip 등록 0건 — 판정한 sslip URI ${z18_verdict#OK:}건 · DEMO_DOMAIN=$z18_dom" ;;
 esac
+
+echo "[verify] (z21) --live: discovery 가 광고하는 경로가 핀·라우터와 일치하는가 (TASK-MONO-615 B1)"
+# ---------------------------------------------------------------------------
+# (z20) 은 「라우터 ⊇ 핀」을 잰다. 그러나 핀이 낡으면 (z20) 의 초록은 「덮었다」가 아니라
+# **「덜 알고 있다」**이다. 이 칸이 그 축을 잰다 — **라이브 문서에서 다시 파생해서**
+# 핀과 대조하고, 라우터가 라이브 경로를 전부 덮는지도 직접 본다.
+# 🔴 IdP 에 못 닿으면 **skip 이다 — 판정이 아니다**(--require-coverage 에서는 FAIL).
+# ---------------------------------------------------------------------------
+z21_dom="${DEMO_DOMAIN:-local}"
+z21_pin="$ROOT/infra/demo/idp-advertised-path-prefixes.txt"
+z21_nocover=""
+if [ "$z21_dom" = "local" ] || [ -z "$z21_dom" ]; then
+  z21_nocover="DEMO_DOMAIN='$z21_dom' — 라이브 IdP 호스트명이 없습니다"
+elif [ ! -f "$z21_pin" ]; then
+  z21_nocover="핀 파일이 없습니다: $z21_pin"
+else
+  z21_doc="$(curl -fsS --max-time 15 "http://iam.${z21_dom}/.well-known/openid-configuration" 2>/dev/null || true)"
+  case "$z21_doc" in
+    *'"issuer"'*) : ;;
+    "")  z21_nocover="discovery 를 못 받았습니다 (http://iam.${z21_dom}/.well-known/openid-configuration)" ;;
+    *)   z21_nocover="받은 본문이 discovery 문서가 아닙니다 (issuer 필드 없음, ${#z21_doc}바이트)" ;;
+  esac
+fi
+
+if [ -n "$z21_nocover" ]; then
+  if [ "$REQUIRE_COVERAGE" -eq 1 ]; then
+    fail "(z21) 판정 못 함: $z21_nocover — --require-coverage 이므로 FAIL 입니다."
+  fi
+  echo "  skip: (z21) 판정 못 함 — $z21_nocover"
+else
+  # URL 값 필드에서 경로의 **첫 세그먼트**만. issuer 는 경로가 비어 걸러진다.
+  z21_live="$(idp_path_prefixes "$z21_doc")"
+  z21_nlive="$(printf '%s\n' "$z21_live" | grep -c '^/' || true)"
+  [ "${z21_nlive:-0}" -ge 1 ] || fail "(z21) 라이브 문서에서 경로 접두사를 **하나도** 못 뽑았습니다 — 추출기가 깨졌습니다(${#z21_doc}바이트를 받았는데 0건)."
+
+  z21_want="$(grep -vE '^[[:space:]]*(#|$)' "$z21_pin" | sort -u || true)"
+  z21_rule="$(grep -m1 'routers\.iam-oidc\.rule=' "$ROOT/infra/demo/iam-traefik.override.yml" || true)"
+  z21_have="$(printf '%s' "$z21_rule" | grep -oE 'PathPrefix\(`[^`]+`\)' | sed 's/PathPrefix(`//; s/`)//' | sort -u || true)"
+
+  # ① 라이브에 있는데 라우터가 안 덮는다 — 이용자가 실제로 404 를 만난다
+  z21_unrouted="$(comm -23 <(printf '%s\n' "$z21_live") <(printf '%s\n' "$z21_have") | tr '\n' ' ')"
+  [ -z "${z21_unrouted// /}" ] || fail "(z21) IdP 가 광고하는데 라우터가 안 덮는 경로: ${z21_unrouted}"\
+    $'\n'"→ 이용자는 그 엔드포인트에서 404 를 만납니다. DEMO_DOMAIN=$z21_dom"
+
+  # ② 라이브에 있는데 핀에 없다 — **핀이 낡았다**. (z20) 의 초록이 「덜 알고 있다」였다
+  z21_newpfx="$(comm -23 <(printf '%s\n' "$z21_live") <(printf '%s\n' "$z21_want") | tr '\n' ' ')"
+  [ -z "${z21_newpfx// /}" ] || fail "(z21) 핀에 없는 경로를 IdP 가 광고합니다: ${z21_newpfx}"\
+    $'\n'"→ $z21_pin 이 낡았습니다. 손으로 덧붙이지 말고 그 파일 헤더의 재파생 명령 **출력으로 덮으세요**."
+
+  # ③ 핀에 있는데 라이브에 없다 — 반대 방향의 드리프트(엔드포인트가 사라졌다)
+  z21_gone="$(comm -13 <(printf '%s\n' "$z21_live") <(printf '%s\n' "$z21_want") | tr '\n' ' ')"
+  [ -z "${z21_gone// /}" ] || fail "(z21) 핀에 있는데 IdP 가 더 이상 광고하지 않는 경로: ${z21_gone}"\
+    $'\n'"→ 엔드포인트가 사라졌거나 이 IdP 가 다른 설정으로 떠 있습니다. 어느 쪽인지 확인한 뒤 핀을 다시 받아 적으세요."
+
+  ok "(z21) 라이브 discovery ↔ 핀 ↔ 라우터 일치 — 광고 접두사 ${z21_nlive}건($(printf '%s' "$z21_live" | tr '\n' ' ')) · DEMO_DOMAIN=$z21_dom"
+fi
 
 echo "[verify] (f) --live: 같은 서비스 키 'redis' 가 별도 -p 로 공존하는가"
 # ---------------------------------------------------------------------------

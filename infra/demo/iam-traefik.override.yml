@@ -206,7 +206,18 @@ services:
       # 404 가 된다 — **로그인 폼 자신이 /signup 으로 링크를 거는데.** 컨테이너는 전부
       # healthy 하고 /login 도 200 인데 **아무도 데모에 로그인할 수 없다.**
       # 가드 (p) 가 템플릿의 링크와 이 규칙을 대조한다 — 손으로 열거하면 또 드리프트한다.
-      - "traefik.http.routers.iam-oidc.rule=Host(`iam.${DEMO_DOMAIN:-local}`) && (PathPrefix(`/oauth2`) || PathPrefix(`/login`) || PathPrefix(`/signup`) || PathPrefix(`/.well-known`))"
+      #
+      # 🔴🔴 `/connect` 도 load-bearing 이고, **같은 결함이 두 번째로 났다**
+      #   (TASK-MONO-610 기동 창 V4, TASK-MONO-615 B1). discovery 문서가
+      #   `end_session_endpoint: <issuer>/connect/logout` 을 **광고하는데** 이 목록에
+      #   `/connect` 가 없었다 ⇒ RP-initiated 로그아웃이 iam 게이트웨이 라우터로
+      #   떨어져 **404**. 컨테이너 안에서 직격하면 401 이라 **엔드포인트는 존재한다** —
+      #   즉 「로그아웃이 없다」가 아니라 **「가는 길이 없다」**이고, 로그인만 재는
+      #   검증은 이것을 영원히 못 본다(TASK-MONO-574 AC-2 가 경고한 「V4 공백」).
+      # 🔵 그래서 가드 (z20) 은 이 규칙을 **discovery 가 광고하는 경로 집합**과
+      #   대조한다 — (p) 가 템플릿 링크로 하는 일의 형제다. 손으로 열거하는 한
+      #   다음 엔드포인트에서 **세 번째**가 난다.
+      - "traefik.http.routers.iam-oidc.rule=Host(`iam.${DEMO_DOMAIN:-local}`) && (PathPrefix(`/oauth2`) || PathPrefix(`/connect`) || PathPrefix(`/login`) || PathPrefix(`/signup`) || PathPrefix(`/.well-known`))"
       - "traefik.http.routers.iam-oidc.priority=1000"
       - "traefik.http.routers.iam-oidc.entrypoints=web"
       - "traefik.http.services.iam-oidc.loadbalancer.server.port=8081"
