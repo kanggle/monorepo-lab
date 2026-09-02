@@ -614,7 +614,7 @@ SELECT redirect_uris FROM oauth_clients WHERE client_id='platform-console-web';
 |---|---|
 | AC-2 라이브 절반 | 새 이름이 **실재해야** 헤어핀을 잰다 ⇒ 소유자 1~3 + 기동 창 |
 | AC-3 (V1–V8) | 기동 창. 🔴 **V5 는 부팅 2회**를 요구한다 |
-| AC-4b | `kanggle-fan` · `kanggle-store` 의 `OIDC_ISSUER_URL` 을 새 issuer 로 — 대시보드 |
+| AC-4b | `kanggle-fan` · `kanggle-store` 의 `OIDC_ISSUER_URL` 을 새 issuer 로 — 대시보드. 🔴 **그리고 store 는 그것만으로 안 된다**(아래 확대) |
 
 🔵 **`review/` 로 올리지 않는 것이 옳다.** `review/` 는 frozen 이라 남은 AC 를
 CORRECTION 으로만 적게 되고, 그러면 «위를 먼저 읽는 사람» 이 닫힌 티켓으로 오해한다.
@@ -632,6 +632,44 @@ C2 가 stable HTTPS 이름을 만들어도 **아무도 그 값을 앱에 넣지 
   안 하면 fan 만 고쳐지고 store 는 시체를 든 채 남는다
 - 🔵 **`TASK-BE-589` 가 IdP 쪽 절반을 이미 했다**(`redirect_uri` 등록). 이건 **앱 쪽 절반**이다
 - 🔴 **판정은 env 목록이 아니라 «로그인이 되는가»** 다 — 그건 V1–V7 이 한다
+
+### 🔴🔴 확대 (2026-09-02 UTC, `TASK-MONO-612` AC-0 이 잡았다) — **store 는 issuer 만으로 안 산다**
+
+위 목록은 `OIDC_ISSUER_URL` **하나**를 이름으로 든다. 실측해 보니 `kanggle-store` 는
+그 하나를 꽂아도 **여전히 500** 이다 — 그 프로젝트의 auth env 가 **통째로 비어 있다**.
+
+| 찌른 곳 | 🔵 `kanggle-fan` (양성 대조군) | 🔴 `kanggle-store` |
+|---|---|---|
+| `/api/auth/providers` | **200** · 167 B · `iam` 나열 | **500** · 108 B |
+| `/api/auth/csrf` | **200** · 80 B | **500** · 108 B |
+| `/` (음성 대조군) | 307 → `/login` | **200** · 34,963 B |
+| 프로덕션 env 전수 | `NEXTAUTH_SECRET` · `NEXTAUTH_URL` · `OIDC_CLIENT_ID` · `OIDC_CLIENT_SECRET` | **`DEMO_API_BASE` 하나** |
+
+🔴 **단일 변수 귀속은 안 한다** — 두 팔 사이 변수가 네 개 다르다. 주장은 *"store 의 auth
+env 가 없고 `/api/auth/*` 가 전부 500"* 까지다. [[feedback_control_group_design_four_axes]]
+
+**⇒ AC-4b 의 소유자 작업이 store 쪽에서는 다섯 줄이다**(fan 은 한 줄 그대로):
+
+| # | `kanggle-store` 프로덕션 env | 값 |
+|---|---|---|
+| 1 | `OIDC_ISSUER_URL` | 새 issuer (`https://auth.hubwang.com`) |
+| 2 | `NEXTAUTH_URL` | `https://store.hubwang.com` |
+| 3 | `NEXTAUTH_SECRET` | 🙋 **소유자 생성** (fan 과 같은 값일 필요 없다) |
+| 4 | `OIDC_CLIENT_ID` | store 용 IdP 클라이언트 |
+| 5 | `OIDC_CLIENT_SECRET` | 같은 클라이언트의 시크릿 |
+
+🔴 **4·5 는 IdP 에 그 클라이언트가 등록돼 있어야 한다.** `TASK-BE-589` 가 `redirect_uri`
+절반을 했다 — **store 용 클라이언트가 시드에 실제로 있는지 V-계열에서 확인하라**. 없으면
+이건 대시보드 작업이 아니라 **시드 변경**이고, 그건 다른 티켓이다.
+
+🔵 **왜 이걸 아무도 안 봤나**: `TASK-MONO-582` 는 `NEXTAUTH_SECRET` 을 «빌드를 죽이나» 로만
+봤고 *"✅ 빌드를 안 죽였다"* 로 닫았다 — **잰 것이 빌드였다**. `TASK-MONO-611` 은 죽은
+issuer 를 지우며 *"오늘 동작 차이는 0"* 이라 적었다 — 맞다, **이미 500 이었으니까**. 세
+티켓이 각각 옳았고 그 사이에 공백이 남았다.
+[[feedback_two_correct_exclusions_compose_into_a_hole]]
+[[feedback_a_reported_figure_must_name_what_was_measured]]
+
+🔵 원장은 `projects/ecommerce-microservices-platform/apps/web-store/VERCEL.md` 에 넣었다.
 
 ## AC-4 — 🔵 **rider 의 배선** — apex 쿠키는 **호스트 한정**
 

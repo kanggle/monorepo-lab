@@ -223,6 +223,60 @@ Pro 에서 그 초과는 **차단(402)이 아니라 과금**이 된다. 🔴🔴
 
 ---
 
+## 🔴 결제 mock — 이 프로젝트 env 가 **불변식의 절반**을 들고 있다 (`TASK-MONO-612`)
+
+데모 결제는 **두 곳이 동의**해야 성립한다. mock PG 는 아무 `paymentKey` 나 받아주지만 실
+Toss 어댑터는 거부하므로, 한쪽만 켜면 체크아웃이 죽는다.
+
+| 절반 | 어디 | 기대값 | 2026-09-02 UTC 실측 |
+|---|---|---|---|
+| 백엔드 | `payment-service` `SPRING_PROFILES_ACTIVE` | `demo-pg` | ✅ `infra/demo/demo.env:276` |
+| 프런트 | 🔴 **이 프로젝트의 env** `DEMO_PAYMENT_MOCK` | `1` | 🔴 **없다** — 프로덕션 키 **전수 1개**(`DEMO_API_BASE`) |
+
+⇒ **백엔드만 켜진 조합이다.** 🔵 두 번째 선언 경로도 없음을 확인했다(같은 앱의
+`vercel.json` · `next.config.*` · `package.json` 에 `DEMO_PAYMENT_MOCK` **0건**).
+
+**왜 이 문서가 원장인가**: `infra/demo/verify-demo-wrapper.sh` 의 가드 (x) 가 이 쌍을
+강제하는데, `TASK-MONO-604` 가 데모에서 `web-store` 를 억제한 뒤 **프런트 절반이 compose
+렌더에서 사라졌다**. 그 절반은 없어진 게 아니라 **여기로 이사 왔다**. `TASK-MONO-612` AC-2
+가 「저장소는 이 축을 판정할 수 없다」를 **명시적으로 수용**했고(선택지 2), 그래서 판정은
+사람이 한다:
+
+- **누가·언제** — 소유자가, 데모 기동 창마다 그리고 이 프로젝트 env 를 만질 때마다
+- **명령** — `vercel env ls production --project kanggle-store | grep DEMO_PAYMENT_MOCK`
+- 🔴 **최종 판정은 env 목록이 아니다** — `/api/store-config` 가 `{"demoPayment":true}` 를
+  내야 한다. env 변경은 **다음 배포부터** 적용된다.
+
+🙋 **방향 지정 대기**: 권장은 「프런트를 백엔드에 맞춘다」(여기에 `DEMO_PAYMENT_MOCK=1`).
+데모는 돈을 받지 않는다. 🔴 그러나 이 문서가 요구하는 대로 **넣은 값과 그 이유를 위 표에
+적고** 나서 넣어라.
+
+---
+
+## 🔴🔴 이 프로젝트의 auth env 는 **통째로 비어 있다** — `/api/auth/*` 가 500 이다
+
+**2026-09-02 UTC 실측.** `TASK-MONO-612` 의 AC-0 이 「런타임 값을 읽으려고」 하다가 잡았다.
+
+| 찌른 곳 | 🔵 형제 `kanggle-fan` (양성 대조군) | 🔴 `kanggle-store` |
+|---|---|---|
+| `/api/auth/providers` | **200** · 167 B · `iam` 를 나열 | **500** · 108 B |
+| `/api/auth/csrf` | **200** · 80 B · 토큰 발급 | **500** · 108 B |
+| `/` (음성 대조군 — 앱 자체는 사나) | 307 → `/login` | **200** · 34,963 B |
+| 프로젝트 auth env | `NEXTAUTH_SECRET` · `NEXTAUTH_URL` · `OIDC_CLIENT_ID` · `OIDC_CLIENT_SECRET` (**4개**) | **0개** |
+
+🔴 **이 문서의 위 절이 「✅ `NEXTAUTH_SECRET` 이 빌드를 안 죽였다」라고 적은 것은 거짓이
+아니다** — 잰 것이 **빌드**였다. 런타임은 그 문장의 사정거리 밖이었고, 그래서 아무도
+안 봤다. [[feedback_a_reported_figure_must_name_what_was_measured]]
+
+🔴 **단일 변수 귀속은 하지 않는다**: 두 팔 사이에 변수가 네 개 다르다. 말할 수 있는 것은
+*"auth env 가 통째로 없고 `/api/auth/*` 가 전부 500 이다"* 까지다.
+
+⇒ **`OIDC_ISSUER_URL` 만 꽂아서는 이 사이트의 로그인이 살아나지 않는다.** 그 사실을
+`TASK-MONO-610` AC-4b 에 넣었다. 🔴 **여기서 즉흥으로 값을 넣지 마라** — 무엇을 왜 넣었는지
+이 표에 적는 것이 이 문서의 규칙이고, 그 규칙이 지켜지지 않아 바로 위 절이 생겼다.
+
+---
+
 ## 무시 규칙 — 왜 목록이 JSON 밖에 있는가
 
 **Vercel 스키마는 명령 문자열에 `maxLength: 256` 을 건다.** `TASK-MONO-562` 가 형제

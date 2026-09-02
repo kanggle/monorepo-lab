@@ -475,3 +475,45 @@ D4 이후에 생긴다.
 🔴 **ADR 이 명시한 한 가지 더**: *"어느 안도 «지금 당장 로그인이 된다» 를 보장하지 않는다"* —
 홉 ①(`error=Configuration`)의 **실제 사유는 여전히 미상**이다(§ R1, 소유자 조회 대기).
 이 티켓이 겪은 그 실패가 C2 배선만으로 사라진다는 근거는 **없다**.
+
+## CORRECTION (2026-09-02 UTC) — 이 티켓이 **가드 (x2) 를 반쪽으로 만든다**. 🔴 술어를 복사하지 마라
+
+`TASK-MONO-612` AC-3 이 미리 세는 것이다. 이 티켓이 팬을 Vercel 로 옮기는 순간, 형제
+축에서 이미 일어난 일이 **똑같이** 일어난다:
+
+| | ecommerce (이미 일어났다) | fan (이 티켓이 일으킨다) |
+|---|---|---|
+| 무엇이 옮겨갔나 | `web-store` | `fan-platform-web` |
+| 사라지는 것 | compose 렌더의 `DEMO_PAYMENT_MOCK` | **같다** |
+| 반쪽이 되는 가드 | `verify-demo-wrapper.sh` (x) | **(x2)** |
+| 억제 선언 | `infra/demo/ecommerce-vercel.override.yml` | 🔴 **팬용이 필요하다** — (x2) 도 «누가 지웠는지 모름» 을 FAIL 로 문다 |
+
+`infra/demo/demo.env:279` 가 이미 적어 뒀다 — *"`DEMO_PAYMENT_MOCK` 는 팬 웹도 함께
+읽는다 — 한 값, 두 프런트."*
+
+### 🔴🔴 그러나 (x) 의 처방을 그대로 옮기면 **정반대를 단언한다**
+
+`demo.env:279-285` 가 그 이유를 든다 — **두 도메인의 극성이 반대다**:
+
+| | 기본 | mock 이 되려면 | 불변식 |
+|---|---|---|---|
+| ecommerce | 실 Toss | `demo-pg` 프로파일을 **켠다** | 프런트 플래그 ON ⟺ `demo-pg` ON |
+| fan | **목**(`MockPaymentGatewayAdapter` = `@Profile("!portone")`) | 아무것도 안 켠다 | 프런트 플래그 ON ⟺ `portone` **OFF** |
+
+⇒ (x) 의 「미집행 축」 문구를 (x2) 로 복사할 때 **기대값이 `DEMO_PAYMENT_MOCK=1` 인 것은
+같지만 그 근거가 되는 백엔드 조건은 반대**다. 문구에 `demo-pg` 를 적으면 거짓이 된다.
+
+### 이 티켓이 해야 하는 것 (AC 에 넣어라)
+
+1. 팬용 억제 override 를 선언하고 `COMPOSE[fan]` 체인에 넣는다 — 안 넣으면 (x2) 가
+   *"데모 렌더에 `fan-platform-web` 이 없는데 선언된 억제도 체인에 없습니다"* 로 **FAIL** 한다.
+2. (x2) 의 미집행 분기 문구를 (x) 와 **같은 형태**(누가·언제·명령·기대값·원장)로 쓰되
+   **팬의 극성**으로 쓴다 — 명령은 `--project kanggle-fan`, 원장은 팬 쪽 `VERCEL.md`.
+3. `kanggle-fan` 프로덕션 env 에 `DEMO_PAYMENT_MOCK` 이 필요한지 **먼저 재라**
+   (2026-09-02 실측: 그 프로젝트 env 는 `NEXTAUTH_SECRET` · `NEXTAUTH_URL` ·
+   `OIDC_CLIENT_ID` · `OIDC_CLIENT_SECRET` 네 개뿐 — **없다**).
+
+🔵 **형제가 이미 값을 치렀다**: ecommerce 쪽은 604 가 억제한 뒤에야 가드가 물었고, 그
+빨강이 612 를 낳았다. 팬은 **옮기는 PR 안에서** 같이 처리하면 그 왕복이 없다.
+[[feedback_two_correct_exclusions_compose_into_a_hole]]
+[[feedback_the_unguarded_operation_is_where_the_invariant_breaks]]
