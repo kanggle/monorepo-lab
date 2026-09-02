@@ -1002,6 +1002,36 @@ awk -F'|' '$1 == "C" { cn[$2 "|" $3] = $4 }
 # (4) 판정
 w_default_host="$(printf '%s' "${JWT_JWKS_URI:-}" | sed -E 's#^https?://##; s#[:/].*$##')"
 [ -n "$w_default_host" ] || fail "(w) demo.env 의 JWT_JWKS_URI 에서 호스트를 뽑지 못했습니다 (값='${JWT_JWKS_URI:-}')."
+
+# 경로 B — **선언된 공개 IdP** (TASK-MONO-615 B3 / ADR-MONO-069 C2)
+# ---------------------------------------------------------------------------
+# C2 아래서 IdP 는 고정 공개 이름 뒤에 서고 Vercel 이 TLS 를 끝낸다. 그 이름은 docker
+# alias 가 **아니므로** (1)~(3)이 만든 이름 집합에 영원히 없다 — 그런데 그것이 의도다.
+# 실측(TASK-MONO-615, 뒤집힌 demo.env 로 이 스크립트를 그대로 실행): 이 칸은
+# `fan:membership-service` **한 건**에서 FAIL 했다. 그 서비스만
+# `INTERNAL_JWT_JWK_SET_URI=${IAM_PUBLIC_URL}/oauth2/jwks` 를 받기 때문이다
+# (projects/fan-platform/docker-compose.yml:193). 그리고 그 FAIL 이 실행을 중단시켜
+# 뒤의 칸들이 **미도달**로 남았다 — `TASK-MONO-606` AC-4′ ②가 그렇게 못 재졌다.
+#
+# 🔴 **완화가 아니라 좁은 면제다.** 면제되는 호스트는 **정확히 하나**이고 저장소에 박지
+#    않는다 — `demo.env` 자신의 `IAM_PUBLIC_URL` 에서 파생한다. 그리고 **`https` 일
+#    때만** 면제한다. 기본값 `http://iam.${DEMO_DOMAIN}` 아래서는 이 절이 **완전히
+#    불활성**이고(아래 ok 줄의 카운트가 0), 활성화되는 시점은 정확히 C3(뒤집기)이
+#    랜딩될 때다. 그래서 이 변경 자체는 오늘의 판정을 하나도 바꾸지 않는다.
+#
+# 🔴 **정적으로 증명되는 것이 줄어든다는 사실을 감추면 그게 완화다.** 경로 A 는
+#    「이름이 컨테이너 fabric 안에서 해소된다」를 증명했다. 경로 B 는 「그 이름이 데모가
+#    선언한 공개 IdP 다」까지만 증명한다 — **실제 도달성은 라이브 축의 몫**이고, 그 공백은
+#    `TASK-MONO-615` B3 § 남은 공백에 이름이 적혀 있다(「JVM 이 그 JWKS 로 토큰을 실제로
+#    검증했다」는 아직 미측정). 여기서 그 공백을 메운 척하지 않는다.
+#
+# 🔴 MONO-507 의 원래 근거는 그대로 살아 있다 — 해소 실패가 401 로 위장한다는 것.
+#    술어를 **지우지 않고** 두 번째 경로를 더한 이유다.
+w_public_idp=""
+case "${IAM_PUBLIC_URL:-}" in
+  https://*) w_public_idp="$(printf '%s' "$IAM_PUBLIC_URL" | sed -E 's#^https://##; s#[:/].*$##')" ;;
+esac
+w_public_used=0
 w_checked=0; w_bad=""
 while IFS='|' read -r _ p svc mod; do
   grep -qxF "$mod" "$w_rs" || continue                    # 리소스 서버가 아님
@@ -1012,18 +1042,30 @@ while IFS='|' read -r _ p svc mod; do
     key="traefik-net"; [ "$net" = "traefik-net" ] || key="$p/$net"
     grep -qxF "$(printf '%s\t%s' "$key" "$host")" "$w_names" && { reachable=1; break; }
   done < <(awk -F'|' -v p="$p" -v s="$svc" '$1=="N" && $2==p && $3==s' "$w_svc")
+  # 경로 B. 🔴 `=` 비교다 — 접미사 매치가 아니다. `evil-auth.hubwang.com` 도,
+  #          `auth.hubwang.com.attacker.tld` 도 통과하지 않는다.
+  if [ "$reachable" != 1 ] && [ -n "$w_public_idp" ] && [ "$host" = "$w_public_idp" ]; then
+    reachable=1
+    w_public_used=$((w_public_used + 1))
+  fi
   w_checked=$((w_checked + 1))
   [ "$reachable" = 1 ] || w_bad="$w_bad"$'\n'"  $p:$svc ($mod) → JWKS 호스트 '$host' 가 이 서비스의 네트워크 어디에도 없습니다"
 done < <(awk -F'|' '$1 == "M"' "$w_svc")
 
 [ "$w_checked" -gt 0 ] || fail "(w) 데모 compose 에서 리소스 서버 서비스를 한 개도 매칭하지 못했습니다 — build.context ↔ 모듈 조인이 깨졌습니다."
-[ -z "$w_bad" ] || fail "JWKS 를 fetch 할 수 없는 리소스 서버가 있습니다:$w_bad"\
+# 🔴 면제가 모집단 **전체**를 덮으면 경로 A 는 한 번도 실행되지 않은 것이고, 이 칸은
+#    「이름이 해소되는가」를 더 이상 재지 않는다. 그건 통과가 아니라 **재설계 신호**다.
+#    실측 기준선: 뒤집힌 demo.env 에서 면제 대상은 리소스 서버 중 **1건**이었다.
+[ "$w_public_used" -lt "$w_checked" ] || fail "(w) 공개 IdP 면제가 리소스 서버 ${w_checked}건 **전부**를 덮었습니다."\
+  $'\n'"→ 그러면 이 칸은 도커 이름 해소를 하나도 재지 않습니다 — 통과가 아니라 가드가 죽은 것입니다."\
+  $'\n'"→ 전부가 공개 IdP 를 쓰는 배치라면 이 가드의 축 자체를 다시 설계해야 합니다(라이브 fetch 로 옮기세요)."
+[ -z "$w_bad" ] || fail "(w) JWKS 를 fetch 할 수 없는 리소스 서버가 있습니다:$w_bad"\
   $'\n'"→ 이 서비스들은 **모든 요청을 401 \"Authentication required\" 로 떨굽니다.** 토큰이 완벽해도 그렇습니다"\
   $'\n'"   — Spring 이 JWKS fetch 실패(UnknownHost)를 fail-closed 로 401 로 바꾸기 때문입니다."\
   $'\n'"→ 게이트웨이는 토큰을 **수락한 뒤** 뒤로 넘기므로, 증상은 '엣지가 좋은 토큰을 거부한다' 로 보입니다."\
   $'\n'"→ 해당 프로젝트의 infra/demo/<slug>-identity.override.yml 에 그 서비스를 추가하고"\
   $'\n'"   infra/demo/projects.sh 의 COMPOSE[<slug>] 에 그 파일이 들어 있는지 확인하세요."
-ok "리소스 서버 ${w_checked}개 전부 자기 JWKS 호스트를 해소 가능 (선언 모듈 $(wc -l < "$w_rs" | tr -d ' ')개 중 데모에 뜨는 것)"
+ok "리소스 서버 ${w_checked}개 전부 자기 JWKS 호스트를 해소 가능 (선언 모듈 $(wc -l < "$w_rs" | tr -d ' ')개 중 데모에 뜨는 것 · 도커 이름 $((w_checked - w_public_used))건 · 선언된 공개 IdP 면제 ${w_public_used}건${w_public_idp:+ ($w_public_idp)})"
 
 # ---------------------------------------------------------------------------
 echo "[verify] (x) 결제 mock 이 프런트·백엔드 양쪽에서 같은 상태인가"
@@ -2034,6 +2076,20 @@ done
 #   · 점이 없는 호스트(`iam-auth-service`, `iam`) = 컨테이너 네트워크 이름 →
 #     도달성은 가드 (w) 의 관할이므로 여기서는 판정하지 않는다.
 #   · `localhost` 는 점이 없지만 **알려진 나쁜 기본값**이라 명시적으로 잡는다.
+# 선언된 공개 IdP 는 **도메인 파생이 아니다** — 그것이 C2 의 요점이다(부팅마다 바뀌는
+# 이름 뒤에 IdP 를 두면 브라우저가 못 따라온다). 그래서 이 칸도 그 한 호스트를 면제한다.
+# 🔴 (w) 와 **같은 규칙**으로 파생한다: `demo.env` 의 `IAM_PUBLIC_URL` 이 `https` 일 때
+#    그 호스트 하나. 기본값(`http://iam.${DEMO_DOMAIN}`)에서는 불활성이라 오늘의 판정을
+#    바꾸지 않는다. 🔵 프로브 도메인으로 다시 source 하는 이유는 위 렌더와 **같은 세계**의
+#    값을 봐야 하기 때문이다(바깥 스코프의 값은 DEMO_DOMAIN 이 다르다).
+z12_public_idp="$(
+  set -a; DEMO_DOMAIN="$z12_probe"; . "$HERE/demo.env"; set +a
+  case "${IAM_PUBLIC_URL:-}" in
+    https://*) printf '%s' "$IAM_PUBLIC_URL" | sed -E 's#^https://##; s#[:/].*$##' ;;
+  esac
+)"
+z12_public_used=0
+
 while IFS='|' read -r z12_proj z12_svc z12_key z12_val; do
   z12_seen=$((z12_seen + 1))
   z12_item_list="$(printf '%s' "$z12_val" | tr ',' '\n')"
@@ -2041,6 +2097,11 @@ while IFS='|' read -r z12_proj z12_svc z12_key z12_val; do
     [ -n "$z12_item" ] || continue
     z12_host="$(printf '%s' "$z12_item" | sed -E 's#^[a-zA-Z][a-zA-Z0-9+.-]*://##; s#[:/].*$##')"
     [ -n "$z12_host" ] || continue
+    # 선언된 공개 IdP 는 통과. 🔴 `=` 비교이므로 다른 공개 호스트는 그대로 BAD 다 —
+    #    이 절이 「점 있는 호스트는 전부 봐준다」로 넓어지면 가드가 죽는다.
+    if [ -n "$z12_public_idp" ] && [ "$z12_host" = "$z12_public_idp" ]; then
+      z12_public_used=$((z12_public_used + 1)); continue
+    fi
     case "$z12_host" in
       localhost)            : ;;                                   # 아래에서 BAD 처리
       *.$z12_probe)         continue ;;                            # 프로브에서 파생됨 ✓
@@ -2051,7 +2112,7 @@ while IFS='|' read -r z12_proj z12_svc z12_key z12_val; do
   done <<< "$z12_item_list"
 done < "$z12_rows"
 
-[ -z "$z12_bad" ] || fail "데모 도메인을 따라가지 않는 issuer/JWKS 주입이 있습니다:$z12_bad"\
+[ -z "$z12_bad" ] || fail "(z12) 데모 도메인을 따라가지 않는 issuer/JWKS 주입이 있습니다:$z12_bad"\
   $'\n'"→ 이 값들은 데모에서 **틀린 IAM 을 가리킵니다.** 데모의 issuer 는 `http://iam.\${DEMO_DOMAIN}`"\
   $'\n'"   이고 DEMO_DOMAIN 은 부팅마다 IMDSv2 에서 파생됩니다 — 저장소에 박힌 호스트는 맞을 수 없습니다."\
   $'\n'"→ 증상은 인증 실패로 보입니다: issuer 불일치는 401, JWKS 호스트 미해소는 Spring 이"\
@@ -2063,7 +2124,7 @@ done < "$z12_rows"
   $'\n'"→ 🔴 이 가드를 DEMO_DOMAIN=local 로 되돌려 통과시키지 마세요. 그러면 하드코딩된"\
   $'\n'"   \`iam.local\` 이 데모 issuer 와 **구별되지 않아** 가드가 조용히 죽습니다."
 
-ok "issuer/JWKS 주입 ${z12_seen}건 전부 데모 도메인 파생 또는 컨테이너 이름 (도메인 ${#COMPOSE[@]}개 전수 · 프로브='$z12_probe')"
+ok "issuer/JWKS 주입 ${z12_seen}건 전부 데모 도메인 파생 · 컨테이너 이름 · 또는 선언된 공개 IdP (도메인 ${#COMPOSE[@]}개 전수 · 프로브='$z12_probe' · 공개 IdP 면제 ${z12_public_used}건${z12_public_idp:+ ($z12_public_idp)})"
 rm -f "$z12_rows"
 
 # ---------------------------------------------------------------------------
