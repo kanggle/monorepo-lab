@@ -8,7 +8,7 @@ TASK-BE-590
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -157,3 +157,78 @@ iam-platform
 | `$`+중괄호를 주석에 씀 | auth-service **기동 실패** | AC-1 (V0031 이 두 번 겪었다) |
 | `JSON_*` 함수 사용 | H2 슬라이스 테스트만 깨진다 | AC-1 |
 | 기존 마이그레이션 수정 | Flyway 체크섬 불일치 → 기동 실패 | Scope Out |
+
+---
+
+# 🛠️ 구현 기록 (2026-09-02 UTC)
+
+## ✅ AC-0 — 앵커를 **쟀다**. 그리고 「마지막 원소」는 직관과 달랐다
+
+`V0012` → `V0016` → `V0024` → `V0028` 을 순서대로 읽어 재구성했다:
+
+| 단계 | `ecommerce-web-store-client` 에 한 일 |
+|---|---|
+| `V0012` | `[localhost:3000/…/gap, web.ecommerce.local/…/gap]` · post-logout `[localhost:3000/, web.ecommerce.local/]` |
+| `V0016` | post-logout 을 Jackson 기본타입 배열(`["java.util.ArrayList",[…]]`)로 교정 |
+| `V0024` | `/api/auth/callback/gap` → **`/iam`** (redirect 만. post-logout 은 앱 루트라 무관) |
+| `V0028` | `localhost:3001` 을 **`localhost:3000` 바로 뒤에** 끼워 넣음 |
+
+⇒ **최종 꼬리는 둘 다 `web.ecommerce.local`** 이다. 🔴 `V0028` 이 중간에 삽입했으므로
+「마이그레이션 순서상 마지막」은 `localhost:3001` 인데, **배열의 마지막은 아니다** —
+티켓 AC-0 ②가 경고한 그 자리다. 앵커는 **배열 기준**으로 골랐다.
+
+## 🔵 AC-0 이 하나 더 확인했다 — **앵커가 부팅마다 살아남는가**
+
+앵커가 `.local` URI 라, 데모 시드가 그것을 덮어쓰면 두 번째 부팅부터 이 마이그레이션이
+**0행 갱신 + SUCCESS** 가 된다(에러가 아니다). 그래서 스크립트를 열어 확인했다:
+
+- 술어는 `WHERE jt.uri LIKE '%.local/%'` 이고 갱신은 **`JSON_MERGE_PRESERVE`** — 즉
+  **덧붙이기만** 한다. 그 파일 자신이 그것이 의도라고 적는다(*"원본 `.local` 을 지우면
+  같은 DB 를 로컬로 못 쓴다"*).
+- `TASK-MONO-606` 의 회수 UPDATE 는 술어가 `%sslip.io%` 라 `hubwang.com` 을 안 건드린다.
+
+⇒ 앵커는 **신선 볼륨에서도 데모 시드된 볼륨에서도** 존재한다. 덧붙여진 형제는
+`web.ecommerce.<데모도메인>` 이라 **다른 문자열**이므로 매치는 정확히 1건이다.
+
+## ✅ AC-1 — `V0035__add_store_vercel_domain_redirect_uri.sql`
+
+`V0033` 의 형태를 그대로 따랐다. 티켓이 미리 든 함정 셋을 **산출물에서 실측**했다:
+
+| 함정 | 실측 |
+|---|---|
+| Flyway placeholder(달러+중괄호) | **0건** |
+| `JSON_*` 함수 (실행문 18줄 기준) | **0건** (주석의 금지 문구만 남음) |
+| 앵커 부재 시 조용한 0행 | `LIKE '%…web.ecommerce.local…%'` 를 WHERE 에 **명시** — 앵커가 없으면 애초에 안 걸린다 |
+
+🔵 **추가로 하나 더**: 기존 마이그레이션 **34개가 전부 순수 ASCII** 임을 확인하고
+이 파일도 ASCII 로 맞췄다. Flyway 의 파일 인코딩은 **기동을 죽이는 축**이라, 주석
+편의를 위해 모집단 유일의 예외가 되지 않는다. 🔴 그 검사는 처음에 `grep -P` 로 했다가
+**로케일 오류를 `|| echo 0` 이 「0건」으로 위장**해서, python 으로 **양성 대조군과 함께**
+다시 쟀다.
+
+## ✅ AC-2 — 시드 통합테스트
+
+`OAuthClientPostLogoutRedirectUriSeedIntegrationTest` 의 web-store 케이스에
+post-logout `containsExactly` 꼬리와 redirect_uris `contains` 를 추가했다.
+🔵 **그 테스트가 어디서 도는지 먼저 확인했다** — `ci.yml` 의 `iam-integration-tests`
+(`:projects:iam-platform:apps:auth-service:integrationTest`, Testcontainers). 러너 없는
+단언은 게이트가 아니다.
+
+## ✅ AC-3 — 런타임 시드가 이 행을 안 건드린다
+
+위 AC-0 곁가지에서 함께 확인했다(술어를 **읽는** 데서 그치지 않고 **현재 파일**을 열었다).
+
+## ✅ AC-4 — 후속을 이름으로 넘겼다
+
+`TASK-MONO-610` AC-4b 의 4·5 행을 「🔴 V0035 선행」 → 「✅ 선행 해소」로 바꾸고,
+🔴 **「닫혔다」가 아님**을 같은 자리에 적었다 — 등록은 필요조건이고 `/api/auth/*` 는
+소유자가 env 다섯 줄을 넣기 전까지 **500 그대로**다.
+
+---
+
+# 📌 남은 것
+
+| | |
+|---|---|
+| 🙋 소유자 | `kanggle-store` env 5줄 → 기동 창 → V1–V8 (`TASK-MONO-610`) |
+| 🔴 순서 | **이 PR 머지가 먼저다.** 4·5 를 먼저 넣으면 `redirect_uri_mismatch` 이고 그 오류는 URI 도 클라이언트도 이름으로 대지 않는다 |
