@@ -132,6 +132,61 @@ docker compose -p traefik -f "$ROOT/$TRAEFIK_COMPOSE" up -d
 UP_ATTEMPTS="${DEMO_UP_ATTEMPTS:-3}"
 UP_RETRY_SLEEP="${DEMO_UP_RETRY_SLEEP:-60}"
 
+# 🔴🔴 TASK-MONO-615 B4 — 위의 (A)(B) 는 **호출이 돌아온다**를 전제한다
+# ---------------------------------------------------------------------------
+# 그 전제가 2026-09-02 기동 창에서 깨졌다(V5, 두 번째 부팅):
+#
+#   14:24:01  Container iam-kafka Waiting / iam-redis Waiting / iam-mysql Waiting
+#   14:41:03  demo-stack.service: start operation timed out -> failed
+#
+# 그 사이 **17분 동안 다음 도메인의 `[demo] up:` 줄이 하나도 안 나왔다** ⇒ `up -d`
+# 호출 하나가 매달린 것이다. 그러면 위의 재시도·예산·재측정·요약이 **전부 실행되지
+# 않는다** — systemd 가 SIGTERM 을 보내고, 운영자에게 남는 것은 유닛의 `failed` 한 줄뿐이다.
+# 상태 발행도 못 하므로 방문자 화면조차 아무 말을 못 한다.
+#
+# 🔴 그리고 이 17분은 **위 AC-0 문단의 산술과 모순된다.** 그 문단은 대기의 상한이
+#    「의존 대상 자신의 healthcheck」라고 적었고 iam-kafka 기준으로 계산하면
+#    start_period 30s + 10 × interval 15s ≈ **최대 5분**이다. 실제로는 그 3배를 넘겨
+#    매달렸다 ⇒ **「대기는 healthcheck 가 묶어 준다」는 문장을 더 이상 신뢰하지 않는다.**
+#    (왜 안 묶였는지는 아직 모른다 — 그건 B4 본체이고 기동 창에서 잰다.)
+#
+# 🔵 **이것은 경합의 고침이 아니다.** 경합 자체의 후보(ⓐ 부팅 시 정리 · ⓑ 의존 조건 조정 ·
+#    ⓒ restart 정책 · ⓓ 라벨에서 도메인 제거)는 이 티켓이 «실측 후 결정» 으로 남겨 뒀고
+#    여기서 고르지 않는다. 여기서 바꾸는 것은 **매달렸을 때 무슨 일이 일어나는가**다:
+#    매달림을 «실패한 시도» 로 바꾸면 이미 잘 설계된 재시도·수렴·요약 경로가 살아난다.
+#    즉 이 변경의 목적은 다음 창에서 **B4 를 잴 수 있게 만드는 것**이다.
+#
+# 🔴 상한은 두 겹이다. 호출당 상한만 두면 8개 × 상한이 TimeoutStartSec 을 넘고, 전체
+#    상한만 두면 첫 도메인이 전부를 먹는다. 그래서 **호출당 상한과 전역 마감**을 같이 둔다.
+UP_CALL_TIMEOUT="${DEMO_UP_CALL_TIMEOUT:-420}"
+UP_TOTAL_BUDGET="${DEMO_UP_TOTAL_BUDGET:-1020}"
+
+# `timeout` 이 없으면 **오늘과 같은 동작**으로 내려간다(묶지 못한다). 여기서 죽이지
+# 않는 이유는, 그러면 도구 하나 때문에 부팅 전체가 실패하기 때문이다 — 오늘보다 나쁘다.
+# 대신 소리를 낸다. 가드 (z13)이 이 스크립트가 실제로 묶는지를 따로 단언한다.
+if command -v timeout >/dev/null 2>&1; then
+  HAVE_TIMEOUT=1
+else
+  HAVE_TIMEOUT=0
+  echo "[demo] ⚠ coreutils 'timeout' 이 없습니다 — up -d 호출을 시간으로 묶지 못합니다" >&2
+  echo "[demo]   (매달리면 systemd TimeoutStartSec 이 유일한 상한이고, 요약도 상태 발행도 못 합니다)" >&2
+fi
+
+up_started_at="$(date +%s)"
+up_remaining() { echo $(( UP_TOTAL_BUDGET - ( $(date +%s) - up_started_at ) )); }
+
+# up_call <초> <docker compose 인자...>
+# 🔴 종료코드 124 는 `timeout` 이 «끊었다» 는 뜻이다. 「떠서 실패」와 반드시 구별한다 —
+#    두 사유가 섞이면 진단이 통째로 틀어진다(이 스크립트가 예산-거부를 따로 세는 것과 같은 이유).
+up_call() {
+  local secs="$1"; shift
+  if [ "$HAVE_TIMEOUT" = 1 ]; then
+    timeout --foreground -k 15 "$secs" docker compose "$@"
+  else
+    docker compose "$@"
+  fi
+}
+
 # ---------------------------------------------------------------------------
 # 🔴 TASK-MONO-559 결함 B — 예산이 선착순이라 **목록 앞이 전부 먹었다**
 # ---------------------------------------------------------------------------
@@ -180,6 +235,8 @@ fi
 failed=()
 declare -A retries_used=()   # 도메인 → 실제로 쓴 재시도 횟수
 declare -A denied=()         # 도메인 → 예약 규칙이 막은 재시도 횟수 (AC-2 의 신호)
+declare -A hung=()           # 도메인 → up -d 가 시간 안에 안 돌아온 횟수 (615 B4)
+exhausted=()                 # 전역 마감이 지나 시도조차 못 한 도메인 (615 B4)
 dom_idx=0
 for p in "${SET[@]}"; do
   dom_idx=$(( dom_idx + 1 ))
@@ -193,9 +250,24 @@ for p in "${SET[@]}"; do
     fi
     # -f 를 ROOT 절대경로로 주면 project-directory 가 첫 파일의 디렉터리로 잡혀
     # 각 프로젝트의 .env 로딩과 상대 build: 컨텍스트가 올바르게 해소된다.
-    if docker compose -p "$p" "${ARGS[@]}" up -d $build_flag; then
+    # 전역 마감 — 남은 시간이 없으면 **시도조차 하지 않는다.** 여기서 굳이 호출하면
+    # 그 호출이 systemd 상한을 넘겨 요약을 통째로 잃는다(이 블록이 막으려는 바로 그 모양).
+    call_secs="$(up_remaining)"
+    if [ "$call_secs" -gt "$UP_CALL_TIMEOUT" ]; then call_secs="$UP_CALL_TIMEOUT"; fi
+    if [ "$call_secs" -le 0 ]; then
+      exhausted+=("$p"); failed+=("$p")
+      echo "[demo] ✖ $p — **전체 기동 예산 ${UP_TOTAL_BUDGET}s 가 소진**되어 시도조차 못 했습니다(이 도메인이 느린 것이 아닙니다)" >&2
+      break
+    fi
+    up_rc=0
+    up_call "$call_secs" -p "$p" "${ARGS[@]}" up -d $build_flag || up_rc=$?
+    if [ "$up_rc" -eq 0 ]; then
       [ "$attempt" -eq 1 ] || echo "[demo] ✔ $p — 재시도 $attempt 회차에 기동 성공"
       break
+    fi
+    if [ "$up_rc" -eq 124 ]; then
+      hung[$p]=$(( ${hung[$p]:-0} + 1 ))
+      echo "[demo] ⏱ $p — up -d 가 ${call_secs}s 안에 돌아오지 않아 **끊었습니다**(매달림, 기동 실패와 구별합니다)" >&2
     fi
     # 뒤에 남은 도메인 각자의 1회분을 예약한다 — 이것이 하한을 만든다.
     reserve=$(( (n_domains - dom_idx) * UP_RETRY_SLEEP ))
@@ -482,6 +554,22 @@ if [ ${#denied[@]} -gt 0 ]; then
     echo "[demo] ⚠ 재시도 배분: $p 는 예산이 없어 재시도 ${denied[$p]}회를 못 받았습니다(느려서가 아닙니다)" >&2
   done
   echo "[demo]   ⇒ 재시도 총 상한 = 도메인 ${n_domains}개 × ${UP_RETRY_SLEEP}s. 이 값이 빠듯하면 UP_RETRY_SLEEP 이나 healthcheck 창을 보세요." >&2
+fi
+
+# 🔴 TASK-MONO-615 B4 — 매달림은 **재측정 결과와 무관하게** 남긴다. 끊은 뒤 재시도가
+#    성공하면 위에서 초록이 되고, 그러면 「한 번 매달렸다」는 사실이 어디에도 안 남는다.
+#    그 사실이야말로 B4 가 찾는 신호다.
+if [ ${#hung[@]} -gt 0 ]; then
+  for p in "${!hung[@]}"; do
+    echo "[demo] ⏱ 매달림: $p 의 up -d 가 ${hung[$p]}회 시간 안에 돌아오지 않았습니다(호출당 상한 ${UP_CALL_TIMEOUT}s)" >&2
+  done
+  echo "[demo]   ⇒ 이것은 '떠서 실패' 가 아닙니다. 의존 대기가 healthcheck 로 묶이지 않았다는 뜻이고," >&2
+  echo "[demo]     TASK-MONO-615 B4 가 찾는 신호입니다. 컨테이너가 'Created' 로 남아 있는지 보세요." >&2
+fi
+if [ ${#exhausted[@]} -gt 0 ]; then
+  final_rc=1
+  echo "[demo] ✖ 전체 기동 예산 소진으로 시도조차 못 한 도메인: ${exhausted[*]}" >&2
+  echo "[demo]   (예산 ${UP_TOTAL_BUDGET}s. 앞 도메인이 다 먹었다는 뜻이며, 그 도메인들이 느린 것이 아닙니다.)" >&2
 fi
 
 [ "$domain_seed_rc" -eq 0 ] || final_rc=1
