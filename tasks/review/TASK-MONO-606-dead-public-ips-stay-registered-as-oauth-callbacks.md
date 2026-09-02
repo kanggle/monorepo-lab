@@ -511,3 +511,61 @@ aws ec2 describe-snapshots --snapshot-ids snap-09449008990589c36
 🔴 **다음에 죽은 IP 를 셀 때는 «IdP DB» 가 아니라 «그 문자열을 담을 수 있는 시스템 전부» 로
 모집단을 잡아라** — 최소한 IdP DB · Vercel env(4 프로젝트) · `infra/demo/*.env` ·
 terraform tfvars. [[feedback_recount_population_dont_inherit_scope]]
+
+---
+
+# ✅🔴 CORRECTION (2026-09-02 UTC) — AC-4′ 를 `TASK-MONO-610` 기동 창에서 쟀다
+
+AC-4′ 가 지시한 네 칸 중 **셋이 닫혔고 하나는 여전히 미측정**이다. `review/` 이므로
+표를 고치지 않고 순수 추가한다.
+
+## 🔵 먼저 — 양성 대조군이 라이브에서 재현됐다
+
+창 시작 시점(AMI 판본, 회수 시드가 호스트에 **없던** 상태)의 실측:
+
+```
+ecommerce-admin-dashboard-client | … admin.ecommerce.3-38-176-240.sslip.io … admin.ecommerce.43-202-166-3.sslip.io …
+ecommerce-web-store-client       | … web.ecommerce.3-38-176-240 …            web.ecommerce.43-202-166-3 …
+fan-platform-user-flow-client    | … (양쪽 세대 모두) …
+platform-console-web             | … (양쪽 세대 모두) …
+```
+
+⇒ **죽은 세대 `3-38-176-240` 이 부팅을 건너 그대로 남아 있었다.** 이 티켓이 고치려는
+결함이 라이브에서 관측됐다 — 회수 전 상태의 사진이다.
+
+## 판정
+
+| # | AC-4′ 의 기준 | 판정 | 근거 |
+|---|---|---|---|
+| ① | 시드 로그에 회수 확인 줄 | 🟢 **PASS** | `[seed] OK — 죽은 sslip 등록 0건 (회수 확인)` — 재기동 1회 + **EC2 부팅 2회 모두** |
+| ② | `verify --live` 의 `(z18)` 이 `ok` | 🔴 **미측정** | 아래 |
+| ③ | 새 도메인으로 로그인이 끝까지 | 🟢 **PASS** | 세 도메인에서 authorization_code + PKCE 왕복이 **토큰 200** 까지 성립 |
+| ④ | `oauth_clients` 의 sslip 세대가 1개 | 🟢 **PASS** | 아래 |
+
+### ④ 의 숫자 — 술어와 대조군을 함께 적는다
+
+부팅 뒤 (도메인 `3-38-132-31`) 기준:
+
+| 질의 | 값 |
+|---|---:|
+| `redirect_uris like '%3-38-176-240%'` (더 옛 세대) | **0** |
+| `redirect_uris like '%43-202-166-3%'` (직전 세대) | **0** |
+| `redirect_uris like '%3-38-132-31%'` (현재 세대) | **4** ← 🔵 **양성 대조군**. 0이면 내 술어가 틀린 것이다 |
+
+🔵 처음 셀 때와 **같은 질의 모양**으로 다시 셌다 — 중간에 추출 술어를 바꿨다가
+「세대가 줄었다」로 읽을 뻔했고, 그건 추출기를 재는 것이다.
+[[feedback_comparing_two_extracts_measures_the_extractors]]
+
+### 🔴 ② 는 왜 미측정인가 — **skip 이 아니라 미도달이다**
+
+`verify-demo-wrapper.sh --live` 가 **(z18) 에 닿기 전에 (w) 에서 중단**됐다:
+
+```
+(w) 모든 OIDC 리소스 서버가 자기 JWKS 호스트를 해소할 수 있는가
+  FAIL: fan:membership-service → JWKS 호스트 'auth.hubwang.com' 가 이 서비스의 네트워크 어디에도 없습니다
+```
+
+이 FAIL 은 `TASK-MONO-610` 의 뒤집기가 만든 **위양성**이다(그 티켓 § 기동 창 실측 원장 ②).
+런타임은 반증한다 — 그 컨테이너 안에서 해소 `216.150.16.129` · JWKS **200 433B**.
+⇒ **(w) 의 술어가 C2 를 반영하도록 고쳐지기 전까지 (z18) 은 이 경로로 잴 수 없다.**
+🔴 AC-4′ 가 *"`skip` 이면 판정된 게 아니다"* 라고 못 박았는데, 여기서는 **skip 조차 아니다.**
