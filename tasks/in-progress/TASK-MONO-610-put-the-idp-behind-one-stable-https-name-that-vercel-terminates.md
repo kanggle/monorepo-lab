@@ -655,12 +655,29 @@ env 가 없고 `/api/auth/*` 가 전부 500"* 까지다. [[feedback_control_grou
 | 1 | `OIDC_ISSUER_URL` | 새 issuer (`https://auth.hubwang.com`) |
 | 2 | `NEXTAUTH_URL` | `https://store.hubwang.com` |
 | 3 | `NEXTAUTH_SECRET` | 🙋 **소유자 생성** (fan 과 같은 값일 필요 없다) |
-| 4 | `OIDC_CLIENT_ID` | store 용 IdP 클라이언트 |
-| 5 | `OIDC_CLIENT_SECRET` | 같은 클라이언트의 시크릿 |
+| 4 | `OIDC_CLIENT_ID` | `ecommerce-web-store-client` — 🔴 **단, V0035 선행**(아래) |
+| 5 | `OIDC_CLIENT_SECRET` | 같은 클라이언트의 시크릿 — 🔴 **단, V0035 선행** |
 
-🔴 **4·5 는 IdP 에 그 클라이언트가 등록돼 있어야 한다.** `TASK-BE-589` 가 `redirect_uri`
-절반을 했다 — **store 용 클라이언트가 시드에 실제로 있는지 V-계열에서 확인하라**. 없으면
-이건 대시보드 작업이 아니라 **시드 변경**이고, 그건 다른 티켓이다.
+#### 🔴🔴 그 확인을 했다 — **4·5 는 대시보드 작업이 아니다. IdP 마이그레이션이 선행이다**
+
+| 물음 | 실측 (2026-09-02 UTC) |
+|---|---|
+| store 용 OIDC 클라이언트가 있나 | ✅ **있다** — `ecommerce-web-store-client`(`V0012` 시드, dev secret `ecommerce-dev`) |
+| 콜백 **경로 모양**은 무엇인가 | ✅ **`/api/auth/callback/iam`** — provider `id: 'iam'`(`web-store/src/shared/auth/auth.ts:76`)이 결정한다 |
+| `store.hubwang.com` 의 `redirect_uri` 가 등록돼 있나 | 🔴 **없다.** 등록된 것은 `http://localhost:3001/api/auth/callback/iam` 과 `http://web.ecommerce.local/api/auth/callback/iam` 뿐 |
+| 그 부재가 누락인가 | ❌ **의도된 것이다** — `V0033`·`V0034` 가 *"`store.hubwang.com` … deliberately absent"* 라고 명시하고, *"각 표면은 자기 단계가 올 때, **경로를 추정이 아니라 측정한 뒤** 자기 마이그레이션을 갖는다"* 를 규칙으로 든다 |
+
+⇒ **`V0035` 가 필요하다**(`V0033`/`V0034` 와 같은 형태 — 현재 최신이 `V0034`).
+🔵 **그 규칙이 요구한 선행 조건은 이제 충족됐다** — 경로 모양이 측정됐다.
+
+🔴 **이것이 없으면 소유자가 1·2·3 을 넣고도 `redirect_uri_mismatch` 를 만난다.** 그리고
+`V0033` 헤더의 실측대로 **그 오류는 URI 도 클라이언트도 이름으로 대지 않는다** — 즉
+소유자는 *"issuer 를 꽂았는데 여전히 안 된다"* 만 보게 된다.
+
+🔴 **`TASK-BE-589` 는 이 절반을 하지 않았다.** 그것은 **팬/콘솔** 축이었다. 여기서
+떠넘기지 않기 위해 적어 둔다 — **이 행은 `projects/iam-platform/` 의 프로젝트 티켓이고
+`610` 도 `612` 도 아니다** ⇒ **별도 spec PR 로 큐에 올린다.**
+[[feedback_the_unguarded_operation_is_where_the_invariant_breaks]]
 
 🔵 **왜 이걸 아무도 안 봤나**: `TASK-MONO-582` 는 `NEXTAUTH_SECRET` 을 «빌드를 죽이나» 로만
 봤고 *"✅ 빌드를 안 죽였다"* 로 닫았다 — **잰 것이 빌드였다**. `TASK-MONO-611` 은 죽은
