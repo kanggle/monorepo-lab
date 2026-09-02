@@ -82,74 +82,93 @@ level"* 이라고 적어 두었다. 그 문장을 지키는 자리를 골랐다.
 
 🔴 **스코프만 다르게 했다.** `@repo/*` 는 **그 워크스페이스 안에서 `workspace:*` 로 해석되는
 이름들**이다. 그 워크스페이스 밖에 사는 패키지가 같은 스코프를 쓰면, `web-store` 의
-`package.json` 안에 `workspace:` 와 `file:` 로 해석되는 `@repo/*` 가 **섞인다** — 읽는 사람이
+`package.json` 안에 워크스페이스 멤버와 그렇지 않은 `@repo/*` 가 **섞인다** — 읽는 사람이
 어느 것이 워크스페이스 멤버인지 이름으로 구별할 수 없게 된다.
 
 ---
 
-## 소비자는 `file:` 로 의존한다 — `workspace:*` 가 아니다
+## 소비자는 `link:` 로 의존한다 — `workspace:*` 도 `file:` 도 아니다
 
 ```jsonc
 // projects/ecommerce-microservices-platform/apps/web-store/package.json
-"@demo/backend-resolver": "file:../../../../infra/demo/backend-resolver"
+"@demo/backend-resolver": "link:../../../../infra/demo/backend-resolver"
 // projects/fan-platform/web/fan-platform-web/package.json
-"@demo/backend-resolver": "file:../../../../infra/demo/backend-resolver"
+"@demo/backend-resolver": "link:../../../../infra/demo/backend-resolver"
 ```
 
 🔵 두 앱이 **깊이가 같아** 상대경로 문자열이 같다.
 🔴 `workspace:*` 는 `B` 다 — 그것을 쓰려면 루트 `pnpm-workspace.yaml` 이 있어야 하고,
-`B2` 는 그것을 만들지 않기로 한 안이다.
+`B2` 는 그것을 만들지 않기로 한 안이다. `link:` 는 **상대경로 의존**이므로 `B2` 안이다.
+
+### 🔴🔴 왜 `file:` 이 아니라 `link:` 인가 — CI 가 가르쳤다
+
+첫 판은 `file:` 이었고, 그러자 web-store 의 **vitest 4 가 기동하다 죽었다**:
+
+```
+[BUNDLER_INITIALIZE_ERROR] Invalid jsx option: `automatic`.
+  Plugin: vite:oxc
+  File: .../node_modules/.pnpm/@demo+backend-resolver@file+..+..+infra+demo+backend-resolver/…/src/index.ts
+```
+
+**기전은 «어디에 있는가» 다.** 두 프로토콜이 만드는 것이 다르다 (실측):
+
+| 의존 | `node_modules/@…` 의 realpath |
+|---|---|
+| `@repo/utils` (`workspace:*`) | `projects/…/packages/utils` — **저장소 실경로** |
+| `@demo/backend-resolver` (**`file:`**) | 🔴 `node_modules/.pnpm/@demo+backend-resolver@file+…/` — **node_modules 안** |
+| `@demo/backend-resolver` (**`link:`**) | ✅ `infra/demo/backend-resolver` — **저장소 실경로** |
+
+`file:` 은 **가상 스토어로 복사**하고 `link:` 는 **심링크**한다. Vite/oxc 는 realpath 가
+`node_modules` 안인 파일을 앱 소스와 다르게 다루고, 거기서 이 앱에 유효하지 않은 jsx 옵션이
+적용된다.
+
+🔵 **`link:` 가 형제들이 쓰는 바로 그 기전이다.** 락파일이 그것을 직접 말한다 —
+`@repo/api-client` 의 `specifier: workspace:*` 가 **`version: link:../../packages/api-client`**
+로 풀린다. 즉 `workspace:*` 는 «워크스페이스에서 이름을 찾은 뒤 `link:` 하는 것» 이고,
+`B2` 는 그 **이름 찾기만 뺀** 것이다.
+
+🔴 **그래서 첫 수정(«tsconfig.json 이 없어서다»)은 원인이 아니었다.** 그 파일을 넣고도
+CI 는 **같은 오류**를 냈다 — 증상이 살아남으면 그것은 원인이 아니다. 🔵 tsconfig 는 그대로
+두었다: 이제는 realpath 가 저장소 안이라 **실제로 발견되고**, 형제들이 전부 갖고 있는
+것이기도 하다(아래).
 
 `main` 이 TS 소스이므로 소비자의 `next.config.ts` 는 이 이름을 **`transpilePackages`** 에
 넣어야 한다(`@repo/*` 가 web-store 에서 이미 그렇게 쓰인다).
 
 ---
 
-## 🔴🔴 `tsconfig.json` 은 장식이 아니다 — 없으면 소비자의 테스트가 **기동하다 죽는다**
+## `tsconfig.json` — 형제들이 전부 갖고 있어서 둔다
 
-CI 실측 (2026-09-02, `web-store` 의 vitest 4.1.0):
-
-```
-[BUNDLER_INITIALIZE_ERROR] Invalid jsx option: `automatic`.
-  File: .../node_modules/@demo/backend-resolver/src/index.ts
-```
-
-이 패키지는 **TS 소스를 그대로** 내보내므로(`main: ./src/index.ts`) 소비자의 변환기가 이
-파일을 **직접 파싱**한다. 그때 변환기는 그 파일을 기준으로 tsconfig 를 찾아 올라가는데,
-`node_modules/` 안의 이 패키지 위에는 아무 tsconfig 도 없어 기본값으로 떨어지고 거기서
-`jsx: automatic` 이라는 **유효하지 않은 값**이 나온다.
-
-🔵 **형제들과의 차이가 정확히 이것이었다.**
 `projects/ecommerce-microservices-platform/packages/{api-client,types,ui,utils}` 는 **넷 다
-자기 `tsconfig.json` 을 갖는다** — 같은 방식(TS 소스 직접 노출)으로 같은 vitest 4 를 통과하는
-이유가 그것이다. 🔴 그리고 **넷 다 `jsx` 를 설정하지 않는다** ⇒ 여기서도 설정하지 않는다.
-관측된 실패 문구가 `jsx` 였다고 해서 `jsx` 를 **박아 넣는** 것은, 동작이 확인된 개체(형제)와
-다른 값을 고르는 일이다. 값은 `@repo/tsconfig/base.json` 을 **그대로** 옮겼다.
+자기 `tsconfig.json` 을 갖는다.** 같은 방식(TS 소스 직접 노출)으로 소비자의 변환기를 지나는
+패키지들이므로 그 모양을 따랐다. 🔴 그리고 **넷 다 `jsx` 를 설정하지 않는다** ⇒ 여기서도
+설정하지 않는다. 값은 `@repo/tsconfig/base.json` 을 그대로 옮겼다.
 
 🔴 그들처럼 `@repo/tsconfig/library.json` 을 `extends` 할 수는 **없다** — 그 패키지는
 ecommerce 워크스페이스의 멤버이고 이 패키지는 그 밖에 산다(`B2` 가 루트 워크스페이스를
 만들지 않기로 한 결과다). 그래서 자족적으로 적었다.
 
-🔵 이 저장소의 tsconfig 13개 중 **주석을 쓰는 것은 0개**라, 이 설명을 JSON 안에 두지 않고
+🔵 이 저장소의 tsconfig 13개 중 **주석을 쓰는 것은 0개**라, 설명을 JSON 안에 두지 않고
 여기 둔다.
 
-### 🔴🔴 그리고 `files` 에 **`tsconfig.json` 을 넣어야** 한다
+🔴🔴 **이 파일은 위 `link:` 문제의 «수정» 이 아니었다.** 처음엔 그렇다고 판단해 넣었고,
+넣은 뒤에도 CI 는 **같은 오류**를 냈다. 남겨 두는 이유는 형제와 모양을 맞추기 위해서이고,
+`link:` 로 바꾼 지금은 realpath 가 저장소 안이라 **실제로 발견된다.**
 
-pnpm 의 `file:` 프로토콜은 **심링크가 아니라 가상 스토어로 복사**한다(실측 경로:
-`node_modules/.pnpm/@demo+backend-resolver@file+..+..+infra+demo+backend-resolver/…`).
-그리고 그 복사는 `package.json` 의 **`files` 를 따른다.**
+### 🔵 `files` 에 `tsconfig.json` 을 넣어 둔 이유 — `file:` 시절의 흉터
 
-🔴 `files: ["src"]` 였을 때 소비자가 실제로 받은 것은 `README.md · package.json · src` **뿐**
-이었다 — 즉 위 `tsconfig.json` 은 **트리에는 있는데 소비자에게는 없는** 상태가 된다.
-그러면 이 절의 수정이 **아무 일도 하지 않으면서 고쳐진 것처럼 보인다.**
-🔵 실측으로 확인하는 법:
+`file:` 이던 동안 pnpm 은 이 패키지를 **가상 스토어로 복사**했고, 그 복사는 `package.json` 의
+**`files` 를 따랐다**. `files: ["src"]` 였을 때 소비자가 실제로 받은 것은
+`README.md · package.json · src` **뿐**이었다 — 즉 트리에는 있는데 **소비자에게는 없는**
+파일이 생긴다. `link:` 인 지금은 복사가 없어 `files` 가 이 축에 영향을 주지 않지만,
+누군가 `file:` 로 되돌리면 그 함정이 되살아나므로 목록에 남겨 둔다.
+
+🔵 **선언 파일 grep ≠ 런타임 모집단.** «파일을 만들었다» 와 «소비자에게 도달한다» 는 다른
+사건이고, 후자는 따로 재야 한다:
 
 ```bash
-ls "$(ls -d node_modules/.pnpm/@demo+backend-resolver*/node_modules/@demo/backend-resolver)"
+node -e "console.log(require('fs').realpathSync('node_modules/@demo/backend-resolver'))"
 ```
-
-**부수 효과 하나**: 복사이므로 이 패키지를 고쳐도 **소비자는 재설치 전까지 옛 판을 본다.**
-로컬에서 이 패키지를 만질 때는 그 워크스페이스에서 `pnpm install` 을 다시 돌려라.
 
 ---
 

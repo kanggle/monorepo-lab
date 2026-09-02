@@ -14,7 +14,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@demo/backend-resolver": "file:../../../../infra/demo/backend-resolver",
+    "@demo/backend-resolver": "link:../../../../infra/demo/backend-resolver",
     "@repo/api-client": "workspace:*",
     "@repo/types": "workspace:*",
     "@repo/ui": "workspace:*",

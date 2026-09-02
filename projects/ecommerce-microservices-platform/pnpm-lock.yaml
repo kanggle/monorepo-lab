@@ -18,8 +18,8 @@ importers:
   apps/web-store:
     dependencies:
       '@demo/backend-resolver':
-        specifier: file:../../../../infra/demo/backend-resolver
-        version: file:../../infra/demo/backend-resolver
+        specifier: link:../../../../infra/demo/backend-resolver
+        version: link:../../../../infra/demo/backend-resolver
       '@repo/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
@@ -326,9 +326,6 @@ packages:
   '@csstools/css-tokenizer@4.0.0':
     resolution: {integrity: sha512-QxULHAm7cNu72w97JUNCBFODFaXpbDg+dP8b/oWFAZ2MTRppA3U00Y2L1HqaS4J6yBqxwa/Y3nMBaxVKbB/NsA==}
     engines: {node: '>=20.19.0'}
-
-  '@demo/backend-resolver@file:../../infra/demo/backend-resolver':
-    resolution: {directory: ../../infra/demo/backend-resolver, type: directory}
 
   '@emnapi/core@1.9.1':
     resolution: {integrity: sha512-mukuNALVsoix/w1BJwFzwXBN/dHeejQtuVzcDsfOEsdpCumXb/E9j8w11h5S54tT1xhifGfbbSm/ICrObRb3KA==}
@@ -3253,8 +3250,6 @@ snapshots:
   '@csstools/css-tokenizer@3.0.4': {}
 
   '@csstools/css-tokenizer@4.0.0': {}
-
-  '@demo/backend-resolver@file:../../infra/demo/backend-resolver': {}
 
   '@emnapi/core@1.9.1':
     dependencies:

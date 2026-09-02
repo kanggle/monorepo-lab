@@ -405,3 +405,67 @@ README.md   package.json   src   tsconfig.json      ← 두 워크스페이스 �
 
 🔵 **부수 효과 하나를 README 에 적었다**: `file:` 이 복사이므로 이 패키지를 고쳐도 소비자는
 **재설치 전까지 옛 판을 본다.**
+
+## CORRECTION (2) — 🔴🔴 **바로 위 수정은 원인이 아니었다.** 진짜는 `file:` 이 만든 **realpath** 다 (2026-09-02)
+
+`tsconfig.json` 을 넣고 `files` 에도 실었는데 **CI 가 같은 오류를 냈다**:
+
+```
+[BUNDLER_INITIALIZE_ERROR] Invalid jsx option: `automatic`.
+  Plugin: vite:oxc
+  File: .../node_modules/.pnpm/@demo+backend-resolver@file+…/src/index.ts
+```
+
+🔴 **증상이 살아남으면 그것은 원인이 아니었다.** 첫 진단은 *"형제는 tsconfig 가 있고 나는
+없다"* 였다 — 그 차이는 **사실**이었지만 **원인이 아니었다.** 검증 가능한 차이를 원인으로
+승격시킨 것이다.
+
+### 진짜 기전 — 오류의 `File:` 경로가 내내 그것을 말하고 있었다
+
+형제와 내 패키지의 차이는 «tsconfig 유무» 가 아니라 **«그 파일이 어디에 있는가»** 다.
+실측 (`fs.realpathSync('node_modules/<pkg>')`):
+
+| 의존 | realpath |
+|---|---|
+| `@repo/utils` (`workspace:*`) | `projects/…/packages/utils` — **저장소 실경로** |
+| `@demo/backend-resolver` (**`file:`**) | 🔴 `node_modules/.pnpm/@demo+backend-resolver@file+…/` — **node_modules 안** |
+| `@demo/backend-resolver` (**`link:`**) | ✅ `infra/demo/backend-resolver` — **저장소 실경로** |
+
+pnpm 의 `file:` 은 **가상 스토어로 복사**하고, `link:` 는 **심링크**한다. Vite/oxc 는 realpath 가
+`node_modules` 안인 파일을 앱 소스와 다르게 다루고, 거기서 이 앱에 유효하지 않은 jsx 옵션이
+적용된다. ⇒ **`file:` → `link:`**.
+
+### 🔵 그리고 `link:` 는 «새로운 것» 이 아니라 **형제들이 이미 쓰는 기전**이다
+
+락파일이 직접 말한다 — `@repo/api-client` 의 `specifier: workspace:*` 가
+**`version: link:../../packages/api-client`** 로 풀린다. 즉 `workspace:*` 는 «워크스페이스에서
+이름을 찾은 뒤 `link:` 하는 것» 이고, `B2` 는 그 **이름 찾기만 뺀** 것이다.
+🔵 `link:` 는 여전히 **상대경로 의존**이므로 `§ D6` 의 `B2`(*"`file:` / 상대경로 의존"*) 안이고,
+루트 워크스페이스도 만들지 않는다.
+
+### 🔴 이 오진이 값싸지 않았던 이유 — 그리고 왜 그래도 두 번 만에 잡혔나
+
+`AC-2` 는 *"각 앱의 **기존 테스트가 그대로 통과**해야 한다"* 를 요구했고, 나는 fan 15/15 로
+그것을 만족했다고 적었다. 🔴 **fan 은 vitest 3 이고 web-store 는 vitest 4 다** — 두 소비자가
+**서로 다른 것을 재고 있었고**, 이 축은 fan 쪽에 존재하지 않는다. 그리고 web-store 의
+스위트는 **이 호스트에서 기동 자체가 안 된다**(Node 24). ⇒ 이 축의 유일한 관측기가 CI 였다.
+
+🔵 **그래도 두 번 만에 잡힌 것은 오류 메시지의 `File:` 경로 덕이다.** 첫 수정이 실패한 뒤
+그 경로를 «패키지 이름» 이 아니라 **«어느 트리에 있는가»** 로 읽었고, 그러자 형제와 대조할
+수 있는 축이 나왔다. **오류가 이미 답을 갖고 있었다.**
+
+### 재검증 (`link:` 로 바꾼 뒤)
+
+| | |
+|---|---|
+| realpath | ✅ 두 소비자 모두 `infra/demo/backend-resolver` (node_modules **밖**) |
+| lockfile | ✅ `specifier/version: link:../../../../infra/demo/backend-resolver` |
+| fan 스위트 | ✅ 15/15 |
+| fan · web-store `tsc --noEmit` | ✅ 둘 다 rc=0 |
+| fan `next build` | ✅ rc=0 |
+| 가드 | resolver self-test **13/0** · 라이브 rc=0 · vercel-triggers rc=0 · index/task-id/walkthrough rc=0 |
+| 🔴 web-store vitest | **여전히 로컬 판정 불가** — CI 가 권위다 |
+
+🔵 `tsconfig.json` 은 **남겨 두었다.** 수정은 아니었지만 형제 넷이 전부 갖고 있는 모양이고,
+`link:` 인 지금은 realpath 가 저장소 안이라 **실제로 발견된다.** `files` 의 `tsconfig.json`
+항목도 남겼다 — 누군가 `file:` 로 되돌리면 그 함정이 되살아난다.
