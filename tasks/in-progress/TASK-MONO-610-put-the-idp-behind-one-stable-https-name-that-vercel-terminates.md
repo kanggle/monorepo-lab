@@ -945,3 +945,88 @@ alias** 인가"* 다. 뒤집기 전에는 공개 이름이 `iam.<도메인>` 이
 | 넷째 프로젝트를 배선 없이 넣었다 | 칸 (15) RED | 🔵 **가드가 제 일을 한 것이다.** AC-5 를 같은 PR 에서 처리하라 |
 | V5 를 **한 번의 부팅**으로 통과 처리 | «로그인 됐다» 한 줄 | 🔴 그건 이 결정을 검증하지 않았다. 부팅 2회가 기준이다 |
 | 로그인만 재고 닫는다 | V4 공백 | `TASK-MONO-574` AC-2 가 정확히 그것을 경고했다 |
+
+---
+
+---
+
+# 🟢🔴 기동 창 #3 실측 원장 (2026-09-03 UTC) — `TASK-MONO-616` 매니페스트 칸 3·4
+
+인스턴스 `54.117.6.10` · `DEMO_DOMAIN=54-117-6-10.sslip.io` ·
+부팅 완료 지문 `console=307 web.fan-platform=307` 확인(08:50:21 UTC).
+
+## ✅ AC-3 — V 표가 **채워졌다**
+
+| # | 축 | 판정 | 근거 |
+|---|---|---|---|
+| V1 | 홉① 목적지 | 🟢 PASS | 창 #1(09-02) · **이번 창 재확인** — fan 왕복의 `Location` 이 `https://auth.hubwang.com/oauth2/authorize?…` |
+| V2 | state/PKCE 왕복 | 🟢 PASS | 창 #1 · **이번 창 재확인** — 콜백이 세션을 심었다(`accountId` 발급) |
+| V3 | 세션 쿠키 실제 속성 | 🟡 실측 | 창 #1: `Path=/; HttpOnly`, `Domain` 없음(host-only ⇒ AC-4 rider 성립), 🔴 `Secure` 없음 |
+| V4 | 로그아웃 | 🟢 **PASS** (창 #2 `615` B1) · **이번 창 재확인** | `http://iam.<도메인>/connect/logout` → **401** (이전 404) |
+| V5 | 부팅 2회 연속 | 🟢 **PASS** (창 #2, `615` B4 ⓐ) | 창 #2 의 부팅 #3·#4 |
+| V6 | 헤어핀 | 🟢 PASS 5/5 | 창 #1 |
+| V7 | 데모 정지 중 화면 | 🟢 PASS · **이번 창 재확인** | 창 전 `auth.hubwang.com` discovery = **503 + 정의된 화면**(*"데모 백엔드가 지금 꺼져 있습니다"*), 부팅 후 **200** |
+| V8 | 기존 볼륨 마이그 | 🟢 **PASS** (창 #2 `615` A1) | 행으로 판정 |
+
+⇒ **AC-3 은 닫혔다.** 🔵 창 #1 이 FAIL 로 남긴 V4·V5 와 미측정으로 남긴 V8 은 전부
+창 #2 가 닫았고, 이번 창은 그 사실을 **되돌려 적기** 위한 것이었다(창이 필요한 칸이 아니었다).
+
+### 🔴 V4 의 술어를 **약하게** 고쳐 적는다 — 음성 대조군이 그것을 요구했다
+
+```
+http://iam.<도메인>/connect/logout    → 401
+http://iam.<도메인>/connect/zzz-616   → 401     ← 🔴 없는 경로도 401
+```
+
+⇒ 401 은 **「그 엔드포인트가 존재한다」의 증거가 아니다.** Spring Security 가 라우팅보다
+앞선 필터에서 거절하므로 `/connect/**` 전체가 401 을 낸다. 401 이 증명하는 것은
+**「`/connect` 접두사가 auth-service 로 라우팅된다」** 뿐이고, **B1 이 산 것이 정확히 그것**
+이므로 판정은 유지된다. 엔드포인트 존재는 별개로 이미 증명돼 있다(창 #2: discovery 가
+`end_session_endpoint` 를 광고 + 컨테이너 직격 401 + (z21) 핀 일치).
+🔴 **「401 = 엔드포인트 있음」으로 적으면 안 된다.** 다음 사람이 그 술어로 다른 경로를 재면
+전부 통과한다. [[feedback_a_guard_that_names_a_cause_needs_a_predicate_only_that_cause_trips]]
+
+## 🔴 AC-4b — **팬 절반은 발효됐다. store 절반은 아직 안 들어갔다**
+
+### ✅ fan — 발효 확인 (선언이 아니라 **동작**으로)
+
+창 #1 은 `kanggle-fan` 프로덕션에 `OIDC_ISSUER_URL` 을 넣었으나 *"배포가 만들어지지
+않는다"*(`ignoreCommand` 가 redeploy 취소)로 끝났다. **그 사이 발효됐다** — 홉①이
+`https://auth.hubwang.com/oauth2/authorize…` 를 만들고 왕복이 세션까지 갔다.
+⇒ `TASK-MONO-586` 라이브 축도 같은 측정으로 닫혔다(그 티켓에 CORRECTION).
+
+### 🔴 store — **홉①이 authorize URL 을 만들지 못한다**
+
+| 잰 것 | 🔵 `kanggle-fan` (양성 대조군, **같은 순간·같은 IdP**) | 🔴 `kanggle-store` |
+|---|---|---|
+| `/api/auth/providers` | 200 / 167 B | **200 / 171 B** (09-02 엔 500/108 B) |
+| `/api/auth/csrf` | 200 / 80 B | **200 / 80 B** |
+| `POST /api/auth/signin/iam` → `Location` | `https://auth.hubwang.com/oauth2/authorize?…` | 🔴 **`https://store.hubwang.com/login?error=Configuration`** |
+| 왕복 종단 | `accountId`·`tenantId`·`roles` | **홉① 에서 중단** |
+
+**⇒ 다섯 줄 중 2·3 은 발효됐고(그래서 `/api/auth/*` 의 500 이 풀렸다), 1(`OIDC_ISSUER_URL`)이
+아직 안 들어갔다.** 실패 지점이 **discovery 단계**이고, 그 단계에 관여하는 값이 issuer 다.
+
+🔴 **단일 변수로 단정하지는 않는다** — 밖에서는 「미설정(코드 폴백 `http://iam.local`)」과
+「낡은 값이 박혀 있음」이 **구별되지 않는다**(둘 다 discovery 실패 → 같은
+`error=Configuration`). 🔵 그러나 **처분은 같다: 1번 줄을 넣는다.**
+🔵 양성 대조군이 이 판정의 값어치다 — 같은 순간 같은 IdP 로 fan 이 통과했으므로
+**IdP·포워더·C3 뒤집기는 이 실패에 연루되지 않았다.**
+[[feedback_control_group_design_four_axes]]
+
+### 🔴 그리고 **넣는 것만으로는 발효되지 않는다** — 이 원장이 두 번 실측한 함정
+
+`kanggle-fan` 에서 겪은 그대로다: env 를 넣어도 `ignoreCommand` 가 같은 커밋의 redeploy 를
+취소하므로 **`web-store` 경로를 건드리는 배포**가 있어야 값이 산다.
+⇒ **순서**: ① `OIDC_ISSUER_URL=https://auth.hubwang.com` 투입 → ② store 경로를 건드리는
+배포 → ③ **기동 창**에서 왕복 재측정. 🔴 ③ 없이 ①만으로 「닫혔다」고 적지 마라 —
+이 티켓이 스스로 *"판정은 env 목록이 아니라 «로그인이 되는가»"* 라고 못박았다.
+
+## 남은 것
+
+| AC | 상태 |
+|---|---|
+| AC-0 · AC-1 · AC-2 · AC-5 · AC-6 | ✅ |
+| **AC-3 (V1–V8)** | ✅ **이 원장으로 닫힘** |
+| **AC-4** (rider 배선) | ✅ V3 가 `Domain` 없음 = host-only 를 실측 |
+| **AC-4b** | 🟡 **fan 닫힘 · store 열림** — 소유자 1줄 + store 경로 배포 + 다음 창의 재측정 |

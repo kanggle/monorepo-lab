@@ -549,3 +549,55 @@ D4 이후에 생긴다.
 🔴 **그러나 발효되지 않았다** — 같은 커밋의 `vercel redeploy` 를 `ignoreCommand` 가
 *"이 커밋은 팬 경로를 안 건드렸다"* 로 **취소**한다. ⇒ **다음 「팬 경로를 건드리는」
 배포에서 발효되고, 그때 이 축을 다시 재야 한다.**
+
+---
+
+# 🟢 CORRECTION (2026-09-03 UTC) — **라이브 축이 닫혔다.** `TASK-MONO-616` 기동 창 #3
+
+09-02 CORRECTION 은 *"「해석기가 백엔드에 닿는다」는 닫히지 않았다"* 로 끝났고, 닫히려면
+**로그인 왕복**이 필요하며 그 선행이 `OIDC_ISSUER_URL` 이라고 적었다. 그 env 는 09-02 창에서
+`kanggle-fan` 프로덕션에 넣었으나 **발효되지 않았다**(`ignoreCommand` 가 redeploy 를 취소).
+
+**그 사이에 발효됐고, 이번 창에서 왕복이 끝까지 갔다.**
+
+## 판정 — **PASS**
+
+```
+POST https://fan.hubwang.com/api/auth/signin/iam   (csrf 64자)
+  → 302 https://auth.hubwang.com/oauth2/authorize?client_id=fan-platform-user-flow-client
+        &redirect_uri=https%3A%2F%2Ffan.hubwang.com%2Fapi%2Fauth%2Fcallback%2Fiam&…S256
+  → /login  200 / 4,247 B  (_csrf 96자)
+  → POST 자격증명 → 302 …/oauth2/authorize?…&continue → 콜백
+GET /api/auth/session →
+  {"user":{"email":"demo@demo.com"},"accountId":"0199de70-0000-7000-8000-00000000fa02",
+   "tenantId":"fan-platform","roles":["FAN"]}
+```
+
+🔵 **홉①의 `Location` 이 발효 판별자다** — `https://auth.hubwang.com/oauth2/authorize…` 가
+나왔다는 것은 `OIDC_ISSUER_URL` 이 **런타임에 읽히고 있다**는 뜻이다(미발효면 코드 폴백
+`http://iam.local`). 선언 목록이 아니라 **동작**으로 판정했다.
+
+## 🔵 이 티켓이 적은 음성 대조군은 **틀리지 않았다 — 술어가 좁았다**
+
+09-02 CORRECTION 은 *"`/zzz-nope-586` = 307, `/` 와 **구별 불가**"* 라 적었다. 그것은
+**상태코드와 바이트만 봤기 때문**이고, `Location` 을 읽으면 갈린다:
+
+| 잰 것 | `Location` |
+|---|---|
+| `/` | `https://fan.hubwang.com/login?from=%2F` |
+| `/zzz-nope-586` | `https://fan.hubwang.com/login?from=%2Fzzz-nope-586` |
+
+⇒ catch-all 307 은 **경로를 보존한다.** 대조군은 살아 있었고 관측 지점이 얕았다.
+[[feedback_my_verification_predicate_is_the_likeliest_defect]]
+
+## 🔴 그래도 이 티켓은 `review/` 에 남는다 — **AC 가 아니라 CORRECTION 이 막는다**
+
+AC-0~AC-4 는 전부 닫혔고 라이브 축도 이제 닫혔다. 그러나 **09-02 의 (x2) CORRECTION 이
+코드 작업 셋을 열어 뒀다**(팬용 억제 override 선언 + `COMPOSE[fan]` 체인 등록 · (x2) 의
+미집행 분기 문구를 **팬의 극성**으로 · `kanggle-fan` 의 `DEMO_PAYMENT_MOCK` 필요 여부 실측).
+
+🔵 **그 셋은 아직 발동 조건이 아니다** — 이번 창에서 `web.fan-platform` 은 **307**, 즉
+팬은 여전히 데모가 서빙한다. 억제는 `ADR-MONO-067` **단계 4** 의 일이다.
+🔴 **그러나 그 단계의 주인이 이 티켓인지 새 티켓인지가 지금 불분명하다.** 이 티켓은 frozen
+이라 AC 를 못 얻는다 ⇒ **주인을 명시하지 않으면 그 일은 조용히 사라진다.**
+`TASK-MONO-616` § AC-3 이 이 공백을 이름으로 적어 뒀다.
