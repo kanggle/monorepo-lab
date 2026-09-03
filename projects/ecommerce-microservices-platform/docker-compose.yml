@@ -1218,6 +1218,12 @@ services:
   web-store:
     build:
       context: .
+      # 🔴 TASK-MONO-615 — fan 과 같은 이유다(그쪽 compose 의 같은 블록 참조).
+      #    이 이미지는 데모에서 억제돼 있어(ADR-MONO-067 단계 2) 오늘은 굽히지
+      #    않지만, 억제가 풀리거나 누가 로컬에서 굽는 순간 fan 과 **똑같이**
+      #    죽는다. 한쪽만 고치면 형제가 낙오한다.
+      additional_contexts:
+        demo-backend-resolver: ../../infra/demo/backend-resolver
       dockerfile: apps/web-store/Dockerfile
       args:
         - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://ecommerce.local}

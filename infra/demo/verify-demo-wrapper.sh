@@ -1459,11 +1459,12 @@ if [ -f "$z2_pkr" ] && [ -f "$z2_self" ]; then
     #    때문에, 그 단언은 정확히 AMI 안의 실재를 재는 것이 된다. 근거가 거짓이 되는 날
     #    (base 이미지가 바뀌는 등) 이 칸이 그 자리에서 빨개진다.
     case "$z2_t" in
-      timeout)
-        command -v timeout >/dev/null 2>&1 \
-          || fail "(z2) 'timeout' 을 base 제공으로 분류했는데 이 환경에 없습니다."\
+      timeout|realpath)
+        command -v "$z2_t" >/dev/null 2>&1 \
+          || fail "(z2) '$z2_t' 을 base 제공(coreutils)으로 분류했는데 이 환경에 없습니다."\
           $'\n'"→ 면제의 근거(coreutils 는 essential)가 거짓입니다. packer 1단계에 coreutils"\
-          $'\n'"  설치를 추가하거나, demo-boot.sh / demo-up.sh 의 timeout 폴백 경로를 다시 보세요."
+          $'\n'"  설치를 추가하거나, 그 도구를 쓰는 칸의 폴백 경로를 다시 보세요."\
+          $'\n'"  (timeout: demo-boot.sh / demo-up.sh · realpath: 가드 (z26)의 경로 정규화)"
         z2_seen="$z2_seen $z2_t(base)"
         continue ;;
       node) z2_pkg="nodejs" ;;
@@ -3525,6 +3526,114 @@ done
   $'\n'"→ 시드가 아는 평문: $(printf '%s' "$z23_plain" | tr '\n' ' ')"
 
 ok "(z23) 클라이언트 시크릿 ${z23_checked}건이 시드 평문 ${z23_nplain}건 안에 있다 — 등록 client_id ${z23_nids}건 기준으로 모집단 판별"
+
+# ---------------------------------------------------------------------------
+echo "[verify] (z26) 컨텍스트 밖 워크스페이스 의존이 이미지 빌드에 실제로 전달되는가 (TASK-MONO-615 C2)"
+# ---------------------------------------------------------------------------
+# 무엇이 있었나 (2026-09-03, AMI 굽기 7차가 여기서 죽었다):
+#
+#   #78 ./src/shared/config/demo-backend.ts
+#   #78 Module not found: Can't resolve '@demo/backend-resolver'
+#   Build 'amazon-ebs.demo' errored after 10 minutes 53 seconds
+#
+# `fan-platform-web/package.json` 이 `"@demo/backend-resolver":
+# "link:../../../../infra/demo/backend-resolver"` 를 갖는데, 그 경로는 이 이미지의
+# 빌드 컨텍스트(`projects/fan-platform`) **밖**이다.
+#
+# 🔴 install 은 통과한다. `pnpm install --frozen-lockfile` 이 576 resolved 로 끝나고
+#    (댕글링 심링크를 만든다) 죽는 것은 그 다음 `next build` 다. 즉 **「install 초록」은
+#    워크스페이스가 온전하다는 증거가 아니다.**
+#
+# 🔴🔴 왜 아무도 못 봤나 — **각각 옳은 두 제외가 합쳐져 구멍이 됐다**:
+#    · CI 는 `pnpm --filter <app> build` 를 러너에서 돈다(저장소 루트라 링크가 해소된다).
+#      **이 이미지를 굽는 CI 잡은 없다.**
+#    · 형제 web-store 는 데모에서 억제돼(ADR-MONO-067 단계 2) 데모 굽기가 그 이미지를
+#      만들지 않고, Vercel 은 저장소 루트에서 빌드한다.
+#    ⇒ 컨테이너 안에서 이 패키지를 빌드하는 자리는 **AMI 굽기 하나뿐**이었고, `link:` 가
+#      들어온 `c2df17060`(#3586) 이후 아무도 굽지 않아 **잠복**했다. AMI 굽기는 1시간짜리
+#      피드백 루프라 그 자리에서 발견하는 것은 가장 비싼 방법이다.
+#
+# 술어는 「fan 이 resolver 를 갖는가」가 아니다 — 그건 한 사례다. **모양**을 문다:
+#   프로젝트 밖을 가리키는 `link:`/`file:` 의존이 있으면, 그 프로젝트 compose 가
+#   같은 대상을 `additional_contexts` 로 넘기고, 그 앱 Dockerfile 이 그 이름을
+#   `COPY --from=` 으로 받아야 한다.
+# 🔵 이 칸은 경로 정규화에 `realpath -m` 을 쓴다. 요구를 **선언**해 두어야 (z2)가
+#    그것을 범위에 넣는다 — 선언하지 않으면 「AMI 안에 그 도구가 있는가」를 아무도 안 묻고,
+#    없으면 packer 7단계에서야 죽는다(그게 (z2)의 존재 이유다).
+command -v realpath >/dev/null 2>&1 \
+  || fail "(z26) 'realpath' 가 없습니다 — 이 칸은 경로를 정규화해서 «컨텍스트 밖인가» 를 판정합니다."\
+  $'\n'"→ 없는 채로 통과시키면 모든 의존이 '컨텍스트 안' 으로 보입니다(빈 문자열 비교)."
+
+z26_scanned=0; z26_esc=0; z26_bad=""
+while IFS= read -r z26_pkg; do
+  case "$z26_pkg" in projects/*/package.json|projects/*/*/package.json|projects/*/*/*/package.json|projects/*/*/*/*/package.json) : ;; *) continue ;; esac
+  z26_scanned=$(( z26_scanned + 1 ))
+  z26_proj="${z26_pkg#projects/}"; z26_proj="projects/${z26_proj%%/*}"
+  z26_app="$(dirname "$z26_pkg")"
+  # "<name>": "link:<path>"  /  "file:<path>"  — 상대경로만 대상이다.
+  while IFS= read -r z26_line; do
+    z26_name="$(printf '%s' "$z26_line" | sed -n 's/^[[:space:]]*"\([^"]*\)"[[:space:]]*:.*/\1/p')"
+    z26_tgt="$(printf '%s' "$z26_line" | sed -n 's/.*"\(link\|file\):\([^"]*\)".*/\2/p')"
+    [ -n "$z26_tgt" ] || continue
+    case "$z26_tgt" in /*) continue ;; esac
+    z26_abs="$(realpath -m "$ROOT/$z26_app/$z26_tgt")"
+    z26_projabs="$(realpath -m "$ROOT/$z26_proj")"
+    case "$z26_abs" in
+      "$z26_projabs"/*) continue ;;    # 컨텍스트 안 — 문제 없음
+    esac
+    z26_esc=$(( z26_esc + 1 ))
+    z26_rel="${z26_abs#$(realpath -m "$ROOT")/}"
+    # (1) 이 프로젝트의 compose 가 그 대상을 추가 컨텍스트로 넘기는가.
+    z26_ctx=""
+    for z26_yml in "$ROOT/$z26_proj"/docker-compose*.yml; do
+      [ -f "$z26_yml" ] || continue
+      z26_ctx="$(sed -n 's/^[[:space:]]*\([A-Za-z0-9_-]*\):[[:space:]]*\.\{0,2\}[^[:space:]]*'"$(basename "$z26_abs")"'[[:space:]]*$/\1/p' "$z26_yml" | head -1)"
+      [ -n "$z26_ctx" ] && break
+    done
+    if [ -z "$z26_ctx" ]; then
+      z26_bad="$z26_bad   $z26_app → $z26_rel (compose 에 additional_contexts 없음)"$'\n'
+      continue
+    fi
+    # (2) 그 앱의 Dockerfile 이 그 이름을 실제로 받는가. 이름만 선언하고 안 받으면
+    #     컨텍스트는 전달되지만 이미지 안에는 안 들어간다 — 증상이 똑같다.
+    z26_df=""
+    for z26_c in "$ROOT/$z26_app/Dockerfile" "$ROOT/$z26_proj/Dockerfile"; do
+      [ -f "$z26_c" ] && { z26_df="$z26_c"; break; }
+    done
+    if [ -z "$z26_df" ]; then
+      z26_bad="$z26_bad   $z26_app → $z26_rel (Dockerfile 을 못 찾음 — 술어가 형태를 놓쳤습니다)"$'\n'
+    elif ! grep -E "COPY[[:space:]]+--from=$z26_ctx([[:space:]]|\$)" "$z26_df" >/dev/null; then
+      z26_bad="$z26_bad   $z26_app → $z26_rel (compose 는 '$z26_ctx' 를 넘기는데 Dockerfile 이 COPY --from=$z26_ctx 로 안 받음)"$'\n'
+    fi
+  done < <(grep -E '"(link|file):' "$ROOT/$z26_pkg" || true)
+done < <(cd "$ROOT" && find projects \
+           -name node_modules -prune -o -name .next -prune -o \
+           -name build -prune -o -name dist -prune -o \
+           -name package.json -print 2>/dev/null)
+
+# 🔴 모집단이 0이면 술어가 형태를 놓친 것이다. 「탈출 의존 0건」을 통과로 읽지 않는다 —
+#    하한은 **탈출 의존 수**가 아니라 **스캔한 파일 수**에 건다. 탈출 의존은 legitimately
+#    0이 될 수 있지만(해석기를 프로젝트 안으로 옮기면), 스캔이 0이면 계측기가 고장난 것이다.
+#
+# 🔴 이 하한이 실제로 물었다 (2026-09-03). 첫 판은 열거를 `git ls-files` 로 했는데,
+#    데모 호스트에서 이 스크립트는 **root** 로 도는 반면 저장소는 ubuntu 소유라
+#    git 이 *"detected dubious ownership"* 로 죽어 **0줄**을 냈다. 그 0을 술어가
+#    「탈출 의존 없음」으로 읽었다면 이 칸은 **고장난 채 영원히 초록**이었을 것이다.
+#    🔵 그래서 열거를 git 에서 떼어 냈다 — 소유권에도, **스테이지 여부에도** 안 걸린다
+#    (`git ls-files` 는 추적된 파일만 보므로 새 package.json 이 스테이지 전이면 안 보인다).
+[ "$z26_scanned" -ge 5 ] \
+  || fail "(z26) package.json 을 ${z26_scanned}개밖에 못 찾았습니다 — 열거가 깨졌습니다."\
+  $'\n'"→ 0건을 '탈출 의존 없음' 으로 보고하지 않습니다. 계측기부터 보세요."\
+  $'\n'"→ find 가 projects/ 아래를 볼 수 있는지, 경로 깊이 패턴이 여전히 맞는지 확인하세요."
+
+[ -z "$z26_bad" ] || fail "(z26) 컨텍스트 밖 워크스페이스 의존이 이미지 빌드에 전달되지 않습니다:"$'\n'"$z26_bad"\
+  $'\n'"→ 증상은 install 이 아니라 **빌드**에서 납니다: pnpm install 은 통과하고(댕글링 심링크)"\
+  $'\n'"  'Module not found: Can't resolve <pkg>' 로 죽습니다."\
+  $'\n'"→ compose 에 additional_contexts 로 넘기고 Dockerfile 에서 COPY --from=<이름> 으로 받으세요."\
+  $'\n'"→ 이 결함은 CI 가 못 잡습니다(러너 빌드는 저장소 루트에서 링크가 해소됩니다). 발견 자리는"\
+  $'\n'"  **AMI 굽기 하나뿐**이고 그건 1시간짜리 피드백 루프입니다 — 그래서 여기서 정적으로 막습니다."
+
+ok "(z26) 컨텍스트 밖 워크스페이스 의존 ${z26_esc}건이 전부 추가 컨텍스트로 전달된다 — package.json ${z26_scanned}개 스캔"
 
 # ---------------------------------------------------------------------------
 echo "[verify] (z25) 파이프 뒤의 grep 이 조기 종료해 앞단을 SIGPIPE 로 죽이지 않는가 (TASK-MONO-615)"
