@@ -649,3 +649,370 @@ B4 의 후보 ⓐ~ⓓ 는 이 티켓이 **「고르지 않았다 — 실측 후 
 - 그 창에서 **이 변경이 실제로 무엇을 남기는지** 본다: 매달림이 다시 나면 이번엔
   `⏱ 매달림:` 줄과 요약이 남아야 한다. **그것이 이 변경의 유일한 성공 기준**이고,
   「매달림이 사라졌다」가 아니다(이 변경은 경합을 고치지 않는다).
+
+---
+
+# 🟢 기동 창 (2026-09-03 UTC) — A1 이 닫혔고, B4 의 「경합」은 **결정론**이었다
+
+인스턴스 `i-0c4721bdeb335885a` / AMI `ami-0caf015f7cd9144fd`(6차, 08-29).
+이 창에서 **부팅 4회**를 썼다 — 2회는 손대지 않은 상태(B4 재현), 2회는 후보 ⓐ 시험.
+호스트 저장소는 `a544c49`(#3596)로, **B1–B4 랜딩분이 아직 없는 판본**이다. 그래서 이 창의
+A1·B4 측정은 전부 「고치기 전」 상태에서 나왔다.
+
+## AC-0 재측정 — 추론이 아니라 실제로 다시 쟀다
+
+| # | AC-0 항목 | 실측 |
+|---|---|---|
+| ① | `flyway_schema_history` 최대가 **`V0034` 미만**인가 | ✅ **참.** `auth_db` 36행 · 최대 `0033` · `installed_on=2026-08-29 15:54:04`. 🔵 B1 세션이 *"추론이지 측정이 아니다"* 라고 적어 둔 그 칸을 이 창에서 실제로 닫았다 — 그리고 추론이 맞았다 |
+| ② | B1–B4 가 아직 참인가 | B1 은 main 에 랜딩됐고 **호스트에는 아직 없다**(호스트 `a544c49`). B2·C3·B4 도 같다. B4 는 아래에서 **재현했다** |
+| ③ | 항목 간 상충 | A1 → 재굽기 순서 제약 **그대로 유효**. 새로 발견한 항목(아래 B4-ii)은 재굽기 전 main 랜딩이 필요하므로 항목 B 와 같은 축이다 |
+
+🔴 다른 세 스키마도 함께 쟀다(같은 볼륨): `account_db` 34행/`0028` · `admin_db` 46행/`0045`
+· `security_db` 11행/`0011`. 전부 `2026-08-29 15:5x` 각인이다 — 이 볼륨이 **08-29 이후
+아무 마이그레이션도 받지 않았다**는 뜻이고, 그것이 A1 의 전제다.
+
+---
+
+## ✅ A1 / V8 — **기존 볼륨 위에서** 마이그레이션이 들어간다 (AC-1 PASS)
+
+### 무엇을 했나
+
+| 단계 | 실측 |
+|---|---|
+| 롤백 확보 | `docker tag iam-auth-service iam-auth-service:pre-615-a1` → `31c759347491` |
+| 이미지 안의 마이그레이션 (전) | 마지막이 `V0033__add_fan_vercel_domain_redirect_uri.sql` · 이미지 생성 `2026-08-29T14:37:51Z` |
+| 호스트 소스 | `src/main/resources/db/migration/` 에는 `V0034`·`V0035` 가 **있다**. `build/resources/main/` 에는 **없었다** ⇒ 저장소는 앞서 있고 **산출물이 뒤처져 있었다** |
+| 재빌드 | `./gradlew :projects:iam-platform:apps:auth-service:bootJar` rc=0 → `auth-service.jar` 98,884,285B (02:45) |
+| 이미지 재굽기 | `docker compose -p iam … build auth-service` rc=0 → `sha256:ef3708f2…` created `2026-09-03T02:46:53Z` |
+| 재기동 | `docker compose -p iam … up -d` rc=0 (02:47:55) · auth-service **healthy 02:48:41** |
+
+### 판정 — 파일이 아니라 **행**을 봤다
+
+```
+전: 36행 · MAX(version)=0033 · 2026-08-29 15:54:04
+후: 38행 · MAX(version)=0035 · 2026-09-03 02:48:19
+    rank 37 = 0034 add console vercel domain redirect uri   success=1
+    rank 38 = 0035 add store vercel domain redirect uri     success=1
+    success=0 인 행 0건 · rank 1..38 연속
+```
+
+Flyway 자신의 말(auth-service 로그):
+
+```
+Successfully validated 38 migrations (execution time 00:00.200s)
+Current version of schema `auth_db`: 0033
+outOfOrder mode is active. Migration of schema `auth_db` may not be reproducible.   ← WARN
+Migrating schema `auth_db` to version "0034 - add console vercel domain redirect uri"
+Migrating schema `auth_db` to version "0035 - add store vercel domain redirect uri"
+Successfully applied 2 migrations to schema `auth_db`, now at version v0035
+```
+
+🔵 `outOfOrder` 경고는 **떴지만 아무것도 실패시키지 않았다.** 이 볼륨에는 rank 34–36 에
+버전 없는 반복 마이그레이션(`R__`)이 이미 있고, 그 위에 `0034`·`0035` 가 얹혔다. 신선
+볼륨에서는 이 배치 자체가 생기지 않으므로 **CI 는 이 조합을 영원히 못 본다** — 그것이
+V8 이 물으려던 것이고, 답은 **결함 없음**이다.
+
+### 술어는 부분문자열이 아니라 JSON 이다
+
+🔴 `LIKE '%console.hubwang.com%'` 은 주석에만 그 문자열이 있어도 참이고 배열이 깨져도
+참이다. `JSON_VALID` + `JSON_CONTAINS(JSON_QUOTE(…))` 로 쟀다:
+
+| client_id | json_valid | has_console | has_store | n |
+|---|---|---|---|---|
+| `platform-console-web` | 1 | **1** | 0 | 4 |
+| `ecommerce-web-store-client` | 1 | 0 | **1** | 5 |
+
+🔵 **음성 대조군이 같은 표 안에 있다** — console 의 URI 가 store 클라이언트에 **없고** 그
+반대도 그렇다. 한 클라이언트만 봤으면 「부분문자열이 우연히 맞았다」와 구별할 수 없었다.
+
+### 🔵 이 한 번의 재빌드가 함께 푼 것
+
+- **`TASK-MONO-612` AC-0 ②** — `store.hubwang.com` 콜백이 이제 **행에 있다**.
+- **store / console 로그인의 선행** — 두 redirect_uri 가 등록됐다.
+  🔴 다만 **로그인 자체는 아직 안 봤다**. 등록은 필요조건이지 충분조건이 아니다.
+
+### 🔴 롤백은 쓰지 않았다
+
+`iam-auth-service:pre-615-a1` 태그는 남겨 뒀다. IdP 는 **약 46초** 내려갔다
+(02:47:55 up → 02:48:41 healthy).
+
+---
+
+## ✅ B4 — 후보 **ⓐ** 를 골랐다. 그리고 「경합」이라는 말이 실측과 안 맞았다
+
+### 🔴🔴 먼저 — 티켓의 「1회 성공 / 1회 실패 ⇒ 결정론이 아니라 경합」이 좁았다
+
+손대지 않은 판으로 **부팅 2회를 연속** 재현했다(둘 다 stop/start — 🔴 reboot 는 공인 IP 가
+유지돼 `DEMO_DOMAIN` 이 안 바뀌고, 그러면 **recreate 자체가 안 일어나** 다른 것을 잰다):
+
+| 부팅 | iam 결과 | 남은 `Created` | 유닛 |
+|---|---|---|---|
+| #1 (02:23:04) | 98s 뒤 `dependency failed to start: iam-kafka is unhealthy` → 재시도 1회 → 포기 | 3 | **timeout** 02:43:04 |
+| #2 (02:50:32) | 210s 뒤 같은 실패 → 재시도 1회 → 포기 | 3 | **timeout** 03:10:32 |
+
+남은 셋은 두 번 다 **똑같다**: `iam-auth-service-1` · `iam-gateway-service-1` · `iam-kafka-ui`
+— `TASK-MONO-610` V5 의 지문 그대로다. ⇒ **경합은 맞지만 오늘의 부하에서는 확실하게 진다.**
+610 의 1회 성공이 예외였지 실패가 예외가 아니다. [[feedback_local_proves_behaviour_not_performance]]
+
+### 🔴🔴 기전은 「kafka 가 안 떴다」가 아니라 **「프로브가 못 끝났다」**였다
+
+부팅 시 샘플러(5초 간격)를 심어 잡았다:
+
+```
+03:14:43 load=23.73  kafka=starting  run=97 created=3   hc=[… 0:…  137:03:13:23]
+03:15:02 load=85.98  kafka=starting  run=95 created=3   hc=[… -1:03:14:28  -1:03:14:44]
+03:15:25 load=126.35 kafka=starting  run=93 created=3
+03:15:42 load=162.74 kafka=starting  run=88 created=3   hc=[… -1:03:15:13]
+```
+
+`iam-kafka` healthcheck = `kafka-broker-api-versions.sh` — **JVM 기동**이다.
+평시 소요 **1.48 / 1.99 / 2.14 / 3.31s**. 부팅 폭풍에서는:
+
+```
+exit=137  03:13:20 → 03:13:23     ← 137 = 128+9 = SIGKILL. 도커가 timeout:10s 로 죽였다
+exit=-1   03:14:17 → 03:14:28     10.7s
+exit=-1   03:14:33 → 03:14:44     11.6s
+exit=-1   03:14:59 → 03:15:13     13.2s
+exit=-1   03:15:28 → 03:15:39     11.0s
+```
+
+🔵 **같은 시각 브로커 로그는 정상이었다** — 컨슈머 그룹 `security-service` 7 멤버 리밸런스를
+02:27~02:28 에 처리하고 있었다. **실패한 것은 브로커가 아니라 프로브다.**
+🔵 자원 고갈도 아니다(티켓의 관찰과 일치): 메모리·디스크 여유. 고갈된 것은 **CPU 스케줄링**이다.
+
+⇒ 후보 **ⓑ(의존 대기 타임아웃/조건 조정)는 레버가 어긋나 있다.** 넓혀야 할 것은 compose 의
+대기가 아니라 **프로브가 끝날 여유**이고, 그것을 만드는 가장 싼 방법은 폭풍을 없애는 것이다.
+
+### 판정 — ⓐ, 부팅 2회 연속
+
+`demo-boot.sh` 가 up **앞에** `demo-down.sh` 를 돌린다(🔴 `-v` 없음 = 볼륨 보존. A1 의 행이
+살아 있어야 한다).
+
+| 부팅 | 판 | iam | `Created` | 시드 실패 | 유닛 |
+|---|---|---|---|---|---|
+| #3 (03:14:19) | ⓐ | `up: iam` 03:17:28 → `up: wms` 03:17:38 = **10s · 재시도 0** | **0** | 6도메인 전부 **0** | `exit-code`(정상 종료) |
+| #4 (03:31:38) | ⓐ | 03:34:22 → 03:34:32 = **10s · 재시도 0** | **0** | 6도메인 전부 **0** | `exit-code`(정상 종료) |
+
+두 판 모두 `기동 실패` 0건 · `⚠ 재시도 배분` 0건 · `✔ HTTP 표면 2/2`.
+남은 rc=1 의 **유일한** 사유는 `[drift] ✖ ecommerce-web-store → 43-202-166-3.sslip.io` — 즉 **C1**이다.
+
+🔵 왜 ⓒ·ⓓ 가 아닌가: 둘 다 8개 프로젝트의 compose 를 건드려 **로컬과 CI 의 기동 의미까지**
+바꾼다. 여기서 필요한 것은 「데모 호스트의 부팅」이라는 한 상황이고 ⓐ 는 그 한 자리에만 산다.
+🔴 ⓐ 가 공짜는 아니다 — down 단계가 실측 **160~184s** 를 먹는다. 그것이 아래 항목을 낳았다.
+
+### 🔴 `DEMO_BOOT_RESET` 게이트 — 이것이 없으면 ⓐ 는 사고다
+
+`demo-boot.sh` 는 부팅 말고 **컨트롤 플레인**도 부른다(`handler.py` `domain_start` →
+`demo-boot.sh <name>`), 그리고 그 화이트리스트 `START_NAMES` 에는 **`full`·`demo-core` 가
+들어 있다**. 무조건 down 하면 방문자가 「전부 켜기」를 누른 순간 **떠 있는 데모를 통째로
+내렸다 올린다.** 인자로는 부팅인지 알 수 없다 — 아는 것은 **호출자**이고 그것을 아는 것은
+systemd 유닛뿐이다. 그래서 플래그가 유닛에서 온다. 가드 **(z24)**가 그 쌍을 묶는다
+(유닛이 준다 · 스크립트가 그때만 내린다 · `handler.py` 는 언급하지 않는다 + 행동 bite 3칸).
+
+---
+
+## 🔴🔴 #3601 의 성공 기준을 잰 결과 — **「남지 않았다」, 그런데 이유가 다르다**
+
+이 창의 질문은 *"다시 매달리면 `⏱ 매달림:` 줄과 요약이 남는가"* 였다. 답을 둘로 갈라야 한다.
+
+**① 매달림은 재현되지 않았다.** 부팅 #1·#2 의 `up -d` 는 **매달리지 않았다** — 98s / 210s 만에
+`dependency failed to start` 로 **돌아왔다**. 그래서 `⏱` 대역 자체가 발화하지 않았고,
+#3601 의 호출당 상한은 이 창에서 **시험되지 않았다.** (「매달림이 사라졌다」로 읽으면 안 된다.
+다른 사유로 실패한 것이다.)
+
+**② 그런데 요약은 — 매달렸더라도 — 나올 수 없는 자리에 있었다.** 이쪽이 본론이다.
+
+```
+boot #1  up 루프 종료 02:27:57 → [seed] 13분 → 02:43:04 SIGTERM (`[seed] --- fan ---` 중)
+boot #2  up 루프 종료 02:56:29 → [seed] 14분 → 03:10:32 SIGTERM (`[seed] --- erp ---` 중)
+실측 카운트(두 판): '늦게 수렴' 0 · 'HTTP 표면' 0 · '재시도 배분' 0 · '매달림' 0
+```
+
+`demo-up.sh` 의 최종 요약 블록은 **시드 뒤**에 있다(342행 `seed/seed.sh` → 511행부터 요약).
+iam 이 안 뜬 판에서는 각 도메인 시드가 게이트웨이를 **240s 씩** 기다리므로 그 한 단계가
+systemd 예산을 통째로 먹고, 요약은 **한 줄도 실행되지 않는다.**
+
+🔴 그리고 그때도 (z13) 칸 (6)의 `UP_TOTAL_BUDGET(1020) < TimeoutStartSec(1200)` 은 **참이었다.**
+⇒ **잰 값이 아니라 «센 항»이 틀렸다.** up 루프만 묶고 그 뒤를 무한히 두면, 앞의 보증은
+뒤가 통째로 먹는다. 「전역 예산이 상한 아래」는 필요조건이지 충분조건이 아니다.
+
+🔵 **#3601 이 만든 결함이 아니다.** 그 PR 의 문장(「매달림은 재측정과 무관하게 요약에 남긴다」)은
+옳다. 틀린 것은 **「요약은 언제나 실행된다」는 암묵 전제**다. 같은 전제가 이미 한 번 깨진
+적도 있다 — `TASK-MONO-552` AC-3 이 *"시드의 rc 를 안 받아 스크립트가 그 자리서 죽고 최종
+블록이 통째로 날아간다"* 를 고쳤다. 그때 닫은 것은 **rc 경로**였고, 이번에 깨진 것은
+**시간 경로**다. **같은 자리, 다른 문.**
+[[feedback_two_correct_exclusions_compose_into_a_hole]] [[feedback_why_a_guard_does_not_bite]]
+
+### 고친 것 — ⓐ 가 그 산술을 더 나쁘게 만들기 때문에 **같은 PR 에서 갚는다**
+
+ⓐ 는 앞에 down 단계(160~184s)를 더한다. `TimeoutStartSec` 을 그대로 두면 ⓐ 는 경합을
+고치면서 **요약을 다시 잃게 만든다** — 「한 항목의 수단이 다른 항목의 전제를 지운다」는,
+이 티켓이 존재하는 바로 그 모양이다(AC-0 ③ 이 물어보라고 한 축).
+
+- `demo-up.sh`: `POST_UP_BUDGET`(240) · `SUMMARY_RESERVE`(120) 선언, 시드·드리프트를
+  `post_up_call` 로 묶고 **rc 124 를 「시드 실패」와 구별**해 `⏱ 시드 단계 마감:` 으로 남긴다.
+- `demo-boot.sh`: `DEMO_DOWN_BUDGET`(300) — down 도 매달릴 수 있다. up 을 묶어 놓고 down 을
+  안 묶으면 같은 결함이 한 칸 앞으로 옮겨간 것뿐이다.
+- `demo-stack.service`: `TimeoutStartSec` **1200 → 1800**. 🔴 완화가 아니라 **재산정**이다 —
+  1200 은 「부팅 = up + 시드」인 세계의 값이었고, 단계가 하나 늘었다.
+- 가드 **(z13) 칸 (8)**: 주석이 아니라 **합**을 센다.
+  `정리 300 + up 1020 + 시드 240 + 예비 120 = 1680 ≤ 1800`, 그리고 예비 하한 60s
+  (예비가 0이면 부등식은 통과하면서 요약은 또 못 나온다).
+  실측 대조: boot #3 **777s** · boot #4 **725s**.
+
+---
+
+## 🔴🔴 측정을 막고 있던 것 — 가드가 **없는 죄**를 고발하고 있었다 (main 의 결함)
+
+`verify --live` 를 돌리자 **(k)** 에서 죽었다:
+
+```
+[verify] (k) 마이그레이션에 박힌 .local 콜백을 데모 시드가 전부 덮는가
+  FAIL: demo-up.sh 가 seed-demo-domain.sh 를 호출하지 않습니다 — 시드가 실행되지 않으면 로그인은 401 입니다.
+```
+
+**호출은 `demo-up.sh` 334행에 멀쩡히 있었다.** 그리고 이 FAIL 은 실행을 끊어
+뒤의 `--live` 칸 — 이 창이 재려던 **(z18)·(z21)** — 을 **미도달**로 남겼다.
+🔴 B3 절이 *"(w) 의 FAIL 이 (z18)을 가린다"* 라고 적은 그 모양이고, B3 절 자신이
+*"(w) 가 먼저 죽어 (z12)를 가렸다"* 를 또 적었다. **세 번째다.**
+
+### 기전 — `A | grep -q PAT` 는 pipefail 아래에서 **매치했는데 실패**한다
+
+`grep -q` 는 첫 매치에서 즉시 끝나며 읽는 쪽 파이프를 닫는다. 앞단(`sed`/`printf`)이
+아직 쓸 것이 남아 있으면 그 write 가 EPIPE/SIGPIPE 로 죽어 **141** 을 내고,
+이 파일의 `set -o pipefail` 이 파이프라인의 결과를 141 로 만든다.
+
+🔴 **내 첫 확인 술어부터 틀렸다.** 호스트에서 `sed … | grep -n …` 를 돌려 「통과한다」를
+보고 «전이 오류인가» 로 갔다. `-n` 은 입력을 끝까지 읽으므로 **SIGPIPE 가 안 난다** —
+나는 문제의 술어가 아니라 **다른 술어**를 재고 있었다.
+[[feedback_my_verification_predicate_is_the_likeliest_defect]]
+
+진짜 술어를 그대로 반복한 실측(데모 호스트, GNU grep/sed):
+
+| 모양 | 입력 | 실패 |
+|---|---|---|
+| `sed 578줄 \| grep -q` (매치 334행) | demo-up.sh | **6 / 40** (rc=141) |
+| `printf 25,476B \| grep -q` (앞쪽 매치) | 문자열 | **295 / 300** |
+| 같은 자리에서 `-q` 만 뺀다 | 같음 | **0 / 60** |
+
+🔵 왜 지금까지 안 터졌나 — 파이프로 넘기는 값이 대개 작아서 한 번의 `write()` 가
+파이프 버퍼에 다 들어가고 grep 이 끝나기 전에 앞단이 이미 종료했다. (k) 는 `sed` 가
+**줄 단위로 흘리기 때문에** 항상 쓸 것이 남아 있고, 그래서 이 칸이 먼저 발화했다.
+🔴 그러나 「지금까지 안 터졌다」는 안전의 근거가 아니다 — 25KB 실측이 **98%** 다.
+
+### 고친 것
+
+- `grepq() { grep "$@" >/dev/null; }` — 파이프 뒤 **54곳**을 이것으로 바꿨다.
+  종료코드 의미는 같고(매치 0 → 1) 입력을 끝까지 읽는다.
+- 가드 **(z25)**: 술어를 「(k) 가 통과하는가」로 쓰지 않는다 — 그건 한 증상일 뿐이다.
+  **모양**을 문다(파이프 뒤 `grep -q` 0건) + 헬퍼 본문이 실제로 `-q` 를 안 쓰는지
+  (이름만 바뀌는 것을 막는다) + **200KB 대역의 양성 대조군**(`grep -q` 는 죽고
+  `grepq` 는 안 죽는다 — 대조군이 없으면 이 칸은 「환경이 관대해서」 초록일 수 있고
+  그러면 금지가 근거를 잃는다).
+  🔴 (1)의 술어는 **주석을 먼저 걷어낸다** — 이 파일의 상단 주석이 설명을 위해 그
+  모양을 일부러 적고 있다. [[feedback_a_discriminator_can_match_its_own_documentation]]
+
+### 🔴 그리고 그 다음 실행에서 **(z2) 가 내 변경을 물었다** — 옳게
+
+(z24) 가 `command -v timeout` 을 정적 구간에 들여오자 (z2) 가 즉시:
+*"packer 1단계가 timeout 패키지를 설치하지 않습니다"*. **문 것 자체는 옳다** — 정적
+구간의 새 도구 요구를 자동으로 범위에 넣는 것이 (z2) 의 설계다. 틀린 것은 **분류**이고
+(`timeout` 은 coreutils = essential, apt 목록에 없는 것이 정상), 그래서 도구→패키지
+매핑에 **세 번째 부류(base 제공)** 를 뒀다. 🔵 면제를 「없어도 된다」로 두지 않고
+**근거 자체를 단언**한다(`command -v timeout`) — 이 스크립트는 packer 7단계에서 AMI
+안에서도 도므로, 그 단언은 정확히 AMI 안의 실재를 잰다.
+[[feedback_retract_the_exemption_when_the_defect_is_fixed]]
+
+---
+
+## ✅ 라이브 칸 — `TASK-MONO-606` AC-4′ ②((z18)) 와 (z21) 첫 확인
+
+가드 결함을 고친 뒤 `--live` 가 그 자리까지 도달했다(호스트 `DEMO_DOMAIN=15-164-181-233.sslip.io`).
+
+| 칸 | 결과 |
+|---|---|
+| **(z18)** `--live` 죽은 sslip OAuth 콜백 | ✅ **0건 — 판정한 sslip URI 10건** ⇒ `TASK-MONO-606` **AC-4′ ② 닫힘** |
+| **(z21)** `--live` discovery ↔ 핀 ↔ 라우터 | ✅ **일치 — 광고 접두사 2건(`/connect` `/oauth2`)** ⇒ B1 의 「라이브에서 도는 것은 아직 못 봤다」가 **닫혔다** |
+| (z20) 정적 라우터 ⊇ 핀 | ✅ 핀 2건 ⊆ 라우터 5건 · `/.well-known` 별도 확인 |
+| (z24) 부팅 리셋 게이트 | ✅ 플래그 有 down→up 순서 · 플래그 無 down **0회** · 매달린 정리 **2s** 만에 끊고 말한다 |
+| (z25) 파이프 뒤 `grep -q` | ✅ 0건 · 200KB 대역에서 `grep -q` **10/10 실패** ↔ `grepq` **0/10** |
+| (z13) 단계 예산 **합** | ✅ `정리300 + up1020 + 시드240 + 예비120 = 1680s ≤ 1800s` |
+| (w) JWKS 호스트 해소 · (z12) issuer 파생 | ✅ (B3 의 좁은 면제가 뒤집힌 상태에서 실제로 통과) |
+
+### 🔴 핀의 완전성 — B1 이 주장하지 **않았던** 것이 이제 측정됐다
+
+B1 세션은 *"그 세션은 문서 1,587B 중 앞 약 900B 만 읽었으므로 목록은 「관측된 접두사
+전부」이지 「문서가 광고하는 전부」가 아니다"* 라고 적고, 완전성을 (z21)에 맡겼다.
+이번에 **문서 전체**를 받아 확인했다 — 경로를 가진 엔드포인트는 8개이고
+(`authorize` `device_authorization` `token` `jwks` `userinfo` `revoke` `introspect` → `/oauth2`,
+`logout` → `/connect`), 접두사 집합은 **정확히 `{/oauth2, /connect}`** 다. **핀은 완전하다.**
+
+### 🔴 B1 의 라이브 증명 — 404 → **401**
+
+```
+http://iam.<domain>/connect/logout            → 401   (이전: 404)
+http://iam.<domain>/oauth2/jwks               → 200
+http://iam.<domain>/.well-known/openid-configuration → 200
+```
+401 = 「엔드포인트는 있고 인증이 없다」 — 티켓이 *"컨테이너 직격은 401"* 이라고 적은 그 값이
+이제 **바깥에서** 나온다. 그리고 discovery 의 `issuer` 는 `https://auth.hubwang.com` 이다(C3 발효).
+
+### 🔴 그러나 `--live` 를 **끝까지** 돌린 것은 아니다 — 이름을 적어 둔다
+
+(z21) 다음 칸 **(f) `--live`** 가 죽었다:
+
+```
+Container scm-platform-redis Creating
+Error response from daemon: Conflict. The container name "/scm-platform-redis" is already in use
+```
+
+(f) 는 `-p verify-live-scm` 으로 scm 의 redis 를 따로 띄워 「같은 서비스 키가 별도 -p 로
+공존하는가」를 본다. 그런데 그 compose 는 `container_name: scm-platform-redis` 를 **고정**하고
+있고 그 이름은 떠 있는 데모의 scm 스택이 이미 갖고 있다 ⇒ **(f) 는 데모가 떠 있는 호스트에서
+구조적으로 못 돈다.**
+
+🔵 내 변경과 무관하다(compose 도 (f) 도 안 건드렸다). 🔴 그러나 *"`--live` 는 살아 있는
+데모를 잰다"* 는 이름과 어긋나므로 **미측정 칸으로 이름을 적는다** — 이 창의 `--live` 판정은
+**(f) 앞까지**다. 침묵하면 다음 사람은 rc=1 을 보고 내 변경을 의심한다.
+[[feedback_a_census_measures_where_you_looked_not_what_exists]]
+
+---
+
+## 🟡 항목 C — 재굽기 전 **기준선을 실측으로 박아 뒀다** (판정은 재굽기 뒤)
+
+재굽기가 인스턴스를 교체하면 이 값들은 사라진다. 「전」을 안 재고 「후」만 재면 그 판정은
+자기 가설을 증명하는 모양이 된다.
+
+| # | 재굽기 **전** 실측 (2026-09-03, `i-0c4721bdeb335885a` / `ami-0caf015f7cd9144fd`) |
+|---|---|
+| **C1** | `ecommerce-web-store` **존재하고 running** · 생성 `2026-09-02 13:04:34` · `project=ecommerce` · 라우터 라벨 `Host(web.ecommerce.43-202-166-3.sslip.io)` |
+| **C2** | `infra/demo/{auth-forwarder,backend-resolver}` 가 호스트 저장소에 **있다** — 🔵 다만 이제 그것은 **main 판본**이다(호스트를 main 으로 리셋했다). AMI 가 갖는지는 별개 축 |
+| **C3** | `git status` **clean** — 🔴 그러나 이것은 *내가* 리셋한 결과지 AMI 의 성질이 아니다. 진짜 판정은 새 AMI 의 첫 부팅에서 |
+| **C4** | 호스트 `projects/fan-platform/.env` 에 **재선언이 그대로**: 25행 `fan-platform-dev` / **73행 `replace-with-secret-from-iam-seed`**(dotenv 는 이쪽이 이긴다) · mtime **2026-08-29 15:51:45** = 이 AMI 의 첫 부팅 이후 **한 번도 안 바뀌었다** |
+
+### 🔴🔴 C1 이 티켓보다 강해졌다 — `--remove-orphans` **로도** 안 지워진다
+
+티켓은 *"억제 선언보다 오래된 컨테이너는 `profiles:` 게이트 밖이고 `--remove-orphans` 가
+안 지운다"* 라고 적었다. 이번 창에서 그것을 **실행으로** 확인했다: 후보 ⓐ 가 부팅마다
+`demo-down.sh`(= `down --remove-orphans`)를 **전 도메인에** 돌렸는데도
+
+```
+부팅 #3 후: [drift] ✖  ecommerce-web-store (-p ecommerce) → 43-202-166-3.sslip.io
+부팅 #4 후: [drift] ✖  ecommerce-web-store (-p ecommerce) → 43-202-166-3.sslip.io
+```
+
+**두 번 다 살아남았다.** 기전: compose 는 `web-store` 를 *모르는* 서비스가 아니라
+**프로파일이 꺼진 아는 서비스**로 본다 ⇒ orphan 이 아니라서 `--remove-orphans` 대상이
+아니고, 프로파일이 꺼져 있어서 `down` 대상도 아니다. **두 기전 어느 쪽에도 안 걸린다.**
+⇒ C1 의 처방(「그 컨테이너가 **애초에 없는** AMI」)이 옳다는 것이 더 강하게 확인됐다.
+
+🔵 그리고 이것이 부팅 #3·#4 에서 유닛이 `rc=1` 로 끝난 **유일한** 사유다. C1 이 닫히면
+ⓐ 판의 부팅은 완전히 초록이 된다.
+
+### C4 는 B2 가 예고한 그대로다
+
+B2 § 남은 공백 1 이 *"`provision-demo-env.sh` 는 멱등이라 `.env` 가 있으면 건드리지 않고,
+호출자는 `demo-boot.sh` 하나뿐(부팅 시점이지 굽는 시점이 아니다)"* 이라고 적었다.
+부팅 로그가 그것을 그대로 말한다: `[provision-env] 요약 — 생성 0 · 기존유지 8`.
+mtime 이 08-29 인 것이 **네 번의 부팅을 건너 안 바뀌었다**는 직접 증거다.
+[[feedback_declaration_files_are_not_the_runtime_state]]
