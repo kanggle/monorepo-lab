@@ -48,12 +48,13 @@ When a specific task ID is given:
 `review/ → done/` is a **lifecycle transition, not a review outcome.** A passing review does not
 close a task; a **merged, GREEN impl PR** does.
 
-It may run only after the task's impl PR is **objectively merge-verified** — all three dimensions
+It may run only after the task's impl PR is **objectively merge-verified** — all four dimensions
 (CLAUDE.md § Task Rules). A "merged it" statement is not proof:
 
 1. `gh pr view <n> --json state,mergedAt,mergeCommit,statusCheckRollup` → `state == MERGED`
 2. `git log origin/main` tip matches that squash commit
 3. the impl PR's **pre-merge** `gh pr checks <n>` snapshot had **0 failing required checks**
+4. the task's `# Acceptance Criteria` section — **opened and read**, not its `INDEX.md` row — shows every AC closed against the verb that AC used. 🔴 1-3 measure the **PR**; only 4 measures the **ticket**. If only 4 fails, do **not** move the file: leave it in `review/` and append a `## CORRECTION` (`done/` is frozen). A ⚪ recording *"could not be measured, and why"* **is** closure when the AC asked for that. See `platform/git-workflow-policy.md` § The Fourth Dimension.
    🔴 **What "required" means here is a set of exactly four contexts** (`TASK-MONO-598`, 2026-08-28).
    🔴 **Match them by equality, and copy the parentheses** — they are part of the registered string,
    not decoration (`TASK-MONO-599`):
@@ -218,7 +219,7 @@ Approved tasks are **not** closed here. List which of them are ready for a close
 - Follow CLAUDE.md Hard Stop Rules at every step
 - Do not modify implementation code during review — create fix tasks
 - **Review never moves the task file.** The task stays in `tasks/review/` whatever the verdict.
-  `review/ → done/` is a separate close-chore PR, gated on 3-dimension merge verification (§ Close Chore).
+  `review/ → done/` is a separate close-chore PR, gated on 4-dimension merge verification (§ Close Chore).
   A passing review does not close a task; a merged, GREEN impl PR does.
 - Reviewed tasks therefore accumulate in `review/`. That is intended, not a leak — CLAUDE.md
   § Recommending Tasks already requires scanning the `review/` queue and clearing it before picking new work.

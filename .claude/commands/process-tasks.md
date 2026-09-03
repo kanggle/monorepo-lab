@@ -75,7 +75,7 @@ After Phase 1 completes, follow the full `/review-task` batch mode procedure. **
     - **Review does not move the task file** — it returns a verdict (`approved` / `fix_needed`). The task stays in `tasks/review/`
     - Issues found → create fix task in `tasks/ready/`
 6. Collect the review agents' fix-task files and land them in **one spec PR**. **Never `git merge` into `main` and never push `main`** (mirrors `/review-task` batch Rules and `/implement-task` Phase 5 step 3)
-7. Collect review results. **The pipeline does not close tasks**: `review/ → done/` is a separate close-chore PR gated on 3-dimension merge verification of each impl PR (`/review-task` § Close Chore). Report which reviewed tasks are ready for that chore
+7. Collect review results. **The pipeline does not close tasks**: `review/ → done/` is a separate close-chore PR gated on 4-dimension merge verification of each impl PR (`/review-task` § Close Chore). Report which reviewed tasks are ready for that chore
 
 ### Phase 3: Summary
 
