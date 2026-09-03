@@ -161,6 +161,33 @@ UP_RETRY_SLEEP="${DEMO_UP_RETRY_SLEEP:-60}"
 UP_CALL_TIMEOUT="${DEMO_UP_CALL_TIMEOUT:-420}"
 UP_TOTAL_BUDGET="${DEMO_UP_TOTAL_BUDGET:-1020}"
 
+# 🔴🔴 TASK-MONO-615 B4-ii — **요약은 도달할 수 없는 자리에 있었다**
+# ---------------------------------------------------------------------------
+# 위 문단(그리고 가드 (z13) 칸 (6))은 `UP_TOTAL_BUDGET < TimeoutStartSec` 을 단언한다.
+# 그 부등식은 **참이었고**(1020 < 1200) 그런데도 2026-09-03 기동 창의 부팅 2회에서
+# 최종 요약은 **한 줄도 나오지 않았다.** 유닛은 두 번 다 `Result=timeout` 이었다.
+#
+#   boot #1  up 루프 종료 02:27:57 → 시드 13분 → 02:43:04 SIGTERM  (`[seed] --- fan ---` 중)
+#   boot #2  up 루프 종료 02:56:29 → 시드 14분 → 03:10:32 SIGTERM  (`[seed] --- erp ---` 중)
+#   두 판 모두 `늦게 수렴` 0건 · `HTTP 표면` 0건 · `재시도 배분` 0건 · `매달림` 0건
+#
+# 🔴 즉 잰 값은 맞았는데 **센 항이 모자랐다.** up 루프 뒤에는 시드·드리프트·재측정·표면
+#    검사가 더 있고 그것들은 **아무 상한도 없었다**. iam 이 안 뜬 판에서 각 도메인 시드가
+#    게이트웨이를 240s 씩 기다리므로, 시드 단계 하나가 systemd 예산을 통째로 먹는다.
+#    `UP_TOTAL_BUDGET` 을 아무리 잘 골라도 그 뒤가 무한하면 요약은 못 나온다.
+#
+# 🔵 이것은 **#3601 이 만든 결함이 아니다** — 그 PR 은 매달림을 요약에 남기게 했고, 그
+#    문장은 옳다. 틀린 것은 「요약은 언제나 실행된다」는 **암묵 전제**다. 같은 전제가
+#    이미 한 번 깨진 적도 있다(MONO-552 AC-3: 시드의 rc 를 안 받아 스크립트가 그 자리서
+#    죽었고 최종 블록이 통째로 날아갔다). 그때는 **rc 경로**를 닫았고, 이번에 깨진 것은
+#    **시간 경로**다. 같은 자리, 다른 문.
+#
+# ⇒ 단계마다 예산을 두고, **요약을 위한 몫을 남긴다.** 부등식은 가드가 다시 센다:
+#      DOWN 300 + UP 1020 + POST_UP 240 + SUMMARY_RESERVE 120 = 1680 ≤ TimeoutStartSec 1800
+#    (down 은 demo-boot.sh 의 몫이라 여기서 쓰지 않지만, 합에는 들어간다.)
+POST_UP_BUDGET="${DEMO_POST_UP_BUDGET:-240}"
+SUMMARY_RESERVE="${DEMO_SUMMARY_RESERVE:-120}"
+
 # `timeout` 이 없으면 **오늘과 같은 동작**으로 내려간다(묶지 못한다). 여기서 죽이지
 # 않는 이유는, 그러면 도구 하나 때문에 부팅 전체가 실패하기 때문이다 — 오늘보다 나쁘다.
 # 대신 소리를 낸다. 가드 (z13)이 이 스크립트가 실제로 묶는지를 따로 단언한다.
@@ -185,6 +212,38 @@ up_call() {
   else
     docker compose "$@"
   fi
+}
+
+# 🔴 TASK-MONO-615 B4-ii — up 루프 **뒤** 단계들의 공용 마감.
+# 🔵 up_call 과 달리 도커에 묶이지 않는다(시드·드리프트는 임의의 스크립트다).
+post_up_started_at=0
+post_up_cut=()
+post_up_remaining() { echo $(( POST_UP_BUDGET - ( $(date +%s) - post_up_started_at ) )); }
+# post_up_call <사람이 읽는 단계 이름> <명령...>
+post_up_call() {
+  local label="$1"; shift
+  local left rc=0
+  left="$(post_up_remaining)"
+  if [ "$left" -le 0 ]; then
+    post_up_cut+=("$label(시도 못 함)")
+    echo "[demo] ⏱ $label — 시드 단계 예산 ${POST_UP_BUDGET}s 가 앞 단계에서 소진돼 **건너뜁니다**" >&2
+    return 1
+  fi
+  # 🔴 `timeout` 이 없으면 오늘과 같은 동작으로 내려간다(묶지 못한다). up_call 과 같은
+  #    이유다 — 도구 하나 때문에 부팅 전체를 죽이는 것은 오늘보다 나쁘다.
+  if [ "$HAVE_TIMEOUT" = 1 ]; then
+    timeout --foreground -k 15 "$left" "$@" || rc=$?
+  else
+    "$@" || rc=$?
+  fi
+  # 🔴 124 는 「끊었다」이고 그 밖의 비-0 은 「돌아왔는데 실패했다」이다. 두 사유는 진단이
+  #    다르다: 전자는 이 단계가 systemd 예산을 먹고 있었다는 뜻이고, 후자는 시드가
+  #    할 일을 못 했다는 뜻이다. 섞으면 다음 창에서 또 못 가른다.
+  if [ "$rc" -eq 124 ] && [ "$HAVE_TIMEOUT" = 1 ]; then
+    post_up_cut+=("$label")
+    echo "[demo] ⏱ $label — ${left}s 안에 끝나지 않아 **끊었습니다**(시드 실패와 구별합니다)" >&2
+  fi
+  return "$rc"
 }
 
 # ---------------------------------------------------------------------------
@@ -329,9 +388,12 @@ fi
 # 🔵 바로 아래 형제 호출(`seed/seed.sh`)은 이미 그 계약을 갖고 있다:
 #    *"실패해도 이미 떠 있는 스택을 내리지 않는다 — `|| true` 가 아니라 종료코드를
 #    보존해 마지막 줄에서 알린다"*. **이 호출만 낙오해 있었다.**
+# 🔴 TASK-MONO-615 B4-ii — 여기부터가 「요약 앞의 무한 구간」이었다. 마감을 연다.
+post_up_started_at="$(date +%s)"
+
 domain_seed_rc=0
 if [[ " ${SET[*]} " == *" iam "* ]]; then
-  bash "$HERE/seed-demo-domain.sh" || domain_seed_rc=$?
+  post_up_call "OIDC 리다이렉트 URI 등록" bash "$HERE/seed-demo-domain.sh" || domain_seed_rc=$?
 fi
 
 # 도메인 데이터 시드 (TASK-MONO-506). 계정과 배선이 갖춰져도 화면이 비어 있으면
@@ -339,13 +401,13 @@ fi
 # 스택을 내리지 않는다(비-0 로 끝나되 기동은 유지) — 그래서 `|| true` 가 아니라
 # 종료코드를 보존해 마지막 줄에서 알린다. 가드 (z) 가 이 호출을 지킨다.
 seed_rc=0
-bash "$HERE/seed/seed.sh" "${SET[@]}" || seed_rc=$?
+post_up_call "도메인 데이터 시드" bash "$HERE/seed/seed.sh" "${SET[@]}" || seed_rc=$?
 
 # 라벨 드리프트 판정 (TASK-MONO-553 C) — 이 결함의 **직접적인 술어**다. 왜 다른 신호로는
 # 안 되는지, 왜 모집단을 둘로 나누는지는 check-label-drift.sh 헤더에 있다. 별도 스크립트인
 # 이유는 **그것만 따로 물릴 수 있어야** 하기 때문이다(AC-3 bite).
 drift_rc=0
-bash "$HERE/check-label-drift.sh" "${SET[@]}" || drift_rc=$?
+post_up_call "라벨 드리프트 판정" bash "$HERE/check-label-drift.sh" "${SET[@]}" || drift_rc=$?
 
 echo "[demo] up complete — profile=$PROFILE"
 [ "$seed_rc" -eq 0 ] || echo "[demo] ⚠ 도메인 데이터 시드가 일부 실패했습니다(위 [seed] 로그 참조) — 해당 화면은 빌 수 있습니다"
@@ -554,6 +616,18 @@ if [ ${#denied[@]} -gt 0 ]; then
     echo "[demo] ⚠ 재시도 배분: $p 는 예산이 없어 재시도 ${denied[$p]}회를 못 받았습니다(느려서가 아닙니다)" >&2
   done
   echo "[demo]   ⇒ 재시도 총 상한 = 도메인 ${n_domains}개 × ${UP_RETRY_SLEEP}s. 이 값이 빠듯하면 UP_RETRY_SLEEP 이나 healthcheck 창을 보세요." >&2
+fi
+
+# 🔴🔴 TASK-MONO-615 B4-ii — 시드 단계가 마감에 끊겼다는 사실을 남긴다.
+#    이 줄이 보인다는 것 자체가 「요약이 실행됐다」는 증거이기도 하다. 예산이 없던
+#    2026-09-03 의 두 부팅에서는 이 블록은커녕 **아래 어느 줄도 나오지 못했다.**
+if [ ${#post_up_cut[@]} -gt 0 ]; then
+  final_rc=1
+  echo "[demo] ⏱ 시드 단계 마감: ${post_up_cut[*]} — 단계 예산 ${POST_UP_BUDGET}s 안에 끝나지 않아 끊었습니다" >&2
+  echo "[demo]   (시드가 «틀린» 것이 아니라 «오래 걸린» 것입니다. 대개 앞에서 어떤 도메인이" >&2
+  echo "[demo]    안 떠서 그 도메인의 게이트웨이를 기다리는 중입니다 — 위 '기동 실패' 줄을 보세요.)" >&2
+  echo "[demo]   ⇒ 끊지 않으면 이 단계가 systemd TimeoutStartSec 을 통째로 먹고, 아래 요약이" >&2
+  echo "[demo]     **한 줄도 나오지 않습니다**(2026-09-03 기동 창에서 두 부팅 연속 그렇게 됐습니다)." >&2
 fi
 
 # 🔴 TASK-MONO-615 B4 — 매달림은 **재측정 결과와 무관하게** 남긴다. 끊은 뒤 재시도가

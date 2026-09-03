@@ -57,6 +57,30 @@ for arg in "$@"; do
   esac
 done
 
+# ---------------------------------------------------------------------------
+# grepq — 파이프 뒤에서 쓰는 `grep -q` 대체 (TASK-MONO-615)
+# ---------------------------------------------------------------------------
+# 🔴🔴 `A | grep -q PAT` 는 이 파일의 `set -o pipefail` 아래에서 **매치했는데 실패**한다.
+# `grep -q` 는 첫 매치에서 즉시 끝나며 읽는 쪽 파이프를 닫는다. 앞단(sed/printf)이 아직
+# 쓸 것이 남아 있으면 그 write 가 EPIPE/SIGPIPE 로 죽어 **141** 을 내고, `pipefail` 이
+# 파이프라인의 결과를 141 로 만든다. 즉 술어는 참인데 가드는 FAIL 을 외친다.
+#
+# 실측 (2026-09-03, 데모 호스트, GNU grep/sed):
+#   sed 578줄 → grep -q (매치 334행)   : 40회 중 **6회** 실패 (rc=141)
+#   printf 25,476B → grep -q (앞쪽 매치): 300회 중 **295회** 실패
+#   같은 자리에서 `-q` 만 빼면          : 60회 중 **0회** 실패
+#
+# 🔴 이것이 실제로 일으킨 일: 가드 (k) 가 *"demo-up.sh 가 seed-demo-domain.sh 를 호출하지
+#    않습니다"* 라고 **거짓 고발**했다. 호출은 334행에 멀쩡히 있었다. 그리고 그 FAIL 이
+#    실행을 중단시켜 뒤의 --live 칸((z18)·(z21))이 **미도달**로 남았다 — 이 저장소가
+#    이미 두 번 당한 모양이다(B3 의 (w) 가 (z18)을 가린 그 자리, 그리고 (w) 가 (z12)를
+#    가린 자리). 첫 실패가 뒤를 덮는다.
+#
+# 🔵 `-q` 를 빼면 grep 은 입력을 끝까지 읽는다. 그것이 고침의 전부다 — 여기서 읽는 것은
+#    수십 KB 라 비용은 무시할 수 있고, 대신 「앞단이 SIGPIPE 를 받을 창」이 사라진다.
+# 🔵 종료코드 의미는 그대로다(매치 0 → 1). 출력만 버린다.
+# 가드 (z25)가 파이프 뒤의 `grep` 플래그 `-q` 가 이 파일에 다시 들어오는 것을 막는다.
+grepq() { grep "$@" >/dev/null; }
 fail() { echo "  FAIL: $*" >&2; exit 1; }
 ok()   { echo "  ok: $*"; }
 
@@ -426,7 +450,7 @@ seed_sh="$ROOT/infra/demo/seed-demo-domain.sh"
 [ -f "$seed_sh" ] || fail "infra/demo/seed-demo-domain.sh 가 없습니다 — 데모 도메인 로그인이 불가능합니다."
 # 주석을 먼저 걷어낸다. `demo-up.sh` 는 이 스크립트를 **주석에서도** 언급하므로
 # 순진한 grep 은 호출이 삭제돼도 주석에 매치돼 통과한다 — mutation-check 로 잡은 실제 결함.
-sed 's/#.*//' "$ROOT/infra/demo/demo-up.sh" | grep -q 'seed-demo-domain\.sh' \
+sed 's/#.*//' "$ROOT/infra/demo/demo-up.sh" | grepq 'seed-demo-domain\.sh' \
   || fail "demo-up.sh 가 seed-demo-domain.sh 를 호출하지 않습니다 — 시드가 실행되지 않으면 로그인은 401 입니다."
 
 # 마이그레이션의 redirect_uri 리터럴 중 `.local` 을 담은 것들.
@@ -714,7 +738,7 @@ if [ -d "$tf_dir" ]; then
   ghost=""
   while IFS= read -r name; do
     [ -n "$name" ] || continue
-    printf '%s\n' "$declared" | grep -qx "$name" || ghost="$ghost   terraform output $name"$'\n'
+    printf '%s\n' "$declared" | grepq -x "$name" || ghost="$ghost   terraform output $name"$'\n'
   done <<EOF
 $referenced
 EOF
@@ -1103,7 +1127,7 @@ x_flag="$(printf '%s' "$x_render" | awk '
 
 # 추출 실패를 통과로 보고하지 않는다. 키가 사라지면(= 데모 결제 배선이 통째로 빠지면)
 # 두 값이 모두 빈 문자열이 되어 "둘 다 꺼짐" 으로 조용히 합격할 수 있다.
-printf '%s' "$x_render" | grep -qE '^      SPRING_PROFILES_ACTIVE:' \
+printf '%s' "$x_render" | grepq -E '^      SPRING_PROFILES_ACTIVE:' \
   || fail "(x) ecommerce 렌더에서 payment-service 의 SPRING_PROFILES_ACTIVE 를 찾지 못했습니다 — 탐지식이 깨졌습니다."
 # 🔴🔴 모집단이 **줄었다** — TASK-MONO-604 가 데모에서 web-store 를 억제했다.
 # 그러면 이 가드의 «프런트 절반» 은 렌더에서 사라진다. 여기서 두 가지를 다 피해야 한다:
@@ -1113,7 +1137,7 @@ printf '%s' "$x_render" | grep -qE '^      SPRING_PROFILES_ACTIVE:' \
 # ⇒ 사라진 것이 **선언된 억제 때문인지** 를 먼저 확인하고, 맞으면 백엔드 절반만 재되
 #   프런트 절반이 **어디로 갔는지·누가 들고 있는지**를 매 실행마다 이름으로 남긴다.
 x_store_present=0
-printf '%s' "$x_render" | grep -qE '^  web-store:' && x_store_present=1
+printf '%s' "$x_render" | grepq -E '^  web-store:' && x_store_present=1
 x_suppressed="infra/demo/ecommerce-vercel.override.yml"
 
 if [ "$x_store_present" = "0" ]; then
@@ -1124,7 +1148,7 @@ if [ "$x_store_present" = "0" ]; then
         $'\n'"  사유가 기록돼 있지 않으면, 다음 사람은 이 가드를 «원래 그런 것» 으로 읽습니다." ;;
   esac
 else
-  printf '%s' "$x_render" | grep -qE '^      DEMO_PAYMENT_MOCK:' \
+  printf '%s' "$x_render" | grepq -E '^      DEMO_PAYMENT_MOCK:' \
     || fail "(x) ecommerce 렌더에서 web-store 의 DEMO_PAYMENT_MOCK 를 찾지 못했습니다"\
       $'\n'"→ web-store.environment 에 \`DEMO_PAYMENT_MOCK=\${DEMO_PAYMENT_MOCK:-}\` 가 있어야 합니다."\
       $'\n'"   compose 는 자기가 이름을 적은 변수만 컨테이너에 넣습니다 — demo.env 값만으로는 도달하지 않습니다."
@@ -1215,9 +1239,9 @@ x2_flag="$(printf '%s' "$x2_render" | awk '
 
 # (x) 와 같은 이유로 추출 실패를 통과로 보고하지 않는다. 키가 사라지면 두 값이 모두 빈
 # 문자열이 되는데, 팬에서는 그 조합이 **바로 이 티켓이 고친 결함** 이라 특히 위험하다.
-printf '%s' "$x2_render" | grep -qE '^      SPRING_PROFILES_ACTIVE:' \
+printf '%s' "$x2_render" | grepq -E '^      SPRING_PROFILES_ACTIVE:' \
   || fail "(x2) fan 렌더에서 membership-service 의 SPRING_PROFILES_ACTIVE 를 찾지 못했습니다 — 탐지식이 깨졌습니다."
-printf '%s' "$x2_render" | grep -qE '^      DEMO_PAYMENT_MOCK:' \
+printf '%s' "$x2_render" | grepq -E '^      DEMO_PAYMENT_MOCK:' \
   || fail "(x2) fan 렌더에서 fan-platform-web 의 DEMO_PAYMENT_MOCK 를 찾지 못했습니다"\
     $'\n'"→ fan-platform-web.environment 에 \`DEMO_PAYMENT_MOCK: \${DEMO_PAYMENT_MOCK:-}\` 가 있어야 합니다."\
     $'\n'"   compose 는 자기가 이름을 적은 변수만 컨테이너에 넣습니다 — demo.env 값만으로는 도달하지 않습니다."
@@ -1306,9 +1330,9 @@ z_lam="$ROOT/infra/demo/aws/terraform/lambda/handler.py"
 #     이 스크립트의 헤더가 `aws ssm put-parameter` 를 **설명하느라** 언급하므로
 #     순진한 grep 은 본문을 통째로 지워도 자기 주석에 매치해 통과한다((k)/(n) 의 함정).
 z_pub_body="$(sed 's/#.*//' "$z_pub")"
-printf '%s\n' "$z_pub_body" | grep -q 'demo-status\.sh' \
+printf '%s\n' "$z_pub_body" | grepq 'demo-status\.sh' \
   || fail "demo-status-publish.sh 가 demo-status.sh 를 호출하지 않습니다 (주석 제외 본문 기준)."
-printf '%s\n' "$z_pub_body" | grep -q 'put-parameter' \
+printf '%s\n' "$z_pub_body" | grepq 'put-parameter' \
   || fail "demo-status-publish.sh 가 put-parameter 를 호출하지 않습니다 (주석 제외 본문 기준)."
 
 # (2) 유닛이 발행자를 부르는가 + 타이머가 그 유닛을 부르는가.
@@ -1317,14 +1341,14 @@ case "$z_svc_exec" in
   *demo-status-publish.sh*) : ;;
   *) fail "demo-status.service 의 ExecStart 가 demo-status-publish.sh 를 부르지 않습니다: ${z_svc_exec:-<없음>}" ;;
 esac
-sed 's/#.*//' "$z_tmr" | grep -qE '^[[:space:]]*Unit=demo-status\.service' \
+sed 's/#.*//' "$z_tmr" | grepq -E '^[[:space:]]*Unit=demo-status\.service' \
   || fail "demo-status.timer 가 Unit=demo-status.service 를 가리키지 않습니다."
 
 # (3) 🔴 AccuracySec 이 없으면 '30초 주기' 는 거짓이다.
 #     systemd 기본 AccuracySec 은 1분이라 커널이 타이머를 뭉쳐 깨운다 — 유닛에는
 #     30s 라고 적혀 있고 실제 주기는 ~1분이 된다. 페이지가 표시 지연을 정직하게
 #     적으라는 티켓 요구의 근거가 여기서 무너지므로, 선언과 실제를 벌리지 않는다.
-sed 's/#.*//' "$z_tmr" | grep -qE '^[[:space:]]*AccuracySec=' \
+sed 's/#.*//' "$z_tmr" | grepq -E '^[[:space:]]*AccuracySec=' \
   || fail "demo-status.timer 에 AccuracySec 이 없습니다 — systemd 기본값 1분이 30초 주기를 삼킵니다."\
      $'\n'"→ 유닛이 선언한 주기와 실제 주기가 달라집니다(선언은 아무것도 강제하지 않는다)."
 
@@ -1425,7 +1449,23 @@ if [ -f "$z2_pkr" ] && [ -f "$z2_self" ]; then
   for z2_t in $(head -n "$z2_live" "$z2_self" \
                   | sed -n 's/.*command -v \([a-z0-9_-][a-z0-9_-]*\).*/\1/p' | sort -u); do
     # 도구 이름 ≠ 패키지 이름. 아는 것만 매핑하고 나머지는 동일 이름으로 본다.
+    #
+    # 🔴 TASK-MONO-615 — 세 번째 부류가 있다: **base 이미지가 보장해서 apt 목록에 없는
+    #    것이 정상인 도구.** `timeout` 은 coreutils 이고 Ubuntu 에서 essential 이다.
+    #    이걸 모르면 이 칸은 «packer 가 timeout 패키지를 설치하지 않는다» 는 **없는 죄**를
+    #    고발한다(실측: (z24) 가 들어온 순간 그렇게 됐다).
+    # 🔵 그렇다고 「없어도 된다」로 넘기지 않는다 — 면제의 근거는 «base 에 있다» 이므로
+    #    그 근거 자체를 단언한다. 이 스크립트는 packer 7단계에서 **AMI 안에서도** 돌기
+    #    때문에, 그 단언은 정확히 AMI 안의 실재를 재는 것이 된다. 근거가 거짓이 되는 날
+    #    (base 이미지가 바뀌는 등) 이 칸이 그 자리에서 빨개진다.
     case "$z2_t" in
+      timeout)
+        command -v timeout >/dev/null 2>&1 \
+          || fail "(z2) 'timeout' 을 base 제공으로 분류했는데 이 환경에 없습니다."\
+          $'\n'"→ 면제의 근거(coreutils 는 essential)가 거짓입니다. packer 1단계에 coreutils"\
+          $'\n'"  설치를 추가하거나, demo-boot.sh / demo-up.sh 의 timeout 폴백 경로를 다시 보세요."
+        z2_seen="$z2_seen $z2_t(base)"
+        continue ;;
       node) z2_pkg="nodejs" ;;
       *)    z2_pkg="$z2_t" ;;
     esac
@@ -1614,7 +1654,7 @@ z4_bad_rc="$(z4_run wms)"
 z4_log="$(cat "$z4_tmp/run.log")"
 rm -rf "$z4_tmp"
 
-if ! printf '%s\n' "$z4_log" | grep -q '^\[demo\] up: console'; then
+if ! printf '%s\n' "$z4_log" | grepq '^\[demo\] up: console'; then
   fail "(z4) wms 기동 실패가 그 뒤의 console 기동을 막았습니다 — 부분 실패가 격리되지 않습니다."\
     $'\n'"→ 실제 결과: 재시작 뒤 옛 라벨 컨테이너가 계속 서빙하고 **새 주소는 전부 404** 입니다."\
     $'\n'"→ demo-up.sh 의 기동 루프에서 compose 실패를 잡아 다음 도메인으로 진행하세요(TASK-MONO-553 A)."
@@ -1625,7 +1665,7 @@ if [ "$z4_bad_rc" = "0" ]; then
     $'\n'"   당한 *\"아무것도 안 보면서 초록\"* 이 됩니다."\
     $'\n'"→ 실패한 도메인을 모아 마지막에 비-0 로 끝내세요(격리 ≠ 무시)."
 fi
-if ! printf '%s\n' "$z4_log" | grep -q 'wms'; then
+if ! printf '%s\n' "$z4_log" | grepq 'wms'; then
   fail "(z4) 실패한 도메인(wms)의 이름이 출력에 없습니다 — 어느 도메인이 죽었는지 알 수 없습니다."
 fi
 ok "부분 실패 격리 — 정상 rc=0 · wms 실패 시 console 까지 진행하고 rc=$z4_bad_rc 로 보고"
@@ -1661,7 +1701,7 @@ chmod +x "$z6_tmp/bin/aws"
 # 술어는 한 곳에만 둔다 — 대조군과 본 판정이 **같은 술어**를 써야 대조군에 의미가 있다.
 z6_wrapped() {  # $1=발행된 값 → 감싼 모양이고 published_at 이 최근이면 0
   local at now
-  printf '%s' "$1" | grep -qE '^\{"published_at":[0-9]+,"domains":\{' || return 1
+  printf '%s' "$1" | grepq -E '^\{"published_at":[0-9]+,"domains":\{' || return 1
   at="$(printf '%s' "$1" | sed -n 's/^{"published_at":\([0-9][0-9]*\).*/\1/p')"
   [ -n "$at" ] || return 1
   now="$(date -u +%s)"
@@ -1866,7 +1906,7 @@ z9_tf="$ROOT/infra/demo/aws/terraform/main.tf"
 #    그게 이 자기점검이 있는 이유다.
 z9_env="$(awk '/^resource "aws_lambda_function" "control"/{f=1} f{print} f&&/^\}/{exit}' "$z9_tf")"
 [ -n "$z9_env" ] || fail "(z9) main.tf 에서 Lambda environment 블록을 찾지 못했습니다 — 앵커가 갈라졌습니다."
-if printf '%s' "$z9_env" | grep -qE '^[^#]*ALLOWED_ORIGIN'; then
+if printf '%s' "$z9_env" | grepq -E '^[^#]*ALLOWED_ORIGIN'; then
   fail "(z9) Lambda environment 에 ALLOWED_ORIGIN 이 되돌아왔습니다 — CORS 가 다시 두 집을 갖습니다."\
     $'\n'"→ 실측(2026-08-18): 그 두 집은 이미 어긋나 있었고, Lambda 쪽은 \`Access-Control-Allow-Origin: \"\"\` 를 실었습니다."\
     $'\n'"→ 두 곳에서 실으면 헤더가 중복되어 브라우저가 거부하기도 합니다."\
@@ -1889,13 +1929,13 @@ z9_local="$(awk '/cors_allowed_origins = distinct\(/{print; exit}' "$z9_tf")"
 
 # (2a) 목록은 **변수에서** 와야 한다. 목록을 리소스 안에 직접 적으면 배포처를 바꿀 때
 #      terraform 코드를 고쳐야 하고, 그러면 tfvars 가 거짓말을 하게 된다.
-printf '%s' "$z9_local" | grep -q 'var.allowed_origins' \
+printf '%s' "$z9_local" | grepq 'var.allowed_origins' \
   || fail "(z9) 허용 오리진 목록이 var.allowed_origins 에서 오지 않습니다."\
     $'\n'"→ 배포처는 환경마다 다릅니다. 목록의 출처는 변수 하나여야 합니다."
 
 # (2b) 🔴 **주제 보존** — AWS 발급 주소를 리터럴로 박으면 안 된다. 이 명제는 CloudFront
 #      폐기와 무관하게 살아 있다(`execute-api` 는 지금도 매 재생성마다 바뀐다).
-if printf '%s' "$z9_local" | grep -qE '"https://[a-z0-9.-]*(cloudfront|execute-api)'; then
+if printf '%s' "$z9_local" | grepq -E '"https://[a-z0-9.-]*(cloudfront|execute-api)'; then
   fail "(z9) 허용 오리진 목록에 AWS 가 발급하는 주소가 **리터럴로** 박혀 있습니다."\
     $'\n'"→ 그 값은 재생성마다 바뀝니다. var.allowed_origins 로 받으세요(결함 2, TASK-MONO-389)."
 fi
@@ -1909,7 +1949,7 @@ fi
 z9_vars="$ROOT/infra/demo/aws/terraform/variables.tf"
 z9_ao="$(awk '/^variable "allowed_origins"/{f=1} f{print} f&&/^\}/{exit}' "$z9_vars")"
 [ -n "$z9_ao" ] || fail "(z9) variables.tf 에서 allowed_origins 블록을 찾지 못했습니다 — 앵커가 갈라졌습니다."
-printf '%s' "$z9_ao" | grep -q 'length(var.allowed_origins) > 0' \
+printf '%s' "$z9_ao" | grepq 'length(var.allowed_origins) > 0' \
   || fail "(z9) allowed_origins 에 **비어 있으면 실패**하는 validation 이 없습니다."\
     $'\n'"→ CloudFront 자동 포함이 폐기된 뒤(TASK-MONO-579) 빈 목록 = 허용 오리진 0개 = Start 버튼 사망입니다."\
     $'\n'"→ 그 실패는 plan 에 안 보이고 런타임에 옵니다. validation 이 그것을 plan 으로 끌어옵니다."
@@ -1917,10 +1957,10 @@ printf '%s' "$z9_ao" | grep -q 'length(var.allowed_origins) > 0' \
 # (3) 대조군 — 가드가 (1)·(2c)를 실제로 볼 수 있는가.
 #     🔴 블록 추출이 빈 껍데기면 그 단언들은 **항상 통과**한다. 각 추출에 반드시 있는
 #        다른 것이 보이는지 확인해 추출이 살아 있음을 증명한다.
-printf '%s' "$z9_env" | grep -q 'MONTHLY_BUDGET_MINUTES' \
+printf '%s' "$z9_env" | grepq 'MONTHLY_BUDGET_MINUTES' \
   || fail "(z9) 대조군 실패 — environment 블록 추출에 MONTHLY_BUDGET_MINUTES 가 안 보입니다."\
     $'\n'"→ 추출이 빈 껍데기이므로 (1)의 통과는 **아무것도 증명하지 않습니다**."
-printf '%s' "$z9_ao" | grep -q 'type        = list(string)' \
+printf '%s' "$z9_ao" | grepq 'type        = list(string)' \
   || fail "(z9) 대조군 실패 — allowed_origins 블록 추출에 type 선언이 안 보입니다."\
     $'\n'"→ 추출이 빈 껍데기이므로 (2c)의 통과는 **아무것도 증명하지 않습니다**."
 
@@ -2234,7 +2274,7 @@ z13_rc1="$(z13_run '' up 0)"
 z13_log1="$(cat "$z13_tmp/run.log")"
 [ "$z13_rc1" = "0" ] || z13_die "(z13) 대조군 실패 — 아무 도메인도 실패하지 않았는데 rc=$z13_rc1 입니다."\
   $'\n'"→ 정상 부팅이 빨간 가드는 곧 꺼지고, 꺼진 가드의 skip 은 초록으로 보고됩니다."
-printf '%s\n' "$z13_log1" | grep -q '^\[demo\] ◑ 늦게 수렴:' \
+printf '%s\n' "$z13_log1" | grepq '^\[demo\] ◑ 늦게 수렴:' \
   && z13_die "(z13) 대조군에서 '늦게 수렴' 이 보고됐습니다 — 아무도 실패하지 않았는데 재측정이 뭔가를 만들어 냈습니다."
 
 # (2) bite — wms 의 up 은 실패하지만 재측정에서는 healthy. 초록이되 **이름이 찍혀야** 한다.
@@ -2244,7 +2284,7 @@ z13_log2="$(cat "$z13_tmp/run.log")"
   $'\n'"→ 이것이 이 티켓의 결함 A 다: compose 가 포기한 **시각의 스냅샷**을 종료코드로 쓰고 있습니다."\
   $'\n'"→ 2026-08-19 실측에서 iam 은 15/15 healthy · kafka restarts=0 인데 유닛이 failed 였습니다."\
   $'\n'"→ 마지막에 demo-status.sh 로 **다시 재고**, 수렴했으면 종료코드에서 빼세요(삼키는 것이 아니라 재는 것)."
-printf '%s\n' "$z13_log2" | grep -q 'wms' \
+printf '%s\n' "$z13_log2" | grepq 'wms' \
   || z13_die "(z13) 늦게 수렴한 도메인의 **이름이 어디에도 없습니다** — 초록이지만 무슨 일이 있었는지 알 수 없습니다."
 
 # (3) 대조군 — 끝내 안 뜬 도메인은 여전히 비-0 이어야 한다. 재측정은 삼킴이 아니다.
@@ -2254,7 +2294,7 @@ z13_log3="$(cat "$z13_tmp/run.log")"
   || z13_die "(z13) 끝내 안 뜬 도메인이 있는데 **성공(rc=0)** 으로 끝났습니다."\
   $'\n'"→ 재측정을 \`|| true\` 처럼 쓴 것입니다. 그러면 유닛이 항상 초록이 되고, 이 저장소가"\
   $'\n'"   반복해서 당한 *\"아무것도 안 보면서 초록\"* 이 됩니다(재측정 ≠ 삼킴)."
-printf '%s\n' "$z13_log3" | grep -q '^\[demo\] ◑ 늦게 수렴:' \
+printf '%s\n' "$z13_log3" | grepq '^\[demo\] ◑ 늦게 수렴:' \
   && z13_die "(z13) 끝내 안 뜬 도메인이 '늦게 수렴' 으로 보고됐습니다 — (3)이 (2)로 오분류됩니다."
 
 # (4) 재측정 자체가 실패 — rc≠0 이되 사유가 **'판정 불가'** 로 구별돼야 한다.
@@ -2262,12 +2302,12 @@ z13_rc4="$(z13_run wms up 1)"
 z13_log4="$(cat "$z13_tmp/run.log")"
 [ "$z13_rc4" != "0" ] \
   || z13_die "(z13) 재측정이 실패했는데 성공으로 끝났습니다 — 못 잰 것을 통과로 읽었습니다."
-printf '%s\n' "$z13_log4" | grep -q '^\[demo\] ✖ 판정 불가 도메인:' \
+printf '%s\n' "$z13_log4" | grepq '^\[demo\] ✖ 판정 불가 도메인:' \
   || z13_die "(z13) 재측정 실패가 **'판정 불가' 로 구별되지 않습니다.**"\
   $'\n'"→ demo-status.sh 는 설계상 도커가 없어도 에러가 아니라 전 도메인 \`down\` 을 돌려줍니다."\
   $'\n'"→ 그래서 그 출력만 보면 '못 쟀다' 와 '안 떴다' 가 **구별 불가**이고, 계측 실패가"\
   $'\n'"   도메인 판정으로 번역됩니다. 재측정 앞에 도커 생존 프로브를 두세요."
-printf '%s\n' "$z13_log4" | grep -q '^\[demo\] ◑ 늦게 수렴:' \
+printf '%s\n' "$z13_log4" | grepq '^\[demo\] ◑ 늦게 수렴:' \
   && z13_die "(z13) 재측정이 실패했는데 '늦게 수렴' 으로 보고됐습니다 — 못 잰 것을 수렴으로 읽었습니다."
 
 # (5) 🔴🔴 AC-2 의 핵심 — **A 의 고침이 B 의 유일한 증상을 지우지 않는가.**
@@ -2286,15 +2326,15 @@ z13_starve() {
 }
 z13_rc5="$(z13_starve iam)"
 z13_log5="$(cat "$z13_tmp/run.log")"
-printf '%s\n' "$z13_log5" | grep -q '재시도 예산이 남지 않아' \
+printf '%s\n' "$z13_log5" | grepq '재시도 예산이 남지 않아' \
   || z13_die "(z13) 예산을 굶겼는데 **예산 때문에 포기했다는 말이 없습니다.**"\
   $'\n'"→ 그러면 '안 떠서 실패' 와 '예산이 없어서 포기' 가 구별되지 않습니다."
-printf '%s\n' "$z13_log5" | grep -q '^\[demo\] ⚠ 재시도 배분:' \
+printf '%s\n' "$z13_log5" | grepq '^\[demo\] ⚠ 재시도 배분:' \
   || z13_die "(z13) 예산 고갈이 **최종 요약에 남지 않습니다** — 이것이 이 티켓의 결함 B 입니다."\
   $'\n'"→ AC-1 의 재측정이 그 도메인을 '늦게 수렴' 초록으로 만들면, 예산이 빠듯했다는 사실은"\
   $'\n'"   **어디에도 남지 않고 사라집니다**(A 의 고침이 B 의 유일한 증상을 지운다)."\
   $'\n'"→ 예산 고갈은 재측정 결과와 **무관하게** 보고하세요."
-printf '%s\n' "$z13_log5" | grep -q '^\[demo\] ◑ 늦게 수렴:' \
+printf '%s\n' "$z13_log5" | grepq '^\[demo\] ◑ 늦게 수렴:' \
   || z13_die "(z13) (5)번 칸의 전제가 성립하지 않습니다 — 굶긴 도메인이 '늦게 수렴' 으로 잡히지 않았습니다."\
   $'\n'"→ 이 칸은 **초록인 채로도** 예산 신호가 남는지를 묻습니다. 전제가 깨지면 판정이 무의미합니다."
 [ "$z13_rc5" = "0" ] \
@@ -2351,13 +2391,13 @@ z13_log7="$(cat "$z13_tmp/run.log")"
   || z13_die "(z13) (7)번 칸의 **대조군**(빨리 실패)이 rc=$z13_rc7base 로 끝났습니다 — 두 판이 같은 하류 경로를 타는지부터 다시 보세요."
 
 # ② 매달림이 '기동 실패' 와 구별되는가.
-printf '%s\n' "$z13_log7" | grep -q '매달림' \
+printf '%s\n' "$z13_log7" | grepq '매달림' \
   || z13_die "(z13) 매달림이 **'기동 실패' 와 구별되지 않습니다.**"\
   $'\n'"→ 두 사유는 진단이 다릅니다: '떠서 실패' 는 의존이 unhealthy 로 끝난 것이고,"\
   $'\n'"  '매달림' 은 그 healthcheck 가 대기를 **묶지 못했다**는 뜻입니다(615 B4 가 찾는 신호)."
 
 # ③ 뒤의 도메인이 계속 시도되는가 — 한 도메인의 매달림이 나머지를 삼키면 안 된다.
-printf '%s\n' "$z13_log7" | grep -q '^\[demo\] up: wms' \
+printf '%s\n' "$z13_log7" | grepq '^\[demo\] up: wms' \
   || z13_die "(z13) 앞 도메인이 매달리자 **뒤 도메인이 시도조차 되지 않았습니다.**"\
   $'\n'"→ 한 도메인의 매달림이 나머지를 삼키면, 고쳐 둔 '부분 실패 내성' 이 무효가 됩니다."
 
@@ -2369,9 +2409,9 @@ printf '%s\n' "$z13_log7" | grep -q '^\[demo\] up: wms' \
 [ "$z13_rc7" = "0" ] \
   || z13_die "(z13) (7)번 칸의 전제가 깨졌습니다 — 대역은 수렴을 답하는데 rc=$z13_rc7 입니다."\
   $'\n'"→ 이 칸은 **초록 위에서** 매달림 신호가 살아남는지를 묻습니다. 전제가 깨지면 판정이 무의미합니다."
-printf '%s\n' "$z13_log7" | grep -q '^\[demo\] ◑ 늦게 수렴:' \
+printf '%s\n' "$z13_log7" | grepq '^\[demo\] ◑ 늦게 수렴:' \
   || z13_die "(z13) (7)번 칸에서 매달린 도메인이 '늦게 수렴' 으로 잡히지 않았습니다 — 전제가 성립하지 않습니다."
-printf '%s\n' "$z13_log7" | grep -q '^\[demo\] ⏱ 매달림:' \
+printf '%s\n' "$z13_log7" | grepq '^\[demo\] ⏱ 매달림:' \
   || z13_die "(z13) 수렴 초록이 **매달림 신호를 지웠습니다.**"\
   $'\n'"→ 매달림은 재측정 결과와 무관하게 최종 요약에 남아야 합니다. 안 남으면 다음 기동 창에서"\
   $'\n'"  B4 를 잴 방법이 사라집니다 — 유닛은 초록이고 아무도 매달렸다는 것을 모릅니다."
@@ -2397,6 +2437,38 @@ z13_total="$(sed -n 's/^UP_TOTAL_BUDGET="\${DEMO_UP_TOTAL_BUDGET:-\([0-9][0-9]*\
   || z13_die "(z13) 전역 기동 예산이 TimeoutStartSec 이상입니다: ${z13_total}s >= ${z13_timeout}s"\
   $'\n'"→ 그러면 demo-up.sh 가 자기 마감에 닿기 전에 systemd 가 SIGTERM 을 보냅니다 —"\
   $'\n'"  묶어 둔 의미가 사라지고 요약도 상태 발행도 다시 잃습니다."
+# (8) 🔴🔴 TASK-MONO-615 B4-ii — 위 (6)의 부등식은 **참이었는데 요약이 안 나왔다.**
+# ---------------------------------------------------------------------------
+# 2026-09-03 기동 창, 손대지 않은 판의 부팅 2회:
+#   boot #1  up 루프 종료 02:27:57 → 시드 13분 → 02:43:04 systemd SIGTERM
+#   boot #2  up 루프 종료 02:56:29 → 시드 14분 → 03:10:32 systemd SIGTERM
+#   두 판 모두 '늦게 수렴' 0건 · 'HTTP 표면' 0건 · '재시도 배분' 0건 · '매달림' 0건
+# 그때 `UP_TOTAL_BUDGET(1020) < TimeoutStartSec(1200)` 은 **참이었다.**
+#
+# 🔴 즉 (6)은 **잰 값이 아니라 센 항**이 틀렸다. up 루프 뒤에도 시드·드리프트·재측정·
+#    표면 검사가 있고 그것들에는 상한이 없었다. 「전역 예산이 상한 아래」는 필요조건일
+#    뿐 충분조건이 아니고, 그 차이가 정확히 «요약이 나오는가» 였다. 한 단계만 묶으면
+#    무한한 다음 단계가 그 보증을 통째로 먹는다.
+#
+# ⇒ 이 칸은 **합**을 센다. 항이 하나라도 빠지면 같은 자리로 돌아온다.
+z13_down="$(sed -n 's/.*DEMO_DOWN_BUDGET:-\([0-9][0-9]*\)}.*/\1/p' "$ROOT/infra/demo/demo-boot.sh" | head -1)"
+[ -n "$z13_down" ] || z13_die "(z13) demo-boot.sh 에서 DEMO_DOWN_BUDGET 기본값을 못 읽었습니다 — 합을 셀 수 없습니다."\
+  $'\n'"→ 후보 ⓐ 의 잔존 정리 단계는 실측 160~184s 를 먹습니다. 항에서 빠지면 합이 거짓이 됩니다."
+z13_post="$(sed -n 's/^POST_UP_BUDGET="\${DEMO_POST_UP_BUDGET:-\([0-9][0-9]*\)}".*/\1/p' "$ROOT/infra/demo/demo-up.sh" | head -1)"
+[ -n "$z13_post" ] || z13_die "(z13) demo-up.sh 에서 POST_UP_BUDGET 기본값을 못 읽었습니다 — 시드 단계가 다시 무한해집니다."
+z13_reserve="$(sed -n 's/^SUMMARY_RESERVE="\${DEMO_SUMMARY_RESERVE:-\([0-9][0-9]*\)}".*/\1/p' "$ROOT/infra/demo/demo-up.sh" | head -1)"
+[ -n "$z13_reserve" ] || z13_die "(z13) demo-up.sh 에서 SUMMARY_RESERVE 기본값을 못 읽었습니다 — 요약 몫이 선언돼 있지 않습니다."
+z13_sum=$(( z13_down + z13_total + z13_post + z13_reserve ))
+[ "$z13_sum" -le "$z13_timeout" ] \
+  || z13_die "(z13) 단계 예산의 **합**이 TimeoutStartSec 을 넘습니다: 정리 ${z13_down} + up ${z13_total} + 시드 ${z13_post} + 요약예비 ${z13_reserve} = ${z13_sum}s > ${z13_timeout}s"\
+  $'\n'"→ 그러면 systemd 가 먼저 SIGTERM 을 보내고 **최종 요약이 한 줄도 안 나옵니다.**"\
+  $'\n'"  2026-09-03 부팅 2회가 정확히 그 상태였고, 그때도 '전역 예산 < 상한' 은 참이었습니다."\
+  $'\n'"→ 항을 지우지 말고 값을 조정하거나 TimeoutStartSec 을 재산정하세요."
+# 🔵 요약 몫이 0 이어도 위 부등식은 통과한다 — 그러면 합은 맞는데 요약은 또 못 나온다.
+#    그래서 예비 자체에 하한을 둔다(실측: 시드 끝~요약 끝 105~108s).
+[ "$z13_reserve" -ge 60 ] \
+  || z13_die "(z13) 요약 예비가 ${z13_reserve}s 입니다 — 재측정·표면검사·상태발행·요약이 그 안에 안 끝납니다(실측 105~108s)."
+
 z13_worst=$(( ${#FULL[@]} * z13_sleep + z13_base ))
 [ "$z13_worst" -le "$z13_timeout" ] \
   || z13_die "(z13) 재시도 최대 총합이 TimeoutStartSec 을 넘습니다: ${#FULL[@]}도메인 × ${z13_sleep}s + 기동 ${z13_base}s = ${z13_worst}s > ${z13_timeout}s"\
@@ -2405,7 +2477,7 @@ z13_worst=$(( ${#FULL[@]} * z13_sleep + z13_base ))
   $'\n'"→ UP_RETRY_SLEEP 을 줄이거나 TimeoutStartSec 을 올리세요. 하한을 상수로 되돌리지는 마세요."
 
 rm -rf "$z13_tmp"
-ok "부팅 판정이 재측정이다 — 정상 rc=0 · 늦게수렴 rc=0(이름 찍힘) · 미기동 rc=$z13_rc3 · 재측정실패 rc=$z13_rc4(판정 불가) · 재시도 상한 ${z13_worst}s ≤ ${z13_timeout}s"
+ok "부팅 판정이 재측정이다 — 정상 rc=0 · 늦게수렴 rc=0(이름 찍힘) · 미기동 rc=$z13_rc3 · 재측정실패 rc=$z13_rc4(판정 불가) · 재시도 상한 ${z13_worst}s ≤ ${z13_timeout}s · 단계 예산 합 정리${z13_down}+up${z13_total}+시드${z13_post}+예비${z13_reserve}=${z13_sum}s ≤ ${z13_timeout}s"
 
 # ---------------------------------------------------------------------------
 echo "[verify] (z14) 방문자 화면 링크가 전부 있고, 안 뜬 화면은 열리지 않는가"
@@ -2552,7 +2624,7 @@ z14_code="$(awk '
   { print FNR "\t" $0 }
 ' "$z14_site")"
 # 대조군 — 걷어내기가 본문까지 먹으면 이 술어는 **빈 입력**을 보게 되고 늘 통과한다.
-printf '%s\n' "$z14_code" | grep -q 'GUARD-T-ANCHOR' \
+printf '%s\n' "$z14_code" | grepq 'GUARD-T-ANCHOR' \
   || fail "(z14) 주석 제거가 본문까지 지웠습니다 — GUARD-T-ANCHOR 줄이 남아 있지 않습니다."\
     $'\n'"→ 빈 입력에 대고 grep 하면 언제나 통과합니다. 그 통과는 아무것도 증명하지 않습니다."
 # 🔵 TASK-MONO-583 — 이 금지는 **파일 본문 전체**에 그대로 둔다. Vercel 행의 주소는
@@ -2578,9 +2650,9 @@ z14_anchor="$(sed -n 's/^[[:space:]]*\(const demoHost =.*\); \/\/ GUARD-T-ANCHOR
 # 한 번도 실행해 본 적이 없었기 때문이다(*내용물에 건 가드는 컨테이너에 건 가드가 아니다*).
 # ⇒ 구간을 넓혔고, **넓어진 채로 있는지 여기서 단언한다.** 앵커가 다시 좁아지면 이 축은
 #   조용히 사라진다 — 그때 이 줄이 빨개진다.
-printf '%s\n' "$z14_code" | grep -q 'function render(' \
+printf '%s\n' "$z14_code" | grepq 'function render(' \
   || fail "(z14) GUARD-Z14 구간 밖으로 render() 가 나갔거나 이름이 바뀌었습니다 — 컨테이너 축을 실행할 수 없습니다."
-sed -n "$(( z14_b + 1 )),$(( z14_e - 1 ))p" "$z14_site" | grep -q 'function render(' \
+sed -n "$(( z14_b + 1 )),$(( z14_e - 1 ))p" "$z14_site" | grepq 'function render(' \
   || fail "(z14) **가드 구간이 render() 를 포함하지 않습니다.**"\
     $'\n'"→ 그러면 \`#surfaces\` 의 가시성을 정하는 줄이 **한 번도 실행되지 않습니다.**"\
     $'\n'"→ TASK-MONO-583 이 정확히 그렇게 통과했습니다: 행 정책 bite 8/8 이 전부 참인데"\
@@ -2858,7 +2930,7 @@ z15_n="$(printf '%s\n' "$z15_probe1" | grep -c 'http://' || true)"
 [ "$z15_n" -ge "$z14_n_demo" ] || z15_die "(z15) 표면을 **찌른 적이 없습니다** (요청 $z15_n 건 / 기대 $z14_n_demo 건)."\
   $'\n'"→ 판정이 HTTP 를 보지 않는다는 뜻이고, 이 가드의 나머지 칸은 전부 공허해집니다."\
   $'\n'"→ 컨테이너 99/102 가 healthy 인 채로 표면이 전멸한 것이 이 티켓의 발견입니다."
-printf '%s\n' "$z15_log1" | grep -q "HTTP 표면 ${z14_n_demo}/${z14_n_demo}" \
+printf '%s\n' "$z15_log1" | grepq "HTTP 표면 ${z14_n_demo}/${z14_n_demo}" \
   || z15_die "(z15) 표면을 몇 개 봤는지 로그가 말하지 않습니다(기대 ${z14_n_demo}/${z14_n_demo}) — 셀 수 없는 검사는 줄어도 모릅니다."\
     $'\n'"→ 로그: $(printf '%s\n' "$z15_log1" | grep 'HTTP 표면' || echo '(HTTP 표면 줄 없음)')"
 
@@ -2872,7 +2944,7 @@ z15_log2="$(cat "$z15_tmp/run.log")"
 [ "$z15_rc2" != "0" ] || z15_die "(z15) 표면이 안 뜨는데 **성공으로 끝났습니다.**"\
   $'\n'"→ 이것이 이 티켓 그 자체다: 컨테이너는 전부 healthy 인데 방문자가 여는 주소가 404 다."\
   $'\n'"→ 판정이 컨테이너만 보면 면접관이 보는 화면과 부팅 결과가 갈라집니다."
-printf '%s\n' "$z15_log2" | grep -q 'HTTP 표면 미도달.*web.fan-platform' \
+printf '%s\n' "$z15_log2" | grepq 'HTTP 표면 미도달.*web.fan-platform' \
   || z15_die "(z15) 안 뜬 표면의 **이름이 없습니다** — 빨간데 어디가 문제인지 알 수 없습니다."
 
 # (3) 대조군 — 도메인 자체가 안 뜬 표면은 **찌르지 않는다.**
@@ -2880,16 +2952,16 @@ printf '%s\n' "$z15_log2" | grep -q 'HTTP 표면 미도달.*web.fan-platform' \
 z15_rc3="$(z15_run fan down '')"
 z15_log3="$(cat "$z15_tmp/run.log")"
 z15_probe3="$(cat "$z15_tmp/probe.log")"
-printf '%s\n' "$z15_probe3" | grep -q 'web.fan-platform' \
+printf '%s\n' "$z15_probe3" | grepq 'web.fan-platform' \
   && z15_die "(z15) 도메인이 안 떴는데 그 표면을 찔렀습니다 — 한 결함이 두 줄로 보고됩니다."
-printf '%s\n' "$z15_log3" | grep -q 'HTTP 표면 미검사.*web.fan-platform' \
+printf '%s\n' "$z15_log3" | grepq 'HTTP 표면 미검사.*web.fan-platform' \
   || z15_die "(z15) 안 찌른 표면을 **침묵으로** 넘겼습니다 — 검사하지 않았다는 사실이 남아야 합니다."
 
 # (3b) 🔴🔴 TASK-MONO-583 — **Vercel 행은 아예 찌르지 않는다.** 데모 호스트에 그 표면이
 #    존재하지 않으므로, 찌르면 부팅 판정이 영원히 열리지 않는 주소를 12번 재시도하며
 #    기다리고 그 실패는 **"데모가 안 떴다"** 로 읽힌다. (1)의 정상 판에서 확인한다 —
 #    (3)처럼 도메인이 죽어서 안 찌른 것과 구별해야 하므로 **전부 up 인 판**에서 본다.
-printf '%s\n' "$z15_probe1" | grep -q 'web.ecommerce' \
+printf '%s\n' "$z15_probe1" | grepq 'web.ecommerce' \
   && z15_die "(z15) Vercel 에서 서빙되는 표면을 데모 호스트에서 찔렀습니다."\
     $'\n'"→ 그 주소는 데모 호스트에 존재하지 않습니다(ADR-MONO-067). 12번 재시도한 뒤"\
     $'\n'"   실패로 세어지고, 그 실패는 '데모가 안 떴다' 로 읽힙니다."
@@ -2902,7 +2974,7 @@ z15_log4="$(cat "$z15_tmp/run.log")"
 [ "$z15_rc4" != "0" ] || z15_die "(z15) 표면 목록이 **비었는데 초록**입니다 — 아무것도 안 보면서 통과합니다."
 # 🔴 127 은 "가드가 물었다" 가 아니라 "하네스가 죽었다" 다. 둘을 섞으면 칸이 공허해진다.
 [ "$z15_rc4" != "127" ] || z15_die "(z15) 하네스가 죽었습니다(rc=127) — 이 칸은 아무것도 시험하지 않았습니다."
-printf '%s\n' "$z15_log4" | grep -q 'HTTP 표면 판정 불가' \
+printf '%s\n' "$z15_log4" | grepq 'HTTP 표면 판정 불가' \
   || z15_die "(z15) 목록을 못 읽은 것이 '판정 불가' 로 구별되지 않습니다 — '표면 정상' 과 섞입니다."
 
 # (5) 🔴 목록이 **론처 마크업에서 온다**는 것 — 복사본이 아니라 그 파일을 읽는가.
@@ -2914,7 +2986,7 @@ sed 's#<div id="smsg"></div>#<a class="open" data-surface data-domain="wms" data
   "$ROOT/infra/demo/aws/site/index.html" > "$z15_tmp/extra.html"
 z15_rc5="$(z15_run '' up '' "$z15_tmp/extra.html")"
 z15_probe5="$(cat "$z15_tmp/probe.log")"
-printf '%s\n' "$z15_probe5" | grep -q 'z15probe' \
+printf '%s\n' "$z15_probe5" | grepq 'z15probe' \
   || z15_die "(z15) 마크업에 표면을 추가했는데 판정이 **찌르지 않았습니다.**"\
   $'\n'"→ 목록을 그 파일에서 읽지 않고 어딘가에 **복사해 둔** 것입니다. 한쪽만 고쳐집니다."
 
@@ -3006,7 +3078,7 @@ awk -v gate="$LIVE_GATE_LINE" '{print} $0 == gate && !d {print "  echo \"[verify
 # 🔴 «파일 어딘가에 zz9 가 있다» 로는 부족하다 — **게이트 블록 «안»에** 들어갔는지를 묻는다.
 z16_ig="$(live_gate_line "$z16_copy" || true)"
 z16_ifi="$(awk -v s="${z16_ig:-0}" 'NR>s && /^fi$/ {print NR; exit}' "$z16_copy")"
-if [ -z "$z16_ig" ] || [ -z "$z16_ifi" ] || ! sed -n "${z16_ig},${z16_ifi}p" "$z16_copy" | grep -q 'zz9'; then
+if [ -z "$z16_ig" ] || [ -z "$z16_ifi" ] || ! sed -n "${z16_ig},${z16_ifi}p" "$z16_copy" | grepq 'zz9'; then
   rm -f "$z16_region" "$z16_copy"
   fail "(z16) bite 하네스가 가짜 칸을 **게이트 블록 안에 주입하지 못했습니다** — 이 칸은 아무것도 시험하지 않았습니다."\
     $'\n'"→ 주입 앵커와 판정 앵커가 어긋났습니다. 둘 다 열 0 고정이어야 합니다(TASK-MONO-608)."
@@ -3194,18 +3266,18 @@ for z19_pair in "억제전:$z19_nb" "억제후:$z19_na" "로컬:$z19_nl"; do
     $'\n'"  이 바닥이 있습니다. 먼저 \`docker compose ... config\` 를 손으로 돌려 사유를 보세요."
 done
 
-printf '%s\n' "$z19_before" | grep -qx 'web-store' || fail \
+printf '%s\n' "$z19_before" | grepq -x 'web-store' || fail \
   "(z19) 억제 파일을 **뺀** 렌더에도 web-store 가 없습니다."\
   $'\n'"→ 그러면 이 가드는 아무것도 증명하지 못합니다 — 억제한 것이 이 파일인지 다른 것인지"\
   $'\n'"  구별할 수 없기 때문입니다. base compose 에서 서비스가 사라졌는지 먼저 확인하세요."
 
-! printf '%s\n' "$z19_after" | grep -qx 'web-store' || fail \
+! printf '%s\n' "$z19_after" | grepq -x 'web-store' || fail \
   "(z19) 데모 렌더에 web-store 가 여전히 있습니다 — 억제가 안 걸렸습니다."\
   $'\n'"→ 데모 호스트가 Vercel 로 옮겨간 스토어의 **사본을 다시 서빙**하게 됩니다."\
   $'\n'"  방문자 경로는 https://store.hubwang.com 이고, 사본은 아무도 안 보는 컨테이너입니다."\
   $'\n'"→ 고치는 곳: $z19_supp (그 파일의 \`profiles:\` 가 억제 기전입니다)."
 
-printf '%s\n' "$z19_local" | grep -qx 'web-store' || fail \
+printf '%s\n' "$z19_local" | grepq -x 'web-store' || fail \
   "(z19) **로컬(base 단독) 렌더에서도** web-store 가 사라졌습니다."\
   $'\n'"→ 이 티켓의 Scope Out 을 넘었습니다. 억제는 데모 체인에만 걸려야 하고, base 는"\
   $'\n'"  로컬 워크스루(docs/guides/interview-demo-walkthrough.md §2)와 \`npm run ecommerce:up\`"\
@@ -3292,7 +3364,7 @@ z20_missing="$(comm -23 <(printf '%s\n' "$z20_want") <(printf '%s\n' "$z20_have"
   $'\n'"  엔드포인트는 존재합니다 — 「없다」가 아니라 「가는 길이 없다」입니다."\
   $'\n'"→ infra/demo/iam-traefik.override.yml 의 iam-oidc.rule 에 PathPrefix 를 더하세요."
 
-printf '%s\n' "$z20_have" | grep -qx '/\.well-known' || fail "(z20) 라우터가 \`/.well-known\` 을 안 덮습니다."\
+printf '%s\n' "$z20_have" | grepq -x '/\.well-known' || fail "(z20) 라우터가 \`/.well-known\` 을 안 덮습니다."\
   $'\n'"→ discovery 문서 자신이 거기 삽니다. 안 덮으면 이 핀을 만들 수조차 없습니다."\
   $'\n'"  (그래서 이 접두사는 핀이 아니라 여기서 따로 단언합니다 — 문서는 자기 자신을 광고하지 않습니다.)"
 
@@ -3431,11 +3503,11 @@ for z23_f in "$ROOT"/projects/*/.env.example; do
     fi
 
     # 형제 ID 가 시드에 없으면 이 시크릿은 이 IdP 의 것이 아니다(상류 소셜 자격 등).
-    printf '%s' "$z23_ids" | grep -qx "$z23_idv" || continue
+    printf '%s' "$z23_ids" | grepq -x "$z23_idv" || continue
 
     z23_checked=$(( z23_checked + 1 ))
     z23_v="$(grep "^$z23_k=" "$z23_f" | tail -1 | cut -d= -f2- || true)"
-    printf '%s' "$z23_plain" | grep -qx "$z23_v" || z23_bad="$z23_bad
+    printf '%s' "$z23_plain" | grepq -x "$z23_v" || z23_bad="$z23_bad
   - $z23_proj/.env.example : $z23_k=$z23_v (클라이언트 $z23_idv)"
   done
 done
@@ -3453,6 +3525,175 @@ done
   $'\n'"→ 시드가 아는 평문: $(printf '%s' "$z23_plain" | tr '\n' ' ')"
 
 ok "(z23) 클라이언트 시크릿 ${z23_checked}건이 시드 평문 ${z23_nplain}건 안에 있다 — 등록 client_id ${z23_nids}건 기준으로 모집단 판별"
+
+# ---------------------------------------------------------------------------
+echo "[verify] (z25) 파이프 뒤의 grep 이 조기 종료해 앞단을 SIGPIPE 로 죽이지 않는가 (TASK-MONO-615)"
+# ---------------------------------------------------------------------------
+# 이 칸은 **자기 자신을 검사한다.** 근거와 실측은 파일 상단 grepq() 주석에 있다.
+# 요약: `set -o pipefail` 아래에서 `A | grep -q PAT` 는 매치했는데 141 로 실패할 수 있고,
+# 그 실패는 «술어가 거짓» 과 구별되지 않는다 — 가드가 없는 죄를 고발한다.
+#
+# 🔴 술어를 「(k) 가 통과하는가」로 쓰지 않는다. 그건 이 결함의 **한 증상**일 뿐이고,
+#    다음번엔 다른 칸에서 난다. 술어는 **모양**을 문다.
+z25_self="$ROOT/infra/demo/verify-demo-wrapper.sh"
+
+# (1) 모양 금지 — 파이프 뒤에 `grep -q…` 가 있으면 FAIL.
+#     🔴 자기 문서에 걸리지 않게 주석을 먼저 걷어낸다. (z12)가 정확히 그 함정을 밟았고,
+#        이 파일의 상단 주석은 설명을 위해 그 모양을 **일부러** 적고 있다.
+z25_hits="$(sed 's/#.*//' "$z25_self" | grep -nE '\|[[:space:]]*grep[[:space:]]+-[A-Za-z]*q' || true)"
+[ -z "$z25_hits" ] || fail "(z25) 파이프 뒤에 'grep -q' 가 있습니다:"$'\n'"$z25_hits"\
+  $'\n'"→ pipefail 아래에서 앞단이 SIGPIPE(141)로 죽어 **매치했는데 FAIL** 이 됩니다."\
+  $'\n'"  실측: printf 25KB 앞쪽 매치 → 300회 중 295회 오검출."\
+  $'\n'"→ grepq 를 쓰세요(파일 상단). 종료코드 의미는 같고 출력만 버립니다."
+
+# (2) 🔴 헬퍼가 실재하고 **실제로 그 성질을 갖는가**. (1)만 있으면 grepq 의 본문이
+#     `grep -q "$@" >/dev/null` 로 바뀌어도 모양 검사는 통과한다 — 이름만 남는다.
+declare -F grepq >/dev/null \
+  || fail "(z25) grepq 헬퍼가 정의돼 있지 않습니다 — (1)의 처방이 가리키는 것이 없습니다."
+z25_body="$(declare -f grepq)"
+printf '%s\n' "$z25_body" | grep -E '(^|[^-])-[A-Za-z]*q' >/dev/null \
+  && fail "(z25) grepq 본문이 여전히 -q 를 씁니다: $z25_body"\
+  $'\n'"→ 이름만 바뀌고 결함은 그대로입니다."
+
+# (3) 🔴🔴 행동 bite — 술어가 아니라 **성질**을 잰다. 대역을 만들어 두 모양을 같은
+#     자리에서 돌린다: 앞단이 크고 매치가 앞쪽이면 `grep -q` 는 실제로 죽어야 하고
+#     `grepq` 는 죽지 않아야 한다. 🔵 양성 대조군이 없으면 이 칸은 "환경이 관대해서"
+#     초록일 수 있고, 그러면 (1)은 근거 없는 금지가 된다.
+z25_big="$(head -c 200000 /dev/zero | tr '\0' 'x' | fold -w 100)"   # 200KB, 2000줄
+z25_big="MATCHME"$'\n'"$z25_big"
+# 🔴🔴 양성 대조군은 **금지된 모양 그 자체**여야 한다 — 그래서 (1)이 자기 대조군을
+#    물었다(실측: 첫 실행에서 이 줄을 고발했다). 문자열로 박으면 대조군을 죽여야 하고,
+#    대조군을 죽이면 (1)의 금지는 근거를 잃는다. 그래서 **플래그를 변수로 만든다**:
+#    실행되는 것은 진짜 `grep -q` 이고, 파일에는 그 리터럴이 없다.
+# 🔴 이것이 (1)에 구멍을 하나 낸다는 것을 적어 둔다 — 누군가 `grep "$f"` 처럼 쓰면
+#    (1)은 못 문다. 그 회피는 우연히 일어나지 않고, 여기서만 의도적으로 쓴다.
+z25_qflag="-q"
+z25_qfail=0; z25_gfail=0
+for z25_i in 1 2 3 4 5 6 7 8 9 10; do
+  ( set -euo pipefail; printf '%s\n' "$z25_big" | grep "$z25_qflag" 'MATCHME' ) || z25_qfail=$(( z25_qfail + 1 ))
+  ( set -euo pipefail; printf '%s\n' "$z25_big" | grepq 'MATCHME' )             || z25_gfail=$(( z25_gfail + 1 ))
+done
+[ "$z25_qfail" -gt 0 ] \
+  || fail "(z25) 양성 대조군이 성립하지 않습니다 — 200KB 입력·앞쪽 매치인데 'grep -q' 가 10/10 통과했습니다."\
+  $'\n'"→ 이 환경에서는 결함이 재현되지 않는다는 뜻이고, 그러면 (1)의 금지는 여기서 증명되지 않습니다."\
+  $'\n'"  (금지를 지우지는 마세요 — 데모 호스트에서는 실제로 재현됐습니다. 이 칸의 대역을 키우세요.)"
+[ "$z25_gfail" -eq 0 ] \
+  || fail "(z25) grepq 가 같은 입력에서 ${z25_gfail}/10 실패했습니다 — 처방이 결함을 안 고칩니다."
+ok "(z25) 파이프 뒤 'grep -q' 0건 · 대역 200KB 에서 grep -q ${z25_qfail}/10 실패 ↔ grepq 0/10"
+
+# ---------------------------------------------------------------------------
+echo "[verify] (z24) 부팅 리셋이 **부팅에서만** 도는가 (TASK-MONO-615 B4 후보 ⓐ)"
+# ---------------------------------------------------------------------------
+# 무엇을 지키나. `demo-boot.sh` 는 up 앞에 `demo-down.sh` 를 돌려 dockerd 가 되살린
+# 잔존 컨테이너를 치운다(2026-09-03 실측: 그것 하나로 부팅 2/2 실패 → 2/2 성공).
+# 🔴 그런데 이 스크립트에는 **부팅 말고 다른 호출자**가 있다. 컨트롤 플레인이 방문자의
+#    "이 도메인 켜기" 를 `demo-boot.sh <name>` 으로 보내고(handler.py domain_start), 그
+#    화이트리스트에는 `full`·`demo-core` 도 들어 있다. 거기서 전체 down 이 돌면 방문자가
+#    보고 있는 데모를 통째로 내렸다 올린다 — **고침이 아니라 사고**다.
+#
+# 그래서 계약이 두 파일에 걸친다(유닛이 플래그를 준다 · 스크립트가 그때만 내린다).
+# 🔴 두 곳에 나뉜 계약은 한쪽만 바뀐다 — 이 저장소가 MONO-366 에서 이미 당한 모양이라
+#    (유닛이 demo-up.sh 를 직접 불러 DEMO_DOMAIN 계약을 몰랐다) **쌍으로** 묶는다.
+#
+# 🔵 그리고 문자열 3칸으로 끝내지 않는다. grep 술어는 자기 문서에 걸리고(이 저장소가
+#    (z12)에서 밟았다), "읽는다" 와 "그때만 내린다" 는 다른 명제다. (4)(5)(6)이 실제로
+#    돌려 본다.
+z24_unit="$ROOT/infra/demo/demo-stack.service"
+z24_boot="$ROOT/infra/demo/demo-boot.sh"
+z24_handler="$ROOT/infra/demo/aws/terraform/lambda/handler.py"
+
+# (1) 유닛이 플래그를 준다.
+grep -qE '^Environment=DEMO_BOOT_RESET=1[[:space:]]*$' "$z24_unit" \
+  || fail "(z24) demo-stack.service 에 'Environment=DEMO_BOOT_RESET=1' 이 없습니다."\
+  $'\n'"→ 그러면 부팅에서도 잔존 정리가 돌지 않고, B4 경합이 그대로 돌아옵니다"\
+  $'\n'"  (iam 의존 healthcheck 가 부하로 죽어 auth/gateway 가 'Created' 로 남습니다)."
+
+# (2) ExecStart 가 여전히 demo-boot.sh 다 — 플래그를 줘도 유닛이 다른 것을 부르면 무의미하다.
+grep -qE '^ExecStart=.*demo-boot\.sh' "$z24_unit" \
+  || fail "(z24) demo-stack.service 의 ExecStart 가 demo-boot.sh 가 아닙니다 — (1)의 플래그가 아무 데도 도달하지 않습니다."
+
+# (3) 🔴 컨트롤 플레인의 per-domain 경로는 이 플래그를 **주면 안 된다**.
+#     이 칸이 없으면 «편의상» handler 에 플래그를 넣는 변경이 조용히 통과하고, 그 순간
+#     방문자의 「도메인 켜기」가 전체 재기동이 된다.
+if [ -f "$z24_handler" ]; then
+  grep -q 'DEMO_BOOT_RESET' "$z24_handler" \
+    && fail "(z24) 컨트롤 플레인(handler.py)이 DEMO_BOOT_RESET 을 언급합니다."\
+    $'\n'"→ per-domain 기동(`demo-boot.sh <name>`)에서 이 플래그가 켜지면 방문자가 보고 있는"\
+    $'\n'"  데모를 통째로 내렸다 올립니다. 이 플래그의 유일한 출처는 systemd 유닛입니다."
+fi
+
+# --- 행동 bite ---------------------------------------------------------------
+# 🔴 주입부터 단언한다. 스텁이 안 깔렸는데 "안 돌았다" 를 읽으면 이 칸은 언제나 초록이다.
+z24_tmp="$(mktemp -d)"
+z24_die() { rm -rf "$z24_tmp"; fail "$@"; }
+mkdir -p "$z24_tmp/infra/demo"
+cp "$z24_boot" "$z24_tmp/infra/demo/demo-boot.sh"
+cat > "$z24_tmp/infra/demo/provision-demo-env.sh" <<'Z24STUB'
+#!/usr/bin/env bash
+exit 0
+Z24STUB
+cat > "$z24_tmp/infra/demo/demo-down.sh" <<'Z24STUB'
+#!/usr/bin/env bash
+echo "DOWN-RAN" >> "$Z24_MARK"
+[ "${Z24_HANG:-0}" = "1" ] && sleep 30
+exit 0
+Z24STUB
+cat > "$z24_tmp/infra/demo/demo-up.sh" <<'Z24STUB'
+#!/usr/bin/env bash
+echo "UP-RAN:$*" >> "$Z24_MARK"
+exit 0
+Z24STUB
+chmod +x "$z24_tmp/infra/demo/"*.sh
+for z24_f in provision-demo-env.sh demo-down.sh demo-up.sh; do
+  [ -x "$z24_tmp/infra/demo/$z24_f" ] \
+    || z24_die "(z24) 주입 확인 실패 — 스텁 $z24_f 가 실행 가능하지 않습니다. 아래 판정은 전부 무효입니다."
+done
+
+z24_run() {  # $1=플래그(0|1) $2..=인자 → 마커 파일 내용을 echo
+  : > "$z24_tmp/mark"
+  ( export Z24_MARK="$z24_tmp/mark" Z24_HANG="${Z24_HANG:-0}" DEMO_DOMAIN=z24.invalid
+    if [ "$1" = "1" ]; then export DEMO_BOOT_RESET=1; else unset DEMO_BOOT_RESET; fi
+    shift
+    bash "$z24_tmp/infra/demo/demo-boot.sh" "$@" ) > "$z24_tmp/out" 2>&1 || true
+  cat "$z24_tmp/mark"
+}
+
+# (4) 플래그가 있으면 down 이 up **앞에** 돈다.
+z24_on="$(z24_run 1 full)"
+printf '%s\n' "$z24_on" | grepq '^DOWN-RAN$' \
+  || z24_die "(z24) DEMO_BOOT_RESET=1 인데 잔존 정리가 **돌지 않았습니다.**"\
+  $'\n'"→ 그러면 부팅 경합(B4)이 그대로입니다. demo-boot.sh 의 게이트를 보세요."
+printf '%s\n' "$z24_on" | grepq '^UP-RAN:full$' \
+  || z24_die "(z24) 잔존 정리 뒤 demo-up.sh 가 원래 인자로 불리지 않았습니다: [$z24_on]"
+[ "$(printf '%s\n' "$z24_on" | head -1)" = "DOWN-RAN" ] \
+  || z24_die "(z24) 잔존 정리가 up **뒤에** 돌았습니다 — 순서가 뒤집히면 방금 올린 스택을 내립니다: [$z24_on]"
+
+# (5) 🔴🔴 핵심 — 플래그가 없으면 **절대** 안 돈다(컨트롤 플레인의 per-domain 경로).
+z24_off="$(z24_run 0 fan)"
+printf '%s\n' "$z24_off" | grepq '^DOWN-RAN$' \
+  && z24_die "(z24) DEMO_BOOT_RESET 이 없는데 잔존 정리가 돌았습니다."\
+  $'\n'"→ 방문자가 「fan 켜기」를 누르면 **떠 있는 데모 전체가 내려갑니다.** 지금보다 나쁩니다."
+printf '%s\n' "$z24_off" | grepq '^UP-RAN:fan$' \
+  || z24_die "(z24) 플래그 없는 호출에서 demo-up.sh 가 안 불렸습니다 — 대조군이 성립하지 않습니다: [$z24_off]"
+
+# (6) 🔴 down 도 매달릴 수 있다. 묶는지 본다 — up 을 묶어 놓고 down 을 안 묶으면
+#     같은 결함이 한 칸 앞으로 옮겨간 것뿐이다.
+if command -v timeout >/dev/null 2>&1; then
+  z24_t0="$(date +%s)"
+  Z24_HANG=1 DEMO_DOWN_BUDGET=2 z24_run 1 full >/dev/null
+  z24_elapsed=$(( $(date +%s) - z24_t0 ))
+  [ "$z24_elapsed" -lt 20 ] \
+    || z24_die "(z24) 매달린 잔존 정리를 **끊지 못했습니다** — 대역 sleep 30s 인데 ${z24_elapsed}s 걸렸습니다."\
+    $'\n'"→ 그러면 ⓐ 가 경합을 고치면서 새 매달림 자리를 하나 만든 것이 됩니다."
+  grep -q '끊었습니다' "$z24_tmp/out" \
+    || z24_die "(z24) 잔존 정리를 끊었는데 **그렇게 말하지 않습니다** — 로그에 '끊었습니다' 가 없습니다."
+  z24_hangnote=" · 매달린 정리 ${z24_elapsed}s 만에 끊고 말한다"
+else
+  z24_hangnote=" · (timeout 없음 — 매달림 칸 skip)"
+fi
+
+rm -rf "$z24_tmp"
+ok "(z24) 잔존 정리는 부팅에서만 돈다 — 플래그 有: down→up 순서 · 플래그 無(per-domain): down 0회${z24_hangnote}"
 
 if [ "$LIVE" -eq 0 ]; then
 
