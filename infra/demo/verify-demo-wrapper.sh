@@ -3561,10 +3561,17 @@ printf '%s\n' "$z25_body" | grep -E '(^|[^-])-[A-Za-z]*q' >/dev/null \
 #     초록일 수 있고, 그러면 (1)은 근거 없는 금지가 된다.
 z25_big="$(head -c 200000 /dev/zero | tr '\0' 'x' | fold -w 100)"   # 200KB, 2000줄
 z25_big="MATCHME"$'\n'"$z25_big"
+# 🔴🔴 양성 대조군은 **금지된 모양 그 자체**여야 한다 — 그래서 (1)이 자기 대조군을
+#    물었다(실측: 첫 실행에서 이 줄을 고발했다). 문자열로 박으면 대조군을 죽여야 하고,
+#    대조군을 죽이면 (1)의 금지는 근거를 잃는다. 그래서 **플래그를 변수로 만든다**:
+#    실행되는 것은 진짜 `grep -q` 이고, 파일에는 그 리터럴이 없다.
+# 🔴 이것이 (1)에 구멍을 하나 낸다는 것을 적어 둔다 — 누군가 `grep "$f"` 처럼 쓰면
+#    (1)은 못 문다. 그 회피는 우연히 일어나지 않고, 여기서만 의도적으로 쓴다.
+z25_qflag="-q"
 z25_qfail=0; z25_gfail=0
 for z25_i in 1 2 3 4 5 6 7 8 9 10; do
-  ( set -euo pipefail; printf '%s\n' "$z25_big" | grep -q 'MATCHME' ) || z25_qfail=$(( z25_qfail + 1 ))
-  ( set -euo pipefail; printf '%s\n' "$z25_big" | grepq 'MATCHME' )   || z25_gfail=$(( z25_gfail + 1 ))
+  ( set -euo pipefail; printf '%s\n' "$z25_big" | grep "$z25_qflag" 'MATCHME' ) || z25_qfail=$(( z25_qfail + 1 ))
+  ( set -euo pipefail; printf '%s\n' "$z25_big" | grepq 'MATCHME' )             || z25_gfail=$(( z25_gfail + 1 ))
 done
 [ "$z25_qfail" -gt 0 ] \
   || fail "(z25) 양성 대조군이 성립하지 않습니다 — 200KB 입력·앞쪽 매치인데 'grep -q' 가 10/10 통과했습니다."\
