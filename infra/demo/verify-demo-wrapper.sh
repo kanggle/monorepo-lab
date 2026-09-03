@@ -1241,10 +1241,33 @@ x2_flag="$(printf '%s' "$x2_render" | awk '
 # 문자열이 되는데, 팬에서는 그 조합이 **바로 이 티켓이 고친 결함** 이라 특히 위험하다.
 printf '%s' "$x2_render" | grepq -E '^      SPRING_PROFILES_ACTIVE:' \
   || fail "(x2) fan 렌더에서 membership-service 의 SPRING_PROFILES_ACTIVE 를 찾지 못했습니다 — 탐지식이 깨졌습니다."
-printf '%s' "$x2_render" | grepq -E '^      DEMO_PAYMENT_MOCK:' \
-  || fail "(x2) fan 렌더에서 fan-platform-web 의 DEMO_PAYMENT_MOCK 를 찾지 못했습니다"\
-    $'\n'"→ fan-platform-web.environment 에 \`DEMO_PAYMENT_MOCK: \${DEMO_PAYMENT_MOCK:-}\` 가 있어야 합니다."\
-    $'\n'"   compose 는 자기가 이름을 적은 변수만 컨테이너에 넣습니다 — demo.env 값만으로는 도달하지 않습니다."
+
+# ---------------------------------------------------------------------------
+# 🔴🔴 TASK-MONO-618 — 팬 프런트가 렌더에서 사라질 수 있다 (ADR-MONO-067 단계 4)
+# ---------------------------------------------------------------------------
+# 억제하면 이 등식의 **한쪽이 없어진다.** 형제 (x) 가 단계 2 에서 밟은 자리와 같은
+# 모양이지만 **극성이 반대**다 — 아래 미집행 문구에 demo-pg 를 적으면 팬 축에서
+# 거짓이 된다(팬의 mock 조건은 portone 이 **꺼져 있는 것**이다).
+#
+# 🔴 부재를 그냥 통과시키지 않는다: 그 부재가 **선언된 억제 때문인지** 먼저 확인한다.
+#    아니면 «누가 지웠는지 모르는» 상태이고, 그것은 통과가 아니라 FAIL 이다.
+x2_web_present=0
+printf '%s' "$x2_render" | grepq -E '^  fan-platform-web:' && x2_web_present=1
+x2_suppressed="infra/demo/fan-vercel.override.yml"
+
+if [ "$x2_web_present" = "0" ]; then
+  case " ${COMPOSE[fan]:-} " in
+    *" $x2_suppressed "*) : ;;
+    *) fail "(x2) 데모 렌더에 fan-platform-web 이 없는데, 선언된 억제($x2_suppressed)도 체인에 없습니다."\
+        $'\n'"→ 즉 «누가 지웠는지 모르는» 상태입니다. 팬 결제 mock 정합의 프런트 절반이 사라졌는데"\
+        $'\n'"  사유가 기록돼 있지 않으면, 다음 사람은 이 가드를 «원래 그런 것» 으로 읽습니다." ;;
+  esac
+else
+  printf '%s' "$x2_render" | grepq -E '^      DEMO_PAYMENT_MOCK:' \
+    || fail "(x2) fan 렌더에서 fan-platform-web 의 DEMO_PAYMENT_MOCK 를 찾지 못했습니다"\
+      $'\n'"→ fan-platform-web.environment 에 \`DEMO_PAYMENT_MOCK: \${DEMO_PAYMENT_MOCK:-}\` 가 있어야 합니다."\
+      $'\n'"   compose 는 자기가 이름을 적은 변수만 컨테이너에 넣습니다 — demo.env 값만으로는 도달하지 않습니다."
+fi
 
 case ",$x2_profiles," in
   *,portone,*) x2_real=1 ;;
@@ -1254,7 +1277,7 @@ esac
 # 목이 기본이므로 "백엔드가 목인가" = "portone 이 꺼져 있는가".
 x2_back_mock=$(( 1 - x2_real ))
 
-[ "$x2_back_mock" = "$x2_front" ] || fail "팬 결제 mock 설정이 한쪽만 켜져 있습니다:"\
+[ "$x2_web_present" = "0" ] || [ "$x2_back_mock" = "$x2_front" ] || fail "팬 결제 mock 설정이 한쪽만 켜져 있습니다:"\
   $'\n'"  membership-service SPRING_PROFILES_ACTIVE = '$x2_profiles'  (portone: $x2_real ⇒ 목: $x2_back_mock)"\
   $'\n'"  fan-platform-web   DEMO_PAYMENT_MOCK      = '$x2_flag'  (on: $x2_front)"\
   $'\n'"→ 프런트만 켜짐 = 지어낸 paymentId 를 실 PortOne 어댑터가 거부해 구독이 죽습니다."\
@@ -1262,7 +1285,32 @@ x2_back_mock=$(( 1 - x2_real ))
   $'\n'"   요청 자체를 보내지 않습니다 (TASK-FAN-FE-015 가 고친 상태가 정확히 이것입니다)."\
   $'\n'"→ 팬은 극성이 ecommerce 와 반대입니다 — 목이 기본이고 portone 이 opt-in 입니다."
 
-ok "팬 결제 mock 정합 (membership-service='${x2_profiles}' ↔ fan-platform-web DEMO_PAYMENT_MOCK='${x2_flag}')"
+if [ "$x2_web_present" = "1" ]; then
+  ok "팬 결제 mock 정합 (membership-service='${x2_profiles}' ↔ fan-platform-web DEMO_PAYMENT_MOCK='${x2_flag}')"
+else
+  # 🔴 «검사했다» 가 아니라 «반쪽만 검사했다» 라고 말한다. 미집행 축은 매 실행마다
+  #    이름이 찍혀야 한다 — 조용한 공백은 다음 사람에게 «원래 그런 것» 으로 읽힌다.
+  # 🔴 **아무것도 안 하고 문구만 지우는 것은 금지다** (TASK-MONO-618 AC-3).
+  #
+  # 🔴🔴 **극성이 형제와 반대다.** 여기에 demo-pg 를 쓰면 정반대를 단언한다 —
+  #    팬은 목이 기본이고(MockPaymentGatewayAdapter = @Profile("!portone"))
+  #    실 PG 가 되려면 portone 을 **켜야** 한다. 그래서 백엔드 절반의 판정은
+  #    «portone 이 **없는가**» 이고, 위 x2_profiles 가 그 절반이다.
+  # 🔴 **날짜 박힌 실측값을 여기에 넣지 않는다.** 소유자가 값을 넣는 순간 거짓이 되는데
+  #    이 스크립트에는 그것을 빨갛게 만들 수단이 없다. 실측값은 원장과 티켓이 든다.
+  ok "팬 결제 mock — 백엔드만 검사 (membership-service='${x2_profiles}' ⇒ 목: ${x2_back_mock}). 프런트 절반은 저장소 밖이다:"\
+     $'\n'"     DEMO_PAYMENT_MOCK 의 집은 Vercel 프로젝트 kanggle-fan 의 env 다 — compose 가 아니다."\
+     $'\n'"     ⇒ CI 도 이 스크립트도 이 축을 **판정할 수 없다**. TASK-MONO-618 이 그것을 수용했고,"\
+     $'\n'"       그래서 판정은 사람이 한다:"\
+     $'\n'"         누가·언제 : 소유자가 — 데모 기동 창마다, 그리고 kanggle-fan 의 env 를 만질 때마다"\
+     $'\n'"         명령      : vercel env ls production --project kanggle-fan | grep DEMO_PAYMENT_MOCK"\
+     $'\n'"         기대값    : DEMO_PAYMENT_MOCK=1   (팬 백엔드에 portone 이 **없는 한** — 위 '${x2_profiles}' 가 그 절반이다)"\
+     $'\n'"         원장      : projects/fan-platform/web/fan-platform-web/VERCEL.md"\
+     $'\n'"     🔴 env 목록에 있다 = 켜져 있다 가 **아니다**. env 변경은 다음 배포부터 적용된다."\
+     $'\n'"     🔴🔴 2026-09-04 실측 기준 이 값은 kanggle-fan 에 **없었다** — 억제로 Vercel 판이"\
+     $'\n'"       유일한 팬이 되었으므로, 없으면 프런트가 'PortOne 키 미설정' 으로 구독 요청 자체를"\
+     $'\n'"       보내지 않는다(TASK-FAN-FE-015 가 고친 상태가 정확히 그것이다)."
+fi
 
 # ---------------------------------------------------------------------------
 # (y) 시드의 직접-DB 는 반드시 `dbexec --why` 를 거친다 (TASK-MONO-506 AC-1)
@@ -3214,28 +3262,33 @@ z18s_expect NOCOVER 0 '' 10   # 빈 출력을 0 으로 세지 않는다
 z18s_expect NOCOVER 0 0  0    # 모집단 0 을 통과로 세지 않는다
 ok "(z18s) 판정기 6/6 — 죽은 것은 물고, «질의 실패»·«빈 출력»·«모집단 0» 중 어느 것도 초록이 아니다"
 
-echo "[verify] (z19) 데모에서 web-store 가 억제되는가 (TASK-MONO-604 / ADR-MONO-067 단계 2)"
+echo "[verify] (z19)·(z28) Vercel 로 옮겨간 화면이 데모에서 억제되는가 (ADR-MONO-067 단계 2·4)"
 # -----------------------------------------------------------------------------
-# 방문자 스토어는 Vercel(`store.hubwang.com`)로 옮겨갔는데 데모 호스트가 자기 사본을
-# 계속 서빙했다. 억제는 `infra/demo/ecommerce-vercel.override.yml` 한 곳에 선언돼 있다.
+# 방문자 화면이 Vercel 로 옮겨갔는데 데모 호스트가 자기 사본을 계속 서빙하던 결함이다.
+# 억제는 도메인마다 `infra/demo/<slug>-vercel.override.yml` **한 곳**에 선언된다.
 #
 # 🔴 이 가드가 «없음» 만 보면 안 되는 이유: 렌더가 깨지면 서비스 목록이 통째로 비고,
-#    그 0행은 «억제됨» 과 **구별되지 않는다.** 그래서 네 칸을 같이 본다 —
+#    그 0행은 «억제됨» 과 **구별되지 않는다.** 그래서 다섯 칸을 같이 본다 —
 #      (1) 억제 파일을 뺀 렌더에는 **있어야** 한다      ← 주입 확인(bite 기준선)
 #      (2) 실제 체인 렌더에는 **없어야** 한다
 #      (3) base 단독(로컬 모양)에는 **있어야** 한다     ← 대조군
-#      (4) (1)과 (2)의 차이가 **정확히 web-store 하나**여야 한다
+#      (4) (1)과 (2)의 차이가 **정확히 그 서비스 하나**여야 한다
+#      (5) 렌더 어디에도 **유령 참조**(depends_on 등)가 남으면 안 된다
 #    그리고 어떤 렌더든 서비스 수가 바닥 아래면 FATAL 로 세운다(공허 통과 금지).
-z19_chain="${COMPOSE[ecommerce]:-}"
-[ -n "$z19_chain" ] || fail "(z19) projects.sh 에 [ecommerce] 체인이 없습니다."
-z19_supp="infra/demo/ecommerce-vercel.override.yml"
-
-case " $z19_chain " in
-  *" $z19_supp "*) : ;;
-  *) fail "(z19) 억제 파일 '$z19_supp' 이 [ecommerce] 체인에 등록돼 있지 않습니다."\
-      $'\n'"→ 선언은 두 곳입니다: 그 파일(무엇을 끄는가) + projects.sh 의 체인(어디에 거는가)."\
-      $'\n'"  파일만 있고 체인에 없으면 아무 효력이 없고, 그 상태는 조용합니다." ;;
-esac
+#
+# -----------------------------------------------------------------------------
+# 🔴🔴 TASK-MONO-618 — **왜 함수인가.** 단계 4(fan)가 같은 다섯 칸을 요구했고, 그때
+#    선택지는 「(z19)를 90줄 복사해 (z28)을 만든다」 였다. 이 저장소가 반복해서 당한
+#    모양이 정확히 그것이다 — **한 사실이 두 절에 있으면 한쪽만 고쳐진다.** 칸을 하나
+#    고칠 때 사본이 안 따라오면, 안 따라온 쪽은 **초록인 채로 아무것도 안 잰다.**
+#    ⇒ 로직은 한 벌이고 **축마다 호출**한다. 단계 3(console)이 오면 **한 줄**이다.
+# 🔴 그렇다고 모집단을 «전자동 유도» 로 하지 않았다 — 축마다 **다른 것**이 필요하다
+#    (기대 서비스 이름 · base compose 경로 · 바닥 · 로컬 사용처 문구 · Vercel 주소).
+#    그것들을 유도하려 들면 술어가 규약(파일명 패턴)에 의존하게 되고, 규약이 어긋난
+#    날 가드는 **모집단 0 으로 조용히 통과**한다. 617 의 런타임 판정자는 유도해도
+#    되지만(그쪽 술어는 «존재/부재» 하나다) 여기는 축마다 대조군이 다르다.
+# 🔵 대신 **호출 수의 바닥**을 아래에 둔다 — 축이 조용히 사라지는 것을 그것이 막는다.
+# -----------------------------------------------------------------------------
 
 z19_render() {  # $@ = compose 파일들 → 서비스 이름 목록(정렬)
   local a=() f
@@ -3243,64 +3296,118 @@ z19_render() {  # $@ = compose 파일들 → 서비스 이름 목록(정렬)
   (cd "$ROOT" && docker compose --env-file "$HERE/demo.env" "${a[@]}" config --services 2>/dev/null) | sort
 }
 
-z19_floor=20   # ecommerce 스택은 30개대다. 이 아래면 «억제» 가 아니라 «렌더 실패» 다.
+# assert_vercel_suppressed <태그> <슬러그> <억제파일> <서비스> <base compose> <바닥> <로컬 사용처> <Vercel 주소>
+z19_axes=0
+assert_vercel_suppressed() {
+  local tag="$1" slug="$2" supp="$3" svc="$4" base="$5" floor="$6" localuse="$7" vercel="$8"
+  local chain before_files f before after localr nb na nl diff only dangling pair name cnt
 
-z19_before_files=""
-for z19_f in $z19_chain; do
-  [ "$z19_f" = "$z19_supp" ] && continue
-  z19_before_files="$z19_before_files $z19_f"
-done
+  z19_axes=$((z19_axes + 1))
 
-z19_before="$(z19_render $z19_before_files)"
-z19_after="$(z19_render $z19_chain)"
-z19_local="$(z19_render projects/ecommerce-microservices-platform/docker-compose.yml)"
+  chain="${COMPOSE[$slug]:-}"
+  [ -n "$chain" ] || fail "($tag) projects.sh 에 [$slug] 체인이 없습니다."
 
-z19_nb="$(printf '%s\n' "$z19_before" | grep -c . || true)"
-z19_na="$(printf '%s\n' "$z19_after"  | grep -c . || true)"
-z19_nl="$(printf '%s\n' "$z19_local"  | grep -c . || true)"
+  case " $chain " in
+    *" $supp "*) : ;;
+    *) fail "($tag) 억제 파일 '$supp' 이 [$slug] 체인에 등록돼 있지 않습니다."\
+        $'\n'"→ 선언은 두 곳입니다: 그 파일(무엇을 끄는가) + projects.sh 의 체인(어디에 거는가)."\
+        $'\n'"  파일만 있고 체인에 없으면 아무 효력이 없고, 그 상태는 조용합니다." ;;
+  esac
 
-for z19_pair in "억제전:$z19_nb" "억제후:$z19_na" "로컬:$z19_nl"; do
-  z19_name="${z19_pair%%:*}"; z19_cnt="${z19_pair##*:}"
-  [ "$z19_cnt" -ge "$z19_floor" ] || fail \
-    "(z19) '$z19_name' 렌더가 서비스 ${z19_cnt}개뿐입니다 (바닥 ${z19_floor})."\
-    $'\n'"→ 이것은 «억제됐다» 가 아니라 **렌더가 실패했다** 입니다. 0행을 부재로 읽지 않으려고"\
-    $'\n'"  이 바닥이 있습니다. 먼저 \`docker compose ... config\` 를 손으로 돌려 사유를 보세요."
-done
+  before_files=""
+  for f in $chain; do
+    [ "$f" = "$supp" ] && continue
+    before_files="$before_files $f"
+  done
 
-printf '%s\n' "$z19_before" | grepq -x 'web-store' || fail \
-  "(z19) 억제 파일을 **뺀** 렌더에도 web-store 가 없습니다."\
-  $'\n'"→ 그러면 이 가드는 아무것도 증명하지 못합니다 — 억제한 것이 이 파일인지 다른 것인지"\
-  $'\n'"  구별할 수 없기 때문입니다. base compose 에서 서비스가 사라졌는지 먼저 확인하세요."
+  before="$(z19_render $before_files)"
+  after="$(z19_render $chain)"
+  localr="$(z19_render "$base")"
 
-! printf '%s\n' "$z19_after" | grepq -x 'web-store' || fail \
-  "(z19) 데모 렌더에 web-store 가 여전히 있습니다 — 억제가 안 걸렸습니다."\
-  $'\n'"→ 데모 호스트가 Vercel 로 옮겨간 스토어의 **사본을 다시 서빙**하게 됩니다."\
-  $'\n'"  방문자 경로는 https://store.hubwang.com 이고, 사본은 아무도 안 보는 컨테이너입니다."\
-  $'\n'"→ 고치는 곳: $z19_supp (그 파일의 \`profiles:\` 가 억제 기전입니다)."
+  nb="$(printf '%s\n' "$before" | grep -c . || true)"
+  na="$(printf '%s\n' "$after"  | grep -c . || true)"
+  nl="$(printf '%s\n' "$localr" | grep -c . || true)"
 
-printf '%s\n' "$z19_local" | grepq -x 'web-store' || fail \
-  "(z19) **로컬(base 단독) 렌더에서도** web-store 가 사라졌습니다."\
-  $'\n'"→ 이 티켓의 Scope Out 을 넘었습니다. 억제는 데모 체인에만 걸려야 하고, base 는"\
-  $'\n'"  로컬 워크스루(docs/guides/interview-demo-walkthrough.md §2)와 \`npm run ecommerce:up\`"\
-  $'\n'"  이 그대로 씁니다. base compose 에서 profiles/삭제를 되돌리세요."
+  for pair in "억제전:$nb" "억제후:$na" "로컬:$nl"; do
+    name="${pair%%:*}"; cnt="${pair##*:}"
+    [ "$cnt" -ge "$floor" ] || fail \
+      "($tag) '$name' 렌더가 서비스 ${cnt}개뿐입니다 (바닥 ${floor})."\
+      $'\n'"→ 이것은 «억제됐다» 가 아니라 **렌더가 실패했다** 입니다. 0행을 부재로 읽지 않으려고"\
+      $'\n'"  이 바닥이 있습니다. 먼저 docker compose config 를 손으로 돌려 사유를 보세요."
+  done
 
-z19_diff="$(comm -23 <(printf '%s\n' "$z19_before") <(printf '%s\n' "$z19_after") | grep -c . || true)"
-z19_only="$(comm -23 <(printf '%s\n' "$z19_before") <(printf '%s\n' "$z19_after") | tr '\n' ' ')"
-[ "$z19_diff" = "1" ] || fail \
-  "(z19) 억제 파일이 서비스 ${z19_diff}개를 지웁니다 (기대: 1개, web-store 만)."\
-  $'\n'"  지워진 것: ${z19_only}"\
-  $'\n'"→ 이 파일의 권한은 «Vercel 로 옮겨간 표면 하나» 입니다. 다른 서비스를 같이 끄면"\
-  $'\n'"  데모의 다른 도메인이 조용히 반쪽이 됩니다."
+  # 🔴🔴 TASK-MONO-618 — **순서가 진단을 정한다.** 예전에는 «억제전 렌더» 칸이 먼저였고,
+  #    그래서 base 에 profiles: 가 들어가는 위반(= 이 함수가 잡아야 하는 대표 사고)에서
+  #    **두 칸이 동시에 참이 되는데 덜 구체적인 쪽이 먼저 보고**됐다. bite 로 실측했다:
+  #    base 에 profiles: 를 주입하면 옛 순서는 *"억제 파일을 뺀 렌더에도 없습니다"* 를
+  #    냈고, 그 문구는 진짜 원인(«base 를 건드렸다»)을 **각주로만** 언급한다.
+  #    ⇒ 대조군(로컬) 칸을 **먼저** 둔다. 두 칸의 분업이 이제 정확하다:
+  #      · 로컬에도 없다      → **base 를 건드렸다** (Scope Out 위반)
+  #      · 로컬엔 있는데 억제전에 없다 → **다른 데모 오버라이드**가 지웠다
+  #    첫 원인만 보고하고 둘째를 가리는 것은 이 저장소가 반복해 당한 모양이다.
+  printf '%s\n' "$localr" | grepq -x "$svc" || fail \
+    "($tag) **로컬(base 단독) 렌더에서도** $svc 가 사라졌습니다."\
+    $'\n'"→ 이 티켓의 Scope Out 을 넘었습니다. 억제는 데모 체인에만 걸려야 하고, base 는"\
+    $'\n'"  로컬이 그대로 씁니다: $localuse"\
+    $'\n'"  base compose 에서 profiles/삭제를 되돌리세요."
 
-z19_dangling="$( (cd "$ROOT" && docker compose --env-file "$HERE/demo.env" \
-  $(for z19_f in $z19_chain; do printf -- '-f %s ' "$ROOT/$z19_f"; done) config 2>/dev/null) \
-  | grep -c 'web-store' || true)"
-[ "$z19_dangling" = "0" ] || fail \
-  "(z19) 억제 뒤에도 렌더 안에 'web-store' 참조가 ${z19_dangling}건 남았습니다 (depends_on 등)."\
-  $'\n'"→ compose 는 없는 서비스에 대한 depends_on 을 기동 시점에 거부합니다 — 증상은 이"\
-  $'\n'"  스택 전체가 안 뜨는 것이고, 렌더는 통과하므로 가드 (a)로는 안 잡힙니다."
+  printf '%s\n' "$before" | grepq -x "$svc" || fail \
+    "($tag) 억제 파일을 **뺀** 렌더에도 $svc 가 없습니다 (로컬 base 에는 있습니다)."\
+    $'\n'"→ 그러면 이 가드는 아무것도 증명하지 못합니다 — 억제한 것이 이 파일인지 다른 것인지"\
+    $'\n'"  구별할 수 없기 때문입니다."\
+    $'\n'"→ base 는 멀쩡하므로 범인은 **다른 데모 오버라이드**입니다: $before_files"
 
-ok "(z19) 데모에서 web-store 억제 — 억제전 ${z19_nb} → 억제후 ${z19_na} (차이 1개, web-store) · 로컬 ${z19_nl}개엔 남아 있다(대조군) · 유령 참조 0건"
+  ! printf '%s\n' "$after" | grepq -x "$svc" || fail \
+    "($tag) 데모 렌더에 $svc 가 여전히 있습니다 — 억제가 안 걸렸습니다."\
+    $'\n'"→ 데모 호스트가 Vercel 로 옮겨간 화면의 **사본을 다시 서빙**하게 됩니다."\
+    $'\n'"  방문자 경로는 $vercel 이고, 사본은 아무도 안 보는 컨테이너입니다."\
+    $'\n'"→ 고치는 곳: $supp (그 파일의 profiles: 가 억제 기전입니다)."
+
+  diff="$(comm -23 <(printf '%s\n' "$before") <(printf '%s\n' "$after") | grep -c . || true)"
+  only="$(comm -23 <(printf '%s\n' "$before") <(printf '%s\n' "$after") | tr '\n' ' ')"
+  [ "$diff" = "1" ] || fail \
+    "($tag) 억제 파일이 서비스 ${diff}개를 지웁니다 (기대: 1개, $svc 만)."\
+    $'\n'"  지워진 것: ${only}"\
+    $'\n'"→ 이 파일의 권한은 «Vercel 로 옮겨간 표면 하나» 입니다. 다른 서비스를 같이 끄면"\
+    $'\n'"  데모의 다른 도메인이 조용히 반쪽이 됩니다."
+
+  dangling="$( (cd "$ROOT" && docker compose --env-file "$HERE/demo.env" \
+    $(for f in $chain; do printf -- '-f %s ' "$ROOT/$f"; done) config 2>/dev/null) \
+    | grep -c "$svc" || true)"
+  [ "$dangling" = "0" ] || fail \
+    "($tag) 억제 뒤에도 렌더 안에 '$svc' 참조가 ${dangling}건 남았습니다 (depends_on 등)."\
+    $'\n'"→ compose 는 없는 서비스에 대한 depends_on 을 기동 시점에 거부합니다 — 증상은 이"\
+    $'\n'"  스택 전체가 안 뜨는 것이고, 렌더는 통과하므로 가드 (a)로는 안 잡힙니다."
+
+  ok "($tag) $slug/$svc 억제 — 억제전 ${nb} → 억제후 ${na} (차이 1개, $svc) · 로컬 ${nl}개엔 남아 있다(대조군) · 유령 참조 0건"
+}
+
+# --- 축 등록 --------------------------------------------------------------
+# 🔴 여기에 줄을 더하는 것이 «단계 N 의 억제» 의 전부다. 지우면 아래 바닥이 문다.
+assert_vercel_suppressed z19 ecommerce \
+  infra/demo/ecommerce-vercel.override.yml web-store \
+  projects/ecommerce-microservices-platform/docker-compose.yml 20 \
+  "docs/guides/interview-demo-walkthrough.md §2 · npm run ecommerce:up" \
+  "https://store.hubwang.com"
+
+# 🔵 팬의 바닥이 6 인 이유: base 가 9서비스(억제 후 8)라 ecommerce 의 20 을 그대로
+#    쓰면 **항상 FATAL** 이다. 바닥은 «렌더가 깨졌는가» 를 재는 것이므로 스택 크기에
+#    맞춰야 하고, 상속하면 그 축이 죽는다. (2026-09-04 실측: 9 → 8 · 로컬 9)
+assert_vercel_suppressed z28 fan \
+  infra/demo/fan-vercel.override.yml fan-platform-web \
+  projects/fan-platform/docker-compose.yml 6 \
+  "pnpm fan-platform:up (package.json:41-45)" \
+  "https://fan.hubwang.com"
+
+# 🔴 축이 조용히 사라지는 것을 막는 바닥. 유도가 아니라 등록이므로, 등록 줄을 지우면
+#    그 억제는 **아무도 안 재는 상태로 초록**이 된다 — 그 구멍을 여기서 닫는다.
+#    🔵 이 수는 ADR-MONO-067 이 «Vercel 로 옮긴 화면» 을 늘릴 때만 올라간다(단계 3).
+z19_axes_floor=2
+[ "$z19_axes" -ge "$z19_axes_floor" ] || fail \
+  "(z19/z28) 억제 축이 ${z19_axes}개만 등록됐습니다 (바닥 ${z19_axes_floor})."\
+  $'\n'"→ 등록 줄이 지워지면 그 도메인의 억제는 아무도 안 재면서 초록이 됩니다."\
+  $'\n'"  ADR-MONO-067 이 화면을 되돌린 것이 아니라면 등록 줄을 복구하세요."
+ok "(z19/z28) 억제 축 ${z19_axes}개가 등록돼 있고 전부 판정됐다 (바닥 ${z19_axes_floor})"
 
 # ---------------------------------------------------------------------------
 # idp_path_prefixes <discovery-json> — URL 값 필드에서 경로의 **첫 세그먼트** 집합
