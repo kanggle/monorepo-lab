@@ -82,15 +82,24 @@ services:
           # **짝으로만** 존재해야 한다 — 가드 (i) 가 그 짝을 강제하고, 이 줄을
           # 되살리면 «라우터가 없는 고아 alias» 로 문다. 스토어를 데모로 되돌리려면
           # 그 오버라이드를 먼저 걷어라. (형제 `web.fan-platform` 은 단계 4 —
-          # TASK-MONO-586 — 이 같은 자리를 밟는다.)
+          # 🟢 **밟았다: TASK-MONO-618, 2026-09-04.** 아래 그 자리를 보라.
+          # 원래 이 주석은 `TASK-MONO-586` 을 가리켰는데, 586 은 단계 4 의
+          # **해석기 몫**이고 **억제 몫에 티켓이 없었다** — 618 이 그 행이다.)
           - wms.${DEMO_DOMAIN:-local}
           - scm.${DEMO_DOMAIN:-local}
           - erp.${DEMO_DOMAIN:-local}
           - finance.${DEMO_DOMAIN:-local}
           - fan-platform.${DEMO_DOMAIN:-local}
-          # 팬 웹 (TASK-FAN-FE-014). 게이트웨이와 호스트명을 분리한 이유는
-          # projects/fan-platform/docker-compose.yml 의 fan-platform-web 주석 참조.
-          - web.fan-platform.${DEMO_DOMAIN:-local}
+          # 🔴 `web.fan-platform.${DEMO_DOMAIN:-local}` 는 **의도적으로 없다**
+          # (TASK-MONO-618 / ADR-MONO-067 단계 4, 2026-09-04). 방문자 팬 화면은
+          # https://fan.hubwang.com 으로 옮겨갔고 데모는 그 사본을 띄우지 않는다
+          # (infra/demo/fan-vercel.override.yml). alias 와 Host() 라우터는 **짝으로만**
+          # 존재해야 한다 — 가드 (i) 가 그 짝을 강제하므로, 이 줄을 되살리면
+          # «라우터가 없는 고아 alias» 로 문다. 팬을 데모로 되돌리려면 그 오버라이드를
+          # 먼저 걷어라. (원래 이 자리는 TASK-FAN-FE-014 였다 — 게이트웨이와 호스트명을
+          # 분리한 이유는 projects/fan-platform/docker-compose.yml 의
+          # fan-platform-web 주석 참조. 바로 위 `fan-platform.` 는 **게이트웨이**라
+          # 남아 있다: 억제된 것은 웹 사본이지 백엔드가 아니다.)
           - kafka.iam.${DEMO_DOMAIN:-local}
           - grafana.iam.${DEMO_DOMAIN:-local}
           - kafka.wms.${DEMO_DOMAIN:-local}

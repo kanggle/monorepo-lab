@@ -519,12 +519,26 @@ SURFACE_SRC="${DEMO_SURFACE_SRC:-$HERE/aws/site/index.html}"
 # 2026-08-21 전수). 서빙 출처가 갈려도 줄지 않는다 — 이 값은 «추출이 깨졌는가» 를 잰다.
 # 가드 (z14) 의 `z14_floor` 와 **같은 축·같은 값**이다.
 SURFACE_ROW_FLOOR="${DEMO_SURFACE_ROW_FLOOR:-3}"
-# 하한 ②: **부팅 때 실제로 찌를 표면의 수** = 2 (console · web.fan-platform).
-# provenance: 위 3 에서 web.ecommerce 를 뺀 값 — TASK-MONO-583 이 그 행을 Vercel 로
-# 옮겼고(ADR-MONO-067 단계 2), Vercel 표면은 데모 호스트가 꺼져 있어도 뜨므로 부팅
-# 완료의 증거가 될 수 없다. 🔴 **다른 축이다** — 화면이 늘어도 그것이 Vercel 이면
-# 여기는 안 오른다. 데모 호스트 화면이 늘 때만 올려라.
-SURFACE_FLOOR="${DEMO_SURFACE_FLOOR:-2}"
+# 하한 ②: **부팅 때 실제로 찌를 표면의 수** = 1 (console 뿐).
+# provenance: 위 3 에서 **Vercel 로 옮겨간 두 행**을 뺀 값 —
+#   · web.ecommerce      TASK-MONO-583 (ADR-MONO-067 단계 2)
+#   · web.fan-platform   TASK-MONO-618 (ADR-MONO-067 단계 4)  ← 2026-09-04
+# Vercel 표면은 데모 호스트가 꺼져 있어도 뜨므로 **부팅 완료의 증거가 될 수 없다.**
+# 🔴 **다른 축이다** — 화면이 늘어도 그것이 Vercel 이면 여기는 안 오른다. 데모 호스트
+# 화면이 늘 때만 올려라.
+#
+# 🔴🔴 TASK-MONO-618 — **이 값을 억제와 같은 PR 에서 안 내리면 부팅이 영구 실패한다.**
+#    억제하면 찌를 수 있는 표면이 1개가 되는데 하한이 2 면 판정이 절대 충족되지 않고,
+#    그 실패는 **"데모가 안 떴다"** 로 읽힌다. 형제 축에서 TASK-MONO-583 이 먼저 낸
+#    길이고, TASK-MONO-604 AC-3 이 "583 이 없었다면 이 티켓이 부팅을 영구히 못
+#    끝내게 만들었을 것" 이라고 적은 그 자리다.
+# 🔴🔴 그리고 **부팅 완료 지문이 바뀐다** — 창 #3 까지는 `console=307 web.fan-platform=307`
+#    (표면 2/2)이 완료 신호였다. 이제 `console=307` **하나(1/1)** 이고
+#    `web.fan-platform` 은 **404** 다. 옛 지문을 기다리면 창이 영원히 안 열린다.
+# 🔵 하한 ①(SURFACE_ROW_FLOOR)은 **그대로 3** 이다 — 론처가 약속하는 화면의 총 수는
+#    줄지 않았고(서빙 출처만 갈렸다), 그 값은 «추출이 깨졌는가» 를 잰다. 두 하한이
+#    서로 다른 것을 재는 이유가 이것이다.
+SURFACE_FLOOR="${DEMO_SURFACE_FLOOR:-1}"
 SURFACE_ATTEMPTS="${DEMO_SURFACE_ATTEMPTS:-12}"
 SURFACE_SLEEP="${DEMO_SURFACE_SLEEP:-10}"
 

@@ -47,7 +47,13 @@ declare -A COMPOSE=(
   # 전수). 효력은 가드 (z19)가 렌더로 확인한다.
   [ecommerce]="projects/ecommerce-microservices-platform/docker-compose.yml infra/demo/ecommerce-relay.override.yml infra/demo/ecommerce-vercel.override.yml"
   [scm]="projects/scm-platform/docker-compose.yml infra/demo/scm-identity.override.yml infra/demo/scm-relay.override.yml"
-  [fan]="projects/fan-platform/docker-compose.yml infra/demo/fan-identity.override.yml"
+  # `fan-vercel.override.yml` — 방문자 팬 화면이 Vercel 로 옮겨갔으므로
+  # (ADR-MONO-067 단계 4) 데모에서는 fan-platform-web 을 **띄우지 않는다**. 억제는
+  # 그 파일 한 곳에 선언돼 있고, 로컬(base 단독)과 CI 는 영향받지 않는다 — CI 의
+  # Frontend E2E smoke 는 compose 가 아니라 `pnpm --filter fan-platform-web build`
+  # 로 돈다(TASK-MONO-618 AC-0 ② 전수). 효력은 (z27)이 렌더로, TASK-MONO-617 의
+  # 판정자가 도는 컨테이너로 확인한다.
+  [fan]="projects/fan-platform/docker-compose.yml infra/demo/fan-identity.override.yml infra/demo/fan-vercel.override.yml"
   [finance]="projects/finance-platform/docker-compose.yml infra/demo/finance-identity.override.yml"
   [erp]="projects/erp-platform/docker-compose.yml infra/demo/erp-identity.override.yml"
   [console]="projects/platform-console/docker-compose.yml"
