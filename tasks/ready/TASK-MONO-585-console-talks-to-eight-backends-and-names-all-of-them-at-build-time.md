@@ -618,3 +618,38 @@ infra/demo/auth-forwarder/package.json          "@demo/backend-resolver": "link:
 | 착수 가능? | 「선행 셋」 | 🛑 **선행 1(OIDC 왕복)만 남았고, 그것이 막는다** |
 
 🙋 **이 티켓을 여는 열쇠는 하나다** — `TASK-MONO-610` 의 기동 창에서 왕복이 닫히는 것.
+
+---
+
+# 🟡 갱신 (2026-09-03 UTC) — `TASK-MONO-616` 기동 창 #3 이 **§ 왕복 홉 표를 낡게 만들었다**
+
+이 티켓의 § 왕복 홉 표는 *"① 앱 → authorize URL 생성 **실패** · ②③④⑤ ⚪ 미측정"* 이고,
+그 근거로 *"`https://store.hubwang.com/api/auth/*` 가 **전부 500**(형제 `kanggle-fan` 은
+같은 순간 **200**)"* 을 들었다. **그 500 은 이제 없다.** 그런데 **홉①은 여전히 실패한다** —
+사유가 바뀌었을 뿐이다. 두 사실을 함께 적지 않으면 다음 사람이 낡은 원인을 고치러 간다.
+
+| 홉 | 이 티켓의 기록 (09-02) | **09-03 실측** |
+|---|---|---|
+| `/api/auth/providers`·`/csrf` | **500** | 🟢 **200** (`NEXTAUTH_URL`·`NEXTAUTH_SECRET` 발효) |
+| ① 앱 → authorize URL | 실패 (앱이 죽어 있음) | 🔴 **여전히 실패** — `?error=Configuration`. 사유는 **discovery/issuer 단계**(`OIDC_ISSUER_URL` 미투입) |
+| ②③④⑤ | ⚪ 미측정 | ⚪ **미측정** (①이 URL 을 안 만들었다 — 이유는 같고 원인은 다르다) |
+
+## 🔵 그러나 **선행 1 의 축은 실제로 전진했다**
+
+이 티켓의 선행 1 은 *"`ADR-MONO-069` `C2` 가 ACCEPTED 이나 `TASK-MONO-610` 이 아직
+안 배선됐다"* 였다. 이번 창에서 **그 배선이 종단 간으로 성립하는 것이 처음 관측됐다** —
+형제 표면에서:
+
+```
+fan.hubwang.com → https://auth.hubwang.com/oauth2/authorize → /login → 콜백
+GET /api/auth/session → accountId · tenantId=fan-platform · roles=["FAN"]
+```
+
+⇒ **「OIDC 왕복이 성립한다」는 이제 가설이 아니라 실측이다.** 🔴 다만 그것은 **팬 표면**에서의
+실측이고, 이 티켓이 여는 것은 **console 표면**이다 — console 은 Vercel 프로젝트조차 없다
+(`TASK-MONO-610` AC-6 이 그렇게 적었다). ⇒ **선행 1 은 「기전이 증명됐다」로 약해졌지
+「해제」는 아니다.** 표본을 형제에서 대상으로 옮겨 적지 마라.
+[[feedback_local_proves_behaviour_not_performance]]
+
+🔵 착수할 때 AC-0 은 **이 표부터 다시 재라** — 그 사이 store 에 `OIDC_ISSUER_URL` 이
+들어갔다면 홉① 의 사유가 또 바뀐다.
