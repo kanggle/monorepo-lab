@@ -101,4 +101,67 @@ bash "$HERE/provision-demo-env.sh"
 # `demo-up.sh` 는 `demo.env` 를 스스로 source 한다. 거기서 `DEMO_DOMAIN` 은 반드시
 # `${DEMO_DOMAIN:-local}` 형태여야 한다 — bare 대입이면 `set -a; source` 가 **여기서
 # export 한 값을 덮어쓴다**(358 에서 실제로 당했다). 가드 (n) 이 그 형태를 지킨다.
+# -----------------------------------------------------------------------------
+# 🔴🔴 TASK-MONO-615 B4 — 부팅 경합: up 전에 잔존 스택을 내린다 (후보 ⓐ)
+# -----------------------------------------------------------------------------
+# 무엇이 일어나고 있었나 (2026-09-03 기동 창, 손대지 않은 판으로 **부팅 2회 전부 재현**):
+#
+#   dockerd 가 뜨면 `restart: unless-stopped` 컨테이너 103개가 **한꺼번에** 살아난다
+#   → 1분 안에 loadavg 104 (boot #1) / 191 (boot #2)
+#   → `iam-kafka` 의 healthcheck 는 `kafka-broker-api-versions.sh`, 즉 **JVM 기동**이다.
+#     평소 1.5~3.3s 인 그 프로브가 이 부하에서 도커의 `timeout: 10s` 를 넘겨 죽는다
+#     (실측 health log: `exit=137`(SIGKILL) 과 `exit=-1` 이 10.7 / 11.6 / 13.2 / 11.0s)
+#   → `docker compose up -d` 는 `depends_on: condition: service_healthy` 에서 그것을
+#     «unhealthy» 로 읽고 포기한다
+#   → 라벨에 DEMO_DOMAIN 이 박힌 서비스는 매 부팅 recreate 대상이므로, 그 셋이
+#     **`Created` 상태로 남는다**: iam-auth-service-1 · iam-gateway-service-1 · iam-kafka-ui
+#
+# 🔴 **브로커는 멀쩡했다.** 같은 시각 로그는 컨슈머 그룹 리밸런스를 정상 처리하고 있다.
+#    실패한 것은 브로커가 아니라 **프로브**다. 그래서 «의존 대기 조건을 조정»(후보 ⓑ)은
+#    레버가 어긋나 있다 — 넓혀야 할 것은 compose 의 대기가 아니라 프로브가 끝날 여유이고,
+#    그 여유를 만드는 가장 싼 방법은 **폭풍 자체를 없애는 것**이다.
+#
+# ⓐ 를 고른 이유 (실측 비교, 같은 인스턴스·연속 4회 부팅):
+#
+#   | 부팅 | 판 | iam | 남은 Created | 유닛 |
+#   |---|---|---|---|---|
+#   | #1 | 손대지 않음 | 98s 뒤 실패 → 포기 | 3 | timeout(SIGTERM) |
+#   | #2 | 손대지 않음 | 210s 뒤 실패 → 포기 | 3 | timeout(SIGTERM) |
+#   | #3 | ⓐ | **10s 만에 성공, 재시도 0** | **0** | 정상 종료 |
+#   | #4 | ⓐ | **성공** | **0** | 정상 종료 |
+#
+# 🔵 ⓒ(restart 정책)·ⓓ(라벨에서 도메인 제거)를 고르지 않은 이유: 둘 다 8개 프로젝트의
+#    compose 를 건드려 **로컬·CI 의 기동 의미까지 바꾼다**. 여기서 필요한 것은
+#    «데모 호스트의 부팅» 이라는 한 상황이고, ⓐ 는 그 한 자리에만 산다.
+#
+# 🔴 ⓐ 가 공짜는 아니다. down 단계 자체가 실측 184s 를 먹고 그만큼 뒤가 밀린다 —
+#    그래서 이 PR 은 `demo-stack.service` 의 TimeoutStartSec 과 demo-up.sh 의 단계별
+#    예산을 **함께** 재산정한다. 안 하면 ⓐ 는 경합을 고치면서 요약을 다시 잃게 만든다.
+#
+# 🔴 `DEMO_BOOT_RESET` 이 없으면 **아무것도 하지 않는다.** 이 스크립트는 컨트롤 플레인의
+#    per-domain 기동 경로(`demo-boot.sh fan`, 화이트리스트에 `full` 도 포함)에서도 불리고,
+#    거기서 전체 down 은 방문자가 보고 있는 데모를 내리는 것이 된다. 부팅인지 아닌지를
+#    아는 것은 systemd 유닛뿐이라 플래그가 거기서 온다. 가드 (z24)가 그 쌍을 묶는다.
+if [ "${DEMO_BOOT_RESET:-0}" = "1" ]; then
+  echo "[boot] 잔존 스택 정리 (DEMO_BOOT_RESET=1) — dockerd 가 되살린 컨테이너를 먼저 내립니다"
+  # 🔴 볼륨은 건드리지 않는다. `demo-down.sh` 는 `down --remove-orphans` 이고 `-v` 가
+  #    없다 — 데이터가 사라지면 이것은 고침이 아니라 파괴다.
+  # 🔴 down 도 매달릴 수 있다. up 과 같은 이유로 시간으로 묶고, 못 묶으면 말한다.
+  if command -v timeout >/dev/null 2>&1; then
+    timeout --foreground -k 15 "${DEMO_DOWN_BUDGET:-300}" bash "$HERE/demo-down.sh" || {
+      down_rc=$?
+      if [ "$down_rc" -eq 124 ]; then
+        echo "[boot] ⏱ 잔존 스택 정리가 ${DEMO_DOWN_BUDGET:-300}s 안에 끝나지 않아 **끊었습니다** — 그대로 기동을 계속합니다" >&2
+      else
+        echo "[boot] ⚠ 잔존 스택 정리가 rc=$down_rc 로 끝났습니다 — 그대로 기동을 계속합니다" >&2
+      fi
+    }
+  else
+    echo "[boot] ⚠ coreutils 'timeout' 이 없습니다 — 잔존 스택 정리를 시간으로 묶지 못합니다" >&2
+    bash "$HERE/demo-down.sh" || echo "[boot] ⚠ 잔존 스택 정리 실패 — 그대로 기동을 계속합니다" >&2
+  fi
+else
+  echo "[boot] 잔존 스택 정리 건너뜀 (DEMO_BOOT_RESET 미설정 — 부팅이 아닌 호출입니다)"
+fi
+
 exec bash "$HERE/demo-up.sh" "$@"

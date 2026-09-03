@@ -32,6 +32,20 @@ WorkingDirectory=/opt/monorepo-lab
 # 프로파일: full(8 프로젝트 — 출처는 projects.sh 의 FULL 배열) | demo-core(iam+ecommerce+wms+console)
 Environment=DEMO_PROFILE=full
 
+# 🔴🔴 TASK-MONO-615 B4 — 부팅에서만 잔존 스택을 먼저 내린다 (후보 ⓐ)
+# -----------------------------------------------------------------------------
+# 왜 이 플래그가 유닛에 있고 스크립트 안의 조건이 아닌가:
+# `demo-boot.sh` 는 **부팅 말고 다른 호출자**가 있다. 컨트롤 플레인이 방문자의
+# "이 도메인 켜기" 요청을 `demo-boot.sh <domain>` 으로 보내고(handler.py domain_start),
+# 그 화이트리스트에는 `full`·`demo-core` 도 들어 있다. 그러니 «인자가 프로파일이면
+# 리셋» 같은 술어를 쓰면, 방문자가 「전부 켜기」를 누른 순간 **떠 있는 데모를 통째로
+# 내렸다가 다시 올린다** — 지금보다 나쁘다.
+#
+# 부팅과 그 밖을 가르는 사실은 인자가 아니라 **호출자**이고, 그것을 아는 것은 이 유닛뿐이다.
+# 그래서 플래그를 여기서 준다. 🔴 계약이 두 파일에 걸치므로 가드 (z24)가 그 쌍을 묶는다
+# (유닛이 준다 · 스크립트가 읽는다 · 컨트롤 플레인 경로는 주지 않는다).
+Environment=DEMO_BOOT_RESET=1
+
 # ⚠️ `demo-up.sh` 를 직접 부르지 않는다 — 그것이 MONO-366 이 고치는 결함이다.
 # systemd 의 `Environment=` 는 셸이 아니라 **명령 치환이 안 된다**. 공인 IP 는 부팅
 # 시점에 IMDSv2 로 읽어야 하므로 파생은 반드시 스크립트 안에서 일어나야 한다.
@@ -40,7 +54,17 @@ ExecStart=/usr/bin/bash /opt/monorepo-lab/infra/demo/demo-boot.sh ${DEMO_PROFILE
 ExecStop=/usr/bin/bash /opt/monorepo-lab/infra/demo/demo-down.sh
 
 # `full` 은 96 컨테이너(JVM 40+)다. 콜드 스타트에 여유를 준다.
-TimeoutStartSec=1200
+#
+# 🔴🔴 TASK-MONO-615 B4 — 1200 → 1800. **완화가 아니라 재산정이다.**
+# 1200 은 「부팅 = up + 시드」 라는 세계에서 정해진 값이었다. 후보 ⓐ 가 그 앞에
+# **down 단계**를 하나 더 붙였고(2026-09-03 실측 184s), 그만큼 뒤가 밀린다.
+# 값을 그대로 두면 ⓐ 는 경합을 고치면서 **요약을 다시 잃게 만든다** — 한 항목의
+# 수단이 다른 항목의 전제를 지우는, 이 티켓이 존재하는 이유 그 모양이다.
+#
+# 산술(가드 (z13) 칸 (8)이 이 부등식을 다시 센다 — 주석에 두지 않는다):
+#   down 300 + up 1020 + 시드·드리프트 240 + 요약·표면 예비 120 = 1680 ≤ 1800
+# 실측(2026-09-03 boot #3, ⓐ 적용): down 184s · up 480s · 시드~요약 108s = 777s.
+TimeoutStartSec=1800
 
 [Install]
 WantedBy=multi-user.target
