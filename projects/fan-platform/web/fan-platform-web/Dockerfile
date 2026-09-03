@@ -47,6 +47,36 @@ COPY web/fan-platform-web/package.json web/fan-platform-web/
 # pnpm store cache mount — persists the content-addressable store across builds
 # so a lockfile change (deps-layer cache miss) re-links from cache instead of
 # re-downloading. No effect on the image (the store lives only in the mount).
+# 🔴🔴 TASK-MONO-615 — `@demo/backend-resolver` 는 이 빌드 컨텍스트 **밖**에 있다
+# -----------------------------------------------------------------------------
+# 이 앱의 package.json 은 `"@demo/backend-resolver": "link:../../../../infra/demo/
+# backend-resolver"` 다(TASK-MONO-614 / ADR-MONO-068 § D6 = B2 — 구현은 저장소에
+# **하나뿐**이고 그 자리는 저장소 루트의 `infra/demo/` 다). 그런데 이 이미지의 빌드
+# 컨텍스트는 이 프로젝트 디렉터리이므로 그 경로는 컨텍스트에 **없다**.
+#
+# 🔴 그리고 그 결핍은 install 에서 안 터진다. `pnpm install --frozen-lockfile` 은
+#    **성공한다**(실측: 576 resolved, Done in 13.3s) — `link:` 는 대상이 없어도
+#    심링크를 만들고 끝나기 때문이다. 죽는 것은 그 다음 `next build` 이고, 메시지는
+#    *"Module not found: Can't resolve '@demo/backend-resolver'"* 다.
+#    ⇒ **「install 이 통과했다」는 워크스페이스가 온전하다는 증거가 아니다.**
+#
+# 왜 AMI 굽기에서야 드러났나 (2026-09-03 실측):
+#   · CI 는 `pnpm --filter <app> build` 를 **러너에서** 돈다(저장소 루트라 링크 해소됨).
+#     **이 이미지를 굽는 CI 잡은 없다.**
+#   · 형제 web-store 는 데모에서 억제돼 있어(ADR-MONO-067 단계 2) 데모 굽기에서
+#     이미지가 안 만들어지고, Vercel 은 저장소 루트에서 빌드한다.
+#   ⇒ 컨테이너 안에서 이 패키지를 빌드하는 자리는 **AMI 굽기 하나뿐**이었고,
+#     `link:` 가 들어온 `c2df17060`(#3586) 이후 아무도 굽지 않아 잠복해 있었다.
+#     가드 (z26)이 이 축을 정적으로 문다.
+#
+# 🔵 목적지가 `/infra/...` 인 것은 임의가 아니라 **lockfile 이 정한다.** pnpm 은
+#    `link:` 를 선언한 package.json 의 디렉터리 기준으로 푼다:
+#      /app/<app-dir> → .. → .. → .. → ..  ⇒ `/`   (루트의 부모는 루트)
+#    따라서 `../../../../infra/demo/backend-resolver` = `/infra/demo/backend-resolver`.
+#    저장소에서는 같은 상대경로가 저장소 루트를 가리킨다 — 깊이가 일치한다.
+# 🔵 러너 이미지에는 안 들어간다. `next.config.ts` 의 `transpilePackages` 가 이
+#    패키지의 TS 소스를 번들에 컴파일해 넣으므로 런타임에는 필요 없다.
+COPY --from=demo-backend-resolver . /infra/demo/backend-resolver
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile
 

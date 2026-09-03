@@ -289,6 +289,13 @@ services:
       # web/fan-platform-web 을 컨텍스트로 잡으면 lockfile 이 밖에 남아
       # `--frozen-lockfile` 이 실패한다.
       context: .
+      # 🔴 TASK-MONO-615 — `@demo/backend-resolver` 는 이 컨텍스트 밖(저장소 루트
+      #    `infra/demo/`)에 있다. 이름 붙인 추가 컨텍스트로 건네지 않으면 이미지
+      #    빌드가 *"Module not found: Can't resolve '@demo/backend-resolver'"* 로
+      #    죽는다 — 그런데 `pnpm install` 은 통과하므로 install 로그로는 안 보인다.
+      #    상세: web/fan-platform-web/Dockerfile 의 같은 이름 COPY 옆 주석.
+      additional_contexts:
+        demo-backend-resolver: ../../infra/demo/backend-resolver
       dockerfile: web/fan-platform-web/Dockerfile
     init: true
     restart: unless-stopped

@@ -1016,3 +1016,113 @@ B2 § 남은 공백 1 이 *"`provision-demo-env.sh` 는 멱등이라 `.env` 가 
 부팅 로그가 그것을 그대로 말한다: `[provision-env] 요약 — 생성 0 · 기존유지 8`.
 mtime 이 08-29 인 것이 **네 번의 부팅을 건너 안 바뀌었다**는 직접 증거다.
 [[feedback_declaration_files_are_not_the_runtime_state]]
+
+---
+
+## 🔴🔴 재굽기가 **실패했다** — 그리고 C2 는 티켓이 적은 것보다 크다
+
+7차 굽기(`main` = `6ad63cb09`)는 10분 53초에 죽었다. **내 변경 때문이 아니다.**
+
+```
+#78 [fan-platform-web builder 8/9] RUN pnpm --filter fan-platform-web build
+#78 ./src/shared/config/demo-backend.ts
+#78 Module not found: Can't resolve '@demo/backend-resolver'
+#78 Import trace: ./src/widgets/demo-notice/DemoBackendNotice.tsx → ./src/app/(main)/layout.tsx
+Build 'amazon-ebs.demo' errored after 10 minutes 53 seconds
+```
+
+### 티켓의 C2 는 「AMI 가 그 파일을 갖고 있지 않다」였다. 실측은 더 세다
+
+**AMI 를 **구울 수 없다.** `fan-platform-web/package.json` 은
+
+```
+"@demo/backend-resolver": "link:../../../../infra/demo/backend-resolver"
+```
+
+인데 그 경로는 이 이미지의 빌드 컨텍스트(`projects/fan-platform`) **밖**이다.
+⇒ C2 는 「호스트 로컬 상태를 AMI 로 옮기면 된다」가 아니라 **「그 이관 자체가 막혀 있다」**였다.
+
+### 🔴 install 은 통과한다 — 그래서 install 로그로는 안 보인다
+
+```
+#69 pnpm install --frozen-lockfile
+#69 13.73 Progress: resolved 576, downloaded 576, added 576
+#69 14.15 Done in 13.3s          ← 성공한다
+#78  ... next build → Module not found
+```
+
+`link:` 는 대상이 없어도 **심링크를 만들고 끝난다**. 죽는 것은 다음 단계다.
+⇒ **「install 초록」은 워크스페이스가 온전하다는 증거가 아니다.**
+[[env_pnpm_file_vs_link_changes_the_realpath]]
+
+### 🔴🔴 왜 아무도 못 봤나 — 각각 옳은 두 제외가 합쳐져 구멍이 됐다
+
+| 경로 | 이 결함을 만나나 | 왜 |
+|---|---|---|
+| CI `Frontend lint & build` | ❌ | `pnpm --filter fan-platform-web build` 를 **러너에서** 돈다(ci.yml:2589) — 저장소 루트라 링크가 해소된다 |
+| CI 이미지 빌드 잡 | ❌ | **fan-platform-web 이미지를 굽는 CI 잡이 없다** |
+| 형제 `web-store` 의 데모 이미지 | ❌ | 데모에서 **억제**돼 있다(ADR-MONO-067 단계 2) ⇒ 굽기 대상이 아니다 |
+| `web-store` 의 Vercel 빌드 | ❌ | 저장소 루트에서 빌드한다 |
+| **AMI 굽기** | ✅ | **여기 하나뿐** |
+
+`link:` 는 `c2df17060`(#3586, `TASK-MONO-614`)에서 들어왔고 마지막 굽기는 `6bc2a44e7`(08-29)다.
+**이번이 그 뒤 첫 굽기**였고 그래서 지금 터졌다. 🔴 `TASK-MONO-614` 티켓 본문에
+`docker`·`image`·`Dockerfile`·`AMI` 는 **0회** 등장한다 — 기각된 축이 아니라 **고려되지 않은 축**이다.
+[[feedback_two_correct_exclusions_compose_into_a_hole]]
+
+### 고친 것 — 결정을 건드리지 않는 최소 모양
+
+해석기의 **위치도**(저장소 루트 `infra/demo/`) **단일 구현 규칙**도(ADR-MONO-068 § D6 = B2)
+그대로 두고, package.json·lockfile 도 안 건드린다(그러면 Vercel 빌드까지 흔든다). 바꾼 것은
+**이미지가 그 패키지를 보게 하는 것** 하나다:
+
+- compose: `additional_contexts: { demo-backend-resolver: ../../infra/demo/backend-resolver }`
+- Dockerfile: `pnpm install` **앞**에 `COPY --from=demo-backend-resolver . /infra/demo/backend-resolver`
+
+🔵 목적지 `/infra/...` 는 임의가 아니라 **lockfile 이 정한다**: pnpm 은 `link:` 를 선언한
+package.json 의 디렉터리 기준으로 풀고, 이미지에서 `/app/<app>` 에서 네 번 올라가면 `/` 다
+(루트의 부모는 루트) ⇒ `/infra/demo/backend-resolver`. 저장소에서는 같은 상대경로가 저장소
+루트를 가리키므로 **깊이가 일치한다.** 🔵 러너 이미지에는 안 들어간다 —
+`transpilePackages` 가 TS 소스를 번들에 컴파일해 넣는다.
+
+🔴 **형제도 같이 고쳤다.** `web-store` 는 같은 `link:` 를 갖고 같은 모양으로 죽는다 — 오늘은
+억제돼 있어 안 굽힐 뿐이다. 한쪽만 고치면 억제가 풀리는 날 그대로 낙오한다.
+[[feedback_grep_the_siblings_before_fixing_it_yourself]]
+
+### 실측 — 같은 호스트에서 A/B (대조군을 먼저 돌렸다)
+
+```
+NEGATIVE CONTROL  origin/main (7ec0527)  → rc=1  "Module not found: Can't resolve '@demo/backend-resolver'"
+TREATMENT         브랜치                  → rc=0  "Image fan-platform/fan-platform-web:local Built" · 해당 오류 0건
+```
+
+🔵 대조군이 없었으면 「이 호스트에서는 원래 잘 빌드된다」와 구별할 수 없었다.
+
+### 가드 (z26) — 술어는 **모양**이지 「fan 이 resolver 를 갖는가」가 아니다
+
+> 프로젝트 밖을 가리키는 `link:`/`file:` 의존이 있으면, 그 프로젝트 compose 가 같은 대상을
+> `additional_contexts` 로 넘기고, 그 앱 Dockerfile 이 그 이름을 `COPY --from=` 으로 받아야 한다.
+
+bite 4/4 (주입 확인 포함), 그리고 **두 주입이 서로 다른 문장으로** 떨어진다:
+
+| # | 주입 | 결과 |
+|---|---|---|
+| ⓪ | 없음 | ✅ ok — 탈출 의존 **2건** 전부 전달 · package.json **11개** 스캔 |
+| ① | compose 의 `additional_contexts` 제거 | ✅ FAIL — *"compose 에 additional_contexts 없음"* |
+| ② | Dockerfile 의 `COPY --from` 만 제거 | ✅ FAIL — *"compose 는 '…' 를 넘기는데 Dockerfile 이 COPY --from=… 로 안 받음"* |
+| ③ | 복원 | ✅ ok (트리 변경 0건 확인) |
+
+### 🔴 그리고 이 칸의 **하한이 내 계측기를 잡았다**
+
+첫 판은 열거를 `git ls-files '*package.json'` 로 했다. 데모 호스트에서 이 스크립트는
+**root** 로 도는데 저장소는 ubuntu 소유라 git 이 *"detected dubious ownership"* 로 죽어
+**0줄**을 냈다. 하한이 없었다면 술어는 그 0을 **「탈출 의존 없음」**으로 읽고 **고장난 채
+영원히 초록**이었을 것이다 — ⓪부터 ③까지 전부 통과하는 모양으로.
+
+🔵 하한을 **「탈출 의존 수」가 아니라 「스캔한 파일 수」**에 건 것이 이 칸을 살렸다. 탈출
+의존은 정당하게 0이 될 수 있지만(해석기를 프로젝트 안으로 옮기면), 스캔 0은 언제나 고장이다.
+⇒ 열거를 git 에서 떼어 `find` 로 바꿨다 — 소유권에도, **스테이지 여부에도** 안 걸린다.
+[[feedback_a_non_vacuity_floor_under_a_draining_population]] [[env_a_guard_reading_git_ls_files_is_blind_to_unstaged_work]]
+
+🔵 `realpath` 요구도 **선언**했다 — 안 하면 (z2)가 그것을 범위에 넣지 않고, AMI 에 없으면
+packer 7단계에서야 죽는다(그게 (z2)의 존재 이유다). (z2)의 base 제공 부류에 함께 넣었다.
