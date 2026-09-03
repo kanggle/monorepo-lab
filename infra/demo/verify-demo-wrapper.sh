@@ -1449,7 +1449,23 @@ if [ -f "$z2_pkr" ] && [ -f "$z2_self" ]; then
   for z2_t in $(head -n "$z2_live" "$z2_self" \
                   | sed -n 's/.*command -v \([a-z0-9_-][a-z0-9_-]*\).*/\1/p' | sort -u); do
     # 도구 이름 ≠ 패키지 이름. 아는 것만 매핑하고 나머지는 동일 이름으로 본다.
+    #
+    # 🔴 TASK-MONO-615 — 세 번째 부류가 있다: **base 이미지가 보장해서 apt 목록에 없는
+    #    것이 정상인 도구.** `timeout` 은 coreutils 이고 Ubuntu 에서 essential 이다.
+    #    이걸 모르면 이 칸은 «packer 가 timeout 패키지를 설치하지 않는다» 는 **없는 죄**를
+    #    고발한다(실측: (z24) 가 들어온 순간 그렇게 됐다).
+    # 🔵 그렇다고 「없어도 된다」로 넘기지 않는다 — 면제의 근거는 «base 에 있다» 이므로
+    #    그 근거 자체를 단언한다. 이 스크립트는 packer 7단계에서 **AMI 안에서도** 돌기
+    #    때문에, 그 단언은 정확히 AMI 안의 실재를 재는 것이 된다. 근거가 거짓이 되는 날
+    #    (base 이미지가 바뀌는 등) 이 칸이 그 자리에서 빨개진다.
     case "$z2_t" in
+      timeout)
+        command -v timeout >/dev/null 2>&1 \
+          || fail "(z2) 'timeout' 을 base 제공으로 분류했는데 이 환경에 없습니다."\
+          $'\n'"→ 면제의 근거(coreutils 는 essential)가 거짓입니다. packer 1단계에 coreutils"\
+          $'\n'"  설치를 추가하거나, demo-boot.sh / demo-up.sh 의 timeout 폴백 경로를 다시 보세요."
+        z2_seen="$z2_seen $z2_t(base)"
+        continue ;;
       node) z2_pkg="nodejs" ;;
       *)    z2_pkg="$z2_t" ;;
     esac
