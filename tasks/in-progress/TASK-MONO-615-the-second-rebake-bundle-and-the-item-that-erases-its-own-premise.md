@@ -1126,3 +1126,143 @@ bite 4/4 (주입 확인 포함), 그리고 **두 주입이 서로 다른 문장�
 
 🔵 `realpath` 요구도 **선언**했다 — 안 하면 (z2)가 그것을 범위에 넣지 않고, AMI 에 없으면
 packer 7단계에서야 죽는다(그게 (z2)의 존재 이유다). (z2)의 base 제공 부류에 함께 넣었다.
+
+---
+
+# ✅ 재굽기 7차 + 기동 창 #2 — C1·C2·C3·C4 판정 (2026-09-03 UTC)
+
+`ami-03144d1436a69bbfb`(`portfolio-demo-1788413688`, main `adcf4c22c`) ·
+인스턴스 `i-059942a457386d186` · `DEMO_DOMAIN=15-165-11-142.sslip.io`.
+
+## 🟢 부팅 #5 — 이 창에서 **처음으로** 유닛이 성공했다
+
+```
+Result=success   ExecMainStatus=0   ActiveState=active
+06:38:10 → 06:49:40  (690s,  TimeoutStartSec 1800)
+[boot] 잔존 스택 정리 (DEMO_BOOT_RESET=1) …    ← ⓐ 가 새 AMI 에서 돈다
+[drift] 라벨 일치 — 실행 중인 컨테이너에 … 아닌 sslip 호스트명이 없습니다
+[demo] ✔ HTTP 표면 2/2: console=307 web.fan-platform=307
+Created 0 · running 99 · 시드 6도메인 실패 0 (생성 wms 3·scm 11·finance 7·erp 20·ecommerce 12·fan 9)
+```
+
+🔵 새 인스턴스라 잔존 컨테이너가 없어 ⓐ 의 down 은 사실상 no-op 다 — 이 부팅이 증명하는
+것은 「ⓐ 가 신선 부팅을 깨지 않는다」이지 「경합을 고쳤다」가 아니다. 후자는 부팅 #3·#4 가
+이미 쟀다.
+
+## ✅ C1 — 404 **이고** 컨테이너가 존재하지 않는다 (AC-3 요구 그대로)
+
+| 축 | 실측 |
+|---|---|
+| 상태코드 | `web.ecommerce.15-165-11-142.sslip.io` → **404** |
+| 🔴 **존재** | `docker ps -a --filter name=web-store` → **0건** |
+| 양성 대조군 | `console` → **307** · `web.fan-platform` → **307** (억제 안 된 화면은 열린다) |
+| 라벨 드리프트 | 다른 sslip 호스트명을 가진 컨테이너 **0건** · `[drift] 라벨 일치` |
+
+🔴 **상태코드만으로 판정하지 않았다** — 기동 창 #1 에서 정확히 그 오독이 있었고, 그때
+살아남은 `ecommerce-web-store`(2026-09-02 생성 · 라벨 `43-202-166-3.sslip.io`)는
+**`down --remove-orphans` 를 두 부팅 연속 견뎠다**. 이제 그 컨테이너는 **없다**.
+⇒ `TASK-MONO-604` AC-4 가 요구한 상태에 도달했다.
+
+## ✅ C2 — 파일이 아니라 **번들**로 확인했다
+
+- `infra/demo/{auth-forwarder,backend-resolver}` 가 AMI 에 존재 ✅
+- 🔴 그러나 「파일이 있다」는 판정이 아니다. 러너 이미지 **안**을 봤다:
+  `not-demo`(이 해석기에만 있는 문자열 — 미니파이는 식별자는 바꿔도 **문자열 리터럴은
+  안 바꾼다**)가 `/app/web/fan-platform-web/.next/server/chunks/839.js` 에 있다.
+- 🔵 **음성 대조군**: 존재하지 않는 센티넬 문자열 → **0 파일**(grep 이 아무거나 잡는 게
+  아님을 증명). 형제 리터럴 `unavailable` 4파일 · `running` 8파일.
+
+🔴 내 첫 술어는 `createDemoBackendResolver` 를 찾는 것이었고 **0건**이 나왔다. 프로덕션
+빌드는 **식별자를 미니파이**하므로 그 술어는 애초에 성립할 수 없었다 — 「없다」가 아니라
+**「그렇게는 못 잰다」**였다.
+
+## 🟡 C3 — `demo.env` 는 저장소 판본, 내용 수정 0건. 다만 `git status` 는 0줄이 아니다
+
+```
+$ git status --short
+ M infra/demo/demo-boot.sh          ← 이것 하나
+$ git diff --numstat -- infra/demo/demo-boot.sh
+0       0       infra/demo/demo-boot.sh
+$ git diff --summary
+ mode change 100644 => 100755 infra/demo/demo-boot.sh
+demo.env:73  IAM_PUBLIC_URL=https://auth.hubwang.com      ← 저장소 판본과 동일
+```
+
+🔵 **내용 diff 는 0/0 이다.** 유일한 차이는 **실행 비트**이고, 이것은 AMI 굽기가 남기는
+자국이다(기동 창 #1 의 옛 인스턴스에서도 같은 한 줄이 나왔다 — 재현 가능한 성질이지
+호스트에서 누가 고친 흔적이 아니다).
+
+🔴 그래서 AC-3 의 문장(**「호스트 로컬 수정이 0건」**)을 **문자 그대로는 충족하지 않는다**.
+`git status` 는 1줄이다. 두 가지가 참이다:
+- 판정이 묻는 것(**뒤집기가 저장소에서 왔는가 · 손으로 고친 값이 없는가**)은 **충족**된다.
+- 술어(`git status` 0줄)는 **모드 변경을 내용 변경과 구별하지 못한다.**
+
+⇒ 「0건이다」로 적지 않고 이렇게 남긴다. 다음 사람이 이 한 줄을 보고 드리프트로 오독하거나,
+반대로 술어를 느슨하게 고쳐 **진짜 내용 변경까지 통과시키는** 것을 막아야 한다.
+🔵 술어를 고칠 거라면 방향은 `git diff --numstat` 이 0 인가 + `--summary` 가 mode change
+뿐인가이지, `git status` 를 지우는 것이 아니다.
+
+## ✅ C4 — 파일 · 런타임 · **그리고 로그인 자체**
+
+```
+projects/fan-platform/.env:25   OIDC_CLIENT_SECRET=fan-platform-dev
+mtime 2026-09-03 06:38:12                  ← 이 부팅에서 새로 만들어졌다
+73행의 재선언은 **없다**                    ← B2 가 지운 그것
+docker inspect fan-platform-web → OIDC_CLIENT_SECRET=fan-platform-dev   ← 런타임이 읽은 값
+```
+
+토큰 엔드포인트 지문이 **뒤집혔다**:
+
+| 시점 | 응답 | 뜻 |
+|---|---|---|
+| B2 진단 당시 | `invalid_client` **401** | 시크릿이 틀렸다 |
+| 지금 | `invalid_grant` **400** | **자격은 통과**, 코드만 가짜(대조군 ecommerce 와 같은 값) |
+
+### 🔴 그리고 티켓이 요구한 「팬 로그인 **자체**」를 왕복으로 확인했다
+
+```
+next-auth /api/auth/signin/iam
+  → 302 https://auth.hubwang.com/oauth2/authorize?…            (C3 뒤집기 = 공개 HTTPS)
+  → 302 /login  →  200 4,247B (폼 · _csrf 96자 · username 필드)
+  → POST demo@demo.com / Demo1234!  → 302 …/oauth2/authorize?…&continue
+  → 콜백 → 200  http://web.fan-platform.15-165-11-142.sslip.io/
+GET /api/auth/session →
+  {"user":{"email":"demo@demo.com"},"accountId":"0199de70-0000-7000-8000-00000000fa02",
+   "tenantId":"fan-platform","roles":["FAN"]}
+```
+
+⇒ B2 § 남은 공백 2 (*"팬 로그인이 실제로 되는지는 미측정이다 … 닫으려면 기동 창이 필요하다"*)
+가 **닫혔다.** 🔵 그리고 여섯 도메인 시드가 전부 `실패 0` 인 것이 같은 사실의 독립 증거다 —
+시드는 실제로 로그인 폼을 통과해 토큰을 받는다.
+
+### 🔴🔴 그 왕복을 재는 동안 내 술어가 **없는 결함을 만들어 냈다**
+
+`curl` 로 authorize 를 치자 **401 `WWW-Authenticate: Bearer`, 0 bytes** 가 나왔다. 나는
+① 공개 포워더 ② 데모 호스트 직격 ③ **컨테이너 직격(Traefik 밖)** 세 경로를 비교해 셋 다
+같은 401 임을 확인했고, 이어서 클라이언트 4개(fan·console·ecommerce·wms)가 **전부 401**
+임을 확인했다. 「포워더도 Traefik 도 C3 도 아니고 IdP 전역이다」— 증거가 아주 그럴듯했다.
+
+**전부 내 헤더를 재고 있었다.** Spring Security 는 엔트리포인트를 **콘텐츠 협상**으로
+고른다. `Accept: */*` 면 리소스서버 엔트리포인트가 401 을 주고, 브라우저가 보내는
+`Accept: text/html…` 이면 `/login` 으로 302 한다. 같은 URL을 헤더만 바꿔 다시 치자
+**200 /login** 이 나왔고 왕복이 끝까지 갔다.
+
+🔵 답은 저장소 안에 이미 있었다 — `infra/demo/seed/lib.sh:159` 의 로그인 헬퍼가
+`-H 'Accept: text/html'` 을 **명시적으로** 붙이고 있다. 조사 전에 그 파일을 열었어야 했다.
+🔴 「클라이언트 4개 전부 401」은 **모집단 조사처럼 보였지만** 네 번 모두 같은 내 헤더를
+잰 것이라 **정보량이 0**이었다 — 표본을 늘려도 공통 결함이 나와 함께 늘어나면 그 조사는
+증거가 아니다. 그대로 적었으면 **없는 IdP 결함**을 티켓에 랜딩했을 것이다.
+[[feedback_my_verification_predicate_is_the_likeliest_defect]]
+[[feedback_a_verifiable_mechanism_is_not_the_cause]]
+[[feedback_grep_the_siblings_before_fixing_it_yourself]]
+
+## 이 창이 **안 닫은** 것
+
+- **AC-4 의 Vercel 축** — `TASK-MONO-586` 라이브 · `TASK-MONO-610` AC-4b. 재굽기는 그것을
+  안 고친다(티켓이 이미 그렇게 적었고 이번에도 그대로다).
+- **매달림(rc=124) 경로** — 이 창 전체(부팅 5회)에서 한 번도 재현되지 않았다. `#3601` 의
+  호출당 상한은 **여전히 미시험**이다. 🔴 「고쳐졌다」가 아니라 **「아직 안 걸렸다」**이다.
+- **`--live` 전체 통과** — (f) 가 `container_name: scm-platform-redis` 고정 때문에 떠 있는
+  데모 호스트에서 구조적으로 못 돈다. 이 창의 `--live` 판정은 **(f) 앞까지**다.
+- **C3 술어** — 위 § C3 참조. 판정은 충족되지만 `git status` 는 1줄이고, 술어가 mode 를
+  content 와 구별하지 못한다는 사실을 남긴다.
