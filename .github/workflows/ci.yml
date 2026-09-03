@@ -217,6 +217,12 @@ jobs:
       # catalog it is validated against. Those diffs carry no code, so AND-combining
       # would skip the guard on exactly the changes it exists to police.
       service-type-notation: ${{ steps.filter.outputs.service-type-notation }}
+      # TASK-MONO-619: raw filter, NOT AND-combined with `code-changed`. 도착 경로는
+      # **아무 셸 편집**이고(가드 스크립트·데모 스크립트·워크플로 인라인 run), 그중 일부는
+      # `code-changed` 의 모집단 밖이다. AND 로 묶으면 그 편집이 이 잡을 안 깨운다.
+      # 🔴 이 줄이 없으면 `needs.changes.outputs.message-backticks` 가 빈 값이 되어
+      #    잡의 `if` 가 **항상 거짓**이 된다 — 배선이 없는데 초록으로 보인다.
+      message-backticks: ${{ steps.filter.outputs.message-backticks }}
       # TASK-MONO-518: raw filter, NOT AND-combined with `code-changed`. Every arrival
       # path for this drift is non-code — a task file moving into `done/`, a row edited
       # in the walkthrough, or the guard/exception list itself. AND-ing with
@@ -532,6 +538,14 @@ jobs:
               - 'projects/*/specs/services/*/architecture.md'
               - 'platform/service-types/INDEX.md'
               - 'scripts/check-service-type-notation.sh'
+            # TASK-MONO-619: 메시지 문자열 안의 백틱은 **명령 치환**이다 —
+            # 문구가 사라지고, 토큰이 PATH 에 있으면 실행된다(617 에서 docker rm 이
+            # 실제로 돌았다). 결함은 FAIL 경로에만 있으므로 초록 실행으로는 안 잡힌다.
+            # 모집단이 저장소 전체 셸이라 트리거도 그렇게 넓다.
+            message-backticks:
+              - '**/*.sh'
+              - '.github/workflows/*.yml'
+              - 'scripts/check-message-backticks.sh'
             # TASK-MONO-461: controller web-slice naming (*ControllerSliceTest).
             # Triggers on any test .java (a mis-named slice arrives there), the spec,
             # and the guard script. Pure-positive (no negation — MONO-074/075 quirk
@@ -1059,6 +1073,31 @@ jobs:
 
       - name: Guard — every public hostname in the tree is declared in TEMPLATE.md
         run: bash scripts/check-public-domains.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-619. 셸의 큰따옴표 안에서 백틱은 명령 치환이다. 가드의 실패 메시지가
+  # 자기 예시를 실행하면 ① 그 문구가 출력에서 사라지고 ② 토큰이 PATH 에 있으면 진짜로
+  # 실행된다 — TASK-MONO-617 의 bite 에서 `docker rm` 이 그렇게 돌았다.
+  # 🔴 이 결함은 FAIL 경로에만 있다. 가드를 초록으로만 돌려서는 영원히 안 보이고,
+  #    `bash -n` 도 못 잡는다(문법적으로 정상이다). 그래서 별도 잡이 필요하다.
+  # ---------------------------------------------------------------------------
+  message-backticks:
+    name: Guard messages do not execute their own examples (backticks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.message-backticks == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-message-backticks.sh
+
+      - name: Self-test the predicate (bites on the real tree, mutated)
+        run: bash scripts/check-message-backticks.sh --self-test
+
+      - name: Guard — no unescaped backtick inside a message string
+        run: bash scripts/check-message-backticks.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-570. A composite `Service Type` must sit in ONE backtick span.

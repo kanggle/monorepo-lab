@@ -1286,7 +1286,7 @@ if [ -d "$y_seed_dir" ]; then
     fi
   done
   [ -z "$y_offenders" ] || fail "시드 스크립트가 docker exec psql/mysql 을 직접 호출합니다:$y_offenders"\
-    $'\n'"→ `dbexec --why \"<사유>\"` 를 쓰십시오 (infra/demo/seed/lib.sh)."\
+    $'\n'"→ \`dbexec --why \"<사유>\"\` 를 쓰십시오 (infra/demo/seed/lib.sh)."\
     $'\n'"→ 사유를 **인자로** 요구하는 이유: 주석 규약은 깜빡할 수 있지만 필수 인자는 그럴 수 없습니다."
 
   # 드라이버가 실제로 존재하고, demo-up.sh 가 그것을 부르는가 (배선을 본다 — 로직이 아니라).
@@ -2154,7 +2154,7 @@ while IFS='|' read -r z12_proj z12_svc z12_key z12_val; do
 done < "$z12_rows"
 
 [ -z "$z12_bad" ] || fail "(z12) 데모 도메인을 따라가지 않는 issuer/JWKS 주입이 있습니다:$z12_bad"\
-  $'\n'"→ 이 값들은 데모에서 **틀린 IAM 을 가리킵니다.** 데모의 issuer 는 `http://iam.\${DEMO_DOMAIN}`"\
+  $'\n'"→ 이 값들은 데모에서 **틀린 IAM 을 가리킵니다.** 데모의 issuer 는 \`http://iam.\${DEMO_DOMAIN}\`"\
   $'\n'"   이고 DEMO_DOMAIN 은 부팅마다 IMDSv2 에서 파생됩니다 — 저장소에 박힌 호스트는 맞을 수 없습니다."\
   $'\n'"→ 증상은 인증 실패로 보입니다: issuer 불일치는 401, JWKS 호스트 미해소는 Spring 이"\
   $'\n'"   fail-closed 로 바꾼 401 입니다. 콘솔은 그 401 을 \"session expired\" 로 번역하므로"\
@@ -3055,7 +3055,7 @@ case "$z16_bad" in
                     $'\n'"→ 하나로 합치거나, 이 술어에 «어느 것을 보는가» 를 명시하세요." ;;
   __NOFI__)       rm -f "$z16_region"; fail "(z16) LIVE 게이트의 닫는 fi 를 찾지 못했습니다 — 구간을 특정할 수 없습니다." ;;
   __WRONGBLOCK__:self)
-                  rm -f "$z16_region"; fail "(z16) 집힌 구간이 **(z16) 자기 본문**입니다(`z16_` 토큰이 들어 있습니다) — 판정 불가입니다."\
+                  rm -f "$z16_region"; fail "(z16) 집힌 구간이 **(z16) 자기 본문**입니다(\`z16_\` 토큰이 들어 있습니다) — 판정 불가입니다."\
                     $'\n'"→ TASK-MONO-608 이 고친 결함이 되돌아온 것입니다. 앵커가 다시 열을 안 보고 있습니다." ;;
   __WRONGBLOCK__:noexit)
                   rm -f "$z16_region"; fail "(z16) 집힌 구간에 \`exit 0\` 이 없습니다 — 게이트 블록이 아닙니다. 판정 불가입니다." ;;
@@ -3143,9 +3143,9 @@ esac
   $'\n'"→ EBS_VOLUME / VOLUME_ATTACHMENT / EBS_BLOCK_DEVICE = DB 데이터가 루트 밖에 산다는 뜻입니다."\
   $'\n'"→ ROOT_PERSISTS = 인스턴스가 사라져도 루트가 남습니다."\
   $'\n'"→ AMI_IGNORED = AMI 를 바꿔도 인스턴스가 교체되지 않습니다."\
-  $'\n'"이 중 하나라도 참이면 **옛 자격으로 초기화된 DB 가 새 `.env` 를 만나는 상태**가 가능해집니다"\
+  $'\n'"이 중 하나라도 참이면 **옛 자격으로 초기화된 DB 가 새 \`.env\` 를 만나는 상태**가 가능해집니다"\
   $'\n'"(TASK-MONO-550 AC-4 가 걱정한 바로 그 조건). 그때는 이 가드가 아니라 **라이브 판정**이 필요하며,"\
-  $'\n'"비-루프백에서 재야 합니다 — `pg_hba` 의 `127.0.0.1/32 trust` 는 틀린 비밀번호도 통과시킵니다."
+  $'\n'"비-루프백에서 재야 합니다 — \`pg_hba\` 의 \`127.0.0.1/32 trust\` 는 틀린 비밀번호도 통과시킵니다."
 
 # (2)~(4) bite — 세 갈래를 각각 주입해 물리는지 본다.
 #     🔴 주입이 실제로 됐는지를 **먼저** 확인한다. 안 물린 것과 안 넣어진 것을 구별하지 못하면
@@ -3579,9 +3579,9 @@ done
   $'\n'"→ 키 이름 규약(*CLIENT_SECRET / *CLIENT_ID)이 바뀌었다면 이 칸의 술어도 같이 바꾸세요."
 
 [ -z "$z23_bad" ] || fail "(z23) .env.example 의 시크릿을 IAM 시드가 모릅니다:$z23_bad"\
-  $'\n'"→ 이 값은 `.env` 로 복사돼 런타임 자격이 됩니다(provision-demo-env.sh). 시드는 BCrypt"\
-  $'\n'"  해시를 갖고 있으므로 `.env` 쪽을 바꿔야 맞습니다 — 토큰 요청이 invalid_client 401 로"\
-  $'\n'"  떨어지고, 브라우저에는 `?error=Configuration` 만 보여 원인을 말하지 않습니다."\
+  $'\n'"→ 이 값은 \`.env\` 로 복사돼 런타임 자격이 됩니다(provision-demo-env.sh). 시드는 BCrypt"\
+  $'\n'"  해시를 갖고 있으므로 \`.env\` 쪽을 바꿔야 맞습니다 — 토큰 요청이 invalid_client 401 로"\
+  $'\n'"  떨어지고, 브라우저에는 \`?error=Configuration\` 만 보여 원인을 말하지 않습니다."\
   $'\n'"→ 시드가 아는 평문: $(printf '%s' "$z23_plain" | tr '\n' ' ')"
 
 ok "(z23) 클라이언트 시크릿 ${z23_checked}건이 시드 평문 ${z23_nplain}건 안에 있다 — 등록 client_id ${z23_nids}건 기준으로 모집단 판별"
@@ -3786,7 +3786,7 @@ grep -qE '^ExecStart=.*demo-boot\.sh' "$z24_unit" \
 if [ -f "$z24_handler" ]; then
   grep -q 'DEMO_BOOT_RESET' "$z24_handler" \
     && fail "(z24) 컨트롤 플레인(handler.py)이 DEMO_BOOT_RESET 을 언급합니다."\
-    $'\n'"→ per-domain 기동(`demo-boot.sh <name>`)에서 이 플래그가 켜지면 방문자가 보고 있는"\
+    $'\n'"→ per-domain 기동(\`demo-boot.sh <name>\`)에서 이 플래그가 켜지면 방문자가 보고 있는"\
     $'\n'"  데모를 통째로 내렸다 올립니다. 이 플래그의 유일한 출처는 systemd 유닛입니다."
 fi
 
