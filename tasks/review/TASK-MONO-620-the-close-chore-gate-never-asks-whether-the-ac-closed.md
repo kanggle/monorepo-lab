@@ -8,7 +8,7 @@ TASK-MONO-620
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -144,3 +144,68 @@ AC-3 이 *"판정하지 못한 것을 함께 적는다"* 를 요구했으므로 
 | 근거를 `CLAUDE.md` 에도 복사 | 한쪽만 고쳐져 갈라진다 | AC-3 |
 | ⚪ 를 일괄 «미결» 로 읽는 규칙 | MONO-574 류가 영원히 안 닫힌다 | AC-1 의 역방향 문장 |
 | 앵커 오타 | 링크가 조용히 죽고 detail 을 아무도 못 찾는다 | AC-4 |
+
+---
+
+# 🔴 Scope 정정 (구현 중 발견) — **2 파일이 아니라 5 파일이다**
+
+원래 Scope 는 `CLAUDE.md` + `platform/git-workflow-policy.md` 둘만 적었다. 구현 시작 시
+**「세 dimension」이라는 «개수»를 말하는 자리**를 전수로 세니 **넷**이었다:
+
+| 파일 | 자리 |
+|---|---|
+| `CLAUDE.md` | `:117` — *"Verify **three dimensions**"* · *"If any of the three fails"* |
+| `platform/git-workflow-policy.md` | `:246` — *"The three-dimension objective merge verification"* |
+| `.claude/commands/review-task.md` | `:51` — *"all three dimensions"* · `:221` — *"gated on 3-dimension merge verification"* |
+| `.claude/commands/process-tasks.md` | `:78` — *"gated on 3-dimension merge verification of each impl PR"* |
+
+🔴 **앞의 둘만 고치면 나머지 둘이 「3」인 채 남는다** — 그건 이 티켓이 막으려는 결함
+(한 사실이 여러 집을 갖고 한쪽만 고쳐진다)을 **이 티켓 자신이 실행하는 것**이다.
+⇒ 넷을 같은 PR 에서 옮겼다. 근거 서술은 여전히 `platform/` **한 곳에만** 둔다.
+
+---
+
+# ✅ 구현 결과 (2026-09-03 UTC)
+
+## AC-1 — `CLAUDE.md` 가 (d) 를 네 번째 dimension 으로 명시한다 ✅
+
+- *"Verify **three dimensions**"* → *"Verify **four dimensions**"*, *"If any of the three fails"*
+  → *"If any of the four fails"*.
+- (c) 뒤에 (d) 삽입. 술어를 **«티켓의 `# Acceptance Criteria` 절을 열어서 읽는다 — `INDEX.md`
+  행이 아니라»** 로 못박았고, **«AC 가 쓴 동사에 대고»** 판정한다고 적었다
+  (*"a recommendation does not close an AC that says «decide»"*).
+- 미충족 처방 명시: **파일을 옮기지 않는다** — `review/` 에 두고 `## CORRECTION`.
+  이유도 함께 적었다(`done/` 은 frozen 이라 그 뒤로 아무도 안 본다).
+- 🔵 역방향 명시: ⚪ 가 *"could not be measured, and why"* 를 기록한 것이면, AC 가 그것을
+  요구했을 때 **그게 그 AC 의 답**이다.
+- 🔴 required check 이름 4종은 **한 글자도 안 건드렸다** — 스크립트로 재확인했다(아래 AC-4).
+
+## AC-2 — `platform/` 이 근거 3건을 파일:줄로 든다 ✅
+
+`## The Fourth Dimension — (d) Did the AC Actually Close?` 신설(`:262`). 표 3행:
+
+- `TASK-BE-582`(iam) `AC-4` — AC 제목 자신이 *"🔴 절반만 충족됐다. 나머지를 적는다."*
+- `TASK-MONO-605` `AC-3` — AC 본문 `:127` *"명시한다 — 남길지 지울지"* ↔ 결과 `:254-257`
+  *"🙋 소유자 결정. 추천: 삭제"* 인데 제목엔 ✅.
+- `TASK-MONO-574` `AC-2` — ⚪ *"미측정, 그리고 측정 불가였다"* 가 **충족**인 역방향 사례.
+
+🔴 **셋 다 요약이 아니라 해당 파일의 원문과 대조해 인용했다.**
+
+## AC-3 — 두 문서가 갈라지지 않는다 ✅
+
+- **근거 서술(표 3행 + ⚪ 읽는 법)은 `platform/` 에만 있다.** `CLAUDE.md` 는 카탈로그 한 문장
+  + *"§ The Fourth Dimension"* 포인터.
+- 🔴 **다만 «개수»는 성질상 네 집에 산다** — 그래서 `platform/` 신설 절 말미에
+  **네 집을 이름으로 열거하고 «같이 움직여야 한다»** 고 적었다. 개수를 한 집으로 줄이는
+  것은 이 티켓 범위 밖(커맨드 파일이 자기 절차를 서술해야 하므로).
+- 잔여 검사: `three dimensions|3-dimension|three-dimension` 전수 grep = **0건**.
+
+## AC-4 — 앵커가 실제로 해소된다 ✅
+
+- 🔵 **새 앵커 링크를 만들지 않았다.** (d) 는 `platform/… § The Fourth Dimension` 을
+  **산문 § 참조**로 가리킨다 — 오타 앵커가 조용히 죽는 경로를 애초에 만들지 않는 쪽을 골랐다.
+  기존 `#merge-verification-worked-incident` 링크는 그대로 유효하다.
+- `scripts/check-claude-reference-integrity.sh` → **rc=0** (24 docs, 161 references, all resolve)
+- `scripts/check-required-check-names.sh` → **rc=0** (핀 4개가 ci.yml + 문서 3곳과 일치)
+- `scripts/check-index-queue-drift.sh` → **rc=0** · `scripts/check-task-id-collision.sh` → **rc=0**
+- 🔴 전부 **독립 statement + 명시 `rc=$?`** 로 읽었다(파이프에 안 물렸다).

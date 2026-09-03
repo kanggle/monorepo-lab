@@ -243,7 +243,7 @@ every path except the one that matters. (Worked incident: TASK-MONO-343.)
 
 ## Merge-Verification Worked Incident
 
-The three-dimension objective merge verification before any close chore (defined in `CLAUDE.md` § Task Rules) exists because a "merged it" statement is not proof. Worked incident: a PR was squash-merged while a required integration check was still failing → `main` went RED four times in a row → recovery required a separate top-priority fix-task to restore `main` GREEN. CI-RED-at-merge time creates a main regression; the `statusCheckRollup` of the merged PR is the authoritative record. If any of the three dimensions fails, STOP and open a fix-task before the close chore.
+The four-dimension objective merge verification before any close chore (defined in `CLAUDE.md` § Task Rules) exists because a "merged it" statement is not proof. Worked incident: a PR was squash-merged while a required integration check was still failing → `main` went RED four times in a row → recovery required a separate top-priority fix-task to restore `main` GREEN. CI-RED-at-merge time creates a main regression; the `statusCheckRollup` of the merged PR is the authoritative record. If any of the four dimensions fails, STOP and open a fix-task before the close chore. Dimension (d) is the exception to "open a fix-task": see § The Fourth Dimension below — it means do not move the file at all.
 
 > 🔴 **Read "required" literally, and know how small the set is** (`TASK-MONO-598`, 2026-08-28). The incident above says *a required integration check* — that was the language of the day, not the current configuration. `main` now requires exactly four contexts — 🔴 **written with their parentheses, because the parentheses are part of the registered string, not decoration** (`TASK-MONO-599`, 2026-08-28): `changes`, `INDEX queue drift (INDEX.md tables vs queue directories)`, `Task ID collision (duplicate IDs in active queues)`, `Walkthrough limitation ledger drift (§ 6 rows vs task queues)`. Only the first is short, and only because that job carries no `name:` so its job id becomes the context verbatim. They were chosen because they measured SUCCESS in **24 of 24** sampled PRs, so requiring them cannot deadlock on a permanent pending; the reusable-workflow children (`… / integration`, `… / e2e`) appear in only **4 of 24** and would. **So integration and e2e are NOT required, and dimension (c) does not assert they were green.** Until 598 the required set was empty, which made (c) true in every state — the guard named in this very section could not bite.
 
@@ -258,3 +258,47 @@ The three-dimension objective merge verification before any close chore (defined
 > 🔵 `scripts/check-required-check-names.sh` cell (4) asserts the gating shape, so this sentence fails a build if someone ungates one of the three. 🔴 What no repo-side guard can see is a **single PR's** actual conclusions — that is runtime, not repo state. Read the rollup.
 
 > 🔴🔴 **A guard that bites is not a document that is right** (`TASK-MONO-599`, 2026-08-28). 598's AC-4 proved the gate bites — probe PR `BLOCKED`, non-required-red PR `UNSTABLE` and merged — by reading the **live configuration**. The names it wrote into three documents on the same day were never compared against it, and **three of the four were wrong** (every parenthetical dropped). Re-registering protection from those names would make three contexts permanently pending and deadlock `main` — the exact failure 598 excluded tier 3 to avoid. It survived a day because the string is true or false *depending on the tool*: substring `grep` matched, equality did not. **When you turn a mechanism on and then describe it, the description is a second artifact and needs its own check.** The pin is `scripts/required-check-names.txt` (sourced from the API, never retyped) and `scripts/check-required-check-names.sh` compares it against `ci.yml` and the three documents. 🔴 It cannot see changes made on the protection side — if the owner changes the required set, the pin must be rebuilt from the API.
+
+## The Fourth Dimension — (d) Did the AC Actually Close?
+
+> `TASK-MONO-620`, 2026-09-03. Surfaced by `/audit-memory` as a promotion candidate: the rule
+> lived in an agent's private memory, so every other session walked into it unguarded.
+
+🔴🔴 **Dimensions (a), (b) and (c) all measure the same object — the pull request.** (a) and (b)
+ask *did it merge*; (c) asks *did merging break `main`*. **None of them asks whether the ticket's
+own Acceptance Criteria closed.** That is dimension **(d)**, and it is the only one that measures
+the *ticket* rather than the *PR*.
+
+The cost of missing it is asymmetric: `done/` is a **frozen** stage. A remainder filed under
+`review/` is still on somebody's queue; the same remainder filed under `done/` is read by nobody,
+ever again. So (d) failing is not "close it and note the gap" — it is **do not move the file.**
+
+### How to read (d)
+
+- **Open the ticket body's `# Acceptance Criteria` section.** Its `INDEX.md` row cannot answer
+  this — the row records queue position, which is exactly what (a)(b)(c) already measured.
+- **Read the AC's verb, not its topic.** An AC that says *"명시한다 — 남길지 지울지"* is closed by
+  a decision, not by a recommendation.
+- 🔵 **The reverse also holds.** A ⚪ that records *"could not be measured, and here is why"* is
+  the **answer** to an AC that asked for exactly that. Reading every ⚪ as "open" fails in the
+  opposite direction.
+
+### Worked evidence — three tickets already in this repository
+
+| Ticket | What (a)(b)(c) said | What (d) would have said |
+|---|---|---|
+| `projects/iam-platform/tasks/done/TASK-BE-582-…md` § `AC-4` | all three passed | the AC's own heading reads **"🔴 절반만 충족됐다. 나머지를 적는다."**, and its 「기존 볼륨」 row is `⏳ 미수행` |
+| `tasks/done/TASK-MONO-605-…md` § `AC-3` | all three passed | the AC (`:127`) requires *"판정 후 스냅샷 처분을 **명시한다** — 남길지 지울지"*; the result (`:254-257`) is *"🙋 스냅샷 처분 = 소유자 결정. **추천: 삭제**"* under a ✅ heading. **A recommendation is not a choice** |
+| `tasks/done/TASK-MONO-574-…md` § `AC-2` | all three passed | ⚪ *"미측정, 그리고 측정 불가였다"* — and `AC-3` asked for *"판정하지 못한 것을 함께 적는다"*, so **the ⚪ is the closure**, not a gap |
+
+🔴 **No repo-side guard can measure (d), and none should pretend to.** AC satisfaction is a prose
+judgement about whether a described outcome occurred; a guard that greps for ✅ would pass
+`TASK-MONO-605` — the ✅ was there. This dimension is enforced by the agent or human doing the
+close chore, which is why it has to be written down where they will read it.
+
+🔴 **Where the count lives.** The number of dimensions is stated in four files —
+`CLAUDE.md` § Task Rules, this section, `.claude/commands/review-task.md` (twice) and
+`.claude/commands/process-tasks.md`. They must move together; a count that is right in one
+home and stale in another is the failure mode this repository has paid for repeatedly. The
+**evidence** above, by contrast, lives only here — `CLAUDE.md` carries the catalog line and
+points at this anchor.
