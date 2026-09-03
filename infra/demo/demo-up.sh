@@ -409,6 +409,20 @@ post_up_call "도메인 데이터 시드" bash "$HERE/seed/seed.sh" "${SET[@]}" 
 drift_rc=0
 post_up_call "라벨 드리프트 판정" bash "$HERE/check-label-drift.sh" "${SET[@]}" || drift_rc=$?
 
+# 억제 런타임 판정 (TASK-MONO-617). (z19)는 **렌더**를 보고 이것은 **컨테이너의 존재**를
+# 본다. `profiles:` 로 가려진 서비스는 compose 에게 「고아」가 아니라 「비활성」이라
+# `down --remove-orphans` 가 안 지우고 `restart=unless-stopped` 가 다음 부팅에서 되살린다
+# (TASK-MONO-610 창 #1 실측). 그 상태에서 (z19)는 **초록**이고, 새 도메인이 내는 404 는
+# 「억제 완료」의 404 와 **모양이 같고 기전이 다르다.**
+#
+# 🔴 이 자리인 이유 — `verify --live` 에 붙이면 **안 돈다**: 칸 (f) 가
+#    `container_name: scm-platform-redis` 고정 때문에 떠 있는 데모 호스트에서 구조적으로
+#    실패하고 그 뒤 칸은 도달하지 않는다(TASK-MONO-615·616 두 창에서 실측). 러너 없는
+#    검사는 썩는다. post_up_call 은 **부팅마다 확실히 돈다** — 드리프트 판정과 같은 자리다.
+# 🔴 드리프트와 같이 종료코드를 보존한다: 이미 뜬 스택을 내리지 않되 조용히 넘기지도 않는다.
+suppressed_rc=0
+post_up_call "억제 런타임 판정" bash "$HERE/check-suppressed-containers.sh" "${SET[@]}" || suppressed_rc=$?
+
 echo "[demo] up complete — profile=$PROFILE"
 [ "$seed_rc" -eq 0 ] || echo "[demo] ⚠ 도메인 데이터 시드가 일부 실패했습니다(위 [seed] 로그 참조) — 해당 화면은 빌 수 있습니다"
 [ "$domain_seed_rc" -eq 0 ] || echo "[demo] ⚠ OIDC 리다이렉트 URI 등록이 실패했습니다(위 [seed] 로그 참조) — 로그인이 데모 도메인에서 되돌아오지 못할 수 있습니다"
@@ -649,4 +663,16 @@ fi
 [ "$domain_seed_rc" -eq 0 ] || final_rc=1
 [ "$drift_rc" -eq 0 ] || final_rc=1
 [ "$seed_rc"  -eq 0 ] || final_rc=1
+# 억제 런타임 판정 (TASK-MONO-617). 🔴 **1 과 2 를 가른다.**
+#   rc=1 → 억제 대상 컨테이너가 **존재한다**. 이것은 진짜 위반이고 부팅을 빨갛게 만든다 —
+#          604 가 고치려던 상태가 정확히 «틀렸는데 조용한» 것이었다.
+#   rc=2 → **판정 불가**(데몬 없음 · 그 프로젝트 컨테이너 0개 · 렌더 실패). 이것으로
+#          빨갛게 만들면 «못 쟀다» 가 «틀렸다» 로 보고되고, 영구 빨강이 된 가드는 꺼진다.
+#          그래서 경고만 찍고 종료코드는 건드리지 않는다.
+if [ "$suppressed_rc" -eq 1 ]; then
+  final_rc=1
+elif [ "$suppressed_rc" -ne 0 ]; then
+  echo "[demo] ⚠ 억제 런타임 판정을 못 했습니다(rc=$suppressed_rc) — 위 [suppressed] 사유 참조." >&2
+  echo "[demo]   🔴 «억제됐다» 가 아니라 «못 봤다» 입니다. 부팅은 이것으로 실패시키지 않습니다." >&2
+fi
 exit "$final_rc"
