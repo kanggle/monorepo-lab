@@ -1030,3 +1030,56 @@ http://iam.<도메인>/connect/zzz-616   → 401     ← 🔴 없는 경로도 4
 | **AC-3 (V1–V8)** | ✅ **이 원장으로 닫힘** |
 | **AC-4** (rider 배선) | ✅ V3 가 `Domain` 없음 = host-only 를 실측 |
 | **AC-4b** | 🟡 **fan 닫힘 · store 열림** — 소유자 1줄 + store 경로 배포 + 다음 창의 재측정 |
+
+---
+
+# 🟢 AC-4b 후속 (2026-09-03 UTC) — **store 의 ② 단계가 닫혔다.** 그리고 그 판별에 술어가 필요했다
+
+기동 창 #3 원장이 적은 순서 `① OIDC_ISSUER_URL 투입 → ② store 경로를 건드리는 배포 →
+③ 기동 창 재측정` 에서 **①과 ②가 끝났다.**
+
+## 판별자 — 🔵 **`?dpl=` 이 Vercel 의 배포 id 다**
+
+Vercel 은 정적 자산 URL(`Link:` preload 헤더·HTML 안의 CSS/JS 참조)에 배포 id 를 쿼리로
+붙인다. **프로덕션 alias 는 한 배포를 가리키므로 그 값이 바뀌면 새 배포가 승격된 것**이다.
+
+| 시각 (KST) | 무엇 | `dpl_` |
+|---|---|---|
+| 17:06 | 창 전 (데모 OFF) | `dpl_HLV6QzMSPd1uQnQ8zfqyq4zTuFMN` |
+| 17:51 · 17:52 | 기동 창 #3 안 (칸1 측정) | **같음** |
+| **19:17** | `OIDC_ISSUER_URL` 투입 뒤 | 🟢 **`dpl_FLxzzBt8B7VxEtshaXXSYdWLZg9a`** |
+
+⇒ **이 원장이 경고한 함정 — `ignoreCommand`(`vercel-ignore.sh`)가 같은 커밋의 redeploy 를
+취소한다 — 이 이번엔 물지 않았다.** `kanggle-fan` 에서는 그것 때문에 발효가 하루 넘게
+지연됐고, 이 원장이 *"네 Vercel 프로젝트 전부가 같은 모양을 갖는다"* 라고 적은 자리다.
+
+## 🔴 내 첫 술어가 틀렸다 — **정적 청크 해시는 이 축을 판별하지 못한다**
+
+처음에 `/_next/static/chunks/*.js` 의 해시를 창 안 판본과 대조했고 **전부 같았다**.
+「새 배포가 없다」로 읽을 뻔했다.
+
+**틀렸다**: `OIDC_ISSUER_URL` 은 `NEXT_PUBLIC_` 접두사가 없어 **클라이언트 번들에 인라인되지
+않는다**(서버에서만 읽힌다 — `auth-callbacks.ts:34`). 같은 소스에서 다시 빌드하면 청크
+해시는 **당연히 같다.** ⇒ 「해시가 같다」는 「배포가 없다」와 **「배포는 됐는데 클라 산출물이
+안 바뀌었다」를 구별하지 못한다.** 배포 id 는 그 둘을 구별한다.
+[[feedback_my_verification_predicate_is_the_likeliest_defect]]
+
+🔵 HTML 바이트 수도 판별자가 **아니다** — 창 안 75,264 B ↔ 지금 40,618 B 의 차이는 배포가
+아니라 **데모가 꺼져서 상품 목록 대신 에러 문구를 렌더**하기 때문이다(칸1 의 기준선 그대로).
+
+## 🔴 그래도 「값이 옳다」는 **아직 아니다** — 그리고 지금은 원리적으로 확인 불가
+
+데모가 꺼져 있으면 `https://auth.hubwang.com/.well-known/openid-configuration` 가 **503**
+이므로, issuer 가 새 값이어도 폴백 `http://iam.local`(`auth-callbacks.ts:34`) 이어도
+next-auth 의 discovery 는 **똑같이 실패**하고 `POST /api/auth/signin/iam` 은 **똑같이**
+`?error=Configuration` 을 낸다. ⇒ **두 원인이 같은 지문을 낸다.**
+
+**⇒ AC-4b store 의 판정은 여전히 ③ 기동 창의 「로그인이 되는가」다.** 이 절은 ②가 닫혔다는
+것만 주장한다. 🔴 다음 창의 매니페스트에 이 칸을 **미리 적어라**(`TASK-MONO-616` 의 교훈).
+
+## 🔵 다음 창에서 같이 볼 것 하나
+
+`ECOMMERCE_WEB_STORE_CLIENT_SECRET` 의 유무는 **밖에서 못 잰다**. 없으면 소스가 빈 문자열로
+폴백하고(`auth-callbacks.ts:38`) 증상은 discovery 가 아니라 **토큰 교환 401** 이다 —
+즉 issuer 를 고친 **다음 홉에서** 터진다. 🔴 왕복이 홉②를 넘어 홉④에서 죽으면
+**issuer 가 아니라 이 시크릿을 의심하라.**
