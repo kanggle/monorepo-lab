@@ -376,3 +376,22 @@ CORRECTION 으로만 적게 되고 그러면 「위를 먼저 읽는 사람」�
 ⇒ (x2) 가 반쪽이 되는 시점은 아직 오지 않았고, 그 일은 `ADR-MONO-067` **단계 4** 의 몫이다.
 🔴 그 단계의 주인이 `TASK-MONO-586`(frozen) 인지 새 티켓인지는 **아직 정해지지 않았다** —
 `TASK-MONO-616` § AC-3 이 그 공백을 이름으로 적어 뒀다.
+
+---
+
+# 🔵 AC-0 ② 후속 (2026-09-03 UTC) — **선행 사슬의 ②가 닫혔다.** 이 칸은 여전히 ③ 대기다
+
+이 티켓이 적은 순서 `① OIDC_ISSUER_URL 투입 → ② store 경로 배포 → ③ 기동 창 로그인 →
+④ /api/store-config 읽기` 에서 **①②가 끝났다**(소유자 투입 + 새 배포 승격 확인).
+
+판별은 Vercel 이 정적 자산 URL 에 붙이는 **배포 id** 로 했다 —
+`dpl_HLV6QzMSPd1uQnQ8zfqyq4zTuFMN`(창 전·창 안 동일) → `dpl_FLxzzBt8B7VxEtshaXXSYdWLZg9a`(투입 뒤).
+🔴 정적 청크 해시는 이 축을 **판별하지 못한다**(`OIDC_ISSUER_URL` 은 `NEXT_PUBLIC_` 이
+아니라 클라 번들에 안 들어간다) — 상세는 `TASK-MONO-610` § AC-4b 후속.
+
+🔴 **그래도 이 칸은 여전히 「미측정」이다.** `/api/store-config` 는 인증 게이트 뒤이고
+(실측 유지: `307 → /login?from=%2Fapi%2Fstore-config`), 로그인은 **데모가 켜져야** 성립한다.
+⇒ **④는 ③ 없이 오지 않는다.**
+
+🔵 **PASS 의 정의는 그대로다** — 이 칸의 PASS 는 값이 `true` 인 것이 아니라
+「런타임 값을 읽었다」 쪽이다. `false` 가 나와도 칸은 닫히고, 그 값이 AC-1 의 입력이 된다.
