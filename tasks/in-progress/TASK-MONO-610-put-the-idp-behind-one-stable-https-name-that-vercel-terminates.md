@@ -1083,3 +1083,37 @@ next-auth 의 discovery 는 **똑같이 실패**하고 `POST /api/auth/signin/ia
 폴백하고(`auth-callbacks.ts:38`) 증상은 discovery 가 아니라 **토큰 교환 401** 이다 —
 즉 issuer 를 고친 **다음 홉에서** 터진다. 🔴 왕복이 홉②를 넘어 홉④에서 죽으면
 **issuer 가 아니라 이 시크릿을 의심하라.**
+
+---
+
+# 🟢 AC-4b — **store 절반이 닫혔다** (기동 창 #4, 2026-09-04 UTC, `TASK-MONO-621` 칸 1)
+
+창 #3 은 홉①에서 `?error=Configuration` 이었다. **뒤집혔다:**
+
+```
+hop0 /api/auth/providers   200 / 171 B
+hop0 /api/auth/csrf        64 chars
+hop1 POST signin/iam  → Location https://auth.hubwang.com/oauth2/authorize
+                                   ?response_type=code&client_id=ecommerce-web-store-client&…
+hop2 /login 폼             4,247 B · _csrf 96 chars
+hop3 자격 제출        → 302 back to authorize
+hop4 콜백 체인             2 redirects
+hop5 /api/auth/session     {"email":"demo@demo.com","accountId":"0199de70-…-ec01",
+                            "tenantId":"ecommerce","roles":["CUSTOMER"]}
+```
+
+⇒ **AC-4b 는 fan(창 #3) · store(창 #4) 양쪽 다 닫혔다.**
+
+🔵 **양성 대조군이 같은 창에 있었다** — 같은 순간 같은 IdP 로 fan 왕복도 세션까지 갔다
+(`tenantId=fan-platform`, `roles=["FAN"]`). 두 팔이 **같이** 성공했으므로 이 PASS 는
+「IdP 가 우연히 관대했다」로 설명되지 않는다.
+
+🔴 **`Accept: text/html` 을 붙여서 쟀다** — 창 #2 가 없는 IdP 결함을 만들어 낸 그 자리다.
+정본은 `infra/demo/seed/lib.sh`. 그리고 **IdP 베이스를 박아 두지 않고 홉①의 `Location`
+에서 파생**시켰다(창 #3 의 교훈).
+
+## 🔵 무엇이 이것을 고쳤나 — **선언이 아니라 배포였다**
+
+`610` § AC-4b 후속(창 #3)이 *"② 단계가 닫혔다 — 판별은 Vercel 배포 id"* 로 적어 둔
+그 배포가 발효한 결과다. 🔴 **env 목록에 있다 = 켜져 있다가 아니다** 는 그 절의 경고가
+이번에 반대 방향으로 확인됐다: 배포가 실린 **뒤에야** 왕복이 성립했다.
