@@ -10,7 +10,7 @@ TASK-MONO-621
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -623,3 +623,63 @@ GET https://fan.hubwang.com/artists   200 (13,762 B)  "디렉토리를 불러올
 🔴 **그러나 `586` 은 지금 닫으면 안 된다** — 위 § A 가 그 티켓의 제목 그대로 열려 있다.
 🔵 `604` 는 후보다. `612` 는 이 창으로 **AC 가 전부 닫혔다** ⇒ `review/` 로 올릴 수 있다.
 🔴 **판정은 큐 행이 아니라 티켓 본문 AC 절을 열어서 한다**(`TASK-MONO-620` 4-dim).
+
+---
+
+# 🔴 창 #5 에 **딸려 와야 하는 것** (2026-09-04 UTC, `review/` 로 올리기 직전에 추가)
+
+`TASK-MONO-616` 이 만든 규율 — *"다음 창은 「무엇이 딸려 와야 하는지」까지 적어야 한다"* —
+을 이 창에도 적용한다. 칸 5 의 처방(소유자 env 투입)이 **창 없이 집행됐고**, 그 효과를
+재려다 **창 #5 의 술어 요구사항 하나를 찾았다.**
+
+## 집행된 것 (소유자, 2026-09-04)
+
+| 항목 | 상태 |
+|---|---|
+| `kanggle-fan` 에 `DEMO_API_BASE` = 컨트롤 플레인 URL + 배포 | 🟢 투입 완료 |
+| `kanggle-fan` 에 `DEMO_PAYMENT_MOCK=1` | 🟢 투입 완료 |
+
+🔴 **효과는 아직 안 쟀다.** 창이 닫혀 있고(`/status` = `stopped`, 318/600), 아래 이유로
+**창 밖에서는 원리적으로 못 잰다.**
+
+## 🔴🔴 창 #5 의 술어 요구사항 — **팬 표면은 fail-closed 라 세션 없이는 못 읽는다**
+
+`fan-platform-web/src/middleware.ts` 의 matcher 는 `/login` · `/api/auth/*` ·
+`build-info.json` 만 공개로 두고 **나머지 전부를 `/login?from=…` 으로 307** 시킨다
+(`TASK-FAN-FE-019` AC-1 이 고른 (A) fail-closed). 그리고 판정에 쓸 두 창구가 그 뒤에 있다:
+
+| 재려는 것 | 창구 | 미인증 실측 (2026-09-04, 데모 OFF) |
+|---|---|---|
+| `DEMO_API_BASE` 발효 | `DemoBackendNotice` — `(main)` 셸의 서버 컴포넌트 | `/` → **307** |
+| `DEMO_PAYMENT_MOCK` 발효 | `/api/payment-config` | **307** |
+
+🔵 대조군: 같은 순간 `store.hubwang.com/` 은 **200**(스토어는 공개 셸) 이고
+`store.hubwang.com/api/store-config` 는 **307** — 즉 게이트는 팬 전용 성질이 아니라
+**라우트별**이고, 팬은 그 셸까지 닫혀 있다는 것이 차이다.
+
+## 🔴🔴 그래서 **맨 `curl` 은 칸 5 의 FAIL 과 지문이 같다**
+
+로그인 페이지는 **200 / 10,913 B** 로 돌아온다. `render.py` 에 그대로 물리면
+「아티스트 링크 0 · 멤버십 링크 0 · 도메인 개체 0」 — **칸 5 가 FAIL 이었을 때와 같은 값**이다.
+⇒ 창 #5 의 팬 칸에는 **판정 앞에 유효성 술어**가 필요하다:
+
+```
+① 최종 URL 이 /login 이 아닐 것  (curl -w '%{url_effective}')
+② 리다이렉트 체인의 Location 에 from= 이 없을 것
+③ 그런 다음에야 도메인 개체를 센다
+```
+
+🔵 **창 #4 의 판정은 이 함정에 안 걸렸다** — 칸 5 는 세션 쿠키(`roundtrip.sh` 의 jar)를
+들고 쟀고, 그래서 로그인 HTML 이 아니라 **에러 문구를 낸 피드 셸**을 읽었다. 즉 창 #4 의
+FAIL 은 유효했다. 🔴 그러나 그것은 **적어 두지 않은 전제**였고, 다음 사람이 맨 `curl` 로
+재면 조용히 같은 숫자를 얻는다. 그래서 여기 적는다.
+[[feedback_measurement_needs_a_validity_predicate]]
+[[feedback_absence_verdict_from_a_proxy_is_not_a_measurement]]
+
+## 🔵 같이 확인한 것 — 팬 배포는 코드상 최신이다
+
+`fan.hubwang.com/build-info.json` = `{"commit":"adcf4c22c0b8bf1840b76b57533acd4916dfd04a",
+"ref":"main"}`. `origin/main` 보다 **18 커밋 뒤**지만 그 18개 중
+`projects/fan-platform/web/fan-platform-web/**` 를 건드린 것은 **0건**이다
+(`vercel-ignore.sh` 의 정상 동작). 🔴 **「코드가 최신」이 「env 가 발효됐다」는 아니다** —
+후자는 위 두 창구로만 판정된다.
