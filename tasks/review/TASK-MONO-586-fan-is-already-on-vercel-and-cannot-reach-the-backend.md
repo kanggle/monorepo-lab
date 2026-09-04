@@ -644,3 +644,39 @@ GET https://fan.hubwang.com/artists  200  "디렉토리를 불러올 수 없습�
 `TASK-MONO-621` § AC-3 이 이것을 「주인이 필요한 일」로 이름 붙였다.
 🙋 소유자 작업(env 투입 + 배포) + 다음 창의 재측정이 남았다.
 🔴 **`604` 와 달리 이 티켓은 지금 `done/` 으로 옮기면 안 된다** — 제목의 명제가 열려 있다.
+
+---
+
+# 🔵 CORRECTION (2026-09-04 UTC) — **이 티켓의 명제에 후속 주인이 생겼다: `TASK-MONO-622`**
+
+`review/`(frozen) 이라 AC 를 못 얻으므로 순수 추가한다. 🔴 **이 티켓은 아직 안 닫힌다** —
+제목의 명제(*"팬은 이미 Vercel 에 있는데 백엔드에 못 닿는다"*)가 기동 창 #4
+(2026-09-04, `TASK-MONO-621` 칸 5)에서 **참으로 재확인**됐다.
+
+## 창 #4 가 알아낸 것 — 원인을 대조군이 한 칸으로 지목했다
+
+| Vercel 프로젝트 | `DEMO_API_BASE` |
+|---|---|
+| `kanggle-store` · `kanggle-portfolio` | ✅ 있다 |
+| **`kanggle-fan`** | ❌ **없었다** |
+
+`DEMO_API_BASE` 는 해석기의 **입력**이다(`ADR-MONO-068` § D2). 팬 코드에는 해석기가 이미
+배선돼 있었다(`shared/config/demo-backend.ts` → `@demo/backend-resolver`) ⇒
+**없던 것은 코드가 아니라 그 입력값**이다.
+
+## 그 뒤 (2026-09-04)
+
+- 🟢 소유자가 `kanggle-fan` 에 `DEMO_API_BASE` + `DEMO_PAYMENT_MOCK=1` 을 **투입·배포**했다.
+- 🔴 **효과는 아직 안 쟀다.** 데모가 꺼져 있고(`/status` = `stopped`), 팬 표면은
+  `middleware.ts` 가 fail-closed 라 판정 창구 둘이 전부 `307 → /login` 이다
+  ⇒ **창 밖에서는 원리적으로 못 잰다.**
+
+## 🔴 그래서 이 티켓의 close 조건
+
+**`TASK-MONO-622` AC-1 의 판정 하나**다. PASS 면 622 가 이 티켓에 CORRECTION 을 달고
+별 close chore PR 로 `review/ → done/` 한다. FAIL 이면 이 티켓은 그대로 남고, 622 가
+다음 가설에 행을 준다.
+
+🔴🔴 **판정의 소유자는 622 다.** `TASK-MONO-618` § AC-0 ① 이 같은 사실을 재지만 그 티켓에서는
+**전제 칸**이고 618 의 목표(억제)는 이미 닫혔다(AC-5 PASS). 두 티켓이 서로를 기다리면
+일이 조용히 사라지므로 여기에 한 번만 적어 둔다.
