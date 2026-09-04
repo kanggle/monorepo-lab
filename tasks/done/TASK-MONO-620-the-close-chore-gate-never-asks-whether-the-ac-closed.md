@@ -8,7 +8,7 @@ TASK-MONO-620
 
 # Status
 
-review
+done
 
 # Owner
 
