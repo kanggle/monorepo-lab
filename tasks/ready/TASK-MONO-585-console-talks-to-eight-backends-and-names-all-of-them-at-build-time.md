@@ -653,3 +653,22 @@ GET /api/auth/session → accountId · tenantId=fan-platform · roles=["FAN"]
 
 🔵 착수할 때 AC-0 은 **이 표부터 다시 재라** — 그 사이 store 에 `OIDC_ISSUER_URL` 이
 들어갔다면 홉① 의 사유가 또 바뀐다.
+
+---
+
+# 🔵 § 왕복 홉 표 갱신 (2026-09-04, 기동 창 #4 · `TASK-MONO-621` 칸 1)
+
+이 티켓은 `TASK-MONO-610` 왕복의 **소비자**다(자기 칸이 아니다). 그 왕복이 닫혔으므로
+여기 적힌 「미측정」이 낡았다 — 한 사실이 두 절에 있으면 한쪽만 고쳐지므로 되돌려 적는다.
+
+| 홉 | 창 #3 | **창 #4** |
+|---|---|---|
+| store 왕복 전체 | 🔴 홉①에서 `?error=Configuration` | 🟢 **세션까지 성립** — `accountId=…ec01` · `tenantId=ecommerce` · `roles=["CUSTOMER"]` |
+| fan 왕복 전체 | 🟢 PASS | 🟢 PASS (재확인) |
+
+⇒ **next-auth ↔ `auth.hubwang.com` 왕복은 두 표면에서 모두 성립한다.**
+🔵 console 은 아직 그 축에 안 올라갔다 — 이 티켓의 선행 셋 중 **OIDC 왕복 축은
+「기전이 증명됐다」로 바뀌었고**, 남은 것은 console 자신의 배선이다.
+
+🔴 **이것이 이 티켓의 BLOCKED 를 푸는 것은 아니다** — 선행 셋 중 하나의 **근거가
+강해졌을 뿐**이고, 나머지는 그대로다. 큐 상태는 안 바꾼다.
