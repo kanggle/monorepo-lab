@@ -1,4 +1,5 @@
 import { getServerEnv } from '@/shared/config/env';
+import { resolveBackendUrl } from '@/shared/config/demo-backend';
 import { logger, newRequestId } from '@/shared/lib/logger';
 import { ApiError, OnboardingUnavailableError } from '@/shared/api/errors';
 import {
@@ -42,6 +43,12 @@ export async function createOrganization(
   const env = getServerEnv();
   const requestId = newRequestId();
 
+  // TASK-MONO-585 — the configured address is what the deployment was given;
+  // this is the address to actually call. Off-demo it is byte-identical.
+  const resolvedOnboardingUrl = await resolveBackendUrl(
+    env.CONSOLE_ONBOARDING_URL,
+  );
+
   const controller = new AbortController();
   const timer = setTimeout(
     () => controller.abort(),
@@ -49,7 +56,7 @@ export async function createOrganization(
   );
 
   try {
-    const res = await fetch(env.CONSOLE_ONBOARDING_URL, {
+    const res = await fetch(resolvedOnboardingUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

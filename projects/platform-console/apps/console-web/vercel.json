@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "**": false,
+      "main": false,
+      "preview/*": true
+    }
+  },
+  "installCommand": "pnpm install --no-frozen-lockfile",
+  "ignoreCommand": "bash \"$(git rev-parse --show-toplevel)/projects/platform-console/apps/console-web/vercel-ignore.sh\""
+}

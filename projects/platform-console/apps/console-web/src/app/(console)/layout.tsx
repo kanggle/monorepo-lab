@@ -23,6 +23,7 @@ import { AccountMenu } from '@/shared/ui/AccountMenu';
 import { NotificationBell } from '@/features/notifications';
 import { ConsoleSidebarNav } from '@/shared/ui/ConsoleSidebarNav';
 import { ApiError } from '@/shared/api/errors';
+import { DemoBackendNotice } from '@/widgets/demo-notice/DemoBackendNotice';
 
 /**
  * The signed-in operator's display identity for the account menu. Read
@@ -142,6 +143,11 @@ export default async function ConsoleLayout({
 
   return (
     <div className="flex min-h-screen flex-col">
+      {/* TASK-MONO-585 AC-3 — 인증된 66개 화면 전부가 이 셸 안에 있다. 데모가 꺼져
+          있으면 여섯 도메인의 데이터가 통째로 비는데, 그때 화면은 Vercel 에서 멀쩡히
+          뜬다 ⇒ 말하지 않으면 "고장" 으로 읽힌다. 인스턴스가 켜져 있는데 한 도메인만
+          죽은 경우는 이 배너가 아니라 `/dashboards/health` 가 말한다(위젯 헤더 참조). */}
+      <DemoBackendNotice />
       <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex h-14 items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link

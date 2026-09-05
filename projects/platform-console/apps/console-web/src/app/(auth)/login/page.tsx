@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { isAuthenticated } from '@/shared/lib/session';
 import { sanitizeReturnPath } from '@/shared/lib/return-path';
 import { redirect } from 'next/navigation';
+import { DemoBackendNotice } from '@/widgets/demo-notice/DemoBackendNotice';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,7 +55,12 @@ export default async function LoginPage({
   const loginHref = `/api/auth/login?redirect=${encodeURIComponent(next)}`;
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-muted px-4">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-muted px-4">
+      {/* TASK-MONO-585 AC-3 — 콘솔의 **유일한 익명 표면**이다(page.tsx 67개 중 1개).
+          데모가 꺼져 있으면 IdP 도 함께 꺼져 로그인이 실패하는데, 이 자리에 아무 말도
+          없으면 방문자는 그 실패를 앱의 고장으로 읽는다. 데모가 아닌 배포에서는
+          아무것도 렌더하지 않는다(위젯의 `not-demo` 분기). */}
+      <DemoBackendNotice />
       <div className="w-full max-w-sm rounded-lg border border-border bg-background p-8">
         <h1 className="text-xl font-semibold text-foreground">
           Platform Console

@@ -257,6 +257,7 @@ jobs:
       # TASK-MONO-610: 넷째 Vercel 프로젝트(auth-forwarder)의 빌드 축. 순수 positive.
       auth-forwarder: ${{ steps.filter.outputs.auth-forwarder }}
       demo-resolver-copies: ${{ steps.filter.outputs.demo-resolver-copies }}
+      client-graph-origins: ${{ steps.filter.outputs.client-graph-origins }}
       # TASK-MONO-562: raw filter, NOT AND-combined with `code-changed`. Every arrival
       # path of this drift is non-code: a `vercel.json` losing its `ignoreCommand`, a
       # new Vercel project landing without one, or the judge script being weakened.
@@ -746,6 +747,18 @@ jobs:
               #    글롭이 언젠가 좁아져도 이 줄이 남는다.
               - 'infra/demo/backend-resolver/**'
               - 'scripts/check-demo-resolver-copies.sh'
+            # TASK-MONO-585 — 클라이언트 그래프에서 백엔드 오리진에 «닿는가».
+            # 🔴 도착 경로가 넓다: 임포트 한 줄이면 충분하고, 그 한 줄은 **어느 TS 파일에도**
+            #    생길 수 있다. 그래서 위 resolver 필터와 같은 글롭을 쓴다(잡은 checkout +
+            #    node 라 싸다). `'use client'` 선언이 생기거나 사라지는 것도 같은 축이다.
+            client-graph-origins:
+              - '**/src/**/*.ts'
+              - '**/src/**/*.tsx'
+              - '**/src/*.ts'
+              - '**/src/*.tsx'
+              - '**/next.config.*'
+              - 'infra/demo/backend-resolver/**'
+              - 'scripts/check-client-graph-backend-origins.mjs'
             # TASK-MONO-562: a Vercel project that builds on every commit arrives three
             # ways — a new `vercel.json` anywhere in the tree, an existing one losing its
             # `ignoreCommand`, or the shared judge being weakened. All three are non-code,
@@ -1340,6 +1353,36 @@ jobs:
 
       - name: Guard — at most one app implements the resolver
         run: bash scripts/check-demo-resolver-copies.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-585 / ADR-MONO-067 D1 — 브라우저는 백엔드 주소를 몰라야 한다.
+  #
+  # 🔴🔴 이 잡이 있는 이유는 **«선언» 이 이 축을 못 잡기 때문**이다. 착수 실측(2026-09-05):
+  #    console-web 의 `shared/config/env.ts` 를 임포트하는 20개 파일 중 `"use client"` 는
+  #    **0개**였는데, 같은 커밋의 산출물에는 그 모듈의 백엔드 URL **12개 전부**가 클라이언트
+  #    청크에 있었다. 클라이언트 컴포넌트가 **몇 다리 건너** 임포트하면 그것으로 충분하다.
+  #
+  # 🔵 권위는 산출물 스캐너(`scan-client-bundle-origins.mjs`)다. 그러나 그것은 빌드가
+  #    필요하고(console-web 은 수 분) PR 마다 못 돈다. 이 잡은 소스만 읽어 **같은 축을
+  #    싸게** 잰다 — 그리고 규칙을 어긴 커밋이 들어오는 그 순간에 문다.
+  # ---------------------------------------------------------------------------
+  client-graph-origins:
+    name: Client graph backend origins (the browser must not know the address)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.client-graph-origins == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax (node --check)
+        run: node --check scripts/check-client-graph-backend-origins.mjs
+
+      - name: Self-test the predicate (bites, and stays silent where it must)
+        run: node scripts/check-client-graph-backend-origins.mjs --self-test
+
+      - name: Guard — no backend origin literal is reachable from a client component
+        run: node scripts/check-client-graph-backend-origins.mjs
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-562 — Vercel build triggers.

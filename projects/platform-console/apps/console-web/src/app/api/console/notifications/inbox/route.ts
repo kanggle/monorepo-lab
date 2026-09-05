@@ -71,6 +71,11 @@ export async function GET(req: NextRequest) {
 
   let res: Response;
   try {
+    // DEMO-URL-EXEMPT: console-bff-internal — console-bff 는 **공개 호스트명이 없다**
+    //   (`TASK-MONO-362` 가 그 Traefik 라우터를 일부러 없앴다: 백엔드 서비스는 엣지에
+    //   노출되지 않는다 — `api-gateway-policy.md` L14). 주소는 도커 네트워크 DNS
+    //   (`http://console-bff:8080`)이고 데모 도메인으로 파생될 수 있는 값이 아니다.
+    //   🔴 그래서 **Vercel 에서는 이 레그가 닿지 않는다** — TASK-MONO-585 § 알려진 한계.
     res = await fetch(bffUrl(search), {
       method: 'GET',
       headers: outboundHeaders,

@@ -1,4 +1,5 @@
 import { getServerEnv } from '@/shared/config/env';
+import { resolveBackendUrl } from '@/shared/config/demo-backend';
 import { getOperatorToken } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
 import { RegistryUnavailableError, ApiError } from './errors';
@@ -50,7 +51,7 @@ export async function fetchRegistry(): Promise<RegistryResponse> {
   const timer = setTimeout(() => controller.abort(), env.REGISTRY_TIMEOUT_MS);
 
   try {
-    const res = await fetch(env.CONSOLE_REGISTRY_URL, {
+    const res = await fetch(await resolveBackendUrl(env.CONSOLE_REGISTRY_URL), {
       method: 'GET',
       headers: {
         Accept: 'application/json',

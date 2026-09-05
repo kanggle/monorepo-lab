@@ -20,11 +20,12 @@ export type { DomainHealthSummaryCardProps } from './components/DomainHealthSumm
 export { DegradeBanner, isAllDegraded } from './components/DegradeBanner';
 export { RetryButton } from './components/RetryButton';
 export { useDomainHealth } from './hooks/use-domain-health';
-export {
-  fetchDomainHealth,
-  getDomainHealthState,
-} from './api/domain-health-api';
-export type { DomainHealthState } from './api/domain-health-api';
+export { fetchDomainHealth } from './api/domain-health-api';
+// 🔴 TASK-MONO-585 — the SSR half lives in its own module so the client graph
+//    cannot reach `shared/config/*` through this feature. The barrel re-exports
+//    both halves; only the app layer (server pages) uses this one.
+export { getDomainHealthState } from './api/domain-health-state';
+export type { DomainHealthState } from './api/domain-health-state';
 export { healthTone } from './lib/tone';
 export type { HealthTone } from './lib/tone';
 export {

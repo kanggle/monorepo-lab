@@ -1066,8 +1066,14 @@ while IFS='|' read -r _ p svc mod; do
     key="traefik-net"; [ "$net" = "traefik-net" ] || key="$p/$net"
     grep -qxF "$(printf '%s\t%s' "$key" "$host")" "$w_names" && { reachable=1; break; }
   done < <(awk -F'|' -v p="$p" -v s="$svc" '$1=="N" && $2==p && $3==s' "$w_svc")
-  # 경로 B. 🔴 `=` 비교다 — 접미사 매치가 아니다. `evil-auth.hubwang.com` 도,
-  #          `auth.hubwang.com.attacker.tld` 도 통과하지 않는다.
+  # 경로 B. 🔴 `=` 비교다 — 접미사 매치가 아니다. `evil-<idp>.<apex>` 도,
+  #          `<idp>.<apex>.attacker.tld` 도 통과하지 않는다.
+  # 🔴 예시를 **일반화해서** 적는다(리터럴 호스트명이 아니라). TASK-MONO-585 실측:
+  #    이 두 줄의 초판은 실제 apex 를 리터럴로 적었고, 그 순간
+  #    `scripts/check-public-domains.sh` 칸 (1)이 *"정본에 없는 호스트명이 트리에
+  #    있습니다: 'evil-auth.<apex>'"* 로 **main 을 빨갛게** 만들었다(#3600 이후 계속).
+  #    그 가드 자신의 헤더가 이 규약을 이미 적어 두었다 — *"초판은 실제 호스트명을
+  #    리터럴로 적었고 이 가드가 자기 주석에 걸렸다"*. 같은 함정을 옆 파일에서 다시 밟은 것이다.
   if [ "$reachable" != 1 ] && [ -n "$w_public_idp" ] && [ "$host" = "$w_public_idp" ]; then
     reachable=1
     w_public_used=$((w_public_used + 1))

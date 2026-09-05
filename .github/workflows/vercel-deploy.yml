@@ -91,6 +91,16 @@ jobs:
           - project: kanggle-auth
             judge: infra/demo/auth-forwarder/vercel-ignore.sh
             secret: VERCEL_DEPLOY_HOOK_AUTH
+          # 🔴🔴 TASK-MONO-585 — 다섯째 프로젝트. `console.hubwang.com` (ADR-MONO-067 단계 3).
+          #    `VERCEL_DEPLOY_HOOK_CONSOLE` 은 **소유자가 Vercel 프로젝트를 만든 뒤에야**
+          #    생긴다. 그때까지 이 잡은 *"secret 이 비어 있습니다"* 로 **빨갛다** — 그것이
+          #    정확한 신호다(앱은 저장소에 있는데 배포할 곳이 없다). 🔵 판정자가 이 앱의
+          #    경로를 안 건드린 커밋은 건너뛰므로 매 커밋 빨간 것은 아니다.
+          #    🔴 항목을 «나중에» 넣지 마라 — 없으면 가드 칸 (14)가 *"main=false 인데
+          #    워크플로가 이 프로젝트를 안 굽습니다"* 로 물고, 그 말이 맞다.
+          - project: kanggle-console
+            judge: projects/platform-console/apps/console-web/vercel-ignore.sh
+            secret: VERCEL_DEPLOY_HOOK_CONSOLE
     steps:
       - uses: actions/checkout@v4
         with:

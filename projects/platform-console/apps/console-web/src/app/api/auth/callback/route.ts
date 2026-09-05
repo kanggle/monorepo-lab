@@ -107,6 +107,10 @@ export async function GET(req: Request) {
     form.set('code_verifier', verifier);
     form.set('client_id', env.OIDC_CLIENT_ID);
 
+    // DEMO-URL-EXEMPT: oidc-issuer — 발급자는 데모 IP 에서 파생되지 않는다.
+    //   `ADR-MONO-069` 가 `C2` 로 **고정된 이름**(`https://auth.hubwang.com`)을 지정했고,
+    //   그 문자열은 토큰의 `iss` 와 **문자 비교**된다 ⇒ 조용히 고쳐 쓰면 로그인이 깨진다.
+    //   데모 컨테이너에서는 `demo.env` 가 이미 `DEMO_DOMAIN` 형태로 주입한다.
     const upstream = await fetch(`${env.OIDC_ISSUER_URL}/oauth2/token`, {
       method: 'POST',
       headers: {

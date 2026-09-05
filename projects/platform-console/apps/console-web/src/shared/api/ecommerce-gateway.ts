@@ -1,4 +1,5 @@
 import { getServerEnv } from '@/shared/config/env';
+import { resolveBackendUrl } from '@/shared/config/demo-backend';
 import { getDomainFacingToken } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
 import { ApiError } from '@/shared/api/errors';
@@ -199,7 +200,7 @@ export async function callEcommerceGateway<T>(
   const timer = setTimeout(() => controller.abort(), env.ECOMMERCE_TIMEOUT_MS);
 
   try {
-    const res = await fetch(`${req.base}${req.path}`, {
+    const res = await fetch(await resolveBackendUrl(`${req.base}${req.path}`), {
       method: req.method,
       headers,
       body: req.body === undefined ? undefined : JSON.stringify(req.body),

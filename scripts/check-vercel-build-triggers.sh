@@ -44,12 +44,15 @@ ROOT="${VERCEL_GUARD_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 # 프로젝트에 트리거 규칙을 붙일 자리다.
 #   2026-08-21 = 2 (kanggle-portfolio + kanggle-fan)
 #   2026-08-26 = 3 (+ web-store — `TASK-MONO-582`, `ADR-MONO-067` 단계 2)
+#   2026-09-05 = 5 (+ console-web — `TASK-MONO-585`, `ADR-MONO-067` 단계 3)
+#     🔴 4 는 `TASK-MONO-610`(auth 포워더)이 올린 값이고 provenance 줄이 빠져 있었다.
+#        여기 적어 둔다: 4 = 위 셋 + `infra/demo/auth-forwarder`.
 # 🔵 2026-08-29: 그 셋째의 Vercel **프로젝트**가 실제로 생겼다(`kanggle-store`). 하한은 이미
 #   3 이라 바뀌지 않는다 — 🔴 그러나 그 전까지 이 가드가 세던 것은 **파일 3개**였고
 #   살아 있는 프로젝트는 2개였다. 파일 수와 프로젝트 수는 다른 축이다.
 # 🔴 올리는 것을 잊으면 **새 프로젝트를 지워도 이 가드는 안 문다** — 하한이 남은 개수보다
 #    낮으면 삭제가 그냥 통과하기 때문이다. 파일을 놓는 커밋과 **같은 커밋에서** 올려라.
-FLOOR="${VERCEL_GUARD_FLOOR:-4}"
+FLOOR="${VERCEL_GUARD_FLOOR:-5}"
 
 # 🔴 TASK-MONO-607: `git.deploymentEnabled.main` 이 false 인 프로젝트는 **이 워크플로가
 #    Deploy Hook 을 쏘지 않으면 영영 배포되지 않는다.** 그 배선이 끊기는 증상은 "배포 실패"

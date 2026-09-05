@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { cn } from '@/shared/lib/cn';
 import { CARD_ORDER, type Card, type DomainKey } from '../api/types';
-import type { DomainHealthState } from '../api/domain-health-api';
+import type { DomainHealthState } from '../api/domain-health-state';
 import { healthTone, type HealthTone } from '../lib/tone';
 
 /**
