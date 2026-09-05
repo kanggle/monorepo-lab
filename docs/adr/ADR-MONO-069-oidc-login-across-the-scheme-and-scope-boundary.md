@@ -436,7 +436,7 @@ A 를 고르면 D 는 **A 의 사람 손을 없애는 보완재**다. 이 사실
 |---|---|---|---|
 | `web-store` | ❌ **안 걸린다** | 단계 2 완료. 로그인 없이 방문자 화면이 성립한다(`store.hubwang.com` 200, 데모 `stopped`) | — |
 | `fan-platform-web` | ✅ | 홉 ① 에서 `error=Configuration`. 가설 6 사망. 라이브러리 = next-auth | 홉 ②③④⑤ 전부 **미측정** |
-| `console-web` | ✅ | **next-auth 를 안 쓴다**(자체 구현). 쿠키 축에서 **반대 방향으로 데인 이력**(`TASK-MONO-358`) | 🔴 **fan 의 실패가 여기서 재현되는지는 «가설조차 아니다»** — 다른 구현이다. console 은 아직 **한 번도** Vercel 에서 로그인을 시도한 적이 없다(프로젝트 미생성, `console.hubwang.com` 404) |
+| `console-web` | ✅ | **next-auth 를 안 쓴다**(자체 구현). 쿠키 축에서 **반대 방향으로 데인 이력**(`TASK-MONO-358`) | 🔴 **fan 의 실패가 여기서 재현되는지는 «가설조차 아니다»** — 다른 구현이다. ~~console 은 아직 **한 번도** Vercel 에서 로그인을 시도한 적이 없다(프로젝트 미생성, `console.hubwang.com` 404)~~ 🔴 **정정 (2026-09-05, `TASK-MONO-626`): 프로젝트는 실재하고 `console.hubwang.com` 은 `307 → /dashboards/overview` 다**(음성 대조군 `nosuch-*.hubwang.com` 404 ⇒ 와일드카드가 아니다). `ADR-MONO-067` 단계 3 의 앱 몫(`TASK-MONO-585`)·론처 몫(`TASK-MONO-625`)이 랜딩했다. 🔴🔴 **그러나 바뀐 것은 «도달» 이지 «성립» 이 아니다** — 홉 ②③④⑤ 는 **여전히 미측정**이고 그것을 잴 티켓이 `TASK-MONO-624`(⏳ 데모 게이트)다. **이 칸은 가설로 남는다.** |
 
 🔴 **어느 선택지도 «세 앱 공통» 으로 검증되지 않는다.** § Verification 이 앱별로 나뉜 이유다.
 
