@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { getServerEnv } from '@/shared/config/env';
+import { resolveBackendUrl } from '@/shared/config/demo-backend';
 import { logger, newRequestId } from '@/shared/lib/logger';
 import { OperatorExchangeError } from '@/shared/api/errors';
 
@@ -66,6 +67,12 @@ export async function exchangeForOperatorToken(
   const env = getServerEnv();
   const requestId = newRequestId();
 
+  // TASK-MONO-585 — the configured address is what the deployment was given;
+  // this is the address to actually call. Off-demo it is byte-identical.
+  const resolvedTokenExchangeUrl = await resolveBackendUrl(
+    env.CONSOLE_TOKEN_EXCHANGE_URL,
+  );
+
   const controller = new AbortController();
   const timer = setTimeout(
     () => controller.abort(),
@@ -73,7 +80,7 @@ export async function exchangeForOperatorToken(
   );
 
   try {
-    const res = await fetch(env.CONSOLE_TOKEN_EXCHANGE_URL, {
+    const res = await fetch(resolvedTokenExchangeUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -785,3 +785,262 @@ AC-0 4항은 *"미해결이면 여기서 멈춘다"* 다. 574 는 `tasks/done/` 
 ②의 「7」은 드리프트가 아니라 **처음부터 단위가 달랐다.** AC-0 이 *"두 숫자가 다르면 왜
 다른지를 적는다"* 를 요구한 덕에 잡혔다 — 그 요구가 없었으면 「7 → 12 로 늘었다」는
 **있지도 않은 회귀**를 쫓았을 것이다.
+
+---
+
+# ✅ 구현 (2026-09-05 UTC) — **저장소 몫 완료.** 배포 몫은 소유자 실행 하나를 기다린다
+
+🔴 **두 문장을 섞지 마라.** 이 절이 닫는 것은 «저장소가 할 수 있는 전부» 이고,
+`console.hubwang.com` 은 아직 `404` 다(같은 날 실측 — 아래 § AC-4). 「585 가 끝났다」로 읽으면
+다음 사람이 배포까지 된 줄 안다.
+
+## AC-1 — 브라우저가 백엔드를 직접 부르지 않는다 ✅
+
+**산출물로 판정했다.** `.next` 를 지우고 다시 구웠고(`next build` rc=0), 같은 실행·같은
+추출기로 두 축을 함께 쟀다:
+
+| | jsFiles | distinct `.local` URL |
+|---|---:|---:|
+| **CLIENT** (`.next/static`) | 275 | **0** |
+| SERVER (`.next/server`) | 525 | **12** ← 양성 대조군 |
+
+🔴 **서버 쪽 12가 이 판정의 대조군이다.** 그 칸이 없으면 「클라 0」은 *추출기가 죽은 것*과
+구별되지 않는다 — 이 저장소가 반복해서 데인 모양이다. 착수 전(= `main` `59fd9e1da`)의 같은
+측정은 **CLIENT 12 / SERVER 12** 였다.
+
+🔵 `scripts/scan-client-bundle-origins.mjs`(565 판, **오리진** 단위)로도 재면
+`backendCount=0` · `jsFiles=275` 다 — 그쪽은 경로를 접으므로 착수 전 값이 **7** 이었다.
+두 숫자는 같은 것의 두 단위다(AC-0 ②가 정정한 그 단위 문제).
+
+### 🔴🔴 고친 것은 값이 아니라 **모듈 경계**다
+
+AC-0 ②가 지목한 그대로였다: `env.ts` 를 임포트하는 20개 파일 중 `"use client"` 는 **0개**
+인데도 12건이 클라 청크에 있었다. 누출 경로는 **한 줄기**였다:
+
+```
+<RetryButton>('use client') → use-domain-health → domain-health-api → shared/config/env.ts
+```
+
+중간 세 파일 어디에도 `"use client"` 는 없다. **선언 경계 ≠ 번들 경계.**
+
+| 한 일 | 파일 |
+|---|---|
+| `env.ts` 에서 `clientEnv`/`ClientEnvSchema` **제거** — 이제 서버 전용 모듈이다 | `shared/config/env.ts` |
+| 그 한 값(앱 자신의 오리진)을 임포트 **0개**인 서버 전용 모듈로 분리 | `shared/config/self-origin.ts` (신규) |
+| SSR 절반을 형제 모듈로 **분리** — 클라 그래프가 `shared/config/*` 에 못 닿게 | `features/{domain-health,operator-overview}/api/*-state.ts` (신규) |
+| 클라 그래프에 남는 `*-api.ts` 는 **상대경로만** 쓰고 절대 오리진은 **인자로 받는다** | 같은 두 feature 의 `*-api.ts` |
+
+🔵 배럴이 두 반쪽을 모두 재수출하므로 **앱 층의 임포트는 한 줄도 안 바뀌었다.**
+
+### 🔴 그리고 계수 밖에 있던 백엔드 오리진 하나 — CSP `form-action`
+
+AC-0 ①이 찾아낸 `next.config.mjs` 의 `form-action 'self' http://iam.local
+http://localhost:3000` 은 **갱신이 아니라 제거**했다. 세어 보니 지킬 대상이 없었다:
+
+- IdP 로 가는 유일한 경로는 로그인 페이지의 `<a href={loginHref}>` → `/api/auth/login` →
+  **302** 다. `form-action` 은 **폼 제출**만 지배하고 최상위 내비게이션은 지배하지 않는다.
+- 앱 전체 `<form` **48개** 중 `action=` 속성(문자열·Server Action 모두)을 가진 것이 **0건**
+  이다(전수 grep).
+
+⇒ `'self'` 로 좁히는 것은 **완화가 아니라 강화**이고, 동시에 이 파일이 배포마다 달라져야 할
+이유가 사라진다(런타임 CSP·미들웨어 불필요). 🔴 크로스오리진 `<form action=...>` 을 새로
+만들면 이 줄을 다시 열어야 한다.
+
+## AC-2 — 서버가 주소를 **런타임에** 얻는다 ✅
+
+`@demo/backend-resolver`(`ADR-MONO-068 § D6 = B2`)의 **네 번째 소비자**가 됐다. AC-0 ③ 이
+예측한 대로 비용은 `package.json` **한 줄**이었다 — 루트 워크스페이스도 lockfile 병합도 없다
+(`pnpm-lock.yaml` diff **3줄**, pnpm **9.15.0** `--frozen-lockfile` rc=0 로 확인 — CI 가 쓰는
+그 판이다).
+
+### 🔴🔴 매핑 표를 **안 만들었다** — 그것이 이 AC 의 핵심이다
+
+AC-2 는 *"매핑의 출처는 하드코딩이 아니라 기존 env 키여야 한다(둘이면 한쪽만 고쳐진다)"* 를
+요구한다. 「접두사 → 데모 호스트」 표를 쓰지 않고 **설정된 값 자신**에서 파생한다:
+
+```
+`.local` 은 우연이 아니라 `${DEMO_DOMAIN:-local}` 의 **기본값**이다.
+```
+
+실측(각 프로젝트 compose 의 Traefik 라우터 규칙): `Host(iam.${DEMO_DOMAIN:-local})` ·
+`Host(wms.…)` · `scm` · `erp` · `finance` · `ecommerce` · `console`. ⇒ 데모에서의 주소는
+**호스트 꼬리 `.local` → `.<demoDomain>`** 과 정확히 같다. 접두사도 경로도 스킴도 값이
+들고 있다 ⇒ **백엔드가 하나 더 늘어도 이 파일은 안 바뀐다.**
+
+- 해석기 인스턴스는 **하나**다. `resolveDemoBackend()` 가 `demoDomain` 을 함께 돌려주므로
+  (그 필드 JSDoc 이 *"다른 서비스 호스트를 조립할 때 쓴다"* 라고 적어 둔 그대로) 여섯 개를
+  만들 필요가 없다 — 만들면 한 요청에 컨트롤 플레인 `/status` 를 최대 6회 때린다.
+  🔵 09-02 기록의 *"인스턴스가 여섯 개 필요하고 요청당 최대 6회"* 를 **여기서 정정한다.**
+- 적용 지점은 `fetch(` **전수 22곳**을 열거해 골랐다. 6곳이 `resolveBackendUrl` 을 지나고
+  (게이트웨이 코어 4 + registry + token-exchange + onboarding), 4곳은 상대경로 리터럴이며,
+  나머지 12곳에는 **`// DEMO-URL-EXEMPT:` 마커로 사유를 적었다.**
+
+### 🔵 `OIDC_ISSUER_URL` 은 **일부러 이 축에 안 태웠다**
+
+발급자는 데모 IP 에서 파생되지 않는다 — `ADR-MONO-069` 가 `C2` 로 **고정된 이름**을 지정했고,
+그 문자열은 토큰의 `iss` 와 **문자 비교**된다. 태우면 안 되는 값이지 «태워도 안 바뀌는 값» 이
+아니다. 그 네 자리(callback·refresh·logout·assume-tenant)에 마커로 사유를 적었다.
+
+## AC-3 — 데모가 꺼져 있을 때 그렇다고 말한다 ✅
+
+`widgets/demo-notice/DemoBackendNotice.tsx` (서버 컴포넌트). `(console)/layout.tsx`(인증된
+66개 화면 전부)와 `(auth)/login/page.tsx` 에 붙였다.
+
+🔴 **`/login` 을 덮은 것이 형제(fan)와 갈리는 지점이고, 근거가 있다.** fan 은 *"로그인 실패는
+다른 증상"* 이라며 비워 뒀다. 콘솔은 `page.tsx` **67개 중 익명으로 닿는 것이 `/login` 하나**
+이고, 데모가 꺼지면 IdP 도 함께 꺼져 로그인 자체가 실패한다 ⇒ 안 붙이면 **꺼진 동안 방문자가
+보는 유일한 화면에 아무 설명이 없다.**
+
+🔴 **문구가 «여섯 곳이 다 죽었다» 라고 말하지 않는다** — AC-3 이 경고한 그 지점이다. 해석기가
+재는 것은 컨트롤 플레인의 `state` 한 칸이고, 그것이 `running` 이 아니면 여섯 도메인이 **한
+인스턴스와 함께** 꺼진 것이다. 반대로 인스턴스가 켜져 있는데 한 도메인만 죽은 경우 이 위젯은
+**아무 말도 하지 않는다** — 그 축은 `/dashboards/health` 가 카드별로 말한다. 두 축을 한
+문장으로 합치면 둘 중 하나는 반드시 거짓이 된다. 단위 테스트가 그 문구를 고정한다
+(`tests/unit/demo-backend-notice.test.tsx` — 도메인 이름이 문구에 없음을 단언).
+
+## AC-4 — Vercel 배선 + 가드 ✅ (저장소 몫)
+
+| 파일 | |
+|---|---|
+| `vercel.json` · `vercel-ignore.sh` · `VERCEL.md` | `TASK-MONO-582` 와 같은 모양. `ignoreCommand` **119자**(한도 256) |
+| `scripts/check-vercel-build-triggers.sh` | `FLOOR` **4 → 5** + provenance. 🔵 4의 provenance 줄이 빠져 있어 그것도 적었다 |
+| `.github/workflows/vercel-deploy.yml` | `kanggle-console` matrix 항목 + `VERCEL_DEPLOY_HOOK_CONSOLE` |
+| `projects/platform-console/docker-compose.yml` · `Dockerfile` | `additional_contexts` + `COPY --from=demo-backend-resolver` (가드 (z26)) |
+| `TEMPLATE.md` § 공개 호스트명 배분 | console 행 갱신 (+ 아래 § 부수 관찰 2) |
+
+가드 실행 — **각각 독립 statement**(파이프가 종료코드를 가린다):
+
+```
+check-vercel-build-triggers.sh              rc=0   (vercel.json 5개 발견 · 하한 5)
+check-vercel-build-triggers.sh --self-test  rc=0   (a)~(f) 6칸 전부 문다
+check-demo-resolver-copies.sh               rc=0   앱 안 구현 0 · 선언 앱 4개 전부 커버
+check-demo-resolver-copies.sh --self-test   rc=0   13 passed
+check-public-domains.sh                     rc=0   (+ --self-test rc=0) ← 아래 § 덤으로 고친 것
+(z26) 술어 복제 실행                          PASS   탈출 의존 3건 전부 배선됨
+```
+
+라이브 프로브(같은 날 같은 명령): `console.hubwang.com` **404** — Vercel 프로젝트가 아직 없다.
+
+### 🔴 Dockerfile 은 형제와 **다르게** 두 스테이지에 복사해야 했다
+
+fan·web-store 는 install 과 build 가 **한 스테이지**라 복사가 한 번이다. console 은 `deps` 와
+`builder` 가 갈려 있고 `builder` 는 `COPY --from=deps /app/node_modules` 로 **심링크를**
+물려받는다 ⇒ 대상이 그 스테이지에 없으면 `next build` 가 죽는다. 형제의 «한 번» 을 그대로
+베끼면 안 되는 자리였다.
+
+## AC-5 — 검증 ✅ · 그리고 **새 가드 하나**
+
+```
+npx tsc --noEmit    rc=0
+npx next lint       rc=0   No ESLint warnings or errors
+npx vitest run      rc=0   282 files / 2932 tests   (착수 전 280 / 2909)
+npx next build      rc=0
+```
+
+### 🔴 AC-5 의 *"vitest 는 이 호스트에서 못 돈다 ⇒ CI 권위"* 는 **console-web 에 대해 거짓이다**
+
+그 문장은 web-store 의 함정(vitest **4** + Node 24)을 상속한 것이다. console-web 은 vitest
+**2.1.9** 이고 이 호스트(Node 24.14.0)에서 **282파일 2932테스트가 전부 돈다**. 실측 없이
+상속한 제약이 하나 더 있었다는 뜻이고, 그대로 뒀다면 이 티켓의 테스트는 **한 번도 안 돌아 본
+채** CI 로 갔을 것이다. [[feedback_recount_population_dont_inherit_scope]]
+
+### 신규 가드 — `scripts/check-client-graph-backend-origins.mjs`
+
+AC-1 이 방금 만든 성질에는 게이트가 없었다. 산출물 스캐너가 권위지만 빌드가 필요해 PR 마다
+못 돈다. 이 가드는 **소스만 읽어 같은 축**을 잰다: `'use client'` 파일을 뿌리로 임포트를
+**전이적으로** 따라가, 그렇게 닿는 모듈에 `*.local` / `*.sslip.io` 리터럴이 있으면 문다.
+
+🔴🔴 **bite 를 먼저 했고, 두 번 틀렸다 — 둘 다 bite 가 잡았다.**
+
+| # | 증상 | 원인 |
+|---|---|---|
+| ① | 착수 **전** 트리에 대고 돌렸는데 console-web 이 `hits=0` | `path.resolve` 가 결과를 **절대경로**로 만들어 상대 임포트(`../hooks/x`)가 **하나도 해석되지 않았다.** 그런데 초록이었다 |
+| ② | 착수 **후** 트리에서 **fan-platform-web 이 빨강** | `'use server'`(Server Action)를 그래프의 끝으로 안 봤다. 그 모듈의 코드는 브라우저로 가지 않는다 ⇒ **남의 프로젝트에 대한 거짓 빨강** |
+
+🔵 ①은 이 가드의 존재 이유 자체를 무력화했고(«무는지 확인하기 전까지 무는 것이 아니다»),
+②는 고치지 않았으면 **fan 을 고칠 방법 없이 막았을** 것이다. 둘 다 self-test 칸으로 고정했다
+(`(a2)` 상대 임포트 · `(a3)` `'use server'` 경계).
+
+최종 판정:
+
+```
+현재 트리    rc=0   앱 4개 · 클라 뿌리 368개 → 도달 637 모듈 · 리터럴 0건
+착수 전 트리  rc=1   console-web 만 빨강 — env.ts → console/iam/wms/scm/finance/erp/ecommerce.local
+--self-test  rc=0   7칸 (무는 3 · 일부러 안 무는 4)
+```
+
+CI 등록: `ci.yml` `client-graph-origins` 잡 + 순수 positive 필터(부정 패턴 없음).
+
+🔴 **이 가드의 초록을 「산출물이 깨끗하다」로 읽지 마라.** 그것은 빌드가 말한다. 이 가드가
+재는 것은 «규칙을 어긴 커밋이 들어왔는가» 이고, 그 둘은 다른 술어다.
+
+---
+
+# 🔴 알려진 한계 — `console-bff` 는 Vercel 에서 닿지 않는다 (이 티켓이 **안 고친다**)
+
+`console-bff` 는 공개 호스트명이 없다. `TASK-MONO-362` 가 그 Traefik 라우터를 일부러 없앴고
+(백엔드는 엣지에 노출되지 않는다 — `api-gateway-policy.md` L14), 이 티켓의 Edge Case 가
+*"공개 호스트명을 주지 마라"* 로 다시 못 박았다. 주소는 `http://console-bff:8080` 이고 데모
+도메인으로 **파생될 수 있는 값이 아니다.** 영향 레그 셋:
+
+| 레그 | 라우트 |
+|---|---|
+| 운영 개요 합성 | `/dashboards/overview` |
+| 도메인 상태 합성 | `/dashboards/health` · `/console` |
+| 알림 인박스 | `/api/console/notifications/**` |
+
+🔵 **화면은 뜬다** — 셋 다 실패를 이미 상태로 표현한다(`bffUnavailable: true` / 502
+`BAD_GATEWAY` 봉투). 이관이 만든 결함이 아니라 이관이 **드러낸** 것이고, `ADR-MONO-067` 이
+요구한 *"백엔드 없는 상태를 앱이 표현해야 한다"* 를 이미 만족한다. 🔴 나머지 도메인 화면
+(iam·wms·scm·finance·erp·ecommerce)은 BFF 를 안 지난다(`ADR-MONO-017` D3.B — console-web →
+도메인 게이트웨이 **직접**) ⇒ 영향 없다.
+
+🔴 고치려면 BFF 에 공개 경로를 주거나(엣지 노출 금지에 정면으로 걸린다) 합성을 콘솔 서버로
+옮겨야 하고 **둘 다 아키텍처 결정**이다(`platform/architecture-decision-rule.md`). 여기서는
+적어 두고 넘긴다 — 조용히 넘기면 다음 사람이 이관의 회귀로 오진한다.
+
+---
+
+# 🔴 이 PR 이 **덤으로 고친 것** — `check-public-domains.sh` 가 `main` 에서 빨갛다
+
+착수 중 발견. 원인은 `#3600`(`TASK-MONO-615`)이 `infra/demo/verify-demo-wrapper.sh` 주석에
+**실제 호스트명을 리터럴로** 적은 것이고(`evil-auth.<apex>`), 그러면 칸 (1)이 *"정본에 없는
+호스트명이 트리에 있습니다"* 로 문다.
+
+🔵 **내 변경이 만든 것이 아님을 먼저 확인했다** — 파킹된 `main` 체크아웃(`59fd9e1da`)에서
+같은 명령이 **같은 한 줄**로 rc=1 이다. 🔴 그리고 내 PR 은 `TEMPLATE.md` 를 건드리므로 그 잡이
+**내 PR 에서도 돈다** ⇒ 남겨 두면 내 PR 이 남의 빨강을 물려받고, 4-dim 검증의 (c) 가 흐려진다.
+
+고친 방법은 **그 가드 자신의 헤더가 이미 적어 둔 규약**이다: 주석의 예시를 리터럴이 아니라
+일반형(`evil-<idp>.<apex>`)으로 쓴다. *"초판은 실제 호스트명을 리터럴로 적었고 이 가드가 자기
+주석에 걸렸다"* — 같은 함정을 옆 파일에서 다시 밟은 것이다.
+
+---
+
+# 🔵 부수 관찰 — 기록해 둘 것 셋
+
+1. **`check-demo-resolver-copies.sh` 는 산문에도 걸린다.** 그 가드는 2026-09-02 에 술어를
+   `DEMO_API_BASE` → `process.env.DEMO_API_BASE` 로 좁혀 «주석에 걸리는» 오발화를 고쳤다.
+   그런데 이번에 **내 주석이 그 좁힌 형태까지 그대로 적어** 다시 발화했다(rc=1). 가드가 틀린
+   것이 아니라 내가 지문을 문서에 적은 것이다 ⇒ 이름을 풀어 썼다. 🔵 술어를 더 좁히는 것은
+   권하지 않는다 — 진짜 구현을 놓치는 쪽으로 실패하게 된다.
+2. **`TEMPLATE.md` 의 `auth.hubwang.com` 행이 낡아 있었다** — `TASK-MONO-610` 이 그 이름을
+   실제로 배선했는데 표는 *"🚫 예약 — `D4`/`576` 전까지 쓰지 마라"* 였다. 읽는 사람에게는
+   「아직 아무도 안 쓴다」로 보인다. 같은 날 같은 명령의 세 응답으로 갈랐다:
+   `store.` **200**(양성 대조군 — 프로브가 살아 있다) · `auth.` **503**(배포는 있고 업스트림
+   데모가 꺼져 있다) · `console.` **404**(Vercel 프로젝트 자체가 없다). 🔵 `404` 와 `503` 이
+   그 둘을 가른다. 행을 고쳤다.
+3. 🔴 **`DEMO-URL-EXEMPT:` 마커에는 게이트가 없다.** 열두 자리의 «왜 해석을 안 지나는가» 는
+   지금 **산문**이고, 새 `fetch(` 가 마커도 해석도 없이 들어오면 아무도 안 문다. 보편 가드로
+   만들려면 형제 둘(fan·web-store)의 `auth-callbacks.ts` 에도 마커를 달아야 해서 이 티켓의
+   범위를 넘는다 ⇒ **후속 티켓으로 세운다.** 선언된 공백이지 잊은 공백이 아니다.
+
+---
+
+# 📌 남은 것
+
+| # | 몫 | 누가 |
+|---|---|---|
+| 1 | Vercel 프로젝트 `kanggle-console` 생성 + env 주입 + Deploy Hook secret | 🙋 **소유자** — 절차는 `VERCEL.md` § 소유자 체크리스트 |
+| 2 | 론처 링크 전환(그 행의 `data-served` → `vercel`) | 별도 후속 (단계 2 `583` · 단계 4 `618` 과 같은 모양) |
+| 3 | `DEMO-URL-EXEMPT:` 축의 가드 | 별도 후속 — **spec PR 로 따로 낸다**. § PR Separation Rule 이 *"스펙 작성과 구현을 한 PR 에 묶지 마라"* 로 금지한다(묶으면 `ready/` 단계가 `main` 에서 사라져 다음 사람이 큐에서 못 본다) |

@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@demo/backend-resolver':
+        specifier: link:../../../../infra/demo/backend-resolver
+        version: link:../../../../infra/demo/backend-resolver
       '@opentelemetry/api':
         specifier: ^1.9.0
         version: 1.9.1

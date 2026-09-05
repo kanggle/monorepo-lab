@@ -1,4 +1,3 @@
-import { clientEnv } from '@/shared/config/env';
 import { ApiError } from '@/shared/api/errors';
 import {
   OperatorOverviewSchema,
@@ -18,15 +17,14 @@ import {
  * frontend-app.md § Authentication).
  *
  *   - {@link fetchOperatorOverview} — client-side caller used by the
- *     React Query hook (`<RetryButton>` only). Builds an absolute
- *     same-origin URL via `clientEnv.NEXT_PUBLIC_APP_URL` and sets
- *     `credentials: 'include'` so the HttpOnly session cookies ride.
- *   - {@link getOperatorOverviewState} — server-side caller for the
- *     SSR route entry (`(console)/dashboards/overview/page.tsx`).
- *     Calls the SAME proxy URL server-to-server (Next.js runs the
- *     route handler in-process); cookies are read server-side by the
- *     proxy from `next/headers`. Returns a discriminated result the
- *     page maps to redirect / no-tenant / overview rendering.
+ *     React Query hook (`<RetryButton>` only). Uses the RELATIVE
+ *     same-origin path and sets `credentials: 'include'` so the
+ *     HttpOnly session cookies ride.
+ *   - `getOperatorOverviewState` — server-side caller for the SSR
+ *     route entry (`(console)/dashboards/overview/page.tsx`). It lives
+ *     in the sibling `operator-overview-state.ts` because it needs this
+ *     app's absolute origin, and THAT module must never be reachable
+ *     from the client graph (TASK-MONO-585 — see `shared/config/env.ts`).
  *
  * Both paths share `OperatorOverviewSchema` for runtime validation —
  * the contract is byte-verbatim from § 2.4.9.1 and the BE `OperatorOverviewResponse`
@@ -37,25 +35,8 @@ import {
  * here at the fetch boundary.
  */
 
-const OPERATOR_OVERVIEW_PATH = '/api/console/dashboards/operator-overview';
-
-/**
- * Builds the absolute same-origin URL for the fetch. On the server-side
- * render path Node's `fetch` requires an absolute URL; on the
- * client-side the same path resolves correctly (the URL is still
- * same-origin). Using `clientEnv.NEXT_PUBLIC_APP_URL` keeps the URL
- * valid in both contexts without leaking server-only env.
- */
-function operatorOverviewUrl(): string {
-  // Same-origin in the browser → relative. `NEXT_PUBLIC_APP_URL` is inlined at
-  // BUILD time (TASK-MONO-358), so an absolute base baked into the bundle
-  // points at the build host, not the serving host. See domain-health-api.ts.
-  if (typeof window !== 'undefined') return OPERATOR_OVERVIEW_PATH;
-  const base = (
-    process.env.CONSOLE_PUBLIC_ORIGIN ?? clientEnv.NEXT_PUBLIC_APP_URL
-  ).replace(/\/$/, '');
-  return `${base}${OPERATOR_OVERVIEW_PATH}`;
-}
+export const OPERATOR_OVERVIEW_PATH =
+  '/api/console/dashboards/operator-overview';
 
 /** Parses the proxy's error envelope `{ code, message }` defensively. */
 async function readErrorEnvelope(
@@ -80,9 +61,10 @@ async function readErrorEnvelope(
  *
  * Used by the React Query hook (client-side) — that's why this
  * function does NOT import server-only modules (`shared/lib/session`,
- * `next/headers`) and uses only `clientEnv`. The server SSR caller
- * uses {@link getOperatorOverviewState} which can react to ApiError
- * for redirects.
+ * `next/headers`, `shared/config/*`) — it is in the CLIENT graph, so anything
+ * it imports ships to the browser. The server SSR caller uses
+ * `getOperatorOverviewState` (sibling `operator-overview-state.ts`), which can
+ * react to ApiError for redirects.
  */
 export async function fetchOperatorOverview(
   /**
@@ -98,12 +80,22 @@ export async function fetchOperatorOverview(
    * page sees `noTenant: true` even when the browser HAS the cookie.
    */
   cookieHeader?: string,
+  /**
+   * Absolute origin to prefix the same-origin path with — server callers ONLY.
+   * Undefined in the browser, where the RELATIVE path is both correct and the
+   * only safe choice (`NEXT_PUBLIC_APP_URL` is build-time inlined,
+   * TASK-MONO-358). See the sibling `domain-health-api.ts` for why this is a
+   * parameter instead of something this module resolves (TASK-MONO-585).
+   */
+  baseUrl?: string,
 ): Promise<OperatorOverview> {
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (cookieHeader) {
     headers.Cookie = cookieHeader;
   }
-  const res = await fetch(operatorOverviewUrl(), {
+  // DEMO-URL-EXEMPT: same-origin — 이 앱 자신의 라우트 핸들러다(백엔드가 아니다).
+  //   브라우저 경로는 상대경로, 서버 경로는 호출자가 건넨 `selfOrigin()`.
+  const res = await fetch(`${baseUrl ?? ''}${OPERATOR_OVERVIEW_PATH}`, {
     method: 'GET',
     headers,
     // Same-origin HttpOnly session cookies ride through the proxy on the
@@ -120,79 +112,4 @@ export async function fetchOperatorOverview(
 
   const raw = (await res.json()) as unknown;
   return OperatorOverviewSchema.parse(raw);
-}
-
-/**
- * Server-side discriminated state for the SSR route entry. Mirrors
- * the existing `features/dashboards/api/overview-state.ts` shape so
- * the page handles the same three outcomes uniformly:
- *
- *   - `noTenant: true` — render the "select a tenant" gate (BFF
- *     proxy fast-failed with 400 NO_ACTIVE_TENANT before any outbound).
- *   - `unauthorized: true` — the page calls `redirect('/login')`
- *     (BFF returned 401 TOKEN_INVALID; no partial authed state).
- *   - `overview` present — render `<OperatorOverviewScreen>`.
- *
- * Per-card degrade lives INSIDE `overview.cards[i].status` (the 200
- * payload); it is NEVER a state field here. A whole-fan-out failure
- * (proxy 502 BAD_GATEWAY) surfaces as `bffUnavailable: true`.
- */
-export interface OperatorOverviewState {
-  overview: OperatorOverview | null;
-  noTenant: boolean;
-  unauthorized: boolean;
-  bffUnavailable: boolean;
-}
-
-/**
- * Server-side SSR fetch wrapper. Calls the same Next.js proxy URL
- * server-to-server (the proxy is in-process); reads the result and
- * maps non-2xx into the discriminated state. Used by the page entry
- * only.
- */
-export async function getOperatorOverviewState(): Promise<OperatorOverviewState> {
-  try {
-    // TASK-PC-FE-030 — forward the page's request cookies to the
-    // in-process proxy fetch. Next.js Node `fetch` does NOT auto-forward
-    // cookies on internal calls (`credentials: 'include'` is browser-only),
-    // so without this explicit header the proxy's `cookies()` reads empty
-    // → 400 NO_ACTIVE_TENANT → `noTenant: true` even when the browser
-    // session has the active-tenant cookie. Lazy-imported to keep this
-    // module callable from the browser path (the React Query hook uses
-    // `fetchOperatorOverview` directly with no cookie arg).
-    const { cookies } = await import('next/headers');
-    const cookieHeader = (await cookies()).toString();
-    const overview = await fetchOperatorOverview(cookieHeader);
-    return {
-      overview,
-      noTenant: false,
-      unauthorized: false,
-      bffUnavailable: false,
-    };
-  } catch (err) {
-    if (err instanceof ApiError) {
-      if (err.status === 400 && err.code === 'NO_ACTIVE_TENANT') {
-        return {
-          overview: null,
-          noTenant: true,
-          unauthorized: false,
-          bffUnavailable: false,
-        };
-      }
-      if (err.status === 401) {
-        return {
-          overview: null,
-          noTenant: false,
-          unauthorized: true,
-          bffUnavailable: false,
-        };
-      }
-    }
-    return {
-      overview: null,
-      noTenant: false,
-      unauthorized: false,
-      bffUnavailable: true,
-    };
-  }
 }

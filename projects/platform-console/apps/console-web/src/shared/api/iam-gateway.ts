@@ -1,4 +1,5 @@
 import { getServerEnv } from '@/shared/config/env';
+import { resolveBackendUrl } from '@/shared/config/demo-backend';
 import { getOperatorToken, getActiveTenant } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
 import { ApiError } from '@/shared/api/errors';
@@ -203,12 +204,18 @@ export async function callAdminGateway<T>(
 
   if (req.body !== undefined) headers['Content-Type'] = 'application/json';
 
+  // TASK-MONO-585 — the configured address is what the deployment was given;
+  // this is the address to actually call. Off-demo it is byte-identical.
+  const resolvedAdminUrl = await resolveBackendUrl(
+    `${env.IAM_ADMIN_API_BASE}${req.path}`,
+  );
+
   const timeoutMs = profile.resolveTimeoutMs(env);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const res = await fetch(`${env.IAM_ADMIN_API_BASE}${req.path}`, {
+    const res = await fetch(resolvedAdminUrl, {
       method: req.method,
       headers,
       body: req.body === undefined ? undefined : JSON.stringify(req.body),

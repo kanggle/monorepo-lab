@@ -1,4 +1,5 @@
 import { getServerEnv } from '@/shared/config/env';
+import { resolveBackendUrl } from '@/shared/config/demo-backend';
 import { getDomainFacingToken } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
 import { ApiError } from '@/shared/api/errors';
@@ -258,13 +259,16 @@ export async function callFlatEnvelopeGateway<T>(
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      return await fetch(`${defaults.baseUrl}${req.path}`, {
-        method,
-        headers,
-        body: req.body === undefined ? undefined : JSON.stringify(req.body),
-        cache: 'no-store',
-        signal: controller.signal,
-      });
+      return await fetch(
+        await resolveBackendUrl(`${defaults.baseUrl}${req.path}`),
+        {
+          method,
+          headers,
+          body: req.body === undefined ? undefined : JSON.stringify(req.body),
+          cache: 'no-store',
+          signal: controller.signal,
+        },
+      );
     } finally {
       clearTimeout(timer);
     }

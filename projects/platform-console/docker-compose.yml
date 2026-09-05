@@ -28,6 +28,14 @@ services:
     container_name: platform-console-web
     build:
       context: ./apps/console-web
+      # 🔴 TASK-MONO-585 — `@demo/backend-resolver` 는 이 컨텍스트 밖(저장소 루트
+      #    `infra/demo/`)에 있다. 이름 붙인 추가 컨텍스트로 건네지 않으면 이미지 빌드가
+      #    *"Module not found: Can't resolve '@demo/backend-resolver'"* 로 죽는다 —
+      #    그런데 `pnpm install` 은 통과하므로(`link:` 는 대상이 없어도 심링크를 만든다)
+      #    install 로그로는 안 보인다. 형제 둘(fan·web-store)이 `TASK-MONO-615` 에서
+      #    AMI 굽기 10분 뒤에 이 지점으로 죽었고, 가드 (z26)이 이 축을 정적으로 문다.
+      additional_contexts:
+        demo-backend-resolver: ../../infra/demo/backend-resolver
       dockerfile: Dockerfile
     restart: unless-stopped
     expose:

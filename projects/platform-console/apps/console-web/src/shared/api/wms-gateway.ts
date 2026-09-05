@@ -1,4 +1,5 @@
 import { getServerEnv } from '@/shared/config/env';
+import { resolveBackendUrl } from '@/shared/config/demo-backend';
 import { getDomainFacingToken } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
 import { ApiError } from '@/shared/api/errors';
@@ -178,7 +179,7 @@ export async function callWmsGateway<T>(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const res = await fetch(`${baseUrl}${req.path}`, {
+    const res = await fetch(await resolveBackendUrl(`${baseUrl}${req.path}`), {
       method: req.method,
       headers,
       body: req.body === undefined ? undefined : JSON.stringify(req.body),

@@ -533,9 +533,9 @@ New projects pick an unused `*.local` hostname and register it in this table in 
 | **launcher** (기동 사이트) | `hubwang.com` | — (론처는 로컬에 없다) | `kanggle-portfolio` | ✅ 연결됨 (`200`, 08-29 실측) |
 | fan | `fan.hubwang.com` | `fan-platform.local` | `kanggle-fan` | ✅ 연결됨 (`307`, 08-29 실측) |
 | web-store | `store.hubwang.com` | `web.ecommerce.local` | `kanggle-store` | ✅ 연결됨 (`200`, 08-29 실측) |
-| console | `console.hubwang.com` | `console.local` | *미생성* | ⏳ 단계 3 (`404`) |
+| console | `console.hubwang.com` | `console.local` | *미생성* → `kanggle-console` | ⏳ 단계 3 — **저장소 몫 완료**(`TASK-MONO-585`), 프로젝트 생성은 소유자. 2026-09-05 실측 `404` |
 | *(리다이렉트)* | `www.hubwang.com` | — | `kanggle-portfolio` | ↪️ apex 로 301 |
-| *(예약)* | `auth.hubwang.com` | `iam.local` | — | 🚫 예약 — `D4`/`TASK-MONO-576` 전까지 쓰지 마라 |
+| auth (IdP 포워더) | `auth.hubwang.com` | `iam.local` | `kanggle-auth` | ✅ **예약 아님 — 쓰이고 있다** (`ADR-MONO-069` `C2` · `TASK-MONO-610` done). 2026-09-05 실측 `503` = 배포는 있고 데모가 꺼진 것 |
 | *(예약)* | `api.hubwang.com` | — | — | 🚫 예약 — 컨트롤 API |
 
 <!-- PUBLIC-HOSTNAMES-END -->
@@ -550,6 +550,14 @@ New projects pick an unused `*.local` hostname and register it in this table in 
 
 🔵 **예약을 적어 두는 이유**는 그 이름을 **나중에 다른 뜻으로 쓰는 것을 막기 위해서**다.
 빈 줄로 두면 다음 사람이 `api.` 를 게이트웨이에 붙인다.
+
+🔴 **`auth.` 행은 2026-09-05 에 «예약» 에서 «사용 중» 으로 고쳤다** (`TASK-MONO-585` 작업 중
+발견). `TASK-MONO-610` 이 그 이름을 실제로 배선했는데 이 표는 *"`D4`/`TASK-MONO-576` 전까지
+쓰지 마라"* 로 남아 있었다 — **한 사실이 두 곳에 있으면 한쪽만 고쳐진다**의 또 한 사례이고,
+읽는 사람에게는 「아직 아무도 안 쓴다」로 보인다. 판정 근거는 같은 날 같은 명령의 세 응답이다:
+`store.` `200`(양성 대조군 — 프로브가 살아 있다) · `auth.` `503`(배포는 있고 업스트림 데모가
+꺼져 있다) · `console.` `404`(Vercel 프로젝트 자체가 없다 — 이 표가 말하는 «미생성» 의 지문).
+🔵 `404` 와 `503` 이 그 둘을 가른다.
 
 ### Frontend dev-server ports (standalone `next dev`)
 

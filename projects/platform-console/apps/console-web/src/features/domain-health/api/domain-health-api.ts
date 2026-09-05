@@ -1,4 +1,3 @@
-import { clientEnv } from '@/shared/config/env';
 import { ApiError } from '@/shared/api/errors';
 import { DomainHealthSchema, type DomainHealth } from './types';
 
@@ -23,14 +22,14 @@ import { DomainHealthSchema, type DomainHealth } from './types';
  * per the § D4 scope clarification). Sending it would be misleading.
  *
  *   - {@link fetchDomainHealth} — client-side caller used by the
- *     React Query hook (`<RetryButton>` only). Builds an absolute
- *     same-origin URL via `clientEnv.NEXT_PUBLIC_APP_URL` and sets
- *     `credentials: 'include'` so the HttpOnly session cookies ride.
- *   - {@link getDomainHealthState} — server-side caller for the
- *     SSR route entry (`(console)/dashboards/health/page.tsx`).
- *     Calls the SAME proxy URL server-to-server (Next.js runs the
- *     route handler in-process); cookies are read server-side by the
- *     proxy from `next/headers`.
+ *     React Query hook (`<RetryButton>` only). Uses the RELATIVE
+ *     same-origin path and sets `credentials: 'include'` so the
+ *     HttpOnly session cookies ride.
+ *   - `getDomainHealthState` — server-side caller for the SSR route
+ *     entry (`(console)/dashboards/health/page.tsx`). It lives in the
+ *     sibling `domain-health-state.ts` because it needs this app's
+ *     absolute origin, and THAT module must never be reachable from
+ *     the client graph (TASK-MONO-585 — see `shared/config/env.ts`).
  *
  * Both paths share `DomainHealthSchema` for runtime validation — the
  * contract is byte-verbatim from § 2.4.9.2 and the BE
@@ -41,22 +40,7 @@ import { DomainHealthSchema, type DomainHealth } from './types';
  * here at the fetch boundary.
  */
 
-const DOMAIN_HEALTH_PATH = '/api/console/dashboards/domain-health';
-
-function domainHealthUrl(): string {
-  // In the browser this call is same-origin by definition, so no base is
-  // needed — and none may be used: `NEXT_PUBLIC_APP_URL` is inlined at BUILD
-  // time (TASK-MONO-358), so a prebuilt image would send the browser to
-  // whatever host the build knew about (`console.local`) instead of the one
-  // it is actually being served from. Relative is both simpler and correct.
-  if (typeof window !== 'undefined') return DOMAIN_HEALTH_PATH;
-  // Server-side (SSR route entry): fetch() needs an absolute URL. Prefer the
-  // runtime-resolvable origin; fall back to the build-time value.
-  const base = (
-    process.env.CONSOLE_PUBLIC_ORIGIN ?? clientEnv.NEXT_PUBLIC_APP_URL
-  ).replace(/\/$/, '');
-  return `${base}${DOMAIN_HEALTH_PATH}`;
-}
+export const DOMAIN_HEALTH_PATH = '/api/console/dashboards/domain-health';
 
 /** Parses the proxy's error envelope `{ code, message }` defensively. */
 async function readErrorEnvelope(
@@ -95,12 +79,29 @@ export async function fetchDomainHealth(
    * the operator has selected one (the bug this closes).
    */
   cookieHeader?: string,
+  /**
+   * Absolute origin to prefix the same-origin path with — server callers ONLY.
+   *
+   * <p>TASK-MONO-585. In the browser this stays undefined and the fetch uses the
+   * RELATIVE path: same-origin by definition, and no base MAY be used, because
+   * `NEXT_PUBLIC_APP_URL` is inlined at BUILD time (TASK-MONO-358) — a prebuilt
+   * artifact would send the browser to whatever host the build knew about
+   * (`console.local`) instead of the one it is being served from.
+   *
+   * <p>🔴 It is a PARAMETER rather than something this module resolves itself
+   * for one reason: this module is in the CLIENT graph (the React Query hook
+   * imports it), so anything it imports ships to the browser. The server caller
+   * (`domain-health-state.ts`) resolves the origin and passes it in.
+   */
+  baseUrl?: string,
 ): Promise<DomainHealth> {
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (cookieHeader) {
     headers.Cookie = cookieHeader;
   }
-  const res = await fetch(domainHealthUrl(), {
+  // DEMO-URL-EXEMPT: same-origin — 이 앱 자신의 라우트 핸들러다(백엔드가 아니다).
+  //   브라우저 경로는 상대경로, 서버 경로는 호출자가 건넨 `selfOrigin()`.
+  const res = await fetch(`${baseUrl ?? ''}${DOMAIN_HEALTH_PATH}`, {
     method: 'GET',
     headers,
     // Same-origin HttpOnly session cookies ride through the proxy on the
@@ -117,73 +118,4 @@ export async function fetchDomainHealth(
 
   const raw = (await res.json()) as unknown;
   return DomainHealthSchema.parse(raw);
-}
-
-/**
- * Server-side discriminated state for the SSR route entry. Mirrors
- * `features/operator-overview/api/operator-overview-api.ts`
- * `OperatorOverviewState` so the page handles the same three outcomes
- * uniformly:
- *
- *   - `noTenant: true` — proxy fast-failed with 400 NO_ACTIVE_TENANT.
- *   - `unauthorized: true` — proxy returned 401 (Spring Security
- *     rejected the inbound `Authorization` bearer).
- *   - `health` present — render `<DomainHealthScreen>`.
- *
- * Per-card degrade lives INSIDE `health.cards[i].status` (the 200
- * payload); it is NEVER a state field here. A whole-fan-out failure
- * (proxy 502 BAD_GATEWAY) surfaces as `bffUnavailable: true`.
- */
-export interface DomainHealthState {
-  health: DomainHealth | null;
-  noTenant: boolean;
-  unauthorized: boolean;
-  bffUnavailable: boolean;
-}
-
-export async function getDomainHealthState(): Promise<DomainHealthState> {
-  try {
-    // TASK-PC-FE-037 — forward the page's request cookies to the in-process
-    // proxy fetch (the operator-overview sibling already does this via
-    // TASK-PC-FE-030). Next.js Node `fetch` does NOT auto-forward cookies on
-    // internal calls (`credentials: 'include'` is browser-only), so without
-    // this explicit header the proxy's `cookies()` reads empty → 400
-    // NO_ACTIVE_TENANT → `noTenant: true` even when the session HAS an active
-    // tenant. Lazy-imported so the browser path (`fetchDomainHealth` via the
-    // React Query hook) never pulls in `next/headers`.
-    const { cookies } = await import('next/headers');
-    const cookieHeader = (await cookies()).toString();
-    const health = await fetchDomainHealth(cookieHeader);
-    return {
-      health,
-      noTenant: false,
-      unauthorized: false,
-      bffUnavailable: false,
-    };
-  } catch (err) {
-    if (err instanceof ApiError) {
-      if (err.status === 400 && err.code === 'NO_ACTIVE_TENANT') {
-        return {
-          health: null,
-          noTenant: true,
-          unauthorized: false,
-          bffUnavailable: false,
-        };
-      }
-      if (err.status === 401) {
-        return {
-          health: null,
-          noTenant: false,
-          unauthorized: true,
-          bffUnavailable: false,
-        };
-      }
-    }
-    return {
-      health: null,
-      noTenant: false,
-      unauthorized: false,
-      bffUnavailable: true,
-    };
-  }
 }

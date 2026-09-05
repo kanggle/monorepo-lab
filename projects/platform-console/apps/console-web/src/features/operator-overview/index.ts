@@ -20,11 +20,10 @@ export {
 } from './components/OverviewDegradeBanner';
 export { RetryButton } from './components/RetryButton';
 export { useOperatorOverview } from './hooks/use-operator-overview';
-export {
-  fetchOperatorOverview,
-  getOperatorOverviewState,
-} from './api/operator-overview-api';
-export type { OperatorOverviewState } from './api/operator-overview-api';
+export { fetchOperatorOverview } from './api/operator-overview-api';
+// 🔴 TASK-MONO-585 — SSR half in its own module (see the domain-health sibling).
+export { getOperatorOverviewState } from './api/operator-overview-state';
+export type { OperatorOverviewState } from './api/operator-overview-state';
 export {
   OperatorOverviewSchema,
   CardSchema,

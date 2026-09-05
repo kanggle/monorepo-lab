@@ -43,6 +43,8 @@ async function doFetch(path: string, opts: ApiRequestOptions): Promise<Response>
   if (opts.body !== undefined && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
+  // DEMO-URL-EXEMPT: same-origin — 이 앱 자신의 라우트 핸들러다(백엔드가 아니다).
+  //   브라우저 경로는 상대경로, 서버 경로는 호출자가 건넨 `selfOrigin()`.
   return fetch(path, {
     ...opts,
     headers,

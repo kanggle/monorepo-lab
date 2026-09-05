@@ -27,17 +27,27 @@ import { z } from 'zod';
  */
 
 // ---------------------------------------------------------------------------
-// Client env (safe to send to browser — NEXT_PUBLIC_ prefix only)
+// SERVER-ONLY MODULE (TASK-MONO-585 / ADR-MONO-067 D1)
 // ---------------------------------------------------------------------------
-
-const ClientEnvSchema = z.object({
-  NEXT_PUBLIC_APP_URL: z.string().url().default('http://console.local'),
-});
-
-export const clientEnv = ClientEnvSchema.parse({
-  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
-});
-
+// 🔴🔴 Never import this module from anything the client graph can reach.
+//
+// It used to also carry a `clientEnv` (`NEXT_PUBLIC_APP_URL` only), and that one
+// client-safe value was enough to drag the WHOLE module into the browser bundle:
+// a single client hook (`use-domain-health`) imported it, and with it went the
+// 12 `.default('http://…')` literals of the server schema below.
+//
+// Measured 2026-09-05 on a clean `next build`: 12 of 12 source URLs present in
+// the client chunks — all in ONE chunk (`6921-*.js`) loaded by the console's
+// three entry routes (`/console`, `/dashboards/overview`, `/dashboards/health`).
+// The browser was handed every backend address the console knows.
+//
+// 🔴 The source boundary was NOT the defect: all 20 importers of this module
+//    were server modules (`"use client"` count = 0). Declaration boundary is not
+//    bundle boundary. The fix was to SPLIT THE MODULE — the app's own origin now
+//    lives in `self-origin.ts`, which nothing client-side imports either.
+//
+// Guarded by `scripts/check-console-backend-urls.sh` cell (4).
+//
 // ---------------------------------------------------------------------------
 // Server env (server runtime only — never serialised to the client)
 // ---------------------------------------------------------------------------
