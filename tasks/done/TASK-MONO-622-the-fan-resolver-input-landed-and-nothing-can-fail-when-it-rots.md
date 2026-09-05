@@ -8,7 +8,7 @@ TASK-MONO-622
 
 # Status
 
-review
+done
 
 # Owner
 
