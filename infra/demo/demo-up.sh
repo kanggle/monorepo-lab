@@ -511,6 +511,11 @@ fi
 #    영원히 열리지 않는 표면을 12번 재시도하며 기다리고, 그 실패는 **"데모가 안 떴다"**
 #    로 읽힌다. 그래서 마크업의 `data-served` 선언을 **여기서도 읽어** 데모 호스트 행만
 #    찌른다(선언의 출처는 여전히 한 벌이다 — 두 벌이면 하나만 고쳐진다).
+# 🔴🔴 TASK-MONO-625 — 그 문장은 **더 이상 `data-served` 만으로 끝나지 않는다.**
+#    단계 3 이 console 행을 `vercel` 로 옮겼는데 **데모 호스트는 그 화면을 여전히 서빙한다**
+#    (억제 오버레이가 없다) ⇒ 「방문자가 가는 곳」과 「부팅이 재는 곳」이 처음으로 갈라졌다.
+#    찌를 대상 = **demo-host 행의 `data-host`  ∪  vercel 행의 `data-demo-probe`**.
+# 🔵 출처는 여전히 **한 벌(론처 마크업)** 이다 — 늘어난 것은 벌 수가 아니라 속성 하나다.
 # 🔴 선언이 없거나 모르는 값인 행은 **판정 불가**다. 조용히 건너뛰면 새 출처가 생겼을 때
 #    그 화면이 부팅 판정에서 **소리 없이 빠진다**.
 # -----------------------------------------------------------------------------
@@ -520,12 +525,28 @@ SURFACE_SRC="${DEMO_SURFACE_SRC:-$HERE/aws/site/index.html}"
 # 가드 (z14) 의 `z14_floor` 와 **같은 축·같은 값**이다.
 SURFACE_ROW_FLOOR="${DEMO_SURFACE_ROW_FLOOR:-3}"
 # 하한 ②: **부팅 때 실제로 찌를 표면의 수** = 1 (console 뿐).
-# provenance: 위 3 에서 **Vercel 로 옮겨간 두 행**을 뺀 값 —
-#   · web.ecommerce      TASK-MONO-583 (ADR-MONO-067 단계 2)
-#   · web.fan-platform   TASK-MONO-618 (ADR-MONO-067 단계 4)  ← 2026-09-04
-# Vercel 표면은 데모 호스트가 꺼져 있어도 뜨므로 **부팅 완료의 증거가 될 수 없다.**
-# 🔴 **다른 축이다** — 화면이 늘어도 그것이 Vercel 이면 여기는 안 오른다. 데모 호스트
-# 화면이 늘 때만 올려라.
+#
+# 🔴🔴 TASK-MONO-625 (2026-09-06) — **provenance 의 문장이 바뀌었다. 값은 안 바뀌었다.**
+#   예전 provenance 는 *"위 3 에서 Vercel 로 옮겨간 두 행을 뺀 값"* 이었고, 그 뺄셈은
+#   **`data-served` 하나로 두 질문에 답하던 시절**의 것이다. 단계 3 이 console 행마저
+#   `vercel` 로 옮겼으므로 그 뺄셈은 이제 **0** 을 내놓는다 — 그런데 값은 여전히 1 이다.
+#   틀린 것은 값이 아니라 **뺄셈**이다:
+#
+#     «방문자는 어디로 가는가»          → data-served / data-url   (console = vercel)
+#     «부팅이 끝났는지 무엇으로 재는가»  → data-demo-probe          (console = 여전히 찌른다)
+#
+#   console 은 방문자가 Vercel 로 가지만 **데모 호스트도 여전히 서빙한다**(`projects.sh`
+#   의 `[console]` 체인에 `*-vercel.override.yml` 이 없다). 형제 둘은 억제됐으므로 찌를
+#   표면이 실제로 사라졌지만, console 은 사라지지 않았다.
+#
+# ⇒ **새 provenance**: 찌를 표면 = «demo-host 행의 data-host» ∪ «vercel 행의
+#   data-demo-probe». 2026-09-06 전수로 그 합집합은 **1건(console)** 이다 —
+#     · console          data-served="vercel" + data-demo-probe="console"  ← 유일
+#     · web.ecommerce    억제됨 (ecommerce-vercel.override.yml)  → 프로브 선언 없음
+#     · web.fan-platform 억제됨 (fan-vercel.override.yml)        → 프로브 선언 없음
+#
+# 🔴 **다른 축이다** — 화면이 늘어도 그것이 Vercel 이고 데모 호스트가 안 서빙하면 여기는
+# 안 오른다. **데모 호스트가 실제로 서빙하는 화면**이 늘 때만 올려라.
 #
 # 🔴🔴 TASK-MONO-618 — **이 값을 억제와 같은 PR 에서 안 내리면 부팅이 영구 실패한다.**
 #    억제하면 찌를 수 있는 표면이 1개가 되는데 하한이 2 면 판정이 절대 충족되지 않고,
@@ -535,9 +556,31 @@ SURFACE_ROW_FLOOR="${DEMO_SURFACE_ROW_FLOOR:-3}"
 # 🔴🔴 그리고 **부팅 완료 지문이 바뀐다** — 창 #3 까지는 `console=307 web.fan-platform=307`
 #    (표면 2/2)이 완료 신호였다. 이제 `console=307` **하나(1/1)** 이고
 #    `web.fan-platform` 은 **404** 다. 옛 지문을 기다리면 창이 영원히 안 열린다.
+# 🔵🔵 TASK-MONO-625 (2026-09-06) — **이번에는 지문이 «안 바뀐다». 그것이 결과다.**
+#    단계 3 이 console 행을 Vercel 로 옮겼는데도 완료 신호는 **`console=307` (1/1) 그대로**
+#    다 — 프로브 선언(`data-demo-probe`)을 서빙 선언(`data-served`)에서 **떼어 냈기**
+#    때문이다. 행이 옮겨간 것과 데모 호스트가 그 화면을 그만 서빙하는 것은 다른 사건이고,
+#    지금 일어난 것은 앞의 것뿐이다.
+#    🔴 그러니 **«행을 옮겼으니 지문도 바뀌었겠지» 로 읽지 마라.** 지문이 바뀌는 것은
+#    console 이 **억제될 때**이고, 그때 바뀌는 방향은 「다른 이름」이 아니라 **1/1 → 0개**,
+#    즉 위 N=0 문단이 설계 변경이라고 부른 그 자리다.
 # 🔵 하한 ①(SURFACE_ROW_FLOOR)은 **그대로 3** 이다 — 론처가 약속하는 화면의 총 수는
 #    줄지 않았고(서빙 출처만 갈렸다), 그 값은 «추출이 깨졌는가» 를 잰다. 두 하한이
 #    서로 다른 것을 재는 이유가 이것이다.
+#
+# 🔴🔴 TASK-MONO-625 — **다음 사람에게. N=1 과 N=0 을 지금 적어 둔다.**
+#   지금 N=1 이다(console 하나). 그 하나가 사라지는 경로는 **하나뿐**이다: 데모가 console
+#   을 억제하는 것(`console-vercel.override.yml`). 그때 해야 할 일은 이 값을 0 으로
+#   내리는 것이 **아니다** —
+#     · N=0 에서 하한을 0 으로 두면 루프가 **빈 채로 통과**한다. `surf_ok` 가 비고
+#       `✔ HTTP 표면` 줄이 아예 안 찍히며 rc 는 무조건 0 이다.
+#       ⇒ **«표면이 정상» 과 «측정이 죽었다» 가 구별되지 않는다.**
+#     · 즉 「부팅 판정이 HTTP 표면을 본다」(TASK-MONO-552 AC-3)는 명제 자체가 공허해진다.
+#   ⇒ N=0 은 **하한 조정이 아니라 설계 변경**이다. 그때 필요한 것은 이 축을 무엇으로
+#     대체할지 정하는 일이고(가드 (z15) 주석이 같은 말을 적어 뒀다), 그 결정 없이
+#     하한만 0 으로 내리는 PR 은 **계측기를 잃는 PR** 이다.
+# 🔵 반대로 N 이 **오르는** 경로는 흔하다(데모 호스트가 서빙하는 화면 추가). 그때는 값을
+#    올리고 이 provenance 목록에 그 이름을 더하면 된다.
 SURFACE_FLOOR="${DEMO_SURFACE_FLOOR:-1}"
 SURFACE_ATTEMPTS="${DEMO_SURFACE_ATTEMPTS:-12}"
 SURFACE_SLEEP="${DEMO_SURFACE_SLEEP:-10}"
@@ -549,10 +592,24 @@ while IFS= read -r sline; do
   surf_rows=$((surf_rows + 1))
   ssrc="$(printf '%s' "$sline" | sed -n 's/.*data-served="\([^"]*\)".*/\1/p')"
   shost="$(printf '%s' "$sline" | sed -n 's/.*data-host="\([^"]*\)".*/\1/p')"
+  # 🔴🔴 TASK-MONO-625 — **찌를 표면을 `data-served` 가 혼자 정하지 않는다.**
+  #    `data-served` 는 «방문자는 어디로 가는가» 를 답하고, 그 답이 `vercel` 이어도
+  #    **데모 호스트가 그 화면을 여전히 서빙할 수 있다**(console 이 그렇다 — 억제
+  #    오버레이가 없다). 그 경우에만 그 행이 `data-demo-probe` 로 부팅 프로브를 선언한다.
+  #    🔴 `data-host` 를 재사용하지 않는 이유는 가드 (z14) 가 vercel 행의 잔존 `data-host`
+  #    를 «아무도 안 읽는 낡은 값» 으로 물기 때문이고, 그 규칙은 옳다 — 「낡은 값」과
+  #    「의도된 선언」은 이름이 달라야 한다.
+  sprobe="$(printf '%s' "$sline" | sed -n 's/.*data-demo-probe="\([^"]*\)".*/\1/p')"
   case "$ssrc" in
+    # 🔴 demo-host 행에 프로브 선언이 함께 있으면 **같은 표면을 두 번** 찌르게 되고,
+    #    한 결함이 두 줄로 보고된다. 그 조합은 (z14) 가 마크업에서 막는다.
     demo-host)
       if [ -n "$shost" ]; then surfaces+=("$sdom $shost"); else surf_badsrc+=("$sdom:host없음"); fi ;;
-    vercel)    : ;;   # 데모 호스트에 없다 — 찌르지 않는다(그것이 이관의 목적이다)
+    vercel)
+      # 방문자는 Vercel 로 간다. 데모 호스트가 그 화면을 **아직 서빙하면** 프로브 선언이
+      # 있고, 그때만 찌른다. 선언이 없으면 데모 호스트에 그 표면이 없다는 뜻이므로
+      # 찌르지 않는다 — 찌르면 영원히 안 열리는 주소를 재시도하다 "데모가 안 떴다" 가 된다.
+      if [ -n "$sprobe" ]; then surfaces+=("$sdom $sprobe"); fi ;;
     *)         surf_badsrc+=("$sdom:출처='${ssrc:-없음}'") ;;
   esac
 done < <(grep '<a [^>]*data-surface' "$SURFACE_SRC" 2>/dev/null)

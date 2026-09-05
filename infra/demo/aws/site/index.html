@@ -86,6 +86,31 @@
         data-served="demo-host" → data-host 필수 · demoHost() 파생 · 도메인 헬스에 묶인다
         data-served="vercel"    → data-url 필수 · 정적 주소 · 헬스와 무관하게 **항상 활성**
 
+      🔴🔴 TASK-MONO-625 — **한 선언이 두 질문에 답하고 있었고, console 에서 둘이 갈렸다.**
+
+        «방문자는 어디로 가는가»          → data-served / data-url
+        «부팅이 끝났는지 무엇으로 재는가»  → 지금까지 **같은** data-served 였다
+
+      형제 둘(ecommerce · fan)에서는 그 둘이 같았다 — 데모 호스트가 그 화면을
+      **억제**했으므로(`*-vercel.override.yml`) 찌를 표면 자체가 없었다. console 은 다르다:
+      방문자는 Vercel 로 가지만 **데모 호스트도 여전히 서빙한다**(`projects.sh` 의 `[console]`
+      체인에 억제 오버레이가 없다). ⇒ 두 답이 처음으로 갈라진다.
+
+      그래서 세 번째 속성이 **부팅 프로브만**을 따로 적는다:
+
+        data-demo-probe="<호스트접두사>" → **vercel 행 전용.** 방문자 경로와 무관하게
+            `demo-up.sh` 가 부팅 판정에서 이 접두사를 찌른다.
+
+      🔴 **`data-host` 를 재사용하지 않는다.** (z14) 는 vercel 행의 잔존 `data-host` 를
+         «아무도 안 읽는 낡은 값» 으로 **실패로 문다** — 그 규칙은 옳다. 「낡은 값」과
+         「의도된 선언」은 다른 것이므로 **이름을 달리해야** 한다.
+      🔵 이 속성을 **방문자 경로는 안 읽는다.** `renderSurfaces()` 는 data-served/url/host
+         만 본다 — 행을 옮겨도 방문자가 보는 것은 바뀌지 않는다. 부팅 판정만의 축이다.
+      🔴 데모 호스트가 그 화면을 **억제하게 되면 이 속성을 같은 PR 에서 지워야** 한다.
+         안 지우면 부팅 판정이 영원히 안 열리는 주소를 12번 재시도하고, 그 실패는
+         **"데모가 안 떴다"** 로 읽힌다. 그때 남는 프로브가 0개가 되는 것은
+         **하한 조정이 아니라 설계 변경**이다 — `demo-up.sh` 의 SURFACE_FLOOR 주석을 읽어라.
+
       🔴 **기본값이 없다.** 선언이 없거나 모르는 값이면 이 페이지는 그 링크를 **열지 않고**
       (모르는 것은 통과가 아니다 — 방문자에게 깨진 링크를 주는 쪽이 더 나쁘다), 가드 (z14)
       는 **빨개진다.** 두 속성은 **상호 배타**다: vercel 행에 data-host 를 남겨 두면 그것은
@@ -93,7 +118,7 @@
       있다고 읽는다. `demo-up.sh` 의 부팅 판정도 **같은 선언**을 읽어 찌를 행을 고른다.
     -->
     <div id="surfaces">
-      <a class="open" data-surface data-domain="console"   data-served="demo-host" data-host="console"          target="_blank" rel="noopener">🖥️ 운영자 콘솔 열기 →</a>
+      <a class="open" data-surface data-domain="console"   data-served="vercel"    data-url="https://console.hubwang.com/" data-demo-probe="console" target="_blank" rel="noopener">🖥️ 운영자 콘솔 열기 →</a>
       <a class="open" data-surface data-domain="ecommerce" data-served="vercel"    data-url="https://store.hubwang.com/" target="_blank" rel="noopener">🛒 이커머스 스토어 열기 →</a>
       <a class="open" data-surface data-domain="fan"       data-served="vercel"    data-url="https://fan.hubwang.com/" target="_blank" rel="noopener">🎤 팬 플랫폼 열기 →</a>
       <div id="smsg"></div>
