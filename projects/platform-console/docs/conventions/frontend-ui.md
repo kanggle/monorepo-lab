@@ -424,14 +424,32 @@ Known gaps, each owned elsewhere:
 ### 5.3 `web-store` and `fan-platform-web` — same gate, different local reality
 
 The rule applies to all three apps; what differs is **how much of it you can
-actually run on a developer machine**. Measured 2026-08-06 from each app's
-`package.json`:
+actually run on a developer machine**. Re-measured 2026-09-05 (UTC) from each
+app's `package.json` — all three rows, not just the one that changed:
 
 | App | Next | vitest | `lint` script | Local gate |
 |---|---|---|---|---|
-| `console-web` | `15.0.3` | `^2.1.4` | `next lint` | all three run locally |
+| `console-web` | `^15.1.0` | `^2.1.4` | `next lint` | all three run locally |
 | `web-store` | `^15.1.0` | `^4.1.0` | `next lint` | `pnpm lint` + `tsc` only — **vitest 4 does not start under Node 24**; CI (Node 20) is the authority for its unit tests |
 | `fan-platform-web` | `^15.1.0` | `^3.2.4` | `next lint --dir src` | not measured on this host — do not assume either way |
+
+The Next column is a **spec, not a version**. `^15.1.0` resolved to 15.5.25 /
+15.5.14 / 15.5.15 respectively on 2026-09-05; a fresh install resolves it again.
+Do not read a number out of this table.
+
+`console-web` held `15.0.3` — an exact pin, with React 19 **RC** as its required
+partner — until TASK-PC-FE-274, when Vercel refused to deploy it: the build
+succeeded and the *deployment* was rejected with `Vulnerable version of Next.js
+detected`. The three siblings, already on `^15.1.0`, deployed fine. That is what
+an exact pin costs when nothing re-examines it.
+
+One consequence lands in this section directly: under 15.5, `next lint` prints
+`` `next lint` is deprecated and will be removed in Next.js 16 `` and Next also
+warns that it inferred a workspace root from the repo-root lockfile. Both are
+**warnings**; `pnpm lint` still exits 0 and still reports `No ESLint warnings or
+errors`. The gate above is `rc=0` — do not read a warning as a failure, and do
+not silence one by widening a task's scope. Migrating off `next lint` is its own
+decision, owed before Next 16.
 
 Two things follow. First, **"CI is the authority" is not a licence to skip the
 part that does run** — `pnpm lint` and `tsc` work fine for `web-store`, and they
@@ -456,6 +474,12 @@ for the date/time convention. Only the implementations are per-app.
   import left behind after token-bridge removal). Restating a rule in five task
   bodies is what having no canonical home looks like.
 - TASK-PC-FE-272 — this section (rule moved out of agent memory into the repo).
+- TASK-PC-FE-274 — § 5.3's table re-measured and the "a warning is not a
+  failure" clause added, after `console-web`'s pinned Next was refused by
+  Vercel. The table itself was the second copy of a fact whose first copy is
+  `package.json`, and **nothing guards it** — it went stale the moment the
+  dependency moved. That is why the bump task carried updating it as an
+  acceptance criterion rather than trusting anyone to notice.
 
 > Deliberately **not** moved here from the originating agent memory: the
 > worktree `node_modules` junction setup and its teardown-order hazard. That is
