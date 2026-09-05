@@ -1298,6 +1298,12 @@ else
   #    «portone 이 **없는가**» 이고, 위 x2_profiles 가 그 절반이다.
   # 🔴 **날짜 박힌 실측값을 여기에 넣지 않는다.** 소유자가 값을 넣는 순간 거짓이 되는데
   #    이 스크립트에는 그것을 빨갛게 만들 수단이 없다. 실측값은 원장과 티켓이 든다.
+  # 🔴🔴 **그리고 이 주석만으로는 안 지켜졌다** (TASK-MONO-622 실측). TASK-MONO-618 은 이
+  #    주석을 형제 (x) 에서 그대로 복사해 놓고 **여섯 줄 아래 메시지에서 어겼다** — 소유자가
+  #    값을 넣은 바로 그날 거짓이 되는 현재형 단정을 적었고, 아무것도 그것을 빨갛게 만들지
+  #    못했다. 🔴 규칙이 없어서가 아니었다. **주석은 게이트가 아니다.**
+  #    ⇒ 칸 **(z29)** 가 이 규칙을 «실행되는 판정» 으로 만든다. 여기에 규칙을 더 크게 쓰는
+  #      것으로는 다음 사람도 못 막는다 — 그 방법은 이미 한 번 실패했다.
   ok "팬 결제 mock — 백엔드만 검사 (membership-service='${x2_profiles}' ⇒ 목: ${x2_back_mock}). 프런트 절반은 저장소 밖이다:"\
      $'\n'"     DEMO_PAYMENT_MOCK 의 집은 Vercel 프로젝트 kanggle-fan 의 env 다 — compose 가 아니다."\
      $'\n'"     ⇒ CI 도 이 스크립트도 이 축을 **판정할 수 없다**. TASK-MONO-618 이 그것을 수용했고,"\
@@ -1306,10 +1312,12 @@ else
      $'\n'"         명령      : vercel env ls production --project kanggle-fan | grep DEMO_PAYMENT_MOCK"\
      $'\n'"         기대값    : DEMO_PAYMENT_MOCK=1   (팬 백엔드에 portone 이 **없는 한** — 위 '${x2_profiles}' 가 그 절반이다)"\
      $'\n'"         원장      : projects/fan-platform/web/fan-platform-web/VERCEL.md"\
-     $'\n'"     🔴 env 목록에 있다 = 켜져 있다 가 **아니다**. env 변경은 다음 배포부터 적용된다."\
-     $'\n'"     🔴🔴 2026-09-04 실측 기준 이 값은 kanggle-fan 에 **없었다** — 억제로 Vercel 판이"\
-     $'\n'"       유일한 팬이 되었으므로, 없으면 프런트가 'PortOne 키 미설정' 으로 구독 요청 자체를"\
-     $'\n'"       보내지 않는다(TASK-FAN-FE-015 가 고친 상태가 정확히 그것이다)."
+     $'\n'"     🔴 env 목록에 있다 = 켜져 있다 가 **아니다**. env 변경은 다음 배포부터 적용되고,"\
+     $'\n'"       최종 판정은 /api/payment-config 가 {\"demoPayment\":true} 를 내는 것이다."\
+     $'\n'"     🔴 팬은 표면 전체가 로그인 뒤에 있다(middleware 가 fail-closed) — 세션 없이"\
+     $'\n'"       부르면 307 로 로그인 페이지가 오고, 그 응답은 «값이 false» 와 **구별되지 않는다**."\
+     $'\n'"     🔵 기전(현재 상태가 아니다): 이 값이 없으면 프런트가 'PortOne 키 미설정' 으로"\
+     $'\n'"       구독 요청 자체를 보내지 않는다 — TASK-FAN-FE-015 가 고친 상태가 정확히 그것이다."
 fi
 
 # ---------------------------------------------------------------------------
@@ -4003,6 +4011,221 @@ fi
 
 rm -rf "$z24_tmp"
 ok "(z24) 잔존 정리는 부팅에서만 돈다 — 플래그 有: down→up 순서 · 플래그 無(per-domain): down 0회${z24_hangnote}"
+
+
+echo "[verify] (z29) 미집행 축 안내가 «현재 상태» 를 단정하지 않고, 지목한 원장이 실재하는가 (TASK-MONO-622)"
+# ---------------------------------------------------------------------------
+# 이 칸은 **주석 하나를 게이트로 바꾼 것**이다.
+#
+# 칸 (x)(ecommerce 결제축)의 주석이 규칙을 적어 뒀다:
+#     "🔴 날짜 박힌 실측값을 여기에 넣지 않는다. 소유자가 값을 넣는 순간 거짓이 되는데
+#      이 스크립트에는 그것을 빨갛게 만들 수단이 없다. 실측값은 원장과 티켓이 든다."
+#
+# 🔴🔴 그리고 그 규칙은 **주석만으로는 안 지켜졌다.** TASK-MONO-618 은 그 주석을 (x2) 로
+#    복사해 놓고 **여섯 줄 아래 메시지에서 어겼다** — "2026-09-04 실측 기준 이 값은
+#    kanggle-fan 에 없었다" 가 소유자가 값을 넣은 **바로 그날** 거짓이 됐고, 아무것도
+#    그것을 빨갛게 만들지 못했다. 규칙이 없어서가 아니었다. 주석은 게이트가 아니다.
+#
+# 🔴 그리고 같은 블록이 **원장을 지목만 하고 채우지는 않았다** — (x2) 가 가리킨
+#    fan-platform-web/VERCEL.md 에 그 키가 0건이었다(형제 (x) 의 원장에는 각각 5건).
+#    "실측값은 원장이 든다" 는 처방이 **원장이 비어 있으면 아무것도 아니다.**
+#
+# 무엇을 보는가 — 미집행 안내 블록마다 셋:
+#   (1) 날짜 박힌 값이 **없다**              — 현재형 단정은 소유자 조작 한 번에 거짓이 된다
+#   (2) 원장을 **지목한다**                  — 안 지목하면 "실측값은 원장이 든다" 가 공허하다
+#   (3) 그 원장이 실재하고 **그 키를 담는다** — 지목만 하고 비어 있으면 지시가 막다른 길이다
+#
+# 🔴 모집단을 **성질로** 고른다: `ok`/`warn` 으로 시작하고 "판정할 수 없다" 를 담은 메시지
+#    블록. 파일·줄 위치로 고르면 단계 3(console)이 세 번째 축을 추가할 때 그 성질이 사라진다.
+#    🔴🔴 그리고 **`fail` 은 뺀다** — 미집행 안내는 **정의상 실패하지 않는다**(실패할 수
+#    있으면 그 축은 이미 집행되는 것이다). 첫 판은 마커 문자열만 봤고,
+#    `check-cross-project-topic-relay.sh` 의 `fail "… 정적으로 판정할 수 없다"` 를
+#    **부분문자열로** 물었다. 마커를 길게 하는 것은 처방이 아니다 — 다음 문구에서 또 걸린다.
+#
+# 🔴🔴 **하한은 «발견 수» 가 아니라 «추출기» 에 건다.** 미집행 축은 **줄어드는 것이 목표**다
+#    (축이 집행 가능해지면 안내가 사라진다) — 발견 수에 하한을 두면 개선이 실패가 된다.
+#    대신 "메시지 블록이 하나도 안 뽑히면" 을 FATAL 로 잡는다. 그것은 모집단이 빈 것이
+#    아니라 **추출기가 깨진 것**이고, 둘은 0행으로 구별되지 않는다.
+#
+# 🔴🔴 **왜 awk 한 번인가 — 첫 판은 fork 고갈로 죽었다.** 블록마다 `printf | grep` 서브셸을
+#    띄우니 68파일 × 149블록에서 프로세스가 1,500개를 넘었고, msys 에서
+#    `dofork: ... exit code 0xC0000142 / Resource temporarily unavailable` 로 중단됐다.
+#    이 파일이 이미 적어 둔 원칙 그대로다: **도는 데 오래 걸리는 가드는 언젠가 꺼지고,
+#    꺼진 가드는 초록을 보고한다**(MONO-360). 그래서 추출·판별을 awk **한 번**에 넣고,
+#    셸은 발견된 안내(오늘 2건)에 대해서만 파일을 읽는다.
+#
+# 이 칸이 **안 보는 것**: 값 자체(Vercel env). 저장소 밖이고 TASK-MONO-612·618 이 판정
+# 불가를 근거를 들어 수용했다. 이 칸은 "재라" 가 아니라 "거짓을 말하지 마라" 다.
+
+# 한 번의 awk 로 전부 뽑는다. 출력:
+#   N<TAB>파일<TAB>날짜샘플(없으면 -)<TAB>원장경로(없으면 -)<TAB>키(없으면 -)
+#   ALL<TAB>추출된 메시지 블록 총수
+# 🔴 주석 줄은 블록에 절대 안 들어간다 — 판별자가 자기 설명 문구에 걸리는 것을 막는다
+#    (TASK-MONO-604 가 밟은 함정).
+z29_awk='
+function flush(   i, n, lines, ld, dt, ky, ok1) {
+  if (!inb) { blk=""; return }
+  all++
+  if (kind == "ok" || kind == "warn") {
+    if (index(blk, "판정할 수 없다") > 0) {
+      dt = "-"
+      if (match(blk, /20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]/))
+        dt = substr(blk, RSTART, RLENGTH)
+      ld = "-"
+      n = split(blk, lines, "\n")
+      for (i = 1; i <= n; i++)
+        if (index(lines[i], "원장") > 0 && match(lines[i], /[A-Za-z0-9._\/-]+\.md/)) {
+          ld = substr(lines[i], RSTART, RLENGTH); break
+        }
+      ky = "-"
+      if (match(blk, /DEMO_[A-Z0-9_]+/)) ky = substr(blk, RSTART, RLENGTH)
+      printf "N\t%s\t%s\t%s\t%s\n", bfile, dt, ld, ky
+    }
+  }
+  inb = 0; blk = ""
+}
+BEGIN { q = sprintf("%c", 39) }
+{ t = $0; sub(/^[ \t]+/, "", t) }
+t ~ /^#/                        { flush(); next }
+t ~ /^(ok|warn|fail)[ \t]+"/    { flush(); match(t, /^[a-z]+/); kind = substr(t, 1, RLENGTH);
+                                  inb = 1; bfile = FILENAME; blk = $0; next }
+inb && substr(t, 1, 2) == ("$" q) { blk = blk "\n" $0; next }
+                                { flush() }
+END { flush(); printf "ALL\t%d\n", all }
+'
+
+# z29_report <출력파일> <파일...>  — 판별 결과를 <종류>\t<상세> 로 쓴다. rc 는 항상 0.
+# 부수효과: z29_all(추출 블록 수) · z29_notice(미집행 안내 수)
+z29_all=0
+z29_notice=0
+z29_report() {
+  local out="$1"; shift
+  local rec tag f dt ld ky
+  : > "$out"
+  z29_all=0; z29_notice=0
+  rec="$(awk "$z29_awk" "$@")"
+  while IFS=$'\t' read -r tag f dt ld ky; do
+    case "$tag" in
+      ALL) z29_all="$f" ;;
+      N)
+        z29_notice=$(( z29_notice + 1 ))
+        [ "$dt" = "-" ] || printf 'date\t%s: 현재 상태를 %s 와 함께 단정했습니다\n' "$f" "$dt" >> "$out"
+        if [ "$ld" = "-" ]; then
+          printf 'no-ledger\t%s: 미집행 안내가 원장을 지목하지 않습니다\n' "$f" >> "$out"
+        elif [ ! -f "$ROOT/$ld" ]; then
+          printf 'ledger-missing\t%s: 지목한 원장이 없습니다 -> %s\n' "$f" "$ld" >> "$out"
+        elif [ "$ky" != "-" ] && ! grepq -F "$ky" "$ROOT/$ld"; then
+          printf 'ledger-key\t%s: 원장 %s 에 %s 가 0건입니다\n' "$f" "$ld" "$ky" >> "$out"
+        fi
+        ;;
+    esac
+  done <<< "$rec"
+}
+
+# --- 실모집단 ---------------------------------------------------------------
+z29_files=()
+while IFS= read -r z29_f; do z29_files+=("$z29_f"); done < <(
+  find "$ROOT/infra/demo" "$ROOT/scripts" -type f -name '*.sh' 2>/dev/null | sort
+)
+[ "${#z29_files[@]}" -ge 10 ] || fail \
+  "(z29) 스캔 대상 .sh 가 ${#z29_files[@]}개뿐입니다 — 파일 수집이 깨졌습니다."\
+  $'\n'"→ 0에 가까운 모집단은 «위반 없음» 과 구별되지 않습니다."
+
+z29_tmp="$(mktemp -d)"
+z29_report "$z29_tmp/hits" "${z29_files[@]}"
+z29_real_all="$z29_all"; z29_real_notice="$z29_notice"
+
+# 🔴 추출기 건전성 — 여기에만 하한을 건다. 발견 수(=미집행 축 수)에는 걸지 않는다.
+[ "$z29_real_all" -ge 20 ] || { rm -rf "$z29_tmp"; fail \
+  "(z29) 메시지 블록이 ${z29_real_all}개만 추출됐습니다 — 추출기가 깨졌을 가능성이 높습니다."\
+  $'\n'"→ 이 저장소의 가드들은 ok/fail 메시지를 수백 개 냅니다. 0에 가까운 값은 «위반 없음»"\
+  $'\n'"  이 아니라 «아무것도 안 봤다» 입니다 — 둘은 0행으로 구별되지 않습니다."\
+  $'\n'"→ 🔴 미집행 축 자체가 0건인 것은 **정상**입니다(축이 집행 가능해지면 사라집니다)."\
+  $'\n'"  그래서 하한은 발견 수가 아니라 추출기에 걸려 있습니다."; }
+
+if [ -s "$z29_tmp/hits" ]; then
+  z29_n=$(grep -c . "$z29_tmp/hits" || true)
+  z29_body="$(sed 's/^/     /' "$z29_tmp/hits")"
+  rm -rf "$z29_tmp"
+  fail "(z29) 미집행 축 안내에 ${z29_n}건의 위반이 있습니다:"\
+    $'\n'"$z29_body"\
+    $'\n'"→ date          : 현재 상태를 날짜와 함께 단정했습니다. 소유자가 값을 바꾸면 그 문장은"\
+    $'\n'"                  거짓이 되는데 이 스크립트에는 그것을 빨갛게 만들 수단이 없습니다."\
+    $'\n'"                  계약과 확인 방법만 남기고, 실측값은 원장과 티켓이 들게 하세요."\
+    $'\n'"→ no-ledger     : 미집행 안내는 실측값을 둘 자리를 지목해야 합니다."\
+    $'\n'"→ ledger-missing: 지목한 원장 파일이 없습니다."\
+    $'\n'"→ ledger-key    : 원장을 지목만 하고 그 키를 안 담았습니다 — 지시가 막다른 길입니다."
+fi
+
+# --- self-test: 픽스처가 아니라 **실블록을 복사해 변형**한다 -----------------
+# 🔴 손으로 지어낸 스텁은 실물보다 관대해서 초록이 공허해진다. 실제 (x2) 블록을 떠와서
+#    한 군데씩 망가뜨린다. 그리고 **주입이 실제로 됐는지를 먼저 단언**한다 — 주입이
+#    안 된 채 «안 물었다» 를 읽으면 술어가 무죄인데 유죄로 보인다.
+z29_self="$ROOT/infra/demo/verify-demo-wrapper.sh"
+awk "$z29_awk" "$z29_self" > "$z29_tmp/self.rec" 2>/dev/null || true
+z29_selfline="$(grep -m1 '^N' "$z29_tmp/self.rec" || true)"
+[ -n "$z29_selfline" ] || { rm -rf "$z29_tmp"; fail \
+  "(z29) self-test 의 대조군 블록을 못 떠왔습니다 — 추출기나 마커가 바뀌었습니다."\
+  $'\n'"→ 이 저장소에 미집행 안내가 정말 0건이 됐다면 이 self-test 는 의미를 잃습니다."\
+  $'\n'"  그때는 이 칸을 지우는 것이 아니라 **왜 0건이 됐는지**를 헤더에 적으세요."; }
+
+# 대조군 픽스처 = 실제 (x2) 블록을 줄 범위로 떠온 것
+z29_s0=$(grep -n '팬 결제 mock — 백엔드만 검사' "$z29_self" | head -1 | cut -d: -f1)
+z29_s1=$(awk -v s="$z29_s0" 'NR>=s && /^fi$/ {print NR; exit}' "$z29_self")
+[ -n "$z29_s0" ] && [ -n "$z29_s1" ] && [ "$z29_s1" -gt "$z29_s0" ] || { rm -rf "$z29_tmp"; fail \
+  "(z29) self-test 대조군 블록의 줄 범위를 못 잡았습니다 (s0=$z29_s0 s1=$z29_s1)."; }
+sed -n "${z29_s0},$((z29_s1-1))p" "$z29_self" > "$z29_tmp/a.sh"
+grepq -F '판정할 수 없다' "$z29_tmp/a.sh" || { rm -rf "$z29_tmp"; fail \
+  "(z29) self-test 대조군에 마커가 없습니다 — 범위 추출이 어긋났습니다."; }
+
+z29_case() {   # $1=이름  $2=픽스처  $3=기대 종류(빈 문자열이면 «위반 0»)  $4=기대 안내 수
+  local name="$1" fx="$2" want="$3" wantn="$4" n
+  z29_report "$z29_tmp/case.out" "$fx"
+  [ "$z29_notice" = "$wantn" ] || fail \
+    "(z29) self-test [$name] 의 안내 수가 ${z29_notice} 입니다 (기대 ${wantn})."\
+    $'\n'"→ 안내로 안 잡히면 아래 단언들은 **실패할 수 없는 단언**이 됩니다."
+  n=$(grep -c . "$z29_tmp/case.out" || true)
+  if [ -z "$want" ]; then
+    [ "$n" = "0" ] || fail "(z29) self-test [$name] 이 위반 ${n}건을 냈습니다 — 0이어야 합니다."\
+      $'\n'"$(sed 's/^/     /' "$z29_tmp/case.out")"
+  else
+    [ "$n" -ge 1 ] || fail "(z29) self-test [$name] 이 **안 물었습니다** — 주입했는데 위반 0건입니다."
+    cut -f1 "$z29_tmp/case.out" | grepq -x -F "$want" || fail \
+      "(z29) self-test [$name] 이 다른 종류로 물었습니다: 기대=$want 실제=$(cut -f1 "$z29_tmp/case.out" | tr '\n' ',')"
+  fi
+}
+
+# (a) 대조군 — 실블록 그대로. 🔴 이것이 초록이어야 나머지의 빨강이 «주입 때문» 이다.
+z29_case "대조군(실블록 그대로)" "$z29_tmp/a.sh" "" 1
+
+# (b) 날짜 주입
+sed 's|판정할 수 없다|판정할 수 없다(2026-01-02 실측 기준 지금은 없다)|' "$z29_tmp/a.sh" > "$z29_tmp/b.sh"
+grepq -F '2026-01-02' "$z29_tmp/b.sh" || fail "(z29) self-test [날짜] 주입이 안 됐습니다 — 앵커가 바뀌었습니다."
+z29_case "날짜 주입" "$z29_tmp/b.sh" "date" 1
+
+# (c) 원장 경로를 없는 파일로
+sed 's|[A-Za-z0-9._/-]*VERCEL\.md|projects/nope-z29/VERCEL.md|' "$z29_tmp/a.sh" > "$z29_tmp/c.sh"
+grepq -F 'projects/nope-z29/VERCEL.md' "$z29_tmp/c.sh" || fail "(z29) self-test [없는 원장] 주입이 안 됐습니다."
+[ ! -f "$ROOT/projects/nope-z29/VERCEL.md" ] || fail "(z29) self-test [없는 원장] 의 경로가 실재합니다 — 음성 대조군이 성립하지 않습니다."
+z29_case "없는 원장" "$z29_tmp/c.sh" "ledger-missing" 1
+
+# (d) 실재하지만 그 키가 없는 원장 — 🔴 «파일이 있다» 와 «키가 있다» 는 다른 명제다
+z29_empty="infra/demo/.z29-empty-ledger-fixture.md"
+printf '%s\n' '# z29 fixture — 이 파일에는 그 키가 없다' > "$ROOT/$z29_empty"
+sed "s|[A-Za-z0-9._/-]*VERCEL\.md|$z29_empty|" "$z29_tmp/a.sh" > "$z29_tmp/d.sh"
+grepq -F "$z29_empty" "$z29_tmp/d.sh" || { rm -f "$ROOT/$z29_empty"; fail "(z29) self-test [빈 원장] 주입이 안 됐습니다."; }
+z29_case "빈 원장(파일 有·키 無)" "$z29_tmp/d.sh" "ledger-key" 1
+rm -f "$ROOT/$z29_empty"
+
+# (e) 🔴 음성 대조군 — `fail` 블록은 마커를 가져도 **안 잡혀야 한다**.
+#     첫 판의 거짓 양성이 정확히 이 모양이었다(check-cross-project-topic-relay.sh:147).
+#     문구가 아니라 «실패할 수 있는가» 가 축이다.
+sed 's|^  ok "|  fail "|' "$z29_tmp/a.sh" > "$z29_tmp/e.sh"
+grepq -E '^[[:space:]]*fail[[:space:]]+"' "$z29_tmp/e.sh" || fail "(z29) self-test [fail 블록] 주입이 안 됐습니다."
+z29_case "fail 블록은 안내가 아니다" "$z29_tmp/e.sh" "" 0
+
+rm -rf "$z29_tmp"
+ok "(z29) 미집행 축 안내 ${z29_real_notice}건: 날짜 단정 0 · 원장 실재+키 보유. 블록 ${z29_real_all}개 추출(파일 ${#z29_files[@]}, awk 1회) · self-test 5칸(대조군·날짜·없는 원장·빈 원장·fail 제외)"
 
 if [ "$LIVE" -eq 0 ]; then
 
