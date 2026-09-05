@@ -8,7 +8,7 @@ TASK-MONO-585
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -1258,3 +1258,93 @@ baseline 과 동일). 그 뒤 배포 `6282303744` 가 **`success`** 다.
 계속 `review/` 에 남는다 — 또는 소유자가 *"데모 예산을 이 검증에 쓰지 않는다"* 를 선택하면
 **⚪ 두 칸을 그대로 둔 채** 닫는 것이 정직한 종결이다. 🔴 어느 쪽이든 **결정은 소유자의
 것**이고, 여기서 임의로 통과 처리하지 않는다.
+
+## CORRECTION
+
+**2026-09-05 UTC (2차) — 소유자가 「⚪ 둘을 둔 채 닫는다」를 골랐다. 그리고 그 ⚪ 는 이 티켓의
+AC 가 아니었다.**
+
+바로 위 절이 *"그때까지 이 티켓은 계속 `review/` 에 남는다"* 라고 적어 둔 상태 선언이 이제
+거짓이므로, 그 문장을 고치지 않고 여기에 **무엇이 참인지**를 적는다.
+
+### ① 🔴 먼저 정정할 것 — **⚪ 두 칸은 AC 가 아니었다**
+
+`# Acceptance Criteria` 절을 **열어서** 다시 읽었다. 이 티켓의 AC 는 **AC-0 ~ AC-5** 이고,
+그 여섯은 § 구현(2026-09-05)에서 **전부 닫혀 있다**:
+
+| AC | 동사 | 닫힘 |
+|---|---|---|
+| AC-0 | «다시 세고, 막히면 올린다» | ✅ 네 칸 실측(모집단 · 산출물 · (3a)(3b) · 574 상태) |
+| AC-1 | «브라우저가 백엔드를 직접 부르지 않는다» | ✅ 산출물 기준 클라 **0** / 서버 **12** |
+| AC-2 | «서버가 주소를 런타임에 얻는다» | ✅ 해석기 + 도메인별 접두사(하드코딩 아님) |
+| AC-3 | «데모가 꺼져 있을 때 그렇다고 말한다» | ✅ `demo-backend-notice` |
+| AC-4 | «Vercel 배선 + 가드» | ✅ `vercel.json`·래퍼·`VERCEL.md`·`FLOOR` 4→5 |
+| AC-5 | «검증» | ✅ 빌드해서 확인 + 단위 테스트 + 가드 상태 명시 |
+
+🔴 **⚪ 로 남은 「로그인 왕복」·「대시보드 degrade」는 이 여섯 중 어디에도 없다.** 그것은
+1차 CORRECTION 이 «배포 몫 기록» 에서 **내가 직접 적은 검증 목록**이었지 이 티켓이 스스로
+지겠다고 선언한 조건이 아니다. 🔵 그리고 **대시보드 축은 이 티켓이 명시적으로 안 고친다** —
+§ 알려진 한계(`console-bff` 는 Vercel 에서 닿지 않는다)가 그것을 미리 적어 뒀다.
+
+⇒ **4-dim 의 (d)「AC 가 닫혔나」는 만족된다.** ⚪ 두 칸 때문에 (d) 가 실패한 것이 아니다.
+
+### ② 🔴 그러나 그 ⚪ 를 그냥 `done/` 에 묻지 않았다 — **집을 새로 줬다**
+
+`done/` 은 frozen 이고 **거기 적힌 잔여는 다시 안 읽힌다.** 그래서 닫기 **전에**
+`TASK-MONO-624` 를 기안했다(PR **#3645** squash `0a3099846`).
+
+🔵 그 티켓은 이 ⚪ 를 옮겨 담은 것이 아니라 **원래 주인에게 돌려준 것**이다 —
+`ADR-MONO-069` § Outstanding follow-ups **항목 3** 이 *"홉 ②③④⑤ + 로그아웃 실측 …
+**ACCEPT 후 티켓 기안**"* 이라고 적었고, 그 ADR 은 `2026-09-01` 에 `C2` 로 ACCEPTED 됐는데
+**나흘간 그 티켓이 없었다**(항목을 언급하는 파일이 전부 `done/` 이거나 이 티켓 자신).
+🔴 ADR 자신이 이 실패에 이름을 붙여 뒀다 — *"두 티켓이 서로에게 떠넘기면 일이 사라진다 —
+중복보다 공백이 조용하다."*
+
+### ③ 그 사이 홉 ① 을 쟀고, **통과했다** (창 없이)
+
+1차 CORRECTION 이 «데모를 켜야 잰다» 로 뭉뚱그린 것 중 **일부는 데모 없이 잴 수 있었다.**
+
+```
+GET https://console.hubwang.com/api/auth/login  →  307
+Location: https://auth.hubwang.com/oauth2/authorize
+  ?client_id=platform-console-web
+  &redirect_uri=https%3A%2F%2Fconsole.hubwang.com%2Fapi%2Fauth%2Fcallback
+  &scope=openid+profile+email+tenant.read
+  &code_challenge_method=S256 &code_challenge=… &state=…
+대조군: /api/auth/__nope__ → 404   (「모든 경로가 307」이 아니다)
+```
+
+🔵 이것이 **이 티켓의 선행 4**(`redirect_uri` 시드, `TASK-BE-589`/`V0034`)가 **라이브에서
+실제로 맞았다는 증거**다 — 시드된 문자열과 요청의 `redirect_uri` 가 문자 그대로 같다.
+그리고 이 URL 이 조립됐다는 것은 **Vercel 프로젝트에 OIDC env 가 주입돼 있다**는 뜻이기도 하다.
+
+🔴 **그리고 `TASK-MONO-358` 축이 구조적으로 해소됐다** — 이 티켓 § 선행이 인용한
+*"지금껏 동작한 콘솔 로그인은 `localhost:3000` 뿐"* 의 그 자리다:
+
+```
+Set-Cookie: console_pkce_verifier=…; Secure; HttpOnly; SameSite=lax
+Set-Cookie: console_oauth_state=…;   Secure; HttpOnly; SameSite=lax
+→ cookie jar 에 둘 다 실제로 저장됨
+```
+
+평문 오리진이면 브라우저가 저장조차 안 해 콜백이 `invalid_state` 로 튕겼는데, 이제 HTTPS 다.
+
+🔴 **여기서 내 술어가 한 번 틀렸다** — 첫 파싱이 jar 를 «비어 있음» 으로 읽었다. curl 이
+HttpOnly 쿠키를 **`#HttpOnly_` 접두**로 쓰는데 `grep -v '^#'` 로 그 줄들을 지웠기 때문이다.
+**없는 결함을 보고하기 직전이었다.** (`TASK-MONO-624` Edge Cases ④ 에 박아 뒀다.)
+
+### ④ 여전히 못 잰 것 — **IdP 가 데모 스택 안이다**
+
+```
+auth.hubwang.com/                                  503
+auth.hubwang.com/.well-known/openid-configuration  503
+```
+
+⇒ 홉 ②③④⑤ 는 창이 필요하고, 그것이 **`TASK-MONO-624` 의 전부**다.
+
+### ⇒ 처분
+
+**`review/ → done/`.** AC 여섯 칸이 닫혔고(위 ①), ⚪ 두 칸은 AC 가 아니며 **집이 생겼다**(②).
+🔵 이 티켓이 물은 질문 — *"콘솔이 여덟 백엔드의 주소를 빌드타임에 다 말하는가"* — 은
+저장소에서(클라 0/서버 12) **그리고 라이브에서**(서빙 HTML 의 `.local`/`sslip.io` **0건**,
+음성 대조군 포함) 둘 다 답이 나왔다.
