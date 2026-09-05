@@ -533,7 +533,7 @@ New projects pick an unused `*.local` hostname and register it in this table in 
 | **launcher** (기동 사이트) | `hubwang.com` | — (론처는 로컬에 없다) | `kanggle-portfolio` | ✅ 연결됨 (`200`, 08-29 실측) |
 | fan | `fan.hubwang.com` | `fan-platform.local` | `kanggle-fan` | ✅ 연결됨 (`307`, 08-29 실측) |
 | web-store | `store.hubwang.com` | `web.ecommerce.local` | `kanggle-store` | ✅ 연결됨 (`200`, 08-29 실측) |
-| console | `console.hubwang.com` | `console.local` | *미생성* → `kanggle-console` | ⏳ 단계 3 — **저장소 몫 완료**(`TASK-MONO-585`), 프로젝트 생성은 소유자. 2026-09-05 실측 `404` |
+| console | `console.hubwang.com` | `console.local` | `kanggle-console` | 🟡 **프로젝트·도메인 부착 완료, 프로덕션 배포 대기** (2026-09-05). 저장소 몫은 `TASK-MONO-585` 로 완료. 실측 `404` — 🔴 **아래 § 404 의 두 얼굴** |
 | *(리다이렉트)* | `www.hubwang.com` | — | `kanggle-portfolio` | ↪️ apex 로 301 |
 | auth (IdP 포워더) | `auth.hubwang.com` | `iam.local` | `kanggle-auth` | ✅ **예약 아님 — 쓰이고 있다** (`ADR-MONO-069` `C2` · `TASK-MONO-610` done). 2026-09-05 실측 `503` = 배포는 있고 데모가 꺼진 것 |
 | *(예약)* | `api.hubwang.com` | — | — | 🚫 예약 — 컨트롤 API |
@@ -550,6 +550,18 @@ New projects pick an unused `*.local` hostname and register it in this table in 
 
 🔵 **예약을 적어 두는 이유**는 그 이름을 **나중에 다른 뜻으로 쓰는 것을 막기 위해서**다.
 빈 줄로 두면 다음 사람이 `api.` 를 게이트웨이에 붙인다.
+
+🔴🔴 **`404` 의 두 얼굴 — 내가 하루 전에 쓴 판별이 틀렸다.** 아래 § `auth.` 행 설명은
+*"`404`(Vercel 프로젝트 자체가 없다 — 이 표가 말하는 «미생성» 의 지문)"* 이라고 적었다.
+**그 술어는 두 상태를 못 가른다**: 소유자가 `kanggle-console` 을 만들고 도메인까지 붙인 뒤에도
+같은 명령이 **`404`** 다. Vercel 이 대시보드에서 말하는 이유는 *"Your domain is properly
+configured, but you don't have a production deployment"* 이고, 그 상태의 HTTP 응답 역시
+`404` 다.
+⇒ **`404` 는 «프로젝트 없음» 과 «배포 없음» 을 구별하지 못한다.** 가르는 것은 HTTP 가 아니라
+대시보드 문구(또는 `vercel-deploy.yml` 의 그 프로젝트 잡이 **failure** 인가 **skip** 인가)다.
+🔵 프로젝트별 첫 배포가 왜 안 생기는지는
+[`console-web/VERCEL.md` § 첫 배포 구간](projects/platform-console/apps/console-web/VERCEL.md)
+에 기전과 실측이 있다.
 
 🔴 **`auth.` 행은 2026-09-05 에 «예약» 에서 «사용 중» 으로 고쳤다** (`TASK-MONO-585` 작업 중
 발견). `TASK-MONO-610` 이 그 이름을 실제로 배선했는데 이 표는 *"`D4`/`TASK-MONO-576` 전까지

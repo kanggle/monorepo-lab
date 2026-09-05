@@ -5,7 +5,7 @@
 
 | | |
 |---|---|
-| Vercel 프로젝트 | **`kanggle-console`** — 🙋 **아직 존재하지 않는다** (소유자 몫, 아래 § 체크리스트) |
+| Vercel 프로젝트 | **`kanggle-console`** — ✅ **생성됨 (2026-09-05)**. 첫 배포는 아래 § 첫 배포 구간 참조 |
 | Root Directory | **`projects/platform-console/apps/console-web`** |
 | 빌드 | Next.js 15 App Router (webpack). 프레임워크 감지는 대시보드에 맡긴다 |
 | `vercel.json` 이 선언하는 것 | `git.deploymentEnabled` + `installCommand` + `ignoreCommand` |
@@ -57,8 +57,54 @@
    그것이 정확한 신호다(앱은 저장소에 있는데 배포할 곳이 없다). 🔵 판정자가 이 앱의 경로를
    안 건드린 커밋은 건너뛰므로 **매 커밋 빨간 것은 아니다**.
 4. **도메인 연결** — `console.hubwang.com`.
-5. 랜딩 후 **론처 링크 전환**은 이 티켓이 아니라 별도 후속이다(단계 2 의 `TASK-MONO-583`,
+5. 🔴 **첫 배포를 확인한다.** *"No Deployment"* 로 보이면 위 § 첫 배포 구간이다 —
+   대시보드 Redeploy 를 누르지 말고, **이 앱 경로를 건드리는 커밋을 하나** 밀어라.
+6. 랜딩 후 **론처 링크 전환**은 이 티켓이 아니라 별도 후속이다(단계 2 의 `TASK-MONO-583`,
    단계 4 의 `TASK-MONO-618` 과 같은 모양 — 론처 행의 `data-served` 를 `vercel` 로).
+
+## 🔴🔴 첫 배포 구간 — **새 프로젝트에는 「배포가 영원히 안 생기는」 창이 있다**
+
+소유자가 프로젝트를 만들고 도메인까지 붙였는데 Vercel 이 이렇게 말한다:
+
+```
+console.hubwang.com — No Deployment
+Your domain is properly configured, but you don't have a production deployment.
+```
+
+🔵 **고장이 아니다. 이 저장소가 세 번째로 겪는, 설계된 동작이다.**
+(`infra/demo/auth-forwarder/README.md` 가 `kanggle-auth` 에 대해 처음 적었고,
+`TASK-MONO-610` 이 `kanggle-fan` 의 env 발효에서 두 번째를 적었다.)
+
+기전: 이 프로젝트는 `git.deploymentEnabled.main = false` 라 **push 로는 배포가 안 만들어지고**,
+배포를 만드는 것은 `vercel-deploy.yml` 의 Deploy Hook 뿐이다. 그 훅은
+[`vercel-ignore.sh`](./vercel-ignore.sh) 의 판정자가 *"이 커밋이 내 `SPECS` 를 건드렸다"*
+라고 할 때만 발사된다. **Import 는 그때의 `main` 을 클론하는데**, 그 커밋이 이 앱의 경로를
+안 건드렸으면 판정자는 정확히 설계대로 **건너뛴다.**
+
+🔴 **대시보드 Redeploy 는 길이 아니다** — 같은 커밋을 다시 재므로 또 건너뛴다.
+
+### 이번 실측 (2026-09-05) — 왜 하필 이 프로젝트에서 창이 넓었나
+
+| 커밋 | 이 앱 경로 | `kanggle-console` 잡 | 뜻 |
+|---|---|---|---|
+| `697f80139` (`TASK-MONO-585` 구현) | ✅ 건드림 | 🔴 **failure** | 자격은 있었는데 **secret 이 아직 없었다**(*"secret 이 비어 있습니다"*) |
+| `5ff3d88b2` · `3ff547239` · `39da225d5` | ❌ 안 건드림 | ✅ success | **건너뜀** — 훅을 안 쏜다 |
+
+`VERCEL_DEPLOY_HOOK_CONSOLE` 은 `2026-09-05T13:10:59Z` 에 들어왔다. ⇒ **자격을 갖춘 유일한
+커밋이 secret 보다 먼저 지나갔고**, 그 뒤로는 자격을 갖춘 커밋이 없었다.
+
+### 빠져나오는 길 — **`SPECS` 안의 경로를 건드리는 커밋 하나**
+
+`kanggle-auth` 는 자기 README 에 이 절을 적는 것으로 빠져나왔다(그 파일이 그 프로젝트의
+`SPECS` 아래에 있다). **이 절이 실린 커밋이 이 프로젝트에 대해 같은 일을 한다** — 이 파일은
+`projects/platform-console/apps/console-web/` 아래이고, 그것이 `SPECS` 의 첫 줄이다.
+
+🔵 그래서 이 문단은 «기록» 인 동시에 **트리거**다. 다음 사람이 다섯 번째 프로젝트를 만들 때
+같은 창을 만나면, 여기 적힌 대로 그 앱 안의 문서를 한 번 고치면 된다.
+
+🔴 **순서를 바꿔도 창은 남는다.** secret 을 먼저 넣고 프로젝트를 나중에 만들어도, Import 가
+클론하는 커밋이 그 앱을 안 건드렸으면 마찬가지다. 창을 없애려면 «프로젝트 생성 직후 그 앱을
+건드리는 커밋을 하나 민다» 를 체크리스트에 넣는 수밖에 없다 — 아래 § 체크리스트 6번.
 
 ## 🔴 왜 `installCommand` 가 `--no-frozen-lockfile` 인가 — **형제와 다른 이유로 같은 값**
 
