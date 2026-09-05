@@ -8,7 +8,7 @@ TASK-MONO-622
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -767,3 +767,34 @@ fan-platform-membership  SPRING_PROFILES_ACTIVE = default     ← portone 없음
 「안 걸린다」가 아니다."* 표본이 하나 늘었을 뿐이고, 그 칸은 **재현으로만** 닫힌다.
 
 ## ⇒ AC-1 · AC-2 **닫힘**. 남은 것은 AC-5(586 close)뿐이다
+
+---
+
+# 🟢 AC-5 — **`TASK-MONO-586` 을 닫았다** (2026-09-05 UTC)
+
+AC-1 이 PASS 했으므로 AC-5 가 적은 두 갈래 중 첫째를 탄다:
+
+> AC-1 PASS → 586 에 `## CORRECTION` 순수 추가(frozen) + **별 close chore PR** 로
+> `review/ → done/`. 🔴 4-dim (d) 는 586 의 `# Acceptance Criteria` 절을 **열어서** 본다.
+
+| 단계 | 결과 |
+|---|---|
+| CORRECTION 순수 추가 | ✅ (`#3629`) |
+| 별 close chore PR | ✅ `#3630` — 스쿼시 `0b1d4c494` |
+| (d) — AC 절을 **열어서** | ✅ AC-0~AC-4 전부 닫힘. § *"남은 것 — AC-3"* 은 `#3489` **이전의 기록**이었다 |
+
+## 🔴 (c) 에서 **required 가 비어 있던 시기를 그냥 통과시키지 않았다**
+
+586 의 impl PR 둘(`#3479`·`#3489`)에 **FAILURE 2건**이 있었고, 당시는 `598` 이 required
+넷을 등록하기 **전**이라 (c)가 «어떤 상태에서도 참» 이었다. 열어 보니 `ci.yml` 잡 실패
+**0건**이고 실패는 **외부 배포 status** 둘뿐이며, 🔵 **같은 날 PR 6건 전수가 똑같이 그
+둘만** 빨갰다 ⇒ 기간 한정 사건. 오늘 두 프로젝트 다 정상.
+
+🔴 그 과정에서 **내 필터가 또 틀렸다** — Vercel 은 **status context** 라 `.name` 이 null
+이고 `.context` 에 이름이 있다. `.name` 만 보면 이웃 PR 의 **같은 실패가 0건으로** 보이고,
+그러면 «이 PR 만 빨갰다» 로 오귀속했을 것이다. 대조군을 세는 술어부터 검증해야 한다.
+[[feedback_comparing_two_extracts_measures_the_extractors]]
+
+## ⇒ 이 티켓의 남은 AC
+
+**없다.** AC-0(+부록) · AC-1 · AC-2 · AC-3 · AC-4 · AC-5 · AC-6 전부 닫혔다.
