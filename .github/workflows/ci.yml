@@ -258,6 +258,7 @@ jobs:
       auth-forwarder: ${{ steps.filter.outputs.auth-forwarder }}
       demo-resolver-copies: ${{ steps.filter.outputs.demo-resolver-copies }}
       client-graph-origins: ${{ steps.filter.outputs.client-graph-origins }}
+      fetch-resolution: ${{ steps.filter.outputs.fetch-resolution }}
       # TASK-MONO-562: raw filter, NOT AND-combined with `code-changed`. Every arrival
       # path of this drift is non-code: a `vercel.json` losing its `ignoreCommand`, a
       # new Vercel project landing without one, or the judge script being weakened.
@@ -759,6 +760,16 @@ jobs:
               - '**/next.config.*'
               - 'infra/demo/backend-resolver/**'
               - 'scripts/check-client-graph-backend-origins.mjs'
+            # TASK-MONO-623 — 백엔드로 나가는 `fetch(` 가 해석기를 지나거나 사유를 선언하는가.
+            # 🔴 도착 경로는 **어느 TS 파일이든**(새 게이트웨이 클라이언트 · 새 route handler)
+            #    이고, 모집단은 `package.json` 의 의존 선언에서 파생한다 ⇒ 그 둘 다 트리거다.
+            fetch-resolution:
+              - '**/src/**/*.ts'
+              - '**/src/**/*.tsx'
+              - '**/src/*.ts'
+              - '**/src/*.tsx'
+              - '**/package.json'
+              - 'scripts/check-fetch-resolution.mjs'
             # TASK-MONO-562: a Vercel project that builds on every commit arrives three
             # ways — a new `vercel.json` anywhere in the tree, an existing one losing its
             # `ignoreCommand`, or the shared judge being weakened. All three are non-code,
@@ -1383,6 +1394,35 @@ jobs:
 
       - name: Guard — no backend origin literal is reachable from a client component
         run: node scripts/check-client-graph-backend-origins.mjs
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-623 / ADR-MONO-067 D2 — 백엔드로 나가는 fetch 는 런타임 해석을 지나거나,
+  # **왜 안 지나는지를 선언한다.**
+  #
+  # 🔴 `TASK-MONO-585` 는 console 의 `fetch(` 22곳을 전수로 분류하고 12곳에 사유 마커를
+  #    달았지만, **그 마커를 지키는 것이 아무것도 없었다** — 23번째가 마커도 해석도 없이
+  #    들어와도 CI 는 초록이었다. 증상은 조용하다: 데모에서 **그 화면만** 죽는다.
+  #
+  # 🔵 형제 가드와 축이 다르다 — `client-graph-origins` 는 «브라우저가 아는가»,
+  #    `demo-resolver-copies` 는 «앱이 구현을 갖는가», 이 잡은 «어디로 나가는가» 다.
+  # ---------------------------------------------------------------------------
+  fetch-resolution:
+    name: Backend fetch resolution (resolved, or the reason is declared)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.fetch-resolution == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax (node --check)
+        run: node --check scripts/check-fetch-resolution.mjs
+
+      - name: Self-test the predicate (bites, and stays silent where it must)
+        run: node scripts/check-fetch-resolution.mjs --self-test
+
+      - name: Guard — every backend fetch is resolved or declared
+        run: node scripts/check-fetch-resolution.mjs
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-562 — Vercel build triggers.
