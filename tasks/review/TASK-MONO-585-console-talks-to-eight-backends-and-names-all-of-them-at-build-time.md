@@ -1111,3 +1111,77 @@ CI 로 갔을 것이고, 로컬에서 잡을 수 있었던 실패를 PR 왕복�
 남은 AC 가 없다. 🔴 **`done` 이 아니다** — 배포 몫(소유자)이 남아 있고, `done/` 은 frozen 이라
 거기 적힌 잔여는 다시 읽히지 않는다. 소유자가 프로젝트를 만들고 `console.hubwang.com` 이
 200 을 주는 것을 확인한 뒤에 `done` 으로 간다.
+
+---
+
+# 🔎 배포 몫 — 라이브 배선 기록 (2026-09-05 UTC)
+
+🔵 이 티켓은 `review/` 라 **frozen** 이다. 위의 표는 고치지 않고 여기 **추가로** 적는다
+(`tasks/INDEX.md` § Review Rules). 큐도 안 옮긴다 — 배포 검증이 아직 안 끝났다.
+
+## 소유자 몫이 들어왔다
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | Vercel 프로젝트 `kanggle-console` 생성 | ✅ |
+| 2 | 도메인 `console.hubwang.com` 부착 | ✅ *"Your domain is properly configured"* |
+| 3 | secret `VERCEL_DEPLOY_HOOK_CONSOLE` | ✅ `2026-09-05T13:10:59Z` |
+| 4 | **프로덕션 배포** | 🔴 **없다** — *"you don't have a production deployment"* |
+
+## 🔴🔴 4번은 고장이 아니다 — **이 저장소의 세 번째 「첫 배포 구간」**
+
+`infra/demo/auth-forwarder/README.md` 가 `kanggle-auth` 에 대해 처음 적었고
+(*"새 프로젝트에는 「첫 배포가 영원히 안 생기는」 구간이 있다"*), `TASK-MONO-610` 이
+`kanggle-fan` 의 env 발효에서 두 번째를 적었다(*"한 번은 우연이지만 둘이면 패턴"*).
+**이번이 세 번째이고, 이 티켓이 그 패턴의 예측대로 걸렸다.**
+
+기전 실측 — `vercel-deploy.yml` 의 `kanggle-console` 잡을 커밋별로:
+
+| 커밋 | 이 앱 경로 | 잡 | 뜻 |
+|---|---|---|---|
+| `697f80139` (이 티켓의 구현 PR) | ✅ 건드림 | 🔴 **failure** | 자격은 있었는데 **secret 이 아직 없었다** |
+| `5ff3d88b2` (623 스펙) | ❌ | ✅ success | 건너뜀 |
+| `3ff547239` (585 close chore) | ❌ | ✅ success | 건너뜀 |
+| `39da225d5` (623 구현) | ❌ | ✅ success | 건너뜀 |
+
+⇒ **자격을 갖춘 유일한 커밋이 secret(13:10:59Z)보다 먼저 지나갔고**, 그 뒤로는 자격을 갖춘
+커밋이 없다. `git.deploymentEnabled.main = false` 이므로 push 로는 배포가 안 만들어지고,
+훅은 판정자가 «내 `SPECS` 를 건드렸다» 라고 할 때만 발사된다.
+
+🔴 **대시보드 Redeploy 는 길이 아니다** — 같은 커밋을 다시 재므로 또 건너뛴다.
+
+🔵 빠져나오는 길은 **`SPECS` 안의 경로를 건드리는 커밋 하나**이고, `kanggle-auth` 는 자기
+README 에 그 절을 적는 것으로 빠져나왔다. **같은 방법을 썼다** — `console-web/VERCEL.md` 에
+§ 첫 배포 구간을 적었고, 그 파일이 `SPECS` 의 첫 줄(`:/projects/platform-console/apps/console-web`)
+아래에 있다. 기록이 곧 트리거다.
+
+## 🔴 그리고 내가 하루 전에 쓴 **판별이 틀렸다** — `404` 는 두 상태를 못 가른다
+
+`TEMPLATE.md` 의 공개 호스트명 표에 내가 *"`404`(Vercel 프로젝트 자체가 없다 — 이 표가
+말하는 «미생성» 의 지문)"* 이라고 적었다(어제 585 구현 PR). **프로젝트가 생기고 도메인이
+붙은 지금도 같은 명령이 `404`** 다.
+
+```
+console.hubwang.com  404   ← 프로젝트 있음 · 도메인 붙음 · 배포 없음
+store.hubwang.com    200   ← 양성 대조군 (프로브가 살아 있다)
+```
+
+⇒ **`404` 는 «프로젝트 없음» 과 «배포 없음» 을 구별하지 못한다.** 가르는 것은 HTTP 가 아니라
+대시보드 문구이거나, `vercel-deploy.yml` 의 그 프로젝트 잡이 **failure**(자격 있음 + 훅 실패)
+인가 **success**(건너뜀)인가다. `TEMPLATE.md` 에 그 정정을 적었다.
+
+🔵 이것은 이 저장소가 이름 붙여 둔 실패다 — **대리지표로 부재를 판정했다.**
+[[feedback_absence_verdict_from_a_proxy_is_not_a_measurement]]
+
+## ⇒ 남은 것
+
+이 커밋이 머지되면 훅이 발사되고 첫 배포가 생긴다. 그 뒤에 **라이브로 재야** 이 티켓이
+`done` 으로 간다:
+
+1. `https://console.hubwang.com/` 이 **200**(또는 `/login` 으로의 리다이렉트)
+2. 로그인 왕복 — `auth.hubwang.com` → 콜백 → 세션
+3. 데모가 꺼져 있을 때 `demo-backend-notice` 가 서빙 HTML 에 있는가 (AC-3)
+4. 🔵 `/dashboards/{overview,health}` 는 **degrade 로 뜨는 것이 정상**이다
+   (§ 알려진 한계 — `console-bff` 는 공개 호스트명이 없다)
+
+🔴 그때까지 이 티켓은 `review/` 에 남는다.
