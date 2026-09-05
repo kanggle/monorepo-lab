@@ -47,6 +47,13 @@ export async function refreshAccessToken(
     const basic = Buffer.from(
       `${env.oidcClientId}:${env.oidcClientSecret}`,
     ).toString('base64');
+    // DEMO-URL-EXEMPT: oidc-issuer — the issuer is NOT derived from the demo IP.
+    //   ADR-MONO-069 (C2) pinned a STABLE name (`https://auth.hubwang.com`), and this
+    //   string is compared CHARACTER-BY-CHARACTER against the token's `iss` claim ⇒
+    //   silently rewriting it breaks login. In the containerised demo the value is
+    //   already injected in `DEMO_DOMAIN` form by `demo.env`.
+    //   TASK-MONO-623 — the same declaration console-web carries on its four
+    //   OIDC legs; this marker is what `scripts/check-fetch-resolution.mjs` reads.
     const res = await fetch(`${env.oidcIssuerUrl}/oauth2/token`, {
       method: 'POST',
       headers: {
