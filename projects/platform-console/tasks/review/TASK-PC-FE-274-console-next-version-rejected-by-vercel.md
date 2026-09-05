@@ -8,7 +8,7 @@ TASK-PC-FE-274
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -134,7 +134,7 @@ Next 15.0.x 는 React 19 **RC** 를 요구했고 15.1 부터 React 19 **stable**
       새 값으로 고치고 그 절의 측정일(`Measured 2026-08-06`)을 다시 찍는다.
       🔴 이 표는 **같은 사실의 두 번째 사본**이다. 안 고치면 저장소가 자기 버전을 놓고 거짓말한다.
 
-- [ ] **AC-5 (라이브 판정 — 이 티켓의 진짜 종료 조건)** — 머지 후:
+- [x] **AC-5 (라이브 판정 — 이 티켓의 진짜 종료 조건)** — 머지 후:
       (a) `vercel-deploy.yml` 의 `kanggle-console` 잡이 이 커밋에서 **발사**됐다
           (`package.json` 이 `vercel-ignore.sh` 의 `SPECS` 첫 줄 아래라 자동으로 자격을 얻는다)
       (b) 새 deployment 의 status 가 **`success`** — 🔴 판정은 **GitHub deployment status API**
@@ -237,12 +237,55 @@ rm -rf .next  후                  tsc rc=0     ← CI 조건. 무사하다
 지금 `in-progress/` 에 있는 이유이며, `review/` 로의 이동은 AC-5 를 닫는 **다음 chore** 의
 몫이다. (막힌 것은 손해가 아니라 규칙이 작동한 것이다.)
 
-## 🔴 남은 것 = AC-5 뿐
+## AC-5 — 라이브 판정 (구현 PR **#3642** squash `151faecdf` 머지 후, 2026-09-05 UTC)
 
-이 PR 이 머지되면 `package.json` 이 `SPECS` 의 `:/projects/platform-console/apps/console-web`
-아래이므로 훅이 **자동으로** 발사된다(585 가 겪은 「첫 배포 구간」을 이번엔 안 겪는다).
-그 배포가 `success` 로 찍히는 것을 **deployment status API + 양성 대조군**으로 확인해야
-이 티켓이 다음 단계로 간다.
+### (a) 훅이 발사됐다 — 🔴 **그런데 잡 결론은 판별자가 아니었다**
+
+`vercel-deploy.yml` 의 `kanggle-console` **잡 결론은 두 커밋 모두 `success`** 다.
+발사했든 건너뛰었든 잡은 성공한다. 갈리는 것은 **스텝**이다:
+
+| 커밋 | 이 앱 경로 | `Deploy Hook 발사` 스텝 | 잡 결론 |
+|---|---|---|---|
+| `151faecdf` (구현 PR) | ✅ 건드림 | ✅ **success** — 발사 | success |
+| `889151fd7` (스펙 PR, `tasks/` 만) | ❌ | ⏭️ **skipped** — 건너뜀 | success |
+
+🔴 **음성 대조군이 없었다면 「잡이 success 니까 배포됐다」로 읽었을 것이다** — 그리고 그
+문장은 **건너뛴 경우에도 참**이라 아무것도 판정하지 않는다.
+
+### (b) 배포가 `success` 다
+
+| deployment | 프로젝트 | sha | state |
+|---|---|---|---|
+| **`6282303744`** | `kanggle-console` | `151faecdf` | ✅ **success** — `Deployment has completed` |
+| `6281458564` | `kanggle-console` | `462e9bd96` | 🔴 failure (이 티켓이 존재한 이유) |
+| `6281101895` | `kanggle-store` | `39da225d5` | ✅ success |
+
+### (c) 대조군 — **같은 질의**로 셋을 나란히 읽었다
+
+위 표가 그것이다. 같은 명령이 `success` / `failure` / `success` 를 **구별해서** 낸다
+⇒ 판독기가 실제로 일한다. 🔵 한 줄만 읽고 «success 다» 라고 적었다면 그것은 판독기가
+항상 `success` 를 내는 경우와 구별되지 않는다.
+
+🔵 부수 관찰: Vercel 은 **빌드가 끝난 뒤에** GitHub deployment 레코드를 만들고 종료 상태를
+같은 초에 함께 올린다(생성 14:54:15Z / success 14:54:16Z, 훅 발사는 14:51:54Z ≈ 빌드 2분).
+실패했던 `6281458564` 도 생성·failure 가 같은 초였다. **1초짜리 성공은 이상이 아니라 그
+플랫폼의 모양**이다 — 이걸 모르면 «너무 빠르다, 가짜다» 로 오진하기 쉽다.
+
+### 그리고 라이브가 200 이다
+
+```
+console.hubwang.com   200  (3.78s)   ← 이 티켓 전에는 배포 자체가 없었다
+store.hubwang.com     200            ← 양성 대조군 (프로브가 살아 있다)
+```
+
+🔴 **단, `200` 은 이 티켓의 판정 근거가 아니다.** 판정은 (b) 의 deployment status 다 —
+585 가 기록한 대로 HTTP 코드는 「프로젝트 없음」과 「배포 없음」을 못 가른다. 여기 적은
+`200` 은 **결과의 확인**이지 판정자가 아니다.
+
+## ⇒ `TASK-MONO-585` 가 언블록됐다
+
+585 는 `review/` 에서 라이브 검증(로그인 왕복 · 데모-off 배너 `demo-backend-notice`)만
+남겨 두고 있었고, **잴 대상이 없어서** 못 재고 있었다. 이제 있다.
 
 ---
 
@@ -306,10 +349,18 @@ rm -rf .next  후                  tsc rc=0     ← CI 조건. 무사하다
 
 # Definition of Done
 
-- [ ] AC-0 ~ AC-5 전부 닫힘
-- [ ] `frontend-ui.md` § 5.3 표가 새 값 + 새 측정일
-- [ ] 새 프로덕션 배포가 **`success`**(양성 대조군과 함께 판정)
-- [ ] `TASK-MONO-585` 의 라이브 검증이 **가능한 상태**가 됐음을 585 에 기록
+- [x] AC-0 ~ AC-5 전부 닫힘
+- [x] `frontend-ui.md` § 5.3 표가 새 값 + 새 측정일(세 행 전부 재측정)
+- [x] 새 프로덕션 배포 `6282303744` 가 **`success`**(대조군 3건을 같은 질의로 나란히 판정)
+- [x] `TASK-MONO-585` 의 라이브 검증이 **가능한 상태**가 됐음을 585 에 기록
+      — 585 는 `review/` 라 frozen 이므로 그 티켓 끝에 **`## CORRECTION`** 으로 적었다.
+      🔵 인계로 미루지 않고 **여기서 실제로 쟀다**(1번 · 3번 통과 / 2번 · 4번 ⚪ 미측정) —
+      두 티켓이 서로에게 떠넘기면 그 사이로 일이 사라진다.
+      🔴 그 append 는 훅에 **두 번 막혔다**: `.claude/hooks/hardstop-detect.ps1` (R2) 는
+      `new_string` 이 `old_string` 으로 **시작**하고 **덧붙인 첫 비어있지 않은 줄**이
+      `^##\s+CORRECTION\b` 일 때만 통과시킨다. 첫 시도는 기존 줄을 old_string 에 4줄
+      포함해서(= 삭제로 읽힘), 둘째 시도는 `## CORRECTION` 앞에 `---` 를 넣어서 막혔다.
+      **훅을 우회하지 않고 훅을 읽어서** 술어를 알아낸 뒤 통과했다.
 
 ---
 
