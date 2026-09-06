@@ -4,7 +4,12 @@
 // 데모 스택의 모든 서비스 이미지를 빌드해 AMI 에 구운다.
 // → 데모 부팅 시 빌드 0, 콜드스타트 단축.
 //
-//   packer init . && packer build -var "repo_ref=main" demo-ami.pkr.hcl
+//   bash infra/demo/aws/packer/bake.sh          ← **이것을 쓴다** (TASK-MONO-628)
+//
+// 🔴 맨 `packer build` 를 직접 부르지 마라. `repo_commit` 은 **기본값이 없는 필수 변수**라
+//    그냥 부르면 packer 가 즉시 거절한다. 그것이 의도된 게이트다 — 구운 커밋을 AMI 태그로
+//    남기지 않으면 「이 AMI 안에 무엇이 들었나」에 답할 방법이 **계정 안에 하나도 없다**
+//    (2026-09-06 실측: ebs:ListSnapshotBlocks=AccessDenied · stopped 인스턴스는 SSM 대상 0건).
 //
 // -----------------------------------------------------------------------------
 // 선행조건 (TASK-MONO-342/344/346 에서 실측으로 확정 — 이전 판은 전부 빠뜨렸다)
@@ -59,6 +64,30 @@ variable "repo_url" {
 variable "repo_ref" {
   type    = string
   default = "main"
+}
+
+// -----------------------------------------------------------------------------
+// repo_commit — **기본값이 없다. 그것이 게이트다.** (TASK-MONO-628)
+// -----------------------------------------------------------------------------
+// `repo_ref` 는 움직이는 이름이라 «무엇이 구워졌나» 에 답하지 못한다: `--branch main` 은
+// **bake 시점의** main 이고, 그 시점은 나중에 알 수 없다.
+//
+// 그 답을 계정 안에서 구할 길이 없었다 — 2026-09-06 실측:
+//   · ebs:ListSnapshotBlocks           → AccessDenied (배포 주체 정책에 없음)
+//   · ssm describe-instance-information → 0건 (인스턴스가 stopped 이면 관리 대상이 아니다)
+//   · 남은 길은 기동 + SSM 뿐이고 그건 과금 + 소유자 승인이다.
+// 그리고 기록이 **없는 것보다 나쁜 상태**를 실제로 만들었다: terraform.tfvars 의 산문
+// 주석(gitignored)과 TASK-MONO-628 본문의 유도값이 **정확히 한 세대 차이로 어긋났고**,
+// 저장소 안의 무엇도 그 다툼을 끝내지 못했다.
+//
+// 그래서 이 변수는 필수다. 값은 클론 직후 **이미지 안에서 확증**되고(2단계), 확증된
+// 값만 EC2 태그 RepoCommit 으로 나간다. ⇒ 태그는 «사람이 적은 말» 이 아니라
+// **이미지가 스스로 한 말**이다.
+//
+// 🔴 값을 손으로 넣지 마라 — `bake.sh` 가 `git ls-remote origin main` 으로 해석해서 넘긴다.
+variable "repo_commit" {
+  type        = string
+  description = "The exact commit SHA this AMI must bake. No default on purpose - see TASK-MONO-628."
 }
 
 // 이 값이 AMI 스냅샷 크기를 정하고, Terraform 의 인스턴스 루트는 그 아래로 못 간다.
@@ -116,9 +145,14 @@ source "amazon-ebs" "demo" {
   # just spent forty minutes producing. `packer validate` does not catch it.
   # An em dash cost exactly that (TASK-MONO-379). Guard (o) now asserts it.
   ami_description = "Portfolio on-demand demo host - docker + prebuilt images + demo-stack.service"
+  // 🔴 RepoCommit 은 «이 AMI 안에 어느 커밋이 들었나» 에 답하는 **유일한 외부에서 읽히는
+  //    기록**이다 (TASK-MONO-628). 2단계가 클론된 HEAD 와 이 값을 대조해 다르면 빌드를
+  //    거기서 죽이므로, 이 태그는 이미지가 확증한 값이다.
+  //    읽는 쪽: `infra/demo/aws/check-ami-generation.sh --with-aws`.
   tags = {
-    Name    = "portfolio-demo"
-    Project = "monorepo-lab"
+    Name       = "portfolio-demo"
+    Project    = "monorepo-lab"
+    RepoCommit = var.repo_commit
   }
 }
 
@@ -193,6 +227,23 @@ build {
       "sudo mkdir -p /opt",
       "sudo git clone --depth 1 --branch ${var.repo_ref} ${var.repo_url} /opt/monorepo-lab",
       "sudo chown -R ubuntu:ubuntu /opt/monorepo-lab",
+      // -----------------------------------------------------------------------
+      // 🔴 구운 커밋을 **여기서 확증한다** (TASK-MONO-628)
+      // -----------------------------------------------------------------------
+      // `--branch ${var.repo_ref}` 는 움직이는 이름이라 클론이 무엇을 집었는지 사후에
+      // 알 수 없다. bake.sh 가 방금 `git ls-remote` 로 해석한 SHA 를 넘겼으니, 클론이
+      // 실제로 그것을 집었는지 대조한다.
+      //
+      // 🔴 여기서 죽는 것은 **의도된 것**이다. main 이 해석과 클론 사이(수십 초)에 움직이면
+      //    이 test 가 빌드를 **2분 만에** 끝낸다 — 55분을 태운 뒤 «태그가 거짓말하는 AMI» 를
+      //    받는 것보다 낫다. 그때는 bake.sh 를 다시 돌려라(다시 해석한다).
+      // 🔵 /etc/demo-ami-release 는 기동한 뒤 인스턴스 안에서 같은 답을 주는 사본이다.
+      //    태그는 밖에서, 이 파일은 안에서 — 둘 다 같은 확증을 통과한 값이다.
+      "cd /opt/monorepo-lab",
+      "HEAD_SHA=$(git rev-parse HEAD)",
+      "echo \"[ami] cloned HEAD=$HEAD_SHA  expected=${var.repo_commit}\"",
+      "test \"$HEAD_SHA\" = \"${var.repo_commit}\"",
+      "printf '%s\\n' \"$HEAD_SHA\" | sudo tee /etc/demo-ami-release > /dev/null",
     ]
   }
 

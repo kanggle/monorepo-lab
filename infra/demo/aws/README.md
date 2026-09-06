@@ -32,8 +32,11 @@ aws configure                     # 또는 AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS
 #    필요 권한은 아래 "배포 주체 권한" 절 — 없으면 apply 가 절반만 하고 멈춘다
 
 # 1) AMI 굽기 (~55분 — 이미지 빌드 + 100GB 스냅샷 등록이 대부분)
-cd infra/demo/aws/packer
-packer init . && packer build -var "repo_ref=main" demo-ami.pkr.hcl
+bash infra/demo/aws/packer/bake.sh
+#    🔴 맨 `packer build` 를 부르지 말 것. `repo_commit` 이 **기본값 없는 필수 변수**라
+#       거절당한다(TASK-MONO-628). bake.sh 가 굽을 커밋을 origin 에서 해석해 넘기고,
+#       굽기 뒤 AMI 태그에서 되읽어 deployed-ami.env 를 갱신한다.
+#    굽지 않고 전제만 확인: bash infra/demo/aws/packer/bake.sh --dry-run
 
 # 2) 인프라 (EC2 + Lambda + API Gateway)
 cd ../terraform
@@ -86,8 +89,16 @@ Vercel 은 `DEMO_API_BASE` **환경변수**로 이 값을 받는다(`site/build.
 
 | 고친 것 | 도달 경로 | 재굽기 |
 |---|---|---|
-| `terraform/**` · `terraform/lambda/handler.py` · `site/index.html` · `ec2/user-data.sh` | **`terraform apply` 가 저장소에서 그때 읽는다** (`file()` / `archive_file` / `aws_s3_object`) | ❌ 불필요 |
-| `infra/demo/*.sh` · `demo-stack.service` · **`projects/*/docker-compose.yml`** · 앱 소스(Java/TS) | **AMI 에 구워져 있다** | ✅ **필요** (`packer build`, ~55분) |
+| `site/index.html` (론처) | 🔵 **머지 = 배포.** Vercel(`kanggle-portfolio`)이 몇 분 안에 올린다 — `TASK-MONO-579` 가 론처의 집을 Vercel 하나로 만든 뒤로. `terraform apply` 는 **CloudFront 사본**도 갱신하지만 방문자가 여는 집은 그쪽이 아니다 | ❌ 불필요 |
+| `terraform/**` · `terraform/lambda/handler.py` · `ec2/user-data.sh` | **`terraform apply` 가 저장소에서 그때 읽는다** (`file()` / `archive_file` / `aws_s3_object`) | ❌ 불필요 |
+| `infra/demo/*.sh` · `demo-stack.service` · **`projects/*/docker-compose.yml`** · 앱 소스(Java/TS) | **AMI 에 구워져 있다** | ✅ **필요** (`bake.sh`, ~55분) |
+
+🔴 **첫 행은 `TASK-MONO-627` 이 실측으로 갈라낸 것이다.** 그전까지 이 표는 론처를
+`terraform apply` 행에 묶어 뒀고, 그 오독이 «머지해도 론처는 안 바뀐다» 는 **없는 전제**를
+만들었다. `#3657` 머지 몇 분 뒤 `check-launcher-fresh.sh` 가 `✔ 신선`(서빙 커밋 = 머지된 SHA,
+md5 일치)을 냈다 — 유도가 아니라 관측이다.
+🔴 그리고 **첫 행과 셋째 행이 하나의 계약을 나눠 갖는다**는 것이 이 표가 말하지 않는 부분이다.
+아래 § 「이 계약을 바꾸는 PR 이 함께 할 일」이 그 자리다.
 
 **⚠️ 그래서 `main` 이 초록인 것은 데모가 고쳐졌다는 증거가 아니다.**
 
@@ -106,6 +117,51 @@ Vercel 은 `DEMO_API_BASE` **환경변수**로 이 값을 받는다(`site/build.
 옛 커밋을 담을 수 있다.** 새 AMI 로 띄운 뒤 **인스턴스 안에서 런타임으로** 확인하라 —
 `git -C /opt/monorepo-lab log -1` 과 `docker inspect ecommerce-kafka --format '{{.HostConfig.Memory}}'`.
 선언이 아니라 **실행 중인 값**을 물어야 한다.
+
+🔵 `TASK-MONO-628` 이후로는 **기동하지 않고도 한 가지는 알 수 있다**: 굽은 커밋이 AMI 태그
+`RepoCommit` 과 `/etc/demo-ami-release` 에 남는다(`bake.sh` 가 그것을
+`infra/demo/aws/deployed-ami.env` 로 되읽는다). 🔴 그래도 위 문장은 **취소되지 않는다** —
+태그는 «어느 커밋이 클론됐나» 에 답할 뿐 «그 커밋이 실제로 이미지가 됐나» 에는 답하지 않는다.
+컨테이너의 실행 중인 값은 여전히 기동해서 물어야 한다.
+
+---
+
+## 🔴 이 계약을 바꾸는 PR 이 함께 할 일 (TASK-MONO-628)
+
+**한 계약이 두 속도로 배포된다.** 아래 파일들은 «어떤 마크업 선언이 어떤 부팅 프로브를
+뜻하는가 · 어떤 화면을 데모 호스트가 그만 서빙하는가» 라는 **하나의 계약**을 나눠 갖는데,
+왼쪽은 머지하면 몇 분 만에 배포되고 오른쪽은 **재굽기 전까지 배포되지 않는다.**
+
+| 계약을 담은 파일 | 어떻게 배포되나 |
+|---|---|
+| `aws/site/index.html` — 선언(누가 어디서 서빙 · 부팅 프로브 대상) | **머지 = 배포** (Vercel `kanggle-portfolio`, 분 단위). `terraform apply` 는 CloudFront **사본**을 갱신할 뿐이고 방문자의 집이 아니다 — `TASK-MONO-579` 가 집을 Vercel 하나로 만들었다 |
+| `demo-up.sh` — 그 선언의 소비자(추출 술어 · 두 하한) | **AMI 에 구워진다** — `bake.sh` (~55분 · 소유자) |
+| `projects.sh` — 어떤 오버레이가 어느 프로젝트에 붙나 | 〃 |
+| `*-vercel.override.yml` — 억제(그 화면을 그만 서빙) | 〃 |
+
+**⇒ 이 표의 파일을 건드리는 PR 이 함께 할 일:**
+
+1. **네 종류를 한 PR 에서 맞춘다.** 마크업 선언 · 소비자 · 억제 오버레이 · `projects.sh` 체인.
+   (`TASK-MONO-618` 이 이 규칙을 만들었다 — 억제와 `SURFACE_FLOOR` 를 다른 PR 로 나누면
+   그 사이 부팅이 **영구 실패**한다.)
+2. **부팅 지문이 바뀌면 그것을 적는다.** `demo-up.sh` 의 provenance 블록이 그 자리다.
+   🔴 지문은 창마다 바뀌었다: `console=307 web.fan-platform=307`(2/2) → `console=307`(1/1)
+   → `iam/login=200`(1/1). **옛 지문을 기다리면 창이 영원히 안 열린다.**
+3. **재굽기 몫을 남긴다는 것을 PR 본문에 적는다.** 머지는 절반이다(위 § 참조).
+   🔴 «그때까지 nightly 가 빨갛다» 를 **«예상된 빨강» 으로 미리 면죄하지 마라.** 그 문장은
+   진짜 빨강까지 무시하게 만든다(`TASK-MONO-627` 이 그런 «없는 예고» 를 랜딩했다가 회수했다).
+   그 빨강은 실제 상태다 — 데모 호스트가 약속과 다른 것을 서빙하고 있다.
+4. **재굽기 뒤 `deployed-ami.env` 를 커밋한다.** `bake.sh` 가 AMI 태그에서 되읽어 써 준다.
+   커밋하지 않으면 판정자는 계속 옛 세대를 기준으로 잰다.
+
+**누가 재는가**: [`check-ami-generation.sh`](check-ami-generation.sh).
+자가검사는 PR 마다(`ci.yml` → `Demo wrapper smoke`), 실판정은 매일 밤
+(`nightly-e2e.yml` → `ami-generation-watch`). 소유자 기계에서는 `--with-aws` 로
+**핀 자신이 거짓말하지 않는지**(AMI 태그 · 배포된 인스턴스의 ImageId)까지 본다 —
+러너에는 AWS 자격증명이 없어 그 축은 CI 에서 안 돈다.
+
+🔴 **정적 가드로는 원리적으로 못 잰다.** `(z14)`·`(z15)` 는 저장소 안의 두 파일이 서로 맞는지를
+보는데, 둘은 **같은 커밋에서 읽히므로 언제나 맞는다.** 어긋남은 배포 경계에만 있다.
 
 ---
 

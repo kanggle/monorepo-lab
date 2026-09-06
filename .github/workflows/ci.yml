@@ -2019,6 +2019,38 @@ jobs:
       - name: Env preflight self-test (constructs both .env states)
         run: bash infra/demo/check-env-preflight.sh --self-test
 
+      # TASK-MONO-628 — the AMI-generation judge's SELF-TEST runs here; its live
+      # VERDICT runs in nightly-e2e.yml (`ami-generation-watch`). The split is a
+      # decision, not an oversight:
+      #
+      #   · The verdict is red from the moment a contract file changes on main
+      #     until someone spends ~55 minutes rebaking. That is the true state, and
+      #     nightly says so every night with the closing action named. But wiring
+      #     it HERE would paint every infra/demo PR red for a condition the PR
+      #     author cannot clear at authoring time, and a gate that is red on day
+      #     one gets switched off — the very reason the shellcheck step below was
+      #     left disabled (TASK-MONO-520 AC-2 measured that and wrote it down).
+      #   · The self-test belongs at PR time: it is what proves the judge still
+      #     BITES, and it is cheap and deterministic.
+      #
+      # 🔴 The self-test is not decoration. It drives four cells with injected
+      # generations and requires 0 / 1 / 2 / 1, and cell ④ additionally asserts
+      # WHICH branch fired — because the first version of the judge misclassified a
+      # newly-added suppression overlay as "content differs" (bare
+      # `git rev-parse <rev>:<path>` echoes its argument on failure instead of
+      # returning empty), and rc was 1 either way. rc alone could not tell them apart.
+      - name: AMI-generation judge self-test (injected generations must bite)
+        run: bash infra/demo/aws/check-ami-generation.sh --self-test
+
+      # 🔴 The bake wrapper has no runner other than an owner spending ~55 minutes
+      # and real money, so `--dry-run` is the only lane it can ever have. It stops
+      # before `packer build` but AFTER the preconditions — including that the
+      # template still declares `repo_commit` and still stamps the `RepoCommit`
+      # tag. Without that check, deleting the tag from the template would be
+      # discovered by the wrapper's step 3, an hour into a bake.
+      - name: Bake wrapper dry-run (resolves the commit, checks the template's contract)
+        run: bash infra/demo/aws/packer/bake.sh --dry-run
+
       # TASK-MONO-520 AC-2 — shellcheck is deliberately NOT enabled here, and the
       # decision was measured rather than assumed. A one-shot non-gating step ran
       # it on this very job (run 31478823405) and reported, over all 16 scripts:
