@@ -8,7 +8,7 @@ TASK-MONO-624
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -235,7 +235,7 @@ auth.hubwang.com/.well-known/openid-configuration  503
 
 ---
 
-# 🔨 구현 기록 (2026-09-05 UTC)
+# 🔨 구현 기록 (2026-09-06 UTC)
 
 ## 기동 창 — 예산 **14분** 소비 (332 → 346 / 600)
 
