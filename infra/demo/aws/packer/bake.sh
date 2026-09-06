@@ -72,7 +72,7 @@ esac
 say "굽을 커밋: $SHA  (origin refs/heads/$REF)"
 
 # 🔵 정보일 뿐 게이트가 아니다 — 로컬이 낡아도 굽기는 origin 기준으로 옳다.
-LOCAL="$(git -C "$AWSDIR" rev-parse "origin/$REF" 2>/dev/null || echo '?')"
+LOCAL="$(git -C "$AWSDIR" rev-parse --verify --quiet "origin/$REF" 2>/dev/null || echo '?')"
 [ "$LOCAL" = "$SHA" ] || say "(참고) 로컬 origin/$REF = ${LOCAL:0:9} — origin 과 다릅니다. 굽는 것은 origin 쪽입니다."
 
 CMD=(packer build -var "repo_ref=$REF" -var "repo_commit=$SHA" demo-ami.pkr.hcl)

@@ -106,14 +106,21 @@ ensure_commit() {
   have_commit "$c"
 }
 
-# 🔴🔴 `--verify --quiet` 는 장식이 아니다. 맨 `git rev-parse <rev>:<path>` 는 경로가 그
-#    커밋에 **없을 때 인자를 그대로 stdout 에 되뱉는다**(rc=128 인 채로):
+# 🔴🔴 `--verify --quiet` 는 장식이 아니다. 맨 `git rev-parse` 는 **해석에 실패해도 인자를
+#    그대로 stdout 에 되뱉는다**(rc=128 인 채로). 경로 형태든 리비전 형태든 똑같다:
 #      $ git rev-parse afebc9371:infra/demo/console-vercel.override.yml 2>/dev/null
 #      afebc9371:infra/demo/console-vercel.override.yml        ← 빈 문자열이 아니다
-#    이 파일의 첫 판이 그것을 몰라서 «한쪽에만 있는 파일» 분기가 **한 번도 못 물었고**
-#    (신설된 console 억제를 «내용 다름» 으로 오분류했다), 코어 경로 이름이 바뀌는 날
-#    «판정 불가» 로 멈춰야 할 자리도 조용히 «어긋남» 이 됐을 것이다.
-#    실측으로 잡았다(2026-09-06): 기대한 문구가 안 나오길래 두 트리를 직접 세어 봤다.
+#      $ git rev-parse origin/main^{commit} 2>/dev/null   # 그 ref 가 없는 얕은 체크아웃에서
+#      origin/main^{commit}                                    ← 빈 문자열이 아니다
+#
+#    🔴🔴 **이 파일은 같은 결함을 두 번 냈다. 두 번째는 첫 번째를 «고친 뒤에» 났다.**
+#      1차 — 경로 형태. «한쪽에만 있는 파일» 분기가 **한 번도 못 물었고** 신설된 console
+#            억제를 «내용 다름» 으로 오분류했다(rc 는 둘 다 1 이라 rc 로는 구별 불가).
+#      2차 — 리비전 형태. blob_at **하나만** 고쳤더니 형제 호출들이 낙오했고, REF_SHA 가
+#            리터럴 `origin/main^{commit}` 을 받아 «비었나» 검사를 통과했다 ⇒ HEAD 로
+#            떨어지는 폴백이 **영원히 안 도는** 채로 **CI 에서만** 죽었다.
+#    ⇒ **이 파일의 모든 rev-parse 호출이 --verify --quiet 를 쓴다.** 한 자리만 고치면
+#      형제가 낙오한다 — 고치기 전에 형제를 grep 하라는 규칙이 정확히 이 모양이다.
 blob_at() { git -C "$ROOT" rev-parse --verify --quiet "${1}:${2}" 2>/dev/null; }
 
 overlays_at() {
@@ -145,8 +152,8 @@ verdict_for() {
   LAST_DRIFT=()
 
   ensure_commit "$baked" || { say "✖ 구운 세대 커밋 ${baked:0:12} 를 못 찾습니다(로컬에도 origin 에도) ⇒ 판정 불가"; return 2; }
-  baked_sha="$(git -C "$ROOT" rev-parse "${baked}^{commit}" 2>/dev/null)"
-  ref_sha="$(git -C "$ROOT" rev-parse "${ref}^{commit}" 2>/dev/null)"
+  baked_sha="$(git -C "$ROOT" rev-parse --verify --quiet "${baked}^{commit}" 2>/dev/null)"
+  ref_sha="$(git -C "$ROOT" rev-parse --verify --quiet "${ref}^{commit}" 2>/dev/null)"
   [ -n "$ref_sha" ] || { say "✖ 기준 ref '$ref' 를 못 읽습니다 ⇒ 판정 불가"; return 2; }
 
   say "── 구운 세대 ${baked_sha:0:9}  vs  서빙 세대 ${ref_sha:0:9} ${label}"
@@ -221,20 +228,60 @@ if [ "$SELFTEST" -eq 1 ]; then
   say "▶ 자가검사 — 주입한 세대에 무는가 (기준 ref=$REF)"
 
   ensure_commit "$REF" >/dev/null 2>&1 || true
-  REF_SHA="$(git -C "$ROOT" rev-parse "${REF}^{commit}" 2>/dev/null)" \
-    || undecidable "기준 ref '$REF' 를 못 읽습니다."
-  [ -n "$REF_SHA" ] || undecidable "기준 ref '$REF' 를 못 읽습니다."
+  REF_SHA="$(git -C "$ROOT" rev-parse --verify --quiet "${REF}^{commit}" 2>/dev/null)"
+  # 🔴🔴 **얕은 PR 체크아웃에는 `origin/main` 이 없다** — `actions/checkout@v4` 는 기본으로
+  #    PR ref 하나만 가져오므로 원격 추적 브랜치가 안 생긴다. 이 자리를 실측으로 잡았다:
+  #    로컬에서 초록이던 자가검사가 CI 에서 «기준 ref 를 못 읽습니다» rc=2 로 죽었고,
+  #    `git clone --depth 1 --branch <이 브랜치>` 로 그 모양을 재현해 확인했다.
+  # 🔵 자가검사에서 기준이 무엇인지는 **재는 축이 아니다**(재는 것은 «판정자가 칸을
+  #    가르는가»). 그래서 여기서만 HEAD 로 떨어진다. 🔴 실판정은 안 떨어진다 — 거기서
+  #    기준이 틀리면 답이 틀리므로 rc=2 로 멈춘다.
+  if [ -z "$REF_SHA" ]; then
+    REF_SHA="$(git -C "$ROOT" rev-parse --verify --quiet "HEAD^{commit}" 2>/dev/null)"
+    [ -n "$REF_SHA" ] || undecidable "기준 ref '$REF' 도 HEAD 도 못 읽습니다."
+    say "   '$REF' 를 못 읽어 **HEAD**(${REF_SHA:0:9})를 기준으로 씁니다 — 얕은 체크아웃으로 보입니다."
+  fi
   REF_UP="$(blob_at "$REF_SHA" "infra/demo/demo-up.sh")"
   [ -n "$REF_UP" ] || undecidable "$REF 에 infra/demo/demo-up.sh 가 없습니다."
 
   # 주입 후보: demo-up.sh 를 바꾼 커밋들을 최신순으로 훑어 **blob 이 실제로 다른** 첫 커밋.
   # 🔴 HEAD~n 같은 상수를 쓰지 않는 이유는 형제가 적었다 — 그 사이에 무관한 커밋이 쌓이면
   #    «내용이 같은 옛 커밋» 을 집어 이 칸을 조용히 공허하게 만든다.
-  INJECT=""
-  while IFS= read -r c; do
-    [ -n "$c" ] || continue
-    if [ "$(blob_at "$c" "infra/demo/demo-up.sh")" != "$REF_UP" ]; then INJECT="$c"; break; fi
-  done < <(git -C "$ROOT" log --format=%H -30 "$REF_SHA" -- ':/infra/demo/demo-up.sh' 2>/dev/null)
+  REF_OV="$(overlays_at "$REF_SHA" | sort | tr '\n' ' ')"
+
+  # 두 후보를 **한 번에** 찾는다(칸②·칸④). 얕은 체크아웃에서는 역사를 더 가져와 다시 찾는다.
+  find_injections() {
+    INJECT=""; INJECT_OV=""
+    local c c2
+    while IFS= read -r c; do
+      [ -n "$c" ] || continue
+      if [ "$(blob_at "$c" "infra/demo/demo-up.sh")" != "$REF_UP" ]; then INJECT="$c"; break; fi
+    done < <(git -C "$ROOT" log --format=%H -30 "$REF_SHA" -- ':/infra/demo/demo-up.sh' 2>/dev/null)
+    while IFS= read -r c2; do
+      [ -n "$c2" ] || continue
+      have_commit "${c2}^" 2>/dev/null || continue
+      if [ "$(overlays_at "${c2}^" | sort | tr '\n' ' ')" != "$REF_OV" ]; then
+        INJECT_OV="$(git -C "$ROOT" rev-parse --verify --quiet "${c2}^" 2>/dev/null)"; break
+      fi
+    done < <(git -C "$ROOT" log --format=%H --diff-filter=AD "$REF_SHA" -- ':/infra/demo/*-vercel.override.yml' 2>/dev/null)
+    [ -n "$INJECT" ] && [ -n "$INJECT_OV" ]
+  }
+
+  # 🔴🔴 **얕은 체크아웃에는 역사가 없다.** `actions/checkout@v4` 는 기본 fetch-depth=1 이라
+  #    `git log` 가 커밋 하나만 돌려주고, 그러면 두 후보를 못 찾아 자가검사가 «대조군 성립
+  #    불가»(2)로 죽는다 — **판정자가 틀려서가 아니라 재는 곳의 역사가 없어서** 다.
+  #    🔵 워크플로에 fetch-depth: 0 을 박는 대신 여기서 필요한 만큼만 깊게 판다: 그 잡은
+  #    이것 말고도 여러 가드를 도는 15분짜리이고, 전체 역사 클론을 그 전부에 물릴 이유가 없다.
+  #    (nightly 잡은 실판정 때문에 어차피 fetch-depth: 0 이다.)
+  if ! find_injections; then
+    if [ "$(git -C "$ROOT" rev-parse --is-shallow-repository 2>/dev/null)" = "true" ]; then
+      for d in 50 200 1000; do
+        say "   얕은 체크아웃 — 역사를 ${d} 커밋 더 가져와 다시 찾습니다."
+        git -C "$ROOT" fetch --deepen="$d" >/dev/null 2>&1 || break
+        find_injections && break
+      done
+    fi
+  fi
 
   [ -n "$INJECT" ] || undecidable "demo-up.sh 의 blob 이 다른 옛 커밋을 못 찾았습니다 ⇒ 대조군 성립 불가."
 
@@ -265,16 +312,8 @@ if [ "$SELFTEST" -eq 1 ]; then
   #    (이 저장소가 여러 번 밟은 «줄어드는 모집단 위의 하한» 과 같은 모양).
   #    대신 **오버레이를 실제로 추가/삭제한 커밋**을 역사에서 찾고 그 **부모**를 쓴다.
   #    그 사건들은 과거에 일어난 일이라 개수가 줄지 않는다.
-  REF_OV="$(overlays_at "$REF_SHA" | sort | tr '\n' ' ')"
-  INJECT_OV=""
-  while IFS= read -r c2; do
-    [ -n "$c2" ] || continue
-    have_commit "${c2}^" 2>/dev/null || continue
-    if [ "$(overlays_at "${c2}^" | sort | tr '\n' ' ')" != "$REF_OV" ]; then
-      INJECT_OV="$(git -C "$ROOT" rev-parse "${c2}^" 2>/dev/null)"; break
-    fi
-  done < <(git -C "$ROOT" log --format=%H --diff-filter=AD "$REF_SHA" -- ':/infra/demo/*-vercel.override.yml' 2>/dev/null)
-
+  #    (후보 탐색 자체는 위 find_injections 에서 칸② 후보와 함께 한다 — 얕은 체크아웃에서
+  #     역사를 더 가져오는 재시도를 두 후보가 공유해야 하기 때문이다.)
   if [ -z "$INJECT_OV" ]; then
     say "✖ 억제 오버레이를 추가/삭제한 커밋의 부모 중 오버레이 집합이 기준과 다른 것을 못 찾았습니다"
     say "  ⇒ 칸④ 대조군 성립 불가. (역사는 줄지 않으므로 보통 성립합니다 — 안 되면"
