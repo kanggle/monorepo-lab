@@ -403,6 +403,17 @@ services:
   console-web:
     build:
       context: ./apps/console-web
+      # 🔴 TASK-MONO-629 — 이 줄이 없어서 `main` 의 nightly 가 30시간 빨갰다.
+      #    `console-web/Dockerfile` 이 `COPY --from=demo-backend-resolver` 로 요구하는
+      #    이름은 이미지도 스테이지도 아닌 **추가 빌드 컨텍스트**다. 안 주면 BuildKit 이
+      #    그것을 **이미지로 해석**해 `docker.io/library/demo-backend-resolver:latest` 를
+      #    pull 하려다 거부당한다 ⇒ 증상이 *"pull access denied"* 라 원인이 배선처럼
+      #    보이지 않는다.
+      # 🔴 형제 `docker-compose.yml` 에는 `TASK-MONO-585` 가 이것을 넣었고 **여기는
+      #    빠뜨렸다.** 이 파일이 nightly `Platform Console E2E full-stack` 이 쓰는 compose 다.
+      #    `scripts/check-build-context-declarations.sh` 가 이제 그 어긋남을 정적으로 문다.
+      additional_contexts:
+        demo-backend-resolver: ../../infra/demo/backend-resolver
       dockerfile: Dockerfile
     environment:
       PORT: "3000"

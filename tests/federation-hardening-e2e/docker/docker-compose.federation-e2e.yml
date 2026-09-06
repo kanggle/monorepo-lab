@@ -707,6 +707,18 @@ services:
     logging: *default-logging
     build:
       context: ../../../projects/platform-console/apps/console-web
+      # 🔴 TASK-MONO-629 — **두 번째 낙오**. 위 주석이 *"platform-console 의
+      #    docker-compose.e2e.yml 에서 그대로 재사용"* 이라고 적었는데, `TASK-MONO-585` 가
+      #    그 원본에 추가 빌드 컨텍스트를 넣을 때 **여기까지 오지 않았다** — 그리고 원본
+      #    자신도 안 고쳐졌다(둘 다 `629` 가 고친다).
+      # 🔴 이 compose 는 **다른 프로젝트 디렉터리 밖**(`tests/`)에 있어서, 「그 프로젝트의
+      #    compose 들」만 보던 가드 `(z26)` 의 시야에 애초에 없었다. 모집단이 저장소 전체가
+      #    아니면 이 칸은 영원히 안 보인다.
+      #    실측: 이 워크플로는 2026-09-04 까지 매일 초록이었고 `697f80139` 다음 스케줄
+      #    (2026-09-05T20:59Z)에 같은 로그로 죽었다.
+      # 🔵 경로는 이 compose 파일 기준이다 — 형제들의 `../../` 가 아니라 `../../../`.
+      additional_contexts:
+        demo-backend-resolver: ../../../infra/demo/backend-resolver
       dockerfile: Dockerfile
     environment:
       PORT: "3000"
