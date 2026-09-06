@@ -58,8 +58,18 @@ declare -A COMPOSE=(
   [erp]="projects/erp-platform/docker-compose.yml infra/demo/erp-identity.override.yml"
   # `console-vercel.override.yml` — 방문자 운영자 콘솔이 Vercel 로 옮겨갔으므로
   # (ADR-MONO-067 단계 3) 데모에서는 console-web 을 **띄우지 않는다**. 억제는 그
-  # 파일 한 곳에 선언돼 있고, 로컬(base 단독)과 CI 는 영향받지 않는다 — 어느 CI 잡도
-  # 이 compose 의 console-web 서비스를 띄우지 않는다(TASK-MONO-627 AC-1 전수).
+  # 파일 한 곳에 선언돼 있고, 로컬(base 단독)과 CI 는 영향받지 않는다.
+  # 🔴 **CI 전수(2026-09-06, TASK-MONO-627 AC-1) — 첫 문장을 실측이 반증했다.**
+  #    처음에 «어느 CI 잡도 console-web 을 띄우지 않는다» 라고 적었는데 **거짓**이다.
+  #    두 잡이 띄운다. 다만 **다른 compose 파일에서** 띄우므로 이 억제가 안 닿는다:
+  #      · nightly-e2e.yml:1236   `-f docker-compose.e2e.yml`            (base 를 안 준다)
+  #      · federation-hardening-e2e.yml:263
+  #        `-f tests/federation-hardening-e2e/docker/docker-compose.federation-e2e.yml` (+2 오버레이)
+  #      · ci.yml 의 Frontend unit / Frontend E2E smoke 는 compose 를 안 쓴다
+  #        (`pnpm build` + Playwright 를 apps/console-web/ 에서 직접 돌린다)
+  #    ⇒ 결론은 같지만 **사유가 다르다**: 「아무도 안 띄운다」가 아니라 「띄우는 둘이
+  #      이 체인을 안 지난다」. 🔵 형제 둘의 주석도 같은 모양으로 읽어야 한다 —
+  #      전수를 다시 세지 않고 문장만 베끼면 **거짓을 복제**한다.
   # 효력은 가드 (z31)이 렌더로, check-suppressed-containers.sh 가 도는 컨테이너로
   # 확인한다.
   # 🔴 `console-bff` 는 **남는다** — 억제 대상은 방문자 표면 하나뿐이다. 그 BFF 는
