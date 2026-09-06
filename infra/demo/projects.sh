@@ -56,7 +56,17 @@ declare -A COMPOSE=(
   [fan]="projects/fan-platform/docker-compose.yml infra/demo/fan-identity.override.yml infra/demo/fan-vercel.override.yml"
   [finance]="projects/finance-platform/docker-compose.yml infra/demo/finance-identity.override.yml"
   [erp]="projects/erp-platform/docker-compose.yml infra/demo/erp-identity.override.yml"
-  [console]="projects/platform-console/docker-compose.yml"
+  # `console-vercel.override.yml` — 방문자 운영자 콘솔이 Vercel 로 옮겨갔으므로
+  # (ADR-MONO-067 단계 3) 데모에서는 console-web 을 **띄우지 않는다**. 억제는 그
+  # 파일 한 곳에 선언돼 있고, 로컬(base 단독)과 CI 는 영향받지 않는다 — 어느 CI 잡도
+  # 이 compose 의 console-web 서비스를 띄우지 않는다(TASK-MONO-627 AC-1 전수).
+  # 효력은 가드 (z31)이 렌더로, check-suppressed-containers.sh 가 도는 컨테이너로
+  # 확인한다.
+  # 🔴 `console-bff` 는 **남는다** — 억제 대상은 방문자 표면 하나뿐이다. 그 BFF 는
+  #    공개 라우터가 없으므로(TASK-MONO-362) 데모 호스트에 HTTP 표면을 안 만든다
+  #    ⇒ 이 억제로 [console] 도메인의 방문자 표면은 0 이 된다. 그것이 demo-up.sh 의
+  #    부팅 프로브를 iam 으로 옮긴 이유다(그 파일의 SURFACE_FLOOR 주석).
+  [console]="projects/platform-console/docker-compose.yml infra/demo/console-vercel.override.yml"
 )
 
 # 공유 edge (traefik-net 정의자) — 항상 선행 기동

@@ -533,7 +533,7 @@ New projects pick an unused `*.local` hostname and register it in this table in 
 | **launcher** (기동 사이트) | `hubwang.com` | — (론처는 로컬에 없다) | `kanggle-portfolio` | ✅ 연결됨 (`200`, 08-29 실측) |
 | fan | `fan.hubwang.com` | `fan-platform.local` | `kanggle-fan` | ✅ 연결됨 (`307`, 08-29 실측) |
 | web-store | `store.hubwang.com` | `web.ecommerce.local` | `kanggle-store` | ✅ 연결됨 (`200`, 08-29 실측) |
-| console | `console.hubwang.com` | `console.local` | `kanggle-console` | 🟡 **프로젝트·도메인 부착 완료, 프로덕션 배포 대기** (2026-09-05). 저장소 몫은 `TASK-MONO-585` 로 완료. 실측 `404` — 🔴 **아래 § 404 의 두 얼굴** |
+| console | `console.hubwang.com` | `console.local` | `kanggle-console` | ✅ **연결됨** (`307` → `/dashboards/overview`, 2026-09-06 실측 · 음성 대조군 `nosuch-<임의>.<apex>` `404` ⇒ 와일드카드 아님). 로그인 왕복이 **세션까지** 성립함을 `TASK-MONO-624` 가 실측(IP 가 바뀐 부팅 #2 에서도). 🔴 **`console.local` 은 이제 데모에 없다** — `TASK-MONO-627` 이 데모 사본을 억제했다(형제 둘과 같다) |
 | *(리다이렉트)* | `www.hubwang.com` | — | `kanggle-portfolio` | ↪️ apex 로 301 |
 | auth (IdP 포워더) | `auth.hubwang.com` | `iam.local` | `kanggle-auth` | ✅ **예약 아님 — 쓰이고 있다** (`ADR-MONO-069` `C2` · `TASK-MONO-610` done). 2026-09-05 실측 `503` = 배포는 있고 데모가 꺼진 것 |
 | *(예약)* | `api.hubwang.com` | — | — | 🚫 예약 — 컨트롤 API |
@@ -570,6 +570,14 @@ configured, but you don't have a production deployment"* 이고, 그 상태의 H
 `store.` `200`(양성 대조군 — 프로브가 살아 있다) · `auth.` `503`(배포는 있고 업스트림 데모가
 꺼져 있다) · `console.` `404`(Vercel 프로젝트 자체가 없다 — 이 표가 말하는 «미생성» 의 지문).
 🔵 `404` 와 `503` 이 그 둘을 가른다.
+
+🟢🟢 **정정 (2026-09-06, `TASK-MONO-627`) — 위 문단의 `console.` `404` 는 그날의 상태였고
+지금은 아니다.** 같은 명령이 이제 **`307` → `/dashboards/overview`** 를 낸다(음성 대조군
+`nosuch-<임의>.<apex>` 는 `404` ⇒ 와일드카드가 아니다). `auth.` 는 여전히 `503` 인데 그것은
+결함이 아니라 **데모가 꺼져 있다는 뜻**이고, 위 문단이 세운 그 판별 그대로다.
+🔵 **위 두 문단은 안 고쳤다.** 그것들은 «지금 무엇인가» 가 아니라 «그때 왜 그렇게 판정했나»
+에 답하는 자리이고, 최신화하면 «`404` 는 두 상태를 구별하지 못한다» 는 교훈이 지워진다
+(`TASK-MONO-626` 이 정한 술어). 고친 것은 **표의 상태 칸 하나**뿐이다.
 
 ### Frontend dev-server ports (standalone `next dev`)
 

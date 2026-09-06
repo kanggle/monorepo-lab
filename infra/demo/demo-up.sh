@@ -524,63 +524,58 @@ SURFACE_SRC="${DEMO_SURFACE_SRC:-$HERE/aws/site/index.html}"
 # 2026-08-21 전수). 서빙 출처가 갈려도 줄지 않는다 — 이 값은 «추출이 깨졌는가» 를 잰다.
 # 가드 (z14) 의 `z14_floor` 와 **같은 축·같은 값**이다.
 SURFACE_ROW_FLOOR="${DEMO_SURFACE_ROW_FLOOR:-3}"
-# 하한 ②: **부팅 때 실제로 찌를 표면의 수** = 1 (console 뿐).
+# 하한 ②: **부팅 때 실제로 찌를 표면의 수** = 1.
 #
-# 🔴🔴 TASK-MONO-625 (2026-09-06) — **provenance 의 문장이 바뀌었다. 값은 안 바뀌었다.**
-#   예전 provenance 는 *"위 3 에서 Vercel 로 옮겨간 두 행을 뺀 값"* 이었고, 그 뺄셈은
-#   **`data-served` 하나로 두 질문에 답하던 시절**의 것이다. 단계 3 이 console 행마저
-#   `vercel` 로 옮겼으므로 그 뺄셈은 이제 **0** 을 내놓는다 — 그런데 값은 여전히 1 이다.
-#   틀린 것은 값이 아니라 **뺄셈**이다:
+# 🔴🔴 TASK-MONO-627 (2026-09-06) — **대상이 바뀌었다. 값은 안 바뀌었다.**
+#   단계 3 이 console 을 억제했다(`infra/demo/console-vercel.override.yml`) ⇒ 데모
+#   호스트가 서빙하는 **방문자 표면은 0개**다. TASK-MONO-625 가 이 자리에 «N=0 은 하한
+#   조정이 아니라 설계 변경» 이라고 적어 뒀고, 그 설계 변경이 이것이다:
 #
-#     «방문자는 어디로 가는가»          → data-served / data-url   (console = vercel)
-#     «부팅이 끝났는지 무엇으로 재는가»  → data-demo-probe          (console = 여전히 찌른다)
+#     찌를 표면 = «demo-host 행의 data-host»          (지금 0건)
+#               ∪ «vercel 행의 data-demo-probe»       (지금 0건 — 억제됐으므로)
+#               ∪ «부팅 프로브 선언 원소」의 data-demo-probe(+ -path)   ← **새 항**
 #
-#   console 은 방문자가 Vercel 로 가지만 **데모 호스트도 여전히 서빙한다**(`projects.sh`
-#   의 `[console]` 체인에 `*-vercel.override.yml` 이 없다). 형제 둘은 억제됐으므로 찌를
-#   표면이 실제로 사라졌지만, console 은 사라지지 않았다.
+#   2026-09-06 전수로 그 합집합은 **1건**이다:
+#     · iam  #bootprobe  data-demo-probe="iam" data-demo-probe-path="/login"
+#     · console / web.ecommerce / web.fan-platform — 셋 다 억제됨 ⇒ 프로브 선언 없음
 #
-# ⇒ **새 provenance**: 찌를 표면 = «demo-host 행의 data-host» ∪ «vercel 행의
-#   data-demo-probe». 2026-09-06 전수로 그 합집합은 **1건(console)** 이다 —
-#     · console          data-served="vercel" + data-demo-probe="console"  ← 유일
-#     · web.ecommerce    억제됨 (ecommerce-vercel.override.yml)  → 프로브 선언 없음
-#     · web.fan-platform 억제됨 (fan-vercel.override.yml)        → 프로브 선언 없음
+# 🔵 **왜 iam 이고, 왜 임의의 대체물이 아닌가.** 억제 뒤 방문자가 데모 호스트를 밟는
+#   **유일한 홉**이다: Vercel 콘솔 → `auth.hubwang.com`(Vercel 포워더) →
+#   `http://iam.<그날 도메인>/login`. 포워더의 `servicePrefix: 'iam'` 이 그 배선이고
+#   (`infra/demo/auth-forwarder/src/app/[[...path]]/route.ts`), `TASK-MONO-624` 기동
+#   창이 그 경로로 로그인 왕복을 **세션까지** 실측했다. 즉 이 프로브는 「방문자와 무관한
+#   내부 표면」이 아니라 **방문자 경로의 마지막 데모-호스트 홉**이고, TASK-MONO-552 가
+#   잡으려던 실패(컨테이너는 healthy 한데 엣지 뒤 앱이 502)를 그대로 잡는다.
+#
+# 🔴 **후보 셋 중 나머지 둘을 왜 안 골랐는지 적어 둔다**(TASK-MONO-627 § ② 의 표):
+#   · (a) Vercel 표면(`console.hubwang.com`)을 찌른다 — **부팅 판정이 아니다.** 데모가
+#     꺼져 있어도 200 이므로 「부팅이 끝났다」의 증거가 못 된다. 이 축을 죽이는 것과 같다.
+#   · (c) 축을 폐기하고 명시한다 — 「컨테이너는 healthy 인데 화면은 502」를 잡는 유일한
+#     축이 사라진다. 대체물이 **실재하고 방문자 경로 위에 있는데** 폐기할 이유가 없다.
+#
+# 🔴 **경로가 `/` 가 아니다.** `iam.<도메인>/` 는 iam 게이트웨이 라우터로 떨어져 404 다
+#   (`iam-traefik.override.yml` — OIDC 라우터는 `/oauth2` `/connect` `/login` `/signup`
+#   `/.well-known` 접두사만 priority 1000 으로 앞선다). 그래서 선언이 경로를 함께 갖고,
+#   기본값은 `/` 다. 🔴 경로를 지우면 부팅 판정이 404 를 12번 재시도하다 실패하고, 그
+#   실패는 **"데모가 안 떴다"** 로 읽힌다.
 #
 # 🔴 **다른 축이다** — 화면이 늘어도 그것이 Vercel 이고 데모 호스트가 안 서빙하면 여기는
-# 안 오른다. **데모 호스트가 실제로 서빙하는 화면**이 늘 때만 올려라.
+#   안 오른다. **데모 호스트가 실제로 서빙하는 표면**이 늘 때만 올려라.
 #
-# 🔴🔴 TASK-MONO-618 — **이 값을 억제와 같은 PR 에서 안 내리면 부팅이 영구 실패한다.**
-#    억제하면 찌를 수 있는 표면이 1개가 되는데 하한이 2 면 판정이 절대 충족되지 않고,
-#    그 실패는 **"데모가 안 떴다"** 로 읽힌다. 형제 축에서 TASK-MONO-583 이 먼저 낸
-#    길이고, TASK-MONO-604 AC-3 이 "583 이 없었다면 이 티켓이 부팅을 영구히 못
-#    끝내게 만들었을 것" 이라고 적은 그 자리다.
-# 🔴🔴 그리고 **부팅 완료 지문이 바뀐다** — 창 #3 까지는 `console=307 web.fan-platform=307`
-#    (표면 2/2)이 완료 신호였다. 이제 `console=307` **하나(1/1)** 이고
-#    `web.fan-platform` 은 **404** 다. 옛 지문을 기다리면 창이 영원히 안 열린다.
-# 🔵🔵 TASK-MONO-625 (2026-09-06) — **이번에는 지문이 «안 바뀐다». 그것이 결과다.**
-#    단계 3 이 console 행을 Vercel 로 옮겼는데도 완료 신호는 **`console=307` (1/1) 그대로**
-#    다 — 프로브 선언(`data-demo-probe`)을 서빙 선언(`data-served`)에서 **떼어 냈기**
-#    때문이다. 행이 옮겨간 것과 데모 호스트가 그 화면을 그만 서빙하는 것은 다른 사건이고,
-#    지금 일어난 것은 앞의 것뿐이다.
-#    🔴 그러니 **«행을 옮겼으니 지문도 바뀌었겠지» 로 읽지 마라.** 지문이 바뀌는 것은
-#    console 이 **억제될 때**이고, 그때 바뀌는 방향은 「다른 이름」이 아니라 **1/1 → 0개**,
-#    즉 위 N=0 문단이 설계 변경이라고 부른 그 자리다.
+# 🔴🔴 **하한을 0 으로 내리지 마라 — 그 금지는 그대로 살아 있다.** 빈 루프는 `surf_ok`
+#   가 비고 `✔ HTTP 표면` 줄이 아예 안 찍히며 rc 가 무조건 0 이다 ⇒ «표면이 정상» 과
+#   «측정이 죽었다» 가 구별되지 않고, 「부팅 완료 판정이 HTTP 표면을 본다」
+#   (TASK-MONO-552 AC-3)는 명제 자체가 공허해진다. 프로브 대상이 또 사라지는 날
+#   필요한 것은 **또 한 번의 설계 결정**이지 하한 조정이 아니다.
 # 🔵 하한 ①(SURFACE_ROW_FLOOR)은 **그대로 3** 이다 — 론처가 약속하는 화면의 총 수는
-#    줄지 않았고(서빙 출처만 갈렸다), 그 값은 «추출이 깨졌는가» 를 잰다. 두 하한이
-#    서로 다른 것을 재는 이유가 이것이다.
+#   줄지 않았다(서빙 출처만 갈렸다). 두 하한이 서로 다른 것을 재는 이유가 이것이다.
 #
-# 🔴🔴 TASK-MONO-625 — **다음 사람에게. N=1 과 N=0 을 지금 적어 둔다.**
-#   지금 N=1 이다(console 하나). 그 하나가 사라지는 경로는 **하나뿐**이다: 데모가 console
-#   을 억제하는 것(`console-vercel.override.yml`). 그때 해야 할 일은 이 값을 0 으로
-#   내리는 것이 **아니다** —
-#     · N=0 에서 하한을 0 으로 두면 루프가 **빈 채로 통과**한다. `surf_ok` 가 비고
-#       `✔ HTTP 표면` 줄이 아예 안 찍히며 rc 는 무조건 0 이다.
-#       ⇒ **«표면이 정상» 과 «측정이 죽었다» 가 구별되지 않는다.**
-#     · 즉 「부팅 판정이 HTTP 표면을 본다」(TASK-MONO-552 AC-3)는 명제 자체가 공허해진다.
-#   ⇒ N=0 은 **하한 조정이 아니라 설계 변경**이다. 그때 필요한 것은 이 축을 무엇으로
-#     대체할지 정하는 일이고(가드 (z15) 주석이 같은 말을 적어 뒀다), 그 결정 없이
-#     하한만 0 으로 내리는 PR 은 **계측기를 잃는 PR** 이다.
-# 🔵 반대로 N 이 **오르는** 경로는 흔하다(데모 호스트가 서빙하는 화면 추가). 그때는 값을
-#    올리고 이 provenance 목록에 그 이름을 더하면 된다.
+# 🔴🔴 TASK-MONO-618 — **이 값을 억제와 같은 PR 에서 안 맞추면 부팅이 영구 실패한다.**
+#   그 규칙이 이 티켓에서도 그대로 적용됐다: console 억제 · 마크업의 프로브 선언 이동 ·
+#   이 provenance · 가드 (z14)(z15)(z31)이 **한 PR** 이다.
+# 🔴🔴 그리고 **부팅 완료 지문이 또 바뀐다** — 창 #3 까지는 `console=307 web.fan-platform=307`
+#   (2/2), 그다음은 `console=307`(1/1) 이었다. 이제 **`iam=200`(1/1)** 이다.
+#   옛 지문을 기다리면 창이 영원히 안 열린다.
 SURFACE_FLOOR="${DEMO_SURFACE_FLOOR:-1}"
 SURFACE_ATTEMPTS="${DEMO_SURFACE_ATTEMPTS:-12}"
 SURFACE_SLEEP="${DEMO_SURFACE_SLEEP:-10}"
@@ -600,19 +595,47 @@ while IFS= read -r sline; do
   #    를 «아무도 안 읽는 낡은 값» 으로 물기 때문이고, 그 규칙은 옳다 — 「낡은 값」과
   #    「의도된 선언」은 이름이 달라야 한다.
   sprobe="$(printf '%s' "$sline" | sed -n 's/.*data-demo-probe="\([^"]*\)".*/\1/p')"
+  sppath="$(printf '%s' "$sline" | sed -n 's/.*data-demo-probe-path="\([^"]*\)".*/\1/p')"
   case "$ssrc" in
     # 🔴 demo-host 행에 프로브 선언이 함께 있으면 **같은 표면을 두 번** 찌르게 되고,
     #    한 결함이 두 줄로 보고된다. 그 조합은 (z14) 가 마크업에서 막는다.
     demo-host)
-      if [ -n "$shost" ]; then surfaces+=("$sdom $shost"); else surf_badsrc+=("$sdom:host없음"); fi ;;
+      if [ -n "$shost" ]; then surfaces+=("$sdom|$shost|/"); else surf_badsrc+=("$sdom:host없음"); fi ;;
     vercel)
       # 방문자는 Vercel 로 간다. 데모 호스트가 그 화면을 **아직 서빙하면** 프로브 선언이
       # 있고, 그때만 찌른다. 선언이 없으면 데모 호스트에 그 표면이 없다는 뜻이므로
       # 찌르지 않는다 — 찌르면 영원히 안 열리는 주소를 재시도하다 "데모가 안 떴다" 가 된다.
-      if [ -n "$sprobe" ]; then surfaces+=("$sdom $sprobe"); fi ;;
+      if [ -n "$sprobe" ]; then surfaces+=("$sdom|$sprobe|${sppath:-/}"); fi ;;
     *)         surf_badsrc+=("$sdom:출처='${ssrc:-없음}'") ;;
   esac
 done < <(grep '<a [^>]*data-surface' "$SURFACE_SRC" 2>/dev/null)
+
+# -----------------------------------------------------------------------------
+# 🔴🔴 TASK-MONO-627 — **부팅 프로브 선언 원소.** 위 루프는 «방문자에게 약속하는 화면»
+#   을 읽는다. 단계 3 이후 그 목록에서 데모 호스트가 서빙하는 것은 **하나도 없다**
+#   (셋 다 Vercel + 억제). 그래서 부팅 판정의 대상은 그 목록 **밖**에 선언된다.
+#
+# 🔵 **출처는 여전히 한 파일**($SURFACE_SRC)이다 — 늘어난 것은 파일 수가 아니라 원소
+#   종류 하나다. 두 벌로 나누지 않은 이유가 그것이고, 가드 (z15)가 이 파일 하나를
+#   갈아 끼우며 두 축을 전부 시험할 수 있는 이유이기도 하다.
+# 🔴 그럼에도 **행 수(SURFACE_ROW_FLOOR)에는 안 센다.** 그 하한은 «방문자에게 약속한
+#   화면이 몇 개인가» 를 재고, 이 원소는 방문자에게 존재하지 않는다. 섞으면 한 값이
+#   또 두 질문에 답하게 되고, 그것이 TASK-MONO-625 가 방금 뜯어낸 그 결함이다.
+# 🔴 선언은 있는데 값이 없으면 **판정 불가**다. 조용히 건너뛰면 프로브가 0개인 채로
+#   초록이 된다 — 하한을 0 으로 내린 것과 같은 상태다.
+# -----------------------------------------------------------------------------
+while IFS= read -r bline; do
+  bdom="$(printf '%s' "$bline" | sed -n 's/.*data-domain="\([^"]*\)".*/\1/p')"
+  bhost="$(printf '%s' "$bline" | sed -n 's/.*data-demo-probe="\([^"]*\)".*/\1/p')"
+  bpath="$(printf '%s' "$bline" | sed -n 's/.*data-demo-probe-path="\([^"]*\)".*/\1/p')"
+  if [ -z "$bdom" ]; then
+    surf_badsrc+=("부팅프로브:도메인없음")
+  elif [ -z "$bhost" ]; then
+    surf_badsrc+=("$bdom:부팅프로브값없음")
+  else
+    surfaces+=("$bdom|$bhost|${bpath:-/}")
+  fi
+done < <(grep '<[a-z][a-z]* [^>]*data-demo-boot-probe' "$SURFACE_SRC" 2>/dev/null)
 
 surf_bad=(); surf_undecidable=(); surf_skipped=(); surf_ok=()
 if [ "$surf_rows" -lt "$SURFACE_ROW_FLOOR" ]; then
@@ -630,7 +653,8 @@ elif [ -z "${DEMO_DOMAIN:-}" ] || [ "${DEMO_DOMAIN}" = "local" ]; then
   echo "[demo] ◑ HTTP 표면 검사 건너뜀 — DEMO_DOMAIN='${DEMO_DOMAIN:-}' (AWS 밖에서는 호스트명이 해석되지 않습니다)"
 else
   for entry in "${surfaces[@]}"; do
-    sdom="${entry%% *}"; shost="${entry#* }"
+    IFS='|' read -r sdom shost spath <<< "$entry"
+    [ -n "$spath" ] || spath="/"
     skip=0
     for d in "${still[@]}" "${undecidable[@]}"; do [ "$d" = "$sdom" ] && skip=1; done
     if [ "$skip" = 1 ]; then surf_skipped+=("$shost($sdom)"); continue; fi
@@ -640,13 +664,13 @@ else
       n=$((n + 1))
       # 🔴 리다이렉트를 **따라가지 않는다.** 콘솔은 `/login` 으로 302 를 내고 그것이
       #    정상 응답이다(AC-1: "2xx/3xx 를 낸다"). 따라가면 실패 모드만 늘어난다.
-      code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://${shost}.${DEMO_DOMAIN}/" 2>/dev/null || echo 000)"
+      code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://${shost}.${DEMO_DOMAIN}${spath}" 2>/dev/null || echo 000)"
       case "$code" in 2??|3??) break ;; esac
       [ "$n" -lt "$SURFACE_ATTEMPTS" ] && sleep "$SURFACE_SLEEP"
     done
     case "$code" in
-      2??|3??) surf_ok+=("$shost=$code") ;;
-      *)       surf_bad+=("$shost.${DEMO_DOMAIN}=$code") ;;
+      2??|3??) surf_ok+=("$shost$([ "$spath" = "/" ] || printf '%s' "$spath")=$code") ;;
+      *)       surf_bad+=("$shost.${DEMO_DOMAIN}${spath}=$code") ;;
     esac
   done
   # 🔵 `if` 로 쓴 이유는 **가독성**이다. 초판 주석은 이것을 `set -e` 함정이라고 적었는데

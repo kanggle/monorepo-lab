@@ -74,7 +74,19 @@ services:
       traefik-net:
         aliases:
           - iam.${DEMO_DOMAIN:-local}
-          - console.${DEMO_DOMAIN:-local}
+          # 🔴 `console.${DEMO_DOMAIN:-local}` 는 **의도적으로 없다**
+          # (TASK-MONO-627 / ADR-MONO-067 단계 3, 2026-09-06). 방문자 운영자 콘솔은
+          # https://console.hubwang.com 으로 옮겨갔고 데모는 그 사본을 띄우지 않는다
+          # (infra/demo/console-vercel.override.yml). alias 와 Host() 라우터는 **짝으로만**
+          # 존재해야 한다 — 가드 (i) 가 그 짝을 강제하므로, 이 줄을 되살리면
+          # «라우터가 없는 고아 alias» 로 문다. 콘솔을 데모로 되돌리려면 그 오버라이드를
+          # 먼저 걷어라.
+          # 🔴🔴 이것으로 **console 프로젝트는 엣지 라우터가 0개인 첫 프로젝트**가 됐다
+          # (남은 `console-bff` 는 TASK-MONO-362 가 라우터를 일부러 없앴다). 그 상태가
+          # 가드 (i) 의 `router_hosts()` 를 **메시지 없이 죽게** 만들었고(grep 0건 →
+          # pipefail → set -e), 627 이 그것을 함께 고쳤다. 🔵 라우터 0개는 이제 정당한
+          # 상태이고, 그 사실은 (i) 가 **이름을 찍어** 보고한다.
+          # 🔵 이것으로 ADR-MONO-067 이 옮긴 방문자 화면 셋이 전부 이 목록에서 빠졌다.
           - ecommerce.${DEMO_DOMAIN:-local}
           # web.ecommerce 는 여기 없다 — 스토어는 Vercel(`store.hubwang.com`)로
           # 옮겨갔고 데모는 그 사본을 띄우지 않는다(TASK-MONO-604 /

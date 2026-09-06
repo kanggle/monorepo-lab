@@ -354,11 +354,51 @@ traefik_aliases() {
   ' | tr -d '"' | sort -u
 }
 
+# ---------------------------------------------------------------------------
+# 🔴🔴 TASK-MONO-627 — **라우터가 0개인 프로젝트가 생겼고, 이 함수가 «조용히 죽었다».**
+# ---------------------------------------------------------------------------
+# 초판은 이랬다:
+#
+#     for p in "${!COMPOSE[@]}"; do
+#       render "$p" | grep -oE 'Host\(...\)' | sed ...
+#     done | sort -u
+#
+# `set -euo pipefail` 아래서 이 모양은 **모든 프로젝트가 라우터를 최소 하나 갖는 동안만**
+# 동작한다. 단계 3 이 `console-web` 을 억제하자 console 프로젝트의 렌더에 `Host(` 가
+# **0건**이 됐고(남은 `console-bff` 는 TASK-MONO-362 가 라우터를 일부러 없앴다), 그러자:
+#
+#   grep 0건 → rc=1 → pipefail 로 파이프라인 rc=1 → for 루프 서브셸이 set -e 로 즉사
+#   → `router_hosts` 가 rc=1 → `router_hosts > "$hosts_file"` 실패 → **스크립트 즉사**
+#
+# 🔴 그 죽음에는 **아무 메시지가 없다.** 로그의 마지막 줄은 `[verify] (i) ...` 이고 rc=1 이라,
+#    「가드가 물었다」와 **모양이 완전히 같다.** 실측으로 그 상태를 재현했다(2026-09-06).
+# 🔵 이 저장소가 이름 붙인 두 함정이 겹친 자리다 — «0건 ≠ 없음» 과 «줄어드는 모집단».
+#    라우터 0개는 **정당한 상태**가 됐는데 술어가 그것을 오류로 다뤘다.
+#
+# ⇒ 고친 방법은 두 가지다:
+#   1. grep 0건을 `|| true` 로 **정상**으로 받는다.
+#   2. 그렇다고 **조용히 넘기지 않는다** — 라우터가 0개인 프로젝트는 이름을 찍는다.
+#      조용한 0 은 «억제됐다» 와 «렌더가 깨졌다» 를 구별하지 못한다(렌더 자체는 위 (a)가
+#      이미 보장하므로 여기서 다시 재지 않는다).
+# 🔵 겸사겸사 렌더를 **한 번만** 한다. 예전에는 `router_hosts` 를 두 번 불러 8개 프로젝트를
+#    16번 렌더했다.
+declare -A z_i_render=()
+for p in "${!COMPOSE[@]}"; do z_i_render[$p]="$(render "$p")"; done
+
 router_hosts() { # 프로젝트 compose 가 선언한 모든 Host(...) 호스트명
+  local p
   for p in "${!COMPOSE[@]}"; do
-    render "$p" | grep -oE 'Host\(`[^`]+`\)' | sed 's/Host(`//; s/`)//'
-  done | sort -u
+    printf '%s\n' "${z_i_render[$p]}" | grep -oE 'Host\(`[^`]+`\)' || true
+  done | sed 's/Host(`//; s/`)//' | sort -u
 }
+
+z_i_norouter=""
+for p in "${!COMPOSE[@]}"; do
+  if ! printf '%s\n' "${z_i_render[$p]}" | grepq -E 'Host\(`[^`]+`\)'; then
+    z_i_norouter="$z_i_norouter $p"
+  fi
+done
+[ -z "$z_i_norouter" ] || ok "(i) 엣지 라우터가 없는 프로젝트:${z_i_norouter} — 데모 호스트에 HTTP 표면을 안 만듭니다(억제됐거나 백엔드 전용). 조용한 0 이 아니라 **이름을 찍은 0** 입니다."
 
 aliases_file="$(mktemp)"; hosts_file="$(mktemp)"
 traefik_aliases > "$aliases_file"
@@ -525,7 +565,34 @@ echo "[verify] (m) 쿠키 Secure 해제와 https 오리진이 함께 쓰이지 �
 #
 # 동시에 `CONSOLE_PUBLIC_ORIGIN` 이 데모 도메인을 가리키는지도 본다 — 빠지면 로그인 직후
 # 콜백이 브라우저를 `console.local` 로 보낸다(빌드타임 인라인된 NEXT_PUBLIC_APP_URL).
-console_render="$(render console)"
+# ---------------------------------------------------------------------------
+# 🔴🔴 TASK-MONO-627 — **이 칸의 모집단이 말라 버렸다. 술어를 옮긴다.**
+# ---------------------------------------------------------------------------
+# 초판은 `render console`(데모 체인)을 읽었다. 단계 3 이 `console-web` 을 억제하자
+# (`infra/demo/console-vercel.override.yml`) 그 렌더에는 `CONSOLE_PUBLIC_ORIGIN` 자체가
+# **없어졌고**, 위 `[ -n "$pub_origin" ]` 단언이 «오리진이 빠졌다» 로 빨개졌다 — 실제로는
+# 빠진 것이 아니라 **그 서비스가 데모에 없는** 것이다. 실측으로 그 빨강을 재현했다
+# (2026-09-06). 이 저장소가 이름 붙인 함정: **줄어드는 모집단에 하한을 걸면 성공이 고장난다.**
+#
+# 🔴 하한을 없애는 것(«없으면 그냥 통과»)은 답이 아니다 — 그러면 console-web 이 데모에
+#    돌아온 날 오리진 누락이 **조용히** 통과한다. 그것이 이 칸이 막으려던 바로 그 사고다.
+# ⇒ **술어가 읽는 렌더를 base compose 로 옮긴다.** 이 칸이 묻는 것은 «체인에 그 서비스가
+#   있는가» 가 아니라 **«그 서비스의 쿠키/오리진 조합이 안전한가»** 이고, 그 조합은 base 의
+#   선언 + `demo.env` 값으로 정해진다(이 스크립트는 위에서 demo.env 를 export 하므로
+#   base 만 렌더해도 데모 값이 그대로 치환된다). 모집단이 마르지 않는 자리로 옮긴 것이다.
+# 🔵 그리고 **비공허성을 명시적으로 단언**한다 — base 에서도 console-web 이 사라지면
+#   이 칸은 «아무것도 안 재면서 초록» 이 되므로, 그때는 빨개져야 한다.
+#
+# 🔵 **데모 축이 어디로 갔는지도 적어 둔다**(조용히 사라지면 회귀로 오진된다):
+#   방문자 콘솔은 이제 `https://console.hubwang.com`(Vercel)이고 그 쿠키 정책은 Vercel
+#   프로젝트 env 의 몫이다. `TASK-MONO-624` 기동 창이 실측했다 — 세션 쿠키 5종이 전부
+#   `Secure; HttpOnly; SameSite=lax` 이고 오리진은 https ⇒ **아래 위험 조합의 반대쪽**이다.
+console_base="projects/platform-console/docker-compose.yml"
+console_render="$(docker compose -p verify-console-base -f "$ROOT/$console_base" config 2>/dev/null)"
+printf '%s\n' "$console_render" | grepq '^  console-web:' \
+  || fail "(m) base compose($console_base) 렌더에 console-web 이 없습니다."\
+    $'\n'"→ 그러면 이 칸은 **아무것도 안 재면서 초록**이 됩니다(쿠키 Secure ↔ 오리진 조합)."\
+    $'\n'"→ 데모 체인이 아니라 base 를 읽는 이유는 위 주석에 있습니다(TASK-MONO-627)."
 # NOTE: do NOT split on ': ' — a URL contains one ("http://…"), so an awk
 # field-split hands back "http" and the https check below silently never
 # matches. Strip exactly the `KEY:` prefix instead. (Caught by mutation-check;
@@ -2647,10 +2714,46 @@ z14_probe_err() {  # $1=data-served  $2=data-demo-probe  → 사유 또는 빈 �
     return 0
   fi
   [ -n "$z14_pe_p" ] || return 0   # 선언 없음 = 데모 호스트가 그 화면을 안 서빙한다(정상)
-  case "$z14_pe_p" in
-    *[!A-Za-z0-9.-]*)     echo "호스트 접두사가 아닙니다(영숫자 · 점 · 하이픈만): '$z14_pe_p'" ;;
-    .*|*.)                echo "점으로 시작하거나 끝납니다: '$z14_pe_p'" ;;
-    *sslip.io*|*1-2-3-4*) echo "데모 호스트 파생 주소가 박혀 있습니다: '$z14_pe_p'" ;;
+  z14_probe_shape_err "$z14_pe_p"
+}
+
+# ---------------------------------------------------------------------------
+# 🔴🔴 TASK-MONO-627 — **모양 검사를 한 번 더 떼어 낸다.** 단계 3 이 console 을 억제하면서
+# 프로브 선언이 `<a data-surface>` 행에서 **행 밖의 원소**(#bootprobe)로 옮겨갔다. 두
+# 자리가 같은 규칙을 받아야 하는데, 규칙이 `z14_probe_err` 안에 인라인으로 있으면
+# 새 자리가 그 규칙을 **안 받는다** — 그러면 이 저장소가 반복해서 당한 모양이 된다:
+# 한 사실이 두 절에 있고, 한쪽만 고쳐진다. ⇒ 값 하나만 보는 술어로 떼고 **양쪽이 부른다.**
+# 🔵 `data-served` 축(중복 프로브 금지)은 여전히 `z14_probe_err` 의 몫이다 — 행 밖의
+#    원소에는 `data-served` 가 없으므로 그 질문 자체가 성립하지 않는다.
+z14_probe_shape_err() {  # $1=프로브 값 → 사유 또는 빈 문자열 (빈 값은 호출자가 판정한다)
+  case "$1" in
+    "")                   return 0 ;;
+    *[!A-Za-z0-9.-]*)     echo "호스트 접두사가 아닙니다(영숫자 · 점 · 하이픈만): '$1'" ;;
+    .*|*.)                echo "점으로 시작하거나 끝납니다: '$1'" ;;
+    *sslip.io*|*1-2-3-4*) echo "데모 호스트 파생 주소가 박혀 있습니다: '$1'" ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
+# 🔴🔴 TASK-MONO-627 — **경로 술어.** `iam.<도메인>/` 는 iam **게이트웨이** 라우터로
+# 떨어져 404 다(OIDC 라우터는 `/oauth2` `/connect` `/login` `/signup` `/.well-known`
+# 접두사만 priority 1000 으로 앞선다 — `iam-traefik.override.yml`). 그래서 프로브 선언이
+# 경로를 함께 갖고, `demo-up.sh` 가 `http://<값>.$DEMO_DOMAIN<경로>` 로 조립한다.
+# 🔴 절대주소·프로토콜 상대 주소·공백이 들어가면 그 조립이 깨지고, 부팅 판정이 404 를
+#    12번 재시도하다 실패한다 — 그 실패는 **"데모가 안 떴다"** 로 읽힌다.
+# 🔵 빈 값은 통과다 = 기본 경로 `/`. 그 기본값이 옳은 자리(루트가 2xx/3xx 인 표면)가
+#    여전히 있기 때문이고, 강제하면 그런 표면이 경로를 억지로 적게 된다.
+z14_probe_path_err() {  # $1=data-demo-probe-path → 사유 또는 빈 문자열
+  z14_pp="$1"
+  [ -n "$z14_pp" ] || return 0
+  case "$z14_pp" in
+    //*) echo "프로토콜 상대 주소입니다(경로만 적으세요): '$z14_pp'"; return 0 ;;
+    /*)  : ;;
+    *)   echo "경로가 '/' 로 시작하지 않습니다: '$z14_pp'"; return 0 ;;
+  esac
+  case "$z14_pp" in
+    *[[:space:]]*) echo "공백이 들어 있습니다: '$z14_pp'" ;;
+    *\"*)          echo "따옴표가 들어 있습니다: '$z14_pp'" ;;
   esac
 }
 
@@ -2671,6 +2774,24 @@ for z14_pt in "demo-host|console" "vercel|https://console.hubwang.com/" "vercel|
 done
 { [ "$z14_pt_pass" -eq 4 ] && [ "$z14_pt_bite" -eq 5 ]; } \
   || fail "(z14) 프로브 술어 self-test 가 9칸을 다 돌지 않았습니다 (통과 ${z14_pt_pass}/4 · 물기 ${z14_pt_bite}/5)."
+
+# 🔴🔴 TASK-MONO-627 — 경로 술어 self-test **8칸.** 위와 같은 이유로 통과·물기를 **둘 다**
+#    센다. 물기만 세면 «전부 문다» 는 술어가 만점을 받고, 그러면 정상 선언이 빨개진다.
+#    🔵 물기 넷은 전부 **조립을 깨는** 모양이다 — 규칙이 임의가 아니라는 뜻이다.
+z14_ppt_pass=0; z14_ppt_bite=0
+for z14_ppt in "" "/" "/login" "/oauth2/authorize"; do
+  z14_ppt_r="$(z14_probe_path_err "$z14_ppt")"
+  [ -z "$z14_ppt_r" ] || fail "(z14) 경로 술어 self-test — '$z14_ppt' 는 통과해야 하는데 물었습니다: $z14_ppt_r"
+  z14_ppt_pass=$(( z14_ppt_pass + 1 ))
+done
+for z14_ppt in "login" "//evil.example/login" "/a b" "http://iam.local/login"; do
+  [ -n "$(z14_probe_path_err "$z14_ppt")" ] \
+    || fail "(z14) 경로 술어 self-test — '$z14_ppt' 를 **안 물었습니다.**"\
+      $'\n'"→ 그 값은 http://<호스트>.\$DEMO_DOMAIN<경로> 조립을 깨뜨립니다."
+  z14_ppt_bite=$(( z14_ppt_bite + 1 ))
+done
+{ [ "$z14_ppt_pass" -eq 4 ] && [ "$z14_ppt_bite" -eq 4 ]; } \
+  || fail "(z14) 경로 술어 self-test 가 8칸을 다 돌지 않았습니다 (통과 ${z14_ppt_pass}/4 · 물기 ${z14_ppt_bite}/4)."
 
 z14_n_demo=0; z14_n_vercel=0; z14_n_probe=0
 while IFS='|' read -r z14_d z14_s z14_h z14_u z14_p; do
@@ -2749,7 +2870,59 @@ done <<< "$z14_rows"
 #    demo-host 행의 `data-host`  ∪  vercel 행의 `data-demo-probe`.
 #    🔴 여기서 하한을 걸지 않는다 — 이 값은 «데모 호스트가 아직 서빙하는 화면 수» 라서
 #    억제가 진행되면 **정당하게 줄어든다**. 하한은 그 축을 소유한 (z15)가 갖는다.
-z14_n_boot_probe=$(( z14_n_demo + z14_n_probe ))
+# ---------------------------------------------------------------------------
+# 🔴🔴 TASK-MONO-627 — **세 번째 모집단: 행 밖의 부팅 프로브 선언 원소.**
+# ---------------------------------------------------------------------------
+# 단계 3 이 console 을 억제하면서 «데모 호스트가 서빙하는 방문자 표면» 이 0 이 됐다.
+# 부팅 판정의 대상은 그래서 `<a data-surface>` 목록 **밖**에 선언된다(#bootprobe).
+#
+# 🔴 **술어를 demo-up.sh 와 같은 것으로 쓴다.** 가드가 자기만의 grep 을 쓰면 「가드가 센
+#    모집단」과 「런타임이 찌르는 모집단」이 갈라지고, 갈라진 날 가드는 **초록인 채로
+#    다른 것을 잰다** — 이 저장소가 이름 붙인 함정이다(선언 파일 grep ≠ 런타임 모집단).
+#    아래 grep · sed 세 줄은 `demo-up.sh` 의 두 번째 추출 루프와 **문자 그대로 같다.**
+# 🔵 그리고 추출이 조용히 흘리지 않았는지 **느슨한 셈과 대조**한다(위 행 추출과 같은 규율).
+z14_bootel_loose="$(grep -c '<[^>]*data-demo-boot-probe' "$z14_site" || true)"
+z14_n_bootel=0
+while IFS= read -r z14_bl; do
+  [ -n "$z14_bl" ] || continue
+  z14_bd="$(printf '%s' "$z14_bl" | sed -n 's/.*data-domain="\([^"]*\)".*/\1/p')"
+  z14_bh="$(printf '%s' "$z14_bl" | sed -n 's/.*data-demo-probe="\([^"]*\)".*/\1/p')"
+  z14_bp="$(printf '%s' "$z14_bl" | sed -n 's/.*data-demo-probe-path="\([^"]*\)".*/\1/p')"
+  z14_n_bootel=$(( z14_n_bootel + 1 ))
+
+  # 🔴 이 원소가 `data-surface` 를 겸하면 방문자 페이지에 **갈 곳 없는 링크**가 뜬다
+  #    (renderSurfaces 가 [data-surface] 를 전부 읽는다). 두 축은 서로 다른 원소다.
+  case "$z14_bl" in
+    *data-surface*) fail "(z14) 부팅 프로브 원소가 data-surface 를 겸하고 있습니다."\
+      $'\n'"→ renderSurfaces() 가 그것을 방문자 링크로 렌더합니다 — data-url 도 없으므로"\
+      $'\n'"   방문자는 아무 데도 못 가는 항목을 봅니다. 두 축은 서로 다른 원소여야 합니다." ;;
+  esac
+
+  [ -n "$z14_bd" ] || fail "(z14) 부팅 프로브 원소에 data-domain 이 없습니다."\
+    $'\n'"→ demo-up.sh 는 그 도메인이 안 떴으면 이 표면을 **안 찌릅니다**(한 결함을 두 줄로"\
+    $'\n'"   보고하지 않으려고). 도메인을 모르면 그 분기가 통째로 죽습니다."
+  [ -n "${COMPOSE[$z14_bd]+x}" ] \
+    || fail "(z14) 부팅 프로브 원소가 존재하지 않는 도메인을 가리킵니다: '$z14_bd' (유효: ${!COMPOSE[*]})"
+
+  [ -n "$z14_bh" ] || fail "(z14) 부팅 프로브 원소('$z14_bd')에 data-demo-probe 값이 없습니다."\
+    $'\n'"→ 선언만 있고 값이 없으면 demo-up.sh 는 **판정 불가**로 끝냅니다(그것이 옳습니다)."\
+    $'\n'"   부팅이 영구 실패하므로, 축을 버릴 생각이면 원소를 지우지 말고 설계를 다시 정하세요."
+  z14_be="$(z14_probe_shape_err "$z14_bh")"
+  [ -z "$z14_be" ] || fail "(z14) 부팅 프로브 원소('$z14_bd')의 data-demo-probe 가 잘못됐습니다 — $z14_be"\
+    $'\n'"→ 이 값은 demo-up.sh 가 http://<값>.\$DEMO_DOMAIN<경로> 로 조립해 찌릅니다."
+  z14_be="$(z14_probe_path_err "$z14_bp")"
+  [ -z "$z14_be" ] || fail "(z14) 부팅 프로브 원소('$z14_bd')의 data-demo-probe-path 가 잘못됐습니다 — $z14_be"
+done < <(grep '<[a-z][a-z]* [^>]*data-demo-boot-probe' "$z14_site")
+
+[ "$z14_bootel_loose" = "$z14_n_bootel" ] \
+  || fail "(z14) data-demo-boot-probe 는 ${z14_bootel_loose}건인데 파싱된 원소는 ${z14_n_bootel}건입니다."\
+    $'\n'"→ 한 원소의 모양이 추출식과 다릅니다. 그 원소는 판정에서 **통째로 빠지고**,"\
+    $'\n'"   demo-up.sh 의 같은 추출식에서도 빠지므로 부팅 프로브가 조용히 사라집니다."
+
+# 🔴 여기서도 하한은 안 건다 — 이 수는 «데모 호스트가 아직 재어 줄 표면 수» 라서
+#    이관이 진행되면 정당하게 변한다. 「전체에 하나는 있어야 한다」는 (z15)의 몫이고,
+#    그쪽이 그것을 «부팅 판정이 잴 것이 남았나» 라는 자기 축으로 갖고 있다.
+z14_n_boot_probe=$(( z14_n_demo + z14_n_probe + z14_n_bootel ))
 [ "$z14_n_vercel" -ge 1 ] || fail "(z14) vercel 정책을 받는 행이 **0개**입니다 — 그 정책은 안 재고 초록이 됩니다."\
   $'\n'"→ ADR-MONO-067 이 화면을 Vercel 로 옮기고 있습니다. 0 이면 이관이 사라진 것이거나"\
   $'\n'"   이 가드가 그 축을 잃은 것입니다 — 둘 다 조용히 지나가면 안 됩니다."
@@ -3016,7 +3189,7 @@ else
 fi
 rm -f "$z14_js2"
 
-ok "방문자 화면 링크 ${z14_got}개 — 실제 행: vercel ${z14_n_vercel}행(여섯 상태 전부 활성·정적 주소) · demo-host ${z14_n_demo}행 · 부팅 프로브 선언 ${z14_n_probe}건(술어 self-test 9칸) · demo-host 정책 4칸은 **주입 픽스처**(${z14_fx_dom}/${z14_fx_host}, 주입 3단언)로 집행 · 컨테이너 축(꺼진 데모에서도 보임 · vercel-0 대조군은 숨김 유지)"
+ok "방문자 화면 링크 ${z14_got}개 — 실제 행: vercel ${z14_n_vercel}행(여섯 상태 전부 활성·정적 주소) · demo-host ${z14_n_demo}행 · 부팅 프로브 = vercel행 ${z14_n_probe}건 + #bootprobe 원소 ${z14_n_bootel}건 = ${z14_n_boot_probe}건(술어 self-test 9칸 + 경로 술어 8칸) · demo-host 정책 4칸은 **주입 픽스처**(${z14_fx_dom}/${z14_fx_host}, 주입 3단언)로 집행 · 컨테이너 축(꺼진 데모에서도 보임 · vercel-0 대조군은 숨김 유지)"
 
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
@@ -3171,11 +3344,31 @@ printf '%s\n' "$z15_log1" | grepq "HTTP 표면 ${z14_n_boot_probe}/${z14_n_boot_
 #
 # 🔵 대상 선정을 **상수 하나로** 모았다. 세 곳에 흩어져 있으면 다음 이사에서 한 곳만
 #    고쳐지고, 안 고쳐진 쪽은 공허하게 참이 된다.
-# 🔵 TASK-MONO-625 — 이 상수는 **안 바뀌었다.** console 행은 `data-served="vercel"` 이
-#    됐지만 `data-demo-probe="console"` 로 여전히 찔린다. 「행이 vercel 이면 안 찌른다」로
-#    읽고 이 값을 지우면, 이 칸은 죽일 표면이 없어 **공허하게 초록**이 된다.
-z15_target_host="console"   # 데모 호스트가 실제로 서빙하는 표면 (2026-09-06 기준 유일)
-z15_target_dom="console"    # 그 표면을 소유한 도메인 슬러그
+# 🔵 TASK-MONO-625 — 이 상수는 그때 **안 바뀌었다.** console 행은 `data-served="vercel"`
+#    이 됐지만 `data-demo-probe="console"` 로 여전히 찔렸다.
+#
+# 🔴🔴 TASK-MONO-627 (2026-09-06) — **그날이 왔다. 위 예고가 말한 그 자리다.**
+#    console 이 억제됐고(`infra/demo/console-vercel.override.yml` + `projects.sh` 의
+#    `[console]` 체인) ⇒ 데모 호스트가 서빙하는 **방문자 표면은 0개**다. 625 가 심은
+#    파수꾼(`z14_n_boot_probe >= 1`)이 바로 그 상태에서 빨개지도록 돼 있었고, 그 빨강의
+#    처방으로 **하한을 내리지 않고 축을 옮겼다**:
+#
+#      bite 대상 = `iam` 의 `/login` (데모 IdP 로그인 폼)
+#
+#    🔵 **임의의 대체물이 아니다.** 억제 뒤 방문자가 데모 호스트를 밟는 **유일한 홉**이다:
+#      Vercel 콘솔 → `auth.hubwang.com`(Vercel 포워더) → `http://iam.<그날 도메인>/login`.
+#      포워더의 `servicePrefix: 'iam'` 이 그 배선이고, `TASK-MONO-624` 기동 창이 그 경로로
+#      로그인 왕복을 **세션까지** 실측했다. ⇒ 552 가 잡으려던 실패(컨테이너는 healthy 한데
+#      엣지 뒤 앱이 502)를 그대로 잡으면서, 「방문자가 여는 것」이라는 성질도 잃지 않는다.
+#    🔴 그리고 이번에도 **이사한 이유를 여기 적는다.** 앞선 두 이사(583·625)에서
+#      「왜 옮겼는가」가 주석에 남아 있었기에 이번 진단이 30분이 아니라 한 문단으로 끝났다.
+#
+#    🔴🔴 **다음 이사는 더 어렵다 — 지금 적어 둔다.** 이 대상이 사라지는 경로는
+#      「데모가 IdP 를 그만 서빙한다」뿐이고, 그것은 **데모 자체가 없어진다는 뜻**이다.
+#      그때는 옮길 곳이 아니라 **폐기**가 답이고, 폐기는 로그와 주석 양쪽에 명시돼야 한다
+#      (하한만 0 으로 두는 것은 폐기가 아니라 **계측기 상실**이다).
+z15_target_host="iam"       # 억제 뒤 데모 호스트가 방문자에게 서빙하는 유일한 홉
+z15_target_dom="iam"        # 그 표면을 소유한 도메인 슬러그
 
 # (2) bite — 도메인은 up 인데 표면 하나가 안 뜬다. **빨개져야 하고 이름이 찍혀야 한다.**
 z15_rc2="$(z15_run '' up "$z15_target_host")"
@@ -3183,8 +3376,8 @@ z15_log2="$(cat "$z15_tmp/run.log")"
 [ "$z15_rc2" != "0" ] || z15_die "(z15) 표면이 안 뜨는데 **성공으로 끝났습니다.**"\
   $'\n'"→ 이것이 이 티켓 그 자체다: 컨테이너는 전부 healthy 인데 방문자가 여는 주소가 404 다."\
   $'\n'"→ 판정이 컨테이너만 보면 면접관이 보는 화면과 부팅 결과가 갈라집니다."\
-  $'\n'"→ 🔴 bite 대상이 '$z15_target_host' 인데, 그 행이 Vercel 로 옮겨갔다면 이 칸은"\
-  $'\n'"   죽일 표면이 없어 공허해집니다. 위 주석의 «이 축은 단계 3 에서 죽는다» 를 읽으세요."
+  $'\n'"→ 🔴 bite 대상이 '$z15_target_host' 인데, 데모 호스트가 그 표면을 그만 서빙하면"\
+  $'\n'"   이 칸은 죽일 표면이 없어 공허해집니다. 위 상수 주석의 «다음 이사» 문단을 읽으세요."
 printf '%s\n' "$z15_log2" | grepq "HTTP 표면 미도달.*$z15_target_host" \
   || z15_die "(z15) 안 뜬 표면의 **이름이 없습니다** — 빨간데 어디가 문제인지 알 수 없습니다."
 
@@ -3214,7 +3407,12 @@ printf '%s\n' "$z15_log3" | grepq "HTTP 표면 미검사.*$z15_target_host" \
 #    거짓이고 그 사유는 이관과 무관해 보인다.
 #    🔵 console 이 **억제되면** 그때 이 목록에 더하고 바닥을 3 으로 올려라 — 그리고 그
 #    PR 은 위 `z14_n_boot_probe >= 1` 도 함께 다루어야 한다(같은 사건의 두 얼굴이다).
-z15_vercel_hosts="web.ecommerce web.fan-platform"
+# 🔴🔴 TASK-MONO-627 — **`console` 을 여기 더하는 것은 억제와 같은 PR 에서만 옳다.**
+#    이 목록의 뜻은 «vercel 행» 이 아니라 **«데모 호스트가 더 이상 서빙하지 않는 표면»**
+#    이다. 억제 «전» 에 더하면 demo-up.sh 는 여전히 그 표면을 찌르므로 «찌르면 안 되는데
+#    찔렀다» 라는 **거짓 빨강**이 나고, 그 사유는 이관과 무관해 보인다(625 가 그 주석을
+#    달아 뒀고, 이 PR 이 그 순서를 지켰다 — 억제 · 프로브 이사 · 이 목록이 한 커밋이다).
+z15_vercel_hosts="web.ecommerce web.fan-platform console"
 z15_vercel_n=0
 for z15_vh in $z15_vercel_hosts; do
   z15_vercel_n=$((z15_vercel_n + 1))
@@ -3223,8 +3421,8 @@ for z15_vh in $z15_vercel_hosts; do
       $'\n'"→ 그 주소는 데모 호스트에 존재하지 않습니다(ADR-MONO-067). 12번 재시도한 뒤"\
       $'\n'"   실패로 세어지고, 그 실패는 '데모가 안 떴다' 로 읽힙니다."
 done
-[ "$z15_vercel_n" -ge 2 ] || z15_die \
-  "(z15) Vercel 행 목록이 ${z15_vercel_n}개뿐입니다 (바닥 2: web.ecommerce · web.fan-platform)."\
+[ "$z15_vercel_n" -ge 3 ] || z15_die \
+  "(z15) Vercel 행 목록이 ${z15_vercel_n}개뿐입니다 (바닥 3: web.ecommerce · web.fan-platform · console)."\
   $'\n'"→ 목록이 줄면 이 칸은 «안 찔렀다» 를 공허하게 통과합니다. ADR-MONO-067 이 화면을"\
   $'\n'"  데모로 되돌린 것이 아니라면 목록을 복구하세요."
 
@@ -3254,20 +3452,34 @@ printf '%s\n' "$z15_probe5" | grepq 'z15probe' \
 
 
 # (6) 🔴🔴 TASK-MONO-625 — **프로브 선언을 지우면 «판정 불가» 여야 한다.**
-# 이 티켓이 만든 축의 bite 다. console 행은 `data-served="vercel"` 이고 `data-demo-probe`
-# 하나로만 찔린다 ⇒ 그 속성이 사라지면 찌를 표면이 **0개**가 되는데, 그때 조용히 rc=0 이
-# 나면 «표면 정상» 과 «측정이 죽었다» 가 구별되지 않는다. `SURFACE_FLOOR` 가 그것을 막는지
-# 여기서 **실행으로** 확인한다(주석이 막아 주지 않는다).
+# 이 티켓이 만든 축의 bite 다.
+# 🔵 TASK-MONO-627 — **이 칸은 대상이 바뀌었는데도 한 글자도 안 고쳤다.** 술어가
+#    «console 행의 속성» 이 아니라 **«파일 전체의 data-demo-probe 선언»** 이었기 때문이다.
+#    지금 그 선언은 `#bootprobe` 원소 하나이고, 같은 sed 가 그것을 지운다 ⇒ 찌를 표면이
+#    **0개**가 된다. 위치로 고른 술어였다면 이사 때 공허해졌을 자리다.
+# 그때 조용히 rc=0 이 나면 «표면 정상» 과 «측정이 죽었다» 가 구별되지 않는다.
+# `SURFACE_FLOOR` 가 그것을 막는지 여기서 **실행으로** 확인한다(주석이 막아 주지 않는다).
 #
 # 🔴 **주입 증명이 먼저다.** 원본에 그 속성이 있었고, 사본에는 없고, **행 수는 그대로**
 #    라는 세 가지를 다 단언한다 — 행이 통째로 사라졌다면 아래 빨강은 이 축이 아니라
 #    `SURFACE_ROW_FLOOR`(다른 축)가 낸 것이고, 그러면 이 칸은 엉뚱한 것을 시험한 것이다.
 z15_site="$ROOT/infra/demo/aws/site/index.html"
-grepq 'data-demo-probe' "$z15_site" \
+# 🔴🔴 TASK-MONO-627 — **술어에 `="` 를 붙여야 한다. 안 붙이면 형제 속성에 걸린다.**
+#    맨 이름 `data-demo-probe` 는 새 형제 `data-demo-probe-path` **에도 매치**된다.
+#    그래서 아래 sed 가 프로브 값을 정확히 지웠는데도 «사본에 남아 있습니다» 가 물었다
+#    (실측 2026-09-06 — 이 칸이 그 오류를 잡았다). 판별 축과 이웃의 이름이 접두사 관계면
+#    술어는 **접두사가 아니라 완전한 토큰**을 봐야 한다.
+# 🔴🔴 그리고 **태그 안으로 한정해야 한다**(`<[^>]*` 접두). 마크업이 이 속성을 산문으로
+#    설명하기 때문이다 — 실측 2026-09-06: `data-demo-probe="` 는 파일에 **2건**이고 그중
+#    하나는 주석의 예시(`data-demo-probe="<호스트접두사>"`)다. 즉 **진짜 선언이 사라져도**
+#    이 칸의 «원본에 있나» 전제가 문서만으로 충족될 수 있었다 ⇒ 공허하게 통과한다.
+#    🔵 이 저장소가 이름 붙인 함정이다: **판별자가 자기 설명 문구에 걸린다**
+#    (판정 축과 검색 축이 같은 매체가 된다 — (z14)가 sslip 검사에서 먼저 밟았다).
+grepq '<[^>]*data-demo-probe="' "$z15_site" \
   || z15_die "(z15) (6) 원본 마크업에 data-demo-probe 가 **없습니다** — 지울 것이 없으므로 이 칸은 공허합니다."\
     $'\n'"→ 억제가 진행돼 프로브가 0 이 됐다면 위 z14_n_boot_probe 단언이 먼저 빨개졌어야 합니다."
 sed 's/ data-demo-probe="[^"]*"//g' "$z15_site" > "$z15_tmp/noprobe.html"
-grepq 'data-demo-probe' "$z15_tmp/noprobe.html" \
+grepq '<[^>]*data-demo-probe="' "$z15_tmp/noprobe.html" \
   && z15_die "(z15) (6) 주입 실패 — 사본에 data-demo-probe 가 남아 있습니다."
 z15_rows_o="$(grep -c '<a [^>]*data-surface' "$z15_site" || true)"
 z15_rows_n="$(grep -c '<a [^>]*data-surface' "$z15_tmp/noprobe.html" || true)"
@@ -3301,8 +3513,51 @@ z15_probe7="$(cat "$z15_tmp/probe.log")"
 printf '%s\n' "$z15_probe7" | grepq "$z15_target_host" \
   || z15_die "(z15) (7) 대조군 실패 — 선언이 살아 있는데 '$z15_target_host' 를 안 찔렀습니다."
 
+# (8) 🔴🔴 TASK-MONO-627 — **경로 속성이 조립에 실제로 들어가는가.**
+# `iam.<도메인>/` 는 iam 게이트웨이 라우터로 떨어져 **404** 다. 그래서 선언이
+# `data-demo-probe-path="/login"` 을 갖는데, 🔴 그 속성이 **배선돼 있지 않아도** 가드는
+# 전부 초록이다 — (1)~(7) 은 어느 칸도 URL 의 경로를 안 본다. 그러면 속성은 장식이 되고,
+# 부팅은 프로덕션에서만 404 를 12번 재시도하다 실패한다.
+# 🔵 그래서 «있을 때/없을 때 찌른 URL 이 다른가» 를 **실행으로** 가른다. 없을 때가 실패가
+#    아니라는 점이 중요하다 — 빈 값은 기본 경로 `/` 로 정당하다. 이 칸이 재는 것은
+#    **«그 값이 조립에 도달하는가»** 이지 «없으면 빨간가» 가 아니다.
+# 🔴 **주입 증명이 먼저다** — 원본에 있었나 · 사본에 없나 · 행 수와 프로브 선언 수는
+#    그대로인가. 셋을 다 단언해야 아래 차이가 «경로 때문» 이라고 말할 수 있다.
+grepq '<[^>]*data-demo-probe-path="' "$z15_site" \
+  || z15_die "(z15) (8) 원본 마크업에 data-demo-probe-path 가 **없습니다** — 이 칸은 공허합니다."\
+    $'\n'"→ 부팅 프로브가 루트(`/`)로만 찔러도 되는 표면으로 옮겨갔다면, 이 칸을 지우기 전에"\
+    $'\n'"   그 표면의 루트가 2xx/3xx 라는 것을 **실측**하세요(iam 의 루트는 404 였습니다)."
+sed 's/ data-demo-probe-path="[^"]*"//g' "$z15_site" > "$z15_tmp/nopath.html"
+grepq '<[^>]*data-demo-probe-path="' "$z15_tmp/nopath.html" \
+  && z15_die "(z15) (8) 주입 실패 — 사본에 data-demo-probe-path 가 남아 있습니다."
+z15_pr_o="$(grep -c '<[^>]*data-demo-probe="' "$z15_site" || true)"
+z15_pr_n="$(grep -c '<[^>]*data-demo-probe="' "$z15_tmp/nopath.html" || true)"
+[ "$z15_pr_o" = "$z15_pr_n" ] \
+  || z15_die "(z15) (8) 주입이 **프로브 선언까지 지웠습니다** (${z15_pr_o} → ${z15_pr_n})."\
+    $'\n'"→ 그러면 아래 차이는 경로가 아니라 (6)이 재는 축(선언이 있나)이 만든 것입니다."
+z15_rows_p="$(grep -c '<a [^>]*data-surface' "$z15_tmp/nopath.html" || true)"
+[ "$z15_rows_o" = "$z15_rows_p" ] \
+  || z15_die "(z15) (8) 주입이 **행까지 지웠습니다** (${z15_rows_o} → ${z15_rows_p})."
+
+z15_rc8="$(z15_run '' up '' "$z15_tmp/nopath.html")"
+z15_probe8="$(cat "$z15_tmp/probe.log")"
+[ "$z15_rc8" != "127" ] || z15_die "(z15) (8) 하네스가 죽었습니다(rc=127) — 이 칸은 아무것도 시험하지 않았습니다."
+# 경로가 살아 있는 (7)의 요청에는 그 경로가 있어야 하고 —
+printf '%s\n' "$z15_probe7" | grepq '/login' \
+  || z15_die "(z15) (8) 선언에 경로가 있는데 찌른 URL 에 그 경로가 **없습니다.**"\
+    $'\n'"→ data-demo-probe-path 가 demo-up.sh 의 URL 조립에 배선돼 있지 않습니다."\
+    $'\n'"→ 그 상태로 부팅하면 `iam.<도메인>/` 가 404 를 내고 판정이 12번 재시도 뒤 실패합니다."\
+    $'\n'"→ (7) 이 찌른 것: $(printf '%s\n' "$z15_probe7" | tr '\n' ' ')"
+# — 지운 사본의 요청에는 없어야 한다. 둘이 같으면 그 속성은 **아무것도 안 한다.**
+! printf '%s\n' "$z15_probe8" | grepq '/login' \
+  || z15_die "(z15) (8) 경로 선언을 지웠는데 찌른 URL 에 여전히 그 경로가 있습니다."\
+    $'\n'"→ 경로가 마크업이 아니라 **어딘가에 하드코딩**돼 있습니다. 두 벌이면 한쪽만 고쳐집니다."\
+    $'\n'"→ (8) 이 찌른 것: $(printf '%s\n' "$z15_probe8" | tr '\n' ' ')"
+printf '%s\n' "$z15_probe8" | grepq "$z15_target_host" \
+  || z15_die "(z15) (8) 경로만 지웠는데 표면 자체를 안 찔렀습니다 — 두 속성이 얽혀 있습니다."
+
 rm -rf "$z15_tmp"
-ok "부팅 판정이 HTTP 표면을 본다 — ${z14_n_boot_probe}/${z14_n_boot_probe} 확인(demo-host 행의 data-host ∪ vercel 행의 data-demo-probe) · 억제된 Vercel 행은 안 찌름 · 표면 하나 죽이면 bite · 안 뜬 도메인은 미검사 · 목록 0건은 판정 불가 · **프로브 선언 삭제도 판정 불가**(주입 3단언 + 대조군) · 목록은 론처 마크업에서 읽음"
+ok "부팅 판정이 HTTP 표면을 본다 — ${z14_n_boot_probe}/${z14_n_boot_probe} 확인(demo-host 행의 data-host ∪ vercel 행의 data-demo-probe ∪ #bootprobe 원소) · 억제된 Vercel 행 3종은 안 찌름 · 표면 하나 죽이면 bite · 안 뜬 도메인은 미검사 · 목록 0건은 판정 불가 · **프로브 선언 삭제도 판정 불가**(주입 3단언 + 대조군) · **경로 속성이 URL 조립에 배선돼 있다**(주입 3단언 + 양방향) · 목록은 론처 마크업에서 읽음"
 
 # =============================================================================
 # (z16) 정적 칸이 `--live` 게이트 **안에 갇혀** 있지 않은가
@@ -3524,7 +3779,7 @@ z18s_expect NOCOVER 0 '' 10   # 빈 출력을 0 으로 세지 않는다
 z18s_expect NOCOVER 0 0  0    # 모집단 0 을 통과로 세지 않는다
 ok "(z18s) 판정기 6/6 — 죽은 것은 물고, «질의 실패»·«빈 출력»·«모집단 0» 중 어느 것도 초록이 아니다"
 
-echo "[verify] (z19)·(z28) Vercel 로 옮겨간 화면이 데모에서 억제되는가 (ADR-MONO-067 단계 2·4)"
+echo "[verify] (z19)·(z28)·(z31) Vercel 로 옮겨간 화면이 데모에서 억제되는가 (ADR-MONO-067 단계 2·3·4)"
 # -----------------------------------------------------------------------------
 # 방문자 화면이 Vercel 로 옮겨갔는데 데모 호스트가 자기 사본을 계속 서빙하던 결함이다.
 # 억제는 도메인마다 `infra/demo/<slug>-vercel.override.yml` **한 곳**에 선언된다.
@@ -3661,10 +3916,29 @@ assert_vercel_suppressed z28 fan \
   "pnpm fan-platform:up (package.json:41-45)" \
   "https://fan.hubwang.com"
 
+# 🔵 콘솔의 바닥이 1 인 이유: base 가 **2서비스**(console-web · console-bff)라 앞의 두
+#    바닥(20 · 6)을 상속하면 **항상 FATAL** 이다. 바닥은 «렌더가 깨졌는가» 를 재는 것이므로
+#    스택 크기에 맞춰야 하고, 상속하면 그 축이 죽는다. (2026-09-06 선언 전수: 2 → 1 · 로컬 2)
+# 🔴 `console-bff` 는 **억제 대상이 아니다** — 공개 라우터가 없어(TASK-MONO-362) 데모
+#    호스트에 표면을 안 만들고, `console-web` 이 없으면 아무도 안 부른다. 그래도 남기는
+#    이유는 억제 파일의 권한이 «Vercel 로 옮겨간 표면 하나» 이기 때문이고, 그 권한은
+#    아래 «차이가 정확히 1개» 칸이 집행한다.
+# 🔴 태그가 `z29` 가 **아니다** — 그 이름은 TASK-MONO-622 의 미집행-축 칸이 이미 쓴다
+#    (실측 2026-09-06: 이 파일의 `(zNN)` 은 z2~z30 이 차 있다). 같은 이름을 두 칸이 쓰면
+#    FAIL 메시지만 보고는 **어느 칸이 물었는지 알 수 없다.**
+assert_vercel_suppressed z31 console \
+  infra/demo/console-vercel.override.yml console-web \
+  projects/platform-console/docker-compose.yml 1 \
+  "pnpm console:up (package.json:77)" \
+  "https://console.hubwang.com"
+
 # 🔴 축이 조용히 사라지는 것을 막는 바닥. 유도가 아니라 등록이므로, 등록 줄을 지우면
 #    그 억제는 **아무도 안 재는 상태로 초록**이 된다 — 그 구멍을 여기서 닫는다.
-#    🔵 이 수는 ADR-MONO-067 이 «Vercel 로 옮긴 화면» 을 늘릴 때만 올라간다(단계 3).
-z19_axes_floor=2
+#    🔵 이 수는 ADR-MONO-067 이 «Vercel 로 옮긴 화면» 을 늘릴 때만 올라간다.
+# 🔵 TASK-MONO-627 — 2 → **3**. 단계 3(console)이 등록됐고, 이것으로 `ADR-MONO-067` 이
+#    옮긴 방문자 화면 **셋 전부**가 이 축에 들어왔다. 🔴 이 값을 되돌리는 것은 그 셋 중
+#    하나의 억제를 **아무도 안 재는 상태**로 만드는 것과 같다.
+z19_axes_floor=3
 [ "$z19_axes" -ge "$z19_axes_floor" ] || fail \
   "(z19/z28) 억제 축이 ${z19_axes}개만 등록됐습니다 (바닥 ${z19_axes_floor})."\
   $'\n'"→ 등록 줄이 지워지면 그 도메인의 억제는 아무도 안 재면서 초록이 됩니다."\
