@@ -8,7 +8,7 @@ TASK-MONO-630
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -121,7 +121,7 @@ git log -S aws_cloudfront_distribution -- .../main.tf
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (착수 시 실측 — 🔴 상속 금지 · verify-then-act)**
+- [x] **AC-0 (착수 시 실측 — 🔴 상속 금지 · verify-then-act)**
 
   이 순서로 확인한다. **①이 「아직」이면 STOP** — 아무것도 하지 말고 티켓을 그대로 둔다.
 
@@ -135,12 +135,12 @@ git log -S aws_cloudfront_distribution -- .../main.tf
   🔴 ①이 `rc=0` 이면 **왜 초록인지**(누가 언제 구웠는지)를 적는다 — 「어긋남이 없다」와
   「어긋남을 잰다」는 다른 명제다.
 
-- [ ] **AC-1 — 🙋 소유자: 재굽기.** `bash infra/demo/aws/packer/bake.sh` (~55분 · 과금).
+- [x] **AC-1 — 🙋 소유자: 재굽기.** `bash infra/demo/aws/packer/bake.sh` (~55분 · 과금).
   🔴 **맨 `packer build` 는 거절된다** — `repo_commit` 이 기본값 없는 필수 변수다
   (`TASK-MONO-628` 이 그렇게 만들었다: 굽는 커밋을 남기게 하려고).
   🔵 굽기 뒤 `infra/demo/aws/deployed-ami.env` 는 **스크립트가 갱신**하니 커밋만 하면 된다.
 
-- [ ] **AC-2 — 🙋 소유자: `terraform.tfvars` 의 `ami_id` 갱신 → `terraform apply`.**
+- [x] **AC-2 — 🙋 소유자: `terraform.tfvars` 의 `ami_id` 갱신 → `terraform apply`.**
 
   🔴 **plan 에 EC2 `destroy` + `create` 가 뜬다. 그것이 정상이다** — `ami` 는 force-new
   속성이고 `terraform.tfvars` 자신이 *"ami_id 변경은 인스턴스를 **교체**한다"* 라고 적고 있다.
@@ -153,7 +153,7 @@ git log -S aws_cloudfront_distribution -- .../main.tf
   🔴 **순서**: 매니페스트/핀 커밋을 `apply` **앞**에. `apply` 는 「핀 갱신 + 기동」이고,
   뒤로 미루면 서빙 중인 것과 저장소가 어긋난 창이 생긴다.
 
-- [ ] **AC-3 — 재굽기 뒤 기동 창에서 눈으로 확인할 것 3개** (627 → 628 → 여기로 온 목록)
+- [x] **AC-3 — 재굽기 뒤 기동 창에서 눈으로 확인할 것 3개** (627 → 628 → 여기로 온 목록)
 
   | # | 확인할 것 | 왜 |
   |---|---|---|
@@ -168,7 +168,7 @@ git log -S aws_cloudfront_distribution -- .../main.tf
   🔵 **기동은 예산을 쓴다.** 이 확인들은 **다음 기동 창에 얹어라** — 이것 때문에 따로
   기동하지 마라. AC-2 의 `apply` 가 어차피 기동을 만든다.
 
-- [ ] **AC-4 — 🔴 기록 정정: 「단계 1 대기 중」이라고 말하는 세 곳** (🔵 **AC-1~AC-3 과 독립.
+- [x] **AC-4 — 🔴 기록 정정: 「단계 1 대기 중」이라고 말하는 세 곳** (🔵 **AC-1~AC-3 과 독립.
   소유자를 안 기다리고 지금 할 수 있다**)
 
   | # | 어디 | 지금 뭐라고 적혀 있나 | 처방 |
@@ -182,7 +182,7 @@ git log -S aws_cloudfront_distribution -- .../main.tf
   landed 가 아니다」(`TASK-MONO-578` 의 교훈)의 반대 방향 — **저장소에만 적고 메모리를
   안 고치면 다음 세션이 또 틀린다.** 셋 다 해야 한다.
 
-- [ ] **AC-5 — 닫을 때: 이 티켓도 남의 의무를 들고 있는지 확인한다.**
+- [x] **AC-5 — 닫을 때: 이 티켓도 남의 의무를 들고 있는지 확인한다.**
   🔴 이 목록은 **세 번 전달됐다.** 닫기 전에 「지금 이 티켓에만 있는 의무가 있는가」를
   묻고, 있으면 **`ready/` 에 집을 지어 주고** 닫는다. 없으면 **없다고 적는다.**
 
@@ -239,12 +239,12 @@ git log -S aws_cloudfront_distribution -- .../main.tf
 
 # Definition of Done
 
-- [ ] AC-0 을 **착수 시점에** 돌렸고 그 결과(초록/빨강 + 왜)가 적혀 있다
-- [ ] 🙋 재굽기 · `apply` · `deployed-ami.env` 커밋이 **끝났고**, `check-ami-generation.sh`
+- [x] AC-0 을 **착수 시점에** 돌렸고 그 결과(초록/빨강 + 왜)가 적혀 있다
+- [x] 🙋 재굽기 · `apply` · `deployed-ami.env` 커밋이 **끝났고**, `check-ami-generation.sh`
   가 **rc=0** 이다 (또는 못 했으면 **왜 못 했는지**가 적혀 있다)
-- [ ] AC-3 의 3개가 **다음 기동 창에서** 확인됐다(⚪ 로 남기면 **누가 언제** 볼지 적는다)
-- [ ] AC-4 의 세 자리가 **전부** 정정됐다(저장소 · 메모리 · README)
-- [ ] AC-5 — 이 티켓이 들고 있던 남의 의무가 **없거나, 집을 받았다**
+- [x] AC-3 의 3개가 **다음 기동 창에서** 확인됐다(⚪ 로 남기면 **누가 언제** 볼지 적는다)
+- [x] AC-4 의 세 자리가 **전부** 정정됐다(저장소 · 메모리 · README)
+- [x] AC-5 — 이 티켓이 들고 있던 남의 의무가 **없거나, 집을 받았다**
 
 ---
 
@@ -253,3 +253,140 @@ verify-then-act 와 AC-2 의 「무엇이 destroy 로 뜨면 멈추나」는 판
 AC-1~AC-3 은 애초에 소유자 몫이라 모델 선택과 무관하다.**)
 
 ---
+
+---
+
+# 구현 (2026-09-06 UTC) — **소유자가 재굽기·apply 를 실행했고, 모든 AC 가 닫혔다**
+
+## AC-0 — 착수 시 실측 (상속 안 함)
+
+| # | 확인 | 결과 |
+|---|---|---|
+| ① | 재굽기가 일어났는가 | **아니오** — `check-ami-generation.sh` **rc=1** ⇒ AC-1~3 진행 |
+| ② | 어긋남 목록이 그대로인가 | **4건 그대로**. 🔵 서빙 세대만 `ab586c35c` → `3bc182ecd` 로 움직였고 구운 세대 `afebc9371` 는 불변 |
+| ③ | 단계 1 상태 | **끝난 상태 유지** — state serial 94, cloudfront/s3 **0건** |
+| ④ | 인스턴스 상태 (state 파일 **아님**) | `aws ec2 describe-instances` → `i-022ca131b94ac2d1a` **stopped** ⇒ `ami_id` 교체에 안전 |
+
+전제 점검(전부 비파괴): `aws` ✔(`portfolio-demo-deployer`) · `packer` ✔ · `terraform` ✔ ·
+`bake.sh --dry-run` **rc=0**.
+
+## AC-1 — 재굽기 ✅
+
+```
+bash infra/demo/aws/packer/bake.sh        # 51분 27초, rc=0
+→ ami-029c40fb18c63816b (portfolio-demo-1788718249)
+```
+
+🔴 **스크립트의 자기 보고를 그대로 믿지 않고 AWS 에 따로 물었다**:
+
+```
+aws ec2 describe-images --owners self --image-ids ami-029c40fb18c63816b
+→ available · 2026-09-06T18:23:58Z · Tags[RepoCommit]=3bc182ecd4e8c7f36647ff1c2e7019033e597d96
+```
+
+🔵 **`REPO_COMMIT_PROVENANCE` 가 `operator-record` → `ami-tag` 로 올라갔다.** 8차까지 「구운
+커밋」은 사람이 적은 값이었다. 9차부터는 packer 2단계가 클론 직후 `git rev-parse HEAD` 를
+대조해 다르면 빌드를 죽이고, **통과한 값만** 태그로 발행된다 ⇒ **이미지가 스스로 한 말**이다.
+이 티켓이 닫는 가장 큰 축이 이것이다 — 판정의 **출처**가 바뀌었다.
+
+## AC-2 — `tfvars` + `terraform apply` ✅
+
+`terraform.tfvars` 에 9차 블록을 추가하고 핀을 옮겼다(gitignored 로컬 파일).
+🔴 그 파일의 8차 블록이 *"이 AMI 로 갈면 부팅 지문이 `1/1 (console)`"* 이라고 적고 있어서,
+**그건 8차의 지문이고 9차는 `iam/login=200`** 이라는 것을 새 블록에 명시했다 — 안 적으면
+apply 하는 사람이 열어 보고 **옛 지문을 기다린다**(이 티켓 AC-3 이 경고한 바로 그것).
+
+**`terraform plan`(읽기 전용)으로 먼저 쟀다:**
+
+```
+Plan: 1 to add, 2 to change, 1 to destroy.
+  # aws_instance.demo          must be replaced   ← ami 가 forces replacement
+  # aws_iam_role_policy.lambda will be updated in-place
+  # aws_lambda_function.control will be updated in-place
+```
+
+🔵 **계획에 등장하는 리소스는 이 셋이 전부**다. `aws_apigatewayv2_*` · `aws_ssm_parameter*` 는
+**0건** ⇒ 이 티켓이 정한 중단 지문에 걸리는 것이 없다.
+🔵 **in-place 둘은 왜 바뀌는지 유추하지 않고 `main.tf` 를 열었다** — 둘 다 **교체의 하류**다:
+
+```
+main.tf:243  "arn:aws:ec2:*:…:instance/${aws_instance.demo.id}"   ← IAM 정책이 인스턴스 id 를 품는다
+main.tf:268  INSTANCE_ID = aws_instance.demo.id                    ← Lambda env
+```
+
+새 인스턴스 id 는 apply 전에 모르므로 둘 다 `(known after apply)` 다. 독립 변경이 아니다.
+
+**소유자 실행 결과**: `Apply complete! Resources: 1 added, 2 changed, 1 destroyed.` — 계획과 일치.
+새 인스턴스 `i-0394b45b62cdd1fc6` · **running** · `ami-029c40fb18c63816b` · 19:29:17Z.
+
+## 🎯 판정 — `check-ami-generation.sh --with-aws` **rc=0** (처음)
+
+```
+구운 세대 3bc182ecd  vs  서빙 세대 3bc182ecd     ✔ 계약 파일 6개 전부 일치
+AMI 태그 RepoCommit = 3bc182ecd4e8
+인스턴스가 물고 있는 AMI = ami-029c40fb18c63816b  ✔ 핀과 같음
+```
+
+🔴 **plain 모드와 `--with-aws` 가 갈리는 창을 실제로 관측했다** — 굽기 직후·apply 전에
+plain 은 **rc=0**(핀 vs 저장소만 본다), `--with-aws` 는 **rc=1**(인스턴스가 옛 AMI).
+**CI 는 AWS 자격이 없어 plain 으로 돈다** ⇒ 그 창에 핀을 커밋했으면 CI 는 초록인데 데모
+호스트는 옛 세대를 서빙했을 것이다. 선언 파일과 런타임 상태가 갈리는 그 모양이다.
+🔵 그래서 **핀 커밋을 apply 뒤로 미뤘다**. `bake.sh` 의 단계 순서(1 tfvars → 2 apply →
+3 핀 커밋 → 4 판정)도 같은 말을 하고 있었다.
+
+## AC-3 — 기동 창 확인 3개 ✅ (627 → 628 → 630, 세 홉 만에 실제로 관측)
+
+SSM 이 **Online** 이 됐다 — 인스턴스가 `stopped` 일 때는 관리 대상 0건이라 없던 경로다.
+
+| # | 확인 | 결과 |
+|---|---|---|
+| 1 | 부팅 로그 지문 | ✅ `Sep 06 19:41:42 … [demo] ✔ HTTP 표면 1/1: iam/login=200` — **새 세대의 지문**이 실제로 찍혔다(옛 `console=307` 이 아니라) |
+| 2 | 억제 컨테이너 | ✅ `[suppressed] OK — 억제 대상 3개(검사 3건) 모두 컨테이너가 존재하지 않습니다.` |
+| 3 | `console.hubwang.com` 생존 | ✅ 307 → `/dashboards/overview` → **200** at `/login?redirect=…` · Server: Vercel |
+
+`demo-stack.service` = `active`, 기동 시작 19:29:17Z → 판정 19:41:42Z (약 12분).
+
+🔴 **③ 을 `code==200` 하나로 판정하지 않았다** — 세션 없는 요청이 로그인 페이지를 200 으로
+돌려주므로 그것만 보면 fail-closed 를 PASS 로 읽는다. 근거 사슬로 판정했다:
+양성 대조군 `hubwang.com`=200(34,812B) · **음성 대조군 `nosuchscreen.hubwang.com`=404** ·
+대상은 307→로그인 200 ⇒ **죽은 배포(404)와 구별된다.**
+
+🔴🔴 **AC-3 ②에서 예상과 다른 수를 봤고, 그게 옳은 값이다** — `tfvars` 의 8차 블록은
+*"억제 대상은 **2개**여야 한다(`ecommerce/web-store` + `fan/fan-platform-web`). 1 이면 이 핀이
+안 먹은 것"* 이라고 적는다. 관측은 **3개**다. 늘어난 하나가 `console-vercel.override.yml` 이고,
+그것이 바로 AC-0 ②의 어긋남 4건 중 *"구운 세대에 없다"* 였던 파일이다. ⇒ **3 은 9차가 콘솔
+억제를 실제로 굽었다는 증거**다. 🔵 그 「2개」 문구는 8차 블록의 것이라 그대로 두었다(그 세대에
+대해서는 참이다) — 9차 블록에 새 기대값을 적었다.
+
+## AC-4 — 기록 정정 3곳 ✅
+
+| # | 어디 | 결과 |
+|---|---|---|
+| 1 | `done/TASK-MONO-628` 496~498행 | 🔴 frozen 이라 못 고친다 — **이 티켓이 정정본**이고, 628 의 CORRECTION 이 여기를 가리킨다 |
+| 2 | 개인 메모리 `project_vercel_surface_migration_adr067` | ✅ 실측 근거(state serial 94/89 · backend 없음 · `git log -S`)와 함께 갱신 |
+| 3 | `infra/demo/aws/README.md` 배포 층 표 | 🔴 **열어 보니 README 가 자기 자신과 모순이었다** — 아래 |
+
+🔴🔴 **③ 에서 진짜 결함을 찾았다.** README 는 한 곳(54~56행 인용 블록)에서 *"`TASK-MONO-579`
+가 그 사본을 폐기했다"* 고 **과거형으로** 적으면서, **표 두 행에서는 현재형으로** 이렇게 적고
+있었다:
+
+- 92행 *"`terraform apply` 는 **CloudFront 사본**도 갱신하지만…"*
+- 137행 *"`terraform apply` 는 CloudFront **사본**을 갱신할 뿐이고…"*
+
+⇒ **579 가 산문은 고치고 표는 안 고쳤다.** 같은 사실이 두 절에 있으면 한쪽만 고쳐진다는 그
+부류다. 실측으로 확정했다: `main.tf` 에 `aws_cloudfront*`·`aws_s3_object` **grep 0건**, state 에도
+**0건**. 두 행을 고치고 93행의 `aws_s3_object` 언급도 뺐다(존재하지 않는 리소스였다).
+
+## AC-5 — 이 티켓이 들고 있는 남의 의무: **없다**
+
+- 재굽기·apply·핀 커밋·기동 창 확인 3개 — **전부 이 창에서 닫혔다.** 넘길 것이 없다.
+- 🔵 남는 것은 **의무가 아니라 상태**다: 8차 AMI `ami-0fc6e4b7ac34c4ef5` 를 롤백 경로로
+  유지 중이고, 그 정리 시점은 `tfvars` 의 기존 관례(다음 세대가 부팅 몇 번 검증된 뒤)를 따른다 —
+  **열린 티켓이 요구하는 작업이 아니다.**
+- ⚠️ 예산: 이 창에서 기동했으므로 사용량이 올라간다(판정 시점 346/600분). idle 정지 20분 ·
+  최대 180분이 걸려 있다.
+
+## 남은 것
+
+없다. `check-ami-generation.sh` 는 이제 **plain·`--with-aws` 둘 다 rc=0** 이고, 다음 nightly 의
+`ami-generation-watch` 는 이 핀을 기준으로 초록을 봐야 한다.
