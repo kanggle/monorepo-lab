@@ -361,3 +361,44 @@ PR 은 잡을 **skip** 하고, skip 은 초록으로 보고된다).
 
 - **AC-1 의 런 하나.** 머지 뒤 `nightly-e2e.yml` 의 그 잡과 `federation-hardening-e2e.yml`
   이 실제로 통과하는 것을 보고 런 id 를 적는다. 그전까지 `review/`.
+
+## CORRECTION (2026-09-06 UTC, 머지 직후 — **AC-1 의 절반이 닫혔다**)
+
+impl PR **#3662** 머지(squash `ca167232d`) 직후 `main` 이 띄운 nightly 런에서 실측했다.
+
+**✅ 닫힌 절반 — `nightly-e2e.yml` 런 `34036399536`**
+
+```
+Platform Console E2E full-stack (Playwright + docker compose)   → success
+```
+
+🔵 **판정을 「빌드가 됐다」가 아니라 「잡이 통과했다」로 잡았다.** 그 전에 중간 상태도
+봤다: 예전에는 **수 초 만에** 죽던 스텝 12(`Start remaining containers …`)가 이번에는
+수 분간 **실제로 빌드했고**, 그 뒤 13~16 스텝을 전부 지나 Playwright 까지 끝났다.
+🔴 그 구별이 중요하다 — 「스텝 12 통과」만 봤으면 뒤에서 죽는 경우를 못 봤을 것이다.
+
+같은 런의 나머지: 실패 **0건**(성공 10 · 건너뜀 3 · 진행 중 1 — 무관한 잡).
+
+**⚪ 아직 못 잰 절반 — `federation-hardening-e2e.yml`**
+
+이 워크플로는 **스케줄(하루 1회, ~21:00 UTC)** 로만 돈다. 이번 창에서는 아직 안 돌았다.
+🔴 **「같은 원인이니 같이 고쳐졌을 것」으로 적지 않는다** — 그것은 유추이고, 이 티켓이
+바로 그 부류의 오독에서 태어났다. 확인할 것:
+
+```
+gh run list --repo kanggle/monorepo-lab --workflow federation-hardening-e2e.yml --limit 1
+# 기대: 2026-09-06T21:xxZ 스케줄 런의
+#       'Federation Hardening E2E full-stack (Playwright + docker compose)' = success
+#       (직전 실패 런 = 33991705892, 09-05T20:59Z)
+```
+
+🔵 **일부러 `workflow_dispatch` 로 앞당기지 않았다.** 그 잡은 풀스택 + Playwright 라
+러너 분을 크게 먹고, 어차피 몇 시간 뒤 **무료로 도는** 스케줄이 같은 답을 준다.
+
+⇒ **그래서 이 티켓은 `review/` 에 남는다.** AC-1 은 「`main` 이 초록으로 돌아온다」이고,
+망가진 워크플로가 **둘**이었다는 것이 AC-0 의 발견이므로 절반만으로 닫지 않는다.
+🔴 `done/` 은 frozen 이라 거기 적은 잔여는 다시 안 읽힌다.
+
+**🔵 그리고 가드는 이미 살아 있다** — `ci.yml` 의 `build-contexts` 잡이 impl PR 에서
+실제로 돌았고(런 `34035915551`), 러너에서도 같은 수를 냈다: Dockerfile 49 스캔 ·
+요구 3건 · compose 27 스캔 · 서비스 5칸 · 자가검사 `0/1/1/2/1`.
