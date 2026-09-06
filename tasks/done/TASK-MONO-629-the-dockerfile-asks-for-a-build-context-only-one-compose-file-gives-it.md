@@ -8,7 +8,7 @@ TASK-MONO-629
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -402,3 +402,54 @@ gh run list --repo kanggle/monorepo-lab --workflow federation-hardening-e2e.yml 
 **🔵 그리고 가드는 이미 살아 있다** — `ci.yml` 의 `build-contexts` 잡이 impl PR 에서
 실제로 돌았고(런 `34035915551`), 러너에서도 같은 수를 냈다: Dockerfile 49 스캔 ·
 요구 3건 · compose 27 스캔 · 서비스 5칸 · 자가검사 `0/1/1/2/1`.
+
+## CORRECTION (2026-09-06T15:53Z — **AC-1 의 나머지 절반이 닫혔다. `federation` 도 통과했다.**)
+
+**✅ `federation-hardening-e2e.yml` 런 `34043022133`** (`workflow_dispatch` · `ref=main` · `sha=ab586c35c`)
+
+```
+Package federation hardening e2e boot jars                        → success
+Federation Hardening E2E full-stack (Playwright + docker compose) → success
+```
+
+⇒ **AC-1 닫힘.** 두 워크플로 모두 머지 뒤 실제로 통과한 런이 있다:
+`nightly-e2e.yml` = **`34036399536`** · `federation-hardening-e2e.yml` = **`34043022133`**.
+DoD 의 「통과한 런(런 id 기재)」 두 칸이 모두 채워졌다.
+
+### 🔴 판정을 「success 라고 적혀 있다」로 잡지 않았다 — 세 축을 따로 쟀다
+
+전체 런이 **13분 56초**에 끝났다. 잡 타임아웃은 25분/50분이므로 「일을 안 하고 rc=0」
+(`feedback_runner_matches_no_package_exits_zero`)을 먼저 의심해야 한다. 세 축:
+
+| 축 | 값 | 왜 이것이 답인가 |
+|---|---|---|
+| ⑴ **대조군 — 회귀 이전의 진짜 초록** | 스케줄 런 `33920427196`(09-04): boot jars **1분34초** · full-stack **11분49초** = **13분30초** | 내 런(1분38초 · 12분12초 = **13분56초**)과 사실상 같다 ⇒ **13분이 이 워크플로의 정상 길이**이고, 타임아웃은 천장이지 예상 시간이 아니다 |
+| ⑵ **음성 대조군 — 빨간 런이 어떻게 생겼나** | 실패 런 `33991705892`: 스텝 13 이 **10초**(21:04:39→21:04:49) 만에 죽고 스텝 14~ 전부 `skipped`, Playwright **미실행** | 고장 지문은 「느림」이 아니라 **즉사 + 하류 skip** 이다 |
+| ⑶ **그 스텝이 실제로 일했나** | 내 런의 스텝 13 `Start docker compose Phase 2 …` = **2분53초**(15:45:52→15:48:45) · 스텝 31 Playwright = **`21 passed (1.4m)`**(`Running 21 tests using 2 workers`) · 스텝 32 `Dump docker compose logs on failure` = **skipped** | 빌드가 **실제로 돌았고**, 테스트 수가 **0이 아니며**, 실패 경로가 안 깨어났다 |
+
+🔵 ⑶ 의 「21 passed」를 굳이 로그에서 꺼낸 이유: **잡 conclusion 은 「테스트가 있었나」를
+안 잰다.** 0건 통과도 success 로 보고된다.
+
+### 🔴 위 § 「⚪ 아직 못 잰 절반」의 사유 한 줄은 **틀렸다** (관측은 그대로 유효)
+
+그 절은 *"러너 분을 크게 먹고, 어차피 몇 시간 뒤 **무료로 도는** 스케줄이 같은 답을 준다"*
+라고 적었다. **이 리포는 PUBLIC 이라 `workflow_dispatch` 도 똑같이 무료다**
+(`gh repo view --json visibility` → `PUBLIC`). 즉 **아끼는 쪽과 안 아끼는 쪽이 없었는데
+있는 것처럼 적었다** — 「무료로 도는」이라는 수식이 스케줄에만 붙어 축이 뒤집혔다.
+
+🔵 대가 판단이 뒤집히자 결론도 뒤집힌다: 앞당기는 비용이 0 이므로 **기다릴 이유가 없다.**
+그리고 워크플로 헤더 자신이 `workflow_dispatch` 를 *"on-demand diagnosis or release-gate
+verification"* 용으로 명시하고, 두 잡의 `if:` 는 `github.repository` 만 본다
+(**`event_name` 게이팅 없음**) ⇒ dispatch 런과 스케줄 런은 **같은 것을 잰다**.
+
+🔴 일반화: **「비싸다」는 재야 하는 주장이고, 그 비용이 «어느 개체» 에 붙는지부터 확인해야
+한다** — 여기서는 리포의 visibility 한 줄이었다. 같은 함정을 개인 메모리
+`feedback_auto_merge_ci_green` 이 09-06 에 이미 한 번 적어 두었다(「한도」를 듣고 한도가
+없는 리포에 적용했다). **같은 축에서 두 번째다.**
+
+### 🔵 그 밖에 이 시각에 함께 잰 것 (상속 안 함)
+
+- `main` = `ab586c35c` · divergence 0 · 최근 `main` nightly(09-06T13:46Z) = **success**
+- `check-launcher-fresh.sh` = **rc=0**(서빙 md5 = `origin/main`, 커밋 `77725f050`)
+- `check-ami-generation.sh` = **rc=1 · 어긋남 4건** — `TASK-MONO-628` 의 축이고 이 티켓과 무관.
+  소유자 재굽기 대기 중이므로 **628 은 `review/` 에 그대로 둔다.**
