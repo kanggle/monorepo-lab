@@ -3525,7 +3525,7 @@ printf '%s\n' "$z15_probe7" | grepq "$z15_target_host" \
 #    그대로인가. 셋을 다 단언해야 아래 차이가 «경로 때문» 이라고 말할 수 있다.
 grepq '<[^>]*data-demo-probe-path="' "$z15_site" \
   || z15_die "(z15) (8) 원본 마크업에 data-demo-probe-path 가 **없습니다** — 이 칸은 공허합니다."\
-    $'\n'"→ 부팅 프로브가 루트(`/`)로만 찔러도 되는 표면으로 옮겨갔다면, 이 칸을 지우기 전에"\
+    $'\n'"→ 부팅 프로브가 루트(\`/\`)로만 찔러도 되는 표면으로 옮겨갔다면, 이 칸을 지우기 전에"\
     $'\n'"   그 표면의 루트가 2xx/3xx 라는 것을 **실측**하세요(iam 의 루트는 404 였습니다)."
 sed 's/ data-demo-probe-path="[^"]*"//g' "$z15_site" > "$z15_tmp/nopath.html"
 grepq '<[^>]*data-demo-probe-path="' "$z15_tmp/nopath.html" \
@@ -3546,7 +3546,7 @@ z15_probe8="$(cat "$z15_tmp/probe.log")"
 printf '%s\n' "$z15_probe7" | grepq '/login' \
   || z15_die "(z15) (8) 선언에 경로가 있는데 찌른 URL 에 그 경로가 **없습니다.**"\
     $'\n'"→ data-demo-probe-path 가 demo-up.sh 의 URL 조립에 배선돼 있지 않습니다."\
-    $'\n'"→ 그 상태로 부팅하면 `iam.<도메인>/` 가 404 를 내고 판정이 12번 재시도 뒤 실패합니다."\
+    $'\n'"→ 그 상태로 부팅하면 \`iam.<도메인>/\` 가 404 를 내고 판정이 12번 재시도 뒤 실패합니다."\
     $'\n'"→ (7) 이 찌른 것: $(printf '%s\n' "$z15_probe7" | tr '\n' ' ')"
 # — 지운 사본의 요청에는 없어야 한다. 둘이 같으면 그 속성은 **아무것도 안 한다.**
 ! printf '%s\n' "$z15_probe8" | grepq '/login' \
