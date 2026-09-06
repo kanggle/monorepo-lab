@@ -89,8 +89,8 @@ Vercel 은 `DEMO_API_BASE` **환경변수**로 이 값을 받는다(`site/build.
 
 | 고친 것 | 도달 경로 | 재굽기 |
 |---|---|---|
-| `site/index.html` (론처) | 🔵 **머지 = 배포.** Vercel(`kanggle-portfolio`)이 몇 분 안에 올린다 — `TASK-MONO-579` 가 론처의 집을 Vercel 하나로 만든 뒤로. `terraform apply` 는 **CloudFront 사본**도 갱신하지만 방문자가 여는 집은 그쪽이 아니다 | ❌ 불필요 |
-| `terraform/**` · `terraform/lambda/handler.py` · `ec2/user-data.sh` | **`terraform apply` 가 저장소에서 그때 읽는다** (`file()` / `archive_file` / `aws_s3_object`) | ❌ 불필요 |
+| `site/index.html` (론처) | 🔵 **머지 = 배포.** Vercel(`kanggle-portfolio`)이 몇 분 안에 올린다 — `TASK-MONO-579` 가 론처의 집을 Vercel 하나로 만든 뒤로. 🔴 **`terraform apply` 는 이제 이 파일에 아무것도 안 한다** — CloudFront/S3 사본은 `579` 의 apply 로 **실제로 파괴됐다**(state 에 그 리소스 **0건**, 2026-09-06 실측) | ❌ 불필요 |
+| `terraform/**` · `terraform/lambda/handler.py` · `ec2/user-data.sh` | **`terraform apply` 가 저장소에서 그때 읽는다** (`file()` / `archive_file`) | ❌ 불필요 |
 | `infra/demo/*.sh` · `demo-stack.service` · **`projects/*/docker-compose.yml`** · 앱 소스(Java/TS) | **AMI 에 구워져 있다** | ✅ **필요** (`bake.sh`, ~55분) |
 
 🔴 **첫 행은 `TASK-MONO-627` 이 실측으로 갈라낸 것이다.** 그전까지 이 표는 론처를
@@ -134,7 +134,7 @@ md5 일치)을 냈다 — 유도가 아니라 관측이다.
 
 | 계약을 담은 파일 | 어떻게 배포되나 |
 |---|---|
-| `aws/site/index.html` — 선언(누가 어디서 서빙 · 부팅 프로브 대상) | **머지 = 배포** (Vercel `kanggle-portfolio`, 분 단위). `terraform apply` 는 CloudFront **사본**을 갱신할 뿐이고 방문자의 집이 아니다 — `TASK-MONO-579` 가 집을 Vercel 하나로 만들었다 |
+| `aws/site/index.html` — 선언(누가 어디서 서빙 · 부팅 프로브 대상) | **머지 = 배포** (Vercel `kanggle-portfolio`, 분 단위). 🔴 **`terraform apply` 는 이 파일에 관여하지 않는다** — CloudFront/S3 사본은 `TASK-MONO-579` 의 apply 로 파괴됐고 state 에 **0건**이다(2026-09-06 실측) |
 | `demo-up.sh` — 그 선언의 소비자(추출 술어 · 두 하한) | **AMI 에 구워진다** — `bake.sh` (~55분 · 소유자) |
 | `projects.sh` — 어떤 오버레이가 어느 프로젝트에 붙나 | 〃 |
 | `*-vercel.override.yml` — 억제(그 화면을 그만 서빙) | 〃 |
