@@ -29,13 +29,24 @@ name: Nightly E2E (full-stack web-store + 5 backend full suites + cross-project 
 # Total 11 backend full unit + ecommerce frontend-e2e-fullstack. All jobs
 # run in parallel — backend jobs do NOT depend on ecommerce-boot-jars-nightly.
 #
-# Plus one non-e2e guard job:
+# Plus four non-e2e guard jobs. 🔴 This line used to say "one", and it had been
+# false for two tickets before anyone reread it (fan-surface-watch and
+# launcher-freshness-watch were both added below without touching this header).
+# TASK-MONO-628 corrected it while adding the fourth. What they share is a TIME
+# trigger: each watches something that can go wrong with NO diff at all, so no
+# paths-filtered job in ci.yml can ever reach it.
 #
 #   7. demo-image-liveness (TASK-MONO-359) — every image referenced by a demo
-#      compose file still resolves in its registry. It lives here, rather than in
-#      ci.yml, because it needs a TIME trigger: an upstream image deletion arrives
-#      with no diff at all, so no paths-filtered job can ever reach it. Cheap
-#      (renders + manifest lookups; nothing boots).
+#      compose file still resolves in its registry. An upstream image deletion
+#      arrives with no diff. Cheap (renders + manifest lookups; nothing boots).
+#   8. fan-surface-watch (TASK-MONO-564) — the served fan surface is main.
+#   9. launcher-freshness-watch (TASK-MONO-602) — the SERVED launcher bytes are
+#      main. A deploy can silently stop happening; the site keeps serving the last
+#      good build and looks 200 the whole time.
+#  10. ami-generation-watch (TASK-MONO-628) — the BAKED demo host is the same
+#      generation as the launcher. Pairs with 9: that one measures the served end
+#      of the contract, this one the baked end. Neither is visible to a static
+#      guard, because in-repo both sides are always read out of one commit.
 #
 # Backend full jobs were introduced by ADR-MONO-011 (PROPOSED 2026-05-13,
 # PR #434 → ACCEPTED via TASK-MONO-079 impl PR) — Phase 3 of the e2e 3단계
@@ -283,6 +294,68 @@ jobs:
       - name: The serving launcher is main
         if: ${{ !cancelled() }}
         run: bash infra/demo/aws/site/check-launcher-fresh.sh
+
+  # ===========================================================================
+  # TASK-MONO-628 — the baked demo host is the same generation as the launcher
+  # ===========================================================================
+  # Two files share one contract and ship at different speeds:
+  #
+  #   infra/demo/aws/site/index.html   → Vercel publishes it minutes after merge
+  #   infra/demo/demo-up.sh + friends  → baked into an AMI (packer, ~55 min, manual)
+  #
+  # 🔴 No static guard can see the gap. (z14)/(z15) read BOTH files out of the same
+  # commit, so they always agree — the mismatch exists only across the deploy
+  # boundary, and until this job nothing looked at that boundary at all. Three
+  # tickets (583, 618, 625) changed this contract and all three went green.
+  #
+  # This job pairs with `launcher-freshness-watch` above and the composition is
+  # deliberate: that job proves the SERVED bytes are `origin/main`, this one proves
+  # the BAKED bytes are `origin/main`. Together they say the two ends meet. If the
+  # launcher job is red, read this one's verdict as "vs main", not "vs served".
+  #
+  # 🔴 Red here is a true statement about the world, not a broken guard: the demo
+  # host is serving something other than what the launcher promises visitors. The
+  # closing action is a rebake, and the judge prints it. Do NOT pre-absolve it in
+  # a comment — TASK-MONO-627 landed exactly such a phantom "this red is expected"
+  # note and had to retract it, because a pre-issued absolution makes a REAL red
+  # get ignored too.
+  #
+  # 🔴 What this job does NOT measure: whether the pin file itself is telling the
+  # truth. That cross-check (`--with-aws`) reads the AMI's own `RepoCommit` tag and
+  # the deployed instance's ImageId, and there are no AWS credentials on a runner.
+  # It runs on the owner's machine, and `bake.sh` performs it implicitly by writing
+  # the pin FROM the tag rather than from what it passed in.
+  #
+  # Why a clock and not only `push`: a rebake closes the gap without any commit
+  # here, and the owner should see the state return to green on its own. Same
+  # trigger discipline as the two watches above.
+  ami-generation-watch:
+    name: AMI generation (the baked demo host matches the launcher's promise)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.repository == 'kanggle/monorepo-lab' && github.event_name != 'push'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # The judge compares blobs at two commits, one of which is however old
+          # the current AMI is. It can shallow-fetch a missing commit on its own,
+          # but the self-test also walks history for an injection candidate, and
+          # that needs real history rather than one commit.
+          fetch-depth: 0
+
+      # The self-test first — same reasoning as the launcher lane. A judge that
+      # cannot separate "same generation" from "drifted" from "cannot tell" is
+      # measuring nothing, and rc alone does not say which branch fired.
+      - name: Self-test the judge (four injected cells must land 0 / 1 / 2 / 1)
+        run: bash infra/demo/aws/check-ami-generation.sh --self-test
+
+      # The live verdict. `!cancelled()` so a self-test failure cannot hide it.
+      # 🔴 exit 2 is "cannot judge", not "fine" — it fails this job on purpose.
+      - name: The baked generation matches origin/main
+        if: ${{ !cancelled() }}
+        run: bash infra/demo/aws/check-ami-generation.sh --ref origin/main
 
   # Build all ecommerce backend boot jars needed for docker compose.
   # Separated from the e2e job so the jar-build step appears clearly in the

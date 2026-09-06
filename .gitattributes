@@ -43,3 +43,10 @@ scripts/required-check-names.txt text eol=lf
 # 어느 쪽이든 안 생긴다.
 tasks/INDEX.md            text eol=lf
 projects/*/tasks/INDEX.md text eol=lf
+
+# 🔴 배포된 AMI 의 핀도 LF 로 고정한다 (TASK-MONO-628). 이 파일은 사람이 아니라
+# `bake.sh` 의 sed 가 다시 쓴다. CRLF 체크아웃 위에서 그 sed 가 돌면 고친 다섯 줄만
+# LF 가 되어 **한 파일 안에 두 줄끝이 섞이고**, 판정자의 `^KEY=` 술어는 통과하는데
+# diff 는 파일 전체가 바뀐 것처럼 보인다(위 INDEX 항목이 실측한 그 모양).
+# 🔵 판정자도 `\r` 을 벗겨서 읽지만(이중 방어), blob 을 우연에 맡기지 않는다.
+infra/demo/aws/deployed-ami.env text eol=lf
