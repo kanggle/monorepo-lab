@@ -59,11 +59,13 @@ bash infra/demo/demo-up.sh iam erp console
 
 | 표면 | URL | 🔴 EC2 데모에서도 같은가 |
 |---|---|---|
-| 콘솔 | `http://console.local` | ✅ 그렇다 |
+| 콘솔 | `http://console.local` | ❌ **아니다** — 아래 § (2026-09-06 `TASK-MONO-627`) |
 | 스토어프런트 | `http://web.ecommerce.local` | ❌ **아니다** — 아래 § |
-| 팬 | `http://web.fan-platform.local` | ✅ 아직 그렇다 (단계 4 = `TASK-MONO-586` 이 바꾼다) |
+| 팬 | `http://web.fan-platform.local` | ❌ **아니다** — 아래 § (~~✅ 아직 그렇다 (단계 4 = `TASK-MONO-586` 이 바꾼다)~~ → 2026-09-04 `TASK-MONO-618`) |
 
-> 🔴🔴 **스토어프런트만 「도메인으로 치환」이 성립하지 않는다** (`TASK-MONO-604` /
+> 🔴🔴 ~~**스토어프런트만** 「도메인으로 치환」이 성립하지 않는다~~ → **세 화면 전부 그렇다**
+> (아래 § 를 먼저 읽어라). 아래 문단은 스토어를 예로 든 **원본**이고, 형제 둘은 그 뒤에 왔다.
+> (`TASK-MONO-604` /
 > `ADR-MONO-067` 단계 2). 방문자 스토어는 **Vercel** 로 옮겨갔고
 > (`https://store.hubwang.com`), EC2 데모는 그 사본을 **띄우지 않는다** —
 > `web.ecommerce.<DEMO_DOMAIN>` 은 **404 가 정상**이다. 그 404 는 「스택이 안 떴다」와
@@ -78,6 +80,22 @@ bash infra/demo/demo-up.sh iam erp console
 > 있어야 상품이 보인다** — Vercel 판은 상품 데이터를 데모 백엔드에서 런타임에 가져온다
 > (`apps/web-store/src/shared/config/demo-backend.ts`). 꺼져 있으면 200 을 내면서
 > *"데모 서버가 꺼져 있어 상품 데이터를 불러올 수 없습니다"* 를 그린다 — 2026-09-01 실측.
+
+> 🔴🔴 **팬과 콘솔도 같아졌다 — `ADR-MONO-067` 단계 4·3.**
+>
+> | 화면 | 데모에서 | 방문자 경로 | 억제 |
+> |---|---|---|---|
+> | 팬 | `web.fan-platform.<DEMO_DOMAIN>` **404 가 정상** | `https://fan.hubwang.com` | `fan-vercel.override.yml` (2026-09-04 `TASK-MONO-618`) |
+> | 콘솔 | `console.<DEMO_DOMAIN>` **404 가 정상** | `https://console.hubwang.com` | `console-vercel.override.yml` (2026-09-06 `TASK-MONO-627`) |
+>
+> 🔵 **로컬은 셋 다 그대로다.** 억제는 데모 체인에만 걸려 있고, `pnpm console:up` /
+> `pnpm fan-platform:up` / `npm run ecommerce:up` 은 지금까지처럼 `*.local` 을 서빙한다.
+> 아래 §2·§4 의 클릭 경로는 **로컬에서 그대로 유효**하다.
+>
+> 🔴 **이 표의 팬 행은 이틀 넘게 낡아 있었다.** `TASK-MONO-618` 이 2026-09-04 에 팬을
+> 억제했는데 위 진입 URL 표는 *"✅ 아직 그렇다"* 로 남아 있었고, 그것을 발견한 것은
+> 형제 억제(`627`)를 하면서 **같은 표를 다시 읽었기 때문**이다. 산문에는 게이트가 없다 —
+> 그래서 **억제하는 PR 이 이 표도 같이 고치는 것**이 유일한 방어다.
 
 `*.local` 은 hosts 파일에 `127.0.0.1` 로 등록돼 있어야 한다
 ([TEMPLATE.md § One-time developer setup](../../TEMPLATE.md)). EC2 데모는 `<ip>.sslip.io` 를
@@ -193,7 +211,9 @@ commission_accrual  1행 (ACCRUAL)       ← 정산 적립
 
 ## 4. 콘솔 — 운영자 시점
 
-`http://console.local` → 로그인 → **테넌트 스위처에서 테넌트를 고른다.**
+`http://console.local`(로컬) — 🔴 **EC2 데모에서는 `https://console.hubwang.com`**
+(2026-09-06 `TASK-MONO-627` 이후 데모 호스트는 콘솔을 서빙하지 않는다) →
+로그인 → **테넌트 스위처에서 테넌트를 고른다.**
 
 > 🔴 테넌트를 고르기 전에는 도메인 운영 섹션이 열리지 않는다. 운영자 역할이
 > 테넌트 assume 에서 파생되기 때문이다(§0).
@@ -333,6 +353,7 @@ SHIPPED → IN_TRANSIT → DELIVERED) 자격을 만든다. 그 과정에서 콘�
 
 | 항목 | 상태 | 추적 |
 |---|---|---|
+| 🔵 **Vercel 콘솔에서 세 패널이 항상 «사용 불가» 로 보인다** — 운영 개요(`/dashboards/overview`) · 도메인 상태(`/dashboards/health`·`/console`) · 알림 인박스(`/api/console/notifications/**`) | **설계상 그렇다, 고장이 아니다.** 그 셋만 `console-bff` 를 지나는데 그 BFF 는 공개 호스트명이 없다(`TASK-MONO-362` 가 엣지 라우터를 일부러 없앴다 — `api-gateway-policy.md` L14). 셋 다 실패를 **상태로 표현**한다(`bffUnavailable: true` / 502 `BAD_GATEWAY` 봉투)이고, 🔵 나머지 6개 도메인 화면은 게이트웨이 **직결**이라 영향 없다(`ADR-MONO-017` D3.B). 🔴 고치려면 BFF 에 공개 경로를 주거나 합성을 콘솔 서버로 옮겨야 하고 **둘 다 아키텍처 결정**이다 | `TASK-MONO-585` § 알려진 한계 · `TASK-MONO-627`(데모 사본 억제로 이 상태가 **유일한 콘솔**이 됐다) |
 | ✅ ~~도커·호스트를 재시작하면 **IdP 가 돌아오지 않는다**~~ (2026-08-15 고침) | 실측(VM 재시작): ecommerce **33/33** · console **2/2** · traefik **1/1** · iam **인프라 9/9** 가 스스로 복귀했는데 **iam 앱은 0/5** 였다. 크래시가 아니다 — `ExitCode 255 · OOMKilled=false · **restart=no**`, `FinishedAt` 이 VM 을 내린 시각이다. iam 은 앱이 **CI 하네스(`docker-compose.e2e.yml`)에만** 정의되고 인프라는 base 에서 오는데, base 의 `unless-stopped` 는 병합으로 살아남고 앱은 상속받을 것이 없었다. 안 돌아온 것이 하필 **OIDC IdP** 라 결과는 `projects.sh` 가 `MONO-358` 로 이름 붙인 그 상태 — **전부 healthy 인데 로그인만 불가능.** 🔵 **고친 자리는 CI 파일이 아니라 데모 전용 오버레이**(`infra/demo/iam-traefik.override.yml`)다 — CI 에서는 재시작이 없는 것이 옳고(앱이 죽으면 런이 실패해야 한다), 거기 넣으면 **CI 가 크래시를 재시작으로 가린다.** 형제 wms 는 `x-wms-app-common` 앵커로 이미 갖고 있었다. 판정은 선언이 아니라 **복귀**로 했다: 수정 전 `docker kill` → 60초 뒤 `exited(137) · restarts=0`(안 돌아옴) / 수정 후 같은 조작에 **스스로 `Up`**. 실효 정책은 8개 도메인 **서비스 101개**를 `docker compose config` 로 전수 확인했다(수정 전 없음 5 → 수정 후 **0**). ⚠️ **복귀 ≠ 즉시 사용 가능** — 같은 재시작에서 `iam-kafka` 가 healthy 되기까지 약 **8분**이 걸렸다(§ 7 참조) | `TASK-MONO-534` |
 | ✅ ~~새로 가입한 계정의 프로필에 **이름·이메일이 비어 있다**~~ (2026-08-06 고침) | 계약(`jwt-standard-claims.md`)이 `email` 을 **Required: Yes** 로 적어 둔 채 **민팅만 빠져 있었다.** 여섯 클라이언트가 scope 를 선언하고 사용자가 동의했고 ecommerce 게이트웨이가 `X-User-Email` 을 매핑하고 `UserProfileProvisioner` 가 받고 있었다 — 체인의 **모든 고리가 있었는데 머리에 있는 값이 없었다.** `TenantClaimTokenCustomizer` 가 scope 게이트를 걸어 민팅한다 | `TASK-BE-577` |
 | ✅ ~~스토어 "회원가입" 이 **IAM 로그인 화면**에 내려놓는다~~ (2026-08-06 고침) | registration hint 로 가입 폼에 **직행**한다. 🔵 IAM 만이 그 클릭을 없앨 수 있었다 — `/signup` 직링크는 지름길이 아니라 **다른 흐름**이다(저장된 `/oauth2/authorize` 요청이 없으면 `SavedRequestTenantResolver` 가 믿을 `client_id` 가 없어 계정이 폴백 테넌트에 태어난다) | `TASK-BE-578` |

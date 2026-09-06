@@ -111,14 +111,55 @@
          **"데모가 안 떴다"** 로 읽힌다. 그때 남는 프로브가 0개가 되는 것은
          **하한 조정이 아니라 설계 변경**이다 — `demo-up.sh` 의 SURFACE_FLOOR 주석을 읽어라.
 
+      🔴🔴 TASK-MONO-627 — **그 일이 일어났다. 그리고 그 설계 변경이 아래 #bootprobe 다.**
+         단계 3 이 console 을 억제했으므로(`infra/demo/console-vercel.override.yml`)
+         이 세 행 중 **어느 것도** 부팅 프로브를 선언하지 않는다 — 데모 호스트가
+         방문자 표면을 하나도 안 서빙하기 때문이다. `data-demo-probe` 기전 자체는
+         **남긴다**: 데모 호스트가 어떤 화면을 다시 서빙하게 되면 그 행이 그 속성으로
+         자기를 프로브에 다시 등록하는 것이 여전히 옳은 길이고, (z14) 가 그 모양을
+         계속 검사한다.
+         🔵 지금 이 세 행에 그 속성이 **없다는 것 자체가** 억제가 걸려 있다는 뜻이다.
+
       🔴 **기본값이 없다.** 선언이 없거나 모르는 값이면 이 페이지는 그 링크를 **열지 않고**
       (모르는 것은 통과가 아니다 — 방문자에게 깨진 링크를 주는 쪽이 더 나쁘다), 가드 (z14)
       는 **빨개진다.** 두 속성은 **상호 배타**다: vercel 행에 data-host 를 남겨 두면 그것은
       아무도 안 쓰는 낡은 값이 되고, 다음 사람은 그것을 보고 그 화면이 여전히 데모 호스트에
       있다고 읽는다. `demo-up.sh` 의 부팅 판정도 **같은 선언**을 읽어 찌를 행을 고른다.
     -->
+    <!--
+      부팅 프로브 선언 (TASK-MONO-627). 🔴 **방문자 표면이 아니다.**
+
+      `demo-up.sh` 는 부팅 완료를 컨테이너 헬스만으로 재지 않는다 — `TASK-MONO-552` 가
+      **99/102 컨테이너 healthy 인데 모든 화면이 502** 인 상태를 실측했기 때문이다(AC-3).
+      그 축은 «데모 호스트의 어떤 HTTP 표면이 실제로 2xx/3xx 를 내는가» 로 재어진다.
+
+      🔴🔴 단계 3 이 console 을 억제하면서 그 축의 대상이 **0개**가 됐다. 하한을 0 으로
+      내리면 루프가 빈 채로 통과하고 «표면이 정상» 과 «측정이 죽었다» 가 구별되지 않는다
+      ⇒ 대상을 **옮겼다.** 그것이 이 원소다.
+
+      🔵 **`iam` 이 임의의 대체물이 아닌 이유** — 억제 뒤 방문자가 여전히 데모 호스트를
+      밟는 **유일한 홉**이다. Vercel 콘솔의 로그인은
+        브라우저 → console.hubwang.com(Vercel) → auth.hubwang.com(Vercel 포워더)
+                 → http://iam.<그날 도메인>/login   ← 여기
+      로 간다(`infra/demo/auth-forwarder/.../route.ts` 의 `servicePrefix: 'iam'`).
+      즉 이 프로브는 「방문자와 무관한 내부 표면」이 아니라 **방문자 경로의 마지막
+      데모-호스트 홉**이고, 552 가 잡으려던 실패(엣지는 사는데 앱이 502)를 그대로 잡는다.
+
+      🔴 **경로가 `/` 가 아니다.** `iam.<도메인>/` 는 iam 게이트웨이 라우터로 떨어져
+      404 다(`infra/demo/iam-traefik.override.yml` — OIDC 라우터는 `/oauth2` `/connect`
+      `/login` `/signup` `/.well-known` 접두사만 우선한다). 그래서 `data-demo-probe-path`
+      로 `/login` 을 적는다. 이 값은 `TASK-MONO-624` 기동 창에서 **실측된 200** 이다.
+      🔴 경로를 지우면(기본값 `/`) 부팅 판정이 404 를 12번 재시도하다 실패한다 —
+      그것이 정확히 이 티켓의 Failure Scenario ① 의 모양이다.
+
+      🔵 이 원소는 `data-surface` 가 **아니므로** `renderSurfaces()` 가 안 읽는다.
+      방문자에게는 존재하지 않는다. 가드 (z14)·(z15)가 그 분리를 지킨다.
+      🔴 지우지 마라 — 지우면 부팅 판정이 «판정 불가» 로 빨개진다. 그것이 의도된
+      동작이다(조용한 초록보다 낫다).
+    -->
+    <span id="bootprobe" hidden data-demo-boot-probe data-domain="iam" data-demo-probe="iam" data-demo-probe-path="/login"></span>
     <div id="surfaces">
-      <a class="open" data-surface data-domain="console"   data-served="vercel"    data-url="https://console.hubwang.com/" data-demo-probe="console" target="_blank" rel="noopener">🖥️ 운영자 콘솔 열기 →</a>
+      <a class="open" data-surface data-domain="console"   data-served="vercel"    data-url="https://console.hubwang.com/" target="_blank" rel="noopener">🖥️ 운영자 콘솔 열기 →</a>
       <a class="open" data-surface data-domain="ecommerce" data-served="vercel"    data-url="https://store.hubwang.com/" target="_blank" rel="noopener">🛒 이커머스 스토어 열기 →</a>
       <a class="open" data-surface data-domain="fan"       data-served="vercel"    data-url="https://fan.hubwang.com/" target="_blank" rel="noopener">🎤 팬 플랫폼 열기 →</a>
       <div id="smsg"></div>
