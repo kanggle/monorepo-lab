@@ -8,7 +8,7 @@ TASK-MONO-628
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -542,3 +542,65 @@ git clone --depth 1 --branch task/mono-628-ami-generation <repo> shallow
 
 🔵 **이 사건이 AC-3 의 근거를 강화한다**: 자가검사에 러너가 없었다면 이 세 겹은 nightly
 첫 실행까지 안 보였을 것이고, 그때는 원인이 「판정자가 틀렸다」로 읽혔을 것이다.
+
+## CORRECTION (2026-09-06 UTC — **닫는다. 재굽기를 기다리지 않는다.**)
+
+### ① 이 티켓은 재굽기를 기다릴 이유가 없었다 — AC 절이 그렇게 말한다
+
+닫기 전에 AC 절을 열어 읽었다(INDEX 행이 아니라):
+
+- **AC-0 · AC-1 · AC-2 · AC-3 · AC-4 전부 `[x]`**
+- **DoD 4칸 전부 `[x]`**
+- 그리고 이 파일 자신이 **`## 🔴 남은 것 — 소유자 몫 (이 티켓의 AC 가 아니다)`** 라고
+  적어 두었다.
+
+⇒ `check-ami-generation.sh` 의 **`rc=1` 은 미완료 AC 가 아니라 판정자가 제 일을 한 것**이다.
+🔴 본문 § ①-c 가 이미 대칭을 적어 두었다 — *"그 사실이 이 티켓을 닫지 않는다. 이 티켓의
+명제는 «지금 깨졌다» 가 아니라 «어긋났는지 재는 것이 없다» 이다."* 그 명제는 판정자가
+생기면서 닫혔고, **같은 이유로 「지금 어긋나 있다」도 이 티켓을 열어 두지 않는다.**
+
+🔵 인계 메모(와 그것을 물려받은 다음 세션의 첫 보고)는 *"재굽기가 되면 rc=0 이 되고
+그때 close"* 라고 적고 있었다. **AC 절이 그것을 부정한다** — 4-dim (d) 의 권위는
+요약이 아니라 AC 절이다.
+
+### ② 남의 의무는 집을 받았다 — **`TASK-MONO-630`** (`ready/`, PR #3665, squash `c207e865c`)
+
+`CLAUDE.md` § Task Rules — 「`done/` 로 닫기 전에 그 티켓이 임시로 들고 있던 남의 의무부터
+집을 줘라」. 이 파일 § 「남은 것」이 들고 있던 것 전부가 630 으로 갔다:
+
+| 무엇 | 630 의 어디 |
+|---|---|
+| 재굽기 · `tfvars`/`apply` · `deployed-ami.env` 커밋 | AC-1 · AC-2 |
+| 재굽기 뒤 기동 창 확인 3개(627 → 628 → 630) | AC-3 |
+| 옛/새 부팅 지문 정정(`console=307` → `iam/login=200`) | AC-3 표의 1번 |
+| `ADR-MONO-067` 단계 1 상태 | AC-4 |
+
+🔴 **이 의무는 이제 세 번 전달됐다**(627 → 628 → 630). 630 의 AC-5 가 닫을 때 그것을 다시
+묻도록 만들어 두었다 — `done/` 안에서 넘기는 것이 실패 모드였기 때문이다.
+
+### ③ 🔴 이 파일 496~498행의 3번은 **시제가 틀렸다** — 단계 1 은 이미 끝났다
+
+그 줄은 *"3. `ADR-MONO-067` 단계 1 의 `terraform apply`(CloudFront 이중 배포 정리) —
+**별개 축, 무관**"* 이라고 적어 「아직 대기 중」으로 읽히게 둔다. 쟀더니 아니었다:
+
+```
+terraform.tfstate         (serial 94)  managed 25개 — cloudfront/s3 0건
+terraform.tfstate.backup  (serial 89)               — cloudfront/s3 0건
+versions.tf 에 backend 블록 없음        ⇒ 이 파일이 유일한 state
+git log -S aws_cloudfront_distribution -- infra/demo/aws/terraform/main.tf
+  → df6eb9b04 (추가, MONO-389) · b679c5396 (삭제, MONO-579)
+```
+
+🔵 *"별개 축"* 이라는 부분은 **맞다**(재굽기와 다른 일이다). 틀린 것은 **시제** — 끝난 일을
+대기 중으로 읽히게 둔 것이다.
+
+🔴 **`done/` 은 frozen 이라 그 줄을 고칠 수 없다.** 그래서 정정본은 **`TASK-MONO-630` AC-4**
+에 있고, 이 CORRECTION 이 그리로 가리킨다. 그것이 AC-4 가 존재하는 이유다.
+
+### ④ 이 시각에 함께 잰 것 (상속 안 함)
+
+| 무엇 | 값 |
+|---|---|
+| `check-ami-generation.sh` | **rc=1 · 어긋남 4건** — 실재하는 상태다. 🔴 「예상된 것」이라는 면죄부를 주지 않는다 |
+| `check-launcher-fresh.sh` | **rc=0** (서빙 md5 = `origin/main`, 커밋 `77725f050`) |
+| 인스턴스 | `i-022ca131b94ac2d1a` · **stopped**(AC-0 실측). 🔴 state 파일의 `instance_state` 는 `running` 이지만 그것은 09-04 refresh 값이다 |
