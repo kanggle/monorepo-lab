@@ -4259,6 +4259,23 @@ echo "[verify] (z26) 컨텍스트 밖 워크스페이스 의존이 이미지 빌
 #   프로젝트 밖을 가리키는 `link:`/`file:` 의존이 있으면, 그 프로젝트 compose 가
 #   같은 대상을 `additional_contexts` 로 넘기고, 그 앱 Dockerfile 이 그 이름을
 #   `COPY --from=` 으로 받아야 한다.
+#
+# 🔴🔴 **이 칸이 통과해도 「모든 compose 가 준다」는 뜻이 아니다** (TASK-MONO-629 실측).
+#   아래 (1)번 루프는 **첫 매치에서 `break`** 하고, 훑는 범위도 **그 프로젝트 디렉터리의
+#   compose 들**뿐이다. 즉 이 칸이 답하는 질문은 «**어떤** compose 가 주는가» 인데
+#   실제 요구는 «**모든** compose 가 줘야 한다» 이다. 그 차이로 두 낙오가 동시에 살았다:
+#     · `platform-console/docker-compose.e2e.yml`                    — 형제가 주고 있어 break
+#     · `tests/federation-hardening-e2e/docker/…federation-e2e.yml`  — 프로젝트 밖이라 시야 밖
+#   증상은 **`main` nightly 20여 런 연속 실패**였고, 로그는 배선이 아니라 인증 실패처럼 보인다
+#   (`pull access denied … docker.io/library/demo-backend-resolver:latest` — 컨텍스트를 안 주면
+#   BuildKit 이 그 이름을 **이미지로 해석**한다).
+#
+# 🔵 그 축은 이제 **저장소 전체 판정자**가 본다: `scripts/check-build-context-declarations.sh`
+#   (Dockerfile 의 요구 × 그것을 빌드하는 **모든** compose 서비스 · 자가검사 5칸).
+#   🔴 두 벌이 아니라 **서로 다른 것을 잰다**: 여기는 «package.json 의 탈출 의존이 선언됐고
+#   Dockerfile 이 그 이름을 받는가»(도착 경로 = `package.json`), 저기는 «그것을 빌드하는 데가
+#   전부 주는가»(도착 경로 = Dockerfile · compose). 한쪽만 보면 이번 결함이 다시 샌다.
+#
 # 🔵 이 칸은 경로 정규화에 `realpath -m` 을 쓴다. 요구를 **선언**해 두어야 (z2)가
 #    그것을 범위에 넣는다 — 선언하지 않으면 「AMI 안에 그 도구가 있는가」를 아무도 안 묻고,
 #    없으면 packer 7단계에서야 죽는다(그게 (z2)의 존재 이유다).

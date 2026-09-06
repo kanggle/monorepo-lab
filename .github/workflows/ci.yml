@@ -269,6 +269,12 @@ jobs:
       # advertised-listener overrides. AND-ing would skip the guard on exactly the diff
       # that silently stops cross-project delivery.
       cross-project-relay: ${{ steps.filter.outputs.cross-project-relay }}
+      # TASK-MONO-629: raw filter, NOT AND-combined with `code-changed`. Every arrival
+      # path is a Dockerfile or a compose file, and AND-ing would switch the guard off on
+      # exactly the diff that breaks the image build. Both directions of the contract are
+      # listed: the Dockerfile that RAISES a requirement, and the compose file that must
+      # SUPPLY it — including composes that live outside the project they build.
+      build-contexts: ${{ steps.filter.outputs.build-contexts }}
       # TASK-MONO-461: raw filter, NOT AND-combined with `code-changed`. Two of this
       # guard's trigger paths are non-code: the spec (testing-strategy.md) being
       # weakened, and the guard script itself. AND-ing with code-changed would skip
@@ -824,6 +830,23 @@ jobs:
               - 'infra/demo/relay/**'
               - 'infra/demo/*-relay.override.yml'
               - 'scripts/check-cross-project-topic-relay.sh'
+            # TASK-MONO-629 — a Dockerfile's `COPY --from=<name>` (not a stage, not an
+            # image) is a REQUEST for a build context; the compose service that builds it
+            # must SUPPLY it via `build.additional_contexts`. The two halves live in
+            # different files and nothing linked them, so `main`'s nightly ran red for
+            # 20+ runs with a log that reads like an auth failure, not like wiring.
+            #
+            # 🔴 Both arrival paths, and both are wider than they look:
+            #   · ANY Dockerfile under the repo can raise a requirement.
+            #   · ANY compose file ANYWHERE can build it — the second straggler was
+            #     `tests/federation-hardening-e2e/docker/…`, outside the project it builds.
+            #     A filter scoped to `projects/*/docker-compose.yml` would have missed it,
+            #     which is precisely how guard (z26) missed it.
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            build-contexts:
+              - '**/Dockerfile'
+              - '**/docker-compose*.yml'
+              - 'scripts/check-build-context-declarations.sh'
             # TASK-MONO-371: platform/contracts/jwt-standard-claims.md declares that
             # every access token MUST carry the claims it lists. It was missing four of
             # them — including tenant_id, which every gateway in the fleet rejects tokens
@@ -1486,6 +1509,35 @@ jobs:
   # evidence of wiring — that empty topic is exactly what hid this. ADR-MONO-062
   # § 결과 3 forbids it by name.
   # ---------------------------------------------------------------------------
+  build-contexts:
+    name: Build context declarations (the Dockerfile asks, every compose must supply)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    # TASK-MONO-520's lesson: a PR that changes only this job's own steps would SKIP it,
+    # and a skip reports green — the guard could be rewritten, merged, and never once run.
+    if: >-
+      needs.changes.outputs.build-contexts == 'true' ||
+      needs.changes.outputs.workflows == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-build-context-declarations.sh
+
+      # 🔴 The self-test is not decoration. Its coverage comes from an INJECTED fixture
+      # tree, not from whatever the repo happens to contain today — if this pattern ever
+      # drops to zero real uses, a population-based test would go quietly vacuous, while a
+      # floor on the number of uses would instead turn success into a failure.
+      # It also pins the exact defect that let this regression through: cell ③ demands a
+      # verdict when a NEW compose omits the context while a sibling still supplies it.
+      # Guard (z26) reported green in that state because it stops at the first match.
+      - name: Self-test the judge (five injected cells must land 0 / 1 / 1 / 2 / 1)
+        run: bash scripts/check-build-context-declarations.sh --self-test
+
+      - name: Guard — every compose that builds a Dockerfile supplies the contexts it asks for
+        run: bash scripts/check-build-context-declarations.sh
+
   cross-project-relay:
     name: Cross-project event relay (listeners vs relay whitelist)
     runs-on: ubuntu-latest
