@@ -1,13 +1,34 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { auth } from '@/shared/auth/auth';
+import { isPublicPath } from '@/shared/auth/public-paths';
+import { hasAuthenticatedUser } from '@/shared/auth/session-shape';
 
 /**
- * Route guard. Protects every page except `/login` and `/api/auth/*`.
+ * Route guard. Protects every page except the public browsing surface
+ * (`shared/auth/public-paths.ts` — the allowlist, and the only place it lives).
  *
- * The `authorized` callback in auth.ts produces the same logic for next-auth
- * internal flows; this middleware is the explicit redirect path so unauth'd
- * visits to a protected route land on `/login?from=<original>`.
+ * The `authorized` callback in auth.ts calls **the same `isPublicPath`** for
+ * next-auth internal flows; this middleware is the explicit redirect path so
+ * unauth'd visits to a protected route land on `/login?from=<original>`.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ * 공개 브라우징이 생긴 뒤에도 **fail-closed 는 그대로다**
+ * ─────────────────────────────────────────────────────────────────────────
+ * 아래 AC-1 서술은 *"세션을 판정할 수 없으면 닫는다"* 를 말하고, 그 성질은 이 변경으로
+ * 하나도 약해지지 않았다. 바뀐 것은 **무엇을 판정 대상으로 삼는가** 뿐이다:
+ *
+ *   · 공개 경로  — 애초에 세션을 안 묻는다(익명이 정상 상태다). 판정이 없으므로
+ *                  판정 실패도 없다.
+ *   · 그 외 전부 — 예전 그대로. `auth()` 가 throw 하든, 오류 본문을 주든, F3 로 강등된
+ *                  세션을 주든 **전부 `/login` 으로 꺾인다**.
+ *
+ * 🔴 그래서 판별자(`/nonexistent-xyz` → `/login`)가 **살아 있어야 한다.** 그 칸이
+ *    404 로 바뀌면 그것은 "그런 페이지가 없다" 가 아니라 «미들웨어가 안 돈다» 는 뜻이고,
+ *    TASK-FAN-FE-018 이 프로덕션에서 3일간 놓친 결함이 정확히 그 모양이었다.
+ *    `e2e-smoke/auth-config-absent.spec.ts` 와 `__tests__/middleware-public-paths.test.ts`
+ *    가 둘 다 그 칸을 들고 있다.
+ * ─────────────────────────────────────────────────────────────────────────
  *
  * ─────────────────────────────────────────────────────────────────────────
  * TASK-FAN-FE-019 / AC-1 — what this guard does when auth is NOT configured.
@@ -48,23 +69,11 @@ import { auth } from '@/shared/auth/auth';
  */
 
 /**
- * What `auth()` can hand back, and what each means:
- *
- *  | returned                             | meaning                          |
- *  |--------------------------------------|----------------------------------|
- *  | `null`                               | anonymous — normal, closed       |
- *  | `{ user: {…}, … }`                   | signed in — open                 |
- *  | `{ user: undefined, … }`             | silent refresh failed; the       |
- *  |                                      | `session` callback degrades to   |
- *  |                                      | anonymous on purpose (F3)        |
- *  | `{ message: "There was a problem…" }`| auth.js is misconfigured         |
- *
- * Only row 2 may pass. `!session` passed rows 2, 3 **and 4**.
+ * 🔵 `hasAuthenticatedUser` 는 `shared/auth/session-shape.ts` 로 옮겼다 — 표(어떤 반환값이
+ * 무엇을 뜻하는가)도 거기 있다. 옮긴 이유는 **소비자가 둘이 됐기 때문**이다:
+ * `session.ts` 의 `isAuthenticated()` 가 같은 질문에 `Boolean(session)` 이라는 **다른**
+ * 답을 내고 있었고, 그 오답 위에서 `Header` 가 익명 방문자에게 알림 조회를 보냈다.
  */
-function hasAuthenticatedUser(session: unknown): boolean {
-  if (typeof session !== 'object' || session === null) return false;
-  return (session as { user?: unknown }).user != null;
-}
 
 /**
  * Resolve "is this request authenticated?" so that every failure mode —
@@ -97,13 +106,9 @@ async function isAuthenticated(pathname: string): Promise<boolean> {
 
 export async function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
-  // Public paths — never gate.
-  if (
-    pathname.startsWith('/login') ||
-    pathname.startsWith('/api/auth') ||
-    pathname.startsWith('/_next') ||
-    pathname === '/favicon.ico'
-  ) {
+  // 공개 경로 — 세션을 **묻지 않는다**. 목록은 `shared/auth/public-paths.ts` 한 곳뿐이고,
+  // `auth.ts` 의 `authorized` 콜백도 같은 함수를 부른다(사본이 없으므로 갈라질 자리가 없다).
+  if (isPublicPath(pathname)) {
     return NextResponse.next();
   }
   if (!(await isAuthenticated(pathname))) {

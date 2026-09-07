@@ -6,8 +6,9 @@
   <title>Portfolio — Live Demo</title>
   <style>
     :root { color-scheme: light dark; }
-    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 8vh auto; padding: 0 20px; line-height: 1.6; }
-    h1 { font-size: 1.6rem; }
+    body { font-family: system-ui, sans-serif; max-width: 1080px; margin: 6vh auto; padding: 0 20px; line-height: 1.6; }
+    h1 { font-size: 1.6rem; margin-bottom: .3rem; }
+    .lede { opacity: .85; margin-top: 0; }
     .card { border: 1px solid #8883; border-radius: 14px; padding: 24px; margin-top: 24px; }
     button { font-size: 1rem; padding: 12px 22px; border-radius: 10px; border: 0; cursor: pointer; }
     #start { background: #2563eb; color: #fff; }
@@ -17,29 +18,58 @@
     #bar > i { display: block; height: 100%; width: 30%; background: #2563eb; animation: slide 1.4s infinite; }
     @keyframes slide { 0% { margin-left: -30%; } 100% { margin-left: 100%; } }
     #msg { margin-top: 8px; font-size: .95rem; opacity: .85; }
-    a.open { display: none; margin-top: 14px; font-weight: 600; }
+    .hint { font-size: .82rem; opacity: .6; margin-top: 20px; }
+
+    /* -----------------------------------------------------------------------
+       화면 카드 (TASK-MONO-634)
+
+       🔴 `#surfaces` 는 **그대로 남는다** — 이름도, 역할(방문자 화면 링크의 컨테이너)도.
+          `render()` 안의 `surfacesVisible()` 이 이 id 의 display 를 정하고, 가드 (z14)가
+          그 축을 여섯 상태에서 실행 대조한다. 카드 그리드로 바뀐 것은 **레이아웃뿐**이다.
+       🔴 데스크톱 3열 / 모바일 1열. `auto-fit` 대신 명시적 미디어쿼리를 쓴다 — 카드가
+          셋으로 고정돼 있고, `auto-fit` 은 넓은 화면에서 2열+1열로 흐트러진다.
+       ----------------------------------------------------------------------- */
+    #surfaces { display: none; gap: 18px; margin-top: 26px; grid-template-columns: 1fr; }
+    @media (min-width: 860px) { #surfaces { grid-template-columns: repeat(3, 1fr); } }
+    .scard { border: 1px solid #8883; border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
+    .scard .thumb { display: block; aspect-ratio: 16 / 10; width: 100%; object-fit: cover; background: #8881; border: 0; }
+    .scard .thumb.ph { display: flex; align-items: center; justify-content: center; font-size: 2.4rem; opacity: .5; }
+    .scard .body { padding: 16px 18px 18px; display: flex; flex-direction: column; flex: 1; }
+    .scard h2 { font-size: 1.12rem; margin: 0 0 4px; }
+    .scard .desc { font-size: .9rem; margin: 0 0 10px; opacity: .85; }
+    .scard dl { margin: 0 0 12px; font-size: .82rem; }
+    .scard dt { opacity: .6; margin-top: 7px; }
+    .scard dd { margin: 2px 0 0; }
+    .scard .acts { margin-top: auto; padding-top: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    a.open { font-weight: 600; text-decoration: none; padding: 9px 14px; border-radius: 9px; background: #2563eb1a; color: #2563eb; }
     /* TASK-MONO-560 — 안 뜬 화면은 **클릭되지 않아야** 한다. 회색으로 보이기만 하고
        클릭이 되면 방문자는 404 를 보고 "고장" 으로 읽는다(pointer-events 가 요점). */
     a.open.off { opacity: .45; pointer-events: none; cursor: default; }
-    #surfaces a.open + a.open { margin-top: 6px; }
-    #smsg { margin-top: 8px; font-size: .82rem; color: #666; }
-    .hint { font-size: .82rem; opacity: .6; margin-top: 20px; }
-    /* 도메인별 선택 (TASK-MONO-477) */
-    .domains { display: none; }
-    .domains h2 { font-size: 1.05rem; margin: 0 0 12px; }
-    .dall { margin-bottom: 8px; }
-    .dall button { font-size: .85rem; padding: 8px 14px; background: #8883; }
-    .drow { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid #8882; }
-    .dname { flex: 1; font-weight: 600; }
+    a.thumb-link { padding: 0; border-radius: 0; background: none; display: block; }
+    .bstart { font-size: .84rem; padding: 9px 13px; background: #8883; }
+    .bstart.on { background: #16a34a; color: #fff; }
+    #smsg { grid-column: 1 / -1; font-size: .82rem; color: #666; }
+
     .badge { font-size: .78rem; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
     .b-up { background: #16a34a2e; color: #16a34a; }
     .b-partial { background: #d977062e; color: #d97706; }
     .b-down { background: #8883; }
     .b-stale { background: #dc26262e; color: #dc2626; }
     .b-unknown { background: #8882; opacity: .7; }
+    .b-tour { background: #2563eb2e; color: #2563eb; }
+
+    /* 고급 영역 — 도메인별 제어 + 전체 시작. 🔴 기본 행동에서 제외됐다(§ details). */
+    details.adv { margin-top: 28px; }
+    details.adv > summary { cursor: pointer; font-size: .9rem; opacity: .75; }
+    .domains h3 { font-size: 1.02rem; margin: 16px 0 12px; }
+    .dall { margin-bottom: 8px; }
+    .dall button { font-size: .85rem; padding: 8px 14px; background: #8883; }
+    .drow { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid #8882; }
+    .dname { flex: 1; font-weight: 600; }
     .dbtn { font-size: .82rem; padding: 6px 14px; }
     .dbtn.up { background: #555; color: #fff; }
     .dbtn.down { background: #2563eb; color: #fff; }
+
     /* 로그인 계정 (TASK-MONO-561) */
     .creds h2 { font-size: 1.05rem; margin: 0 0 4px; }
     .creds p { margin: 0 0 14px; font-size: .92rem; }
@@ -52,144 +82,180 @@
   </style>
 </head>
 <body>
-  <h1>🚀 라이브 데모 (온디맨드)</h1>
+  <h1>🚀 포트폴리오 라이브 데모</h1>
   <!--
-    "약 10분" 은 **실측이다**(MONO-389, 데모 호스트 저널): iam 15:44:58 → `up complete`
-    15:54:30 = 9분 32초, 인스턴스 부팅까지 합쳐 약 11분. 8개 프로젝트 96개 컨테이너를
-    순서대로(iam 먼저, console 마지막) 올리고 각 단계가 healthcheck 를 기다린다.
+    🔴🔴 TASK-MONO-634 — **이 문단의 주장이 바뀌었다. 값이 아니라 사실이 바뀌었기 때문이다.**
 
-    예전 문구는 "약 2~4분" 이었다. 잰 적 없는 숫자이고, 방문자를 **4분에 포기하게**
-    만든다 — 그때 스택은 아직 ecommerce 를 올리는 중이고 console 은 시작도 안 했다.
+    예전 문구: *"아래 버튼을 누르면 서버가 기동됩니다(약 10분 — 8개 프로젝트를 순서대로 올립니다)"*
+
+    그 문장에는 두 가지가 섞여 있었고 둘 다 이제 틀리다:
+
+      ① *"버튼을 누르면"* — 이제 **아무것도 안 눌러도 세 화면을 볼 수 있다.** 공개 데이터가
+         Vercel 저장본에서 오므로(ADR-MONO-070) 둘러보기는 서버와 무관하다. 방문자가 가장
+         먼저 알아야 하는 사실이 그것인데, 예전 문구는 기동을 **전제**로 깔았다.
+      ② *"8개 프로젝트"* — 이제 **고른 것만** 뜬다(ADR-MONO-071). `full` 은 기본 행동이
+         아니다.
+
+    🔴 "약 10분" 은 **실측이다**(MONO-389, 데모 호스트 저널): iam 15:44:58 → `up complete`
+       15:54:30 = 9분 32초. 그 값을 지우지 말고 **어느 경우의 값인지**를 적는다 — 예전에
+       "약 2~4분" 이라는 잰 적 없는 숫자가 방문자를 4분에 포기시켰다.
+    🔴 묶음 하나의 소요는 **아직 실측이 없다.** 그래서 여기에 숫자를 적지 않고 "그보다
+       짧습니다" 라고만 쓴다. 잰 뒤에 숫자를 넣어라 — 지금 넣으면 그것은 이 저장소가
+       반복해서 밟은 "잰 적 없는 숫자" 이고, 방문자를 틀린 시점에 포기시킨다.
   -->
-  <p>이 데모 스택은 평소 꺼져 있어 비용이 들지 않습니다. 아래 버튼을 누르면 서버가 기동됩니다(<strong>약 10분</strong> — 8개 프로젝트를 순서대로 올립니다). 20분간 활동이 없으면 자동으로 종료됩니다.</p>
+  <p class="lede">
+    세 화면은 <strong>지금 바로, 로그인 없이</strong> 둘러볼 수 있습니다 — 서버를 켜지 않아도 됩니다.
+    글쓰기·주문·운영 같은 <strong>실시간 기능</strong>이 필요할 때만 해당 카드의 버튼으로 백엔드를 켜세요
+    (필요한 서비스만 기동합니다 · 8개 전부를 올릴 때가 <strong>약 10분</strong>, 묶음 하나는 그보다 짧습니다).
+    20분간 활동이 없으면 자동으로 종료됩니다.
+  </p>
 
-  <div class="card">
-    <button id="start">▶ 데모 시작</button>
-    <button id="stop" disabled>■ 데모 종료</button>
-    <div id="bar"><i></i></div>
-    <div id="msg">상태 확인 중…</div>
-    <!--
-      방문자 화면 (TASK-MONO-560).
+  <!--
+    부팅 프로브 선언 (TASK-MONO-627). 🔴 **방문자 표면이 아니다.**
 
-      예전에는 이 자리에 링크가 **하나뿐**이었고 목적지는 콘솔이었다. 그래서 나머지 두
-      화면(이커머스 스토어·팬 플랫폼)은 **존재를 알 방법이 없었다** — 소유자 본인이 자기
-      데모에서 그 둘을 못 찾은 것이 이 티켓의 발견 경로다. 면접관이 찾을 리 없다.
+    `demo-up.sh` 는 부팅 완료를 컨테이너 헬스만으로 재지 않는다 — `TASK-MONO-552` 가
+    **99/102 컨테이너 healthy 인데 모든 화면이 502** 인 상태를 실측했기 때문이다(AC-3).
+    그 축은 «데모 호스트의 어떤 HTTP 표면이 실제로 2xx/3xx 를 내는가» 로 재어진다.
 
-      🔴 그냥 링크를 박으면 안 된다. 부팅에 약 10분이 걸리고 그 창에서 각 화면은 404 이며,
-      안 뜬 화면에 링크를 주면 방문자는 **"고장났다"** 로 읽는다. 그래서 각 링크는 자기
-      화면을 실제로 서빙하는 **도메인의 헬스에 묶인다**(아래 SURFACES).
+    🔴🔴 단계 3 이 console 을 억제하면서 그 축의 대상이 **0개**가 됐다. 하한을 0 으로
+    내리면 루프가 빈 채로 통과하고 «표면이 정상» 과 «측정이 죽었다» 가 구별되지 않는다
+    ⇒ 대상을 **옮겼다.** 그것이 이 원소다.
 
-      🔴🔴 TASK-MONO-583 — 그 문장은 이제 **행마다 다르다.** `ADR-MONO-067` 이 일부 화면을
-      Vercel 로 옮겼고, 그 화면은 **데모가 꺼져 있어도 뜬다**(그것이 이관의 목적이다).
-      그래서 각 행은 **자기가 어디서 서빙되는지를 선언한다** — `data-served`:
+    🔵 **`iam` 이 임의의 대체물이 아닌 이유** — 억제 뒤 방문자가 여전히 데모 호스트를
+    밟는 **유일한 홉**이다. Vercel 콘솔의 로그인은
+      브라우저 → console.hubwang.com(Vercel) → auth.hubwang.com(Vercel 포워더)
+               → http://iam.<그날 도메인>/login   ← 여기
+    로 간다(`infra/demo/auth-forwarder/.../route.ts` 의 `servicePrefix: 'iam'`).
+    즉 이 프로브는 「방문자와 무관한 내부 표면」이 아니라 **방문자 경로의 마지막
+    데모-호스트 홉**이고, 552 가 잡으려던 실패(엣지는 사는데 앱이 502)를 그대로 잡는다.
 
-        data-served="demo-host" → data-host 필수 · demoHost() 파생 · 도메인 헬스에 묶인다
-        data-served="vercel"    → data-url 필수 · 정적 주소 · 헬스와 무관하게 **항상 활성**
+    🔴 **경로가 `/` 가 아니다.** `iam.<도메인>/` 는 iam 게이트웨이 라우터로 떨어져
+    404 다(`infra/demo/iam-traefik.override.yml`). 그래서 `data-demo-probe-path` 로
+    `/login` 을 적는다. 이 값은 `TASK-MONO-624` 기동 창에서 **실측된 200** 이다.
 
-      🔴🔴 TASK-MONO-625 — **한 선언이 두 질문에 답하고 있었고, console 에서 둘이 갈렸다.**
+    🔵 이 원소는 `data-surface` 가 **아니므로** `renderSurfaces()` 가 안 읽는다.
+    방문자에게는 존재하지 않는다. 가드 (z14)·(z15)가 그 분리를 지킨다.
+    🔴 지우지 마라 — 지우면 부팅 판정이 «판정 불가» 로 빨개진다. 그것이 의도된 동작이다.
 
-        «방문자는 어디로 가는가»          → data-served / data-url
-        «부팅이 끝났는지 무엇으로 재는가»  → 지금까지 **같은** data-served 였다
+    🔵 TASK-MONO-634 — 묶음 선택이 들어와도 이 원소는 **안 바뀐다.** 어떤 묶음을 고르든
+       `iam` 은 하드 의존으로 항상 함께 뜨므로(projects.sh 의 DEPS), 이 프로브는 모든
+       선택에서 유효하다. 🔵 그것이 `iam` 을 고른 것의 **두 번째 이유**가 됐다 — 묶음마다
+       프로브가 갈렸다면 부팅 판정이 선택마다 달라져야 했을 것이다.
+  -->
+  <span id="bootprobe" hidden data-demo-boot-probe data-domain="iam" data-demo-probe="iam" data-demo-probe-path="/login"></span>
 
-      형제 둘(ecommerce · fan)에서는 그 둘이 같았다 — 데모 호스트가 그 화면을
-      **억제**했으므로(`*-vercel.override.yml`) 찌를 표면 자체가 없었다. console 은 다르다:
-      방문자는 Vercel 로 가지만 **데모 호스트도 여전히 서빙한다**(`projects.sh` 의 `[console]`
-      체인에 억제 오버레이가 없다). ⇒ 두 답이 처음으로 갈라진다.
+  <!--
+    ==========================================================================
+    방문자 화면 카드 (TASK-MONO-560 → 583 → 603 → 625/627 → **634**)
+    ==========================================================================
+    🔴 `data-surface` 를 단 앵커는 **한 줄에 하나**여야 한다. `demo-up.sh` 와 가드 (z14)가
+       둘 다 줄 단위 `grep`/`awk` 로 이 행을 뽑는다 — 여러 줄로 쪼개면 그 행은 **판정에서
+       통째로 빠지고**, (z14)의 loose 대조가 그것을 빨갛게 만든다.
 
-      그래서 세 번째 속성이 **부팅 프로브만**을 따로 적는다:
+    🔴 각 행은 **자기가 어디서 서빙되는지 선언한다** (`data-served`):
+         data-served="demo-host" → data-host 필수 · demoHost() 파생 · 도메인 헬스에 묶인다
+         data-served="vercel"    → data-url 필수 · 정적 주소 · 헬스와 무관하게 **항상 활성**
+       기본값은 없다. 선언이 없거나 모르는 값이면 링크를 **열지 않고** (z14)가 빨개진다.
 
-        data-demo-probe="<호스트접두사>" → **vercel 행 전용.** 방문자 경로와 무관하게
-            `demo-up.sh` 가 부팅 판정에서 이 접두사를 찌른다.
+    🔴🔴 TASK-MONO-634 — **카드가 두 가지를 분리한다.** 요구가 명시적이다:
+        *"이미지·제목·둘러보기는 항상 해당 Vercel 프런트엔드 주소로 이동한다.
+          링크 클릭이 서버 기동을 겸하지 않게 한다."*
+       그래서 카드 안에 **서로 다른 두 컨트롤**이 있다:
+         · 썸네일 링크 + `data-surface` 앵커(둘러보기) → 언제나 정적 Vercel 주소로 이동
+         · `<button data-bundle-start>`                → 그 묶음의 백엔드만 기동
+       한 요소가 둘을 겸하면 «둘러보러 눌렀는데 EC2 가 켜졌다» 가 되고, 그것은 요금이
+       걸린 부작용이다. **겸하지 않는다는 사실이 마크업의 모양으로 강제된다.**
 
-      🔴 **`data-host` 를 재사용하지 않는다.** (z14) 는 vercel 행의 잔존 `data-host` 를
-         «아무도 안 읽는 낡은 값» 으로 **실패로 문다** — 그 규칙은 옳다. 「낡은 값」과
-         「의도된 선언」은 다른 것이므로 **이름을 달리해야** 한다.
-      🔵 이 속성을 **방문자 경로는 안 읽는다.** `renderSurfaces()` 는 data-served/url/host
-         만 본다 — 행을 옮겨도 방문자가 보는 것은 바뀌지 않는다. 부팅 판정만의 축이다.
-      🔴 데모 호스트가 그 화면을 **억제하게 되면 이 속성을 같은 PR 에서 지워야** 한다.
-         안 지우면 부팅 판정이 영원히 안 열리는 주소를 12번 재시도하고, 그 실패는
-         **"데모가 안 떴다"** 로 읽힌다. 그때 남는 프로브가 0개가 되는 것은
-         **하한 조정이 아니라 설계 변경**이다 — `demo-up.sh` 의 SURFACE_FLOOR 주석을 읽어라.
+    🔴 썸네일 링크는 `data-surface` 를 **안 단다.** 달면 (z14)의 loose 대조가 같은 화면을
+       두 번 세고, 판정 대상은 «화면당 하나» 여야 한다. 그래서 썸네일은 `href` 를 마크업에
+       직접 갖고(정적 주소라 파생이 필요 없다), 판정은 아래 둘러보기 행이 받는다.
 
-      🔴🔴 TASK-MONO-627 — **그 일이 일어났다. 그리고 그 설계 변경이 아래 #bootprobe 다.**
-         단계 3 이 console 을 억제했으므로(`infra/demo/console-vercel.override.yml`)
-         이 세 행 중 **어느 것도** 부팅 프로브를 선언하지 않는다 — 데모 호스트가
-         방문자 표면을 하나도 안 서빙하기 때문이다. `data-demo-probe` 기전 자체는
-         **남긴다**: 데모 호스트가 어떤 화면을 다시 서빙하게 되면 그 행이 그 속성으로
-         자기를 프로브에 다시 등록하는 것이 여전히 옳은 길이고, (z14) 가 그 모양을
-         계속 검사한다.
-         🔵 지금 이 세 행에 그 속성이 **없다는 것 자체가** 억제가 걸려 있다는 뜻이다.
+    🔴🔴 **이 주석들이 자기 자신에게 걸린 적이 있다 (2026-09-07, 이 파일에서 실측).**
+       (z14) 의 loose 대조는 `grep -c '<a [^>]*data-surface'` 다. 위 두 문단이 설명하려고
+       그 문자열을 **산문에 그대로 적었더니** loose 가 5, 파싱이 3 이 되어 가드가 빨개졌다.
+       ⇒ **판정 축과 검색 축이 같은 매체(이 파일)일 때 문서가 판정에 섞인다** — 이 저장소가
+       반복해서 밟는 함정이고, (z12) 도 같은 것에 물렸다.
+       🔵 고친 방향: 가드를 느슨하게 하지 않고 **산문에서 그 리터럴을 뺐다.** 반대로 했으면
+       (예: 주석 제거 후 grep) 진짜 마크업 오류도 함께 통과했을 것이다.
 
-      🔴 **기본값이 없다.** 선언이 없거나 모르는 값이면 이 페이지는 그 링크를 **열지 않고**
-      (모르는 것은 통과가 아니다 — 방문자에게 깨진 링크를 주는 쪽이 더 나쁘다), 가드 (z14)
-      는 **빨개진다.** 두 속성은 **상호 배타**다: vercel 행에 data-host 를 남겨 두면 그것은
-      아무도 안 쓰는 낡은 값이 되고, 다음 사람은 그것을 보고 그 화면이 여전히 데모 호스트에
-      있다고 읽는다. `demo-up.sh` 의 부팅 판정도 **같은 선언**을 읽어 찌를 행을 고른다.
-    -->
-    <!--
-      부팅 프로브 선언 (TASK-MONO-627). 🔴 **방문자 표면이 아니다.**
-
-      `demo-up.sh` 는 부팅 완료를 컨테이너 헬스만으로 재지 않는다 — `TASK-MONO-552` 가
-      **99/102 컨테이너 healthy 인데 모든 화면이 502** 인 상태를 실측했기 때문이다(AC-3).
-      그 축은 «데모 호스트의 어떤 HTTP 표면이 실제로 2xx/3xx 를 내는가» 로 재어진다.
-
-      🔴🔴 단계 3 이 console 을 억제하면서 그 축의 대상이 **0개**가 됐다. 하한을 0 으로
-      내리면 루프가 빈 채로 통과하고 «표면이 정상» 과 «측정이 죽었다» 가 구별되지 않는다
-      ⇒ 대상을 **옮겼다.** 그것이 이 원소다.
-
-      🔵 **`iam` 이 임의의 대체물이 아닌 이유** — 억제 뒤 방문자가 여전히 데모 호스트를
-      밟는 **유일한 홉**이다. Vercel 콘솔의 로그인은
-        브라우저 → console.hubwang.com(Vercel) → auth.hubwang.com(Vercel 포워더)
-                 → http://iam.<그날 도메인>/login   ← 여기
-      로 간다(`infra/demo/auth-forwarder/.../route.ts` 의 `servicePrefix: 'iam'`).
-      즉 이 프로브는 「방문자와 무관한 내부 표면」이 아니라 **방문자 경로의 마지막
-      데모-호스트 홉**이고, 552 가 잡으려던 실패(엣지는 사는데 앱이 502)를 그대로 잡는다.
-
-      🔴 **경로가 `/` 가 아니다.** `iam.<도메인>/` 는 iam 게이트웨이 라우터로 떨어져
-      404 다(`infra/demo/iam-traefik.override.yml` — OIDC 라우터는 `/oauth2` `/connect`
-      `/login` `/signup` `/.well-known` 접두사만 우선한다). 그래서 `data-demo-probe-path`
-      로 `/login` 을 적는다. 이 값은 `TASK-MONO-624` 기동 창에서 **실측된 200** 이다.
-      🔴 경로를 지우면(기본값 `/`) 부팅 판정이 404 를 12번 재시도하다 실패한다 —
-      그것이 정확히 이 티켓의 Failure Scenario ① 의 모양이다.
-
-      🔵 이 원소는 `data-surface` 가 **아니므로** `renderSurfaces()` 가 안 읽는다.
-      방문자에게는 존재하지 않는다. 가드 (z14)·(z15)가 그 분리를 지킨다.
-      🔴 지우지 마라 — 지우면 부팅 판정이 «판정 불가» 로 빨개진다. 그것이 의도된
-      동작이다(조용한 초록보다 낫다).
-    -->
-    <span id="bootprobe" hidden data-demo-boot-probe data-domain="iam" data-demo-probe="iam" data-demo-probe-path="/login"></span>
-    <div id="surfaces">
-      <a class="open" data-surface data-domain="console"   data-served="vercel"    data-url="https://console.hubwang.com/" target="_blank" rel="noopener">🖥️ 운영자 콘솔 열기 →</a>
-      <a class="open" data-surface data-domain="ecommerce" data-served="vercel"    data-url="https://store.hubwang.com/" target="_blank" rel="noopener">🛒 이커머스 스토어 열기 →</a>
-      <a class="open" data-surface data-domain="fan"       data-served="vercel"    data-url="https://fan.hubwang.com/" target="_blank" rel="noopener">🎤 팬 플랫폼 열기 →</a>
-      <div id="smsg"></div>
-    </div>
+    🔵 `data-bundle` 은 `/bundles` 응답의 키이고, 그 키의 정본은 `projects.sh` 의
+       `BUNDLES` 다(Lambda 의 사본과 가드 (z32)가 대조한다).
+  -->
+  <div id="surfaces">
+    <article class="scard" data-bundle="console">
+      <a class="thumb-link" href="https://console.hubwang.com/" target="_blank" rel="noopener" aria-label="운영자 콘솔 열기"><img class="thumb" src="thumbnails/console.png" alt="운영자 콘솔 미리보기" loading="lazy" /></a>
+      <div class="body">
+        <h2>운영자 콘솔</h2>
+        <p class="desc">여러 도메인을 한 화면에서 운영하는 백오피스. 대시보드·주문·재고·조직·권한.</p>
+        <dl>
+          <dt>대표 기능</dt><dd>도메인 헬스 대시보드 · 이커머스/WMS/SCM/ERP/재무 운영 · IAM 테넌트·권한</dd>
+          <dt>기동되는 서비스</dt><dd data-services>—</dd>
+          <dt>공개 둘러보기</dt><dd><span class="badge b-tour">로그인 없이 샘플 탐색</span></dd>
+          <dt>실시간 기능</dt><dd><span class="badge b-unknown" data-bundle-badge>… 확인 중</span></dd>
+        </dl>
+        <div class="acts">
+          <a class="open" data-surface data-domain="console" data-served="vercel" data-url="https://console.hubwang.com/" target="_blank" rel="noopener">둘러보기 →</a>
+          <button class="bstart" data-bundle-start type="button">실시간 기능 시작</button>
+        </div>
+      </div>
+    </article>
+    <article class="scard" data-bundle="store">
+      <a class="thumb-link" href="https://store.hubwang.com/" target="_blank" rel="noopener" aria-label="이커머스 스토어 열기"><img class="thumb" src="thumbnails/store.png" alt="이커머스 스토어 미리보기" loading="lazy" /></a>
+      <div class="body">
+        <h2>이커머스 스토어</h2>
+        <p class="desc">방문자용 상품 카탈로그. 목록·상세·카테고리·검색·필터·정렬이 로그인 없이 동작합니다.</p>
+        <dl>
+          <dt>대표 기능</dt><dd>상품 탐색 · 검색/필터/정렬 · 장바구니 · 주문·결제(로그인 필요)</dd>
+          <dt>기동되는 서비스</dt><dd data-services>—</dd>
+          <dt>공개 둘러보기</dt><dd><span class="badge b-tour">로그인 없이 전체 카탈로그</span></dd>
+          <dt>실시간 기능</dt><dd><span class="badge b-unknown" data-bundle-badge>… 확인 중</span></dd>
+        </dl>
+        <div class="acts">
+          <a class="open" data-surface data-domain="ecommerce" data-served="vercel" data-url="https://store.hubwang.com/" target="_blank" rel="noopener">둘러보기 →</a>
+          <button class="bstart" data-bundle-start type="button">실시간 기능 시작</button>
+        </div>
+      </div>
+    </article>
+    <article class="scard" data-bundle="fan">
+      <a class="thumb-link" href="https://fan.hubwang.com/" target="_blank" rel="noopener" aria-label="팬 플랫폼 열기"><img class="thumb" src="thumbnails/fan.png" alt="팬 플랫폼 미리보기" loading="lazy" /></a>
+      <div class="body">
+        <h2>팬 플랫폼</h2>
+        <p class="desc">아티스트와 팬을 잇는 커뮤니티. 공개 피드·아티스트 프로필·멤버십 소개는 로그인 없이 열립니다.</p>
+        <dl>
+          <dt>대표 기능</dt><dd>공개 피드 · 아티스트 검색/프로필 · 멤버십 · 글·댓글·팔로우(로그인 필요)</dd>
+          <dt>기동되는 서비스</dt><dd data-services>—</dd>
+          <dt>공개 둘러보기</dt><dd><span class="badge b-tour">로그인 없이 공개 게시물</span></dd>
+          <dt>실시간 기능</dt><dd><span class="badge b-unknown" data-bundle-badge>… 확인 중</span></dd>
+        </dl>
+        <div class="acts">
+          <a class="open" data-surface data-domain="fan" data-served="vercel" data-url="https://fan.hubwang.com/" target="_blank" rel="noopener">둘러보기 →</a>
+          <button class="bstart" data-bundle-start type="button">실시간 기능 시작</button>
+        </div>
+      </div>
+    </article>
+    <div id="smsg"></div>
   </div>
+
+  <div id="bmsg" class="hint" style="margin-top:14px"></div>
 
   <!--
     로그인 계정 (TASK-MONO-561).
 
     이 블록이 없어서 방문자가 못 들어갔다. 로그인 화면은 나오는데 계정을 모르니
     "회원가입" 을 누르게 되고, 그 경로는 콘솔 클라이언트에서 **구조적으로 불가능**하며
-    (TASK-BE-581 — 예약 슬러그 `iam` 에는 테넌트 행이 없다) 실패 메시지마저 틀렸다
-    (TASK-BE-580 — 영구 404 를 "일시적 장애" 로 보고). 두 결함은 방문자가 이 구멍을
-    메우려다 밟은 것이다.
+    (TASK-BE-581) 실패 메시지마저 틀렸다(TASK-BE-580).
 
     🔵 비밀번호를 여기 적는 것은 새로운 노출이 아니다. `Demo1234!` 는 이미 저장소에
     있고 마이그레이션 주석이 스스로를 "one published demo password" 라고 부른다.
-    데모 전체가 무인증 공개이고(/start 포함), 지출 상한은 계정이 아니라 **월 예산
-    가드**가 지킨다. 🔴 여기 오는 것은 **데모 시드 계정뿐이다** — AWS 자격증명·API 키는
-    오지 않는다(TASK-MONO-557 이 세운 경계).
-
     🔴 값을 손으로 고치지 마라. `verify-demo-wrapper.sh` (z11) 이 이 두 값을
     `infra/demo/seed/lib.sh` 의 `user_token()` 기본값과 **양방향으로** 대조한다.
-    lib.sh 쪽이 권위인 이유: 그 값은 부팅마다 **실제로 로그인에 쓰인다**(시드가 통과하면
-    로그인은 이미 검증된 것이다). 시드 마이그레이션의 평문은 주석일 뿐이고 컬럼에 든
-    것은 Argon2id 해시라 대조할 수 없다.
+
+    🔵 TASK-MONO-634 — 이 블록은 이제 **둘러보기 뒤에** 온다. 로그인은 더 이상 첫 관문이
+       아니기 때문이다(공개 열람이 먼저다). 순서 자체가 «무엇이 먼저 필요한가» 를 말한다.
   -->
   <div class="card creds">
-    <h2>로그인 계정</h2>
-    <p>세 화면(운영 콘솔 · 이커머스 · 팬 플랫폼) 모두 <strong>같은 계정</strong>으로 들어갑니다.</p>
+    <h2>로그인 계정 (실시간 기능용)</h2>
+    <p>공개 둘러보기에는 <strong>필요 없습니다.</strong> 글쓰기·주문·운영 기능을 쓸 때 세 화면 모두 <strong>같은 계정</strong>으로 들어갑니다.</p>
     <dl style="margin:0">
       <div class="crow">
         <dt>이메일</dt>
@@ -205,8 +271,6 @@
       테넌트에서 CUSTOMER 일 뿐이라 /api/admin/** 에 그대로 가면 **전부 403**(실측 6/6).
       운영자 권한은 계정에 붙어 있지 않고 **demo-corp 를 assume 하는 순간 파생된다**
       (OperatorRoleDerivation.fromEntitledDomains — demo-corp 가 5개 도메인을 구독한다).
-      즉 로그인만 하고 테넌트를 안 고르면 방문자는 빈 화면과 403 을 보고 "고장났다" 로
-      읽는다 — 계정이 모자라서가 아니다.
     -->
     <p class="hint" style="margin-top:14px">
       콘솔에 로그인한 뒤 <strong>테넌트를 <code>demo-corp</code> 로 선택</strong>하세요.
@@ -215,21 +279,49 @@
   </div>
 
   <!--
-    도메인 선택 (TASK-MONO-477). 인스턴스가 running 일 때만 보인다. 전체가 아니라
-    필요한 도메인만 올리면 OOM 여유·웜업 시간을 벌 수 있다(비용은 VM 가동시간이 결정하므로
-    도메인 수와 무관 — 월 예산 가드는 그대로다). 헬스는 /domains 폴링으로 갱신한다.
-  -->
-  <div class="card domains" id="domains">
-    <h2>도메인 선택 기동 / 종료</h2>
-    <div class="dall">
-      <button id="dall-start">전체 시작</button>
-      <button id="dall-stop">전체 종료</button>
-    </div>
-    <div id="dlist"></div>
-    <div id="dmsg" class="hint" style="margin-top: 10px"></div>
-  </div>
+    ==========================================================================
+    고급 제어 (TASK-MONO-477 → 634)
+    ==========================================================================
+    🔴🔴 **`<details>` 안으로 들어갔다 — 그것이 요구사항이다:**
+        *"기존 도메인별 상세 제어는 고급 영역으로 유지할 수 있다.
+          전체 시작은 기본 행동에서 제외한다."*
 
-  <p class="hint">자동 종료: 20분 무활동 · 최대 3시간. 요금 안전장치가 이중으로 걸려 있습니다.</p>
+    「전체 시작」을 지우지 않고 **접은** 이유: 그 버튼은 여전히 유효한 동작이고(면접
+    콜드스타트 전에 미리 다 올려 두는 용도), 지우면 그 능력이 사라진다. 접으면 **기본
+    행동에서 빠지되 남는다** — 요구가 구별한 것이 정확히 그 둘이다.
+    🔴 접힌 영역의 버튼도 **여전히 동작해야** 한다. `<details>` 는 DOM 에서 요소를 빼지
+       않으므로 `$("dlist")` 등의 조회는 그대로 성립한다. 접었다고 코드를 지우면 그 순간
+       고급 경로가 죽는다.
+  -->
+  <details class="adv">
+    <summary>고급 — 도메인 단위 제어 · 전체 스택 기동</summary>
+    <div class="card">
+      <button id="start">▶ 전체 스택 시작</button>
+      <button id="stop" disabled>■ 데모 종료 (EC2 정지)</button>
+      <div id="bar"><i></i></div>
+      <div id="msg">상태 확인 중…</div>
+      <p class="hint">
+        「전체 스택 시작」은 8개 프로젝트를 전부 올립니다(약 10분). 카드의 「실시간 기능 시작」이
+        필요한 것만 올리므로 평소에는 그쪽을 쓰세요.
+        「데모 종료」는 <strong>EC2 인스턴스 전체</strong>를 정지합니다 — 묶음 하나만 내리는 것과 다릅니다.
+      </p>
+      <div class="domains" id="domains">
+        <h3>도메인 선택 기동 / 종료</h3>
+        <div class="dall">
+          <button id="dall-start">전체 시작</button>
+          <button id="dall-stop">전체 종료</button>
+        </div>
+        <div id="dlist"></div>
+        <div id="dmsg" class="hint" style="margin-top: 10px"></div>
+      </div>
+    </div>
+  </details>
+
+  <p class="hint">
+    자동 종료: 20분 무활동 · 최대 3시간 · 월 예산 상한. 요금 안전장치가 삼중으로 걸려 있습니다.<br />
+    🔵 <strong>공개 둘러보기는 서버를 켜지도, 켜진 서버를 살려 두지도 않습니다</strong> — 이 페이지와
+    로그인한 세션만 사용 신호(heartbeat)를 보냅니다.
+  </p>
 
   <!-- terraform 이 자기 상태에서 렌더한다 (aws_s3_object.config). 저장소에는 없다. -->
   <script src="config.js"></script>
@@ -239,28 +331,31 @@
     // 이제 terraform 이 config.js 를 자기 상태에서 렌더한다(TASK-MONO-389).
     const API_BASE = window.DEMO_API_BASE;
 
-    // config.js 가 없으면 **크게 실패한다.** 조용히 undefined 로 두면 페이지는 200 을
-    // 내고 버튼은 아무 일도 하지 않는다 — 정확히 이 task 가 고친 결함의 모양이다.
-    if (!API_BASE) {
+    // config.js 가 없으면 예전 판은 여기서 `throw` 했다. 조용히 undefined 로 두면 페이지는
+    // 200 을 내고 버튼은 아무 일도 하지 않기 때문이다 — 그 판단 자체는 옳았다.
+    //
+    // 🔴🔴 TASK-MONO-634 — 그런데 **이제 둘러보기까지 죽이면 안 된다.** 이 페이지의 가장
+    //    중요한 기능이 «세 화면으로 가는 정적 링크» 가 됐고, 그것은 컨트롤 플레인과
+    //    **무관하다**. 예전처럼 throw 하면 config.js 가 없는 날 **둘러보기도 함께 죽는다** —
+    //    그것은 ADR-MONO-070 이 만든 성질(백엔드 없이도 화면이 선다)을 론처가 스스로 깨는
+    //    것이고, 하필 «제어 API 가 없다» 는 가장 흔한 배포 사고에서 발동한다.
+    //    ⇒ 기동 관련 컨트롤만 끄고, 링크는 살린 채로 **사실을 말한다.**
+    const CONTROL_OK = typeof API_BASE === "string" && API_BASE !== "";
+    if (!CONTROL_OK) {
       document.getElementById("msg").textContent =
         "⚠️ config.js 가 로드되지 않았습니다 — terraform apply 로 사이트를 배포했는지 확인하세요.";
       document.getElementById("start").disabled = true;
-      throw new Error("DEMO_API_BASE is not set: config.js missing or not deployed");
+      document.getElementById("bmsg").textContent =
+        "⚠️ 제어 API 주소가 없어 실시간 기능 기동은 사용할 수 없습니다. 둘러보기는 정상 동작합니다.";
     }
 
     // 데모 진입 URL 은 /status 가 돌려주는 공인 IP 로 **동적 구성**한다.
     // 인스턴스에 EIP 가 없어 start 마다 IP 가 바뀌므로 상수로 박을 수 없다.
     //
     // ⚠️ **대시 표기다.** 데모 호스트는 부팅 시 IMDSv2 로 공인 IP 를 읽어
-    //     printf '%s.sslip.io' "$(printf '%s' "$ip" | tr '.' '-')"     ← demo-boot.sh:64
+    //     printf '%s.sslip.io' "$(printf '%s' "$ip" | tr '.' '-')"     ← demo-boot.sh
     // 로 DEMO_DOMAIN 을 파생하고, **Traefik 라우터는 그 표기로만 존재한다.**
-    //
-    // sslip.io 는 점 표기(`console.1.2.3.4.sslip.io`)도 같은 IP 로 해석해 준다.
-    // 그래서 DNS 는 멀쩡히 풀리고 TCP 도 붙는데 — **Traefik 이 매치되는 라우터를
-    // 못 찾아 404 를 낸다.** 이 페이지는 실제로 점 표기로 링크하고 있었다:
-    // 사이트 200, `/start` 200, 컨테이너 전부 healthy, 그런데 "데모 사이트 열기" 가 404.
-    // 실측(MONO-389): 점 → **404** / 대시 → **307 → /dashboards/overview**.
-    //
+    // 실측(MONO-389): 점 → **404** / 대시 → **307**.
     // 가드 (t) 가 이 함수와 demo-boot.sh 의 파생을 **같은 IP 로 실행해 대조**한다.
     const demoHost = (ip) => `${ip.replace(/\./g, "-")}.sslip.io`; // GUARD-T-ANCHOR
 
@@ -269,32 +364,22 @@
     // -----------------------------------------------------------------------
     // 🔴 **데모 호스트에서 서빙되는 링크는** 반드시 demoHost() 를 통과한다. 한 곳이라도 IP 를
     //    직접 조립하면 다음 재기동에서 그 링크만 죽고 나머지가 멀쩡해 **원인이 안 보인다**.
-    //    호스트 접두사는 마크업의 data-host 에 있고 여기서 조립만 한다.
     //
     // 🔴🔴 TASK-MONO-583 — 이 문장은 **예전에 "모든 링크는"** 이었고, 그것이 더 이상 참이
     //    아니다. 왜 예외가 생겼는지 적어 둔다 — 값만 고치면 다음 사람이 "일관성" 이라는
-    //    이유로 원복하기 때문이다:
-    //
-    //      `ADR-MONO-067` 이 일부 방문자 화면을 Vercel 로 옮겼다. 그 화면의 **존재 이유가
-    //      데모 호스트를 안 타는 것**이다 — 데모가 꺼져 있어도(= 대부분의 시간) 떠야 하고,
-    //      그래서 주소가 IP 에 파생되면 안 된다. demoHost() 를 통과시키면 그 화면은
-    //      **데모가 꺼진 동안 죽고**, 이관은 아무 일도 하지 않은 것이 된다.
-    //
-    //    🔴 그렇다고 "스토어는 예외" 로 느슨하게 만들지 마라. 그러면 **데모 호스트 행에
-    //    실수로 정적 주소를 쓰는 것**도 같이 통과한다. 축은 예외가 아니라 **선언**이다:
-    //    행이 `data-served` 로 자기 출처를 말하고, 두 정책이 각각 **끝까지** 집행된다.
-    //    (z14) 가 두 정책을 **양쪽 다** 실행 대조하고, 양쪽 모집단이 각각 ≥1 임을 단언한다.
+    //    이유로 원복하기 때문이다: `ADR-MONO-067` 이 일부 방문자 화면을 Vercel 로 옮겼고,
+    //    그 화면의 **존재 이유가 데모 호스트를 안 타는 것**이다.
+    //    🔴 축은 예외가 아니라 **선언**이다: 행이 `data-served` 로 자기 출처를 말하고,
+    //    두 정책이 각각 **끝까지** 집행된다. (z14) 가 두 정책을 **양쪽 다** 실행 대조한다.
     // GUARD-Z14-BEGIN — (z14) 가 이 구간을 **실행해서** 링크 판정을 대조한다.
     const surfaceUrl = (ip, prefix) => `http://${prefix}.${demoHost(ip)}/`;
 
     // 서빙 출처 — 마크업의 `data-served` 가 유일한 출처이고 **기본값이 없다.**
     const SERVED_DEMO = "demo-host", SERVED_VERCEL = "vercel";
 
-    // 🔴 `partial` 을 **비활성으로 정한다** — 그리고 그 결정을 여기 적는다(AC-2 (3)).
-    // partial 은 그 도메인의 컨테이너 일부가 unhealthy 라는 뜻이고, 웹 표면이 그중
-    // 하나일지 아닐지 이 페이지는 알 수 없다. 활성으로 두면 방문자가 눌러서 404/500 을
-    // 보고 **"고장났다"** 로 읽는다 — 이 티켓의 발견 경로가 정확히 그 오독이다.
-    // 조금 더 기다리게 하는 쪽이 잘못된 인상을 주는 쪽보다 낫다.
+    // 🔴 `partial` 을 **비활성으로 정한다** — 그리고 그 결정을 여기 적는다. partial 은 그
+    // 도메인의 컨테이너 일부가 unhealthy 라는 뜻이고, 웹 표면이 그중 하나일지 이 페이지는
+    // 알 수 없다. 활성으로 두면 방문자가 눌러서 404/500 을 보고 **"고장났다"** 로 읽는다.
     const SURFACE_LIVE = (st) => st === "up";
     let lastIp = null, lastSnap = null, lastStale = false;
 
@@ -302,18 +387,15 @@
     // 🔴🔴 TASK-MONO-603 — **블록의 가시성은 «데모가 떴는가» 가 아니다**
     // -----------------------------------------------------------------------
     // 이 줄은 원래 `(isRun && ip)` 였고, 모든 방문자 화면이 데모 호스트에 있던 시절엔
-    // **옳았다** — 데모가 꺼져 있으면 셋 다 못 여니 블록째 숨기는 것이 맞았다.
-    //
-    // `ADR-MONO-067` 이 **데모를 안 타는 화면**을 만들면서 그 전제가 깨졌다.
-    // `TASK-MONO-583` 은 그것을 **행 단위**에서만 반영했고(스토어 행은 다섯 상태 전부
-    // 활성), 그 결과 **활성인 채로 영영 안 보이는 링크**가 생겼다 — 실측(2026-08-29):
-    // 서빙본은 새 마크업인데 `/status` 가 `stopped` 라 블록이 `display:none` 이었다.
+    // **옳았다**. `ADR-MONO-067` 이 **데모를 안 타는 화면**을 만들면서 그 전제가 깨졌다.
+    // `TASK-MONO-583` 은 그것을 **행 단위**에서만 반영했고, 그 결과 **활성인 채로 영영
+    // 안 보이는 링크**가 생겼다 — 실측(2026-08-29): 서빙본은 새 마크업인데 `/status` 가
+    // `stopped` 라 블록이 `display:none` 이었다.
     //
     // ⇒ 물어야 할 것은 **«지금 열 수 있는 화면이 하나라도 있는가»** 다.
     //
-    // 🔴 「스토어가 있으니 항상 보인다」로 **상수화하지 마라.** 단계 3·4 가 행을 옮기거나
-    //    되돌리면 그 상수는 **조용히 거짓**이 된다. 술어는 마크업의 `data-served`
-    //    선언에서 **파생**된다 — 583 이 만든 그 선언이 유일한 출처다.
+    // 🔴 「스토어가 있으니 항상 보인다」로 **상수화하지 마라.** 술어는 마크업의
+    //    `data-served` 선언에서 **파생**된다 — 583 이 만든 그 선언이 유일한 출처다.
     // 🔴 `data-url` 이 없는 vercel 행은 세지 않는다. 그 행은 renderSurfaces 가 비활성으로
     //    두므로, 세면 **아무것도 열 수 없는 빈 블록**을 보여 주게 된다.
     const anyAlwaysOpenSurface = () => {
@@ -324,9 +406,16 @@
     };
     // 🔵 값을 돌려주지 않고 **직접 쓴다** — 호출부가 결과를 버리면 (z14) 가 render() 를
     //    실행해도 컨테이너가 안 바뀌므로, 그 실수를 가드가 그대로 잡는다.
+    //
+    // 🔴🔴 TASK-MONO-634 — display 값이 `"block"` → `"grid"` 로 바뀌었다. 가드 (z14)는
+    //    여섯 상태에서 이 값을 **문자열 `"block"` 으로 단언하고 있었다**. 그 단언은 축을
+    //    잘못 잡은 것이다: 재려던 성질은 «보이는가» 이고, `block` 은 그 성질의 **당시
+    //    구현**이었을 뿐이다. 값으로 얼려 두면 레이아웃 변경이 «회귀» 로 보고된다.
+    //    ⇒ 가드를 같은 PR 에서 «`none` 이 아닌가» 로 고쳤다. 대조군(vercel 행 0개 →
+    //      `none`)은 그대로 살아 있으므로 칸은 줄지 않는다.
     function surfacesVisible(isRun, ip) {
       const shown = !!(isRun && ip) || anyAlwaysOpenSurface();
-      $("surfaces").style.display = shown ? "block" : "none";
+      $("surfaces").style.display = shown ? "grid" : "none";
       return shown;
     }
 
@@ -344,9 +433,6 @@
         }
 
         // ── 선언이 없거나 모르는 값 — **열지 않는다.** 안전한 쪽이 폴백이다.
-        //    (z14) 가 이 경우를 별도로 빨갛게 만든다. 여기서 조용히 데모 호스트 정책을
-        //    주면 새 출처가 생겼을 때 그 행이 **한쪽 정책을 조용히 받는다** — 이 티켓이
-        //    막아야 하는 실패가 정확히 그것이다.
         if (served !== SERVED_DEMO) {
           a.classList.toggle("off", true); a.removeAttribute("href"); off++;
           continue;
@@ -354,16 +440,15 @@
 
         // ── 데모 호스트 행 — 기존 네 칸 그대로.
         const st = (lastSnap && lastSnap[a.dataset.domain] || {}).state || "unknown";
-        // 🔴 health_stale 이면 **어떤 state 도 믿지 않는다**(AC-2 (4)). 그 필드는
-        //    TASK-MONO-551 이 만든 것이고, 참일 때 `up` 을 믿으면 **꺼진 스택의 링크를
-        //    초록으로** 준다. 실측에서 그때 호스트는 15분째 무응답이었다.
+        // 🔴 health_stale 이면 **어떤 state 도 믿지 않는다**. 그 필드는 TASK-MONO-551 이
+        //    만든 것이고, 참일 때 `up` 을 믿으면 **꺼진 스택의 링크를 초록으로** 준다.
         const live = lastIp && !lastStale && SURFACE_LIVE(st);
         a.classList.toggle("off", !live);
         if (live) { a.href = surfaceUrl(lastIp, a.dataset.host); on++; }
         else { a.removeAttribute("href"); off++; }   // href 자체를 없앤다 — 클릭도 새 탭도 없다
       }
       $("smsg").textContent = !off ? ""
-        : lastStale ? "⚠ 헬스 정보가 갱신되지 않아 링크를 열지 않습니다 — 배지를 확인하세요"
+        : lastStale ? "⚠ 헬스 정보가 갱신되지 않아 일부 링크를 열지 않습니다 — 배지를 확인하세요"
         : `아직 준비되지 않은 화면 ${off}개는 비활성입니다 (해당 도메인이 🟢 실행 중이 되면 열립니다)`;
     }
 
@@ -390,18 +475,17 @@
       $("start").disabled = isRun || state === "pending" || state === "starting";
       $("stop").disabled = !isRun;
       $("bar").style.display = (state === "pending" || state === "starting") ? "block" : "none";
-      // 🔴🔴 TASK-MONO-603 — 이 줄이 «(isRun && ip)» 였고, 그래서 583 이 스토어 링크를
-      //    다섯 상태 전부에서 활성으로 만들어 놓고도 **방문자 경로는 안 바뀌었다.**
-      //    행은 열려 있는데 그 행을 담은 블록이 통째로 숨겨져 있었다.
+      // 🔴🔴 TASK-MONO-603 — 이 줄이 «(isRun && ip)» 였고, 그래서 583 이 링크를 다섯 상태
+      //    전부에서 활성으로 만들어 놓고도 **방문자 경로는 안 바뀌었다.**
       surfacesVisible(isRun, ip);
       $("domains").style.display = isRun ? "block" : "none";
       lastIp = ip || null;
       renderSurfaces();
       const label = {
-        stopped: "🟢 대기 중 — 시작을 누르세요",
+        stopped: "🟢 대기 중 — 카드의 「실시간 기능 시작」을 누르세요",
         pending: "🟡 인스턴스 기동 중…",
-        starting: "🟡 서비스 웜업 중… (약 10분 — iam → … → console 순서로 올라옵니다)",
-        running: "✅ 준비 완료 — 데모 사이트를 여세요",
+        starting: "🟡 서비스 웜업 중… (고른 묶음만 올라옵니다)",
+        running: "✅ 실행 중",
         stopping: "🔻 종료 중…",
       }[state] || state;
       $("msg").textContent = usage
@@ -410,6 +494,92 @@
     }
     // GUARD-Z14-END
 
+    // =======================================================================
+    // 카드 상태 렌더 (TASK-MONO-634)
+    // =======================================================================
+    // 🔴🔴 **일부러 GUARD-Z14 구간 밖에 있다.** 그 구간은 가드가 최소 DOM 대역으로
+    //    **실행**하고, 그 대역의 요소는 `{id, textContent, disabled, style}` 뿐이다
+    //    (`verify-demo-wrapper.sh` 의 Z14DRV). 여기서 하는 일 — `querySelectorAll` 로
+    //    카드를 훑고 `className`·`textContent` 를 만지는 것 — 은 그 대역에 없다.
+    //
+    //    구간 안으로 넣으면 가드의 노드 실행이 **TypeError 로 죽고**, 그 빨강의 사유는
+    //    «링크 판정이 틀렸다» 가 아니라 «대역이 좁다» 다 — 즉 가드가 **다른 것을 재게
+    //    된다.** 그래서 축을 나눈다:
+    //      · 구간 안 = «어디로 갈 수 있는가»   (링크 판정 — 가드가 실행 대조)
+    //      · 구간 밖 = «지금 어떤 상태인가»     (배지·버튼 — 표시 전용)
+    //    🔵 이 분리는 우연이 아니라 **가드의 대역이 정의한 경계**다. 대역을 넓히는 편이
+    //       나아 보일 수 있지만, 넓힌 대역은 실물보다 관대해지기 쉽다(반복 함정).
+    const BLABEL = {
+      ready:     ["🟢 사용 가능", "b-up"],
+      booting:   ["🟡 기동 중…", "b-partial"],
+      requested: ["🟡 요청됨 — 기동 대기", "b-partial"],
+      partial:   ["🟠 일부만 실행 중", "b-partial"],
+      stopping:  ["🔻 종료 중", "b-down"],
+      waiting:   ["⚪ 꺼짐", "b-down"],
+      unknown:   ["🔴 확인 불가", "b-stale"],
+    };
+    // 🔴 «시작» 을 누를 수 있는 상태와 아닌 상태를 **명시**한다. 기동 중에 또 누르면
+    //    중복 요청이 되고(서버가 멱등이지만) 방문자는 «안 먹혔다» 로 읽는다.
+    // 🔵 `unknown` 을 startable 에 넣는다 — «확인 불가» 일 때 버튼을 잠그면, 헬스 발행이
+    //    끊긴 동안 방문자가 **아무것도 못 한다.** 모르는 것은 «못 한다» 가 아니다.
+    const B_STARTABLE = new Set(["waiting", "partial", "unknown"]);
+    let lastBundles = null;
+
+    function renderCards() {
+      for (const card of document.querySelectorAll("[data-bundle]")) {
+        const key = card.dataset.bundle;
+        const info = (lastBundles && lastBundles[key]) || null;
+        const badge = card.querySelector("[data-bundle-badge]");
+        const btn = card.querySelector("[data-bundle-start]");
+        const svc = card.querySelector("[data-services]");
+
+        // 🔵 «기동되는 서비스 목록» 은 **서버가 말한다**(`/bundles` 의 domains). 마크업에
+        //    적으면 projects.sh 의 DEPS 가 바뀌는 날 이 페이지만 낡는다 — 그리고 그 거짓은
+        //    «무엇이 켜지는지» 라는, 방문자가 확인할 수 없는 축에 앉는다.
+        if (svc) svc.textContent = info ? info.domains.join(" · ") : "—";
+
+        const st = info && BLABEL[info.state] ? info.state : "unknown";
+        const [text, cls] = BLABEL[st];
+        if (badge) { badge.className = "badge " + cls; badge.textContent = info ? text : "… 확인 중"; }
+        if (btn) {
+          const startable = CONTROL_OK && info !== null && B_STARTABLE.has(st);
+          btn.disabled = !startable;
+          btn.className = "bstart" + (startable ? " on" : "");
+          btn.textContent = st === "ready" ? "실시간 기능 사용 중"
+            : (st === "booting" || st === "requested") ? "기동 중…"
+            : "실시간 기능 시작";
+        }
+      }
+    }
+
+    async function pollBundles() {
+      if (!CONTROL_OK) { renderCards(); return; }
+      try {
+        const { ok, body } = await api("/bundles");
+        if (!ok) return;
+        lastBundles = body.bundles || null;
+        renderCards();
+      } catch (e) { /* 다음 폴링이 재시도한다 */ }
+    }
+
+    async function bundleStart(name) {
+      // 🔴 요구사항의 순서를 그대로 구현한다: ① 필요한 서비스와 현재 상태 확인 →
+      //    ② **사용자 버튼 클릭**으로 기동 요청 → ③ 준비 완료 후 로그인 → ④ 원래 경로 복귀.
+      //    ②가 여기다. 링크 클릭이 이 함수를 부르지 않는다는 것이 카드 마크업의 요점이다.
+      $("bmsg").textContent = `${name} 기동 요청 중…`;
+      const { ok, status, body } = await api("/bundle/start", "POST", { bundles: [name] });
+      $("bmsg").textContent = body.message || (ok ? `${name} 기동 요청됨` : `실패 (${status})`);
+      // 🔵 기동 중에도 **둘러보기는 계속된다** — 이 함수는 링크를 건드리지 않는다.
+      setTimeout(pollBundles, 1500);
+      setTimeout(poll, 1500);
+    }
+
+    document.getElementById("surfaces").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-bundle-start]");
+      if (!btn || btn.disabled) return;
+      bundleStart(btn.closest("[data-bundle]").dataset.bundle);
+    });
+
     function startHeartbeat() {
       stopHeartbeat();
       beatTimer = setInterval(() => api("/heartbeat", "POST").catch(() => {}), 30000);
@@ -417,6 +587,11 @@
     function stopHeartbeat() { if (beatTimer) clearInterval(beatTimer); beatTimer = null; }
 
     async function poll() {
+      if (!CONTROL_OK) {
+        // 🔴 제어 API 가 없어도 **링크 판정은 돌려야** 한다 — 그것이 이 페이지의 본체다.
+        render("stopped", null, null);
+        return;
+      }
       try {
         const { ok, body } = await api("/status");
         if (!ok) { $("msg").textContent = "상태 확인 실패"; return; }
@@ -424,19 +599,18 @@
           ? { used: body.used_minutes, budget: body.budget_minutes } : null;
         render(body.state, body.ip, usage);
         if (running(body.state)) { startHeartbeat(); pollDomains(); } else stopHeartbeat();
+        pollBundles();
       } catch (e) { $("msg").textContent = "상태 확인 실패"; }
     }
 
-    // ---- 도메인별 선택 (TASK-MONO-477) ----------------------------------------
+    // ---- 도메인별 선택 (TASK-MONO-477) — 고급 영역 ----------------------------
     const DOMAINS = ["iam", "wms", "scm", "finance", "erp", "ecommerce", "fan", "console"];
     const DLABEL = {
       up: ["🟢 실행 중", "b-up"], partial: ["🟡 일부", "b-partial"],
       down: ["⚪ 꺼짐", "b-down"], unknown: ["… 확인 중", "b-unknown"],
-      // TASK-MONO-551 결함 B — 헬스 발행이 끊긴 상태. 백엔드만 고치고 여기를 그대로 두면
-      // 면접관에게는 **아무것도 안 바뀐다**(이 결함의 사용자 표면은 배지다).
-      // "확인 중"(회색)이 아니라 빨강인 이유: 이 상태의 뜻은 "아직 모른다" 가 아니라
-      // **"인스턴스가 답을 밀어 올리지 못하고 있다"** 이고, 실측에서 그때 호스트는
-      // 15분째 무응답이었다.
+      // TASK-MONO-551 결함 B — 헬스 발행이 끊긴 상태. "확인 중"(회색)이 아니라 빨강인
+      // 이유: 이 상태의 뜻은 "아직 모른다" 가 아니라 **"인스턴스가 답을 밀어 올리지 못하고
+      // 있다"** 이고, 실측에서 그때 호스트는 15분째 무응답이었다.
       stale: ["🔴 응답 없음", "b-stale"],
     };
 
@@ -557,6 +731,38 @@
       };
     }
 
+    // =======================================================================
+    // 썸네일 폴백 (TASK-MONO-634)
+    // =======================================================================
+    // 🔴🔴 **아직 실제 캡처가 없다. 그래서 «없을 때» 를 설계해 둔다.**
+    //
+    // 요구는 *"썸네일은 공개 데모 데이터로 채운 실제 화면을 캡처한다. 가짜 제품 화면을
+    // 생성하지 않는다"* 다. 그 캡처는 `TASK-MONO-635` 의 공개 화면이 실제로 선 **뒤에야**
+    // 찍을 수 있으므로 순서상 이 티켓보다 늦다.
+    //
+    // 🔴 그 사이를 «그럴듯한 가짜 이미지» 로 메우지 않는다 — 그것이 요구가 금지한 것이고,
+    //    캡처가 영영 안 와도 아무도 모르게 된다. 대신 **비어 있음이 보이는** 자리표시자를
+    //    둔다: 파일이 없으면 이모지 블록이 뜨고, 캡처를 넣으면 그대로 사진이 된다.
+    // 🔴 `onerror` 인라인 속성을 안 쓴다 — 마크업에 스크립트를 섞으면 (z14)의 행 추출식이
+    //    보는 줄이 길어지고, 그 줄에 따옴표가 늘면 파싱이 흔들린다. 여기서 붙인다.
+    const THUMB_FALLBACK = { console: "🖥️", store: "🛒", fan: "🎤" };
+    for (const img of document.querySelectorAll(".scard img.thumb")) {
+      img.addEventListener("error", () => {
+        const key = img.closest("[data-bundle]")?.dataset.bundle;
+        const ph = document.createElement("div");
+        ph.className = "thumb ph";
+        ph.textContent = THUMB_FALLBACK[key] || "🖼️";
+        ph.title = "미리보기 캡처 준비 중";
+        img.replaceWith(ph);
+      }, { once: true });
+    }
+
+    // 🔵 첫 렌더를 폴링 **전에** 한 번 돌린다 — 제어 API 가 느리거나 없어도 카드와 링크는
+    //    즉시 선다. 예전 판은 `/status` 응답을 기다렸고, 그동안 방문자는 빈 화면을 봤다.
+    //    그 대기가 이제 문제인 이유: 둘러보기가 제어 API 와 무관해졌기 때문이다.
+    renderSurfaces();
+    surfacesVisible(false, null);
+    renderCards();
     poll();
     pollTimer = setInterval(poll, 10000); // 10초마다 상태 폴링
   </script>

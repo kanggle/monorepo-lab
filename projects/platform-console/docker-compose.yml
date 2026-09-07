@@ -36,6 +36,11 @@ services:
       #    AMI 굽기 10분 뒤에 이 지점으로 죽었고, 가드 (z26)이 이 축을 정적으로 문다.
       additional_contexts:
         demo-backend-resolver: ../../infra/demo/backend-resolver
+        # 🔴 TASK-MONO-635 — `@demo/public-data` 도 **컨텍스트 밖**이다(같은 이유,
+        #    같은 처방). 안 건네면 `pnpm install` 은 댕글링 심링크로 **통과하고**
+        #    이미지 빌드가 "Module not found: Can't resolve '@demo/public-data'" 로
+        #    죽는다. 가드 (z26)이 이 축을 정적으로 문다.
+        demo-public-data: ../../infra/demo/public-data
       dockerfile: Dockerfile
     restart: unless-stopped
     expose:

@@ -1,0 +1,251 @@
+// DEMO-PUBLIC-DATA: 운영자 콘솔 **둘러보기** 샘플. 전부 합성이다.
+//
+// =============================================================================
+// 🔴🔴 여기에는 백엔드에서 온 값이 **한 줄도 없다**
+// =============================================================================
+// 요구사항: *"실제 고객·주문·재무·계정 데이터를 공개 저장본으로 복사하지 않는다."*
+//
+// 콘솔은 **정의상** 그런 데이터만 그리는 화면이다. 그러니 «허용 목록을 잘 짜서 일부만 뽑는다»
+// 는 접근이 다른 두 데이터셋보다 훨씬 위험하다 — 한 필드만 새면 그것이 곧 실제 운영
+// 데이터이고, 이름·주문번호·금액은 **되돌릴 수 없다.**
+//
+// ⇒ 축을 바꾼다: 콘솔 샘플은 **백엔드에 원본이 없는 데이터**로 만든다. 발행자에게 이
+//   데이터셋의 추출 경로가 **존재하지 않는다**(`bin/publish-public-data.mjs` 는 fan·store 만
+//   받는다). 그래서 «실수로 실제 데이터를 뽑는다» 가 표현 불가능하다.
+//
+// 🔵 그럼에도 화면은 **실물이어야** 한다 — 요구사항이 "가짜 제품 화면을 생성하지 않는다" 를
+//    따로 적었고, 그 뜻은 «컴포넌트를 새로 그리지 말라» 이지 «데이터를 실제로 쓰라» 가
+//    아니다. 그래서 여기 있는 컬럼·지표 이름은 **실제 콘솔 화면의 것과 같고**, 값만 합성이다.
+//    각 도메인의 `liveHref` 가 그 실제 화면을 가리킨다(둘러보기에서는 링크가 아니라 안내다).
+//
+// 🔴 이름은 전부 «데모» 로 시작한다. 실제 고객처럼 보이는 이름을 넣으면, 그 화면을 캡처한
+//    사람이 그것을 진짜로 읽는다.
+// =============================================================================
+
+export const CONSOLE_SAMPLE_DOMAINS = [
+  {
+    key: 'overview',
+    label: '개요',
+    description:
+      '테넌트가 구독한 도메인의 상태를 한 화면에 모읍니다. 실시간 콘솔에서는 console-bff 가 각 도메인의 헬스·요약을 합성해 가져옵니다.',
+    liveHref: '/dashboards/overview',
+    metrics: [
+      { label: '구독 도메인', value: '5', hint: '이커머스 · WMS · SCM · ERP · 재무' },
+      { label: '정상 도메인', value: '5 / 5', hint: '각 도메인의 actuator 헬스를 합성한 값' },
+      { label: '미처리 알림', value: '3', hint: '도메인별 알림을 하나의 인박스로 모읍니다' },
+    ],
+    tables: [
+      {
+        key: 'domain-health',
+        title: '도메인 헬스',
+        description:
+          '각 도메인 서비스의 상태와 응답 시간. 실시간 콘솔에서는 도메인이 안 떠 있으면 그 행만 “서비스 시작 필요”가 되고 나머지 행은 정상 표시됩니다.',
+        columns: [
+          { key: 'domain', label: '도메인' },
+          { key: 'status', label: '상태' },
+          { key: 'latency', label: '응답' },
+        ],
+        rows: [
+          { domain: '이커머스', status: '정상', latency: '42ms' },
+          { domain: 'WMS', status: '정상', latency: '61ms' },
+          { domain: 'SCM', status: '정상', latency: '55ms' },
+          { domain: 'ERP', status: '정상', latency: '38ms' },
+          { domain: '재무', status: '정상', latency: '47ms' },
+        ],
+      },
+    ],
+  },
+  {
+    key: 'ecommerce',
+    label: '이커머스',
+    description:
+      '상품·주문·배송·프로모션·정산을 운영합니다. 실시간 콘솔의 쓰기 작업은 IAM 이 파생한 운영자 권한을 서버에서 다시 확인합니다.',
+    liveHref: '/ecommerce/orders',
+    metrics: [
+      { label: '오늘 주문', value: '128', hint: '샘플 값입니다' },
+      { label: '처리 대기', value: '9', hint: '결제 완료 후 출고 전' },
+      { label: '판매 상품', value: '8', hint: '데모 시드 상품 수' },
+    ],
+    tables: [
+      {
+        key: 'orders',
+        title: '주문',
+        description: '주문 상태 전이와 결제·배송 연계를 확인하는 화면입니다. 상태 변경은 로그인 후 실시간 기능에서만 가능합니다.',
+        columns: [
+          { key: 'orderNo', label: '주문번호' },
+          { key: 'customer', label: '주문자' },
+          { key: 'amount', label: '금액' },
+          { key: 'status', label: '상태' },
+        ],
+        rows: [
+          { orderNo: 'DEMO-2026-0912', customer: '데모 고객 A', amount: '59,000원', status: '결제완료' },
+          { orderNo: 'DEMO-2026-0911', customer: '데모 고객 B', amount: '1,590,000원', status: '출고대기' },
+          { orderNo: 'DEMO-2026-0910', customer: '데모 고객 C', amount: '35,000원', status: '배송중' },
+          { orderNo: 'DEMO-2026-0909', customer: '데모 고객 A', amount: '45,000원', status: '배송완료' },
+        ],
+      },
+      {
+        key: 'products',
+        title: '상품',
+        description: '판매 상품과 옵션·재고를 관리합니다. 재고 수치는 실시간 기능에서만 표시됩니다.',
+        columns: [
+          { key: 'name', label: '상품명' },
+          { key: 'price', label: '판매가' },
+          { key: 'status', label: '상태' },
+        ],
+        rows: [
+          { name: '베이직 코튼 티셔츠', price: '29,000원', status: '판매중' },
+          { name: '슬림핏 데님 청바지', price: '59,000원', status: '판매중' },
+          { name: '갤럭시 S25 울트라', price: '1,590,000원', status: '판매중' },
+          { name: '맥북 프로 16인치 M4', price: '3,490,000원', status: '판매중' },
+        ],
+      },
+    ],
+  },
+  {
+    key: 'wms',
+    label: 'WMS',
+    description: '입고·재고·출고와 창고 마스터를 운영합니다. 스토어의 출고 연계가 이 도메인을 함께 요구합니다.',
+    liveHref: '/wms/inventory',
+    metrics: [
+      { label: '보관 SKU', value: '146', hint: '샘플 값입니다' },
+      { label: '입고 예정', value: '4', hint: 'SCM 발주에서 넘어온 건' },
+      { label: '출고 대기', value: '9', hint: '이커머스 주문에서 넘어온 건' },
+    ],
+    tables: [
+      {
+        key: 'inventory',
+        title: '재고',
+        description: '로케이션별 보관 수량입니다. 실시간 콘솔에서는 테넌트 축으로 가시성이 제한됩니다.',
+        columns: [
+          { key: 'sku', label: 'SKU' },
+          { key: 'location', label: '로케이션' },
+          { key: 'qty', label: '수량' },
+        ],
+        rows: [
+          { sku: 'DEMO-TSHIRT-M', location: 'A-01-03', qty: 100 },
+          { sku: 'DEMO-DENIM-30', location: 'A-02-01', qty: 60 },
+          { sku: 'DEMO-PHONE-256B', location: 'B-01-01', qty: 30 },
+          { sku: 'DEMO-NUTS-500G', location: 'C-04-02', qty: 100 },
+        ],
+      },
+    ],
+  },
+  {
+    key: 'scm',
+    label: 'SCM',
+    description: '발주·재고보충·공급 계약을 운영합니다. 발주 확정은 WMS 입고 예정을 만듭니다.',
+    liveHref: '/scm/procurement',
+    metrics: [
+      { label: '진행 발주', value: '4', hint: '샘플 값입니다' },
+      { label: '보충 제안', value: '7', hint: '재고 기준선 미달 SKU' },
+      { label: '공급사', value: '3', hint: '데모 공급사' },
+    ],
+    tables: [
+      {
+        key: 'procurement',
+        title: '발주',
+        description: '공급사에 보낸 발주와 그 진행 상태입니다.',
+        columns: [
+          { key: 'poNo', label: '발주번호' },
+          { key: 'supplier', label: '공급사' },
+          { key: 'items', label: '품목' },
+          { key: 'status', label: '상태' },
+        ],
+        rows: [
+          { poNo: 'DEMO-PO-2026-041', supplier: '데모 공급사 1', items: 3, status: '승인대기' },
+          { poNo: 'DEMO-PO-2026-040', supplier: '데모 공급사 2', items: 5, status: '입고예정' },
+          { poNo: 'DEMO-PO-2026-039', supplier: '데모 공급사 1', items: 2, status: '입고완료' },
+        ],
+      },
+    ],
+  },
+  {
+    key: 'erp',
+    label: 'ERP',
+    description: '조직·결재·위임과 마스터 데이터를 운영합니다.',
+    liveHref: '/erp/approval',
+    metrics: [
+      { label: '결재 대기', value: '6', hint: '샘플 값입니다' },
+      { label: '부서', value: '8', hint: '데모 조직' },
+      { label: '위임 중', value: '2', hint: '기간 위임' },
+    ],
+    tables: [
+      {
+        key: 'approval',
+        title: '결재',
+        description: '결재선과 진행 상태입니다. 승인·반려는 로그인 후 실시간 기능에서만 가능합니다.',
+        columns: [
+          { key: 'docNo', label: '문서번호' },
+          { key: 'title', label: '제목' },
+          { key: 'requester', label: '기안자' },
+          { key: 'status', label: '상태' },
+        ],
+        rows: [
+          { docNo: 'DEMO-AP-1042', title: '창고 임대 계약 갱신', requester: '데모 사원 A', status: '결재대기' },
+          { docNo: 'DEMO-AP-1041', title: '2026 상반기 마케팅 예산', requester: '데모 사원 B', status: '진행중' },
+          { docNo: 'DEMO-AP-1040', title: '공급사 신규 등록', requester: '데모 사원 C', status: '승인' },
+        ],
+      },
+    ],
+  },
+  {
+    key: 'finance',
+    label: '재무',
+    description: '계정과목·전표·원장을 운영합니다. 이커머스 정산이 이 도메인으로 전표를 만듭니다.',
+    liveHref: '/finance/accounts',
+    metrics: [
+      { label: '이번 달 전표', value: '312', hint: '샘플 값입니다' },
+      { label: '미마감 계정', value: '2', hint: '마감 전 계정과목' },
+      { label: '계정과목', value: '54', hint: '데모 계정 체계' },
+    ],
+    tables: [
+      {
+        key: 'ledger',
+        title: '원장',
+        description: '계정과목별 차변·대변 합계입니다. 금액은 전부 합성값입니다.',
+        columns: [
+          { key: 'account', label: '계정과목' },
+          { key: 'debit', label: '차변' },
+          { key: 'credit', label: '대변' },
+        ],
+        rows: [
+          { account: '상품매출', debit: '0원', credit: '12,480,000원' },
+          { account: '매출원가', debit: '7,120,000원', credit: '0원' },
+          { account: '지급수수료', debit: '374,400원', credit: '0원' },
+          { account: '보통예금', debit: '12,105,600원', credit: '0원' },
+        ],
+      },
+    ],
+  },
+  {
+    key: 'iam',
+    label: 'IAM',
+    description:
+      '테넌트·운영자·권한과 감사 로그를 운영합니다. 콘솔의 모든 운영 권한이 이 도메인에서 파생됩니다.',
+    liveHref: '/iam',
+    metrics: [
+      { label: '테넌트', value: '18', hint: '데모 환경의 테넌트 수' },
+      { label: '운영자', value: '12', hint: '샘플 값입니다' },
+      { label: '권한 세트', value: '9', hint: '도메인별 권한 묶음' },
+    ],
+    tables: [
+      {
+        key: 'tenants',
+        title: '테넌트',
+        description:
+          '테넌트와 그 도메인 구독입니다. 운영자 권한은 로그인 후 테넌트를 선택하는 시점에 파생됩니다.',
+        columns: [
+          { key: 'slug', label: '테넌트' },
+          { key: 'domains', label: '구독 도메인' },
+          { key: 'status', label: '상태' },
+        ],
+        rows: [
+          { slug: 'demo-corp', domains: '이커머스, WMS, SCM, ERP, 재무', status: '활성' },
+          { slug: 'demo-partner', domains: 'SCM', status: '활성' },
+          { slug: 'demo-archive', domains: '—', status: '비활성' },
+        ],
+      },
+    ],
+  },
+];

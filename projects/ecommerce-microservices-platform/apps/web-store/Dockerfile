@@ -42,6 +42,12 @@ COPY packages/ packages/
 # 🔵 러너 이미지에는 안 들어간다. `next.config.ts` 의 `transpilePackages` 가 이
 #    패키지의 TS 소스를 번들에 컴파일해 넣으므로 런타임에는 필요 없다.
 COPY --from=demo-backend-resolver . /infra/demo/backend-resolver
+# 🔴 TASK-MONO-635 — 같은 축, 같은 처방. `@demo/public-data` 는 세 앱의 공개
+#    화면이 읽는 저장본 판독자이고, `link:` 가 컨텍스트 밖(`infra/demo/`)을 가리킨다.
+#    안 건네면 install 은 통과하고 **빌드가** Module not found 로 죽는다.
+# 🔵 목적지 경로는 lockfile 이 정한다 — backend-resolver 와 **같은 깊이**이므로
+#    같은 자리(`/infra/demo/...`)다.
+COPY --from=demo-public-data . /infra/demo/public-data
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile
 

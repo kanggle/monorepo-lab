@@ -414,6 +414,12 @@ services:
       #    `scripts/check-build-context-declarations.sh` 가 이제 그 어긋남을 정적으로 문다.
       additional_contexts:
         demo-backend-resolver: ../../infra/demo/backend-resolver
+        # 🔴🔴 TASK-MONO-635 — `@demo/public-data` 도 같은 축이다. **그리고 이 파일이
+        #    바로 위 주석이 경고한 자리다**: 형제 `docker-compose.yml` 에만 넣고 여기를
+        #    빠뜨리는 것이 `TASK-MONO-585` 가 저지른 실수였고, 같은 실수를 반복하지
+        #    않으려고 형제를 먼저 grep 해서 이 줄을 함께 넣었다.
+        #    `scripts/check-build-context-declarations.sh` 가 그 어긋남을 정적으로 문다.
+        demo-public-data: ../../infra/demo/public-data
       dockerfile: Dockerfile
     environment:
       PORT: "3000"

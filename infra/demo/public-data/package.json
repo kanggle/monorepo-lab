@@ -1,0 +1,23 @@
+{
+  "name": "@demo/public-data",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Versioned public snapshot store for the demo surfaces (ADR-MONO-070). Reader is dependency-free and runs in every Next server runtime; the writer is CLI-only and is the sole place @vercel/blob is imported.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./snapshots/*": "./snapshots/*"
+  },
+  "files": [
+    "src",
+    "snapshots",
+    "tsconfig.json"
+  ],
+  "scripts": {
+    "test": "node --test tests/public-data.test.mjs",
+    "build-snapshots": "node bin/build-bundled-snapshots.mjs",
+    "check-snapshots": "node bin/build-bundled-snapshots.mjs --check",
+    "publish-snapshot": "node bin/publish-public-data.mjs"
+  }
+}

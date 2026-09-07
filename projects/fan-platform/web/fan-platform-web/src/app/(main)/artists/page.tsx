@@ -1,57 +1,28 @@
-import { Suspense } from 'react';
-import { getFanSession } from '@/shared/auth/session';
-import { getArtists, ArtistCard } from '@/features/artist';
-import { LoadingState } from '@/shared/ui/LoadingState';
-import { EmptyState } from '@/shared/ui/EmptyState';
-import { ErrorState } from '@/shared/ui/ErrorState';
+import { queryArtists } from '@demo/public-data';
+import {
+  readFanPublicData,
+  emptyKind,
+  totalPagesOf,
+  PublicArtistCard,
+  PublicEmptyState,
+  ProvenanceBanner,
+} from '@/features/public-browse';
 import { Pagination } from '@/shared/ui/Pagination';
-import type { ArtistPage } from '@/entities/artist';
 
 const PAGE_SIZE = 12;
 
-async function ArtistGrid({ q, page }: { q?: string; page: number }) {
-  const session = await getFanSession();
-  let result: ArtistPage | null = null;
-  try {
-    result = await getArtists(session.accessToken, { q, page, size: PAGE_SIZE });
-  } catch {
-    result = null;
-  }
-
-  if (!result) {
-    return <ErrorState title="디렉토리를 불러올 수 없습니다" />;
-  }
-
-  if (result.content.length === 0) {
-    return (
-      <EmptyState
-        title="아티스트를 찾을 수 없습니다"
-        description={q ? `"${q}" 와 일치하는 아티스트가 없습니다.` : undefined}
-      />
-    );
-  }
-
-  return (
-    <>
-      <ul
-        className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4"
-        data-testid="artist-grid"
-      >
-        {result.content.map((artist) => (
-          <li key={artist.id}>
-            <ArtistCard artist={artist} />
-          </li>
-        ))}
-      </ul>
-      <Pagination
-        page={result.page}
-        totalPages={result.totalPages}
-        hrefFor={(p) => (q ? `/artists?q=${encodeURIComponent(q)}&page=${p}` : `/artists?page=${p}`)}
-      />
-    </>
-  );
-}
-
+/**
+ * 아티스트 디렉토리 — **공개**. 검색(`?q=`)도 저장본 안에서 돈다.
+ *
+ * 🔵 검색을 화면이 직접 구현하지 않고 `queryArtists` 를 부른다. 그 함수는 백엔드가 하던
+ *    일과 **같은 뜻**을 유지하려고 `@demo/public-data` 에 있다(부분 문자열 포함이라는
+ *    약한 규칙 + 안정 정렬). 여기서 다른 규칙을 새로 쓰면 같은 질의에 다른 답을 내면서
+ *    아무도 그 사실을 모른다.
+ *
+ * 🔴 0건에는 **두 뜻**이 있고 문구가 갈린다 — `corpusSize` 가 그 축이다
+ *    (§ `features/public-browse/lib/empty-state.ts`). 예전 판은 둘 다 "아티스트를 찾을 수
+ *    없습니다" 였고, 그래서 저장본이 비었을 때 방문자가 검색어만 바꿔 가며 헤맸다.
+ */
 export default async function ArtistsPage({
   searchParams,
 }: {
@@ -60,6 +31,11 @@ export default async function ArtistsPage({
   const params = await searchParams;
   const q = params.q?.trim() || undefined;
   const page = Number.parseInt(params.page ?? '0', 10) || 0;
+
+  const result = await readFanPublicData();
+  const paged = queryArtists(result.data.artists, { q, page, size: PAGE_SIZE });
+  const empty = emptyKind(paged);
+
   return (
     <section>
       <header className="mb-6 flex items-end justify-between gap-4">
@@ -82,9 +58,36 @@ export default async function ArtistsPage({
           </button>
         </form>
       </header>
-      <Suspense fallback={<LoadingState label="아티스트를 불러오는 중..." />}>
-        <ArtistGrid q={q} page={page} />
-      </Suspense>
+
+      {empty ? (
+        <PublicEmptyState kind={empty} query={q} noun="아티스트" />
+      ) : (
+        <>
+          <ul
+            className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4"
+            data-testid="artist-grid"
+          >
+            {paged.content.map((artist) => (
+              <li key={artist.id}>
+                <PublicArtistCard artist={artist} />
+              </li>
+            ))}
+          </ul>
+          <Pagination
+            page={paged.page}
+            totalPages={totalPagesOf(paged.totalElements, paged.size)}
+            hrefFor={(p) =>
+              q ? `/artists?q=${encodeURIComponent(q)}&page=${p}` : `/artists?page=${p}`
+            }
+          />
+        </>
+      )}
+
+      <ProvenanceBanner
+        source={result.envelope.source}
+        generatedAt={result.envelope.generatedAt}
+        degraded={result.degraded}
+      />
     </section>
   );
 }

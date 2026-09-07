@@ -1,0 +1,304 @@
+{
+  "schemaVersion": 1,
+  "dataset": "store",
+  "dataVersion": "20260907T000000Z-00000001",
+  "generatedAt": "2026-09-07T00:00:00.000Z",
+  "source": "bundled",
+  "origin": "repo-bundled",
+  "coverage": {
+    "products": 8,
+    "categories": 6
+  },
+  "collectionStatus": {
+    "products": "ok",
+    "categories": "ok"
+  },
+  "data": {
+    "products": [
+      {
+        "id": "b0000000-0000-0000-0000-000000000001",
+        "name": "베이직 코튼 티셔츠",
+        "description": "부드러운 코튼 100% 소재의 베이직 티셔츠입니다.",
+        "status": "ON_SALE",
+        "price": 29000,
+        "thumbnailUrl": "https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=600&q=80&auto=format&fit=crop",
+        "images": [],
+        "categoryId": "a0000000-0000-0000-0000-000000000004",
+        "options": [
+          {
+            "id": "c0000000-0000-0000-0000-000000000001",
+            "optionName": "S",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000002",
+            "optionName": "M",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000003",
+            "optionName": "L",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000004",
+            "optionName": "XL",
+            "additionalPrice": 2000
+          }
+        ],
+        "searchText": "베이직 코튼 티셔츠 부드러운 코튼 100% 소재의 베이직 티셔츠입니다. a0000000-0000-0000-0000-000000000004 s m l xl",
+        "createdAt": "2026-01-02T00:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000002",
+        "name": "슬림핏 데님 청바지",
+        "description": "스트레치 소재로 편안한 착용감의 슬림핏 청바지입니다.",
+        "status": "ON_SALE",
+        "price": 59000,
+        "thumbnailUrl": "https://images.unsplash.com/photo-1542272604-787c3835535d?w=600&q=80&auto=format&fit=crop",
+        "images": [],
+        "categoryId": "a0000000-0000-0000-0000-000000000005",
+        "options": [
+          {
+            "id": "c0000000-0000-0000-0000-000000000005",
+            "optionName": "28",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000006",
+            "optionName": "30",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000007",
+            "optionName": "32",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000008",
+            "optionName": "34",
+            "additionalPrice": 0
+          }
+        ],
+        "searchText": "슬림핏 데님 청바지 스트레치 소재로 편안한 착용감의 슬림핏 청바지입니다. a0000000-0000-0000-0000-000000000005 28 30 32 34",
+        "createdAt": "2026-01-03T00:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000003",
+        "name": "갤럭시 S25 울트라",
+        "description": "최신 AI 기능이 탑재된 프리미엄 스마트폰입니다.",
+        "status": "ON_SALE",
+        "price": 1590000,
+        "thumbnailUrl": "https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?w=600&q=80&auto=format&fit=crop",
+        "images": [],
+        "categoryId": "a0000000-0000-0000-0000-000000000006",
+        "options": [
+          {
+            "id": "c0000000-0000-0000-0000-000000000009",
+            "optionName": "256GB 블랙",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000010",
+            "optionName": "512GB 블랙",
+            "additionalPrice": 200000
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000011",
+            "optionName": "256GB 화이트",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000012",
+            "optionName": "512GB 화이트",
+            "additionalPrice": 200000
+          }
+        ],
+        "searchText": "갤럭시 s25 울트라 최신 ai 기능이 탑재된 프리미엄 스마트폰입니다. a0000000-0000-0000-0000-000000000006 256gb 블랙 512gb 블랙 256gb 화이트 512gb 화이트",
+        "createdAt": "2026-01-04T00:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000004",
+        "name": "맥북 프로 16인치 M4",
+        "description": "M4 칩셋 탑재 프로페셔널 노트북입니다.",
+        "status": "ON_SALE",
+        "price": 3490000,
+        "thumbnailUrl": "https://images.unsplash.com/photo-1541807084-5c52b6b3adef?w=600&q=80&auto=format&fit=crop",
+        "images": [],
+        "categoryId": "a0000000-0000-0000-0000-000000000007",
+        "options": [
+          {
+            "id": "c0000000-0000-0000-0000-000000000013",
+            "optionName": "36GB/512GB",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000014",
+            "optionName": "36GB/1TB",
+            "additionalPrice": 300000
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000015",
+            "optionName": "48GB/1TB",
+            "additionalPrice": 600000
+          }
+        ],
+        "searchText": "맥북 프로 16인치 m4 m4 칩셋 탑재 프로페셔널 노트북입니다. a0000000-0000-0000-0000-000000000007 36gb/512gb 36gb/1tb 48gb/1tb",
+        "createdAt": "2026-01-05T00:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000005",
+        "name": "오버핏 후드 집업",
+        "description": "유니섹스 오버핏 디자인의 후드 집업입니다.",
+        "status": "ON_SALE",
+        "price": 45000,
+        "thumbnailUrl": "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=600&q=80&auto=format&fit=crop",
+        "images": [],
+        "categoryId": "a0000000-0000-0000-0000-000000000004",
+        "options": [
+          {
+            "id": "c0000000-0000-0000-0000-000000000016",
+            "optionName": "M 블랙",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000017",
+            "optionName": "L 블랙",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000018",
+            "optionName": "M 그레이",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000019",
+            "optionName": "L 그레이",
+            "additionalPrice": 0
+          }
+        ],
+        "searchText": "오버핏 후드 집업 유니섹스 오버핏 디자인의 후드 집업입니다. a0000000-0000-0000-0000-000000000004 m 블랙 l 블랙 m 그레이 l 그레이",
+        "createdAt": "2026-01-06T00:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000006",
+        "name": "프리미엄 견과류 선물세트",
+        "description": "아몬드, 캐슈넛, 호두, 마카다미아 프리미엄 견과류 세트입니다.",
+        "status": "ON_SALE",
+        "price": 35000,
+        "thumbnailUrl": "https://images.unsplash.com/photo-1599599810769-bcde5a160d32?w=600&q=80&auto=format&fit=crop",
+        "images": [],
+        "categoryId": "a0000000-0000-0000-0000-000000000003",
+        "options": [
+          {
+            "id": "c0000000-0000-0000-0000-000000000020",
+            "optionName": "500g",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000021",
+            "optionName": "1kg",
+            "additionalPrice": 30000
+          }
+        ],
+        "searchText": "프리미엄 견과류 선물세트 아몬드, 캐슈넛, 호두, 마카다미아 프리미엄 견과류 세트입니다. a0000000-0000-0000-0000-000000000003 500g 1kg",
+        "createdAt": "2026-01-07T00:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000007",
+        "name": "프로 무선 이어폰",
+        "description": "노이즈캔슬링 기능이 탑재된 무선 이어폰입니다.",
+        "status": "ON_SALE",
+        "price": 320000,
+        "thumbnailUrl": "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=600&q=80&auto=format&fit=crop",
+        "images": [],
+        "categoryId": "a0000000-0000-0000-0000-000000000002",
+        "options": [
+          {
+            "id": "c0000000-0000-0000-0000-000000000022",
+            "optionName": "화이트",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000023",
+            "optionName": "블랙",
+            "additionalPrice": 0
+          }
+        ],
+        "searchText": "프로 무선 이어폰 노이즈캔슬링 기능이 탑재된 무선 이어폰입니다. a0000000-0000-0000-0000-000000000002 화이트 블랙",
+        "createdAt": "2026-01-08T00:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000008",
+        "name": "와이드핏 슬랙스",
+        "description": "구김이 적은 폴리 소재의 와이드핏 슬랙스입니다.",
+        "status": "ON_SALE",
+        "price": 39000,
+        "thumbnailUrl": "https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?w=600&q=80&auto=format&fit=crop",
+        "images": [],
+        "categoryId": "a0000000-0000-0000-0000-000000000005",
+        "options": [
+          {
+            "id": "c0000000-0000-0000-0000-000000000024",
+            "optionName": "S 블랙",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000025",
+            "optionName": "M 블랙",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000026",
+            "optionName": "L 블랙",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000027",
+            "optionName": "S 베이지",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000028",
+            "optionName": "M 베이지",
+            "additionalPrice": 0
+          }
+        ],
+        "searchText": "와이드핏 슬랙스 구김이 적은 폴리 소재의 와이드핏 슬랙스입니다. a0000000-0000-0000-0000-000000000005 s 블랙 m 블랙 l 블랙 s 베이지 m 베이지",
+        "createdAt": "2026-01-09T00:00:00Z"
+      }
+    ],
+    "categories": [
+      {
+        "id": "a0000000-0000-0000-0000-000000000004",
+        "name": "상의",
+        "productCount": 2
+      },
+      {
+        "id": "a0000000-0000-0000-0000-000000000005",
+        "name": "하의",
+        "productCount": 2
+      },
+      {
+        "id": "a0000000-0000-0000-0000-000000000002",
+        "name": "전자기기",
+        "productCount": 1
+      },
+      {
+        "id": "a0000000-0000-0000-0000-000000000003",
+        "name": "식품",
+        "productCount": 1
+      },
+      {
+        "id": "a0000000-0000-0000-0000-000000000006",
+        "name": "스마트폰",
+        "productCount": 1
+      },
+      {
+        "id": "a0000000-0000-0000-0000-000000000007",
+        "name": "노트북",
+        "productCount": 1
+      }
+    ]
+  }
+}

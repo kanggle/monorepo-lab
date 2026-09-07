@@ -106,6 +106,72 @@ CORE=(iam ecommerce wms console)
 DOWN_ORDER=(console fan ecommerce erp finance scm wms iam)
 
 # ---------------------------------------------------------------------------
+# 화면 묶음 (BUNDLES) — 방문자가 고르는 단위 (TASK-MONO-634 / ADR-MONO-071)
+# ---------------------------------------------------------------------------
+# `DOMAINS` 는 **구현 단위**이고, 방문자가 아는 단위는 **화면**이다. 론처는 «팬 플랫폼을
+# 쓰겠다» 를 받지 «fan 과 iam 을 올려라» 를 받지 않는다. 그 번역을 여기서 한 번만 한다.
+#
+# 🔴 왜 `DEPS` 로 충분하지 않은가 — 두 표가 **다른 것을 잰다**:
+#     DEPS[fan]="iam"   = «fan 이 기능하려면 iam 이 떠 있어야 한다»  (하드 의존)
+#     BUNDLES[fan]="fan" = «"팬 플랫폼" 이라는 화면은 fan 도메인이다» (제품 단위)
+#   묶음을 풀 때 `resolve_deps` 가 iam 을 얹으므로 여기에 iam 을 **적지 않는다.** 적으면
+#   같은 사실이 두 곳에 생기고, DEPS 가 바뀌는 날 한쪽만 고쳐진다.
+#
+# 🔴🔴 **이 표가 Lambda 의 화이트리스트와 같아야 한다.** 컨트롤 플레인은 방문자 입력을
+#   SSM RunShellScript 로 넘기므로 화이트리스트가 **주입 방어**이기도 하다. 두 곳에 있는
+#   같은 사실이므로 가드 (z32)가 이 표와 `handler.py` 의 `BUNDLES` 를 대조한다.
+#
+# 🔵 콘솔의 업무 도메인은 **묶음이 아니라 애드온**이다(§ BUNDLE_ADDONS). 콘솔은 그것들
+#   없이도 뜨고, 안 뜬 도메인은 그 섹션만 "서비스 시작 필요" 가 된다 — 소프트 의존을
+#   묶음에 넣으면 「콘솔 하나 켜기」가 전 스택을 끌어와 선택의 존재 이유를 없앤다.
+declare -A BUNDLES=(
+  [fan]="fan"
+  [store]="ecommerce"
+  [console]="console"
+)
+
+# 애드온 — 방문자가 «그 기능» 을 쓸 때 **추가로** 올리는 것. 묶음과 합집합으로 쓰인다.
+#   store-fulfillment : 스토어의 출고·배송 연계(이커머스 → WMS → SCM 이벤트 흐름)
+#   console-<domain>  : 콘솔의 업무 도메인 화면
+# 🔴 애드온을 기본 묶음에 접어 넣지 마라 — 그것이 «불필요한 전체 기동» 으로 가는 길이다.
+declare -A BUNDLE_ADDONS=(
+  [store-fulfillment]="wms scm"
+  [console-ecommerce]="ecommerce"
+  [console-wms]="wms"
+  [console-scm]="scm"
+  [console-erp]="erp"
+  [console-finance]="finance"
+)
+
+# ---------------------------------------------------------------------------
+# resolve_bundles <name...> — 묶음/애드온 이름 집합을 **도메인 집합**으로 푼다.
+#   · 이름이 하나라도 모르는 것이면 stderr 로 알리고 return 1 (조용한 무시 금지 —
+#     오타가 «켰다고 생각했는데 안 켜진» 상태를 만들고, 그 상태는 방문자에게 «고장» 이다).
+#   · 하드 의존은 `resolve_deps` 가 얹는다. 여기서 iam 을 적지 않는 이유(위 § 참조).
+#   · 출력 순서 = FULL(iam 먼저, console 마지막). 기동 순서가 load-bearing 이다.
+# 호출: set="$(resolve_bundles fan console)" || exit 2
+# ---------------------------------------------------------------------------
+resolve_bundles() {
+  local n unknown="" doms=""
+  for n in "$@"; do
+    if [ -n "${BUNDLES[$n]+x}" ]; then
+      doms="$doms ${BUNDLES[$n]}"
+    elif [ -n "${BUNDLE_ADDONS[$n]+x}" ]; then
+      doms="$doms ${BUNDLE_ADDONS[$n]}"
+    else
+      unknown="$unknown $n"
+    fi
+  done
+  [ -z "$unknown" ] || {
+    echo "resolve_bundles: 알 수 없는 묶음:$unknown (유효: ${!BUNDLES[*]} ${!BUNDLE_ADDONS[*]})" >&2
+    return 1
+  }
+  [ -n "$doms" ] || { echo "resolve_bundles: 묶음이 지정되지 않았습니다" >&2; return 1; }
+  # shellcheck disable=SC2086
+  resolve_deps $doms
+}
+
+# ---------------------------------------------------------------------------
 # 도메인 하드 의존 (DEPS) — 단일 출처 (TASK-MONO-477)
 # ---------------------------------------------------------------------------
 # DEPS[slug] = 이 도메인이 기능하려면 **반드시 함께 떠 있어야 하는** 도메인들(공백 구분).

@@ -35,6 +35,13 @@ BEAT_PARAM = os.environ["BEAT_PARAM"]
 STARTED_PARAM = os.environ["STARTED_PARAM"]
 USAGE_PARAM = os.environ["USAGE_PARAM"]
 HEALTH_PARAM = os.environ.get("HEALTH_PARAM", "/portfolio-demo/domains-health")
+# 🔴🔴 TASK-MONO-634 — **부팅 선택**이 사는 곳 (ADR-MONO-071).
+# 이 이름은 terraform(`local.selection_param`)·`infra/demo/demo-selection.sh`·여기 **세 곳**에
+# 있다. 같은 사실이 세 곳에 있으면 한 곳만 고쳐진다 — 가드 (z33)이 셋을 대조한다
+# (`HEALTH_PARAM` 이 이미 같은 모양이고 (z) 가 그것을 지킨다. 같은 규율).
+SELECTION_PARAM = os.environ.get("SELECTION_PARAM", "/portfolio-demo/boot-selection")
+# 종료·선택 변경을 직렬화하는 잠금. § _with_lock 참조.
+LOCK_PARAM = os.environ.get("LOCK_PARAM", "/portfolio-demo/control-lock")
 # 헬스 스냅샷이 이 나이를 넘으면 stale 로 본다 (TASK-MONO-551 결함 B).
 # 발행 주기는 30초(demo-status.timer)이므로 3주기 = 90초. 한 번 놓친 발행으로 빨개지지
 # 않으면서, 발행자가 죽은 것은 1분 반 안에 드러난다. 인스턴스 시계와 Lambda 시계가 다르지만
@@ -76,6 +83,79 @@ REPO = "/opt/monorepo-lab"
 DOMAINS = frozenset({"iam", "wms", "scm", "finance", "erp", "ecommerce", "fan", "console"})
 START_NAMES = DOMAINS | {"full", "demo-core"}
 STOP_NAMES = DOMAINS | {"all"}
+
+# ---------------------------------------------------------------------------
+# 화면 묶음 (TASK-MONO-634 / ADR-MONO-071)
+# ---------------------------------------------------------------------------
+# 🔴🔴 **이 표는 `infra/demo/projects.sh` 의 `BUNDLES`/`BUNDLE_ADDONS` 와 같아야 한다.**
+# 두 곳에 있는 이유는 서로 다른 런타임이기 때문이다(여기는 Lambda, 저기는 부팅 셸). 같은
+# 사실이 두 집을 가지면 한쪽만 고쳐지므로, 가드 (z32)가 두 표를 **파싱해서 대조**한다.
+#
+# 🔴 여기서 이 표가 하는 일은 매핑만이 아니다 — **주입 방어**이기도 하다. 방문자가 보낸
+# 이름은 결국 SSM RunShellScript 의 명령줄이 된다. 검증 없이 넣으면 명령 주입이다.
+# 그래서 이름은 **집합 소속**으로만 통과하고, 문자열 패턴 검사로 통과시키지 않는다.
+#
+# 🔵 하드 의존(iam)은 여기 **안 적는다.** 인스턴스 쪽 `resolve_deps` 가 얹는다 —
+# 두 곳에서 얹으면 DEPS 가 바뀌는 날 여기가 낡는다.
+BUNDLES = {
+    "fan": ("fan",),
+    "store": ("ecommerce",),
+    "console": ("console",),
+}
+BUNDLE_ADDONS = {
+    "store-fulfillment": ("wms", "scm"),
+    "console-ecommerce": ("ecommerce",),
+    "console-wms": ("wms",),
+    "console-scm": ("scm",),
+    "console-erp": ("erp",),
+    "console-finance": ("finance",),
+}
+BUNDLE_NAMES = frozenset(BUNDLES) | frozenset(BUNDLE_ADDONS)
+
+# 묶음이 «준비 완료» 라고 말하려면 이 도메인들이 전부 up 이어야 한다. 하드 의존을 포함하는
+# 것은 여기 하나뿐 — 상태 판정은 인스턴스의 resolve_deps 를 못 부르므로 여기서 편다.
+# 🔴 `iam` 을 빼면 «로그인이 안 되는데 준비 완료» 를 표시하게 된다. 이 저장소가 반복해서
+#    당한 실패 모드가 정확히 그것이다(96 컨테이너 healthy + 로그인 불가, MONO-358).
+BUNDLE_REQUIRED_DOMAINS = {
+    name: tuple(sorted(set(doms) | {"iam"}))
+    for name, doms in list(BUNDLES.items()) + list(BUNDLE_ADDONS.items())
+}
+
+
+def _parse_names(event, key="bundles"):
+    """요청 본문에서 묶음 이름 목록을 꺼낸다. 모르는 이름이 하나라도 있으면 (None, 그 이름들).
+
+    🔴 **부분 수용을 하지 않는다.** 셋 중 하나가 오타면 방문자는 «세 개를 켰다» 고 믿는데
+       둘만 뜬다 — 그리고 안 뜬 하나는 화면에서 «고장» 으로 보인다. 전부 거절하고 이름을
+       댄다.
+    """
+    raw = event.get("body") or ""
+    try:
+        data = json.loads(raw) if raw else {}
+    except (ValueError, TypeError):
+        data = {}
+    if not isinstance(data, dict):
+        return [], []
+    values = data.get(key)
+    if values is None:
+        return [], []
+    if not isinstance(values, list):
+        return None, [str(values)]
+    names, bad = [], []
+    for v in values:
+        if isinstance(v, str) and v.strip() in BUNDLE_NAMES:
+            names.append(v.strip())
+        else:
+            bad.append(str(v)[:32])
+    if bad:
+        return None, bad
+    # 중복 제거하되 순서는 안정적으로.
+    seen, out = set(), []
+    for n in names:
+        if n not in seen:
+            seen.add(n)
+            out.append(n)
+    return out, []
 
 # EventBridge 틱 간격(5분)의 2배. 틱이 한 번 유실돼도 실제 경과분을 반영하되,
 # 인스턴스가 오래 running 이었는데 Lambda 가 죽어 있던 구간을 과도하게 몰아서
@@ -174,6 +254,275 @@ def _budget_exhausted(u):
     return u["seconds"] >= BUDGET_MINUTES * 60
 
 
+# ---- 부팅 선택 (TASK-MONO-634 / ADR-MONO-071) -------------------------------
+#
+# ## 왜 "합집합" 이고, 왜 그것이 동시 요청을 안전하게 만드는가
+#
+# SSM 에는 compare-and-swap 이 없다. 그래서 여러 방문자가 동시에 "켜기" 를 눌렀을 때
+# lost update 를 **막을** 수는 없다. 대신 **잃어도 스스로 낫는 자료구조**를 쓴다:
+#
+#   선택 = 묶음 이름의 **집합**이고, 시작 요청은 **원소 추가**뿐이다(단조 증가).
+#   두 요청이 겹쳐 한쪽이 덮여도, 그 요청을 **다시 쓰면** 집합은 두 원소를 다 갖는다.
+#
+# => 쓴 뒤 **다시 읽어** 내 원소가 들어갔는지 확인하고, 없으면 재시도한다. 수렴 보장은
+#   "합집합은 교환·결합·멱등" 이라는 성질에서 온다(G-Set). 락으로 지키는 것보다 약하지만,
+#   **락이 죽었을 때 데모가 영영 안 켜지는** 실패 모드가 없다.
+#
+# 🔴 **종료는 이 성질이 없다** - 원소 제거는 단조가 아니다. 그래서 종료 경로만 잠금을
+#    쓴다(§ _with_lock). 두 경로를 같은 기전으로 다루려는 유혹을 이 주석이 막는다.
+# 🔴 "같은 요청 반복" 은 멱등이다 - 이미 있는 원소를 또 넣어도 집합이 안 변하고, 아래
+#    `changed` 가 거짓이 되어 **중복 실행을 안 한다.**
+
+SELECTION_MAX_RETRIES = 3
+
+
+def _read_selection():
+    """저장된 묶음 이름 집합. 없거나 깨졌으면 빈 집합.
+
+    🔴 깨진 값을 "전부" 로도 "없음" 으로도 번역하지 않는다 - 빈 집합은 "아직 아무도 안
+       골랐다" 와 같은 뜻이고, 부팅 폴백(`demo-core`)이 그 상태를 담당한다.
+    """
+    raw = _get(SELECTION_PARAM)
+    if not raw:
+        return set()
+    try:
+        data = json.loads(raw)
+    except (ValueError, TypeError):
+        return set()
+    if not isinstance(data, dict):
+        return set()
+    names = data.get("bundles")
+    if not isinstance(names, list):
+        return set()
+    return {n for n in names if isinstance(n, str) and n in BUNDLE_NAMES}
+
+
+def _write_selection(names):
+    _put(SELECTION_PARAM, json.dumps({"bundles": sorted(names), "updatedAt": _now()}))
+
+
+def _add_to_selection(names):
+    """합집합 + 읽기 확인. (최종집합, 실제로_늘었나, 수렴했나)."""
+    wanted = set(names)
+    for _ in range(SELECTION_MAX_RETRIES):
+        current = _read_selection()
+        merged = current | wanted
+        if merged == current:
+            # 🔵 이미 전부 들어 있다 - 멱등. 쓰지 않는다(쓰면 남의 동시 쓰기를 덮을 수 있다).
+            return current, False, True
+        _write_selection(merged)
+        # 🔴 **쓴 뒤 다시 읽는다.** 이 저장소가 이름 붙인 규율: 산출물을 만드는 명령이
+        #    게이트 안에 있으면 그 뒤로 한 번 더 재야 "저장된 것" 을 잰 것이 된다.
+        after = _read_selection()
+        if wanted <= after:
+            return after, True, True
+    # 🔴 수렴 못 했다 - 조용히 성공으로 보고하지 않는다. 호출자가 방문자에게 말한다.
+    return _read_selection(), False, False
+
+
+def _remove_from_selection(names):
+    """집합에서 뺀다. 🔴 단조가 아니므로 **잠금 안에서만** 불러라."""
+    current = _read_selection()
+    merged = current - set(names)
+    if merged != current:
+        _write_selection(merged)
+    return merged
+
+
+# ---- 직렬화 잠금 -------------------------------------------------------------
+#
+# 🔴 SSM 에 CAS 가 없으므로 이 잠금은 **상호배제를 보장하지 못한다**(둘이 동시에 "비었다"
+#    를 읽을 수 있다). 그럼에도 두는 이유는, 막으려는 것이 "드문 경합" 이고 그 경합의
+#    피해가 "종료와 기동이 엇갈려 반쯤 뜬 스택" 이기 때문이다. 창을 좁히는 것과 닫는 것은
+#    다르고, **여기서는 좁히는 것까지만 한다** - 그리고 그 사실을 적어 둔다. 조용히
+#    "직렬화됨" 이라고 쓰는 것보다 이쪽이 정직하다.
+# 🔴 만료를 반드시 둔다. 만료 없는 잠금은 Lambda 가 한 번 죽는 순간 **데모를 영구히
+#    잠근다** - 그 상태의 사용자 표면은 "버튼이 아무 일도 안 함" 이라 진단이 오래 걸린다.
+LOCK_TTL_SECONDS = 120
+
+
+def _with_lock(owner, fn):
+    """잠금을 잡고 fn() 을 부른다. 못 잡으면 (None, 사유)."""
+    raw = _get(LOCK_PARAM)
+    now = _now()
+    if raw:
+        try:
+            held = json.loads(raw)
+            if isinstance(held, dict) and int(held.get("until", 0)) > now:
+                return None, "다른 요청이 처리 중입니다 (약 %ds 후 재시도)" % (int(held["until"]) - now)
+        except (ValueError, TypeError):
+            pass  # 손상된 잠금은 "안 잠김" 으로 본다 - 영구 잠금보다 낫다.
+    _put(LOCK_PARAM, json.dumps({"owner": owner, "until": now + LOCK_TTL_SECONDS}))
+    try:
+        return fn(), None
+    finally:
+        # 🔵 예외가 나도 푼다. 안 풀면 TTL 이 지날 때까지 데모가 잠긴다.
+        _put(LOCK_PARAM, json.dumps({"owner": owner, "until": 0}))
+
+
+def _bundle_state(name, instance_state, snap, stale, selected):
+    """묶음 하나의 상태 - 7단계로 판정한다.
+
+    waiting / requested / booting / ready / partial / stopping / unknown
+
+    🔴🔴 **"EC2 running" 과 "이 기능이 준비됨" 은 다른 사실이다.** 그 둘을 한 값으로 쓰면
+       방문자는 running 을 보고 링크를 눌러 404 를 만나고, 그것을 "고장" 으로 읽는다.
+       이 함수가 존재하는 이유가 그 분리다.
+    🔴 **stale 이면 어떤 도메인 상태도 안 믿는다.** `up` 을 믿으면 꺼진 스택을 "준비 완료"
+       로 그린다(TASK-MONO-551 결함 B 가 만든 필드가 그것을 말해 준다).
+    """
+    if instance_state in ("stopping", "shutting-down"):
+        return "stopping"
+    if instance_state != "running":
+        return "requested" if name in selected else "waiting"
+    if stale:
+        return "unknown"
+    required = BUNDLE_REQUIRED_DOMAINS.get(name, ())
+    states = [(snap.get(d) or {}).get("state") for d in required]
+    if not states:
+        return "unknown"
+    if all(st == "up" for st in states):
+        return "ready"
+    if any(st in ("up", "partial") for st in states):
+        # 일부만 떠 있다 - 선택돼 있으면 "기동 중", 아니면 "일부 실패" 로 읽는다.
+        return "booting" if name in selected else "partial"
+    return "requested" if name in selected else "waiting"
+
+
+def bundles():
+    """GET /bundles - 저장된 선택 + 묶음별 상태.
+
+    🔵 론처 카드가 이것 하나로 "공개 둘러보기 가능 여부" 와 "실시간 기능 상태" 를 그린다.
+    """
+    state, ip, _ = _state()
+    selected = _read_selection()
+    snap, published_at = _parse_health(_get(HEALTH_PARAM))
+    age = None if published_at is None else max(0, _now() - published_at)
+    stale = state == "running" and (age is None or age > HEALTH_STALE_AFTER_SECONDS)
+    if state != "running":
+        snap, age, stale = {}, None, False
+    out = {}
+    for name in sorted(BUNDLE_NAMES):
+        out[name] = {
+            "state": _bundle_state(name, state, snap, stale, selected),
+            "domains": list(BUNDLE_REQUIRED_DOMAINS[name]),
+            "selected": name in selected,
+            "addon": name in BUNDLE_ADDONS,
+        }
+    return _resp({
+        "state": state,
+        "ip": ip,
+        "selection": sorted(selected),
+        "bundles": out,
+        "health_age_seconds": age,
+        "health_stale": stale,
+    })
+
+
+def bundle_start(event):
+    """POST /bundle/start {"bundles":["fan"]} - **최초 부팅부터** 그 묶음만 올린다.
+
+    🔴🔴 이것이 이 티켓의 본체다. 기존 `/domain/start` 는 인스턴스가 running 이 아니면
+       409 를 냈고(그 경로는 SSM RunShellScript 를 쓰므로 그럴 수밖에 없다), 그래서
+       "최초 부팅" 은 언제나 systemd 유닛의 프로파일로 결정됐다 - 그 값이 `full` 이었다.
+
+       여기서는 순서를 뒤집는다: **선택을 먼저 영속화하고, 그 다음에 켠다.** 부팅은
+       그 선택을 읽는다(`demo-boot.sh selection`). 그러면 stopped 상태에서도 "팬만" 이
+       표현 가능하다.
+    """
+    names, bad = _parse_names(event)
+    if bad:
+        return _resp({"error": "invalid-bundle", "invalid": bad, "valid": sorted(BUNDLE_NAMES)}, 400)
+    if not names:
+        return _resp({"error": "no-bundles", "valid": sorted(BUNDLE_NAMES)}, 400)
+
+    state, _, _ = _state()
+    if state == "missing":
+        return _resp({"state": state, "message": "인스턴스를 찾을 수 없습니다"}, 503)
+
+    u = _usage()
+    if _budget_exhausted(u):
+        used_min = u["seconds"] // 60
+        return _resp({
+            "state": state, "error": "monthly-budget-exhausted",
+            "message": "이번 달 데모 가동 예산 소진 (%d/%d분). 다음 달 1일 리셋됩니다." % (used_min, BUDGET_MINUTES),
+            "used_minutes": used_min, "budget_minutes": BUDGET_MINUTES,
+        }, 429)
+
+    # -- 1. 선택을 **먼저** 영속화한다. 여기서 실패하면 켜지 않는다 - 켜 놓고 선택이
+    #       저장 안 되면 방문자는 "고른 것과 다른 것이 떴다" 를 보게 된다.
+    selection, changed, converged = _add_to_selection(names)
+    if not converged:
+        return _resp({
+            "state": state, "error": "selection-not-converged",
+            "message": "선택을 저장하지 못했습니다(동시 요청이 많습니다). 잠시 후 다시 시도하세요.",
+            "selection": sorted(selection),
+        }, 503)
+
+    if state == "stopping":
+        # 🔵 선택은 이미 저장됐다 - 종료가 끝난 뒤 다시 누르면 그 선택으로 뜬다.
+        return _resp({"state": state, "selection": sorted(selection),
+                      "message": "이전 종료 진행 중 - 잠시 후 다시 시도하세요 (선택은 저장됐습니다)"}, 409)
+
+    if state == "stopped":
+        ec2.start_instances(InstanceIds=[INSTANCE_ID])
+        u["tick"] = _now()
+        _save_usage(u)
+        # 🔴 새 세션의 시작점 - **여기서만** STARTED_PARAM 을 찍는다(§ start() 의 주석).
+        _put(STARTED_PARAM, _now())
+        _put(BEAT_PARAM, _now())
+        return _resp({"state": "starting", "selection": sorted(selection), "started": sorted(names),
+                      "message": "기동 시작 - %s 웜업까지 약 4~10분" % ", ".join(sorted(names))})
+
+    # -- 2. 이미 running - 부족한 묶음만 **추가**한다.
+    _put(BEAT_PARAM, _now())
+    if not changed:
+        # 🔴 "같은 요청 반복" 은 여기서 끝난다. 중복 실행을 하지 않는다.
+        return _resp({"state": state, "selection": sorted(selection), "started": [],
+                      "message": "이미 요청된 묶음입니다 - 중복 기동하지 않습니다"})
+    cmd = _send(["bash %s/infra/demo/demo-boot.sh selection" % REPO])
+    return _resp({"state": state, "selection": sorted(selection), "started": sorted(names),
+                  "command_id": cmd,
+                  "message": "%s 추가 기동 요청됨 - 웜업까지 잠시 걸립니다" % ", ".join(sorted(names))})
+
+
+def bundle_stop(event):
+    """POST /bundle/stop {"bundles":["fan"]} - 그 묶음만 내린다. 공유 의존은 남긴다.
+
+    🔴 "EC2 전체 종료" 와 **다른 동작이다.** 전자는 `/stop` 이고, 이것은 인스턴스를 계속
+       켜 둔 채 묶음만 내린다. 둘을 한 버튼으로 합치면 "팬을 껐더니 스토어도 꺼졌다" 가 된다.
+    🔵 공유 의존(iam)을 남기는 계산은 **인스턴스 쪽 `demo-down.sh` 의 잔존 가드**가 이미
+       한다(아직 떠 있고 종료 대상이 아닌 도메인이 x 에 하드-의존하면 x 를 남긴다).
+       여기서 다시 계산하면 같은 사실이 두 집을 갖는다 - 그래서 **안 한다.**
+    """
+    names, bad = _parse_names(event)
+    if bad:
+        return _resp({"error": "invalid-bundle", "invalid": bad, "valid": sorted(BUNDLE_NAMES)}, 400)
+    if not names:
+        return _resp({"error": "no-bundles", "valid": sorted(BUNDLE_NAMES)}, 400)
+
+    state, _, _ = _state()
+    if state != "running":
+        return _resp({"state": state, "message": "인스턴스가 켜져 있지 않습니다"}, 409)
+
+    def _do():
+        remaining = _remove_from_selection(names)
+        doms = sorted({d for n in names for d in BUNDLES.get(n, BUNDLE_ADDONS.get(n, ()))})
+        # 🔴 iam 은 **절대 이 목록에 안 들어간다** - BUNDLES/BUNDLE_ADDONS 어디에도 없다.
+        #    들어갔다면 위 § 의 "하드 의존은 여기 안 적는다" 가 깨진 것이고, 그때 이 호출은
+        #    남아 있는 다른 묶음의 로그인을 무너뜨린다.
+        cmd = _send(["bash %s/infra/demo/demo-down.sh %s" % (REPO, " ".join(doms))])
+        return {"selection": sorted(remaining), "stopped": doms, "command_id": cmd}
+
+    result, reason = _with_lock("bundle-stop:%s" % ",".join(sorted(names)), _do)
+    if result is None:
+        return _resp({"state": state, "error": "locked", "message": reason}, 409)
+    out = {"state": state, "action": "stop"}
+    out.update(result)
+    out["message"] = "%s 종료 요청됨 (공유 의존은 유지됩니다)" % ", ".join(sorted(names))
+    return _resp(out)
+
+
 # ---- API actions -----------------------------------------------------------
 
 def start():
@@ -203,9 +552,24 @@ def start():
         # running 으로 계상되므로 여기서 끊는다.
         u["tick"] = _now()
         _save_usage(u)
+        # 🔴 `started` 는 **전이에서만** 찍는다 - 아래 § 의 max-runtime 결함 참조.
+        _put(STARTED_PARAM, _now())
 
-    # 이미 running/pending 이어도 heartbeat/started 는 갱신해 세션 연장
-    _put(STARTED_PARAM, _now())
+    # 🔴🔴 TASK-MONO-634 - **여기 있던 `_put(STARTED_PARAM, _now())` 를 조건 안으로 옮겼다.**
+    #
+    # 무엇이 잘못돼 있었나: 이 줄은 상태와 무관하게 돌았다. 그래서 `/start` 를 반복 호출하면
+    # `started` 가 매번 지금으로 밀리고, `idle_check` 의
+    #     run_sec = now - started
+    # 가 **영원히 작게 유지된다** => `max-runtime 180m` 가드가 **한 번도 물지 못한다.**
+    # 이 파일의 헤더가 그 시나리오를 이미 경고하고 있었다("/start 를 반복 호출하면 둘 다 계속
+    # 리셋되어 24/7 가동이 가능하다") - 그리고 월 예산 가드를 그 이유로 만들었다. 즉 **가드를
+    # 하나 더 만들면서 원래 가드는 고치지 않았다.** 예산 가드가 지출 상한을 지키므로 피해가
+    # 눈에 안 띄었을 뿐, 최대 가동 시간 축은 그동안 죽어 있었다.
+    #
+    # 🔵 `beat` 는 계속 갱신한다 - 그것은 "사용 중" 신호이고, 반복 호출로 연장되는 것이
+    #    **의도**다. 두 값의 의미가 다르다: beat = "누가 쓰고 있다", started = "이 세션이
+    #    언제 시작됐다". 후자를 연장하는 것은 세션 연장이 아니라 **기록을 지우는 것**이다.
+    # 🔴 그래서 `started` 는 stopped -> start 전이에서만 찍는다(위 블록).
     _put(BEAT_PARAM, _now())
     # "약 10분" 은 실측이다(MONO-389, 데모 호스트 저널): 부팅 → `up complete` 9분 32초.
     # 예전엔 "약 2~4분" 이라 적혀 있었다 — 잰 적 없는 숫자이고, 그 시점엔 console 이
@@ -434,6 +798,16 @@ def handler(event, context):
     if method == "OPTIONS":
         return _resp({"ok": True})
     # 도메인 라우트를 먼저 본다 — "/domain/start" 는 "/start" 로도 끝나므로 순서가 load-bearing.
+    # 🔴 묶음 라우트도 같은 이유로 여기 위쪽에 있다: "/bundle/start" 도 "/start" 로 끝난다.
+    #    새 라우트를 아래쪽에 붙이면 조용히 `start()` 가 불리고, 그러면 방문자가 "팬만" 을
+    #    골랐는데 **선택 없이 인스턴스만 켜져** demo-core 폴백이 뜬다 - 그리고 그 실패는
+    #    200 을 낸다(에러가 아니라 **다른 동작**이라 로그로도 안 보인다).
+    if path.endswith("/bundles"):
+        return bundles()
+    if path.endswith("/bundle/start"):
+        return bundle_start(event)
+    if path.endswith("/bundle/stop"):
+        return bundle_stop(event)
     if path.endswith("/domains"):
         return domains()
     if path.endswith("/domain/start"):

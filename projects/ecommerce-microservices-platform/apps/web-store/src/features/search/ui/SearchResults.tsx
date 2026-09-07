@@ -1,11 +1,16 @@
 import type { ProductStatus, ProductSummary, SearchProductItem } from '@repo/types';
 import { ProductCard } from '@/entities/product';
 import { ProductGrid } from '@/shared/ui/ProductGrid';
-import { EmptyState } from '@repo/ui';
+import { SnapshotEmptyState } from '@/shared/ui/SnapshotEmptyState';
 
 interface SearchResultsProps {
   items: SearchProductItem[];
   query: string;
+  /**
+   * 질의 **이전**의 저장본 모집단 크기. 🔴 0건의 두 가지 뜻을 가르는 유일한 축이다
+   * (근거는 `SnapshotEmptyState`). 없으면 «검색 결과 없음» 쪽으로 붙는다.
+   */
+  corpusSize?: number;
   /**
    * 카드마다 붙일 액션 (위시리스트 하트 등). `ProductList` 과 같은 시그니처다.
    * 액션은 feature 가 아니라 두 계층을 다 아는 app 레이어에서 주입한다 —
@@ -25,9 +30,9 @@ function toProductSummary(item: SearchProductItem): ProductSummary {
   };
 }
 
-export function SearchResults({ items, query, renderAction }: SearchResultsProps) {
+export function SearchResults({ items, query, corpusSize, renderAction }: SearchResultsProps) {
   if (items.length === 0) {
-    return <EmptyState message={`"${query}"에 대한 검색 결과가 없습니다.`} />;
+    return <SnapshotEmptyState corpusSize={corpusSize} query={query} />;
   }
 
   return (

@@ -719,6 +719,10 @@ services:
       # 🔵 경로는 이 compose 파일 기준이다 — 형제들의 `../../` 가 아니라 `../../../`.
       additional_contexts:
         demo-backend-resolver: ../../../infra/demo/backend-resolver
+        # 🔴 TASK-MONO-635 — 같은 축. 🔵 그리고 경로는 **이 파일 기준 `../../../`** 이다
+        #    (형제 compose 들의 `../../` 를 복사하면 안 된다 — 디렉터리 깊이가 다르다).
+        #    바로 위 주석이 그 함정을 이미 이름 붙여 뒀고, 여기서 그대로 지켰다.
+        demo-public-data: ../../../infra/demo/public-data
       dockerfile: Dockerfile
     environment:
       PORT: "3000"

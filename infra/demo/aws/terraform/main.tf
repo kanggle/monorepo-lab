@@ -24,6 +24,15 @@ locals {
   # 도메인별 헬스 스냅샷(TASK-MONO-477). 인스턴스가 demo-status.sh 로 주기 발행하고
   # Lambda /domains 는 읽기만 한다 — SSM SendCommand 는 비동기라 매 요청 왕복이 취약하다.
   health_param = "/${var.project}/domains-health"
+  # 부팅 선택(TASK-MONO-634 / ADR-MONO-071). Lambda 가 쓰고 **인스턴스가 부팅 중에 읽는다.**
+  #
+  # 🔴 왜 인스턴스 안의 파일이 아닌가: 쓰는 쪽(Lambda)과 읽는 쪽(인스턴스)이 **동시에
+  #    살아 있는 구간이 없다.** 방문자가 "켜기" 를 누르는 순간 인스턴스는 stopped 이라
+  #    SSM RunShellScript 로 파일을 쓸 수 없다(그 채널은 인스턴스가 떠 있어야 한다).
+  selection_param = "/${var.project}/boot-selection"
+  # 종료·선택 변경 직렬화 잠금. 🔴 만료가 있는 잠금이다(handler.py LOCK_TTL_SECONDS) —
+  # 만료 없으면 Lambda 가 한 번 죽는 순간 데모가 영구히 잠긴다.
+  lock_param = "/${var.project}/control-lock"
 
   vpc_id    = var.vpc_id != "" ? var.vpc_id : data.aws_vpc.default[0].id
   subnet_id = var.subnet_id != "" ? var.subnet_id : data.aws_subnets.default[0].ids[0]
@@ -117,6 +126,15 @@ resource "aws_iam_role_policy" "ec2_health" {
       Effect   = "Allow"
       Action   = ["ssm:PutParameter"]
       Resource = aws_ssm_parameter.health.arn
+      },
+      # 부팅 선택을 **읽는다**(TASK-MONO-634). `demo-boot.sh selection` 이 부팅 중에 이
+      # 파라미터를 읽어 무엇을 띄울지 정한다.
+      # 🔴 **읽기만** 준다. 인스턴스가 선택을 쓸 수 있으면 "누가 이 값을 소유하는가" 가
+      #    둘이 되고, 그때 방문자의 선택이 부팅 스크립트에 덮일 수 있다.
+      {
+        Effect   = "Allow"
+        Action   = ["ssm:GetParameter"]
+        Resource = aws_ssm_parameter.selection.arn
     }]
   })
 }
@@ -185,6 +203,26 @@ resource "aws_ssm_parameter" "health" {
   lifecycle { ignore_changes = [value] }
 }
 
+# 부팅 선택(TASK-MONO-634). Lambda 가 갱신하므로 terraform 은 초기값만 심는다.
+#
+# 🔴 초기값이 **빈 목록**이다 — `full` 이 아니다. 이 값이 없거나 비면 `demo-boot.sh` 는
+#    `demo-core` 로 폴백한다(demo-selection.sh § 폴백 결정). 여기에 `full` 을 심으면
+#    "선택 기동" 이라는 기능 전체가 첫 부팅에서 무효가 되고, 그 회귀는 **아무 오류도
+#    남기지 않는다**(전부 정상적으로 뜬다 — 그냥 너무 많이).
+resource "aws_ssm_parameter" "selection" {
+  name  = local.selection_param
+  type  = "String"
+  value = jsonencode({ bundles = [], updatedAt = 0 })
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "lock" {
+  name  = local.lock_param
+  type  = "String"
+  value = jsonencode({ owner = "", until = 0 })
+  lifecycle { ignore_changes = [value] }
+}
+
 # ---------------------------------------------------------------------------
 # 컨트롤 플레인 Lambda (항상 대기, 과금 거의 0)
 # ---------------------------------------------------------------------------
@@ -222,9 +260,16 @@ resource "aws_iam_role_policy" "lambda" {
         Resource = "*"
       },
       {
-        Effect   = "Allow"
-        Action   = ["ssm:GetParameter", "ssm:PutParameter"]
-        Resource = [aws_ssm_parameter.beat.arn, aws_ssm_parameter.started.arn, aws_ssm_parameter.usage.arn]
+        Effect = "Allow"
+        Action = ["ssm:GetParameter", "ssm:PutParameter"]
+        Resource = [
+          aws_ssm_parameter.beat.arn,
+          aws_ssm_parameter.started.arn,
+          aws_ssm_parameter.usage.arn,
+          # 부팅 선택 + 직렬화 잠금 (TASK-MONO-634). Lambda 가 이 둘의 소유자다.
+          aws_ssm_parameter.selection.arn,
+          aws_ssm_parameter.lock.arn,
+        ]
       },
       # /domains 는 헬스 스냅샷을 읽기만 한다(발행은 인스턴스가 한다).
       {
@@ -270,6 +315,8 @@ resource "aws_lambda_function" "control" {
       STARTED_PARAM          = local.start_param
       USAGE_PARAM            = local.usage_param
       HEALTH_PARAM           = local.health_param
+      SELECTION_PARAM        = local.selection_param
+      LOCK_PARAM             = local.lock_param
       IDLE_MINUTES           = tostring(var.idle_minutes)
       MAX_RUNTIME_MINUTES    = tostring(var.max_runtime_minutes)
       MONTHLY_BUDGET_MINUTES = tostring(var.monthly_budget_minutes)
@@ -314,6 +361,11 @@ resource "aws_apigatewayv2_route" "routes" {
     "POST /start", "POST /stop", "GET /status", "POST /heartbeat",
     # 도메인별 선택 (TASK-MONO-477)
     "GET /domains", "POST /domain/start", "POST /domain/stop",
+    # 화면 묶음 선택 (TASK-MONO-634 / ADR-MONO-071).
+    # 🔴 `/domain/*` 과 **다른 축이다**: 저쪽은 구현 단위(도메인)이고 인스턴스가 running
+    #    이어야만 동작한다. 이쪽은 제품 단위(화면)이고 **stopped 에서도** 선택을 남긴다.
+    #    둘을 합치지 않은 이유가 그것이다 — 합치면 "최초 부팅부터 선택" 이 불가능해진다.
+    "GET /bundles", "POST /bundle/start", "POST /bundle/stop",
   ])
   api_id    = aws_apigatewayv2_api.api.id
   route_key = each.value

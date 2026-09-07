@@ -46,9 +46,14 @@ ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
 # 🔴🔴 `infra/demo/backend-resolver` 가 없으면 그 패키지만 바뀐 커밋이 **배포를 조용히
 #    건너뛰고**, 앱은 낡은 해석기를 계속 서빙한다(fan 이 `TASK-MONO-614` 에서 같은 줄을
 #    같은 이유로 넣었다).
+# 🔴🔴 `infra/demo/public-data` 도 같은 이유로 들어간다 — 공개 둘러보기(`/demo`)가 읽는
+#    **번들 시드가 그 패키지 안에** 있다(`snapshots/console-sample.json`). 시드만 고친 커밋이
+#    배포를 건너뛰면 화면은 옛 샘플을 계속 서빙하고, 그 증상은 "고장" 이 아니라
+#    **"조용히 안 바뀜"** 이라 아무도 못 본다(backend-resolver 를 넣은 것과 같은 논거).
 SPECS=(
   ':/projects/platform-console/apps/console-web'
   ':/infra/demo/backend-resolver'
+  ':/infra/demo/public-data'
   ':/scripts/vercel-should-build.sh'
 )
 

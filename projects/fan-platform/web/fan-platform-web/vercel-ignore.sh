@@ -52,6 +52,11 @@ SPECS=(
   # 🔴 해석기 구현이 사는 자리 (TASK-MONO-614 / ADR-MONO-068 § D6 = B2). 없으면 그 패키지만
   #    바뀜 커밋이 **배포를 조용히 건너뛰고**, 앱은 낡은 해석기를 계속 서빙한다.
   ':/infra/demo/backend-resolver'
+  # TASK-MONO-635 — `infra/demo/public-data` 도 같은 논거로 들어간다. 이 앱의 공개
+  #    화면이 읽는 **번들 시드가 그 패키지 안에** 있으므로, 시드만 고친 커밋이 배포를
+  #    건너뛰면 화면은 옛 데이터를 계속 서빙한다. 그 증상은 «고장» 이 아니라
+  #    **«조용히 안 바뀜»** 이라 URL 을 찔러도 200 이고 아무도 못 본다.
+  ':/infra/demo/public-data'
   ':/scripts/vercel-should-build.sh'
 )
 

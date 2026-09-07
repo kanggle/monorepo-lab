@@ -3,14 +3,34 @@ import { signOut } from '@/shared/auth/auth';
 import { buildGapEndSessionUrl } from '@/shared/auth/federated-logout';
 import { getFanSession, isAuthenticated } from '@/shared/auth/session';
 import { NotificationBell, getRecentNotifications, getUnreadCount } from '@/features/notification';
+import { DemoHeartbeat } from '@/widgets/heartbeat/DemoHeartbeat';
 
-/** Top navigation. Server Component — reads session via the server boundary. */
+/**
+ * Top navigation. Server Component — reads session via the server boundary.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ * 🔴🔴 익명 방문자에게는 **게이트웨이 호출이 하나도 없다**
+ * ─────────────────────────────────────────────────────────────────────────
+ * 이 헤더는 공개 페이지를 포함한 `(main)` 셸 **전부**에 붙는다. 그래서 여기서 새는 요청
+ * 하나가 «익명 방문은 백엔드를 안 부른다» 를 페이지별 노력과 무관하게 통째로 깬다.
+ *
+ * 그 성질은 아래 `authed` 삼항 하나에 걸려 있고, 그 값의 신뢰도는 `isAuthenticated()` 의
+ * 술어에 걸려 있다. 예전 구현은 `Boolean(await auth())` 였고 auth.js 의 **설정 오류 본문**
+ * (`{ message: "There was a problem…" }`)을 true 로 읽었다 — 즉 인증이 깨진 배포에서는
+ * 익명 방문자마다 알림 조회 두 건이 게이트웨이로 나갔고, 401 로 조용히 실패해서 아무도
+ * 몰랐다. 그 술어는 `shared/auth/session-shape.ts` 로 옮겨 미들웨어와 공유한다.
+ *
+ * 🔵 인증된 렌더는 하나도 안 바뀐다 — 알림 벨도, 조회 병렬화도, 알림 서비스 장애 시
+ *    빈 값으로 degrade 하는 것도 그대로다.
+ * ─────────────────────────────────────────────────────────────────────────
+ */
 export async function Header() {
   const authed = await isAuthenticated();
   const session = authed ? await getFanSession() : null;
   // Notification bell data — fetched server-side (token never leaves the server),
   // in parallel. Both degrade to empty/0 on a notification-service outage so the
   // header never breaks an authed page.
+  // 🔴 `session` 이 null 인 익명 경로에서는 이 두 호출이 **평가되지 않는다**(§ 위).
   const [recent, unread] = session
     ? await Promise.all([
         getRecentNotifications(session.accessToken),
@@ -45,6 +65,11 @@ export async function Header() {
         <div className="ml-auto flex items-center gap-3">
           {authed ? (
             <>
+              {/* 🔴 heartbeat 은 **인증된 셸에만** 붙는다 — 공개 브라우징이 데모 EC2 를
+                  살려 두면 안 되기 때문이고, 이유 전체는
+                  `app/api/demo/heartbeat/route.ts` 헤더에 있다. 이것을 `(main)/layout.tsx`
+                  같은 공용 자리로 올리면 익명 방문자도 핑을 보내게 된다. */}
+              <DemoHeartbeat />
               {/* TASK-FAN-FE-016: the compose entry point lives inside the `authed`
                   branch, so an anonymous visitor is never offered a form they cannot
                   submit (AC-3). This is the whole of the anonymous-case handling —

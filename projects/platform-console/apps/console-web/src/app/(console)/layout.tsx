@@ -24,6 +24,7 @@ import { NotificationBell } from '@/features/notifications';
 import { ConsoleSidebarNav } from '@/shared/ui/ConsoleSidebarNav';
 import { ApiError } from '@/shared/api/errors';
 import { DemoBackendNotice } from '@/widgets/demo-notice/DemoBackendNotice';
+import { DemoHeartbeat } from '@/widgets/demo-heartbeat/DemoHeartbeat';
 
 /**
  * The signed-in operator's display identity for the account menu. Read
@@ -148,6 +149,12 @@ export default async function ConsoleLayout({
           뜬다 ⇒ 말하지 않으면 "고장" 으로 읽힌다. 인스턴스가 켜져 있는데 한 도메인만
           죽은 경우는 이 배너가 아니라 `/dashboards/health` 가 말한다(위젯 헤더 참조). */}
       <DemoBackendNotice />
+      {/* 🔴🔴 데모 인스턴스 keep-alive 핑거 — **이 셸 안에만** 있다. 이 지점은 위
+          `isAuthenticated()` 가드를 통과한 뒤이므로, 렌더된다는 것 자체가 «로그인한
+          운영자가 콘솔을 쓰고 있다» 를 뜻한다. 공개 둘러보기 `(demo)` 그룹에는 없다 —
+          익명 방문자의 열린 탭이 EC2 예산을 태우면 안 된다. (마운트 지점만 믿지 않는다:
+          라우트 핸들러가 서버에서 세션을 다시 확인한다 — `api/demo/heartbeat/route.ts`.) */}
+      <DemoHeartbeat />
       <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex h-14 items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link

@@ -1,11 +1,11 @@
 import { useRef } from 'react';
-import type { ProductDetail } from '@repo/types';
+import type { ProductDetailView } from '@/entities/product';
 import type { SelectedItem } from './types';
 import { useClickOutside } from '@/shared/hooks/use-click-outside';
 import styles from './ProductDetailWithCart.module.css';
 
 interface VariantSelectorProps {
-  variants: ProductDetail['variants'];
+  variants: ProductDetailView['variants'];
   selectedItems: SelectedItem[];
   dropdownOpen: boolean;
   onDropdownToggle: () => void;
@@ -57,7 +57,12 @@ export function VariantSelector({
                         +{v.additionalPrice.toLocaleString()}원
                       </span>
                     )}
-                    {isSoldOut ? (
+                    {/* 🔴🔴 세 갈래다. `stock === null` 은 «모른다» 이므로 **아무것도 안
+                        그린다** — 숫자도, "재고 있음" 같은 배지도. 저장본은 재고를 싣지
+                        않고(ADR-MONO-070 § 재고), 모르는 것을 그리면 그 화면이 없는 사실을
+                        주장한다. 재고·판매 가능 여부는 상세 상단 문구가 «주문 단계에서
+                        확인» 이라고 말하고, 실제 판정은 주문 직전 라이브 검증이 한다. */}
+                    {v.stock === null ? null : isSoldOut ? (
                       <span className={styles.dropdownItemSoldOut}>품절</span>
                     ) : (
                       <span className={styles.dropdownItemStock}>재고 {v.stock}</span>

@@ -12,5 +12,6 @@ export { AutoRenewToggle } from './ui/AutoRenewToggle';
 export { MembershipStatusCard } from './ui/MembershipStatusCard';
 export { RenewPanel } from './ui/RenewPanel';
 export { MembershipHistoryList } from './ui/MembershipHistoryList';
+export { MembershipMemberPanel } from './ui/MembershipMemberPanel';
 export { historyStatus, HISTORY_LABEL, HISTORY_BADGE } from './ui/historyStatus';
 export type { HistoryStatus } from './ui/historyStatus';
