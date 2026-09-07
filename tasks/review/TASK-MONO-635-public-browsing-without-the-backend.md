@@ -8,7 +8,7 @@ TASK-MONO-635
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -97,7 +97,10 @@ EC2·IAM·MinIO 에 **전혀 의존하지 않게** 만든다.
 - [x] 검색·필터·정렬·페이지 의미 보존(`SearchSortOrder` 값 집합 동일).
 - [x] `corpusSize` 로 «검색 결과 없음» 과 «저장본이 비었다» 를 가른다.
 - [x] 화면이 **출처를 말한다**(`source` + `degraded`).
-- [ ] 🔴 세 앱 `build` — § Verification 참조(진행 중).
+- [x] 세 앱 `build` — fan 12/12 · console 66/66 · store 23/23 정적 페이지가 **백엔드 없이**
+      생성됐다(컴파일·타입체크 통과). 🔵 store 는 마지막 `output: 'standalone'` 복사 단계가
+      Windows 심링크 권한(EPERM)으로 실패하지만 그것은 **호스트 제약**이고, CI 의
+      `Frontend lint & build` 가 SUCCESS 로 그 축을 닫았다.
 
 ## AC-4 — 발행 절차
 
@@ -117,8 +120,14 @@ EC2·IAM·MinIO 에 **전혀 의존하지 않게** 만든다.
 - [x] 콘솔 둘러보기는 **새 라우트 그룹**이고 실제 API 라우트를 안 부른다.
 - [x] 팬 middleware 는 공개 경로만 예외이고 나머지는 **fail-closed 유지**.
 - [x] 공개 둘러보기는 heartbeat 를 안 보낸다.
-- [ ] 🔴 비로그인 쓰기·직접 API 호출 차단, 만료 세션·IAM 중단 시 공개 열람 유지 —
-      **실환경 미검증**(§ 미검증).
+- [x] 비로그인 쓰기·직접 API 호출 차단 — **자동 검사로 닫혔다**: 콘솔 e2e-smoke 가
+      «둘러보기는 보호 경로를 열지 않는다» 와 «미인증 `/operators`·`/dashboards/overview`
+      → `/login`» 을 백엔드 차단 상태에서 단언하고(14/14), 팬 e2e-smoke 가 보호 경로 4종 +
+      판별자(존재하지 않는 경로)를 단언한다(18/18). 세 앱 유닛에도 같은 축이 있다.
+- [ ] ⚪ 만료 세션·IAM 중단 상태에서 공개 열람 유지 — **실환경 미검증.** 자동 검사는
+      «백엔드 차단» 은 재지만 «세션은 있는데 만료됐고 IAM 이 죽은» 조합은 안 잰다.
+      🔴 그 조합을 재려면 EC2 기동 창이 필요하고, 이 티켓만을 위해 켜지 않는다
+      (`TASK-MONO-633` 과 같은 규약). 다음 기동 창에 얹을 항목이다.
 
 ---
 
@@ -185,3 +194,40 @@ fan: npx vitest run --maxWorkers=2                              rc=0   239/239
 쟀다 — 재는 조건을 고친 것이지 기준을 낮춘 것이 아니다. 커밋에는 타임아웃 변경이 **없다.**
 🔴 console `AccountSelfService` 는 교대 A/B 3패스에서 A 2/3 · B 3/3 로 **깨끗이 갈리지 않았다**
 ⇒ «우리 변경 탓» 이라고도 «무관» 하다고도 단정하지 않는다. 후속에서 그 파일만 따로 봐야 한다.
+
+---
+
+# 머지 검증 (4-dimension)
+
+impl PR [#3681](https://github.com/kanggle/monorepo-lab/pull/3681) · 스쿼시 `9f0fcd2d6`
+
+| 축 | 결과 |
+|---|---|
+| (a) `state=MERGED` | ✅ `mergedAt=2026-09-07T19:17:09Z` · `mergeCommit=9f0fcd2d6df70b3dee847163c82d4159cbe9d125` |
+| (b) `origin/main` 팁 == 스쿼시 커밋 | ✅ `9f0fcd2d6` |
+| (c) 머지 시점 실패 체크 | ✅ **0건** (SUCCESS 29 · SKIPPED 28 · FAILURE 0) · required 4/4 SUCCESS |
+| (d) AC 가 닫혔나 | 🔴 **아래 § AC 참조 — 전부는 아니다.** 그래서 이 파일은 `review/` 에 남는다 |
+
+🔴 (a)(b)(c) 는 **PR** 을 재고 (d) 만 **티켓** 을 잰다. (d) 가 안 닫혔으므로 `done/` 로
+옮기지 않는다 — `done/` 는 frozen 이고, 거기 남긴 잔여는 다시 읽히지 않는다.
+
+## CI 가 닫아 준 것 — 로컬에서 «미검증» 이라고 적었던 항목의 정정
+
+🔵 **`web-store` 유닛 테스트가 CI 에서 통과했다** (`Frontend unit tests` = SUCCESS, 922 tests).
+이 호스트에서는 vitest 4.1.0 이 Node 24.14 에서 `ERR_PACKAGE_IMPORT_NOT_DEFINED` 로 **기동
+자체가 안 됐고**(대조군으로 우리 변경 이전에도 동일함을 확인), 그래서 커밋 메시지와 PR 본문에
+「store 유닛 테스트는 안 돌았다」고 적었다. **그 문장은 CI 결과로 갱신된다** — 안 돈 것은
+*이 호스트에서* 였고, 실제로는 돌았고 통과했다.
+🔴 「로컬에서 못 쟀다」와 「검증되지 않았다」는 다른 사실이다. 앞의 것만 참이었다.
+
+🔵 `Frontend E2E smoke` (세 앱 Playwright, 백엔드 차단) 도 SUCCESS · `Demo wrapper smoke` SUCCESS.
+
+## AC — 무엇이 닫혔고 무엇이 안 닫혔나
+
+- AC-0 · AC-1 · AC-2 · AC-3 · AC-4 — **닫혔다.**
+- AC-5 — **한 칸 열림**(만료 세션 × IAM 중단 조합). 나머지 칸은 닫혔다.
+
+🔴 체크박스 밖에서 열려 있는 것: **Vercel Blob 왕복 미검증**(토큰 없음) · **백엔드 추출 경로
+   미검증**(게이트웨이 미기동) · **실브라우저 3주소 확인 미실시**. 🔵 다만 보안 성질을 들고
+   있는 쪽(변환기·허용 목록)은 네트워크 없이 전수 시험됐고 CI 에서도 통과했다 — 「백엔드를
+   못 띄워서 검증 못 했다」가 **그 축에는 해당되지 않는다.**
