@@ -3,6 +3,7 @@ import { isAuthenticated } from '@/shared/lib/session';
 import { sanitizeReturnPath } from '@/shared/lib/return-path';
 import { redirect } from 'next/navigation';
 import { DemoBackendNotice } from '@/widgets/demo-notice/DemoBackendNotice';
+import { DemoLoginCredentials } from '@/widgets/demo-credentials/DemoLoginCredentials';
 
 export const dynamic = 'force-dynamic';
 
@@ -90,6 +91,12 @@ export default async function LoginPage({
         <p className="mt-4 text-center text-xs text-muted-foreground">
           IAM OIDC (Authorization Code + PKCE) 단일 로그인
         </p>
+
+        {/* TASK-PC-FE-275 — 이 화면이 계정을 말하지 않으면 방문자는 «회원가입» 을 눌러
+            빈 조직(`/onboarding`)에 도착한다. `TASK-MONO-561` 이 런처에서 고친 결함의
+            낙오한 형제였다. 데모가 아닌 배포에서는 아무것도 렌더하지 않는다(위젯의
+            `not-demo` 분기). */}
+        <DemoLoginCredentials />
       </div>
     </main>
   );
