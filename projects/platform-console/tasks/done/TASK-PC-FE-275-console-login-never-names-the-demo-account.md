@@ -8,7 +8,7 @@ TASK-PC-FE-275
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -138,7 +138,7 @@ frontend
       `pnpm test` · `next build`). 🔴 파이프(`| tail`)로 감싸면 **`tail` 의 종료코드**를
       읽는다. 🔴 `next lint` 가 `next-env.d.ts` 를 건드리므로 `tsc` 는 **lint 뒤에 한 번
       더** 잰다(`TASK-PC-FE-274` 가 이 순서에서 한 번 틀렸다).
-- [ ] **AC-6 (라이브, ⚪ 가능)** — 데모 서버가 켜져 있으면 `console.hubwang.com/login` 의
+- [x] **AC-6 (라이브, ⚪ 가능)** — 데모 서버가 켜져 있으면 `console.hubwang.com/login` 의
       **서빙 HTML** 에 블록이 있는지 잰다. 꺼져 있으면 **⚪ 미측정으로 그렇게 적는다** —
       안 잰 것을 통과로 적지 않는다(데모 시간은 예산이고, 켤지는 소유자 결정이다).
 
@@ -358,3 +358,41 @@ z11-harness.sh: line 61: /onboarding: No such file or directory     ← bash 가
 
 🔵 앱 게이트(AC-5)는 다시 돌리지 않았다 — 이 정정은 `infra/demo/verify-demo-wrapper.sh`
 한 줄이고 `console-web` 은 한 바이트도 안 바뀌었다. (돌리지 않은 것을 돌렸다고 적지 않는다.)
+
+## CORRECTION (2026-09-07 UTC, close chore) — **AC-6 닫힘. 그리고 프로덕션이 AC-1 의 술어를 증명했다**
+
+구현 PR **#3679** squash `3e39a0417` 머지 → 배포 훅 발사 → Vercel 배포
+`6305983065` **state=success** → `https://console.hubwang.com/login` **200 / 14,989 B**
+서빙 HTML 실측:
+
+| 칸 | 값 |
+|---|---|
+| 유효성(양성 대조군) — 내가 «그 로그인 페이지»를 받았나 | `iam-login` **1** · `Platform Console` **1** |
+| **측정** `demo-login-credentials` | **1** |
+| `demo@demo.com` / `Demo1234!` / `demo-corp` | **1 / 1 / 1** |
+| 음성 대조군 — grep 이 0 을 낼 수 있나 | 존재하지 않는 문자열 **0** |
+
+🔴 **주석이 아니라 «렌더되는 텍스트» 임을 확인했다** — 추출기가 **주석을 먼저 제거한 뒤**
+태그를 벗겼고(순서를 바꾸면 안 그려지는 것이 딸려 나온다), 그러고도 남은 본문이 이것이다:
+
+> 데모 계정 · 이메일 `demo@demo.com` · 비밀번호 `Demo1234!` ·
+> 로그인한 뒤 테넌트를 `demo-corp` 로 선택하세요. 5개 도메인(…)의 운영자 권한은 그 시점에 부여됩니다.
+
+### 🔴🔴 같은 응답에 `demo-backend-notice` 도 **1** 이었다 — 이것이 AC-1 의 라이브 증거다
+
+지금 데모 인스턴스는 **꺼져 있다**(그래서 배너가 뜬다). 그런데 계정 블록은 **함께
+렌더됐다.** 즉 술어를 `=== 'running'` 으로 썼다면 **바로 지금, 방문자가 계정을 가장
+필요로 하는 그 순간에 이 블록은 보이지 않았을 것**이다. AC-1 이 경고한 오작성이
+프로덕션에서 실제로 갈렸고, 그 갈림을 **한 번의 응답으로** 봤다.
+
+🔵 두 블록이 나란히 뜨는 것은 Edge Case 가 적은 그대로다 — 하나는 *왜 지금 안 되는가*,
+다른 하나는 *켜지면 무엇으로 들어가는가*.
+
+### 배포 판정의 판별자 — 「잡 결론」이 아니라 **스텝**
+
+`Vercel deploy hooks` 런 `34107131592`: `kanggle-console` 잡의 **`Deploy Hook 발사` =
+success**, 형제 넷(`portfolio` · `auth` · `fan` · `store`)은 같은 스텝이 **skipped**.
+🔵 음성 대조군이 워크플로 안에 내장돼 있는 셈이다 — 잡 **결론**은 발사했든 건너뛰었든
+`success` 라서, 그것만 보면 아무것도 판정되지 않는다.
+
+**⇒ AC-0~AC-6 7/7 닫힘.**
