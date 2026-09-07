@@ -8,7 +8,7 @@ TASK-MONO-634
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -112,7 +112,11 @@ monorepo
 - [x] **이미지·제목·둘러보기는 언제나 정적 Vercel 주소**로 가고 기동을 겸하지 않는다.
 - [x] 「전체 시작」이 기본 행동에서 빠지되 `<details>` 안에 남는다.
 - [x] 기동 중에도 둘러보기가 계속된다(기동 함수가 링크를 안 건드린다).
-- [ ] 🔴 **카드 썸네일이 아직 자리표시자다** — § 남은 것 ①.
+- [ ] 🔴 **카드 썸네일이 아직 자리표시자다** — § 남은 것 ①. ⚪ **이 AC 는 열린 채로 둔다.**
+      닫으려면 «공개 데모 데이터로 채운 실제 화면» 을 캡처해야 하고, 그것은 `TASK-MONO-635`
+      의 공개 화면이 **배포되어 실제로 서 있을 때**만 가능하다(가짜 화면을 만들지 않는다는
+      것이 요구사항이다). 지금 화면은 이모지 자리표시자가 뜨고, `build.sh` 가 매 빌드에
+      그 사실을 로그로 말한다 — 0장인 상태가 «정상» 으로 굳지 않게.
 
 ## AC-7 — 기존 도구가 새 UI 와 함께 산다
 
@@ -206,3 +210,40 @@ source projects.sh; resolve_bundles …                 fan→iam fan · store�
 ① **카드 썸네일**(AC-6 마지막 칸) — 공개 데모 데이터로 채운 **실제 화면 캡처**여야 한다.
    `TASK-MONO-635` 의 공개 화면이 먼저 서야 찍을 수 있으므로 순서상 그 뒤다. 🔴 가짜 제품
    화면을 생성하지 않는다 — 캡처 전까지는 `onerror` 자리표시자가 뜬다.
+
+---
+
+# 머지 검증 (4-dimension)
+
+impl PR [#3681](https://github.com/kanggle/monorepo-lab/pull/3681) · 스쿼시 `9f0fcd2d6`
+
+| 축 | 결과 |
+|---|---|
+| (a) `state=MERGED` | ✅ `mergedAt=2026-09-07T19:17:09Z` · `mergeCommit=9f0fcd2d6df70b3dee847163c82d4159cbe9d125` |
+| (b) `origin/main` 팁 == 스쿼시 커밋 | ✅ `9f0fcd2d6` |
+| (c) 머지 시점 실패 체크 | ✅ **0건** (SUCCESS 29 · SKIPPED 28 · FAILURE 0) · required 4/4 SUCCESS |
+| (d) AC 가 닫혔나 | 🔴 **아래 § AC 참조 — 전부는 아니다.** 그래서 이 파일은 `review/` 에 남는다 |
+
+🔴 (a)(b)(c) 는 **PR** 을 재고 (d) 만 **티켓** 을 잰다. (d) 가 안 닫혔으므로 `done/` 로
+옮기지 않는다 — `done/` 는 frozen 이고, 거기 남긴 잔여는 다시 읽히지 않는다.
+
+## CI 가 닫아 준 것 — 로컬에서 «미검증» 이라고 적었던 항목의 정정
+
+🔵 **`web-store` 유닛 테스트가 CI 에서 통과했다** (`Frontend unit tests` = SUCCESS, 922 tests).
+이 호스트에서는 vitest 4.1.0 이 Node 24.14 에서 `ERR_PACKAGE_IMPORT_NOT_DEFINED` 로 **기동
+자체가 안 됐고**(대조군으로 우리 변경 이전에도 동일함을 확인), 그래서 커밋 메시지와 PR 본문에
+「store 유닛 테스트는 안 돌았다」고 적었다. **그 문장은 CI 결과로 갱신된다** — 안 돈 것은
+*이 호스트에서* 였고, 실제로는 돌았고 통과했다.
+🔴 「로컬에서 못 쟀다」와 「검증되지 않았다」는 다른 사실이다. 앞의 것만 참이었다.
+
+🔵 `Frontend E2E smoke` (세 앱 Playwright, 백엔드 차단) 도 SUCCESS · `Demo wrapper smoke` SUCCESS.
+
+## AC — 무엇이 닫혔고 무엇이 안 닫혔나
+
+- AC-0 · AC-1 · AC-2 · AC-3 · AC-4 · AC-5 · AC-7 · AC-8 — **닫혔다**(§ Verification 의 명령과
+  bite 9/9, 그리고 CI 의 `Demo wrapper smoke` SUCCESS).
+- AC-6 — **한 칸 열림**(썸네일). 나머지 칸은 닫혔다.
+
+🔴 그리고 **AC 와 무관하게 열려 있는 것**이 둘 있다. 체크박스로 표현되지 않으므로 여기 적는다:
+   ① `terraform apply` 미실행 ② **AMI 재굽기 미실행**. 부팅 스크립트는 AMI 에 구워지므로
+   **머지가 런타임 반영이 아니다.** 이 둘이 끝나야 「최초 부팅부터 선택」이 실제로 성립한다.
