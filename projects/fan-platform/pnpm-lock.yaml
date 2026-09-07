@@ -13,6 +13,9 @@ importers:
       '@demo/backend-resolver':
         specifier: link:../../../../infra/demo/backend-resolver
         version: link:../../../../infra/demo/backend-resolver
+      '@demo/public-data':
+        specifier: link:../../../../infra/demo/public-data
+        version: link:../../../../infra/demo/public-data
       '@portone/browser-sdk':
         specifier: ^0.1.9
         version: 0.1.9

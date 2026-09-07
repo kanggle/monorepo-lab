@@ -3207,12 +3207,27 @@ done <<< "$z14_rows_fx"
 # ---------------------------------------------------------------------------
 # 583 은 이 축을 하나도 안 쟀고, 그래서 링크 정책을 다 고쳐 놓고도 방문자 경로가 안
 # 바뀌었다(실측: 서빙본은 새 마크업인데 `/status`=stopped 라 `display:none` 이었다).
+# 🔴🔴 TASK-MONO-634 — **`= "block"` 을 «none 이 아닌가» 로 바꿨다. 완화가 아니라 축 교정이다.**
+#
+# 재려던 성질은 «방문자에게 보이는가» 이고, `block` 은 그 성질의 **당시 구현**이었다.
+# 카드 그리드(3열)로 바꾸려면 `grid` 여야 하는데, 값으로 얼어 있으면 그 레이아웃 변경이
+# **«회귀»로 보고된다** — 가드가 지키려던 것(가시성)이 아니라 우연히 함께 굳은 것(display
+# 값)을 지키게 된 상태다. 이 저장소가 이름 붙인 함정: **핀이 지키려던 결함을 얼린다.**
+#
+# 🔴 그렇다고 이 칸을 지우지 않는다 — 아래 vercel-0 대조군이 여전히 `none` 을 요구하므로
+#    «항상 보이게 상수화» 는 그쪽에서 잡힌다. 칸은 줄지 않았고 축만 정확해졌다.
+# 🔴 빈 문자열도 실패다. `style.display` 를 아무도 안 정하면 `""` 이고, 그것은 «CSS 기본값이
+#    먹는다» 는 뜻인데 이 페이지의 CSS 기본값은 `display:none` 이다(#surfaces 규칙).
+#    즉 «아무도 안 정했다» 는 «안 보인다» 와 같고, 통과시키면 안 된다.
 for z14_k in UP DOWN UNKNOWN PARTIAL STALE STOPPED; do
-  [ "$(z14_disp "$z14_k")" = "block" ] \
-    || fail "(z14) [$z14_k] #surfaces 가 보이지 않습니다 (display='$(z14_disp "$z14_k")')."\
+  z14_dv="$(z14_disp "$z14_k")"
+  { [ -n "$z14_dv" ] && [ "$z14_dv" != "none" ]; } \
+    || fail "(z14) [$z14_k] #surfaces 가 보이지 않습니다 (display='$z14_dv')."\
       $'\n'"→ 데모가 떠 있으면 당연히 보여야 하고, **꺼져 있어도 Vercel 행이 있으면 보여야** 합니다."\
       $'\n'"→ 행만 활성으로 두고 블록을 숨기면 그 링크는 **활성인 채로 영영 안 보입니다.**"\
-      $'\n'"   그것이 TASK-MONO-583 이 통과하면서 남긴 구멍이고 TASK-MONO-603 이 닫은 것입니다."
+      $'\n'"   그것이 TASK-MONO-583 이 통과하면서 남긴 구멍이고 TASK-MONO-603 이 닫은 것입니다."\
+      $'\n'"→ 빈 문자열도 실패입니다: CSS 의 #surfaces 기본값이 display:none 이므로"\
+      $'\n'"   «아무도 안 정했다» 는 «안 보인다» 와 같습니다."
 done
 
 # 🔴🔴 **대조군 — vercel 행이 0개면 예전 동작(숨김)이 유지돼야 한다.**
@@ -3234,7 +3249,12 @@ if [ -n "$z14_rows_demo" ]; then
       $'\n'"   방문자는 아무것도 열 수 없는 빈 블록을 봅니다."
   # 🔵 그 대조군 판에서도 **데모가 떠 있으면** 보여야 한다 — 예전 동작을 잃지 않았는지.
   z14_disp_du="$(printf '%s\n' "$z14_out_d" | sed -n 's/^UP|//p' | cut -d'|' -f1)"
-  [ "$z14_disp_du" = "block" ] \
+  # TASK-MONO-634 — 위 여섯 칸과 **같은 축 교정**이다(값 "block" -> «none 이 아닌가»).
+  #    여기만 값으로 남겨 두면 대조군이 레이아웃 변경에 걸려 빨개지고, 그 빨강의 사유는
+  #    「가시성이 상수로 굳었다」가 아니라 「display 값이 바뀌었다」 — 재려던 것이 아니다.
+  #    아래 STOPPED 칸은 `none` 정확 일치 그대로 둔다: 그쪽이 재는 것은 «숨겨지는가»
+  #    이고 `none` 은 값이 아니라 **그 성질 자체**다.
+  { [ -n "$z14_disp_du" ] && [ "$z14_disp_du" != "none" ]; } \
     || fail "(z14) 대조군 실패 — vercel 행이 없어도 **데모가 떠 있으면** #surfaces 는 보여야 합니다 (display='$z14_disp_du')."\
       $'\n'"→ 이 티켓은 조건을 **넓힌 것**이지 예전 조건을 대체한 것이 아닙니다."
 else
@@ -3243,6 +3263,145 @@ fi
 rm -f "$z14_js2"
 
 ok "방문자 화면 링크 ${z14_got}개 — 실제 행: vercel ${z14_n_vercel}행(여섯 상태 전부 활성·정적 주소) · demo-host ${z14_n_demo}행 · 부팅 프로브 = vercel행 ${z14_n_probe}건 + #bootprobe 원소 ${z14_n_bootel}건 = ${z14_n_boot_probe}건(술어 self-test 9칸 + 경로 술어 8칸) · demo-host 정책 4칸은 **주입 픽스처**(${z14_fx_dom}/${z14_fx_host}, 주입 3단언)로 집행 · 컨테이너 축(꺼진 데모에서도 보임 · vercel-0 대조군은 숨김 유지)"
+
+# =============================================================================
+# (z32) 묶음 표가 두 집에서 갈라지지 않는가 — TASK-MONO-634 / ADR-MONO-071
+# =============================================================================
+# 🔴🔴 같은 사실이 **두 런타임**에 있다:
+#     · `infra/demo/projects.sh`               — 부팅 셸이 읽는다(bash 연관배열)
+#     · `infra/demo/aws/terraform/lambda/handler.py` — 컨트롤 플레인이 읽는다(python dict)
+#
+# 두 벌인 것은 피할 수 없다(다른 언어·다른 프로세스). 피할 수 있는 것은 **갈라지는 것**이고,
+# 그것이 이 가드다. 갈라지면 무슨 일이 일어나는가:
+#   · Lambda 에만 있는 이름 → 방문자가 고를 수 있는데 부팅이 «알 수 없는 묶음» 으로 죽는다
+#   · projects.sh 에만 있는 이름 → 아무도 고를 수 없다(조용히 존재하지 않는 기능)
+# 둘 다 **에러 없이** 일어난다.
+#
+# 🔴 `handler.py` 를 python 으로 임포트하지 않는다 — boto3 가 없고, import 시점에
+#    `boto3.client()` 를 부른다. 두 파일 모두 **텍스트로 파싱**한다.
+echo "[verify] (z32) 묶음 표(projects.sh ↔ handler.py)가 갈라지지 않았는가"
+z32_sh="$ROOT/infra/demo/projects.sh"
+z32_py="$ROOT/infra/demo/aws/terraform/lambda/handler.py"
+[ -f "$z32_sh" ] || fail "(z32) projects.sh 가 없습니다: $z32_sh"
+[ -f "$z32_py" ] || fail "(z32) handler.py 가 없습니다: $z32_py"
+
+# bash 쪽 — `declare -A NAME=( [k]="v" ... )` 블록에서 키만 뽑는다.
+z32_sh_keys() {  # $1 = 변수명
+  awk -v var="$1" '
+    $0 ~ ("^declare -A " var "=\\(") { inb = 1; next }
+    inb && /^\)/ { inb = 0 }
+    inb && match($0, /\[[a-z0-9-]+\]=/) {
+      k = substr($0, RSTART + 1, RLENGTH - 3); print k
+    }
+  ' "$z32_sh" | sort -u
+}
+# python 쪽 — `NAME = {` 부터 `}` 까지에서 `"key":` 를 뽑는다.
+z32_py_keys() {  # $1 = 변수명
+  awk -v var="$1" '
+    $0 ~ ("^" var " = \\{") { inb = 1; next }
+    inb && /^\}/ { inb = 0 }
+    inb && match($0, /"[a-z0-9-]+":/) {
+      k = substr($0, RSTART + 1, RLENGTH - 3); print k
+    }
+  ' "$z32_py" | sort -u
+}
+
+for z32_var in BUNDLES BUNDLE_ADDONS; do
+  z32_a="$(z32_sh_keys "$z32_var")"
+  z32_b="$(z32_py_keys "$z32_var")"
+  # 🔴🔴 **비공허성 먼저.** 둘 다 빈 채로 비교하면 `diff` 는 통과하고, 이 가드는
+  #    «아무것도 안 하면서 초록» 이 된다 — 추출식이 깨지는 것이 정확히 그 모양이다.
+  [ -n "$z32_a" ] || fail "(z32) projects.sh 에서 $z32_var 의 키를 한 개도 뽑지 못했습니다."\
+    $'\n'"→ 0건은 '표가 비었다' 가 아니라 **추출식이 깨진 것**입니다(선언 모양이 바뀌었다면 이 술어도 고치세요)."
+  [ -n "$z32_b" ] || fail "(z32) handler.py 에서 $z32_var 의 키를 한 개도 뽑지 못했습니다."\
+    $'\n'"→ 같은 이유입니다. 두 추출식은 서로의 대조군이 아닙니다 — 각각 비공허해야 합니다."
+  if [ "$z32_a" != "$z32_b" ]; then
+    fail "(z32) $z32_var 가 두 집에서 다릅니다."\
+      $'\n'"  projects.sh : $(printf '%s' "$z32_a" | tr '\n' ' ')"\
+      $'\n'"  handler.py  : $(printf '%s' "$z32_b" | tr '\n' ' ')"\
+      $'\n'"→ Lambda 에만 있는 이름은 방문자가 고를 수 있는데 부팅이 죽습니다."\
+      $'\n'"→ projects.sh 에만 있는 이름은 **아무도 고를 수 없습니다**(조용히 없는 기능)."
+  fi
+done
+
+# 🔴 그리고 마크업의 `data-bundle` 이 실재하는 묶음을 가리키는가. 오타면 그 카드는
+#    영원히 "… 확인 중" 이고, 그 상태는 «백엔드가 느리다» 로 오독된다.
+z32_all="$(z32_sh_keys BUNDLES)"
+z32_cards="$(grep -o 'data-bundle="[a-z0-9-]*"' "$z14_site" | sed 's/.*="\(.*\)"/\1/' | sort -u)"
+[ -n "$z32_cards" ] || fail "(z32) index.html 에서 data-bundle 카드를 한 개도 뽑지 못했습니다."
+while IFS= read -r z32_c; do
+  [ -n "$z32_c" ] || continue
+  printf '%s\n' "$z32_all" | grepq "^${z32_c}$" \
+    || fail "(z32) 카드가 존재하지 않는 묶음을 가리킵니다: '$z32_c' (유효: $(printf '%s' "$z32_all" | tr '\n' ' '))"
+done <<< "$z32_cards"
+
+ok "묶음 표 일치 — BUNDLES $(printf '%s' "$z32_all" | tr '\n' ' ')· ADDONS $(z32_sh_keys BUNDLE_ADDONS | tr '\n' ' ')· 카드 $(printf '%s\n' "$z32_cards" | grep -c .)개"
+
+# =============================================================================
+# (z33) 부팅이 «전부» 를 뜻하지 않는가 — TASK-MONO-634 / ADR-MONO-071
+# =============================================================================
+# 🔴🔴 이 티켓이 고친 결함은 **어떤 에러도 내지 않는다.** systemd 유닛이 `full` 을 넘기면
+#    8개 프로젝트 96 컨테이너가 **전부 정상적으로** 뜬다 — 로그는 완벽하게 초록이고, 다른
+#    점은 «방문자가 고른 것과 다르다» 뿐이다. 그러니 이 회귀를 잡을 수 있는 것은
+#    **선언을 읽는 가드뿐**이다.
+echo "[verify] (z33) 부팅 프로파일이 selection 인가 + 선택 파라미터 이름이 세 곳에서 같은가"
+z33_unit="$ROOT/infra/demo/demo-stack.service"
+z33_boot="$ROOT/infra/demo/demo-boot.sh"
+z33_sel="$ROOT/infra/demo/demo-selection.sh"
+z33_tf="$ROOT/infra/demo/aws/terraform/main.tf"
+for z33_f in "$z33_unit" "$z33_boot" "$z33_sel" "$z33_tf"; do
+  [ -f "$z33_f" ] || fail "(z33) 파일이 없습니다: $z33_f"
+done
+
+# (1) 유닛이 `selection` 을 넘기는가. 🔴 `full` 로 되돌리면 «선택 기동» 전체가 무효다.
+z33_profile="$(sed -n 's/^Environment=DEMO_PROFILE=\(.*\)$/\1/p' "$z33_unit")"
+[ "$z33_profile" = "selection" ] \
+  || fail "(z33) demo-stack.service 의 DEMO_PROFILE 이 '$z33_profile' 입니다(기대 'selection')."\
+    $'\n'"→ 이 값이 'full' 이면 방문자가 무엇을 고르든 **최초 부팅은 8개 프로젝트 전부**입니다."\
+    $'\n'"→ 그 회귀는 부팅 로그에 아무 오류도 남기지 않습니다 — 전부 정상적으로 뜹니다, 그냥 너무 많이."
+
+# (2) 진입점이 그 센티널을 **실제로 해석하는가.** 유닛만 고치고 스크립트를 안 고치면
+#     `selection` 이 도메인 이름으로 해석돼 «알 수 없는 도메인» 으로 부팅이 죽는다.
+grepq 'demo-selection.sh' "$z33_boot" \
+  || fail "(z33) demo-boot.sh 가 demo-selection.sh 를 source 하지 않습니다 — 센티널이 해석되지 않습니다."
+grepq 'read_boot_selection' "$z33_boot" \
+  || fail "(z33) demo-boot.sh 가 read_boot_selection 을 부르지 않습니다."
+grepq 'resolve_bundles' "$z33_boot" \
+  || fail "(z33) demo-boot.sh 가 resolve_bundles 를 부르지 않습니다 — 묶음이 도메인으로 안 풀립니다."
+
+# (3) 🔴🔴 **폴백이 `full` 이 아닌가.** 폴백이 옛 동작이면 「선택이 저장되지 않는다」는
+#     결함이 **영영 안 보인다** — 그리고 그 상태가 정확히 이 티켓 이전의 상태다.
+z33_fallback="$(sed -n 's/^SELECTION_FALLBACK="\(.*\)"$/\1/p' "$z33_sel")"
+[ -n "$z33_fallback" ] || fail "(z33) demo-selection.sh 에서 SELECTION_FALLBACK 을 뽑지 못했습니다."
+[ "$z33_fallback" != "full" ] \
+  || fail "(z33) 선택 폴백이 'full' 입니다."\
+    $'\n'"→ 파라미터 읽기가 한 번 실패하면 96 컨테이너가 뜹니다. 방문자의 의도와 정반대이고,"\
+    $'\n'"   그 실패는 «정상 부팅» 과 구별되지 않습니다. 안전한 쪽은 **작은 쪽**입니다."
+
+# (4) 파라미터 이름이 **세 곳에서 같은가.** 갈라지면 Lambda 가 쓴 선택을 부팅이 못 읽고,
+#     부팅은 조용히 폴백한다 — 그리고 그 폴백은 정상 동작처럼 보인다.
+z33_n_sel="$(sed -n 's/^SELECTION_PARAM="\${SELECTION_PARAM:-\(.*\)}"$/\1/p' "$z33_sel")"
+z33_n_py="$(sed -n 's/^SELECTION_PARAM = os.environ.get("SELECTION_PARAM", "\(.*\)")$/\1/p' "$z32_py")"
+z33_n_tf="$(sed -n 's/^  selection_param = "\(.*\)"$/\1/p' "$z33_tf" | sed 's/\${var.project}/portfolio-demo/')"
+[ -n "$z33_n_sel" ] || fail "(z33) demo-selection.sh 에서 SELECTION_PARAM 을 뽑지 못했습니다."
+[ -n "$z33_n_py" ]  || fail "(z33) handler.py 에서 SELECTION_PARAM 을 뽑지 못했습니다."
+[ -n "$z33_n_tf" ]  || fail "(z33) main.tf 에서 selection_param 을 뽑지 못했습니다."
+{ [ "$z33_n_sel" = "$z33_n_py" ] && [ "$z33_n_py" = "$z33_n_tf" ]; } \
+  || fail "(z33) 선택 파라미터 이름이 세 곳에서 다릅니다:"\
+    $'\n'"  demo-selection.sh : $z33_n_sel"\
+    $'\n'"  handler.py        : $z33_n_py"\
+    $'\n'"  main.tf           : $z33_n_tf"\
+    $'\n'"→ 갈라지면 Lambda 가 쓴 선택을 부팅이 못 읽고 **조용히 폴백**합니다."
+
+# (5) 🔴 terraform 의 초기값이 `full` 을 담고 있지 않은가 — 담으면 첫 부팅이 전부 뜬다.
+z33_init="$(awk '/^resource "aws_ssm_parameter" "selection"/,/^}/' "$z33_tf")"
+[ -n "$z33_init" ] || fail "(z33) main.tf 에 aws_ssm_parameter.selection 이 없습니다."
+case "$z33_init" in
+  *full*) fail "(z33) 선택 파라미터의 terraform 초기값에 'full' 이 있습니다 — 첫 부팅이 전부 뜹니다." ;;
+esac
+
+ok "부팅 선택 — 유닛=selection · 진입점이 센티널 해석 · 폴백='$z33_fallback'(≠full) · 파라미터 이름 3곳 일치 · tf 초기값 비어 있음"
+
 
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------

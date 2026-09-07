@@ -1,6 +1,6 @@
 'use client';
 
-import type { ProductDetail } from '@repo/types';
+import type { ProductDetailView } from '@/entities/product';
 import { Toast } from '@/shared/ui';
 import { VariantSelector } from './VariantSelector';
 import { SelectedItemsList } from './SelectedItemsList';
@@ -9,7 +9,7 @@ import { useProductVariantSelection } from './use-product-variant-selection';
 import styles from './ProductDetailWithCart.module.css';
 
 interface ProductPurchasePanelProps {
-  product: ProductDetail;
+  product: ProductDetailView;
 }
 
 /**

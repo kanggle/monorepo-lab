@@ -108,6 +108,21 @@ rm -rf "$OUT"
 mkdir -p "$OUT"
 cp "$HERE/index.html" "$OUT/index.html"
 
+# --- 카드 썸네일 (TASK-MONO-634) --------------------------------------------
+# 🔴 **없어도 빌드를 죽이지 않는다.** 캡처는 `TASK-MONO-635` 의 공개 화면이 선 뒤에야 찍을
+#    수 있으므로, 그 사이에 빌드가 실패하면 **론처 전체가 배포되지 않는다** — 있으면 좋은
+#    것 하나 때문에 본체를 잃는 거래다. 페이지는 파일이 없을 때 이모지 자리표시자를 띄운다
+#    (index.html 의 THUMB_FALLBACK).
+# 🔴 그렇다고 조용히 넘어가지도 않는다 — 빌드 로그가 몇 장을 실었는지 **말한다.** 0 장인
+#    상태가 «정상» 으로 굳으면 캡처는 영영 안 온다.
+if [ -d "$HERE/thumbnails" ]; then
+  mkdir -p "$OUT/thumbnails"
+  cp -r "$HERE/thumbnails/." "$OUT/thumbnails/" 2>/dev/null || true
+  echo "[site/build] ✔ 썸네일 $(find "$OUT/thumbnails" -type f 2>/dev/null | wc -l) 장 포함"
+else
+  echo "[site/build] ◑ 썸네일 디렉터리가 없습니다 — 카드는 자리표시자로 뜹니다 (TASK-MONO-634 § 남은 것 ①)"
+fi
+
 # 🔵 이 한 줄의 모양은 예전 terraform 판(`aws_s3_object.config`)과 맞춰 둔 것이다. 그 사본은
 # `TASK-MONO-579` 로 폐기됐고 지금은 여기가 유일한 생산자다 — 모양을 바꿀 이유는 없으므로
 # 그대로 둔다(`index.html` 이 `window.DEMO_API_BASE` 를 읽는 계약은 변하지 않았다).

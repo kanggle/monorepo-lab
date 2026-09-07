@@ -1,10 +1,11 @@
-import type { ProductDetail } from '@repo/types';
+import type { ProductDetailView } from '@/entities/product';
+import { MAX_ORDER_QUANTITY } from '@/entities/product';
 import type { SelectedItem } from './types';
 import styles from './ProductDetailWithCart.module.css';
 
 interface SelectedItemsListProps {
   selectedItems: SelectedItem[];
-  variantMap: Map<string, ProductDetail['variants'][number]>;
+  variantMap: Map<string, ProductDetailView['variants'][number]>;
   basePrice: number;
   onQuantityChange: (variantId: string, next: number) => void;
   onRemove: (variantId: string) => void;
@@ -43,7 +44,11 @@ export function SelectedItemsList({
                 type="button"
                 className={styles.stepperBtn}
                 onClick={() => onQuantityChange(item.variantId, item.quantity + 1)}
-                disabled={item.quantity >= v.stock}
+                // 🔴🔴 `item.quantity >= v.stock` 로 쓰면 안 된다: `stock` 이 `null`(모름)일 때
+                //    JS 관계 연산이 null 을 **0 으로 강제**해서 `1 >= 0` → 항상 참이 되고,
+                //    `+` 버튼이 영구히 죽는다. "모름" 을 "0" 으로 읽는 바로 그 실패다.
+                //    모를 때의 상한은 재고가 아니라 UI 상한(`MAX_ORDER_QUANTITY`)이다.
+                disabled={item.quantity >= (v.stock ?? MAX_ORDER_QUANTITY)}
                 aria-label="수량 늘리기"
               >
                 +

@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@demo/backend-resolver": "link:../../../../infra/demo/backend-resolver",
+    "@demo/public-data": "link:../../../../infra/demo/public-data",
     "@repo/api-client": "workspace:*",
     "@repo/types": "workspace:*",
     "@repo/ui": "workspace:*",

@@ -1,13 +1,10 @@
-import Link from 'next/link';
-import { getFanSession } from '@/shared/auth/session';
+import { isAuthenticated } from '@/shared/auth/session';
+import { MembershipMemberPanel } from '@/features/membership';
 import {
-  getMemberships,
-  currentActive,
-  SubscribePanel,
-  MembershipStatusCard,
-  RenewPanel,
-  AutoRenewToggle,
-} from '@/features/membership';
+  readFanPublicData,
+  PublicMembershipPlans,
+  ProvenanceBanner,
+} from '@/features/public-browse';
 import type { MembershipTier } from '@/entities/membership';
 
 function parseTier(raw: string | undefined): MembershipTier | undefined {
@@ -15,9 +12,25 @@ function parseTier(raw: string | undefined): MembershipTier | undefined {
 }
 
 /**
- * Membership page — current status + tier subscribe (membership-service via the
- * gateway). Server Component: the access token stays on the server; the
- * subscribe/cancel writes go through `'use server'` actions.
+ * 멤버십 — **공개 소개 + (로그인 시) 회원 패널**.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ * 🔴🔴 이 페이지가 갈라진 이유 — 예전 판은 «공개 화면» 이 아니라 **개인 데이터 화면**이었다
+ * ─────────────────────────────────────────────────────────────────────────
+ * 예전 `/membership` 은 `getMemberships(accessToken)` 을 무조건 불렀다. 그 엔드포인트
+ * (`GET /api/v1/memberships`)가 돌려주는 것은 요금제 목록이 아니라 **현재 사용자의 구독**
+ * 이다 — DTO 에 accountId 와 결제 상태가 들어 있다. 그러니 이 경로를 그대로 공개로
+ * 열었다면 공개 화면이 개인 데이터 엔드포인트를 때리게 됐을 것이다.
+ *
+ * ⇒ 축을 둘로 나눈다:
+ *     · 공개 절반 — 요금제·혜택·가격·주의문구. 출처는 저장본의 `membershipPlans` 이고,
+ *                   그것은 백엔드에서 뽑은 것이 **아니라** 저장소가 쓴 `authored` 안내다.
+ *     · 회원 절반 — `MembershipMemberPanel`. 로그인했을 때만 **엘리먼트가 만들어진다.**
+ *
+ * 🔴 `/membership/history` 는 갈라지지 않는다 — 전부 인증 필요다. 그래서
+ *    `shared/auth/public-paths.ts` 에서 `/membership` 은 **정확 일치**로 열려 있고,
+ *    하위 경로는 안 열린다. 그 한 칸이 이 분리의 실제 집행 지점이다.
+ * ─────────────────────────────────────────────────────────────────────────
  */
 export default async function MembershipPage({
   searchParams,
@@ -26,63 +39,27 @@ export default async function MembershipPage({
 }) {
   const { tier } = await searchParams;
   const highlightTier = parseTier(tier);
-  // TASK-FAN-FE-015: the copy below promised a mock PG unconditionally while no such
-  // switch existed, so a visitor read "모의 PG", clicked, and got "결제 모듈이 설정되지
-  // 않았습니다" — the sentence was ahead of the code. Read here, in a Server Component
-  // that already renders per request, so it reports the deployment's actual state
-  // rather than whatever was true when the image was built.
-  const demoPayment = process.env.DEMO_PAYMENT_MOCK === '1';
 
-  const session = await getFanSession();
-  const memberships = await getMemberships(session.accessToken);
-  const active = currentActive(memberships);
-  const heldActiveTiers = memberships.filter((m) => m.active).map((m) => m.tier);
-  // A just-expired membership (stored ACTIVE, read-time inactive, not canceled) is
-  // renewable. The list is newest-window first, so the first match is the most
-  // recent. Only surfaced when nothing is currently active.
-  const expired = active
-    ? null
-    : (memberships.find((m) => m.status === 'ACTIVE' && !m.active) ?? null);
+  const result = await readFanPublicData();
+  const authed = await isAuthenticated();
 
   return (
     <section className="flex flex-col gap-8">
-      <header className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-ink-900">멤버십</h1>
-          <p className="text-sm text-ink-600">
-            멤버 전용·프리미엄 콘텐츠를 위한 구독입니다.
-            {demoPayment ? ' 결제는 데모용 모의 PG로 처리됩니다.' : ''}
-          </p>
-        </div>
-        <Link
-          href="/membership/history"
-          className="shrink-0 text-sm font-medium text-brand-600 hover:text-brand-700"
-        >
-          이력 보기
-        </Link>
+      <header>
+        <h1 className="text-2xl font-bold text-ink-900">멤버십</h1>
+        <p className="text-sm text-ink-600">
+          멤버 전용·프리미엄 콘텐츠를 위한 구독입니다.
+        </p>
       </header>
 
-      {active ? <MembershipStatusCard membership={active} /> : null}
-      {active ? (
-        <AutoRenewToggle
-          tier={active.tier}
-          buyerEmail={session.email}
-          buyerName={session.displayName}
-        />
-      ) : null}
-      {expired ? (
-        <RenewPanel
-          membership={expired}
-          buyerEmail={session.email}
-          buyerName={session.displayName}
-        />
-      ) : null}
+      {authed ? <MembershipMemberPanel highlightTier={highlightTier} /> : null}
 
-      <SubscribePanel
-        heldActiveTiers={heldActiveTiers}
-        highlightTier={highlightTier}
-        buyerEmail={session.email}
-        buyerName={session.displayName}
+      <PublicMembershipPlans plans={result.data.membershipPlans} authenticated={authed} />
+
+      <ProvenanceBanner
+        source={result.envelope.source}
+        generatedAt={result.envelope.generatedAt}
+        degraded={result.degraded}
       />
     </section>
   );

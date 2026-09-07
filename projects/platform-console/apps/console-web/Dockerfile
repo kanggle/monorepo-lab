@@ -56,6 +56,12 @@ COPY package.json pnpm-lock.yaml* ./
 #    compiles this package's TS source into the bundle, so nothing needs it at
 #    runtime.
 COPY --from=demo-backend-resolver . /infra/demo/backend-resolver
+# 🔴 TASK-MONO-635 — 같은 축, 같은 처방. `@demo/public-data` 는 세 앱의 공개
+#    화면이 읽는 저장본 판독자이고, `link:` 가 컨텍스트 밖(`infra/demo/`)을 가리킨다.
+#    안 건네면 install 은 통과하고 **빌드가** Module not found 로 죽는다.
+# 🔵 목적지 경로는 lockfile 이 정한다 — backend-resolver 와 **같은 깊이**이므로
+#    같은 자리(`/infra/demo/...`)다.
+COPY --from=demo-public-data . /infra/demo/public-data
 # pnpm store cache mount — persists the content-addressable package store across
 # builds so a lockfile change (deps-layer cache miss) re-links from cache instead
 # of re-downloading. No effect on the image (store lives only in the mount).

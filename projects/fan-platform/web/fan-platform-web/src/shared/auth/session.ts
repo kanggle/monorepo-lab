@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 import { getToken } from 'next-auth/jwt';
 import { auth } from '@/shared/auth/auth';
 import { selectAccessToken } from '@/shared/auth/auth-callbacks';
+import { hasAuthenticatedUser } from '@/shared/auth/session-shape';
 
 /**
  * Server-only access to the authenticated session + bearer token. NEVER import
@@ -69,7 +70,13 @@ async function readAccessTokenFromJwt(): Promise<string | null> {
 
 export async function getFanSession(): Promise<FanSession> {
   const session = await auth();
-  if (!session) return EMPTY;
+  // 🔵 `!session` 이 아니라 `hasAuthenticatedUser` 로 판정한다 — 위 `isAuthenticated` 와
+  //    **같은 술어**여야 한다. 두 함수가 갈리면 「헤더는 익명이라는데 페이지는 세션이
+  //    있다고 한다」 같은 반쪽 상태가 생긴다. (설정 오류 본문이 왔을 때 예전 코드도
+  //    결국 전부 null 인 FanSession 을 만들었으므로 동작은 같고, 이유가 명시적으로 바뀐다.)
+  // (`!session` 을 앞에 두는 것은 TS 의 널 좁히기를 위해서다 — 술어는 `unknown` 을 받으므로
+  //  타입 가드가 아니다. 두 조건의 논리적 합집합은 `hasAuthenticatedUser` 하나와 같다.)
+  if (!session || !hasAuthenticatedUser(session)) return EMPTY;
   const accessToken = await readAccessTokenFromJwt();
   return {
     accessToken,
@@ -81,7 +88,26 @@ export async function getFanSession(): Promise<FanSession> {
   };
 }
 
+/**
+ * 로그인한 방문자인가.
+ *
+ * 🔴🔴 예전 구현은 `Boolean(await auth())` 였고, 그것은 **틀린 술어다**. auth.js 가
+ * 설정 오류로 500 을 내면 `auth()` 는 그 JSON 본문(`{ message: "There was a problem…" }`)
+ * 을 **그대로** 돌려주고, `Boolean` 은 그것을 true 로 읽는다. `middleware.ts` 는 2026-08-28
+ * 에 이미 이 함정을 고쳤지만(§ TASK-FAN-FE-019) 같은 질문의 **두 번째 사본**인 이 함수는
+ * 안 고쳐졌다 — 한 사실이 두 곳에 있으면 한쪽만 고쳐진다는 그 모양 그대로다.
+ *
+ * 🔴 공개 브라우징이 생기면서 그 오답의 대가가 커졌다: `Header` 가 이 값으로 알림 조회
+ * 여부를 정하므로, true 를 잘못 받으면 **익명 방문자가 게이트웨이로 요청을 보낸다.**
+ * 그 요청은 401 로 조용히 실패하므로 화면상 아무 일도 안 일어난 것처럼 보이고, 그 사이
+ * «익명 방문은 백엔드를 안 부른다» 는 성질만 사라진다.
+ *
+ * 🔵 `throw` 도 익명으로 떨어뜨린다. 판정 불가는 «로그인함» 이 아니다.
+ */
 export async function isAuthenticated(): Promise<boolean> {
-  const session = await auth();
-  return Boolean(session);
+  try {
+    return hasAuthenticatedUser(await auth());
+  } catch {
+    return false;
+  }
 }

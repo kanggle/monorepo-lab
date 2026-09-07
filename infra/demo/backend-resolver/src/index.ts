@@ -120,8 +120,15 @@ const CACHE_TTL_MS = 15_000;
 
 function controlPlaneBase(): string | null {
   const raw = process.env.DEMO_API_BASE;
-  if (!raw) return null;
-  const trimmed = raw.replace(/\/+$/, '');
+  if (typeof raw !== 'string') return null;
+  // 🔴🔴 **공백을 먼저 턴다** (TASK-MONO-635). 이전 판은 `!raw` 로만 걸러서 `'   '` 를
+  //    **참으로 통과시켰고**, 그 값이 그대로 `${base}/heartbeat` 에 붙어 `   /heartbeat`
+  //    라는 쓰레기 URL 이 됐다. 빈 문자열은 막으면서 공백 문자열은 못 막는 것은
+  //    «없음» 의 정의가 반쪽이라는 뜻이다.
+  // 🔵 이 결함을 잡은 것은 콘솔 라우트가 갖고 있던 더 꼼꼼한 사본이다 — 그 사본을 여기로
+  //    접으면서 그쪽의 `.trim()` 을 함께 가져왔다. 통합이 성질을 **잃지 않게** 하는 것이
+  //    통합의 조건이고, 그것을 지킨 자리가 여기다(테스트가 그 한 칸을 지키고 있었다).
+  const trimmed = raw.trim().replace(/\/+$/, '');
   return trimmed.length > 0 ? trimmed : null;
 }
 
@@ -222,4 +229,75 @@ export function createDemoBackendResolver(
     resolveUpstreamBaseUrl,
     __resetDemoBackendCache,
   };
+}
+
+// =============================================================================
+// 컨트롤 플레인 — `DEMO_API_BASE` 를 읽는 **유일한 자리** (TASK-MONO-635)
+// =============================================================================
+// 🔴🔴 왜 이것이 여기 있는가 — 세 앱이 각자 읽으려다 가드에 물렸다.
+//
+// 세 프런트엔드가 «로그인한 세션이 데모를 살려 둔다» 는 heartbeat 중계를 갖게 됐고
+// (ADR-MONO-071 § D8), 셋 다 `process.env.DEMO_API_BASE` 를 직접 읽었다. 그러자
+// `scripts/check-demo-resolver-copies.sh` 가 셋을 전부 물었다 — 그 가드의 구현 지문 ①이
+// 정확히 그 리터럴이기 때문이다(`ADR-MONO-068 § D6 = B2`).
+//
+// 🔵 **가드가 옳다.** 그 라우트들이 주소를 «해석» 하지는 않지만, `DEMO_API_BASE` 는
+//    이 패키지가 소유하는 **계약**이고 그것을 세 곳에서 읽으면 계약이 네 집을 갖는다.
+//    형태가 바뀌는 날(예: 끝 슬래시 정책, 다른 이름) 한 곳만 고쳐진다.
+//
+// 🔴 그래서 **지문을 문법으로 피하지 않았다.** 상수로 감싸 `process.env[NAME]` 로 쓰면
+//    가드는 통과하지만 중복은 그대로 남는다 — 그것은 고침이 아니라 회피다.
+//    (그 회피를 실제로 시도한 판이 있었고, 그 파일 자신이 "옳은 모양은 이것이 아니다"
+//     라고 적어 두었다. 그 부채를 여기서 갚는다.)
+// =============================================================================
+
+/**
+ * 컨트롤 플레인의 베이스 URL. 설정이 없으면 `null` — **결함이 아니다**(로컬·CI·비데모 배포).
+ *
+ * 🔵 계약을 정하는 것은 `infra/demo/aws/site/build.sh` 이고, 읽는 것은 이 함수 하나다.
+ */
+export function controlPlaneBaseUrl(): string | null {
+  return controlPlaneBase();
+}
+
+/** `sendDemoHeartbeat()` 의 결과. 🔴 세 값이 **서로 다른 사실**이라 뭉치지 않는다. */
+export type DemoHeartbeatOutcome =
+  /** 보냈다(2xx). */
+  | 'sent'
+  /** 이 배포는 데모가 아니다 — `DEMO_API_BASE` 가 없다. 살려 둘 인스턴스 자체가 없다. */
+  | 'not-demo'
+  /** 데모인데 못 보냈다(타임아웃·네트워크·5xx). 화면은 안 죽는다. */
+  | 'failed';
+
+/** 컨트롤 플레인 왕복이 이보다 오래 걸리면 포기한다. 하트비트 실패로 화면이 죽으면 안 된다. */
+const HEARTBEAT_TIMEOUT_MS = 2_000;
+
+/**
+ * 데모 EC2 의 유휴 타이머를 미룬다.
+ *
+ * 🔴🔴 **호출자가 «로그인했는가» 를 먼저 판정해야 한다.** 이 함수는 그것을 모른다 —
+ *    알면 안 된다(앱마다 세션 기전이 다르다: next-auth 둘, 자체 쿠키 하나). 익명 방문자의
+ *    열린 탭이 EC2 예산을 태우는 것을 막는 것은 **호출부의 책임**이고, 세 앱의 라우트
+ *    핸들러가 서버에서 그 판정을 한다.
+ * 🔵 그 분리가 곧 «공개 둘러보기는 heartbeat 를 안 보낸다»(ADR-MONO-071 § D8)의 구현이다.
+ */
+export async function sendDemoHeartbeat(): Promise<DemoHeartbeatOutcome> {
+  const base = controlPlaneBase();
+  if (base === null) return 'not-demo';
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), HEARTBEAT_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${base}/heartbeat`, {
+      method: 'POST',
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    return res.ok ? 'sent' : 'failed';
+  } catch {
+    // 🔴 삼키되 **거짓말하지 않는다** — 'sent' 로 답하면 호출부가 «살아 있다» 로 읽는다.
+    return 'failed';
+  } finally {
+    clearTimeout(timer);
+  }
 }

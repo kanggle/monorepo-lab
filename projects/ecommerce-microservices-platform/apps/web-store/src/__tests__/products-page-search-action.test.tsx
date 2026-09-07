@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { SearchResponse } from '@repo/types';
+import type { StoreSearchResponse } from '@/features/search';
+import type { StoreProductListResult } from '@/entities/product';
 
 // 이 스위트가 잡는 결함(TASK-FE-099): `/products` 는 카드마다 위시리스트 하트를 달지만
 // `/products?q=…`(검색 결과)는 안 달았다 — 같은 상품인데 검색해서 찾으면 목록에서 찜을
@@ -15,6 +17,7 @@ vi.mock('@/entities/product', () => ({
 vi.mock('@/features/search', () => ({
   searchProducts: vi.fn(),
   SearchBar: () => <div data-testid="search-bar" />,
+  SearchFilters: () => <div data-testid="search-filters" />,
   SearchResultsSection: ({
     result,
     renderAction,
@@ -42,6 +45,14 @@ vi.mock('@/widgets/product-list-with-wishlist', () => ({
 
 vi.mock('@/shared/ui', () => ({
   Pagination: () => <div data-testid="pagination" />,
+  SnapshotEmptyState: ({ corpusSize }: { corpusSize?: number }) => (
+    <div data-testid="snapshot-empty-state" data-corpus-size={corpusSize ?? 'unknown'} />
+  ),
+}));
+
+// 출처 표시는 서버 컴포넌트(async)라 RTL 이 직접 못 그린다 — 페이지가 **넘기는지**만 본다.
+vi.mock('@/widgets/data-provenance', () => ({
+  DataProvenanceNotice: () => <div data-testid="store-data-provenance" />,
 }));
 
 vi.mock('@repo/ui', () => ({
@@ -56,7 +67,7 @@ import ProductsPage from '@/app/(store)/products/page';
 const mockSearchProducts = vi.mocked(searchProducts);
 const mockGetProducts = vi.mocked(getProducts);
 
-const searchResult: SearchResponse = {
+const searchResult: StoreSearchResponse = {
   query: '노트북',
   content: [
     { productId: 'p1', name: '노트북 A', price: 1000000, status: 'ON_SALE', thumbnailUrl: '/a.jpg', categoryId: 'c1', score: 1.5 },
@@ -66,6 +77,18 @@ const searchResult: SearchResponse = {
   page: 0,
   size: 20,
   totalElements: 2,
+  corpusSize: 8,
+};
+
+const listResult: StoreProductListResult = {
+  content: [
+    { id: 'p1', name: '노트북 A', price: 1000000, status: 'ON_SALE', thumbnailUrl: '/a.jpg', categoryId: 'c1' },
+  ],
+  page: 0,
+  size: 20,
+  totalElements: 1,
+  corpusSize: 8,
+  categories: [{ id: 'c1', name: '노트북', count: 1 }],
 };
 
 describe('ProductsPage — 검색 결과 카드 액션', () => {
@@ -84,7 +107,7 @@ describe('ProductsPage — 검색 결과 카드 액션', () => {
   });
 
   it('검색어가 없으면 전체 상품 목록(위시리스트 포함)을 그린다', async () => {
-    mockGetProducts.mockResolvedValue({ content: [], page: 0, size: 20, totalElements: 0 });
+    mockGetProducts.mockResolvedValue(listResult);
 
     render(await ProductsPage({ searchParams: Promise.resolve({}) }));
 

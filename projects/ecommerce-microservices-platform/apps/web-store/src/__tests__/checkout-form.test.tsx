@@ -15,6 +15,18 @@ vi.mock('@/entities/order', () => ({
   placeOrder: vi.fn(),
 }));
 
+// 🔴 주문 직전의 라이브 재검증(`verifyOrderLines`)은 이 스위트에서 **기본 통과**로 둔다 —
+//    여기서 재는 것은 폼의 동작이고, 게이트 자체의 표는 `verify-order-lines.test.ts` 에 있다.
+//    다만 «게이트가 배선돼 있는가» 는 여기서만 잴 수 있어서(폼이 안 부르면 양쪽 다 초록인
+//    채 화면에서 백엔드 없이 주문이 나간다) 아래 두 칸을 둔다.
+const mockVerifyOrderLines = vi.hoisted(() => vi.fn());
+vi.mock('@/features/checkout/model/verify-order-lines', async () => {
+  const actual = await vi.importActual<typeof import('@/features/checkout/model/verify-order-lines')>(
+    '@/features/checkout/model/verify-order-lines',
+  );
+  return { ...actual, verifyOrderLines: mockVerifyOrderLines };
+});
+
 vi.mock('@/entities/user/api/use-addresses', () => ({
   useAddresses: () => ({ data: { addresses: [] }, isLoading: false, invalidate: vi.fn() }),
 }));
@@ -76,6 +88,7 @@ async function fillRequiredFields(user: ReturnType<typeof userEvent.setup>) {
 describe('CheckoutForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockVerifyOrderLines.mockResolvedValue({ ok: true });
   });
 
   it('주문 상품 정보를 표시한다', async () => {
@@ -239,5 +252,60 @@ describe('CheckoutForm', () => {
 
     const button = screen.getByRole('button', { name: /결제하기/ });
     expect(button).toBeDisabled();
+  });
+
+  describe('주문 직전 라이브 재검증 (공개 카탈로그가 저장본을 읽게 되면서 생긴 요구)', () => {
+    it('주문을 만들기 전에 라이브로 각 줄을 확인한다', async () => {
+      mockSubmitOrder.mockResolvedValueOnce({ orderId: 'order-1' });
+
+      const user = userEvent.setup();
+      renderCheckoutForm();
+
+      await fillRequiredFields(user);
+      await user.click(screen.getByRole('button', { name: /결제하기/ }));
+
+      await waitFor(() => {
+        expect(mockVerifyOrderLines).toHaveBeenCalledWith(CART_ITEMS);
+      });
+    });
+
+    it('🔴 백엔드에 닿지 못하면 주문을 만들지 않는다 — 성공을 흉내내지 않는다', async () => {
+      mockVerifyOrderLines.mockResolvedValue({ ok: false, reason: 'backend_unreachable' });
+
+      const user = userEvent.setup();
+      renderCheckoutForm();
+
+      await fillRequiredFields(user);
+      await user.click(screen.getByRole('button', { name: /결제하기/ }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert')).toHaveTextContent('주문 서버에 연결할 수 없어');
+      });
+      expect(mockSubmitOrder).not.toHaveBeenCalled();
+      expect(mockRequestPayment).not.toHaveBeenCalled();
+      expect(mockOnOrderComplete).not.toHaveBeenCalled();
+      // 거절 뒤에는 다시 시도할 수 있어야 한다.
+      expect(screen.getByRole('button', { name: /결제하기/ })).toBeEnabled();
+    });
+
+    it('가격이 바뀌었으면 현재 가격을 말하고 주문하지 않는다', async () => {
+      mockVerifyOrderLines.mockResolvedValue({
+        ok: false,
+        reason: 'price_changed',
+        productName: '노트북',
+        currentPrice: 1600000,
+      });
+
+      const user = userEvent.setup();
+      renderCheckoutForm();
+
+      await fillRequiredFields(user);
+      await user.click(screen.getByRole('button', { name: /결제하기/ }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert')).toHaveTextContent('1,600,000');
+      });
+      expect(mockSubmitOrder).not.toHaveBeenCalled();
+    });
   });
 });

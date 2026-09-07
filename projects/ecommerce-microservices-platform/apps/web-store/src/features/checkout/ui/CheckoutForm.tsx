@@ -6,6 +6,7 @@ import type { CheckoutFormProps } from '../model/types';
 import { placeOrder } from '@/entities/order';
 import { useTossPayment } from '../model/use-toss-payment';
 import { getOrCreateIdempotencyKey } from '../model/checkout-idempotency';
+import { orderLineVerdictMessage, verifyOrderLines } from '../model/verify-order-lines';
 import { useAddresses } from '@/entities/user';
 import { isValidPhone } from '@/shared/lib/validate-phone';
 import { useShippingAddressState } from '../model/use-shipping-address-state';
@@ -44,6 +45,18 @@ export function CheckoutForm({ items, totalAmount, discountAmount = 0, onOrderCo
     setIsSubmitting(true);
 
     try {
+      // 🔴🔴 주문을 만들기 **전에** 라이브 백엔드로 각 줄을 다시 확인한다. 공개 카탈로그는
+      //    이제 공개 저장본(표시 가격, 재고 없음)을 읽으므로, 장바구니의 가격은 «발행 시점의
+      //    값» 이고 재고는 **아무도 안 물어본 상태**로 여기까지 온다. 근거와 «백엔드에
+      //    동기 재검증이 없다» 는 실측은 `verify-order-lines.ts` 머리 주석에 있다.
+      //    백엔드가 죽어 있으면 여기서 **거절한다** — 성공을 흉내내지 않는다.
+      const verdict = await verifyOrderLines(items);
+      if (!verdict.ok) {
+        setError(orderLineVerdictMessage(verdict));
+        setIsSubmitting(false);
+        return;
+      }
+
       const orderItems = items.map((item) => ({
         productId: item.productId, variantId: item.variantId,
         productName: item.productName, optionName: item.optionName,

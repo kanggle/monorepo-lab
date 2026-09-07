@@ -29,8 +29,25 @@ Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/monorepo-lab
 
-# 프로파일: full(8 프로젝트 — 출처는 projects.sh 의 FULL 배열) | demo-core(iam+ecommerce+wms+console)
-Environment=DEMO_PROFILE=full
+# 프로파일: selection(방문자가 고른 묶음 — 기본) | full | demo-core | <도메인...>
+#
+# 🔴🔴 TASK-MONO-634 — 이 값은 **`full` 이었다.** 그것이 「화면별 선택 기동」을 구조적으로
+# 불가능하게 만들던 자리다:
+#
+#   방문자가 론처에서 «팬 플랫폼» 을 고른다
+#     → 컨트롤 플레인은 인스턴스가 stopped 이므로 `/domain/start` 를 **409 로 거절**한다
+#       (그 경로는 EC2 가 running 인 것을 전제한다)
+#     → 방문자는 «데모 시작» 을 눌러야 하고, 그 부팅은 이 줄을 읽어 **`full`** 로 뜬다
+#     → 8개 프로젝트 96 컨테이너. 선택은 **부팅이 끝난 뒤에야** 의미를 갖는다.
+#
+# `selection` 은 SSM 에 저장된 방문자의 선택을 부팅 시점에 읽는다(`demo-selection.sh`).
+# 저장된 것이 없으면 `demo-core` 로 떨어진다 — **`full` 이 아니다.** 폴백이 옛 동작이면
+# 「선택이 저장되지 않는다」는 결함이 영영 안 보인다.
+#
+# 🔴 되돌리지 마라. 이 줄을 `full` 로 바꾸면 위 사슬이 통째로 복원되고, 그 회귀는
+#    **부팅 로그에 아무 오류도 남기지 않는다**(전부 정상적으로 뜬다 — 그냥 너무 많이).
+#    가드 (z33)이 이 줄을 문다.
+Environment=DEMO_PROFILE=selection
 
 # 🔴🔴 TASK-MONO-615 B4 — 부팅에서만 잔존 스택을 먼저 내린다 (후보 ⓐ)
 # -----------------------------------------------------------------------------

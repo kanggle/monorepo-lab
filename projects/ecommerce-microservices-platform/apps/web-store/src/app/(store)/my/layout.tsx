@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useRequireAuth } from '@/features/auth';
+import { DemoHeartbeat } from '@/features/demo-heartbeat';
 
 const navItems = [
   { href: '/my/profile', label: '프로필' },
@@ -31,6 +32,9 @@ export default function MyLayout({ children }: { children: React.ReactNode }) {
         alignItems: 'flex-start',
       }}
     >
+      {/* 🔴 로그인 영역에서만 하트비트를 보낸다 — 공개 열람은 EC2 를 켜 두면 안 된다
+          (근거는 `DemoHeartbeat` 머리 주석). */}
+      <DemoHeartbeat />
       <aside
         style={{
           width: '200px',

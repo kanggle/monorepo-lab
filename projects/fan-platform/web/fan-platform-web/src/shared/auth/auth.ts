@@ -1,6 +1,7 @@
 import NextAuth, { type NextAuthConfig } from 'next-auth';
 import { env } from '@/shared/config/env';
 import { jwtCallback, sessionCallback } from '@/shared/auth/auth-callbacks';
+import { isPublicPath } from '@/shared/auth/public-paths';
 
 /**
  * next-auth v5 (auth.js) configuration — GAP OIDC + PKCE.
@@ -94,14 +95,19 @@ export const authConfig: NextAuthConfig = {
      */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     session: sessionCallback as any,
+    /**
+     * 🔴 공개 경로 목록을 여기 **다시 적지 않는다.** 예전에는 이 콜백과 `middleware.ts` 가
+     * 각자 접두사 목록을 들고 있었고, 그 둘은 이미 갈라져 있었다(`/favicon` vs
+     * `/favicon.ico`). 공개 브라우징이 늘어나는 목록에서 그 드리프트는 «한쪽만 열린다» 로
+     * 나타나고, 그 증상은 조용하다. 두 소비자가 `isPublicPath` 하나를 부른다.
+     *
+     * 🔵 `Boolean(auth)` 는 여기서는 그대로 둔다 — next-auth 가 이 콜백에 넘기는 `auth` 는
+     * `session` 콜백을 이미 통과한 값이라 `middleware.ts` 가 다루는 «설정 오류 본문» 이
+     * 올 수 있는 자리가 아니다. 실제 리다이렉트 판정은 미들웨어가 하고, 그쪽은
+     * `hasAuthenticatedUser` 를 쓴다.
+     */
     authorized({ auth, request }) {
-      const { pathname } = request.nextUrl;
-      const isProtected =
-        !pathname.startsWith('/login') &&
-        !pathname.startsWith('/api/auth') &&
-        !pathname.startsWith('/_next') &&
-        !pathname.startsWith('/favicon');
-      if (!isProtected) return true;
+      if (isPublicPath(request.nextUrl.pathname)) return true;
       return Boolean(auth);
     },
   },

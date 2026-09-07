@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@demo/backend-resolver": "link:../../../../infra/demo/backend-resolver",
+    "@demo/public-data": "link:../../../../infra/demo/public-data",
     "@portone/browser-sdk": "^0.1.9",
     "@tanstack/react-query": "^5.60.0",
     "next": "^15.1.0",

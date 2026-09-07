@@ -541,5 +541,311 @@ class CorsHasOneHome(unittest.TestCase):
                 self.assertEqual(resp["headers"].get("Content-Type"), "application/json")
 
 
+# ===========================================================================
+# 화면 묶음 선택 기동 (TASK-MONO-634 / ADR-MONO-071)
+# ===========================================================================
+class BundleSelectionTest(unittest.TestCase):
+    """왜 이 클래스가 있는가.
+
+    이 티켓이 고치는 결함은 **"선택했는데 전부 뜬다"** 이고, 그 결함은 어떤 에러도 내지
+    않는다 — 96개 컨테이너가 전부 정상적으로 뜬다. 즉 **로그로는 절대 안 보인다.**
+    그래서 판정은 "요청이 성공했나" 가 아니라 **"무엇이 저장되고 무엇이 실행됐나"** 여야
+    한다. 아래 테스트가 전부 `FAKE_SSM.store` 와 `FAKE_SSM.sent` 를 본다.
+    """
+
+    def setUp(self):
+        FAKE_SSM.store.clear()
+        FAKE_SSM.sent.clear()
+        FAKE_EC2.state = "stopped"
+        FAKE_EC2.start_calls = 0
+        FAKE_EC2.stop_calls = 0
+        FAKE_EC2.launch_time = launched(0)
+
+    def req(self, payload):
+        return {"body": json.dumps(payload)}
+
+    def selection(self):
+        return json.loads(FAKE_SSM.store[handler.SELECTION_PARAM])["bundles"]
+
+    # -- 화이트리스트 / 주입 ------------------------------------------------
+    def test_unknown_bundle_is_rejected_and_nothing_is_started(self):
+        with mock.patch.object(handler, "_now", return_value=T0):
+            r = handler.bundle_start(self.req({"bundles": ["fan", "nope"]}))
+        self.assertEqual(r["statusCode"], 400)
+        self.assertEqual(FAKE_EC2.start_calls, 0)
+        # 🔴 **부분 수용 금지** — 유효한 'fan' 도 저장되면 안 된다. 저장되면 방문자는
+        #    "둘 다 켰다" 고 믿는데 하나만 뜨고, 안 뜬 쪽은 화면에서 "고장" 으로 보인다.
+        self.assertNotIn(handler.SELECTION_PARAM, FAKE_SSM.store)
+
+    def test_shell_metacharacters_never_reach_send_command(self):
+        """🔴 이 값은 결국 SSM RunShellScript 의 명령줄이 된다. 화이트리스트가 주입 방어다."""
+        for evil in ["fan; rm -rf /", "$(id)", "fan console", "../../etc/passwd", "FAN"]:
+            with self.subTest(payload=evil):
+                FAKE_SSM.sent.clear()
+                with mock.patch.object(handler, "_now", return_value=T0):
+                    r = handler.bundle_start(self.req({"bundles": [evil]}))
+                self.assertEqual(r["statusCode"], 400, evil)
+                self.assertEqual(FAKE_SSM.sent, [], evil)
+
+    def test_bundle_names_match_projects_sh(self):
+        """🔴🔴 같은 사실이 두 집에 있다(여기 + projects.sh). 갈라지면 조용히 틀린다.
+
+        가드 (z32)가 CI 에서 같은 대조를 하지만, 여기서도 한다 — 가드는 셸이고 이쪽은
+        파이썬이라 서로의 파싱 결함을 덮어 준다.
+        """
+        import re
+        root = os.path.join(HERE, "..", "..", "..", "..")
+        with open(os.path.join(root, "infra", "demo", "projects.sh"), encoding="utf-8") as fh:
+            src = fh.read()
+
+        def names_of(var):
+            m = re.search(r"declare -A " + var + r"=\((.*?)\n\)", src, re.S)
+            self.assertIsNotNone(m, var + " 를 projects.sh 에서 찾지 못했습니다")
+            return set(re.findall(r"^\s*\[([a-z0-9-]+)\]=", m.group(1), re.M))
+
+        self.assertEqual(names_of("BUNDLES"), set(handler.BUNDLES))
+        self.assertEqual(names_of("BUNDLE_ADDONS"), set(handler.BUNDLE_ADDONS))
+        # 🔴 대조군 — 위 두 단언이 **빈 집합끼리** 비교해서 통과하는 것을 막는다.
+        self.assertGreaterEqual(len(handler.BUNDLES), 3)
+        self.assertGreaterEqual(len(handler.BUNDLE_ADDONS), 1)
+
+    # -- 최초 부팅부터 선택된다 ---------------------------------------------
+    def test_cold_start_persists_selection_before_starting_the_instance(self):
+        """🔴🔴 이 티켓의 본체. stopped 에서 'fan' 만 골라도 선택이 **저장된다.**"""
+        with mock.patch.object(handler, "_now", return_value=T0):
+            r = handler.bundle_start(self.req({"bundles": ["fan"]}))
+        self.assertEqual(r["statusCode"], 200)
+        self.assertEqual(body(r)["state"], "starting")
+        self.assertEqual(self.selection(), ["fan"])
+        self.assertEqual(FAKE_EC2.start_calls, 1)
+        # 🔴 stopped 에서는 SSM 명령을 **안 보낸다** — 보낼 수 없다(인스턴스가 꺼져 있다).
+        #    부팅이 저장된 선택을 읽는 것이 이 설계의 요점이다.
+        self.assertEqual(FAKE_SSM.sent, [])
+
+    def test_cold_start_selection_never_contains_the_full_profile(self):
+        """🔴 "팬만" 이 "전부" 로 번역되지 않는다 — 그것이 고치는 결함 자체다."""
+        with mock.patch.object(handler, "_now", return_value=T0):
+            handler.bundle_start(self.req({"bundles": ["fan"]}))
+        stored = FAKE_SSM.store[handler.SELECTION_PARAM]
+        self.assertNotIn("full", stored)
+        self.assertNotIn("console", stored)
+        self.assertNotIn("store", stored)
+
+    # -- 동시 / 중복 / 기동 중 추가 -----------------------------------------
+    def test_concurrent_requests_union_rather_than_overwrite(self):
+        with mock.patch.object(handler, "_now", return_value=T0):
+            handler.bundle_start(self.req({"bundles": ["fan"]}))
+            FAKE_EC2.state = "running"
+            handler.bundle_start(self.req({"bundles": ["store"]}))
+            handler.bundle_start(self.req({"bundles": ["console"]}))
+        self.assertEqual(self.selection(), ["console", "fan", "store"])
+
+    def test_repeating_the_same_request_does_not_run_the_command_twice(self):
+        FAKE_EC2.state = "running"
+        with mock.patch.object(handler, "_now", return_value=T0):
+            handler.bundle_start(self.req({"bundles": ["fan"]}))
+            first = len(FAKE_SSM.sent)
+            handler.bundle_start(self.req({"bundles": ["fan"]}))
+        self.assertEqual(len(FAKE_SSM.sent), first, "같은 요청 반복이 중복 실행됐습니다")
+
+    def test_request_while_booting_is_not_lost(self):
+        """🔴 'pending' 중에 온 요청도 선택에 들어가야 한다 — 유실되면 그 화면은 안 뜬다."""
+        with mock.patch.object(handler, "_now", return_value=T0):
+            handler.bundle_start(self.req({"bundles": ["fan"]}))
+            FAKE_EC2.state = "pending"
+            r = handler.bundle_start(self.req({"bundles": ["store"]}))
+        self.assertEqual(r["statusCode"], 200)
+        self.assertIn("store", self.selection())
+
+    def test_selection_is_kept_even_when_instance_is_stopping(self):
+        FAKE_EC2.state = "stopping"
+        with mock.patch.object(handler, "_now", return_value=T0):
+            r = handler.bundle_start(self.req({"bundles": ["fan"]}))
+        self.assertEqual(r["statusCode"], 409)
+        # 🔵 켜지 못했지만 **선택은 남는다** — 다시 누르면 그 선택으로 뜬다.
+        self.assertEqual(self.selection(), ["fan"])
+
+    def test_warm_start_sends_the_selection_sentinel_not_a_domain_list(self):
+        """🔴 명령줄에 방문자 문자열이 안 들어간다 — 센티널 하나만 간다."""
+        FAKE_EC2.state = "running"
+        with mock.patch.object(handler, "_now", return_value=T0):
+            handler.bundle_start(self.req({"bundles": ["console-wms"]}))
+        cmds = FAKE_SSM.sent[-1]["params"]["commands"]
+        self.assertEqual(cmds, ["bash /opt/monorepo-lab/infra/demo/demo-boot.sh selection"])
+
+    # -- 종료: 공유 의존을 안 내린다 ----------------------------------------
+    def test_bundle_stop_never_names_iam(self):
+        """🔴🔴 iam 을 내리면 남아 있는 다른 묶음의 로그인이 조용히 무너진다."""
+        FAKE_EC2.state = "running"
+        with mock.patch.object(handler, "_now", return_value=T0):
+            handler.bundle_start(self.req({"bundles": ["fan", "store"]}))
+            FAKE_SSM.sent.clear()
+            r = handler.bundle_stop(self.req({"bundles": ["fan"]}))
+        self.assertEqual(r["statusCode"], 200)
+        cmd = FAKE_SSM.sent[-1]["params"]["commands"][0]
+        self.assertIn("demo-down.sh fan", cmd)
+        self.assertNotIn("iam", cmd)
+        self.assertEqual(self.selection(), ["store"])
+
+    def test_bundle_stop_is_serialised_by_a_lock(self):
+        FAKE_EC2.state = "running"
+        with mock.patch.object(handler, "_now", return_value=T0):
+            handler.bundle_start(self.req({"bundles": ["fan"]}))
+            # 잠금이 잡혀 있는 상태를 만든다
+            FAKE_SSM.store[handler.LOCK_PARAM] = json.dumps({"owner": "other", "until": T0 + 60})
+            r = handler.bundle_stop(self.req({"bundles": ["fan"]}))
+        self.assertEqual(r["statusCode"], 409)
+        self.assertEqual(body(r)["error"], "locked")
+
+    def test_expired_lock_does_not_wedge_the_demo_forever(self):
+        """🔴 만료 없는 잠금은 Lambda 가 한 번 죽으면 데모를 영구히 잠근다."""
+        FAKE_EC2.state = "running"
+        with mock.patch.object(handler, "_now", return_value=T0):
+            handler.bundle_start(self.req({"bundles": ["fan"]}))
+            FAKE_SSM.store[handler.LOCK_PARAM] = json.dumps({"owner": "dead", "until": T0 - 1})
+            r = handler.bundle_stop(self.req({"bundles": ["fan"]}))
+        self.assertEqual(r["statusCode"], 200)
+
+    # -- 상태: running != 준비 완료 -----------------------------------------
+    def _health(self, states, age=0):
+        FAKE_SSM.store["/t/health"] = json.dumps({
+            "published_at": T0 - age,
+            "domains": {d: {"state": st, "healthy": 1, "total": 1} for d, st in states.items()},
+        })
+
+    def test_instance_running_is_not_the_same_as_bundle_ready(self):
+        """🔴🔴 이 구별이 없으면 방문자가 링크를 눌러 404 를 보고 '고장' 으로 읽는다."""
+        FAKE_EC2.state = "running"
+        self._health({"iam": "up", "fan": "down"})
+        with mock.patch.object(handler, "_now", return_value=T0):
+            handler._write_selection({"fan"})
+            b = body(handler.bundles())
+        self.assertEqual(b["state"], "running")
+        self.assertNotEqual(b["bundles"]["fan"]["state"], "ready")
+        self.assertEqual(b["bundles"]["fan"]["state"], "booting")
+
+    def test_bundle_is_ready_only_when_iam_is_up_too(self):
+        FAKE_EC2.state = "running"
+        self._health({"iam": "down", "fan": "up"})
+        with mock.patch.object(handler, "_now", return_value=T0):
+            b = body(handler.bundles())
+        self.assertNotEqual(b["bundles"]["fan"]["state"], "ready", "iam 없이 준비 완료로 표시됐습니다")
+
+        self._health({"iam": "up", "fan": "up"})
+        with mock.patch.object(handler, "_now", return_value=T0):
+            b = body(handler.bundles())
+        self.assertEqual(b["bundles"]["fan"]["state"], "ready")
+
+    def test_stale_health_is_never_reported_as_ready(self):
+        """🔴 stale 일 때 up 을 믿으면 꺼진 스택을 초록으로 그린다(MONO-551 결함 B)."""
+        FAKE_EC2.state = "running"
+        self._health({"iam": "up", "fan": "up"}, age=handler.HEALTH_STALE_AFTER_SECONDS + 1)
+        with mock.patch.object(handler, "_now", return_value=T0):
+            b = body(handler.bundles())
+        self.assertTrue(b["health_stale"])
+        self.assertEqual(b["bundles"]["fan"]["state"], "unknown")
+
+    def test_stopped_instance_distinguishes_requested_from_waiting(self):
+        FAKE_EC2.state = "stopped"
+        with mock.patch.object(handler, "_now", return_value=T0):
+            handler._write_selection({"fan"})
+            b = body(handler.bundles())
+        self.assertEqual(b["bundles"]["fan"]["state"], "requested")
+        self.assertEqual(b["bundles"]["store"]["state"], "waiting")
+
+    # -- 예산 / 라우팅 -------------------------------------------------------
+    def test_budget_exhausted_refuses_bundle_start(self):
+        FAKE_SSM.store["/t/usage"] = json.dumps(
+            {"month": handler._month(T0), "seconds": BUDGET_SEC, "tick": 0})
+        with mock.patch.object(handler, "_now", return_value=T0):
+            r = handler.bundle_start(self.req({"bundles": ["fan"]}))
+        self.assertEqual(r["statusCode"], 429)
+        self.assertEqual(FAKE_EC2.start_calls, 0)
+
+    def test_bundle_start_path_is_not_swallowed_by_the_start_route(self):
+        """🔴 '/bundle/start' 도 '/start' 로 끝난다 — 디스패치 순서가 load-bearing 이다.
+
+        순서가 틀리면 `start()` 가 불려 **선택 없이 인스턴스만 켜진다.** 그 실패는 200 을
+        내므로 로그로 안 보이고, 방문자는 고른 것과 다른 것이 뜬 화면을 본다.
+        """
+        with mock.patch.object(handler, "_now", return_value=T0):
+            r = handler.handler(
+                {"requestContext": {"http": {"method": "POST", "path": "/bundle/start"}},
+                 "body": json.dumps({"bundles": ["fan"]})}, None)
+        self.assertEqual(self.selection(), ["fan"], "start() 로 잘못 라우팅됐습니다")
+        self.assertEqual(body(r)["state"], "starting")
+
+    def test_bundles_route_is_reachable(self):
+        r = handler.handler(
+            {"requestContext": {"http": {"method": "GET", "path": "/bundles"}}}, None)
+        self.assertEqual(r["statusCode"], 200)
+        self.assertIn("bundles", body(r))
+
+
+class MaxRuntimeResetTest(unittest.TestCase):
+    """🔴🔴 **반복 시작 요청이 최대 가동 시간을 리셋하던 결함** (TASK-MONO-634 발견).
+
+    `start()` 는 상태와 무관하게 `_put(STARTED_PARAM, _now())` 를 했다. 그래서 `/start` 를
+    주기적으로 부르면 `run_sec = now - started` 가 영원히 작게 유지되어 **max-runtime 가드가
+    한 번도 물지 않았다.**
+
+    🔵 이 결함이 눈에 안 띈 이유: 월 예산 가드가 지출 상한을 따로 지키고 있었다. 즉 이
+    저장소는 **가드를 하나 더 만들면서 원래 가드는 고치지 않았고**, 새 가드가 피해를 가려
+    주었다. handler.py 헤더가 그 시나리오를 이미 문장으로 적어 두고 있었다는 점이 특히
+    나쁘다 — 알고 있었는데 그 축은 죽어 있었다.
+    """
+
+    def setUp(self):
+        FAKE_SSM.store.clear()
+        FAKE_SSM.sent.clear()
+        FAKE_EC2.state = "stopped"
+        FAKE_EC2.start_calls = 0
+        FAKE_EC2.stop_calls = 0
+        FAKE_EC2.launch_time = launched(T0)
+
+    def test_repeated_start_does_not_reset_the_max_runtime_clock(self):
+        # T0 에 켠다.
+        with mock.patch.object(handler, "_now", return_value=T0):
+            handler.start()
+        self.assertEqual(FAKE_SSM.store["/t/started"], str(T0))
+
+        # 4시간 동안 30분마다 /start 를 다시 누른다(= 옛 판이 시계를 리셋하던 경로).
+        for minutes in range(30, 4 * 60 + 1, 30):
+            t = T0 + minutes * 60
+            with mock.patch.object(handler, "_now", return_value=t):
+                handler.start()
+
+        # 🔴 판정: `started` 가 **여전히 T0** 여야 한다.
+        self.assertEqual(
+            FAKE_SSM.store["/t/started"], str(T0),
+            "반복 /start 가 최대 가동 시간 시계를 리셋했습니다 — max-runtime 가드가 죽습니다.")
+
+        # 그리고 실제로 가드가 문다.
+        t = T0 + 4 * 60 * 60
+        with mock.patch.object(handler, "_now", return_value=t):
+            out = handler.idle_check()
+        self.assertTrue(out["stopped"])
+        self.assertIn("max-runtime", out["reason"])
+
+    def test_heartbeat_is_still_extended_by_repeated_start(self):
+        """🔵 대조군 — beat 는 **연장되는 것이 의도**다. 둘을 같이 얼리면 유휴 판정이 깨진다."""
+        with mock.patch.object(handler, "_now", return_value=T0):
+            handler.start()
+        t = T0 + 3600
+        with mock.patch.object(handler, "_now", return_value=t):
+            handler.start()
+        self.assertEqual(FAKE_SSM.store["/t/beat"], str(t))
+
+    def test_bundle_start_has_the_same_property(self):
+        with mock.patch.object(handler, "_now", return_value=T0):
+            handler.bundle_start({"body": json.dumps({"bundles": ["fan"]})})
+        FAKE_EC2.state = "running"
+        for minutes in (60, 120, 180, 240):
+            t = T0 + minutes * 60
+            with mock.patch.object(handler, "_now", return_value=t):
+                handler.bundle_start({"body": json.dumps({"bundles": ["fan"]})})
+        self.assertEqual(FAKE_SSM.store["/t/started"], str(T0))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

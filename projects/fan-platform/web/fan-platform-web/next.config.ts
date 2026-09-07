@@ -19,9 +19,12 @@ import type { NextConfig } from 'next';
  * nothing about it reaches the running server.
  */
 const nextConfig: NextConfig = {
-  // 🔴 `@demo/backend-resolver` 은 TS 소스를 그대로 내보낸다(`main: ./src/index.ts`).
+  // 🔴 두 `@demo/*` 패키지는 TS 소스를 그대로 내보낸다(`main: ./src/index.ts`).
   //    이 목록에 없으면 `next build` 가 node_modules 안 TS 를 만나 죽는다 — TASK-MONO-614.
-  transpilePackages: ['@demo/backend-resolver'],
+  // 🔵 `@demo/public-data` 는 `./snapshots/*.json` 서브패스도 함께 내보낸다. JSON 은
+  //    transpile 대상이 아니지만, 같은 패키지의 TS 진입점이 이 목록에 없으면 그 JSON 을
+  //    임포트하는 모듈이 애초에 컴파일되지 않는다 ⇒ 둘을 갈라 적을 이유가 없다.
+  transpilePackages: ['@demo/backend-resolver', '@demo/public-data'],
   ...(process.env.NEXT_OUTPUT_STANDALONE === '1'
     ? { output: 'standalone' as const }
     : {}),

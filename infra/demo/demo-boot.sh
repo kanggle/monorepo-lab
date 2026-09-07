@@ -32,8 +32,53 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# 무인자 부팅은 full (systemd 유닛이 DEMO_PROFILE=full 을 넘기지만 안전망으로 유지).
-[ "$#" -eq 0 ] && set -- full
+
+# -----------------------------------------------------------------------------
+# 🔴🔴 TASK-MONO-634 — **부팅이 «전부» 를 뜻하지 않게 만든다** (ADR-MONO-071)
+# -----------------------------------------------------------------------------
+# 여기 있던 안전망은 `[ "$#" -eq 0 ] && set -- full` 이었고, systemd 유닛도
+# `DEMO_PROFILE=full` 을 넘겼다. 그래서 방문자가 론처에서 «팬 플랫폼만» 을 골라도
+# **최초 부팅은 언제나 8개 프로젝트 96 컨테이너**였다 — 선택은 이미 떠 있는 스택에
+# 도메인을 «추가» 할 때만 의미가 있었고(컨트롤 플레인의 `/domain/start` 는 인스턴스가
+# running 이 아니면 409 를 낸다), 그것이 이 티켓이 고치는 결함이다.
+#
+# ⇒ 새 센티널 `selection` 을 받는다. 그 값이 오면 **SSM 에 저장된 방문자의 선택**을 읽어
+#   묶음을 도메인으로 푼다. 선택이 없거나 못 읽으면 `demo-core` 로 떨어진다(**`full` 이
+#   아니다** — 이유는 demo-selection.sh 의 § 폴백 결정).
+#
+# 🔴 다른 인자 형태는 **전부 그대로 둔다.** 이 스크립트는 컨트롤 플레인의 per-domain
+#   경로에서도 불리고(`demo-boot.sh fan`), 로컬 개발자도 부른다. 센티널 하나만 더한다.
+# 🔵 무인자 기본값도 `selection` 으로 바꾼다 — 유닛이 값을 안 넘기게 되는 날(오타·리팩터)
+#   조용히 `full` 로 되돌아가지 않게. 폴백의 폴백이 옛 동작이면 회귀가 안 보인다.
+[ "$#" -eq 0 ] && set -- selection
+
+if [ "$#" -eq 1 ] && [ "$1" = "selection" ]; then
+  # shellcheck source=infra/demo/projects.sh
+  source "$HERE/projects.sh"
+  # shellcheck source=infra/demo/demo-selection.sh
+  source "$HERE/demo-selection.sh"
+
+  mapfile -t SEL_BUNDLES < <(read_boot_selection)
+  echo "[boot] 저장된 부팅 선택: ${SEL_BUNDLES[*]}"
+
+  # 🔴 `demo-core` 는 **묶음이 아니라 프로파일**이다(폴백이 그 이름을 돌려준다).
+  #    그것을 resolve_bundles 에 넣으면 «알 수 없는 묶음» 이 되어 부팅이 죽는다.
+  #    폴백 경로가 자기가 만든 값에 걸려 죽는 것은 가장 나쁜 종류의 결함이다 —
+  #    선택이 저장 안 된 상황에서만 발동하므로 평소에는 안 보인다.
+  if [ "${#SEL_BUNDLES[@]}" -eq 1 ] && { [ "${SEL_BUNDLES[0]}" = "demo-core" ] || [ "${SEL_BUNDLES[0]}" = "full" ]; }; then
+    set -- "${SEL_BUNDLES[0]}"
+  elif RESOLVED_SEL="$(resolve_bundles "${SEL_BUNDLES[@]}")"; then
+    mapfile -t SEL_DOMAINS <<<"$RESOLVED_SEL"
+    echo "[boot] 묶음 → 도메인(하드 의존 포함): ${SEL_DOMAINS[*]}"
+    set -- "${SEL_DOMAINS[@]}"
+  else
+    # 🔴 모르는 묶음 이름이 저장돼 있다 — 조용히 무시하면 방문자는 «켰는데 안 뜬» 화면을
+    #    본다. 이름을 대고 폴백한다(위 resolve_bundles 가 이미 stderr 에 이름을 적었다).
+    echo "[boot] ⚠ 저장된 선택을 풀지 못했습니다 — '$SELECTION_FALLBACK' 로 뜹니다." >&2
+    set -- "$SELECTION_FALLBACK"
+  fi
+fi
+
 PROFILE="$*"
 
 # -----------------------------------------------------------------------------

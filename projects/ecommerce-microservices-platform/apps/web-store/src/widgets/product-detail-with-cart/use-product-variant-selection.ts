@@ -2,14 +2,14 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { ProductDetail } from '@repo/types';
+import { MAX_ORDER_QUANTITY, type ProductDetailView } from '@/entities/product';
 import { useCart } from '@/features/cart';
 import type { SelectedItem } from './types';
 
 export interface ProductVariantSelectionResult {
   selectedItems: SelectedItem[];
   dropdownOpen: boolean;
-  variantMap: Map<string, ProductDetail['variants'][number]>;
+  variantMap: Map<string, ProductDetailView['variants'][number]>;
   totalQuantity: number;
   totalPrice: number;
   canAdd: boolean;
@@ -24,7 +24,7 @@ export interface ProductVariantSelectionResult {
   clearToast: () => void;
 }
 
-export function useProductVariantSelection(product: ProductDetail): ProductVariantSelectionResult {
+export function useProductVariantSelection(product: ProductDetailView): ProductVariantSelectionResult {
   const router = useRouter();
   const { addItem } = useCart();
 
@@ -53,7 +53,9 @@ export function useProductVariantSelection(product: ProductDetail): ProductVaria
   function handleQuantity(variantId: string, next: number) {
     const variant = variantMap.get(variantId);
     if (!variant) return;
-    const clamped = Math.max(1, Math.min(variant.stock, next));
+    // 🔴 `stock === null`(모름)일 때의 상한은 재고가 아니라 **UI 상한**이다. `Math.min(null, n)`
+    //    은 null 을 0 으로 강제해 수량을 1 로 못 박아 버린다 — "모름" 을 "0" 으로 읽는 실패.
+    const clamped = Math.max(1, Math.min(variant.stock ?? MAX_ORDER_QUANTITY, next));
     setSelectedItems((prev) =>
       prev.map((s) => (s.variantId === variantId ? { ...s, quantity: clamped } : s)),
     );

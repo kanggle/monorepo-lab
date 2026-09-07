@@ -46,7 +46,11 @@ const nextConfig = {
   //    ADR-MONO-068 § D6 = B2 / TASK-MONO-614). 트랜스파일 대상으로 선언하지 않으면
   //    `next build` 가 그 패키지의 TS 를 파싱하지 못한다. 형제 둘(web-store·
   //    fan-platform-web)과 같은 선언이다.
-  transpilePackages: ['@demo/backend-resolver'],
+  // 🔴 `@demo/public-data` 도 같은 이유로 여기 있어야 한다 — TS 소스를 그대로 내보낸다
+  //    (`main: ./src/index.ts`). 이 앱에서 그것을 읽는 유일한 자리는 공개 둘러보기
+  //    (`src/app/(demo)/**` → `src/features/demo-tour/**`)이고, 그 화면은 백엔드·BFF·IAM 을
+  //    **부르지 않는다**. 선언을 빠뜨리면 `next build` 가 그 패키지의 TS 를 파싱하지 못한다.
+  transpilePackages: ['@demo/backend-resolver', '@demo/public-data'],
   // TASK-PC-FE-135 — feature-barrel RSC client-reference First Load sweep.
   // The erp/ecommerce sections are multi-route: a single feature barrel
   // re-exports several 'use client' route-entry screens (+ leaves), so each

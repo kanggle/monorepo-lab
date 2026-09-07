@@ -3,12 +3,46 @@ import { test, expect } from '@playwright/test';
 /**
  * 백엔드 / GAP 미기동 환경에서도 결정론적으로 통과해야 하는 smoke.
  *
- * playwright.smoke.config.ts 는 OIDC_ISSUER_URL / NEXT_PUBLIC_GATEWAY_URL 을
- * 닫힌 loopback 으로 강제하므로 SSR fetch 는 즉시 실패하고 next-auth 의 세션
- * 쿠키도 존재하지 않아 middleware 가 / → /login 으로 redirect 한다.
+ * `playwright.smoke.config.ts` 는 `OIDC_ISSUER_URL` / `NEXT_PUBLIC_GATEWAY_URL` 을 닫힌
+ * loopback 으로 강제한다. 그래서 이 스위트는 **«백엔드가 없다» 를 재는 하네스**다.
+ *
+ * =============================================================================
+ * 🔴🔴 이 파일의 명제가 뒤집혔다 (TASK-MONO-635 / ADR-MONO-070)
+ * =============================================================================
+ * 예전 명제: *"비로그인 상태에서 `/` 접근 시 `/login` 으로 리다이렉트된다."*
+ *
+ * 그것은 «게이트웨이가 없으면 이 화면은 아무것도 못 그린다» 는 세계의 참이었다.
+ * `ADR-MONO-070` 이 그 전제를 없앴다 — 홈은 이제 Vercel 저장본(없으면 저장소에 커밋된
+ * 번들 시드)만 읽으므로 **백엔드가 닫혀 있어도 실제 내용을 그린다.**
+ *
+ * ⇒ 이 하네스가 재는 것이 더 강해졌다: 예전에는 «로그인으로 꺾이더라» 였고, 이제는
+ *   **«백엔드가 닫혀 있는데도 공개 피드가 실물로 뜬다»** 이다. 그것이 이 ADR 의 성질
+ *   자체이고, 이 스위트가 그것을 잴 수 있는 **유일한 자동 검사**다(닫힌 loopback 을
+ *   강제하는 설정이 여기밖에 없다).
  */
-test('비로그인 상태에서 / 접근 시 /login 으로 리다이렉트된다', async ({ page }) => {
+
+test('백엔드가 닫혀 있어도 / 가 공개 피드를 그린다 (로그인 없이)', async ({ page }) => {
+  const res = await page.goto('/');
+
+  // 🔴 ① 꺾이지 않는다. 이 한 줄이 예전 명제의 정확한 반대다.
+  expect(new URL(page.url()).pathname, '/login 으로 꺾이면 공개 열람이 죽은 것이다').toBe('/');
+  expect(res?.status()).toBeLessThan(400);
+
+  // 🔴 ② **200 이 곧 «내용이 있다» 는 아니다.** 빈 껍데기도 200 이다.
+  //    저장본(번들 시드)에서 온 실제 게시물이 보이는지를 본다 — 시드의 아티스트 활동명은
+  //    `infra/demo/public-data/snapshots/fan.json` 에서 왔고, 그 값이 화면에 닿는다는 것이
+  //    «판독자 → 페이지» 배선이 살아 있다는 뜻이다.
+  await expect(page.getByText('루미').first()).toBeVisible({ timeout: 10_000 });
+
+  // 🔴 ③ 출처를 **정직하게** 말하는가. 저장본을 못 읽었거나 아직 발행 전이면 화면은
+  //    그 사실을 말해야 한다 — 말하지 않으면 번들 시드가 «지금 백엔드에서 뽑은 것» 으로
+  //    읽힌다(없는 사실을 주장하는 화면).
+  await expect(page.getByTestId('provenance-banner')).toBeVisible();
+});
+
+test('익명 방문자에게 로그인 진입점이 보인다 (실시간 기능으로 가는 길)', async ({ page }) => {
   await page.goto('/');
-  await page.waitForURL('**/login**', { timeout: 10_000 });
-  await expect(page.getByRole('heading', { name: 'fan-platform' })).toBeVisible();
+  // 🔵 공개 열람이 기본이 됐으므로 로그인은 **막는 벽**이 아니라 **다음 단계**다.
+  //    그 진입점이 사라지면 방문자는 회원 기능으로 갈 길을 잃는다.
+  await expect(page.getByRole('link', { name: /로그인/ }).first()).toBeVisible();
 });
