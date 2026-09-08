@@ -53,6 +53,23 @@ describe('DemoBackendNotice (fan)', () => {
     expect(notice).toHaveTextContent('데모 시작');
   });
 
+  // 🔴🔴 TASK-MONO-642 — 위 두 단언만으로는 **이 티켓의 결함을 못 잡는다.**
+  //    옛 문구(「피드와 아티스트 데이터를 불러올 수 없습니다」)도 두 리터럴을 그대로
+  //    포함했다. 🔵 리터럴 고정은 유지하고(배너의 문장이 계약이다), 덮는 칸을 더한다.
+  it('🔴 배너가 «그리고 있는 것»과 어긋나지 않는다 — 「불러올 수 없」다고 말하지 않는다', async () => {
+    process.env.DEMO_API_BASE = 'https://control.example';
+    stubStatus({ state: 'stopped' });
+
+    await renderNotice();
+    const notice = screen.getByTestId('demo-backend-notice');
+
+    expect(notice).toHaveTextContent('샘플');
+    // 🔴 이 칸이 bite 다 — 옛 문구를 되살리면 빨개진다.
+    expect(notice.textContent).not.toContain('불러올 수 없');
+    // 🔴 잠긴 사실을 안 지웠는가
+    expect(notice).toHaveTextContent('실시간 기능');
+  });
+
   it('🔴 데모 배포 + 컨트롤 플레인 조회 실패 → 배너가 보인다 (침묵하지 않는다)', async () => {
     process.env.DEMO_API_BASE = 'https://control.example';
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('down')));
