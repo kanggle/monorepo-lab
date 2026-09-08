@@ -192,7 +192,7 @@ git blob `CR=0`(LF). 이 호스트의 `core.autocrlf=true` 가 체크아웃에�
 - [x] 배선할지 말지 **정하고 근거를 적는다.** 배선한다면 최소한 패키지 시험과 스냅샷
       드리프트 검사가 대상이다. 🔴 안 배선하기로 정한다면 **그 이유와 그때까지 무엇이
       미측정인지**를 적어라 — 「나중에」는 근거가 아니다.
-- [ ] 배선한다면 그 잡이 **실제로 돌았는지**를 PR 에서 로그로 확인한다(경로 필터에 걸려
+- [x] 배선한다면 그 잡이 **실제로 돌았는지**를 PR 에서 로그로 확인한다(경로 필터에 걸려
       SKIPPED 되면 배선한 적이 없는 것과 같다).
 
 ---
@@ -385,8 +385,21 @@ $ node --test tests/public-data.test.mjs           → rc=0
 🔴 트리거에 **`.gitignore` 를 넣었다** — 원인이 그쪽에 있기 때문이다. `package.json` 만
 보면 이 결함의 도착 경로를 놓친다.
 
-- [ ] 🔴 **PR 에서 두 잡이 SKIPPED 가 아니라 실제로 돌았는지 로그로 확인한다.**
+- [x] 🔴 **PR 에서 두 잡이 SKIPPED 가 아니라 실제로 돌았는지 로그로 확인한다.**
       (배선했는데 경로 필터에 걸려 안 돌면 배선한 적이 없는 것과 같다.)
+
+      **측정(PR #3688, run 34224907741)** — 잡의 «결론» 이 아니라 **스텝**을 읽었다:
+
+      | 잡 | 스텝 | 결과 |
+      |---|---|---|
+      | `package.json scripts point at files that are in the repo` | `bash -n` | success |
+      | | `Self-test the predicate (bites on the real tree, mutated)` | success |
+      | | `Guard — every referenced local script is tracked` | success |
+      | `Demo wrapper smoke (infra/demo)` | `Public-data bundled seed is regenerable and not drifted` | success |
+      | | `Public-data package tests (transform allowlist + leak controls)` | success |
+
+      ⇒ 배선 사슬 네 단계가 **실제로** 이어졌다. 전체 체크 59개 중 SUCCESS 38 · SKIPPED 21 ·
+      실패 0.
 
 ## 실행한 게이트
 
