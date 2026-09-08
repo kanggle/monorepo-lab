@@ -4018,7 +4018,7 @@ z37_mres="$(node -e '
 # 🔵 목록의 정본은 `capture-shots.mjs` 다. 마크업의 상수는 그것으로 만든 산출물이므로,
 #    둘이 갈라지면 «다시 찍었는데 화면은 옛 목록» 이 된다.
 z37_script="$ROOT/infra/demo/aws/site/capture-shots.mjs"
-[ -f "$z37_script" ] || z37_die "(z37) capture-shots.mjs 가 없습니다 — 캡처를 다시 만들 방법이 사라졌습니다."
+[ -f "$z37_script" ] || z37_die "(z37) capture-shots.mjs 파일이 없습니다 — 이 줄은 **존재만** 봅니다. 실제로 도는지는 (z38) 이 잽니다."
 grep -oE "name: '[^']+'" "$z37_script" | sed "s/name: '//; s/'//" | sort -u > "$z37_tmp/names.txt"
 sed 's/\.[a-z]*$//' "$z37_tmp/refs.txt" | sort -u > "$z37_tmp/refnames.txt"
 z37_diff="$(comm -3 "$z37_tmp/names.txt" "$z37_tmp/refnames.txt" | tr -d '\t' | tr '\n' ' ')"
@@ -5782,6 +5782,74 @@ z30_cells=$(printf '%s\n' "$z30_out" | grep -c '✓' || true)
   $'\n'"→ 칸을 의도적으로 줄였다면 이 하한도 같은 PR 에서 내리고 왜인지 적으세요."
 
 ok "(z30) 호스트 드리프트 술어 — 존재·문법·self-test ${z30_cells}칸(대조군 · mode만 · 내용 · 내용+mode · 미추적 · gitignore · 저장소 아님)"
+
+# =============================================================================
+# (z38) 캡처 스크립트가 **실제로 기동해서 의존을 해석하는가** — TASK-MONO-643
+# =============================================================================
+# 🔴🔴 (z37) 은 `[ -f capture-shots.mjs ]` 만 보면서 메시지로는 «다시 만들 방법이
+#    사라졌습니다» 를 말했다. **안 도는 스크립트는 «다시 만들 방법» 이 아니다** — 술어가
+#    자기 메시지가 지목한 원인을 안 물고 있었고, 그 상태로 CI 에서 초록이었다.
+#
+# 🔴 이 칸이 재는 것은 **의존 해석까지**다. 네트워크에 안 붙고(`--dry-run`), AWS 도 안 부른다.
+#
+# 🔴🔴 술어의 핵심 — **스크립트의 말이 아니라 «실제 설치 여부» 와 대조한다:**
+#      설치돼 있다    ⇒ rc **0**. rc=3 이면 **스크립트가 못 찾은 것**(= 이 결함)
+#      설치 안 돼 있다 ⇒ rc **3**. rc=0 이면 **없는 것을 찾았다고 말한 것**
+#    안 가르면 설치 없는 clean CI 에서 «고장» 을 신고하거나(영구 빨강), 진짜 고장을
+#    «미설치» 로 삼킨다(영구 초록).
+echo "[verify] (z38) 캡처 스크립트가 실제로 돌아서 의존을 해석하는가 (TASK-MONO-643)"
+z38_script="$ROOT/infra/demo/aws/site/capture-shots.mjs"
+[ -f "$z38_script" ] || fail "(z38) capture-shots.mjs 가 없습니다: $z38_script"
+
+if ! command -v node >/dev/null 2>&1; then
+  ok "(z38) node 가 없어 건너뜁니다 — 이 칸은 node 가 있는 환경에서만 판정합니다"
+else
+  # --- ① 지상 진실: @playwright/test 가 실제로 설치돼 있는가 (깊이 1~3) ---------
+  # 🔵 스크립트에게 묻지 않는다. 물으면 «스크립트가 스스로를 채점» 하게 된다.
+  z38_truth=0
+  for z38_d in "$ROOT"/projects/*/node_modules/@playwright/test \
+               "$ROOT"/projects/*/*/node_modules/@playwright/test \
+               "$ROOT"/projects/*/*/*/node_modules/@playwright/test; do
+    if [ -d "$z38_d" ]; then z38_truth=1; break; fi
+  done
+
+  # --- ② 스크립트를 실제로 돌린다 -------------------------------------------
+  # 🔴 `set -e` 아래에서는 실패하는 명령치환의 결과를 `$?` 로 받기 전에 셸이 죽는다.
+  #    이 칸은 **0 이 아닌 종료코드가 정상 결과**이므로 if 로 받아야 한다.
+  if z38_out="$(cd "$ROOT" && node "$z38_script" --dry-run 2>&1)"; then z38_rc=0; else z38_rc=$?; fi
+  if [ "$z38_truth" = "1" ]; then z38_want=0; z38_mark="[capture] Playwright: "; else z38_want=3; z38_mark="설치돼 있지 않습니다"; fi
+
+  # 🔴🔴 **종료코드만 보면 안 된다.** 이 결함의 옛 스크립트는 `--dry-run` 이 의존 해석보다
+  #    먼저 반환해서 rc=0 을 냈다 — 설치된 트리에서 기대값 0 과 같아져 **가드가 초록**이
+  #    된다. 실측: 이 칸의 첫 판이 정확히 그렇게 통과했고, 파일수준 bite 로만 드러났다.
+  #    ⇒ «해석이 실제로 일어났다» 는 **증거를 함께 요구**한다.
+  printf %s "$z38_out" | grepq -F "$z38_mark" || fail "(z38) 종료코드는 맞는데 의존을 해석한 흔적이 없습니다 — 기대한 표지 «$z38_mark» 가 출력에 없습니다. --dry-run 이 의존 해석 전에 반환하면 이 상태가 되고, rc 만 보면 초록입니다. 출력: $z38_out"
+
+  if [ "$z38_rc" != "$z38_want" ]; then
+    if [ "$z38_truth" = "1" ]; then
+      fail "(z38) Playwright 가 설치돼 있는데 스크립트가 못 찾았습니다 (rc=$z38_rc, 기대 0). 손으로 적은 후보 경로가 실제 배치와 어긋나면 이 상태가 되고, 문서에 적힌 명령이 죽습니다. 출력: $z38_out"
+    else
+      fail "(z38) Playwright 가 설치돼 있지 않은데 스크립트가 rc=$z38_rc 을 냈습니다 (기대 3). rc=0 이면 없는 것을 찾았다고 말한 것이고, rc=1 이면 스크립트 자체가 깨졌습니다. 출력: $z38_out"
+    fi
+  fi
+
+  # --- ③ bite — 지금 환경의 «반대 답» 을 내게 만들면 이 칸이 빨개져야 한다 ------
+  # 🔴 가드 안의 변수가 아니라 **실제 파일을 변형**해서 돌린다. 지상 진실이 어느 쪽이든
+  #    동작하도록 「지금 정답의 반대」로 뒤집는다.
+  z38_tmp="$(mktemp -d)"
+  z38_mut="$z38_tmp/capture-shots.mjs"
+  if [ "$z38_truth" = "1" ]; then z38_wrong=3; else z38_wrong=0; fi
+  { head -1 "$z38_script"; echo "process.exit($z38_wrong);"; tail -n +2 "$z38_script"; } > "$z38_mut"
+  if z38_bout="$(cd "$ROOT" && node "$z38_mut" --dry-run 2>&1)"; then z38_brc=0; else z38_brc=$?; fi
+  rm -rf "$z38_tmp"
+  if [ "$z38_brc" = "$z38_want" ]; then
+    fail "(z38) bite 실패 — 반대 코드를 내게 만들었는데 기대값과 같아졌습니다(rc=$z38_brc). 술어가 종료코드를 안 보고 있다는 뜻입니다."
+  fi
+  # 🔵 대조군: 손대지 않은 스크립트는 위 ②에서 이미 기대값과 표지를 냈다(그것이 대조군이다).
+
+  if [ "$z38_truth" = "1" ]; then z38_where="설치됨"; else z38_where="미설치(clean clone·CI 의 정상 상태)"; fi
+  ok "(z38) 문서의 명령이 실제로 돕니다 — 환경=$z38_where · rc=$z38_rc(기대 $z38_want) · 해석 표지 확인 · bite(반대 코드 $z38_wrong)=빨강 · 네트워크·AWS 미접촉"
+fi
 
 if [ "$LIVE" -eq 0 ]; then
 

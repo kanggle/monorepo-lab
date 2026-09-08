@@ -19,14 +19,21 @@
 // 사용
 // =============================================================================
 //   node infra/demo/aws/site/capture-shots.mjs                  # 전부 찍는다
-//   node infra/demo/aws/site/capture-shots.mjs --dry-run        # 목록만 찍어 본다
+//   node infra/demo/aws/site/capture-shots.mjs --dry-run        # 목록 + **의존 해석**만
+//   node infra/demo/aws/site/capture-shots.mjs --from <경로>    # 특정 @playwright/test 설치본
 //
-// 🔴 Playwright 가 필요하다. 이 저장소에는 ecommerce/fan 워크스페이스가 이미 들고 있으므로
-//    그 설치본을 쓴다(`--from <경로>` 로 다른 설치본을 가리킬 수 있다).
+// 종료코드 — 🔴 «미설치» 와 «고장» 은 다른 상태다(TASK-MONO-643):
+//   0  정상
+//   3  Playwright 가 설치돼 있지 않다. **고장이 아니다** — clean clone·CI 의 정상 상태다
+//   1  그 밖의 실패(캡처 실패 등)
+//
+// 🔴 Playwright 가 필요하다. 워크스페이스 어딘가에 설치돼 있으면 **찾아서** 쓴다
+//    (`projects/` 아래 깊이 1~3). 손으로 적은 경로 목록은 쓰지 않는다 — 그 목록이 틀려서
+//    이 스크립트가 문서대로 실행하면 죽었던 것이 TASK-MONO-643 이다.
 // =============================================================================
 
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -75,28 +82,67 @@ const SHOTS = [
 const VIEWPORT = { width: 1280, height: 800 };
 const SCALE = 1;
 
-async function loadChromium(from) {
-  const candidates = from ? [from] : [
-    resolve(HERE, '../../../../projects/ecommerce-microservices-platform/node_modules/@playwright/test'),
-    resolve(HERE, '../../../../projects/fan-platform/node_modules/@playwright/test'),
-    resolve(HERE, '../../../../projects/platform-console/node_modules/@playwright/test'),
-  ];
-  for (const c of candidates) {
-    if (!existsSync(c)) continue;
+// -----------------------------------------------------------------------------
+// Playwright 를 어떻게 찾는가 — TASK-MONO-643
+// -----------------------------------------------------------------------------
+// 🔴🔴 첫 판은 후보 경로 **셋을 손으로 적었고 셋 다 틀렸다**(프로젝트 층을 봤는데 설치본은
+//    앱 층에 있었다). 그래서 문서에 적힌 `node capture-shots.mjs` 가 rc=1 로 죽었고,
+//    TASK-MONO-639 는 `--from` 으로 우회해 성공했기 때문에 그 사실이 안 드러났다.
+//
+// 🔴 그래서 **네 번째 경로를 적는 것으로 고치지 않는다.** 그것이 지금 결함의 모양이다 —
+//    손으로 적은 목록은 디렉터리가 한 층 움직이는 날 다시 틀린다. **찾아낸다.**
+//
+// 🔵 왜 `import.meta.resolve` / `createRequire` 가 아닌가: 이 파일은 워크스페이스 **밖**
+//    (`infra/demo/aws/site/`)에 있고 자기 `package.json` 이 없다. Node 의 해석은 이 파일의
+//    위치에서 위로만 올라가므로 `projects/**/node_modules` 에 절대 닿지 않는다. 그래서
+//    저장소 구조를 아는 **경계 있는 탐색**이 맞다.
+//
+// 🔵 깊이 1~3 인 이유(실측 2026-09-08): 설치본은 앱 층에 있다 —
+//      projects/<p>/apps/<app>/node_modules          → 깊이 3
+//      projects/<p>/web/<app>/node_modules           → 깊이 3
+//    그리고 프로젝트 층(깊이 1)에도 생길 수 있으므로 1~3 을 본다. 무한 재귀는 하지 않는다
+//    (node_modules 안을 훑으면 느리고, 이 저장소는 «느린 가드=틀린 가드» 를 이미 겪었다).
+const REPO_ROOT = resolve(HERE, '../../../..');
+
+function discoverPlaywright() {
+  const found = [];
+  const projects = join(REPO_ROOT, 'projects');
+  if (!existsSync(projects)) return found;
+  const dirsIn = (d) => {
     try {
-      const mod = await import(new URL('index.mjs', `file:///${c.replace(/\\/g, '/')}/`).href);
-      if (mod.chromium) return mod.chromium;
-    } catch {
-      /* 다음 후보 */
-    }
-    try {
-      const mod = await import(`file:///${c.replace(/\\/g, '/')}/index.js`);
-      if (mod.chromium) return mod.chromium;
-    } catch {
-      /* 다음 후보 */
+      return readdirSync(d, { withFileTypes: true })
+        .filter((e) => e.isDirectory() && e.name !== 'node_modules' && !e.name.startsWith('.'))
+        .map((e) => join(d, e.name));
+    } catch { return []; }
+  };
+  const hit = (d) => {
+    const c = join(d, 'node_modules', '@playwright', 'test');
+    if (existsSync(c) && !found.includes(c)) found.push(c);
+  };
+  for (const l1 of dirsIn(projects)) {          // projects/<p>
+    hit(l1);
+    for (const l2 of dirsIn(l1)) {              // projects/<p>/<apps|web|...>
+      hit(l2);
+      for (const l3 of dirsIn(l2)) hit(l3);     // projects/<p>/<apps>/<app>
     }
   }
-  return null;
+  return found;
+}
+
+async function loadChromium(from) {
+  const candidates = from ? [from] : discoverPlaywright();
+  for (const c of candidates) {
+    if (!existsSync(c)) continue;
+    for (const entry of ['index.mjs', 'index.js']) {
+      try {
+        const mod = await import(new URL(entry, `file:///${c.split(String.fromCharCode(92)).join('/')}/`).href);
+        if (mod.chromium) return { chromium: mod.chromium, at: c };
+      } catch {
+        /* 다음 후보 */
+      }
+    }
+  }
+  return { chromium: null, at: null, candidates };
 }
 
 async function main() {
@@ -106,16 +152,27 @@ async function main() {
 
   console.log(`[capture] ${SHOTS.length}장 · 뷰포트 ${VIEWPORT.width}x${VIEWPORT.height} · scale ${SCALE}`);
   for (const s of SHOTS) console.log(`  ${s.bundle.padEnd(8)} ${s.name.padEnd(22)} ${s.url}`);
-  if (dry) {
-    console.log('[capture] --dry-run — 찍지 않았습니다.');
-    return;
-  }
-
-  const chromium = await loadChromium(from);
+  // 🔴🔴 의존 해석을 **--dry-run 보다 먼저** 한다. 첫 판은 순서가 반대라서
+  //    `--dry-run` 이 «목록만 찍고 rc=0» 으로 끝났고, 그래서 **Playwright 를 못 찾는
+  //    상태를 통과시켰다.** 그 순서가 결함의 일부였다(TASK-MONO-643 Failure Scenario 4).
+  const { chromium, at, candidates } = await loadChromium(from);
   if (!chromium) {
-    console.error('[capture] ✗ Playwright 를 못 찾았습니다.');
-    console.error('  → 워크스페이스 중 하나에서 설치하거나 --from <@playwright/test 경로> 를 주세요.');
-    process.exit(1);
+    // 🔴 두 상태를 **다른 종료코드로** 가른다. 게이트가 이 둘을 섞으면 설치가 없는
+    //    clean CI 에서 «스크립트 고장» 을 신고하거나(영구 빨강), 반대로 진짜 고장을
+    //    «설치 안 됨» 으로 삼킨다(영구 초록).
+    //      rc=3 — Playwright 가 설치돼 있지 않다. **정상 상태다**(clean clone·CI).
+    //      rc=1 — 그 밖의 실패(캡처 실패 등). 스크립트나 대상의 문제다.
+    console.error('[capture] ⚠ Playwright 가 설치돼 있지 않습니다 (rc=3 — 고장이 아닙니다).');
+    if (from) console.error(`  → --from 으로 준 경로에 없습니다: ${from}`);
+    else console.error(`  → projects/ 아래 깊이 1~3 을 훑었고 후보를 못 찾았습니다(${(candidates || []).length}건).`);
+    console.error('  → 워크스페이스 중 하나에서 npm/pnpm install 하거나 --from <@playwright/test 경로> 를 주세요.');
+    process.exit(3);
+  }
+  console.log(`[capture] Playwright: ${at}`);
+
+  if (dry) {
+    console.log('[capture] --dry-run — 의존 해석까지 마쳤고 찍지 않았습니다.');
+    return;
   }
 
   await mkdir(OUT_DIR, { recursive: true });
