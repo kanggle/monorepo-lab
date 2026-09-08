@@ -302,3 +302,27 @@ close chore, which is why it has to be written down where they will read it.
 home and stale in another is the failure mode this repository has paid for repeatedly. The
 **evidence** above, by contrast, lives only here — `CLAUDE.md` carries the catalog line and
 points at this anchor.
+
+## Stage Before You Run a Guard
+
+20 of the 52 guards under `scripts/` build their population with `git ls-files`. That is the **right** choice — a guard is asking about what will be committed, not about whatever happens to be lying in the working tree. The cost is that the guard's answer depends on the **index**, so running it before `git add` asks a different question than CI will ask.
+
+**The failure has the same shape as success.** A two-way check compares a listing against a directory. If the new file is unstaged *and* nothing references it yet, both sides are empty — and empty sets agree. The guard does not fall silent; it states that everything is consistent.
+
+Measured on `TASK-MONO-646` (2026-09-09 UTC), one guard, one tree, three runs; the only variable is what the index holds:
+
+| # | State | rc | What the guard said | What was true |
+|---|---|---:|---|---|
+| A | file unstaged, no INDEX row | **0** | *"listing and directory agree in both directions"* | **false green** — `tasks/ready/` held an unlisted file (`ls`=1, `git ls-files`=0) |
+| B | file unstaged, INDEX row present | **1** | *"no file with that ID exists anywhere under `tasks/`"* | **false red** — the file was on disk |
+| C | both staged | **0** | same wording as A | true green |
+
+A is the dangerous one, and it is the one that actually shipped: in `TASK-MONO-572` an INDEX row landed in a prose section (a heading anchor matched `## in-progress → review` before `## in-progress`) *and* the task file was untracked, so **two defects cancelled into a green**. B is milder because red stops a person — but its stated reason is wrong, and believing *"anywhere under `tasks/`"* makes you recreate a file that exists.
+
+**Rule:** `git add` → eyeball the population (`git ls-files <dir>`) → run the guard. A guard run before staging is not a verdict, in either direction. Deletions invert it: before staging, `git ls-files` still reports the deleted file as present, so a guard verifying a removal goes falsely red.
+
+Three of the 20 are `main`'s **required** checks (`check-index-queue-drift.sh`, `check-task-id-collision.sh`, `check-walkthrough-ledger-drift.sh`), so a pre-stage local green on the required set carries no information at all.
+
+🔵 This is a **local-run** rule. CI checks out a committed tree, where index and tree coincide, so the trap cannot fire there — which is exactly why it presents as "green locally, red in CI".
+
+🔴 Not covered by this rule: a file that `.gitignore` swallows. Staging does not make it visible either (`TASK-MONO-640` was that class — `bin/` ate a generator the README called mandatory).
