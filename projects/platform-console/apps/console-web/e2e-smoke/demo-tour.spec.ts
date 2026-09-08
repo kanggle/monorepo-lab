@@ -44,10 +44,17 @@ test.describe('공개 둘러보기 (backend 미기동 · 미인증)', () => {
   test('표 안 검색이 브라우저에서 돈다(네비게이션 없음)', async ({ page }) => {
     await page.goto('/demo/ecommerce');
     const rows = page.locator('[data-testid^="demo-row-orders-"]');
-    await expect(rows).toHaveCount(4);
+    // 🔴🔴 TASK-MONO-638 — **전체 행 수를 얼려 두지 않는다.** 예전 판은 4 를 적었는데,
+    //    콘솔 표본이 늘자(표 행 30 → 65) 이 시험이 빨개졌다. 그 빨강의 사유는
+    //    «검색이 고장났다» 가 아니라 «내가 제품 수치를 얼려 두었다» 였다.
+    // 🔵 이 시험의 축은 «표 안 검색이 브라우저에서 돈다» 이지 «주문이 몇 건이다» 가 아니다.
+    const before = await rows.count();
+    // 🔴 비공허성 — 1행 이하면 «좁혀졌다» 는 아래 단언이 아무것도 시험하지 않는다.
+    expect(before).toBeGreaterThan(1);
 
     await page.getByTestId('demo-search-orders').fill('0911');
     await expect(rows).toHaveCount(1);
+    expect(before).toBeGreaterThan(1); // 좁혀지기 **전** 이 더 많았다는 사실을 남긴다
     // URL 이 안 바뀌었다 = 서버로 질의가 안 나갔다.
     expect(new URL(page.url()).pathname).toBe('/demo/ecommerce');
   });
