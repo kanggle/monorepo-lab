@@ -8,7 +8,7 @@ TASK-MONO-642
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -273,3 +273,16 @@ projects/platform-console/apps/console-web/src/widgets/demo-notice/DemoBackendNo
 🔴 **미측정**: 새 캡처가 `hubwang.com` 카드에 실제로 뜨는지. 이 PR 이 머지되고 Vercel 이
 배포한 뒤에만 볼 수 있다. `TASK-MONO-639` 때와 같은 축이고, 그때는 8/8 이 **md5 동일**로
 확인됐다.
+
+## CORRECTION — § 미측정이었던 「라이브 캡처」를 실제로 쟀다 (2026-09-08 UTC)
+
+이 티켓은 «새 캡처가 `hubwang.com` 카드에 실제로 뜨는지» 를 미측정으로 남겼다. 머지
+(`0aa92f6a2`) 후 Vercel 배포를 확인하고 **두 축으로 갈라서** 쟀다:
+
+| 축 | 결과 |
+|---|---|
+| 방문자가 받는 파일이 커밋본과 같은가 | ✅ **8/8 md5 동일** |
+| 그 파일이 화면에 **그려지는가** | ✅ `.shots img` 8장 전부 `naturalWidth=1280` · `visible=true` |
+
+🔵 에셋이 있다는 것과 캐러셀이 그린다는 것은 다른 축이다(캐러셀은 인라인 JS 가 만든다).
+`TASK-MONO-639` 에서 이미 이름 붙인 갈래라 그대로 갈라서 쟀다.
