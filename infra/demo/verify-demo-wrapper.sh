@@ -3924,6 +3924,137 @@ rm -rf "$z35_dir"
 ok "카드 ${z35_n}장 — 구조 추출(링크 1개 · 제목 앵커 · 하드코딩 주소 0 · 로그인 전/후 + 기동필요 표시 · 캐러셀 자리, 술어 self-test 8칸) + 캐러셀 **실행 대조** 5시나리오(0장·1장·3장·마지막장·이미지실패) + bite 2칸(1장 컨트롤 · 0장 자리표시자) + 커서 양방향 7칸"
 
 # =============================================================================
+# (z37) 캐러셀이 가리키는 캡처가 **실재하는가**, 그리고 그 반대도 — TASK-MONO-639
+# =============================================================================
+# 🔴🔴 이 축은 **양방향**이다. 한쪽만 보면 둘 중 하나가 조용히 통과한다:
+#   · 참조 → 파일 만 보면: 아무도 안 그리는 캡처가 저장소에 쌓여도 모른다(용량만 는다)
+#   · 파일 → 참조 만 보면: 마크업이 없는 파일을 가리켜도 모른다(방문자는 깨진 칸을 본다)
+#
+# 🔴 그리고 `build.sh` 는 `thumbnails/` 가 **없어도 성공한다**(오늘까지 그랬다). 그래서
+#    «있어야 하는데 없다» 를 아무도 말해 주지 않는다 — 이 칸이 그 자리다.
+#
+# 🔵 하한을 두는가 — **둔다. 근거를 적는다.** 이 모집단은 «비어 가는 것» 이 아니라 «채워진
+#    채로 유지되는 것» 이다. 캡처가 0장이 되면 그것은 «다 고쳤다» 가 아니라 **캐러셀이
+#    자리표시자로 되돌아갔다** 는 뜻이고, 그 상태는 TASK-MONO-639 가 끝낸 상태의 회귀다.
+#    ⇒ 「1장 이상」에 건다. 몇 장인지는 안 건다 — 그건 제품 결정이다.
+echo "[verify] (z37) 캐러셀 참조 ↔ 캡처 파일이 양방향으로 맞는가 (TASK-MONO-639)"
+z37_site="$ROOT/infra/demo/aws/site/index.html"
+z37_dir="$ROOT/infra/demo/aws/site/thumbnails"
+z37_mani="$z37_dir/manifest.json"
+[ -f "$z37_site" ] || fail "(z37) index.html 이 없습니다: $z37_site"
+
+z37_tmp="$(mktemp -d)"
+z37_die() { rm -rf "$z37_tmp"; fail "$@"; }
+
+# ---------------------------------------------------------------------------
+# ① 마크업(스크립트)이 가리키는 파일 이름을 뽑는다
+# ---------------------------------------------------------------------------
+# 🔵 SHOTS 상수 안의 `file: '...'` 만 본다. 파일 전체에서 `.jpg` 를 grep 하면 주석·산문에
+#    걸린다(이 저장소가 반복해서 밟은 함정).
+z37_b="$(grep -n 'const SHOTS = {' "$z37_site" | head -1 | cut -d: -f1)"
+[ -n "$z37_b" ] || z37_die "(z37) index.html 에서 SHOTS 상수를 찾지 못했습니다 — **가드가 공허합니다.**"
+z37_e="$(awk -v s="$z37_b" 'NR > s && /^    };$/ { print NR; exit }' "$z37_site")"
+[ -n "$z37_e" ] || z37_die "(z37) SHOTS 상수의 끝을 찾지 못했습니다."
+sed -n "${z37_b},${z37_e}p" "$z37_site" | grep -oE "file: '[^']+'" | sed "s/file: '//; s/'//" | sort -u > "$z37_tmp/refs.txt"
+
+z37_nref="$(grep -c . "$z37_tmp/refs.txt" || true)"
+# 🔴 하한 — 위 § 의 근거대로 «1장 이상» 이다.
+[ "$z37_nref" -ge 1 ] \
+  || z37_die "(z37) 캐러셀이 캡처를 **한 장도 안 가리킵니다.**"\
+    $'\n'"→ TASK-MONO-639 가 끝낸 상태의 회귀입니다(카드가 자리표시자로 되돌아갑니다)."\
+    $'\n'"→ 다시 만들려면: node infra/demo/aws/site/capture-shots.mjs"
+
+# ---------------------------------------------------------------------------
+# ② 방향 1 — 참조하는 파일이 **전부 실재하는가**
+# ---------------------------------------------------------------------------
+z37_missing=""
+while IFS= read -r z37_f; do
+  [ -n "$z37_f" ] || continue
+  [ -f "$z37_dir/$z37_f" ] || z37_missing="$z37_missing $z37_f"
+done < "$z37_tmp/refs.txt"
+[ -z "$z37_missing" ] \
+  || z37_die "(z37) 캐러셀이 가리키는 캡처가 없습니다:$z37_missing"\
+    $'\n'"→ 방문자는 그 칸에서 자리표시자를 봅니다(런타임은 안 죽지만 화면은 비어 보입니다)."
+
+# ---------------------------------------------------------------------------
+# ③ 방향 2 — 저장소의 캡처가 **전부 참조되는가**
+# ---------------------------------------------------------------------------
+# 🔴 이 방향이 없으면 아무도 안 그리는 이미지가 쌓여도 모른다. 그리고 그것은 배포 용량이다.
+ls -1 "$z37_dir" 2>/dev/null | grep -E '\.(jpg|jpeg|png|webp)$' | sort -u > "$z37_tmp/files.txt"
+z37_nfile="$(grep -c . "$z37_tmp/files.txt" || true)"
+[ "$z37_nfile" -ge 1 ] || z37_die "(z37) thumbnails/ 에 캡처가 한 장도 없습니다(참조는 ${z37_nref}건)."
+z37_orphan="$(comm -13 "$z37_tmp/refs.txt" "$z37_tmp/files.txt" | tr '\n' ' ')"
+[ -z "$(printf '%s' "$z37_orphan" | tr -d '[:space:]')" ] \
+  || z37_die "(z37) 아무도 안 그리는 캡처가 있습니다: $z37_orphan"\
+    $'\n'"→ 지우거나 SHOTS 에 넣으세요. 안 그리는 이미지는 배포 용량일 뿐입니다."
+
+# ---------------------------------------------------------------------------
+# ④ 매니페스트 — 어느 주소를 언제 찍었는지가 남아 있는가
+# ---------------------------------------------------------------------------
+# 🔴 기록이 없으면 다음 사람이 «이게 아직 맞는 화면인가» 를 판정할 방법이 없다.
+[ -f "$z37_mani" ] || z37_die "(z37) manifest.json 이 없습니다 — 어느 주소를 언제 찍었는지 기록이 사라졌습니다."
+z37_mres="$(node -e '
+  const fs = require("fs");
+  const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+  const refs = fs.readFileSync(process.argv[2], "utf8").split("\n").filter(Boolean);
+  const shots = m.shots || [];
+  const bad = [];
+  if (!shots.length) bad.push("manifest 의 shots 가 비었습니다");
+  const byFile = new Map(shots.map((s) => [s.file, s]));
+  for (const r of refs) {
+    const s = byFile.get(r);
+    if (!s) { bad.push(r + " 가 manifest 에 없습니다"); continue; }
+    if (!/^https:\/\//.test(s.url || "")) bad.push(r + " 의 url 이 https 절대주소가 아닙니다");
+    if (s.status !== 200) bad.push(r + " 의 status 가 200 이 아닙니다: " + s.status);
+    if (!Date.parse(s.capturedAt || "")) bad.push(r + " 의 capturedAt 을 해석할 수 없습니다");
+  }
+  console.log(bad.join("\n"));
+' "$z37_mani" "$z37_tmp/refs.txt" 2>&1)"
+[ -z "$z37_mres" ] || z37_die "(z37) manifest 가 참조와 맞지 않습니다:"$'\n'"$z37_mres"
+
+# ---------------------------------------------------------------------------
+# ⑤ 캡처 스크립트의 SHOTS 와 마크업의 SHOTS 가 갈라지지 않았는가
+# ---------------------------------------------------------------------------
+# 🔵 목록의 정본은 `capture-shots.mjs` 다. 마크업의 상수는 그것으로 만든 산출물이므로,
+#    둘이 갈라지면 «다시 찍었는데 화면은 옛 목록» 이 된다.
+z37_script="$ROOT/infra/demo/aws/site/capture-shots.mjs"
+[ -f "$z37_script" ] || z37_die "(z37) capture-shots.mjs 가 없습니다 — 캡처를 다시 만들 방법이 사라졌습니다."
+grep -oE "name: '[^']+'" "$z37_script" | sed "s/name: '//; s/'//" | sort -u > "$z37_tmp/names.txt"
+sed 's/\.[a-z]*$//' "$z37_tmp/refs.txt" | sort -u > "$z37_tmp/refnames.txt"
+z37_diff="$(comm -3 "$z37_tmp/names.txt" "$z37_tmp/refnames.txt" | tr -d '\t' | tr '\n' ' ')"
+[ -z "$(printf '%s' "$z37_diff" | tr -d '[:space:]')" ] \
+  || z37_die "(z37) capture-shots.mjs 의 목록과 index.html 의 SHOTS 가 갈라졌습니다: $z37_diff"\
+    $'\n'"→ 다시 찍은 뒤 SHOTS 를 갱신하지 않았거나 그 반대입니다."
+
+# ---------------------------------------------------------------------------
+# bite — 결함을 되살려서 술어가 무는지 본다
+# ---------------------------------------------------------------------------
+# 🔴 실트리를 안 건드리고, **참조 목록을 변형해서** 각 방향이 무는지 본다.
+z37_bite() {  # $1=라벨  $2=refs 내용  $3=files 내용  → 물어야 한다
+  printf '%s\n' "$2" | sort -u > "$z37_tmp/b_refs.txt"
+  printf '%s\n' "$3" | sort -u > "$z37_tmp/b_files.txt"
+  z37_m=""
+  while IFS= read -r f; do [ -n "$f" ] || continue; grep -qxF "$f" "$z37_tmp/b_files.txt" || z37_m="x"; done < "$z37_tmp/b_refs.txt"
+  z37_o="$(comm -13 "$z37_tmp/b_refs.txt" "$z37_tmp/b_files.txt" | tr -d '[:space:]')"
+  [ -n "$z37_m" ] || [ -n "$z37_o" ] || z37_die "(z37) bite [$1] — 술어가 **안 물었습니다.**"
+}
+z37_first="$(head -1 "$z37_tmp/refs.txt")"
+z37_all="$(cat "$z37_tmp/refs.txt")"
+# (bite-1) 참조는 있는데 파일이 없다
+z37_bite "참조는 있는데 파일 없음" "$z37_all" "$(grep -vxF "$z37_first" "$z37_tmp/refs.txt")"
+# (bite-2) 파일은 있는데 아무도 안 그린다
+z37_bite "고아 캡처" "$(grep -vxF "$z37_first" "$z37_tmp/refs.txt")" "$z37_all"
+# (대조군) 손대지 않으면 안 물어야 한다
+printf '%s\n' "$z37_all" | sort -u > "$z37_tmp/b_refs.txt"
+cp "$z37_tmp/b_refs.txt" "$z37_tmp/b_files.txt"
+z37_ctl="$(comm -3 "$z37_tmp/b_refs.txt" "$z37_tmp/b_files.txt" | tr -d '[:space:]')"
+[ -z "$z37_ctl" ] || z37_die "(z37) bite 대조군 실패 — 같은 목록끼리 비교했는데 차이가 나왔습니다."
+
+z37_bytes="$(du -ck "$z37_dir"/*.jpg 2>/dev/null | tail -1 | cut -f1)"
+rm -rf "$z37_tmp"
+ok "캡처 ${z37_nref}장 — 참조↔파일 **양방향** 일치 · manifest 가 주소·200·촬영시각을 들고 있음 · capture-shots.mjs 의 목록과 갈라지지 않음 · 합계 ${z37_bytes}KB · bite 2칸(참조만 있음 · 파일만 있음) + 대조군"
+
+# =============================================================================
 # (z32) 묶음 표가 두 집에서 갈라지지 않는가 — TASK-MONO-634 / ADR-MONO-071
 # =============================================================================
 # 🔴🔴 같은 사실이 **두 런타임**에 있다:

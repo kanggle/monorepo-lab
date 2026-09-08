@@ -880,9 +880,13 @@
     //    보이는 것» 이고, 자동 재생은 스크린리더·모션 민감 사용자에게 해롭다(AC-2).
     // GUARD-Z35-BEGIN — (z35) 가 이 구간을 **실행해서** 0장·1장·N장을 대조한다.
     const SHOTS_FALLBACK = { console: "🖥️", store: "🛒", fan: "🎤" };
-    // 🔴 TASK-MONO-639 가 여기를 채운다. **비어 있는 것이 오늘의 정상 상태**다 —
-    //    `infra/demo/aws/site/thumbnails/` 디렉터리가 저장소에 아직 없다.
-    const SHOTS = { console: [], store: [], fan: [] };
+    // 🔵 TASK-MONO-639 가 채웠다. 목록의 정본은 `capture-shots.mjs` 의 SHOTS 이고,
+    //    이 상수는 그것으로 만든 산출물이다 — 가드 (z37)가 둘을 대조한다.
+    const SHOTS = {
+      console: [{ file: 'console-1-overview.jpg', alt: '운영자 콘솔 둘러보기 — 도메인 요약' }, { file: 'console-2-ecommerce.jpg', alt: '운영자 콘솔 — 이커머스 주문·상품 표' }, { file: 'console-3-wms.jpg', alt: '운영자 콘솔 — WMS 재고 표' }],
+      store: [{ file: 'store-1-home.jpg', alt: '이커머스 스토어 홈' }, { file: 'store-2-products.jpg', alt: '이커머스 스토어 — 상품 목록' }],
+      fan: [{ file: 'fan-1-feed.jpg', alt: '팬 플랫폼 — 공개 피드' }, { file: 'fan-2-artists.jpg', alt: '팬 플랫폼 — 아티스트 목록' }, { file: 'fan-3-membership.jpg', alt: '팬 플랫폼 — 멤버십 소개' }],
+    };
 
     function buildShots(card) {
       const box = card.querySelector("[data-shots]");
