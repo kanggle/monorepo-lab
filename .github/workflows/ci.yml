@@ -223,6 +223,11 @@ jobs:
       # 🔴 이 줄이 없으면 `needs.changes.outputs.message-backticks` 가 빈 값이 되어
       #    잡의 `if` 가 **항상 거짓**이 된다 — 배선이 없는데 초록으로 보인다.
       message-backticks: ${{ steps.filter.outputs.message-backticks }}
+      # TASK-MONO-640 — 같은 이유로 이 줄이 필요하다. 🔴 필터를 선언하고 잡을 만들어도
+      #    **여기 한 줄이 없으면** `needs.changes.outputs.package-script-targets` 가 빈
+      #    값이라 그 잡은 한 번도 안 돌고, PR 은 초록으로 보인다. 그 실패 모드가 이
+      #    티켓이 고치는 결함과 같은 부류다 — «선언은 있는데 실제로는 없다».
+      package-script-targets: ${{ steps.filter.outputs.package-script-targets }}
       # TASK-MONO-518: raw filter, NOT AND-combined with `code-changed`. Every arrival
       # path for this drift is non-code — a task file moving into `done/`, a row edited
       # in the walkthrough, or the guard/exception list itself. AND-ing with
@@ -554,6 +559,16 @@ jobs:
               - '**/*.sh'
               - '.github/workflows/*.yml'
               - 'scripts/check-message-backticks.sh'
+            # TASK-MONO-640: package.json 의 scripts 가 가리키는 로컬 파일이 **추적되는가**.
+            # 이 결함은 «파일이 없어서» 가 아니라 «있는데 .gitignore 가 삼켜서» 생겼다 —
+            # `bin/` 패턴이 infra/demo/public-data/bin/ 을 먹어서 그 패키지의 세 스크립트가
+            # 전부 커밋되지 않은 파일을 가리켰고, 작성자의 트리에서는 잘 돌았다.
+            # 🔴 그러므로 트리거가 package.json 만 보면 안 된다 — **원인은 .gitignore** 다.
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            package-script-targets:
+              - '**/package.json'
+              - '.gitignore'
+              - 'scripts/check-package-script-targets.sh'
             # TASK-MONO-461: controller web-slice naming (*ControllerSliceTest).
             # Triggers on any test .java (a mis-named slice arrives there), the spec,
             # and the guard script. Pure-positive (no negation — MONO-074/075 quirk
@@ -1145,6 +1160,33 @@ jobs:
 
       - name: Guard — no unescaped backtick inside a message string
         run: bash scripts/check-message-backticks.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-640. `package.json` 의 scripts 가 가리키는 로컬 파일이 **저장소에 있는가.**
+  # 🔴 술어는 «존재하는가» 가 아니라 «추적되는가» 다. 이 결함의 정의가 «작성자 트리에는
+  #    있는데 커밋은 안 됨» 이기 때문이다 — 루트 `.gitignore` 의 `bin/`(경로 제한 없음)이
+  #    `infra/demo/public-data/bin/` 을 삼켜서 그 패키지의 세 스크립트가 전부 없는 파일을
+  #    가리켰고, 작성자의 트리에서는 잘 돌았다. 존재 검사는 그 상태에서도 초록이다.
+  # 🔵 checkout 은 얕게 해도 되지만 `git ls-files` 를 쓰므로 **인덱스가 필요**하다 —
+  #    actions/checkout 은 인덱스를 만들어 주므로 추가 설정이 필요 없다.
+  # ---------------------------------------------------------------------------
+  package-script-targets:
+    name: package.json scripts point at files that are in the repo
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.package-script-targets == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-package-script-targets.sh
+
+      - name: Self-test the predicate (bites on the real tree, mutated)
+        run: bash scripts/check-package-script-targets.sh --self-test
+
+      - name: Guard — every referenced local script is tracked
+        run: bash scripts/check-package-script-targets.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-570. A composite `Service Type` must sit in ONE backtick span.
@@ -2157,6 +2199,26 @@ jobs:
         run: |
           python3 -m pip install --quiet pytest
           python3 -m pytest infra/demo/aws/tests -q
+
+      # -----------------------------------------------------------------------
+      # TASK-MONO-640 — `@demo/public-data` 는 **CI 에서 한 번도 돈 적이 없었다.**
+      # -----------------------------------------------------------------------
+      # 실측(2026-09-08): `grep -rn "public-data" .github/workflows/*.yml` → 0건.
+      # 패키지 시험도, 스냅샷 드리프트 검사도 러너가 없었다 — 이 저장소가 이름 붙인
+      # «러너 없는 스위트는 썩는다» 그대로다. 그리고 그 패키지의 생성기 자체가 커밋돼
+      # 있지 않았으므로, 배선했더라도 이 티켓 전에는 **돌 수 없었다.**
+      #
+      # 🔵 별도 잡을 만들지 않고 이 잡에 붙이는 이유: 이 잡의 트리거가 이미
+      #    `infra/demo/**` 라서 그 패키지의 어떤 변경도 여기를 깨운다. 잡을 새로 만들면
+      #    같은 트리거를 두 벌로 유지해야 하고, 두 벌은 갈라진다.
+      # 🔴 드리프트 검사가 **먼저** 온다: 픽스처를 고치고 스냅샷을 안 만든 상태에서
+      #    시험만 통과하는 것을 «정상» 으로 보고하면 안 된다.
+      - name: Public-data bundled seed is regenerable and not drifted
+        run: node infra/demo/public-data/bin/build-bundled-snapshots.mjs --check
+
+      - name: Public-data package tests (transform allowlist + leak controls)
+        working-directory: infra/demo/public-data
+        run: node --test tests/public-data.test.mjs
 
       - name: Verify wrapper invariants + live coexistence proof
         run: bash infra/demo/verify-demo-wrapper.sh --live
