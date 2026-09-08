@@ -8,7 +8,7 @@ TASK-MONO-640
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -422,3 +422,20 @@ $ node --test tests/public-data.test.mjs           → rc=0
 
 🔴 **미측정**: 이 PR 이 만든 두 CI 잡이 실제로 도는지는 **PR 이 열려야** 확인된다(위 AC-5
 마지막 칸). 그 확인 전까지 「배선했다」는 선언이지 측정이 아니다.
+
+## CORRECTION — § 미측정이었던 「두 CI 추가가 실제로 도는가」를 쟀다 (2026-09-08 UTC)
+
+이 티켓은 «PR 이 열려야 확인된다 … 그 확인 전까지 「배선했다」는 선언이지 측정이 아니다»
+라고 적었다. 이제 쟀다 — 그리고 **잡의 결론이 아니라 스텝**을 읽었다.
+
+| 추가 | 어디 | 실측 (impl PR `#3688`) |
+|---|---|---|
+| 새 잡 `package-script-targets` | 독립 잡 | **SUCCESS** — 「package.json scripts point at files that are in the repo」 |
+| 스텝 「Public-data bundled seed is regenerable and not drifted」 | `Demo wrapper smoke (infra/demo)` 안 | **success** |
+| 스텝 「Public-data package tests (transform allowlist + leak controls)」 | 같은 잡 | **success** |
+
+🔵 **경로 게이트도 함께 확인했다**: 그 뒤 PR 4건(`#3689`·`#3691`·`#3692`·`#3693`)에서 새 잡은
+`SKIPPED` 다. `package.json` 을 안 건드린 PR 이므로 **정확한 게이팅**이다 — 「안 돈다」가
+아니라 「그 도착 경로가 아니다」.
+
+🔴 그래서 이제 「배선했다」가 선언이 아니라 측정이다.

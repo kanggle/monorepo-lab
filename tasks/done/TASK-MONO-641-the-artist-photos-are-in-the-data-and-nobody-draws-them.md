@@ -8,7 +8,7 @@ TASK-MONO-641
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -235,3 +235,19 @@ $ grep -rn "profileImageUrl" projects/fan-platform/web/fan-platform-web/src
 🔴 **미측정**: 라이브 화면. 머지 → Vercel 배포 뒤 `fan.hubwang.com/artists` 의
 `images.unsplash.com` 건수가 **0에서 6으로** 바뀌는지 확인해야 한다(그것이 이 티켓의
 재현 조건을 뒤집는 유일한 측정이다).
+
+## CORRECTION — § 미측정이었던 「라이브 화면」을 실제로 쟀다 (2026-09-08 UTC)
+
+배포 후 `fan.hubwang.com/artists` 를 브라우저로 렌더해서 쟀다:
+
+```
+unsplash <img> = 6      실제로 그려짐 = 6      깨짐(naturalWidth=0) = 0
+```
+
+🔵 **두 축을 갈라서 쟀다.** `<img>` 태그가 있다는 것과 픽셀이 실렸다는 것은 다르고,
+이 티켓의 결함이 정확히 그 갈래였다(값은 데이터에 있고 아무도 그리지 않았다). `naturalWidth`
+로 재야 «그려졌다» 가 증명된다.
+
+🔵 폴백 경로도 살아 있다 — 이 컴포넌트는 `profileImageUrl` 이 없거나 `onError` 가 나면
+이니셜 블록으로 떨어진다. 라이브에서 폴백은 **0건**이고, 그것이 기대값이다(여섯 명 전부
+사진을 들고 있다).
