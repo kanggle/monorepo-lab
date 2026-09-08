@@ -395,3 +395,59 @@ check-seed-catalogue-parity: OK — 번들 24 · postgres 24 · h2 24 · 세 출
    확인**했다. 그래도 «로그인이 실제로 되는가» 는 안 쟀다.
 2. postgres `V19` 가 **기존 볼륨에** 적용되는가(H2 로만 실행 검증했다).
 3. 늘어난 데이터가 세 화면에 **실제로 그려지는가**(머지 → Vercel 배포 뒤 확인 가능).
+
+## CORRECTION — 위 § Verification 이 «검증했다» 고 적은 것 중 둘이 결함을 못 봤다
+
+머지 전 CI 가 **여섯 건**을 잡았고 그중 **둘이 진짜 결함**이었다. 위 절은 그것들을 모르는
+상태로 쓰였으므로, 지우지 않고 여기 정정한다.
+
+### 진짜 결함 ① — `V19` 가 `product_variants.tenant_id` 를 안 채웠다
+
+Testcontainers 통합 시험에서 마이그레이션이 죽었다:
+`null value in column "tenant_id" of relation "product_variants"`.
+`products` 의 `tenant_id`·`seller_id` 는 챙기고 **변형 표를 놓쳤다**.
+
+🔴🔴 **위 절의 「H2 에 12개를 실제로 적용했다」가 이것을 못 잡은 이유**: 두 트리는 **다른
+스키마를 지나왔다.** h2 트리는 `V11` 까지라 `product_variants` 에 `tenant_id` 가 **아예
+없다** ⇒ 한쪽의 초록은 다른 쪽의 증거가 아니다. 그런데 위 절은 그 실행을 «마이그레이션을
+실행으로 검증했다» 로 뭉뚱그렸다 — 실제로 검증된 것은 **h2 트리뿐**이었다.
+
+처방: 변형 INSERT 에 `tenant_id` 추가. Docker 가 없어 실제 postgres 로는 못 돌렸으므로,
+마이그레이션 DDL 에서 **NOT NULL(DEFAULT 없는) 컬럼을 뽑아 INSERT 가 전부 덮는지** 기계적으로
+검사했다(두 트리 누락 0건). 🔵 그 검사기가 **수정 전 판에서 `tenant_id` 를 잡는다**는 양성
+대조군을 함께 돌렸다 — 안 그러면 「누락 없음」이 검사기 고장과 구별되지 않는다.
+
+### 진짜 결함 ② — `R__02` 자격증명 시드가 MySQL 문법 오류였다
+
+`You have an error in your SQL syntax ... near '),\n('`. 행을 추가하는 스크립트가 괄호를
+하나 더 넣었다. auth-service 가 컨텍스트를 못 띄워 fan live-trio e2e 두 클래스가
+`initializationError` 로 죽었다.
+
+🔴🔴 **위 절의 「`bash -n` rc=0」과 「6/6 일치」가 이것을 못 잡은 이유**: 그 둘은 **결함의
+축과 다른 것을 잰다.** `bash -n` 은 셸 문법만 보고(이 파일은 SQL 이다), 행 수 세기는 괄호를
+안 센다. 즉 나는 «검증했다» 고 적었지만 그 검사들은 이 결함을 **볼 수 없는 종류**였다.
+
+처방: 괄호 수정 + **H2 를 MySQL 모드로 띄워 두 시드 SQL 을 실제로 실행**했다:
+`R__02 ✅ · R__06 ✅ · credentials 6 · identities 6 · accounts 6 · account_roles 12 · ARTIST 6`.
+그리고 `FanArtistDemoSeedTest` 를 다시 돌렸다(BUILD SUCCESSFUL).
+
+### 나머지 넷 — 제품 수치를 얼려 둔 핀
+
+| 어디 | 얼려 둔 것 | 바꾼 것 |
+|---|---|---|
+| `public-pages.test.tsx` | 아티스트 `toHaveLength(3)` · 글 제목 리터럴 둘 | 저장본에서 파생(+ 비공허성 하한) |
+| `demo-tour.spec.ts` (콘솔 e2e) | 표 전체 행 `toHaveCount(4)` | 좁히기 **전** 개수를 읽어 «1보다 크다» |
+| `ProductRegisterQueryIntegrationTest` ×2 | 페이지 크기 20 을 «시드가 작다» 의 대리로 사용 | 전체 개수를 먼저 물어 그만큼 요청 |
+
+🔵 넷 다 **수치를 올리지 않고 성질로 바꿨다**. 3→6, 4→9 로 올렸으면 다음에 데이터가 바뀔 때
+또 깨진다 — 그 시험들의 축은 «몇 개인가» 가 아니었다.
+
+### 🔴 일반화 — 이 티켓이 남기는 교훈
+
+두 결함 모두 **검사가 재는 축이 결함의 축과 달랐다**. 「H2 초록」을 postgres 의 증거로,
+「셸 문법」을 SQL 의 증거로 썼다. 두 번 다 검사 자체는 통과했고, 통과가 아무것도 뜻하지
+않았다. ⇒ 검사를 적을 때 **«이 검사는 어떤 결함을 볼 수 있는가»** 를 함께 적어야 한다.
+
+### 최종 CI
+
+**60개 체크 · 실패 0.**
