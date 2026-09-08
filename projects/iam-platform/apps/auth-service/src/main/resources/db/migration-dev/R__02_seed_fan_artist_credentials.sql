@@ -108,17 +108,14 @@ INSERT IGNORE INTO credentials (
     'fan-platform', '0199de80-0000-7000-8000-00000000a004', 'harin@demo.com',
     '$argon2id$v=16$m=65536,t=3,p=1$NR1Seql5fgXB0hQ7CmpFL6RyiXvL86lxeZCobfiBdRxzRlTkkcv6iIZDJq9eQ32QmKQMylwsG+IP25S1aaw9vw$kTFrCq8cQG4HVUKioosaD88eiXZkQesTp5Xc8yylaSM',
     'argon2id', NOW(6), NOW(6), 0
-)
 ),
 (
     'fan-platform', '0199de80-0000-7000-8000-00000000a005', 'rio@demo.com',
     '$argon2id$v=16$m=65536,t=3,p=1$NR1Seql5fgXB0hQ7CmpFL6RyiXvL86lxeZCobfiBdRxzRlTkkcv6iIZDJq9eQ32QmKQMylwsG+IP25S1aaw9vw$kTFrCq8cQG4HVUKioosaD88eiXZkQesTp5Xc8yylaSM',
     'argon2id', NOW(6), NOW(6), 0
-)
 ),
 (
     'fan-platform', '0199de80-0000-7000-8000-00000000a006', 'yuno@demo.com',
     '$argon2id$v=16$m=65536,t=3,p=1$NR1Seql5fgXB0hQ7CmpFL6RyiXvL86lxeZCobfiBdRxzRlTkkcv6iIZDJq9eQ32QmKQMylwsG+IP25S1aaw9vw$kTFrCq8cQG4HVUKioosaD88eiXZkQesTp5Xc8yylaSM',
     'argon2id', NOW(6), NOW(6), 0
-)
 );
