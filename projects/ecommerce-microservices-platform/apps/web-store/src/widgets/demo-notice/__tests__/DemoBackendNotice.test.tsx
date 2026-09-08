@@ -52,6 +52,27 @@ describe('DemoBackendNotice', () => {
     expect(notice).toHaveTextContent('데모 시작');
   });
 
+  // 🔴🔴 TASK-MONO-642 — 위 두 단언만으로는 **이 티켓의 결함을 못 잡는다.**
+  //    옛 문구(「상품 데이터를 불러올 수 없습니다」)도 「데모 서버가 꺼져 있어」와
+  //    「데모 시작」을 그대로 포함했다. 즉 두 리터럴은 결함이 있든 없든 통과한다.
+  //    🔵 리터럴 고정 자체는 유지한다 — 배너의 **문장이 방문자와의 계약**이다.
+  //       다만 이 티켓이 고치는 부분을 덮는 칸을 **더한다.**
+  it('🔴 배너가 «그리고 있는 것»과 어긋나지 않는다 — 「불러올 수 없」다고 말하지 않는다', async () => {
+    process.env.DEMO_API_BASE = 'https://control.example';
+    stubStatus({ state: 'stopped' });
+
+    await renderNotice();
+    const notice = screen.getByTestId('demo-backend-notice');
+
+    // (a) 화면이 그리는 것을 말한다
+    expect(notice).toHaveTextContent('샘플');
+    // (b) 🔴 **이 칸이 bite 다.** 옛 문구를 되살리면 여기서 빨개진다.
+    expect(notice.textContent).not.toContain('불러올 수 없');
+    // (c) 🔴 잠긴 사실을 **안 지웠는가** — 이것까지 지우면 방문자가 장바구니·로그인이
+    //     왜 안 되는지 모른다. 배너를 부드럽게 만드는 것이 목적이 아니다.
+    expect(notice).toHaveTextContent('실시간 기능');
+  });
+
   it('🔴 데모 배포 + 컨트롤 플레인 조회 실패 → 배너가 보인다 (침묵하지 않는다)', async () => {
     process.env.DEMO_API_BASE = 'https://control.example';
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('down')));
