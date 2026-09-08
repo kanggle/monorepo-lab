@@ -3549,6 +3549,381 @@ rm -rf "$z34_dir"
 ok "카드 ${z34_got}장 × 7시나리오(미측정·404·5xx·네트워크실패·모양불명·404+EC2running·정상) 를 **실행 대조** — 배지·사유·버튼잠금 + 404≠5xx · 5xx=타임아웃 · 폴백이 /status 를 읽음 · bite 2칸(조기반환 되살리기 · 문구 뭉개기)"
 
 # =============================================================================
+# (z35) 카드가 로그인 전/후를 말하고, 링크가 하나이며, 캐러셀이 0·1·N 장에서 옳은가
+#       — TASK-MONO-637
+# =============================================================================
+# 🔴🔴 이 칸이 지키는 것 넷은 **서로 다른 이유로** 조용히 깨진다:
+#
+#   (1) 카드마다 링크가 **하나**인가 — 예전에는 둘이었다(썸네일 앵커의 하드코딩 href +
+#       판정 속성을 든 「둘러보기」 행). 그러면 비활성 처리가 **판정 행에만** 걸려서,
+#       데모가 꺼진 날 나머지 하나는 흐리지도 않고 클릭된다. 그리고 (z14)는 그 하나를
+#       안 보므로 **초록이다.**
+#   (2) 링크가 **제목**에 붙었는가 — 소유자 요구다. 붙는 자리가 바뀌면 (z14)의 줄 단위
+#       추출이 통째로 흔들릴 수 있어(속성이 여러 줄로 갈리면 그 행이 사라진다) 여기서 함께 본다.
+#   (3) 카드가 **로그인 전/후**를 말하는가 — 그리고 「로그인 후」가 «로그인하면 된다» 로
+#       뭉개지지 않았는가. 로그인 후 기능은 데모 백엔드가 기동돼 있어야 열린다.
+#   (4) 캐러셀이 **0장·1장·N장**에서 각각 옳은가 — 오늘 이미지는 0장이므로, 0장 경로가
+#       이 저장소의 **정상 경로**다. 1장에서 화살표가 보이면 방문자는 «눌렀는데 아무 일도
+#       안 남» 을 겪고 그것을 고장으로 읽는다.
+#
+# 🔴 (1)(2)(3)은 **추출**로, (4)는 **실행**으로 잰다. 산문 grep 으로 짜지 않는다 — 이 파일과
+#    index.html 은 같은 낱말을 설명에도 쓰므로 술어가 자기 문서에 걸린다((z12)·(z14)가 각각
+#    한 번씩 밟았고, index.html 안에 그 사건이 주석으로 남아 있다).
+#    ⇒ (1)(2)(3)은 **카드 블록을 잘라내서** 그 안에서만 센다. 파일 전체를 훑지 않는다.
+echo "[verify] (z35) 카드가 로그인 전/후를 말하고 링크가 하나이며 캐러셀이 0·1·N장에서 옳은가 (TASK-MONO-637)"
+z35_site="$ROOT/infra/demo/aws/site/index.html"
+[ -f "$z35_site" ] || fail "(z35) index.html 이 없습니다: $z35_site"
+
+z35_dir="$(mktemp -d)"
+z35_die() { rm -rf "$z35_dir"; fail "$@"; }
+
+# ---------------------------------------------------------------------------
+# (1)(2)(3) 카드 블록을 잘라내서 그 안에서만 센다
+# ---------------------------------------------------------------------------
+# 🔵 모집단은 `<article ... data-bundle="X">` 부터 `</article>` 까지다. 산문·주석·스크립트는
+#    이 밖이므로 술어가 자기 설명에 안 걸린다.
+z35_cards="$z35_dir/cards.txt"
+awk '
+  /<article[^>]*data-bundle="/ {
+    if (match($0, /data-bundle="[a-z0-9-]+"/)) { cur = substr($0, RSTART + 13, RLENGTH - 14); n = 0 }
+    inb = 1
+    surf = 0; title_surf = 0; hardhref = 0; dt_pre = 0; dt_post = 0; boot = 0; shots = 0
+    next
+  }
+  inb && /<\/article>/ {
+    print cur "|" surf "|" title_surf "|" hardhref "|" dt_pre "|" dt_post "|" boot "|" shots
+    inb = 0; cur = ""
+    next
+  }
+  inb {
+    if ($0 ~ /<a [^>]*data-surface/) surf++
+    if ($0 ~ /<h2><a [^>]*data-surface/) title_surf++
+    if ($0 ~ /href="https:\/\/[a-z]+\.hubwang\.com/) hardhref++
+    if ($0 ~ /<dt>로그인 없이<\/dt>/) dt_pre++
+    if ($0 ~ /<dt>로그인 후<\/dt>/) dt_post++
+    if ($0 ~ /class="needs-boot"/) boot++
+    if ($0 ~ /data-shots/) shots++
+  }
+' "$z35_site" > "$z35_cards"
+
+z35_n="$(grep -c . "$z35_cards" || true)"
+[ "$z35_n" -ge 1 ] || z35_die "(z35) 카드를 한 장도 뽑지 못했습니다 — **추출식이 깨진 것**입니다."\
+  $'\n'"→ 0장을 훑는 루프는 아무것도 시험하지 않으면서 언제나 초록입니다."
+# 🔴 loose 대조 — 속성 하나만 바뀌어도 위 추출은 그 카드를 통째로 흘리고, 그러면 이 칸은
+#    «카드 2장» 을 정상으로 보고한다.
+z35_loose="$(grep -c '<article[^>]*data-bundle="' "$z35_site" || true)"
+[ "$z35_loose" = "$z35_n" ] \
+  || z35_die "(z35) 카드는 ${z35_loose}장인데 파싱된 것은 ${z35_n}장입니다 — 흘린 카드는 이 칸이 **안 봅니다.**"
+
+# 🔴 술어를 함수로 뺀다 — 아래에서 실물과 **합성 결함 행** 둘 다에 쓴다(self-test).
+z35_card_err() {  # $1 = "key|surf|title_surf|hardhref|dt_pre|dt_post|boot|shots" → 사유 또는 빈 문자열
+  printf '%s\n' "$1" | awk -F'|' '
+    {
+      k = $1
+      if ($2 != 1) print "[" k "] 카드 안의 판정 링크가 " $2 "개입니다(기대 1개) — 둘이면 비활성 처리가 한쪽에만 걸리고 (z14)는 하나만 봅니다"
+      if ($3 != 1) print "[" k "] 판정 링크가 제목(h2) 안에 있지 않습니다 — 소유자 요구는 제목에서 링크가 걸리는 것입니다"
+      if ($4 != 0) print "[" k "] 카드 안에 하드코딩된 데모 주소가 " $4 "건 있습니다 — 주소는 data-url 한 곳에만 적습니다"
+      if ($5 != 1) print "[" k "] 로그인 없이 되는 것을 말하는 항목이 " $5 "개입니다(기대 1개)"
+      if ($6 != 1) print "[" k "] 로그인 후 되는 것을 말하는 항목이 " $6 "개입니다(기대 1개)"
+      if ($7 != 1) print "[" k "] 로그인 후 항목에 «기동이 먼저 필요하다» 는 표시가 " $7 "개입니다(기대 1개) — 없으면 방문자가 로그인 화면까지 갔다가 막힙니다"
+      if ($8 != 1) print "[" k "] 캐러셀 자리가 " $8 "개입니다(기대 1개)"
+    }
+  '
+}
+
+# self-test — 술어가 **무는지** 먼저 증명한다(합성 행 7칸 + 통과 1칸).
+z35_st_pass="$(z35_card_err "ok|1|1|0|1|1|1|1")"
+[ -z "$z35_st_pass" ] || z35_die "(z35) 술어 self-test — 정상 행을 물었습니다: $z35_st_pass"
+z35_st_bite=0
+for z35_bad in "a|2|1|0|1|1|1|1" "b|1|0|0|1|1|1|1" "c|1|1|1|1|1|1|1" "d|1|1|0|0|1|1|1" \
+               "e|1|1|0|1|0|1|1" "f|1|1|0|1|1|0|1" "g|1|1|0|1|1|1|0"; do
+  [ -n "$(z35_card_err "$z35_bad")" ] \
+    || z35_die "(z35) 술어 self-test — '$z35_bad' 를 **안 물었습니다.**"
+  z35_st_bite=$(( z35_st_bite + 1 ))
+done
+[ "$z35_st_bite" -eq 7 ] || z35_die "(z35) 술어 self-test 가 7칸을 다 돌지 않았습니다(${z35_st_bite}/7)."
+
+z35_bad=""
+while IFS= read -r z35_row; do
+  [ -n "$z35_row" ] || continue
+  z35_r="$(z35_card_err "$z35_row")"
+  [ -z "$z35_r" ] || z35_bad="$z35_bad$z35_r"$'\n'
+done < "$z35_cards"
+[ -z "$z35_bad" ] || z35_die "(z35) 카드 구조가 요구와 다릅니다:"$'\n'"$z35_bad"
+
+# ---------------------------------------------------------------------------
+# (4) 캐러셀 — 구간을 **실행해서** 0장·1장·N장을 대조한다
+# ---------------------------------------------------------------------------
+z35_b="$(grep -n 'GUARD-Z35-BEGIN' "$z35_site" | head -1 | cut -d: -f1)"
+z35_e="$(grep -n 'GUARD-Z35-END'   "$z35_site" | head -1 | cut -d: -f1)"
+{ [ -n "$z35_b" ] && [ -n "$z35_e" ] && [ "$z35_e" -gt "$z35_b" ]; } \
+  || z35_die "(z35) index.html 에서 GUARD-Z35 앵커 구간을 찾지 못했습니다 — **가드가 공허합니다.**"
+
+z35_src="$z35_dir/region.js"
+sed -n "$(( z35_b + 1 )),$(( z35_e - 1 ))p" "$z35_site" > "$z35_src"
+for z35_need in 'function buildShots(' 'function buildAllShots('; do
+  grep -qF "$z35_need" "$z35_src" \
+    || z35_die "(z35) GUARD-Z35 구간이 '$z35_need' 를 포함하지 않습니다 — 구간이 좁아졌거나 이름이 바뀌었습니다."\
+      $'\n'"→ 그러면 이 칸은 아무것도 실행하지 않으면서 초록입니다."
+done
+
+z35_mk() {   # $1 = 구간 소스   $2 = 만들 js 파일
+  { cat "$1"; cat <<'Z35DRV'
+// --- (z35) 캐러셀 대역 -------------------------------------------------------
+// 🔴 모르는 셀렉터를 만나면 null 이 아니라 죽는다. 조용히 null 을 주면 코드가 새 원소를
+//    읽어도 가드는 «없어서 안 그렸다» 를 통과시킨다(실물보다 관대한 대역).
+function mkEl(tag) {
+  var el = {
+    tag: tag, className: "", textContent: "", title: "", type: "", src: "", alt: "",
+    loading: "", disabled: false, style: {}, children: [], _on: {}, _attrs: {}, parent: null,
+    appendChild: function (c) { c.parent = this; this.children.push(c); return c; },
+    addEventListener: function (k, f) { (this._on[k] = this._on[k] || []).push(f); },
+    setAttribute: function (k, v) { this._attrs[k] = v; },
+    replaceWith: function (n) {
+      var p = this.parent;
+      if (!p) throw new Error("replaceWith: 부모가 없습니다");
+      var i = p.children.indexOf(this);
+      if (i < 0) throw new Error("replaceWith: 그 부모의 자식이 아닙니다");
+      n.parent = p; p.children[i] = n;
+    }
+  };
+  el.classList = {
+    toggle: function (c, on) {
+      var s = el.className.split(/\s+/).filter(Boolean).filter(function (x) { return x !== c; });
+      if (on) s.push(c);
+      el.className = s.join(" ");
+    },
+    add: function (c) { el.classList.toggle(c, true); },
+    remove: function (c) { el.classList.toggle(c, false); },
+    contains: function (c) { return el.className.split(/\s+/).indexOf(c) >= 0; }
+  };
+  return el;
+}
+global.document = {
+  createElement: mkEl,
+  querySelectorAll: function (sel) {
+    if (sel !== "[data-bundle]") throw new Error("대역 밖 셀렉터: " + sel);
+    return CARDS;
+  }
+};
+var CARDS = [];
+function mkCard(bundle, url) {
+  var box = mkEl("div");
+  var link = mkEl("a");
+  link.dataset = { url: url };
+  return {
+    dataset: { bundle: bundle },
+    _box: box,
+    querySelector: function (sel) {
+      if (sel === "[data-shots]") return box;
+      if (sel === "[data-surface]") return link;
+      throw new Error("대역 밖 셀렉터: " + sel);
+    }
+  };
+}
+function reset(n) {
+  CARDS = [mkCard("console", "https://console.example/"),
+           mkCard("store", "https://store.example/"),
+           mkCard("fan", "https://fan.example/")];
+  for (var k in SHOTS) {
+    SHOTS[k] = [];
+    for (var i = 0; i < n; i++) SHOTS[k].push({ file: k + "-" + i + ".png", alt: k + " " + i });
+  }
+}
+function describe(card, st) {
+  var box = card._box;
+  var track = box.children.filter(function (c) { return c.className === "shots-track"; })[0];
+  var navs = box.children.filter(function (c) { return /shots-nav/.test(c.className); });
+  var dots = box.children.filter(function (c) { return c.className === "shots-dots"; })[0];
+  var ph = track ? track.children.filter(function (c) { return c.className === "shots-ph"; }).length : -1;
+  var imgs = track ? track.children.filter(function (c) { return c.className === "shots-shot"; }).length : -1;
+  var prev = navs.filter(function (c) { return /prev/.test(c.className); })[0];
+  var next = navs.filter(function (c) { return /next/.test(c.className); })[0];
+  return [card.dataset.bundle,
+          st ? st.count : "-",
+          navs.length,
+          dots ? dots.children.length : 0,
+          imgs, ph,
+          prev ? (prev.disabled ? "D" : "E") : "-",
+          next ? (next.disabled ? "D" : "E") : "-",
+          track ? (track.style.transform || "-") : "-"].join("~");
+}
+function run(label, n, after) {
+  reset(n);
+  var states = buildAllShots();
+  if (after) after(states);
+  console.log(label + "|" + CARDS.map(function (c, i) { return describe(c, states[i]); }).join(" ;; "));
+}
+run("N0", 0);
+run("N1", 1);
+run("N3", 3);
+// 마지막 장으로 이동 — next 가 잠기고 prev 가 열려야 한다.
+run("N3END", 3, function (states) { states.forEach(function (s) { if (s.go) s.go(2); }); });
+// 이미지 하나가 404 — **그 칸만** 폴백이고 나머지는 산다.
+run("ERR", 3, function () {
+  CARDS.forEach(function (c) {
+    var track = c._box.children.filter(function (x) { return x.className === "shots-track"; })[0];
+    var img = track.children[1];
+    if (!img._on.error) throw new Error("이미지에 error 리스너가 없습니다");
+    img._on.error.forEach(function (f) { f(); });
+  });
+});
+Z35DRV
+  } > "$2"
+}
+
+z35_run() {  # $1 = 구간 소스 → 드라이버 출력
+  z35_mk "$1" "$z35_dir/drv.js"
+  node "$z35_dir/drv.js" 2>&1
+}
+
+# 🔴🔴 **판정기 자신이 죽으면 «사유 0건» 과 같은 모양이 된다.** 이 칸을 짜면서 실제로
+#    당했다: 배열 이름 하나를 awk 예약어(`next`)로 써서 awk 가 매 줄 syntax error 로 죽었고,
+#    그 빈 출력이 «캐러셀이 옳다» 로 읽혀 **실물 판정이 공허하게 통과**했다. bite 가 아니었으면
+#    안 보였다. ⇒ 판정기의 실패를 **사유로 바꾸고**, 판정하기 전에 **모집단부터 센다.**
+z35_verdict() {  # $1 = 드라이버 출력 → 사유 또는 빈 문자열
+  z35_vout="$(printf '%s\n' "$1" | awk '
+    BEGIN { FS = "|"; nb = 0; recs = 0 }
+    {
+      key = $1
+      n = split($2, r, / ;; /)
+      cnt[key] = n
+      for (i = 1; i <= n; i++) {
+        m = split(r[i], f, "~")
+        if (m < 9) { print "출력 [" key "] 의 레코드 필드가 " m "개입니다(기대 9개): " r[i]; continue }
+        b = f[1]
+        count[key,b]=f[2]; navs[key,b]=f[3]; dots[key,b]=f[4]; imgs[key,b]=f[5]
+        ph[key,b]=f[6]; prev[key,b]=f[7]; nxt[key,b]=f[8]; tr[key,b]=f[9]
+        recs++
+        if (!(b in seen)) { seen[b]=1; bl[++nb]=b }
+      }
+    }
+    END {
+      if (nb < 1) { print "카드가 0장입니다 — 드라이버가 빈 모집단을 돌았습니다"; exit }
+      # 🔴🔴 해석하기 전에 **모집단이 있었나부터 센다.** 5시나리오 × 카드 수가 아니면
+      #    아래 단언들은 없는 칸을 비교하며 조용히 통과한다.
+      if (recs != 5 * nb) { print "판정할 레코드가 " recs "개입니다(기대 " (5 * nb) "개 = 5시나리오 × 카드 " nb "장) — 출력이 잘렸거나 시나리오가 빠졌습니다"; exit }
+      for (i = 1; i <= nb; i++) {
+        b = bl[i]
+        # ── 0장: 오늘의 정상 상태. 폴백 한 칸 · 컨트롤 없음 · 이미지 없음
+        if (navs["N0",b] != 0) print "[N0] " b " 이미지가 0장인데 이동 컨트롤이 " navs["N0",b] "개 있습니다 — 넘길 곳이 없는데 화살표가 보이면 고장으로 읽힙니다"
+        if (ph["N0",b] != 1) print "[N0] " b " 이미지가 0장인데 자리표시자가 " ph["N0",b] "칸입니다(기대 1칸) — 카드가 빈 채로 깨집니다"
+        if (imgs["N0",b] != 0) print "[N0] " b " 이미지가 0장인데 사진이 " imgs["N0",b] "장 그려졌습니다"
+        if (dots["N0",b] != 0) print "[N0] " b " 이미지가 0장인데 위치 표시가 " dots["N0",b] "개입니다"
+        # ── 1장: 컨트롤 없음(넘길 곳이 없다)
+        if (navs["N1",b] != 0) print "[N1] " b " 이미지가 1장인데 이동 컨트롤이 " navs["N1",b] "개 있습니다"
+        if (dots["N1",b] != 0) print "[N1] " b " 이미지가 1장인데 위치 표시가 " dots["N1",b] "개입니다"
+        if (imgs["N1",b] != 1) print "[N1] " b " 사진이 " imgs["N1",b] "장입니다(기대 1장)"
+        # ── 3장: 컨트롤 둘 · 위치표시 셋 · 첫 장에서 prev 잠김 / next 열림
+        if (navs["N3",b] != 2) print "[N3] " b " 이동 컨트롤이 " navs["N3",b] "개입니다(기대 2개)"
+        if (dots["N3",b] != 3) print "[N3] " b " 위치 표시가 " dots["N3",b] "개입니다(기대 3개)"
+        if (imgs["N3",b] != 3) print "[N3] " b " 사진이 " imgs["N3",b] "장입니다(기대 3장)"
+        if (prev["N3",b] != "D") print "[N3] " b " 첫 장인데 이전 버튼이 잠겨 있지 않습니다"
+        if (nxt["N3",b] != "E") print "[N3] " b " 첫 장인데 다음 버튼이 열려 있지 않습니다"
+        # ── 마지막 장: 잠김이 뒤집힌다 + 트랙이 실제로 움직였다
+        if (prev["N3END",b] != "E") print "[N3END] " b " 마지막 장인데 이전 버튼이 열려 있지 않습니다"
+        if (nxt["N3END",b] != "D") print "[N3END] " b " 마지막 장인데 다음 버튼이 잠겨 있지 않습니다"
+        if (tr["N3END",b] == tr["N3",b]) print "[N3END] " b " 마지막 장으로 옮겼는데 트랙이 그대로입니다(" tr["N3",b] ") — 위치 표시만 바뀌고 화면은 안 넘어갑니다"
+        # ── 이미지 하나가 404: 그 칸만 폴백이고 나머지는 산다
+        if (ph["ERR",b] != 1) print "[ERR] " b " 사진 하나가 실패했는데 자리표시자가 " ph["ERR",b] "칸입니다(기대 1칸)"
+        if (imgs["ERR",b] != 2) print "[ERR] " b " 사진 하나가 실패했는데 남은 사진이 " imgs["ERR",b] "장입니다(기대 2장) — 한 칸의 실패가 캐러셀 전체를 죽였습니다"
+        if (navs["ERR",b] != 2) print "[ERR] " b " 사진 하나가 실패했는데 이동 컨트롤이 " navs["ERR",b] "개입니다(기대 2개)"
+      }
+    }
+  ' 2>"$z35_dir/awk.err")"
+  # 🔴 awk 가 죽으면 표준출력은 **비어 있고**, 그 빈 출력은 «사유 0건» 과 구별되지 않는다.
+  #    그러므로 stderr 를 읽어 **사유로 바꾼다.** 안 하면 판정기 고장이 초록으로 보인다.
+  if [ -s "$z35_dir/awk.err" ]; then
+    printf '%s
+' "판정기 자신이 실패했습니다(awk) — 이 빈 출력은 «문제 없음» 이 아닙니다:"
+    head -3 "$z35_dir/awk.err"
+    return
+  fi
+  printf '%s' "$z35_vout"
+}
+
+z35_out="$(z35_run "$z35_src")" || z35_die "(z35) 캐러셀 판정 실행 실패:"$'\n'"$z35_out"
+z35_v="$(z35_verdict "$z35_out")"
+[ -z "$z35_v" ] || z35_die "(z35) 캐러셀이 0·1·N장에서 옳지 않습니다:"$'\n'"$z35_v"\
+  $'\n'"   드라이버 출력:"$'\n'"$z35_out"
+
+# ---------------------------------------------------------------------------
+# bite — 결함을 되살려서 술어가 무는지 본다 (주입 → 실행 → 판정 순으로 단언한다)
+# ---------------------------------------------------------------------------
+z35_mark="$(grep -c 'GUARD-Z35-BITE' "$z35_src" || true)"
+[ "$z35_mark" = "1" ] \
+  || z35_die "(z35) bite 앵커(GUARD-Z35-BITE)가 ${z35_mark}개입니다(기대 1개) — 앵커가 없으면 bite 는 아무것도 안 되돌립니다."
+z35_b1="$z35_dir/bite1.js"
+sed 's|^.*GUARD-Z35-BITE.*$||' "$z35_src" > "$z35_b1"
+if grep -q 'GUARD-Z35-BITE' "$z35_b1"; then
+  z35_die "(z35) bite-1 주입 실패 — 마커 줄이 그대로 남아 있습니다."
+fi
+z35_o1="$(z35_run "$z35_b1")" \
+  || z35_die "(z35) bite-1 실행 실패 — 변형이 문법을 깬 것이므로 이 빨강은 가드가 문 것이 아닙니다:"$'\n'"$z35_o1"
+[ -n "$(z35_verdict "$z35_o1")" ] \
+  || z35_die "(z35) bite-1 — 1장에서 컨트롤을 막는 줄을 지웠는데 가드가 **안 물었습니다.**"\
+    $'\n'"→ «넘길 곳이 없는데 화살표가 보인다» 축이 죽어 있습니다. 출력:"$'\n'"$z35_o1"
+
+# (bite-2) 0장 자리표시자를 없앤다 — 오늘의 정상 경로가 빈 카드가 된다.
+z35_b2="$z35_dir/bite2.js"
+sed 's|^\( *\)track\.appendChild(ph);$|\1;|' "$z35_src" > "$z35_b2"
+if cmp -s "$z35_src" "$z35_b2"; then
+  z35_die "(z35) bite-2 주입 실패 — 구간이 하나도 안 바뀌었습니다(자리표시자를 붙이는 줄의 모양이 바뀌었습니까?)."
+fi
+z35_o2="$(z35_run "$z35_b2")" \
+  || z35_die "(z35) bite-2 실행 실패 — 변형이 문법을 깬 것이므로 이 빨강은 가드가 문 것이 아닙니다:"$'\n'"$z35_o2"
+[ -n "$(z35_verdict "$z35_o2")" ] \
+  || z35_die "(z35) bite-2 — 0장 자리표시자를 없앴는데 가드가 **안 물었습니다.**"\
+    $'\n'"→ 이미지가 0장인 것이 **오늘의 실제 상태**이므로, 이 축이 죽으면 빈 카드가 그대로 배포됩니다."\
+    $'\n'"   출력:"$'\n'"$z35_o2"
+
+# ---------------------------------------------------------------------------
+# (5) 손가락 커서 — 클릭되는 곳에 있고, 못 누르는 곳에는 없다
+# ---------------------------------------------------------------------------
+# 🔴 손가락은 «누를 수 있다» 는 신호다. 못 누르는 곳에 주면 거짓말이고, 누를 수 있는 곳에
+#    없으면 방문자가 클릭 가능한 줄 모른다. 그래서 **양쪽을 다** 센다.
+# 🔴 CSS 규칙은 **여러 줄에 걸친다.** 줄 단위 grep 은 그것을 못 보고, 못 본 것을
+#    «선언이 없다» 로 보고한다 — 이 칸을 짜면서 실제로 그렇게 빨개졌고, 규칙은 있었다.
+#    ⇒ 규칙을 한 줄로 **펴서** 본다.
+z35_flat="$z35_dir/css.txt"
+awk 'BEGIN { RS = "}" }
+  {
+    gsub(/[\r\n]+/, " ", $0)
+    gsub(/  +/, " ", $0)
+    if ($0 ~ /\{/) print $0 " }"
+  }
+' "$z35_site" > "$z35_flat"
+# 🔴 대조군 — 펴기가 깨지면 아래 술어들은 **빈 입력**에 대고 묻게 되고, 그러면 전부
+#    «없다» 가 되어 이 칸이 빨간 이유가 «CSS 가 틀렸다» 로 오독된다.
+z35_nrules="$(grep -c . "$z35_flat" || true)"
+[ "$z35_nrules" -ge 20 ] \
+  || z35_die "(z35) CSS 규칙을 ${z35_nrules}개만 폈습니다 — 펴기가 깨졌습니다(빈 입력에 대고 묻게 됩니다)."
+
+# 🔵 한계를 적어 둔다: 아래는 «그런 규칙이 있는가» 를 묻는 **존재 단언**이고, 뒤따르는
+#    규칙이 다시 덮는 경우(캐스케이드 순서)는 안 잰다. 그것까지 재려면 CSS 를 해석해야 한다.
+z35_css_has() {  # $1 = 선택자 조각  $2 = 선언 → 있으면 0
+  grep -F -- "$1" "$z35_flat" | grepq -F -- "$2"
+}
+for z35_sel in "a.open" ".bstart.on" ".shots-nav" ".shots-dot"; do
+  z35_css_has "$z35_sel" "cursor: pointer" \
+    || z35_die "(z35) '$z35_sel' 규칙에 손가락 커서 선언이 없습니다 — 클릭되는데 화살표가 뜹니다."
+done
+for z35_sel in "a.open.off" ".bstart:disabled" ".shots-nav:disabled"; do
+  z35_css_has "$z35_sel" "cursor: default" \
+    || z35_die "(z35) '$z35_sel' 규칙에 커서를 되돌리는 선언이 없습니다 — 못 누르는 곳에 손가락이 남습니다."
+done
+# self-test — 술어가 **무는지** 본다. 존재하지 않는 선택자를 통과시키면 위 일곱 칸은 공허하다.
+if z35_css_has ".z35-does-not-exist" "cursor: pointer"; then
+  z35_die "(z35) 커서 술어 self-test — 존재하지 않는 선택자를 **통과시켰습니다.**"
+fi
+if z35_css_has "a.open" "cursor: z35-nonsense"; then
+  z35_die "(z35) 커서 술어 self-test — 존재하지 않는 선언을 **통과시켰습니다.**"
+fi
+
+rm -rf "$z35_dir"
+ok "카드 ${z35_n}장 — 구조 추출(링크 1개 · 제목 앵커 · 하드코딩 주소 0 · 로그인 전/후 + 기동필요 표시 · 캐러셀 자리, 술어 self-test 8칸) + 캐러셀 **실행 대조** 5시나리오(0장·1장·3장·마지막장·이미지실패) + bite 2칸(1장 컨트롤 · 0장 자리표시자) + 커서 양방향 7칸"
+
+# =============================================================================
 # (z32) 묶음 표가 두 집에서 갈라지지 않는가 — TASK-MONO-634 / ADR-MONO-071
 # =============================================================================
 # 🔴🔴 같은 사실이 **두 런타임**에 있다:

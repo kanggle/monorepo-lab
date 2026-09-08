@@ -32,8 +32,24 @@
     #surfaces { display: none; gap: 18px; margin-top: 26px; grid-template-columns: 1fr; }
     @media (min-width: 860px) { #surfaces { grid-template-columns: repeat(3, 1fr); } }
     .scard { border: 1px solid #8883; border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
-    .scard .thumb { display: block; aspect-ratio: 16 / 10; width: 100%; object-fit: cover; background: #8881; border: 0; }
-    .scard .thumb.ph { display: flex; align-items: center; justify-content: center; font-size: 2.4rem; opacity: .5; }
+    /* TASK-MONO-637 — 이미지 자리가 캐러셀이 된다. 🔴 오늘 이미지는 **0장**이고
+       (`thumbnails/` 가 저장소에 없다) 실캡처는 TASK-MONO-639 가 넣는다. 그래서 이
+       스타일은 «0장에서도 카드가 선다» 를 첫 번째 요구로 두고 짜여 있다. */
+    .shots { position: relative; aspect-ratio: 16 / 10; width: 100%; background: #8881; overflow: hidden; }
+    .shots-track { display: flex; height: 100%; transition: transform .28s ease; }
+    /* 🔴 `prefers-reduced-motion` 을 존중한다 — 이 캐러셀은 방문자가 누를 때만 움직이지만,
+       그 이동조차 원치 않는 사람이 있다. 자동 재생은 **넣지 않는다**(AC-2). */
+    @media (prefers-reduced-motion: reduce) { .shots-track { transition: none; } }
+    .shots-shot { flex: 0 0 100%; height: 100%; display: block; object-fit: cover; width: 100%; border: 0; }
+    .shots-ph { flex: 0 0 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 2.4rem; opacity: .5; }
+    .shots-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 30px; height: 30px;
+                 border: 0; border-radius: 999px; background: #0009; color: #fff; font-size: 1rem;
+                 line-height: 1; padding: 0; cursor: pointer; }
+    .shots-nav.prev { left: 8px; } .shots-nav.next { right: 8px; }
+    .shots-nav:disabled { opacity: .35; cursor: default; }
+    .shots-dots { position: absolute; left: 0; right: 0; bottom: 8px; display: flex; justify-content: center; gap: 6px; }
+    .shots-dot { width: 7px; height: 7px; border-radius: 999px; border: 0; padding: 0; background: #fff8; cursor: pointer; }
+    .shots-dot.on { background: #fff; }
     .scard .body { padding: 16px 18px 18px; display: flex; flex-direction: column; flex: 1; }
     .scard h2 { font-size: 1.12rem; margin: 0 0 4px; }
     .scard .desc { font-size: .9rem; margin: 0 0 10px; opacity: .85; }
@@ -41,19 +57,31 @@
     .scard dt { opacity: .6; margin-top: 7px; }
     .scard dd { margin: 2px 0 0; }
     .scard .acts { margin-top: auto; padding-top: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    a.open { font-weight: 600; text-decoration: none; padding: 9px 14px; border-radius: 9px; background: #2563eb1a; color: #2563eb; }
+    /* TASK-MONO-637 — 링크는 이제 **제목**이다(「둘러보기 →」 버튼을 없앴다). 그래서
+       버튼 모양이 아니라 제목 모양이고, 밑줄은 호버에서만 준다. */
+    a.open { color: inherit; text-decoration: none; cursor: pointer; }
+    a.open:hover, a.open:focus-visible { text-decoration: underline; }
     /* TASK-MONO-560 — 안 뜬 화면은 **클릭되지 않아야** 한다. 회색으로 보이기만 하고
-       클릭이 되면 방문자는 404 를 보고 "고장" 으로 읽는다(pointer-events 가 요점). */
-    a.open.off { opacity: .45; pointer-events: none; cursor: default; }
-    a.thumb-link { padding: 0; border-radius: 0; background: none; display: block; }
+       클릭이 되면 방문자는 404 를 보고 "고장" 으로 읽는다(pointer-events 가 요점).
+       🔴 TASK-MONO-637 — 여기 `cursor: default` 는 **일부러 남긴다.** 손가락은 «누를 수
+       있다» 는 신호이고, 못 누르는 곳에 주면 거짓말이다(AC-4). */
+    a.open.off { opacity: .45; pointer-events: none; cursor: default; text-decoration: none; }
     .bstart { font-size: .84rem; padding: 9px 13px; background: #8883; }
-    .bstart.on { background: #16a34a; color: #fff; }
+    /* 🔴 손가락은 **켜진 버튼에만** 준다. 잠긴 버튼은 아래 :disabled 가 되돌린다. */
+    .bstart.on { background: #16a34a; color: #fff; cursor: pointer; }
+    .bstart:disabled { cursor: default; }
     /* TASK-MONO-636 — 카드가 «왜 못 하는지» 를 말하는 자리.
        🔴 안내를 `#bmsg` 에만 두면 그 문구는 `bundleStart()` 안에서만 채워지고, 그 함수는
           **버튼을 눌러야** 돈다. 그런데 안내가 필요한 바로 그 상황에서 버튼은 잠겨 있고,
           잠긴 버튼은 클릭 이벤트를 내지 않는다 — 즉 그 자리는 **영원히 안 보인다.** */
     .bnote { font-size: .78rem; line-height: 1.5; margin-top: 10px; color: #dc2626; }
     .bnote:empty { display: none; }
+    /* TASK-MONO-637 AC-1 — 🔴 «로그인하면 된다» 로 뭉치지 않기 위한 자리.
+       로그인 후 기능은 로그인만으로 열리지 않는다. 데모 백엔드가 **기동돼 있어야** 하고,
+       그 상태는 바로 아래 「실시간 기능」 배지가 말한다. 이 한 줄이 없으면 방문자는
+       로그인 화면까지 갔다가 막히고, 왜 막혔는지는 아무 데도 안 적혀 있다. */
+    .needs-boot { display: inline-block; margin-top: 3px; font-style: normal; font-size: .76rem; opacity: .7; }
+    .scard dd code { font-size: .95em; padding: 0 3px; background: #8882; border-radius: 4px; }
     #smsg { grid-column: 1 / -1; font-size: .82rem; color: #666; }
 
     .badge { font-size: .78rem; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
@@ -167,14 +195,17 @@
         *"이미지·제목·둘러보기는 항상 해당 Vercel 프런트엔드 주소로 이동한다.
           링크 클릭이 서버 기동을 겸하지 않게 한다."*
        그래서 카드 안에 **서로 다른 두 컨트롤**이 있다:
-         · 썸네일 링크 + `data-surface` 앵커(둘러보기) → 언제나 정적 Vercel 주소로 이동
-         · `<button data-bundle-start>`                → 그 묶음의 백엔드만 기동
+         · `data-surface` 를 단 **제목 앵커** → 언제나 정적 Vercel 주소로 이동
+         · `<button data-bundle-start>`      → 그 묶음의 백엔드만 기동
        한 요소가 둘을 겸하면 «둘러보러 눌렀는데 EC2 가 켜졌다» 가 되고, 그것은 요금이
        걸린 부작용이다. **겸하지 않는다는 사실이 마크업의 모양으로 강제된다.**
 
-    🔴 썸네일 링크는 `data-surface` 를 **안 단다.** 달면 (z14)의 loose 대조가 같은 화면을
-       두 번 세고, 판정 대상은 «화면당 하나» 여야 한다. 그래서 썸네일은 `href` 를 마크업에
-       직접 갖고(정적 주소라 파생이 필요 없다), 판정은 아래 둘러보기 행이 받는다.
+    🔴🔴 TASK-MONO-637 — **링크가 카드마다 하나다.** 예전에는 둘이었다: 썸네일 앵커가
+       `href` 를 마크업에 직접 갖고, 그 아래 「둘러보기 →」 행이 판정 속성을 가졌다.
+       그 모양의 문제는 **가드가 하나만 본다**는 것이다 — 비활성 처리(`off` + href 제거)도
+       판정 행에만 걸리므로, 데모가 꺼진 날 썸네일 링크만 **흐리지도 않고 클릭되는** 상태로
+       남았다. ⇒ 「둘러보기 →」 행을 없애고 그 속성을 **제목 앵커로 옮겼으며**, 주소를
+       마크업에 두 번 적지 않는다(캐러셀은 그 앵커의 `data-url` 을 읽는다).
 
     🔴🔴 **이 주석들이 자기 자신에게 걸린 적이 있다 (2026-09-07, 이 파일에서 실측).**
        (z14) 의 loose 대조는 `grep -c '<a [^>]*data-surface'` 다. 위 두 문단이 설명하려고
@@ -189,58 +220,55 @@
   -->
   <div id="surfaces">
     <article class="scard" data-bundle="console">
-      <a class="thumb-link" href="https://console.hubwang.com/" target="_blank" rel="noopener" aria-label="운영자 콘솔 열기"><img class="thumb" src="thumbnails/console.png" alt="운영자 콘솔 미리보기" loading="lazy" /></a>
+      <div class="shots" data-shots></div>
       <div class="body">
-        <h2>운영자 콘솔</h2>
+        <h2><a class="open" data-surface data-domain="console" data-served="vercel" data-url="https://console.hubwang.com/" target="_blank" rel="noopener">운영자 콘솔</a></h2>
         <p class="desc">여러 도메인을 한 화면에서 운영하는 백오피스. 대시보드·주문·재고·조직·권한.</p>
         <dl>
-          <dt>대표 기능</dt><dd>도메인 헬스 대시보드 · 이커머스/WMS/SCM/ERP/재무 운영 · IAM 테넌트·권한</dd>
+          <dt>로그인 없이</dt><dd>데모 둘러보기 화면(<code>/demo</code>) — 8개 도메인의 대시보드·표 샘플</dd>
+          <dt>로그인 후</dt><dd>도메인 헬스 대시보드 · 이커머스/WMS/SCM/ERP/재무 운영 · IAM 테넌트·권한·감사 로그<br /><em class="needs-boot">↳ 실시간 기능을 먼저 기동해야 열립니다</em></dd>
           <dt>기동되는 서비스</dt><dd data-services>—</dd>
-          <dt>공개 둘러보기</dt><dd><span class="badge b-tour">로그인 없이 샘플 탐색</span></dd>
           <dt>실시간 기능</dt><dd><span class="badge b-unknown" data-bundle-badge>… 확인 중</span></dd>
         </dl>
         <!-- TASK-MONO-636 — 기동이 왜 안 되는지를 **버튼을 안 눌러도** 읽는 자리. 비면 안 그려진다. -->
         <div class="bnote" data-bundle-note></div>
         <div class="acts">
-          <a class="open" data-surface data-domain="console" data-served="vercel" data-url="https://console.hubwang.com/" target="_blank" rel="noopener">둘러보기 →</a>
           <button class="bstart" data-bundle-start type="button">실시간 기능 시작</button>
         </div>
       </div>
     </article>
     <article class="scard" data-bundle="store">
-      <a class="thumb-link" href="https://store.hubwang.com/" target="_blank" rel="noopener" aria-label="이커머스 스토어 열기"><img class="thumb" src="thumbnails/store.png" alt="이커머스 스토어 미리보기" loading="lazy" /></a>
+      <div class="shots" data-shots></div>
       <div class="body">
-        <h2>이커머스 스토어</h2>
+        <h2><a class="open" data-surface data-domain="ecommerce" data-served="vercel" data-url="https://store.hubwang.com/" target="_blank" rel="noopener">이커머스 스토어</a></h2>
         <p class="desc">방문자용 상품 카탈로그. 목록·상세·카테고리·검색·필터·정렬이 로그인 없이 동작합니다.</p>
         <dl>
-          <dt>대표 기능</dt><dd>상품 탐색 · 검색/필터/정렬 · 장바구니 · 주문·결제(로그인 필요)</dd>
+          <dt>로그인 없이</dt><dd>홈 · 상품 목록/상세 · 검색 · 카테고리 · 필터 · 정렬</dd>
+          <dt>로그인 후</dt><dd>장바구니 · 주문 · 결제 · 위시리스트 · 마이페이지(주문내역·리뷰·쿠폰)<br /><em class="needs-boot">↳ 실시간 기능을 먼저 기동해야 열립니다</em></dd>
           <dt>기동되는 서비스</dt><dd data-services>—</dd>
-          <dt>공개 둘러보기</dt><dd><span class="badge b-tour">로그인 없이 전체 카탈로그</span></dd>
           <dt>실시간 기능</dt><dd><span class="badge b-unknown" data-bundle-badge>… 확인 중</span></dd>
         </dl>
         <!-- TASK-MONO-636 — 기동이 왜 안 되는지를 **버튼을 안 눌러도** 읽는 자리. 비면 안 그려진다. -->
         <div class="bnote" data-bundle-note></div>
         <div class="acts">
-          <a class="open" data-surface data-domain="ecommerce" data-served="vercel" data-url="https://store.hubwang.com/" target="_blank" rel="noopener">둘러보기 →</a>
           <button class="bstart" data-bundle-start type="button">실시간 기능 시작</button>
         </div>
       </div>
     </article>
     <article class="scard" data-bundle="fan">
-      <a class="thumb-link" href="https://fan.hubwang.com/" target="_blank" rel="noopener" aria-label="팬 플랫폼 열기"><img class="thumb" src="thumbnails/fan.png" alt="팬 플랫폼 미리보기" loading="lazy" /></a>
+      <div class="shots" data-shots></div>
       <div class="body">
-        <h2>팬 플랫폼</h2>
+        <h2><a class="open" data-surface data-domain="fan" data-served="vercel" data-url="https://fan.hubwang.com/" target="_blank" rel="noopener">팬 플랫폼</a></h2>
         <p class="desc">아티스트와 팬을 잇는 커뮤니티. 공개 피드·아티스트 프로필·멤버십 소개는 로그인 없이 열립니다.</p>
         <dl>
-          <dt>대표 기능</dt><dd>공개 피드 · 아티스트 검색/프로필 · 멤버십 · 글·댓글·팔로우(로그인 필요)</dd>
+          <dt>로그인 없이</dt><dd>공개 피드 · 아티스트 목록/프로필 · 게시물 상세 · 멤버십 소개</dd>
+          <dt>로그인 후</dt><dd>글쓰기 · 댓글 · 팔로우 · 멤버십 가입/내역 · 알림<br /><em class="needs-boot">↳ 실시간 기능을 먼저 기동해야 열립니다</em></dd>
           <dt>기동되는 서비스</dt><dd data-services>—</dd>
-          <dt>공개 둘러보기</dt><dd><span class="badge b-tour">로그인 없이 공개 게시물</span></dd>
           <dt>실시간 기능</dt><dd><span class="badge b-unknown" data-bundle-badge>… 확인 중</span></dd>
         </dl>
         <!-- TASK-MONO-636 — 기동이 왜 안 되는지를 **버튼을 안 눌러도** 읽는 자리. 비면 안 그려진다. -->
         <div class="bnote" data-bundle-note></div>
         <div class="acts">
-          <a class="open" data-surface data-domain="fan" data-served="vercel" data-url="https://fan.hubwang.com/" target="_blank" rel="noopener">둘러보기 →</a>
           <button class="bstart" data-bundle-start type="button">실시간 기능 시작</button>
         </div>
       </div>
@@ -832,36 +860,127 @@
     }
 
     // =======================================================================
-    // 썸네일 폴백 (TASK-MONO-634)
+    // 화면 캐러셀 (TASK-MONO-634 → **637**)
     // =======================================================================
-    // 🔴🔴 **아직 실제 캡처가 없다. 그래서 «없을 때» 를 설계해 둔다.**
+    // 🔴🔴 **아직 실제 캡처가 없다. 그래서 «없을 때» 를 첫 번째 요구로 두고 설계한다.**
     //
     // 요구는 *"썸네일은 공개 데모 데이터로 채운 실제 화면을 캡처한다. 가짜 제품 화면을
-    // 생성하지 않는다"* 다. 그 캡처는 `TASK-MONO-635` 의 공개 화면이 실제로 선 **뒤에야**
-    // 찍을 수 있으므로 순서상 이 티켓보다 늦다.
+    // 생성하지 않는다"* 다(TASK-MONO-634 AC-6). 그 캡처는 `TASK-MONO-639` 가 넣는다.
     //
     // 🔴 그 사이를 «그럴듯한 가짜 이미지» 로 메우지 않는다 — 그것이 요구가 금지한 것이고,
     //    캡처가 영영 안 와도 아무도 모르게 된다. 대신 **비어 있음이 보이는** 자리표시자를
-    //    둔다: 파일이 없으면 이모지 블록이 뜨고, 캡처를 넣으면 그대로 사진이 된다.
-    // 🔴 `onerror` 인라인 속성을 안 쓴다 — 마크업에 스크립트를 섞으면 (z14)의 행 추출식이
-    //    보는 줄이 길어지고, 그 줄에 따옴표가 늘면 파싱이 흔들린다. 여기서 붙인다.
-    const THUMB_FALLBACK = { console: "🖥️", store: "🛒", fan: "🎤" };
-    for (const img of document.querySelectorAll(".scard img.thumb")) {
-      img.addEventListener("error", () => {
-        const key = img.closest("[data-bundle]")?.dataset.bundle;
+    //    둔다: SHOTS 가 비면 이모지 블록이 뜨고, 캡처를 넣으면 그대로 사진이 된다.
+    //
+    // 🔴🔴 목록이 **마크업이 아니라 여기** 있는 이유: 639 가 캡처를 넣을 때 고칠 자리가
+    //    한 곳이어야 하고, 가드가 「참조 ↔ 파일」을 양방향으로 대조하려면 목록이 한 벌로
+    //    **추출 가능**해야 한다. 마크업에 `<img>` 를 세 카드에 흩으면 그 대조가 세 곳을
+    //    훑는 일이 되고, 한 카드만 빠뜨려도 조용히 통과한다.
+    //
+    // 🔴 자동 재생을 넣지 않는다. 이 페이지의 목적은 «움직이는 것» 이 아니라 «무엇인지
+    //    보이는 것» 이고, 자동 재생은 스크린리더·모션 민감 사용자에게 해롭다(AC-2).
+    // GUARD-Z35-BEGIN — (z35) 가 이 구간을 **실행해서** 0장·1장·N장을 대조한다.
+    const SHOTS_FALLBACK = { console: "🖥️", store: "🛒", fan: "🎤" };
+    // 🔴 TASK-MONO-639 가 여기를 채운다. **비어 있는 것이 오늘의 정상 상태**다 —
+    //    `infra/demo/aws/site/thumbnails/` 디렉터리가 저장소에 아직 없다.
+    const SHOTS = { console: [], store: [], fan: [] };
+
+    function buildShots(card) {
+      const box = card.querySelector("[data-shots]");
+      if (!box) return null;
+      const key = card.dataset.bundle;
+      const shots = SHOTS[key] || [];
+      const link = card.querySelector("[data-surface]");
+      const href = (link && link.dataset) ? link.dataset.url : "";
+
+      const track = document.createElement("div");
+      track.className = "shots-track";
+
+      // 🔵 0장은 **결함이 아니라 상태**다. 이모지 한 칸을 넣고 컨트롤 없이 끝낸다.
+      if (!shots.length) {
         const ph = document.createElement("div");
-        ph.className = "thumb ph";
-        ph.textContent = THUMB_FALLBACK[key] || "🖼️";
+        ph.className = "shots-ph";
+        ph.textContent = SHOTS_FALLBACK[key] || "🖼️";
         ph.title = "미리보기 캡처 준비 중";
-        img.replaceWith(ph);
-      }, { once: true });
+        track.appendChild(ph);
+        box.appendChild(track);
+        return { key, count: 0, controls: false, index: 0 };
+      }
+
+      for (const s of shots) {
+        const img = document.createElement("img");
+        img.className = "shots-shot";
+        img.src = "thumbnails/" + s.file;
+        img.alt = s.alt || "";
+        // 🔵 첫 장만 즉시 로드한다. 나머지는 지연 — 카드가 셋이라 장수가 곱해진다.
+        img.loading = shots.indexOf(s) === 0 ? "eager" : "lazy";
+        // 🔴 이미지 하나가 404 여도 **그 칸만** 폴백이다. 캐러셀은 계속 돈다.
+        img.addEventListener("error", () => {
+          const ph = document.createElement("div");
+          ph.className = "shots-ph";
+          ph.textContent = SHOTS_FALLBACK[key] || "🖼️";
+          ph.title = "이 캡처를 불러오지 못했습니다";
+          img.replaceWith(ph);
+        }, { once: true });
+        track.appendChild(img);
+      }
+      box.appendChild(track);
+
+      // 🔴 1장이면 이동 컨트롤을 **만들지 않는다.** 넘길 곳이 없는데 화살표가 보이면
+      //    방문자는 «눌렀는데 아무 일도 안 남» 을 겪고 그것을 고장으로 읽는다.
+      if (shots.length < 2) return { key, count: shots.length, controls: false, index: 0 };  // GUARD-Z35-BITE
+
+      const prev = document.createElement("button");
+      prev.type = "button"; prev.className = "shots-nav prev";
+      prev.setAttribute("aria-label", "이전 화면"); prev.textContent = "‹";
+      const next = document.createElement("button");
+      next.type = "button"; next.className = "shots-nav next";
+      next.setAttribute("aria-label", "다음 화면"); next.textContent = "›";
+      const dots = document.createElement("div");
+      dots.className = "shots-dots";
+
+      const state = { key, count: shots.length, controls: true, index: 0 };
+      const dotEls = shots.map((s, i) => {
+        const d = document.createElement("button");
+        d.type = "button"; d.className = "shots-dot" + (i ? "" : " on");
+        d.setAttribute("aria-label", (i + 1) + "번째 화면");
+        d.addEventListener("click", () => go(i));
+        dots.appendChild(d);
+        return d;
+      });
+      function go(i) {
+        state.index = Math.max(0, Math.min(shots.length - 1, i));
+        track.style.transform = "translateX(" + (-100 * state.index) + "%)";
+        dotEls.forEach((d, n) => d.classList.toggle("on", n === state.index));
+        prev.disabled = state.index === 0;
+        next.disabled = state.index === shots.length - 1;
+      }
+      prev.addEventListener("click", () => go(state.index - 1));
+      next.addEventListener("click", () => go(state.index + 1));
+      box.appendChild(prev); box.appendChild(next); box.appendChild(dots);
+      go(0);
+      state.go = go;
+      // 🔵 주소를 마크업에 두 번 적지 않는다 — 제목 앵커의 data-url 이 유일한 출처다.
+      //    (예전 판은 썸네일 앵커가 href 를 따로 들고 있었고, 그래서 링크가 둘이었다.)
+      state.href = href;
+      return state;
     }
+
+    function buildAllShots() {
+      const out = [];
+      for (const card of document.querySelectorAll("[data-bundle]")) {
+        const r = buildShots(card);
+        if (r) out.push(r);
+      }
+      return out;
+    }
+    // GUARD-Z35-END
 
     // 🔵 첫 렌더를 폴링 **전에** 한 번 돌린다 — 제어 API 가 느리거나 없어도 카드와 링크는
     //    즉시 선다. 예전 판은 `/status` 응답을 기다렸고, 그동안 방문자는 빈 화면을 봤다.
     //    그 대기가 이제 문제인 이유: 둘러보기가 제어 API 와 무관해졌기 때문이다.
     renderSurfaces();
     surfacesVisible(false, null);
+    buildAllShots();
     renderCards();
     poll();
     pollTimer = setInterval(poll, 10000); // 10초마다 상태 폴링
