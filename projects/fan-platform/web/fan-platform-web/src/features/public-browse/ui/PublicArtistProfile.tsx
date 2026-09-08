@@ -1,4 +1,5 @@
 import type { PublicArtist } from '@demo/public-data';
+import { PublicArtistAvatar } from './PublicArtistAvatar';
 
 /**
  * 공개 아티스트 프로필.
@@ -16,9 +17,7 @@ export function PublicArtistProfile({ artist }: { artist: PublicArtist }) {
       className="rounded-2xl border border-ink-200 bg-white p-8 shadow-sm"
     >
       <div className="flex items-start gap-6">
-        <div className="flex h-32 w-32 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-100 to-accent-100 text-4xl font-bold text-brand-700">
-          {artist.stageName.slice(0, 2).toUpperCase()}
-        </div>
+        <PublicArtistAvatar artist={artist} className="h-32 w-32 shrink-0 rounded-2xl" textClassName="text-4xl" />
         <div className="flex-1">
           <h1 className="text-3xl font-bold text-ink-900">{artist.stageName}</h1>
           <p className="mt-2 text-sm text-ink-600">
