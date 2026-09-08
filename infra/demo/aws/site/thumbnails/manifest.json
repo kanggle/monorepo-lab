@@ -16,7 +16,7 @@
       "url": "https://console.hubwang.com/demo",
       "alt": "운영자 콘솔 둘러보기 — 도메인 요약",
       "status": 200,
-      "capturedAt": "2026-09-08T15:18:13.081Z"
+      "capturedAt": "2026-09-08T20:58:17.984Z"
     },
     {
       "bundle": "console",
@@ -24,7 +24,7 @@
       "url": "https://console.hubwang.com/demo/ecommerce",
       "alt": "운영자 콘솔 — 이커머스 주문·상품 표",
       "status": 200,
-      "capturedAt": "2026-09-08T15:18:15.081Z"
+      "capturedAt": "2026-09-08T20:58:19.673Z"
     },
     {
       "bundle": "console",
@@ -32,7 +32,7 @@
       "url": "https://console.hubwang.com/demo/wms",
       "alt": "운영자 콘솔 — WMS 재고 표",
       "status": 200,
-      "capturedAt": "2026-09-08T15:18:16.846Z"
+      "capturedAt": "2026-09-08T20:58:21.457Z"
     },
     {
       "bundle": "store",
@@ -40,7 +40,7 @@
       "url": "https://store.hubwang.com/",
       "alt": "이커머스 스토어 홈",
       "status": 200,
-      "capturedAt": "2026-09-08T15:18:19.543Z"
+      "capturedAt": "2026-09-08T20:58:24.269Z"
     },
     {
       "bundle": "store",
@@ -48,7 +48,7 @@
       "url": "https://store.hubwang.com/products",
       "alt": "이커머스 스토어 — 상품 목록",
       "status": 200,
-      "capturedAt": "2026-09-08T15:18:22.283Z"
+      "capturedAt": "2026-09-08T20:58:27.230Z"
     },
     {
       "bundle": "fan",
@@ -56,7 +56,7 @@
       "url": "https://fan.hubwang.com/",
       "alt": "팬 플랫폼 — 공개 피드",
       "status": 200,
-      "capturedAt": "2026-09-08T15:18:25.271Z"
+      "capturedAt": "2026-09-08T20:58:30.018Z"
     },
     {
       "bundle": "fan",
@@ -64,7 +64,7 @@
       "url": "https://fan.hubwang.com/artists",
       "alt": "팬 플랫폼 — 아티스트 목록",
       "status": 200,
-      "capturedAt": "2026-09-08T15:18:27.083Z"
+      "capturedAt": "2026-09-08T20:58:32.636Z"
     },
     {
       "bundle": "fan",
@@ -72,7 +72,7 @@
       "url": "https://fan.hubwang.com/membership",
       "alt": "팬 플랫폼 — 멤버십 소개",
       "status": 200,
-      "capturedAt": "2026-09-08T15:18:29.577Z"
+      "capturedAt": "2026-09-08T20:58:35.299Z"
     }
   ]
 }
