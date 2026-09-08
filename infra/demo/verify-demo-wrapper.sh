@@ -3265,6 +3265,290 @@ rm -f "$z14_js2"
 ok "방문자 화면 링크 ${z14_got}개 — 실제 행: vercel ${z14_n_vercel}행(여섯 상태 전부 활성·정적 주소) · demo-host ${z14_n_demo}행 · 부팅 프로브 = vercel행 ${z14_n_probe}건 + #bootprobe 원소 ${z14_n_bootel}건 = ${z14_n_boot_probe}건(술어 self-test 9칸 + 경로 술어 8칸) · demo-host 정책 4칸은 **주입 픽스처**(${z14_fx_dom}/${z14_fx_host}, 주입 3단언)로 집행 · 컨테이너 축(꺼진 데모에서도 보임 · vercel-0 대조군은 숨김 유지)"
 
 # =============================================================================
+# (z34) /bundles 가 404·5xx 일 때 카드가 **사유를 말하는가** — TASK-MONO-636
+# =============================================================================
+# 🔴🔴 실측(2026-09-08 UTC, 서빙 판 9f0fcd2d6): /status 와 /domains 는 200 인데 /bundles 는
+#    404 였다. 그때 론처는 "… 확인 중" 배지 + 잠긴 회색 버튼을 **영원히** 보여줬다 —
+#    방문자에게는 «고장난 버튼» 으로 읽히는데 실제로는 «아직 배포 안 된 기능» 이다.
+#    원인은 pollBundles() 의 조용한 조기 반환이었고, terraform apply 가 끝나면 증상은
+#    사라지지만 **코드는 그대로**다. 제어 API 가 잠깐 죽거나 라우트 이름이 바뀌는 날
+#    똑같은 화면이 재발하고, 그때도 화면은 아무 말도 안 한다.
+#
+# ── 이 칸을 (z14) 에 합치지 않은 이유 (TASK-MONO-636 AC-3 — 자리를 먼저 정하고 근거를 적는다)
+#
+#   (z14) 의 최소 DOM 대역은 querySelectorAll() 이 **셀렉터와 무관하게** 표면 앵커 행을
+#   돌려주고, 원소는 {id, textContent, disabled, style} 뿐이다(querySelector 가 없다).
+#   카드 렌더는 **다른 모집단**([data-bundle] 카드)을 훑고 card.querySelector() 로 자식
+#   넷을 꺼내며 className 을 쓴다. 한 대역이 둘 다 흉내 내려면 querySelectorAll 이
+#   셀렉터로 분기해야 하는데, 그렇게 똑똑해진 스텁이 바로 이 저장소가 반복해서 밟은
+#   «실물보다 관대한 대역» 이다.
+#   ⇒ 대역을 넓히는 대신 **구간을 하나 더 만든다**(GUARD-Z34-BEGIN/END). 두 축이 갈린다:
+#       (z14) = 어디로 갈 수 있는가 (링크)   · 모집단 [data-surface]
+#       (z34) = 왜 못 하는지 말하는가 (사유) · 모집단 [data-bundle]
+#   🔵 부작용이 하나 더 있다: 대역을 합쳤다면 (z14) 의 빨강이 «링크 판정이 틀렸다» 인지
+#      «카드 대역이 좁다» 인지 구별되지 않는다. 지금은 어느 칸이 빨간지가 곧 사유다.
+#
+# 🔴 문자열 grep 으로 짜지 않는다 — index.html 과 이 파일은 이 결함을 **문장으로** 적어
+#    두고 있어서 술어가 자기 문서에 걸린다((z12) 와 TASK-MONO-634 가 각각 한 번씩 밟았다).
+#    판정은 구간을 **실행해서** 얻고, «404 와 5xx 가 다른 문구인가» 는 소스가 아니라
+#    **두 실행 출력을 서로 비교**해서 본다.
+echo "[verify] (z34) /bundles 가 404·5xx 일 때 카드가 사유를 말하는가 (TASK-MONO-636)"
+z34_site="$ROOT/infra/demo/aws/site/index.html"
+[ -f "$z34_site" ] || fail "(z34) index.html 이 없습니다: $z34_site"
+
+z34_dir="$(mktemp -d)"
+z34_die() { rm -rf "$z34_dir"; fail "$@"; }
+
+z34_b="$(grep -n 'GUARD-Z34-BEGIN' "$z34_site" | head -1 | cut -d: -f1)"
+z34_e="$(grep -n 'GUARD-Z34-END'   "$z34_site" | head -1 | cut -d: -f1)"
+{ [ -n "$z34_b" ] && [ -n "$z34_e" ] && [ "$z34_e" -gt "$z34_b" ]; } \
+  || z34_die "(z34) index.html 에서 GUARD-Z34 앵커 구간을 찾지 못했습니다 — **가드가 공허합니다.**"
+
+z34_src="$z34_dir/region.js"
+sed -n "$(( z34_b + 1 )),$(( z34_e - 1 ))p" "$z34_site" > "$z34_src"
+
+# 🔴 구간이 좁아지면 이 칸은 **조용히 아무것도 안 재게 된다** — TASK-MONO-603 이 (z14) 에서
+#    당한 그것이다(행 정책 bite 8/8 이 전부 참인데 그 코드는 한 번도 실행되지 않았다).
+#    그래서 «구간이 무엇을 포함해야 하는가» 를 여기서 단언한다.
+for z34_need in 'function renderCards(' 'async function pollBundles(' 'function bundleFallback('; do
+  grep -qF "$z34_need" "$z34_src" \
+    || z34_die "(z34) GUARD-Z34 구간이 '$z34_need' 를 포함하지 않습니다 — 구간이 좁아졌거나 이름이 바뀌었습니다."\
+      $'\n'"→ 그러면 이 칸은 아무것도 실행하지 않으면서 초록입니다."
+done
+
+# ---------------------------------------------------------------------------
+# 카드 모집단 — **마크업에서 뽑는다.** 드라이버에 하드코딩하면 카드를 지워도 조용히 통과한다.
+# ---------------------------------------------------------------------------
+z34_cards="$(awk '
+  match($0, /data-bundle="[a-z0-9-]+"/) {
+    cur = substr($0, RSTART + 13, RLENGTH - 14); next
+  }
+  cur != "" && /data-surface/ && match($0, /data-domain="[a-z0-9-]+"/) {
+    print cur "|" substr($0, RSTART + 13, RLENGTH - 14); cur = ""
+  }
+' "$z34_site")"
+z34_loose="$(grep -c 'data-bundle="' "$z34_site" || true)"
+z34_got="$(printf '%s\n' "$z34_cards" | grep -c . || true)"
+[ "$z34_got" -ge 1 ] || z34_die "(z34) index.html 에서 카드를 한 장도 뽑지 못했습니다 — 드라이버가 **빈 모집단**을 돌게 됩니다."\
+  $'\n'"→ 빈 배열을 훑는 루프는 아무것도 시험하지 않으면서 언제나 초록입니다."
+[ "$z34_loose" = "$z34_got" ] \
+  || z34_die "(z34) data-bundle 카드는 ${z34_loose}장인데 표면 도메인까지 짝지어진 것은 ${z34_got}장입니다."\
+    $'\n'"→ 짝이 안 지어진 카드는 이 칸이 **안 봅니다.** 그 카드만 조용히 안 재어집니다."
+
+# ---------------------------------------------------------------------------
+# 드라이버 — 카드 모양 최소 DOM 대역
+# ---------------------------------------------------------------------------
+z34_mk() {   # $1 = 구간 소스   $2 = 만들 js 파일
+  { cat "$1"; cat <<'Z34DRV'
+// --- (z34) 카드 모양 최소 DOM 대역 -----------------------------------------
+// 🔴 (z14) 의 대역을 재사용하지 않는다. 여기서는 **모르는 셀렉터를 만나면 null 이 아니라
+//    죽인다** — 조용히 null 을 주면 코드가 새 원소를 읽어도 가드는 «없어서 안 그렸다» 를
+//    통과시킨다(= 실물보다 관대한 대역, 이 저장소의 반복 함정).
+function mkEl(ds) {
+  return { textContent: "", className: "", disabled: false, dataset: ds || {}, style: {} };
+}
+function mkCard(bundle, domain) {
+  var kids = {
+    "[data-bundle-badge]": mkEl(),
+    "[data-bundle-start]": mkEl(),
+    "[data-services]":     mkEl(),
+    "[data-bundle-note]":  mkEl(),
+    "[data-surface]":      mkEl({ domain: domain })
+  };
+  return {
+    dataset: { bundle: bundle },
+    _kids: kids,
+    querySelector: function (sel) {
+      if (!(sel in kids)) throw new Error("대역 밖 셀렉터: " + sel);
+      return kids[sel];
+    }
+  };
+}
+var CARDS = process.env.Z34_CARDS.trim().split("\n")
+  .map(function (l) { var p = l.split("|"); return mkCard(p[0], p[1]); });
+global.document = {
+  querySelectorAll: function (sel) {
+    if (sel !== "[data-bundle]") throw new Error("대역 밖 셀렉터: " + sel);
+    return CARDS;
+  }
+};
+global.CONTROL_OK = true;
+global.lastState = "stopped";
+global.lastSnap = {};
+global.lastStale = false;
+
+var SCENE = null;
+global.api = async function (path) {
+  if (path !== "/bundles") throw new Error("대역 밖 경로: " + path);
+  if (SCENE.throws) throw new Error("network");
+  return { ok: SCENE.ok, status: SCENE.status, body: SCENE.body };
+};
+
+function snap() {
+  return CARDS.map(function (c) {
+    return [c.dataset.bundle,
+            c._kids["[data-surface]"].dataset.domain,
+            c._kids["[data-bundle-badge]"].textContent,
+            c._kids["[data-bundle-start]"].disabled ? "locked" : "open",
+            c._kids["[data-bundle-note]"].textContent].join("~");
+  }).join(" ;; ");
+}
+
+async function main() {
+  var out = {};
+  renderCards();                 // PRE — 아직 아무것도 안 물어봤다
+  out.PRE = snap();
+  async function run(k, scene) { SCENE = scene; await pollBundles(); out[k] = snap(); }
+  await run("E404",  { ok: false, status: 404, body: { message: "Not Found" } });
+  await run("E500",  { ok: false, status: 503, body: {} });
+  await run("ENET",  { throws: true });
+  await run("SHAPE", { ok: true, status: 200, body: { state: "stopped" } });
+  // AC-2 — 폴백이 /status·/domains 를 **실제로** 읽는가: 그 둘만 바꾸고 같은 404 를 준다.
+  global.lastState = "running";
+  global.lastSnap = CARDS.reduce(function (a, c) {
+    a[c._kids["[data-surface]"].dataset.domain] = { state: "up" }; return a;
+  }, {});
+  await run("E404R", { ok: false, status: 404, body: { message: "Not Found" } });
+  await run("OK", { ok: true, status: 200, body: { bundles: {
+    console: { state: "waiting", domains: ["iam", "console"] },
+    store:   { state: "ready",   domains: ["iam", "ecommerce"] },
+    fan:     { state: "booting", domains: ["iam", "fan"] }
+  } } });
+  ["PRE", "E404", "E500", "ENET", "SHAPE", "E404R", "OK"].forEach(function (k) {
+    console.log(k + "|" + out[k]);
+  });
+}
+main().catch(function (e) { console.error(String((e && e.stack) || e)); process.exit(1); });
+Z34DRV
+  } > "$2"
+}
+
+z34_run() {  # $1 = 구간 소스 → 드라이버 출력(표준출력), 실패는 종료코드로
+  z34_mk "$1" "$z34_dir/drv.js"
+  Z34_CARDS="$z34_cards" node "$z34_dir/drv.js" 2>&1
+}
+
+# ---------------------------------------------------------------------------
+# 판정 술어 — **한 번의 awk 패스.** 아래에서 세 번 쓴다(실물 1 + bite 2).
+# ---------------------------------------------------------------------------
+# 🔴 항목마다 서브셸을 띄우는 루프로 짜지 않는다(이 호스트의 msys 는 fork 를 소진하고,
+#    그때 rc 는 0 이 아닌데 FAIL 은 한 줄도 안 나와 «가드가 통과했다» 처럼 보인다).
+z34_verdict() {  # $1 = 드라이버 출력 → 사유(여러 줄) 또는 빈 문자열
+  printf '%s\n' "$1" | awk '
+    BEGIN {
+      FS = "|"
+      PEND = "… 확인 중"
+      ne = split("E404 E500 ENET SHAPE E404R", ek, " ")
+      nb = 0
+    }
+    {
+      key = $1
+      n = split($2, r, / ;; /)
+      cnt[key] = n
+      for (i = 1; i <= n; i++) {
+        m = split(r[i], f, "~")
+        if (m < 5) { print "출력 [" key "] 의 레코드 필드가 " m "개입니다(기대 5개): " r[i]; continue }
+        b = f[1]
+        dom[key, b] = f[2]; badge[key, b] = f[3]; lock[key, b] = f[4]; note[key, b] = f[5]
+        if (!(b in seenb)) { seenb[b] = 1; bl[++nb] = b }
+      }
+    }
+    END {
+      if (nb < 1) { print "카드가 0장입니다 — 드라이버가 빈 모집단을 돌았습니다"; exit }
+      for (k in cnt) if (cnt[k] != nb) print "[" k "] 카드 " cnt[k] "장 (다른 칸은 " nb "장)"
+      for (i = 1; i <= nb; i++) {
+        b = bl[i]
+        # ── 아직 안 물어봤다: 미측정이 그대로 보여야 한다(이 상태만 «확인 중» 이다)
+        if (badge["PRE", b] != PEND) print "[PRE] " b " 배지가 미측정 문구가 아닙니다: " badge["PRE", b]
+        if (lock["PRE", b] != "locked") print "[PRE] " b " 버튼이 열려 있습니다"
+        if (note["PRE", b] != "") print "[PRE] " b " 가 묻기도 전에 사유를 말합니다: " note["PRE", b]
+        # ── 물어봤는데 못 받았다: 배지가 미측정에 머물지 않고, 사유가 있고, 버튼은 잠긴 채다
+        for (j = 1; j <= ne; j++) {
+          k = ek[j]
+          if (badge[k, b] == PEND) print "[" k "] " b " 배지가 미측정 문구에 머물렀습니다 — «물어봤는데 없다» 와 «아직 모른다» 가 같은 화면입니다"
+          if (note[k, b] == "") print "[" k "] " b " 가 사유를 한 마디도 말하지 않습니다 — 방문자는 이유 없는 회색 버튼을 봅니다"
+          if (lock[k, b] != "locked") print "[" k "] " b " 버튼이 열렸습니다 — 누르면 404 이고, 그것은 지금보다 나쁩니다"
+          if (note[k, b] != "" && index(note[k, b], dom[k, b]) == 0) print "[" k "] " b " 의 사유가 그 카드의 도메인(" dom[k, b] ")을 안 읽었습니다 — 폴백이 카드마다 다르지 않습니다"
+        }
+        # ── 404 와 5xx 는 **다른 문구**여야 한다
+        if (note["E404", b] == note["E500", b]) print "[" b "] 404 와 5xx 의 문구가 같습니다 — «배포하면 되는 것» 과 «장애» 가 한 화면이 되어 엉뚱한 곳을 팝니다: " note["E404", b]
+        # ── 5xx 와 네트워크 실패/타임아웃은 **같은 축**이다(둘 다 «응답이 없다»)
+        if (note["E500", b] != note["ENET", b]) print "[" b "] 5xx 와 네트워크 실패의 문구가 다릅니다 — 둘 다 «응답이 없다» 입니다"
+        # ── AC-2 폴백이 /status·/domains 를 **실제로** 읽는가 (그 둘만 바꿔 같은 404 를 줬다)
+        if (note["E404", b] == note["E404R", b]) print "[" b "] EC2 상태가 stopped 에서 running 으로 바뀌어도 사유가 그대로입니다 — 폴백이 /status 를 안 읽고 상수를 찍습니다"
+        # ── 정상 응답: 사유는 사라지고 배지는 실제 상태가 된다
+        if (note["OK", b] != "") print "[OK] " b " 가 200 을 받고도 사유를 남겨 둡니다: " note["OK", b]
+        if (badge["OK", b] == PEND) print "[OK] " b " 배지가 미측정 문구입니다"
+      }
+      # ── 버튼이 열리는 것은 **정상 응답에서만**이고, 상태에 따라 갈린다
+      if (lock["OK", "console"] != "open") print "[OK] waiting 인 console 버튼이 잠겨 있습니다 — 정상 응답에서도 못 누르면 이 페이지의 목적이 사라집니다"
+      if (lock["OK", "store"] != "locked") print "[OK] 이미 ready 인 store 버튼이 열려 있습니다"
+      if (lock["OK", "fan"] != "locked") print "[OK] 기동 중인 fan 버튼이 열려 있습니다 — 중복 요청이 됩니다"
+    }
+  '
+}
+
+# ---------------------------------------------------------------------------
+# 실물 판정
+# ---------------------------------------------------------------------------
+z34_out="$(z34_run "$z34_src")" \
+  || z34_die "(z34) 카드 판정 실행 실패:"$'\n'"$z34_out"
+z34_bad="$(z34_verdict "$z34_out")"
+[ -z "$z34_bad" ] || z34_die "(z34) /bundles 를 못 받았을 때 화면이 사유를 말하지 않습니다:"$'\n'"$z34_bad"\
+  $'\n'"→ 방문자가 보는 것은 «고장난 버튼» 이고, 실제로는 «아직 배포 안 된 기능» 입니다."\
+  $'\n'"   드라이버 출력:"$'\n'"$z34_out"
+
+# ---------------------------------------------------------------------------
+# bite — 결함을 **되살려서** 이 술어가 무는지 본다 (주입 → 실행 → 판정 순으로 단언한다)
+# ---------------------------------------------------------------------------
+# 🔴 변형이 문법을 깨면 node 가 죽고, 그 빨강은 «가드가 물었다» 가 아니다. 그래서 각 bite 는
+#    ① 주입됐는가 ② 그래도 실행되는가 ③ 술어가 무는가 를 **따로** 단언한다.
+
+# (bite-1) 이 티켓이 고친 그 줄 — 상태코드를 받아서 버린다.
+z34_mark="$(grep -c 'GUARD-Z34-BITE' "$z34_src" || true)"
+[ "$z34_mark" = "1" ] \
+  || z34_die "(z34) bite 앵커(GUARD-Z34-BITE)가 ${z34_mark}개입니다(기대 1개) — 앵커가 없으면 bite 는 아무것도 안 되돌립니다."
+z34_b1="$z34_dir/bite1.js"
+sed 's|^.*GUARD-Z34-BITE.*$|      if (!r.ok) return;|' "$z34_src" > "$z34_b1"
+grep -qF 'if (!r.ok) return;' "$z34_b1" \
+  || z34_die "(z34) bite-1 주입 실패 — 조기 반환이 들어가지 않았습니다."
+if grep -q 'GUARD-Z34-BITE' "$z34_b1"; then
+  z34_die "(z34) bite-1 주입 실패 — 마커 줄이 그대로 남아 있습니다."
+fi
+z34_o1="$(z34_run "$z34_b1")" \
+  || z34_die "(z34) bite-1 실행 실패 — 변형이 문법을 깬 것이므로 이 빨강은 가드가 문 것이 아닙니다:"$'\n'"$z34_o1"
+[ -n "$(z34_verdict "$z34_o1")" ] \
+  || z34_die "(z34) bite-1 — 404 를 삼키는 조기 반환을 되살렸는데 가드가 **안 물었습니다.**"\
+    $'\n'"→ 이 칸은 아무것도 지키지 않습니다. 출력:"$'\n'"$z34_o1"
+
+# (bite-2) 404 와 5xx 의 문구를 **뭉갠다.** 값을 여기 다시 적지 않는다 — down 의 값을
+#          absent 자리로 복사해서, 두 벌이 되는 대신 «같아지는 것» 자체를 만든다.
+z34_b2="$z34_dir/bite2.js"
+awk '
+  NR == FNR {
+    if ($0 ~ /^[[:space:]]*down:[[:space:]]/) { dv = $0; sub(/^[[:space:]]*down:[[:space:]]*/, "", dv) }
+    next
+  }
+  {
+    if ($0 ~ /^[[:space:]]*absent:[[:space:]]/ && dv != "") {
+      match($0, /^[[:space:]]*/)
+      print substr($0, 1, RLENGTH) "absent: " dv
+    } else print
+  }
+' "$z34_src" "$z34_src" > "$z34_b2"
+if cmp -s "$z34_src" "$z34_b2"; then
+  z34_die "(z34) bite-2 주입 실패 — 구간이 하나도 안 바뀌었습니다(absent/down 항목 이름이 바뀌었습니까?)."
+fi
+z34_o2="$(z34_run "$z34_b2")" \
+  || z34_die "(z34) bite-2 실행 실패 — 변형이 문법을 깬 것이므로 이 빨강은 가드가 문 것이 아닙니다:"$'\n'"$z34_o2"
+[ -n "$(z34_verdict "$z34_o2")" ] \
+  || z34_die "(z34) bite-2 — 404 와 5xx 의 문구를 같게 만들었는데 가드가 **안 물었습니다.**"\
+    $'\n'"→ «다른 문구여야 한다» 축이 죽어 있습니다. 출력:"$'\n'"$z34_o2"
+
+rm -rf "$z34_dir"
+ok "카드 ${z34_got}장 × 7시나리오(미측정·404·5xx·네트워크실패·모양불명·404+EC2running·정상) 를 **실행 대조** — 배지·사유·버튼잠금 + 404≠5xx · 5xx=타임아웃 · 폴백이 /status 를 읽음 · bite 2칸(조기반환 되살리기 · 문구 뭉개기)"
+
+# =============================================================================
 # (z32) 묶음 표가 두 집에서 갈라지지 않는가 — TASK-MONO-634 / ADR-MONO-071
 # =============================================================================
 # 🔴🔴 같은 사실이 **두 런타임**에 있다:

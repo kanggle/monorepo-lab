@@ -48,6 +48,12 @@
     a.thumb-link { padding: 0; border-radius: 0; background: none; display: block; }
     .bstart { font-size: .84rem; padding: 9px 13px; background: #8883; }
     .bstart.on { background: #16a34a; color: #fff; }
+    /* TASK-MONO-636 — 카드가 «왜 못 하는지» 를 말하는 자리.
+       🔴 안내를 `#bmsg` 에만 두면 그 문구는 `bundleStart()` 안에서만 채워지고, 그 함수는
+          **버튼을 눌러야** 돈다. 그런데 안내가 필요한 바로 그 상황에서 버튼은 잠겨 있고,
+          잠긴 버튼은 클릭 이벤트를 내지 않는다 — 즉 그 자리는 **영원히 안 보인다.** */
+    .bnote { font-size: .78rem; line-height: 1.5; margin-top: 10px; color: #dc2626; }
+    .bnote:empty { display: none; }
     #smsg { grid-column: 1 / -1; font-size: .82rem; color: #666; }
 
     .badge { font-size: .78rem; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
@@ -193,6 +199,8 @@
           <dt>공개 둘러보기</dt><dd><span class="badge b-tour">로그인 없이 샘플 탐색</span></dd>
           <dt>실시간 기능</dt><dd><span class="badge b-unknown" data-bundle-badge>… 확인 중</span></dd>
         </dl>
+        <!-- TASK-MONO-636 — 기동이 왜 안 되는지를 **버튼을 안 눌러도** 읽는 자리. 비면 안 그려진다. -->
+        <div class="bnote" data-bundle-note></div>
         <div class="acts">
           <a class="open" data-surface data-domain="console" data-served="vercel" data-url="https://console.hubwang.com/" target="_blank" rel="noopener">둘러보기 →</a>
           <button class="bstart" data-bundle-start type="button">실시간 기능 시작</button>
@@ -210,6 +218,8 @@
           <dt>공개 둘러보기</dt><dd><span class="badge b-tour">로그인 없이 전체 카탈로그</span></dd>
           <dt>실시간 기능</dt><dd><span class="badge b-unknown" data-bundle-badge>… 확인 중</span></dd>
         </dl>
+        <!-- TASK-MONO-636 — 기동이 왜 안 되는지를 **버튼을 안 눌러도** 읽는 자리. 비면 안 그려진다. -->
+        <div class="bnote" data-bundle-note></div>
         <div class="acts">
           <a class="open" data-surface data-domain="ecommerce" data-served="vercel" data-url="https://store.hubwang.com/" target="_blank" rel="noopener">둘러보기 →</a>
           <button class="bstart" data-bundle-start type="button">실시간 기능 시작</button>
@@ -227,6 +237,8 @@
           <dt>공개 둘러보기</dt><dd><span class="badge b-tour">로그인 없이 공개 게시물</span></dd>
           <dt>실시간 기능</dt><dd><span class="badge b-unknown" data-bundle-badge>… 확인 중</span></dd>
         </dl>
+        <!-- TASK-MONO-636 — 기동이 왜 안 되는지를 **버튼을 안 눌러도** 읽는 자리. 비면 안 그려진다. -->
+        <div class="bnote" data-bundle-note></div>
         <div class="acts">
           <a class="open" data-surface data-domain="fan" data-served="vercel" data-url="https://fan.hubwang.com/" target="_blank" rel="noopener">둘러보기 →</a>
           <button class="bstart" data-bundle-start type="button">실시간 기능 시작</button>
@@ -382,6 +394,10 @@
     // 알 수 없다. 활성으로 두면 방문자가 눌러서 404/500 을 보고 **"고장났다"** 로 읽는다.
     const SURFACE_LIVE = (st) => st === "up";
     let lastIp = null, lastSnap = null, lastStale = false;
+    // 🔵 TASK-MONO-636 — `/status` 의 state 를 **보관한다.** 카드가 `/bundles` 를 못 받았을
+    //    때 「있는 정보라도 보여준다」(AC-2)는 이 값과 lastSnap 으로 만들어진다. 예전에는
+    //    render() 의 인자로만 살다가 사라져서, 폴백이 쓸 수 있는 사실이 하나도 없었다.
+    let lastState = null;
 
     // -----------------------------------------------------------------------
     // 🔴🔴 TASK-MONO-603 — **블록의 가시성은 «데모가 떴는가» 가 아니다**
@@ -480,6 +496,7 @@
       surfacesVisible(isRun, ip);
       $("domains").style.display = isRun ? "block" : "none";
       lastIp = ip || null;
+      lastState = state || null;   // TASK-MONO-636 — 카드 폴백이 읽는다
       renderSurfaces();
       const label = {
         stopped: "🟢 대기 중 — 카드의 「실시간 기능 시작」을 누르세요",
@@ -509,6 +526,14 @@
     //      · 구간 밖 = «지금 어떤 상태인가»     (배지·버튼 — 표시 전용)
     //    🔵 이 분리는 우연이 아니라 **가드의 대역이 정의한 경계**다. 대역을 넓히는 편이
     //       나아 보일 수 있지만, 넓힌 대역은 실물보다 관대해지기 쉽다(반복 함정).
+    //
+    // 🔴🔴 TASK-MONO-636 — 그래서 이 블록은 **자기 앵커**를 갖는다. (z34) 가 이 구간만
+    //    떼어 내 **카드 모양의 별도 대역**으로 실행한다. (z14) 를 넓히지 않은 이유는
+    //    `verify-demo-wrapper.sh` 의 (z34) 머리말에 적혀 있다 — 요지는 두 구간이 **다른
+    //    모집단**(`[data-surface]` 앵커 vs `[data-bundle]` 카드)을 보고, 한 대역이 둘 다
+    //    흉내 내려면 `querySelectorAll` 이 셀렉터를 분기해야 하며 그렇게 똑똑해진 스텁이
+    //    바로 «실물보다 관대한 대역» 이라는 것이다.
+    // GUARD-Z34-BEGIN — (z34) 가 이 구간을 **실행해서** 「사유를 말하는가」를 대조한다.
     const BLABEL = {
       ready:     ["🟢 사용 가능", "b-up"],
       booting:   ["🟡 기동 중…", "b-partial"],
@@ -525,6 +550,45 @@
     const B_STARTABLE = new Set(["waiting", "partial", "unknown"]);
     let lastBundles = null;
 
+    // 🔴🔴 TASK-MONO-636 — «아직 안 물어봤다» 와 «물어봤는데 못 받았다» 는 **다른 값**이다.
+    //    `null` = 미측정(첫 폴링 전) · 문자열 = 부재/장애 판정. 예전 코드는 둘을
+    //    `lastBundles === null` 하나로 뭉쳤고, 그래서 404 를 받은 화면과 아직 안 물어본
+    //    화면이 **같은 모양**(«… 확인 중» 배지 + 잠긴 회색 버튼)이 됐다. 그 모양은 영원히
+    //    안 바뀐다 — 부재 판정과 미측정을 구별하라는, 이 저장소가 반복해서 이름 붙인 축이다.
+    let bundlesErr = null;
+
+    // 🔴 404 와 5xx 를 **다른 문구**로 준다. 앞엣것은 «배포하면 되는 것», 뒤엣것은 «장애»
+    //    이고 방문자와 운영자가 할 일이 다르다. 뭉치면 엉뚱한 곳을 판다.
+    const B_ERR = {
+      absent: "이 기능이 제어 API 에 아직 배포되지 않았습니다 (/bundles → 404).",
+      down:   "제어 API 가 응답하지 않습니다 — 잠시 후 자동으로 다시 시도합니다.",
+      shape:  "제어 API 응답을 해석할 수 없습니다 — 묶음 목록이 들어 있지 않습니다.",
+    };
+    // 🔵 셋 다 뒤에 같은 말을 붙인다: **둘러보기는 살아 있다.** 이 페이지의 본체가 그것이고
+    //    (ADR-MONO-070), 그것까지 죽은 줄 알고 떠나는 것이 이 결함의 가장 비싼 결과다.
+    const B_ERR_TAIL = " 공개 둘러보기는 정상 동작합니다.";
+
+    const B_EC2 = {
+      stopped: "대기 중", pending: "기동 중", starting: "웜업 중",
+      running: "실행 중", stopping: "종료 중",
+    };
+    const B_DOM = { up: "실행 중", partial: "일부 실행", down: "꺼짐" };
+
+    // AC-2 — `/bundles` 가 없어도 `/status`·`/domains` 는 **200 이다**(실측). 있는 사실만 쓴다.
+    // 🔴 여기서 «준비됨» 을 유추하지 않는다. 이 줄이 말하는 것은 EC2 상태와 **그 카드가 여는
+    //    화면의 도메인** 하나뿐이고, 묶음이 필요로 하는 나머지 도메인(iam 등)은 `/bundles`
+    //    만 안다 — ADR-MONO-071 § D5, «EC2 running» 은 «이 기능 준비됨» 이 아니다.
+    function bundleFallback(card) {
+      const ec2 = B_EC2[lastState] || (lastState ? String(lastState) : "확인 중");
+      const a = card.querySelector("[data-surface]");
+      const d = (a && a.dataset) ? a.dataset.domain : null;
+      if (!d) return "EC2 " + ec2;
+      // 🔴 헬스가 stale 이면 어떤 도메인 상태도 안 믿는다(TASK-MONO-551 결함 B).
+      const dst = lastStale ? "응답 없음"
+        : (B_DOM[((lastSnap && lastSnap[d]) || {}).state] || "확인 중");
+      return "EC2 " + ec2 + " · 도메인 " + d + " " + dst;
+    }
+
     function renderCards() {
       for (const card of document.querySelectorAll("[data-bundle]")) {
         const key = card.dataset.bundle;
@@ -532,16 +596,37 @@
         const badge = card.querySelector("[data-bundle-badge]");
         const btn = card.querySelector("[data-bundle-start]");
         const svc = card.querySelector("[data-services]");
+        const note = card.querySelector("[data-bundle-note]");
 
         // 🔵 «기동되는 서비스 목록» 은 **서버가 말한다**(`/bundles` 의 domains). 마크업에
         //    적으면 projects.sh 의 DEPS 가 바뀌는 날 이 페이지만 낡는다 — 그리고 그 거짓은
         //    «무엇이 켜지는지» 라는, 방문자가 확인할 수 없는 축에 앉는다.
         if (svc) svc.textContent = info ? info.domains.join(" · ") : "—";
 
-        const st = info && BLABEL[info.state] ? info.state : "unknown";
+        // 🔴 «아직 안 물어봤다» 가 참인 것은 첫 응답 전까지뿐이다. 그 뒤로는 **답이 있거나
+        //    사유가 있다.** 배지가 이 셋을 구별하지 못하면 화면은 다시 말을 잃는다.
+        const pending = CONTROL_OK && info === null && bundlesErr === null;
+        const st = (info && BLABEL[info.state]) ? info.state : "unknown";
         const [text, cls] = BLABEL[st];
-        if (badge) { badge.className = "badge " + cls; badge.textContent = info ? text : "… 확인 중"; }
+        if (badge) {
+          badge.className = "badge " + (pending ? "b-unknown" : cls);
+          badge.textContent = pending ? "… 확인 중" : text;
+        }
+        if (note) {
+          // 🔴 사유는 **버튼을 안 눌러도** 여기 있다. `#bmsg` 는 `bundleStart()` 안에서만
+          //    채워지는데 그 함수는 버튼을 눌러야 돌고, 이 상황에서 버튼은 잠겨 있다.
+          // 🔵 `#bmsg` 를 여기서 건드리지 않는 이유: 그 칸은 기동 요청의 응답을 들고 있고,
+          //    1.5초 뒤 폴링이 renderCards() 를 부르므로 여기서 쓰면 그 답을 지운다.
+          note.textContent = bundlesErr
+            ? B_ERR[bundlesErr] + B_ERR_TAIL + " (" + bundleFallback(card) + ")"
+            : !CONTROL_OK
+              ? "제어 API 주소가 없어 실시간 기능 기동은 사용할 수 없습니다." + B_ERR_TAIL
+              : "";
+        }
         if (btn) {
+          // 🔴 사유를 말한다고 **버튼을 열지는 않는다.** 열면 눌러서 404 를 받고 «눌렀는데
+          //    아무 일도 안 남» 이 된다 — 지금보다 나쁘다. 「보이게 하는 것」과 「눌리게
+          //    하는 것」은 다른 축이다(AC-2).
           const startable = CONTROL_OK && info !== null && B_STARTABLE.has(st);
           btn.disabled = !startable;
           btn.className = "bstart" + (startable ? " on" : "");
@@ -554,13 +639,28 @@
 
     async function pollBundles() {
       if (!CONTROL_OK) { renderCards(); return; }
+      let r;
       try {
-        const { ok, body } = await api("/bundles");
-        if (!ok) return;
-        lastBundles = body.bundles || null;
-        renderCards();
-      } catch (e) { /* 다음 폴링이 재시도한다 */ }
+        r = await api("/bundles");
+      } catch (e) {
+        // fetch 자체가 안 끝났다(네트워크·타임아웃·CORS). 5xx 와 같은 축 — «응답이 없다».
+        // 🔴 예전 코드는 여기서도 조용히 삼켰다. 다음 폴링이 재시도하는 것은 맞지만,
+        //    **그 사이 화면은 «아직 안 물어봤다» 라고 거짓말한다.**
+        bundlesErr = "down"; lastBundles = null; renderCards(); return;
+      }
+      // 🔴🔴 이 줄이 이 티켓이다. 예전에는 `if (!ok) return;` 이었고 404 를 통째로 삼켰다 —
+      //    같은 파일의 `api()` 주석이 *"상태코드를 버리면 … 사용자는 영원히 «기동 중» 을
+      //    보게 된다"* 라고 이미 금지해 둔 것을, 그 `ok` 를 받아서 버림으로써 어겼다.
+      if (!r.ok) { bundlesErr = (r.status === 404) ? "absent" : "down"; lastBundles = null; renderCards(); return; }  // GUARD-Z34-BITE
+      const b = r.body && r.body.bundles;
+      if (!b || typeof b !== "object") {
+        // 200 인데 모양을 모른다. 🔴 `body.bundles || null` 로 조용히 빈 값을 만들면
+        //    «확인 중» 에 영원히 머문다 — 위 결함의 쌍둥이다.
+        bundlesErr = "shape"; lastBundles = null; renderCards(); return;
+      }
+      bundlesErr = null; lastBundles = b; renderCards();
     }
+    // GUARD-Z34-END
 
     async function bundleStart(name) {
       // 🔴 요구사항의 순서를 그대로 구현한다: ① 필요한 서비스와 현재 상태 확인 →
