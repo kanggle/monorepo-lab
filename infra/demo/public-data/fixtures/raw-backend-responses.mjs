@@ -39,7 +39,7 @@ export const RAW_ARTISTS = [
     debutDate: '2021-03-14',
     agency: 'Aurora Entertainment',
     bio: '2021년 데뷔한 솔로 아티스트입니다. 어쿠스틱 기반의 자작곡을 주로 발표합니다.',
-    profileImageRef: null,
+    profileImageRef: 'https://images.unsplash.com/photo-1618673747378-7e0d3561371a?w=400&h=400&q=80&auto=format&fit=crop&crop=faces',
     createdAt: '2026-01-05T09:00:00Z',
     updatedAt: '2026-01-05T09:00:00Z',
   },
@@ -54,7 +54,7 @@ export const RAW_ARTISTS = [
     debutDate: '2019-08-01',
     agency: 'Aurora Entertainment',
     bio: '프로듀서 겸 솔로 아티스트.',
-    profileImageRef: null,
+    profileImageRef: 'https://images.unsplash.com/photo-1675859427928-fe41277572b4?w=400&h=400&q=80&auto=format&fit=crop&crop=faces',
     createdAt: '2026-01-05T09:00:00Z',
     updatedAt: '2026-01-05T09:00:00Z',
   },
@@ -69,7 +69,62 @@ export const RAW_ARTISTS = [
     debutDate: '2022-05-20',
     agency: 'Aurora Entertainment',
     bio: '그룹 STELLAR 의 리더.',
-    profileImageRef: null,
+    profileImageRef: 'https://images.unsplash.com/photo-1659150140178-d672b4763fd0?w=400&h=400&q=80&auto=format&fit=crop&crop=faces',
+    createdAt: '2026-01-05T09:00:00Z',
+    updatedAt: '2026-01-05T09:00:00Z',
+  },
+  // ── TASK-MONO-638 — 아티스트를 셋에서 여섯으로 늘린다 ────────────────────────
+  // 🔴 셋으로는 「아티스트 목록」이 목록으로 안 보인다. 그리고 잠긴 글이 한 아티스트에게만
+  //    있어서 «로그인하면 더 있다» 가 화면에서 거의 참이 아니었다 — 아래에서 여섯 명 모두
+  //    공개 1 + 잠금 1 을 갖게 한다.
+  // 🔵 프로필 사진은 **소유자 결정(2026-09-08)**: 라이선스 인물사진(Unsplash). 스토어 상품
+  //    이미지와 같은 CDN·같은 계약이라 새 의존이 안 생긴다.
+  // 🔴🔴 **실존 인물을 참고하지 않았다.** 이 아티스트들은 가공 인물이고, 실존 연예인을 닮게
+  //    만들면 실존 인물의 초상이 포트폴리오에 들어간다. 필요한 것은 «그럴듯한 아티스트
+  //    사진» 이지 «누군가를 닮은 사진» 이 아니다.
+  // 🔴 사진 주소는 지어내지 않았다 — 후보를 전부 찔러 200 인 것만 남겼다(56개 중 43개).
+  {
+    id: '0199de80-0000-7000-8000-00000000a004',
+    tenantId: 'fan-platform',
+    accountId: '0199de80-0000-7000-8000-00000000a004',
+    artistType: 'SOLO',
+    status: 'PUBLISHED',
+    stageName: '하린',
+    realName: '정하린',
+    debutDate: '2023-09-08',
+    agency: 'Aurora Entertainment',
+    bio: '신스팝 기반의 솔로 아티스트입니다. 직접 편곡한 무대를 자주 올립니다.',
+    profileImageRef: 'https://images.unsplash.com/photo-1620653616528-7da9a2005478?w=400&h=400&q=80&auto=format&fit=crop&crop=faces',
+    createdAt: '2026-01-05T09:00:00Z',
+    updatedAt: '2026-01-05T09:00:00Z',
+  },
+  {
+    id: '0199de80-0000-7000-8000-00000000a005',
+    tenantId: 'fan-platform',
+    accountId: '0199de80-0000-7000-8000-00000000a005',
+    artistType: 'GROUP_MEMBER',
+    status: 'PUBLISHED',
+    stageName: '리오',
+    realName: '강리오',
+    debutDate: '2022-05-20',
+    agency: 'Aurora Entertainment',
+    bio: '그룹 STELLAR 의 메인 보컬. 커버 무대와 라이브 클립을 자주 올립니다.',
+    profileImageRef: 'https://images.unsplash.com/photo-1619361368198-53f950a51dfa?w=400&h=400&q=80&auto=format&fit=crop&crop=faces',
+    createdAt: '2026-01-05T09:00:00Z',
+    updatedAt: '2026-01-05T09:00:00Z',
+  },
+  {
+    id: '0199de80-0000-7000-8000-00000000a006',
+    tenantId: 'fan-platform',
+    accountId: '0199de80-0000-7000-8000-00000000a006',
+    artistType: 'SOLO',
+    status: 'PUBLISHED',
+    stageName: '유노',
+    realName: '오유노',
+    debutDate: '2020-11-02',
+    agency: 'Nova Sound',
+    bio: '재즈와 알앤비를 오가는 싱어송라이터입니다.',
+    profileImageRef: 'https://images.unsplash.com/photo-1619361369140-33c01702f9cc?w=400&h=400&q=80&auto=format&fit=crop&crop=faces',
     createdAt: '2026-01-05T09:00:00Z',
     updatedAt: '2026-01-05T09:00:00Z',
   },
@@ -147,6 +202,156 @@ export const RAW_POSTS = [
     commentCount: 51,
     publishedAt: '2026-02-11T02:15:00Z',
     createdAt: '2026-02-11T02:15:00Z',
+  },
+  // ── TASK-MONO-638 — 여섯 아티스트가 각각 «공개 1 + 잠금 1» 을 갖는다 ─────────────
+  // 🔴 잠긴 글이 있어야 «로그인하면 더 있다» 가 화면에서 참이 된다. 예전에는 잠긴 글이
+  //    한 아티스트에게만 있어서, 나머지 카드는 그 사실을 보여 줄 방법이 없었다.
+  // 🔴🔴 잠긴 글은 변환기가 `body` 와 `bodyPreview` 를 **둘 다** 지운다(ADR-MONO-070).
+  //    그러므로 아래 잠긴 글들의 본문은 **누출 대조군이기도 하다** — 늘어난 만큼 그
+  //    성질을 시험하는 표본도 늘어난다.
+  {
+    id: '0199de80-0000-7000-8000-00000000b005',
+    postId: '0199de80-0000-7000-8000-00000000b005',
+    tenantId: 'fan-platform',
+    artistId: '0199de80-0000-7000-8000-00000000a002',
+    authorAccountId: '0199de80-0000-7000-8000-00000000a002',
+    postType: 'TEXT',
+    status: 'PUBLISHED',
+    visibility: 'MEMBERS_ONLY',
+    title: '[멤버십] 다음 EP 의 트랙 리스트 초안',
+    body: 'MEMBERS-ONLY-BODY-MUST-NOT-LEAK-005',
+    bodyPreview: 'MEMBERS-ONLY-PREVIEW-MUST-NOT-LEAK-005',
+    locked: true,
+    likeCount: 54,
+    commentCount: 7,
+    publishedAt: '2026-02-11T09:00:00Z',
+    createdAt: '2026-02-11T09:00:00Z',
+  },
+  {
+    id: '0199de80-0000-7000-8000-00000000b006',
+    postId: '0199de80-0000-7000-8000-00000000b006',
+    tenantId: 'fan-platform',
+    artistId: '0199de80-0000-7000-8000-00000000a003',
+    authorAccountId: '0199de80-0000-7000-8000-00000000a003',
+    postType: 'TEXT',
+    status: 'PUBLISHED',
+    visibility: 'MEMBERS_ONLY',
+    title: '[멤버십] 안무 연습실 비하인드',
+    body: 'MEMBERS-ONLY-BODY-MUST-NOT-LEAK-006',
+    bodyPreview: 'MEMBERS-ONLY-PREVIEW-MUST-NOT-LEAK-006',
+    locked: true,
+    likeCount: 91,
+    commentCount: 12,
+    publishedAt: '2026-02-12T09:00:00Z',
+    createdAt: '2026-02-12T09:00:00Z',
+  },
+  {
+    id: '0199de80-0000-7000-8000-00000000b007',
+    postId: '0199de80-0000-7000-8000-00000000b007',
+    tenantId: 'fan-platform',
+    artistId: '0199de80-0000-7000-8000-00000000a004',
+    authorAccountId: '0199de80-0000-7000-8000-00000000a004',
+    postType: 'TEXT',
+    status: 'PUBLISHED',
+    visibility: 'PUBLIC',
+    title: '첫 단독 공연 준비 일지',
+    body: '다음 달 첫 단독 공연을 준비하고 있습니다.\n\n세트리스트를 짜면서 데뷔곡을 어디에 둘지 한참 고민했어요. 결국 마지막 앙코르로 옮겼습니다.',
+    bodyPreview: '다음 달 첫 단독 공연을 준비하고 있습니다…',
+    locked: false,
+    likeCount: 143,
+    commentCount: 21,
+    publishedAt: '2026-02-13T09:00:00Z',
+    createdAt: '2026-02-13T09:00:00Z',
+  },
+  {
+    id: '0199de80-0000-7000-8000-00000000b008',
+    postId: '0199de80-0000-7000-8000-00000000b008',
+    tenantId: 'fan-platform',
+    artistId: '0199de80-0000-7000-8000-00000000a004',
+    authorAccountId: '0199de80-0000-7000-8000-00000000a004',
+    postType: 'TEXT',
+    status: 'PUBLISHED',
+    visibility: 'MEMBERS_ONLY',
+    title: '[멤버십] 리허설 현장 사진',
+    body: 'MEMBERS-ONLY-BODY-MUST-NOT-LEAK-008',
+    bodyPreview: 'MEMBERS-ONLY-PREVIEW-MUST-NOT-LEAK-008',
+    locked: true,
+    likeCount: 67,
+    commentCount: 8,
+    publishedAt: '2026-02-14T09:00:00Z',
+    createdAt: '2026-02-14T09:00:00Z',
+  },
+  {
+    id: '0199de80-0000-7000-8000-00000000b009',
+    postId: '0199de80-0000-7000-8000-00000000b009',
+    tenantId: 'fan-platform',
+    artistId: '0199de80-0000-7000-8000-00000000a005',
+    authorAccountId: '0199de80-0000-7000-8000-00000000a005',
+    postType: 'TEXT',
+    status: 'PUBLISHED',
+    visibility: 'PUBLIC',
+    title: '커버 무대 영상 올렸습니다',
+    body: '요청 많았던 곡으로 커버 무대를 준비했습니다.\n\n원곡의 키를 두 음 내려서 불렀는데, 오히려 제 목소리와는 더 맞는 것 같아요.',
+    bodyPreview: '요청 많았던 곡으로 커버 무대를 준비했습니다…',
+    locked: false,
+    likeCount: 208,
+    commentCount: 33,
+    publishedAt: '2026-02-15T09:00:00Z',
+    createdAt: '2026-02-15T09:00:00Z',
+  },
+  {
+    id: '0199de80-0000-7000-8000-00000000b010',
+    postId: '0199de80-0000-7000-8000-00000000b010',
+    tenantId: 'fan-platform',
+    artistId: '0199de80-0000-7000-8000-00000000a005',
+    authorAccountId: '0199de80-0000-7000-8000-00000000a005',
+    postType: 'TEXT',
+    status: 'PUBLISHED',
+    visibility: 'MEMBERS_ONLY',
+    title: '[멤버십] 연습실 라이브 풀버전',
+    body: 'MEMBERS-ONLY-BODY-MUST-NOT-LEAK-010',
+    bodyPreview: 'MEMBERS-ONLY-PREVIEW-MUST-NOT-LEAK-010',
+    locked: true,
+    likeCount: 88,
+    commentCount: 15,
+    publishedAt: '2026-02-16T09:00:00Z',
+    createdAt: '2026-02-16T09:00:00Z',
+  },
+  {
+    id: '0199de80-0000-7000-8000-00000000b011',
+    postId: '0199de80-0000-7000-8000-00000000b011',
+    tenantId: 'fan-platform',
+    artistId: '0199de80-0000-7000-8000-00000000a006',
+    authorAccountId: '0199de80-0000-7000-8000-00000000a006',
+    postType: 'TEXT',
+    status: 'PUBLISHED',
+    visibility: 'PUBLIC',
+    title: '재즈 편곡 작업 노트',
+    body: '이번 곡은 4비트 스윙으로 시작했다가 결국 보사노바로 바꿨습니다.\n\n리듬을 바꾸니 가사의 호흡이 완전히 달라져서, 멜로디도 절반을 다시 썼어요.',
+    bodyPreview: '이번 곡은 4비트 스윙으로 시작했다가 결국 보사노바로…',
+    locked: false,
+    likeCount: 97,
+    commentCount: 11,
+    publishedAt: '2026-02-17T09:00:00Z',
+    createdAt: '2026-02-17T09:00:00Z',
+  },
+  {
+    id: '0199de80-0000-7000-8000-00000000b012',
+    postId: '0199de80-0000-7000-8000-00000000b012',
+    tenantId: 'fan-platform',
+    artistId: '0199de80-0000-7000-8000-00000000a006',
+    authorAccountId: '0199de80-0000-7000-8000-00000000a006',
+    postType: 'TEXT',
+    status: 'PUBLISHED',
+    visibility: 'MEMBERS_ONLY',
+    title: '[멤버십] 미공개 세션 녹음',
+    body: 'MEMBERS-ONLY-BODY-MUST-NOT-LEAK-012',
+    bodyPreview: 'MEMBERS-ONLY-PREVIEW-MUST-NOT-LEAK-012',
+    locked: true,
+    likeCount: 45,
+    commentCount: 6,
+    publishedAt: '2026-02-18T09:00:00Z',
+    createdAt: '2026-02-18T09:00:00Z',
   },
   {
     // 🔴🔴 **음성 대조군 — 회원 전용 글.** 변환기가 `body` 와 `bodyPreview` 를 **둘 다**
@@ -321,6 +526,177 @@ export const RAW_PRODUCTS = [
       { id: `${C}26`, optionName: 'L 블랙', stock: 40, additionalPrice: 0 },
       { id: `${C}27`, optionName: 'S 베이지', stock: 30, additionalPrice: 0 },
       { id: `${C}28`, optionName: 'M 베이지', stock: 45, additionalPrice: 0 },
+    ],
+  },
+  // ===========================================================================
+  // TASK-MONO-638 — 카테고리별로 «둘러볼 만한» 양까지 채운다
+  // ===========================================================================
+  // 🔴 여섯 리프 카테고리가 각각 1~2개뿐이었다. 그 화면은 «카탈로그» 가 아니라
+  //    «샘플» 로 읽히고, 방문자는 제품이 그 정도인 줄 안다.
+  // 🔴 이미지 주소는 **지어내지 않았다.** Unsplash 검색이 돌려준 실제 id 를 받아
+  //    56개 후보를 전부 찔러 200 인 43개만 남기고 그중에서 골랐다(13개는 죽어 있었다).
+  //    검증 없이 넣었으면 깨진 이미지가 카탈로그에 박혔을 것이다.
+  // 🔵 실제 시드(V19 / h2 V12)에 같은 행이 들어간다 — 두 벌이 갈라지면 방문자가
+  //    «로그인했더니 카탈로그가 줄었다» 를 겪는다. 가드 (z36)가 그 축을 대조한다.
+
+  // ── 상의 (a…04) ─────────────────────────────────────────────────────────────
+  {
+    id: `${P}09`, name: '케이블 니트 스웨터', description: '도톰한 케이블 조직의 라운드넥 니트 스웨터입니다.',
+    price: 79000, status: 'ON_SALE', categoryId: `${CAT}04`, createdAt: '2026-01-11T00:00:00Z',
+    thumbnailUrl: U('1574201635302-388dd92a4c3f'), images: [],
+    variants: [
+      { id: `${C}29`, optionName: 'M 아이보리', stock: 40, additionalPrice: 0 },
+      { id: `${C}30`, optionName: 'L 아이보리', stock: 35, additionalPrice: 0 },
+      { id: `${C}31`, optionName: 'M 차콜', stock: 30, additionalPrice: 0 },
+    ],
+  },
+  {
+    id: `${P}10`, name: '릴랙스 스웨트셔츠', description: '기모 안감의 루즈핏 스웨트셔츠입니다.',
+    price: 52000, status: 'ON_SALE', categoryId: `${CAT}04`, createdAt: '2026-01-12T00:00:00Z',
+    thumbnailUrl: U('1620799140188-3b2a02fd9a77'), images: [],
+    variants: [
+      { id: `${C}32`, optionName: 'M 그레이', stock: 55, additionalPrice: 0 },
+      { id: `${C}33`, optionName: 'L 그레이', stock: 45, additionalPrice: 0 },
+      { id: `${C}34`, optionName: 'L 네이비', stock: 25, additionalPrice: 0 },
+    ],
+  },
+
+  // ── 하의 (a…05) ─────────────────────────────────────────────────────────────
+  {
+    id: `${P}11`, name: '코튼 치노 팬츠', description: '사계절용 코튼 트윌 원단의 스트레이트 치노입니다.',
+    price: 62000, status: 'ON_SALE', categoryId: `${CAT}05`, createdAt: '2026-01-13T00:00:00Z',
+    thumbnailUrl: U('1473966968600-fa801b869a1a'), images: [],
+    variants: [
+      { id: `${C}35`, optionName: '30 베이지', stock: 40, additionalPrice: 0 },
+      { id: `${C}36`, optionName: '32 베이지', stock: 45, additionalPrice: 0 },
+      { id: `${C}37`, optionName: '32 블랙', stock: 35, additionalPrice: 0 },
+    ],
+  },
+  {
+    id: `${P}12`, name: '와이드 슬랙스', description: '드레이프감이 좋은 와이드 핏 슬랙스입니다.',
+    price: 68000, status: 'ON_SALE', categoryId: `${CAT}05`, createdAt: '2026-01-14T00:00:00Z',
+    thumbnailUrl: U('1584865288642-42078afe6942'), images: [],
+    variants: [
+      { id: `${C}38`, optionName: 'S 차콜', stock: 30, additionalPrice: 0 },
+      { id: `${C}39`, optionName: 'M 차콜', stock: 40, additionalPrice: 0 },
+      { id: `${C}40`, optionName: 'M 블랙', stock: 38, additionalPrice: 0 },
+    ],
+  },
+
+  // ── 전자기기 (a…02) ─────────────────────────────────────────────────────────
+  {
+    id: `${P}13`, name: '노이즈 캔슬링 무선 이어버드', description: '액티브 노이즈 캔슬링과 30시간 재생을 지원하는 무선 이어버드입니다.',
+    price: 189000, status: 'ON_SALE', categoryId: `${CAT}02`, createdAt: '2026-01-15T00:00:00Z',
+    thumbnailUrl: U('1572569511254-d8f925fe2cbb'), images: [],
+    variants: [
+      { id: `${C}41`, optionName: '블랙', stock: 60, additionalPrice: 0 },
+      { id: `${C}42`, optionName: '화이트', stock: 45, additionalPrice: 0 },
+    ],
+  },
+  {
+    id: `${P}14`, name: '포터블 블루투스 스피커', description: 'IPX7 방수 등급의 휴대용 블루투스 스피커입니다.',
+    price: 129000, status: 'ON_SALE', categoryId: `${CAT}02`, createdAt: '2026-01-16T00:00:00Z',
+    thumbnailUrl: U('1608043152269-423dbba4e7e1'), images: [],
+    variants: [
+      { id: `${C}43`, optionName: '차콜', stock: 35, additionalPrice: 0 },
+      { id: `${C}44`, optionName: '샌드', stock: 25, additionalPrice: 0 },
+    ],
+  },
+  {
+    id: `${P}15`, name: '스마트워치 7', description: '심박·수면·운동 추적을 지원하는 스마트워치입니다.',
+    price: 349000, status: 'ON_SALE', categoryId: `${CAT}02`, createdAt: '2026-01-17T00:00:00Z',
+    thumbnailUrl: U('1579586337278-3befd40fd17a'), images: [],
+    variants: [
+      { id: `${C}45`, optionName: '41mm 실버', stock: 30, additionalPrice: 0 },
+      { id: `${C}46`, optionName: '45mm 실버', stock: 22, additionalPrice: 40000 },
+      { id: `${C}47`, optionName: '45mm 블랙', stock: 18, additionalPrice: 40000 },
+    ],
+  },
+
+  // ── 식품 (a…03) ─────────────────────────────────────────────────────────────
+  {
+    id: `${P}16`, name: '스페셜티 원두 500g', description: '에티오피아 싱글 오리진, 미디엄 로스팅 원두입니다.',
+    price: 24000, status: 'ON_SALE', categoryId: `${CAT}03`, createdAt: '2026-01-18T00:00:00Z',
+    thumbnailUrl: U('1447933601403-0c6688de566e'), images: [],
+    variants: [
+      { id: `${C}48`, optionName: '홀빈', stock: 80, additionalPrice: 0 },
+      { id: `${C}49`, optionName: '분쇄', stock: 60, additionalPrice: 0 },
+    ],
+  },
+  {
+    id: `${P}17`, name: '엑스트라 버진 올리브오일 500ml', description: '콜드 프레스 방식으로 착유한 엑스트라 버진 올리브오일입니다.',
+    price: 32000, status: 'ON_SALE', categoryId: `${CAT}03`, createdAt: '2026-01-19T00:00:00Z',
+    thumbnailUrl: U('1474979266404-7eaacbcd87c5'), images: [],
+    variants: [
+      { id: `${C}50`, optionName: '500ml', stock: 50, additionalPrice: 0 },
+      { id: `${C}51`, optionName: '750ml', stock: 30, additionalPrice: 12000 },
+    ],
+  },
+  {
+    id: `${P}18`, name: '유기농 벌꿀 600g', description: '국내 산지에서 채밀한 유기농 아카시아 벌꿀입니다.',
+    price: 28000, status: 'ON_SALE', categoryId: `${CAT}03`, createdAt: '2026-01-20T00:00:00Z',
+    thumbnailUrl: U('1587049352851-8d4e89133924'), images: [],
+    variants: [
+      { id: `${C}52`, optionName: '600g', stock: 45, additionalPrice: 0 },
+      { id: `${C}53`, optionName: '1.2kg', stock: 20, additionalPrice: 22000 },
+    ],
+  },
+
+  // ── 스마트폰 (a…06) ─────────────────────────────────────────────────────────
+  {
+    id: `${P}19`, name: '아이폰 17 프로', description: '티타늄 프레임과 개선된 카메라 시스템을 갖춘 프리미엄 스마트폰입니다.',
+    price: 1690000, status: 'ON_SALE', categoryId: `${CAT}06`, createdAt: '2026-01-21T00:00:00Z',
+    thumbnailUrl: U('1592890288564-76628a30a657'), images: [],
+    variants: [
+      { id: `${C}54`, optionName: '256GB 티타늄', stock: 25, additionalPrice: 0 },
+      { id: `${C}55`, optionName: '512GB 티타늄', stock: 15, additionalPrice: 250000 },
+    ],
+  },
+  {
+    id: `${P}20`, name: '픽셀 10 프로', description: 'AI 사진 보정에 강점을 둔 안드로이드 플래그십입니다.',
+    price: 1290000, status: 'ON_SALE', categoryId: `${CAT}06`, createdAt: '2026-01-22T00:00:00Z',
+    thumbnailUrl: U('1511707171634-5f897ff02aa9'), images: [],
+    variants: [
+      { id: `${C}56`, optionName: '128GB', stock: 30, additionalPrice: 0 },
+      { id: `${C}57`, optionName: '256GB', stock: 20, additionalPrice: 150000 },
+    ],
+  },
+  {
+    id: `${P}21`, name: '폴더블 스마트폰 Z6', description: '펼치면 7.6인치가 되는 폴더블 스마트폰입니다.',
+    price: 2090000, status: 'ON_SALE', categoryId: `${CAT}06`, createdAt: '2026-01-23T00:00:00Z',
+    thumbnailUrl: U('1598327105666-5b89351aff97'), images: [],
+    variants: [
+      { id: `${C}58`, optionName: '256GB 그라파이트', stock: 12, additionalPrice: 0 },
+      { id: `${C}59`, optionName: '512GB 그라파이트', stock: 8, additionalPrice: 280000 },
+    ],
+  },
+
+  // ── 노트북 (a…07) ───────────────────────────────────────────────────────────
+  {
+    id: `${P}22`, name: '울트라북 14인치', description: '1.1kg 무게의 휴대성 중심 14인치 울트라북입니다.',
+    price: 1890000, status: 'ON_SALE', categoryId: `${CAT}07`, createdAt: '2026-01-24T00:00:00Z',
+    thumbnailUrl: U('1525547719571-a2d4ac8945e2'), images: [],
+    variants: [
+      { id: `${C}60`, optionName: '16GB/512GB', stock: 20, additionalPrice: 0 },
+      { id: `${C}61`, optionName: '32GB/1TB', stock: 10, additionalPrice: 450000 },
+    ],
+  },
+  {
+    id: `${P}23`, name: '게이밍 노트북 16인치', description: '고주사율 디스플레이와 외장 그래픽을 갖춘 게이밍 노트북입니다.',
+    price: 2590000, status: 'ON_SALE', categoryId: `${CAT}07`, createdAt: '2026-01-25T00:00:00Z',
+    thumbnailUrl: U('1496181133206-80ce9b88a853'), images: [],
+    variants: [
+      { id: `${C}62`, optionName: '16GB/1TB', stock: 14, additionalPrice: 0 },
+      { id: `${C}63`, optionName: '32GB/1TB', stock: 9, additionalPrice: 380000 },
+    ],
+  },
+  {
+    id: `${P}24`, name: '2-in-1 컨버터블 노트북', description: '360도 힌지와 펜 입력을 지원하는 컨버터블 노트북입니다.',
+    price: 1490000, status: 'ON_SALE', categoryId: `${CAT}07`, createdAt: '2026-01-26T00:00:00Z',
+    thumbnailUrl: U('1486312338219-ce68d2c6f44d'), images: [],
+    variants: [
+      { id: `${C}64`, optionName: '16GB/512GB', stock: 18, additionalPrice: 0 },
+      { id: `${C}65`, optionName: '16GB/1TB', stock: 11, additionalPrice: 200000 },
     ],
   },
   {

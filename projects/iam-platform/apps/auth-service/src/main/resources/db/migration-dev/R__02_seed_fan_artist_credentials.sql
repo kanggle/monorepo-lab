@@ -100,4 +100,25 @@ INSERT IGNORE INTO credentials (
     'fan-platform', '0199de80-0000-7000-8000-00000000a003', 'sea@demo.com',
     '$argon2id$v=16$m=65536,t=3,p=1$NR1Seql5fgXB0hQ7CmpFL6RyiXvL86lxeZCobfiBdRxzRlTkkcv6iIZDJq9eQ32QmKQMylwsG+IP25S1aaw9vw$kTFrCq8cQG4HVUKioosaD88eiXZkQesTp5Xc8yylaSM',
     'argon2id', NOW(6), NOW(6), 0
+),
+-- TASK-MONO-638 — 아티스트를 셋에서 여섯으로 늘렸다. 🔴 자격증명이 없으면 그 아티스트는
+-- 로그인할 수 없고, seed-fan.sh 가 ARTIST_POST 를 **본인 로그인으로** 발행하므로
+-- 디렉터리에만 있고 글이 하나도 없는 아티스트가 된다.
+(
+    'fan-platform', '0199de80-0000-7000-8000-00000000a004', 'harin@demo.com',
+    '$argon2id$v=16$m=65536,t=3,p=1$NR1Seql5fgXB0hQ7CmpFL6RyiXvL86lxeZCobfiBdRxzRlTkkcv6iIZDJq9eQ32QmKQMylwsG+IP25S1aaw9vw$kTFrCq8cQG4HVUKioosaD88eiXZkQesTp5Xc8yylaSM',
+    'argon2id', NOW(6), NOW(6), 0
+)
+),
+(
+    'fan-platform', '0199de80-0000-7000-8000-00000000a005', 'rio@demo.com',
+    '$argon2id$v=16$m=65536,t=3,p=1$NR1Seql5fgXB0hQ7CmpFL6RyiXvL86lxeZCobfiBdRxzRlTkkcv6iIZDJq9eQ32QmKQMylwsG+IP25S1aaw9vw$kTFrCq8cQG4HVUKioosaD88eiXZkQesTp5Xc8yylaSM',
+    'argon2id', NOW(6), NOW(6), 0
+)
+),
+(
+    'fan-platform', '0199de80-0000-7000-8000-00000000a006', 'yuno@demo.com',
+    '$argon2id$v=16$m=65536,t=3,p=1$NR1Seql5fgXB0hQ7CmpFL6RyiXvL86lxeZCobfiBdRxzRlTkkcv6iIZDJq9eQ32QmKQMylwsG+IP25S1aaw9vw$kTFrCq8cQG4HVUKioosaD88eiXZkQesTp5Xc8yylaSM',
+    'argon2id', NOW(6), NOW(6), 0
+)
 );

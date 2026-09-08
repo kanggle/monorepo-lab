@@ -228,6 +228,7 @@ jobs:
       #    값이라 그 잡은 한 번도 안 돌고, PR 은 초록으로 보인다. 그 실패 모드가 이
       #    티켓이 고치는 결함과 같은 부류다 — «선언은 있는데 실제로는 없다».
       package-script-targets: ${{ steps.filter.outputs.package-script-targets }}
+      seed-catalogue-parity: ${{ steps.filter.outputs.seed-catalogue-parity }}
       # TASK-MONO-518: raw filter, NOT AND-combined with `code-changed`. Every arrival
       # path for this drift is non-code — a task file moving into `done/`, a row edited
       # in the walkthrough, or the guard/exception list itself. AND-ing with
@@ -569,6 +570,15 @@ jobs:
               - '**/package.json'
               - '.gitignore'
               - 'scripts/check-package-script-targets.sh'
+            # TASK-MONO-638: 공개 카탈로그가 **세 곳**에 있다 — 번들 시드(백엔드 없이 보이는
+            # 것)와 실제 시드 둘(postgres · h2). 한쪽만 늘리면 아무 에러도 안 나고, 대신
+            # 방문자가 «로그인했더니 카탈로그가 줄었다» 를 겪는다.
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            seed-catalogue-parity:
+              - 'infra/demo/public-data/snapshots/store.json'
+              - 'infra/demo/public-data/fixtures/**'
+              - 'projects/ecommerce-microservices-platform/apps/product-service/src/main/resources/db/**'
+              - 'scripts/check-seed-catalogue-parity.sh'
             # TASK-MONO-461: controller web-slice naming (*ControllerSliceTest).
             # Triggers on any test .java (a mis-named slice arrives there), the spec,
             # and the guard script. Pure-positive (no negation — MONO-074/075 quirk
@@ -1187,6 +1197,29 @@ jobs:
 
       - name: Guard — every referenced local script is tracked
         run: bash scripts/check-package-script-targets.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-638. 공개 카탈로그의 두 벌(번들 시드 ↔ 실제 시드 postgres/h2)이 갈라지지
+  # 않는가. 🔴 갈라져도 아무 에러가 안 난다 — 방문자가 기동 전후로 다른 카탈로그를 볼 뿐이고,
+  #    그 화면은 «고장» 으로 읽히지만 로그도 테스트도 아무 말을 안 한다.
+  # ---------------------------------------------------------------------------
+  seed-catalogue-parity:
+    name: Public catalogue does not split between bundled and real seed
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.seed-catalogue-parity == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-seed-catalogue-parity.sh
+
+      - name: Self-test the predicate (bites on the real tree, mutated)
+        run: bash scripts/check-seed-catalogue-parity.sh --self-test
+
+      - name: Guard — bundled seed and real seed carry the same product ids
+        run: bash scripts/check-seed-catalogue-parity.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-570. A composite `Service Type` must sit in ONE backtick span.

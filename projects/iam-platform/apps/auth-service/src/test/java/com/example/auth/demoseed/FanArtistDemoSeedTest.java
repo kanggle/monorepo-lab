@@ -85,7 +85,7 @@ class FanArtistDemoSeedTest {
 
     /** seed-fan.sh: ARTIST_A="0199de80-..." */
     private static final Pattern SEED_ARTIST_ID = Pattern.compile(
-            "^ARTIST_([A-C])=\"([0-9a-f-]{36})\"", Pattern.MULTILINE);
+            "^ARTIST_([A-F])=\"([0-9a-f-]{36})\"", Pattern.MULTILINE);
 
     private final PasswordHasher hasher = new Argon2idPasswordHasher();
 
@@ -144,11 +144,13 @@ class FanArtistDemoSeedTest {
     }
 
     @Test
-    @DisplayName("three artist credentials, all in the fan tenant, each with its own email")
-    void credentialsCoverTheThreeDemoArtists() throws IOException {
+    @DisplayName("six artist credentials, all in the fan tenant, each with its own email")
+    void credentialsCoverTheSixDemoArtists() throws IOException {
         List<SeededCredential> rows = parseCredentials();
 
-        assertThat(rows).hasSize(3);
+        // TASK-MONO-638: 셋 → 여섯. 🔴 이 수는 «비어 있지 않음» 을 재는 바닥이지
+        // «정확히 몇 명인가» 라는 제품 사실이 아니다 — 아티스트를 늘릴 때 함께 올린다.
+        assertThat(rows).hasSize(6);
         assertThat(rows).extracting(SeededCredential::tenantId).containsOnly(FAN_TENANT);
         // UNIQUE (tenant_id, email) since V0007 — and a shared email in one tenant would
         // also collide with the demo consumer credential R__01 already seeds there.
@@ -225,10 +227,10 @@ class FanArtistDemoSeedTest {
         List<String> demoSeedIds = parseDemoSeedArtistIds();
 
         assertThat(demoSeedIds)
-                .as("seed-fan.sh must still declare ARTIST_A/B/C as literal ids — if that "
+                .as("seed-fan.sh must still declare ARTIST_A..F as literal ids — if that "
                         + "changed, this guard is measuring nothing (0 parsed rows would "
                         + "otherwise pass a containsAll against an empty list)")
-                .hasSize(3);
+                .hasSize(6);
         assertThat(accountIds)
                 .as("TASK-FAN-BE-045 backfilled artists.account_id := artists.id, and this "
                         + "ticket makes that value a REAL IAM subject by provisioning the "

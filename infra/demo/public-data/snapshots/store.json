@@ -6,7 +6,7 @@
   "source": "bundled",
   "origin": "repo-bundled",
   "coverage": {
-    "products": 8,
+    "products": 24,
     "categories": 6
   },
   "collectionStatus": {
@@ -266,38 +266,447 @@
         ],
         "searchText": "와이드핏 슬랙스 구김이 적은 폴리 소재의 와이드핏 슬랙스입니다. a0000000-0000-0000-0000-000000000005 s 블랙 m 블랙 l 블랙 s 베이지 m 베이지",
         "createdAt": "2026-01-09T00:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000009",
+        "name": "케이블 니트 스웨터",
+        "description": "도톰한 케이블 조직의 라운드넥 니트 스웨터입니다.",
+        "status": "ON_SALE",
+        "price": 79000,
+        "thumbnailUrl": "https://images.unsplash.com/photo-1574201635302-388dd92a4c3f?w=600&q=80&auto=format&fit=crop",
+        "images": [],
+        "categoryId": "a0000000-0000-0000-0000-000000000004",
+        "options": [
+          {
+            "id": "c0000000-0000-0000-0000-000000000029",
+            "optionName": "M 아이보리",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000030",
+            "optionName": "L 아이보리",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000031",
+            "optionName": "M 차콜",
+            "additionalPrice": 0
+          }
+        ],
+        "searchText": "케이블 니트 스웨터 도톰한 케이블 조직의 라운드넥 니트 스웨터입니다. a0000000-0000-0000-0000-000000000004 m 아이보리 l 아이보리 m 차콜",
+        "createdAt": "2026-01-11T00:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000010",
+        "name": "릴랙스 스웨트셔츠",
+        "description": "기모 안감의 루즈핏 스웨트셔츠입니다.",
+        "status": "ON_SALE",
+        "price": 52000,
+        "thumbnailUrl": "https://images.unsplash.com/photo-1620799140188-3b2a02fd9a77?w=600&q=80&auto=format&fit=crop",
+        "images": [],
+        "categoryId": "a0000000-0000-0000-0000-000000000004",
+        "options": [
+          {
+            "id": "c0000000-0000-0000-0000-000000000032",
+            "optionName": "M 그레이",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000033",
+            "optionName": "L 그레이",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000034",
+            "optionName": "L 네이비",
+            "additionalPrice": 0
+          }
+        ],
+        "searchText": "릴랙스 스웨트셔츠 기모 안감의 루즈핏 스웨트셔츠입니다. a0000000-0000-0000-0000-000000000004 m 그레이 l 그레이 l 네이비",
+        "createdAt": "2026-01-12T00:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000011",
+        "name": "코튼 치노 팬츠",
+        "description": "사계절용 코튼 트윌 원단의 스트레이트 치노입니다.",
+        "status": "ON_SALE",
+        "price": 62000,
+        "thumbnailUrl": "https://images.unsplash.com/photo-1473966968600-fa801b869a1a?w=600&q=80&auto=format&fit=crop",
+        "images": [],
+        "categoryId": "a0000000-0000-0000-0000-000000000005",
+        "options": [
+          {
+            "id": "c0000000-0000-0000-0000-000000000035",
+            "optionName": "30 베이지",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000036",
+            "optionName": "32 베이지",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000037",
+            "optionName": "32 블랙",
+            "additionalPrice": 0
+          }
+        ],
+        "searchText": "코튼 치노 팬츠 사계절용 코튼 트윌 원단의 스트레이트 치노입니다. a0000000-0000-0000-0000-000000000005 30 베이지 32 베이지 32 블랙",
+        "createdAt": "2026-01-13T00:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000012",
+        "name": "와이드 슬랙스",
+        "description": "드레이프감이 좋은 와이드 핏 슬랙스입니다.",
+        "status": "ON_SALE",
+        "price": 68000,
+        "thumbnailUrl": "https://images.unsplash.com/photo-1584865288642-42078afe6942?w=600&q=80&auto=format&fit=crop",
+        "images": [],
+        "categoryId": "a0000000-0000-0000-0000-000000000005",
+        "options": [
+          {
+            "id": "c0000000-0000-0000-0000-000000000038",
+            "optionName": "S 차콜",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000039",
+            "optionName": "M 차콜",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000040",
+            "optionName": "M 블랙",
+            "additionalPrice": 0
+          }
+        ],
+        "searchText": "와이드 슬랙스 드레이프감이 좋은 와이드 핏 슬랙스입니다. a0000000-0000-0000-0000-000000000005 s 차콜 m 차콜 m 블랙",
+        "createdAt": "2026-01-14T00:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000013",
+        "name": "노이즈 캔슬링 무선 이어버드",
+        "description": "액티브 노이즈 캔슬링과 30시간 재생을 지원하는 무선 이어버드입니다.",
+        "status": "ON_SALE",
+        "price": 189000,
+        "thumbnailUrl": "https://images.unsplash.com/photo-1572569511254-d8f925fe2cbb?w=600&q=80&auto=format&fit=crop",
+        "images": [],
+        "categoryId": "a0000000-0000-0000-0000-000000000002",
+        "options": [
+          {
+            "id": "c0000000-0000-0000-0000-000000000041",
+            "optionName": "블랙",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000042",
+            "optionName": "화이트",
+            "additionalPrice": 0
+          }
+        ],
+        "searchText": "노이즈 캔슬링 무선 이어버드 액티브 노이즈 캔슬링과 30시간 재생을 지원하는 무선 이어버드입니다. a0000000-0000-0000-0000-000000000002 블랙 화이트",
+        "createdAt": "2026-01-15T00:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000014",
+        "name": "포터블 블루투스 스피커",
+        "description": "IPX7 방수 등급의 휴대용 블루투스 스피커입니다.",
+        "status": "ON_SALE",
+        "price": 129000,
+        "thumbnailUrl": "https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=600&q=80&auto=format&fit=crop",
+        "images": [],
+        "categoryId": "a0000000-0000-0000-0000-000000000002",
+        "options": [
+          {
+            "id": "c0000000-0000-0000-0000-000000000043",
+            "optionName": "차콜",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000044",
+            "optionName": "샌드",
+            "additionalPrice": 0
+          }
+        ],
+        "searchText": "포터블 블루투스 스피커 ipx7 방수 등급의 휴대용 블루투스 스피커입니다. a0000000-0000-0000-0000-000000000002 차콜 샌드",
+        "createdAt": "2026-01-16T00:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000015",
+        "name": "스마트워치 7",
+        "description": "심박·수면·운동 추적을 지원하는 스마트워치입니다.",
+        "status": "ON_SALE",
+        "price": 349000,
+        "thumbnailUrl": "https://images.unsplash.com/photo-1579586337278-3befd40fd17a?w=600&q=80&auto=format&fit=crop",
+        "images": [],
+        "categoryId": "a0000000-0000-0000-0000-000000000002",
+        "options": [
+          {
+            "id": "c0000000-0000-0000-0000-000000000045",
+            "optionName": "41mm 실버",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000046",
+            "optionName": "45mm 실버",
+            "additionalPrice": 40000
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000047",
+            "optionName": "45mm 블랙",
+            "additionalPrice": 40000
+          }
+        ],
+        "searchText": "스마트워치 7 심박·수면·운동 추적을 지원하는 스마트워치입니다. a0000000-0000-0000-0000-000000000002 41mm 실버 45mm 실버 45mm 블랙",
+        "createdAt": "2026-01-17T00:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000016",
+        "name": "스페셜티 원두 500g",
+        "description": "에티오피아 싱글 오리진, 미디엄 로스팅 원두입니다.",
+        "status": "ON_SALE",
+        "price": 24000,
+        "thumbnailUrl": "https://images.unsplash.com/photo-1447933601403-0c6688de566e?w=600&q=80&auto=format&fit=crop",
+        "images": [],
+        "categoryId": "a0000000-0000-0000-0000-000000000003",
+        "options": [
+          {
+            "id": "c0000000-0000-0000-0000-000000000048",
+            "optionName": "홀빈",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000049",
+            "optionName": "분쇄",
+            "additionalPrice": 0
+          }
+        ],
+        "searchText": "스페셜티 원두 500g 에티오피아 싱글 오리진, 미디엄 로스팅 원두입니다. a0000000-0000-0000-0000-000000000003 홀빈 분쇄",
+        "createdAt": "2026-01-18T00:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000017",
+        "name": "엑스트라 버진 올리브오일 500ml",
+        "description": "콜드 프레스 방식으로 착유한 엑스트라 버진 올리브오일입니다.",
+        "status": "ON_SALE",
+        "price": 32000,
+        "thumbnailUrl": "https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=600&q=80&auto=format&fit=crop",
+        "images": [],
+        "categoryId": "a0000000-0000-0000-0000-000000000003",
+        "options": [
+          {
+            "id": "c0000000-0000-0000-0000-000000000050",
+            "optionName": "500ml",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000051",
+            "optionName": "750ml",
+            "additionalPrice": 12000
+          }
+        ],
+        "searchText": "엑스트라 버진 올리브오일 500ml 콜드 프레스 방식으로 착유한 엑스트라 버진 올리브오일입니다. a0000000-0000-0000-0000-000000000003 500ml 750ml",
+        "createdAt": "2026-01-19T00:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000018",
+        "name": "유기농 벌꿀 600g",
+        "description": "국내 산지에서 채밀한 유기농 아카시아 벌꿀입니다.",
+        "status": "ON_SALE",
+        "price": 28000,
+        "thumbnailUrl": "https://images.unsplash.com/photo-1587049352851-8d4e89133924?w=600&q=80&auto=format&fit=crop",
+        "images": [],
+        "categoryId": "a0000000-0000-0000-0000-000000000003",
+        "options": [
+          {
+            "id": "c0000000-0000-0000-0000-000000000052",
+            "optionName": "600g",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000053",
+            "optionName": "1.2kg",
+            "additionalPrice": 22000
+          }
+        ],
+        "searchText": "유기농 벌꿀 600g 국내 산지에서 채밀한 유기농 아카시아 벌꿀입니다. a0000000-0000-0000-0000-000000000003 600g 1.2kg",
+        "createdAt": "2026-01-20T00:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000019",
+        "name": "아이폰 17 프로",
+        "description": "티타늄 프레임과 개선된 카메라 시스템을 갖춘 프리미엄 스마트폰입니다.",
+        "status": "ON_SALE",
+        "price": 1690000,
+        "thumbnailUrl": "https://images.unsplash.com/photo-1592890288564-76628a30a657?w=600&q=80&auto=format&fit=crop",
+        "images": [],
+        "categoryId": "a0000000-0000-0000-0000-000000000006",
+        "options": [
+          {
+            "id": "c0000000-0000-0000-0000-000000000054",
+            "optionName": "256GB 티타늄",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000055",
+            "optionName": "512GB 티타늄",
+            "additionalPrice": 250000
+          }
+        ],
+        "searchText": "아이폰 17 프로 티타늄 프레임과 개선된 카메라 시스템을 갖춘 프리미엄 스마트폰입니다. a0000000-0000-0000-0000-000000000006 256gb 티타늄 512gb 티타늄",
+        "createdAt": "2026-01-21T00:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000020",
+        "name": "픽셀 10 프로",
+        "description": "AI 사진 보정에 강점을 둔 안드로이드 플래그십입니다.",
+        "status": "ON_SALE",
+        "price": 1290000,
+        "thumbnailUrl": "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600&q=80&auto=format&fit=crop",
+        "images": [],
+        "categoryId": "a0000000-0000-0000-0000-000000000006",
+        "options": [
+          {
+            "id": "c0000000-0000-0000-0000-000000000056",
+            "optionName": "128GB",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000057",
+            "optionName": "256GB",
+            "additionalPrice": 150000
+          }
+        ],
+        "searchText": "픽셀 10 프로 ai 사진 보정에 강점을 둔 안드로이드 플래그십입니다. a0000000-0000-0000-0000-000000000006 128gb 256gb",
+        "createdAt": "2026-01-22T00:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000021",
+        "name": "폴더블 스마트폰 Z6",
+        "description": "펼치면 7.6인치가 되는 폴더블 스마트폰입니다.",
+        "status": "ON_SALE",
+        "price": 2090000,
+        "thumbnailUrl": "https://images.unsplash.com/photo-1598327105666-5b89351aff97?w=600&q=80&auto=format&fit=crop",
+        "images": [],
+        "categoryId": "a0000000-0000-0000-0000-000000000006",
+        "options": [
+          {
+            "id": "c0000000-0000-0000-0000-000000000058",
+            "optionName": "256GB 그라파이트",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000059",
+            "optionName": "512GB 그라파이트",
+            "additionalPrice": 280000
+          }
+        ],
+        "searchText": "폴더블 스마트폰 z6 펼치면 7.6인치가 되는 폴더블 스마트폰입니다. a0000000-0000-0000-0000-000000000006 256gb 그라파이트 512gb 그라파이트",
+        "createdAt": "2026-01-23T00:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000022",
+        "name": "울트라북 14인치",
+        "description": "1.1kg 무게의 휴대성 중심 14인치 울트라북입니다.",
+        "status": "ON_SALE",
+        "price": 1890000,
+        "thumbnailUrl": "https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?w=600&q=80&auto=format&fit=crop",
+        "images": [],
+        "categoryId": "a0000000-0000-0000-0000-000000000007",
+        "options": [
+          {
+            "id": "c0000000-0000-0000-0000-000000000060",
+            "optionName": "16GB/512GB",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000061",
+            "optionName": "32GB/1TB",
+            "additionalPrice": 450000
+          }
+        ],
+        "searchText": "울트라북 14인치 1.1kg 무게의 휴대성 중심 14인치 울트라북입니다. a0000000-0000-0000-0000-000000000007 16gb/512gb 32gb/1tb",
+        "createdAt": "2026-01-24T00:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000023",
+        "name": "게이밍 노트북 16인치",
+        "description": "고주사율 디스플레이와 외장 그래픽을 갖춘 게이밍 노트북입니다.",
+        "status": "ON_SALE",
+        "price": 2590000,
+        "thumbnailUrl": "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=600&q=80&auto=format&fit=crop",
+        "images": [],
+        "categoryId": "a0000000-0000-0000-0000-000000000007",
+        "options": [
+          {
+            "id": "c0000000-0000-0000-0000-000000000062",
+            "optionName": "16GB/1TB",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000063",
+            "optionName": "32GB/1TB",
+            "additionalPrice": 380000
+          }
+        ],
+        "searchText": "게이밍 노트북 16인치 고주사율 디스플레이와 외장 그래픽을 갖춘 게이밍 노트북입니다. a0000000-0000-0000-0000-000000000007 16gb/1tb 32gb/1tb",
+        "createdAt": "2026-01-25T00:00:00Z"
+      },
+      {
+        "id": "b0000000-0000-0000-0000-000000000024",
+        "name": "2-in-1 컨버터블 노트북",
+        "description": "360도 힌지와 펜 입력을 지원하는 컨버터블 노트북입니다.",
+        "status": "ON_SALE",
+        "price": 1490000,
+        "thumbnailUrl": "https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=600&q=80&auto=format&fit=crop",
+        "images": [],
+        "categoryId": "a0000000-0000-0000-0000-000000000007",
+        "options": [
+          {
+            "id": "c0000000-0000-0000-0000-000000000064",
+            "optionName": "16GB/512GB",
+            "additionalPrice": 0
+          },
+          {
+            "id": "c0000000-0000-0000-0000-000000000065",
+            "optionName": "16GB/1TB",
+            "additionalPrice": 200000
+          }
+        ],
+        "searchText": "2-in-1 컨버터블 노트북 360도 힌지와 펜 입력을 지원하는 컨버터블 노트북입니다. a0000000-0000-0000-0000-000000000007 16gb/512gb 16gb/1tb",
+        "createdAt": "2026-01-26T00:00:00Z"
       }
     ],
     "categories": [
       {
-        "id": "a0000000-0000-0000-0000-000000000004",
-        "name": "상의",
-        "productCount": 2
-      },
-      {
-        "id": "a0000000-0000-0000-0000-000000000005",
-        "name": "하의",
-        "productCount": 2
-      },
-      {
         "id": "a0000000-0000-0000-0000-000000000002",
         "name": "전자기기",
-        "productCount": 1
+        "productCount": 4
       },
       {
         "id": "a0000000-0000-0000-0000-000000000003",
         "name": "식품",
-        "productCount": 1
+        "productCount": 4
+      },
+      {
+        "id": "a0000000-0000-0000-0000-000000000004",
+        "name": "상의",
+        "productCount": 4
+      },
+      {
+        "id": "a0000000-0000-0000-0000-000000000005",
+        "name": "하의",
+        "productCount": 4
       },
       {
         "id": "a0000000-0000-0000-0000-000000000006",
         "name": "스마트폰",
-        "productCount": 1
+        "productCount": 4
       },
       {
         "id": "a0000000-0000-0000-0000-000000000007",
         "name": "노트북",
-        "productCount": 1
+        "productCount": 4
       }
     ]
   }

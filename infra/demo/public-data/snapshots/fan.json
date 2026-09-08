@@ -6,8 +6,8 @@
   "source": "bundled",
   "origin": "repo-bundled",
   "coverage": {
-    "artists": 3,
-    "posts": 4,
+    "artists": 6,
+    "posts": 12,
     "membershipPlans": 2
   },
   "collectionStatus": {
@@ -24,7 +24,7 @@
         "agency": "Aurora Entertainment",
         "debutDate": "2021-03-14",
         "bio": "2021년 데뷔한 솔로 아티스트입니다. 어쿠스틱 기반의 자작곡을 주로 발표합니다.",
-        "profileImageUrl": null,
+        "profileImageUrl": "https://images.unsplash.com/photo-1618673747378-7e0d3561371a?w=400&h=400&q=80&auto=format&fit=crop&crop=faces",
         "searchText": "루미 aurora entertainment 2021년 데뷔한 솔로 아티스트입니다. 어쿠스틱 기반의 자작곡을 주로 발표합니다."
       },
       {
@@ -34,7 +34,7 @@
         "agency": "Aurora Entertainment",
         "debutDate": "2019-08-01",
         "bio": "프로듀서 겸 솔로 아티스트.",
-        "profileImageUrl": null,
+        "profileImageUrl": "https://images.unsplash.com/photo-1675859427928-fe41277572b4?w=400&h=400&q=80&auto=format&fit=crop&crop=faces",
         "searchText": "노아 aurora entertainment 프로듀서 겸 솔로 아티스트."
       },
       {
@@ -44,11 +44,129 @@
         "agency": "Aurora Entertainment",
         "debutDate": "2022-05-20",
         "bio": "그룹 STELLAR 의 리더.",
-        "profileImageUrl": null,
+        "profileImageUrl": "https://images.unsplash.com/photo-1659150140178-d672b4763fd0?w=400&h=400&q=80&auto=format&fit=crop&crop=faces",
         "searchText": "세아 aurora entertainment 그룹 stellar 의 리더."
+      },
+      {
+        "id": "0199de80-0000-7000-8000-00000000a004",
+        "stageName": "하린",
+        "artistType": "SOLO",
+        "agency": "Aurora Entertainment",
+        "debutDate": "2023-09-08",
+        "bio": "신스팝 기반의 솔로 아티스트입니다. 직접 편곡한 무대를 자주 올립니다.",
+        "profileImageUrl": "https://images.unsplash.com/photo-1620653616528-7da9a2005478?w=400&h=400&q=80&auto=format&fit=crop&crop=faces",
+        "searchText": "하린 aurora entertainment 신스팝 기반의 솔로 아티스트입니다. 직접 편곡한 무대를 자주 올립니다."
+      },
+      {
+        "id": "0199de80-0000-7000-8000-00000000a005",
+        "stageName": "리오",
+        "artistType": "GROUP_MEMBER",
+        "agency": "Aurora Entertainment",
+        "debutDate": "2022-05-20",
+        "bio": "그룹 STELLAR 의 메인 보컬. 커버 무대와 라이브 클립을 자주 올립니다.",
+        "profileImageUrl": "https://images.unsplash.com/photo-1619361368198-53f950a51dfa?w=400&h=400&q=80&auto=format&fit=crop&crop=faces",
+        "searchText": "리오 aurora entertainment 그룹 stellar 의 메인 보컬. 커버 무대와 라이브 클립을 자주 올립니다."
+      },
+      {
+        "id": "0199de80-0000-7000-8000-00000000a006",
+        "stageName": "유노",
+        "artistType": "SOLO",
+        "agency": "Nova Sound",
+        "debutDate": "2020-11-02",
+        "bio": "재즈와 알앤비를 오가는 싱어송라이터입니다.",
+        "profileImageUrl": "https://images.unsplash.com/photo-1619361369140-33c01702f9cc?w=400&h=400&q=80&auto=format&fit=crop&crop=faces",
+        "searchText": "유노 nova sound 재즈와 알앤비를 오가는 싱어송라이터입니다."
       }
     ],
     "posts": [
+      {
+        "id": "0199de80-0000-7000-8000-00000000b012",
+        "artistId": "0199de80-0000-7000-8000-00000000a006",
+        "artistStageName": "유노",
+        "title": "[멤버십] 미공개 세션 녹음",
+        "body": null,
+        "visibility": "MEMBERS_ONLY",
+        "locked": true,
+        "publishedAt": "2026-02-18T09:00:00Z",
+        "imageUrls": []
+      },
+      {
+        "id": "0199de80-0000-7000-8000-00000000b011",
+        "artistId": "0199de80-0000-7000-8000-00000000a006",
+        "artistStageName": "유노",
+        "title": "재즈 편곡 작업 노트",
+        "body": "이번 곡은 4비트 스윙으로 시작했다가 결국 보사노바로 바꿨습니다.\n\n리듬을 바꾸니 가사의 호흡이 완전히 달라져서, 멜로디도 절반을 다시 썼어요.",
+        "visibility": "PUBLIC",
+        "locked": false,
+        "publishedAt": "2026-02-17T09:00:00Z",
+        "imageUrls": []
+      },
+      {
+        "id": "0199de80-0000-7000-8000-00000000b010",
+        "artistId": "0199de80-0000-7000-8000-00000000a005",
+        "artistStageName": "리오",
+        "title": "[멤버십] 연습실 라이브 풀버전",
+        "body": null,
+        "visibility": "MEMBERS_ONLY",
+        "locked": true,
+        "publishedAt": "2026-02-16T09:00:00Z",
+        "imageUrls": []
+      },
+      {
+        "id": "0199de80-0000-7000-8000-00000000b009",
+        "artistId": "0199de80-0000-7000-8000-00000000a005",
+        "artistStageName": "리오",
+        "title": "커버 무대 영상 올렸습니다",
+        "body": "요청 많았던 곡으로 커버 무대를 준비했습니다.\n\n원곡의 키를 두 음 내려서 불렀는데, 오히려 제 목소리와는 더 맞는 것 같아요.",
+        "visibility": "PUBLIC",
+        "locked": false,
+        "publishedAt": "2026-02-15T09:00:00Z",
+        "imageUrls": []
+      },
+      {
+        "id": "0199de80-0000-7000-8000-00000000b008",
+        "artistId": "0199de80-0000-7000-8000-00000000a004",
+        "artistStageName": "하린",
+        "title": "[멤버십] 리허설 현장 사진",
+        "body": null,
+        "visibility": "MEMBERS_ONLY",
+        "locked": true,
+        "publishedAt": "2026-02-14T09:00:00Z",
+        "imageUrls": []
+      },
+      {
+        "id": "0199de80-0000-7000-8000-00000000b007",
+        "artistId": "0199de80-0000-7000-8000-00000000a004",
+        "artistStageName": "하린",
+        "title": "첫 단독 공연 준비 일지",
+        "body": "다음 달 첫 단독 공연을 준비하고 있습니다.\n\n세트리스트를 짜면서 데뷔곡을 어디에 둘지 한참 고민했어요. 결국 마지막 앙코르로 옮겼습니다.",
+        "visibility": "PUBLIC",
+        "locked": false,
+        "publishedAt": "2026-02-13T09:00:00Z",
+        "imageUrls": []
+      },
+      {
+        "id": "0199de80-0000-7000-8000-00000000b006",
+        "artistId": "0199de80-0000-7000-8000-00000000a003",
+        "artistStageName": "세아",
+        "title": "[멤버십] 안무 연습실 비하인드",
+        "body": null,
+        "visibility": "MEMBERS_ONLY",
+        "locked": true,
+        "publishedAt": "2026-02-12T09:00:00Z",
+        "imageUrls": []
+      },
+      {
+        "id": "0199de80-0000-7000-8000-00000000b005",
+        "artistId": "0199de80-0000-7000-8000-00000000a002",
+        "artistStageName": "노아",
+        "title": "[멤버십] 다음 EP 의 트랙 리스트 초안",
+        "body": null,
+        "visibility": "MEMBERS_ONLY",
+        "locked": true,
+        "publishedAt": "2026-02-11T09:00:00Z",
+        "imageUrls": []
+      },
       {
         "id": "0199de80-0000-7000-8000-00000000b003",
         "artistId": "0199de80-0000-7000-8000-00000000a003",
