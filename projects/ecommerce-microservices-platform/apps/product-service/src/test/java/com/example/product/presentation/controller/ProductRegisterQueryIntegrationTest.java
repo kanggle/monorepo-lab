@@ -96,7 +96,15 @@ class ProductRegisterQueryIntegrationTest {
 
         UUID id = registerProductService.register(command);
 
-        var result = queryProductService.findAll(null, null, null, 0, 20);
+        // 🔴🔴 TASK-MONO-638 — 페이지 크기를 «시드가 작다» 는 가정으로 쓰지 않는다.
+        //    데모 카탈로그가 8 → 24 로 늘자 새로 등록한 상품이 1페이지(20) 밖으로 밀려
+        //    이 시험이 빨개졌다. 그런데 이 시험의 축은 «등록한 상품이 목록 질의로 되돌아
+        //    오는가» 이지 «목록이 스무 개 이하다» 가 아니다 — 후자는 시드의 크기이고,
+        //    그것은 제품 결정이라 언제든 바뀐다.
+        //    ⇒ 전체 개수를 먼저 물어 그만큼 요청한다. 시드가 몇 개든 이 시험은 같은 것을 잰다.
+        long total = queryProductService.findAll(null, null, null, 0, 1).totalElements();
+        assertThat(total).isGreaterThan(0); // 비공허성 — 0건이면 아래 단언은 아무것도 안 잰다
+        var result = queryProductService.findAll(null, null, null, 0, (int) total);
         assertThat(result.content()).isNotEmpty();
         assertThat(result.content().stream().anyMatch(p -> p.id().equals(id))).isTrue();
     }
@@ -209,7 +217,10 @@ class ProductRegisterQueryIntegrationTest {
         assertThat(noMatch.totalElements()).isEqualTo(0);
 
         // blank(빈 문자열) name 은 no-filter 로 취급되어 전체 목록을 반환한다 (cleared search box)
-        var blank = queryProductService.findAll(null, null, "", 0, 20);
+        // 🔴 같은 이유로 여기서도 페이지 크기를 시드 크기의 대리로 쓰지 않는다(TASK-MONO-638).
+        //    재려는 성질은 «빈 문자열이 no-filter 로 취급된다» 이지 «한 페이지에 다 들어온다» 가 아니다.
+        long blankTotal = queryProductService.findAll(null, null, "", 0, 1).totalElements();
+        var blank = queryProductService.findAll(null, null, "", 0, (int) blankTotal);
         assertThat(blank.content()).hasSizeGreaterThanOrEqualTo(3);
         assertThat(blank.content()).anyMatch(p -> p.name().equals("레드 바지"));
         assertThat(blank.content()).anyMatch(p -> p.name().equals("블루 셔츠"));

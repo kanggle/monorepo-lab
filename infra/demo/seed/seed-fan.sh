@@ -78,12 +78,22 @@ DEMO_SUB="${DEMO_FAN_SUB:-0199de70-0000-7000-8000-00000000fa02}"
 ARTIST_A="0199de80-0000-7000-8000-00000000a001"   # 팔로우 대상 · 3종 가시성 글의 저자
 ARTIST_B="0199de80-0000-7000-8000-00000000a002"   # 디렉터리가 한 줄이 아니게 하는 두 번째
 ARTIST_C="0199de80-0000-7000-8000-00000000a003"   # 그룹 멤버 (artist_type=GROUP_MEMBER)
+# TASK-MONO-638 — 셋으로는 「아티스트 목록」이 목록으로 안 보인다. 여섯으로 늘린다.
+# 🔴 이 이름들은 auth R__02 · account R__06 · 이 파일 **세 곳이 함께** 바뀌어야 하고,
+#    FanArtistDemoSeedTest 가 그 셋을 대조한다(그 테스트의 hasSize 도 함께 올렸다).
+ARTIST_D="0199de80-0000-7000-8000-00000000a004"   # 하린
+ARTIST_E="0199de80-0000-7000-8000-00000000a005"   # 리오
+ARTIST_F="0199de80-0000-7000-8000-00000000a006"   # 유노
 GROUP_1="0199de80-0000-7000-8000-00000000b001"
 
 # 아티스트 로그인 — auth-service migration-dev R__02 의 이메일. 비밀번호는 데모와 같은
 # `Demo1234!` 다(면접관이 타이핑하는 계정은 여전히 demo@demo.com 하나 — 이쪽은 시드만 쓴다).
 ARTIST_A_EMAIL="${DEMO_FAN_ARTIST_A_EMAIL:-lumi@demo.com}"
 ARTIST_B_EMAIL="${DEMO_FAN_ARTIST_B_EMAIL:-noah@demo.com}"
+ARTIST_C_EMAIL="${DEMO_FAN_ARTIST_C_EMAIL:-sea@demo.com}"
+ARTIST_D_EMAIL="${DEMO_FAN_ARTIST_D_EMAIL:-harin@demo.com}"
+ARTIST_E_EMAIL="${DEMO_FAN_ARTIST_E_EMAIL:-rio@demo.com}"
+ARTIST_F_EMAIL="${DEMO_FAN_ARTIST_F_EMAIL:-yuno@demo.com}"
 
 # 🔴 게시물 id 는 **더 이상 고정 리터럴이 아니다.** API 로 발행하므로 서버가 UUIDv7 을
 # 만든다(`PublishPostUseCase`). 아래 2번이 발행한 뒤 (저자, 제목)으로 되찾아 채운다 —
@@ -107,23 +117,45 @@ if container_up fan-platform-postgres; then
 -- R__06 이 바로 이 id 로 계정을, auth-service R__02 가 자격증명을 만든다. 그래서 아래 2번이
 -- 아티스트 **본인 로그인**으로 글을 발행할 수 있다. (재지정이 아니라 그 id 를 실재화한 이유는
 -- R__06 헤더에 있다: 이미 시드된 데모 DB 의 follows/posts 가 옛 값을 들고 있기 때문이다.)
-INSERT INTO artists (id, tenant_id, account_id, artist_type, status, stage_name, real_name, debut_date, agency, bio, created_at, updated_at, published_at, version)
+INSERT INTO artists (id, tenant_id, account_id, artist_type, status, stage_name, real_name, debut_date, agency, bio, profile_image_ref, created_at, updated_at, published_at, version)
 SELECT '$ARTIST_A', '$TENANT', '$ARTIST_A', 'SOLO', 'PUBLISHED', '루미', '김하늘', DATE '2021-03-14', 'Aurora Entertainment',
        E'2021년 데뷔한 솔로 아티스트입니다. 어쿠스틱 기반의 자작곡을 주로 발표합니다.\n\n데모 데이터 — TASK-MONO-509',
+       'https://images.unsplash.com/photo-1618673747378-7e0d3561371a?w=400&h=400&q=80&auto=format&fit=crop&crop=faces',
        TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', 0
 WHERE NOT EXISTS (SELECT 1 FROM artists WHERE id = '$ARTIST_A');
 
-INSERT INTO artists (id, tenant_id, account_id, artist_type, status, stage_name, real_name, debut_date, agency, bio, created_at, updated_at, published_at, version)
+INSERT INTO artists (id, tenant_id, account_id, artist_type, status, stage_name, real_name, debut_date, agency, bio, profile_image_ref, created_at, updated_at, published_at, version)
 SELECT '$ARTIST_B', '$TENANT', '$ARTIST_B', 'SOLO', 'PUBLISHED', '노아', '박서준', DATE '2019-08-01', 'Aurora Entertainment',
        E'프로듀서 겸 솔로 아티스트.\n\n데모 데이터 — TASK-MONO-509',
+       'https://images.unsplash.com/photo-1675859427928-fe41277572b4?w=400&h=400&q=80&auto=format&fit=crop&crop=faces',
        TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', 0
 WHERE NOT EXISTS (SELECT 1 FROM artists WHERE id = '$ARTIST_B');
 
-INSERT INTO artists (id, tenant_id, account_id, artist_type, status, stage_name, real_name, debut_date, agency, bio, created_at, updated_at, published_at, version)
+INSERT INTO artists (id, tenant_id, account_id, artist_type, status, stage_name, real_name, debut_date, agency, bio, profile_image_ref, created_at, updated_at, published_at, version)
 SELECT '$ARTIST_C', '$TENANT', '$ARTIST_C', 'GROUP_MEMBER', 'PUBLISHED', '세아', '이세아', DATE '2022-05-20', 'Aurora Entertainment',
        E'그룹 STELLAR 의 리더.\n\n데모 데이터 — TASK-MONO-509',
+       'https://images.unsplash.com/photo-1659150140178-d672b4763fd0?w=400&h=400&q=80&auto=format&fit=crop&crop=faces',
        TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', 0
 WHERE NOT EXISTS (SELECT 1 FROM artists WHERE id = '$ARTIST_C');
+
+INSERT INTO artists (id, tenant_id, account_id, artist_type, status, stage_name, real_name, debut_date, agency, bio, profile_image_ref, created_at, updated_at, published_at, version)
+SELECT '$ARTIST_D', '$TENANT', '$ARTIST_D', 'SOLO', 'PUBLISHED', '하린', '정하린', DATE '2023-09-08', 'Aurora Entertainment',
+       E'신스팝 기반의 솔로 아티스트입니다. 직접 편곡한 무대를 자주 올립니다.\n\n데모 데이터 — TASK-MONO-638',
+       'https://images.unsplash.com/photo-1620653616528-7da9a2005478?w=400&h=400&q=80&auto=format&fit=crop&crop=faces',
+       TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', 0
+WHERE NOT EXISTS (SELECT 1 FROM artists WHERE id = '$ARTIST_D');
+INSERT INTO artists (id, tenant_id, account_id, artist_type, status, stage_name, real_name, debut_date, agency, bio, profile_image_ref, created_at, updated_at, published_at, version)
+SELECT '$ARTIST_E', '$TENANT', '$ARTIST_E', 'GROUP_MEMBER', 'PUBLISHED', '리오', '강리오', DATE '2022-05-20', 'Aurora Entertainment',
+       E'그룹 STELLAR 의 메인 보컬. 커버 무대와 라이브 클립을 자주 올립니다.\n\n데모 데이터 — TASK-MONO-638',
+       'https://images.unsplash.com/photo-1619361368198-53f950a51dfa?w=400&h=400&q=80&auto=format&fit=crop&crop=faces',
+       TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', 0
+WHERE NOT EXISTS (SELECT 1 FROM artists WHERE id = '$ARTIST_E');
+INSERT INTO artists (id, tenant_id, account_id, artist_type, status, stage_name, real_name, debut_date, agency, bio, profile_image_ref, created_at, updated_at, published_at, version)
+SELECT '$ARTIST_F', '$TENANT', '$ARTIST_F', 'SOLO', 'PUBLISHED', '유노', '오유노', DATE '2020-11-02', 'Nova Sound',
+       E'재즈와 알앤비를 오가는 싱어송라이터입니다.\n\n데모 데이터 — TASK-MONO-638',
+       'https://images.unsplash.com/photo-1619361369140-33c01702f9cc?w=400&h=400&q=80&auto=format&fit=crop&crop=faces',
+       TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', 0
+WHERE NOT EXISTS (SELECT 1 FROM artists WHERE id = '$ARTIST_F');
 
 INSERT INTO artist_groups (id, tenant_id, name, debut_date, agency, status, created_at, updated_at, version)
 SELECT '$GROUP_1', '$TENANT', 'STELLAR', DATE '2022-05-20', 'Aurora Entertainment', 'ACTIVE',
@@ -250,6 +282,48 @@ if seed_as_artist '노아' "$ARTIST_B_EMAIL" "$ARTIST_B"; then
   publish_artist_post 'ARTIST_POST(PUBLIC · 노아)' "$ARTIST_B" PUBLIC \
     '프로듀싱 노트를 시작합니다' \
     '노아입니다. 앞으로 작업 과정을 짧게 기록해 두려 합니다.\n첫 글은 마이크 프리앰프 이야기부터.'
+fi
+
+# TASK-MONO-638 — 나머지 아티스트도 «공개 1 + 멤버십 1» 을 갖는다.
+# 🔴 잠긴 글이 있어야 «로그인하면 더 있다» 가 화면에서 참이 된다. 예전에는 루미에게만
+#    있어서, 나머지 카드는 그 사실을 보여 줄 방법이 없었다.
+# 🔵 번들 시드(infra/demo/public-data)의 게시물과 **같은 구성**이다 — 두 벌이 갈라지면
+#    방문자가 기동 전후로 다른 피드를 본다.
+
+if seed_as_artist '세아' "$ARTIST_C_EMAIL" "$ARTIST_C"; then
+  publish_artist_post 'ARTIST_POST(PUBLIC · 세아)' "$ARTIST_C" PUBLIC \
+    'STELLAR 컴백 준비 현장' \
+    '세아입니다. STELLAR 컴백 준비가 한창입니다.\n안무 연습과 녹음을 병행하는 중이라 정신없지만 즐겁습니다.'
+  publish_artist_post 'ARTIST_POST(MEMBERS_ONLY · 세아)' "$ARTIST_C" MEMBERS_ONLY \
+    '멤버십 전용 — 안무 연습실 비하인드' \
+    '멤버십 가입해 주신 분들께만 남깁니다.\n\n연습실에서 찍은 사진과 짧은 클립을 올려요.'
+fi
+
+if seed_as_artist '하린' "$ARTIST_D_EMAIL" "$ARTIST_D"; then
+  publish_artist_post 'ARTIST_POST(PUBLIC · 하린)' "$ARTIST_D" PUBLIC \
+    '첫 단독 공연 준비 일지' \
+    '하린입니다. 다음 달 첫 단독 공연을 준비하고 있습니다.\n세트리스트를 짜면서 데뷔곡을 어디에 둘지 한참 고민했어요.'
+  publish_artist_post 'ARTIST_POST(MEMBERS_ONLY · 하린)' "$ARTIST_D" MEMBERS_ONLY \
+    '멤버십 전용 — 리허설 현장' \
+    '멤버십 전용 안내입니다.\n\n리허설 사진과 세트리스트 초안을 먼저 공유드립니다.'
+fi
+
+if seed_as_artist '리오' "$ARTIST_E_EMAIL" "$ARTIST_E"; then
+  publish_artist_post 'ARTIST_POST(PUBLIC · 리오)' "$ARTIST_E" PUBLIC \
+    '커버 무대 영상 올렸습니다' \
+    '리오입니다. 요청 많았던 곡으로 커버 무대를 준비했습니다.\n원곡의 키를 두 음 내려서 불렀어요.'
+  publish_artist_post 'ARTIST_POST(MEMBERS_ONLY · 리오)' "$ARTIST_E" MEMBERS_ONLY \
+    '멤버십 전용 — 연습실 라이브 풀버전' \
+    '멤버십 전용입니다.\n\n편집 없이 연습실에서 한 번에 부른 풀버전을 올립니다.'
+fi
+
+if seed_as_artist '유노' "$ARTIST_F_EMAIL" "$ARTIST_F"; then
+  publish_artist_post 'ARTIST_POST(PUBLIC · 유노)' "$ARTIST_F" PUBLIC \
+    '재즈 편곡 작업 노트' \
+    '유노입니다. 이번 곡은 4비트 스윙으로 시작했다가 결국 보사노바로 바꿨습니다.\n리듬을 바꾸니 가사의 호흡이 완전히 달라졌어요.'
+  publish_artist_post 'ARTIST_POST(MEMBERS_ONLY · 유노)' "$ARTIST_F" MEMBERS_ONLY \
+    '멤버십 전용 — 미공개 세션 녹음' \
+    '멤버십 전용입니다.\n\n세션 뮤지션들과 한 번에 간 테이크를 그대로 올립니다.'
 fi
 
 # PUBLIC 글의 id 를 되찾는다 — 아래 댓글·리액션이 그 id 로 건다. 서버가 만든 UUIDv7 이라

@@ -137,10 +137,22 @@ describe('/ (공개 피드) — 세션 없이', () => {
     await renderPage(HomePage({ searchParams: Promise.resolve({}) }));
 
     expect(screen.getByTestId('public-feed')).toBeInTheDocument();
-    // 시드의 공개 글 제목
-    expect(screen.getByText('STELLAR 컴백 준비 현장')).toBeInTheDocument();
-    // 시드의 잠긴 글 — 제목은 나오고 상태는 «멤버십 전용»
-    expect(screen.getByText('[멤버십] 미공개 데모 트랙 이야기')).toBeInTheDocument();
+
+    // 🔴🔴 TASK-MONO-638 — **제목을 리터럴로 고정하지 않는다.** 예전 판은 시드의 두 제목을
+    //    그대로 적었는데, 게시물이 4 → 12 로 늘자 그중 하나가 첫 페이지 밖으로 밀려
+    //    이 시험이 빨개졌다. 그 빨강의 사유는 «화면이 고장났다» 가 아니라 «내가 제품 수치를
+    //    얼려 두었다» 였다.
+    // 🔵 재려는 성질은 그대로다: 공개 글은 제목이 보이고, 잠긴 글도 **제목은** 보이되
+    //    상태가 «멤버십 전용» 이다. 그것을 시드에서 파생해 묻는다 — 페이지 크기에도
+    //    의존하지 않는다(어느 글이 첫 페이지에 오는지는 이 시험의 축이 아니다).
+    const feed = (state.result as PublicDataResult<FanPublicData>).data.posts;
+    const publics = feed.filter((post) => !post.locked);
+    const lockeds = feed.filter((post) => post.locked);
+    // 🔴 비공허성 — 둘 중 하나라도 0건이면 아래 단언은 아무것도 시험하지 않는다.
+    expect(publics.length).toBeGreaterThan(0);
+    expect(lockeds.length).toBeGreaterThan(0);
+    expect(publics.some((post) => screen.queryByText(post.title) !== null)).toBe(true);
+    expect(lockeds.some((post) => screen.queryByText(post.title) !== null)).toBe(true);
     expect(screen.getAllByText('멤버십 전용').length).toBeGreaterThan(0);
   });
 
@@ -172,7 +184,11 @@ describe('/artists (공개 목록 + 검색) — 세션 없이', () => {
     await renderPage(ArtistsPage({ searchParams: Promise.resolve({}) }));
 
     expect(screen.getByTestId('artist-grid')).toBeInTheDocument();
-    expect(screen.getAllByTestId('public-artist-card')).toHaveLength(3);
+    // 🔴 TASK-MONO-638 — 3 을 얼려 두었더니 아티스트가 6 명이 되는 날 빨개졌다. 재려는
+    //    성질은 «저장본의 아티스트가 **전부** 카드로 그려진다» 이지 «세 명이다» 가 아니다.
+    const seeded = (state.result as PublicDataResult<FanPublicData>).data.artists.length;
+    expect(seeded).toBeGreaterThan(0); // 비공허성 — 0 명이면 아래 단언은 공허하다
+    expect(screen.getAllByTestId('public-artist-card')).toHaveLength(seeded);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 

@@ -112,7 +112,11 @@ INSERT IGNORE INTO identities (identity_id, tenant_id, primary_email, status, cr
 VALUES
     ('0199de82-0000-7000-8000-00000000a001', 'fan-platform', 'lumi@demo.com', 'ACTIVE', NOW(6), NOW(6), 0),
     ('0199de82-0000-7000-8000-00000000a002', 'fan-platform', 'noah@demo.com', 'ACTIVE', NOW(6), NOW(6), 0),
-    ('0199de82-0000-7000-8000-00000000a003', 'fan-platform', 'sea@demo.com',  'ACTIVE', NOW(6), NOW(6), 0);
+    ('0199de82-0000-7000-8000-00000000a003', 'fan-platform', 'sea@demo.com',  'ACTIVE', NOW(6), NOW(6), 0),
+    -- TASK-MONO-638 — 아티스트 셋 → 여섯.
+    ('0199de82-0000-7000-8000-00000000a004', 'fan-platform', 'harin@demo.com', 'ACTIVE', NOW(6), NOW(6), 0),
+    ('0199de82-0000-7000-8000-00000000a005', 'fan-platform', 'rio@demo.com', 'ACTIVE', NOW(6), NOW(6), 0),
+    ('0199de82-0000-7000-8000-00000000a006', 'fan-platform', 'yuno@demo.com', 'ACTIVE', NOW(6), NOW(6), 0);
 
 -- ---------------------------------------------------------------------------
 -- 2. Artist accounts. `id` MUST equal the matching credentials.account_id
@@ -126,7 +130,14 @@ VALUES
     ('0199de80-0000-7000-8000-00000000a002', '0199de82-0000-7000-8000-00000000a002',
      'fan-platform', 'noah@demo.com', 'ACTIVE', NOW(6), NOW(6), 0),
     ('0199de80-0000-7000-8000-00000000a003', '0199de82-0000-7000-8000-00000000a003',
-     'fan-platform', 'sea@demo.com',  'ACTIVE', NOW(6), NOW(6), 0);
+     'fan-platform', 'sea@demo.com',  'ACTIVE', NOW(6), NOW(6), 0),
+    -- TASK-MONO-638 — id 는 artists.id 와 **같아야** 한다(헤더의 이유).
+    ('0199de80-0000-7000-8000-00000000a004', '0199de82-0000-7000-8000-00000000a004',
+     'fan-platform', 'harin@demo.com', 'ACTIVE', NOW(6), NOW(6), 0),
+    ('0199de80-0000-7000-8000-00000000a005', '0199de82-0000-7000-8000-00000000a005',
+     'fan-platform', 'rio@demo.com', 'ACTIVE', NOW(6), NOW(6), 0),
+    ('0199de80-0000-7000-8000-00000000a006', '0199de82-0000-7000-8000-00000000a006',
+     'fan-platform', 'yuno@demo.com', 'ACTIVE', NOW(6), NOW(6), 0);
 
 -- ---------------------------------------------------------------------------
 -- 3. The grant. `granted_by` is NULL — no operator performed this; the demo
@@ -140,4 +151,11 @@ VALUES
     ('fan-platform', '0199de80-0000-7000-8000-00000000a002', 'FAN',    NULL, NOW(6)),
     ('fan-platform', '0199de80-0000-7000-8000-00000000a002', 'ARTIST', NULL, NOW(6)),
     ('fan-platform', '0199de80-0000-7000-8000-00000000a003', 'FAN',    NULL, NOW(6)),
-    ('fan-platform', '0199de80-0000-7000-8000-00000000a003', 'ARTIST', NULL, NOW(6));
+    ('fan-platform', '0199de80-0000-7000-8000-00000000a003', 'ARTIST', NULL, NOW(6)),
+    -- TASK-MONO-638 — 여섯으로 늘린 아티스트에게 같은 두 역할을 준다.
+    ('fan-platform', '0199de80-0000-7000-8000-00000000a004', 'FAN',    NULL, NOW(6)),
+    ('fan-platform', '0199de80-0000-7000-8000-00000000a004', 'ARTIST', NULL, NOW(6)),
+    ('fan-platform', '0199de80-0000-7000-8000-00000000a005', 'FAN',    NULL, NOW(6)),
+    ('fan-platform', '0199de80-0000-7000-8000-00000000a005', 'ARTIST', NULL, NOW(6)),
+    ('fan-platform', '0199de80-0000-7000-8000-00000000a006', 'FAN',    NULL, NOW(6)),
+    ('fan-platform', '0199de80-0000-7000-8000-00000000a006', 'ARTIST', NULL, NOW(6));
