@@ -217,6 +217,7 @@ jobs:
       # catalog it is validated against. Those diffs carry no code, so AND-combining
       # would skip the guard on exactly the changes it exists to police.
       service-type-notation: ${{ steps.filter.outputs.service-type-notation }}
+      ls-files-guard-count: ${{ steps.filter.outputs.ls-files-guard-count }}
       # TASK-MONO-619: raw filter, NOT AND-combined with `code-changed`. 도착 경로는
       # **아무 셸 편집**이고(가드 스크립트·데모 스크립트·워크플로 인라인 run), 그중 일부는
       # `code-changed` 의 모집단 밖이다. AND 로 묶으면 그 편집이 이 잡을 안 깨운다.
@@ -552,6 +553,14 @@ jobs:
               - 'projects/*/specs/services/*/architecture.md'
               - 'platform/service-types/INDEX.md'
               - 'scripts/check-service-type-notation.sh'
+            # TASK-MONO-646: the "N of the M scripts/ guards read git ls-files"
+            # figure lives in two prose homes and nothing else can falsify it.
+            # The filter must fire on a NEW GUARD as well as on the homes —
+            # adding a script is exactly what makes both sentences false.
+            ls-files-guard-count:
+              - 'scripts/**'
+              - 'CLAUDE.md'
+              - 'platform/git-workflow-policy.md'
             # TASK-MONO-619: 메시지 문자열 안의 백틱은 **명령 치환**이다 —
             # 문구가 사라지고, 토큰이 PATH 에 있으면 실행된다(617 에서 docker rm 이
             # 실제로 돌았다). 결함은 FAIL 경로에만 있으므로 초록 실행으로는 안 잡힌다.
@@ -1245,6 +1254,30 @@ jobs:
 
       - name: Guard — every composite Service Type sits in one backtick span
         run: bash scripts/check-service-type-notation.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-646 — the rule "stage before you run a guard locally" argues from a
+  # measurement (most guards derive their population from the git INDEX). The rule
+  # survives a wrong number; the number is what makes a reader believe it. Nothing
+  # else in the repo notices when one new guard makes both sentences false.
+  # ---------------------------------------------------------------------------
+  ls-files-guard-count:
+    name: Guard-count figure (scripts/ reading git ls-files vs its two prose homes)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.ls-files-guard-count == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-ls-files-guard-count.sh
+
+      - name: Self-test the predicate can reject a tree it must reject
+        run: bash scripts/check-ls-files-guard-count.sh --self-test
+
+      - name: Guard — both prose homes state the measured figure
+        run: bash scripts/check-ls-files-guard-count.sh
 
   required-check-names:
     name: Required check names (protection pin vs ci.yml vs the rule's three homes)
