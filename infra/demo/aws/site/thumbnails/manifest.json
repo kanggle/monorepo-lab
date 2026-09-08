@@ -1,0 +1,78 @@
+{
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "deviceScaleFactor": 1,
+  "format": {
+    "type": "jpeg",
+    "quality": 82,
+    "ext": "jpg"
+  },
+  "shots": [
+    {
+      "bundle": "console",
+      "file": "console-1-overview.jpg",
+      "url": "https://console.hubwang.com/demo",
+      "alt": "운영자 콘솔 둘러보기 — 도메인 요약",
+      "status": 200,
+      "capturedAt": "2026-09-08T15:18:13.081Z"
+    },
+    {
+      "bundle": "console",
+      "file": "console-2-ecommerce.jpg",
+      "url": "https://console.hubwang.com/demo/ecommerce",
+      "alt": "운영자 콘솔 — 이커머스 주문·상품 표",
+      "status": 200,
+      "capturedAt": "2026-09-08T15:18:15.081Z"
+    },
+    {
+      "bundle": "console",
+      "file": "console-3-wms.jpg",
+      "url": "https://console.hubwang.com/demo/wms",
+      "alt": "운영자 콘솔 — WMS 재고 표",
+      "status": 200,
+      "capturedAt": "2026-09-08T15:18:16.846Z"
+    },
+    {
+      "bundle": "store",
+      "file": "store-1-home.jpg",
+      "url": "https://store.hubwang.com/",
+      "alt": "이커머스 스토어 홈",
+      "status": 200,
+      "capturedAt": "2026-09-08T15:18:19.543Z"
+    },
+    {
+      "bundle": "store",
+      "file": "store-2-products.jpg",
+      "url": "https://store.hubwang.com/products",
+      "alt": "이커머스 스토어 — 상품 목록",
+      "status": 200,
+      "capturedAt": "2026-09-08T15:18:22.283Z"
+    },
+    {
+      "bundle": "fan",
+      "file": "fan-1-feed.jpg",
+      "url": "https://fan.hubwang.com/",
+      "alt": "팬 플랫폼 — 공개 피드",
+      "status": 200,
+      "capturedAt": "2026-09-08T15:18:25.271Z"
+    },
+    {
+      "bundle": "fan",
+      "file": "fan-2-artists.jpg",
+      "url": "https://fan.hubwang.com/artists",
+      "alt": "팬 플랫폼 — 아티스트 목록",
+      "status": 200,
+      "capturedAt": "2026-09-08T15:18:27.083Z"
+    },
+    {
+      "bundle": "fan",
+      "file": "fan-3-membership.jpg",
+      "url": "https://fan.hubwang.com/membership",
+      "alt": "팬 플랫폼 — 멤버십 소개",
+      "status": 200,
+      "capturedAt": "2026-09-08T15:18:29.577Z"
+    }
+  ]
+}
