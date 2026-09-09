@@ -266,6 +266,7 @@ jobs:
       demo-resolver-copies: ${{ steps.filter.outputs.demo-resolver-copies }}
       client-graph-origins: ${{ steps.filter.outputs.client-graph-origins }}
       fetch-resolution: ${{ steps.filter.outputs.fetch-resolution }}
+      readme-screenshots: ${{ steps.filter.outputs.readme-screenshots }}
       # TASK-MONO-562: raw filter, NOT AND-combined with `code-changed`. Every arrival
       # path of this drift is non-code: a `vercel.json` losing its `ignoreCommand`, a
       # new Vercel project landing without one, or the judge script being weakened.
@@ -810,6 +811,16 @@ jobs:
               - '**/src/*.tsx'
               - '**/package.json'
               - 'scripts/check-fetch-resolution.mjs'
+            # TASK-MONO-650: README 스크린샷 배선. 도착 경로가 셋이다 —
+            # README 를 고치거나, 이미지를 넣고 빼거나, 판정자 자신을 바꾸거나.
+            # 🔴 이미지 줄이 없으면 «파일만 지운» 커밋에서 이 잡이 **안 돈다**:
+            #    그 커밋은 README 를 안 건드리므로 필터가 안 걸리고, 그러면 깨진 참조가
+            #    조용히 머지된다(이 가드가 막으려는 바로 그 상태다).
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            readme-screenshots:
+              - 'projects/*/README.md'
+              - 'projects/*/docs/screenshots/**'
+              - 'scripts/check-readme-screenshots.mjs'
             # TASK-MONO-562: a Vercel project that builds on every commit arrives three
             # ways — a new `vercel.json` anywhere in the tree, an existing one losing its
             # `ignoreCommand`, or the shared judge being weakened. All three are non-code,
@@ -1554,6 +1565,35 @@ jobs:
 
       - name: Guard — every backend fetch is resolved or declared
         run: node scripts/check-fetch-resolution.mjs
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-650 — README 스크린샷 배선.
+  #
+  # 🔴 술어는 마크다운 «과» HTML 둘 다다. 이 저장소는 두 문법을 섞어 쓰고, 스크린샷은
+  # 실제로 `<img src=...>` 쪽에 산다. 한쪽만 물면 «이미 있는 것을 없다고» 보고한다 —
+  # 2026-09-09 에 그렇게 세서 「스크린샷 0장」이라 오보했고 실제로는 7장이 있었다.
+  # 그 좁힘이 다시 일어나면 `--self-test` 칸 (4)가 죽는다.
+  #
+  # 🔴 하한(FLOOR)의 대상은 «스크린샷을 가진 서비스 수» 가 아니라 «참조·파일 쌍의 수» 다.
+  # 전자는 줄어드는 모집단이라 서비스가 하나 빠지는 정상적인 변경이 하한을 깬다.
+  # ---------------------------------------------------------------------------
+  readme-screenshots:
+    name: README screenshot wiring (references and files agree, both ways)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.readme-screenshots == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax (node --check)
+        run: node --check scripts/check-readme-screenshots.mjs
+
+      - name: Self-test the predicate (bites, and stays silent where it must)
+        run: node scripts/check-readme-screenshots.mjs --self-test
+
+      - name: Guard — every referenced shot exists, and no shot is orphaned
+        run: node scripts/check-readme-screenshots.mjs
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-562 — Vercel build triggers.

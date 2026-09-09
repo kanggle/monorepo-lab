@@ -8,7 +8,7 @@ TASK-MONO-650
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -208,6 +208,81 @@ portfolio-captures/          ← 68장이 여기 있고
 - [ ] 🔴 **채울 수 없는 서비스는 «채웠다»고 적지 말고 ⚪ 로 남겨라.** 오늘 기준 ecommerce
       콘솔 9장은 재촬영 대기이고 wms/scm 은 제품 결함 대기다. 빈 표를 넣고 「배선 완료」로
       적으면 **README 가 «안 만든 제품» 을 보여준다.**
+
+---
+
+# 🟢 구현 (2026-09-09 UTC · `ready` → `in-progress`)
+
+## 배선한 것 — **12장** (승인은 13장이었다)
+
+| README | 장 | 출처 |
+|---|---|---|
+| `erp-platform` | `01-erp-overview` · `02-erp-masters` · `03-erp-orgview` | 콘솔 |
+| `iam-platform` | `01-iam-operators` · `02-iam-permissions` | 콘솔 |
+| `finance-platform` | `01-finance-ledger` | 콘솔 |
+| `fan-platform` | `01-fan-feed` · `02-fan-artists` · `03-fan-artist-profile` · `04-fan-membership` | 팬 |
+| `ecommerce-…` | `09-store-products` · `10-store-wishlist` (기존 7장 옆에) | 스토어 |
+
+🔴 **승인된 13장에서 하나를 뺐고 그 사유를 적는다.** `store /`(홈)를 배선하려다 기존
+`01-home.png` 을 **열어 보니 같은 페이지**였다 — 스토어 홈, 히어로 + 인기 상품. 게다가
+새 것에는 `TASK-MONO-654` 의 노란 배너가 박혀 있어 **더 나쁘다.** ⇒ 중복을 안 넣는다.
+🔵 `/products`(카탈로그 그리드 20개)와 `/my/wishlist` 는 기존 7장에 **없던 것**이라 남겼다.
+
+용량 **1.79MB → 1.59MB**(12장). 경로는 새로 만들지 않고 ecommerce 관례
+`projects/<name>/docs/screenshots/NN-slug.ext` 를 따랐다.
+
+## 🔴 가드가 첫 실행에서 **기존 드리프트**를 물었다
+
+내가 만들지 않은 고아 둘이 있었다 — `05-admin-dashboard.png` · `06-admin-products.png`.
+ecommerce README 자신이 *"독립 admin-dashboard 앱은 제거되었고"*(`ADR-MONO-031` Phase 6)
+라고 적으면서 **참조만 지우고 파일을 남겼다.**
+
+🔵 **지우지 않았다.** 열어 보니 차트·KPI·주문 표가 있는 멀쩡한 그림이고, 「도메인마다
+admin 을 따로 두면 운영자가 앱을 갈아타야 한다」는 **합친 이유**가 거기 보인다. ⇒
+`<details>` 안에 **「지금은 없는 앱이다」를 먼저 적고** 다시 참조했다. 삭제는 되돌릴 수
+없고, 이 배치는 소유자가 원하면 언제든 삭제로 바꿀 수 있다.
+
+## 가드 — `scripts/check-readme-screenshots.mjs`
+
+양방향(참조→파일, 파일→참조) · `--self-test` 7칸 · 비-공허성 하한 `FLOOR = 8`.
+
+🔴🔴 **하한의 대상은 «쌍의 수» 다** — «스크린샷을 가진 서비스 수» 로 두면 서비스가 하나
+빠지는 정상적인 변경이 하한을 깨서 성공을 고장으로 만든다.
+
+**bite 를 ①주입 ②문법 무사 ③물기로 나눠 증명했다:**
+
+| bite | 결과 |
+|---|---|
+| 파일을 감춘다(참조 유지) | rc=1 · 「가리키는 파일이 없다」 1건 |
+| 참조를 바꾼다(파일 유지) | rc=1 · 「파일이 없다」 1건 **+ 「고아」 1건**(양방향이 동시에 문다) |
+| 🔴🔴 **술어를 마크다운만으로 좁힌다** | `--self-test` **3칸 빨강**(그중 (4)가 이 함정) · 실제 저장소에서는 **쌍 0개 → 하한 발화** |
+
+세 번째가 핵심이다 — **2026-09-09 에 내가 실제로 저지른 좁힘**이고, 그때 `![` 로만 세서
+「스크린샷 0장」이라 보고했으나 실제로는 7장이 있었다(ecommerce 가 `<img>` 를 쓴다).
+그 좁힘이 다시 일어나면 칸 (4)가 죽는다.
+
+**대조군**(좁힘 뒤에도 초록을 유지해야 하는 것): (5) 마크다운 전용도 센다 ·
+(6) 배지(외부 URL)는 대상이 아니다 · (7) 스크린샷 0장인 서비스는 정상이다.
+🔵 (7)이 실제 모집단에서 살아 있다 — `wms`·`scm`·`platform-console` 이 0장인 채로 초록이다.
+
+## CI
+
+`ci.yml` 에 필터 `readme-screenshots`(README · 이미지 · 판정자 **셋 다**) + 잡을 더했다.
+🔴 **이미지 경로를 필터에 넣은 이유**: 「파일만 지운」 커밋은 README 를 안 건드리므로,
+그 줄이 없으면 이 잡이 **안 돌고** 깨진 참조가 조용히 머지된다.
+🔴🔴 `changes.outputs` 선언을 처음에 빠뜨렸고 **YAML 파싱이 잡았다** — 그것이 없으면
+`if:` 가 늘 거짓이라 가드가 **한 번도 안 돈다**(`TASK-MONO-646` 이 데인 그 축).
+
+## ⚪ 채우지 못한 것 — 「채웠다」로 적지 않는다 (AC-4)
+
+| README | 상태 |
+|---|---|
+| `platform-console` | ⚪ **0장.** 콘솔 자신의 화면(`/console`·`/subscriptions`·`/partnerships`·`/accounts`)은 **열어 보지 않았다.** 안 본 장을 넣는 것이 오늘 이미 한 실수다 |
+| `wms-platform` | ⚪ **0장.** `/wms`·`/wms/master` 빈값 · `/wms/operations` 저하 |
+| `scm-platform` | ⚪ **0장.** `/scm/inventory`·`/scm/replenishment` 빈값 |
+
+🔴 셋 다 **시드 부재·제품 결함이 선행**이고 재촬영으로 회수되지 않는다.
+🔵 `ecommerce` 콘솔 9장은 테넌트 오선택이라 **재촬영으로 회수된다**(`TASK-MONO-648` AC-2).
 
 ---
 

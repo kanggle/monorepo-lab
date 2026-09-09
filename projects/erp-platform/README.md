@@ -37,6 +37,28 @@ v2 deferred (아직 미구현): `permission-service`(권한 매트릭스/데이�
 
 ---
 
+## Screenshots
+
+> 🔵 아래 화면은 **운영자 콘솔**(`platform-console`)이 그린다 — 이 서비스는 그 뒤의 API 다.
+> 실서비스에서 열려면 **로그인 후** `console.hubwang.com` 에서 해당 도메인 섹션으로 간다.
+
+<p align="center">
+  <img src="docs/screenshots/02-erp-masters.jpg" width="900" alt="ERP 마스터 — 부서·직원·직급·비용센터·거래처"><br>
+  <em>마스터 5종 — 유효기간(effective-dating)이 행마다 붙고, <code>asOf</code> 로 과거 시점 상태를 조회한다</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/03-erp-orgview.jpg" width="900" alt="ERP 통합 조회 — 조직도 read-model"><br>
+  <em>통합 조회 — 부서·직원·직급·비용센터를 결합한 read-model. 부서 경로가 <code>DEPT-HQ · 본사 › DEPT-OPS · 운영본부</code> 로 펼쳐진다 (eventually-consistent)</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/01-erp-overview.jpg" width="900" alt="ERP 개요 — 마스터 건수와 결재 대기"><br>
+  <em>개요 — 마스터 5종 건수 · 본인 결재 대기 · 활성 위임을 한 화면에서 (per-cell 독립 degrade)</em>
+</p>
+
+---
+
 ## Local Dev Quick Start
 
 ```bash

@@ -35,6 +35,18 @@
 
 ---
 
+## Screenshots
+
+> 🔵 아래 화면은 **운영자 콘솔**(`platform-console`)이 그린다 — 이 서비스는 그 뒤의 API 다.
+> 실서비스에서 열려면 **로그인 후** `console.hubwang.com` 에서 해당 도메인 섹션으로 간다.
+
+<p align="center">
+  <img src="docs/screenshots/01-finance-ledger.jpg" width="900" alt="Finance Ledger — 시산표"><br>
+  <em>원장 운영 — 시산표(trial balance). 차변·대변과 <strong>기준통화 환산</strong>이 나란히 서고 <code>대차 일치 (in balance)</code> 를 화면이 직접 판정한다. 탭: 시산표 · 회계 기간 · 분개 · 대사 · 계정 · FX 포지션 로트 · FX 환율 피드</em>
+</p>
+
+---
+
 ## Local Dev Quick Start
 
 > `pnpm finance:up` 이 `gateway-service` · `account-service` · `ledger-service` 와 백킹 인프라(mysql ×2 / redis / kafka)를 모두 기동한다. `http://finance.local/` 은 `gateway-service` 를 통해서만 진입하며, 두 백엔드는 Traefik 라벨이 없는 내부 전용 서비스다(TASK-MONO-357).
