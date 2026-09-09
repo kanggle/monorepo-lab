@@ -8,7 +8,7 @@ TASK-MONO-655
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -233,7 +233,7 @@ snapshot-mappers.ts:67 stock: null,                                  ← 하드�
       `data-sold-out` 으로 또 적으면 한쪽만 고쳐지는 자리가 생긴다) — 그 대신 그 전제를
       대조군 #2 가 문다.
 
-- [ ] ⚪ **web-store 잡의 최종 판정은 다음 nightly 가 한다.** 로컬에서 이 스위트를 돌릴 수
+- [x] 🟢 **web-store 잡의 최종 판정이 났다 — 아래 § 최종 판정.** (기록 유지) ⚪ 였던 사유: 로컬에서 이 스위트를 돌릴 수
       없다 — web-store 는 vitest 4 이고 이 호스트는 Node 24 라 **기동 자체가 안 된다**
       (`#module-evaluator`, 문서화된 한계). Node 20 을 임시로 끌어와도 pnpm 심링크 해석에서
       다시 막혔다. 로컬에서 실제로 통과시킨 것은 **`tsc --noEmit` rc=0 · `next lint` rc=0**
@@ -375,6 +375,71 @@ scope"*. 도착 경로가 «누가 UI 를 보러 간다» 였고, 3일 동안 �
 소유자의 watch 설정에 달려 있고 **저장소 안에서 잴 수 없다.** 배지 대비 실질 개선인 지점은
 하나뿐이고 그것으로 충분하다 — 배지는 보러 가야 보이지만 **이슈는 남는다.**
 🔴 Slack webhook 은 여전히 없다(ADR-MONO-011 § 6.1 은 그 부분에서 계속 outstanding).
+
+---
+
+# 🟢 최종 판정 — nightly 가 다시 초록이다 (2026-09-09 UTC)
+
+머지 커밋 `a1f763e3e` 의 nightly 런
+[`34380542810`](https://github.com/kanggle/monorepo-lab/actions/runs/34380542810):
+
+```
+run conclusion = success          ← 2026-09-07T19:17Z 이후 처음
+```
+
+| 잡 | 결론 |
+|---|---|
+| Frontend E2E full-stack (web-store) | 🟢 **success** |
+| Platform Console E2E full-stack | 🟢 **success** |
+| 나머지 e2e·가드 9개 | 🟢 success |
+| watch 3개 (AMI·fan surface·launcher freshness) | ⚪ skipped (push 런에서 정상) |
+| **A red nightly arrives** | 🟢 success |
+
+## 🔴 「초록」이 아니라 «무엇이 돌았나» 로 닫았다
+
+빨강을 없애는 가장 나쁜 길이 skip 이라고 이 티켓이 스스로 적었으므로, 판정은 실행 수로 했다.
+잡 자신의 「Assert the required specs actually ran」 스텝 출력:
+
+```
+spec                           ran  skipped
+account-type-guard.spec.ts       1        0
+auth-redirect.spec.ts            7        0
+cart-management.spec.ts          1        0     ← 죽어 있던 둘 중 하나
+golden-flow.spec.ts              1        0     ← 나머지 하나
+rp-initiated-logout.spec.ts      1        0
+wishlist.spec.ts                 1        0
+OK — all 5 required specs ran (12 tests collected).
+```
+
+🔵 콘솔 쪽도 같은 축으로 확인했다 — `Running 7 tests using 2 workers` → `7 passed`.
+단위 대조군도 실행됐다: `product-detail-with-cart.test.tsx` 가 **11 → 15 tests**(새 4칸).
+
+## 🟢 AC-3 의 알림이 «초록 경로» 를 실제로 걸었다
+
+`nightly-red-arrives` 가 처음으로 돌았고 자기 스텝이 실제 숫자를 냈다:
+
+```
+판정기 self-test 4칸 통과 — 초록/빨강 두 방향이 실제로 다르다.
+선언된 잡 15 · 감시 중 14 (+ 이 잡 자신)
+```
+
+빨간 잡 0개 ⇒ 이슈를 안 만들었다. 실측: 저장소 이슈 **0건**(`gh issue list --state all`).
+
+## ⚪ 그래도 안 잰 것 — 빨강 경로는 라이브에서 한 번도 안 돌았다
+
+🔴 `gh issue create` / `gh issue edit` / `gh issue close` 자체는 **실행된 적이 없다.**
+self-test 가 증명한 것은 **판정**(어느 잡이 빨간가)이지 **부작용**(이슈가 열리는가)이 아니다.
+⇒ 다음에 nightly 가 실제로 빨개지는 날이 그 경로의 첫 실행이고, 그때 이슈가 안 열리면
+**이 티켓이 만든 도착 경로는 없는 것**이다. 🔵 그 실패는 조용하지 않다 — 스텝이 죽으면
+`nightly-red-arrives` 잡 자신이 빨개진다(그리고 그것은 배지에 남는다).
+
+## 🔵 이 티켓이 남기는 일반화 두 개
+
+1. **시각을 비교할 때는 두 값의 타임존을 먼저 같게 만들어라.** KST 커밋 날짜를 UTC 런
+   날짜와 대조해서 「변경이 첫 실패보다 하루 늦다」는 **역전된 결론**을 냈고, 그 결론이
+   원인을 **틀렸다고 판정**했다. 날짜만 보면 하루가 통째로 뒤집힌다.
+2. **픽스처가 현실을 안 담으면 초록도 공허하다.** 단위 스위트는 `stock: 10/5/0` 만 써서
+   3일 내내 초록이었고, 그 초록이 e2e 의 빨강을 **가리지는 않았지만 설명도 못 했다.**
 
 # Related Specs / Contracts
 
