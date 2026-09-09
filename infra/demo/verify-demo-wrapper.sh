@@ -3378,7 +3378,15 @@ global.lastSnap = {};
 global.lastStale = false;
 
 var SCENE = null;
+// 🔴 TASK-MONO-644 — `/status` 가 **판정의 일부**가 됐다. pollBundles 는 /bundles 가
+//    던졌을 때 «제어 API 가 죽었나» 를 그 자리에서 직접 묻고, 그 답이 사유를 가른다.
+//    그래서 대역이 /status 를 서빙한다 — 여전히 **모르는 경로는 죽인다**(관대한 대역 금지).
 global.api = async function (path) {
+  if (path === "/status") {
+    if (SCENE.statusThrows) throw new Error("network");
+    var sok = SCENE.statusOk !== false;
+    return { ok: sok, status: sok ? 200 : 503, body: {} };
+  }
   if (path !== "/bundles") throw new Error("대역 밖 경로: " + path);
   if (SCENE.throws) throw new Error("network");
   return { ok: SCENE.ok, status: SCENE.status, body: SCENE.body };
@@ -3401,7 +3409,17 @@ async function main() {
   async function run(k, scene) { SCENE = scene; await pollBundles(); out[k] = snap(); }
   await run("E404",  { ok: false, status: 404, body: { message: "Not Found" } });
   await run("E500",  { ok: false, status: 503, body: {} });
-  await run("ENET",  { throws: true });
+  // 🔴 ENET 은 이제 **제어 API 가 정말 죽은** 경우다: /bundles 도 /status 도 던진다.
+  //    644 이전에는 /status 를 안 물었으므로 아래 EROUTE 와 구별되지 않았다.
+  await run("ENET",  { throws: true, statusThrows: true });
+  // 🔵 대조군 — /status 가 **응답은 하는데 ok 가 아니다**(503). 판정이 «던지지 않았다»
+  //    가 아니라 «ok 인가» 를 읽는지 가른다. 이 칸이 없으면 `alive = true` 로 잘못
+  //    구현해도 초록이다.
+  await run("ESTAT5", { throws: true, statusOk: false });
+  // 🔴🔴 TASK-MONO-644 의 그 상태 — /status 는 200 인데 /bundles 만 던진다.
+  //    라이브에서 실제로 일어난 것이고, 그때 화면은 «잠시 후 다시 시도합니다» 라고
+  //    했다. 재시도로는 영원히 안 풀리는 상태이므로 그 문장은 거짓이었다.
+  await run("EROUTE", { throws: true, statusOk: true });
   await run("SHAPE", { ok: true, status: 200, body: { state: "stopped" } });
   // AC-2 — 폴백이 /status·/domains 를 **실제로** 읽는가: 그 둘만 바꾸고 같은 404 를 준다.
   global.lastState = "running";
@@ -3414,7 +3432,7 @@ async function main() {
     store:   { state: "ready",   domains: ["iam", "ecommerce"] },
     fan:     { state: "booting", domains: ["iam", "fan"] }
   } } });
-  ["PRE", "E404", "E500", "ENET", "SHAPE", "E404R", "OK"].forEach(function (k) {
+  ["PRE", "E404", "E500", "ENET", "ESTAT5", "EROUTE", "SHAPE", "E404R", "OK"].forEach(function (k) {
     console.log(k + "|" + out[k]);
   });
 }
@@ -3438,7 +3456,7 @@ z34_verdict() {  # $1 = 드라이버 출력 → 사유(여러 줄) 또는 빈 �
     BEGIN {
       FS = "|"
       PEND = "… 확인 중"
-      ne = split("E404 E500 ENET SHAPE E404R", ek, " ")
+      ne = split("E404 E500 ENET ESTAT5 EROUTE SHAPE E404R", ek, " ")
       nb = 0
     }
     {
@@ -3474,6 +3492,13 @@ z34_verdict() {  # $1 = 드라이버 출력 → 사유(여러 줄) 또는 빈 �
         if (note["E404", b] == note["E500", b]) print "[" b "] 404 와 5xx 의 문구가 같습니다 — «배포하면 되는 것» 과 «장애» 가 한 화면이 되어 엉뚱한 곳을 팝니다: " note["E404", b]
         # ── 5xx 와 네트워크 실패/타임아웃은 **같은 축**이다(둘 다 «응답이 없다»)
         if (note["E500", b] != note["ENET", b]) print "[" b "] 5xx 와 네트워크 실패의 문구가 다릅니다 — 둘 다 «응답이 없다» 입니다"
+        # ── TASK-MONO-644 — «제어 API 가 죽었다» 와 «그 경로에만 못 닿는다» 는 **다른 상태**다.
+        #    방문자가 할 일이 다르다: 전자는 기다린다, 후자는 기다려도 소용없다.
+        if (note["EROUTE", b] == note["ENET", b]) print "[" b "] /status 가 200 인데도 «제어 API 가 응답하지 않습니다» 라고 말합니다 — 재시도로 안 풀리는 상태를 «기다리면 된다» 로 말하는 거짓입니다: " note["EROUTE", b]
+        if (note["EROUTE", b] == note["E404", b]) print "[" b "] 차단된 응답과 진짜 404 의 문구가 같습니다 — 앞엣것은 브라우저가 삼킨 것이고 뒤엣것은 서버가 말한 것입니다"
+        if (index(note["EROUTE", b], "잠시 후") != 0) print "[" b "] 이 상태의 사유가 «잠시 후» 를 말합니다 — 재시도로 풀리지 않습니다: " note["EROUTE", b]
+        # ── 대조군: /status 가 **ok 가 아니면** 그것은 여전히 «응답이 없다» 축이다.
+        if (note["ESTAT5", b] != note["ENET", b]) print "[" b "] /status 가 503 인데 «경로만 못 닿는다» 로 읽었습니다 — 판정이 ok 가 아니라 «던졌나» 만 보고 있습니다"
         # ── AC-2 폴백이 /status·/domains 를 **실제로** 읽는가 (그 둘만 바꿔 같은 404 를 줬다)
         if (note["E404", b] == note["E404R", b]) print "[" b "] EC2 상태가 stopped 에서 running 으로 바뀌어도 사유가 그대로입니다 — 폴백이 /status 를 안 읽고 상수를 찍습니다"
         # ── 정상 응답: 사유는 사라지고 배지는 실제 상태가 된다
@@ -3505,14 +3530,19 @@ z34_bad="$(z34_verdict "$z34_out")"
 #    ① 주입됐는가 ② 그래도 실행되는가 ③ 술어가 무는가 를 **따로** 단언한다.
 
 # (bite-1) 이 티켓이 고친 그 줄 — 상태코드를 받아서 버린다.
-z34_mark="$(grep -c 'GUARD-Z34-BITE' "$z34_src" || true)"
+# 🔴 `GUARD-Z34-BITE` 는 `GUARD-Z34-BITE3` 의 접두사다. 줄 끝으로 고정하지 않으면
+#    앵커가 2개로 세어지고, 그러면 이 칸은 **bite 를 돌리기도 전에** 죽는다.
+z34_mark="$(grep -c 'GUARD-Z34-BITE$' "$z34_src" || true)"
 [ "$z34_mark" = "1" ] \
   || z34_die "(z34) bite 앵커(GUARD-Z34-BITE)가 ${z34_mark}개입니다(기대 1개) — 앵커가 없으면 bite 는 아무것도 안 되돌립니다."
 z34_b1="$z34_dir/bite1.js"
-sed 's|^.*GUARD-Z34-BITE.*$|      if (!r.ok) return;|' "$z34_src" > "$z34_b1"
+# 🔴 `$` 로 줄 끝을 고정한다. 안 하면 이 sed 가 `GUARD-Z34-BITE3` 줄까지 갈아엎어
+#    catch 안이 `if (!r.ok) return;` 이 되고, 그 자리의 `r` 은 아직 undefined 라
+#    node 가 TypeError 로 죽는다 — 그 빨강은 **가드가 문 것이 아니다**(실측 2026-09-09).
+sed 's|^.*GUARD-Z34-BITE$|      if (!r.ok) return;|' "$z34_src" > "$z34_b1"
 grep -qF 'if (!r.ok) return;' "$z34_b1" \
   || z34_die "(z34) bite-1 주입 실패 — 조기 반환이 들어가지 않았습니다."
-if grep -q 'GUARD-Z34-BITE' "$z34_b1"; then
+if grep -q 'GUARD-Z34-BITE$' "$z34_b1"; then
   z34_die "(z34) bite-1 주입 실패 — 마커 줄이 그대로 남아 있습니다."
 fi
 z34_o1="$(z34_run "$z34_b1")" \
@@ -3545,8 +3575,26 @@ z34_o2="$(z34_run "$z34_b2")" \
   || z34_die "(z34) bite-2 — 404 와 5xx 의 문구를 같게 만들었는데 가드가 **안 물었습니다.**"\
     $'\n'"→ «다른 문구여야 한다» 축이 죽어 있습니다. 출력:"$'\n'"$z34_o2"
 
+# (bite-3) 두 상태를 **하나로 뭉갠다** — /status 를 안 묻고 무조건 «응답이 없다» 로 읽는다.
+#          이것이 TASK-MONO-644 이전의 코드이고, 라이브에서 실제로 거짓말한 판이다.
+z34_m3="$(grep -c 'GUARD-Z34-BITE3$' "$z34_src" || true)"
+[ "$z34_m3" = "1" ] \
+  || z34_die "(z34) bite-3 앵커(GUARD-Z34-BITE3)가 ${z34_m3}개입니다(기대 1개) — 앵커가 없으면 bite 는 아무것도 안 되돌립니다."
+z34_b3="$z34_dir/bite3.js"
+sed 's|^.*GUARD-Z34-BITE3.*$|        bundlesErr = "down"; lastBundles = null; renderCards(); return;|' "$z34_src" > "$z34_b3"
+if grep -q 'GUARD-Z34-BITE3' "$z34_b3"; then
+  z34_die "(z34) bite-3 주입 실패 — 마커 줄이 그대로 남아 있습니다."
+fi
+grep -qF 'bundlesErr = "down"; lastBundles = null; renderCards(); return;' "$z34_b3" \
+  || z34_die "(z34) bite-3 주입 실패 — 뭉갠 줄이 들어가지 않았습니다."
+z34_o3="$(z34_run "$z34_b3")" \
+  || z34_die "(z34) bite-3 실행 실패 — 변형이 문법을 깬 것이므로 이 빨강은 가드가 문 것이 아닙니다:"$'\n'"$z34_o3"
+[ -n "$(z34_verdict "$z34_o3")" ] \
+  || z34_die "(z34) bite-3 — /status 를 안 묻고 두 상태를 뭉갰는데 가드가 **안 물었습니다.**"\
+    $'\n'"→ «제어 API 가 죽었다» 와 «그 경로만 못 닿는다» 를 가르는 축이 죽어 있습니다. 출력:"$'\n'"$z34_o3"
+
 rm -rf "$z34_dir"
-ok "카드 ${z34_got}장 × 7시나리오(미측정·404·5xx·네트워크실패·모양불명·404+EC2running·정상) 를 **실행 대조** — 배지·사유·버튼잠금 + 404≠5xx · 5xx=타임아웃 · 폴백이 /status 를 읽음 · bite 2칸(조기반환 되살리기 · 문구 뭉개기)"
+ok "카드 ${z34_got}장 × 9시나리오(미측정·404·5xx·제어API전멸·status503·**status200+경로차단**·모양불명·404+EC2running·정상) 를 **실행 대조** — 배지·사유·버튼잠금 + 404≠5xx · 5xx=타임아웃 · 경로차단≠전멸 · «잠시 후» 금지 · 폴백이 /status 를 읽음 · bite 3칸(조기반환 되살리기 · 문구 뭉개기 · 두 상태 뭉개기)"
 
 # =============================================================================
 # (z35) 카드가 로그인 전/후를 말하고, 링크가 하나이며, 캐러셀이 0·1·N 장에서 옳은가

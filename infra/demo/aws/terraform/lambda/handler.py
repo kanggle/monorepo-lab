@@ -787,6 +787,52 @@ def idle_check():
 
 # ---- Dispatch --------------------------------------------------------------
 
+# 🔴🔴 라우트 표는 **(메서드, 경로) 쌍**이고, 대조는 **등호**다 (TASK-MONO-644).
+#
+# 예전 판은 `path.endswith("/start")` 사슬이었고, 그것이 안전했던 이유는 이 파일이
+# 아니라 **API Gateway 의 라우트 목록**이었다 — 목록에 없는 (메서드, 경로) 는 람다에
+# 도달조차 못 했다. 644 가 `$default` 라우트를 더하면 그 방벽이 사라지고 **모든** 요청이
+# 여기로 온다. 그러면:
+#
+#   - `POST /아무거나/start`  → `endswith("/start")` 가 참이라 `start()` 가 EC2 를 켠다
+#   - `GET /start`            → 목록이 메서드도 걸렀다는 사실이 사라져 역시 `start()` 다
+#
+# 즉 CORS 를 고치려던 변경이 **인증 없는 기동 경로를 여는** 변경이 된다. 그래서 라우터
+# 하드닝이 `$default` 의 선행 조건이고, 순서를 뒤집으면 그 사이에 구멍이 열린다.
+#
+# 🔵 이 표는 `main.tf` 의 `aws_apigatewayv2_route.routes` 와 **같은 쌍**을 들어야 한다.
+#    두 곳이 어긋나면 라우트는 있는데 404 이거나 그 반대가 된다 — 시험이 두 표를 대조한다.
+_ROUTES = {
+    ("GET", "/status"): lambda event: status(),
+    ("POST", "/start"): lambda event: start(),
+    ("POST", "/stop"): lambda event: stop(),
+    ("POST", "/heartbeat"): lambda event: heartbeat(),
+    # 도메인별 선택 (TASK-MONO-477)
+    ("GET", "/domains"): lambda event: domains(),
+    ("POST", "/domain/start"): domain_start,
+    ("POST", "/domain/stop"): domain_stop,
+    # 화면 묶음 선택 (TASK-MONO-634 / ADR-MONO-071)
+    ("GET", "/bundles"): lambda event: bundles(),
+    ("POST", "/bundle/start"): bundle_start,
+    ("POST", "/bundle/stop"): bundle_stop,
+}
+
+
+def _normalize(path):
+    """표와 등호로 비교할 수 있는 꼴로만 만든다.
+
+    🔴 정규화를 **관대하게** 하지 않는다. 하는 일은 끝의 `/` 를 떼는 것 하나뿐이다
+    (`/status/` = `/status`). 소문자화나 `..` 해소 같은 것은 하지 않는다 — 그런 관용은
+    표를 우회하는 **새 철자를 만들어 주는 쪽으로만** 작동하고, 이 표가 지키는 것은
+    「EC2 를 켜는 경로가 정확히 하나인가」다.
+    """
+    if not isinstance(path, str):
+        return ""
+    if len(path) > 1 and path.endswith("/"):
+        return path.rstrip("/") or "/"
+    return path
+
+
 def handler(event, context):
     if event.get("action") == "idle-check":
         return idle_check()
@@ -797,29 +843,13 @@ def handler(event, context):
 
     if method == "OPTIONS":
         return _resp({"ok": True})
-    # 도메인 라우트를 먼저 본다 — "/domain/start" 는 "/start" 로도 끝나므로 순서가 load-bearing.
-    # 🔴 묶음 라우트도 같은 이유로 여기 위쪽에 있다: "/bundle/start" 도 "/start" 로 끝난다.
-    #    새 라우트를 아래쪽에 붙이면 조용히 `start()` 가 불리고, 그러면 방문자가 "팬만" 을
-    #    골랐는데 **선택 없이 인스턴스만 켜져** demo-core 폴백이 뜬다 - 그리고 그 실패는
-    #    200 을 낸다(에러가 아니라 **다른 동작**이라 로그로도 안 보인다).
-    if path.endswith("/bundles"):
-        return bundles()
-    if path.endswith("/bundle/start"):
-        return bundle_start(event)
-    if path.endswith("/bundle/stop"):
-        return bundle_stop(event)
-    if path.endswith("/domains"):
-        return domains()
-    if path.endswith("/domain/start"):
-        return domain_start(event)
-    if path.endswith("/domain/stop"):
-        return domain_stop(event)
-    if path.endswith("/start"):
-        return start()
-    if path.endswith("/stop"):
-        return stop()
-    if path.endswith("/status"):
-        return status()
-    if path.endswith("/heartbeat"):
-        return heartbeat()
-    return _resp({"error": "not found", "path": path}, 404)
+
+    fn = _ROUTES.get((method, _normalize(path)))
+    if fn is None:
+        # 🔴 «경로는 맞는데 메서드가 다르다» 도 여기로 온다. 405 가 아니라 404 를 주는 것은
+        #    `$default` 이전에 게이트웨이가 주던 것과 **같은 상태코드**를 유지하기 위해서다 —
+        #    이 변경으로 달라져야 하는 것은 응답의 **CORS 헤더**뿐이고 상태코드가 아니다.
+        # 🔵 경로를 본문에 되비추지 않는다. `$default` 아래에서 그 값은 임의의 외부 입력이고,
+        #    되비춰서 얻는 것(디버깅)은 CloudWatch 로그가 이미 들고 있다.
+        return _resp({"error": "not found"}, 404)
+    return fn(event)

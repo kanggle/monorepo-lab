@@ -845,6 +845,178 @@ class MaxRuntimeResetTest(unittest.TestCase):
             with mock.patch.object(handler, "_now", return_value=t):
                 handler.bundle_start({"body": json.dumps({"bundles": ["fan"]})})
         self.assertEqual(FAKE_SSM.store["/t/started"], str(T0))
+# ===========================================================================
+# 라우터는 등호로 가른다 — `$default` 의 선행 조건 (TASK-MONO-644)
+# ===========================================================================
+class RouterIsExactTest(unittest.TestCase):
+    """🔴🔴 왜 이 클래스가 생겼는가.
+
+    644 는 «없는 경로의 404 에 CORS 헤더가 없어 론처가 그 404 를 못 본다» 를 고친다.
+    HTTP API(v2) 에는 REST API(v1) 의 `gateway_response` 손잡이가 없으므로 남은 길은
+    **`$default` 라우트를 더해 람다가 404 를 내게 하는 것** 하나뿐이다 — 그래야 라우트가
+    매치되어 `cors_configuration` 이 적용된다.
+
+    그런데 그 변경은 **방벽을 하나 없앤다.** `$default` 이전에는 «어떤 (메서드, 경로) 가
+    람다에 도달하는가» 를 게이트웨이의 라우트 목록이 정했다. 그 뒤로는 전부 도달하고,
+    그러면 옛 `path.endswith("/start")` 사슬이 `POST /아무거나/start` 를 `start()` 로
+    보낸다 — CORS 를 고치려던 변경이 **인증 없는 기동 경로를 여는** 변경이 된다.
+
+    🔴 아래 시험은 **핸들러를 직접 부른다.** 게이트웨이를 거치는 시험은 이 축을 못 잰다:
+    거기서는 라우트 목록이 여전히 막아 주므로 사슬이 틀려도 초록이고, 그 초록은
+    «라우터가 안전하다» 가 아니라 «아직 `$default` 를 안 넣었다» 는 뜻이다.
+    """
+
+    def setUp(self):
+        FAKE_SSM.store.clear()
+        FAKE_SSM.sent.clear()
+        FAKE_EC2.state = "stopped"
+        FAKE_EC2.start_calls = 0
+        FAKE_EC2.stop_calls = 0
+        FAKE_EC2.launch_time = launched(0)
+
+    def call(self, method, path, payload=None):
+        ev = {"requestContext": {"http": {"method": method, "path": path}}}
+        if payload is not None:
+            ev["body"] = json.dumps(payload)
+        with mock.patch.object(handler, "_now", return_value=T0):
+            return handler.handler(ev, None)
+
+    # -- 물 기회 (positive control) ------------------------------------------
+    def test_the_real_route_does_start_the_instance(self):
+        """🔴 아래 bite 들이 «아무것도 안 켜졌다» 로 통과하지 않게 하는 바닥.
+
+        이 칸이 없으면 `start()` 가 어떤 이유로든 죽어 있을 때 모든 bite 가 조용히
+        통과한다 — 그 초록은 «라우터가 막았다» 가 아니라 «켤 수 있는 게 없었다» 다.
+        """
+        r = self.call("POST", "/start")
+        self.assertEqual(r["statusCode"], 200)
+        self.assertEqual(FAKE_EC2.start_calls, 1, "정상 라우트가 인스턴스를 안 켰습니다")
+
+    # -- bite: 접미사가 기동 경로에 닿으면 안 된다 ----------------------------
+    def test_suffix_paths_never_reach_start(self):
+        """🔴🔴 이 티켓의 bite. 옛 `endswith` 사슬에서는 **전부 `start()` 에 도달한다.**"""
+        for path in ("/x/start", "/evil/start", "/api/v2/start", "//start", "/bundle/x/start"):
+            with self.subTest(path=path):
+                FAKE_EC2.start_calls = 0
+                r = self.call("POST", path)
+                self.assertEqual(
+                    r["statusCode"], 404,
+                    f"{path} 가 404 가 아닙니다 — 라우터가 접미사로 갈리고 있습니다",
+                )
+                self.assertEqual(
+                    FAKE_EC2.start_calls, 0,
+                    f"{path} 가 start() 에 도달해 EC2 를 켰습니다 — "
+                    "$default 아래에서 이것은 인증 없는 기동 경로입니다",
+                )
+
+    def test_suffix_paths_never_reach_the_other_control_routes(self):
+        """`/start` 만의 문제가 아니다 — 사슬의 **모든** 가지가 같은 성질을 갖고 있었다."""
+        cases = [
+            ("POST", "/x/stop", "stop_calls"),
+            ("POST", "/x/bundle/start", None),
+            ("POST", "/x/domain/start", None),
+            ("POST", "/x/heartbeat", None),
+            ("GET", "/x/status", None),
+            ("GET", "/x/bundles", None),
+            ("GET", "/x/domains", None),
+        ]
+        for method, path, counter in cases:
+            with self.subTest(path=path):
+                FAKE_EC2.stop_calls = 0
+                r = self.call(method, path, {"bundles": ["fan"]})
+                self.assertEqual(r["statusCode"], 404, f"{method} {path} 가 404 가 아닙니다")
+                if counter:
+                    self.assertEqual(getattr(FAKE_EC2, counter), 0)
+        self.assertEqual(FAKE_SSM.sent, [], "접미사 경로가 SSM 명령을 보냈습니다")
+
+    # -- bite: 메서드도 표의 일부다 -------------------------------------------
+    def test_method_is_part_of_the_route(self):
+        """🔴 `$default` 는 **메서드 필터도** 없앤다.
+
+        라우트 목록은 `"POST /start"` 였다 — 경로와 메서드를 **함께** 걸렀다. `$default`
+        아래에서 표가 경로만 보면 `GET /start` 가 EC2 를 켠다. 링크 하나, 이미지 태그
+        하나, 프리페치 한 번이면 충분하다.
+        """
+        for method, path in (("GET", "/start"), ("GET", "/stop"), ("GET", "/heartbeat"),
+                             ("POST", "/status"), ("POST", "/bundles"), ("POST", "/domains")):
+            with self.subTest(method=method, path=path):
+                FAKE_EC2.start_calls = 0
+                FAKE_EC2.stop_calls = 0
+                r = self.call(method, path)
+                self.assertEqual(r["statusCode"], 404, f"{method} {path} 가 통과했습니다")
+                self.assertEqual(FAKE_EC2.start_calls, 0)
+                self.assertEqual(FAKE_EC2.stop_calls, 0)
+
+    # -- 정규화는 하되 관대하지 않게 ------------------------------------------
+    def test_trailing_slash_is_the_same_route(self):
+        r = self.call("GET", "/status/")
+        self.assertEqual(r["statusCode"], 200)
+
+    def test_normalisation_does_not_invent_new_spellings(self):
+        """🔵 대조군 — 정규화가 «표를 우회하는 철자» 를 만들어 주지 않는가."""
+        for path in ("/STATUS", "/status/../start", "/status%2f", " /status"):
+            with self.subTest(path=path):
+                self.assertEqual(self.call("GET", path)["statusCode"], 404)
+
+    def test_unknown_path_is_not_reflected_in_the_body(self):
+        """`$default` 아래에서 경로는 임의의 외부 입력이다 — 되비추지 않는다."""
+        r = self.call("GET", "/<script>alert(1)</script>")
+        self.assertEqual(r["statusCode"], 404)
+        self.assertNotIn("script", json.dumps(body(r)))
+
+
+class RouteTableMatchesTerraformTest(unittest.TestCase):
+    """🔴🔴 배선 — 핸들러의 표와 게이트웨이의 라우트 목록은 **같은 쌍**이어야 한다.
+
+    두 곳이 어긋나면 증상이 조용하다: terraform 에만 있는 쌍은 «라우트는 있는데 404»,
+    핸들러에만 있는 쌍은 `$default` 가 생긴 뒤에야 도달하는 **문서에 없는 경로**가 된다.
+    어느 쪽도 에러를 내지 않는다.
+    """
+
+    ROUTES_RE = (
+        r'resource\s+"aws_apigatewayv2_route"\s+"routes"\s*\{'
+        r'.*?for_each\s*=\s*toset\(\[(.*?)\]\)'
+    )
+
+    def setUp(self):
+        import re
+        self.re = re
+        path = os.path.join(HERE, "..", "terraform", "main.tf")
+        self.assertTrue(os.path.isfile(path), f"main.tf 를 못 찾았습니다: {path}")
+        with open(path, encoding="utf-8") as fh:
+            self.tf = fh.read()
+
+    def terraform_routes(self):
+        m = self.re.search(self.ROUTES_RE, self.tf, self.re.S)
+        self.assertIsNotNone(
+            m, "main.tf 에서 aws_apigatewayv2_route.routes 의 for_each 를 못 읽었습니다 — "
+               "리소스 이름이나 모양이 바뀌었으면 이 시험을 **먼저** 고치세요. "
+               "못 읽은 채 통과하면 이 칸은 아무것도 대조하지 않습니다.")
+        found = self.re.findall(r'"([A-Z]+ /[^"]*)"', m.group(1))
+        return {tuple(s.split(" ", 1)) for s in found}
+
+    def test_the_two_tables_are_the_same_set(self):
+        tf_routes = self.terraform_routes()
+        self.assertGreaterEqual(
+            len(tf_routes), 10,
+            f"terraform 에서 {len(tf_routes)}개만 읽었습니다 — 파서가 목록을 놓쳤습니다. "
+            "빈(또는 얇은) 집합끼리는 **서로 동의하므로** 이 대조가 공허해집니다.")
+        self.assertEqual(
+            tf_routes, set(handler._ROUTES),
+            "핸들러의 _ROUTES 와 main.tf 의 라우트 목록이 다릅니다.\n"
+            f"  terraform 에만: {sorted(tf_routes - set(handler._ROUTES))}\n"
+            f"  handler 에만  : {sorted(set(handler._ROUTES) - tf_routes)}")
+
+    def test_the_default_route_exists(self):
+        """🔴 `$default` 가 없으면 없는 경로의 404 는 게이트웨이가 내고, **CORS 가 안 붙는다.**
+
+        그 404 는 브라우저에서 `net::ERR_FAILED` 로 도착하므로 론처의 `r.status === 404`
+        분기는 **도달 불가능**하다 — 644 가 고치려는 바로 그 상태다.
+        """
+        self.assertRegex(
+            self.tf,
+            r'resource\s+"aws_apigatewayv2_route"\s+"default"\s*\{[^}]*route_key\s*=\s*"\$default"',
+            "main.tf 에 $default 라우트가 없습니다 — 없는 경로의 4xx 에 CORS 가 안 붙습니다.")
 
 
 if __name__ == "__main__":

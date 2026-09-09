@@ -372,6 +372,42 @@ resource "aws_apigatewayv2_route" "routes" {
   target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
 }
 
+# ---------------------------------------------------------------------------
+# `$default` — 없는 경로의 404 를 **람다가** 내게 한다 (TASK-MONO-644)
+# ---------------------------------------------------------------------------
+# 🔴🔴 왜 필요한가. 위 `cors_configuration` 은 **매치된 라우트의 응답에만** 적용된다.
+#    라우트가 하나도 안 맞으면 API Gateway 가 스스로 `{"message":"Not Found"}` 404 를
+#    내는데, 그 응답에는 `access-control-allow-origin` 이 **안 붙는다**(2026-09-08·09-09
+#    실측). 그러면 브라우저는 본 요청의 응답을 차단하고 `fetch` 가 던진다 —
+#    즉 론처의 `r.status === 404` 분기는 **도달 불가능**하다.
+#
+#    🔵 이것이 안 보이는 이유: 프리플라이트 `OPTIONS` 는 204 + CORS 로 통과한다.
+#       네트워크 탭에서 OPTIONS 는 초록이고, 빨간 것은 본 요청뿐이다.
+#
+# 🔴 REST API(v1) 였다면 `aws_api_gateway_gateway_response` 로 `DEFAULT_4XX` 에 헤더를
+#    붙였을 것이다. 이 API 는 `protocol_type = "HTTP"` 즉 **HTTP API(v2)** 이고 v2 에는
+#    그 손잡이가 없다. REST 로 옮기는 것은 이 결함 하나에 비해 반경이 과하다
+#    (스테이지·배포·통합·권한이 전부 다른 리소스가 된다) — 그래서 안 한다.
+#
+# 🔴🔴 **이 라우트는 방벽을 하나 없앤다.** 이전에는 위 `routes` 목록이 «어떤 (메서드,
+#    경로) 가 람다에 도달하는가» 를 정했다. `$default` 뒤로는 전부 도달하므로, 람다의
+#    라우터가 접미사가 아니라 **등호**로 갈라야 한다. 그 하드닝은 `handler.py` 의
+#    `_ROUTES` 이고, `tests/test_handler.py::RouterIsExactTest` 가 그것을 지킨다.
+#    순서를 뒤집으면(이 라우트를 먼저 넣으면) 그 사이에 `POST /아무거나/start` 가 열린다.
+resource "aws_apigatewayv2_route" "default" {
+  api_id    = aws_apigatewayv2_api.api.id
+  route_key = "$default"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+
+  # 🔴🔴 순서는 **apply 안에서도** load-bearing 이다. 이 라우트는 통합(integration)에만
+  #    의존하고 통합의 `invoke_arn` 은 람다 **코드**가 바뀌어도 그대로다 — 그래서
+  #    terraform 은 «라우트 생성» 을 «람다 코드 갱신» 보다 먼저 해도 된다고 본다.
+  #    그 몇 초 동안 살아 있는 조합이 정확히 이 티켓이 막으려는 것이다:
+  #    **옛 endswith 라우터 + $default** = `POST /아무거나/start` 가 EC2 를 켠다.
+  #    티켓을 PR 하나로 묶는 것만으로는 이 창이 안 닫힌다.
+  depends_on = [aws_lambda_function.control]
+}
+
 resource "aws_apigatewayv2_stage" "default" {
   api_id      = aws_apigatewayv2_api.api.id
   name        = "$default"
