@@ -26,6 +26,32 @@ AI-assisted 풀스택 포트폴리오 — 엔터테인먼트 회사 (HYBE / SM /
 
 `gateway` · `community` (post / comment / reaction / follow feed) · `artist` (profile + fandom) · `membership` (subscription state machine + PG mock + outbox) · `notification` (membership events → per-fan inbox) 5 개 백엔드 서비스와 Next.js 15 프론트엔드까지 모두 구현 완료. 자세한 service map 은 [PROJECT.md](PROJECT.md#service-map-v1--v2).
 
+## Screenshots
+
+> 🔵 아래 셋은 **로그인 없이** 열리고, 멤버십 화면은 **로그인 후**다.
+
+<p align="center">
+  <img src="docs/screenshots/04-fan-membership.jpg" width="900" alt="멤버십 — 티어와 일할 계산"><br>
+  <em>멤버십 — 현재 구독 상태 · 자동 갱신 등록 · 두 티어. 업그레이드는 <strong>잔여 크레딧을 일할로 정산</strong>해서 이번 결제액을 다시 계산한다 (<code>-₩7,636 → ₩10,264</code>). 결제는 데모용 모의 PG 다</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/01-fan-feed.jpg" width="900" alt="피드 — 멤버십 게이팅"><br>
+  <em>피드 — 공개 포스트는 본문까지, <code>멤버 전용</code>·<code>PREMIUM</code> 포스트는 <strong>제목만</strong> 보이고 본문 자리에 가입 안내가 선다. 게이팅은 렌더가 아니라 응답에서 걸린다</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/02-fan-artists.jpg" width="900" alt="아티스트 디렉터리"><br>
+  <em>아티스트 디렉터리 — 소속사 · 솔로/그룹 구분 · 이름 검색</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/03-fan-artist-profile.jpg" width="900" alt="아티스트 프로필 — 팔로우와 게이팅"><br>
+  <em>아티스트 프로필 — 데뷔일 · 소개 · <strong>팔로잉 상태</strong>. 그 아티스트의 포스트에도 같은 게이팅이 걸린다</em>
+</p>
+
+---
+
 ## Quick Start
 
 ```bash

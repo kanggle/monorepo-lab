@@ -54,6 +54,23 @@
 
 ---
 
+## Screenshots
+
+> 🔵 아래 화면은 **운영자 콘솔**(`platform-console`)이 그린다 — 이 서비스는 그 뒤의 API 다.
+> 실서비스에서 열려면 **로그인 후** `console.hubwang.com` 에서 해당 도메인 섹션으로 간다.
+
+<p align="center">
+  <img src="docs/screenshots/01-iam-operators.jpg" width="900" alt="운영자 관리 — 등록·역할 변경·테넌트 배정"><br>
+  <em>운영자 관리 — 등록(역할 다중 선택 · break-glass 로컬 비밀번호는 <strong>선택</strong>, 비우면 OIDC-only) · 테넌트 배정 · 상태 변경. 모든 변경은 사유를 요구하고 감사 기록에 남는다</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/02-iam-permissions.jpg" width="900" alt="권한 키 카탈로그와 역할별 보유 권한"><br>
+  <em>권한 — 권한 키 카탈로그와 역할(role)별 보유 권한. 역할 정의는 seed(Flyway)로만 바뀌는 읽기 전용 화면이고, 각 역할이 인용하는 ADR 이 그대로 보인다</em>
+</p>
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |

@@ -63,6 +63,40 @@
 > 운영자(operator) UI 는 ADR-MONO-031 Phase 6 로 통합 콘솔(platform-console, hub)에 흡수되었다.
 > 독립 admin-dashboard 앱은 제거되었고, standalone 배포본은 web-store 단독 프론트엔드로 운영된다.
 
+<details>
+<summary>🗄️ 제거된 독립 <code>admin-dashboard</code> 앱 (v1.0) — 흡수 전 모습</summary>
+
+> 🔴 **지금은 없는 앱이다.** 아래 둘은 `ADR-MONO-031` Phase 6 이전의 화면이고, 그 기능은
+> 통합 콘솔의 E-Commerce 섹션으로 옮겨졌다. 남겨 두는 이유는 **왜 콘솔로 합쳤는지**가
+> 이 두 장에 보이기 때문이다 — 도메인마다 admin 을 따로 두면 운영자가 앱을 갈아타야 한다.
+
+<p align="center">
+  <img src="docs/screenshots/05-admin-dashboard.png" width="900" alt="제거된 admin-dashboard — 대시보드"><br>
+  <em>(구) Admin 대시보드 — 오늘 주문 · 처리 대기 · 품절 · 최근 7일 매출 추이</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/06-admin-products.png" width="900" alt="제거된 admin-dashboard — 상품 관리"><br>
+  <em>(구) Admin 상품 관리</em>
+</p>
+
+</details>
+
+### 라이브 데모 (`store.hubwang.com`)
+
+> 🔵 위 넷은 **로컬 풀스택**에서 찍은 것이고(결제 연동 포함), 아래 둘은 **지금 열리는 데모**다.
+> 🔴 데모의 실시간 기능(장바구니·주문)은 백엔드를 켠 뒤에 열린다 — 공개 카탈로그는 **로그인 없이** 열린다.
+
+<p align="center">
+  <img src="docs/screenshots/09-store-products.jpg" width="900" alt="전체 상품 카탈로그"><br>
+  <em>전체 상품 — 카테고리·정렬 필터, 검색, 위시리스트 토글(채워진 하트가 담은 상태), 페이지네이션</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/10-store-wishlist.jpg" width="900" alt="마이페이지 — 위시리스트"><br>
+  <em>마이페이지 — 위시리스트(담은 시각까지). 좌측이 프로필·주문내역·리뷰·쿠폰·배송지·알림으로 이어지는 고객 자기관리 표면이다</em>
+</p>
+
 ### Observability
 
 <p align="center">
