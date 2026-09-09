@@ -267,6 +267,7 @@ jobs:
       client-graph-origins: ${{ steps.filter.outputs.client-graph-origins }}
       fetch-resolution: ${{ steps.filter.outputs.fetch-resolution }}
       readme-screenshots: ${{ steps.filter.outputs.readme-screenshots }}
+      stage-contexts: ${{ steps.filter.outputs.stage-contexts }}
       # TASK-MONO-562: raw filter, NOT AND-combined with `code-changed`. Every arrival
       # path of this drift is non-code: a `vercel.json` losing its `ignoreCommand`, a
       # new Vercel project landing without one, or the judge script being weakened.
@@ -824,6 +825,12 @@ jobs:
               #    **그 문서만 고치는 커밋**에서 잡이 안 돌아 깨진 참조가 조용히 머지된다.
               - 'docs/portfolio.md'
               - 'scripts/check-readme-screenshots.mjs'
+            # TASK-MONO-655: 다단계 Dockerfile 의 스테이지 대칭. 도착 경로는 둘 —
+            # Dockerfile 자신, 그리고 판정자.
+            stage-contexts:
+              - '**/Dockerfile'
+              - '**/Dockerfile.*'
+              - 'scripts/check-stage-inherits-its-contexts.mjs'
             # TASK-MONO-562: a Vercel project that builds on every commit arrives three
             # ways — a new `vercel.json` anywhere in the tree, an existing one losing its
             # `ignoreCommand`, or the shared judge being weakened. All three are non-code,
@@ -1568,6 +1575,34 @@ jobs:
 
       - name: Guard — every backend fetch is resolved or declared
         run: node scripts/check-fetch-resolution.mjs
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-655 — 다단계 빌드에서 스테이지가 물려받은 심링크의 **대상**도 놓는가.
+  #
+  # 🔴 `pnpm` 의 `link:` 는 대상이 없어도 심링크를 만든다 ⇒ `pnpm install` 은 통과하고
+  # 죽는 것은 **다음 스테이지의 build** 다. 그래서 install 로그로는 안 보인다.
+  #
+  # 🔴🔴 `check-build-context-declarations.sh` 가 이 축을 **못 본다.** 그것은
+  # 「Dockerfile 이 요구 ↔ compose 가 공급」을 보고, 이 결함은 **공급도 됐고 복사도 했는데
+  # 스테이지 하나를 빠뜨린** 것이라 거기 초록으로 통과했다. 그 사이 nightly 가 이틀 빨갰다.
+  # ---------------------------------------------------------------------------
+  stage-contexts:
+    name: Stage inherits its contexts (node_modules and its symlink targets travel together)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.stage-contexts == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax (node --check)
+        run: node --check scripts/check-stage-inherits-its-contexts.mjs
+
+      - name: Self-test the predicate (bites, and stays silent where it must)
+        run: node scripts/check-stage-inherits-its-contexts.mjs --self-test
+
+      - name: Guard — an inheriting stage places every context its source placed
+        run: node scripts/check-stage-inherits-its-contexts.mjs
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-650 — README 스크린샷 배선.
