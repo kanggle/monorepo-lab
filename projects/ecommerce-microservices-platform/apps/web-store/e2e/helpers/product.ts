@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test';
+import { SELECTABLE_VARIANT_OPTION } from '../../src/widgets/product-detail-with-cart/variant-option-testid';
 
 /**
  * /products 리스트에서 첫 상품 상세로 이동.
@@ -17,19 +18,21 @@ export async function openFirstProductDetail(page: Page): Promise<void> {
 }
 
 /**
- * 상품 상세 페이지에서 variant 드롭다운을 열어 첫 번째 활성 옵션을 선택한다.
+ * 상품 상세 페이지에서 variant 드롭다운을 열어 첫 번째 **선택 가능한** 옵션을 선택한다.
  * 옵션 미선택 시 "장바구니 담기" 버튼의 accessible name이 드롭다운 트리거와
  * 동일해지므로(둘 다 "옵션을 선택하세요"), ▾ 아이콘이 붙은 쪽을 정확히 매칭한다.
+ *
+ * 🔴 이 헬퍼는 «재고 숫자» 로 옵션을 고르지 않는다 — 그 화면은 재고를 **모를 수 있고**,
+ *    모르는 것을 안 그리는 것이 설계다(ADR-MONO-070 § 재고). 술어와 그 사유는
+ *    `src/widgets/product-detail-with-cart/variant-option-testid.ts` 에 한 번만 있다.
+ *    거기서 import 하므로 이 문자열은 대조군 단위 테스트가 재는 것과 **같은 값**이다.
  */
 export async function selectFirstVariant(page: Page): Promise<void> {
   const trigger = page.getByRole('button', { name: /^옵션을 선택하세요\s*▾$/ });
   await expect(trigger).toBeVisible();
   await trigger.click();
 
-  const firstOption = page
-    .locator('button:not([disabled])')
-    .filter({ hasText: /재고\s+\d+/ })
-    .first();
+  const firstOption = page.locator(SELECTABLE_VARIANT_OPTION).first();
   await expect(firstOption).toBeVisible();
   await firstOption.click();
 }

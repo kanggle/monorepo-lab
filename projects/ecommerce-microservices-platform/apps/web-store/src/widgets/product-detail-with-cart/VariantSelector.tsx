@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import type { ProductDetailView } from '@/entities/product';
 import type { SelectedItem } from './types';
+import { VARIANT_OPTION_TESTID } from './variant-option-testid';
 import { useClickOutside } from '@/shared/hooks/use-click-outside';
 import styles from './ProductDetailWithCart.module.css';
 
@@ -46,6 +47,11 @@ export function VariantSelector({
                 <button
                   key={v.id}
                   type="button"
+                  /* 🔴 «옵션 항목» 이라는 역할에만 이름을 붙인다 — 재고에 대해서는 아무것도
+                     주장하지 않는다. 선택 가능 여부는 아래 `disabled` 하나가 말하고,
+                     e2e 헬퍼는 그 둘을 합친 `SELECTABLE_VARIANT_OPTION` 으로 고른다.
+                     이 testid 가 필요해진 사유는 `variant-option-testid.ts` 에 한 번만 적었다. */
+                  data-testid={VARIANT_OPTION_TESTID}
                   className={`${styles.dropdownItem} ${isDisabled ? styles.dropdownItemDisabled : ''}`}
                   disabled={isDisabled}
                   onClick={() => onSelect(v.id)}

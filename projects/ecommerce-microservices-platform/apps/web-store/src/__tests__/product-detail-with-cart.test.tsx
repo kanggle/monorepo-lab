@@ -2,7 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ProductDetailWithCart } from '@/widgets/product-detail-with-cart';
+import { VariantSelector } from '@/widgets/product-detail-with-cart/VariantSelector';
+import {
+  SELECTABLE_VARIANT_OPTION,
+  VARIANT_OPTION_TESTID,
+} from '@/widgets/product-detail-with-cart/variant-option-testid';
 import type { ProductDetail } from '@repo/types';
+import type { ProductDetailView } from '@/entities/product';
 
 const mockPush = vi.fn();
 const mockAddItem = vi.fn();
@@ -193,5 +199,98 @@ describe('ProductDetailWithCart', () => {
 
     // 삭제 후 즉시 주문 버튼이 다시 비활성화
     expect(screen.getByRole('button', { name: '즉시 주문' })).toBeDisabled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TASK-MONO-655 원인 ② — e2e 헬퍼의 술어에 대한 대조군
+//
+// 🔴 위의 기존 스위트는 `stock: 10 / 5 / 0` 만 쓴다. 그것은 **라이브 백엔드가 말한 수**
+//    이고, 공개 상세는 2026-09-07 이후 **저장본**에서 와서 `stock` 이 항상 `null` 이다
+//    (`snapshot-mappers.ts`). 그래서 이 스위트는 초록인 채로 남았고 e2e 만 3일 빨갰다 —
+//    픽스처가 현실을 안 담으면 초록도 공허하다. 아래가 그 구멍을 메운다.
+//
+// 재는 것은 **헬퍼가 실제로 쓰는 그 문자열**이다(`SELECTABLE_VARIANT_OPTION` 을 양쪽이
+// 같은 모듈에서 import 한다). 여기서 직접 셀렉터를 다시 타이핑하면 이 테스트는 헬퍼가
+// 아니라 자기가 베낀 사본을 재게 된다.
+// ---------------------------------------------------------------------------
+
+/** 저장본 모양 — 재고를 «모른다». 위 `product` 와 달리 이것이 지금의 공개 상세다. */
+const snapshotProduct: ProductDetailView = {
+  ...product,
+  variants: [
+    { id: 'v1', optionName: '빨강', stock: null, additionalPrice: 1000 },
+    { id: 'v2', optionName: '파랑', stock: null, additionalPrice: 0 },
+  ],
+};
+
+function selectable(root: ParentNode = document): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(SELECTABLE_VARIANT_OPTION));
+}
+
+function renderOpenSelector(variants: ProductDetailView['variants'], selectedIds: string[] = []) {
+  return render(
+    <VariantSelector
+      variants={variants}
+      selectedItems={selectedIds.map((variantId) => ({ variantId, quantity: 1 }))}
+      dropdownOpen
+      onDropdownToggle={vi.fn()}
+      onSelect={vi.fn()}
+      onDropdownClose={vi.fn()}
+    />,
+  );
+}
+
+describe('e2e 헬퍼의 술어 — «선택 가능한 옵션»', () => {
+  it('재고를 «모르는» 옵션(stock: null)을 잡는다 — 낡은 술어는 못 잡던 자리', () => {
+    const { container } = renderOpenSelector(snapshotProduct.variants);
+
+    expect(selectable(container).map((el) => el.textContent)).toEqual([
+      expect.stringContaining('빨강'),
+      expect.stringContaining('파랑'),
+    ]);
+
+    // 🔴 같은 화면에서 낡은 술어 `/재고\s+\d+/` 는 **0건**이다. 이것이 e2e 가 죽은 사유고,
+    //    저장본 경로에 재고 문구를 되살리면 여기가 빨개진다(ADR-MONO-070 § 재고).
+    expect(container.textContent).not.toMatch(/재고\s+\d+/);
+  });
+
+  it('🔴 대조군 — 품절 옵션은 testid 를 «가진 채» 이 술어에 안 잡힌다', () => {
+    const { container } = renderOpenSelector([
+      { id: 'v0', optionName: '녹색', stock: 0, additionalPrice: 0 },
+      ...snapshotProduct.variants,
+    ]);
+
+    // 제외가 «원소가 없어서» 가 아니라 `:not([disabled])` 로 이뤄지는지 먼저 증명한다.
+    expect(container.querySelectorAll(`[data-testid="${VARIANT_OPTION_TESTID}"]`)).toHaveLength(3);
+
+    const names = selectable(container).map((el) => el.textContent);
+    expect(names).toHaveLength(2);
+    expect(names.join('|')).not.toContain('녹색');
+  });
+
+  it('🔴 대조군 — 이미 선택된 옵션도 안 잡힌다 (다시 고르면 e2e 가 헛돈다)', () => {
+    const { container } = renderOpenSelector(snapshotProduct.variants, ['v1']);
+
+    const names = selectable(container).map((el) => el.textContent);
+    expect(names).toHaveLength(1);
+    expect(names[0]).toContain('파랑');
+  });
+
+  it('🔴 대조군 — 페이지 전체에서 옵션 항목만 잡는다 (술어를 넓히기만 하면 엉뚱한 버튼을 누른다)', async () => {
+    const user = userEvent.setup();
+    render(<ProductDetailWithCart product={snapshotProduct} fromSnapshot />);
+    await user.click(getDropdownTrigger());
+
+    const matched = selectable();
+    expect(matched).toHaveLength(2);
+    expect(matched.every((el) => el.dataset.testid === VARIANT_OPTION_TESTID)).toBe(true);
+
+    // 🔴🔴 넓히기만 한 술어(`button:not([disabled])`)가 왜 답이 아닌지를 **재서** 남긴다:
+    //    페이지에는 활성 버튼이 옵션보다 많고, 그 중 **첫 번째가 옵션이 아니다** ⇒
+    //    `.first()` 는 찜/트리거를 누른다. 실패가 아니라 조용한 오작동이 된다.
+    const allEnabled = Array.from(document.querySelectorAll<HTMLElement>('button:not([disabled])'));
+    expect(allEnabled.length).toBeGreaterThan(matched.length);
+    expect(allEnabled[0].dataset.testid).not.toBe(VARIANT_OPTION_TESTID);
   });
 });
