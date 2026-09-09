@@ -228,3 +228,74 @@ AMI 재굽기 — 가 **서로 다른 속도로 나가는 구조**는 그대로�
 
 분석=Opus 5 / 구현 권장=**Opus** (거절을 어디서·무엇으로 판단할지가 설계 판단이고,
 잘못 만들면 기능이 영원히 꺼지거나 예산이 새는 쪽으로 실패한다).
+
+---
+
+# 10차 재굽기 기록 (2026-09-09 UTC · 소유자 승인)
+
+## 무엇을 했나
+
+```
+bash infra/demo/aws/packer/bake.sh
+  → Build 'amazon-ebs.demo' finished after 51 minutes 37 seconds
+  → ami-0cfe209aef4a9cd29 / portfolio-demo-1788934931 / snap-0f8168d3a2e1ae813 (100GB)
+  → RepoCommit 태그 = 6ae6145db553875b23f952ab0ca44cf2275338b7  (AWS 에서 되읽어 확인)
+  → deployed-ami.env 갱신, REPO_COMMIT_PROVENANCE = ami-tag
+```
+
+🔵 **굽기 전에 「왜 굽는가」를 커밋에서 확인했다** — 55분을 태우고 나서 「안 들어 있었다」를
+알면 안 되므로:
+
+| 항목 | 9차 AMI (`3bc182ecd`) | 10차 대상 (`6ae6145db`) |
+|---|---|---|
+| `demo-boot.sh` 번들 선택 | 없음 | ✅ `selection` 센티널 |
+| `projects.sh` `BUNDLES` | 없음 | ✅ |
+| `demo-stack.service` | `DEMO_PROFILE=full` | ✅ `=selection` |
+| `V19__seed_more_sample_data.sql` | 없음 | ✅ |
+| `seed-fan.sh` 아티스트 | `a001–a003` | ✅ `a001–a006` |
+
+🔵 **부수 소득**: packer 가 AMI 안에서 돌린 정적 검증 로그에
+`ok: (z38) … 환경=미설치(clean clone·CI 의 정상 상태) · rc=3(기대 3) · 해석 표지 확인` 이
+찍혔다. `TASK-MONO-643` 이 「CI 에서 한 번도 안 도는 가지」라고 적어 둔 미설치 분기가
+**굽기 중에 실제로 돌았다** — 그 티켓화의 근거가 약해졌다.
+
+## 🔴 이 티켓은 닫히지 않는다
+
+AC-0 이 이 상황을 예고해 뒀다: *"그 사이 소유자가 재굽기를 했다면 재현 조건이 사라진다 —
+**그때도 티켓을 닫지 마라.** 판정은 «지금 세대가 맞나» 가 아니라 **«어긋났을 때
+거절하는가»** 다."*
+
+재굽기는 **오늘의 거짓말을 없앤다.** 이 티켓이 막으려는 것은 **다음번**이다 —
+세 배포 경로(Vercel 머지 · terraform apply · AMI 재굽기)가 서로 다른 속도로 나가는
+구조는 그대로이고, 다음에 인스턴스 실행 파일이 바뀌는 날 똑같이 재발한다.
+⇒ AC-1(세대를 읽고 거절) · AC-2(화면이 말한다) · AC-3(가드)은 **그대로 남는다.**
+
+🔴 AC-0 의 지시대로, 세대가 맞는 지금은 **인위적으로 어긋난 값을 넣어서** 거절을 재야 한다.
+
+## 남은 것
+
+- 🔴 **`terraform apply` (ami_id 교체) — 소유자 승인 대기.** plan:
+  `aws_instance.demo must be replaced` · `aws_iam_role_policy.lambda`/`aws_lambda_function.control`
+  in-place(둘 다 **인스턴스 id 변경의 결과**이지 독립 변경이 아니다 — `source_code_hash` 는
+  플랜에 안 나온다) · **1 add · 2 change · 1 destroy**.
+  🔵 `terraform.tfvars` 가 적어 둔 정상 지문과 일치한다: *"EC2 destroy+create 는 정상.
+  멈춰야 할 지문은 **Lambda / API Gateway / SSM 이 destroy 로 뜨는 것**"* — 그 셋은 없다.
+- apply 뒤 부팅 창 하나로 수확할 것: `TASK-MONO-648` 보호 경로 87장 · 론처 콘솔 4장 ·
+  이 티켓의 검증 · **기동 시간 측정**(아직 한 번도 안 쟀다) · `TASK-MONO-645` ①② · `TASK-MONO-633`.
+- 🔴 **부팅 지문이 또 바뀐다.** 9차의 `1/1 (iam/login=200)` 이 10차에서 무엇이 되는지는
+  **구운 세대의 마크업**으로 확인해야 한다(저장소 최신이 아니라):
+  `git show 6ae6145db:infra/demo/aws/site/index.html | grep demo-probe`
+
+## 🔴🔴 그리고 이 재굽기가 드러낸 것 — `check-ami-generation.sh` 의 술어가 원인보다 넓다
+
+재굽기 직후 판정자는 **rc=0 · 같은 세대**다. 그런데 `TASK-MONO-644` 를 머지하는 순간
+**어긋남 1건**이 되고 처방은 *"닫는 행위는 재굽기다(~55분 · 과금)"* 다.
+
+644 가 `index.html` 에서 바꾼 것은 `<script>` 안의 상태기계뿐이고, `demo-up.sh` 가 그
+파일에서 **추출하는 것**은 선언 속성뿐이다 — `data-surface`/`data-served`/`data-host`/
+`data-demo-probe(-path)`. 즉 *"구운 데모 호스트는 서빙 중인 론처가 약속하는 것을 서빙하지
+않습니다"* 는 이 변경에 대해 **참이 아니다.**
+
+🔵 판정자가 파일 내용 전체를 비교하는 것은 설계 선택이다(추출기를 두 벌로 만들면 한쪽만
+고쳐진다). 하지만 `index.html` 은 **머지 = 배포**라 이 영역에서 가장 자주 바뀌는 파일이고,
+그래서 이 가드는 앞으로도 계속 이렇게 빨개진다. ⇒ **`TASK-MONO-649`** 로 기안했다.
