@@ -98,3 +98,9 @@ infra/demo/aws/terraform/*.zip
 # 생겨도 따라온다.
 __pycache__/
 *.pyc
+
+# 포트폴리오 촬영 산출물 (TASK-MONO-648) — 102장 · 15–50MB.
+# 🔴 취업 지원용 자료라 **저장소 밖에서 쓴다.** 커밋하면 클론마다 그 무게가 따라다니고,
+#    이미지 diff 는 리뷰를 받지 못한다. README 에 넣을 큐레이션 몇 장만 따로 커밋한다.
+# 🔵 `scripts/capture-portfolio.mjs --out <경로>` 로 위치를 바꿀 수 있다.
+portfolio-captures/
