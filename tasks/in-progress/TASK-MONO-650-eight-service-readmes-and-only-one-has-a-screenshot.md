@@ -273,6 +273,34 @@ admin 을 따로 두면 운영자가 앱을 갈아타야 한다」는 **합친 �
 🔴🔴 `changes.outputs` 선언을 처음에 빠뜨렸고 **YAML 파싱이 잡았다** — 그것이 없으면
 `if:` 가 늘 거짓이라 가드가 **한 번도 안 돈다**(`TASK-MONO-646` 이 데인 그 축).
 
+## 🔴🔴 이 PR 이 main 을 빨갛게 만들었다 — 가드를 **하나 더한 것만으로**
+
+`#3718` 이 머지된 뒤 `Guard-count figure (scripts/ reading git ls-files vs its two prose
+homes)` 가 **FAILURE** 였다. 사유:
+
+```
+measured: 20 of 54 scripts/ entries read git ls-files
+DRIFT: CLAUDE.md does not state "20 of the 54 …".   It currently says: 20 of the 53 …
+DRIFT: platform/git-workflow-policy.md …            It currently says: 20 of the 53 …
+```
+
+🔵 **분자는 안 움직였다**(내 가드는 `git ls-files` 를 안 쓴다). 움직인 것은 **분모**다 —
+`scripts/` 에 파일을 하나 더했기 때문이다. `TASK-MONO-646` 이 그 수에 게이트를 달아 뒀고,
+그 게이트가 **정확히 작동했다.**
+
+🔴 **내가 놓친 것은 «어느 가드를 돌릴지» 였다.** 나는 required 3개 + 내가 만든 가드만
+돌렸다. 그 넷은 전부 초록이었고, 그래서 **초록을 보고 푸시했다.** 그러나
+`check-ls-files-guard-count.sh` 는 required 가 아니고 내가 만든 것도 아니라 그 목록에
+없었다 — 즉 **내 선택이 모집단을 정했고 그 모집단이 틀렸다.**
+
+⇒ 일반화: **`scripts/` 에 파일을 더하거나 지우는 변경은 그 자체로 다른 가드의 입력이다.**
+「내 변경과 관련 있어 보이는 가드」만 돌리면 이 부류를 영원히 못 본다.
+
+- [x] `CLAUDE.md` 와 `platform/git-workflow-policy.md` 의 `53` → `54`. 🔵 판정자가 스스로
+      *"Fix the sentence in each home above, not this script: the counts are derived"* 라고
+      적어 두어 무엇을 고칠지 헤맬 일이 없었다. 게이트가 **처방까지** 들고 있었다.
+- [ ] 🔴 **다음에 `scripts/` 를 건드리면 전체 가드를 쓸어라.** 3개가 아니라.
+
 ## ⚪ 채우지 못한 것 — 「채웠다」로 적지 않는다 (AC-4)
 
 | README | 상태 |
