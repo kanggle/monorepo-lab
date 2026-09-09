@@ -745,13 +745,63 @@ class BundleSelectionTest(unittest.TestCase):
         self.assertTrue(b["health_stale"])
         self.assertEqual(b["bundles"]["fan"]["state"], "unknown")
 
-    def test_stopped_instance_distinguishes_requested_from_waiting(self):
+    def test_stopped_instance_distinguishes_selected_from_waiting(self):
+        """🔴🔴 TASK-MONO-653 — 이 단언은 `requested` 였고, 그것이 결함이었다.
+
+        `stopped` + 선택됨은 «저장된 선택에 있다» 이지 «지금 뜨는 중» 이 아니다. 론처는
+        `requested` 를 후자로 그리고 버튼을 잠그므로, 한 번 고른 묶음의 시작 버튼이
+        인스턴스가 멈춘 뒤 **영구히 죽었다.** 값을 갈라 `selected` 로 만들었다.
+        """
         FAKE_EC2.state = "stopped"
         with mock.patch.object(handler, "_now", return_value=T0):
             handler._write_selection({"fan"})
             b = body(handler.bundles())
-        self.assertEqual(b["bundles"]["fan"]["state"], "requested")
+        self.assertEqual(b["bundles"]["fan"]["state"], "selected")
         self.assertEqual(b["bundles"]["store"]["state"], "waiting")
+
+    def test_pending_instance_is_requested_not_selected(self):
+        """🔴🔴 대조군 — `pending` 을 `stopped` 와 같이 묶으면 안 된다.
+
+        켜지는 중이면 「기동 중」이 **참**이므로 버튼은 잠긴 채여야 한다. 여기서 `selected`
+        가 나오면 론처가 버튼을 열고, 방문자가 기동 중에 또 눌러 **중복 요청**이 된다 —
+        이 티켓의 Failure 2 다. 이 칸이 없으면 «`stopped` 아니면 전부 `selected`» 라는
+        더 단순하고 **틀린** 구현이 초록으로 통과한다.
+        """
+        FAKE_EC2.state = "pending"
+        with mock.patch.object(handler, "_now", return_value=T0):
+            handler._write_selection({"fan"})
+            b = body(handler.bundles())
+        self.assertEqual(b["bundles"]["fan"]["state"], "requested")
+        # 선택 안 된 묶음은 인스턴스 상태와 무관하게 `waiting` 이다(대조군의 대조군).
+        self.assertEqual(b["bundles"]["store"]["state"], "waiting")
+
+    def test_running_instance_with_all_domains_down_is_requested(self):
+        """🔵 `requested` 가 **남아 있어야 하는** 자리. 값을 가르면서 이쪽을 같이 지우면
+        「인스턴스는 떴는데 이 묶음이 아직」을 표현할 값이 사라진다."""
+        FAKE_EC2.state = "running"
+        self._health({"iam": "down", "fan": "down"})
+        with mock.patch.object(handler, "_now", return_value=T0):
+            handler._write_selection({"fan"})
+            b = body(handler.bundles())
+        self.assertEqual(b["bundles"]["fan"]["state"], "requested")
+
+    def test_selected_and_requested_are_never_the_same_value(self):
+        """🔴🔴 이 티켓의 불변식 그 자체 — 두 사실은 **다른 값**이어야 한다.
+
+        위 세 칸은 각각 하나의 상태를 고정한다. 이 칸은 그 셋을 한 문장으로 묶어,
+        누군가 «두 값을 다시 하나로 합치는» 방향으로 되돌리면 여기서도 빨개지게 한다.
+        """
+        seen = {}
+        for ec2 in ("stopped", "pending"):
+            FAKE_EC2.state = ec2
+            with mock.patch.object(handler, "_now", return_value=T0):
+                handler._write_selection({"fan"})
+                seen[ec2] = body(handler.bundles())["bundles"]["fan"]["state"]
+        self.assertNotEqual(
+            seen["stopped"], seen["pending"],
+            "«선택됐지만 안 떴다» 와 «켜지는 중» 이 같은 값입니다 — "
+            "론처는 둘을 구별할 수 없고, 어느 쪽으로 그려도 한쪽이 거짓이 됩니다: "
+            + repr(seen))
 
     # -- 예산 / 라우팅 -------------------------------------------------------
     def test_budget_exhausted_refuses_bundle_start(self):

@@ -322,6 +322,41 @@ function bundleStateOf(info) {
 🔵 CI 배선은 이미 있다 — `ci.yml` 의 `demo-wrapper` 필터가 `infra/demo/**` 를 통째로 잡으므로
 람다·론처·가드 세 변경이 전부 그 잡을 깨운다. 새 필터를 더하지 않았다.
 
+## 🔴 CI 가 내가 놓친 형제를 잡았다 — 람다에도 단위 테스트가 있었다
+
+첫 푸시에서 `Demo wrapper smoke` 가 빨갰다:
+
+```
+FAILED infra/demo/aws/tests/test_handler.py::BundleSelectionTest
+       ::test_stopped_instance_distinguishes_requested_from_waiting
+       - AssertionError: 'selected' != 'requested'
+```
+
+🔵 **가드가 옳았다.** 그 단언은 옛 동작을 고정하고 있었고, 그것을 고치는 것이 이 티켓이다.
+🔴 그러나 내가 «고칠 형제를 먼저 grep» 하지 않아서 **CI 가 대신 찾아 줬다** — 람다 쪽에
+파이썬 단위 스위트가 있다는 것을 착수 시점에 안 봤다.
+
+고친 방식: 단언 하나를 뒤집고 **끝내지 않았다.** 그렇게만 하면 «`stopped` 아니면 전부
+`selected`» 라는 더 단순하고 **틀린** 구현(Failure 2)이 초록으로 통과한다. 그래서 대조군
+3칸을 함께 넣었다:
+
+| 칸 | 무는 것 |
+|---|---|
+| `test_pending_instance_is_requested_not_selected` | 🔴 `pending` 은 `requested` 여야 한다 — 켜지는 중에 버튼을 열면 중복 요청 |
+| `test_running_instance_with_all_domains_down_is_requested` | 🔵 `requested` 가 **남아 있어야 하는** 자리(값을 가르면서 이쪽을 같이 지우면 안 된다) |
+| `test_selected_and_requested_are_never_the_same_value` | 🔴🔴 **불변식 자체** — 두 값을 다시 하나로 합치는 방향이면 여기서 빨개진다 |
+
+🟢 **주입으로 물기를 증명했다.** `pending` 갈래를 지우자 **정확히 2칸**이 빨개졌고 나머지
+66칸은 통과했다(무차별 빨강이 아니다):
+
+```
+FAIL: test_pending_instance_is_requested_not_selected
+FAIL: test_selected_and_requested_are_never_the_same_value
+AssertionError: 'selected' == 'selected' : «선택됐지만 안 떴다» 와 «켜지는 중» 이
+                같은 값입니다 … {'stopped': 'selected', 'pending': 'selected'}
+Ran 68 tests … FAILED (failures=2)
+```
+
 ## AC-4 — 절반은 여기서 닫고, 절반은 승인이 필요하다
 
 **`terraform plan` 을 냈고 apply 는 안 했다.**
