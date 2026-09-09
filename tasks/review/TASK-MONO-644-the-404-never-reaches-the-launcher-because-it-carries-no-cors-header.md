@@ -8,7 +8,7 @@ TASK-MONO-644
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -154,8 +154,14 @@ if path.endswith("/start"):
 - [x] `$default` 라우트를 더한다. 존재하지 않는 경로의 응답에 `access-control-allow-origin`
       이 붙는다.
 - [x] 🔴 `terraform plan` 을 내고 **무엇이 바뀌는지 적어라.**
-- [ ] 🔴 **적용은 소유자 승인 사항이다**(`terraform apply` 는 상태 변경). plan 까지
+- [x] 🔴 **적용은 소유자 승인 사항이다**(`terraform apply` 는 상태 변경). plan 까지
       만들고 STOP 한 뒤 승인을 받아라.
+      ✅ **2026-09-09 소유자 승인 → apply 완료.** `1 added · 1 changed · 0 destroyed`
+      (plan 을 파일로 저장해 그것으로 apply 했다 — 다시 계산시키면 «잰 것»과 «적용된 것»이
+      달라질 수 있다). 🔵 `depends_on` 이 실제로 작동했다: apply 로그의 순서가
+      `aws_lambda_function.control: Modifications complete after 6s` **다음에**
+      `aws_apigatewayv2_route.default: Creation complete` 였다 — 즉 옛 라우터와 `$default`
+      가 함께 살아 있는 창은 **열리지 않았다.**
 - [x] 🔵 **하지 않기로 한 것을 적어라**: REST API 로 옮기는 것(반경이 크고 이 결함에
       비해 과하다). 그 판단의 근거를 남겨야 다음 사람이 다시 묻지 않는다.
 
@@ -178,10 +184,61 @@ if path.endswith("/start"):
 
 ## AC-4 — 라이브 확인
 
-- [ ] 배포 후 `hubwang.com` 에서 `.bnote` 문구를 **다시 읽는다.** 파일이 바뀐 것과 방문자가
+- [x] 배포 후 `hubwang.com` 에서 `.bnote` 문구를 **다시 읽는다.** 파일이 바뀐 것과 방문자가
       보는 것이 바뀐 것은 다른 축이다.
-- [ ] 🔴 AC-1 이 승인 대기로 막히면 AC-2 만으로도 문구는 바뀐다 — **그 상태를 측정하고
+- [x] 🔴 AC-1 이 승인 대기로 막히면 AC-2 만으로도 문구는 바뀐다 — **그 상태를 측정하고
       적어라.** 「승인 대기중」은 미측정의 사유이지 측정의 대체가 아니다.
+      🔵 이 칸은 **승인이 나서 불필요해졌다.** 막힌 상태를 측정할 일이 없었다.
+
+### ✅ AC-4 라이브 실측 (2026-09-09 UTC, apply 직후)
+
+**① 게이트웨이 — 결함이 닫혔다** (오리진 `https://hubwang.com` 을 붙여 측정):
+
+| 경로 | 상태 | `access-control-allow-origin` |
+|---|---|---|
+| `/status` | 200 | ✅ `https://hubwang.com` |
+| `/domains` | 200 | ✅ |
+| `/bundles` | 200 | ✅ |
+| `/status/` (끝 슬래시) | 200 | ✅ — `_normalize()` 가 돈다 |
+| **`/__no_such_route__`** | **404** | ✅ ← **이 티켓이다** |
+
+착수 전에는 마지막 줄이 «404 인데 헤더 없음» 이었고, 그래서 브라우저가 응답을 차단해
+`fetch` 가 **404 분기에 닿기도 전에 던졌다.**
+
+**② 메서드 방벽이 살아 있다** — `$default` 는 경로 방벽만이 아니라 메서드 방벽도 없앨 수
+있었다. 인스턴스 상태를 앞뒤로 잡고 쟀다:
+
+```
+전   {"state":"stopped", "used_minutes":516}
+GET  /start                → 404 {"error":"not found"}
+후   {"state":"stopped", "used_minutes":516}      ← 안 켜졌다
+GET  /x/start              → 404
+GET  /foo/status           → 404      (옛 endswith 사슬이면 status() 에 닿는다)
+GET  /anything/heartbeat   → 404
+```
+
+🔵 404 본문이 **경로를 되비추지 않는다**(`{"error": "not found"}`) — 반사는 그 자체로
+작은 표면이라 일부러 뺐다.
+
+**③ 방문자가 보는 것** (브라우저, 폴링 한 주기 이상 기다린 뒤):
+
+- `.bnote` 노드 **0개** · 묶음 카드 **3장** · 실패한 요청 **0건** · 콘솔 오류 **0건**
+- 🔴 이름을 대고 확인한 세 문구가 **전부 사라졌다**: 「제어 API 가 응답하지 않습니다」 ·
+  「잠시 후 자동으로 다시 시도」 · 「이 기능의 제어 경로에 닿지 못했습니다」
+- 🔵 카드 3장은 공허한 수가 아니다 — `/bundles` 의 9개 중 `addon: false` 가 정확히 3개
+  (`console`·`fan`·`store`)다.
+
+### 🔴🔴 이 측정이 **다음 결함**을 드러냈다 — `TASK-MONO-653`
+
+`/bundles` 가 이제 읽히므로 그 내용이 처음으로 화면에 반영됐고, 거기서 나왔다:
+인스턴스가 `stopped` 인데 묶음 버튼 3개가 전부 **비활성 + 「기동 중…」** 이다.
+
+🔴 **처음에 나는 이것을 「방문자가 데모를 켤 수 없다」로 적으려 했다. 과장이었다** —
+페이지 전체의 버튼을 세니 `▶ 전체 스택 시작`(id=`start`)은 **활성**이다. 정확히는
+«필요한 것만 골라 켜는 경로가 죽었고, 남은 유일한 길이 가장 비싼 길» 이다.
+
+**이 티켓의 책임이 아니다.** 기전이 다르고(SSM 에 저장된 선택 ↔ 론처의 상태 해석),
+`$default` 나 라우터와 무관하다. 상세는 `TASK-MONO-653`.
 
 ---
 
