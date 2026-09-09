@@ -212,18 +212,36 @@ async function login(page, app) {
     return { ok: false, reason: `로그인 입구를 못 찾았습니다(${entry}) — 마크업이 바뀌었습니다` };
   }
   await page.locator(entry).first().click().catch(() => {});
-  // IAM 은 다른 호스트다. 리다이렉트가 끝날 때까지 기다린다.
-  await page.waitForLoadState('domcontentloaded', { timeout: 45000 }).catch(() => {});
-  await page.waitForTimeout(2500);
 
   // --- ② IAM 의 폼을 채운다 --------------------------------------------------
   const userSel = 'input[type="email"], input[name="username"], #username';
   const passSel = 'input[type="password"], input[name="password"], #password';
+
+  // 🔴🔴 **시간으로 기다리지 않는다** (2026-09-09 실측이 이 줄을 다시 쓰게 했다).
+  //    이전 판은 `waitForLoadState('domcontentloaded')` + `waitForTimeout(2500)` 였는데,
+  //    앞엣것은 **다음 항해를 기다려 주지 않는다** — «지금 문서» 가 이미 로드돼 있으면
+  //    즉시 돌아온다. 그래서 실질 대기는 고정 2.5초뿐이었고, 홉이 하나 더인 앱이 졌다:
+  //
+  //      console  a[href="/api/auth/login"] → Next 라우트 핸들러 → 302 → auth.hubwang.com
+  //      fan      같은 모양 — 둘 다 실패
+  //      store    홉이 짧아 **우연히** 2.5초 안에 도착 → 통과
+  //
+  //    🔵 그 초록은 «맞다» 가 아니라 «그날 빨랐다» 였다. 시간으로 기다리면 느린 날 store 도
+  //       진다. 그리고 그 패배는 **로그인 화면 87장**으로 조용히 저장된다.
+  //    ⇒ 판정을 **조건**으로 바꾼다: 비밀번호 칸이 나타날 때까지 기다린다. 안 나오면
+  //       그때가 진짜 실패이고, 아래 진단이 «어디서» 멈췄는지 URL 로 말한다.
+  await page.waitForSelector(passSel, { timeout: 45000 }).catch(() => {});
+
   if (!(await page.locator(userSel).count()) || !(await page.locator(passSel).count())) {
-    // 🔴 여기서 실패하면 «IAM 이 안 떴다» 이거나 «폼이 바뀌었다» 다 — 둘을 구별해서 적는다.
+    // 🔴 여기서 실패하면 셋 중 하나다 — 구별해서 적는다.
+    //    · 아직 앱 오리진이면  → 리다이렉트가 시작조차 안 했다(입구를 잘못 눌렀다)
+    //    · IAM 호스트인데 없으면 → 폼이 바뀌었거나 IAM 이 안 떴다
+    const stillOnApp = page.url().startsWith(app.baseUrl);
     return {
       ok: false,
-      reason: `IAM 로그인 폼을 못 찾았습니다 (현재 URL: ${page.url()}). 데모 백엔드가 떠 있는지, 그리고 auth-service 의 templates/login.html 이 바뀌지 않았는지 보세요`,
+      reason: stillOnApp
+        ? `로그인 입구를 눌렀는데 IAM 으로 넘어가지 않았습니다 (여전히 ${page.url()}). 입구 셀렉터가 엉뚱한 원소를 잡았는지 보세요`
+        : `IAM 로그인 폼을 못 찾았습니다 (현재 URL: ${page.url()}). 데모 백엔드가 떠 있는지, 그리고 auth-service 의 templates/login.html 이 바뀌지 않았는지 보세요`,
     };
   }
   await page.fill(userSel, DEMO_EMAIL, { timeout: 15000 });
@@ -339,6 +357,22 @@ async function resolveDynamic(page, app, route) {
 }
 
 // -----------------------------------------------------------------------------
+// 본문 표지 — 🔴🔴 «찍혔다» 는 «볼 만한 것이 찍혔다» 가 **아니다**
+// -----------------------------------------------------------------------------
+// 2026-09-09 실측이 이 절을 만들었다. 콘솔 `/ecommerce/products` 는 HTTP 200 · 로그인됨 ·
+// 테넌트 `demo-corp` 선택됨 · 「권한 없음」 아님인데 본문이 **「표시할 상품이 없습니다」**
+// 였다. `/dashboards/overview` 는 **「통합 개요를 일시적으로 불러올 수 없습니다」** 였다.
+// 둘 다 `sanityCheck()` 를 통과했고 **성공으로 집계됐다.**
+//
+// 🔴 취업 자료에 넣을 그림으로 빈 표는 «안 만든 제품» 처럼 읽힌다 — 그림이 거짓말을 하는
+//    또 하나의 문이고, 앞문(로그인 화면)만 막아 둔 상태였다.
+// 🔵 **고치지 않고 드러낸다.** 데이터가 왜 비었는지는 이 스크립트의 축이 아니다(별도 티켓).
+//    여기서 할 일은 «이 장은 큐레이션 후보가 아니다» 를 기계가 말하게 하는 것이다.
+// 🔴 실패로 세지 않는다 — 캡처는 **성공했다.** 빈 화면의 정직한 사진이다. 별도 범주로 센다.
+const EMPTY_RE = /표시할\s*[^.\n]{0,24}없습니다|(?:데이터|결과|항목|내역)[가이]?\s*없습니다|비어\s*있습니다/;
+const DEGRADED_RE = /일시적으로\s*불러올\s*수\s*없|잠시\s*후\s*다시\s*시도|오류가\s*발생/;
+
+// -----------------------------------------------------------------------------
 // 한 장 찍기
 // -----------------------------------------------------------------------------
 // 🔴 실패를 **분류**한다. 「로그인으로 튕겼다」를 «그 페이지의 캡처» 로 저장하면
@@ -366,7 +400,20 @@ async function captureOne(page, app, appKey, route, path, outDir) {
       type: FORMAT.type,
       quality: FORMAT.quality,
     });
-    return { route, path, file, ok: true, status, url, capturedAt: new Date().toISOString() };
+    // 🔴 그림과 **같은 순간의** 본문을 남긴다. 나중에 따로 재면 그것은 다른 화면이다.
+    const text = await page
+      .evaluate(() => document.body.innerText.replace(/\s+/g, ' ').trim())
+      .catch(() => '');
+    const empty = EMPTY_RE.test(text);
+    const degraded = DEGRADED_RE.test(text);
+    return {
+      route, path, file, ok: true, status, url,
+      capturedAt: new Date().toISOString(),
+      textLen: text.length,
+      head: text.slice(0, 180),
+      ...(empty ? { empty: true } : {}),
+      ...(degraded ? { degraded: true } : {}),
+    };
   } catch (e) {
     return { route, path, file, ok: false, kind: 'error', reason: e.message, url };
   }
@@ -441,14 +488,26 @@ async function main() {
   console.log(`[portfolio] 출력: ${outDir}`);
 
   const browser = await chromium.launch();
-  const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: SCALE });
-  const page = await context.newPage();
+  let context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: SCALE });
+  let page = await context.newPage();
   const shots = [];
   const failures = [];
 
   for (const k of keys) {
     const app = APPS[k];
     console.log(`\n[portfolio] === ${k} (${app.label}) ${app.baseUrl}`);
+
+
+    // 🔴🔴 **앱마다 새 컨텍스트다** (2026-09-09 실측이 이 줄을 만들었다).
+    //    하나를 공유하면 앞 앱의 세션이 다음 앱으로 번진다: 콘솔에 **OPERATOR** 로 로그인한
+    //    뒤 스토어가 `?error=account_type_mismatch` 로 튕겼다 — 스토어는 CUSTOMER 를 받는다.
+    // 🔵 그리고 직전 실행에서 store 가 통과한 것은 **콘솔이 먼저 실패해서 그 세션이
+    //    없었기** 때문이다. 즉 그 초록도 «맞다» 가 아니라 «앞이 졌다» 였다 — 앱 순서가
+    //    조용히 판정을 바꾸고 있었고, 순서가 바뀌는 날 사라지는 초록이다.
+    // 🔴 첫 앱에도 똑같이 갈아끼운다. 「첫 번째만 예외」는 그 자체가 다음 함정이다.
+    await context.close().catch(() => {});
+    context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: SCALE });
+    page = await context.newPage();
 
     // 🔵 `--no-auth` — 로그인을 건너뛴다. 두 쓸모가 있다:
     //    ① 데모가 꺼져 있어도 **공개 경로는 찍힌다**(포트폴리오의 공개 표면 자산).
@@ -539,6 +598,19 @@ async function main() {
     //    «어느 것이 왜» 가 적히면 된다(TASK-MONO-648 AC-1).
     console.log('[portfolio] 실패 목록:');
     for (const f of failures) console.log(`  ${(f.app || '?').padEnd(8)} ${f.route || '(앱 전체)'}  [${f.kind}] ${f.reason || f.status || ''}`);
+  }
+
+  // 🔴🔴 «찍음 N» 만 보고하면 **빈 화면 N 장**도 성공이다. 실측(2026-09-09): 콘솔의
+  //    `/ecommerce/products`·`/ecommerce/orders` 는 HTTP 200 · 로그인됨 · 테넌트 선택됨
+  //    · 「권한 없음」 아님인데 본문이 「표시할 …이 없습니다」였고, `/dashboards/overview`
+  //    는 「일시적으로 불러올 수 없습니다」였다. 취업 자료로는 **못 쓰는 장**이다.
+  // 🔵 실패로 세지 않는다 — 캡처는 성공했고 그 그림은 정직하다. **다른 줄로** 센다.
+  const empties = shots.filter((x) => x.empty);
+  const degraded = shots.filter((x) => x.degraded);
+  if (empties.length || degraded.length) {
+    console.log(`[portfolio] ⚠ 찍혔지만 큐레이션 후보가 아님 — 빈 목록 ${empties.length} · 성능저하/오류 ${degraded.length}`);
+    for (const x of degraded) console.log(`  [저하] ${x.route}  ${x.head.slice(0, 70)}`);
+    for (const x of empties) console.log(`  [빈값] ${x.route}  ${x.head.slice(0, 70)}`);
   }
   console.log('[portfolio] manifest.json 기록');
 }
