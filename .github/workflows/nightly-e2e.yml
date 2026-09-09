@@ -65,10 +65,19 @@ name: Nightly E2E (full-stack web-store + 5 backend full suites + cross-project 
 #   dispatch  — workflow_dispatch for manual one-shot runs
 #               Usage: gh workflow run nightly-e2e.yml --ref main
 #
-# Failure handling (v1 scope — portfolio):
-#   - Failure turns the main branch badge red; visible in GitHub Actions UI.
-#   - v2 would add issue auto-create or Slack webhook (out of scope; ADR-
-#     MONO-011 § 6.1 outstanding).
+# Failure handling:
+#   - v1 (portfolio scope) said, verbatim: "Failure turns the main branch badge
+#     red; visible in GitHub Actions UI." + "v2 would add issue auto-create or
+#     Slack webhook (out of scope; ADR-MONO-011 § 6.1 outstanding)."
+#     🔴🔴 그 v1 이 실제로 무엇이었는지가 TASK-MONO-655 에서 드러났다 — 도착 경로가
+#     «누가 UI 를 보러 간다» 였고, 2026-09-07~09 **3일 동안 아무도 안 갔다.** 그 사이
+#     12건이 머지됐고 전부 이 워크플로를 빨간 채로 지나갔다. 배지는 경로가 아니다.
+#   - v2 가 도착했다 (TASK-MONO-655): 아래 잡 11 `nightly-red-arrives` 가 빨강에
+#     이슈를 열고/갱신하고 초록에 닫는다. Slack webhook 은 여전히 없다.
+#
+#  11. nightly-red-arrives (TASK-MONO-655) — 위 v2. 다른 잡들과 달리 무엇도 «검사»
+#      하지 않는다; 이 워크플로의 판정이 저장소 밖으로 나가는 유일한 자리다. 감시
+#      모집단은 자기 `needs` 이고, 그것이 선언된 잡 수와 어긋나면 스스로 빨개진다.
 
 on:
   schedule:
@@ -1414,3 +1423,147 @@ jobs:
             projects/platform-console/apps/console-web/test-results/
           retention-days: 7
           if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-655 AC-3 — 빨강이 «도착한다»
+  #
+  # 🔴🔴 655 의 진짜 결함은 빨강 자체가 아니라 **3일 동안 아무도 몰랐다** 는 것이다.
+  # 왜 아무도 몰랐나 — 이 파일의 머리 § Failure handling 이 그 답을 **처음부터 적어
+  # 두고 있었다**(원문은 거기 인용해 뒀다; 같은 문장을 두 곳에 두면 한쪽만 고쳐진다).
+  # 도착 경로가 «누가 UI 를 보러 간다» 였다. 그것은 경로가 아니다. `CLAUDE.md` 도
+  # "check the next nightly run on main once after" 라고 적어 두었지만 **산문에는
+  # 게이트가 없다** — 이 저장소가 여러 번 데인 문장이고, 여기서 또 데였다.
+  #
+  # 이 잡이 그 v2 다. 빨강을 **저장소 밖으로 밀어내는** 유일한 자리이므로,
+  # 실패를 «읽으러 가야 하는 것» 에서 «와 있는 것» 으로 바꾼다.
+  #
+  # 🔴 이 잡이 감시하는 모집단은 `needs` 다. 그래서 잡을 새로 추가하고 `needs` 에
+  #    안 넣으면 이 알림은 그 잡에 대해 **조용히 눈이 먼다**. 그 상태가 정확히
+  #    655 가 고발하는 종류의 결함이라 — 아래 「모집단」 스텝이 워크플로에 선언된
+  #    잡 수와 `needs` 수를 대조해서 **먼저 빨개진다.**
+  #
+  # ⚪ 한계, 정직하게: 이슈가 열리는 것까지가 이 잡이 보장하는 전부다. 그 이슈가
+  #    사람에게 «알림» 으로 도달하는지는 소유자의 watch 설정에 달려 있고 저장소
+  #    안에서 잴 수 없다. 그러나 배지와 달리 이슈는 **남는다** — 아무도 안 봐도
+  #    다음에 저장소를 열었을 때 거기 있다. 그것이 배지 대비 실질 개선이다.
+  # ---------------------------------------------------------------------------
+  nightly-red-arrives:
+    name: A red nightly arrives (issue, not just a badge)
+    if: always() && github.repository == 'kanggle/monorepo-lab'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    needs:
+      - demo-image-liveness
+      - fan-surface-watch
+      - launcher-freshness-watch
+      - ami-generation-watch
+      - ecommerce-boot-jars-nightly
+      - frontend-e2e-fullstack
+      - web-store-iam-logout-e2e
+      - wms-platform-e2e-full
+      - fan-platform-e2e-full
+      - scm-platform-e2e-full
+      - iam-e2e-full
+      - ecommerce-fulfillment-e2e-full
+      - platform-console-boot-jars-nightly
+      - platform-console-e2e-fullstack
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Self-test the verdict (fixed inputs, both directions must differ)
+        # 🔴 판정기가 «항상 초록» 이면 이 잡은 655 가 고발한 그 상태 — 안 무는 가드 —
+        #    를 재현한다. 그래서 판정을 먼저 고정 입력으로 양방향 증명한다.
+        run: |
+          set -euo pipefail
+          verdict() { jq -r '[to_entries[] | select(.value.result=="failure" or .value.result=="cancelled") | .key] | join(" ")'; }
+
+          # (1) 전부 성공 → 빨간 잡 0개
+          a=$(echo '{"x":{"result":"success"},"y":{"result":"success"}}' | verdict)
+          # (2) 하나 실패 → 그 잡 이름이 나온다
+          b=$(echo '{"x":{"result":"success"},"y":{"result":"failure"}}' | verdict)
+          # (3) 취소도 빨강이다 (MONO-374: 취소된 런은 성공도 실패도 아니라서 «안 일어난 것»이 된다)
+          c=$(echo '{"x":{"result":"cancelled"}}' | verdict)
+          # (4) 🔵 대조군 — skipped 는 빨강이 아니다. watch 잡들은 push 런에서 정상적으로 skip 된다.
+          d=$(echo '{"x":{"result":"skipped"},"y":{"result":"success"}}' | verdict)
+
+          [ -z "$a" ] || { echo "self-test (1) 실패: 전부 성공인데 «$a» 를 빨갛다고 했다"; exit 1; }
+          [ "$b" = "y" ] || { echo "self-test (2) 실패: 실패한 잡을 못 지목했다 («$b»)"; exit 1; }
+          [ "$c" = "x" ] || { echo "self-test (3) 실패: cancelled 를 빨강으로 안 셌다 («$c»)"; exit 1; }
+          [ -z "$d" ] || { echo "self-test (4) 실패: skipped 를 빨갛다고 했다 («$d»)"; exit 1; }
+          echo "판정기 self-test 4칸 통과 — 초록/빨강 두 방향이 실제로 다르다."
+
+      - name: 모집단 — 이 잡이 감시하지 않는 잡이 없는가
+        # 🔴🔴 잡을 추가하고 `needs` 에 안 넣으면 알림은 그 잡에 눈이 먼다. 선언된 잡 수와
+        #    감시 중인 수(+ 이 잡 자신)를 대조한다. 안 맞으면 여기서 먼저 빨개진다.
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          declared=$(sed -n '/^jobs:/,$p' .github/workflows/nightly-e2e.yml | grep -cE '^  [a-z][a-z0-9-]*:$')
+          watched=$(printf '%s' "$NEEDS" | jq 'length')
+          echo "선언된 잡 $declared · 감시 중 $watched (+ 이 잡 자신)"
+          if [ "$declared" -ne "$((watched + 1))" ]; then
+            echo "::error::nightly-e2e.yml 에 잡이 $declared 개인데 nightly-red-arrives 는 $watched 개만 감시한다."
+            echo "::error::새로 더한 잡을 이 잡의 needs 에 추가하라 — 안 하면 그 잡의 빨강은 아무 데도 도착하지 않는다."
+            exit 1
+          fi
+          if [ "$watched" -eq 0 ]; then
+            echo "::error::감시 대상이 0개다 — 이 잡은 무엇도 지키지 않는다."
+            exit 1
+          fi
+
+      - name: 빨간 잡을 세고, 이슈를 열거나 닫는다
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEEDS: ${{ toJSON(needs) }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SHA: ${{ github.sha }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          TITLE='🔴 nightly-e2e 가 빨갛다 (자동 감시 — TASK-MONO-655)'
+          red=$(printf '%s' "$NEEDS" | jq -r '[to_entries[] | select(.value.result=="failure" or .value.result=="cancelled") | .key] | sort | join(", ")')
+
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title \"자동 감시 — TASK-MONO-655\"" --json number --jq '.[0].number // empty')
+
+          if [ -z "$red" ]; then
+            echo "빨간 잡 0개."
+            if [ -n "$existing" ]; then
+              gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" \
+                --body "🟢 다시 초록이다 — \`${SHA}\` (${EVENT}). [런](${RUN_URL})"
+              gh issue close "$existing" --repo "$GITHUB_REPOSITORY"
+              echo "이슈 #$existing 를 닫았다."
+            fi
+            exit 0
+          fi
+
+          echo "🔴 빨간 잡: $red"
+          body=$(printf '%s\n' \
+            "**빨간 잡**: ${red}" \
+            "" \
+            "- 커밋: \`${SHA}\` (${EVENT})" \
+            "- 런: ${RUN_URL}" \
+            "" \
+            "이 이슈는 nightly 가 다시 초록이 되면 자동으로 닫힌다. 손으로 닫지 마라 —" \
+            "닫아도 다음 빨강에 다시 열리고, 그 사이 빨강이 어디에도 안 남는다." \
+            "" \
+            "🔴 왜 이 이슈가 있나: 배지는 «보러 가야» 보인다. 2026-09-07~09 에 이 워크플로가" \
+            "3일 동안 빨갰고 그 사이 12건이 머지됐다 — 아무도 몰랐다(TASK-MONO-655).")
+
+          if [ -n "$existing" ]; then
+            prev=$(gh issue view "$existing" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' | sed -n '1s/^\*\*빨간 잡\*\*: //p')
+            gh issue edit "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
+            # 🔵 매 런마다 코멘트를 달면 main 에 머지할 때마다 쌓여서 이슈가 읽히지 않게 된다.
+            #    빨간 «집합이 바뀐 때만» 코멘트한다 — 그때가 새 정보가 생긴 유일한 순간이다.
+            if [ "$prev" != "$red" ]; then
+              gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" \
+                --body "빨간 잡이 바뀌었다: \`${prev:-(알 수 없음)}\` → \`${red}\` — \`${SHA}\`. [런](${RUN_URL})"
+            fi
+            echo "이슈 #$existing 갱신."
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$body"
+            echo "이슈를 새로 열었다."
+          fi
