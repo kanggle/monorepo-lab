@@ -361,20 +361,46 @@ def _with_lock(owner, fn):
 
 
 def _bundle_state(name, instance_state, snap, stale, selected):
-    """묶음 하나의 상태 - 7단계로 판정한다.
+    """묶음 하나의 상태 - 8단계로 판정한다.
 
-    waiting / requested / booting / ready / partial / stopping / unknown
+    waiting / selected / requested / booting / ready / partial / stopping / unknown
 
     🔴🔴 **"EC2 running" 과 "이 기능이 준비됨" 은 다른 사실이다.** 그 둘을 한 값으로 쓰면
        방문자는 running 을 보고 링크를 눌러 404 를 만나고, 그것을 "고장" 으로 읽는다.
        이 함수가 존재하는 이유가 그 분리다.
     🔴 **stale 이면 어떤 도메인 상태도 안 믿는다.** `up` 을 믿으면 꺼진 스택을 "준비 완료"
        로 그린다(TASK-MONO-551 결함 B 가 만든 필드가 그것을 말해 준다).
+
+    🔴🔴 **`selected` 는 TASK-MONO-653 이 `requested` 에서 갈라낸 값이다.** 그 전에는
+       `requested` 하나가 **두 사실**을 날랐다:
+
+         (가) "이 묶음은 저장된 선택에 있다"   - 인스턴스가 아직 안 떴을 때
+         (나) "이 묶음의 도메인이 아직 안 떴다" - 인스턴스는 떴을 때
+
+       론처는 그 값을 "지금 뜨는 중" 으로 그리고 버튼을 잠근다. (나) 에서는 그것이 참이지만
+       (가) 에서는 **거짓**이다 - 아무것도 안 뜨고 있고, 방문자가 눌러야 뜬다. 결과는
+       한 번이라도 선택된 묶음의 시작 버튼이 인스턴스가 멈춘 뒤 **영구히 죽는 것**이었고,
+       남은 유일한 길이 가장 비싼 길(전체 스택)이었다.
+
+       🔴 그래서 **`requested` 에 그냥 (가) 를 얹어 두면 안 된다** - 두 사실이 한 값에
+       실려 있는 한 어느 쪽으로 고쳐도 다른 쪽이 깨진다. (가) 를 열면 (나) 에서 중복
+       요청이 되고, (나) 를 잠그면 (가) 가 지금 상태다.
+
+    🔴 **`pending` 은 `stopped` 와 같이 묶지 않는다.** 인스턴스가 켜지는 중이면 "기동 중"
+       이 **참**이므로 (나) 와 같은 값이어야 한다. 이 갈래가 없으면 방문자가 기동 중에
+       또 눌러 중복 요청을 낸다.
+    🔵 그 밖의 상태(`stopped`, `terminated`, `missing`)는 `selected` 로 떨어진다 - 즉
+       "누를 수 있다" 쪽이다. 이 저장소의 판단을 따른 것이다: **모르는 것은 "못 한다" 가
+       아니다**(론처의 `unknown` 이 startable 인 것과 같은 이유). 눌러서 실패하면 그 응답이
+       사유를 말하고, 잠그면 방문자는 이유 없는 회색 버튼만 본다.
     """
     if instance_state in ("stopping", "shutting-down"):
         return "stopping"
     if instance_state != "running":
-        return "requested" if name in selected else "waiting"
+        if name not in selected:
+            return "waiting"
+        # 🔴 여기가 653 이 가른 자리다. 위 독스트링의 (가) 와 (나).
+        return "requested" if instance_state == "pending" else "selected"
     if stale:
         return "unknown"
     required = BUNDLE_REQUIRED_DOMAINS.get(name, ())

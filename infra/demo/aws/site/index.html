@@ -566,6 +566,11 @@
       ready:     ["🟢 사용 가능", "b-up"],
       booting:   ["🟡 기동 중…", "b-partial"],
       requested: ["🟡 요청됨 — 기동 대기", "b-partial"],
+      // 🔴🔴 TASK-MONO-653 — `selected` 는 `requested` 에서 갈라낸 값이다. 뜻은
+      //    «저장된 선택에 있다. 그리고 아무것도 안 뜨고 있다» 이므로 배지는 «꺼짐» 쪽이고
+      //    (`b-down`), 선택돼 있다는 사실은 참이므로 함께 말한다. `requested` 와 같은
+      //    노랑을 쓰면 방문자는 다시 «뜨는 중» 으로 읽는다 — 그것이 이 결함이었다.
+      selected:  ["⚪ 꺼짐 — 선택됨", "b-down"],
       partial:   ["🟠 일부만 실행 중", "b-partial"],
       stopping:  ["🔻 종료 중", "b-down"],
       waiting:   ["⚪ 꺼짐", "b-down"],
@@ -575,7 +580,32 @@
     //    중복 요청이 되고(서버가 멱등이지만) 방문자는 «안 먹혔다» 로 읽는다.
     // 🔵 `unknown` 을 startable 에 넣는다 — «확인 불가» 일 때 버튼을 잠그면, 헬스 발행이
     //    끊긴 동안 방문자가 **아무것도 못 한다.** 모르는 것은 «못 한다» 가 아니다.
-    const B_STARTABLE = new Set(["waiting", "partial", "unknown"]);
+    // 🔴🔴 `selected` 도 여기 있다(TASK-MONO-653). 그것이 이 티켓의 전부다 — 선택돼
+    //    있다는 사실 하나로 버튼이 영구히 잠기고 있었고, 남은 유일한 길이 «전체 스택»
+    //    이었다. 🔴 `requested` 는 **여전히 여기 없다**: 그 값은 이제 «인스턴스가 떴거나
+    //    켜지는 중인데 이 묶음이 아직» 만 뜻하고, 그때 여는 것이 중복 요청이다.
+    const B_STARTABLE = new Set(["waiting", "selected", "partial", "unknown"]);
+
+    // 🔴🔴 배포 창을 건넌다 (TASK-MONO-653). 이 파일은 **머지로** 나가고(Vercel, 분 단위)
+    //    람다는 **`terraform apply`** 로 나간다(소유자 승인). 순서를 어떻게 잡아도 이 파일이
+    //    먼저 서빙되는 창이 열리고, 그 동안 서버는 아직 옛 `requested` 를 준다 — 그러면
+    //    버튼은 그 창 내내 잠긴 채다. 「람다만 고치고 론처를 안 고친다(또는 그 반대)」가
+    //    이 티켓의 Failure 3 이다.
+    // 🔵 근거를 빌려 오지 않는다 — «인스턴스가 안 떴다» 는 **같은 화면이 이미 아는 사실**
+    //    이고(`lastState`, /status 가 채운다), 「인스턴스가 stopped 인데 이 묶음이 기동
+    //    중」은 서버 버전과 무관하게 **성립할 수 없다.** 그래서 이 정규화는 임시 보정이
+    //    아니라 항상 참인 규칙이고, 람다가 배포된 뒤에도 그대로 옳다(그때는 서버가 이미
+    //    `selected` 를 주므로 이 갈래를 안 탄다).
+    // 🔴 `pending` 은 **제외한다.** 켜지는 중이면 「기동 중」이 참이고, 여기서 열면 정확히
+    //    중복 요청이 된다. `lastState === null`(아직 /status 를 못 받음)도 제외 — 모르면
+    //    안전한 쪽(잠금)에 남는다.
+    // 🔴 이 함수는 GUARD-Z39 대역이 **실행해서** 잰다. grep 이 아니다.
+    function bundleStateOf(info) {
+      const raw = (info && BLABEL[info.state]) ? info.state : "unknown";
+      if (raw !== "requested") return raw;
+      if (lastState === null || lastState === "pending" || lastState === "running") return raw;
+      return "selected";
+    }
     let lastBundles = null;
 
     // 🔴🔴 TASK-MONO-636 — «아직 안 물어봤다» 와 «물어봤는데 못 받았다» 는 **다른 값**이다.
@@ -641,7 +671,7 @@
         // 🔴 «아직 안 물어봤다» 가 참인 것은 첫 응답 전까지뿐이다. 그 뒤로는 **답이 있거나
         //    사유가 있다.** 배지가 이 셋을 구별하지 못하면 화면은 다시 말을 잃는다.
         const pending = CONTROL_OK && info === null && bundlesErr === null;
-        const st = (info && BLABEL[info.state]) ? info.state : "unknown";
+        const st = bundleStateOf(info);
         const [text, cls] = BLABEL[st];
         if (badge) {
           badge.className = "badge " + (pending ? "b-unknown" : cls);
