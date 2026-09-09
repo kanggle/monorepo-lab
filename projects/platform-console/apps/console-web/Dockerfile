@@ -77,6 +77,16 @@ WORKDIR /app
 #    `node_modules/@demo/backend-resolver` symlink, so the target must exist
 #    HERE too or `pnpm build` below dies with "Module not found".
 COPY --from=demo-backend-resolver . /infra/demo/backend-resolver
+# 🔴🔴 TASK-MONO-655 — **its sibling needs the same line, and for 2 days it did not
+#    have one.** `TASK-MONO-635` added `@demo/public-data` to the deps stage only, so
+#    `pnpm build` here died with `Module not found: Can't resolve '@demo/public-data'`
+#    and the console E2E job never reached Playwright. Measured: nightly went green →
+#    red on the very run of that commit (2026-09-07T19:17Z, `9f0fcd2d6`) and stayed red.
+# 🔵 The comment above already said "HERE too", and the deps-stage comment already said
+#    the sibling apps' single copy "is not a precedent for a single copy here". The
+#    warning was written and then not applied to the next package — one fact in two
+#    places, only one of them updated.
+COPY --from=demo-public-data . /infra/demo/public-data
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 

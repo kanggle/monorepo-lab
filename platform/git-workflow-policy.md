@@ -305,7 +305,7 @@ points at this anchor.
 
 ## Stage Before You Run a Guard
 
-20 of the 54 guards under `scripts/` build their population with `git ls-files`. That is the **right** choice — a guard is asking about what will be committed, not about whatever happens to be lying in the working tree. The cost is that the guard's answer depends on the **index**, so running it before `git add` asks a different question than CI will ask.
+20 of the 55 guards under `scripts/` build their population with `git ls-files`. That is the **right** choice — a guard is asking about what will be committed, not about whatever happens to be lying in the working tree. The cost is that the guard's answer depends on the **index**, so running it before `git add` asks a different question than CI will ask.
 
 **The failure has the same shape as success.** A two-way check compares a listing against a directory. If the new file is unstaged *and* nothing references it yet, both sides are empty — and empty sets agree. The guard does not fall silent; it states that everything is consistent.
 
