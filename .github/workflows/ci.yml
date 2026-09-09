@@ -820,6 +820,9 @@ jobs:
             readme-screenshots:
               - 'projects/*/README.md'
               - 'projects/*/docs/screenshots/**'
+              # 🔴 TASK-MONO-651: `docs/portfolio.md` 도 같은 이미지를 건다. 이 줄이 없으면
+              #    **그 문서만 고치는 커밋**에서 잡이 안 돌아 깨진 참조가 조용히 머지된다.
+              - 'docs/portfolio.md'
               - 'scripts/check-readme-screenshots.mjs'
             # TASK-MONO-562: a Vercel project that builds on every commit arrives three
             # ways — a new `vercel.json` anywhere in the tree, an existing one losing its

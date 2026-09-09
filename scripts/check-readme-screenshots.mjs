@@ -44,12 +44,24 @@ export function inspect(root) {
   let scanned = 0;
   if (!existsSync(projects)) return { pairs, problems, scanned };
 
+  // 🔴 모집단은 «프로젝트 README» 만이 아니다. `docs/portfolio.md`(TASK-MONO-651)도 같은
+  //    이미지를 가리키고, 그 파일은 **저장소 루트 기준**으로 참조한다 — 그래서 파일마다
+  //    «어느 디렉터리를 기준으로 푸는가»(base)를 함께 든다. 하나로 뭉뚱그리면 한쪽이
+  //    영원히 «파일 없음» 이 되거나, 더 나쁘게는 **아무도 안 보는 채로 초록**이 된다.
+  const docs = [];
   for (const proj of readdirSync(projects, { withFileTypes: true })
     .filter((e) => e.isDirectory())
     .map((e) => e.name)
     .sort()) {
     const readme = join(projects, proj, 'README.md');
-    if (!existsSync(readme)) continue;
+    if (existsSync(readme)) docs.push({ label: proj, file: readme, base: join(projects, proj) });
+  }
+  const portfolio = join(root, 'docs', 'portfolio.md');
+  if (existsSync(portfolio)) docs.push({ label: 'docs/portfolio.md', file: portfolio, base: join(root, 'docs') });
+
+  const referenced = new Set(); // 절대 경로 — 고아 판정은 **모든 문서를 본 뒤**에 한다
+
+  for (const { label: proj, file: readme, base } of docs) {
     scanned++;
     const src = readFileSync(readme, 'utf8');
 
@@ -60,18 +72,29 @@ export function inspect(root) {
     const local = [...refs].filter((r) => !/^https?:/i.test(r) && IMG_EXT.test(r));
 
     for (const rel of local) {
-      if (existsSync(join(projects, proj, rel))) pairs++;
-      else problems.push(`${proj}: README 가 가리키는 파일이 없다 — ${rel}`);
+      const abs = resolve(base, rel);
+      if (existsSync(abs)) {
+        pairs++;
+        referenced.add(abs);
+      } else {
+        problems.push(`${proj}: 가리키는 파일이 없다 — ${rel}`);
+      }
     }
+  }
 
+  // 🔴 고아 판정은 **모든 문서를 읽은 뒤**다. 문서 하나씩 판정하면
+  //    `docs/portfolio.md` 만 가리키는 이미지가 그 프로젝트 README 기준으로 «고아» 가 된다.
+  for (const proj of readdirSync(projects, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .sort()) {
     const shotDir = join(projects, proj, 'docs', 'screenshots');
-    if (existsSync(shotDir)) {
-      for (const f of readdirSync(shotDir)) {
-        if (!IMG_EXT.test(f)) continue;
-        const rel = `docs/screenshots/${f}`;
-        if (!local.includes(rel)) {
-          problems.push(`${proj}: 아무 README 도 안 가리키는 고아 이미지 — ${rel}`);
-        }
+    if (!existsSync(shotDir)) continue;
+    for (const f of readdirSync(shotDir)) {
+      if (!IMG_EXT.test(f)) continue;
+      const abs = join(shotDir, f);
+      if (!referenced.has(abs)) {
+        problems.push(`${proj}: 아무 문서도 안 가리키는 고아 이미지 — docs/screenshots/${f}`);
       }
     }
   }
@@ -161,6 +184,36 @@ function selfTest() {
   cell('7-no-screenshots-is-fine', (d) => {
     fixture(d, { readme: '# 스크린샷 없음', files: [] });
     eq(inspect(d).problems.length, 0, '문제 수');
+  });
+
+  // 🔴🔴 (8) **`docs/portfolio.md` 도 모집단이고, 그 파일은 «저장소 루트» 기준으로 참조한다.**
+  //     ⚠️ **이 칸은 실제 저장소 실행으로 대체되지 않는다.** 2026-09-09 실측: 모집단에서
+  //     `portfolio.md` 를 빼도 실제 저장소는 **rc=0** 이다 — 그 문서가 거는 5장을 각
+  //     프로젝트 README 도 걸고 있어 고아가 안 생기기 때문이다. 즉 이 좁힘은 **오직
+  //     자기 시험에서만 보인다.** 이 저장소가 `--self-test` 를 CI 에서 돌리는 이유다.
+  //     기준 디렉터리를 프로젝트로 뭉뚱그리면 이 칸이 죽는다 — 그러면 그 문서의 참조가
+  //     전부 «파일 없음» 이 되거나(빨강) 아예 안 세진다(더 나쁨: 조용한 초록).
+  cell('8-portfolio-doc-counts', (d) => {
+    fixture(d, { readme: '# 프로젝트 README 는 아무것도 안 건다', files: ['a.jpg'] });
+    mkdirSync(join(d, 'docs'), { recursive: true });
+    writeFileSync(
+      join(d, 'docs', 'portfolio.md'),
+      '<img src="../projects/demo-svc/docs/screenshots/a.jpg">',
+      'utf8',
+    );
+    const r = inspect(d);
+    eq(r.pairs, 1, '포트폴리오 문서가 만든 쌍');
+    eq(r.problems.length, 0, '문제 수');   // 🔵 README 가 안 걸어도 «고아» 가 아니다
+  });
+
+  // 🔴 (9) 그래도 **아무도 안 가리키면** 고아다 — (8)이 고아 판정을 무디게 만들지 않았는지.
+  cell('9-still-orphan-when-nobody-points', (d) => {
+    fixture(d, { readme: '# 아무것도 안 건다', files: ['a.jpg'] });
+    mkdirSync(join(d, 'docs'), { recursive: true });
+    writeFileSync(join(d, 'docs', 'portfolio.md'), '# 여기도 안 건다', 'utf8');
+    const r = inspect(d);
+    eq(r.problems.length, 1, '문제 수');
+    if (!r.problems[0].includes('고아')) throw new Error(`사유가 틀림: ${r.problems[0]}`);
   });
 
   rmSync(base, { recursive: true, force: true });
