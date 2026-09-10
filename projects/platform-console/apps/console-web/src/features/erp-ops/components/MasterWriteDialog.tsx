@@ -7,7 +7,7 @@ import {
   masterWriteErrorMessage,
   PAYMENT_METHODS,
 } from '../hooks/use-master-write';
-import { codeName } from '../lib/master-ref-label';
+import { codeName } from '@/shared/lib/master-ref-label';
 
 /**
  * Generic master write dialog (TASK-PC-FE-048) — drives create / update /

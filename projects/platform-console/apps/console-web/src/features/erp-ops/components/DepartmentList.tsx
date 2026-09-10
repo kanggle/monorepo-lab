@@ -18,7 +18,7 @@ import {
   DepartmentWriteDialog,
   type DeptWriteRequest,
 } from './DepartmentWriteDialog';
-import { masterRefIndex, masterRefLabel } from '../lib/master-ref-label';
+import { masterRefIndex, masterRefLabel } from '@/shared/lib/master-ref-label';
 import type { MasterOption } from './MasterWriteDialog';
 
 /**

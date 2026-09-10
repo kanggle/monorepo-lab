@@ -28,7 +28,7 @@ import {
   type MasterWriteDialogProps,
 } from './MasterWriteDialog';
 import { EMPLOYEE_WRITE_CONFIG } from './master-write-configs';
-import { masterRefIndex, masterRefLabel } from '../lib/master-ref-label';
+import { masterRefIndex, masterRefLabel } from '@/shared/lib/master-ref-label';
 
 /**
  * Employees list (TASK-PC-FE-010 / § 2.4.8) — paginated table.

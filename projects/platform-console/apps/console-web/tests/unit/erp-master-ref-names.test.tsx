@@ -44,7 +44,7 @@ import {
   masterRefLabel,
   MASTER_REF_UNRESOLVED,
   MASTER_REF_NONE,
-} from '@/features/erp-ops/lib/master-ref-label';
+} from '@/shared/lib/master-ref-label';
 
 function wrapper() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });

@@ -8,7 +8,7 @@ TASK-PC-FE-277
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -178,6 +178,130 @@ platform-console
       그것을 볼 수 있는 창(`TASK-MONO-645` 계열의 데모 창)에 얹어라.
 
 ---
+
+---
+
+# 🟢 AC-0 (2026-09-10 UTC · `in-progress`)
+
+## ① 다시 셌다 — 🔴🔴 그리고 **내 첫 수(111)는 내 추출기의 결함이었다**
+
+같은 술어로 다시 세려 했더니 **111** 이 나왔다(기안은 48). 코드가 두 배로 늘었을 리 없으니
+둘 중 하나가 틀렸다 — **내 쪽이었다.**
+
+`OrgAdminPanel.tsx` 를 **눈으로 열어 보다가** 알았다. 내 정규식이 이것을 세고 있었다:
+
+```tsx
+data-testid={`org-admin-row-${a.operatorId}`}    ← 보이는 텍스트가 아니다
+```
+
+`=` 바로 뒤의 `{` 는 속성이라고 뺐는데, **템플릿 리터럴 안의 `${...}`** 는 앞 글자가 `$` 라
+그 제외를 빠져나갔다. 🔵 술어를 좁히자(`$` 도 제외) **66** 이 됐고, 도메인 분포가 기안의
+모양과 **같아졌다**(ecommerce-ops 가 가장 크고 ledger-ops 가 그다음).
+
+| 도메인 | 내 술어 | 기안 | | 도메인 | 내 술어 | 기안 |
+|---|---|---|---|---|---|---|
+| `ecommerce-ops` | 16 | 11 | | `org-hierarchy` | 3 | 3 |
+| `ledger-ops` | 14 | 10 | | `tenants` | 3 | 3 |
+| `operator-groups` | 6 | 2 | | `wms-ops` | 3 | 3 |
+| `scm-ops` | 5 | 4 | | `audit` | 2 | 1 |
+| `finance-ops` | 4 | 4 | | `wms-outbound-ops` | 2 | 2 |
+| `scm-replenishment` | 4 | 4 | | `accounts` | 1 | 1 |
+| `operators` | 3 | (0) | | **합계** | **66** | **48** |
+
+🔴🔴 **그래도 48 과는 다르고, 두 수는 여전히 비교 가능한 값이 아니다.** 기안이 적은 것은
+산문이고 — *"「보이는 텍스트 자리」에 렌더"* — **그것을 무엇으로 판정했는지가 없다.**
+같은 술어로 다시 셀 수가 없으니 「그 사이 늘었나」도 답할 수 없다
+(`feedback_comparing_two_extracts_measures_extractors`: 두 추출값의 비교는 추출기를 잰다).
+
+⇒ 🔵 **이번 수는 재현 가능하게 만든다.** 술어를 스크립트로 박고 **커밋한다**:
+
+```
+매치   /(.)\{\s*ident\.[A-Za-z_$][\w$]*Id\s*(\?\?[^}]*)?\}/
+제외   앞 글자가 '='(JSX 속성값) 또는 '$'(템플릿 리터럴 보간)
+모집단 console-web 의 src/features/**/*.tsx 272개 · features/erp-ops/ 제외(276 이 고쳤다)
+결과   66곳 / 13 도메인
+```
+
+🔴 **이 술어의 한계도 적는다**: 줄 단위라 여러 줄에 걸친 JSX 를 못 본다. 즉 66 은
+**하한**이다.
+
+## ② 가른다 — 🔴 **66 은 «고칠 목록» 이 아니다**
+
+가른 기준(기안이 적으라고 한 것): **그 필드가 «다른» 엔티티의 `id` 를 가리키는가.**
+같은 행 자신의 id 면 자기 식별자다.
+
+### 🔴 결함 — 참조이고 런타임이 UUID 다 (**9곳**)
+
+| 필드 | 그리는 곳 | 시드의 실제 값 | 읽을 이름 |
+|---|---|---|---|
+| `operatorId` | `AuditRowCells` · `GroupDetail` · `OrgAdminPanel` (각 1) | `0199de71-0000-7000-8000-00000000ec01` | ✅ 운영자 이름 |
+| `warehouseId` | `ReplenishmentTable` · `WmsAsnDataTable` · `WmsInventoryDetailPanel` (각 1) | `01910000-…-0001` (`warehouse_code='WH01'` 별도) | ✅ |
+| `skuId` | `OutboundDrillLines` | `01910000-…-0401` (`sku_code='SKU-BOX-001'` 별도) | ✅ |
+| `inspectorId` | `AsnInspectionPanel` | 운영자 참조 | ✅ |
+| `parentId` | `OrgNodeDetail` | 조직 노드 참조 | ✅ |
+
+### 🔵 참조지만 **읽을 수 있다** — 고치지 않는다 (**16곳**)
+
+| 필드 | 곳 | 시드의 실제 값 | 근거 |
+|---|---|---|---|
+| `tenantId` | 9 | **`demo-corp`** · **`ecommerce`** | `infra/demo/seed/` — 운영자의 멘탈 모델 그 자체다 |
+| `sellerId` | 7 | **`'default'`** (+ `display_name='Default Seller'`) | `V14__add_seller_axis.sql:31,38` |
+
+🔵 `ecommerce-overview-state.test.ts` 가 *"name-map cell (sellerId → displayName)"* 과
+*"No name map → the raw sellerId stays the label (never blank)"* 를 이미 갖고 있다 —
+그쪽은 **이미 이름을 그리려 시도하고** 있다. 새로 고칠 것이 아니다.
+
+### 🔵 자기 식별자 — 고치지 않는다 (**24곳**)
+
+`orderId`(`OrderDetail`·`OrdersTable`) · `groupId`(`GroupDetail`) · `accountId`(`AccountDetail`) ·
+`entryId`(`JournalEntryDetail`) · `orgNodeId`(`OrgNodeDetail`) · `periodId`(3) ·
+`statementId` · `transactionId` · `payoutId` · `shippingId` · `poId` · `promotionId` ·
+`discrepancyId`(`DiscrepancyDetail`) · `sellerId`(`SellerDetail`·`SellersTable`) 등.
+
+🔴 **자기 식별자를 이름으로 바꾸지 마라** — 운영자는 그 id 로 검색하고 지원 요청을 받는다.
+
+### ⚪ 판정 못 함 — 고치지 않는다 (**17곳**)
+
+`journalEntryId`(3) · `sourceJournalEntryId`(2) · `nodeId`(3) · `supplierId`(3) ·
+`entryId`(`AccountDetail` 2) · `lotId` · `materializedPoId` · `counterpartyAccountId` ·
+`reversalOfEntryId` · `reversalOfTransactionId` · `targetId` · `userId` ·
+`assignOperatorId` · `orderId`(`AccrualsTable`·`ShippingsTable`) · `discrepancyId`(`StatementDetail`)
+
+🔵 그중 **`journalEntryId` 계열은 «이름이 없는 엔티티»** 일 가능성이 높다(기안 Edge Cases:
+*"분개는 이름이 없다. id 가 유일한 표시다"*). 🔴 **그러나 확인하지 않았으므로 ⚪ 다** —
+추측으로 고치는 것이 이 티켓의 위험이라고 AC-0 ③ 이 못 박았다.
+
+## ③ 런타임 확인 — **시드가 갈랐다. 선언은 못 갈랐다**
+
+콘솔 zod 는 전부 `z.string()` 이고 `.uuid()` 는 0건이다(기안 실측, 재확인). 그래서 값의
+모양은 **시드/마이그레이션**에서 읽었다.
+
+🔴🔴 **그리고 기안의 추측 하나가 틀렸다.** 기안은 이렇게 적었다:
+*"그러나 `skuId` 가 `SKU-001` 이면 그것은 **읽을 수 있고 결함이 아니다**."*
+
+`R__04_seed_dev_skus.sql` 이 실제로 넣는 값:
+
+```
+id       = '01910000-0000-7000-8000-000000000401'   ← 화면에 그려지는 것
+sku_code = 'SKU-BOX-001'                             ← 별도 컬럼
+```
+
+⇒ **`skuId` 는 UUID 이고, 읽을 수 있는 코드는 옆 칸에 따로 있다.** `warehouses` 도 같은
+모양이다(`id` UUID + `warehouse_code='WH01'`). 🔵 반대로 `sellerId` 는 진짜로 `'default'`
+라서 기안의 그 문장이 **`sellerId` 에 대해서는 맞았다** — 필드마다 답이 다르고, 그것이
+「선언으로는 못 판정한다」의 실제 내용이다.
+
+## AC-2 의 선행을 **먼저** 했다 — AC 순서와 실제 의존이 반대다
+
+기안은 AC-1(고치기) → AC-2(`OrgScopeDialogBody`, 선행: 헬퍼 `shared/` 이동) 순인데,
+🔴 **고칠 9곳이 전부 `erp-ops` 밖이라 AC-1 도 그 이동을 선행으로 갖는다.** 아니면 9곳이
+전부 feature 간 import 가 되어 `layer-dependency-rules` 가 문다(276 이 실측으로 밟은 그것).
+
+⇒ `features/erp-ops/lib/master-ref-label.ts` → **`shared/lib/master-ref-label.ts`** 로
+`git mv` 하고 `erp-ops` 의 import 10곳을 `@/shared/lib/…` 로 갱신했다.
+🔵 **re-export 껍데기를 남기지 않았다** — 남기면 같은 사실이 두 집을 갖는다.
+🔴 `tests/unit/erp-master-ref-names.test.tsx`(276 의 가드)도 옛 경로를 가리키고 있어 함께
+갱신했다 — **`tsc` 가 그것을 잡았다**(`TS2307`). 이동이 참조를 깨뜨렸고 타입체커가 물었다.
 
 # Related Specs / Contracts
 

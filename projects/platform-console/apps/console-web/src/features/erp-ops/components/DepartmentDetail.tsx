@@ -10,7 +10,7 @@ import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { useDepartment } from '../hooks/use-erp-ops';
 import { EffectivePeriodBadge } from './EffectivePeriodBadge';
 import { RetiredReferenceBadge } from './RetiredReferenceBadge';
-import { masterRefLabel } from '../lib/master-ref-label';
+import { masterRefLabel } from '@/shared/lib/master-ref-label';
 
 /**
  * Department detail (TASK-PC-FE-010 / § 2.4.8).

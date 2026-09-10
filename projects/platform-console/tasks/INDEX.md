@@ -91,8 +91,9 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
+(empty)
 
-- `TASK-PC-FE-277-forty-eight-more-cells-print-an-id-and-nobody-has-asked-which-are-uuids.md` — 🔵 **erp-ops 밖에도 id 를 그대로 찍는 칸이 48곳 있다 — 그런데 그중 몇이 «결함» 인지는 아무도 안 물었다** (READY, 2026-09-10 UTC). `TASK-PC-FE-276` AC-0 ②가 «세고, 고치지 말고, 별도 티켓» 이라 했고 그 수를 넘겨받는다: **48곳 / 12 도메인**(ecommerce-ops 11 · ledger-ops 10 · scm-replenishment 4 · scm-ops 4 · finance-ops 4 · wms-ops 3 · tenants 3 · org-hierarchy 3 · wms-outbound-ops 2 · operator-groups 2 · audit 1 · accounts 1). 🔴🔴 **이 48은 «고칠 목록» 이 아니다** — 술어가 ①**자기 식별자 vs 참조**를 (`OrdersTable` 의 `{o.orderId}` 는 그 행 자신의 id 이고 정상이다) ②**런타임 값이 UUID 인가 읽을 수 있는 코드인가**를 못 가른다. ②는 **선언으로 못 판정한다**: 콘솔 zod 에 `.uuid()` 가 **0건**이고 전부 `z.string()` 이다(실측) ⇒ **이 티켓의 본체는 고치기가 아니라 가르기**이고, 못 가른 항목은 ⚪ 로 남겨 데모 창에 얹는다(추측으로 고치지 마라). 🔴 **`OrgScopeDialogBody` 는 선행이 있다** — `{dept ? … : id}` 의 **id 폴백**을 없애려면 헬퍼가 `shared/` 로 가야 한다: 276 이 그 import 를 넣었다가 `layer-dependency-rules.test.ts`(feature 간 import 금지)와 `OperatorsScreen.test.tsx` 를 빨갛게 만들었고 되돌렸다. 🔴 **새 포맷을 만들지 마라** — `codeName` 이 이미 있고 276 이 그것으로 **인라인 복제 11곳을 통일**했다. 가드도 새로 짓지 말고 276 의 것(`[data-master-ref]` 셀 × UUID 정규식)을 **넓혀라**. 분석=Opus 5 / 구현 권장=**Opus**(가르기) → **Sonnet**(교체).
+
 
 _(직전 착수)_ `TASK-PC-BE-015` — console-bff 의 spec-vs-reality resilience 갭 봉합. `architecture.md` § Resilience(D5.A)·`RestClientConfig` javadoc·계약 § 2.4.9 가 모두 "per-leg circuit-breaker keyed by `(domain, route)`" 를 단언하지만 `src/main` 에 resilience4j import 0건(타임아웃 쌍만 존재). `libs/java-common` 의 `ResilienceClientFactory` 를 **그대로 채택**해 13개 `(domain, route)` 레그 전부 CB+bounded retry 뒤로 이동하고, 죽어 있던 `circuit_open`/`CIRCUIT_OPEN` 분류를 실제 emitter 로 살린다(console-web zod `DEGRADED_REASONS` 는 이미 소비 준비 완료). 문서의 `libs/java-web` 인용도 오답(그 모듈엔 resilience 코드 0) → `libs/java-common` 정정. 분석=Opus 5 / 구현 권장=Opus.
 
@@ -117,7 +118,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 ## in-progress
 
 
-(empty)
+- `TASK-PC-FE-277-forty-eight-more-cells-print-an-id-and-nobody-has-asked-which-are-uuids.md` — 🔵 **erp-ops 밖에도 id 를 그대로 찍는 칸이 48곳 있다 — 그런데 그중 몇이 «결함» 인지는 아무도 안 물었다** (READY, 2026-09-10 UTC). `TASK-PC-FE-276` AC-0 ②가 «세고, 고치지 말고, 별도 티켓» 이라 했고 그 수를 넘겨받는다: **48곳 / 12 도메인**(ecommerce-ops 11 · ledger-ops 10 · scm-replenishment 4 · scm-ops 4 · finance-ops 4 · wms-ops 3 · tenants 3 · org-hierarchy 3 · wms-outbound-ops 2 · operator-groups 2 · audit 1 · accounts 1). 🔴🔴 **이 48은 «고칠 목록» 이 아니다** — 술어가 ①**자기 식별자 vs 참조**를 (`OrdersTable` 의 `{o.orderId}` 는 그 행 자신의 id 이고 정상이다) ②**런타임 값이 UUID 인가 읽을 수 있는 코드인가**를 못 가른다. ②는 **선언으로 못 판정한다**: 콘솔 zod 에 `.uuid()` 가 **0건**이고 전부 `z.string()` 이다(실측) ⇒ **이 티켓의 본체는 고치기가 아니라 가르기**이고, 못 가른 항목은 ⚪ 로 남겨 데모 창에 얹는다(추측으로 고치지 마라). 🔴 **`OrgScopeDialogBody` 는 선행이 있다** — `{dept ? … : id}` 의 **id 폴백**을 없애려면 헬퍼가 `shared/` 로 가야 한다: 276 이 그 import 를 넣었다가 `layer-dependency-rules.test.ts`(feature 간 import 금지)와 `OperatorsScreen.test.tsx` 를 빨갛게 만들었고 되돌렸다. 🔴 **새 포맷을 만들지 마라** — `codeName` 이 이미 있고 276 이 그것으로 **인라인 복제 11곳을 통일**했다. 가드도 새로 짓지 말고 276 의 것(`[data-master-ref]` 셀 × UUID 정규식)을 **넓혀라**. 분석=Opus 5 / 구현 권장=**Opus**(가르기) → **Sonnet**(교체).
 
 ## review
 
