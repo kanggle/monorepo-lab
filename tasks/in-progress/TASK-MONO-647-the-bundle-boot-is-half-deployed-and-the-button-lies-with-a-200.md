@@ -8,7 +8,7 @@ TASK-MONO-647
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -139,12 +139,61 @@ AMI 재굽기 — 가 **서로 다른 속도로 나가는 구조**는 그대로�
 
 ## AC-0 — 착수 전 재측정
 
-- [ ] 🔴 **AMI 의 `RepoCommit` 을 다시 읽어라.** 그 사이 소유자가 재굽기를 했다면 재현
+- [x] 🔴 **AMI 의 `RepoCommit` 을 다시 읽어라.** 그 사이 소유자가 재굽기를 했다면 재현
       조건이 사라진다 — **그때도 티켓을 닫지 마라.** 판정은 «지금 세대가 맞나» 가 아니라
       **«어긋났을 때 거절하는가»** 다. 맞으면 인위적으로 어긋난 값을 넣어서 재라.
-- [ ] 구워진 `demo-boot.sh`·`projects.sh`·`demo-stack.service` 를 다시 열어 위 표를 갱신한다
+- [x] 구워진 `demo-boot.sh`·`projects.sh`·`demo-stack.service` 를 다시 열어 위 표를 갱신한다
       (`git show <RepoCommit>:<path>`).
-- [ ] 🔴 예산을 다시 재라. 이 결함을 밟으면 **전체 스택 분량**이 나간다.
+- [x] 🔴 예산을 다시 재라. 이 결함을 밟으면 **전체 스택 분량**이 나간다.
+
+### 🟢 AC-0 실측 (2026-09-10 UTC · `main` = `c5545abe8`)
+
+#### ① 재현 조건이 사라졌다 — 인스턴스가 **교체됐다**
+
+```
+인스턴스   i-0863ba8d8faf52c63   (본문의 i-0394b45b62cdd1fc6 에서 교체)
+AMI        ami-0cfe209aef4a9cd29  (10차, 2026-09-09T06:34:51Z)
+RepoCommit 6ae6145db553875b23f952ab0ca44cf2275338b7   ← AMI 태그에서 되읽음
+상태       stopped
+```
+
+`git merge-base --is-ancestor 9f0fcd2d6 6ae6145db` → **rc=0, 자손이다.**
+⇒ **지금 세대는 묶음 기동을 안다.** AC-0 이 예고한 그대로이므로 **닫지 않고**, 거절은
+**인위적으로 어긋난 값**으로 잰다.
+
+#### ② 인스턴스 실행 파일 — 구운 세대와 `main` 의 diff 가 **0**
+
+| 축 | 구워진 것 (`6ae6145db`) | 지금 `main` (`c5545abe8`) |
+|---|---|---|
+| `demo-boot.sh` 의 `selection` | **8회** | 8회 |
+| `projects.sh` 의 `BUNDLES`/`resolve_bundles` | **11회** | 11회 |
+| `demo-stack.service` 의 `DEMO_PROFILE` | **`selection`** | `selection` |
+| 네 파일(`demo-boot.sh`·`projects.sh`·`demo-stack.service`·`demo-up.sh`) 전체 diff | — | **0** |
+
+`check-ami-generation.sh` → **rc=0 · *"✔ 같은 세대입니다"***.
+🔵 그 판정자가 `index.html` 을 *"내용은 다르지만 **선언 표면은 같다**"* 로 통과시킨다 —
+`TASK-MONO-649` 가 좁힌 술어가 실제로 일하고 있다.
+
+#### ③ 예산 (SSM `/portfolio-demo/monthly-usage`)
+
+```
+{"month": "2026-09", "seconds": 30962, "tick": 0}
+  = 516.0분 / 600   → 남은 84분   (tick=0 = 지금 계상 중 아님)
+```
+
+#### 🔴 이 측정에서 내 술어가 한 번 틀렸다 — 기록해 둔다
+
+`aws ssm get-parameter --name /portfolio-demo/monthly-usage` 가 **`ParameterNotFound`** 를 냈다.
+파라미터는 있다 — **msys 가 `/portfolio-demo/...` 를 Windows 경로로 바꿨다:**
+
+```
+InvalidParameters: ["C:/Program Files/Git/portfolio-demo/monthly-usage"]
+```
+
+`MSYS_NO_PATHCONV=1` 로 다시 재서 값을 얻었다. 🔴🔴 **`describe-parameters` 는 인자에 경로가
+없어서 정상이었다** — 즉 「목록에는 있는데 읽으면 없다」는 모순이 관측됐고, 그 모순이
+없었다면 나는 **「예산을 못 읽는다」를 사실로 적었을 것**이다. ⇒ AWS CLI 에 `/`-로 시작하는
+인자를 줄 때는 이 저장소에서 항상 `MSYS_NO_PATHCONV=1` 을 붙인다.
 
 ## AC-1 — 세대가 어긋나면 묶음 기동을 거절한다
 
