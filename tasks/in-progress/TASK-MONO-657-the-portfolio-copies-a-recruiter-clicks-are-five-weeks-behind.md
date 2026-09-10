@@ -8,7 +8,7 @@ TASK-MONO-657
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -121,14 +121,14 @@ REST 는 `pushed_at` 이다. 651 이 이것을 「푸시 기록이 없다」로 
 
 ## AC-0 — 착수 게이트 (verify-then-act, 두 겹)
 
-- [ ] 🔴🔴 **① 소유자가 «동기화를 돌려라» 라고 명시적으로 말했는가.** 안 말했으면 **STOP** —
+- [x] 🔴🔴 **① 소유자가 «동기화를 돌려라» 라고 명시적으로 말했는가.** 안 말했으면 **STOP** —
       no-op 이 올바른 구현이다. `sync-portfolio.sh` 는 **force-push** 한다(스크립트 머리말
       § Strategy 4). `CLAUDE.md` § Git 규율: *"a general 'proceed to completion' instruction
       does not authorize … `git push --force-with-lease`"*. 🔴 **「진행해라」는 이 승인이
       아니다.**
-- [ ] 🔴 **② 위 실측 표를 다시 재라.** 2026-09-10 값이고 반드시 낡는다. 술어는 **REST
+- [x] 🔴 **② 위 실측 표를 다시 재라.** 2026-09-10 값이고 반드시 낡는다. 술어는 **REST
       `pushed_at`** 이고 **내용이 확실한 리포를 대조군으로** 같이 재라(§ 술어 함정).
-- [ ] 🔴 **③ `--dry-run` 을 먼저 돌리고 그 출력을 본문에 적어라.** 사본은 5주,
+- [x] 🔴 **③ `--dry-run` 을 먼저 돌리고 그 출력을 본문에 적어라.** 사본은 5주,
       erp·finance 는 **114일** 벌어져 있다 — force-push 가 무엇을 덮는지 **보고 나서** 민다.
 
 ## AC-1 — 동기화 (승인된 경우에만)
@@ -211,3 +211,75 @@ REST 는 `pushed_at` 이다. 651 이 이것을 「푸시 기록이 없다」로 
 
 분석=Opus 5 / 구현 권장=**Sonnet** — 스크립트를 돌리고 실측을 적는 것이 본체다.
 🔴 단, **AC-0 은 소유자**이고 대리 판단이 불가능하다(force-push).
+
+---
+
+# 🟢 AC-0 — 착수 게이트 세 겹 전부 통과 (2026-09-10 UTC)
+
+## ① 소유자 승인 — **범위가 좁혀졌다**
+
+소유자의 말 그대로: **「erp·finance 둘만」**
+
+🔵 선행 승인은 *"승인대기 셋 모두 승인할테니 추천 순서대로 진행해줘"* 였고, 그 뒤 사본
+6개를 어떻게 할지 물었을 때 나온 답이 위 한 줄이다. ⇒ **`wms` · `iam` ·
+`ecommerce` · `fan` 은 이번에 안 민다.** 그 넷은 37일 낡은 채로 남고, 그것이
+소유자의 결정이다 — 🔴 **「나중에 마저 하겠다」로 적지 않는다**(아무도 그 문장을 못 잰다).
+안 민 채로 남는 사실은 AC-3 에서 `docs/portfolio.md` 가 **직접 말하게** 한다.
+
+## ② 재측정 — REST `pushed_at` + 대조군
+
+🔴 티켓 본문의 표는 **낡았다.** 다시 쟀다(`gh api repos/kanggle/<r> --jq .pushed_at`,
+2026-09-10 UTC):
+
+| 사본 | 마지막 푸시 | 크기 | 본문 표 대비 |
+|---|---|---|---|
+| `wms-platform` | 2026-08-04T10:22:26Z | 6,120KB | 변화 없음 |
+| `iam-platform` | 2026-08-04T10:54:32Z | 7,284KB | 변화 없음 |
+| `ecommerce-microservices-platform` | 2026-08-04T11:29:55Z | 9,241KB | 변화 없음 |
+| `fan-platform` | 2026-08-04T11:57:39Z | 3,761KB | 변화 없음 |
+| `scm-platform` | **2026-09-10T13:11:34Z** | **4,183KB** | 🟢 **바뀌었다** (3,621KB → +562KB) |
+| `erp-platform` | 2026-05-19T10:01:15Z | 647KB | 변화 없음 |
+| `finance-platform` | 2026-05-19T03:42:37Z | 647KB | 변화 없음 |
+
+🟢 **`scm-platform` 이 대조군 겸 캐너리다.** 어제(같은 세션) 그것 하나를 먼저 밀었고,
+표에서 **날짜와 크기가 둘 다 움직였다** — 그러므로
+
+1. **술어가 살아 있다.** 여섯이 안 움직이고 하나가 움직였으므로 이 측정은 「전부 `-`」
+   같은 죽은 측정이 아니다(§ 술어 함정이 경고한 그 모양). 🔵 티켓이 요구한 *"내용이
+   확실한 리포를 대조군으로"* 를 **더 강한 형태**로 만족한다 — 대조군이 아니라
+   **변화한 원소**가 하나 있다.
+2. **스크립트가 오늘 동작한다.** AC-1 의 🔴🔴 *"형제 다섯 중 하나를 먼저 돌려라"* 는
+   **이미 충족돼 있다.** erp·finance 로 바로 갈 수 있다.
+
+## ③ dry-run — 무엇이 덮이는지 보고 나서 민다
+
+```
+$ ./scripts/sync-portfolio.sh erp-platform --dry-run     # rc=0
+[sync] Project:  erp-platform
+[sync] Remote:   https://github.com/kanggle/erp-platform.git
+[sync] Type:     direct-include
+[sync] [dry-run] Would clone monorepo, run filter-repo, force-push to …
+[sync] [dry-run] Kept paths:
+             libs/ platform/ rules/ .claude/ tasks/templates/ docs/guides/
+             build.gradle settings.gradle gradle/ gradlew gradlew.bat
+             gradle.properties .gitignore .gitattributes .dockerignore
+             .editorconfig .github/ CLAUDE.md TEMPLATE.md
+             projects/erp-platform/
+```
+`finance-platform` 도 동일(rc=0, 마지막 줄만 `projects/finance-platform/`).
+
+### 🟢 Edge Case 「force-push 가 사본의 로컬 커밋을 덮는가」 — 실측으로 닫았다
+
+티켓 Edge Cases 첫 줄이 *"사본 리포에 모노레포에 없는 커밋이 있는가 — dry-run 전에
+확인하라"* 다. 쟀다:
+
+```
+$ gh api repos/kanggle/erp-platform/commits --jq '.[] | .sha[0:8]+"  "+.commit.message'
+fb0a763c  Initial commit          ← 이것뿐이다
+$ gh api repos/kanggle/finance-platform/commits …
+82ad83ba  Initial commit          ← 이것뿐이다
+```
+
+⇒ **두 사본 다 커밋이 하나뿐이고 그것은 부트스트랩 커밋이다.** force-push 가 덮는
+것은 «누군가 사본에서 한 작업» 이 아니라 **빈 초기화**다. 🔵 이것은 가정이 아니라
+측정이고, 그래서 이 Edge Case 는 「위험 없음」으로 닫힌다.
