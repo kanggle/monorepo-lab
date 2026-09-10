@@ -93,7 +93,7 @@ describe('ConsoleHomePage — parallel SSR fetch (TASK-PC-FE-117)', () => {
     getDomainHealthState.mockReturnValue(Promise.reject(new Error('ignored')));
 
     await expect(ConsoleHomePage()).rejects.toThrow('NEXT_REDIRECT:/login');
-    expect(redirect).toHaveBeenCalledWith('/login');
+    expect(redirect).toHaveBeenCalledWith('/login?error=session_expired');
   });
 
   it('re-throws a non-401 catalog error (no redirect)', async () => {

@@ -168,6 +168,6 @@ describe('getScmOverviewState (TASK-PC-FE-167)', () => {
     m.getSnapshot.mockRejectedValue(new ApiError(401, 'TOKEN_INVALID', 'exp'));
 
     await expect(getScmOverviewState(true)).rejects.toThrow('REDIRECT:/login');
-    expect(redirectMock).toHaveBeenCalledWith('/login');
+    expect(redirectMock).toHaveBeenCalledWith('/login?error=session_expired');
   });
 });

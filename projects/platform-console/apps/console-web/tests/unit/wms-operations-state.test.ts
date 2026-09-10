@@ -239,7 +239,7 @@ describe('getWmsOperationsState — 401 on either leg → whole-session re-login
 
     const err = await getWmsOperationsState(true).catch((e) => e);
     expect(err).toBeInstanceOf(Error);
-    expect((err as Error).message).toBe('REDIRECT:/login');
+    expect((err as Error).message).toBe('REDIRECT:/login?error=session_expired');
   });
 
   it('projection 401 → redirect(/login), even though settings resolved fine', async () => {
@@ -251,6 +251,6 @@ describe('getWmsOperationsState — 401 on either leg → whole-session re-login
 
     const err = await getWmsOperationsState(true).catch((e) => e);
     expect(err).toBeInstanceOf(Error);
-    expect((err as Error).message).toBe('REDIRECT:/login');
+    expect((err as Error).message).toBe('REDIRECT:/login?error=session_expired');
   });
 });

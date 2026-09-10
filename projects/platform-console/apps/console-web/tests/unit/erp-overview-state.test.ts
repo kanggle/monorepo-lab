@@ -188,7 +188,7 @@ describe('getErpOverviewState (TASK-PC-FE-232)', () => {
     await expect(getErpOverviewState(true)).rejects.toThrow(
       'REDIRECT:/login',
     );
-    expect(redirectMock).toHaveBeenCalledWith('/login');
+    expect(redirectMock).toHaveBeenCalledWith('/login?error=session_expired');
   });
 
   it('401 in any masterdata leg → whole-session redirect(/login) (not a per-cell degrade)', async () => {
@@ -199,6 +199,6 @@ describe('getErpOverviewState (TASK-PC-FE-232)', () => {
     await expect(getErpOverviewState(true)).rejects.toThrow(
       'REDIRECT:/login',
     );
-    expect(redirectMock).toHaveBeenCalledWith('/login');
+    expect(redirectMock).toHaveBeenCalledWith('/login?error=session_expired');
   });
 });

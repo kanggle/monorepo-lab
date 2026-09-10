@@ -95,7 +95,7 @@ const BLOCKED: ErpRouteFlags = {
 function flagsForError(err: unknown): ErpRouteFlags {
   if (err instanceof ApiError && err.status === 401) {
     // No partial authed state → clean WHOLE-SESSION re-login.
-    redirect('/login');
+    redirect('/login?error=session_expired');
   }
   if (err instanceof ApiError && err.status === 403) {
     return { ...BLOCKED, forbidden: true };

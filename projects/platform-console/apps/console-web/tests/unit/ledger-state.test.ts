@@ -245,7 +245,7 @@ describe('getLedgerSectionState — eligibility + id gates (§ 2.4.7.1)', () => 
     );
     const err = await getLedgerSectionState(true, null).catch((e) => e);
     expect(err).toBeInstanceOf(Error);
-    expect((err as Error).message).toBe('REDIRECT:/login');
+    expect((err as Error).message).toBe('REDIRECT:/login?error=session_expired');
   });
 });
 

@@ -47,7 +47,7 @@ export async function getAccountsListState(
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
       // Auth failure → clean re-login (no partial authed state).
-      redirect('/login');
+      redirect('/login?error=session_expired');
     }
     if (
       err instanceof ApiError &&

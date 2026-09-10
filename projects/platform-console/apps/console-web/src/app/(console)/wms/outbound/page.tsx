@@ -49,7 +49,7 @@ export default async function WmsOutboundPage() {
     eligible = Boolean(wms && wms.available && wms.tenants.length > 0);
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
-      redirect('/login');
+      redirect('/login?error=session_expired');
     }
     registryDegraded = true;
   }

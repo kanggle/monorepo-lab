@@ -33,7 +33,7 @@ export default async function DomainHealthPage() {
   const state = await getDomainHealthState();
 
   if (state.unauthorized) {
-    redirect('/login');
+    redirect('/login?error=session_expired');
   }
 
   // TASK-PC-FE-068 — 도메인 상태 개요 is reached from the 개요 page's "도메인 상태

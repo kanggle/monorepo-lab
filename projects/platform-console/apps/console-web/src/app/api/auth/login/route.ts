@@ -10,6 +10,7 @@ import {
   PKCE_VERIFIER_COOKIE,
   OAUTH_STATE_COOKIE,
   transientCookieOpts,
+  clearFullSession,
 } from '@/shared/lib/session';
 import { sanitizeReturnPath } from '@/shared/lib/return-path';
 import { logger, newRequestId } from '@/shared/lib/logger';
@@ -53,6 +54,22 @@ export async function GET(req: Request) {
   authorizeUrl.searchParams.set('state', state);
 
   const jar = await cookies();
+
+  // 🔴🔴 TASK-PC-FE-278 — 재로그인을 **시작하는 순간** 옛 세션을 버린다.
+  //
+  // 계약이 스무 곳에서 요구하는 *"forced whole-session re-login — no partial authed
+  // state"* 의 「clear」 가 실제로 일어나는 유일한 자리다. 401 을 만난 서버 컴포넌트는
+  // 쿠키를 **못 지운다**(Next 는 Route Handler / Server Action 에서만 쿠키 변경을
+  // 허용한다) — 그래서 그 지점들은 마커만 붙여 여기로 보내고, 지우는 일은 여기가 한다.
+  //
+  // 🔵 마커 유무와 무관하게 지운다. 운영자가 스스로 다시 로그인하는 경우에도 옛 토큰이
+  //    남아 있을 이유가 없고, 「마커가 있을 때만」 로 좁히면 그 조건이 틀렸을 때 **다시
+  //    조용히** 반쪽 세션이 살아남는다 — 이 티켓이 고치는 결함이 정확히 그 모양이었다.
+  //
+  // 🔴 순서 주의: PKCE/state 쿠키를 **세운 뒤에** 부르면 방금 만든 것을 지운다.
+  //    `clearFullSession` 은 세션 쿠키만 건드리지만, 그 사실에 기대지 말고 여기서 끝낸다.
+  clearFullSession(jar);
+
   jar.set(PKCE_VERIFIER_COOKIE, verifier, transientCookieOpts);
   // state cookie carries both the CSRF token and the post-login target.
   jar.set(

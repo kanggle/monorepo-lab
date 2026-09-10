@@ -42,7 +42,7 @@ export default async function ScmPage() {
     eligible = Boolean(scm && scm.available && scm.tenants.length > 0);
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
-      redirect('/login');
+      redirect('/login?error=session_expired');
     }
     registryDegraded = true;
   }

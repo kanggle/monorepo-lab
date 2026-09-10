@@ -69,7 +69,7 @@ export default async function FinanceOverviewPage({
     eligible = Boolean(fin && fin.available && fin.tenants.length > 0);
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
-      redirect('/login');
+      redirect('/login?error=session_expired');
     }
     registryDegraded = true;
   }

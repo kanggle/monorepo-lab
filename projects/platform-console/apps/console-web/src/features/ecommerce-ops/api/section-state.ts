@@ -42,7 +42,7 @@ export interface DetailResilienceFlags extends SectionResilienceFlags {
 export function mapSectionResilience(err: unknown): SectionResilienceFlags {
   if (err instanceof ApiError && err.status === 401) {
     // No partial authed state → clean WHOLE-SESSION re-login.
-    redirect('/login');
+    redirect('/login?error=session_expired');
   }
   if (err instanceof ApiError && err.status === 403) {
     return { forbidden: true, degraded: false };

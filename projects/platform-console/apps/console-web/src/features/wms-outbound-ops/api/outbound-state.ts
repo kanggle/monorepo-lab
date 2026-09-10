@@ -67,7 +67,7 @@ export async function getOutboundSectionState(
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
       // No partial authed state → clean WHOLE-SESSION re-login.
-      redirect('/login');
+      redirect('/login?error=session_expired');
     }
     if (err instanceof ApiError && err.status === 403) {
       // Role-insufficient → inline "not available to your role".

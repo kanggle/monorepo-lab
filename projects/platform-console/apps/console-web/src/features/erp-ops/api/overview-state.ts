@@ -167,7 +167,7 @@ export async function getErpOverviewState(
   } catch (err) {
     // Only a `401` re-thrown by a cell reaches here → whole-session re-login.
     if (err instanceof ApiError && err.status === 401) {
-      redirect('/login');
+      redirect('/login?error=session_expired');
     }
     throw err;
   }

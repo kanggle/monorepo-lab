@@ -221,7 +221,7 @@ describe('getEcommerceOverviewState (TASK-PC-FE-156 / TASK-PC-FE-164)', () => {
     await expect(getEcommerceOverviewState(true)).rejects.toThrow(
       'REDIRECT:/login',
     );
-    expect(redirectMock).toHaveBeenCalledWith('/login');
+    expect(redirectMock).toHaveBeenCalledWith('/login?error=session_expired');
   });
 
   // ── TASK-PC-FE-172 — insights leg + seller-name overlay ──────────────────

@@ -254,7 +254,7 @@ describe('getFinanceOverviewState (TASK-PC-FE-229)', () => {
     await expect(getFinanceOverviewState(true)).rejects.toThrow(
       'REDIRECT:/login',
     );
-    expect(redirectMock).toHaveBeenCalledWith('/login');
+    expect(redirectMock).toHaveBeenCalledWith('/login?error=session_expired');
   });
 
   it('401 in the account leg → whole-session redirect(/login) (not a per-leg degrade)', async () => {
@@ -263,7 +263,7 @@ describe('getFinanceOverviewState (TASK-PC-FE-229)', () => {
     await expect(getFinanceOverviewState(true)).rejects.toThrow(
       'REDIRECT:/login',
     );
-    expect(redirectMock).toHaveBeenCalledWith('/login');
+    expect(redirectMock).toHaveBeenCalledWith('/login?error=session_expired');
   });
 
   it('empty FX cache → fxLatestAsOf null, fxStaleCount 0 (no crash on empty rates)', async () => {

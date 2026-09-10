@@ -88,7 +88,7 @@ const CLEAR: ScmResilienceFlags = {
 function classifyScmError(err: unknown): ScmResilienceFlags {
   if (err instanceof ApiError && err.status === 401) {
     // No partial authed state → clean WHOLE-SESSION re-login.
-    redirect('/login');
+    redirect('/login?error=session_expired');
   }
   if (err instanceof ApiError && err.status === 403) {
     // Token not scm-scoped → inline "not available / not scoped".

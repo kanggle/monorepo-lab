@@ -235,7 +235,7 @@ describe('getErpMastersState — `/erp/masters` slice (§ 2.4.8 / PC-FE-076; rel
     );
     const err = await getErpMastersState(true).catch((e) => e);
     expect(err).toBeInstanceOf(Error);
-    expect((err as Error).message).toBe('REDIRECT:/login');
+    expect((err as Error).message).toBe('REDIRECT:/login?error=session_expired');
   });
 });
 

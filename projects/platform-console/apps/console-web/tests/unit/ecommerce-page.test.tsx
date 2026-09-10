@@ -143,6 +143,6 @@ describe('EcommercePage (TASK-MONO-241 /ecommerce drill-in)', () => {
     );
 
     await expect(renderPage()).rejects.toThrow('REDIRECT:/login');
-    expect(redirectMock).toHaveBeenCalledWith('/login');
+    expect(redirectMock).toHaveBeenCalledWith('/login?error=session_expired');
   });
 });

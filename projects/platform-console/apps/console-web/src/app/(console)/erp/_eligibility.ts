@@ -54,7 +54,7 @@ export async function resolveErpEligibility(): Promise<ErpEligibility> {
     };
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
-      redirect('/login');
+      redirect('/login?error=session_expired');
     }
     return { eligible: false, registryDegraded: true };
   }

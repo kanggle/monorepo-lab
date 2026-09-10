@@ -106,6 +106,6 @@ describe('EcommercePage — SSR gating (TASK-PC-FE-118 / TASK-PC-FE-172)', () =>
     getCatalog.mockRejectedValue(new ApiError(401, 'TOKEN_INVALID', 'nope'));
 
     await expect(EcommercePage()).rejects.toThrow('NEXT_REDIRECT:/login');
-    expect(redirect).toHaveBeenCalledWith('/login');
+    expect(redirect).toHaveBeenCalledWith('/login?error=session_expired');
   });
 });
