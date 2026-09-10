@@ -615,6 +615,14 @@
     //    안 바뀐다 — 부재 판정과 미측정을 구별하라는, 이 저장소가 반복해서 이름 붙인 축이다.
     let bundlesErr = null;
 
+    // 🔴🔴 TASK-MONO-647 — «제어 API 가 이 경로를 모른다»(위 `bundlesErr`) 와 «제어 API 는
+    //    아는데 **저쪽 인스턴스가** 모른다» 는 **다른 상태**다. 후자에서 `/bundles` 는
+    //    200 이고 묶음 목록도 온전하다 — 즉 아래 다섯 사유 중 **어느 것도 참이 아니고**,
+    //    이 상태를 따로 안 들면 화면은 **아무 문제 없어 보인다.** 그것이 이 티켓의 결함이다:
+    //    버튼이 눌리고, 200 이 오고, 고른 것과 다른 것이 뜬다.
+    // 🔵 `null` = 안 막혔다 · 객체 = 막혔고 그 객체가 사유를 들고 있다(서버가 준 문구).
+    let bundleBlocked = null;
+
     // 🔴 404 와 5xx 를 **다른 문구**로 준다. 앞엣것은 «배포하면 되는 것», 뒤엣것은 «장애»
     //    이고 방문자와 운영자가 할 일이 다르다. 뭉치면 엉뚱한 곳을 판다.
     const B_ERR = {
@@ -686,13 +694,20 @@
             ? B_ERR[bundlesErr] + B_ERR_TAIL + " (" + bundleFallback(card) + ")"
             : !CONTROL_OK
               ? "제어 API 주소가 없어 실시간 기능 기동은 사용할 수 없습니다." + B_ERR_TAIL
-              : "";
+              // 🔴 TASK-MONO-647 — 서버가 준 사유를 **그대로** 싣는다. 여기서 «준비 중» 같은
+              //    모호한 말로 바꾸면 방문자도 운영자도 할 일을 모른다(AC-2).
+              : bundleBlocked
+                ? bundleBlocked.message + B_ERR_TAIL
+                : "";
         }
         if (btn) {
           // 🔴 사유를 말한다고 **버튼을 열지는 않는다.** 열면 눌러서 404 를 받고 «눌렀는데
           //    아무 일도 안 남» 이 된다 — 지금보다 나쁘다. 「보이게 하는 것」과 「눌리게
           //    하는 것」은 다른 축이다(AC-2).
-          const startable = CONTROL_OK && info !== null && B_STARTABLE.has(st);
+          // 🔴 TASK-MONO-647 — `bundleBlocked` 는 여기서도 물어야 한다. 사유를 note 에만
+          //    적고 버튼을 열어 두면 방문자는 그것을 누르고 409 를 받는다 — 「눌렀는데 아무
+          //    일도 안 남」은 지금보다 나쁘다(바로 위 주석이 404 에 대해 말한 것과 같은 축).
+          const startable = CONTROL_OK && info !== null && !bundleBlocked && B_STARTABLE.has(st);
           btn.disabled = !startable;
           btn.className = "bstart" + (startable ? " on" : "");
           btn.textContent = st === "ready" ? "실시간 기능 사용 중"
@@ -742,6 +757,13 @@
         //    «확인 중» 에 영원히 머문다 — 위 결함의 쌍둥이다.
         bundlesErr = "shape"; lastBundles = null; renderCards(); return;
       }
+      // 🔴 TASK-MONO-647 — 200 이고 목록도 온전한데 **저쪽이 이 동작을 모를 수 있다.**
+      //    서버가 `bundle_boot_supported:false` 로 그것을 말하고, 사유 문구도 함께 준다.
+      //    🔵 문구를 여기서 짓지 않는다 — 「구세대 확정」과 「판정 실패」는 처방이 다르고,
+      //    그 둘을 아는 것은 apply 가 값을 실어 준 **서버**뿐이다.
+      bundleBlocked = (r.body && r.body.bundle_boot_supported === false)
+        ? (r.body.bundle_boot_blocked || { message: "지금은 묶음 기동을 사용할 수 없습니다." })
+        : null;
       bundlesErr = null; lastBundles = b; renderCards();
     }
     // GUARD-Z34-END
