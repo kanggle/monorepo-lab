@@ -357,7 +357,7 @@ jobs:
       # The self-test first — same reasoning as the launcher lane. A judge that
       # cannot separate "same generation" from "drifted" from "cannot tell" is
       # measuring nothing, and rc alone does not say which branch fired.
-      - name: Self-test the judge (four injected cells must land 0 / 1 / 2 / 1)
+      - name: Self-test the judge (8 injected cells — 4 세대 + 4 좁힘/배선)
         run: bash infra/demo/aws/check-ami-generation.sh --self-test
 
       # The live verdict. `!cancelled()` so a self-test failure cannot hide it.

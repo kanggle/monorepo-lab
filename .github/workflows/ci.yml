@@ -2271,10 +2271,18 @@ jobs:
       #   · The self-test belongs at PR time: it is what proves the judge still
       #     BITES, and it is cheap and deterministic.
       #
-      # 🔴 The self-test is not decoration. It drives four cells with injected
-      # generations and requires 0 / 1 / 2 / 1, and cell ④ additionally asserts
-      # WHICH branch fired — because the first version of the judge misclassified a
-      # newly-added suppression overlay as "content differs" (bare
+      # 🔴 The self-test is not decoration. It drives EIGHT cells. Cells ①–④ inject
+      # generations and require 0 / 1 / 2 / 1, and cell ④ additionally asserts
+      # WHICH branch fired. Cells ⑤–⑧ (TASK-MONO-649) cover the narrowed index.html
+      # predicate: a changed DECLARATION still differs, a change OUTSIDE the
+      # declarations compares equal, an empty extraction is undecidable (2) rather
+      # than "same", and — cell ⑧ — the judge actually USES the narrowing.
+      # 🔴🔴 Cell ⑧ exists because ⑤–⑦ drive the extractor DIRECTLY: measured on
+      # 2026-09-10, killing the narrowing branch inside `verdict_for` left all three
+      # green and `--self-test` exited 0. "Does it bite" and "does it get the chance
+      # to bite" are different questions.
+      # The ① – ④ cells were themselves born from a defect: the first version of the
+      # judge misclassified a newly-added suppression overlay as "content differs" (bare
       # `git rev-parse <rev>:<path>` echoes its argument on failure instead of
       # returning empty), and rc was 1 either way. rc alone could not tell them apart.
       - name: AMI-generation judge self-test (injected generations must bite)
