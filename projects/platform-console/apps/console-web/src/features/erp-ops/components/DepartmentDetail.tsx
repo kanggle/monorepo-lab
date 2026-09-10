@@ -10,6 +10,7 @@ import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { useDepartment } from '../hooks/use-erp-ops';
 import { EffectivePeriodBadge } from './EffectivePeriodBadge';
 import { RetiredReferenceBadge } from './RetiredReferenceBadge';
+import { masterRefLabel } from '../lib/master-ref-label';
 
 /**
  * Department detail (TASK-PC-FE-010 / § 2.4.8).
@@ -91,7 +92,13 @@ export function DepartmentDetail({ id, initial }: DepartmentDetailProps) {
           <dd className="text-foreground">
             {d.parentId ? (
               <>
-                <span data-testid="erp-department-parentid">{d.parentId}</span>
+                <span
+                  data-testid="erp-department-parentid"
+                  data-master-ref="department.parentId"
+                  title={d.parentId ?? undefined}
+                >
+                  {masterRefLabel(d.parentId, parent)}
+                </span>
                 {parent && (
                   <span className="ml-1 text-muted-foreground">
                     ({parent.name})

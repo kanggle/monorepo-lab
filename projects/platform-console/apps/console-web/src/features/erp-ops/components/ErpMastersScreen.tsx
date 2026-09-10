@@ -83,6 +83,7 @@ export function ErpMastersScreen({
       <DepartmentList
         initial={initialDepartments ?? undefined}
         writable={mastersWritable}
+        parentOptions={departments}
       />
       <EmployeeList
         initial={initialEmployees ?? undefined}

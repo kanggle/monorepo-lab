@@ -10,6 +10,7 @@ import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { useCostCenter, useDepartment } from '../hooks/use-erp-ops';
 import { EffectivePeriodBadge } from './EffectivePeriodBadge';
 import { RetiredReferenceBadge } from './RetiredReferenceBadge';
+import { masterRefLabel } from '../lib/master-ref-label';
 
 /**
  * Cost-center detail (TASK-PC-FE-010 / § 2.4.8).
@@ -83,7 +84,9 @@ export function CostCenterDetail({ id, initial }: CostCenterDetailProps) {
             {c.departmentId ? (
               <>
                 <span data-testid="erp-costcenter-department-ref">
-                  {c.departmentId}
+                  <span data-master-ref="costCenter.departmentId" title={c.departmentId ?? undefined}>
+                    {masterRefLabel(c.departmentId, departmentQ.data)}
+                  </span>
                 </span>
                 {departmentQ.data && (
                   <span className="ml-1 text-muted-foreground">
