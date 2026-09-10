@@ -91,7 +91,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-PC-FE-279-a-test-that-copies-the-map-it-guards-has-already-drifted.md` — 🟠 **READY (2026-09-10 UTC).** 🔴 `tests/unit/login-error-messages.test.ts` 가 `(auth)/login/page.tsx` 의 `ERROR_MESSAGES` 를 **복제**해 두고 자기 복제본을 검사한다 — 파일 머리에 *"소스가 바뀌면 이 파일도 고쳐라"* 라고 적혀 있고 **그 지시는 지켜지지 않았다**: `not_provisioned` 이 소스는 *"아직 소속된 조직이 없습니다…"*(`TASK-PC-FE-182` / `ADR-MONO-044` 로 바뀐 문구), 복제본은 *"운영자 권한이 없는 계정입니다…"* 로 **이미 어긋나 있다**(`TASK-PC-FE-278` 작업 중 두 파일을 나란히 열어 실측). 🔵 **이 테스트는 초록이고 앞으로도 계속 초록일 것이다** — 자기 복제본을 검사하니까. ⇒ 이 결함은 테스트가 빨개지는 방식으로는 **절대 드러나지 않는다.** 🔴 **본체는 AC-2(bite)** — 복제를 지우는 것(AC-1)만으로는 「이제 드리프트를 문다」를 모른다; 소스 문구를 한 글자 바꿔 빨개지는 것까지 증명해야 한다. 🔵 *"페이지를 vitest 에서 못 태운다"* 는 파일 머리의 주장은 **낡았다** — `relogin-loop.test.tsx`(278 이 추가)가 진짜 로그인 페이지를 태운다. 분석=**Opus 5** / 구현 권장=**Sonnet**.
+(empty)
 
 
 _(직전 착수)_ `TASK-PC-BE-015` — console-bff 의 spec-vs-reality resilience 갭 봉합. `architecture.md` § Resilience(D5.A)·`RestClientConfig` javadoc·계약 § 2.4.9 가 모두 "per-leg circuit-breaker keyed by `(domain, route)`" 를 단언하지만 `src/main` 에 resilience4j import 0건(타임아웃 쌍만 존재). `libs/java-common` 의 `ResilienceClientFactory` 를 **그대로 채택**해 13개 `(domain, route)` 레그 전부 CB+bounded retry 뒤로 이동하고, 죽어 있던 `circuit_open`/`CIRCUIT_OPEN` 분류를 실제 emitter 로 살린다(console-web zod `DEGRADED_REASONS` 는 이미 소비 준비 완료). 문서의 `libs/java-web` 인용도 오답(그 모듈엔 resilience 코드 0) → `libs/java-common` 정정. 분석=Opus 5 / 구현 권장=Opus.
@@ -120,7 +120,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
-(empty)
+- `TASK-PC-FE-279-a-test-that-copies-the-map-it-guards-has-already-drifted.md` — 🟠 **REVIEW (2026-09-10 UTC, ready → review 한 PR).** 🔴🔴 **자기가 지키려던 맵을 복제해 둔 테스트가 이미 어긋나 있었다.** AC-0 기계 대조: 소스 키 7 · 복제본 키 6 — **값 불일치 1**(`not_provisioned`: 소스는 `ADR-MONO-044` 문구, 복제본은 그 이전 화석) · **소스에만 1**(`session_expired`) · 복제본에만 0 · `GENERIC_ERROR` 일치. 🔴🔴 **그 `session_expired` 공백은 같은 날 `TASK-PC-FE-278` 이 만들었다** — 소스에 키를 넣고 복제본을 안 고쳤는데, 그 세션은 이 파일의 *"소스가 바뀌면 이 파일도 고쳐라"* 머리 주석을 **읽고 티켓에 인용까지 했다.** ⇒ **규율이 실패한 대상이 「그것을 방금 읽은 사람」이었고, 실패해도 스위트는 초록이었다**(자기 복제본을 검사하니까). 도달 가능 코드 전수: **6개 전부 매핑, 미매핑 0**(`callback` 5종 + 53개 화면의 `session_expired`; `not_provisioned` 은 매핑돼 있으나 **도달 불가** — `:187` 이 `/onboarding` 으로 보낸다, 소스 주석과 일치). **고침**: 복제본 삭제 → **진짜 페이지를 렌더**하고 `role="alert"` 로 읽는다. 🔵 **소스는 한 줄도 안 고쳤다**(페이지가 이미 `role="alert"` 를 단다). 🔵 **핀은 남겼고 그것이 복제본과 다른 이유**: 옛 판은 복제본을 **복제본의 로직**에 먹여 소스가 계산에 안 들어갔고, 지금은 핀을 **렌더된 소스**와 대조하므로 소스가 바뀌면 빨개진다. **bite 3종**: ①한 글자(IAM→IAN) → **1 failed / 14 passed**(바뀐 키 하나만 문다) ②화석 문구 복원 → **2 failed**(핀 칸 + 의미 칸 동시) ③**소스에만 키 추가 → 1 failed**. 🔴🔴 **③ 은 계획에 없었다** — ①②를 통과시킨 뒤 *"이 스위트가 `session_expired` 드리프트를 잡았을까?"* 를 다시 물었더니 답이 **아니오**였다(핀 칸들은 `EXPECTED` 에 **있는** 키만 렌더한다; callback 커버리지 칸도 그 코드를 안 담는다) ⇒ **소스 맵의 키 집합을 등호로 맞추는 칸**을 더해 구멍을 닫았다. 🔴 **내 술어가 두 번 틀렸다**: `next/link` 목이 props 를 버려 `data-testid` 가 사라졌고(→「조건이 거짓」과 「렌더가 죽었다」가 구별 안 됨), 커버리지 정규식을 **인자의 모양**에 걸어 `publicOrigin(env)` 의 `)` 에 막혀 **0건**을 냈다 — 🔵 **비공허성 칸이 그것을 잡았다**(없었으면 「미매핑 0」이 **아무것도 안 본 초록**으로 통과). 고친 술어는 호출 **6곳 / 사유 5종**을 뽑아 수기 판독과 일치. **게이트**(각각 독립 statement): `tsc` rc=0 · `next lint` rc=0 · `vitest run` rc=0 **292 files / 3010 tests**(이전 292/3004, 회귀 0). 🔵 `next build` 미실행 — **앱 코드가 한 줄도 안 바뀌었다.** 🔴 **안 잰 것**: 다른 복제-검사 테스트 전수(Out of Scope) · 문구 자체의 적절성(소스가 정본) · 53개 화면의 마커 부착 여부(`relogin-marker.test.ts` 가 그 축의 가드다). 분석=**Opus 5** / 구현=**Opus 5**.
 
 
 
