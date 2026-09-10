@@ -8,7 +8,7 @@ TASK-MONO-647
 
 # Status
 
-review
+done
 
 # Owner
 
