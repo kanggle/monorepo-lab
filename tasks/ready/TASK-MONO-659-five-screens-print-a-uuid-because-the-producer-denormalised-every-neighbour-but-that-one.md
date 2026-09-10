@@ -25,8 +25,12 @@ monorepo (wms-platform · iam-platform)
 # Goal
 
 `TASK-PC-FE-277` AC-1 이 「참조 칸의 UUID 를 이름으로 바꾼다」를 하다가 **9곳 중 2곳만
-고칠 수 있었다.** 나머지 중 5곳은 콘솔의 결함이 아니다 — **읽을 이름이 그 화면에 도착조차
-하지 않는다.** 그 5개 응답 DTO 에 이미 옆 필드로 하고 있는 비정규화를 한 칸 더 한다.
+고칠 수 있었다.** 나머지 중 **넷**은 콘솔의 결함이 아니다 — **읽을 이름이 그 화면에 도착조차
+하지 않는다.** 그 4개 응답 DTO 에 이미 옆 필드로 하고 있는 비정규화를 한 칸 더 한다.
+
+🔴🔴 **제목과 파일명의 「5곳」은 낡았다 — 넷이다.** 2026-09-10 의 데모 창에서 감사 행을
+실제로 열어 보니 그 자리는 결함이 아니었다(§ 라이브 정정). 🔵 **슬러그는 안 고친다** —
+바꾸면 이 티켓을 가리키는 곳들이 조용히 낡는다. **세는 곳은 § 실측의 표**다.
 
 🔴 이 티켓은 「콘솔을 고친다」가 **아니다.** 콘솔 쪽 변경은 277 이 이미 했고, 여기서
 바뀌는 것은 **생산자의 응답**이다.
@@ -59,11 +63,35 @@ monorepo (wms-platform · iam-platform)
 | 1 | `wms admin-service` `InventorySnapshotResponse` | `warehouseCode` | **`locationCode` · `skuCode` · `lotNo` 셋을 비정규화한다.** 창고만 빠졌다 |
 | 2 | `wms admin-service` `AsnSummaryResponse` | `warehouseCode` | **`supplierName` 을 비정규화한다**(`supplierPartnerId` 옆에) |
 | 3 | `wms outbound-service` `OrderLineResponse` | `skuCode` | 🔴 이 서비스는 인입 때 **코드로 조회해서** UUID 를 얻는다 (`FulfillmentRequestedConsumer` → `findSkuByCode`) — 코드를 **손에 쥐고 있다가 버린다** |
-| 4 | `iam` 통합 감사 `admin` 행 (`AdminAuditRowSchema`) | 운영자 표시명 | 같은 union 의 `login_history`/`suspicious` 도 없다(별도 축) |
+| ~~4~~ | ~~`iam` 통합 감사 `admin` 행 (`AdminAuditRowSchema`)~~ | — | 🔴🔴 **철회. 아래 § 라이브 정정** |
 | 5 | `iam` `OrgAdminSchema` (`GET /{orgNodeId}/admins`) | 운영자 표시명 | 같은 프로젝트의 `GroupMember` 는 **`displayName` 을 싣는다** |
 
-🔵 **1~3 과 4~5 는 다른 부류다.** 앞 셋은 «옆 칸은 했는데 이 칸만 안 했다» 는 **누락**이고,
-뒤 둘은 «이 계약이 이름을 한 번도 안 실었다» 는 **설계**다. 한 PR 로 묶지 마라.
+🔵 **1~3 과 5 는 다른 부류다.** 앞 셋은 «옆 칸은 했는데 이 칸만 안 했다» 는 **누락**이고,
+5 는 «이 계약이 이름을 한 번도 안 실었다» 는 **설계**다. 한 PR 로 묶지 마라.
+
+### 🔴🔴 라이브 정정 (2026-09-10 UTC, `TASK-MONO-645` ④ 의 데모 창) — **넷이다, 다섯이 아니다**
+
+`AdminAuditRowSchema.operatorId` 를 **결함으로 적은 것이 틀렸다.** 창을 열고 `/audit` 을
+로그인해서 열어 보니 행위자 칸의 실제 값은 이것이다:
+
+```
+소스   액션/이벤트   행위자/계정      대상/위치        결과      발생 시각
+admin  AUDIT_QUERY   demo-operator   *               SUCCESS   2026. 9. 10. 20:59:18
+admin  AUDIT_QUERY   demo-operator   demo-operator   DENIED    2026. 9. 10. 20:55:18
+admin  UNKNOWN       demo-operator   -               DENIED    2026. 9.  9. 20:21:46
+```
+
+**14행 전부 `demo-operator` 이고 UUID 가 한 건도 없다.** `targetId` 도 `*` · `demo-operator` ·
+`-` 로 읽을 수 있다(그것은 `TASK-PC-FE-277` 의 ⚪ 목록에 있었고, 여기서 **닫힌다**).
+
+⇒ 🔵 `operatorId` 는 **UUID 가 아니라 운영자 핸들**이다. 생산자가 이름을 안 실은 것이
+맞지만 **싣고 있는 값이 이미 읽을 수 있으므로 결함이 아니다.** 이 자리는 이 티켓에서 뺀다.
+
+🔴 **왜 틀렸나 — 같은 실수의 세 번째 반복이다.** 277 은 이 자리를 «시드의 운영자 id 가
+UUID 이므로 감사 행의 `operatorId` 도 UUID일 것» 이라고 **추론**했다. 감사 행의 그 필드는
+`admin_actions` 가 자기 형식으로 적는 값이고, **다른 테이블의 PK 모양이 그것을 결정하지
+않는다.** 277 이 `inspectorId` 에서 이미 같은 추론을 했고 그때도 틀렸다.
+⇒ **런타임 값은 그 필드를 실제로 쓰는 곳에서 읽어야 한다.**
 
 ## 제외
 
