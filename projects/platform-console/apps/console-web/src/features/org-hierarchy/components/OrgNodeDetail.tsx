@@ -5,6 +5,7 @@ import { DetailHeader } from '@/shared/ui/DetailHeader';
 import { Button } from '@/shared/ui/Button';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import { formatDateTime } from '@/shared/lib/datetime';
+import { masterRefLabel } from '@/shared/lib/master-ref-label';
 import type { OrgNode, Ceiling } from '../api/types';
 import {
   descendantIds,
@@ -61,6 +62,12 @@ export function OrgNodeDetail({ node, nodes, grantableRoles }: OrgNodeDetailProp
     node.parentId !== null
       ? effectiveCeilingOf(nodes, node.parentId)
       : { mode: 'UNBOUNDED' };
+
+  // 🔵 `TASK-PC-FE-277` — 상위 노드의 **이름은 이미 이 컴포넌트 안에 있다.** `nodes` 는
+  //    평면 전체 목록이고(`GET /api/admin/org-nodes`), 위의 `effectiveCeilingOf` 가 같은
+  //    목록에서 같은 `parentId` 를 이미 찾아 쓴다 — 조회를 새로 하지 않는다.
+  //    🔴 못 찾으면 `이름 확인 불가` 다(id 로 되돌아가지 않는다 — 276 의 규칙).
+  const parent = nodes.find((n) => n.orgNodeId === node.parentId) ?? null;
 
   const tenants = useOrgNodeTenants(node.orgNodeId);
   const admins = useOrgNodeAdmins(node.orgNodeId);
@@ -121,9 +128,18 @@ export function OrgNodeDetail({ node, nodes, grantableRoles }: OrgNodeDetailProp
           {node.orgNodeId}
         </dd>
 
-        <dt className="text-muted-foreground">상위 노드 ID</dt>
-        <dd className="break-all font-mono text-xs text-foreground">
-          {node.parentId ?? '(루트)'}
+        <dt className="text-muted-foreground">상위 노드</dt>
+        {/* 🔴 `TASK-PC-FE-277` — 이 칸은 **참조**다. `(루트)` 는 「참조가 없다」이고
+            `—` 보다 이 화면에서 더 많은 것을 말하므로 그대로 둔다(`MASTER_REF_NONE` 을
+            쓰지 않는 유일한 자리). 원본 id 는 `title` 로만 싣는다. */}
+        <dd
+          className="text-foreground"
+          data-master-ref="orgNode.parentId"
+          title={node.parentId ?? undefined}
+        >
+          {node.parentId === null
+            ? '(루트)'
+            : masterRefLabel(node.parentId, parent && { name: parent.name })}
         </dd>
 
         <dt className="text-muted-foreground">생성 / 수정</dt>

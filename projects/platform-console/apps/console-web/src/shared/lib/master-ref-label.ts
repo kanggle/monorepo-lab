@@ -29,14 +29,22 @@ export interface MasterRefTarget {
 }
 
 /**
- * `CODE · 이름`. 코드가 없으면 이름만.
+ * `CODE · 이름`. 코드가 없으면 이름만, **이름이 없으면 코드만**.
  *
  * 🔵 `MasterWriteDialog` 의 드롭다운 라벨이 쓰던 바로 그 규칙이고(`o.code ? … : o.name`),
  *    `EmployeeOrgViewCard` 의 조직 경로도 같은 모양이다. 새로 짓지 않았다.
+ *
+ * 🔴 **이름 없는 코드** (`TASK-PC-FE-277`). 276 의 호출부는 전부 `code` 와 `name` 을 **둘 다**
+ *    갖고 있었고, 그래서 첫 판은 `` `${code} · ${name}` `` 로 끝냈다 — `name` 이 비면
+ *    `'WH01 · '` 라는 꼬리가 남는다. 277 이 그 입력을 처음 만들었다: scm 의
+ *    `reorder_suggestion` 은 **코드만** 싣는다(`warehouse_code`, 이름 컬럼이 아예 없다 —
+ *    ADR-MONO-050 D9 「교차서비스 식별자는 CODE 다」). 🔵 그러니 이것은 새 규칙이 아니라
+ *    **원래 규칙의 빠져 있던 반쪽**이고, 양쪽이 다 있는 기존 호출부의 출력은 안 바뀐다.
  */
 export function codeName(target: MasterRefTarget): string {
   const name = target.name ?? '';
-  return target.code ? `${target.code} · ${name}` : name;
+  if (!target.code) return name;
+  return name ? `${target.code} · ${name}` : target.code;
 }
 
 /**

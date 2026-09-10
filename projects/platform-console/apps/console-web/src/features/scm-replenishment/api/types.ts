@@ -34,6 +34,12 @@ export const SuggestionSchema = z
     id: z.string(),
     skuCode: z.string().optional(),
     warehouseId: z.string().nullable().optional(),
+    // 🔴 `TASK-PC-FE-277` — **이미 전선에 있었다.** `SuggestionResponse.warehouseCode` 를
+    //    생산자가 싣고 있는데(ADR-MONO-050 D9: 교차서비스 식별자는 CODE 다) 이 스키마가
+    //    선언을 안 해서 표가 UUID 인 `warehouseId` 를 그렸다. `.passthrough()` 라 값은
+    //    도착해 있었고, **없던 것은 데이터가 아니라 이 한 줄**이었다.
+    //    🔵 nullable: BATCH 출처 추천은 코드가 없다(V2__adr050_d9_codes.sql 주석).
+    warehouseCode: z.string().nullable().optional(),
     supplierId: z.string().nullable().optional(),
     suggestedQty: z.number().optional(),
     // SUGGESTED | APPROVED | MATERIALIZED | DISMISSED — tolerated as a free
