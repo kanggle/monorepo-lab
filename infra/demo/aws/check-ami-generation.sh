@@ -31,6 +31,7 @@
 # 재는 것 = **계약 파일 집합**의 내용이 두 세대에서 같은가.
 #
 #   infra/demo/aws/site/index.html      선언(누가 어디서 서빙되는가 · 부팅 프로브 대상)
+#                                       🔴 **이 파일만 «선언 표면» 으로 좁혀 본다** — 아래.
 #   infra/demo/demo-up.sh               그 선언의 소비자(추출 술어 · 두 하한)
 #   infra/demo/projects.sh              어떤 오버레이가 어느 프로젝트에 붙는가
 #   infra/demo/*-vercel.override.yml    억제 — 데모 호스트가 그 화면을 **그만 서빙**한다
@@ -43,6 +44,37 @@
 #   **론처가 방문자에게 한 약속을 깨지 않는다.** 이 판정자를 «AMI 가 낡았나» 로 넓히면
 #   재굽기 직후를 빼면 영원히 빨강이고, 영원한 빨강은 **꺼진 가드**다.
 #   🔵 그 축이 궁금하면 아래 «동반 파일» 줄이 건수만 정보로 알려준다(판정에 안 넣는다).
+#
+# -----------------------------------------------------------------------------
+# 🔴🔴 index.html 은 **선언 표면**으로만 비교한다 (TASK-MONO-649)
+# -----------------------------------------------------------------------------
+# 위 문단이 경계한 «영원한 빨강» 이 **계약 집합 안에서** 일어났다. `index.html` 은 이
+# 영역에서 가장 자주 바뀌는 파일이고(머지 = 배포), 구운 호스트가 실제로 **소비하는 것**은
+# 파일 전체가 아니라 `demo-up.sh` 가 뽑아 가는 **선언 몇 개**다. 그래서 문구·주석·상태기계
+# 변경에도 판정이 빨개졌고, 그때 내는 처방은 **55분·과금·소유자 승인**인 재굽기였다.
+# 🔴 **그 처방은 그런 변경을 닫지 못한다** — 재굽기해도 다음 론처 변경에 똑같이 빨개진다.
+# 무시되는 처방을 단 가드는 꺼진 가드다.
+#
+# ⇒ 이 파일에 한해 판정 단위를 **추출된 선언 집합**으로 좁혔다. 나머지 계약 파일은 그대로
+#   내용 전체다 — 그것들은 **구운 호스트가 실행하는 파일**이라 내용이 곧 계약이다.
+#
+# 🔴🔴 **추출기를 두 벌로 만들지 않았다.** `demo-up.sh` 안의 추출 블록을 **앵커로 잘라내
+#   그대로 실행한다**(이 저장소가 (z34)/(z39) 에서 쓰는 방식과 같다). 두 벌이면 속성 이름이
+#   바뀌는 날 한쪽만 고쳐지고, 그때 이 판정은 **초록으로 실패**한다.
+#   🔵 `demo-up.sh` 에 마커 주석을 새로 넣지 **않은** 이유: 그 파일은 계약 집합에서 내용
+#   전체로 비교되므로, 마커를 넣는 순간 이 가드가 **재굽기 없이는 못 닫는 빨강**이 된다 —
+#   즉 이 티켓이 없애려는 바로 그 상태를 새로 만든다. 앵커가 못 맞으면 **판정 불가(2)** 로
+#   멈추므로, 블록이 움직여도 조용히 틀리지는 않는다.
+#
+# 🔵 **어느 세대의 추출기를 쓰나 — 서빙(ref) 세대의 것 하나로 양쪽을 뽑는다.** 두 세대의
+#   추출기로 각각 뽑아 비교하면 그 비교는 «선언» 이 아니라 **«추출기 두 벌»** 을 재게 된다.
+#   🔴 그러면 추출기가 그 사이 바뀐 경우를 놓치느냐 — 아니다. `demo-up.sh` 자신이 계약
+#   집합에 **내용 전체로** 들어 있어 그 축은 **다른 줄이 이미 문다.**
+#
+# 🔵 **이 좁힘이 못 보게 되는 것**: `index.html` 의 선언 밖 변경 중 구운 호스트가 정말로
+#   신경 쓰는 것. 근거는 `demo-up.sh` 가 그 파일을 **`SURFACE_SRC` 로만** 읽는다는 사실이고
+#   (다른 용도의 참조가 0건), 그 전제가 깨지면 — 즉 그 파일을 다른 목적으로도 읽게 되면 —
+#   **이 좁힘도 함께 넓혀야 한다.** 다음 사람이 다시 확인할 수 있도록 근거를 여기 적는다.
 #
 # -----------------------------------------------------------------------------
 # 🔴 핀 파일이 «구운 세대» 를 **읽어서** 아는 것이 아니다 (2026-09-06 실측)
@@ -128,6 +160,73 @@ overlays_at() {
 }
 
 # -----------------------------------------------------------------------------
+# 선언 표면 추출 (TASK-MONO-649) — **demo-up.sh 의 블록을 잘라 그대로 실행한다**
+# -----------------------------------------------------------------------------
+# 🔴 앵커가 안 맞으면 «같다» 가 아니라 **판정 불가(2)** 다. 블록이 이름을 바꾸거나 옮겨진
+#    상태에서 조용히 초록이 되면, 이 좁힘은 «아무것도 안 재는 것» 과 구별되지 않는다.
+SURFACE_BEGIN_RE='^surfaces=\(\); surf_rows=0; surf_badsrc=\(\)$'
+SURFACE_END_LIT="data-demo-boot-probe' \"\$SURFACE_SRC\""
+
+EXTRACT_WHY=""
+# extract_decls <index.html> <demo-up.sh> → 정규화된 선언들을 stdout · rc 0 / 2
+extract_decls() {
+  local html="$1" up="$2" b e blk out
+  EXTRACT_WHY=""
+  [ -s "$html" ] || { EXTRACT_WHY="index.html 이 비었습니다"; return 2; }
+  [ -s "$up" ]   || { EXTRACT_WHY="demo-up.sh 가 비었습니다"; return 2; }
+  b="$(grep -nE "$SURFACE_BEGIN_RE" "$up" | head -1 | cut -d: -f1)"
+  e="$(grep -nF "$SURFACE_END_LIT" "$up" | head -1 | cut -d: -f1)"
+  if [ -z "$b" ] || [ -z "$e" ] || [ "$e" -le "$b" ]; then
+    EXTRACT_WHY="demo-up.sh 에서 추출 블록 앵커를 못 찾았습니다 (시작=${b:-없음} 끝=${e:-없음})"
+    return 2
+  fi
+  blk="$(sed -n "${b},${e}p" "$up")"
+  # 🔵 블록이 밖에서 읽는 변수는 SURFACE_SRC **하나뿐**이다(나머지는 블록 안에서 산다).
+  out="$(
+    SURFACE_SRC="$html"
+    surfaces=(); surf_rows=0; surf_badsrc=()
+    eval "$blk" || exit 9
+    printf 'rows=%s\n' "$surf_rows"
+    for x in ${surf_badsrc[@]+"${surf_badsrc[@]}"}; do printf 'bad=%s\n' "$x"; done
+    for x in ${surfaces[@]+"${surfaces[@]}"};   do printf 'surface=%s\n' "$x"; done
+  )" || { EXTRACT_WHY="추출 블록 실행이 실패했습니다"; return 2; }
+
+  local rows nbad nsurf
+  rows="$(printf '%s\n'  "$out" | sed -n 's/^rows=//p' | head -1)"
+  nbad="$(printf '%s\n'  "$out" | grep -c '^bad=' || true)"
+  nsurf="$(printf '%s\n' "$out" | grep -c '^surface=' || true)"
+  # 🔴 «선언은 있는데 모르는 값» 은 demo-up.sh 안에서도 판정 불가다. 여기서도 같다 —
+  #    속성 이름이 그 사이 바뀐 옛 세대를 «같다» 로 접으면 진짜 어긋남이 숨는다.
+  if [ "${nbad:-0}" -gt 0 ]; then
+    EXTRACT_WHY="모르는 선언 $(printf '%s\n' "$out" | sed -n 's/^bad=//p' | tr '\n' ' ')"
+    return 2
+  fi
+  # 🔴🔴 **빈 집합끼리는 서로 동의한다.** 하한이 없으면 추출이 통째로 죽어도 «같은 세대» 가
+  #    나온다 — 좁힌 술어가 공허하게 초록이 되는 정확히 그 자리다.
+  if [ "${rows:-0}" -lt 1 ] || [ "${nsurf:-0}" -lt 1 ]; then
+    EXTRACT_WHY="추출이 공허합니다 (행 ${rows:-0} · 표면 ${nsurf:-0}) — 0건은 «같다» 가 아닙니다"
+    return 2
+  fi
+  # 정규화: 표면 선언은 정렬한다(마크업 순서는 계약이 아니다). 행 수는 함께 싣는다.
+  { printf '%s\n' "$out" | sed -n 's/^rows=/rows=/p'
+    printf '%s\n' "$out" | sed -n 's/^surface=/surface=/p' | LC_ALL=C sort; }
+  return 0
+}
+
+# surface_decls_at <선언을 읽을 sha> <추출기를 읽을 sha>
+surface_decls_at() {
+  local sha="$1" upsha="$2" d rc
+  d="$(mktemp -d)" || { EXTRACT_WHY="임시 디렉터리 실패"; return 2; }
+  git -C "$ROOT" show "$sha:infra/demo/aws/site/index.html" > "$d/index.html" 2>/dev/null || {
+    rm -rf "$d"; EXTRACT_WHY="${sha:0:9} 에서 index.html 을 못 읽습니다"; return 2; }
+  git -C "$ROOT" show "$upsha:infra/demo/demo-up.sh" > "$d/demo-up.sh" 2>/dev/null || {
+    rm -rf "$d"; EXTRACT_WHY="${upsha:0:9} 에서 demo-up.sh 를 못 읽습니다"; return 2; }
+  extract_decls "$d/index.html" "$d/demo-up.sh"; rc=$?
+  rm -rf "$d"
+  return $rc
+}
+
+# -----------------------------------------------------------------------------
 # 핀 파일 읽기 — 🔴 source 하지 않는다(임의 코드 실행). 키만 뽑는다.
 # -----------------------------------------------------------------------------
 pin_get() { # <file> <key>
@@ -172,6 +271,27 @@ verdict_for() {
       return 2
     fi
     n_checked=$((n_checked + 1))
+    # 🔴 index.html 만 «선언 표면» 으로 좁힌다 (TASK-MONO-649 — 머리말 참조).
+    if [ "$p" = "infra/demo/aws/site/index.html" ]; then
+      if [ "$bb" = "$rb" ]; then continue; fi   # blob 이 같으면 선언도 같다
+      local bdec rdec
+      bdec="$(surface_decls_at "$baked_sha" "$ref_sha")" || {
+        say "✖ 구운 세대 ${baked_sha:0:9} 의 선언을 못 뽑습니다: $EXTRACT_WHY ⇒ 판정 불가"
+        return 2; }
+      rdec="$(surface_decls_at "$ref_sha" "$ref_sha")" || {
+        say "✖ 서빙 세대 ${ref_sha:0:9} 의 선언을 못 뽑습니다: $EXTRACT_WHY ⇒ 판정 불가"
+        return 2; }
+      if [ "$bdec" != "$rdec" ]; then
+        # 🔴 파일 이름만 찍지 않는다 — **어느 선언이** 달라졌는지 말해야 처방을 검증할 수 있다.
+        local dl
+        dl="$(diff <(printf '%s\n' "$bdec") <(printf '%s\n' "$rdec") | sed -n 's/^[<>] /&/p' | tr '\n' ' ')"
+        drift+=("$p (**선언이 다름**: ${dl:-차이를 못 렌더했습니다})")
+      else
+        say "   ◑ $p 는 내용이 다르지만 **선언 표면은 같다** — 구운 호스트가 소비하는 것은 안 바뀌었습니다."
+        say "     (문구·주석·스크립트 변경. 재굽기로 닫을 수 없고 닫을 필요도 없습니다 — TASK-MONO-649)"
+      fi
+      continue
+    fi
     if [ "$bb" != "$rb" ]; then drift+=("$p (내용 다름)"); fi
   done
 
@@ -329,7 +449,95 @@ if [ "$SELFTEST" -eq 1 ]; then
     case "$entry" in *"없다"*|*"구운 세대에만"*) d_named=1 ;; esac
   done
 
+  # ---------------------------------------------------------------------------
+  # 칸 ⑤⑥⑦ — 좁힌 술어가 **좁힌 대로** 무는가 (TASK-MONO-649)
+  # ---------------------------------------------------------------------------
+  # 🔴 위 네 칸은 «판정자가 세대를 가르는가» 를 잰다. 좁힘은 그 축에서 **안 보인다** —
+  #    칸②는 projects.sh 하나만으로도 빨개지므로, index.html 판정이 통째로 죽어도 초록이다.
+  # 🔴🔴 그리고 좁힘은 **초록으로 실패한다.** 잘못 좁히면 아무도 모른다. 그래서 세 칸이
+  #    직접 추출기를 두드린다: 선언을 바꾸면 달라지는가 · 선언 밖만 바꾸면 같은가 ·
+  #    추출이 0건이면 «같다» 가 아니라 판정 불가인가.
+  # 🔵 역사에서 못 주입한다 — 이 창의 역사에는 선언이 바뀐 세대가 없다(실측: 9차 핀
+  #    3bc182ecd 로 내려가도 선언은 같고 projects.sh 가 빨강을 만든다). 그래서 여기서만
+  #    합성 입력을 쓴다. 🔴 각 칸은 **읽기 전에 주입을 단언한다**.
+  SD="$(mktemp -d)"
+  git -C "$ROOT" show "$REF_SHA:infra/demo/aws/site/index.html" > "$SD/base.html" 2>/dev/null \
+    || { rm -rf "$SD"; undecidable "기준 세대의 index.html 을 못 읽습니다."; }
+  git -C "$ROOT" show "$REF_SHA:infra/demo/demo-up.sh" > "$SD/up.sh" 2>/dev/null \
+    || { rm -rf "$SD"; undecidable "기준 세대의 demo-up.sh 를 못 읽습니다."; }
+
+  BASE_DEC="$(extract_decls "$SD/base.html" "$SD/up.sh")" || {
+    rm -rf "$SD"; undecidable "기준 선언을 못 뽑습니다: $EXTRACT_WHY (좁힌 술어가 아예 안 돕니다)"; }
+  say "   칸⑤⑥⑦ 기준 선언 $(printf '%s\n' "$BASE_DEC" | grep -c '^surface=')건 · $(printf '%s\n' "$BASE_DEC" | sed -n 's/^rows=/행 /p')"
+
+  # 칸 ⑤ — **선언 속성**을 바꾼다 ⇒ 달라져야 한다(좁혀도 진짜 어긋남은 여전히 문다).
+  sed 's/data-demo-probe="/data-demo-probe="zz-/' "$SD/base.html" > "$SD/decl.html"
+  if cmp -s "$SD/base.html" "$SD/decl.html"; then
+    rm -rf "$SD"; undecidable "칸⑤ 주입 실패 — data-demo-probe 선언이 안 바뀌었습니다(속성 이름이 바뀌었습니까?)."
+  fi
+  E5="$(extract_decls "$SD/decl.html" "$SD/up.sh")"; r5=$?
+  # 칸 ⑥ — **선언 밖**만 바꾼다(주석 한 줄) ⇒ 같아야 한다. **이 티켓의 본체다.**
+  { cat "$SD/base.html"; printf '%s\n' '<!-- (칸⑥) 선언 밖 변경 — 구운 호스트는 이것을 안 읽는다 -->'; } > "$SD/cmt.html"
+  if cmp -s "$SD/base.html" "$SD/cmt.html"; then
+    rm -rf "$SD"; undecidable "칸⑥ 주입 실패 — 파일이 안 바뀌었습니다."
+  fi
+  E6="$(extract_decls "$SD/cmt.html" "$SD/up.sh")"; r6=$?
+  # 칸 ⑦ — 추출이 **0건**이면 판정 불가(2). 빈 집합끼리는 서로 동의하므로 이 칸이 없으면
+  #        좁힌 술어가 **공허하게 초록**이 될 수 있다.
+  grep -v 'data-surface' "$SD/base.html" | grep -v 'data-demo-boot-probe' > "$SD/empty.html"
+  if cmp -s "$SD/base.html" "$SD/empty.html"; then
+    rm -rf "$SD"; undecidable "칸⑦ 주입 실패 — 선언 행이 안 지워졌습니다."
+  fi
+  extract_decls "$SD/empty.html" "$SD/up.sh" >/dev/null; r7=$?
+  E7_WHY="$EXTRACT_WHY"
+  rm -rf "$SD"
+
+  e5=0; [ "$r5" -eq 0 ] && [ "$E5" != "$BASE_DEC" ] && e5=1
+  e6=0; [ "$r6" -eq 0 ] && [ "$E6" =  "$BASE_DEC" ] && e6=1
+  e7=0; [ "$r7" -eq 2 ] && e7=1
+
+  # ---------------------------------------------------------------------------
+  # 칸 ⑧ — **판정자가 그 좁힘을 실제로 쓰는가** (술어가 아니라 배선)
+  # ---------------------------------------------------------------------------
+  # 🔴🔴 칸⑤⑥⑦ 은 `extract_decls` 를 **직접** 두드린다. 그래서 추출기가 완벽해도
+  #    `verdict_for` 가 그것을 안 쓰면 세 칸 다 초록이다 — 실측으로 확인했다: 좁힘 분기를
+  #    `if false` 로 죽였더니 `--self-test` 가 **rc=0 으로 통과**했다. 「무는가」와
+  #    「물 기회를 얻는가」는 다른 질문이고, 이 칸이 뒤엣것이다.
+  # 🔴 주입은 역사에서 고른다: **index.html blob 은 다른데 선언은 같은** 옛 커밋. 그런
+  #    커밋은 이 영역에서 가장 흔하다(머지 = 배포). 상수 SHA 를 박지 않는 이유는 칸④ 와 같다.
+  REF_HTML="$(blob_at "$REF_SHA" "infra/demo/aws/site/index.html")"
+  NARROW_C=""
+  while IFS= read -r nc; do
+    [ -n "$nc" ] || continue
+    ncb="$(blob_at "$nc" "infra/demo/aws/site/index.html")"
+    [ -n "$ncb" ] && [ "$ncb" != "$REF_HTML" ] || continue
+    ncd="$(surface_decls_at "$nc" "$REF_SHA")" || continue
+    [ "$ncd" = "$BASE_DEC" ] || continue
+    NARROW_C="$nc"; break
+  done < <(git -C "$ROOT" log --format=%H -50 "$REF_SHA" -- ':/infra/demo/aws/site/index.html' 2>/dev/null)
+
+  if [ -z "$NARROW_C" ]; then
+    say "✖ 칸⑧ 대조군 성립 불가 — index.html 이 **다르면서 선언은 같은** 옛 커밋을 50개 안에서 못 찾았습니다."
+    say "  ⇒ 좁힘이 판정에 **배선됐는지**를 증명할 수 없습니다. 초록으로 넘기지 않습니다."
+    exit 2
+  fi
+  say "   칸⑧ 주입 확인: ${NARROW_C:0:9} 의 index.html blob ${ncb:0:9} ≠ ${REF_SHA:0:9} 의 ${REF_HTML:0:9} · **선언은 같다**"
+  verdict_for "$NARROW_C" "$REF_SHA" "[칸⑧ 배선]" >/dev/null; w=$?
+  e8=1
+  for entry in ${LAST_DRIFT[@]+"${LAST_DRIFT[@]}"}; do
+    case "$entry" in *"index.html"*) e8=0 ;; esac
+  done
+
   say "── 자가검사 결과: 같은커밋=$a  주입=$b  없는커밋=$c  오버레이=$d(분기적중=$d_named)   (기대 0 / 1 / 2 / 1·1)"
+  say "   좁힘 칸: 선언바꿈=$e5  선언밖만바꿈=$e6  추출0건=$e7  배선=$e8(rc=$w)   (기대 1 / 1 / 1 / 1)"
+  if [ "$e5" -ne 1 ] || [ "$e6" -ne 1 ] || [ "$e7" -ne 1 ] || [ "$e8" -ne 1 ]; then
+    say "✖ 좁힌 술어(TASK-MONO-649)가 좁힌 대로 안 뭅니다."
+    [ "$e5" -ne 1 ] && say "  · 칸⑤(선언 속성을 바꿨는데 같다고 함, rc=$r5) → **좁히다가 축을 통째로 죽였습니다.**"
+    [ "$e6" -ne 1 ] && say "  · 칸⑥(주석만 바꿨는데 다르다고 함, rc=$r6) → 좁힘이 안 먹었습니다 — 이 티켓 이전 상태입니다."
+    [ "$e7" -ne 1 ] && say "  · 칸⑦(추출 0건인데 rc=$r7, 기대 2) → **빈 집합끼리 동의**해서 공허하게 초록이 됩니다. ($E7_WHY)"
+    [ "$e8" -ne 1 ] && say "  · 칸⑧(선언이 같은데 index.html 이 어긋남에 찍혔다) → **판정자가 좁힘을 안 씁니다.** 추출기는 맞는데 배선이 없습니다."
+    exit 2
+  fi
   if [ "$d" -ne 1 ] || [ "$d_named" -ne 1 ]; then
     say "✖ 오버레이 신설/삭제 분기가 **이름을 찍지 못했습니다.**"
     say "  rc 만 보면 «내용 다름» 으로도 1 이 나오므로, 이 칸은 **어느 분기가 물었는지**를 봅니다."
@@ -344,6 +552,7 @@ if [ "$SELFTEST" -eq 1 ]; then
     exit 2
   fi
   say "✔ 판정자가 주입에 뭅니다 (같은커밋=같은세대 / 주입=어긋남 / 없는커밋=판정불가)."
+  say "✔ 좁힌 술어가 좁힌 대로 뭅니다 (선언 변경=어긋남 / 선언 밖 변경=같음 / 추출 0건=판정불가 / 판정자가 실제로 그것을 쓴다)."
   exit 0
 fi
 
