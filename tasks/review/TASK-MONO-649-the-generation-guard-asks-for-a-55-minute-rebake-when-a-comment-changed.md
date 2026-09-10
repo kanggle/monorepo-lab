@@ -8,7 +8,7 @@ TASK-MONO-649
 
 # Status
 
-in-progress
+review
 
 # Owner
 
