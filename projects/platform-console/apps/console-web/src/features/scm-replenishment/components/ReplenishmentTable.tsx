@@ -1,5 +1,6 @@
 import { Button } from '@/shared/ui/Button';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
+import { masterRefLabel } from '@/shared/lib/master-ref-label';
 import {
   suggestionStatusTone,
   canApprove,
@@ -86,7 +87,20 @@ export function ReplenishmentTable({
                 className="border-b border-border"
               >
                 <td className="p-2">{s.skuCode ?? '—'}</td>
-                <td className="p-2">{s.warehouseId ?? '—'}</td>
+                {/* 🔴 「창고」 칸은 참조다 — `TASK-PC-FE-277`. 생산자가 `warehouseCode` 를
+                    이미 싣고 있으므로 여기서 조회를 새로 하지 않는다. `data-master-ref` 는
+                    276 의 회귀 가드가 읽는 **모집단 선언**이고, 원본 id 는 `title` 에만
+                    싣는다(보이는 텍스트가 아니므로 UUID 가드가 안 문다). */}
+                <td
+                  className="p-2"
+                  data-master-ref="suggestion.warehouseId"
+                  title={s.warehouseId ?? undefined}
+                >
+                  {masterRefLabel(
+                    s.warehouseId,
+                    s.warehouseCode ? { code: s.warehouseCode } : null,
+                  )}
+                </td>
                 <td className="p-2">{s.supplierId ?? '—'}</td>
                 <td className="p-2">{s.suggestedQty ?? '—'}</td>
                 <td className="p-2" data-testid={`repl-row-trigger-${i}`}>

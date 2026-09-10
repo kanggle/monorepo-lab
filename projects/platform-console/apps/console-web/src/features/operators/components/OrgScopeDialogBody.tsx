@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/shared/ui/Button';
+import { masterRefLabel } from '@/shared/lib/master-ref-label';
 import type { useOrgScopeForm } from '../hooks/use-org-scope-form';
 import { OrgScopeSubsetPicker } from './OrgScopeSubsetPicker';
 
@@ -87,8 +88,25 @@ export function OrgScopeDialogBody({
                       key={id}
                       className="rounded bg-background px-2 py-0.5 text-xs text-foreground"
                       data-testid={`org-scope-current-chip-${id}`}
+                      // 🔵 `TASK-PC-FE-277` AC-2 — 이 화면은 «범위 선택» 이라 운영자가
+                      //    부서 id 를 알아야 할 수 있다. 보이는 텍스트가 아니므로 UUID
+                      //    회귀 가드가 안 물고, 값은 사라지지 않는다.
+                      title={id}
+                      // 🔴🔴 **부서 조회가 통째로 실패한 상태는 「못 찾았다」가 아니다.**
+                      //    그때 이 화면은 수동 id 입력 모드로 내려가고 배너로 그 사실을
+                      //    말한다 — 즉 id 가 화면이 가진 **유일한 진실**이고, 그것을
+                      //    `이름 확인 불가` 로 덮으면 운영자는 현재 스코프가 무엇인지
+                      //    알 길이 없어진다. ⇒ 그 분기에서는 마커도 뗀다: 마커는
+                      //    «이 칸은 해석된 이름을 그린다» 는 **선언**이고, 여기서 그
+                      //    선언은 거짓이 된다(가드가 이 상태를 결함으로 오판하게 된다).
+                      data-master-ref={
+                        f.deptsFailed ? undefined : 'orgScope.departmentId'
+                      }
                     >
-                      {dept ? `${dept.code} · ${dept.name}` : id}
+                      {/* 🔴 폴백이 `id` 였다. 그러면 «조회원 안에 없는» 칩만 가끔 UUID 가
+                          되고, 화면은 대부분의 칩에서 이름을 보여주므로 아무도 안 본다 —
+                          276 이 이 부류에 이름을 붙였다. 위의 통째-실패와는 다른 상태다. */}
+                      {f.deptsFailed ? id : masterRefLabel(id, dept)}
                     </span>
                   );
                 })}
