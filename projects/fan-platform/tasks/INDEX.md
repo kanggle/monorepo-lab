@@ -70,6 +70,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
+- `TASK-FAN-FE-021-the-live-guard-still-demands-a-bounce-a-decision-already-took-away.md` — 🔴 **라이브 가드가 채택된 결정이 이미 없앤 리다이렉트를 아직 요구한다 — 사흘째 빨강은 «거짓 빨강»이다** (READY, 2026-09-10 UTC 라이브 실측). `check-fan-guard-live.sh` 가 `/artists` → **307 `/login`** 을 요구하는데 실측은 **200, 리다이렉트 없음**. 🔵 그런데 「가드가 안 닫는다」는 결론이 **틀렸다**: `/artists` 는 `public-paths.ts` 의 `PUBLIC_PREFIXES` 에 **명시적으로** 있고(미들웨어 마지막 변경 = `9f0fcd2d6` *"공개 열람을 백엔드 없이 성립시키고 … (ADR-MONO-070/071)"*), 유닛 `middleware-public-paths.test.ts:174` 가 `isPassThrough('/artists') === true` 를 **이미 단언한다** ⇒ 세 자리 중 **라이브 스크립트만 옛 세계**를 요구한다. 🔵 **가드가 지키려던 성질은 멀쩡하다** — 판별자 `/nonexistent-xyz` **307**(미들웨어가 라우팅보다 먼저 돈다는 증거; `TASK-FAN-FE-018` 의 결함은 여기가 **404** 였다) · `/me` **307** · `/login` **200** · 자가검사 **통과**. 🔴🔴 대가: 이 거짓 빨강 때문에 `Deployed fan surface` 가 **09-07·08·09 사흘 연속 빨갰고**, 그 사이 **진짜 빨강이 났어도 구별되지 않았다**. 🔴🔴 **AC-2 가 이 티켓의 위험지점**: 공개가 된 경로를 검사 목록에서 **빼면 안 된다** — 빼면 「공개여야 한다」를 아무도 안 재고, 훗날 실수로 로그인 벽이 생겨도 조용히 통과한다. **기대를 뒤집어라**(`/artists` → 200 + 리다이렉트 없음). 이 저장소의 기존 교훈 그대로 «금지→허가 가드는 **반전**이지 **축소**가 아니다». 🔴 AC-3: `/nonexistent-xyz` 칸은 **그대로 둬라**(그게 이 스크립트의 존재 이유다). 🔴 AC-0: `/artists` **하나만 고치지 마라** — 스크립트의 다른 칸(`/posts`·`/membership` 쌍)은 **안 쟀다**; `public-paths.ts` 는 세 갈래(`PUBLIC_PREFIXES`·`PUBLIC_EXACT`·`INFRA_PREFIXES`)라 한 갈래만 보면 또 어긋난다. 🔵 감시자가 이 빨강을 조용히 닫은 것은 **별건**이고 집이 있다(`TASK-MONO-661`). 분석=Opus 5 / 구현 권장=Sonnet(단 AC-2 는 주의).
 
 
 ## in-progress
