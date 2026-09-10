@@ -37,7 +37,7 @@ export default async function ConsoleHomePage() {
   try {
     catalog = await catalogPromise;
   } catch (err) {
-    if (err instanceof ApiError && err.status === 401) redirect('/login');
+    if (err instanceof ApiError && err.status === 401) redirect('/login?error=session_expired');
     throw err;
   }
 

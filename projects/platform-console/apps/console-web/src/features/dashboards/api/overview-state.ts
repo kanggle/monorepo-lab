@@ -48,7 +48,7 @@ export async function getIamComposedOverviewState(): Promise<IamComposedOverview
     // 401 on ANY leg → whole-overview clean re-login (no partial authed
     // state). `getOperatorOverview()` re-throws a leg 401 as ApiError(401).
     if (err instanceof ApiError && err.status === 401) {
-      redirect('/login');
+      redirect('/login?error=session_expired');
     }
     // A NO_ACTIVE_TENANT that raced past the pre-flight gate → the tenant
     // gate state (still never an empty header — the leg blocked itself).

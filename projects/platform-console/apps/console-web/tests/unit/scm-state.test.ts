@@ -192,7 +192,7 @@ describe('getScmProcurementState — eligibility gate + resilience (§ 2.4.6)', 
     );
     const err = await getScmProcurementState(true).catch((e) => e);
     expect(err).toBeInstanceOf(Error);
-    expect((err as Error).message).toBe('REDIRECT:/login');
+    expect((err as Error).message).toBe('REDIRECT:/login?error=session_expired');
   });
 });
 
@@ -269,6 +269,6 @@ describe('getScmInventoryState — eligibility gate + resilience (§ 2.4.6)', ()
     );
     const err = await getScmInventoryState(true).catch((e) => e);
     expect(err).toBeInstanceOf(Error);
-    expect((err as Error).message).toBe('REDIRECT:/login');
+    expect((err as Error).message).toBe('REDIRECT:/login?error=session_expired');
   });
 });

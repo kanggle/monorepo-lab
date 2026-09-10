@@ -191,6 +191,6 @@ describe('getIamOverviewState (TASK-PC-FE-180)', () => {
     seedHappy();
     m.queryAudit.mockRejectedValue(new ApiError(401, 'TOKEN_INVALID', 'exp'));
     await expect(getIamOverviewState()).rejects.toThrow('REDIRECT:/login');
-    expect(redirectMock).toHaveBeenCalledWith('/login');
+    expect(redirectMock).toHaveBeenCalledWith('/login?error=session_expired');
   });
 });

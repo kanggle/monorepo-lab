@@ -136,6 +136,6 @@ describe('OperatorOverviewPage — parallel SSR fetch (TASK-PC-FE-117)', () => {
     getDomainHealthState.mockReturnValue(Promise.reject(new Error('ignored')));
 
     await expect(OperatorOverviewPage()).rejects.toThrow('NEXT_REDIRECT:/login');
-    expect(redirect).toHaveBeenCalledWith('/login');
+    expect(redirect).toHaveBeenCalledWith('/login?error=session_expired');
   });
 });

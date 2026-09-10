@@ -22,7 +22,7 @@ export default async function OnboardingLayout({
   children: ReactNode;
 }) {
   if ((await getOperatorToken()) !== null) redirect('/');
-  if (!(await hasPreOperatorSession())) redirect('/login');
+  if (!(await hasPreOperatorSession())) redirect('/login?error=session_expired');
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted px-4 py-10">

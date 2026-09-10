@@ -326,7 +326,7 @@ describe('getRbacCatalogState — SSR resilience state (mirrors operators/audit 
     );
 
     await expect(getRbacCatalogState()).rejects.toThrow(/NEXT_REDIRECT/);
-    expect(redirectMock).toHaveBeenCalledWith('/login');
+    expect(redirectMock).toHaveBeenCalledWith('/login?error=session_expired');
   });
 
   it('permissionError when the producer returns 403 PERMISSION_DENIED', async () => {

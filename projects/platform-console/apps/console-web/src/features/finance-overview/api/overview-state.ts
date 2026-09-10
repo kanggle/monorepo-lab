@@ -274,7 +274,7 @@ export async function getFinanceOverviewState(
   ) {
     // Shared credential — no partial authed state → ONE whole-session
     // re-login (never per-leg).
-    redirect('/login');
+    redirect('/login?error=session_expired');
   }
 
   if (ledgerOutcome.kind === 'forbidden' || accountOutcome.kind === 'forbidden') {

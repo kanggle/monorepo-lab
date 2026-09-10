@@ -170,6 +170,44 @@ describe('GET /api/auth/login (PKCE initiation)', () => {
       '|/dashboards/overview',
     );
   });
+
+  // 🔴🔴 TASK-PC-FE-278 — 재로그인을 «시작하는 순간» 옛 세션을 버린다.
+  //
+  // 계약이 스무 곳에서 요구하는 *"forced whole-session re-login — no partial authed
+  // state"* 의 「clear」 가 실제로 일어나는 유일한 자리다. 401 을 만난 서버 컴포넌트는
+  // 쿠키를 못 지우므로(Next 는 Route Handler / Server Action 에서만 허용) 지우는 일이
+  // 여기로 온다. 이 칸이 없으면 죽은 쿠키가 재로그인 내내 살아남는다.
+  it('🔴 죽은 세션 쿠키를 전부 지운다 — 반쪽 authed 상태를 남기지 않는다', async () => {
+    cookieJar.set(ACCESS_COOKIE, { value: 'dead.access', opts: {} });
+    cookieJar.set(REFRESH_COOKIE, { value: 'dead.refresh', opts: {} });
+    cookieJar.set(OPERATOR_COOKIE, { value: 'dead.operator', opts: {} });
+    cookieJar.set(TENANT_COOKIE, { value: 'ecommerce', opts: {} });
+    cookieJar.set(ASSUMED_TOKEN_COOKIE, { value: 'dead.assumed', opts: {} });
+
+    await loginGET(new Request('http://console.local/api/auth/login'));
+
+    expect(cookieDeletes).toContain(ACCESS_COOKIE);
+    expect(cookieDeletes).toContain(REFRESH_COOKIE);
+    expect(cookieDeletes).toContain(OPERATOR_COOKIE);
+    expect(cookieDeletes).toContain(TENANT_COOKIE);
+    expect(cookieDeletes).toContain(ASSUMED_TOKEN_COOKIE);
+  });
+
+  // 🔴 순서 함정: `clearFullSession` 을 PKCE/state 쿠키 «뒤에» 부르면 방금 만든 것을
+  //    지운다. 그러면 콜백이 verifier 를 못 찾아 로그인 자체가 죽고, 그 증상은
+  //    «로그인이 안 된다» 라서 이 티켓이 고치려던 것과 육안으로 구별되지 않는다.
+  it('🔴 그러면서 방금 세운 PKCE·state 쿠키는 살아남는다 (지우는 순서)', async () => {
+    cookieJar.set(ACCESS_COOKIE, { value: 'dead.access', opts: {} });
+
+    await loginGET(
+      new Request('http://console.local/api/auth/login?redirect=/console'),
+    );
+
+    expect(cookieJar.get(PKCE_VERIFIER_COOKIE)?.value).toBeTruthy();
+    expect(cookieJar.get(OAUTH_STATE_COOKIE)?.value).toContain('|/console');
+    expect(cookieDeletes).not.toContain(PKCE_VERIFIER_COOKIE);
+    expect(cookieDeletes).not.toContain(OAUTH_STATE_COOKIE);
+  });
 });
 
 describe('GET /api/auth/callback (token exchange)', () => {

@@ -129,6 +129,6 @@ describe('getOutboundSectionState — eligibility gate (§ 2.4.5.1)', () => {
     );
     const err = await getOutboundSectionState(true).catch((e) => e);
     expect(err).toBeInstanceOf(Error);
-    expect((err as Error).message).toBe('REDIRECT:/login');
+    expect((err as Error).message).toBe('REDIRECT:/login?error=session_expired');
   });
 });

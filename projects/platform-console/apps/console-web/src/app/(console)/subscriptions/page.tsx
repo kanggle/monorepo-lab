@@ -64,7 +64,7 @@ export default async function SubscriptionsPage() {
     degraded = catalog.degraded;
     rows = deriveDomainSubscriptions(catalog.products, activeTenant);
   } catch (err) {
-    if (err instanceof ApiError && err.status === 401) redirect('/login');
+    if (err instanceof ApiError && err.status === 401) redirect('/login?error=session_expired');
     throw err;
   }
 

@@ -56,7 +56,7 @@ export default async function OperatorOverviewPage() {
   const state = await getOperatorOverviewState();
 
   if (state.unauthorized) {
-    redirect('/login');
+    redirect('/login?error=session_expired');
   }
 
   if (state.noTenant) {

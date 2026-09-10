@@ -244,6 +244,6 @@ describe('getFinanceSectionState — eligibility + account-id gates (§ 2.4.7)',
     );
     const err = await getFinanceSectionState(true, 'acct-1').catch((e) => e);
     expect(err).toBeInstanceOf(Error);
-    expect((err as Error).message).toBe('REDIRECT:/login');
+    expect((err as Error).message).toBe('REDIRECT:/login?error=session_expired');
   });
 });

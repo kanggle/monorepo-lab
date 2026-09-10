@@ -111,7 +111,7 @@ export default async function PartnershipsPage() {
   // Past the noTenant gate an active tenant is selected; read it for the client
   // component (drives the invite-form copy). A 401 here → clean re-login.
   const activeTenant = await getActiveTenant();
-  if (!activeTenant) redirect('/login');
+  if (!activeTenant) redirect('/login?error=session_expired');
 
   return (
     <PartnershipsScreen initial={state.page} activeTenant={activeTenant} />

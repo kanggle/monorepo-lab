@@ -58,7 +58,7 @@ export async function getPartnershipsListState(
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
       // No partial authed state → clean re-login.
-      redirect('/login');
+      redirect('/login?error=session_expired');
     }
     if (err instanceof ApiError && err.code === 'NO_ACTIVE_TENANT') {
       return {

@@ -57,7 +57,7 @@ export async function getOperatorGroupsState(
     };
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
-      redirect('/login');
+      redirect('/login?error=session_expired');
     }
     if (err instanceof ApiError && err.code === 'NO_ACTIVE_TENANT') {
       return {
@@ -136,7 +136,7 @@ export async function getOperatorGroupDetailState(
     };
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
-      redirect('/login');
+      redirect('/login?error=session_expired');
     }
     if (err instanceof ApiError && err.code === 'NO_ACTIVE_TENANT') {
       return {
