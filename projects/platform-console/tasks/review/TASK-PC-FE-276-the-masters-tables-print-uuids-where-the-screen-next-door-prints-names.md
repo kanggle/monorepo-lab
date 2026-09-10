@@ -8,7 +8,7 @@ TASK-PC-FE-276
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -279,6 +279,34 @@ FAIL tests/unit/OperatorsScreen.test.tsx
       묶음(ecommerce 테넌트로 콘솔 재촬영)에 이 장이 **추가**된다.
       🔵 648 AC-3 의 낡음 가드는 «경로가 사라졌나» 만 묻고 «내용이 바뀌었나» 는 못 잡으므로,
       이 칸이 사람 손으로 그 자리를 대신한다.
+
+---
+
+# 🔴 임플 PR 이 이 파일을 `review/` 로 안 옮겼다 (2026-09-10 UTC · `in-progress` 에서 적는다)
+
+`#3731`(squash `dc827d94d`)이 구현과 AC 체크를 전부 실었는데 **파일은 `in-progress/` 에
+남았다.** `tasks/INDEX.md` § PR Separation Rule 이 impl PR 에 요구하는
+*"moves the task file through `in-progress/` to `review/`"* 중 **마지막 칸이 빠졌다.**
+🔵 그래서 이 기록을 여기 적는다 — 같은 문서 § Review Rules 가 `in-progress/` 를
+「수정하지 마라」 목록에서 **일부러 뺐고**(*"that file is the working document until it moves
+to `review/`"*), `review/` 에 올린 뒤에는 이것을 적을 수 없다.
+
+## 리뷰 단계에서 잰 것
+
+**AC-0 ①②③ · AC-1 · AC-2 · AC-3 — 열린 칸 0.** 체크박스가 아니라 § 착수 기록의 근거를
+읽어 대조했다.
+
+🔴 그리고 이 티켓이 **임시로 들고 있던 남의 의무 둘**이 실제로 집을 받았는지 확인했다.
+받지 않았으면 `done/` 은 frozen 이라 그 의무가 다시 읽히지 않는다:
+
+| 넘긴 것 | 받은 곳 | 실측 (2026-09-10 UTC) |
+|---|---|---|
+| `/erp/masters` **재촬영** | `TASK-MONO-648` (`in-progress`) | AC-2 에 한 칸으로 살아 있다 — *"🔴🔴 `/erp/masters` 도 재촬영 대상이 됐다 (2026-09-10, `TASK-PC-FE-276` 이 알림)"* 이고 *"위 `/ecommerce/*` 3장과 **같은 창에서 함께** 찍는다"* 로 **묶음까지** 지정돼 있다 |
+| 48곳 **가르기** | `TASK-PC-FE-277` (`ready`) | § 실측 표(48곳/12도메인)와 «이 48은 결함 수가 아니다» 가 그대로 옮겨져 있다 |
+| `data-master-ref` **마커 밖은 가드 밖** | `TASK-PC-FE-277` AC-1 | *"참조 칸에는 `data-master-ref` 마커를 단다 — 276 의 회귀 가드가 그것으로 모집단을 만든다. 🔴 마커를 안 달면 그 칸은 **가드 밖**이다"* |
+| `OrgScopeDialogBody` **id 폴백** | `TASK-PC-FE-277` AC-2 | 헬퍼 `shared/` 이동이 **선행**임과, 276 이 실측으로 밟은 `layer-dependency-rules.test.ts` 빨강이 근거로 적혀 있다 |
+
+🔵 넷 다 **열려 있는 큐**(`in-progress` · `ready`)에 있다. `done/` 에 넘긴 것은 없다.
 
 # Related Specs / Contracts
 
