@@ -47,6 +47,27 @@ monorepo
 
 ---
 
+## 🔴🔴 2026-09-10 — 이 apply 에 **두 번째 티켓이 올라탔다** (`TASK-MONO-647`)
+
+`TASK-MONO-647`(PR **#3734**, squash `bd0917f68`)이 같은 자원 —
+**`aws_lambda_function.control`** — 을 바꿔서 머지됐다. 그러므로:
+
+- 🔵 **한 번의 apply 가 둘을 함께 싣는다.** 따로 apply 할 이유가 없고, 따로 하려 해도
+  `source_code_hash` 가 하나뿐이라 **갈라지지 않는다.**
+- 🔴🔴 **그래서 위에 적힌 `0 add / 1 change / 0 destroy` 는 이제 확실히 낡았다.**
+  647 이 `handler.py` 를 바꿨고 `main.tf` 에 **`data "external" "ami_bundle_capability"`**
+  와 람다 env 두 개(`BUNDLE_SELECTION_CAPABLE`·`AMI_REPO_COMMIT`)를 더했으며,
+  `versions.tf` 에 **`hashicorp/external ~> 2.3`** provider 를 추가했다.
+  ⇒ **`terraform init` 이 먼저 필요할 수 있고**(새 provider), plan 의 change 내역도 달라진다.
+  🔵 **판정 기준은 그대로다**: `0 to destroy` 이고 **`aws_instance` 가 목록에 없어야 한다.**
+- 🔴 **apply 뒤에 647 의 라이브 확인을 한 줄 더 해라** — `GET /bundles` 응답에
+  **`bundle_boot_supported: true`** 가 실려 오는가. 지금 배포된 세대(`6ae6145db`)는 묶음을
+  아는 세대이므로 **`true` 가 정답**이고, `false`/필드 부재는 배선이 안 실렸다는 뜻이다.
+  🔵 그 필드가 없으면 론처는 **오늘과 똑같이** 동작한다(647 의 화면 변경은 apply 전엔 불활성)
+  — 즉 **조용히 안 실려도 아무 증상이 없다.** 그래서 이 한 줄이 필요하다.
+
+---
+
 # 🟢 이미 잰 것 (2026-09-10 UTC, `TASK-MONO-653` 에서)
 
 ## plan 은 이미 냈고 안전하다
