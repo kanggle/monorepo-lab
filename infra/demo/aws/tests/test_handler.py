@@ -94,6 +94,16 @@ os.environ.update({
     # 지워 버리면 그 테스트는 *"값이 없어서"* 통과한다 — 행사된 적 없는 네거티브 테스트가
     # 되고, 정작 회귀는 못 본다. 눈에 띄는 값을 넣어 두면 새는 순간 그 문자열이 나온다.
     "ALLOWED_ORIGIN": "https://should-not-appear.example",
+    # TASK-MONO-647 — 이 스위트의 묶음 테스트들은 전부 **AMI 가 묶음을 아는** 경로를 잰다.
+    # 🔴 이 줄을 빼면 핸들러의 기본값 "unknown" 이 걸려 그 10건이 409 로 떨어진다. 그것은
+    #    핸들러의 결함이 아니라 **fail-closed 가 설계대로 동작한 것**이다(「모르면 허용」이
+    #    647 이 고치는 자리다). 실제로 이 스위트가 그렇게 먼저 빨개졌고, 그 빨강이 거절이
+    #    살아 있다는 첫 증거였다.
+    # 🔴🔴 그러나 여기를 "yes" 로 고정하면 **거절 경로가 한 번도 행사되지 않는다** —
+    #    행사된 적 없는 가드는 없는 가드와 같다(바로 위 ALLOWED_ORIGIN 주석과 같은 규율).
+    #    그래서 아래 BundleGenerationGateTest 가 handler.BUNDLE_CAPABLE 을 직접 갈아 끼워
+    #    no · unknown · 엉뚱한 값을 전부 잰다.
+    "BUNDLE_SELECTION_CAPABLE": "yes",
 })
 
 import handler  # noqa: E402
@@ -1067,6 +1077,120 @@ class RouteTableMatchesTerraformTest(unittest.TestCase):
             self.tf,
             r'resource\s+"aws_apigatewayv2_route"\s+"default"\s*\{[^}]*route_key\s*=\s*"\$default"',
             "main.tf 에 $default 라우트가 없습니다 — 없는 경로의 4xx 에 CORS 가 안 붙습니다.")
+
+
+class BundleGenerationGateTest(unittest.TestCase):
+    """구세대 AMI 에서 묶음 기동을 거절하는가 — TASK-MONO-647.
+
+    🔴🔴 **판정은 «409 가 나왔나» 가 아니다.** 이 티켓이 고치는 결함은 *"200 을 내고
+    고른 것과 다른 것이 뜬다"* 였고, 그 비용은 **전체 스택 분량의 예산**이다. 그러니
+    거절이 «돈이 나가기 전» 인지를 함께 봐야 한다: 선택이 **저장되지 않았고**
+    인스턴스가 **켜지지 않았는가**. 그래서 모든 칸이 FAKE_SSM.store 와
+    FAKE_EC2.start_calls 를 함께 읽는다.
+
+    🔵 모듈 env 는 "yes" 다(정상 경로). 여기서는 handler.BUNDLE_CAPABLE 을 직접 갈아
+    끼운다 — 그 상수는 import 시점에 묶이므로 env 를 나중에 고쳐도 안 바뀐다.
+    """
+
+    def setUp(self):
+        FAKE_SSM.store.clear()
+        FAKE_SSM.sent.clear()
+        FAKE_EC2.state = "stopped"
+        FAKE_EC2.start_calls = 0
+        FAKE_EC2.stop_calls = 0
+        FAKE_EC2.launch_time = launched(0)
+        self._saved = handler.BUNDLE_CAPABLE
+
+    def tearDown(self):
+        handler.BUNDLE_CAPABLE = self._saved
+
+    def req(self, payload):
+        return {"body": json.dumps(payload)}
+
+    def assert_refused(self, capability):
+        handler.BUNDLE_CAPABLE = capability
+        r = handler.bundle_start(self.req({"bundles": ["fan"]}))
+        body = json.loads(r["body"])
+        self.assertEqual(
+            r["statusCode"], 409,
+            f"capability={capability!r} 인데 거절하지 않았습니다 — 응답: {body}")
+        self.assertEqual(body["error"], "bundle-boot-not-deployed")
+        # 🔴 여기가 이 시험의 본체다. 거절 «코드» 만 보면, 선택을 저장하고 인스턴스를 켠
+        #    다음에 409 를 내는 구현도 통과한다 — 그때 돈은 이미 나갔다.
+        self.assertNotIn(
+            handler.SELECTION_PARAM, FAKE_SSM.store,
+            "거절했는데 선택이 저장됐습니다 — 거절이 _add_to_selection 보다 뒤입니다.")
+        self.assertEqual(
+            FAKE_EC2.start_calls, 0,
+            "거절했는데 인스턴스를 켰습니다 — 막으려던 비용이 이미 나갔습니다.")
+        self.assertEqual(FAKE_SSM.sent, [], "거절했는데 SSM 명령을 보냈습니다.")
+        return body
+
+    def test_old_generation_is_refused_before_anything_costs_money(self):
+        body = self.assert_refused("no")
+        self.assertIn("오래됐", body["message"])
+
+    def test_unknown_generation_is_refused_too(self):
+        """🔴 「모르면 허용」은 이 티켓이 고치는 자리로 되돌아간다."""
+        body = self.assert_refused("unknown")
+        self.assertIn("확인하지 못했", body["message"])
+
+    def test_the_predicate_is_a_whitelist_not_a_blacklist(self):
+        """🔴🔴 `!= "no"` 로 구현하면 오타·빈 값·미래의 새 값이 전부 통과한다.
+
+        그 구현은 위 두 칸을 **둘 다 통과시키지 못하므로** 여기서만 갈린다.
+        """
+        for bogus in ("", "YES", "true", "maybe", "1"):
+            with self.subTest(capability=bogus):
+                FAKE_SSM.store.clear()
+                FAKE_EC2.start_calls = 0
+                FAKE_SSM.sent.clear()
+                self.assert_refused(bogus)
+
+    def test_refusal_names_which_of_the_two_states_it_is(self):
+        """🔵 방문자에겐 둘 다 「지금은 못 한다」지만 운영자의 처방이 다르다."""
+        handler.BUNDLE_CAPABLE = "no"
+        no_msg = json.loads(handler.bundle_start(self.req({"bundles": ["fan"]}))["body"])["message"]
+        FAKE_SSM.store.clear(); FAKE_SSM.sent.clear(); FAKE_EC2.start_calls = 0
+        handler.BUNDLE_CAPABLE = "unknown"
+        unk_msg = json.loads(handler.bundle_start(self.req({"bundles": ["fan"]}))["body"])["message"]
+        self.assertNotEqual(
+            no_msg, unk_msg,
+            "구세대 확정과 판정 실패가 **같은 문구**입니다 — 로그에서도 어느 쪽인지 못 가릅니다.")
+
+    def test_full_stack_start_is_not_blocked(self):
+        """🔴 대조군. 둘을 같이 막으면 지금 되는 유일한 기동 경로가 사라진다(Failure 2)."""
+        handler.BUNDLE_CAPABLE = "no"
+        r = handler.start()
+        self.assertEqual(
+            r["statusCode"], 200,
+            "구세대 AMI 에서 /start(전체 스택)까지 막혔습니다 — 데모가 통째로 멈춥니다.")
+        self.assertEqual(FAKE_EC2.start_calls, 1)
+
+    def test_capable_generation_still_starts(self):
+        """대조군의 반대쪽 — 게이트가 정상 경로를 막지 않는가."""
+        handler.BUNDLE_CAPABLE = "yes"
+        r = handler.bundle_start(self.req({"bundles": ["fan"]}))
+        self.assertEqual(r["statusCode"], 200, json.loads(r["body"]))
+        self.assertIn(handler.SELECTION_PARAM, FAKE_SSM.store)
+        self.assertEqual(FAKE_EC2.start_calls, 1)
+
+    def test_bundles_tells_the_screen_why(self):
+        """AC-2 — 화면이 버튼을 잠그려면 `/bundles` 가 그 사실을 말해야 한다."""
+        handler.BUNDLE_CAPABLE = "yes"
+        ok_body = json.loads(handler.bundles()["body"])
+        self.assertIs(ok_body["bundle_boot_supported"], True)
+        self.assertIsNone(ok_body["bundle_boot_blocked"])
+
+        handler.BUNDLE_CAPABLE = "no"
+        bad_body = json.loads(handler.bundles()["body"])
+        self.assertIs(bad_body["bundle_boot_supported"], False)
+        self.assertEqual(bad_body["bundle_boot_blocked"]["error"], "bundle-boot-not-deployed")
+        # 🔵 목록 자체는 온전해야 한다 — 이 상태에서 `/bundles` 는 200 이고, 그것이
+        #    기존 다섯 사유(absent/route/down/shape)와 이 상태가 갈리는 지점이다.
+        self.assertEqual(
+            set(bad_body["bundles"]), set(handler.BUNDLE_NAMES),
+            "거절 상태에서 묶음 목록이 비었습니다 — 론처는 이것을 «모양 불명» 으로 읽습니다.")
 
 
 if __name__ == "__main__":
