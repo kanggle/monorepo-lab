@@ -18,6 +18,8 @@ import {
   DepartmentWriteDialog,
   type DeptWriteRequest,
 } from './DepartmentWriteDialog';
+import { masterRefIndex, masterRefLabel } from '../lib/master-ref-label';
+import type { MasterOption } from './MasterWriteDialog';
 
 /**
  * Departments list (TASK-PC-FE-010 / § 2.4.8) — paginated table.
@@ -44,13 +46,23 @@ import {
  */
 export interface DepartmentListProps {
   initial?: DepartmentListResponse;
+  /**
+   * 상위 부서 이름을 풀 조회원 (TASK-PC-FE-276). 화면이 이미 로드한 부서 목록이다 —
+   * 형제 `EmployeeList` / `CostCenterList` 가 쓰던 `optionSources` 와 같은 출처.
+   * 🔴 없으면 이 표의 행에서 만든다(자기 참조라 대부분 같은 페이지에 있다).
+   */
+  parentOptions?: MasterOption[];
   /** TASK-PC-FE-046: enable the department write affordances. Defaults
    *  to false (read-only) so the component stays read-only unless the
    *  page explicitly opts the department master in. */
   writable?: boolean;
 }
 
-export function DepartmentList({ initial, writable = false }: DepartmentListProps) {
+export function DepartmentList({
+  initial,
+  writable = false,
+  parentOptions,
+}: DepartmentListProps) {
   const [query, setQuery] = useState<ErpListQueryParams>({
     page: 0,
     size: initial?.meta.size ?? 20,
@@ -58,6 +70,12 @@ export function DepartmentList({ initial, writable = false }: DepartmentListProp
   const [pending, setPending] = useState<DeptWriteRequest | null>(null);
   const q = useDepartments(query, initial);
   const dataResp = q.data ?? initial ?? { data: [], meta: { page: 0, size: 20, totalElements: 0 } };
+  // TASK-PC-FE-276 — 🔵 조회원은 «화면이 준 목록 ∪ 이 표의 현재 행» 이다. 부서는 자기
+  //    자신을 참조하므로 두 번째 항만으로도 대부분 풀리고, 첫 항이 페이지 밖 부모를 더 덮는다.
+  const parentIndex = masterRefIndex([
+    ...(parentOptions ?? []),
+    ...dataResp.data.map((d: Department) => ({ id: d.id, code: d.code, name: d.name })),
+  ]);
   const rows = dataResp.data ?? [];
   const totalElements = dataResp.meta.totalElements ?? rows.length;
   const size = dataResp.meta.size ?? 20;
@@ -135,7 +153,13 @@ export function DepartmentList({ initial, writable = false }: DepartmentListProp
                         {labelForUnknownEnum(d.status, KNOWN_MASTER_STATUSES)}
                       </StatusBadge>
                     </td>
-                    <td className="p-2">{d.parentId ?? '—'}</td>
+                    <td
+                      className="p-2"
+                      data-master-ref="department.parentId"
+                      title={d.parentId ?? undefined}
+                    >
+                      {masterRefLabel(d.parentId, parentIndex.get(d.parentId ?? ''))}
+                    </td>
                     <td className="p-2">
                       <EffectivePeriodBadge period={d.effectivePeriod} />
                     </td>

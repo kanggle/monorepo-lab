@@ -22,6 +22,7 @@ import {
 import { EffectivePeriodBadge } from './EffectivePeriodBadge';
 import { useMasterWrite, type MasterWriteController } from './MasterWriteDialog';
 import { JOB_GRADE_WRITE_CONFIG } from './master-write-configs';
+import { codeName } from '../lib/master-ref-label';
 
 /**
  * Job-grades list (TASK-PC-FE-010 / § 2.4.8) — paginated, producer-ordered by
@@ -135,7 +136,7 @@ export function JobGradeList({ initial, writable = false }: JobGradeListProps) {
                           <Button
                             variant="secondary"
                             size="sm"
-                            onClick={() => openUpdate(g.id, `${g.code} · ${g.name}`)}
+                            onClick={() => openUpdate(g.id, codeName(g))}
                             data-testid={`erp-jobgrade-edit-${i}`}
                           >
                             수정
@@ -143,7 +144,7 @@ export function JobGradeList({ initial, writable = false }: JobGradeListProps) {
                           <Button
                             variant="secondary"
                             size="sm"
-                            onClick={() => openRetire(g.id, `${g.code} · ${g.name}`)}
+                            onClick={() => openRetire(g.id, codeName(g))}
                             data-testid={`erp-jobgrade-retire-${i}`}
                             className="text-destructive"
                           >

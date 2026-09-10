@@ -17,6 +17,7 @@ import {
 } from '../hooks/use-erp-ops';
 import { EffectivePeriodBadge } from './EffectivePeriodBadge';
 import { RetiredReferenceBadge } from './RetiredReferenceBadge';
+import { masterRefLabel } from '../lib/master-ref-label';
 
 /**
  * Employee detail (TASK-PC-FE-010 / § 2.4.8).
@@ -125,7 +126,9 @@ export function EmployeeDetail({ id, initial }: EmployeeDetailProps) {
             {e.departmentId ? (
               <>
                 <span data-testid="erp-employee-department-ref">
-                  {e.departmentId}
+                  <span data-master-ref="employee.departmentId" title={e.departmentId ?? undefined}>
+                    {masterRefLabel(e.departmentId, departmentQ.data)}
+                  </span>
                 </span>
                 {departmentQ.data && (
                   <span className="ml-1 text-muted-foreground">
@@ -147,7 +150,9 @@ export function EmployeeDetail({ id, initial }: EmployeeDetailProps) {
             {e.jobGradeId ? (
               <>
                 <span data-testid="erp-employee-jobgrade-ref">
-                  {e.jobGradeId}
+                  <span data-master-ref="employee.jobGradeId" title={e.jobGradeId ?? undefined}>
+                    {masterRefLabel(e.jobGradeId, jobGradeQ.data)}
+                  </span>
                 </span>
                 {jobGradeQ.data && (
                   <span className="ml-1 text-muted-foreground">
@@ -169,7 +174,9 @@ export function EmployeeDetail({ id, initial }: EmployeeDetailProps) {
             {e.costCenterId ? (
               <>
                 <span data-testid="erp-employee-costcenter-ref">
-                  {e.costCenterId}
+                  <span data-master-ref="employee.costCenterId" title={e.costCenterId ?? undefined}>
+                    {masterRefLabel(e.costCenterId, costCenterQ.data)}
+                  </span>
                 </span>
                 {costCenterQ.data && (
                   <span className="ml-1 text-muted-foreground">

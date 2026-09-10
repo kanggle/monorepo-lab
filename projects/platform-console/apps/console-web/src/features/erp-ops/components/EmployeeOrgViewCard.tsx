@@ -9,6 +9,7 @@ import {
   type OrgViewListQueryParams,
 } from '../api/types';
 import { useEmployeeOrgViews } from '../hooks/use-erp-ops';
+import { codeName } from '../lib/master-ref-label';
 
 /**
  * ERP "통합 조회" card (TASK-PC-FE-049 — ADR-MONO-016 § D3).
@@ -37,7 +38,7 @@ function formatDeptPath(
   path: Array<{ code: string; name: string }> | undefined | null,
 ): string {
   if (!path || path.length === 0) return '—';
-  return path.map((n) => `${n.code} · ${n.name}`).join(' › ');
+  return path.map((n) => codeName(n)).join(' › ');
 }
 
 export function EmployeeOrgViewCard({ initial }: EmployeeOrgViewCardProps) {
@@ -145,7 +146,7 @@ export function EmployeeOrgViewCard({ initial }: EmployeeOrgViewCardProps) {
                       ) : (
                         <span className="text-sm">
                           {emp.costCenter
-                            ? `${emp.costCenter.code} · ${emp.costCenter.name}`
+                            ? codeName(emp.costCenter)
                             : '—'}
                         </span>
                       )}
@@ -156,7 +157,7 @@ export function EmployeeOrgViewCard({ initial }: EmployeeOrgViewCardProps) {
                       ) : (
                         <span className="text-sm">
                           {emp.jobGrade
-                            ? `${emp.jobGrade.code} · ${emp.jobGrade.name}`
+                            ? codeName(emp.jobGrade)
                             : '—'}
                         </span>
                       )}

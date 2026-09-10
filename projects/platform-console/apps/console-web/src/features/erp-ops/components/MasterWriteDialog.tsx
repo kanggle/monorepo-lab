@@ -7,6 +7,7 @@ import {
   masterWriteErrorMessage,
   PAYMENT_METHODS,
 } from '../hooks/use-master-write';
+import { codeName } from '../lib/master-ref-label';
 
 /**
  * Generic master write dialog (TASK-PC-FE-048) — drives create / update /
@@ -192,7 +193,7 @@ export function MasterWriteDialog({
                     {(f.options ??
                       dynamicOptions(f.optionSource).map((o) => ({
                         value: o.id,
-                        label: o.code ? `${o.code} · ${o.name}` : o.name,
+                        label: codeName(o),
                       }))).map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}

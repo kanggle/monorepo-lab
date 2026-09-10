@@ -23,6 +23,7 @@ import {
 import { EffectivePeriodBadge } from './EffectivePeriodBadge';
 import { useMasterWrite, type MasterWriteController } from './MasterWriteDialog';
 import { BUSINESS_PARTNER_WRITE_CONFIG } from './master-write-configs';
+import { codeName } from '../lib/master-ref-label';
 
 /**
  * Business-partners list (TASK-PC-FE-010 / § 2.4.8) — paginated;
@@ -150,7 +151,7 @@ export function BusinessPartnerList({
                           <Button
                             variant="secondary"
                             size="sm"
-                            onClick={() => openUpdate(p.id, `${p.code} · ${p.name}`)}
+                            onClick={() => openUpdate(p.id, codeName(p))}
                             data-testid={`erp-businesspartner-edit-${i}`}
                           >
                             수정
@@ -158,7 +159,7 @@ export function BusinessPartnerList({
                           <Button
                             variant="secondary"
                             size="sm"
-                            onClick={() => openRetire(p.id, `${p.code} · ${p.name}`)}
+                            onClick={() => openRetire(p.id, codeName(p))}
                             data-testid={`erp-businesspartner-retire-${i}`}
                             className="text-destructive"
                           >

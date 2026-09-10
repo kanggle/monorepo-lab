@@ -26,6 +26,7 @@ import {
   type MasterWriteDialogProps,
 } from './MasterWriteDialog';
 import { COST_CENTER_WRITE_CONFIG } from './master-write-configs';
+import { codeName, masterRefIndex, masterRefLabel } from '../lib/master-ref-label';
 
 /**
  * Cost-centers list (TASK-PC-FE-010 / § 2.4.8) — paginated; references a
@@ -69,6 +70,8 @@ export function CostCenterList({
   );
 
   const dataResp = q.data ?? initial ?? { data: [], meta: { page: 0, size: 20, totalElements: 0 } };
+  // TASK-PC-FE-276 — 이 화면이 쓰기 다이얼로그용으로 **이미 받고 있던** 목록을 그대로 쓴다.
+  const departmentIndex = masterRefIndex(optionSources?.departments);
   const rows = dataResp.data ?? [];
   const totalElements = dataResp.meta.totalElements ?? rows.length;
   const size = dataResp.meta.size ?? 20;
@@ -135,7 +138,16 @@ export function CostCenterList({
                         {labelForUnknownEnum(c.status, KNOWN_MASTER_STATUSES)}
                       </StatusBadge>
                     </td>
-                    <td className="p-2">{c.departmentId ?? '—'}</td>
+                    <td
+                      className="p-2"
+                      data-master-ref="costCenter.departmentId"
+                      title={c.departmentId ?? undefined}
+                    >
+                      {masterRefLabel(
+                        c.departmentId,
+                        departmentIndex.get(c.departmentId ?? ''),
+                      )}
+                    </td>
                     <td className="p-2">
                       <EffectivePeriodBadge period={c.effectivePeriod} />
                     </td>
@@ -145,7 +157,7 @@ export function CostCenterList({
                           <Button
                             variant="secondary"
                             size="sm"
-                            onClick={() => openUpdate(c.id, `${c.code} · ${c.name}`)}
+                            onClick={() => openUpdate(c.id, codeName(c))}
                             data-testid={`erp-costcenter-edit-${i}`}
                           >
                             수정
@@ -153,7 +165,7 @@ export function CostCenterList({
                           <Button
                             variant="secondary"
                             size="sm"
-                            onClick={() => openRetire(c.id, `${c.code} · ${c.name}`)}
+                            onClick={() => openRetire(c.id, codeName(c))}
                             data-testid={`erp-costcenter-retire-${i}`}
                             className="text-destructive"
                           >

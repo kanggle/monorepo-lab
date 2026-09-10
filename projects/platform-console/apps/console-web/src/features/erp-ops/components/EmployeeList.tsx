@@ -28,6 +28,7 @@ import {
   type MasterWriteDialogProps,
 } from './MasterWriteDialog';
 import { EMPLOYEE_WRITE_CONFIG } from './master-write-configs';
+import { masterRefIndex, masterRefLabel } from '../lib/master-ref-label';
 
 /**
  * Employees list (TASK-PC-FE-010 / § 2.4.8) — paginated table.
@@ -76,6 +77,8 @@ export function EmployeeList({
   );
 
   const dataResp = q.data ?? initial ?? { data: [], meta: { page: 0, size: 20, totalElements: 0 } };
+  // TASK-PC-FE-276 — 이 화면이 쓰기 다이얼로그용으로 **이미 받고 있던** 목록을 그대로 쓴다.
+  const departmentIndex = masterRefIndex(optionSources?.departments);
   const rows = dataResp.data ?? [];
   const totalElements = dataResp.meta.totalElements ?? rows.length;
   const size = dataResp.meta.size ?? 20;
@@ -157,7 +160,16 @@ export function EmployeeList({
                         )}
                       </StatusBadge>
                     </td>
-                    <td className="p-2">{e.departmentId ?? '—'}</td>
+                    <td
+                      className="p-2"
+                      data-master-ref="employee.departmentId"
+                      title={e.departmentId ?? undefined}
+                    >
+                      {masterRefLabel(
+                        e.departmentId,
+                        departmentIndex.get(e.departmentId ?? ''),
+                      )}
+                    </td>
                     <td className="p-2">
                       <EffectivePeriodBadge period={e.effectivePeriod} />
                     </td>
