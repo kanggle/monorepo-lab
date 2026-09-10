@@ -8,7 +8,7 @@ TASK-MONO-650
 
 # Status
 
-review
+done
 
 # Owner
 
