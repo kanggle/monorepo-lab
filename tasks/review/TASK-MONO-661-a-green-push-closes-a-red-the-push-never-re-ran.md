@@ -8,7 +8,7 @@ TASK-MONO-661
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -95,21 +95,21 @@ skip)"* 이라고 적어 뒀고 **그것은 옳다**(새 빨강을 찾을 때 sk
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (실측 고정)** — 착수 시점에 다시 재서, *"빨갰던 잡이 skipped 인 런이
+- [x] **AC-0 (실측 고정)** — 착수 시점에 다시 재서, *"빨갰던 잡이 skipped 인 런이
       이슈를 닫았다"* 는 사례를 **이슈 코멘트 기록으로** 하나 이상 제시한다.
       🔵 #3724 가 이미 그 형태이지만, 착수 시점 기록으로 다시 확인하라
       (그 사이 감시자가 바뀌었을 수 있다).
-- [ ] **AC-1** — 종료 술어가 **«빨갰던 잡이 그 뒤 실제로 돌았는가»** 를 본다.
+- [x] **AC-1** — 종료 술어가 **«빨갰던 잡이 그 뒤 실제로 돌았는가»** 를 본다.
       🔴 `conclusion == 'success'` 만 보지 마라 — 잡별 `conclusion` 을 읽어
       **`skipped` 를 «미측정»으로** 분류해야 한다.
-- [ ] **AC-2 (bite)** — 빨갰던 잡이 `skipped` 인 런을 먹이면 **안 닫는다**.
+- [x] **AC-2 (bite)** — 빨갰던 잡이 `skipped` 인 런을 먹이면 **안 닫는다**.
       🔴 이것이 본체다. AC-1 만으로는 「술어를 바꿨다」는 알아도 「이제 안 닫는다」는 모른다.
-- [ ] **AC-3 (대조군)** — 빨갰던 잡이 **실제로 돌아서 success** 인 런을 먹이면 **닫는다.**
+- [x] **AC-3 (대조군)** — 빨갰던 잡이 **실제로 돌아서 success** 인 런을 먹이면 **닫는다.**
       🔴 이 칸이 없으면 「구멍을 막았다」와 「영영 안 닫게 만들었다」가 같은 초록이다 —
       후자면 이슈가 **영구히 열려** 있고, 영구히 열린 경보는 꺼진 경보와 같다.
-- [ ] **AC-4** — 탐지 축은 **안 바뀐다**. 655 의 대조군(push 런의 skipped 는 빨강 아님)이
+- [x] **AC-4** — 탐지 축은 **안 바뀐다**. 655 의 대조군(push 런의 skipped 는 빨강 아님)이
       **그대로 초록**이다. 🔴 종료를 고치면서 탐지를 깨면 매 push 마다 거짓 이슈가 열린다.
-- [ ] **AC-5** — 게이트가 **각각 독립 statement + 명시 `rc=$?`**. 감시자에 테스트가 있으면
+- [x] **AC-5** — 게이트가 **각각 독립 statement + 명시 `rc=$?`**. 감시자에 테스트가 있으면
       그것, 없으면 이 티켓이 만든다. 🔵 판정은 rc 가 아니라 **몇 개가 돌았나**.
 
 ---
@@ -174,3 +174,105 @@ skip)"* 이라고 적어 뒀고 **그것은 옳다**(새 빨강을 찾을 때 sk
 
 분석=**Opus 5** / 구현 권장=**Opus** (술어의 «탐지 ↔ 종료» 분리가 이 티켓의 전부이고,
 AC-3 의 대조군을 빠뜨리면 경보를 꺼 버린다)
+
+---
+
+# 구현 기록 (ready → review, 2026-09-10 UTC)
+
+## 무엇을 바꿨나
+
+| 파일 | 내용 |
+|---|---|
+| `scripts/nightly-close-predicate.mjs` | **신규** — 종료 술어 + `--self-test` 7칸 + 양방향 대조 |
+| `.github/workflows/nightly-e2e.yml` | 닫기 전에 그 술어를 부른다 · 종료 self-test 스텝 추가 |
+| `CLAUDE.md` · `platform/git-workflow-policy.md` | `scripts/` 분모 **55 → 56** (아래 § 분모) |
+
+## § 왜 인라인이 아니라 `scripts/` 인가
+
+옛 판의 종료 로직은 워크플로 인라인 bash 였다. 거기 두면 **로컬 검증본이 «사본»** 이
+된다 — `TASK-PC-FE-279` 가 방금 고친 그 결함이다. 🔵 그리고 이 호스트에는 외부 `jq` 가
+없어서 bash+jq 판은 **로컬에서 self-test 를 못 돌린다** ⇒ `.mjs`(선례 6건).
+
+## § AC 판정
+
+| AC | 판정 | 근거 |
+|---|---|---|
+| AC-0 | ✅ | 이슈 #3724 의 자기 기록 재확인 (§ 아래) |
+| AC-1 | ✅ | 술어가 `prev` 의 잡별 `result` 를 읽고 `skipped`/부재를 **«안 잼»** 으로 분류 |
+| AC-2 | ✅ | self-test (2) + **실제 #3724 입력 재현** → `hold` |
+| AC-3 | ✅ | self-test (5)(7) + **실제 대조군 입력** → `close` |
+| AC-4 | ✅ | 탐지 축 diff **0줄** (§ 아래) |
+| AC-5 | ✅ | § 게이트 |
+
+## § AC-0 — 실측 고정
+
+이슈 [#3724](https://github.com/kanggle/monorepo-lab/issues/3724) 본문·코멘트:
+
+```
+빨간 잡: ami-generation-watch, fan-surface-watch   (런 34403347798, schedule)
+…
+🟢 다시 초록이다 — 1bfc0c5a9… (push)               (런 34436788683)
+```
+
+그 두 잡은 `if: github.event_name != 'push'` ⇒ 그 push 런에서 **돌지 않았다**.
+
+## § AC-2 / AC-3 — bite 와 대조군, **실제 입력으로**
+
+```
+# AC-2 — 실제 #3724 시나리오
+--needs '{"ami-generation-watch":{"result":"skipped"},
+          "fan-surface-watch":{"result":"skipped"},
+          "platform-console-e2e-fullstack":{"result":"success"}}'
+--prev  'ami-generation-watch, fan-surface-watch'
+→ hold
+  ✖ ami-generation-watch — **skipped** ⇒ «초록» 이 아니라 «안 잼»
+  ✖ fan-surface-watch    — **skipped** ⇒ «초록» 이 아니라 «안 잼»
+
+# AC-3 — 같은 둘이 실제로 돌아 success 인 cron 런
+→ close
+  ✔ ami-generation-watch — 이번 런에서 실제로 돌았고 success
+  ✔ fan-surface-watch    — 이번 런에서 실제로 돌았고 success
+```
+
+🔴🔴 **AC-3 이 없었으면 «영구 hold» 를 «고쳤다» 로 착각할 수 있었다.** 그래서 술어는
+**`prev` 에 있는 잡만** 본다 — self-test (5)가 그 대조군이다(`prev` 밖의 잡이 skip 된
+것은 붙잡지 않는다). self-test 는 *"close 가 최소 한 번, hold 가 최소 한 번 나온다"* 도
+따로 단언한다 — 전부 hold 를 내는 술어는 판정기가 아니라 상수다.
+
+## § AC-4 — 탐지 축은 손대지 않았다
+
+```
+git diff .github/workflows/nightly-e2e.yml | grep -E "^[-+].*(red=|self-test \(4\)|to_entries)"
+→ (없음)
+```
+
+⇒ `red` 계산과 655 의 self-test 4칸(그중 (4) = *"skipped 는 빨강이 아니다"*)은 **한 글자도
+안 바뀌었다.** 종료를 고치면서 탐지를 깨면 매 push 마다 거짓 이슈가 열린다.
+
+## § 게이트
+
+```
+node scripts/nightly-close-predicate.mjs --self-test    rc=0   7칸 + 양방향 대조
+python -c "yaml.safe_load(...)"                          rc=0   잡 15개, 새 스텝 자리 확인
+bash scripts/check-ls-files-guard-count.sh               rc=0   20/56, 2 homes 합의
+```
+
+## § 분모 — `scripts/` 에 파일을 더하면 다른 가드의 **입력**이 바뀐다
+
+`check-ls-files-guard-count.sh` 의 `TOTAL` 은 `find scripts -maxdepth 1 -type f` 다.
+파일 하나를 더했으므로 **55 → 56** 이고, 산문 홈 **2곳**(`CLAUDE.md` · 
+`platform/git-workflow-policy.md`)을 같이 고쳤다. `READERS` 는 `ls-files` 문자열 기준이라
+**20 유지**(이 스크립트는 그 문자열을 안 쓴다).
+🔵 `TASK-MONO-650` 이 정확히 이 자리에서 main 을 빨갛게 만들었다 — **분자가 아니라
+분모가 움직인 것**이었다. 그래서 `git status` 에 `scripts/` 추가가 보이면 **가드를 전부**
+돌린다(§ 아래 sweep).
+
+## 🔴 안 잰 것
+
+- **`ami-generation-watch` 빨강의 원인.** 이 티켓은 진단하지 않는다(범위 밖).
+  🔵 그러나 이 수정의 성공 조건이 곧 그것이다 — 종료 술어가 고쳐졌으므로 그 빨강은
+  이제 **다음 cron 에서 다시 보이게 된다.**
+- **라이브에서 이 술어가 실제로 이슈를 붙잡는 것은 못 봤다.** 그러려면 빨간 이슈가
+  열려 있는 상태에서 push 런이 돌아야 한다. 지금은 열린 이슈가 **0건**이다.
+  ⇒ 다음에 nightly 가 빨개진 뒤 push 가 나면 그때 확인된다.
+- **다른 워크플로에 같은 감시자가 있는지** — 안 셌다(661 § 안 잰 것 그대로).
