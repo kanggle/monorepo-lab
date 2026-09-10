@@ -26,7 +26,7 @@ import {
   type MasterWriteDialogProps,
 } from './MasterWriteDialog';
 import { COST_CENTER_WRITE_CONFIG } from './master-write-configs';
-import { codeName, masterRefIndex, masterRefLabel } from '../lib/master-ref-label';
+import { codeName, masterRefIndex, masterRefLabel } from '@/shared/lib/master-ref-label';
 
 /**
  * Cost-centers list (TASK-PC-FE-010 / § 2.4.8) — paginated; references a

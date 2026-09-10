@@ -9,7 +9,7 @@ import {
   type OrgViewListQueryParams,
 } from '../api/types';
 import { useEmployeeOrgViews } from '../hooks/use-erp-ops';
-import { codeName } from '../lib/master-ref-label';
+import { codeName } from '@/shared/lib/master-ref-label';
 
 /**
  * ERP "통합 조회" card (TASK-PC-FE-049 — ADR-MONO-016 § D3).

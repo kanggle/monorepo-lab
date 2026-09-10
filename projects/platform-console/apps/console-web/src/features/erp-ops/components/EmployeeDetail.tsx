@@ -17,7 +17,7 @@ import {
 } from '../hooks/use-erp-ops';
 import { EffectivePeriodBadge } from './EffectivePeriodBadge';
 import { RetiredReferenceBadge } from './RetiredReferenceBadge';
-import { masterRefLabel } from '../lib/master-ref-label';
+import { masterRefLabel } from '@/shared/lib/master-ref-label';
 
 /**
  * Employee detail (TASK-PC-FE-010 / § 2.4.8).

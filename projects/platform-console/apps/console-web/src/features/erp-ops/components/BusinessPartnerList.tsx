@@ -23,7 +23,7 @@ import {
 import { EffectivePeriodBadge } from './EffectivePeriodBadge';
 import { useMasterWrite, type MasterWriteController } from './MasterWriteDialog';
 import { BUSINESS_PARTNER_WRITE_CONFIG } from './master-write-configs';
-import { codeName } from '../lib/master-ref-label';
+import { codeName } from '@/shared/lib/master-ref-label';
 
 /**
  * Business-partners list (TASK-PC-FE-010 / § 2.4.8) — paginated;
