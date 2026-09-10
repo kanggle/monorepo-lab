@@ -40,7 +40,13 @@
 # 그 커밋이 건드린 **인스턴스 실행 파일**이 정확히 셋이다 (실측, --stat):
 #   infra/demo/demo-boot.sh (+49) · infra/demo/demo-stack.service (+21) · infra/demo/projects.sh (+66)
 # 즉 「묶음 기동을 안다」 = 「그 세 파일의 그 판을 갖고 있다」 = 「이 커밋의 자손이다」.
-BUNDLE_CAPABILITY_COMMIT=9f0fcd2d6df70b3dee847163c82d4159cbe9d125
+#
+# 🔵 override 가 있는 이유는 (z40) 이 **자기 완결**이어야 하기 때문이다 (TASK-MONO-658).
+#    그 칸은 임시 디렉터리에 저장소를 직접 만들어 조상 관계를 세우고, 그 저장소의 커밋을
+#    임계값으로 준다 ⇒ **이 저장소의 이력을 한 번도 안 읽는다.** 그래야 얕은 클론
+#    (packer 의 `git clone --depth 1`, nightly 의 기본 체크아웃)에서도 판정이 성립한다.
+#    🔴 운영 경로는 override 를 **안 쓴다** — 아래 기본값이 그 값이다.
+BUNDLE_CAPABILITY_COMMIT="${AMI_BUNDLE_MIN_COMMIT:-9f0fcd2d6df70b3dee847163c82d4159cbe9d125}"
 #
 # ---------------------------------------------------------------------------
 # 출력

@@ -3864,28 +3864,57 @@ z40_maintf="$ROOT/infra/demo/aws/terraform/main.tf"
 z40_dir="$(mktemp -d)"
 z40_die() { rm -rf "$z40_dir"; fail "$@"; }
 
-# --- (1) 판정기를 **실행해서** 네 상태를 대조한다 --------------------------------
+# --- (1) 판정 행렬 — **자기 완결**이다 (TASK-MONO-658) ---------------------------
+#
+# 🔴🔴 **이 칸은 저장소 이력을 읽지 않는다. 그것이 이 설계의 요점이다.**
+# 첫 판(TASK-MONO-647)은 `main` 의 실제 커밋 둘(임계 `9f0fcd2d6` · 9차 `3bc182ecd`)로
+# 대조하고, 없으면 «빈 모집단» 이라 FAIL 하게 했다. 그 판단 자체는 옳았는데 **모집단을
+# 저장소 이력에서 가져온 것이 틀렸다.** 결과:
+#
+#   ci.yml  「Demo wrapper smoke」   그 잡의 체크아웃에는 이력이 있었다  → 🟢 ok
+#   nightly 「Demo compose image …」 기본 체크아웃(얕다)                → 🔴 FAIL
+#   packer  7단계                    git clone --depth 1 (L228)         → 🔴 FAIL 했을 것
+#
+# 🔴 **같은 스크립트, 같은 칸, 다른 클론.** PR 의 초록은 «이 가드가 통과한다» 가 아니라
+#    «이 클론에서 통과한다» 였다. 그리고 packer 쪽은 **약 51분을 태운 뒤** 죽는다.
+#
+# ⇒ 술어는 「이 스크립트가 조상/비조상/모름을 옳게 답하는가」이고, 그 질문에 **이 저장소의
+#   이력은 필요 없다.** 필요한 것은 조상 관계를 가진 커밋 두 개뿐이고, 그건 **만들 수 있다.**
+z40_hist="$z40_dir/hist"
+git init -q "$z40_hist" 2>/dev/null \
+  || z40_die "(z40) 임시 저장소를 만들지 못했습니다: $z40_hist"$'\n'"→ 못 만들었으면 판정 불가입니다. 「못 만들었으니 통과」는 공허한 초록입니다."
+(
+  cd "$z40_hist" || exit 1
+  git config user.email z40@example.invalid
+  git config user.name z40
+  git config commit.gpgsign false
+  # 🔵 Windows 호스트에서 core.autocrlf 가 켜져 있으면 커밋마다 경고를 뱉는다. 판정에는
+  #    영향이 없지만, 가드 출력에 섞인 경고는 다음 사람이 «무언가 잘못됐다» 로 읽는다.
+  git config core.autocrlf false
+  echo base    > f; git add f; git commit -q -m base
+  echo feature > f; git add f; git commit -q -m "feature: bundle selection lands here"
+  echo later   > f; git add f; git commit -q -m later
+) || z40_die "(z40) 임시 저장소에 커밋을 세우지 못했습니다."
+
+z40_base="$(git -C "$z40_hist" rev-parse HEAD~2 2>/dev/null)"
+z40_feat="$(git -C "$z40_hist" rev-parse HEAD~1 2>/dev/null)"
+z40_later="$(git -C "$z40_hist" rev-parse HEAD 2>/dev/null)"
+# 🔴 세 값이 서로 다르고 전부 채워졌는지 먼저 단언한다 — 빈 값끼리는 **서로 같아서**
+#    아래 대조가 통째로 공허해진다.
+[ -n "$z40_base" ] && [ -n "$z40_feat" ] && [ -n "$z40_later" ] \
+  && [ "$z40_base" != "$z40_feat" ] && [ "$z40_feat" != "$z40_later" ] \
+  || z40_die "(z40) 임시 이력이 안 섰습니다 (base=$z40_base feat=$z40_feat later=$z40_later)."
+
 # 🔴 값을 grep 하지 않는다. 임계 커밋을 읽는 부분이 통째로 죽어도 문자열은 남는다.
 z40_run_cap() {  # $1 = REPO_COMMIT 값(빈 문자열이면 그 줄을 안 쓴다) → "capable rc jsonrc"
   local pin="$z40_dir/pin.env"
   : > "$pin"
   [ -n "$1" ] && printf 'REPO_COMMIT=%s\n' "$1" >> "$pin"
-  local j jrc h hrc
-  j="$(AMI_PIN_FILE="$pin" bash "$z40_cap" --json 2>/dev/null)"; jrc=$?
-  h="$(AMI_PIN_FILE="$pin" bash "$z40_cap" >/dev/null 2>&1; echo $?)"; hrc="$h"
+  local j jrc hrc
+  j="$(AMI_GIT_ROOT="$z40_hist" AMI_BUNDLE_MIN_COMMIT="$z40_feat" AMI_PIN_FILE="$pin" bash "$z40_cap" --json 2>/dev/null)"; jrc=$?
+  hrc="$(AMI_GIT_ROOT="$z40_hist" AMI_BUNDLE_MIN_COMMIT="$z40_feat" AMI_PIN_FILE="$pin" bash "$z40_cap" >/dev/null 2>&1; echo $?)"
   printf '%s %s %s' "$(printf '%s' "$j" | sed -n 's/.*"capable":"\([a-z]*\)".*/\1/p')" "$hrc" "$jrc"
 }
-
-# 🔵 임계 커밋과 9차 커밋은 **역사적 실측값**이다(TASK-MONO-647 Context · 10차 재굽기 기록).
-#    읽기 좋은 가짜 값을 쓰면 이 가드는 결함을 재현할 수 없는 입력 위에서 초록이 된다.
-z40_min=9f0fcd2d6df70b3dee847163c82d4159cbe9d125   # ADR-MONO-070/071 본체
-z40_9th=3bc182ecd4e8c7f36647ff1c2e7019033e597d96   # 9차 AMI — 묶음 기동을 **모르던** 세대
-
-# 이 클론에 두 커밋이 실제로 있어야 아래 판정이 의미를 갖는다(빈 모집단 방지).
-for z40_c in "$z40_min" "$z40_9th"; do
-  git -C "$ROOT" cat-file -e "${z40_c}^{commit}" 2>/dev/null \
-    || z40_die "(z40) 대조에 쓸 커밋 ${z40_c:0:9} 가 이 클론에 없습니다 — 판정이 공허해집니다(얕은 클론?)."
-done
 
 z40_expect() {  # $1=라벨 $2=REPO_COMMIT $3=기대capable $4=기대rc
   local got; got="$(z40_run_cap "$2")"
@@ -3900,17 +3929,36 @@ z40_expect() {  # $1=라벨 $2=REPO_COMMIT $3=기대capable $4=기대rc
     $'\n'"→ terraform 의 external data source 는 프로그램이 죽으면 plan 을 통째로 죽입니다."
 }
 
-z40_expect "임계 커밋 자신(경계값)" "$z40_min" yes 0
-z40_expect "9차 AMI(묶음을 모르던 세대)" "$z40_9th" no 1
-z40_expect "이 클론에 없는 커밋" deadbeefdeadbeefdeadbeefdeadbeefdeadbeef unknown 2
-z40_expect "REPO_COMMIT 이 없는 핀" "" unknown 2
+# 🔵 네 상태. 임계 커밋 = z40_feat 이므로 관계가 **구성된 것**이고, 어떤 클론에서도 성립한다.
+z40_expect "임계 커밋 자신(경계값)"        "$z40_feat"  yes 0
+z40_expect "임계보다 앞선 커밋(구세대)"     "$z40_base"  no  1
+z40_expect "임계 이후 커밋(정상 신세대)"    "$z40_later" yes 0
+z40_expect "이 저장소에 없는 커밋"         deadbeefdeadbeefdeadbeefdeadbeefdeadbeef unknown 2
+z40_expect "REPO_COMMIT 이 없는 핀"        ""           unknown 2
 
-# 🔵 실제 핀도 한 번 읽는다 — 값이 무엇이든(yes/no) 좋고, **읽히는가**만 본다.
-z40_real="$(bash "$z40_cap" --json 2>/dev/null | sed -n 's/.*"capable":"\([a-z]*\)".*/\1/p')"
-case "$z40_real" in yes|no) : ;; *)
-  z40_die "(z40) 실제 핀(deployed-ami.env)에서 capable=$z40_real 이 나왔습니다 — 판정 불가입니다."\
-    $'\n'"→ 핀 파일이나 REPO_COMMIT 줄이 깨졌을 수 있습니다. 그 상태에서는 묶음 기동이 영구히 막힙니다." ;;
-esac
+# --- (1b) 실제 핀 대조 — **이력이 있을 때만**, 그리고 조용하지 않게 -----------------
+#
+# 🔴 자기 완결 칸은 «스크립트가 옳은가» 만 잰다. «배포된 AMI 가 실제로 어느 쪽인가» 는
+#    실제 핀으로만 알 수 있으므로 이 대조를 없애지 않는다.
+# 🔴🔴 다만 얕은 클론에서는 **잴 수 없다.** 그때는 `skip:` 으로 사유를 이름 대고 넘어간다 —
+#    `ok:` 로 적으면 «안 잰 것을 통과로 적는» 이 저장소의 최다 재발 결함이 된다.
+# 🔵 얕은 것은 **정상 상태**다: packer 는 `--depth 1` 로 굽고 nightly 는 기본 체크아웃이다.
+z40_real_pin="$(sed -n 's/^REPO_COMMIT=\([0-9a-f]\{7,40\}\)[[:space:]]*$/\1/p' "$ROOT/infra/demo/aws/deployed-ami.env" | head -1)"
+z40_min=9f0fcd2d6df70b3dee847163c82d4159cbe9d125   # ADR-MONO-070/071 본체 (운영 기본값)
+z40_real="(미측정)"
+if [ -n "$z40_real_pin" ] \
+   && git -C "$ROOT" cat-file -e "${z40_real_pin}^{commit}" 2>/dev/null \
+   && git -C "$ROOT" cat-file -e "${z40_min}^{commit}" 2>/dev/null; then
+  z40_real="$(bash "$z40_cap" --json 2>/dev/null | sed -n 's/.*"capable":"\([a-z]*\)".*/\1/p')"
+  case "$z40_real" in yes|no) : ;; *)
+    z40_die "(z40) 실제 핀(deployed-ami.env)에서 capable=$z40_real 이 나왔습니다 — 판정 불가입니다."\
+      $'\n'"→ 핀 파일이나 REPO_COMMIT 줄이 깨졌을 수 있습니다. 그 상태에서는 묶음 기동이 영구히 막힙니다." ;;
+  esac
+else
+  z40_real="skip(얕은클론)"
+  echo "  skip: (z40) 실제 핀 대조 — 구운 커밋 ${z40_real_pin:0:9} 또는 임계 커밋이 이 클론에 없습니다(얕은 클론)."
+  echo "        판정 행렬은 위에서 **전부 돌았습니다** — 이 skip 은 «안 쟀다» 이지 «통과» 가 아닙니다."
+fi
 
 # --- (2) 거절이 handler 안 **올바른 자리**에 있는가 (ast 로 문장 순서를 읽는다) -----
 cat > "$z40_dir/order.py" <<'Z40PY'
@@ -3995,23 +4043,28 @@ grep -q 'BUNDLE_SELECTION_CAPABLE *= *data\.external\.ami_bundle_capability\.res
 # 🔴 변형이 문법을 깨서 난 빨강은 «문 것» 이 아니다. 그래서 실행 성공을 먼저 본다.
 # ---------------------------------------------------------------------------
 
-# (bite-1) 임계 커밋을 아주 오래된 커밋으로 바꾼다 = 세대 판정을 무력화.
-#          그러면 9차 AMI 도 「안다」가 되고, 이 티켓의 결함이 그대로 돌아온다.
-z40_root_commit="$(git -C "$ROOT" rev-list --max-parents=0 HEAD | tail -1)"
+# (bite-1) 임계 커밋을 **더 오래된 커밋**으로 바꾼다 = 세대 판정을 무력화.
+#          그러면 구세대(base)도 「안다」가 되고, 647 이 고친 결함이 그대로 돌아온다.
+# 🔵 주입 대상은 스크립트의 **상수 줄**이다(override env 가 아니라). 그래서 이 bite 는
+#    「그 상수를 누가 바꿔도 잡히는가」를 재고, 아래 실행은 override 를 **일부러 안 준다.**
 z40_b1="$z40_dir/cap-bite1.sh"
-sed "s/^BUNDLE_CAPABILITY_COMMIT=.*/BUNDLE_CAPABILITY_COMMIT=$z40_root_commit/" "$z40_cap" > "$z40_b1"
+sed "s/^BUNDLE_CAPABILITY_COMMIT=.*/BUNDLE_CAPABILITY_COMMIT=$z40_base/" "$z40_cap" > "$z40_b1"
 if cmp -s "$z40_cap" "$z40_b1"; then
   z40_die "(z40) bite-1 주입 실패 — BUNDLE_CAPABILITY_COMMIT 줄이 안 바뀌었습니다."
 fi
-printf 'REPO_COMMIT=%s\n' "$z40_9th" > "$z40_dir/pin9.env"
+printf 'REPO_COMMIT=%s\n' "$z40_base" > "$z40_dir/pin9.env"
 # 🔴 변형본은 저장소 밖(임시 디렉터리)에 있다. AMI_GIT_ROOT 를 안 주면 스크립트가
 #    «git 저장소 밖» 으로 떨어져 **판정이 아니라 위치를 재게 된다** — 결과는 unknown 이라
 #    안전하지만 이 bite 는 아무것도 증명하지 못한다. (이 override 는 그래서 존재한다:
 #    첫 판에서 실제로 이 칸이 그렇게 헛돌았고, bite 가 그것을 물어서 알았다.)
-z40_o1="$(AMI_GIT_ROOT="$ROOT" AMI_PIN_FILE="$z40_dir/pin9.env" bash "$z40_b1" --json 2>&1)" \
+# 🔴🔴 그리고 **임시 이력**을 가리킨다 — 저장소가 아니라(TASK-MONO-658). 여기서 $ROOT 를
+#    쓰면 이 bite 가 다시 «이 클론에 그 커밋이 있는가» 에 묶이고, 얕은 클론에서 죽는다.
+# 🔵 AMI_BUNDLE_MIN_COMMIT 은 **일부러 안 준다** — 이 bite 가 재는 것은 스크립트 안의
+#    상수이고, override 를 주면 그 상수를 덮어써서 주입이 무의미해진다.
+z40_o1="$(AMI_GIT_ROOT="$z40_hist" AMI_PIN_FILE="$z40_dir/pin9.env" bash "$z40_b1" --json 2>&1)" \
   || z40_die "(z40) bite-1 실행 실패 — 변형이 스크립트를 깼습니다:"$'\n'"$z40_o1"
 if grepq -F '"capable":"no"' <<<"$z40_o1"; then
-  z40_die "(z40) bite-1 — 임계 커밋을 최초 커밋으로 바꿨는데도 9차가 no 로 나왔습니다(주입이 안 먹었습니다)."
+  z40_die "(z40) bite-1 — 임계 커밋을 더 오래된 커밋으로 바꿨는데도 구세대가 no 로 나왔습니다(주입이 안 먹었습니다)."
 fi
 grepq -F '"capable":"yes"' <<<"$z40_o1" \
   || z40_die "(z40) bite-1 — 기대한 변화가 안 나왔습니다:"$'\n'"$z40_o1"
@@ -4058,7 +4111,7 @@ grep -q '_bundle_capability()' "$z40_b3" \
     $'\n'"→ 호출이 있는지만 보고 있습니다. 거절이 뒤에 있으면 선택이 저장되고 돈이 나간 뒤에 거절합니다."
 
 rm -rf "$z40_dir"
-ok "(z40) 세대 판정 4상태 실행 대조(임계 경계값 yes · 9차 no · 없는커밋 unknown · 핀 결손 unknown, json 은 전부 rc=0) + 거절이 선택·기동보다 앞 + start(전체)는 대조군으로 안 막힘 + terraform 배선 · bite 3칸(임계 무력화 · 모르면 허용 · 거절을 뒤로 이동) · 실제 핀 capable=$z40_real"
+ok "(z40) 세대 판정 **5상태 자기완결 대조**(임시 이력 base→feature→later 를 직접 세워서: 경계값 yes · 구세대 no · 신세대 yes · 없는커밋 unknown · 핀 결손 unknown, json 은 전부 rc=0) + 거절이 선택·기동보다 앞 + start(전체)는 대조군으로 안 막힘 + terraform 배선 · bite 3칸(임계 무력화 · 모르면 허용 · 거절을 뒤로 이동) · 실제 핀 = $z40_real"
 
 
 # =============================================================================
