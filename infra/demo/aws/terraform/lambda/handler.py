@@ -55,6 +55,27 @@ IDLE_MINUTES = int(os.environ.get("IDLE_MINUTES", "20"))
 MAX_MINUTES = int(os.environ.get("MAX_RUNTIME_MINUTES", "180"))
 BUDGET_MINUTES = int(os.environ.get("MONTHLY_BUDGET_MINUTES", "600"))
 
+# ---- 묶음 기동을 배포된 AMI 가 아는가 (TASK-MONO-647) -----------------------
+#
+# 🔴🔴 **이 값은 런타임에 알아낼 수 없다. 그래서 apply 가 실어 나른다.**
+# 647 이 막는 결함은 「`main` 이 앞서 나갔고 AMI 는 안 구워졌다」인데, 그 사실의 한쪽 항
+# (`main`)은 **이 프로세스 안에 존재하지 않는다.** 두 후보를 실측해서 떨어뜨렸다:
+#
+#   · 인스턴스에서 파일 grep → **running 이어야** 한다. 목적이 「켜기 전에 막는다」라 못 쓴다.
+#   · 여기서 AMI 태그 RepoCommit 읽기 → (a) 이 Lambda 의 IAM 에 `ec2:DescribeImages` 가
+#     **없다**(`DescribeInstances` 는 ImageId 만 주고 그 이미지의 태그는 안 준다)
+#     (b) 읽어도 **git 조상 판정을 여기서 못 한다.**
+#
+# ⇒ 판정은 `infra/demo/aws/ami-bundle-capability.sh` 가 저장소에서 하고, terraform 의
+#   external data source 가 그 답을 이 env 로 싣는다. 값이 `deployed-ami.env` 의
+#   REPO_COMMIT 에서 유도되므로 **하드코딩 스위치가 아니다** — 재굽기는 ami_id 교체 apply 를
+#   어차피 필요로 하고, 그 apply 가 이 값을 다시 계산한다 ⇒ **저절로 풀린다.**
+#
+# 🔴 기본값이 "unknown" 이고 unknown 은 **거절**이다. 「모르면 허용」은 647 이 고치려는
+#    바로 그 자리로 되돌아간다(버튼이 200 을 내고 다른 것이 뜬다).
+BUNDLE_CAPABLE = os.environ.get("BUNDLE_SELECTION_CAPABLE", "unknown")
+AMI_REPO_COMMIT = os.environ.get("AMI_REPO_COMMIT", "")
+
 # 🔴 CORS 는 여기서 다루지 않는다 — **API Gateway 의 `cors_configuration` 이 유일한 집**이다
 # (TASK-MONO-557). 예전에는 이 파일도 `ALLOWED_ORIGIN` 을 읽어 `_resp()` 에 실었고, 그래서
 # 같은 사실이 두 집을 갖고 있었다. 2026-08-18 실측이 그 구조가 이미 어긋나 있었음을 보였다:
@@ -415,6 +436,29 @@ def _bundle_state(name, instance_state, snap, stale, selected):
     return "requested" if name in selected else "waiting"
 
 
+def _bundle_capability():
+    """(ok, payload) — 배포된 AMI 가 묶음 기동을 아는가. § BUNDLE_CAPABLE 의 주석 참조.
+
+    🔴 `yes` 만 통과다. `no` 와 `unknown` 을 **같이 막되 사유는 가른다** — 방문자에게는
+       둘 다 「지금은 못 한다」지만, 운영자에게 `no`(구세대 확정)와 `unknown`(판정 실패)은
+       처방이 다르다. 하나로 뭉개면 어느 쪽인지 로그에서도 못 가른다.
+    """
+    if BUNDLE_CAPABLE == "yes":
+        return True, None
+    if BUNDLE_CAPABLE == "no":
+        msg = ("데모 서버 이미지가 이 기능보다 오래됐습니다 — 관리자 재배포가 필요합니다. "
+               "지금은 「전체 시작」만 됩니다.")
+    else:
+        msg = ("데모 서버 이미지의 세대를 확인하지 못했습니다 — 안전을 위해 묶음 기동을 "
+               "막습니다. 「전체 시작」은 그대로 됩니다.")
+    return False, {
+        "error": "bundle-boot-not-deployed",
+        "message": msg,
+        "capability": BUNDLE_CAPABLE,
+        "ami_repo_commit": AMI_REPO_COMMIT,
+    }
+
+
 def bundles():
     """GET /bundles - 저장된 선택 + 묶음별 상태.
 
@@ -435,6 +479,9 @@ def bundles():
             "selected": name in selected,
             "addon": name in BUNDLE_ADDONS,
         }
+    # 🔴 화면이 «왜 못 하는지» 를 말할 수 있게 여기서 함께 낸다 (TASK-MONO-647 AC-2).
+    #    론처는 이 두 필드로 묶음 버튼을 잠그고 사유를 표시한다. `/start`(전체)는 영향 없다.
+    cap_ok, cap = _bundle_capability()
     return _resp({
         "state": state,
         "ip": ip,
@@ -442,6 +489,8 @@ def bundles():
         "bundles": out,
         "health_age_seconds": age,
         "health_stale": stale,
+        "bundle_boot_supported": cap_ok,
+        "bundle_boot_blocked": None if cap_ok else cap,
     })
 
 
@@ -461,6 +510,22 @@ def bundle_start(event):
         return _resp({"error": "invalid-bundle", "invalid": bad, "valid": sorted(BUNDLE_NAMES)}, 400)
     if not names:
         return _resp({"error": "no-bundles", "valid": sorted(BUNDLE_NAMES)}, 400)
+
+    # -- 0. 배포된 AMI 가 이 동작을 아는가 (TASK-MONO-647).
+    #
+    # 🔴 **여기가 맞는 자리다.** `/bundles` 에서만 막으면 API 를 직접 부르는 경로가 남고,
+    #    론처를 고쳐도 그 구멍은 안 닫힌다(티켓 Failure 3).
+    # 🔴 **어떤 상태 변경보다 앞이다** — 선택 영속화(`_add_to_selection`)도, 인스턴스 기동도
+    #    하지 않는다. 647 이 관측한 결함이 정확히 「200 을 내고 8도메인을 띄운다」였고 그
+    #    비용은 **전체 스택 분량의 예산**이다. 막을 거면 돈이 나가기 전에 막아야 한다.
+    # 🔵 `/start`(전체 스택)는 **막지 않는다** — 구워진 AMI 가 아는 동작이고 지금도 정상이다.
+    #    둘을 같이 막으면 데모가 통째로 멈춘다(Failure 2).
+    #
+    # 409: 전송 실패도 일시적 과부하도 아니라 **배포 상태의 불일치**다. 방문자가 재시도해서
+    # 풀릴 성질이 아니므로 5xx(재시도 유도)가 아니라 4xx 로 낸다.
+    cap_ok, cap = _bundle_capability()
+    if not cap_ok:
+        return _resp(cap, 409)
 
     state, _, _ = _state()
     if state == "missing":

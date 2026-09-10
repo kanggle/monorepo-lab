@@ -3836,6 +3836,232 @@ ok "카드 ${z39_n}장 × 8상태(선택됨+stopped · requested+pending · requ
 
 
 # =============================================================================
+# (z40) 구세대 AMI 에서 묶음 기동을 **거절**하는가 — TASK-MONO-647
+# =============================================================================
+# 🔴🔴 결함: 제어 API 는 묶음 라우트를 알고(2026-09-08 apply) 인스턴스는 몰랐다. 방문자가
+#      「팬만」을 누르면 람다는 200 을 내고 8도메인 전체가 떴다. 에러가 아니라 **다른 동작**
+#      이라 로그에도 안 보이고, 비용은 전체 스택 분량이었다.
+#
+# 🔴 **AWS 를 부르지 않는다**(AC-3). CI 에 자격증명이 없으므로 자격증명을 요구하는 가드는
+#    영구 빨강이거나 영구 skip 이 되고, skip 은 초록으로 보고된다. 여기서 재는 것은
+#    «거절 로직이 존재하고, 술어가 세대를 읽고, 그 거절이 돈이 나가기 전에 일어나는가» 다.
+#
+# 🔴🔴 **위치가 술어의 일부다.** 거절이 _add_to_selection / start_instances 보다 뒤에 있으면
+#    선택이 저장되고 인스턴스가 켜진 다음에 거절하는 셈이라, 막으려던 비용이 이미 나간다.
+#    그래서 grep 이 아니라 **ast 로 문장 순서를 읽는다** — 「호출이 있나」로는 이걸 못 잰다.
+#
+# 🔵 (z39) 와 다른 축이다. (z39) 는 «/bundles 200 을 받았을 때 버튼이 상태마다 옳게 눌리는가»
+#    이고, 이 칸은 «그 200 이 오더라도 저쪽이 이 동작을 모를 수 있다» 이다.
+# =============================================================================
+echo "[verify] (z40) 구세대 AMI 에서 묶음 기동을 거절하는가 (TASK-MONO-647)"
+z40_cap="$ROOT/infra/demo/aws/ami-bundle-capability.sh"
+z40_handler="$ROOT/infra/demo/aws/terraform/lambda/handler.py"
+z40_maintf="$ROOT/infra/demo/aws/terraform/main.tf"
+[ -f "$z40_cap" ]     || fail "(z40) 판정기가 없습니다: $z40_cap — 세대 판정이 사라졌습니다."
+[ -f "$z40_handler" ] || fail "(z40) handler.py 가 없습니다: $z40_handler"
+[ -f "$z40_maintf" ]  || fail "(z40) main.tf 가 없습니다: $z40_maintf"
+
+z40_dir="$(mktemp -d)"
+z40_die() { rm -rf "$z40_dir"; fail "$@"; }
+
+# --- (1) 판정기를 **실행해서** 네 상태를 대조한다 --------------------------------
+# 🔴 값을 grep 하지 않는다. 임계 커밋을 읽는 부분이 통째로 죽어도 문자열은 남는다.
+z40_run_cap() {  # $1 = REPO_COMMIT 값(빈 문자열이면 그 줄을 안 쓴다) → "capable rc jsonrc"
+  local pin="$z40_dir/pin.env"
+  : > "$pin"
+  [ -n "$1" ] && printf 'REPO_COMMIT=%s\n' "$1" >> "$pin"
+  local j jrc h hrc
+  j="$(AMI_PIN_FILE="$pin" bash "$z40_cap" --json 2>/dev/null)"; jrc=$?
+  h="$(AMI_PIN_FILE="$pin" bash "$z40_cap" >/dev/null 2>&1; echo $?)"; hrc="$h"
+  printf '%s %s %s' "$(printf '%s' "$j" | sed -n 's/.*"capable":"\([a-z]*\)".*/\1/p')" "$hrc" "$jrc"
+}
+
+# 🔵 임계 커밋과 9차 커밋은 **역사적 실측값**이다(TASK-MONO-647 Context · 10차 재굽기 기록).
+#    읽기 좋은 가짜 값을 쓰면 이 가드는 결함을 재현할 수 없는 입력 위에서 초록이 된다.
+z40_min=9f0fcd2d6df70b3dee847163c82d4159cbe9d125   # ADR-MONO-070/071 본체
+z40_9th=3bc182ecd4e8c7f36647ff1c2e7019033e597d96   # 9차 AMI — 묶음 기동을 **모르던** 세대
+
+# 이 클론에 두 커밋이 실제로 있어야 아래 판정이 의미를 갖는다(빈 모집단 방지).
+for z40_c in "$z40_min" "$z40_9th"; do
+  git -C "$ROOT" cat-file -e "${z40_c}^{commit}" 2>/dev/null \
+    || z40_die "(z40) 대조에 쓸 커밋 ${z40_c:0:9} 가 이 클론에 없습니다 — 판정이 공허해집니다(얕은 클론?)."
+done
+
+z40_expect() {  # $1=라벨 $2=REPO_COMMIT $3=기대capable $4=기대rc
+  local got; got="$(z40_run_cap "$2")"
+  local cap="${got%% *}"; local rest="${got#* }"; local hrc="${rest%% *}"; local jrc="${rest##* }"
+  [ "$cap" = "$3" ] || z40_die "(z40) $1 — capable=$cap 인데 $3 이어야 합니다."\
+    $'\n'"→ 세대 판정이 틀렸습니다. 구세대를 통과시키면 이 티켓의 결함이 그대로 돌아옵니다."
+  [ "$hrc" = "$4" ] || z40_die "(z40) $1 — 사람모드 rc=$hrc 인데 $4 이어야 합니다."
+  # 🔴🔴 --json 은 **어떤 상태에서도 rc=0** 이어야 한다. terraform external 은 프로그램이
+  #    죽으면 plan 자체를 죽이므로, 여기서 실패하면 「묶음 기동을 못 한다」가
+  #    「아무것도 배포 못 한다」가 된다.
+  [ "$jrc" = "0" ] || z40_die "(z40) $1 — json 모드가 rc=$jrc 로 죽었습니다."\
+    $'\n'"→ terraform 의 external data source 는 프로그램이 죽으면 plan 을 통째로 죽입니다."
+}
+
+z40_expect "임계 커밋 자신(경계값)" "$z40_min" yes 0
+z40_expect "9차 AMI(묶음을 모르던 세대)" "$z40_9th" no 1
+z40_expect "이 클론에 없는 커밋" deadbeefdeadbeefdeadbeefdeadbeefdeadbeef unknown 2
+z40_expect "REPO_COMMIT 이 없는 핀" "" unknown 2
+
+# 🔵 실제 핀도 한 번 읽는다 — 값이 무엇이든(yes/no) 좋고, **읽히는가**만 본다.
+z40_real="$(bash "$z40_cap" --json 2>/dev/null | sed -n 's/.*"capable":"\([a-z]*\)".*/\1/p')"
+case "$z40_real" in yes|no) : ;; *)
+  z40_die "(z40) 실제 핀(deployed-ami.env)에서 capable=$z40_real 이 나왔습니다 — 판정 불가입니다."\
+    $'\n'"→ 핀 파일이나 REPO_COMMIT 줄이 깨졌을 수 있습니다. 그 상태에서는 묶음 기동이 영구히 막힙니다." ;;
+esac
+
+# --- (2) 거절이 handler 안 **올바른 자리**에 있는가 (ast 로 문장 순서를 읽는다) -----
+cat > "$z40_dir/order.py" <<'Z40PY'
+import ast, sys
+
+src = open(sys.argv[1], encoding="utf-8").read()
+tree = ast.parse(src)
+problems = []
+
+def fn(name):
+    for n in ast.walk(tree):
+        if isinstance(n, ast.FunctionDef) and n.name == name:
+            return n
+    return None
+
+def calls(node, needle):
+    """그 함수 안에서 needle 을 부르는 가장 이른 줄. 없으면 None."""
+    out = []
+    for n in ast.walk(node):
+        if isinstance(n, ast.Call):
+            f = n.func
+            nm = getattr(f, "id", None) or getattr(f, "attr", None)
+            if nm == needle:
+                out.append(n.lineno)
+    return min(out) if out else None
+
+bs = fn("bundle_start")
+if bs is None:
+    problems.append("bundle_start 함수가 없습니다")
+else:
+    cap = calls(bs, "_bundle_capability")
+    if cap is None:
+        problems.append("bundle_start 가 _bundle_capability 를 부르지 않습니다 — 거절이 없습니다")
+    else:
+        # 🔴 돈이 나가는 두 지점보다 앞이어야 한다.
+        for needle, why in (("_add_to_selection", "선택이 이미 저장된 뒤"),
+                            ("start_instances", "인스턴스가 이미 켜진 뒤")):
+            ln = calls(bs, needle)
+            if ln is not None and ln < cap:
+                problems.append(
+                    "거절(%d행)이 %s(%d행)보다 뒤입니다 — %s에 거절합니다" % (cap, needle, ln, why))
+
+# 대조군: /start(전체 스택)는 막지 않는다. 막으면 데모가 통째로 멈춘다.
+st = fn("start")
+if st is None:
+    problems.append("start 함수가 없습니다")
+elif calls(st, "_bundle_capability") is not None:
+    problems.append("start(전체 스택)까지 세대로 막고 있습니다 — 지금 되는 유일한 기동 경로입니다")
+
+# 기본값이 unknown 이어야 한다. 「모르면 허용」은 이 티켓이 고치는 자리로 되돌아간다.
+if 'os.environ.get("BUNDLE_SELECTION_CAPABLE", "unknown")' not in src:
+    problems.append("BUNDLE_SELECTION_CAPABLE 의 기본값이 unknown 이 아닙니다")
+
+# unknown 을 통과시키면 안 된다: yes 만 통과여야 한다.
+cf = fn("_bundle_capability")
+if cf is None:
+    problems.append("_bundle_capability 가 없습니다")
+else:
+    seg = ast.get_source_segment(src, cf) or ""
+    if 'BUNDLE_CAPABLE == "yes"' not in seg:
+        problems.append("_bundle_capability 가 yes 를 등호로 판정하지 않습니다 — 화이트리스트가 아닙니다")
+
+print("\n".join(problems))
+Z40PY
+
+z40_order() { python "$z40_dir/order.py" "$1" 2>&1; }
+z40_bad="$(z40_order "$z40_handler")" \
+  || z40_die "(z40) 구조 판정기 실행 실패:"$'\n'"$z40_bad"
+[ -z "$z40_bad" ] || z40_die "(z40) 거절이 제자리에 없습니다:"$'\n'"$z40_bad"
+
+# --- (3) terraform 이 그 답을 실어 나르는가 --------------------------------------
+# 🔴 이 배선이 없으면 handler 의 기본값 unknown 이 그대로 남아 **묶음 기동이 영구히 막힌다.**
+grep -qF 'data "external" "ami_bundle_capability"' "$z40_maintf" \
+  || z40_die "(z40) main.tf 에 ami_bundle_capability 의 external data source 가 없습니다."\
+    $'\n'"→ 판정 결과가 Lambda 에 안 실리면 기본값 unknown 이 남아 묶음 기동이 영구히 막힙니다."
+grep -q 'BUNDLE_SELECTION_CAPABLE *= *data\.external\.ami_bundle_capability\.result\.capable' "$z40_maintf" \
+  || z40_die "(z40) Lambda env 의 BUNDLE_SELECTION_CAPABLE 이 판정 결과에서 오지 않습니다."\
+    $'\n'"→ 상수로 박으면 재굽기 뒤에 이 코드를 또 고쳐야 하고, 그 티켓이 안 만들어지면 기능이 영원히 꺼집니다."
+
+# ---------------------------------------------------------------------------
+# bite — 주입 · 실행 · 물기를 각각 단언한다
+# 🔴 변형이 문법을 깨서 난 빨강은 «문 것» 이 아니다. 그래서 실행 성공을 먼저 본다.
+# ---------------------------------------------------------------------------
+
+# (bite-1) 임계 커밋을 아주 오래된 커밋으로 바꾼다 = 세대 판정을 무력화.
+#          그러면 9차 AMI 도 「안다」가 되고, 이 티켓의 결함이 그대로 돌아온다.
+z40_root_commit="$(git -C "$ROOT" rev-list --max-parents=0 HEAD | tail -1)"
+z40_b1="$z40_dir/cap-bite1.sh"
+sed "s/^BUNDLE_CAPABILITY_COMMIT=.*/BUNDLE_CAPABILITY_COMMIT=$z40_root_commit/" "$z40_cap" > "$z40_b1"
+if cmp -s "$z40_cap" "$z40_b1"; then
+  z40_die "(z40) bite-1 주입 실패 — BUNDLE_CAPABILITY_COMMIT 줄이 안 바뀌었습니다."
+fi
+printf 'REPO_COMMIT=%s\n' "$z40_9th" > "$z40_dir/pin9.env"
+# 🔴 변형본은 저장소 밖(임시 디렉터리)에 있다. AMI_GIT_ROOT 를 안 주면 스크립트가
+#    «git 저장소 밖» 으로 떨어져 **판정이 아니라 위치를 재게 된다** — 결과는 unknown 이라
+#    안전하지만 이 bite 는 아무것도 증명하지 못한다. (이 override 는 그래서 존재한다:
+#    첫 판에서 실제로 이 칸이 그렇게 헛돌았고, bite 가 그것을 물어서 알았다.)
+z40_o1="$(AMI_GIT_ROOT="$ROOT" AMI_PIN_FILE="$z40_dir/pin9.env" bash "$z40_b1" --json 2>&1)" \
+  || z40_die "(z40) bite-1 실행 실패 — 변형이 스크립트를 깼습니다:"$'\n'"$z40_o1"
+if grepq -F '"capable":"no"' <<<"$z40_o1"; then
+  z40_die "(z40) bite-1 — 임계 커밋을 최초 커밋으로 바꿨는데도 9차가 no 로 나왔습니다(주입이 안 먹었습니다)."
+fi
+grepq -F '"capable":"yes"' <<<"$z40_o1" \
+  || z40_die "(z40) bite-1 — 기대한 변화가 안 나왔습니다:"$'\n'"$z40_o1"
+
+# (bite-2) 🔴🔴 unknown 을 허용으로 바꾼다 — 「모르면 허용」. 이 티켓이 고치는 자리다.
+z40_b2="$z40_dir/handler-bite2.py"
+sed 's/^    if BUNDLE_CAPABLE == "yes":$/    if BUNDLE_CAPABLE != "no":/' "$z40_handler" > "$z40_b2"
+if cmp -s "$z40_handler" "$z40_b2"; then
+  z40_die "(z40) bite-2 주입 실패 — _bundle_capability 의 등호 판정이 안 바뀌었습니다."
+fi
+python -c "import ast,sys; ast.parse(open(sys.argv[1],encoding='utf-8').read())" "$z40_b2" \
+  || z40_die "(z40) bite-2 실행 실패 — 변형이 문법을 깼습니다. 이 빨강은 가드가 문 것이 아닙니다."
+[ -n "$(z40_order "$z40_b2")" ] \
+  || z40_die "(z40) bite-2 — 「모르면 허용」으로 바꿨는데 가드가 **안 물었습니다.**"\
+    $'\n'"→ 판정에 실패한 상태가 통과합니다. 버튼이 200 을 내고 고른 것과 다른 것이 뜹니다."
+
+# (bite-3) 🔴🔴 거절을 **선택 영속화 뒤로** 옮긴다. 호출은 그대로 있으므로 grep 은 통과한다.
+#          이 칸이 없으면 「거절이 있기만 하면 된다」는 구현이 초록이 되고, 그때 비용은 이미 나간다.
+z40_b3="$z40_dir/handler-bite3.py"
+python - "$z40_handler" "$z40_b3" <<'Z40MOVE'
+import re, sys
+src = open(sys.argv[1], encoding="utf-8").read()
+block = re.search(r"\n    cap_ok, cap = _bundle_capability\(\)\n    if not cap_ok:\n        return _resp\(cap, 409\)\n", src)
+if not block:
+    sys.exit("bite-3: 옮길 블록을 못 찾았습니다")
+moved = block.group(0)
+src2 = src.replace(moved, "\n", 1)
+anchor = "\n    selection, changed, converged = _add_to_selection(names)\n"
+if anchor not in src2:
+    sys.exit("bite-3: 앵커(_add_to_selection)를 못 찾았습니다")
+src2 = src2.replace(anchor, anchor + moved.lstrip("\n"), 1)
+open(sys.argv[2], "w", encoding="utf-8").write(src2)
+Z40MOVE
+[ -f "$z40_b3" ] || z40_die "(z40) bite-3 주입 실패 — 변형본이 안 만들어졌습니다."
+if cmp -s "$z40_handler" "$z40_b3"; then
+  z40_die "(z40) bite-3 주입 실패 — 파일이 안 바뀌었습니다."
+fi
+python -c "import ast,sys; ast.parse(open(sys.argv[1],encoding='utf-8').read())" "$z40_b3" \
+  || z40_die "(z40) bite-3 실행 실패 — 변형이 문법을 깼습니다. 이 빨강은 가드가 문 것이 아닙니다."
+grep -q '_bundle_capability()' "$z40_b3" \
+  || z40_die "(z40) bite-3 주입 실패 — 호출이 통째로 사라졌습니다. 이건 위치 축을 재지 못합니다."
+[ -n "$(z40_order "$z40_b3")" ] \
+  || z40_die "(z40) bite-3 — 거절을 선택 영속화 뒤로 옮겼는데 가드가 **안 물었습니다.**"\
+    $'\n'"→ 호출이 있는지만 보고 있습니다. 거절이 뒤에 있으면 선택이 저장되고 돈이 나간 뒤에 거절합니다."
+
+rm -rf "$z40_dir"
+ok "(z40) 세대 판정 4상태 실행 대조(임계 경계값 yes · 9차 no · 없는커밋 unknown · 핀 결손 unknown, json 은 전부 rc=0) + 거절이 선택·기동보다 앞 + start(전체)는 대조군으로 안 막힘 + terraform 배선 · bite 3칸(임계 무력화 · 모르면 허용 · 거절을 뒤로 이동) · 실제 핀 capable=$z40_real"
+
+
+# =============================================================================
 # (z35) 카드가 로그인 전/후를 말하고, 링크가 하나이며, 캐러셀이 0·1·N 장에서 옳은가
 #       — TASK-MONO-637
 # =============================================================================

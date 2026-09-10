@@ -299,6 +299,24 @@ resource "aws_iam_role_policy" "lambda" {
   })
 }
 
+# ---------------------------------------------------------------------------
+# 배포된 AMI 가 묶음 기동을 아는가 (TASK-MONO-647)
+# ---------------------------------------------------------------------------
+# 🔴🔴 **이 사실은 런타임에 없다.** 「main 이 앞서 나갔고 AMI 는 안 구워졌다」의 한쪽 항이
+# 저장소이고, Lambda 는 저장소를 볼 수 없다. 그래서 판정을 여기서(=저장소가 있는 자리에서)
+# 하고 그 답만 Lambda 로 싣는다. 근거와 떨어뜨린 두 후보는 스크립트 머리말에 있다.
+#
+# 🔵 **하드코딩 스위치가 아니다** — 스크립트가 `deployed-ami.env` 의 REPO_COMMIT 에서
+# 유도한다. 재굽기는 ami_id 교체 apply 를 어차피 필요로 하고, 그 apply 가 이 값을 다시
+# 계산해 싣는다 ⇒ 저절로 풀린다.
+#
+# 🔴 그 스크립트는 --json 모드에서 **절대 죽지 않는다**(알 수 없으면 unknown 을 성공으로
+# 낸다). external data source 의 프로그램이 죽으면 plan 자체가 죽어서, 「묶음 기동을 못
+# 한다」가 「아무것도 배포 못 한다」가 되기 때문이다.
+data "external" "ami_bundle_capability" {
+  program = ["bash", "${path.module}/../ami-bundle-capability.sh", "--json"]
+}
+
 resource "aws_lambda_function" "control" {
   function_name    = "${local.name}-control"
   role             = aws_iam_role.lambda.arn
@@ -320,6 +338,11 @@ resource "aws_lambda_function" "control" {
       IDLE_MINUTES           = tostring(var.idle_minutes)
       MAX_RUNTIME_MINUTES    = tostring(var.max_runtime_minutes)
       MONTHLY_BUDGET_MINUTES = tostring(var.monthly_budget_minutes)
+      # TASK-MONO-647 — 위 data.external 이 저장소에서 유도한 답. "yes" 만 통과이고
+      # "no"/"unknown" 은 Lambda 가 `POST /bundle/start` 를 409 로 거절한다.
+      # 🔴 `/start`(전체 스택)는 영향받지 않는다.
+      BUNDLE_SELECTION_CAPABLE = data.external.ami_bundle_capability.result.capable
+      AMI_REPO_COMMIT          = data.external.ami_bundle_capability.result.repo_commit
       # 🔴 `ALLOWED_ORIGIN` 은 **의도적으로 없다**(TASK-MONO-557). CORS 의 유일한 집은
       # 아래 `cors_configuration` 이다. 예전에는 이 자리가 두 번째 집이었고, 실측 결과
       # 그 두 집은 이미 어긋나 있었다 — 같은 `""` 가 API Gateway 에서는 폴백으로 해소되고
