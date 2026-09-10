@@ -77,8 +77,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## review
 
-
-
+- `TASK-FAN-FE-020-login-names-the-demo-off-cause-instead-of-one-generic-retry.md` — 🟠 **REVIEW (2026-09-10 UTC, ready → review 한 PR).** `/login` 이 Auth.js `error` 코드를 **무엇이든 한 문장**(*"로그인에 실패했습니다. 잠시 후 다시 시도해주세요"*)으로 뭉갰다. 그 문장은 **재시도가 고친다고 약속**하는데 가장 흔한 원인(데모 백엔드 꺼짐)에서는 몇 번을 눌러도 같은 결과다. 판정 순서를 **「데모 상태 → 코드 → 문구」** 로 바꾸고 세 문구를 **상호배타**로 렌더한다. 🔴 **AC-0 실측(2026-09-10 UTC)**: `providers`/`session`/`csrf` **200/200/200** ⇒ **2026-08-26 의 「`NEXTAUTH_SECRET` 미투입」 뿌리가 아니다**(그때는 셋 다 **500**) · `signin/iam` **302 → `?error=Configuration`** · `auth.hubwang.com/.well-known/openid-configuration` **503**(*"데모 백엔드가 지금 꺼져 있습니다"*) · 컨트롤 플레인 `state: stopped` ⇒ 깨진 것은 설정이 아니라 **discovery 한 다리**다. 🔴 **이 구멍은 알려져 있었다** — `DemoBackendNotice`(fan) JSDoc 이 *"`/login` 은 알고 비워 둔 자리다 … 로그인 실패는 **다른 증상**이라 다른 처방이 필요하다"* 라고 적어 뒀고, 선행 조건이던 왕복 측정은 `TASK-MONO-610` AC-4b 로 끝났다. 🔵 **배너 복사가 아니다** — `(main)` 문구(*"지금 보이는 피드와 아티스트는 샘플 데이터입니다"*)는 `/login` 에서 거짓이다. **게이트**(각각 독립 statement·파이프 없음): `tsc` rc=0 · `next lint` rc=0 · `vitest run` rc=0 **32 files / 256 tests**(이전 31/246) · `next build` rc=0. **bite**: `page.tsx` 만 되돌리면 **8 failed / 2 passed** — 🔵 남은 초록 2칸은 **대조군**(「error 없으면 경고 없음」·「데모가 아니면 fetch 도 안 함」)이라 수정에 의존하지 않는 것이 정상이다. 🔴 **안 잰 것**: 라이브 `fan.hubwang.com` 에서 이 화면을 **못 봤다**(데모 `stopped`, 분 예산 543/600) · Auth.js `error` 코드의 **전수 목록**은 안 쟀다(그래서 fallback 이 AC-1 의 본체다). 분석=**Opus 5** / 구현=**Opus 5**.
 
 
 ## done
