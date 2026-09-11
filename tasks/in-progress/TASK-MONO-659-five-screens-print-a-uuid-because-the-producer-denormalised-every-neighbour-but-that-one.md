@@ -8,7 +8,7 @@ TASK-MONO-659
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -183,3 +183,75 @@ UUID 이므로 감사 행의 `operatorId` 도 UUID일 것» 이라고 **추론**
 
 분석=Opus 5 / 구현 권장=**Sonnet**(AC-1 의 누락 셋 — 기계적) → **Opus**(AC-2 의 계약 결정).
 🔴 AC-0 을 건너뛰면 나머지가 전부 헛일이 될 수 있다.
+
+---
+
+# 🟢 AC-0 (2026-09-11 UTC) — **창 없이 닫았다. 네 자리 전부 확인, 그리고 ①의 갈래가 정해졌다**
+
+## 🔵 창이 필요 없었던 이유
+
+AC-0 은 *"다섯 자리 각각에 대해 **실제 응답 본문**을 떠서 붙여라(**데모 스택 또는 그
+서비스의 IT**)"* 라고 적었다. 🔵 «또는» 이 이 칸을 창 밖으로 꺼낸다 — 그리고 실제로는
+**응답 DTO 가 `record` 라 필드가 곧 응답 본문**이라, 세 자리(①②③)는 소스가 곧 판정이다.
+⑤는 콘솔 zod 가 아니라 **백엔드 컨트롤러의 record** 를 봤다(AC-0 의 `.passthrough()`
+경고가 가리킨 바로 그 구분 — 콘솔 선언은 답이 아니다).
+
+## 판정 — 네 자리 전부 **티켓의 서술이 정확했다**
+
+| # | 자리 | 확인 |
+|---|---|---|
+| ① | `InventorySnapshotResponse` | 🟢 `locationCode` · `skuCode` · `lotNo` **있고** `warehouseId` 는 UUID 로 있는데 **`warehouseCode` 만 없다** |
+| ② | `AsnSummaryResponse` | 🟢 `supplierPartnerId` 옆에 **`supplierName` 이 있고**, `warehouseId` 옆에 **`warehouseCode` 가 없다** |
+| ③ | `OrderLineResponse` | 🟢 `skuId` · `lotId` 만. **코드가 하나도 없다** |
+| ⑤ | org admins | 🟢 **백엔드 `record OrgAdminResponse(String operatorId, String roleName, Instant grantedAt)`** — 콘솔 선언이 아니라 **응답 자체**에 이름이 없다. 대조군 `GroupMemberSchema` 는 `operatorId` **옆에 `displayName`** 을 싣는다 |
+
+## 🟢🟢 ③의 주장도 실측으로 확인 — **코드를 쥐었다가 버린다**
+
+`FulfillmentRequestedConsumer:183-190`:
+
+```java
+String skuCode = requireText(lineNode, "skuCode");
+SkuSnapshot sku = masterReadModel.findSkuByCode(skuCode)
+        .orElseThrow(... "SKU not found in read model: code=" + skuCode);
+```
+
+⇒ 인입 시 **`skuCode` 를 받아** UUID 를 얻고, 응답에는 **`skuId` 만** 남긴다.
+
+## 🟢🟢 ① 의 AC-1 갈래가 정해졌다 — **재투영이 필요하지만 생산자 변경은 아니다**
+
+AC-1 이 *"read-model 에 그 값이 있는지부터 확인하라. 없으면 프로젝터가 채워야 하고,
+그러면 **기존 행은 NULL 인 채로 남는다** … 재투영이 필요한지도 이 AC 에서 답하라"* 고
+적었다. 실측:
+
+- 🔴 `InventorySnapshotEntity` 에는 **`warehouse_id`(UUID) 컬럼만** 있고 `warehouseCode` 가 없다.
+- 🟢 **그러나 값의 출처는 이미 있다** — `WarehouseRefEntity` 에
+  `@Column(name = "warehouse_code", nullable = false, length = 40)` 이 **이미 존재한다.**
+- 🟢 그리고 프로젝터가 **나머지 셋을 정확히 같은 방식**으로 채운다
+  (`InventoryProjectionService:336-340`):
+
+```java
+String locationCode = locationRepo.findById(locationId).map(LocationRefEntity::getLocationCode)…
+String skuCode      = skuRepo.findById(skuId).map(SkuRefEntity::getSkuCode)…
+String lotNo        = lotRepo.findById(lotId).map(LotRefEntity::getLotNo)…
+//  warehouseRepo 는 주입조차 안 돼 있다  ← 결함 자리
+```
+
+⇒ **① 은 «옆 칸은 했는데 이 칸만 안 했다» 가 문자 그대로 참**이다. 세 형제가 **같은
+패턴으로 옆줄에** 있고 창고만 빠졌다.
+
+### 답: **새 이벤트도, 생산자 변경도 필요 없다. 재투영은 필요하다**
+
+- **필요한 것**: `InventorySnapshotEntity` 에 컬럼 추가 + `WarehouseRefRepository` 주입 +
+  조회 한 줄. 🔵 이벤트 스키마도 생산자도 안 건드린다(`warehouseId` 는 이미 온다).
+- 🔴 **기존 행은 NULL 로 남는다** — 컬럼이 새로 생기므로. ⇒ **재투영이 필요하다.**
+  🔵 다만 백필이 «이벤트 재생» 이 아니라 **`warehouse_id` 로 `WarehouseRef` 를 조인하는
+  마이그레이션 한 번**으로 끝난다(값이 이미 저장소 안에 있으므로). 🔴 그 선택(백필 SQL vs
+  재투영)은 AC-1 이 답할 것이고, 이 실측이 **백필 쪽을 가능하게** 만든다.
+- 🔴 **이 저장소가 이름 붙인 축 그대로다**: *마이그레이션은 코드 질문 이전에 데이터
+  질문이다.* 여기서는 데이터 질문의 답이 **«값은 이미 있다»** 였다.
+
+## ⚪ AC-4 — 277 의 ⚪ 17곳 대조는 **아직 안 했다**
+
+AC-4 가 *"277 AC-0 의 ⚪ 17곳 중 여기서 해결되는 것이 있는지 대조하라"* 고 적었다.
+🔵 그 17곳은 **런타임 값을 못 본 콘솔 칸**이고 이 티켓의 넷과 다른 부류다.
+🔴 **추측으로 닫지 않는다** — AC-1~AC-3 을 구현할 때 함께 본다.
