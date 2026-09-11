@@ -85,14 +85,30 @@ const HOSTS = {
 //    캐러셀이 세 장이면 좌우 이동이 의미 있고, 그 이상은 방문자가 다 안 넘긴다.
 // 🔴 `requiresAuth` 가 없는 장은 **로그인 없이 열리는 경로**다(2026-09-08·09 실측).
 //    보호 경로를 «인증 없이» 찍으면 로그인 화면이 찍히고, 그것은 «주요 화면» 이 아니다.
+// 🔴🔴 **`tenant` 는 장마다 다르다 — 전역이 아니다** (TASK-MONO-648 AC-2, 2026-09-11 실측).
+//    같은 계정으로 같은 콘솔을 봐도 **어느 테넌트를 assume 했느냐에 따라 화면이 갈린다**:
+//      `/erp/masters`        demo-corp → 16행 ✅   /  ecommerce → **「권한이 없습니다」**
+//      `/ecommerce/products` ecommerce → 20행 ✅   /  demo-corp → **빈 목록**
+//    ⇒ 「전부 `ecommerce` 로 재촬영」했으면 **유일하게 쓸 만한 장을 깨뜨렸다.**
+//    그래서 `CAPTURE_AUTH_TENANT` 하나로는 이 목록을 찍을 수 없고, 아래 `assumeTenant` 가
+//    장 사이에 전환한다.
 const SHOTS = [
-  // 운영자 콘솔 — 둘러보기(/demo)가 공개 표면이다.
-  { bundle: 'console', name: 'console-1-overview', path: '/demo',
-    alt: '운영자 콘솔 둘러보기 — 도메인 요약' },
-  { bundle: 'console', name: 'console-2-ecommerce', path: '/demo/ecommerce',
-    alt: '운영자 콘솔 — 이커머스 주문·상품 표' },
-  { bundle: 'console', name: 'console-3-wms', path: '/demo/wms',
-    alt: '운영자 콘솔 — WMS 재고 표' },
+  // 운영자 콘솔 — 🔴 **진짜 콘솔이다.** 옛 판의 `/demo/*` 세 장은 `src/app/(demo)/` 의
+  //    **합성 샘플 투어**였고 그 페이지가 스스로 *"실제 운영 데이터는 한 건도 포함되어
+  //    있지 않으며…"* 라고 적는다. `requiresAuth` 가 그 제약을 풀었다.
+  //
+  // 🔵 **두 장인 것은 결정이다** (소유자, 2026-09-11: 「확정된 둘로 줄인다」).
+  //    승인 4장(`/dashboards/overview` · `/ecommerce/orders` ·
+  //    `/ecommerce/products/[id]/edit` · `/ecommerce/settlements`)은 **테넌트 선택만으로
+  //    살지 않았다** — 각각 저하 / 두 테넌트 다 빈값 / 권한거부 / 1행뿐이었다.
+  //    🔴 빈 표를 «승인된 장» 으로 적으면 매니페스트가 **거짓이 된다**(이 파일 머리말의
+  //    「가짜 화면을 만들지 않는다」와 같은 축). 카드가 셋에서 둘로 줄지만 **찍힌 것이 참이다.**
+  { bundle: 'console', name: 'console-1-erp-masters', path: '/erp/masters',
+    requiresAuth: true, tenant: 'demo-corp', minChars: 900,
+    alt: '운영자 콘솔 — ERP 마스터 데이터(부서·직급·원가센터 … effective-dating)' },
+  { bundle: 'console', name: 'console-2-ecommerce-products', path: '/ecommerce/products',
+    requiresAuth: true, tenant: 'ecommerce', minChars: 700,
+    alt: '운영자 콘솔 — 이커머스 상품 관리(목록 · 상태 필터 · 수정/삭제)' },
 
   // 이커머스 스토어
   { bundle: 'store', name: 'store-1-home', path: '/',
@@ -135,6 +151,8 @@ const SCALE = 1;
 //    있다. 다른 테넌트로 갔다가 돌아오는 **왕복**이 그것을 강제한다.
 //
 // 🔴 자격증명은 **환경변수로만** 받는다. 이 파일에 적지 않는다.
+// 🔵 `CAPTURE_AUTH_TENANT` 는 **장이 테넌트를 안 적었을 때의 폴백**으로만 남는다.
+//    실제 목록은 장마다 `tenant` 를 갖는다(위 SHOTS 의 🔴🔴 주석).
 const AUTH = {
   email: process.env.CAPTURE_AUTH_EMAIL || '',
   password: process.env.CAPTURE_AUTH_PASSWORD || '',
@@ -144,9 +162,13 @@ const AUTH = {
 /** 로그인이 필요한 장이 하나라도 있는가. */
 const NEEDS_AUTH = SHOTS.some((s) => s.requiresAuth);
 
+/** 인증 장들이 요구하는 테넌트 집합 — 하나가 아닐 수 있다. */
+const REQUIRED_TENANTS = [...new Set(SHOTS.filter((s) => s.requiresAuth).map((s) => s.tenant ?? AUTH.tenant))];
+
 /**
- * 로그인하고 테넌트를 assume 한다. 🔴 **각 단계를 단언한다** — 실패해도 조용히 다음으로
- * 가면 뒤의 모든 캡처가 로그인 화면이 되고, 매니페스트는 그것을 «성공» 으로 적는다.
+ * 로그인한다(테넌트 assume 은 **안 한다** — `assumeTenant` 가 장마다 따로 한다).
+ * 🔴 **각 단계를 단언한다** — 실패해도 조용히 다음으로 가면 뒤의 모든 캡처가 로그인
+ * 화면이 되고, 매니페스트는 그것을 «성공» 으로 적는다.
  */
 async function signIn(page) {
   const base = HOSTS.console;
@@ -169,23 +191,41 @@ async function signIn(page) {
   if (page.url().includes('/login')) {
     throw new Error('로그인 뒤에도 /login 입니다 — 자격증명 또는 IAM 상태를 확인하세요');
   }
+}
 
-  // 🔴 테넌트 왕복. 셀렉트가 없으면 그것도 실패다 — 없는 채로 찍으면 권한 없음 화면이 찍힌다.
+/**
+ * 테넌트를 assume 한다. 🔴 **왕복이 필수다** — 다른 테넌트로 갔다가 돌아와야 실제
+ * assume 이 걸린다(위 § 의 «표시된 선택과 실제 assume 이 다른 상태»).
+ *
+ * 🔴🔴 **장 사이에 여러 번 불린다.** 목록이 테넌트 둘을 요구하기 때문이고, 그것이
+ * 이 함수가 `signIn` 에서 갈라져 나온 이유다. 🔵 같은 테넌트가 연속이면 **건너뛴다** —
+ * 왕복 한 번이 11초이므로 장마다 무조건 돌면 값없이 느려진다.
+ */
+async function assumeTenant(page, tenant) {
   const sel = page.locator('[data-testid=tenant-select]');
   if (!(await sel.isVisible().catch(() => false))) {
-    throw new Error('테넌트 셀렉트 [data-testid=tenant-select] 를 못 찾았습니다');
+    // 🔵 셀렉터는 콘솔 레이아웃에 있다. 공개 화면에 있다가 불리면 콘솔로 한 번 들어간다.
+    await page.goto(`${HOSTS.console}/console`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.waitForTimeout(3000);
+    if (!(await sel.isVisible().catch(() => false))) {
+      throw new Error('테넌트 셀렉트 [data-testid=tenant-select] 를 못 찾았습니다');
+    }
   }
-  const others = (await sel.locator('option').allTextContents())
-    .map((t) => t.trim()).filter((t) => t && t !== AUTH.tenant);
+  const options = (await sel.locator('option').allTextContents()).map((t) => t.trim()).filter(Boolean);
+  if (!options.includes(tenant)) {
+    // 🔴 «없는 테넌트» 와 «assume 실패» 는 다른 사실이다. 사유를 대며 죽는다.
+    throw new Error(`테넌트 ${tenant} 가 셀렉트에 없습니다 (있는 것: ${options.join(', ')})`);
+  }
+  const others = options.filter((t) => t !== tenant);
   if (others.length > 0) {
     await sel.selectOption(others[0]);
     await page.waitForTimeout(4000);
   }
-  await sel.selectOption(AUTH.tenant);
+  await sel.selectOption(tenant);
   await page.waitForTimeout(7000);
   const active = await sel.inputValue();
-  if (active !== AUTH.tenant) {
-    throw new Error(`테넌트 assume 실패: 기대 ${AUTH.tenant} · 실제 ${active}`);
+  if (active !== tenant) {
+    throw new Error(`테넌트 assume 실패: 기대 ${tenant} · 실제 ${active}`);
   }
   return active;
 }
@@ -276,7 +316,10 @@ async function main() {
 
   console.log(`[capture] ${SHOTS.length}장 · 뷰포트 ${VIEWPORT.width}x${VIEWPORT.height} · scale ${SCALE}`);
   for (const s of SHOTS) {
-    console.log(`  ${s.bundle.padEnd(8)} ${s.name.padEnd(22)} ${s.url}${s.requiresAuth ? '   [로그인 필요]' : ''}`);
+    // 🔵 인증 장은 **테넌트까지** 보여 준다 — 이 목록의 요점이 «테넌트가 장마다 다르다» 이고,
+    //    dry-run 이 그것을 안 보여 주면 목록을 눈으로 검토할 수 없다.
+    const tag = s.requiresAuth ? `   [로그인 필요 · 테넌트 ${s.tenant ?? AUTH.tenant}]` : '';
+    console.log(`  ${s.bundle.padEnd(8)} ${s.name.padEnd(28)} ${s.url}${tag}`);
   }
   // 🔵 기본 호스트가 아니면 그것을 **크게** 알린다. 다른 곳에서 찍은 그림이 조용히
   //    캐러셀에 걸리면, 방문자는 «눌러도 안 나오는 화면» 을 광고당한다.
@@ -286,7 +329,13 @@ async function main() {
       console.log(`             🔴 찍은 화면이 «배포된 그 주소가 주는 화면» 과 같은지 대조하십시오.`);
     }
   }
-  if (NEEDS_AUTH) console.log(`[capture] 로그인 필요 ${SHOTS.filter((s) => s.requiresAuth).length}장 · 테넌트 ${AUTH.tenant}`);
+  // 🔴 «테넌트 하나» 로 요약하지 않는다 — 이 목록은 둘을 요구하고, 그 사실이 목록의 요점이다.
+  if (NEEDS_AUTH) {
+    console.log(`[capture] 로그인 필요 ${SHOTS.filter((s) => s.requiresAuth).length}장 · 요구 테넌트 ${REQUIRED_TENANTS.length}종: ${REQUIRED_TENANTS.join(', ')}`);
+    if (REQUIRED_TENANTS.length > 1) {
+      console.log('  🔵 장 사이에 테넌트를 전환합니다(왕복 1회 ≈ 11초). 같은 테넌트가 연속이면 건너뜁니다.');
+    }
+  }
   // 🔴🔴 의존 해석을 **--dry-run 보다 먼저** 한다. 첫 판은 순서가 반대라서
   //    `--dry-run` 이 «목록만 찍고 rc=0» 으로 끝났고, 그래서 **Playwright 를 못 찾는
   //    상태를 통과시켰다.** 그 순서가 결함의 일부였다(TASK-MONO-643 Failure Scenario 4).
@@ -331,11 +380,12 @@ async function main() {
 
   // 🔴 로그인은 **한 번만** 한다. 장마다 하면 IAM 에 불필요한 부하를 주고, 세션이 장 사이에
   //    끊겼는지도 못 가른다(아래 `assertRendered` 가 `/login` 튕김을 장마다 다시 문다).
-  let signedInAs = null;
+  // 🔵 **테넌트는 그렇지 않다** — 목록이 둘을 요구하므로 장마다 맞춘다(`activeTenant`).
+  let activeTenant = null;
   if (NEEDS_AUTH) {
     try {
-      signedInAs = await signIn(page);
-      console.log(`[capture] 로그인 완료 · 활성 테넌트 ${signedInAs}`);
+      await signIn(page);
+      console.log(`[capture] 로그인 완료 · 이 목록이 요구하는 테넌트: ${REQUIRED_TENANTS.join(', ')}`);
     } catch (e) {
       await browser.close();
       console.error(`[capture] ✗ 로그인 실패 — 아무것도 찍지 않았습니다: ${e.message}`);
@@ -346,6 +396,17 @@ async function main() {
   for (const s of SHOTS) {
     const file = `${s.name}.${FORMAT.ext}`;
     try {
+      // 🔴🔴 이 장이 요구하는 테넌트로 **먼저** 맞춘다. 안 맞추면 같은 주소가 다른 화면을
+      //    준다 — `/erp/masters` 는 `ecommerce` 에서 「권한이 없습니다」이고
+      //    `/ecommerce/products` 는 `demo-corp` 에서 **빈 목록**이다(2026-09-11 실측).
+      //    🔵 같은 테넌트가 연속이면 `assumeTenant` 를 건너뛴다(왕복 한 번이 11초다).
+      if (s.requiresAuth) {
+        const want = s.tenant ?? AUTH.tenant;
+        if (activeTenant !== want) {
+          activeTenant = await assumeTenant(page, want);
+          console.log(`[capture]   테넌트 assume → ${activeTenant}`);
+        }
+      }
       // 🔵 networkidle 이 아니라 domcontentloaded + 짧은 안정화. 공개 장들은 백엔드로
       //    가는 요청이 없으므로(ADR-MONO-070) networkidle 은 불필요하게 오래 기다린다.
       // 🔴 인증 장은 다르다 — BFF 를 실제로 부르므로 더 기다려야 표가 찬다.
@@ -367,7 +428,9 @@ async function main() {
         capturedAt: new Date().toISOString(),
         // 🔴 인증 캡처였다는 **사실을 남긴다.** 안 적으면 다음 사람이 왜 재생성이 안 되는지
         //    모른다(자격증명 없이 돌리면 이 장은 안 나온다).
-        ...(s.requiresAuth ? { requiresAuth: true, tenant: signedInAs, bodyChars: chars } : {}),
+        // 🔴🔴 **그리고 «어느 테넌트로» 찍었는지를 장마다 남긴다** — 이 목록은 테넌트가
+        //    둘이고, 그것을 안 적으면 재생성이 **다른 화면을 찍는다**(권한거부 또는 빈 목록).
+        ...(s.requiresAuth ? { requiresAuth: true, tenant: activeTenant, bodyChars: chars } : {}),
       });
       console.log(`[capture] ✔ ${file}  ← ${s.url}${s.requiresAuth ? `  [인증 · ${chars}자]` : ''}`);
     } catch (e) {
