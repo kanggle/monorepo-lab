@@ -1087,7 +1087,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: changes
-    if: needs.changes.outputs.migrations == 'true'
+    # 🔴 TASK-MONO-671 — 사본 가드. `TASK-MONO-669` 가 이 잡을 더하면서 **이것만 빠뜨렸다.**
+    #    실측(2026-09-11): 가드 없는 잡 5개 중 **넷은 `main` 의 required 4종과 정확히 일치**한다
+    #    — required 가 fork 에서 skip 되면 그 context 가 **영구 pending** 이 되므로 의도적이다.
+    #    ⇒ 비-required 중 가드가 없던 것은 **이 잡 하나뿐**이었다.
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      needs.changes.outputs.migrations == 'true'
     steps:
       - uses: actions/checkout@v4
 
