@@ -8,7 +8,7 @@ TASK-PC-FE-280
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -88,24 +88,24 @@ git show 9bffd85a1^:…/tests/unit/login-error-messages.test.ts | grep -c "from 
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (모집단 재측정 + 판정)** — 착수 시점 트리에서 위 두 숫자를 **다시 세고**,
+- [x] **AC-0 (모집단 재측정 + 판정)** — 착수 시점 트리에서 위 두 숫자를 **다시 세고**,
       나머지 13개를 열어 *"자기가 검사하는 대상을 실제로 태우는가"* 를 파일별로 판정한다.
       🔴 **`@/` import 유무로 판정하지 마라** — 그것은 **찾는** 술어이지 **판정하는**
       술어가 아니다(한 모듈을 import 하면서 다른 상수를 복제할 수 있다).
       🔵 판정 불가면 ⚪ 로 남기고 **왜** 인지 적어라.
-- [ ] **AC-1** — `layout-login-redirect.test.ts` 가 `layout.tsx` 의 **진짜** 로직을
+- [x] **AC-1** — `layout-login-redirect.test.ts` 가 `layout.tsx` 의 **진짜** 로직을
       태운다. 🔴 로컬 재구현(`buildLoginRedirectFrom`) **삭제**.
       🔵 함수가 서버 컴포넌트 안의 비-export 라 직접 import 가 안 되면,
       `login-error-messages.test.tsx`(279)가 쓴 길을 따라라 — **레이아웃을 렌더**하거나,
       아니면 그 함수를 `shared/lib/` 로 **뽑아** 양쪽이 같은 것을 쓰게 하라.
       🔴 후자를 고르면 그것은 **소스 변경**이므로 `next build` 게이트가 추가된다.
-- [ ] **AC-2 (bite)** — `layout.tsx` 의 sanitisation 규칙을 **한 줄 바꾸면** 이 스위트가
+- [x] **AC-2 (bite)** — `layout.tsx` 의 sanitisation 규칙을 **한 줄 바꾸면** 이 스위트가
       빨개진다. 🔴 이것이 본체다. AC-1 만으로는 「재구현을 지웠다」는 알아도
       「이제 드리프트를 문다」는 모른다.
-- [ ] **AC-3 (음성 대조군)** — 기존 8칸(`//evil`·`http://evil`·`/login` 자기참조 등)이
+- [x] **AC-3 (음성 대조군)** — 기존 8칸(`//evil`·`http://evil`·`/login` 자기참조 등)이
       **그대로 초록**이다. 🔴 재구현을 걷어내면서 커버리지를 줄이면 «고쳤다» 가
       «덜 잰다» 로 바뀐다.
-- [ ] **AC-4** — 게이트가 **각각 독립 statement + 명시 `rc=$?`** 로 초록
+- [x] **AC-4** — 게이트가 **각각 독립 statement + 명시 `rc=$?`** 로 초록
       (`tsc --noEmit` · `next lint` · `vitest run`, 소스를 건드렸으면 `next build` 추가).
       🔵 판정은 rc 가 아니라 **몇 개가 돌았나**(기준선: **292 files / 3010 tests**).
 
@@ -174,11 +174,11 @@ git show 9bffd85a1^:…/tests/unit/login-error-messages.test.ts | grep -c "from 
 
 # Definition of Done
 
-- [ ] 재구현 제거, 소스 기반 검사
-- [ ] bite 증명
-- [ ] 음성 대조군 유지 확인
-- [ ] 게이트 통과 — 각각 `rc=$?` 명시
-- [ ] Ready for review
+- [x] 재구현 제거, 소스 기반 검사
+- [x] bite 증명
+- [x] 음성 대조군 유지 확인
+- [x] 게이트 통과 — 각각 `rc=$?` 명시
+- [x] Ready for review
 
 ---
 
@@ -186,3 +186,95 @@ git show 9bffd85a1^:…/tests/unit/login-error-messages.test.ts | grep -c "from 
 
 분석=**Opus 5** / 구현 권장=**Sonnet** (한 파일 + 판정 규칙이 위에 박혀 있다.
 🔴 단 AC-1 에서 «`shared/lib/` 추출» 을 고르게 되면 소스 구조 변경이므로 **Opus**)
+
+---
+
+# 구현 기록 (ready → review, 2026-09-11 UTC)
+
+## § AC-0 — 모집단 재측정 + **열어서** 판정
+
+착수 시점 트리(`4c235631b`)에서 다시 세니 기안과 같다: 문구 매치 **14** · `@/` import
+0건 **1**(`layout-login-redirect.test.ts`).
+
+🔴 **나머지 13개는 `@/` import 유무로 판정하지 않았다**(AC-0 이 금지한 그것). 각 파일의
+*"mirrors/replicate"* 문장을 읽고, 애매한 것은 열었다:
+
+| 부류 | 파일 | 판정 |
+|---|---|---|
+| *"형제 테스트의 구조를 따른다"* | `sidebar-drilldown` · `tenants-page` · `tenants-detail-page` · `operator-groups-page` · `erp-read-model-proxy` · `WmsRecentAdjustments` · `wms-shipments-state` · `OperatorProfileEditDialog` | ✅ 이 결함 부류 아님 — 복제 대상이 **로직이 아니라 테스트 구성**이다 |
+| *"BE Javadoc 을 mirror"* | `domain-health-api` · `operator-overview-api` | ✅ **열어서 확인** — 둘 다 `fetchDomainHealth` / `fetchOperatorOverview` 를 `@/` 에서 import 해 **실제로 호출**한다. mirror 는 «단언이 인코딩한 생산자 계약» 을 가리킨다 |
+| 상수/픽스처 | `ecommerce-images-upload` · `me-profile-route` | ✅ **열어서 확인** — 전자는 `IMAGE_MAX_BYTES` 를 **소스에서 import** 해 리터럴과 대조(핀), 후자는 라우트가 **실제로 보낸 body** 를 단언 |
+| 279 가 고친 것 | `login-error-messages` | ✅ 소스를 태운다 |
+
+⇒ **이 결함 부류는 14개 중 정확히 1개.**
+🔵 그 결과가 기안의 경고를 확증한다 — `@/` import 는 **찾는** 술어로는 정확했지만
+(1건을 정확히 집었다), **판정하는** 술어로 썼다면 13개를 «깨끗하다» 로 넘겼을 것이고
+그 판단은 근거가 달랐다(실제로는 열어 봐야 알 수 있었다).
+
+## § AC-1 — 고친 것은 테스트가 아니라 **정의의 수**
+
+`buildLoginRedirect()` 의 **순수한 부분**을 `src/shared/lib/login-redirect.ts` 로 뺐다.
+layout 은 헤더를 읽어 그 함수에 넘기기만 한다. 이제 테스트와 제품이 **같은 함수**를 쓴다.
+
+🔵 **`return-path.ts` 에 합치지 않았다** — 그 파일이 이미 그 결정을 적어 뒀다:
+*"The layout guard `buildLoginRedirect()` … is the PRODUCE side … so it stays a
+**deliberately separate, stricter predicate** rather than a call site here."*
+합쳤으면 기록된 결정을 거스르는 것이다. 별도 모듈의 doc 에 그 인용을 박아 뒀다.
+
+🔵 **레이아웃 렌더 대신 추출을 고른 이유**: layout 을 렌더하려면 `next/headers` ·
+세션 4종 · `getCatalog` · `listOrgNodes` · 위젯 다수를 목해야 하고, 그러면 테스트의
+주제가 «리다이렉트 규칙» 이 아니라 «레이아웃 조립» 이 된다. 추출은 테스트가 원래
+재려던 것(`(raw) => string`)과 모양이 같다.
+
+## § AC-3 — 커버리지를 **줄이지 않았다**
+
+기존 **10칸 전부 유지**(`//evil` · `http://evil` · `https://evil` · `/login` 자기참조 ·
+`/api/**` · null · 쿼리 보존 · 인코딩 · 파라미터 이름). 바뀐 것은 **함수 이름 하나**다.
+추가된 것은 § 배선 **3칸**.
+
+## § AC-2 — bite **2종**
+
+```
+① 규칙 한 줄 변경 (login-redirect.ts 에서 `//` 거부 제거)
+     rc=1 → 1 failed | 12 passed     ← 「rejects open-redirect via // prefix」 만
+② layout 에 규칙 재인라인 (= 이 티켓의 수정을 되돌린 세계)
+     rc=1 → 2 failed | 11 passed     ← § 배선 칸 둘, 메시지가 발견한 조각 셋을 나열
+```
+
+🔴🔴 **② 가 계획에 없던 칸을 낳았다.** ①만 있으면 「테스트가 진짜 규칙을 잰다」는 알아도
+**「layout 이 그 규칙을 쓴다」는 모른다** — 누군가 규칙을 layout 안에 다시 인라인해도
+기능 10칸은 전부 초록이다. 그러면 **이 티켓이 고친 결함이 그대로 돌아온다.**
+⇒ § 배선 절(비공허성 1 + import·호출 1 + 재인라인 금지 1)을 더했다.
+
+🔴 `git checkout --` 은 안 썼다. 파일 복사로 되돌렸고 두 파일 모두 복원 후 **바이트
+동일성**을 확인했다.
+
+## § AC-4 — 게이트 (각각 독립 statement, 파이프 없음)
+
+```
+tsc --noEmit    rc=0
+next lint       rc=0   ✔ No ESLint warnings or errors
+vitest run      rc=0   292 files / 3013 tests   (기준선 292 / 3010)
+next build      rc=0   ← 🔴 소스를 건드렸으므로 AC-4 가 요구한 추가 게이트
+```
+
+🔵 칸 수 **3010 → 3013**(배선 3칸), 파일 수 불변, **회귀 0**.
+
+### 🔴 vitest 첫 전체 실행이 2칸 빨갰다 — 내 것이 아니다
+
+`CreateOrganizationForm` · `AccountSelfService`, 지문은 `Test timed out in 5000ms` +
+`Not implemented: navigation (except hash changes)`. 판별: **격리 재실행 2회 모두
+9/9 초록** → **전체 재실행 292/292 · 3013/3013 초록**. 두 파일은 온보딩·계정
+셀프서비스이고 내 변경(순수 함수 추출 + 그 테스트)과 닿지 않는다.
+🔵 **원인은 단정하지 않는다** — 이 저장소의 콘솔 flake 카탈로그 ④(*"격리 실행 시 통과,
+full-suite 순서/공유상태에서만 간헐"*)와 지문이 같다는 것까지만 적는다.
+
+## 🔴 안 잰 것
+
+- **`layout.tsx` 를 렌더해서** 리다이렉트가 실제로 일어나는지는 안 쟀다. § 배선 절은
+  **소스를 읽어** import·호출을 확인할 뿐이다 — 「배선돼 있다」와 「런타임에 그 경로를
+  탄다」는 다른 명제다. 후자는 e2e(`console-guard.spec.ts`)가 덮는 축이다.
+- **나머지 13개를 «완전히» 감사하지 않았다** — 각 파일의 mirror 문장을 읽고 애매한 넷을
+  열었다. 파일 전체를 줄 단위로 읽지는 않았으므로, 문장이 가리키지 않는 **다른** 복제가
+  숨어 있을 가능성은 배제하지 못한다.
+- **자기선언이 없는 복제본** — 기안이 적은 그대로, 이 모집단은 **하한**이다.
