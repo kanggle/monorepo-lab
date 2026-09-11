@@ -92,10 +92,17 @@ class OrgNodeAdminUseCaseTest {
     }
 
     private static AdminOperatorJpaEntity operator(long id, String externalId, String tenantId) {
+        return operator(id, externalId, tenantId, null);
+    }
+
+    /** TASK-MONO-670 — 표시명까지 세우는 판. 기존 호출부는 위 오버로드로 그대로 둔다. */
+    private static AdminOperatorJpaEntity operator(long id, String externalId, String tenantId,
+                                                   String displayName) {
         AdminOperatorJpaEntity e = mock(AdminOperatorJpaEntity.class);
         when(e.getId()).thenReturn(id);
         when(e.getOperatorId()).thenReturn(externalId);
         when(e.getTenantId()).thenReturn(tenantId);
+        when(e.getDisplayName()).thenReturn(displayName);
         return e;
     }
 
@@ -246,4 +253,53 @@ class OrgNodeAdminUseCaseTest {
         useCase.setCeiling(ACTOR, "biz", CeilingView.unbounded(), "why");
         verify(orgNodePort).setCeiling("biz", CeilingView.unbounded());
     }
+
+    // =========================================================================
+    // TASK-MONO-670 / ADR-MONO-073 ACCEPTED ⓐ — org-admin 행이 표시명을 싣는다
+    // =========================================================================
+    // 🔴 이 경로는 `operatorId` 를 만들려고 **이미 그 행을 읽고 있었고** 표시명만 버렸다.
+    //    형제 `GroupAdminUseCase` 는 같은 조회에서 이름까지 꺼낸다 — 그 대칭이 요지다.
+
+    @Test
+    void listNodeAdmins_carriesDisplayName() {
+        // 🔵 setUp() 이 actor·role·scope 를 이미 세운다 — 여기서는 이 칸이 재는 것만 세운다.
+        AdminOperatorRoleJpaEntity row = mock(AdminOperatorRoleJpaEntity.class);
+        when(row.getRoleId()).thenReturn(7L);
+        when(row.getOperatorId()).thenReturn(2L);
+        when(row.getGrantedAt()).thenReturn(Instant.parse("2026-07-10T09:00:00Z"));
+        when(operatorRoles.findByOrgNodeId("biz")).thenReturn(List.of(row));
+        // 🔴 이 파일이 자기 주석에 적어 둔 함정: `when()` 을 쓰는 헬퍼를 `thenReturn(...)`
+        //    **안에서** 부르면 nested-stubbing(UnfinishedStubbing)이다. 먼저 만든다.
+        AdminOperatorJpaEntity named = operator(2L, "op-123", "hq", "김운영");
+        when(operators.findById(2L)).thenReturn(Optional.of(named));
+
+        List<OrgNodeAdminUseCase.OrgAdminGrant> out = useCase.listNodeAdmins(ACTOR, "biz");
+
+        assertThat(out).hasSize(1);
+        // 이 한 줄이 이 티켓의 전부다 — 화면이 읽을 수 있는 값이 응답까지 도착한다.
+        assertThat(out.get(0).displayName()).isEqualTo("김운영");
+        // 🔴 대조군: `operatorId` 를 **교체한 것이 아니라 더한** 것이다.
+        assertThat(out.get(0).operatorId()).isEqualTo("op-123");
+    }
+
+    @Test
+    void listNodeAdmins_displayNameIsNull_whenOperatorRowMissing() {
+        // 🔴 못 찾으면 `null` 이다 — 형제와 같은 규칙. 빈 문자열로 채우면 「이름이 없다」와
+        //    「운영자를 못 찾았다」가 합쳐져 다시는 못 갈린다.
+        // 🔵 setUp() 이 actor·role·scope 를 이미 세운다 — 여기서는 이 칸이 재는 것만 세운다.
+        AdminOperatorRoleJpaEntity row = mock(AdminOperatorRoleJpaEntity.class);
+        when(row.getRoleId()).thenReturn(7L);
+        when(row.getOperatorId()).thenReturn(99L);
+        when(row.getGrantedAt()).thenReturn(Instant.parse("2026-07-10T09:00:00Z"));
+        when(operatorRoles.findByOrgNodeId("biz")).thenReturn(List.of(row));
+        when(operators.findById(99L)).thenReturn(Optional.empty());
+
+        List<OrgNodeAdminUseCase.OrgAdminGrant> out = useCase.listNodeAdmins(ACTOR, "biz");
+
+        assertThat(out).hasSize(1);
+        assertThat(out.get(0).displayName()).isNull();
+        // 🔵 대조군이 공허하지 않다 — 그 행은 실제로 목록에 남는다(사라지지 않는다).
+        assertThat(out.get(0).roleName()).isEqualTo("ORG_ADMIN");
+    }
+
 }

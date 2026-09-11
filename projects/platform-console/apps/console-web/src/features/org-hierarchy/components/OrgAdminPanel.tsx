@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { formatDateTime } from '@/shared/lib/datetime';
+import { masterRefLabel } from '@/shared/lib/master-ref-label';
 import {
   ELEVATED_ROLE_NEVER_GRANTABLE,
   KNOWN_ORG_ADMIN_ROLES,
@@ -109,7 +110,17 @@ export function OrgAdminPanel({
               className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
             >
               <span className="min-w-0">
-                <span className="font-medium text-foreground">{a.operatorId}</span>{' '}
+                {/* 🔴 TASK-MONO-670 — 이 칸은 운영자를 가리키는 **참조**다. 생산자가
+                    `displayName` 을 싣기 전에는 콘솔이 할 수 있는 것이 없었다
+                    (`TASK-PC-FE-277` 이 「콘솔에서 못 고치는 부류」로 분류한 자리).
+                    🔵 원본 id 는 `title` 에만 — 보이는 텍스트가 아니라 UUID 가드가 안 문다. */}
+                <span
+                  className="font-medium text-foreground"
+                  data-master-ref="orgAdmin.operatorId"
+                  title={a.operatorId}
+                >
+                  {masterRefLabel(a.operatorId, a.displayName ? { name: a.displayName } : null)}
+                </span>{' '}
                 <span className="text-muted-foreground">
                   · {a.roleName} · {formatDateTime(a.grantedAt)}
                 </span>

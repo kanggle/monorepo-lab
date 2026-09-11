@@ -105,6 +105,10 @@ export type SubtreeTenants = z.infer<typeof SubtreeTenantsSchema>;
 
 export const OrgAdminSchema = z.object({
   operatorId: z.string(),
+  // TASK-MONO-670 / ADR-MONO-073 ⓐ — 생산자가 운영자 표시명을 싣는다.
+  // 🔴 nullable: 운영자 레코드를 못 찾으면 생산자가 null 을 보낸다(형제 GroupMember 와 같은 규칙).
+  //    빈 문자열로 오지 않는다 — 「이름이 없다」와 「운영자를 못 찾았다」를 갈라 두기 위해서다.
+  displayName: z.string().nullable().optional(),
   roleName: z.string(),
   grantedAt: z.string(),
 });
