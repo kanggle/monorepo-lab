@@ -617,3 +617,114 @@ AC-4 가 요구한 큐레이션 후보를 내려고 **19장 중 16장을 실제�
 | `/ecommerce/settlements` | 🟡 `ecommerce` 에서 **1행** — 탈락시켰다(포트폴리오 장으로 빈약) |
 
 🔵 **사진은 이 창에서 이미 찍혀 있다** — 남은 일은 매니페스트·론처 배선이고 **창이 필요 없다.**
+
+## 🟢 배선 (2026-09-11 UTC) — 결정을 코드에 넣었다. 🔴 **사진 교체는 다음 창이다**
+
+### 무엇을 고쳤나
+
+`capture-shots.mjs` 의 콘솔 목록을 **합성 투어 세 장(`/demo/*`) → 진짜 콘솔 두 장**으로 바꿨다:
+
+```
+console-1-erp-masters         /erp/masters          테넌트 demo-corp   minChars 900
+console-2-ecommerce-products  /ecommerce/products   테넌트 ecommerce   minChars 700
+```
+
+### 🔴🔴 핵심 변경은 «목록» 이 아니라 «테넌트가 장마다 다르다» 는 것이다
+
+기존 스크립트는 `CAPTURE_AUTH_TENANT` **전역 하나**로 로그인 시 한 번 assume 했다.
+그 구조로는 이 목록을 **찍을 수 없다** — 같은 계정·같은 콘솔인데 테넌트에 따라 화면이 갈린다:
+
+| 장 | `demo-corp` | `ecommerce` |
+|---|---|---|
+| `/erp/masters` | **16행** 🟢 | **권한거부** |
+| `/ecommerce/products` | **빈 목록** | **20행** 🟢 |
+
+⇒ **`assumeTenant(page, tenant)` 를 `signIn` 에서 갈라냈다.** 로그인은 여전히 한 번이고,
+테넌트만 장 사이에 전환한다. 🔵 같은 테넌트가 연속이면 **건너뛴다**(왕복 1회 ≈ 11초).
+🔵 셀렉트에 없는 테넌트는 **사유를 대며 죽는다** — «없는 테넌트» 와 «assume 실패» 는 다른 사실이다.
+
+### dry-run 으로 확인 (술어는 «안 죽는다» 가 아니라 «의도대로 나오나»)
+
+```
+console  console-1-erp-masters        …/erp/masters          [로그인 필요 · 테넌트 demo-corp]
+console  console-2-ecommerce-products …/ecommerce/products   [로그인 필요 · 테넌트 ecommerce]
+[capture] 로그인 필요 2장 · 요구 테넌트 2종: demo-corp, ecommerce
+  🔵 장 사이에 테넌트를 전환합니다(왕복 1회 ≈ 11초). 같은 테넌트가 연속이면 건너뜁니다.
+rc=0
+```
+
+🔵 **매니페스트도 고쳤다** — `tenant` 를 전역 `signedInAs` 가 아니라 **장별 `activeTenant`**
+로 적는다. 🔴 그것을 안 적으면 재생성이 **다른 화면을 찍는다**(권한거부 또는 빈 목록).
+
+## 🔴🔴 정정 — **«①↔③ 은 아무도 안 본다» 는 내가 틀린 것이었다. (z37) 이 본다**
+
+처음에 나는 이렇게 적었다: *"`scripts/` 에 `capture-shots.mjs` 의 SHOTS 를 `index.html` 과
+대조하는 것이 **없다**(grep 0건)"*. 🔴 **거짓이다.** CI 가 잡았다:
+
+```
+FAIL: (z37) capture-shots.mjs 의 목록과 index.html 의 SHOTS 가 갈라졌습니다:
+      console-1-erp-masters console-1-overview console-2-ecommerce
+      console-2-ecommerce-products console-3-wms
+```
+
+🔴🔴 **내가 모집단을 잘못 골랐다.** `scripts/` 를 grep 했는데 **(z37) 은
+`infra/demo/verify-demo-wrapper.sh` 에 산다.** 이 저장소가 이름 붙인
+*«「막는 가드가 있나」에 grep 은 답 못 한다»* 를 그대로 밟았고, 더 나쁘게도 그 **거짓
+주장을 다섯 곳**(코드 주석 · 이 티켓 · INDEX 행 · 커밋 메시지 · PR 본문)에 적었다.
+
+🔵 **가드가 설계대로 일했다.** 그리고 그 가드는 내가 말한 것보다 **강하다**:
+
+```
+capture-shots.mjs 의 SHOTS  ↔  index.html 의 SHOTS 상수  ↔  thumbnails/*.jpg
+```
+
+**세 곳을 한 줄에 꿴다.** ⇒ 하나만 바꾸면 빨개진다.
+
+## ⇒ 그래서 목록 교체를 **되돌렸다.** 이 PR 은 «기전» 만 싣는다
+
+새 `.jpg` 는 **데모 스택이 떠야** 찍힌다(두 장의 데이터가 데모 백엔드에서 온다).
+⇒ 셋 중 **어느 하나도** 단독으로 착지할 수 없다. **한 커밋이어야 한다.**
+
+🔵 **그래도 이 PR 이 값진 이유**: 목록을 바꿀 수 있게 하는 **기전**은 지금 착지한다.
+장별 `tenant` + `assumeTenant()` 가 없으면 그 목록은 **애초에 찍을 수가 없다** —
+같은 콘솔인데 `/erp/masters` 는 `demo-corp` 에서만, `/ecommerce/products` 는
+`ecommerce` 에서만 그려지기 때문이다. 🔵 동작 변화는 **0** 이다(`--dry-run` 이 옛
+여덟 장을 **주소까지 그대로** 낸다 — 대조군).
+
+🔴 그리고 **스크립트와 `index.html` 양쪽에 ⏳ 주석**을 달아 «다음 창에 셋을 한 커밋에»
+를 그 자리에 적었다. 🔵 (z37) 이 이미 지키므로 그 주석은 **방어가 아니라 안내**다 —
+처음에 내가 «유일한 방어» 라고 쓴 것도 같은 오해의 산물이었다.
+
+## ~~🔴🔴 그런데 같은 사실이 세 곳에 있고, 셋째는 아무도 안 본다~~ (🔴 위 § 정정 참조 — 셋째도 (z37) 이 본다)
+
+1. `capture-shots.mjs` 의 `SHOTS` — **정본**. 이번에 고쳤다.
+2. `thumbnails/*.jpg` + `manifest.json` — 캡처 산출물. **아직 옛 세 장**이다.
+3. `index.html` 의 `SHOTS` 상수(964행) — 🔴 **하드코딩**이고 매니페스트를 안 읽는다.
+
+🔵 **(z37) 은 실재하고 2↔3 을 양방향으로 지킨다**(`verify-demo-wrapper.sh:4493` —
+*"캐러셀이 가리키는 캡처가 실재하는가, 그리고 그 반대도"*).
+🔴 **그러나 1↔3 은 아무도 안 본다.** `scripts/` 에 `capture-shots.mjs` 의 SHOTS 를
+`index.html` 과 대조하는 것이 **없다**(grep 0건).
+
+### ⇒ 그래서 `index.html` 을 **일부러 안 바꿨다**
+
+새 `.jpg` 가 아직 없으므로 먼저 바꾸면 **(z37) 이 «참조는 있는데 파일이 없다» 로 막는다** —
+그리고 **그 가드가 옳다**(론처가 깨진 이미지를 그리면 안 된다).
+⇒ `index.html` 에 **⏳ 표식**을 달아 «지금 어긋나 있고, 다음 창에서 캡처와 같은 커밋에
+바꾼다» 를 그 자리에 적었다. 🔵 1↔3 을 지키는 것이 없으므로 **그 주석이 유일한 방어**다.
+
+## ⏳ 다음 데모 창 묶음 — 이 항목이 거기 들어간다
+
+🔴 **사진 교체에는 데모 스택이 필요하다.** 콘솔은 Vercel 이지만 두 장의 **데이터는 데모
+백엔드에서 온다** — 꺼져 있으면 빈 표가 찍힌다.
+
+다음 창에서 **한 커밋으로** 해야 하는 것:
+
+1. `CAPTURE_AUTH_EMAIL/PASSWORD` 를 주고 `capture-shots.mjs` 실행 (테넌트는 이제 스크립트가 전환한다)
+2. 새 `.jpg` 둘 + `manifest.json` 커밋, 옛 `console-1-overview/2-ecommerce/3-wms.jpg` **삭제**
+3. `index.html` 의 `SHOTS.console` 을 두 장으로 교체 + ⏳ 표식 제거
+4. (z37) 로 2↔3 양방향 확인
+
+🔵 **같은 창에 `TASK-MONO-645` ①(b)(IAM 중단)도 들어간다** — 소유자가
+**「다음 창에 묶어서」** 로 결정했다. 🔴 ①(b)는 **파괴적이라 맨 마지막**이므로 순서는
+**648 촬영 → … → 645 ①(b) → `POST /stop`** 이다.
