@@ -226,7 +226,7 @@
         <p class="desc">여러 도메인을 한 화면에서 운영하는 백오피스. 대시보드·주문·재고·조직·권한.</p>
         <dl>
           <dt>로그인 없이</dt><dd>데모 둘러보기 화면(<code>/demo</code>) — 8개 도메인의 대시보드·표 샘플</dd>
-          <dt>로그인 후</dt><dd>도메인 헬스 대시보드 · 이커머스/WMS/SCM/ERP/재무 운영 · IAM 테넌트·권한·감사 로그<br /><em class="needs-boot">↳ 실시간 기능을 먼저 기동해야 열립니다</em></dd>
+          <dt>로그인 후</dt><dd>도메인 헬스 대시보드 · 이커머스/WMS/SCM/ERP/재무 운영 · IAM 테넌트·권한·감사 로그<br /><em class="needs-boot">↳ 실시간 기능을 먼저 기동해야 열립니다</em><br /><em class="needs-boot">↳ 위 미리보기 두 장이 <strong>이쪽</strong> 화면입니다 — 로그인 없이는 열리지 않습니다</em></dd>
           <dt>기동되는 서비스</dt><dd data-services>—</dd>
           <dt>실시간 기능</dt><dd><span class="badge b-unknown" data-bundle-badge>… 확인 중</span></dd>
         </dl>
@@ -315,6 +315,10 @@
     <p class="hint" style="margin-top:14px">
       콘솔에 로그인한 뒤 <strong>테넌트를 <code>demo-corp</code> 로 선택</strong>하세요.
       5개 도메인(이커머스 · WMS · SCM · ERP · 재무)의 운영자 권한은 그 시점에 부여됩니다.
+      <br />
+      단, <strong>이커머스 화면(<code>/ecommerce/*</code>)의 목록은 테넌트 <code>ecommerce</code> 에서 보입니다</strong> —
+      권한은 <code>demo-corp</code> 에서 파생되지만 데이터 스코프는 JWT 의 <code>tenant_id</code> 를 따르기 때문입니다.
+      <code>demo-corp</code> 인 채로 상품 목록을 열면 빈 목록이 나옵니다(2026-09-11 실측).
     </p>
   </div>
 
@@ -965,12 +969,12 @@
     //        `capture-shots.mjs` 의 SHOTS  ↔  이 상수  ↔  `thumbnails/*.jpg`
     //    ⇒ **셋 중 하나만 바꾸면 CI 가 빨개진다.** 그것이 이 가드의 일이다.
     //
-    // ⏳ **다음 데모 창에서 이 콘솔 세 줄이 두 줄로 바뀐다** (TASK-MONO-648, 소유자 결정
-    //    「확정된 둘로 줄인다」): `console-1-erp-masters`(테넌트 demo-corp) ·
-    //    `console-2-ecommerce-products`(테넌트 ecommerce). 새 `.jpg` 는 **데모 스택이
-    //    떠야** 찍히므로(데이터가 데모 백엔드에서 온다) **셋을 한 커밋에** 바꾼다.
+    // 🟢 **콘솔이 두 장으로 바뀌었다** (TASK-MONO-648, 2026-09-11 데모 창에서 촬영).
+    //    옛 세 장은 `/demo/*` — 그 페이지가 스스로 *"샘플(합성) 데이터로 만든 둘러보기
+    //    입니다"* 라고 적는 **합성 투어**였다. 지금 둘은 **로그인해서 찍은 진짜 콘솔**이고,
+    //    테넌트가 서로 다르다(`/erp/masters`=demo-corp · `/ecommerce/products`=ecommerce).
     const SHOTS = {
-      console: [{ file: 'console-1-overview.jpg', alt: '운영자 콘솔 둘러보기 — 도메인 요약' }, { file: 'console-2-ecommerce.jpg', alt: '운영자 콘솔 — 이커머스 주문·상품 표' }, { file: 'console-3-wms.jpg', alt: '운영자 콘솔 — WMS 재고 표' }],
+      console: [{ file: 'console-1-erp-masters.jpg', alt: '운영자 콘솔 — ERP 마스터 5종(effective-dating·asOf)' }, { file: 'console-2-ecommerce-products.jpg', alt: '운영자 콘솔 — 이커머스 상품 목록' }],
       store: [{ file: 'store-1-home.jpg', alt: '이커머스 스토어 홈' }, { file: 'store-2-products.jpg', alt: '이커머스 스토어 — 상품 목록' }],
       fan: [{ file: 'fan-1-feed.jpg', alt: '팬 플랫폼 — 공개 피드' }, { file: 'fan-2-artists.jpg', alt: '팬 플랫폼 — 아티스트 목록' }, { file: 'fan-3-membership.jpg', alt: '팬 플랫폼 — 멤버십 소개' }],
     };
