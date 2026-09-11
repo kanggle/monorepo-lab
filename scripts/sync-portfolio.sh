@@ -433,11 +433,32 @@ sync_project() {
         # outer script aborting before push with no visible cause. `set -e` +
         # an explicit git presence check surface the real failure point.
         printf 'set -e\n'
-        printf 'apk add --no-cache git\n'
-        printf 'command -v git >/dev/null 2>&1 || { echo "FATAL: git not installed in container (apk add git failed — check container network/DNS to dl-cdn.alpinelinux.org)"; exit 1; }\n'
-        printf 'pip install --quiet git-filter-repo\n'
-        printf "git config --global user.email 'sync@portfolio'\n"
-        printf "git config --global user.name 'Portfolio Sync'\n"
+        # ---------------------------------------------------------------------
+        # Preamble differs by backend; the FILTER COMMANDS BELOW DO NOT.
+        # ---------------------------------------------------------------------
+        # 🔴 That split is the whole point (TASK-MONO-663 AC-1). The predicate the
+        # ticket demands is not "rc=0" but "do both paths produce the same file
+        # list" — and the strongest way to make that true is to keep ONE copy of
+        # the filter commands and vary only how the interpreter is provisioned.
+        if [ "$FILTER_BACKEND" = "docker" ]; then
+            # Fail LOUDLY: a silent `apk add git` failure used to leave git
+            # uninstalled, so git-filter-repo (a git wrapper) died with an obscure
+            # FileNotFoundError mid-run, leaving the workdir unfiltered and the
+            # outer script aborting before push with no visible cause.
+            printf 'apk add --no-cache git\n'
+            printf 'command -v git >/dev/null 2>&1 || { echo "FATAL: git not installed in container (apk add git failed — check container network/DNS to dl-cdn.alpinelinux.org)"; exit 1; }\n'
+            printf 'pip install --quiet git-filter-repo\n'
+            # 🔵 --global is fine here: the container is thrown away.
+            printf "git config --global user.email 'sync@portfolio'\n"
+            printf "git config --global user.name 'Portfolio Sync'\n"
+        else
+            # 🔴 NEVER --global on the native path — this runs on someone's machine
+            # (or a CI runner shared by other steps). Repo-local config only.
+            printf 'command -v git >/dev/null 2>&1 || { echo "FATAL: git not found"; exit 1; }\n'
+            printf 'git filter-repo --version >/dev/null 2>&1 || { echo "FATAL: git-filter-repo not installed (pip install git-filter-repo)"; exit 1; }\n'
+            printf "git config user.email 'sync@portfolio'\n"
+            printf "git config user.name 'Portfolio Sync'\n"
+        fi
         # Step 1 (direct-include only): pre-remove projects/<name>/settings.gradle
         # from ALL historical commits. Root settings.gradle is in SHARED_PATHS; the
         # project-level copy existed in old commits (composite-build era) and causes
@@ -468,14 +489,23 @@ sync_project() {
         fi
     } > "$runner"
 
-    # Run the filter inside a container. Mount workdir as /repo.
-    # MSYS_NO_PATHCONV=1 stops Git Bash from mangling the /repo paths into
-    # C:/Program Files/Git/repo.
-    MSYS_NO_PATHCONV=1 docker run --rm \
-        -v "$(cygpath -w "$workdir" 2>/dev/null || echo "$workdir"):/repo" \
-        -w /repo \
-        "$FILTER_REPO_IMAGE" \
-        sh /repo/_filter_repo_run.sh
+    # Run the generated filter script. Two backends, ONE script.
+    if [ "$FILTER_BACKEND" = "docker" ]; then
+        # Mount workdir as /repo.
+        # MSYS_NO_PATHCONV=1 stops Git Bash from mangling the /repo paths into
+        # C:/Program Files/Git/repo.
+        MSYS_NO_PATHCONV=1 docker run --rm \
+            -v "$(cygpath -w "$workdir" 2>/dev/null || echo "$workdir"):/repo" \
+            -w /repo \
+            "$FILTER_REPO_IMAGE" \
+            sh /repo/_filter_repo_run.sh
+    else
+        # 🔵 Native: git-filter-repo is on PATH. Same script, run in place.
+        #    This is the path CI takes (TASK-MONO-663) — a Linux runner has git
+        #    and pip, and pulling a python image to run git would be the slow
+        #    part we are removing.
+        ( cd "$workdir" && sh ./_filter_repo_run.sh )
+    fi
 
     cd "$workdir"
 
@@ -538,8 +568,53 @@ EOF
     done
 
     # Pre-flight checks
-    command -v docker >/dev/null || fail "docker required (filter-repo runs in container)"
     command -v git >/dev/null || fail "git required"
+
+    # -------------------------------------------------------------------------
+    # Which filter-repo backend? (TASK-MONO-663 AC-1)
+    # -------------------------------------------------------------------------
+    # 🔴 This used to be `command -v docker || fail "docker required"`, which made
+    #    the script UNRUNNABLE on a Linux CI runner that has git-filter-repo on
+    #    PATH and no reason to pull a python image. That single line is why the
+    #    sync only ever ran on the one machine that is worst at it (Windows +
+    #    Docker Desktop: minutes per copy, in NTFS file-creation cost).
+    #
+    # 🔵 Preference order is NATIVE FIRST, and the reason is not speed alone —
+    #    the docker path re-installs git and git-filter-repo on EVERY run
+    #    (`apk add` + `pip install`), so it also depends on container DNS
+    #    reaching dl-cdn.alpinelinux.org and PyPI. Fewer moving parts wins.
+    #
+    # 🔴 `FILTER_BACKEND` may be forced (`FILTER_BACKEND=docker ./sync-portfolio.sh …`).
+    #    That exists so the two paths can be COMPARED on one machine — the
+    #    ticket's predicate is "do both produce the same file list", and you
+    #    cannot ask that question if the script silently picks one.
+    if [ -n "${FILTER_BACKEND:-}" ]; then
+        case "$FILTER_BACKEND" in
+            native|docker) : ;;
+            *) fail "FILTER_BACKEND must be 'native' or 'docker' (got: $FILTER_BACKEND)" ;;
+        esac
+        log "filter-repo backend: $FILTER_BACKEND (forced via FILTER_BACKEND)"
+    elif git filter-repo --version >/dev/null 2>&1; then
+        FILTER_BACKEND=native
+        log "filter-repo backend: native ($(git filter-repo --version 2>&1 | head -1))"
+    elif docker info >/dev/null 2>&1; then
+        # 🔴 `docker info` — NOT `command -v docker`. The CLI being on PATH says
+        #    nothing about whether the daemon is up, and this host proves it:
+        #    Docker Desktop stopped, `command -v docker` still succeeds, and the
+        #    run would then die minutes later inside `docker run` with
+        #    "failed to connect to the docker API at npipe:…".
+        #    ⇒ Probe the thing you are going to USE, not the thing that names it.
+        FILTER_BACKEND=docker
+        log "filter-repo backend: docker ($FILTER_REPO_IMAGE)"
+    else
+        # 🔴 Name BOTH ways out. A message that names only one turns "you have a
+        #    choice" into "you must install docker", which is the very framing
+        #    this ticket exists to undo.
+        fail "no filter-repo backend available. Install EITHER:
+    · git-filter-repo on PATH   →  pip install git-filter-repo   (preferred; no container)
+    · docker                    →  the script then runs filter-repo in $FILTER_REPO_IMAGE"
+    fi
+    export FILTER_BACKEND
 
     if [ -n "$target" ]; then
         sync_project "$target" "$dry_run"

@@ -8,7 +8,7 @@ TASK-MONO-663
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -263,3 +263,109 @@ $ gh variable list
 
 🔴 **그 전까지 워크플로를 머지하지 마라.** 이 티켓 § Background 가 그 실패 모양을 이미
 적어 뒀다.
+
+---
+
+# 🟢 구현 (2026-09-11 UTC)
+
+## 🟢 AC-0 — 자격증명. **결정이 아니라 «존재» 를 쟀다**
+
+소유자가 **「fine-grained PAT 발급」** 을 고르고 실제로 넣었다. 🔴 **「넣었다」를 그대로
+믿지 않고 쟀다** — 이름 오타가 가장 흔한 실패다:
+
+```
+$ gh secret list --repo kanggle/monorepo-lab
+PORTFOLIO_SYNC_TOKEN        2026-09-11T09:35:09Z     ← 🟢 정확 일치
+VERCEL_DEPLOY_HOOK_AUTH     …  (기존 5개)
+```
+
+**만료일: 2027-12-10** (소유자 보고). 🔴 fine-grained PAT 는 만료되면 **워크플로가 조용히
+죽고** 그때 증상은 *"동기화가 안 됐다"* 라 원인이 안 보인다 ⇒ 이 줄이 그 기록이다.
+
+### 🔴 그러나 «시크릿이 있다» 는 «토큰이 동작한다» 가 아니다
+
+`gh secret list` 는 **이름만** 보여 준다 — 스코프도, 어느 리포를 포함하는지도 말해 주지
+않는다. 이 AC 가 막으려던 것이 정확히 *"초록으로 머지되고 첫 실행에서 403 으로 죽는다"*
+이므로, **워크플로 첫 잡을 프리플라이트로** 만들었다(아래 AC-1). ⇒ 첫 실행이 **자격을
+먼저 판정**한다.
+
+## 🟢 AC-1 — 리눅스에서 돈다
+
+### ① `command -v docker || fail` → 백엔드 해결
+
+🔴 그 한 줄이 이 티켓의 원인이었다. 이제 **native → docker → 둘 다 이름을 대며 실패** 다.
+
+🔴🔴 **첫 구현이 틀렸고 그 자리에서 잡았다**: `command -v docker` 로 판정했더니 이 호스트
+(Docker Desktop **정지** 상태)에서 **docker 를 골랐다.** CLI 가 PATH 에 있다는 것은
+**데몬이 살아 있다는 뜻이 아니다** — 그대로 뒀으면 추출을 다 한 뒤 `docker run` 에서
+*"failed to connect to the docker API at npipe:…"* 로 죽었을 것이다.
+⇒ **`docker info`** 로 바꿨다. 🔵 **쓸 것을 찔러라, 그것을 부르는 이름 말고.**
+
+**실측(이 호스트 = 네이티브도 docker 데몬도 없음):**
+
+```
+$ bash scripts/sync-portfolio.sh --dry-run scm-platform          rc=1
+[fail] no filter-repo backend available. Install EITHER:
+    · git-filter-repo on PATH   →  pip install git-filter-repo   (preferred; no container)
+    · docker                    →  the script then runs filter-repo in python:3.11-alpine
+
+$ FILTER_BACKEND=native  …    → "filter-repo backend: native (forced via FILTER_BACKEND)"  🟢
+$ FILTER_BACKEND=bogus   …    → "[fail] FILTER_BACKEND must be 'native' or 'docker'"       🟢
+```
+
+### 🔵 «두 경로가 같은 결과» 를 **구조로** 보장했다
+
+AC 의 술어는 *"rc=0 이 아니라 «같은 파일 목록이 나오는가»"* 다. 🔵 가장 강한 방법은
+**필터 명령을 한 벌만 두는 것**이라, 생성되는 `_filter_repo_run.sh` 에서
+**프리앰블만 백엔드별로 가르고 필터 명령 본문은 동일**하게 뒀다.
+🔴 그리고 `--global` 은 **컨테이너 경로에만** 남겼다 — 네이티브는 남의 기계(또는 다른
+스텝과 공유하는 러너)에서 도므로 리포-로컬 config 를 쓴다.
+
+### ② `rev-parse main` — 🔴 가드를 안 지우고 **환경을 맞췄다**
+
+`actions/checkout` 기본값은 detached HEAD 라 `rev-parse main` 이 **빈 문자열**을 내고
+스크립트가 그것을 `fail` 로 잡는다. AC 가 *"가드는 옳고 환경이 다르다"* 라고 적었다.
+⇒ 워크플로의 두 잡 모두 **`ref: main` + `fetch-depth: 0`** 으로 체크아웃한다.
+
+### ⚪ ③ 소요 시간 — **못 쟀다**
+
+🔴 이 호스트에 **네이티브도 docker 데몬도 없다** — 어느 경로도 못 돌린다. 🔵 AC 가
+*"호스트 실측과 **같은 프로젝트**로 재라"* 고 못 박았으므로 **아무 수나 적지 않는다**
+(두 열의 술어와 모집단을 맞춰야 비교가 성립한다).
+⇒ **집**: 워크플로를 `dry_run=false` 로 **한 프로젝트(`scm-platform`)에 처음 돌리는 그
+실행**이 이 칸을 닫는다. 러너 로그의 잡 소요가 곧 그 수다.
+
+## 🟢 AC-2 — 트리거. 소유자 결정: **「ⓐ workflow_dispatch 만」**
+
+세 갈래(ⓐ 수동만 / ⓑ + 주기 / ⓒ + push)를 각각이 포기하는 것과 함께 올렸고 소유자가
+**ⓐ** 를 골랐다. 🔵 내 추천도 ⓐ 였지만 **물어서 받았다.**
+
+🔴 **포기한 것을 적는다**: 사본이 낡는 것을 **아무도 알려 주지 않는다.**
+`TASK-MONO-657` 이 37일/114일 낡은 것을 **사람이 눈치채서** 발견했다. 그 감시는 별도
+축이고 이 워크플로가 하지 않는다.
+
+🔵 ⓑ 를 안 고른 데는 부수 사유도 있다 — `TASK-MONO-662` 가 방금 **사본에서 `schedule:`
+을 떼어낸** 티켓이라, 모노레포에 주기 실행을 다시 들이는 것이 모순으로 읽힐 수 있다
+(다른 축이지만 적어 둔다).
+
+## 🟢 AC-3 — 「어디서 도는가」를 사람이 읽는 곳에
+
+`docs/guides/monorepo-workflow.md` § 5 에 **CI 경로를 먼저** 놓는 표를 넣고, 왜 Windows
+호스트가 느린지(NTFS 파일 생성 + Docker 번역)를 적었다.
+🔴 **호스트 실행법은 안 지웠다** — 자격증명이 없거나 CI 가 안 도는 날의 유일한 경로다.
+🔵 백엔드 자동 선택과 `FILTER_BACKEND` 강제 지정도 같이 적었다.
+
+## 워크플로의 모양
+
+- **트리거**: `workflow_dispatch` 만. 입력 `project`(비우면 전부) · `dry_run`(**기본 true**)
+- **`permissions: contents: read`** — 🔵 기본 토큰의 권한을 최소로. 대상 리포로 가는
+  권한은 `PORTFOLIO_SYNC_TOKEN` 에서만 온다
+- **`concurrency: portfolio-sync`** — 🔴 두 런이 같은 사본에 force-push 하면 나중 것이
+  앞 것을 덮고 **어느 쪽이 남았는지는 타이밍이 정한다**
+- **잡 ① 프리플라이트**: 시크릿 존재 → **7개 리포 `push` 권한** → 목록이 스크립트와 같은가
+  - 🔴 술어가 **«리포가 보이는가» 가 아니라 «push 권한이 있는가»** 다. read-only 토큰도
+    `GET /repos/…` 에 200 을 낸다 — 그것을 통과로 읽으면 **첫 push 에서 403** 이다
+  - 🔴 프리플라이트의 리포 목록은 손으로 적었으므로 **`PROJECT_REMOTES` 에서 유도해
+    대조**한다. 안 하면 리포가 늘어난 날 프리플라이트만 모른다
+- **잡 ② 동기화**: `needs: preflight`. `FILTER_BACKEND=native` 를 **명시**해 «우연히
+  native» 가 되지 않게 하고, 🔴 파이프를 안 써서 **종료코드가 tail 것이 되지 않게** 한다
