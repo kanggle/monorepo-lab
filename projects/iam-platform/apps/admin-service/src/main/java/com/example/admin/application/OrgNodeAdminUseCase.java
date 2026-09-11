@@ -82,10 +82,18 @@ public class OrgNodeAdminUseCase {
         OrgNodeScopeGuard.Reach reach = reach(actor);
         orgNodeScopeGuard.requireAdministers(actor, reach, orgNodeId, ActionCode.ORG_ADMIN_GRANT);
         AdminRoleJpaEntity orgAdmin = requireRole(ORG_ADMIN_ROLE);
+        // 🔵 TASK-MONO-670 — 조회가 <b>늘지 않는다</b>. 이 경로는 `operatorId` 를 만들려고
+        //    이미 그 행을 읽고 있었고(`externalOperatorId`), 표시명만 버리고 있었다.
+        //    ⇒ 엔티티를 한 번 읽어 <b>둘 다</b> 꺼낸다.
         return operatorRoles.findByOrgNodeId(orgNodeId).stream()
                 .filter(row -> row.getRoleId().equals(orgAdmin.getId()))
-                .map(row -> new OrgAdminGrant(
-                        externalOperatorId(row.getOperatorId()), ORG_ADMIN_ROLE, row.getGrantedAt()))
+                .map(row -> {
+                    AdminOperatorJpaEntity op = operators.findById(row.getOperatorId()).orElse(null);
+                    return new OrgAdminGrant(
+                            op == null ? null : op.getOperatorId(),
+                            op == null ? null : op.getDisplayName(),
+                            ORG_ADMIN_ROLE, row.getGrantedAt());
+                })
                 .toList();
     }
 
@@ -195,7 +203,8 @@ public class OrgNodeAdminUseCase {
 
         audit(ActionCode.ORG_ADMIN_GRANT, orgNodeId, actor, reason,
                 "granted_operator_id=" + targetOperatorId + " role=" + roleName);
-        return new OrgAdminGrant(targetOperatorId, roleName, now);
+        // 🔵 grant 직후 응답 — target 은 위에서 이미 조회했다(추가 조회 0건).
+        return new OrgAdminGrant(targetOperatorId, target.getDisplayName(), roleName, now);
     }
 
     /**
@@ -313,5 +322,15 @@ public class OrgNodeAdminUseCase {
     }
 
     /** A node-scoped role grant as the operator surface sees it. */
-    public record OrgAdminGrant(String operatorId, String roleName, Instant grantedAt) {}
+    /**
+     * 🔴 TASK-MONO-670 / ADR-MONO-073 ACCEPTED ⓐ — {@code displayName} 은 <b>nullable</b> 이다.
+     * 운영자 레코드를 못 찾으면 {@code null} 이고, 그것은 형제
+     * {@code GroupAdminUseCase.MemberView} 와 <b>같은 규칙</b>이다.
+     *
+     * <p>🔴 빈 문자열로 채우지 마라 — 「이름이 없다」와 「운영자를 못 찾았다」가 합쳐지면
+     * 다시는 못 갈린다. 소비자(콘솔)는 {@code null} 을 「이름 확인 불가」로 표현하고
+     * {@code operatorId} 로 <b>되돌아가지 않는다</b>({@code TASK-PC-FE-276}).
+     */
+    public record OrgAdminGrant(String operatorId, String displayName, String roleName,
+                                Instant grantedAt) {}
 }

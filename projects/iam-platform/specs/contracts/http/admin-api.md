@@ -2371,10 +2371,24 @@ actor 의 reach 로 스코프된 노드 **flat array**. SUPER_ADMIN → 전체; 
 ```json
 {
   "items": [
-    { "operatorId": "op-123", "roleName": "ORG_ADMIN", "grantedAt": "2026-07-10T09:00:00Z" }
+    { "operatorId": "op-123", "displayName": "김운영", "roleName": "ORG_ADMIN",
+      "grantedAt": "2026-07-10T09:00:00Z" }
   ]
 }
 ```
+
+`displayName` — 운영자 표시명 (`ADR-MONO-073` **ACCEPTED ⓐ**, `TASK-MONO-670`).
+
+- 🔴 **nullable.** 운영자 레코드를 못 찾으면 `null` 이다. 🔵 형제
+  `GET /api/admin/operator-groups/{id}/members` 의 `displayName` 과 **같은 규칙·같은 이름**이다
+  — 열두 번째 이름을 만들지 않는다.
+- 🔴 **빈 문자열로 채우지 않는다**: 「이름이 없다」와 「운영자를 못 찾았다」가 합쳐지면 다시는
+  못 갈린다. 소비자는 `null` 을 **「이름 확인 불가」로 표현**하고 **`operatorId` 로 되돌아가지
+  않는다**(`TASK-PC-FE-276`).
+- 🔵 `operatorId` 는 **그대로 있다.** 이것은 더하는 변경이고, 운영자가 그 id 로 지원 요청을 받는다.
+- 🔵 **왜 생산자가 싣는가**: 소비자가 따로 조회하면 feature 경계를 넘고 페이지 밖 참조를 잃는다
+  (`ADR-MONO-073` § 갈래 ⓑ 가 기각된 이유). 그리고 **추가 조회가 없다** — 이 핸들러는
+  `operatorId` 를 만들려고 **이미 그 행을 읽고 있었고** 표시명만 버리고 있었다.
 
 **Errors**:
 

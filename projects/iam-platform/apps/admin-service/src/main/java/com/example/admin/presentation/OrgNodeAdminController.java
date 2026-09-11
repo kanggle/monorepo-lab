@@ -232,9 +232,11 @@ public class OrgNodeAdminController {
 
     public record SubtreeTenantsResponse(List<String> tenantIds) {}
 
-    public record OrgAdminResponse(String operatorId, String roleName, Instant grantedAt) {
+    /** 🔴 `displayName` 은 nullable — `ADR-MONO-073` ⓐ / `TASK-MONO-670`. 계약 참조. */
+    public record OrgAdminResponse(String operatorId, String displayName, String roleName,
+                                   Instant grantedAt) {
         static OrgAdminResponse from(OrgNodeAdminUseCase.OrgAdminGrant g) {
-            return new OrgAdminResponse(g.operatorId(), g.roleName(), g.grantedAt());
+            return new OrgAdminResponse(g.operatorId(), g.displayName(), g.roleName(), g.grantedAt());
         }
     }
 

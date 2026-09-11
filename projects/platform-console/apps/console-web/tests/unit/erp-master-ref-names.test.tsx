@@ -68,6 +68,7 @@ import { WmsInventoryDetailPanel } from '@/features/wms-ops/components/WmsInvent
 import { WmsAsnDataTable } from '@/features/wms-ops/components/WmsAsnDataTable';
 import { OutboundDrillLines } from '@/features/wms-outbound-ops/components/OutboundDrillLines';
 import { WmsInventoryDataTable } from '@/features/wms-ops/components/WmsInventoryDataTable';
+import { OrgAdminPanel } from '@/features/org-hierarchy/components/OrgAdminPanel';
 import { OrgScopeDialogBody } from '@/features/operators/components/OrgScopeDialogBody';
 import {
   codeName,
@@ -664,6 +665,58 @@ describe('🔴 제외한 칸은 모집단 밖이다 (TASK-PC-FE-281 § 제외)',
     expect(container.textContent).toContain(P_SUP);
     // (2) 그런데 참조 셀(모집단) 안에서는 UUID 가 0건이다 ⇒ 그 칸은 모집단 밖이다.
     assertNoUuidInRefCells(container, 2, '제외 칸(ASN 번호)');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TASK-MONO-670 / ADR-MONO-073 ⓐ — org-admin 행의 운영자 칸.
+//
+// 🔴 `TASK-PC-FE-277` 이 「콘솔에서 못 고치는 부류」로 분류했던 자리다 — 생산자가
+//    `displayName` 을 싣기 전에는 화면이 할 수 있는 것이 없었다. 이제 싣는다.
+// ---------------------------------------------------------------------------
+
+const OA_OP = '01a085a1-bc98-741e-ba56-21b896de3001';
+const OA_GHOST = '01a085a1-bc98-741e-ba56-21b896de3fff';
+
+function renderOrgAdmins(admins: unknown[]) {
+  return render(
+    <OrgAdminPanel
+      node={{ orgNodeId: 'biz', parentId: null, name: '사업본부', depth: 0,
+              ceiling: { mode: 'UNBOUNDED' }, createdAt: '2026-01-01T00:00:00Z',
+              updatedAt: '2026-01-01T00:00:00Z' } as never}
+      admins={admins as never}
+      adminsLoading={false}
+      adminsError={null}
+      grantableRoles={['ORG_ADMIN']}
+      onGrant={vi.fn()}
+      onRevoke={vi.fn()}
+      grantPending={false}
+      grantError={null}
+      revokePending={false}
+      revokeError={null}
+    />,
+    { wrapper: wrapper() },
+  );
+}
+
+describe('org-admin 행의 운영자 칸 (TASK-MONO-670)', () => {
+  it('표시명이 오면 그것을 그리고, UUID 로 안 돌아간다', () => {
+    const { container } = renderOrgAdmins([
+      { operatorId: OA_OP, displayName: '김운영', roleName: 'ORG_ADMIN',
+        grantedAt: '2026-07-10T09:00:00Z' },
+      // 🔴 대조군 — 생산자가 못 찾으면 null 이다.
+      { operatorId: OA_GHOST, displayName: null, roleName: 'ORG_ADMIN',
+        grantedAt: '2026-07-10T09:00:00Z' },
+    ]);
+
+    assertNoUuidInRefCells(container, 2, 'org-admin 운영자 칸');
+    const cells = refCells(container).map((el) => (el.textContent ?? '').trim());
+    expect(cells).toContain('김운영');
+    expect(cells).toContain(MASTER_REF_UNRESOLVED);
+    // 🔵 그 행의 id 는 여전히 UUID 다 ⇒ 대조군이 공허하지 않다.
+    expect(UUID_RE.test(OA_GHOST)).toBe(true);
+    // 🔵 원본 id 는 사라지지 않았다 — `title` 로 옮겼을 뿐이다.
+    expect(refCells(container).map((el) => el.getAttribute('title'))).toContain(OA_OP);
   });
 });
 
