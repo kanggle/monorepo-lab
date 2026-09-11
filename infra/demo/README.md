@@ -51,9 +51,14 @@ KEEP_TRAEFIK=1 bash infra/demo/demo-down.sh   # traefik-net 유지
 
 > 리소스 주의: `full`(41 JVM 동시)은 RAM ~32–48GB. 저사양/로컬에서는 OOM/exit137
 > 위험이 있으니 `demo-core` 부터 확인할 것.
-> **실제 데모 호스트는 `m6i.2xlarge`(32GB)** — `terraform/variables.tf` 의 기본값이 권위다
-> (`TASK-MONO-366` 실측: ~26GB 사용 / 여유 ~5.5GB). 64GB 는 여유를 원할 때의 *선택지*이지
-> 현재 구성이 아니다.
+> **실제 데모 호스트는 `r6i.2xlarge`(8 vCPU / 64 GiB)** — `terraform/variables.tf` 의
+> `instance_type` 기본값이 권위다.
+> 🔴🔴 **여기 있던 *"`m6i.2xlarge`(32GB) … 64GB 는 선택지이지 현재 구성이 아니다"* 는
+> 틀린 채로 남아 있었다** — `TASK-MONO-552` 가 32GB 를 **라이브에서 기각**했다:
+> 31.5 GiB 중 ~29 GiB 사용 / **MemAvailable 2.4 GiB**, pressure/memory full `0.00 → 41.16`.
+> 즉 64 GiB 는 "여유를 원할 때의 선택지" 가 아니라 **현재 구성 그 자체**다.
+> 🔵 `TASK-MONO-366` 의 *"~26GB 사용 / 여유 ~5.5GB"* 는 **합계 추정**이었고, 552 가 정한
+> 기준은 *"정상 상태 MemAvailable 6~8 GiB 확보"* 다.
 
 ## 프로젝트당 compose 파일이 여러 개일 수 있다 (TASK-MONO-342/344)
 
@@ -134,9 +139,14 @@ CI 잡 `demo-wrapper-smoke` (`.github/workflows/ci.yml`) 가 `infra/demo/**` ·
 - ✅ 실기동 증명 — `scm-platform-redis` + `fan-platform-redis` 동시 healthy (같은 compose 키 `redis`)
 - ✅ include/-f 가 중복 키를 잃는다는 실측 확인(위 근거)
 - ⏳ **`full`(41 JVM) 실기동 healthcheck 스모크는 EC2 권위** — GH 러너(16GB)·로컬 Windows
-  (Docker VM 11.68GiB) 모두 물리적 불가. **실측 결과 `m6i.2xlarge`(32GB)로 뜬다**
-  (`TASK-MONO-366`: ~26GB 사용). 이 줄의 이전 판은 64GB 가 *필요*하다고 적었는데 그건
-  측정 전의 추정이었다.
+  (Docker VM 11.68GiB) 모두 물리적 불가. **현재 호스트는 `r6i.2xlarge`(64 GiB)** 다.
+  🔴🔴 **이 줄은 두 번 뒤집혔고, 가운데 판이 틀렸다**: ① 원래 *"64GB 가 필요하다"* 라고
+  적혀 있었고 ② `TASK-MONO-366` 이 *"m6i.2xlarge(32GB)로 뜬다 — 64GB 는 측정 전의 추정"*
+  으로 **뒤집었는데** ③ `TASK-MONO-552` 가 라이브에서 32GB 를 기각해(MemAvailable 2.4 GiB,
+  파일 페이지 thrashing) **①이 옳았음을 복원**했다.
+  🔵 366 이 틀린 이유는 산술이 아니라 **술어**다 — *"뜬다"* 는 컨테이너가 기동한다는 뜻이고
+  *"충분하다"* 와 다른 명제인데, 그 둘을 같은 문장으로 썼다. 32GB 에서 스택은 **떴고,
+  동시에 thrashing 하고 있었다.**
 
 ## 데모 도메인 (`DEMO_DOMAIN`) — TASK-MONO-358
 
