@@ -15,9 +15,12 @@
 | 이메일 | `demo@demo.com` |
 | 비밀번호 | `Demo1234!` |
 
-**하나의 자격증명으로 세 표면 전부**에 로그인한다. 같은 이메일/비밀번호가 표면마다
-다른 신원으로 해석되는 것이 아니라, IAM(Spring Authorization Server)이 **어느
-클라이언트로 왔는지**에 따라 다른 테넌트·역할의 토큰을 발급한다:
+**하나의 자격증명으로 세 표면 전부**에 로그인한다 — 🔴 **단, 표면마다 «그 표면에서»
+로그인해야 한다.** 아래 § 「먼저 연 표면이 테넌트를 고정한다」를 먼저 읽어라.
+
+같은 이메일/비밀번호가 표면마다 다른 신원으로 해석되는 것이 아니라,
+IAM(Spring Authorization Server)이 **IdP 로그인 폼을 거칠 때** 어느 클라이언트로 왔는지에
+따라 다른 테넌트·역할의 토큰을 발급한다:
 
 - 스토어프런트 → `tenant_id=ecommerce`, `roles=[CUSTOMER]`
 - 팬 → `tenant_id=fan-platform`, `roles=[CUSTOMER]`
@@ -29,6 +32,25 @@
 (`OperatorRoleDerivation.fromEntitledDomains`). `demo-corp` 하나가 5개 도메인을
 구독하고 있으므로, 테넌트 스위처를 만지지 않고도 콘솔의 도메인 운영 5개 섹션이
 전부 열린다.
+
+### 🔴 먼저 연 표면이 테넌트를 고정한다 (2026-09-11 실측 · `ADR-MONO-072`)
+
+위 목록은 **IdP 폼을 거칠 때** 참이다. **SSO 세션이 이미 서 있으면** 폼이 생략되고
+**먼저 로그인한 표면의 테넌트가 그대로 따라간다.** 그래서 순서가 결과를 바꾼다:
+
+| 순서 | 결과 |
+|---|---|
+| 스토어에서 **바로** 로그인 | 🟢 통과 (`tenant_id=ecommerce`) |
+| **콘솔 먼저** → 같은 브라우저로 스토어 | 🔴 `/login?error=account_type_mismatch` |
+| **팬 먼저** → 같은 브라우저로 스토어 | 🔴 같은 배너 |
+
+🔵 **테넌트를 정하는 것은 «클라이언트» 가 아니라 «세션» 이다.** 스토어의 consumer 가드는
+설계대로 동작하고 있다(`ADR-MONO-035`) — 어긋난 것은 위 목록의 **기전 서술**이었다.
+
+**⇒ 시연 순서 권장**: 스토어 → (다른 브라우저 프로파일 또는 로그아웃 후) 팬 → 콘솔.
+🔴 한 프로파일에서 연속으로 누르면 두 번째 표면에서 튕긴다.
+🔵 이것은 **고칠 수 있는 결함**이고, 고치지 않기로 한 결정과 그 대가는
+[`ADR-MONO-072`](../adr/ADR-MONO-072-sso-session-decides-the-tenant-not-the-client.md) 에 있다.
 
 ---
 
@@ -353,6 +375,7 @@ SHIPPED → IN_TRANSIT → DELIVERED) 자격을 만든다. 그 과정에서 콘�
 
 | 항목 | 상태 | 추적 |
 |---|---|---|
+| 🔴 **먼저 연 표면이 테넌트를 고정한다 — 콘솔이나 팬에 먼저 로그인하면 스토어가 `account_type_mismatch` 로 튕긴다** | **고칠 수 있는 결함이지만 고치지 않기로 결정했다** (`ADR-MONO-072` ACCEPTED — ⓒ «약속을 고친다»). 🔴 기전은 데모 시드가 아니라 **SSO 세션 재사용**이다: IdP 폼을 거칠 때만 클라이언트별 스코프 조회가 일어나고, 세션이 이미 있으면 **그 세션의 테넌트가 그대로 전달**된다. 실측(2026-09-11 데모 창, `TASK-MONO-633`): B·A·B·A 교대 + A′ **다섯 패스 전부 일관** — 스토어에서 바로 로그인하면 `accountId=…ec01` 로 통과, 콘솔/팬 먼저면 `accountId=null` + 거부. 거부 토큰은 `tenant_id=iam`·`sub`=…`ad03`(콘솔발). 🔵 **유효성 조건 충족** — A 패스가 IdP 폼을 **안 거쳤다**(거쳤으면 `ecommerce` 행에 히트해 통과했을 것이라 현상이 관측되지 않는다). 🔵 `ADR-MONO-035` 의 cross-tenant 가드는 **설계대로 동작한다** — 어긋난 것은 § 0 의 **기전 서술**이었고 그것을 고쳤다. 🔴 **증상은 살아 있다**: 순서를 모르는 방문자는 여전히 밟고, `account_type_mismatch` 문구는 원인을 말해 주지 않는다 — 그것이 ⓒ 가 포기한 것이다. **시연은 표면마다 새 프로파일(또는 로그아웃 후)로 하라.** | `TASK-MONO-633` · `TASK-MONO-666` · [`ADR-MONO-072`](../adr/ADR-MONO-072-sso-session-decides-the-tenant-not-the-client.md) |
 | 🔵 **Vercel 콘솔에서 세 패널이 항상 «사용 불가» 로 보인다** — 운영 개요(`/dashboards/overview`) · 도메인 상태(`/dashboards/health`·`/console`) · 알림 인박스(`/api/console/notifications/**`) | **설계상 그렇다, 고장이 아니다.** 그 셋만 `console-bff` 를 지나는데 그 BFF 는 공개 호스트명이 없다(`TASK-MONO-362` 가 엣지 라우터를 일부러 없앴다 — `api-gateway-policy.md` L14). 셋 다 실패를 **상태로 표현**한다(`bffUnavailable: true` / 502 `BAD_GATEWAY` 봉투)이고, 🔵 나머지 6개 도메인 화면은 게이트웨이 **직결**이라 영향 없다(`ADR-MONO-017` D3.B). 🔴 고치려면 BFF 에 공개 경로를 주거나 합성을 콘솔 서버로 옮겨야 하고 **둘 다 아키텍처 결정**이다 | `TASK-MONO-585` § 알려진 한계 · `TASK-MONO-627`(데모 사본 억제로 이 상태가 **유일한 콘솔**이 됐다) |
 | ✅ ~~도커·호스트를 재시작하면 **IdP 가 돌아오지 않는다**~~ (2026-08-15 고침) | 실측(VM 재시작): ecommerce **33/33** · console **2/2** · traefik **1/1** · iam **인프라 9/9** 가 스스로 복귀했는데 **iam 앱은 0/5** 였다. 크래시가 아니다 — `ExitCode 255 · OOMKilled=false · **restart=no**`, `FinishedAt` 이 VM 을 내린 시각이다. iam 은 앱이 **CI 하네스(`docker-compose.e2e.yml`)에만** 정의되고 인프라는 base 에서 오는데, base 의 `unless-stopped` 는 병합으로 살아남고 앱은 상속받을 것이 없었다. 안 돌아온 것이 하필 **OIDC IdP** 라 결과는 `projects.sh` 가 `MONO-358` 로 이름 붙인 그 상태 — **전부 healthy 인데 로그인만 불가능.** 🔵 **고친 자리는 CI 파일이 아니라 데모 전용 오버레이**(`infra/demo/iam-traefik.override.yml`)다 — CI 에서는 재시작이 없는 것이 옳고(앱이 죽으면 런이 실패해야 한다), 거기 넣으면 **CI 가 크래시를 재시작으로 가린다.** 형제 wms 는 `x-wms-app-common` 앵커로 이미 갖고 있었다. 판정은 선언이 아니라 **복귀**로 했다: 수정 전 `docker kill` → 60초 뒤 `exited(137) · restarts=0`(안 돌아옴) / 수정 후 같은 조작에 **스스로 `Up`**. 실효 정책은 8개 도메인 **서비스 101개**를 `docker compose config` 로 전수 확인했다(수정 전 없음 5 → 수정 후 **0**). ⚠️ **복귀 ≠ 즉시 사용 가능** — 같은 재시작에서 `iam-kafka` 가 healthy 되기까지 약 **8분**이 걸렸다(§ 7 참조) | `TASK-MONO-534` |
 | ✅ ~~새로 가입한 계정의 프로필에 **이름·이메일이 비어 있다**~~ (2026-08-06 고침) | 계약(`jwt-standard-claims.md`)이 `email` 을 **Required: Yes** 로 적어 둔 채 **민팅만 빠져 있었다.** 여섯 클라이언트가 scope 를 선언하고 사용자가 동의했고 ecommerce 게이트웨이가 `X-User-Email` 을 매핑하고 `UserProfileProvisioner` 가 받고 있었다 — 체인의 **모든 고리가 있었는데 머리에 있는 값이 없었다.** `TenantClaimTokenCustomizer` 가 scope 게이트를 걸어 민팅한다 | `TASK-BE-577` |

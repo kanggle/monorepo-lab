@@ -8,7 +8,7 @@ TASK-MONO-633
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -62,7 +62,7 @@ monorepo
 
 | 갈래 | 조건 | 결과 |
 |---|---|---|
-| 스코프 히트 | `(ecommerce, demo@demo.com)` 행이 있다 | principal tenant = `ecommerce` = platform ⇒ seed `[CUSTOMER]` ⇒ **통과** |
+| 스코프 히트 | `(ecommerce, demo@demo.com)` 행이 **`auth_db.credentials` 에** 있다 | principal tenant = `ecommerce` = platform ⇒ `[CUSTOMER]` 가 **토큰 발급 시점에 부여**된다 ⇒ **통과**. 🔴🔴 **정정 (2026-09-11 실측 · `TASK-MONO-666` AC-3)**: 이 칸의 «seed `[CUSTOMER]`» 를 **`account_roles` 의 행**으로 읽으면 안 된다 — 런타임에 `account_db.account_roles` 는 **전체 12행이 전부 `fan-platform`**(ARTIST 6 · FAN 6)이고 **`demo@demo.com` 은 0행**인데 B 패스는 통과한다. ⇒ `[CUSTOMER]` 부여는 **DB 행이 아니라 코드 경로**다. 🔵 이것은 H2 를 흔들지 않고 오히려 **가르는 것이 «스코프 조회가 어느 credentials 행에 히트하느냐» 뿐**임을 보여 준다. |
 | 스코프 미스 | 그 행이 없다 | 폴백 `findAllByEmail` 이 **2행 이상**(`fan-platform`·`iam`)을 보고 `matches.size() > 1` ⇒ **fail-closed `BadCredentialsException`** ⇒ **로그인 폼 에러**, 역할 가드에 **도달조차 못 한다** |
 
 🔴🔴 **어느 쪽도 `account_type_mismatch` 를 낼 수 없다.** 그런데 그 배너가 나왔다
@@ -193,23 +193,23 @@ aws ec2 describe-instances --instance-ids i-0394b45b62cdd1fc6
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (verify-then-act)** — 착수 전에 셋을 확인하고, 하나라도 어긋나면 STOP 하고 이 티켓 본문부터 갱신한다.
+- [x] **AC-0 (verify-then-act)** — 착수 전에 셋을 확인하고, 하나라도 어긋나면 STOP 하고 이 티켓 본문부터 갱신한다.
   ① `curl -o /dev/null -w '%{http_code}' https://auth.hubwang.com/.well-known/openid-configuration` 이 **200** 인가(503 이면 스택이 아직 안 떴다 — 워크스루 § 7 기준 `iam-kafka` healthy 까지 약 8~10분).
   ② § 실측이 인용한 **네 파일이 그 사이 바뀌지 않았는가** (`auth-callbacks.ts` · `TenantClaimTokenCustomizer.java` · `SavedRequestTenantResolver.java` · 시드 3종). 바뀌었으면 인용 행번호부터 다시 잡는다 — 🔴 **행번호를 상속하지 마라.**
   ③ ✅ **닫혔다 (2026-09-07) — 답은 `demo@demo.com`.** 다시 묻지 마라. 이 답이 H1 을 죽였고 § 소유자 답변의 소거 논증을 성립시켰다.
   ④ 🔴 **아직 안 닫힌 질문이 하나 남았고, 그것도 라이브가 아니라 질문이다**: «스토어에서 IAM 로그인 폼에 **비밀번호를 실제로 입력했는가**». **아니오** ⇒ H2 확정(AC-2 는 확인용). **예** ⇒ H2 기각이고 **AC-2 가 주 검사로 승격**된다(§ 소유자 답변 마지막 절). 답이 없으면 두 갈래를 **둘 다** 열어 둔 채 창에 들어간다.
-- [ ] **AC-1 (H2 — 순서 축, 결정적)** — 한 기동 창 안에서 **교대로** 잰다. 판정은 URL 이 아니라 **`/api/auth/session` 의 `accountId`** 로 한다(🔴 `/login` 은 세션 없어도 200 이다 — `TASK-MONO-622` 가 이미 그 함정을 이름 붙였다).
+- [x] **AC-1 (H2 — 순서 축, 결정적)** — 한 기동 창 안에서 **교대로** 잰다. 판정은 URL 이 아니라 **`/api/auth/session` 의 `accountId`** 로 한다(🔴 `/login` 은 세션 없어도 200 이다 — `TASK-MONO-622` 가 이미 그 함정을 이름 붙였다).
   · **B**: 새 시크릿 창 → 스토어에서 `demo@demo.com` 로그인 → 세션 `accountId` **有** 를 기대
   · **A**: 새 시크릿 창 → **콘솔 먼저** `demo@demo.com` 로그인 → 같은 창에서 스토어 진입 → `account_type_mismatch` 를 기대
   · **A′**(추가, 2026-09-07): 새 프로파일 → **팬 먼저** `demo@demo.com` 로그인 → 스토어 진입. 🔴 콘솔(`iam`)과 팬(`fan-platform`)은 **같은 배너를 낸다** — 소유자가 어느 쪽을 먼저 열었는지 모르므로 둘 다 재고, 가르는 것은 AC-3 의 `sub`/`tenant_id` 다.
   · 🔴 **B, A, B, A 로 교대**하고 **인터리브 안에서만** 비교한다. 두 패스가 갈리면 **H2 참**. 🔴 **안 갈리면 이제는 「H1 이다」가 아니라 「소거 논증이 틀렸다」** — § 소유자 답변이 H1 을 이미 죽였으므로, 그때 열어야 할 것은 AC-2 이지 H1 이 아니다.
-- [ ] **AC-2 (런타임 ≠ 선언 검사)** — `credentials` · `accounts` · `account_roles` 를 **실제로 조회**해 § 실측의 시드 표와 대조한다. 🔴 **1순위 질문은 딱 하나**: `demo@demo.com` 행이 **몇 개이고 어느 테넌트인가**. **3행(`ecommerce`·`fan-platform`·`iam`)이면** 소거 논증의 전제가 서고 H2 가 남는다. **`ecommerce` 행이 없고 나머지가 1행뿐이면** 폼 로그인으로도 같은 배너가 나올 수 있어 **H2 를 확증할 수 없다**(§ 소유자 답변 마지막 절). 시드에 없는 행이 있으면 그것이 곧 「런타임 ≠ 선언」의 실물이므로 반드시 적는다.
-- [ ] **AC-3 (토큰)** — 거부가 재현된 그 로그인의 **실제 access token** 을 디코드해 `tenant_id` · `roles` · `sub` 를 적는다. 🔴 **판정은 선언이 아니라 토큰이다.** 이제 이 칸이 가르는 것은 H1/H2 가 아니라 **세션을 심은 클라이언트**다: `sub`=`…ad03` + `tenant_id=iam` ⇒ 콘솔발 · `sub`=`…fa02` + `tenant_id=fan-platform` ⇒ 팬발. 🔴 `sub`=`…ec01`(`tenant_id=ecommerce`)이 나오면서도 거부됐다면 **가드가 아니라 seed 게이트를 다시 읽어라** — 그 조합은 현재 코드로 설명되지 않는다.
-- [ ] **AC-4 (기안 — 고침 아님)** — 판정에 따라 갈린다.
+- [x] **AC-2 (런타임 ≠ 선언 검사)** — `credentials` · `accounts` · `account_roles` 를 **실제로 조회**해 § 실측의 시드 표와 대조한다. 🔴 **1순위 질문은 딱 하나**: `demo@demo.com` 행이 **몇 개이고 어느 테넌트인가**. **3행(`ecommerce`·`fan-platform`·`iam`)이면** 소거 논증의 전제가 서고 H2 가 남는다. **`ecommerce` 행이 없고 나머지가 1행뿐이면** 폼 로그인으로도 같은 배너가 나올 수 있어 **H2 를 확증할 수 없다**(§ 소유자 답변 마지막 절). 시드에 없는 행이 있으면 그것이 곧 「런타임 ≠ 선언」의 실물이므로 반드시 적는다.
+- [x] **AC-3 (토큰)** — 거부가 재현된 그 로그인의 **실제 access token** 을 디코드해 `tenant_id` · `roles` · `sub` 를 적는다. 🔴 **판정은 선언이 아니라 토큰이다.** 이제 이 칸이 가르는 것은 H1/H2 가 아니라 **세션을 심은 클라이언트**다: `sub`=`…ad03` + `tenant_id=iam` ⇒ 콘솔발 · `sub`=`…fa02` + `tenant_id=fan-platform` ⇒ 팬발. 🔴 `sub`=`…ec01`(`tenant_id=ecommerce`)이 나오면서도 거부됐다면 **가드가 아니라 seed 게이트를 다시 읽어라** — 그 조합은 현재 코드로 설명되지 않는다.
+- [x] **AC-4 (기안 — 고침 아님)** — 판정에 따라 갈린다.
   · **H2 참** ⇒ 🔴 데모 결함(문서 약속 위반)으로 **별 티켓 기안**. 그 티켓의 질문은 «SSO 재사용 시 클라이언트별로 테넌트를 다시 해석해야 하는가» 이고, 그것은 **인증 모델 변경이라 `HARDSTOP-09`** 다 ⇒ 기안은 **ADR PROPOSED** 로 가야 하며 여기서 고르지 않는다.
   · ~~**H1 만 참**~~ ⇒ 🟢 **2026-09-07 에 소거됐다**(§ 소유자 답변). 이 갈래는 더 이상 없다. 문서 축(워크스루 § 0 에 «스토어에 쓸 수 있는 계정» 명시)은 **H2 기안 안에 포함**시킨다 — `TASK-PC-FE-275`(콘솔 로그인 화면이 데모 계정을 말하지 않는다)와 같은 축이므로 얹을지 먼저 확인한다.
   · **H2 도 재현 안 됨** ⇒ 🔴 후보가 소진됐다는 뜻이므로 **닫지 말고** AC-2 의 행 수 + AC-3 의 토큰을 들고 이 티켓을 다시 연다. 🔴 **그때 의심할 것은 코드가 아니라 § 소유자 답변의 소거 논증**이다(전제 = 폴백이 2행 이상을 본다).
-- [ ] **AC-5 (기록)** — 결과를 `tasks/INDEX.md` 행과 이 파일에 적을 때 **무엇으로 쟀는지**를 같이 적는다(세션 `accountId` · 토큰 클레임 · DB 행). 🔴 «통과했다/거부됐다» 만 적으면 다음 사람이 다시 못 잰다.
+- [x] **AC-5 (기록)** — 결과를 `tasks/INDEX.md` 행과 이 파일에 적을 때 **무엇으로 쟀는지**를 같이 적는다(세션 `accountId` · 토큰 클레임 · DB 행). 🔴 «통과했다/거부됐다» 만 적으면 다음 사람이 다시 못 잰다.
 
 ---
 
