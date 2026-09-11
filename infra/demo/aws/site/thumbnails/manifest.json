@@ -12,27 +12,25 @@
   "shots": [
     {
       "bundle": "console",
-      "file": "console-1-overview.jpg",
-      "url": "https://console.hubwang.com/demo",
-      "alt": "운영자 콘솔 둘러보기 — 도메인 요약",
+      "file": "console-1-erp-masters.jpg",
+      "url": "https://console.hubwang.com/erp/masters",
+      "alt": "운영자 콘솔 — ERP 마스터 5종(effective-dating·asOf)",
       "status": 200,
-      "capturedAt": "2026-09-08T20:58:17.984Z"
+      "capturedAt": "2026-09-11T11:37:26.481Z",
+      "requiresAuth": true,
+      "tenant": "demo-corp",
+      "bodyChars": 1677
     },
     {
       "bundle": "console",
-      "file": "console-2-ecommerce.jpg",
-      "url": "https://console.hubwang.com/demo/ecommerce",
-      "alt": "운영자 콘솔 — 이커머스 주문·상품 표",
+      "file": "console-2-ecommerce-products.jpg",
+      "url": "https://console.hubwang.com/ecommerce/products",
+      "alt": "운영자 콘솔 — 이커머스 상품 목록",
       "status": 200,
-      "capturedAt": "2026-09-08T20:58:19.673Z"
-    },
-    {
-      "bundle": "console",
-      "file": "console-3-wms.jpg",
-      "url": "https://console.hubwang.com/demo/wms",
-      "alt": "운영자 콘솔 — WMS 재고 표",
-      "status": 200,
-      "capturedAt": "2026-09-08T20:58:21.457Z"
+      "capturedAt": "2026-09-11T11:37:44.186Z",
+      "requiresAuth": true,
+      "tenant": "ecommerce",
+      "bodyChars": 1004
     },
     {
       "bundle": "store",
@@ -40,7 +38,7 @@
       "url": "https://store.hubwang.com/",
       "alt": "이커머스 스토어 홈",
       "status": 200,
-      "capturedAt": "2026-09-08T20:58:24.269Z"
+      "capturedAt": "2026-09-11T11:37:46.960Z"
     },
     {
       "bundle": "store",
@@ -48,7 +46,7 @@
       "url": "https://store.hubwang.com/products",
       "alt": "이커머스 스토어 — 상품 목록",
       "status": 200,
-      "capturedAt": "2026-09-08T20:58:27.230Z"
+      "capturedAt": "2026-09-11T11:37:49.828Z"
     },
     {
       "bundle": "fan",
@@ -56,7 +54,7 @@
       "url": "https://fan.hubwang.com/",
       "alt": "팬 플랫폼 — 공개 피드",
       "status": 200,
-      "capturedAt": "2026-09-08T20:58:30.018Z"
+      "capturedAt": "2026-09-11T11:37:53.030Z"
     },
     {
       "bundle": "fan",
@@ -64,7 +62,7 @@
       "url": "https://fan.hubwang.com/artists",
       "alt": "팬 플랫폼 — 아티스트 목록",
       "status": 200,
-      "capturedAt": "2026-09-08T20:58:32.636Z"
+      "capturedAt": "2026-09-11T11:37:54.997Z"
     },
     {
       "bundle": "fan",
@@ -72,7 +70,7 @@
       "url": "https://fan.hubwang.com/membership",
       "alt": "팬 플랫폼 — 멤버십 소개",
       "status": 200,
-      "capturedAt": "2026-09-08T20:58:35.299Z"
+      "capturedAt": "2026-09-11T11:37:58.059Z"
     }
   ]
 }

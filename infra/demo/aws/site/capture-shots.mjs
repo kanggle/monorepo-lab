@@ -92,31 +92,32 @@ const HOSTS = {
 //    ⇒ 「전부 `ecommerce` 로 재촬영」했으면 **유일하게 쓸 만한 장을 깨뜨렸다.**
 //    그래서 `CAPTURE_AUTH_TENANT` 하나로는 이 목록을 찍을 수 없고, 아래 `assumeTenant` 가
 //    장 사이에 전환한다.
-// ⏳ **다음 데모 창에서 이 콘솔 세 줄이 두 줄로 바뀐다** (TASK-MONO-648, 소유자 결정
-//    「확정된 둘로 줄인다」, 2026-09-11):
-//        console-1-erp-masters         /erp/masters          tenant: 'demo-corp'
-//        console-2-ecommerce-products  /ecommerce/products   tenant: 'ecommerce'
+// 🟢 **콘솔 세 줄이 두 줄로 바뀌었다** (TASK-MONO-648, 소유자 결정 「확정된 둘로 줄인다」,
+//    2026-09-11 · 촬영 2026-09-11 데모 창). 옛 세 줄은 `/demo/*` — **합성 샘플 투어**였고
+//    그 페이지가 스스로 *"샘플(합성) 데이터로 만든 둘러보기입니다"* 라고 적었다. 이제
+//    캐러셀은 **진짜 콘솔 화면 둘**을 건다.
 //
-// 🔴🔴 **지금 바꾸지 않는 이유는 (z37) 이다 — 그리고 (z37) 이 옳다.** 그 가드는 **세 곳을
-//    한 줄에 꿴다**: 이 `SHOTS` ↔ `index.html` 의 SHOTS 상수 ↔ `thumbnails/*.jpg`.
-//    새 `.jpg` 는 **데모 스택이 떠야** 찍히므로(두 장의 데이터가 데모 백엔드에서 온다),
-//    셋 중 하나만 먼저 바꾸면 CI 가 빨개진다. ⇒ **셋을 한 커밋에.**
-//    🔵 실제로 이 목록만 먼저 바꿨다가 (z37) 에 잡혔다:
+// 🔴🔴 **두 줄로 «줄인» 것이지 두 줄밖에 못 찍은 게 아니다.** 승인 목록은 6장이었는데
+//    실측이 넷을 떨어뜨렸다(빈 목록·권한거부). 그 근거는 티켓의 「승인 목록 ↔ 실측」 표에
+//    있고, 여기 남길 것은 **살아남은 둘과 그 테넌트**다.
+//
+// 🔴🔴 **(z37) 이 세 곳을 한 줄에 꿴다**: 이 `SHOTS` ↔ `index.html` 의 SHOTS 상수 ↔
+//    `thumbnails/*.jpg`. 셋 중 하나만 바꾸면 CI 가 빨개진다 ⇒ **셋을 한 커밋에.**
+//    🔵 실제로 이 목록만 먼저 바꿨다가 (z37) 에 잡힌 적이 있다:
 //       *"capture-shots.mjs 의 목록과 index.html 의 SHOTS 가 갈라졌습니다"*.
-//       가드가 설계대로 일했다.
+//       가드가 설계대로 일했다. 이번 판은 셋을 같이 옮긴다.
 //
-// 🔵 **바뀌는 것은 «목록» 이고, 그것을 가능하게 하는 «기전» 은 이미 아래에 있다** —
-//    장별 `tenant` + `assumeTenant()`. 그 둘이 없으면 이 목록은 **찍을 수가 없다**
-//    (같은 콘솔인데 `/erp/masters` 는 `demo-corp` 에서만, `/ecommerce/products` 는
-//    `ecommerce` 에서만 그려진다 — 2026-09-11 실측).
+// 🔵 **목록을 가능하게 하는 «기전» 은 아래에 이미 있다** — 장별 `tenant` + `assumeTenant()`.
+//    그 둘이 없으면 이 목록은 **찍을 수가 없다**(같은 콘솔인데 `/erp/masters` 는
+//    `demo-corp` 에서만, `/ecommerce/products` 는 `ecommerce` 에서만 그려진다).
 const SHOTS = [
-  // 운영자 콘솔 — 둘러보기(/demo)가 공개 표면이다.
-  { bundle: 'console', name: 'console-1-overview', path: '/demo',
-    alt: '운영자 콘솔 둘러보기 — 도메인 요약' },
-  { bundle: 'console', name: 'console-2-ecommerce', path: '/demo/ecommerce',
-    alt: '운영자 콘솔 — 이커머스 주문·상품 표' },
-  { bundle: 'console', name: 'console-3-wms', path: '/demo/wms',
-    alt: '운영자 콘솔 — WMS 재고 표' },
+  // 운영자 콘솔 — 🔴 둘 다 **로그인 + 테넌트 assume** 이 필요하고, 요구 테넌트가 서로 다르다.
+  { bundle: 'console', name: 'console-1-erp-masters', path: '/erp/masters',
+    requiresAuth: true, tenant: 'demo-corp',
+    alt: '운영자 콘솔 — ERP 마스터 5종(effective-dating·asOf)' },
+  { bundle: 'console', name: 'console-2-ecommerce-products', path: '/ecommerce/products',
+    requiresAuth: true, tenant: 'ecommerce',
+    alt: '운영자 콘솔 — 이커머스 상품 목록' },
 
   // 이커머스 스토어
   { bundle: 'store', name: 'store-1-home', path: '/',
