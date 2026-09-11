@@ -180,7 +180,9 @@ services:
   # specs/platform/object-storage-policy.md
   # ──────────────────────────────────────────────
   minio:
-    image: minio/minio:RELEASE.2024-10-13T13-34-11Z
+    # TASK-BE-591: Docker Hub 가 minio/* 익명 pull 을 닫았다(레포 전체 401 — `latest` 도).
+    # quay.io 는 MinIO 자신의 레지스트리이고 **같은 태그**가 익명으로 열려 있다. 태그는 안 바꾼다.
+    image: quay.io/minio/minio:RELEASE.2024-10-13T13-34-11Z
     container_name: ecommerce-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
@@ -211,7 +213,8 @@ services:
   # 1회 실행 후 종료(oneshot). restart 정책 "no" 유지.
   # ──────────────────────────────────────────────
   minio-init:
-    image: minio/mc:RELEASE.2024-10-08T09-37-26Z
+    # TASK-BE-591: 위 minio 와 같은 사유 — `minio/mc` 도 Hub 에서 401 이다.
+    image: quay.io/minio/mc:RELEASE.2024-10-08T09-37-26Z
     container_name: ecommerce-minio-init
     restart: "no"
     depends_on:

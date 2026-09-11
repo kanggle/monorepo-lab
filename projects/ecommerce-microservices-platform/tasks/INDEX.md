@@ -83,7 +83,16 @@ _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DON
 
 ## in-progress
 
-_(없음)_
+- `TASK-BE-591-the-nightly-stack-cannot-pull-minio-anymore.md` — 🔴 **`main` 을 여섯 커밋 연속
+  빨갛게 만든 것** (2026-09-12). `Nightly E2E` 의 **Frontend E2E full-stack (web-store)** 이
+  스택 기동에서 죽는다: `pull access denied for minio/minio`. 🔴 **원인은 저장소 밖이고 경계가
+  «내용» 이 아니라 «시각» 이다** — 첫 실패 커밋 `5a000dad6` 은 `ci.yml` 만 건드린 `fix(ci)` 이고,
+  이 세션의 어떤 커밋도 minio 참조를 안 건드렸다(19:14 성공 → 19:37 실패). 실측: Docker Hub 가
+  `minio/*` **익명 pull 을 레포째 닫았다**(`latest` 도 401, Hub 태그 API 는 `object not found`;
+  대조군 `library/postgres:16` = 200) ⇒ **태그를 올려서는 안 풀린다**. `quay.io` 에 **같은 두
+  태그**가 익명 200 이라 네 자리(compose 2 + k8s 2)를 그쪽으로 옮겼다. 🔴 **판정은 아직 안 났다**:
+  이 잡은 PR 에서 안 돌고 `push`/`main` 에서만 돌아서 **머지 후에야** 재진다 — 그래서 구현이
+  끝났는데도 `review/` 가 아니라 여기 있다. 분석=Opus 5 / 구현=Opus 5.
 
 ## review
 
