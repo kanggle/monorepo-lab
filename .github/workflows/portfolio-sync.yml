@@ -1,0 +1,169 @@
+# =============================================================================
+# 포트폴리오 사본 동기화 — TASK-MONO-663
+# =============================================================================
+# 🔴 이 워크플로는 대상 리포에 **force-push** 한다. `sync-portfolio.sh` 의 전략이
+#    «모노레포에서 추출해 통째로 덮어쓴다» 이기 때문이고, 그래서 트리거가
+#    **`workflow_dispatch` 하나뿐**이다.
+#
+#    소유자 결정 (AC-2, 2026-09-11): **「ⓐ workflow_dispatch 만」**
+#      🔵 사유(소유자가 고른 것이지 내 추천이 아니다): `CLAUDE.md` 가 force-push 를
+#         **명시적 승인 축**으로 못 박았고, `schedule` 이나 push 트리거는 그것을
+#         **무인으로** 만든다.
+#      🔴 포기한 것: 사본이 낡는 것을 아무도 알려 주지 않는다. `TASK-MONO-657` 이
+#         37일/114일 낡은 것을 **사람이 눈치채서** 발견했다. 그 감시는 별도 축이고
+#         이 워크플로가 하지 않는다.
+#
+# 🔴🔴 **왜 CI 인가**: `sync-portfolio.sh` 는 원래 `command -v docker || fail` 로
+#    시작했다. 그 한 줄 때문에 동기화가 **가장 못하는 기계에서만** 돌았다 —
+#    Windows + Docker Desktop 은 사본 하나당 수십 분이고(NTFS 파일 생성 비용),
+#    그래서 「전부 돌린다」가 소유자의 반나절이 된다. 리눅스 러너에는
+#    `git-filter-repo` 가 pip 한 줄이고 컨테이너가 필요 없다.
+#
+# 🔵 이 파일이 하는 일은 «스크립트를 대신하는 것» 이 아니라 **«스크립트를 옳은
+#    기계에서 돌리는 것»** 이다. 추출 규칙은 전부 스크립트에 있고 여기 없다.
+# =============================================================================
+name: Portfolio sync (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: '동기화할 프로젝트 (비우면 전부). 예: scm-platform'
+        required: false
+        type: string
+      dry_run:
+        description: '드라이런 — 밀지 않고 «무엇을 밀지» 만 출력한다'
+        required: false
+        default: true
+        type: boolean
+
+# 🔴 기본 토큰의 권한을 최소로 못 박는다. 대상 리포로 가는 권한은 이 토큰이 아니라
+#    `PORTFOLIO_SYNC_TOKEN` 에서 온다 — 기본 `GITHUB_TOKEN` 은 다른 리포에 403 이다.
+permissions:
+  contents: read
+
+concurrency:
+  # 🔴 동시 실행 금지. 두 런이 같은 사본에 force-push 하면 나중 것이 앞 것을 덮고,
+  #    어느 쪽이 남았는지는 타이밍이 정한다.
+  group: portfolio-sync
+  cancel-in-progress: false
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # ① 프리플라이트 — 🔴 **자격을 «동기화 전에» 판정한다**
+  # ---------------------------------------------------------------------------
+  # 🔴🔴 이 잡이 존재하는 이유가 TASK-MONO-663 AC-0 이다: *"토큰 없이 워크플로만
+  #    머지하면 초록으로 머지되고 첫 실행에서 죽는다."* 그 실패는 **추출을 다 한 뒤
+  #    push 에서** 나므로 수 분을 버리고, 로그를 열기 전엔 사유가 안 보인다.
+  # 🔵 그래서 **아무것도 하기 전에** 7개 리포 전부에 write 가 되는지 묻는다.
+  preflight:
+    name: Preflight (토큰이 7개 리포에 write 가능한가)
+    runs-on: ubuntu-latest
+    steps:
+      - name: 시크릿이 있는가
+        env:
+          TOKEN: ${{ secrets.PORTFOLIO_SYNC_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TOKEN:-}" ]; then
+            echo "::error::PORTFOLIO_SYNC_TOKEN 이 비어 있습니다."
+            echo "  → fine-grained PAT 를 만들어 리포 시크릿에 넣으세요 (TASK-MONO-663 AC-0)."
+            echo "  🔴 권한은 대상 7개 리포에 Contents: Read and write 하나면 됩니다."
+            exit 1
+          fi
+          echo "PORTFOLIO_SYNC_TOKEN 존재 (길이 ${#TOKEN})"
+
+      - name: 7개 리포에 write 가 되는가 — 🔴 하나라도 안 되면 여기서 멈춘다
+        env:
+          GH_TOKEN: ${{ secrets.PORTFOLIO_SYNC_TOKEN }}
+        run: |
+          set -uo pipefail
+          # 🔵 목록의 정본은 sync-portfolio.sh 의 PROJECT_REMOTES 다. 여기 손으로
+          #    적는 것은 **중복**이므로, 아래 ②가 스크립트에서 유도해 대조한다.
+          repos="wms-platform ecommerce-microservices-platform iam-platform fan-platform scm-platform finance-platform erp-platform"
+          bad=0
+          for r in $repos; do
+            # 🔴 술어는 «리포가 보이는가» 가 아니라 «push 권한이 있는가» 다.
+            #    read-only 토큰도 GET /repos/... 에는 200 을 낸다 — 그것을 통과로
+            #    읽으면 첫 push 에서 403 으로 죽는 바로 그 상태가 된다.
+            perm=$(gh api "repos/kanggle/$r" --jq '.permissions.push // false' 2>/dev/null || echo "ERR")
+            case "$perm" in
+              true)  printf '  ✔ %-40s push=true\n'  "$r" ;;
+              false) printf '  ✗ %-40s push=false  (토큰에 이 리포가 없거나 Contents 가 read 입니다)\n' "$r"; bad=$((bad+1)) ;;
+              *)     printf '  ✗ %-40s 조회 실패    (리포명 오타 또는 토큰이 이 리포를 못 봅니다)\n' "$r"; bad=$((bad+1)) ;;
+            esac
+          done
+          if [ "$bad" -ne 0 ]; then
+            echo "::error::$bad 개 리포에 push 권한이 없습니다 — 동기화를 시작하지 않습니다."
+            exit 1
+          fi
+          echo "7/7 push 가능 — 계속합니다."
+
+      - uses: actions/checkout@v4
+        with:
+          # 🔴 `sync-portfolio.sh` 는 `rev-parse main` 과 `rev-parse origin/main` 을
+          #    둘 다 요구한다(원본이 origin/main 과 같은지 확인하는 가드).
+          #    기본 checkout 은 **detached HEAD** 라 `main` 이 빈 문자열이 되고 그
+          #    가드가 fail 한다. 🔵 **가드는 옳다 — 환경을 맞춘다**(AC-1).
+          ref: main
+          fetch-depth: 0
+
+      - name: 프리플라이트가 쓴 리포 목록이 스크립트와 같은가
+        run: |
+          set -euo pipefail
+          # 🔴 위 목록을 손으로 적었으므로 **드리프트가 가능하다.** 스크립트에서
+          #    유도해 대조한다 — 안 하면 리포가 늘어난 날 프리플라이트만 모른다.
+          sed -n '/PROJECT_REMOTES=(/,/^)/p' scripts/sync-portfolio.sh \
+            | grep -oE '\["[^"]+"\]' | tr -d '["]' | sort > /tmp/from-script.txt
+          printf '%s\n' wms-platform ecommerce-microservices-platform iam-platform \
+            fan-platform scm-platform finance-platform erp-platform | sort > /tmp/from-workflow.txt
+          if ! diff -u /tmp/from-script.txt /tmp/from-workflow.txt; then
+            echo "::error::프리플라이트의 리포 목록이 sync-portfolio.sh 의 PROJECT_REMOTES 와 다릅니다."
+            exit 1
+          fi
+          echo "목록 일치 ($(wc -l < /tmp/from-script.txt) 개)"
+
+  # ---------------------------------------------------------------------------
+  # ② 동기화 — 프리플라이트가 통과해야만 돈다
+  # ---------------------------------------------------------------------------
+  sync:
+    name: Sync (${{ inputs.project || '전부' }}${{ inputs.dry_run && ' · dry-run' || '' }})
+    needs: preflight
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main          # 🔵 위 ①과 같은 이유
+          fetch-depth: 0
+
+      - name: git-filter-repo 설치 (네이티브 경로)
+        run: |
+          set -euo pipefail
+          pip install --quiet git-filter-repo
+          git filter-repo --version
+          # 🔵 이 한 줄이 이 티켓의 요점이다 — 컨테이너를 안 쓴다.
+          #    스크립트가 native 를 **자동으로** 고르지만(docker 데몬이 없다),
+          #    아래에서 명시적으로 못 박아 «우연히 native» 가 되지 않게 한다.
+
+      - name: 동기화
+        env:
+          # 🔴 스크립트가 `git push` 할 때 쓰는 자격. 대상 리포로 가는 유일한 길이다.
+          GH_TOKEN: ${{ secrets.PORTFOLIO_SYNC_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PORTFOLIO_SYNC_TOKEN }}
+          # 🔴 «우연히 native» 를 막는다. 러너에 docker 가 있어도 이 값이 선택을 고정한다.
+          FILTER_BACKEND: native
+        run: |
+          set -euo pipefail
+          git config --global user.email 'sync@portfolio'
+          git config --global user.name 'Portfolio Sync'
+          # 🔵 토큰을 remote URL 에 실어 push 가 그것을 쓰게 한다.
+          git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "https://github.com/"
+
+          args=()
+          if [ "${{ inputs.dry_run }}" = "true" ]; then args+=(--dry-run); fi
+          if [ -n "${{ inputs.project }}" ]; then args+=("${{ inputs.project }}"); fi
+
+          echo "실행: scripts/sync-portfolio.sh ${args[*]:-}"
+          # 🔴 파이프를 쓰지 않는다 — 파이프라인의 종료코드는 마지막 명령의 것이라
+          #    실패한 동기화가 초록으로 보일 수 있다(이 저장소가 이름 붙인 함정).
+          bash scripts/sync-portfolio.sh "${args[@]:-}"
