@@ -34,6 +34,13 @@ export async function middleware(request: NextRequest) {
     // anonymous visitors, since the backend allows them. Mirrors the documented
     // intent of `authConfig.callbacks.authorized` in `shared/auth/auth.ts`.
     pathname.startsWith('/api/bff') ||
+    // 🔴🔴 TASK-MONO-654 — 데모 백엔드 판정 탐침. **익명이 부를 수 있어야 한다.**
+    // 이 배너의 청중이 정확히 «로그인하지 않은 방문자»(면접관)이므로, 여기 없으면
+    // 그 방문자의 탐침이 `/login` 으로 307 되고 배너는 **영영 안 뜬다** — 그러면 이
+    // 티켓이 고친 결함이 «배너가 낡았다» 에서 «배너가 아예 없다» 로 바뀔 뿐이다.
+    // 🔵 새는 것이 없다: 이 라우트가 돌려주는 것은 `{state}` 하나이고, 그 사실은
+    //    론처 페이지가 이미 방문자에게 **대놓고 보여 준다**(`/status` 는 공개다).
+    pathname === '/api/demo/backend-state' ||
     pathname.startsWith('/_next') ||
     // The Web Push service worker script (TASK-FE-083) must be publicly fetchable:
     // `navigator.serviceWorker.register('/sw.js')` and the browser's periodic SW

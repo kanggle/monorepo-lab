@@ -3736,9 +3736,24 @@ jobs:
         working-directory: projects/ecommerce-microservices-platform
         run: pnpm lint
 
+      # 🔴🔴 TASK-MONO-654 — `DEMO_API_BASE` 를 **여기서** 건다.
+      #    이 값이 없으면 데모 판정이 `not-demo` 라서, 결함 코드로 빌드해도 배너가 안
+      #    구워진다 ⇒ 바로 아래 가드가 **초록인데 아무것도 증명하지 않는다.**
+      #    🔵 닿지 않는 주소면 된다(조회 실패 → 판정 `unavailable`). 네트워크를 안 탄다.
+      #    🔴 아래 가드 스텝과 **같은 값**이어야 한다 — 한쪽만 바꾸면 빌드가 담은 것과
+      #       가드가 가정하는 것이 갈리고, 그 어긋남은 **초록으로** 나온다.
       - name: Build (ecommerce)
         working-directory: projects/ecommerce-microservices-platform
+        env:
+          DEMO_API_BASE: http://127.0.0.1:9
         run: pnpm build
+
+      # 🔴 이 스텝은 **빌드 다음**이어야 한다 — 산출물(`.next`)을 읽는다. 앞에 두면
+      #    「매니페스트가 없다」로 죽는다(그것도 초록보다는 낫다 — 가드가 그렇게 적었다).
+      - name: Prerendered demo verdict (the banner must not be baked into a static copy)
+        env:
+          DEMO_API_BASE: http://127.0.0.1:9
+        run: bash scripts/check-prerendered-demo-verdict.sh
 
       - name: Install dependencies (fan-platform)
         working-directory: projects/fan-platform
