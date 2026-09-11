@@ -284,7 +284,7 @@ AC-4 가 *"277 AC-0 의 ⚪ 17곳 중 여기서 해결되는 것이 있는지 �
 | 마이그레이션 | 백필의 출처 |
 |---|---|
 | `admin-service V4__denormalise_warehouse_code.sql` | `admin_warehouse_ref.warehouse_code` (같은 DB) |
-| `outbound-service V10__denormalise_sku_code_on_order_line.sql` | `sku_snapshot.sku_code` (같은 DB) |
+| `outbound-service V19__denormalise_sku_code_on_order_line.sql` | `sku_snapshot.sku_code` (같은 DB) |
 
 🔵 **값이 이미 저장소 안에 있으므로** 이벤트 재생이 필요 없다. AC-0 의 실측이 이 답을
 가능하게 만들었다 — *"마이그레이션은 코드 질문 이전에 데이터 질문이다"* 의 답이
@@ -364,3 +364,46 @@ Postgres 에 적용되는지는 **CI 의 wms 통합 잡이 권위**다 — 두 �
       해석하면 **과거 기록이 바뀐다.** 그 판단을 적지 않고 필드만 더하면 안 된다(AC-2 원문).
 - 🔵 결정이 「싣는다」면 필드명은 `GroupMember.displayName` 과 **같은 것**을 쓴다(AC-2 둘째 칸).
 - 🔵 ④(`AdminAuditRowSchema.operatorId`)는 **이미 철회됐다**(§ 라이브 정정) — 남은 것은 ⑤ 하나다.
+
+---
+
+## 🔴🔴 CI 가 잡은 것 — **Flyway 버전이 중복됐다. 그리고 그것을 무는 가드가 없다**
+
+첫 푸시에서 `Integration (… outbound-service, Testcontainers)` 가 빨갛게 났다.
+사유는 테스트 단언이 아니라 **컨텍스트 기동 실패**였다:
+
+```
+Caused by: org.flywaydb.core.api.FlywayException at CompositeMigrationResolver.java:92
+```
+
+`outbound-service` 에 **`V10__order_schema_align.sql` 이 이미 있었고** 내가 같은 번호로
+`V10__denormalise_sku_code_on_order_line.sql` 을 넣었다. ⇒ `V19` 로 고쳤다.
+
+### 🔴 왜 못 봤나 — **술어가 알파벳 정렬이었다**
+
+`ls src/main/resources/db/migration/ | tail -8` 로 「마지막 버전」을 봤다. 그런데 `ls` 는
+**알파벳 순**이라 `V10` 이 `V2` 보다 **앞에** 오고, `tail -8` 이 그 구간을 통째로 잘라냈다.
+그래서 보인 최대값이 `V9` 였고 **실제 최대값은 `V18`** 이었다.
+
+🔵 이 저장소가 이름 붙인 «부재를 주장하기 전에 술어를 의심해라» 그대로다 — 「V10 은 없다」가
+아니라 **「내가 쓴 목록에 V10 이 안 보였다」** 였다. 올바른 술어:
+
+```bash
+find <dir> -name 'V*.sql' | sed 's|.*/V||;s|__.*||' | sort -n | tail -1
+```
+
+### 🔴 전수로 다시 쟀다 — 지금은 중복이 없다
+
+저장소의 **모든** `db/migration` 디렉터리에 대해 버전 번호를 **숫자 정렬**로 뽑아
+`uniq -d` 를 돌렸다: 이 수정 뒤 **중복 0건**. 🔵 admin-service 의 `V4` 는 올바르다(최대 3).
+
+### ⚪ 남는 것 — **중복 버전을 무는 가드가 저장소에 없다**
+
+`scripts/` 전체에서 「같은 버전 번호가 둘」을 재는 검사는 **0건**이다(grep 실측).
+⇒ 이 결함은 **CI 의 Testcontainers 잡이 기동에 실패해야만** 드러나고, 그 신호는
+「마이그레이션 번호가 겹쳤다」가 아니라 **「IT 15개가 무더기로 FAILED」** 로 보인다 —
+진단이 오래 걸리는 모양이다.
+
+🔴 **여기서 가드를 더하지 않았다**: `scripts/` 에 파일을 더하면 분모가 움직여 전체 가드
+쓸기와 두 산문 홈 수정이 따라붙고(그 축은 `TASK-MONO-650` 이 이름 붙였다), 그것은 이
+티켓의 주제와 다른 일이다. ⇒ **별도 티켓 후보**이고, 술어는 위 한 줄이면 된다.
