@@ -92,23 +92,31 @@ const HOSTS = {
 //    ⇒ 「전부 `ecommerce` 로 재촬영」했으면 **유일하게 쓸 만한 장을 깨뜨렸다.**
 //    그래서 `CAPTURE_AUTH_TENANT` 하나로는 이 목록을 찍을 수 없고, 아래 `assumeTenant` 가
 //    장 사이에 전환한다.
+// ⏳ **다음 데모 창에서 이 콘솔 세 줄이 두 줄로 바뀐다** (TASK-MONO-648, 소유자 결정
+//    「확정된 둘로 줄인다」, 2026-09-11):
+//        console-1-erp-masters         /erp/masters          tenant: 'demo-corp'
+//        console-2-ecommerce-products  /ecommerce/products   tenant: 'ecommerce'
+//
+// 🔴🔴 **지금 바꾸지 않는 이유는 (z37) 이다 — 그리고 (z37) 이 옳다.** 그 가드는 **세 곳을
+//    한 줄에 꿴다**: 이 `SHOTS` ↔ `index.html` 의 SHOTS 상수 ↔ `thumbnails/*.jpg`.
+//    새 `.jpg` 는 **데모 스택이 떠야** 찍히므로(두 장의 데이터가 데모 백엔드에서 온다),
+//    셋 중 하나만 먼저 바꾸면 CI 가 빨개진다. ⇒ **셋을 한 커밋에.**
+//    🔵 실제로 이 목록만 먼저 바꿨다가 (z37) 에 잡혔다:
+//       *"capture-shots.mjs 의 목록과 index.html 의 SHOTS 가 갈라졌습니다"*.
+//       가드가 설계대로 일했다.
+//
+// 🔵 **바뀌는 것은 «목록» 이고, 그것을 가능하게 하는 «기전» 은 이미 아래에 있다** —
+//    장별 `tenant` + `assumeTenant()`. 그 둘이 없으면 이 목록은 **찍을 수가 없다**
+//    (같은 콘솔인데 `/erp/masters` 는 `demo-corp` 에서만, `/ecommerce/products` 는
+//    `ecommerce` 에서만 그려진다 — 2026-09-11 실측).
 const SHOTS = [
-  // 운영자 콘솔 — 🔴 **진짜 콘솔이다.** 옛 판의 `/demo/*` 세 장은 `src/app/(demo)/` 의
-  //    **합성 샘플 투어**였고 그 페이지가 스스로 *"실제 운영 데이터는 한 건도 포함되어
-  //    있지 않으며…"* 라고 적는다. `requiresAuth` 가 그 제약을 풀었다.
-  //
-  // 🔵 **두 장인 것은 결정이다** (소유자, 2026-09-11: 「확정된 둘로 줄인다」).
-  //    승인 4장(`/dashboards/overview` · `/ecommerce/orders` ·
-  //    `/ecommerce/products/[id]/edit` · `/ecommerce/settlements`)은 **테넌트 선택만으로
-  //    살지 않았다** — 각각 저하 / 두 테넌트 다 빈값 / 권한거부 / 1행뿐이었다.
-  //    🔴 빈 표를 «승인된 장» 으로 적으면 매니페스트가 **거짓이 된다**(이 파일 머리말의
-  //    「가짜 화면을 만들지 않는다」와 같은 축). 카드가 셋에서 둘로 줄지만 **찍힌 것이 참이다.**
-  { bundle: 'console', name: 'console-1-erp-masters', path: '/erp/masters',
-    requiresAuth: true, tenant: 'demo-corp', minChars: 900,
-    alt: '운영자 콘솔 — ERP 마스터 데이터(부서·직급·원가센터 … effective-dating)' },
-  { bundle: 'console', name: 'console-2-ecommerce-products', path: '/ecommerce/products',
-    requiresAuth: true, tenant: 'ecommerce', minChars: 700,
-    alt: '운영자 콘솔 — 이커머스 상품 관리(목록 · 상태 필터 · 수정/삭제)' },
+  // 운영자 콘솔 — 둘러보기(/demo)가 공개 표면이다.
+  { bundle: 'console', name: 'console-1-overview', path: '/demo',
+    alt: '운영자 콘솔 둘러보기 — 도메인 요약' },
+  { bundle: 'console', name: 'console-2-ecommerce', path: '/demo/ecommerce',
+    alt: '운영자 콘솔 — 이커머스 주문·상품 표' },
+  { bundle: 'console', name: 'console-3-wms', path: '/demo/wms',
+    alt: '운영자 콘솔 — WMS 재고 표' },
 
   // 이커머스 스토어
   { bundle: 'store', name: 'store-1-home', path: '/',

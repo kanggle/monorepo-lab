@@ -959,22 +959,16 @@
     // GUARD-Z35-BEGIN — (z35) 가 이 구간을 **실행해서** 0장·1장·N장을 대조한다.
     const SHOTS_FALLBACK = { console: "🖥️", store: "🛒", fan: "🎤" };
     // 🔵 TASK-MONO-639 가 채웠다. 목록의 정본은 `capture-shots.mjs` 의 SHOTS 이고,
-    //    이 상수는 그것으로 만든 산출물이다.
+    //    이 상수는 그것으로 만든 산출물이다 — 가드 (z37)가 둘을 대조한다.
     //
-    // 🔴🔴 **(z37) 이 대조하는 것은 «이 상수 ↔ thumbnails/*.jpg» 이지 «이 상수 ↔
-    //    capture-shots.mjs» 가 아니다.** 그 둘의 어긋남은 **아무도 안 본다** — 아래 주석이
-    //    그 자리에서 유일하게 하는 일이다.
+    // 🔴🔴 **(z37) 은 세 곳을 한 줄에 꿴다**(`verify-demo-wrapper.sh`):
+    //        `capture-shots.mjs` 의 SHOTS  ↔  이 상수  ↔  `thumbnails/*.jpg`
+    //    ⇒ **셋 중 하나만 바꾸면 CI 가 빨개진다.** 그것이 이 가드의 일이다.
     //
-    // ⏳ **지금 어긋나 있다 (TASK-MONO-648, 2026-09-11).** `capture-shots.mjs` 의 콘솔
-    //    목록은 소유자 결정(「확정된 둘로 줄인다」)에 따라 **진짜 콘솔 두 장**으로 바뀌었다:
-    //        console-1-erp-masters         (테넌트 demo-corp)
-    //        console-2-ecommerce-products  (테넌트 ecommerce)
-    //    아래 상수는 아직 **옛 합성 투어 세 장**(`/demo/*`)을 가리킨다.
-    //
-    // 🔴 **일부러 안 바꿨다.** 새 `.jpg` 가 아직 없고, 먼저 바꾸면 (z37) 이 «참조는 있는데
-    //    파일이 없다» 로 막는다 — 그리고 그 가드가 옳다(론처가 깨진 이미지를 그리면 안 된다).
-    // ⇒ **다음 데모 창에서 캡처와 이 상수를 «같은 커밋에» 바꾼다.** 그 창 전에는 론처가
-    //    합성 투어를 광고하는 상태가 유지되고, 그 사실은 TASK-MONO-648 에 적혀 있다.
+    // ⏳ **다음 데모 창에서 이 콘솔 세 줄이 두 줄로 바뀐다** (TASK-MONO-648, 소유자 결정
+    //    「확정된 둘로 줄인다」): `console-1-erp-masters`(테넌트 demo-corp) ·
+    //    `console-2-ecommerce-products`(테넌트 ecommerce). 새 `.jpg` 는 **데모 스택이
+    //    떠야** 찍히므로(데이터가 데모 백엔드에서 온다) **셋을 한 커밋에** 바꾼다.
     const SHOTS = {
       console: [{ file: 'console-1-overview.jpg', alt: '운영자 콘솔 둘러보기 — 도메인 요약' }, { file: 'console-2-ecommerce.jpg', alt: '운영자 콘솔 — 이커머스 주문·상품 표' }, { file: 'console-3-wms.jpg', alt: '운영자 콘솔 — WMS 재고 표' }],
       store: [{ file: 'store-1-home.jpg', alt: '이커머스 스토어 홈' }, { file: 'store-2-products.jpg', alt: '이커머스 스토어 — 상품 목록' }],
