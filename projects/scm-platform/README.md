@@ -15,6 +15,22 @@
 
 ---
 
+## Screenshots
+
+> ⏳ **아직 싣지 않는다 — 누락이 아니라 보류다.**
+>
+> 이 플랫폼의 화면은 운영자 콘솔(`platform-console`)이 그린다. 2026-09-11 에 데모에서 찍은
+> `SCM 조달` 캡처를 검토했고 **싣지 않기로 했다**: 발주 3건(`DRAFT` → `ACKNOWLEDGED` →
+> `CONFIRMED`)은 상태 진행이 잘 보이지만 **「공급사」 칸이 UUID 원문**(`01a085a0-8ee2-…`)이다.
+>
+> 🔴 그 UUID 노출은 콘솔에서 못 고친다 — 생산자가 옆 필드는 비정규화해 놓고 그 하나만
+> 빼놨다. 추적: `TASK-MONO-659`.
+>
+> 🔵 **스크린샷은 광고다.** 알려진 결함이 박힌 화면을 거는 것은 그 결함을 광고하는 일이라,
+> 659 가 닫힌 뒤 재촬영해서 싣는다.
+
+---
+
 ## Purpose
 
 조달(Procurement) → 운송(Logistics) → 정산(Settlement) 의 cross-functional 공급망 흐름을 다수 외부 시스템(supplier ERP / carrier API / bank / 자사 wms-platform) 과 연동하면서 일관된 상태 머신으로 관리하는 백엔드 플랫폼.
