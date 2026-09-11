@@ -145,9 +145,34 @@ variable "max_runtime_minutes" {
 # /start 는 인증 없는 공개 엔드포인트다(정적 사이트에 토큰을 숨길 곳이 없다).
 # idle_minutes / max_runtime_minutes 는 반복 호출로 리셋되므로 지출 상한이 아니다.
 # 이 값만이 실질적 상한이다: 월 누적 running 시간이 이를 넘으면 즉시 stop + /start 429.
-# 600분(10시간) × m6i.2xlarge ≈ $5/월 — EBS 상시 $9 와 합쳐 월 $15 미만으로 묶인다.
+#
+# 🔴 그러므로 **이 값이 곧 그달 최악 청구다.** 크게 잡는 것은 "여유" 가 아니라
+#    그 최악값을 받아들이는 결정이다.
+#
+# 비용 (TASK-MONO-665, 2026-09-11 실측):
+#   r6i.2xlarge · ap-northeast-2 · Linux · 온디맨드 = **$0.6080/시간**
+#     └ 출처: AWS 공개 요금표(자격증명 불필요), 발행일 2026-09-10
+#       https://b0.p.awsstatic.com/pricing/2.0/meteredUnitMaps/ec2/USD/current/
+#         ec2-ondemand-without-sec-sel/Asia%20Pacific%20(Seoul)/Linux/index.json
+#       🔴 gzip 이다 — `curl --compressed` 로 받아라. 키는 `"r6i 2xlarge ... Linux"` (점 아님).
+#   1200분(20시간) × $0.6080 = **$12.16/월** ← 이 변수가 정하는 컴퓨트 상한
+#
+# ⚪ EBS 는 이 티켓이 **못 쟀다**(AWS 공개 EBS 엔드포인트 404). README § 비용의 ~$11/월
+#    (100GB gp3 + AMI 스냅샷)이 저장소가 가진 유일한 값이고 **미측정이다.**
+#    🔴 그래서 여기에 "월 $N 미만" 같은 **부등호 결론을 쓰지 않는다** — 이 주석이 예전에
+#    그렇게 썼다가 틀렸다: `m6i.2xlarge` 로 계산한 "월 $15 미만" 이 인스턴스가
+#    r6i 로 바뀐 뒤(TASK-MONO-552) 조용히 깨졌고 아무도 몰랐다(실제로는 600분에서
+#    이미 $15.08 로 부등호가 뒤집혀 있었다). 단언하는 것은 **컴퓨트 축뿐**이다.
+#
+# 🔵 왜 1200 인가 (TASK-MONO-665, 소유자 결정 2026-09-11):
+#   · 예산 로직에 양자화가 없다 — handler.py 의 `seconds >= BUDGET_MINUTES*60` 한 줄이 전부다.
+#     "600 단위" 는 근거가 아니었다.
+#   · 창 평균 **46.2분**(CloudWatch 실측, 5일 4창 185분 — 부팅 9분 16초 포함)
+#     ⇒ 1200분 ≈ 월 26창. 600분은 2026-09 에 11일 만에 소진됐다(543/600).
+#   · 1000 이 아니라 1200 인 이유는 비용($2.03 차이)이 아니라 **정시로 떨어져서**다 —
+#     이 주석이 분과 시간을 같이 쓰므로 "1200분(20시간)" 은 들어가고 "16시간 40분" 은 깨진다.
 variable "monthly_budget_minutes" {
-  description = "월 누적 가동 상한(분). 초과 시 자동 종료 + /start 거절. 매월 1일 리셋"
+  description = "월 누적 가동 상한(분). 초과 시 자동 종료 + /start 거절. UTC 달력월 1일 리셋"
   type        = number
-  default     = 600
+  default     = 1200
 }
