@@ -83,16 +83,7 @@ _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DON
 
 ## in-progress
 
-- `TASK-BE-591-the-nightly-stack-cannot-pull-minio-anymore.md` — 🔴 **`main` 을 여섯 커밋 연속
-  빨갛게 만든 것** (2026-09-12). `Nightly E2E` 의 **Frontend E2E full-stack (web-store)** 이
-  스택 기동에서 죽는다: `pull access denied for minio/minio`. 🔴 **원인은 저장소 밖이고 경계가
-  «내용» 이 아니라 «시각» 이다** — 첫 실패 커밋 `5a000dad6` 은 `ci.yml` 만 건드린 `fix(ci)` 이고,
-  이 세션의 어떤 커밋도 minio 참조를 안 건드렸다(19:14 성공 → 19:37 실패). 실측: Docker Hub 가
-  `minio/*` **익명 pull 을 레포째 닫았다**(`latest` 도 401, Hub 태그 API 는 `object not found`;
-  대조군 `library/postgres:16` = 200) ⇒ **태그를 올려서는 안 풀린다**. `quay.io` 에 **같은 두
-  태그**가 익명 200 이라 네 자리(compose 2 + k8s 2)를 그쪽으로 옮겼다. 🔴 **판정은 아직 안 났다**:
-  이 잡은 PR 에서 안 돌고 `push`/`main` 에서만 돌아서 **머지 후에야** 재진다 — 그래서 구현이
-  끝났는데도 `review/` 가 아니라 여기 있다. 분석=Opus 5 / 구현=Opus 5.
+_(없음)_
 
 ## review
 
@@ -102,6 +93,7 @@ _(없음)_
 
 ## done
 
+- `TASK-BE-591-the-nightly-stack-cannot-pull-minio-anymore.md` — **✅ DONE (2026-09-12 UTC · 4차원 검증 — impl PR [#3799](https://github.com/kanggle/monorepo-lab/pull/3799) squash `c06c4ca76`; `state=MERGED` · `origin/main` 대조 · 머지 전 required 4/4 SUCCESS · FAILURE 0)** — 🔴 **`main` 을 여섯 커밋 연속 빨갛게 만들고 있던 것**을 `Nightly E2E` 의 **Frontend E2E full-stack (web-store)** 에서 걷어냈다. 실패는 테스트가 아니라 **스택 기동**이었다(`pull access denied for minio/minio`) — 테스트는 **한 개도 안 돌았고**, 뒤따르던 `Assert the required specs actually ran` 실패는 결과가 아니라 **메아리**였다. 🔴 **경계가 «내용» 이 아니라 «시각» 이다**: 첫 실패 커밋 `5a000dad6` 은 `ci.yml` 한 곳만 건드린 `fix(ci)` 이고, 그 묶음의 어떤 커밋도 minio 참조를 안 건드렸다(19:14 성공 → 19:37 실패). 실측(대조군 포함): Docker Hub 가 `minio/*` **익명 pull 을 레포째 닫았다** — `latest` 도 401, Hub 태그 API 는 `object not found`, 같은 방식으로 물은 `library/postgres:16` 은 200 ⇒ **태그를 올려서는 안 풀린다**. `quay.io`(MinIO 자신의 레지스트리)에 **같은 두 태그**가 익명 200 이고 OCI index 에 `linux/amd64` 가 있어 **네 자리**(compose 2 + k8s 2)를 옮겼다 — 태그는 한 글자도 안 바꿨다. 🔵 **CI 를 빨갛게 만든 것은 compose 2줄뿐인데 k8s 2줄도 같이 고쳤다**(CI 가 안 돌려서 조용히 같은 결함을 들고 있었다). 🔴🔴 **이 티켓의 요지는 결함이 아니라 발견 경로다**: 그 잡은 **required 4종에 없어서** 여섯 커밋이 전부 4차원 (c) 를 통과하며 머지됐다 — 세션 끝 *「머지 전부를 **커밋별로** CI 확인」* 의무가 아니었으면 안 보였다. 판정도 결론이 아니라 **스텝을 열어서** 했다: 죽던 `#14 Start docker compose stack` = SUCCESS **그리고** `#21 Assert the required specs actually ran` = SUCCESS(이 결함은 테스트를 0개 돌리고도 잡을 끝낼 수 있는 부류라 후자가 없으면 판정이 아니다). ⚪ Hub 판↔quay 판 **바이트 동일성**과 **로컬 pull** 은 못 쟀고(Hub 가 닫혀 원본이 없다 · 호스트 docker 데몬 꺼짐) AC-3 이 「적어라」로 요구한 ⚪ 라 적은 채로 닫았다 — **창을 기다리는 ⚪ 가 아니라 원리상 못 재는 ⚪** 여서 후속 집을 안 만들었다. 분석=Opus 5 / 구현=Opus 5.
 - `TASK-FE-098-search-results-grid-diverges-from-the-product-list-grid.md` — **✅ DONE (2026-08-26, 3차원 검증 — impl PR [#3445](https://github.com/kanggle/monorepo-lab/pull/3445) squash `4a53f0e3d`; `state=MERGED` · `origin/main` tip 대조 · 머지 전 체크 52건 **실패 0**)** — 검색 결과 목록이 다른 상품 목록 페이지와 **모든 폭에서 같은 열 수·같은 간격**으로 깔린다. 결함의 정체는 스타일 값이 아니라 **인라인 사본**이었다 — 검색 결과가 `ProductList` 를 쓰지 않고 그리드 클래스를 자기 자리에 다시 적었고, 그 사본에 **모바일 2열 규칙만 빠져** 있었다. 🔵 그래서 고침도 값 조정이 아니라 **사본을 없애는 쪽**이다(같은 사실이 두 곳에 있으면 한쪽만 고쳐진다). 분석=Opus 5 / 구현=Sonnet.
 - `TASK-FE-099-search-results-cards-have-no-wishlist-button.md` — **✅ DONE (2026-08-26, 3차원 검증 — impl PR [#3447](https://github.com/kanggle/monorepo-lab/pull/3447) squash `387c66e6a`; `state=MERGED` · `origin/main` tip 대조 · 머지 전 체크 52건 **실패 0**)** — 검색 결과 카드에서도 전체 목록과 똑같이 하트로 찜을 추가/해제한다. 🔵 회귀 테스트가 같이 들어갔다(`products-page-search-action.test.tsx`) — **검색 경로만 버튼이 없던 것**이라, 목록 경로만 보는 테스트는 이 결함에 계속 초록이었다. 분석=Opus 5 / 구현=Sonnet.
 
