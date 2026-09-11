@@ -29,6 +29,11 @@ import { render, screen, waitFor } from '@testing-library/react';
 const ORIGINAL_ENV = { ...process.env };
 
 beforeEach(() => {
+  // 🔴🔴 `vi.doMock` 등록은 `vi.resetModules()` 로 **안 지워진다.** § A 가 클라이언트
+  //    위젯을 상수 마커로 바꾸는데, 그것을 안 풀면 § B 의 동적 import 가 계속 그 마커를
+  //    받아 «탐침이 아예 안 돈다» — CI 에서 fetch 가 0회 호출로 잡혔다(2026-09-11).
+  //    🔵 순서가 중요하다: 먼저 unmock, 그다음 모듈 캐시 리셋.
+  vi.doUnmock('../DemoBackendNoticeClient');
   vi.resetModules();
   vi.unstubAllGlobals();
   delete process.env.DEMO_API_BASE;
@@ -115,6 +120,8 @@ describe('DemoBackendNoticeClient — 방문 시점 판정', () => {
   }
 
   async function renderClient() {
+    vi.doUnmock('../DemoBackendNoticeClient');
+    vi.resetModules();
     const { DemoBackendNoticeClient } = await import('../DemoBackendNoticeClient');
     render(
       <div data-testid="host">
