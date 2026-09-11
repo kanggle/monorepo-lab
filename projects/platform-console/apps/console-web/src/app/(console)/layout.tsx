@@ -9,6 +9,7 @@ import {
   getAccessToken,
 } from '@/shared/lib/session';
 import { decodeJwtPayload } from '@/shared/lib/jwt';
+import { buildLoginRedirectFor } from '@/shared/lib/login-redirect';
 import { getCatalog } from '@/features/catalog';
 import {
   selectableTenants,
@@ -48,22 +49,17 @@ export const dynamic = 'force-dynamic';
  * `?redirect=<path>` (Gap D / F6 — TASK-PC-FE-115).
  *
  * Reads the current path from the `x-pathname` header injected by
- * middleware.ts. Sanitises to a same-site relative path before encoding:
- *   - Must start with a single `/` (rejects absolute URLs and `//…`)
- *   - Must not be `/login` (avoid a meaningless self-redirect param)
- *   - Must not be an `/api/…` non-page path (not a valid return destination)
+ * middleware.ts and hands it to the sanitiser.
+ *
+ * 🔴 **규칙 자체는 여기 없다** — `shared/lib/login-redirect.ts` 로 뺐다
+ * (`TASK-PC-FE-280`). 서버 컴포넌트 안의 **비-export 함수**였던 탓에, 그것을 지키는
+ * 테스트(`tests/unit/layout-login-redirect.test.ts`)가 로직을 **로컬에 재구현**해 두고
+ * 그 재구현을 검사했다 — 진짜 함수는 계산에 **한 번도 안 들어갔다**. 이제 정의는 하나고,
+ * 테스트와 제품이 **같은 함수**를 쓴다.
  */
 async function buildLoginRedirect(): Promise<string> {
   const hdrs = await headers();
-  const raw = hdrs.get('x-pathname');
-  const isSameSite =
-    raw !== null &&
-    raw.startsWith('/') &&
-    !raw.startsWith('//') &&
-    !raw.startsWith('/login') &&
-    !raw.startsWith('/api/');
-  if (!isSameSite) return '/login';
-  return `/login?redirect=${encodeURIComponent(raw)}`;
+  return buildLoginRedirectFor(hdrs.get('x-pathname'));
 }
 
 /**
