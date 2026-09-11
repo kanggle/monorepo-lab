@@ -87,3 +87,58 @@ before adding IT weight.
 - Query under test: `notification-service/.../adapter/outbound/persistence/jpa/delivery/NotificationDeliveryJpaRepository.java` (`findPendingDueForRetry`, SKIP-LOCKED hint) + `DeliveryRepositoryImpl.findAndLockPendingDueForRetry`.
 - Already-shipped sibling coverage (BE-528): `DeliverySkipLockedClaimIntegrationTest.claimReturnsOnlyPendingDueOrdered` (plain claim semantics), `SlackChannelAdapterCircuitBreakerTest` (breaker transitions), `DeliveryRetrySchedulerTest`.
 - Memory: `env_ci_flake_is_a_hypothesis_not_a_verdict`, `env_test_fixture_impossible_input_proves_nothing`, `project_testcontainers_docker_desktop_blocker`, `env_wms_notification_seed_cluster_ci_flake` (IT-lane resource/serialisation), `platform/testing-strategy.md`.
+
+## CORRECTION
+
+> 🔴 **이 절은 더하기만 한다** — 위의 어떤 관측도 고치거나 지우지 않는다. 위 기록은 그 날짜에
+> 대한 사실이고, 아래는 **그 뒤에 일어난 일**이다(`TASK-MONO-591` 의 CORRECTION 규약).
+
+### 2026-09-11 UTC — **재발 1건. 그리고 이 티켓의 설계가 그 자리에서 동작했다**
+
+`DeliverySkipLockedClaimIntegrationTest` 가 `main` 의 post-merge CI 에서 한 번 빨갰다
+(커밋 `127e2d916` — `TASK-PC-FE-281`, 콘솔 TypeScript 만 바꾼 커밋).
+
+```
+DeliverySkipLockedClaimIntegrationTest > SKIP-LOCKED exclusivity: … FAILED
+    org.hibernate.QueryTimeoutException at DeliverySkipLockedClaimIntegrationTest.java:140
+BUILD FAILED in 2m 50s
+```
+
+#### 🔵 먼저 — 이것은 **AC-1 이 설계한 그대로**다
+
+AC-1 이 요구한 것은 *"every lock wait is bounded … so a regression (or a non-skip-locked query)
+fails **fast and loud**, never at the 30-min job timeout"* 이다. 실제로 일어난 일:
+**유계 타임아웃이 발화**했고(`QueryTimeoutException`), **2분 50초**에 죽었다.
+
+🔴 **그러므로 이 재발은 「BE-529 가 회귀했다」가 아니다.** 유계 타임아웃이 없었다면 이 세션은
+30분짜리 잡 타임아웃을 봤을 것이고, 원인은 훨씬 안 보였을 것이다. **이 티켓이 산 값이 그것이다.**
+
+#### 판정 — **환경 요인**(그리고 그것은 추정이 아니라 측정이다)
+
+이 저장소의 규율은 *"「flake=인프라」는 가설"* 이다. 그래서 가설로 두지 않고 갈랐다:
+
+| 축 | 결과 |
+|---|---|
+| **같은 트리 재실행** | 🟢 **통과** (`gh run rerun --failed`, 같은 커밋) |
+| 그 커밋의 `wms-platform` 변경 | **0건** (바꾼 것은 console-web `.tsx` 4개 + 태스크 파일 2개) |
+| 실패 지문 | 전부 **연결 수준** — `An I/O error occurred while sending to the backend` ×5 · `Closed by interrupt` ×2. **단언 실패가 아니다** |
+| 직전에 wms 를 **실제로** 바꾼 커밋(`c12bedcb3`) | 같은 잡 🟢 **success** |
+
+⇒ diff 가 원인이 아니라는 것은 **재실행이 직접 보여 준다**(트리가 같다). 현재 `127e2d916` 은
+CI · Nightly E2E · Vercel 전부 success 다.
+
+#### ⚪ 이 관측이 **말하지 않는** 것
+
+- 🔴 **표본 하나다.** 「이 테스트는 flaky 하다」는 성질로 승격시키지 마라 — 이 저장소가 이름 붙인
+  «측정 하나를 성질로 승격 금지» 다. 여기 적는 것은 **관측 1건**이고, 두 번째가 생기면 그때
+  비율을 말할 수 있다.
+- 🔴 재실행이 통과했다는 것이 **「다시는 안 난다」를 뜻하지 않는다.** 그것이 증명한 것은
+  «그 커밋의 diff 가 원인이 아니다» 하나다.
+- ⚪ **무엇이 러너를 그 상태로 만들었는지는 안 쟀다**(동시 실행 레인의 자원 경합? 컨테이너
+  teardown?). 🔵 `env_wms_notification_seed_cluster_ci_flake`(IT-lane 자원/직렬화)가 인접 축이다.
+
+#### 다음 사람에게
+
+🔵 **여기서 새 티켓을 파지 않았다** — 관측 1건이고, 이 티켓의 설계는 **의도대로 동작했다**.
+🔴 다만 **두 번째 재발이 생기면** 그때는 부류가 바뀐다(간헐이 아니라 비율이 된다) ⇒ 그때
+이 절에 한 줄을 더하고, 세 번째면 별도 티켓이다. **이 절이 그 카운터다.**
