@@ -4,7 +4,7 @@ TASK-MONO-669
 
 # Status
 
-review
+done
 
 # Title
 
