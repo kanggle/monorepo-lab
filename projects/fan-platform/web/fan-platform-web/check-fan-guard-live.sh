@@ -153,28 +153,83 @@ say "── $ORIGIN"
 rc=0
 unreachable=0
 
-# ① 판별자 + 보호 경로 — 꺾여야 한다
-for path in /nonexistent-xyz /artists /me; do
+# ---------------------------------------------------------------------------
+# ① 경로 → **기대**. 정본은 `src/shared/auth/public-paths.ts` 하나다.
+#
+# 🔴🔴 TASK-FAN-FE-021 — 여기는 원래 세 경로에 **같은 기대**(꺾여야 한다)를 먹이는
+# 루프였고, 그래서 `/artists` 가 `ADR-MONO-070/071` 로 **공개가 된 뒤에도** 옛 세계를
+# 요구했다. 그 거짓 빨강이 nightly 의 `Deployed fan surface` 를 09-07·08·09 **사흘 연속**
+# 빨갛게 만들었고, 그 사이 **진짜 빨강이 났어도 구별되지 않았다.**
+#
+# 🔴 고칠 때 «공개가 된 경로를 목록에서 빼는» 쪽으로 가지 마라. 빼면 「공개여야 한다」를
+# **아무도 안 재고**, 훗날 실수로 로그인 벽이 생겨도 조용히 통과한다. 기대를 **뒤집어**
+# 같은 수의 칸으로 반대 성질을 잰다 — 금지→허가 가드는 **반전**이지 **축소**가 아니다.
+#
+#   closed = 미인증이면 이 오리진의 `/login` 으로 꺾여야 한다
+#   public = 미인증으로도 열려야 한다. 🔴 그리고 **2xx** 까지 본다 —
+#            `classify` 는 `4xx` 도 `open` 으로 부르므로(라우팅에 닿았다는 뜻),
+#            `public` 을 verdict 만으로 판정하면 **라우트가 사라져도 통과**한다.
+#            (실측: `/posts` 는 공개 접두사인데 인덱스 라우트가 없어 **404** 다. 그래서
+#             `/posts` 는 여기 없다 — 넣으면 «열려 있다» 를 **틀린 이유로** 통과시킨다.)
+# ---------------------------------------------------------------------------
+CASES='/nonexistent-xyz|closed
+/me|closed
+/membership/history|closed
+/artistsxyz|closed
+/artists|public
+/membership|public'
+
+# 🔴 파이프(`printf … | while`)로 돌리면 루프가 **서브셸**에서 실행돼 `rc`/`unreachable`
+#    대입이 부모에 안 남는다 — 어떤 칸이 빨개도 이 스크립트가 0 을 내는, 가드가 조용히
+#    죽는 고전적인 자리다. herestring 은 서브셸을 만들지 않는다(bash 셔뱅 확인함).
+while IFS='|' read -r path expect; do
+  [ -n "$path" ] || continue
   meta="$(probe "$path")"; code="${meta%%|*}"; loc="${meta#*|}"
   verdict="$(classify "$code" "$loc" "$ORIGIN")"
-  case "$verdict" in
-    redirect-to-login)
-      say "✔ $path — $code → $loc" ;;
-    unreachable)
-      say "✖ $path — 도달 불가(curl 000). **판정 불가**(죽었다는 뜻이 아니다)."
-      unreachable=1 ;;
-    open)
-      say "✖ $path — $code, 리다이렉트 없음 ⇒ **가드가 안 닫는다**(018 의 지문)."
-      rc=1 ;;
-    redirect-elsewhere)
-      say "✖ $path — $code 인데 Location 이 이 오리진의 /login 이 아니다: $loc"
-      say "   🔴 열린 리다이렉트일 수 있다 — NEXTAUTH_URL 오설정을 의심하라."
-      rc=1 ;;
-    *)
-      say "✖ $path — $code ⇒ 예상 밖. 판정 불가."
-      unreachable=1 ;;
-  esac
-done
+
+  if [ "$verdict" = "unreachable" ]; then
+    say "✖ $path — 도달 불가(curl 000). **판정 불가**(죽었다는 뜻이 아니다)."
+    unreachable=1; continue
+  fi
+
+  if [ "$expect" = "closed" ]; then
+    case "$verdict" in
+      redirect-to-login)
+        say "✔ $path — $code → $loc  (보호: 꺾인다)" ;;
+      open)
+        say "✖ $path — $code, 리다이렉트 없음 ⇒ **가드가 안 닫는다**(018 의 지문)."
+        rc=1 ;;
+      redirect-elsewhere)
+        say "✖ $path — $code 인데 Location 이 이 오리진의 /login 이 아니다: $loc"
+        say "   🔴 열린 리다이렉트일 수 있다 — NEXTAUTH_URL 오설정을 의심하라."
+        rc=1 ;;
+      *)
+        say "✖ $path — $code ⇒ 예상 밖. 판정 불가."
+        unreachable=1 ;;
+    esac
+  else
+    # public — 🔵 이 칸이 «반전» 이다. 여기가 꺾이면 그것이 결함이다.
+    case "$verdict" in
+      open)
+        case "$code" in
+          2*) say "✔ $path — $code  (공개: 열려 있다)" ;;
+          *)  say "✖ $path — $code ⇒ 공개 경로인데 **2xx 가 아니다**(라우트가 사라졌나)."
+              rc=1 ;;
+        esac ;;
+      redirect-to-login)
+        say "✖ $path — $code → $loc ⇒ **공개여야 하는데 꺾인다**."
+        # 🔴 백틱을 쓰지 마라 — 큰따옴표 안에서 **명령 치환**이 되어 메시지가 자기 예시를
+        #    실행한다. 이 줄의 초판이 실제로 `public-paths.ts: command not found` 를 냈고,
+        #    AC-5 의 bite 가 그것을 잡았다. 이 저장소엔 CI 가드도 있다:
+        #    «Guard messages do not execute their own examples (backticks)».
+        say "   🔴 src/shared/auth/public-paths.ts 가 이 경로를 공개로 선언한다(ADR-MONO-070/071)."
+        rc=1 ;;
+      *)
+        say "✖ $path — $code ($verdict) ⇒ 예상 밖. 판정 불가."
+        unreachable=1 ;;
+    esac
+  fi
+done <<< "$CASES"
 
 # ② 🔵 음성 대조군 — /login 은 200 이어야 한다
 meta="$(probe /login)"; code="${meta%%|*}"; loc="${meta#*|}"
