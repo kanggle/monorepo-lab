@@ -8,7 +8,7 @@ TASK-MONO-654
 
 # Status
 
-in-progress
+review
 
 # Owner
 
