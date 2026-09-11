@@ -196,6 +196,10 @@ jobs:
       # the diff this guard exists to catch, so AND-combining would switch it off
       # for its only defect class (the MONO-389 failure mode).
       task-ids: ${{ steps.filter.outputs.task-ids }}
+      # TASK-MONO-669 — Flyway 버전 충돌. 🔴 `code-changed` 와 AND 하지 않는다:
+      #    마이그레이션은 .sql 이고, 코드 게이트가 그것을 걸러내면 이 결함을 낼 수
+      #    있는 PR 에서 매번 건너뛴다(task-ids 가 같은 이유로 AND 를 안 한다).
+      migrations: ${{ steps.filter.outputs.migrations }}
       # TASK-MONO-451: raw filter, NOT AND-combined with `code-changed`. Every
       # instance of the drift this guard exists to catch (BE-535, BE-536, BE-539,
       # 2026-07-20) arrived in a close-chore PR that touched nothing but `.md`
@@ -488,6 +492,10 @@ jobs:
             # arrival path (§ G1) — a colliding ID arrives as a new file in an
             # active lifecycle directory, so those directories ARE the trigger.
             # Pure-positive (no negation — MONO-074/075 quirk rule).
+            # TASK-MONO-669: 같은 서비스 안에 같은 Flyway 버전 번호가 둘.
+            migrations:
+              - '**/db/migration/**'
+              - 'scripts/check-flyway-version-collision.sh'
             task-ids:
               - 'tasks/ready/**'
               - 'tasks/review/**'
@@ -1058,6 +1066,36 @@ jobs:
 
       - name: Guard — no duplicate task IDs within a project namespace
         run: bash scripts/check-task-id-collision.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-669 — 같은 서비스 안에 같은 Flyway 버전 번호가 둘.
+  #
+  # 🔴 **실제로 밟아서 만든 가드다** (TASK-MONO-659, 2026-09-11). outbound-service 에
+  # `V10__order_schema_align.sql` 이 이미 있는데 같은 번호를 넣었고, Flyway 가
+  # `CompositeMigrationResolver` 에서 죽었다.
+  #
+  # 🔴🔴 그 신호는 «번호가 겹쳤다» 로 **안 보인다** — 보이는 것은 Testcontainers 통합
+  # 테스트 15개가 무더기로 FAILED 인 화면이고, 그중 어느 것도 마이그레이션을 말하지
+  # 않는다(전부 «컨텍스트 기동 실패» 의 파생이다).
+  #
+  # 🔴 그리고 이 저장소의 Testcontainers IT 는 **로컬에서 못 돌린다**(알려진 블로커).
+  # ⇒ CI 에 밀어 넣기 전에는 알 방법이 없었다. 이 잡이 그 간극을 메우고, 5분 안에
+  # 「어느 디렉터리의 어느 두 파일인가」를 이름으로 찍는다.
+  # ---------------------------------------------------------------------------
+  flyway-version-collision:
+    name: Flyway version collision (same version twice in one service)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.migrations == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-flyway-version-collision.sh
+
+      - name: Guard — no duplicate Flyway version within one migration directory
+        run: bash scripts/check-flyway-version-collision.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-451 — INDEX queue listing / queue directory drift guard.
