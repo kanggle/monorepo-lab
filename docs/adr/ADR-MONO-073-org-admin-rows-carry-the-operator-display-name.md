@@ -1,16 +1,33 @@
 # ADR-MONO-073 — org-admin 행이 **운영자 표시명을 싣는다** (그리고 「그때의 이름」 위험은 이 행에 없다)
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 **Date:** 2026-09-11
 **주관 티켓:** `TASK-MONO-659` AC-2
 **근거 실측:** 2026-09-11 UTC — `iam-platform/apps/admin-service` 소스 직접 확인
 **선행:** [`ADR-MONO-050`](ADR-MONO-050-cross-service-identifiers-are-codes.md) D9 (교차서비스 식별자는 CODE 다) ·
 `TASK-PC-FE-276` (`masterRefLabel` — 콘솔은 **id 로 되돌아가지 않는다**)
 
-> 🔴 **이 ADR 은 아직 결정이 아니다.** `TASK-MONO-659` AC-2 가 *"먼저 결정이다, 구현이
-> 아니다"* 로 시작하고 그 판단을 소유자에게 올리라고 요구한다. 아래 § 갈래에서 **하나를
-> 골라 주면** 그때 ACCEPTED 로 바꾸고 **그 PR 에서 실행 티켓을 같이 기안한다**
-> (🔴 「ACCEPT 후에 기안한다」는 아무도 안 한다 — 산문에는 게이트가 없다).
+**출처 — 소유자 결정 (2026-09-11), 아래 § 갈래의 셋 중:**
+
+> **「ⓐ 생산자가 조인해서 싣는다」**
+
+---
+
+## History
+
+- 2026-09-11 — **ACCEPTED (ⓐ).** 갈래 셋을 각각이 **무엇을 포기하는지**와 함께 올렸고
+  소유자가 ⓐ 를 골랐다.
+  🔴 **처음 받은 의사표시는 게이트를 통과하지 못했다** — `ADR-MONO-073 ACCEPT` 는 ADR 을
+  이름으로 지목했지만 **갈래 letter 가 비어 있었다.** 이 ADR 은 갈래가 셋이고, 내 추천은
+  ⓐ 였다. ⇒ 그 상태에서 넘겼다면 `platform/architecture-decision-rule.md` § The ACCEPTED
+  Gate 가 금지하는 *"launders an agent's own preference into an accepted decision"* 그
+  자체다. **다시 물어서 ⓐ 를 받았다**(우연히 추천과 같았다는 사실은 판단의 정당성과 무관하다).
+  🔵 2026-08-07 `ADR-MONO-059`/`060` 에서 **같은 모양**을 한 번 걸러낸 전례가 있다.
+- 🔴 **결정 본문(§ 갈래 · § Consequences)은 한 바이트도 안 바꿨다** — ACCEPT 는 *finalise*
+  이지 *re-decide* 가 아니다.
+- 🔴 ACCEPTED 는 구현을 **authorise 만 한다.** 실행은 별도 티켓이고
+  (`platform/architecture-decision-rule.md` HARDSTOP-09), **이 PR 에서 같이 기안했다**:
+  **`TASK-MONO-670`**. 🔵 「ACCEPT 후에 기안한다」는 아무도 안 한다 — 산문에는 게이트가 없다.
 
 ---
 
