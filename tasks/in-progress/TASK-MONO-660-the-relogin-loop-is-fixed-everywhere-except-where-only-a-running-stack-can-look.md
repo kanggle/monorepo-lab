@@ -8,7 +8,7 @@ TASK-MONO-660
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -156,3 +156,117 @@ UTC)가 데모가 **꺼져 있는 상태 자체를 이용해** 프로덕션에�
 # 분석 / 구현 권장
 
 분석=**Opus 5** / 구현 권장=**Sonnet** (라이브 관측 + 기록. 판정 규칙은 위에 다 박혀 있다)
+
+---
+
+# 🟢 수확 (2026-09-11 UTC · 데모 창 · `ready` → `in-progress`)
+
+## AC-0 — 착수 게이트 통과
+
+| 칸 | 값 |
+|---|---|
+| 창이 열렸나 | 🟢 소유자가 **「창 열어」** 로 명시 승인. `POST /bundle/start` 로 8묶음 기동 |
+| 기동 → 8/8 `ready` | `07:14:32Z` → **`07:22:51Z`** (부팅 **8분 19초**) |
+| `/status` | `state=running` · `ip=43.203.116.238` |
+| OIDC 디스커버리 | **200** |
+| 분 예산 | 창 시작 **543/1200** (🔵 `TASK-MONO-665` 로 600→1200 상향된 직후다) |
+
+🔴 **웜업 술어를 한 번 틀렸고 그 자체가 기록할 값이다**: 처음에 `oidc=200` 을 웜업 완료로
+잡았는데 **`07:16:42Z` 에 200 이 떴을 때 묶음은 전부 `booting`** 이었다. OIDC 200 은
+«iam 이 떴다» 이지 «스택이 웜업됐다» 가 아니다 — `TASK-MONO-648` AC-0 이 경고한
+*"기동 직후엔 빈 표·로딩 상태가 찍힌다"* 구간이 정확히 거기다. ⇒ 술어를 **«선택된 8묶음이
+전부 `ready`»** 로 바꿔서 다시 쟀고, 그 차이는 **6분 9초**다.
+
+## 🟢 AC-1 — ① 루프가 끊겼다 (PASS)
+
+절차는 티켓대로: 로그인 → **쿠키를 지우지 않고 값만 한 글자 훼손** → `/ecommerce`.
+
+- 훼손 대상: **`console_assumed_token`** (세션 쿠키 **7종** 중 — 🔵 티켓은 «3종» 이라고
+  적었는데 실제는 `JSESSIONID` · `console_access_token` · `console_refresh_token` ·
+  `console_id_token` · `console_operator_token` · `console_active_tenant` ·
+  `console_assumed_token` **7개**다)
+- 최종 **pathname `/login`** · query **`error=session_expired`**
+- 화면 실문구: *"세션이 만료되어 로그아웃되었습니다. 다시 로그인해주세요."*
+- `/console` 카탈로그로 **가지 않았다**
+
+⇒ **PASS.** 티켓이 요구한 대로 **최종 URL 과 화면 둘 다**로 판정했다.
+
+### 🔴🔴 여기서 내 판별자가 자기 호스트명에 걸렸다 — 기록해 둔다
+
+`landedOnConsoleCatalog` 를 **전체 URL** 에 `/\/console(\b|\/|$)/` 로 쟀더니 **`true`** 가
+나왔다. 🔴 `https://console.hubwang.com/login?...` 의 **`//console`** 이 그 정규식에 걸린다.
+⇒ **`new URL(u).pathname` 으로 다시 판정**해서 `false` 를 얻었다.
+🔵 이 저장소가 이름 붙인 *«판별자가 자기 설명 문구에 걸린다»* 와 같은 부류이고,
+**URL 판정은 문자열이 아니라 `pathname` 으로** 해야 한다는 실례다.
+
+## 🟢 AC-2 — 대조군 (PASS)
+
+같은 창에서 **멀쩡한 세션**으로 `/login` 을 직접 쳤다 → 최종 pathname **`/console`**,
+카탈로그가 실제로 렌더됐다(테넌트 셀렉트에 `demo-corp`·`ecommerce`, nav 그룹 전부).
+
+⇒ 🔵 **이 칸이 AC-1 의 PASS 를 갈라 준다** — 「루프를 끊었다」이지 「단락회로를 통째로
+죽였다」가 아니다. 두 방향이 다 살아 있다.
+
+## AC-3 — ② 서버사이드 refresh 부재
+
+🔴 **토큰 수명을 «실측» 했고 설정 파일과 달랐다.** `auth-service/application.yml:95` 는
+`JWT_ACCESS_TOKEN_TTL_SECONDS:3600` 이고 데모에 override 가 **없는데**, 실제 발급된
+토큰의 클레임은 **`ttlSec: 1800`(30분)** 이다(`exp - iat`).
+🔵 선언을 믿었으면 60분을 기다릴 뻔했다 — *«선언 파일 grep ≠ 런타임»* 의 실례다.
+
+- 심은 시각 `07:30:49Z` · `console_access_token` exp **`08:00:49Z`** ·
+  `console_assumed_token` exp **`08:01:06Z`** · `sub`=…`ad03` / access `tenant_id=iam` ·
+  assumed `tenant_id=ecommerce`
+- 측정은 그 뒤에 수행했다(결과는 아래 § AC-3 실측).
+
+## AC-4 — 되돌려 줄 것
+
+① 이 PASS 이므로 fix 티켓은 **없다.** ②의 결과에 따른 처리는 § AC-3 실측에 적는다.
+
+## ⚪ AC-3 실측 — **못 쟀다. 그리고 «왜 못 쟀는지» 가 이 칸의 소득이다**
+
+### 무엇을 하려 했나
+
+`07:30:49Z` 에 세션을 심고 토큰이 **자연 만료**하기를 기다렸다(위조가 아니라 기다림).
+`08:01:41Z`(두 exp 를 다 지난 시각)에 저장해 둔 `storageState` 를 복원해 SSR 화면을 열었다.
+
+### 🔴🔴 그런데 만료 토큰은 **서버에 도달하지 못한다** — 브라우저가 먼저 버린다
+
+복원한 컨텍스트에서 두 토큰 쿠키가 **아예 없었다.** 저장된 state 를 열어 보니 이유가 명확하다:
+
+```
+console_access_token    expires 2026-09-11T08:00:50Z   ← 토큰 exp 와 «같다»
+console_assumed_token   expires 2026-09-11T08:01:06Z   ← 같다
+console_refresh_token   expires 2026-10-11T07:30:51Z   ← 살아 있다
+console_operator_token  expires 2026-09-11T08:30:51Z   ← 살아 있다
+console_active_tenant / JSESSIONID                     ← 세션 쿠키
+```
+
+🔵 **쿠키의 브라우저 만료가 토큰의 `exp` 에 맞춰져 있다.** ⇒ 브라우저 경로에서는
+«만료된 액세스 토큰을 서버가 받는» 사건이 **일어날 수 없다.** 그래서 그 뒤에 관측한
+`/ecommerce` → `/login?redirect=%2Fecommerce` 는 **«쿠키 없음» 가드 경로**이지
+AC-1 이 재던 **«백엔드 401»** 이 아니다.
+
+🔴 **그러므로 이 칸을 «쟀다» 로 적지 않는다.** 티켓의 Failure Scenario 가 *"쿠키를 지우지
+말고 값만 훼손해야 하는 이유"* 로 이미 이 구분에 이름을 붙여 뒀다 — 자연 만료는 **지우는
+쪽**과 같은 결과를 낸다.
+
+### 🔵 그래도 ②에 대해 말할 수 있는 것이 하나 생겼다
+
+복원 시점에 **`console_refresh_token` 은 살아 있었다**(만료 2026-10-11). 그 상태에서
+SSR 화면을 열었더니 **서버가 갱신을 시도하지 않고** `/login?redirect=…` 로 보냈다.
+
+- `/ecommerce` → `/login?redirect=%2Fecommerce`
+- `/dashboards/overview` → `/login?redirect=%2Fdashboards%2Foverview`
+
+🔵 즉 *"액세스 토큰이 죽었고 리프레시 토큰은 살아 있는데 아무도 갱신하지 않는다"* 는
+**관측됐다.** 🔴 다만 이것이 ②(서버 사이드 refresh 부재)의 **증거이긴 해도 AC-3 의 문구가
+요구한 측정은 아니다** — 그 문구는 «강제 로그아웃이 몇 분 만에 나는가» 였고, 여기서는
+로그아웃이 아니라 **처음부터 인증이 없는 상태로 취급**됐다.
+
+### ⇒ 다음에 이 칸을 닫는 법
+
+🔴 브라우저로는 못 닫는다. 닫으려면 **쿠키 만료를 늘려서 «만료된 토큰 값» 을 살아 있는
+쿠키에 담아** 보내야 한다(`expires` 를 미래로 둔 채 값은 만료된 JWT). 그러면 서버가
+그 토큰을 실제로 받고 401 을 내는 경로가 재현된다.
+🔵 이 절차는 이 창에서 만든 **새 지식**이고, 다음 사람이 같은 30분을 다시 쓰지 않게 한다.

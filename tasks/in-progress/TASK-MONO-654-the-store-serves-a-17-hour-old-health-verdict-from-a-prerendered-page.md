@@ -266,3 +266,67 @@ AC-0 의 첫 칸은 *"인스턴스를 켠 상태에서 `store /` 를 **브라우
 
 분석=Opus 5 / 구현 권장=**Opus** — 렌더 전략(프리렌더/ISR ↔ 클라이언트)에 손대는 일이고,
 「배너를 지우면 된다」가 **틀린 답**인 부류다(Failure 2·3). 가드도 실행 비교라 설계가 필요하다.
+
+---
+
+# 🔴🔴 AC-0 닫힘 (2026-09-11 UTC · 데모 창) — **재현됐다. 그리고 티켓보다 나쁘다.**
+
+## 첫 칸 — 「인스턴스를 켠 상태에서 브라우저로」
+
+🟢 조건 충족: 8/8 묶음 `ready`(`07:22:51Z`), `/status` `state=running`. 그 상태에서
+**브라우저로** `store /` 를 열었다(🔴 `curl` 로는 판정 불가라는 AC-0 의 조항 그대로).
+
+```
+X-Vercel-Cache: STALE      Age: 120265 (= 33.4시간)      X-Nextjs-Stale-Time: 300
+배너 문구 3종 전부 존재: "데모 서버가 꺼져 있어" · "샘플 데이터입니다" · "실시간 기능은 잠겨"
+상품 링크 8개(샘플)      본문 527자      first·reload 동일
+```
+
+⇒ **배너가 남는다.** 기전은 확정이고 렌더까지 확인했다.
+
+## 🔴🔴 「낡았다」가 아니라 **「재생성이 착지하지 않는다」**
+
+티켓 제목의 «17시간» 은 이제 **33.4시간**이다. 그런데 더 중요한 것은 **자가 치유가
+일어나지 않는다**는 것이다. 2분간 8회 요청하며 지켜본 결과:
+
+```
+[1] age=120298  cache=STALE   [5] age=120362  cache=STALE
+[2] age=120314  cache=STALE   [6] age=120378  cache=STALE
+[3] age=120330  cache=STALE   [7] age=120393  cache=STALE
+[4] age=120346  cache=STALE   [8] age=120410  cache=STALE
+```
+
+🔴 **`Age` 가 단조증가하고 `STALE` 이 안 풀린다.** `revalidate = 60` 인데 요청이 반복돼도
+새 판이 **한 번도 안 내려온다** ⇒ 「오래된 사본을 주고 뒤에서 다시 만든다」가 아니라
+**뒤에서 만드는 것이 도착하지 않는다.** 🔵 이 구분이 AC-1 의 설계를 바꾼다 — 캐시 수명만
+줄이는 처방은 **이 상태를 안 고친다.**
+
+## 🔴 AC-0 ③ — fan·console 은 **같은 부류가 아니다.** 그리고 모집단은 store 안에서 **3**이다
+
+| 앱 | `export const revalidate` | `export const dynamic` | 판정 |
+|---|---|---|---|
+| **web-store** | **3 파일** (`= 60`) | 5 | 🔴 **결함 부류** |
+| console-web | **0** | 66 | 🟢 전부 동적 |
+| fan-platform-web | **0** | 3 | 🟢 동적 (`DemoBackendNotice` 위젯은 있다) |
+
+⇒ **별도 티켓이 필요 없다** — fan·console 에는 이 부류가 없다. `TASK-MONO-635` 가 셋에
+같은 폴백을 넣었으므로 «있을 법하다» 고 적었는데, **폴백이 있는 것과 그 판정이 프리렌더에
+굳는 것은 다른 축**이었다.
+
+🔴🔴 **그런데 이 티켓이 세는 자리가 좁다.** `DemoBackendNotice` 는 페이지가 아니라
+**`app/(store)/layout.tsx`** 에 있고, 그 레이아웃이 **세 ISR 라우트를 전부 감싼다**:
+
+```
+src/app/(store)/page.tsx                  export const revalidate = 60
+src/app/(store)/products/page.tsx         export const revalidate = 60
+src/app/(store)/products/[id]/page.tsx    export const revalidate = 60
+```
+
+⇒ 티켓은 `store /` 하나를 말하지만 **영향 라우트는 셋**이다. AC-1·AC-3 의 대상과 가드
+모집단을 셋으로 잡아야 한다.
+
+## 남은 칸
+
+- AC-1·AC-2·AC-3·AC-4 는 **구현 축**이고 이 창에서 하지 않았다(이 창은 측정 창이다).
+- 🔵 AC-4 의 *"배포 뒤 인스턴스를 켠 상태에서 라이브로 다시 재라"* 는 **고친 뒤** 축이라
+  이 창에서 닫을 수 없다.
