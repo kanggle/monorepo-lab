@@ -160,6 +160,72 @@ log()  { printf '\e[1;34m[sync]\e[0m %s\n' "$*"; }
 warn() { printf '\e[1;33m[warn]\e[0m %s\n' "$*" >&2; }
 fail() { printf '\e[1;31m[fail]\e[0m %s\n' "$*" >&2; exit 1; }
 
+# ─────────────── Post-process: workflows that must not run in a copy ───────────────
+# TASK-MONO-662 (owner decision 2026-09-10: "ⓒ+ⓑ").
+#
+# A copy carries the monorepo's .github/workflows/ verbatim, and two of those
+# fire on their own once the copy is pushed:
+#
+#   nightly-e2e.yml / federation-hardening-e2e.yml   `schedule:` cron
+#       -> fire nightly on every copy, forever. Measured 2026-09-10:
+#          wms-platform's last 30 runs were ALL `event=schedule`
+#          (242 total runs; iam 377; scm 225). They end `skipped`, so the
+#          minute cost is small -- but it is not zero, and it multiplies
+#          by the number of copies every single day.
+#
+#   vercel-deploy.yml                                push to main
+#       -> the copy tries to POST five Vercel deploy hooks it has no
+#          secrets for, and all five jobs fail. That failure is NOT a
+#          fail-safe, it is an accident: put the secrets in a copy and the
+#          portfolio copy would deploy production. This workflow has no
+#          reason to exist in a copy at all.
+#
+# NOT fixed here (owner chose ⓒ+ⓑ, not ⓐ): the copy still carries ci.yml, so
+# a push still runs it and it still fails -- the copy's settings.gradle
+# includes 43-46 `projects:<sibling>:` paths whose directories do not exist,
+# because the monorepo CI assumes eight projects in one tree. The owner chose
+# to keep that evidence rather than strip .github/ wholesale; what ⓒ fixes is
+# that nobody is shown the result (the badges point at the monorepo now).
+# So: this is "made invisible", not "fixed". Anyone opening the copy's
+# Actions tab still sees red.
+#
+# Called from BOTH post_process_* functions. Keeping it one helper is
+# deliberate: the two integration types already rewrite workflows separately,
+# and a trigger stripped in one but not its sibling is exactly the drift this
+# repo keeps paying for.
+strip_copy_only_workflow_triggers() {
+    [ -d .github/workflows ] || return 0
+
+    if [ -f .github/workflows/vercel-deploy.yml ]; then
+        log "  removing vercel-deploy.yml (a copy must not fire deploy hooks)..."
+        rm -f .github/workflows/vercel-deploy.yml
+    fi
+
+    # Strip `schedule:` and the cron lines under it. Indentation-aware rather
+    # than a line pattern: the block is `schedule:` followed by more-indented
+    # `- cron:` lines, and a plain `sed '/schedule:/d'` would leave those
+    # dangling under whatever key came next (silently valid YAML, wrong file).
+    local yml stripped
+    for yml in .github/workflows/*.yml .github/workflows/*.yaml; do
+        [ -f "$yml" ] || continue
+        grep -qE '^[[:space:]]*schedule:[[:space:]]*$' "$yml" || continue
+        stripped="$yml.stripped"
+        awk '
+            /^[[:space:]]*schedule:[[:space:]]*$/ && !skip {
+                match($0, /^[[:space:]]*/); indent = RLENGTH; skip = 1; next
+            }
+            skip {
+                if ($0 ~ /^[[:space:]]*$/) { next }
+                match($0, /^[[:space:]]*/)
+                if (RLENGTH > indent) { next }
+                skip = 0
+            }
+            { print }
+        ' "$yml" > "$stripped" && mv "$stripped" "$yml"
+        log "  stripped schedule: trigger from $yml"
+    done
+}
+
 # ───────────────────────── Post-process: direct-include ─────────────────────────
 # After --path-rename, the project's placeholder build.gradle overwrote the
 # monorepo root build.gradle (which declared plugins + subprojects block).
@@ -194,6 +260,8 @@ post_process_direct_include() {
             sed -i "s|:projects:$project:|:|g; s|projects/$project/||g" "$gradle_file"
         fi
     done < <(find apps libs -name "*.gradle" -print0 2>/dev/null)
+
+    strip_copy_only_workflow_triggers
 }
 
 direct_include_commit_msg() {
@@ -261,6 +329,8 @@ post_process_composite_build() {
             fi
         done
     fi
+
+    strip_copy_only_workflow_triggers
 }
 
 composite_build_commit_msg() {
