@@ -21,6 +21,14 @@
 //   node infra/demo/aws/site/capture-shots.mjs                  # 전부 찍는다
 //   node infra/demo/aws/site/capture-shots.mjs --dry-run        # 목록 + **의존 해석**만
 //   node infra/demo/aws/site/capture-shots.mjs --from <경로>    # 특정 @playwright/test 설치본
+//   node infra/demo/aws/site/capture-shots.mjs --only store-1-home   # 그 장만 다시 찍는다
+//
+// 🔴🔴 `--only` 는 **매니페스트를 통째로 덮지 않는다** — 안 찍은 장의 기록을 그대로 두고
+//    찍은 장만 갈아 끼운다. 그러지 않으면 1장짜리 매니페스트가 남아 (z37) 가드가
+//    *"capture-shots.mjs 의 목록과 index.html 의 SHOTS 가 갈라졌습니다"* 로 문다.
+//    🔵 그리고 그 가드가 옳다: 매니페스트는 «무엇이 최신인가» 의 기록이고, 반쪽이면 거짓이다.
+// 🔴 그래서 `--only` 는 **한 장이 낡았을 때** 쓰는 것이지 정기 재생성용이 아니다.
+//    전부 다시 찍을 수 있으면 인자 없이 돌려라 — 그쪽이 드리프트가 없다.
 //
 // 환경변수 (TASK-MONO-648 AC-2):
 //   CAPTURE_CONSOLE_BASE / CAPTURE_STORE_BASE / CAPTURE_FAN_BASE
@@ -323,8 +331,31 @@ async function main() {
   const fromIdx = process.argv.indexOf('--from');
   const from = fromIdx >= 0 ? process.argv[fromIdx + 1] : null;
 
-  console.log(`[capture] ${SHOTS.length}장 · 뷰포트 ${VIEWPORT.width}x${VIEWPORT.height} · scale ${SCALE}`);
-  for (const s of SHOTS) {
+  // 🔴 `--only` 는 **찍을 대상**만 좁힌다. `SHOTS` 자체는 안 건드린다 — 그 상수는 (z37)이
+  //    `index.html` 과 대조하는 **정본 목록**이라, 여기서 줄이면 가드가 그 축을 잃는다.
+  const onlyIdx = process.argv.indexOf('--only');
+  const onlyNames = onlyIdx >= 0
+    ? String(process.argv[onlyIdx + 1] ?? '').split(',').map((x) => x.trim()).filter(Boolean)
+    : null;
+  if (onlyNames && onlyNames.length === 0) {
+    console.error('[capture] ✗ --only 에 이름이 없습니다.');
+    process.exit(1);
+  }
+  if (onlyNames) {
+    const known = new Set(SHOTS.map((s) => s.name));
+    const unknown = onlyNames.filter((n) => !known.has(n));
+    // 🔴 오타를 «0장 찍고 성공» 으로 넘기지 않는다. 그것이 이 저장소가 이름 붙인
+    //    «일을 하나도 안 하고 rc=0» 이다.
+    if (unknown.length) {
+      console.error(`[capture] ✗ --only: ${unknown.join(', ')}`);
+      console.error(`             known: ${[...known].join(', ')}`);
+      process.exit(1);
+    }
+  }
+  const TARGETS = onlyNames ? SHOTS.filter((s) => onlyNames.includes(s.name)) : SHOTS;
+
+  console.log(`[capture] ${TARGETS.length}장${onlyNames ? ` (--only, 전체 ${SHOTS.length}장 중)` : ''} · 뷰포트 ${VIEWPORT.width}x${VIEWPORT.height} · scale ${SCALE}`);
+  for (const s of TARGETS) {
     // 🔵 인증 장은 **테넌트까지** 보여 준다 — 이 목록의 요점이 «테넌트가 장마다 다르다» 이고,
     //    dry-run 이 그것을 안 보여 주면 목록을 눈으로 검토할 수 없다.
     const tag = s.requiresAuth ? `   [로그인 필요 · 테넌트 ${s.tenant ?? AUTH.tenant}]` : '';
@@ -339,7 +370,7 @@ async function main() {
     }
   }
   // 🔴 «테넌트 하나» 로 요약하지 않는다 — 이 목록은 둘을 요구하고, 그 사실이 목록의 요점이다.
-  if (NEEDS_AUTH) {
+  if (TARGETS.some((t) => t.requiresAuth)) {
     console.log(`[capture] 로그인 필요 ${SHOTS.filter((s) => s.requiresAuth).length}장 · 요구 테넌트 ${REQUIRED_TENANTS.length}종: ${REQUIRED_TENANTS.join(', ')}`);
     if (REQUIRED_TENANTS.length > 1) {
       console.log('  🔵 장 사이에 테넌트를 전환합니다(왕복 1회 ≈ 11초). 같은 테넌트가 연속이면 건너뜁니다.');
@@ -374,7 +405,9 @@ async function main() {
   //    자격증명이 필요 없다 — 순서가 곧 의미다.
   //    (이 파일은 이미 같은 부류를 한 번 겪었다: `--dry-run` 이 의존 해석보다 **먼저**
   //     반환해서 「못 찾는 상태」를 통과시켰다 — TASK-MONO-643.)
-  if (NEEDS_AUTH && (!AUTH.email || !AUTH.password)) {
+  // 🔴 자격증명 요구도 **대상 기준**이다. 목록 전체(`NEEDS_AUTH`)로 재면 공개 장
+  //    하나만 찍는 `--only` 가 «자격증명이 없다» 로 죽는다(2026-09-11 실측).
+  if (TARGETS.some((t) => t.requiresAuth) && (!AUTH.email || !AUTH.password)) {
     console.error('[capture] ✗ 로그인이 필요한 장이 있는데 자격증명이 없습니다.');
     console.error('  → CAPTURE_AUTH_EMAIL / CAPTURE_AUTH_PASSWORD 를 주세요 (CAPTURE_AUTH_TENANT 기본 demo-corp).');
     console.error('  🔴 그냥 진행하면 그 장들이 «로그인 화면» 으로 찍히고 매니페스트가 그것을 성공으로 적습니다.');
@@ -391,7 +424,8 @@ async function main() {
   //    끊겼는지도 못 가른다(아래 `assertRendered` 가 `/login` 튕김을 장마다 다시 문다).
   // 🔵 **테넌트는 그렇지 않다** — 목록이 둘을 요구하므로 장마다 맞춘다(`activeTenant`).
   let activeTenant = null;
-  if (NEEDS_AUTH) {
+  // 🔴 대상 기준으로 판정한다 — 공개 장 하나만 찍는데 자격증명을 요구하면 안 된다.
+  if (TARGETS.some((t) => t.requiresAuth)) {
     try {
       await signIn(page);
       console.log(`[capture] 로그인 완료 · 이 목록이 요구하는 테넌트: ${REQUIRED_TENANTS.join(', ')}`);
@@ -402,7 +436,7 @@ async function main() {
     }
   }
 
-  for (const s of SHOTS) {
+  for (const s of TARGETS) {
     const file = `${s.name}.${FORMAT.ext}`;
     try {
       // 🔴🔴 이 장이 요구하는 테넌트로 **먼저** 맞춘다. 안 맞추면 같은 주소가 다른 화면을
@@ -459,9 +493,29 @@ async function main() {
 
   // 🔵 어느 주소를 언제 찍었는지 남긴다. 기록이 없으면 다음 사람이 «이게 아직 맞는
   //    화면인가» 를 판정할 방법이 없다(TASK-MONO-639 AC-1).
-  const manifest = { viewport: VIEWPORT, deviceScaleFactor: SCALE, format: FORMAT, shots: entries };
+  // 🔴🔴 `--only` 면 **기존 기록을 살려서 갈아 끼운다.** 통째로 덮으면 안 찍은 장이
+  //    매니페스트에서 사라지고, 그 반쪽짜리가 «이만큼은 최신» 이라는 거짓을 만든다
+  //    (위 `failed > 0` 이 막으려던 것과 **같은 거짓**이다).
+  let shots = entries;
+  if (onlyNames) {
+    let prev = [];
+    try {
+      prev = JSON.parse(await readFile(MANIFEST, 'utf8')).shots ?? [];
+    } catch {
+      console.error('[capture] ✗ --only but manifest.json is unreadable - refusing to write a half record.');
+      process.exit(1);
+    }
+    const updated = new Map(entries.map((e) => [e.file, e]));
+    // 🔵 순서는 `SHOTS`(정본 목록)를 따른다 — 갱신 순서로 흐트러지면 diff 가 시끄러워진다.
+    shots = SHOTS.map((s) => {
+      const file = `${s.name}.${FORMAT.ext}`;
+      return updated.get(file) ?? prev.find((e) => e.file === file);
+    }).filter(Boolean);
+    console.log(`[capture] --only: ${entries.length} updated, ${shots.length - entries.length} kept`);
+  }
+  const manifest = { viewport: VIEWPORT, deviceScaleFactor: SCALE, format: FORMAT, shots };
   await writeFile(MANIFEST, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
-  console.log(`[capture] ✔ ${entries.length}장 · manifest.json 기록`);
+  console.log(`[capture] ✔ ${shots.length}장 · manifest.json 기록`);
 }
 
 main().catch((e) => {
