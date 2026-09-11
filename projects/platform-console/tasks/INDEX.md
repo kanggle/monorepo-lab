@@ -120,7 +120,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
-(empty)
+- `TASK-PC-FE-281-the-helper-that-forbids-id-fallback-is-imported-next-to-seven-id-fallbacks.md` — 🔴 **id 폴백을 금지하는 헬퍼가 id 폴백 일곱 칸 옆에서 임포트되고 있었다** (2026-09-11). `TASK-MONO-659` 가 「창고」 칸만 고치면서 같은 패널이 같은 상황에 두 말을 하게 됐다 — 창고는 `이름 확인 불가`, 옆의 위치·SKU·로트는 **raw UUID**. 전수 census 결과 `{code ?? id}` 는 **10곳**이고 그중 **마스터 참조 7곳**만 고쳤다. 🔴🔴 나머지 **3곳(`asnNo ?? asnId` · `orderNo ?? orderId` ×2)은 일부러 남겼다** — 그 행 «자신의» 업무 번호라 해석할 이름이 없고, `이름 확인 불가` 로 바꾸면 그 행을 지목할 방법이 화면에서 사라진다. 가드에 **그 셋이 모집단 밖임을 단언하는 음성 칸**을 넣었다.
 
 
 
