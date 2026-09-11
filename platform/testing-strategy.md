@@ -298,6 +298,35 @@ fails, the green is a fact about the fixture, not about the property.
 
 ---
 
+## "Fresh-volume CI represents production" can be a property of today's deployment, not of the system
+
+A fresh-volume CI run is **permanently green on migration-ordering defects**: a migration that only breaks when
+applied *on top of existing rows* never meets existing rows, because every CI run starts from an empty database.
+The verdict for that axis comes from an **existing volume** or not at all.
+
+There is one escape, and the demo deployment currently sits in it. New migrations reach that host by exactly one
+path — rebake the AMI, change `ami_id`, `terraform apply` — and that apply **replaces the instance**. The root
+device is the only volume and it is `DeleteOnTermination=True`; the routine `stop`/`start` preserves the volume
+but cannot deliver a new migration. So a new migration there **always meets an empty volume**, production
+included. When that holds, CI is not merely convenient — it genuinely represents production for this axis, and
+"does this migration apply on top of existing rows" is not a deferred test but an **event that cannot occur**.
+
+🔴 **That is a property of the current architecture, not of the system.** Attach one data EBS volume — or move
+the database off the root device, or introduce any path that delivers migrations without replacing the instance
+— and production stops always being fresh while **CI stays exactly as green as before**. Nothing fails. The
+coverage claim simply becomes false, silently, and the next migration-ordering defect ships.
+
+(Measured 2026-09-10 / 2026-09-11, `TASK-MONO-645` AC-3: `BlockDeviceMappings` showed a single root volume with
+`DeleteOnTermination=True`, and `flyway_schema_history` carried `V19` as `success=t` dated to the day the
+instance was **replaced** — the argument and the observation agreed.)
+
+**Therefore, before treating CI as covering migration ordering for a deployment, re-measure the three facts that
+make the escape true:** (a) the only path for a new migration is instance replacement, (b) the database lives on
+the only volume, and (c) that volume does not survive replacement. If any one of them has changed, the axis is
+back and the verdict must come from an existing volume again.
+
+---
+
 # Naming Conventions
 
 | Test Type | Naming Pattern | Example (generic) |
