@@ -151,11 +151,15 @@ refresh token rotation · revoke · 멀티테넌트 행 단위 격리 · RFC 869
 **살아 있는 저장소**입니다. 전체 개발 이력과 공용 라이브러리가 여기 있습니다.
 
 각 프로젝트는 [`scripts/sync-portfolio.sh`](../scripts/sync-portfolio.sh) 로 독립 리포에
-추출됩니다. 🔴 **다만 그 사본들은 지금 낡았습니다** — 마지막 동기화가 **2026-08-04** 이고
-(erp·finance 는 2026-05-19 부트스트랩 상태), 그래서 위 링크는 전부 **모노레포 안의 경로**를
-가리킵니다. 사본을 보고 싶으면:
-[wms](https://github.com/kanggle/wms-platform) ·
-[scm](https://github.com/kanggle/scm-platform) ·
-[iam](https://github.com/kanggle/iam-platform) ·
-[ecommerce](https://github.com/kanggle/ecommerce-microservices-platform) ·
-[fan](https://github.com/kanggle/fan-platform).
+추출됩니다. 🔵 **위 링크는 전부 모노레포 안의 경로를 가리킵니다** — 사본은 추출본이고,
+이력·공용 라이브러리·이 문서가 모두 여기 있기 때문입니다.
+
+사본을 보고 싶으면 (**최종 동기화 2026-09-10 UTC 기준**):
+
+| 사본 | 마지막 동기화 |
+|---|---|
+| [scm](https://github.com/kanggle/scm-platform) · [erp](https://github.com/kanggle/erp-platform) · [finance](https://github.com/kanggle/finance-platform) | 🟢 **2026-09-10** — 최신입니다 |
+| [wms](https://github.com/kanggle/wms-platform) · [iam](https://github.com/kanggle/iam-platform) · [ecommerce](https://github.com/kanggle/ecommerce-microservices-platform) · [fan](https://github.com/kanggle/fan-platform) | 🔴 **2026-08-04** — 그만큼 뒤처져 있습니다 |
+
+🔴 뒤처진 넷은 **그 프로젝트가 멈춘 것이 아니라 추출을 안 돌린 것**입니다. 그 넷의 최신
+상태는 위의 모노레포 링크에서 보실 수 있습니다.
