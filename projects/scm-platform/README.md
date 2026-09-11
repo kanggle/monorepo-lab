@@ -1,6 +1,6 @@
 # scm-platform
 
-[![CI](https://github.com/kanggle/scm-platform/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kanggle/scm-platform/actions/workflows/ci.yml?query=branch%3Amain)
+[![CI (monorepo-lab)](https://github.com/kanggle/monorepo-lab/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kanggle/monorepo-lab/actions/workflows/ci.yml?query=branch%3Amain)
 
 > Supply Chain Management 백엔드 플랫폼. monorepo Phase 4 catalyst 도메인 — 조달 → 재고 가시성 → 수요 계획 → 운송의 cross-functional 공급망 흐름을 다수 외부 시스템과 연동하며 관리한다.
 

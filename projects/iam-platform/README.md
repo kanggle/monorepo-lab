@@ -4,7 +4,7 @@
 >
 > _옛 명칭: **Global Account Platform** (`global-account-platform` / `gap`) — 2026-06-06 IAM 으로 rename (MONO-179/180)._
 
-[![CI](https://github.com/kanggle/iam-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/kanggle/iam-platform/actions/workflows/ci.yml)
+[![CI (monorepo-lab)](https://github.com/kanggle/monorepo-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/kanggle/monorepo-lab/actions/workflows/ci.yml)
 
 ---
 

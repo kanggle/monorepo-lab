@@ -3,7 +3,7 @@
 > **K-pop 류 아티스트↔팬 커뮤니티** 백엔드 + Next.js 프론트엔드. Weverse-style.
 > Built with Claude Code · spec-driven · IAM OIDC consumer · Traefik hostname routing
 
-[![CI](https://github.com/kanggle/fan-platform/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kanggle/fan-platform/actions/workflows/ci.yml?query=branch%3Amain)
+[![CI (monorepo-lab)](https://github.com/kanggle/monorepo-lab/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kanggle/monorepo-lab/actions/workflows/ci.yml?query=branch%3Amain)
 [![Java 21](https://img.shields.io/badge/java-21-007396)](https://adoptium.net/)
 [![Spring Boot 3.4](https://img.shields.io/badge/spring--boot-3.4-6DB33F)](https://spring.io/projects/spring-boot)
 [![Next.js 15](https://img.shields.io/badge/next.js-15-000000)](https://nextjs.org/)

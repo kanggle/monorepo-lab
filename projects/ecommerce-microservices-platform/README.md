@@ -15,7 +15,7 @@
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-[![CI](https://github.com/kanggle/ecommerce-microservices-platform/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kanggle/ecommerce-microservices-platform/actions/workflows/ci.yml?query=branch%3Amain)
+[![CI (monorepo-lab)](https://github.com/kanggle/monorepo-lab/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kanggle/monorepo-lab/actions/workflows/ci.yml?query=branch%3Amain)
 
 ---
 

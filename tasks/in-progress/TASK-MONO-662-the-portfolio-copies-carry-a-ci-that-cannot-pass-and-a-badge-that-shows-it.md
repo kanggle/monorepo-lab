@@ -8,7 +8,7 @@ TASK-MONO-662
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -272,3 +272,133 @@ failure | kanggle-auth    failure | kanggle-console
 소유자가 별도 질문에서 **「662 를 먼저 해결한 뒤」 `TASK-MONO-663`(자동화)** 순서를 골랐다.
 ⇒ **이 티켓이 663 보다 앞선다.** 🔴 사유는 내가 제출한 그대로다: *자동화는 「사본을 더 자주
 민다」는 뜻이고, 지금은 밀 때마다 배지가 빨개지므로 순서를 바꾸면 결함을 더 빨리 복제한다.*
+
+---
+
+# 🟢 AC-0 재측정 + AC-2 구현 (2026-09-10 UTC)
+
+## AC-0 — 착수 게이트
+
+### ① 각 사본의 최근 «CI» 런 — 🔴 술어를 지켜서 쟀다
+
+```
+wms-platform                       CI 런 0건
+iam-platform                       CI 런 0건
+ecommerce-microservices-platform   CI 런 0건
+fan-platform                       CI 런 0건
+scm-platform                       failure  2026-09-10T13:11:39Z
+erp-platform                       failure  2026-09-10T15:12:31Z
+finance-platform                   failure  2026-09-10T15:56:35Z
+```
+
+🔵 **표본이 셋이 됐다.** `finance` 는 이 절을 쓰기 전에 예고했고 실제로 `failure` 였다 —
+🟢 밀린 것 셋이 전부, 안 밀린 넷이 전부 0건. **「밀면 빨개진다」가 7개 전수에서 성립한다.**
+🔴 `select(.name=="CI")` 없이 `.workflow_runs[0]` 만 봤으면 예약 런이 목록을 채워
+「최근 런 = skipped」로 읽혔을 것이다.
+
+### ② `erp`·`finance` 배지 — 다시 세서 **0개** 확인
+
+긴급도는 안 바뀐다.
+
+---
+
+## 🔴🔴 그런데 AC-0 을 재다가 이 티켓의 «전제» 가 틀린 것을 찾았다
+
+이 티켓은 사본 CI 를 *"통과가 **구조적으로** 불가능"* 이라고 적었다. **아니다.**
+
+`nightly-e2e.yml` 주석이 스스로 말한다:
+
+> *"Only monorepo-lab has the backend stack; extracted portfolio repos skip.
+> Enforced at the job level via `if: github.repository == 'kanggle/monorepo-lab'`."*
+
+⇒ **이 저장소엔 「사본에서는 돌지 마라」를 표현하는 관용구가 이미 있고, 검증돼 있다**
+(사본의 예약 런이 `skipped` 로 끝나던 이유가 바로 이것이다). 전수:
+
+| 워크플로 | `github.repository ==` 가드 수 |
+|---|---|
+| `ci.yml` | **14** |
+| `nightly-e2e.yml` | 17 |
+| `federation-hardening-e2e.yml` | 3 |
+| `_integration.yml` | 1 |
+| `vercel-deploy.yml` · `_platform-e2e.yml` | **0** |
+
+🔴 **`ci.yml` 은 잡이 62개인데 가드는 14곳뿐이다.** 그리고 그 14개가 무엇인지 세 보면
+전부 **Testcontainers · E2E · 관측 스택** 같은 무거운 잡이다:
+
+```
+E2E (fan-platform v1 live-trio smoke, Testcontainers)
+Integration (ecommerce …, Testcontainers) · (erp) · (finance) · (iam) · (scm) …
+Observability stack footprint regression
+```
+
+🔵 **즉 그 가드는 «사본은 CI 를 돌면 안 된다» 때문에 붙은 게 아니라 «도커와 전체 스택이
+필요하다» 때문에 붙었다.** 나머지 ~48개(가드·린트·빌드·단위테스트)는 아무도 그 질문을
+안 한 채 남았고, 사본에서 그것들이 실패한다.
+
+⇒ **「구조적으로 불가능」이 아니라 「관용구가 일부에만 적용됐다」가 맞는 서술이다.**
+🔴 이 차이가 중요한 이유: 전자면 손쓸 수 없고, 후자면 **고칠 수 있다.**
+
+### ⇒ 🙋 소유자가 고른 메뉴에 **없던 갈래 ⓔ 가 생겼다**
+
+**ⓔ `ci.yml` 의 나머지 잡에도 `if: github.repository == 'kanggle/monorepo-lab'` 를
+붙인다** — 그러면 사본의 CI 는 **빨강이 아니라 skipped** 가 되고, 🔵 사본에 CI 가 있다는
+증거도 남는다(ⓐ 가 포기하는 것). 즉 **ⓒ 가 «안 보이게» 한 것을 ⓔ 는 «없게» 한다.**
+
+🔴 **그러나 이것은 소유자가 고를 때 없던 선택지다.** 그리고 62개 잡을 건드리는 일이라
+크기가 다르다. ⇒ **여기서 하지 않는다.** ⓒ+ⓑ 는 그대로 구현했고, ⓔ 는 **`TASK-MONO-664`**
+로 기안해 소유자 앞에 놓는다. 🔵 ⓒ+ⓑ 와 ⓔ 는 **충돌하지 않는다** — ⓔ 를 나중에 해도
+배지는 이미 옳은 곳을 가리킨다.
+
+---
+
+## AC-2 — 구현
+
+### ⓑ 사본에서 예약 실행과 배포 훅을 뗀다
+
+`strip_copy_only_workflow_triggers()` 를 **공유 헬퍼**로 넣고 **두 후처리 함수 양쪽**에서
+부른다(`post_process_direct_include` · `post_process_composite_build`).
+🔴 한 헬퍼로 둔 것이 의도다 — 두 함수가 이미 워크플로를 **따로** 고치고 있어서, 한쪽에만
+넣으면 형제가 조용히 어긋난다(이 저장소가 반복해서 값을 치른 모양이다).
+
+🔴 **`schedule:` 을 `sed '/schedule:/d'` 로 지우지 않았다.** 그러면 그 아래 `- cron:` 줄이
+**다음 키 밑에 매달린 채 남는다** — 문법적으로 유효한 YAML 이라 아무도 안 잡는다.
+들여쓰기를 읽는 awk 로 **블록째** 떼어 냈다.
+
+### 🟢 bite — 주입 · 실행 · 물기를 각각 증명했다
+
+| | 무엇을 쟀나 | 결과 |
+|---|---|---|
+| **① 주입** | 손대기 전 픽스처 | `schedule:` 2파일 · `cron` 2줄 · `vercel-deploy.yml` **있다** · `ci.yml` **3,958줄** |
+| **② 실행** | 헬퍼가 실제로 돌았나 | rc=0, 세 파일에 대해 **로그 3줄** |
+| **③ 물기** | 손댄 뒤 | `schedule:` **0** · `cron` **0** · `vercel-deploy.yml` **없다** |
+
+🔵 **대조군 셋이 안 다쳤다**: `ci.yml` **여전히 3,958줄**(한 줄도 안 건드렸다) ·
+`nightly` 의 `push:` 트리거 **생존** · `federation` 의 `workflow_dispatch:` **생존**.
+⇒ 뗀 것이 «예약 트리거» 뿐이고 **파일을 망가뜨린 게 아니다.** 잘린 자리의 `on:` 블록도
+확인했다 — `on: → push: → workflow_dispatch:` 로 정상이다.
+
+### ⓒ 배지가 사실을 가리키게 한다
+
+프로젝트 README **5개**의 배지를 `kanggle/<copy>/…/ci.yml` → `kanggle/monorepo-lab/…/ci.yml`
+로 옮겼다(각 2곳 = 이미지 URL + 링크 URL, **총 10곳**). 검증: 사본을 가리키는 배지 **0**,
+모노레포를 가리키는 배지 **5**.
+
+🔵 **라벨도 바꿨다**: `![CI]` → `![CI (monorepo-lab)]`. 배지가 가리키는 곳만 바꾸면
+방문자는 여전히 **사본의 CI** 로 읽는다 — 🔴 산문 한 줄을 다섯 군데 더하는 대신 **배지가
+스스로 말하게** 했다(사본으로 따라가고, 따로 낡지 않는다).
+
+---
+
+## ⚪ 남은 것 — 🙋 **소급 적용은 소유자 승인 축이다**
+
+AC-2 의 셋째 칸: *"이미 밀린 `scm`·`erp`·`finance` 세 사본에 **소급 적용**하라"*.
+🔴 그것은 **force-push** 이고 `TASK-MONO-657` AC-0 과 **같은 승인 축**이다 — 여기서
+자동으로 하지 않는다.
+
+🔵 **급한 것은 하나뿐이다**: `scm-platform` 의 배지가 **지금 빨갛다.** `erp`·`finance` 는
+배지가 없어 방문자에게 안 보인다. ⇒ 최소 조치는 **`scm` 하나만 다시 미는 것**이고,
+그것만으로 「지원자가 건네는 링크에 빨간 배지」가 사라진다.
+
+🔴 그리고 AC-2 의 술어를 지켜야 한다 — **「rc=0」이 아니라 «그 사본 Actions 에 새 런이
+생겼는가 / 배지가 무슨 색인가»**. 어제 내가 「푸시 성공」만 읽어서 이 결함이 하루 늦게
+발견됐다.

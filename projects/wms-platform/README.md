@@ -1,6 +1,6 @@
 # wms-platform
 
-[![CI](https://github.com/kanggle/wms-platform/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kanggle/wms-platform/actions/workflows/ci.yml?query=branch%3Amain)
+[![CI (monorepo-lab)](https://github.com/kanggle/monorepo-lab/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kanggle/monorepo-lab/actions/workflows/ci.yml?query=branch%3Amain)
 
 > **창고 관리 시스템 백엔드** — 프로덕션 기준으로 설계한 포트폴리오 프로젝트
 
