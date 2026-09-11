@@ -8,7 +8,7 @@ TASK-MONO-657
 
 # Status
 
-in-progress
+review
 
 # Owner
 
