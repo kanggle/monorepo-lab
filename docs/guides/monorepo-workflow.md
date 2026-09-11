@@ -147,7 +147,30 @@ Before recommending the next task, scan **both** the `ready/` queue (new candida
 
 `scripts/sync-portfolio.sh` extracts each project into its own GitHub repository (full history, `git-filter-repo` based). Projects in the standalone repos are suitable for portfolio submission.
 
-### Basic usage
+### 어디서 돌릴 것인가 — 🔴 **CI 를 먼저 보라** (TASK-MONO-663)
+
+| | 경로 | 언제 |
+|---|---|---|
+| **권장** | **GitHub Actions → `Portfolio sync (manual)` → Run workflow** | 기본. 리눅스 러너 |
+| 폴백 | 아래 호스트 실행 | CI 가 안 돌거나 토큰이 없을 때 |
+
+🔴 **Windows 호스트에서 돌리면 사본 하나당 수십 분이다.** 추출은 파일을 수만 개
+만들고 지우는 일이고, NTFS 의 파일 생성 비용 + Docker Desktop 의 번역이 거기 곱해진다.
+그래서 「전부 돌린다」가 반나절이 된다. 리눅스 러너에서는 `git-filter-repo` 가
+**pip 한 줄**이고 컨테이너가 필요 없다.
+
+🔵 워크플로는 **`workflow_dispatch` 하나만** 받는다(소유자 결정, 2026-09-11) — 이 작업은
+대상 리포에 **force-push** 하고, `CLAUDE.md` 가 그것을 명시적 승인 축으로 못 박았기
+때문이다. `schedule`·push 트리거는 그것을 **무인으로** 만든다.
+🔴 그 대가: **사본이 낡는 것을 아무도 알려 주지 않는다**(`TASK-MONO-657` 이 37일/114일
+낡은 것을 사람이 눈치채서 발견했다). 그 감시는 별도 축이다.
+
+🔵 입력 둘: `project`(비우면 전부) · `dry_run`(**기본 true** — 밀기 전에 무엇을 밀지 본다).
+🔴 첫 잡이 **프리플라이트**다. 7개 리포 전부에 `push` 권한이 있는지 **동기화를 시작하기
+전에** 확인하고, 하나라도 없으면 거기서 멈춘다 — 안 그러면 추출을 다 한 뒤 push 에서
+403 으로 죽고 수 분을 버린다.
+
+### Basic usage (호스트 — 폴백)
 
 ```bash
 # Sync all configured projects
@@ -160,6 +183,18 @@ Before recommending the next task, scan **both** the `ready/` queue (new candida
 ./scripts/sync-portfolio.sh --dry-run
 ./scripts/sync-portfolio.sh wms-platform --dry-run
 ```
+
+🔵 **백엔드는 자동으로 고른다**: `git-filter-repo` 가 PATH 에 있으면 **네이티브**(권장,
+컨테이너 없음), 없고 docker 데몬이 살아 있으면 **컨테이너**. 둘 다 없으면 **둘 다
+이름을 대며** 죽는다.
+
+```bash
+pip install git-filter-repo          # 네이티브 경로를 여는 한 줄
+FILTER_BACKEND=docker ./scripts/sync-portfolio.sh --dry-run wms-platform   # 강제 지정
+```
+
+🔴 `FILTER_BACKEND` 는 **두 경로를 한 기계에서 비교**하려고 있다. 스크립트가 조용히
+하나를 고르면 «둘이 같은 결과를 내는가» 를 물을 수 없다.
 
 ### How it works
 
