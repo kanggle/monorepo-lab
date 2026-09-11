@@ -22,6 +22,8 @@ import com.wms.admin.readmodel.master.LotRefEntity;
 import com.wms.admin.readmodel.master.LotRefRepository;
 import com.wms.admin.readmodel.master.SkuRefEntity;
 import com.wms.admin.readmodel.master.SkuRefRepository;
+import com.wms.admin.readmodel.master.WarehouseRefEntity;
+import com.wms.admin.readmodel.master.WarehouseRefRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
@@ -58,6 +60,8 @@ public class InventoryProjectionService {
     private final LocationRefRepository locationRepo;
     private final SkuRefRepository skuRepo;
     private final LotRefRepository lotRepo;
+    // 🔴 TASK-MONO-659 — 형제 셋은 주입돼 있었고 이것만 없었다. 그것이 결함의 전부다.
+    private final WarehouseRefRepository warehouseRepo;
     private final AdminEventDedupeRepository dedupe;
     private final ProjectionMetrics metrics;
     private final Clock clock;
@@ -68,6 +72,7 @@ public class InventoryProjectionService {
                                       LocationRefRepository locationRepo,
                                       SkuRefRepository skuRepo,
                                       LotRefRepository lotRepo,
+                                      WarehouseRefRepository warehouseRepo,
                                       AdminEventDedupeRepository dedupe,
                                       ProjectionMetrics metrics,
                                       Clock clock) {
@@ -77,6 +82,7 @@ public class InventoryProjectionService {
         this.locationRepo = locationRepo;
         this.skuRepo = skuRepo;
         this.lotRepo = lotRepo;
+        this.warehouseRepo = warehouseRepo;
         this.dedupe = dedupe;
         this.metrics = metrics;
         this.clock = clock;
@@ -333,6 +339,9 @@ public class InventoryProjectionService {
                                UUID lotId, UUID warehouseId, int availableQty, int reservedQty,
                                int damagedQty, Instant occurredAt) {
         boolean lowStock = availableQty <= DEFAULT_LOW_STOCK_THRESHOLD;
+        String warehouseCode = warehouseId == null ? null
+                : warehouseRepo.findById(warehouseId)
+                        .map(WarehouseRefEntity::getWarehouseCode).orElse(null);
         String locationCode = locationRepo.findById(locationId)
                 .map(LocationRefEntity::getLocationCode).orElse(null);
         String skuCode = skuRepo.findById(skuId).map(SkuRefEntity::getSkuCode).orElse(null);
@@ -340,11 +349,13 @@ public class InventoryProjectionService {
                 : lotRepo.findById(lotId).map(LotRefEntity::getLotNo).orElse(null);
         if (existing == null) {
             InventorySnapshotEntity row = new InventorySnapshotEntity(
-                    locationId, skuId, lotId, warehouseId, locationCode, skuCode, lotNo,
+                    locationId, skuId, lotId, warehouseId, warehouseCode, locationCode, skuCode,
+                    lotNo,
                     availableQty, reservedQty, damagedQty, lowStock, occurredAt, occurredAt);
             snapshotRepo.save(row);
         } else {
-            existing.apply(warehouseId, locationCode, skuCode, lotNo, availableQty, reservedQty,
+            existing.apply(warehouseId, warehouseCode, locationCode, skuCode, lotNo,
+                    availableQty, reservedQty,
                     damagedQty, lowStock, occurredAt, occurredAt);
         }
     }

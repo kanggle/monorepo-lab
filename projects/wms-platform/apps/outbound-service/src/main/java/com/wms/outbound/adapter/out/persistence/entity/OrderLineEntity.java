@@ -31,6 +31,10 @@ public class OrderLineEntity {
     @Column(name = "sku_id", nullable = false)
     private UUID skuId;
 
+    /** TASK-MONO-659 — 비정규화된 SKU 코드. 기존 행은 백필 전까지 null 이다. */
+    @Column(name = "sku_code", length = 40)
+    private String skuCode;
+
     @Column(name = "lot_id")
     private UUID lotId;
 
@@ -44,12 +48,13 @@ public class OrderLineEntity {
     }
 
     public OrderLineEntity(UUID id, UUID orderId, int lineNumber,
-                           UUID skuId, UUID lotId, int requestedQty,
+                           UUID skuId, String skuCode, UUID lotId, int requestedQty,
                            Instant createdAt) {
         this.id = id;
         this.orderId = orderId;
         this.lineNumber = lineNumber;
         this.skuId = skuId;
+        this.skuCode = skuCode;
         this.lotId = lotId;
         this.requestedQty = requestedQty;
         this.createdAt = createdAt;
@@ -59,6 +64,7 @@ public class OrderLineEntity {
     public UUID getOrderId() { return orderId; }
     public int getLineNumber() { return lineNumber; }
     public UUID getSkuId() { return skuId; }
+    public String getSkuCode() { return skuCode; }
     public UUID getLotId() { return lotId; }
     public int getRequestedQty() { return requestedQty; }
     public Instant getCreatedAt() { return createdAt; }

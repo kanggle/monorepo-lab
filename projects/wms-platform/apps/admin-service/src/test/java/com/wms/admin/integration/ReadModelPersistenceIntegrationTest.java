@@ -94,7 +94,7 @@ class ReadModelPersistenceIntegrationTest extends AdminServiceIntegrationBase {
     void asnSummary_roundTrip() {
         UUID asnId = UUID.randomUUID();
         UUID warehouseId = UUID.randomUUID();
-        asnRepo.save(new AsnSummaryEntity(asnId, "ASN-001", warehouseId, null, null,
+        asnRepo.save(new AsnSummaryEntity(asnId, "ASN-001", warehouseId, null, null, null,
                 "CREATED", "MANUAL", LocalDate.of(2026, 5, 12), 3, NOW, null, NOW));
 
         var loaded = asnRepo.findById(asnId).orElseThrow();
@@ -121,7 +121,7 @@ class ReadModelPersistenceIntegrationTest extends AdminServiceIntegrationBase {
         UUID location = UUID.randomUUID();
         UUID sku = UUID.randomUUID();
         UUID warehouse = UUID.randomUUID();
-        snapshotRepo.save(new InventorySnapshotEntity(location, sku, null, warehouse,
+        snapshotRepo.save(new InventorySnapshotEntity(location, sku, null, warehouse, null,
                 "WH01-A-01", "SKU-1", null, 100, 0, 0, false, NOW, NOW));
 
         var loaded = snapshotRepo.findById(new InventorySnapshotId(location, sku, null))
@@ -136,7 +136,7 @@ class ReadModelPersistenceIntegrationTest extends AdminServiceIntegrationBase {
         UUID sku = UUID.randomUUID();
         UUID lot = UUID.randomUUID();
         UUID warehouse = UUID.randomUUID();
-        snapshotRepo.save(new InventorySnapshotEntity(location, sku, lot, warehouse,
+        snapshotRepo.save(new InventorySnapshotEntity(location, sku, lot, warehouse, null,
                 null, null, "LOT-1", 50, 10, 0, false, NOW, NOW));
 
         var loaded = snapshotRepo.findById(new InventorySnapshotId(location, sku, lot))
@@ -289,7 +289,7 @@ class ReadModelPersistenceIntegrationTest extends AdminServiceIntegrationBase {
     @Test
     void asnSummary_search_allNullFilters_doesNotFailPgTypeInference() {
         UUID asnId = UUID.randomUUID();
-        asnRepo.save(new AsnSummaryEntity(asnId, "ASN-001", UUID.randomUUID(), null, null,
+        asnRepo.save(new AsnSummaryEntity(asnId, "ASN-001", UUID.randomUUID(), null, null, null,
                 "CREATED", "MANUAL", LocalDate.of(2026, 5, 12), 3, NOW, null, NOW));
 
         Page<AsnSummaryEntity> result =

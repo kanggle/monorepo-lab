@@ -101,8 +101,8 @@ class RecordReservedPickingServiceTest {
     void repeatedSkuLinesAreMatchedInOrder() {
         // Two order lines for the same SKU with no lot — the join key alone
         // cannot separate them, so order has to.
-        OrderLine first = new OrderLine(UUID.randomUUID(), orderId, 1, skuA, null, 2);
-        OrderLine second = new OrderLine(UUID.randomUUID(), orderId, 2, skuA, null, 7);
+        OrderLine first = new OrderLine(UUID.randomUUID(), orderId, 1, skuA, null, null, 2);
+        OrderLine second = new OrderLine(UUID.randomUUID(), orderId, 2, skuA, null, null, 7);
         saveOrder(List.of(first, second));
 
         service.recordReservedPicking(new RecordReservedPickingCommand(
@@ -177,8 +177,8 @@ class RecordReservedPickingServiceTest {
 
     private List<OrderLine> seedOrder(UUID firstSku, UUID secondSku) {
         List<OrderLine> lines = List.of(
-                new OrderLine(UUID.randomUUID(), orderId, 1, firstSku, null, 3),
-                new OrderLine(UUID.randomUUID(), orderId, 2, secondSku, null, 5));
+                new OrderLine(UUID.randomUUID(), orderId, 1, firstSku, null, null, 3),
+                new OrderLine(UUID.randomUUID(), orderId, 2, secondSku, null, null, 5));
         saveOrder(lines);
         return lines;
     }

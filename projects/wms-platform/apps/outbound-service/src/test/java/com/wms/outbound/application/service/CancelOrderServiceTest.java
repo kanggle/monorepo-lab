@@ -214,7 +214,7 @@ class CancelOrderServiceTest {
     private static Order orderInState(OrderStatus status) {
         UUID orderId = UUID.randomUUID();
         OrderLine line = new OrderLine(UUID.randomUUID(), orderId, 1,
-                UUID.randomUUID(), null, 5);
+                UUID.randomUUID(), null, null, 5);
         return new Order(orderId, "ORD-" + orderId, OrderSource.MANUAL,
                 UUID.randomUUID(), UUID.randomUUID(),
                 null, null, status, 0L,
@@ -225,7 +225,7 @@ class CancelOrderServiceTest {
     private static Order ecommerceOrderInState(OrderStatus status, String tenantId) {
         UUID orderId = UUID.randomUUID();
         OrderLine line = new OrderLine(UUID.randomUUID(), orderId, 1,
-                UUID.randomUUID(), null, 5);
+                UUID.randomUUID(), null, null, 5);
         return new Order(orderId, "ORD-" + orderId, OrderSource.FULFILLMENT_ECOMMERCE,
                 UUID.randomUUID(), UUID.randomUUID(),
                 null, null, null /* shipTo */, tenantId, status, 0L,

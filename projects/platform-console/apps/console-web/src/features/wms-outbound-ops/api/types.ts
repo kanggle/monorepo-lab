@@ -111,6 +111,9 @@ export const OutboundOrderLineSchema = z
     orderLineId: z.string(),
     lineNo: z.number().optional(),
     skuId: z.string(),
+    // TASK-MONO-659 — outbound 가 인입 시점에 쥐고 있던 코드를 이제 응답에 싣는다.
+    // 🔴 백필 전에 만들어진 주문은 null 이다(마이그레이션 V10 이 조인으로 채운다).
+    skuCode: z.string().nullable().optional(),
     lotId: z.string().nullable().optional(),
     qtyOrdered: z.number(),
   })

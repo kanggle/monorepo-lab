@@ -9,6 +9,7 @@ public record AsnSummaryResponse(
         UUID asnId,
         String asnNo,
         UUID warehouseId,
+        String warehouseCode,
         UUID supplierPartnerId,
         String supplierName,
         String status,
@@ -22,7 +23,7 @@ public record AsnSummaryResponse(
 
     public static AsnSummaryResponse from(AsnSummaryEntity e) {
         return new AsnSummaryResponse(
-                e.getAsnId(), e.getAsnNo(), e.getWarehouseId(),
+                e.getAsnId(), e.getAsnNo(), e.getWarehouseId(), e.getWarehouseCode(),
                 e.getSupplierPartnerId(), e.getSupplierName(),
                 e.getStatus(), e.getSource(), e.getExpectedArriveDate(),
                 e.getLineCount(), e.getReceivedAt(), e.getClosedAt(),

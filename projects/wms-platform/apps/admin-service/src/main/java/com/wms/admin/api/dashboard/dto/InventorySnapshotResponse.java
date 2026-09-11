@@ -10,6 +10,7 @@ public record InventorySnapshotResponse(
         UUID skuId,
         UUID lotId,
         UUID warehouseId,
+        String warehouseCode,
         String locationCode,
         String skuCode,
         String lotNo,
@@ -25,7 +26,7 @@ public record InventorySnapshotResponse(
     public static InventorySnapshotResponse from(InventorySnapshotEntity e) {
         return new InventorySnapshotResponse(
                 e.getLocationId(), e.getSkuId(), e.getLotIdOrNull(), e.getWarehouseId(),
-                e.getLocationCode(), e.getSkuCode(), e.getLotNo(),
+                e.getWarehouseCode(), e.getLocationCode(), e.getSkuCode(), e.getLotNo(),
                 e.getAvailableQty(), e.getReservedQty(), e.getDamagedQty(), e.getOnHandQty(),
                 e.isLowStockFlag(), e.getLastAdjustedAt(), e.getLastEventAt(), e.getVersion());
     }

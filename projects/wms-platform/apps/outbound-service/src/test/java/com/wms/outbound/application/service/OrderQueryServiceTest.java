@@ -115,7 +115,7 @@ class OrderQueryServiceTest {
                 UUID.randomUUID(), UUID.randomUUID(), null, null, null /* shipTo */,
                 "ecommerce", OrderStatus.PICKING, 0L, T0, "creator", T0, "creator",
                 List.of(new OrderLine(UUID.randomUUID(), UUID.randomUUID(), 1,
-                        UUID.randomUUID(), null, 5)));
+                        UUID.randomUUID(), null, null, 5)));
         orderPersistence.save(order);
         callerScopeProvider.restrictTo("ecommerce");
 
@@ -127,7 +127,7 @@ class OrderQueryServiceTest {
     private static Order orderInState(OrderStatus status) {
         UUID orderId = UUID.randomUUID();
         OrderLine line = new OrderLine(UUID.randomUUID(), orderId, 1,
-                UUID.randomUUID(), null, 5);
+                UUID.randomUUID(), null, null, 5);
         return new Order(orderId, "ORD-" + orderId, OrderSource.MANUAL,
                 UUID.randomUUID(), UUID.randomUUID(),
                 null, null, status, 0L,

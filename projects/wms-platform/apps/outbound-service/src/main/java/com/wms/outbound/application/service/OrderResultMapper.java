@@ -36,6 +36,7 @@ public final class OrderResultMapper {
                         l.getId(),
                         l.getLineNo(),
                         l.getSkuId(),
+                        l.getSkuCode(),
                         l.getLotId(),
                         l.getQtyOrdered()))
                 .toList();

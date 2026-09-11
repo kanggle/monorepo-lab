@@ -7,6 +7,7 @@ public record OrderLineResponse(
         UUID orderLineId,
         int lineNo,
         UUID skuId,
+        String skuCode,
         UUID lotId,
         int qtyOrdered
 ) {
@@ -16,6 +17,7 @@ public record OrderLineResponse(
                 r.orderLineId(),
                 r.lineNo(),
                 r.skuId(),
+                r.skuCode(),
                 r.lotId(),
                 r.qtyOrdered());
     }

@@ -158,8 +158,10 @@ public class ReceiveOrderService implements ReceiveOrderUseCase {
                 throw new SkuInactiveException(cl.skuId());
             }
             UUID lineId = UuidV7.randomUuid();
+            // 🔵 TASK-MONO-659 — `sku` 는 바로 위에서 이미 해석됐고 아래 이벤트도 그
+            //    코드를 싣는다. 즉 값은 손에 있었고 주문 라인에만 안 실렸던 것이다.
             lines.add(new OrderLine(lineId, orderId, cl.lineNo(),
-                    cl.skuId(), cl.lotId(), cl.qtyOrdered()));
+                    cl.skuId(), sku.skuCode(), cl.lotId(), cl.qtyOrdered()));
             eventLinesAccumulator.add(new OrderReceivedEvent.Line(
                     lineId, cl.lineNo(), cl.skuId(), sku.skuCode(),
                     cl.lotId(), cl.qtyOrdered()));

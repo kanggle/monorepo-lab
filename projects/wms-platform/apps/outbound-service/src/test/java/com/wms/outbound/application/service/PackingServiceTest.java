@@ -281,7 +281,7 @@ class PackingServiceTest {
     // ------------------------------------------------------------------
 
     private void seedOrder(OrderStatus status, int qty) {
-        OrderLine line = new OrderLine(orderLineId, orderId, 1, skuId, null, qty);
+        OrderLine line = new OrderLine(orderLineId, orderId, 1, skuId, null, null, qty);
         Order order = new Order(orderId, "ORD-1", OrderSource.MANUAL,
                 partnerId, warehouseId, null, null, status,
                 0L, T0, "creator", T0, "creator", List.of(line));

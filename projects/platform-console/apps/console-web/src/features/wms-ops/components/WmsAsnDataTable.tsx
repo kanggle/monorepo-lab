@@ -3,6 +3,7 @@
 import { Button } from '@/shared/ui/Button';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { formatDate, formatDateTime } from '@/shared/lib/datetime';
+import { masterRefLabel } from '@/shared/lib/master-ref-label';
 import { asnStatusTone } from './wms-ops-helpers';
 import type { AsnPage, AsnQueryParams, AsnRow } from '../api/types';
 
@@ -80,7 +81,18 @@ export function WmsAsnDataTable({
                   {a.status ?? '—'}
                 </StatusBadge>
               </td>
-              <td className="p-2">{a.warehouseId ?? '—'}</td>
+              {/* 🔴 TASK-MONO-659 — `supplierName` 은 옆 칸에서 이미 이름을 그리는데
+                  창고만 UUID 였다. 생산자가 이제 `warehouseCode` 를 싣는다. */}
+              <td
+                className="p-2"
+                data-master-ref="asn.warehouseId"
+                title={a.warehouseId ?? undefined}
+              >
+                {masterRefLabel(
+                  a.warehouseId,
+                  a.warehouseCode ? { code: a.warehouseCode } : null,
+                )}
+              </td>
               <td className="p-2">
                 {a.supplierName ?? a.supplierPartnerId ?? '—'}
               </td>

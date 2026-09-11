@@ -18,6 +18,8 @@ import com.wms.admin.readmodel.inbound.InspectionSummaryEntity;
 import com.wms.admin.readmodel.inbound.InspectionSummaryRepository;
 import com.wms.admin.readmodel.master.PartnerRefEntity;
 import com.wms.admin.readmodel.master.PartnerRefRepository;
+import com.wms.admin.readmodel.master.WarehouseRefEntity;
+import com.wms.admin.readmodel.master.WarehouseRefRepository;
 import com.wms.admin.readmodel.throughput.ThroughputInboundDailyRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -46,6 +48,8 @@ public class InboundProjectionService {
     private final InspectionSummaryRepository inspectionRepo;
     private final ThroughputInboundDailyRepository throughputRepo;
     private final PartnerRefRepository partnerRepo;
+    // 🔴 TASK-MONO-659 — partnerRepo 는 이미 있었고 이것만 없었다.
+    private final WarehouseRefRepository warehouseRepo;
     private final AdminEventDedupeRepository dedupe;
     private final ProjectionMetrics metrics;
     private final Clock clock;
@@ -54,6 +58,7 @@ public class InboundProjectionService {
                                     InspectionSummaryRepository inspectionRepo,
                                     ThroughputInboundDailyRepository throughputRepo,
                                     PartnerRefRepository partnerRepo,
+                                    WarehouseRefRepository warehouseRepo,
                                     AdminEventDedupeRepository dedupe,
                                     ProjectionMetrics metrics,
                                     Clock clock) {
@@ -61,6 +66,7 @@ public class InboundProjectionService {
         this.inspectionRepo = inspectionRepo;
         this.throughputRepo = throughputRepo;
         this.partnerRepo = partnerRepo;
+        this.warehouseRepo = warehouseRepo;
         this.dedupe = dedupe;
         this.metrics = metrics;
         this.clock = clock;
@@ -120,6 +126,7 @@ public class InboundProjectionService {
                     asnId,
                     text(p, "asnNo"),
                     uuid(p, "warehouseId"),
+                    resolveWarehouseCode(uuid(p, "warehouseId")),
                     supplierId,
                     supplierName,
                     "CREATED",
@@ -131,7 +138,8 @@ public class InboundProjectionService {
                     occurredAt);
             asnRepo.save(row);
         } else {
-            row.applyReceived(text(p, "asnNo"), uuid(p, "warehouseId"), supplierId,
+            row.applyReceived(text(p, "asnNo"), uuid(p, "warehouseId"),
+                    resolveWarehouseCode(uuid(p, "warehouseId")), supplierId,
                     supplierName, optionalText(p, "source"),
                     optionalDate(p, "expectedArriveDate"), lineCount, occurredAt, occurredAt);
         }
@@ -156,7 +164,8 @@ public class InboundProjectionService {
                     optionalUuid(p, "warehouseId") == null
                             ? new UUID(0, 0)
                             : optionalUuid(p, "warehouseId"),
-                    null, null, newStatus, null, null, 0, null, null, occurredAt);
+                    // 🔵 얇은 행 — denorm 칸은 received 가 따라올 때까지 null 이다.
+                    null, null, null, newStatus, null, null, 0, null, null, occurredAt);
             asnRepo.save(row);
         } else {
             row.applyStatus(newStatus, occurredAt);
@@ -180,7 +189,7 @@ public class InboundProjectionService {
                     optionalUuid(p, "warehouseId") == null
                             ? new UUID(0, 0)
                             : optionalUuid(p, "warehouseId"),
-                    null, null, "CLOSED", null, null, 0, null, closedAt, occurredAt);
+                    null, null, null, "CLOSED", null, null, 0, null, closedAt, occurredAt);
             asnRepo.save(row);
         } else {
             row.applyClosed(closedAt == null ? occurredAt : closedAt, occurredAt);
@@ -254,5 +263,18 @@ public class InboundProjectionService {
     private String resolvePartnerName(UUID partnerId) {
         if (partnerId == null) return null;
         return partnerRepo.findById(partnerId).map(PartnerRefEntity::getName).orElse(null);
+    }
+
+    /**
+     * TASK-MONO-659 — {@link #resolvePartnerName} 과 <b>같은 모양</b>이다. 그 대칭이 요지다:
+     * 이 DTO 는 공급사 이름을 이미 이렇게 풀고 있었고 창고만 안 풀었다.
+     *
+     * <p>참조가 아직 투영되지 않았으면 {@code null} 을 돌려준다 — 그것은 결함이 아니라
+     * 순서 뒤바뀜이고, 호출부가 "null 이면 덮지 않는다" 로 받는다.
+     */
+    private String resolveWarehouseCode(UUID warehouseId) {
+        if (warehouseId == null) return null;
+        return warehouseRepo.findById(warehouseId)
+                .map(WarehouseRefEntity::getWarehouseCode).orElse(null);
     }
 }

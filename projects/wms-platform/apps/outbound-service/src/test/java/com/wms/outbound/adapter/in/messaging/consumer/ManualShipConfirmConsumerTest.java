@@ -179,7 +179,7 @@ class ManualShipConfirmConsumerTest {
                 "system",
                 T0,
                 "system",
-                List.of(new OrderLine(UUID.randomUUID(), id, 1, UUID.randomUUID(), null, 1)));
+                List.of(new OrderLine(UUID.randomUUID(), id, 1, UUID.randomUUID(), null, null, 1)));
     }
 
     private static OutboundSaga saga(UUID orderId, SagaStatus status) {

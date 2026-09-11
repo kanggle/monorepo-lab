@@ -21,6 +21,8 @@ import com.wms.admin.readmodel.inventory.InventorySnapshotRepository;
 import com.wms.admin.readmodel.master.LocationRefRepository;
 import com.wms.admin.readmodel.master.LotRefRepository;
 import com.wms.admin.readmodel.master.SkuRefRepository;
+import com.wms.admin.readmodel.master.WarehouseRefEntity;
+import com.wms.admin.readmodel.master.WarehouseRefRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
@@ -30,6 +32,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -48,6 +51,7 @@ class InventoryProjectionServiceTest {
     @Mock LocationRefRepository locationRepo;
     @Mock SkuRefRepository skuRepo;
     @Mock LotRefRepository lotRepo;
+    @Mock WarehouseRefRepository warehouseRepo;
 
     private InMemoryDedupePort dedupe;
     private InventoryProjectionService service;
@@ -59,7 +63,7 @@ class InventoryProjectionServiceTest {
                 Clock.fixed(NOW, ZoneOffset.UTC));
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
         service = new InventoryProjectionService(snapshotRepo, auditRepo, alertRepo,
-                locationRepo, skuRepo, lotRepo, dedupe, metrics, clock);
+                locationRepo, skuRepo, lotRepo, warehouseRepo, dedupe, metrics, clock);
     }
 
     @Test
@@ -208,4 +212,64 @@ class InventoryProjectionServiceTest {
         JsonNode payload = MAPPER.readTree(payloadJson);
         return new ProjectionEnvelope(UUID.randomUUID(), eventType, NOW, "agg", topic, null, payload);
     }
+
+    // =========================================================================
+    // TASK-MONO-659 — warehouseCode 비정규화
+    // =========================================================================
+    // 형제 셋(locationCode/skuCode/lotNo)은 처음부터 이렇게 풀리고 있었고 창고만
+    // 안 풀렸다. 그래서 콘솔이 그 칸에 raw UUID 를 그렸고, 콘솔에서는 고칠 수 없었다.
+
+    @Test
+    void inventorySnapshot_carriesWarehouseCode_resolvedFromRef() throws Exception {
+        UUID location = UUID.randomUUID();
+        UUID sku = UUID.randomUUID();
+        UUID warehouseId = UUID.randomUUID();
+        when(snapshotRepo.findById(any(InventorySnapshotId.class))).thenReturn(Optional.empty());
+        when(locationRepo.findById(any())).thenReturn(Optional.empty());
+        when(skuRepo.findById(any())).thenReturn(Optional.empty());
+        when(warehouseRepo.findById(warehouseId)).thenReturn(Optional.of(
+                new WarehouseRefEntity(warehouseId, "WH-SEOUL", "Seoul DC", "Asia/Seoul",
+                        "ACTIVE", NOW)));
+
+        ProjectionEnvelope env = envelope("inventory.received", "wms.inventory.received.v1",
+                "{\"warehouseId\":\"" + warehouseId + "\",\"lines\":[{\"locationId\":\""
+                        + location + "\",\"skuId\":\"" + sku + "\",\"qtyReceived\":50,"
+                        + "\"availableQtyAfter\":50}]}");
+
+        assertThat(service.project(env)).isEqualTo(DedupeOutcome.APPLIED);
+
+        ArgumentCaptor<InventorySnapshotEntity> captor =
+                ArgumentCaptor.forClass(InventorySnapshotEntity.class);
+        verify(snapshotRepo).save(captor.capture());
+        // 이 한 줄이 이 티켓의 전부다 — 화면이 읽을 수 있는 값이 응답까지 도착한다.
+        assertThat(captor.getValue().getWarehouseCode()).isEqualTo("WH-SEOUL");
+        // 대조군: UUID 는 지우지 않았다(UUID 로 조회하는 경로가 있다).
+        assertThat(captor.getValue().getWarehouseId()).isEqualTo(warehouseId);
+    }
+
+    @Test
+    void inventorySnapshot_warehouseCodeIsNull_whenRefNotProjectedYet() throws Exception {
+        // 대조군 — 참조가 아직 안 왔으면 null 이다. 그것은 결함이 아니라 순서 뒤바뀜이고,
+        // 여기서 빈 문자열이나 UUID 문자열로 채우면 「코드가 없다」와 영영 못 갈린다.
+        UUID location = UUID.randomUUID();
+        UUID sku = UUID.randomUUID();
+        UUID warehouseId = UUID.randomUUID();
+        when(snapshotRepo.findById(any(InventorySnapshotId.class))).thenReturn(Optional.empty());
+        when(locationRepo.findById(any())).thenReturn(Optional.empty());
+        when(skuRepo.findById(any())).thenReturn(Optional.empty());
+        when(warehouseRepo.findById(any())).thenReturn(Optional.empty());
+
+        ProjectionEnvelope env = envelope("inventory.received", "wms.inventory.received.v1",
+                "{\"warehouseId\":\"" + warehouseId + "\",\"lines\":[{\"locationId\":\""
+                        + location + "\",\"skuId\":\"" + sku + "\",\"qtyReceived\":50,"
+                        + "\"availableQtyAfter\":50}]}");
+
+        assertThat(service.project(env)).isEqualTo(DedupeOutcome.APPLIED);
+
+        ArgumentCaptor<InventorySnapshotEntity> captor =
+                ArgumentCaptor.forClass(InventorySnapshotEntity.class);
+        verify(snapshotRepo).save(captor.capture());
+        assertThat(captor.getValue().getWarehouseCode()).isNull();
+    }
+
 }

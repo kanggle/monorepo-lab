@@ -176,7 +176,7 @@ class OrderQueryPickingRequestsControllerSliceTest {
                 UUID.randomUUID(), WAREHOUSE_ID,
                 null, null, "PICKING",
                 0L, T0, "creator", T0, "creator",
-                List.of(new OrderLineResult(ORDER_LINE_ID, 1, SKU_ID, null, 50)),
+                List.of(new OrderLineResult(ORDER_LINE_ID, 1, SKU_ID, null, null, 50)),
                 SAGA_ID, "REQUESTED");
         when(queryOrder.findById(ORDER_ID)).thenReturn(orderResult);
     }

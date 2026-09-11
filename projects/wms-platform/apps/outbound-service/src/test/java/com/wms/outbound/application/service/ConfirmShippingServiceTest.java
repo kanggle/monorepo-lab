@@ -193,7 +193,7 @@ class ConfirmShippingServiceTest {
     // ------------------------------------------------------------------
 
     private void seedOrder(OrderStatus status) {
-        OrderLine line = new OrderLine(orderLineId, orderId, 1, skuId, null, 50);
+        OrderLine line = new OrderLine(orderLineId, orderId, 1, skuId, null, null, 50);
         Order order = new Order(orderId, "ORD-1", OrderSource.MANUAL,
                 partnerId, warehouseId, null, null, status,
                 0L, T0, "creator", T0, "creator", List.of(line));
@@ -201,7 +201,7 @@ class ConfirmShippingServiceTest {
     }
 
     private void seedFulfillmentOrder(OrderStatus status, String tenantId) {
-        OrderLine line = new OrderLine(orderLineId, orderId, 1, skuId, null, 50);
+        OrderLine line = new OrderLine(orderLineId, orderId, 1, skuId, null, null, 50);
         Order order = new Order(orderId, "ORD-1", OrderSource.FULFILLMENT_ECOMMERCE,
                 partnerId, warehouseId, null, null, null /* shipTo */, tenantId, status,
                 0L, T0, "creator", T0, "creator", List.of(line));

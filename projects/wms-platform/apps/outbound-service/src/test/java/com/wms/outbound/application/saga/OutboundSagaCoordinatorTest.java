@@ -117,6 +117,6 @@ class OutboundSagaCoordinatorTest {
                 UUID.randomUUID(), UUID.randomUUID(), null, null,
                 status, 0L, T0, "u", T0, "u",
                 List.of(new OrderLine(UUID.randomUUID(), orderId, 1,
-                        UUID.randomUUID(), null, 1)));
+                        UUID.randomUUID(), null, null, 1)));
     }
 }

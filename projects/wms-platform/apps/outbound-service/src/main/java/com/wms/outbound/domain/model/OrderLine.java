@@ -19,6 +19,15 @@ public final class OrderLine {
     private final UUID orderId;
     private final int lineNo;
     private final UUID skuId;
+    /**
+     * TASK-MONO-659 — SKU 코드(비정규화). 이 서비스는 인입 시점에 <b>코드로 조회해서</b>
+     * UUID 를 얻는다({@code FulfillmentRequestedConsumer} / {@code ReceiveOrderService}) —
+     * 즉 코드를 손에 쥐고 있다가 버리고 있었고, 그래서 콘솔이 그 칸에 raw UUID 를 그렸다.
+     *
+     * <p>Nullable 이다: 이 컬럼이 생기기 전에 만들어진 행은 백필 전까지 {@code null} 이다.
+     * {@code skuId} 는 그대로 둔다 — 이것은 <b>더하는</b> 변경이다.
+     */
+    private final String skuCode;
     private final UUID lotId;
     private final int qtyOrdered;
 
@@ -26,6 +35,7 @@ public final class OrderLine {
                      UUID orderId,
                      int lineNo,
                      UUID skuId,
+                     String skuCode,
                      UUID lotId,
                      int qtyOrdered) {
         this.id = Objects.requireNonNull(id, "id");
@@ -35,6 +45,9 @@ public final class OrderLine {
         }
         this.lineNo = lineNo;
         this.skuId = Objects.requireNonNull(skuId, "skuId");
+        // 🔵 requireNonNull 을 걸지 않는다 — 백필 전 기존 행이 null 이고, 그것은 결함이
+        //    아니라 «아직 안 채워졌다» 이다. 여기서 막으면 옛 주문을 못 읽는다.
+        this.skuCode = skuCode;
         this.lotId = lotId;
         if (qtyOrdered <= 0) {
             throw new IllegalArgumentException("qtyOrdered must be > 0");
@@ -56,6 +69,10 @@ public final class OrderLine {
 
     public UUID getSkuId() {
         return skuId;
+    }
+
+    public String getSkuCode() {
+        return skuCode;
     }
 
     public UUID getLotId() {

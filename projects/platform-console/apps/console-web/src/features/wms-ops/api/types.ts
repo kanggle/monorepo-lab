@@ -60,6 +60,9 @@ export const InventoryRowSchema = z
     locationCode: z.string().nullable().optional(),
     skuCode: z.string().nullable().optional(),
     lotNo: z.string().nullable().optional(),
+    // TASK-MONO-659 — 형제 셋과 **같은 이유로** nullable 이다: 참조(admin_warehouse_ref)가
+    // 아직 투영되지 않았으면 생산자가 null 을 싣는다. 그것은 결함이 아니라 순서 뒤바뀜이다.
+    warehouseCode: z.string().nullable().optional(),
     availableQty: z.number().optional(),
     reservedQty: z.number().optional(),
     damagedQty: z.number().optional(),
@@ -149,6 +152,8 @@ export const AsnRowSchema = z
     asnId: z.string(),
     asnNo: z.string().nullable().optional(),
     warehouseId: z.string().optional(),
+    // TASK-MONO-659 — `supplierName` 과 같은 자리의 같은 부류다.
+    warehouseCode: z.string().nullable().optional(),
     supplierPartnerId: z.string().nullable().optional(),
     supplierName: z.string().nullable().optional(),
     status: z.string().optional(),

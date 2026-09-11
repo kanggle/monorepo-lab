@@ -40,7 +40,7 @@ class AsnDashboardControllerSliceTest {
     private static final Instant NOW = Instant.parse("2026-05-09T10:00:00Z");
 
     private AsnSummaryEntity sample() {
-        return new AsnSummaryEntity(UUID.randomUUID(), "ASN-1", UUID.randomUUID(),
+        return new AsnSummaryEntity(UUID.randomUUID(), "ASN-1", UUID.randomUUID(), null,
                 null, null, "CREATED", "MANUAL", LocalDate.of(2026, 5, 12), 1, NOW, null, NOW);
     }
 
