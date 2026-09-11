@@ -8,7 +8,7 @@ TASK-MONO-664
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -197,3 +197,60 @@ Build context declarations … Hook fixtures (Windows) …   Lifecycle stage dir
 🔴 단, **AC-1 은 소유자**이고 AC-2 의 사본 확인은 **force-push 승인 축**이다.
 🔴🔴 Edge Cases 첫 줄(required 4종)은 **Sonnet 에게 맡기지 말고 직접 세라** — 틀리면
 브랜치 보호가 무력화된다.
+
+---
+
+# 🟢 AC-0 재측정 + AC-1 소유자 결정 (2026-09-11 UTC)
+
+## AC-0 — 착수 게이트 통과
+
+티켓이 지정한 **술어 그대로** 다시 쟀다:
+
+```
+ci.yml 잡 수  = grep -cE '^  [a-z0-9_-]+:$'      → 62
+가드 수       = grep -c 'github.repository =='   → 14
+차이          =                                     48   ← 이 티켓의 크기
+```
+
+🟢 **티켓 본문의 수치(62 / 14 / ~48)가 그대로 유효하다** — 이 저장소에서 «거의 매주
+움직인다» 고 적어 둔 값인데 이번엔 안 움직였다. 🔵 그래도 **상속하지 않고 다시 쟀다.**
+
+🟢 **`TASK-MONO-662` 머지 확인**: `7fe80a287`(구현) · `839760f70`(review) · `894f6dc35`(done)
+전부 `origin/main` 에 있다 ⇒ 같은 파일 계열의 선행이 해소됐다.
+
+## AC-1 — 소유자 결정: **ⓧ 전부**
+
+### 답 (소유자의 말 그대로)
+
+> **「ⓧ 전부」**
+
+세 갈래(ⓧ 전부 / ⓨ 의미 있는 것만 / ⓩ 안 함)를 각각이 포기하는 것과 함께 올렸고
+소유자가 **ⓧ** 를 골랐다. 🔵 내 추천도 ⓧ 였지만 **물어서 받았다.**
+사유(내가 추천한 근거, 결정의 근거가 아니다): **ⓨ 는 «그 잡들이 사본에서 실제로 통과하는가»
+라는 안 잰 전제에 매달려 있다** — 사본의 `settings.gradle` 이 없는 디렉터리 43~46개를
+include 한다.
+
+### 🔴🔴 구현 시 절대 조건 — required 4종에는 붙이지 않는다
+
+`scripts/required-check-names.txt`(브랜치 보호 API 에서 뜬 핀)의 **네 이름**:
+
+```
+changes
+INDEX queue drift (INDEX.md tables vs queue directories)
+Task ID collision (duplicate IDs in active queues)
+Walkthrough limitation ledger drift (§ 6 rows vs task queues)
+```
+
+🔴 이 넷에 `if: github.repository ==` 를 붙이면 **모노레포에서 `skipped`** 가 되고,
+GitHub 은 `skipped` 를 실패로 안 보므로 **브랜치 보호가 조용히 무력화된다.**
+🔵 그리고 그 PR 자신은 **초록으로 머지된다** — 자기를 막지 못한다.
+🔴 **이 목록은 `ci.yml` 을 보고 채우지 말고 위 핀 파일에서 읽어라**(핀의 존재 이유가 그것이다).
+
+### ⇒ 남은 AC 와 승인 축
+
+- **AC-2** 는 술어가 **«사본 Actions 에서 그 잡이 `skipped` 로 끝나는가»** 다
+  ⇒ 🔴 한 사본에 실제로 밀어야 하고 **그것은 force-push 라 `TASK-MONO-657` AC-0 과
+  같은 승인 축**이다. **ⓧ 결정이 그 승인까지 포함하지는 않는다.**
+- 🔴 **대조군**: 같은 PR 에서 **모노레포 CI 가 하나도 안 줄어야 한다**(SKIPPED 0 인 잡들이
+  그대로 실행). 가드를 잘못 쓰면 모노레포 자신의 CI 가 전부 skipped 가 되고 **그것이
+  초록으로 보인다.**
