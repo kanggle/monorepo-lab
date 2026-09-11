@@ -8,7 +8,7 @@ TASK-MONO-633
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -246,3 +246,123 @@ aws ec2 describe-instances --instance-ids i-0394b45b62cdd1fc6
 ---
 
 분석=Opus 5 / 구현 권장=**Sonnet** (기동 창 안의 조회 + 기록 — 판정 기준이 이 문서에 이미 다 적혀 있다). 🔴 단, **AC-4 가 H2 참으로 갈리면 그 다음은 `HARDSTOP-09` 라 Opus** 로 올라간다 — 그리고 2026-09-07 소거 이후 **그쪽이 기본 경로**다.
+
+---
+
+# 🟢🟢 수확 (2026-09-11 UTC · 데모 창) — **H2 참. 확증됐다.**
+
+## AC-0 — 착수 게이트
+
+| 칸 | 결과 |
+|---|---|
+| ① OIDC 디스커버리 200 | 🟢 `07:16:42Z` 부터 200. 🔴 다만 **그때 묶음은 전부 `booting`** 이었다 — 측정은 8/8 `ready`(`07:22:51Z`) 이후에 했다 |
+| ② 인용 네 파일 불변 | 🟢 이 창에서 코드 변경 없음(측정 전용 창) |
+| ③ 소유자 답변 | ✅ 이미 닫힘 (`demo@demo.com`) |
+| ④ 스토어에서 **폼에 비밀번호를 실제로 입력했는가** | 🟢 **아래 A 패스가 이 질문을 실측으로 대체했다** — A 패스는 폼을 **안 거쳤고**(`sawIamForm=false`) 그래도 거부됐다 ⇒ H2 확정 갈래 |
+
+## 🟢 AC-1 — H2 (순서 축). **B·A·B·A 교대 + A′, 다섯 패스 전부 일관**
+
+🔴 매 패스 **새 브라우저 컨텍스트**(프로파일 공유 없음). 판정은 URL 이 아니라
+**`/api/auth/session` 의 `accountId`**.
+
+| 패스 | 진입 순서 | 최종 path | `accountId` | **IAM 폼을 거쳤나** | 토큰 |
+|---|---|---|---|---|---|
+| **B** | 스토어에서 바로 | `/` | **`…ec01`** | 예(정상) | — |
+| **A** | 콘솔 → 스토어 | **`/login?error=account_type_mismatch`** | **null** | **아니오** | `console_access_token` `tenant_id=iam` `sub`=…`ad03` |
+| **B** | 스토어에서 바로 | `/` | **`…ec01`** | 예 | — |
+| **A** | 콘솔 → 스토어 | **`account_type_mismatch`** | **null** | **아니오** | `tenant_id=iam` `sub`=…`ad03` |
+| **A′** | 팬 → 스토어 | **`account_type_mismatch`** | **null** | **아니오** | (복호 불가, 아래 ⚪) |
+
+🔴🔴 **티켓이 건 유효성 조건이 충족됐다.** § Edge Cases 가 *"A 패스가 폼을 **안** 거치는지
+확인해야 한다 — IdP 화면이 스쳐 지나가면 그 패스는 무효"* 라고 적었고, `sawIamForm=false`
+가 그것을 단언한다. ⇒ **인터리브 안에서 B 와 A 가 갈린다 ⇒ H2 참.**
+
+## 🟢 AC-3 — 토큰. 세션을 심은 클라이언트가 갈렸다
+
+거부된 A 패스의 실제 토큰: **`sub`=…`ad03` · `tenant_id=iam`** ⇒ 티켓의 판별표대로
+**콘솔발**이다(`…ad03`+`iam` = 콘솔). 🟢 `…ec01`(`ecommerce`)이 아니므로 *"가드가 아니라
+seed 게이트를 다시 읽어라"* 갈래는 **발동하지 않는다.**
+
+⚪ **A′(팬발)의 토큰은 못 읽었다.** 팬은 Auth.js 의 **암호화된 세션 쿠키**
+(`__Secure-authjs.session-token`)를 쓰고 JWT 가 아니라 클레임을 복호할 수 없었다.
+🔵 거부 자체는 재현됐고, `credentials` 테이블이 `fan-platform` 신원을 **`…fa02`** 로
+확정하므로 티켓이 예상한 조합과 모순되지 않는다 — 다만 **토큰으로 확증한 것은 아니다.**
+🔴 이 칸을 «쟀다» 로 적지 않는다.
+
+## 🟢🟢 AC-2 — 런타임 행. 소거 논증의 전제가 섰고, **표 한 칸이 틀렸다**
+
+`iam-mysql` 에서 직접 조회했다(🔵 IAM 은 postgres 가 아니라 **MySQL** 이다 —
+`auth_db` · `account_db` · `admin_db`).
+
+### 1순위 질문: `demo@demo.com` 이 몇 행이고 어느 테넌트인가 → **3행**
+
+| `auth_db.credentials` | `tenant_id` | `account_id` |
+|---|---|---|
+| id 1 | **`ecommerce`** | `…ec01` |
+| id 2 | **`fan-platform`** | `…fa02` |
+| id 3 | **`iam`** | `…ad03` |
+
+⇒ 🟢 **시드 «선언» 과 런타임이 정확히 일치한다**(손으로 만든 행 없음). 티켓이 *"3행이면
+소거 논증의 전제가 서고 H2 가 남는다"* 라고 적은 조건이 **충족**됐다.
+🔵 그리고 이 세 `account_id` 가 위 AC-1/AC-3 의 관측과 **정확히 맞물린다**:
+B 패스의 `accountId`=`…ec01`, A 패스 토큰의 `sub`=`…ad03`.
+
+### 🔴🔴 그러나 § 실측의 스코프 표는 **한 칸이 틀렸다**
+
+표는 *"`(ecommerce, demo@demo.com)` 행이 있다 → principal tenant = ecommerce ⇒ seed
+`[CUSTOMER]` ⇒ 통과"* 를 **데이터인 것처럼** 적는다. 런타임은 이렇다:
+
+```
+account_db.account_roles  전체 12행  =  fan-platform/ARTIST 6 + fan-platform/FAN 6
+account_db.account_roles  demo@demo.com  =  0행
+account_db.accounts       demo@demo.com  =  2행 (ecommerce, fan-platform) — iam 없음
+account_db.accounts       id=…ad03       =  0행
+```
+
+🔴 **`demo@demo.com` 에 `account_roles` 행이 하나도 없는데 B 패스는 통과한다.**
+⇒ `[CUSTOMER]` 부여는 **DB 행이 아니라 토큰 발급 시점의 코드 경로**다.
+🔵 이것은 H2 를 흔들지 않는다 — 오히려 **가르는 것이 «스코프 조회가 어느 credentials 행에
+히트하느냐» 뿐**임을 보여 주므로 H2 의 기전과 일치한다. 🔴 다만 **표를 그대로 두면
+다음 사람이 `account_roles` 를 찾아보고 없어서 혼란한다.**
+
+🔵 `iam` credential 이 가리키는 `…ad03` 은 `account_db.accounts` 에 없고 **`admin_db`**
+(`admin_operators` · `admin_operator_roles` · `operator_tenant_assignment` …)에 산다 —
+운영자와 소비자 계정을 가른 설계이고 **결함이 아니다.**
+
+## 🔴 AC-4 — 기안 (고침 아님). **H2 참 ⇒ `HARDSTOP-09` 경로**
+
+§ AC-4 가 *"H2 참 ⇒ 별 티켓 기안, 그 질문은 «SSO 재사용 시 클라이언트별로 테넌트를 다시
+해석해야 하는가» 이고 인증 모델 변경이라 **`HARDSTOP-09`** ⇒ **ADR PROPOSED**"* 라고
+적었다. 그 기안은 이 창의 산출물로 남긴다(별도 커밋).
+
+🔵 문서 축(워크스루 § 0 의 *"하나의 자격증명으로 세 표면 전부"*)은 **지금 낡았다** —
+콘솔이나 팬에 먼저 로그인한 방문자는 스토어에서 **튕긴다.** 그 정정은 기안 안에 포함한다.
+
+## AC-5 — 무엇으로 쟀는지
+
+- 세션: `/api/auth/session` 의 `accountId` (스토어 오리진에서 `fetch`)
+- 토큰: 쿠키 `console_access_token` 의 JWT payload (`sub` 끝 4자 · `tenant_id`)
+- DB: `iam-mysql` 에 SSM 으로 직접 질의(`auth_db.credentials` · `account_db.accounts` ·
+  `account_db.account_roles`)
+- 유효성: `sawIamForm` (A 패스가 IdP 폼을 거쳤는지)
+
+## 🟢 AC-4 닫힘 — 기안했다 (`TASK-MONO-666`)
+
+🔴 *"산문으로 「나중에」라고 쓰지 마라 — 큐가 아닌 곳에 적은 의무는 사라진다"* 가 이 AC 의
+조항이다. 그래서 **창 안에서 큐에 실제 파일로** 넣었다:
+
+> **`TASK-MONO-666`** — *"SSO 재사용이 «먼저 연 표면의 테넌트» 를 그대로 들고 가고,
+> 스토어가 그것을 거부한다"* (`tasks/ready/`)
+
+그 티켓이 지는 것:
+- **AC-1** `ADR-MONO-072` 를 **PROPOSED** 로 기안(🔴 `HARDSTOP-09` 라 고르지 않는다).
+  갈래 넷을 «무엇을 포기하는지» 와 함께 적게 했다 — ⓐ클라이언트별 테넌트 재해석 /
+  ⓑ표면별 계정 분리 / ⓒ약속을 고친다 / ⓓ아무것도 안 한다.
+- **AC-2** 워크스루 § 0 의 *"하나의 자격증명으로 세 표면 전부"* 정정 + § 6 한계 원장 행.
+  🔵 `TASK-PC-FE-275` 와 같은 축인지 먼저 확인하도록 적었다(이 AC 가 지목한 그대로).
+- **AC-3** 위 § AC-2 의 **스코프 표 정정**(`[CUSTOMER]` 가 `account_roles` 행이 아니라는 것).
+- **AC-4** 가드를 만들지 말지의 **판단**과 근거(🔴 이 결함은 «두 표면의 순서» 라는 상태에서만
+  나므로 단위 테스트로 못 물고, e2e 로 물면 `nightly-e2e.yml` 축이다).
+
+🔵 **이 티켓 자신은 «재는 티켓» 이므로 여기서 끝난다** — 남은 열린 칸은 AC-3 의
+⚪(A′ 토큰 복호 불가) 하나이고, 그것은 «못 쟀다 + 왜» 로 닫힌 형태다.
