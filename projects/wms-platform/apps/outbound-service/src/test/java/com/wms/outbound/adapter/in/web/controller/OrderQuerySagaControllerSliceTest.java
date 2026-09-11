@@ -140,7 +140,7 @@ class OrderQuerySagaControllerSliceTest {
                 UUID.randomUUID(), WAREHOUSE_ID,
                 null, null, "PICKING",
                 0L, T0, "creator", T0, "creator",
-                List.of(new OrderLineResult(UUID.randomUUID(), 1, UUID.randomUUID(), null, 10)),
+                List.of(new OrderLineResult(UUID.randomUUID(), 1, UUID.randomUUID(), null, null, 10)),
                 SAGA_ID, "RESERVED");
         when(queryOrder.findById(ORDER_ID)).thenReturn(orderResult);
     }

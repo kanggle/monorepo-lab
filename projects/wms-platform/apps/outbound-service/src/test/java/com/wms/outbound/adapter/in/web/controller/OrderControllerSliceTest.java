@@ -77,7 +77,7 @@ class OrderControllerSliceTest {
                 CUSTOMER_PARTNER_ID, WAREHOUSE_ID,
                 null, "note", "PICKING",
                 0L, T0, "creator", T0, "creator",
-                List.of(new OrderLineResult(ORDER_LINE_ID, 1, SKU_ID, null, 10)),
+                List.of(new OrderLineResult(ORDER_LINE_ID, 1, SKU_ID, null, null, 10)),
                 SAGA_ID, "REQUESTED");
         when(receiveOrder.receive(any())).thenReturn(result);
 
@@ -150,7 +150,7 @@ class OrderControllerSliceTest {
                 CUSTOMER_PARTNER_ID, WAREHOUSE_ID,
                 null, "note", "CANCELLED",
                 1L, T0, "creator", T0, "creator",
-                List.of(new OrderLineResult(ORDER_LINE_ID, 1, SKU_ID, null, 10)),
+                List.of(new OrderLineResult(ORDER_LINE_ID, 1, SKU_ID, null, null, 10)),
                 SAGA_ID, "CANCELLED",
                 "PICKING", "Customer requested cancellation", T0, "canceller");
         when(cancelOrder.cancel(any())).thenReturn(result);

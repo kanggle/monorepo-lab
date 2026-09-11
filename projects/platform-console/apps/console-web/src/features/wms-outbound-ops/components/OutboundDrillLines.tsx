@@ -1,5 +1,6 @@
 'use client';
 
+import { masterRefLabel } from '@/shared/lib/master-ref-label';
 import type { OutboundOrderLine } from '../api/types';
 
 /**
@@ -42,7 +43,15 @@ export function OutboundDrillLines({ lines }: OutboundDrillLinesProps) {
             className="border-b border-border"
           >
             <td className="p-2">{l.lineNo ?? i + 1}</td>
-            <td className="p-2">{l.skuId}</td>
+            {/* 🔴 TASK-MONO-659 — outbound 는 인입 시점에 `skuCode` 로 조회해서 UUID 를
+                얻는다. 즉 코드를 쥐었다가 버리고 있었고, 이 칸이 그 결과였다. */}
+            <td
+              className="p-2"
+              data-master-ref="orderLine.skuId"
+              title={l.skuId ?? undefined}
+            >
+              {masterRefLabel(l.skuId, l.skuCode ? { code: l.skuCode } : null)}
+            </td>
             <td className="p-2">{l.lotId ?? '—'}</td>
             <td className="p-2">{l.qtyOrdered}</td>
           </tr>

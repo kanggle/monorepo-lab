@@ -34,6 +34,15 @@ public class InventorySnapshotEntity {
     @Column(name = "warehouse_id", nullable = false)
     private UUID warehouseId;
 
+    /**
+     * 🔴 TASK-MONO-659 — 창고 코드. 형제 셋(location/sku/lot)은 처음부터 비정규화돼 있었고
+     * 창고만 빠져 있어서, 콘솔이 그 칸에 raw UUID 를 그렸다. 그 화면은 이 값이 도착하지
+     * 않으면 아무것도 할 수 없다(생산자만 실어 줄 수 있다).
+     * 🔵 `warehouseId` 는 **그대로 둔다** — UUID 로 조회하는 경로가 있다.
+     */
+    @Column(name = "warehouse_code", length = 40)
+    private String warehouseCode;
+
     @Column(name = "location_code", length = 80)
     private String locationCode;
 
@@ -72,7 +81,8 @@ public class InventorySnapshotEntity {
     }
 
     public InventorySnapshotEntity(UUID locationId, UUID skuId, UUID lotId, UUID warehouseId,
-                                   String locationCode, String skuCode, String lotNo,
+                                   String warehouseCode, String locationCode, String skuCode,
+                                   String lotNo,
                                    int availableQty, int reservedQty, int damagedQty,
                                    boolean lowStockFlag, Instant lastAdjustedAt,
                                    Instant lastEventAt) {
@@ -80,6 +90,7 @@ public class InventorySnapshotEntity {
         this.skuId = skuId;
         this.lotId = lotId == null ? InventorySnapshotId.NULL_SENTINEL : lotId;
         this.warehouseId = warehouseId;
+        this.warehouseCode = warehouseCode;
         this.locationCode = locationCode;
         this.skuCode = skuCode;
         this.lotNo = lotNo;
@@ -92,11 +103,17 @@ public class InventorySnapshotEntity {
         this.lastEventAt = lastEventAt;
     }
 
-    public void apply(UUID warehouseId, String locationCode, String skuCode, String lotNo,
+    public void apply(UUID warehouseId, String warehouseCode, String locationCode,
+                      String skuCode, String lotNo,
                       int availableQty, int reservedQty, int damagedQty, boolean lowStockFlag,
                       Instant lastAdjustedAt, Instant lastEventAt) {
         if (warehouseId != null) {
             this.warehouseId = warehouseId;
+        }
+        // 🔵 형제들과 같은 «null 이면 안 덮는다» 규칙 — 참조가 아직 투영되지 않았을 때
+        //    이미 채워 둔 코드를 지우지 않기 위해서다.
+        if (warehouseCode != null) {
+            this.warehouseCode = warehouseCode;
         }
         if (locationCode != null) {
             this.locationCode = locationCode;
@@ -126,6 +143,7 @@ public class InventorySnapshotEntity {
         return InventorySnapshotId.NULL_SENTINEL.equals(lotId) ? null : lotId;
     }
     public UUID getWarehouseId() { return warehouseId; }
+    public String getWarehouseCode() { return warehouseCode; }
     public String getLocationCode() { return locationCode; }
     public String getSkuCode() { return skuCode; }
     public String getLotNo() { return lotNo; }

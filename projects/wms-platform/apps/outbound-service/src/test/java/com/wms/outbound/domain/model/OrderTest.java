@@ -85,7 +85,7 @@ class OrderTest {
     private static Order orderInState(OrderStatus status) {
         UUID orderId = UUID.randomUUID();
         OrderLine line = new OrderLine(UUID.randomUUID(), orderId, 1,
-                UUID.randomUUID(), null, 10);
+                UUID.randomUUID(), null, null, 10);
         return new Order(orderId, "ORD-1", OrderSource.MANUAL,
                 UUID.randomUUID(), UUID.randomUUID(),
                 null, "notes",

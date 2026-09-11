@@ -64,6 +64,9 @@ import { CostCenterList } from '@/features/erp-ops/components/CostCenterList';
 // TASK-PC-FE-277 이 더한 두 칸 — erp-ops 밖이다.
 import { ReplenishmentTable } from '@/features/scm-replenishment/components/ReplenishmentTable';
 import { OrgNodeDetail } from '@/features/org-hierarchy/components/OrgNodeDetail';
+import { WmsInventoryDetailPanel } from '@/features/wms-ops/components/WmsInventoryDetailPanel';
+import { WmsAsnDataTable } from '@/features/wms-ops/components/WmsAsnDataTable';
+import { OutboundDrillLines } from '@/features/wms-outbound-ops/components/OutboundDrillLines';
 import { OrgScopeDialogBody } from '@/features/operators/components/OrgScopeDialogBody';
 import {
   codeName,
@@ -404,6 +407,117 @@ describe('🔴🔴 bite — 이 술어가 실제로 문다 (주입 · 실행 · 
     const { container } = render(<div />, { wrapper: wrapper() });
     expect(refCells(container).length).toBe(0);
     expect(() => assertNoUuidInRefCells(container, 1, 'bite-공허')).toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TASK-MONO-659 — wms 의 세 참조 칸. 🔵 술어도 하한도 위와 **같은 함수**다.
+//
+// 🔴 이 셋은 `TASK-PC-FE-277` 이 «콘솔에서 못 고친다» 로 분류했던 자리다 — 읽을 이름이
+//    화면에 도착조차 하지 않았다. 659 가 생산자(admin-service · outbound-service)에
+//    `warehouseCode` / `skuCode` 를 실어서 비로소 여기서 고칠 수 있게 됐다.
+//    ⇒ 그래서 **하한이 3칸 늘어난다**(AC-3: "새 칸이 늘었는데 하한이 그대로면
+//    비-공허성이 헐거워진다").
+// ---------------------------------------------------------------------------
+
+const WMS_WH = '01910000-0000-7000-8000-000000000001';
+const WMS_WH_GHOST = '01910000-0000-7000-8000-0000000009fe';
+const WMS_SKU = '01910000-0000-7000-8000-000000000403';
+
+describe('wms 의 참조 칸도 같은 술어를 지킨다 (TASK-MONO-659)', () => {
+  it('재고 상세 — 「창고」 칸', () => {
+    const { container } = render(
+      <WmsInventoryDetailPanel
+        selected={{ locationId: 'L', skuId: 'S', lotId: null } as never}
+        loading={false}
+        forbidden={false}
+        notFound={false}
+        degraded={false}
+        data={{
+          locationId: 'L',
+          skuId: WMS_SKU,
+          lotId: null,
+          warehouseId: WMS_WH,
+          warehouseCode: 'WH01',
+          availableQty: 5,
+        } as never}
+      />,
+      { wrapper: wrapper() },
+    );
+    assertNoUuidInRefCells(container, 1, 'wms 재고 상세');
+    const cells = refCells(container).map((el) => (el.textContent ?? '').trim());
+    expect(cells).toContain('WH01');
+    // 🔵 원본 id 는 사라지지 않았다 — `title` 로 옮겼을 뿐이다.
+    expect(refCells(container).map((el) => el.getAttribute('title'))).toContain(WMS_WH);
+  });
+
+  it('🔴 대조군 — 코드가 없으면 `이름 확인 불가` 이고 **id 로 안 돌아간다**', () => {
+    const { container } = render(
+      <WmsInventoryDetailPanel
+        selected={{ locationId: 'L', skuId: 'S', lotId: null } as never}
+        loading={false}
+        forbidden={false}
+        notFound={false}
+        degraded={false}
+        data={{
+          locationId: 'L',
+          skuId: WMS_SKU,
+          lotId: null,
+          warehouseId: WMS_WH_GHOST,
+          warehouseCode: null,
+          availableQty: 5,
+        } as never}
+      />,
+      { wrapper: wrapper() },
+    );
+    const cells = refCells(container).map((el) => (el.textContent ?? '').trim());
+    expect(cells).toContain(MASTER_REF_UNRESOLVED);
+    // 🔴 그 행의 id 는 여전히 UUID 다 — 이 대조군은 공허하지 않다.
+    expect(UUID_RE.test(WMS_WH_GHOST)).toBe(true);
+    assertNoUuidInRefCells(container, 1, 'wms 재고 상세(미해석)');
+  });
+
+  it('ASN 목록 — 「창고」 칸 (해석 + 미해석 + 없음)', () => {
+    const { container } = render(
+      <WmsAsnDataTable
+        data={{
+          content: [
+            { asnId: 'a1', asnNo: 'ASN-1', warehouseId: WMS_WH, warehouseCode: 'WH01', status: 'CREATED' },
+            { asnId: 'a2', asnNo: 'ASN-2', warehouseId: WMS_WH_GHOST, warehouseCode: null, status: 'CREATED' },
+            { asnId: 'a3', asnNo: 'ASN-3', warehouseId: null, warehouseCode: null, status: 'CREATED' },
+          ],
+          page: { totalPages: 1, totalElements: 3, number: 0, size: 20 },
+        } as never}
+        query={{ page: 0 } as never}
+        onPrevPage={vi.fn()}
+        onNextPage={vi.fn()}
+        onInspect={vi.fn()}
+      />,
+      { wrapper: wrapper() },
+    );
+    // 세 행이 세 상태를 덮는다 ⇒ 하한 3.
+    assertNoUuidInRefCells(container, 3, 'wms ASN 목록');
+    const cells = refCells(container).map((el) => (el.textContent ?? '').trim());
+    expect(cells).toContain('WH01');
+    expect(cells).toContain(MASTER_REF_UNRESOLVED);
+    expect(cells).toContain(MASTER_REF_NONE);
+  });
+
+  it('출고 주문 라인 — 「SKU」 칸', () => {
+    const { container } = render(
+      <OutboundDrillLines
+        lines={[
+          { orderLineId: 'ol1', lineNo: 1, skuId: WMS_SKU, skuCode: 'SKU-BOX-001', qtyOrdered: 3 },
+          // 🔴 대조군 — 백필 전에 만들어진 주문은 `skuCode` 가 null 이다.
+          { orderLineId: 'ol2', lineNo: 2, skuId: WMS_WH_GHOST, skuCode: null, qtyOrdered: 1 },
+        ] as never}
+      />,
+      { wrapper: wrapper() },
+    );
+    assertNoUuidInRefCells(container, 2, 'wms 출고 라인');
+    const cells = refCells(container).map((el) => (el.textContent ?? '').trim());
+    expect(cells).toContain('SKU-BOX-001');
+    expect(cells).toContain(MASTER_REF_UNRESOLVED);
   });
 });
 

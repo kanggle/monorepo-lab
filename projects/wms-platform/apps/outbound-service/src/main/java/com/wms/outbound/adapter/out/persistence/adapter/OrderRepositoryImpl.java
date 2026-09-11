@@ -79,6 +79,7 @@ public class OrderRepositoryImpl implements OrderPersistencePort {
                         line.getOrderId(),
                         line.getLineNo(),
                         line.getSkuId(),
+                        line.getSkuCode(),
                         line.getLotId(),
                         line.getQtyOrdered(),
                         clock.instant());

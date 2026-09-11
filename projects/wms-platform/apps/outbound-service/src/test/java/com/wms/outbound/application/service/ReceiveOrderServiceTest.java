@@ -243,4 +243,30 @@ class ReceiveOrderServiceTest {
                 .as("the command's explicit tenant wins over the caller scope")
                 .isEqualTo("ecommerce");
     }
+
+    // =========================================================================
+    // TASK-MONO-659 — 주문 라인이 skuCode 를 싣는다
+    // =========================================================================
+    // 🔴 이 서비스는 인입 시점에 SkuSnapshot 을 이미 해석하고, 발행하는
+    //    OrderReceivedEvent 에는 skuCode 를 싣고 있었다. 즉 **코드를 손에 쥐고 있다가
+    //    주문 라인에만 안 실었다.** 그래서 콘솔이 그 칸에 raw UUID 를 그렸고, 콘솔에서는
+    //    고칠 수 없었다(읽을 이름이 화면에 도착하지 않는다).
+
+    @Test
+    void orderLineCarriesSkuCode_notJustTheUuid() {
+        ReceiveOrderCommand cmd = new ReceiveOrderCommand(
+                "ORD-CODE-1", "MANUAL", partnerId, warehouseId, null, null,
+                List.of(new ReceiveOrderLineCommand(1, skuId, null, 7)),
+                "user-1", Set.of("ROLE_OUTBOUND_WRITE"));
+
+        OrderResult result = service.receive(cmd);
+
+        assertThat(result.lines()).hasSize(1);
+        // 이 한 줄이 이 티켓의 전부다.
+        assertThat(result.lines().get(0).skuCode()).isEqualTo("SKU-001");
+        // 대조군: UUID 를 **교체**한 것이 아니라 **더한** 것이다. 운영자가 그 id 로
+        // 지원 요청을 받으므로 지우면 안 된다(TASK-PC-FE-277 Failure 1).
+        assertThat(result.lines().get(0).skuId()).isEqualTo(skuId);
+    }
+
 }

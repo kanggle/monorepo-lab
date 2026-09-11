@@ -74,7 +74,7 @@ class InventoryReservedConsumerTest {
         UUID warehouseId = UUID.randomUUID();
         sagaPersistence.save(OutboundSaga.newRequested(sagaId, orderId, T0));
 
-        OrderLine line = new OrderLine(UUID.randomUUID(), orderId, 1, skuId, null, 4);
+        OrderLine line = new OrderLine(UUID.randomUUID(), orderId, 1, skuId, null, null, 4);
         orderPersistence.save(new Order(orderId, "SO-1", OrderSource.MANUAL,
                 UUID.randomUUID(), warehouseId, null, null, OrderStatus.PICKING,
                 0L, T0, "creator", T0, "creator", List.of(line)));

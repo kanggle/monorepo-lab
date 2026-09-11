@@ -18,6 +18,8 @@ import com.wms.admin.readmodel.inbound.AsnSummaryRepository;
 import com.wms.admin.readmodel.inbound.InspectionSummaryEntity;
 import com.wms.admin.readmodel.inbound.InspectionSummaryRepository;
 import com.wms.admin.readmodel.master.PartnerRefRepository;
+import com.wms.admin.readmodel.master.WarehouseRefEntity;
+import com.wms.admin.readmodel.master.WarehouseRefRepository;
 import com.wms.admin.readmodel.throughput.ThroughputInboundDailyRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
@@ -29,6 +31,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -42,6 +45,7 @@ class InboundProjectionServiceTest {
     @Mock InspectionSummaryRepository inspectionRepo;
     @Mock ThroughputInboundDailyRepository throughputRepo;
     @Mock PartnerRefRepository partnerRepo;
+    @Mock WarehouseRefRepository warehouseRepo;
 
     private InMemoryDedupePort dedupe;
     private InboundProjectionService service;
@@ -52,7 +56,7 @@ class InboundProjectionServiceTest {
         ProjectionMetrics metrics = new ProjectionMetrics(new SimpleMeterRegistry(),
                 Clock.fixed(NOW, ZoneOffset.UTC));
         service = new InboundProjectionService(asnRepo, inspectionRepo, throughputRepo,
-                partnerRepo, dedupe, metrics, Clock.fixed(NOW, ZoneOffset.UTC));
+                partnerRepo, warehouseRepo, dedupe, metrics, Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     @Test
@@ -73,7 +77,7 @@ class InboundProjectionServiceTest {
     void asnCancelled_updatesStatus() throws Exception {
         UUID asnId = UUID.randomUUID();
         UUID warehouseId = UUID.randomUUID();
-        AsnSummaryEntity existing = new AsnSummaryEntity(asnId, "ASN-001", warehouseId, null,
+        AsnSummaryEntity existing = new AsnSummaryEntity(asnId, "ASN-001", warehouseId, null, null,
                 null, "CREATED", "MANUAL", null, 0, NOW.minusSeconds(60), null, NOW.minusSeconds(60));
         when(asnRepo.findById(asnId)).thenReturn(Optional.of(existing));
 
@@ -161,4 +165,72 @@ class InboundProjectionServiceTest {
         JsonNode payload = MAPPER.readTree(payloadJson);
         return new ProjectionEnvelope(eventId, eventType, NOW, "agg", topic, null, payload);
     }
+
+    // =========================================================================
+    // TASK-MONO-659 — warehouseCode 비정규화
+    // =========================================================================
+    // 이 DTO 는 `supplierPartnerId` 옆에 `supplierName` 을 이미 풀고 있었다. 창고만
+    // UUID 로 남아 콘솔이 그것을 그대로 그렸고, 콘솔에서는 고칠 수 없었다.
+
+    @Test
+    void asnReceived_carriesWarehouseCode_resolvedFromRef() throws Exception {
+        UUID asnId = UUID.randomUUID();
+        UUID warehouseId = UUID.randomUUID();
+        when(asnRepo.findById(asnId)).thenReturn(Optional.empty());
+        when(warehouseRepo.findById(warehouseId)).thenReturn(Optional.of(
+                new WarehouseRefEntity(warehouseId, "WH-BUSAN", "Busan DC", "Asia/Seoul",
+                        "ACTIVE", NOW)));
+
+        ProjectionEnvelope env = envelope("inbound.asn.received", "wms.inbound.asn.received.v1",
+                "{\"asnId\":\"" + asnId + "\",\"asnNo\":\"ASN-001\",\"warehouseId\":\""
+                        + warehouseId + "\",\"source\":\"WEBHOOK_ERP\",\"lines\":[]}");
+
+        assertThat(service.project(env)).isEqualTo(DedupeOutcome.APPLIED);
+
+        ArgumentCaptor<AsnSummaryEntity> captor = ArgumentCaptor.forClass(AsnSummaryEntity.class);
+        verify(asnRepo).save(captor.capture());
+        assertThat(captor.getValue().getWarehouseCode()).isEqualTo("WH-BUSAN");
+        // 대조군: UUID 는 그대로 남는다 — 더하는 변경이지 바꾸는 변경이 아니다.
+        assertThat(captor.getValue().getWarehouseId()).isEqualTo(warehouseId);
+    }
+
+    @Test
+    void asnReceived_warehouseCodeIsNull_whenRefNotProjectedYet() throws Exception {
+        // 대조군 — 참조 미도착은 결함이 아니다. null 로 남는 것이 옳다.
+        UUID asnId = UUID.randomUUID();
+        UUID warehouseId = UUID.randomUUID();
+        when(asnRepo.findById(asnId)).thenReturn(Optional.empty());
+        when(warehouseRepo.findById(any())).thenReturn(Optional.empty());
+
+        ProjectionEnvelope env = envelope("inbound.asn.received", "wms.inbound.asn.received.v1",
+                "{\"asnId\":\"" + asnId + "\",\"asnNo\":\"ASN-001\",\"warehouseId\":\""
+                        + warehouseId + "\",\"source\":\"WEBHOOK_ERP\",\"lines\":[]}");
+
+        assertThat(service.project(env)).isEqualTo(DedupeOutcome.APPLIED);
+
+        ArgumentCaptor<AsnSummaryEntity> captor = ArgumentCaptor.forClass(AsnSummaryEntity.class);
+        verify(asnRepo).save(captor.capture());
+        assertThat(captor.getValue().getWarehouseCode()).isNull();
+    }
+
+    @Test
+    void asnReceived_doesNotEraseExistingCode_whenRefGoesMissing() throws Exception {
+        // 🔴 「null 이면 덮지 않는다」 규칙의 칸. 이것이 없으면 참조가 잠깐 사라진 사이에
+        //    재수신된 이벤트가 이미 채워 둔 코드를 **지운다**.
+        UUID asnId = UUID.randomUUID();
+        UUID warehouseId = UUID.randomUUID();
+        AsnSummaryEntity existing = new AsnSummaryEntity(asnId, "ASN-001", warehouseId,
+                "WH-BUSAN", null, null, "CREATED", "MANUAL", null, 0,
+                NOW.minusSeconds(60), null, NOW.minusSeconds(60));
+        when(asnRepo.findById(asnId)).thenReturn(Optional.of(existing));
+        when(warehouseRepo.findById(any())).thenReturn(Optional.empty());
+
+        ProjectionEnvelope env = envelope("inbound.asn.received", "wms.inbound.asn.received.v1",
+                "{\"asnId\":\"" + asnId + "\",\"asnNo\":\"ASN-001\",\"warehouseId\":\""
+                        + warehouseId + "\",\"source\":\"WEBHOOK_ERP\",\"lines\":[]}");
+
+        assertThat(service.project(env)).isEqualTo(DedupeOutcome.APPLIED);
+        assertThat(existing.getWarehouseCode()).isEqualTo("WH-BUSAN");
+    }
+
 }

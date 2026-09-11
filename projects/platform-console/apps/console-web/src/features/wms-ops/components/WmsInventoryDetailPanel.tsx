@@ -2,6 +2,7 @@
 
 import { messageForCode } from '@/shared/api/errors';
 import { formatDateTime } from '@/shared/lib/datetime';
+import { masterRefLabel } from '@/shared/lib/master-ref-label';
 import type { InventoryRow } from '../api/types';
 
 /**
@@ -99,8 +100,21 @@ export function WmsInventoryDetailPanel({
             </div>
             <div>
               <dt className="text-muted-foreground">창고</dt>
-              <dd data-testid="wms-inv-detail-warehouse">
-                {data.warehouseId}
+              {/* 🔴 TASK-MONO-659 — 이 칸은 raw UUID 를 그리고 있었다. 콘솔에서 고칠 수
+                  없었던 이유는 «읽을 이름이 이 화면에 도착하지 않아서» 였고, 그래서 그
+                  티켓이 생산자(admin-service)에 `warehouseCode` 를 실었다. 여기는 이제
+                  **선언과 표시만** 한다 — 조회를 새로 붙이지 않는다.
+                  🔵 `data-master-ref` 는 276 회귀 가드가 읽는 **모집단 선언**이고,
+                  원본 id 는 `title` 에만 싣는다(보이는 텍스트가 아니므로 UUID 가드가 안 문다). */}
+              <dd
+                data-testid="wms-inv-detail-warehouse"
+                data-master-ref="inventory.warehouseId"
+                title={data.warehouseId ?? undefined}
+              >
+                {masterRefLabel(
+                  data.warehouseId,
+                  data.warehouseCode ? { code: data.warehouseCode } : null,
+                )}
               </dd>
             </div>
             <div>

@@ -62,6 +62,7 @@ final class OrderMapper {
                 e.getOrderId(),
                 e.getLineNumber(),
                 e.getSkuId(),
+                e.getSkuCode(),
                 e.getLotId(),
                 e.getRequestedQty());
     }

@@ -39,7 +39,7 @@ class InventoryDashboardControllerSliceTest {
 
     private InventorySnapshotEntity sample() {
         return new InventorySnapshotEntity(UUID.randomUUID(), UUID.randomUUID(), null,
-                UUID.randomUUID(), "WH01-A-01", "SKU-1", null,
+                UUID.randomUUID(), null, "WH01-A-01", "SKU-1", null,
                 100, 0, 0, false, NOW, NOW);
     }
 

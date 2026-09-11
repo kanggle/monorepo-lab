@@ -106,22 +106,22 @@ UUID 이므로 감사 행의 `operatorId` 도 UUID일 것» 이라고 **추론**
 
 ## AC-0 — 고치기 전에, 그 필드가 정말 없는지 **응답에서** 재라
 
-- [ ] 🔴🔴 **DTO 소스 grep 은 답이 아니다.** `.passthrough()` 스키마 아래에서는 「선언이
+- [x] 🔴🔴 **DTO 소스 grep 은 답이 아니다.** `.passthrough()` 스키마 아래에서는 「선언이
       없다」와 「값이 안 온다」가 다르다 — 277 이 그것을 밟았다: `scm` 의 `warehouseCode` 는
       **이미 전선에 있었는데** 콘솔 스키마가 선언을 안 해서 없는 줄 알았다. ⇒ 다섯 자리
       각각에 대해 **실제 응답 본문**을 떠서 붙여라(데모 스택 또는 그 서비스의 IT).
-- [ ] 🔵 하나라도 「이미 오고 있다」면 그 자리는 **콘솔 한 줄**이고 이 티켓에서 빠진다.
+- [x] 🔵 하나라도 「이미 오고 있다」면 그 자리는 **콘솔 한 줄**이고 이 티켓에서 빠진다.
       그 경우 277 처럼 zod 선언 + 표시 + `data-master-ref` 마커로 닫는다.
 
 ## AC-1 — 누락 셋 (wms)
 
-- [ ] `InventorySnapshotResponse` · `AsnSummaryResponse` 에 `warehouseCode`,
+- [x] `InventorySnapshotResponse` · `AsnSummaryResponse` 에 `warehouseCode`,
       `OrderLineResponse` 에 `skuCode` 를 **추가**한다. 🔴 **기존 필드는 지우지 마라** —
       UUID 로 검색하는 경로가 있다(`TASK-PC-FE-277` Failure 1).
-- [ ] 🔴 **read-model 에 그 값이 있는지부터** 확인하라. 없으면 프로젝터가 채워야 하고,
+- [x] 🔴 **read-model 에 그 값이 있는지부터** 확인하라. 없으면 프로젝터가 채워야 하고,
       그러면 **기존 행은 NULL 인 채로 남는다**(이 저장소가 이름 붙인 축: 마이그레이션은
       코드 질문 이전에 데이터 질문이다). 그때 재투영이 필요한지도 이 AC 에서 답하라.
-- [ ] 🔵 3번은 값을 **인입 시점에 이미 갖고 있다** — 저장하고 있는지부터 보라.
+- [x] 🔵 3번은 값을 **인입 시점에 이미 갖고 있다** — 저장하고 있는지부터 보라.
 
 ## AC-2 — 설계 둘 (iam)
 
@@ -134,13 +134,13 @@ UUID 이므로 감사 행의 `operatorId` 도 UUID일 것» 이라고 **추론**
 
 ## AC-3 — 콘솔 쪽 마무리
 
-- [ ] 각 자리에서 `TASK-PC-FE-277` 이 쓴 `masterRefLabel` + **`data-master-ref` 마커**를
+- [x] 각 자리에서 `TASK-PC-FE-277` 이 쓴 `masterRefLabel` + **`data-master-ref` 마커**를
       단다. 🔴 마커를 안 달면 `tests/unit/erp-master-ref-names.test.tsx` 의 모집단 밖이다.
-- [ ] 그 가드의 **하한을 올려라** — 새 칸이 늘었는데 하한이 그대로면 비-공허성이 헐거워진다.
+- [x] 그 가드의 **하한을 올려라** — 새 칸이 늘었는데 하한이 그대로면 비-공허성이 헐거워진다.
 
 ## AC-4 — 🔴 이 티켓이 닫힐 때 277 의 ⚪ 목록도 다시 봐라
 
-- [ ] 277 AC-0 의 ⚪ 17곳 중 여기서 해결되는 것이 있는지 대조하고, 남는 것은 **그대로
+- [x] 277 AC-0 의 ⚪ 17곳 중 여기서 해결되는 것이 있는지 대조하고, 남는 것은 **그대로
       ⚪ 로 남겨라**(추측으로 닫지 마라).
 
 ---
@@ -255,3 +255,155 @@ String lotNo        = lotRepo.findById(lotId).map(LotRefEntity::getLotNo)…
 AC-4 가 *"277 AC-0 의 ⚪ 17곳 중 여기서 해결되는 것이 있는지 대조하라"* 고 적었다.
 🔵 그 17곳은 **런타임 값을 못 본 콘솔 칸**이고 이 티켓의 넷과 다른 부류다.
 🔴 **추측으로 닫지 않는다** — AC-1~AC-3 을 구현할 때 함께 본다.
+
+---
+
+# 🟢🟢 AC-1 · AC-3 · AC-4 구현 (2026-09-11 UTC · 창 없이) — **wms 갈래 셋**
+
+🔴 **AC-2(iam ⑤)는 이 PR 에 없다.** Failure 3 이 *"다섯을 한 PR 로 묶는다 → 뒤 둘의 논의가
+앞 셋을 붙잡는다"* 라고 적었고, AC-2 자신이 *"먼저 결정이다, 구현이 아니다"* 로 시작한다.
+⇒ **소유자 결정이 필요한 항목**이고 아래 § 남은 것에 질문을 정리해 뒀다.
+
+## AC-1 — 셋 다 «옆 칸은 했는데 이 칸만» 이 문자 그대로였다
+
+| # | 바꾼 것 | 형제(이미 하고 있던 것) |
+|---|---|---|
+| ① `InventorySnapshot` | 엔티티 컬럼 + `WarehouseRefRepository` 주입 + 조회 한 줄 + DTO | `locationRepo`·`skuRepo`·`lotRepo` 가 **바로 옆줄에** 같은 모양으로 있었다 |
+| ② `AsnSummary` | 같은 셋 + `resolveWarehouseCode()` | `resolvePartnerName()` 이 **같은 파일에** 있었다 |
+| ③ `OrderLine` | 도메인·엔티티·result·response 에 `skuCode` | `ReceiveOrderService` 가 `sku.skuCode()` 로 **이벤트에는 이미 싣고 있었다** |
+
+🔵 ③ 이 제일 컸다 — 티켓은 *"조회 한 줄"* 부류로 묶었지만 실제로는 **도메인 모델을
+지나는 사슬**이라 6개 파일 + 테스트 호출부 20여 곳이 따라 움직였다. 🔵 다만 값은 정말로
+손에 있었다: `ReceiveOrderService` 가 `SkuSnapshot` 을 **이미 해석해 두고** 이벤트에만
+실었으므로, 새 조회는 **한 건도 추가되지 않았다.**
+
+🔴 **UUID 필드는 하나도 안 지웠다**(Failure 2). 셋 다 **더하는** 변경이다.
+
+### 백필 — AC-1 이 물은 「재투영이 필요한가」의 답: **아니다, 조인 한 번이다**
+
+| 마이그레이션 | 백필의 출처 |
+|---|---|
+| `admin-service V4__denormalise_warehouse_code.sql` | `admin_warehouse_ref.warehouse_code` (같은 DB) |
+| `outbound-service V19__denormalise_sku_code_on_order_line.sql` | `sku_snapshot.sku_code` (같은 DB) |
+
+🔵 **값이 이미 저장소 안에 있으므로** 이벤트 재생이 필요 없다. AC-0 의 실측이 이 답을
+가능하게 만들었다 — *"마이그레이션은 코드 질문 이전에 데이터 질문이다"* 의 답이
+«값은 이미 있다» 였다.
+🔴 참조가 아직 투영되지 않은 행은 **NULL 로 남는다.** 빈 문자열이나 UUID 문자열로 채우면
+「코드가 없다」와 「코드를 모른다」가 합쳐져 다시는 못 갈린다.
+
+## AC-3 — 콘솔은 **선언과 표시만** 했다 (조회를 새로 붙이지 않았다)
+
+`scm` 에서 277 이 한 모양 그대로다: zod 한 줄 + `masterRefLabel` + `data-master-ref` 마커
+(+ 원본 id 는 `title` 에만 — 보이는 텍스트가 아니므로 UUID 가드가 안 문다).
+
+**하한을 올렸다**(AC-3 둘째 칸): `tests/unit/erp-master-ref-names.test.tsx` 에 wms 블록을
+더했고 하한이 **1 + 1 + 3 + 2** 늘었다. 네 칸 모두 **해석 / 미해석 / 없음** 대조군을 든다.
+
+## AC-4 — 277 의 ⚪ 목록 대조
+
+| 277 의 ⚪ | 이 티켓이 해결하나 |
+|---|---|
+| `/wms/*` 의 **창고** 칸 | 🟢 **해결** — 생산자가 `warehouseCode` 를 싣고 콘솔이 그린다 |
+| `/scm/*` `supplierId`(3) · `materializedPoId` | ⚪ 그대로 — 화면에 데이터가 0건이라 못 봤다(다른 부류) |
+| `/ledger` 분개 8칸 | ⚪ 그대로 — **탐색 경로가 없다**(목록 API 부재). 이 티켓과 무관 |
+| `/org/*` `nodeId`(3) | ⚪ 그대로 |
+| `/wms/*` `lotId` · `inspectorId` | ⚪ 그대로 — 값이 없거나(null) 이 티켓의 넷이 아니다 |
+
+🔴 **추측으로 닫지 않았다.** 위 ⚪ 는 전부 «런타임 값을 아직 못 봤다» 이고 그대로 남는다.
+
+---
+
+## 🔴🔴 곁가지로 나온 것 — **같은 패널의 형제 두 칸이 여전히 id 로 되돌아간다**
+
+`TASK-MONO-645` ④ 가 데모 창에서 `/wms/inventory` 상세가 **세 칸을 raw UUID 로** 그리는
+것을 봤다(위치 · SKU · 창고). 이 티켓은 그중 **창고**만 다뤘는데, 나머지 둘이 왜 UUID 였는지
+이번에 코드에서 확인됐다:
+
+```tsx
+{data.locationCode ?? data.locationId}   // ← id 폴백
+{data.skuCode ?? data.skuId}             // ← id 폴백
+{data.lotNo ?? data.lotId ?? '—'}        // ← id 폴백
+```
+
+🔴 **선언은 처음부터 있었다.** 그 칸들이 UUID 였던 것은 값이 없어서가 아니라 **코드가 null 일
+때 id 로 되돌아가기 때문**이다 — 그리고 `master-ref-label.ts` 가 자기 문서에 그것을
+**하지 말라고** 적어 놓았다: *"🔴🔴 id 폴백은 결함을 «가끔» 되살리고, 그때는 아무도 안 본다."*
+
+⇒ **이 티켓에서 고치지 않았다.** § 제외가 *"콘솔 화면 수정 — 277 이 했다"* 로 선을 그었고,
+이것은 «생산자가 값을 안 보낸다» 가 아니라 **«콘솔이 받은 null 을 잘못 표현한다»** 라서
+부류가 다르다. 🔴 그리고 고치면 동작이 바뀐다(UUID → `이름 확인 불가`) — 그것은
+`TASK-PC-FE-276` 의 결정을 이 화면에 적용하는 **별도 판단**이다.
+
+🔵 **다만 지금 상태가 어색하다는 것은 적어 둔다**: 같은 패널에서 창고는 `이름 확인 불가` 를,
+바로 옆 위치·SKU 는 UUID 를 그리게 된다. ⇒ **별도 티켓 후보**이고, 판단은 소유자 몫이다.
+
+---
+
+## 검증
+
+| 축 | 결과 |
+|---|---|
+| `admin-service` 전체 유닛 | 🟢 **313 tests, 0 failures** |
+| `outbound-service` 전체 유닛 | 🟢 **286 tests, 0 failures** |
+| console `erp-master-ref-names` | 🟢 **26 tests** (기존 22 + wms 4) |
+| console `tsc --noEmit` | 🟢 rc=0 |
+
+**bite 를 실제로 물렸다**: `InventoryProjectionService` 의 조회 한 줄을 `null` 로 되돌리고
+같은 스위트를 돌리니 **rc=1**(복구 후 rc=0). 🔵 즉 새 칸은 «그 줄이 있어야만» 초록이다.
+
+🔴 **Testcontainers IT 는 이 호스트에서 못 돌린다**(알려진 블로커). 마이그레이션이 실제
+Postgres 에 적용되는지는 **CI 의 wms 통합 잡이 권위**다 — 두 마이그레이션 다 `UPDATE … FROM`
+(Postgres 문법)이고 두 서비스 모두 Postgres 전용이라 H2 경로는 없다(실측: `build.gradle` 에
+`testcontainers:postgresql`, H2 의존성 없음).
+
+## 남은 것 — 🔴 AC-2 (iam ④⑤) 는 **소유자 결정**이다
+
+- [ ] 감사 행과 org-admin 행에 운영자 표시명을 **①생산자가 조인해서 싣는가 ②소비자가 별도
+      조회로 해석하는가.** 🔴 감사 로그는 **그 시점의 이름**이 필요할 수 있다 — 지금 이름으로
+      해석하면 **과거 기록이 바뀐다.** 그 판단을 적지 않고 필드만 더하면 안 된다(AC-2 원문).
+- 🔵 결정이 「싣는다」면 필드명은 `GroupMember.displayName` 과 **같은 것**을 쓴다(AC-2 둘째 칸).
+- 🔵 ④(`AdminAuditRowSchema.operatorId`)는 **이미 철회됐다**(§ 라이브 정정) — 남은 것은 ⑤ 하나다.
+
+---
+
+## 🔴🔴 CI 가 잡은 것 — **Flyway 버전이 중복됐다. 그리고 그것을 무는 가드가 없다**
+
+첫 푸시에서 `Integration (… outbound-service, Testcontainers)` 가 빨갛게 났다.
+사유는 테스트 단언이 아니라 **컨텍스트 기동 실패**였다:
+
+```
+Caused by: org.flywaydb.core.api.FlywayException at CompositeMigrationResolver.java:92
+```
+
+`outbound-service` 에 **`V10__order_schema_align.sql` 이 이미 있었고** 내가 같은 번호로
+`V10__denormalise_sku_code_on_order_line.sql` 을 넣었다. ⇒ `V19` 로 고쳤다.
+
+### 🔴 왜 못 봤나 — **술어가 알파벳 정렬이었다**
+
+`ls src/main/resources/db/migration/ | tail -8` 로 「마지막 버전」을 봤다. 그런데 `ls` 는
+**알파벳 순**이라 `V10` 이 `V2` 보다 **앞에** 오고, `tail -8` 이 그 구간을 통째로 잘라냈다.
+그래서 보인 최대값이 `V9` 였고 **실제 최대값은 `V18`** 이었다.
+
+🔵 이 저장소가 이름 붙인 «부재를 주장하기 전에 술어를 의심해라» 그대로다 — 「V10 은 없다」가
+아니라 **「내가 쓴 목록에 V10 이 안 보였다」** 였다. 올바른 술어:
+
+```bash
+find <dir> -name 'V*.sql' | sed 's|.*/V||;s|__.*||' | sort -n | tail -1
+```
+
+### 🔴 전수로 다시 쟀다 — 지금은 중복이 없다
+
+저장소의 **모든** `db/migration` 디렉터리에 대해 버전 번호를 **숫자 정렬**로 뽑아
+`uniq -d` 를 돌렸다: 이 수정 뒤 **중복 0건**. 🔵 admin-service 의 `V4` 는 올바르다(최대 3).
+
+### ⚪ 남는 것 — **중복 버전을 무는 가드가 저장소에 없다**
+
+`scripts/` 전체에서 「같은 버전 번호가 둘」을 재는 검사는 **0건**이다(grep 실측).
+⇒ 이 결함은 **CI 의 Testcontainers 잡이 기동에 실패해야만** 드러나고, 그 신호는
+「마이그레이션 번호가 겹쳤다」가 아니라 **「IT 15개가 무더기로 FAILED」** 로 보인다 —
+진단이 오래 걸리는 모양이다.
+
+🔴 **여기서 가드를 더하지 않았다**: `scripts/` 에 파일을 더하면 분모가 움직여 전체 가드
+쓸기와 두 산문 홈 수정이 따라붙고(그 축은 `TASK-MONO-650` 이 이름 붙였다), 그것은 이
+티켓의 주제와 다른 일이다. ⇒ **별도 티켓 후보**이고, 술어는 위 한 줄이면 된다.

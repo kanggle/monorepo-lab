@@ -27,6 +27,14 @@ public class AsnSummaryEntity {
     @Column(name = "warehouse_id", nullable = false)
     private UUID warehouseId;
 
+    /**
+     * 🔴 TASK-MONO-659 — 창고 코드. 이 DTO 는 `supplierPartnerId` 옆에 `supplierName` 을
+     * 이미 비정규화하고 있었는데 창고만 UUID 로 남아 콘솔이 그것을 그대로 그렸다.
+     * 🔵 `warehouseId` 는 그대로 둔다(UUID 조회 경로가 있다).
+     */
+    @Column(name = "warehouse_code", length = 40)
+    private String warehouseCode;
+
     @Column(name = "supplier_partner_id")
     private UUID supplierPartnerId;
 
@@ -61,13 +69,15 @@ public class AsnSummaryEntity {
     protected AsnSummaryEntity() {
     }
 
-    public AsnSummaryEntity(UUID asnId, String asnNo, UUID warehouseId, UUID supplierPartnerId,
+    public AsnSummaryEntity(UUID asnId, String asnNo, UUID warehouseId, String warehouseCode,
+                            UUID supplierPartnerId,
                             String supplierName, String status, String source,
                             LocalDate expectedArriveDate, int lineCount, Instant receivedAt,
                             Instant closedAt, Instant lastEventAt) {
         this.asnId = asnId;
         this.asnNo = asnNo;
         this.warehouseId = warehouseId;
+        this.warehouseCode = warehouseCode;
         this.supplierPartnerId = supplierPartnerId;
         this.supplierName = supplierName;
         this.status = status;
@@ -79,11 +89,17 @@ public class AsnSummaryEntity {
         this.lastEventAt = lastEventAt;
     }
 
-    public void applyReceived(String asnNo, UUID warehouseId, UUID supplierPartnerId,
+    public void applyReceived(String asnNo, UUID warehouseId, String warehouseCode,
+                              UUID supplierPartnerId,
                               String supplierName, String source, LocalDate expectedArriveDate,
                               int lineCount, Instant receivedAt, Instant lastEventAt) {
         this.asnNo = asnNo;
         this.warehouseId = warehouseId;
+        // 🔵 `supplierName` 과 **같은 규칙**: 참조가 아직 안 왔으면 null 이 오고, 그때는
+        //    이미 채워 둔 값을 지우지 않는다(순서 뒤바뀜은 architecture.md § Out-of-Order).
+        if (warehouseCode != null) {
+            this.warehouseCode = warehouseCode;
+        }
         this.supplierPartnerId = supplierPartnerId;
         this.supplierName = supplierName;
         this.source = source;
@@ -108,6 +124,7 @@ public class AsnSummaryEntity {
     public UUID getAsnId() { return asnId; }
     public String getAsnNo() { return asnNo; }
     public UUID getWarehouseId() { return warehouseId; }
+    public String getWarehouseCode() { return warehouseCode; }
     public UUID getSupplierPartnerId() { return supplierPartnerId; }
     public String getSupplierName() { return supplierName; }
     public String getStatus() { return status; }

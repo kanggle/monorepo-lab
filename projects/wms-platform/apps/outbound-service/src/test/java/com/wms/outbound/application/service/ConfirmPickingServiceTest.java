@@ -181,7 +181,7 @@ class ConfirmPickingServiceTest {
     }
 
     private void seedOrderInState(OrderStatus status, UUID actualSkuId, int qty) {
-        OrderLine line = new OrderLine(orderLineId, orderId, 1, actualSkuId, null, qty);
+        OrderLine line = new OrderLine(orderLineId, orderId, 1, actualSkuId, null, null, qty);
         Order order = new Order(orderId, "ORD-1", OrderSource.MANUAL,
                 partnerId, warehouseId, null, null, status,
                 0L, T0, "creator", T0, "creator", List.of(line));
