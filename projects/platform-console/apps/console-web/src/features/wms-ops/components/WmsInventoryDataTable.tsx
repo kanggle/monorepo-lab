@@ -2,6 +2,7 @@
 
 import { Button } from '@/shared/ui/Button';
 import { formatDateTime } from '@/shared/lib/datetime';
+import { masterRefLabel } from '@/shared/lib/master-ref-label';
 import type { InventoryPage, InventoryQueryParams, InventoryRow } from '../api/types';
 
 /**
@@ -80,9 +81,30 @@ export function WmsInventoryDataTable({
               data-testid={`wms-inv-row-${i}`}
               className="border-b border-border"
             >
-              <td className="p-2">{r.locationCode ?? r.locationId}</td>
-              <td className="p-2">{r.skuCode ?? r.skuId}</td>
-              <td className="p-2">{r.lotNo ?? r.lotId ?? '—'}</td>
+              {/* 🔴 TASK-PC-FE-281 — 세 칸 다 **마스터 참조**다. 코드가 null 일 때
+                  id 로 되돌아가면 raw UUID 가 보인다(`TASK-MONO-645` ④ 가 라이브에서
+                  관측한 모양). 원본 id 는 `title` 에만 싣는다. */}
+              <td
+                className="p-2"
+                data-master-ref="inventory.locationId"
+                title={r.locationId ?? undefined}
+              >
+                {masterRefLabel(r.locationId, r.locationCode ? { code: r.locationCode } : null)}
+              </td>
+              <td
+                className="p-2"
+                data-master-ref="inventory.skuId"
+                title={r.skuId ?? undefined}
+              >
+                {masterRefLabel(r.skuId, r.skuCode ? { code: r.skuCode } : null)}
+              </td>
+              <td
+                className="p-2"
+                data-master-ref="inventory.lotId"
+                title={r.lotId ?? undefined}
+              >
+                {masterRefLabel(r.lotId, r.lotNo ? { code: r.lotNo } : null)}
+              </td>
               <td className="p-2">{r.availableQty ?? '—'}</td>
               <td className="p-2">{r.reservedQty ?? '—'}</td>
               <td className="p-2">{r.onHandQty ?? '—'}</td>

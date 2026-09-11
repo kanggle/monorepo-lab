@@ -82,20 +82,37 @@ export function WmsInventoryDetailPanel({
           <dl className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
             <div>
               <dt className="text-muted-foreground">위치</dt>
-              <dd data-testid="wms-inv-detail-location">
-                {data.locationCode ?? data.locationId}
+              {/* 🔴 TASK-PC-FE-281 — 창고 칸(659)과 **같은 부류**인데 여기만 id 폴백이
+                  남아 있어서, 같은 화면이 같은 상황에 두 말을 하고 있었다. */}
+              <dd
+                data-testid="wms-inv-detail-location"
+                data-master-ref="inventory.locationId"
+                title={data.locationId ?? undefined}
+              >
+                {masterRefLabel(
+                  data.locationId,
+                  data.locationCode ? { code: data.locationCode } : null,
+                )}
               </dd>
             </div>
             <div>
               <dt className="text-muted-foreground">SKU</dt>
-              <dd data-testid="wms-inv-detail-sku">
-                {data.skuCode ?? data.skuId}
+              <dd
+                data-testid="wms-inv-detail-sku"
+                data-master-ref="inventory.skuId"
+                title={data.skuId ?? undefined}
+              >
+                {masterRefLabel(data.skuId, data.skuCode ? { code: data.skuCode } : null)}
               </dd>
             </div>
             <div>
               <dt className="text-muted-foreground">로트</dt>
-              <dd data-testid="wms-inv-detail-lot">
-                {data.lotNo ?? data.lotId ?? '—'}
+              <dd
+                data-testid="wms-inv-detail-lot"
+                data-master-ref="inventory.lotId"
+                title={data.lotId ?? undefined}
+              >
+                {masterRefLabel(data.lotId, data.lotNo ? { code: data.lotNo } : null)}
               </dd>
             </div>
             <div>

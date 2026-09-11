@@ -67,6 +67,7 @@ import { OrgNodeDetail } from '@/features/org-hierarchy/components/OrgNodeDetail
 import { WmsInventoryDetailPanel } from '@/features/wms-ops/components/WmsInventoryDetailPanel';
 import { WmsAsnDataTable } from '@/features/wms-ops/components/WmsAsnDataTable';
 import { OutboundDrillLines } from '@/features/wms-outbound-ops/components/OutboundDrillLines';
+import { WmsInventoryDataTable } from '@/features/wms-ops/components/WmsInventoryDataTable';
 import { OrgScopeDialogBody } from '@/features/operators/components/OrgScopeDialogBody';
 import {
   codeName,
@@ -518,6 +519,151 @@ describe('wms 의 참조 칸도 같은 술어를 지킨다 (TASK-MONO-659)', () 
     const cells = refCells(container).map((el) => (el.textContent ?? '').trim());
     expect(cells).toContain('SKU-BOX-001');
     expect(cells).toContain(MASTER_REF_UNRESOLVED);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TASK-PC-FE-281 — `{code ?? id}` 로 **id 로 되돌아가던** 마스터 참조 7칸.
+//
+// 🔴 659 가 「창고」만 고쳐서 같은 패널이 같은 상황에 두 말을 하고 있었다:
+//    창고=`이름 확인 불가` / 위치·SKU·로트=raw UUID.
+// 🔴🔴 그리고 **그 행 자신의 업무 번호 3칸은 제외했다** — 마지막 describe 가
+//    그 셋이 모집단 **밖**임을 단언한다(안 하면 나중에 마커가 붙어도 아무도 모른다).
+// ---------------------------------------------------------------------------
+
+const P_LOC = '01910000-0000-7000-8000-000000001001';
+const P_SKU = '01910000-0000-7000-8000-000000000403';
+const P_LOT = '01910000-0000-7000-8000-0000000007aa';
+const P_SUP = '01910000-0000-7000-8000-0000000002fe';
+
+function inventoryRows() {
+  return [
+    // 해석됨
+    { locationId: P_LOC, skuId: P_SKU, lotId: P_LOT, warehouseId: WMS_WH, warehouseCode: 'WH01',
+      locationCode: 'A-01-01', skuCode: 'SKU-BOX-001', lotNo: 'LOT-77', availableQty: 5 },
+    // 🔴 미해석 — 코드가 null 이다. 여기서 UUID 가 보이면 이 티켓의 결함이 살아 있다.
+    { locationId: P_LOC, skuId: P_SKU, lotId: P_LOT, warehouseId: WMS_WH, warehouseCode: null,
+      locationCode: null, skuCode: null, lotNo: null, availableQty: 1 },
+    // 참조 없음 — lotId 가 null ⇒ `—`
+    { locationId: P_LOC, skuId: P_SKU, lotId: null, warehouseId: WMS_WH, warehouseCode: 'WH01',
+      locationCode: 'A-01-02', skuCode: 'SKU-BOX-002', lotNo: null, availableQty: 2 },
+  ];
+}
+
+function renderInventoryTable() {
+  return render(
+    <WmsInventoryDataTable
+      data={{ content: inventoryRows(), page: { totalPages: 1, totalElements: 3, number: 0, size: 20 } } as never}
+      query={{ page: 0 } as never}
+      onPrevPage={vi.fn()}
+      onNextPage={vi.fn()}
+      onSelect={vi.fn()}
+    />,
+    { wrapper: wrapper() },
+  );
+}
+
+describe('id 폴백을 걷어낸다 — wms 마스터 참조 7칸 (TASK-PC-FE-281)', () => {
+  it('재고 목록 — 위치·SKU·로트가 UUID 로 안 돌아간다', () => {
+    const { container } = renderInventoryTable();
+    // 3행 × 3칸(+창고 3) ⇒ 하한을 넉넉히 잡지 않고 실제 수로 잡는다.
+    assertNoUuidInRefCells(container, 9, 'wms 재고 목록');
+    const cells = refCells(container).map((el) => (el.textContent ?? '').trim());
+    expect(cells).toContain('A-01-01');
+    expect(cells).toContain('SKU-BOX-001');
+    expect(cells).toContain('LOT-77');
+    // 🔴 미해석 행 — `이름 확인 불가` 이고 UUID 가 아니다.
+    expect(cells).toContain(MASTER_REF_UNRESOLVED);
+    // 참조가 아예 없는 칸 — `—`
+    expect(cells).toContain(MASTER_REF_NONE);
+  });
+
+  it('🔵 원본 id 는 사라지지 않았다 — `title` 로 옮겼을 뿐이다', () => {
+    const { container } = renderInventoryTable();
+    const titles = refCells(container).map((el) => el.getAttribute('title'));
+    expect(titles).toContain(P_LOC);
+    expect(titles).toContain(P_SKU);
+    // 보이는 텍스트에는 없다.
+    assertNoUuidInRefCells(container, 9, 'wms 재고 목록(title 확인)');
+  });
+
+  it('재고 상세 — 위치·SKU·로트도 같은 술어를 지킨다', () => {
+    const { container } = render(
+      <WmsInventoryDetailPanel
+        selected={{ locationId: P_LOC, skuId: P_SKU, lotId: P_LOT } as never}
+        loading={false}
+        forbidden={false}
+        notFound={false}
+        degraded={false}
+        data={{ locationId: P_LOC, skuId: P_SKU, lotId: P_LOT, warehouseId: WMS_WH,
+                warehouseCode: null, locationCode: null, skuCode: null, lotNo: null,
+                availableQty: 5 } as never}
+      />,
+      { wrapper: wrapper() },
+    );
+    // 창고 + 위치 + SKU + 로트 = 4칸, 전부 미해석이다.
+    assertNoUuidInRefCells(container, 4, 'wms 재고 상세(전부 미해석)');
+    const cells = refCells(container).map((el) => (el.textContent ?? '').trim());
+    expect(cells.filter((c) => c === MASTER_REF_UNRESOLVED).length).toBe(4);
+  });
+
+  it('ASN 목록 — 공급사 칸이 이름을 그리고, 없으면 UUID 가 아니다', () => {
+    const { container } = render(
+      <WmsAsnDataTable
+        data={{
+          content: [
+            { asnId: 'a1', asnNo: 'ASN-1', warehouseId: WMS_WH, warehouseCode: 'WH01',
+              supplierPartnerId: P_SUP, supplierName: '한빛물산', status: 'CREATED' },
+            { asnId: 'a2', asnNo: 'ASN-2', warehouseId: WMS_WH, warehouseCode: 'WH01',
+              supplierPartnerId: P_SUP, supplierName: null, status: 'CREATED' },
+          ],
+          page: { totalPages: 1, totalElements: 2, number: 0, size: 20 },
+        } as never}
+        query={{ page: 0 } as never}
+        onPrevPage={vi.fn()}
+        onNextPage={vi.fn()}
+        onInspect={vi.fn()}
+      />,
+      { wrapper: wrapper() },
+    );
+    assertNoUuidInRefCells(container, 4, 'wms ASN 공급사');
+    const cells = refCells(container).map((el) => (el.textContent ?? '').trim());
+    expect(cells).toContain('한빛물산');
+    expect(cells).toContain(MASTER_REF_UNRESOLVED);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 🔴🔴 TASK-PC-FE-281 § 제외 — **그 행 자신의 업무 번호는 모집단 밖이다**
+//
+// `asnNo ?? asnId` · `orderNo ?? orderId` 는 다른 엔티티를 가리키는 참조가 아니다.
+// 해석할 «이름» 이 없으므로 `이름 확인 불가` 로 바꾸면 **그 행을 지목할 방법이
+// 화면에서 사라진다.** ⇒ UUID 폴백이 옳고, `data-master-ref` 를 달지 않는다.
+// 🔵 이 칸이 없으면 누군가 «일관성» 을 이유로 마커를 달았을 때 아무도 모른다.
+// ---------------------------------------------------------------------------
+describe('🔴 제외한 칸은 모집단 밖이다 (TASK-PC-FE-281 § 제외)', () => {
+  it('ASN 번호 칸은 `data-master-ref` 를 달지 않는다 — UUID 폴백이 의도다', () => {
+    const { container } = render(
+      <WmsAsnDataTable
+        data={{
+          content: [
+            // 🔴 asnNo 가 null 이라 UUID 가 **보이는 텍스트로** 나온다. 그것이 의도다.
+            { asnId: P_SUP, asnNo: null, warehouseId: WMS_WH, warehouseCode: 'WH01',
+              supplierPartnerId: P_SUP, supplierName: '한빛물산', status: 'CREATED' },
+          ],
+          page: { totalPages: 1, totalElements: 1, number: 0, size: 20 },
+        } as never}
+        query={{ page: 0 } as never}
+        onPrevPage={vi.fn()}
+        onNextPage={vi.fn()}
+        onInspect={vi.fn()}
+      />,
+      { wrapper: wrapper() },
+    );
+    // (1) 그 UUID 가 화면에 실제로 있다 — 이 대조군은 공허하지 않다.
+    expect(container.textContent).toContain(P_SUP);
+    // (2) 그런데 참조 셀(모집단) 안에서는 UUID 가 0건이다 ⇒ 그 칸은 모집단 밖이다.
+    assertNoUuidInRefCells(container, 2, '제외 칸(ASN 번호)');
   });
 });
 

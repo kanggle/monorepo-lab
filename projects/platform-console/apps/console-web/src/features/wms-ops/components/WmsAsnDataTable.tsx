@@ -75,6 +75,11 @@ export function WmsAsnDataTable({
               data-testid={`wms-asn-row-${i}`}
               className="border-b border-border"
             >
+              {/* 🔴🔴 TASK-PC-FE-281 § 제외 — **이 칸은 바꾸지 마라.** `asnNo` 는 다른
+                  엔티티를 가리키는 참조가 아니라 **이 행 자신의 업무 번호**다. 해석할
+                  «이름» 이 없으므로 `masterRefLabel` 의 세 상태가 성립하지 않고, 그것을
+                  `이름 확인 불가` 로 바꾸면 **이 행을 지목할 방법이 화면에서 사라진다.**
+                  ⇒ 여기서는 UUID 폴백이 옳다. `data-master-ref` 도 달지 않는다(모집단 밖). */}
               <td className="p-2">{a.asnNo ?? a.asnId}</td>
               <td className="p-2" data-testid={`wms-asn-status-${i}`}>
                 <StatusBadge tone={asnStatusTone(a.status)}>
@@ -93,8 +98,17 @@ export function WmsAsnDataTable({
                   a.warehouseCode ? { code: a.warehouseCode } : null,
                 )}
               </td>
-              <td className="p-2">
-                {a.supplierName ?? a.supplierPartnerId ?? '—'}
+              {/* 🔴 TASK-PC-FE-281 — 공급사는 **마스터 참조**다. 🔵 이 칸은 코드가 아니라
+                  이름을 싣는다(`supplierName`) — `codeName` 이 «이름만» 도 처리한다. */}
+              <td
+                className="p-2"
+                data-master-ref="asn.supplierPartnerId"
+                title={a.supplierPartnerId ?? undefined}
+              >
+                {masterRefLabel(
+                  a.supplierPartnerId,
+                  a.supplierName ? { name: a.supplierName } : null,
+                )}
               </td>
               <td className="p-2">{formatDate(a.expectedArriveDate)}</td>
               <td className="p-2">{a.lineCount ?? '—'}</td>
