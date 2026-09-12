@@ -3961,6 +3961,28 @@ else
 fi
 
 # --- (2) 거절이 handler 안 **올바른 자리**에 있는가 (ast 로 문장 순서를 읽는다) -----
+#
+# 🔴🔴 인터프리터를 여기서 **한 번** 고른다 (TASK-MONO-673). 아래 네 자리가 이 값을 쓴다 —
+#      같은 사실을 네 곳에 적으면 한 곳만 고쳐진다.
+#
+#      술어는 «있는가» 가 아니라 **«실제로 도는가»** 다. 그 차이가 이 고침의 전부다:
+#        · packer AMI 빌드 호스트(Ubuntu) — `python` 이 **없다**, `python3` 만 있다
+#          (이 판정기가 처음으로 굽기를 12분 55초에 죽인 자리다)
+#        · 개발 Windows 호스트          — `python` 은 돌고 `python3` 은 **Store 스텁**이라
+#          `command -v python3` 이 **true 인데 실행하면 죽는다**
+#      ⇒ `command -v` 로 고르면 Windows 에서 고장난 스텁을 집는다. 그래서 실행으로 고른다.
+#
+# 🔴 못 찾으면 **죽는다.** z40 은 판정기다 — 안 돌았으면 「통과」가 아니라 「안 쟀다」이고,
+#    이 스크립트는 그 구분을 다른 칸에서 이미 지킨다(위 z40 skip 문구를 보라).
+z40_py=""
+for z40_c in python3 python py; do
+  if command -v "$z40_c" >/dev/null 2>&1 && "$z40_c" -c 'import ast,sys' >/dev/null 2>&1; then
+    z40_py="$z40_c"; break
+  fi
+done
+[ -n "$z40_py" ] \
+  || z40_die "(z40) 파이썬 인터프리터를 못 찾았습니다 — python3/python/py 중 **실행되는** 것이 없습니다."
+
 cat > "$z40_dir/order.py" <<'Z40PY'
 import ast, sys
 
@@ -4024,7 +4046,7 @@ else:
 print("\n".join(problems))
 Z40PY
 
-z40_order() { python "$z40_dir/order.py" "$1" 2>&1; }
+z40_order() { "$z40_py" "$z40_dir/order.py" "$1" 2>&1; }
 z40_bad="$(z40_order "$z40_handler")" \
   || z40_die "(z40) 구조 판정기 실행 실패:"$'\n'"$z40_bad"
 [ -z "$z40_bad" ] || z40_die "(z40) 거절이 제자리에 없습니다:"$'\n'"$z40_bad"
@@ -4075,7 +4097,7 @@ sed 's/^    if BUNDLE_CAPABLE == "yes":$/    if BUNDLE_CAPABLE != "no":/' "$z40_
 if cmp -s "$z40_handler" "$z40_b2"; then
   z40_die "(z40) bite-2 주입 실패 — _bundle_capability 의 등호 판정이 안 바뀌었습니다."
 fi
-python -c "import ast,sys; ast.parse(open(sys.argv[1],encoding='utf-8').read())" "$z40_b2" \
+"$z40_py" -c "import ast,sys; ast.parse(open(sys.argv[1],encoding='utf-8').read())" "$z40_b2" \
   || z40_die "(z40) bite-2 실행 실패 — 변형이 문법을 깼습니다. 이 빨강은 가드가 문 것이 아닙니다."
 [ -n "$(z40_order "$z40_b2")" ] \
   || z40_die "(z40) bite-2 — 「모르면 허용」으로 바꿨는데 가드가 **안 물었습니다.**"\
@@ -4084,7 +4106,7 @@ python -c "import ast,sys; ast.parse(open(sys.argv[1],encoding='utf-8').read())"
 # (bite-3) 🔴🔴 거절을 **선택 영속화 뒤로** 옮긴다. 호출은 그대로 있으므로 grep 은 통과한다.
 #          이 칸이 없으면 「거절이 있기만 하면 된다」는 구현이 초록이 되고, 그때 비용은 이미 나간다.
 z40_b3="$z40_dir/handler-bite3.py"
-python - "$z40_handler" "$z40_b3" <<'Z40MOVE'
+"$z40_py" - "$z40_handler" "$z40_b3" <<'Z40MOVE'
 import re, sys
 src = open(sys.argv[1], encoding="utf-8").read()
 block = re.search(r"\n    cap_ok, cap = _bundle_capability\(\)\n    if not cap_ok:\n        return _resp\(cap, 409\)\n", src)
@@ -4102,7 +4124,7 @@ Z40MOVE
 if cmp -s "$z40_handler" "$z40_b3"; then
   z40_die "(z40) bite-3 주입 실패 — 파일이 안 바뀌었습니다."
 fi
-python -c "import ast,sys; ast.parse(open(sys.argv[1],encoding='utf-8').read())" "$z40_b3" \
+"$z40_py" -c "import ast,sys; ast.parse(open(sys.argv[1],encoding='utf-8').read())" "$z40_b3" \
   || z40_die "(z40) bite-3 실행 실패 — 변형이 문법을 깼습니다. 이 빨강은 가드가 문 것이 아닙니다."
 grep -q '_bundle_capability()' "$z40_b3" \
   || z40_die "(z40) bite-3 주입 실패 — 호출이 통째로 사라졌습니다. 이건 위치 축을 재지 못합니다."
