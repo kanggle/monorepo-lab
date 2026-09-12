@@ -116,14 +116,34 @@ if (status && status.state === 'running' && isPlausibleIpv4(status.ip)) { … } 
 
 ## AC-0 — 착수 게이트
 
-- [ ] 🔴 **위 실측을 다시 재라.** 창이 열리는 김에 읽으면 되고(비용 0), 그 사이
+- [x] 🔴 **위 실측을 다시 재라.** 창이 열리는 김에 읽으면 되고(비용 0), 그 사이
       람다나 해석기가 바뀌었을 수 있다. 🔵 술어: 기동 직후 `/bundles` 와
       `/api/demo/backend-state` 를 **같이** 읽는다.
-- [ ] 🔴 **구간 길이를 재라.** 이번 관측은 «인스턴스 running → 묶음 ready» 가 **약 7분**
+      → 🟢 **다시 쟀다** (2026-09-12 창). 술어 그대로 `/bundles` 와
+      `/api/demo/backend-state` 를 **같이** 읽었다:
+
+      ```
+      07:13:41Z  backend-state={"state":"running"}   store=booting  console=booting
+      07:14:25Z  backend-state={"state":"running"}   store=booting  console=booting
+      07:15:18Z  backend-state={"state":"running"}   store=booting  console=booting
+      07:15:40Z  backend-state={"state":"running"}   store=ready    console=ready
+      ```
+
+      🔴 **결함이 살아 있다** — 배너가 `running` 이라고 말하는 동안 `store` 묶음은 `booting` 이다.
+- [x] 🔴 **구간 길이를 재라.** 이번 관측은 «인스턴스 running → 묶음 ready» 가 **약 7분**
       이었다(`16:12` → `16:19:51`). 🔴 단일 표본이다 — 갈래 ⓒ 의 근거가 되려면 더 필요하다.
 
 ## AC-1 — 갈래를 고른다
 
+      → 🟢 **두 번째 표본이 생겼다.** 인스턴스 기동(`07:05:18Z`) → **선택 묶음 전부 ready
+      `+661초 = 11분 1초`**. `store` 단독은 `+610~622초`.
+      🔴🔴 **직전 표본(≈7분)과 그냥 비교하면 안 된다 — 모집단이 다르다.** 이번 창은
+      저장된 `boot-selection` 이 **8묶음**이었다(내가 요청한 4묶음이
+      *"이미 요청된 묶음입니다"* 로 흡수됐다). 🔵 묶음이 많을수록 길어지므로
+      «7분 → 11분» 은 **악화가 아니라 다른 실험**이다.
+      🔴 내가 **실제로 증명한 하한**은 «배너 running + store booting» 을 관측한
+      `07:13:41 → 07:15:40` = **119초**다. 그 전에도 배너는 running 이었을 것이나
+      **관측 시작이 늦어서 시작점을 못 봤다** — 추정을 판정으로 적지 않는다.
 - [ ] 🔴 ⓐ/ⓑ/ⓒ 중 하나를 고르고 **왜 나머지를 안 골랐는지** 적는다.
 - [ ] ⓐ 라면 🔴 **`ADR-MONO-068` 을 먼저 열어라**(그 파일이 그렇게 요구한다).
 - [ ] ⓒ 라면 🔴 근거는 «확률이 낮다» 가 아니라 **잰 값**이어야 한다.
@@ -132,10 +152,22 @@ if (status && status.state === 'running' && isPlausibleIpv4(status.ip)) { … } 
 
 - [ ] 🔴 해석기는 **세 앱이 공유한다**(store · fan · console). 한 앱만 고치면 나머지 둘이
       다른 말을 한다 — 이 저장소가 이미 «사본이 갈린다» 로 데인 축이다(`ADR-MONO-068 § D6`).
-- [ ] 🔵 `console` 은 배너 대신 `SampleDataBanner` 를 쓴다 — **같은 값이 필요한지** 확인하라.
+- [x] 🔵 `console` 은 배너 대신 `SampleDataBanner` 를 쓴다 — **같은 값이 필요한지** 확인하라.
 
 ## AC-3 — 가드
 
+      → 🟢 **같은 값이 필요하지 않다 — 애초에 안 읽는다.** 같은 순간에 세 앱을 물었다:
+
+      | 앱 | `/api/demo/backend-state` |
+      |---|---|
+      | store | 🟢 `{"state":"running"}` |
+      | fan | 🔴 `Redirecting...` — **그 라우트가 없다** |
+      | console | 🔴 HTML 앱 셸 — **없다** |
+
+      그리고 `git grep backend-state\|backendState -- console-web/src` = **0건**.
+      `SampleDataBanner` 는 `(demo)/layout.tsx` 에 있고 **«샘플 데이터»** 축이다.
+      🔵 ⇒ **세 앱이 공유하는 것은 «해석기(라이브러리)» 이지 이 엔드포인트가 아니다.**
+      AC-2 의 첫 칸(«한 앱만 고치면 나머지 둘이 다른 말을 한다»)은 **해석기 층**에서 지켜야 한다.
 - [ ] 🔴 **실행 비교**: 「인스턴스 running + 묶음 booting」 상태를 주고 화면이
       «켜졌다» 와 **다른지** 비교한다. 🔴 선언 grep 으로는 못 잰다.
 - [ ] **대조군**: 「전부 ready」에서는 그 문구가 **안 나와야** 한다.
@@ -180,3 +212,15 @@ if (status && status.state === 'running' && isPlausibleIpv4(status.ip)) { … } 
 
 분석=Opus 5 / 구현 권장=**Opus** — 갈래 ⓐ 는 `ADR-MONO-068` 재개봉이고, ⓑ 는 컨트롤 플레인의
 계약 변경이다. 🔵 고른 뒤의 **구현 자체**는 작아서 Sonnet 으로 충분하다.
+
+
+---
+
+# 🟢 2026-09-12 데모 창 — AC-0 과 AC-2 한 칸이 실측으로 닫혔다
+
+🔵 **남은 칸은 «고르고 고치는» 것들**이다(AC-1 갈래 선택 · AC-2 세 앱 반영 · AC-3 가드).
+이 티켓은 여전히 `ready/` 다 — 측정은 끝났고 **결정과 구현이 남았다.**
+
+🔴 이 창이 준 가장 쓸모 있는 입력: **`store` 묶음이 `ready` 가 되는 시점과 배너가 «떴다» 고
+말하는 시점이 다르다**는 것을 **쌍 관측으로** 봤다. ⓒ 갈래(«확률이 낮다»)를 고르려면
+근거가 «잰 값» 이어야 한다고 AC-1 이 요구하는데, 이제 그 값이 있다.
