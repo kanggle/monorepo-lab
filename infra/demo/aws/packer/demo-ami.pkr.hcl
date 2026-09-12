@@ -167,6 +167,14 @@ build {
       "set -eux",
       "sudo apt-get update -y",
       "sudo apt-get install -y ca-certificates curl git",
+      // TASK-MONO-673 — verify-demo-wrapper.sh 의 (z40) 이 파이썬으로 `handler.py` 의 문장
+      // 순서를 ast 로 읽는다. 그 스크립트는 아래 7단계에서 **이 AMI 안에서** 돌기 때문에
+      // 인터프리터가 여기 있어야 한다. 없으면 이미지를 다 굽고 나서 죽는다 —
+      // 2026-09-12 실측: `python: command not found` 로 **12분 55초** 태우고 실패.
+      // 🔵 확증은 설치 직후 **실행**으로 한다((z2) 가 그렇게 처방한다). 존재만 보는 것으로는
+      //    부족하다는 것이 673 의 요지다(이 저장소의 개발 호스트에 있는 Store 스텁이 반례).
+      "sudo apt-get install -y python3",
+      "python3 -c 'import ast,sys; print(sys.version)'",
       "sudo install -m 0755 -d /etc/apt/keyrings",
       "sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc",
       "sudo chmod a+r /etc/apt/keyrings/docker.asc",
