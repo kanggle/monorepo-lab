@@ -1,7 +1,13 @@
+/**
+ * 상품 상세 리뷰 영역 — props 로 받은 **저장본** 리뷰를 그린다 (ADR-MONO-075 · TASK-MONO-681).
+ *
+ * 🔴 «리뷰를 읽으러 백엔드에 가지 않는다» 를 말로 하지 않고 **잰다**: 리뷰 API 모듈을 mock 하고 조회
+ *    함수가 한 번도 안 불렸음을 단언한다(AC-6). 예전 판은 그 조회가 실패하면 «리뷰를 불러오는데
+ *    실패했습니다» 를 그렸고, 데모가 꺼진 동안 방문자가 본 것이 정확히 그것이었다.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ReviewItem, ReviewListResponse, ReviewSummary } from '@repo/types';
 import { TestQueryProvider } from './test-utils';
 
 vi.mock('next/navigation', () => ({
@@ -21,13 +27,6 @@ vi.mock('@/features/review/api/review-api', () => ({
 }));
 
 vi.mock('@repo/ui', () => ({
-  LoadingSpinner: () => <div data-testid="loading-spinner">로딩 중...</div>,
-  ErrorMessage: ({ message, onRetry }: { message: string; onRetry: () => void }) => (
-    <div data-testid="error-message">
-      {message}
-      <button onClick={onRetry}>재시도</button>
-    </div>
-  ),
   EmptyState: ({ message }: { message: string }) => (
     <div data-testid="empty-state">{message}</div>
   ),
@@ -38,209 +37,129 @@ import {
   getProductReviews,
   getProductReviewSummary,
 } from '@/features/review/api/review-api';
-import { ReviewList } from '@/features/review/ui/ReviewList';
+import { ReviewList, type ReviewListItem } from '@/features/review/ui/ReviewList';
 
 const mockUseAuth = vi.mocked(useAuth);
-const mockGetProductReviews = vi.mocked(getProductReviews);
-const mockGetProductReviewSummary = vi.mocked(getProductReviewSummary);
 
-const MOCK_REVIEWS: ReviewItem[] = [
+const REVIEWS: ReviewListItem[] = [
   {
-    reviewId: 'review-1',
-    userId: 'user-1',
+    id: 'review-1',
     rating: 5,
     title: '아주 좋아요',
     content: '정말 만족스러운 상품입니다.',
     createdAt: '2026-04-01T10:00:00Z',
-    updatedAt: '2026-04-01T10:00:00Z',
   },
   {
-    reviewId: 'review-2',
-    userId: 'user-2',
+    id: 'review-2',
     rating: 3,
     title: '보통이에요',
     content: '가격 대비 평범합니다.',
     createdAt: '2026-03-30T10:00:00Z',
-    updatedAt: '2026-03-30T10:00:00Z',
   },
 ];
 
-function createReviewListResponse(
-  content: ReviewItem[],
-  page = 0,
-  size = 10,
-  totalElements = content.length,
-): ReviewListResponse {
-  return {
-    content,
-    page,
-    size,
-    totalElements,
-    averageRating: 4.0,
-    totalReviews: totalElements,
-  };
-}
-
-const MOCK_SUMMARY: ReviewSummary = {
-  productId: 'product-1',
-  averageRating: 4.0,
+const SUMMARY = {
+  averageRating: 4,
   totalReviews: 2,
   ratingDistribution: { '1': 0, '2': 0, '3': 1, '4': 0, '5': 1 },
 };
 
-describe('ReviewList', () => {
+const EMPTY_SUMMARY = {
+  averageRating: 0,
+  totalReviews: 0,
+  ratingDistribution: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 },
+};
+
+function authAs(isAuthenticated: boolean) {
+  mockUseAuth.mockReturnValue({
+    isAuthenticated,
+    isLoading: false,
+    user: isAuthenticated ? ({ userId: 'user-1' } as never) : null,
+    login: vi.fn(),
+    signup: vi.fn(),
+    logout: vi.fn(),
+  });
+}
+
+function renderList(overrides: Partial<Parameters<typeof ReviewList>[0]> = {}) {
+  return render(
+    <TestQueryProvider>
+      <ReviewList
+        productId="product-1"
+        reviews={REVIEWS}
+        summary={SUMMARY}
+        isSample={false}
+        {...overrides}
+      />
+    </TestQueryProvider>,
+  );
+}
+
+function manyReviews(n: number): ReviewListItem[] {
+  return Array.from({ length: n }, (_, i) => ({
+    id: `r-${i + 1}`,
+    rating: (i % 5) + 1,
+    title: `리뷰 제목 ${i + 1}`,
+    content: `리뷰 본문 ${i + 1}`,
+    createdAt: `2026-02-${String(28 - i).padStart(2, '0')}T00:00:00Z`,
+  }));
+}
+
+describe('ReviewList — 저장본 리뷰 (ADR-MONO-075)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockUseAuth.mockReturnValue({
-      isAuthenticated: false,
-      isLoading: false,
-      user: null,
-      login: vi.fn(),
-      signup: vi.fn(),
-      logout: vi.fn(),
-    });
-    mockGetProductReviewSummary.mockResolvedValue(MOCK_SUMMARY);
+    authAs(false);
   });
 
-  it('로딩 중일 때 스켈레톤이 표시된다', () => {
-    mockGetProductReviews.mockReturnValue(new Promise(() => {}));
-
-    render(
-      <TestQueryProvider>
-        <ReviewList productId="product-1" />
-      </TestQueryProvider>,
-    );
+  it('받은 리뷰와 요약을 곧바로 그린다 (로딩 단계가 없다)', () => {
+    renderList();
 
     expect(screen.getByText('상품 리뷰')).toBeInTheDocument();
-  });
-
-  it('리뷰 목록을 렌더링한다', async () => {
-    mockGetProductReviews.mockResolvedValueOnce(createReviewListResponse(MOCK_REVIEWS));
-
-    render(
-      <TestQueryProvider>
-        <ReviewList productId="product-1" />
-      </TestQueryProvider>,
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('아주 좋아요')).toBeInTheDocument();
-    });
+    expect(screen.getByText('아주 좋아요')).toBeInTheDocument();
     expect(screen.getByText('보통이에요')).toBeInTheDocument();
     expect(screen.getByText('정말 만족스러운 상품입니다.')).toBeInTheDocument();
+    expect(screen.getByTestId('rating-summary')).toHaveTextContent('(2개 리뷰)');
   });
 
-  it('리뷰가 없으면 빈 상태를 표시한다', async () => {
-    mockGetProductReviews.mockResolvedValueOnce(createReviewListResponse([]));
+  it('🔴 리뷰·요약을 읽으러 백엔드를 부르지 않는다 (AC-6)', () => {
+    renderList();
 
-    render(
-      <TestQueryProvider>
-        <ReviewList productId="product-1" />
-      </TestQueryProvider>,
-    );
+    expect(vi.mocked(getProductReviews)).not.toHaveBeenCalled();
+    expect(vi.mocked(getProductReviewSummary)).not.toHaveBeenCalled();
+    // 🔵 예전 판의 실패 문구가 어떤 경로로도 나타나지 않는다.
+    expect(screen.queryByText('리뷰를 불러오는데 실패했습니다.')).not.toBeInTheDocument();
+  });
 
-    await waitFor(() => {
-      expect(screen.getByTestId('empty-state')).toBeInTheDocument();
+  it('리뷰가 없으면 빈 상태를 보이고 요약은 그리지 않는다 («0.0 / 5.0» 을 안 그린다)', () => {
+    renderList({ reviews: [], summary: EMPTY_SUMMARY });
+
+    expect(screen.getByTestId('empty-state')).toHaveTextContent('아직 리뷰가 없습니다.');
+    expect(screen.queryByTestId('rating-summary')).not.toBeInTheDocument();
+  });
+
+  describe('샘플 표시 (D4)', () => {
+    it('isSample 이면 「샘플 리뷰」 를 말한다', () => {
+      renderList({ isSample: true });
+      expect(screen.getByTestId('sample-review-notice')).toHaveTextContent(
+        '샘플 리뷰 — 실제 구매자가 쓴 리뷰가 아닙니다.',
+      );
     });
-    expect(screen.getByText('아직 리뷰가 없습니다.')).toBeInTheDocument();
-  });
 
-  it('에러 발생 시 에러 메시지를 표시한다', async () => {
-    mockGetProductReviews.mockRejectedValueOnce(new Error('fail'));
-
-    render(
-      <TestQueryProvider>
-        <ReviewList productId="product-1" />
-      </TestQueryProvider>,
-    );
-
-    await waitFor(() => {
-      expect(screen.getByTestId('error-message')).toBeInTheDocument();
+    it('isSample 이 아니면 말하지 않는다 (발행된 실데이터에 샘플 딱지를 붙이지 않는다)', () => {
+      renderList({ isSample: false });
+      expect(screen.queryByTestId('sample-review-notice')).not.toBeInTheDocument();
     });
-    expect(screen.getByText('리뷰를 불러오는데 실패했습니다.')).toBeInTheDocument();
   });
 
-  it('에러 후 재시도 버튼을 클릭하면 다시 로드한다', async () => {
-    mockGetProductReviews.mockRejectedValueOnce(new Error('fail'));
+  it('비로그인 사용자에게 리뷰 작성 버튼을 표시하지 않는다', () => {
+    renderList();
+    expect(screen.queryByRole('button', { name: '리뷰 작성' })).not.toBeInTheDocument();
+  });
 
+  it('로그인한 사용자에게 리뷰 작성 버튼을 표시하고, 누르면 폼이 열린다 (R2)', async () => {
+    authAs(true);
     const user = userEvent.setup();
-    render(
-      <TestQueryProvider>
-        <ReviewList productId="product-1" />
-      </TestQueryProvider>,
-    );
-
-    await waitFor(() => {
-      expect(screen.getByTestId('error-message')).toBeInTheDocument();
-    });
-
-    mockGetProductReviews.mockResolvedValueOnce(createReviewListResponse(MOCK_REVIEWS));
-    await user.click(screen.getByText('재시도'));
-
-    await waitFor(() => {
-      expect(screen.getByText('아주 좋아요')).toBeInTheDocument();
-    });
-  });
-
-  it('비로그인 사용자에게 리뷰 작성 버튼을 표시하지 않는다', async () => {
-    mockGetProductReviews.mockResolvedValueOnce(createReviewListResponse(MOCK_REVIEWS));
-
-    render(
-      <TestQueryProvider>
-        <ReviewList productId="product-1" />
-      </TestQueryProvider>,
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('아주 좋아요')).toBeInTheDocument();
-    });
-    expect(screen.queryByText('리뷰 작성')).not.toBeInTheDocument();
-  });
-
-  it('로그인한 사용자에게 리뷰 작성 버튼을 표시한다', async () => {
-    mockUseAuth.mockReturnValue({
-      isAuthenticated: true,
-      isLoading: false,
-      user: { userId: 'user-1' } as never,
-      login: vi.fn(),
-      signup: vi.fn(),
-      logout: vi.fn(),
-    });
-    mockGetProductReviews.mockResolvedValueOnce(createReviewListResponse(MOCK_REVIEWS));
-
-    render(
-      <TestQueryProvider>
-        <ReviewList productId="product-1" />
-      </TestQueryProvider>,
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('아주 좋아요')).toBeInTheDocument();
-    });
-    expect(screen.getByRole('button', { name: '리뷰 작성' })).toBeInTheDocument();
-  });
-
-  it('리뷰 작성 버튼 클릭 시 폼이 표시된다', async () => {
-    mockUseAuth.mockReturnValue({
-      isAuthenticated: true,
-      isLoading: false,
-      user: { userId: 'user-1' } as never,
-      login: vi.fn(),
-      signup: vi.fn(),
-      logout: vi.fn(),
-    });
-    mockGetProductReviews.mockResolvedValueOnce(createReviewListResponse(MOCK_REVIEWS));
-
-    const user = userEvent.setup();
-    render(
-      <TestQueryProvider>
-        <ReviewList productId="product-1" />
-      </TestQueryProvider>,
-    );
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: '리뷰 작성' })).toBeInTheDocument();
-    });
+    renderList();
 
     await user.click(screen.getByRole('button', { name: '리뷰 작성' }));
 
@@ -248,114 +167,64 @@ describe('ReviewList', () => {
     expect(screen.getByLabelText('내용')).toBeInTheDocument();
   });
 
-  it('본인 리뷰에 수정/삭제 버튼이 표시된다', async () => {
-    mockUseAuth.mockReturnValue({
-      isAuthenticated: true,
-      isLoading: false,
-      user: { userId: 'user-1' } as never,
-      login: vi.fn(),
-      signup: vi.fn(),
-      logout: vi.fn(),
-    });
-    mockGetProductReviews.mockResolvedValueOnce(createReviewListResponse(MOCK_REVIEWS));
+  it('🔴 로그인해도 수정·삭제 버튼이 없다 — 저장본에 작성자가 없어 «본인» 을 판정할 수 없다 (R3)', () => {
+    authAs(true);
+    renderList();
 
-    render(
-      <TestQueryProvider>
-        <ReviewList productId="product-1" />
-      </TestQueryProvider>,
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('아주 좋아요')).toBeInTheDocument();
-    });
-
-    // user-1's review should have edit/delete buttons
-    expect(screen.getByText('수정')).toBeInTheDocument();
-    expect(screen.getByText('삭제')).toBeInTheDocument();
-  });
-
-  it('다른 사용자 리뷰에 수정/삭제 버튼이 표시되지 않는다', async () => {
-    mockUseAuth.mockReturnValue({
-      isAuthenticated: true,
-      isLoading: false,
-      user: { userId: 'user-3' } as never,
-      login: vi.fn(),
-      signup: vi.fn(),
-      logout: vi.fn(),
-    });
-    mockGetProductReviews.mockResolvedValueOnce(createReviewListResponse(MOCK_REVIEWS));
-
-    render(
-      <TestQueryProvider>
-        <ReviewList productId="product-1" />
-      </TestQueryProvider>,
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('아주 좋아요')).toBeInTheDocument();
-    });
-
+    expect(screen.getByText('아주 좋아요')).toBeInTheDocument();
     expect(screen.queryByText('수정')).not.toBeInTheDocument();
     expect(screen.queryByText('삭제')).not.toBeInTheDocument();
   });
 
-  describe('페이지네이션', () => {
-    it('페이지네이션 컨트롤을 표시한다', async () => {
-      mockGetProductReviews.mockResolvedValueOnce(
-        createReviewListResponse(MOCK_REVIEWS, 0, 10, 25),
-      );
+  it('작성에 성공하면 «다음 발행 때 반영» 을 알린다 — 목록에 바로 안 나오는 이유를 말한다 (R2)', async () => {
+    const { createReview } = await import('@/features/review/api/review-api');
+    vi.mocked(createReview).mockResolvedValueOnce({ reviewId: 'new-1' });
+    authAs(true);
+    const user = userEvent.setup();
+    renderList();
 
-      render(
-        <TestQueryProvider>
-          <ReviewList productId="product-1" />
-        </TestQueryProvider>,
-      );
+    await user.click(screen.getByRole('button', { name: '리뷰 작성' }));
+    await user.click(screen.getByRole('radio', { name: '4점' }));
+    await user.type(screen.getByLabelText('제목'), '새로 쓴 리뷰');
+    await user.type(screen.getByLabelText('내용'), '배송이 빨랐어요');
+    // 폼이 열리면 토글 버튼은 사라지고, 같은 이름의 **제출** 버튼만 남는다.
+    await user.click(screen.getByRole('button', { name: '리뷰 작성' }));
 
-      await waitFor(() => {
-        expect(screen.getByText('1 / 3')).toBeInTheDocument();
-      });
+    expect(await screen.findByTestId('review-submitted-notice')).toHaveTextContent(
+      '공개 목록에는 다음 발행 때 반영됩니다',
+    );
+    expect(vi.mocked(createReview).mock.calls[0][0]).toEqual({
+      productId: 'product-1',
+      rating: 4,
+      title: '새로 쓴 리뷰',
+      content: '배송이 빨랐어요',
+    });
+    // 🔴 방금 쓴 리뷰는 목록에 **없다** — 목록은 저장본이고 아직 발행 전이다. 그래서 위 알림이 필요하다.
+    expect(screen.queryByText('새로 쓴 리뷰')).not.toBeInTheDocument();
+  });
+
+  describe('페이지네이션 — 저장본 배열 안에서 돈다', () => {
+    it('10개 이하면 페이지네이션을 그리지 않는다', () => {
+      renderList({ reviews: manyReviews(10) });
+      expect(screen.queryByLabelText('다음 페이지')).not.toBeInTheDocument();
     });
 
-    it('첫 페이지에서 이전 버튼이 비활성화된다', async () => {
-      mockGetProductReviews.mockResolvedValueOnce(
-        createReviewListResponse(MOCK_REVIEWS, 0, 10, 25),
-      );
-
-      render(
-        <TestQueryProvider>
-          <ReviewList productId="product-1" />
-        </TestQueryProvider>,
-      );
-
-      await waitFor(() => {
-        expect(screen.getByLabelText('이전 페이지')).toBeDisabled();
-      });
-    });
-
-    it('다음 버튼 클릭 시 다음 페이지를 로드한다', async () => {
-      mockGetProductReviews.mockResolvedValueOnce(
-        createReviewListResponse(MOCK_REVIEWS, 0, 10, 25),
-      );
-
+    it('11개 이상이면 페이지를 나누고, 다음을 누르면 다음 묶음을 그린다', async () => {
       const user = userEvent.setup();
-      render(
-        <TestQueryProvider>
-          <ReviewList productId="product-1" />
-        </TestQueryProvider>,
-      );
+      renderList({ reviews: manyReviews(12) });
 
-      await waitFor(() => {
-        expect(screen.getByLabelText('다음 페이지')).toBeEnabled();
-      });
+      expect(screen.getByText('1 / 2')).toBeInTheDocument();
+      expect(screen.getByLabelText('이전 페이지')).toBeDisabled();
+      expect(screen.getByText('리뷰 제목 1')).toBeInTheDocument();
+      expect(screen.queryByText('리뷰 제목 11')).not.toBeInTheDocument();
 
-      mockGetProductReviews.mockResolvedValueOnce(
-        createReviewListResponse(MOCK_REVIEWS, 1, 10, 25),
-      );
       await user.click(screen.getByLabelText('다음 페이지'));
 
-      await waitFor(() => {
-        expect(screen.getByText('2 / 3')).toBeInTheDocument();
-      });
+      expect(screen.getByText('2 / 2')).toBeInTheDocument();
+      expect(screen.getByText('리뷰 제목 11')).toBeInTheDocument();
+      expect(screen.queryByText('리뷰 제목 1')).not.toBeInTheDocument();
+      // 🔵 페이지를 넘겨도 조회는 없다 — 넘기는 것은 배열 자르기다.
+      expect(vi.mocked(getProductReviews)).not.toHaveBeenCalled();
     });
   });
 });

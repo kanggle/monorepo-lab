@@ -42,9 +42,9 @@ import {
 import { createLocalStore } from '../src/store.mjs';
 import { buildEnvelope, publishEnvelope, readCurrentPointer, pruneOldVersions, newDataVersion } from '../src/publish.mjs';
 import {
-  toPublicArtist, toPublicPost, toPublicProduct, deriveCategories, collectionStatusOf,
+  toPublicArtist, toPublicPost, toPublicProduct, toPublicReview, collectReviews, deriveCategories, collectionStatusOf,
 } from '../src/transform.mjs';
-import { RAW_ARTISTS, RAW_POSTS, RAW_PRODUCTS } from '../fixtures/raw-backend-responses.mjs';
+import { RAW_ARTISTS, RAW_POSTS, RAW_PRODUCTS, RAW_REVIEWS_BY_PRODUCT } from '../fixtures/raw-backend-responses.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BASE = 'https://blob.example.invalid';
@@ -152,9 +152,10 @@ const okEnvelope = (over = {}) => ({
   generatedAt: '2026-01-01T00:00:00.000Z',
   source: 'backend',
   origin: 'http://x.invalid',
-  coverage: { products: 1, categories: 1 },
-  collectionStatus: { products: 'ok', categories: 'ok' },
-  data: { products: [{ id: 'p', name: 'n', status: 'ON_SALE', options: [] }], categories: [{ id: 'c' }] },
+  // 🔵 `reviews` 는 ADR-MONO-075 로 **필수**가 됐다 — 0개(`empty`)가 계약상 정상인 대조군 봉투다.
+  coverage: { products: 1, categories: 1, reviews: 0 },
+  collectionStatus: { products: 'ok', categories: 'ok', reviews: 'empty' },
+  data: { products: [{ id: 'p', name: 'n', status: 'ON_SALE', options: [] }], categories: [{ id: 'c' }], reviews: [] },
   ...over,
 });
 
@@ -526,4 +527,98 @@ test('번들 시드에 픽스처의 음성 대조군 값이 하나도 없다', a
   assert.ok(banned.length >= 5, `금지 목록이 ${banned.length}건뿐 — 이 시험이 공허하다`);
   for (const needle of banned) assert.ok(!all.includes(needle), `시드에 '${needle.slice(0, 40)}' 가 있다`);
   assert.ok(!all.includes('"stock"'));
+});
+
+// ===========================================================================
+// 5. 리뷰 — ADR-MONO-075 · TASK-MONO-681
+// ===========================================================================
+
+const PUBLIC_PRODUCT_IDS = RAW_PRODUCTS.filter((p) => p.status !== 'HIDDEN').map((p) => p.id);
+const reviewRowsFor = (productId) => RAW_REVIEWS_BY_PRODUCT.find((g) => g.productId === productId)?.items ?? [];
+
+test('리뷰: 작성자가 공개 DTO 에 없다 (허용 목록 여섯 필드뿐)', async () => {
+  const { reviews } = await collectReviews(PUBLIC_PRODUCT_IDS, async (id) => ({ fetched: true, rows: reviewRowsFor(id) }));
+  assert.ok(reviews.length >= PUBLIC_PRODUCT_IDS.length, '모집단이 비면 이 시험은 공허하다');
+  for (const r of reviews) {
+    assert.ok(!('userId' in r), 'userId 가 새어 나왔다');
+    assert.ok(!('updatedAt' in r), 'updatedAt 이 새어 나왔다');
+    assert.deepEqual(Object.keys(r).sort(), ['content', 'createdAt', 'id', 'productId', 'rating', 'title']);
+  }
+  // 🔴 **양성 대조군** — 픽스처 원본에는 작성자가 실제로 있었다. 없으면 위 단언은 «없는 것을 못 찾은» 것이다.
+  assert.ok(
+    RAW_REVIEWS_BY_PRODUCT.every((g) => g.items.every((i) => typeof i.userId === 'string' && i.userId !== '')),
+    '픽스처에 userId 가 없다 — 위 단언이 공허하다',
+  );
+});
+
+test('리뷰: 별점이 1~5 정수가 아니면 버린다', () => {
+  // 🔵 대조군 — 정상 별점은 통과한다. 이 칸이 없으면 «전부 버리는» 고장난 변환기도 아래를 통과한다.
+  assert.notEqual(toPublicReview({ reviewId: 'r', rating: 5, title: 't', content: 'c' }, 'p'), null);
+  for (const bad of [0, 6, 4.5, '5', null, undefined]) {
+    assert.equal(toPublicReview({ reviewId: 'r', rating: bad, title: 't', content: 'c' }, 'p'), null, `버려야 한다: ${String(bad)}`);
+  }
+  assert.ok(RAW_REVIEWS_BY_PRODUCT.some((g) => g.items.some((i) => i.rating === 0)), '픽스처에 별점 범위 밖 리뷰(음성 대조군)가 없다');
+});
+
+test('리뷰 수집: 한 상품이라도 실패하면 fetched=false 이고 봉투에서 failed 가 된다', async () => {
+  const ids = PUBLIC_PRODUCT_IDS.slice(0, 3);
+  const ok = await collectReviews(ids, async (id) => ({ fetched: true, rows: reviewRowsFor(id) }));
+  assert.equal(ok.fetched, true, '대조군 — 전부 성공하면 fetched 여야 한다');
+
+  const partial = await collectReviews(ids, async (id) =>
+    id === ids[1] ? { fetched: false, rows: [], error: 'HTTP 502' } : { fetched: true, rows: reviewRowsFor(id) },
+  );
+  assert.equal(partial.fetched, false, '부분 수집을 성공으로 보고했다');
+  assert.match(partial.errors[0], /502/);
+  // 🔴 성공한 상품의 리뷰는 모았더라도 컬렉션 판정은 failed 여야 한다 — 그래야 발행이 거부된다.
+  assert.ok(partial.reviews.length > 0);
+  assert.equal(collectionStatusOf(partial.fetched, partial.reviews), 'failed');
+});
+
+test('내용물: 리뷰 계약이 부재·작성자·별점·고아를 각각 거부한다', () => {
+  const product = { id: 'p', name: 'n', status: 'ON_SALE', options: [] };
+  const review = { id: 'r', productId: 'p', rating: 4, title: 't', content: 'c', createdAt: '2026-01-01T00:00:00Z' };
+  const data = (reviews) => ({ products: [product], categories: [], reviews });
+  // 🔵 대조군 둘 — 정상 리뷰, 그리고 «리뷰 0개» 는 계약상 정상이다.
+  assert.equal(validateDatasetData('store', data([review])).ok, true);
+  assert.equal(validateDatasetData('store', data([])).ok, true);
+
+  const cases = [
+    [{ products: [product], categories: [] }, /reviews/],
+    [data([{ ...review, userId: 'u-1' }]), /userId/],
+    [data([{ ...review, nickname: '누군가' }]), /nickname/],
+    [data([{ ...review, rating: 0 }]), /rating/],
+    [data([{ ...review, rating: 3.5 }]), /rating/],
+    [data([{ ...review, productId: 'hidden' }]), /저장본에 없습니다/],
+  ];
+  for (const [d, re] of cases) {
+    const r = validateDatasetData('store', d);
+    assert.equal(r.ok, false, `거부돼야 한다: ${JSON.stringify(d.reviews ?? null).slice(0, 80)}`);
+    assert.match(r.reason, re);
+  }
+});
+
+test('시드: 공개 상품 전부가 리뷰를 갖고, 리뷰의 상품은 전부 공개 상품이다', async () => {
+  const store = JSON.parse(await readFile(join(HERE, '..', 'snapshots', 'store.json'), 'utf8'));
+  const ids = new Set(store.data.products.map((p) => p.id));
+  assert.ok(store.data.reviews.length > 0, '시드에 리뷰가 없다');
+  assert.equal(store.coverage.reviews, store.data.reviews.length, 'coverage.reviews 가 실제 수와 다르다');
+  for (const id of ids) assert.ok(store.data.reviews.some((r) => r.productId === id), `상품 ${id} 에 리뷰가 없다`);
+  for (const r of store.data.reviews) assert.ok(ids.has(r.productId), `리뷰 ${r.id} 의 상품이 공개 목록에 없다`);
+  // 🔵 요약 화면이 시험되려면 별점이 섞여 있어야 한다(R4).
+  assert.ok(new Set(store.data.reviews.map((r) => r.rating)).size >= 3, '시드 리뷰의 별점 종류가 3개 미만이다');
+});
+
+test('시드: 리뷰의 음성 대조군(작성자 · 범위 밖 별점 · 숨김 상품)이 문자열로도 없다', async () => {
+  const store = await readFile(join(HERE, '..', 'snapshots', 'store.json'), 'utf8');
+  const banned = [];
+  for (const g of RAW_REVIEWS_BY_PRODUCT) {
+    for (const i of g.items) {
+      banned.push(i.userId);
+      if (String(i.title).includes('MUST-NOT-LEAK')) banned.push(i.title, i.content);
+    }
+  }
+  assert.ok(banned.filter((b) => String(b).includes('MUST-NOT-LEAK')).length >= 4, '리뷰 음성 대조군이 비었다 — 이 시험이 공허하다');
+  for (const needle of banned) assert.ok(!store.includes(needle), `시드에 '${String(needle).slice(0, 40)}' 가 있다`);
+  assert.ok(!store.includes('"userId"'));
 });

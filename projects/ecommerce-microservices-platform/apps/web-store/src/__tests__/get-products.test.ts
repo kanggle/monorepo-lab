@@ -47,6 +47,7 @@ const DATA: StorePublicData = {
     { id: 'cat-a', name: '상의', productCount: 2 },
     { id: 'cat-b', name: '하의', productCount: 1 },
   ],
+  reviews: [],
 };
 
 function snapshot(data: StorePublicData = DATA) {
@@ -149,7 +150,7 @@ describe('getProducts — 공개 저장본', () => {
     });
 
     it('저장본에 이름이 없는 카테고리는 name 을 null 로 남긴다 (id 를 이름 자리에 넣지 않는다)', async () => {
-      mockRead.mockResolvedValue(snapshot({ products: PRODUCTS, categories: [] }));
+      mockRead.mockResolvedValue(snapshot({ products: PRODUCTS, categories: [], reviews: [] }));
       const r = await getProducts();
       expect(r.categories.every((c) => c.name === null)).toBe(true);
     });
@@ -187,7 +188,7 @@ describe('getProducts — 공개 저장본', () => {
 
   describe('빈 상태의 두 얼굴', () => {
     it('저장본이 비면 corpusSize 가 0 이다', async () => {
-      mockRead.mockResolvedValue(snapshot({ products: [], categories: [] }));
+      mockRead.mockResolvedValue(snapshot({ products: [], categories: [], reviews: [] }));
       const r = await getProducts();
       expect(r.totalElements).toBe(0);
       expect(r.corpusSize).toBe(0);

@@ -70,6 +70,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
+- `TASK-FAN-FE-022-the-feed-card-opens-only-from-a-small-text-link.md` — 🔵 **피드 카드가 오른쪽 아래 «자세히 보기 →» 글자로만 열린다 → 카드 어디를 눌러도 상세로** (READY, 2026-09-15, 소유자 요청). 대상 = 공개 카드(`PublicPostCard` — `/` · `/artists/[id]`) + 회원 카드(`PostCard` — 팔로우 피드). 🔴🔴 **카드를 통째로 `<Link>` 로 감싸면 안 된다** — 카드 안에 아티스트 배지 링크와 잠긴 카드의 「멤버십 안내 보기」 링크가 있어 `<a>` 안의 `<a>` 가 된다 ⇒ stretched link + 안쪽 링크를 위로. 🔴 `onClick`+`router.push` 도 금지(키보드·새 탭 열기가 깨진다). jsdom 은 늘린 클릭 영역을 못 재므로 **라이브 헤드리스 확인**이 AC 다. 🔴 **선행 = `TASK-MONO-679`(#3818) 머지** — 같은 `PostCard.tsx` 를 고친다(공유 파일은 직렬). 분석=Opus 5 / 구현 권장=Sonnet.
 
 
 ## in-progress

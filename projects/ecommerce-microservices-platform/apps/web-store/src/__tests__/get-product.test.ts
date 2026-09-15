@@ -40,6 +40,7 @@ const PRODUCT: PublicProduct = {
 const DATA: StorePublicData = {
   products: [PRODUCT],
   categories: [{ id: 'cat-a', name: '상의', productCount: 1 }],
+  reviews: [],
 };
 
 function snapshot(data: StorePublicData = DATA) {
@@ -120,7 +121,7 @@ describe('getProduct — 공개 저장본', () => {
   });
 
   it('카테고리 이름을 못 찾으면 null 로 남긴다 — id 를 이름 자리에 넣지 않는다', async () => {
-    mockRead.mockResolvedValue(snapshot({ products: [PRODUCT], categories: [] }));
+    mockRead.mockResolvedValue(snapshot({ products: [PRODUCT], categories: [], reviews: [] }));
     const p = await getProduct(PRODUCT.id);
     expect(p!.categoryName).toBeNull();
   });
