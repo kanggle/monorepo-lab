@@ -38,7 +38,7 @@ test.describe('공개 둘러보기 (backend 미기동 · 미인증)', () => {
     const approve = page.getByTestId('demo-action-orders-환불 승인');
     await expect(approve).toBeVisible();
     await expect(approve).toBeDisabled();
-    await expect(approve).toHaveAttribute('title', '실시간 기능 시작 후 로그인');
+    await expect(approve).toHaveAttribute('title', '데모 서버를 켠 뒤 로그인');
   });
 
   test('표 안 검색이 브라우저에서 돈다(네비게이션 없음)', async ({ page }) => {
