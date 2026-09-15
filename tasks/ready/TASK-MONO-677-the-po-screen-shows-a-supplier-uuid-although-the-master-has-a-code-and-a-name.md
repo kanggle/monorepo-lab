@@ -69,14 +69,32 @@ ready
 
 ## AC-0 — 착수 게이트 (전제부터 다시 재라)
 
-- [ ] 🔴 `PurchaseOrderResponse` 가 **여전히** 공급사를 id 하나로만 싣는지 다시 읽어라. 이미 이름이 실렸으면 이 티켓은 phantom 이다.
-- [ ] 🔴 콘솔 `api/scm/` 에 공급사 조회 경로가 **여전히 없는지** 다시 세라.
-- [ ] 발주 `supplierId` 에 무엇이 들어가는지 **시드 경로와 운영자 작성 경로 둘 다** 확인하라 — 계약상 DEMAND_PLANNING 발 발주는 코드를, 운영자 작성 발주는 «운영자가 준 값» 을 싣는다(`scm-procurement-events.md`). 🔴 한 경로만 보고 고르지 마라.
+- [x] 🔴 `PurchaseOrderResponse` 가 **여전히** 공급사를 id 하나로만 싣는지 다시 읽어라. 이미 이름이 실렸으면 이 티켓은 phantom 이다.
+      → 🟢 **여전히 id 하나다 — phantom 아님** (2026-09-15). `PurchaseOrderResponse.java:16` `String supplierId,` 뿐이고 `supplierCode`·`supplierName` 은 없다. 마스터(`SupplierResponse.java:8-18`)는 `code`·`name` 을 든다.
+- [x] 🔴 콘솔 `api/scm/` 에 공급사 조회 경로가 **여전히 없는지** 다시 세라.
+      → 🟢 **없다.** `api/scm/` 전수 14개 파일(`_proxy.ts` · `nodes` · `po` · `po/[poId]` · `sku/[sku]` · `snapshot` · `staleness` · `demand-planning/{_proxy, suggestions×4, policies/[skuCode], sku-supplier-map/[skuCode]}`)에 `suppliers` **0건**. 화면은 `ScmPoTable.tsx:186` `{p.supplierId ?? '—'}` · `PoDetailDialog.tsx:102` 로 원문을 그린다. 🔵 낡은 주석 *"no supplier master in v1"* 은 **세 곳**이다 — `sku-supplier-map/[skuCode]/route.ts:19` · `features/scm-config/api/types.ts:73` · `features/scm-config/api/demand-planning-seed-api.ts:213` (AC-2 셋째 칸은 셋 다다).
+- [x] 발주 `supplierId` 에 무엇이 들어가는지 **시드 경로와 운영자 작성 경로 둘 다** 확인하라 — 계약상 DEMAND_PLANNING 발 발주는 코드를, 운영자 작성 발주는 «운영자가 준 값» 을 싣는다(`scm-procurement-events.md`). 🔴 한 경로만 보고 고르지 마라.
+      → 🔴🔴 **같은 칸이 경로에 따라 «UUID» 이기도 하고 «코드» 이기도 하다** — 이것이 갈래 선택의 핵심 입력이다:
+
+      | 경로 | `supplierId` 에 드는 값 | 근거 |
+      |---|---|---|
+      | 데모 시드 | 마스터의 **서버 발급 UUID `id`** | `seed-scm.sh:116,194` |
+      | 운영자 작성 | **아무 문자열**(≤36자, FK 없음) | `procurement-api.md:88,569` |
+      | DEMAND_PLANNING 발 | 공급사 **CODE**(`sku_supplier_map.supplier_id`) | `procurement-api.md:89` · `scm-procurement-events.md:414` |
+      | wms 인바운드가 받는 값 | **CODE** 로 해석(`findPartnerByCode`) | `ADR-MONO-050:223-225` D9 |
+
+      🔴 ⇒ **ⓐ(id 로 마스터 조인)는 DEMAND_PLANNING 발 발주에서 빈다** — 그 행의 값은 id 가 아니라 코드다. ⓐ 를 고르면 «id 로도 코드로도 찾는다» 까지 정해야 한다.
+      🔴 ⇒ **데모 시드는 이미 D9 와 반대로 가고 있다** — 시드 발주가 인바운드 이벤트로 넘어가면 wms 는 UUID 를 코드로 찾는다. 그 연계를 이 데모가 실제로 쓰는지는 이 티켓 범위 밖이지만, ⓒ 의 «대가» 칸이 적은 «wms 인바운드 연계가 따라 움직인다» 는 **반대로 읽어야 할 수 있다**(ⓒ 가 연계를 **맞추는** 쪽).
+      🔵 AC-4 가드: `erp-master-ref-names` 는 스크립트가 아니라 **`console-web/tests/unit/erp-master-ref-names.test.tsx`** 다(`data-master-ref` 마커 모집단) — 추가해도 `scripts/` 분모는 안 움직인다.
 
 ## AC-1 — 갈래를 고른다 (🔴 소유자 결정)
 
-- [ ] ⓐ/ⓑ/ⓒ 를 **소유자에게 묻는다.** 내 추천을 결정으로 적지 마라.
-- [ ] 답을 **소유자의 말 그대로** 적고, 안 고른 갈래가 무엇을 포기하는지 함께 적는다.
+- [x] ⓐ/ⓑ/ⓒ 를 **소유자에게 묻는다.** 내 추천을 결정으로 적지 마라.
+      → 2026-09-15 선택창으로 물었다(AC-0 의 «같은 칸에 UUID·코드가 섞인다» 를 질문에 넣었다). 🔵 추천 표지는 **내 것**, 선택은 소유자.
+- [x] 답을 **소유자의 말 그대로** 적고, 안 고른 갈래가 무엇을 포기하는지 함께 적는다.
+      → 소유자 선택(선택창 라벨 원문): **「ⓐ 생산자가 싣기, id·code 둘 다 조인 (Recommended)」**
+      — 선택지 설명(내가 쓴 것): *`PurchaseOrderResponse` 에 `supplierCode`·`supplierName` 추가(계약 먼저). 같은 테넌트 안에서 id 로 먼저, 없으면 code 로. 못 찾으면 null → 화면은 «이름 확인 불가». 저장 의미는 안 바꾼다.*
+      포기한 것: **ⓑ** = 콘솔 BFF 경로 신설 없음(N+1 을 피한다) · **ⓒ** = `supplierId` 저장 의미는 **섞인 채로 남는다** — 시드 발주가 D9(서비스 간 식별자=코드)와 어긋나는 것은 이 티켓이 **고치지 않는다**. 🔴 그 어긋남이 wms 인바운드 연계에서 실제로 문제를 내는지는 **아무 티켓도 안 들고 있다** — 구현 PR 에서 받는 티켓에 행을 만들거나 «문제 아님» 을 실측으로 적는다(Failure Scenario 3 의 규율).
 
 ## AC-2 — 계약 먼저
 
