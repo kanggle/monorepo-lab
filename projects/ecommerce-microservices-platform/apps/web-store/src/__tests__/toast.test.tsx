@@ -77,17 +77,7 @@ describe('Toast', () => {
     vi.useRealTimers();
   });
 
-  it('성공 타입일 때 녹색 계열 배경색이 적용된다', () => {
-    render(<Toast message="성공" type="success" onClose={vi.fn()} />);
-
-    const toast = screen.getByRole('status');
-    expect(toast).toHaveStyle({ backgroundColor: '#f0fdf4' });
-  });
-
-  it('에러 타입일 때 빨간색 계열 배경색이 적용된다', () => {
-    render(<Toast message="실패" type="error" onClose={vi.fn()} />);
-
-    const toast = screen.getByRole('alert');
-    expect(toast).toHaveStyle({ backgroundColor: '#fef2f2' });
-  });
+  // 🔵 TASK-FE-101 — 색은 이제 테마 토큰(`var(--color-success-surface)` 등)이다. jsdom 은 CSS 변수를 풀지 못해
+  //    렌더된 스타일로 «녹색 계열인가» 를 잴 수 없고, 예전 단언(고정 hex)은 바로 그 고정값이 다크 테마 결함의
+  //    원인이었다. 색 판정은 `toast-dark-contrast.test.ts` 가 토큰의 **실제 값**으로 두 테마 대비를 계산해서 한다.
 });
