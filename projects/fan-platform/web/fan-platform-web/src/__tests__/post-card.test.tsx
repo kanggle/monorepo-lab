@@ -100,3 +100,39 @@ describe('PostCard — 사진 (TASK-MONO-679)', () => {
     expect(container.querySelectorAll('[data-testid="post-image-frame"]')).toHaveLength(0);
   });
 });
+
+describe('PostCard — 카드 어디를 눌러도 상세로 (TASK-FAN-FE-022)', () => {
+  // 🔵 jsdom 은 늘린 클릭 영역을 못 잰다 — 여기서는 «그렇게 짜였는가» 까지(티켓 AC-3), 실제 클릭은 라이브(AC-4).
+  it('🔴 제목이 있는 열린 항목: 상세 링크는 제목 하나이고 카드 전체를 덮는다', () => {
+    const { container } = render(<PostCard item={{ ...baseItem, mediaRefs: [PHOTO_A] }} />);
+    const detail = container.querySelectorAll('a[href="/posts/p1"]');
+    expect(detail).toHaveLength(1);
+    expect(screen.getByRole('link', { name: '봄 컴백 D-1' })).toBe(detail[0]);
+    for (const token of ['after:absolute', 'after:inset-0', 'after:z-[1]']) {
+      expect(detail[0].getAttribute('class') ?? '').toContain(token);
+    }
+    expect(screen.getByTestId('post-card').className).toContain('relative');
+  });
+
+  it('🔴 잠긴 항목(`title: null`)도 상세 링크가 하나이고 **이름이 비지 않는다**', () => {
+    const { container } = render(
+      <PostCard item={{ ...baseItem, visibility: 'MEMBERS_ONLY', title: null, bodyPreview: null, locked: true }} />,
+    );
+    expect(container.querySelectorAll('a[href="/posts/p1"]')).toHaveLength(1);
+    expect(screen.getByRole('link', { name: '멤버십이 필요한 포스트' })).toHaveAttribute('href', '/posts/p1');
+  });
+
+  it('제목이 없는 열린 항목도 이름 있는 링크 하나', () => {
+    const { container } = render(<PostCard item={{ ...baseItem, title: null }} />);
+    expect(container.querySelectorAll('a[href="/posts/p1"]')).toHaveLength(1);
+    expect(screen.getByRole('link', { name: '포스트 보기' })).toBeInTheDocument();
+  });
+
+  it('🔴 중첩 링크 0 · 「자세히 보기」 글자 0 · 댓글·반응 수는 그대로', () => {
+    const { container } = render(<PostCard item={baseItem} />);
+    expect(container.querySelector('a a')).toBeNull();
+    expect(container.textContent ?? '').not.toContain('자세히 보기');
+    expect(screen.getByText('댓글 3')).toBeInTheDocument();
+    expect(screen.getByText('반응 12')).toBeInTheDocument();
+  });
+});
