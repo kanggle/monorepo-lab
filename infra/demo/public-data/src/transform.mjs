@@ -118,7 +118,15 @@ export function toPublicPost(raw, artistNames) {
   const visibility =
     raw.visibility === 'MEMBERS_ONLY' || raw.visibility === 'PREMIUM' ? raw.visibility : 'PUBLIC';
   const locked = visibility !== 'PUBLIC';
-  const rawImages = Array.isArray(raw.imageRefs) ? raw.imageRefs : Array.isArray(raw.images) ? raw.images : [];
+  // 🔵 `mediaRefs` 가 백엔드의 이름이다(community-service 피드·단건 응답, TASK-MONO-679). 나머지 둘은
+  //    그 필드가 생기기 전의 픽스처·다른 출처 모양을 받기 위한 폴백이다.
+  const rawImages = Array.isArray(raw.mediaRefs)
+    ? raw.mediaRefs
+    : Array.isArray(raw.imageRefs)
+      ? raw.imageRefs
+      : Array.isArray(raw.images)
+        ? raw.images
+        : [];
 
   return {
     id,

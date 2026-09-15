@@ -52,8 +52,12 @@ public class FeedCacheRepository implements FeedCache {
      * Bump whenever the cached payload's shape changes. Exposed so the integration
      * test builds its expected key from this constant rather than re-typing the literal — a
      * hand-copied key would keep asserting the old shape after a bump and pass anyway.
+     *
+     * <p>{@code v3} (TASK-MONO-679): the snapshot gained {@code mediaRefs}. A {@code v2} entry would
+     * deserialize with {@code mediaRefs = null} — every photo quietly missing for up to the TTL
+     * right after deploy — so it is made unreachable instead.
      */
-    public static final String KEY_VERSION = "v2";
+    public static final String KEY_VERSION = "v3";
 
     static final long TTL_MINUTES = 5;
     private static final Duration TTL = Duration.ofMinutes(TTL_MINUTES);

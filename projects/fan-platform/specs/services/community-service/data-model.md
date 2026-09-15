@@ -40,7 +40,7 @@ processed_events  (legacy v1 dedupe table; unmapped since TASK-MONO-406 deleted 
 | `status` | VARCHAR(20) NOT NULL CHECK | `DRAFT` / `PUBLISHED` / `HIDDEN` / `DELETED` |
 | `title` | VARCHAR(200) | nullable |
 | `body` | TEXT | nullable for media-only posts |
-| `media_refs` | JSONB | array of S3/MinIO keys (raw upload v2) |
+| `media_refs` | JSONB | array of **absolute https URLs**, returned verbatim as `mediaRefs` (TASK-MONO-679 ⓐ). NULL = no media. Was documented as "S3/MinIO keys" — no resolver for a key ever existed; raw upload is still v2 |
 | `published_at`, `created_at`, `updated_at`, `deleted_at` | TIMESTAMPTZ | UTC |
 | `version` | BIGINT NOT NULL | optimistic lock |
 

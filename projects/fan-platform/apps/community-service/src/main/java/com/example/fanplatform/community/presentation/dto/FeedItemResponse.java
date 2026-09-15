@@ -3,6 +3,7 @@ package com.example.fanplatform.community.presentation.dto;
 import com.example.fanplatform.community.application.FeedItemView;
 
 import java.time.Instant;
+import java.util.List;
 
 public record FeedItemResponse(
         String postId,
@@ -11,6 +12,7 @@ public record FeedItemResponse(
         String authorAccountId,
         String title,
         String bodyPreview,
+        List<String> mediaRefs,
         long commentCount,
         long reactionCount,
         Instant publishedAt,
@@ -24,6 +26,7 @@ public record FeedItemResponse(
                 v.authorAccountId(),
                 v.title(),
                 v.bodyPreview(),
+                v.mediaRefs(),
                 v.commentCount(),
                 v.reactionCount(),
                 v.publishedAt(),

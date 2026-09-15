@@ -94,9 +94,16 @@ Request:
   "debutDate": "YYYY-MM-DD (optional)",
   "agency": "string (max 120, optional)",
   "bio": "string (max 4000, optional)",
-  "profileImageRef": "string (max 500, optional, e.g. s3://...)"
+  "profileImageRef": "string (max 500, optional, e.g. https://...)"
 }
 ```
+
+`profileImageRef` holds an **absolute https URL the web app renders as-is** — it is stored and
+returned verbatim; nothing resolves it (`specs/services/artist-service/data-model.md`: "media URL
+only"). The earlier `s3://...` example described a storage key that no code ever resolved, and
+was corrected alongside `community-api.md` § `mediaRefs` (TASK-MONO-679), which follows the same
+convention. 🔵 Unlike `mediaRefs`, the https shape is **not yet validated** on this endpoint — the
+write side is admin-tier only (`ADR-MONO-063`) and has no caller today.
 
 Response 201:
 ```json

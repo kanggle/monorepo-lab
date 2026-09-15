@@ -223,8 +223,14 @@ jwt_has_role() { # <token> <role>
   printf '%s' "$payload" | openssl base64 -d -A 2>/dev/null | grep -q "\"$2\""
 }
 
-publish_artist_post() { # <라벨> <저자 account_id> <visibility> <제목> <본문>
-  local label="$1" author="$2" vis="$3" title="$4" body="$5" n
+publish_artist_post() { # <라벨> <저자 account_id> <visibility> <제목> <본문> [mediaRefs JSON 배열]
+  local label="$1" author="$2" vis="$3" title="$4" body="$5" media="${6:-}" n extra=""
+  # TASK-MONO-679 — 사진은 https 절대주소의 JSON 배열로 싣는다(community-api.md § mediaRefs).
+  # 🔴 아래 탐지는 **제목**으로 «이미 있음» 을 판단한다 ⇒ 이미 시드된 DB 의 글은 발행을 건너뛰고,
+  #    **사진도 추가되지 않는다.** 사진이 보이려면 신선 볼륨이 필요하다(= AMI 재굽기). 이 스크립트가
+  #    기존 글을 PATCH 로 고치지 않는 이유: 작성자 수정은 발행 후 5분 창뿐이고 운영자 평면은 열지
+  #    않기로 결정돼 있다(ADR-MONO-059·063).
+  if [ -n "$media" ]; then extra=",\"mediaRefs\":$media"; fi
   # 탐지는 dbquery(읽기 전용)다. 피드로는 탐지할 수 없다 — 피드는 팔로우 기반이고
   # 아티스트는 자기 자신을 팔로우하지 않으므로 자기 글이 자기 피드에 뜨지 않는다.
   n="$(dbquery fan-platform-postgres psql fanplatform_community fanplatform '' \
@@ -266,10 +272,17 @@ seed_as_artist() { # <라벨> <email> <기대 account_id>
   return 0
 }
 
+# TASK-MONO-679 — 공개 글은 사진(https 절대주소 JSON 배열)을 함께 발행한다.
+# 🔴🔴 **이 파일이 팬 글의 정본이다.** 번들 시드(`infra/demo/public-data/fixtures/raw-backend-responses.mjs`)가
+#    제목·공개 본문·사진·구성을 이쪽에 맞추고, `infra/demo/public-data/tests/public-data.test.mjs` 가 두 파일을
+#    대조한다. 제목을 바꾸면 그 테스트가 빨개진다 — 그리고 바꾸지 않는 편이 좋다: 아래 탐지는 **제목**으로
+#    «이미 있음» 을 판단하므로, 이미 시드된 DB 에 같은 글이 새 제목으로 한 벌 더 생긴다.
+# 🔴 인자는 **한 줄에 하나씩, 작은따옴표로** 쓴다 — 그 테스트가 이 모양을 읽는다.
 if seed_as_artist '루미' "$ARTIST_A_EMAIL" "$ARTIST_A"; then
   publish_artist_post 'ARTIST_POST(PUBLIC · 루미)' "$ARTIST_A" PUBLIC \
     '새 싱글 「밤의 끝」 발매 안내' \
-    '안녕하세요, 루미입니다.\n\n오랜만에 새 싱글로 인사드립니다. 「밤의 끝」은 지난 겨울에 쓴 곡이에요.\n모든 분들이 들으실 수 있도록 전체 공개로 올립니다.'
+    '안녕하세요, 루미입니다.\n\n오랜만에 새 싱글로 인사드립니다. 「밤의 끝」은 지난 겨울에 쓴 곡이에요.\n모든 분들이 들으실 수 있도록 전체 공개로 올립니다.' \
+    '["https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=1200&h=675&q=80&auto=format&fit=crop","https://images.unsplash.com/photo-1510915361894-db8b60106cb1?w=1200&h=675&q=80&auto=format&fit=crop"]'
   publish_artist_post 'ARTIST_POST(MEMBERS_ONLY · 루미)' "$ARTIST_A" MEMBERS_ONLY \
     '멤버십 전용 — 작업실 이야기' \
     '멤버십 가입해 주신 분들께만 남깁니다.\n\n이번 앨범 작업을 하면서 세 번을 갈아엎었어요. 처음 데모와 지금 버전은 코드 진행부터 다릅니다.\n다음 주에는 미공개 데모 음원도 여기에 올릴게요.'
@@ -281,19 +294,25 @@ fi
 if seed_as_artist '노아' "$ARTIST_B_EMAIL" "$ARTIST_B"; then
   publish_artist_post 'ARTIST_POST(PUBLIC · 노아)' "$ARTIST_B" PUBLIC \
     '프로듀싱 노트를 시작합니다' \
-    '노아입니다. 앞으로 작업 과정을 짧게 기록해 두려 합니다.\n첫 글은 마이크 프리앰프 이야기부터.'
+    '노아입니다. 앞으로 작업 과정을 짧게 기록해 두려 합니다.\n첫 글은 마이크 프리앰프 이야기부터.' \
+    '["https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=1200&h=675&q=80&auto=format&fit=crop","https://images.unsplash.com/photo-1460667262436-cf19894f4774?w=1200&h=675&q=80&auto=format&fit=crop"]'
+  # TASK-MONO-679 — 번들에만 있던 노아의 잠긴 글. 새 제목이라 이미 시드된 DB 에도 중복 없이 한 번만 생긴다.
+  publish_artist_post 'ARTIST_POST(MEMBERS_ONLY · 노아)' "$ARTIST_B" MEMBERS_ONLY \
+    '멤버십 전용 — 다음 EP 트랙 리스트 초안' \
+    '멤버십 가입해 주신 분들께만 남깁니다.\n\n다음 EP 에 들어갈 트랙 리스트 초안을 먼저 공유드립니다.'
 fi
 
 # TASK-MONO-638 — 나머지 아티스트도 «공개 1 + 멤버십 1» 을 갖는다.
 # 🔴 잠긴 글이 있어야 «로그인하면 더 있다» 가 화면에서 참이 된다. 예전에는 루미에게만
 #    있어서, 나머지 카드는 그 사실을 보여 줄 방법이 없었다.
-# 🔵 번들 시드(infra/demo/public-data)의 게시물과 **같은 구성**이다 — 두 벌이 갈라지면
-#    방문자가 기동 전후로 다른 피드를 본다.
+# 🔴 638 은 여기에 «번들 시드와 **같은 구성**» 이라고 적었지만 제목·구성이 실제로는 갈라져 있었다
+#    (TASK-MONO-679 가 실측). 이제 그 문장은 주장이 아니라 **시험**이다 — 위 § 정본 참조.
 
 if seed_as_artist '세아' "$ARTIST_C_EMAIL" "$ARTIST_C"; then
   publish_artist_post 'ARTIST_POST(PUBLIC · 세아)' "$ARTIST_C" PUBLIC \
     'STELLAR 컴백 준비 현장' \
-    '세아입니다. STELLAR 컴백 준비가 한창입니다.\n안무 연습과 녹음을 병행하는 중이라 정신없지만 즐겁습니다.'
+    '세아입니다. STELLAR 컴백 준비가 한창입니다.\n안무 연습과 녹음을 병행하는 중이라 정신없지만 즐겁습니다.' \
+    '["https://images.unsplash.com/photo-1459749411175-04bf5292ceea?w=1200&h=675&q=80&auto=format&fit=crop"]'
   publish_artist_post 'ARTIST_POST(MEMBERS_ONLY · 세아)' "$ARTIST_C" MEMBERS_ONLY \
     '멤버십 전용 — 안무 연습실 비하인드' \
     '멤버십 가입해 주신 분들께만 남깁니다.\n\n연습실에서 찍은 사진과 짧은 클립을 올려요.'
@@ -302,7 +321,8 @@ fi
 if seed_as_artist '하린' "$ARTIST_D_EMAIL" "$ARTIST_D"; then
   publish_artist_post 'ARTIST_POST(PUBLIC · 하린)' "$ARTIST_D" PUBLIC \
     '첫 단독 공연 준비 일지' \
-    '하린입니다. 다음 달 첫 단독 공연을 준비하고 있습니다.\n세트리스트를 짜면서 데뷔곡을 어디에 둘지 한참 고민했어요.'
+    '하린입니다. 다음 달 첫 단독 공연을 준비하고 있습니다.\n세트리스트를 짜면서 데뷔곡을 어디에 둘지 한참 고민했어요.' \
+    '["https://images.unsplash.com/photo-1506157786151-b8491531f063?w=1200&h=675&q=80&auto=format&fit=crop"]'
   publish_artist_post 'ARTIST_POST(MEMBERS_ONLY · 하린)' "$ARTIST_D" MEMBERS_ONLY \
     '멤버십 전용 — 리허설 현장' \
     '멤버십 전용 안내입니다.\n\n리허설 사진과 세트리스트 초안을 먼저 공유드립니다.'
@@ -311,7 +331,8 @@ fi
 if seed_as_artist '리오' "$ARTIST_E_EMAIL" "$ARTIST_E"; then
   publish_artist_post 'ARTIST_POST(PUBLIC · 리오)' "$ARTIST_E" PUBLIC \
     '커버 무대 영상 올렸습니다' \
-    '리오입니다. 요청 많았던 곡으로 커버 무대를 준비했습니다.\n원곡의 키를 두 음 내려서 불렀어요.'
+    '리오입니다. 요청 많았던 곡으로 커버 무대를 준비했습니다.\n원곡의 키를 두 음 내려서 불렀어요.' \
+    '["https://images.unsplash.com/photo-1514320291840-2e0a9bf2a9ae?w=1200&h=675&q=80&auto=format&fit=crop"]'
   publish_artist_post 'ARTIST_POST(MEMBERS_ONLY · 리오)' "$ARTIST_E" MEMBERS_ONLY \
     '멤버십 전용 — 연습실 라이브 풀버전' \
     '멤버십 전용입니다.\n\n편집 없이 연습실에서 한 번에 부른 풀버전을 올립니다.'
@@ -320,7 +341,8 @@ fi
 if seed_as_artist '유노' "$ARTIST_F_EMAIL" "$ARTIST_F"; then
   publish_artist_post 'ARTIST_POST(PUBLIC · 유노)' "$ARTIST_F" PUBLIC \
     '재즈 편곡 작업 노트' \
-    '유노입니다. 이번 곡은 4비트 스윙으로 시작했다가 결국 보사노바로 바꿨습니다.\n리듬을 바꾸니 가사의 호흡이 완전히 달라졌어요.'
+    '유노입니다. 이번 곡은 4비트 스윙으로 시작했다가 결국 보사노바로 바꿨습니다.\n리듬을 바꾸니 가사의 호흡이 완전히 달라졌어요.' \
+    '["https://images.unsplash.com/photo-1415201364774-f6f0bb35f28f?w=1200&h=675&q=80&auto=format&fit=crop","https://images.unsplash.com/photo-1507838153414-b4b713384a76?w=1200&h=675&q=80&auto=format&fit=crop"]'
   publish_artist_post 'ARTIST_POST(MEMBERS_ONLY · 유노)' "$ARTIST_F" MEMBERS_ONLY \
     '멤버십 전용 — 미공개 세션 녹음' \
     '멤버십 전용입니다.\n\n세션 뮤지션들과 한 번에 간 테이크를 그대로 올립니다.'
