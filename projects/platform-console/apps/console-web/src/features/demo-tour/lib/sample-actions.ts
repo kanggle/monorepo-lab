@@ -21,7 +21,7 @@
  */
 
 /** 비활성 사유. 요구사항이 지정한 **정확한 문구**이며, 툴팁과 안내문이 이 하나를 공유한다. */
-export const DEMO_DISABLED_REASON = '실시간 기능 시작 후 로그인';
+export const DEMO_DISABLED_REASON = '데모 서버를 켠 뒤 로그인';
 
 /**
  * 표 `key` → 그 화면의 쓰기 작업 이름들.
@@ -42,7 +42,7 @@ const ACTIONS_BY_TABLE: Readonly<Record<string, readonly string[]>> = {
   tenants: ['테넌트 생성', '운영자 초대', '구독 변경'],
 };
 
-/** 이 표가 실시간 콘솔에서 제공하는 쓰기 작업 이름들(없으면 빈 배열). */
+/** 이 표가 실제 콘솔에서 제공하는 쓰기 작업 이름들(없으면 빈 배열). */
 export function actionsForTable(tableKey: string): readonly string[] {
   return ACTIONS_BY_TABLE[tableKey] ?? [];
 }
