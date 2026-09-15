@@ -83,6 +83,9 @@ class DevSeedScopeIT {
             assertThat(count(ds, "SELECT count(*) FROM admin_user")).isZero();
             assertThat(count(ds, "SELECT count(*) FROM admin_user_role_assignment")).isZero();
             assertThat(count(ds, "SELECT count(*) FROM admin_setting")).isZero();
+            // TASK-MONO-675 — the master-ref seed is dev/demo only too.
+            assertThat(count(ds, "SELECT count(*) FROM admin_warehouse_ref")).isZero();
+            assertThat(count(ds, "SELECT count(*) FROM admin_partner_ref")).isZero();
 
             // Nothing structural went missing with the seed: the read models the
             // eight dashboards query exist, including the ADR-MONO-065 tenant axis.
@@ -105,6 +108,13 @@ class DevSeedScopeIT {
                     + BOOTSTRAP_USER_EMAIL + "'")).isEqualTo(1);
             assertThat(count(ds, "SELECT count(*) FROM admin_user_role_assignment")).isEqualTo(1);
             assertThat(count(ds, "SELECT count(*) FROM admin_setting")).isEqualTo(4);
+            // TASK-MONO-675 — R__seed_dev_masterref.sql mirrors master-service's seed.
+            assertThat(count(ds, "SELECT count(*) FROM admin_warehouse_ref")).isEqualTo(1);
+            assertThat(count(ds, "SELECT count(*) FROM admin_zone_ref")).isEqualTo(3);
+            assertThat(count(ds, "SELECT count(*) FROM admin_location_ref")).isEqualTo(3);
+            assertThat(count(ds, "SELECT count(*) FROM admin_sku_ref")).isEqualTo(3);
+            assertThat(count(ds, "SELECT count(*) FROM admin_lot_ref")).isEqualTo(1);
+            assertThat(count(ds, "SELECT count(*) FROM admin_partner_ref")).isEqualTo(3);
         }
     }
 
@@ -140,7 +150,8 @@ class DevSeedScopeIT {
      * such a database also holds the bootstrap {@code WMS_SUPERADMIN} under a
      * published UUID, which is the thing this ticket exists to stop shipping.
      *
-     * <pre>DELETE FROM flyway_schema_history WHERE version IS NULL AND description = 'seed dev data';</pre>
+     * <pre>DELETE FROM flyway_schema_history WHERE version IS NULL AND description IN ('seed dev data', 'seed dev masterref');</pre>
+     * (TASK-MONO-675 added the second repeatable; repairing only the first leaves the boot refused.)
      */
     @Test
     @DisplayName("an existing database seeded under the old arrangement refuses production locations until repaired")
@@ -150,16 +161,18 @@ class DevSeedScopeIT {
             DataSource ds = dataSource(pg);
 
             flyway(ds, DEV_AND_DEMO).migrate();
-            assertThat(appliedRepeatableScripts(ds)).isEqualTo(1);
+            // TASK-MONO-675 added a second repeatable to db/seed (R__seed_dev_masterref.sql),
+            // so a dev/demo database now carries two history rows with version IS NULL.
+            assertThat(appliedRepeatableScripts(ds)).isEqualTo(2);
 
             assertThatThrownBy(() -> flyway(ds, PRODUCTION).migrate())
                     .isInstanceOf(FlywayValidateException.class)
                     .hasMessageContaining("applied migration not resolved locally: seed dev data");
 
-            // The documented repair, and then the same boot succeeds.
+            // The documented repair — now for both repeatables — and then the same boot succeeds.
             try (Connection c = ds.getConnection(); Statement s = c.createStatement()) {
                 s.executeUpdate("DELETE FROM flyway_schema_history "
-                        + "WHERE version IS NULL AND description = 'seed dev data'");
+                        + "WHERE version IS NULL AND description IN ('seed dev data', 'seed dev masterref')");
             }
             assertThatCode(() -> flyway(ds, PRODUCTION).migrate()).doesNotThrowAnyException();
 
