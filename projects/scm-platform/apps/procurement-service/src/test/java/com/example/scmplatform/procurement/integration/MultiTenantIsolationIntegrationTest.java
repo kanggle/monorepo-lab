@@ -1,7 +1,9 @@
 package com.example.scmplatform.procurement.integration;
 
+import com.example.common.page.PageQuery;
 import com.example.scmplatform.procurement.application.ActorContext;
 import com.example.scmplatform.procurement.application.PurchaseOrderApplicationService;
+import com.example.scmplatform.procurement.application.PurchaseOrderView;
 import com.example.scmplatform.procurement.domain.error.PoNotFoundException;
 import com.example.scmplatform.procurement.domain.po.PurchaseOrder;
 import com.example.scmplatform.procurement.domain.supplier.Supplier;
@@ -59,5 +61,50 @@ class MultiTenantIsolationIntegrationTest extends AbstractProcurementIntegration
         // Assert
         assertThat(view.id()).isEqualTo(po.getId());
         assertThat(view.tenantId()).isEqualTo(TENANT_SCM);
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-677: 공급사 참조는 같은 tenant 안에서 id 로, 없으면 code 로 풀리고 — 다른 tenant 행은 안 풀린다")
+    void supplierReferenceResolvesInsideTheTenantOnly() {
+        // Arrange — one supplier per tenant. persistActiveSupplier sets code = UPPER(id).
+        Supplier own = persistActiveSupplier(TENANT_SCM);
+        Supplier foreign = persistActiveSupplier(TENANT_OTHER);
+        PurchaseOrder refById = persistDraftPo(TENANT_SCM, own.getId());
+        PurchaseOrder refByCode = persistDraftPo(TENANT_SCM, own.getCode());
+        PurchaseOrder refForeign = persistDraftPo(TENANT_SCM, foreign.getId());
+        ActorContext buyer = new ActorContext("buyer-a-677", TENANT_SCM, Set.of("BUYER"));
+
+        // Detail path.
+        PurchaseOrderView viaId = service.get(refById.getId(), buyer);
+        assertThat(viaId.supplierCode()).isEqualTo(own.getCode());
+        assertThat(viaId.supplierName()).isEqualTo(own.getName());
+
+        PurchaseOrderView viaCode = service.get(refByCode.getId(), buyer);
+        assertThat(viaCode.supplierId()).isEqualTo(own.getCode());
+        assertThat(viaCode.supplierCode()).isEqualTo(own.getCode());
+        assertThat(viaCode.supplierName()).isEqualTo(own.getName());
+
+        PurchaseOrderView viaForeign = service.get(refForeign.getId(), buyer);
+        assertThat(viaForeign.supplierCode()).isNull();
+        assertThat(viaForeign.supplierName()).isNull();
+
+        // List path (the batched IN-queries) must give the same three answers. Filtering
+        // by the stored supplierId keeps each page to exactly this test's PO.
+        PageQuery page = PageQuery.of(0, 20, "createdAt", "DESC");
+        assertThat(service.search(buyer, null, own.getId(), page).content())
+                .singleElement()
+                .satisfies(v -> {
+                    assertThat(v.supplierCode()).isEqualTo(own.getCode());
+                    assertThat(v.supplierName()).isEqualTo(own.getName());
+                });
+        assertThat(service.search(buyer, null, own.getCode(), page).content())
+                .singleElement()
+                .satisfies(v -> assertThat(v.supplierName()).isEqualTo(own.getName()));
+        assertThat(service.search(buyer, null, foreign.getId(), page).content())
+                .singleElement()
+                .satisfies(v -> {
+                    assertThat(v.supplierCode()).isNull();
+                    assertThat(v.supplierName()).isNull();
+                });
     }
 }

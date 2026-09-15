@@ -14,6 +14,10 @@ public record PurchaseOrderResponse(
         String tenantId,
         String poNumber,
         String supplierId,
+        // TASK-MONO-677: the supplier master row supplierId resolves to (same
+        // tenant, id first then code). Both null when unresolved — never "".
+        String supplierCode,
+        String supplierName,
         String buyerAccountId,
         PoStatus status,
         // Provenance (ADR-MONO-027 D5): origin is always present; sourceSuggestionId
@@ -58,7 +62,8 @@ public record PurchaseOrderResponse(
                         l.quantity(), l.unitPrice(), l.receivedQuantity()))
                 .toList();
         return new PurchaseOrderResponse(
-                v.id(), v.tenantId(), v.poNumber(), v.supplierId(), v.buyerAccountId(),
+                v.id(), v.tenantId(), v.poNumber(), v.supplierId(),
+                v.supplierCode(), v.supplierName(), v.buyerAccountId(),
                 v.status(), v.origin(), v.sourceSuggestionId(), v.totalAmount(), v.currency(),
                 v.submittedAt(), v.acknowledgedAt(), v.confirmedAt(), v.canceledAt(),
                 v.createdAt(), v.updatedAt(),

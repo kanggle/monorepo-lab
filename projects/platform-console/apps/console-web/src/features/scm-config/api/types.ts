@@ -69,10 +69,13 @@ export const SupplierMapSchema = z
   .passthrough();
 export type SupplierMap = z.infer<typeof SupplierMapSchema>;
 
-/** PUT body for a sku-supplier-map upsert (the FULL row). `supplierId` is a
- *  FREE-TEXT / uuid in v1 — there is no supplier master to resolve against
- *  (the `sku_supplier_map` is the deliberate minimal stand-in per ADR-MONO-027
- *  D3); validate SHAPE only, never resolve a non-existent supplier-service. */
+/** PUT body for a sku-supplier-map upsert (the FULL row). `supplierId` is
+ *  FREE-TEXT — validate SHAPE only. The `sku_supplier_map` is the deliberate
+ *  minimal stand-in per ADR-MONO-027 D3 and demand-planning does not resolve the
+ *  value against anything. A procurement supplier master DOES exist
+ *  (TASK-SCM-BE-059 / ADR-SCM-001); per ADR-MONO-050 D9 this value is that
+ *  master's supplier CODE, which reaches wms inbound. (TASK-MONO-677 corrected
+ *  the former "there is no supplier master".) */
 export const SupplierMapInputSchema = z.object({
   supplierId: z.string().trim().min(1),
   defaultOrderQty: z.number().int().positive(),

@@ -60,7 +60,7 @@ class SupplierAckWebhookControllerSliceTest {
     private PurchaseOrderView acknowledgedView() {
         Instant now = Instant.now();
         return new PurchaseOrderView(
-                "po-001", "scm", "PO-0001", "sup-001", "buyer-001",
+                "po-001", "scm", "PO-0001", "sup-001", null, null, "buyer-001",
                 PoStatus.ACKNOWLEDGED, PoOrigin.OPERATOR, null, BigDecimal.TEN, "USD",
                 now, now, null, null, now, now, List.of()
         );
