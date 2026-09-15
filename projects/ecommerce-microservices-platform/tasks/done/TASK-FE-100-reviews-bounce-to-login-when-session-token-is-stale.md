@@ -8,7 +8,7 @@ TASK-FE-100
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -90,7 +90,12 @@ frontend
 - [x] **AC-3** — POST/PUT/PATCH/DELETE 는 재시도하지 않는다 (업스트림 호출 1회)
 - [x] **AC-4** — 세션 토큰이 없어 Bearer 를 안 붙인 요청은 401 이어도 재시도하지 않는다 (호출 1회)
 - [x] **AC-5** — 기존 `bff-proxy.test.ts` 케이스가 **수정 없이** 통과한다
-- [ ] **AC-6** — `tsc --noEmit` · `next lint` 로컬 통과, 단위 테스트는 CI `frontend-unit-tests`(Node 20) 초록
+- [x] **AC-6** — `tsc --noEmit` · `next lint` 로컬 통과, 단위 테스트는 CI `frontend-unit-tests`(Node 20) 초록
+      — 로컬: `tsc --noEmit` rc=0 · ESLint(변경 파일, `.eslintrc.js`) rc=0. ⚪ `next lint` 자체는 호스트
+      Application Control 정책이 worktree 의 swc 네이티브 바이너리를 차단해 설정 로드 단계에서 죽었다
+      (코드 무관) — 그래서 ESLint 직접 실행으로 대체했고, CI `Frontend lint & build` 가 SUCCESS 로
+      `next lint` + `next build` 를 쟀다. CI 단위: 로그에서 `src/__tests__/bff-proxy.test.ts (13 tests)`
+      통과 확인(기존 8 + 신규 5 — 0개 실행 초록이 아님).
 
 ---
 
@@ -127,5 +132,5 @@ frontend
 # Definition of Done
 
 - [x] 수정 + 테스트
-- [ ] 게이트 통과
+- [x] 게이트 통과
 - [x] Ready for review

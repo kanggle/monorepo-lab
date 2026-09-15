@@ -99,7 +99,10 @@
         "visibility": "PUBLIC",
         "locked": false,
         "publishedAt": "2026-02-17T09:00:00Z",
-        "imageUrls": []
+        "imageUrls": [
+          "https://images.unsplash.com/photo-1415201364774-f6f0bb35f28f?w=1200&h=675&q=80&auto=format&fit=crop",
+          "https://images.unsplash.com/photo-1507838153414-b4b713384a76?w=1200&h=675&q=80&auto=format&fit=crop"
+        ]
       },
       {
         "id": "0199de80-0000-7000-8000-00000000b010",
@@ -121,7 +124,9 @@
         "visibility": "PUBLIC",
         "locked": false,
         "publishedAt": "2026-02-15T09:00:00Z",
-        "imageUrls": []
+        "imageUrls": [
+          "https://images.unsplash.com/photo-1514320291840-2e0a9bf2a9ae?w=1200&h=675&q=80&auto=format&fit=crop"
+        ]
       },
       {
         "id": "0199de80-0000-7000-8000-00000000b008",
@@ -143,7 +148,9 @@
         "visibility": "PUBLIC",
         "locked": false,
         "publishedAt": "2026-02-13T09:00:00Z",
-        "imageUrls": []
+        "imageUrls": [
+          "https://images.unsplash.com/photo-1506157786151-b8491531f063?w=1200&h=675&q=80&auto=format&fit=crop"
+        ]
       },
       {
         "id": "0199de80-0000-7000-8000-00000000b006",
@@ -176,7 +183,9 @@
         "visibility": "PUBLIC",
         "locked": false,
         "publishedAt": "2026-02-11T02:15:00Z",
-        "imageUrls": []
+        "imageUrls": [
+          "https://images.unsplash.com/photo-1459749411175-04bf5292ceea?w=1200&h=675&q=80&auto=format&fit=crop"
+        ]
       },
       {
         "id": "0199de80-0000-7000-8000-00000000b001",
@@ -187,7 +196,10 @@
         "visibility": "PUBLIC",
         "locked": false,
         "publishedAt": "2026-02-10T08:00:00Z",
-        "imageUrls": []
+        "imageUrls": [
+          "https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=1200&h=675&q=80&auto=format&fit=crop",
+          "https://images.unsplash.com/photo-1510915361894-db8b60106cb1?w=1200&h=675&q=80&auto=format&fit=crop"
+        ]
       },
       {
         "id": "0199de80-0000-7000-8000-00000000b004",
@@ -209,7 +221,10 @@
         "visibility": "PUBLIC",
         "locked": false,
         "publishedAt": "2026-02-08T11:30:00Z",
-        "imageUrls": []
+        "imageUrls": [
+          "https://images.unsplash.com/photo-1519892300165-cb5542fb47c7?w=1200&h=675&q=80&auto=format&fit=crop",
+          "https://images.unsplash.com/photo-1460667262436-cf19894f4774?w=1200&h=675&q=80&auto=format&fit=crop"
+        ]
       }
     ],
     "membershipPlans": [
