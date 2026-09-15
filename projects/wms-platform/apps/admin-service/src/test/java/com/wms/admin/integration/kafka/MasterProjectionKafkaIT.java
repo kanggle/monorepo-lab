@@ -43,8 +43,12 @@ class MasterProjectionKafkaIT extends ProjectionKafkaIntegrationBase {
     void warehouseCreated_upsertsWarehouseRef() {
         UUID eventId = UUID.randomUUID();
         UUID warehouseId = UUID.randomUUID();
+        // 🔴 Not "WH01": this base opens classpath:db/seed, whose R__seed_dev_masterref.sql
+        //    (TASK-MONO-675) already holds WH01 under a fixed id, and warehouse_code is UNIQUE —
+        //    a random id with the same code cannot be upserted. Fixture codes must not collide
+        //    with dev-seed codes.
         String payload = """
-                {"warehouse":{"id":"%s","warehouseCode":"WH01","name":"Seoul",
+                {"warehouse":{"id":"%s","warehouseCode":"WH-IT-01","name":"Seoul",
                 "timezone":"Asia/Seoul","status":"ACTIVE"}}""".formatted(warehouseId);
 
         kafkaTemplate.send("wms.master.warehouse.v1", warehouseId.toString(),
@@ -54,7 +58,7 @@ class MasterProjectionKafkaIT extends ProjectionKafkaIntegrationBase {
         await().atMost(AWAIT).untilAsserted(() -> {
             assertThat(dedupe.existsById(eventId)).isTrue();
             assertThat(warehouseRepo.findById(warehouseId)).isPresent()
-                    .get().satisfies(w -> assertThat(w.getWarehouseCode()).isEqualTo("WH01"));
+                    .get().satisfies(w -> assertThat(w.getWarehouseCode()).isEqualTo("WH-IT-01"));
         });
     }
 
@@ -119,8 +123,10 @@ class MasterProjectionKafkaIT extends ProjectionKafkaIntegrationBase {
     void partnerCreated_upsertsPartnerRef() {
         UUID eventId = UUID.randomUUID();
         UUID partnerId = UUID.randomUUID();
+        // 🔴 Not "SUP-001" — same collision as warehouseCreated (partner_code is UNIQUE and
+        //    the dev seed already holds SUP-001).
         String payload = """
-                {"partner":{"id":"%s","partnerCode":"SUP-001","name":"AcmeCo",
+                {"partner":{"id":"%s","partnerCode":"SUP-IT-001","name":"AcmeCo",
                 "partnerType":"SUPPLIER","status":"ACTIVE"}}""".formatted(partnerId);
 
         kafkaTemplate.send("wms.master.partner.v1", partnerId.toString(),
@@ -129,7 +135,7 @@ class MasterProjectionKafkaIT extends ProjectionKafkaIntegrationBase {
 
         await().atMost(AWAIT).untilAsserted(() -> {
             assertThat(partnerRepo.findById(partnerId)).isPresent()
-                    .get().satisfies(p -> assertThat(p.getPartnerCode()).isEqualTo("SUP-001"));
+                    .get().satisfies(p -> assertThat(p.getPartnerCode()).isEqualTo("SUP-IT-001"));
         });
     }
 

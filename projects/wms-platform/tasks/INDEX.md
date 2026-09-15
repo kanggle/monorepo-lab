@@ -71,7 +71,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-BE-588-outbound-masterref-seed-disagrees-with-master-seed.md` — **READY (2026-09-15).** 🔴 outbound-service 의 `R__seed_dev_masterref.sql` 이 master 원본과 **두 행** 어긋난다: 로케이션 `…1002` 를 `WH01-A-01-01-02`/`Z-A` 로 심는데 원본은 `WH01-C-01-01-01`/`Z-C`, 그리고 원본에 없는 SKU `…0404 SKU-APPLE-002`. `TASK-MONO-675` 가 admin 시드를 만들며 손으로 대조하다 찾았다(inbound·inventory·admin 사본은 원본과 맞다). 🔴 고치기 전에 **두 행이 outbound 시드 흐름에서 쓰이는지** 부터 센다(AC-1) · `ON CONFLICT DO NOTHING` 이면 기존 볼륨의 틀린 행은 안 고쳐진다(AC-2). 분석=Opus 5 / 구현 권장=Sonnet.
 
 <details><summary>직전 점유 (2026-08-13~14, `TASK-BE-583` — 지금 done/)</summary>
 

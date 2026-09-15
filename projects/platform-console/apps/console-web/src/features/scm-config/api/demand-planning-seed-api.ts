@@ -210,8 +210,10 @@ export async function getSupplierMap(
 }
 
 /** PUT /api/v1/demand-planning/sku-supplier-map/{skuCode} — idempotent upsert.
- *  The body IS the FULL row. `supplierId` is free-text/uuid (no supplier master
- *  in v1). NO Idempotency-Key, NO X-Operator-Reason. */
+ *  The body IS the FULL row. `supplierId` is free-text, shape-validated only —
+ *  per ADR-MONO-050 D9 it is the procurement supplier master's CODE (the master
+ *  exists since TASK-SCM-BE-059; demand-planning just does not resolve against
+ *  it — TASK-MONO-677). NO Idempotency-Key, NO X-Operator-Reason. */
 export async function putSupplierMap(
   skuCode: string,
   body: SupplierMapInput,

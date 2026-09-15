@@ -1057,9 +1057,13 @@ section degrades; AbortController hard timeout; tokens/PII never logged); and th
   row; carrying either over is a defect, a test asserts **both** absent on PUT).
   The same domain-facing IAM OIDC credential serves the GET inspect **and** the
   PUT upsert (no stronger credential — the gate is server-side `tenant_id`
-  validation). `supplierId` is a **free-text/uuid** input in v1 — there is no
-  supplier master to resolve against (the `sku_supplier_map` is the deliberate
-  minimal stand-in per ADR-MONO-027 D3); the console validates shape only.
+  validation). `supplierId` is a **free-text** input; the console validates
+  shape only (the `sku_supplier_map` is the deliberate minimal stand-in per
+  ADR-MONO-027 D3 and demand-planning does not resolve the value). A procurement
+  supplier master **does** exist (TASK-SCM-BE-059 / ADR-SCM-001); per
+  `scm-procurement-events.md` § inbound-expected (ADR-MONO-050 D9) this value is
+  that master's supplier **CODE**. (TASK-MONO-677 corrected the former "there is
+  no supplier master to resolve against".)
 
 - **Config-surface invariant surfaced in UI (normative)**: editing the seed rows
   affects **future** reorder-suggestion evaluation only — the screen MUST make

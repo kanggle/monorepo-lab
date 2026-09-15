@@ -2,7 +2,7 @@
 
 # Status
 
-ready
+in-progress
 
 **Type:** TASK-MONO (monorepo-level — wms 투영 + 데모 시드 경로)
 
@@ -142,11 +142,66 @@ master-ref **소비자 클래스가 하나도 없다**(있는 것은 `MasterRefC
 
 ## AC-2 — 고친다
 
-- [ ] 원인이 ⓑ 라면 **소비자를 더하는 것이 맞는지** 먼저 판단하라 — 🔴 형제 서비스
+- [x] 원인이 ⓑ 라면 **소비자를 더하는 것이 맞는지** 먼저 판단하라 — 🔴 형제 서비스
       (`inventory-service`)가 이미 같은 ref 를 들고 있다면 **admin 이 직접 구독할 일이
       아닐 수도 있다**(조회로 풀 수도 있다). 그 판단을 적어라.
-- [ ] **백필**: 이미 들어와 있는 스냅샷 행의 `*Code` 는 어떻게 되나. 🔴 새 행만 채우면
+      → 🔴 **ⓑ 는 기각됐다(AC-1) — 그래서 이 칸 자체가 해당 없다.** admin 은 이미
+      `MasterProjectionConsumer` 로 6개 토픽을 구독하고 있고, 원인은 «구독이 없다» 가
+      아니라 «시드가 이벤트를 안 낸다»(ⓐ) 다. **소비자를 더하는 판단도, 조회로 우회하는
+      판단도 필요 없다** — 파이프라인은 옳고, 파이프라인에 먹일 데이터가 없었을 뿐이다.
+      ⇒ 고친 것은 **admin-service 의 `db/seed/R__seed_dev_masterref.sql` 신설** 하나다
+      (형제 셋 — inbound·inventory·outbound — 가 각자 이미 쓰고 있는 것과 같은 우회:
+      master-service 의 seed 가 outbox 를 안 거치므로, 소비자 쪽에서 같은 고정 UUID 로
+      직접 미리 채워 둔다). 6개 ref 타입 중 admin 이 실제로 투영하는 5종 테이블을
+      채웠다(웨어하우스 1·존 3·로케이션 3·SKU 3·랏 1·파트너 3 — 총 14행): 웨어하우스·
+      존·로케이션·SKU·파트너는 master-service `R__01..R__05` 원본을, 랏은 마스터에
+      랏 시드가 없으므로 inventory-service(=inbound·outbound 와 동일) 의
+      `R__seed_dev_masterref.sql` 을 출처로 그대로 옮겼다.
+      🔴🔴 **드리프트 위험 — 이제 이 UUID 세트의 5번째 사본이다**(master 원본 +
+      inbound·inventory·outbound 사본 3개 + 이 admin 사본). master-service 가 id 나
+      코드를 바꾸면 이 파일이 **조용히** 낡는다. 🔴 이미 실제로 갈라져 있다는 것도
+      찾았다 — 사본끼리도 서로 다르다: outbound 의 `R__seed_dev_masterref.sql` 은
+      로케이션 `...1002` 를 `WH01-A-01-01-02`/존 `Z-A` 로 심는데 master 원본의
+      `...1002` 는 `WH01-C-01-01-01`/존 `Z-C` 이고, outbound 는 master 에 없는
+      SKU `...404 SKU-APPLE-002` 도 심는다 — 둘 다 master 원본과 안 맞는 **outbound
+      자신의 복사 오류**로 보여 이 파일에는 옮기지 않았다(파일 꼬리 주석에 근거를
+      남겼다). ⇒ 사본이 늘수록 이런 대조 없는 드리프트가 **더** 생기기 쉽다.
+      🔵 **이 어긋남의 집 = `projects/wms-platform/tasks/ready/TASK-BE-588-outbound-masterref-seed-disagrees-with-master-seed.md`**
+      (2026-09-15 같은 PR 에서 기안 — 받는 쪽에 행이 있는지 확인했다. 산문 «나중에» 로 남기지 않는다).
+      🔴 **가드/테스트 검색 — 없다.** `scripts/` 와 `.github/workflows/ci.yml` 을
+      `masterref`/`master_ref`/`MasterRef` 로 훑었고, 형제 masterref 시드끼리(또는
+      master-service 시드와) 값을 대조하는 가드나 테스트는 **0건**이다. 방금 찾은
+      outbound 의 자기모순도 이번에 손으로 대조하다 발견한 것이지, 어떤 자동화도
+      잡아내지 못했다. 이 공백을 메우는 것은 이 티켓의 범위 밖이다(AC-4 가 가드
+      여부를 별도로 판단한다).
+- [x] **백필**: 이미 들어와 있는 스냅샷 행의 `*Code` 는 어떻게 되나. 🔴 새 행만 채우면
       **옛 행은 영원히 null 이고, 화면에는 그 옛 행이 보인다.**
+      → **순서 주장(“신선 볼륨에서 Flyway 가 Kafka 리스너보다 먼저 돈다”)은 설정/코드로
+      지지된다, 런타임 확증은 아직 없다**: Spring Boot 는 Flyway 마이그레이션을 빈
+      초기화 단계에서(데이터소스가 준비되자마자, 컨텍스트 refresh 중) 실행하고,
+      `@KafkaListener` 컨테이너는 `KafkaListenerEndpointRegistry` 가 `SmartLifecycle`
+      의 `start()` 단계 — **싱글톤 빈이 전부 만들어지고 컨텍스트 refresh 가 끝난 뒤** —
+      에 기동한다(admin `application.yml` 에 `spring.kafka.listener.auto-startup` 을
+      끄는 오버라이드 없음, 기본값 `true` 확인). ⇒ **같은 컨테이너 안에서는** 신선
+      볼륨이라면 R__ 시드 행이 커밋된 뒤에야 리스너가 첫 이벤트를 받을 수 있다 —
+      구조적으로 순서가 보장된다. 🔴 그러나 이것은 **단일 프로세스 기동 순서**를 읽은
+      것이고, 데모처럼 **여러 서비스·여러 컨테이너**가 동시에 뜨는 상황에서 admin 의
+      리스너가 뜨기 전에 master-service 가 (시드 말고) **실제 쓰기 이벤트**를 이미
+      냈다가 admin 이 놓치는 경우는 이 산술이 안 덮는다 — 그 경우의 술어는 컨슈머
+      그룹 오프셋/lag 이고, AC-1 이 이미 «남은 런타임 술어» 로 열어 둔 항목과 같다.
+      🔴 **옛 스냅샷 행(admin_inventory_snapshot · admin_asn_summary 등)에 대한 백필은
+      추가하지 않았다** — 세 가지 근거: (1) **이 데모는 매 창마다 신선 볼륨이다**
+      (Edge Cases 표 3행, AMI 재굽기 = 볼륨 소멸) — 다음 창은 시드부터 다시 돌므로
+      이 티켓이 고친 뒤에는 애초에 «옛 null 행» 이 생길 수가 없다. (2) 오래 떠 있는
+      **로컬 dev 볼륨**에 이미 null 코드로 박힌 스냅샷 행이 있을 수는 있지만, 그
+      복구는 이미 이 저장소의 표준 처방(`docker compose down -v` 재기동, R__ 재적용)
+      으로 충분하고 비용이 낮다. (3) `V4__denormalise_warehouse_code.sql` 과 달리
+      이번 백필 대상(`admin_inventory_snapshot`·`admin_asn_summary` 의 *Code 컬럼)은
+      **운영 환경에는 필요가 없다** — 운영 master-service 의 쓰기는 outbox 를 거쳐
+      실제 이벤트를 내므로 운영 ref 테이블은 이미 정상적으로 채워진다(이 결함은
+      «시드가 outbox 를 우회한다» 는 **비운영 전용** 경로다). 백필 마이그레이션은
+      `db/migration` 에 있어야 버전 마이그레이션으로서 운영에도 적용되므로,
+      운영에는 불필요한 조인을 매 배포마다 얹는 대가를 치른다. ⇒ **추가하지 않는다.**
 
 ## AC-3 — 판정은 **화면**이다
 
@@ -157,11 +212,45 @@ master-ref **소비자 클래스가 하나도 없다**(있는 것은 `MasterRefC
 
 ## AC-4 — 이 부류가 다시 조용히 지나가지 않게
 
-- [ ] 🔴 **유닛/IT 가 왜 못 잡았는지 적어라** — 픽스처가 ref 행을 넣기 때문이다.
+- [x] 🔴 **유닛/IT 가 왜 못 잡았는지 적어라** — 픽스처가 ref 행을 넣기 때문이다.
       🔵 «픽스처가 현실을 안 담으면 초록도 공허하다» 가 이 저장소에 이미 있는 문장이고,
       이 건이 그 **새 사례**다.
-- [ ] 가드를 만들지 말지 **판단하고 이유를 적어라**. 🔴 `scripts/` 에 파일을 더하면
+      → **확인했다 — `InventoryProjectionServiceTest` 는 ref 리포지토리를 전부 Mockito
+      `@Mock` 으로 갈아 끼운다.** `warehouseRepo.findById(...)` 를 테스트가 직접
+      `Optional.of(new WarehouseRefEntity(...))` 로 «있음» 을, 또는
+      `Optional.empty()` 로 «없음» 을 **손으로 주입**한다 — 실제 Postgres 도, 실제
+      시드도, 실제 `MasterProjectionService` 도 이 테스트 경로에 없다. 🔵 이건 **틀린
+      테스트가 아니다**: `inventorySnapshot_warehouseCodeIsNull_whenRefNotProjectedYet`
+      은 오히려 «ref 가 없으면 null이어야 한다» 는 **옳은 동작을 정확히 고정**하고 있다
+      (AC-2 의 설계 의도와 정확히 일치 — 빈 문자열/UUID 문자열로 채우지 않는다).
+      🔴 **못 잡은 이유는 테스트가 틀려서가 아니라 층이 달라서다** — 이 스위트는
+      「join 로직이 옳은가」만 재고, 「join 이 읽을 데이터가 실제로 거기 있는가」
+      (= 시드가 실제 Postgres 에 행을 넣는가, `MasterProjectionConsumer` 가 실제
+      Kafka 에서 그 값을 받는가)는 **어떤 테스트도 안 잰다**. Mockito 목이 «ref 행이
+      있다» 는 세계를 매번 성립시켜 주므로, admin-service 의 진짜 ref 테이블이 5종
+      전부 0건이어도 이 스위트는 처음부터 끝까지 초록이었다.
+- [x] 가드를 만들지 말지 **판단하고 이유를 적어라**. 🔴 `scripts/` 에 파일을 더하면
       분모가 움직인다(전수 스윕 + 두 산문 집).
+      → **판단: 만들지 않는다.** 이유 셋:
+      (1) 이 결함이 잡히는 층은 정적 grep/스크립트가 아니라 **런타임 IT** 다 — 필요한
+      술어는 «`db/seed` 위치를 연 프로파일로 Flyway 를 돌리면 `admin_*_ref` 5종이
+      0건이 아니다» 이고, 이건 Testcontainers 로 실제 Postgres 를 띄워야 잴 수 있다
+      (이 호스트엔 Docker 가 없어 이 세션에서 직접 만들 수도, 돌릴 수도 없다 — AC-5
+      참고). 정적 스크립트로 흉내 내면 «시드 파일이 존재한다» 정도만 재는 가짜 가드가
+      된다(파일은 있는데 내용이 틀려도 통과).
+      (2) 정확히 이 모양의 세이프티넷이 이미 이 저장소에 있다 — `R__seed_dev_data.sql`
+      머리말이 인용하는 `DevSeedScopeIT`(admin 자신의 시드 위치 전환을 검증한 IT)가
+      같은 패턴이다. 재발 방지가 필요해지면 **그 옆에 `MasterRefDevSeedScopeIT` 류를
+      추가하는 것이 맞는 자리**이지 `scripts/` 가 아니다 — 다만 이 세션은 Docker 가
+      없어 그 IT 를 직접 쓰고 돌려 검증할 수 없으므로 **이번 창에서 만들지 않는다**
+      (만들어도 로컬에서 못 돌려 본 가드는 «만들었다» 와 «검증했다» 를 섞는다).
+      (3) `scripts/` 에 파일을 더하면 `check-ls-files-guard-count.sh` 가 읽는
+      분모가 움직여 **관련 없어 보이는 다른 가드**(Guard-count figure)가 빨개질 수
+      있다(`TASK-MONO-650` 실측 전례) — 이 티켓의 좁은 수정 하나를 위해 그 비용을
+      치를 근거가 없다.
+      ⇒ **후속 후보로만 남긴다**: 이 부류가 다시 조용히 지나가는 것을 막고 싶다면,
+      다음에 Docker 가 있는 세션에서 `MasterRefDevSeedScopeIT` 를 admin-service 에
+      추가하는 것을 권한다(새 티켓 기안은 이 창의 범위 밖).
 
 ---
 

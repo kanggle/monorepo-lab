@@ -4188,8 +4188,11 @@ awk '
     if ($0 ~ /<h2><a [^>]*data-surface/) title_surf++
     if ($0 ~ /href="https:\/\/[a-z]+\.hubwang\.com/) hardhref++
     if ($0 ~ /<dt>로그인 없이<\/dt>/) dt_pre++
-    if ($0 ~ /<dt>로그인 후<\/dt>/) dt_post++
-    if ($0 ~ /class="needs-boot"/) boot++
+    # 🔵 TASK-MONO-684 — 「기동이 먼저」 표시는 이제 **「로그인 후」 제목 안**에 있다
+    #    (`<dt>로그인 후 <span class="needs-boot">…</span></dt>`). 그래서 표시를 **그 줄에서만**
+    #    센다 — 카드 어디에나 있으면 되던 옛 술어는 표시가 다른 항목으로 옮겨가도 초록이었다.
+    if ($0 ~ /<dt>로그인 후(<\/dt>| <span class="needs-boot">)/) dt_post++
+    if ($0 ~ /<dt>로그인 후 <span class="needs-boot">/) boot++
     if ($0 ~ /data-shots/) shots++
   }
 ' "$z35_site" > "$z35_cards"
