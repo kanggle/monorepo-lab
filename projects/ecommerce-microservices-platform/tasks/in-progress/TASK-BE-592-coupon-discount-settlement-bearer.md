@@ -94,6 +94,26 @@ If any section is missing or incomplete, this task must not be implemented.
 
 🔵 스냅샷 레코드(`OrderSnapshot`)에 할인 필드 자체가 없어서, 할인은 이 서비스에 **들어올 길이 없다** — 위 테스트가 할인을 어디에도 넘기지 않는 것은 넘길 자리가 없기 때문이다. 위 표의 사실 2·3 은 측정으로 확인됐다.
 
+### 구현 후 로컬 검증 (2026-09-15 UTC)
+
+| 무엇 | 결과 |
+|---|---|
+| `./gradlew :…:settlement-service:test` (unit · slice, `integration` 태그 제외) | `BUILD SUCCESSFUL`. 결과 XML 26 파일 · **164 tests · failures+errors 0** |
+| 새 테스트 실행 확인 | `SettlementCouponDiscountTest` 9 · `PromotionCostTest` 4 · `OrderPlacedSnapshotConsumerDiscountTest` 3 — 전부 실패 0 |
+| 기존 테스트 무수정 통과 | `SettlementServiceTest` 9 · `SettlementConsumersTest` 10 (쿠폰 없는 경로 = 변경 전 숫자) |
+
+같은 주문 모양(30,000 @10%, 할인 5,000, 결제 25,000)에서 AC-0 표와 비교한 수정 후 숫자:
+
+| 경우 | 수정 전 | 수정 후 |
+|---|---|---|
+| 캡처 | commission 3,000 · net 27,000 · 할인 기록 없음 | commission 3,000 · net 27,000 (그대로) + `promotion_cost` COST 5,000 → `Σgross − 비용 = 25,000` |
+| 부분 환불 10,000 | gross −10,000 (분모 30,000) | gross −12,000 · commission −1,200 · net −10,800 + 비용 −2,000 → 되돌린 돈 12,000 − 2,000 = 10,000 |
+| 이어서 완전 환불 15,000 | 잔여 전액, 합 0 | gross −18,000 · 비용 −3,000, **두 원장 모두 합 0** |
+
+**미측정 (로컬 불가):** `SettlementPromotionCostIntegrationTest`(V7 마이그레이션·`ck_promotion_cost_sign`·JPA 매핑을 실제 Postgres 로) — 로컬 Docker 차단, CI ecommerce integration lane 이 권위. 컴파일은 위 `test` 태스크에서 통과.
+
+🔵 기준 특성 테스트 `SettlementCouponDiscountBaselineTest` 는 AC-0 증거 커밋(`dd3048b96`)에 남기고 구현 커밋에서 지운다 — 수정 후에도 초록이지만(스냅샷에 할인이 없으면 숫자가 같다) 이름이 «수정 전 측정» 이라 남기면 오해를 부른다. 같은 모양의 수정 후 기대값은 `SettlementCouponDiscountTest` 가 갖는다.
+
 ---
 
 # Scope
