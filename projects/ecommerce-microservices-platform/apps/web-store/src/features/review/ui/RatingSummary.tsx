@@ -1,10 +1,16 @@
-'use client';
-
-import { useReviewSummary } from '../model/use-review-summary';
-import { Skeleton } from '@/shared/ui/Skeleton';
+/** 평점 요약에 필요한 값 — 저장본 `PublicReviewSummary` 와 백엔드 `ReviewSummary` 둘 다 이 모양을 만족한다. */
+export interface RatingSummaryData {
+  averageRating: number;
+  totalReviews: number;
+  ratingDistribution: Record<string, number>;
+}
 
 interface RatingSummaryProps {
-  productId: string;
+  /**
+   * 🔴 서버가 **저장본에서** 계산해 넘긴다(ADR-MONO-075 D3). 이 컴포넌트는 백엔드를 부르지 않는다 —
+   *    예전 판은 `useReviewSummary` 로 게이트웨이를 불러서 데모가 꺼진 동안 요약이 사라졌다.
+   */
+  summary: RatingSummaryData;
 }
 
 const RATING_LABELS: Record<number, string> = {
@@ -15,33 +21,18 @@ const RATING_LABELS: Record<number, string> = {
   1: '1점',
 };
 
-export function RatingSummary({ productId }: RatingSummaryProps) {
-  const { data, isLoading, isError } = useReviewSummary(productId);
-
-  if (isLoading) {
-    return (
-      <div style={{ padding: 'var(--space-4)' }}>
-        <Skeleton width="120px" height="32px" />
-        <div style={{ marginTop: 'var(--space-3)', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} width="100%" height="16px" />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (isError || !data) {
+export function RatingSummary({ summary }: RatingSummaryProps) {
+  // 🔵 리뷰가 0개면 요약을 그리지 않는다 — «0.0 / 5.0» 은 «평점이 0점» 으로 읽힌다.
+  //    «아직 리뷰가 없습니다» 는 목록 쪽 빈 상태가 말한다.
+  if (summary.totalReviews === 0) {
     return null;
   }
 
-  const maxCount = Math.max(
-    ...Object.values(data.ratingDistribution),
-    1,
-  );
+  const maxCount = Math.max(...Object.values(summary.ratingDistribution), 1);
 
   return (
     <div
+      data-testid="rating-summary"
       style={{
         padding: 'var(--space-6)',
         background: 'var(--color-bg-secondary, #f9fafb)',
@@ -56,10 +47,10 @@ export function RatingSummary({ productId }: RatingSummaryProps) {
             fontWeight: 'var(--font-weight-bold)',
           }}
         >
-          {data.averageRating.toFixed(1)}
+          {summary.averageRating.toFixed(1)}
         </span>
         <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
-          / 5.0 ({data.totalReviews}개 리뷰)
+          / 5.0 ({summary.totalReviews}개 리뷰)
         </span>
       </div>
 
@@ -72,7 +63,7 @@ export function RatingSummary({ productId }: RatingSummaryProps) {
         }}
       >
         {[5, 4, 3, 2, 1].map((rating) => {
-          const count = data.ratingDistribution[String(rating)] ?? 0;
+          const count = summary.ratingDistribution[String(rating)] ?? 0;
           const percentage = maxCount > 0 ? (count / maxCount) * 100 : 0;
 
           return (
