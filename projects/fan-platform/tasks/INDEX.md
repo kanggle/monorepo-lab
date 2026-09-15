@@ -74,11 +74,10 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-- `TASK-FAN-FE-022-the-feed-card-opens-only-from-a-small-text-link.md` — 🔵 **피드 카드 어디를 눌러도 상세로** (IN-PROGRESS, 2026-09-15 착수 — 선행 `TASK-MONO-679` 가 #3818 `2c3c494b0` 로 머지된 뒤). 공개 카드 + 회원 카드에 **stretched link**(`shared/ui/cardLink.ts` 한 곳): 상세 `<a>` 하나의 `::after` 를 카드 전체로, 🔴 **덮개에 `z-[1]`** — 사진 틀(`PostImage`)이 `relative` 라 안 올리면 사진을 눌러도 상세로 안 간다(설계 중 발견) · 아티스트 배지·「멤버십 안내 보기」는 `z-10` 으로 그 위. 잠긴 회원 카드(`title: null`)는 화면에 안 보이는 링크 이름. 「자세히 보기 →」 제거. 분석=Opus 5 / 구현=Opus 5.
 
 ## review
 
-(empty)
+- `TASK-FAN-FE-022-the-feed-card-opens-only-from-a-small-text-link.md` — 🟢 **피드 카드 어디를 눌러도 상세로 · ⚪ 1(라이브 실제 클릭)** (REVIEW, 2026-09-15). 공개 카드 + 회원 카드의 「자세히 보기 →」 를 없애고 **stretched link** 하나로(`shared/ui/cardLink.ts` 한 곳). 🔴 카드를 통째로 `<Link>` 로 감싸지 않았다(카드 안 링크가 중첩 `<a>` 가 된다) · 🔴🔴 **설계 중 발견: 사진 틀(`PostImage`)이 `relative` 라 z-index 없는 덮개로는 사진을 눌러도 상세로 안 간다** ⇒ 덮개 `z-[1]`, 아티스트 배지·「멤버십 안내 보기」 `z-10`. 잠긴 회원 카드(`title: null`)도 이름 있는 링크(«멤버십이 필요한 포스트»). 게이트: tsc · lint(경고 0) · vitest **284/284** · `next build` 전부 rc=0. 🔴 jsdom 은 늘린 클릭 영역·z-index 를 못 잰다 ⇒ **사진 클릭 → 상세 · 배지 → 아티스트 · 멤버십 버튼 → `/membership` 을 라이브 헤드리스로 재는 것이 진짜 판정**(close chore). 분석=Opus 5 / 구현=Opus 5.
 
 
 
