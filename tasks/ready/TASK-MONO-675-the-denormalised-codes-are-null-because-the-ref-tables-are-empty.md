@@ -92,7 +92,8 @@ warehouseCode       = warehouseRepo.findById(warehouseId)…
 master-ref **소비자 클래스가 하나도 없다**(있는 것은 `MasterRefController` 뿐 = **읽기만**).
 🔵 그러나 **이것도 가설이다.** admin-service 가 다른 이름으로 채울 수도 있다.
 
-**Out of scope**: scm 조달의 공급사 UUID(같은 부류지만 다른 서비스 — `TASK-MONO-676` 참조) ·
+**Out of scope**: scm 조달의 공급사 UUID(기전이 다르다 — `TASK-MONO-677`. 🔴 처음엔 여기서 `676` 을
+가리켰는데 676 은 그 칸을 다루지 않는다 — 2026-09-15 정정) ·
 콘솔 표시 로직(결백하다) · 659 의 비정규화 자체(코드는 옳다).
 
 ---
