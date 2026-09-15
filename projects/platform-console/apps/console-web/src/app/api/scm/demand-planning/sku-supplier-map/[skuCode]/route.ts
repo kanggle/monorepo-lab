@@ -16,8 +16,11 @@ export const runtime = 'nodejs';
  *
  * The domain-facing IAM OIDC token is attached server-side in the seed client
  * (NOT the operator token — § 2.4.6.2). NO `Idempotency-Key`, NO
- * `X-Operator-Reason`. `supplierId` is free-text/uuid (no supplier master in
- * v1). A producer `404 MAPPING_NOT_FOUND` is surfaced as a typed
+ * `X-Operator-Reason`. `supplierId` is free-text, shape-validated only. A
+ * procurement supplier master DOES exist (TASK-SCM-BE-059 / ADR-SCM-001), but
+ * demand-planning does not resolve against it; per ADR-MONO-050 D9 this value is
+ * the supplier CODE that reaches wms (TASK-MONO-677 corrected the former "no
+ * supplier master in v1"). A producer `404 MAPPING_NOT_FOUND` is surfaced as a typed
  * `{ found: false }` 200 — "not configured yet → create", NOT a 404 error toast.
  */
 export async function GET(

@@ -104,7 +104,7 @@ class PurchaseOrderControllerSliceTest {
     private PurchaseOrderView draftView() {
         Instant now = Instant.now();
         return new PurchaseOrderView(
-                "po-001", "scm", "PO-0001", "sup-001", "buyer-001",
+                "po-001", "scm", "PO-0001", "sup-001", null, null, "buyer-001",
                 PoStatus.DRAFT, PoOrigin.OPERATOR, null, BigDecimal.TEN, "USD",
                 null, null, null, null, now, now,
                 List.of(new PurchaseOrderView.LineView(
@@ -116,7 +116,7 @@ class PurchaseOrderControllerSliceTest {
     private PurchaseOrderView fromSuggestionView() {
         Instant now = Instant.now();
         return new PurchaseOrderView(
-                "po-dp-001", "scm", "PO-DP01", "sup-001", "operator-001",
+                "po-dp-001", "scm", "PO-DP01", "sup-001", null, null, "operator-001",
                 PoStatus.DRAFT, PoOrigin.DEMAND_PLANNING, "0192cccc-0000-0000-0000-000000000001",
                 BigDecimal.ZERO, "KRW",
                 null, null, null, null, now, now,
@@ -129,7 +129,7 @@ class PurchaseOrderControllerSliceTest {
     private PurchaseOrderView submittedView() {
         Instant now = Instant.now();
         return new PurchaseOrderView(
-                "po-001", "scm", "PO-0001", "sup-001", "buyer-001",
+                "po-001", "scm", "PO-0001", "sup-001", null, null, "buyer-001",
                 PoStatus.SUBMITTED, PoOrigin.OPERATOR, null, BigDecimal.TEN, "USD",
                 now, null, null, null, now, now, List.of()
         );
@@ -138,7 +138,7 @@ class PurchaseOrderControllerSliceTest {
     private PurchaseOrderView canceledView() {
         Instant now = Instant.now();
         return new PurchaseOrderView(
-                "po-001", "scm", "PO-0001", "sup-001", "buyer-001",
+                "po-001", "scm", "PO-0001", "sup-001", null, null, "buyer-001",
                 PoStatus.CANCELED, PoOrigin.OPERATOR, null, BigDecimal.TEN, "USD",
                 null, null, null, now, now, now, List.of()
         );
@@ -302,6 +302,51 @@ class PurchaseOrderControllerSliceTest {
                         .value(org.hamcrest.Matchers.instanceOf(String.class)))
                 .andExpect(jsonPath("$.data.content[0].lines[0].unitPrice")
                         .value(org.hamcrest.Matchers.instanceOf(String.class)));
+    }
+
+    // ---- TASK-MONO-677: supplier reference fields on PurchaseOrderResponse ----
+
+    private PurchaseOrderView viewWithSupplier(String supplierCode, String supplierName) {
+        Instant now = Instant.now();
+        return new PurchaseOrderView(
+                "po-001", "scm", "PO-0001", "01a09478-5c1e-7d2a-9b3f-4e6a8c0d2f11",
+                supplierCode, supplierName, "buyer-001",
+                PoStatus.DRAFT, PoOrigin.OPERATOR, null, BigDecimal.TEN, "USD",
+                null, null, null, null, now, now, List.of());
+    }
+
+    @Test
+    @DisplayName("GET /po/{poId} — supplierCode/supplierName serialised next to the unchanged supplierId (TASK-MONO-677)")
+    void getCarriesSupplierReference() throws Exception {
+        when(service.get(eq("po-001"), any(ActorContext.class)))
+                .thenReturn(viewWithSupplier("SUP-DEMO-01", "demo supplier"));
+
+        mockMvc.perform(get(BASE_URL + "/po-001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.supplierId").value("01a09478-5c1e-7d2a-9b3f-4e6a8c0d2f11"))
+                .andExpect(jsonPath("$.data.supplierCode").value("SUP-DEMO-01"))
+                .andExpect(jsonPath("$.data.supplierName").value("demo supplier"));
+    }
+
+    @Test
+    @DisplayName("GET /po — an unresolved supplier serialises BOTH fields as explicit JSON null, never \"\" (TASK-MONO-677)")
+    void searchUnresolvedSupplierIsExplicitNull() throws Exception {
+        com.example.common.page.PageResult<PurchaseOrderView> pageResult =
+                new com.example.common.page.PageResult<>(List.of(viewWithSupplier(null, null)), 0, 20, 1L, 1);
+        when(service.search(any(ActorContext.class), isNull(), isNull(), any())).thenReturn(pageResult);
+
+        String body = mockMvc.perform(get(BASE_URL))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].supplierCode").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.data.content[0].supplierName").value(org.hamcrest.Matchers.nullValue()))
+                .andReturn().getResponse().getContentAsString();
+
+        // Present-and-null, not omitted: the console distinguishes neither, but the
+        // contract says the field exists on every PurchaseOrderResponse.
+        org.assertj.core.api.Assertions.assertThat(body)
+                .contains("\"supplierCode\":null")
+                .contains("\"supplierName\":null")
+                .doesNotContain("\"supplierCode\":\"\"");
     }
 
     @Test

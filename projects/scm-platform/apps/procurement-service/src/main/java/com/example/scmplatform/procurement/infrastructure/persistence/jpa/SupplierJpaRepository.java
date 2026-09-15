@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 public interface SupplierJpaRepository extends JpaRepository<Supplier, String> {
@@ -15,6 +17,10 @@ public interface SupplierJpaRepository extends JpaRepository<Supplier, String> {
     Optional<Supplier> findByIdAndTenantId(String id, String tenantId);
 
     Optional<Supplier> findByCodeAndTenantId(String code, String tenantId);
+
+    List<Supplier> findByTenantIdAndIdIn(String tenantId, Collection<String> ids);
+
+    List<Supplier> findByTenantIdAndCodeIn(String tenantId, Collection<String> codes);
 
     @Query("""
             SELECT s FROM Supplier s

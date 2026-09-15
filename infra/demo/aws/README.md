@@ -15,6 +15,8 @@ infra/demo/aws/
 ├── packer/demo-ami.pkr.hcl   ← 도커 + 저장소 + 프리빌드 이미지 + systemd 유닛을 구운 AMI
 ├── terraform/                ← EC2 + API Gateway + Lambda + IAM + SG
 │   ├── lambda/handler.py     ← /start /stop /status /heartbeat + 유휴정지 + 월 예산 가드
+│   │                            (`/status` = state · ip · used_minutes · budget_minutes ·
+│   │                             selection_ready — 마지막 칸의 계약은 ADR-MONO-071 § D5.1)
 │   └── terraform.tfvars.example
 ├── tests/test_handler.py     ← Lambda 단위 테스트 11건 (예산 가드 포함)
 └── site/index.html           ← 정적 "Start Demo" 페이지

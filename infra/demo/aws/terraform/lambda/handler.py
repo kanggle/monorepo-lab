@@ -673,6 +673,52 @@ def stop():
     return _resp({"state": "stopping", "message": "종료 요청됨"})
 
 
+def _selection_ready(state):
+    """`/status` 의 `selection_ready` — **저장된 선택의 묶음이 전부 `ready` 인가** (TASK-MONO-668).
+
+    True / False / None 세 값이고, 🔴 **None 은 «모른다» 이지 «아니다» 가 아니다.**
+
+      True  — 인스턴스 running · 헬스 신선 · 선택 비어 있지 않음 · 선택 묶음 **전부** `ready`
+      False — 위와 같은데 선택 묶음 중 하나라도 `ready` 가 아니다 ⇒ 「켜지는 중」
+      None  — 판정 불가: 인스턴스가 running 이 아니다(그 사실은 `state` 가 이미 말한다) ·
+              헬스가 stale · 선택이 비었다(부팅 폴백이 무엇을 띄웠는지 여기서 모른다) ·
+              어느 묶음이 `unknown` · 읽기 자체가 실패했다
+
+    🔴🔴 **왜 None 을 False 로 뭉치지 않는가** — 해석기는 False 만 「켜지는 중」으로 번역하고
+       None 은 **기존 동작**(running)으로 둔다. stale 을 False 로 내면 발행자가 죽은 멀쩡한
+       스택이 영구히 「켜지는 중」이 되고, True 로 내면 꺼진 스택을 「준비됨」으로 그린다
+       (MONO-551 결함 B). 판정 불가를 어느 쪽으로도 번역하지 않는 것이 이 저장소의 규칙이다.
+
+    🔴 **판정은 `_bundle_state()` 를 그대로 쓴다** — `/bundles` 와 같은 함수다. 여기서 «ready»
+       를 따로 계산하면 같은 사실이 두 집을 갖고, 론처 카드가 `booting` 인데 앱은 준비됐다고
+       말하는 날이 온다.
+
+    🔴 **«전부» 는 선택된 묶음 전부다**(소유자 결정 ⓑ, 2026-09-15). 그 앱이 쓰는 묶음만 보려면
+       해석기가 «내 묶음 이름» 을 알아야 하고 그것은 `ADR-MONO-068` 재개봉이다. 대가로, 자기
+       묶음이 ready 여도 **다른 선택 묶음이 booting 이면 False** 다 — 보수 쪽 오차로 수용했다.
+    """
+    if state != "running":
+        return None
+    # 🔴 `/status` 는 론처와 세 앱의 해석기가 부르는 **가장 중요한 엔드포인트**다. 준비 여부를
+    #    얹느라 SSM 읽기가 둘 늘었고, 그 읽기가 스로틀·권한 오류로 던지면 `/status` 전체가
+    #    500 이 되어 해석기가 「꺼짐」 배너를 낸다. 덧붙인 필드가 본체를 죽이면 안 되므로
+    #    여기서 삼키고 None(판정 불가)으로 떨어뜨린다.
+    try:
+        selected = _read_selection()
+        if not selected:
+            return None
+        snap, published_at = _parse_health(_get(HEALTH_PARAM))
+        age = None if published_at is None else max(0, _now() - published_at)
+        if age is None or age > HEALTH_STALE_AFTER_SECONDS:
+            return None
+        states = [_bundle_state(n, state, snap, False, selected) for n in sorted(selected)]
+    except Exception:  # noqa: BLE001 — 이유는 위 주석
+        return None
+    if any(st == "unknown" for st in states):
+        return None
+    return all(st == "ready" for st in states)
+
+
 def status():
     state, ip, _ = _state()
     u = _usage()
@@ -682,6 +728,9 @@ def status():
             "ip": ip,
             "used_minutes": u["seconds"] // 60,
             "budget_minutes": BUDGET_MINUTES,
+            # 🔴 TASK-MONO-668 — 인스턴스 running ≠ 선택한 화면이 대답한다. § _selection_ready.
+            #    **추가 필드**다: 옛 해석기는 모르는 키를 무시하므로 배포 순서가 자유롭다.
+            "selection_ready": _selection_ready(state),
         }
     )
 

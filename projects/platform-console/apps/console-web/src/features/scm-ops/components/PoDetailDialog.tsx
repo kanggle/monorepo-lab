@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef } from 'react';
 import { CloseButton } from '@/shared/ui/CloseButton';
+import { masterRefLabel } from '@/shared/lib/master-ref-label';
 import type { PurchaseOrder } from '../api/types';
 
 /**
@@ -98,8 +99,33 @@ export function PoDetailDialog({ open, po, onClose }: PoDetailDialogProps) {
             </dd>
           </div>
           <div>
+            <dt className="text-muted-foreground">공급사</dt>
+            <dd
+              className="text-foreground"
+              data-master-ref="po.supplierId"
+              data-testid="scm-po-supplier"
+              title={po.supplierId ?? undefined}
+            >
+              {masterRefLabel(po.supplierId, {
+                code: po.supplierCode,
+                name: po.supplierName,
+              })}
+            </dd>
+          </div>
+          {/* 🔴 TASK-MONO-677 § 제외 — this row is the stored `supplierId` ITSELF,
+              labelled as an ID. It is secondary (the row above carries the name)
+              and it is the only place the screen shows the exact value the
+              「공급사 ID」 filter matches on, so it keeps the raw value and has NO
+              `data-master-ref` marker (outside the guard's population — same
+              reasoning as the ASN/order-number exclusion in TASK-PC-FE-281). */}
+          <div>
             <dt className="text-muted-foreground">공급사 ID</dt>
-            <dd className="text-foreground">{po.supplierId ?? '—'}</dd>
+            <dd
+              className="font-mono text-xs text-muted-foreground"
+              data-testid="scm-po-supplier-id"
+            >
+              {po.supplierId ?? '—'}
+            </dd>
           </div>
           <div>
             <dt className="text-muted-foreground">총액</dt>
