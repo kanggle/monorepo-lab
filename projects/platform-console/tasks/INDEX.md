@@ -123,9 +123,11 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## in-progress
 
-- `TASK-PC-FE-282-anonymous-visitors-enter-the-real-console-and-the-gateways-answer-with-samples.md` — 🔴🔴 **기반** (`ADR-MONO-074` 실행 1/8, 착수 2026-09-15). 판정(액세스·운영자 쿠키 둘 다 없음) · 게이트웨이 코어 6 + 코어 밖 `fetch` 전부의 샘플 분기(토큰 조회 **전**) · 셸 익명판(heartbeat·백엔드 공지 미렌더) · 배너 · 루트 `/` → 개요 · 원장 · 가드 셋(샘플 라우터 금지 임포트 · 코어 밖 fetch 금지 · «(샘플)» 규칙) · 대시보드 픽스처. 🔴 `(console)` 가드의 의미가 «못 들어온다» → «들어오지만 백엔드에 못 닿는다» 로 바뀐다. 🔴 코어 넷이 403 메시지를 덮어써서 거부 문구는 **코드 `SAMPLE_READ_ONLY` → 문구** 매핑. 분석=Opus 5 / 구현=Opus 5.
+(empty)
 
 ## review
+
+- `TASK-PC-FE-282-anonymous-visitors-enter-the-real-console-and-the-gateways-answer-with-samples.md` — 🟡 **구현 완료 → review** (`ADR-MONO-074` 실행 1/8, 2026-09-15). 익명 방문자가 실제 `(console)` 셸에 들어오고 게이트웨이 코어 6 + 코어 밖 백엔드 호출 5곳이 **토큰 조회 전에** 샘플 라우터로 답한다(조정자가 10개 파일 전부에서 `sampleGate(` < 토큰 < `fetch(` 순서를 따로 쟀다). 루트 `/` → 개요, 셸 익명판(로그인 링크 · 샘플 배너 · heartbeat/백엔드 공지 미렌더), 쓰기 `SAMPLE_READ_ONLY` · 준비 중 `SAMPLE_NOT_READY` 문구는 코드→문구 매핑 한 곳, 대시보드 픽스처 ready. 가드: 금지 임포트 · fetch 허용목록+순서 · «(샘플)» 규칙 양방향 · 원장↔소스 양방향 — bite 6. 로컬: lint rc=0 · tsc rc=0 · vitest **292/3031 → 301/3161** 실패 0(조정자 재실행 301 files 일치) · build rc=0 · smoke **18 passed**. 🔴 **D8**: 빈 쿠키 병으로 «세션 없음 → 401» 을 재던 **51 파일 / 70 셀**이 A1 로 샘플이 되어, 반쪽 세션(운영자 쿠키만)을 심도록 바꿨다 — `expect(` 추가 0 · 삭제 0(조정자 diff 실측). ⚪ AC-14 전환 e2e 는 머지 후 첫 nightly 가 첫 측정. 분석=Opus 5 / 구현=Opus 5.
 
 
 
