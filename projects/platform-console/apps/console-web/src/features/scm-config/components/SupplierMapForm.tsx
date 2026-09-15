@@ -13,9 +13,10 @@ import { SeedTextField } from './SeedTextField';
  * (TASK-PC-FE-080 / § 2.4.6.2). This is the operational fix-path for FE-077's
  * `SKU_SUPPLIER_UNMAPPED` — adding the mapping here lets the operator return to
  * 보충 and approve. 404 = "not configured yet → create" (NOT an error toast);
- * PUT is confirm-gated, full-row, idempotent. `supplierId` is FREE-TEXT/uuid (no
- * supplier master in v1 — validate shape only). Edits affect FUTURE evaluation
- * only.
+ * PUT is confirm-gated, full-row, idempotent. `supplierId` is FREE-TEXT, validated
+ * for shape only — per ADR-MONO-050 D9 it is the procurement supplier master's
+ * CODE (that master exists since TASK-SCM-BE-059; demand-planning does not
+ * resolve against it — TASK-MONO-677). Edits affect FUTURE evaluation only.
  *
  * The form-model (field state, per-SKU hydration, validation, confirm-gated
  * upsert) lives in {@link useSupplierMapForm}; the loading/forbidden/rate-limited/

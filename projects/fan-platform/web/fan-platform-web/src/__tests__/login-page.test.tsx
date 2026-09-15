@@ -98,6 +98,43 @@ describe('/login — 데모가 꺼져 있을 때 (AC-2 / AC-3)', () => {
   });
 });
 
+describe('/login — 데모가 켜지는 중일 때 (TASK-MONO-668)', () => {
+  beforeEach(() => {
+    process.env.DEMO_API_BASE = 'https://control.example';
+    stubStatus({ state: 'running', ip: '13.125.1.2', selection_ready: false });
+  });
+
+  it('🔴 «켜지는 중» 문구를 낸다 — «꺼져 있어» 문구가 아니다', async () => {
+    await renderLogin();
+
+    const notice = screen.getByTestId('login-demo-starting');
+    expect(notice).toHaveTextContent('데모 서버가 켜지는 중입니다');
+    expect(screen.queryByTestId('login-demo-off')).toBeNull();
+    // 🔴 꺼진 동안의 문장(«다시 시도해도 같은 결과»)은 여기서 **거짓**이다 — 준비되면 된다.
+    expect(notice.textContent).not.toContain('같은 결과');
+  });
+
+  it('🔴 로그인 폼은 **막지 않는다** — 판정이 «선택 전부» 라 IdP 는 이미 준비됐을 수 있다', async () => {
+    await renderLogin();
+    expectPageStillRendered();
+  });
+
+  it('🔴 켜지는 중의 `Configuration` 에 «관리자에게 문의» 를 붙이지 않는다 — 코드 문구보다 먼저 온다', async () => {
+    await renderLogin({ error: 'Configuration' });
+
+    expect(screen.getByTestId('login-demo-starting')).toBeInTheDocument();
+    expect(screen.queryByTestId('login-error')).toBeNull();
+  });
+
+  it('🔵 대조군 — 같은 `Configuration` 이라도 준비가 끝났으면(selection_ready=true) 설정 결함 문구', async () => {
+    stubStatus({ state: 'running', ip: '13.125.1.2', selection_ready: true });
+    await renderLogin({ error: 'Configuration' });
+
+    expect(screen.queryByTestId('login-demo-starting')).toBeNull();
+    expect(screen.getByTestId('login-error')).toHaveTextContent('IAM 인증 서버에 연결할 수 없습니다');
+  });
+});
+
 describe('/login — 코드별 문구와 fallback (AC-1)', () => {
   // 🔵 아래 칸들은 전부 데모가 **켜져 있는** 상태다. 그래야 코드 분기가 도달된다.
   beforeEach(() => {

@@ -70,6 +70,9 @@ import { OutboundDrillLines } from '@/features/wms-outbound-ops/components/Outbo
 import { WmsInventoryDataTable } from '@/features/wms-ops/components/WmsInventoryDataTable';
 import { OrgAdminPanel } from '@/features/org-hierarchy/components/OrgAdminPanel';
 import { OrgScopeDialogBody } from '@/features/operators/components/OrgScopeDialogBody';
+// TASK-MONO-677 이 더한 두 칸 — scm 발주의 「공급사」(목록 · 상세).
+import { ScmPoTable } from '@/features/scm-ops/components/ScmPoTable';
+import { PoDetailDialog } from '@/features/scm-ops/components/PoDetailDialog';
 import {
   codeName,
   masterRefLabel,
@@ -717,6 +720,107 @@ describe('org-admin 행의 운영자 칸 (TASK-MONO-670)', () => {
     expect(UUID_RE.test(OA_GHOST)).toBe(true);
     // 🔵 원본 id 는 사라지지 않았다 — `title` 로 옮겼을 뿐이다.
     expect(refCells(container).map((el) => el.getAttribute('title'))).toContain(OA_OP);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TASK-MONO-677 — scm 발주의 「공급사」 칸 (목록 + 상세).
+//
+// 🔴 `TASK-MONO-659` 가 «다른 부류» 로 남겼던 자리다 — 읽을 이름이 화면에 도착하지 않았다.
+//    procurement-service 가 `supplierCode`·`supplierName` 을 싣게 되어(같은 테넌트, id 먼저
+//    그다음 code) 여기서 고칠 수 있게 됐다 ⇒ **하한이 늘어난다**(목록 5 + 상세 1).
+// 🔴 픽스처의 supplierId 는 데모 화면에서 본 모양(UUID)이고, DEMAND_PLANNING 발 발주처럼
+//    **코드가 supplierId 칸에 든 행**도 넣었다(같은 칸이 경로마다 다른 값을 싣는다).
+// ---------------------------------------------------------------------------
+
+const PO_SUP = '01a09478-5c1e-7d2a-9b3f-4e6a8c0d2f11';
+const PO_SUP_GHOST = '01a09478-5c1e-7d2a-9b3f-4e6a8c0d2fff';
+
+function scmPoRows() {
+  return [
+    // 해석됨 — id 로 풀림(운영자·시드 발주)
+    { id: 'po-1', poNumber: 'PO-0001', supplierId: PO_SUP, supplierCode: 'SUP-DEMO-01',
+      supplierName: 'demo supplier', status: 'DRAFT' },
+    // 해석됨 — code 로 풀림(DEMAND_PLANNING 발 발주는 supplierId 칸에 코드를 싣는다)
+    { id: 'po-2', poNumber: 'PO-0002', supplierId: 'SUP-DEMO-01', supplierCode: 'SUP-DEMO-01',
+      supplierName: 'demo supplier', status: 'DRAFT' },
+    // 🔴 미해석 — 생산자가 못 찾았다(null). 여기서 UUID 가 보이면 이 티켓의 결함이 살아 있다.
+    { id: 'po-3', poNumber: 'PO-0003', supplierId: PO_SUP_GHOST, supplierCode: null,
+      supplierName: null, status: 'SUBMITTED' },
+    // 🔴 필드 없음 — 두 필드를 싣기 전의 생산자. 역시 `이름 확인 불가` 이고 UUID 가 아니다.
+    { id: 'po-4', poNumber: 'PO-0004', supplierId: PO_SUP_GHOST, status: 'SUBMITTED' },
+    // 참조 없음 → `—`
+    { id: 'po-5', poNumber: 'PO-0005', status: 'DRAFT' },
+  ];
+}
+
+function renderScmPoTable() {
+  return render(
+    <ScmPoTable
+      statusFid="s"
+      supplierFid="f"
+      filters={{ status: '', supplierId: '' } as never}
+      onFiltersChange={vi.fn()}
+      onSubmit={vi.fn()}
+      forbidden={false}
+      rateLimited={false}
+      degraded={false}
+      data={{ content: scmPoRows(), page: 0, size: 20, totalElements: 5, totalPages: 1 } as never}
+      query={{ page: 0 } as never}
+      onDetail={vi.fn()}
+      onPrevPage={vi.fn()}
+      onNextPage={vi.fn()}
+    />,
+    { wrapper: wrapper() },
+  );
+}
+
+function renderPoDetail(row: number) {
+  return render(
+    <PoDetailDialog open po={scmPoRows()[row] as never} onClose={vi.fn()} />,
+    { wrapper: wrapper() },
+  );
+}
+
+describe('scm 발주의 공급사 칸 (TASK-MONO-677)', () => {
+  it('발주 목록 — id 로도 code 로도 풀린 칸이 이름을 그리고, UUID 로 안 돌아간다', () => {
+    const { container } = renderScmPoTable();
+    // 5행 × 1칸 ⇒ 하한은 실제 수 5.
+    assertNoUuidInRefCells(container, 5, 'scm 발주 목록');
+    const cells = refCells(container).map((el) => (el.textContent ?? '').trim());
+    expect(cells.filter((c) => c === 'SUP-DEMO-01 · demo supplier').length).toBe(2);
+    // 미해석(null) + 필드 없음 — 둘 다 `이름 확인 불가`
+    expect(cells.filter((c) => c === MASTER_REF_UNRESOLVED).length).toBe(2);
+    expect(cells).toContain(MASTER_REF_NONE);
+  });
+
+  it('🔴 대조군 — 미해석 행의 id 는 여전히 UUID 이고, 그 원본은 `title` 에만 있다', () => {
+    const { container } = renderScmPoTable();
+    expect(UUID_RE.test(PO_SUP_GHOST)).toBe(true);
+    const titles = refCells(container).map((el) => el.getAttribute('title'));
+    expect(titles).toContain(PO_SUP);
+    expect(titles).toContain(PO_SUP_GHOST);
+  });
+
+  it('발주 상세 — 「공급사」 칸이 이름을 그린다', () => {
+    const { container } = renderPoDetail(0);
+    assertNoUuidInRefCells(container, 1, 'scm 발주 상세');
+    const cells = refCells(container).map((el) => (el.textContent ?? '').trim());
+    expect(cells).toEqual(['SUP-DEMO-01 · demo supplier']);
+  });
+
+  it('🔴 제외 — 상세의 「공급사 ID」 줄은 저장값 자체라 모집단 밖이다', () => {
+    const { container } = renderPoDetail(2);
+    const idRow = screen.getByTestId('scm-po-supplier-id');
+    // (1) 그 UUID 가 화면에 실제로 있다 — 이 대조군은 공허하지 않다.
+    expect((idRow.textContent ?? '').trim()).toBe(PO_SUP_GHOST);
+    // (2) 그런데 마커가 없다 ⇒ 필터가 매칭하는 원본값을 보여 주는 줄은 가드가 안 문다.
+    expect(idRow.hasAttribute('data-master-ref')).toBe(false);
+    // (3) 모집단(「공급사」 칸)은 UUID 0건이고 `이름 확인 불가` 다.
+    assertNoUuidInRefCells(container, 1, 'scm 발주 상세(미해석)');
+    expect((screen.getByTestId('scm-po-supplier').textContent ?? '').trim()).toBe(
+      MASTER_REF_UNRESOLVED,
+    );
   });
 });
 

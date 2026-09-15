@@ -35,7 +35,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -123,7 +128,9 @@ public class PurchaseOrderApplicationService {
                 saved.getTenantId(), AGGREGATE_PO, saved.getId(), "DRAFT",
                 actor.accountId(), actor.actorType(), null, null));
 
-        return PurchaseOrderView.from(saved);
+        // The supplier was just resolved by id in this tenant (the draft guard above),
+        // which is exactly what the id-first rule would find — no second lookup.
+        return PurchaseOrderView.from(saved, supplier);
     }
 
     // ---------------- DRAFT PO FROM SUGGESTION (ADR-MONO-027 D5) ----------------
@@ -154,7 +161,7 @@ public class PurchaseOrderApplicationService {
         if (existing.isPresent()) {
             log.info("from-suggestion idempotent hit: suggestion={} returns existing PO {}",
                     cmd.sourceSuggestionId(), existing.get().getId());
-            return PurchaseOrderView.from(existing.get());
+            return view(existing.get());
         }
 
         String poId = UuidV7.randomString();
@@ -196,7 +203,7 @@ public class PurchaseOrderApplicationService {
             log.info("from-suggestion race on suggestion={} — re-reading the winning PO",
                     cmd.sourceSuggestionId());
             return poRepository.findBySourceSuggestionId(cmd.sourceSuggestionId(), actor.tenantId())
-                    .map(PurchaseOrderView::from)
+                    .map(this::view)
                     .orElseThrow(() -> race);
         }
 
@@ -206,7 +213,7 @@ public class PurchaseOrderApplicationService {
                 "{\"origin\":\"DEMAND_PLANNING\",\"sourceSuggestionId\":\""
                         + cmd.sourceSuggestionId() + "\"}"));
 
-        return PurchaseOrderView.from(saved);
+        return view(saved);
     }
 
     // ---------------- SUBMIT PO (DRAFT → SUBMITTED) ----------------
@@ -233,7 +240,7 @@ public class PurchaseOrderApplicationService {
                 "{\"status\":\"SUBMITTED\",\"supplierReceiptRef\":\""
                         + result.supplierReceiptRef() + "\"}"));
         eventPublisher.publishPoSubmitted(saved);
-        return PurchaseOrderView.from(saved);
+        return view(saved);
     }
 
     // ---------------- ACKNOWLEDGE PO (webhook from supplier) ----------------
@@ -245,7 +252,7 @@ public class PurchaseOrderApplicationService {
         if (ALREADY_PAST_SUBMITTED.contains(po.getStatus())) {
             log.info("Supplier ack received for PO {} already in status {} — treating as idempotent no-op",
                     po.getId(), po.getStatus());
-            return PurchaseOrderView.from(po);
+            return view(po);
         }
 
         PoStatus previous = po.acknowledge(ActorType.SUPPLIER);
@@ -258,7 +265,7 @@ public class PurchaseOrderApplicationService {
                 "{\"status\":\"" + previous + "\"}",
                 "{\"status\":\"ACKNOWLEDGED\"}"));
         eventPublisher.publishPoAcknowledged(saved, cmd.supplierAckRef());
-        return PurchaseOrderView.from(saved);
+        return view(saved);
     }
 
     // ---------------- CONFIRM PO ----------------
@@ -280,7 +287,7 @@ public class PurchaseOrderApplicationService {
         // publishes an inbound-expected event to wms, in the SAME transaction as
         // the CONFIRMED state change (outbox → no lost events, D8).
         maybePublishInboundExpected(saved);
-        return PurchaseOrderView.from(saved);
+        return view(saved);
     }
 
     /**
@@ -356,7 +363,7 @@ public class PurchaseOrderApplicationService {
         if (saved.isWmsWarehouseDestination()) {
             eventPublisher.publishInboundExpectedCancelled(saved);
         }
-        return PurchaseOrderView.from(saved);
+        return view(saved);
     }
 
     // ---------------- RECEIVE ASN ----------------
@@ -419,7 +426,7 @@ public class PurchaseOrderApplicationService {
 
     @Transactional(readOnly = true)
     public PurchaseOrderView get(String poId, ActorContext actor) {
-        return PurchaseOrderView.from(loadPo(poId, actor.tenantId()));
+        return view(loadPo(poId, actor.tenantId()));
     }
 
     @Transactional(readOnly = true)
@@ -427,8 +434,67 @@ public class PurchaseOrderApplicationService {
                                                 PoStatus status,
                                                 String supplierId,
                                                 PageQuery pageQuery) {
-        return poRepository.search(actor.tenantId(), status, supplierId, pageQuery)
-                .map(PurchaseOrderView::from);
+        PageResult<PurchaseOrder> page =
+                poRepository.search(actor.tenantId(), status, supplierId, pageQuery);
+        // TASK-MONO-677: one batched resolution for the whole page — never a lookup per row.
+        Map<String, Supplier> suppliers = resolveSuppliers(
+                page.content().stream().map(PurchaseOrder::getSupplierId).toList(),
+                actor.tenantId());
+        return page.map(po -> PurchaseOrderView.from(po, suppliers.get(po.getSupplierId())));
+    }
+
+    // ---------------- supplier reference (TASK-MONO-677) ----------------
+
+    /** A single PO's view, with its supplier reference resolved by the same rule as the list. */
+    private PurchaseOrderView view(PurchaseOrder po) {
+        String ref = po.getSupplierId();
+        Map<String, Supplier> suppliers = resolveSuppliers(Collections.singletonList(ref), po.getTenantId());
+        return PurchaseOrderView.from(po, suppliers.get(ref));
+    }
+
+    /**
+     * Resolves stored {@code supplierId} values to supplier master rows —
+     * {@code procurement-api.md} § supplier reference fields:
+     * <ol>
+     *   <li>inside {@code tenantId} only;</li>
+     *   <li>by master id first (one batched query for all refs);</li>
+     *   <li>then by code, only for the refs the id query did not match (one more batched
+     *       query, skipped when nothing is left) — so an id match always wins;</li>
+     *   <li>a ref that matches neither is simply absent from the map (the caller renders
+     *       {@code null} for both fields).</li>
+     * </ol>
+     * Why both: the same column holds a master id for {@code POST /po} and a supplier
+     * code for DEMAND_PLANNING-origin POs (ADR-MONO-050 D9). Supplier status is
+     * deliberately not a filter — an inactive supplier keeps its row and name.
+     */
+    private Map<String, Supplier> resolveSuppliers(Collection<String> refs, String tenantId) {
+        Set<String> wanted = new LinkedHashSet<>();
+        for (String ref : refs) {
+            if (ref != null && !ref.isBlank()) {
+                wanted.add(ref);
+            }
+        }
+        Map<String, Supplier> resolved = new HashMap<>();
+        if (wanted.isEmpty()) {
+            return resolved;
+        }
+        for (Supplier s : supplierRepository.findAllByIds(wanted, tenantId)) {
+            // Defence in depth on top of the tenant-scoped query: never show a foreign row.
+            if (tenantId.equals(s.getTenantId()) && wanted.contains(s.getId())) {
+                resolved.put(s.getId(), s);
+            }
+        }
+        Set<String> byCode = new LinkedHashSet<>(wanted);
+        byCode.removeAll(resolved.keySet());
+        if (byCode.isEmpty()) {
+            return resolved;
+        }
+        for (Supplier s : supplierRepository.findAllByCodes(byCode, tenantId)) {
+            if (tenantId.equals(s.getTenantId()) && byCode.contains(s.getCode())) {
+                resolved.putIfAbsent(s.getCode(), s);
+            }
+        }
+        return resolved;
     }
 
     // ---------------- helpers ----------------

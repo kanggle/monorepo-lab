@@ -14,7 +14,7 @@ import { useEffect, useState } from 'react';
  * 임포트하지 않고 **여기서 좁게 다시 적는다** — 타입 임포트는 지워지지만, 그 모듈은
  * 모듈 스코프에서 해석기 팩토리를 부르므로 클라이언트 그래프에 끌려오면 안 된다.
  */
-type BackendState = 'not-demo' | 'running' | 'unavailable';
+type BackendState = 'not-demo' | 'starting' | 'running' | 'unavailable';
 
 /**
  * 🔴🔴 네 값이 **서로 다른 사실**이다. 뭉치면 `TASK-MONO-636`·`644` 가 두 번 고친
@@ -25,6 +25,12 @@ type Probe =
   | { kind: 'probing' }
   /** 물어봤고 꺼져 있다. 배너를 낸다. */
   | { kind: 'unavailable' }
+  /**
+   * 🔴 물어봤고 **켜지는 중**이다 (`TASK-MONO-668`) — 인스턴스는 떴는데 고른 화면이 아직
+   * 전부 준비되지 않았다. 「꺼져 있어」 배너와 **다른 문장**이다: 켜라고 하면 거짓이고(이미
+   * 켜졌다), 아무 말도 안 하면 방문자가 «다 됐다» 고 믿는다(이 티켓의 결함).
+   */
+  | { kind: 'starting' }
   /** 물어봤고 켜져 있거나(running) 데모 배포가 아니다(not-demo). 배너 없음. */
   | { kind: 'quiet' }
   /**
@@ -49,6 +55,8 @@ export function DemoBackendNoticeClient() {
         if (!res.ok) throw new Error(`status ${res.status}`);
         const body = (await res.json()) as { state?: BackendState };
         if (!alive) return;
+        // 🔴 TASK-MONO-668 — 켜지는 중은 꺼짐과도 켜짐과도 다른 값이다.
+        if (body.state === 'starting') return setProbe({ kind: 'starting' });
         setProbe(body.state === 'unavailable' ? { kind: 'unavailable' } : { kind: 'quiet' });
       } catch {
         // 🔴 삼키되 **거짓말하지 않는다.** 'unavailable' 로 떨어뜨리면 원인을 지어낸다.
@@ -60,6 +68,31 @@ export function DemoBackendNoticeClient() {
       alive = false;
     };
   }, []);
+
+  // 🔴 TASK-MONO-668 — 켜지는 중. 세 앱이 같은 첫 문장(«데모 서버가 켜지는 중입니다»)을 쓴다.
+  //    🔴 「샘플 데이터」 문장을 **안 넣는다** — 켜지는 중에 무엇이 그려지는지는 잰 적이 없고,
+  //    `TASK-MONO-642` 의 규칙이 «배너는 화면이 그리는 것과 어긋나면 안 된다» 다.
+  //    🔴 「서버를 켠 뒤」도 **안 넣는다** — 이미 켜졌다. 그 말은 방문자를 론처로 돌려보내
+  //    중복 기동을 누르게 한다.
+  if (probe.kind === 'starting') {
+    return (
+      <div
+        role="status"
+        data-testid="demo-backend-starting"
+        style={{
+          background: '#e0f2fe',
+          color: '#075985',
+          padding: '10px 16px',
+          fontSize: '0.9rem',
+          textAlign: 'center',
+          borderBottom: '1px solid #7dd3fc',
+        }}
+      >
+        데모 서버가 켜지는 중입니다. 준비가 끝나기 전에는 장바구니·로그인 같은 실시간 기능이
+        동작하지 않을 수 있습니다. 몇 분 뒤 다시 열어 주세요.
+      </div>
+    );
+  }
 
   if (probe.kind !== 'unavailable') return null;
 
@@ -79,15 +112,15 @@ export function DemoBackendNoticeClient() {
       {/* 🔴 TASK-MONO-642 — 옛 문구는 «상품 데이터를 불러올 수 없습니다» 였다. 그런데 바로
           아래에 상품이 그려지고 있어서, 방문자에게는 «에러가 났는데 왜인지 뭔가는 보인다»
           로 읽혔다. 거짓은 아니었다(백엔드는 정말 꺼져 있다) — 뜻이 표현에 안 담겼다.
-          🔴 «실시간 기능이 잠겼다» 는 사실은 **남긴다.** 그것까지 지우면 방문자가 장바구니·
+          🔴 «로그인과 로그인 후 기능이 잠겼다» 는 사실은 **남긴다.** 그것까지 지우면 방문자가 장바구니·
           로그인이 왜 안 되는지 모른다. 배너를 부드럽게 만드는 것이 목적이 아니다.
-          🔵 「실시간 기능」이라는 말은 론처 카드(TASK-MONO-637)와 **같은 용어**다. 두 화면이
+          🔵 「로그인 후 기능」이라는 말은 론처 카드의 「로그인 후」 칸과 **같은 용어**다(TASK-MONO-680 이 「실시간 기능」에서 바꿨다). 두 화면이
           다른 말을 하면 방문자가 어느 쪽을 믿을지 모른다.
           🔴🔴 TASK-MONO-654 — 이 문장은 **옮겨졌을 뿐 바뀌지 않았다.** 배너의 문장은
           방문자와의 계약이고, 이 티켓이 고치는 것은 «언제 판정하는가» 이지 «무엇을
           말하는가» 가 아니다. */}
-      지금 보이는 상품은 샘플 데이터입니다. 데모 서버가 꺼져 있어 장바구니·로그인 같은
-      실시간 기능은 잠겨 있습니다. 데모 시작 페이지에서 서버를 켠 뒤(약 10분) 다시 열어 주세요.
+      지금 보이는 상품은 샘플 데이터입니다. 데모 서버가 꺼져 있어 로그인할 수 없고, 장바구니·주문 같은
+      로그인 후 기능도 잠겨 있습니다. 데모 시작 페이지에서 서버를 켠 뒤(약 10분) 다시 열어 주세요.
     </div>
   );
 }
