@@ -17,7 +17,7 @@ import { useEffect, useState } from 'react';
 type BackendState = 'not-demo' | 'starting' | 'running' | 'unavailable';
 
 /**
- * 🔴🔴 다섯 값이 **서로 다른 사실**이다. 뭉치면 `TASK-MONO-636`·`644` 가 두 번 고친
+ * 🔴🔴 네 값이 **서로 다른 사실**이다. 뭉치면 `TASK-MONO-636`·`644` 가 두 번 고친
  * 그 결함이 세 번째로 생긴다.
  */
 type Probe =
@@ -55,13 +55,9 @@ export function DemoBackendNoticeClient() {
         if (!res.ok) throw new Error(`status ${res.status}`);
         const body = (await res.json()) as { state?: BackendState };
         if (!alive) return;
-        setProbe(
-          body.state === 'unavailable'
-            ? { kind: 'unavailable' }
-            : body.state === 'starting'
-              ? { kind: 'starting' }
-              : { kind: 'quiet' },
-        );
+        // 🔴 TASK-MONO-668 — 켜지는 중은 꺼짐과도 켜짐과도 다른 값이다.
+        if (body.state === 'starting') return setProbe({ kind: 'starting' });
+        setProbe(body.state === 'unavailable' ? { kind: 'unavailable' } : { kind: 'quiet' });
       } catch {
         // 🔴 삼키되 **거짓말하지 않는다.** 'unavailable' 로 떨어뜨리면 원인을 지어낸다.
         if (alive) setProbe({ kind: 'unreachable' });
