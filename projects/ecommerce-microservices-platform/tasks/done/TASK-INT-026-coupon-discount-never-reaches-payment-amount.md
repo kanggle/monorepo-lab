@@ -8,7 +8,7 @@ TASK-INT-026
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -114,14 +114,22 @@ If any section is missing or incomplete, this task must not be implemented.
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (재현 먼저)** — «쿠폰 선택 → 주문 생성 → 할인 후 금액으로 `POST /api/payments/confirm`» 을 실제로 돌려 `400 AMOUNT_MISMATCH` 가 나는지 측정하고, 명령·응답을 이 파일에 적는다. 로컬 스택이든 payment-service 통합 테스트든 좋다. 🔴 재현되지 않으면 위 표의 **어느 사실이 틀렸는지**를 적고, 나머지 AC 없이 이 티켓을 닫는다.
-- [ ] **AC-1 (결정)** — 소유자가 고른 선택지(ⓐ/ⓑ/ⓒ, 또는 다른 안)를 **소유자의 말 그대로** 이 파일에 적는다. 분석자 추천을 결정으로 옮겨 적지 않는다.
-- [ ] **AC-2 (스펙 먼저)** — 스펙 충돌 표의 다섯 문장과 `promotion-service/overview.md:36` 경로 표기가 결정과 **같은 방향**을 가리킨다. 반대 문장이 한 곳이라도 남으면 미완료. 코드 변경은 이 AC 이후 커밋에만 들어간다.
-- [ ] **AC-3** — 쿠폰을 고른 주문에서 `토스 요청 금액 == payment PENDING 금액 == 서버가 계산한 할인 후 금액` 이고 승인이 성공한다. 테스트로 고정한다. *(ⓒ 선택 시: 체크아웃에서 쿠폰을 고를 수 없고, 주문 요약·결제 버튼 금액에 할인이 나타나지 않는다.)*
-- [ ] **AC-4** — 쿠폰 없는 주문은 요청·`OrderPlaced` 페이로드·결제 금액이 변경 전과 같다(회귀 테스트).
-- [ ] **AC-5** — 결제까지 끝난 쿠폰 주문의 쿠폰은 `USED` 이고 그 `orderId` 를 가진다. 그 주문을 취소하면 기존 `order.order.cancelled` 복원 경로로 `ISSUED` 가 된다. *(ⓒ 선택 시 해당 없음 — 이유 기록.)*
-- [ ] **AC-6** — 사용됨·만료·남의 쿠폰으로는 할인된 결제가 만들어지지 않고, 사용자에게 무엇이 문제인지 보인다(`COUPON_ALREADY_USED` / `COUPON_EXPIRED` / `COUPON_NOT_OWNED`). *(ⓒ 선택 시 해당 없음.)*
-- [ ] **AC-7** — 브라우저가 계산한 할인액을 서버가 금액으로 쓰지 않는다. 브라우저 계산은 표시용으로만 남거나 사라진다. *(ⓒ 선택 시 해당 없음.)*
+- [x] **AC-0 (재현 먼저)** — «쿠폰 선택 → 주문 생성 → 할인 후 금액으로 `POST /api/payments/confirm`» 을 실제로 돌려 `400 AMOUNT_MISMATCH` 가 나는지 측정하고, 명령·응답을 이 파일에 적는다. 로컬 스택이든 payment-service 통합 테스트든 좋다. 🔴 재현되지 않으면 위 표의 **어느 사실이 틀렸는지**를 적고, 나머지 AC 없이 이 티켓을 닫는다.
+  - 닫힘(두 절반): ① 화면 쪽 — 재현 커밋 `99be352f0` 의 CI run `34965972802` 에서 AC-0 테스트 **하나만** 빨강, 기대 `amount 1500000`(주문 응답) / 실제 `1495000`(화면 할인 차감). ② payment-service 쪽 — `CouponOrderPaymentAmountIntegrationTest.preFixShape_discountedConfirmAgainstUndiscountedPending_isAmountMismatch` 가 PENDING 30,000 ↔ 승인 25,000 → `AmountMismatchException`, PENDING 유지, PG 호출 없음을 실제 Spring 컨텍스트·Postgres 에서 돌려 **PASS** (#3842, run `34968306532`, job `104378098938`). 기록 = 아래 § AC-0 재현.
+- [x] **AC-1 (결정)** — 소유자가 고른 선택지(ⓐ/ⓑ/ⓒ, 또는 다른 안)를 **소유자의 말 그대로** 이 파일에 적는다. 분석자 추천을 결정으로 옮겨 적지 않는다.
+  - 닫힘: 소유자 원문 「ⓐ 동기 호출」, 2026-09-15 — § AC-1 결정 기록.
+- [x] **AC-2 (스펙 먼저)** — 스펙 충돌 표의 다섯 문장과 `promotion-service/overview.md:36` 경로 표기가 결정과 **같은 방향**을 가리킨다. 반대 문장이 한 곳이라도 남으면 미완료. 코드 변경은 이 AC 이후 커밋에만 들어간다.
+  - 닫힘: 스펙·계약 커밋 `0d88f437c`(코드 없음)가 구현 커밋 `56f7aa63d` 보다 앞선다(#3839 커밋 순서). order `dependencies.md:24`·`overview.md:68`, promotion `overview.md:22,36`·`architecture.md:106`·`promotion-api.md` apply 절이 모두 «order-service 가 동기 호출» 로 정렬.
+- [x] **AC-3** — 쿠폰을 고른 주문에서 `토스 요청 금액 == payment PENDING 금액 == 서버가 계산한 할인 후 금액` 이고 승인이 성공한다. 테스트로 고정한다. *(ⓒ 선택 시: 체크아웃에서 쿠폰을 고를 수 없고, 주문 요약·결제 버튼 금액에 할인이 나타나지 않는다.)*
+  - 닫힘(세 고리를 각각 테스트로): 토스 요청 금액 = 주문 응답 `totalPrice` — web-store `checkout-form.test.tsx` «쿠폰을 고르면 couponId 를 주문 요청에 싣고, 서버가 확정한 할인 후 금액으로 결제한다» (#3839 CI `Frontend unit tests` 초록). 응답·`OrderPlaced.totalPrice` = 소계 − promotion 할인 — `OrderPlacementServiceCouponTest.withCoupon_totalPriceIsServerDiscountedAmount_inResultAndEvent`. PENDING = `OrderPlaced.totalPrice` 이고 같은 금액 승인 → `COMPLETED` — `CouponOrderPaymentAmountIntegrationTest.postFixShape_discountedTotalPrice_confirmSucceeds` **PASS** (run `34968306532`). 🔵 PG 는 mock — 실제 토스 승인은 부르지 않았다.
+- [x] **AC-4** — 쿠폰 없는 주문은 요청·`OrderPlaced` 페이로드·결제 금액이 변경 전과 같다(회귀 테스트).
+  - 닫힘: `OrderPlacementServiceCouponTest.withoutCoupon_neverCallsPromotion`(promotion 미호출, `couponId` null·`discountAmount` 0·`totalPrice` = 소계), web-store «올바른 데이터를 전송한다»(요청 본문에 `couponId` 없음, 기존 단언 그대로 초록), `OrderPlacementIntegrationTest` 의 `totalPrice 2000000` 단언 그대로 초록(#3839 ecommerce A).
+- [x] **AC-5** — 결제까지 끝난 쿠폰 주문의 쿠폰은 `USED` 이고 그 `orderId` 를 가진다. 그 주문을 취소하면 기존 `order.order.cancelled` 복원 경로로 `ISSUED` 가 된다. *(ⓒ 선택 시 해당 없음 — 이유 기록.)*
+  - 닫힘(조합): order-service 가 apply 에 넘기는 `orderId` == 저장되는 주문의 `orderId` — `OrderPlacementServiceCouponTest` 가 캡처로 단언. promotion `Coupon.apply` 가 그 `orderId` 를 `USED` 와 함께 기록 — `CouponTest.apply_validOwner_changesStatusToUsed`, `CouponApplyReplayAndReleaseTest`. 취소 복원은 **바꾸지 않은** 기존 경로 `restoreCouponsByOrderId`(`CouponRestoreIntegrationTest`, #3839·#3842 ecommerce B 초록). 🔵 쿠폰 주문 하나를 끝에서 끝까지(적용 → 결제 → 취소 → 복원) 한 번에 돌린 테스트는 없다.
+- [x] **AC-6** — 사용됨·만료·남의 쿠폰으로는 할인된 결제가 만들어지지 않고, 사용자에게 무엇이 문제인지 보인다(`COUPON_ALREADY_USED` / `COUPON_EXPIRED` / `COUPON_NOT_OWNED`). *(ⓒ 선택 시 해당 없음.)*
+  - 닫힘: 거절이면 주문을 저장·발행하지 않는다 — `OrderPlacementServiceCouponTest.couponRejected_noSave_noEvent`. 코드가 그대로 422 로 전달된다 — `OrderControllerSliceTest.placeOrder_couponRejected_returns422WithCode`, `PromotionServiceCouponClientTest`(422·404 통과). 화면 문구는 `guards.ts` `ERROR_MESSAGES` 에 코드별 한국어로 추가, 표시 경로는 기존 «주문 실패 시 API 에러 메시지를 표시한다» 가 재는 `ERROR_MESSAGES[code]` 그 경로다. 🔵 쿠폰 코드 각각의 문구를 화면에서 단언한 테스트는 없다.
+- [x] **AC-7** — 브라우저가 계산한 할인액을 서버가 금액으로 쓰지 않는다. 브라우저 계산은 표시용으로만 남거나 사라진다. *(ⓒ 선택 시 해당 없음.)*
+  - 닫힘: 주문 요청에는 금액 필드가 없고 `couponId` 만 실린다(`PlaceOrderRequest`, `order-api.md`). 결제 금액은 주문 응답 `totalPrice` — AC-0 테스트가 수정 후 초록(#3839). 화면 할인은 `previewAmount` 로 버튼 표시에만 쓰인다.
 
 ---
 
