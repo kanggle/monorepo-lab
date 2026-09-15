@@ -142,6 +142,15 @@ BUNDLE_REQUIRED_DOMAINS = {
     for name, doms in list(BUNDLES.items()) + list(BUNDLE_ADDONS.items())
 }
 
+# 🔴 TASK-MONO-685 — 묶음 **자신의** 도메인(공유 하드 의존 제외). 선택 안 된 묶음의 «일부 실행»
+#    판정은 이것만 근거로 삼는다. `iam` 은 모든 묶음이 공유하므로, 그것을 근거로 쓰면 콘솔 하나만
+#    켜도 스토어·팬이 «일부만 실행 중» 이 된다(2026-09-15 실측: 선택 안 된 `console-finance` 가
+#    finance=down · iam=up 인데 `partial`).
+BUNDLE_OWN_DOMAINS = {
+    name: tuple(sorted(set(doms)))
+    for name, doms in list(BUNDLES.items()) + list(BUNDLE_ADDONS.items())
+}
+
 
 def _parse_names(event, key="bundles"):
     """요청 본문에서 묶음 이름 목록을 꺼낸다. 모르는 이름이 하나라도 있으면 (None, 그 이름들).
@@ -350,6 +359,45 @@ def _remove_from_selection(names):
     return merged
 
 
+# ---- 세션 경계 (TASK-MONO-685 / ADR-MONO-071 § D4.1) -------------------------
+#
+# 🔴🔴 **선택은 세션을 넘어 살아남으면 안 된다.** 위 합집합(G-Set)은 **한 세션 안의** 동시 요청을
+#    안전하게 만드는 기전이고, 원소를 빼는 경로는 `/bundle/stop` 하나뿐이었다. 그런데 론처에는
+#    그 버튼이 없고, 수동 종료(`stop`)·유휴/예산 종료(`idle_check`)는 인스턴스만 끈다 ⇒ 선택이
+#    **세션마다 쌓였다.** 2026-09-15 실측: 저장된 선택 8묶음(= 8도메인 중 7) — 그 상태에서
+#    「팬 플랫폼」 하나만 눌러도 거의 전체 스택이 뜬다. ADR-MONO-071 의 출발점(*"프런트엔드 버튼만
+#    나누고 내부적으로 전체 스택을 시작하는 구현은 금지"*)을 **시간이 지나며** 어기는 모양이다.
+#
+# ⇒ 인스턴스가 꺼져 있을 때(stopped/stopping) 들어온 요청은 **새 세션의 첫 요청**이므로, 선택을
+#   비우고 그 요청으로 시작한다. 켜져 있거나 켜지는 중이면 지금처럼 합집합이다.
+#
+# 🔴 이것은 **원소 제거**다 — D4 가 말한 대로 단조가 아니다. 그래서 창을 좁히는 장치를 둔다:
+#    방금(`COLD_START_UNION_WINDOW_SECONDS` 안에) 세션이 시작됐으면 비우지 않는다. EC2 의
+#    describe 는 `start_instances` 직후에도 잠깐 `stopped` 를 줄 수 있고, 그 사이 두 번째
+#    방문자의 요청이 첫 번째의 선택을 지우면 «켰는데 안 뜬» 화면이 된다.
+# 🔴 **창을 닫지는 못한다.** 첫 요청이 선택을 쓰고 `STARTED_PARAM` 을 찍기까지(같은 호출 안의
+#    짧은 구간)에 두 번째 요청이 끼면 여전히 지워질 수 있다 — SSM 에 CAS 가 없다(§ _with_lock 와
+#    같은 사정). 좁히는 것까지만 하고, 그 사실을 여기 적는다.
+# 🔵 잠금을 쓰지 않는 이유: 이 제거가 경합하는 상대는 **같은 꺼진 상태의 다른 첫 요청**뿐이다
+#    (`bundle_stop` 은 running 전제라 겹치지 않는다). 잠금이 막을 창은 위 시각 창이 이미 덮고,
+#    잠금이 추가로 만드는 것은 «두 번째 방문자에게 409» 뿐이다.
+COLD_START_UNION_WINDOW_SECONDS = 120
+
+
+def _recently_started():
+    """방금 새 세션이 시작됐나 — `STARTED_PARAM` 이 창 안인가. 못 읽으면 False."""
+    try:
+        started = int(_get(STARTED_PARAM, 0) or 0)
+    except (ValueError, TypeError):
+        return False
+    return started > 0 and 0 <= _now() - started < COLD_START_UNION_WINDOW_SECONDS
+
+
+def _reset_selection():
+    """선택을 비운다 — **새 세션의 첫 요청**에서만 부른다(§ 세션 경계)."""
+    _write_selection(set())
+
+
 # ---- 직렬화 잠금 -------------------------------------------------------------
 #
 # 🔴 SSM 에 CAS 가 없으므로 이 잠금은 **상호배제를 보장하지 못한다**(둘이 동시에 "비었다"
@@ -430,10 +478,14 @@ def _bundle_state(name, instance_state, snap, stale, selected):
         return "unknown"
     if all(st == "up" for st in states):
         return "ready"
-    if any(st in ("up", "partial") for st in states):
-        # 일부만 떠 있다 - 선택돼 있으면 "기동 중", 아니면 "일부 실패" 로 읽는다.
-        return "booting" if name in selected else "partial"
-    return "requested" if name in selected else "waiting"
+    if name in selected:
+        # 일부만 떠 있으면 "기동 중", 아무것도 안 떴으면 "요청됨".
+        # 🔵 선택된 묶음은 공유 의존(iam)이 뜬 것도 진행으로 친다 — 그 묶음을 위해 뜨는 중이다.
+        return "booting" if any(st in ("up", "partial") for st in states) else "requested"
+    # 🔴 TASK-MONO-685 — 선택 안 된 묶음은 **자기 도메인**만 본다(§ BUNDLE_OWN_DOMAINS).
+    #    공유 의존 iam 만 떠 있는 것은 «이 묶음이 일부 실행 중» 이 아니다 — 다른 묶음이 켠 것이다.
+    own = [(snap.get(d) or {}).get("state") for d in BUNDLE_OWN_DOMAINS.get(name, ())]
+    return "partial" if any(st in ("up", "partial") for st in own) else "waiting"
 
 
 def _bundle_capability():
@@ -539,6 +591,12 @@ def bundle_start(event):
             "message": "이번 달 데모 가동 예산 소진 (%d/%d분). 다음 달 1일 리셋됩니다." % (used_min, BUDGET_MINUTES),
             "used_minutes": used_min, "budget_minutes": BUDGET_MINUTES,
         }, 429)
+
+    # -- 0b. 🔴🔴 TASK-MONO-685 — 꺼진 인스턴스에 온 요청은 **새 세션**을 연다(§ 세션 경계).
+    #        지난 세션의 선택을 비우고 이 요청으로 시작한다. 🔴 거절(세대·예산) **뒤**다 —
+    #        거절될 요청이 남의 선택을 지우면 안 된다. (z40) 이 이 순서를 문장 단위로 잰다.
+    if state in ("stopped", "stopping") and not _recently_started():
+        _reset_selection()
 
     # -- 1. 선택을 **먼저** 영속화한다. 여기서 실패하면 켜지 않는다 - 켜 놓고 선택이
     #       저장 안 되면 방문자는 "고른 것과 다른 것이 떴다" 를 보게 된다.

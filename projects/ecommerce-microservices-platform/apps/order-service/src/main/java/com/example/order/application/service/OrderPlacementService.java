@@ -2,8 +2,10 @@ package com.example.order.application.service;
 
 import com.example.order.application.dto.PlaceOrderCommand;
 import com.example.order.application.dto.PlaceOrderResult;
+import com.example.order.application.exception.CouponRejectedException;
 import com.example.order.application.exception.DuplicateOrderPlacementException;
 import com.example.order.application.event.OrderPlacedEvent;
+import com.example.order.application.port.CouponDiscountPort;
 import com.example.order.application.port.OrderEventPublisher;
 import com.example.order.application.port.OrderMetricsPort;
 import com.example.order.domain.model.Order;
@@ -14,6 +16,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Clock;
 import java.util.List;
@@ -28,6 +32,7 @@ public class OrderPlacementService {
     private final OrderEventPublisher orderEventPublisher;
     private final OrderMetricsPort orderMetrics;
     private final Clock clock;
+    private final CouponDiscountPort couponDiscountPort;
 
     @Transactional
     public PlaceOrderResult placeOrder(PlaceOrderCommand command) {
@@ -41,9 +46,12 @@ public class OrderPlacementService {
             Optional<Order> existing =
                     orderRepository.findByUserIdAndIdempotencyKey(command.userId(), idempotencyKey);
             if (existing.isPresent()) {
+                Order original = existing.get();
                 log.info("Idempotent order placement replay: orderId={}, userId={}, idempotencyKey={}",
-                        existing.get().getOrderId(), command.userId(), idempotencyKey);
-                return new PlaceOrderResult(existing.get().getOrderId());
+                        original.getOrderId(), command.userId(), idempotencyKey);
+                // The replay answers the ORIGINAL amounts and does not touch promotion-service again.
+                return new PlaceOrderResult(
+                        original.getOrderId(), original.getTotalPrice(), original.getDiscountAmount());
             }
         }
 
@@ -53,6 +61,9 @@ public class OrderPlacementService {
         Order order = Order.create(command.userId(), itemDataList, shippingAddress, clock);
         if (idempotent) {
             order.assignIdempotencyKey(idempotencyKey);
+        }
+        if (command.couponId() != null) {
+            applyCoupon(order, command.couponId());
         }
 
         try {
@@ -80,7 +91,42 @@ public class OrderPlacementService {
         orderEventPublisher.publishOrderPlaced(
                 buildOrderPlacedEvent(order, command.shippingAddress()));
 
-        return new PlaceOrderResult(order.getOrderId());
+        return new PlaceOrderResult(order.getOrderId(), order.getTotalPrice(), order.getDiscountAmount());
+    }
+
+    /**
+     * Asks promotion-service for the discount and applies it to the unsaved order (TASK-INT-026).
+     *
+     * <p>The release hook is registered <b>before</b> the call, not after it succeeds: a timed-out
+     * apply may still have committed at promotion-service, and any later failure in this method
+     * (the guard below, a duplicate key, the save) rolls the order back. In every one of those cases
+     * the coupon must not stay used by an order that does not exist. Release is scoped to this
+     * {@code orderId}, so running it after a rejection is a harmless no-op.
+     */
+    private void applyCoupon(Order order, String couponId) {
+        releaseCouponIfPlacementDoesNotCommit(couponId, order.getOrderId());
+
+        long subtotal = order.subtotal();
+        long discount = couponDiscountPort.applyCoupon(couponId, order.getOrderId(), order.getUserId(), subtotal);
+        if (subtotal - discount < 1) {
+            throw new CouponRejectedException("COUPON_NOT_APPLICABLE",
+                    "The coupon discount leaves less than 1 KRW to pay");
+        }
+        order.applyCouponDiscount(couponId, discount);
+    }
+
+    private void releaseCouponIfPlacementDoesNotCommit(String couponId, String orderId) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status != STATUS_COMMITTED) {
+                    couponDiscountPort.releaseCoupon(couponId, orderId);
+                }
+            }
+        });
     }
 
     private List<Order.OrderItemData> toItemDataList(List<PlaceOrderCommand.OrderItemCommand> items) {
@@ -116,6 +162,7 @@ public class OrderPlacementService {
         );
 
         return OrderPlacedEvent.of(order.getOrderId(), order.getUserId(),
-                order.getTotalPrice(), eventItems, eventAddr, clock);
+                order.getTotalPrice(), eventItems, eventAddr,
+                order.getCouponId(), order.getDiscountAmount(), clock);
     }
 }

@@ -104,6 +104,7 @@ public class GetFeedUseCase {
                 post.getAuthorAccountId(),
                 post.getTitle(),
                 preview(post.getBody()),
+                PostMediaRefSerializer.deserialize(post.getMediaRefsJson()),
                 commentCounts.getOrDefault(post.getId(), 0L),
                 reactionCounts.getOrDefault(post.getId(), 0L),
                 post.getPublishedAt()));
@@ -111,8 +112,11 @@ public class GetFeedUseCase {
 
     /**
      * Renders the cached projection for one actor, right now. Locked items surrender their
-     * title and body preview here — they are present in the snapshot precisely so that this
-     * decision can be made (and re-made) at read time rather than baked in at cache-fill time.
+     * title, body preview and media refs here — they are present in the snapshot precisely so that
+     * this decision can be made (and re-made) at read time rather than baked in at cache-fill time.
+     *
+     * <p>🔴 {@code mediaRefs} goes through the same {@code locked} ternary as the title
+     * (TASK-MONO-679). A photo URL is not metadata: whoever holds it can fetch the photo.
      */
     private PageResult<FeedItemView> applyEntitlement(PageResult<FeedItemSnapshot> snapshot,
                                                       ActorContext actor) {
@@ -126,6 +130,7 @@ public class GetFeedUseCase {
                     item.authorAccountId(),
                     locked ? null : item.title(),
                     locked ? null : item.bodyPreview(),
+                    locked || item.mediaRefs() == null ? List.of() : item.mediaRefs(),
                     item.commentCount(),
                     item.reactionCount(),
                     item.publishedAt(),

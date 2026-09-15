@@ -21,7 +21,7 @@
 ## Allowed Service Interactions
 - exposes its own HTTP API for order placement, cancellation, and purchase verification (consumed by review-service via `GET /api/orders/verify-purchase`)
 - all inbound interactions arrive through gateway-service — **with one exception**: the internal system-command endpoint `POST /api/internal/orders/confirm-paid-stale` (`/api/internal/orders/**`) is gateway-excluded (no external route) and called directly on the internal network by batch-worker (`client_credentials` Bearer, fail-closed). order-service evaluates the predicate + performs the `PENDING → CONFIRMED` transition server-side and emits the standard `OrderConfirmed`. Contract: `specs/contracts/http/internal/order-confirm-paid-stale.md` (TASK-BE-410 decision; impl TASK-BE-412).
-- no outbound service-to-service HTTP calls initiated
+- one outbound service-to-service HTTP dependency (TASK-INT-026): **promotion-service**, only when a placement carries a `couponId` — `POST /api/coupons/{couponId}/apply` synchronously inside the placement transaction, and `POST /api/internal/coupons/{couponId}/release` when that transaction does not commit. Internal network (`PROMOTION_SERVICE_URL`), explicit connect/read timeouts, circuit breaker + bounded retry via `libs/java-common` `ResilienceClientFactory`. promotion-service unavailable → placement fails with `503 COUPON_SERVICE_UNAVAILABLE`; it never proceeds without the discount. No other outbound HTTP.
 
 ## Consumes From
 

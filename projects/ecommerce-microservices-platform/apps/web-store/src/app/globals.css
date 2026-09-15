@@ -41,6 +41,15 @@
   --color-warning: #f39c12;
   --color-info: #3498db;
 
+  /* Feedback surfaces for Toast (TASK-FE-101). The text on them is --color-text,
+     which flips to near-white in dark mode, so the surface MUST flip too. A
+     light-only surface under theme text is unreadable in dark (it was ~1.1:1).
+     Contrast in both themes is asserted by toast-dark-contrast.test.ts. */
+  --color-success-surface: #f0fdf4;
+  --color-success-border: #22c55e;
+  --color-error-surface: #fef2f2;
+  --color-error-border: #ef4444;
+
   /* Literal white — for foreground/text on coloured surfaces (accent buttons,
      badges, avatars). Stays white in every theme; do NOT remap it for dark. */
   --color-white: #ffffff;
@@ -141,6 +150,12 @@
 
   --color-border: #2e2f33;
   --color-border-light: #26272b;
+
+  /* Dark tinted feedback surfaces — keep --color-text legible (TASK-FE-101). */
+  --color-success-surface: #0f2a1a;
+  --color-success-border: #22c55e;
+  --color-error-surface: #2c1215;
+  --color-error-border: #f87171;
 
   --color-shadow: rgba(0, 0, 0, 0.5);
   --color-shadow-lg: rgba(0, 0, 0, 0.6);

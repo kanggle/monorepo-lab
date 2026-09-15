@@ -71,7 +71,8 @@ class GetFeedUseCaseEntitlementFreshnessTest {
 
     private FeedItemSnapshot snapshot(String id, PostVisibility visibility, String author) {
         return new FeedItemSnapshot(id, PostType.ARTIST_POST, visibility, author,
-                "작업실 이야기", "멤버십 가입해 주셔서 감사합니다", 0L, 0L, Instant.EPOCH);
+                "작업실 이야기", "멤버십 가입해 주셔서 감사합니다",
+                List.of("https://images.example.com/studio.jpg"), 0L, 0L, Instant.EPOCH);
     }
 
     /** Primes the cache with a page whose titles are present — i.e. written while entitled. */
@@ -101,6 +102,8 @@ class GetFeedUseCaseEntitlementFreshnessTest {
         // The two fields the ticket measured leaking: the title and the 200-char preview.
         assertThat(item.title()).isNull();
         assertThat(item.bodyPreview()).isNull();
+        // TASK-MONO-679 — the photo URL leaks on exactly the same terms, so it locks on the same request.
+        assertThat(item.mediaRefs()).isEmpty();
         // Nothing was invalidated — the fix is that there is no decision in the cache to
         // invalidate. Asserting this is what separates "recomputed" from "evicted and rebuilt".
         verify(feedCache, never()).cachePage(anyString(), anyString(), anyInt(), anyInt(), any());

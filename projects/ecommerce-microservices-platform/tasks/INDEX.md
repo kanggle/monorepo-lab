@@ -76,16 +76,17 @@ continuing there is the lifecycle working as designed, not an exception to it.
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-| ID | Title | Service | Tags |
-|---|---|---|---|
-| TASK-INT-026 | 쿠폰 할인이 결제 금액에 닿지 않는다 — 재현(AC-0) → 쿠폰 적용 호출 주체 결정(AC-1, 스펙 충돌) → 수정 | web-store · order · promotion · payment | api, event, code, test |
+_(없음)_
 
 
 _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DONE. `../../../tasks/done/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
 
 ## in-progress
 
-_(없음)_
+| ID | Title | Service | Tags |
+|---|---|---|---|
+| TASK-INT-026 | 쿠폰 할인이 결제 금액에 닿지 않는다 — AC-1 결정 = ⓐ 동기 호출 (2026-09-15) · 재현 → 스펙 정렬 → 수정 | web-store · order · promotion · payment | api, event, code, test |
+
 
 ## review
 
@@ -95,6 +96,7 @@ _(없음)_
 
 ## done
 
+- `TASK-FE-101-cart-toast-unreadable-in-dark-theme.md` — **✅ DONE (2026-09-15 UTC · 4차원 검증 — impl PR [#3829](https://github.com/kanggle/monorepo-lab/pull/3829) squash `8d9efe7b9`; `state=MERGED` · `origin/main` tip 대조 · 머지 전 FAILURE 0 · required 4/4 SUCCESS · AC 절 전 항목 닫힘)** — 🟢 **다크 테마에서 «장바구니에 추가되었습니다.» 가 읽힌다.** 원인: `Toast` 가 배경만 밝은 연녹으로 고정하고 글자색은 테마 토큰(다크=거의 흰색)을 써서 대비 **1.12:1**. 처방: 성공·에러 표면·테두리를 `globals.css` 토큰으로(라이트 값 그대로, 다크 `#0f2a1a`·`#2c1215`). 🟢 **라이브 전·후 같은 방법**(헤드리스, 다크, 실제 장바구니 담기): 토스트 배경 `rgb(240,253,244)` → `rgb(15,42,26)`, 대비 **1.12 → 13.13:1** · 라이트 테마는 이전과 동일. 🔴 **첫 CI 가 빨갰다** — 새 대비 시험이 `import.meta.url` 로 파일을 읽어 vitest jsdom 에서 수집 단계에 죽었다(시험 0개). 로컬을 일반 node 로만 재현해서 못 잡았고, 재실행에서 **7 tests 실행**을 로그로 확인한 뒤 머지했다. 🔵 형제 검사: 다른 고정 밝은 배경 둘은 글자색도 고정이라 결함 아님. 분석=Opus 5 / 구현=Opus 5.
 - `TASK-FE-100-reviews-bounce-to-login-when-session-token-is-stale.md` — **✅ DONE (2026-09-15 UTC · 4차원 검증 — impl PR [#3807](https://github.com/kanggle/monorepo-lab/pull/3807) squash `713fda71c`; `state=MERGED` · `origin/main` tip 대조 · 머지 전 required 4/4 SUCCESS · FAILURE 0 · AC 절 전 항목 닫힘)** — 로그인 안 해도 보여야 할 상품 리뷰가, **예전에 로그인했고 토큰이 낡은 방문자**에게만 `/login` 으로 튕기던 것을 고쳤다. 원인은 BFF 가 세션 쿠키를 디코드만 하고 갱신하지 않아 낡은 Bearer 를 붙이고, 리소스 서버가 `permitAll` 경로에서도 무효한 Bearer 에 401 을 내던 것. BFF 가 **GET/HEAD 에 한해** Bearer 를 붙인 401 을 Bearer 없이 1회 재시도한다 — 공개 경로 목록은 복제하지 않았다(권위=게이트웨이). 🔵 CI 로그에서 `bff-proxy.test.ts (13 tests)` 실행을 확인했다(0개 실행 초록 아님). ⚪ 라이브 재현·로컬 `next lint` 는 못 쟀다(Docker 꺼짐 · 호스트 정책이 swc 바이너리 차단) — CI `Frontend lint & build` SUCCESS 가 대신 쟀다. 분석=Opus 5 / 구현=Opus 5.
 - `TASK-BE-591-the-nightly-stack-cannot-pull-minio-anymore.md` — **✅ DONE (2026-09-12 UTC · 4차원 검증 — impl PR [#3799](https://github.com/kanggle/monorepo-lab/pull/3799) squash `c06c4ca76`; `state=MERGED` · `origin/main` 대조 · 머지 전 required 4/4 SUCCESS · FAILURE 0)** — 🔴 **`main` 을 여섯 커밋 연속 빨갛게 만들고 있던 것**을 `Nightly E2E` 의 **Frontend E2E full-stack (web-store)** 에서 걷어냈다. 실패는 테스트가 아니라 **스택 기동**이었다(`pull access denied for minio/minio`) — 테스트는 **한 개도 안 돌았고**, 뒤따르던 `Assert the required specs actually ran` 실패는 결과가 아니라 **메아리**였다. 🔴 **경계가 «내용» 이 아니라 «시각» 이다**: 첫 실패 커밋 `5a000dad6` 은 `ci.yml` 한 곳만 건드린 `fix(ci)` 이고, 그 묶음의 어떤 커밋도 minio 참조를 안 건드렸다(19:14 성공 → 19:37 실패). 실측(대조군 포함): Docker Hub 가 `minio/*` **익명 pull 을 레포째 닫았다** — `latest` 도 401, Hub 태그 API 는 `object not found`, 같은 방식으로 물은 `library/postgres:16` 은 200 ⇒ **태그를 올려서는 안 풀린다**. `quay.io`(MinIO 자신의 레지스트리)에 **같은 두 태그**가 익명 200 이고 OCI index 에 `linux/amd64` 가 있어 **네 자리**(compose 2 + k8s 2)를 옮겼다 — 태그는 한 글자도 안 바꿨다. 🔵 **CI 를 빨갛게 만든 것은 compose 2줄뿐인데 k8s 2줄도 같이 고쳤다**(CI 가 안 돌려서 조용히 같은 결함을 들고 있었다). 🔴🔴 **이 티켓의 요지는 결함이 아니라 발견 경로다**: 그 잡은 **required 4종에 없어서** 여섯 커밋이 전부 4차원 (c) 를 통과하며 머지됐다 — 세션 끝 *「머지 전부를 **커밋별로** CI 확인」* 의무가 아니었으면 안 보였다. 판정도 결론이 아니라 **스텝을 열어서** 했다: 죽던 `#14 Start docker compose stack` = SUCCESS **그리고** `#21 Assert the required specs actually ran` = SUCCESS(이 결함은 테스트를 0개 돌리고도 잡을 끝낼 수 있는 부류라 후자가 없으면 판정이 아니다). ⚪ Hub 판↔quay 판 **바이트 동일성**과 **로컬 pull** 은 못 쟀고(Hub 가 닫혀 원본이 없다 · 호스트 docker 데몬 꺼짐) AC-3 이 「적어라」로 요구한 ⚪ 라 적은 채로 닫았다 — **창을 기다리는 ⚪ 가 아니라 원리상 못 재는 ⚪** 여서 후속 집을 안 만들었다. 분석=Opus 5 / 구현=Opus 5.
 - `TASK-FE-098-search-results-grid-diverges-from-the-product-list-grid.md` — **✅ DONE (2026-08-26, 3차원 검증 — impl PR [#3445](https://github.com/kanggle/monorepo-lab/pull/3445) squash `4a53f0e3d`; `state=MERGED` · `origin/main` tip 대조 · 머지 전 체크 52건 **실패 0**)** — 검색 결과 목록이 다른 상품 목록 페이지와 **모든 폭에서 같은 열 수·같은 간격**으로 깔린다. 결함의 정체는 스타일 값이 아니라 **인라인 사본**이었다 — 검색 결과가 `ProductList` 를 쓰지 않고 그리드 클래스를 자기 자리에 다시 적었고, 그 사본에 **모바일 2열 규칙만 빠져** 있었다. 🔵 그래서 고침도 값 조정이 아니라 **사본을 없애는 쪽**이다(같은 사실이 두 곳에 있으면 한쪽만 고쳐진다). 분석=Opus 5 / 구현=Sonnet.

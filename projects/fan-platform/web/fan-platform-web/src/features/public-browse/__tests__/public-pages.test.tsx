@@ -253,7 +253,13 @@ describe('/posts/[id] (공개 상세) — 세션 없이', () => {
     await renderPage(PostDetailPage({ params: Promise.resolve({ id: '0199de80-0000-7000-8000-00000000b001' }) }));
 
     expect(screen.getByTestId('public-post-detail')).toHaveAttribute('data-locked', 'false');
-    expect(screen.getByText(/첫 정규 앨범 작업을 시작했습니다/)).toBeInTheDocument();
+    // 🔴 TASK-MONO-679 — 제목을 리터럴로 얼리지 않는다. 번들 시드가 실제 시드의 제목으로 정렬되면서
+    //    이 글의 제목이 바뀌었다(638 이 같은 이유로 목록 칸을 파생으로 바꿨다).
+    const post = (state.result as PublicDataResult<FanPublicData>).data.posts.find(
+      (p) => p.id === '0199de80-0000-7000-8000-00000000b001',
+    );
+    expect(post).toBeDefined();
+    expect(screen.getByRole('heading', { name: post!.title, level: 1 })).toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 

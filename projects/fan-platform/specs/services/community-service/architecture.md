@@ -170,8 +170,13 @@ Every transition appends a row to `post_status_history` (append-only) AND emits 
 
 `PostAccessGuard` centralizes this logic. The feed (`GetFeedUseCase`)
 applies the same tiering at the row level — locked items are returned with
-`title`/`bodyPreview` redacted and `locked=true` so the UI knows to display a
-"Subscribe" CTA without leaking content.
+`title`/`bodyPreview` redacted, `mediaRefs` emptied to `[]`, and `locked=true` so the UI
+knows to display a "Subscribe" CTA without leaking content.
+
+**Media refs are content, not metadata (TASK-MONO-679).** A `mediaRefs` entry is an absolute
+https URL, so whoever receives it can fetch the photo. It therefore follows exactly the gate the
+title follows: redacted in the feed for a locked reader, and on `GET /api/community/posts/{id}`
+returned only after `PostAccessGuard` has passed (a gated reader gets 403 before any view is built).
 
 **The feed evaluates that gate per request, never from cache (TASK-FAN-BE-046).** The feed
 cache stores a `FeedItemSnapshot` page — facts about posts — and the `locked` decision plus the

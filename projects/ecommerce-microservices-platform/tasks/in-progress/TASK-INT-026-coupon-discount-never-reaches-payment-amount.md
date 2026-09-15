@@ -8,7 +8,7 @@ TASK-INT-026
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -78,6 +78,18 @@ If any section is missing or incomplete, this task must not be implemented.
 - **ⓒ 당장은 쿠폰 선택을 결제 경로에서 막는다** — 결함만 차단(체크아웃의 `CouponSelector` 비노출/비활성). 기능 설계는 후속 티켓.
 
 🔵 분석자 추천은 **ⓐ** 다 — 스펙 다섯 곳 중 네 곳이 이미 그쪽이고, 금액의 권위를 결제 전에 서버가 쥐는 유일한 안이다. 🔴 **추천은 결정이 아니다.** AC-1 이 소유자 선택을 기록하기 전에는 구현을 시작하지 않는다(스펙 충돌 = HARDSTOP-06).
+
+### AC-1 결정 기록 (2026-09-15 UTC)
+
+소유자 답, 원문 그대로: **「ⓐ 동기 호출」**
+
+단서(rider)는 붙지 않았다. 이 결정에서 구현이 추가로 정한 것 — 결정의 일부가 아니라 구현 판단이며 스펙에 적었다:
+
+- `totalPrice` 는 **결제할 금액(할인 반영 후)** 을 뜻한다. 할인 전 금액·할인액을 따로 싣는 대신 `couponId`·`discountAmount` 를 **덧붙였다**(additive). 쿠폰 없는 주문의 `OrderPlaced` 는 의미가 그대로다.
+- 보상 = order-service 가 apply **직전에** 트랜잭션 동기화를 걸어, 배치가 커밋되지 않으면 promotion-service 의 새 내부 경로 `POST /api/internal/coupons/{couponId}/release` 를 부른다. release 는 **그 orderId 로 쓰인 쿠폰만** 되돌린다. 이 경로는 게이트웨이 라우트가 없고, 있어서는 안 된다(사용자가 부를 수 있으면 할인받은 주문의 쿠폰을 풀어 재사용한다).
+- promotion-service `apply` 는 **같은 orderId 에 대해 멱등**이 됐다(재시도 안전). 다른 주문이면 여전히 `COUPON_ALREADY_USED`.
+- 할인 후 1원 미만이면 `422 COUPON_NOT_APPLICABLE`(PG 는 0원을 청구하지 못한다). promotion-service 무응답이면 `503 COUPON_SERVICE_UNAVAILABLE` — 할인 없이 주문을 만들지 않는다.
+- 남는 위험(닫지 않음, 기록만): apply 가 **release 보다 늦게** promotion-service 에서 커밋되면 쿠폰이 존재하지 않는 주문에 `USED` 로 남는다.
 
 ---
 
@@ -217,3 +229,51 @@ If any section is missing or incomplete, this task must not be implemented.
 ---
 
 분석=Opus 5 / 구현 권장=Opus — 금액·계약·서비스 경계가 함께 바뀌고 보상 설계가 필요하다. ⓒ 가 선택되면 Sonnet 으로 충분하다.
+
+---
+
+# 진행 기록 (in-progress 작업 문서)
+
+## AC-0 재현 — 측정 (2026-09-15 UTC)
+
+**재현됐다.** 커밋 `99be352f0` 은 재현 테스트만 담았다(`CheckoutForm` 수정 전). 그 커밋의 CI —
+run `34965972802`, job `Frontend unit tests (ecommerce + fan-platform + console-web, vitest)`, Node 20:
+
+- `Test Files  1 failed | 128 passed (129)`, `Failed Tests 1` — 실패는 **이 테스트 하나**:
+  `checkout-form.test.tsx > CheckoutForm > 🔴 TASK-INT-026 — 결제 금액의 권위는 서버다 > 토스에 요청하는 금액은 주문 응답의 totalPrice 다`
+- 기대 `amount: 1500000` (주문 응답의 `totalPrice`) / 실제 `amount: 1495000` (화면 할인 5,000 을 뺀 값) — `checkout-form.test.tsx:335`
+
+⇒ 위 표의 사실 4(토스엔 `totalAmount − discountAmount`)가 **실행으로** 확인됐다.
+
+🔴 측정의 범위를 줄여 말하지 않는다: 이것은 **«화면이 서버의 주문 금액과 다른 금액을 PG 에 요청한다»** 까지다. 사실 5·6(PENDING 금액 = 할인 전 `totalPrice`, 금액이 다르면 `400 AMOUNT_MISMATCH`)은 payment-service **코드 읽기**에 머물고, payment-service 의 거절 자체를 돌린 것은 아니다.
+
+🔵 로컬 첫 시도(`npx vitest run … -t "TASK-INT-026"`)의 `rc=1` 은 **테스트 실패가 아니라 러너 기동 오류**(`ERR_PACKAGE_IMPORT_NOT_DEFINED: #module-evaluator`, vitest 4 × Node 24)였다 — 증거로 쓰지 않았다.
+
+## 정산 영향 — 측정 (2026-09-15 UTC)
+
+- settlement-service 는 수수료 기준(gross)을 **`OrderPlaced.items[]` 의 `unitPrice × quantity`** 로 잡는다 — `apps/settlement-service/.../infrastructure/event/OrderPlacedSnapshotConsumer.java:72`. `totalPrice` 는 읽지 않는다.
+- ⇒ 쿠폰 주문에서 수수료는 **할인 전 금액**에 매겨지고, 셀러 순수익은 할인을 전혀 부담하지 않는다. 할인은 사실상 플랫폼(수수료를 덜 받지 않음) 또는 아무도 장부에 기록하지 않는 돈이 된다.
+- 환불 역분개는 «captured 합계 == 적립 gross» 를 전제한다(`settlement-subscriptions.md` § Proportional clawback rule). 쿠폰 주문은 captured(`totalPrice`) < gross 라서 **부분 환불의 비례 역분개가 과소**하게 계산된다. 마지막 환불(`fullyRefunded=true`)이 남은 전액을 되돌리므로 **완전 환불로 끝나면 주문 단위로는 0 이 맞는다.**
+- 🔴 이 티켓은 정산을 바꾸지 않는다(Out of Scope). **«쿠폰 할인은 누가 부담하나 — 플랫폼 / 셀러 / 비례»** 는 소유자 결정이 필요한 후속 질문이다. 후속 티켓 기안 대상.
+
+## 로컬 검증 (2026-09-15 UTC, worktree `int-026-impl`)
+
+| 무엇 | 명령 | 결과 |
+|---|---|---|
+| order·promotion 단위/슬라이스/계약 | `./gradlew :…:order-service:test :…:promotion-service:test --continue` | `BUILD SUCCESSFUL`. 새 클래스 실행 확인(XML): `OrderPlacementServiceCouponTest` 9, `OrderCouponDiscountTest` 8, `PromotionServiceCouponClientTest` 7, `CouponApplyReplayAndReleaseTest` 5, `CouponCommandServiceReplayReleaseTest` 4, `InternalCouponControllerSliceTest` 2 — 실패 0 |
+| web-store 타입 | `npx tsc --noEmit` | rc=0 |
+| web-store lint | `npx next lint` | rc=0 |
+| 에러 코드 등록부 | `check-error-code-registry.sh`, `check-domain-error-code-registry.sh` | rc=0 / rc=0 |
+
+## `OrderPlaced` 구독자 — 덧붙인 필드가 소비를 깨지 않나 (2026-09-15 UTC)
+
+| 구독자 | 근거 | 판정 |
+|---|---|---|
+| settlement-service | `OrderPlacedEvent` 에 `@JsonIgnoreProperties(ignoreUnknown = true)` | 안전 |
+| product-service | `ReservationInboundEvents.OrderPlacedMessage` 에 `ignoreUnknown = true` | 안전 |
+| notification-service | DTO 가 `orderId/userId/totalPrice` 만 선언하는데 **지금도** 와이어엔 `items`·`shippingAddress` 가 실려 온다. 커스텀 ObjectMapper 없음(Spring Boot 기본 = 모르는 필드 무시) | 이미 모르는 필드를 받고 있다 ⇒ 안전 |
+| payment-service | 같은 논리 — DTO `OrderItem` 에 `sellerId` 가 없는데 와이어엔 이미 있다. 커스텀 ObjectMapper 없음 | 안전 |
+
+🔵 `POST /api/orders` 응답을 쓰는 다른 곳: load-tests 는 `orderId` 만 읽고, `tests/e2e` 는 쿠폰 없이 주문한다. platform-console 은 관리자 조회 경로만 부른다.
+
+**미측정 (로컬에서 못 잰 것):** web-store vitest(Node 24 에서 vitest 4 기동 불가 — CI Node 20 이 권위), order-service Testcontainers 통합 테스트(로컬 Docker 차단 — CI), 실 스택 종단(쿠폰 선택 → 토스 승인 성공)은 돌리지 않았다.

@@ -114,6 +114,21 @@ describe('재로그인 루프 (TASK-PC-FE-278)', () => {
     expect(screen.getByTestId('host')).toHaveTextContent('세션이 만료');
   });
 
+  it('🔴🔴 ② 유휴 만료 갱신 실패(`TASK-MONO-674`)도 **같은 마커**로 와서 같은 문구를 보이고, 목적지를 잃지 않는다', async () => {
+    // ①(서버 401)과 ②(30분 유휴 → 갱신 실패)는 화면만 보면 둘 다 «로그인 화면» 이다.
+    // 갈리는 것은 쿼리였고, ②는 사유가 **없었다**. 이제 ②도 `error=session_expired` 를
+    // 싣고 온다 — 갱신 라우트가 `redirect` 를 덧붙이므로 그 모양 그대로 잰다.
+    isAuthenticatedMock.mockResolvedValue(true);
+
+    await renderLogin({ error: SESSION_EXPIRED, redirect: '/ecommerce' });
+
+    expect(redirectMock).not.toHaveBeenCalled();
+    expect(screen.getByTestId('host')).toHaveTextContent('세션이 만료');
+    expect(screen.getByRole('link').getAttribute('href')).toBe(
+      `/api/auth/login?redirect=${encodeURIComponent('/ecommerce')}`,
+    );
+  });
+
   it('🔵 마커 상수와 401 지점들이 쓰는 경로가 어긋나지 않는다', () => {
     expect(RE_LOGIN_PATH).toBe(`/login?error=${SESSION_EXPIRED}`);
     expect(RE_LOGIN_PATH).toBe('/login?error=session_expired');

@@ -245,8 +245,26 @@ export async function isAuthenticated(): Promise<boolean> {
 }
 
 /**
- * The **sample visitor** (ADR-MONO-074 A1): the IAM access cookie AND the
- * operator cookie are BOTH absent — an anonymous browser.
+ * Whether the browser still holds the IAM refresh cookie (TASK-MONO-674).
+ *
+ * The access / id_token / home-tenant cookies carry `maxAge = expires_in`
+ * (1800s) and the operator cookie `maxAge = expiresIn`, so after an idle
+ * period the browser DROPS them while the 30-day refresh cookie survives. Its
+ * presence is what separates "logged in before, session idled out" (→ silent
+ * refresh via `GET /api/auth/refresh`) from "never logged in / logged out"
+ * (→ plain `/login?redirect=`). It is NOT an authentication predicate — a
+ * present refresh cookie may be rotated away or revoked; only the refresh
+ * route can tell.
+ */
+export async function hasRefreshToken(): Promise<boolean> {
+  const jar = await cookies();
+  return Boolean(jar.get(REFRESH_COOKIE)?.value);
+}
+
+/**
+ * The **sample visitor** (ADR-MONO-074 A1): the IAM access cookie, the operator
+ * cookie AND the refresh cookie are ALL absent — an anonymous browser that has
+ * no session of any kind, live or idled out.
  *
  * Such a visitor enters the real `(console)` shell, and every backend call site
  * answers it from the sample router instead of the network
@@ -257,15 +275,25 @@ export async function isAuthenticated(): Promise<boolean> {
  *    when the rule changes (the same argument `app/page.tsx` made for
  *    {@link isAuthenticated}).
  *
- * 🔴 Half sessions are NOT sample visitors, on purpose:
+ * 🔴 NOT sample visitors, on purpose (ADR-MONO-074 A1: «반쪽 세션·죽은 쿠키는 지금
+ *    경로 그대로»):
  *    - access cookie only (the pre-operator state, {@link hasPreOperatorSession})
  *      → onboarding / login exactly as before;
- *    - operator cookie only → not authenticated → login exactly as before.
+ *    - operator cookie only → not authenticated → login exactly as before;
+ *    - 🔴🔴 refresh cookie surviving without access/operator cookies = «logged in
+ *      before, idled out» (TASK-MONO-674: the access and operator cookies expire
+ *      at their token TTL while the 30-day refresh cookie stays) → the silent
+ *      refresh hop, NOT the sample shell. Without this clause a real operator
+ *      back from a coffee break would be shown synthetic data. (TASK-PC-FE-282 D11.)
  *    A dead-but-present cookie is likewise not a sample visitor: the backend
- *    401 drives the existing forced re-login.
+ *    401 / the refresh route drives the existing forced re-login.
  */
 export async function isSampleVisitor(): Promise<boolean> {
-  return (await getAccessToken()) === null && (await getOperatorToken()) === null;
+  return (
+    (await getAccessToken()) === null &&
+    (await getOperatorToken()) === null &&
+    !(await hasRefreshToken())
+  );
 }
 
 /**

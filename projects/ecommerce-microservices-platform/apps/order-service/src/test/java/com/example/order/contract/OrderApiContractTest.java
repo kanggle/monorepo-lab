@@ -77,9 +77,9 @@ class OrderApiContractTest {
     // ─── POST /api/orders — 201 ─────────────────────────────────────────
 
     @Test
-    @DisplayName("POST /api/orders 성공 응답은 {orderId}만 포함한다")
-    void placeOrder_response_containsOnlyOrderId() throws Exception {
-        given(orderPlacementService.placeOrder(any())).willReturn(new PlaceOrderResult("order-1"));
+    @DisplayName("POST /api/orders 성공 응답은 {orderId, totalPrice, discountAmount}만 포함한다")
+    void placeOrder_response_containsSpecFields() throws Exception {
+        given(orderPlacementService.placeOrder(any())).willReturn(new PlaceOrderResult("order-1", 25000L, 5000L));
 
         MvcResult result = mockMvc.perform(post("/api/orders")
                         .header("X-User-Id", "user-1")
@@ -88,8 +88,10 @@ class OrderApiContractTest {
                 .andExpect(status().isCreated())
                 .andReturn();
 
+        // TASK-INT-026: totalPrice is the amount the client charges — the field the web-store
+        // hands to the PG. Dropping it would bring back AMOUNT_MISMATCH for coupon orders.
         assertFieldsMatch(result.getResponse().getContentAsString(),
-                Set.of("orderId"), SPEC_REF + " POST /api/orders 201");
+                Set.of("orderId", "totalPrice", "discountAmount"), SPEC_REF + " POST /api/orders 201");
     }
 
     // ─── GET /api/orders — 200 ──────────────────────────────────────────

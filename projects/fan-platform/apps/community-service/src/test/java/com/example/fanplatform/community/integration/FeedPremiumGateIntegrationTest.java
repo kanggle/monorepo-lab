@@ -81,10 +81,14 @@ class FeedPremiumGateIntegrationTest extends CommunityServiceIntegrationBase {
         Post p = Post.createDraft(
                 UUID.randomUUID().toString(), TENANT, ARTIST,
                 PostType.ARTIST_POST, PostVisibility.PREMIUM,
-                "Premium Title", "Premium body content", mediaRefSerializer.serialize(null));
+                "Premium Title", "Premium body content",
+                // 🔴 TASK-MONO-679 — 사진이 **있어야** 아래 «잠기면 빈 배열» 단언이 공허하지 않다.
+                mediaRefSerializer.serialize(java.util.List.of(PREMIUM_PHOTO)));
         p.publish(ActorType.AUTHOR);
         postJpaRepository.saveAndFlush(p);
     }
+
+    static final String PREMIUM_PHOTO = "https://images.example.com/premium.jpg";
 
     @AfterEach
     void cleanUp() {
@@ -134,6 +138,14 @@ class FeedPremiumGateIntegrationTest extends CommunityServiceIntegrationBase {
         assertThat(item.path("bodyPreview").isNull())
                 .as("locked post must not expose body preview")
                 .isTrue();
+        // TASK-MONO-679 — the post was seeded WITH a photo, so an empty array here is the gate
+        // working, not the absence of anything to redact.
+        assertThat(item.path("mediaRefs").isArray())
+                .as("mediaRefs is always an array")
+                .isTrue();
+        assertThat(item.path("mediaRefs").size())
+                .as("locked post must not expose photo URLs")
+                .isZero();
     }
 
     // -----------------------------------------------------------------------
@@ -178,7 +190,7 @@ class FeedPremiumGateIntegrationTest extends CommunityServiceIntegrationBase {
                     UUID.randomUUID().toString(), TENANT, ARTIST,
                     PostType.ARTIST_POST, PostVisibility.PREMIUM,
                     "Premium Title", "Premium body content",
-                    mediaRefSerializer.serialize(null));
+                    mediaRefSerializer.serialize(java.util.List.of(PREMIUM_PHOTO)));
             p.publish(ActorType.AUTHOR);
             postJpaRepository.saveAndFlush(p);
         }
@@ -227,6 +239,12 @@ class FeedPremiumGateIntegrationTest extends CommunityServiceIntegrationBase {
             assertThat(item.path("bodyPreview").asText())
                     .as("subscriber sees body preview")
                     .isEqualTo("Premium body content");
+            // TASK-MONO-679 — the positive control for the locked arm above: the same seeded photo
+            // reaches an entitled reader, so "empty when locked" is the gate, not a missing field.
+            assertThat(item.path("mediaRefs").size()).isEqualTo(1);
+            assertThat(item.path("mediaRefs").get(0).asText())
+                    .as("subscriber sees the photo URL verbatim")
+                    .isEqualTo(PREMIUM_PHOTO);
         }
     }
 

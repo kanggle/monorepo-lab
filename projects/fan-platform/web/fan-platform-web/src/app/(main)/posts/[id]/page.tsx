@@ -7,6 +7,7 @@ import {
   PublicPostDetail,
   ProvenanceBanner,
 } from '@/features/public-browse';
+import { BackLink } from '@/shared/ui/BackLink';
 
 /**
  * 포스트 상세 — 출처가 **둘**이고, 순서가 정해져 있다.
@@ -30,6 +31,10 @@ import {
  * 🔴🔴 잠긴 글의 본문은 ②에서 **구조적으로 없다** — 봉투가 `body: null` 을 보장하고
  *    (`validateDatasetData` 가 아니면 봉투를 거부한다) `PublicPostDetail` 의 잠김 분기에는
  *    본문을 참조하는 식이 없다. 「조심해서 안 그린다」가 아니라 그릴 것이 없다.
+ *
+ * 🔵 «← 뒤로»(TASK-FAN-FE-023)는 두 출처 **각각의 바깥**에 하나씩 둔다 — 회원 판이 `null` 이면
+ *    공개 판으로 내려가므로, 한 렌더에는 늘 하나뿐이다. 회원 판의 두 모양(성공 ·
+ *    `MEMBERSHIP_REQUIRED`)은 `memberPostDetail` 이 만든 엘리먼트라 이 한 자리가 둘 다 덮는다.
  */
 export default async function PostDetailPage({
   params,
@@ -40,7 +45,14 @@ export default async function PostDetailPage({
 
   if (await isAuthenticated()) {
     const member = await memberPostDetail(id);
-    if (member) return member;
+    if (member) {
+      return (
+        <section>
+          <BackLink />
+          {member}
+        </section>
+      );
+    }
   }
 
   const result = await readFanPublicData();
@@ -49,6 +61,7 @@ export default async function PostDetailPage({
 
   return (
     <section>
+      <BackLink />
       <PublicPostDetail post={post} />
       <ProvenanceBanner
         source={result.envelope.source}

@@ -31,10 +31,16 @@ export interface OrderItemDetail {
 export interface PlaceOrderRequest {
   items: OrderItem[];
   shippingAddress: ShippingAddress;
+  /** 적용할 쿠폰 (TASK-INT-026). 할인액은 order-service 가 promotion-service 에 물어 정한다. */
+  couponId?: string;
 }
 
 export interface PlaceOrderResponse {
   orderId: string;
+  /** 결제할 금액 — 할인 반영 후. PG 에 이 금액을 그대로 요청해야 승인이 통과한다. */
+  totalPrice: number;
+  /** 서버가 확정한 쿠폰 할인액. 쿠폰이 없으면 0. */
+  discountAmount: number;
 }
 
 export interface OrderListParams {

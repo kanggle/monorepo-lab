@@ -5,12 +5,16 @@ import { headers } from 'next/headers';
 import {
   isAuthenticated,
   isSampleVisitor,
+  hasRefreshToken,
   getActiveTenant,
   getIdToken,
   getAccessToken,
 } from '@/shared/lib/session';
 import { decodeJwtPayload } from '@/shared/lib/jwt';
-import { buildLoginRedirectFor } from '@/shared/lib/login-redirect';
+import {
+  buildLoginRedirectFor,
+  buildSessionRefreshRedirectFor,
+} from '@/shared/lib/login-redirect';
 import { getCatalog } from '@/features/catalog';
 import {
   selectableTenants,
@@ -66,6 +70,24 @@ async function buildLoginRedirect(): Promise<string> {
 }
 
 /**
+ * Idle-expiry hop (TASK-MONO-674, console-integration-contract § 2.6.1).
+ *
+ * 🔴 The access cookie's `maxAge` is the token's `expires_in` (1800s), so after
+ * 30 idle minutes the BROWSER drops it (and the operator cookie at its own TTL)
+ * while the 30-day refresh cookie survives. This guard reads cookies only, so it
+ * used to bounce such an operator to a reason-less `/login?redirect=…`.
+ *
+ * A layout cannot set cookies, so the refresh cannot happen here: redirect to
+ * `GET /api/auth/refresh`, which rotates + re-exchanges, sets the cookies and
+ * returns to the same path (or lands on `/login?error=session_expired`).
+ * Same path predicate as {@link buildLoginRedirect}.
+ */
+async function buildSessionRefreshRedirect(): Promise<string> {
+  const hdrs = await headers();
+  return buildSessionRefreshRedirectFor(hdrs.get('x-pathname'));
+}
+
+/**
  * Console shell layout (Vercel-style — TASK-PC-FE-039).
  *
  * Layout: a full-width sticky top bar holds only the brand + the **tenant
@@ -82,13 +104,20 @@ async function buildLoginRedirect(): Promise<string> {
  *
  *   - authenticated operator ({@link isAuthenticated}) → this shell, real data,
  *     exactly as before;
- *   - sample visitor ({@link isSampleVisitor} — BOTH session cookies absent) →
- *     this shell, sample data: every backend call site answers from the sample
- *     router (`shared/api/sample-gate.ts`), and the fetch allow-list guard
- *     (`tests/unit/sample-fetch-allowlist.test.ts`) keeps a new call site from
- *     appearing outside that branch;
- *   - a half session (access cookie only / operator cookie only) → `/login`,
- *     exactly as before.
+ *   - sample visitor ({@link isSampleVisitor} — access, operator AND refresh
+ *     cookies all absent) → this shell, sample data: every backend call site
+ *     answers from the sample router (`shared/api/sample-gate.ts`), and the fetch
+ *     allow-list guard (`tests/unit/sample-fetch-allowlist.test.ts`) keeps a new
+ *     call site from appearing outside that branch;
+ *   - not authenticated but the refresh cookie survives (idled out,
+ *     TASK-MONO-674) → the silent refresh hop `GET /api/auth/refresh`, exactly as
+ *     MONO-674 defined it — NOT the sample shell;
+ *   - a half session (access cookie only / operator cookie only, no refresh
+ *     cookie) → `/login`, exactly as before.
+ *
+ * 🔴 Order matters: the sample question is asked first, and it already excludes
+ *    every browser that holds any session cookie — so the MONO-674 branch below
+ *    sees exactly the population it saw before this ticket.
  *
  * The sample shell (A7): the account menu slot is a «로그인» link carrying
  * `?redirect=<current path>`; the tenant switcher shows the single read-only
@@ -108,8 +137,19 @@ export default async function ConsoleLayout({
 }: {
   children: ReactNode;
 }) {
+  // ADR-MONO-074 A1 — a sample visitor (no access, operator OR refresh cookie)
+  // enters the sample shell. Everyone else meets the TASK-MONO-674 guard below,
+  // unchanged.
   const sampleVisitor = await isSampleVisitor();
-  if (!sampleVisitor && !(await isAuthenticated())) redirect(await buildLoginRedirect());
+  if (!sampleVisitor && !(await isAuthenticated())) {
+    // Refresh cookie present = logged in before, session idled out → refresh.
+    // Absent = never logged in / logged out → login. No network call either way.
+    redirect(
+      (await hasRefreshToken())
+        ? await buildSessionRefreshRedirect()
+        : await buildLoginRedirect(),
+    );
+  }
 
   const activeTenant = await getActiveTenant();
   const accountLabel = sampleVisitor

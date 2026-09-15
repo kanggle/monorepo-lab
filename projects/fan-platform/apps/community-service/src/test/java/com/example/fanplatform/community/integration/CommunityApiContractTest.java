@@ -140,7 +140,7 @@ class CommunityApiContractTest extends CommunityServiceIntegrationBase {
         JsonNode data = json.path("data");
         for (String key : new String[]{
                 "postId", "tenantId", "postType", "visibility", "status",
-                "authorAccountId", "title", "body",
+                "authorAccountId", "title", "body", "mediaRefs",
                 "commentCount", "reactionCount",
                 "publishedAt", "createdAt", "updatedAt"}) {
             assertThat(data.has(key)).as("data missing field '%s'", key).isTrue();
