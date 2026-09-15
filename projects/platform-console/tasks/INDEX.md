@@ -91,7 +91,15 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+**`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔴 **순서: 282 → 283~288 직렬**(샘플 등록부·원장 파일 공유 — 병렬 worktree 금지) → 루트 `TASK-MONO-686`(`/demo` 은퇴, ⏳).
+
+- `TASK-PC-FE-282-anonymous-visitors-enter-the-real-console-and-the-gateways-answer-with-samples.md` — 🔴🔴 **기반**. 판정(액세스·운영자 쿠키 둘 다 없음) · 게이트웨이 코어 6 + 코어 밖 `fetch` 전부의 샘플 분기(토큰 조회 **전**) · 셸 익명판(heartbeat·백엔드 공지 미렌더) · 배너 · 루트 `/` → 개요 · 원장 · 가드 셋(샘플 라우터 금지 임포트 · 코어 밖 fetch 금지 · «(샘플)» 규칙) · 대시보드 픽스처. 🔴 `(console)` 가드의 의미가 «못 들어온다» → «들어오지만 백엔드에 못 닿는다» 로 바뀐다. 🔴 코어 넷이 403 메시지를 덮어써서 거부 문구는 **코드 `SAMPLE_READ_ONLY` → 문구** 매핑. 분석=Opus 5 / 구현 권장=Opus 5.
+- `TASK-PC-FE-283-iam-screens-get-samples.md` — IAM 14 화면 · GET 18. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
+- `TASK-PC-FE-284-ecommerce-screens-get-samples.md` — ecommerce 23 화면 · GET 19 · 🔴 이미지에 MinIO 주소 금지. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
+- `TASK-PC-FE-285-erp-screens-get-samples.md` — erp 6 화면 · GET 18 · 🔴 개요 수 = 목록 행 수. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
+- `TASK-PC-FE-286-finance-and-ledger-screens-get-samples.md` — finance·ledger 4 화면 · GET 15 · 🔴 차변 합 = 대변 합. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
+- `TASK-PC-FE-287-wms-screens-get-samples.md` — wms 7 화면 · GET 11 · 🔴 NESTED 에러 봉투라 코드 보존 확인 · 코드 칸 null 금지. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
+- `TASK-PC-FE-288-scm-screens-get-samples.md` — scm 6 화면 · GET 10 · 🔴 404-as-empty 센티널 경로 유지 · 공급사 UUID 표시 금지. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
 
 
 _(직전 착수)_ `TASK-PC-BE-015` — console-bff 의 spec-vs-reality resilience 갭 봉합. `architecture.md` § Resilience(D5.A)·`RestClientConfig` javadoc·계약 § 2.4.9 가 모두 "per-leg circuit-breaker keyed by `(domain, route)`" 를 단언하지만 `src/main` 에 resilience4j import 0건(타임아웃 쌍만 존재). `libs/java-common` 의 `ResilienceClientFactory` 를 **그대로 채택**해 13개 `(domain, route)` 레그 전부 CB+bounded retry 뒤로 이동하고, 죽어 있던 `circuit_open`/`CIRCUIT_OPEN` 분류를 실제 emitter 로 살린다(console-web zod `DEGRADED_REASONS` 는 이미 소비 준비 완료). 문서의 `libs/java-web` 인용도 오답(그 모듈엔 resilience 코드 0) → `libs/java-common` 정정. 분석=Opus 5 / 구현 권장=Opus.
