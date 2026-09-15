@@ -255,6 +255,30 @@ export function validateDatasetData(dataset, data) {
         }
       }
     }
+
+    // ── 리뷰 (ADR-MONO-074) ─────────────────────────────────────────────────
+    // 🔴 `reviews` 는 **필수**다. 빠진 봉투를 «리뷰 0개» 로 읽어 주면 발행자의 누락이 조용히
+    //    통과하고, 화면은 모든 상품을 «리뷰 없음» 으로 그린다.
+    if (!isArrayOfObjects(d.reviews)) return { ok: false, reason: 'store.reviews 가 객체 배열이 아닙니다' };
+    // 🔴🔴 작성자 식별 키 — 변환기가 허용 목록으로 다시 조립하므로 여기 걸릴 일은 없어야 한다.
+    //    이것은 **두 번째 겹**이다: 변환기를 안 거친 봉투(손으로 올린 발행본 · 다른 발행자)가 여기서
+    //    막힌다. 한 겹이면 그 한 겹이 빠진 날 조용히 통과한다.
+    const REVIEW_AUTHOR_KEYS = ['userId', 'accountId', 'tenantId', 'email', 'userName', 'nickname', 'authorName'];
+    const productIds = new Set(/** @type {Array<Record<string, unknown>>} */ (d.products).map((p) => p.id));
+    for (const r of /** @type {Array<Record<string, unknown>>} */ (d.reviews)) {
+      for (const banned of REVIEW_AUTHOR_KEYS) {
+        if (banned in r) {
+          return { ok: false, reason: `리뷰 '${String(r.id)}' 에 ${banned} 이(가) 실려 있습니다 — 작성자는 공개 계약에 없습니다` };
+        }
+      }
+      if (typeof r.rating !== 'number' || !Number.isInteger(r.rating) || r.rating < 1 || r.rating > 5) {
+        return { ok: false, reason: `리뷰 '${String(r.id)}' 의 rating 이 1~5 정수가 아닙니다: '${String(r.rating)}'` };
+      }
+      // 🔴 저장본에 없는 상품의 리뷰 = 숨김 상품은 걸렀는데 그 리뷰는 안 거른 모양이다.
+      if (!productIds.has(r.productId)) {
+        return { ok: false, reason: `리뷰 '${String(r.id)}' 의 상품 '${String(r.productId)}' 이(가) 저장본에 없습니다` };
+      }
+    }
     return { ok: true };
   }
 

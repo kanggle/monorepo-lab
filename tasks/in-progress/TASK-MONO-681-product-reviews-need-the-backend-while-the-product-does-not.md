@@ -8,7 +8,7 @@ TASK-MONO-681
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -23,12 +23,15 @@ monorepo
 
 ---
 
-# ⏳ BLOCKED — `ADR-MONO-074` ACCEPTED 전에는 착수하지 않는다
+# 🟢 게이트 닫힘 — `ADR-MONO-074` ACCEPTED (2026-09-15 UTC)
+
+소유자 정확형 **`ADR-MONO-074 ACCEPTED`** — ADR 이름 · `ACCEPTED` 둘 다 있고, 이 ADR 은 갈래 letter 가 없으므로
+세 번째 요건은 해당 없음. **뒤집힌 라이더 0** ⇒ 아래 AC 는 기안 그대로다.
 
 🔴 **AC-0 (게이트)**: `ADR-MONO-074` 의 Status 가 `ACCEPTED` 이고, 그 ACCEPT 가 소유자의 정확형
 (`ADR-MONO-074 ACCEPTED` [— 뒤집을 라이더])으로 기록돼 있는가. **아니면 STOP.** 방향 선택(갈래 고르기)은 ACCEPT 가
 아니다(`platform/architecture-decision-rule.md` § The ACCEPTED Gate). 뒤집힌 라이더가 있으면 **아래 AC 를 그에 맞게
-먼저 고친다.**
+먼저 고친다.** — ✅ 충족(위).
 
 ---
 
@@ -71,14 +74,23 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 위 게이트.
-- [ ] **AC-1** — `validateDatasetData('store', …)` 가 `reviews` 부재 · 작성자 식별 키(`userId`/`accountId`/`tenantId`/
+- [x] **AC-0** — 위 게이트. ✅ 2026-09-15 소유자 정확형 `ADR-MONO-074 ACCEPTED`.
+- [x] **AC-1** — `validateDatasetData('store', …)` 가 `reviews` 부재 · 작성자 식별 키(`userId`/`accountId`/`tenantId`/
       `email`/`userName`/`nickname`) · 1~5 밖의 별점 · 저장본에 없는 `productId` 를 **각각** 거부한다(대조군: 정상본 통과).
-- [ ] **AC-2** — `toPublicReview` 산출물에 작성자 필드가 없다. 🔴 **양성 대조군**: 픽스처 원본에는 `userId` 가 실제로 있다.
-- [ ] **AC-3** — 숨김 상품에 달린 리뷰(음성 대조군)가 번들 시드에 **문자열로도** 없다(`assertNoLeak` + 시험 둘 다).
-- [ ] **AC-4** — `build-bundled-snapshots.mjs --check` 드리프트 0 · 번들 시드 `coverage.reviews > 0` · 공개 상품
+      ✅ `tests/public-data.test.mjs` «내용물: 리뷰 계약이 부재·작성자·별점·고아를 각각 거부한다» — 거부 6칸(부재 · `userId` ·
+      `nickname` · 별점 0 · 별점 3.5 · 고아) + 대조군 2칸(정상 · 0개). 계약 목록은 `authorName` 까지 7키.
+- [x] **AC-2** — `toPublicReview` 산출물에 작성자 필드가 없다. 🔴 **양성 대조군**: 픽스처 원본에는 `userId` 가 실제로 있다.
+      ✅ «리뷰: 작성자가 공개 DTO 에 없다» — 키 집합이 정확히 6개 + 원본 전 항목에 `userId` 실재 단언.
+- [x] **AC-3** — 숨김 상품에 달린 리뷰(음성 대조군)가 번들 시드에 **문자열로도** 없다(`assertNoLeak` + 시험 둘 다).
+      ✅ 생성기 누출 대조군 store **68건**(이전 상품만일 때보다 늘었다) + 시험 «리뷰의 음성 대조군이 문자열로도 없다»
+      (MUST-NOT-LEAK 4건 이상 비공허성 단언 포함).
+- [x] **AC-4** — `build-bundled-snapshots.mjs --check` 드리프트 0 · 번들 시드 `coverage.reviews > 0` · 공개 상품
       **전부**가 리뷰 ≥ 1 (상품 상세에 빈 리뷰가 없다).
-- [ ] **AC-5** — 발행자 `extractStore` 가 상품 하나의 리뷰 수집만 실패해도 `collectionStatus.reviews = 'failed'` 를 낸다.
+      ✅ `--check` rc=0 · `reviews=60`(24상품 × 2~3) · 시험 «공개 상품 전부가 리뷰를 갖고…» + web-store 오프라인 스위트(실제 시드) 두 곳.
+- [x] **AC-5** — 발행자 `extractStore` 가 상품 하나의 리뷰 수집만 실패해도 `collectionStatus.reviews = 'failed'` 를 낸다.
+      ✅ 판정은 `collectReviews`(`src/transform.mjs`, 네트워크 주입)가 들고 있고 시험 «한 상품이라도 실패하면 fetched=false
+      이고 봉투에서 failed 가 된다» 가 문다. `extractStore` 는 `detailsOk && collected.fetched` 를 그대로 싣는다.
+      ⚪ `extractStore` 의 HTTP 배관 자체는 **시험하지 않았다** — 이 패키지가 원래 안 시험하는 축(README § 시험: 게이트웨이 없음).
 - [ ] **AC-6** — 공개 상품 상세가 **백엔드를 부르지 않고** 리뷰·요약을 그린다 — 상세 경로에서 `useProductReviews`·
       `useReviewSummary` 호출 **0건**, 테스트가 그것을 문다.
 - [ ] **AC-7** — `source !== 'backend'` 일 때 「샘플 리뷰」 표시가 보이고, `source === 'backend'` 면 안 보인다(두 칸 다 시험).

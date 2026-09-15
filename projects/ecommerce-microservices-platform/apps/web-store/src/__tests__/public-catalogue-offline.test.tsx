@@ -237,6 +237,21 @@ describe('공개 카탈로그 — 백엔드 없이 (번들 시드 실물)', () =
     }
   });
 
+  it('시드의 공개 상품은 전부 리뷰를 갖고, 리뷰에는 작성자가 없다 (ADR-MONO-074)', async () => {
+    const { data } = await readStoreSnapshot();
+    const ids = new Set(data.products.map((p) => p.id));
+
+    expect(data.reviews.length).toBeGreaterThan(0);
+    for (const p of data.products) {
+      expect(data.reviews.some((r) => r.productId === p.id)).toBe(true);
+    }
+    for (const r of data.reviews) {
+      expect(ids.has(r.productId)).toBe(true);
+      expect(r).not.toHaveProperty('userId');
+      expect(Number.isInteger(r.rating) && r.rating >= 1 && r.rating <= 5).toBe(true);
+    }
+  });
+
   it('카드 그리드를 그려도 네트워크로 나가지 않았다', () => {
     // 🔵 위 전 칸이 도는 동안 stub 된 fetch 가 한 번이라도 불렸으면 그 자리에서 던져서
     //    이미 빨강이었다. 여기서는 «한 번도 안 불렸다» 를 명시적으로 한 번 더 적는다.

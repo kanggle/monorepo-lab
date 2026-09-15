@@ -1,6 +1,6 @@
 # ADR-MONO-074 — 상품 리뷰는 store 저장본에 실린다 (그리고 작성자는 싣지 않는다)
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 **Date:** 2026-09-15
 **주관 티켓:** `TASK-MONO-681`
 **개정 대상:** [`ADR-MONO-070`](ADR-MONO-070-public-browsing-served-from-a-versioned-vercel-snapshot.md) § D2(공개 필드 허용 목록) —
@@ -18,6 +18,10 @@ store 데이터셋에 `reviews` 컬렉션을 더한다. § D3(백엔드로 가�
 
 ## History
 
+- 2026-09-15 — **ACCEPTED (라이더 R1~R6 그대로).** 소유자 정확형: **`ADR-MONO-074 ACCEPTED`**. 이름 · `ACCEPTED` 둘 다
+  있고, 이 ADR 은 갈래 letter 를 두지 않았으므로(방향은 이미 소유자가 골랐다) 세 번째 요건은 해당이 없다. 뒤집힌 라이더 **0**.
+  🔴 결정 본문(§ Decision · § 라이더 · § Consequences)은 **한 바이트도 안 바꿨다** — ACCEPT 는 *finalise* 이지 *re-decide* 가 아니다.
+  🔵 실행 `TASK-MONO-681` 은 PROPOSED 와 **같은 PR 에서 기안**돼 있었고, 그 AC-0(게이트)이 이 줄로 닫힌다.
 - 2026-09-15 — **PROPOSED.** 🔴 위 인용은 **방향**을 정했다. 그러나 그 문장 안의 세부(필드 목록·샘플 표시)는 내가
   선택지 설명에 **써 넣은 것**이고, 그 밖의 결정(아래 § 라이더)은 소유자가 본 적이 없다. ⇒
   `platform/architecture-decision-rule.md` § The ACCEPTED Gate 에 따라 이 ADR 은 **PROPOSED** 이고,

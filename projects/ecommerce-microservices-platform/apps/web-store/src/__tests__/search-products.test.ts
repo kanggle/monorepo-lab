@@ -50,6 +50,7 @@ const DATA: StorePublicData = {
     { id: 'cat-pc', name: '노트북', productCount: 2 },
     { id: 'cat-acc', name: '주변기기', productCount: 1 },
   ],
+  reviews: [],
 };
 
 function snapshot(data: StorePublicData = DATA) {
@@ -159,7 +160,7 @@ describe('searchProducts — 공개 저장본', () => {
     });
 
     it('저장본 자체가 빈 경우 — corpusSize === 0', async () => {
-      mockRead.mockResolvedValue(snapshot({ products: [], categories: [] }));
+      mockRead.mockResolvedValue(snapshot({ products: [], categories: [], reviews: [] }));
       const r = await searchProducts({ q: '노트북' });
       expect(r.totalElements).toBe(0);
       expect(r.corpusSize).toBe(0);

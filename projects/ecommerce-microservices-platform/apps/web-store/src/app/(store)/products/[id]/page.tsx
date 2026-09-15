@@ -3,6 +3,7 @@ export const revalidate = 60;
 import { cache } from 'react';
 import dynamic from 'next/dynamic';
 import { getProduct } from '@/entities/product';
+import { getSnapshotProductReviews } from '@/features/review/api/get-snapshot-reviews';
 import { ProductDetailWithCart } from '@/widgets/product-detail-with-cart';
 import { DataProvenanceNotice } from '@/widgets/data-provenance';
 import { ReviewListSkeleton } from '@/features/review/ui/ReviewListSkeleton';
@@ -61,6 +62,10 @@ export default async function ProductDetailPage({ params }: Props) {
     notFound();
   }
 
+  // 🔴 리뷰·평점 요약도 **서버가 저장본에서** 읽는다(ADR-MONO-074 D3) — 상품과 같은 봉투다.
+  //    브라우저가 게이트웨이로 리뷰를 읽던 예전 판은 데모가 꺼진 동안 리뷰만 비었다.
+  const productReviews = await getSnapshotProductReviews(product.id);
+
   return (
     <div className="container" style={{ paddingTop: 'var(--space-8)', paddingBottom: 'var(--space-16)' }}>
       <div style={{ marginBottom: 'var(--space-4)' }}>
@@ -75,7 +80,12 @@ export default async function ProductDetailPage({ params }: Props) {
           was redundant and re-parented React 19.2 async-info on cleanup
           ("cleaning up async info that was not on the parent Suspense
           boundary"). One boundary only. (TASK-FE-082) */}
-      <ReviewList productId={product.id} />
+      <ReviewList
+        productId={product.id}
+        reviews={productReviews.reviews}
+        summary={productReviews.summary}
+        isSample={productReviews.isSample}
+      />
     </div>
   );
 }

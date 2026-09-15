@@ -34,11 +34,18 @@ import {
   toPublicArtist,
   toPublicPost,
   toPublicProduct,
+  collectReviews,
   deriveCategories,
   humanizeCategoryId,
   collectionStatusOf,
 } from '../src/transform.mjs';
-import { RAW_ARTISTS, RAW_POSTS, RAW_PRODUCTS, CATEGORY_NAMES } from '../fixtures/raw-backend-responses.mjs';
+import {
+  RAW_ARTISTS,
+  RAW_POSTS,
+  RAW_PRODUCTS,
+  RAW_REVIEWS_BY_PRODUCT,
+  CATEGORY_NAMES,
+} from '../fixtures/raw-backend-responses.mjs';
 import { MEMBERSHIP_PLANS } from '../fixtures/membership-plans.mjs';
 import { CONSOLE_SAMPLE_DOMAINS } from '../fixtures/console-sample.mjs';
 
@@ -95,7 +102,7 @@ function buildFan() {
   );
 }
 
-function buildStore() {
+async function buildStore() {
   const products = RAW_PRODUCTS.map(toPublicProduct).filter((p) => p !== null);
   // 🔵 카테고리 표시명은 **백엔드에서 못 얻는다**(조회 API 없음 — 픽스처 헤더 참조).
   //    시드는 마이그레이션의 표시명을 알고 있으므로 그것을 얹고, 모르는 id 는 `humanize` 로
@@ -105,14 +112,26 @@ function buildStore() {
     name: CATEGORY_NAMES[c.id] ?? humanizeCategoryId(c.id),
     productCount: c.productCount,
   }));
-  const data = { products, categories };
+  // 🔴 리뷰(ADR-MONO-074)는 **발행자와 같은 수집기**를 지난다 — 네트워크 자리에 픽스처를 끼울 뿐이다.
+  //    공개된 상품의 id 만 묻으므로 숨김 상품의 리뷰는 애초에 닿지 않는다(계약도 두 번째 겹으로 막는다).
+  const byProduct = new Map(RAW_REVIEWS_BY_PRODUCT.map((g) => [g.productId, g.items]));
+  const collected = await collectReviews(
+    products.map((p) => p.id),
+    async (productId) => ({ fetched: true, rows: byProduct.get(productId) ?? [] }),
+  );
+  const reviews = collected.reviews;
+  const data = { products, categories, reviews };
   return envelope(
     'store',
     'bundled',
     'repo-bundled',
     data,
-    { products: products.length, categories: categories.length },
-    { products: collectionStatusOf(true, products), categories: collectionStatusOf(true, categories) },
+    { products: products.length, categories: categories.length, reviews: reviews.length },
+    {
+      products: collectionStatusOf(true, products),
+      categories: collectionStatusOf(true, categories),
+      reviews: collectionStatusOf(collected.fetched, reviews),
+    },
   );
 }
 
@@ -164,9 +183,22 @@ function assertNoLeak(dataset, envelopeObj) {
         if (p.description) banned.push(p.description);
       }
     }
+    // 🔴 리뷰(ADR-MONO-074) — 작성자 id 전부, 그리고 버려져야 할 리뷰(별점 범위 밖 · 숨김 상품)의 본문.
+    for (const g of RAW_REVIEWS_BY_PRODUCT) {
+      for (const r of g.items) {
+        if (r.userId) banned.push(r.userId);
+        if (typeof r.title === 'string' && r.title.includes('MUST-NOT-LEAK')) {
+          banned.push(r.title);
+          if (r.content) banned.push(r.content);
+        }
+      }
+    }
     // 재고는 숫자라 문자열 검사로는 못 잡는다 — 필드 이름으로 잡는다(계약도 그렇게 잡는다).
     if (json.includes('"stock"')) {
       throw new Error(`[build-snapshots] '${dataset}' 산출물에 "stock" 필드가 있습니다.`);
+    }
+    if (json.includes('"userId"')) {
+      throw new Error(`[build-snapshots] '${dataset}' 산출물에 "userId" 필드가 있습니다 — 리뷰 작성자는 공개 계약에 없습니다.`);
     }
   }
   // 🔴🔴 `console-sample` 은 **다른 것을 물어야 한다.**
@@ -226,7 +258,8 @@ async function main() {
   let drift = 0;
 
   for (const [dataset, build] of Object.entries(BUILDERS)) {
-    const env = build();
+    // 🔵 `await` — store 빌더는 수집기(async)를 지난다. 동기 빌더에 await 해도 값은 같다.
+    const env = await build();
     const v = validateEnvelope(env, { dataset });
     if (!v.ok) {
       console.error(`[build-snapshots] ✗ '${dataset}' 이 계약을 어깁니다: ${v.reason}`);
