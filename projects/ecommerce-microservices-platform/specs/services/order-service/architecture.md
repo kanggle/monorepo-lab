@@ -101,6 +101,7 @@ Package organization should preserve aggregate boundaries and domain ownership.
 - HTTP APIs must follow published HTTP contracts
 - cross-service orchestration must follow use-cases and ownership rules
 - shared libraries must not absorb order-domain logic
+- **outbound HTTP to promotion-service (TASK-INT-026)** — the only synchronous outbound call. Port `application/port/CouponDiscountPort`, adapter in `infrastructure/client`. Apply runs inside the placement transaction, after the `orderId` is assigned and before the order is saved; promotion-service decides the discount, the `Order` aggregate only guards "one coupon, while `PENDING`, ≥ 1 KRW left to pay". Compensation: a transaction synchronization registered **before** the apply call asks promotion-service to release the coupon for that `orderId` whenever the placement does not commit — release is scoped to that `orderId`, so it is safe after a rejection or timeout too. Residual risk (recorded, not closed): an apply that commits at promotion-service **after** the release already ran leaves the coupon `USED` by a non-existent order.
 
 ## Testing Expectations
 Required emphasis:

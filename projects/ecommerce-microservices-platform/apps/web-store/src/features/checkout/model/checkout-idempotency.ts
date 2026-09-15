@@ -23,12 +23,18 @@ interface StoredKey {
   key: string;
 }
 
-/** Order-independent, content-sensitive hash of the checkout line items. */
-function hashItems(items: CheckoutCartItem[]): string {
+/**
+ * Order-independent, content-sensitive hash of the checkout line items and the chosen coupon.
+ *
+ * The coupon is part of the hash (TASK-INT-026): the server decides the discount at placement
+ * and a replay returns the ORIGINAL order's amount. Without the coupon in the key, choosing a
+ * different coupon after a failed payment would silently reuse the order priced for the old one.
+ */
+function hashCheckout(items: CheckoutCartItem[], couponId: string | null | undefined): string {
   const canonical = items
     .map((i) => `${i.productId}:${i.variantId}:${i.quantity}:${i.price}`)
     .sort()
-    .join('|');
+    .join('|') + `#coupon:${couponId ?? ''}`;
   // Small, stable, non-cryptographic string hash (djb2). Collisions only weaken
   // dedup (two different carts sharing a key) which the server backstops by also
   // scoping the key to the user; for cart content it is more than sufficient.
@@ -47,12 +53,15 @@ function newKey(): string {
 }
 
 /**
- * Returns the idempotency key for placing an order with the given cart items:
- * the stored key when the cart is unchanged (retry of the same checkout), or a
- * freshly generated + persisted key when the cart differs / none is stored.
+ * Returns the idempotency key for placing an order with the given cart items and coupon:
+ * the stored key when both are unchanged (retry of the same checkout), or a freshly
+ * generated + persisted key when either differs / none is stored.
  */
-export function getOrCreateIdempotencyKey(items: CheckoutCartItem[]): string {
-  const cartHash = hashItems(items);
+export function getOrCreateIdempotencyKey(
+  items: CheckoutCartItem[],
+  couponId?: string | null,
+): string {
+  const cartHash = hashCheckout(items, couponId);
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY);
     if (raw) {

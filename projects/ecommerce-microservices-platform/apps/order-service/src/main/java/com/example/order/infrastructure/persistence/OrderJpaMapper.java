@@ -34,7 +34,9 @@ class OrderJpaMapper {
                 entity.getRefundedAt(),
                 entity.getStuckRecoveryAttemptCount(),
                 entity.getStuckRecoveryAt(),
-                entity.getVersion()
+                entity.getVersion(),
+                entity.getCouponId(),
+                entity.getDiscountAmount()
         );
     }
 

@@ -80,6 +80,14 @@ class OrderJpaEntity {
     @Column(name = "idempotency_key", length = 64, updatable = false)
     private String idempotencyKey;
 
+    /** Coupon applied at placement (TASK-INT-026). Insert-only, like the idempotency key. */
+    @Column(name = "coupon_id", length = 36, updatable = false)
+    private String couponId;
+
+    /** Discount granted for {@link #couponId}; {@code total_price} is already net of it. Insert-only. */
+    @Column(name = "discount_amount", nullable = false, updatable = false)
+    private long discountAmount;
+
     static OrderJpaEntity fromDomain(Order order, String tenantId) {
         OrderJpaEntity entity = new OrderJpaEntity();
         entity.orderId = order.getOrderId();
@@ -97,6 +105,8 @@ class OrderJpaEntity {
         entity.stuckRecoveryAt = order.getStuckRecoveryAt();
         entity.version = order.getVersion();
         entity.idempotencyKey = order.getIdempotencyKey();
+        entity.couponId = order.getCouponId();
+        entity.discountAmount = order.getDiscountAmount();
 
         for (OrderItem item : order.getItems()) {
             OrderItemJpaEntity itemEntity = OrderItemJpaEntity.fromDomain(item, entity, tenantId);

@@ -103,7 +103,7 @@ Key domain concepts:
 ## Integration Rules
 - HTTP behavior must follow published contracts
 - Domain events must follow published event contracts
-- order-service communicates coupon application via synchronous HTTP call to promotion-service
+- order-service communicates coupon application via synchronous HTTP call to promotion-service: `POST /api/coupons/{couponId}/apply` during placement (idempotent for the same `orderId`), and `POST /api/internal/coupons/{couponId}/release` when that placement does not commit (TASK-INT-026). The internal path has no gateway route and must never get one — see `promotion-api.md`.
 - Shared libraries may be used only under shared-library policy
 
 ## Events

@@ -76,16 +76,16 @@ continuing there is the lifecycle working as designed, not an exception to it.
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-| ID | Title | Service | Tags |
-|---|---|---|---|
-| TASK-INT-026 | 쿠폰 할인이 결제 금액에 닿지 않는다 — 재현(AC-0) → 쿠폰 적용 호출 주체 결정(AC-1, 스펙 충돌) → 수정 | web-store · order · promotion · payment | api, event, code, test |
+_(없음)_
 
 
 _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DONE. `../../../tasks/done/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
 
 ## in-progress
 
-_(없음)_
+| ID | Title | Service | Tags |
+|---|---|---|---|
+| TASK-INT-026 | 쿠폰 할인이 결제 금액에 닿지 않는다 — AC-1 결정 = ⓐ 동기 호출 (2026-09-15) · 재현 → 스펙 정렬 → 수정 | web-store · order · promotion · payment | api, event, code, test |
 
 
 ## review

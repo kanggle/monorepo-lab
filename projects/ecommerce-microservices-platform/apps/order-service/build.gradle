@@ -13,6 +13,12 @@ dependencies {
     // Common
     implementation project(':libs:java-common')
 
+    // Circuit breaker + retry types returned by ResilienceClientFactory — java-common declares them
+    // `implementation`, so a consumer that holds the returned objects must declare them too
+    // (promotion-service coupon client, TASK-INT-026).
+    implementation 'io.github.resilience4j:resilience4j-circuitbreaker:2.2.0'
+    implementation 'io.github.resilience4j:resilience4j-retry:2.2.0'
+
     // Messaging (Outbox pattern)
     implementation project(':libs:java-messaging')
 

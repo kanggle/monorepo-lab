@@ -49,11 +49,21 @@ public class Coupon {
         return coupon;
     }
 
-    public void apply(String orderId, String requestUserId, Clock clock) {
+    /**
+     * Uses the coupon for {@code orderId}.
+     *
+     * @return {@code true} when this call used the coupon; {@code false} when it was already used
+     *         by the same order and the same user — an idempotent replay of the placement's apply
+     *         (TASK-INT-026), in which nothing changes
+     */
+    public boolean apply(String orderId, String requestUserId, Clock clock) {
         if (!this.userId.equals(requestUserId)) {
             throw new CouponNotOwnedException(this.couponId, requestUserId);
         }
         if (this.status == CouponStatus.USED) {
+            if (orderId != null && orderId.equals(this.orderId)) {
+                return false;
+            }
             throw new CouponAlreadyUsedException(this.couponId);
         }
         if (this.status == CouponStatus.EXPIRED || isExpired(clock)) {
@@ -62,6 +72,22 @@ public class Coupon {
         this.status = CouponStatus.USED;
         this.usedAt = Instant.now(clock);
         this.orderId = orderId;
+        return true;
+    }
+
+    /**
+     * Gives the coupon back when the order placement that used it did not commit (TASK-INT-026).
+     * Acts only if the coupon is used by {@code orderId} — a coupon used by another order, still
+     * issued, or expired is left untouched.
+     *
+     * @return {@code true} if the coupon was reverted to issued
+     */
+    public boolean releaseFor(String orderId) {
+        if (this.status != CouponStatus.USED || orderId == null || !orderId.equals(this.orderId)) {
+            return false;
+        }
+        restore();
+        return true;
     }
 
     public void restore() {

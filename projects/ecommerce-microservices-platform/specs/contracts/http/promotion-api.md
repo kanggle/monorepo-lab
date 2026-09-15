@@ -255,7 +255,15 @@ List coupons for the authenticated user.
 ---
 
 ### POST /api/coupons/{couponId}/apply
-Apply a coupon to calculate discount. Called by order-service during order placement.
+Apply a coupon to calculate discount. Called by **order-service** during order placement,
+synchronously, on the internal network (TASK-INT-026). The web-store does not call it — the
+discount it shows before placement is a preview; the amount charged comes from this call.
+
+**Request Headers**
+| Header | Required | Description |
+|---|---|---|
+| `X-User-Id` | yes | The user placing the order (order-service forwards the gateway-trusted id). |
+| `X-Tenant-Id` | no | Tenant of the order; absent → default tenant. |
 
 **Request Body**
 ```json
@@ -264,6 +272,13 @@ Apply a coupon to calculate discount. Called by order-service during order place
   "orderAmount": 30000
 }
 ```
+
+`orderAmount` is the order's line subtotal **before** any discount.
+
+**Idempotent for the same order.** If the coupon is already `USED` by **the same `orderId`**
+and the same user, the call returns `200` with the discount for `orderAmount` again and
+publishes no second `CouponUsed`. A coupon used by a different order still answers
+`422 COUPON_ALREADY_USED`.
 
 **Response 200**
 ```json
@@ -282,6 +297,39 @@ Apply a coupon to calculate discount. Called by order-service during order place
 | 422 | COUPON_ALREADY_USED | Coupon has already been used |
 | 422 | COUPON_EXPIRED | Coupon has expired |
 | 422 | COUPON_NOT_OWNED | Coupon does not belong to the authenticated user |
+
+---
+
+### POST /api/internal/coupons/{couponId}/release
+**Internal — not routed by gateway-service** (the gateway forwards only `/api/promotions/**`
+and `/api/coupons/**`). Called by order-service when an order placement that attempted
+`apply` does not commit, so the coupon is not left `USED` by an order that does not exist
+(TASK-INT-026).
+
+It must stay off the public route: a user who could call it would release the coupon behind
+an order they were already discounted for, and use it again.
+
+**Request Headers**
+| Header | Required | Description |
+|---|---|---|
+| `X-Tenant-Id` | no | Tenant of the order; absent → default tenant. |
+
+**Request Body**
+```json
+{
+  "orderId": "string (UUID)"
+}
+```
+
+**Behaviour** — reverts the coupon to `ISSUED` **only if** it is `USED` by this `orderId`.
+Any other state (issued, used by another order, expired, not found) is left untouched.
+
+**Response 204** — always, including the no-op cases, so a retry is harmless.
+
+**Error responses**
+| Status | Code | Reason |
+|---|---|---|
+| 400 | VALIDATION_ERROR | `orderId` missing or blank |
 
 ---
 

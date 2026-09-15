@@ -50,17 +50,25 @@ class OrderEventContractTest {
     @DisplayName("OrderPlaced payload는 스펙 정의 필드만 포함한다")
     void orderPlaced_payload_matchesSpec() throws Exception {
         OrderPlacedEvent event = OrderPlacedEvent.of(
-                "order-1", "user-1", 30000L,
+                "order-1", "user-1", 25000L,
                 List.of(new OrderPlacedEvent.Item("p1", "v1", 2, 15000L)),
                 new OrderPlacedEvent.ShippingAddress("홍길동", "010-1234-5678", "12345", "서울시", "강남구"),
+                "coupon-1", 5000L,
                 FIXED_CLOCK
         );
 
         JsonNode root = objectMapper.readTree(objectMapper.writeValueAsString(event));
         JsonNode payload = root.get("payload");
 
-        assertFieldsMatch(payload, Set.of("orderId", "userId", "totalPrice", "items", "shippingAddress"),
+        assertFieldsMatch(payload,
+                Set.of("orderId", "userId", "totalPrice", "items", "shippingAddress", "couponId", "discountAmount"),
                 SPEC_REF + " OrderPlaced payload");
+
+        // TASK-INT-026: totalPrice is the amount paid — net of discountAmount — because payment-service
+        // builds the PENDING payment from it. items[] still carry the pre-discount line amounts.
+        org.assertj.core.api.Assertions.assertThat(payload.get("totalPrice").asLong()).isEqualTo(25000L);
+        org.assertj.core.api.Assertions.assertThat(payload.get("couponId").asText()).isEqualTo("coupon-1");
+        org.assertj.core.api.Assertions.assertThat(payload.get("discountAmount").asLong()).isEqualTo(5000L);
 
         JsonNode item = payload.get("items").get(0);
         assertFieldsMatch(item, Set.of("productId", "variantId", "quantity", "unitPrice", "sellerId"),

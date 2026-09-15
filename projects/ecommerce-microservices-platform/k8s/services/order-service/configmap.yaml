@@ -8,3 +8,6 @@ data:
   SERVER_PORT: "8086"
   OTEL_SERVICE_NAME: "order-service"
   DB_URL: "jdbc:postgresql://order-postgres.infra.svc.cluster.local:5432/order_db"
+  # TASK-INT-026: coupon apply/release at placement. promotion-service has no manifest in this
+  # directory yet — this is the in-cluster name it is expected to take.
+  PROMOTION_SERVICE_URL: "http://promotion-service:8092"

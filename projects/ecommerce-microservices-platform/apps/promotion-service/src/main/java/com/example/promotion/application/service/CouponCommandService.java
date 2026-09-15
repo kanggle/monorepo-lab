@@ -127,13 +127,21 @@ public class CouponCommandService {
         Coupon coupon = couponRepository.findByIdForUpdate(command.couponId())
                 .orElseThrow(() -> new CouponNotFoundException(command.couponId()));
 
-        coupon.apply(command.orderId(), command.userId(), clock);
+        boolean newlyApplied = coupon.apply(command.orderId(), command.userId(), clock);
 
         Promotion promotion = promotionRepository.findById(coupon.getPromotionId())
                 .orElseThrow(() -> new PromotionNotFoundException(coupon.getPromotionId()));
 
         long discountAmount = promotion.calculateDiscount(command.orderAmount());
         long finalAmount = command.orderAmount() - discountAmount;
+
+        if (!newlyApplied) {
+            // Same order asking again (order-service retried after a timeout) — answer the same
+            // discount, but the coupon was used once, so it is saved and announced once (TASK-INT-026).
+            log.info("Coupon apply replay for the same order: couponId={}, orderId={}",
+                    coupon.getCouponId(), command.orderId());
+            return new ApplyCouponResult(coupon.getCouponId(), discountAmount, finalAmount);
+        }
 
         couponRepository.save(coupon);
 
@@ -146,6 +154,29 @@ public class CouponCommandService {
         log.info("Coupon applied: couponId={}, orderId={}, discount={}",
                 coupon.getCouponId(), command.orderId(), discountAmount);
         return new ApplyCouponResult(coupon.getCouponId(), discountAmount, finalAmount);
+    }
+
+    /**
+     * Gives a coupon back when the order placement that used it did not commit (TASK-INT-026).
+     * Called by order-service on the gateway-excluded internal path. Scoped to {@code orderId}:
+     * a coupon used by another order, still issued, expired, or absent is left alone — so a retry,
+     * or a release after a rejected apply, is harmless.
+     */
+    @Transactional
+    public void releaseCoupon(String couponId, String orderId) {
+        Optional<Coupon> found = couponRepository.findByIdForUpdate(couponId);
+        if (found.isEmpty()) {
+            log.info("Coupon release skipped — coupon not found: couponId={}, orderId={}", couponId, orderId);
+            return;
+        }
+        Coupon coupon = found.get();
+        if (!coupon.releaseFor(orderId)) {
+            log.info("Coupon release skipped — not used by this order: couponId={}, orderId={}, status={}",
+                    couponId, orderId, coupon.getStatus());
+            return;
+        }
+        couponRepository.save(coupon);
+        log.info("Coupon released for a placement that did not commit: couponId={}, orderId={}", couponId, orderId);
     }
 
     @Transactional

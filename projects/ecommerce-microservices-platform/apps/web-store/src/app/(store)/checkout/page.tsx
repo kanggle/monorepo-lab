@@ -38,6 +38,7 @@ export default function CheckoutPage() {
         items={checkoutItems}
         totalAmount={totalAmount}
         discountAmount={discountAmount}
+        couponId={couponResult?.couponId ?? null}
         onOrderComplete={completeOrder}
       />
     </NarrowContainer>

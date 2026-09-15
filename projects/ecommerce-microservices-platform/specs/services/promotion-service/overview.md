@@ -19,7 +19,7 @@
 ## Responsibilities
 
 - Manage promotion CRUD (admin) and coupon issuance / lifecycle.
-- Apply coupons at order placement — synchronous HTTP from `order-service`, returns discount amount.
+- Apply coupons at order placement — synchronous HTTP from `order-service`, returns discount amount; release a coupon when that placement does not commit (TASK-INT-026).
 - Enforce usage constraints (one-use, quantity cap, expiry).
 - Restore coupons on `OrderCancelled` event consumption (set `USED → ISSUED`).
 - Calculate discounts (fixed amount, percentage with max cap).
@@ -33,7 +33,8 @@
 | REST | `GET /api/promotions/{id}` | JWT | promotion detail |
 | REST | `POST /api/coupons/issue` | JWT + ROLE_ADMIN | issue coupons to users |
 | REST | `GET /api/coupons` | JWT (owner) | user's coupon list |
-| REST | `POST /api/coupons/{code}/apply` | JWT (service-to-service from order-service) | apply coupon at order placement |
+| REST | `POST /api/coupons/{couponId}/apply` | `X-User-Id` header trust (service-to-service from order-service) | apply coupon at order placement |
+| REST (internal) | `POST /api/internal/coupons/{couponId}/release` | internal network only — no gateway route | release a coupon whose placement did not commit (TASK-INT-026) |
 | Kafka consume | `order.order.cancelled` | — | coupon restoration |
 | Kafka publish | `promotion.coupon.used`, `promotion.coupon.expired` | — | analytics / notification consumers |
 
@@ -61,7 +62,7 @@
 
 - PostgreSQL — promotion / coupon persistence
 - Kafka — event consumption + publication
-- `order-service` (events: `OrderCancelled`; sync HTTP for coupon apply from `order-service`)
+- `order-service` (events: `OrderCancelled`; inbound sync HTTP from `order-service` for coupon apply and internal release)
 
 ## Out of scope (v1)
 
