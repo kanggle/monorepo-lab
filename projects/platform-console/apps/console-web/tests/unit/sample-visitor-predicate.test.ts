@@ -23,6 +23,7 @@ import {
   getActiveTenant,
   ACCESS_COOKIE,
   OPERATOR_COOKIE,
+  REFRESH_COOKIE,
   TENANT_COOKIE,
 } from '@/shared/lib/session';
 import { SAMPLE_TENANT_ID } from '@/shared/sample/codes';
@@ -65,6 +66,29 @@ describe('isSampleVisitor — 4 cells (AC-1)', () => {
       if (o) cookieJar.set(OPERATOR_COOKIE, 'o');
       expect((await isSampleVisitor()) && (await isAuthenticated())).toBe(false);
     }
+  });
+});
+
+describe('🔴🔴 the refresh cookie — idled out is not anonymous (TASK-MONO-674 / D11)', () => {
+  it('all three absent (access ✗ · operator ✗ · refresh ✗) → sample visitor', async () => {
+    expect(await isSampleVisitor()).toBe(true);
+  });
+
+  it('🔴🔴 refresh cookie only → NOT a sample visitor (an operator idled past the access TTL)', async () => {
+    cookieJar.set(REFRESH_COOKIE, 'r');
+    expect(await isSampleVisitor()).toBe(false);
+  });
+
+  it('🔴 access ✗ · operator ✗ but refresh ✓ → NOT a sample visitor, and not authenticated either', async () => {
+    cookieJar.set(REFRESH_COOKIE, 'r');
+    expect(await isSampleVisitor()).toBe(false);
+    expect(await isAuthenticated()).toBe(false);
+  });
+
+  it('🔵 an idled-out browser keeps its tenant cookie read (never the sample tenant)', async () => {
+    cookieJar.set(REFRESH_COOKIE, 'r');
+    cookieJar.set(TENANT_COOKIE, 'acme');
+    expect(await getActiveTenant()).toBe('acme');
   });
 });
 

@@ -115,7 +115,11 @@ const ALLOWED: Record<string, { count: number; category: Category; why: string }
 
   // ── auth flow (the way out of anonymity — must NOT be sample-branched) ──────
   'app/api/auth/callback/route.ts': { count: 1, category: 'auth-flow', why: 'OIDC code → token' },
-  'app/api/auth/refresh/route.ts': { count: 1, category: 'auth-flow', why: 'OIDC refresh' },
+  'shared/lib/session-refresh.ts': {
+    count: 1,
+    category: 'auth-flow',
+    why: 'OIDC refresh grant (TASK-MONO-674 moved it out of app/api/auth/refresh/route.ts, now 0) — reached only when a refresh cookie exists, i.e. never for a sample visitor',
+  },
   'app/api/auth/logout/route.ts': { count: 1, category: 'auth-flow', why: 'OIDC revoke' },
   'shared/lib/operator-token-exchange.ts': {
     count: 1,

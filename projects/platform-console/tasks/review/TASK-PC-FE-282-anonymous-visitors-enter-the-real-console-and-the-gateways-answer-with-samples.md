@@ -295,3 +295,61 @@ B1–B4·B6 는 한 번에 주입해 가드 파일별로 귀속했다(5 files / 
   `/demo`·`/login?redirect` 를 기대하는 nightly 스펙은 0건.
 - **K3 렌더러(에러를 안 읽는 고정 문구) 개별 수** — 셸 알림이 전부를 덮으므로 개별로 세지 않았다(위 표).
 - **실제 Vercel 배포에서 샘플 방문자** — 로컬 production build + smoke 까지만 쟀다.
+
+## CORRECTION — main 병합(`TASK-MONO-674`) 뒤 샘플 판정 조건이 바뀌었다 (2026-09-15 UTC)
+
+위 기록 중 «`isSampleVisitor()` = 액세스 쿠키 **와** 운영자 쿠키가 둘 다 없음»(D3 · AC-1 절 · 원장 설명 등)은 **병합 이후 참이 아니다.**
+지금 참인 것: **액세스 ✗ · 운영자 ✗ · 리프레시 ✗** 셋이 모두 없어야 샘플 방문자다. 위 문장은 그 시점의 기록이라 고치지 않고, 여기
+추가만 한다. (🔵 조정자는 D11/D12 를 «편차» 절 안에 넣으라고 했지만 `review/` 파일은 동결 — HARDSTOP-05 훅이 중간 편집을 막았고,
+허용되는 형태가 끝에 붙이는 이 절이다.)
+
+- **D11 (조정자 결정)** — main 에 먼저 들어간 `TASK-MONO-674` 는 액세스·운영자 쿠키가 토큰 TTL(~1800s)에 사라지고 30일
+  리프레시 쿠키만 남은 브라우저를 «로그인했었고 유휴로 만료됨» 으로 보고 조용한 갱신 hop(`GET /api/auth/refresh`)으로 보낸다.
+  두 쿠키만 보던 술어는 그 운영자를 샘플 방문자로 분류해 **실데이터 자리에 합성 데이터를** 보여 줬을 것이다(아래 bite B7 이 실측).
+  ADR-MONO-074 A1 의 자기 조항 «반쪽 세션·죽은 쿠키는 지금 경로 그대로» 가 이 경우를 덮는다 — ADR 본문은 수정하지 않았다.
+  - 술어는 여전히 `session.ts` 한 곳이고, 리프레시 판정은 main 의 `hasRefreshToken()` 재사용.
+  - 레이아웃 가드: `isSampleVisitor()` → 샘플 셸 / 아니고 `!isAuthenticated()` → MONO-674 그대로(리프레시 쿠키 ? 갱신 hop :
+    `/login?redirect=`). 샘플 셸의 «로그인» 링크는 `buildLoginRedirect` 유지. ⇒ MONO-674 분기가 보는 모집단은 이 티켓 전과 같다.
+  - 충돌 해소: `layout.tsx` — import(`isSampleVisitor` · `hasRefreshToken`)와 헬퍼 둘(`buildLoginRedirect` · `buildSessionRefreshRedirect`)
+    모두 유지, 가드는 위 순서. `session.ts` — `hasRefreshToken()` 유지, 그 뒤에 3조건 `isSampleVisitor()`.
+  - 테스트: `sample-visitor-predicate` 에 4칸 추가(셋 다 없음=샘플 · 리프레시만=샘플 아님 · 액세스✗운영자✗리프레시✓=샘플 아님·미인증 ·
+    유휴 브라우저는 테넌트 쿠키를 그대로 읽음). main 의 `console-guard-idle-refresh.test.tsx` 는 리프레시가 있는 칸 **무수정 초록**;
+    «리프레시 쿠키만 빼면 예전 그대로 `/login?redirect=`» 대조군 **하나만** 셋업을 반쪽 세션(운영자 쿠키만)으로 바꿨다(빈 병 = 이제
+    샘플 방문자). 단언 불변, 헤더에 ADR-MONO-074 인용. `auth-idle-refresh` · `layout-login-redirect` · `relogin-loop` 는 **무수정 초록**
+    — 같은 이유로 빨개진 칸 0, 다른 이유로 빨개진 칸 0.
+  - `sample-fetch-allowlist`: main 이 refresh grant 의 `fetch(` 를 `app/api/auth/refresh/route.ts`(이제 0)에서
+    `shared/lib/session-refresh.ts`(1)로 옮겼다 → 항목 교체(`auth-flow`, 리프레시 쿠키가 있을 때만 도달 = 샘플 방문자에게 불가).
+- **D12 (측정 · 동작 미변경) 거부된 리프레시는 리프레시 쿠키를 지우는가 — 경로마다 다르다.**
+  `shared/lib/session-refresh.ts` 는 `no_refresh_token` · `grant_rejected` · `error` 에서 쿠키를 건드리지 않고 호출자에게 맡긴다.
+  `app/api/auth/refresh/route.ts`:
+  - POST(셸 안 apiClient 401 뒤): `grant_rejected` · operator 실패 → `clearFullSession`(리프레시 포함 삭제).
+  - GET(가드의 유휴 hop): IAM `400 invalid_grant`(로테이션 경합 의심) → **삭제 안 함**, 2초 뒤 `retry=1` → 재시도 hop 은
+    `/login?error=session_expired` 로 가면서 **역시 삭제 안 함**. 그 밖의 4xx · `operator_unavailable` → 삭제. 5xx · `error` → 유지.
+  - 그 밖에 지우는 곳: `/api/auth/login`(로그인 시작 시 `clearFullSession`) · `/api/auth/logout` · 콜백 실패 분기.
+  **누가 무엇을 보나:** 폐기·만료된 리프레시 토큰(IAM 이 `invalid_grant` 로 답하는 흔한 경우)을 가진 브라우저는 쿠키 수명(최대 30일)
+  동안 **샘플 방문자가 되지 않는다** — `(console)` 이나 `/` 에 올 때마다 갱신 hop → 2초 대기 → `/login?error=session_expired`.
+  로그인을 시작하면 그때 지워지고, 그 뒤로 익명이면 샘플 셸을 본다.
+  **중요한가:** 이 모집단은 «이 브라우저에서 한 번 로그인했던 사람» 이지 포트폴리오 익명 방문자가 아니다. 데이터 노출·오인 위험
+  없음(샘플을 못 볼 뿐 실데이터에 닿지 않는다). 비용은 방문마다 2초 + 사유 있는 로그인 화면. ⇒ MONO-674 동작은 바꾸지 않았다.
+  🔵 후속 후보(소유자 판단): `retry=1` 최종 실패에서 쿠키를 지울지는 MONO-674 의 경합 설계(승자 탭의 Set-Cookie 를 지우지 않기)에
+  속하므로 그 계보에서 결정할 일이다.
+
+### 병합 트리 재측정 (각 게이트 독립 실행 + 명시 rc)
+
+| 게이트 | 결과 |
+|---|---|
+| `pnpm lint` | rc=0 · «No ESLint warnings or errors» |
+| `npx tsc --noEmit` | rc=0 |
+| vitest (병합 트리 전체) | rc=0 · **303 files / 3219 tests passed**, 실패 0 (main 의 신규 2 파일 포함) |
+| `pnpm build` | rc=0 |
+| `pnpm e2e:smoke` | rc=0 · **18 passed** (console-guard 2 · demo-tour 5 · login-page 5 · root-redirect 3 · sample-visitor 3) |
+
+### 병합 트리 bite (동시 주입 · 가드별 귀속 → 복원 트리 재실행)
+
+| # | 주입 | 빨강 |
+|---|---|---|
+| B2 | 새 파일 `shared/lib/bite-probe.ts` 에 `fetch('/bite')` | allow-list 개수: `+ "shared/lib/bite-probe.ts": 1` |
+| B3 | `domain-health/route.ts` 의 `sampleGate(` 앞에 `await getAccessToken()` | 순서: `getAccessToken … comes before sampleGate(` |
+| B7 | `isSampleVisitor()` 에서 리프레시 조항 삭제 | 새 술어 칸 3개 `expected true to be false` + 🔴 **main 의 `console-guard-idle-refresh` 칸 3개도 빨강** — D11 의 충돌이 실제로 존재함을 독립적으로 보인다 |
+
+주입 실행: rc=1 · 3 files / 8 failed. 복원 트리: rc=0 · 3 files / 30 passed. `BITE-` 마커 잔여 0.
