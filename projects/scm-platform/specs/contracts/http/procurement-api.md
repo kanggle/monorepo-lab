@@ -102,6 +102,8 @@ Validation:
     "tenantId": "scm",
     "poNumber": "PO-A1B2C3D4",
     "supplierId": "9b1d4a8c-...",
+    "supplierCode": "SUP-0043",
+    "supplierName": "Acme Components",
     "buyerAccountId": "7c2e9f5a-...",
     "status": "DRAFT",
     "totalAmount": "125000.00",
@@ -132,6 +134,44 @@ Validation:
 `SUPPLIER_NOT_FOUND` (404), `SUPPLIER_INACTIVE` (422), `VALIDATION_ERROR`
 (400/422), `TENANT_FORBIDDEN` (403), `UNAUTHORIZED` (401).
 
+### `PurchaseOrderResponse` — supplier reference fields (`supplierCode`, `supplierName`)
+
+Every endpoint whose body is a `PurchaseOrderResponse` — `POST /po`,
+`POST /po/from-suggestion`, `GET /po` (each `content[]` element),
+`GET /po/{poId}`, `POST /po/{poId}/submit|confirm|cancel` and the
+`POST /webhooks/supplier-ack` response — carries two read-only fields next to
+`supplierId` (TASK-MONO-677, owner decision ⓐ «id·code 둘 다 조인»):
+
+| Field | Type | Nullable | Meaning |
+|---|---|---|---|
+| `supplierCode` | string | **yes** | `code` of the resolved supplier master row (§ `GET /api/procurement/suppliers/{supplierId}`) |
+| `supplierName` | string | **yes** | `name` of the same row |
+
+Resolution rule (normative):
+
+1. **`supplierId` is unchanged** — it is still what the write path stored, and
+   it is not a foreign key. By write path it holds: `POST /po` → a supplier
+   master **id** (the draft use case looks the supplier up by id and rejects an
+   unknown one with `SUPPLIER_NOT_FOUND`); `POST /po/from-suggestion` → whatever
+   demand-planning sent, which per `scm-procurement-events.md` § inbound-expected
+   (ADR-MONO-050 D9) is the supplier **code** and is not validated here.
+2. Look the supplier up **inside the PO's own tenant**, first by
+   `id = supplierId`, and only if that finds no row, by `code = supplierId`.
+   An id match wins over a code match.
+3. If neither matches — **including a row that exists only in another
+   tenant** — both fields are `null`. Never an empty string, never a copy of
+   `supplierId`.
+4. Supplier status is not a filter. An `INACTIVE` / `CONTRACT_EXPIRED` supplier
+   still resolves: v1 has no supplier delete path, the row keeps its name, and
+   a PO references the supplier it was placed with.
+5. The fields are computed when the response is built; nothing is stored on the
+   PO. `GET /po` resolves a whole page with at most two batched lookups (by ids,
+   then by codes for the refs the first lookup did not match), never one lookup
+   per row. An idempotent replay (same `Idempotency-Key`) returns the response
+   stored at first execution, including these two fields as they were then.
+6. Neither field is a query filter — `GET /po?supplierId=` keeps matching the
+   stored `supplierId` exactly.
+
 ---
 
 ## GET /api/procurement/po
@@ -150,7 +190,7 @@ Search POs (paginated, tenant-scoped).
 ```json
 {
   "data": {
-    "content": [ /* PurchaseOrderResponse list */ ],
+    "content": [ /* PurchaseOrderResponse list — each element carries supplierCode / supplierName (see § POST /po, supplier reference fields) */ ],
     "page": 0,
     "size": 20,
     "totalElements": 42,
@@ -169,7 +209,8 @@ Sort order: `createdAt DESC` (fixed).
 Fetch one PO by id. Tenant-scoped — cross-tenant lookups return
 `PO_NOT_FOUND` (deliberate, no enumeration leak).
 
-**Response 200:** `{ "data": <PurchaseOrderResponse>, "meta": { "timestamp": "..." } }`
+**Response 200:** `{ "data": <PurchaseOrderResponse>, "meta": { "timestamp": "..." } }` —
+including `supplierCode` / `supplierName` resolved per § POST /po, supplier reference fields.
 
 **Errors:** `PO_NOT_FOUND` (404), `UNAUTHORIZED` (401), `TENANT_FORBIDDEN` (403).
 

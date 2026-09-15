@@ -4,6 +4,7 @@ import type { Dispatch, FormEvent, SetStateAction } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { messageForCode } from '@/shared/api/errors';
+import { masterRefLabel } from '@/shared/lib/master-ref-label';
 import type { PoPage, PurchaseOrder, PoQueryParams } from '../api/types';
 import {
   KNOWN_PO_STATUSES,
@@ -183,7 +184,21 @@ export function ScmPoTable({
                   className="border-b border-border"
                 >
                   <td className="p-2">{p.poNumber ?? p.id}</td>
-                  <td className="p-2">{p.supplierId ?? '—'}</td>
+                  {/* TASK-MONO-677 — the producer now carries the supplier master's
+                      code/name. The raw `supplierId` (a UUID for operator POs) moves
+                      to `title`; it is never the visible text, including when the
+                      reference does not resolve (`이름 확인 불가`). The filter input
+                      above still takes the raw `supplierId` — unchanged. */}
+                  <td
+                    className="p-2"
+                    data-master-ref="po.supplierId"
+                    title={p.supplierId ?? undefined}
+                  >
+                    {masterRefLabel(p.supplierId, {
+                      code: p.supplierCode,
+                      name: p.supplierName,
+                    })}
+                  </td>
                   <td className="p-2">
                     <StatusBadge tone={poStatusTone(p.status)}>
                       {p.status ?? '—'}

@@ -48,7 +48,7 @@ class IdempotencyExecutorTest {
 
     private static PurchaseOrderView sampleView(String id) {
         return new PurchaseOrderView(
-                id, TENANT, "PO-ABCD1234", "sup-1", "buyer-1",
+                id, TENANT, "PO-ABCD1234", "sup-1", "SUP-CODE-1", "Supplier One", "buyer-1",
                 PoStatus.DRAFT, PoOrigin.OPERATOR, null,
                 new BigDecimal("100.00"), "USD",
                 null, null, null, null, Instant.parse("2026-07-17T00:00:00Z"),
