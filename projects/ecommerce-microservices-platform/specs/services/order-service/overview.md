@@ -65,7 +65,7 @@
 - `payment-service` (events)
 - `user-service` (events)
 - `product-service` (optional sync HTTP for product snapshot)
-- `promotion-service` (optional sync HTTP for coupon apply)
+- `promotion-service` (sync HTTP when a placement carries a `couponId`: coupon apply, and release when the placement does not commit — TASK-INT-026)
 
 ## Out of scope (v1)
 

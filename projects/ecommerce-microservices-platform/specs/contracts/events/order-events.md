@@ -59,9 +59,19 @@ Published when a new order is successfully created.
     "zipCode": "string",
     "address1": "string",
     "address2": "string | null"
-  }
+  },
+  "couponId": "string | null",
+  "discountAmount": 0
 }
 ```
+
+`totalPrice` is **the amount the customer pays** — net of `discountAmount`
+(TASK-INT-026). payment-service builds the PENDING payment from it, so it must equal what
+the storefront charges. `couponId` / `discountAmount` are additive: `null` / `0` when the
+order has no coupon, which keeps a coupon-less `OrderPlaced` byte-for-byte meaningful to
+existing consumers. `items[].unitPrice × quantity` is still the **pre-discount** line
+amount — a consumer that sums lines (settlement-service accrues on that gross) sees more
+than `totalPrice` for a discounted order.
 
 `items[].sellerId` (inner marketplace axis — ADR-MONO-030 Step 3 §3.2) is the
 seller this line is attributed to, captured immutably at placement from the line

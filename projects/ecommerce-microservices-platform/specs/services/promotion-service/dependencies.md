@@ -19,8 +19,9 @@
 - own database (promotions, coupons, outbox, processed_events)
 
 ## Allowed Service Interactions
-- pure event-driven; no outbound HTTP calls to other services
+- no outbound HTTP calls to other services
 - exposes its own HTTP API for promotion and coupon management (consumed by authenticated users and admins via gateway)
+- accepts synchronous inbound HTTP from order-service on the internal network: coupon apply at placement and the gateway-excluded `POST /api/internal/coupons/{couponId}/release` (TASK-INT-026)
 
 ## Consumes From
 

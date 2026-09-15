@@ -43,9 +43,30 @@ Place a new order.
     "zipCode": "string",
     "address1": "string",
     "address2": "string | null"
-  }
+  },
+  "couponId": "string (optional, ≤ 36 chars — coupon to apply)"
 }
 ```
+
+**`couponId` — the discount is decided by the server (TASK-INT-026).** The client sends
+only which coupon to use, never a discount amount. When `couponId` is present,
+order-service:
+
+1. assigns the new `orderId` and computes the line subtotal (`Σ unitPrice × quantity`);
+2. calls promotion-service `POST /api/coupons/{couponId}/apply` **synchronously** with
+   that `orderId` and the subtotal (see `promotion-api.md`);
+3. sets `totalPrice = subtotal − discountAmount` and publishes `OrderPlaced` with it —
+   so the payment PENDING amount already carries the discount;
+4. if the placement transaction does **not** commit after step 2 was attempted (any
+   later failure, including a rejected or timed-out apply), asks promotion-service to
+   release the coupon for that `orderId` (`POST /api/internal/coupons/{couponId}/release`).
+   Release only reverts a coupon used **by that `orderId`**, so it is safe after a
+   rejection too.
+
+A coupon whose discount would leave less than 1 KRW to pay is refused with
+`422 COUPON_NOT_APPLICABLE` (the PG cannot charge 0). An idempotent replay (same
+`Idempotency-Key`) returns the original order's `totalPrice` / `discountAmount` and does
+not call promotion-service again.
 
 > 🔴 **The field is `recipient`, not `recipientName` — and the neighbouring address API
 > disagrees on purpose.** `/api/users/me/addresses` (user-api.md) uses `recipientName`;
@@ -65,9 +86,16 @@ Absent → the default seller `default` (D8 net-zero).
 **Response 201**
 ```json
 {
-  "orderId": "string (UUID)"
+  "orderId": "string (UUID)",
+  "totalPrice": 25000,
+  "discountAmount": 5000
 }
 ```
+
+`totalPrice` is **the amount to charge** — net of `discountAmount` (0 without a coupon).
+The web-store requests exactly this amount from the PG; payment-service confirms against
+the same value (from `OrderPlaced.totalPrice`), so any other amount is rejected with
+`AMOUNT_MISMATCH`.
 
 **Error responses**
 | Status | Code | Reason |
@@ -75,6 +103,12 @@ Absent → the default seller `default` (D8 net-zero).
 | 400 | INVALID_ORDER_REQUEST | Missing or invalid field |
 | 401 | UNAUTHORIZED | Missing or invalid access token |
 | 409 | DUPLICATE_ORDER_REQUEST | Concurrent placement with an in-flight `Idempotency-Key` (retry → original order) |
+| 422 | COUPON_NOT_FOUND | `couponId` does not exist in the caller's tenant |
+| 422 | COUPON_ALREADY_USED | The coupon was already used by another order |
+| 422 | COUPON_EXPIRED | The coupon has expired |
+| 422 | COUPON_NOT_OWNED | The coupon belongs to another user |
+| 422 | COUPON_NOT_APPLICABLE | The discount would leave less than 1 KRW to pay, or promotion-service refused the request for another reason |
+| 503 | COUPON_SERVICE_UNAVAILABLE | promotion-service did not answer (timeout, 5xx, circuit open). No order is created; retry later |
 
 ---
 

@@ -8,7 +8,7 @@ TASK-INT-026
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -78,6 +78,18 @@ If any section is missing or incomplete, this task must not be implemented.
 - **ⓒ 당장은 쿠폰 선택을 결제 경로에서 막는다** — 결함만 차단(체크아웃의 `CouponSelector` 비노출/비활성). 기능 설계는 후속 티켓.
 
 🔵 분석자 추천은 **ⓐ** 다 — 스펙 다섯 곳 중 네 곳이 이미 그쪽이고, 금액의 권위를 결제 전에 서버가 쥐는 유일한 안이다. 🔴 **추천은 결정이 아니다.** AC-1 이 소유자 선택을 기록하기 전에는 구현을 시작하지 않는다(스펙 충돌 = HARDSTOP-06).
+
+### AC-1 결정 기록 (2026-09-15 UTC)
+
+소유자 답, 원문 그대로: **「ⓐ 동기 호출」**
+
+단서(rider)는 붙지 않았다. 이 결정에서 구현이 추가로 정한 것 — 결정의 일부가 아니라 구현 판단이며 스펙에 적었다:
+
+- `totalPrice` 는 **결제할 금액(할인 반영 후)** 을 뜻한다. 할인 전 금액·할인액을 따로 싣는 대신 `couponId`·`discountAmount` 를 **덧붙였다**(additive). 쿠폰 없는 주문의 `OrderPlaced` 는 의미가 그대로다.
+- 보상 = order-service 가 apply **직전에** 트랜잭션 동기화를 걸어, 배치가 커밋되지 않으면 promotion-service 의 새 내부 경로 `POST /api/internal/coupons/{couponId}/release` 를 부른다. release 는 **그 orderId 로 쓰인 쿠폰만** 되돌린다. 이 경로는 게이트웨이 라우트가 없고, 있어서는 안 된다(사용자가 부를 수 있으면 할인받은 주문의 쿠폰을 풀어 재사용한다).
+- promotion-service `apply` 는 **같은 orderId 에 대해 멱등**이 됐다(재시도 안전). 다른 주문이면 여전히 `COUPON_ALREADY_USED`.
+- 할인 후 1원 미만이면 `422 COUPON_NOT_APPLICABLE`(PG 는 0원을 청구하지 못한다). promotion-service 무응답이면 `503 COUPON_SERVICE_UNAVAILABLE` — 할인 없이 주문을 만들지 않는다.
+- 남는 위험(닫지 않음, 기록만): apply 가 **release 보다 늦게** promotion-service 에서 커밋되면 쿠폰이 존재하지 않는 주문에 `USED` 로 남는다.
 
 ---
 

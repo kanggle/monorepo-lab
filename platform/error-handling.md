@@ -318,6 +318,10 @@ Owned by `order-service`. See `rules/domains/ecommerce.md` rules E1, E2.
 | INVALID_ORDER_REQUEST | 400 | Order request is invalid (missing fields, invalid quantity) |
 | ORDER_CANNOT_BE_CANCELLED | 422 | Order cannot be cancelled in its current status |
 | DUPLICATE_ORDER_REQUEST | 409 | The same `Idempotency-Key` was replayed with a different order payload (`DuplicateOrderRequestException`) |
+| COUPON_NOT_APPLICABLE | 422 | The coupon in an order placement cannot be applied — its discount would leave less than 1 KRW to pay, or the coupon service refused it with a code the order API does not pass through (TASK-INT-026) |
+| COUPON_SERVICE_UNAVAILABLE | 503 | The coupon service did not answer a coupon apply during order placement (timeout / 5xx / circuit open); no order is created (TASK-INT-026) |
+
+The order placement API also passes through the Promotion codes `COUPON_NOT_FOUND`, `COUPON_ALREADY_USED`, `COUPON_EXPIRED` and `COUPON_NOT_OWNED` — always as **422**, because there the coupon is a field of the order request, not the resource being addressed.
 
 ## Payment  `[domain: ecommerce]`
 
