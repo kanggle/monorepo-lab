@@ -4,6 +4,7 @@ import com.example.fanplatform.community.domain.post.PostType;
 import com.example.fanplatform.community.domain.post.PostVisibility;
 
 import java.time.Instant;
+import java.util.List;
 
 /**
  * What the feed cache is allowed to hold: the entitlement-INDEPENDENT projection of a feed
@@ -34,6 +35,12 @@ import java.time.Instant;
  * bounded: the key is per-account, the value never leaves the process without passing through
  * the gate, the content is a title plus 200 characters, and the entry expires in 5 minutes.
  * The gate itself is applied on the way out on both the hit and the miss path, by one method.
+ *
+ * <p><strong>{@code mediaRefs} (TASK-MONO-679)</strong> is stored on the same terms as
+ * {@code title}: unconditionally, and surrendered by the gate for a locked reader. A photo URL is
+ * content in the sense that matters here — handing it to a non-member hands them the photo — so
+ * it is never let out by a path the title would not also take. Adding it changed the cached shape,
+ * which is why {@code FeedCacheRepository.KEY_VERSION} moved to {@code v3}.
  */
 public record FeedItemSnapshot(
         String postId,
@@ -42,6 +49,7 @@ public record FeedItemSnapshot(
         String authorAccountId,
         String title,
         String bodyPreview,
+        List<String> mediaRefs,
         long commentCount,
         long reactionCount,
         Instant publishedAt

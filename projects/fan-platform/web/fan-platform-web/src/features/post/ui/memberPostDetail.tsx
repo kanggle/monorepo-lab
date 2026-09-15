@@ -5,6 +5,7 @@ import { getPost } from '@/features/post/api/getPost';
 import { ReactionBar } from './ReactionBar';
 import { ApiError } from '@/shared/api/errors';
 import { ErrorState } from '@/shared/ui/ErrorState';
+import { PostImage } from '@/shared/ui/PostImage';
 
 /**
  * `/posts/[id]` 의 **회원 판** — 게이트웨이가 그리는 상세. 예전 페이지의 본문 그대로다.
@@ -27,6 +28,9 @@ import { ErrorState } from '@/shared/ui/ErrorState';
  *
  * 🔴 인가는 하나도 안 바뀐다. 본문을 줄지 말지는 여전히 community-service 가 정하고,
  *    `MEMBERSHIP_REQUIRED` 는 그 서비스가 내린 판정을 그대로 그리는 것이다.
+ *
+ * 🔵 사진(TASK-MONO-679)은 **성공 분기에서만** 그린다 — 서버가 `PostAccessGuard` 를 통과시킨 뒤에만
+ *    응답을 만들므로 사진은 본문과 같은 자격으로 온다. «멤버십이 필요하다» 분기에는 사진이 없다.
  * ─────────────────────────────────────────────────────────────────────────
  */
 export async function memberPostDetail(id: string): Promise<ReactNode | null> {
@@ -35,6 +39,8 @@ export async function memberPostDetail(id: string): Promise<ReactNode | null> {
 
   try {
     const post = await getPost(session.accessToken, id);
+    // 🔴 `?? []` — 사진 필드가 생기기 전의 백엔드 응답에는 키가 없다(`Post.mediaRefs` 참조).
+    const photos = post.mediaRefs ?? [];
     return (
       <article
         data-testid="member-post-detail"
@@ -57,6 +63,22 @@ export async function memberPostDetail(id: string): Promise<ReactNode | null> {
         </header>
         {post.title ? (
           <h1 className="mb-3 text-2xl font-bold text-ink-900">{post.title}</h1>
+        ) : null}
+        {photos.length > 0 ? (
+          // 🔵 상세는 전부 — 공개 판(TASK-MONO-678)과 같은 규칙이다.
+          <div
+            data-testid="member-post-gallery"
+            className={`mb-6 grid gap-3 ${photos.length > 1 ? 'sm:grid-cols-2' : ''}`}
+          >
+            {photos.map((src, i) => (
+              <PostImage
+                key={`${i}-${src}`}
+                src={src}
+                alt={`${post.title ?? '포스트'} — 사진 ${i + 1}/${photos.length}`}
+                frameClassName="aspect-video rounded-xl bg-ink-100"
+              />
+            ))}
+          </div>
         ) : null}
         <p className="whitespace-pre-line text-base leading-relaxed text-ink-800">{post.body}</p>
         <footer className="mt-8 border-t border-ink-200 pt-4">

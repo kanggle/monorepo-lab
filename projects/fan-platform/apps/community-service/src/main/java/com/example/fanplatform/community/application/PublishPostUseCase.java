@@ -82,6 +82,9 @@ public class PublishPostUseCase {
         return new PostView(
                 p.getId(), p.getTenantId(), p.getPostType(), p.getVisibility(), p.getStatus(),
                 p.getAuthorAccountId(), p.getTitle(), p.getBody(),
+                // Single-post reads reach here only after PostAccessGuard has passed, so the media
+                // refs follow the same entitlement as the body (TASK-MONO-679).
+                PostMediaRefSerializer.deserialize(p.getMediaRefsJson()),
                 commentCount, reactionCount,
                 p.getPublishedAt(), p.getCreatedAt(), p.getUpdatedAt()
         );

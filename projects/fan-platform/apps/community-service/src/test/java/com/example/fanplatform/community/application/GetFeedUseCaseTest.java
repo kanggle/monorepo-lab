@@ -229,4 +229,63 @@ class GetFeedUseCaseTest {
 
         assertThat(item.locked()).isFalse();
     }
+
+    // -----------------------------------------------------------------------
+    // TASK-MONO-679 — mediaRefs pass the same gate as title / bodyPreview
+    // -----------------------------------------------------------------------
+
+    private static final String PHOTO = "https://images.example.com/stage.jpg";
+
+    private Post postWithPhoto(PostVisibility visibility, String mediaRefsJson) {
+        Post p = Post.createDraft(POST_ID, TENANT, AUTHOR,
+                PostType.ARTIST_POST, visibility, "title", "body", mediaRefsJson);
+        p.publish(ActorType.AUTHOR);
+        return p;
+    }
+
+    @Test
+    @DisplayName("🔴🔴 679: 잠긴 항목은 사진 주소도 비운다 — 사진 URL 을 가진 사람은 사진을 가진다")
+    void locked_surrendersMediaRefs() {
+        stubFeedWithPost(postWithPhoto(PostVisibility.MEMBERS_ONLY, "[\"" + PHOTO + "\"]"));
+        when(membershipChecker.hasAccess(FAN, PostVisibility.MEMBERS_ONLY.name(), TENANT))
+                .thenReturn(false);
+
+        FeedItemView item = firstItem(fanActor());
+
+        assertThat(item.locked()).isTrue();
+        assertThat(item.mediaRefs()).isNotNull().isEmpty();
+    }
+
+    @Test
+    @DisplayName("🔵 679 대조군: 같은 글이 자격이 있으면 사진 주소를 싣는다 (위 칸이 «항상 비움» 이 아니라는 증거)")
+    void unlocked_carriesMediaRefs() {
+        stubFeedWithPost(postWithPhoto(PostVisibility.MEMBERS_ONLY, "[\"" + PHOTO + "\"]"));
+        when(membershipChecker.hasAccess(FAN, PostVisibility.MEMBERS_ONLY.name(), TENANT))
+                .thenReturn(true);
+
+        FeedItemView item = firstItem(fanActor());
+
+        assertThat(item.locked()).isFalse();
+        assertThat(item.mediaRefs()).containsExactly(PHOTO);
+    }
+
+    @Test
+    @DisplayName("679: PUBLIC 글은 멤버십 조회 없이 사진을 싣는다")
+    void public_carriesMediaRefs() {
+        stubFeedWithPost(postWithPhoto(PostVisibility.PUBLIC, "[\"" + PHOTO + "\"]"));
+
+        FeedItemView item = firstItem(fanActor());
+
+        assertThat(item.mediaRefs()).containsExactly(PHOTO);
+    }
+
+    @Test
+    @DisplayName("679: 사진이 없는 글(media_refs NULL)은 null 이 아니라 빈 배열이다")
+    void noMedia_isEmptyNotNull() {
+        stubFeedWithPost(postWithPhoto(PostVisibility.PUBLIC, null));
+
+        FeedItemView item = firstItem(fanActor());
+
+        assertThat(item.mediaRefs()).isNotNull().isEmpty();
+    }
 }

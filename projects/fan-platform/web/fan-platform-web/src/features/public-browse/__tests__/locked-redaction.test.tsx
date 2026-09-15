@@ -25,7 +25,7 @@ import bundled from '@demo/public-data/snapshots/fan.json';
 import { PublicPostCard } from '../ui/PublicPostCard';
 import { PublicPostDetail } from '../ui/PublicPostDetail';
 import { PublicFeedList } from '../ui/PublicFeedList';
-import { PublicPostImage } from '../ui/PublicPostImage';
+import { PostImage } from '@/shared/ui/PostImage';
 
 const posts = bundled.data.posts as unknown as PublicPost[];
 const lockedPosts = posts.filter((p) => p.locked);
@@ -115,7 +115,7 @@ describe('② PublicPostCard — 계약이 깨져도 본문을 안 그린다', (
   it('🔵 사진 0장인 공개 글은 사진 자리 없이 예전 카드 그대로다', () => {
     const none = { ...violating, locked: false, visibility: 'PUBLIC', imageUrls: [] } as unknown as PublicPost;
     const { container } = render(<PublicPostCard post={none} />);
-    expect(container.querySelectorAll('[data-testid="public-post-image-frame"]')).toHaveLength(0);
+    expect(container.querySelectorAll('[data-testid="post-image-frame"]')).toHaveLength(0);
     expect(container.textContent ?? '').toContain(CONTRABAND);
   });
 
@@ -184,15 +184,15 @@ describe('④ 실제 시드로 그린 피드 — 잠긴 글이 티저로 나온�
   });
 });
 
-describe('⑤ PublicPostImage — 사진이 죽어도 글은 산다 (TASK-MONO-678 AC-4)', () => {
+describe('⑤ PostImage — 사진이 죽어도 글은 산다 (TASK-MONO-678 AC-4)', () => {
   it('🔴 로드 실패 시 틀(frame)까지 사라진다 — 깨진 이미지 상자를 남기지 않는다', () => {
     const { container } = render(
-      <PublicPostImage src="https://example.invalid/404.jpg" alt="사진" frameClassName="aspect-video" />,
+      <PostImage src="https://example.invalid/404.jpg" alt="사진" frameClassName="aspect-video" />,
     );
     const img = container.querySelector('img');
     expect(img).not.toBeNull(); // 대조군 — 실패 전에는 그려져 있다
     fireEvent.error(img!);
-    expect(container.querySelector('[data-testid="public-post-image-frame"]')).toBeNull();
+    expect(container.querySelector('[data-testid="post-image-frame"]')).toBeNull();
     expect(container.querySelector('img')).toBeNull();
   });
 
