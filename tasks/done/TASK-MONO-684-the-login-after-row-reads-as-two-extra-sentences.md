@@ -8,7 +8,7 @@ TASK-MONO-684
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -103,3 +103,26 @@ monorepo
 - ⚪ 로컬 미측정 → CI: `verify-demo-wrapper.sh --live` 전체.
 
 분석=Opus 5 / 구현=Opus 5.
+
+## CORRECTION — close chore (2026-09-15 UTC): AC-5 는 머지 뒤 실측으로 닫혔다
+
+위 `- [ ] AC-5` 는 frozen 파일이라 켤 수 없어 미체크로 남는다. 이 절이 그 칸의 판정이다.
+
+**4차원 검증**
+
+- (a) PR [#3822](https://github.com/kanggle/monorepo-lab/pull/3822) `state=MERGED` 2026-09-15T08:27:30Z · merge commit `54265509c`
+- (b) `origin/main` tip = `54265509c`
+- (c) 머지 헤드(`692942b75`) 롤업 SUCCESS 7 · SKIPPED 54 · FAILURE 0 — 필수 4개 + `Demo wrapper smoke (infra/demo)`(= `verify-demo-wrapper.sh --live`, z35 포함) SUCCESS
+- (d) AC-1~4 = impl PR 에서 닫힘(위 본문) · AC-5 = 아래
+
+**AC-5 — `hubwang.com` 이 새 바이트를 서빙한다: PASS (08:29:19Z, 머지 +109초)**
+
+| 무엇 | 값 |
+|---|---|
+| 서빙된 `https://hubwang.com/` md5 | `aa7b9b68a2a23800588da650d5a758be` |
+| `git show origin/main:infra/demo/aws/site/index.html` md5 | `aa7b9b68a2a23800588da650d5a758be` (일치) |
+| `build-info.json` (캐시버스트) | `commit=54265509c…` · `index_md5=aa7b9b68…` |
+| 「데모 서버 켠 뒤」 / `data-shots-note="🔒 로그인 후 화면"` / `class="needs-boot"` | 3 / 1 / 3 |
+| 「↳ 데모 서버를 먼저 켜야」 / 「미리보기 두 장」 | 0 / 0 |
+
+- 🔵 30초 간격 폴링: 08:28:47Z 는 옛 판(`05360d8c5`, md5 `5009902f…`) — 그 시각 `vercel-deploy.yml` 런은 `queued` 였다. 다음 폴에서 세 값이 **동시에** 새 값으로 바뀌었다.
