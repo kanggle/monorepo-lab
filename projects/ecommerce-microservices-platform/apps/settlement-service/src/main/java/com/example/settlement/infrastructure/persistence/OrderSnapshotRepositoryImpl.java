@@ -24,6 +24,7 @@ public class OrderSnapshotRepositoryImpl implements OrderSnapshotRepository {
         OrderSnapshotJpaEntity entity = jpaRepository.findById(snapshot.orderId())
                 .orElseGet(() -> OrderSnapshotJpaEntity.of(snapshot.orderId(), snapshot.tenantId()));
         entity.setTenantId(snapshot.tenantId());
+        entity.setDiscount(snapshot.discountMinor(), snapshot.couponId());
         entity.replaceLines(lineEntities);
         jpaRepository.save(entity);
     }
@@ -37,6 +38,6 @@ public class OrderSnapshotRepositoryImpl implements OrderSnapshotRepository {
         List<OrderSnapshotLine> lines = e.getLines().stream()
                 .map(l -> new OrderSnapshotLine(l.getSellerId(), l.getGrossMinor()))
                 .toList();
-        return new OrderSnapshot(e.getOrderId(), e.getTenantId(), lines);
+        return new OrderSnapshot(e.getOrderId(), e.getTenantId(), lines, e.getDiscountMinor(), e.getCouponId());
     }
 }

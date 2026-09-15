@@ -72,7 +72,18 @@ public class OrderPlacedSnapshotConsumer {
                         i.unitPrice() * i.quantity()))
                 .toList();
 
-        settlementService.recordSnapshot(
-                new RecordOrderSnapshotCommand(event.payload().orderId(), tenantId, lines));
+        // Coupon discount (TASK-BE-592): absent → no coupon. A negative value is a producer
+        // defect; recording it would invert the promotion cost, so it is treated as no discount.
+        Long rawDiscount = event.payload().discountAmount();
+        long discountMinor = rawDiscount == null ? 0L : rawDiscount;
+        if (discountMinor < 0) {
+            log.warn("OrderPlaced carries a negative discountAmount={} — treating as no discount. orderId={}",
+                    discountMinor, event.payload().orderId());
+            discountMinor = 0L;
+        }
+        String couponId = EventFieldParser.isBlank(event.payload().couponId()) ? null : event.payload().couponId();
+
+        settlementService.recordSnapshot(new RecordOrderSnapshotCommand(
+                event.payload().orderId(), tenantId, lines, discountMinor, couponId));
     }
 }

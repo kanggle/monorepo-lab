@@ -8,7 +8,7 @@ TASK-BE-592
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -60,6 +60,59 @@ If any section is missing or incomplete, this task must not be implemented.
 - **ⓒ 분담** — 비율을 정한다(프로모션마다 다를 수 있나).
 
 🔴 분석자 추천은 적지 않는다 — 돈을 누가 내는지는 제품·계약 결정이다. AC-1 이 소유자 답을 기록하기 전에는 구현하지 않는다.
+
+### AC-1 결정 기록 (2026-09-15 UTC)
+
+소유자에게 선택창으로 물었다(분석자 추천을 함께 보였다 — 소유자가 «추천과 함께» 를 요청했다). 소유자 답, 원문 그대로:
+
+| 질문 | 소유자 답 |
+|---|---|
+| 쿠폰 할인액을 정산에서 누가 부담할까요? | **「플랫폼 부담 (Recommended)」** |
+| 플랫폼이 부담한다면, 할인액을 장부에 어떻게 적을까요? | **「별도 프로모션 비용 행 (Recommended)」** |
+
+선택창에 보인 추천 근거(분석자): 쿠폰은 셀러가 아니라 테넌트 운영자가 발급한다 — `specs/services/promotion-service/architecture.md` 가 «promotion/coupon are tenant-scoped operator entities, not seller» 라고 적는다. 별도 행은 수수료를 음수로 만들지 않아 `commission_accrual` 의 `ck_commission_accrual_split` 와 셀러 payout fold 를 건드리지 않는다.
+
+이 결정에서 구현이 추가로 정한 것(결정의 일부가 아니라 구현 판단 — 스펙에 적었다):
+
+- 새 append-only 원장 `promotion_cost` — 주문 단위 한 행(`COST`, 양수)을 결제 캡처 때, 환불마다 `REVERSAL`(음수, 부모 `COST` 에 연결). 셀러별로 나누지 않는다.
+- 환불 비율의 분모를 «적립 gross» 에서 **«실제 결제액 = 적립 gross − 할인»** 으로 바꾼다. 수수료 역분개와 프로모션 비용 역분개가 같은 비율을 쓴다.
+- 주문 단위 불변식: `Σ commission_accrual.gross − Σ promotion_cost.amount = 결제액`.
+- 쿠폰 필드가 없는 `OrderPlaced` 는 할인 0 — 행이 생기지 않고 숫자가 변경 전과 같다.
+
+### AC-0 측정 기록 (2026-09-15 UTC)
+
+**방법.** 수정 전 코드에 대한 특성(characterization) 테스트 `SettlementCouponDiscountBaselineTest` — 모든 단언이 **지금 코드가 내는 숫자**다. 수정 전 트리(worktree `be-592-settlement`, HEAD `35bd9d293`)에서
+`./gradlew :…:settlement-service:test --tests "…SettlementCouponDiscountBaselineTest"` → `BUILD SUCCESSFUL`, 결과 XML `tests=3 failures=0 errors=0 skipped=0` (세 테스트 모두 실행 확인). 초록이므로 단언된 숫자가 곧 측정값이다.
+
+주문 모양: 라인 소계 30,000, 쿠폰 할인 5,000, 고객 결제 **25,000**.
+
+| 경우 | 지금 남는 숫자 | 뜻 |
+|---|---|---|
+| 단일 셀러 30,000 @10% | ACCRUAL gross 30,000 · commission 3,000 · seller_net 27,000. 할인 5,000 은 **어느 행에도 없음** | 장부 gross − 결제액 = 5,000 이 설명되지 않는다. 셀러에게 27,000 을 줘야 하는데 들어온 돈은 25,000 — 플랫폼은 실제로 2,000 손해인데 장부는 +3,000 |
+| 두 셀러 20,000 @10% + 10,000 @0% | seller_net 합 28,000 · commission 합 2,000 | 셀러 순수익 합이 결제액을 3,000 넘는다 |
+| 부분 환불 10,000 → 나머지 15,000 완전 환불 | 1차 REVERSAL gross −10,000 · commission −1,000 · net −9,000 (분모 30,000 → 1/3). 2차는 잔여 전액(−20,000 / −2,000 / −18,000)이라 주문 합은 0 | 결제액 기준(10,000/25,000 = 40%)이면 1차는 gross −12,000 이어야 한다 — **부분 환불 역분개가 2,000 과소** |
+
+🔵 스냅샷 레코드(`OrderSnapshot`)에 할인 필드 자체가 없어서, 할인은 이 서비스에 **들어올 길이 없다** — 위 테스트가 할인을 어디에도 넘기지 않는 것은 넘길 자리가 없기 때문이다. 위 표의 사실 2·3 은 측정으로 확인됐다.
+
+### 구현 후 로컬 검증 (2026-09-15 UTC)
+
+| 무엇 | 결과 |
+|---|---|
+| `./gradlew :…:settlement-service:test` (unit · slice, `integration` 태그 제외) | `BUILD SUCCESSFUL`. 결과 XML 26 파일 · **164 tests · failures+errors 0** |
+| 새 테스트 실행 확인 | `SettlementCouponDiscountTest` 9 · `PromotionCostTest` 4 · `OrderPlacedSnapshotConsumerDiscountTest` 3 — 전부 실패 0 |
+| 기존 테스트 무수정 통과 | `SettlementServiceTest` 9 · `SettlementConsumersTest` 10 (쿠폰 없는 경로 = 변경 전 숫자) |
+
+같은 주문 모양(30,000 @10%, 할인 5,000, 결제 25,000)에서 AC-0 표와 비교한 수정 후 숫자:
+
+| 경우 | 수정 전 | 수정 후 |
+|---|---|---|
+| 캡처 | commission 3,000 · net 27,000 · 할인 기록 없음 | commission 3,000 · net 27,000 (그대로) + `promotion_cost` COST 5,000 → `Σgross − 비용 = 25,000` |
+| 부분 환불 10,000 | gross −10,000 (분모 30,000) | gross −12,000 · commission −1,200 · net −10,800 + 비용 −2,000 → 되돌린 돈 12,000 − 2,000 = 10,000 |
+| 이어서 완전 환불 15,000 | 잔여 전액, 합 0 | gross −18,000 · 비용 −3,000, **두 원장 모두 합 0** |
+
+**미측정 (로컬 불가):** `SettlementPromotionCostIntegrationTest`(V7 마이그레이션·`ck_promotion_cost_sign`·JPA 매핑을 실제 Postgres 로) — 로컬 Docker 차단, CI ecommerce integration lane 이 권위. 컴파일은 위 `test` 태스크에서 통과.
+
+🔵 기준 특성 테스트 `SettlementCouponDiscountBaselineTest` 는 AC-0 증거 커밋(`dd3048b96`)에 남기고 구현 커밋에서 지운다 — 수정 후에도 초록이지만(스냅샷에 할인이 없으면 숫자가 같다) 이름이 «수정 전 측정» 이라 남기면 오해를 부른다. 같은 모양의 수정 후 기대값은 `SettlementCouponDiscountTest` 가 갖는다.
 
 ---
 

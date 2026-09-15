@@ -12,10 +12,25 @@ import java.util.List;
  * tenant and each line's seller; settlement never calls order/payment HTTP APIs to
  * backfill it (consumer rule). A missing snapshot at accrual time = unattributable
  * (F2 — the consumer raises → retry → DLQ).
+ *
+ * <p>{@code discountMinor} / {@code couponId} (TASK-BE-592) are the order's coupon discount from
+ * the additive {@code OrderPlaced.discountAmount} / {@code couponId}. The platform bears it: it is
+ * booked as a separate promotion cost at capture and sets the refund fraction's denominator
+ * ({@code Σ line gross − discountMinor} = the captured amount). {@code 0} / {@code null} for an
+ * order without a coupon (or an event without the fields).
  */
-public record OrderSnapshot(String orderId, String tenantId, List<OrderSnapshotLine> lines) {
+public record OrderSnapshot(String orderId, String tenantId, List<OrderSnapshotLine> lines,
+                            long discountMinor, String couponId) {
 
     public OrderSnapshot {
         lines = lines == null ? List.of() : List.copyOf(lines);
+        if (discountMinor < 0) {
+            throw new IllegalArgumentException("discountMinor must not be negative: " + discountMinor);
+        }
+    }
+
+    /** An order without a coupon discount. */
+    public OrderSnapshot(String orderId, String tenantId, List<OrderSnapshotLine> lines) {
+        this(orderId, tenantId, lines, 0L, null);
     }
 }

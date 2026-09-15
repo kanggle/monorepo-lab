@@ -7,8 +7,11 @@ import com.example.settlement.domain.model.CommissionRate;
 import com.example.settlement.domain.model.CommissionSplit;
 import com.example.settlement.domain.model.OrderSnapshot;
 import com.example.settlement.domain.model.OrderSnapshotLine;
+import com.example.settlement.domain.model.PromotionCost;
+import com.example.settlement.domain.model.PromotionCostType;
 import com.example.settlement.domain.repository.CommissionAccrualRepository;
 import com.example.settlement.domain.repository.OrderSnapshotRepository;
+import com.example.settlement.domain.repository.PromotionCostRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,15 +31,15 @@ import java.util.Map;
  *
  * <ul>
  *   <li><b>snapshot</b> ({@code OrderPlaced}) — cache the order's tenant + per-line
- *       seller/gross, idempotent on {@code orderId}.</li>
+ *       seller/gross + coupon discount, idempotent on {@code orderId}.</li>
  *   <li><b>accrue</b> ({@code PaymentCompleted}) — join the snapshot, split each line
- *       by its seller's effective rate, append ACCRUAL rows. Idempotent on
- *       {@code (orderId, paymentId)}; missing snapshot → {@link SnapshotNotFoundException}
- *       (F2).</li>
- *   <li><b>reverse</b> ({@code PaymentRefunded}) — proportionally claw back commission for a
- *       (partial or full) refund, appending REVERSAL rows linked to their parent accruals.
- *       Idempotent on the envelope {@code event_id} (the consumer dedupe) — a payment may emit
- *       several partial refunds.</li>
+ *       by its seller's effective rate, append ACCRUAL rows; book the coupon discount as a
+ *       separate promotion-cost row (TASK-BE-592). Idempotent on {@code (orderId, paymentId)};
+ *       missing snapshot → {@link SnapshotNotFoundException} (F2).</li>
+ *   <li><b>reverse</b> ({@code PaymentRefunded}) — proportionally claw back commission and
+ *       promotion cost for a (partial or full) refund, appending REVERSAL rows linked to their
+ *       parents. Idempotent on the envelope {@code event_id} (the consumer dedupe) — a payment
+ *       may emit several partial refunds.</li>
  * </ul>
  */
 @Slf4j
@@ -47,11 +50,13 @@ public class SettlementService {
     private final OrderSnapshotRepository snapshotRepository;
     private final CommissionAccrualRepository accrualRepository;
     private final CommissionRateResolver rateResolver;
+    private final PromotionCostRepository promotionCostRepository;
 
-    /** Caches an OrderPlaced line snapshot, idempotent on {@code orderId}. */
+    /** Caches an OrderPlaced line snapshot (with its coupon discount), idempotent on {@code orderId}. */
     @Transactional
     public void recordSnapshot(RecordOrderSnapshotCommand cmd) {
-        snapshotRepository.upsert(new OrderSnapshot(cmd.orderId(), cmd.tenantId(), cmd.lines()));
+        snapshotRepository.upsert(new OrderSnapshot(
+                cmd.orderId(), cmd.tenantId(), cmd.lines(), cmd.discountMinor(), cmd.couponId()));
     }
 
     /**
@@ -60,6 +65,9 @@ public class SettlementService {
      * and {@code seller_net = gross − commission} per line, appends an ACCRUAL row per
      * line. A replayed {@code (orderId, paymentId)} is a no-op (AC-6). No snapshot →
      * F2 (raise → retry → DLQ).
+     *
+     * <p>TASK-BE-592: commission stays on the pre-discount line gross; a coupon discount is
+     * booked as one order-level promotion-cost row (the platform bears it).
      */
     @Transactional
     public void accrue(AccruePaymentCommand cmd) {
@@ -83,19 +91,37 @@ public class SettlementService {
         accrualRepository.appendAll(rows);
         log.info("Accrued {} commission line(s) for orderId={}, paymentId={}, tenant={}",
                 rows.size(), cmd.orderId(), cmd.paymentId(), snapshot.tenantId());
+
+        // The platform bears the coupon discount. It is booked as its own row so the commission
+        // rows above — and every seller balance and payout fold — stay exactly as they would be
+        // without the coupon. Same transaction, same (orderId, paymentId) guard.
+        if (snapshot.discountMinor() > 0) {
+            promotionCostRepository.appendAll(List.of(PromotionCost.cost(
+                    snapshot.tenantId(), cmd.orderId(), cmd.paymentId(), snapshot.couponId(),
+                    snapshot.discountMinor(), cmd.occurredAt())));
+            log.info("Booked promotion cost {} for orderId={}, paymentId={}, couponId={}",
+                    snapshot.discountMinor(), cmd.orderId(), cmd.paymentId(), snapshot.couponId());
+        }
     }
 
     /**
-     * Proportionally claws back an order's commission on a (partial or full) refund.
-     * For each ACCRUAL row, reverses {@code round(orig_gross × refundAmount / accruedGross)}
-     * of the gross — re-split via {@link CommissionPolicy} and negated so every REVERSAL
-     * row independently satisfies {@code commission + seller_net == gross} — clamped to the
-     * row's remaining un-reversed gross (cumulative cap). On the final refund
-     * ({@code cmd.fullyRefunded()}) it reverses the <b>exact remaining</b> per field so the
-     * order nets to exactly zero per seller, absorbing any partial-rounding drift.
+     * Proportionally claws back an order's commission — and, for a coupon-discounted order, its
+     * promotion cost — on a (partial or full) refund.
      *
-     * <p>Idempotency is the consumer's {@code event_id} dedupe — a payment may emit several
-     * partial refunds, each a distinct event. No accruals (cancel-before-capture) → no-op.
+     * <p>The refund fraction is taken against the order's <b>captured</b> amount,
+     * {@code captured = Σ ACCRUAL.gross − snapshot.discountMinor} (TASK-BE-592): a refund gives
+     * back captured money, and for a discounted order that is less than the accrued gross. For
+     * each ACCRUAL row it reverses {@code round(orig_gross × refundAmount / captured)} of the
+     * gross — re-split via {@link CommissionPolicy} and negated so every REVERSAL row
+     * independently satisfies {@code commission + seller_net == gross} — clamped to the row's
+     * remaining un-reversed gross (cumulative cap). The promotion cost reverses
+     * {@code round(discount × refundAmount / captured)}, clamped the same way. On the final
+     * refund ({@code cmd.fullyRefunded()}) both reverse the <b>exact remaining</b>, so the order
+     * nets to exactly zero per seller and in promotion cost, absorbing any partial-rounding drift.
+     *
+     * <p>Without a coupon {@code captured == accruedGross} — the behaviour before TASK-BE-592.
+     * Idempotency is the consumer's {@code event_id} dedupe — a payment may emit several partial
+     * refunds, each a distinct event. No accruals (cancel-before-capture) → no-op.
      */
     @Transactional
     public void reverse(ReversePaymentCommand cmd) {
@@ -135,6 +161,19 @@ public class SettlementService {
             return;
         }
 
+        // TASK-BE-592: the refund fraction's denominator is the CAPTURED amount. The snapshot is
+        // always present here (accrual required it); if it is somehow gone the order is treated as
+        // having had no coupon, which is exactly the pre-TASK-BE-592 arithmetic.
+        long discountMinor = snapshotRepository.findByOrderId(cmd.orderId())
+                .map(OrderSnapshot::discountMinor)
+                .orElse(0L);
+        long capturedMinor = accruedGross - discountMinor;
+        if (capturedMinor <= 0) {
+            log.warn("Captured amount is non-positive for orderId={} (accruedGross={}, discount={}) — "
+                    + "cannot apportion the refund; skipping", cmd.orderId(), accruedGross, discountMinor);
+            return;
+        }
+
         List<CommissionAccrual> reversals = new ArrayList<>(accruals.size());
         for (CommissionAccrual a : accruals) {
             long[] already = reversedByAccrual.getOrDefault(a.accrualId(), new long[3]);
@@ -150,7 +189,7 @@ public class SettlementService {
                 long remSellerNet = a.sellerNetMinor() - already[2];
                 reverseSplit = new CommissionSplit(-remainingGross, a.rateBps(), -remCommission, -remSellerNet);
             } else {
-                long portion = Math.min(proportionalGross(a.grossMinor(), cmd.refundAmount(), accruedGross),
+                long portion = Math.min(proportional(a.grossMinor(), cmd.refundAmount(), capturedMinor),
                         remainingGross); // cumulative cap
                 if (portion <= 0) {
                     continue;
@@ -160,25 +199,67 @@ public class SettlementService {
             reversals.add(a.toReversal(cmd.paymentId(), cmd.occurredAt(), reverseSplit));
         }
 
-        if (reversals.isEmpty()) {
+        List<PromotionCost> costReversals = discountMinor > 0
+                ? promotionCostReversals(cmd, capturedMinor)
+                : List.of();
+
+        if (reversals.isEmpty() && costReversals.isEmpty()) {
             log.info("Proportional reversal produced no rows for orderId={} (refundAmount={}, fully={})",
                     cmd.orderId(), cmd.refundAmount(), cmd.fullyRefunded());
             return;
         }
-        accrualRepository.appendAll(reversals);
-        log.info("Reversed {} accrual line(s) for orderId={}, refundPaymentId={} (refundAmount={}, fully={})",
-                reversals.size(), cmd.orderId(), cmd.paymentId(), cmd.refundAmount(), cmd.fullyRefunded());
+        if (!reversals.isEmpty()) {
+            accrualRepository.appendAll(reversals);
+        }
+        if (!costReversals.isEmpty()) {
+            promotionCostRepository.appendAll(costReversals);
+        }
+        log.info("Reversed {} accrual line(s) and {} promotion-cost row(s) for orderId={}, refundPaymentId={} "
+                        + "(refundAmount={}, captured={}, fully={})",
+                reversals.size(), costReversals.size(), cmd.orderId(), cmd.paymentId(),
+                cmd.refundAmount(), capturedMinor, cmd.fullyRefunded());
     }
 
     /**
-     * {@code round(grossMinor × refundAmount / accruedGross)} (HALF_UP) via BigDecimal — the
-     * same rounding vehicle as {@link CommissionPolicy} — to avoid {@code long} overflow on the
+     * The promotion-cost share of a refund: per COST row, {@code round(amount × refund / captured)}
+     * clamped to its remaining un-reversed amount, or the exact remaining on the final refund.
+     */
+    private List<PromotionCost> promotionCostReversals(ReversePaymentCommand cmd, long capturedMinor) {
+        List<PromotionCost> rows = promotionCostRepository.findByOrderId(cmd.orderId());
+        Map<String, Long> reversedByCost = new HashMap<>();
+        for (PromotionCost r : rows) {
+            if (r.type() == PromotionCostType.REVERSAL) {
+                reversedByCost.merge(r.reversesCostId(), -r.amountMinor(), Long::sum);
+            }
+        }
+        List<PromotionCost> out = new ArrayList<>();
+        for (PromotionCost c : rows) {
+            if (c.type() != PromotionCostType.COST) {
+                continue;
+            }
+            long remaining = c.amountMinor() - reversedByCost.getOrDefault(c.costId(), 0L);
+            if (remaining <= 0) {
+                continue; // already fully reversed
+            }
+            long portion = cmd.fullyRefunded()
+                    ? remaining
+                    : Math.min(proportional(c.amountMinor(), cmd.refundAmount(), capturedMinor), remaining);
+            if (portion > 0) {
+                out.add(c.toReversal(cmd.paymentId(), cmd.occurredAt(), portion));
+            }
+        }
+        return out;
+    }
+
+    /**
+     * {@code round(amountMinor × refundAmount / baseMinor)} (HALF_UP) via BigDecimal — the same
+     * rounding vehicle as {@link CommissionPolicy} — to avoid {@code long} overflow on the
      * intermediate product and keep money exact.
      */
-    private static long proportionalGross(long grossMinor, long refundAmount, long accruedGross) {
-        return BigDecimal.valueOf(grossMinor)
+    private static long proportional(long amountMinor, long refundAmount, long baseMinor) {
+        return BigDecimal.valueOf(amountMinor)
                 .multiply(BigDecimal.valueOf(refundAmount))
-                .divide(BigDecimal.valueOf(accruedGross), 0, RoundingMode.HALF_UP)
+                .divide(BigDecimal.valueOf(baseMinor), 0, RoundingMode.HALF_UP)
                 .longValueExact();
     }
 }

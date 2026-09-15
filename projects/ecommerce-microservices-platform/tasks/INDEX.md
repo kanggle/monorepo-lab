@@ -76,16 +76,16 @@ continuing there is the lifecycle working as designed, not an exception to it.
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-| ID | Title | Service | Tags |
-|---|---|---|---|
-| TASK-BE-592 | 쿠폰 할인은 정산에서 누가 부담하나 — 지금은 수수료가 할인 전 금액에 매겨지고 할인은 어느 장부에도 없다 (AC-1 소유자 결정 필요, TASK-INT-026 후속) | settlement-service | event, code, test |
+_(없음)_
 
 
 _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DONE. `../../../tasks/done/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
 
 ## in-progress
 
-_(없음)_
+| ID | Title | Service | Tags |
+|---|---|---|---|
+| TASK-BE-592 | 쿠폰 할인은 정산에서 누가 부담하나 — AC-1 결정 = 플랫폼 부담 · 별도 프로모션 비용 행 (2026-09-15) · 측정 → 스펙 → 구현 | settlement-service | event, code, test |
 
 
 ## review

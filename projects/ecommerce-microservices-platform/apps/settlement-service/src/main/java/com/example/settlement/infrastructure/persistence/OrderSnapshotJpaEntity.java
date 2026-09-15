@@ -38,6 +38,18 @@ public class OrderSnapshotJpaEntity {
     @OrderColumn(name = "line_index")
     private List<OrderSnapshotLineJpaEntity> lines = new ArrayList<>();
 
+    /** The order's coupon discount (TASK-BE-592). 0 without a coupon. */
+    @Column(name = "discount_minor", nullable = false)
+    private long discountMinor;
+
+    @Column(name = "coupon_id")
+    private String couponId;
+
+    void setDiscount(long discountMinor, String couponId) {
+        this.discountMinor = discountMinor;
+        this.couponId = couponId;
+    }
+
     static OrderSnapshotJpaEntity of(String orderId, String tenantId) {
         OrderSnapshotJpaEntity e = new OrderSnapshotJpaEntity();
         e.orderId = orderId;
