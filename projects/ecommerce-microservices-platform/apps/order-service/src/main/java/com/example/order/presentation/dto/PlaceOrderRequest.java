@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 
 import java.util.List;
 
@@ -15,7 +16,12 @@ public record PlaceOrderRequest(
 
         @NotNull(message = "Shipping address is required")
         @Valid
-        ShippingAddressRequest shippingAddress
+        ShippingAddressRequest shippingAddress,
+
+        // Optional coupon (TASK-INT-026). order-service asks promotion-service for the
+        // discount; the client never sends the discount amount itself.
+        @Size(max = 36, message = "couponId must be at most 36 characters")
+        String couponId
 ) {
     public PlaceOrderCommand toCommand(String userId) {
         return toCommand(userId, null);
@@ -30,7 +36,8 @@ public record PlaceOrderRequest(
         PlaceOrderCommand.ShippingAddressCommand addrCommand = new PlaceOrderCommand.ShippingAddressCommand(
                 shippingAddress.recipient(), shippingAddress.phone(), shippingAddress.zipCode(),
                 shippingAddress.address1(), shippingAddress.address2());
-        return new PlaceOrderCommand(userId, itemCommands, addrCommand, idempotencyKey);
+        String coupon = (couponId == null || couponId.isBlank()) ? null : couponId;
+        return new PlaceOrderCommand(userId, itemCommands, addrCommand, idempotencyKey, coupon);
     }
 
     public record OrderItemRequest(

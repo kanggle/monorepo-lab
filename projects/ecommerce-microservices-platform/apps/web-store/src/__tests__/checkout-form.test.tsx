@@ -337,5 +337,52 @@ describe('CheckoutForm', () => {
         );
       });
     });
+
+    it('쿠폰을 고르면 couponId 를 주문 요청에 싣고, 서버가 확정한 할인 후 금액으로 결제한다', async () => {
+      mockSubmitOrder.mockResolvedValueOnce({ orderId: 'order-1', totalPrice: 1495000, discountAmount: 5000 });
+
+      const user = userEvent.setup();
+      render(
+        <TestQueryProvider>
+          <CheckoutForm
+            items={CART_ITEMS}
+            totalAmount={1500000}
+            discountAmount={5000}
+            couponId="coupon-1"
+            onOrderComplete={mockOnOrderComplete}
+          />
+        </TestQueryProvider>,
+      );
+
+      await fillRequiredFields(user);
+      await user.click(screen.getByRole('button', { name: /결제하기/ }));
+
+      await waitFor(() => {
+        expect(mockRequestPayment).toHaveBeenCalledWith(
+          expect.objectContaining({ orderId: 'order-1', amount: 1495000 }),
+        );
+      });
+      expect(mockSubmitOrder).toHaveBeenCalledWith(
+        expect.objectContaining({ couponId: 'coupon-1' }),
+        expect.any(String),
+      );
+    });
+
+    it('🔴 주문 응답에 결제 금액이 없으면 결제창을 열지 않는다 — 추정한 금액으로 결제하지 않는다', async () => {
+      mockSubmitOrder.mockResolvedValueOnce(
+        { orderId: 'order-1' } as unknown as Awaited<ReturnType<typeof placeOrder>>,
+      );
+
+      const user = userEvent.setup();
+      renderCheckoutForm();
+
+      await fillRequiredFields(user);
+      await user.click(screen.getByRole('button', { name: /결제하기/ }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert')).toHaveTextContent('주문 금액을 확인할 수 없어');
+      });
+      expect(mockRequestPayment).not.toHaveBeenCalled();
+    });
   });
 });

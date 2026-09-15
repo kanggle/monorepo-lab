@@ -808,6 +808,7 @@ services:
       - DB_USERNAME=order_user
       - DB_PASSWORD=${ORDER_DB_PASSWORD}
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - PROMOTION_SERVICE_URL=http://promotion-service:8092
       - SERVER_PORT=8086
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
       - OTEL_SERVICE_NAME=order-service

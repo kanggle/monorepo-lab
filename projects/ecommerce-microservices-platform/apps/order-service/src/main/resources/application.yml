@@ -80,6 +80,12 @@ order:
       jwk-set-uri: ${ORDER_INTERNAL_OAUTH2_JWK_SET_URI:http://auth-service:8081/oauth2/jwks}
       issuer: ${ORDER_INTERNAL_OAUTH2_ISSUER:http://auth-service:8081}
       audience: ${ORDER_INTERNAL_OAUTH2_AUDIENCE:}
+  promotion-service:
+    # TASK-INT-026: synchronous coupon apply at placement, plus a best-effort release when the
+    # placement transaction does not commit. Internal network only — never through the gateway.
+    base-url: ${PROMOTION_SERVICE_URL:http://localhost:8092}
+    connect-timeout-ms: ${PROMOTION_SERVICE_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms: ${PROMOTION_SERVICE_READ_TIMEOUT_MS:3000}
   saga:
     stuck-detector:
       enabled: ${ORDER_STUCK_DETECTOR_ENABLED:true}

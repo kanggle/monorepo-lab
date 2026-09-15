@@ -78,16 +78,65 @@ class OrderControllerSliceTest {
     // ─── POST /api/orders ───────────────────────────────────────────────
 
     @Test
-    @DisplayName("정상 요청 시 201과 orderId 반환")
+    @DisplayName("정상 요청 시 201과 orderId·결제 금액 반환")
     void placeOrder_validRequest_returns201() throws Exception {
-        given(orderPlacementService.placeOrder(any())).willReturn(new PlaceOrderResult("order-123"));
+        given(orderPlacementService.placeOrder(any())).willReturn(new PlaceOrderResult("order-123", 1000000L, 0L));
 
         mockMvc.perform(post("/api/orders")
                         .header("X-User-Id", "user1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_PLACE_BODY))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.orderId").value("order-123"));
+                .andExpect(jsonPath("$.orderId").value("order-123"))
+                .andExpect(jsonPath("$.totalPrice").value(1000000))
+                .andExpect(jsonPath("$.discountAmount").value(0));
+    }
+
+    @Test
+    @DisplayName("TASK-INT-026: couponId 가 명령으로 전달되고, 응답은 서버가 확정한 할인 후 금액이다")
+    void placeOrder_withCoupon_passesCouponIdAndReturnsDiscountedTotal() throws Exception {
+        given(orderPlacementService.placeOrder(any())).willReturn(new PlaceOrderResult("order-123", 995000L, 5000L));
+
+        mockMvc.perform(post("/api/orders")
+                        .header("X-User-Id", "user1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_PLACE_BODY.replace("\"shippingAddress\"", "\"couponId\": \"coupon-1\",\n  \"shippingAddress\"")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.totalPrice").value(995000))
+                .andExpect(jsonPath("$.discountAmount").value(5000));
+
+        org.mockito.ArgumentCaptor<com.example.order.application.dto.PlaceOrderCommand> captor =
+                org.mockito.ArgumentCaptor.forClass(com.example.order.application.dto.PlaceOrderCommand.class);
+        org.mockito.Mockito.verify(orderPlacementService).placeOrder(captor.capture());
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().couponId()).isEqualTo("coupon-1");
+    }
+
+    @Test
+    @DisplayName("TASK-INT-026: 쿠폰이 거절되면 422 와 promotion-service 의 코드를 그대로 반환")
+    void placeOrder_couponRejected_returns422WithCode() throws Exception {
+        given(orderPlacementService.placeOrder(any())).willThrow(
+                new com.example.order.application.exception.CouponRejectedException("COUPON_ALREADY_USED", "used"));
+
+        mockMvc.perform(post("/api/orders")
+                        .header("X-User-Id", "user1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_PLACE_BODY))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("COUPON_ALREADY_USED"));
+    }
+
+    @Test
+    @DisplayName("TASK-INT-026: promotion-service 가 응답하지 않으면 503 COUPON_SERVICE_UNAVAILABLE")
+    void placeOrder_couponServiceUnavailable_returns503() throws Exception {
+        given(orderPlacementService.placeOrder(any())).willThrow(
+                new com.example.order.application.exception.CouponServiceUnavailableException("down", null));
+
+        mockMvc.perform(post("/api/orders")
+                        .header("X-User-Id", "user1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_PLACE_BODY))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("COUPON_SERVICE_UNAVAILABLE"));
     }
 
     @Test

@@ -229,3 +229,36 @@ If any section is missing or incomplete, this task must not be implemented.
 ---
 
 분석=Opus 5 / 구현 권장=Opus — 금액·계약·서비스 경계가 함께 바뀌고 보상 설계가 필요하다. ⓒ 가 선택되면 Sonnet 으로 충분하다.
+
+---
+
+# 진행 기록 (in-progress 작업 문서)
+
+## 정산 영향 — 측정 (2026-09-15 UTC)
+
+- settlement-service 는 수수료 기준(gross)을 **`OrderPlaced.items[]` 의 `unitPrice × quantity`** 로 잡는다 — `apps/settlement-service/.../infrastructure/event/OrderPlacedSnapshotConsumer.java:72`. `totalPrice` 는 읽지 않는다.
+- ⇒ 쿠폰 주문에서 수수료는 **할인 전 금액**에 매겨지고, 셀러 순수익은 할인을 전혀 부담하지 않는다. 할인은 사실상 플랫폼(수수료를 덜 받지 않음) 또는 아무도 장부에 기록하지 않는 돈이 된다.
+- 환불 역분개는 «captured 합계 == 적립 gross» 를 전제한다(`settlement-subscriptions.md` § Proportional clawback rule). 쿠폰 주문은 captured(`totalPrice`) < gross 라서 **부분 환불의 비례 역분개가 과소**하게 계산된다. 마지막 환불(`fullyRefunded=true`)이 남은 전액을 되돌리므로 **완전 환불로 끝나면 주문 단위로는 0 이 맞는다.**
+- 🔴 이 티켓은 정산을 바꾸지 않는다(Out of Scope). **«쿠폰 할인은 누가 부담하나 — 플랫폼 / 셀러 / 비례»** 는 소유자 결정이 필요한 후속 질문이다. 후속 티켓 기안 대상.
+
+## 로컬 검증 (2026-09-15 UTC, worktree `int-026-impl`)
+
+| 무엇 | 명령 | 결과 |
+|---|---|---|
+| order·promotion 단위/슬라이스/계약 | `./gradlew :…:order-service:test :…:promotion-service:test --continue` | `BUILD SUCCESSFUL`. 새 클래스 실행 확인(XML): `OrderPlacementServiceCouponTest` 9, `OrderCouponDiscountTest` 8, `PromotionServiceCouponClientTest` 7, `CouponApplyReplayAndReleaseTest` 5, `CouponCommandServiceReplayReleaseTest` 4, `InternalCouponControllerSliceTest` 2 — 실패 0 |
+| web-store 타입 | `npx tsc --noEmit` | rc=0 |
+| web-store lint | `npx next lint` | rc=0 |
+| 에러 코드 등록부 | `check-error-code-registry.sh`, `check-domain-error-code-registry.sh` | rc=0 / rc=0 |
+
+## `OrderPlaced` 구독자 — 덧붙인 필드가 소비를 깨지 않나 (2026-09-15 UTC)
+
+| 구독자 | 근거 | 판정 |
+|---|---|---|
+| settlement-service | `OrderPlacedEvent` 에 `@JsonIgnoreProperties(ignoreUnknown = true)` | 안전 |
+| product-service | `ReservationInboundEvents.OrderPlacedMessage` 에 `ignoreUnknown = true` | 안전 |
+| notification-service | DTO 가 `orderId/userId/totalPrice` 만 선언하는데 **지금도** 와이어엔 `items`·`shippingAddress` 가 실려 온다. 커스텀 ObjectMapper 없음(Spring Boot 기본 = 모르는 필드 무시) | 이미 모르는 필드를 받고 있다 ⇒ 안전 |
+| payment-service | 같은 논리 — DTO `OrderItem` 에 `sellerId` 가 없는데 와이어엔 이미 있다. 커스텀 ObjectMapper 없음 | 안전 |
+
+🔵 `POST /api/orders` 응답을 쓰는 다른 곳: load-tests 는 `orderId` 만 읽고, `tests/e2e` 는 쿠폰 없이 주문한다. platform-console 은 관리자 조회 경로만 부른다.
+
+**미측정 (로컬에서 못 잰 것):** web-store vitest(Node 24 에서 vitest 4 기동 불가 — CI Node 20 이 권위), order-service Testcontainers 통합 테스트(로컬 Docker 차단 — CI), 실 스택 종단(쿠폰 선택 → 토스 승인 성공)은 돌리지 않았다.

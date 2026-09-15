@@ -9,6 +9,8 @@ import com.example.order.domain.exception.OrderCannotBeCancelledException;
 import com.example.order.domain.exception.OrderNotFoundException;
 import com.example.common.persistence.DataIntegrityViolations;
 import com.example.web.dto.ErrorResponse;
+import com.example.order.application.exception.CouponRejectedException;
+import com.example.order.application.exception.CouponServiceUnavailableException;
 import com.example.order.application.exception.DuplicateOrderPlacementException;
 import com.example.order.application.exception.InvalidOrderStatusException;
 import jakarta.validation.ConstraintViolationException;
@@ -136,6 +138,21 @@ public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
         // receives the winning order via the idempotent replay path.
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ErrorResponse.of("DUPLICATE_ORDER_REQUEST", "Order placement already in progress. Please retry."));
+    }
+
+    @ExceptionHandler(CouponRejectedException.class)
+    public ResponseEntity<ErrorResponse> handleCouponRejected(CouponRejectedException e) {
+        // TASK-INT-026: the coupon in the request cannot be applied — no order was created.
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of(e.getCode(), e.getMessage()));
+    }
+
+    @ExceptionHandler(CouponServiceUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleCouponServiceUnavailable(CouponServiceUnavailableException e) {
+        // TASK-INT-026: never place the order without the discount the customer chose.
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ErrorResponse.of("COUPON_SERVICE_UNAVAILABLE",
+                        "Coupon service is temporarily unavailable. Please retry."));
     }
 
     @ExceptionHandler(OptimisticLockingFailureException.class)

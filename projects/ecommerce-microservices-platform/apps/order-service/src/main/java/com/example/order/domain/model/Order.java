@@ -48,6 +48,20 @@ public class Order {
      */
     private String idempotencyKey;
 
+    /**
+     * Coupon applied at placement (TASK-INT-026). Null when the order was placed without one.
+     * Set once, before the first save, by {@link #applyCouponDiscount}; persisted and restored
+     * so a later read can see what the customer was charged against.
+     */
+    private String couponId;
+
+    /**
+     * Discount granted for {@link #couponId}, in KRW; 0 without a coupon. {@link #totalPrice}
+     * is already net of it — it stays "the amount the customer pays", which is what
+     * payment-service builds the PENDING payment from.
+     */
+    private long discountAmount;
+
     private Order() {
     }
 
@@ -130,6 +144,65 @@ public class Order {
         order.stuckRecoveryAt = stuckRecoveryAt;
         order.version = version;
         return order;
+    }
+
+    /** Reconstitutes an order together with the coupon snapshot captured at placement (TASK-INT-026). */
+    public static Order reconstitute(String orderId, String userId, List<OrderItem> items,
+                                      OrderStatus status, long totalPrice,
+                                      ShippingAddress shippingAddress,
+                                      Instant createdAt, Instant updatedAt,
+                                      String paymentId, Instant paidAt,
+                                      Instant refundedAt,
+                                      int stuckRecoveryAttemptCount,
+                                      Instant stuckRecoveryAt,
+                                      Long version,
+                                      String couponId,
+                                      long discountAmount) {
+        Order order = reconstitute(orderId, userId, items, status, totalPrice, shippingAddress,
+                createdAt, updatedAt, paymentId, paidAt, refundedAt,
+                stuckRecoveryAttemptCount, stuckRecoveryAt, version);
+        order.couponId = couponId;
+        order.discountAmount = discountAmount;
+        return order;
+    }
+
+    /**
+     * Applies the discount promotion-service granted for {@code couponId} (TASK-INT-026) and
+     * re-derives {@link #totalPrice} as the amount the customer pays.
+     *
+     * <p>promotion-service is the authority on the amount; this method guards only what the
+     * order owns: one coupon per order, applied while still {@code PENDING}, never a negative
+     * discount, and never a payable total below 1 KRW (the PG cannot charge 0).
+     */
+    public void applyCouponDiscount(String couponId, long discountAmount) {
+        if (couponId == null || couponId.isBlank()) {
+            throw new InvalidOrderException("Coupon ID must not be null or blank");
+        }
+        if (this.couponId != null) {
+            throw new InvalidOrderException("A coupon is already applied to this order");
+        }
+        if (this.status != OrderStatus.PENDING) {
+            throw new InvalidOrderException("Coupon can only be applied to a PENDING order: " + status);
+        }
+        if (discountAmount < 0) {
+            throw new InvalidOrderException("Discount amount must not be negative");
+        }
+        long subtotal = subtotal();
+        if (subtotal - discountAmount < 1) {
+            throw new InvalidOrderException("Payable amount after discount must be at least 1");
+        }
+        this.couponId = couponId;
+        this.discountAmount = discountAmount;
+        this.totalPrice = subtotal - discountAmount;
+    }
+
+    /** Sum of the line subtotals before any coupon discount. */
+    public long subtotal() {
+        long sum = 0L;
+        for (OrderItem item : items) {
+            sum += item.subtotal();
+        }
+        return sum;
     }
 
     public boolean confirm(Clock clock) {
