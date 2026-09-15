@@ -145,9 +145,9 @@ Consumed via Kafka; each consumer dedupes on the envelope `event_id` through a
 
 | Event | Topic | Role |
 |---|---|---|
-| `OrderPlaced` | `order.order.placed` | **Line snapshot.** Upsert a per-order line cache `(order_id → [{seller_id, gross_minor}], tenant_id)`. Idempotent on `order_id`. The envelope's `tenant_id` is the **only** source of the order's tenant for settlement (see Multi-Tenancy below). |
-| `PaymentCompleted` | `payment.payment.completed` | **Accrual trigger.** The money is captured (real). Look up the snapshot by `orderId`; for each line compute the commission split and append an `ACCRUAL` row. Idempotent on `(order_id, payment_id)`. |
-| `PaymentRefunded` | `payment.payment.refunded` | **Proportional reversal.** Append `REVERSAL` rows (negative) clawing back commission in proportion to the refund `amount` (`reverses_accrual_id` links each to its parent ACCRUAL; the final `fullyRefunded` refund reverses the exact remaining so the order nets to zero per seller). Idempotent on the envelope `event_id` (a payment may emit several partial refunds). See `contracts/events/settlement-subscriptions.md` § Proportional clawback rule. |
+| `OrderPlaced` | `order.order.placed` | **Line snapshot.** Upsert a per-order line cache `(order_id → [{seller_id, gross_minor}], tenant_id, discount_minor, coupon_id)`. Idempotent on `order_id`. The envelope's `tenant_id` is the **only** source of the order's tenant for settlement (see Multi-Tenancy below). `discount_minor` / `coupon_id` come from the additive `OrderPlaced.discountAmount` / `couponId` (absent → `0` / `null`). |
+| `PaymentCompleted` | `payment.payment.completed` | **Accrual trigger.** The money is captured (real). Look up the snapshot by `orderId`; for each line compute the commission split and append an `ACCRUAL` row; when `discount_minor > 0`, append one `promotion_cost` `COST` row for the order. Idempotent on `(order_id, payment_id)`. |
+| `PaymentRefunded` | `payment.payment.refunded` | **Proportional reversal.** Append `REVERSAL` rows (negative) clawing back commission — and the promotion cost of a discounted order — in proportion to the refund `amount` against the **captured** amount `accruedGross − discount_minor` (`reverses_accrual_id` links each to its parent ACCRUAL; the final `fullyRefunded` refund reverses the exact remaining so the order nets to zero per seller and its promotion cost nets to zero). Idempotent on the envelope `event_id` (a payment may emit several partial refunds). See `contracts/events/settlement-subscriptions.md` § Proportional clawback rule. |
 
 Consumer group: `settlement-service`. Malformed / unattributable events route to
 the retry topic → DLQ (never fail the whole pipeline).
@@ -186,10 +186,30 @@ negative of the original. A seller's settleable balance is `Σ(seller_net_minor)
 over their rows (commission is `Σ(commission_minor)` to the platform). Reads
 aggregate; nothing is mutated in place.
 
+**Promotion-cost ledger (`promotion_cost`, append-only, immutable — TASK-BE-592):**
+the **platform bears coupon discounts** (owner decision 2026-09-15). Commission and
+`seller_net` are computed on the **pre-discount** line gross, exactly as without a
+coupon, so `ck_commission_accrual_split`, seller balances and the period-close payout
+fold are unchanged. The discount is a separate order-level row:
+
+```
+COST      amount_minor = +discount_minor                       (on PaymentCompleted, discount_minor > 0)
+REVERSAL  amount_minor = −round(discount_minor × refund / captured), capped by the remaining
+          (on PaymentRefunded; the fullyRefunded refund reverses the exact remaining)
+captured  = Σ ACCRUAL.gross_minor − discount_minor
+per order: Σ commission_accrual.gross_minor − Σ promotion_cost.amount_minor = captured
+```
+
+A `REVERSAL` row links its `COST` row via `reverses_cost_id`. `discount_minor` /
+`coupon_id` are cached on the `OrderPlaced` snapshot; an event without them has
+`discount_minor = 0` and writes no `promotion_cost` row. There is no HTTP read for
+promotion costs yet (forward-declared).
+
 **Idempotency:** the `processed_event` dedupe (on `event_id`) guards re-delivery;
 additionally the accrual write is keyed on `(order_id, payment_id)` so a replayed
 `PaymentCompleted` cannot double-accrue, and a reversal on the same key cannot
-double-reverse.
+double-reverse. The promotion-cost `COST` row is written in the same transaction as the
+accruals, behind the same `(order_id, payment_id)` guard.
 
 ## Period close + simulated payout (this increment)
 

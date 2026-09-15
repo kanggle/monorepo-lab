@@ -25,9 +25,9 @@
 
 그러나 `PaymentCompleted` 페이로드(`paymentId`/`orderId`/`userId`/`amount`/`paidAt`)에는 **라인 분해도, `seller_id` 도, `tenant_id` 도 없다**. 라인별 셀러 귀속 + tenant 는 **`order.order.placed`** 에만 있다(`items[].sellerId` + `items[].unitPrice` + `items[].quantity` + 봉투 `tenant_id`). 그래서:
 
-1. `OrderPlaced` 소비 → **라인 스냅샷 캐시**(`order_id → [{seller_id, gross_minor}]`, `tenant_id`). 아직 accrual 없음(돈 미캡처).
-2. `PaymentCompleted` 소비 → 스냅샷을 `orderId` 로 조인 → 라인별 수수료 분할 → **accrual** 적립.
-3. `PaymentRefunded` 소비 → 해당 주문 accrual 을 **reversal**(음수)로 상쇄.
+1. `OrderPlaced` 소비 → **라인 스냅샷 캐시**(`order_id → [{seller_id, gross_minor}]`, `tenant_id`, 쿠폰 할인 `discount_minor`·`coupon_id`). 아직 accrual 없음(돈 미캡처).
+2. `PaymentCompleted` 소비 → 스냅샷을 `orderId` 로 조인 → 라인별 수수료 분할 → **accrual** 적립. 할인이 있으면 **`promotion_cost` 행** 1개를 따로 적립(§3.1).
+3. `PaymentRefunded` 소비 → 해당 주문 accrual 을 **reversal**(음수)로 상쇄. 할인 주문이면 promotion cost 도 같은 비율로 상쇄.
 
 > **★ ADR-030 통찰 — settlement tenant_id 소스 업데이트 (TASK-BE-400)**: payment-service 가 TASK-BE-400 (ADR-MONO-030 Step 4 facet c) 에서 `tenant_id` 전파를 완료함으로써 `PaymentCompleted` / `PaymentRefunded` 봉투에 `tenant_id` 가 포함된다. settlement-service 는 이제 결제 봉투에서 직접 `tenant_id` 를 읽을 수 있다. 단, `OrderPlaced` 스냅샷 캐시는 `seller_id` / 라인 분해를 위해 여전히 필요하므로 스냅샷-선행 패턴은 유지한다. 스냅샷 캐시가 `tenant_id` 도 저장하고 있으므로, settlement-service 가 결제 봉투 `tenant_id` 를 직접 읽도록 이관하는 것은 선택적 최적화다 — settlement-service 코드 변경은 별도 follow-up 으로 데퍼드.
 
@@ -60,6 +60,16 @@ seller_net_minor = gross_minor − commission_minor           (나머지 — 2�
 **환불 reversal (비례 clawback)**: `PaymentRefunded` → 환불 `amount` 에 비례해 그 주문의 accrual 을 음수 `REVERSAL` 로 상쇄(`reverses_accrual_id` 가 각 REVERSAL 을 부모 ACCRUAL 에 연결, per-row `commission+seller_net=gross` invariant 유지). 부분환불은 여러 번 올 수 있고, **마지막 `fullyRefunded` 환불**은 잔여를 정확히 상쇄해 셀러별 net-zero 보장(부분 rounding drift 흡수). 누적 cap = 적립 초과 상쇄 불가. 상세 = `specs/contracts/events/settlement-subscriptions.md` § Proportional clawback rule.
 
 **멱등**: accrual 은 `(order_id, payment_id)`, reversal 은 envelope `event_id`(`processed_event` dedupe) → 재전달이 중복 적립/중복 상쇄 불가(부분환불마다 distinct event_id 라 각각 1회 처리).
+
+### 3.1 쿠폰 할인 = 플랫폼 부담, 별도 프로모션 비용 행 (TASK-BE-592, 소유자 결정 2026-09-15)
+
+쿠폰은 셀러가 아니라 테넌트 운영자가 발급한다. 그래서 **할인은 플랫폼이 부담**하고, 수수료 원장과 **분리된** append-only 원장 `promotion_cost` 에 적는다.
+
+- 수수료·셀러 순수익은 **할인 전** 라인 gross 기준 그대로 — 셀러 잔액·기간마감 payout 은 쿠폰이 없을 때와 같다.
+- 결제 캡처 때 주문 단위 `COST` 행 1개(`amount_minor = 할인액`), 환불마다 `REVERSAL` 행(음수, 부모 `COST` 에 연결).
+- 환불 비율의 분모 = **실제 결제액** `captured = Σ ACCRUAL.gross − 할인액`. 수수료 역분개도 같은 분모를 쓴다(쿠폰 없는 주문은 `captured = Σ gross` 라 기존과 같다). 마지막 `fullyRefunded` 환불은 수수료·프로모션 비용 모두 잔여를 정확히 상쇄한다.
+- 주문 단위 불변식: `Σ commission_accrual.gross − Σ promotion_cost.amount = 결제액`.
+- 조회 API 는 아직 없다(보류).
 
 ---
 
