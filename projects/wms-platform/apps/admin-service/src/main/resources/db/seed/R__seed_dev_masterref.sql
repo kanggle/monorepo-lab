@@ -262,4 +262,5 @@ ON CONFLICT (id) DO NOTHING;
 -- baseline data. Reproducing them here would inject rows into admin's ref
 -- tables that master-service itself will never emit an event for — this file
 -- mirrors master-service's actual seed instead.
+-- Tracked in projects/wms-platform/tasks/ready/TASK-BE-588-outbound-masterref-seed-disagrees-with-master-seed.md
 -- =============================================================================

@@ -166,6 +166,8 @@ master-ref **소비자 클래스가 하나도 없다**(있는 것은 `MasterRefC
       SKU `...404 SKU-APPLE-002` 도 심는다 — 둘 다 master 원본과 안 맞는 **outbound
       자신의 복사 오류**로 보여 이 파일에는 옮기지 않았다(파일 꼬리 주석에 근거를
       남겼다). ⇒ 사본이 늘수록 이런 대조 없는 드리프트가 **더** 생기기 쉽다.
+      🔵 **이 어긋남의 집 = `projects/wms-platform/tasks/ready/TASK-BE-588-outbound-masterref-seed-disagrees-with-master-seed.md`**
+      (2026-09-15 같은 PR 에서 기안 — 받는 쪽에 행이 있는지 확인했다. 산문 «나중에» 로 남기지 않는다).
       🔴 **가드/테스트 검색 — 없다.** `scripts/` 와 `.github/workflows/ci.yml` 을
       `masterref`/`master_ref`/`MasterRef` 로 훑었고, 형제 masterref 시드끼리(또는
       master-service 시드와) 값을 대조하는 가드나 테스트는 **0건**이다. 방금 찾은
