@@ -236,6 +236,23 @@ export async function isAuthenticated(): Promise<boolean> {
 }
 
 /**
+ * Whether the browser still holds the IAM refresh cookie (TASK-MONO-674).
+ *
+ * The access / id_token / home-tenant cookies carry `maxAge = expires_in`
+ * (1800s) and the operator cookie `maxAge = expiresIn`, so after an idle
+ * period the browser DROPS them while the 30-day refresh cookie survives. Its
+ * presence is what separates "logged in before, session idled out" (→ silent
+ * refresh via `GET /api/auth/refresh`) from "never logged in / logged out"
+ * (→ plain `/login?redirect=`). It is NOT an authentication predicate — a
+ * present refresh cookie may be rotated away or revoked; only the refresh
+ * route can tell.
+ */
+export async function hasRefreshToken(): Promise<boolean> {
+  const jar = await cookies();
+  return Boolean(jar.get(REFRESH_COOKIE)?.value);
+}
+
+/**
  * The **pre-operator** intermediate session: the caller has a valid IAM OIDC
  * login (access token present) but is NOT yet an operator of any tenant
  * (operator token absent — the RFC 8693 exchange returned `not_provisioned`).
