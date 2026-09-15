@@ -93,7 +93,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔴 **순서: 282 → 283~288 직렬**(샘플 등록부·원장 파일 공유 — 병렬 worktree 금지) → 루트 `TASK-MONO-686`(`/demo` 은퇴, ⏳).
 
-- `TASK-PC-FE-282-anonymous-visitors-enter-the-real-console-and-the-gateways-answer-with-samples.md` — 🔴🔴 **기반**. 판정(액세스·운영자 쿠키 둘 다 없음) · 게이트웨이 코어 6 + 코어 밖 `fetch` 전부의 샘플 분기(토큰 조회 **전**) · 셸 익명판(heartbeat·백엔드 공지 미렌더) · 배너 · 루트 `/` → 개요 · 원장 · 가드 셋(샘플 라우터 금지 임포트 · 코어 밖 fetch 금지 · «(샘플)» 규칙) · 대시보드 픽스처. 🔴 `(console)` 가드의 의미가 «못 들어온다» → «들어오지만 백엔드에 못 닿는다» 로 바뀐다. 🔴 코어 넷이 403 메시지를 덮어써서 거부 문구는 **코드 `SAMPLE_READ_ONLY` → 문구** 매핑. 분석=Opus 5 / 구현 권장=Opus 5.
 - `TASK-PC-FE-283-iam-screens-get-samples.md` — IAM 14 화면 · GET 18. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
 - `TASK-PC-FE-284-ecommerce-screens-get-samples.md` — ecommerce 23 화면 · GET 19 · 🔴 이미지에 MinIO 주소 금지. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
 - `TASK-PC-FE-285-erp-screens-get-samples.md` — erp 6 화면 · GET 18 · 🔴 개요 수 = 목록 행 수. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
@@ -124,7 +123,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## in-progress
 
-(empty)
+- `TASK-PC-FE-282-anonymous-visitors-enter-the-real-console-and-the-gateways-answer-with-samples.md` — 🔴🔴 **기반** (`ADR-MONO-074` 실행 1/8, 착수 2026-09-15). 판정(액세스·운영자 쿠키 둘 다 없음) · 게이트웨이 코어 6 + 코어 밖 `fetch` 전부의 샘플 분기(토큰 조회 **전**) · 셸 익명판(heartbeat·백엔드 공지 미렌더) · 배너 · 루트 `/` → 개요 · 원장 · 가드 셋(샘플 라우터 금지 임포트 · 코어 밖 fetch 금지 · «(샘플)» 규칙) · 대시보드 픽스처. 🔴 `(console)` 가드의 의미가 «못 들어온다» → «들어오지만 백엔드에 못 닿는다» 로 바뀐다. 🔴 코어 넷이 403 메시지를 덮어써서 거부 문구는 **코드 `SAMPLE_READ_ONLY` → 문구** 매핑. 분석=Opus 5 / 구현=Opus 5.
 
 ## review
 
