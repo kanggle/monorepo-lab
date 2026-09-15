@@ -11,7 +11,7 @@ import { Pagination } from './Pagination';
 import styles from './ReviewList.module.css';
 
 /**
- * 상품 상세의 리뷰 영역 (ADR-MONO-074).
+ * 상품 상세의 리뷰 영역 (ADR-MONO-075).
  *
  * 🔴🔴 **이 컴포넌트는 리뷰를 읽으러 백엔드에 가지 않는다.** 목록과 요약은 서버가 저장본에서 읽어
  *    props 로 넘긴다(D3). 예전 판은 브라우저가 BFF → 게이트웨이 → review-service 로 읽어서, 데모가

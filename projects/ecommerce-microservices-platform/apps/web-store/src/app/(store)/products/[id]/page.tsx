@@ -62,7 +62,7 @@ export default async function ProductDetailPage({ params }: Props) {
     notFound();
   }
 
-  // 🔴 리뷰·평점 요약도 **서버가 저장본에서** 읽는다(ADR-MONO-074 D3) — 상품과 같은 봉투다.
+  // 🔴 리뷰·평점 요약도 **서버가 저장본에서** 읽는다(ADR-MONO-075 D3) — 상품과 같은 봉투다.
   //    브라우저가 게이트웨이로 리뷰를 읽던 예전 판은 데모가 꺼진 동안 리뷰만 비었다.
   const productReviews = await getSnapshotProductReviews(product.id);
 

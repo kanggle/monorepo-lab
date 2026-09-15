@@ -174,7 +174,7 @@ export interface PublicCategory {
 }
 
 /**
- * 공개 리뷰 (`ADR-MONO-074` D2).
+ * 공개 리뷰 (`ADR-MONO-075` D2).
  *
  * 🔴🔴 **작성자가 없다.** 백엔드 `ReviewItem` 에는 `userId` 가 있다. 공개 저장본에 작성자 식별이
  *    실리면 회수할 수 없다(한 번 나간 JSON 은 이미 나갔다). 그래서 «구매자» 같은 익명 표기조차
@@ -195,7 +195,7 @@ export interface PublicReview {
 export interface StorePublicData {
   products: PublicProduct[];
   categories: PublicCategory[];
-  /** 🔴 **필수**다(`ADR-MONO-074` D1) — `coverage`·`collectionStatus` 의 키에도 들어간다. */
+  /** 🔴 **필수**다(`ADR-MONO-075` D1) — `coverage`·`collectionStatus` 의 키에도 들어간다. */
   reviews: PublicReview[];
 }
 

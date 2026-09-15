@@ -152,7 +152,7 @@ const okEnvelope = (over = {}) => ({
   generatedAt: '2026-01-01T00:00:00.000Z',
   source: 'backend',
   origin: 'http://x.invalid',
-  // 🔵 `reviews` 는 ADR-MONO-074 로 **필수**가 됐다 — 0개(`empty`)가 계약상 정상인 대조군 봉투다.
+  // 🔵 `reviews` 는 ADR-MONO-075 로 **필수**가 됐다 — 0개(`empty`)가 계약상 정상인 대조군 봉투다.
   coverage: { products: 1, categories: 1, reviews: 0 },
   collectionStatus: { products: 'ok', categories: 'ok', reviews: 'empty' },
   data: { products: [{ id: 'p', name: 'n', status: 'ON_SALE', options: [] }], categories: [{ id: 'c' }], reviews: [] },
@@ -434,7 +434,7 @@ test('번들 시드에 픽스처의 음성 대조군 값이 하나도 없다', a
 });
 
 // ===========================================================================
-// 5. 리뷰 — ADR-MONO-074 · TASK-MONO-681
+// 5. 리뷰 — ADR-MONO-075 · TASK-MONO-681
 // ===========================================================================
 
 const PUBLIC_PRODUCT_IDS = RAW_PRODUCTS.filter((p) => p.status !== 'HIDDEN').map((p) => p.id);

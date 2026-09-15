@@ -1,5 +1,5 @@
 /**
- * 상품 상세 리뷰 영역 — props 로 받은 **저장본** 리뷰를 그린다 (ADR-MONO-074 · TASK-MONO-681).
+ * 상품 상세 리뷰 영역 — props 로 받은 **저장본** 리뷰를 그린다 (ADR-MONO-075 · TASK-MONO-681).
  *
  * 🔴 «리뷰를 읽으러 백엔드에 가지 않는다» 를 말로 하지 않고 **잰다**: 리뷰 API 모듈을 mock 하고 조회
  *    함수가 한 번도 안 불렸음을 단언한다(AC-6). 예전 판은 그 조회가 실패하면 «리뷰를 불러오는데
@@ -105,7 +105,7 @@ function manyReviews(n: number): ReviewListItem[] {
   }));
 }
 
-describe('ReviewList — 저장본 리뷰 (ADR-MONO-074)', () => {
+describe('ReviewList — 저장본 리뷰 (ADR-MONO-075)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authAs(false);

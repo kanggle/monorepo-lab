@@ -153,6 +153,99 @@ describe('resolveDemoBackend', () => {
   });
 });
 
+// =============================================================================
+// TASK-MONO-668 — 네 번째 값 `starting` (`/status` 의 `selection_ready`)
+// =============================================================================
+// 🔴🔴 이 표의 요점은 **`=== false` 만 켜지는 중**이라는 것이다. 람다를 배포하기 전의 응답
+//    (필드 없음)과 람다가 판정을 못 한 응답(`null` — 헬스 stale·선택 빔)이 `starting` 으로
+//    읽히면, 모든 방문이 **영구히** 「켜지는 중」을 말한다. 해석기의 규칙 3번(판정 불가를
+//    어느 쪽으로도 번역하지 않는다)과 같은 규칙이다.
+describe('resolveDemoBackendState — starting (TASK-MONO-668)', () => {
+  const IP = '13.125.1.2';
+
+  it('🔴🔴 running + ip + selection_ready=false → starting (이 티켓의 결함 자리)', async () => {
+    process.env.DEMO_API_BASE = CONTROL;
+    stubStatus({ state: 'running', ip: IP, selection_ready: false });
+
+    const { resolveDemoBackendState } = await load();
+    expect(await resolveDemoBackendState()).toBe('starting');
+  });
+
+  it('🔵 대조군 — selection_ready=true → running', async () => {
+    process.env.DEMO_API_BASE = CONTROL;
+    stubStatus({ state: 'running', ip: IP, selection_ready: true });
+
+    const { resolveDemoBackendState } = await load();
+    expect(await resolveDemoBackendState()).toBe('running');
+  });
+
+  it('🔴 필드가 없으면(옛 람다) 옛 동작 — running. 배포 순서가 자유로워야 한다', async () => {
+    process.env.DEMO_API_BASE = CONTROL;
+    stubStatus({ state: 'running', ip: IP, used_minutes: 12, budget_minutes: 600 });
+
+    const { resolveDemoBackendState } = await load();
+    expect(await resolveDemoBackendState()).toBe('running');
+  });
+
+  it('🔴 selection_ready=null(헬스 stale·선택 빔 — 람다가 판정 불가) → running, starting 이 아니다', async () => {
+    process.env.DEMO_API_BASE = CONTROL;
+    stubStatus({ state: 'running', ip: IP, selection_ready: null });
+
+    const { resolveDemoBackendState } = await load();
+    expect(await resolveDemoBackendState()).toBe('running');
+  });
+
+  it('🔴 불리언이 아닌 값("false" · 0)은 판정 불가로 본다 — truthy 판정으로 쓰면 여기서 갈린다', async () => {
+    process.env.DEMO_API_BASE = CONTROL;
+    for (const junk of ['false', 0, '']) {
+      vi.resetModules();
+      stubStatus({ state: 'running', ip: IP, selection_ready: junk });
+      const { resolveDemoBackendState } = await load();
+      expect(await resolveDemoBackendState()).toBe('running');
+    }
+  });
+
+  it('🔴🔴 starting 이어도 **주소는 준다** — 거두면 준비된 묶음으로 가는 흐름까지 끊긴다', async () => {
+    process.env.DEMO_API_BASE = CONTROL;
+    process.env.API_URL_INTERNAL = 'http://gateway-service:8080';
+    stubStatus({ state: 'running', ip: IP, selection_ready: false });
+
+    const { resolveDemoBackend, resolveUpstreamBaseUrl } = await load();
+    expect(await resolveDemoBackend()).toEqual({
+      baseUrl: 'http://ecommerce.13-125-1-2.sslip.io',
+      demoDomain: '13-125-1-2.sslip.io',
+    });
+    // 🔴 폴백 사슬(`API_URL_INTERNAL`)로 떨어지지 않는다.
+    expect(await resolveUpstreamBaseUrl()).toBe('http://ecommerce.13-125-1-2.sslip.io');
+  });
+
+  it('🔴 인스턴스가 running 이 아니면 selection_ready 와 무관하게 unavailable — starting 이 꺼짐을 가리지 않는다', async () => {
+    process.env.DEMO_API_BASE = CONTROL;
+    stubStatus({ state: 'pending', ip: IP, selection_ready: false });
+
+    const { resolveDemoBackendState } = await load();
+    expect(await resolveDemoBackendState()).toBe('unavailable');
+  });
+
+  it('🔴 /status 조회 실패는 그대로 unavailable — 「켜지는 중」과 「조회 실패」를 묶지 않는다', async () => {
+    process.env.DEMO_API_BASE = CONTROL;
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('boom')));
+
+    const { resolveDemoBackendState } = await load();
+    expect(await resolveDemoBackendState()).toBe('unavailable');
+  });
+
+  it('🔵 상태와 주소가 **한 번의 왕복**에서 나온다 — 캐시 한 칸', async () => {
+    process.env.DEMO_API_BASE = CONTROL;
+    const fetchMock = stubStatus({ state: 'running', ip: IP, selection_ready: false });
+
+    const { resolveDemoBackend, resolveDemoBackendState } = await load();
+    await resolveDemoBackend();
+    expect(await resolveDemoBackendState()).toBe('starting');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('resolveUpstreamBaseUrl — 폴백 사슬', () => {
   it('해석되면 그 주소', async () => {
     process.env.DEMO_API_BASE = CONTROL;

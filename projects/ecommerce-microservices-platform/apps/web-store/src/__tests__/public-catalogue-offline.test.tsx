@@ -237,7 +237,7 @@ describe('공개 카탈로그 — 백엔드 없이 (번들 시드 실물)', () =
     }
   });
 
-  it('시드의 공개 상품은 전부 리뷰를 갖고, 리뷰에는 작성자가 없다 (ADR-MONO-074)', async () => {
+  it('시드의 공개 상품은 전부 리뷰를 갖고, 리뷰에는 작성자가 없다 (ADR-MONO-075)', async () => {
     const { data } = await readStoreSnapshot();
     const ids = new Set(data.products.map((p) => p.id));
 

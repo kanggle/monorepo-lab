@@ -67,7 +67,7 @@ describe('DemoBackendNotice (fan)', () => {
     // 🔴 이 칸이 bite 다 — 옛 문구를 되살리면 빨개진다.
     expect(notice.textContent).not.toContain('불러올 수 없');
     // 🔴 잠긴 사실을 안 지웠는가
-    expect(notice).toHaveTextContent('실시간 기능');
+    expect(notice).toHaveTextContent('로그인 후 기능');
   });
 
   it('🔴 데모 배포 + 컨트롤 플레인 조회 실패 → 배너가 보인다 (침묵하지 않는다)', async () => {
@@ -84,6 +84,30 @@ describe('DemoBackendNotice (fan)', () => {
 
     await renderNotice();
     expect(screen.getByTestId('demo-backend-notice')).toBeInTheDocument();
+  });
+
+  // 🔴🔴 TASK-MONO-668 — **진짜 해석기**를 태운다(`/status` stub). 해석기를 mock 하면 «람다의
+  //    `selection_ready=false` 가 실제로 이 화면을 바꾸는가» 를 못 잰다.
+  it('🔴🔴 인스턴스 running + 선택 묶음 준비 전 → «켜지는 중» 배너, «꺼져 있어» 배너는 없다', async () => {
+    process.env.DEMO_API_BASE = 'https://control.example';
+    stubStatus({ state: 'running', ip: '13.125.1.2', selection_ready: false });
+
+    await renderNotice();
+    const notice = screen.getByTestId('demo-backend-starting');
+    expect(notice).toHaveTextContent('데모 서버가 켜지는 중입니다');
+    expect(notice.textContent).not.toContain('꺼져 있어');
+    expect(notice.textContent).not.toContain('샘플');
+    expect(screen.queryByTestId('demo-backend-notice')).toBeNull();
+  });
+
+  it('🔵 대조군 — 선택 묶음이 전부 준비됐으면(selection_ready=true) 배너 없음', async () => {
+    process.env.DEMO_API_BASE = 'https://control.example';
+    stubStatus({ state: 'running', ip: '13.125.1.2', selection_ready: true });
+
+    await renderNotice();
+    expect(screen.queryByTestId('demo-backend-starting')).toBeNull();
+    expect(screen.queryByTestId('demo-backend-notice')).toBeNull();
+    expect(screen.getByTestId('host')).toBeInTheDocument();
   });
 
   it('데모 배포 + 백엔드 켜짐 → 배너 없음', async () => {

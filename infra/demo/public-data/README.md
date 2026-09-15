@@ -72,7 +72,7 @@ const result = await readPublicData();
 🔵 행의 값은 실제 시드에서 가져왔다(`infra/demo/seed/seed-fan.sh` · product-service 의
 `V8`/`V9`/`V11` 마이그레이션) — *"픽스처가 현실을 안 담으면 초록도 공허하다"*.
 
-🔴 **예외 하나 — 상품 리뷰(`RAW_REVIEWS_BY_PRODUCT`, `ADR-MONO-074`)는 저장소가 쓴 샘플이다.**
+🔴 **예외 하나 — 상품 리뷰(`RAW_REVIEWS_BY_PRODUCT`, `ADR-MONO-075`)는 저장소가 쓴 샘플이다.**
 review-service 에 데모 시드 리뷰가 **없어서** 가져올 행이 없다. 모양만 백엔드 것(`ReviewItem`)이고, 음성 대조군은
 작성자 `userId` · 별점 범위 밖 리뷰 · 숨김 상품에 달린 리뷰다. 번들 시드 봉투의 `source` 가 `bundled` 인 한
 상품 상세는 「샘플 리뷰」 라고 표시한다 — 백엔드에서 발행하면(`--from`) 실제 DB 리뷰로 바뀐다(현재 0개).

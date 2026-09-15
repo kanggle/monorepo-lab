@@ -2,7 +2,7 @@ import { productReviews, type PublicReview, type PublicReviewSummary } from '@de
 import { readStoreSnapshot } from '@/shared/public-data/store-snapshot';
 
 /**
- * 공개 상품 상세의 리뷰 — **출처는 공개 저장본이다** (ADR-MONO-074 D3).
+ * 공개 상품 상세의 리뷰 — **출처는 공개 저장본이다** (ADR-MONO-075 D3).
  *
  * 🔴 상품(`entities/product/api/get-product.ts`)과 **같은 봉투 하나**에서 읽는다. 판독자가 인자를 안
  *    받으므로 «상품은 저장본, 리뷰는 백엔드» 같은 반쪽 구현을 표현할 수 없다 — 이 파일이 생기기 전의

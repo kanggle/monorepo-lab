@@ -168,7 +168,7 @@ export function categoryFacets(
 }
 
 // ---------------------------------------------------------------------------
-// store — 리뷰 (ADR-MONO-074 D3)
+// store — 리뷰 (ADR-MONO-075 D3)
 // ---------------------------------------------------------------------------
 
 export interface PublicReviewSummary {

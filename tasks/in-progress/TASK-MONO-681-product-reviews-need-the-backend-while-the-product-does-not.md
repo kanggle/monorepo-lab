@@ -4,7 +4,7 @@ TASK-MONO-681
 
 # Title
 
-상품은 서버 없이 보이는데 **리뷰만 서버를 요구한다** — 리뷰를 store 저장본에 싣는다 (`ADR-MONO-074`)
+상품은 서버 없이 보이는데 **리뷰만 서버를 요구한다** — 리뷰를 store 저장본에 싣는다 (`ADR-MONO-075`)
 
 # Status
 
@@ -23,22 +23,29 @@ monorepo
 
 ---
 
-# 🟢 게이트 닫힘 — `ADR-MONO-074` ACCEPTED (2026-09-15 UTC)
+# ⏳ 게이트 재개방 — `ADR-MONO-075 ACCEPTED` 재확인 대기 (2026-09-15 UTC)
 
-소유자 정확형 **`ADR-MONO-074 ACCEPTED`** — ADR 이름 · `ACCEPTED` 둘 다 있고, 이 ADR 은 갈래 letter 가 없으므로
-세 번째 요건은 해당 없음. **뒤집힌 라이더 0** ⇒ 아래 AC 는 기안 그대로다.
+🔴🔴 **번호 충돌.** 이 ADR 은 처음 `ADR-MONO-074` 로 발행됐고, 소유자는 이 대화에서 원문 그대로
+**`ADR-MONO-074 ACCEPTED`** 로 답했다(라이더 뒤집기 없음). 그런데 그 사이 다른 세션의 콘솔 ADR
+(`ADR-MONO-074-anonymous-visitors-see-the-real-console-with-sample-data.md`, PROPOSED, `TASK-MONO-682`)이 **먼저 main 에
+머지**됐다(#3815). `tasks/INDEX.md` § Task ID Allocation 규칙 4(먼저 머지된 쪽이 번호를 갖는다)에 따라 이 ADR 은
+**`ADR-MONO-075` 로 재번호**했다.
 
-🔴 **AC-0 (게이트)**: `ADR-MONO-074` 의 Status 가 `ACCEPTED` 이고, 그 ACCEPT 가 소유자의 정확형
-(`ADR-MONO-074 ACCEPTED` [— 뒤집을 라이더])으로 기록돼 있는가. **아니면 STOP.** 방향 선택(갈래 고르기)은 ACCEPT 가
+⇒ 그 ACCEPT 줄의 **이름이 이제 다른 결정을 가리킨다.** 게이트의 목적이 «이름으로 귀속» 이므로 그 줄을 075 로 옮겨
+적지 않고 **재확인을 받는다.** 구현은 이 PR 에 들어 있으나 **재확인 전에는 머지하지 않는다.** 그리고 🔴 그 `074 ACCEPTED`
+줄을 콘솔 ADR 의 수락으로 읽지 마라 — 그 결정은 소유자가 본 적이 없다.
+
+🔴 **AC-0 (게이트)**: `ADR-MONO-075` 의 Status 가 `ACCEPTED` 이고, 그 ACCEPT 가 소유자의 정확형
+(`ADR-MONO-075 ACCEPTED` [— 뒤집을 라이더])으로 기록돼 있는가. **아니면 STOP.** 방향 선택(갈래 고르기)은 ACCEPT 가
 아니다(`platform/architecture-decision-rule.md` § The ACCEPTED Gate). 뒤집힌 라이더가 있으면 **아래 AC 를 그에 맞게
-먼저 고친다.** — ✅ 충족(위).
+먼저 고친다.**
 
 ---
 
 # Goal
 
 데모 백엔드가 꺼져 있어도 공개 상품 상세에서 **리뷰 목록과 평점 요약**이 보이게 한다. 출처는 폴백이 아니라
-**store 저장본**이다(`ADR-MONO-070` D3 · `ADR-MONO-074` D3).
+**store 저장본**이다(`ADR-MONO-070` D3 · `ADR-MONO-075` D3).
 
 ---
 
@@ -48,7 +55,7 @@ monorepo
   **502** `BFF_UPSTREAM_ERROR` · `/api/demo/backend-state` = `unavailable` · 저장본 `data-source="bundled"`.
 - 선행 `TASK-FE-100`(done)은 **다른 결함**(낡은 세션 토큰의 `/login` 튕김)을 고쳤다. 사용자가 본 증상은 이것이었다 —
   그 티켓 착수 전에 라이브를 안 열어 본 것이 그 원인이다.
-- 상세 경위·결정·라이더: `docs/adr/ADR-MONO-074-product-reviews-ride-in-the-store-snapshot.md`.
+- 상세 경위·결정·라이더: `docs/adr/ADR-MONO-075-product-reviews-ride-in-the-store-snapshot.md`.
 
 ---
 
@@ -61,7 +68,7 @@ monorepo
   `bin/publish-public-data.mjs`(`extractStore` 수집) · `tests/public-data.test.mjs` · `snapshots/store.json` 재생성 · `README.md`
 - `projects/ecommerce-microservices-platform/apps/web-store`: 상품 상세가 저장본 리뷰를 서버에서 읽어 넘기고,
   `ReviewList`·`RatingSummary` 가 props 로 그린다. 샘플 표시. 작성 성공 문구. 상세의 수정·삭제 제거(R3). 테스트.
-- `docs/adr/ADR-MONO-070` § 후속에 `ADR-MONO-074` 포인터
+- `docs/adr/ADR-MONO-070` § 후속에 `ADR-MONO-075` 포인터
 
 ## Out of Scope
 
@@ -74,7 +81,7 @@ monorepo
 
 # Acceptance Criteria
 
-- [x] **AC-0** — 위 게이트. ✅ 2026-09-15 소유자 정확형 `ADR-MONO-074 ACCEPTED`.
+- [ ] **AC-0** — 위 게이트. ⏳ 소유자는 `ADR-MONO-074 ACCEPTED`(원문)로 답했으나 번호 충돌로 075 재번호 → `ADR-MONO-075 ACCEPTED` 재확인 대기.
 - [x] **AC-1** — `validateDatasetData('store', …)` 가 `reviews` 부재 · 작성자 식별 키(`userId`/`accountId`/`tenantId`/
       `email`/`userName`/`nickname`) · 1~5 밖의 별점 · 저장본에 없는 `productId` 를 **각각** 거부한다(대조군: 정상본 통과).
       ✅ `tests/public-data.test.mjs` «내용물: 리뷰 계약이 부재·작성자·별점·고아를 각각 거부한다» — 거부 6칸(부재 · `userId` ·
@@ -104,7 +111,7 @@ monorepo
 
 # Related Specs
 
-- `docs/adr/ADR-MONO-074-product-reviews-ride-in-the-store-snapshot.md` (이 티켓의 결정)
+- `docs/adr/ADR-MONO-075-product-reviews-ride-in-the-store-snapshot.md` (이 티켓의 결정)
 - `docs/adr/ADR-MONO-070-public-browsing-served-from-a-versioned-vercel-snapshot.md` (D1·D2·D3·D4)
 - `infra/demo/public-data/README.md`
 
@@ -137,7 +144,7 @@ monorepo
 
 # Definition of Done
 
-- [ ] ADR-MONO-074 ACCEPTED
+- [ ] ADR-MONO-075 ACCEPTED
 - [ ] 구현 + 테스트
 - [ ] 게이트 통과 + 라이브 판정(AC-8)
 

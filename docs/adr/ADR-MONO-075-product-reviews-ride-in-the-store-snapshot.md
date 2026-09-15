@@ -1,6 +1,6 @@
-# ADR-MONO-074 — 상품 리뷰는 store 저장본에 실린다 (그리고 작성자는 싣지 않는다)
+# ADR-MONO-075 — 상품 리뷰는 store 저장본에 실린다 (그리고 작성자는 싣지 않는다)
 
-**Status:** ACCEPTED
+**Status:** PROPOSED
 **Date:** 2026-09-15
 **주관 티켓:** `TASK-MONO-681`
 **개정 대상:** [`ADR-MONO-070`](ADR-MONO-070-public-browsing-served-from-a-versioned-vercel-snapshot.md) § D2(공개 필드 허용 목록) —
@@ -18,10 +18,15 @@ store 데이터셋에 `reviews` 컬렉션을 더한다. § D3(백엔드로 가�
 
 ## History
 
-- 2026-09-15 — **ACCEPTED (라이더 R1~R6 그대로).** 소유자 정확형: **`ADR-MONO-074 ACCEPTED`**. 이름 · `ACCEPTED` 둘 다
-  있고, 이 ADR 은 갈래 letter 를 두지 않았으므로(방향은 이미 소유자가 골랐다) 세 번째 요건은 해당이 없다. 뒤집힌 라이더 **0**.
-  🔴 결정 본문(§ Decision · § 라이더 · § Consequences)은 **한 바이트도 안 바꿨다** — ACCEPT 는 *finalise* 이지 *re-decide* 가 아니다.
-  🔵 실행 `TASK-MONO-681` 은 PROPOSED 와 **같은 PR 에서 기안**돼 있었고, 그 AC-0(게이트)이 이 줄로 닫힌다.
+- 2026-09-15 — 🔴🔴 **번호 충돌 → `ADR-MONO-075` 로 재번호, Status 를 PROPOSED 로 되돌림(재확인 대기).**
+  이 ADR 은 `ADR-MONO-074` 로 발행됐고, 소유자는 이 대화에서 원문 그대로 **`ADR-MONO-074 ACCEPTED`** 로 답했다(라이더 뒤집기
+  없음). 그러나 그 사이 다른 세션의 `ADR-MONO-074-anonymous-visitors-see-the-real-console-with-sample-data.md`(PROPOSED ·
+  `TASK-MONO-682`)가 **먼저 main 에 머지**됐다(#3815). 먼저 머지된 쪽이 번호를 갖는다(`tasks/INDEX.md` § Task ID Allocation
+  규칙 4) ⇒ 이쪽이 075 가 됐다.
+  🔴 그 ACCEPT 줄은 **이름으로** 결정을 지목하는데 그 이름이 이제 **다른 결정**을 가리킨다. 게이트의 목적이 귀속이므로 대화
+  맥락이 분명하더라도 그 줄을 075 로 옮겨 적지 않는다 — **`ADR-MONO-075 ACCEPTED` 재확인을 받는다.** 그 사이 구현은 PR 에
+  있으나 머지하지 않는다. 🔴 그리고 그 `074 ACCEPTED` 줄을 **콘솔 ADR 의 수락으로 읽지 마라** — 소유자는 그 ADR 을 본 적이 없다.
+  🔵 결정 본문(§ Decision · § 라이더 · § Consequences)은 번호 외에 **한 바이트도 안 바꿨다.**
 - 2026-09-15 — **PROPOSED.** 🔴 위 인용은 **방향**을 정했다. 그러나 그 문장 안의 세부(필드 목록·샘플 표시)는 내가
   선택지 설명에 **써 넣은 것**이고, 그 밖의 결정(아래 § 라이더)은 소유자가 본 적이 없다. ⇒
   `platform/architecture-decision-rule.md` § The ACCEPTED Gate 에 따라 이 ADR 은 **PROPOSED** 이고,
@@ -122,4 +127,4 @@ interface PublicReview {
 
 ## ACCEPT 하는 법
 
-한 줄로: **`ADR-MONO-074 ACCEPTED`** (라이더 그대로) — 또는 뒤집을 라이더를 붙여서, 예: `ADR-MONO-074 ACCEPTED — R3 뒤집기`.
+한 줄로: **`ADR-MONO-075 ACCEPTED`** (라이더 그대로) — 또는 뒤집을 라이더를 붙여서, 예: `ADR-MONO-075 ACCEPTED — R3 뒤집기`.

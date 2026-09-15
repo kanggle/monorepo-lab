@@ -45,6 +45,31 @@ import { resolveDemoBackendState } from '@/shared/config/demo-backend';
  */
 export async function DemoBackendNotice() {
   const state = await resolveDemoBackendState();
+
+  // 🔴 TASK-MONO-668 — 「켜지는 중」은 「꺼져 있어」와 **다른 문장**이다. 세 앱이 같은 첫
+  //    문장(«데모 서버가 켜지는 중입니다»)을 쓴다. 🔵 이 위젯의 규칙(도메인 이름을 주장하지
+  //    않는다)은 그대로다 — 판정이 «선택된 묶음 전부» 라 **어느** 도메인이 아직인지 모른다.
+  //    그래서 «사용할 수 없다» 가 아니라 «일부만 동작할 수 있다» 고 말한다.
+  if (state === 'starting') {
+    return (
+      <div
+        role="status"
+        data-testid="demo-backend-starting"
+        style={{
+          background: '#e0f2fe',
+          color: '#075985',
+          padding: '10px 16px',
+          fontSize: '0.9rem',
+          textAlign: 'center',
+          borderBottom: '1px solid #7dd3fc',
+        }}
+      >
+        데모 서버가 켜지는 중입니다. 준비가 끝나기 전에는 로그인과 운영 데이터가 일부만
+        동작할 수 있습니다. 몇 분 뒤 다시 열어 주세요.
+      </div>
+    );
+  }
+
   if (state !== 'unavailable') return null;
 
   return (

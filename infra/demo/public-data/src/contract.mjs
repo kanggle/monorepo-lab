@@ -256,7 +256,7 @@ export function validateDatasetData(dataset, data) {
       }
     }
 
-    // ── 리뷰 (ADR-MONO-074) ─────────────────────────────────────────────────
+    // ── 리뷰 (ADR-MONO-075) ─────────────────────────────────────────────────
     // 🔴 `reviews` 는 **필수**다. 빠진 봉투를 «리뷰 0개» 로 읽어 주면 발행자의 누락이 조용히
     //    통과하고, 화면은 모든 상품을 «리뷰 없음» 으로 그린다.
     if (!isArrayOfObjects(d.reviews)) return { ok: false, reason: 'store.reviews 가 객체 배열이 아닙니다' };

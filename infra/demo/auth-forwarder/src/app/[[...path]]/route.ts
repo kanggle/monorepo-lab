@@ -143,6 +143,10 @@ function demoOffResponse(state: 'not-demo' | 'unavailable'): Response {
 }
 
 async function forward(req: Request, path: string[]): Promise<Response> {
+  // 🔴 TASK-MONO-668 — 해석기가 `starting`(인스턴스 running · 선택 묶음 준비 전)이어도
+  //    `resolveDemoBackend()` 는 주소를 준다 ⇒ **그대로 포워드한다.** 판정이 «선택 전부» 라
+  //    iam 은 이미 대답할 수 있고, 여기서 503 을 내면 **될 로그인을 끊는다.** 아직이면
+  //    업스트림 자신의 응답이 방문자에게 간다 — 「켜지는 중」 문구는 앱 화면의 몫이다.
   const demo = await resolver.resolveDemoBackend();
   if (!demo) return demoOffResponse(await resolver.resolveDemoBackendState() === 'not-demo' ? 'not-demo' : 'unavailable');
 

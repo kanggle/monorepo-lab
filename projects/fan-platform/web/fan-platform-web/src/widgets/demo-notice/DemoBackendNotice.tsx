@@ -35,6 +35,33 @@ import { resolveDemoBackendState } from '@/shared/config/demo-backend';
  */
 export async function DemoBackendNotice() {
   const state = await resolveDemoBackendState();
+
+  // 🔴 TASK-MONO-668 — 「켜지는 중」은 「꺼져 있어」와 **다른 문장**이다. 켜라고 하면 거짓이고
+  //    (이미 켜졌다), 아무 말도 안 하면 방문자가 «다 됐다» 고 믿는다. 세 앱이 같은 첫 문장
+  //    («데모 서버가 켜지는 중입니다»)을 쓴다 — 해석기가 같은 값을 주는데 화면이 다른 말을
+  //    하면 `ADR-MONO-068 § D6` 이 막으려던 갈라짐이 문구 층에서 생긴다.
+  // 🔴 「샘플 데이터」 문장을 여기 **안 넣는다** — 켜지는 중에 무엇이 그려지는지는 잰 적이
+  //    없다(TASK-MONO-642 의 규칙: 배너는 화면이 그리는 것과 어긋나면 안 된다).
+  if (state === 'starting') {
+    return (
+      <div
+        role="status"
+        data-testid="demo-backend-starting"
+        style={{
+          background: '#e0f2fe',
+          color: '#075985',
+          padding: '10px 16px',
+          fontSize: '0.9rem',
+          textAlign: 'center',
+          borderBottom: '1px solid #7dd3fc',
+        }}
+      >
+        데모 서버가 켜지는 중입니다. 준비가 끝나기 전에는 로그인·멤버십 같은 실시간 기능이
+        동작하지 않을 수 있습니다. 몇 분 뒤 다시 열어 주세요.
+      </div>
+    );
+  }
+
   if (state !== 'unavailable') return null;
 
   return (
@@ -52,11 +79,11 @@ export async function DemoBackendNotice() {
     >
       {/* 🔴 TASK-MONO-642 — 옛 문구는 «피드와 아티스트 데이터를 불러올 수 없습니다» 였다.
           그런데 바로 아래에 피드와 아티스트 여섯이 사진과 함께 그려지고 있었다.
-          🔴 «실시간 기능이 잠겼다» 는 사실은 **남긴다** — 그것까지 지우면 방문자가 로그인·
+          🔴 «로그인과 로그인 후 기능이 잠겼다» 는 사실은 **남긴다** — 그것까지 지우면 방문자가 로그인·
           멤버십이 왜 안 되는지 모른다.
-          🔵 「실시간 기능」은 론처 카드(TASK-MONO-637)와 **같은 용어**다. */}
-      지금 보이는 피드와 아티스트는 샘플 데이터입니다. 데모 서버가 꺼져 있어 로그인·멤버십
-      같은 실시간 기능은 잠겨 있습니다. 데모 시작 페이지에서 서버를 켠 뒤(약 10분) 다시
+          🔵 「로그인 후 기능」은 론처 카드의 「로그인 후」 칸과 **같은 용어**다(TASK-MONO-680). */}
+      지금 보이는 피드와 아티스트는 샘플 데이터입니다. 데모 서버가 꺼져 있어 로그인할 수 없고, 글쓰기·멤버십
+      같은 로그인 후 기능도 잠겨 있습니다. 데모 시작 페이지에서 서버를 켠 뒤(약 10분) 다시
       열어 주세요.
     </div>
   );

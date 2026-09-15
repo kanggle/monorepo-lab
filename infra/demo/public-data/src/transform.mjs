@@ -198,7 +198,7 @@ export function toPublicProduct(raw) {
 }
 
 /**
- * 리뷰 하나 (ADR-MONO-074 D2).
+ * 리뷰 하나 (ADR-MONO-075 D2).
  *
  * 🔴🔴 **작성자를 읽지 않는다.** 백엔드 `ReviewItem.userId` 는 여기서 손에 잡히지도 않는다 — 아래
  *    객체에 자리가 없다. 표시명·익명 표기도 만들지 않는다(R1).
@@ -226,7 +226,7 @@ export function toPublicReview(raw, productId) {
 }
 
 /**
- * 상품마다 리뷰를 모은다 (ADR-MONO-074 D5). **네트워크는 주입받는다** — 그래서 발행자와 번들 시드
+ * 상품마다 리뷰를 모은다 (ADR-MONO-075 D5). **네트워크는 주입받는다** — 그래서 발행자와 번들 시드
  * 생성기가 같은 함수를 쓰고, 여기서 네트워크 없이 시험된다.
  *
  * 🔴 한 상품이라도 수집에 실패하면 `fetched: false` 다. 봉투는 `collectionStatus.reviews = 'failed'` 를

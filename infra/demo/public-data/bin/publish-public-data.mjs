@@ -264,7 +264,7 @@ async function extractStore(from) {
     id: c.id, name: humanizeCategoryId(c.id), productCount: c.productCount,
   }));
 
-  // 🔴 리뷰(ADR-MONO-074 D5) — 공개된 상품마다 전 페이지. 한 상품이라도 실패하면 컬렉션 전체
+  // 🔴 리뷰(ADR-MONO-075 D5) — 공개된 상품마다 전 페이지. 한 상품이라도 실패하면 컬렉션 전체
   //    `failed` ⇒ 발행 거부. 「일부 상품만 리뷰 0개」 는 화면에서 «리뷰가 없는 상품» 으로 읽힌다.
   // 🔴 상품 상세 수집이 이미 실패했으면 리뷰도 `failed` 다 — 상품 집합이 불완전하면 그 상품들에
   //    대해 물은 리뷰 집합도 불완전하다. 여기서 «리뷰는 성공» 이라 적으면 봉투가 거짓말을 한다.

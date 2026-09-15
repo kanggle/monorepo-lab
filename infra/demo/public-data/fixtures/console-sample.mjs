@@ -73,7 +73,7 @@ export const CONSOLE_SAMPLE_DOMAINS = [
       {
         key: 'orders',
         title: '주문',
-        description: '주문 상태 전이와 결제·배송 연계를 확인하는 화면입니다. 상태 변경은 로그인 후 실시간 기능에서만 가능합니다.',
+        description: '주문 상태 전이와 결제·배송 연계를 확인하는 화면입니다. 상태 변경은 로그인 후에만 가능합니다.',
         columns: [
           { key: 'orderNo', label: '주문번호' },
           { key: 'customer', label: '주문자' },
@@ -95,7 +95,7 @@ export const CONSOLE_SAMPLE_DOMAINS = [
       {
         key: 'products',
         title: '상품',
-        description: '판매 상품과 옵션·재고를 관리합니다. 재고 수치는 실시간 기능에서만 표시됩니다.',
+        description: '판매 상품과 옵션·재고를 관리합니다. 재고 수치는 로그인 후에만 표시됩니다.',
         columns: [
           { key: 'name', label: '상품명' },
           { key: 'price', label: '판매가' },
@@ -196,7 +196,7 @@ export const CONSOLE_SAMPLE_DOMAINS = [
       {
         key: 'approval',
         title: '결재',
-        description: '결재선과 진행 상태입니다. 승인·반려는 로그인 후 실시간 기능에서만 가능합니다.',
+        description: '결재선과 진행 상태입니다. 승인·반려는 로그인 후에만 가능합니다.',
         columns: [
           { key: 'docNo', label: '문서번호' },
           { key: 'title', label: '제목' },

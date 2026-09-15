@@ -7,7 +7,7 @@ export interface RatingSummaryData {
 
 interface RatingSummaryProps {
   /**
-   * 🔴 서버가 **저장본에서** 계산해 넘긴다(ADR-MONO-074 D3). 이 컴포넌트는 백엔드를 부르지 않는다 —
+   * 🔴 서버가 **저장본에서** 계산해 넘긴다(ADR-MONO-075 D3). 이 컴포넌트는 백엔드를 부르지 않는다 —
    *    예전 판은 `useReviewSummary` 로 게이트웨이를 불러서 데모가 꺼진 동안 요약이 사라졌다.
    */
   summary: RatingSummaryData;

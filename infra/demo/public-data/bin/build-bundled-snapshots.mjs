@@ -112,7 +112,7 @@ async function buildStore() {
     name: CATEGORY_NAMES[c.id] ?? humanizeCategoryId(c.id),
     productCount: c.productCount,
   }));
-  // 🔴 리뷰(ADR-MONO-074)는 **발행자와 같은 수집기**를 지난다 — 네트워크 자리에 픽스처를 끼울 뿐이다.
+  // 🔴 리뷰(ADR-MONO-075)는 **발행자와 같은 수집기**를 지난다 — 네트워크 자리에 픽스처를 끼울 뿐이다.
   //    공개된 상품의 id 만 묻으므로 숨김 상품의 리뷰는 애초에 닿지 않는다(계약도 두 번째 겹으로 막는다).
   const byProduct = new Map(RAW_REVIEWS_BY_PRODUCT.map((g) => [g.productId, g.items]));
   const collected = await collectReviews(
@@ -183,7 +183,7 @@ function assertNoLeak(dataset, envelopeObj) {
         if (p.description) banned.push(p.description);
       }
     }
-    // 🔴 리뷰(ADR-MONO-074) — 작성자 id 전부, 그리고 버려져야 할 리뷰(별점 범위 밖 · 숨김 상품)의 본문.
+    // 🔴 리뷰(ADR-MONO-075) — 작성자 id 전부, 그리고 버려져야 할 리뷰(별점 범위 밖 · 숨김 상품)의 본문.
     for (const g of RAW_REVIEWS_BY_PRODUCT) {
       for (const r of g.items) {
         if (r.userId) banned.push(r.userId);

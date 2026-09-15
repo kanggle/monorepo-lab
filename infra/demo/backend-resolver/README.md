@@ -22,6 +22,23 @@ export const {
 
 ---
 
+## 상태 넷 — `resolveDemoBackendState()`
+
+| 값 | 조건 | 주소(`resolveDemoBackend`) |
+|---|---|---|
+| `not-demo` | `DEMO_API_BASE` 없음(로컬·CI) — 컨트롤 플레인을 **부르지 않는다** | `null` |
+| `unavailable` | `/status` 실패 · `state≠running` · ip 없음 | `null` |
+| **`starting`** | running + ip + **`selection_ready === false`** (`TASK-MONO-668`) | 🔴 **주소를 준다** |
+| `running` | running + ip + `selection_ready` 가 `true`·`null`·없음 | 주소를 준다 |
+
+🔴 `starting` 은 «말하기» 용이다. 주소를 거두면 로그인 포워더와 BFF 가 폴백 사슬로 떨어져
+**이미 준비된 묶음으로 가는 흐름까지** 끊는다.
+🔴 `selection_ready` 의 `null`·없음은 `starting` 이 **아니다** — 판정 불가를 「켜지는 중」으로
+번역하지 않는다. 필드의 계약은 [`ADR-MONO-071 § D5.1`](../../../docs/adr/ADR-MONO-071-boot-the-bundle-the-visitor-chose.md).
+🔴 이것은 **응답 필드**이지 설정이 아니다. `DemoBackendResolverConfig` 는 여전히 셋이다.
+
+---
+
 ## 자리 — 왜 `infra/demo/` 이고 왜 나머지가 아닌가
 
 `TASK-MONO-614 AC-1` 이 *"고르고 나서 「왜 나머지가 아닌가」를 적어라"* 를 요구한다.
