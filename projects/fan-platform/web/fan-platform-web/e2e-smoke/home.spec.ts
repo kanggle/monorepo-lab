@@ -40,7 +40,7 @@ test('백엔드가 닫혀 있어도 / 가 공개 피드를 그린다 (로그인 
   await expect(page.getByTestId('provenance-banner')).toBeVisible();
 });
 
-test('익명 방문자에게 로그인 진입점이 보인다 (실시간 기능으로 가는 길)', async ({ page }) => {
+test('익명 방문자에게 로그인 진입점이 보인다 (로그인 후 기능으로 가는 길)', async ({ page }) => {
   await page.goto('/');
   // 🔵 공개 열람이 기본이 됐으므로 로그인은 **막는 벽**이 아니라 **다음 단계**다.
   //    그 진입점이 사라지면 방문자는 회원 기능으로 갈 길을 잃는다.

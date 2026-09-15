@@ -180,6 +180,7 @@ in-progress
 - 🔴 **그러나 같은 시드가 `sku_supplier_map` 에도 UUID 를 넣는다** — `seed-scm.sh:141-143` `"supplierId":"$SUPPLIER_ID"`(= 마스터 UUID). 계약은 그 칸을 **공급사 CODE** 로 취급한다(`scm-procurement-events.md:396,414`). 운영자가 콘솔에서 보충 제안을 **승인**하면 from-suggestion 발주가 `supplierId=UUID` + `WMS_WAREHOUSE` 목적지로 생기고, confirm 시 inbound-expected 페이로드 `supplierId` 가 그 UUID 다(`OutboxProcurementEventPublisher.java:136`, `publishInboundExpected`) → wms `CreateScmInboundExpectationService.java:139-141` `findPartnerByCode(UUID)` 미스 → `InboundExpectationRejectedException` → `IllegalArgumentException` 계열이라 **non-retryable → `.DLT`** (`InboundExpectationRejectedException.java:8-11`).
 - ⇒ **잠재 결함, 실재.** 데모에서 «보충 제안 승인 → 발주 확정» 을 밟는 순간 wms 인바운드 연계가 DLT 로 떨어진다. 시드 자신은 제안을 승인하지 않으므로(대기만 한다, `seed-scm.sh:161-185`) **시드만으로는 발화하지 않는다.** 🔵 코드를 넣어도 wms 쪽 partner 에 그 코드가 있어야 하고, 지금은 ref 테이블 0건(`TASK-MONO-675`)이 먼저 막는다 — **두 원인이 겹친다**. 부수: `demand-planning-api.md:61,139` 예시가 `"supplierId": "uuid"` 라 D9 와 **계약끼리도** 어긋난다.
 - 🔴 **받는 티켓이 아직 없다** — ID 를 할당하지 않고 오케스트레이터에 보고했다(Failure Scenario 3: 내보내려면 받는 쪽 행이 먼저). 이 티켓의 ⓐ 는 그 결함을 고치지도 악화하지도 않는다(표시만 id·code 둘 다로 푼다).
+  → 🔵 **받는 티켓 = `tasks/ready/TASK-MONO-683-the-seed-maps-skus-to-a-supplier-uuid-that-wms-resolves-as-a-code.md`** (2026-09-15 같은 PR 에서 기안, INDEX ready 행 확인). 아래 `ReplenishmentTable.tsx:104` 곁발견도 그 티켓 Scope 에 넣었다.
 
 ## 테스트 · rc (전부 이 worktree, 2026-09-15 UTC)
 
