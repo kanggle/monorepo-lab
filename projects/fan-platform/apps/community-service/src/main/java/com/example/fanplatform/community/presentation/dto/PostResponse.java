@@ -3,6 +3,7 @@ package com.example.fanplatform.community.presentation.dto;
 import com.example.fanplatform.community.application.PostView;
 
 import java.time.Instant;
+import java.util.List;
 
 public record PostResponse(
         String postId,
@@ -13,6 +14,7 @@ public record PostResponse(
         String authorAccountId,
         String title,
         String body,
+        List<String> mediaRefs,
         long commentCount,
         long reactionCount,
         Instant publishedAt,
@@ -28,6 +30,7 @@ public record PostResponse(
                 v.authorAccountId(),
                 v.title(),
                 v.body(),
+                v.mediaRefs(),
                 v.commentCount(),
                 v.reactionCount(),
                 v.publishedAt(),

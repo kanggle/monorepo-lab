@@ -66,7 +66,7 @@ Request:
   "visibility": "PUBLIC | MEMBERS_ONLY | PREMIUM",
   "title": "string (max 200, optional)",
   "body": "string (1..10000)",
-  "mediaRefs": ["s3://...", "..."]
+  "mediaRefs": ["https://images.example.com/photo.jpg", "..."]
 }
 ```
 
@@ -82,6 +82,7 @@ Response 201:
     "authorAccountId": "uuid",
     "title": "...",
     "body": "...",
+    "mediaRefs": ["https://images.example.com/photo.jpg"],
     "commentCount": 0,
     "reactionCount": 0,
     "publishedAt": "2026-05-03T00:00:00Z",
@@ -175,7 +176,7 @@ Request:
 {
   "title": "string?",
   "body": "string?",
-  "mediaRefs": ["..."]
+  "mediaRefs": ["https://images.example.com/photo.jpg"]
 }
 ```
 
@@ -224,6 +225,7 @@ Response 200:
         "authorAccountId": "...",
         "title": "...",
         "bodyPreview": "...first 200 chars...",
+        "mediaRefs": ["https://images.example.com/photo.jpg"],
         "commentCount": 4,
         "reactionCount": 12,
         "publishedAt": "...",
@@ -240,7 +242,33 @@ Response 200:
 }
 ```
 
-When `locked=true`, `title` and `bodyPreview` are `null` (UI uses this to render a "Subscribe" gate).
+When `locked=true`, `title` and `bodyPreview` are `null` and `mediaRefs` is `[]` (UI uses this to
+render a "Subscribe" gate). A photo URL is content — whoever holds it can fetch the photo — so it
+is redacted on exactly the terms the title is (see § `mediaRefs` below).
+
+### `mediaRefs` — display-ready https URLs (TASK-MONO-679 ⓐ)
+
+Owner decision, 2026-09-15. A media ref is an **absolute `https://` URL a browser renders as-is** —
+the convention artist-service already follows for `profileImageRef`.
+
+| Rule | Enforced by |
+|---|---|
+| Each entry matches `^https://[^\s/]+/\S*$`, ≤ 1024 chars; ≤ 10 entries per post | `PublishPostRequest` / `UpdatePostRequest` → 422 `VALIDATION_ERROR` |
+| Returned verbatim on publish · get · `mine` · feed | `PostResponse`, `FeedItemResponse` |
+| Always an array — `[]` when the post has no media (never `null`, never absent) | `PostMediaRefSerializer.deserialize` |
+| Feed item with `locked=true` → `[]` | `GetFeedUseCase.applyEntitlement` (the same ternary as `title`) |
+| Gated single post → 403 before any payload is built | `PostAccessGuard` |
+
+**Why not storage keys.** The field used to be described as "S3 / MinIO keys" (`s3://...`). No code in
+fan-platform ever resolved a key — there is no upload path and no storage client — so that meaning had
+no consumer, and no row held a value (the demo seed sent none). Redefining it needed no migration.
+
+**When to revisit.** A stored URL cannot deliver **private** media (member-only photos behind expiring
+signed URLs). If that is ever needed, add a key field and resolve it to a signed URL at read time — an
+additive change that does not break this contract.
+
+**Clients must tolerate absence during rollout.** The web app can be deployed before the backend that
+returns this field; `fan-platform-web` reads it as `mediaRefs ?? []`.
 
 ---
 

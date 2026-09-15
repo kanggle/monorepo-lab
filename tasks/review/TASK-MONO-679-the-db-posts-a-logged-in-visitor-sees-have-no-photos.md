@@ -8,7 +8,7 @@ TASK-MONO-679
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -123,9 +123,12 @@ monorepo
 
 ## AC-1 — 🙋 계약 결정: 사진 필드가 무엇을 담는가
 
-- [ ] 갈래를 적고 **소유자가 고른다**: ⓐ `mediaRefs` 를 «표시 가능한 https URL» 로 재정의 · ⓑ 키는 `mediaRefs` 로 두고
+- [x] 갈래를 적고 **소유자가 고른다**: ⓐ `mediaRefs` 를 «표시 가능한 https URL» 로 재정의 · ⓑ 키는 `mediaRefs` 로 두고
       응답에 해석된 `mediaUrls` 를 별도로 싣는다 · ⓒ 그 밖. 🔴 에이전트가 조용히 고르지 않는다.
-- [ ] 고른 결과를 `community-api.md` 에 **먼저** 반영한다(CLAUDE.md: 계약 → 구현).
+      🟢 **소유자 결정 2026-09-15 UTC: ⓐ.** 에이전트는 ⓐ 를 추천했고(근거: artist-service `profileImageRef` 가 이미
+      https URL 을 그대로 저장·응답한다 · fan 앱 전체에 업로드/스토리지 코드 0건 · 키를 가진 행 0), 소유자가 «ⓐ» 로 답했다.
+      ⓑ 가 맞는 조건(비공개 서명 URL 이 필요해질 때)은 계약 § `mediaRefs` 의 «When to revisit» 에 적었다.
+- [x] 고른 결과를 `community-api.md` 에 **먼저** 반영한다(CLAUDE.md: 계약 → 구현). — 같은 PR 이지만 커밋 순서가 계약 → 구현이다.
 
 ## AC-2 — 응답이 사진을 싣는다
 
@@ -191,3 +194,78 @@ monorepo
 # 분석 / 구현 권장
 
 분석=Opus 5 / 구현 권장=**Opus** (계약 결정 + 잠긴 항목 리댁션 + 두 시드 정렬이 조용히 틀리기 쉬운 자리).
+
+---
+
+# Verification — 구현 세션 (2026-09-15 UTC)
+
+## AC-0 — 착수 전 실측 (`main` = `30cdff1a2`)
+
+- 두 표를 다시 쟀다 — 기안과 같다: `PostResponse`·`FeedItemResponse` 에 필드 **없음** · 회원 판 `mediaRefs` 참조 **0** ·
+  `seed-fan.sh` 발행 요청에 사진 **없음** · 루미·노아 공개 글 제목이 두 벌에서 **다름** · 노아 잠긴 글은 번들에만, 루미 PREMIUM 은 시드에만.
+- 🔵 추가로 잰 것(계획을 바꿨다): `publish_artist_post` 는 **제목으로** «이미 있음» 을 판단한다(`seed-fan.sh` 의 `count(*) … AND title=`)
+  ⇒ 시드 제목을 바꾸면 기존 DB 에 같은 글이 두 벌 생기고, 기존 글에는 사진도 안 붙는다. 그래서 AC-4 의 정본을 **시드** 로 정했다.
+- ⚪ **실제 로그인 재현(세 칸)은 못 했다** — 데모 백엔드가 꺼져 있다. 코드 근거는 위 § 정정 표(`posts/[id]/page.tsx:41-44` ·
+  `memberPostDetail.tsx` 의 404 → `null` · `PublishPostUseCase.java:37`). close chore 에서 `TASK-MONO-672` 에 집을 준다.
+
+## AC-1 — ✅ 소유자 결정 ⓐ (위 AC 절에 기록)
+
+## AC-2 — 응답이 사진을 싣는다
+
+| 층 | 무엇 |
+|---|---|
+| `PostView` · `PostResponse` (publish · get · mine) | `mediaRefs` — `PostMediaRefSerializer.deserialize`, NULL/깨진 값 → `[]` |
+| `FeedItemSnapshot` → `FeedItemView` → `FeedItemResponse` | 🔴 `locked` 면 제목과 **같은 삼항**으로 `[]` |
+| 단건 403 | `PostAccessGuard` 가 뷰를 만들기 **전**에 던진다 — 사진이 새는 경로 없음 |
+| 쓰기 | `^https://[^\s/]+/\S*$` · ≤1024자 · ≤10장, 위반 422 (`MediaRefRules`) — 공개 계약 `imageUrls` 와 같은 패턴 |
+| 캐시 | `KEY_VERSION` `v2 → v3` — 옛 엔트리는 `mediaRefs=null` 로 읽혀 배포 직후 TTL 동안 사진이 빈다 |
+
+시험: `GetFeedUseCaseTest` +4(잠김→`[]` · 대조군 열림→주소 · PUBLIC · NULL→`[]`) · `GetFeedUseCaseEntitlementFreshnessTest` AC-1 에
+사진 단언 · `FeedControllerSliceTest` +1(JSON 두 모양) · `PostControllerSliceTest` +4(거부 6모양 + 유스케이스 미도달 · 대조군 통과 ·
+11장 · PATCH) · `PostMediaRefSerializerTest` 4. 통합: `FeedPremiumGateIntegrationTest` 는 **사진을 넣고 시드**해 잠김 `[]` /
+구독자 주소를 둘 다 단언하고, `CommunityApiContractTest` 키 목록에 `mediaRefs`.
+
+## AC-3 — 회원 판 화면
+
+- 🔵 공개 판의 `PublicPostImage` 를 **`shared/ui/PostImage`** 로 옮겨 두 판이 같은 컴포넌트를 쓴다 — feature 끼리 import 금지
+  (`fan-platform-web/overview.md` § Cross-feature isolation)라서 `shared/` 다. 옛 파일은 삭제(참조 0 확인).
+- `PostCard` 첫 장 + `+N` · `memberPostDetail` 전부 — **성공 분기에서만**. 🔴 옛 백엔드 응답(키 없음)은 `?? []` — 웹이 AMI 보다 먼저 배포된다.
+- 시험 `post-card.test.tsx` +4: 열림 1장·`+1` · 🔴 잠긴 항목에 사진이 실린 **불가능한 입력** → `<img>` 0 · 키 **부재** 응답 · 0장.
+
+## AC-4 — 두 시드가 같은 글 목록
+
+- **정본 = 실제 시드** (근거: AC-0 의 제목 기반 멱등). 번들 픽스처를 맞췄다 — 제목 8 · 공개 본문 6 · 노아 사진(드럼 → **마이크**, 200 확인 · 열어서 봄) ·
+  루미 PREMIUM 추가(발행일을 2쪽에 둬 **첫 페이지 공개 글 5 유지**). 시드에는 노아 잠긴 글 추가(새 제목이라 기존 DB 에도 중복 없음).
+- 픽스처 필드 `imageRefs` → 백엔드와 같은 **`mediaRefs`**, 변환기는 `mediaRefs` 를 먼저 읽는다.
+- **가드 = `public-data.test.mjs` 3칸**(`scripts/` 가 아닌 이유: 입력이 이 패키지 픽스처이고 CI 에서 이미 돈다 · 새 가드 파일은 가드 수 문서들을 흔든다):
+  ① 두 파일 대조 — 키 = (아티스트 id · 등급 · 제목), 공개 글은 본문·사진까지 · 비공허성(≥12건 · 사진 있는 공개 글 ≥1)
+  ② 파서 완전성 — 발행 호출 수 = 파싱된 글 수 ③ **bite 4**: 제목 · 사진 · 공개 본문 · 글 하나 빼기(대조군: 손대기 전 차이 0).
+- 결과 스냅샷: 글 12 → **13** · 공개 **6/6** 사진 · **9장** · 잠긴 글 사진 **0**.
+
+## AC-5 — 게이트 (각각 독립 실행 · 명시 rc)
+
+| 게이트 | 결과 |
+|---|---|
+| `./gradlew :projects:fan-platform:apps:community-service:test` | ✅ rc=0 · **205/205** (Post slice 14 · Feed slice 5 · GetFeed 11 · Freshness 9 · Serializer 4) |
+| `node --test infra/demo/public-data/tests/public-data.test.mjs` | ✅ **36/36** |
+| `build-bundled-snapshots.mjs --check` · `bash -n seed-fan.sh` | ✅ rc=0 · rc=0 |
+| fan-platform-web `tsc --noEmit` · `next lint` | ✅ rc=0 · 경고 0 |
+| fan-platform-web `vitest run` (**단독 실행**) | ✅ **32 files · 268/268** |
+
+🔴 **vitest 가 두 번 빨갰고 둘 다 이 변경의 결함이 아니다 — 그렇게 판정한 근거**: ① 첫 판은 gradle 과, 둘째 판은 커밋·가드 스크립트와
+**동시에** 돌았다 ② 실패한 파일이 **매번 달랐다**(`auto-renew-toggle` → `demo-payment-branch`) ③ 둘째 판의 1번 칸은
+`Test timed out in 5000ms`(동적 `import` 대기), 2번 칸은 그 늦은 import 가 만든 **연쇄**(spy 2회) ④ 두 파일 모두 **단독 재실행 통과**(7/7 · 10/10)
+⑤ 아무것도 동시에 안 돌린 전체 실행이 **268/268**. 두 파일 다 멤버십·결제 화면이라 이 diff 와 코드가 겹치지 않는다.
+
+## ⚪ 미측정
+
+1. **통합 시험**(`@Tag("integration")`: `FeedPremiumGateIntegrationTest` · `CommunityApiContractTest`) — 로컬 기본 실행에서 제외된다(결과 파일 0). **CI 가 권위.**
+2. **`seed-fan.sh` 가 실제로 사진 달린 글을 발행하는가** — 스택이 떠야 잰다. 🔴 그리고 **기존 데모 DB 에는 사진이 안 붙는다**(제목 탐지로 발행을 건너뛴다) —
+   판정은 **신선 볼륨 = AMI 재굽기 뒤**. close chore 에서 `TASK-MONO-672` 에 집을 준다.
+3. **AC-0 의 실제 로그인 재현** — 같은 창에서.
+
+## 기록 정정 — 이 PR 의 커밋 A
+
+`chore(tasks): … ready → in-progress` 커밋이 ① 이미 스테이지돼 있던 `PublicPostImage.tsx` **삭제를 함께 실었고** ② 파일은 옮기면서
+`# Status` 를 `ready` 로 **남겼다**. 가드 셋은 둘 다 못 본다(이동·중복만 잰다). ②는 review 커밋이 `review` 로 고친다 — 그 커밋에서
+`git show :<path>` 로 확인한다.

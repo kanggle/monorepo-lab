@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { PublicPost } from '@demo/public-data';
-import { PublicPostImage } from './PublicPostImage';
+import { PostImage } from '@/shared/ui/PostImage';
 
 /**
  * 공개 피드의 글 한 줄.
@@ -70,7 +70,7 @@ export function PublicPostCard({ post }: { post: PublicPost }) {
         <>
           {/* 🔴 사진은 **이 분기 안에서만** 읽는다. 카드는 첫 장만 — 피드가 사진 벽이 되지 않게. */}
           {post.imageUrls.length > 0 ? (
-            <PublicPostImage
+            <PostImage
               src={post.imageUrls[0]}
               alt={`${post.artistStageName} — ${post.title}`}
               frameClassName="mb-3 aspect-video rounded-lg bg-ink-100 dark:bg-ink-800"
