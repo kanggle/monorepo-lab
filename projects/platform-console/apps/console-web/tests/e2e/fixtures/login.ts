@@ -139,14 +139,32 @@ async function driveOidcPkceLogin(
   // TASK-PC-FE-027 — start tracing BEFORE bridgeAuthServiceHostname so the
   // `context.route` handler invocations are captured. CI-only to avoid dev
   // iteration overhead.
-  const tracingEnabled = !!process.env.CI;
-  if (tracingEnabled) {
+  //
+  // TASK-PC-FE-289 — manage ONLY the tracing this function started. Inside a
+  // test (not globalSetup) the runner has ALREADY started tracing on the test's
+  // context (`playwright.config.ts` `trace: 'on'` in CI), so a second `start`
+  // throws «Tracing has been already started» — which is exactly how
+  // `sample-visitor-transition.spec.ts` died before reaching any assertion
+  // (nightly run 34971551224). Stopping it here would also destroy the runner's
+  // own per-test trace, so in that case we neither start nor stop. globalSetup
+  // has no runner tracing: there the start/stop below behaves as before.
+  let tracingStartedHere = false;
+  if (process.env.CI) {
     await mkdir(TRACE_DIR, { recursive: true });
-    await context.tracing.start({
-      screenshots: true,
-      snapshots: true,
-      sources: true,
-    });
+    try {
+      await context.tracing.start({
+        screenshots: true,
+        snapshots: true,
+        sources: true,
+      });
+      tracingStartedHere = true;
+    } catch (err) {
+      // Only the «someone else already traces this context» case is tolerated;
+      // anything else is a real failure and must surface.
+      if (!(err instanceof Error && /already started/i.test(err.message))) {
+        throw err;
+      }
+    }
   }
   // TASK-BE-311 iter 4 — bridgeAuthServiceHostname removed. PC-FE-028 iter 7
   // added `127.0.0.1 auth-service` to the runner's /etc/hosts + realigned
@@ -221,7 +239,8 @@ async function driveOidcPkceLogin(
     // the browser/page close throws. The MONO-133 workflow's `if: always()`
     // upload step then captures the artifact (whether the test passed or
     // failed in globalSetup).
-    if (tracingEnabled) {
+    // TASK-PC-FE-289 — only stop what we started; the runner owns its own trace.
+    if (tracingStartedHere) {
       try {
         await context.tracing.stop({ path: TRACE_PATH });
       } catch {
