@@ -17,7 +17,7 @@
 //    같다 — 화면은 같은 함수를 서버에서 부른다.
 // =============================================================================
 
-import type { PublicArtist, PublicProduct } from './datasets';
+import type { PublicArtist, PublicProduct, PublicReview } from './datasets';
 
 export interface PageRequest {
   page?: number;
@@ -165,6 +165,52 @@ export function categoryFacets(
     counts.set(p.categoryId, (counts.get(p.categoryId) ?? 0) + 1);
   }
   return [...counts.entries()].map(([id, count]) => ({ id, count })).sort((a, b) => b.count - a.count || a.id.localeCompare(b.id));
+}
+
+// ---------------------------------------------------------------------------
+// store — 리뷰 (ADR-MONO-075 D3)
+// ---------------------------------------------------------------------------
+
+export interface PublicReviewSummary {
+  averageRating: number;
+  totalReviews: number;
+  /** 키 `"1"`~`"5"` 가 **항상** 있다 — 0개인 별점도 0 으로 적는다(화면이 막대 다섯을 그린다). */
+  ratingDistribution: Record<'1' | '2' | '3' | '4' | '5', number>;
+}
+
+export interface ProductReviews {
+  /** 최신순(동점은 id 순). */
+  reviews: PublicReview[];
+  summary: PublicReviewSummary;
+}
+
+/**
+ * 상품 하나의 리뷰와 요약 — **저장본 안에서** 계산한다.
+ *
+ * 🔴 요약을 백엔드 summary API 에서 가져오지 않는다(D3). 목록과 요약의 출처가 다르면 «3개 리뷰» 라고
+ *    말하면서 목록에 2개를 그리는 화면이 된다.
+ * 🔴 인자로 받은 배열을 제자리 정렬하지 않는다 — 저장본 캐시의 것이다(`queryProducts` 와 같은 이유).
+ * 🔵 평균을 반올림하지 않는다 — 표시 형식은 화면의 일이다.
+ */
+export function productReviews(reviews: PublicReview[], productId: string): ProductReviews {
+  const mine = reviews
+    .filter((r) => r.productId === productId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id));
+  const ratingDistribution: PublicReviewSummary['ratingDistribution'] = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
+  let sum = 0;
+  for (const r of mine) {
+    const key = String(r.rating) as keyof PublicReviewSummary['ratingDistribution'];
+    if (key in ratingDistribution) ratingDistribution[key] += 1;
+    sum += r.rating;
+  }
+  return {
+    reviews: mine,
+    summary: {
+      averageRating: mine.length === 0 ? 0 : sum / mine.length,
+      totalReviews: mine.length,
+      ratingDistribution,
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
