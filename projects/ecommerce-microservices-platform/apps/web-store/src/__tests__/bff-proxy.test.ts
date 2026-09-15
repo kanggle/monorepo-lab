@@ -193,4 +193,109 @@ describe('BFF proxy — F2 server-side bearer attach', () => {
     const res = await GET(req, makeCtx(['api', 'orders']));
     expect(res.status).toBe(502);
   });
+
+  // TASK-FE-100 — a stale session cookie must not turn a public read (product
+  // reviews) into a /login bounce. The gateway 401s a bad bearer even on a
+  // permitAll path, so safe methods retry once without the bearer.
+  describe('낡은 세션 토큰 + 공개 조회 [FE-100]', () => {
+    const staleSession = {
+      accessToken: 'stale',
+      accountId: 'a',
+      tenantId: 't',
+      roles: ['CUSTOMER'],
+    };
+
+    it('GET 이 Bearer 를 붙인 채 401 → Bearer 없이 1회 재시도하고 그 응답을 그대로 전달', async () => {
+      getWebStoreSession.mockResolvedValue(staleSession);
+      fetchMock
+        .mockResolvedValueOnce(new Response('unauthorized', { status: 401 }))
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ content: [], totalElements: 0 }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        );
+
+      const req = new NextRequest(
+        'http://localhost:3000/api/bff/api/reviews/products/p-1?page=0',
+        { method: 'GET' },
+      );
+      const res = await GET(req, makeCtx(['api', 'reviews', 'products', 'p-1']));
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get('X-Reauth')).toBeNull();
+      expect(await res.json()).toEqual({ content: [], totalElements: 0 });
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      const [firstUrl, firstInit] = fetchMock.mock.calls[0];
+      const [retryUrl, retryInit] = fetchMock.mock.calls[1];
+      expect(firstInit.headers.get('Authorization')).toBe('Bearer stale');
+      expect(retryInit.headers.get('Authorization')).toBeNull();
+      expect(String(retryUrl)).toBe(String(firstUrl));
+    });
+
+    it('재시도도 401 이면 기존 재인증 신호(401 + X-Reauth)', async () => {
+      getWebStoreSession.mockResolvedValue(staleSession);
+      fetchMock
+        .mockResolvedValueOnce(new Response('unauthorized', { status: 401 }))
+        .mockResolvedValueOnce(new Response('unauthorized', { status: 401 }));
+
+      const req = new NextRequest('http://localhost:3000/api/bff/api/orders', { method: 'GET' });
+      const res = await GET(req, makeCtx(['api', 'orders']));
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(res.status).toBe(401);
+      expect(res.headers.get('X-Reauth')).toBe('1');
+      const body = (await res.json()) as { code: string };
+      expect(body.code).toBe('REAUTH_REQUIRED');
+    });
+
+    it('POST 는 401 이어도 재시도하지 않는다 (쓰기를 두 번 보내지 않음)', async () => {
+      getWebStoreSession.mockResolvedValue(staleSession);
+      fetchMock.mockResolvedValue(new Response('unauthorized', { status: 401 }));
+
+      const req = new NextRequest('http://localhost:3000/api/bff/api/reviews', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ productId: 'p-1', rating: 5 }),
+      });
+      const res = await POST(req, makeCtx(['api', 'reviews']));
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(res.status).toBe(401);
+      expect(res.headers.get('X-Reauth')).toBe('1');
+    });
+
+    it('세션 토큰이 없어 Bearer 를 안 붙인 GET 은 401 이어도 재시도하지 않는다', async () => {
+      getWebStoreSession.mockResolvedValue({
+        accessToken: null,
+        accountId: null,
+        tenantId: null,
+        roles: [],
+      });
+      fetchMock.mockResolvedValue(new Response('unauthorized', { status: 401 }));
+
+      const req = new NextRequest('http://localhost:3000/api/bff/api/orders', { method: 'GET' });
+      const res = await GET(req, makeCtx(['api', 'orders']));
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(res.status).toBe(401);
+    });
+
+    it('재시도 중 업스트림 네트워크 실패 → 502', async () => {
+      getWebStoreSession.mockResolvedValue(staleSession);
+      fetchMock
+        .mockResolvedValueOnce(new Response('unauthorized', { status: 401 }))
+        .mockRejectedValueOnce(new Error('ECONNREFUSED'));
+
+      const req = new NextRequest(
+        'http://localhost:3000/api/bff/api/reviews/products/p-1/summary',
+        { method: 'GET' },
+      );
+      const res = await GET(req, makeCtx(['api', 'reviews', 'products', 'p-1', 'summary']));
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(res.status).toBe(502);
+    });
+  });
 });

@@ -22,6 +22,15 @@ export const dynamic = 'force-dynamic';
  * and an `X-Reauth: 1` header so the client axios `onAuthError` redirects to a
  * full re-auth (F1), preserving the return-to.
  *
+ * Public reads with a stale session (TASK-FE-100): the session cookie is only
+ * decoded here, never refreshed, so it can hand us an expired or no-longer-valid
+ * token. A resource server rejects a bad bearer with 401 even on a `permitAll`
+ * path, so a visitor with an old cookie was bounced to /login from public
+ * product reviews. For safe methods (GET/HEAD) a 401 on a bearer-carrying call
+ * is therefore retried ONCE without the bearer: a public path answers, a
+ * protected one 401s again and falls through to the re-auth signal. Which paths
+ * are public stays the gateway's decision — no path list is copied here.
+ *
  * Server Components / Server Actions do NOT use this proxy — they read
  * `getWebStoreSession()` directly and call the gateway server-side.
  */
@@ -44,6 +53,9 @@ const STRIPPED_REQUEST_HEADERS = new Set([
   'authorization', // re-attached server-side from the session
   'cookie', // never forward the NextAuth session cookie to the backend
 ]);
+
+// Methods that may be repeated without repeating a side effect.
+const SAFE_METHODS = new Set(['GET', 'HEAD']);
 
 const STRIPPED_RESPONSE_HEADERS = new Set([
   'content-encoding',
@@ -79,23 +91,33 @@ async function forward(
       headers.set(key, value);
     }
   });
-  if (session.accessToken) {
-    headers.set('Authorization', `Bearer ${session.accessToken}`);
-  }
 
   const method = req.method.toUpperCase();
   const hasBody = method !== 'GET' && method !== 'HEAD';
   const body = hasBody ? await req.arrayBuffer() : undefined;
 
-  let backendRes: Response;
-  try {
-    backendRes = await fetch(targetUrl, {
+  const callUpstream = (bearer: string | null): Promise<Response> => {
+    const attemptHeaders = new Headers(headers);
+    if (bearer) {
+      attemptHeaders.set('Authorization', `Bearer ${bearer}`);
+    }
+    return fetch(targetUrl, {
       method,
-      headers,
+      headers: attemptHeaders,
       body: body && body.byteLength > 0 ? body : undefined,
       redirect: 'manual',
       cache: 'no-store',
     });
+  };
+
+  let backendRes: Response;
+  try {
+    backendRes = await callUpstream(session.accessToken);
+    // Stale bearer on a safe method → ask once more anonymously (TASK-FE-100).
+    // Only safe methods: a write must never be sent twice.
+    if (backendRes.status === 401 && session.accessToken && SAFE_METHODS.has(method)) {
+      backendRes = await callUpstream(null);
+    }
   } catch {
     return NextResponse.json(
       { code: 'BFF_UPSTREAM_ERROR', message: 'Upstream request failed' },
