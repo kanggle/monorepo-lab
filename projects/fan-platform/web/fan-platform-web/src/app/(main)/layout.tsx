@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Header } from '@/widgets/header/Header';
 import { DemoBackendNotice } from '@/widgets/demo-notice/DemoBackendNotice';
+import { InAppHistoryTracker } from '@/shared/navigation/InAppHistoryTracker';
 
 /**
  * Main shell — 공개 페이지와 회원 페이지가 **둘 다** 여기 붙는다.
@@ -20,10 +21,14 @@ import { DemoBackendNotice } from '@/widgets/demo-notice/DemoBackendNotice';
  *
  * 🔵 데모 heartbeat 은 여기 없다 — `Header` 의 인증 분기 안에 있다. 이 자리로 올리면
  *    익명 방문이 데모 EC2 를 살려 두게 된다(`app/api/demo/heartbeat/route.ts` 헤더).
+ *
+ * 🔵 `InAppHistoryTracker`(TASK-FAN-FE-023)는 여기 있어도 된다 — 경로를 메모리에 적을 뿐 아무것도
+ *    그리지 않고 **요청을 보내지 않는다**. 상세의 «← 뒤로» 가 앱 안에서 왔는지를 이것으로 안다.
  */
 export default function MainLayout({ children }: { children: ReactNode }) {
   return (
     <>
+      <InAppHistoryTracker />
       <DemoBackendNotice />
       <Header />
       <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
