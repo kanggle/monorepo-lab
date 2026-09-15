@@ -8,7 +8,7 @@ TASK-MONO-681
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -101,14 +101,34 @@ monorepo
       ✅ 판정은 `collectReviews`(`src/transform.mjs`, 네트워크 주입)가 들고 있고 시험 «한 상품이라도 실패하면 fetched=false
       이고 봉투에서 failed 가 된다» 가 문다. `extractStore` 는 `detailsOk && collected.fetched` 를 그대로 싣는다.
       ⚪ `extractStore` 의 HTTP 배관 자체는 **시험하지 않았다** — 이 패키지가 원래 안 시험하는 축(README § 시험: 게이트웨이 없음).
-- [ ] **AC-6** — 공개 상품 상세가 **백엔드를 부르지 않고** 리뷰·요약을 그린다 — 상세 경로에서 `useProductReviews`·
+- [x] **AC-6** — 공개 상품 상세가 **백엔드를 부르지 않고** 리뷰·요약을 그린다 — 상세 경로에서 `useProductReviews`·
       `useReviewSummary` 호출 **0건**, 테스트가 그것을 문다.
-- [ ] **AC-7** — `source !== 'backend'` 일 때 「샘플 리뷰」 표시가 보이고, `source === 'backend'` 면 안 보인다(두 칸 다 시험).
-- [ ] **AC-8** — 라이브 판정: 배포 뒤 익명으로 `/products/b0000000-0000-0000-0000-000000000022` 의 **렌더된 HTML** 에 리뷰
+      ✅ 상세 경로(`page.tsx` → `getSnapshotProductReviews` → `ReviewList`/`RatingSummary` props)에 두 훅 호출 0 ·
+      `review-list.test.tsx` 가 리뷰 API 조회 함수 **미호출**을 단언(페이지 넘김 뒤에도) · `rating-summary.test.tsx` 도 같은 단언.
+      CI `Frontend unit tests` 로그: `review-list.test.tsx (11 tests)` · `rating-summary.test.tsx (6 tests)` · `get-snapshot-reviews.test.ts (7 tests)` 통과(PR #3814, run 34947107750).
+- [x] **AC-7** — `source !== 'backend'` 일 때 「샘플 리뷰」 표시가 보이고, `source === 'backend'` 면 안 보인다(두 칸 다 시험).
+      ✅ `get-snapshot-reviews.test.ts` 가 `bundled`/`authored` → `isSample=true`, `backend` → `false` 세 칸 · `review-list.test.tsx` 가
+      표시 있음/없음 두 칸(CI 통과, 위와 같은 런).
+- [x] **AC-8** — 라이브 판정: 배포 뒤 익명으로 `/products/b0000000-0000-0000-0000-000000000022` 의 **렌더된 HTML** 에 리뷰
       제목과 「샘플 리뷰」가 있다(서버 렌더이므로 HTML 로 판정 가능 — 클라이언트 fetch 가 아니다). 🔴 판정 전에
       `build-info`/배포 커밋이 머지 커밋인지부터 확인한다.
-- [ ] **AC-9** — 게이트: `node --test` public-data · web-store `tsc`·lint(CI)·vitest(CI) · `check-seed-catalogue-parity.sh` ·
+      ✅ **배포 커밋 먼저**: `build-info.json` 은 이 앱에서 307(리다이렉트)이라 쓸 수 없어 GitHub deployments 로 확인 —
+      `Production – kanggle-store` 배포 `8d07c1454`(= PR #3814 squash) **success** 2026-09-15T10:39:35Z.
+      🔴 그 «success» 는 판정이 아니다(빌드 훅 호출만 뜻한 적이 있다) ⇒ **렌더된 HTML 로 판정**했다. 쿠키 없는 curl(익명):
+      | 상품 | 「샘플 리뷰」 문구 | 평점 요약 | 저장본 리뷰 제목 | 개수·평균 |
+      |---|---|---|---|---|
+      | 22 (울트라북) | **1** | **1** | **2/2** (`업무용으로 추천` · `충전기가 커요`) | `(2개 리뷰)` · `4.0` (5·3점) |
+      | 01 (티셔츠) | **1** | **1** | **3/3** | `(3개 리뷰)` · `4.0` (5·3·4점) |
+      🔵 **대조군** — 배포 전 같은 상품 22 페이지: 문구 **0** · 평점 요약 **0**(리뷰 영역 제목만 1). 차이가 이 변경의 효과다.
+      🔵 개수 문구를 처음 `(2개 리뷰)` 로 grep 해서 **0건**이 나왔다 — React SSR 이 `(<!-- -->2<!-- -->개 리뷰)` 로 주석을 끼운다.
+      판정기 문제였고 렌더는 정상이다(HTML 을 열어 확인).
+- [x] **AC-9** — 게이트: `node --test` public-data · web-store `tsc`·lint(CI)·vitest(CI) · `check-seed-catalogue-parity.sh` ·
       필수 가드 3종.
+      ✅ PR #3814 머지 전 CI(head `5e8940d3c`): **FAILURE 0** (SUCCESS 19 · SKIPPED 44) · 필수 4종 SUCCESS ·
+      `Demo wrapper smoke` 안의 두 스텝 «Public-data bundled seed is regenerable and not drifted» · «Public-data package tests» **둘 다
+      success**(잡이 초록이어도 스텝이 skip 일 수 있어 스텝 단위로 확인) · `Public catalogue does not split between bundled and real seed`
+      SUCCESS · `Frontend lint & build` SUCCESS(`next build` 가 `/products/[id]` 컴파일) · `Frontend unit tests` SUCCESS · `ADR index drift` SUCCESS.
+      로컬(스테이지 후): `node --test` 39/39 · `tsc` rc=0 · ESLint rc=0.
 
 ---
 
@@ -147,8 +167,8 @@ monorepo
 
 # Definition of Done
 
-- [ ] ADR-MONO-075 ACCEPTED
-- [ ] 구현 + 테스트
-- [ ] 게이트 통과 + 라이브 판정(AC-8)
+- [x] ADR-MONO-075 ACCEPTED
+- [x] 구현 + 테스트
+- [x] 게이트 통과 + 라이브 판정(AC-8)
 
 분석=Opus 5 / 구현 권장=Opus (계약·보안 허용목록·교차 패키지)
