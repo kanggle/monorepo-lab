@@ -198,6 +198,71 @@ export function toPublicProduct(raw) {
 }
 
 /**
+ * 리뷰 하나 (ADR-MONO-075 D2).
+ *
+ * 🔴🔴 **작성자를 읽지 않는다.** 백엔드 `ReviewItem.userId` 는 여기서 손에 잡히지도 않는다 — 아래
+ *    객체에 자리가 없다. 표시명·익명 표기도 만들지 않는다(R1).
+ * 🔴 `productId` 는 응답이 아니라 **호출 경로**에서 온다(`GET /api/reviews/products/{id}` 의 항목에는
+ *    상품 id 가 없다). 그래서 인자로 받는다.
+ * 🔴 별점이 1~5 정수가 아니면 **공개하지 않는다.** 0 으로 채우거나 반올림하면 평균이 조용히 틀린다.
+ *
+ * @param {Record<string, unknown>} raw  백엔드 `ReviewItem`
+ * @param {string} productId
+ * @returns {Record<string, unknown> | null}
+ */
+export function toPublicReview(raw, productId) {
+  const id = strOrNull(raw.reviewId ?? raw.id);
+  if (id === null || typeof productId !== 'string' || productId === '') return null;
+  const rating = raw.rating;
+  if (typeof rating !== 'number' || !Number.isInteger(rating) || rating < 1 || rating > 5) return null;
+  return {
+    id,
+    productId,
+    rating,
+    title: str(raw.title, ''),
+    content: str(raw.content, ''),
+    createdAt: str(raw.createdAt, ''),
+  };
+}
+
+/**
+ * 상품마다 리뷰를 모은다 (ADR-MONO-075 D5). **네트워크는 주입받는다** — 그래서 발행자와 번들 시드
+ * 생성기가 같은 함수를 쓰고, 여기서 네트워크 없이 시험된다.
+ *
+ * 🔴 한 상품이라도 수집에 실패하면 `fetched: false` 다. 봉투는 `collectionStatus.reviews = 'failed'` 를
+ *    받고 발행이 거부된다. 성공한 상품만 모아 «성공» 으로 보고하면 실패한 상품은 화면에서 «리뷰가 없는
+ *    상품» 이 되고, 그 오독은 되돌릴 수 없다.
+ * 🔵 최신순으로 정렬해 돌려준다(동점은 id 순 — 페이지네이션이 흔들리지 않게).
+ *
+ * @param {string[]} productIds  **공개된** 상품의 id. 숨김 상품의 리뷰는 애초에 묻지 않는다.
+ * @param {(productId: string) => Promise<{fetched: boolean, rows: Array<Record<string, unknown>>, error?: string}>} fetchAll
+ * @returns {Promise<{fetched: boolean, reviews: Array<Record<string, unknown>>, errors: string[]}>}
+ */
+export async function collectReviews(productIds, fetchAll) {
+  let fetched = true;
+  /** @type {Array<Record<string, unknown>>} */
+  const reviews = [];
+  /** @type {string[]} */
+  const errors = [];
+  for (const productId of productIds) {
+    const res = await fetchAll(productId);
+    if (!res.fetched) {
+      fetched = false;
+      errors.push(`${productId}: ${res.error ?? '알 수 없는 오류'}`);
+      continue;
+    }
+    for (const raw of res.rows) {
+      const pub = toPublicReview(raw, productId);
+      if (pub !== null) reviews.push(pub);
+    }
+  }
+  reviews.sort(
+    (a, b) => String(b.createdAt).localeCompare(String(a.createdAt)) || String(a.id).localeCompare(String(b.id)),
+  );
+  return { fetched, reviews, errors };
+}
+
+/**
  * 카테고리 목록을 **상품에서 파생**한다.
  *
  * 🔴 백엔드에 카테고리 조회 API 가 **없다**(실측: `packages/api-client/src/services/` 에

@@ -248,7 +248,7 @@ IAM 자체의 세션 수명(`JSESSIONID`).
 
 - ⏳ AC-2(위) — 창이 없으면 `TASK-MONO-672` 로.
 - 🔵 곁발견(미수정, 범위 밖): `layout.tsx` 의 `getCatalog()` **401** 캐치는 여전히 마커 없는 `buildLoginRedirect()` 다 — 쿠키가 살아 있는데 백엔드가 거절하면 `/login?redirect=` → `/login` 이 쿠키를 보고 `/console` 로 되튕긴다(TASK-PC-FE-278 이 서버 401 지점 53곳에서 고친 모양). `relogin-marker.test.ts` 는 `redirect('/login')` 리터럴만 찾아서 이 호출을 못 본다.
-  → 🔵 **받는 티켓 = `tasks/ready/TASK-MONO-684-the-console-layout-catalog-401-still-bounces-without-the-session-expired-marker.md`** (2026-09-15 같은 PR 에서 기안, INDEX ready 행 확인 — 산문 «범위 밖» 으로만 남기지 않는다).
+  → 🔵 **받는 티켓 = `tasks/ready/TASK-MONO-685-the-console-layout-catalog-401-still-bounces-without-the-session-expired-marker.md`** (2026-09-15 같은 PR 에서 기안, INDEX ready 행 확인 — 산문 «범위 밖» 으로만 남기지 않는다). 🔴 처음엔 684 로 기안했는데 동시 세션 #3822 가 **같은 684 를 먼저 main 에 머지**해 685 로 옮겼다(배정 직전 확인 뒤에도 병렬 세션이 번호를 가져갈 수 있다).
 
 ---
 

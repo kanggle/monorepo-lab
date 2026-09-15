@@ -5,7 +5,11 @@
 **주관 티켓:** `TASK-MONO-635`
 **선행:** [`ADR-MONO-067`](ADR-MONO-067-demo-surfaces-served-from-vercel.md) (방문자 화면 = Vercel) ·
 [`ADR-MONO-068`](ADR-MONO-068-where-the-demo-backend-resolver-lives.md) (런타임 백엔드 해석의 자리)
-**후속:** [`ADR-MONO-071`](ADR-MONO-071-boot-the-bundle-the-visitor-chose.md) (선택 기동 — 같은 요청의 다른 축)
+**후속:** [`ADR-MONO-071`](ADR-MONO-071-boot-the-bundle-the-visitor-chose.md) (선택 기동 — 같은 요청의 다른 축) ·
+[`ADR-MONO-075`](ADR-MONO-075-product-reviews-ride-in-the-store-snapshot.md) (§ D2 개정 — store 저장본에 리뷰를 싣는다, 작성자 제외)
+**부분 대체:** [`ADR-MONO-074`](ADR-MONO-074-anonymous-visitors-see-the-real-console-with-sample-data.md) (2026-09-15) — D6 의
+«콘솔 둘러보기는 별도 `(demo)` 화면이다». 🔵 D6 의 **축**(콘솔 샘플은 추출 경로가 없는 합성 데이터)은 074 가 이어받는다.
+D1~D5 · D7 은 그대로다(D2 는 075 가 따로 개정).
 
 **출처 — 소유자 요청 (2026-09-07), 원문 인용:**
 

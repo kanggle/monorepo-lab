@@ -8,7 +8,7 @@ TASK-MONO-682
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -55,18 +55,25 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] **AC-1** `ADR-MONO-074` 가 `PROPOSED` 로 머지되고 `docs/adr/INDEX.md` 에 행이 있다 (`scripts/check-adr-index-drift.sh` 초록).
-- [ ] **AC-2** 소유자에게서 **정확형** 줄을 받는다:
+- [x] **AC-1** `ADR-MONO-074` 가 `PROPOSED` 로 머지되고 `docs/adr/INDEX.md` 에 행이 있다 (`scripts/check-adr-index-drift.sh` 초록).
+      ✅ PR [#3815](https://github.com/kanggle/monorepo-lab/pull/3815) squash `c7ef72767` · 로컬 `check-adr-index-drift.sh` rc=0(78) · CI `ADR index drift` SUCCESS.
+- [x] **AC-2** 소유자에게서 **정확형** 줄을 받는다:
       `ADR-MONO-074 ACCEPTED — <A|B|C> · R1<ⓐ|ⓑ> · R2<ⓐ|ⓑ> · R3<ⓐ|ⓑ>` (C 는 라이더 불필요).
       🔴 «진행»·글자만·ADR 이름 없는 줄·플레이스홀더가 남은 줄·«추천대로» 는 **통과가 아니다** — 다시 묻는다.
       🔴 A/B 인데 라이더 글자가 빠졌으면 그 라이더는 **미결로 기록**하고 해당 부분은 기안하지 않는다.
-- [ ] **AC-3** ACCEPT PR: Status 전환 + § History(받은 원문 인용) + 결정 본문 **byte-unchanged** + (A/B) `ADR-MONO-070` 헤더에 부분 대체 포인터.
-- [ ] **AC-4** 같은 ACCEPT PR 에서 § Roadmap 의 실행 티켓을 `ready/` 에 기안한다. A 의 기반 티켓은 최소한 다음을 AC 로 갖는다:
+      ✅ 받은 원문 `ADR-MONO-074 ACCEPTED — A · R1<ⓐ> · R2<ⓐ> · R3<ⓐ>` (2026-09-15). 이름·ACCEPTED·갈래·라이더 셋을 각각 확인, 미결 0.
+      🔴 소유자가 직전에 추천을 **요청**했고 받은 글자가 추천과 같다 — 통과 판정 근거는 ADR § History 에 적었다.
+- [x] **AC-3** ACCEPT PR: Status 전환 + § History(받은 원문 인용) + 결정 본문 **byte-unchanged** + (A/B) `ADR-MONO-070` 헤더에 부분 대체 포인터.
+      ✅ 이 PR. 본문 불변은 diff 로 확인(§ History 와 `Status` 줄만 바뀐다).
+- [x] **AC-4** 같은 ACCEPT PR 에서 § Roadmap 의 실행 티켓을 `ready/` 에 기안한다. A 의 기반 티켓은 최소한 다음을 AC 로 갖는다:
       ① 엔드포인트 **재인벤토리**(ADR 의 94/99 는 코드 읽기 수) ② 코어 6 + 코어 밖 구멍 5 전부의 샘플 분기
       ③ `(console)` 트리에서 코어·샘플 라우터 밖 `fetch` 금지 가드 ④ 샘플 라우터 금지 임포트 가드
       ⑤ 가드 테스트 3개(`demo-tour-console-guard-regression`·`root-redirect.spec`·`demo-tour.spec`)의 기대값을 **ADR 인용과 함께** 교체
       ⑥ «익명으로 연 뒤 로그인한 같은 브라우저에 샘플 문자열 0» e2e.
-- [ ] **AC-5** 이 티켓의 PR 은 `docs/adr/**` 와 `tasks/**` 만 바꾼다(코드 diff 0).
+      ✅ `TASK-PC-FE-282`(①=AC-0 · ②=AC-2 · ③=AC-5 · ④=AC-4 · ⑤=AC-11 · ⑥=AC-14, 🔴 smoke 는 세션을 못 만들어 nightly 또는 ⚪) ·
+      `TASK-PC-FE-283`~`288`(도메인) · `TASK-MONO-686`(은퇴, ⏳ 게이트). ①~⑥ 에 더해 기반 티켓이 **코어 넷의 403 메시지 덮어쓰기**
+      (실측)를 AC-3 으로 갖는다.
+- [x] **AC-5** 이 티켓의 PR 은 `docs/adr/**` 와 `tasks/**` 만 바꾼다(코드 diff 0). ✅ 두 PR 모두 `docs/adr/**` · `tasks/**` · `projects/platform-console/tasks/**` 뿐.
 
 ---
 

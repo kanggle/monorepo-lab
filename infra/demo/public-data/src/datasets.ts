@@ -173,9 +173,30 @@ export interface PublicCategory {
   productCount: number;
 }
 
+/**
+ * 공개 리뷰 (`ADR-MONO-075` D2).
+ *
+ * 🔴🔴 **작성자가 없다.** 백엔드 `ReviewItem` 에는 `userId` 가 있다. 공개 저장본에 작성자 식별이
+ *    실리면 회수할 수 없다(한 번 나간 JSON 은 이미 나갔다). 그래서 «구매자» 같은 익명 표기조차
+ *    **자리를 만들지 않는다**(R1). 「본인 리뷰」 판정이 필요한 동작(수정·삭제)은 공개 화면에 없다(R3).
+ * 🔴 `updatedAt` 도 없다 — 화면이 쓰지 않는 필드는 허용 목록에 오르지 않는다.
+ * 🔵 `productId` 는 백엔드 항목에 없고 **수집 경로**(`/api/reviews/products/{id}`)에서 온다.
+ */
+export interface PublicReview {
+  id: string;
+  productId: string;
+  /** 1~5 정수. 계약(`contract.mjs`)이 범위 밖을 거부한다. */
+  rating: number;
+  title: string;
+  content: string;
+  createdAt: string;
+}
+
 export interface StorePublicData {
   products: PublicProduct[];
   categories: PublicCategory[];
+  /** 🔴 **필수**다(`ADR-MONO-075` D1) — `coverage`·`collectionStatus` 의 키에도 들어간다. */
+  reviews: PublicReview[];
 }
 
 // ---------------------------------------------------------------------------

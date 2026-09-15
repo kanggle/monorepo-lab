@@ -721,3 +721,108 @@ export const RAW_PRODUCTS = [
     thumbnailUrl: null, images: [], variants: [{ id: `${C}9f`, optionName: '기본', stock: 5, additionalPrice: 0 }],
   },
 ];
+
+// =============================================================================
+// TASK-MONO-681 / ADR-MONO-075 — 상품 리뷰
+// =============================================================================
+// 🔴🔴 **이 절만 «실제 시드의 행» 이 아니다.** review-service 에는 데모 시드 리뷰가 **없다**
+//    (`INSERT INTO reviews` 는 통합테스트 한 곳뿐). 그래서 여기 리뷰는 **저장소가 쓴 샘플**이고
+//    (ADR-MONO-075 D4 · R5), 화면이 「샘플 리뷰」 라고 말한다. 파일 머리의 «실제 데모 시드에서 그대로»
+//    는 이 절에 해당하지 않는다 — 그 문장을 믿고 이 리뷰를 «누군가의 실제 평가» 로 읽지 마라.
+// 🔵 **모양은 백엔드 것**이다: `GET /api/reviews/products/{id}` 의 `content[]` 항목(`ReviewItem` —
+//    `reviewId`·`userId`·`rating`·`title`·`content`·`createdAt`·`updatedAt`). 상품 id 는 항목에 없고
+//    **호출 경로**에 있으므로 `{ productId, items }` 로 묶는다(`collectReviews` 가 그렇게 묻는다).
+// 🔴 **음성 대조군**: 모든 항목의 `userId`(작성자) · 별점 0 인 리뷰 · 숨김 상품에 달린 리뷰.
+// 🔵 샘플은 카테고리별 문구 넷에서 상품마다 2~3개를 돌려 고른다(R4) — 전부 5점이면 평점 요약이
+//    그리는 막대가 하나뿐이라 요약 화면이 시험되지 않는다.
+
+const REVIEW_POOLS = {
+  // 전자기기
+  [`${CAT}02`]: [
+    { rating: 5, title: '음질 만족', content: '기대 이상으로 소리가 깔끔합니다. 연결도 한 번에 잡혀요.' },
+    { rating: 4, title: '배터리 오래가요', content: '하루 종일 써도 넉넉합니다. 케이스가 조금 미끄러운 게 단점이에요.' },
+    { rating: 3, title: '가격 대비 보통', content: '기능은 충분한데 앱 설정이 조금 복잡했습니다.' },
+    { rating: 4, title: '디자인 깔끔', content: '책상 위에 두어도 잘 어울립니다. 버튼 반응도 괜찮아요.' },
+  ],
+  // 식품
+  [`${CAT}03`]: [
+    { rating: 5, title: '선물용으로 좋아요', content: '포장이 깔끔해서 선물로 보냈는데 반응이 좋았습니다.' },
+    { rating: 4, title: '신선해요', content: '유통기한 넉넉하게 왔고 맛도 좋습니다. 양이 조금 더 많았으면 해요.' },
+    { rating: 5, title: '꾸준히 먹고 있어요', content: '맛이 일정해서 계속 주문하게 됩니다.' },
+    { rating: 3, title: '배송이 조금 늦었어요', content: '상품은 괜찮은데 배송이 예상보다 이틀 늦었습니다.' },
+  ],
+  // 상의
+  [`${CAT}04`]: [
+    { rating: 5, title: '사이즈 딱 맞아요', content: '평소 입는 사이즈로 주문했는데 잘 맞습니다. 세탁 후에도 형태가 크게 변하지 않았어요.' },
+    { rating: 4, title: '소재가 좋아요', content: '촉감이 부드럽고 두께도 적당합니다. 색상이 사진보다 조금 어둡게 느껴졌어요.' },
+    { rating: 3, title: '무난합니다', content: '가격 생각하면 무난한 편입니다. 실밥 정리가 조금 아쉬웠어요.' },
+    { rating: 5, title: '재구매 의사 있어요', content: '편하게 입기 좋아서 다른 색상도 주문할 생각입니다.' },
+  ],
+  // 하의
+  [`${CAT}05`]: [
+    { rating: 4, title: '핏이 예뻐요', content: '허리는 잘 맞고 기장이 조금 길어서 수선했습니다.' },
+    { rating: 5, title: '편해요', content: '신축성이 있어서 오래 앉아 있어도 불편하지 않습니다.' },
+    { rating: 3, title: '두께가 얇아요', content: '봄가을용으로는 괜찮은데 겨울에는 춥겠어요.' },
+    { rating: 4, title: '색상 만족', content: '사진과 거의 같은 색이고 다른 옷과 맞추기 쉽습니다.' },
+  ],
+  // 스마트폰
+  [`${CAT}06`]: [
+    { rating: 5, title: '카메라가 좋아요', content: '야간 사진이 확실히 선명해졌습니다. 발열도 심하지 않아요.' },
+    { rating: 4, title: '화면이 시원해요', content: '디스플레이는 만족스럽고, 무게가 조금 있는 편입니다.' },
+    { rating: 4, title: '기기 변경 무난', content: '데이터 옮기는 과정이 생각보다 간단했습니다.' },
+    { rating: 3, title: '배터리는 보통', content: '사용량이 많은 날은 저녁쯤 충전이 필요합니다.' },
+  ],
+  // 노트북
+  [`${CAT}07`]: [
+    { rating: 5, title: '가볍고 빨라요', content: '들고 다니기 편하고 부팅이 빠릅니다. 키감도 좋아요.' },
+    { rating: 4, title: '화면 만족', content: '색감이 좋아서 작업하기 편합니다. 팬 소음이 가끔 들려요.' },
+    { rating: 3, title: '충전기가 커요', content: '성능은 좋은데 기본 충전기가 커서 휴대가 불편합니다.' },
+    { rating: 5, title: '업무용으로 추천', content: '여러 프로그램을 띄워도 버벅임이 없습니다.' },
+  ],
+};
+
+/** 12자리 꼬리로 UUID 모양을 만든다 — 상품(b…)·옵션(c…)·카테고리(a…)와 접두사가 겹치지 않게 리뷰=e, 작성자=f. */
+const uuidTail = (n, k) => `${String(n).padStart(10, '0')}${String(k).padStart(2, '0')}`;
+
+const PUBLIC_REVIEW_GROUPS = RAW_PRODUCTS.filter((p) => p.status !== 'HIDDEN').map((p, i) => {
+  const n = i + 1;
+  const pool = REVIEW_POOLS[p.categoryId];
+  // 🔴 문구 없는 카테고리에 공개 상품이 생기면 **여기서 죽는다** — 조용히 0개로 두면 그 상품만
+  //    «리뷰 없음» 으로 보이고 시험이 그걸 «정상적인 0개» 로 읽는다.
+  if (!pool) throw new Error(`[fixtures] 카테고리 '${p.categoryId}' 에 샘플 리뷰 문구가 없습니다 (상품 ${p.id})`);
+  const count = 2 + (n % 2);
+  const items = Array.from({ length: count }, (_, k) => {
+    const t = pool[(n + k) % pool.length];
+    const at = `2026-02-${String(((n * 3 + k * 7) % 27) + 1).padStart(2, '0')}T09:00:00Z`;
+    return {
+      reviewId: `e0000000-0000-0000-0000-${uuidTail(n, k)}`,
+      userId: `f0000000-0000-0000-0000-${uuidTail(n, k)}`,
+      rating: t.rating,
+      title: t.title,
+      content: t.content,
+      createdAt: at,
+      updatedAt: at,
+    };
+  });
+  return { productId: p.id, items };
+});
+
+// 🔴 **음성 대조군 ① — 별점 범위 밖.** 변환기가 버려야 한다(0 으로 두면 평균이 조용히 내려간다).
+PUBLIC_REVIEW_GROUPS[0].items.push({
+  reviewId: 'e0000000-0000-0000-0000-00000000ff00', userId: 'f0000000-0000-0000-0000-00000000ff00',
+  rating: 0, title: 'INVALID-RATING-REVIEW-MUST-NOT-LEAK', content: 'INVALID-RATING-CONTENT-MUST-NOT-LEAK',
+  createdAt: '2026-02-01T09:00:00Z', updatedAt: '2026-02-01T09:00:00Z',
+});
+
+/** 스토어 게이트웨이 `GET /api/reviews/products/{id}` 의 `content[]` 를 상품별로 묶은 것. */
+export const RAW_REVIEWS_BY_PRODUCT = PUBLIC_REVIEW_GROUPS.concat([
+  {
+    // 🔴 **음성 대조군 ② — 숨김 상품의 리뷰.** 수집기는 공개 상품만 묻으므로 애초에 안 닿아야 한다.
+    productId: `${P}9f`,
+    items: [{
+      reviewId: 'e0000000-0000-0000-0000-00000000ff01', userId: 'f0000000-0000-0000-0000-00000000ff01',
+      rating: 5, title: 'HIDDEN-PRODUCT-REVIEW-MUST-NOT-LEAK', content: 'HIDDEN-PRODUCT-REVIEW-CONTENT-MUST-NOT-LEAK',
+      createdAt: '2026-02-01T09:00:00Z', updatedAt: '2026-02-01T09:00:00Z',
+    }],
+  },
+]);
