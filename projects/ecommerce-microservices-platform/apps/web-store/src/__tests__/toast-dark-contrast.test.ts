@@ -8,11 +8,30 @@
  *    ② Toast 가 색을 고정값으로 두지 않고 그 토큰을 쓰는지 소스로 문다.
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
-const css = readFileSync(fileURLToPath(new URL('../app/globals.css', import.meta.url)), 'utf8');
-const toastSource = readFileSync(fileURLToPath(new URL('../shared/ui/Toast.tsx', import.meta.url)), 'utf8');
+/**
+ * web-store 기준 상대경로의 소스 파일을 읽는다.
+ *
+ * 🔴 `new URL(…, import.meta.url)` 을 쓰지 않는다 — vitest 의 jsdom 환경에서 `import.meta.url` 이 `file:` 이 아니라
+ *    `fileURLToPath` 가 `ERR_INVALID_URL_SCHEME` 로 **수집 단계에서** 죽는다(이 파일 초판이 CI 에서 정확히 그렇게 죽었다 —
+ *    시험 0개, 파일 FAIL). 로컬에서 같은 술어를 일반 node 로 돌려 본 것은 그 환경 차이를 못 잰다.
+ * 🔵 cwd 가 앱 디렉터리든 워크스페이스·저장소 루트든 찾도록 후보를 두고, 못 찾으면 **후보를 대며** 죽는다.
+ */
+function readWebStoreSource(rel: string): string {
+  const candidates = [
+    resolve(process.cwd(), rel),
+    resolve(process.cwd(), 'apps/web-store', rel),
+    resolve(process.cwd(), 'projects/ecommerce-microservices-platform/apps/web-store', rel),
+  ];
+  const hit = candidates.find((p) => existsSync(p));
+  if (!hit) throw new Error(`${rel} 를 찾지 못했다 — cwd=${process.cwd()} · 후보: ${candidates.join(' | ')}`);
+  return readFileSync(hit, 'utf8');
+}
+
+const css = readWebStoreSource('src/app/globals.css');
+const toastSource = readWebStoreSource('src/shared/ui/Toast.tsx');
 
 /** 선택자 블록 하나에서 `--token: #rrggbb` 선언만 모은다. */
 function tokensOf(selector: string): Record<string, string> {
