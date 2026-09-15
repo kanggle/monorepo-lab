@@ -70,7 +70,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-
+- `TASK-FAN-FE-023-phone-width-header-wraps-per-character-and-detail-has-no-back.md` — 🟡 **휴대폰 너비 헤더 글자 단위 줄바꿈 · 상세 뒤로가기 없음** (READY, 2026-09-15 UTC). 라이브 실측: 360·400px 에서 헤더 항목 **전부 2줄**(`피`/`드` — 한 글자에 한 줄), 768px 부터 1줄. 원인=`Header.tsx` 의 줄바꿈 금지 없는 flex. 처방=클래스만(햄버거 X — 헤더의 «익명 게이트웨이 호출 0건» 성질 보존) · 휴대폰=로고+동작 / 메뉴 두 줄. 뒤로가기=상세 네 갈래 전부 · 🔴🔴 **앱 안에서 왔으면 `history.back()`, 이력 없으면 `/`**(고정 `/` 는 `/artists/{id}` 방문자를 튕기고, 무조건 back 은 공유 링크 방문자를 사이트 밖으로 내보낸다) · 🔴 `document.referrer` 판정 금지(앱 안 이동이 referrer 를 안 바꾼다). 분석=Opus 5 / 구현 권장=Sonnet.
 
 ## in-progress
 
