@@ -83,7 +83,7 @@ _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DON
 
 ## in-progress
 
-_(없음)_
+- `TASK-FE-100-reviews-bounce-to-login-when-session-token-is-stale.md` — 낡은 세션 토큰이 공개 조회(상품 리뷰)까지 401 로 만들어 `/login` 으로 튕기던 것을, BFF 가 안전한 메서드에 한해 Bearer 없이 1회 재시도하도록 고친다. 분석=Opus 5 / 구현=Opus 5.
 
 ## review
 
