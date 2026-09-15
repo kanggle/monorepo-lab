@@ -119,3 +119,36 @@ startable 로 그린다. 라이브 증거: 선택 안 된 `console-finance` 가 
 - 🙋 반영: `terraform apply`(소유자 승인) — AMI 재굽기 불필요(부팅 셸 무변경).
 
 분석=Opus 5 / 구현=Opus 5.
+
+## CORRECTION — 머지·apply 뒤 (2026-09-15 UTC): AC-7 은 반만 닫혔다
+
+**머지**: PR [#3831](https://github.com/kanggle/monorepo-lab/pull/3831) `MERGED` 2026-09-15T11:17:59Z · `bd50ed513` · 롤업 SUCCESS 9 · SKIPPED 52 · FAILURE 0(`Demo wrapper smoke` 안의 `pytest infra/demo/aws/tests` 포함).
+
+**apply (소유자 「apply까지해」)** — 메인 체크아웃(`bf0114aec`, 깨끗함; state·tfvars 가 거기만 있다)에서:
+
+| 단계 | 결과 |
+|---|---|
+| `plan -out` | `aws_lambda_function.control` **in-place 1건** · `0 to add, 1 to change, 0 to destroy` |
+| `show` | 바뀌는 속성 = `source_code_hash`(`hzvCO94…` → `tc93P/Uw…`) · `last_modified` 뿐. env·AMI 무변경 |
+| `apply "<plan 파일>"` | `Apply complete! Resources: 0 added, 1 changed, 0 destroyed.` |
+| `aws lambda get-function-configuration` | `CodeSha256 = tc93P/UwPBmo75XUupNIJZkh0KXNtWzMkI96Dd859AQ=`(plan 과 일치) · `Active` · `Successful` |
+| 재-plan `-detailed-exitcode` | rc=0 · `No changes.` |
+
+🔵 AMI 핀(`deployed-ami.env` `ami-058f6293d1408f91e`) = state 의 AMI ⇒ 인스턴스 교체 없음 — plan 이 그것을 확인했다.
+
+**AC-7 (b) 켜진 뒤 선택 안 된 카드: ✅ PASS (라이브 전/후 대조)**
+
+| 시각(UTC) | Lambda | `console-finance`(선택 안 됨) | 도메인 |
+|---|---|---|---|
+| 11:29:46 | 옛 코드 | `partial` | finance=down · iam=up |
+| 11:30:58 | 새 코드 | **`waiting`** | finance=down · iam=up |
+
+같은 순간 선택된 묶음(console · store · fan · console-ecommerce · store-fulfillment)은 전부 `ready` 로 **그대로** — 선택 분기는 안 건드렸다는 대조군.
+
+**AC-7 (a) 꺼진 인스턴스의 첫 요청이 선택을 교체: ⚪ 미측정 — 그리고 왜**
+
+- 이 판정은 **인스턴스가 꺼진 상태에서 `POST /bundle/start`** 가 있어야 난다. 그 요청은 EC2 를 켠다(과금 부작용) — 소유자 승인은 `apply` 까지였고 **기동은 아니었다.**
+- 측정 시각에 인스턴스는 **running**(다른 세션, 예산 738/1200분)이었고, 저장 선택은 여전히 8묶음이다. 🔴 이것은 결함이 아니다 — 새 코드는 **종료 때 비우지 않고 다음 꺼진-상태 첫 요청 때 비운다**(D4.1). 그래서 «지금 선택이 8개» 는 (a) 의 반증도 증거도 아니다.
+- 🔵 코드 수준 증거는 이미 있다: `test_cold_start_replaces_the_previous_sessions_selection` 이 **라이브의 8묶음 그대로**를 심고 `["fan"]` 만 남는 것을 단언하며, 옛 handler 에서 빨갛다(bite A).
+- ⏳ 닫는 조건: 다음에 인스턴스가 `stopped` 인 창에서 누군가(소유자·방문자) 카드 하나를 누른 뒤 `GET /bundles` 의 `selection` 이 **그 묶음 하나**인가. 읽기만 하면 된다 — 그 클릭을 **일부러 만들 필요는 없다.**
+- 🔴 이 칸 때문에 이 파일은 `review/` 에 남는다. `done/` 으로 옮기려면 (a) 를 재거나, 소유자 결정으로 `TASK-MONO-672`(스택이 떠야 잴 수 있는 것들의 집)에 넘긴다.
