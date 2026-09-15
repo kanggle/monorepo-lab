@@ -8,7 +8,7 @@ TASK-MONO-679
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -269,3 +269,35 @@ monorepo
 `chore(tasks): … ready → in-progress` 커밋이 ① 이미 스테이지돼 있던 `PublicPostImage.tsx` **삭제를 함께 실었고** ② 파일은 옮기면서
 `# Status` 를 `ready` 로 **남겼다**. 가드 셋은 둘 다 못 본다(이동·중복만 잰다). ②는 review 커밋이 `review` 로 고친다 — 그 커밋에서
 `git show :<path>` 로 확인한다.
+
+## CORRECTION — 머지 · 위 § 미측정 세 칸의 처리 (2026-09-15 UTC, close chore)
+
+위 절의 «⚪ 미측정» 은 그때의 사실이고 지우지 않는다. 지금 참인 것은 다음이다.
+
+### 4차원 머지 검증
+
+| 축 | 결과 |
+|---|---|
+| (a) PR 상태 | #3818 `MERGED` `2026-09-15T11:01:53Z` · squash `2c3c494b0` |
+| (b) `origin/main` | 머지 직후 tip = `2c3c494b0` |
+| (c) 머지 시점 체크 | 🔴 **필수 4종 SUCCESS · 실패 0 · 비필수 일부 대기(`UNSTABLE`) 상태에서 머지했다** — 아래 § 소유자 결정. 코드는 직전 head `19fcfdf71` 에서 **61/61 완료 · 실패 0**(Frontend unit · Integration fan Testcontainers · E2E live-trio 전부 SUCCESS)으로 이미 확인됐고, 그 뒤 커밋은 `origin/main` merge 와 `tasks/INDEX.md` 줄 정리뿐이다. **머지 뒤 main CI(`34961078259`) = success · 성공 41 · 건너뜀 23 · 실패 0.** |
+| (d) AC 절 | 열어서 대조했다 — AC-1(결정) · AC-2 · AC-3 · AC-4 ✅ · AC-0 의 실제 로그인 재현과 AC-5 의 시드 실제 발행은 **AC-5 가 적은 동사 그대로**(«창이 없으면 ⚪ 로 적고 `TASK-MONO-672` 에 집을 준다») 넘겼다 ⇒ 닫힘 |
+
+### 🔴 소유자 결정 — 머지 조건 (2026-09-15)
+
+전체 CI 가 도는 ~15분 사이 `main` 이 매번 `tasks/INDEX.md` 를 바꿔 **다섯 번** 충돌했다(#3813·#3812·#3817·#3815 → #3819·#3820 → #3816·#3822 → #3814·#3824·#3825 → #3826 류, 전부 INDEX 줄 이동). 저장된 자동 머지 조건(«전체 초록»)으로는 끝나지 않아 소유자에게 물었고,
+답은 **「필수 4종만 보고 머지」** — 근거는 코드가 이미 전체 초록이라는 것. 🔵 이 결정은 **이 PR 한정**이다(후속 `TASK-FAN-FE-022` #3830 은 원래 규칙).
+
+### § 미측정 세 칸
+
+1. **통합 시험** — ✅ **닫혔다.** `19fcfdf71` 의 `Integration (fan-platform, Testcontainers)` 와 `E2E (fan-platform v1 live-trio smoke)` 가 SUCCESS.
+   `FeedPremiumGateIntegrationTest`(사진 넣은 잠김 `[]`/구독자 주소) · `CommunityApiContractTest`(`mediaRefs` 키)가 그 잡 안에서 돌았다.
+2. **`seed-fan.sh` 가 실제로 사진 달린 글을 발행하는가** — ⚪ → **`TASK-MONO-672` § 넘겨받은 항목 1**. 🔴 창만으로 안 풀리고 **AMI 재굽기 뒤**에만 판정이 난다.
+3. **실제 로그인 재현(AC-0 세 칸)** — ⚪ → **`TASK-MONO-672` § 넘겨받은 항목 2**. ①(공개 카드 → 공개 판 폴백)은 창만으로, ②③은 재굽기 뒤.
+
+### 라이브 (익명 경로는 이 PR 로 바뀐 컴포넌트를 지난다)
+
+`fan.hubwang.com/build-info.json` `commit` = `2c3c494b0`. 사진 `data-testid="post-image"`(이동한 공통 컴포넌트): `/` **5** · `/?page=1` **1** · `/posts/…b001` **2** · `/posts/…b004`(잠긴 글) **0** · 옛 testid **0** · `minio` 문자열 **0** — `TASK-MONO-678` 때와 같은 수다.
+🔴 로그인 경로(회원 카드·상세의 사진)는 데모 백엔드가 꺼져 있어 라이브로 못 봤다 — 항목 2 가 그것을 들고 있다.
+
+⇒ **넘긴 의무 2건(`TASK-MONO-672`) · 이 티켓에 남은 ⚪ 0.**
