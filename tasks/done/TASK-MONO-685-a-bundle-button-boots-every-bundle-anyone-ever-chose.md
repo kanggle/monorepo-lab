@@ -8,7 +8,7 @@ TASK-MONO-685
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -152,3 +152,31 @@ startable 로 그린다. 라이브 증거: 선택 안 된 `console-finance` 가 
 - 🔵 코드 수준 증거는 이미 있다: `test_cold_start_replaces_the_previous_sessions_selection` 이 **라이브의 8묶음 그대로**를 심고 `["fan"]` 만 남는 것을 단언하며, 옛 handler 에서 빨갛다(bite A).
 - ⏳ 닫는 조건: 다음에 인스턴스가 `stopped` 인 창에서 누군가(소유자·방문자) 카드 하나를 누른 뒤 `GET /bundles` 의 `selection` 이 **그 묶음 하나**인가. 읽기만 하면 된다 — 그 클릭을 **일부러 만들 필요는 없다.**
 - 🔴 이 칸 때문에 이 파일은 `review/` 에 남는다. `done/` 으로 옮기려면 (a) 를 재거나, 소유자 결정으로 `TASK-MONO-672`(스택이 떠야 잴 수 있는 것들의 집)에 넘긴다.
+
+## CORRECTION — close chore (2026-09-15 UTC): AC-7 (a) 는 소유자 결정으로 `TASK-MONO-672` 에 넘기고 닫는다
+
+**소유자 결정**: 「1번 진행」 = *(a) 의 라이브 판정을 `TASK-MONO-672` 로 넘기고 이 티켓은 닫는다.* 🔴 위 절의 «review/ 에 남는다» 는 그 결정 전의 상태이고, 이 절이 지금의 상태다.
+
+**4차원 검증**
+
+- (a) impl PR [#3831](https://github.com/kanggle/monorepo-lab/pull/3831) `MERGED` 2026-09-15T11:17:59Z · 판정 기록 PR [#3834](https://github.com/kanggle/monorepo-lab/pull/3834) `MERGED` 11:38:44Z
+- (b) `bd50ed513` · `3950d7493` 모두 `origin/main` 조상
+- (c) #3831 머지 헤드 롤업 SUCCESS 9 · SKIPPED 52 · **FAILURE 0**(필수 4개 + `Demo wrapper smoke` SUCCESS)
+- (d) AC 절을 열어 동사에 대고 읽었다:
+
+| AC | 동사 | 판정 |
+|---|---|---|
+| AC-1 · AC-2 | 저장 선택이 그 요청뿐이다 | ✅ 단위 테스트(라이브 8묶음 그대로) + 옛 handler 빨강 |
+| AC-3 | 대조군 — 합집합 유지 · 창 · 창 밖 | ✅ 단위 테스트 3칸 |
+| AC-4 | 거절이 선택을 지우지 않는다 · (z40) 이 문다 | ✅ 테스트 + bite B |
+| AC-5 | iam 만 → `waiting` · 대조군 | ✅ 테스트 + **라이브**(AC-7 b) |
+| AC-6 | 옛 handler 에서 빨갛다 | ✅ bite A 5칸 |
+| AC-7 (b) | 켜진 뒤 선택 안 된 카드 | ✅ **라이브 PASS** — `console-finance` apply 전 `partial` → 후 `waiting` |
+| AC-7 (a) | 꺼진 상태 첫 요청 → 선택 교체 | ⚪ **미측정 → `TASK-MONO-672` 항목 3 으로 이관** |
+
+**이관 확인 (받는 쪽에 행이 실제로 있는가)** — 같은 PR 에서:
+
+- `tasks/ready/TASK-MONO-672-…` § 넘겨받은 항목 **«항목 3 — `TASK-MONO-685` AC-7 (a)»** 를 추가했다: 무엇을 재나(꺼진 상태 첫 클릭 뒤 `GET /bundles` 의 `selection` 이 그 묶음 하나) · 창만으로 풀리고 **일부러 열 필요 없음**(Lambda 배포 완료, 읽기 한 번) · 🔴 읽는 시점(120초 합집합 창) · 🔴 «꺼지기만 해서는 안 비워지는 것이 정상» · 대조군 · 출처.
+- `tasks/INDEX.md` 의 672 행을 «항목 3개(679 2 · 685 1)» 로 고쳤다.
+
+🔵 **왜 넘기는가(소유자에게 제시한 근거)**: 남은 일이 «사건을 기다리는 것» 뿐이고, 그 사건(꺼진 상태의 첫 클릭)은 다음 데모 창을 여는 그 클릭이 곧 재료라 **추가 비용이 0** 이다. `review/` 에서 기다리면 아무도 그 창을 지목하지 않는다 — 672 는 정확히 «닫히는 티켓의 스택-필요 측정» 을 받으려고 존재한다.
