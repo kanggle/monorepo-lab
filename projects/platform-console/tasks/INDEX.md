@@ -93,6 +93,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔴 **순서: 282 → 283~288 직렬**(샘플 등록부·원장 파일 공유 — 병렬 worktree 금지) → 루트 `TASK-MONO-686`(`/demo` 은퇴, ⏳).
 
+- `TASK-PC-FE-289-the-login-fixture-starts-tracing-the-runner-already-started.md` — 🔴 **`TASK-PC-FE-282` fix — `main` nightly 가 빨갛다** (2026-09-15). 282 머지 커밋 `35bd9d293` 의 `Platform Console E2E full-stack` = failure(자동 이슈 #3846), 직전 main 셋은 실제로 돌아 success. 8 중 1 — 282 의 `sample-visitor-transition.spec.ts` 가 `tracing.start: Tracing has been already started` 로 **단언에 닿기 전에** 죽었다. 원인: CI 에서 러너(`trace: 'on'`)가 이미 켠 트레이싱을 로그인 픽스처(`globalSetup` 용으로 스스로 켜던 것)가 또 켰다. 픽스처가 **자기가 켠 것만** 끄게 고치고, 🔴 로컬 게이트가 `tests/e2e/**` 를 안 재므로 **수정 브랜치 `workflow_dispatch` 런이 권위**. 트레이싱 통과 뒤 AC-14 단언이 빨강이면 제품 결함 → 머지 안 함. 분석=Opus 5 / 구현=Opus 5.
 - `TASK-PC-FE-283-iam-screens-get-samples.md` — IAM 14 화면 · GET 18. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
 - `TASK-PC-FE-284-ecommerce-screens-get-samples.md` — ecommerce 23 화면 · GET 19 · 🔴 이미지에 MinIO 주소 금지. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
 - `TASK-PC-FE-285-erp-screens-get-samples.md` — erp 6 화면 · GET 18 · 🔴 개요 수 = 목록 행 수. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
