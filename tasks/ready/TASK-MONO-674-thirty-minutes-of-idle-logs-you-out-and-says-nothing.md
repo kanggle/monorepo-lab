@@ -68,18 +68,62 @@ IAM 자체의 세션 수명(`JSESSIONID`).
 
 ## AC-0 — 착수 게이트 (전제부터 다시 재라)
 
-- [ ] 🔴 **토큰 수명을 다시 읽어라.** 이 티켓은 `1800`(V0008 의 client settings)을 근거로
+- [x] 🔴 **토큰 수명을 다시 읽어라.** 이 티켓은 `1800`(V0008 의 client settings)을 근거로
       서 있다. 그 값이 바뀌었으면 **이 티켓의 수치가 전부 낡은 것**이다.
-- [ ] 🔴 **`console_refresh_token` 이 실제로 발급되는지** 확인하라 — 창 실측에서 쿠키 이름은
+      → 🟢 **값은 그대로 1800초다. 🔴 그러나 출처가 틀렸다 — V0008 이 아니라 V0015 다**
+      (2026-09-15 저장소 재측정). 콘솔 클라이언트 id 는 `platform-console-web`
+      (`V0015__seed_platform_console_oidc_client.sql:85`, `console-web/src/shared/config/env.ts:60`)
+      이고 V0008 은 이 클라이언트를 **심지 않는다**(`test-internal-client`·`demo-spa-client` 만).
+      `V0015:95` = access **1800** · refresh **2592000** · 🔴 **`reuse-refresh-tokens=false`**(회전한다).
+      이 클라이언트를 건드리는 뒤 마이그레이션(V0020·V0021·V0023·V0024·V0034)은 전부
+      grant/redirect/scope/tenant 만 바꾸고 **`token_settings` 는 0건**이다.
+      🔵 ⇒ Related Specs 의 *"V0008 — 토큰 수명 셋의 유일한 출처"* 는 **V0015** 로 읽어라.
+      🔴 `reuse=false` 라 Edge Case «두 탭 동시 만료 → 재사용 거부» 는 **가설이 아니라 실제 조건**이다.
+- [x] 🔴 **`console_refresh_token` 이 실제로 발급되는지** 확인하라 — 창 실측에서 쿠키 이름은
       봤지만(`JSESSIONID` · `console_access_token` · `console_refresh_token` ·
       `console_id_token` · `console_operator_token` · `console_active_tenant`) **쓰이는지는
       안 쟀다.** ⓐ 의 전제가 그것이다.
+      → 🟢 **발급된다** — 런타임 증거가 이미 있다: `TASK-MONO-660` 09-11 절의 `storageState` 에
+      `console_refresh_token expires 2026-10-11T07:30:51Z`(심은 시각 +30일). 코드는
+      `api/auth/callback/route.ts:142-146`(`maxAge: 2_592_000`).
+      🔴 **쓰이는 곳은 딱 하나이고, 이 결함의 경로에는 없다**:
+      `POST /api/auth/refresh`(`api/auth/refresh/route.ts:59,70-71`)를 부르는 것은
+      `shared/api/client.ts:62` 뿐이고, 그것은 `:90` `res.status === 401 && … && isBrowser()` 뒤다.
+      middleware · `(console)` 레이아웃 · 서버 컴포넌트는 **0건**.
+- [x] 🔴🔴 **(660 close chore 가 넘긴 행) 30분 만료는 «어느 문» 으로 나가는가** — 660 의 09-11 절은
+      «쿠키-없음 가드» 라 했고 09-12 절은 «서버 사이드 refresh 부재(`client.ts:90`)» 로 읽었다.
+      → 🟢 **코드로 갈렸다: 백엔드 401 이 아니라 `(console)` 레이아웃의 쿠키 가드다.**
+
+      | 단계 | 코드 |
+      |---|---|
+      | 액세스 쿠키 수명 = 토큰 `expires_in` | `callback/route.ts:137-140` `maxAge: data.expires_in` → 30분 뒤 **브라우저가 쿠키를 버린다** |
+      | 가드 | `app/(console)/layout.tsx:90` `if (!(await isAuthenticated())) redirect(await buildLoginRedirect());` |
+      | 술어 | `shared/lib/session.ts:234-235` — **쿠키만 본다**(access ≠ null && operator ≠ null). 리프레시 쿠키는 **안 본다** |
+      | URL | `shared/lib/login-redirect.ts:57` `/login?redirect=…` — `error` 없음 ⇒ `login/page.tsx:85-87` 가 문구를 안 그린다 |
+
+      🔴 ⇒ **`client.ts:90` 의 `isBrowser()` 는 이 결함의 원인이 아니다** — 요청이 백엔드까지 가지도 않는다.
+      🔵 **처방 자리가 바뀐다**: 갈래 ⓐ 는 «SSR 401 에 refresh» 가 아니라 **«레이아웃 가드가 액세스
+      쿠키 없음 + 리프레시 쿠키 있음을 보면 갱신을 시도한다»** 이고, 갈래 ⓑ 는 **같은 조건에서
+      사유를 붙이는 것**이다(리프레시 쿠키의 존재가 «로그인한 적이 있다» 와 «처음 온 사람» 을 가른다).
+      🔴 **가드에 박힌 테스트**: `tests/unit/demo-tour-console-guard-regression.test.tsx:94`
+      `expect(globalThis.fetch).not.toHaveBeenCalled()` — 가드 앞에 refresh `fetch` 를 넣는 ⓐ 는
+      **이 핀과 정면으로 부딪친다**(그 핀이 무엇을 지키려던 것인지부터 읽어야 한다).
+      🔵 AC-3 첫 칸의 답도 여기 있다: `?error=session_expired` 는 **약 53개 서버 401 자리**와
+      단위 테스트 수십 개가 단언하고, `?redirect=` 는 `layout-login-redirect.test.ts` ·
+      `e2e-smoke/console-guard.spec.ts` 가 단언한다. 🔴 «액세스 쿠키 없음 + 리프레시 쿠키 있음» 을
+      주는 테스트는 **0건** — 이 결함이 조용히 산 이유다.
 
 ## AC-1 — 갈래를 고른다 (🔴 소유자 결정)
 
-- [ ] ⓐ/ⓑ/ⓒ 중 하나(또는 ⓐ+ⓑ)를 **소유자에게 묻는다.** 🔴 내 추천을 결정으로 적지 마라.
-- [ ] 답을 **소유자의 말 그대로** 적는다.
-- [ ] 🔵 안 고른 갈래가 **무엇을 포기하는 것인지** 함께 적는다.
+- [x] ⓐ/ⓑ/ⓒ 중 하나(또는 ⓐ+ⓑ)를 **소유자에게 묻는다.** 🔴 내 추천을 결정으로 적지 마라.
+      → 2026-09-15 선택창으로 물었다. 🔵 추천(`(Recommended)` 표지)은 **내 것**이었고, 고른 것은 소유자다.
+- [x] 답을 **소유자의 말 그대로** 적는다.
+      → 소유자 선택(선택창 라벨 원문): **「ⓐ+ⓑ 갱신+실패시 사유 (Recommended)」**
+      — 선택지 설명(내가 쓴 것): *액세스 쿠키 없음 + 리프레시 쿠키 있음 → 조용히 갱신. Next 레이아웃은 쿠키를 못 쓰므로 middleware 또는 `/api/auth/refresh` 경유 후 복귀. 갱신 실패 → `?error=session_expired`. 회전 정책이라 두 탭 경합 처리, 가드 핀 테스트(fetch 미호출 단언) 재검토.*
+- [x] 🔵 안 고른 갈래가 **무엇을 포기하는 것인지** 함께 적는다.
+      → **ⓑ만** 을 버렸다 = 싼 수리를 포기하고 갱신 설계 비용(회전·경합·폴백)을 떠안는다.
+      **ⓐ만** 을 버렸다 = 갱신 실패일에도 사유 문구를 보장한다(실패 경로가 조용해지지 않는다).
+      **ⓒ** 를 버렸다 = 토큰 수명(보안 축)은 **1800초 그대로** 둔다 — ADR 없음.
 
 ## AC-2 — 판정은 **다시 창을 열어야** 난다
 

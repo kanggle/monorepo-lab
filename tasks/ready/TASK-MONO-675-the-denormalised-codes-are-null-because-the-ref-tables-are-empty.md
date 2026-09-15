@@ -108,13 +108,37 @@ master-ref **소비자 클래스가 하나도 없다**(있는 것은 `MasterRefC
       🔵 ref 가 찼는데도 null 이면 **원인이 다른 것**이고 이 티켓의 진단부터 다시 세워야 한다.
 - [ ] 🔴 **창이 필요하다.** 못 열면 아무것도 하지 말고 `ready/` 에 그대로 둬라 —
       「켜는 것」은 이 티켓의 범위가 아니다(`TASK-MONO-660` AC-0 과 같은 규율).
+      → ⏳ (2026-09-15) 위 두 칸은 **런타임 값**이라 창 없이 못 닫는다 — 열어 두었다.
+      저장소 쪽에서 잴 수 있는 것은 아래 AC-1 에 적었다.
 
 ## AC-1 — 원인을 **하나로** 지목한다
 
 - [ ] ⓐ~ⓓ 중 **어느 것인지 실측으로 지목**하고, 나머지를 **왜 배제했는지** 적어라.
+      → ⏳ **절반 닫혔다 (2026-09-15 저장소 재측정)** — 🔴 ⓑ 는 **관측으로 기각**, ⓐ 는 **코드로 지지**,
+      런타임 확증(토픽 오프셋)이 남았다:
+
+      | 가설 | 판정 | 근거 |
+      |---|---|---|
+      | ⓐ 시드가 master 이벤트를 발행 안 한다 | 🟠 **코드로 지지** | master-service 시드 `db/seed/R__01..R__05` 는 `INSERT INTO warehouses/zones/locations/skus/partners` **직삽입**이고 outbox 언급 **0건**. 이벤트는 `OutboxDomainEventAdapter` → `MasterOutboxPublisher` 로만 나간다 ⇒ **시드 행에는 이벤트가 없다**. `seed-wms.sh:17-23` 이 이유를 적어 뒀다: API 는 `MASTER_WRITE` 를 아무도 못 받아 403(`TASK-MONO-514`) |
+      | ⓑ admin-service 가 구독 안 한다 | 🔴 **기각** | `admin-service/.../infra/messaging/MasterProjectionConsumer.java:39-46` `@KafkaListener` 가 `wms.master.{warehouse,zone,location,sku,partner,lot}.v1` **6개**를 구독하고, 쓰기는 `MasterProjectionService.java` 의 `*Repo.save` 6곳. 스펙도 요구한다(`specs/services/admin-service/architecture.md:214-219`) |
+      | ⓒ 순서 어긋남 | ⚪ **해당 없음(ⓐ 가 참이면)** | 올 이벤트가 없으면 순서가 없다 |
+      | ⓓ 과거 이벤트를 못 받는다 | 🔵 **약함** | admin `application.yml:47-48` `auto-offset-reset: earliest` |
+
+      🔵 **형제가 왜 멀쩡한지가 ⓐ 의 대조군이다**: 같은 master 이벤트 소비자를 가진
+      `inbound`·`inventory`·`outbound` 는 **각자 `db/seed/R__seed_dev_masterref.sql`** 로 ref 를 직접 심는다
+      (inventory 파일 머리말: *"boots with an empty master read-model and waits for `master.*` consumer
+      events … we pre-load"*). **admin-service 만 그 파일이 없다** — `db/seed/` 에는 `R__seed_dev_data.sql`
+      (role·user·setting) 하나다. `infra/demo/wms-devseed.override.yml:141-143` 이 admin 에도
+      `classpath:db/seed` 를 연다 ⇒ 파일만 있으면 데모가 먹는다.
+      🔴 **남은 런타임 술어**(창에서): `wms.master.*.v1` 토픽의 오프셋이 **0** 인가 · admin 컨슈머 그룹 lag ·
+      `*.DLT` 에 레코드가 있는가. 🔴 DLT 에 레코드가 있으면 ⓐ 가 아니라 **소비 실패**다 — 그래서 아직 ⓐ 로 확정하지 않는다.
 - [ ] 🔴 «가장 그럴듯한 것» 으로 고르지 마라 — 이 저장소가 반복해서 댄 대가다.
       술어는 **관측**이어야 한다(소비자 클래스의 존재, 토픽 오프셋, 시드 로그).
-- [ ] 🔵 admin-service 에 소비자가 없다는 내 실측이 **맞는지부터** 다시 확인하라.
+- [x] 🔵 admin-service 에 소비자가 없다는 내 실측이 **맞는지부터** 다시 확인하라.
+      → 🔴 **틀렸다.** 소비자는 있다(위 표 ⓑ). 🔵 틀린 이유: 처음 실측은 **`masterref` 패키지의
+      `Master*Consumer` 이름**으로 셌고, admin 은 `infra/messaging/MasterProjectionConsumer` 라 그 모집단 밖이었다
+      — «내 레코드의 이름은 그 코퍼스의 이름이 아니다». 🔵 스펙 쪽 이름도 또 다르다
+      (`idempotency.md:173-178` 는 `MasterRefProjectionConsumer`).
 
 ## AC-2 — 고친다
 
