@@ -49,6 +49,14 @@
 interface DemoStatus {
   state?: unknown;
   ip?: unknown;
+  /**
+   * 저장된 선택의 묶음이 **전부 ready 인가** (`TASK-MONO-668`, `ADR-MONO-071 § D5.1`).
+   * `true` / `false` / `null`(판정 불가) / 없음(옛 람다).
+   *
+   * 🔴 **이것은 설정이 아니라 응답 필드다** — `DemoBackendResolverConfig` 는 여전히 셋이다.
+   *    «어느 묶음이 내 것인가» 를 이 모듈이 알게 되는 순간 그것이 넷째 설정이고 ADR 재개봉이다.
+   */
+  selection_ready?: unknown;
 }
 
 export interface DemoBackend {
@@ -68,8 +76,23 @@ export interface DemoBackend {
  * `ADR-MONO-067` § Consequences 가 이것을 **새 요구**라고 적었다: *"데모가 꺼져 있어도
  * 화면 자체는 뜬다(백엔드 없는 상태를 앱이 표현해야 한다)."* 예전에는 데모 호스트에서
  * 같이 죽었으므로 표현할 필요가 없었다.
+ *
+ * -----------------------------------------------------------------------------
+ * 🔴🔴 `starting` — 네 번째 값 (`TASK-MONO-668`)
+ * -----------------------------------------------------------------------------
+ * 인스턴스는 running 이라 **주소는 만들 수 있는데**, 저장된 선택의 묶음이 아직 전부 ready 가
+ * 아니다(`/status` 의 `selection_ready === false`). 이 값이 없던 동안 배너는 인스턴스가
+ * 켜지는 순간 사라졌고, 방문자는 «다 됐다» 고 믿고 들어와 수 분 동안 빈 화면을 봤다.
+ *
+ * 🔴 `starting` 은 `unavailable` 이 **아니다** — `resolveDemoBackend()` 는 이 상태에서도 주소를
+ *    돌려준다. 자기 묶음은 이미 대답할 수 있고(선택 «전부» 로 판정하므로 보수적이다), 로그인
+ *    포워더와 BFF 가 폴백 사슬로 떨어지면 **될 흐름을 끊는다.** 이 값은 «말하기» 용이지
+ *    «막기» 용이 아니다.
+ * 🔴 `starting` 은 `running` 도 **아니다** — 뭉치면 이 티켓의 결함 그대로다.
+ * 🔴 `selection_ready` 가 `null`·없음·불리언 아님이면 `starting` 이 **아니다**. 판정 불가를
+ *    「켜지는 중」으로 번역하지 않는다(위 3번 규칙과 같은 규칙) — 그때는 옛 동작(`running`)이다.
  */
-export type DemoBackendState = 'not-demo' | 'running' | 'unavailable';
+export type DemoBackendState = 'not-demo' | 'starting' | 'running' | 'unavailable';
 
 /**
  * 앱마다 다른 **세 가지**. 이 셋이 정확히 `ADR-MONO-068 § D5.1` 의 정규화가 지우던 축이고,
@@ -176,17 +199,19 @@ async function fetchStatus(base: string): Promise<DemoStatus | null> {
 export function createDemoBackendResolver(
   config: DemoBackendResolverConfig,
 ): DemoBackendResolver {
-  let cache: { at: number; value: DemoBackend | null } | null = null;
+  // 🔴 `starting` 은 **주소와 같은 응답**에서 온 값이어야 한다 — 따로 캐시하면 TTL 경계에서
+  //    «새 주소 + 옛 준비여부» 가 섞인다. 그래서 한 칸에 같이 둔다.
+  let cache: { at: number; value: DemoBackend | null; starting: boolean } | null = null;
 
-  const resolveDemoBackend = async (): Promise<DemoBackend | null> => {
-    const base = controlPlaneBase();
-    if (!base) return null;
-
+  const resolveSnapshot = async (
+    base: string,
+  ): Promise<{ value: DemoBackend | null; starting: boolean }> => {
     const now = Date.now();
-    if (cache && now - cache.at < CACHE_TTL_MS) return cache.value;
+    if (cache && now - cache.at < CACHE_TTL_MS) return cache;
 
     const status = await fetchStatus(base);
     let value: DemoBackend | null = null;
+    let starting = false;
 
     // 🔴 `state` 와 `ip` 를 **둘 다** 요구한다. `state=running` 인데 `ip` 가 없는 반쪽
     //    응답으로 주소를 만들면, 만들어진 주소가 무엇을 가리키는지 아무도 모른다.
@@ -196,15 +221,30 @@ export function createDemoBackendResolver(
         baseUrl: `http://${config.servicePrefix}.${demoDomain}`,
         demoDomain,
       };
+      // 🔴🔴 TASK-MONO-668 — **`=== false` 만** 「켜지는 중」이다. `null`(람다가 판정 불가)·
+      //    필드 없음(옛 람다)·문자열 `"false"` 같은 엉뚱한 값은 전부 옛 동작으로 둔다.
+      //    `!status.selection_ready` 로 쓰면 없음·null 이 전부 「켜지는 중」이 되어, 람다를
+      //    배포하기 전의 모든 방문이 **영구히** 켜지는 중을 말한다.
+      starting = status.selection_ready === false;
     }
 
-    cache = { at: now, value };
-    return value;
+    cache = { at: now, value, starting };
+    return cache;
+  };
+
+  const resolveDemoBackend = async (): Promise<DemoBackend | null> => {
+    const base = controlPlaneBase();
+    if (!base) return null;
+    // 🔵 `starting` 이어도 주소를 돌려준다 — § DemoBackendState 의 `starting` 절.
+    return (await resolveSnapshot(base)).value;
   };
 
   const resolveDemoBackendState = async (): Promise<DemoBackendState> => {
-    if (!controlPlaneBase()) return 'not-demo';
-    return (await resolveDemoBackend()) ? 'running' : 'unavailable';
+    const base = controlPlaneBase();
+    if (!base) return 'not-demo';
+    const { value, starting } = await resolveSnapshot(base);
+    if (!value) return 'unavailable';
+    return starting ? 'starting' : 'running';
   };
 
   const resolveUpstreamBaseUrl = async (): Promise<string> => {

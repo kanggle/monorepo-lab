@@ -160,6 +160,64 @@ describe('DemoBackendNoticeClient — 방문 시점 판정', () => {
     expect(notice).toHaveTextContent('로그인 후 기능');
   });
 
+  // ===========================================================================
+  // 🔴🔴 TASK-MONO-668 — 「켜지는 중」은 「켜졌다」와 **다른 화면**이다 (AC-3 실행 비교)
+  // ===========================================================================
+  // 🔴 선언 grep 이 아니라 **렌더된 DOM 두 개를 비교한다.** 같은 하네스에 running 과
+  //    starting 을 주고 출력이 다른지를 본다 — 「starting 분기가 코드에 있다」는 이것을 못 잰다.
+  async function renderedFor(state: string): Promise<string> {
+    stubProbe({ state });
+    const { unmount, container } = await (async () => {
+      vi.doUnmock('../DemoBackendNoticeClient');
+      vi.resetModules();
+      const { DemoBackendNoticeClient } = await import('../DemoBackendNoticeClient');
+      return render(
+        <div data-testid="host">
+          <DemoBackendNoticeClient />
+        </div>,
+      );
+    })();
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+    // 탐침 결과가 반영될 때까지 한 틱 기다린다 — starting 이면 배너가, running 이면 무(無)가 선다.
+    await new Promise((r) => setTimeout(r, 0));
+    const html = container.innerHTML;
+    unmount();
+    return html;
+  }
+
+  it('🔴🔴 실행 비교 — 탐침이 «켜지는 중» 을 주면 «켜짐» 과 **다른** 화면이 나온다', async () => {
+    const running = await renderedFor('running');
+    const starting = await renderedFor('starting');
+
+    expect(starting).not.toBe(running);
+    // 🔵 «다르다» 가 «엉뚱한 배너» 로 성립하면 안 된다 — 무엇이 달라졌는지 단언한다.
+    expect(starting).toContain('데모 서버가 켜지는 중입니다');
+    expect(running).not.toContain('켜지는 중');
+  });
+
+  it('🔴 «켜지는 중» 배너는 «꺼져 있어» 배너가 **아니다** — 켜라고 말하지 않는다', async () => {
+    stubProbe({ state: 'starting' });
+    await renderClient();
+
+    const notice = await screen.findByTestId('demo-backend-starting');
+    expect(notice).toHaveTextContent('데모 서버가 켜지는 중입니다');
+    expect(notice.getAttribute('role')).toBe('status');
+    // 🔴 이미 켜졌다 — 「서버를 켠 뒤」는 방문자를 론처로 돌려보내 중복 기동을 누르게 한다.
+    expect(notice.textContent).not.toContain('꺼져 있어');
+    expect(notice.textContent).not.toContain('켠 뒤');
+    // 🔴 켜지는 중에 무엇이 그려지는지는 잰 적이 없다 — 「샘플」을 주장하지 않는다(642 규칙).
+    expect(notice.textContent).not.toContain('샘플');
+    expect(screen.queryByTestId('demo-backend-notice')).toBeNull();
+  });
+
+  it('🔵 대조군 — 탐침이 «꺼짐» 을 주면 «켜지는 중» 배너는 없다 (두 값을 한 화면으로 뭉치지 않는다)', async () => {
+    stubProbe({ state: 'unavailable' });
+    await renderClient();
+
+    await screen.findByTestId('demo-backend-notice');
+    expect(screen.queryByTestId('demo-backend-starting')).toBeNull();
+  });
+
   it('🔵 대조군 — 탐침이 «켜짐» 을 주면 배너가 없다', async () => {
     stubProbe({ state: 'running' });
     await renderClient();

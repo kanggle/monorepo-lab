@@ -50,6 +50,21 @@ describe('DemoBackendNotice', () => {
     expect(el.getAttribute('role')).toBe('status');
   });
 
+  // 🔴🔴 TASK-MONO-668 — 「켜지는 중」은 「켜졌다」와도 「꺼져 있어」와도 **다른 화면**이다.
+  it('🔴🔴 `starting` → «켜지는 중» 배너. `running` 과 다르고 `unavailable` 배너도 아니다', async () => {
+    state.value = 'starting';
+    const el = await renderNotice();
+    // 🔴 실행 비교 — `running` 은 null 을 돌려주는데 여기는 엘리먼트다.
+    expect(el).not.toBeNull();
+    const notice = screen.getByTestId('demo-backend-starting');
+    expect(notice).toHaveTextContent('데모 서버가 켜지는 중입니다');
+    expect(notice.getAttribute('role')).toBe('status');
+    expect(notice.textContent).not.toContain('꺼져 있어');
+    expect(screen.queryByTestId('demo-backend-notice')).toBeNull();
+    // 🔴 이 위젯의 규칙은 그대로 — 어느 도메인이 아직인지 모르므로 이름을 대지 않는다.
+    expect(notice.textContent ?? '').not.toMatch(/iam|wms|scm|finance|erp|ecommerce/i);
+  });
+
   it('🔴 문구가 «여섯 도메인» 을 주장하지 않는다 — 그 축은 이 위젯이 안 잰다', async () => {
     state.value = 'unavailable';
     await renderNotice();
