@@ -8,7 +8,7 @@ TASK-MONO-680
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -127,3 +127,30 @@ monorepo
 - ⚪ **로컬 미측정 → CI**: 세 프런트 앱 vitest(새 worktree 에 `node_modules` 없음) · `verify-demo-wrapper.sh --live`(z35·z39 포함).
 
 분석=Opus 5 / 구현=Opus 5.
+
+## CORRECTION — close chore (2026-09-15 UTC): AC-6 는 머지 뒤 실측으로 닫혔다
+
+위 `- [ ] AC-6` 은 frozen 파일이라 켤 수 없어 미체크로 남는다. 이 절이 그 칸의 판정이다.
+
+**4차원 검증**
+
+- (a) PR [#3812](https://github.com/kanggle/monorepo-lab/pull/3812) `state=MERGED` 2026-09-15T07:46:10Z · merge commit `05360d8c5`
+- (b) `origin/main` tip = `05360d8c5`
+- (c) 머지 헤드(`dd19141bc`) 롤업 SUCCESS 23 · SKIPPED 40 · FAILURE 0 · 필수 4개 전부 SUCCESS
+- (d) AC-1~5 = impl PR 에서 닫힘(위 본문) · AC-6 = 아래
+
+**AC-6 — `hubwang.com` 이 새 바이트를 서빙한다: PASS**
+
+| 무엇 | 값 |
+|---|---|
+| 서빙된 `https://hubwang.com/` md5 | `5009902f72ca2f655e165084935fc097` |
+| `git show origin/main:infra/demo/aws/site/index.html` md5 | `5009902f72ca2f655e165084935fc097` (일치) |
+| `build-info.json` (캐시버스트) | `commit=05360d8c5…` · `index_md5=5009902f…` |
+| 서빙 HTML 의 「데모 서버 켜기」 / 「실시간 기능」 / `rel="icon"` | 8 / 0 / 1 |
+| `vercel-deploy.yml` 런 | `05360d8c5` success (07:46:13Z) |
+
+- 🔴 **첫 조회의 `build-info.json` 은 옛 커밋 `025a4ff29`(#3783)을 줬다.** 그 순간 서빙 HTML md5 는 이미 새 값이었다 — 배포가 막 끝나던 창의 캐시였고, 캐시버스트 재조회에서 두 값이 일치했다. ⇒ 한 값만 봤다면 「미배포」로 오판했을 것이다. 판정은 **두 계기의 일치**다.
+- 🔵 곁측정: `fan.hubwang.com/build-info.json` commit = `05360d8c5`, SSR HTML 에 「로그인 후 기능」 2 · 「실시간 기능」 0.
+- ⚪ store 배너: 방문 시점 클라이언트 렌더라 SSR HTML 에 배너가 없다(0) — HTML 로는 판정 불가, **미측정**. AC-6 의 대상(hubwang.com)이 아니라 닫는 것을 막지 않는다.
+
+**CI 1회차 빨강 (기록)**: web-store `DemoBackendNotice.test.tsx` 의 껍데기 bite 테스트 — 첫 호출에서 `vi.doMock` 이 적용되지 않은 모양(`up` 빈 host). 이 PR 이 목으로 대체되는 컴포넌트만 바꿨고 직전 7회 success, 재실행 success. 🔴 rerun-초록은 원인 판정이 아니다 — 가설=모듈 목 순서 경합. **착수 신호: 같은 테스트가 무관한 diff 에서 재발하면 결함 티켓.**
