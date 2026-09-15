@@ -86,6 +86,12 @@ export const PurchaseOrderSchema = z
     tenantId: z.string().optional(),
     poNumber: z.string().optional(),
     supplierId: z.string().optional(),
+    // TASK-MONO-677 — the supplier master row `supplierId` resolves to on the
+    // producer (same tenant, id first then code). `null` = unresolved; absent =
+    // an older producer that predates the fields. Both render as
+    // `이름 확인 불가`, never as the raw `supplierId` (master-ref-label.ts).
+    supplierCode: z.string().nullable().optional(),
+    supplierName: z.string().nullable().optional(),
     buyerAccountId: z.string().nullable().optional(),
     // PoStatus is a producer enum — tolerated as a free string so an
     // unknown/future status renders a generic label, never a parser throw.

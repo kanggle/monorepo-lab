@@ -297,7 +297,7 @@ class ActorContextAuthPathSliceTest {
     private static PurchaseOrderView view() {
         Instant now = Instant.now();
         return new PurchaseOrderView(
-                "po-1", "scm", "PO-0001", "sup-001", "buyer-001",
+                "po-1", "scm", "PO-0001", "sup-001", null, null, "buyer-001",
                 PoStatus.DRAFT, PoOrigin.OPERATOR, null, BigDecimal.TEN, "USD",
                 null, null, null, null, now, now, List.of());
     }

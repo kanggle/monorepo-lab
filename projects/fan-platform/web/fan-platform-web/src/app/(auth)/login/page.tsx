@@ -43,6 +43,19 @@ const DEMO_OFF_MESSAGE =
   '데모 서버가 꺼져 있어 로그인할 수 없습니다. 데모 시작 페이지에서 서버를 켠 뒤(약 10분) 다시 열어주세요. 서버가 꺼진 동안에는 다시 시도해도 같은 결과입니다.';
 
 /**
+ * 데모 서버가 **켜지는 중**일 때의 로그인 문구 (`TASK-MONO-668`).
+ *
+ * 🔴 `DEMO_OFF_MESSAGE` 와 뜻이 **반대인 곳이 있다** — 꺼진 동안의 재시도는 같은 결과지만,
+ *    켜지는 중의 재시도는 **준비가 끝나면 성공한다.** 그래서 한 문구로 합치지 않는다.
+ * 🔴 로그인 폼은 **막지 않는다** — 판정이 «선택된 묶음 전부» 라서 IdP·팬 묶음은 이미 준비됐을
+ *    수 있다(보수 쪽 오차). 막으면 될 로그인을 끊는다.
+ * 🔴 코드별 문구보다 **먼저** 온다 — 켜지는 중에 난 `Configuration` 은 설정 결함이 아니라
+ *    discovery 가 아직 안 뜬 것일 가능성이 높고, *"관리자에게 문의"* 는 그때 거짓이다.
+ */
+const DEMO_STARTING_MESSAGE =
+  '데모 서버가 켜지는 중입니다. 준비가 끝나기 전에는 로그인이 실패할 수 있습니다. 몇 분 뒤 다시 시도해주세요.';
+
+/**
  * Public login page. Triggers `signIn('iam', ...)` which redirects to GAP's
  * `/oauth2/authorize` endpoint with PKCE + state. After GAP roundtrip the
  * `[...nextauth]` callback completes the code-exchange and sets the session
@@ -76,7 +89,10 @@ export default async function LoginPage({
 
   // 🔵 서버 컴포넌트에서만 판정한다 — `DEMO_API_BASE` 는 비공개 env 이고 그 이름이
   //    클라이언트 번들에 들어가면 안 된다. `/login` 은 이미 서버 컴포넌트라 경계 이동 없음.
-  const demoOff = (await resolveDemoBackendState()) === 'unavailable';
+  const demoState = await resolveDemoBackendState();
+  const demoOff = demoState === 'unavailable';
+  // 🔴 TASK-MONO-668 — 켜지는 중은 꺼짐과 **다른 문구**이고, 코드별 문구보다 먼저 온다.
+  const demoStarting = demoState === 'starting';
 
   const codeMessage = params.error
     ? (ERROR_MESSAGES[params.error] ?? GENERIC_ERROR)
@@ -109,6 +125,14 @@ export default async function LoginPage({
             className="mt-4 rounded-md border border-[#fcd34d] bg-[#fef3c7] p-3 text-sm text-[#92400e]"
           >
             {DEMO_OFF_MESSAGE}
+          </p>
+        ) : demoStarting ? (
+          <p
+            role="status"
+            data-testid="login-demo-starting"
+            className="mt-4 rounded-md border border-[#7dd3fc] bg-[#e0f2fe] p-3 text-sm text-[#075985]"
+          >
+            {DEMO_STARTING_MESSAGE}
           </p>
         ) : codeMessage ? (
           <p

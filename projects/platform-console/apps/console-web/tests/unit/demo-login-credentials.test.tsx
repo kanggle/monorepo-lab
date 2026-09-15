@@ -64,6 +64,12 @@ describe('DemoLoginCredentials', () => {
     expect(screen.getByTestId('demo-login-credentials')).toBeTruthy();
   });
 
+  it('🔴 TASK-MONO-668 — `starting` 도 렌더한다 (켜지기를 기다리는 방문자가 가장 필요로 한다)', async () => {
+    state.value = 'starting';
+    await renderBlock();
+    expect(screen.getByTestId('demo-login-credentials')).toBeTruthy();
+  });
+
   it('🔴 다음 한 걸음(`demo-corp` 테넌트 선택)을 함께 말한다', async () => {
     state.value = 'running';
     await renderBlock();

@@ -153,6 +153,29 @@ describe('resolveDemoBackend', () => {
   });
 });
 
+// 🔴 TASK-MONO-668 — 같은 구현을 **이 앱의 설정으로** 통과시킨다(README § 자기 테스트가 없는 이유).
+describe('resolveDemoBackendState — starting (TASK-MONO-668)', () => {
+  it('🔴🔴 running + selection_ready=false → starting, 그래도 주소는 준다', async () => {
+    process.env.DEMO_API_BASE = CONTROL;
+    stubStatus({ state: 'running', ip: '13.125.1.2', selection_ready: false });
+
+    const { resolveDemoBackendState, resolveDemoBackend } = await load();
+    expect(await resolveDemoBackendState()).toBe('starting');
+    expect(await resolveDemoBackend()).toEqual({
+      baseUrl: 'http://fan-platform.13-125-1-2.sslip.io',
+      demoDomain: '13-125-1-2.sslip.io',
+    });
+  });
+
+  it('🔴 필드 없음(옛 람다) → running', async () => {
+    process.env.DEMO_API_BASE = CONTROL;
+    stubStatus({ state: 'running', ip: '13.125.1.2' });
+
+    const { resolveDemoBackendState } = await load();
+    expect(await resolveDemoBackendState()).toBe('running');
+  });
+});
+
 describe('resolveUpstreamBaseUrl — 폴백 사슬', () => {
   it('해석되면 그 주소', async () => {
     process.env.DEMO_API_BASE = CONTROL;

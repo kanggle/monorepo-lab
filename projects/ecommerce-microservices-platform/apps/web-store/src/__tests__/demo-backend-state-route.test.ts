@@ -53,6 +53,14 @@ describe('GET /api/demo/backend-state', () => {
     await expect(res.json()).resolves.toEqual({ state: 'running' });
   });
 
+  it('🔴 TASK-MONO-668 — 백엔드 켜짐 + 선택 묶음 준비 전 → starting (running 으로 뭉치지 않는다)', async () => {
+    process.env.DEMO_API_BASE = 'https://control.example';
+    stubControlPlane({ state: 'running', ip: '13.125.1.2', selection_ready: false });
+
+    const res = await get();
+    await expect(res.json()).resolves.toEqual({ state: 'starting' });
+  });
+
   it('🔴 로컬·CI(DEMO_API_BASE 없음) → not-demo, 그리고 컨트롤 플레인을 **안 부른다**', async () => {
     stubControlPlane({ state: 'stopped' });
 
