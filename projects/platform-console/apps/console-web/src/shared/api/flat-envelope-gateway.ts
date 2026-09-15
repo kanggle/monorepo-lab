@@ -3,6 +3,8 @@ import { resolveBackendUrl } from '@/shared/config/demo-backend';
 import { getDomainFacingToken } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
 import { ApiError } from '@/shared/api/errors';
+import { sampleGate } from '@/shared/api/sample-gate';
+import { samplePath } from '@/shared/sample/router';
 
 /**
  * Shared server-side **FLAT-envelope gateway HTTP core** (TASK-PC-FE-243 —
@@ -219,41 +221,24 @@ export async function callFlatEnvelopeGateway<T>(
   const logPath = req.logPath ?? req.path;
   const method = req.method ?? 'GET';
 
-  const token = await getDomainFacingToken();
-  if (!token) {
-    logger.warn(`${logPrefix}_no_gap_session`, { requestId, path: logPath });
-    // No IAM OIDC session ⇒ whole-session re-login (not a per-section degrade).
-    throw new ApiError(401, 'UNAUTHORIZED', 'No IAM session');
-  }
-
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    Authorization: `Bearer ${token}`,
-    'X-Request-Id': requestId,
-    // Deliberately NO `X-Tenant-Id` — the domain resolves the tenant from the
-    // JWT claim. `Content-Type` / mutation headers are added below only when a
-    // body / key / reason is present (read-only callers stay header-free).
-  };
-
-  if (profile.requireIdempotencyKeyOnMutation && method !== 'GET') {
-    if (!req.idempotencyKey) {
-      throw new ApiError(
-        400,
-        'VALIDATION_ERROR',
-        'An idempotency key is required for this action',
-      );
-    }
-  }
-  if (req.idempotencyKey !== undefined) {
-    headers['Idempotency-Key'] = req.idempotencyKey;
-  }
-  if (req.operatorReason !== undefined) {
-    headers['X-Operator-Reason'] = req.operatorReason;
-  }
-  if (req.body !== undefined) headers['Content-Type'] = 'application/json';
-
+  // `resolveDefaults` is a pure read of `env` — computed first so the sample
+  // branch can name the path the core would have called.
   const defaults = profile.resolveDefaults(env);
   const timeoutMs = defaults.timeoutMs;
+
+  // ADR-MONO-074 A2 — asked BEFORE any token is read. A sample visitor gets the
+  // sample router's (FLAT-envelope) Response fed into the mapping below; the
+  // token, the idempotency guard and the network are never reached.
+  const sample = await sampleGate({
+    core: 'flat',
+    surface: logPrefix,
+    method,
+    path: samplePath(defaults.baseUrl, req.path),
+  });
+
+  const headers = sample
+    ? {}
+    : await prepareFlatHeaders(req, profile, method, requestId, logPath);
 
   async function doFetch(): Promise<Response> {
     const controller = new AbortController();
@@ -275,7 +260,7 @@ export async function callFlatEnvelopeGateway<T>(
   }
 
   try {
-    let res = await doFetch();
+    let res = sample ?? (await doFetch());
 
     // Optional 429 → ONE bounded backoff honouring Retry-After, then surface.
     const rl = profile.rateLimit;
@@ -396,4 +381,54 @@ export async function callFlatEnvelopeGateway<T>(
       profile.messages.network,
     );
   }
+}
+
+/**
+ * The pre-network half of {@link callFlatEnvelopeGateway} — domain-facing
+ * token, optional idempotency fail-fast guard and mutation headers, moved here
+ * VERBATIM so the sample branch (ADR-MONO-074 A2) can skip it as a whole.
+ * Throws exactly as before.
+ */
+async function prepareFlatHeaders(
+  req: FlatEnvelopeGatewayRequest,
+  profile: FlatEnvelopeGatewayProfile,
+  method: string,
+  requestId: string,
+  logPath: string,
+): Promise<Record<string, string>> {
+  const { logPrefix } = profile;
+
+  const token = await getDomainFacingToken();
+  if (!token) {
+    logger.warn(`${logPrefix}_no_gap_session`, { requestId, path: logPath });
+    // No IAM OIDC session ⇒ whole-session re-login (not a per-section degrade).
+    throw new ApiError(401, 'UNAUTHORIZED', 'No IAM session');
+  }
+
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    Authorization: `Bearer ${token}`,
+    'X-Request-Id': requestId,
+    // Deliberately NO `X-Tenant-Id` — the domain resolves the tenant from the
+    // JWT claim. `Content-Type` / mutation headers are added below only when a
+    // body / key / reason is present (read-only callers stay header-free).
+  };
+
+  if (profile.requireIdempotencyKeyOnMutation && method !== 'GET') {
+    if (!req.idempotencyKey) {
+      throw new ApiError(
+        400,
+        'VALIDATION_ERROR',
+        'An idempotency key is required for this action',
+      );
+    }
+  }
+  if (req.idempotencyKey !== undefined) {
+    headers['Idempotency-Key'] = req.idempotencyKey;
+  }
+  if (req.operatorReason !== undefined) {
+    headers['X-Operator-Reason'] = req.operatorReason;
+  }
+  if (req.body !== undefined) headers['Content-Type'] = 'application/json';
+  return headers;
 }

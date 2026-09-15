@@ -7,6 +7,7 @@ import {
 } from '@/shared/lib/session';
 import { getFinanceDefaultAccountId } from '@/shared/lib/finance-default-account-id';
 import { logger, newRequestId } from '@/shared/lib/logger';
+import { sampleGate } from '@/shared/api/sample-gate';
 
 export const runtime = 'nodejs';
 
@@ -75,76 +76,90 @@ function bffUrl(): string {
 export async function GET() {
   const requestId = newRequestId();
 
-  const tenant = await getActiveTenant();
-  if (!tenant) {
-    return NextResponse.json(
-      { code: 'NO_ACTIVE_TENANT', message: 'no active tenant selected' },
-      { status: 400 },
-    );
-  }
-
-  const accessToken = await getAccessToken();
-  const operatorToken = await getOperatorToken();
-  if (!accessToken || !operatorToken) {
-    // No partial authed state — both tokens required (mirrors
-    // `isAuthenticated()` in shared/lib/session.ts).
-    return NextResponse.json(
-      { code: 'TOKEN_INVALID', message: 'session not authenticated' },
-      { status: 401 },
-    );
-  }
-
-  // ── Domain-facing inbound principal (ADR-MONO-020 D4 / § 2.7) ────────────
-  // The BFF forwards `Authorization: Bearer <token>` verbatim to the non-GAP
-  // legs (ADR-017 D6 pass-through, 0-byte). We put the **domain-facing** token
-  // here: the ASSUMED (tenant-scoped) token when the operator has switched to
-  // a customer (so the non-IAM domain entitlement gates follow the selection),
-  // else the base token (net-zero). The IAM leg keeps using `X-Operator-Token`
-  // (§ 2.6 operator-token boundary — unchanged).
-  const domainFacingToken = await getDomainFacingToken();
-  if (!domainFacingToken) {
-    return NextResponse.json(
-      { code: 'TOKEN_INVALID', message: 'session not authenticated' },
-      { status: 401 },
-    );
-  }
-
-  // Option (a) activation (TASK-PC-FE-014): forward the optional
-  // operator finance default account id when present. The helper itself
-  // returns null on absent / whitespace / registry-degraded — we set the
-  // header ONLY when truthy. Never `headers.set('X-Finance-Default-Account-Id', '')`
-  // (the BFF's `hasText` gate treats blank as absent, but transmitting a
-  // blank header would obscure the intent at the wire).
-  const financeDefaultAccountId = await getFinanceDefaultAccountId();
-  const outboundHeaders: Record<string, string> = {
-    Accept: 'application/json',
-    Authorization: `Bearer ${domainFacingToken}`,
-    'X-Operator-Token': operatorToken,
-    'X-Tenant-Id': tenant,
-    'X-Request-Id': requestId,
-  };
-  if (financeDefaultAccountId) {
-    outboundHeaders['X-Finance-Default-Account-Id'] = financeDefaultAccountId;
-  }
+  // ADR-MONO-074 A2 — asked BEFORE the tenant and token reads. A sample visitor
+  // gets the sample overview fed into the passthrough mapping below; console-bff
+  // is never called. Everyone else takes the unchanged path in the `else`.
+  const sample = await sampleGate({
+    core: 'console-bff',
+    surface: 'operator-overview',
+    method: 'GET',
+    path: '/api/console/dashboards/operator-overview',
+  });
 
   let res: Response;
-  try {
-    // DEMO-URL-EXEMPT: console-bff-internal — console-bff 는 **공개 호스트명이 없다**
-    //   (`TASK-MONO-362` 가 그 Traefik 라우터를 일부러 없앴다: 백엔드 서비스는 엣지에
-    //   노출되지 않는다 — `api-gateway-policy.md` L14). 주소는 도커 네트워크 DNS
-    //   (`http://console-bff:8080`)이고 데모 도메인으로 파생될 수 있는 값이 아니다.
-    //   🔴 그래서 **Vercel 에서는 이 레그가 닿지 않는다** — TASK-MONO-585 § 알려진 한계.
-    res = await fetch(bffUrl(), {
-      method: 'GET',
-      headers: outboundHeaders,
-      cache: 'no-store',
-    });
-  } catch {
-    logger.warn('operator_overview_proxy_network_error', { requestId });
-    return NextResponse.json(
-      { code: 'BAD_GATEWAY', message: 'console-bff unreachable' },
-      { status: 502 },
-    );
+  if (sample) {
+    res = sample;
+  } else {
+    const tenant = await getActiveTenant();
+    if (!tenant) {
+      return NextResponse.json(
+        { code: 'NO_ACTIVE_TENANT', message: 'no active tenant selected' },
+        { status: 400 },
+      );
+    }
+
+    const accessToken = await getAccessToken();
+    const operatorToken = await getOperatorToken();
+    if (!accessToken || !operatorToken) {
+      // No partial authed state — both tokens required (mirrors
+      // `isAuthenticated()` in shared/lib/session.ts).
+      return NextResponse.json(
+        { code: 'TOKEN_INVALID', message: 'session not authenticated' },
+        { status: 401 },
+      );
+    }
+
+    // ── Domain-facing inbound principal (ADR-MONO-020 D4 / § 2.7) ──────────
+    // The BFF forwards `Authorization: Bearer <token>` verbatim to the non-GAP
+    // legs (ADR-017 D6 pass-through, 0-byte). We put the **domain-facing** token
+    // here: the ASSUMED (tenant-scoped) token when the operator has switched to
+    // a customer (so the non-IAM domain entitlement gates follow the selection),
+    // else the base token (net-zero). The IAM leg keeps using `X-Operator-Token`
+    // (§ 2.6 operator-token boundary — unchanged).
+    const domainFacingToken = await getDomainFacingToken();
+    if (!domainFacingToken) {
+      return NextResponse.json(
+        { code: 'TOKEN_INVALID', message: 'session not authenticated' },
+        { status: 401 },
+      );
+    }
+
+    // Option (a) activation (TASK-PC-FE-014): forward the optional
+    // operator finance default account id when present. The helper itself
+    // returns null on absent / whitespace / registry-degraded — we set the
+    // header ONLY when truthy. Never `headers.set('X-Finance-Default-Account-Id', '')`
+    // (the BFF's `hasText` gate treats blank as absent, but transmitting a
+    // blank header would obscure the intent at the wire).
+    const financeDefaultAccountId = await getFinanceDefaultAccountId();
+    const outboundHeaders: Record<string, string> = {
+      Accept: 'application/json',
+      Authorization: `Bearer ${domainFacingToken}`,
+      'X-Operator-Token': operatorToken,
+      'X-Tenant-Id': tenant,
+      'X-Request-Id': requestId,
+    };
+    if (financeDefaultAccountId) {
+      outboundHeaders['X-Finance-Default-Account-Id'] = financeDefaultAccountId;
+    }
+
+    try {
+      // DEMO-URL-EXEMPT: console-bff-internal — console-bff 는 **공개 호스트명이 없다**
+      //   (`TASK-MONO-362` 가 그 Traefik 라우터를 일부러 없앴다: 백엔드 서비스는 엣지에
+      //   노출되지 않는다 — `api-gateway-policy.md` L14). 주소는 도커 네트워크 DNS
+      //   (`http://console-bff:8080`)이고 데모 도메인으로 파생될 수 있는 값이 아니다.
+      //   🔴 그래서 **Vercel 에서는 이 레그가 닿지 않는다** — TASK-MONO-585 § 알려진 한계.
+      res = await fetch(bffUrl(), {
+        method: 'GET',
+        headers: outboundHeaders,
+        cache: 'no-store',
+      });
+    } catch {
+      logger.warn('operator_overview_proxy_network_error', { requestId });
+      return NextResponse.json(
+        { code: 'BAD_GATEWAY', message: 'console-bff unreachable' },
+        { status: 502 },
+      );
+    }
   }
 
   // Passthrough for the two contractually defined surfaces.

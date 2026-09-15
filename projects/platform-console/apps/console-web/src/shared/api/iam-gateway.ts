@@ -3,6 +3,7 @@ import { resolveBackendUrl } from '@/shared/config/demo-backend';
 import { getOperatorToken, getActiveTenant } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
 import { ApiError } from '@/shared/api/errors';
+import { sampleGate } from '@/shared/api/sample-gate';
 
 /**
  * Shared server-side **IAM `/api/admin/**` gateway HTTP core** (TASK-PC-FE-208 —
@@ -131,97 +132,41 @@ export async function callAdminGateway<T>(
   const requestId = newRequestId();
   const { logPrefix } = profile;
 
-  // Trust boundary: the /api/admin/** credential is the EXCHANGED operator
-  // token — never the IAM OIDC access token. Absent ⇒ 401, no fetch.
-  const token = await getOperatorToken();
-  if (!token) {
-    logger.warn(`${logPrefix}_no_operator_session`, { requestId, path: req.path });
-    throw new ApiError(401, 'TOKEN_INVALID', 'No operator session');
-  }
+  // ADR-MONO-074 A2 — the sample branch is asked BEFORE any token is read. A
+  // sample visitor's call never reaches the header matrix or the network: the
+  // sample router's Response is fed into the response handling below,
+  // unchanged. Everyone else gets `null` here and the path below is as before.
+  const sample = await sampleGate({
+    core: 'iam',
+    surface: logPrefix,
+    method: req.method,
+    path: req.path,
+  });
 
-  // Multi-tenant: always send the selected tenant; block (no empty header)
-  // when none is selected — never a cross-tenant / unscoped call.
-  const tenant = await getActiveTenant();
-  if (!tenant) {
-    logger.warn(`${logPrefix}_no_active_tenant`, { requestId, path: req.path });
-    throw new ApiError(400, 'NO_ACTIVE_TENANT', 'No active tenant selected');
-  }
-
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    Authorization: `Bearer ${token}`,
-    'X-Tenant-Id': tenant,
-    'X-Request-Id': requestId,
-  };
-
-  // Per-endpoint header matrix. `forceMutationHeaders` (accounts) makes a
-  // non-GET REQUIRE reason + key; otherwise reason/key are validated only when
-  // the caller supplies them (TASK-MONO-176: percent-encode the reason so a
-  // non-Latin-1 value does not make `fetch()` throw on the ByteString header).
-  if (profile.forceMutationHeaders && req.method !== 'GET') {
-    const reason = req.reason?.trim() ?? '';
-    if (reason === '') {
-      logger.warn(`${logPrefix}_mutation_no_reason`, { requestId, path: req.path });
-      throw new ApiError(
-        400,
-        'REASON_REQUIRED',
-        'An operator reason is required for this action',
-      );
-    }
-    if (!req.idempotencyKey) {
-      throw new ApiError(
-        400,
-        'VALIDATION_ERROR',
-        'An idempotency key is required for this action',
-      );
-    }
-    headers['X-Operator-Reason'] = encodeURIComponent(reason);
-    headers['Idempotency-Key'] = req.idempotencyKey;
-  } else {
-    if (req.reason !== undefined) {
-      const reason = req.reason.trim();
-      if (reason === '') {
-        logger.warn(`${logPrefix}_mutation_no_reason`, { requestId, path: req.path });
-        throw new ApiError(
-          400,
-          'REASON_REQUIRED',
-          'An operator reason is required for this action',
-        );
-      }
-      headers['X-Operator-Reason'] = encodeURIComponent(reason);
-    }
-    if (req.idempotencyKey !== undefined) {
-      if (req.idempotencyKey.trim() === '') {
-        throw new ApiError(
-          400,
-          'VALIDATION_ERROR',
-          'An idempotency key is required for this action',
-        );
-      }
-      headers['Idempotency-Key'] = req.idempotencyKey;
-    }
-  }
-
-  if (req.body !== undefined) headers['Content-Type'] = 'application/json';
+  const headers = sample
+    ? {}
+    : await prepareAdminHeaders(req, profile, requestId);
 
   // TASK-MONO-585 — the configured address is what the deployment was given;
   // this is the address to actually call. Off-demo it is byte-identical.
-  const resolvedAdminUrl = await resolveBackendUrl(
-    `${env.IAM_ADMIN_API_BASE}${req.path}`,
-  );
+  const resolvedAdminUrl = sample
+    ? ''
+    : await resolveBackendUrl(`${env.IAM_ADMIN_API_BASE}${req.path}`);
 
   const timeoutMs = profile.resolveTimeoutMs(env);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const res = await fetch(resolvedAdminUrl, {
-      method: req.method,
-      headers,
-      body: req.body === undefined ? undefined : JSON.stringify(req.body),
-      cache: 'no-store',
-      signal: controller.signal,
-    });
+    const res =
+      sample ??
+      (await fetch(resolvedAdminUrl, {
+        method: req.method,
+        headers,
+        body: req.body === undefined ? undefined : JSON.stringify(req.body),
+        cache: 'no-store',
+        signal: controller.signal,
+      }));
 
     if (res.status === 401) {
       const errBody = (await res.json().catch(() => ({}))) as { code?: string };
@@ -329,4 +274,92 @@ export async function callAdminGateway<T>(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * The pre-network half of {@link callAdminGateway} — trust boundary, active
+ * tenant and the per-endpoint header matrix, moved here VERBATIM so the sample
+ * branch (ADR-MONO-074 A2) can skip it as a whole. Throws exactly as before,
+ * in the same order.
+ */
+async function prepareAdminHeaders(
+  req: AdminGatewayRequest,
+  profile: AdminGatewayProfile,
+  requestId: string,
+): Promise<Record<string, string>> {
+  const { logPrefix } = profile;
+
+  // Trust boundary: the /api/admin/** credential is the EXCHANGED operator
+  // token — never the IAM OIDC access token. Absent ⇒ 401, no fetch.
+  const token = await getOperatorToken();
+  if (!token) {
+    logger.warn(`${logPrefix}_no_operator_session`, { requestId, path: req.path });
+    throw new ApiError(401, 'TOKEN_INVALID', 'No operator session');
+  }
+
+  // Multi-tenant: always send the selected tenant; block (no empty header)
+  // when none is selected — never a cross-tenant / unscoped call.
+  const tenant = await getActiveTenant();
+  if (!tenant) {
+    logger.warn(`${logPrefix}_no_active_tenant`, { requestId, path: req.path });
+    throw new ApiError(400, 'NO_ACTIVE_TENANT', 'No active tenant selected');
+  }
+
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    Authorization: `Bearer ${token}`,
+    'X-Tenant-Id': tenant,
+    'X-Request-Id': requestId,
+  };
+
+  // Per-endpoint header matrix. `forceMutationHeaders` (accounts) makes a
+  // non-GET REQUIRE reason + key; otherwise reason/key are validated only when
+  // the caller supplies them (TASK-MONO-176: percent-encode the reason so a
+  // non-Latin-1 value does not make `fetch()` throw on the ByteString header).
+  if (profile.forceMutationHeaders && req.method !== 'GET') {
+    const reason = req.reason?.trim() ?? '';
+    if (reason === '') {
+      logger.warn(`${logPrefix}_mutation_no_reason`, { requestId, path: req.path });
+      throw new ApiError(
+        400,
+        'REASON_REQUIRED',
+        'An operator reason is required for this action',
+      );
+    }
+    if (!req.idempotencyKey) {
+      throw new ApiError(
+        400,
+        'VALIDATION_ERROR',
+        'An idempotency key is required for this action',
+      );
+    }
+    headers['X-Operator-Reason'] = encodeURIComponent(reason);
+    headers['Idempotency-Key'] = req.idempotencyKey;
+  } else {
+    if (req.reason !== undefined) {
+      const reason = req.reason.trim();
+      if (reason === '') {
+        logger.warn(`${logPrefix}_mutation_no_reason`, { requestId, path: req.path });
+        throw new ApiError(
+          400,
+          'REASON_REQUIRED',
+          'An operator reason is required for this action',
+        );
+      }
+      headers['X-Operator-Reason'] = encodeURIComponent(reason);
+    }
+    if (req.idempotencyKey !== undefined) {
+      if (req.idempotencyKey.trim() === '') {
+        throw new ApiError(
+          400,
+          'VALIDATION_ERROR',
+          'An idempotency key is required for this action',
+        );
+      }
+      headers['Idempotency-Key'] = req.idempotencyKey;
+    }
+  }
+
+  if (req.body !== undefined) headers['Content-Type'] = 'application/json';
+  return headers;
 }

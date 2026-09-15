@@ -5,6 +5,7 @@ import {
   getActiveTenant,
 } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
+import { sampleGate } from '@/shared/api/sample-gate';
 
 export const runtime = 'nodejs';
 
@@ -41,42 +42,59 @@ export async function POST(
   const requestId = newRequestId();
   const { sourceDomain, id } = await params;
 
-  const domainFacingToken = await getDomainFacingToken();
-  if (!domainFacingToken) {
-    return NextResponse.json(
-      { code: 'TOKEN_INVALID', message: 'session not authenticated' },
-      { status: 401 },
-    );
-  }
-
-  const outboundHeaders: Record<string, string> = {
-    Accept: 'application/json',
-    Authorization: `Bearer ${domainFacingToken}`,
-    'X-Request-Id': requestId,
-  };
-  const operatorToken = await getOperatorToken();
-  if (operatorToken) outboundHeaders['X-Operator-Token'] = operatorToken;
-  const tenant = await getActiveTenant();
-  if (tenant) outboundHeaders['X-Tenant-Id'] = tenant;
+  // ADR-MONO-074 A2 / R1ⓐ — asked BEFORE any token read. A sample visitor's
+  // mark-read is refused by the sample router (`403 SAMPLE_READ_ONLY`), and that
+  // Response is fed into the mapping below UNCHANGED — which maps a non-200/401/
+  // 404 to `502 BAD_GATEWAY`, as it always has. 🔵 The bell ignores mark-read
+  // failures by design (navigation must not block), so no refusal copy is
+  // rendered for this write; nothing claims it succeeded either.
+  const sample = await sampleGate({
+    core: 'console-bff',
+    surface: 'notifications-read',
+    method: 'POST',
+    path: `/api/console/notifications/${encodeURIComponent(sourceDomain)}/${encodeURIComponent(id)}/read`,
+  });
 
   let res: Response;
-  try {
-    // DEMO-URL-EXEMPT: console-bff-internal — console-bff 는 **공개 호스트명이 없다**
-    //   (`TASK-MONO-362` 가 그 Traefik 라우터를 일부러 없앴다: 백엔드 서비스는 엣지에
-    //   노출되지 않는다 — `api-gateway-policy.md` L14). 주소는 도커 네트워크 DNS
-    //   (`http://console-bff:8080`)이고 데모 도메인으로 파생될 수 있는 값이 아니다.
-    //   🔴 그래서 **Vercel 에서는 이 레그가 닿지 않는다** — TASK-MONO-585 § 알려진 한계.
-    res = await fetch(bffUrl(sourceDomain, id), {
-      method: 'POST',
-      headers: outboundHeaders,
-      cache: 'no-store',
-    });
-  } catch {
-    logger.warn('notification_markread_proxy_network_error', { requestId });
-    return NextResponse.json(
-      { code: 'BAD_GATEWAY', message: 'console-bff unreachable' },
-      { status: 502 },
-    );
+  if (sample) {
+    res = sample;
+  } else {
+    const domainFacingToken = await getDomainFacingToken();
+    if (!domainFacingToken) {
+      return NextResponse.json(
+        { code: 'TOKEN_INVALID', message: 'session not authenticated' },
+        { status: 401 },
+      );
+    }
+
+    const outboundHeaders: Record<string, string> = {
+      Accept: 'application/json',
+      Authorization: `Bearer ${domainFacingToken}`,
+      'X-Request-Id': requestId,
+    };
+    const operatorToken = await getOperatorToken();
+    if (operatorToken) outboundHeaders['X-Operator-Token'] = operatorToken;
+    const tenant = await getActiveTenant();
+    if (tenant) outboundHeaders['X-Tenant-Id'] = tenant;
+
+    try {
+      // DEMO-URL-EXEMPT: console-bff-internal — console-bff 는 **공개 호스트명이 없다**
+      //   (`TASK-MONO-362` 가 그 Traefik 라우터를 일부러 없앴다: 백엔드 서비스는 엣지에
+      //   노출되지 않는다 — `api-gateway-policy.md` L14). 주소는 도커 네트워크 DNS
+      //   (`http://console-bff:8080`)이고 데모 도메인으로 파생될 수 있는 값이 아니다.
+      //   🔴 그래서 **Vercel 에서는 이 레그가 닿지 않는다** — TASK-MONO-585 § 알려진 한계.
+      res = await fetch(bffUrl(sourceDomain, id), {
+        method: 'POST',
+        headers: outboundHeaders,
+        cache: 'no-store',
+      });
+    } catch {
+      logger.warn('notification_markread_proxy_network_error', { requestId });
+      return NextResponse.json(
+        { code: 'BAD_GATEWAY', message: 'console-bff unreachable' },
+        { status: 502 },
+      );
+    }
   }
 
   if (res.status === 200) {

@@ -1,3 +1,8 @@
+// ADR-MONO-074 (TASK-PC-FE-282) changed an expectation in this file — the decision changed it,
+// it was not "red, so fixed". An anonymous browser (IAM access cookie AND operator cookie both
+// absent) is now a SAMPLE VISITOR, answered from the sample router (still no upstream fetch).
+// The «no IAM session → 401» cell(s) below therefore seed a HALF session (operator cookie only,
+// no IAM access cookie) — the state in which that 401 path still exists and is still measured.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
@@ -48,7 +53,7 @@ import { PUT as ratePUT } from '@/app/api/ecommerce/settlements/commission-rates
 import { POST as periodsPOST } from '@/app/api/ecommerce/settlements/periods/route';
 import { POST as closePOST } from '@/app/api/ecommerce/settlements/periods/[id]/close/route';
 import { POST as executePOST } from '@/app/api/ecommerce/settlements/periods/[id]/payouts/execute/route';
-import { ACCESS_COOKIE } from '@/shared/lib/session';
+import { ACCESS_COOKIE, OPERATOR_COOKIE } from '@/shared/lib/session';
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -133,6 +138,8 @@ describe('PUT /api/ecommerce/settlements/commission-rates/{id}', () => {
   });
 
   it('no IAM session → 401 (no upstream call)', async () => {
+    // ADR-MONO-074 A1 — an empty jar is a sample visitor now; the 401 path is the half session.
+    cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-ONLY-HALF-SESSION');
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const res = await ratePUT(putReq({ rateBps: 1500 }), {

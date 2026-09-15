@@ -3,6 +3,8 @@ import { resolveBackendUrl } from '@/shared/config/demo-backend';
 import { getDomainFacingToken } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
 import { ApiError } from '@/shared/api/errors';
+import { sampleGate } from '@/shared/api/sample-gate';
+import { samplePath } from '@/shared/sample/router';
 
 /**
  * Shared server-side **wms gateway HTTP core** (TASK-PC-FE-192 — dedup of the
@@ -143,49 +145,37 @@ export async function callWmsGateway<T>(
   const requestId = newRequestId();
   const { logPrefix } = profile;
 
-  const token = await getDomainFacingToken();
-  if (!token) {
-    logger.warn(`${logPrefix}_no_gap_session`, { requestId, path: req.path });
-    // No IAM OIDC session ⇒ whole-session re-login (not a per-section degrade).
-    throw new ApiError(401, 'UNAUTHORIZED', 'No IAM session');
-  }
-
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    Authorization: `Bearer ${token}`,
-    // wms gateway echoes/generates X-Request-Id; X-Actor-Id is set by the
-    // wms gateway from the JWT — the console does NOT forge it.
-    'X-Request-Id': requestId,
-    // Deliberately NO `X-Tenant-Id` — wms resolves tenant from the JWT claim.
-  };
-
-  if (req.method !== 'GET') {
-    if (!req.idempotencyKey) {
-      throw new ApiError(
-        400,
-        'VALIDATION_ERROR',
-        'An idempotency key is required for this action',
-      );
-    }
-    headers['Idempotency-Key'] = req.idempotencyKey;
-    // NO `X-Operator-Reason` — the wms surfaces do not define it.
-  }
-  if (req.body !== undefined) headers['Content-Type'] = 'application/json';
-
+  // `resolveDefaults` is a pure read of `env` — computed first so the sample
+  // branch can name the path the core would have called.
   const defaults = profile.resolveDefaults(env);
   const baseUrl = req.baseUrl ?? defaults.baseUrl;
   const timeoutMs = req.timeoutMs ?? defaults.timeoutMs;
+
+  // ADR-MONO-074 A2 — asked BEFORE any token is read. A sample visitor gets the
+  // sample router's (NESTED-envelope) Response fed into the mapping below; the
+  // token, the idempotency matrix and the network are never reached.
+  const sample = await sampleGate({
+    core: 'wms',
+    surface: logPrefix,
+    method: req.method,
+    path: samplePath(baseUrl, req.path),
+  });
+
+  const headers = sample ? {} : await prepareWmsHeaders(req, logPrefix, requestId);
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const res = await fetch(await resolveBackendUrl(`${baseUrl}${req.path}`), {
-      method: req.method,
-      headers,
-      body: req.body === undefined ? undefined : JSON.stringify(req.body),
-      cache: 'no-store',
-      signal: controller.signal,
-    });
+    const res =
+      sample ??
+      (await fetch(await resolveBackendUrl(`${baseUrl}${req.path}`), {
+        method: req.method,
+        headers,
+        body: req.body === undefined ? undefined : JSON.stringify(req.body),
+        cache: 'no-store',
+        signal: controller.signal,
+      }));
 
     if (res.status === 401) {
       const e = await parseWmsError(res, profile.requestFailedLabel);
@@ -271,4 +261,45 @@ export async function callWmsGateway<T>(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * The pre-network half of {@link callWmsGateway} — domain-facing token + the
+ * idempotency matrix, moved here VERBATIM so the sample branch
+ * (ADR-MONO-074 A2) can skip it as a whole. Throws exactly as before.
+ */
+async function prepareWmsHeaders(
+  req: WmsGatewayRequest,
+  logPrefix: string,
+  requestId: string,
+): Promise<Record<string, string>> {
+  const token = await getDomainFacingToken();
+  if (!token) {
+    logger.warn(`${logPrefix}_no_gap_session`, { requestId, path: req.path });
+    // No IAM OIDC session ⇒ whole-session re-login (not a per-section degrade).
+    throw new ApiError(401, 'UNAUTHORIZED', 'No IAM session');
+  }
+
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    Authorization: `Bearer ${token}`,
+    // wms gateway echoes/generates X-Request-Id; X-Actor-Id is set by the
+    // wms gateway from the JWT — the console does NOT forge it.
+    'X-Request-Id': requestId,
+    // Deliberately NO `X-Tenant-Id` — wms resolves tenant from the JWT claim.
+  };
+
+  if (req.method !== 'GET') {
+    if (!req.idempotencyKey) {
+      throw new ApiError(
+        400,
+        'VALIDATION_ERROR',
+        'An idempotency key is required for this action',
+      );
+    }
+    headers['Idempotency-Key'] = req.idempotencyKey;
+    // NO `X-Operator-Reason` — the wms surfaces do not define it.
+  }
+  if (req.body !== undefined) headers['Content-Type'] = 'application/json';
+  return headers;
 }

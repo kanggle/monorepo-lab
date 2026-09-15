@@ -3,6 +3,8 @@ import { resolveBackendUrl } from '@/shared/config/demo-backend';
 import { getDomainFacingToken } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
 import { ApiError } from '@/shared/api/errors';
+import { sampleGate } from '@/shared/api/sample-gate';
+import { samplePath } from '@/shared/sample/router';
 
 /**
  * Shared server-side **ecommerce gateway HTTP core** (TASK-PC-FE-213 — promotion
@@ -170,43 +172,32 @@ export async function callEcommerceGateway<T>(
   const requestId = newRequestId();
   const { logPrefix } = profile;
 
-  // Per-domain credential selection (§ 2.4.10): the ecommerce gateway requires
-  // the IAM OIDC token (account_type=OPERATOR). NEVER getOperatorToken() — that
-  // is the IAM (§ 2.6 exchanged) credential; ecommerce would reject it.
-  const token = await getDomainFacingToken();
-  if (!token) {
-    logger.warn(`${logPrefix}_no_gap_session`, {
-      requestId,
-      path: req.path,
-    });
-    // No IAM OIDC session ⇒ whole-session re-login (no partial authed state).
-    throw new ApiError(401, 'UNAUTHORIZED', 'No IAM session');
-  }
+  // ADR-MONO-074 A2 — asked BEFORE any token is read. A sample visitor gets the
+  // sample router's Response fed into the mapping below; no token, no network.
+  const sample = await sampleGate({
+    core: 'ecommerce',
+    surface: logPrefix,
+    method: req.method,
+    path: samplePath(req.base, req.path),
+  });
 
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    Authorization: `Bearer ${token}`,
-    'X-Request-Id': requestId,
-  };
-  // NOTE: deliberately NO `X-Tenant-Id` — ecommerce resolves tenant from the
-  // JWT `tenant_id` claim (gateway-injected; § 2.4.10 tenant invariant).
-  // `Idempotency-Key` is opt-in per call (TASK-BE-536) — only attached when the
-  // caller supplies one (product register/stock-adjust, coupon issue); every
-  // other mutation omits it, unchanged.
-  if (req.idempotencyKey) headers['Idempotency-Key'] = req.idempotencyKey;
-  if (req.body !== undefined) headers['Content-Type'] = 'application/json';
+  const headers = sample
+    ? {}
+    : await prepareEcommerceHeaders(req, logPrefix, requestId);
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), env.ECOMMERCE_TIMEOUT_MS);
 
   try {
-    const res = await fetch(await resolveBackendUrl(`${req.base}${req.path}`), {
-      method: req.method,
-      headers,
-      body: req.body === undefined ? undefined : JSON.stringify(req.body),
-      cache: 'no-store',
-      signal: controller.signal,
-    });
+    const res =
+      sample ??
+      (await fetch(await resolveBackendUrl(`${req.base}${req.path}`), {
+        method: req.method,
+        headers,
+        body: req.body === undefined ? undefined : JSON.stringify(req.body),
+        cache: 'no-store',
+        signal: controller.signal,
+      }));
 
     if (res.status === 401) {
       const e = await parseEcommerceError(res, profile.requestFailedLabel);
@@ -295,4 +286,42 @@ export async function callEcommerceGateway<T>(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * The pre-network half of {@link callEcommerceGateway} — domain-facing token +
+ * opt-in mutation headers, moved here VERBATIM so the sample branch
+ * (ADR-MONO-074 A2) can skip it as a whole. Throws exactly as before.
+ */
+async function prepareEcommerceHeaders(
+  req: EcommerceGatewayRequest,
+  logPrefix: string,
+  requestId: string,
+): Promise<Record<string, string>> {
+  // Per-domain credential selection (§ 2.4.10): the ecommerce gateway requires
+  // the IAM OIDC token (account_type=OPERATOR). NEVER getOperatorToken() — that
+  // is the IAM (§ 2.6 exchanged) credential; ecommerce would reject it.
+  const token = await getDomainFacingToken();
+  if (!token) {
+    logger.warn(`${logPrefix}_no_gap_session`, {
+      requestId,
+      path: req.path,
+    });
+    // No IAM OIDC session ⇒ whole-session re-login (no partial authed state).
+    throw new ApiError(401, 'UNAUTHORIZED', 'No IAM session');
+  }
+
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    Authorization: `Bearer ${token}`,
+    'X-Request-Id': requestId,
+  };
+  // NOTE: deliberately NO `X-Tenant-Id` — ecommerce resolves tenant from the
+  // JWT `tenant_id` claim (gateway-injected; § 2.4.10 tenant invariant).
+  // `Idempotency-Key` is opt-in per call (TASK-BE-536) — only attached when the
+  // caller supplies one (product register/stock-adjust, coupon issue); every
+  // other mutation omits it, unchanged.
+  if (req.idempotencyKey) headers['Idempotency-Key'] = req.idempotencyKey;
+  if (req.body !== undefined) headers['Content-Type'] = 'application/json';
+  return headers;
 }

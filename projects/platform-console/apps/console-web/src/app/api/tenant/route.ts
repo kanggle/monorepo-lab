@@ -15,6 +15,7 @@ import {
 } from '@/shared/lib/session';
 import { exchangeForAssumedToken } from '@/shared/lib/assume-tenant-exchange';
 import { logger, newRequestId } from '@/shared/lib/logger';
+import { sampleGate } from '@/shared/api/sample-gate';
 
 export const runtime = 'nodejs';
 
@@ -66,6 +67,26 @@ export async function POST(req: Request) {
     jar.delete(TENANT_COOKIE);
     jar.delete(ASSUMED_TOKEN_COOKIE);
     return NextResponse.json({ ok: true, activeTenant: null });
+  }
+
+  // ADR-MONO-074 A2 / R1ⓐ — asked before ANY backend reach (the registry read
+  // and the assume-tenant token exchange below). A sample visitor sits in the
+  // single read-only sample tenant: a switch is refused with the sample router's
+  // `403 SAMPLE_READ_ONLY`, so the exchange's `fetch` is never reached and no
+  // cookie changes. (The clear path above touches only cookies — no backend —
+  // and is left as it was.) This route has no upstream response mapping to feed,
+  // so the refusal is returned as-is.
+  const sample = await sampleGate({
+    core: 'console-web',
+    surface: 'tenant-switch',
+    method: 'POST',
+    path: '/api/tenant',
+  });
+  if (sample) {
+    return new NextResponse(sample.body, {
+      status: sample.status,
+      headers: sample.headers,
+    });
   }
 
   let allowed: Set<string>;
