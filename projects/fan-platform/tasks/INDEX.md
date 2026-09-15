@@ -70,12 +70,12 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-FAN-FE-023-phone-width-header-wraps-per-character-and-detail-has-no-back.md` — 🟡 **휴대폰 너비 헤더 글자 단위 줄바꿈 · 상세 뒤로가기 없음** (READY, 2026-09-15 UTC). 라이브 실측: 360·400px 에서 헤더 항목 **전부 2줄**(`피`/`드` — 한 글자에 한 줄), 768px 부터 1줄. 원인=`Header.tsx` 의 줄바꿈 금지 없는 flex. 처방=클래스만(햄버거 X — 헤더의 «익명 게이트웨이 호출 0건» 성질 보존) · 휴대폰=로고+동작 / 메뉴 두 줄. 뒤로가기=상세 네 갈래 전부 · 🔴🔴 **앱 안에서 왔으면 `history.back()`, 이력 없으면 `/`**(고정 `/` 는 `/artists/{id}` 방문자를 튕기고, 무조건 back 은 공유 링크 방문자를 사이트 밖으로 내보낸다) · 🔴 `document.referrer` 판정 금지(앱 안 이동이 referrer 를 안 바꾼다). 분석=Opus 5 / 구현 권장=Sonnet.
-
 ## in-progress
 
 
 ## review
+
+- `TASK-FAN-FE-023-phone-width-header-wraps-per-character-and-detail-has-no-back.md` — 🟢 **휴대폰 헤더 항목이 안 쪼개진다 · 상세에 «← 뒤로» · ⚪ 1(라이브 클릭·재측)** (REVIEW, 2026-09-15 UTC). 헤더=클래스만(`whitespace-nowrap` + `flex-wrap` + 메뉴 묶음 `order-last w-full sm:order-none`): 360·400px 익명 **2줄 → 1줄**(85px, 로고+로그인 / 메뉴), 🔴 로그인 헤더는 **최대 4줄 + 가로 넘침 → 1줄 · 넘침 없음**(125px 세 줄 — 재현본으로 쟀고, 익명 전·후 재현값이 라이브·로컬 실측과 폭까지 같아 기계를 믿는다). 대조군 768·1280 전후 동일. 뒤로가기=`shared/ui/BackLink` + 경로 스택(`shared/navigation/inAppHistory`) — 앱 안 이력이면 `history.back()`, 없으면 `/` · 🔴🔴 «직접 진입 → 다른 화면 → 브라우저 뒤로 복귀» 도 이력 없음(사이트 밖 X). 시험 +18칸 · bite 4/4 물림 + 대조군 초록(🔴 첫 bite 판은 텍스트 grep 이 0건을 세서 판정 불가 → JSON 리포터로 재측). 게이트: tsc · lint 0 · vitest **302/302** · `next build` 전부 rc=0. 분석=Opus 5 / 구현=Opus 5.
 
 
 

@@ -22,8 +22,20 @@ import { DemoHeartbeat } from '@/widgets/heartbeat/DemoHeartbeat';
  *
  * 🔵 인증된 렌더는 하나도 안 바뀐다 — 알림 벨도, 조회 병렬화도, 알림 서비스 장애 시
  *    빈 값으로 degrade 하는 것도 그대로다.
+ *
  * ─────────────────────────────────────────────────────────────────────────
+ * 🔴 휴대폰 너비 배치 (TASK-FAN-FE-023)
+ * ─────────────────────────────────────────────────────────────────────────
+ * 예전 `<nav className="flex … gap-6">` 은 400px 에서 항목이 줄어들며 **글자 단위로** 끊겼다
+ * (`피`/`드`, `로그`/`인` — 한글은 글자 사이 어디서나 끊긴다). 그래서:
+ *   · 모든 링크·버튼에 `whitespace-nowrap` — 항목은 쪼개지지 않는다.
+ *   · `flex-wrap` + 메뉴 묶음 `order-last w-full` — 640px 미만에서는 첫 줄 = 로고 + 오른쪽 동작,
+ *     둘째 줄 = 피드 · 아티스트 · 멤버십. `sm:` 부터는 예전과 같은 한 줄·같은 간격·같은 순서다.
+ *   · 줄바꿈 금지만 넣고 줄 배치를 안 정하면 문서가 **가로로 넘친다** — 둘은 짝이다.
+ * 🔴 클래스만 바꿨다. 햄버거 메뉴처럼 클라이언트 상태를 들이면 위 § 의 서버 경계가 흔들린다.
  */
+const NAV_LINK = 'whitespace-nowrap text-sm text-ink-700 hover:text-brand-600 dark:text-ink-200';
+
 export async function Header() {
   const authed = await isAuthenticated();
   const session = authed ? await getFanSession() : null;
@@ -40,29 +52,28 @@ export async function Header() {
 
   return (
     <header className="sticky top-0 z-10 border-b border-ink-200 bg-white/80 backdrop-blur dark:bg-ink-900/80 dark:border-ink-800">
-      <nav className="mx-auto flex max-w-5xl items-center gap-6 px-4 py-3">
+      <nav className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
         <Link
           href="/"
-          className="bg-gradient-to-r from-brand-600 to-accent-500 bg-clip-text text-lg font-bold text-transparent"
+          className="whitespace-nowrap bg-gradient-to-r from-brand-600 to-accent-500 bg-clip-text text-lg font-bold text-transparent"
         >
           fan-platform
         </Link>
-        <Link href="/" className="text-sm text-ink-700 hover:text-brand-600 dark:text-ink-200">
-          피드
-        </Link>
-        <Link
-          href="/artists"
-          className="text-sm text-ink-700 hover:text-brand-600 dark:text-ink-200"
+        <div
+          data-testid="nav-primary"
+          className="order-last flex w-full items-center gap-5 sm:order-none sm:w-auto sm:gap-6"
         >
-          아티스트
-        </Link>
-        <Link
-          href="/membership"
-          className="text-sm text-ink-700 hover:text-brand-600 dark:text-ink-200"
-        >
-          멤버십
-        </Link>
-        <div className="ml-auto flex items-center gap-3">
+          <Link href="/" className={NAV_LINK}>
+            피드
+          </Link>
+          <Link href="/artists" className={NAV_LINK}>
+            아티스트
+          </Link>
+          <Link href="/membership" className={NAV_LINK}>
+            멤버십
+          </Link>
+        </div>
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
           {authed ? (
             <>
               {/* 🔴 heartbeat 은 **인증된 셸에만** 붙는다 — 공개 브라우징이 데모 EC2 를
@@ -77,22 +88,15 @@ export async function Header() {
               <Link
                 href="/compose"
                 data-testid="nav-compose"
-                className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
+                className="whitespace-nowrap rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
               >
                 글쓰기
               </Link>
-              <Link
-                href="/me/posts"
-                data-testid="nav-my-posts"
-                className="text-sm text-ink-700 hover:text-brand-600 dark:text-ink-200"
-              >
+              <Link href="/me/posts" data-testid="nav-my-posts" className={NAV_LINK}>
                 내 글
               </Link>
               <NotificationBell initialItems={recent} initialUnread={unread} />
-              <Link
-                href="/me"
-                className="text-sm text-ink-700 hover:text-brand-600 dark:text-ink-200"
-              >
+              <Link href="/me" className={NAV_LINK}>
                 {session?.tenantId === 'fan-platform' ? '내 정보' : 'Account'}
               </Link>
               <form
@@ -108,7 +112,7 @@ export async function Header() {
               >
                 <button
                   type="submit"
-                  className="rounded-md border border-ink-200 px-3 py-1.5 text-sm text-ink-700 hover:bg-ink-50"
+                  className="whitespace-nowrap rounded-md border border-ink-200 px-3 py-1.5 text-sm text-ink-700 hover:bg-ink-50"
                 >
                   로그아웃
                 </button>
@@ -117,7 +121,7 @@ export async function Header() {
           ) : (
             <Link
               href="/login"
-              className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
+              className="whitespace-nowrap rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
             >
               로그인
             </Link>
