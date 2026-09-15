@@ -1,5 +1,14 @@
 import Link from 'next/link';
 import type { FeedItem } from '@/entities/post';
+import { PostImage } from '@/shared/ui/PostImage';
+
+/**
+ * 사진 목록. 🔴 `?? []` — 사진 필드가 생기기 전의 백엔드 응답에는 키가 없다(`FeedItem.mediaRefs` 참조).
+ * 🔴 **잠기지 않은 분기에서만** 부른다. 서버가 잠긴 항목을 이미 비워 보내지만, 화면이 한 겹 더 선다.
+ */
+function photosOf(item: FeedItem): string[] {
+  return item.mediaRefs ?? [];
+}
 
 /** Single feed row. Locked tier renders a subscribe CTA without leaking content. */
 export function PostCard({ item }: { item: FeedItem }) {
@@ -48,6 +57,15 @@ export function PostCard({ item }: { item: FeedItem }) {
             <h3 className="mb-1 text-lg font-semibold text-ink-900 dark:text-ink-100">
               {item.title}
             </h3>
+          ) : null}
+          {photosOf(item).length > 0 ? (
+            // 🔵 카드는 첫 장만 — 공개 피드(TASK-MONO-678)와 같은 규칙이다.
+            <PostImage
+              src={photosOf(item)[0]}
+              alt={item.title ?? '포스트 사진'}
+              frameClassName="mb-3 aspect-video rounded-lg bg-ink-100 dark:bg-ink-800"
+              badge={photosOf(item).length > 1 ? `+${photosOf(item).length - 1}` : undefined}
+            />
           ) : null}
           {item.bodyPreview ? (
             <p className="line-clamp-3 text-sm text-ink-600 dark:text-ink-300">

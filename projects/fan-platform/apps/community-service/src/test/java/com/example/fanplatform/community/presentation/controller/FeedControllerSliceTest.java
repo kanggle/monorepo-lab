@@ -86,6 +86,31 @@ class FeedControllerSliceTest {
     }
 
     @Test
+    @DisplayName("🔴 679: 응답 항목이 mediaRefs 를 싣는다 — 열린 항목은 주소, 잠긴 항목은 빈 배열")
+    void feed_itemsCarryMediaRefs_emptyWhenLocked() throws Exception {
+        java.time.Instant now = java.time.Instant.parse("2026-09-15T00:00:00Z");
+        FeedItemView open = new FeedItemView("p-open",
+                com.example.fanplatform.community.domain.post.PostType.ARTIST_POST,
+                com.example.fanplatform.community.domain.post.PostVisibility.PUBLIC,
+                "artist-1", "t", "preview", List.of("https://images.example.com/a.jpg"),
+                0L, 0L, now, false);
+        FeedItemView locked = new FeedItemView("p-locked",
+                com.example.fanplatform.community.domain.post.PostType.ARTIST_POST,
+                com.example.fanplatform.community.domain.post.PostVisibility.MEMBERS_ONLY,
+                "artist-1", null, null, List.of(),
+                0L, 0L, now, true);
+        when(getFeedUseCase.execute(any(), eq(0), eq(20)))
+                .thenReturn(new PageResult<>(List.of(open, locked), 0, 20, 2L, 1));
+
+        mockMvc.perform(get("/api/community/feed").header("Authorization", fanBearer("fan-1")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].mediaRefs[0]").value("https://images.example.com/a.jpg"))
+                .andExpect(jsonPath("$.data.content[1].locked").value(true))
+                .andExpect(jsonPath("$.data.content[1].mediaRefs").isArray())
+                .andExpect(jsonPath("$.data.content[1].mediaRefs").isEmpty());
+    }
+
+    @Test
     @DisplayName("GET /api/community/feed?page=abc → 400 VALIDATION_ERROR (type mismatch)")
     void feed_invalidPaginationType_returns400() throws Exception {
         mockMvc.perform(get("/api/community/feed?page=abc&size=20")

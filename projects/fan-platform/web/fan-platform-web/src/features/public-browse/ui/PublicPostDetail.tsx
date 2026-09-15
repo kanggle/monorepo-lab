@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { PublicPost } from '@demo/public-data';
-import { PublicPostImage } from './PublicPostImage';
+import { PostImage } from '@/shared/ui/PostImage';
 
 /**
  * 공개 글 상세.
@@ -66,7 +66,7 @@ export function PublicPostDetail({ post }: { post: PublicPost }) {
               className={`mb-6 grid gap-3 ${post.imageUrls.length > 1 ? 'sm:grid-cols-2' : ''}`}
             >
               {post.imageUrls.map((src, i) => (
-                <PublicPostImage
+                <PostImage
                   key={`${i}-${src}`}
                   src={src}
                   alt={`${post.title} — 사진 ${i + 1}/${post.imageUrls.length}`}

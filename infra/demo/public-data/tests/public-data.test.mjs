@@ -240,11 +240,107 @@ test('시드: 공개 글은 전부 사진을 갖고, 잠긴 글은 하나도 안
 
   for (const p of lockeds) assert.deepEqual(p.imageUrls, [], `잠긴 글 '${p.title}' 에 사진이 실렸다`);
   // 🔴 양성 대조군 — 픽스처의 잠긴 글에 **지울 사진이 실제로 있었는가.** 없으면 위 칸은
-  //    «없는 것을 못 찾은» 것이다.
+  //    «없는 것을 못 찾은» 것이다. (TASK-MONO-679 가 필드 이름을 백엔드와 같은 `mediaRefs` 로 바꿨다.)
   assert.ok(
-    RAW_POSTS.some((p) => p.visibility !== 'PUBLIC' && Array.isArray(p.imageRefs) && p.imageRefs.length > 0),
-    '픽스처의 잠긴 글에 imageRefs 음성 대조군이 없다',
+    RAW_POSTS.some((p) => p.visibility !== 'PUBLIC' && Array.isArray(p.mediaRefs) && p.mediaRefs.length > 0),
+    '픽스처의 잠긴 글에 mediaRefs 음성 대조군이 없다',
   );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TASK-MONO-679 AC-4 — 번들 시드와 실제 시드가 **같은 글 목록**을 말한다
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 638 은 `seed-fan.sh` 에 «번들과 같은 구성» 이라고 **적었고**, 679 가 재어 보니 제목·구성이 갈라져
+//    있었다(게이트 없는 문장은 반드시 낡는다). 그래서 이 대조는 문장이 아니라 시험이다.
+// 🔴 대조의 키는 id 가 **아니다** — 실제 시드는 API 로 발행하고 id 는 서버가 UUIDv7 로 만든다
+//    (`PublishPostUseCase`). id 로 대조하면 첫날부터 영원히 빨갛고, 늘 빨간 시험은 꺼진다.
+//    ⇒ 키 = (아티스트 id, 등급, 제목). 공개 글은 본문·사진까지 같아야 한다.
+// 🔵 `scripts/` 가드가 아니라 이 패키지 시험에 둔 이유: 두 입력이 이 패키지의 픽스처와 그 픽스처가 따라야
+//    하는 시드이고, 이 시험은 CI 에서 이미 돈다. 새 가드 파일은 가드 수 문서들까지 흔든다.
+
+const SEED_FAN = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'seed', 'seed-fan.sh');
+
+/** `seed-fan.sh` 의 `publish_artist_post` 호출을 읽는다. 인자는 한 줄에 하나, 작은따옴표. */
+function parseSeedArtistPosts(text) {
+  const ids = {};
+  for (const m of text.matchAll(/^(ARTIST_[A-Z])="([0-9a-f-]{36})"/gm)) ids[m[1]] = m[2];
+  const re = /publish_artist_post '[^']*' "\$(ARTIST_[A-Z])" (PUBLIC|MEMBERS_ONLY|PREMIUM) \\\r?\n[ \t]+'([^']*)' \\\r?\n[ \t]+'([^']*)'(?: \\\r?\n[ \t]+'([^']*)')?/g;
+  return [...text.matchAll(re)].map((m) => ({
+    artistId: ids[m[1]],
+    visibility: m[2],
+    title: m[3],
+    body: m[4].replace(/\\n/g, '\n'),
+    mediaRefs: m[5] ? JSON.parse(m[5]) : [],
+  }));
+}
+
+/** 번들 쪽 — 공개 저장본이 실제로 싣는 모양(변환기를 지난 뒤)으로 비교한다. */
+function bundleArtistPosts() {
+  const names = new Map(RAW_ARTISTS.filter((a) => a.status === 'PUBLISHED').map((a) => [a.id, a.stageName]));
+  return RAW_POSTS.map((p) => toPublicPost(p, names)).filter(Boolean);
+}
+
+/** 차이를 사람이 읽을 문장으로. 빈 배열 = 두 벌이 같다. */
+function seedBundleDiff(seedPosts, bundlePosts) {
+  const key = (p) => `${p.artistId} · ${p.visibility} · ${p.title}`;
+  const diffs = [];
+  const seedMap = new Map(seedPosts.map((p) => [key(p), p]));
+  const bundleMap = new Map(bundlePosts.map((p) => [key(p), p]));
+  if (seedMap.size !== seedPosts.length) diffs.push('실제 시드에 같은 (아티스트, 등급, 제목) 이 두 번 있다');
+  if (bundleMap.size !== bundlePosts.length) diffs.push('번들에 같은 (아티스트, 등급, 제목) 이 두 번 있다');
+  for (const [k, s] of seedMap) {
+    const b = bundleMap.get(k);
+    if (!b) {
+      diffs.push(`번들에 없다: ${k}`);
+      continue;
+    }
+    if (s.visibility === 'PUBLIC') {
+      if (s.body !== b.body) diffs.push(`공개 본문이 다르다: ${k}`);
+      if (JSON.stringify(s.mediaRefs) !== JSON.stringify(b.imageUrls)) diffs.push(`사진이 다르다: ${k}`);
+    } else if (s.mediaRefs.length > 0) {
+      // 번들은 잠긴 글의 사진을 공개하지 않으므로 대조할 수 없다 — 실제 시드도 싣지 않게 한다.
+      diffs.push(`잠긴 글에 사진을 싣는다: ${k}`);
+    }
+  }
+  for (const k of bundleMap.keys()) if (!seedMap.has(k)) diffs.push(`실제 시드에 없다: ${k}`);
+  return diffs;
+}
+
+test('🔴🔴 두 시드: 번들과 실제 시드가 같은 글 목록 · 공개 본문 · 사진을 갖는다 (TASK-MONO-679)', async () => {
+  const seed = parseSeedArtistPosts(await readFile(SEED_FAN, 'utf8'));
+  const bundle = bundleArtistPosts();
+  // 🔴 비공허성 — 파서가 0건을 내면 «차이 없음» 은 두 빈 목록의 일치일 뿐이다.
+  assert.ok(seed.length >= 12, `실제 시드에서 읽은 글이 ${seed.length} 건뿐이다 — 파서가 모양을 놓쳤다`);
+  assert.ok(seed.some((p) => p.visibility === 'PUBLIC' && p.mediaRefs.length > 0), '사진 있는 공개 글을 하나도 못 읽었다');
+  assert.deepEqual(seedBundleDiff(seed, bundle), []);
+});
+
+test('🔴 두 시드: 발행 호출은 **전부** 파서가 읽는다 — 다른 모양으로 쓴 호출이 대조를 빠져나가지 않는다', async () => {
+  const text = await readFile(SEED_FAN, 'utf8');
+  const calls = (text.match(/^[ \t]+publish_artist_post '/gm) || []).length;
+  assert.ok(calls > 0);
+  assert.equal(parseSeedArtistPosts(text).length, calls,
+    '호출 수와 파싱된 글 수가 다르다 — 인자를 한 줄에 하나씩, 작은따옴표로 쓰세요');
+});
+
+test('🔴 두 시드 bite: 제목 · 공개 본문 · 사진 · 글 하나를 한쪽에서만 바꾸면 차이가 잡힌다', async () => {
+  const text = await readFile(SEED_FAN, 'utf8');
+  const bundle = bundleArtistPosts();
+  const base = parseSeedArtistPosts(text);
+  assert.deepEqual(seedBundleDiff(base, bundle), []); // 대조군 — 손대기 전은 같다
+
+  const retitled = parseSeedArtistPosts(text.replace("'재즈 편곡 작업 노트'", "'재즈 편곡 작업 노트 (수정)'"));
+  assert.ok(seedBundleDiff(retitled, bundle).some((d) => d.includes('재즈 편곡 작업 노트 (수정)')), '제목 변경을 못 잡았다');
+
+  const rephotoed = parseSeedArtistPosts(text.replace('photo-1459749411175-04bf5292ceea', 'photo-0000000000000-000000000000'));
+  assert.ok(seedBundleDiff(rephotoed, bundle).some((d) => d.startsWith('사진이 다르다')), '사진 변경을 못 잡았다');
+
+  const reworded = parseSeedArtistPosts(text.replace('첫 글은 마이크 프리앰프 이야기부터.', '첫 글은 드럼 이야기부터.'));
+  assert.ok(seedBundleDiff(reworded, bundle).some((d) => d.startsWith('공개 본문이 다르다')), '공개 본문 변경을 못 잡았다');
+
+  const dropped = base.filter((p) => p.title !== '멤버십 전용 — 다음 EP 트랙 리스트 초안');
+  assert.equal(dropped.length, base.length - 1); // 대조군 — 정말 하나를 뺐다
+  assert.ok(seedBundleDiff(dropped, bundle).some((d) => d.startsWith('실제 시드에 없다')), '빠진 글을 못 잡았다');
 });
 
 test('내용물: 옵션에 stock 이 실려 오면 봉투를 거부한다', () => {

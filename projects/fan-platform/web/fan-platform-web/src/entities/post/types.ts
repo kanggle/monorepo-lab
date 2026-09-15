@@ -15,6 +15,13 @@ export interface Post {
   authorAccountId: string;
   title: string | null;
   body: string;
+  /**
+   * 화면이 그대로 그리는 https 절대주소(TASK-MONO-679 ⓐ). 사진이 없으면 `[]`.
+   *
+   * 🔴 optional 인 이유: 웹은 Vercel 로 **먼저** 배포되고 데모 백엔드는 AMI 재굽기 뒤에야 이 필드를
+   *    싣는다. 그 사이의 응답에는 키가 **없다** — 읽는 쪽은 `?? []` 로 받는다.
+   */
+  mediaRefs?: string[];
   commentCount: number;
   reactionCount: number;
   publishedAt: string | null;
@@ -29,6 +36,10 @@ export interface FeedItem {
   authorAccountId: string;
   title: string | null;
   bodyPreview: string | null;
+  /**
+   * `locked` 면 서버가 `[]` 로 비워 보낸다(제목·미리보기와 같은 게이트). optional 인 이유는 `Post.mediaRefs` 참조.
+   */
+  mediaRefs?: string[];
   commentCount: number;
   reactionCount: number;
   publishedAt: string;

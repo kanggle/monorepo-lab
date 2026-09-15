@@ -147,13 +147,16 @@ export const RAW_ARTISTS = [
   },
 ];
 
-// ── TASK-MONO-678 — 공개 글 사진 ─────────────────────────────────────────────────
-// 🔴 이 필드 이름(`imageRefs`)은 **백엔드의 것이 아니다.** community-service 는 `mediaRefs` 를
-//    받아 저장만 하고 피드·단건 응답에 **싣지 않는다**(TASK-MONO-679). 변환기가 `imageRefs` 를
-//    읽으므로 번들 시드는 이 이름으로 싣는다 — 679 가 응답 필드를 정하면 여기도 따라간다.
+// ── 공개 글 사진 (TASK-MONO-678 · 679) ─────────────────────────────────────────
+// 🔵 필드 이름은 백엔드와 같은 `mediaRefs` 다 — community-service 의 피드·단건 응답이 이 이름으로
+//    https 절대주소 배열을 싣는다(TASK-MONO-679 ⓐ, community-api.md § mediaRefs). 678 때는 응답에
+//    필드가 없어서 `imageRefs` 라는 픽스처 전용 이름을 썼다.
 // 🔴 주소는 지어내지 않았다 — 이 문자열 **그대로** 찔러 `200 image/jpeg` 인 것만 넣었다.
-// 🔴🔴 **식별 가능한 얼굴이 없는 사진만** 골랐다(열어서 봤다): 악기·무대·스튜디오. 관객
-//    얼굴이 또렷한 사진은 후보에서 뺐다 — 실존 인물의 초상이 포트폴리오에 들어간다(638 AC-2).
+// 🔴🔴 **식별 가능한 얼굴이 없는 사진만** 골랐다(열어서 봤다): 악기·무대·스튜디오.
+// 🔴🔴 **실제 시드(`infra/demo/seed/seed-fan.sh`)가 정본이다** — 제목·공개 글 본문·사진·구성이 그쪽과
+//    같아야 하고, `tests/public-data.test.mjs` 가 두 파일을 대조한다(TASK-MONO-679 AC-4). 시드 쪽을
+//    정본으로 삼은 이유: 시드는 제목으로 «이미 있음» 을 판단하므로 시드의 제목을 바꾸면 이미 시드된
+//    DB 에 같은 글이 두 벌 생긴다. 번들을 바꾸는 쪽은 그런 비용이 없다.
 // 🔵 16:9(1200×675) 한 크기만 쓴다 — 이 앱은 `images.unoptimized` 라 받은 파일을 그대로 그린다.
 const PHOTO = (id) => `https://images.unsplash.com/photo-${id}?w=1200&h=675&q=80&auto=format&fit=crop`;
 /** 팬 게이트웨이 `GET /api/v1/community/feed` 의 항목 모양(`FeedItem`). */
@@ -167,15 +170,15 @@ export const RAW_POSTS = [
     postType: 'TEXT',
     status: 'PUBLISHED',
     visibility: 'PUBLIC',
-    title: '첫 정규 앨범 작업을 시작했습니다',
-    body: '오랜만에 인사드립니다. 지난 겨울부터 준비해 온 첫 정규 앨범 작업을 시작했어요.\n\n어쿠스틱 기타로 시작한 데모를 밴드 편성으로 옮기는 중인데, 생각보다 시간이 걸리네요. 그래도 한 곡 한 곡 완성될 때마다 들려드리고 싶은 마음이 커집니다.',
-    bodyPreview: '오랜만에 인사드립니다. 지난 겨울부터 준비해 온 첫 정규…',
+    title: '새 싱글 「밤의 끝」 발매 안내',
+    body: '안녕하세요, 루미입니다.\n\n오랜만에 새 싱글로 인사드립니다. 「밤의 끝」은 지난 겨울에 쓴 곡이에요.\n모든 분들이 들으실 수 있도록 전체 공개로 올립니다.',
+    bodyPreview: '안녕하세요, 루미입니다.…',
     locked: false,
     likeCount: 128,
     commentCount: 14,
     publishedAt: '2026-02-10T08:00:00Z',
     createdAt: '2026-02-10T08:00:00Z',
-    imageRefs: [PHOTO('1511379938547-c1f69419868d'), PHOTO('1510915361894-db8b60106cb1')],
+    mediaRefs: [PHOTO('1511379938547-c1f69419868d'), PHOTO('1510915361894-db8b60106cb1')],
   },
   {
     id: '0199de80-0000-7000-8000-00000000b002',
@@ -186,15 +189,15 @@ export const RAW_POSTS = [
     postType: 'TEXT',
     status: 'PUBLISHED',
     visibility: 'PUBLIC',
-    title: '프로듀싱 노트 — 드럼 사운드 잡기',
-    body: '이번 트랙에서 가장 오래 붙잡고 있던 건 드럼이었습니다.\n\n킥과 베이스가 같은 대역에서 부딪히는 문제를 사이드체인으로 해결했는데, 결과적으로 곡 전체의 그루브가 달라졌어요.',
-    bodyPreview: '이번 트랙에서 가장 오래 붙잡고 있던 건 드럼이었습니다…',
+    title: '프로듀싱 노트를 시작합니다',
+    body: '노아입니다. 앞으로 작업 과정을 짧게 기록해 두려 합니다.\n첫 글은 마이크 프리앰프 이야기부터.',
+    bodyPreview: '노아입니다. 앞으로 작업 과정을 짧게 기록해 두려 …',
     locked: false,
     likeCount: 76,
     commentCount: 9,
     publishedAt: '2026-02-08T11:30:00Z',
     createdAt: '2026-02-08T11:30:00Z',
-    imageRefs: [PHOTO('1519892300165-cb5542fb47c7'), PHOTO('1460667262436-cf19894f4774')],
+    mediaRefs: [PHOTO('1478737270239-2f02b77fc618'), PHOTO('1460667262436-cf19894f4774')],
   },
   {
     id: '0199de80-0000-7000-8000-00000000b003',
@@ -206,14 +209,14 @@ export const RAW_POSTS = [
     status: 'PUBLISHED',
     visibility: 'PUBLIC',
     title: 'STELLAR 컴백 준비 현장',
-    body: '연습실에서 인사드려요! 컴백 안무 연습이 한창입니다.\n\n이번에는 멤버 전원이 안무 창작에 참여했어요. 무대에서 보여드릴 날이 기다려집니다.',
-    bodyPreview: '연습실에서 인사드려요! 컴백 안무 연습이 한창입니다…',
+    body: '세아입니다. STELLAR 컴백 준비가 한창입니다.\n안무 연습과 녹음을 병행하는 중이라 정신없지만 즐겁습니다.',
+    bodyPreview: '세아입니다. STELLAR 컴백 준비가 한창입니다.…',
     locked: false,
     likeCount: 342,
     commentCount: 51,
     publishedAt: '2026-02-11T02:15:00Z',
     createdAt: '2026-02-11T02:15:00Z',
-    imageRefs: [PHOTO('1459749411175-04bf5292ceea')],
+    mediaRefs: [PHOTO('1459749411175-04bf5292ceea')],
   },
   // ── TASK-MONO-638 — 여섯 아티스트가 각각 «공개 1 + 잠금 1» 을 갖는다 ─────────────
   // 🔴 잠긴 글이 있어야 «로그인하면 더 있다» 가 화면에서 참이 된다. 예전에는 잠긴 글이
@@ -230,7 +233,7 @@ export const RAW_POSTS = [
     postType: 'TEXT',
     status: 'PUBLISHED',
     visibility: 'MEMBERS_ONLY',
-    title: '[멤버십] 다음 EP 의 트랙 리스트 초안',
+    title: '멤버십 전용 — 다음 EP 트랙 리스트 초안',
     body: 'MEMBERS-ONLY-BODY-MUST-NOT-LEAK-005',
     bodyPreview: 'MEMBERS-ONLY-PREVIEW-MUST-NOT-LEAK-005',
     locked: true,
@@ -248,7 +251,7 @@ export const RAW_POSTS = [
     postType: 'TEXT',
     status: 'PUBLISHED',
     visibility: 'MEMBERS_ONLY',
-    title: '[멤버십] 안무 연습실 비하인드',
+    title: '멤버십 전용 — 안무 연습실 비하인드',
     body: 'MEMBERS-ONLY-BODY-MUST-NOT-LEAK-006',
     bodyPreview: 'MEMBERS-ONLY-PREVIEW-MUST-NOT-LEAK-006',
     locked: true,
@@ -267,14 +270,14 @@ export const RAW_POSTS = [
     status: 'PUBLISHED',
     visibility: 'PUBLIC',
     title: '첫 단독 공연 준비 일지',
-    body: '다음 달 첫 단독 공연을 준비하고 있습니다.\n\n세트리스트를 짜면서 데뷔곡을 어디에 둘지 한참 고민했어요. 결국 마지막 앙코르로 옮겼습니다.',
-    bodyPreview: '다음 달 첫 단독 공연을 준비하고 있습니다…',
+    body: '하린입니다. 다음 달 첫 단독 공연을 준비하고 있습니다.\n세트리스트를 짜면서 데뷔곡을 어디에 둘지 한참 고민했어요.',
+    bodyPreview: '하린입니다. 다음 달 첫 단독 공연을 준비하고 있습…',
     locked: false,
     likeCount: 143,
     commentCount: 21,
     publishedAt: '2026-02-13T09:00:00Z',
     createdAt: '2026-02-13T09:00:00Z',
-    imageRefs: [PHOTO('1506157786151-b8491531f063')],
+    mediaRefs: [PHOTO('1506157786151-b8491531f063')],
   },
   {
     id: '0199de80-0000-7000-8000-00000000b008',
@@ -285,7 +288,7 @@ export const RAW_POSTS = [
     postType: 'TEXT',
     status: 'PUBLISHED',
     visibility: 'MEMBERS_ONLY',
-    title: '[멤버십] 리허설 현장 사진',
+    title: '멤버십 전용 — 리허설 현장',
     body: 'MEMBERS-ONLY-BODY-MUST-NOT-LEAK-008',
     bodyPreview: 'MEMBERS-ONLY-PREVIEW-MUST-NOT-LEAK-008',
     locked: true,
@@ -304,14 +307,14 @@ export const RAW_POSTS = [
     status: 'PUBLISHED',
     visibility: 'PUBLIC',
     title: '커버 무대 영상 올렸습니다',
-    body: '요청 많았던 곡으로 커버 무대를 준비했습니다.\n\n원곡의 키를 두 음 내려서 불렀는데, 오히려 제 목소리와는 더 맞는 것 같아요.',
-    bodyPreview: '요청 많았던 곡으로 커버 무대를 준비했습니다…',
+    body: '리오입니다. 요청 많았던 곡으로 커버 무대를 준비했습니다.\n원곡의 키를 두 음 내려서 불렀어요.',
+    bodyPreview: '리오입니다. 요청 많았던 곡으로 커버 무대를 준비했…',
     locked: false,
     likeCount: 208,
     commentCount: 33,
     publishedAt: '2026-02-15T09:00:00Z',
     createdAt: '2026-02-15T09:00:00Z',
-    imageRefs: [PHOTO('1514320291840-2e0a9bf2a9ae')],
+    mediaRefs: [PHOTO('1514320291840-2e0a9bf2a9ae')],
   },
   {
     id: '0199de80-0000-7000-8000-00000000b010',
@@ -322,7 +325,7 @@ export const RAW_POSTS = [
     postType: 'TEXT',
     status: 'PUBLISHED',
     visibility: 'MEMBERS_ONLY',
-    title: '[멤버십] 연습실 라이브 풀버전',
+    title: '멤버십 전용 — 연습실 라이브 풀버전',
     body: 'MEMBERS-ONLY-BODY-MUST-NOT-LEAK-010',
     bodyPreview: 'MEMBERS-ONLY-PREVIEW-MUST-NOT-LEAK-010',
     locked: true,
@@ -341,14 +344,14 @@ export const RAW_POSTS = [
     status: 'PUBLISHED',
     visibility: 'PUBLIC',
     title: '재즈 편곡 작업 노트',
-    body: '이번 곡은 4비트 스윙으로 시작했다가 결국 보사노바로 바꿨습니다.\n\n리듬을 바꾸니 가사의 호흡이 완전히 달라져서, 멜로디도 절반을 다시 썼어요.',
-    bodyPreview: '이번 곡은 4비트 스윙으로 시작했다가 결국 보사노바로…',
+    body: '유노입니다. 이번 곡은 4비트 스윙으로 시작했다가 결국 보사노바로 바꿨습니다.\n리듬을 바꾸니 가사의 호흡이 완전히 달라졌어요.',
+    bodyPreview: '유노입니다. 이번 곡은 4비트 스윙으로 시작했다가 …',
     locked: false,
     likeCount: 97,
     commentCount: 11,
     publishedAt: '2026-02-17T09:00:00Z',
     createdAt: '2026-02-17T09:00:00Z',
-    imageRefs: [PHOTO('1415201364774-f6f0bb35f28f'), PHOTO('1507838153414-b4b713384a76')],
+    mediaRefs: [PHOTO('1415201364774-f6f0bb35f28f'), PHOTO('1507838153414-b4b713384a76')],
   },
   {
     id: '0199de80-0000-7000-8000-00000000b012',
@@ -359,7 +362,7 @@ export const RAW_POSTS = [
     postType: 'TEXT',
     status: 'PUBLISHED',
     visibility: 'MEMBERS_ONLY',
-    title: '[멤버십] 미공개 세션 녹음',
+    title: '멤버십 전용 — 미공개 세션 녹음',
     body: 'MEMBERS-ONLY-BODY-MUST-NOT-LEAK-012',
     bodyPreview: 'MEMBERS-ONLY-PREVIEW-MUST-NOT-LEAK-012',
     locked: true,
@@ -367,6 +370,26 @@ export const RAW_POSTS = [
     commentCount: 6,
     publishedAt: '2026-02-18T09:00:00Z',
     createdAt: '2026-02-18T09:00:00Z',
+  },
+  {
+    // TASK-MONO-679 — 실제 시드의 루미 PREMIUM 글. 번들에만 없어서 두 벌의 구성이 갈라져 있었다.
+    // 🔵 발행일을 2쪽에 오게 잡았다 — 첫 페이지(10개)의 공개 글 수를 바꾸지 않으려고.
+    id: '0199de80-0000-7000-8000-00000000b013',
+    postId: '0199de80-0000-7000-8000-00000000b013',
+    tenantId: 'fan-platform',
+    artistId: '0199de80-0000-7000-8000-00000000a001',
+    authorAccountId: '0199de80-0000-7000-8000-00000000a001',
+    postType: 'TEXT',
+    status: 'PUBLISHED',
+    visibility: 'PREMIUM',
+    title: '프리미엄 전용 — 팬미팅 선예매 안내',
+    body: 'PREMIUM-BODY-MUST-NOT-LEAK-013',
+    bodyPreview: 'PREMIUM-PREVIEW-MUST-NOT-LEAK-013',
+    locked: true,
+    likeCount: 39,
+    commentCount: 5,
+    publishedAt: '2026-02-09T09:00:00Z',
+    createdAt: '2026-02-09T09:00:00Z',
   },
   {
     // 🔴🔴 **음성 대조군 — 회원 전용 글.** 변환기가 `body` 와 `bodyPreview` 를 **둘 다**
@@ -381,7 +404,7 @@ export const RAW_POSTS = [
     postType: 'TEXT',
     status: 'PUBLISHED',
     visibility: 'MEMBERS_ONLY',
-    title: '[멤버십] 미공개 데모 트랙 이야기',
+    title: '멤버십 전용 — 작업실 이야기',
     body: 'MEMBERS-ONLY-BODY-MUST-NOT-LEAK 멤버십 회원분들께만 공개하는 미공개 데모 이야기입니다.',
     bodyPreview: 'MEMBERS-ONLY-PREVIEW-MUST-NOT-LEAK 멤버십 회원분들께만…',
     locked: true,
@@ -389,7 +412,7 @@ export const RAW_POSTS = [
     commentCount: 7,
     publishedAt: '2026-02-09T05:00:00Z',
     createdAt: '2026-02-09T05:00:00Z',
-    imageRefs: ['http://minio.demo.invalid/fan/members-only-1.jpg'],
+    mediaRefs: ['http://minio.demo.invalid/fan/members-only-1.jpg'],
   },
   {
     // 🔴 **음성 대조군 — 삭제된 글.**
