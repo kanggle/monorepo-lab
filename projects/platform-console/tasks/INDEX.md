@@ -123,9 +123,11 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## in-progress
 
-- `TASK-PC-FE-289-the-login-fixture-starts-tracing-the-runner-already-started.md` — 🔴 **`TASK-PC-FE-282` fix — `main` nightly 가 빨갛다** (착수 2026-09-15). 282 머지 커밋 `35bd9d293` 의 `Platform Console E2E full-stack` = failure(자동 이슈 #3846), 직전 main 셋은 실제로 돌아 success. 8 중 1 — 282 의 `sample-visitor-transition.spec.ts` 가 `tracing.start: Tracing has been already started` 로 **단언에 닿기 전에** 죽었다. 원인: CI 에서 러너(`trace: 'on'`)가 이미 켠 트레이싱을 로그인 픽스처(`globalSetup` 용으로 스스로 켜던 것)가 또 켰다. 픽스처가 **자기가 켠 것만** 끄게 고친다. 🔴 로컬 게이트가 `tests/e2e/**` 를 안 재므로(tsconfig exclude · `next lint` = src) **수정 브랜치 `workflow_dispatch` 런이 권위**. 트레이싱 통과 뒤 AC-14 단언이 빨강이면 제품 결함 → 머지 안 함. 분석=Opus 5 / 구현=Opus 5.
+(empty)
 
 ## review
+
+- `TASK-PC-FE-289-the-login-fixture-starts-tracing-the-runner-already-started.md` — 🟡 **`TASK-PC-FE-282` fix 구현 완료 → review** (2026-09-15). 282 머지 커밋 `35bd9d293` 의 `Platform Console E2E full-stack` failure(자동 이슈 #3846)는 `sample-visitor-transition.spec.ts` 가 `tracing.start: Tracing has been already started` 로 단언 전에 죽은 것이었다(CI 러너 `trace: 'on'` + 로그인 픽스처의 자체 `tracing.start`). 픽스처가 **자기가 켠 트레이싱만** 켜고 끈다(«already started» 외 에러는 던짐, globalSetup 불변). 🔵 **수정 브랜치 `workflow_dispatch` 런 [34974736858](https://github.com/kanggle/monorepo-lab/actions/runs/34974736858) — 콘솔 full-stack success · 8 passed · 트레이싱 에러 0** (수정 전 같은 잡 7 passed + 1 failed). ⇒ 282 AC-14(익명 → 같은 브라우저 로그인 → 샘플 문자열 0)의 **첫 실측**. 🔴 로컬 게이트는 이 파일을 안 잰다(tsconfig exclude · `next lint` = src) — 권위는 dispatch 런, 로컬은 TypeScript 구문 진단 0 만. 분석=Opus 5 / 구현=Opus 5.
 
 - `TASK-PC-FE-282-anonymous-visitors-enter-the-real-console-and-the-gateways-answer-with-samples.md` — 🟡 **구현 완료 → review** (`ADR-MONO-074` 실행 1/8, 2026-09-15). 익명 방문자가 실제 `(console)` 셸에 들어오고 게이트웨이 코어 6 + 코어 밖 백엔드 호출 5곳이 **토큰 조회 전에** 샘플 라우터로 답한다(조정자가 10개 파일 전부에서 `sampleGate(` < 토큰 < `fetch(` 순서를 따로 쟀다). 루트 `/` → 개요, 셸 익명판(로그인 링크 · 샘플 배너 · heartbeat/백엔드 공지 미렌더), 쓰기 `SAMPLE_READ_ONLY` · 준비 중 `SAMPLE_NOT_READY` 문구는 코드→문구 매핑 한 곳, 대시보드 픽스처 ready. 가드: 금지 임포트 · fetch 허용목록+순서 · «(샘플)» 규칙 양방향 · 원장↔소스 양방향 — bite 6. 로컬: lint rc=0 · tsc rc=0 · vitest **292/3031 → 301/3161** 실패 0(조정자 재실행 301 files 일치) · build rc=0 · smoke **18 passed**. 🔴 **D8**: 빈 쿠키 병으로 «세션 없음 → 401» 을 재던 **51 파일 / 70 셀**이 A1 로 샘플이 되어, 반쪽 세션(운영자 쿠키만)을 심도록 바꿨다 — `expect(` 추가 0 · 삭제 0(조정자 diff 실측). ⚪ AC-14 전환 e2e 는 머지 후 첫 nightly 가 첫 측정. 분석=Opus 5 / 구현=Opus 5.
 
