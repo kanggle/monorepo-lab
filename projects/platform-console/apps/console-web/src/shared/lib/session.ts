@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import { SAMPLE_TENANT_ID } from '@/shared/sample/codes';
 
 /**
  * HttpOnly cookie session contract (single source of cookie names + options).
@@ -179,8 +180,16 @@ export async function getIdToken(): Promise<string | null> {
   return jar.get(ID_TOKEN_COOKIE)?.value ?? null;
 }
 
-/** Server-side read of the active tenant (or null when none selected). */
+/**
+ * Server-side read of the active tenant (or null when none selected).
+ *
+ * A sample visitor ({@link isSampleVisitor}) sits in the single read-only
+ * sample tenant (ADR-MONO-074 A7) — whatever tenant cookie the browser may still
+ * carry is ignored, because every answer that visitor gets is sample data.
+ * For everyone else this is the cookie read, unchanged.
+ */
 export async function getActiveTenant(): Promise<string | null> {
+  if (await isSampleVisitor()) return SAMPLE_TENANT_ID;
   const jar = await cookies();
   return jar.get(TENANT_COOKIE)?.value ?? null;
 }
@@ -233,6 +242,30 @@ export async function getDomainFacingToken(): Promise<string | null> {
  */
 export async function isAuthenticated(): Promise<boolean> {
   return (await getAccessToken()) !== null && (await getOperatorToken()) !== null;
+}
+
+/**
+ * The **sample visitor** (ADR-MONO-074 A1): the IAM access cookie AND the
+ * operator cookie are BOTH absent — an anonymous browser.
+ *
+ * Such a visitor enters the real `(console)` shell, and every backend call site
+ * answers it from the sample router instead of the network
+ * (`shared/api/sample-gate.ts`).
+ *
+ * 🔴🔴 This is the ONLY definition of «sample visitor». Every caller asks this
+ *    function — a second definition would be the one that gets left behind
+ *    when the rule changes (the same argument `app/page.tsx` made for
+ *    {@link isAuthenticated}).
+ *
+ * 🔴 Half sessions are NOT sample visitors, on purpose:
+ *    - access cookie only (the pre-operator state, {@link hasPreOperatorSession})
+ *      → onboarding / login exactly as before;
+ *    - operator cookie only → not authenticated → login exactly as before.
+ *    A dead-but-present cookie is likewise not a sample visitor: the backend
+ *    401 drives the existing forced re-login.
+ */
+export async function isSampleVisitor(): Promise<boolean> {
+  return (await getAccessToken()) === null && (await getOperatorToken()) === null;
 }
 
 /**

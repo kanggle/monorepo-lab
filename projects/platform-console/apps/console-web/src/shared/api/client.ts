@@ -1,4 +1,6 @@
-import { ApiError } from './errors';
+import { ApiError, messageForCode } from './errors';
+import { isSampleErrorCode, SAMPLE_READ_ONLY } from '@/shared/sample/codes';
+import { publishSampleRefusal } from '@/shared/lib/sample-refusal';
 
 /**
  * The ONLY backend entry point for client components (architecture.md
@@ -33,6 +35,17 @@ async function parseError(res: Response): Promise<ApiError> {
     timestamp = data.timestamp as string | undefined;
   } catch {
     /* keep defaults */
+  }
+  // ADR-MONO-074 R1ⓐ / A9 — a sample refusal's copy comes from the ONE
+  // code → copy mapping, never from the wire message (the route handlers pass
+  // the cores' overwritten `'not permitted'` through). Rewriting it HERE, at the
+  // single client entry point, means every renderer that prints `err.message`
+  // shows the copy too — and renderers that look the code up already do.
+  if (isSampleErrorCode(code)) {
+    message = messageForCode(code);
+    // Renderers that print a fixed string never read the error at all; the
+    // `(console)` shell hears this signal and says it once for them.
+    if (code === SAMPLE_READ_ONLY) publishSampleRefusal(code);
   }
   return new ApiError(res.status, code, message, timestamp);
 }
