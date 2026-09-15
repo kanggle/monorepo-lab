@@ -197,6 +197,56 @@ test('내용물: 잠긴 글에 본문이 실려 오면 봉투를 거부한다 (�
   assert.equal(r.ok, false);
 });
 
+test('내용물: 공개 글의 사진 주소가 https 절대주소가 아니면 봉투를 거부한다 (TASK-MONO-678)', () => {
+  const withImages = (imageUrls) => ({
+    artists: [], membershipPlans: [],
+    posts: [{ id: 'p', locked: false, visibility: 'PUBLIC', body: '공개', imageUrls }],
+  });
+  // 🔵 대조군 — 정상 주소와 «사진 0장» 은 통과한다. 이 칸이 없으면 «전부 거부» 하는 고장난
+  //    검증기도 아래 칸들을 통과한다.
+  assert.equal(validateDatasetData('fan', withImages(['https://images.unsplash.com/photo-1?w=1200'])).ok, true);
+  assert.equal(validateDatasetData('fan', withImages([])).ok, true);
+
+  const bad = [
+    ['http://minio.demo.invalid/fan/a.jpg'], // mixed content — https 페이지에서 깨진다
+    ['javascript:alert(1)'],
+    ['//images.unsplash.com/photo-1'], // 스킴 없음
+    ['https://'], // 호스트 없음
+    [42],
+    'https://images.unsplash.com/photo-1', // 배열이 아니다
+    undefined, // 키가 빠졌다 — «0장» 으로 읽어 주지 않는다
+  ];
+  for (const imageUrls of bad) {
+    const r = validateDatasetData('fan', withImages(imageUrls));
+    assert.equal(r.ok, false, `거부돼야 한다: ${JSON.stringify(imageUrls)}`);
+    assert.match(r.reason, /imageUrls/);
+  }
+});
+
+test('시드: 공개 글은 전부 사진을 갖고, 잠긴 글은 하나도 안 갖는다 (TASK-MONO-678)', () => {
+  const names = new Map(RAW_ARTISTS.filter((a) => a.status === 'PUBLISHED').map((a) => [a.id, a.stageName]));
+  const out = RAW_POSTS.map((p) => toPublicPost(p, names)).filter(Boolean);
+  const publics = out.filter((p) => !p.locked);
+  const lockeds = out.filter((p) => p.locked);
+  // 🔴 비공허성 — 둘 중 하나라도 0 이면 아래 단언은 아무것도 시험하지 않는다.
+  assert.ok(publics.length > 0 && lockeds.length > 0);
+
+  for (const p of publics) {
+    assert.ok(p.imageUrls.length >= 1, `공개 글 '${p.title}' 에 사진이 없다`);
+    for (const u of p.imageUrls) assert.match(u, /^https:\/\//);
+  }
+  // 🔵 상세의 «여러 장» 표시가 실제 시드로 시험되려면 두 장 이상인 글이 있어야 한다.
+  assert.ok(publics.some((p) => p.imageUrls.length >= 2), '사진이 두 장 이상인 공개 글이 없다');
+
+  for (const p of lockeds) assert.deepEqual(p.imageUrls, [], `잠긴 글 '${p.title}' 에 사진이 실렸다`);
+  // 🔴 양성 대조군 — 픽스처의 잠긴 글에 **지울 사진이 실제로 있었는가.** 없으면 위 칸은
+  //    «없는 것을 못 찾은» 것이다.
+  assert.ok(
+    RAW_POSTS.some((p) => p.visibility !== 'PUBLIC' && Array.isArray(p.imageRefs) && p.imageRefs.length > 0),
+    '픽스처의 잠긴 글에 imageRefs 음성 대조군이 없다',
+  );
+});
+
 test('내용물: 옵션에 stock 이 실려 오면 봉투를 거부한다', () => {
   const r = validateDatasetData('store', {
     categories: [],

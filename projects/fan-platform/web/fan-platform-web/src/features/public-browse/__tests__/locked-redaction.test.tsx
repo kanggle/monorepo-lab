@@ -19,12 +19,13 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, fireEvent } from '@testing-library/react';
 import type { PublicPost } from '@demo/public-data';
 import bundled from '@demo/public-data/snapshots/fan.json';
 import { PublicPostCard } from '../ui/PublicPostCard';
 import { PublicPostDetail } from '../ui/PublicPostDetail';
 import { PublicFeedList } from '../ui/PublicFeedList';
+import { PublicPostImage } from '../ui/PublicPostImage';
 
 const posts = bundled.data.posts as unknown as PublicPost[];
 const lockedPosts = posts.filter((p) => p.locked);
@@ -32,6 +33,8 @@ const lockedPosts = posts.filter((p) => p.locked);
 /** 계약을 어긴 «있을 수 없는» 글 — 화면 계층만 남겨 놓고 재기 위한 주입. */
 const CONTRABAND = '초-비밀-미공개-데모-가사-절대-노출-금지';
 const CONTRABAND_PREVIEW = '초-비밀-미리보기-절대-노출-금지';
+/** 잠긴 글에 실려 온 사진 주소 — 경로도 본문이다(TASK-MONO-678). */
+const CONTRABAND_IMAGE = 'leak.jpg';
 const violating = {
   id: 'violating-1',
   artistId: 'a1',
@@ -82,6 +85,40 @@ describe('② PublicPostCard — 계약이 깨져도 본문을 안 그린다', (
     expect(container.textContent ?? '').toContain(CONTRABAND);
   });
 
+  it('🔴🔴 사진이 실려 와도 잠긴 카드에는 `<img>` 가 하나도 없다 (TASK-MONO-678)', () => {
+    const { container } = render(<PublicPostCard post={violating} />);
+    expect(container.querySelectorAll('img')).toHaveLength(0);
+    // 속성 어디에도 — `srcset`·`data-*` 로 숨는 경우까지.
+    expect(container.innerHTML).not.toContain(CONTRABAND_IMAGE);
+  });
+
+  it('🔵 대조군: 잠기지 않은 카드는 첫 장을 그리고, 여러 장이면 남은 수를 알린다', () => {
+    const one = { ...violating, locked: false, visibility: 'PUBLIC' } as PublicPost;
+    const single = render(<PublicPostCard post={one} />);
+    const imgs = single.container.querySelectorAll('img');
+    expect(imgs).toHaveLength(1);
+    expect(imgs[0].getAttribute('src')).toContain(CONTRABAND_IMAGE);
+    expect(imgs[0].getAttribute('alt')).toBeTruthy();
+    expect(single.container.textContent ?? '').not.toMatch(/\+\d/);
+    single.unmount();
+
+    const three = {
+      ...one,
+      imageUrls: ['https://example.invalid/a.jpg', 'https://example.invalid/b.jpg', 'https://example.invalid/c.jpg'],
+    } as PublicPost;
+    const multi = render(<PublicPostCard post={three} />);
+    // 🔴 카드는 **한 장만** 그린다 — 피드가 사진 벽이 되지 않게.
+    expect(multi.container.querySelectorAll('img')).toHaveLength(1);
+    expect(multi.container.textContent ?? '').toContain('+2');
+  });
+
+  it('🔵 사진 0장인 공개 글은 사진 자리 없이 예전 카드 그대로다', () => {
+    const none = { ...violating, locked: false, visibility: 'PUBLIC', imageUrls: [] } as unknown as PublicPost;
+    const { container } = render(<PublicPostCard post={none} />);
+    expect(container.querySelectorAll('[data-testid="public-post-image-frame"]')).toHaveLength(0);
+    expect(container.textContent ?? '').toContain(CONTRABAND);
+  });
+
   it('잠긴 글은 «멤버십 전용» 과 제목, /membership 링크를 낸다', () => {
     const { container, getByText } = render(<PublicPostCard post={violating} />);
     expect(getByText('멤버십 전용')).toBeInTheDocument();
@@ -104,6 +141,21 @@ describe('③ PublicPostDetail — 상세에서도 마찬가지다', () => {
     const { container } = render(<PublicPostDetail post={open} />);
     expect(container.textContent ?? '').toContain(CONTRABAND);
   });
+
+  it('🔴🔴 사진이 실려 와도 잠긴 상세에는 `<img>` 가 하나도 없다 (TASK-MONO-678)', () => {
+    const { container } = render(<PublicPostDetail post={violating} />);
+    expect(container.querySelectorAll('img')).toHaveLength(0);
+    expect(container.innerHTML).not.toContain(CONTRABAND_IMAGE);
+  });
+
+  it('🔵 대조군: 공개 글의 상세는 사진을 **전부** 그리고, 장마다 다른 alt 를 준다', () => {
+    const urls = ['https://example.invalid/a.jpg', 'https://example.invalid/b.jpg', 'https://example.invalid/c.jpg'];
+    const open = { ...violating, locked: false, visibility: 'PUBLIC', imageUrls: urls } as PublicPost;
+    const { container } = render(<PublicPostDetail post={open} />);
+    const imgs = Array.from(container.querySelectorAll('img'));
+    expect(imgs.map((i) => i.getAttribute('src'))).toEqual(urls);
+    expect(new Set(imgs.map((i) => i.getAttribute('alt'))).size).toBe(urls.length);
+  });
 });
 
 describe('④ 실제 시드로 그린 피드 — 잠긴 글이 티저로 나온다', () => {
@@ -117,5 +169,39 @@ describe('④ 실제 시드로 그린 피드 — 잠긴 글이 티저로 나온�
     expect(container.querySelectorAll('[data-locked="false"]').length).toBe(
       posts.length - lockedPosts.length,
     );
+  });
+
+  it('🔴 사진 `<img>` 수 = 사진이 있는 공개 글 수 — 그리고 전부 공개 카드 안에 있다 (TASK-MONO-678)', () => {
+    // 🔴 TASK-MONO-641 의 모양(«데이터는 채웠는데 아무도 안 그린다»)을 실제 시드로 문다.
+    const withPhotos = posts.filter((p) => !p.locked && p.imageUrls.length > 0);
+    expect(withPhotos.length).toBeGreaterThan(0); // 비공허성 — 0 이면 아래가 «0 = 0» 으로 통과한다
+    const { container } = render(<PublicFeedList posts={posts} />);
+    const imgs = container.querySelectorAll('img');
+    expect(imgs).toHaveLength(withPhotos.length);
+    for (const img of Array.from(imgs)) {
+      expect(img.closest('[data-locked="false"]')).not.toBeNull();
+    }
+  });
+});
+
+describe('⑤ PublicPostImage — 사진이 죽어도 글은 산다 (TASK-MONO-678 AC-4)', () => {
+  it('🔴 로드 실패 시 틀(frame)까지 사라진다 — 깨진 이미지 상자를 남기지 않는다', () => {
+    const { container } = render(
+      <PublicPostImage src="https://example.invalid/404.jpg" alt="사진" frameClassName="aspect-video" />,
+    );
+    const img = container.querySelector('img');
+    expect(img).not.toBeNull(); // 대조군 — 실패 전에는 그려져 있다
+    fireEvent.error(img!);
+    expect(container.querySelector('[data-testid="public-post-image-frame"]')).toBeNull();
+    expect(container.querySelector('img')).toBeNull();
+  });
+
+  it('🔴 카드 안에서 사진이 죽어도 제목·본문은 그대로다', () => {
+    const open = { ...violating, locked: false, visibility: 'PUBLIC' } as PublicPost;
+    const { container } = render(<PublicPostCard post={open} />);
+    fireEvent.error(container.querySelector('img')!);
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.textContent ?? '').toContain(CONTRABAND);
+    expect(container.textContent ?? '').toContain(open.title);
   });
 });

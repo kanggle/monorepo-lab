@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { PublicPost } from '@demo/public-data';
+import { PublicPostImage } from './PublicPostImage';
 
 /**
  * 공개 피드의 글 한 줄.
@@ -12,7 +13,8 @@ import type { PublicPost } from '@demo/public-data';
  *   ① 발행 계약  — `locked === true` 면 `body` 는 `null`, `imageUrls` 는 `[]` 다
  *                  (`@demo/public-data` 의 `validateDatasetData` 가 봉투를 **거부**한다).
  *                  `bodyPreview` 라는 필드는 공개 계약에 **존재하지 않는다.**
- *   ② 이 컴포넌트 — 잠긴 분기에서 `post.body` 를 참조하는 식이 하나도 없다.
+ *   ② 이 컴포넌트 — 잠긴 분기에서 `post.body` 도 `post.imageUrls` 도 참조하는 식이 하나도 없다
+ *                  (TASK-MONO-678: 사진 경로도 본문이다).
  *   ③ 서버 컴포넌트 — `'use client'` 가 없으므로 `post` 객체가 RSC 페이로드로 직렬화되지
  *                  않는다. 클라이언트 컴포넌트에 `post` 를 통째로 넘기면 ①②가 다 참이어도
  *                  **봉투의 필드가 페이로드에 실린다** — 그 함정을 여기서 닫는다.
@@ -65,9 +67,20 @@ export function PublicPostCard({ post }: { post: PublicPost }) {
           </Link>
         </div>
       ) : (
-        <p className="line-clamp-3 whitespace-pre-line text-sm text-ink-600 dark:text-ink-300">
-          {post.body}
-        </p>
+        <>
+          {/* 🔴 사진은 **이 분기 안에서만** 읽는다. 카드는 첫 장만 — 피드가 사진 벽이 되지 않게. */}
+          {post.imageUrls.length > 0 ? (
+            <PublicPostImage
+              src={post.imageUrls[0]}
+              alt={`${post.artistStageName} — ${post.title}`}
+              frameClassName="mb-3 aspect-video rounded-lg bg-ink-100 dark:bg-ink-800"
+              badge={post.imageUrls.length > 1 ? `+${post.imageUrls.length - 1}` : undefined}
+            />
+          ) : null}
+          <p className="line-clamp-3 whitespace-pre-line text-sm text-ink-600 dark:text-ink-300">
+            {post.body}
+          </p>
+        </>
       )}
 
       <footer className="mt-4 flex items-center text-xs text-ink-500">
