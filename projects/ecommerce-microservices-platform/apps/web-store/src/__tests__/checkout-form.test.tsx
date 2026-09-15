@@ -131,7 +131,7 @@ describe('CheckoutForm', () => {
   });
 
   it('주문 성공 시 결제를 요청한다', async () => {
-    mockSubmitOrder.mockResolvedValueOnce({ orderId: 'order-1' });
+    mockSubmitOrder.mockResolvedValueOnce({ orderId: 'order-1', totalPrice: 1500000, discountAmount: 0 });
 
     const user = userEvent.setup();
     renderCheckoutForm();
@@ -147,7 +147,7 @@ describe('CheckoutForm', () => {
   });
 
   it('주문 성공 시 onOrderComplete를 호출한다', async () => {
-    mockSubmitOrder.mockResolvedValueOnce({ orderId: 'order-1' });
+    mockSubmitOrder.mockResolvedValueOnce({ orderId: 'order-1', totalPrice: 1500000, discountAmount: 0 });
 
     const user = userEvent.setup();
     renderCheckoutForm();
@@ -161,7 +161,7 @@ describe('CheckoutForm', () => {
   });
 
   it('주문 성공 시 올바른 데이터를 전송한다', async () => {
-    mockSubmitOrder.mockResolvedValueOnce({ orderId: 'order-1' });
+    mockSubmitOrder.mockResolvedValueOnce({ orderId: 'order-1', totalPrice: 1500000, discountAmount: 0 });
 
     const user = userEvent.setup();
     renderCheckoutForm();
@@ -222,7 +222,7 @@ describe('CheckoutForm', () => {
   });
 
   it('주문 처리 중 중복 클릭을 방지한다', async () => {
-    let resolveOrder: (value: { orderId: string }) => void;
+    let resolveOrder: (value: { orderId: string; totalPrice: number; discountAmount: number }) => void;
     mockSubmitOrder.mockImplementationOnce(
       () => new Promise((resolve) => { resolveOrder = resolve; }),
     );
@@ -238,7 +238,7 @@ describe('CheckoutForm', () => {
     expect(screen.getByRole('button', { name: /주문 처리 중/ })).toBeDisabled();
     expect(mockSubmitOrder).toHaveBeenCalledTimes(1);
 
-    resolveOrder!({ orderId: 'order-1' });
+    resolveOrder!({ orderId: 'order-1', totalPrice: 1500000, discountAmount: 0 });
 
     await waitFor(() => {
       expect(mockRequestPayment).toHaveBeenCalledWith(
@@ -256,7 +256,7 @@ describe('CheckoutForm', () => {
 
   describe('주문 직전 라이브 재검증 (공개 카탈로그가 저장본을 읽게 되면서 생긴 요구)', () => {
     it('주문을 만들기 전에 라이브로 각 줄을 확인한다', async () => {
-      mockSubmitOrder.mockResolvedValueOnce({ orderId: 'order-1' });
+      mockSubmitOrder.mockResolvedValueOnce({ orderId: 'order-1', totalPrice: 1500000, discountAmount: 0 });
 
       const user = userEvent.setup();
       renderCheckoutForm();
@@ -306,6 +306,36 @@ describe('CheckoutForm', () => {
         expect(screen.getByRole('alert')).toHaveTextContent('1,600,000');
       });
       expect(mockSubmitOrder).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('🔴 TASK-INT-026 — 결제 금액의 권위는 서버다', () => {
+    // payment-service 는 `OrderPlaced.totalPrice` 로 PENDING 결제를 만들고, 승인 금액이 그와
+    // 다르면 `400 AMOUNT_MISMATCH` 로 거절한다. 그래서 토스에 요청하는 금액은 **주문 응답이
+    // 돌려준 totalPrice** 여야 한다 — 화면이 계산한 할인액을 빼서 만든 값이 아니라.
+    it('토스에 요청하는 금액은 주문 응답의 totalPrice 다 — 화면의 할인 계산이 아니다', async () => {
+      mockSubmitOrder.mockResolvedValueOnce({ orderId: 'order-1', totalPrice: 1500000, discountAmount: 0 });
+
+      const user = userEvent.setup();
+      render(
+        <TestQueryProvider>
+          <CheckoutForm
+            items={CART_ITEMS}
+            totalAmount={1500000}
+            discountAmount={5000}
+            onOrderComplete={mockOnOrderComplete}
+          />
+        </TestQueryProvider>,
+      );
+
+      await fillRequiredFields(user);
+      await user.click(screen.getByRole('button', { name: /결제하기/ }));
+
+      await waitFor(() => {
+        expect(mockRequestPayment).toHaveBeenCalledWith(
+          expect.objectContaining({ orderId: 'order-1', amount: 1500000 }),
+        );
+      });
     });
   });
 });
