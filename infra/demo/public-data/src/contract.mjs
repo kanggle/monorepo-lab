@@ -214,6 +214,22 @@ export function validateDatasetData(dataset, data) {
       if ('bodyPreview' in p) {
         return { ok: false, reason: `게시물 '${String(p.id)}' 에 bodyPreview 가 있습니다 — 공개 계약에 없는 필드입니다` };
       }
+      // 🔴 TASK-MONO-678 — 사진 주소는 화면이 `<img src>` 에 **그대로** 넣는다. 이 봉투는
+      //    저장소 밖(Blob)에서도 오므로, `http:`(mixed content로 깨진다) · `javascript:` ·
+      //    스킴 없는 `//host` 가 화면까지 가면 안 된다. 포인터의 `url` 검사와 같은 규칙이다.
+      //    🔵 배열 자체도 요구한다 — 계약 타입이 `imageUrls: string[]` 이고, 키가 빠진 글을
+      //    «사진 0장» 으로 읽어 주면 발행자의 누락이 조용히 통과한다.
+      if (!Array.isArray(p.imageUrls)) {
+        return { ok: false, reason: `게시물 '${String(p.id)}' 의 imageUrls 가 배열이 아닙니다` };
+      }
+      for (const u of /** @type {unknown[]} */ (p.imageUrls)) {
+        if (typeof u !== 'string' || !/^https:\/\/[^\s/]+\/\S*$/.test(u)) {
+          return {
+            ok: false,
+            reason: `게시물 '${String(p.id)}' 의 imageUrls 에 https 절대주소가 아닌 값이 있습니다: '${String(u).slice(0, 80)}'`,
+          };
+        }
+      }
     }
     for (const a of /** @type {Array<Record<string, unknown>>} */ (d.artists)) {
       for (const banned of ['realName', 'accountId', 'tenantId', 'email']) {

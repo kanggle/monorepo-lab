@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { PublicPost } from '@demo/public-data';
+import { PublicPostImage } from './PublicPostImage';
 
 /**
  * 공개 글 상세.
@@ -57,7 +58,25 @@ export function PublicPostDetail({ post }: { post: PublicPost }) {
           </Link>
         </div>
       ) : (
-        <p className="whitespace-pre-line text-base leading-relaxed text-ink-800">{post.body}</p>
+        <>
+          {/* 🔴 사진은 **이 분기 안에서만** 읽는다 — 잠긴 분기에는 `imageUrls` 를 참조하는 식이 없다. */}
+          {post.imageUrls.length > 0 ? (
+            <div
+              data-testid="public-post-gallery"
+              className={`mb-6 grid gap-3 ${post.imageUrls.length > 1 ? 'sm:grid-cols-2' : ''}`}
+            >
+              {post.imageUrls.map((src, i) => (
+                <PublicPostImage
+                  key={`${i}-${src}`}
+                  src={src}
+                  alt={`${post.title} — 사진 ${i + 1}/${post.imageUrls.length}`}
+                  frameClassName="aspect-video rounded-xl bg-ink-100"
+                />
+              ))}
+            </div>
+          ) : null}
+          <p className="whitespace-pre-line text-base leading-relaxed text-ink-800">{post.body}</p>
+        </>
       )}
     </article>
   );
