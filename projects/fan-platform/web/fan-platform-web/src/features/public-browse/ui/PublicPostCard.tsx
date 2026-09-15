@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { PublicPost } from '@demo/public-data';
 import { PostImage } from '@/shared/ui/PostImage';
+import { CARD_INNER_LINK_CLASS, CARD_LINK_CLASS } from '@/shared/ui/cardLink';
 
 /**
  * 공개 피드의 글 한 줄.
@@ -22,18 +23,22 @@ import { PostImage } from '@/shared/ui/PostImage';
  * ⇒ 「본문을 조심해서 안 그린다」가 아니라 **그릴 본문이 없다.** 그래서 다음 사람이 이
  *   카드에 필드를 하나 더 붙여도 잠긴 글에서 새 나갈 것이 없다.
  * ─────────────────────────────────────────────────────────────────────────
+ *
+ * 🔵 **카드 어디를 눌러도 상세로 간다** (TASK-FAN-FE-022) — 제목 링크 하나를 카드 전체로 늘린다.
+ *    아티스트 배지와 잠긴 카드의 「멤버십 안내 보기」는 그 위로 올려 자기 목적지로 간다.
+ *    이유와 함정은 `shared/ui/cardLink.ts` 머리말.
  */
 export function PublicPostCard({ post }: { post: PublicPost }) {
   return (
     <article
       data-testid="public-post-card"
       data-locked={post.locked ? 'true' : 'false'}
-      className="rounded-xl border border-ink-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md dark:bg-ink-900 dark:border-ink-800"
+      className="relative rounded-xl border border-ink-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md dark:bg-ink-900 dark:border-ink-800"
     >
       <header className="mb-2 flex items-center gap-2">
         <Link
           href={`/artists/${post.artistId}`}
-          className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-700 hover:bg-brand-200"
+          className={`${CARD_INNER_LINK_CLASS} rounded-full bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-700 hover:bg-brand-200`}
         >
           {post.artistStageName}
         </Link>
@@ -48,7 +53,9 @@ export function PublicPostCard({ post }: { post: PublicPost }) {
       </header>
 
       <h3 className="mb-1 text-lg font-semibold text-ink-900 dark:text-ink-100">
-        {post.title}
+        <Link href={`/posts/${post.id}`} data-card-link="" className={CARD_LINK_CLASS}>
+          {post.title}
+        </Link>
       </h3>
 
       {post.locked ? (
@@ -61,7 +68,7 @@ export function PublicPostCard({ post }: { post: PublicPost }) {
           </p>
           <Link
             href="/membership"
-            className="mt-3 inline-block rounded-md bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700"
+            className={`${CARD_INNER_LINK_CLASS} mt-3 inline-block rounded-md bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700`}
           >
             멤버십 안내 보기
           </Link>
@@ -82,12 +89,6 @@ export function PublicPostCard({ post }: { post: PublicPost }) {
           </p>
         </>
       )}
-
-      <footer className="mt-4 flex items-center text-xs text-ink-500">
-        <Link className="ml-auto text-brand-600 hover:text-brand-700" href={`/posts/${post.id}`}>
-          자세히 보기 →
-        </Link>
-      </footer>
     </article>
   );
 }
