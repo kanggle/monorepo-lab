@@ -4,12 +4,16 @@ import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import {
   isAuthenticated,
+  hasRefreshToken,
   getActiveTenant,
   getIdToken,
   getAccessToken,
 } from '@/shared/lib/session';
 import { decodeJwtPayload } from '@/shared/lib/jwt';
-import { buildLoginRedirectFor } from '@/shared/lib/login-redirect';
+import {
+  buildLoginRedirectFor,
+  buildSessionRefreshRedirectFor,
+} from '@/shared/lib/login-redirect';
 import { getCatalog } from '@/features/catalog';
 import {
   selectableTenants,
@@ -63,6 +67,24 @@ async function buildLoginRedirect(): Promise<string> {
 }
 
 /**
+ * Idle-expiry hop (TASK-MONO-674, console-integration-contract § 2.6.1).
+ *
+ * 🔴 The access cookie's `maxAge` is the token's `expires_in` (1800s), so after
+ * 30 idle minutes the BROWSER drops it (and the operator cookie at its own TTL)
+ * while the 30-day refresh cookie survives. This guard reads cookies only, so it
+ * used to bounce such an operator to a reason-less `/login?redirect=…`.
+ *
+ * A layout cannot set cookies, so the refresh cannot happen here: redirect to
+ * `GET /api/auth/refresh`, which rotates + re-exchanges, sets the cookies and
+ * returns to the same path (or lands on `/login?error=session_expired`).
+ * Same path predicate as {@link buildLoginRedirect}.
+ */
+async function buildSessionRefreshRedirect(): Promise<string> {
+  const hdrs = await headers();
+  return buildSessionRefreshRedirectFor(hdrs.get('x-pathname'));
+}
+
+/**
  * Authenticated console shell layout (Vercel-style — TASK-PC-FE-039).
  *
  * Layout: a full-width sticky top bar holds only the brand + the **tenant
@@ -87,7 +109,15 @@ export default async function ConsoleLayout({
 }: {
   children: ReactNode;
 }) {
-  if (!(await isAuthenticated())) redirect(await buildLoginRedirect());
+  if (!(await isAuthenticated())) {
+    // Refresh cookie present = logged in before, session idled out → refresh.
+    // Absent = never logged in / logged out → login. No network call either way.
+    redirect(
+      (await hasRefreshToken())
+        ? await buildSessionRefreshRedirect()
+        : await buildLoginRedirect(),
+    );
+  }
 
   const activeTenant = await getActiveTenant();
   const accountLabel = accountDisplayLabel(
