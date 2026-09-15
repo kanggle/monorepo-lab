@@ -14,10 +14,10 @@ import { useEffect, useState } from 'react';
  * 임포트하지 않고 **여기서 좁게 다시 적는다** — 타입 임포트는 지워지지만, 그 모듈은
  * 모듈 스코프에서 해석기 팩토리를 부르므로 클라이언트 그래프에 끌려오면 안 된다.
  */
-type BackendState = 'not-demo' | 'running' | 'unavailable';
+type BackendState = 'not-demo' | 'starting' | 'running' | 'unavailable';
 
 /**
- * 🔴🔴 네 값이 **서로 다른 사실**이다. 뭉치면 `TASK-MONO-636`·`644` 가 두 번 고친
+ * 🔴🔴 다섯 값이 **서로 다른 사실**이다. 뭉치면 `TASK-MONO-636`·`644` 가 두 번 고친
  * 그 결함이 세 번째로 생긴다.
  */
 type Probe =
@@ -25,6 +25,12 @@ type Probe =
   | { kind: 'probing' }
   /** 물어봤고 꺼져 있다. 배너를 낸다. */
   | { kind: 'unavailable' }
+  /**
+   * 🔴 물어봤고 **켜지는 중**이다 (`TASK-MONO-668`) — 인스턴스는 떴는데 고른 화면이 아직
+   * 전부 준비되지 않았다. 「꺼져 있어」 배너와 **다른 문장**이다: 켜라고 하면 거짓이고(이미
+   * 켜졌다), 아무 말도 안 하면 방문자가 «다 됐다» 고 믿는다(이 티켓의 결함).
+   */
+  | { kind: 'starting' }
   /** 물어봤고 켜져 있거나(running) 데모 배포가 아니다(not-demo). 배너 없음. */
   | { kind: 'quiet' }
   /**
@@ -49,7 +55,13 @@ export function DemoBackendNoticeClient() {
         if (!res.ok) throw new Error(`status ${res.status}`);
         const body = (await res.json()) as { state?: BackendState };
         if (!alive) return;
-        setProbe(body.state === 'unavailable' ? { kind: 'unavailable' } : { kind: 'quiet' });
+        setProbe(
+          body.state === 'unavailable'
+            ? { kind: 'unavailable' }
+            : body.state === 'starting'
+              ? { kind: 'starting' }
+              : { kind: 'quiet' },
+        );
       } catch {
         // 🔴 삼키되 **거짓말하지 않는다.** 'unavailable' 로 떨어뜨리면 원인을 지어낸다.
         if (alive) setProbe({ kind: 'unreachable' });
@@ -60,6 +72,31 @@ export function DemoBackendNoticeClient() {
       alive = false;
     };
   }, []);
+
+  // 🔴 TASK-MONO-668 — 켜지는 중. 세 앱이 같은 첫 문장(«데모 서버가 켜지는 중입니다»)을 쓴다.
+  //    🔴 「샘플 데이터」 문장을 **안 넣는다** — 켜지는 중에 무엇이 그려지는지는 잰 적이 없고,
+  //    `TASK-MONO-642` 의 규칙이 «배너는 화면이 그리는 것과 어긋나면 안 된다» 다.
+  //    🔴 「서버를 켠 뒤」도 **안 넣는다** — 이미 켜졌다. 그 말은 방문자를 론처로 돌려보내
+  //    중복 기동을 누르게 한다.
+  if (probe.kind === 'starting') {
+    return (
+      <div
+        role="status"
+        data-testid="demo-backend-starting"
+        style={{
+          background: '#e0f2fe',
+          color: '#075985',
+          padding: '10px 16px',
+          fontSize: '0.9rem',
+          textAlign: 'center',
+          borderBottom: '1px solid #7dd3fc',
+        }}
+      >
+        데모 서버가 켜지는 중입니다. 준비가 끝나기 전에는 장바구니·로그인 같은 실시간 기능이
+        동작하지 않을 수 있습니다. 몇 분 뒤 다시 열어 주세요.
+      </div>
+    );
+  }
 
   if (probe.kind !== 'unavailable') return null;
 

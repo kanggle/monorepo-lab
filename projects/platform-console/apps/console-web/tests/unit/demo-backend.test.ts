@@ -276,6 +276,25 @@ describe('resolveDemoBackendState', () => {
     expect(await resolveDemoBackendState()).toBe('unavailable');
   });
 
+  it('🔴🔴 TASK-MONO-668 — running + selection_ready=false → `starting`', async () => {
+    process.env.DEMO_API_BASE = CONTROL;
+    stubStatus({ state: 'running', ip: IP, selection_ready: false });
+    const { resolveDemoBackendState, resolveDemoBackend } = await load();
+    expect(await resolveDemoBackendState()).toBe('starting');
+    // 🔴 켜지는 중에도 주소는 준다 — 콘솔의 BFF 호출이 폴백으로 떨어지면 안 된다.
+    expect(await resolveDemoBackend()).not.toBeNull();
+  });
+
+  it('🔴 TASK-MONO-668 — 필드 없음·null(옛 람다 · 판정 불가) → `running` 그대로', async () => {
+    process.env.DEMO_API_BASE = CONTROL;
+    for (const extra of [{}, { selection_ready: null }]) {
+      vi.resetModules();
+      stubStatus({ state: 'running', ip: IP, ...extra });
+      const { resolveDemoBackendState } = await load();
+      expect(await resolveDemoBackendState()).toBe('running');
+    }
+  });
+
   it('🔴 `/status` 실패도 `unavailable` 이다 — 「모른다」를 「켜졌다」로 번역하지 않는다', async () => {
     process.env.DEMO_API_BASE = CONTROL;
     stubStatus({}, { ok: false });

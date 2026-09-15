@@ -908,6 +908,144 @@ class MaxRuntimeResetTest(unittest.TestCase):
 # ===========================================================================
 # 라우터는 등호로 가른다 — `$default` 의 선행 조건 (TASK-MONO-644)
 # ===========================================================================
+class SelectionReadyOnStatusTest(unittest.TestCase):
+    """TASK-MONO-668 — `/status` 의 `selection_ready` (소유자 결정 ⓑ, ADR-MONO-071 § D5.1).
+
+    🔴🔴 이 클래스가 지키는 것은 **세 값이 서로 다르다**는 것이다: True(준비됨) · False(켜지는
+       중) · None(판정 불가). None 을 False 로 뭉치면 발행자만 죽은 멀쩡한 스택이 영구히
+       「켜지는 중」이 되고, True 로 뭉치면 꺼진 스택을 「준비됨」으로 그린다.
+    """
+
+    def setUp(self):
+        FAKE_SSM.store.clear()
+        FAKE_SSM.sent.clear()
+        FAKE_EC2.state = "running"
+        FAKE_EC2.launch_time = launched(0)
+
+    def _health(self, states, age=0):
+        FAKE_SSM.store["/t/health"] = json.dumps({
+            "published_at": T0 - age,
+            "domains": {d: {"state": st, "healthy": 1, "total": 1} for d, st in states.items()},
+        })
+
+    def _status(self):
+        with mock.patch.object(handler, "_now", return_value=T0):
+            return body(handler.status())
+
+    def _bundles(self):
+        with mock.patch.object(handler, "_now", return_value=T0):
+            return body(handler.bundles())
+
+    def test_running_instance_with_a_booting_selected_bundle_is_not_ready(self):
+        """🔴🔴 이 티켓의 결함 그 자체 — 2026-09-11/12 창의 관측(`running` + `store=booting`)."""
+        handler._write_selection({"store"})
+        self._health({"iam": "up", "ecommerce": "partial"})
+        b = self._status()
+        self.assertEqual(b["state"], "running")
+        self.assertIs(b["selection_ready"], False)
+
+    def test_all_selected_bundles_ready_is_true(self):
+        """대조군 — 위 칸이 «언제나 False» 로 통과하는 구현과 구별한다."""
+        handler._write_selection({"store"})
+        self._health({"iam": "up", "ecommerce": "up"})
+        self.assertIs(self._status()["selection_ready"], True)
+
+    def test_one_ready_and_one_booting_is_false_the_accepted_conservative_cost(self):
+        """🔴 «전부» = 선택 전부. 스토어가 다 떠도 콘솔이 booting 이면 False 다(수용한 대가)."""
+        handler._write_selection({"store", "console"})
+        self._health({"iam": "up", "ecommerce": "up", "console": "partial"})
+        b = self._bundles()
+        self.assertEqual(b["bundles"]["store"]["state"], "ready")
+        self.assertEqual(b["bundles"]["console"]["state"], "booting")
+        self.assertIs(self._status()["selection_ready"], False)
+
+    def test_unselected_bundles_never_hold_it_back(self):
+        """🔴 고르지 않은 묶음은 `waiting` 이고 영영 안 켜진다 — 그것이 «켜지는 중» 을 붙들면 안 된다."""
+        handler._write_selection({"fan"})
+        self._health({"iam": "up", "fan": "up"})  # ecommerce·console·wms… 은 스냅샷에 없다
+        store = self._bundles()["bundles"]["store"]
+        # 🔵 첫 판은 여기서 `waiting` 을 단언했고 **틀렸다** — 선택 안 된 store 도 공유 의존
+        #    iam 이 up 이면 `partial` 이다(`_bundle_state` 의 마지막 두 갈래). 이 칸이 지키는 것은
+        #    그 이름이 아니라 «선택 밖이고 ready 가 아닌 묶음» 이 판정을 붙들지 않는다는 것이다.
+        self.assertFalse(store["selected"])
+        self.assertNotEqual(store["state"], "ready")
+        self.assertIs(self._status()["selection_ready"], True)
+
+    def test_stale_health_is_none_not_false_and_not_true(self):
+        """🔴🔴 stale 은 «모른다» 다 — up 을 믿지도(True), booting 으로 읽지도(False) 않는다."""
+        handler._write_selection({"store"})
+        self._health({"iam": "up", "ecommerce": "up"}, age=handler.HEALTH_STALE_AFTER_SECONDS + 1)
+        self.assertIsNone(self._status()["selection_ready"])
+        # 🔵 대조군: 같은 스냅샷이 신선하면 True 다 — None 이 «항상 None» 이 아니다.
+        self._health({"iam": "up", "ecommerce": "up"}, age=0)
+        self.assertIs(self._status()["selection_ready"], True)
+
+    def test_snapshot_without_published_at_is_none(self):
+        FAKE_SSM.store["/t/health"] = json.dumps({"iam": {"state": "up"}, "ecommerce": {"state": "up"}})
+        handler._write_selection({"store"})
+        self.assertIsNone(self._status()["selection_ready"])
+
+    def test_instance_not_running_is_none(self):
+        """🔴 꺼짐·켜지는 중인 인스턴스는 `state` 가 이미 말한다 — 여기서 False 를 내면 두 번 말한다."""
+        handler._write_selection({"store"})
+        self._health({"iam": "up", "ecommerce": "up"})
+        for ec2 in ("stopped", "pending", "stopping"):
+            with self.subTest(ec2=ec2):
+                FAKE_EC2.state = ec2
+                self.assertIsNone(self._status()["selection_ready"])
+
+    def test_empty_selection_is_none(self):
+        """🔵 선택이 비면 부팅 폴백이 무엇을 띄웠는지 여기서 모른다(«전체 시작» 경로 포함)."""
+        self._health({"iam": "up", "ecommerce": "up"})
+        self.assertIsNone(self._status()["selection_ready"])
+
+    def test_a_failing_ssm_read_does_not_break_status(self):
+        """🔴🔴 덧붙인 필드가 본체를 죽이면 안 된다 — `/status` 500 은 세 앱에 「꺼짐」 배너를 띄운다."""
+        handler._write_selection({"store"})
+        with mock.patch.object(handler, "_read_selection", side_effect=RuntimeError("throttled")):
+            with mock.patch.object(handler, "_now", return_value=T0):
+                r = handler.status()
+        self.assertEqual(r["statusCode"], 200)
+        b = body(r)
+        self.assertIsNone(b["selection_ready"])
+        self.assertEqual(b["state"], "running")
+        self.assertEqual(b["ip"], "1.2.3.4")
+
+    def test_old_fields_are_still_there(self):
+        """🔵 추가 필드다 — 론처가 읽는 `used_minutes`·`budget_minutes` 가 사라지면 안 된다."""
+        b = self._status()
+        for k in ("state", "ip", "used_minutes", "budget_minutes", "selection_ready"):
+            self.assertIn(k, b)
+
+    def test_status_and_bundles_never_disagree(self):
+        """🔴🔴 같은 사실은 한 집 — `/status` 의 판정이 `/bundles` 의 묶음 상태에서 유도되는가.
+
+        여러 세계를 돌려 `selection_ready` 가 «선택 묶음의 `/bundles` state 가 전부 ready» 와
+        **같은지** 대조한다. 한쪽이 판정을 따로 계산하기 시작하면 여기서 갈라진다.
+        """
+        worlds = [
+            ({"store"}, {"iam": "up", "ecommerce": "up"}),
+            ({"store"}, {"iam": "down", "ecommerce": "up"}),
+            ({"store"}, {"iam": "up", "ecommerce": "down"}),
+            ({"fan", "store"}, {"iam": "up", "fan": "up", "ecommerce": "partial"}),
+            ({"console", "console-wms"}, {"iam": "up", "console": "up", "wms": "up"}),
+            ({"console", "console-wms"}, {"iam": "up", "console": "up"}),
+        ]
+        seen = set()
+        for selection, health in worlds:
+            with self.subTest(selection=sorted(selection), health=health):
+                FAKE_SSM.store.clear()
+                handler._write_selection(selection)
+                self._health(health)
+                bundles = self._bundles()["bundles"]
+                expected = all(bundles[n]["state"] == "ready" for n in selection)
+                got = self._status()["selection_ready"]
+                self.assertIs(got, expected)
+                seen.add(got)
+        # 🔵 비공허성 — 세계들이 두 값을 **다** 만들었는가. 전부 True 면 대조가 한쪽만 잰 것이다.
+        self.assertEqual(seen, {True, False})
+
+
 class RouterIsExactTest(unittest.TestCase):
     """🔴🔴 왜 이 클래스가 생겼는가.
 
