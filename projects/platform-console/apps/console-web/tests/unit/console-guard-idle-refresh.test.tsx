@@ -1,3 +1,10 @@
+// ADR-MONO-074 (TASK-PC-FE-282 D11) changed ONE setup in this file — the decision changed it,
+// it was not "red, so fixed". An anonymous browser (access, operator AND refresh cookies all
+// absent) is now a SAMPLE VISITOR and enters the sample shell instead of being redirected.
+// The «리프레시 쿠키만 빼면 예전 그대로 /login» control therefore seeds a HALF session
+// (operator cookie only, no access, no refresh) — the state in which the /login branch still
+// exists. Every refresh-present cell and every assertion is unchanged.
+
 /**
  * 🔴🔴 `TASK-MONO-674` — `(console)` 가드의 **유휴 만료** 갈래. 실제 레이아웃을 부른다.
  *
@@ -23,7 +30,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const { session } = vi.hoisted(() => ({
-  session: { refreshCookie: true },
+  session: { refreshCookie: true, operatorCookie: false },
 }));
 
 vi.mock('@/shared/lib/session', async (importOriginal) => {
@@ -44,7 +51,9 @@ vi.mock('next/headers', () => ({
     get: (name: string) =>
       name === 'console_refresh_token' && session.refreshCookie
         ? { value: 'idle.refresh' }
-        : undefined,
+        : name === 'console_operator_token' && session.operatorCookie
+          ? { value: 'half.session.operator' }
+          : undefined,
   }),
 }));
 
@@ -78,6 +87,7 @@ async function guardTarget(): Promise<string> {
 
 beforeEach(() => {
   session.refreshCookie = true;
+  session.operatorCookie = false;
   vi.stubGlobal(
     'fetch',
     vi.fn(() => {
@@ -114,6 +124,8 @@ describe('🔴🔴 유휴 만료 — 리프레시 쿠키가 남아 있다 (TASK-
 
   it('🔵 대조군 — 같은 목에서 리프레시 쿠키만 빼면 예전 그대로 `/login?redirect=` (fetch 0)', async () => {
     session.refreshCookie = false;
+    // ADR-MONO-074 A1 — an empty jar is a sample visitor now; /login is the half session.
+    session.operatorCookie = true;
     expect(await guardTarget()).toBe(
       `/login?redirect=${encodeURIComponent('/finance/accounts?page=2')}`,
     );

@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import { SAMPLE_TENANT_ID } from '@/shared/sample/codes';
 
 /**
  * HttpOnly cookie session contract (single source of cookie names + options).
@@ -179,8 +180,16 @@ export async function getIdToken(): Promise<string | null> {
   return jar.get(ID_TOKEN_COOKIE)?.value ?? null;
 }
 
-/** Server-side read of the active tenant (or null when none selected). */
+/**
+ * Server-side read of the active tenant (or null when none selected).
+ *
+ * A sample visitor ({@link isSampleVisitor}) sits in the single read-only
+ * sample tenant (ADR-MONO-074 A7) — whatever tenant cookie the browser may still
+ * carry is ignored, because every answer that visitor gets is sample data.
+ * For everyone else this is the cookie read, unchanged.
+ */
 export async function getActiveTenant(): Promise<string | null> {
+  if (await isSampleVisitor()) return SAMPLE_TENANT_ID;
   const jar = await cookies();
   return jar.get(TENANT_COOKIE)?.value ?? null;
 }
@@ -250,6 +259,41 @@ export async function isAuthenticated(): Promise<boolean> {
 export async function hasRefreshToken(): Promise<boolean> {
   const jar = await cookies();
   return Boolean(jar.get(REFRESH_COOKIE)?.value);
+}
+
+/**
+ * The **sample visitor** (ADR-MONO-074 A1): the IAM access cookie, the operator
+ * cookie AND the refresh cookie are ALL absent — an anonymous browser that has
+ * no session of any kind, live or idled out.
+ *
+ * Such a visitor enters the real `(console)` shell, and every backend call site
+ * answers it from the sample router instead of the network
+ * (`shared/api/sample-gate.ts`).
+ *
+ * 🔴🔴 This is the ONLY definition of «sample visitor». Every caller asks this
+ *    function — a second definition would be the one that gets left behind
+ *    when the rule changes (the same argument `app/page.tsx` made for
+ *    {@link isAuthenticated}).
+ *
+ * 🔴 NOT sample visitors, on purpose (ADR-MONO-074 A1: «반쪽 세션·죽은 쿠키는 지금
+ *    경로 그대로»):
+ *    - access cookie only (the pre-operator state, {@link hasPreOperatorSession})
+ *      → onboarding / login exactly as before;
+ *    - operator cookie only → not authenticated → login exactly as before;
+ *    - 🔴🔴 refresh cookie surviving without access/operator cookies = «logged in
+ *      before, idled out» (TASK-MONO-674: the access and operator cookies expire
+ *      at their token TTL while the 30-day refresh cookie stays) → the silent
+ *      refresh hop, NOT the sample shell. Without this clause a real operator
+ *      back from a coffee break would be shown synthetic data. (TASK-PC-FE-282 D11.)
+ *    A dead-but-present cookie is likewise not a sample visitor: the backend
+ *    401 / the refresh route drives the existing forced re-login.
+ */
+export async function isSampleVisitor(): Promise<boolean> {
+  return (
+    (await getAccessToken()) === null &&
+    (await getOperatorToken()) === null &&
+    !(await hasRefreshToken())
+  );
 }
 
 /**

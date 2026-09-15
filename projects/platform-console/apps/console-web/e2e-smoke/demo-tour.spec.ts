@@ -69,8 +69,12 @@ test.describe('공개 둘러보기 (backend 미기동 · 미인증)', () => {
       '/ecommerce/orders',
     );
 
-    // 그리고 보호 경로에 직접 들어가면 여전히 로그인으로 튕긴다(가드 그대로).
+    // 🔴 `ADR-MONO-074` 가 아래 기대값을 바꿨다(«빨개져서 고친» 것이 아니다). 예전 판은
+    //    «보호 경로에 직접 들어가면 로그인으로 튕긴다» 를 쟀다. 이제 익명(샘플 방문자)은
+    //    **같은 주소의 실제 화면**에 머물고 값은 샘플이다 — 로그인은 셸의 링크가 제공한다.
+    //    이 칸의 나머지(`/demo` 쪽 기대)는 `TASK-MONO-686` 까지 그대로다.
     await page.goto('/ecommerce/orders');
-    await page.waitForURL(/\/login\?redirect=/, { timeout: 10_000 });
+    await expect(page.getByTestId('sample-visitor-banner')).toBeVisible();
+    expect(new URL(page.url()).pathname).toBe('/ecommerce/orders');
   });
 });

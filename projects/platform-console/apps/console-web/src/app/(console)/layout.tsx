@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import {
   isAuthenticated,
+  isSampleVisitor,
   hasRefreshToken,
   getActiveTenant,
   getIdToken,
@@ -30,6 +31,8 @@ import { ConsoleSidebarNav } from '@/shared/ui/ConsoleSidebarNav';
 import { ApiError } from '@/shared/api/errors';
 import { DemoBackendNotice } from '@/widgets/demo-notice/DemoBackendNotice';
 import { DemoHeartbeat } from '@/widgets/demo-heartbeat/DemoHeartbeat';
+import { SampleVisitorBanner } from '@/widgets/sample-visitor/SampleVisitorBanner';
+import { SampleScreenNotice } from '@/widgets/sample-visitor/SampleScreenNotice';
 
 /**
  * The signed-in operator's display identity for the account menu. Read
@@ -57,8 +60,8 @@ export const dynamic = 'force-dynamic';
  *
  * 🔴 **규칙 자체는 여기 없다** — `shared/lib/login-redirect.ts` 로 뺐다
  * (`TASK-PC-FE-280`). 서버 컴포넌트 안의 **비-export 함수**였던 탓에, 그것을 지키는
- * 테스트(`tests/unit/layout-login-redirect.test.ts`)가 로직을 **로컬에 재구현**해 두고
- * 그 재구현을 검사했다 — 진짜 함수는 계산에 **한 번도 안 들어갔다**. 이제 정의는 하나고,
+ * 테스트(`tests/unit/layout-login-redirect.test.ts`)가 로직을 **로컬에 재구현**해
+ * 두고 그 재구현을 검사했다 — 진짜 함수는 계산에 **한 번도 안 들어갔다**. 이제 정의는 하나고,
  * 테스트와 제품이 **같은 함수**를 쓴다.
  */
 async function buildLoginRedirect(): Promise<string> {
@@ -85,20 +88,45 @@ async function buildSessionRefreshRedirect(): Promise<string> {
 }
 
 /**
- * Authenticated console shell layout (Vercel-style — TASK-PC-FE-039).
+ * Console shell layout (Vercel-style — TASK-PC-FE-039).
  *
  * Layout: a full-width sticky top bar holds only the brand + the **tenant
- * switcher** (+ theme toggle / logout account controls); the section
- * navigation lives in a **left sidebar** ({@link ConsoleSidebarNav}). The
- * sidebar is `hidden md:block` (desktop ops console; a mobile drawer is a
- * deferred follow-up — the top bar controls stay visible on all sizes).
+ * switcher** (+ theme toggle / account controls); the section navigation lives
+ * in a **left sidebar** ({@link ConsoleSidebarNav}). The sidebar is
+ * `hidden md:block` (desktop ops console; a mobile drawer is a deferred
+ * follow-up — the top bar controls stay visible on all sizes).
  *
- * Server-side session guard: no IAM access-token cookie → redirect to
- * `/login` (no client-side token juggling — frontend-app.md
- * § Authentication). The tenant switcher options come from the operator's
- * own (GAP-scoped) registry response — multi-tenant isolation is enforced
- * producer-side; the switcher degrades to hidden / read-only for
- * zero / single-tenant operators (task Edge Case).
+ * =============================================================================
+ * 🔴🔴 The guard below changed meaning (ADR-MONO-074 — TASK-PC-FE-282)
+ * =============================================================================
+ * It used to say «an anonymous visitor cannot come in». It now says «an
+ * anonymous visitor comes in, but cannot reach a backend»:
+ *
+ *   - authenticated operator ({@link isAuthenticated}) → this shell, real data,
+ *     exactly as before;
+ *   - sample visitor ({@link isSampleVisitor} — access, operator AND refresh
+ *     cookies all absent) → this shell, sample data: every backend call site
+ *     answers from the sample router (`shared/api/sample-gate.ts`), and the fetch
+ *     allow-list guard (`tests/unit/sample-fetch-allowlist.test.ts`) keeps a new
+ *     call site from appearing outside that branch;
+ *   - not authenticated but the refresh cookie survives (idled out,
+ *     TASK-MONO-674) → the silent refresh hop `GET /api/auth/refresh`, exactly as
+ *     MONO-674 defined it — NOT the sample shell;
+ *   - a half session (access cookie only / operator cookie only, no refresh
+ *     cookie) → `/login`, exactly as before.
+ *
+ * 🔴 Order matters: the sample question is asked first, and it already excludes
+ *    every browser that holds any session cookie — so the MONO-674 branch below
+ *    sees exactly the population it saw before this ticket.
+ *
+ * The sample shell (A7): the account menu slot is a «로그인» link carrying
+ * `?redirect=<current path>`; the tenant switcher shows the single read-only
+ * sample tenant (it falls out of the sample registry); the notification bell
+ * reads the sample inbox; the persistent banner is rendered HERE, not per page;
+ * `DemoHeartbeat` and `DemoBackendNotice` are NOT mounted — an anonymous tab
+ * must not keep the demo EC2 instance alive (ADR-MONO-071 D8), and a sample
+ * screen does not depend on the backend, so «the demo is off» would be a false
+ * warning.
  *
  * Registry unavailable here does NOT blank the shell — the switcher simply
  * has no options; the catalog page renders its own degraded state
@@ -109,7 +137,11 @@ export default async function ConsoleLayout({
 }: {
   children: ReactNode;
 }) {
-  if (!(await isAuthenticated())) {
+  // ADR-MONO-074 A1 — a sample visitor (no access, operator OR refresh cookie)
+  // enters the sample shell. Everyone else meets the TASK-MONO-674 guard below,
+  // unchanged.
+  const sampleVisitor = await isSampleVisitor();
+  if (!sampleVisitor && !(await isAuthenticated())) {
     // Refresh cookie present = logged in before, session idled out → refresh.
     // Absent = never logged in / logged out → login. No network call either way.
     redirect(
@@ -120,10 +152,10 @@ export default async function ConsoleLayout({
   }
 
   const activeTenant = await getActiveTenant();
-  const accountLabel = accountDisplayLabel(
-    await getIdToken(),
-    await getAccessToken(),
-  );
+  const accountLabel = sampleVisitor
+    ? null
+    : accountDisplayLabel(await getIdToken(), await getAccessToken());
+  const sampleLoginHref = sampleVisitor ? await buildLoginRedirect() : null;
   let tenants: string[] = [];
   try {
     const catalog = await getCatalog();
@@ -170,17 +202,23 @@ export default async function ConsoleLayout({
 
   return (
     <div className="flex min-h-screen flex-col">
-      {/* TASK-MONO-585 AC-3 — 인증된 66개 화면 전부가 이 셸 안에 있다. 데모가 꺼져
-          있으면 여섯 도메인의 데이터가 통째로 비는데, 그때 화면은 Vercel 에서 멀쩡히
-          뜬다 ⇒ 말하지 않으면 "고장" 으로 읽힌다. 인스턴스가 켜져 있는데 한 도메인만
-          죽은 경우는 이 배너가 아니라 `/dashboards/health` 가 말한다(위젯 헤더 참조). */}
-      <DemoBackendNotice />
-      {/* 🔴🔴 데모 인스턴스 keep-alive 핑거 — **이 셸 안에만** 있다. 이 지점은 위
-          `isAuthenticated()` 가드를 통과한 뒤이므로, 렌더된다는 것 자체가 «로그인한
-          운영자가 콘솔을 쓰고 있다» 를 뜻한다. 공개 둘러보기 `(demo)` 그룹에는 없다 —
-          익명 방문자의 열린 탭이 EC2 예산을 태우면 안 된다. (마운트 지점만 믿지 않는다:
-          라우트 핸들러가 서버에서 세션을 다시 확인한다 — `api/demo/heartbeat/route.ts`.) */}
-      <DemoHeartbeat />
+      {sampleVisitor ? (
+        <SampleVisitorBanner />
+      ) : (
+        <>
+          {/* TASK-MONO-585 AC-3 — 인증된 66개 화면 전부가 이 셸 안에 있다. 데모가 꺼져
+              있으면 여섯 도메인의 데이터가 통째로 비는데, 그때 화면은 Vercel 에서 멀쩡히
+              뜬다 ⇒ 말하지 않으면 "고장" 으로 읽힌다. 인스턴스가 켜져 있는데 한 도메인만
+              죽은 경우는 이 배너가 아니라 `/dashboards/health` 가 말한다(위젯 헤더 참조). */}
+          <DemoBackendNotice />
+          {/* 🔴🔴 데모 인스턴스 keep-alive 핑거 — **로그인한 운영자에게만** 마운트한다.
+              샘플 방문자(ADR-MONO-074)는 이 셸에 들어오지만 이 분기를 타지 않는다 —
+              익명 방문자의 열린 탭이 EC2 예산을 태우면 안 된다(ADR-MONO-071 D8).
+              (마운트 지점만 믿지 않는다: 라우트 핸들러가 서버에서 세션을 다시 확인한다 —
+              `api/demo/heartbeat/route.ts`.) */}
+          <DemoHeartbeat />
+        </>
+      )}
       <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex h-14 items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link
@@ -197,7 +235,18 @@ export default async function ConsoleLayout({
             />
             <NotificationBell />
             <ThemeToggle />
-            <AccountMenu accountLabel={accountLabel} />
+            {sampleLoginHref !== null ? (
+              <Link
+                href={sampleLoginHref}
+                prefetch={false}
+                data-testid="sample-visitor-login"
+                className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                로그인
+              </Link>
+            ) : (
+              <AccountMenu accountLabel={accountLabel ?? '운영자'} />
+            )}
           </div>
         </div>
       </header>
@@ -206,7 +255,10 @@ export default async function ConsoleLayout({
           <ConsoleSidebarNav />
         </aside>
         <main className="min-w-0 flex-1 px-4 py-8 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-6xl">{children}</div>
+          <div className="mx-auto max-w-6xl">
+            {sampleVisitor ? <SampleScreenNotice /> : null}
+            {children}
+          </div>
         </main>
       </div>
     </div>

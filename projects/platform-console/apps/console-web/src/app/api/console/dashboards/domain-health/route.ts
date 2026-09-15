@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAccessToken, getActiveTenant } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
+import { sampleGate } from '@/shared/api/sample-gate';
 
 export const runtime = 'nodejs';
 
@@ -61,47 +62,61 @@ function bffUrl(): string {
 export async function GET() {
   const requestId = newRequestId();
 
-  const tenant = await getActiveTenant();
-  if (!tenant) {
-    return NextResponse.json(
-      { code: 'NO_ACTIVE_TENANT', message: 'no active tenant selected' },
-      { status: 400 },
-    );
-  }
-
-  const accessToken = await getAccessToken();
-  if (!accessToken) {
-    // Inbound principal absent — the BFF would also reject (Spring
-    // Security 401). We do not call it in that state.
-    return NextResponse.json(
-      { code: 'TOKEN_INVALID', message: 'session not authenticated' },
-      { status: 401 },
-    );
-  }
+  // ADR-MONO-074 A2 — asked BEFORE the tenant and token reads. A sample visitor
+  // gets the sample health envelope fed into the passthrough mapping below;
+  // console-bff is never called. Everyone else takes the unchanged `else` path.
+  const sample = await sampleGate({
+    core: 'console-bff',
+    surface: 'domain-health',
+    method: 'GET',
+    path: '/api/console/dashboards/domain-health',
+  });
 
   let res: Response;
-  try {
-    // DEMO-URL-EXEMPT: console-bff-internal — console-bff 는 **공개 호스트명이 없다**
-    //   (`TASK-MONO-362` 가 그 Traefik 라우터를 일부러 없앴다: 백엔드 서비스는 엣지에
-    //   노출되지 않는다 — `api-gateway-policy.md` L14). 주소는 도커 네트워크 DNS
-    //   (`http://console-bff:8080`)이고 데모 도메인으로 파생될 수 있는 값이 아니다.
-    //   🔴 그래서 **Vercel 에서는 이 레그가 닿지 않는다** — TASK-MONO-585 § 알려진 한계.
-    res = await fetch(bffUrl(), {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-        'X-Tenant-Id': tenant,
-        'X-Request-Id': requestId,
-      },
-      cache: 'no-store',
-    });
-  } catch {
-    logger.warn('domain_health_proxy_network_error', { requestId });
-    return NextResponse.json(
-      { code: 'BAD_GATEWAY', message: 'console-bff unreachable' },
-      { status: 502 },
-    );
+  if (sample) {
+    res = sample;
+  } else {
+    const tenant = await getActiveTenant();
+    if (!tenant) {
+      return NextResponse.json(
+        { code: 'NO_ACTIVE_TENANT', message: 'no active tenant selected' },
+        { status: 400 },
+      );
+    }
+
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      // Inbound principal absent — the BFF would also reject (Spring
+      // Security 401). We do not call it in that state.
+      return NextResponse.json(
+        { code: 'TOKEN_INVALID', message: 'session not authenticated' },
+        { status: 401 },
+      );
+    }
+
+    try {
+      // DEMO-URL-EXEMPT: console-bff-internal — console-bff 는 **공개 호스트명이 없다**
+      //   (`TASK-MONO-362` 가 그 Traefik 라우터를 일부러 없앴다: 백엔드 서비스는 엣지에
+      //   노출되지 않는다 — `api-gateway-policy.md` L14). 주소는 도커 네트워크 DNS
+      //   (`http://console-bff:8080`)이고 데모 도메인으로 파생될 수 있는 값이 아니다.
+      //   🔴 그래서 **Vercel 에서는 이 레그가 닿지 않는다** — TASK-MONO-585 § 알려진 한계.
+      res = await fetch(bffUrl(), {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+          'X-Tenant-Id': tenant,
+          'X-Request-Id': requestId,
+        },
+        cache: 'no-store',
+      });
+    } catch {
+      logger.warn('domain_health_proxy_network_error', { requestId });
+      return NextResponse.json(
+        { code: 'BAD_GATEWAY', message: 'console-bff unreachable' },
+        { status: 502 },
+      );
+    }
   }
 
   if (res.status === 200) {

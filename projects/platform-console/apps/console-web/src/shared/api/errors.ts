@@ -1,3 +1,5 @@
+import { SAMPLE_NOT_READY, SAMPLE_READ_ONLY } from '@/shared/sample/codes';
+
 /**
  * API error envelope. GAP/admin-service uses `{ code, message, timestamp }`
  * (console-registry-api.md § Errors → admin-api.md Common Error Format).
@@ -796,6 +798,13 @@ export class GroupsUnavailableError extends Error {
 }
 
 const MESSAGES: Record<string, string> = {
+  // --- sample mode (ADR-MONO-074 R1ⓐ / A9 — TASK-PC-FE-282) -----------------
+  // 🔴🔴 The ONE code → copy mapping for sample refusals. Never put this copy in
+  //    a response message: four gateway cores overwrite a 403 message with
+  //    'not permitted' and keep only the code.
+  [SAMPLE_READ_ONLY]:
+    '샘플 화면에서는 실행되지 않습니다. 로그인하면 실제로 실행됩니다',
+  [SAMPLE_NOT_READY]: '이 화면의 샘플 데이터는 준비 중입니다',
   TOKEN_INVALID: '세션이 만료되었습니다. 다시 로그인해주세요.',
   TOKEN_REVOKED: '세션이 종료되었습니다. 다시 로그인해주세요.',
   DOWNSTREAM_ERROR: '하위 서비스 호출에 실패했습니다.',

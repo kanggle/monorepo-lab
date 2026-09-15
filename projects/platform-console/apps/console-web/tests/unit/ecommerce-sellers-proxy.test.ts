@@ -1,3 +1,8 @@
+// ADR-MONO-074 (TASK-PC-FE-282) changed an expectation in this file — the decision changed it,
+// it was not "red, so fixed". An anonymous browser (IAM access cookie AND operator cookie both
+// absent) is now a SAMPLE VISITOR, answered from the sample router (still no upstream fetch).
+// The «no IAM session → 401» cell(s) below therefore seed a HALF session (operator cookie only,
+// no IAM access cookie) — the state in which that 401 path still exists and is still measured.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
@@ -109,6 +114,8 @@ describe('GET /api/ecommerce/sellers (list)', () => {
   });
 
   it('no IAM session → 401', async () => {
+    // ADR-MONO-074 A1 — an empty jar is a sample visitor now; the 401 path is the half session.
+    cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-ONLY-HALF-SESSION');
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const res = await listGET(
@@ -176,6 +183,8 @@ describe('POST /api/ecommerce/sellers (register)', () => {
   });
 
   it('no IAM session → 401 (no upstream call)', async () => {
+    // ADR-MONO-074 A1 — an empty jar is a sample visitor now; the 401 path is the half session.
+    cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-ONLY-HALF-SESSION');
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const res = await registerPOST(

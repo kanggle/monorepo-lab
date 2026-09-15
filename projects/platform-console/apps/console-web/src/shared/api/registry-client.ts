@@ -3,6 +3,7 @@ import { resolveBackendUrl } from '@/shared/config/demo-backend';
 import { getOperatorToken } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
 import { RegistryUnavailableError, ApiError } from './errors';
+import { sampleGate } from './sample-gate';
 import {
   RegistryResponseSchema,
   type RegistryResponse,
@@ -38,12 +39,22 @@ import {
 export async function fetchRegistry(): Promise<RegistryResponse> {
   const env = getServerEnv();
   const requestId = newRequestId();
+
+  // ADR-MONO-074 A2 — asked BEFORE the token read. A sample visitor gets the
+  // sample registry fed through the parsing below; no token, no network.
+  const sample = await sampleGate({
+    core: 'registry',
+    surface: 'registry',
+    method: 'GET',
+    path: '/api/admin/console/registry',
+  });
+
   // The /api/admin/** credential is the EXCHANGED operator token — never the
   // IAM OIDC access token (§ 2.1/§ 2.2/§ 2.6). Absent operator token ⇒ no
   // usable operator session ⇒ 401 (caller re-logins; the exchange must run).
-  const token = await getOperatorToken();
+  const token = sample ? null : await getOperatorToken();
 
-  if (!token) {
+  if (!sample && !token) {
     throw new ApiError(401, 'TOKEN_INVALID', 'No operator session');
   }
 
@@ -51,16 +62,18 @@ export async function fetchRegistry(): Promise<RegistryResponse> {
   const timer = setTimeout(() => controller.abort(), env.REGISTRY_TIMEOUT_MS);
 
   try {
-    const res = await fetch(await resolveBackendUrl(env.CONSOLE_REGISTRY_URL), {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${token}`,
-        'X-Request-Id': requestId,
-      },
-      cache: 'no-store',
-      signal: controller.signal,
-    });
+    const res =
+      sample ??
+      (await fetch(await resolveBackendUrl(env.CONSOLE_REGISTRY_URL), {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+          'X-Request-Id': requestId,
+        },
+        cache: 'no-store',
+        signal: controller.signal,
+      }));
 
     if (res.status === 401 || res.status === 403) {
       const body = await res.json().catch(() => ({}));
