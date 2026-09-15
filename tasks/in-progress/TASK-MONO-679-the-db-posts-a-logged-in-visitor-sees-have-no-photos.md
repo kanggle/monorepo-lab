@@ -123,9 +123,12 @@ monorepo
 
 ## AC-1 — 🙋 계약 결정: 사진 필드가 무엇을 담는가
 
-- [ ] 갈래를 적고 **소유자가 고른다**: ⓐ `mediaRefs` 를 «표시 가능한 https URL» 로 재정의 · ⓑ 키는 `mediaRefs` 로 두고
+- [x] 갈래를 적고 **소유자가 고른다**: ⓐ `mediaRefs` 를 «표시 가능한 https URL» 로 재정의 · ⓑ 키는 `mediaRefs` 로 두고
       응답에 해석된 `mediaUrls` 를 별도로 싣는다 · ⓒ 그 밖. 🔴 에이전트가 조용히 고르지 않는다.
-- [ ] 고른 결과를 `community-api.md` 에 **먼저** 반영한다(CLAUDE.md: 계약 → 구현).
+      🟢 **소유자 결정 2026-09-15 UTC: ⓐ.** 에이전트는 ⓐ 를 추천했고(근거: artist-service `profileImageRef` 가 이미
+      https URL 을 그대로 저장·응답한다 · fan 앱 전체에 업로드/스토리지 코드 0건 · 키를 가진 행 0), 소유자가 «ⓐ» 로 답했다.
+      ⓑ 가 맞는 조건(비공개 서명 URL 이 필요해질 때)은 계약 § `mediaRefs` 의 «When to revisit» 에 적었다.
+- [x] 고른 결과를 `community-api.md` 에 **먼저** 반영한다(CLAUDE.md: 계약 → 구현). — 같은 PR 이지만 커밋 순서가 계약 → 구현이다.
 
 ## AC-2 — 응답이 사진을 싣는다
 
