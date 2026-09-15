@@ -23,7 +23,41 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildLoginRedirectFor } from '@/shared/lib/login-redirect';
+import {
+  buildLoginRedirectFor,
+  buildSessionRefreshRedirectFor,
+  resolveRefreshReturnPath,
+} from '@/shared/lib/login-redirect';
+
+describe('유휴 만료 갱신 목적지 — 로그인 목적지와 **같은 술어** (TASK-MONO-674)', () => {
+  it('정상 콘솔 경로는 쿼리까지 실어 갱신 라우트로 보낸다', () => {
+    const path = '/ecommerce/orders?page=2';
+    expect(buildSessionRefreshRedirectFor(path)).toBe(
+      `/api/auth/refresh?redirect=${encodeURIComponent(path)}`,
+    );
+  });
+
+  it.each([null, '', '//evil.example', 'https://evil.example', '/login', '/api/auth/refresh'])(
+    'x-pathname %j 은 로그인 목적지에서 거절되는 것과 똑같이 여기서도 경로를 싣지 않는다',
+    (raw) => {
+      expect(buildLoginRedirectFor(raw)).toBe('/login');
+      expect(buildSessionRefreshRedirectFor(raw)).toBe('/api/auth/refresh');
+    },
+  );
+
+  it.each([
+    ['/ecommerce?x=1', '/ecommerce?x=1'],
+    ['//evil.example', '/'],
+    ['/\\evil.example', '/'],
+    ['https://evil.example', '/'],
+    ['/login?error=session_expired', '/'],
+    ['/api/auth/refresh?redirect=%2Fx', '/'],
+    [null, '/'],
+    [undefined, '/'],
+  ])('소비 측(쿼리에서 읽은 값) %j → %j', (raw, expected) => {
+    expect(resolveRefreshReturnPath(raw)).toBe(expected);
+  });
+});
 
 describe('layout guard buildLoginRedirect sanitisation (Gap D / F6)', () => {
   it('returns bare /login when x-pathname header is absent (null)', () => {
@@ -96,10 +130,21 @@ describe('§ 배선 — layout 이 정말 이 함수를 쓰는가 (TASK-PC-FE-28
   });
 
   it('🔴 layout 이 `buildLoginRedirectFor` 를 import 해서 부른다', () => {
-    expect(layoutSrc).toContain(
-      "import { buildLoginRedirectFor } from '@/shared/lib/login-redirect'",
+    // TASK-MONO-674 — 같은 모듈에서 둘을 import 하게 되어 한 줄 문자열 대조를
+    // «이름 목록에 들어 있다» 로 넓혔다. 재는 명제(그 모듈에서 가져온다)는 그대로다.
+    expect(layoutSrc).toMatch(
+      /import\s*\{[^}]*\bbuildLoginRedirectFor\b[^}]*\}\s*from\s*'@\/shared\/lib\/login-redirect'/,
     );
     expect(layoutSrc).toContain('buildLoginRedirectFor(hdrs.get(');
+  });
+
+  it('🔴 layout 이 유휴 만료 목적지도 **같은 모듈의 함수**로 만든다 (TASK-MONO-674)', () => {
+    expect(layoutSrc).toMatch(
+      /import\s*\{[^}]*\bbuildSessionRefreshRedirectFor\b[^}]*\}\s*from\s*'@\/shared\/lib\/login-redirect'/,
+    );
+    expect(layoutSrc).toContain('buildSessionRefreshRedirectFor(hdrs.get(');
+    // 경로 문자열을 layout 에 손으로 박지 않았다.
+    expect(layoutSrc).not.toContain("'/api/auth/refresh");
   });
 
   it('🔴🔴 layout 에 규칙이 **다시 인라인되지 않았다**', () => {

@@ -3339,6 +3339,7 @@ retrofit, no console-bff leg**.
 
 - Console/BFF fan-out applies circuit-breaker / retry / timeout per `platform/` baselines (`integration-heavy` trait).
 - One domain unavailable MUST degrade only that domain's section — never blank the console shell.
+- **Idle session expiry is not a backend failure** (TASK-MONO-674). The session cookies expire in the browser (access/id_token/home-tenant cookies `maxAge = expires_in`, 1800s; operator cookie `maxAge = expiresIn`) while the refresh cookie lives 30 days. When the `(console)` guard finds the session incomplete **and** a refresh cookie is present, it MUST attempt a silent server-side refresh (§ 2.6.1) before sending the operator to `/login`; when that refresh fails the operator lands on `/login?error=session_expired` (reason shown), never on a reason-less `/login?redirect=…`. A visitor with **no** refresh cookie (never logged in, or logged out) keeps the plain `/login?redirect=<path>` bounce, with no network call.
 
 ### 2.6 Operator Token Exchange (normative — ADR-MONO-014 D2/D3)
 
@@ -3363,6 +3364,26 @@ The operator credential the console presents to `/api/admin/**` (§ 2.2 registry
   - An unexpected `tokenType` (≠ `"admin"`) is treated as fail-closed (operator cookie not set).
 - **Resilience parity (§ 2.5)**: the exchange call uses the same `integration-heavy` discipline as the registry call — explicit hard timeout (AbortController), structured logging, no unbounded default — but the operator-boundary outcome is fail-closed (no partial authed state), distinct from the registry's degrade-the-section behaviour.
 - **Tenant scope**: never derived from the IAM OIDC token. IAM resolves operator tenant scope producer-side from `admin_operators.tenant_id` (ADR-002 `'*'` platform sentinel); the console sends no tenant to the exchange (consistent with § 2.2 registry tenant scoping). Cross-references: IAM [`console-registry-api.md` § Authentication](../../../iam-platform/specs/contracts/http/console-registry-api.md) (operator token now via the exchange; producer requirement unchanged).
+
+#### 2.6.1 Idle-expiry refresh at the `(console)` guard (normative — TASK-MONO-674)
+
+Owner decision (TASK-MONO-674 AC-1): **refresh silently, and show the reason when refresh fails**. Token lifetimes are unchanged (access 1800s, refresh 2592000s, `reuse-refresh-tokens=false` → the refresh token **rotates** on every use; IAM `V0015`).
+
+- **Why a redirect hop, not an in-layout refresh.** Server Components/layouts cannot set cookies (Next allows it only in Route Handlers, Server Actions, middleware). The guard therefore **redirects** to a route handler that refreshes, sets the cookies and redirects back. The guard itself still makes **no network call**.
+- **Guard (`(console)/layout.tsx`)**: `isAuthenticated()` false →
+  - refresh cookie **present** → `GET /api/auth/refresh?redirect=<path>` (`<path>` = the same produce-side predicate as the login redirect: same-site absolute path, not `//…`, not `/login…`, not `/api/…`; otherwise the param is omitted);
+  - refresh cookie **absent** → `/login?redirect=<path>` (unchanged).
+- **`GET /api/auth/refresh`** (navigation counterpart of the `POST`; same IAM refresh + § 2.6 operator re-exchange + § 2.7 re-assume):
+  - `redirect` is attacker-controllable → consume-side sanitised (`sanitizeReturnPath`) **and** the guard predicate (`/login…`, `/api/…` rejected); anything rejected becomes `/`. The handler only ever redirects to same-origin paths under the public origin.
+  - Session already complete (access **and** operator cookies present) → `307` to the target, **no IAM call** (another tab already refreshed; also bounds a cross-site-triggered GET to sessions that are already expired).
+  - No refresh cookie → `/login?redirect=<target>` (never logged in / logged out), no IAM call.
+  - Refresh + operator re-exchange OK → rotated access/refresh/id_token + operator (+ assumed, if an active tenant cookie survived) cookies set → `307` to the target. When **no** active-tenant cookie survived (the callback's home-tenant default has `maxAge = expires_in`, so it expires with the access token) the home tenant from the rotated access token is re-defaulted exactly as `/api/auth/callback` does (both `GET` and `POST` refresh).
+  - **Rotation race** — IAM `400 invalid_grant` on the first attempt may mean another tab already rotated the token. No cookie is deleted (the deletes could land after — and erase — the other tab's fresh cookies); the handler waits a short grace period and redirects **once** to `/api/auth/refresh?redirect=<target>&retry=1`, which carries the browser's *current* cookies. `retry=1` with a complete session → target; `retry=1` without → `/login?error=session_expired&redirect=<target>`, no IAM call, no cookie deletes.
+  - Other IAM `4xx`, or operator re-exchange **unavailable** → whole session cleared (§ 2.6 fail-closed) → `/login?error=session_expired&redirect=<target>`.
+  - IAM `5xx` / network / unparseable response → `/login?error=session_expired&redirect=<target>`, **cookies kept** (transient; the next guard visit may refresh successfully).
+  - Operator re-exchange **fail-closed** (`401`, not an operator of any tenant) → callback parity: operator session dropped, rotated IAM cookies kept → `/onboarding`.
+- **Loop bound**: one guard bounce reaches the handler at most **twice** (first attempt + one `retry=1`); every failure destination (`/login…`, `/onboarding`) is outside the `(console)` guard, and `/login?error=session_expired` does not short-circuit back to the console (TASK-PC-FE-278). A success whose cookies the browser refuses to store cannot cycle: the old refresh token was rotated away, so the next attempt is rejected.
+- **Unchanged**: the browser `POST /api/auth/refresh` after a `401` (§ 2.6 "When") and its JSON responses; the 53 server-side `401` sites (`/login?error=session_expired`).
 
 ### 2.7 Active-Tenant Switcher → Assume-Tenant Exchange (normative — ADR-MONO-020 D4)
 
