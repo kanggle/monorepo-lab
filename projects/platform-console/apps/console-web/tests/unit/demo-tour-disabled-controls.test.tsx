@@ -89,7 +89,7 @@ describe('둘러보기의 쓰기 작업 컨트롤', () => {
   });
 
   it('사유 문구가 요구된 정확한 문자열이다', () => {
-    expect(DEMO_DISABLED_REASON).toBe('실시간 기능 시작 후 로그인');
+    expect(DEMO_DISABLED_REASON).toBe('데모 서버를 켠 뒤 로그인');
   });
 
   it('개요 화면(읽기 전용 집계)에는 쓰기 버튼을 지어내지 않는다', async () => {

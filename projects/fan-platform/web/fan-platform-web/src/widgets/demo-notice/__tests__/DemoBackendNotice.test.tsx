@@ -67,7 +67,7 @@ describe('DemoBackendNotice (fan)', () => {
     // 🔴 이 칸이 bite 다 — 옛 문구를 되살리면 빨개진다.
     expect(notice.textContent).not.toContain('불러올 수 없');
     // 🔴 잠긴 사실을 안 지웠는가
-    expect(notice).toHaveTextContent('실시간 기능');
+    expect(notice).toHaveTextContent('로그인 후 기능');
   });
 
   it('🔴 데모 배포 + 컨트롤 플레인 조회 실패 → 배너가 보인다 (침묵하지 않는다)', async () => {

@@ -157,7 +157,7 @@ describe('DemoBackendNoticeClient — 방문 시점 판정', () => {
     expect(notice.textContent).not.toContain('불러올 수 없');
     // (c) 🔴 잠긴 사실을 **안 지웠는가** — 이것까지 지우면 방문자가 장바구니·로그인이
     //     왜 안 되는지 모른다. 배너를 부드럽게 만드는 것이 목적이 아니다.
-    expect(notice).toHaveTextContent('실시간 기능');
+    expect(notice).toHaveTextContent('로그인 후 기능');
   });
 
   // ===========================================================================
