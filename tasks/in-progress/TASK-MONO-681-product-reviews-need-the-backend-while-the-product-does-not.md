@@ -23,7 +23,10 @@ monorepo
 
 ---
 
-# ⏳ 게이트 재개방 — `ADR-MONO-075 ACCEPTED` 재확인 대기 (2026-09-15 UTC)
+# 🟢 게이트 닫힘 — `ADR-MONO-075 ACCEPTED` (2026-09-15 UTC, 재확인 완료)
+
+소유자 정확형 **`ADR-MONO-075 ACCEPTED`** 를 새 이름으로 받았다 — 이름 · `ACCEPTED` 둘 다 있고, 갈래 letter 없음,
+**뒤집힌 라이더 0** ⇒ 아래 AC 는 기안 그대로다. 아래는 재확인을 받게 된 경위(기록으로 남긴다).
 
 🔴🔴 **번호 충돌.** 이 ADR 은 처음 `ADR-MONO-074` 로 발행됐고, 소유자는 이 대화에서 원문 그대로
 **`ADR-MONO-074 ACCEPTED`** 로 답했다(라이더 뒤집기 없음). 그런데 그 사이 다른 세션의 콘솔 ADR
@@ -81,7 +84,7 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 위 게이트. ⏳ 소유자는 `ADR-MONO-074 ACCEPTED`(원문)로 답했으나 번호 충돌로 075 재번호 → `ADR-MONO-075 ACCEPTED` 재확인 대기.
+- [x] **AC-0** — 위 게이트. ✅ 2026-09-15 소유자 정확형 `ADR-MONO-075 ACCEPTED`(재번호 뒤 재확인 — 처음 받은 원문 `ADR-MONO-074 ACCEPTED` 는 이름 충돌로 옮겨 적지 않았다).
 - [x] **AC-1** — `validateDatasetData('store', …)` 가 `reviews` 부재 · 작성자 식별 키(`userId`/`accountId`/`tenantId`/
       `email`/`userName`/`nickname`) · 1~5 밖의 별점 · 저장본에 없는 `productId` 를 **각각** 거부한다(대조군: 정상본 통과).
       ✅ `tests/public-data.test.mjs` «내용물: 리뷰 계약이 부재·작성자·별점·고아를 각각 거부한다» — 거부 6칸(부재 · `userId` ·

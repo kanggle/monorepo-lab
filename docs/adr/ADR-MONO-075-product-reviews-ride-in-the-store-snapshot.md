@@ -1,6 +1,6 @@
 # ADR-MONO-075 — 상품 리뷰는 store 저장본에 실린다 (그리고 작성자는 싣지 않는다)
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 **Date:** 2026-09-15
 **주관 티켓:** `TASK-MONO-681`
 **개정 대상:** [`ADR-MONO-070`](ADR-MONO-070-public-browsing-served-from-a-versioned-vercel-snapshot.md) § D2(공개 필드 허용 목록) —
@@ -18,6 +18,10 @@ store 데이터셋에 `reviews` 컬렉션을 더한다. § D3(백엔드로 가�
 
 ## History
 
+- 2026-09-15 — **ACCEPTED (라이더 R1~R6 그대로).** 소유자 정확형 **`ADR-MONO-075 ACCEPTED`** — 재번호 뒤 새 이름으로
+  다시 받았다. 이름 · `ACCEPTED` 둘 다 있고, 이 ADR 은 갈래 letter 를 두지 않았으므로 세 번째 요건은 해당 없음. 뒤집힌 라이더 **0**.
+  🔵 결정 본문(§ Decision · § 라이더 · § Consequences)은 발행 이후 번호 외에 **한 바이트도 안 바꿨다** — ACCEPT 는 *finalise* 이지
+  *re-decide* 가 아니다. 실행 `TASK-MONO-681` 의 AC-0(게이트)이 이 줄로 닫힌다.
 - 2026-09-15 — 🔴🔴 **번호 충돌 → `ADR-MONO-075` 로 재번호, Status 를 PROPOSED 로 되돌림(재확인 대기).**
   이 ADR 은 `ADR-MONO-074` 로 발행됐고, 소유자는 이 대화에서 원문 그대로 **`ADR-MONO-074 ACCEPTED`** 로 답했다(라이더 뒤집기
   없음). 그러나 그 사이 다른 세션의 `ADR-MONO-074-anonymous-visitors-see-the-real-console-with-sample-data.md`(PROPOSED ·

@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Component;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 @Component
@@ -25,6 +27,23 @@ public class SupplierRepositoryImpl implements SupplierRepository {
     @Override
     public Optional<Supplier> findById(String id, String tenantId) {
         return jpa.findByIdAndTenantId(id, tenantId);
+    }
+
+    @Override
+    public List<Supplier> findAllByIds(Collection<String> ids, String tenantId) {
+        // An empty IN () is not portable SQL — short-circuit instead of querying.
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        return jpa.findByTenantIdAndIdIn(tenantId, ids);
+    }
+
+    @Override
+    public List<Supplier> findAllByCodes(Collection<String> codes, String tenantId) {
+        if (codes == null || codes.isEmpty()) {
+            return List.of();
+        }
+        return jpa.findByTenantIdAndCodeIn(tenantId, codes);
     }
 
     @Override

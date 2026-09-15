@@ -467,6 +467,166 @@ class PurchaseOrderApplicationServiceTest {
         assertThat(result.size()).isEqualTo(10);
     }
 
+    // ---------------- SUPPLIER REFERENCE (TASK-MONO-677) ----------------
+    // Rule (procurement-api.md § supplier reference fields): same tenant, by master id
+    // first, then by code; unresolved -> both null. The stored supplierId never changes.
+
+    /** The shape seen on the demo screen: a server-issued supplier UUID. */
+    private static final String SUPPLIER_UUID = "01a09478-5c1e-7d2a-9b3f-4e6a8c0d2f11";
+
+    private PurchaseOrder poReferencing(String poId, String supplierRef) {
+        return PurchaseOrder.createDraft(poId, TENANT, "PO-" + poId, supplierRef, BUYER_ACCOUNT, "USD");
+    }
+
+    private Supplier supplier(String id, String tenant, String code, String name, SupplierStatus status) {
+        return Supplier.create(id, tenant, code, name, status);
+    }
+
+    @Test
+    @DisplayName("677 get() — id hit: code/name come from the master row found by id; no code lookup")
+    void getResolvesSupplierById() {
+        PurchaseOrder po = poReferencing("po-sup-1", SUPPLIER_UUID);
+        when(poRepository.findById("po-sup-1", TENANT)).thenReturn(Optional.of(po));
+        when(supplierRepository.findAllByIds(Set.of(SUPPLIER_UUID), TENANT)).thenReturn(List.of(
+                supplier(SUPPLIER_UUID, TENANT, "SUP-DEMO-01", "demo supplier", SupplierStatus.ACTIVE)));
+
+        PurchaseOrderView view = service.get("po-sup-1", BUYER);
+
+        assertThat(view.supplierId()).isEqualTo(SUPPLIER_UUID);
+        assertThat(view.supplierCode()).isEqualTo("SUP-DEMO-01");
+        assertThat(view.supplierName()).isEqualTo("demo supplier");
+        // An id hit wins — the code lookup is never issued for that ref.
+        verify(supplierRepository, never()).findAllByCodes(any(), any());
+    }
+
+    @Test
+    @DisplayName("677 get() — code hit: a DEMAND_PLANNING-style supplierId (a CODE) resolves when the id lookup misses")
+    void getResolvesSupplierByCodeWhenIdMisses() {
+        PurchaseOrder po = poReferencing("po-sup-2", "SUP-DEMO-01");
+        when(poRepository.findById("po-sup-2", TENANT)).thenReturn(Optional.of(po));
+        when(supplierRepository.findAllByIds(Set.of("SUP-DEMO-01"), TENANT)).thenReturn(List.of());
+        when(supplierRepository.findAllByCodes(Set.of("SUP-DEMO-01"), TENANT)).thenReturn(List.of(
+                supplier(SUPPLIER_UUID, TENANT, "SUP-DEMO-01", "demo supplier", SupplierStatus.ACTIVE)));
+
+        PurchaseOrderView view = service.get("po-sup-2", BUYER);
+
+        assertThat(view.supplierId()).isEqualTo("SUP-DEMO-01");
+        assertThat(view.supplierCode()).isEqualTo("SUP-DEMO-01");
+        assertThat(view.supplierName()).isEqualTo("demo supplier");
+    }
+
+    @Test
+    @DisplayName("677 get() — miss: neither id nor code resolves -> both fields null (never \"\", never the raw id)")
+    void getUnresolvedSupplierLeavesBothNull() {
+        PurchaseOrder po = poReferencing("po-sup-3", SUPPLIER_UUID);
+        when(poRepository.findById("po-sup-3", TENANT)).thenReturn(Optional.of(po));
+        when(supplierRepository.findAllByIds(Set.of(SUPPLIER_UUID), TENANT)).thenReturn(List.of());
+        when(supplierRepository.findAllByCodes(Set.of(SUPPLIER_UUID), TENANT)).thenReturn(List.of());
+
+        PurchaseOrderView view = service.get("po-sup-3", BUYER);
+
+        assertThat(view.supplierId()).isEqualTo(SUPPLIER_UUID);
+        assertThat(view.supplierCode()).isNull();
+        assertThat(view.supplierName()).isNull();
+    }
+
+    @Test
+    @DisplayName("677 get() — cross-tenant: only the PO's tenant is queried, and a foreign-tenant row is never used")
+    void getNeverResolvesAnotherTenantsSupplier() {
+        PurchaseOrder po = poReferencing("po-sup-4", SUPPLIER_UUID);
+        when(poRepository.findById("po-sup-4", TENANT)).thenReturn(Optional.of(po));
+        // Defence in depth: even if the tenant-scoped port handed back a foreign row,
+        // the resolver must not show it.
+        Supplier foreign = supplier(SUPPLIER_UUID, "tenant-other", SUPPLIER_UUID, "foreign supplier",
+                SupplierStatus.ACTIVE);
+        when(supplierRepository.findAllByIds(Set.of(SUPPLIER_UUID), TENANT)).thenReturn(List.of(foreign));
+        when(supplierRepository.findAllByCodes(Set.of(SUPPLIER_UUID), TENANT)).thenReturn(List.of(foreign));
+
+        PurchaseOrderView view = service.get("po-sup-4", BUYER);
+
+        assertThat(view.supplierCode()).isNull();
+        assertThat(view.supplierName()).isNull();
+        verify(supplierRepository, never()).findAllByIds(any(), eq("tenant-other"));
+        verify(supplierRepository, never()).findAllByCodes(any(), eq("tenant-other"));
+    }
+
+    @Test
+    @DisplayName("677 get() — an INACTIVE supplier still resolves (status is not a filter; the row keeps its name)")
+    void getResolvesInactiveSupplier() {
+        PurchaseOrder po = poReferencing("po-sup-5", SUPPLIER_UUID);
+        when(poRepository.findById("po-sup-5", TENANT)).thenReturn(Optional.of(po));
+        when(supplierRepository.findAllByIds(Set.of(SUPPLIER_UUID), TENANT)).thenReturn(List.of(
+                supplier(SUPPLIER_UUID, TENANT, "SUP-OLD", "retired supplier", SupplierStatus.INACTIVE)));
+
+        PurchaseOrderView view = service.get("po-sup-5", BUYER);
+
+        assertThat(view.supplierCode()).isEqualTo("SUP-OLD");
+        assertThat(view.supplierName()).isEqualTo("retired supplier");
+    }
+
+    @Test
+    @DisplayName("677 search() — a page resolves in ONE id batch + ONE code batch for the leftovers (no per-row lookup)")
+    void searchResolvesSupplierReferencesInTwoBatches() {
+        String dpCode = "SUP-DP-02";
+        PurchaseOrder viaId = poReferencing("po-a", SUPPLIER_UUID);
+        PurchaseOrder viaCode = poReferencing("po-b", dpCode);
+        PurchaseOrder unresolved = poReferencing("po-c", "operator-free-text");
+        PurchaseOrder viaIdAgain = poReferencing("po-d", SUPPLIER_UUID);
+        when(poRepository.search(eq(TENANT), any(), any(), any()))
+                .thenReturn(new PageResult<>(List.of(viaId, viaCode, unresolved, viaIdAgain), 0, 20, 4, 1));
+        when(supplierRepository.findAllByIds(Set.of(SUPPLIER_UUID, dpCode, "operator-free-text"), TENANT))
+                .thenReturn(List.of(supplier(SUPPLIER_UUID, TENANT, "SUP-DEMO-01", "demo supplier",
+                        SupplierStatus.ACTIVE)));
+        // Only the refs the id batch did not match go to the code batch.
+        when(supplierRepository.findAllByCodes(Set.of(dpCode, "operator-free-text"), TENANT))
+                .thenReturn(List.of(supplier("01a09478-0000-7000-8000-0000000000b2", TENANT, dpCode,
+                        "dp supplier", SupplierStatus.ACTIVE)));
+
+        PageResult<PurchaseOrderView> result = service.search(BUYER, null, null,
+                PageQuery.of(0, 20, "createdAt", "DESC"));
+
+        assertThat(result.content()).extracting(PurchaseOrderView::id, PurchaseOrderView::supplierCode,
+                        PurchaseOrderView::supplierName)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("po-a", "SUP-DEMO-01", "demo supplier"),
+                        org.assertj.core.groups.Tuple.tuple("po-b", dpCode, "dp supplier"),
+                        org.assertj.core.groups.Tuple.tuple("po-c", null, null),
+                        org.assertj.core.groups.Tuple.tuple("po-d", "SUP-DEMO-01", "demo supplier"));
+        verify(supplierRepository, times(1)).findAllByIds(any(), any());
+        verify(supplierRepository, times(1)).findAllByCodes(any(), any());
+        verify(supplierRepository, never()).findById(any(), any());
+        verify(supplierRepository, never()).findByCode(any(), any());
+    }
+
+    @Test
+    @DisplayName("677 search() — when every ref hits by id, no code query is issued")
+    void searchSkipsCodeBatchWhenAllRefsHitById() {
+        PurchaseOrder po = poReferencing("po-e", SUPPLIER_UUID);
+        when(poRepository.search(eq(TENANT), any(), any(), any()))
+                .thenReturn(new PageResult<>(List.of(po), 0, 20, 1, 1));
+        when(supplierRepository.findAllByIds(Set.of(SUPPLIER_UUID), TENANT)).thenReturn(List.of(
+                supplier(SUPPLIER_UUID, TENANT, "SUP-DEMO-01", "demo supplier", SupplierStatus.ACTIVE)));
+
+        PageResult<PurchaseOrderView> result = service.search(BUYER, null, null,
+                PageQuery.of(0, 20, "createdAt", "DESC"));
+
+        assertThat(result.content().get(0).supplierCode()).isEqualTo("SUP-DEMO-01");
+        verify(supplierRepository, never()).findAllByCodes(any(), any());
+    }
+
+    @Test
+    @DisplayName("677 draft() — the response carries the supplier the draft guard already loaded (no extra lookup)")
+    void draftResponseCarriesLoadedSupplier() {
+        when(supplierRepository.findById(SUPPLIER_ID, TENANT)).thenReturn(Optional.of(activeSupplier()));
+
+        PurchaseOrderView view = service.draft(validDraftCommand());
+
+        assertThat(view.supplierCode()).isEqualTo("SUP-ACME");
+        assertThat(view.supplierName()).isEqualTo("Acme");
+        verify(supplierRepository, never()).findAllByIds(any(), any());
+        verify(supplierRepository, never()).findAllByCodes(any(), any());
+    }
+
     // ---------------- helpers ----------------
 
     private PurchaseOrder freshDraftPo() {
