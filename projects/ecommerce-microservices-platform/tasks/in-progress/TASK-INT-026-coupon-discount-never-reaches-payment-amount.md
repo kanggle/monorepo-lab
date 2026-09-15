@@ -234,6 +234,21 @@ If any section is missing or incomplete, this task must not be implemented.
 
 # 진행 기록 (in-progress 작업 문서)
 
+## AC-0 재현 — 측정 (2026-09-15 UTC)
+
+**재현됐다.** 커밋 `99be352f0` 은 재현 테스트만 담았다(`CheckoutForm` 수정 전). 그 커밋의 CI —
+run `34965972802`, job `Frontend unit tests (ecommerce + fan-platform + console-web, vitest)`, Node 20:
+
+- `Test Files  1 failed | 128 passed (129)`, `Failed Tests 1` — 실패는 **이 테스트 하나**:
+  `checkout-form.test.tsx > CheckoutForm > 🔴 TASK-INT-026 — 결제 금액의 권위는 서버다 > 토스에 요청하는 금액은 주문 응답의 totalPrice 다`
+- 기대 `amount: 1500000` (주문 응답의 `totalPrice`) / 실제 `amount: 1495000` (화면 할인 5,000 을 뺀 값) — `checkout-form.test.tsx:335`
+
+⇒ 위 표의 사실 4(토스엔 `totalAmount − discountAmount`)가 **실행으로** 확인됐다.
+
+🔴 측정의 범위를 줄여 말하지 않는다: 이것은 **«화면이 서버의 주문 금액과 다른 금액을 PG 에 요청한다»** 까지다. 사실 5·6(PENDING 금액 = 할인 전 `totalPrice`, 금액이 다르면 `400 AMOUNT_MISMATCH`)은 payment-service **코드 읽기**에 머물고, payment-service 의 거절 자체를 돌린 것은 아니다.
+
+🔵 로컬 첫 시도(`npx vitest run … -t "TASK-INT-026"`)의 `rc=1` 은 **테스트 실패가 아니라 러너 기동 오류**(`ERR_PACKAGE_IMPORT_NOT_DEFINED: #module-evaluator`, vitest 4 × Node 24)였다 — 증거로 쓰지 않았다.
+
 ## 정산 영향 — 측정 (2026-09-15 UTC)
 
 - settlement-service 는 수수료 기준(gross)을 **`OrderPlaced.items[]` 의 `unitPrice × quantity`** 로 잡는다 — `apps/settlement-service/.../infrastructure/event/OrderPlacedSnapshotConsumer.java:72`. `totalPrice` 는 읽지 않는다.
