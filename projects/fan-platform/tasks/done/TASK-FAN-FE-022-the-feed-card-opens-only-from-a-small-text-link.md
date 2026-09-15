@@ -8,7 +8,7 @@ TASK-FAN-FE-022
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -180,3 +180,34 @@ frontend
 라이브 `fan.hubwang.com/` 에서 헤드리스 브라우저로 **실제 클릭**: 사진 영역 → `/posts/{id}` · 아티스트 배지 → `/artists/{id}` · 잠긴 카드의
 「멤버십 안내 보기」 → `/membership`. 🔴 이 셋이 이 티켓의 진짜 판정이다(Failure 3: 안쪽 링크를 안 올려도 href 만 보는 시험은 초록).
 배포 판정은 `build-info.json` 의 `commit`. close chore 에서 기록한다.
+
+## CORRECTION — close chore (2026-09-15 UTC)
+
+### 4축 검증
+
+| 축 | 결과 |
+|---|---|
+| (a) PR 상태 | #3830 `state=MERGED` · `mergedAt=2026-09-15T11:19:54Z` · squash `dd2c31a1b` |
+| (b) main | `git merge-base --is-ancestor dd2c31a1b origin/main` rc=0 |
+| (c) 머지 전 체크 | 총 **61** · SUCCESS 15 · SKIPPED 46 · **FAILURE 0 · PENDING 0** · required 4/4 SUCCESS |
+| (d) AC 절 | AC-0~AC-4 를 열어 읽었다. AC-0~AC-3 은 위 Verification 이 닫았고, ⚪ 였던 **AC-4 는 아래 라이브 측정이 닫는다** ⇒ 열린 AC **0** |
+
+### AC-4 — 라이브 실제 클릭 (⚪ → ✅)
+
+- 배포 판정: `https://fan.hubwang.com/build-info.json` → `{"commit":"dd2c31a1b…","ref":"main"}` (폴링으로 `2c3c494b0` → `dd2c31a1b` 전환 확인 뒤 측정).
+- 헤드리스 Chromium(1280×1400), 요소 API `.click()` 이 아니라 **요소 중심 좌표에 마우스 클릭** — 그 좌표의 맨 위 요소가 클릭을 받으므로 z-index 가 재진다.
+
+| 칸 | 기대 | 도착 | 좌표의 맨 위 요소 | 판정 |
+|---|---|---|---|---|
+| 공개 카드 **사진** | `/posts/{id}` | `/posts/…b011` | `a` | ✅ |
+| 공개 카드 본문 미리보기 | `/posts/{id}` | `/posts/…b011` | `a` | ✅ |
+| 🔵 대조군: 아티스트 배지 | `/artists/{id}` | `/artists/…a006` | `a` | ✅ |
+| 🔵 대조군: 잠긴 카드 「멤버십 안내 보기」 | `/membership` | `/membership` | `a` | ✅ |
+| 잠긴 카드 티저 문구 | `/posts/{id}` | `/posts/…b012` | `a` | ✅ |
+| 「자세히 보기」 문구 | 0 | 0 | — | ✅ |
+
+⇒ 🔴 Failure Scenario 3(덮개 아래 안쪽 링크가 묻힘) · 설계 중 발견한 사진 틀 `relative` 층 문제 둘 다 **실제 브라우저에서 안 일어났다**.
+
+### 안 잰 것
+
+- 회원 카드(`features/post/ui/PostCard.tsx`)의 라이브 클릭 — 로그인이 필요하다. AC-4 는 공개 카드만 요구했고, 회원 카드는 같은 `shared/ui/cardLink.ts` 클래스를 쓰며 유닛(`post-card.test.tsx`)이 구조를 덮는다. ⇒ AC 미충족이 아니므로 **넘긴 의무 0건**.

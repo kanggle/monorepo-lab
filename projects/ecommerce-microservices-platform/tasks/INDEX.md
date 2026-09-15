@@ -85,7 +85,7 @@ _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DON
 
 ## in-progress
 
-_(없음)_
+- `TASK-FE-101-cart-toast-unreadable-in-dark-theme.md` — 🔴 **다크 테마에서 «장바구니에 추가되었습니다.» 가 안 보인다** (착수 2026-09-15 UTC). 원인: `Toast` 가 배경을 밝은 연녹으로 **고정**하고 글자색만 테마 토큰 `--color-text`(다크=거의 흰색)를 써서 대비 약 **1.1:1**. 처방: 성공·에러 표면·테두리를 `globals.css` 토큰으로 옮기고 다크 값을 둔다 + 두 테마 대비를 토큰 실제 값으로 계산하는 시험(결함 조합을 대조군으로). 🔵 형제 검사: 고정 밝은 배경 3곳 중 `products/page.tsx`·`DemoBackendNoticeClient` 는 **글자색도 고정**이라 다크에서 읽힌다 — 같은 결함은 `Toast` 하나. 분석=Opus 5 / 구현=Opus 5.
 
 ## review
 
