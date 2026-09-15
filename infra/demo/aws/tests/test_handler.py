@@ -813,6 +813,117 @@ class BundleSelectionTest(unittest.TestCase):
             "론처는 둘을 구별할 수 없고, 어느 쪽으로 그려도 한쪽이 거짓이 됩니다: "
             + repr(seen))
 
+    # -- 세션 경계: 선택은 세션을 넘어 쌓이지 않는다 (TASK-MONO-685) ---------------
+    def _old_session(self, bundles, started_ago=7200):
+        """지난 세션이 남긴 선택 + 그 세션의 시작 시각을 심는다."""
+        FAKE_SSM.store[handler.SELECTION_PARAM] = json.dumps(
+            {"bundles": sorted(bundles), "updatedAt": T0 - started_ago})
+        FAKE_SSM.store[handler.STARTED_PARAM] = str(T0 - started_ago)
+
+    def test_cold_start_replaces_the_previous_sessions_selection(self):
+        """🔴🔴 이 티켓의 본체. 지난 세션의 8묶음이 남아 있어도 「팬」 하나면 팬만 뜬다.
+
+        2026-09-15 라이브에 실제로 저장돼 있던 선택 그대로다 — 이 상태에서 옛 코드는 팬 요청을
+        합집합으로 더해 iam·wms·scm·erp·ecommerce·fan·console(8도메인 중 7)을 올렸다.
+        """
+        self._old_session(["console", "console-ecommerce", "console-erp", "console-scm",
+                           "console-wms", "fan", "store", "store-fulfillment"])
+        FAKE_EC2.state = "stopped"
+        with mock.patch.object(handler, "_now", return_value=T0):
+            r = handler.bundle_start(self.req({"bundles": ["fan"]}))
+        self.assertEqual(r["statusCode"], 200)
+        self.assertEqual(self.selection(), ["fan"])
+        self.assertEqual(FAKE_EC2.start_calls, 1)
+
+    def test_request_while_stopping_also_opens_a_new_session(self):
+        """`stopping` 은 지난 세션이 끝나는 중이다 — 거기 온 요청은 다음 세션의 것이다."""
+        self._old_session(["store", "console"])
+        FAKE_EC2.state = "stopping"
+        with mock.patch.object(handler, "_now", return_value=T0):
+            r = handler.bundle_start(self.req({"bundles": ["fan"]}))
+        self.assertEqual(r["statusCode"], 409)
+        self.assertEqual(self.selection(), ["fan"])
+
+    def test_warm_request_still_unions_with_the_current_session(self):
+        """🔵 대조군 — 켜진 세션 안에서는 D4 의 합집합 그대로다. 여기까지 비우면 남의 화면이 꺼진다."""
+        self._old_session(["store"], started_ago=600)
+        FAKE_EC2.state = "running"
+        with mock.patch.object(handler, "_now", return_value=T0):
+            handler.bundle_start(self.req({"bundles": ["fan"]}))
+        self.assertEqual(self.selection(), ["fan", "store"])
+
+    def test_second_click_during_describe_lag_is_not_wiped(self):
+        """🔴 start_instances 직후 describe 가 아직 stopped 를 줘도, 방금 시작된 세션이면 합집합이다."""
+        self._old_session(["console"])
+        FAKE_EC2.state = "stopped"
+        with mock.patch.object(handler, "_now", return_value=T0):
+            handler.bundle_start(self.req({"bundles": ["fan"]}))
+        FAKE_EC2.state = "stopped"  # describe 지연을 흉내 낸다
+        with mock.patch.object(handler, "_now", return_value=T0 + 5):
+            handler.bundle_start(self.req({"bundles": ["store"]}))
+        self.assertEqual(self.selection(), ["fan", "store"])
+
+    def test_after_the_window_a_cold_click_is_a_new_session_again(self):
+        """🔵 대조군 — 창 밖이면 다시 새 세션이다. 창이 영원하면 누적이 돌아온다."""
+        self._old_session(["console"], started_ago=handler.COLD_START_UNION_WINDOW_SECONDS + 1)
+        FAKE_EC2.state = "stopped"
+        with mock.patch.object(handler, "_now", return_value=T0):
+            handler.bundle_start(self.req({"bundles": ["fan"]}))
+        self.assertEqual(self.selection(), ["fan"])
+
+    def test_refused_request_never_wipes_the_selection(self):
+        """🔴 거절(세대·예산)될 요청이 남의 선택을 지우면 안 된다 — 비우기는 거절 뒤다."""
+        self._old_session(["store"])
+        FAKE_EC2.state = "stopped"
+        with mock.patch.object(handler, "BUNDLE_CAPABLE", "no"), \
+                mock.patch.object(handler, "_now", return_value=T0):
+            r = handler.bundle_start(self.req({"bundles": ["fan"]}))
+        self.assertEqual(r["statusCode"], 409)
+        self.assertEqual(self.selection(), ["store"])
+
+        FAKE_SSM.store["/t/usage"] = json.dumps(
+            {"month": handler._month(T0), "seconds": BUDGET_SEC, "tick": 0})
+        with mock.patch.object(handler, "_now", return_value=T0):
+            r = handler.bundle_start(self.req({"bundles": ["fan"]}))
+        self.assertEqual(r["statusCode"], 429)
+        self.assertEqual(self.selection(), ["store"])
+
+    # -- 선택 안 된 묶음은 공유 의존(iam)으로 «일부 실행» 이 되지 않는다 (TASK-MONO-685) --
+    def test_unselected_bundle_is_waiting_when_only_shared_iam_is_up(self):
+        """🔴🔴 콘솔만 켰는데 스토어·팬이 «일부만 실행 중» 으로 보이던 결함."""
+        FAKE_EC2.state = "running"
+        self._health({"iam": "up", "console": "up", "ecommerce": "down",
+                      "fan": "down", "finance": "down"})
+        with mock.patch.object(handler, "_now", return_value=T0):
+            handler._write_selection({"console"})
+            b = body(handler.bundles())["bundles"]
+        self.assertEqual(b["console"]["state"], "ready")
+        self.assertEqual(b["store"]["state"], "waiting")
+        self.assertEqual(b["fan"]["state"], "waiting")
+        # 2026-09-15 라이브에서 본 모양 그대로: 선택 안 된 console-finance, finance=down · iam=up
+        self.assertEqual(b["console-finance"]["state"], "waiting")
+
+    def test_unselected_bundle_is_partial_when_its_own_domain_is_up(self):
+        """🔵 대조군 — 자기 도메인이 떠 있으면 여전히 `partial` 이다. 전부 `waiting` 으로 뭉개면 안 된다."""
+        FAKE_EC2.state = "running"
+        for own_state in ("up", "partial"):
+            with self.subTest(ecommerce=own_state):
+                self._health({"iam": "down", "ecommerce": own_state})
+                with mock.patch.object(handler, "_now", return_value=T0):
+                    handler._write_selection({"console"})
+                    b = body(handler.bundles())["bundles"]
+                self.assertEqual(b["store"]["state"], "partial")
+
+    def test_selected_bundle_still_counts_shared_iam_as_progress(self):
+        """🔵 대조군 — 선택된 묶음은 iam 이 뜬 것도 진행이다(`booting`). 이 칸이 없으면
+        «선택 여부와 무관하게 자기 도메인만 본다» 는 더 넓고 틀린 구현이 초록이 된다."""
+        FAKE_EC2.state = "running"
+        self._health({"iam": "up", "ecommerce": "down"})
+        with mock.patch.object(handler, "_now", return_value=T0):
+            handler._write_selection({"store"})
+            b = body(handler.bundles())["bundles"]
+        self.assertEqual(b["store"]["state"], "booting")
+
     # -- 예산 / 라우팅 -------------------------------------------------------
     def test_budget_exhausted_refuses_bundle_start(self):
         FAKE_SSM.store["/t/usage"] = json.dumps(

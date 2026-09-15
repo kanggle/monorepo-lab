@@ -4016,7 +4016,10 @@ else:
         problems.append("bundle_start 가 _bundle_capability 를 부르지 않습니다 — 거절이 없습니다")
     else:
         # 🔴 돈이 나가는 두 지점보다 앞이어야 한다.
-        for needle, why in (("_add_to_selection", "선택이 이미 저장된 뒤"),
+        # 🔵 TASK-MONO-685 — `_reset_selection` 은 돈이 아니라 **남의 선택**을 건드린다. 거절될
+        #    요청이 지난 세션의 선택을 지우면 안 되므로 같은 순서 술어에 넣는다.
+        for needle, why in (("_reset_selection", "선택이 이미 지워진 뒤"),
+                            ("_add_to_selection", "선택이 이미 저장된 뒤"),
                             ("start_instances", "인스턴스가 이미 켜진 뒤")):
             ln = calls(bs, needle)
             if ln is not None and ln < cap:
