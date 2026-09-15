@@ -81,9 +81,16 @@
     .bnote:empty { display: none; }
     /* TASK-MONO-637 AC-1 — 🔴 «로그인하면 된다» 로 뭉치지 않기 위한 자리.
        로그인 후 기능은 로그인만으로 열리지 않는다. 데모 백엔드가 **기동돼 있어야** 하고,
-       그 상태는 바로 아래 「데모 서버」 배지가 말한다. 이 한 줄이 없으면 방문자는
-       로그인 화면까지 갔다가 막히고, 왜 막혔는지는 아무 데도 안 적혀 있다. */
-    .needs-boot { display: inline-block; margin-top: 3px; font-style: normal; font-size: .76rem; opacity: .7; }
+       그 상태는 바로 아래 「데모 서버」 배지가 말한다. 이 표시가 없으면 방문자는
+       로그인 화면까지 갔다가 막히고, 왜 막혔는지는 아무 데도 안 적혀 있다.
+       🔵 TASK-MONO-684 — 목록 아래 「↳ …」 문장에서 **「로그인 후」 제목 옆**으로 옮겼다(소유자:
+          가독성). 조건은 그 항목 전체에 걸리므로 제목에 붙는 것이 맞고, 뜻은 그대로다. */
+    .needs-boot { font-style: normal; font-size: .92em; }
+    /* TASK-MONO-684 — 미리보기가 «로그인해야 보이는 화면» 이라는 사실은 문장이 아니라 **사진 위**에
+       말한다. 🔴 ::before 로 그리는 이유: 캐러셀 JS(buildShots)가 이 상자에 자식을 채우므로
+       마크업에 자식 원소를 두면 순서·대역((z35) 드라이버)이 흔들린다 — 속성 하나면 JS 는 모른다. */
+    .shots[data-shots-note]::before { content: attr(data-shots-note); position: absolute; top: 8px; left: 8px; z-index: 2;
+      font-size: .74rem; line-height: 1; padding: 5px 8px; border-radius: 999px; background: #000b; color: #fff; pointer-events: none; }
     .scard dd code { font-size: .95em; padding: 0 3px; background: #8882; border-radius: 4px; }
     #smsg { grid-column: 1 / -1; font-size: .82rem; color: #666; }
 
@@ -223,13 +230,13 @@
   -->
   <div id="surfaces">
     <article class="scard" data-bundle="console">
-      <div class="shots" data-shots></div>
+      <div class="shots" data-shots data-shots-note="🔒 로그인 후 화면"></div>
       <div class="body">
         <h2><a class="open" data-surface data-domain="console" data-served="vercel" data-url="https://console.hubwang.com/" target="_blank" rel="noopener">운영자 콘솔</a></h2>
         <p class="desc">여러 도메인을 한 화면에서 운영하는 백오피스. 대시보드·주문·재고·조직·권한.</p>
         <dl>
           <dt>로그인 없이</dt><dd>데모 둘러보기 화면(<code>/demo</code>) — 8개 도메인의 대시보드·표 샘플</dd>
-          <dt>로그인 후</dt><dd>도메인 헬스 대시보드 · 이커머스/WMS/SCM/ERP/재무 운영 · IAM 테넌트·권한·감사 로그<br /><em class="needs-boot">↳ 데모 서버를 먼저 켜야 열립니다</em><br /><em class="needs-boot">↳ 위 미리보기 두 장이 <strong>이쪽</strong> 화면입니다 — 로그인 없이는 열리지 않습니다</em></dd>
+          <dt>로그인 후 <span class="needs-boot">· 데모 서버 켠 뒤</span></dt><dd>도메인 헬스 대시보드 · 이커머스/WMS/SCM/ERP/재무 운영 · IAM 테넌트·권한·감사 로그</dd>
           <dt>기동되는 서비스</dt><dd data-services>—</dd>
           <dt>데모 서버</dt><dd><span class="badge b-unknown" data-bundle-badge>… 확인 중</span></dd>
         </dl>
@@ -247,7 +254,7 @@
         <p class="desc">방문자용 상품 카탈로그. 목록·상세·카테고리·검색·필터·정렬이 로그인 없이 동작합니다.</p>
         <dl>
           <dt>로그인 없이</dt><dd>홈 · 상품 목록/상세 · 검색 · 카테고리 · 필터 · 정렬</dd>
-          <dt>로그인 후</dt><dd>장바구니 · 주문 · 결제 · 위시리스트 · 마이페이지(주문내역·리뷰·쿠폰)<br /><em class="needs-boot">↳ 데모 서버를 먼저 켜야 열립니다</em></dd>
+          <dt>로그인 후 <span class="needs-boot">· 데모 서버 켠 뒤</span></dt><dd>장바구니 · 주문 · 결제 · 위시리스트 · 마이페이지(주문내역·리뷰·쿠폰)</dd>
           <dt>기동되는 서비스</dt><dd data-services>—</dd>
           <dt>데모 서버</dt><dd><span class="badge b-unknown" data-bundle-badge>… 확인 중</span></dd>
         </dl>
@@ -265,7 +272,7 @@
         <p class="desc">아티스트와 팬을 잇는 커뮤니티. 공개 피드·아티스트 프로필·멤버십 소개는 로그인 없이 열립니다.</p>
         <dl>
           <dt>로그인 없이</dt><dd>공개 피드 · 아티스트 목록/프로필 · 게시물 상세 · 멤버십 소개</dd>
-          <dt>로그인 후</dt><dd>글쓰기 · 댓글 · 팔로우 · 멤버십 가입/내역 · 알림<br /><em class="needs-boot">↳ 데모 서버를 먼저 켜야 열립니다</em></dd>
+          <dt>로그인 후 <span class="needs-boot">· 데모 서버 켠 뒤</span></dt><dd>글쓰기 · 댓글 · 팔로우 · 멤버십 가입/내역 · 알림</dd>
           <dt>기동되는 서비스</dt><dd data-services>—</dd>
           <dt>데모 서버</dt><dd><span class="badge b-unknown" data-bundle-badge>… 확인 중</span></dd>
         </dl>
