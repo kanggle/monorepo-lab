@@ -8,7 +8,7 @@ TASK-INT-027
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -117,9 +117,16 @@ integration
   쿠폰 전체를 막는 것이 아니다.
   - 닫힘: `theFenceIsScopedToThePair_soAnotherOrderCanStillUseTheCoupon` — order-1 을 실제로
     release 해 펜스를 남긴 뒤 order-2 로 apply 하면 할인 5,000 이 나오고 쿠폰이 order-2 로 `USED`.
-- [ ] **AC-5** — 마이그레이션·유니크 제약·JPA 매핑을 실제 Postgres 에서 확인한다(로컬 Docker 차단 →
+- [x] **AC-5** — 마이그레이션·유니크 제약·JPA 매핑을 실제 Postgres 에서 확인한다(로컬 Docker 차단 →
   CI ecommerce integration 레인이 권위). 못 쟀으면 ⚪ 로 «못 쟀다 + 이유» 를 적는다.
-  - 진행 중: `CouponReleaseFenceIntegrationTest` 4건을 작성했고 **컴파일은 통과**했다(같은 실행의
+  - 닫힘: PR #3855 CI run `35089198893` 의 **샤드 B**(job `104771279989`)가
+    `:promotion-service:integrationTest` 를 돌렸고, 로그에 `CouponReleaseFenceIntegrationTest` **4/4 PASSED**
+    가 찍혔다 — 펜스 행 1개 후 늦은 apply 거절·쿠폰 `ISSUED`, 재시도 release 에도 행 1개(유니크 제약),
+    apply 선행 시 펜스 0행, 다른 주문은 정상 `USED`. 테스트가 `coupon_release` 를 직접 조회하므로 V9 가
+    실제로 적용됐다는 증거이기도 하다. 🔴 샤드 A·C 로그에는 이 모듈의 태스크가 **0건**이다 — 레인이
+    셋 다 초록이어서 「통합 레인 초록」만으로 닫았다면 어느 샤드가 맡았는지 모른 채 닫았을 것이다.
+    판정은 결과줄로 했다.
+  - (작성 시점 기록) `CouponReleaseFenceIntegrationTest` 4건을 작성했고 **컴파일은 통과**했다(같은 실행의
     `compileTestJava`). 로컬 `test` 실행 결과에 이 클래스의 XML 은 없다 — 프로젝트 수준
     `projects/ecommerce-microservices-platform/build.gradle:43` 이 모든 ecommerce 앱의 `test` 에서
     `excludeTags 'integration'` 을 걸고, `@Tag("integration")` 은 promotion-service 의 별도
@@ -127,7 +134,7 @@ integration
     자신의 `build.gradle` 에 없어서 처음엔 못 찾았다 — 「태그 제외가 없는데 왜 안 도나」를 추측으로
     적지 않고 저장소 전체를 grep 해 확인했다. CI `ecommerce-integration-tests` 레인이
     `:promotion-service:integrationTest` 를 부르므로(ci.yml:3683) 그 실행이 권위다.
-    **PR CI 에서 확인한 뒤 닫는다.**
+    PR CI 에서 확인한 뒤 닫는다 — 위 「닫힘」이 그 확인이다.
 
 ---
 
@@ -215,7 +222,8 @@ integration
 - [ ] 계약 선행 정렬
 - [ ] 구현 완료
 - [ ] 테스트 추가·통과
-- [ ] `TASK-INT-026` 이 남긴 「남는 위험」 문장이 이 티켓으로 닫혔음을 기록
+- [x] `TASK-INT-026` 이 남긴 「남는 위험」 문장이 이 티켓으로 닫혔음을 기록 — `TASK-INT-026` 은 `done/`
+  이라 얼어 있으므로 그 파일은 고치지 않았다. 닫힘의 기록은 이 파일과 INDEX `## done` 행이 들고 있다.
 - [ ] Ready for review
 
 ---
