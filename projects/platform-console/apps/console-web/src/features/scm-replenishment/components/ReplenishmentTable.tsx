@@ -10,6 +10,23 @@ import {
 
 type ActionKind = 'approve' | 'dismiss';
 
+/** A server-issued id (UUID) rather than a business code. */
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * 「공급사」 칸의 참조 대상 — `TASK-MONO-683`.
+ *
+ * 제안의 `supplierId` 는 계약상 **공급사 코드**다(ADR-MONO-050 D9 — wms 가 그 값을 코드로
+ * 찾는다). 그래서 값 자체가 `code` 이고, 이름은 이 응답에 없다(`codeName` 이 코드만 그린다).
+ * 🔴 UUID 모양이면 코드가 아니다 — 683 이전 시드가 넣던 값이고, 확정되면 wms 가 DLT 로 버린다.
+ *    그 값을 «코드» 로 그리면 결함이 정상처럼 보이므로 `이름 확인 불가` 로 보이게 하고, 원문은
+ *    `title` 에만 싣는다(창고 칸과 같은 규칙).
+ */
+function supplierCodeRef(supplierId: string | null | undefined) {
+  if (!supplierId || UUID_SHAPE.test(supplierId)) return null;
+  return { code: supplierId };
+}
+
 /**
  * The suggestion table + pagination for {@link ReplenishmentScreen} (TASK-PC-FE-190
  * split) — rendered only in the loaded/non-empty branch (the parent owns the
@@ -101,7 +118,13 @@ export function ReplenishmentTable({
                     s.warehouseCode ? { code: s.warehouseCode } : null,
                   )}
                 </td>
-                <td className="p-2">{s.supplierId ?? '—'}</td>
+                <td
+                  className="p-2"
+                  data-master-ref="suggestion.supplierId"
+                  title={s.supplierId ?? undefined}
+                >
+                  {masterRefLabel(s.supplierId, supplierCodeRef(s.supplierId))}
+                </td>
                 <td className="p-2">{s.suggestedQty ?? '—'}</td>
                 <td className="p-2" data-testid={`repl-row-trigger-${i}`}>
                   {s.triggerAvailableQty ?? '—'}

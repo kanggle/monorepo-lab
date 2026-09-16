@@ -88,8 +88,8 @@ monorepo
 - [x] **AC-0 — 재측정.** 위 표의 file:line 넷과 곁가지 둘을 **다시 읽어라** — 677 구현 에이전트의 보고이지 오케스트레이터가 연 것이 아니다. 하나라도 틀리면 그 칸부터 정정한다.
 - [x] **AC-1 — 잠복을 «실측» 으로 확인하거나 기각한다.** 저장소에서 재현할 수 있는 가장 싼 방법(서비스 IT 또는 컨슈머 단위 테스트에 시드와 같은 UUID 를 넣기)으로 «DLT 로 간다» 를 보인다. 🔴 추론만으로 결함이라 적지 마라.
 - [x] **AC-2 — 두 서비스의 코드 공간을 대조한다.** scm 공급사 코드와 wms 파트너 코드가 **같은 값으로 만나는가**. 안 만나면 «시드를 코드로 바꾼다» 만으로는 안 고쳐진다 — 그 사실과 선택지를 적고, 선택이 필요하면 소유자에게 묻는다(🔴 추천을 결정으로 적지 마라).
-- [ ] **AC-3 — 고친다(계약 먼저).** `demand-planning-api.md` 예시를 먼저 고치고, 시드·표시를 고친다. bite: 고친 시드를 되돌리면 AC-1 의 테스트가 빨개진다.
-- [ ] **AC-4 — 판정.** 가능하면 데모 창에서 «제안 승인 → 확정 → wms 인바운드 예정 생성» 을 한 번 끝까지 본다. 창이 없으면 ⚪ + 갈 곳(`TASK-MONO-672`).
+- [x] **AC-3 — 고친다(계약 먼저).** `demand-planning-api.md` 예시를 먼저 고치고, 시드·표시를 고친다. bite: 고친 시드를 되돌리면 AC-1 의 테스트가 빨개진다. → § Phase 2 (bite 둘 다 rc=1).
+- [ ] ⚪ **AC-4 — 판정.** → **측정 불가(데모 창 없음), 갈 곳 = `TASK-MONO-672` § 항목 4 (2026-09-16 수령).** 이 칸은 체크하지 않는다 — 판정은 거기서 난다. 가능하면 데모 창에서 «제안 승인 → 확정 → wms 인바운드 예정 생성» 을 한 번 끝까지 본다. 창이 없으면 ⚪ + 갈 곳(`TASK-MONO-672`).
 
 ---
 
@@ -159,9 +159,17 @@ monorepo
 - 🔵 코드 공간이 **만나는 곳은 e2e 픽스처뿐**이다: `tests/federation-hardening-e2e/fixtures/seed-wms-inbound.sql:13-27`(`SUP-FED-IE`/`SKU-FED-IE`/`WH-FED-IE`) — D9 가 말한 «양쪽에 같은 코드를 심는 forcing function» 은 e2e 에만 있고 데모 시드엔 없다.
 - ⇒ **«시드의 UUID 를 코드로 바꾼다» 만으로는 안 고쳐진다.** 공급사 코드와 SKU 코드를 **한쪽으로 맞추는 선택**이 필요하다 → 아래.
 
-## 선택지 — 소유자 결정 대기
+## 선택지 — 소유자 결정 대기 → ✅ 해소 (2026-09-16)
 
-> 🔴 **아래는 결정이 아니다.** D9(`ADR-MONO-050:227`)는 방향만 정했다 — *"scm's `sku_supplier_map.supplier_id` must be seeded
+> ✅ **소유자 결정 기록 (2026-09-16 UTC, 원문 그대로)**
+>
+> - **질문**: «어느 쪽으로 맞출까요?»
+> - **답**: «ⓐ scm 시드를 wms 코드로 (추천)»
+>
+> 아래 선택지는 **지우지 않고 남긴다** — 결정의 입력이었던 trade-off 기록이다. ⓑ·ⓒ·ⓓ 는 이 결정으로 **채택되지 않았다**.
+> 구현은 아래 § Phase 2.
+
+> 🔴 **(결정 전 기록) 아래는 결정이 아니다.** D9(`ADR-MONO-050:227`)는 방향만 정했다 — *"scm's `sku_supplier_map.supplier_id` must be seeded
 > with the supplier **code** wms's partner master knows"*. **어느 코드로 맞출지**, 그리고 D9 가 말하지 않은 **SKU 축**을 어떻게 할지는 열려 있다.
 
 **ⓐ scm 시드가 wms 의 코드로 간다** — scm 공급사를 `SUP-001` 로 등록하고 매핑 `supplierId`=`"SUP-001"`, 매핑·정책·시드 PO 의 SKU 를 wms 가 가진 `SKU-APPLE-001`(등)로 바꾼다.
@@ -192,6 +200,113 @@ monorepo
 - scm 쪽 UUID 전파(매핑 → 제안 → from-suggestion → confirm → outbox)의 **실행** 확인 — 코드 읽기만 했다.
 - 콘솔 `SupplierMapForm` 이 실제로 무엇을 받는지(Edge Case 1행) — 안 열었다.
 - `ReplenishmentTable.tsx:104` 표시 판단 — 선택지가 정해진 뒤 Phase 2.
+
+---
+
+# Phase 2 구현 (2026-09-16, 결정 ⓐ)
+
+> 🔵 위 Phase 1 절은 **당시 기록**이다. Phase 2 에서 테스트를 시드에 묶으면서 이름·구성이 바뀌었다:
+> `seedShapedSupplierUuid_…` → `serverIssuedSupplierUuid_isRejectedByWms_andGoesToDltWithoutRetry`(SKU 를 wms 가 아는 값으로 바꿔 공급사만이 거절 사유가 되게 함),
+> AC-2 고정 테스트 둘(`scmSeedSupplierCode_…` · `wmsSeedSupplierCode_…`)은 **삭제**하고 시드를 직접 읽는 `demoSeedMapping_resolvesInWmsDevSeed` 로 대체했다
+> (옛 값 `SUP-DEMO-01`·`SKU-DEMO-A1` 은 이제 저장소 어느 시드에도 없으므로 그 둘을 붙들어 둘 이유가 없다).
+
+## 1. 계약 먼저
+
+- `projects/scm-platform/specs/contracts/http/demand-planning-api.md:61` (suggestion 예시) · `:139` (매핑 `PUT` 예시) — `"uuid"` → `"SUP-0043"`, 그리고 매핑 절에
+  «`supplierId` 는 wms 가 아는 **공급사 코드**, UUID 는 이 엔드포인트는 통과(`@Size(max = 36)`)하고 wms 에서 재시도 없이 거절» 한 문단을 붙였다.
+- `projects/scm-platform/specs/contracts/http/procurement-api.md:589` (from-suggestion 요청 예시) — `"9b1d4a8c-…"` → `"SUP-0043"`, 필드 설명에 `supplierId` 줄 추가(§ supplier reference fields rule 1 로 연결).
+- 🔵 예시 값을 데모 값(`SUP-001`)이 아니라 `SUP-0043` 으로 둔 이유: 같은 계약군의 이벤트 예시(`scm-procurement-events.md:414,442`)·`MappingRequest` javadoc 이 이미 `SUP-0043` 이다 — 예시끼리 맞춘다.
+- `scm.procurement.inbound-expected.v1` 은 **안 바꿨다**(이미 CODE).
+
+## 2. 시드 (`infra/demo/seed/seed-scm.sh`)
+
+- `SUPPLIER_CODE="SUP-001"` · `SKU_A="SKU-APPLE-001"` — wms inbound·master·admin dev 시드 셋이 공유하는 값.
+- 매핑 `PUT` 본문의 `supplierId` = **`$SUPPLIER_CODE`**(이전 `$SUPPLIER_ID`). 운영자 발주 `POST /po` 는 계속 **id**(`$SUPPLIER_ID`) — draft 유스케이스가 id 로 찾기 때문이다(`PurchaseOrderApplicationService.java:90`). 두 쓰임을 주석으로 갈라 적었다.
+- 🔵 **`SKU_B` 결정 = 없앤다.** 두 번째 wms SKU 후보(`SKU-EA-001`·`SKU-BOX-001`)는 master 시드에만 있고 **inbound read-model 시드엔 없다**
+  (inbound `R__seed_dev_masterref.sql` 의 SKU 는 `SKU-APPLE-001` 하나 · master 의 Flyway 행은 이벤트를 안 내 inbound 로 투영되지 않는다),
+  `seed-wms.sh` 도 `SKU-APPLE-001` 만 움직인다. 그 SKU 로 매핑을 하나 더 심으면 «확정되면 DLT 로 가는 매핑» 을 하나 더 심는 것이다.
+  ⇒ 루프는 `for sku in "$SKU_A"`, 확정 발주(0003)도 `SKU_A`. 로그의 config 분모 `/4` → `/2`.
+- 🔴 **재실행 멱등 — 발주 키를 바꿨다.** 서버는 같은 `Idempotency-Key` + 다른 본문을 `422 IDEMPOTENCY_KEY_MISMATCH` 로 거절한다(`IdempotencyExecutor.java:28-29`, TTL 24h `:56`).
+  683 이전 볼륨에 24시간 안에 새 시드를 돌리면 옛 키 `seed-scm-po-000N` 이 옛 본문(`SKU-DEMO-*`)을 들고 있어 세 발주가 전부 422 가 된다.
+  ⇒ 키 = `seed-scm-po-000N-$SUPPLIER_CODE-$SKU_A`(최대 38자, 컬럼 `VARCHAR(80)` — `V1__init.sql:198`). 같은 코드로 재실행하면 같은 키 → replay 로 수렴(기존 행 수 판정 그대로).
+- 나머지 멱등: 공급사 등록은 code 로 수렴(다른 키 + 같은 code = 200) · 매핑/정책은 `PUT` upsert · 전이는 PO id 키. 🔵 683 이전 볼륨에서는 `SUP-001` 이 **새 행**으로
+  생기고 옛 `SUP-DEMO-01` 행·옛 매핑·옛 발주는 남는다(지우지 않는다 — 옛 발주가 참조). 신선 볼륨에선 없다.
+- `bash -n infra/demo/seed/seed-scm.sh` → rc=0. 🔴 **실제 스택에 대고 돌리지는 않았다**(데모 창 없음).
+
+## 3. 참조 전수 (옛 코드 3종)
+
+`Grep` 패턴 `SUP-DEMO-01|SKU-DEMO-A1|SKU-DEMO-B2|SUP-DEMO|SKU-DEMO`, `node_modules` 제외, 저장소 전체.
+🔵 **양성 대조군**: 같은 검색이 수정 전 `infra/demo/seed/seed-scm.sh:67-69` 를 **찾았다** — 0건이 «검색이 안 돈 것» 이 아님을 보인다.
+
+| 위치 | 처리 | 이유 |
+|---|---|---|
+| `infra/demo/seed/seed-scm.sh:67-69,81-90` | **고침** | 이 티켓의 대상. 옛 이름은 주석의 이력 설명으로만 남김 |
+| `projects/wms-platform/…/ScmInboundExpectedDemoSeedShapeDltTest.java` | **고침** | 옛 상수 삭제 → 시드를 읽는다(아래 4.) |
+| `projects/scm-platform/…/PurchaseOrderApplicationServiceTest.java` (491-613 등 13곳) · `PurchaseOrderControllerSliceTest.java:322,327` | 둠 | 677 의 id/code 조인 단위 테스트 픽스처 — 목 저장소에 넣는 임의 문자열이지 시드를 읽지 않는다. 값이 무엇이든 단언이 같다 |
+| `projects/platform-console/apps/console-web/tests/unit/erp-master-ref-names.test.tsx:742-809` | 둠 | 677 의 발주 공급사 칸 픽스처 — 같은 이유(렌더 규칙 테스트) |
+| `projects/scm-platform/apps/procurement-service/…/V6__suppliers_natural_key_code.sql:14` | 둠 | 적용된 Flyway 마이그레이션 — 체크섬이 바뀌면 기존 DB 가 거부한다. 과거 사실 서술 |
+| `scripts/console-demo/seed/07-scm-inventory.sql:40` (`SKU-DEMO-001`) | 둠 | 정규식 `SKU-DEMO` 에 걸린 **다른 값** — 콘솔 데모 가짜 데이터, 이 흐름과 무관 |
+| `tasks/done/TASK-MONO-510-…:446` · `projects/scm-platform/tasks/done/TASK-SCM-BE-059-…:194,197` · `projects/scm-platform/tasks/INDEX.md:93` | 둠 | `done/` 는 frozen, INDEX 행은 그 done 티켓의 요약 |
+| `tasks/in-progress/TASK-MONO-677-…:45,202` | 🔴 **안 고침 — 보고** | 677 AC-3 이 라이브 기대값을 `SUP-DEMO-01 · demo supplier` 로 적고 있다. 683 이후 신선 볼륨의 시드 발주는 **`SUP-001 · demo supplier`** 로 그려진다. 다른 세션의 in-progress 티켓이라 여기서 손대지 않고 오케스트레이터에게 넘긴다 |
+| README · 론처 스크린샷 문안 · 콘솔 e2e/fixtures · 다른 시드 | 0건 | 위 검색 결과에 없음 |
+
+`demo supplier`(공급사 이름)도 따로 검색 — 시드 1곳 + 위 677 단위 테스트 셋뿐. 이름은 **안 바꿨다**(결정 범위는 코드).
+
+**scm UNIQUE 충돌**: scm-platform 에 dev/seed Flyway 위치가 **없다**(`apps/*/src/main/resources/db/` = `migration` 만). `INSERT INTO suppliers` 도 0건.
+`SUP-001`·`SKU-APPLE-001` 이 scm 테스트 7파일에 나오지만 전부 목 또는 Testcontainers 의 **빈 DB** 에 테스트가 직접 넣는 값이다 —
+`seed-scm.sh` 는 데모 스택의 REST 에만 쓰므로 IT DB 에 닿을 경로가 없다.
+
+## 4. bite 를 시드에 묶었다
+
+- `ScmInboundExpectedDemoSeedShapeDltTest#demoSeedMapping_resolvesInWmsDevSeed` — `seed-scm.sh` 텍스트에서 (a) 매핑 `PUT` 본문의 `\"supplierId\":\"$VAR\"` 변수,
+  (b) 그 `PUT` 을 부르는 `for sku in …; do` 의 변수들을 뽑아 `NAME="literal"` 로 해석한다. `SUPPLIER_ID` 처럼 리터럴이 없는 서버 발급 변수면 UUIDv7 을 넣는다.
+  그 값으로 inbound-expected 이벤트를 만들어 **진짜 consumer + service** 에 넣고, wms dev 시드 read-model 에서 **거절 없이 ASN 이 저장되는지** 단언한다.
+  못 찾으면 조용히 통과하지 않고 실패한다(파일 없음 · 변수 없음 · 리터럴 없음 각각 AssertionError).
+- 🔴🔴 **첫 bite 가 안 물었다 — 원인은 Gradle 이었다.** 시드를 옛 코드로 되돌렸는데 `rc=0` — 로그에 `inbound-service:test UP-TO-DATE`.
+  테스트가 읽는 `infra/…/seed-scm.sh` 는 Gradle 이 모르는 입력이고 `org.gradle.caching=true` 라 **결과를 재사용**했다. 그대로 두면 시드만 바꾼 변경에서 이 검사는 영원히 초록이다.
+  ⇒ `projects/wms-platform/apps/inbound-service/build.gradle` 에 `tasks.withType(Test).configureEach { inputs.file(rootProject.file('infra/demo/seed/seed-scm.sh')) … }` 를 선언했다.
+- 명령(모두 `--offline`, 출력은 파일로 받아 rc 를 따로 읽음): `./gradlew :projects:wms-platform:apps:inbound-service:test --tests 'com.wms.inbound.adapter.in.messaging.scm.ScmInboundExpectedDemoSeedShapeDltTest'`
+
+| 단계 | 시드 상태 | rc | 결과 |
+|---|---|---|---|
+| (입력 선언 전) bite A | 옛 코드 `SUP-DEMO-01`/`SKU-DEMO-A1` | **0** | 🔴 `test UP-TO-DATE` — 가짜 초록 |
+| 초록 | 새 코드 | 0 | `test` 실행, 4 tests / 0 failures |
+| bite A | 옛 코드 `SUP-DEMO-01`/`SKU-DEMO-A1` | **1** | `demoSeedMapping_resolvesInWmsDevSeed` **만** 실패(`:146` `isNull`) |
+| 원복 | 손 편집(sed) → 백업과 `cmp` rc=0 | — | |
+| bite B | 매핑 `supplierId` = `$SUPPLIER_ID`(서버 UUID) | **1** | 같은 테스트만 실패(`:146`) |
+| 원복 | 손 편집 → `cmp` rc=0 | — | |
+| 초록 (`--rerun`) | 새 코드 | 0 | 4 tests / 0 failures |
+
+- 전체 `:projects:wms-platform:apps:inbound-service:test` → rc=0 (build.gradle 입력 선언이 다른 테스트를 깨지 않음).
+- 🔴 **CI 에서 이 bite 가 언제 도는가**: `ci.yml` 의 `wms` 경로 필터는 `projects/wms-platform/**` 뿐이라 **`infra/demo/seed/seed-scm.sh` 만 바꾼 PR 에서는 Java 빌드가 안 돈다**
+  (PR 게이트에서 못 막는다). `main` push 는 `code-changed`(`**/*.sh` 포함)로 빌드가 돌고 입력 선언 덕에 캐시도 안 탄다 ⇒ **머지 후 main 에서** 빨개진다.
+  필터에 그 경로를 더하는 것은 `ci.yml`(공유 파일·가드 다수) 변경이라 이 티켓에서 하지 않았다 — 필요하면 별도 티켓.
+
+## 5. 표시 (`ReplenishmentTable.tsx`)
+
+- **결정: 677/276 규칙을 쓴다.** 제안의 `supplierId` 는 계약상 **코드**(D9)이므로 값 자체를 `code` 로 넘긴다: `masterRefLabel(s.supplierId, supplierCodeRef(s.supplierId))`,
+  `data-master-ref="suggestion.supplierId"`, 원문은 `title`. 🔴 **UUID 모양이면 코드가 아니다**(683 이전 매핑 · 운영자가 폼에 id 를 넣은 경우) ⇒ `이름 확인 불가` 로 **보이게** 한다 —
+  코드처럼 그리면 DLT 로 갈 매핑이 정상처럼 보인다. 이름은 이 응답에 없어서 `codeName` 이 코드만 그린다(277 이 만든 반쪽 규칙). 창고 칸과 같은 모양.
+- 새 조회는 안 했다(procurement 공급사 마스터를 콘솔이 부르지 않음) — 이름까지 원하면 생산자(demand-planning)가 싣는 별도 계약 변경이다.
+- 테스트 `tests/unit/erp-master-ref-names.test.tsx`: 제안 픽스처에 공급사(코드 · UUID · null)를 넣고 2건 추가
+  (「공급사」 칸 = `['SUP-001', 이름 확인 불가, —]` · 대조군 = UUID 는 `title` 에만). 🔴 한 컴포넌트에 참조 칸이 둘이 되어 277 의 창고 대조군을
+  **칸 키로 좁혔다**(`refCellTexts(container, 'suggestion.warehouseId')` + 길이 3) — 안 좁히면 공급사 칸의 `—`/`이름 확인 불가` 가 창고 대조군을 대신 통과시킨다.
+- 명령(console-web, 워크트리 안 `pnpm install --frozen-lockfile` rc=0 — 저장소는 pnpm 잠금파일이라 `npm ci` 대신 CI 와 같은 명령):
+  `npx tsc --noEmit` rc=0 · `npx vitest run tests/unit/erp-master-ref-names.test.tsx tests/unit/ReplenishmentScreen.test.tsx` rc=0 (2 files / 53 tests) · `pnpm lint` rc=0.
+- bite: 칸 내용을 `{s.supplierId ?? '—'}` 로 되돌림 → vitest rc=1, 3 실패(새 「공급사」 칸 + 전 참조 셀 UUID 술어를 공유하는 277 테스트 둘) → 백업에서 복원, `cmp` rc=0.
+
+## 6. AC-4 ⚪ → `TASK-MONO-672` § 항목 4
+
+`tasks/ready/TASK-MONO-672-…` 에 «항목 4 — TASK-MONO-683 AC-4» 절을 추가하고 `tasks/INDEX.md` 의 672 행 수령 수를 3 → 4 로 고쳤다.
+
+## 미측정 (Phase 2)
+
+- 새 시드를 **실제 스택에 돌린 결과** — 문법 검사(`bash -n`)만. 발주 키 변경의 422 회피도 코드 읽기(`IdempotencyExecutor`)이지 실행이 아니다.
+- 데모에서 `SKU-APPLE-001` 보충 제안이 생기는가 · 끝까지 ASN 이 생기는가 — `TASK-MONO-672` 항목 4.
+- Testcontainers IT — Docker 미기동(Phase 1 과 같음).
+- CI 경로 필터 공백(위 4.) — 관찰만, 안 고침.
+- 677 AC-3 의 라이브 기대값 문구 — 보고만(위 3.).
+- 콘솔 `SupplierMapForm` 이 무엇을 받는지 — 여전히 안 열었다.
 
 ---
 

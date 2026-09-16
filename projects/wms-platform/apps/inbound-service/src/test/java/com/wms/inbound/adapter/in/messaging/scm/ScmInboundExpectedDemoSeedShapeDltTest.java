@@ -31,11 +31,16 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -57,38 +62,33 @@ import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.kafka.support.SendResult;
 
 /**
- * TASK-MONO-683 AC-1 / AC-2 — what wms inbound-service does with the inbound-expected event
- * that the <strong>demo seed's data shape</strong> would produce, measured rather than inferred.
+ * TASK-MONO-683 — does the scm <strong>demo seed's</strong> SKU→supplier mapping resolve in wms, and
+ * what does wms do when it does not.
  *
- * <p>{@code infra/demo/seed/seed-scm.sh} writes the supplier master's <em>server-issued UUID</em>
- * into {@code sku_supplier_map.supplier_id}; demand-planning copies it onto the suggestion, the
- * from-suggestion PO stores it verbatim, and {@code OutboxProcurementEventPublisher} emits it as
- * the event's {@code supplierId}. wms resolves that field as a partner <em>code</em>
- * (ADR-MONO-050 D9).
+ * <p>The mapping's {@code supplierId} and SKU code flow verbatim: {@code sku_supplier_map} →
+ * reorder suggestion → from-suggestion PO → {@code scm.procurement.inbound-expected.v1}, where wms
+ * inbound resolves both <em>by code</em> (ADR-MONO-050 §7 D9). The seed used to store the supplier
+ * master's server-issued UUID and demo-only SKU codes that no wms seed knows, so any confirmed
+ * suggestion would have been rejected straight to the DLT.
  *
- * <p>Everything below the Kafka listener is real: the parser, the consumer, the
- * {@link CreateScmInboundExpectationService} and the {@link DefaultErrorHandler} built by
- * {@link KafkaConsumerConfig}. The master read model is a fake <strong>loaded from the wms dev
- * seed file itself</strong> ({@code db/seed/R__seed_dev_masterref.sql}), so the "which codes wms
- * knows" half is read from the repository, not typed here. Only the persistence/outbox ports and
- * the Kafka producer are mocks. No broker, no database — Docker was unavailable when this was
- * written; {@code ScmInboundExpectedConsumerIT} is the Testcontainers-level sibling.
- *
- * <p>🔴 Honest limit: the scm-side values ({@code SUP-DEMO-01}, {@code SKU-DEMO-A1}) are copied
- * from {@code seed-scm.sh} lines 67-68, and the supplier UUID is generated in the same shape
- * procurement issues ({@code UuidV7}). This test does not read {@code seed-scm.sh}; changing the
- * seed does not change this test's inputs.
+ * <p>Both sides are read from the repository, not typed here:
+ * <ul>
+ *   <li>scm: {@code infra/demo/seed/seed-scm.sh} — the variable the mapping {@code PUT} writes as
+ *       {@code supplierId}, and the SKU variables its loop iterates ({@link ScmDemoSeed});</li>
+ *   <li>wms: {@code db/seed/R__seed_dev_masterref.sql} on the test classpath — the inbound master
+ *       read model the demo boots with ({@link WmsDevSeedReadModel}).</li>
+ * </ul>
+ * Everything below the listener is real: the parser, the consumer, the service and the
+ * {@link DefaultErrorHandler} the service registers. Only persistence/outbox ports and the Kafka
+ * producer are mocks. No broker, no database — {@code ScmInboundExpectedConsumerIT} is the
+ * Testcontainers-level sibling.
  */
 @ExtendWith(MockitoExtension.class)
 class ScmInboundExpectedDemoSeedShapeDltTest {
 
     private static final String TOPIC = "scm.procurement.inbound-expected.v1";
     private static final String WMS_DEV_SEED = "db/seed/R__seed_dev_masterref.sql";
-
-    /** {@code infra/demo/seed/seed-scm.sh:67} — the scm supplier master's natural key. */
-    private static final String SCM_SEED_SUPPLIER_CODE = "SUP-DEMO-01";
-    /** {@code infra/demo/seed/seed-scm.sh:68} — the SKU the seed maps to that supplier. */
-    private static final String SCM_SEED_SKU = "SKU-DEMO-A1";
+    private static final Path SCM_DEMO_SEED = Paths.get("infra", "demo", "seed", "seed-scm.sh");
 
     @Mock AsnPersistencePort asnPersistence;
     @Mock AsnNoSequencePort asnNoSequence;
@@ -115,21 +115,50 @@ class ScmInboundExpectedDemoSeedShapeDltTest {
 
     @Test
     void wmsDevSeed_isLoadedNonVacuously() {
-        // Guard against a silently empty fake: every assertion below reads "unknown" from it.
+        // Guard against a silently empty fake: the tests below read "unknown" from it.
         assertThat(wmsSeed.warehouseCodes).containsExactly("WH01");
         assertThat(wmsSeed.partnerCodes).containsExactly("SUP-001");
         assertThat(wmsSeed.skuCodes).containsExactly("SKU-APPLE-001");
     }
 
+    /**
+     * 🔴 The seed-coupled check. Reverting {@code seed-scm.sh} to the pre-683 values (supplier
+     * {@code SUP-DEMO-01} / SKU {@code SKU-DEMO-A1}) or back to writing {@code $SUPPLIER_ID} into
+     * the mapping turns this red.
+     */
     @Test
-    void seedShapedSupplierUuid_isRejectedByWms_andGoesToDltWithoutRetry() {
+    void demoSeedMapping_resolvesInWmsDevSeed() throws IOException {
+        ScmDemoSeed seed = ScmDemoSeed.load();
+        assertThat(seed.mappedSkus).as("SKUs the seed maps to a supplier").isNotEmpty();
+
+        runDedupeWork();
+        when(asnPersistence.existsOpenByPoNumber(any())).thenReturn(false);
+        when(asnPersistence.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(asnNoSequence.nextAsnNo()).thenReturn("ASN-SEED-0001");
+        String warehouse = wmsSeed.warehouseCodes.get(0);
+
+        for (String sku : seed.mappedSkus) {
+            Throwable thrown = catchThrowable(() -> consumer.onInboundExpected(
+                    event(seed.mappedSupplierId, warehouse, sku)));
+            assertThat(thrown)
+                    .as("seed-scm.sh maps %s → supplierId %s (from $%s); wms must resolve both by code",
+                            sku, seed.mappedSupplierId, seed.mappedSupplierVariable)
+                    .isNull();
+        }
+        verify(asnPersistence, times(seed.mappedSkus.size())).save(any());
+    }
+
+    @Test
+    void serverIssuedSupplierUuid_isRejectedByWms_andGoesToDltWithoutRetry() {
+        // The pre-683 seed shape: the supplier master's id instead of its code. SKU and warehouse
+        // are ones wms knows, so the supplier is the only reason for the rejection.
         runDedupeWork();
         when(asnPersistence.existsOpenByPoNumber(any())).thenReturn(false);
         stubDltSend();
         String supplierUuid = UuidV7.randomUuid().toString();
 
         Throwable thrown = catchThrowable(() -> consumer.onInboundExpected(
-                event(supplierUuid, "WH01", SCM_SEED_SKU)));
+                event(supplierUuid, wmsSeed.warehouseCodes.get(0), wmsSeed.skuCodes.get(0))));
 
         assertThat(thrown)
                 .isInstanceOf(InboundExpectationRejectedException.class)
@@ -165,35 +194,6 @@ class ScmInboundExpectedDemoSeedShapeDltTest {
         assertThat(retry.getClass().getSimpleName()).isEqualTo("RecordInRetryException");
         verify(kafkaOperations, never()).send(any(ProducerRecord.class));
         verify(kafkaConsumer).seek(any(), any(Long.class));
-    }
-
-    @Test
-    void scmSeedSupplierCode_isAlsoUnknownToWmsDevSeed() {
-        // AC-2: replacing the UUID with the scm supplier CODE alone does not meet wms.
-        runDedupeWork();
-        when(asnPersistence.existsOpenByPoNumber(any())).thenReturn(false);
-
-        Throwable thrown = catchThrowable(() -> consumer.onInboundExpected(
-                event(SCM_SEED_SUPPLIER_CODE, "WH01", SCM_SEED_SKU)));
-
-        assertThat(thrown)
-                .isInstanceOf(InboundExpectationRejectedException.class)
-                .hasMessageStartingWith("unknown supplierId=" + SCM_SEED_SUPPLIER_CODE);
-    }
-
-    @Test
-    void wmsSeedSupplierCode_passesSupplierGate_butScmSeedSku_isUnknownToWms() {
-        // AC-2: even a supplier code wms knows is followed by a SKU code wms does not know.
-        runDedupeWork();
-        when(asnPersistence.existsOpenByPoNumber(any())).thenReturn(false);
-
-        Throwable thrown = catchThrowable(() -> consumer.onInboundExpected(
-                event("SUP-001", "WH01", SCM_SEED_SKU)));
-
-        assertThat(thrown)
-                .isInstanceOf(InboundExpectationRejectedException.class)
-                .hasMessageStartingWith("unknown skuCode=" + SCM_SEED_SKU);
-        verify(asnPersistence, never()).save(any());
     }
 
     // ------------------------------------------------------------------ helpers
@@ -246,7 +246,7 @@ class ScmInboundExpectedDemoSeedShapeDltTest {
                   "partitionKey": "%s",
                   "payload": {
                     "poId": "%s",
-                    "poNumber": "PO-DEMO0001",
+                    "poNumber": "PO-%s",
                     "supplierId": "%s",
                     "destinationWarehouseId": "%s",
                     "destinationNodeType": "WMS_WAREHOUSE",
@@ -255,14 +255,98 @@ class ScmInboundExpectedDemoSeedShapeDltTest {
                     "lines": [ { "skuCode": "%s", "expectedQty": "100", "uom": "EA" } ]
                   }
                 }
-                """.formatted(UUID.randomUUID(), "po-1", UUID.randomUUID(), supplierId,
+                """.formatted(UUID.randomUUID(), "po-1", UUID.randomUUID(), skuCode, supplierId,
                 warehouseCode, skuCode);
     }
 
     /**
+     * What {@code infra/demo/seed/seed-scm.sh} writes into {@code sku_supplier_map}, read from the
+     * script text.
+     *
+     * <ul>
+     *   <li>{@code supplierId} = the {@code $VARIABLE} inside the JSON body of the
+     *       {@code sku-supplier-map} {@code PUT}. A variable with a literal {@code NAME="value"}
+     *       assignment resolves to that literal; {@code SUPPLIER_ID} has none because the script
+     *       extracts it from the registration response (a server-issued UUIDv7), so it resolves to a
+     *       fresh UUIDv7 — the same shape the demo would store.</li>
+     *   <li>SKUs = the {@code $VARIABLE}s of the {@code for sku in …; do} loop that issues that
+     *       {@code PUT}, each resolved to its literal.</li>
+     * </ul>
+     * 🔴 Anything else fails loudly — a parse that silently finds nothing would pass vacuously.
+     */
+    static final class ScmDemoSeed {
+
+        private static final Pattern ASSIGNMENT = Pattern.compile("(?m)^([A-Z][A-Z0-9_]*)=\"([^\"$]*)\"\\s*$");
+        private static final Pattern MAP_LOOP = Pattern.compile(
+                "for sku in ([^;\\n]*); do((?:(?!\\bdone\\b).)*?)sku-supplier-map/",
+                Pattern.DOTALL);
+        private static final Pattern MAP_SUPPLIER_VAR = Pattern.compile(
+                "sku-supplier-map/\\$sku\"[^\\n]*\\n[^\\n]*\\\\\"supplierId\\\\\":\\\\\"\\$([A-Z_][A-Z0-9_]*)\\\\\"");
+        private static final Pattern VAR_REF = Pattern.compile("\\$\\{?([A-Z_][A-Z0-9_]*)\\}?");
+
+        final String mappedSupplierVariable;
+        final String mappedSupplierId;
+        final List<String> mappedSkus = new ArrayList<>();
+
+        private ScmDemoSeed(String supplierVariable, String supplierId) {
+            this.mappedSupplierVariable = supplierVariable;
+            this.mappedSupplierId = supplierId;
+        }
+
+        static ScmDemoSeed load() throws IOException {
+            String script = Files.readString(locate(), StandardCharsets.UTF_8).replace("\r\n", "\n");
+            Map<String, String> literals = new HashMap<>();
+            Matcher a = ASSIGNMENT.matcher(script);
+            while (a.find()) {
+                literals.put(a.group(1), a.group(2));
+            }
+
+            Matcher sup = MAP_SUPPLIER_VAR.matcher(script);
+            assertThat(sup.find())
+                    .as("seed-scm.sh: the sku-supplier-map PUT body with a \\\"supplierId\\\":\\\"$VAR\\\"")
+                    .isTrue();
+            String supplierVar = sup.group(1);
+            String supplierId;
+            if (literals.containsKey(supplierVar) && !literals.get(supplierVar).isEmpty()) {
+                supplierId = literals.get(supplierVar);
+            } else if ("SUPPLIER_ID".equals(supplierVar)) {
+                supplierId = UuidV7.randomUuid().toString();
+            } else {
+                throw new AssertionError("seed-scm.sh maps supplierId from $" + supplierVar
+                        + ", which has no literal assignment and is not the server-issued SUPPLIER_ID");
+            }
+
+            ScmDemoSeed seed = new ScmDemoSeed(supplierVar, supplierId);
+            Matcher loop = MAP_LOOP.matcher(script);
+            assertThat(loop.find()).as("seed-scm.sh: the `for sku in …; do` loop issuing the mapping PUT").isTrue();
+            Matcher ref = VAR_REF.matcher(loop.group(1));
+            while (ref.find()) {
+                String var = ref.group(1);
+                assertThat(literals).as("seed-scm.sh: literal assignment of $%s", var).containsKey(var);
+                seed.mappedSkus.add(literals.get(var));
+            }
+            return seed;
+        }
+
+        /** Walks up from the Gradle test working directory (the module dir) to the repo root. */
+        private static Path locate() {
+            Path dir = Paths.get("").toAbsolutePath();
+            while (dir != null) {
+                Path candidate = dir.resolve(SCM_DEMO_SEED);
+                if (Files.isRegularFile(candidate)) {
+                    return candidate;
+                }
+                dir = dir.getParent();
+            }
+            throw new AssertionError("infra/demo/seed/seed-scm.sh not found above "
+                    + Paths.get("").toAbsolutePath() + " — this check must not pass without reading it");
+        }
+    }
+
+    /**
      * Master read model holding exactly the rows of the wms dev seed file. Every row in that file
-     * is a single-row {@code INSERT INTO <table> (...) VALUES (...)}; the code column is the
-     * second string literal of the VALUES tuple, and the partner type the third.
+     * is a single-row {@code INSERT INTO <table> (...) VALUES (...)}; the id is the first string
+     * literal of the VALUES tuple, the code the second, and the partner type the third.
      */
     static final class WmsDevSeedReadModel implements MasterReadModelPort {
 
@@ -275,7 +359,9 @@ class ScmInboundExpectedDemoSeedShapeDltTest {
         final List<String> warehouseCodes = new ArrayList<>();
         final List<String> partnerCodes = new ArrayList<>();
         final List<String> skuCodes = new ArrayList<>();
+        private final List<WarehouseSnapshot> warehouses = new ArrayList<>();
         private final List<PartnerSnapshot> partners = new ArrayList<>();
+        private final List<SkuSnapshot> skus = new ArrayList<>();
 
         static WmsDevSeedReadModel load(String resource) throws IOException {
             String sql;
@@ -291,13 +377,23 @@ class ScmInboundExpectedDemoSeedShapeDltTest {
                 while (lit.find()) {
                     literals.add(lit.group(1));
                 }
+                UUID id = UUID.fromString(literals.get(0));
                 switch (m.group(1)) {
-                    case "warehouse_snapshot" -> model.warehouseCodes.add(literals.get(1));
-                    case "sku_snapshot" -> model.skuCodes.add(literals.get(1));
+                    case "warehouse_snapshot" -> {
+                        model.warehouseCodes.add(literals.get(1));
+                        model.warehouses.add(new WarehouseSnapshot(id, literals.get(1),
+                                WarehouseSnapshot.Status.valueOf(literals.get(2)), CACHED, 0L));
+                    }
+                    case "sku_snapshot" -> {
+                        model.skuCodes.add(literals.get(1));
+                        model.skus.add(new SkuSnapshot(id, literals.get(1),
+                                SkuSnapshot.TrackingType.valueOf(literals.get(2)),
+                                SkuSnapshot.Status.valueOf(literals.get(3)), CACHED, 0L));
+                    }
                     case "partner_snapshot" -> {
                         model.partnerCodes.add(literals.get(1));
-                        model.partners.add(new PartnerSnapshot(UUID.fromString(literals.get(0)),
-                                literals.get(1), PartnerSnapshot.PartnerType.valueOf(literals.get(2)),
+                        model.partners.add(new PartnerSnapshot(id, literals.get(1),
+                                PartnerSnapshot.PartnerType.valueOf(literals.get(2)),
                                 PartnerSnapshot.Status.valueOf(literals.get(3)), CACHED, 0L));
                     }
                     default -> { }
@@ -308,10 +404,7 @@ class ScmInboundExpectedDemoSeedShapeDltTest {
 
         @Override
         public Optional<WarehouseSnapshot> findWarehouseByCode(String warehouseCode) {
-            return warehouseCodes.contains(warehouseCode)
-                    ? Optional.of(new WarehouseSnapshot(UUID.randomUUID(), warehouseCode,
-                            WarehouseSnapshot.Status.ACTIVE, CACHED, 0L))
-                    : Optional.empty();
+            return warehouses.stream().filter(w -> w.warehouseCode().equals(warehouseCode)).findFirst();
         }
 
         @Override
@@ -321,16 +414,17 @@ class ScmInboundExpectedDemoSeedShapeDltTest {
 
         @Override
         public Optional<SkuSnapshot> findSkuByCode(String skuCode) {
-            return skuCodes.contains(skuCode)
-                    ? Optional.of(new SkuSnapshot(UUID.randomUUID(), skuCode, SkuSnapshot.TrackingType.LOT,
-                            SkuSnapshot.Status.ACTIVE, CACHED, 0L))
-                    : Optional.empty();
+            return skus.stream().filter(s -> s.skuCode().equals(skuCode)).findFirst();
+        }
+
+        @Override
+        public Optional<SkuSnapshot> findSku(UUID id) {
+            return skus.stream().filter(s -> s.id().equals(id)).findFirst();
         }
 
         @Override public Optional<WarehouseSnapshot> findWarehouse(UUID id) { return Optional.empty(); }
         @Override public Optional<ZoneSnapshot> findZone(UUID id) { return Optional.empty(); }
         @Override public Optional<LocationSnapshot> findLocation(UUID id) { return Optional.empty(); }
-        @Override public Optional<SkuSnapshot> findSku(UUID id) { return Optional.empty(); }
         @Override public Optional<LotSnapshot> findLot(UUID id) { return Optional.empty(); }
         @Override public Optional<LotSnapshot> findLotBySkuAndLotNo(UUID skuId, String lotNo) { return Optional.empty(); }
         @Override public Optional<PartnerSnapshot> findPartner(UUID id) { return Optional.empty(); }

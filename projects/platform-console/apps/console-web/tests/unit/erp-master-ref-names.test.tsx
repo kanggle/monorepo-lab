@@ -215,14 +215,28 @@ const WH_GHOST = '01910000-0000-7000-8000-0000000009ff';
 const ROOT_NODE = '01a085a1-bc98-741e-ba56-21b896de1001';
 const CHILD_NODE = '01a085a1-bc98-741e-ba56-21b896de1002';
 
+// TASK-MONO-683 — 683 이전 데모 시드가 매핑에 넣던 모양(공급사 마스터의 서버 발급 id).
+const SUP_UUID = '01a09478-5c1e-7d2a-9b3f-4e6a8c0d2e01';
+
 const SUGGESTIONS = [
-  // 해석됨 — 생산자가 `warehouseCode` 를 실어 준다(ADR-MONO-050 D9).
-  { id: 's1', skuCode: 'SKU-BOX-001', warehouseId: WH, warehouseCode: 'WH01', suggestedQty: 10, status: 'SUGGESTED' },
+  // 해석됨 — 생산자가 `warehouseCode` 를 실어 준다(ADR-MONO-050 D9). 공급사는 코드(D9).
+  { id: 's1', skuCode: 'SKU-BOX-001', warehouseId: WH, warehouseCode: 'WH01', supplierId: 'SUP-001', suggestedQty: 10, status: 'SUGGESTED' },
   // 🔴 대조군 — BATCH 출처는 코드가 없다. `이름 확인 불가` 여야 하고 **UUID 는 안 된다**.
-  { id: 's2', skuCode: 'SKU-BOX-002', warehouseId: WH_GHOST, warehouseCode: null, suggestedQty: 5, status: 'SUGGESTED' },
+  //    공급사 칸도 코드가 아니라 UUID 다(683 이전 시드) → 같은 규칙.
+  { id: 's2', skuCode: 'SKU-BOX-002', warehouseId: WH_GHOST, warehouseCode: null, supplierId: SUP_UUID, suggestedQty: 5, status: 'SUGGESTED' },
   // 🔴 대조군 — 참조가 아예 없는 행 → `—`.
-  { id: 's3', skuCode: 'SKU-BOX-003', warehouseId: null, warehouseCode: null, suggestedQty: 1, status: 'SUGGESTED' },
+  { id: 's3', skuCode: 'SKU-BOX-003', warehouseId: null, warehouseCode: null, supplierId: null, suggestedQty: 1, status: 'SUGGESTED' },
 ];
+
+/**
+ * 한 컴포넌트에 참조 칸이 둘(창고·공급사)이 되었으므로, 칸별 단언은 **그 칸의 키로** 좁힌다.
+ * 🔴 좁히지 않으면 한 칸의 `이름 확인 불가`/`—` 가 다른 칸의 대조군을 대신 통과시킨다.
+ */
+function refCellTexts(container: HTMLElement, key: string): string[] {
+  return Array.from(container.querySelectorAll<HTMLElement>(`[data-master-ref="${key}"]`)).map(
+    (el) => (el.textContent ?? '').trim(),
+  );
+}
 
 const ORG_NODES = [
   { orgNodeId: ROOT_NODE, parentId: null, name: '본사', depth: 0, ceiling: { mode: 'UNBOUNDED' }, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
@@ -263,7 +277,8 @@ describe('erp-ops 밖의 참조 칸도 같은 술어를 지킨다 (TASK-PC-FE-27
 
   it('🔴 대조군 — 코드가 없는 행은 `이름 확인 불가` 이고 **id 로 안 돌아간다**', () => {
     const { container } = renderReplenishment();
-    const cells = refCells(container).map((el) => (el.textContent ?? '').trim());
+    const cells = refCellTexts(container, 'suggestion.warehouseId');
+    expect(cells).toHaveLength(3);
     expect(cells).toContain(MASTER_REF_UNRESOLVED);
     expect(cells).toContain(MASTER_REF_NONE);
     // 🔴 그 행의 id 는 **여전히 UUID 다** — 즉 이 대조군은 공허하지 않다.
@@ -276,6 +291,28 @@ describe('erp-ops 밖의 참조 칸도 같은 술어를 지킨다 (TASK-PC-FE-27
     expect(titles).toContain(WH);
     // 보이는 텍스트에는 없다.
     assertNoUuidInRefCells(container, 3, '보충 추천(title 확인)');
+  });
+
+  it('보충 추천 — 「공급사」 칸 (TASK-MONO-683): 코드는 코드로, UUID 는 `이름 확인 불가` 로', () => {
+    const { container } = renderReplenishment();
+    // 창고 3 + 공급사 3 ⇒ 하한은 실제 수 6.
+    assertNoUuidInRefCells(container, 6, '보충 추천(공급사 포함)');
+    expect(refCellTexts(container, 'suggestion.supplierId')).toEqual([
+      'SUP-001',
+      MASTER_REF_UNRESOLVED,
+      MASTER_REF_NONE,
+    ]);
+  });
+
+  it('🔴 대조군 — 공급사 UUID 는 **여전히 화면에 올 수 있는 값**이고, 원문은 `title` 에만 있다', () => {
+    const { container } = renderReplenishment();
+    // (1) 입력이 정말 UUID 다 — 이 대조군은 공허하지 않다.
+    expect(UUID_RE.test(SUP_UUID)).toBe(true);
+    // (2) 원문은 사라지지 않았다.
+    const titles = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-master-ref="suggestion.supplierId"]'),
+    ).map((el) => el.getAttribute('title'));
+    expect(titles).toEqual(['SUP-001', SUP_UUID, null]);
   });
 
   it('조직 노드 — 「상위 노드」 칸', () => {
