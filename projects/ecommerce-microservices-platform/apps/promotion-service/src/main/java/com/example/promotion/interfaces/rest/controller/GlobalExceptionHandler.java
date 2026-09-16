@@ -11,6 +11,7 @@ import com.example.promotion.domain.coupon.CouponAlreadyUsedException;
 import com.example.promotion.domain.coupon.CouponExpiredException;
 import com.example.promotion.domain.coupon.CouponNotFoundException;
 import com.example.promotion.domain.coupon.CouponNotOwnedException;
+import com.example.promotion.domain.coupon.CouponPlacementReleasedException;
 import com.example.promotion.domain.coupon.CouponRestoreNotAllowedException;
 import com.example.promotion.domain.promotion.CouponLimitExceededException;
 import com.example.promotion.domain.promotion.PromotionAlreadyEndedException;
@@ -132,6 +133,16 @@ public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleCouponNotOwned(CouponNotOwnedException e) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
                 .body(ErrorResponse.of("COUPON_NOT_OWNED", e.getMessage()));
+    }
+
+    @ExceptionHandler(CouponPlacementReleasedException.class)
+    public ResponseEntity<ErrorResponse> handleCouponPlacementReleased(CouponPlacementReleasedException e) {
+        // 422 COUPON_PLACEMENT_RELEASED — the placement this apply belongs to was already
+        // released, so its order was never saved (TASK-INT-027). In practice nobody is listening:
+        // the caller rolled back before sending the release. The code exists so the refusal is
+        // observable rather than silent.
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of("COUPON_PLACEMENT_RELEASED", e.getMessage()));
     }
 
     @ExceptionHandler(CouponRestoreNotAllowedException.class)
