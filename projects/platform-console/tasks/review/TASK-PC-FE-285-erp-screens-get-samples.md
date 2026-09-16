@@ -277,3 +277,87 @@ B1·B2 모두 단독 주입 → 실행 → 복원 순으로 개별 확인했다.
 **한 줄도 안 바뀌었다**. 인증 운영자 경로 테스트(erp-api/erp-proxy/approval-api/approval-proxy/
 delegation-api/delegation-proxy/erp-state 전부)는 무수정 초록이며, `pnpm test` 최종 실행이 그 안에 포함된
 전체 스위트다(별도 대조군 실행을 분리하지 않았다 — 변경 파일이 sample-mode 전용이라 분리해도 같은 결과).
+
+## CORRECTION — 조정자 지시 2건 반영 (2026-09-17 UTC)
+
+조정자가 커밋 `0dbc36a5c` 리뷰에서 병합 전 고쳐야 할 두 가지를 지목했다 — 아래에 각각의 결과를 기록한다.
+
+### 1. 알림벨이 존재하지 않는 결재로 링크되던 것 — 이 티켓에서 고쳤다
+
+**정정** — 원 구현 노트의 "⚪ `dashboards.ts` 는 282 소유 파일이라 이 티켓 범위 밖으로 두고 여기 기록만
+한다"는 틀렸다. 벨(`NotificationBell.tsx`)은 샘플 방문자가 보는 **모든 화면**에 떠 있는 셸 위젯이고,
+283~288 시리즈가 샘플 세계의 정합성을 소유한다 — 282 가 파일을 처음 썼다는 사실이 그 파일의 내용을
+이 티켓이 깨뜨려 놓은 채로 남겨도 되는 이유가 되지 않는다. 실측(조정자 지적, 이 워크트리에서 재확인):
+
+| 알림 | 원래 `sourceId` | 이 티켓의 결재 픽스처에 있었나 | `type` |
+|---|---|---|---|
+| `sample-notification-0001` | `sample-approval-1001` | ❌ 없음(404) | `APPROVAL_SUBMITTED` |
+| `sample-notification-0002` | `sample-approval-1000` | ❌ 없음(404) | `APPROVAL_APPROVED` |
+| `sample-notification-0003` | `sample-approval-0998` | ❌ 없음(404) | `APPROVAL_REJECTED` |
+
+**고침** (`shared/sample/fixtures/dashboards.ts`) — 각 `sourceId` 를 실제 `ERP_APPROVAL_REQUESTS` 항목으로
+바꾸고, `type` 이 그 결재의 **실제 `status`** 와 일치하도록 맞췄다. 제목/본문도 그 결재를 가리키게 다시 썼다
+(다른 문서를 설명하지 않는다):
+
+| 알림 | 새 `sourceId` | 그 결재의 실제 status | `type` | 정합 |
+|---|---|---|---|---|
+| `sample-notification-0001` | `appr-sample-0001` | `SUBMITTED` | `APPROVAL_SUBMITTED` | ✅ |
+| `sample-notification-0002` | `appr-sample-0004` | `APPROVED` | `APPROVAL_APPROVED` | ✅ |
+| `sample-notification-0003` | `appr-sample-0005` | `REJECTED`(사유: 예산 부족으로 반려) | `APPROVAL_REJECTED` | ✅ |
+
+**벨의 링크 해석 확인** (`NotificationBell.tsx` `NotificationRow.handleClick`) — `n.deepLink` 가 있으면
+그리로, 없으면 `isApprovalSource(n) && n.sourceId` 일 때 `/erp/approval?request=<sourceId>` 로 이동한다.
+이 세 알림 전부 `deepLink` 필드가 없으므로(§1 계약상 "도메인이 안 주면 부재") 폴백 경로를 탄다 — 그
+폴백이 여는 정확한 경로가 `ErpApprovalScreen`/`getErpApprovalState` 가 `?request=` 로 읽는 바로 그 경로다.
+
+**새 테스트 + bite** — `tests/unit/notification-inbox-approval-links.test.ts`(신규, 4 케이스): 인박스를
+`sampleResponse`(console-bff:notifications-inbox)로 읽고, 각 `APPROVAL` 소스 항목의 `sourceId` 를
+`sampleResponse`(flat:erp_approval)의 상세 조회로 해석 + 그 결재의 `status` 가 알림 `type` 과 일치하는지
+검사한다(내부 상수 비교가 아니라 **두 라우터 호출의 결과**를 비교). bite: `sample-notification-0001` 의
+`sourceId` 를 `appr-sample-0001-BITE-DANGLING` 로 주입 → rc=1, 2 files 단언 실패
+(`expected 404 to be 200` + status 비교 연쇄 실패) → 복원 → rc=0, 4/4. `grep -rn "BITE-" src tests
+e2e-smoke` = 0건(복원 확인).
+
+`dashboards.ts` 를 파싱하는 282 의 기존 가드(`sample-fixtures-schema.test.ts`의 스키마 파싱,
+`sample-label-rule.test.ts`의 라벨 규칙)는 값만 바뀌었을 뿐 구조는 그대로라 **무수정 초록**이다.
+
+### 2. 404 에러 코드 — 추측이 아니라 계약을 읽었다; 이전 문장 정정
+
+**정정** — 원 구현 노트에 적은 "`read-model-api.md` 는 erp-platform 프로젝트 스펙이라 이 워크트리에서
+읽을 수 없다(§ D4)"는 **사실이 아니다.** 파일은 `projects/erp-platform/specs/contracts/http/
+read-model-api.md` 에 이 모노레포·이 워크트리 안에 있다(같은 디렉터리에 `masterdata-api.md`·
+`approval-api.md`·`notification-api.md` 도 있다). 셋 다 읽었다.
+
+| 표면 · 엔드포인트 | 이전(추측) | 계약이 실제로 말하는 것 | 근거 | 고침 |
+|---|---|---|---|---|
+| 5 마스터 상세(부서/직원/직급/비용센터/거래처) `GET …/{id}` | `MASTERDATA_NOT_FOUND` | `MASTERDATA_NOT_FOUND` | `masterdata-api.md` 전역(예: L133 "**Errors**: 404 `MASTERDATA_NOT_FOUND`" — 부서/직원/직급/비용센터/거래처 상세 각 절 + L443 코드 표) | 변경 없음(추측이 우연히 맞았다) |
+| read-model 직원 org-view 상세 `GET …/read-model/employees/{id}` | `MASTERDATA_NOT_FOUND` | `MASTERDATA_NOT_FOUND` | `read-model-api.md` L128 "**Errors**: 404 `MASTERDATA_NOT_FOUND` (no employee projection for `id`…)" | 변경 없음 |
+| read-model 위임 facts 상세 `GET …/read-model/delegations/{grantId}` | `DELEGATION_NOT_FOUND`(추측 — 틀림) | `MASTERDATA_NOT_FOUND` | `read-model-api.md` L300-303 "**Errors**: 404 `MASTERDATA_NOT_FOUND` (no delegation-fact projection for the id…)" | **고침** — `erp.ts` L558-565 + `sample-fixtures-schema-erp.test.ts` L333 |
+| 결재 요청 상세 `GET …/approval/requests/{id}` | `APPROVAL_REQUEST_NOT_FOUND` | `APPROVAL_REQUEST_NOT_FOUND` | `approval-api.md` L313/341/370/398/426(각 결재 엔드포인트) + L467 코드 표 | 변경 없음 |
+| 위임 그랜트 — GET 상세 자체가 없다 | (구현 안 함 — 맞음) | `approval-api.md` 는 `/api/erp/approval/delegations` 아래 **list 하나** (`GET`, 캐시된 role 필터)와 write 둘(`POST` create·`POST …/{id}/revoke`)만 정의한다 — **GET-by-id 엔드포인트가 없다.** `DELEGATION_NOT_FOUND`(404)는 오직 `POST …/{id}/revoke`(§ L58 "unknown id → 404 `DELEGATION_NOT_FOUND`") 에만 등장하고, 그건 **쓰기**라 샘플 모드에서 라우터의 일반 403 `SAMPLE_READ_ONLY` 분기가 어떤 픽스처 코드보다 먼저 가로챈다 — **이 코드는 샘플 세계에서 도달 불가능하다.** | 원래부터 detail 핸들러 없음(맞았다) — `DELEGATION_NOT_FOUND` 문자열 자체를 코드에서 제거(더 이상 아무 데도 쓰지 않는다) |
+
+**콘솔 코드가 이 코드들을 실제로 분기하는가** (`grep -rn` 결과, `features/erp-ops` + `shared`):
+- `MASTERDATA_NOT_FOUND` — **분기한다.** `hooks/use-department-write.ts:59` · `hooks/use-master-write.ts:51`
+  (마스터 쓰기 뮤테이션의 404 를 사람이 읽는 문구로 매핑) + `shared/api/errors.ts:938`
+  (`messageForCode` 의 전역 매핑, "대상 마스터 레코드를 찾을 수 없습니다."). 읽기 경로(우리가 실제로
+  건드리는 GET 404)는 이 전역 매핑을 거친다.
+- `APPROVAL_REQUEST_NOT_FOUND` — **분기한다.** `components/approval-error.ts:35`.
+- `DELEGATION_NOT_FOUND` — **분기한다(코드는 있다), 그러나 샘플 모드에서 도달 불가능하다.**
+  `components/approval-error.ts:51` 에 case 가 있다 — 위임 회수(POST) 실패 문구용이다. 우리 픽스처는
+  이 코드를 더 이상 어디서도 만들지 않는다(위 표) — 그 case 는 **실제 백엔드**에 연결됐을 때만 살아있고,
+  샘플 방문자는 애초에 그 POST 에 도달하지 못한다(라우터가 먼저 막는다).
+
+### 게이트 (이 워크트리, 정정 반영 후, 각각 독립 실행 + 명시 rc)
+
+| 게이트 | 결과 |
+|---|---|
+| `pnpm lint` | rc=0 · «No ESLint warnings or errors» |
+| `npx tsc --noEmit` | rc=0 |
+| `pnpm test` | rc=0 · **310 files / 3399 tests passed**(정정 전 309/3395 대비 +1 파일·+4 테스트 — 신규
+  `notification-inbox-approval-links.test.ts`), 실패 0 |
+
+`pnpm e2e:smoke` 는 재실행하지 않았다 — 화면 컴포넌트·라우트·e2e 스펙을 건드리지 않았고(픽스처 데이터 +
+`erp.ts` 의 에러 코드 문자열 2곳 + 신규 유닛 테스트 파일만 변경), 코디네이터 지시가 "스펙이나 렌더링
+코드를 건드릴 때만" 재실행하라고 명시했다.
+
+넘길 의무 **0건** — 이 정정이 새로 발견한 남의 미해결 작업은 없다.

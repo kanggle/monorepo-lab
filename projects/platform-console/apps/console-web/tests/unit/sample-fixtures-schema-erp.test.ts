@@ -330,7 +330,11 @@ describe('read-model — delegation facts (AC-1 / AC-3)', () => {
     expect(detail.data.grantId).toBe(first.grantId);
     const res = erp('/api/erp/read-model/delegations/no-such-grant');
     expect(res.status).toBe(404);
-    expect(((await res.json()) as { code?: string }).code).toBe('DELEGATION_NOT_FOUND');
+    // read-model-api.md § "GET …/delegations/{grantId}" — 404
+    // `MASTERDATA_NOT_FOUND` (a projection miss, not `DELEGATION_NOT_FOUND`
+    // — that code is documented only for the approval-service write
+    // endpoint `POST …/delegations/{id}/revoke`, unreachable in sample mode).
+    expect(((await res.json()) as { code?: string }).code).toBe('MASTERDATA_NOT_FOUND');
   });
 
   it('BE-018 edge case — a revoke-before-grant row (scope + validFrom absent) parses without throwing', async () => {

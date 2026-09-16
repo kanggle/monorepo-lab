@@ -555,7 +555,14 @@ function delegationFactsFixture(path: string): unknown {
   if (detailMatch) {
     const grantId = decodeURIComponent(detailMatch[1]);
     const found = ERP_DELEGATION_FACTS.find((f) => f.grantId === grantId);
-    if (!found) return fixtureNotFound('DELEGATION_NOT_FOUND', 'delegation fact not found');
+    // read-model-api.md § "GET /api/erp/read-model/delegations/{grantId}" —
+    // 404 `MASTERDATA_NOT_FOUND` (a projection miss, not fabricated; NOT
+    // `DELEGATION_NOT_FOUND` — that code is documented only for the
+    // approval-service WRITE endpoint `POST …/delegations/{id}/revoke`,
+    // which is unreachable in sample mode anyway — every non-GET is refused
+    // by the router's generic 403 SAMPLE_READ_ONLY branch before any fixture
+    // code runs).
+    if (!found) return fixtureNotFound('MASTERDATA_NOT_FOUND', 'delegation fact not found');
     return { data: found, meta: { timestamp: SAMPLE_AS_OF, warning: WARNING } };
   }
 

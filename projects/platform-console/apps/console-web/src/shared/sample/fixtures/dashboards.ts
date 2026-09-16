@@ -60,39 +60,55 @@ export const SAMPLE_DOMAIN_HEALTH = {
   ],
 } as const;
 
+/**
+ * CORRECTION (TASK-PC-FE-285 coordinator review, 2026-09-17 UTC) — every
+ * `sourceId` below MUST be a real id in the erp approval fixture world
+ * (`shared/sample/fixtures/erp.ts`'s `ERP_APPROVAL_REQUESTS`), and each
+ * notification's `type` MUST match that approval's actual `status` — the
+ * bell is mounted on every screen a sample visitor sees, so a dangling
+ * `sourceId` is a 404 one click away from anywhere in the console, and a
+ * `type`/`status` mismatch is the exact "two screens disagree" defect class
+ * TASK-PC-FE-284's settlement CORRECTION already named. Before this fix the
+ * three ids (`sample-approval-1001/1000/0998`) existed ONLY in this file —
+ * `tests/unit/notification-inbox-approval-links.test.ts` walks the inbox →
+ * approval via `sampleResponse` (never the raw constants) and proves it.
+ */
 export const SAMPLE_NOTIFICATION_INBOX = {
   asOf: SAMPLE_AS_OF,
   items: [
     {
+      // appr-sample-0001 — status SUBMITTED, submitterId emp-sample-0002 (이민준).
       id: 'sample-notification-0001',
       sourceDomain: 'erp',
       type: 'APPROVAL_SUBMITTED',
-      title: '출장비 정산 결재 요청 (샘플)',
-      body: '영업1팀 김하나 님이 9월 출장비 정산을 상신했습니다 (샘플)',
+      title: '영업1팀 예산 증액 요청 (샘플)',
+      body: '이민준 님이 영업1팀 예산 증액 요청을 상신했습니다 (샘플)',
       sourceType: 'APPROVAL',
-      sourceId: 'sample-approval-1001',
+      sourceId: 'appr-sample-0001',
       read: false,
       createdAt: '2026-09-15T09:30:00Z',
     },
     {
+      // appr-sample-0004 — status APPROVED, title '이민준 부서 이동 승인'.
       id: 'sample-notification-0002',
       sourceDomain: 'erp',
       type: 'APPROVAL_APPROVED',
-      title: '구매 요청 승인 완료 (샘플)',
-      body: '사무용품 구매 요청이 최종 승인되었습니다 (샘플)',
+      title: '이민준 부서 이동 승인 완료 (샘플)',
+      body: '이민준 부서 이동 요청이 최종 승인되었습니다 (샘플)',
       sourceType: 'APPROVAL',
-      sourceId: 'sample-approval-1000',
+      sourceId: 'appr-sample-0004',
       read: false,
       createdAt: '2026-09-14T23:10:00Z',
     },
     {
+      // appr-sample-0005 — status REJECTED, reason '예산 부족으로 반려'.
       id: 'sample-notification-0003',
       sourceDomain: 'erp',
       type: 'APPROVAL_REJECTED',
-      title: '휴가 신청 반려 (샘플)',
-      body: '일정 조정이 필요해 반려되었습니다 (샘플)',
+      title: '영업2팀 폐지 결재 반려 (샘플)',
+      body: '예산 부족으로 반려되었습니다 (샘플)',
       sourceType: 'APPROVAL',
-      sourceId: 'sample-approval-0998',
+      sourceId: 'appr-sample-0005',
       read: true,
       createdAt: '2026-09-12T02:00:00Z',
       readAt: '2026-09-12T05:00:00Z',
