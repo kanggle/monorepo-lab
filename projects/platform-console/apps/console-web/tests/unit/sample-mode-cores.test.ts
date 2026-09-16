@@ -345,10 +345,23 @@ describe('callFlatEnvelopeGateway (erp/finance/ledger) + callScmGateway shim', (
   });
 
   it('① pending GET → SAMPLE_NOT_READY, fetch 0', async () => {
+    // TASK-PC-FE-285 — this suite's DoD is "erp 원장의 `pending` 0", so `erp`
+    // (this cell's original profile) is now `ready`, exactly as
+    // TASK-PC-FE-283/284's identical note on the `iam`/`ecommerce` describe
+    // blocks recorded for `accounts`/`ecommerce_order`. This cell tests the
+    // CORE's generic ready/pending BRANCH mechanics, not any one surface's
+    // content, so a `logPrefix` absent from the ledger entirely exercises the
+    // identical branch (`findSurfaceCoverage` → `undefined` → the same "not
+    // ready" path a real `pending` row takes) without depending on a surface
+    // staying unimplemented forever.
+    const NO_SUCH_SURFACE_PROFILE: FlatEnvelopeGatewayProfile = {
+      ...FLAT_PROFILE,
+      logPrefix: 'no-such-surface',
+    };
     const err = await callFlatEnvelopeGateway(
       { path: '/api/erp/masterdata/departments' },
       parse,
-      FLAT_PROFILE,
+      NO_SUCH_SURFACE_PROFILE,
     ).catch((e) => e);
     expect((err as TestUnavailable).code).toBe(SAMPLE_NOT_READY);
     expect(fetchSpy).not.toHaveBeenCalled();

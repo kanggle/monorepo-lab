@@ -57,6 +57,10 @@ platform-console
 - [ ] **AC-5** `X-Read-Model-Lag-Seconds` 는 샘플에서 **안 싣는다**(지연 힌트는 사실이 아니므로) — 헤더 부재 시 `lagSeconds=null` 이 화면에 거짓 경고를 안 띄우는지 확인.
 - [ ] **AC-6** 대표 쓰기 1개(출고 확정) → «샘플 화면에서는 실행되지 않습니다».
 - [ ] **AC-7** `e2e-smoke` 익명 `/wms/inventory` 렌더 1칸.
+- [ ] **AC-8** 🔴 **첫 화면 개요의 WMS 카드가 이 픽스처와 맞는다** (`TASK-PC-FE-285` CORRECTION 에서 추가). 지금 `fixtures/dashboards.ts` 의 wms 카드는
+      손으로 적힌 값(«총 재고» `48210` · «알림» `3`)이다. console-bff 가 wms 카드에 부르는 조회를 **어댑터 코드에서** 확인하고, 같은 경로를 이 티켓의
+      wms 픽스처 핸들러에 물어 카드 값을 **파생**한다 — 총 재고는 `/wms/inventory` 의 수량과, 알림은 그 화면이 보이는 알림과 같아야 한다.
+      `tests/unit/sample-overview-cards-match-lists.test.ts` 에 칸을 더하고 bite. 🔴 wms 는 NESTED 에러 봉투다.
 
 # Related Specs
 

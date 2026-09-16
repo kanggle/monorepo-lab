@@ -56,6 +56,10 @@ platform-console
 - [ ] **AC-5** `X-Cache` 헤더는 샘플에서 싣지 않는다 — 부재 시 화면이 거짓 캐시 표시를 안 하는지.
 - [ ] **AC-6** 대표 쓰기 1개(제안 승인) → «샘플 화면에서는 실행되지 않습니다».
 - [ ] **AC-7** `e2e-smoke` 익명 `/scm/procurement` 렌더 1칸.
+- [ ] **AC-8** 🔴 **첫 화면 개요의 SCM 카드가 이 픽스처와 맞는다** (`TASK-PC-FE-285` CORRECTION 에서 추가). 지금 `fixtures/dashboards.ts` 의 scm 카드는
+      손으로 적힌 노드 셋(`sample-node-01..03`, 평택·이천·부산)이다. console-bff 가 scm 카드에 부르는 조회를 **어댑터 코드에서** 확인하고, 같은 경로를
+      이 티켓의 scm 픽스처 핸들러에 물어 카드 값을 **파생**한다 — 노드 수·노드 id·이름이 `/scm/inventory` 의 노드와 같아야 한다.
+      `tests/unit/sample-overview-cards-match-lists.test.ts` 에 칸을 더하고 bite.
 
 # Related Specs
 

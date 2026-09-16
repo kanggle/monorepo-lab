@@ -56,6 +56,10 @@ platform-console
 - [ ] **AC-4** 🔴 금액은 **합성임이 분명한 규모**로 두고(실재 회사 재무로 오인되지 않게), 통화·소수 자릿수는 실제 파서가 기대하는 표현(`money` 타입)을 따른다.
 - [ ] **AC-5** 대표 쓰기 1개 → «샘플 화면에서는 실행되지 않습니다».
 - [ ] **AC-6** `e2e-smoke` 익명 `/ledger` 렌더 1칸.
+- [ ] **AC-7** 🔴 **첫 화면 개요의 finance 카드가 이 픽스처와 맞는다** (`TASK-PC-FE-285` CORRECTION 에서 추가). 지금 `fixtures/dashboards.ts` 의 finance 카드는
+      손으로 적힌 값(계정 `sample-account-0001` · 잔액 `1250000000` KRW)이다. console-bff 가 finance 카드에 부르는 조회를 **어댑터 코드에서** 확인하고,
+      같은 경로를 이 티켓의 finance 픽스처 핸들러에 물어 카드 값을 **파생**한다(IAM·ERP·E-Commerce 카드가 이미 그렇게 한다). 그 계정은 `/finance/accounts`
+      에서 찾아져야 하고 잔액이 같아야 한다. `tests/unit/sample-overview-cards-match-lists.test.ts` 에 칸을 더하고 bite.
 
 # Related Specs
 

@@ -93,7 +93,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔴 **순서: 282 → 283~288 직렬**(샘플 등록부·원장 파일 공유 — 병렬 worktree 금지) → 루트 `TASK-MONO-686`(`/demo` 은퇴, ⏳).
 
-- `TASK-PC-FE-285-erp-screens-get-samples.md` — erp 6 화면 · GET 18 · 🔴 개요 수 = 목록 행 수. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
 - `TASK-PC-FE-286-finance-and-ledger-screens-get-samples.md` — finance·ledger 4 화면 · GET 15 · 🔴 차변 합 = 대변 합. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
 - `TASK-PC-FE-287-wms-screens-get-samples.md` — wms 7 화면 · GET 11 · 🔴 NESTED 에러 봉투라 코드 보존 확인 · 코드 칸 null 금지. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
 - `TASK-PC-FE-288-scm-screens-get-samples.md` — scm 6 화면 · GET 10 · 🔴 404-as-empty 센티널 경로 유지 · 공급사 UUID 표시 금지. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
@@ -124,6 +123,8 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 (empty)
 
 ## review
+
+- `TASK-PC-FE-285-erp-screens-get-samples.md` — erp 3 surface(masterdata 5종+read-model org-view+read-model delegation-facts 공용 `erp` · `erp_approval` · `erp_delegation`) + 5 화면 `pending → ready` (`ADR-MONO-074` 실행 4/8). 개요 7-tile 카운트가 **별도 SUMMARY 상수 없이** 목록과 같은 필터·같은 배열을 page/size 만 다르게 읽어 구조적으로 일치(AC-3, 표로 증명) + 조직도 부서 참조·결재선 결재자·위임 delegator/delegate 전부 실제 detail 조회로 해석(AC-4, `masterRefLabel`) + E1 헤드라인 케이스(직원→RETIRED 부서) 포함 + AC-6 e2e-smoke 1건. lint/tsc rc=0, `pnpm test` 309/309 파일·3395/3395 테스트(BEFORE 이 워크트리 `git stash` 308/308·3351/3351, 대조군 무수정 — 282 가 이미 IAM/erp 전용 테스트를 반쪽세션으로 D8 변환해 둬 이 티켓의 기존 테스트 수정은 1칸뿐), `pnpm build` rc=0(1차 `Exit code 255` 원인불명 재시도 통과), `pnpm e2e:smoke` 22/22. bite 2건(B1 개요=목록 카운트 하드코딩 주입, B2 존재하지 않는 부서 참조 주입) 전부 발화+복원 확인. 분석=Opus 5 / 구현=Sonnet 5.
 
 ## done
 
