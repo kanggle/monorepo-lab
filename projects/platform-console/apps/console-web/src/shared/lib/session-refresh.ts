@@ -14,7 +14,7 @@ import {
 } from '@/shared/lib/session';
 import { exchangeForOperatorToken } from '@/shared/lib/operator-token-exchange';
 import { exchangeForAssumedToken } from '@/shared/lib/assume-tenant-exchange';
-import { homeTenantFromAccessToken } from '@/shared/lib/jwt';
+import { establishDefaultTenant } from '@/shared/lib/active-tenant-default';
 import { OperatorExchangeError } from '@/shared/api/errors';
 import { logger } from '@/shared/lib/logger';
 
@@ -173,12 +173,14 @@ export async function refreshSessionCookies(
     // for a fresh operator token. On failure the operator session is dropped
     // here (never a stale operator token, never a GAP-token fallback on the
     // operator boundary); whether the IAM cookies go too is the caller's call.
+    let operatorToken: string;
     try {
       const op = await operatorPromise;
       jar.set(OPERATOR_COOKIE, op.accessToken, {
         ...tokenCookieOpts,
         maxAge: op.expiresIn,
       });
+      operatorToken = op.accessToken;
     } catch (err) {
       clearOperatorSession(jar);
       const failClosed =
@@ -207,24 +209,19 @@ export async function refreshSessionCookies(
         logger.warn('refresh_reassume_failed', { requestId, via });
       }
     } else {
-      // --- Re-default the home tenant (TASK-MONO-674) --------------------
-      // The callback's home-tenant default carries `maxAge = expires_in`, so it
-      // expires TOGETHER with the access token. Without this, an idle-expired
-      // session would come back authenticated but tenant-less, and the
-      // tenant-scoped overviews would gate with "select a tenant" again (the
-      // TASK-PC-FE-036 defect). Same rule as `/api/auth/callback`: the rotated
-      // base token is already scoped to the home tenant, so no assume is
-      // needed; the platform sentinel '*' has no home tenant → left unset.
-      // 🔴 What this CANNOT restore: nothing — a switched (non-home) tenant is
-      // set by `/api/tenant` as a session cookie with no maxAge, so it survives
-      // idling and takes the re-assume branch above instead.
-      const homeTenant = homeTenantFromAccessToken(data.access_token);
-      if (homeTenant) {
-        jar.set(TENANT_COOKIE, homeTenant, {
-          ...tokenCookieOpts,
-          maxAge: data.expires_in,
-        });
-      }
+      // --- Default the active tenant (TASK-MONO-674 → TASK-PC-FE-292) ------
+      // No selection survived: the SAME function as `/api/auth/callback`, so
+      // login and idle refresh cannot drift apart (TASK-PC-FE-292 Failure
+      // Scenario 1). It no longer reads the token's `tenant_id` — that was the
+      // console client's operational slug `iam`, not a customer tenant.
+      // A tenant it does choose is set like a switch (session cookie, no
+      // maxAge), so the NEXT idle refresh takes the re-assume branch above.
+      await establishDefaultTenant(jar, {
+        accessToken: data.access_token,
+        operatorToken,
+        requestId,
+        via,
+      });
     }
 
     logger.info('refresh_ok', { requestId, via });

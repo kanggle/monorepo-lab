@@ -99,8 +99,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 - `TASK-PC-FE-287-wms-screens-get-samples.md` — wms 7 화면 · GET 11 · 🔴 NESTED 에러 봉투라 코드 보존 확인 · 코드 칸 null 금지. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
 - `TASK-PC-FE-288-scm-screens-get-samples.md` — scm 6 화면 · GET 10 · 🔴 404-as-empty 센티널 경로 유지 · 공급사 UUID 표시 금지. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
 
-- `TASK-PC-FE-292-the-active-tenant-default-picks-the-operational-slug-iam.md` — 🔴 **로그인만 하고 테넌트를 안 고르면 도메인 화면이 전부 «세션 만료» 로 튕긴다** (2026-09-16 라이브 실측). 콘솔 OIDC 클라이언트의 `tenant_id` 가 **`iam`**(운영용 슬러그, `V0024` 가 `gap`→`iam`)인데 계정 서비스는 그것을 **일부러 테넌트로 안 심는다** ⇒ 토큰이 `tenant_id=iam` + `entitled_domains` **생략**으로 발급되고(auth-service WARN + `404 TENANT_NOT_FOUND: iam`), 콘솔은 그 값을 **활성 테넌트 기본값**으로 삼아(`jwt.ts:61` 이 `'*'` 만 거른다) assume 없이 기본 토큰으로 도메인을 부른다 → 게이트웨이 401(Traefik 로그에 Vercel IP 401 실측). 🔵 **DB 는 정상**(demo-corp 5도메인 구독 ACTIVE · 운영자에 demo-corp·ecommerce 배정) — 고칠 것은 데이터가 아니라 기본값 술어다. 🔴 **호출 지점 둘**(콜백 + `TASK-MONO-674` 의 유휴 갱신 재기본값) — 한쪽만 고치면 30분 뒤 재발. 🟢 **소유자 결정(2026-09-16): 「콘솔 축 — `iam` 을 기본값에서 제외」**(IAM 발급 규칙 변경은 기각). 🔴 AC-1(기본값 못 정할 때 무엇을 하는가)은 갈래 선택이 남아 있다. 자매 = `TASK-BE-595`(같은 증상의 나머지 절반). 분석=Opus 5 / 구현 권장=Opus 5.
-
 
 _(직전 착수)_ `TASK-PC-BE-015` — console-bff 의 spec-vs-reality resilience 갭 봉합. `architecture.md` § Resilience(D5.A)·`RestClientConfig` javadoc·계약 § 2.4.9 가 모두 "per-leg circuit-breaker keyed by `(domain, route)`" 를 단언하지만 `src/main` 에 resilience4j import 0건(타임아웃 쌍만 존재). `libs/java-common` 의 `ResilienceClientFactory` 를 **그대로 채택**해 13개 `(domain, route)` 레그 전부 CB+bounded retry 뒤로 이동하고, 죽어 있던 `circuit_open`/`CIRCUIT_OPEN` 분류를 실제 emitter 로 살린다(console-web zod `DEGRADED_REASONS` 는 이미 소비 준비 완료). 문서의 `libs/java-web` 인용도 오답(그 모듈엔 resilience 코드 0) → `libs/java-common` 정정. 분석=Opus 5 / 구현 권장=Opus.
 
@@ -127,6 +125,8 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 (empty)
 
 ## review
+
+- `TASK-PC-FE-292-the-active-tenant-default-picks-the-operational-slug-iam.md` — 🟡 **impl PR 대기 (2026-09-16)** 활성 테넌트를 **토큰 `tenant_id`(= 운영용 슬러그 `iam`) 에서 정하지 않는다.** 소유자 결정 «마지막 선택 기억 + 단일 배정»: 콜백과 유휴 갱신이 **같은 함수**(`active-tenant-default.ts`)로 레지스트리 선택지에서 ① 이 운영자의 마지막 선택(`console_last_tenant`, 여전히 선택 가능할 때) ② 선택지가 하나면 그것 ③ 아니면 없음 — 고르면 **반드시 assume**. 도메인 섹션 **6**(ledger 포함)에 `layout.tsx` 게이트: assumed 토큰이 없으면 «테넌트를 먼저 선택하세요». red-first 3/3(rc=1) · bite 3종 전부 물림 · 관련 13파일 160/160. 🔴 **AC-0 라이브 첫 칸 · AC-4 는 ⚪** — 소유자 결정으로 머지·배포 후 창 한 번. 자매 `TASK-BE-595`. 분석=Opus 5 / 구현=Opus 5.
 
 ## done
 
