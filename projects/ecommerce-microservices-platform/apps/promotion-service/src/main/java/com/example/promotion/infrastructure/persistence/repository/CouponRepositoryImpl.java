@@ -3,6 +3,7 @@ package com.example.promotion.infrastructure.persistence.repository;
 import com.example.promotion.domain.coupon.Coupon;
 import com.example.promotion.domain.coupon.CouponRepository;
 import com.example.promotion.domain.coupon.CouponStatus;
+import com.example.promotion.domain.coupon.StaleUsedCoupon;
 import com.example.common.page.PageResult;
 import com.example.promotion.domain.tenant.TenantContext;
 import com.example.promotion.infrastructure.persistence.entity.CouponJpaEntity;
@@ -21,6 +22,15 @@ import java.util.Optional;
 public class CouponRepositoryImpl implements CouponRepository {
 
     private final CouponJpaRepository jpaRepository;
+
+    @Override
+    public List<StaleUsedCoupon> findStaleUsedCoupons(Instant usedBefore, int limit) {
+        // Tenant-agnostic system sweep (TASK-INT-028). The row's own tenant travels with each
+        // result because the release that may follow is looked up tenant-scoped.
+        return jpaRepository.findStaleUsedCoupons(usedBefore, PageRequest.of(0, limit)).stream()
+                .map(e -> new StaleUsedCoupon(e.getCouponId(), e.getOrderId(), e.getTenantId(), e.getUsedAt()))
+                .toList();
+    }
 
     @Override
     public Coupon save(Coupon coupon) {

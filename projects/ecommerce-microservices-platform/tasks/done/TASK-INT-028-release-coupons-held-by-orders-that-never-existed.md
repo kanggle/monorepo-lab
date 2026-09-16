@@ -8,7 +8,7 @@ TASK-INT-028
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -88,24 +88,92 @@ promotion 목록 조회, promotion release)으로 는다. AC-2 에서 스펙을 
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (측정 먼저)** — ① release 실패 뒤 그 쿠폰을 푸는 경로가 **코드 어디에도 없음**을 기존 테스트와
+- [x] **AC-0 (측정 먼저)** — ① release 실패 뒤 그 쿠폰을 푸는 경로가 **코드 어디에도 없음**을 기존 테스트와
   전수 검색으로 확인해 적는다. ② 실제 환경의 고아 쿠폰 수는 잴 수 있으면 재고, 없으면 ⚪ 로 «못 쟀다 + 이유» 를
   적는다. 🔴 ① 이 틀렸으면(이미 푸는 경로가 있으면) 그 경로를 적고 나머지 AC 없이 닫는다.
+  - 닫힘 ①: **푸는 경로 없음 — 사실 1~3 이 맞았다.** 기준 `2563bba1f`. 쿠폰 상태의 주인은 promotion-service
+    하나이므로 `USED → ISSUED` 전이는 어느 경로든 그 코드를 거친다. 그래서 `releaseFor` · `.restore()` ·
+    `restoreCouponsByOrderId` · `releaseCoupon(` 호출자를 promotion·order·batch-worker 의 `src/main` 전체에서 셌다:
+
+    | 호출 | 발화 조건 | release 가 도착 못 한 고아에 닿나 |
+    |---|---|---|
+    | `CouponCommandService.releaseCoupon` ← `InternalCouponController` | order-service 가 주문 롤백 직후 보낼 때만(`OrderPlacementService:126`) | 닿지 않음 — 바로 그 호출이 실패한 경우다 |
+    | `restoreCouponsByOrderId` ← `OrderCancelledEventConsumer` | `order.order.cancelled` 수신 | 닿지 않음 — 주문이 없으면 취소 이벤트도 없다 |
+
+    만료 배치(`CouponExpirationScheduler`)는 `status = 'ISSUED'` 인 쿠폰만 보므로(`findExpiredIssuedCoupons`)
+    `USED` 고아를 건드리지 않는다. release 실패가 조용히 끝난다는 것은 기존 테스트
+    `PromotionServiceCouponClientTest.release_failure_isSwallowed` 가 고정하고 있다.
+  - ⚪ ②: **못 쟀다.** 이 작업 호스트의 Docker 데몬이 꺼져 있어 로컬 스택이 없고, 데모 환경 DB 는 자격증명이
+    필요해 이 작업의 판단으로 접속하지 않았다. 따라서 이 티켓은 「고아가 몇 개인가」가 아니라 「고아가 **생길 수
+    있고** 생기면 **아무것도 풀지 않는다**」는 확인 위에 선다 — 0개여도 안전망은 필요하다(release 실패는 앞으로도
+    일어난다).
 - [x] **AC-1 (결정)** — 소유자 답을 원문 그대로 적는다.
   - 닫힘: 위 § AC-1 결정 기록.
-- [ ] **AC-2 (스펙 먼저)** — 두 내부 계약(order 존재 조회, promotion 오래된 USED 목록)과 batch-worker 의 경계 문장
+- [x] **AC-2 (스펙 먼저)** — 두 내부 계약(order 존재 조회, promotion 오래된 USED 목록)과 batch-worker 의 경계 문장
   (사실 7), order-service·promotion-service 의 인바운드 서술이 결정과 같은 방향을 가리킨다. 코드는 이 AC 이후 커밋에만.
-- [ ] **AC-3** — 주문이 **어느 테넌트에도 없는** 쿠폰만 풀린다. 주문이 존재하면 상태(`PENDING`·`CANCELLED`·
+  - 닫힘: 새 계약 `specs/contracts/http/internal/order-existence.md`, `promotion-api.md` § `POST /api/internal/coupons/stale-used`
+    (+ release 절에 두 번째 호출자·테넌트 헤더). 경계 문장 **열한 곳**: batch-worker `dependencies.md`(허용 호출 4개 명시 ·
+    Consumes From 2행 · Forbidden 「모름으로 풀지 않음」) · `overview.md`(책임 · 스케줄러 행 · 아웃바운드 2행 · 의존 시스템) ·
+    `architecture.md`(Consumed Interfaces · Dependencies · Key Jobs) · order-service `dependencies.md` 23행 · promotion-service
+    `dependencies.md` · `overview.md`. 🔵 「한 사실이 두 곳에 있으면 한쪽만 고쳐진다」 — 옛 문장 전수 검색에서 batch-worker
+    `architecture.md:80` 의 「One internal system-command exception」이 남아 있던 것을 찾아 같이 고쳤다.
+  - 계약에서 새로 정한 것:
+    - **존재 조회의 「없음」은 주문이 지워지지 않는 동안에만 「저장된 적 없음」이다.** `2563bba1f` 기준 order-service 에 주문
+      삭제·보존 정리 경로가 없음을 확인했다. 🔴 주문 삭제를 도입하려면 이 배치부터 다시 봐야 한다고 계약 불변식으로 적었다.
+    - **본문 없는 응답은 「모름」이다.** 기존 `OrderServiceClient` 는 null 본문을 0건 기본값으로 바꾸는데, 존재 조회에서
+      그렇게 하면 「존재 0건 = 전부 없음」이 되어 전부 푼다. 계약에 금지로 적었다.
+    - **전부-없음 브레이크**: 한 회차에 ≥ 20건을 봤는데 존재하는 주문이 0건이면 아무것도 풀지 않고 `FAILED`. 존재 조회
+      주소가 빈 환경을 가리키는 설정 실수를 막는다(그 경우 모든 주문이 「없음」으로 답해진다).
+    - **유예 하한 30분은 promotion-service 가 강제한다**(기본 60분). 호출자 설정을 믿지 않는다.
+    - **`order_id IS NULL` 인 `USED` 쿠폰은 제외** — 물어볼 주문이 없으므로 「판단 불가」이고, 판단 불가는 풀지 않는다.
+    - 🔵 기안이 미뤄 둔 **만료 지난 `USED` 쿠폰은 포함**한다: 풀면 `ISSUED` 가 되고 만료 배치가 `EXPIRED` 로 넘긴다 —
+      한 번도 안 쓴 쿠폰과 같은 끝 상태다.
+- [x] **AC-3** — 주문이 **어느 테넌트에도 없는** 쿠폰만 풀린다. 주문이 존재하면 상태(`PENDING`·`CANCELLED`·
   `DELIVERED` 무엇이든)와 무관하게 건드리지 않는다.
-- [ ] **AC-4 (「모름」≠「없음」)** — order-service 가 실패(연결 실패·타임아웃·4xx/5xx·토큰 실패)하거나 응답이 요청한
+  - 닫힘(잡): `OrphanCouponReleaseJobTest.releasesOnlyCouponsWhoseOrderIsAbsent_withTheCouponsOwnTenant` — 존재하는
+    주문의 쿠폰은 `release` 호출 0, 없는 주문의 쿠폰 2건만 호출. 닫힘(답의 원천): order-service 쿼리에 테넌트·상태 필터가
+    **없다**(`OrderJpaRepository.findExistingOrderIds`), 실제 DB 확인은 `OrderExistenceIT`(다른 테넌트 `DELIVERED`·
+    `CANCELLED` 도 존재로 답함) — CI 권위, AC-8 과 함께 닫는다.
+- [x] **AC-4 (「모름」≠「없음」)** — order-service 가 실패(연결 실패·타임아웃·4xx/5xx·토큰 실패)하거나 응답이 요청한
   ID 를 판단하지 못하면 그 회차는 **아무 쿠폰도 풀지 않는다.** 이력은 `FAILED`.
-- [ ] **AC-5 (유예)** — `olderThanMinutes` 보다 최근에 `USED` 가 된 쿠폰은 대상이 아니다. 기본값은 주문 생성 트랜잭션이
+  - 닫힘: 두 겹. ① 클라이언트 — `OrderServiceClientExistenceTest` 가 본문 없는 200·필드 없는 200·503 을 **모두 예외**로
+    단언(기존 `confirmPaidStale` 처럼 null 을 기본값으로 바꾸지 않음). ② 잡 — `existenceCallFails_releasesNothing_andRecordsFailed`:
+    `release` 호출 0, 이력 `FAILED`. 추가 방어로 **전부-없음 브레이크**(`allAbsentAtOrAboveTheBrake_releasesNothing`) —
+    20건에서 0건 풀림, 대조군 19건에서는 19건 풀림(`allAbsentBelowTheBrake_...`).
+  - ⚪ **물기(bite) 확인은 못 했다.** 안전장치를 끄는 결함을 일시 주입해 위 테스트들이 빨개지는지 보려 했으나, 편집이
+    auto-mode 분류기에 **차단**됐고 우회하지 않았다(작업트리는 커밋 `ea147c0c2` 그대로). 남은 증거는 브레이크 테스트가
+    19건↔20건 **경계 쌍**이라 단언이 브레이크의 켜짐/꺼짐을 구분해 관측한다는 것까지다 — 결함 주입 시 빨개진다는 직접 증거는 아니다.
+- [x] **AC-5 (유예)** — `olderThanMinutes` 보다 최근에 `USED` 가 된 쿠폰은 대상이 아니다. 기본값은 주문 생성 트랜잭션이
   끝날 수 있는 시간보다 충분히 길다(≥ 30분). 진행 중인 주문의 쿠폰을 풀지 않는다.
-- [ ] **AC-6 (테넌트)** — 다른 테넌트의 고아 쿠폰도 풀린다. release 는 그 쿠폰의 테넌트로 보낸다.
-- [ ] **AC-7 (격리·멱등)** — release 한 건의 실패가 나머지를 멈추지 않는다. 잡 실패가 스케줄러를 죽이지 않는다.
+  - 닫힘: 기본 60분, 하한 30분을 **promotion-service 가 두 겹으로 강제** — 요청 DTO `@Min(30)` → `400 VALIDATION_ERROR`
+    (`InternalCouponControllerSliceTest.staleUsed_belowFloor_returns400`, 조회 호출 0) + 서비스 자체 거절
+    (`StaleUsedCouponQueryServiceTest.belowFloor_isRefusedEvenOffTheHttpPath`). 기준 시각 = 지금 − 분
+    (`cutoffIsNowMinusOlderThanMinutes`). 「10분 전 사용」 쿠폰 제외는 `StaleUsedCouponsIntegrationTest` — CI 권위.
+- [x] **AC-6 (테넌트)** — 다른 테넌트의 고아 쿠폰도 풀린다. release 는 그 쿠폰의 테넌트로 보낸다.
+  - 닫힘: 잡이 쿠폰별 `tenantId` 를 그대로 넘김(`release("c-orphan-b", "o-gone-b", "tenant-b")`), 클라이언트가 그것을
+    `X-Tenant-Id` 헤더로 실음(`PromotionServiceClientTest.release_sendsCouponsTenantHeader_andOrderId` — 실제 HTTP 요청 헤더
+    관측), 목록이 테넌트를 가로질러 `tenantId` 를 실음(슬라이스 테스트 + `StaleUsedCouponsIntegrationTest` 의 `tenant-b` 행).
+- [x] **AC-7 (격리·멱등)** — release 한 건의 실패가 나머지를 멈추지 않는다. 잡 실패가 스케줄러를 죽이지 않는다.
   같은 회차를 두 번 돌려도 결과가 같다(이미 풀린 쿠폰은 목록에 다시 안 나온다).
-- [ ] **AC-8** — 두 새 조회의 SQL(테넌트 가로지르기, 인덱스, `limit`)을 실제 Postgres 에서 확인한다
+  - 닫힘: `oneReleaseFailure_doesNotStopTheOthers`(1건 실패, 나머지 2건 호출, `COMPLETED`, 실패 지표 +1) ·
+    `existenceCallFails_...`(`assertThatNoException` — 예외가 스케줄러로 새지 않음). 멱등: 목록 조건이 `status = 'USED'`
+    이고 release 가 `ISSUED` 로 되돌리므로 풀린 쿠폰은 다음 회차 목록에 없다(`ISSUED` 제외는 IT 에서 관측).
+  - 🔵 테스트 하네스 정정 하나: 「한 건만 실패」 스텁을 `STRICT_STUBS` 에 두면 다른 인자 호출이 `PotentialStubbingProblem`
+    을 던지고, 잡이 그걸 **건별 실패로 잡아** 실패 3건으로 센다 — 잡이 아니라 하네스를 재는 테스트가 된다. 그 스텁만
+    `lenient()` 로 두고 주석을 남겼다.
+- [x] **AC-8** — 두 새 조회의 SQL(테넌트 가로지르기, 인덱스, `limit`)을 실제 Postgres 에서 확인한다
   (로컬 Docker 차단 → CI 통합 레인이 권위). 못 쟀으면 ⚪.
+  - 닫힘: PR #3868 CI run `35100812438`. 레인 셋이 모두 초록이었지만 판정은 **샤드 로그의 결과줄**로 했다 —
+    샤드마다 맡은 모듈이 달라 초록만으로는 무엇이 돌았는지 모른다.
+    - 샤드 **A**(job `104810271353`, `order-service:integrationTest`): `OrderExistenceIT` 3/3 PASSED — **다른 테넌트의
+      `DELIVERED` 주문과 `CANCELLED` 주문도 존재로 답하고 없는 id 만 빠진다**, Bearer 없음 401, 빈 목록 400
+      `INVALID_REQUEST`. AC-3 의 「답의 원천」이 실제 DB 에서 닫혔다.
+    - 샤드 **B**(job `104810271030`, `promotion-service:integrationTest`): `StaleUsedCouponsIntegrationTest` 2/2 PASSED —
+      테넌트를 가로질러 오래된 `USED` 만 `used_at` 순, 10분 전 사용·`ISSUED`·주문 없는 `USED` 제외, `pg_indexes` 에
+      `idx_coupons_status_used_at` 존재(V10 적용).
+    - 샤드 C 에는 두 모듈 태스크 0건.
+  - 🔵 첫 확인에서 결과줄을 `cut -c1-150` 으로 잘라 **가장 중요한 두 줄의 `PASSED` 가 잘려 나갔다.** 잘린 줄을 초록으로
+    읽지 않고 줄 끝의 판정만 다시 뽑아 확인했다.
 
 ---
 
@@ -190,12 +258,12 @@ batch-worker 스케줄(기존 잡과 같은 주기 계열, ShedLock).
 
 # Definition of Done
 
-- [ ] AC-0 측정 기록
+- [x] AC-0 측정 기록
 - [x] AC-1 소유자 결정 기록
-- [ ] 스펙·계약 선행 정렬
-- [ ] 구현 완료
-- [ ] 테스트 추가·통과
-- [ ] Ready for review
+- [x] 스펙·계약 선행 정렬
+- [x] 구현 완료
+- [x] 테스트 추가·통과
+- [x] Ready for review
 
 ---
 

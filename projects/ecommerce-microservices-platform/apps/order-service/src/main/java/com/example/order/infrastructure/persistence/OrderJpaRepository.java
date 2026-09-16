@@ -23,6 +23,13 @@ interface OrderJpaRepository extends JpaRepository<OrderJpaEntity, String> {
 
     Optional<OrderJpaEntity> findByOrderIdAndTenantId(String orderId, String tenantId);
 
+    // ---- system path: existence across tenants (TASK-INT-028) -----------------
+    // Deliberately NOT tenant-filtered and NOT status-filtered. batch-worker releases a
+    // coupon when its order is absent from this answer, so a tenant or status filter
+    // here would report a real order as absent and free its coupon.
+    @Query("SELECT o.orderId FROM OrderJpaEntity o WHERE o.orderId IN :orderIds")
+    List<String> findExistingOrderIds(@Param("orderIds") Collection<String> orderIds);
+
     // Placement-idempotency lookup (TASK-BE-430): the original order for a
     // re-submit/retry, keyed by the (tenant, user, client Idempotency-Key) the
     // unique index enforces.

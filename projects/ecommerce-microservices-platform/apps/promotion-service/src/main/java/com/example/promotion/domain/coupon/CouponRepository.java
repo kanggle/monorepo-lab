@@ -34,4 +34,12 @@ public interface CouponRepository {
      * {@code null} when the coupon is absent (caller maps null → default tenant).
      */
     String findTenantIdByCouponId(String couponId);
+
+    /**
+     * Coupons {@code USED} before {@code usedBefore} that name an order, oldest first, across every
+     * tenant (TASK-INT-028). A system sweep with no request tenant, like the expiry sweep. Rows with
+     * no {@code order_id} are excluded: there is no order to ask about, and "cannot judge" must
+     * never become a release.
+     */
+    List<StaleUsedCoupon> findStaleUsedCoupons(Instant usedBefore, int limit);
 }

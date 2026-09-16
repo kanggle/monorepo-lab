@@ -43,4 +43,9 @@ public interface CouponJpaRepository extends JpaRepository<CouponJpaEntity, Stri
 
     /** OrderCancelled recovery — orderId is globally unique (system saga path). */
     List<CouponJpaEntity> findByOrderIdAndStatus(String orderId, CouponStatus status);
+
+    /** Orphan-coupon reconciliation (TASK-INT-028) — batch-worker caller, no request tenant. */
+    @Query("SELECT c FROM CouponJpaEntity c WHERE c.status = 'USED' AND c.orderId IS NOT NULL "
+         + "AND c.usedAt < :usedBefore ORDER BY c.usedAt ASC")
+    List<CouponJpaEntity> findStaleUsedCoupons(Instant usedBefore, Pageable pageable);
 }
