@@ -8,7 +8,7 @@ TASK-BE-592
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -136,12 +136,18 @@ If any section is missing or incomplete, this task must not be implemented.
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (측정 먼저)** — 할인 5,000 이 붙은 30,000 짜리 주문(단일 셀러, 그리고 두 셀러에 걸친 주문)에 대해 지금 코드가 남기는 `ACCRUAL` 행과, 10,000 부분 환불 → 나머지 완전 환불 뒤의 `REVERSAL` 합계를 테스트로 돌려 숫자를 이 파일에 적는다. 위 사실 2·3 과 다르면 어느 쪽이 틀렸는지 적는다.
-- [ ] **AC-1 (결정)** — ⓐ/ⓑ/ⓒ(또는 다른 안)에 대한 소유자 답을 원문 그대로 적는다.
-- [ ] **AC-2 (스펙 먼저)** — `settlement-subscriptions.md` 가 결정한 부담 주체와 할인 반영 규칙(여러 셀러 배분·반올림 포함)을 적는다. 코드 변경은 이 AC 이후 커밋에만.
-- [ ] **AC-3** — 쿠폰 주문에서 주문 단위 `Σ gross` 가 결정한 규칙대로 결제 금액과 맞고, `commission + seller_net = gross` 불변식(DB `ck_commission_accrual_split`)이 행마다 유지된다.
-- [ ] **AC-4** — 쿠폰 주문의 부분 환불 → 완전 환불 뒤 주문·셀러 단위 순적립이 정확히 0 이다.
-- [ ] **AC-5** — 쿠폰 없는 주문(`discountAmount` 0 또는 필드 없는 옛 이벤트)은 적립·역분개 숫자가 변경 전과 같다(회귀).
+- [x] **AC-0 (측정 먼저)** — 할인 5,000 이 붙은 30,000 짜리 주문(단일 셀러, 그리고 두 셀러에 걸친 주문)에 대해 지금 코드가 남기는 `ACCRUAL` 행과, 10,000 부분 환불 → 나머지 완전 환불 뒤의 `REVERSAL` 합계를 테스트로 돌려 숫자를 이 파일에 적는다. 위 사실 2·3 과 다르면 어느 쪽이 틀렸는지 적는다.
+  - 닫힘: 수정 전 트리(`35bd9d293`)에서 `SettlementCouponDiscountBaselineTest` **tests=3 failures=0** 실행, 숫자는 § AC-0 측정 기록의 표. 증거 커밋 `dd3048b96`(그 테스트만). 사실 2·3 이 맞았다 — 틀린 쪽 없음.
+- [x] **AC-1 (결정)** — ⓐ/ⓑ/ⓒ(또는 다른 안)에 대한 소유자 답을 원문 그대로 적는다.
+  - 닫힘: § AC-1 결정 기록 — 「플랫폼 부담 (Recommended)」 + 「별도 프로모션 비용 행 (Recommended)」, 소유자 원문 그대로.
+- [x] **AC-2 (스펙 먼저)** — `settlement-subscriptions.md` 가 결정한 부담 주체와 할인 반영 규칙(여러 셀러 배분·반올림 포함)을 적는다. 코드 변경은 이 AC 이후 커밋에만.
+  - 닫힘: 스펙 커밋 `b98e9bcab`(코드 없음)이 구현 커밋 `c4eb5aeb0` 보다 앞선다. `settlement-subscriptions.md` § 「Coupon discount — who bears it」 + § Proportional clawback rule(분모 = 결제액, 프로모션 비용 반올림·클램프), `settlement-service/architecture.md` § promotion-cost ledger, `marketplace-settlement.md` § 3.1. 🔵 **여러 셀러 «배분» 규칙은 필요 없어졌다** — 플랫폼 부담이라 할인이 셀러 줄에 나뉘지 않는다. 스펙에 그렇게 적혀 있다(주문 단위 한 행).
+- [x] **AC-3** — 쿠폰 주문에서 주문 단위 `Σ gross` 가 결정한 규칙대로 결제 금액과 맞고, `commission + seller_net = gross` 불변식(DB `ck_commission_accrual_split`)이 행마다 유지된다.
+  - 닫힘: 규칙은 `Σ accrual gross − Σ promotion cost = 결제액`. `SettlementCouponDiscountTest` 가 단일/두 셀러 모두 `30,000 − 5,000 = 25,000` 으로 단언. DB 제약은 실제 Postgres 에서 — `SettlementPromotionCostIntegrationTest` **PASSED** (CI run `34976167259`, job `104404381983`; `settlement-service:integrationTest` 22 tests / 실패 0).
+- [x] **AC-4** — 쿠폰 주문의 부분 환불 → 완전 환불 뒤 주문·셀러 단위 순적립이 정확히 0 이다.
+  - 닫힘: `SettlementCouponDiscountTest` 의 부분→완전 환불 케이스(수수료 원장·프로모션 원장 각각 합 0, 반올림 잔차 30,001 케이스 포함)와 IT 의 라운드트립(셀러 잔액 0 · 프로모션 비용 합 0).
+- [x] **AC-5** — 쿠폰 없는 주문(`discountAmount` 0 또는 필드 없는 옛 이벤트)은 적립·역분개 숫자가 변경 전과 같다(회귀).
+  - 닫힘: 기존 `SettlementServiceTest` 9 · `SettlementConsumersTest` 10 이 **수정 없이** 통과, `SettlementCouponDiscountTest.reverse_noDiscount_sameAsBefore`(분모 30,000 유지 · 프로모션 원장 미접촉), `OrderPlacedSnapshotConsumerDiscountTest.wireJson_withoutCouponFields_isNoDiscount`(옛 이벤트), IT `orderWithoutCoupon_writesNoPromotionCost`.
 
 ---
 
