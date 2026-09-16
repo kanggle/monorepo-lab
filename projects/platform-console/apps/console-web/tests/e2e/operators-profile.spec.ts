@@ -10,9 +10,14 @@ import { test, expect } from '@playwright/test';
  * now in place. The previous `test.skip(true, …)` guard has been removed.
  *
  * Identity — the global setup primes the BrowserContext with the seeded
- * SUPER_ADMIN cookies. Tenant = 'fan-platform' (matches the seeded finance
- * account row's tenant_id; the SUPER_ADMIN's platform-scope token can read
- * any tenant).
+ * SUPER_ADMIN session (active tenant `fan-platform`, assumed via the real
+ * switch). 🔴 TASK-PC-FE-293: this spec then SWITCHES to `finance` through
+ * `POST /api/tenant`, because the overview's finance leg is called with the
+ * ASSUMED token of the selected tenant (§ 2.7), not the SUPER_ADMIN's base
+ * '*' token — and finance accepts only `tenant_id` '*' or 'finance' and reads
+ * rows by that claim (`seed-finance.sql` rows now carry 'finance'). Before
+ * TASK-PC-FE-292/293 the harness never assumed a tenant, so this passed on the
+ * wildcard base token, a path a selecting operator never takes.
  *
  * Scenario:
  *   1. navigate to /account (TASK-PC-FE-045: self-service MyProfileForm moved
@@ -39,6 +44,16 @@ test.describe('@e2e operators profile — finance default account self-serve', (
   test('operator can self-set finance default account → overview shows ok', async ({
     page,
   }) => {
+    // TASK-PC-FE-293 — select `finance` exactly as the tenant switcher does;
+    // fail loudly (status + body) rather than as a card stuck on `forbidden`.
+    const switched = await page.request.post('/api/tenant', {
+      data: { tenant: 'finance' },
+    });
+    expect(
+      switched.ok(),
+      `POST /api/tenant {tenant: finance} → ${switched.status()} ${await switched.text()}`,
+    ).toBe(true);
+
     await page.goto('/account'); // TASK-PC-FE-045: self profile lives on 계정 설정
 
     const input = page.getByTestId('my-profile-default-account-id');
