@@ -89,7 +89,7 @@ monorepo
 - [x] **AC-1 — 잠복을 «실측» 으로 확인하거나 기각한다.** 저장소에서 재현할 수 있는 가장 싼 방법(서비스 IT 또는 컨슈머 단위 테스트에 시드와 같은 UUID 를 넣기)으로 «DLT 로 간다» 를 보인다. 🔴 추론만으로 결함이라 적지 마라.
 - [x] **AC-2 — 두 서비스의 코드 공간을 대조한다.** scm 공급사 코드와 wms 파트너 코드가 **같은 값으로 만나는가**. 안 만나면 «시드를 코드로 바꾼다» 만으로는 안 고쳐진다 — 그 사실과 선택지를 적고, 선택이 필요하면 소유자에게 묻는다(🔴 추천을 결정으로 적지 마라).
 - [x] **AC-3 — 고친다(계약 먼저).** `demand-planning-api.md` 예시를 먼저 고치고, 시드·표시를 고친다. bite: 고친 시드를 되돌리면 AC-1 의 테스트가 빨개진다. → § Phase 2 (bite 둘 다 rc=1).
-- [ ] ⚪ **AC-4 — 판정.** → **측정 불가(데모 창 없음), 갈 곳 = `TASK-MONO-672` § 항목 4 (2026-09-16 수령).** 이 칸은 체크하지 않는다 — 판정은 거기서 난다. 가능하면 데모 창에서 «제안 승인 → 확정 → wms 인바운드 예정 생성» 을 한 번 끝까지 본다. 창이 없으면 ⚪ + 갈 곳(`TASK-MONO-672`).
+- [ ] ⚪ **AC-4 — 판정.** → **측정 불가(데모 창 없음), 갈 곳 = `TASK-MONO-672` § 항목 5 (2026-09-16 수령).** 이 칸은 체크하지 않는다 — 판정은 거기서 난다. 가능하면 데모 창에서 «제안 승인 → 확정 → wms 인바운드 예정 생성» 을 한 번 끝까지 본다. 창이 없으면 ⚪ + 갈 곳(`TASK-MONO-672`).
 
 ---
 
@@ -295,14 +295,14 @@ monorepo
   `npx tsc --noEmit` rc=0 · `npx vitest run tests/unit/erp-master-ref-names.test.tsx tests/unit/ReplenishmentScreen.test.tsx` rc=0 (2 files / 53 tests) · `pnpm lint` rc=0.
 - bite: 칸 내용을 `{s.supplierId ?? '—'}` 로 되돌림 → vitest rc=1, 3 실패(새 「공급사」 칸 + 전 참조 셀 UUID 술어를 공유하는 277 테스트 둘) → 백업에서 복원, `cmp` rc=0.
 
-## 6. AC-4 ⚪ → `TASK-MONO-672` § 항목 4
+## 6. AC-4 ⚪ → `TASK-MONO-672` § 항목 5
 
-`tasks/ready/TASK-MONO-672-…` 에 «항목 4 — TASK-MONO-683 AC-4» 절을 추가하고 `tasks/INDEX.md` 의 672 행 수령 수를 3 → 4 로 고쳤다.
+`tasks/ready/TASK-MONO-672-…` 에 «항목 5 — TASK-MONO-683 AC-4» 절을 추가하고 `tasks/INDEX.md` 의 672 행 수령 수를 5 로 고쳤다(병합 중 main 이 `TASK-BE-595` 를 항목 4 로 먼저 넣어 번호를 5 로 옮김 — INDEX 행에는 BE-595 가 빠져 있어 함께 셈).
 
 ## 미측정 (Phase 2)
 
 - 새 시드를 **실제 스택에 돌린 결과** — 문법 검사(`bash -n`)만. 발주 키 변경의 422 회피도 코드 읽기(`IdempotencyExecutor`)이지 실행이 아니다.
-- 데모에서 `SKU-APPLE-001` 보충 제안이 생기는가 · 끝까지 ASN 이 생기는가 — `TASK-MONO-672` 항목 4.
+- 데모에서 `SKU-APPLE-001` 보충 제안이 생기는가 · 끝까지 ASN 이 생기는가 — `TASK-MONO-672` 항목 5.
 - Testcontainers IT — Docker 미기동(Phase 1 과 같음).
 - CI 경로 필터 공백(위 4.) — 관찰만, 안 고침.
 - 677 AC-3 의 라이브 기대값 문구 — 보고만(위 3.).

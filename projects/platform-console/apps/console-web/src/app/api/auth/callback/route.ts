@@ -7,14 +7,13 @@ import {
   REFRESH_COOKIE,
   OPERATOR_COOKIE,
   ID_TOKEN_COOKIE,
-  TENANT_COOKIE,
   PKCE_VERIFIER_COOKIE,
   OAUTH_STATE_COOKIE,
   tokenCookieOpts,
   clearOperatorSession,
 } from '@/shared/lib/session';
 import { exchangeForOperatorToken } from '@/shared/lib/operator-token-exchange';
-import { homeTenantFromAccessToken } from '@/shared/lib/jwt';
+import { establishDefaultTenant } from '@/shared/lib/active-tenant-default';
 import { OperatorExchangeError } from '@/shared/api/errors';
 import { logger, newRequestId } from '@/shared/lib/logger';
 
@@ -157,12 +156,14 @@ export async function GET(req: Request) {
     // --- Server-side operator-token exchange (§ 2.6 / ADR-MONO-014) -------
     // The IAM access token is NOT an /api/admin/** credential — exchange it
     // for the operator token.
+    let operatorToken: string;
     try {
       const op = await exchangeForOperatorToken(data.access_token);
       jar.set(OPERATOR_COOKIE, op.accessToken, {
         ...tokenCookieOpts,
         maxAge: op.expiresIn,
       });
+      operatorToken = op.accessToken;
     } catch (err) {
       const notProvisioned =
         err instanceof OperatorExchangeError && err.reason === 'fail_closed';
@@ -207,26 +208,21 @@ export async function GET(req: Request) {
       );
     }
 
-    // --- Default the active tenant to the operator's home tenant ----------
-    // TASK-PC-FE-036: without this the active-tenant cookie is unset on first
-    // load, so the tenant-scoped overviews (운영자 통합 개요 / 도메인 상태)
-    // gate with "select a tenant" even though the switcher shows a tenant —
-    // a confusing UI/server mismatch. A real-customer operator's IAM OIDC
-    // access token already carries `tenant_id=<home>` (+ entitled_domains), so
-    // defaulting the active tenant to it makes the overviews work immediately
-    // via the base token (no assume-tenant needed — getDomainFacingToken falls
-    // back to the base access token, which is already scoped to the home
-    // tenant; switching to a NON-home assigned tenant still drives the
-    // assume-tenant exchange via /api/tenant). The platform sentinel '*' has
-    // no single home tenant → left unset (the operator explicitly selects a
-    // customer; the switcher renders an unselected placeholder for them).
-    const homeTenant = homeTenantFromAccessToken(data.access_token);
-    if (homeTenant) {
-      jar.set(TENANT_COOKIE, homeTenant, {
-        ...tokenCookieOpts,
-        maxAge: data.expires_in,
-      });
-    }
+    // --- Default the active tenant (TASK-PC-FE-292) -----------------------
+    // TASK-PC-FE-036 defaulted it to the token's `tenant_id`, on the premise
+    // that the base token is already scoped to the operator's home tenant.
+    // 🔴 That premise is false for this client: its tokens carry the client's
+    // operational slug (`iam`), so the default was `iam` with no assumed token
+    // and every domain screen answered 401 → «세션 만료» (live, 2026-09-16).
+    // Now: the registry's selectable tenants decide, and the chosen tenant is
+    // ASSUMED. Never fatal — without a default the operator is still logged in
+    // and the domain sections ask them to pick a tenant.
+    await establishDefaultTenant(jar, {
+      accessToken: data.access_token,
+      operatorToken,
+      requestId,
+      via: 'callback',
+    });
 
     logger.info('oidc_login_success', { requestId });
     return NextResponse.redirect(

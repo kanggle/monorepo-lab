@@ -57,16 +57,16 @@ export const SURFACE_COVERAGE: readonly SurfaceCoverage[] = [
   { core: 'console-bff', surface: 'domain-health', status: 'ready', owner: FOUNDATION },
   { core: 'console-bff', surface: 'notifications-inbox', status: 'ready', owner: FOUNDATION },
 
-  // ── iam (`callAdminGateway`) ───────────────────────────────────────────────
-  { core: 'iam', surface: 'accounts', status: 'pending', owner: IAM },
-  { core: 'iam', surface: 'audit', status: 'pending', owner: IAM },
-  { core: 'iam', surface: 'operators', status: 'pending', owner: IAM },
-  { core: 'iam', surface: 'rbac', status: 'pending', owner: IAM },
-  { core: 'iam', surface: 'subscriptions', status: 'pending', owner: IAM },
-  { core: 'iam', surface: 'partnerships', status: 'pending', owner: IAM },
-  { core: 'iam', surface: 'tenants', status: 'pending', owner: IAM },
-  { core: 'iam', surface: 'org_nodes', status: 'pending', owner: IAM },
-  { core: 'iam', surface: 'groups', status: 'pending', owner: IAM },
+  // ── iam (`callAdminGateway`) — TASK-PC-FE-283 ───────────────────────────────
+  { core: 'iam', surface: 'accounts', status: 'ready', owner: IAM },
+  { core: 'iam', surface: 'audit', status: 'ready', owner: IAM },
+  { core: 'iam', surface: 'operators', status: 'ready', owner: IAM },
+  { core: 'iam', surface: 'rbac', status: 'ready', owner: IAM },
+  { core: 'iam', surface: 'subscriptions', status: 'ready', owner: IAM },
+  { core: 'iam', surface: 'partnerships', status: 'ready', owner: IAM },
+  { core: 'iam', surface: 'tenants', status: 'ready', owner: IAM },
+  { core: 'iam', surface: 'org_nodes', status: 'ready', owner: IAM },
+  { core: 'iam', surface: 'groups', status: 'ready', owner: IAM },
 
   // ── ecommerce (`callEcommerceGateway`) ─────────────────────────────────────
   { core: 'ecommerce', surface: 'ecommerce', status: 'pending', owner: ECOMMERCE },
@@ -107,6 +107,29 @@ export function findSurfaceCoverage(
 }
 
 /**
+ * A representative GET path per `ready` surface, keyed `<core>:<surface>`
+ * (TASK-PC-FE-283). `sample-coverage-ledger.test.ts`'s "the ledger promises
+ * what the router does" section asks every `ready` row for a `200` — the 4
+ * TASK-PC-FE-282 dashboard/registry fixtures answer ANY path (they ignore the
+ * argument), so a bare `/` worked there. The 9 IAM domain fixtures answer
+ * concrete producer paths (`/api/admin/accounts`, …) and return `undefined`
+ * (→ 503) for an unmatched one — so the guard needs a path each fixture can
+ * actually answer, not a placeholder both sides silently agree on. Absent
+ * entries fall back to `/` (preserves the TASK-PC-FE-282 rows unchanged).
+ */
+export const SURFACE_SAMPLE_PATH: Readonly<Record<string, string>> = {
+  'iam:accounts': '/api/admin/accounts?page=0&size=20&tenantId=sample',
+  'iam:audit': '/api/admin/audit?page=0&size=20&tenantId=sample',
+  'iam:operators': '/api/admin/operators?page=0&size=20&tenantId=sample',
+  'iam:rbac': '/api/admin/roles',
+  'iam:subscriptions': '/api/admin/subscriptions',
+  'iam:partnerships': '/api/admin/partnerships?page=0&size=20',
+  'iam:tenants': '/api/admin/tenants?page=0&size=20',
+  'iam:org_nodes': '/api/admin/org-nodes',
+  'iam:groups': '/api/admin/groups?page=0&size=20',
+};
+
+/**
  * Screen ledger — every `(console)` page route and whether its sample data is
  * ready. The shell reads this to say «준비 중» on a pending screen (the section
  * degrade states drop the error code, so the screen cannot say it itself).
@@ -131,20 +154,20 @@ export const SCREEN_COVERAGE: Readonly<Record<string, ScreenStatus>> = {
   '/ecommerce/guide': 'static',
 
   // iam — TASK-PC-FE-283
-  '/account': 'pending',
-  '/accounts': 'pending',
-  '/audit': 'pending',
-  '/dashboards': 'pending',
-  '/iam': 'pending',
-  '/operator-groups': 'pending',
-  '/operators': 'pending',
-  '/org-hierarchy': 'pending',
-  '/partnerships': 'pending',
-  '/permission-sets': 'pending',
-  '/permissions': 'pending',
-  '/subscriptions': 'pending',
-  '/tenants': 'pending',
-  '/tenants/[tenantId]': 'pending',
+  '/account': 'ready',
+  '/accounts': 'ready',
+  '/audit': 'ready',
+  '/dashboards': 'ready',
+  '/iam': 'ready',
+  '/operator-groups': 'ready',
+  '/operators': 'ready',
+  '/org-hierarchy': 'ready',
+  '/partnerships': 'ready',
+  '/permission-sets': 'ready',
+  '/permissions': 'ready',
+  '/subscriptions': 'ready',
+  '/tenants': 'ready',
+  '/tenants/[tenantId]': 'ready',
 
   // ecommerce — TASK-PC-FE-284
   '/ecommerce': 'pending',

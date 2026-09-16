@@ -77,7 +77,19 @@ monorepo
 - **함께 볼 것(대조군)**: 켜진 뒤 다른 카드를 누르면 선택이 **더해지는가**(세션 안 합집합, D4).
 - 출처: `tasks/done/TASK-MONO-685-…` § AC-7 · § CORRECTION 두 절. 코드 수준 증거 = `test_cold_start_replaces_the_previous_sessions_selection`(라이브 8묶음 그대로, 옛 handler 에서 빨강).
 
-## 항목 4 — `TASK-MONO-683` AC-4: 보충 제안 승인 → 발주 확정 → **wms 인바운드 예정(ASN) 생성**이 끝까지 가는가 (2026-09-16 수령)
+## 항목 4 — `TASK-BE-595` AC-4: 테넌트가 안 맞는 토큰에 이커머스 게이트웨이가 **403** 으로 답하고, 콘솔이 «세션 만료» 가 아니라 권한 문구를 보이는가 (2026-09-16 수령)
+
+- **무엇을 재나** (두 칸): ① 엔타이틀먼트 없는 외부 테넌트 토큰으로 ecommerce 게이트웨이의 보호 경로(예: `GET /api/orders/…`)를 부르면
+  **403 + `code=TENANT_FORBIDDEN`** 인가(401 `UNAUTHORIZED` 면 FAIL). ② 같은 상황에서 콘솔이 `/login?error=session_expired` 로 보내지 않고
+  inline 권한 문구를 보이는가.
+- 🔴 **창만으로 풀리는지 미확인.** 데모 AMI 는 fresh clone 으로 굽는다(`infra/demo/aws/packer/demo-ami.pkr.hcl`) — 이 수정이 머지된 뒤
+  구운 AMI 인지(또는 게이트웨이 이미지가 창에서 다시 빌드되는지)를 **먼저** 확인하라. 옛 AMI 에서 401 이 나오면 결함이 아니라 옛 코드다.
+- 🔵 ②는 `TASK-PC-FE-292`(콘솔이 운영용 슬러그 `iam` 을 활성 테넌트로 삼는 것)와 얽힌다 — 292 가 먼저 고쳐지면 평소 경로로는 테넌트
+  거절이 안 일어나므로, 외부 테넌트 토큰을 **일부러** 만들어야 ①②를 잴 수 있다.
+- 출처: `projects/ecommerce-microservices-platform/tasks/…/TASK-BE-595-…` § AC-4. 코드 수준 증거 = `SecurityConfigRealDecoderPathTest`
+  (고친 트리 초록, 고침을 되돌리면 테넌트 칸 5개 빨강).
+
+## 항목 5 — `TASK-MONO-683` AC-4: 보충 제안 승인 → 발주 확정 → **wms 인바운드 예정(ASN) 생성**이 끝까지 가는가 (2026-09-16 수령)
 
 - **무엇을 재나** (순서대로, 🔴 앞 칸이 안 되면 뒤 칸은 «측정 불가» 로 적는다 — «실패» 가 아니다):
   ① `/scm/replenishment` 에 `SKU-APPLE-001` 의 보충 제안이 **한 건이라도 생기는가** — 683 이 측정하지 못한 전제다. 제안은 wms 저재고 알림
@@ -90,6 +102,8 @@ monorepo
 - **함께 볼 것(대조군)**: 콘솔 `/scm/replenishment` 「공급사」 칸이 `SUP-001` 로 그려지는가(UUID 면 옛 매핑 — `이름 확인 불가` 로 보여야 한다).
 - 출처: `tasks/in-progress/TASK-MONO-683-…` § AC-4 · § Phase 2. 코드 수준 증거 = `ScmInboundExpectedDemoSeedShapeDltTest#demoSeedMapping_resolvesInWmsDevSeed`
   (시드 스크립트를 읽어 wms dev 시드로 해석 — 옛 코드·옛 UUID 매핑에서 빨강).
+- 🔴 **Failure Scenario 2 대조**: 이 집은 «닫히면서 집을 잃는» 의무만 받는다. 683 은 수령 시점(2026-09-16)에 아직 `in-progress` 이고,
+  AC-4 를 ⚪ 로 둔 채 이 항목을 넘기고 닫히는 경로다 — 683 이 **닫히지 않고 살아 남는다면** 이 항목은 683 으로 되돌려야 한다(의무 이중 보유 금지).
 
 ---
 
