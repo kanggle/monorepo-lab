@@ -51,7 +51,7 @@ vi.mock('@/shared/config/env', () => ({
 }));
 
 import { getSelfOperatorIdOrNull } from '@/features/operators/api/operators-api';
-import { OPERATOR_COOKIE, TENANT_COOKIE } from '@/shared/lib/session';
+import { ACCESS_COOKIE, OPERATOR_COOKIE, TENANT_COOKIE } from '@/shared/lib/session';
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -139,6 +139,16 @@ describe('getSelfOperatorIdOrNull — fail-graceful contract (TASK-PC-FE-020)', 
 
   it('(f) no operator session (cookie missing) → null', async () => {
     cookieJar.clear();
+    // TASK-PC-FE-283 (mirrors TASK-PC-FE-282 D8) — a TOTALLY empty cookie jar
+    // (access ✗, operator ✗, refresh ✗) is now `isSampleVisitor() === true`
+    // (ADR-MONO-074 A1), and `operators` is `ready` since this task, so that
+    // scenario would answer from the sample router (`op-sample-0001`) instead
+    // of failing pre-flight — a DIFFERENT cell than the one this test names.
+    // The pre-operator state this cell actually means — "logged into IAM, no
+    // operator token" — keeps the ACCESS cookie so the predicate's `access ✗`
+    // leg is false (A1's own carve-out: "access cookie only → onboarding/login
+    // exactly as before, NOT a sample visitor"). The assertion is unchanged.
+    cookieJar.set(ACCESS_COOKIE, 'ACCESS-TOKEN');
     cookieJar.set(TENANT_COOKIE, 'wms');
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

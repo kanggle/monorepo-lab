@@ -150,10 +150,23 @@ describe('callAdminGateway (iam)', () => {
   });
 
   it('① pending GET → section degrade carrying SAMPLE_NOT_READY, fetch 0', async () => {
+    // TASK-PC-FE-283 — the DoD it closes is "IAM 원장의 `pending` 0", so by the
+    // time this suite runs there is no longer a real IAM surface this cell can
+    // point at (`accounts` — the profile this test used before — is now
+    // `ready`, per this very task). This cell tests the CORE's generic
+    // ready/pending BRANCH mechanics, not any one surface's content, so a
+    // `logPrefix` absent from the ledger entirely exercises the identical
+    // branch (`findSurfaceCoverage` → `undefined` → same "not ready" path a
+    // real `pending` row takes) without depending on a surface staying
+    // unimplemented forever.
+    const NO_SUCH_SURFACE_PROFILE: AdminGatewayProfile = {
+      ...IAM_PROFILE,
+      logPrefix: 'no-such-surface',
+    };
     const err = await callAdminGateway(
-      { method: 'GET', path: '/api/admin/accounts' },
+      { method: 'GET', path: '/api/admin/no-such-surface' },
       parse,
-      IAM_PROFILE,
+      NO_SUCH_SURFACE_PROFILE,
     ).catch((e) => e);
     expect(err).toBeInstanceOf(TestUnavailable);
     expect((err as TestUnavailable).code).toBe(SAMPLE_NOT_READY);

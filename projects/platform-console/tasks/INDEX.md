@@ -93,7 +93,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔴 **순서: 282 → 283~288 직렬**(샘플 등록부·원장 파일 공유 — 병렬 worktree 금지) → 루트 `TASK-MONO-686`(`/demo` 은퇴, ⏳).
 
-- `TASK-PC-FE-283-iam-screens-get-samples.md` — IAM 14 화면 · GET 18. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
 - `TASK-PC-FE-284-ecommerce-screens-get-samples.md` — ecommerce 23 화면 · GET 19 · 🔴 이미지에 MinIO 주소 금지. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
 - `TASK-PC-FE-285-erp-screens-get-samples.md` — erp 6 화면 · GET 18 · 🔴 개요 수 = 목록 행 수. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
 - `TASK-PC-FE-286-finance-and-ledger-screens-get-samples.md` — finance·ledger 4 화면 · GET 15 · 🔴 차변 합 = 대변 합. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
@@ -127,6 +126,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
+- `TASK-PC-FE-283-iam-screens-get-samples.md` — IAM 9 surface(accounts·audit·operators·rbac·subscriptions·partnerships·tenants·org_nodes·groups) + 14 화면 `pending → ready` (`ADR-MONO-074` 실행 2/8). 리스트↔상세 id 일관 + 필터/검색/페이지 실동작 + 404 실모양(`fixtureNotFound`) + AC-6 e2e-smoke 1건. lint/tsc rc=0, `pnpm test` 304/304 파일·3261/3261 테스트(BEFORE parked main 302/303·3218/3219, 대조군 무수정), `pnpm e2e:smoke` 19/19. bite 5건(B8~B12) 전부 발화+복원 확인. 분석=Opus 5 / 구현=Sonnet 5.
 - `TASK-PC-FE-292-the-active-tenant-default-picks-the-operational-slug-iam.md` — 🟡 **impl PR 대기 (2026-09-16)** 활성 테넌트를 **토큰 `tenant_id`(= 운영용 슬러그 `iam`) 에서 정하지 않는다.** 소유자 결정 «마지막 선택 기억 + 단일 배정»: 콜백과 유휴 갱신이 **같은 함수**(`active-tenant-default.ts`)로 레지스트리 선택지에서 ① 이 운영자의 마지막 선택(`console_last_tenant`, 여전히 선택 가능할 때) ② 선택지가 하나면 그것 ③ 아니면 없음 — 고르면 **반드시 assume**. 도메인 섹션 **6**(ledger 포함)에 `layout.tsx` 게이트: assumed 토큰이 없으면 «테넌트를 먼저 선택하세요». red-first 3/3(rc=1) · bite 3종 전부 물림 · 관련 13파일 160/160. 🔴 **AC-0 라이브 첫 칸 · AC-4 는 ⚪** — 소유자 결정으로 머지·배포 후 창 한 번. 자매 `TASK-BE-595`. 분석=Opus 5 / 구현=Opus 5.
 
 ## done
