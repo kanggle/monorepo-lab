@@ -55,6 +55,12 @@ const HUMAN_READABLE_KEYS = new Set([
   'recipient',
   'address1',
   'address2',
+  // TASK-PC-FE-285 — erp domain fixtures. `title` is the approval request's
+  // free-text title (a person types it in `ApprovalCreateDialog`); every
+  // other human-readable erp value already resolves to `name` (department /
+  // employee / job-grade / cost-center / business-partner / department-path
+  // node / cost-center-ref / job-grade-ref all share that key).
+  'title',
 ]);
 
 const MACHINE_KEYS = new Set([
@@ -109,6 +115,28 @@ const MACHINE_KEYS = new Set([
   'objectKey', // product-image storage key
   'url', // product-image URL
   'thumbnailUrl', // product thumbnail URL (always null in this fixture set — AC-7)
+  // TASK-PC-FE-285 — erp domain fixtures (masters · read-model · approval ·
+  // delegation). Every value below is an id/code/enum/date/actor-reference a
+  // parser, `StatusBadge`, `EffectivePeriodBadge` or `masterRefLabel` reads —
+  // never free prose (ADR-MONO-050 D9 — cross-service identifiers are codes;
+  // `master-ref-label.ts` never suffixes a `code`, only the `name` beside it).
+  'code', // department/employee/job-grade/cost-center/business-partner CODE
+  'employeeNumber', // employee business identifier (사번), e.g. 'E-0001'
+  'partnerType', // business-partner enum (CUSTOMER | SUPPLIER | BOTH)
+  'employmentStatus', // employee enum (EMPLOYED | ON_LEAVE | SEPARATED)
+  'subjectType', // approval enum (DEPARTMENT | EMPLOYEE)
+  'effectiveFrom', // E2 EffectivePeriod bound (ISO-8601 DATE)
+  'effectiveTo', // E2 EffectivePeriod bound (ISO-8601 DATE, nullable)
+  'validFrom', // delegation grant/fact period bound (ISO-8601)
+  'validTo', // delegation grant/fact period bound (ISO-8601, NON_NULL-absent)
+  'createdBy', // audit envelope actor id
+  'updatedBy', // audit envelope actor id
+  'revokedBy', // delegation grant actor id (who revoked)
+  'scope', // delegation-fact enum (GLOBAL | REQUEST)
+  'method', // business-partner paymentTerms enum (e.g. 'BANK_TRANSFER')
+  'transition', // approval history discriminant ('submit' | 'approve' | …)
+  'actor', // approval history actor id
+  'at', // approval history entry timestamp (ISO-8601)
 ]);
 
 /** `*Id` (sourceId, accountId, nodeId, …) and `*At` (createdAt, asOf-like). */

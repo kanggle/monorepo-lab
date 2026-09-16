@@ -79,10 +79,10 @@ export const SURFACE_COVERAGE: readonly SurfaceCoverage[] = [
   { core: 'ecommerce', surface: 'ecommerce_settlement', status: 'ready', owner: ECOMMERCE },
   { core: 'ecommerce', surface: 'ecommerce_promotion', status: 'ready', owner: ECOMMERCE },
 
-  // ── erp (`callFlatEnvelopeGateway`) ────────────────────────────────────────
-  { core: 'flat', surface: 'erp', status: 'pending', owner: ERP },
-  { core: 'flat', surface: 'erp_approval', status: 'pending', owner: ERP },
-  { core: 'flat', surface: 'erp_delegation', status: 'pending', owner: ERP },
+  // ── erp (`callFlatEnvelopeGateway`) — TASK-PC-FE-285 ───────────────────────
+  { core: 'flat', surface: 'erp', status: 'ready', owner: ERP },
+  { core: 'flat', surface: 'erp_approval', status: 'ready', owner: ERP },
+  { core: 'flat', surface: 'erp_delegation', status: 'ready', owner: ERP },
 
   // ── finance + ledger (`callFlatEnvelopeGateway`) ───────────────────────────
   { core: 'flat', surface: 'finance', status: 'pending', owner: FINANCE },
@@ -137,6 +137,10 @@ export const SURFACE_SAMPLE_PATH: Readonly<Record<string, string>> = {
   'ecommerce:ecommerce_notification': '/api/notifications/templates?page=0&size=20',
   'ecommerce:ecommerce_seller': '/api/admin/sellers?page=0&size=20',
   'ecommerce:ecommerce_settlement': '/api/admin/settlements/periods?page=0&size=20',
+  // TASK-PC-FE-285
+  'flat:erp': '/api/erp/masterdata/departments?page=0&size=20',
+  'flat:erp_approval': '/api/erp/approval/requests?page=0&size=20',
+  'flat:erp_delegation': '/api/erp/approval/delegations',
 };
 
 /**
@@ -204,11 +208,11 @@ export const SCREEN_COVERAGE: Readonly<Record<string, ScreenStatus>> = {
   '/ecommerce/users/[id]': 'ready',
 
   // erp — TASK-PC-FE-285
-  '/erp': 'pending',
-  '/erp/approval': 'pending',
-  '/erp/delegation': 'pending',
-  '/erp/masters': 'pending',
-  '/erp/orgview': 'pending',
+  '/erp': 'ready',
+  '/erp/approval': 'ready',
+  '/erp/delegation': 'ready',
+  '/erp/masters': 'ready',
+  '/erp/orgview': 'ready',
 
   // finance + ledger — TASK-PC-FE-286
   '/finance': 'pending',

@@ -7,6 +7,7 @@ import {
 
 import { IAM_FIXTURE_HANDLERS, IAM_FIXTURE_DOCUMENTS } from './iam';
 import { ECOMMERCE_FIXTURE_HANDLERS, ECOMMERCE_FIXTURE_DOCUMENTS } from './ecommerce';
+import { ERP_FIXTURE_HANDLERS, ERP_FIXTURE_DOCUMENTS } from './erp';
 import type { FixtureNotFound } from '../router';
 
 /**
@@ -34,6 +35,7 @@ export const SAMPLE_FIXTURES: Readonly<Record<string, FixtureHandler>> = {
   'console-bff:notifications-inbox': () => SAMPLE_NOTIFICATION_INBOX,
   ...IAM_FIXTURE_HANDLERS,
   ...ECOMMERCE_FIXTURE_HANDLERS,
+  ...ERP_FIXTURE_HANDLERS,
 };
 
 /**
@@ -55,4 +57,5 @@ export const SAMPLE_FIXTURE_DOCUMENTS: Readonly<Record<string, unknown>> = {
   'console-bff:notifications-inbox': SAMPLE_NOTIFICATION_INBOX,
   ...IAM_FIXTURE_DOCUMENTS,
   ...ECOMMERCE_FIXTURE_DOCUMENTS,
+  ...ERP_FIXTURE_DOCUMENTS,
 };
