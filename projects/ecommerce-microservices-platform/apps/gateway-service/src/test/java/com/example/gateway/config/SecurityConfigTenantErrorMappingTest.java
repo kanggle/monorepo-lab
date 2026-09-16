@@ -6,6 +6,7 @@ import com.example.security.oauth2.TenantClaimValidator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -14,6 +15,8 @@ import org.springframework.mock.web.server.MockServerWebExchange;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.jwt.JwtValidationException;
+import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
 import org.springframework.security.web.server.ServerAuthenticationEntryPoint;
 
 /**
@@ -75,6 +78,56 @@ class SecurityConfigTenantErrorMappingTest {
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(bodyOf(exchange)).contains("TENANT_FORBIDDEN");
         assertThat(counter(registry, GatewayMetrics.REASON_TENANT_MISMATCH)).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("실제 사슬 모양: InvalidBearerTokenException(invalid_token) 이 JwtValidationException[tenant_mismatch] 을 감싸도 403 이다 (TASK-BE-595)")
+    void realChainShape_invalidBearerTokenWrappingJwtValidationException_mapsToForbidden() {
+        MeterRegistry registry = new SimpleMeterRegistry();
+        GatewayMetrics metrics = new GatewayMetrics(registry);
+        ServerAuthenticationEntryPoint entryPoint = config.unauthorizedEntryPoint(objectMapper, metrics);
+
+        // The shape Spring really produces (JwtReactiveAuthenticationManager.onError): the outer
+        // frame is an OAuth2 exception whose code is ALWAYS invalid_token, and tenant_mismatch lives
+        // only in the inner, non-OAuth2 JwtValidationException's error list. The cell above wraps an
+        // OAuth2AuthenticationException instead — a shape that never occurs, which is why it stayed
+        // green while production answered 401. SecurityConfigRealDecoderPathTest lets Spring build
+        // the chain instead of building it here.
+        JwtValidationException inner = new JwtValidationException("tenant_id 'globex' is not allowed", List.of(
+                new OAuth2Error("invalid_token", "Jwt expired at 2026-01-01T00:00:00Z", null),
+                new OAuth2Error(TenantClaimValidator.ERROR_CODE_TENANT_MISMATCH, "tenant_id 'globex' is not allowed", null)));
+        InvalidBearerTokenException outer = new InvalidBearerTokenException(inner.getMessage(), inner);
+        assertThat(outer.getError().getErrorCode()).isEqualTo("invalid_token");
+
+        MockServerWebExchange exchange = exchangeFor("/api/orders/123");
+        entryPoint.commence(exchange, outer).block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        String body = bodyOf(exchange);
+        assertThat(body).contains("TENANT_FORBIDDEN").contains("tenant_id 'globex' is not allowed");
+        assertThat(body).doesNotContain("UNAUTHORIZED");
+        assertThat(counter(registry, GatewayMetrics.REASON_TENANT_MISMATCH)).isEqualTo(1.0);
+        assertThat(counter(registry, "invalid")).isEqualTo(0.0);
+    }
+
+    @Test
+    @DisplayName("실제 사슬 모양이라도 안쪽 오류에 tenant_mismatch 가 없으면(만료) 401 이다")
+    void realChainShape_withoutTenantMismatch_staysUnauthorized() {
+        MeterRegistry registry = new SimpleMeterRegistry();
+        GatewayMetrics metrics = new GatewayMetrics(registry);
+        ServerAuthenticationEntryPoint entryPoint = config.unauthorizedEntryPoint(objectMapper, metrics);
+
+        JwtValidationException inner = new JwtValidationException("Jwt expired", List.of(
+                new OAuth2Error("invalid_token", "Jwt expired at 2026-01-01T00:00:00Z", null)));
+        InvalidBearerTokenException outer = new InvalidBearerTokenException(inner.getMessage(), inner);
+
+        MockServerWebExchange exchange = exchangeFor("/api/orders/123");
+        entryPoint.commence(exchange, outer).block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(bodyOf(exchange)).contains("UNAUTHORIZED");
+        assertThat(counter(registry, "invalid")).isEqualTo(1.0);
+        assertThat(counter(registry, GatewayMetrics.REASON_TENANT_MISMATCH)).isEqualTo(0.0);
     }
 
     @Test

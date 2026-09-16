@@ -88,12 +88,20 @@ class GatewayIntegrationTest {
     @Test
     @DisplayName("만료된 JWT로 보호된 경로 요청 시 401을 반환한다")
     void protectedRoute_expiredToken_returns401() {
-        // signToken with -1 second TTL → already expired
+        // Issued two hours ago, expired one hour ago, tenant_id=ecommerce — so expiry is the ONLY
+        // rejection reason and it is judged by JwtTimestampValidator.
+        // TASK-BE-595: this fixture used to be TTL -1s with iat=now and no tenant_id. exp<iat makes
+        // Spring's Jwt builder throw ("expiresAt must be after issuedAt") before any validator
+        // runs, so the cell was 401 for a malformed token, never for an expired one. The "iat"
+        // entry below overrides the helper's iat=now (additional claims are applied last).
+        java.time.Instant now = java.time.Instant.now();
         String expiredToken = jwtHelper.signToken(
-                "user-123", null, -1L,
+                "user-123", null, -3600L,
                 java.util.Map.of(
+                        "iat", java.util.Date.from(now.minusSeconds(7200)),
                         "aud", List.of("ecommerce"),
                         "account_type", "CONSUMER",
+                        "tenant_id", "ecommerce",
                         "email", "user@example.com"));
 
         webTestClient.get()
@@ -106,9 +114,14 @@ class GatewayIntegrationTest {
     }
 
     @Test
-    @DisplayName("audience가 일치하지 않는 JWT로 보호된 경로 요청 시 401을 반환한다")
-    void protectedRoute_wrongAudience_returns401() {
-        // No aud claim → Spring Security rejects it when audiences is configured
+    @DisplayName("aud·tenant_id 가 모두 없는 JWT → 403 TENANT_FORBIDDEN (거절 사유는 audience 가 아니라 테넌트)")
+    void protectedRoute_noAudienceNoTenant_returns403TenantForbidden() {
+        // TASK-BE-595: this cell was named "wrong audience → 401". It never measured audience.
+        // The gateway's decoder is OAuth2ResourceServerConfig's own bean, so Boot's
+        // `spring.security.oauth2.resourceserver.jwt.audiences` property is not applied to it;
+        // measured 2026-09-16 on the real decoder path, the same token WITH tenant_id=ecommerce
+        // and no aud is admitted (200). The only thing rejecting this token is the missing
+        // tenant_id — a tenant rejection, which is 403.
         String noAudToken = jwtHelper.signToken(
                 "user-123", "BUYER", 300L,
                 java.util.Map.of("account_type", "CONSUMER", "email", "user@example.com"));
@@ -117,7 +130,9 @@ class GatewayIntegrationTest {
                 .uri("/api/orders/123")
                 .header("Authorization", "Bearer " + noAudToken)
                 .exchange()
-                .expectStatus().isUnauthorized();
+                .expectStatus().isForbidden()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("TENANT_FORBIDDEN");
     }
 
     // -----------------------------------------------------------------------
@@ -223,11 +238,10 @@ class GatewayIntegrationTest {
     // TASK-MONO-367 (2026-08-01 sunset, LANDED): the legacy `iam` issuer entry above is
     // gone — TASK-BE-398 retired the only flow that minted it.
     //
-    // Spring Security WebFlux surfaces all JWT validation failures
-    // (issuer mismatch, missing/blank tenant_id) as 401 via
-    // ServerAuthenticationEntryPoint — not 403 — because the token is
-    // rejected before authentication completes. Under entitlement-trust
-    // (ADR-MONO-030 § 2.4) a non-blank tenant_id no longer fails the gate.
+    // Issuer mismatch is 401. A tenant rejection (missing/blank tenant_id, or a tenant
+    // neither equal to ecommerce nor entitled to it) is 403 TENANT_FORBIDDEN: SecurityConfig
+    // finds tenant_mismatch inside the JwtValidationException that Spring wraps in
+    // InvalidBearerTokenException (TASK-BE-595 — before that, every one of these was 401).
     // -----------------------------------------------------------------------
 
     @Test
@@ -279,11 +293,11 @@ class GatewayIntegrationTest {
                 .exchange()
                 // The gate rejects; SecurityConfig maps tenant_mismatch to 403 rather than 401,
                 // because telling a client with a perfectly valid token to "re-authenticate"
-                // would be a lie it can never act on (SecurityConfigTenantErrorMappingTest).
-                .expectStatus().value(status ->
-                        org.assertj.core.api.Assertions.assertThat(status)
-                                .as("an unentitled foreign tenant must not reach ecommerce")
-                                .isIn(401, 403));
+                // would be a lie it can never act on. TASK-BE-595: this was isIn(401, 403), which
+                // was green in both directions while production answered 401.
+                .expectStatus().isForbidden()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("TENANT_FORBIDDEN");
     }
 
     @Test
@@ -299,13 +313,14 @@ class GatewayIntegrationTest {
                 .uri("/api/orders/123")
                 .header("Authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().value(status ->
-                        org.assertj.core.api.Assertions.assertThat(status).isIn(401, 403));
+                .expectStatus().isForbidden()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("TENANT_FORBIDDEN");
     }
 
     @Test
-    @DisplayName("tenant_id 미설정 → 401")
-    void protectedRoute_missingTenant_returns401() {
+    @DisplayName("tenant_id 미설정 → 403 TENANT_FORBIDDEN (TASK-BE-595 이전엔 401)")
+    void protectedRoute_missingTenant_returns403() {
         String token = jwtHelper.signTokenWithIssuerAndTenant(
                 "https://test.local/issuer", null);
 
@@ -313,9 +328,9 @@ class GatewayIntegrationTest {
                 .uri("/api/orders/123")
                 .header("Authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isUnauthorized()
+                .expectStatus().isForbidden()
                 .expectBody()
-                .jsonPath("$.code").isEqualTo("UNAUTHORIZED");
+                .jsonPath("$.code").isEqualTo("TENANT_FORBIDDEN");
     }
 
     @Test
