@@ -125,9 +125,9 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
-- `TASK-PC-FE-292-the-active-tenant-default-picks-the-operational-slug-iam.md` — 🟡 **impl PR 대기 (2026-09-16)** 활성 테넌트를 **토큰 `tenant_id`(= 운영용 슬러그 `iam`) 에서 정하지 않는다.** 소유자 결정 «마지막 선택 기억 + 단일 배정»: 콜백과 유휴 갱신이 **같은 함수**(`active-tenant-default.ts`)로 레지스트리 선택지에서 ① 이 운영자의 마지막 선택(`console_last_tenant`, 여전히 선택 가능할 때) ② 선택지가 하나면 그것 ③ 아니면 없음 — 고르면 **반드시 assume**. 도메인 섹션 **6**(ledger 포함)에 `layout.tsx` 게이트: assumed 토큰이 없으면 «테넌트를 먼저 선택하세요». red-first 3/3(rc=1) · bite 3종 전부 물림 · 관련 13파일 160/160. 🔴 **AC-0 라이브 첫 칸 · AC-4 는 ⚪** — 소유자 결정으로 머지·배포 후 창 한 번. 자매 `TASK-BE-595`. 분석=Opus 5 / 구현=Opus 5.
-
 ## done
+
+- ✅ `TASK-PC-FE-292-the-active-tenant-default-picks-the-operational-slug-iam.md` — **DONE (2026-09-16 UTC · 4차원 검증 + 라이브 판정 · impl PR [#3862](https://github.com/kanggle/monorepo-lab/pull/3862) squash `f95ef11a4`)** 🟢 **로그인만 한 운영자가 도메인 화면에서 «세션 만료» 로 튕기지 않는다.** 활성 테넌트를 토큰 `tenant_id`(= 운영용 슬러그 `iam`) 에서 정하지 않고, 콜백·유휴 갱신이 같은 함수로 레지스트리 선택지에서 ① 마지막 선택(`console_last_tenant`) ② 선택지 1개 ③ 없음 — 고르면 반드시 assume. 도메인 섹션 6 에 게이트. 🟢 **라이브(데모 창 16:49Z, Vercel `729aa7eed`)**: 로그인만 → 6/6 «테넌트를 먼저 선택하세요» · `session_expired` 0/6 · 토큰 클레임 `iam` 실측 / 선택(200) → 6/6 열림 / 재로그인 → 기억으로 6/6 바로 열림. 🟢 **AC-0 라이브 DB**(SSM, 소유자 실행): 콘솔 클라이언트 `tenant_id=iam` · 테넌트 12건 `iam` 없음 · demo-operator 홈 demo-corp·배정 demo-corp+ecommerce — 09-16 기록과 일치. 🔴 **이 머지가 main nightly 를 빨갛게 했다**(«e2e 영향 없음» 판정 오류 — 클릭으로 들어가는 스펙을 못 셌다) → `TASK-PC-FE-293` 이 복구. 🔴 머지 시점 필수 아닌 체크 3 진행 중 — 이후 프런트 unit 1회 무관 flake·재실행 전 단계 초록. ⚪ 섹션 **안** 데이터 로드는 안 쟀다. 분석=Opus 5 / 구현=Opus 5.
 
 - ✅ `TASK-PC-FE-293-the-e2e-login-fixture-primes-a-tenant-cookie-without-assuming-it.md` — **DONE (2026-09-16 UTC · 4차원 검증 · impl PR [#3871](https://github.com/kanggle/monorepo-lab/pull/3871) squash `729aa7eed`)** 🟢 **`TASK-PC-FE-292` 가 빨갛게 만든 `main` nightly 를 되돌렸다.** e2e 픽스처가 assumed 토큰 없는 테넌트 쿠키만 심던 것을 실제 `POST /api/tenant` 로 · e2e compose `auth-service` 에 빠진 `ADMIN_SERVICE_URL`(없으면 배정 검사 fail-closed 로 모든 선택 403 — 이 스택에서 `/api/tenant` 가 성공한 첫 기록) · finance 스펙은 `finance` 를 고르고 시드 행 `'*'`→`'finance'`(와일드카드 base 토큰 전제였다). 제품 코드 변경 0. 판정: 브랜치 dispatch 35103541564 콘솔 잡 8/8 → **`main` push 런 35106378961 콘솔 full-stack success**. 🔴 #3867 은 머지 **11분 전** 브랜치 dispatch 초록으로 닫혔다(`TASK-MONO-692` 결함이 실제로 발현) — 복구 판정은 이슈가 아니라 push 런으로. 분석=Opus 5 / 구현=Opus 5.
 

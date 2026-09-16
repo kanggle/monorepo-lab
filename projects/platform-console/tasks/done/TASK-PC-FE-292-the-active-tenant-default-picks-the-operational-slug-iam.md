@@ -8,7 +8,7 @@ TASK-PC-FE-292
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -371,3 +371,41 @@ assumed 토큰이 없으면 도메인 섹션이 «테넌트를 먼저 선택하�
    증상이 그대로다(AC-1 이 그것을 세라고 요구한다).
 4. **`TASK-BE-595` 를 안 고친다** → 이 티켓이 닫혀도, 다른 이유로 테넌트가 거절될 때 여전히
    «세션 만료» 라는 거짓말이 뜬다.
+
+## CORRECTION
+
+**2026-09-16 UTC close chore — 4차원 검증 + 라이브 판정.** review 이동 때 ⚪ 였던 AC-0 첫 칸과 AC-4 가 데모 창
+(2026-09-16 16:49Z 기동, 소유자 승인)에서 측정됐다.
+
+### 머지 4차원
+- (a) impl PR [#3862](https://github.com/kanggle/monorepo-lab/pull/3862) `state=MERGED` 2026-09-16T12:44:14Z, 머지 커밋 `f95ef11a4`.
+- (b) `f95ef11a4` 는 `origin/main` 의 조상.
+- (c) 머지 시점 롤업: SUCCESS 10 · SKIPPED 48 · **실패 0 · 진행 중 3**(`Build & Test` · 프런트 unit · 프런트 E2E smoke — 필수 아님).
+  🔴 소유자가 CI 완료 전에 머지했다. 셋의 결과: Build & Test·E2E smoke success, 프런트 unit **failure** — 실패 칸은 ecommerce
+  web-store `DemoBackendNotice.test.tsx` 1칸(이 PR 무관 파일, 직전 헤드 `b340ad086` 에선 통과)이고 console-web 단계는 그 실패로
+  skipped 였다. 같은 런 재실행(35097495783)에서 **ecommerce·fan·console-web unit·typecheck·lint 전 단계 success**.
+- 🔴🔴 **그리고 이 머지가 `main` nightly 를 빨갛게 했다**(콘솔 full-stack e2e `overview-consolidation.spec.ts:75`) — 이 티켓의
+  «e2e 영향 없음» 판정은 **틀렸다**(도메인 화면을 여는 스펙을 `goto` 문자열로만 셌고, 그 스펙은 **클릭**으로 들어간다).
+  `TASK-PC-FE-293`(#3871) 이 복구했고 push 런 35106378961 에서 초록.
+- (d) AC 대조 — 아래.
+
+### AC-0 첫 칸 — 라이브 값 (SSM 읽기 전용, command `b6fcdd6d-ee4b-4d93-932c-56ae8e04b8df`, 16:58:13Z, 소유자 실행)
+| 조회 | 2026-09-16 기록 | 라이브 |
+|---|---|---|
+| `auth_db.oauth_clients` `platform-console-web` 의 `tenant_id` | `iam` | **`iam`** |
+| `account_db.tenants` | 12건, `iam` 없음 | **12건 전부 ACTIVE, `iam` 없음** (acme-corp · demo-corp · ecommerce · erp · fan-platform · finance · globex-corp · initech-corp · ip-pilot-corp · scm · umbrella-corp · wms) |
+| `demo-operator` 홈 / 배정 | demo-corp / demo-corp·ecommerce | **demo-corp / demo-corp·ecommerce** |
+
+⇒ 전제가 그대로 살아 있다. 티켓 수치는 낡지 않았다.
+
+### AC-4 — 라이브 판정 (`console.hubwang.com`, Vercel 배포 `729aa7eed` = 292·293 포함, 헤드리스 chromium, 공개 데모 계정)
+| 단계 | 관측 |
+|---|---|
+| **1. 로그인만, 선택 안 함** | 착지 `/dashboards/overview` · base 토큰 `tenant_id` 클레임 **`iam`** · 활성 테넌트 없음 · assumed 토큰 없음 · 6 섹션(`/ecommerce` `/wms` `/scm` `/erp` `/finance` `/ledger`) **전부 게이트(`domain-no-tenant`) · 전부 `session_expired` 아님** |
+| **2. 대조군 — `POST /api/tenant {ecommerce}`** | **200** · assumed 토큰 `tenant_id`=`ecommerce` · `console_last_tenant`=`<sub>\|ecommerce` · 6 섹션 **전부 게이트 없음**(`E-Commerce 개요` · `WMS 개요` · `SCM 개요` · `ERP 개요` · `Finance 개요` · `Finance Ledger 운영`) |
+| **3. 새 브라우저 재로그인(기억 쿠키만 유지)** | 선택 없이 활성 테넌트 `ecommerce` · assumed 토큰 `tenant_id`=`ecommerce` · 6 섹션 **전부 바로 열림** |
+
+- AC-4 첫 칸 ✅ — 기대(선택지 2 ⇒ 첫 로그인은 게이트)대로이고 `/login?error=session_expired` 0/6.
+- AC-4 둘째 칸 ✅ — 고른 뒤 6/6 열림. 🔵 결정된 «기억» 동작도 6/6.
+- AC-4 셋째 칸 — 창을 열었으므로 해당 없음.
+- ⚪ **이 판정이 안 잰 것**: 섹션이 **렌더됐다**(게이트 통과·제목)까지다. 각 화면 안의 데이터 로드·인라인 권한 오류는 보지 않았다.
