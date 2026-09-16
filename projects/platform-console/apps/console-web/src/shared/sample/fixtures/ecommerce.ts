@@ -406,9 +406,48 @@ export const ECOMMERCE_ORDERS: readonly OrderSeed[] = [
     createdAt: '2026-07-05T02:00:00Z',
     updatedAt: '2026-07-06T00:00:00Z',
   },
+  {
+    // CORRECTION (coordinator review) — a MULTI-SELLER order, the demo case
+    // for "an order's items may belong to several sellers; an accrual is per
+    // seller" (§ ecommerce_settlement below). seller-sample-0001's subtotal is
+    // 19000 (item 1), seller-sample-0002's is 24000 (item 2) — both feed a
+    // settlement accrual keyed to THIS order and cross-checked against it.
+    orderId: 'order-sample-0005',
+    userId: 'user-sample-0002',
+    status: 'CONFIRMED',
+    items: [
+      {
+        productId: 'prod-sample-0001',
+        variantId: 'variant-sample-0001',
+        productName: `베이직 반팔 티셔츠${SUFFIX}`,
+        optionName: `M${SUFFIX}`,
+        quantity: 1,
+        unitPrice: 19000,
+        sellerId: 'seller-sample-0001',
+      },
+      {
+        productId: 'prod-sample-0003',
+        variantId: null,
+        productName: `캔버스 에코백${SUFFIX}`,
+        optionName: null,
+        quantity: 2,
+        unitPrice: 12000,
+        sellerId: 'seller-sample-0002',
+      },
+    ],
+    shippingAddress: {
+      recipient: `이민준${SUFFIX}`,
+      phone: '010-3333-4444',
+      zipCode: '03187',
+      address1: `서울특별시 종로구 세종대로 1${SUFFIX}`,
+      address2: null,
+    },
+    createdAt: '2026-08-25T10:00:00Z',
+    updatedAt: null,
+  },
 ];
 
-const ORDERS_SUMMARY = { today: 0, week: 1, month: 4, total: 4 };
+const ORDERS_SUMMARY = { today: 0, week: 1, month: 5, total: 5 };
 
 function orderDetail(o: OrderSeed) {
   return { ...o, totalPrice: orderTotal(o.items) };
@@ -838,22 +877,35 @@ const ECOMMERCE_COMMISSION_RATES = [
   { sellerId: 'seller-sample-0003', rateBps: 1000, source: 'PLATFORM_DEFAULT' },
 ] as const;
 
-/** Σ(accrual lines) per seller — kept byte-consistent with `ECOMMERCE_ACCRUALS`
- *  below (asserted equal by a schema/arithmetic test, not just eyeballed). */
+/**
+ * CORRECTION (coordinator review, 2026-09-16 UTC) — every accrual's
+ * `grossMinor` now equals the REFERENCING order's own total as
+ * `/ecommerce/orders` shows it (or that seller's SUBTOTAL of the order, for
+ * the multi-seller `order-sample-0005`). Before this correction the accrual
+ * amounts were independent numbers that happened to sum correctly to the
+ * seller balance in isolation, but did not match the order screen at all
+ * (`minorToWon` renders minor units AS won on both screens, so a visitor
+ * comparing an order to its settlement line saw two different numbers for
+ * the same money — the exact "합성이어도 산술은 맞아야 한다" Edge Case this
+ * ticket's own body names). Σ(accrual lines) per seller below is kept
+ * byte-consistent with `ECOMMERCE_ACCRUALS` (asserted by a schema/arithmetic
+ * test AND by `tests/unit/sample-fixtures-schema-ecommerce.test.ts`'s
+ * accrual↔order cross-screen test, not just eyeballed).
+ */
 const ECOMMERCE_SELLER_BALANCES = [
   {
     sellerId: 'seller-sample-0001',
-    grossMinor: 380000,
-    platformCommissionMinor: 38000,
-    accruedNetMinor: 342000,
+    grossMinor: 92000,
+    platformCommissionMinor: 9200,
+    accruedNetMinor: 82800,
     accrualCount: 4,
   },
   {
     sellerId: 'seller-sample-0002',
-    grossMinor: 120000,
-    platformCommissionMinor: 14400,
-    accruedNetMinor: 105600,
-    accrualCount: 1,
+    grossMinor: 60000,
+    platformCommissionMinor: 7200,
+    accruedNetMinor: 52800,
+    accrualCount: 2,
   },
   {
     sellerId: 'seller-sample-0003',
@@ -864,10 +916,21 @@ const ECOMMERCE_SELLER_BALANCES = [
   },
 ] as const;
 
-/** Append-only ledger. Lines 1–4 (seller-0001) sum EXACTLY to that seller's
- *  balance above (200000+150000-20000+50000=380000 gross, etc — a REVERSAL
- *  clawback on the same order as its ACCRUAL, a realistic partial-refund
- *  shape); line 5 (seller-0002) is that seller's sole line. */
+/**
+ * Append-only ledger, cross-screen-consistent with `ECOMMERCE_ORDERS` (see
+ * the CORRECTION note on `ECOMMERCE_SELLER_BALANCES` above):
+ *   - accrual-0001 = order-sample-0001's FULL total (38000, single-seller).
+ *   - accrual-0002/-0003 = order-sample-0002's FULL total (45000) then a
+ *     PARTIAL REVERSAL clawback (-10000, ≤ the 45000 accrued — a realistic
+ *     partial-refund shape) on the SAME order.
+ *   - accrual-0004 = seller-sample-0001's SUBTOTAL (19000, item 1) of the
+ *     MULTI-SELLER order-sample-0005 (total 43000) — NOT the order's total.
+ *   - accrual-0005 = order-sample-0003's FULL total (36000, single-seller).
+ *   - accrual-0006 = seller-sample-0002's SUBTOTAL (24000, item 2) of the
+ *     SAME multi-seller order-sample-0005.
+ * `order-sample-0004` (CANCELLED) carries NO accrual — a cancelled order
+ * never accrues seller commission.
+ */
 export const ECOMMERCE_ACCRUALS = [
   {
     accrualId: 'accrual-sample-0001',
@@ -875,10 +938,10 @@ export const ECOMMERCE_ACCRUALS = [
     paymentId: 'payment-sample-0001',
     sellerId: 'seller-sample-0001',
     type: 'ACCRUAL',
-    grossMinor: 200000,
+    grossMinor: 38000,
     rateBps: 1000,
-    commissionMinor: 20000,
-    sellerNetMinor: 180000,
+    commissionMinor: 3800,
+    sellerNetMinor: 34200,
     occurredAt: '2026-08-05T00:00:00Z',
   },
   {
@@ -887,10 +950,10 @@ export const ECOMMERCE_ACCRUALS = [
     paymentId: 'payment-sample-0002',
     sellerId: 'seller-sample-0001',
     type: 'ACCRUAL',
-    grossMinor: 150000,
+    grossMinor: 45000,
     rateBps: 1000,
-    commissionMinor: 15000,
-    sellerNetMinor: 135000,
+    commissionMinor: 4500,
+    sellerNetMinor: 40500,
     occurredAt: '2026-08-10T00:00:00Z',
   },
   {
@@ -899,23 +962,23 @@ export const ECOMMERCE_ACCRUALS = [
     paymentId: 'payment-sample-0002',
     sellerId: 'seller-sample-0001',
     type: 'REVERSAL',
-    grossMinor: -20000,
+    grossMinor: -10000,
     rateBps: 1000,
-    commissionMinor: -2000,
-    sellerNetMinor: -18000,
+    commissionMinor: -1000,
+    sellerNetMinor: -9000,
     occurredAt: '2026-08-12T00:00:00Z',
   },
   {
     accrualId: 'accrual-sample-0004',
-    orderId: 'order-settlement-0001',
+    orderId: 'order-sample-0005',
     paymentId: 'payment-sample-0004',
     sellerId: 'seller-sample-0001',
     type: 'ACCRUAL',
-    grossMinor: 50000,
+    grossMinor: 19000,
     rateBps: 1000,
-    commissionMinor: 5000,
-    sellerNetMinor: 45000,
-    occurredAt: '2026-08-20T00:00:00Z',
+    commissionMinor: 1900,
+    sellerNetMinor: 17100,
+    occurredAt: '2026-08-25T10:30:00Z',
   },
   {
     accrualId: 'accrual-sample-0005',
@@ -923,11 +986,23 @@ export const ECOMMERCE_ACCRUALS = [
     paymentId: 'payment-sample-0005',
     sellerId: 'seller-sample-0002',
     type: 'ACCRUAL',
-    grossMinor: 120000,
+    grossMinor: 36000,
     rateBps: 1200,
-    commissionMinor: 14400,
-    sellerNetMinor: 105600,
-    occurredAt: '2026-08-15T00:00:00Z',
+    commissionMinor: 4320,
+    sellerNetMinor: 31680,
+    occurredAt: '2026-08-20T05:30:00Z',
+  },
+  {
+    accrualId: 'accrual-sample-0006',
+    orderId: 'order-sample-0005',
+    paymentId: 'payment-sample-0006',
+    sellerId: 'seller-sample-0002',
+    type: 'ACCRUAL',
+    grossMinor: 24000,
+    rateBps: 1200,
+    commissionMinor: 2880,
+    sellerNetMinor: 21120,
+    occurredAt: '2026-08-25T10:30:00Z',
   },
 ] as const;
 
@@ -961,8 +1036,8 @@ const ECOMMERCE_PAYOUTS_BY_PERIOD: Readonly<Record<string, readonly unknown[]>> 
     {
       payoutId: 'payout-sample-0001',
       sellerId: 'seller-sample-0001',
-      payableNetMinor: 342000,
-      commissionMinor: 38000,
+      payableNetMinor: 82800,
+      commissionMinor: 9200,
       accrualCount: 4,
       status: 'PAID',
       payoutReference: 'PO-SAMPLE-0001',
@@ -971,9 +1046,9 @@ const ECOMMERCE_PAYOUTS_BY_PERIOD: Readonly<Record<string, readonly unknown[]>> 
     {
       payoutId: 'payout-sample-0002',
       sellerId: 'seller-sample-0002',
-      payableNetMinor: 105600,
-      commissionMinor: 14400,
-      accrualCount: 1,
+      payableNetMinor: 52800,
+      commissionMinor: 7200,
+      accrualCount: 2,
       status: 'PAID',
       payoutReference: 'PO-SAMPLE-0002',
       paidAt: '2026-09-03T00:00:00Z',

@@ -258,3 +258,69 @@ BEFORE 는 **이 워크트리를 `git stash`로 되돌린 상태**(분기점과 
 
 B13–B20 모두 단독 주입 → 실행 → 복원 순으로 개별 확인했다. `grep -rn "BITE-" src tests e2e-smoke` = 0건
 (복원 확인). 전체 스위트 기준 최종 복원 확인은 § 측정의 "최종" 행.
+
+## CORRECTION — 코디네이터 리뷰: 정산 라인 금액이 주문 화면과 어긋남 (2026-09-16 UTC)
+
+🔴 **결함**: `settlement-types.ts`의 `minorToWon`은 minor unit 을 그대로 원(₩)으로 그린다(KRW 는 scale 0).
+그런데 최초 구현의 적립 라인 `grossMinor` 는 참조하는 주문의 실제 합계와 **무관한 별개 숫자**였다 —
+`accrual-sample-0001`(order-sample-0001 참조)의 gross 는 200,000 인데 그 주문의 `/ecommerce/orders` 합계는
+38,000; `accrual-sample-0004`는 아예 픽스처 세계에 없는 `order-settlement-0001`을 참조했다. 이 티켓 자신의
+Edge Case("합성이어도 산술은 맞아야 한다 — 틀리면 «고장» 으로 읽힌다")가 정확히 지목하는 결함이고, 방문자가
+주문을 열어 본 뒤 그 정산 라인을 열면 같은 돈이 다른 숫자로 보인다.
+
+### 고침
+
+1. **`order-settlement-0001` 제거** — 새 주문 `order-sample-0005`(멀티셀러: item 1 = seller-sample-0001 몫
+   19,000, item 2 = seller-sample-0002 몫 24,000, 합계 43,000)를 `ECOMMERCE_ORDERS`에 추가하고 그 주문을
+   참조하도록 했다(추가 쪽을 선택 — 기존 4개 주문은 이미 각자의 적립 라인과 1:1로 대응되어 있어 재사용하면
+   "한 주문에 같은 셀러의 적립이 두 번" 이라는 새 결함을 만들었을 것이다). 이 주문은 동시에 "주문의 아이템이
+   여러 셀러에 걸칠 수 있고, 그러면 적립은 셀러별" 이라는 코디네이터 요청 문장의 실증 사례가 됐다.
+2. **모든 ACCRUAL 의 `grossMinor` = 그 주문(또는 멀티셀러 주문에서는 그 셀러 몫)의 실제 합계**로 재계산:
+   accrual-1→38,000(order-1 전체) · accrual-2→45,000(order-2 전체) · accrual-3(REVERSAL)→-10,000(order-2
+   누적 gross 45,000 이하의 부분 환불) · accrual-4→19,000(order-5 의 seller-1 몫) · accrual-5→36,000(order-3
+   전체) · accrual-6(신규)→24,000(order-5 의 seller-2 몫). CANCELLED 인 `order-sample-0004` 를 참조하는 적립은
+   0건(취소된 주문은 커미션이 발생하지 않는다).
+3. **커미션/셀러정산액/잔액/지급 전부 재계산**(정수 bps 적산, 반올림 없이 나누어떨어짐):
+   - seller-sample-0001(10%): gross 38,000+45,000-10,000+19,000=**92,000**, commission **9,200**,
+     net **82,800**, accrualCount **4**.
+   - seller-sample-0002(12%): gross 36,000+24,000=**60,000**, commission **7,200**, net **52,800**,
+     accrualCount **2**.
+   - seller-sample-0003: 활동 없음, 0/0/0/0 (무변화).
+   - `period-sample-0001` 지급 2건도 위 net/commission/accrualCount 로 갱신, `sellerCount`(2) = 지급 행
+     수(2) 불변 확인.
+4. **새 테스트** `sample-fixtures-schema-ecommerce.test.ts`의 "CORRECTION (coordinator review) — every
+   accrual's orderId exists in the order fixtures, and each ACCRUAL's grossMinor equals that SELLER's
+   subtotal on that order" — `sampleResponse` 만으로 적립→주문을 순회해 ⓐ `orderId` 가 실제 주문 목록에
+   존재 ⓑ CANCELLED 주문을 참조하지 않음 ⓒ ACCRUAL gross = 그 셀러의 그 주문 라인 합 ⓓ REVERSAL 절대값 ≤
+   그 셀러가 그 주문에서 이미 누적한 gross, 4가지를 단언한다. **bite B21**: `accrual-sample-0001`의 gross
+   를 200,000 으로 주입 → 이 새 테스트 + 기존 "money adds up" 테스트 둘 다 빨강(rc=1, 2 files 단언 실패) →
+   복원 → rc=0 47/47. `grep -rn "BITE-" src tests e2e-smoke` = 0건.
+
+### 전/후 표 — 적립 → 주문 금액
+
+| accrual | orderId | 전: grossMinor | 그 주문(또는 셀러 몫) 합계 | 후: grossMinor |
+|---|---|---:|---:|---:|
+| accrual-sample-0001 | order-sample-0001 | 200,000 | 38,000 | **38,000** |
+| accrual-sample-0002 | order-sample-0002 | 150,000 | 45,000 | **45,000** |
+| accrual-sample-0003 (REVERSAL) | order-sample-0002 | -20,000 | (≤45,000 누적) | **-10,000** |
+| accrual-sample-0004 | ~~order-settlement-0001~~ → **order-sample-0005** | 50,000 | 19,000(seller-1 몫) | **19,000** |
+| accrual-sample-0005 | order-sample-0003 | 120,000 | 36,000 | **36,000** |
+| accrual-sample-0006(신규) | order-sample-0005 | — | 24,000(seller-2 몫) | **24,000** |
+
+### 부수 효과 — insights 랭킹 숫자도 갱신
+
+`order-sample-0005` 추가로 `/ecommerce` 개요의 랭킹 차트 숫자가 바뀌었다(테스트 갱신, 단언 로직은 불변):
+`topProductsByRevenue`의 `prod-sample-0001` 38,000→**57,000**(order-1 38,000 + order-5 item-1 19,000),
+`topSellersByRevenue`의 `seller-sample-0001` 83,000→**102,000**(order-1 38,000 + order-2 45,000 + order-5
+item-1 19,000). `ORDERS_SUMMARY.total`/`.month` 도 4→**5**.
+
+### 게이트 (이 워크트리, 각각 독립 실행 + 명시 rc)
+
+| 게이트 | 결과 |
+|---|---|
+| `pnpm lint` | rc=0 · «No ESLint warnings or errors» |
+| `npx tsc --noEmit` | rc=0 |
+| `pnpm test` | rc=0 · **305 files / 3317 tests passed**(교정 전 305/3316 대비 +1 신규 테스트), 실패 0 |
+
+`pnpm build`/`pnpm e2e:smoke` 는 재실행하지 않았다 — 화면 렌더링 코드나 e2e 스펙을 건드리지 않았고(픽스처
+데이터 + 테스트 파일만 변경), 코디네이터 지시 § 6 이 명시적으로 재실행을 요구하지 않는 경우로 판단했다.

@@ -224,14 +224,16 @@ describe('orders (AC-1 / AC-3 / AC-4 / money)', () => {
       }
     }
     // Revenue by product excludes the CANCELLED order-sample-0004's line
-    // (prod-sample-0001 would otherwise carry 38000+20000=58000, not 38000).
+    // (prod-sample-0001 would otherwise carry 38000+20000+19000=77000, not
+    // 57000 — order-1's 38000 + order-5's 19000 item-1 subtotal).
     const prod1 = insights.topProductsByRevenue.find((r) => r.id === 'prod-sample-0001');
-    expect(prod1?.value).toBe(38000);
+    expect(prod1?.value).toBe(57000);
     // Seller label is already resolved to the seller's own (suffixed)
     // displayName (§ ecommerce.ts doc comment on `computeInsights`).
     const seller1 = insights.topSellersByRevenue.find((r) => r.id === 'seller-sample-0001');
     expect(seller1?.label).toContain('(샘플)');
-    expect(seller1?.value).toBe(83000);
+    // order-1(38000) + order-2(45000) + order-5 item-1 subtotal(19000).
+    expect(seller1?.value).toBe(102000);
   });
 });
 
@@ -505,6 +507,65 @@ describe('settlements (AC-1 / AC-3 / AC-4 / money) — the "합계 = 행 합" ed
       // The seller's effective rate applied to its gross reproduces its commission
       // (integer basis-points math — never a float rate).
       expect(Math.round((sumGross * rate.rateBps) / 10000)).toBe(sumCommission);
+    }
+  });
+
+  it('CORRECTION (coordinator review) — every accrual\'s orderId exists in the order fixtures, and each ACCRUAL\'s grossMinor equals that SELLER\'s subtotal on that order', async () => {
+    // Walks accruals → orders through `sampleResponse` (the router + real
+    // schemas), not through the internal seed arrays — so this is a genuine
+    // cross-screen check: the same money a visitor sees on `/ecommerce/orders`
+    // must be the money the settlement screen shows for that order's line.
+    const accruals = AccrualsResponseSchema.parse(
+      await json(get('ecommerce_settlement', '/api/admin/settlements/accruals?page=0&size=50')),
+    );
+    expect(accruals.items.length).toBeGreaterThan(0);
+
+    const orders = OrderListSchema.parse(await json(get('ecommerce_order', '/api/admin/orders?page=0&size=20')));
+    const orderIds = new Set(orders.content.map((o) => o.orderId));
+    const cancelledOrderIds = new Set(
+      orders.content.filter((o) => o.status === 'CANCELLED').map((o) => o.orderId),
+    );
+
+    // Cache order details (several accrual lines share the same order).
+    const detailCache = new Map<string, ReturnType<typeof OrderDetailSchema.parse>>();
+    async function orderDetailFor(orderId: string) {
+      if (!detailCache.has(orderId)) {
+        const detail = OrderDetailSchema.parse(
+          await json(get('ecommerce_order', `/api/admin/orders/${orderId}`)),
+        );
+        detailCache.set(orderId, detail);
+      }
+      return detailCache.get(orderId)!;
+    }
+
+    // ACCRUAL gross must equal the referenced order's own total when the
+    // order is single-seller, or that seller's line SUBTOTAL when the order
+    // has items from more than one seller (order-sample-0005).
+    const accruedGrossBySellerOrder = new Map<string, number>();
+
+    for (const line of accruals.items) {
+      expect(orderIds.has(line.orderId), `${line.accrualId} references ${line.orderId}`).toBe(true);
+      expect(
+        cancelledOrderIds.has(line.orderId),
+        `${line.accrualId} references CANCELLED order ${line.orderId}`,
+      ).toBe(false);
+
+      const detail = await orderDetailFor(line.orderId);
+      const sellerSubtotal = detail.items
+        .filter((it) => it.sellerId === line.sellerId)
+        .reduce((s, it) => s + it.unitPrice * it.quantity, 0);
+      const key = `${line.sellerId}:${line.orderId}`;
+
+      if (line.type === 'ACCRUAL') {
+        expect(line.grossMinor, `${line.accrualId} gross vs order ${line.orderId}`).toBe(sellerSubtotal);
+        accruedGrossBySellerOrder.set(key, (accruedGrossBySellerOrder.get(key) ?? 0) + line.grossMinor);
+      } else {
+        // REVERSAL — a clawback must never exceed what that seller actually
+        // accrued on that order (a partial refund, not manufactured money).
+        expect(Math.abs(line.grossMinor)).toBeLessThanOrEqual(
+          accruedGrossBySellerOrder.get(key) ?? 0,
+        );
+      }
     }
   });
 
