@@ -8,7 +8,7 @@ TASK-INT-028
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -161,8 +161,19 @@ promotion 목록 조회, promotion release)으로 는다. AC-2 에서 스펙을 
   - 🔵 테스트 하네스 정정 하나: 「한 건만 실패」 스텁을 `STRICT_STUBS` 에 두면 다른 인자 호출이 `PotentialStubbingProblem`
     을 던지고, 잡이 그걸 **건별 실패로 잡아** 실패 3건으로 센다 — 잡이 아니라 하네스를 재는 테스트가 된다. 그 스텁만
     `lenient()` 로 두고 주석을 남겼다.
-- [ ] **AC-8** — 두 새 조회의 SQL(테넌트 가로지르기, 인덱스, `limit`)을 실제 Postgres 에서 확인한다
+- [x] **AC-8** — 두 새 조회의 SQL(테넌트 가로지르기, 인덱스, `limit`)을 실제 Postgres 에서 확인한다
   (로컬 Docker 차단 → CI 통합 레인이 권위). 못 쟀으면 ⚪.
+  - 닫힘: PR #3868 CI run `35100812438`. 레인 셋이 모두 초록이었지만 판정은 **샤드 로그의 결과줄**로 했다 —
+    샤드마다 맡은 모듈이 달라 초록만으로는 무엇이 돌았는지 모른다.
+    - 샤드 **A**(job `104810271353`, `order-service:integrationTest`): `OrderExistenceIT` 3/3 PASSED — **다른 테넌트의
+      `DELIVERED` 주문과 `CANCELLED` 주문도 존재로 답하고 없는 id 만 빠진다**, Bearer 없음 401, 빈 목록 400
+      `INVALID_REQUEST`. AC-3 의 「답의 원천」이 실제 DB 에서 닫혔다.
+    - 샤드 **B**(job `104810271030`, `promotion-service:integrationTest`): `StaleUsedCouponsIntegrationTest` 2/2 PASSED —
+      테넌트를 가로질러 오래된 `USED` 만 `used_at` 순, 10분 전 사용·`ISSUED`·주문 없는 `USED` 제외, `pg_indexes` 에
+      `idx_coupons_status_used_at` 존재(V10 적용).
+    - 샤드 C 에는 두 모듈 태스크 0건.
+  - 🔵 첫 확인에서 결과줄을 `cut -c1-150` 으로 잘라 **가장 중요한 두 줄의 `PASSED` 가 잘려 나갔다.** 잘린 줄을 초록으로
+    읽지 않고 줄 끝의 판정만 다시 뽑아 확인했다.
 
 ---
 
@@ -250,9 +261,9 @@ batch-worker 스케줄(기존 잡과 같은 주기 계열, ShedLock).
 - [x] AC-0 측정 기록
 - [x] AC-1 소유자 결정 기록
 - [x] 스펙·계약 선행 정렬
-- [ ] 구현 완료
-- [ ] 테스트 추가·통과
-- [ ] Ready for review
+- [x] 구현 완료
+- [x] 테스트 추가·통과
+- [x] Ready for review
 
 ---
 
