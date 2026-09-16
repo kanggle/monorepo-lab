@@ -8,7 +8,7 @@ TASK-BE-595
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -285,3 +285,21 @@ backend
    거짓말이 된다(AC-1 의 회귀 칸이 그것을 막는다).
 3. **형제 게이트웨이를 안 센다** → 같은 결함이 네 곳에 남고, 다음 사람이 «ecommerce 는 고쳐졌으니
    이 부류는 끝났다» 고 읽는다.
+
+## CORRECTION
+
+**2026-09-16 UTC close chore — 4차원 검증.**
+
+- (a) impl PR [#3861](https://github.com/kanggle/monorepo-lab/pull/3861) `state=MERGED` 2026-09-16T12:25:13Z, 머지 커밋 `23f416e64`.
+- (b) `23f416e64` 는 `origin/main` 의 조상.
+- (c) 머지 전 롤업 SUCCESS 17 · SKIPPED 46 · 실패 0 — 로컬에서 못 돌린 `GatewayIntegrationTest` 는 CI `Integration (ecommerce A/B/C, Testcontainers)` 에서 **실제 실행·통과**했다.
+- (d) AC 를 열어 대조: AC-0~AC-3 은 review 이동 때 증거와 함께 닫혔다. **AC-4 첫 칸은 ⚪ 그대로이고, 그 ⚪ 가 이 AC 의 닫힘이다** —
+  둘째 칸이 요구한 «갈 곳» 이 `TASK-MONO-672` 항목 4 로 적혀 있다.
+
+🔴 **데모 창이 2026-09-16 16:49Z 에 열렸는데도 이 칸은 잴 수 없었다** — 창이 없어서가 아니다:
+데모 백엔드 AMI 는 `infra/demo/aws/deployed-ami.env` 기준 **`8cf474346`(bake 2026-09-12)** 에서 구워졌고
+`demo-boot.sh` 는 부팅 때 `git pull` 을 하지 않는다. 이 수정(`23f416e64`, 09-16)은 그 AMI 에 **없다** ⇒ 그 창에서
+게이트웨이를 불렀다면 고치기 전 동작(401)을 쟀을 것이다. 그래서 부르지 않았다. **이 칸을 닫는 선행조건은 창이 아니라
+AMI 재굽기**다(`TASK-MONO-672` 항목 4 가 이미 «이 수정이 들어간 AMI 인지 먼저 확인» 을 적고 있다).
+
+🔵 같은 창에서 자매 `TASK-PC-FE-292` 의 라이브 판정은 났다(콘솔은 Vercel 이라 `729aa7eed` 배포본) — 그 티켓 CORRECTION 참조.

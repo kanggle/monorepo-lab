@@ -87,13 +87,11 @@ _(없음)_
 
 ## review
 
-| ID | Title | Service | Tags |
-|---|---|---|---|
-| TASK-BE-595 | 테넌트 거절이 401 로 보고된다 — 403 분기가 실제 예외 사슬(`InvalidBearerTokenException` ⊃ `JwtValidationException`)에서 도달 불가였다 · 술어=«tenant_mismatch 가 사슬 어디에든 있으면 403» · 형제 5 중 0 (공유 `libs/java-gateway` SecurityConfig 는 이미 안쪽을 읽는다) · AC-4 라이브 ⚪ → TASK-MONO-672 항목 4 | gateway-service | code, test, security |
-
-
+(empty)
 
 ## done
+
+- `TASK-BE-595-tenant-rejection-reports-itself-as-401-so-a-permission-problem-reads-as-an-expired-session.md` — **✅ DONE (2026-09-16 UTC · 4차원 검증 — impl PR [#3861](https://github.com/kanggle/monorepo-lab/pull/3861) squash `23f416e64`; `state=MERGED` · `origin/main` 조상 · 머지 전 FAILURE 0 (success 17 / skipped 46) · AC 절 AC-0~4 대조)** — 🟢 **테넌트 거절이 403 `TENANT_FORBIDDEN` 으로 보고된다.** 403 분기가 실제 예외 사슬(`InvalidBearerTokenException` ⊃ `JwtValidationException`)에서 도달 불가였다 → 술어 «tenant_mismatch 가 사슬 어디에든 있으면 403». 만료·서명·발급자·토큰 부재는 401 유지(칸 4). bite 16 중 5 빨강. `GatewayIntegrationTest` 는 로컬 Docker 부재로 못 돌렸고 CI Integration A/B/C 에서 실제 통과. 형제 게이트웨이 5 중 0(공유 `libs/java-gateway` 는 이미 안쪽을 읽는다). 🔴 **AC-4 라이브 ⚪ → `TASK-MONO-672` 항목 4** — 09-16 데모 창이 열렸지만 AMI(`8cf474346`, 09-12 bake)에 이 수정이 없어 잴 수 없었다: 선행조건은 창이 아니라 **AMI 재굽기**. 🔵 부수 발견(티켓화): audience 미검증 → `TASK-MONO-696`. 분석=Opus 5 / 구현=Opus 5.
 
 - `TASK-INT-028-release-coupons-held-by-orders-that-never-existed.md` — **✅ DONE (2026-09-16 UTC · 4차원 검증 — impl PR [#3868](https://github.com/kanggle/monorepo-lab/pull/3868) squash `b26a9e974`; `state=MERGED` · `origin/main` tip 대조 · 머지 전 헤드 `c29122ef6` = CI 가 잰 커밋, FAILURE 0 (success 21 / skipped 42) · required 4/4 SUCCESS · AC 절 AC-0~8 전 항목 닫힘)** — 🟢 **release 가 도착하지 못한 고아 쿠폰을 batch-worker 가 대조해 푼다.** 소유자 결정 「배치 대조」: promotion-service `stale-used`(USED 30분 하한·서버 강제, 테넌트 무관, 쿠폰별 tenantId) → order-service `existence`(어느 테넌트·어느 상태로든) → 없는 주문의 쿠폰만 그 쿠폰의 `X-Tenant-Id` 로 release. 🔴 **「모름」≠「없음」** — 존재 조회 실패·본문 없는 200 은 아무것도 풀지 않는다(기존 `confirmPaidStale` 은 null 을 0건으로 바꾸지만 여기서 그러면 전부 푼다). 🔴 **전부-없음 브레이크** 20건(대조군 19건은 정상 해제). 🔴 「없음 = 저장된 적 없음」은 주문이 지워지지 않는 동안만 참 — 계약 불변식. 🟢 실제 Postgres: 샤드 A `OrderExistenceIT` 3/3(다른 테넌트 `DELIVERED`·`CANCELLED` 도 존재), 샤드 B `StaleUsedCouponsIntegrationTest` 2/2(V10 인덱스 존재) — 레인 초록이 아니라 결과줄로 판정, 잘린 줄은 다시 뽑았다. 🔵 CI 미시작(체크 0개)을 TIMEOUT 으로 읽지 않고 INDEX 충돌을 찾아 병합으로 풀었다. ⚪ 물기(결함 주입) 확인은 분류기 차단으로 못 했다 · 실제 고아 수 못 잼. 분석=Opus 5 / 구현=Opus 5.
 
