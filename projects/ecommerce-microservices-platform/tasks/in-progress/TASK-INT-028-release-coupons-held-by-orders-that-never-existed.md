@@ -8,7 +8,7 @@ TASK-INT-028
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -88,9 +88,25 @@ promotion 목록 조회, promotion release)으로 는다. AC-2 에서 스펙을 
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (측정 먼저)** — ① release 실패 뒤 그 쿠폰을 푸는 경로가 **코드 어디에도 없음**을 기존 테스트와
+- [x] **AC-0 (측정 먼저)** — ① release 실패 뒤 그 쿠폰을 푸는 경로가 **코드 어디에도 없음**을 기존 테스트와
   전수 검색으로 확인해 적는다. ② 실제 환경의 고아 쿠폰 수는 잴 수 있으면 재고, 없으면 ⚪ 로 «못 쟀다 + 이유» 를
   적는다. 🔴 ① 이 틀렸으면(이미 푸는 경로가 있으면) 그 경로를 적고 나머지 AC 없이 닫는다.
+  - 닫힘 ①: **푸는 경로 없음 — 사실 1~3 이 맞았다.** 기준 `2563bba1f`. 쿠폰 상태의 주인은 promotion-service
+    하나이므로 `USED → ISSUED` 전이는 어느 경로든 그 코드를 거친다. 그래서 `releaseFor` · `.restore()` ·
+    `restoreCouponsByOrderId` · `releaseCoupon(` 호출자를 promotion·order·batch-worker 의 `src/main` 전체에서 셌다:
+
+    | 호출 | 발화 조건 | release 가 도착 못 한 고아에 닿나 |
+    |---|---|---|
+    | `CouponCommandService.releaseCoupon` ← `InternalCouponController` | order-service 가 주문 롤백 직후 보낼 때만(`OrderPlacementService:126`) | 닿지 않음 — 바로 그 호출이 실패한 경우다 |
+    | `restoreCouponsByOrderId` ← `OrderCancelledEventConsumer` | `order.order.cancelled` 수신 | 닿지 않음 — 주문이 없으면 취소 이벤트도 없다 |
+
+    만료 배치(`CouponExpirationScheduler`)는 `status = 'ISSUED'` 인 쿠폰만 보므로(`findExpiredIssuedCoupons`)
+    `USED` 고아를 건드리지 않는다. release 실패가 조용히 끝난다는 것은 기존 테스트
+    `PromotionServiceCouponClientTest.release_failure_isSwallowed` 가 고정하고 있다.
+  - ⚪ ②: **못 쟀다.** 이 작업 호스트의 Docker 데몬이 꺼져 있어 로컬 스택이 없고, 데모 환경 DB 는 자격증명이
+    필요해 이 작업의 판단으로 접속하지 않았다. 따라서 이 티켓은 「고아가 몇 개인가」가 아니라 「고아가 **생길 수
+    있고** 생기면 **아무것도 풀지 않는다**」는 확인 위에 선다 — 0개여도 안전망은 필요하다(release 실패는 앞으로도
+    일어난다).
 - [x] **AC-1 (결정)** — 소유자 답을 원문 그대로 적는다.
   - 닫힘: 위 § AC-1 결정 기록.
 - [ ] **AC-2 (스펙 먼저)** — 두 내부 계약(order 존재 조회, promotion 오래된 USED 목록)과 batch-worker 의 경계 문장
@@ -190,7 +206,7 @@ batch-worker 스케줄(기존 잡과 같은 주기 계열, ShedLock).
 
 # Definition of Done
 
-- [ ] AC-0 측정 기록
+- [x] AC-0 측정 기록
 - [x] AC-1 소유자 결정 기록
 - [ ] 스펙·계약 선행 정렬
 - [ ] 구현 완료
