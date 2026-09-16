@@ -8,7 +8,7 @@ TASK-PC-FE-289
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -109,3 +109,17 @@ Error: tracing.start: Tracing has been already started
 - [ ] `main` 의 콘솔 full-stack nightly 초록
 
 분석=Opus 5 / 구현=Opus 5 (한 파일 수정이지만 판정이 dispatch 런에 달려 있다).
+
+## CORRECTION — 닫기 판정 (조정자, 2026-09-15 UTC)
+
+🔴 위 체크박스는 `[ ]` 로 남아 있다(`review/` 동결). **판정은 아래 표다.**
+
+| AC | 닫힘 | 증거 |
+|---|---|---|
+| AC-1 | ✅ | `login.ts` — `start` 가 «already started» 로 거절되면 그 컨텍스트를 안 건드리고, 그 밖의 에러는 `throw`. 🔵 dispatch 트레이스에 **그 거절 이벤트 1건**이 찍혀 있고 그 뒤로 테스트가 계속됐다 = 이 경로를 실제로 탔다 |
+| AC-2 | ✅ | 같은 런 아티팩트에 `test-results/global-setup-driveOidcPkceLogin/trace.zip` **존재** |
+| AC-3 | ✅ | dispatch 런 34974736858 (sha `1ab6bd9e3`) — 콘솔 full-stack **success** · **8 passed** · 잡 로그의 `Tracing has been already started` **0**. 🔴 `list` 리포터는 통과 이름을 안 찍으므로 스펙 확인은 아티팩트로: `sample-visitor-transition…/trace.zip` **1개 · 재시도 폴더 없음** · 이벤트 203(에러 1 = 위 의도된 거절) · `fill` 4 · `goto` 3 · `toHaveCount` 6 · `toContain` 1 |
+| AC-4 | ✅ | 머지 커밋 `46fae6fe7` 의 main nightly 34976921564 콘솔 full-stack **success**(다음 런 `5bae1b1f5` 도 success). 🔴 자동 이슈 #3846 은 **13:37:27Z 에 닫혔고 이 머지(13:44:01Z)보다 앞선다** — `nightly-red-arrives` 가 **브랜치 dispatch 런**(`1ab6bd9e3`)의 초록을 보고 닫았다. 결과는 옳았지만 **그 잡이 잰 것은 «main 이 초록» 이 아니다** |
+| AC-5 | ✅ | 코드 diff = `tests/e2e/fixtures/login.ts` 한 파일(+ 티켓·INDEX) · PR #3848 |
+
+🔴 **남기는 의무 (루트 후속)**: `nightly-red-arrives`(TASK-MONO-655)는 ref 를 안 보고 초록 런 하나로 이슈를 닫는다 ⇒ «브랜치에서 증명 → 이슈 닫힘 → main 은 아직 빨감» 이 표현 가능하다(이번에 7분간 실제로 그 상태였다). `.github/workflows/` 는 루트 경로이므로 **별도 루트 티켓**으로 기안한다 — 이 절이 그 인계다.

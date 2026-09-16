@@ -8,7 +8,7 @@ TASK-PC-FE-282
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -353,3 +353,28 @@ B1–B4·B6 는 한 번에 주입해 가드 파일별로 귀속했다(5 files / 
 | B7 | `isSampleVisitor()` 에서 리프레시 조항 삭제 | 새 술어 칸 3개 `expected true to be false` + 🔴 **main 의 `console-guard-idle-refresh` 칸 3개도 빨강** — D11 의 충돌이 실제로 존재함을 독립적으로 보인다 |
 
 주입 실행: rc=1 · 3 files / 8 failed. 복원 트리: rc=0 · 3 files / 30 passed. `BITE-` 마커 잔여 0.
+
+## CORRECTION — 닫기 판정 (조정자, 2026-09-15 UTC)
+
+🔴 위 AC 절의 체크박스는 `[ ]` 로 남아 있다 — `review/` 파일은 동결이라 중간 편집이 막힌다. **체크박스가 아니라 아래 표가 판정이다.**
+
+| AC | 닫힘 | 증거 |
+|---|---|---|
+| AC-0 재인벤토리 | ✅ | § AC-0 표 — 네트워크 호출 24 파일 / 26 호출(게이트 9 · 같은 오리진 7 · auth 5 · 도달불가 3). **클라이언트가 백엔드를 직접 부르는 자리 0** ⇒ ADR 전제 유지 |
+| AC-1 판정 | ✅ | `isSampleVisitor()` 단일 정의 + 셀 8. 🔴 D11 로 술어가 **액세스·운영자·리프레시 셋** 으로 좁혀졌다 |
+| AC-2 코어 분기 | ✅ | 코어 6 + 코어 밖 5. **조정자 독립 실측**: 10/10 파일에서 `sampleGate(` < 첫 토큰 읽기 < 첫 `fetch(` |
+| AC-3 쓰기 거부 | ✅ | `SAMPLE_READ_ONLY` → `messageForCode` 한 곳(코어 넷의 403 메시지 덮어쓰기를 코드로 우회) · 렌더러 3종 |
+| AC-4 라우터 격리 | ✅ | 금지 임포트 가드 + bite B1 |
+| AC-5 코어 밖 fetch 금지 | ✅ | 허용목록(개수 양방향) + 순서 가드 + bite B2·B3 |
+| AC-6 셸 익명판 | ✅ | 로그인 링크 · 샘플 테넌트 · 배너(레이아웃) · heartbeat/백엔드 공지 **미렌더** |
+| AC-7 «(샘플)» 표기 | ✅ | 규칙 테스트 + bite B4(빼면 빨강) · B5(enum 에 붙이면 빨강) |
+| AC-8 루트 | ✅ | `app/page.tsx` — 누구든 `/dashboards/overview`, 세션 읽기 0 |
+| AC-9 원장 | ✅ (범위 좁힘) | 🔴 **D1**: 행이 GET 이 아니라 **surface**(37) + 화면(64). 이미 `ready` 인 surface 안의 새 GET 은 가드가 모른다 — 라우터가 `SAMPLE_NOT_READY` 로 답하므로 **조용한 200 은 아니다**. bite B6 |
+| AC-10 대시보드 샘플 | ✅ | smoke(백엔드 전부 loopback)에서 익명 개요 렌더 |
+| AC-11 뒤집히는 기대값 | ✅ | 3 파일 + D8(51) + MONO-674 대조군 1칸 — 전부 ADR 인용, `expect(` 추가·삭제 **0**(조정자 실측) |
+| AC-12 샘플 권한 | ✅ | § AC-12 — `fixtures/registry.ts` 한 곳으로 뒤집힘 |
+| AC-13 대조군 | ✅ | 인증 운영자 칸 무수정 · vitest 292/3031 → 303/3219(조정자 재실행 일치) |
+| AC-14 캐시/전환 | ✅ **(첫 실측 완료)** | 🔴 머지 후 첫 nightly 에서 이 스펙이 **하네스 충돌로 죽어 `main` 이 빨갰다**(런 34971551224) ⇒ `TASK-PC-FE-289` 가 복구하고 **dispatch 런 34974736858** 에서 콘솔 full-stack success · 8 passed · 트레이스 `fill` 4 · `goto` 3 · `toHaveCount` 6 · `toContain` 1 ⇒ «익명은 샘플을 보고, 같은 브라우저로 로그인하면 배너 0 · «(샘플)» 0» 이 실제로 측정됐다. 머지 커밋 `46fae6fe7` 의 main nightly 34976921564 도 success |
+
+🔴 **임시로 들고 있던 남의 의무 점검**: AC-14 의 «머지 후 nightly 확인» 은 `TASK-PC-FE-289` 가 받아 닫았다(그 티켓 AC-4) ⇒ 넘길 의무 **0건**.
+🔵 남은 ⚪ 는 § ⚪ 절 그대로(실제 Vercel 배포의 익명 화면은 미측정 — 로컬 production build + smoke 까지).
