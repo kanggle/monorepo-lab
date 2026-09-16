@@ -76,6 +76,10 @@ continuing there is the lifecycle working as designed, not an exception to it.
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
+| ID | Title | Service | Tags |
+|---|---|---|---|
+| TASK-INT-027 | 쿠폰 되돌림이 늦게 도착한 apply 를 막지 못한다 — 재현(AC-0) → 계약 선행 → 펜스로 막기 | order · promotion | api, code, test |
+
 - `TASK-BE-595-tenant-rejection-reports-itself-as-401-so-a-permission-problem-reads-as-an-expired-session.md` — 🔴🔴 **`TASK-BE-501` 이 넣은 403 `TENANT_FORBIDDEN` 분기는 실제 예외 사슬에서 «도달 불가»** 이고, 그래서 테넌트 거절이 **401** 로 나가 콘솔에서 «세션이 만료되었습니다» 로 읽힌다(2026-09-16 바이트코드 실측: `JwtValidationException extends BadJwtException` → Spring `JwtReactiveAuthenticationManager.onError` 가 **`InvalidBearerTokenException`**(= `BearerTokenErrors.invalidToken` → `"invalid_token"`)으로 감싼다 ⇒ 사슬의 바깥이 항상 `invalid_token`). 🔴 **테스트 두 겹이 다 빗나가 있다**: 단위 테스트가 만드는 «감싸인» 사슬은 안쪽이 `OAuth2AuthenticationException` 이라 실제 모양이 아니고, `GatewayIntegrationTest` 는 `isIn(401, 403)` 으로 **둘 다 허용**한다. 🔵 재로그인해도 소용없는 상태에서 사용자를 재로그인시키는 것이 이 결함의 값이다. 형제 게이트웨이(wms·scm·erp·finance·fan) 전수는 AC-3. 자매 = `TASK-PC-FE-292`(근본 원인 쪽). 분석=Opus 5 / 구현 권장=Opus 5.
 
 
