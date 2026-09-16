@@ -71,7 +71,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-588-outbound-masterref-seed-disagrees-with-master-seed.md` — **READY (2026-09-15).** 🔴 outbound-service 의 `R__seed_dev_masterref.sql` 이 master 원본과 **두 행** 어긋난다: 로케이션 `…1002` 를 `WH01-A-01-01-02`/`Z-A` 로 심는데 원본은 `WH01-C-01-01-01`/`Z-C`, 그리고 원본에 없는 SKU `…0404 SKU-APPLE-002`. `TASK-MONO-675` 가 admin 시드를 만들며 손으로 대조하다 찾았다(inbound·inventory·admin 사본은 원본과 맞다). 🔴 고치기 전에 **두 행이 outbound 시드 흐름에서 쓰이는지** 부터 센다(AC-1) · `ON CONFLICT DO NOTHING` 이면 기존 볼륨의 틀린 행은 안 고쳐진다(AC-2). 분석=Opus 5 / 구현 권장=Sonnet.
+(empty)
 
 <details><summary>직전 점유 (2026-08-13~14, `TASK-BE-583` — 지금 done/)</summary>
 
@@ -85,7 +85,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-(empty)
+- `TASK-BE-588-outbound-masterref-seed-disagrees-with-master-seed.md` — **IN-PROGRESS (2026-09-16) — 시드 수정 완료, AC-3(창에서 DB 조회) 남음.** outbound-service 의 `R__seed_dev_masterref.sql` 이 master 원본과 어긋나던 두 행을 원본에 맞췄다: 로케이션 `…1002` 를 `WH01-C-01-01-01`/zone `…0102`(`Z-C`)로 정정(master 원본 그대로), 원본에 없는 SKU `…0404 SKU-APPLE-002` 행은 삭제. AC-1 전수(양성대조군 포함) 결과 **실행되는 흐름에서의 참조 0건**이라 이지선다 없이 확정. admin-service 시드의 관련 주석도 갱신. `./gradlew :outbound-service:test :admin-service:test` rc=0. ⚪ Docker 미가용이라 실제 DB 조회 미실측(파일 비교 + Flyway 의미론으로 대체) — outbound 의 어떤 자동 스위트도 애초에 `db/seed` 를 안 태워서(test 프로파일=`db/migration` 만, standalone=Flyway 자체 off) Docker 가 있었어도 이 행을 태우는 테스트는 없었음. 분석=Opus 5 / 구현 권장=Sonnet.
 
 ## review
 
