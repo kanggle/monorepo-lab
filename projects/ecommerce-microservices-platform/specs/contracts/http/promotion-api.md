@@ -355,6 +355,62 @@ harmless.
 |---|---|---|
 | 400 | VALIDATION_ERROR | `orderId` missing or blank |
 
+**Second caller — batch-worker** (TASK-INT-028). batch-worker releases coupons held by orders that never
+existed (see `POST /api/internal/coupons/stale-used` below). Because the coupon lookup here is
+**tenant-scoped**, batch-worker sends `X-Tenant-Id` set to **the coupon's own `tenantId`** from that list;
+without it a coupon in any tenant other than the default would not be found and the call would be a
+silent no-op.
+
+---
+
+### POST /api/internal/coupons/stale-used
+**Internal — not routed by gateway-service.** Called by **batch-worker** (TASK-INT-028) to find coupons
+that have been `USED` for a while, so it can ask order-service whether each coupon's order exists and
+release the ones whose order was never saved. **Read-only.**
+
+**Request Body**
+```json
+{
+  "olderThanMinutes": 60,
+  "limit": 200
+}
+```
+
+| Field | Type | Default | Constraint |
+|---|---|---|---|
+| `olderThanMinutes` | int | 60 | **≥ 30.** Only coupons used longer ago than this are returned. The floor is enforced here, not trusted to the caller: an order placement that is still in flight must never have its coupon offered for release. |
+| `limit` | int | 200 | 1..500 |
+
+**Predicate** — tenant-agnostic (a system sweep with no request tenant, like the expiry sweep):
+
+```sql
+SELECT coupon_id, order_id, tenant_id, used_at FROM coupons
+WHERE status = 'USED'
+  AND order_id IS NOT NULL
+  AND used_at < (now() - (:olderThanMinutes * interval '1 minute'))
+ORDER BY used_at ASC
+LIMIT :limit
+```
+
+- `order_id IS NULL` rows are excluded: with no order id there is nothing to ask order-service about, and
+  "cannot judge" must never become "release".
+- Coupons past `expires_at` **are** returned. Releasing one returns it to `ISSUED`, and the expiry sweep then
+  moves it to `EXPIRED` — the same end state a never-used coupon reaches.
+
+**Response 200**
+```json
+{
+  "coupons": [
+    { "couponId": "string (UUID)", "orderId": "string (UUID)", "tenantId": "ecommerce", "usedAt": "2026-09-16T01:02:03Z" }
+  ]
+}
+```
+
+**Error responses**
+| Status | Code | Reason |
+|---|---|---|
+| 400 | VALIDATION_ERROR | `olderThanMinutes` below 30, or `limit` outside 1..500 |
+
 ---
 
 ## Promotion Status Values
