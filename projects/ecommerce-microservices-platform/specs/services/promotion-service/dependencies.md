@@ -22,6 +22,7 @@
 - no outbound HTTP calls to other services
 - exposes its own HTTP API for promotion and coupon management (consumed by authenticated users and admins via gateway)
 - accepts synchronous inbound HTTP from order-service on the internal network: coupon apply at placement and the gateway-excluded `POST /api/internal/coupons/{couponId}/release` (TASK-INT-026)
+- accepts synchronous inbound HTTP from **batch-worker** on the internal network (TASK-INT-028): the read-only `POST /api/internal/coupons/stale-used` and the same internal release, sent with the coupon's own `X-Tenant-Id`. promotion-service still makes **no** outbound call — whether an order exists is asked by batch-worker, never by promotion-service
 
 ## Consumes From
 

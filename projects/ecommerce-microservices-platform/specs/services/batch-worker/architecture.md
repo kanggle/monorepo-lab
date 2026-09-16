@@ -77,7 +77,9 @@ Package organization may follow package-by-layer or package-by-feature if the la
 
 ## Consumed Interfaces
 - Consumes other services' published HTTP contracts (read-only) for data verification
-- **One internal system-command exception**: calls order-service `POST /api/internal/orders/confirm-paid-stale` (`client_credentials` Bearer) for stale paid-order forward-confirm — server-side predicate, not a DB write into order's store (TASK-BE-410 decision; contract `specs/contracts/http/internal/order-confirm-paid-stale.md`)
+- **Internal-endpoint exceptions** (full list and rules: `dependencies.md` § Allowed Service Interactions):
+  - order-service `POST /api/internal/orders/confirm-paid-stale` (`client_credentials` Bearer) for stale paid-order forward-confirm — server-side predicate, not a DB write into order's store (TASK-BE-410 decision; contract `specs/contracts/http/internal/order-confirm-paid-stale.md`)
+  - order-service `POST /api/internal/orders/existence` (same credential, read-only) and promotion-service `POST /api/internal/coupons/stale-used` (read-only) + `POST /api/internal/coupons/{couponId}/release` (system-command) for orphan-coupon release (TASK-INT-028; contracts `order-existence.md`, `promotion-api.md`)
 - Consumes domain events from other services for batch processing triggers
 - Must not access other services' databases directly (per `service-boundaries.md`)
 
@@ -87,6 +89,8 @@ Package organization may follow package-by-layer or package-by-feature if the la
 - product-service via published HTTP contract (read-only, for index consistency check)
 - search-service via published HTTP contract (read-only, for index consistency check)
 - order-service via internal contract `order-confirm-paid-stale.md` (`client_credentials` Bearer; system-command, for stale paid-order forward-confirm)
+- order-service via internal contract `order-existence.md` (`client_credentials` Bearer; read-only, for orphan-coupon release — TASK-INT-028)
+- promotion-service via `promotion-api.md` internal endpoints (internal network; `stale-used` read-only + release system-command, for orphan-coupon release — TASK-INT-028)
 
 For full dependency rules, see `dependencies.md`.
 
@@ -94,6 +98,7 @@ For full dependency rules, see `dependencies.md`.
 - ~~Expired session cleanup (auth-service sessions past inactivity timeout)~~ **REMOVED — IAM owns auth sessions (TASK-BE-132).**
 - Stale paid-order forward-confirm (`PENDING AND payment_id IS NOT NULL` beyond timeout → `PENDING → CONFIRMED` via order-service internal endpoint; recovery for a lost confirm event, NOT cancellation; disjoint from BE-138's `payment_id IS NULL` bucket)
 - ~~Daily sales aggregation (order/payment summary)~~ **DEFERRED — removed (TASK-BE-411): no consumer; FE-063 aggregates daily sales FE-side from `/api/orders`; any future daily money rollup belongs to settlement-service, not batch-worker. See `overview.md` Responsibilities.**
+- Orphan-coupon release (coupons `USED` by an order that exists in no tenant → release with the coupon's tenant; an unknown existence answer releases nothing; all-absent batch of ≥ 20 aborts — TASK-INT-028)
 - Elasticsearch index consistency check (product data sync verification)
 
 ## Integration Rules

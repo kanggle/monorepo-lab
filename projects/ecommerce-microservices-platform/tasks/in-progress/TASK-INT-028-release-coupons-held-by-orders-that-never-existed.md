@@ -109,8 +109,25 @@ promotion 목록 조회, promotion release)으로 는다. AC-2 에서 스펙을 
     일어난다).
 - [x] **AC-1 (결정)** — 소유자 답을 원문 그대로 적는다.
   - 닫힘: 위 § AC-1 결정 기록.
-- [ ] **AC-2 (스펙 먼저)** — 두 내부 계약(order 존재 조회, promotion 오래된 USED 목록)과 batch-worker 의 경계 문장
+- [x] **AC-2 (스펙 먼저)** — 두 내부 계약(order 존재 조회, promotion 오래된 USED 목록)과 batch-worker 의 경계 문장
   (사실 7), order-service·promotion-service 의 인바운드 서술이 결정과 같은 방향을 가리킨다. 코드는 이 AC 이후 커밋에만.
+  - 닫힘: 새 계약 `specs/contracts/http/internal/order-existence.md`, `promotion-api.md` § `POST /api/internal/coupons/stale-used`
+    (+ release 절에 두 번째 호출자·테넌트 헤더). 경계 문장 **열한 곳**: batch-worker `dependencies.md`(허용 호출 4개 명시 ·
+    Consumes From 2행 · Forbidden 「모름으로 풀지 않음」) · `overview.md`(책임 · 스케줄러 행 · 아웃바운드 2행 · 의존 시스템) ·
+    `architecture.md`(Consumed Interfaces · Dependencies · Key Jobs) · order-service `dependencies.md` 23행 · promotion-service
+    `dependencies.md` · `overview.md`. 🔵 「한 사실이 두 곳에 있으면 한쪽만 고쳐진다」 — 옛 문장 전수 검색에서 batch-worker
+    `architecture.md:80` 의 「One internal system-command exception」이 남아 있던 것을 찾아 같이 고쳤다.
+  - 계약에서 새로 정한 것:
+    - **존재 조회의 「없음」은 주문이 지워지지 않는 동안에만 「저장된 적 없음」이다.** `2563bba1f` 기준 order-service 에 주문
+      삭제·보존 정리 경로가 없음을 확인했다. 🔴 주문 삭제를 도입하려면 이 배치부터 다시 봐야 한다고 계약 불변식으로 적었다.
+    - **본문 없는 응답은 「모름」이다.** 기존 `OrderServiceClient` 는 null 본문을 0건 기본값으로 바꾸는데, 존재 조회에서
+      그렇게 하면 「존재 0건 = 전부 없음」이 되어 전부 푼다. 계약에 금지로 적었다.
+    - **전부-없음 브레이크**: 한 회차에 ≥ 20건을 봤는데 존재하는 주문이 0건이면 아무것도 풀지 않고 `FAILED`. 존재 조회
+      주소가 빈 환경을 가리키는 설정 실수를 막는다(그 경우 모든 주문이 「없음」으로 답해진다).
+    - **유예 하한 30분은 promotion-service 가 강제한다**(기본 60분). 호출자 설정을 믿지 않는다.
+    - **`order_id IS NULL` 인 `USED` 쿠폰은 제외** — 물어볼 주문이 없으므로 「판단 불가」이고, 판단 불가는 풀지 않는다.
+    - 🔵 기안이 미뤄 둔 **만료 지난 `USED` 쿠폰은 포함**한다: 풀면 `ISSUED` 가 되고 만료 배치가 `EXPIRED` 로 넘긴다 —
+      한 번도 안 쓴 쿠폰과 같은 끝 상태다.
 - [ ] **AC-3** — 주문이 **어느 테넌트에도 없는** 쿠폰만 풀린다. 주문이 존재하면 상태(`PENDING`·`CANCELLED`·
   `DELIVERED` 무엇이든)와 무관하게 건드리지 않는다.
 - [ ] **AC-4 (「모름」≠「없음」)** — order-service 가 실패(연결 실패·타임아웃·4xx/5xx·토큰 실패)하거나 응답이 요청한
@@ -208,7 +225,7 @@ batch-worker 스케줄(기존 잡과 같은 주기 계열, ShedLock).
 
 - [x] AC-0 측정 기록
 - [x] AC-1 소유자 결정 기록
-- [ ] 스펙·계약 선행 정렬
+- [x] 스펙·계약 선행 정렬
 - [ ] 구현 완료
 - [ ] 테스트 추가·통과
 - [ ] Ready for review

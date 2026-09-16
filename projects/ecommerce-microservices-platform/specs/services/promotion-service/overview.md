@@ -34,7 +34,8 @@
 | REST | `POST /api/coupons/issue` | JWT + ROLE_ADMIN | issue coupons to users |
 | REST | `GET /api/coupons` | JWT (owner) | user's coupon list |
 | REST | `POST /api/coupons/{couponId}/apply` | `X-User-Id` header trust (service-to-service from order-service) | apply coupon at order placement |
-| REST (internal) | `POST /api/internal/coupons/{couponId}/release` | internal network only — no gateway route | release a coupon whose placement did not commit, and record the pair so a late `apply` cannot bind it (TASK-INT-026, TASK-INT-027) |
+| REST (internal) | `POST /api/internal/coupons/{couponId}/release` | internal network only — no gateway route | release a coupon whose placement did not commit, and record the pair so a late `apply` cannot bind it (TASK-INT-026, TASK-INT-027). Also called by batch-worker, with the coupon's own `X-Tenant-Id` (TASK-INT-028) |
+| REST (internal) | `POST /api/internal/coupons/stale-used` | internal network only — no gateway route | read-only list of coupons `USED` longer than `olderThanMinutes` (≥ 30), across tenants, for batch-worker's orphan-coupon reconciliation (TASK-INT-028) |
 | Kafka consume | `order.order.cancelled` | — | coupon restoration |
 | Kafka publish | `promotion.coupon.used`, `promotion.coupon.expired` | — | analytics / notification consumers |
 
