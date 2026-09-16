@@ -182,6 +182,13 @@ services:
       DB_USERNAME: auth_user
       DB_PASSWORD: auth_pass
       ACCOUNT_SERVICE_URL: http://account-service:8082
+      # TASK-PC-FE-293 — the assume-tenant exchange checks the operator's
+      # assignment at admin-service (`/internal/operator-assignments/check`,
+      # FAIL-CLOSED). Unset, it defaulted to `http://localhost:8084` — neither
+      # this network's host nor admin-service's port — so every `POST /api/tenant`
+      # in this stack answered 403 «tenant not selectable», which reads as an
+      # authorization verdict. The e2e login fixture now switches tenant for real.
+      ADMIN_SERVICE_URL: http://admin-service:8085
       # SAS issuer claim — every JWT this service mints embeds this as `iss`.
       OIDC_ISSUER_URL: http://auth-service:8081
       # JWT signing keys — production application.yml defaults expect classpath
