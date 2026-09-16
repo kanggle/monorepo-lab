@@ -36,6 +36,40 @@
 -- already follow) and adding the missing `application-dev.yml`. Contents are
 -- unchanged: outbound resolves a CUSTOMER partner, so CUST-001 is what it
 -- needs — SUP-001 belongs to inbound's ASN check, not here.
+--
+-- TASK-BE-588 — two rows below used to disagree with master-service's own
+-- R__03_seed_dev_locations.sql / R__04_seed_dev_skus.sql (copy-paste drift in
+-- this file, flagged by TASK-MONO-675 AC-2 while building admin-service's
+-- mirror; admin's file deliberately did NOT reproduce either row — see the
+-- note at its bottom). Fixed here to match master exactly:
+--   * location ...1002 now carries master's actual code/zone
+--     (WH01-C-01-01-01 / zone ...0102, was WH01-A-01-01-02 / zone ...0101).
+--     zone_id ...0102 (Z-C) has no corresponding zone_snapshot row seeded in
+--     this file (only Z-A ...0101 is seeded here) — pre-existing, harmless:
+--     location_snapshot.zone_id carries no FK and no outbound-service code
+--     path joins location_snapshot to zone_snapshot (grepped 2026-09-16).
+--   * the sku_snapshot row for ...0404 'SKU-APPLE-002' is removed — that SKU
+--     does not exist anywhere in master-service's baseline. TASK-BE-588 AC-1
+--     found zero live references to either ...1002's old code or ...0404
+--     anywhere in outbound-service (its own db/seed/* has no other file, no
+--     order-line seed exists, and its src/test has zero matches against a
+--     working positive control). The two ERP webhook contract *example*
+--     payloads (specs/contracts/webhooks/erp-{order,asn}-webhook.md) use
+--     SKU-APPLE-002 as illustrative second-line JSON, but that is advisory
+--     documentation, not executable seed/test data, and predates this fix —
+--     inbound-service's own webhook contract shows the same code even though
+--     inbound's seed never carried SKU-APPLE-002 either.
+--
+-- 🔴 Existing (already-seeded) local volumes: this is a REPEATABLE migration,
+-- so a checksum change makes Flyway re-run it, but every statement below uses
+-- ON CONFLICT (id) DO NOTHING — a row that was already inserted with the old,
+-- wrong values is NOT corrected by the re-run. A volume that seeded before
+-- this fix must be dropped (`docker compose down -v` / fresh volume) to pick
+-- up the corrected row; only a Kafka-projected real master.* event can correct
+-- it in place (the runtime consumer's ON CONFLICT (id) DO UPDATE ... WHERE
+-- master_version < EXCLUDED.master_version in MasterReadModelRepositoryImpl
+-- always wins over this seed's master_version=0, so a real event will still
+-- self-heal an existing wrong row without a volume drop).
 
 INSERT INTO warehouse_snapshot (
     id, warehouse_code, status, cached_at, master_version
@@ -81,9 +115,9 @@ INSERT INTO location_snapshot (
     cached_at, master_version
 ) VALUES (
     '01910000-0000-7000-8000-000000001002',
-    'WH01-A-01-01-02',
+    'WH01-C-01-01-01',
     '01910000-0000-7000-8000-000000000001',
-    '01910000-0000-7000-8000-000000000101',
+    '01910000-0000-7000-8000-000000000102',
     'STORAGE',
     'ACTIVE',
     '2026-04-18T00:00:00Z',
@@ -97,18 +131,6 @@ INSERT INTO sku_snapshot (
     '01910000-0000-7000-8000-000000000403',
     'SKU-APPLE-001',
     'LOT',
-    'ACTIVE',
-    '2026-04-18T00:00:00Z',
-    0
-)
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO sku_snapshot (
-    id, sku_code, tracking_type, status, cached_at, master_version
-) VALUES (
-    '01910000-0000-7000-8000-000000000404',
-    'SKU-APPLE-002',
-    'NONE',
     'ACTIVE',
     '2026-04-18T00:00:00Z',
     0

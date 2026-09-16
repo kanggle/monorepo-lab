@@ -586,7 +586,7 @@ state + `PoStatusMachine` + audit/outbox — **no new PO state, no auto-SUBMIT.*
 **Request body:**
 ```json
 {
-  "supplierId": "9b1d4a8c-1f2c-7a90-b1d4-3e6f8a2c9d10",
+  "supplierId": "SUP-0043",
   "currency": "KRW",
   "origin": "DEMAND_PLANNING",
   "sourceSuggestionId": "0192...",
@@ -596,6 +596,8 @@ state + `PoStatusMachine` + audit/outbox — **no new PO state, no auto-SUBMIT.*
 }
 ```
 
+- `supplierId`: the supplier **code** demand-planning copied from `sku_supplier_map`
+  (ADR-MONO-050 §7 D9), not a supplier master id — see § supplier reference fields rule 1.
 - `origin`: `DEMAND_PLANNING` (vs the default operator-authored origin) — recorded
   on the PO for provenance/audit.
 - `unitPriceRef`: a price **reference/placeholder** (e.g. `LAST_KNOWN`), not a

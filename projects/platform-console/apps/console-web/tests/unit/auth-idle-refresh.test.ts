@@ -52,6 +52,16 @@ vi.mock('@/shared/config/env', () => ({
     e.CONSOLE_PUBLIC_ORIGIN ?? e.NEXT_PUBLIC_APP_URL,
 }));
 
+// TASK-PC-FE-292 — 활성 테넌트 기본값은 레지스트리의 선택지로 정한다(토큰 tenant_id 가 아니다).
+// 이 파일의 운영자는 선택지가 `demo-corp` 하나인 운영자다.
+vi.mock('@/shared/api/registry-client', () => ({
+  fetchRegistry: async () => ({
+    products: [
+      { productKey: 'iam', displayName: 'IAM', available: true, tenants: ['demo-corp'], baseRoute: '/accounts' },
+    ],
+  }),
+}));
+
 // 경합 대기는 짧게 — 그러나 **0 이 아니게** 해서 «정말 기다렸다» 를 잴 수 있게 한다.
 // 제품 값은 아래 칸에서 따로 잰다.
 const TEST_GRACE_MS = 60;
@@ -66,6 +76,7 @@ import {
   REFRESH_COOKIE,
   OPERATOR_COOKIE,
   TENANT_COOKIE,
+  ASSUMED_TOKEN_COOKIE,
   ID_TOKEN_COOKIE,
 } from '@/shared/lib/session';
 import { RE_LOGIN_PATH, SESSION_EXPIRED } from '@/shared/lib/re-login';
@@ -164,14 +175,19 @@ describe('GET /api/auth/refresh — 유휴 만료 갱신 (TASK-MONO-674)', () =>
     expect(cookieDeletes).toEqual([]);
   });
 
-  it('🔴 세션이 **완전해진다** — 액세스 쿠키와 함께 만료된 홈 테넌트도 콜백과 같은 규칙으로 되살린다', async () => {
+  // TASK-PC-FE-292 가 이 칸의 **기전**을 바꿨다(결정이 바꾼 것 — «빨개서 고친» 것이 아니다).
+  // 결과(활성 테넌트 = demo-corp)는 그대로다. 달라진 것: 토큰의 tenant_id 를 읽는 대신 콜백과 같은
+  // 함수가 레지스트리 선택지에서 고르고 **assume** 한다 — 그래서 assumed 토큰이 같이 서고, 테넌트
+  // 쿠키는 스위치와 같은 세션 쿠키(maxAge 없음)라 다음 유휴 갱신은 re-assume 가지를 탄다.
+  it('🔴 세션이 **완전해진다** — 활성 테넌트도 콜백과 같은 함수로 되살린다 (assumed 토큰과 함께)', async () => {
     idleExpired();
     stubFetch(IAM_OK);
 
     await get('?redirect=%2Fdashboards%2Foverview');
 
     expect(cookieJar.get(TENANT_COOKIE)?.value).toBe('demo-corp');
-    expect(cookieJar.get(TENANT_COOKIE)?.opts?.maxAge).toBe(1800);
+    expect(cookieJar.get(TENANT_COOKIE)?.opts?.maxAge).toBeUndefined();
+    expect(cookieJar.get(ASSUMED_TOKEN_COOKIE)?.value).toBeTruthy();
   });
 
   it('🔴🔴 ⓑ IAM 이 리프레시를 거절하면(4xx) **사유를 달고** `/login?error=session_expired` — 세션 전체를 지운다', async () => {

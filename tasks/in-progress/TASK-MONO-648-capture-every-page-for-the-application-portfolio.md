@@ -196,6 +196,29 @@ monorepo
       `tenants-permission-denied` 가 그런 실제 마커다). 🔵 `TASK-MONO-676` 의 PR 은
       `scripts/` 를 건드리지 않았다 — 이 체크박스가 그 일의 집이다.
 
+      🔵 **2026-09-16 진행 — 판정기는 고쳤다, 닫는 조건의 «창 실행» 은 아직이다(그래서 체크 안 함).**
+      🔴 **전제 정정:** 위 문단은 «`:297` 이 권한 거부를 판정한다» 고 적었지만, 그 표지는
+      **앱당 1회 프로브(`sanityCheck`)에만** 쓰였고 장별 판정은 **아예 없었다** — 이 티켓 § «왜 자동
+      판정이 19를 냈나» 표가 이미 그렇게 적었다. 가이드 셋의 «권한 거부» 를 **어디서** 판정했는지는
+      이 스크립트에서 찾을 수 없다(스크립트 안 `DENIED_MARKERS` 사용처 = `sanityCheck` 1곳, 확인 안 한 추정은
+      적지 않는다). ⇒ 수리는 «판별자 교체» 가 아니라 **장별 판정 신설**이다.
+      - 판정 = 요소: `data-testid` 가 `-permission-denied` · `-not-eligible` · `-forbidden` 으로 끝나는
+        요소(2026-09-16 console-web `src` 전수 — 동적 상세의 `note('product-forbidden', …)` 도 같은 접미사).
+        거부면 **사진을 저장하지 않고** `kind:'denied'` 실패로 센다(로그인 화면과 같은 규칙).
+      - 🔴 `-card-…-forbidden`(`/dashboards/overview` 도메인 카드 하나)은 페이지 거부가 **아니다** →
+        `partialDenied` 로 따로 센다. 안 가르면 대시보드가 새 오탐이 된다.
+      - 본문 문구 적중은 판정에서 뺐지만 `deniedTextOnly` 로 남긴다 — 마커 없는 새 거부 화면을
+        요소 판정이 못 보므로 **사람이 그림을 연다**(틀릴 때 일이 느는 쪽).
+      - 프로브(`sanityCheck`)는 요소 **또는** 문구로 막는다 — 고정 대시보드라 자기 인용 오탐 모집단이
+        아니고, «테넌트를 먼저 선택하세요» 안내엔 마커가 없다(`accounts/page.tsx` 등).
+      - 증거(창 없이, 실제 Chromium `setContent`): `node scripts/capture-portfolio.mjs --self-test
+        --from <console-web>/node_modules/@playwright/test` → **rc=0, 6/6 (거부 3 · 비거부 3)**.
+        bite ① 판정을 본문 문구로 되돌림 → **rc=1**, `guide-quotes-denial-copy` · `dashboard-card-forbidden`
+        빨강. bite ② `-card-` 제외 제거 → **rc=1**, `dashboard-card-forbidden` 빨강. 복원 → 6/6.
+        `--dry-run` rc=0.
+      - ⚪ **남은 것(창):** 가이드 셋 + `/tenants` 를 실제 콘솔에서 찍어 `denied` 0 / 1 을 본다.
+        🔴 self-test 는 **술어**를 재지 실제 화면이 그 마커를 다는지는 재지 않는다.
+
       **② `ecommerce` 테넌트에서만 막힘 (7) — 🔵 설계대로다**
       `/erp/{approval,delegation,masters,orgview}` · `/scm/{inventory,procurement,replenishment}`
       — 전부 `demo-corp` 에서 열린다. **테넌트 경계가 동작한 것**이다.

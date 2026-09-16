@@ -16,6 +16,7 @@ import org.springframework.security.config.annotation.web.reactive.EnableWebFlux
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.jwt.JwtValidationException;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.ServerAuthenticationEntryPoint;
 import org.springframework.security.web.server.authorization.ServerAccessDeniedHandler;
@@ -111,9 +112,8 @@ public class SecurityConfig {
     ServerAuthenticationEntryPoint unauthorizedEntryPoint(
             ObjectMapper objectMapper, GatewayMetrics gatewayMetrics) {
         return (exchange, ex) -> {
-            OAuth2Error oauthError = extractOAuth2Error(ex);
-            if (oauthError != null
-                    && TenantClaimValidator.ERROR_CODE_TENANT_MISMATCH.equals(oauthError.getErrorCode())) {
+            OAuth2Error oauthError = findTenantMismatch(ex);
+            if (oauthError != null) {
                 log.debug("Cross-tenant token rejected: {}", oauthError.getDescription());
                 gatewayMetrics.incrementJwtValidationFailure(GatewayMetrics.REASON_TENANT_MISMATCH);
                 String message = oauthError.getDescription() != null
@@ -130,23 +130,51 @@ public class SecurityConfig {
     }
 
     /**
-     * Digs the {@link OAuth2Error} out of the authentication exception. Spring wraps the
-     * decode-time validator failure in an {@link OAuth2AuthenticationException}, but the
-     * resource-server filter may in turn wrap that in a generic
-     * {@link org.springframework.security.core.AuthenticationException}, so walk the
-     * cause chain rather than testing only the top frame. Guards against a self-cause
-     * loop.
+     * <strong>Predicate: if {@code tenant_mismatch} appears anywhere in the cause chain — as an
+     * {@link OAuth2AuthenticationException}'s error <em>or</em> inside a
+     * {@link JwtValidationException}'s {@code getErrors()} — the rejection is 403.</strong>
+     * Returns that error, or {@code null} when no frame carries it. Guards against a
+     * self-cause loop.
+     *
+     * <p>Why not "the first {@link OAuth2Error} in the chain" (TASK-BE-501's rule): that frame
+     * is never the validator's. When {@link TenantClaimValidator} fails, the decoder throws
+     * {@link JwtValidationException} — which is <em>not</em> an OAuth2 exception — and
+     * {@code JwtReactiveAuthenticationManager} wraps it in
+     * {@link org.springframework.security.oauth2.server.resource.InvalidBearerTokenException},
+     * whose own error code is always {@code invalid_token}. The first OAuth2 error found was
+     * therefore always {@code invalid_token} and the 403 branch was unreachable (TASK-BE-595).
+     * The validator's real codes live only in the inner frame's error list.
+     *
+     * <p>Consequence, deliberate: a token rejected for its tenant <em>and</em> for something
+     * else (e.g. also expired) is 403. Re-authenticating cannot cure the tenant, so "go
+     * re-authenticate" would be the lie this mapping exists to avoid. The shared
+     * {@code libs/java-gateway} SecurityConfig (wms/scm/erp/finance/fan) agrees for
+     * expired + tenant, but not in every mix: it reports the first non-{@code invalid_token}
+     * error, so a token with a disallowed issuer <em>and</em> a foreign tenant is 401 there
+     * ({@code invalid_issuer} is listed first) and 403 here.
      */
-    private static OAuth2Error extractOAuth2Error(Throwable ex) {
+    private static OAuth2Error findTenantMismatch(Throwable ex) {
         for (Throwable cur = ex; cur != null; cur = cur.getCause()) {
-            if (cur instanceof OAuth2AuthenticationException oauthEx) {
+            if (cur instanceof OAuth2AuthenticationException oauthEx && isTenantMismatch(oauthEx.getError())) {
                 return oauthEx.getError();
+            }
+            if (cur instanceof JwtValidationException jve) {
+                for (OAuth2Error error : jve.getErrors()) {
+                    if (isTenantMismatch(error)) {
+                        return error;
+                    }
+                }
             }
             if (cur == cur.getCause()) {
                 break;
             }
         }
         return null;
+    }
+
+    private static boolean isTenantMismatch(OAuth2Error error) {
+        return error != null
+                && TenantClaimValidator.ERROR_CODE_TENANT_MISMATCH.equals(error.getErrorCode());
     }
 
     private ServerAccessDeniedHandler forbiddenHandler(ObjectMapper objectMapper) {

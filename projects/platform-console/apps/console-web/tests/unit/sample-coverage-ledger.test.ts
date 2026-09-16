@@ -22,6 +22,7 @@ import path from 'node:path';
 import {
   SURFACE_COVERAGE,
   SCREEN_COVERAGE,
+  SURFACE_SAMPLE_PATH,
   screenStatusFor,
 } from '@/shared/sample/coverage';
 import { SAMPLE_FIXTURES, SAMPLE_FIXTURE_DOCUMENTS } from '@/shared/sample/fixtures';
@@ -103,9 +104,17 @@ describe('the ledger promises what the router does', () => {
   it.each(SURFACE_COVERAGE.map((r) => [`${r.core}:${r.surface} (${r.status})`, r] as const))(
     '%s',
     async (_label, row) => {
-      const get = sampleResponse({ core: row.core, surface: row.surface, method: 'GET', path: '/' });
+      // TASK-PC-FE-283 — a `ready` IAM domain fixture answers a CONCRETE
+      // producer path (`/api/admin/accounts`, …), not a bare `/`; the 4
+      // TASK-PC-FE-282 dashboard/registry fixtures ignore the path entirely, so
+      // `SURFACE_SAMPLE_PATH`'s `/` fallback preserves their behaviour
+      // unchanged. Without this, every newly-`ready` IAM row would 503 here
+      // (fixture returns `undefined` for an unmatched path) while the real
+      // screens render fine — a guard measuring the wrong path, not a real bug.
+      const path = SURFACE_SAMPLE_PATH[`${row.core}:${row.surface}`] ?? '/';
+      const get = sampleResponse({ core: row.core, surface: row.surface, method: 'GET', path });
       if (row.status === 'ready') {
-        expect(get.status).toBe(200);
+        expect(get.status, `${row.core}:${row.surface} at ${path}`).toBe(200);
       } else {
         expect(get.status).toBe(503);
         const body = (await get.json()) as { code?: string; error?: { code?: string } };
@@ -125,6 +134,38 @@ describe('the ledger promises what the router does', () => {
     );
     expect(Object.keys(SAMPLE_FIXTURES).sort()).toEqual([...ready].sort());
     expect(Object.keys(SAMPLE_FIXTURE_DOCUMENTS).sort()).toEqual([...ready].sort());
+  });
+
+  // TASK-PC-FE-283 (coordinator finding) — `SURFACE_SAMPLE_PATH` is a SECOND
+  // list next to `SURFACE_COVERAGE` and can drift from it independently: a
+  // future `ready` row with no entry silently falls back to `/`, 503s here,
+  // and the guard above goes red for a reason nobody will connect back to
+  // "forgot the representative path". The `/` fallback is legitimate ONLY for
+  // the 4 TASK-PC-FE-282 dashboard/registry rows, whose handlers ignore the
+  // path argument entirely — every OTHER `ready` row must name its own path.
+  const FOUNDATION_ROWS_ANSWERING_ANY_PATH = new Set([
+    'registry:registry',
+    'console-bff:operator-overview',
+    'console-bff:domain-health',
+    'console-bff:notifications-inbox',
+  ]);
+
+  it('🔴 every `ready` row outside the 4 TASK-PC-FE-282 rows has an explicit SURFACE_SAMPLE_PATH entry', () => {
+    const readyKeys = SURFACE_COVERAGE.filter((r) => r.status === 'ready').map(
+      (r) => `${r.core}:${r.surface}`,
+    );
+    const missing = readyKeys.filter(
+      (key) => !FOUNDATION_ROWS_ANSWERING_ANY_PATH.has(key) && !(key in SURFACE_SAMPLE_PATH),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it('🔴 SURFACE_SAMPLE_PATH has no stale entry for a row that no longer exists / is not ready', () => {
+    const readySet = new Set(
+      SURFACE_COVERAGE.filter((r) => r.status === 'ready').map((r) => `${r.core}:${r.surface}`),
+    );
+    const stale = Object.keys(SURFACE_SAMPLE_PATH).filter((key) => !readySet.has(key));
+    expect(stale).toEqual([]);
   });
 });
 

@@ -12,6 +12,7 @@ import com.example.promotion.domain.coupon.CouponAlreadyUsedException;
 import com.example.promotion.domain.coupon.CouponIssueRequest;
 import com.example.promotion.domain.coupon.CouponIssueRequestRepository;
 import com.example.promotion.domain.coupon.CouponNotFoundException;
+import com.example.promotion.domain.coupon.CouponReleaseRepository;
 import com.example.promotion.domain.coupon.CouponRepository;
 import com.example.promotion.domain.coupon.CouponStatus;
 import com.example.promotion.domain.promotion.DiscountType;
@@ -57,14 +58,17 @@ class CouponCommandServiceTest {
     @Mock
     private CouponIssueRequestRepository couponIssueRequestRepository;
 
+    @Mock
+    private CouponReleaseRepository couponReleaseRepository;
+
     private final Clock clock = Clock.fixed(Instant.parse("2026-03-28T12:00:00Z"), ZoneOffset.UTC);
 
     private CouponCommandService createService() {
         // Not every test reaches the replay lookup (e.g. role-guard / missing-key
         // throw earlier) — lenient() so those do not trip STRICT_STUBS.
         lenient().when(couponIssueRequestRepository.find(any(), any())).thenReturn(Optional.empty());
-        return new CouponCommandService(
-                couponRepository, promotionRepository, eventPublisher, couponIssueRequestRepository, clock);
+        return new CouponCommandService(couponRepository, promotionRepository, eventPublisher,
+                couponIssueRequestRepository, couponReleaseRepository, clock);
     }
 
     @Test

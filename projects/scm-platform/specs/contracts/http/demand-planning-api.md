@@ -58,7 +58,7 @@ Query: `status` (`SUGGESTED|APPROVED|MATERIALIZED|DISMISSED`, optional), `skuCod
       "id": "0192...",
       "skuCode": "SKU-APPLE-001",
       "warehouseId": "uuid",
-      "supplierId": "uuid",
+      "supplierId": "SUP-0043",
       "suggestedQty": 100,
       "status": "SUGGESTED",
       "source": "ALERT",
@@ -136,8 +136,14 @@ Seed/inspect the SKU→supplier mapping.
 
 `PUT` body:
 ```json
-{ "supplierId": "uuid", "defaultOrderQty": 100, "leadTimeDays": 7, "currency": "KRW" }
+{ "supplierId": "SUP-0043", "defaultOrderQty": 100, "leadTimeDays": 7, "currency": "KRW" }
 ```
+
+`supplierId` is the supplier **business code** that wms's partner master knows, not a
+supplier master id (ADR-MONO-050 §7 D9). It is copied verbatim onto every suggestion,
+the from-suggestion PO and `scm.procurement.inbound-expected.v1`, where wms resolves it
+with `findPartnerByCode` — a server-issued UUID stored here passes this endpoint
+(`@Size(max = 36)`) and is rejected by wms without retry (TASK-MONO-683).
 `200` returns the upserted mapping. `GET` → `200` or `404 MAPPING_NOT_FOUND`.
 
 ## Error codes (additions to `rules/domains/scm.md`)
