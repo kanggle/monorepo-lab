@@ -249,18 +249,19 @@ INSERT INTO admin_partner_ref (
 ON CONFLICT (id) DO NOTHING;
 
 -- =============================================================================
--- 🔴 NOT REPRODUCED HERE — a drift already found between the sibling seeds
--- themselves (TASK-MONO-675 AC-2 drift-risk note, not fixed by this ticket):
---   · outbound-service's masterref seed carries a SECOND location under id
---     ...1002 with code 'WH01-A-01-01-02' / zone Z-A — this does not match
+-- 🔵 HISTORICAL NOTE — TASK-MONO-675 AC-2 flagged a drift here between the
+-- sibling seeds themselves; TASK-BE-588 fixed it (2026-09-16):
+--   · outbound-service's masterref seed used to carry a SECOND location under
+--     id ...1002 with code 'WH01-A-01-01-02' / zone Z-A — this did not match
 --     master-service's own ...1002 row (code 'WH01-C-01-01-01', zone Z-C,
---     reproduced above).
---   · outbound-service's masterref seed also carries a sku_snapshot row
+--     reproduced above). Now fixed to match.
+--   · outbound-service's masterref seed also used to carry a sku_snapshot row
 --     ...404 'SKU-APPLE-002' that does not exist anywhere in master-service's
---     R__04 seed.
--- Both look like copy-paste drift in outbound's own file, not master-service
--- baseline data. Reproducing them here would inject rows into admin's ref
--- tables that master-service itself will never emit an event for — this file
--- mirrors master-service's actual seed instead.
--- Tracked in projects/wms-platform/tasks/ready/TASK-BE-588-outbound-masterref-seed-disagrees-with-master-seed.md
+--     R__04 seed. Now removed.
+-- Both were copy-paste drift in outbound's own file, not master-service
+-- baseline data — admin's ref tables were never meant to reproduce them
+-- (reproducing them here would have injected rows that master-service itself
+-- never emits an event for). This file continues to mirror master-service's
+-- actual seed only.
+-- See TASK-BE-588 (projects/wms-platform/tasks/) for the fix.
 -- =============================================================================
