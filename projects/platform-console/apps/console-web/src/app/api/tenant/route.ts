@@ -10,10 +10,15 @@ import {
 import {
   TENANT_COOKIE,
   ASSUMED_TOKEN_COOKIE,
+  LAST_TENANT_COOKIE,
   tokenCookieOpts,
   getAccessToken,
 } from '@/shared/lib/session';
 import { exchangeForAssumedToken } from '@/shared/lib/assume-tenant-exchange';
+import {
+  rememberTenant,
+  selectableTenants,
+} from '@/shared/lib/active-tenant-default';
 import { logger, newRequestId } from '@/shared/lib/logger';
 import { sampleGate } from '@/shared/api/sample-gate';
 
@@ -66,6 +71,9 @@ export async function POST(req: Request) {
     // assumed token is only ever valid for the current active tenant).
     jar.delete(TENANT_COOKIE);
     jar.delete(ASSUMED_TOKEN_COOKIE);
+    // An explicit «no tenant» is also the choice the next login should respect
+    // (TASK-PC-FE-292) — forget the remembered selection.
+    jar.delete(LAST_TENANT_COOKIE);
     return NextResponse.json({ ok: true, activeTenant: null });
   }
 
@@ -92,9 +100,8 @@ export async function POST(req: Request) {
   let allowed: Set<string>;
   try {
     const registry = await fetchRegistry();
-    allowed = new Set(
-      registry.products.flatMap((p) => (p.available ? p.tenants : [])),
-    );
+    // The same set the login/refresh default chooses from (TASK-PC-FE-292).
+    allowed = new Set(selectableTenants(registry));
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
       return NextResponse.json(
@@ -182,6 +189,9 @@ export async function POST(req: Request) {
     ...tokenCookieOpts,
     maxAge: assumed.expiresIn,
   });
+  // Remembered for the next login (TASK-PC-FE-292) — only after the assume
+  // succeeded, so a refused tenant is never remembered.
+  rememberTenant(jar, baseToken, tenant);
   logger.info('tenant_switched', { requestId, tenant });
   return NextResponse.json({ ok: true, activeTenant: tenant });
 }

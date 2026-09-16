@@ -36,6 +36,12 @@ export const TENANT_COOKIE = 'console_active_tenant';
  *  `/api/admin/**` credential (the IAM operator-token boundary § 2.6 is
  *  unchanged). */
 export const ASSUMED_TOKEN_COOKIE = 'console_assumed_token';
+/** The operator's last tenant selection (`<operator sub>|<tenant>`), kept across
+ *  logins so the next login can re-assume it (TASK-PC-FE-292). NOT a credential
+ *  and NOT the active tenant: only ever a candidate, re-validated against the
+ *  registry's selectable tenants before it is assumed
+ *  (`active-tenant-default.ts`). Deliberately NOT cleared by logout. */
+export const LAST_TENANT_COOKIE = 'console_last_tenant';
 /** IAM OIDC `id_token` from the login/refresh token response. Stored ONLY to
  *  serve as the `id_token_hint` for RP-initiated logout (OIDC end_session /
  *  `/connect/logout` — TASK-PC-FE-033). NEVER a credential: it is not sent to

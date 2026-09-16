@@ -36,23 +36,33 @@ import {
  *   - timeout / 503 / network → `RegistryUnavailableError` so the caller can
  *     render a degraded catalog (never blank the shell).
  */
-export async function fetchRegistry(): Promise<RegistryResponse> {
+export async function fetchRegistry(
+  opts: {
+    /** An operator token the caller has JUST minted and not yet delivered as a
+     *  cookie — the login callback and the idle refresh choosing the default
+     *  tenant (TASK-PC-FE-292). A caller holding one is by construction not a
+     *  sample visitor, so the sample branch is not asked. */
+    operatorToken?: string;
+  } = {},
+): Promise<RegistryResponse> {
   const env = getServerEnv();
   const requestId = newRequestId();
 
   // ADR-MONO-074 A2 — asked BEFORE the token read. A sample visitor gets the
   // sample registry fed through the parsing below; no token, no network.
-  const sample = await sampleGate({
-    core: 'registry',
-    surface: 'registry',
-    method: 'GET',
-    path: '/api/admin/console/registry',
-  });
+  const sample = opts.operatorToken
+    ? null
+    : await sampleGate({
+        core: 'registry',
+        surface: 'registry',
+        method: 'GET',
+        path: '/api/admin/console/registry',
+      });
 
   // The /api/admin/** credential is the EXCHANGED operator token — never the
   // IAM OIDC access token (§ 2.1/§ 2.2/§ 2.6). Absent operator token ⇒ no
   // usable operator session ⇒ 401 (caller re-logins; the exchange must run).
-  const token = sample ? null : await getOperatorToken();
+  const token = sample ? null : (opts.operatorToken ?? (await getOperatorToken()));
 
   if (!sample && !token) {
     throw new ApiError(401, 'TOKEN_INVALID', 'No operator session');
