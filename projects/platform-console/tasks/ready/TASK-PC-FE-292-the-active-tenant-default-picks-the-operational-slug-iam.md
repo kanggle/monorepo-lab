@@ -55,6 +55,23 @@ SSM 읽기 전용 진단으로 실측한 사슬:
 홈 테넌트는 `demo-corp` 이고 `operator_tenant_assignment` 에 `demo-corp`·`ecommerce` 두 행이 있다.
 고칠 것은 데이터가 아니라 **«활성 테넌트를 무엇으로 기본값 삼는가»** 다.
 
+## 🟢 2026-09-16 라이브 확증 — 소유자 실측 (이 사슬의 반증 기회였고, 통과했다)
+
+소유자가 라이브 데모에서 직접 쟀다:
+
+> *"로그인하고 바로 이커머스 메뉴를 누르면 안 되고, 계정을 다른 것으로 전환했다가 다시
+> 안 되던 것으로 전환하면 된다."*
+
+🔵 **이것이 위 5번 칸(«assumed 토큰이 없다»)의 직접 증거다.** 전환은 어느 쪽으로 가든
+`/api/tenant` 의 assume-tenant 교환을 태워 **그 테넌트로 스코프된 토큰**을 새로 발급받는다
+(`api/tenant/route.ts:160`, `maxAge = assumed.expiresIn`). 그래서 «되돌아와도» 되는 것이다 —
+고친 것은 «어느 테넌트인가» 가 아니라 **«assumed 토큰이 존재하는가»** 이기 때문이다.
+🔴 로그인 직후 상태는 활성 테넌트 쿠키가 `iam` 으로 서 있고 assumed 토큰은 **없다** ⇒
+`getDomainFacingToken` 이 기본 토큰(= `tenant_id=iam`)을 내보낸다.
+
+🔵 **우회책(사용자용, 임시)**: 스위처에서 아무 테넌트로 한 번 전환한다. 🔴 이것을 «해결» 로
+읽지 마라 — 매 로그인마다 사람이 해야 하고, 30분 유휴 뒤 갱신에서 같은 상태로 돌아간다.
+
 🔴 **계약서가 이미 반대로 적고 있다**: `console-integration-contract.md:3370` — *"Tenant scope:
 **never derived from the IAM OIDC token**. IAM resolves operator tenant scope producer-side from
 `admin_operators.tenant_id`"*. 그런데 콜백은 정확히 그 토큰의 `tenant_id` 로 활성 테넌트를 정한다.
