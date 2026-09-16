@@ -10,7 +10,7 @@ This document extends the Core platform specs. It does not replace them.
 
 An `identity-platform` service issues and manages JWT tokens, exposes a JWKS endpoint, and is the authoritative source of authentication for one or more downstream platforms (gateways, REST APIs, frontends).
 
-A single `identity-platform` deployment may serve multiple platforms (e.g., an e-commerce platform and a WMS platform) by scoping tokens via the `aud` claim. Each downstream gateway delegates token validation to the public keys exposed at the JWKS endpoint.
+A single `identity-platform` deployment may serve multiple platforms (e.g., an e-commerce platform and a WMS platform) by registering a client per platform surface and scoping each token to its issuing client's platform (`aud` names that client; `tenant_id` / `roles` carry the platform binding). Each downstream gateway delegates token validation to the public keys exposed at the JWKS endpoint.
 
 This service type is reserved for the central identity / OIDC / IAM service. There MUST be at most one `identity-platform` per project. General-purpose REST services that merely accept bearer tokens remain `rest-api`.
 
@@ -75,7 +75,7 @@ The `password` grant type is forbidden. The `client_credentials` grant type is a
   - operator-facing platforms (wms, erp, mes, scm, ecommerce admin surface): 5 minutes (short-lived; high-privilege)
   - consumer-facing surfaces (ecommerce customer, fan-platform): 15 minutes
 - Required claims: `iss`, `sub`, `aud`, `iat`, `exp`, `roles`, `email`. Recommended: `jti`, `kid` (in JOSE header). There is **no `scope` claim** — `roles` is the sole authorization axis. `account_type` is **removed** (no longer emitted on any token; `auth_db.credentials.account_type` column dropped per TASK-MONO-263 / ADR-MONO-032 D5 step 4). See the JWT Standard Claims contract § Standard Claims.
-- The `aud` claim MUST identify the target platform (e.g., `wms`, `ecommerce`). A token issued for one platform is invalid for another.
+- The `aud` claim MUST carry the **client id of the registered client the token was issued to** (on every grant, including `client_credentials` and the assume-tenant exchange, where it is the acting client). It is not a platform name. A token is refused at an edge whose declared audience allowlist does not include that client id (JWT Standard Claims contract § JWT Validation rule 5), so a token obtained by one registered client is invalid at a gateway that does not admit that client.
 - Access tokens are NOT stored server-side. Validation is stateless via JWKS.
 
 ## Refresh Token
@@ -146,15 +146,15 @@ The `password` grant type is forbidden. The `client_credentials` grant type is a
 ## One identity, both capabilities
 
 - A single identity MAY hold both consumer-facing and operator-facing roles (e.g., a staff member who also shops on the e-commerce platform). This is **one account**, not two — the former "must provision separate accounts" rule is removed.
-- Per-token least privilege is preserved by `aud`-scoping: each token is for one platform and carries only that platform's roles. Relying parties authorize by **role presence** for the requested surface (they check `roles`, not `account_type`).
-- Operator-facing surfaces remain protected by their role requirement + MFA + RBAC/ABAC defense-in-depth; a consumer-facing token (different `aud`, consumer roles) cannot reach them.
+- Per-token least privilege is preserved by client scoping: each token is issued to one registered client (named in `aud`), is for that client's platform, and carries only that platform's roles. Relying parties authorize by **role presence** for the requested surface (they check `roles`, not `account_type`).
+- Operator-facing surfaces remain protected by their role requirement + MFA + RBAC/ABAC defense-in-depth; a consumer-facing token (different issuing client, consumer roles) cannot reach them.
 
 ---
 
 # SSO Scope Rules
 
-- SSO is scoped by **role possession on the target platform**. An identity MAY receive a token for any platform on which it holds ≥ 1 role, in the same browser session, subject to consent and `aud` scoping.
-- There is **no cross-type SSO prohibition** (removed by ADR-MONO-032). The unified identity holds whatever capabilities its roles grant, and each `aud` token is independently `aud`-scoped to that platform's roles.
+- SSO is scoped by **role possession on the target platform**. An identity MAY receive a token for any platform on which it holds ≥ 1 role, in the same browser session, subject to consent and client scoping.
+- There is **no cross-type SSO prohibition** (removed by ADR-MONO-032). The unified identity holds whatever capabilities its roles grant, and each token is independently scoped to its issuing client's platform roles.
 - A staff member who also shops uses **one account** and MAY hold both an operator-facing token (for their work platform) and a consumer-facing token (for the storefront) in one session — each token carries only its own platform's roles.
 
 ---
@@ -222,7 +222,7 @@ A relying party MUST:
 
 1. Resolve the JWKS URL from the OIDC discovery document at startup.
 2. Cache the JWKS response (recommended TTL: 1 hour) and refresh on `kid`-not-found.
-3. Validate every incoming bearer token: signature (via `kid`), `iss`, `aud` (matches its own platform), `exp`, `nbf` (if present).
+3. Validate every incoming bearer token: signature (via `kid`), `iss`, `aud` (its values — a single string is a one-element set — MUST intersect the relying party's declared audience allowlist of client ids; the allowlist is mandatory and an empty or absent one is a startup failure; mismatch → 403; a transitional shadow phase that logs and counts mismatches without rejecting is permitted until the measured mismatch count is zero — see the JWT Standard Claims contract § JWT Validation rule 5), `exp`, `nbf` (if present).
 4. Authorize by **role presence** for the requested surface: admit iff `roles` contains a role valid for the route, otherwise reject (403). (The ADR-MONO-032 D5 migration is **complete** — issuance is roles-only and the `account_type` claim is removed; gateways gate on `roles` only and ignore `account_type` if seen on a legacy token. See the JWT Standard Claims contract § Migration Compatibility for the historical staged rollout.)
 5. For high-privilege endpoints, OPTIONALLY call `/v1/oauth/introspect` to confirm the refresh-token family has not been revoked. Document this on a per-endpoint basis in the relying party's service spec.
 
@@ -241,7 +241,7 @@ A relying party MUST:
 
 # Allowed Patterns
 
-- Multiple `aud` values served by a single deployment, scoped by client registration
+- Multiple platforms served by a single deployment, scoped by client registration (each token's `aud` is its issuing client id)
 - Federation with external OIDC / social-login providers
 - A small admin REST surface for account management (lives on the same service)
 - Publishing audit events to Kafka via outbox for downstream projection
@@ -250,7 +250,7 @@ A relying party MUST:
 
 # Forbidden Patterns
 
-- Issuing tokens whose `aud` is unbounded ("any platform") — every token MUST be scoped
+- Issuing tokens with no `aud`, or with an `aud` that does not name the registered client the token was issued to — every token MUST be attributable to exactly one issuing client
 - Self-contained refresh tokens (refresh tokens MUST be opaque and server-revocable)
 - Symmetric signing (HS256) for tokens consumed by other services
 - Embedding business-domain logic (orders, inventory, profile preferences) in this service
@@ -276,11 +276,11 @@ The following responsibilities do **not** belong on an `identity-platform` servi
 
 # Testing Requirements
 
-- Unit tests for token issuance (claims, lifetime, `aud`, `kid`), refresh rotation, refresh-reuse detection, and revocation.
+- Unit tests for token issuance (claims, lifetime, `aud` = issuing client id, `kid`), refresh rotation, refresh-reuse detection, and revocation.
 - Contract tests for every endpoint in `specs/contracts/http/<service>-api.md` and the OIDC discovery document.
 - Integration tests with Testcontainers covering: full Authorization Code + PKCE flow, refresh rotation, refresh-reuse triggers family revocation, JWKS reachable without auth, key rotation surfaces both `kid`s during grace.
 - Cross-service contract test: a sample relying party fetches JWKS and validates a freshly issued token end-to-end.
-- Negative tests: HS256 token rejected, mismatched `aud` rejected, expired token rejected, revoked refresh token rejected, social-login token NOT accepted as platform token.
+- Negative tests: HS256 token rejected, `aud` outside the relying party's audience allowlist rejected with 403 (and, while a shadow phase is active, admitted with the mismatch logged and counted), token with no `aud` rejected, empty audience allowlist fails startup, expired token rejected, revoked refresh token rejected, social-login token NOT accepted as platform token.
 - Audit assertions: every test that triggers an audited event verifies the audit record was written.
 
 ---
@@ -304,7 +304,7 @@ When implementing or extending an `identity-platform` service:
 - [ ] Refresh-token rotation + reuse-detection wired and tested
 - [ ] Key rotation procedure documented with 24h grace period
 - [ ] PKCE enforced; `state` validated; `redirect_uri` exact-match enforced
-- [ ] Role-based admission enforced per surface (valid `aud` + ≥ 1 role for the requested surface); no account-type gate, no cross-type SSO prohibition (ADR-MONO-032)
+- [ ] Role-based admission enforced per surface (`aud` within the gateway's audience allowlist + ≥ 1 role for the requested surface); no account-type gate, no cross-type SSO prohibition (ADR-MONO-032)
 - [ ] Audit events emitted via outbox for every required event
 - [ ] Brute-force / enumeration defenses in place and tested
 - [ ] At least one relying party (gateway) validates tokens against JWKS end-to-end
