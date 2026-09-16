@@ -8,7 +8,7 @@ IAM 화면이 샘플로 선다 — 계정·감사·운영자·그룹·조직·�
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -299,3 +299,33 @@ B8–B12 모두 단독 주입 → 실행 → 복원 순으로 개별 확인했�
    쓰이는 지점: `use-accounts.ts`, `accounts-api.ts` `getAccountByEmail`, `AccountsPagination.tsx`)까지
    포함해 기록. 테스트 4개 추가(평문 매치·접미 매치·부분일치 거부·매치없음=200빈페이지) + bite B12.
 3. **`SURFACE_SAMPLE_PATH` 드리프트 가드** — § D2 에 기록, 가드 2개 추가 + bite B8/B9.
+
+## CORRECTION — 닫기 판정 (조정자, 2026-09-16 UTC)
+
+🔴 위 AC 절의 체크박스는 `[ ]` 로 남아 있다 — `review/` 파일은 동결이다. **체크박스가 아니라 아래 표가 판정이다.**
+
+머지 검증 4차원: (a) PR [#3864](https://github.com/kanggle/monorepo-lab/pull/3864) `state=MERGED` 2026-09-16T12:25:06Z ·
+(b) squash `0e9f020c6` 가 `origin/main` 조상(그 뒤 다른 세션 머지 1건) · (c) 머지 전 롤업 **61 체크 · FAILURE 0**, 필수 4 +
+프런트 unit · E2E smoke · console-bff IT **실제 실행** · (d) 아래 표.
+
+| AC | 닫힘 | 증거 |
+|---|---|---|
+| AC-0 | ✅ | 표면 9 · 화면 14. ADR 의 18 은 단위가 달라 직접 비교하지 않음(282 D1 을 따름) |
+| AC-1 | ✅ | `sample-fixtures-schema-iam.test.ts` — 9 표면 전부 화면이 쓰는 실제 zod 스키마로 파싱 |
+| AC-2 | ✅ | 라벨 가드가 IAM 문서 9개 순회 · 새 키마다 분류 사유 · bite B10 |
+| AC-3 | ✅ | 테넌트·조직·그룹·운영자 할당: 목록 id → 상세, 없는 id → FLAT 404(bite B11). 계정은 생산자에 id 조회가 **없어** 없는 이메일 = 200 빈 페이지(실제 동작). 조정자의 최초 제안(404)을 에이전트가 코드 근거로 반박했고 그쪽이 맞다 |
+| AC-4 | ✅ | 필터 6종이 픽스처 위에서 적용 · 총계 = 필터 후 실제 행 수 · 이메일 정확일치(부분일치로 바꾸면 빨강, bite B12) |
+| AC-5 | ✅ | 계정 잠금 POST → 403 `SAMPLE_READ_ONLY` → `messageForCode` 문구 |
+| AC-6 | ✅ | `e2e-smoke/sample-visitor-iam.spec.ts` · 로컬 smoke 19 passed · PR CI E2E smoke SUCCESS |
+| AC-7 | ✅ | **조정자 실측**: `fixtures/iam.ts` 의 이메일 도메인 10건 전부 `@example.com`(헬퍼로 조립돼 단순 리터럴 grep 엔 0건으로 보였다 — 0 ≠ 없음) |
+| DoD | ✅ | 원장 IAM `pending` 0 · 인증 운영자 칸 무수정(D8 의 두 칸은 설정만 변경, `expect(` 추가 0 · 삭제 0 — 조정자 diff 실측) |
+
+🔴 **위 구현 기록의 틀린 문장 1건**: § 측정의 «BEFORE 는 파킹된 main(`7b706d304`), **이 워크트리의 분기점과 동일 HEAD**» 는
+사실이 아니다 — 분기점은 `4ae869d48` 이다. 🔵 그래도 BEFORE 수치(3218/3219)는 유효하다: 두 커밋 사이 변경은 **문서 5 파일**
+(`TASK-PC-FE-292`·`TASK-BE-595` 기안 + INDEX)뿐이고 console-web 코드는 같다(조정자 `git diff --stat` 실측).
+
+🔵 **남는 것 (결함 아님 · 다음 사람이 알아야 할 것)**
+- `iam:subscriptions` 는 어떤 화면도 GET 을 부르지 않는 표면인데(D6), 원장을 비우려고 **모든 GET 에 `{}` 200** 을 준다. 누군가 이
+  표면에 GET 을 추가하면 «준비 중»이 아니라 **파서 실패(섹션 degrade)** 로 보인다 — 그 GET 을 추가하는 티켓이 픽스처를 같이 써야 한다.
+- 계정 «내보내기»(`GET /api/admin/accounts/{id}/export`)는 픽스처가 없어 `SAMPLE_NOT_READY` 로 떨어진다(정직한 빈칸).
+- 넘길 의무 **0건** — 이 티켓이 임시로 들고 있던 남의 의무 없음.
