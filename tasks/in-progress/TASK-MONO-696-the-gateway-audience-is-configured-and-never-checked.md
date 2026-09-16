@@ -8,7 +8,7 @@ TASK-MONO-696
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -131,17 +131,105 @@ console-bff 는 **한 개의** IAM OIDC access token 을 WMS·SCM·FINANCE·ERP�
 - **거절 상태코드** — 계약서 `:166` 은 wrong `aud` → **403**. 디코더 검증기 실패는 기본적으로 **401**(`invalid_token`) 이 된다. BE-595 가 tenant 거절을 403 `TENANT_FORBIDDEN` 으로 매핑한 방식을 따를지, 401 로 두고 계약서를 고칠지.
 - **섀도 모드의 유무와 기간**
 
+## 결정 (소유자, 2026-09-16 UTC) — AC-2
+
+🔵 위 표·추천은 결정 전 기록으로 그대로 둔다. 아래가 소유자가 고른 것이고, **여기 적힌 것 외에는 결정되지 않았다.**
+
+| 항목 | 결정 |
+|---|---|
+| 선택지 | **B** — 게이트웨이별 **client id allowlist** 로 `aud` 를 검사한다. IdP 발급은 **변경하지 않는다**. 계약서는 «`aud` = 발급 client id, 각 게이트웨이는 선언된 allowlist 를 받아들인다» 로 개정한다. |
+| 롤아웃 | **2단계.** 1단계 = **섀도**(불일치를 거절하지 않고 로그 + 메트릭만) 를 **6 게이트웨이 전부**에 배포. 2단계 = 거절로 전환 — **별도 PR**, **실측 불일치 = 0 을 확인한 뒤에만**. |
+| 섀도 기간 | **기간: 미정(불일치 0 실측이 전환 조건)** — 소유자가 기간을 정하지 않았다. |
+| 거절 상태코드 | **403** (계약서 `:166`). 디코더 기본값 401 이 아니라, `TASK-BE-595` 의 `TENANT_FORBIDDEN` 처럼 **예외 원인 사슬을 훑어** 403 으로 매핑한다. |
+| 오류 코드 이름 | **결정 아님.** 계약서 본문에 `AUDIENCE_FORBIDDEN` 을 **제안**으로만 적었다(`platform/contracts/jwt-standard-claims.md` § Error Handling) — 2단계 구현 PR 이 확정한다. |
+| 이 PR 범위 | AC-2(기록) + AC-0 + AC-1 + AC-3(스펙). **AC-4/AC-5/AC-6 은 이 PR 이 아니다** — 검증기 구현·헬퍼 교정·죽은 속성 삭제 없음. 그래서 이 티켓은 `in-progress` 로 남는다. |
+
 ---
 
 # Acceptance Criteria
 
-- [ ] **AC-0 재측정 (고치기 전에)** — ecommerce `SecurityConfigRealDecoderPathTest`(프로덕션 `OAuth2ResourceServerConfig#reactiveJwtDecoder()` 를 그대로 쓰는 하네스)에 두 칸을 추가해 **현 상태를 단언**한다: (i) `aud` 없음 + `tenant_id=ecommerce` → **통과**, (ii) `aud = ["wms"]`(다른 값) + `tenant_id=ecommerce` → **통과**. 🔴 두 칸 모두 **대조군**을 둔다 — 같은 토큰에서 `tenant_id` 만 빼면 403 이 되어야 한다(그래야 «통과» 가 디코더가 토큰을 실제로 받아들였다는 뜻이다; 하네스가 아무 토큰이나 통과시키는 게 아님). 6 게이트웨이 중 최소 한 곳(wms — `audiences: wms` 가 설정돼 있는 다른 한 곳)에서도 같은 (i) 칸을 잰다. **재현되지 않으면** 이 티켓의 전제가 틀린 것이다 — 구현하지 말고 사유를 기록한다. 이 칸들은 결정 집행 시 기대값이 뒤집히는 **bite 칸**이 된다.
-- [ ] **AC-1 토큰 모집단 실측** — § 측정 (c) 표의 «프레임워크 기본» 행을 **실제 발급 토큰 디코드**로 확인한다(auth-service IT 에서 각 grant 로 발급해 `aud` 단언, 또는 로컬 스택에서 발급한 토큰 디코드). 최소: 콘솔 base, assume-tenant(이미 단언 있음), web-store, 내부 `client_credentials` 1종. 그리고 **각 게이트웨이에 실제로 도달하는 client 목록**을 표로 남긴다(console-bff 팬아웃, 도메인 SPA, 서비스 간 호출 중 게이트웨이를 경유하는 것). 🔴 «이 client 는 그 게이트웨이에 안 온다» 는 부재 판정은 grep 이 아니라 호출 경로(설정된 base URL)로 댄다.
-- [ ] **AC-2 소유자 결정 기록** — § 결정 대기 에 소유자가 고른 선택지(A/B/C/D 또는 다른 것)와 부속 결정 2건(상태코드, 섀도 모드)을 **정확한 형태로** 기록한다. 결정 전에는 AC-3 이후를 시작하지 않는다.
-- [ ] **AC-3 스펙 먼저** — 결정이 계약서와 다르면 `platform/contracts/jwt-standard-claims.md`(`:46`, `:58`, `:130`, `:166`, 예제 `:219` 이하)와 `platform/service-types/identity-platform.md`(`:78`, `:225`, `:283`)를 **구현보다 먼저** 같은 PR 안에서 개정한다. 결정이 A 면 IdP 계약(`projects/iam-platform/specs/contracts/http/auth-api.md`)의 발급 `aud` 도.
+- [x] **AC-0 재측정 (고치기 전에)** — ecommerce `SecurityConfigRealDecoderPathTest`(프로덕션 `OAuth2ResourceServerConfig#reactiveJwtDecoder()` 를 그대로 쓰는 하네스)에 두 칸을 추가해 **현 상태를 단언**한다: (i) `aud` 없음 + `tenant_id=ecommerce` → **통과**, (ii) `aud = ["wms"]`(다른 값) + `tenant_id=ecommerce` → **통과**. 🔴 두 칸 모두 **대조군**을 둔다 — 같은 토큰에서 `tenant_id` 만 빼면 403 이 되어야 한다(그래야 «통과» 가 디코더가 토큰을 실제로 받아들였다는 뜻이다; 하네스가 아무 토큰이나 통과시키는 게 아님). 6 게이트웨이 중 최소 한 곳(wms — `audiences: wms` 가 설정돼 있는 다른 한 곳)에서도 같은 (i) 칸을 잰다. **재현되지 않으면** 이 티켓의 전제가 틀린 것이다 — 구현하지 말고 사유를 기록한다. 이 칸들은 결정 집행 시 기대값이 뒤집히는 **bite 칸**이 된다.
+      - **재현됨 (2026-09-16 UTC).** 전제가 맞다 — 두 게이트웨이 모두 `aud` 를 보지 않는다.
+      - ecommerce: `SecurityConfigRealDecoderPathTest$AudienceNotCheckedToday` 4칸 — `noAudience_ecommerceTenant_passesToday_flipsInAc5`(200 `reached`) · `noAudience_control_withoutTenant_is403`(403 `TENANT_FORBIDDEN`) · `foreignAudience_ecommerceTenant_passesToday_flipsInAc5`(`aud=["wms"]` → 200 `reached`) · `foreignAudience_control_withoutTenant_is403`(403 `TENANT_FORBIDDEN`).
+        명령 `./gradlew :projects:ecommerce-microservices-platform:apps:gateway-service:test --tests "com.example.gateway.config.SecurityConfigRealDecoderPathTest*"` → **rc=0**, 이 nested 판 `tests="4" failures="0" errors="0"`.
+      - wms: 이런 하네스가 **없었다** → ecommerce 판을 최소로 옮긴 새 `projects/wms-platform/apps/gateway-service/src/test/java/com/wms/gateway/config/SecurityConfigRealDecoderPathTest.java` — wms 가 실제로 등록하는 공유 `com.example.apigateway.config.SecurityConfig` 필터 체인 + 프로덕션 `OAuth2ResourceServerConfig#reactiveJwtDecoder()` + MockWebServer JWKS 실제 RS256 검증. 디코더 목 없음, Docker 없음. 칸 `noAudience_wmsTenant_passesToday_flipsInAc5`(200 `reached`) · `noAudience_control_withoutTenant_is403`(403 `TENANT_FORBIDDEN`).
+        명령 `./gradlew :projects:wms-platform:apps:gateway-service:test --tests "com.wms.gateway.config.SecurityConfigRealDecoderPathTest"` → **rc=0**, `tests="2" failures="0" errors="0"`.
+      - 🔵 칸 이름·주석이 «AC-5 phase 2 에서 403 으로 뒤집힌다» 를 말한다. 1단계(섀도)에서는 여전히 통과 + 불일치 로그/메트릭이어야 한다(AC-5 가 그 단언을 더한다).
+      - 모듈 전체: ecommerce gateway `test` **rc=0** · 128칸 실패 0 · wms gateway `test` **rc=0** · 42칸 실패 0 (둘 다 `test` 태스크 실제 실행, 캐시 아님). 🔴 `test` 는 `@Tag("integration")` 을 제외한다 — Docker IT 는 포함되지 않는다(이 호스트는 Docker 꺼짐, CI 가 권위).
+- [x] **AC-1 토큰 모집단 실측** — § 측정 (c) 표의 «프레임워크 기본» 행을 **실제 발급 토큰 디코드**로 확인한다(auth-service IT 에서 각 grant 로 발급해 `aud` 단언, 또는 로컬 스택에서 발급한 토큰 디코드). 최소: 콘솔 base, assume-tenant(이미 단언 있음), web-store, 내부 `client_credentials` 1종. 그리고 **각 게이트웨이에 실제로 도달하는 client 목록**을 표로 남긴다(console-bff 팬아웃, 도메인 SPA, 서비스 간 호출 중 게이트웨이를 경유하는 것). 🔴 «이 client 는 그 게이트웨이에 안 온다» 는 부재 판정은 grep 이 아니라 호출 경로(설정된 base URL)로 댄다.
+      - 증거와 표: 아래 **§ AC-1 실측**. 🔴 Testcontainers IT 에 넣은 단언은 **이 호스트에서 돌지 못했다**(Docker 꺼짐) — CI `iam` 통합 잡이 권위다. 로컬에서 실제로 돈 것은 Docker 없는 H2 슬라이스의 `client_credentials` 1칸뿐이다.
+- [x] **AC-2 소유자 결정 기록** — § 결정 대기 에 소유자가 고른 선택지(A/B/C/D 또는 다른 것)와 부속 결정 2건(상태코드, 섀도 모드)을 **정확한 형태로** 기록한다. 결정 전에는 AC-3 이후를 시작하지 않는다.
+      - § 결정 대기 › **결정 (소유자, 2026-09-16 UTC) — AC-2** 표.
+- [x] **AC-3 스펙 먼저** — 결정이 계약서와 다르면 `platform/contracts/jwt-standard-claims.md`(`:46`, `:58`, `:130`, `:166`, 예제 `:219` 이하)와 `platform/service-types/identity-platform.md`(`:78`, `:225`, `:283`)를 **구현보다 먼저** 같은 PR 안에서 개정한다. 결정이 A 면 IdP 계약(`projects/iam-platform/specs/contracts/http/auth-api.md`)의 발급 `aud` 도.
+      - **계약서는 이제 B 를 말한다.** 상세와 AC-4/5 가 맞춰야 할 목록: 아래 **§ AC-3 스펙 개정**. 결정이 A 가 아니므로 `auth-api.md` 는 건드리지 않았다.
 - [ ] **AC-4 집행 — 한 곳에서, 잊을 수 없게** — 검증은 `GatewayJwtDecoders.validatorChain`(또는 결정이 정한 공유 지점)에서 이루어지고, 게이트웨이가 audience 정책을 **생략할 수 없는** 시그니처여야 한다(선택지 C 제외). 6 게이트웨이 전부 적용. 죽은 `audiences:` 속성(ecommerce `application.yml:23`, wms `application.yml:24`, ecommerce `application-integration-test.yml:7`)은 삭제하거나 실제로 읽히게 한다 — **설정돼 있는데 안 읽히는 상태를 남기지 않는다**.
 - [ ] **AC-5 bite** — AC-0 의 칸이 결정에 맞게 뒤집힌다(C 면 뒤집히지 않고 이름·주석이 «검증하지 않는다» 를 말한다). 추가로 (iii) 결정이 허용하는 `aud` → 통과, (iv) 허용하지 않는 `aud` → 결정된 상태코드. 🔴 **테스트 헬퍼가 운영과 같은 `aud` 를 민팅**하도록 고친다 — 지금처럼 헬퍼가 `aud: ecommerce` 를 민팅하면 «플랫폼 이름을 요구» 하는 구현이 **테스트는 초록, 운영은 전량 거절**이 된다. 각 게이트웨이의 기존 스위트 초록.
 - [ ] **AC-6 후속 기안** — 서비스 레벨 디코더 14개 · console-bff · iam gateway 에 같은 원칙을 적용할지를 다루는 후속 티켓을 **이 티켓을 `done/` 으로 닫기 전에** 기안한다(또는 «적용하지 않는다» 는 결정을 사유와 함께 기록).
+
+---
+
+# AC-1 실측 (2026-09-16 UTC)
+
+## (a) grant 별 실제 발급 토큰의 `aud`
+
+| 토큰 모집단 | grant | 발급 client | 단언 위치 | 기대 `aud` | 이 호스트에서 돌았나 |
+|---|---|---|---|---|---|
+| 내부 `client_credentials` (Docker 없는 판) | `client_credentials` | `test-internal-client`(슬라이스가 심는 행) | `OAuth2AuthorizationServerSliceTest.java:278-291` — 실제 SAS `JwtGenerator` + `TenantClaimTokenCustomizer`, H2 | `["test-internal-client"]` | ✅ **돌았다** — `:auth-service:test --tests "…OAuth2AuthorizationServerSliceTest"` **rc=0**, `tests="14" failures="0"`. `aud` = 발급 client id **실측** |
+| GAP 내부 워크로드 | `client_credentials` | `account-service-client`(V0019 시드) | `OAuth2AuthorizationServerIntegrationTest.java:310-314` (JWKS 서명 검증 후 `jwt.getAudience()`) | `["account-service-client"]` | ⚪ Testcontainers IT — **로컬 불가**(Docker 꺼짐, `docker info` rc=1). CI 통합 잡이 권위 |
+| 도메인 워크로드 (fan) | `client_credentials` | `community-service-client`(V0009/V0032 시드) | `OAuth2AuthorizationServerIntegrationTest.java:453-456` | `["community-service-client"]` | ⚪ 같음 |
+| 콘솔 base | `authorization_code` (form-login + PKCE) | `platform-console-web`(V0015 시드) | `FormLoginIntegrationTest.java:223-236` | `["platform-console-web"]` | ⚪ 같음 |
+| 콘솔 assume-tenant | `token_exchange` | `platform-console-web` | `AssumeTenantExchangeIntegrationTest.java:472-474` (기존) | `aud` ∋ `platform-console-web` | ⚪ 같음(기존 단언, 이 PR 은 손대지 않음) |
+| web-store 소비자 | `authorization_code` (소셜 로그인 세션 → 시드 client 로 재-authorize, `client_secret_basic` + PKCE) | `ecommerce-web-store-client`(V0012 시드, 콜백 `/api/auth/callback/iam` V0024) | `SocialLoginSasBrowserIntegrationTest.java:343-386` (+ 같은 흐름의 IT 공개 client 토큰 `:338-341`) | `["ecommerce-web-store-client"]` | ⚪ 같음 |
+
+- 🔴 **위 ⚪ 다섯 줄은 «단언을 썼다» 이지 «초록을 봤다» 가 아니다.** 컴파일은 로컬에서 확인했다(`:auth-service:test` 가 같은 소스셋을 컴파일 — **rc=0**, 700칸 실패 0 · 28 skip; 🔴 `test` 는 `@Tag("integration")` 을 제외하므로 이 IT 들은 **실행되지 않았다**). 판정은 이 PR 의 CI `iam` 통합 잡이 한다.
+- 🔵 web-store 칸은 IT 스탠드인 client 가 아니라 **시드된 실제 client** 로 발급한다 — 같은 세션(같은 계정·같은 테넌트 `ecommerce`)을 재사용하므로 추가 스텁 없이 web-store 발급 경로만 다르다. 이 칸이 CI 에서 빨개지면 원인 후보는 `aud` 가 아니라 발급 경로(시드 시크릿·콜백 등록)일 수 있다 — 먼저 어느 줄에서 실패했는지 본다.
+- 🔵 legacy issuer `iam` 토큰(Edge Case): `TASK-MONO-367`(2026-08-01 일몰, LANDED)로 게이트웨이 allowlist 에서 빠졌다 — 6 게이트웨이에 도달해 통과할 모집단이 아니므로 `aud` 형태를 따로 재지 않았다.
+- 🔵 Nimbus 는 원소 하나짜리 `aud` 를 **문자열**로 직렬화한다 — JSON 페이로드 단언은 문자열/배열 둘 다 받아 값 집합으로 비교했다. 구현(AC-4)도 같은 이유로 «교집합» 을 단일 문자열에도 적용해야 한다(계약서 `:58` 이 이제 그렇게 적는다).
+
+## (b) 각 게이트웨이에 실제로 도달하는 client — **측정 입력이지 결정이 아니다** (1단계 섀도 allowlist 의 제안값)
+
+호스트명 → 게이트웨이: `wms.local`=wms `gateway-service`(`projects/wms-platform/docker-compose.e2e.yml:103`), `scm.local`=`scm-platform-gateway`(`projects/scm-platform/docker-compose.yml:41,68`), `erp.local`=`erp-platform-gateway`(`projects/erp-platform/docker-compose.yml:51,78` — 백엔드 넷은 Traefik 라벨 없음 `:42-47`), `finance.local`=`finance-platform-gateway`(`projects/finance-platform/docker-compose.yml:52,77`), `fan-platform.local`=`fan-platform-gateway`(`projects/fan-platform/docker-compose.yml:29,58`), `ecommerce.local`=`ecommerce-gateway-service`(`projects/ecommerce-microservices-platform/docker-compose.yml:1135,1203`). 데모는 `.local` → `${DEMO_DOMAIN}`.
+
+| 게이트웨이 | 도달하는 client (제안 allowlist) | 호출 경로 근거 (설정된 base URL) | 도달하지 않는 것 — 근거 |
+|---|---|---|---|
+| **ecommerce** | `platform-console-web` · `ecommerce-web-store-client` | 콘솔: console-bff `CONSOLE_BFF_OUTBOUND_ECOMMERCE_BASE_URL` 기본 `http://ecommerce.local`(`console-bff/src/main/resources/application.yml:88`, 데모 `infra/demo/demo.env:236`), console-web `ECOMMERCE_ADMIN_BASE_URL` 기본 `http://ecommerce.local/api/admin` · `ECOMMERCE_PUBLIC_BASE_URL` `http://ecommerce.local/api`(`console-web/src/shared/config/env.ts:278-293`), client id `OIDC_CLIENT_ID` 기본 `platform-console-web`(`env.ts:60`). web-store: `API_URL_INTERNAL=http://gateway-service:8080` · `NEXT_PUBLIC_API_URL` 기본 `http://ecommerce.local`, client `ECOMMERCE_WEB_STORE_CLIENT_ID` 기본 `ecommerce-web-store-client`(`ecommerce…/docker-compose.yml:1238,1244,1267`) | `ecommerce-internal-services-client`(batch-worker): 호출 대상이 서비스 직행 — `product-service:8081`·`search-service:8085`·`order-service:8082`·`promotion-service:8092`(`batch-worker/src/main/resources/application.yml:76-85`). ⚪ `ecommerce-admin-dashboard-client`(V0012 시드): 등록 콜백이 `localhost:3001`·`admin.ecommerce.local`(V0012 `:110`)인데 **그 앱이 이 저장소에 없다** — 도달 여부를 설정으로 댈 수 없다(부재 판정 아님, **미측정**). |
+| **wms** | `platform-console-web` | console-bff `CONSOLE_BFF_OUTBOUND_WMS_BASE_URL` 기본 `http://wms.local`(`application.yml:78`, 데모 `demo.env:230`); console-web `WMS_ADMIN_BASE_URL` 기본 `http://wms.local/api/v1/admin` · `WMS_OUTBOUND_BASE_URL` `http://wms.local/api/v1/outbound`(`env.ts:174-193`) | ⚪ `wms-user-flow-client`(V0010 시드): 이 client 로 설정된 앱이 저장소에 없다 — **미측정**. ⚪ `wms-internal-services-client`: 설정된 호출자 없음. 수동 1회 호출 기록만 있다(`infra/demo/wms-devseed.override.yml:23-24`, `/api/v1/master/warehouses` 403) — 설정된 트래픽이 아니므로 표에 넣지 않았다. |
+| **scm** | `platform-console-web` | console-bff `CONSOLE_BFF_OUTBOUND_SCM_BASE_URL` 기본 `http://scm.local`(`application.yml:80`, `demo.env:231`); console-web `SCM_GATEWAY_BASE_URL` 기본 `http://scm.local`(`env.ts:209`) | ⚪ `scm-platform-internal-services-client`: 게이트웨이 컨테이너 env 에 `OIDC_INTERNAL_CLIENT_ID` 로 들어가지만(`scm…/docker-compose.yml:54`) 게이트웨이 `src/main` 은 그 키를 읽지 않는다(릴라잉 파티라 발급하지 않음). 이 client 로 scm 게이트웨이를 부르는 호출자는 설정에서 찾지 못했다 — **미측정**. |
+| **erp** | `platform-console-web` | console-bff `CONSOLE_BFF_OUTBOUND_ERP_BASE_URL` 기본 `http://erp.local`(`application.yml:84`, `demo.env:233`); console-web `ERP_BASE_URL` 기본 `http://erp.local`(`env.ts:261`) | ⚪ `erp-platform-internal-services-client`: `.env.example` 에만 있다 — 설정된 호출자 **미측정**. |
+| **finance** | `platform-console-web` | console-bff `CONSOLE_BFF_OUTBOUND_FINANCE_BASE_URL` 기본 `http://finance.local`(`application.yml:82`, `demo.env:232`); console-web `FINANCE_BASE_URL` · `LEDGER_BASE_URL` 기본 `http://finance.local`(`env.ts:224,245`) | ⚪ `finance-platform-internal-services-client`: `.env.example` 에만 있다 — **미측정**. 🔵 e2e 오버레이는 console-bff FINANCE 를 게이트웨이가 아닌 `http://finance-account-service:8080` 으로 돌린다(`projects/platform-console/docker-compose.e2e.yml:390`) — e2e 에서는 이 경로가 finance 게이트웨이를 **타지 않는다**. |
+| **fan** | `fan-platform-user-flow-client` | fan-platform-web `OIDC_CLIENT_ID` 기본 `fan-platform-user-flow-client` · `GATEWAY_URL_INTERNAL=http://gateway-service:8080`(`projects/fan-platform/docker-compose.yml:326,332`), `NEXT_PUBLIC_GATEWAY_URL`/`GATEWAY_URL_INTERNAL` 사슬(`web/fan-platform-web/src/shared/config/env.ts:100-106,121`) | `platform-console-web`: console-bff 의 팬아웃 대상 열거가 `IAM, WMS, SCM, FINANCE, ERP, ECOMMERCE` 로 **fan 이 없다**(`console-bff/…/domain/credential/DomainTarget.java:22-29`), console-bff outbound base URL 도 그 여섯뿐(`application.yml:76-88`). `community-service-client`: 호출 대상이 서비스 직행 `ARTIST_SERVICE_BASE_URL` 기본 `http://artist-service:8080`(`community-service/src/main/resources/application.yml:126`). |
+
+- 🔴 **⚪ 칸은 «안 온다» 가 아니라 «설정으로 대지 못했다» 이다.** 1단계 섀도가 바로 이것을 재는 장치다 — 섀도 로그에 이 client 들이 나타나면 allowlist 에 넣는 것이 2단계 전환 조건(불일치 0)의 일부가 된다.
+- 🔴 **데모/e2e 하네스가 직접 민팅하는 토큰**(Edge Case)은 이 표에 없다 — 게이트웨이 테스트 헬퍼가 `aud: ecommerce`/`wms` 를 민팅하는 것은 AC-5 가 고친다.
+
+# AC-3 스펙 개정 (2026-09-16 UTC) — 계약서는 이제 B 를 말한다
+
+| 파일 | 줄 | 바뀐 것 |
+|---|---|---|
+| `platform/contracts/jwt-standard-claims.md` | `:46` | Audience Scoping → «`aud` = 토큰을 얻은 등록 client 의 id, 게이트웨이는 client allowlist 를 선언하고 교집합 없으면 거절» |
+| 같음 | `:58` | `aud` 행: 타입 `string or string[]`, 뜻 = 발급 client id(모든 grant, assume-tenant 는 acting client), RFC 8693 `audience` 파라미터는 `tenant_id` 로 가지 `aud` 로 가지 않음, 단일 문자열 = 원소 하나 집합, 예시는 자리표시자 |
+| 같음 | `:130-134` | 규칙 5: **`aud` 집합 ∩ allowlist ≠ ∅ 이면 통과**, 아니면 403 · allowlist 필수 · **빈/부재 = 기동 실패** · `aud` 없음 = 빈 집합 = 불통과 · 공유 검증기 사슬에 둔다 · 새 client 등록 시 allowlist 동시 갱신 · **섀도 단계**(거절 없이 로그+메트릭, 전환 조건 = 실측 불일치 0, 날짜 아님) |
+| 같음 | `:170` | Error Handling: allowlist 불일치(섀도 밖) → **403**, 디코더 기본 401 을 사슬 훑기로 403 매핑. 오류 코드 이름 **제안** `AUDIENCE_FORBIDDEN` (결정 아님) |
+| 같음 | `:223-337` | 예제 1-6 의 `aud` 를 플랫폼 이름 → **client id 자리표시자**로, 게이트웨이 동작 줄을 «allowlist 교집합» 으로. 예제 5 는 «allowlist 에 없는 client» + 섀도 단계 동작 |
+| 같음 | `:23`, `:83`, `:85`, `:102`, `:104`, `:153`, `:281`, `:284` | 🔵 **요청 목록 밖 정합 수정** — «`aud` = 플랫폼» 을 전제로 쓴 문장(«A token is always for exactly one platform (`aud`)», «`aud` platform's roles», SSO «any platform (`aud`)» 등)을 «발급 client 의 플랫폼» 으로. 안 고치면 같은 파일이 `aud` 를 두 가지로 말한다 |
+| 같음 | `:358` | Change log 항목(2단계 롤아웃·전환 조건 포함) |
+| `platform/service-types/identity-platform.md` | `:78` | `aud` MUST = 발급 client id(플랫폼 이름 아님), allowlist 에 없는 edge 에서 무효 |
+| 같음 | `:225` | 릴라잉 파티 규칙 3: `aud` 교집합 규칙 · allowlist 필수(빈 = 기동 실패) · 403 · 섀도 단계 허용 |
+| 같음 | `:283` | 음성 테스트: allowlist 밖 `aud` → 403(섀도 중엔 통과 + 로그/메트릭) · `aud` 없음 거절 · 빈 allowlist 기동 실패 |
+| 같음 | `:13`, `:149-150`, `:156-157`, `:244`, `:253`, `:279`, `:307` | 🔵 **요청 목록 밖 정합 수정** — 같은 전제(`aud`-scoping = 플랫폼)의 문장들 |
+
+- HARDSTOP-03: 두 파일에 서비스 이름·구체 client id(`platform-console-web` 등)를 **넣지 않았다** — 자리표시자만. (두 파일에 원래 있던 플랫폼 이름 예시 `ecommerce`/`wms` 는 역할·경로 설명에 남아 있다.) `scripts/check-jwt-claims-registry.sh` **rc=0**(«all 6 claims … registered»).
+
+**AC-4/AC-5 가 맞춰야 할 것 (계약서 기준):**
+
+1. 검사 = `aud` 값 집합(단일 문자열 포함) **∩** 게이트웨이 allowlist ≠ ∅. «정확히 하나» 가 아니다.
+2. allowlist 는 **필수 인자** — 빈 목록/부재는 **기동 실패**(`AllowedIssuersValidator` 와 같은 fail-closed; ecommerce `order-service` `AudienceValidator` 의 «빈 값 = 통과» 를 복사하지 말 것). `aud` 없는 토큰은 불통과.
+3. **공유 사슬**(`GatewayJwtDecoders.validatorChain`)에 둬서 6 게이트웨이가 생략할 수 없게.
+4. **1단계 섀도**: 불일치 → 거절 없음 + 로그(`jti`, `aud` 값, 게이트웨이) + 메트릭 1. 6 게이트웨이 전부. 테스트는 «불일치 → 통과 + 메트릭 +1».
+5. **2단계 거절**(별도 PR, 실측 불일치 0 이후): 불일치 → **403**, BE-595 식 원인 사슬 훑기로 매핑(401 아님), 만료·서명·발급자 거절은 여전히 401. AC-0 의 `…_passesToday_flipsInAc5` 칸이 403 으로 뒤집힌다.
+6. allowlist 초기값 = 위 § AC-1 (b) 표(측정 입력) + 섀도가 드러내는 ⚪ client.
+7. 테스트 헬퍼는 **운영과 같은 `aud`(client id)** 를 민팅한다(`aud: ecommerce`/`wms` 금지).
+8. 죽은 `audiences:` 속성 처분(AC-4) — 계약서는 그 속성을 요구하지 않는다.
 
 ---
 

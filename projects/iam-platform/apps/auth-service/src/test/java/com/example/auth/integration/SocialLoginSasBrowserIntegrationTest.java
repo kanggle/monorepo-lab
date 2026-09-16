@@ -336,6 +336,72 @@ class SocialLoginSasBrowserIntegrationTest extends AbstractIntegrationTest {
             if ("CUSTOMER".equals(r.asText())) { hasCustomer = true; break; }
         }
         assertThat(hasCustomer).as("token roles must contain CUSTOMER (RoleSeedPolicy on ecommerce)").isTrue();
+        assertThat(audValues(accessPayload))
+                .as("TASK-MONO-696 AC-1: aud == issuing client id (the IT public client)")
+                .containsExactly(CLIENT_ID);
+
+        // 7. TASK-MONO-696 AC-1 — the SEEDED web-store client, not the IT stand-in.
+        // Same authenticated session (same account, same tenant `ecommerce`), re-driven through
+        // /oauth2/authorize with `ecommerce-web-store-client` (V0012, confidential
+        // client_secret_basic + PKCE; dev secret pinned by BcryptHashPinTest; callback path
+        // /api/auth/callback/iam per V0024). The question is only what `aud` the IdP puts on the
+        // token a web-store user actually carries to the ecommerce gateway.
+        String wsVerifier = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(UUID.randomUUID().toString().replace("-", "").getBytes(StandardCharsets.UTF_8));
+        String wsChallenge = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(MessageDigest.getInstance("SHA-256")
+                        .digest(wsVerifier.getBytes(StandardCharsets.US_ASCII)));
+        MvcResult wsAuthorize = mockMvc.perform(get("/oauth2/authorize")
+                        .session(toMockSession(session))
+                        .queryParam("response_type", "code")
+                        .queryParam("client_id", WEB_STORE_CLIENT_ID)
+                        .queryParam("redirect_uri", WEB_STORE_REDIRECT_URI)
+                        .queryParam("scope", "openid profile email")
+                        .queryParam("code_challenge", wsChallenge)
+                        .queryParam("code_challenge_method", "S256")
+                        .queryParam("state", "browser-state-ws"))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+        String wsRedirect = wsAuthorize.getResponse().getHeader("Location");
+        assertThat(wsRedirect).startsWith(WEB_STORE_REDIRECT_URI);
+        String wsCode = extractParam(wsRedirect, "code");
+        assertThat(wsCode).isNotBlank();
+
+        MvcResult wsToken = mockMvc.perform(post("/oauth2/token")
+                        .header("Authorization", "Basic " + Base64.getEncoder().encodeToString(
+                                (WEB_STORE_CLIENT_ID + ":" + WEB_STORE_CLIENT_SECRET)
+                                        .getBytes(StandardCharsets.UTF_8)))
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("grant_type", "authorization_code")
+                        .param("code", wsCode)
+                        .param("redirect_uri", WEB_STORE_REDIRECT_URI)
+                        .param("code_verifier", wsVerifier))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode wsPayload = decodeJwtPayload(objectMapper.readTree(
+                wsToken.getResponse().getContentAsString()).get("access_token").asText());
+        assertThat(audValues(wsPayload))
+                .as("TASK-MONO-696 AC-1: web-store access token aud == ecommerce-web-store-client, "
+                        + "not the platform name `ecommerce`")
+                .containsExactly(WEB_STORE_CLIENT_ID);
+        assertThat(wsPayload.get("tenant_id").asText()).isEqualTo("ecommerce");
+    }
+
+    private static final String WEB_STORE_CLIENT_ID = "ecommerce-web-store-client";
+    private static final String WEB_STORE_CLIENT_SECRET = "ecommerce-dev";
+    private static final String WEB_STORE_REDIRECT_URI = "http://localhost:3000/api/auth/callback/iam";
+
+    /** `aud` values; Nimbus serializes a single-element audience as a bare string. */
+    private static java.util.List<String> audValues(JsonNode payload) {
+        JsonNode aud = payload.get("aud");
+        assertThat(aud).as("access token must carry aud").isNotNull();
+        java.util.List<String> values = new java.util.ArrayList<>();
+        if (aud.isArray()) {
+            aud.forEach(a -> values.add(a.asText()));
+        } else {
+            values.add(aud.asText());
+        }
+        return values;
     }
 
     // ----------------------------------------------------------------------

@@ -20,7 +20,7 @@ There is a single kind of account: an **identity** (globally unique `sub`), auth
 - **No account-type partition.** An identity is not classified as "consumer" or "operator" at the account level. Capability is expressed entirely by the roles the identity holds.
 - **Roles carry capability.** Some roles are *consumer-facing* (e.g. ecommerce `CUSTOMER`, fan-platform `FAN`/`PREMIUM_MEMBER`); others are *operator-facing* (e.g. `WMS_OPERATOR`, `SCM_OPERATOR`, ecommerce `ADMIN`). "Consumer-facing" vs "operator-facing" describes the *role*, not the *person*.
 - **One identity may hold both.** A marketplace MD who also shops, a seller who also buys, a warehouse lead who is also a fan member — each is **one account** holding both consumer-facing and operator-facing roles. (Under the former model these required two separate accounts; that constraint is removed.)
-- **Per-token least privilege is preserved.** A token is always for exactly one platform (`aud`) and carries only that platform's roles (§ Role Strategy). The "one person, both capabilities" fact lives in the identity's *role grants*; any single token stays narrowly scoped.
+- **Per-token least privilege is preserved.** A token is always for exactly one platform — the platform its issuing client is registered for — and carries only that platform's roles (§ Role Strategy). (`aud` names that client, not the platform; see the `aud` row.) The "one person, both capabilities" fact lives in the identity's *role grants*; any single token stays narrowly scoped.
 
 | Capability family | Example roles | Target platforms |
 |---|---|---|
@@ -43,7 +43,7 @@ Self-service signup grants consumer-facing roles; operator/admin provisioning gr
 - **Token Lifetime:**
   - Access tokens: short-lived (5–15 minutes typical)
   - Refresh tokens: longer-lived, stored server-side, not validated as JWTs
-- **Audience Scoping:** Each access token carries a platform-specific `aud` claim; gateways reject tokens with mismatched `aud`
+- **Audience Scoping (client allowlist):** Each access token carries an `aud` claim naming the **client id of the registered client that obtained it** (the identity-platform's token-issuance default; it is not a platform name). Each gateway declares an **audience allowlist** — the client ids admitted at that edge — and rejects a token whose `aud` values share no member with it (§ JWT Validation rule 5). The platform a token acts on is still bound by `tenant_id` / `entitled_domains` and `roles`; `aud` answers a different question: *which registered client is presenting this token, and is that client admitted here?*
 
 ---
 
@@ -55,7 +55,7 @@ All access tokens issued by the identity-platform service MUST include the follo
 |---|---|---|---|---|
 | `sub` | UUID string | Yes | Account ID (globally unique, immutable across all platforms). **ADR-MONO-040 Phase 2 (executed, TASK-MONO-295):** the SAS OIDC path emits the account UUID here (the auth-service `TenantClaimTokenCustomizer` overrides the framework-default email principal on the `authorization_code`/`refresh_token` path). **Phase 3 part B (TASK-MONO-299):** `X-User-Id ← sub` is fully restored — gateways read `sub` directly, with no transitional `account_id`-claim fallback. **ADR-MONO-060 (TASK-MONO-515): this row already said "all platforms", and the `token_exchange` (assume-tenant) path was the one grant not honouring it** — it emitted the acting client id. That is corrected; the assumed token's `sub` is now the account UUID validated out of the subject token. **No carve-out exists here and none is intended** — contrast the `email` row below, which carves out the assume-tenant exchange explicitly. The acting client remains identifiable via `aud`/`client_id`; no `act` claim is minted. | `550e8400-e29b-41d4-a716-446655440000` |
 | ~~`account_id`~~ | — | **REMOVED** | **ADR-MONO-040 transitional claim — RETIRED in Phase 3 part B (TASK-MONO-299).** Phase 1 introduced it as the consumer `X-User-Id` source while `sub` carried the email; Phase 2 made `sub` itself the account UUID, making the claim redundant; Phase 3 part B removed its emission entirely (the auth-service `TenantClaimTokenCustomizer` no longer emits it). Gateways read `X-User-Id ← sub` directly. Any token observed carrying it is legacy/in-flight; gateways ignore it. | — |
-| `aud` | string | Yes | Target platform audience — must match gateway's own platform | `ecommerce`, `fan`, `wms`, `erp`, `mes`, `scm` |
+| `aud` | string or string[] | Yes | **The client id of the registered client the token was issued to** — on every grant (`authorization_code` / `refresh_token`, `client_credentials`, and the assume-tenant `token_exchange`, where it is the acting client). It is **not** a platform identifier: no issuance path writes a platform name here, and the RFC 8693 `audience` *request parameter* of the assume-tenant exchange carries the selected tenant into `tenant_id`, never into this claim. JWT permits a single string or an array; readers MUST accept both and treat a single string as a one-element set. A gateway admits the token iff this set intersects its declared audience allowlist (§ JWT Validation rule 5). | `<consumer-web-client-id>`, `<operator-console-client-id>`, `<workload-client-id>` |
 | `roles` | string[] | Conditional | Platform-scoped roles for the `aud` platform — **the authorization axis** (may span consumer-facing and operator-facing roles). Emitted on the identity-bearing grants (`authorization_code` / `refresh_token`) and on the assume-tenant exchange whenever the resolved set is non-empty; **omitted, never emitted as `[]`**, when it is empty — a role-less token is refused by rule 6 either way, and the omission is what the fleet has always minted. **ADR-MONO-061 (ACCEPTED 2026-08-13) additionally permits it on `client_credentials`**, per explicitly-enumerated workload client, default none — see § Gateway Enforcement Rules. The cell read `Required: Yes` from the day this contract was written and was never true of a workload token; `Conditional` states what is minted. | `["CUSTOMER"]`, `["CUSTOMER","ADMIN"]`, `["WMS_OPERATOR","OUTBOUND_MANAGER"]`, `["MASTER_WRITE"]` (workload) |
 | `email` | string | Conditional | Account email address. Emitted on identity-bearing grants (`authorization_code` / `refresh_token`) **when the `email` scope was granted** — consent is what makes the token a legitimate PII channel, so an ungranted scope means no claim. Omitted, never blank, when no email is known: consumers map it with `skipIfNull`, and a present-but-empty header provisions an empty-email profile. Never on `client_credentials` (a workload is not an identity) nor on the assume-tenant exchange. | `user@example.com` |
 | `iss` | string | Yes | Issuer URI of the identity-platform service | `https://account.example.com` |
@@ -80,9 +80,9 @@ Additional custom claims MAY be added by the identity service but MUST NOT confl
 
 # Role Strategy
 
-Roles are platform-scoped and define authorization within the target `aud` platform. **`roles` is the only authorization axis** — there is no account-type gate above it.
+Roles are platform-scoped and define authorization within the token's target platform (the platform its issuing client is registered for — not the `aud` value, which is the client id). **`roles` is the only authorization axis** — there is no account-type gate above it.
 
-- **A token carries only its `aud` platform's roles** (aud-scoped). A `wms` token carries the identity's wms roles; an `ecommerce` token carries its ecommerce roles. Roles are **not** flattened across platforms into a single token — this preserves per-token least privilege.
+- **A token carries only its target platform's roles** (platform-scoped). A `wms` token carries the identity's wms roles; an `ecommerce` token carries its ecommerce roles. Roles are **not** flattened across platforms into a single token — this preserves per-token least privilege.
 - **An identity may hold roles on multiple platforms** (e.g. `wms` + `scm`), and may hold **both consumer-facing and operator-facing roles** — on the same platform (ecommerce `["CUSTOMER","ADMIN"]`) or across platforms (ecommerce `CUSTOMER` + wms `WMS_OPERATOR`).
 - **Multiple roles per platform are supported for every platform** (the former "CONSUMER single-role" restriction is removed). A consumer surface typically issues one role (`CUSTOMER`) but the model does not forbid more.
 - Platform administrators define and assign roles; the identity service does not prescribe a role catalog per platform. Examples:
@@ -99,9 +99,9 @@ Roles are platform-scoped and define authorization within the target `aud` platf
 
 SSO is scoped by **role possession on the target platform**, not by account type:
 
-- An identity may request an access token for **any platform (`aud`) on which it holds ≥ 1 role**, without re-entering credentials.
+- An identity may request an access token for **any platform on which it holds ≥ 1 role** (through that platform's registered client), without re-entering credentials.
 - A single login therefore spans every entitled platform — consumer-facing and operator-facing alike. The same identity can hold a `CUSTOMER` token for ecommerce and a `WMS_OPERATOR` token for wms in one session.
-- **No cross-type restriction.** The former rule that consumer and operator surfaces could never share a session is removed — the unified identity holds both capabilities, and each `aud` token is independently scoped to that platform's roles.
+- **No cross-type restriction.** The former rule that consumer and operator surfaces could never share a session is removed — the unified identity holds both capabilities, and each token is independently scoped to its target platform's roles.
 
 ---
 
@@ -127,7 +127,11 @@ Every platform gateway MUST implement the following validation and injection log
 
 4. **Validate issuer:** Reject if `iss` does not match the expected identity service URI (e.g., `https://account.example.com`)
 
-5. **Validate audience:** Reject if `aud` does not match the gateway's own platform identifier
+5. **Validate audience (client allowlist):** Admit iff the token's `aud` values (a single string is a one-element set) **intersect** the gateway's declared audience allowlist — i.e. at least one `aud` value is a client id the gateway admits. Otherwise reject with `403 Forbidden` (§ Error Handling).
+   - **The allowlist is mandatory and fail-closed.** Every gateway declares it explicitly; an absent or empty allowlist is a **startup failure**, never "accept any audience". A token with no `aud` claim has an empty set and therefore never intersects.
+   - **The check lives in the shared validator chain**, alongside the issuer allowlist, so a gateway cannot omit it by not wiring it.
+   - **Allowlist contents are the client ids measured to reach that edge** — end-user web clients of that platform, the operator console client that fans out to it, and workload clients whose calls are routed through it. Registering a new client that calls a gateway therefore requires adding its client id to that gateway's allowlist in the same change; otherwise the new client is refused at that edge.
+   - **Transitional shadow phase.** A gateway MAY run this rule in *shadow* mode for a bounded rollout: a mismatch is **not rejected**; it is logged (with `jti`, the `aud` values and the gateway) and counted on a metric, and the request proceeds to rule 6. Shadow mode is a rollout device, not a steady state — a gateway leaves it (switches to rejection) once the measured mismatch count is zero, and the switch is its own change. The exit condition is the measured count, not a date.
 
 6. **Validate authorization (role-based admission):** Admit iff the token carries ≥ 1 role valid for the requested surface; otherwise respond `403 Forbidden`. Authorization is a positive check against a closed role set.
    - **fan gateway:** require a FAN-family role (e.g. `FAN`)
@@ -146,7 +150,7 @@ Every platform gateway MUST implement the following validation and injection log
    - **A workload is still not an identity.** It carries no `email` (see that row) and its `sub` is the client, not an account. `roles` on a machine token states what the workload may do — never who it is — and nothing may infer a human actor from its presence.
    - **The scope axis is unchanged.** Surfaces that gate on scope or on a subject allow-list (`/internal/**`) keep doing exactly that. Roles are an addition for role-gated *domain* surfaces, not a replacement, and a workload role set must not be widened to substitute for a scope check.
 
-   This preserves the isolation that matters: a `CUSTOMER`-only token still fails the `/api/admin/**` role check, and a consumer-surface token never carries operator roles for a different `aud` (different token, § Role Strategy). Defense-in-depth (RBAC, ABAC data scope, access conditions) is unchanged and remains the primary gate on sensitive surfaces.
+   This preserves the isolation that matters: a `CUSTOMER`-only token still fails the `/api/admin/**` role check, and a consumer-surface token never carries operator roles for a different platform (different token, § Role Strategy). Defense-in-depth (RBAC, ABAC data scope, access conditions) is unchanged and remains the primary gate on sensitive surfaces.
 
    **Roles-only (end state).** The ADR-MONO-032 D5 migration is complete (TASK-MONO-263 / D5 step 4): issuance is roles-only and the `account_type` claim is dropped. Gateways gate on `roles` only and **ignore `account_type` if seen** on a legacy token. The dual-read window (§ Migration Compatibility) is historical.
 
@@ -163,7 +167,7 @@ Every platform gateway MUST implement the following validation and injection log
 - Invalid or missing JWT: respond with HTTP 401 Unauthorized
 - Expired token: respond with HTTP 401 Unauthorized
 - Signature mismatch: respond with HTTP 401 Unauthorized
-- Wrong `aud`, or no role valid for the requested surface: respond with HTTP 403 Forbidden (authenticated but not authorized for this surface)
+- `aud` that does not intersect the gateway's audience allowlist (rule 5, outside shadow mode), or no role valid for the requested surface: respond with HTTP 403 Forbidden (authenticated but not authorized for this surface). An audience rejection raised inside the decoder's validator chain surfaces as an authentication failure by default (401 `invalid_token`); the gateway MUST map it to 403 by finding the audience error anywhere in the exception cause chain — the same chain-walk used for tenant rejection — so that re-authenticating (which cannot change the issuing client) is not what the caller is told to do. The response error code for this case is not yet fixed by this contract (proposal: `AUDIENCE_FORBIDDEN`, parallel to `TENANT_FORBIDDEN`); it is settled by the implementation change that turns on rejection.
 - JWKS endpoint unreachable: log error and respond with HTTP 503 Service Unavailable (do not fall back to cached keys older than 1 hour)
 
 ---
@@ -216,7 +220,7 @@ Gateways SHOULD cache this endpoint for up to 1 hour and refresh on-demand if a 
 ```json
 {
   "sub": "550e8400-e29b-41d4-a716-446655440000",
-  "aud": "ecommerce",
+  "aud": "<ecommerce-consumer-web-client-id>",
   "roles": ["CUSTOMER"],
   "email": "shopper@example.com",
   "iss": "https://account.example.com",
@@ -228,7 +232,7 @@ Gateways SHOULD cache this endpoint for up to 1 hour and refresh on-demand if a 
 ```
 
 **Gateway Behavior (ecommerce, `/api/products` path):**
-- Validate signature, expiry, issuer, `aud = "ecommerce"` ✓
+- Validate signature, expiry, issuer, `aud` ∩ the ecommerce audience allowlist ≠ ∅ (the consumer web client id is listed) ✓
 - Path is not `/api/admin/**` → require a consumer role; `roles` contains `CUSTOMER` ✓
 - Inject: `X-User-Id: 550e8400-…`, `X-User-Role: CUSTOMER`, `X-User-Email: shopper@example.com`
 
@@ -237,7 +241,7 @@ Gateways SHOULD cache this endpoint for up to 1 hour and refresh on-demand if a 
 ```json
 {
   "sub": "550e8400-e29b-41d4-a716-446655440000",
-  "aud": "fan",
+  "aud": "<fan-web-client-id>",
   "roles": ["FAN", "PREMIUM_MEMBER"],
   "email": "shopper@example.com",
   "iss": "https://account.example.com",
@@ -249,7 +253,7 @@ Gateways SHOULD cache this endpoint for up to 1 hour and refresh on-demand if a 
 ```
 
 **Gateway Behavior (fan-platform):**
-- Validate signature, expiry, issuer, `aud = "fan"`; require a FAN-family role; `roles` contains `FAN` ✓
+- Validate signature, expiry, issuer, `aud` ∩ the fan audience allowlist ≠ ∅; require a FAN-family role; `roles` contains `FAN` ✓
 - Inject: `X-User-Role: FAN,PREMIUM_MEMBER`. Services may check for `PREMIUM_MEMBER` to enable premium features.
 
 ## Example 3: WMS operator with multiple roles
@@ -257,7 +261,7 @@ Gateways SHOULD cache this endpoint for up to 1 hour and refresh on-demand if a 
 ```json
 {
   "sub": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
-  "aud": "wms",
+  "aud": "<operator-console-client-id>",
   "roles": ["WMS_OPERATOR", "OUTBOUND_MANAGER"],
   "email": "warehouse-lead@company.com",
   "iss": "https://account.example.com",
@@ -269,18 +273,18 @@ Gateways SHOULD cache this endpoint for up to 1 hour and refresh on-demand if a 
 ```
 
 **Gateway Behavior (WMS):**
-- Validate signature, expiry, issuer, `aud = "wms"`; require an operator role; `roles` contains `WMS_OPERATOR` ✓
+- Validate signature, expiry, issuer, `aud` ∩ the wms audience allowlist ≠ ∅ (the operator console client id is listed on every domain gateway it fans out to); require an operator role; `roles` contains `WMS_OPERATOR` ✓
 - Inject: `X-User-Role: WMS_OPERATOR,OUTBOUND_MANAGER`. Services may check for `OUTBOUND_MANAGER` to enable outbound-specific operations.
 
 ## Example 4: dual-capability identity (same person is both a customer and an admin)
 
-The unified model's defining case: **one account** holds both a consumer-facing and an operator-facing role. Each `aud` token is still scoped to that platform's roles.
+The unified model's defining case: **one account** holds both a consumer-facing and an operator-facing role. Each token is still scoped to its target platform's roles.
 
 ```json
-// token for aud=ecommerce — the account both shops and administers
+// ecommerce token — the account both shops and administers
 {
   "sub": "7f3d2c1b-0000-4abc-8def-111122223333",
-  "aud": "ecommerce",
+  "aud": "<ecommerce-consumer-web-client-id>",
   "roles": ["CUSTOMER", "ADMIN"],
   "email": "md-who-also-shops@company.com",
   "iss": "https://account.example.com",
@@ -296,12 +300,12 @@ The unified model's defining case: **one account** holds both a consumer-facing 
 - `/api/admin/products` (admin path) → requires an admin-family role; `roles` contains `ADMIN` ✓ → admitted
 - The same identity is authorized on both surfaces from one token, yet each path independently checks the role it requires. Under the former model this required two separate accounts.
 
-## Example 5: invalid token (wrong audience)
+## Example 5: invalid token (client not on the audience allowlist)
 
 ```json
 {
   "sub": "550e8400-e29b-41d4-a716-446655440000",
-  "aud": "wms",
+  "aud": "<unlisted-client-id>",
   "roles": ["CUSTOMER"],
   "email": "shopper@example.com",
   "iss": "https://account.example.com",
@@ -311,14 +315,14 @@ The unified model's defining case: **one account** holds both a consumer-facing 
 ```
 
 **Gateway Behavior (ecommerce):**
-- Validate `aud = "wms"` against expected `"ecommerce"` ✗ → HTTP 403 Forbidden (token is for a different platform)
+- `aud = ["<unlisted-client-id>"]` shares no member with the ecommerce audience allowlist ✗ → HTTP 403 Forbidden (the presenting client is not admitted at this edge). In the transitional shadow phase (rule 5) the same token is **not** rejected: the mismatch is logged and counted, and the request continues to rule 6.
 
 ## Example 6: invalid token (no role for the requested surface)
 
 ```json
 {
   "sub": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
-  "aud": "ecommerce",
+  "aud": "<ecommerce-consumer-web-client-id>",
   "roles": ["CUSTOMER"],
   "email": "shopper@example.com",
   "iss": "https://account.example.com",
@@ -330,7 +334,7 @@ The unified model's defining case: **one account** holds both a consumer-facing 
 ```
 
 **Gateway Behavior (ecommerce — `/api/admin/products` path):**
-- Validate signature, expiry, issuer, `aud = "ecommerce"` ✓
+- Validate signature, expiry, issuer, `aud` ∩ the ecommerce audience allowlist ≠ ∅ ✓
 - Path `/api/admin/**` → require an admin-family role; `roles` is `["CUSTOMER"]`, no admin role ✗
 - Respond: HTTP 403 Forbidden — this token lacks an admin role for the admin surface (the account would need an `ADMIN` grant; see Example 4).
 
@@ -350,6 +354,8 @@ The unified model's defining case: **one account** holds both a consumer-facing 
 Any change to the JWT structure, standard claims, signing strategy, or gateway enforcement rules defined in this contract — new claim, claim type change, signature algorithm change, validation rule, header injection — must be documented in this file **before** any project's identity-platform service emits the change or any project's gateway enforces it. Breaking changes (claim rename, claim removal, validation tightening) require a coordinated rollout across all consuming projects (each project's gateway + downstream services), and the contract update MUST precede the implementation PR.
 
 **Change log:**
+
+- **2026-09-16 (TASK-MONO-696) — `aud` is the issuing client id; gateways validate it against a declared client allowlist (validation tightening, staged).** This contract said `aud` is a platform name that each gateway matches against its own platform. Neither half was true: the identity-platform has always minted the **issuing client id** in `aud` (framework default, never overridden — asserted by decoding issued tokens in the identity-platform's test suites, per grant), and **no gateway checked `aud` at all** (a platform-name property existed in two gateways' configuration but configured a decoder those gateways do not use). The contract is revised to what is issued, and the enforcement it promised is redefined so it can actually be turned on: rule 5 now admits a token iff its `aud` set intersects the gateway's **mandatory, fail-closed** audience allowlist of client ids, and a mismatch is a `403` (not the decoder's default `401`). Examples use placeholders for client ids. Because tightening would refuse tokens that pass today, the rollout is **two-phase**: phase 1 runs rule 5 in shadow mode on every gateway (mismatch logged + counted, not rejected); phase 2 switches to rejection in a separate change **only after the measured mismatch count is zero** — no duration is fixed; the zero count is the condition. Non-breaking for issuance (no claim changes). Implementation (the shared validator, per-gateway allowlists, the 403 mapping, test helpers minting realistic `aud` values) follows this revision and must match it.
 
 - **2026-08-13 (ADR-MONO-061, TASK-MONO-514) — a `client_credentials` token MAY carry `roles`; the machine authorization axis is scope *at the edge* and roles *behind it*.** No claim is added, renamed or retyped: `roles` has been in the Standard Claims table since this contract was written, and every service in the fleet already maps it to authorities. What changed is the grant it may appear on, and one sentence in § Gateway Enforcement Rules that was **true of admission and false of enforcement** — *"machine tokens authorize on the `scope` axis, not `roles`"*. Behind the gateway, authorization is roles: `master-service` gates 24 write predicates on `hasRole('MASTER_WRITE')`, no credential in the platform could produce that role (issuers measured: **0**), and the workload client's correctly-named `wms.master.write` scope opened nothing — the shape of the defect being that a scope with the right name is not evidence that it grants anything. `roles` is now `Conditional` rather than `Required: Yes`, which is what was always minted. **Constrained, not opened:** the grant is per-client and explicitly enumerated, gated on the scope the request was actually granted, the default is no roles for a client that is not listed, and the scope axis on `/internal/**` is untouched. Non-breaking for every reader — the claim's name, type and position are unchanged, and a reader that saw no `roles` on a workload token still sees none unless that client was enumerated.
 - **2026-08-07 (ADR-MONO-060, TASK-MONO-515) — the assume-tenant token's `sub` is the account UUID; the last grant violating the `sub` row is corrected.** No row was added, renamed or retyped: the `sub` row has required an account UUID "immutable across all platforms" since this contract was written, and the `token_exchange` (assume-tenant) grant was simply not honouring it — it emitted the acting client id (`platform-console-web`). Because all six domain gateways map `X-User-Id ← sub` and the shared `ActorClaims.from(jwt)` sets `accountId = jwt.getSubject()`, **every console operator was the same actor in every domain**: erp's approval and notification inboxes filtered on a single synthetic id (visible — the screen was empty) and every domain's audit rows recorded the client as the actor (invisible — nothing failed). The auth-service now carries the account UUID validated out of the subject token onto the resolved grant, and mints it as `sub`, **fail-closed** if it is absent. Reading side unchanged in all six gateways — that is why ADR-MONO-060 chose this option over a new claim. **No `act` claim is minted**: the acting client is still identified by `aud`/`client_id`, asserted in `AssumeTenantExchangeIntegrationTest`. Non-breaking for consumers (the claim's name, type and position are unchanged); behaviour-changing for anything that treated `X-User-Id` on an operator request as a client id — nothing did, which is the defect.

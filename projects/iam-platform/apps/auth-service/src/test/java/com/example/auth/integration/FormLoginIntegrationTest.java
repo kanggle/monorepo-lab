@@ -220,6 +220,21 @@ class FormLoginIntegrationTest extends AbstractIntegrationTest {
                 .as("access_token must NOT carry account_type (claim removed, roles-only model)")
                 .isFalse();
 
+        // TASK-MONO-696 AC-1: the console base token (authorization_code) carries the issuing
+        // client id in `aud` — the value every domain gateway sees on console fan-out traffic.
+        // Nimbus serializes a single-element audience as a bare string; accept either shape.
+        JsonNode aud = accessPayload.get("aud");
+        assertThat(aud).as("access_token must carry aud").isNotNull();
+        java.util.List<String> audValues = new java.util.ArrayList<>();
+        if (aud.isArray()) {
+            aud.forEach(a -> audValues.add(a.asText()));
+        } else {
+            audValues.add(aud.asText());
+        }
+        assertThat(audValues)
+                .as("TASK-MONO-696 AC-1: console base access token aud == platform-console-web")
+                .containsExactly(CLIENT_ID);
+
         JsonNode idPayload = decodeJwtPayload(tokenResponse.get("id_token").asText());
         assertThat(idPayload.has("account_type"))
                 .as("id_token must NOT carry account_type (claim removed)")
