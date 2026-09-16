@@ -8,7 +8,7 @@ e2e 로그인 픽스처가 **테넌트 쿠키만 심고 assume 은 안 한다** 
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -76,19 +76,46 @@ frontend
 
 ## AC-0 — 전제
 
-- [ ] 실패가 292 에서 시작했음을 런으로 고정: `15dbd9108` 초록 · `f95ef11a4` 빨강, 실패 칸 1(`:75`).
+- [x] 실패가 292 에서 시작했음을 런으로 고정: `15dbd9108` 초록 · `f95ef11a4` 빨강, 실패 칸 1(`:75`).
+      → nightly 런 35096744015(`15dbd9108`) success · 35097574407(`f95ef11a4`) failure, 콘솔 full-stack 잡의
+      실패 칸 1 = `overview-consolidation.spec.ts:75`(`heading 'ERP 마스터'` not found, 5000ms). 다음 커밋
+      `2563bba1f` 런도 failure.
 
 ## AC-1 — 고침
 
-- [ ] compose `auth-service` 에 `ADMIN_SERVICE_URL`.
-- [ ] 픽스처가 `POST /api/tenant {tenant}` 로 고르고, 2xx 가 아니면 상태+본문으로 던진다. `activeTenant=null` 가지는 유지(고르지 않음).
-- [ ] 쿠키 직접 주입 코드 제거(운영과 다른 상태를 만드는 유일한 자리).
+- [x] compose `auth-service` 에 `ADMIN_SERVICE_URL`. → `http://admin-service:8085`.
+- [x] 픽스처가 `POST /api/tenant {tenant}` 로 고르고, 2xx 가 아니면 상태+본문으로 던진다. `activeTenant=null` 가지는 유지(고르지 않음).
+      → `context.request.post`(컨텍스트 쿠키 공유 → storageState 에 assumed 토큰이 실린다) + 성공 시 `[e2e login] … → 200` 로그.
+- [x] 쿠키 직접 주입 코드 제거(운영과 다른 상태를 만드는 유일한 자리).
+- [x] 🔵 **착수 뒤 추가(1차 dispatch 가 드러냄)** — `operators-profile.spec.ts` 가 실제 스위치로 `finance` 를 고르고,
+      `seed-finance.sql` 의 계좌·잔액 행 `tenant_id` 를 `'*'` → `'finance'`. 아래 AC-2 표 참조.
 
 ## AC-2 — 판정 (🔴 권위는 dispatch 런)
 
-- [ ] 브랜치 dispatch nightly: 콘솔 full-stack 잡 **success**, 스펙 2개 전부 통과. 런 id 기록.
-- [ ] 🔴 그 런의 globalSetup 로그에서 `/api/tenant` 가 **200** 이었음을 확인(«스펙이 우연히 통과» 와 구별).
+- [x] 브랜치 dispatch nightly: 콘솔 full-stack 잡 **success**, 스펙 2개 전부 통과. 런 id 기록.
+
+      | 런 | 커밋 | 콘솔 잡 | 결과 |
+      |---|---|---|---|
+      | 35101604812 | `9a4515417` (compose + 픽스처) | failure | 7 통과 · 1 실패 — `overview-consolidation` **초록**, 대신 `operators-profile.spec.ts:39` finance 카드 `forbidden`(기대 `ok`) |
+      | **35103541564** | `40db5f5b2` (+ finance 테넌트 선택 · 시드 행 `'finance'`) | **success** | **8 통과 · 0 실패** |
+
+      🔴 1차 실패의 원인: 오버뷰의 finance 레그가 이제 **선택한 테넌트(`fan-platform`)의 assumed 토큰**으로 나간다.
+      finance 는 `tenant_id` `'*'` 또는 `'finance'` 만 받고 행을 그 클레임으로 읽는데, 시드는 `'*'` 와일드카드
+      base 토큰 전제였다 — 즉 이 스펙은 **테넌트를 고른 운영자가 절대 안 타는 경로**에서만 초록이었다.
+      `finance` 테넌트는 비-dev 마이그레이션이 보장한다(account-service `V0017` ACTIVE · `V0019` finance 자기구독).
+      `operators-admin-profile.spec.ts` 는 IAM 운영자 목록만 보므로 `fan-platform` 유지.
+- [x] 🔴 그 런의 globalSetup 로그에서 `/api/tenant` 가 **200** 이었음을 확인(«스펙이 우연히 통과» 와 구별).
+      → 두 런 모두 `[e2e login] POST /api/tenant {tenant: fan-platform} → 200`(globalSetup + 스펙 안 재로그인 1회). 이
+      스택에서 `/api/tenant` 가 성공한 **첫 기록**이다(compose 수정 전엔 배정 검사가 `localhost:8084` 로 가 fail-closed).
+      `operators-profile` 의 `finance` 스위치는 `expect(switched.ok())` 로 단언 — 통과.
 - [ ] 머지 후 `main` 의 nightly 한 번 초록 확인. 🔴 #3867 이 **브랜치 dispatch 초록으로 닫힐 수 있다**(`TASK-MONO-692`) — 닫힘을 «main 초록» 의 증거로 읽지 않는다.
+      ⚪ 머지 전이라 미측정 — close chore 에서 잰다. (2026-09-16 dispatch 2회 뒤에도 #3867 은 OPEN.)
+
+## 🔴 티켓 본문과 달라진 것
+
+1. **finance 시드 행의 테넌트를 바꿨다**(Scope 에 없었다). 1차 dispatch 가 드러낸 같은 결함 부류 — 하네스가
+   와일드카드 base 토큰 전제로 만들어져 있었다 — 라서 이 티켓에서 닫았다. 제품 코드 변경 0.
+2. **로컬 판정 없음** — Docker 가 없는 호스트라 e2e 스택을 못 띄웠다. 로컬에서 잰 것은 두 파일의 `tsc` rc=0 뿐.
 
 ---
 

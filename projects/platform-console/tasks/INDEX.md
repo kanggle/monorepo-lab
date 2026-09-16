@@ -122,9 +122,11 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## in-progress
 
-- `TASK-PC-FE-293-the-e2e-login-fixture-primes-a-tenant-cookie-without-assuming-it.md` — 🔴 **`main` nightly 복구** — `TASK-PC-FE-292` 의 섹션 게이트 뒤에서 e2e 픽스처가 assumed 토큰 없는 테넌트 쿠키만 심어 `overview-consolidation.spec.ts:75` 가 빨갛다(#3867). 소유자 결정 ① 픽스처를 실제 `POST /api/tenant` 로 + e2e compose `auth-service` 에 빠진 `ADMIN_SERVICE_URL`. 권위=dispatch 런. 분석=Opus 5 / 구현=Opus 5.
+(empty)
 
 ## review
+
+- `TASK-PC-FE-293-the-e2e-login-fixture-primes-a-tenant-cookie-without-assuming-it.md` — 🟡 **impl PR 대기 (2026-09-16)** `main` nightly 복구 — `TASK-PC-FE-292` 의 섹션 게이트 뒤에서 e2e 픽스처가 assumed 토큰 없는 테넌트 쿠키만 심어 `overview-consolidation.spec.ts:75` 가 빨갰다(#3867). 픽스처가 실제 `POST /api/tenant` 로 고르고 · e2e compose `auth-service` 에 빠진 `ADMIN_SERVICE_URL`(없으면 배정 검사 fail-closed 로 모든 선택 403) · finance 스펙은 `finance` 를 고르고 시드 행 `'*'`→`'finance'`. 브랜치 dispatch 35103541564 콘솔 잡 **8/8**(1차 35101604812 는 finance 카드 `forbidden` 으로 7/8). 🔴 main nightly 초록은 머지 후 확인. 분석=Opus 5 / 구현=Opus 5.
 
 - `TASK-PC-FE-292-the-active-tenant-default-picks-the-operational-slug-iam.md` — 🟡 **impl PR 대기 (2026-09-16)** 활성 테넌트를 **토큰 `tenant_id`(= 운영용 슬러그 `iam`) 에서 정하지 않는다.** 소유자 결정 «마지막 선택 기억 + 단일 배정»: 콜백과 유휴 갱신이 **같은 함수**(`active-tenant-default.ts`)로 레지스트리 선택지에서 ① 이 운영자의 마지막 선택(`console_last_tenant`, 여전히 선택 가능할 때) ② 선택지가 하나면 그것 ③ 아니면 없음 — 고르면 **반드시 assume**. 도메인 섹션 **6**(ledger 포함)에 `layout.tsx` 게이트: assumed 토큰이 없으면 «테넌트를 먼저 선택하세요». red-first 3/3(rc=1) · bite 3종 전부 물림 · 관련 13파일 160/160. 🔴 **AC-0 라이브 첫 칸 · AC-4 는 ⚪** — 소유자 결정으로 머지·배포 후 창 한 번. 자매 `TASK-BE-595`. 분석=Opus 5 / 구현=Opus 5.
 
