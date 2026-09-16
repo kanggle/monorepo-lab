@@ -2,6 +2,10 @@
 # =============================================================================
 # infra/demo/seed/seed-scm.sh — scm 도메인 데모 데이터 (TASK-MONO-510)
 # =============================================================================
+# TASK-MONO-695 AC-4 probe (harmless, comment-only): this line exists only to
+# confirm that a PR touching ONLY this file wakes wms's `Build & Test` via
+# ci.yml's `wms` filter entry `infra/demo/seed/seed-scm.sh`, instead of being
+# SKIPPED as it was before this ticket. Safe to delete once observed.
 # 콘솔 SCM 섹션 6화면 중 데이터에 의존하는 4개를 표적으로 한다:
 #
 #   /scm/config        ← demand-planning 정책 + SKU-공급사 매핑
