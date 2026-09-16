@@ -77,8 +77,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 ## ready
 
 - `TASK-INT-028-release-coupons-held-by-orders-that-never-existed.md` — 🔴 **release 가 쿠폰 서비스에 도착하지 못하면 그 쿠폰은 저장된 적 없는 주문에 만료까지 묶인다** — order-service 는 재시도 2회 뒤 로그만 남기고(`release_failure_isSwallowed`), `TASK-INT-027` 의 펜스는 release 가 **도착한** 경우만 막는다. 소유자 결정 「배치 대조」: batch-worker 가 오래된 `USED` 쿠폰의 주문 ID 를 order-service 에 묻고 **어느 테넌트에도 없는** 주문의 쿠폰만 그 쿠폰의 테넌트로 release. 🔴 **「모름」≠「없음」** — order-service 가 실패하면 그 회차는 아무것도 풀지 않는다(AC-4). batch-worker 의 「비조회 내부 호출은 하나뿐」 경계가 셋으로 넓어지므로 스펙 선행(AC-2). 분석=Opus 5 / 구현 권장=Opus.
-- `TASK-BE-595-tenant-rejection-reports-itself-as-401-so-a-permission-problem-reads-as-an-expired-session.md` — 🔴🔴 **`TASK-BE-501` 이 넣은 403 `TENANT_FORBIDDEN` 분기는 실제 예외 사슬에서 «도달 불가»** 이고, 그래서 테넌트 거절이 **401** 로 나가 콘솔에서 «세션이 만료되었습니다» 로 읽힌다(2026-09-16 바이트코드 실측: `JwtValidationException extends BadJwtException` → Spring `JwtReactiveAuthenticationManager.onError` 가 **`InvalidBearerTokenException`**(= `BearerTokenErrors.invalidToken` → `"invalid_token"`)으로 감싼다 ⇒ 사슬의 바깥이 항상 `invalid_token`). 🔴 **테스트 두 겹이 다 빗나가 있다**: 단위 테스트가 만드는 «감싸인» 사슬은 안쪽이 `OAuth2AuthenticationException` 이라 실제 모양이 아니고, `GatewayIntegrationTest` 는 `isIn(401, 403)` 으로 **둘 다 허용**한다. 🔵 재로그인해도 소용없는 상태에서 사용자를 재로그인시키는 것이 이 결함의 값이다. 형제 게이트웨이(wms·scm·erp·finance·fan) 전수는 AC-3. 자매 = `TASK-PC-FE-292`(근본 원인 쪽). 분석=Opus 5 / 구현 권장=Opus 5.
-
 
 _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DONE. `../../../tasks/done/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
 
@@ -89,7 +87,9 @@ _(없음)_
 
 ## review
 
-_(없음)_
+| ID | Title | Service | Tags |
+|---|---|---|---|
+| TASK-BE-595 | 테넌트 거절이 401 로 보고된다 — 403 분기가 실제 예외 사슬(`InvalidBearerTokenException` ⊃ `JwtValidationException`)에서 도달 불가였다 · 술어=«tenant_mismatch 가 사슬 어디에든 있으면 403» · 형제 5 중 0 (공유 `libs/java-gateway` SecurityConfig 는 이미 안쪽을 읽는다) · AC-4 라이브 ⚪ → TASK-MONO-672 항목 4 | gateway-service | code, test, security |
 
 
 
