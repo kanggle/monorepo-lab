@@ -8,7 +8,7 @@ e2e 로그인 픽스처가 **테넌트 쿠키만 심고 assume 은 안 한다** 
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -147,3 +147,19 @@ frontend
 1. **픽스처만 고치고 compose 를 안 고친다** → 모든 선택이 403 → globalSetup 실패(전 스펙 빨강).
 2. **실패를 삼킨다** → 게이트 화면이 뜬 채 스펙이 5s 타임아웃으로 터지고, 원인이 «요소 없음» 으로 위장.
 3. **dispatch 초록이 #3867 을 닫은 것을 main 복구로 읽는다** → `main` 이 아직 빨간데 닫힌다.
+
+## CORRECTION
+
+**2026-09-16 UTC close chore — 4차원 검증.** 위 AC-2 셋째 칸(«머지 후 `main` nightly 초록»)은 review 이동
+당시 ⚪ 미측정이었고, 이제 측정됐다:
+
+- (a) impl PR [#3871](https://github.com/kanggle/monorepo-lab/pull/3871) `state=MERGED` 2026-09-16T14:07:20Z, 머지 커밋 `729aa7eed`.
+- (b) `729aa7eed` 는 `origin/main` 의 조상(`git merge-base --is-ancestor` rc=0).
+- (c) 머지 전 롤업 SUCCESS 11 · SKIPPED 50 · 실패 0(필수 4 포함). full-stack e2e 는 PR CI 에 없다 — 아래 (d) 가 그 권위.
+- (d) AC 를 열어 대조: AC-0·AC-1(4칸)·AC-2 앞 두 칸은 review 이동 때 증거와 함께 닫혔다. 셋째 칸:
+  **`main` push 런 [35106378961](https://github.com/kanggle/monorepo-lab/actions/runs/35106378961)
+  (`event=push`, `branch=main`, `729aa7eed`) — `Platform Console E2E full-stack` success, 런 전체 success.**
+  직전 main 런 35103671380(`4d546b1e5`, 292 이후·293 이전)은 failure 였다.
+- 🔴 **Failure Scenario 3 이 실제로 일어났다**: 자동 이슈 #3867 은 **2026-09-16T13:56:14Z** 에 닫혔다 — 293 머지(14:07:20Z)
+  **11분 전**이고, 그 시각의 main 은 아직 빨갰다(35103671380). 닫은 것은 브랜치 dispatch 35103541564 의 초록이다
+  (`TASK-MONO-692` 가 기록한 «아무 ref 의 초록으로 닫힌다»). 그래서 main 복구는 이슈 상태가 아니라 위 push 런으로 판정했다.
