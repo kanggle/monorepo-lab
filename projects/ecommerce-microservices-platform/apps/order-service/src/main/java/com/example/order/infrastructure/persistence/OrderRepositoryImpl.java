@@ -19,10 +19,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Repository
@@ -167,6 +169,16 @@ public class OrderRepositoryImpl implements OrderRepository {
         // by the unique order id cannot leak across tenants; returns the row's stored
         // tenant so the consumer can bind it before mutating + emitting order.cancelled.
         return jpaRepository.findById(orderId).map(OrderJpaEntity::getTenantId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Set<String> findExistingOrderIdsAcrossTenants(Collection<String> orderIds) {
+        // Orphan-coupon reconciliation (TASK-INT-028): tenant- and status-agnostic by design.
+        if (orderIds == null || orderIds.isEmpty()) {
+            return Set.of();
+        }
+        return new HashSet<>(jpaRepository.findExistingOrderIds(orderIds));
     }
 
     @Override

@@ -8,7 +8,10 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * HTTP client for order-service internal endpoint (TASK-BE-413 / AC-2).
@@ -31,6 +34,7 @@ import java.util.List;
 public class OrderServiceClient {
 
     static final String CONFIRM_PAID_STALE_PATH = "/api/internal/orders/confirm-paid-stale";
+    static final String EXISTENCE_PATH = "/api/internal/orders/existence";
 
     private final RestClient restClient;
     private final IamClientCredentialsTokenProvider tokenProvider;
@@ -112,4 +116,38 @@ public class OrderServiceClient {
             int skipped,
             List<String> confirmedOrderIds) {
     }
+
+    /**
+     * Which of {@code orderIds} exist in any tenant ({@code order-existence.md}, TASK-INT-028).
+     *
+     * <p>🔴 Unlike {@link #confirmPaidStale()}, a missing body is <b>not</b> defaulted. The caller releases
+     * the coupon of every order absent from this answer, so an empty default would read an outage as
+     * "no order exists" and free every coupon in the batch. A missing body or field throws; so does any
+     * 4xx/5xx or transport error (RestClient default).
+     *
+     * @return the existing subset; never null
+     * @throws IllegalStateException when order-service answered without a readable answer
+     */
+    public Set<String> existingOrderIds(Collection<String> orderIds) {
+        String bearer = tokenProvider.currentBearer();
+        OrderExistenceResponse response = restClient.post()
+                .uri(EXISTENCE_PATH)
+                .header("Authorization", "Bearer " + bearer)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(new OrderExistenceRequest(List.copyOf(orderIds)))
+                .retrieve()
+                .body(OrderExistenceResponse.class);
+        if (response == null || response.existingOrderIds() == null) {
+            throw new IllegalStateException(
+                    "order-service returned no existence answer — unknown, not \"none exist\"");
+        }
+        return new HashSet<>(response.existingOrderIds());
+    }
+
+    /** Request body for {@code POST /api/internal/orders/existence}. */
+    public record OrderExistenceRequest(List<String> orderIds) {}
+
+    /** Response body for {@code POST /api/internal/orders/existence}. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record OrderExistenceResponse(List<String> existingOrderIds) {}
 }
