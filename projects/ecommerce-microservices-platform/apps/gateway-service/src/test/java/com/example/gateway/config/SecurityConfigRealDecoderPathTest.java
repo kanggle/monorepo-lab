@@ -1,0 +1,271 @@
+package com.example.gateway.config;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.example.gateway.testsupport.JwksMockServer;
+import com.example.gateway.testsupport.JwtTestHelper;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
+import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.reactive.config.EnableWebFlux;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Tenant rejection status, measured through the <strong>real</strong> decoder path
+ * (TASK-BE-595).
+ *
+ * <p>{@link SecurityConfigTenantErrorMappingTest} calls the entry point with an exception it
+ * builds itself — and the one it built for TASK-BE-501 had a shape Spring never produces, so
+ * that suite was green while production answered every tenant rejection with 401. This suite
+ * does not build the exception. It runs the production pieces end to end and lets Spring
+ * build it:
+ *
+ * <ul>
+ *   <li>the real {@link SecurityConfig} filter chain (entry point included),</li>
+ *   <li>the real decoder from {@link OAuth2ResourceServerConfig#reactiveJwtDecoder()} — the
+ *       shared validator chain with ecommerce's tenant gate,</li>
+ *   <li>a real RS256 signature checked against a JWKS document fetched over HTTP
+ *       ({@link JwksMockServer}, an in-process MockWebServer).</li>
+ * </ul>
+ *
+ * <p><strong>Docker-free by construction</strong> — no Redis, no gateway routes; a probe
+ * controller stands in for the downstream. {@code GatewayIntegrationTest} asserts the same
+ * statuses on a booted gateway, but needs Docker, so without this suite a host without Docker
+ * could not tell the defect from the fix.
+ */
+@SpringJUnitConfig(classes = {SecurityConfig.class, SecurityConfigRealDecoderPathTest.Beans.class})
+@DisplayName("SecurityConfig — 실제 디코더 경로의 테넌트 거절 보고 (TASK-BE-595)")
+class SecurityConfigRealDecoderPathTest {
+
+    private static final String ISSUER = "https://test.local/issuer";
+    private static final String PROTECTED = "/api/orders/123";
+    private static final JwtTestHelper JWT = new JwtTestHelper();
+    private static final JwksMockServer JWKS;
+
+    static {
+        try {
+            JWKS = new JwksMockServer(JWT);
+        } catch (Exception e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
+
+    @AfterAll
+    static void stopJwks() throws Exception {
+        JWKS.close();
+    }
+
+    @Autowired
+    private ApplicationContext context;
+
+    @Autowired
+    private MeterRegistry registry;
+
+    private WebTestClient client;
+
+    @BeforeEach
+    void bind() {
+        // Whichever test runs first pays for context start-up and the first JWKS fetch; the
+        // 5s default timed out on exactly that request (measured 12.7s on this host).
+        client = WebTestClient.bindToApplicationContext(context).configureClient()
+                .responseTimeout(Duration.ofSeconds(60))
+                .build();
+    }
+
+    // -----------------------------------------------------------------------
+    // Controls — prove the requests really reach the tenant gate (AC-0 injection check)
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("대조군: 같은 모양의 토큰에서 tenant_id 만 ecommerce 로 맞추면 통과한다")
+    void control_matchingTenant_passes() {
+        send(JWT.signTokenWithIssuerAndTenant(ISSUER, "ecommerce"))
+                .expectStatus().isOk()
+                .expectBody(String.class).isEqualTo("reached");
+    }
+
+    @Test
+    @DisplayName("대조군: 외부 테넌트라도 entitled_domains ∋ ecommerce 면 통과한다")
+    void control_entitledForeignTenant_passes() {
+        send(JWT.signTokenWithIssuerTenantAndEntitlements(ISSUER, "globex", List.of("ecommerce")))
+                .expectStatus().isOk();
+    }
+
+    // -----------------------------------------------------------------------
+    // AC-1 — tenant rejection is 403 TENANT_FORBIDDEN
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("엔타이틀먼트 없는 외부 테넌트 → 403 TENANT_FORBIDDEN, UNAUTHORIZED 아님, 메트릭은 tenant_mismatch")
+    void unentitledForeignTenant_is403TenantForbidden() {
+        double tenantBefore = counter(GatewayMetrics.REASON_TENANT_MISMATCH);
+        double invalidBefore = counter("invalid");
+
+        String body = send(JWT.signTokenWithIssuerAndTenant(ISSUER, "globex"))
+                .expectStatus().isForbidden()
+                .expectBody(String.class).returnResult().getResponseBody();
+
+        assertThat(body).contains("\"TENANT_FORBIDDEN\"").doesNotContain("UNAUTHORIZED");
+        assertThat(counter(GatewayMetrics.REASON_TENANT_MISMATCH) - tenantBefore).isEqualTo(1.0);
+        assertThat(counter("invalid") - invalidBefore).isEqualTo(0.0);
+    }
+
+    @Test
+    @DisplayName("다른 도메인에만 구독된 테넌트(wms, entitled=[wms]) → 403 TENANT_FORBIDDEN")
+    void tenantEntitledElsewhere_is403() {
+        send(JWT.signTokenWithIssuerTenantAndEntitlements(ISSUER, "wms", List.of("wms")))
+                .expectStatus().isForbidden()
+                .expectBody().jsonPath("$.code").isEqualTo("TENANT_FORBIDDEN");
+    }
+
+    @Test
+    @DisplayName("tenant_id 부재 → 403 TENANT_FORBIDDEN (tenant_mismatch 계열)")
+    void missingTenant_is403() {
+        send(JWT.signTokenWithIssuerAndTenant(ISSUER, null))
+                .expectStatus().isForbidden()
+                .expectBody().jsonPath("$.code").isEqualTo("TENANT_FORBIDDEN");
+    }
+
+    @Test
+    @DisplayName("만료 + 외부 테넌트 → 403 (재인증으로 테넌트는 고쳐지지 않는다 — 의도된 선택)")
+    void expiredAndForeignTenant_is403() {
+        send(expiredToken("globex"))
+                .expectStatus().isForbidden()
+                .expectBody().jsonPath("$.code").isEqualTo("TENANT_FORBIDDEN");
+    }
+
+    // -----------------------------------------------------------------------
+    // AC-1 regression — everything that is NOT a tenant rejection stays 401
+    // -----------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("회귀 금지 — 테넌트 문제가 아닌 거절은 여전히 401")
+    class StillUnauthorized {
+
+        @Test
+        @DisplayName("만료 토큰(테넌트는 맞음) → 401 UNAUTHORIZED, 메트릭은 invalid")
+        void expired_is401() {
+            double tenantBefore = counter(GatewayMetrics.REASON_TENANT_MISMATCH);
+            double invalidBefore = counter("invalid");
+
+            assertUnauthorized(send(expiredToken("ecommerce")));
+
+            assertThat(counter("invalid") - invalidBefore).isEqualTo(1.0);
+            assertThat(counter(GatewayMetrics.REASON_TENANT_MISMATCH) - tenantBefore).isEqualTo(0.0);
+        }
+
+        @Test
+        @DisplayName("서명 불일치(같은 kid, 다른 서명) → 401")
+        void badSignature_is401() {
+            String a = JWT.signTokenWithIssuerAndTenant(ISSUER, "ecommerce");
+            String b = JWT.signTokenWithIssuerAndTenant(ISSUER, "ecommerce");
+            // header.payload of A with the signature of B: same key id, signature does not verify.
+            String forged = a.substring(0, a.lastIndexOf('.')) + b.substring(b.lastIndexOf('.'));
+            assertThat(forged).isNotEqualTo(a);
+
+            assertUnauthorized(send(forged));
+        }
+
+        @Test
+        @DisplayName("발급자 불일치(테넌트는 맞음) → 401")
+        void wrongIssuer_is401() {
+            assertUnauthorized(send(JWT.signTokenWithIssuerAndTenant("https://attacker.example.com", "ecommerce")));
+        }
+
+        @Test
+        @DisplayName("토큰 부재 → 401")
+        void missingToken_is401() {
+            assertUnauthorized(client.get().uri(PROTECTED).exchange());
+        }
+    }
+
+    // -----------------------------------------------------------------------
+
+    private WebTestClient.ResponseSpec send(String token) {
+        return client.get().uri(PROTECTED)
+                .header("Authorization", "Bearer " + token)
+                .exchange();
+    }
+
+    private static void assertUnauthorized(WebTestClient.ResponseSpec response) {
+        response.expectStatus().isUnauthorized()
+                .expectBody().jsonPath("$.code").isEqualTo("UNAUTHORIZED");
+    }
+
+    /**
+     * Issued two hours ago, expired one hour ago — past JwtTimestampValidator's 60s skew.
+     * <p>The {@code iat} override matters: the helper stamps {@code iat=now}, and a token whose
+     * {@code exp} precedes its {@code iat} is thrown out by Spring's {@code Jwt} builder as
+     * malformed ({@code BadJwtException}) before any validator runs — it would be a 401 for the
+     * wrong reason and never exercise expiry (measured while writing this suite).
+     */
+    private static String expiredToken(String tenantId) {
+        return JWT.signToken("user-expired", null, -3600L, Map.of(
+                "iat", Date.from(Instant.now().minusSeconds(7200)),
+                "aud", List.of("ecommerce"),
+                "account_type", "CONSUMER",
+                "tenant_id", tenantId));
+    }
+
+    private double counter(String reason) {
+        return registry.counter("gateway_jwt_validation_failure_total", "reason", reason).count();
+    }
+
+    @RestController
+    static class ProbeController {
+        @GetMapping("/api/orders/{id}")
+        String order() {
+            return "reached";
+        }
+    }
+
+    @Configuration
+    @EnableWebFlux
+    static class Beans {
+        @Bean
+        ObjectMapper objectMapper() {
+            return new ObjectMapper();
+        }
+
+        @Bean
+        MeterRegistry meterRegistry() {
+            return new SimpleMeterRegistry();
+        }
+
+        @Bean
+        GatewayMetrics gatewayMetrics(MeterRegistry registry) {
+            return new GatewayMetrics(registry);
+        }
+
+        /** The production decoder, built by the production config class. */
+        @Bean
+        ReactiveJwtDecoder reactiveJwtDecoder() {
+            return new OAuth2ResourceServerConfig(JWKS.hostJwksUrl(), ISSUER, "ecommerce")
+                    .reactiveJwtDecoder();
+        }
+
+        @Bean
+        ProbeController probeController() {
+            return new ProbeController();
+        }
+    }
+}
