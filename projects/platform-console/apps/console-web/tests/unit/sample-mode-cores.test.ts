@@ -286,10 +286,21 @@ describe('callEcommerceGateway (ecommerce)', () => {
   });
 
   it('① pending GET → SAMPLE_NOT_READY, fetch 0', async () => {
+    // TASK-PC-FE-284 — this suite's DoD is "ecommerce 원장의 `pending` 0", so
+    // `ecommerce_order` (this cell's original profile) is now `ready`, exactly
+    // as TASK-PC-FE-283's identical note on the `iam` describe block recorded
+    // for `accounts`. This cell tests the CORE's generic ready/pending BRANCH
+    // mechanics, not any one surface's content, so a `logPrefix` absent from
+    // the ledger entirely exercises the identical branch without depending on
+    // a surface staying unimplemented forever.
+    const NO_SUCH_SURFACE_PROFILE: EcommerceGatewayProfile = {
+      ...ECOMMERCE_PROFILE,
+      logPrefix: 'no-such-surface',
+    };
     const err = await callEcommerceGateway(
       { method: 'GET', base: 'http://ecommerce.local/api/admin', path: '/orders' },
       parse,
-      ECOMMERCE_PROFILE,
+      NO_SUCH_SURFACE_PROFILE,
     ).catch((e) => e);
     expect((err as TestUnavailable).code).toBe(SAMPLE_NOT_READY);
     expect(fetchSpy).not.toHaveBeenCalled();

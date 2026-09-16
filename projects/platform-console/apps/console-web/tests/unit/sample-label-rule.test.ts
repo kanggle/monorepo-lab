@@ -40,7 +40,11 @@ describe('predicate self-check (both directions)', () => {
   });
 
   it('🔴 an unclassified string key is a violation (never a silent pass)', () => {
-    expect(findLabelViolations({ nickname: '하나 (샘플)' })[0].problem).toBe(
+    // 🔴 TASK-PC-FE-284 classified `nickname` (ecommerce users) as
+    // human-readable, so it is no longer an example of an UNclassified key —
+    // this cell's SUBJECT is the predicate's fallback branch, not `nickname`
+    // specifically. Swapped to a key no fixture ticket has claimed.
+    expect(findLabelViolations({ mysteryField: '하나 (샘플)' })[0].problem).toBe(
       'unclassified-key',
     );
   });
