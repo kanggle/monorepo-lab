@@ -76,8 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-_(없음)_
-
+- `TASK-INT-028-release-coupons-held-by-orders-that-never-existed.md` — 🔴 **release 가 쿠폰 서비스에 도착하지 못하면 그 쿠폰은 저장된 적 없는 주문에 만료까지 묶인다** — order-service 는 재시도 2회 뒤 로그만 남기고(`release_failure_isSwallowed`), `TASK-INT-027` 의 펜스는 release 가 **도착한** 경우만 막는다. 소유자 결정 「배치 대조」: batch-worker 가 오래된 `USED` 쿠폰의 주문 ID 를 order-service 에 묻고 **어느 테넌트에도 없는** 주문의 쿠폰만 그 쿠폰의 테넌트로 release. 🔴 **「모름」≠「없음」** — order-service 가 실패하면 그 회차는 아무것도 풀지 않는다(AC-4). batch-worker 의 「비조회 내부 호출은 하나뿐」 경계가 셋으로 넓어지므로 스펙 선행(AC-2). 분석=Opus 5 / 구현 권장=Opus.
 
 _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DONE. `../../../tasks/done/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
 
