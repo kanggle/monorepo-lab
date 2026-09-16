@@ -29,6 +29,17 @@ const HUMAN_READABLE_KEYS = new Set([
   'note',
   'warning',
   'label',
+  // TASK-PC-FE-283 — the IAM accounts/operators surfaces have NO OTHER
+  // human-readable field (`AccountSummarySchema` is `{id,email,status,
+  // createdAt}` — no name/title/description). `email` is both the value an
+  // operator reads AND the value shown as the table's own record; classifying
+  // it human-readable is what lets AC-7's synthetic-identity requirement and
+  // AC-6's literal «(샘플)»-string-on-`/accounts` requirement both land on
+  // the SAME field, deliberately, rather than inventing a display-only field
+  // the real screen never has. `AccountSummarySchema`/`OperatorSummarySchema`
+  // model `email` as `z.string()` (no format constraint), so a suffixed value
+  // parses; nothing in the app re-validates it as an RFC address.
+  'email',
 ]);
 
 const MACHINE_KEYS = new Set([
@@ -47,6 +58,25 @@ const MACHINE_KEYS = new Set([
   'amount',
   'code',
   'degradedDomains',
+  // TASK-PC-FE-283 — IAM domain fixtures (accounts/audit/operators/rbac/
+  // tenants/org-nodes/groups/partnerships). Each is an enum/discriminant/
+  // catalog-key value a parser or `StatusBadge`-like element interprets, or
+  // an array of such values (arrays inherit their key) — never free prose.
+  'source', // audit discriminant ('admin' | 'login_history' | 'suspicious')
+  'actionCode', // admin_actions action code, e.g. 'ACCOUNT_LOCK'
+  'outcome', // login/suspicious outcome enum
+  'ipMasked', // producer-masked IP — a machine-formatted value
+  'geoCountry', // ISO country code
+  'roles', // operator role-name array (enum-like codes, e.g. 'SUPER_ADMIN')
+  'scope', // rbac catalog scope ('global')
+  'permissions', // permission-key array (e.g. 'operator.manage')
+  'tenantType', // tenant type enum
+  'roleName', // group/org-node admin grant role name
+  'mode', // org-node ceiling discriminant ('UNBOUNDED' | 'BOUNDED')
+  'domains', // org-node ceiling / partnership scope domain-key array
+  'tenantIds', // org-node subtree tenant id array
+  'myRole', // partnership side discriminant ('host' | 'partner')
+  'grantableRoles', // operators grantable-roles endpoint — role-name array (label-guard document key only; not a wire field of any schema)
 ]);
 
 /** `*Id` (sourceId, accountId, nodeId, …) and `*At` (createdAt, asOf-like). */
