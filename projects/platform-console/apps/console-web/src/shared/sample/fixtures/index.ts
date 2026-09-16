@@ -6,6 +6,7 @@ import {
 } from './dashboards';
 
 import { IAM_FIXTURE_HANDLERS, IAM_FIXTURE_DOCUMENTS } from './iam';
+import { ECOMMERCE_FIXTURE_HANDLERS, ECOMMERCE_FIXTURE_DOCUMENTS } from './ecommerce';
 import type { FixtureNotFound } from '../router';
 
 /**
@@ -32,6 +33,7 @@ export const SAMPLE_FIXTURES: Readonly<Record<string, FixtureHandler>> = {
   'console-bff:domain-health': () => SAMPLE_DOMAIN_HEALTH,
   'console-bff:notifications-inbox': () => SAMPLE_NOTIFICATION_INBOX,
   ...IAM_FIXTURE_HANDLERS,
+  ...ECOMMERCE_FIXTURE_HANDLERS,
 };
 
 /**
@@ -52,4 +54,5 @@ export const SAMPLE_FIXTURE_DOCUMENTS: Readonly<Record<string, unknown>> = {
   'console-bff:domain-health': SAMPLE_DOMAIN_HEALTH,
   'console-bff:notifications-inbox': SAMPLE_NOTIFICATION_INBOX,
   ...IAM_FIXTURE_DOCUMENTS,
+  ...ECOMMERCE_FIXTURE_DOCUMENTS,
 };
