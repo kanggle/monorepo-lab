@@ -8,7 +8,7 @@ ERP 화면이 샘플로 선다 — 개요·결재·위임·마스터·조직도 
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -406,3 +406,33 @@ read-model-api.md` 에 이 모노레포·이 워크트리 안에 있다(같은 �
 WMS «총 재고 · 알림» (`48,210` · `3`), SCM «스냅샷 노드 수» (`3`, 노드 이름 셋), Finance «잔액» (계정 `sample-account-0001`) 카드는
 **아직 손으로 적힌 값**이다 — 그 도메인 픽스처가 없어서 파생할 곳이 없다. 각 소유 티켓이 같은 방식으로 파생하고 위 가드에 칸을 더한다:
 `TASK-PC-FE-286`(finance) · `287`(wms) · `288`(scm). 조정자가 각 티켓의 지시서에 이 의무를 넣는다.
+
+## CORRECTION — 닫기 판정 (조정자, 2026-09-16 UTC)
+
+머지 검증 4차원: (a) PR [#3881](https://github.com/kanggle/monorepo-lab/pull/3881) `state=MERGED` 2026-09-16T18:13:25Z ·
+(b) squash `7b6eaaf6a` 가 `origin/main` 조상(머지 시점의 끝) · (c) 머지 전 롤업 **61 체크 · FAILURE 0** — 🔴 **마지막 수정 커밋 `5240b8c15`
+(개요 카드) 기준**으로 새로 돈 롤업이다(그 전 커밋의 초록은 수정이 빠진 트리라 판정에 쓰지 않았다). 필수 4 + 프런트 unit · E2E smoke ·
+console-bff IT **실제 실행** · (d) 아래 표.
+
+| AC | 닫힘 | 증거 |
+|---|---|---|
+| AC-0 | ✅ | 표면 3 · GET 메서드 리터럴 18 (ADR 의 18 과 **단위가 다르고 수만 우연히 같다** — 비교 근거로 쓰지 않음) |
+| AC-1 | ✅ | `sample-fixtures-schema-erp.test.ts` — 3 표면을 실제 zod 스키마로 router 경유 파싱 |
+| AC-2 | ✅ | 라벨 가드가 erp 문서 3개 순회 · 새 키 분류와 사유 |
+| AC-3 | ✅ | **조정자 확인**: 테스트가 `size=1`(개요 형태) 과 `size=20`(목록 형태) 의 `totalElements` 를 비교하고, 목록 쪽은 `totalElements = 실제 반환 행 수` 까지 단언 — 자기 자신과 맞장구치는 공허 테스트가 아니다. bite B1 |
+| AC-4 | ✅ | 부서 계층 · 직원 참조 · 결재 결재자/상신자 · 위임자 전부 실제 상세 조회로 해석. bite B2 |
+| AC-5 | ✅ | POST 3종 → 403 `SAMPLE_READ_ONLY` → `messageForCode` 문구 |
+| AC-6 | ✅ | `e2e-smoke/sample-visitor-erp.spec.ts` · 로컬 smoke 22 passed(개요 수정 후 조정자 재실행) · PR CI E2E smoke SUCCESS |
+| DoD | ✅ | 원장 erp `pending` 0 · 인증 운영자 칸 무수정(`sample-mode-cores` 1칸 설정만, `expect(` ±0) |
+
+🔴 **머지 전 조정자 리뷰가 잡은 결함 3건** (위 두 CORRECTION 에 상세):
+1. 알림 벨 → 존재하지 않는 결재 3건. 에이전트는 발견하고도 «282 소유 파일» 이라 두었다 — **샘플 세계의 일관성은 283~288 시리즈가 소유한다.**
+2. 명세를 «이 worktree 에서 읽을 수 없다» 며 404 코드를 추측 — 명세는 같은 모노레포에 있었고 추측 하나가 틀렸다.
+3. **282 부터 있던** 첫 화면 개요 카드의 손으로 적힌 수 + 그것을 얼린 smoke 리터럴 핀. 283 · 284 의 닫기 판정은 이것을 놓쳤다
+   (각 티켓이 **자기 도메인 화면 안**만 봤다). 이 티켓에서 IAM · ERP · E-Commerce 셋을 고쳤다.
+
+🔴 **기록 오류 1건**: 위 `# Implementation notes (구현 에이전트, 2026-09-17 UTC)` 와 첫 CORRECTION 의 날짜 `2026-09-17 UTC` 는 **UTC 가 아니다** —
+작성 시각의 UTC 는 2026-09-16 이었다(KST 호스트의 날짜를 UTC 로 적은 것). 내용에는 영향 없음.
+
+🔵 로컬 전체 vitest(조정자, 병합 트리) 1회 `OperatorsScreen.test.tsx` 5초 타임아웃 1건 → 그 파일 단독 재실행 14/14. PR CI Linux 러너는 전부 초록.
+넘길 의무: wms · scm · finance 개요 카드 파생 — **이미 `TASK-PC-FE-286` AC-7 · `287` AC-8 · `288` AC-8 로 티켓 안에 적었다**(이 PR 에서). 그 밖 0건.
