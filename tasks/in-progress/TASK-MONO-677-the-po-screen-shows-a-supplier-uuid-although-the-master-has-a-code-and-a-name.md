@@ -202,5 +202,6 @@ in-progress
 ## ⏳ 남은 것 (창이 필요)
 
 - **AC-3** — 새 jar 로 AMI 를 다시 구운 창에서 `/scm/procurement` 「공급사」 칸의 **값**을 본다(필드 존재가 아니라 값; 시드 발주는 id 적중이어야 `SUP-DEMO-01 · demo supplier`). 창이 없으면 ⚪ + 갈 곳 `TASK-MONO-672`.
+  🔴 **기대값 갱신 (2026-09-16):** `TASK-MONO-683`(소유자 결정 ⓐ, PR #3860)이 머지되면 시드 공급사 코드는 **`SUP-001`** 이다(wms 코드와 정렬, 이름 `demo supplier` 는 그대로). 그 시드로 구운 AMI 의 신선 볼륨이면 기대값은 **`SUP-001 · demo supplier`** 다. 🔴 창에서 판정하기 전에 **구운 AMI 의 `RepoCommit` 이 683 머지 뒤인지** 먼저 확인하라 — 앞이면 옛 기대값 `SUP-DEMO-01` 이 맞다.
 - **AC-3** — 판정이 나면 scm README § Screenshots 보류 사유 되돌림.
 - 곁발견(범위 밖, 기록만): `scm-replenishment/components/ReplenishmentTable.tsx:104` 도 `supplierId` 를 원문으로 그린다(추천 행의 값은 D9 상 코드여야 하지만 시드는 UUID 를 넣는다 — 위 D9 결함과 같은 뿌리).
