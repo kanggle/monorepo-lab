@@ -8,7 +8,7 @@ TASK-INT-027
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -82,9 +82,11 @@ integration
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (재현 먼저)** — release → apply 순서를 실제로 돌려 쿠폰이 `USED` + 없는 `orderId` 로 끝나는지
+- [x] **AC-0 (재현 먼저)** — release → apply 순서를 실제로 돌려 쿠폰이 `USED` + 없는 `orderId` 로 끝나는지
   측정하고, 명령·결과를 이 파일에 적는다. 🔴 재현되지 않으면 위 「사실」 표의 **어느 항목이 틀렸는지**를
   적고, 나머지 AC 없이 이 티켓을 닫는다.
+  - 닫힘: 재현됐다. `expected: ISSUED but was: USED` (`CouponApplyAfterReleaseTest.java:94`), 서비스
+    로그가 순서를 그대로 찍었다 — 기록은 아래 § AC-0 재현 측정. 틀린 사실 없음.
 - [ ] **AC-1 (계약 먼저)** — 펜스에 걸린 apply 의 상태 코드·오류 코드와 「release 는 되돌릴 것이 없어도
   기록한다」를 `promotion-api.md` 와 `platform/error-handling.md` 에 적는다. 코드 변경은 이 AC 이후
   커밋에만 들어간다.
@@ -193,3 +195,42 @@ integration
 
 🔵 선례: `coupon_issue_request`(V8, `TASK-BE-536`) — 「청구를 먼저 잡고 그다음에 만든다」, TTL 없음.
 `processed_events`(V5) — 이벤트 중복 제거. 펜스는 같은 계열이고, 새 개념이 아니다.
+
+---
+
+# AC-0 재현 측정 (2026-09-16 UTC)
+
+**돌린 것** — worktree `int-027-impl`, base `a4f4aa920`
+
+```
+./gradlew :projects:ecommerce-microservices-platform:apps:promotion-service:test \
+          --tests '*CouponApplyAfterReleaseTest*'
+```
+
+**결과** — `BUILD FAILED in 49s`, `1 test completed, 1 failed`. 단언 값:
+
+```
+org.opentest4j.AssertionFailedError:
+expected: ISSUED
+ but was: USED
+        at CouponApplyAfterReleaseTest.java:94
+```
+
+**서비스 로그가 순서를 그대로 찍었다** (같은 실행의 `system-out`)
+
+```
+Coupon release skipped — not used by this order: couponId=04e6871a…, orderId=order-1, status=ISSUED
+Coupon applied: couponId=04e6871a…, orderId=order-1, discount=5000
+```
+
+release 가 먼저 도착해 `status=ISSUED` 를 보고 **아무 일도 하지 않고 끝났다** — 되돌릴 것이 없었다는
+사실을 남기지도 않았다. 그 뒤 apply 가 같은 `orderId` 로 커밋됐고 쿠폰은 `USED`, `order_id=order-1` 이
+됐다. 그 주문은 저장된 적이 없다.
+
+⇒ 「사실」 표 1~5 는 맞았다. **틀린 항목 없음.** 사실 6(고아 쿠폰은 스스로 풀리지 않는다)과 7(`CouponUsed`
+구독자 없음)은 이 테스트의 범위 밖이라 코드·계약을 읽어 확인한 그대로 두었다 — 여기서 측정한 것은
+**창이 실재한다**는 사실이다.
+
+🔵 증거 커밋은 이 재현 테스트 **하나만** 담는다. 테스트는 고친 뒤에도 남는다(수정 전 빨강 → 수정 후 초록).
+⚪ 실제 두 서비스를 띄운 종단 재현은 하지 않았다 — 로컬 Docker 가 막혀 있고, 이 창은 promotion-service
+안에서 두 호출의 **순서**만으로 재현되므로 단위 수준이 창을 그대로 담는다.
