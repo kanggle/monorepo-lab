@@ -122,7 +122,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## in-progress
 
-(empty)
+- `TASK-PC-FE-293-the-e2e-login-fixture-primes-a-tenant-cookie-without-assuming-it.md` — 🔴 **`main` nightly 복구** — `TASK-PC-FE-292` 의 섹션 게이트 뒤에서 e2e 픽스처가 assumed 토큰 없는 테넌트 쿠키만 심어 `overview-consolidation.spec.ts:75` 가 빨갛다(#3867). 소유자 결정 ① 픽스처를 실제 `POST /api/tenant` 로 + e2e compose `auth-service` 에 빠진 `ADMIN_SERVICE_URL`. 권위=dispatch 런. 분석=Opus 5 / 구현=Opus 5.
 
 ## review
 

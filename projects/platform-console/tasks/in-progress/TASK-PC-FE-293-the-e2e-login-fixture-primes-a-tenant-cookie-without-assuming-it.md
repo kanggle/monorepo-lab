@@ -8,7 +8,7 @@ e2e 로그인 픽스처가 **테넌트 쿠키만 심고 assume 은 안 한다** 
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
