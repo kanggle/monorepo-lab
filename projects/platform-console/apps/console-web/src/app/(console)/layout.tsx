@@ -15,6 +15,7 @@ import {
   buildLoginRedirectFor,
   buildSessionRefreshRedirectFor,
 } from '@/shared/lib/login-redirect';
+import { RE_LOGIN_PATH } from '@/shared/lib/re-login';
 import { getCatalog } from '@/features/catalog';
 import {
   selectableTenants,
@@ -161,8 +162,18 @@ export default async function ConsoleLayout({
     const catalog = await getCatalog();
     tenants = selectableTenants(catalog.products);
   } catch (err) {
-    if (err instanceof ApiError && err.status === 401)
-      redirect(await buildLoginRedirect());
+    // TASK-MONO-690 — this branch only runs past the TASK-MONO-674 guard
+    // above (isAuthenticated() true, i.e. BOTH the access AND operator
+    // cookies are present). A 401 here means the backend rejected a token
+    // the browser still holds — distinct from 674's idle-expiry case (cookie
+    // absent) and therefore NOT overlapping its silent-refresh hop. It used
+    // to redirect via buildLoginRedirect(), which carries no re-login
+    // marker — /login then sees a live cookie jar and bounces straight back
+    // to /console (isAuthenticated() there is cookie-only too), reproducing
+    // the loop TASK-PC-FE-278 closed everywhere else. Route through the same
+    // RE_LOGIN_PATH constant the other 53 points use so /login's
+    // forcedReLogin short-circuit-skip fires.
+    if (err instanceof ApiError && err.status === 401) redirect(RE_LOGIN_PATH);
     tenants = []; // degraded — switcher hidden, shell still usable
   }
 
