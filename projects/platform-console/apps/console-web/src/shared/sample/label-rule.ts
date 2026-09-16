@@ -40,6 +40,21 @@ const HUMAN_READABLE_KEYS = new Set([
   // model `email` as `z.string()` (no format constraint), so a suffixed value
   // parses; nothing in the app re-validates it as an RFC address.
   'email',
+  // TASK-PC-FE-284 — ecommerce domain fixtures. Each is a free-prose /
+  // display-only string a person reads (not interpreted by a parser or
+  // `StatusBadge`): product-variant option name (`optionName`, e.g. "M"),
+  // order line + summary denormalized product name (`productName` /
+  // `firstItemName`), user nickname, notification-template `subject`, and the
+  // order shipping-address free-text fields (`recipient` / `address1` /
+  // `address2`).
+  'optionName',
+  'productName',
+  'firstItemName',
+  'nickname',
+  'subject',
+  'recipient',
+  'address1',
+  'address2',
 ]);
 
 const MACHINE_KEYS = new Set([
@@ -77,6 +92,23 @@ const MACHINE_KEYS = new Set([
   'tenantIds', // org-node subtree tenant id array
   'myRole', // partnership side discriminant ('host' | 'partner')
   'grantableRoles', // operators grantable-roles endpoint — role-name array (label-guard document key only; not a wire field of any schema)
+  // TASK-PC-FE-284 — ecommerce domain fixtures. All enum/code/formatted values
+  // a parser, `StatusBadge`-like element or a copy-paste search key reads —
+  // never free prose.
+  'discountType', // promotion enum ('FIXED' | 'PERCENTAGE')
+  'channel', // notification-template enum ('EMAIL' | 'SMS' | 'PUSH')
+  'trackingNumber', // shipping carrier tracking code
+  'carrier', // shipping carrier code/name (formatted value, not free prose)
+  'payoutReference', // settlement payout reference code
+  'phone', // formatted phone number (order shipping address / user profile)
+  'zipCode', // postal code
+  'startDate', // promotion window bound (ISO instant)
+  'endDate', // promotion window bound (ISO instant)
+  'from', // settlement period window bound (ISO instant)
+  'to', // settlement period window bound (ISO instant)
+  'objectKey', // product-image storage key
+  'url', // product-image URL
+  'thumbnailUrl', // product thumbnail URL (always null in this fixture set — AC-7)
 ]);
 
 /** `*Id` (sourceId, accountId, nodeId, …) and `*At` (createdAt, asOf-like). */
