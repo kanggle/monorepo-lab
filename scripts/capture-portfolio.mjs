@@ -23,6 +23,7 @@
 //   node scripts/capture-portfolio.mjs --app console   # 한 앱만
 //   node scripts/capture-portfolio.mjs --out <경로>    # 출력 위치 (기본: portfolio-captures/)
 //   node scripts/capture-portfolio.mjs --no-auth       # 로그인 건너뜀 (공개 경로만 · 파이프라인 시험용)
+//   node scripts/capture-portfolio.mjs --self-test     # 거부 판정기를 창 없이 브라우저 픽스처로 잰다
 //
 // 종료코드 — 🔴 «미설치» 와 «고장» 은 다른 상태다(TASK-MONO-643 과 같은 규약):
 //   0  정상 (실패한 페이지가 있어도, 그것이 «보고된» 상태면 0)
@@ -296,15 +297,58 @@ async function selectTenant(page, app) {
 //    이게 없으면 「권한 없음」 64장을 «성공» 으로 세고, 그 실패는 조용하다(이미지는 생긴다).
 const DENIED_MARKERS = ['권한이 없습니다', '접근 권한', '테넌트를 선택', 'Forbidden', '403'];
 
+// -----------------------------------------------------------------------------
+// 권한 거부 판정 — 🔴🔴 본문 **문구** 가 아니라 거부 화면이 렌더하는 **요소** 로 (TASK-MONO-648 AC-1b)
+// -----------------------------------------------------------------------------
+// 2026-09-12 창에서 `/ecommerce/guide` · `/erp/guide` · `/scm/guide` 가 «권한 거부» 로 세어졌다.
+// 세 가이드엔 권한 가드가 없다 — 본문이 *설명 목적으로* «403»·«접근 권한이 없습니다» 를
+// **인용**했을 뿐이다(`features/{ecommerce,scm,erp}-guide/data.ts`). 판별자가 자기 설명 문구에 걸렸다.
+//
+// 🔵 콘솔의 거부 화면은 전부 접미사가 정해진 `data-testid` 를 단다(2026-09-16 전수):
+//      `-permission-denied`(IAM 화면) · `-not-eligible`(도메인 자격 없음) · `-forbidden`(403)
+//    동적 상세 화면도 `note('product-forbidden', …)` 처럼 같은 접미사다.
+// 🔴 **`-card-…-forbidden` 은 페이지 거부가 아니다** — `/dashboards/overview` 의 도메인 카드
+//    하나가 막힌 것이고 화면의 나머지는 산다(`DomainCardStates.tsx`). 페이지 거부로 세면
+//    대시보드가 **새 오탐**이 된다 ⇒ `partial` 로 따로 센다.
+// 🔴 본문 문구 적중은 **판정에서 뺐지만 버리지 않는다** — 마커를 안 단 거부 화면이 새로 생기면
+//    요소 판정은 그것을 못 본다. 실패로 세지 않고 `deniedTextOnly` 로 남겨 **사람이 그림을 연다**
+//    (틀릴 때 일이 늘어나는 쪽으로 틀린다).
+const DENIAL_SUFFIXES = ['-permission-denied', '-not-eligible', '-forbidden'];
+
+// 🔴 이 함수는 **브라우저 안에서** 돈다(`page.evaluate`) — 바깥 변수를 닫아 쓰지 말고 인자로 받는다.
+function judgeDenialInPage({ suffixes, textMarkers }) {
+  const sel = suffixes.map((s) => `[data-testid$="${s}"]`).join(',');
+  const page = [];
+  const partial = [];
+  for (const el of document.querySelectorAll(sel)) {
+    const id = el.getAttribute('data-testid');
+    (/-card-/.test(id) ? partial : page).push(id);
+  }
+  const text = document.body ? document.body.innerText : '';
+  return {
+    denied: page.length > 0,
+    deniedBy: page,
+    partial,
+    textHits: textMarkers.filter((m) => text.includes(m)),
+    chars: text.length,
+  };
+}
+
+const judgeDenial = (page) =>
+  page.evaluate(judgeDenialInPage, { suffixes: DENIAL_SUFFIXES, textMarkers: DENIED_MARKERS });
+
 async function sanityCheck(page, app, probePath) {
   const res = await page.goto(app.baseUrl + probePath, { waitUntil: 'domcontentloaded', timeout: 45000 });
   await page.waitForTimeout(2000);
   if (!res || res.status() !== 200) return { ok: false, reason: `${probePath} 가 ${res ? res.status() : '무응답'} 입니다` };
   if (/\/login(\?|$)/.test(page.url())) return { ok: false, reason: `${probePath} 가 로그인으로 튕겼습니다` };
-  const text = await page.evaluate(() => document.body.innerText);
-  const hit = DENIED_MARKERS.find((m) => text.includes(m));
-  if (hit) return { ok: false, reason: `${probePath} 가 «${hit}» 를 그리고 있습니다 — 테넌트/권한이 안 잡혔습니다` };
-  return { ok: true, probePath, chars: text.length };
+  const j = await judgeDenial(page);
+  if (j.denied) return { ok: false, reason: `${probePath} 가 거부 요소 ${j.deniedBy.join(', ')} 를 그리고 있습니다 — 테넌트/권한이 안 잡혔습니다` };
+  // 🔵 프로브는 문구 적중도 **여전히 막는다.** 장별 판정과 다르게 두는 이유: 프로브 경로는
+  //    문서 페이지가 아닌 고정 대시보드라 «자기 설명 문구» 오탐의 모집단이 아니고, «테넌트를 먼저
+  //    선택하세요» 안내는 마커가 **없다**(`accounts/page.tsx` 등). 여기서 놓치면 앱 전체가 거짓 캡처다.
+  if (j.textHits.length) return { ok: false, reason: `${probePath} 가 «${j.textHits[0]}» 를 그리고 있습니다 — 테넌트/권한이 안 잡혔습니다` };
+  return { ok: true, probePath, chars: j.chars };
 }
 
 // -----------------------------------------------------------------------------
@@ -394,6 +438,11 @@ async function captureOne(page, app, appKey, route, path, outDir) {
     if (/\/login(\?|$)/.test(page.url()) && !/\/login(\?|$)/.test(path)) {
       return { route, path, file, ok: false, kind: 'redirected-to-login', status, url, landedOn: page.url() };
     }
+    // 🔴 거부 화면도 로그인 화면과 같다 — «그 페이지의 사진» 으로 저장하지 않는다(AC-1b).
+    const denial = await judgeDenial(page);
+    if (denial.denied) {
+      return { route, path, file, ok: false, kind: 'denied', status, url, deniedBy: denial.deniedBy };
+    }
     await page.screenshot({
       path: join(outDir, file),
       fullPage: FULL_PAGE,
@@ -413,6 +462,8 @@ async function captureOne(page, app, appKey, route, path, outDir) {
       head: text.slice(0, 180),
       ...(empty ? { empty: true } : {}),
       ...(degraded ? { degraded: true } : {}),
+      ...(denial.partial.length ? { partialDenied: denial.partial } : {}),
+      ...(denial.textHits.length ? { deniedTextOnly: denial.textHits } : {}),
     };
   } catch (e) {
     return { route, path, file, ok: false, kind: 'error', reason: e.message, url };
@@ -478,6 +529,50 @@ async function main() {
     process.exit(3);
   }
   console.log(`[portfolio] Playwright: ${at}`);
+
+  // 🔵 `--self-test` — 거부 판정을 **창 없이** 실제 브라우저로 재는 자리(AC-1b).
+  //    데모 창은 예산이 드는 자원이라, 판정기의 결함을 창에서 처음 발견하면 그 창이 버려진다.
+  //    🔴 이 픽스처는 판정기의 **술어**를 재지 실제 콘솔이 그 마커를 다는지는 재지 않는다 —
+  //       그건 창에서 가이드 셋 + `/tenants` 를 찍어 확인한다(TASK-MONO-648 AC-1b 닫는 조건).
+  if (argv.includes('--self-test')) {
+    const browser = await chromium.launch();
+    const page = await browser.newPage();
+    const cases = [
+      // 가이드: 본문이 거부 문구를 «인용» 한다 — 2026-09-12 오탐의 모양
+      { name: 'guide-quotes-denial-copy', denied: false, partial: 0, textHit: true,
+        html: '<main><h1>E-Commerce 가이드</h1><p>역할이 없으면 403 과 함께 「접근 권한이 없습니다」 가 보입니다. Forbidden 은 정상 동작입니다.</p></main>' },
+      { name: 'tenants-permission-denied', denied: true, partial: 0, textHit: true,
+        html: '<div data-testid="tenants-permission-denied">테넌트 관리 권한이 없습니다.</div>' },
+      { name: 'dynamic-detail-forbidden', denied: true, partial: 0, textHit: true,
+        html: '<div data-testid="product-forbidden">이 화면을 조회할 권한이 없습니다.</div>' },
+      { name: 'domain-not-eligible', denied: true, partial: 0, textHit: true,
+        html: '<div data-testid="wms-inventory-not-eligible">wms 재고 화면에 대한 접근 권한이 없습니다.</div>' },
+      // 대시보드 카드 하나만 막힘 — 페이지 거부가 아니다
+      { name: 'dashboard-card-forbidden', denied: false, partial: 1, textHit: true,
+        html: '<section><div data-testid="operator-overview-card-erp-forbidden">이 도메인 조회 권한이 없습니다.</div><div>wms 12 · scm 4</div></section>' },
+      { name: 'plain-screen', denied: false, partial: 0, textHit: false,
+        html: '<table><tr><td>SKU-APPLE-001</td><td>12</td></tr></table>' },
+    ];
+    let bad = 0;
+    for (const c of cases) {
+      await page.setContent(c.html);
+      const j = await judgeDenial(page);
+      const got = { denied: j.denied, partial: j.partial.length, textHit: j.textHits.length > 0 };
+      const ok = got.denied === c.denied && got.partial === c.partial && got.textHit === c.textHit;
+      if (!ok) bad++;
+      console.log(`  ${ok ? '✔' : '✗'} ${c.name}  want=${JSON.stringify({ denied: c.denied, partial: c.partial, textHit: c.textHit })} got=${JSON.stringify(got)}`);
+    }
+    await browser.close();
+    // 🔴 양성·음성이 **둘 다** 있어야 «0 오탐» 이 공허하지 않다 — 픽스처가 한쪽으로 쏠리면 멈춘다.
+    const pos = cases.filter((c) => c.denied).length;
+    const neg = cases.filter((c) => !c.denied).length;
+    if (!pos || !neg) {
+      console.error(`[portfolio] ✗ self-test 픽스처가 공허합니다 (거부 ${pos} · 비거부 ${neg})`);
+      process.exit(1);
+    }
+    console.log(`[portfolio] self-test ${cases.length - bad}/${cases.length} (거부 ${pos} · 비거부 ${neg})`);
+    process.exit(bad ? 1 : 0);
+  }
 
   if (dry) {
     console.log('[portfolio] --dry-run — 라우트 유도와 의존 해석까지 마쳤고 찍지 않았습니다.');
@@ -611,6 +706,14 @@ async function main() {
     console.log(`[portfolio] ⚠ 찍혔지만 큐레이션 후보가 아님 — 빈 목록 ${empties.length} · 성능저하/오류 ${degraded.length}`);
     for (const x of degraded) console.log(`  [저하] ${x.route}  ${x.head.slice(0, 70)}`);
     for (const x of empties) console.log(`  [빈값] ${x.route}  ${x.head.slice(0, 70)}`);
+  }
+  // 🔵 요소 판정은 통과했지만 사람이 열어 볼 장 — 실패가 아니다(위 «권한 거부 판정» 절).
+  const textOnly = shots.filter((x) => x.deniedTextOnly);
+  const partialDenied = shots.filter((x) => x.partialDenied);
+  if (textOnly.length || partialDenied.length) {
+    console.log(`[portfolio] 👁 이미지를 열어 볼 것 — 거부 문구만 있음 ${textOnly.length} · 카드 일부 거부 ${partialDenied.length}`);
+    for (const x of textOnly) console.log(`  [문구] ${x.route}  «${x.deniedTextOnly.join('» «')}»`);
+    for (const x of partialDenied) console.log(`  [카드] ${x.route}  ${x.partialDenied.join(', ')}`);
   }
   console.log('[portfolio] manifest.json 기록');
 }
