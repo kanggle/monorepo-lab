@@ -101,14 +101,33 @@ integration
   - 🔴 promotion-service 가 order-service 에 「그 주문 있느냐」를 되묻지 않는다는 것도 계약에 적었다.
     되물으면 의존이 역류한다(`dependencies.md` § Forbidden Dependencies). 펜스는 release 가 이미
     들고 온 `(couponId, orderId)` 만 쓴다.
-- [ ] **AC-2** — AC-0 이 재현한 그 순서가 이제 쿠폰을 `ISSUED` 로 남긴다. apply 는 거절되고 `CouponUsed`
+- [x] **AC-2** — AC-0 이 재현한 그 순서가 이제 쿠폰을 `ISSUED` 로 남긴다. apply 는 거절되고 `CouponUsed`
   는 발행되지 않는다.
-- [ ] **AC-3 (정상 경로 회귀)** — 펜스가 없는 apply, apply 후 도착한 release(→ `ISSUED` 복원), 같은 주문의
+  - 닫힘: 같은 테스트가 초록으로 뒤집혔다 — `CouponApplyAfterReleaseTest` **tests=4 failures=0**,
+    apply 는 `CouponPlacementReleasedException`, 쿠폰 `ISSUED` · `orderId=null` ·
+    `publishCouponUsed` 호출 0. 아래 § 구현 측정.
+- [x] **AC-3 (정상 경로 회귀)** — 펜스가 없는 apply, apply 후 도착한 release(→ `ISSUED` 복원), 같은 주문의
   멱등 재적용, 다른 주문이 쓴 쿠폰의 release(→ 무변화)가 모두 변경 전과 같다.
-- [ ] **AC-4** — 같은 쿠폰을 **다른 새 주문**으로는 여전히 쓸 수 있다. 펜스는 `(couponId, orderId)` 쌍이지
+  - 닫힘: promotion-service 단위 스위트 **전체 105건 실패 0**(변경 전과 같은 수). 기존
+    `CouponCommandServiceTest` 19 · `CouponCommandServiceReplayReleaseTest` 4 ·
+    `Coupon` 도메인 11+5 가 **단언을 하나도 고치지 않고** 통과했다(생성자 인자만 늘렸다).
+    새 `aReleaseThatFindsItsOwnOrderRevertsTheCouponAndLeavesNoFence` 가 「apply 가 먼저면
+    펜스를 남기지 않는다」를 따로 못박는다.
+- [x] **AC-4** — 같은 쿠폰을 **다른 새 주문**으로는 여전히 쓸 수 있다. 펜스는 `(couponId, orderId)` 쌍이지
   쿠폰 전체를 막는 것이 아니다.
+  - 닫힘: `theFenceIsScopedToThePair_soAnotherOrderCanStillUseTheCoupon` — order-1 을 실제로
+    release 해 펜스를 남긴 뒤 order-2 로 apply 하면 할인 5,000 이 나오고 쿠폰이 order-2 로 `USED`.
 - [ ] **AC-5** — 마이그레이션·유니크 제약·JPA 매핑을 실제 Postgres 에서 확인한다(로컬 Docker 차단 →
   CI ecommerce integration 레인이 권위). 못 쟀으면 ⚪ 로 «못 쟀다 + 이유» 를 적는다.
+  - 진행 중: `CouponReleaseFenceIntegrationTest` 4건을 작성했고 **컴파일은 통과**했다(같은 실행의
+    `compileTestJava`). 로컬 `test` 실행 결과에 이 클래스의 XML 은 없다 — 프로젝트 수준
+    `projects/ecommerce-microservices-platform/build.gradle:43` 이 모든 ecommerce 앱의 `test` 에서
+    `excludeTags 'integration'` 을 걸고, `@Tag("integration")` 은 promotion-service 의 별도
+    `integrationTest` 태스크(`includeTags 'integration'`, Docker 필요)만 돌린다. 🔵 이 기전은 모듈
+    자신의 `build.gradle` 에 없어서 처음엔 못 찾았다 — 「태그 제외가 없는데 왜 안 도나」를 추측으로
+    적지 않고 저장소 전체를 grep 해 확인했다. CI `ecommerce-integration-tests` 레인이
+    `:promotion-service:integrationTest` 를 부르므로(ci.yml:3683) 그 실행이 권위다.
+    **PR CI 에서 확인한 뒤 닫는다.**
 
 ---
 
@@ -245,3 +264,36 @@ release 가 먼저 도착해 `status=ISSUED` 를 보고 **아무 일도 하지 �
 🔵 증거 커밋은 이 재현 테스트 **하나만** 담는다. 테스트는 고친 뒤에도 남는다(수정 전 빨강 → 수정 후 초록).
 ⚪ 실제 두 서비스를 띄운 종단 재현은 하지 않았다 — 로컬 Docker 가 막혀 있고, 이 창은 promotion-service
 안에서 두 호출의 **순서**만으로 재현되므로 단위 수준이 창을 그대로 담는다.
+
+---
+
+# 구현 측정 (2026-09-16 UTC)
+
+**돌린 것** — `./gradlew :projects:ecommerce-microservices-platform:apps:promotion-service:test`
+
+| | 수정 전(증거 커밋 `1d4e5f31f`) | 수정 후 |
+|---|---|---|
+| `CouponApplyAfterReleaseTest` | tests=4 **failures=1** (`expected: ISSUED but was: USED`) | tests=4 **failures=0** |
+| 모듈 전체 | 105 tests, 1 failed, `BUILD FAILED` | 105 tests, **0 failed**, `BUILD SUCCESSFUL in 1m 46s` |
+
+기존 스위트는 단언을 하나도 고치지 않았다. 생성자에 `CouponReleaseRepository` 가 늘어 세 테스트 클래스의
+**인자 목록만** 바뀌었다(`CouponCommandServiceTest`, `CouponCommandServiceReplayReleaseTest`, 그리고 이 티켓의
+새 클래스). 직접 생성하는 곳이 그 셋뿐인 것은 grep 으로 확인했다.
+
+## 🔴 목(mock)을 페이크로 바꾼 이유 — 처음 초록이 공허했다
+
+첫 수정 후 실행에서 AC-0 이 **여전히 빨갰다**. 원인은 제품 코드가 아니라 하네스였다: `CouponReleaseRepository`
+를 Mockito 목으로 두면 기억이 없어서, release 가 `record(...)` 를 불러도 목은 아무것도 담지 않고 뒤이은
+apply 의 `existsFor` 가 `false` 를 돌려준다. 펜스가 실제로는 동작하는데 테스트에는 없는 것처럼 보였다.
+
+`willReturn(false, true)` 로 스텁하면 초록이 되지만 그건 **내가 시킨 값을 되읽는 것**이라 아무것도 증명하지
+않는다. 그래서 `InMemoryCouponReleaseRepository` 페이크로 바꿨고, **유니크 제약까지 흉내 내게** 했다 —
+`record` 가 중복 쌍에 던진다. 덕분에 제품 코드가 `existsFor` 검사를 빼면 「재시도 release 는 한 번만
+기록한다」 테스트가 소리내어 깨진다. 스텁이었다면 그 삭제를 통과시켰을 것이다.
+
+## 설계에서 자리가 중요한 곳
+
+펜스 검사는 `findByIdForUpdate`(쿠폰 행 잠금) **뒤**에 있다. release 도 같은 행을 잠그므로 두 트랜잭션이
+거기서 직렬화되고, 어느 쪽이 먼저 잡아도 결과가 옳다 — apply 가 먼저면 release 가 자기 주문의 `USED` 를
+찾아 되돌리고, release 가 먼저면 그 펜스가 apply 에 보인다. 잠금 **앞**에 두면 검사와 사용 사이가 다시
+이 티켓이 닫으려는 바로 그 창이 된다.

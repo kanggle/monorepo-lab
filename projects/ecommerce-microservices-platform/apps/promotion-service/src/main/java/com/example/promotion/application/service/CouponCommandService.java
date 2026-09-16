@@ -12,6 +12,9 @@ import com.example.promotion.domain.coupon.Coupon;
 import com.example.promotion.domain.coupon.CouponIssueRequest;
 import com.example.promotion.domain.coupon.CouponIssueRequestRepository;
 import com.example.promotion.domain.coupon.CouponNotFoundException;
+import com.example.promotion.domain.coupon.CouponPlacementReleasedException;
+import com.example.promotion.domain.coupon.CouponRelease;
+import com.example.promotion.domain.coupon.CouponReleaseRepository;
 import com.example.promotion.domain.coupon.CouponRepository;
 import com.example.promotion.domain.promotion.Promotion;
 import com.example.promotion.domain.promotion.PromotionNotFoundException;
@@ -39,6 +42,8 @@ public class CouponCommandService {
     private final PromotionEventPublisher eventPublisher;
     /** Idempotency store for this admin write path (TASK-BE-536). */
     private final CouponIssueRequestRepository couponIssueRequestRepository;
+    /** Release fences — a released placement can never bind its coupon afterwards (TASK-INT-027). */
+    private final CouponReleaseRepository couponReleaseRepository;
     private final Clock clock;
 
     /**
@@ -127,6 +132,15 @@ public class CouponCommandService {
         Coupon coupon = couponRepository.findByIdForUpdate(command.couponId())
                 .orElseThrow(() -> new CouponNotFoundException(command.couponId()));
 
+        // AFTER the row lock, on purpose (TASK-INT-027). releaseCoupon takes the same lock, so the
+        // two transactions serialise here and either order is safe: if this apply wins the lock,
+        // the release that follows finds the coupon USED by its own order and reverts it; if the
+        // release won, the fence it left is visible to this read and the apply refuses. Checked
+        // before the lock, the gap between check and use would be the same window this closes.
+        if (couponReleaseRepository.existsFor(command.couponId(), command.orderId())) {
+            throw new CouponPlacementReleasedException(command.couponId(), command.orderId());
+        }
+
         boolean newlyApplied = coupon.apply(command.orderId(), command.userId(), clock);
 
         Promotion promotion = promotionRepository.findById(coupon.getPromotionId())
@@ -171,7 +185,16 @@ public class CouponCommandService {
         }
         Coupon coupon = found.get();
         if (!coupon.releaseFor(orderId)) {
-            log.info("Coupon release skipped — not used by this order: couponId={}, orderId={}, status={}",
+            // Nothing to give back — but that does NOT mean nothing happened. The apply this
+            // release compensates may still be executing here (it timed out on the caller, which
+            // is why the release was sent at all). Record the pair so that late apply refuses
+            // instead of binding the coupon to an order that was never saved (TASK-INT-027).
+            // existsFor/record run under the coupon row lock taken above, so a concurrent release
+            // cannot slip between them; UNIQUE (coupon_id, order_id) is the backstop.
+            if (!couponReleaseRepository.existsFor(couponId, orderId)) {
+                couponReleaseRepository.record(CouponRelease.of(couponId, orderId, clock.instant()));
+            }
+            log.info("Coupon release recorded — nothing to give back: couponId={}, orderId={}, status={}",
                     couponId, orderId, coupon.getStatus());
             return;
         }

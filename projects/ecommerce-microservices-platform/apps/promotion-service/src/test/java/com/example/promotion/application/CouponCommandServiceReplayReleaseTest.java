@@ -6,6 +6,7 @@ import com.example.promotion.application.result.ApplyCouponResult;
 import com.example.promotion.application.service.CouponCommandService;
 import com.example.promotion.domain.coupon.Coupon;
 import com.example.promotion.domain.coupon.CouponIssueRequestRepository;
+import com.example.promotion.domain.coupon.CouponReleaseRepository;
 import com.example.promotion.domain.coupon.CouponRepository;
 import com.example.promotion.domain.coupon.CouponStatus;
 import com.example.promotion.domain.promotion.DiscountType;
@@ -44,11 +45,14 @@ class CouponCommandServiceReplayReleaseTest {
     @Mock
     private CouponIssueRequestRepository couponIssueRequestRepository;
 
+    @Mock
+    private CouponReleaseRepository couponReleaseRepository;
+
     private final Clock clock = Clock.fixed(Instant.parse("2026-03-28T12:00:00Z"), ZoneOffset.UTC);
 
     private CouponCommandService service() {
-        return new CouponCommandService(
-                couponRepository, promotionRepository, eventPublisher, couponIssueRequestRepository, clock);
+        return new CouponCommandService(couponRepository, promotionRepository, eventPublisher,
+                couponIssueRequestRepository, couponReleaseRepository, clock);
     }
 
     private Promotion fixed5000() {
