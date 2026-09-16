@@ -64,9 +64,24 @@ wait_backend "inventory-visibility-service" "$SCM/api/v1/inventory-visibility/sn
 [ "$scm_ready" = "1" ] || { seed_summary; exit $?; }
 
 # --- 데모 고정 식별자 (랜덤 금지 — 2회차가 "두 배"가 된다) --------------------
-SUPPLIER_CODE="SUP-DEMO-01"
-SKU_A="SKU-DEMO-A1"
-SKU_B="SKU-DEMO-B2"
+#
+# 🔴 **이 두 값은 wms 의 코드다 — 지어낸 이름으로 되돌리지 마라** (TASK-MONO-683, 소유자 결정 ⓐ).
+# 공급사 코드와 SKU 코드는 매핑 → 보충 제안 → from-suggestion 발주 → `inbound-expected`
+# 이벤트로 **그대로** 흘러가 wms inbound 가 `findPartnerByCode` / `findSkuByCode` 로 찾는다
+# (ADR-MONO-050 §7 D9). 예전 값 `SUP-DEMO-01` / `SKU-DEMO-A1` / `SKU-DEMO-B2` 는 wms 어느
+# 시드에도 없어서, 제안이 한 건이라도 확정되면 wms 가 **재시도 없이 DLT** 로 버렸다.
+# 정본: wms `SUP-001` = inbound·master·admin dev 시드 셋, `SKU-APPLE-001` = 같은 셋 +
+# `seed-wms.sh` 가 실제로 입고·출고하는 SKU.
+# 🔵 이 파일의 이 줄들은 **wms 테스트가 읽는다** —
+# `ScmInboundExpectedDemoSeedShapeDltTest#demoSeedMapping_resolvesInWmsDevSeed`. 값을
+# 바꾸면 그 테스트가 wms dev 시드로 해석되는지 다시 잰다.
+#
+# 🔵 **SKU 는 하나다.** 예전 `SKU_B` 는 없앴다. wms inbound 의 read-model 시드가 가진 SKU
+# 는 `SKU-APPLE-001` 하나뿐이고(master 의 `SKU-BOX-001`·`SKU-EA-001` 은 Flyway 로만 들어가
+# 이벤트를 안 내므로 inbound 에 투영되지 않는다), 재고가 움직여 제안이 생길 수 있는 SKU 도
+# 그것뿐이다. 두 번째 매핑은 **확정되면 DLT 로 가는 매핑**을 하나 더 심는 것이었다.
+SUPPLIER_CODE="SUP-001"
+SKU_A="SKU-APPLE-001"
 CURRENCY="KRW"
 SEED_TENANT="demo-corp"
 
@@ -78,16 +93,24 @@ SEED_TENANT="demo-corp"
 # `ADR-SCM-001`(ACCEPTED, A)이 v1 공급사 마스터를 **운영 대상**으로 정하면서
 # `POST /api/v1/procurement/suppliers` 가 생겼고, 직접-DB 우회는 사라졌다.
 #
-# 🔴 **id 가 더 이상 우리가 정하는 값이 아니다.** 예전엔 PK 에 `SUP-DEMO-01` 을 직접
+# 🔴 **id 가 더 이상 우리가 정하는 값이 아니다.** 예전엔 PK 에 공급사 코드를 직접
 # 박아 넣어서 이후 호출이 그 문자열을 그대로 supplierId 로 썼다. 이제 id 는 서버가
-# 만드는 UUID 이고, `SUP-DEMO-01` 은 **자연키(code)** 다. 그래서 응답에서 id 를 꺼내야
+# 만드는 UUID 이고, `$SUPPLIER_CODE` 는 **자연키(code)** 다. 그래서 응답에서 id 를 꺼내야
 # 한다(jq 없음 — lib.sh 규약).
+#
+# 🔴🔴 **id 와 code 는 쓰는 곳이 다르다 — 섞지 마라** (TASK-MONO-683).
+#   · `POST /po` (운영자 발주, 아래 3.)  → **id**. draft 유스케이스가 id 로 찾고 모르면 404.
+#   · `sku-supplier-map` (아래 1.)       → **code**. 이 값은 wms 까지 가서 코드로 해석된다.
+#   예전엔 매핑에도 id 를 넣었고, 계약 경계에서는 아무도 안 막았다(`@Size(max = 36)` 통과).
 #
 # 🔵 **2회차가 왜 안전한가**: 계약이 멱등을 두 갈래로 갈라 뒀다. 같은 Idempotency-Key
 # = 201 replay, **다른 키 + 같은 code = 200 + 행 증가 없음**. 시드는 고정 키를 쓰지만
 # 볼륨을 지우면 키 기록도 사라지므로, 실제로 수렴을 보장하는 것은 후자다.
-# 그리고 예전 `dbexec` 가 남긴 행(id='SUP-DEMO-01')이 있는 DB 에서는 V6 마이그레이션이
-# 그 행에 code='SUP-DEMO-01' 을 채우므로, 이 호출은 **그 행으로 수렴**한다(중복 생성 X).
+# 🔵 **683 이전 볼륨**(공급사 `SUP-DEMO-01` 이 이미 있는 DB)에서는 `SUP-001` 이 **새 행**으로
+# 생긴다 — 옛 행은 지우지 않는다(그 id 로 만든 옛 발주가 참조한다). 옛 매핑·정책 행
+# (`SKU-DEMO-A1`/`B2`)도 남는다. 신선 볼륨 데모에서는 둘 다 없다.
+# (옛 `dbexec` 행 id='SUP-DEMO-01' 에 V6 가 code 를 채우는 수렴 이야기는 683 이전 코드에만
+#  해당한다 — 지금 코드는 `SUP-001` 을 POST 하므로 그 행으로 수렴하지 않는다.)
 PG_C="scm-platform-postgres"; PG_DB="scm_procurement"; PG_U="scm"; PG_P="scm"
 
 SUPPLIER_ID=""
@@ -136,11 +159,11 @@ put_dp() {
   return 1
 }
 
-for sku in "$SKU_A" "$SKU_B"; do
+for sku in "$SKU_A"; do
   # MappingRequest(supplierId, defaultOrderQty>=1, leadTimeDays>=0, currency[3])
   put_dp "SKU-공급사 매핑 $sku" \
     "$SCM/api/v1/demand-planning/sku-supplier-map/$sku" \
-    "{\"supplierId\":\"$SUPPLIER_ID\",\"defaultOrderQty\":100,\"leadTimeDays\":3,\"currency\":\"$CURRENCY\"}"
+    "{\"supplierId\":\"$SUPPLIER_CODE\",\"defaultOrderQty\":100,\"leadTimeDays\":3,\"currency\":\"$CURRENCY\"}"
 
   # PolicyRequest(reorderPoint>=0, safetyStock>=0, reorderQty>=1)
   put_dp "재고 정책 $sku" \
@@ -180,7 +203,7 @@ if SUGGESTION_ID="$(await_suggestion "$SKU_A" 60)"; then
   seed_log "존재  보충 제안 $SKU_A (id=${SUGGESTION_ID:0:12}…)"
 elif [ $? -eq 2 ]; then
   # 🔴 여기서 "정책·매핑은 반영됐다" 고 단정하지 않는다 — 위 단계의 실제 성공 수를 센다.
-  seed_log "관측  보충 제안 $SKU_A — 조회 200, 60초 동안 0건 (config 반영 $CONFIG_OK/4)"
+  seed_log "관측  보충 제안 $SKU_A — 조회 200, 60초 동안 0건 (config 반영 $CONFIG_OK/2)"
   seed_log "      제안 생성에는 재고 신호가 더 필요하다 ⇒ /scm/replenishment 는 빈 채로 남는다"
 fi
 
@@ -312,13 +335,20 @@ po_transition() {
   return 1
 }
 
-create_po "발주 초안 (DRAFT)" "seed-scm-po-0001" "$SKU_A"
+# 🔴 키에 공급사·SKU 코드를 넣는다 (TASK-MONO-683). 서버는 같은 키 + **다른 본문** 을
+# `422 IDEMPOTENCY_KEY_MISMATCH` 로 거절한다(`IdempotencyExecutor`, TTL 24h). 코드가 바뀐
+# 이 시드를 683 이전 볼륨에 24시간 안에 다시 돌리면 옛 키 `seed-scm-po-0001` 이 옛 본문
+# (`SKU-DEMO-A1`)을 들고 있어 세 발주가 전부 422 가 된다. 키가 본문의 식별자를 담으면
+# 본문이 바뀔 때 키도 바뀐다 — 같은 코드로 재실행하면 여전히 같은 키라 replay 로 수렴한다.
+PO_KEY_SUFFIX="$SUPPLIER_CODE-$SKU_A"
 
-if create_po "발주 상신 (SUBMITTED)" "seed-scm-po-0002" "$SKU_A"; then
+create_po "발주 초안 (DRAFT)" "seed-scm-po-0001-$PO_KEY_SUFFIX" "$SKU_A"
+
+if create_po "발주 상신 (SUBMITTED)" "seed-scm-po-0002-$PO_KEY_SUFFIX" "$SKU_A"; then
   po_transition "SCM-PO-0002 → SUBMITTED" "$PO_ID" "submit" "SUBMITTED"
 fi
 
-if create_po "발주 확정 (CONFIRMED)" "seed-scm-po-0003" "$SKU_B"; then
+if create_po "발주 확정 (CONFIRMED)" "seed-scm-po-0003-$PO_KEY_SUFFIX" "$SKU_A"; then
   CONFIRM_PO="$PO_ID"
   po_transition "SCM-PO-0003 → SUBMITTED" "$CONFIRM_PO" "submit" "SUBMITTED"
   # 🔴 confirm 의 선행은 SUBMITTED 가 **아니라 ACKNOWLEDGED** 다 — `PoStatusMachine`

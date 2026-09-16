@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   readJwtClaim,
-  homeTenantFromAccessToken,
   decodeJwtPayload,
 } from '@/shared/lib/jwt';
 
@@ -11,31 +10,11 @@ function jwt(payload: Record<string, unknown>): string {
   return `eyJhbGciOiJSUzI1NiJ9.${b64}.sig`;
 }
 
-describe('jwt — homeTenantFromAccessToken (TASK-PC-FE-036 active-tenant default)', () => {
-  it('returns the real-customer tenant_id claim', () => {
-    expect(homeTenantFromAccessToken(jwt({ tenant_id: 'acme-corp' }))).toBe(
-      'acme-corp',
-    );
-  });
-
-  it('returns null for the platform-scope sentinel "*" (operator must select)', () => {
-    expect(homeTenantFromAccessToken(jwt({ tenant_id: '*' }))).toBeNull();
-  });
-
-  it('returns null when the tenant_id claim is absent', () => {
-    expect(homeTenantFromAccessToken(jwt({ sub: 'op-1' }))).toBeNull();
-  });
-
-  it('returns null for an empty tenant_id', () => {
-    expect(homeTenantFromAccessToken(jwt({ tenant_id: '' }))).toBeNull();
-  });
-
-  it('returns null for a malformed / non-JWT token (never throws)', () => {
-    expect(homeTenantFromAccessToken('not-a-jwt')).toBeNull();
-    expect(homeTenantFromAccessToken('')).toBeNull();
-    expect(homeTenantFromAccessToken('a.b.c')).toBeNull();
-  });
-
+// TASK-PC-FE-292 removed `homeTenantFromAccessToken` (TASK-PC-FE-036): the active
+// tenant is no longer read from the token's `tenant_id` — this client's tokens carry
+// its operational slug `iam`. The default now lives in `active-tenant-default.ts`
+// and is pinned by `tests/unit/active-tenant-default.test.ts`.
+describe('jwt — readJwtClaim', () => {
   it('readJwtClaim reads arbitrary claims and is null-safe', () => {
     const t = jwt({ tenant_id: 'globex-corp', entitled_domains: ['scm', 'erp'] });
     expect(readJwtClaim(t, 'tenant_id')).toBe('globex-corp');

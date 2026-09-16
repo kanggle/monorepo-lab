@@ -3,10 +3,13 @@ package com.example.order.presentation;
 import com.example.order.application.dto.CancelOrderResult;
 import com.example.order.application.dto.ConfirmPaidStaleResult;
 import com.example.order.application.service.OperatorOrderCancellationService;
+import com.example.order.application.service.OrderExistenceQueryService;
 import com.example.order.application.service.StalePaidOrderConfirmService;
 import com.example.order.presentation.dto.ConfirmPaidStaleRequest;
 import com.example.order.presentation.dto.ConfirmPaidStaleResponse;
 import com.example.order.presentation.dto.OperatorCancelOrderRequest;
+import com.example.order.presentation.dto.OrderExistenceRequest;
+import com.example.order.presentation.dto.OrderExistenceResponse;
 import com.example.order.presentation.exception.InvalidRequestException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -15,6 +18,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 /**
  * Internal system-command endpoints for order-service (TASK-BE-412).
@@ -48,6 +53,31 @@ public class InternalOrderController {
 
     private final StalePaidOrderConfirmService stalePaidOrderConfirmService;
     private final OperatorOrderCancellationService operatorOrderCancellationService;
+    private final OrderExistenceQueryService orderExistenceQueryService;
+
+    /**
+     * Which of the given order ids exist, in any tenant and any status (TASK-INT-028,
+     * {@code order-existence.md}). Read-only. batch-worker releases the coupon of every requested
+     * order that is absent from the answer, which is why a malformed request is refused outright
+     * rather than answered partially.
+     */
+    @PostMapping("/existence")
+    public ResponseEntity<OrderExistenceResponse> existence(
+            @RequestBody(required = false) OrderExistenceRequest request) {
+        List<String> orderIds = request != null ? request.orderIds() : null;
+        if (orderIds == null || orderIds.isEmpty()) {
+            throw new InvalidRequestException("orderIds must contain at least one id");
+        }
+        if (orderIds.size() > OrderExistenceRequest.MAX_ORDER_IDS) {
+            throw new InvalidRequestException(
+                    "orderIds must contain at most " + OrderExistenceRequest.MAX_ORDER_IDS + " ids");
+        }
+        if (orderIds.stream().anyMatch(id -> id == null || id.isBlank())) {
+            throw new InvalidRequestException("orderIds must not contain a blank id");
+        }
+        return ResponseEntity.ok(new OrderExistenceResponse(
+                List.copyOf(orderExistenceQueryService.existing(orderIds))));
+    }
 
     @PostMapping("/confirm-paid-stale")
     public ResponseEntity<ConfirmPaidStaleResponse> confirmPaidStale(

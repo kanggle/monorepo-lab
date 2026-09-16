@@ -67,6 +67,16 @@ tasks.named('bootJar') {
     archiveFileName = 'inbound-service.jar'
 }
 
+// TASK-MONO-683: ScmInboundExpectedDemoSeedShapeDltTest reads the scm demo seed script
+// (repo-root infra/, outside this module). Gradle does not see that read, so without this
+// declaration an edit to the seed leaves `test` UP-TO-DATE / FROM-CACHE (org.gradle.caching=true)
+// and the check never re-runs — measured: a seed revert produced rc=0 with the task UP-TO-DATE.
+tasks.withType(Test).configureEach {
+    inputs.file(rootProject.file('infra/demo/seed/seed-scm.sh'))
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+            .withPropertyName('scmDemoSeedScript')
+}
+
 // Mirror inventory-service: default `test` excludes integration tag for fast CI.
 test {
     useJUnitPlatform {

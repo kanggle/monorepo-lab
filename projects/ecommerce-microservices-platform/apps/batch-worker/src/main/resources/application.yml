@@ -81,6 +81,9 @@ search-service:
 order-service:
   base-url: ${ORDER_SERVICE_BASE_URL:http://order-service:8082}
 
+promotion-service:
+  base-url: ${PROMOTION_SERVICE_BASE_URL:http://promotion-service:8092}
+
 iam:
   internal-client:
     token-uri: ${IAM_TOKEN_URI:http://iam-service:8081/oauth2/token}
@@ -95,6 +98,14 @@ batch:
       enabled: ${BATCH_STALE_PAID_ORDER_CONFIRMATION_ENABLED:true}
       older-than-minutes: ${BATCH_STALE_PAID_ORDER_CONFIRMATION_OLDER_THAN_MINUTES:30}
       limit: ${BATCH_STALE_PAID_ORDER_CONFIRMATION_LIMIT:200}
+    orphan-coupon-release:
+      enabled: ${BATCH_ORPHAN_COUPON_RELEASE_ENABLED:true}
+      # promotion-service enforces a 30-minute floor regardless of this value.
+      older-than-minutes: ${BATCH_ORPHAN_COUPON_RELEASE_OLDER_THAN_MINUTES:60}
+      # At most 500 (the existence and stale-used endpoints both cap there).
+      limit: ${BATCH_ORPHAN_COUPON_RELEASE_LIMIT:200}
+      # All-absent brake: scanned >= this AND no order exists -> release nothing, FAILED.
+      min-scanned-for-all-absent-abort: ${BATCH_ORPHAN_COUPON_RELEASE_MIN_SCANNED_FOR_ALL_ABSENT_ABORT:20}
 
 logging:
   level:

@@ -89,6 +89,22 @@ monorepo
 - 출처: `projects/ecommerce-microservices-platform/tasks/…/TASK-BE-595-…` § AC-4. 코드 수준 증거 = `SecurityConfigRealDecoderPathTest`
   (고친 트리 초록, 고침을 되돌리면 테넌트 칸 5개 빨강).
 
+## 항목 5 — `TASK-MONO-683` AC-4: 보충 제안 승인 → 발주 확정 → **wms 인바운드 예정(ASN) 생성**이 끝까지 가는가 (2026-09-16 수령)
+
+- **무엇을 재나** (순서대로, 🔴 앞 칸이 안 되면 뒤 칸은 «측정 불가» 로 적는다 — «실패» 가 아니다):
+  ① `/scm/replenishment` 에 `SKU-APPLE-001` 의 보충 제안이 **한 건이라도 생기는가** — 683 이 측정하지 못한 전제다. 제안은 wms 저재고 알림
+  또는 IVS 야간 스윕에서만 생긴다. 0건이면 그 사실과 `seed-wms.sh` 이후 `SKU-APPLE-001` 가용재고를 적는다.
+  ② 제안 승인 → DRAFT → submit → 공급사 ack → confirm 뒤 `scm.procurement.inbound-expected.v1` 이 나가는가(procurement outbox).
+  ③ wms `/wms/inbound` 에 `source=SCM_PROCUREMENT` ASN 이 생기는가, 그리고 `scm.procurement.inbound-expected.v1.DLT` 에 새 레코드가 **없는가**.
+- 🔴 **창만으로는 안 풀릴 수 있다 — 새 시드가 한 번 돌아야 한다.** 683 은 `seed-scm.sh` 의 공급사·SKU 코드를 wms 코드(`SUP-001`/`SKU-APPLE-001`)로
+  바꿨다. 683 이전 볼륨엔 옛 매핑(`SKU-DEMO-*` → UUID)이 남지만 그 SKU 에는 제안이 생길 경로가 없어 판정을 오염시키지 않는다.
+  `SUP-001` 매핑은 새 시드가 돌아야 생긴다 — AMI 가 시드된 데이터를 굽는다면 재굽기 뒤의 창이다(683 은 이것을 확인하지 않았다).
+- **함께 볼 것(대조군)**: 콘솔 `/scm/replenishment` 「공급사」 칸이 `SUP-001` 로 그려지는가(UUID 면 옛 매핑 — `이름 확인 불가` 로 보여야 한다).
+- 출처: `tasks/in-progress/TASK-MONO-683-…` § AC-4 · § Phase 2. 코드 수준 증거 = `ScmInboundExpectedDemoSeedShapeDltTest#demoSeedMapping_resolvesInWmsDevSeed`
+  (시드 스크립트를 읽어 wms dev 시드로 해석 — 옛 코드·옛 UUID 매핑에서 빨강).
+- 🔴 **Failure Scenario 2 대조**: 이 집은 «닫히면서 집을 잃는» 의무만 받는다. 683 은 수령 시점(2026-09-16)에 아직 `in-progress` 이고,
+  AC-4 를 ⚪ 로 둔 채 이 항목을 넘기고 닫히는 경로다 — 683 이 **닫히지 않고 살아 남는다면** 이 항목은 683 으로 되돌려야 한다(의무 이중 보유 금지).
+
 ---
 
 # Goal

@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public interface OrderRepository {
 
@@ -77,6 +78,14 @@ public interface OrderRepository {
      * tenants. Empty when no such order exists (then the default tenant applies, D8).
      */
     Optional<String> findTenantIdByOrderId(String orderId);
+
+    /**
+     * Which of {@code orderIds} exist — in any tenant, in any status (TASK-INT-028). For
+     * batch-worker's orphan-coupon reconciliation: a coupon is released only when its order is
+     * absent from this answer, so the lookup must never hide a real order. Addressing by
+     * globally-unique ids cannot leak data across tenants; only the ids themselves come back.
+     */
+    Set<String> findExistingOrderIdsAcrossTenants(Collection<String> orderIds);
 
     PageResult<Order> findByUserId(String userId, PageQuery pageQuery);
 

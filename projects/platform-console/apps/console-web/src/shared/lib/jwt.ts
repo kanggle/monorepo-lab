@@ -5,12 +5,15 @@
  * `/oauth2/token` endpoint over the completed Authorization-Code exchange —
  * this is **NOT** a signature/security check (the BFF and the federated
  * domains verify the RS256 signature; the console never trusts an unverified
- * claim for authorization). It is used solely to read the operator's home
- * `tenant_id` claim so the console can DEFAULT the active-tenant selection on
- * login (TASK-PC-FE-036). Returns `null` on any malformed input.
+ * claim for authorization). It reads the operator `sub` that keys the
+ * remembered tenant selection (`active-tenant-default.ts`, TASK-PC-FE-292).
+ * Returns `null` on any malformed input.
  *
- * Runtime: nodejs only (uses `Buffer`); the sole caller is the
- * `/api/auth/callback` route (`runtime = 'nodejs'`).
+ * 🔴 Do not read `tenant_id` from here to choose the active tenant: this
+ * client's tokens carry its operational slug (`iam`), not a customer tenant.
+ * That was TASK-PC-FE-036's home-tenant default, removed by TASK-PC-FE-292.
+ *
+ * Runtime: nodejs only (uses `Buffer`).
  */
 export function readJwtClaim(token: string, claim: string): unknown {
   return decodeJwtPayload(token)?.[claim] ?? null;
@@ -21,7 +24,7 @@ export function readJwtClaim(token: string, claim: string): unknown {
  * malformed / null input). Same safety caveat as {@link readJwtClaim}: this is
  * NOT a signature check — used only to surface the operator's own display
  * identity (account menu label + the read-only `/account` page, TASK-PC-FE-041)
- * and the home-tenant default (TASK-PC-FE-036), never for an authorization
+ * and the remembered-tenant key (TASK-PC-FE-292), never for an authorization
  * decision (the BFF + federated domains verify the RS256 signature).
  *
  * Runtime: nodejs only (uses `Buffer`) — server components / `runtime =
@@ -43,20 +46,4 @@ export function decodeJwtPayload(
   } catch {
     return null;
   }
-}
-
-/**
- * The operator's home tenant from the IAM OIDC access token's `tenant_id`
- * claim — the value the console defaults the active-tenant selection to on
- * login so the tenant-scoped overviews work on first load (TASK-PC-FE-036).
- *
- * Returns `null` when the claim is absent, empty, or the platform-scope
- * sentinel `'*'` (a platform operator has no single home tenant — they MUST
- * explicitly select a customer; the switcher renders an unselected
- * placeholder for them, and the overview/health "select a tenant" gate stands
- * until they pick one).
- */
-export function homeTenantFromAccessToken(accessToken: string): string | null {
-  const t = readJwtClaim(accessToken, 'tenant_id');
-  return typeof t === 'string' && t !== '' && t !== '*' ? t : null;
 }
