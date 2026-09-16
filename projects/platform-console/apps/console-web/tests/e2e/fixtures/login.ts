@@ -128,9 +128,10 @@ async function driveOidcPkceLogin(
   context: BrowserContext,
   email: string,
   password: string,
-  // The active-tenant cookie to prime after login. Defaults to the SUPER_ADMIN's
-  // `fan-platform`. `null` skips priming entirely, for a spec that drives the
-  // tenant itself via the real `POST /api/tenant` switch. No current spec passes
+  // The active tenant to select after login (via the real `POST /api/tenant`
+  // switch — TASK-PC-FE-293). Defaults to `fan-platform` (seeded ACTIVE by the
+  // non-dev account-service V0009, so always selectable for the `'*'`
+  // SUPER_ADMIN). `null` selects nothing, for a spec that drives the switch itself. No current spec passes
   // `null` (TASK-PC-FE-248 removed the federation-operator specs — see
   // `tests/e2e/README.md`); the branch is kept because it is the correct
   // behaviour for any spec that asserts the assume-tenant re-scope.
@@ -215,24 +216,36 @@ async function driveOidcPkceLogin(
       page.click('button[type="submit"]'),
     ]);
 
-    // Step 7 — seed the `console_active_tenant` cookie. In production this
-    // is set by the client-side tenant-switcher write that happens on first
-    // page load. The harness primes it here so the 2 e2e specs land in the
-    // expected tenant without an extra UI click. Skipped when
-    // `activeTenant === null` — a spec that asserts the assume-tenant re-scope
-    // must drive the tenant via the real `POST /api/tenant` switch instead.
+    // Step 7 — select the active tenant through the REAL switch
+    // (`POST /api/tenant`), exactly as the tenant switcher does.
+    //
+    // 🔴 TASK-PC-FE-293: this used to `addCookies` a bare `console_active_tenant`
+    // — a state production never produces (the switch sets the tenant cookie
+    // AND the assumed token atomically, § 2.7). Before TASK-PC-FE-292 that
+    // passed because the domain calls fell back to the base token (`'*'` for
+    // this operator); after it, the domain section gate requires an assumed
+    // token and `overview-consolidation.spec.ts` met «테넌트를 먼저 선택하세요».
+    // `context.request` shares this context's cookie jar, so the session cookies
+    // from the login above are sent and the Set-Cookie response lands in the
+    // storageState that every spec inherits.
+    //
+    // Fail HERE, with the status and body: a 403 from the assume exchange (e.g.
+    // the auth-service → admin-service assignment check unreachable — it is
+    // fail-closed) would otherwise surface later as a spec timing out on a
+    // missing element.
     if (activeTenant !== null) {
-      await context.addCookies([
-        {
-          name: 'console_active_tenant',
-          value: activeTenant,
-          domain: new URL(DEFAULTS.consoleOrigin).hostname,
-          path: '/',
-          httpOnly: true,
-          secure: false,
-          sameSite: 'Strict',
-        },
-      ]);
+      const res = await context.request.post(
+        `${DEFAULTS.consoleOrigin}/api/tenant`,
+        { data: { tenant: activeTenant } },
+      );
+      if (!res.ok()) {
+        throw new Error(
+          `e2e login: POST /api/tenant {tenant: ${activeTenant}} → ${res.status()} ${await res.text()}`,
+        );
+      }
+      console.log(
+        `[e2e login] POST /api/tenant {tenant: ${activeTenant}} → ${res.status()}`,
+      );
     }
   } finally {
     // TASK-PC-FE-027 — stop tracing FIRST so the trace.zip lands even if
