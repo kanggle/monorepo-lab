@@ -18,7 +18,9 @@ import { SAMPLE_FIXTURES } from './fixtures';
  * Answers:
  *   - non-GET → `403 SAMPLE_READ_ONLY` (R1ⓐ). The body message is plumbing
  *     only; the visitor-facing copy comes from the code (`messageForCode`).
- *   - GET on a `ready` surface with a fixture for the path → `200` fixture.
+ *   - GET on a `ready` surface with a fixture for the path → `200` fixture,
+ *     or `404` (a domain fixture reporting a real "no such id" — TASK-PC-FE-283
+ *     AC-3) via {@link fixtureNotFound}.
  *   - any other GET → `503 SAMPLE_NOT_READY` (A9 — section degrade).
  *
  * Error bodies use the envelope the core's parser reads: wms is NESTED
@@ -66,6 +68,31 @@ function errorBody(core: SampleCore, code: string, message: string): unknown {
     : { code, message, timestamp: SAMPLE_AS_OF };
 }
 
+/**
+ * A domain fixture's "no such id" answer (TASK-PC-FE-283 AC-3 — a detail
+ * lookup on an id absent from the fixture rows must produce the SAME 404
+ * shape the real backend produces, not a generic `SAMPLE_NOT_READY`). Built
+ * with {@link fixtureNotFound}; the router renders it through the SAME
+ * `errorBody` envelope (flat vs wms-nested) every other error uses.
+ */
+export interface FixtureNotFound {
+  readonly notFound: true;
+  readonly code: string;
+  readonly message: string;
+}
+
+export function fixtureNotFound(code: string, message: string): FixtureNotFound {
+  return { notFound: true, code, message };
+}
+
+function isFixtureNotFound(value: unknown): value is FixtureNotFound {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as { notFound?: unknown }).notFound === true
+  );
+}
+
 export function sampleResponse(req: SampleRequest): Response {
   if (req.method.toUpperCase() !== 'GET') {
     return jsonResponse(
@@ -77,8 +104,18 @@ export function sampleResponse(req: SampleRequest): Response {
   const coverage = findSurfaceCoverage(req.core, req.surface);
   const fixture = SAMPLE_FIXTURES[`${req.core}:${req.surface}`];
   if (coverage?.status === 'ready' && fixture) {
-    const body = fixture(req.path.split('?')[0]);
-    if (body !== undefined) return jsonResponse(200, body);
+    // TASK-PC-FE-283 — the FULL path (query string included) is handed to the
+    // fixture: a domain fixture applies the screen's own filter/search/page
+    // query params over its rows (AC-4). The 4 dashboard/registry fixtures
+    // from TASK-PC-FE-282 ignore the argument entirely, so this is
+    // backward-compatible with them.
+    const result = fixture(req.path);
+    if (result !== undefined) {
+      if (isFixtureNotFound(result)) {
+        return jsonResponse(404, errorBody(req.core, result.code, result.message));
+      }
+      return jsonResponse(200, result);
+    }
   }
 
   return jsonResponse(
