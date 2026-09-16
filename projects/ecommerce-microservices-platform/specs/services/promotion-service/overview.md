@@ -19,7 +19,7 @@
 ## Responsibilities
 
 - Manage promotion CRUD (admin) and coupon issuance / lifecycle.
-- Apply coupons at order placement — synchronous HTTP from `order-service`, returns discount amount; release a coupon when that placement does not commit (TASK-INT-026).
+- Apply coupons at order placement — synchronous HTTP from `order-service`, returns discount amount; release a coupon when that placement does not commit (TASK-INT-026). A release that finds nothing to give back is recorded, and a later `apply` for that same `(couponId, orderId)` is refused — the two calls have no guaranteed order (TASK-INT-027).
 - Enforce usage constraints (one-use, quantity cap, expiry).
 - Restore coupons on `OrderCancelled` event consumption (set `USED → ISSUED`).
 - Calculate discounts (fixed amount, percentage with max cap).
@@ -34,7 +34,7 @@
 | REST | `POST /api/coupons/issue` | JWT + ROLE_ADMIN | issue coupons to users |
 | REST | `GET /api/coupons` | JWT (owner) | user's coupon list |
 | REST | `POST /api/coupons/{couponId}/apply` | `X-User-Id` header trust (service-to-service from order-service) | apply coupon at order placement |
-| REST (internal) | `POST /api/internal/coupons/{couponId}/release` | internal network only — no gateway route | release a coupon whose placement did not commit (TASK-INT-026) |
+| REST (internal) | `POST /api/internal/coupons/{couponId}/release` | internal network only — no gateway route | release a coupon whose placement did not commit, and record the pair so a late `apply` cannot bind it (TASK-INT-026, TASK-INT-027) |
 | Kafka consume | `order.order.cancelled` | — | coupon restoration |
 | Kafka publish | `promotion.coupon.used`, `promotion.coupon.expired` | — | analytics / notification consumers |
 
