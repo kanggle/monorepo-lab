@@ -104,6 +104,7 @@ Key domain concepts:
 - HTTP behavior must follow published contracts
 - Domain events must follow published event contracts
 - order-service communicates coupon application via synchronous HTTP call to promotion-service: `POST /api/coupons/{couponId}/apply` during placement (idempotent for the same `orderId`), and `POST /api/internal/coupons/{couponId}/release` when that placement does not commit (TASK-INT-026). The internal path has no gateway route and must never get one — see `promotion-api.md`.
+- The two calls are **not ordered** with respect to each other, so release is not enough on its own (TASK-INT-027): a release that finds nothing to give back records the `(couponId, orderId)` pair, and a later `apply` for that pair is refused with `422 COUPON_PLACEMENT_RELEASED` instead of binding the coupon to an order that was never saved. promotion-service never asks order-service whether an order exists — that would invert the dependency; it uses only what the release already carried.
 - Shared libraries may be used only under shared-library policy
 
 ## Events

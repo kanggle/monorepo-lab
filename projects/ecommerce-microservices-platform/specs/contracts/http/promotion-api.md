@@ -280,6 +280,18 @@ and the same user, the call returns `200` with the discount for `orderAmount` ag
 publishes no second `CouponUsed`. A coupon used by a different order still answers
 `422 COUPON_ALREADY_USED`.
 
+**A released placement cannot be applied afterwards** (TASK-INT-027). `apply` and the internal
+`release` below are not ordered with respect to each other: a caller whose `apply` times out
+rolls its placement back and sends the `release` while that `apply` is still being processed
+here. If this call's `(couponId, orderId)` already has a release recorded, the placement is
+known dead — the coupon stays `ISSUED`, no `CouponUsed` is published, and the call answers
+`422 COUPON_PLACEMENT_RELEASED`. Without this, the late `apply` would bind the coupon to an
+order that was never saved, and nothing could ever free it: the cancellation restore path
+needs an order to fire, so the coupon would sit `USED` until it expired.
+
+The fence is scoped to the **pair**, not the coupon: the same coupon applied by a *different*
+`orderId` is unaffected, so a user whose placement failed can simply order again.
+
 **Response 200**
 ```json
 {
@@ -297,6 +309,7 @@ publishes no second `CouponUsed`. A coupon used by a different order still answe
 | 422 | COUPON_ALREADY_USED | Coupon has already been used |
 | 422 | COUPON_EXPIRED | Coupon has expired |
 | 422 | COUPON_NOT_OWNED | Coupon does not belong to the authenticated user |
+| 422 | COUPON_PLACEMENT_RELEASED | This `(couponId, orderId)` was already released — the placement did not commit and its order was never saved (TASK-INT-027) |
 
 ---
 
@@ -322,9 +335,20 @@ an order they were already discounted for, and use it again.
 ```
 
 **Behaviour** — reverts the coupon to `ISSUED` **only if** it is `USED` by this `orderId`.
-Any other state (issued, used by another order, expired, not found) is left untouched.
+Any other state (used by another order, expired, not found) is left untouched.
 
-**Response 204** — always, including the no-op cases, so a retry is harmless.
+**A release with nothing to give back is still recorded** (TASK-INT-027). When the coupon is
+not `USED` by this `orderId`, this call records the `(couponId, orderId)` pair as released
+before returning. That record is what a later `apply` for the same pair refuses on — see
+`POST /api/coupons/{couponId}/apply` above. Without it the compensation only works when the
+`apply` happens to commit first: the caller sends `release` precisely because its `apply`
+timed out, which is exactly when that call may still be in flight here.
+
+Recording is **idempotent** — a retried release writes one record, not two — and the record is
+scoped to the pair, so it never blocks the same coupon on a different order.
+
+**Response 204** — always, including the cases where nothing was reverted, so a retry is
+harmless.
 
 **Error responses**
 | Status | Code | Reason |

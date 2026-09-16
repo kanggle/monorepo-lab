@@ -87,9 +87,20 @@ integration
   적고, 나머지 AC 없이 이 티켓을 닫는다.
   - 닫힘: 재현됐다. `expected: ISSUED but was: USED` (`CouponApplyAfterReleaseTest.java:94`), 서비스
     로그가 순서를 그대로 찍었다 — 기록은 아래 § AC-0 재현 측정. 틀린 사실 없음.
-- [ ] **AC-1 (계약 먼저)** — 펜스에 걸린 apply 의 상태 코드·오류 코드와 「release 는 되돌릴 것이 없어도
+- [x] **AC-1 (계약 먼저)** — 펜스에 걸린 apply 의 상태 코드·오류 코드와 「release 는 되돌릴 것이 없어도
   기록한다」를 `promotion-api.md` 와 `platform/error-handling.md` 에 적는다. 코드 변경은 이 AC 이후
   커밋에만 들어간다.
+  - 닫힘: `COUPON_PLACEMENT_RELEASED` / **422**. 형제 거절(`ALREADY_USED`·`EXPIRED`·`NOT_OWNED`)이
+    모두 422 이고, 409 는 이 저장소에서 멱등키 경합에 쓰고 있어 그쪽을 피했다. 적은 곳 **다섯**:
+    `promotion-api.md` apply 절(순서 없음 + 쌍 단위 펜스) · 같은 문서 apply 오류 표 · 같은 문서
+    internal release 「Behaviour」(되돌릴 것이 없어도 기록, 멱등) · `platform/error-handling.md`
+    Promotion 표 · promotion-service `architecture.md` 통합 규칙 + `overview.md` 책임 문장·공개 표면 행.
+  - 🔵 `platform/` 은 공유 경로라 원칙상 루트 태스크의 몫이지만, 이 표는 `[domain: ecommerce]` 처럼
+    프로젝트별 행을 담도록 설계된 문서이고 바로 위 두 행(`COUPON_NOT_APPLICABLE`,
+    `COUPON_SERVICE_UNAVAILABLE`)이 `TASK-INT-026` 이 같은 방식으로 넣은 것이다. 같은 선례를 따랐다.
+  - 🔴 promotion-service 가 order-service 에 「그 주문 있느냐」를 되묻지 않는다는 것도 계약에 적었다.
+    되물으면 의존이 역류한다(`dependencies.md` § Forbidden Dependencies). 펜스는 release 가 이미
+    들고 온 `(couponId, orderId)` 만 쓴다.
 - [ ] **AC-2** — AC-0 이 재현한 그 순서가 이제 쿠폰을 `ISSUED` 로 남긴다. apply 는 거절되고 `CouponUsed`
   는 발행되지 않는다.
 - [ ] **AC-3 (정상 경로 회귀)** — 펜스가 없는 apply, apply 후 도착한 release(→ `ISSUED` 복원), 같은 주문의

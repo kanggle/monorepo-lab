@@ -367,6 +367,7 @@ Owned by `promotion-service`. See `rules/domains/ecommerce.md` rule E7.
 | COUPON_NOT_OWNED | 422 | Coupon does not belong to the user |
 | COUPON_LIMIT_EXCEEDED | 422 | Issuance would exceed max issuance count |
 | COUPON_RESTORE_NOT_ALLOWED | 422 | Coupon cannot be restored (e.g. coupon is not in a used state) |
+| COUPON_PLACEMENT_RELEASED | 422 | An `apply` arrived for a `(couponId, orderId)` whose **release is already recorded** — that placement did not commit, so its order was never saved. Binding the coupon to it would strand the coupon as `USED` until expiry, since the cancellation restore path needs an order to fire and there is none (TASK-INT-027). Not a user-facing code in practice: the caller has already rolled its placement back, so nobody is listening — it exists so the refusal is observable rather than silent. |
 | IDEMPOTENCY_KEY_REQUIRED | 400 | `Idempotency-Key` header missing or blank on `POST /api/promotions/{promotionId}/coupons/issue` (promotion-service `IdempotencyKeyRequiredException`, TASK-BE-536) |
 | IDEMPOTENCY_KEY_CONFLICT | 409 | The same `Idempotency-Key` was replayed against one promotion with a **different** user-id batch, or lost the concurrent insert race on `UNIQUE (promotion_id, idempotency_key)` (promotion-service `IdempotencyKeyConflictException`, TASK-BE-536). A same-key + same-batch replay is NOT an error — it returns the already-issued count without minting a second batch. |
 
