@@ -1,4 +1,48 @@
 import { SAMPLE_AS_OF } from '../codes';
+import { IAM_FIXTURE_HANDLERS } from './iam';
+import { ERP_FIXTURE_HANDLERS } from './erp';
+import { ECOMMERCE_FIXTURE_HANDLERS } from './ecommerce';
+
+/**
+ * TASK-PC-FE-285 (coordinator review) — an overview card's count is NOT typed
+ * here. It is the answer the SAME domain fixture gives to the SAME request the
+ * console-bff adapter makes, so the landing card and the list screen it
+ * summarises cannot disagree. Before this, the cards said IAM 128 · ERP 12 ·
+ * E-Commerce 342 while the lists they summarise held 5 · 3 · 3 — on the very
+ * first screen an anonymous visitor lands on (`/` → `/dashboards/overview`).
+ *
+ * Paths mirror console-bff's outbound adapters (`IamAccountsReadAdapter`,
+ * `ErpDepartmentsReadAdapter`, `EcommerceOverviewReadAdapter`). A fixture that
+ * stops answering throws at module load — loud, never a silent fallback number.
+ */
+function countFrom(
+  handler: ((path: string) => unknown) | undefined,
+  path: string,
+  pick: (body: never) => unknown,
+): number {
+  const body = handler?.(path);
+  const n = body === undefined ? undefined : pick(body as never);
+  if (typeof n !== 'number') {
+    throw new Error(`sample overview: no count for ${path}`);
+  }
+  return n;
+}
+
+const IAM_ACCOUNT_COUNT = countFrom(
+  IAM_FIXTURE_HANDLERS['iam:accounts'],
+  '/api/admin/accounts?page=0&size=1',
+  (b: { totalElements?: unknown }) => b.totalElements,
+);
+const ERP_ACTIVE_DEPARTMENT_COUNT = countFrom(
+  ERP_FIXTURE_HANDLERS['flat:erp'],
+  '/api/erp/masterdata/departments?active=true&page=0&size=1',
+  (b: { meta?: { totalElements?: unknown } }) => b.meta?.totalElements,
+);
+const ECOMMERCE_PRODUCT_COUNT = countFrom(
+  ECOMMERCE_FIXTURE_HANDLERS['ecommerce:ecommerce'],
+  '/api/admin/products?page=0&size=1',
+  (b: { totalElements?: unknown }) => b.totalElements,
+);
 
 /**
  * Dashboard fixtures (R3ⓐ — the first screens made `ready`): the console-bff
@@ -17,7 +61,7 @@ import { SAMPLE_AS_OF } from '../codes';
 export const SAMPLE_OPERATOR_OVERVIEW = {
   asOf: SAMPLE_AS_OF,
   cards: [
-    { domain: 'iam', status: 'ok', data: { totalElements: 128 } },
+    { domain: 'iam', status: 'ok', data: { totalElements: IAM_ACCOUNT_COUNT } },
     {
       domain: 'wms',
       status: 'ok',
@@ -43,8 +87,12 @@ export const SAMPLE_OPERATOR_OVERVIEW = {
         accountId: 'sample-account-0001',
       },
     },
-    { domain: 'erp', status: 'ok', data: { meta: { totalElements: 12 } } },
-    { domain: 'ecommerce', status: 'ok', data: { totalElements: 342 } },
+    // 🔵 wms (totalStockUnits/alertCount), scm (nodes) and finance (account) are
+    //    still typed here — their domain fixtures do not exist yet. Each owning
+    //    ticket (TASK-PC-FE-286 finance · 287 wms · 288 scm) derives its card the
+    //    same way and adds its row to `sample-overview-cards-match-lists.test.ts`.
+    { domain: 'erp', status: 'ok', data: { meta: { totalElements: ERP_ACTIVE_DEPARTMENT_COUNT } } },
+    { domain: 'ecommerce', status: 'ok', data: { totalElements: ECOMMERCE_PRODUCT_COUNT } },
   ],
 } as const;
 

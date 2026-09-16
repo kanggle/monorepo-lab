@@ -361,3 +361,48 @@ read-model-api.md` 에 이 모노레포·이 워크트리 안에 있다(같은 �
 코드를 건드릴 때만" 재실행하라고 명시했다.
 
 넘길 의무 **0건** — 이 정정이 새로 발견한 남의 미해결 작업은 없다.
+
+## CORRECTION — 첫 화면 개요 카드가 목록과 다른 숫자를 말했다 (조정자, 2026-09-16 UTC)
+
+🔴 **결함** (282 가 넣고 283 · 284 · 285 가 드러낸 것): `/` → `/dashboards/overview` 의 개요 카드 값이 `fixtures/dashboards.ts`
+에 **손으로 적힌 숫자**였다. 도메인 픽스처가 생긴 뒤 그 숫자가 요약하는 목록과 어긋났다 — 익명 방문자가 **가장 먼저 보는 화면**에서.
+조정자가 console-bff 의 실제 조회 경로로 router 에 물어 실측했다:
+
+| 카드 | console-bff 가 부르는 조회 (어댑터) | 카드 (전) | 목록 실제 | 카드 (후) |
+|---|---|---:|---:|---:|
+| IAM «전체 계정» | `GET /api/admin/accounts?page=0&size=1` (`IamAccountsReadAdapter`) | 128 | 5 | **5** |
+| ERP «활성 부서 수» | `GET /api/erp/masterdata/departments?active=true&page=0&size=1` (`ErpDepartmentsReadAdapter`) | 12 | 활성 3 / 전체 4 | **3** |
+| E-Commerce «상품 수» | `GET /api/admin/products?page=0&size=1` (`EcommerceOverviewReadAdapter`) | 342 | 3 | **3** |
+
+🔴🔴 **그 불일치를 초록으로 얼려 둔 핀이 있었다**: 282 의 `e2e-smoke/sample-visitor.spec.ts:23-24` 가 `'128'` · `'342'` 를
+**문자 그대로** 단언했다. 결함을 막는 가드가 아니라 결함 상태를 고정하는 핀이었다.
+
+### 고침
+
+1. `fixtures/dashboards.ts` — 카드 셋의 값을 **파생**한다: console-bff 어댑터와 **같은 경로**를 **같은 도메인 픽스처 핸들러**에
+   물어 얻은 수. 답이 숫자가 아니면 모듈 로드에서 던진다(조용한 대체값 없음).
+2. 새 가드 `tests/unit/sample-overview-cards-match-lists.test.ts` — 개요(console-bff 표면)와 목록(도메인 표면)을 **둘 다 router 로**
+   불러 비교한다. 목록 쪽은 픽스처의 `totalElements` 가 아니라 **실제 반환 행 수**로 센다(메타와 행이 서로 맞장구치는 공허 방지).
+   ERP 칸은 목록에 비활성 행이 **있음**도 단언한다(없으면 «활성» 과 «전체» 를 구별 못 해 전체를 세는 카드도 통과).
+3. `e2e-smoke/sample-visitor.spec.ts` — 리터럴 핀을 «숫자가 섰다(degrade 의 `—` 아님)» 정규식으로 바꾸고 이유를 헤더에 적었다.
+   값의 정합은 위 유닛 가드가 문다 — 값을 다시 적으면 다음 픽스처 변경에서 또 얼어붙는다.
+
+### Bite
+
+| # | 주입 | 빨강 | 복원 |
+|---|---|---|---|
+| B-OV1 | 이커머스 카드를 `totalElements: 342` 로 되돌림 | rc=1 · `expected 342 to be 3` | rc=0 · 3/3 |
+| B-OV2 | ERP 파생 경로에서 `active=true` 제거(전체 부서를 셈) | rc=1 · `expected 4 to be 3` | rc=0 |
+
+### 게이트 (이 worktree · `main` 병합 트리 위 · 각각 독립 + 명시 rc)
+
+- `pnpm lint` rc=0 · `npx tsc --noEmit` rc=0
+- `pnpm test` rc=1 · **311 files 중 1 failed / 3402 tests 중 1 failed** — `OperatorsScreen.test.tsx` «a valid create is reason+confirm-gated»
+  `Test timed out in 5000ms`. 🔵 그 파일 **단독 재실행 rc=0 · 14/14 passed**. 이 호스트에서 반복 기록된 타이밍 flake 이고 이 변경(샘플 개요
+  픽스처)과 경로가 겹치지 않는다. 두 실행 모두 여기 적는다 — 판정 권위는 PR CI 의 Linux 러너.
+
+### 🔵 남는 것 — 다음 티켓이 가져간다
+
+WMS «총 재고 · 알림» (`48,210` · `3`), SCM «스냅샷 노드 수» (`3`, 노드 이름 셋), Finance «잔액» (계정 `sample-account-0001`) 카드는
+**아직 손으로 적힌 값**이다 — 그 도메인 픽스처가 없어서 파생할 곳이 없다. 각 소유 티켓이 같은 방식으로 파생하고 위 가드에 칸을 더한다:
+`TASK-PC-FE-286`(finance) · `287`(wms) · `288`(scm). 조정자가 각 티켓의 지시서에 이 의무를 넣는다.
