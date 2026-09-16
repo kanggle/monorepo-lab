@@ -274,6 +274,21 @@ class OAuth2AuthorizationServerSliceTest {
         // Standard JWT claims
         assertThat(payload.has("iss")).isTrue();
         assertThat(payload.has("exp")).isTrue();
+
+        // TASK-MONO-696 AC-1 (Docker-free leg): the real SAS JwtGenerator + this service's token
+        // customizer put the ISSUING CLIENT ID in `aud` — not a platform name. Nimbus serializes a
+        // single-element audience as a bare string, so accept either JSON shape and compare values.
+        JsonNode aud = payload.get("aud");
+        assertThat(aud).as("access token must carry aud").isNotNull();
+        java.util.List<String> audValues = new java.util.ArrayList<>();
+        if (aud.isArray()) {
+            aud.forEach(a -> audValues.add(a.asText()));
+        } else {
+            audValues.add(aud.asText());
+        }
+        assertThat(audValues)
+                .as("TASK-MONO-696 AC-1: client_credentials aud == issuing client id")
+                .containsExactly(CLIENT_ID);
     }
 
     @Test

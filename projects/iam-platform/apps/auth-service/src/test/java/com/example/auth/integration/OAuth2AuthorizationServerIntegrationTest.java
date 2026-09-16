@@ -307,6 +307,11 @@ class OAuth2AuthorizationServerIntegrationTest extends AbstractIntegrationTest {
                 .isEqualTo("account-service-client");
         assertThat(jwt.getClaimAsString("tenant_id")).isEqualTo("global-account-platform");
         assertThat(jwt.getClaimAsString("tenant_type")).isEqualTo("INTERNAL");
+        // TASK-MONO-696 AC-1: the IdP's `aud` on client_credentials is the issuing client id
+        // (SAS JwtGenerator default — nothing in auth-service overrides it), not a platform name.
+        assertThat(jwt.getAudience())
+                .as("TASK-MONO-696 AC-1: client_credentials aud == issuing client id")
+                .containsExactly("account-service-client");
     }
 
     @Test
@@ -445,6 +450,10 @@ class OAuth2AuthorizationServerIntegrationTest extends AbstractIntegrationTest {
         // client under tenant `fan-platform`. A token minted from some other client_id that
         // happened to hold the scope would satisfy the assertion above but not this one.
         assertThat(jwt.getClaimAsString("tenant_id")).isEqualTo("fan-platform");
+        // TASK-MONO-696 AC-1: a domain workload client's token — aud is its client id, not `fan`.
+        assertThat(jwt.getAudience())
+                .as("TASK-MONO-696 AC-1: client_credentials aud == issuing client id, not a platform name")
+                .containsExactly(COMMUNITY_CLIENT_ID);
     }
 
     @Test

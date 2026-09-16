@@ -199,6 +199,63 @@ class SecurityConfigRealDecoderPathTest {
     }
 
     // -----------------------------------------------------------------------
+    // TASK-MONO-696 AC-0 — audience is NOT checked today (before-state pin)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Today's behaviour: the gateway never looks at {@code aud} (TASK-MONO-696 AC-0).
+     *
+     * <p>{@code application.yml}'s {@code spring.security.oauth2.resourceserver.jwt.audiences}
+     * applies only to Boot's auto-configured decoder, which backs off because
+     * {@link OAuth2ResourceServerConfig#reactiveJwtDecoder()} defines its own; the shared
+     * validator chain has no audience validator.
+     *
+     * <p><strong>These are the cells that flip in TASK-MONO-696 AC-5 (phase 2, reject)</strong>:
+     * under the recorded decision (per-gateway client-id allowlist, mismatch → 403) the two
+     * "passes today" cells become 403. In phase 1 (shadow) they still pass, plus a mismatch
+     * log/metric. Each has a control — the same claims minus {@code tenant_id} is refused with
+     * 403 — which proves "passes" means the real decoder accepted the token, not that the
+     * harness lets anything through.
+     */
+    @Nested
+    @DisplayName("TASK-MONO-696 AC-0 — aud 는 오늘 검사되지 않는다 (AC-5 에서 뒤집힐 칸)")
+    class AudienceNotCheckedToday {
+
+        @Test
+        @DisplayName("(i) aud 없음 + tenant_id=ecommerce → 통과 (오늘) — AC-5 phase 2 에서 403 으로 뒤집힌다")
+        void noAudience_ecommerceTenant_passesToday_flipsInAc5() {
+            send(JWT.signToken("user-no-aud", null, 300L, Map.of("tenant_id", "ecommerce")))
+                    .expectStatus().isOk()
+                    .expectBody(String.class).isEqualTo("reached");
+        }
+
+        @Test
+        @DisplayName("(i) 대조군: 같은 토큰(aud 없음)에서 tenant_id 만 빼면 → 403 TENANT_FORBIDDEN")
+        void noAudience_control_withoutTenant_is403() {
+            send(JWT.signToken("user-no-aud", null, 300L, Map.of()))
+                    .expectStatus().isForbidden()
+                    .expectBody().jsonPath("$.code").isEqualTo("TENANT_FORBIDDEN");
+        }
+
+        @Test
+        @DisplayName("(ii) aud=[wms] + tenant_id=ecommerce → 통과 (오늘) — AC-5 phase 2 에서 403 으로 뒤집힌다")
+        void foreignAudience_ecommerceTenant_passesToday_flipsInAc5() {
+            send(JWT.signToken("user-wms-aud", null, 300L,
+                    Map.of("aud", List.of("wms"), "tenant_id", "ecommerce")))
+                    .expectStatus().isOk()
+                    .expectBody(String.class).isEqualTo("reached");
+        }
+
+        @Test
+        @DisplayName("(ii) 대조군: 같은 토큰(aud=[wms])에서 tenant_id 만 빼면 → 403 TENANT_FORBIDDEN")
+        void foreignAudience_control_withoutTenant_is403() {
+            send(JWT.signToken("user-wms-aud", null, 300L, Map.of("aud", List.of("wms"))))
+                    .expectStatus().isForbidden()
+                    .expectBody().jsonPath("$.code").isEqualTo("TENANT_FORBIDDEN");
+        }
+    }
+
+    // -----------------------------------------------------------------------
 
     private WebTestClient.ResponseSpec send(String token) {
         return client.get().uri(PROTECTED)
