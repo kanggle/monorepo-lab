@@ -93,7 +93,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔴 **순서: 282 → 283~288 직렬**(샘플 등록부·원장 파일 공유 — 병렬 worktree 금지) → 루트 `TASK-MONO-686`(`/demo` 은퇴, ⏳).
 
-- `TASK-PC-FE-284-ecommerce-screens-get-samples.md` — ecommerce 23 화면 · GET 19 · 🔴 이미지에 MinIO 주소 금지. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
 - `TASK-PC-FE-285-erp-screens-get-samples.md` — erp 6 화면 · GET 18 · 🔴 개요 수 = 목록 행 수. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
 - `TASK-PC-FE-286-finance-and-ledger-screens-get-samples.md` — finance·ledger 4 화면 · GET 15 · 🔴 차변 합 = 대변 합. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
 - `TASK-PC-FE-287-wms-screens-get-samples.md` — wms 7 화면 · GET 11 · 🔴 NESTED 에러 봉투라 코드 보존 확인 · 코드 칸 null 금지. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
@@ -129,6 +128,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 ## review
 
 - `TASK-PC-FE-283-iam-screens-get-samples.md` — IAM 9 surface(accounts·audit·operators·rbac·subscriptions·partnerships·tenants·org_nodes·groups) + 14 화면 `pending → ready` (`ADR-MONO-074` 실행 2/8). 리스트↔상세 id 일관 + 필터/검색/페이지 실동작 + 404 실모양(`fixtureNotFound`) + AC-6 e2e-smoke 1건. lint/tsc rc=0, `pnpm test` 304/304 파일·3261/3261 테스트(BEFORE parked main 302/303·3218/3219, 대조군 무수정), `pnpm e2e:smoke` 19/19. bite 5건(B8~B12) 전부 발화+복원 확인. 분석=Opus 5 / 구현=Sonnet 5.
+- `TASK-PC-FE-284-ecommerce-screens-get-samples.md` — ecommerce 9 surface(products·images·orders·users·promotions·shippings·notifications·sellers·settlements) + 22 화면 `pending → ready` (`ADR-MONO-074` 실행 3/8). 리스트↔상세 id 일관 + 필터/검색/페이지 실동작 + 404 실모양(`fixtureNotFound`) + 정산 money 교차검증(잔액=적립 라인 합, bps 적산) + AC-6 e2e-smoke 2건. AC-7 선택=이미지 없음. lint/tsc rc=0, `pnpm test` 305/305 파일·3316/3316 테스트(BEFORE 이 워크트리 `git stash` 304/304·3261/3261, 대조군 무수정), `pnpm e2e:smoke` 21/21. bite 8건(B13~B20) 전부 발화+복원 확인. 분석=Opus 5 / 구현=Sonnet 5.
 
 ## done
 

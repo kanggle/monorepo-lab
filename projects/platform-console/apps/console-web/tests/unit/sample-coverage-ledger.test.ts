@@ -193,7 +193,13 @@ describe('screen ledger ↔ (console) pages', () => {
   });
 
   it('dynamic segments and query strings resolve to their row; unknown paths err toward pending', () => {
-    expect(screenStatusFor('/ecommerce/orders/ord-1')).toBe('pending');
+    // 🔴 TASK-PC-FE-284 changed this expectation — `/ecommerce/orders/[id]` is
+    // now `ready` (ADR-MONO-074 execution 3/8), so the bracket-pattern match
+    // this cell exercises now resolves to `ready` for a concrete order id.
+    // The cell's subject (dynamic `[id]` segments resolve to their OWN ledger
+    // row) is unchanged; only the row's value changed, because the decision
+    // did — not because this cell was red.
+    expect(screenStatusFor('/ecommerce/orders/ord-1')).toBe('ready');
     expect(screenStatusFor('/dashboards/overview?x=1')).toBe('ready');
     expect(screenStatusFor('/wms/guide/')).toBe('static');
     expect(screenStatusFor('/no-such-screen')).toBe('pending');
