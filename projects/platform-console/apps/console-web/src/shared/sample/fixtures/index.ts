@@ -11,6 +11,7 @@ import { ERP_FIXTURE_HANDLERS, ERP_FIXTURE_DOCUMENTS } from './erp';
 import { FINANCE_FIXTURE_HANDLERS, FINANCE_FIXTURE_DOCUMENTS } from './finance';
 import { LEDGER_FIXTURE_HANDLERS, LEDGER_FIXTURE_DOCUMENTS } from './ledger';
 import { WMS_FIXTURE_HANDLERS, WMS_FIXTURE_DOCUMENTS } from './wms';
+import { SCM_FIXTURE_HANDLERS, SCM_FIXTURE_DOCUMENTS } from './scm';
 import type { FixtureNotFound } from '../router';
 
 /**
@@ -42,6 +43,7 @@ export const SAMPLE_FIXTURES: Readonly<Record<string, FixtureHandler>> = {
   ...FINANCE_FIXTURE_HANDLERS,
   ...LEDGER_FIXTURE_HANDLERS,
   ...WMS_FIXTURE_HANDLERS,
+  ...SCM_FIXTURE_HANDLERS,
 };
 
 /**
@@ -67,4 +69,5 @@ export const SAMPLE_FIXTURE_DOCUMENTS: Readonly<Record<string, unknown>> = {
   ...FINANCE_FIXTURE_DOCUMENTS,
   ...LEDGER_FIXTURE_DOCUMENTS,
   ...WMS_FIXTURE_DOCUMENTS,
+  ...SCM_FIXTURE_DOCUMENTS,
 };

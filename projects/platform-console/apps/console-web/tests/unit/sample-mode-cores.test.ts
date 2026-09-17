@@ -390,9 +390,25 @@ describe('callFlatEnvelopeGateway (erp/finance/ledger) + callScmGateway shim', (
   });
 
   it('① scm shim — pending GET → SAMPLE_NOT_READY, fetch 0', async () => {
-    const err = await callScmGateway({ path: '/api/v1/procurement/po' }, parse, SCM_PROFILE).catch(
-      (e) => e,
-    );
+    // TASK-PC-FE-288 — this suite's DoD is "scm 원장의 `pending` 0" (the LAST
+    // domain ticket — after this, NO surface anywhere is `pending`), so `scm`
+    // (this cell's original profile) is now `ready`, exactly as
+    // TASK-PC-FE-283/284/285/287's identical note on the other describe
+    // blocks recorded for their own surfaces. This cell tests the callScmGateway
+    // SHIM's generic ready/pending BRANCH mechanics, not any one surface's
+    // content, so a `logPrefix` absent from the ledger entirely exercises the
+    // identical branch (`findSurfaceCoverage` → `undefined` → the same "not
+    // ready" path a real `pending` row took) without depending on a surface
+    // staying unimplemented forever.
+    const NO_SUCH_SURFACE_PROFILE: ScmGatewayProfile = {
+      ...SCM_PROFILE,
+      logPrefix: 'no-such-surface',
+    };
+    const err = await callScmGateway(
+      { path: '/api/v1/procurement/po' },
+      parse,
+      NO_SUCH_SURFACE_PROFILE,
+    ).catch((e) => e);
     expect((err as TestUnavailable).code).toBe(SAMPLE_NOT_READY);
     expect(fetchSpy).not.toHaveBeenCalled();
   });

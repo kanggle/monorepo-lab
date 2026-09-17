@@ -108,10 +108,10 @@ export const SURFACE_COVERAGE: readonly SurfaceCoverage[] = [
   // does" to itself).
   { core: 'flat', surface: 'wms_outbound_logistics', status: 'ready', owner: WMS },
 
-  // ── scm (`callScmGateway` → `callFlatEnvelopeGateway`) ─────────────────────
-  { core: 'flat', surface: 'scm', status: 'pending', owner: SCM },
-  { core: 'flat', surface: 'scm_replenishment', status: 'pending', owner: SCM },
-  { core: 'flat', surface: 'scm_config', status: 'pending', owner: SCM },
+  // ── scm (`callScmGateway` → `callFlatEnvelopeGateway`) — TASK-PC-FE-288 ────
+  { core: 'flat', surface: 'scm', status: 'ready', owner: SCM },
+  { core: 'flat', surface: 'scm_replenishment', status: 'ready', owner: SCM },
+  { core: 'flat', surface: 'scm_config', status: 'ready', owner: SCM },
 ];
 
 export function findSurfaceCoverage(
@@ -163,6 +163,10 @@ export const SURFACE_SAMPLE_PATH: Readonly<Record<string, string>> = {
   'wms:wms': '/api/v1/admin/dashboard/inventory?page=0&size=20',
   'wms:wms_outbound': '/api/v1/outbound/orders?page=0&size=20',
   'flat:wms_outbound_logistics': '/api/v1/logistics/dispatches/by-shipment/ship-sample-0001',
+  // TASK-PC-FE-288
+  'flat:scm': '/api/v1/procurement/po?page=0&size=20',
+  'flat:scm_replenishment': '/api/v1/demand-planning/suggestions?page=0&size=20',
+  'flat:scm_config': '/api/v1/demand-planning/policies/SKU-SAMPLE-001',
 };
 
 /**
@@ -250,11 +254,11 @@ export const SCREEN_COVERAGE: Readonly<Record<string, ScreenStatus>> = {
   '/wms/outbound': 'ready',
 
   // scm — TASK-PC-FE-288
-  '/scm': 'pending',
-  '/scm/config': 'pending',
-  '/scm/inventory': 'pending',
-  '/scm/procurement': 'pending',
-  '/scm/replenishment': 'pending',
+  '/scm': 'ready',
+  '/scm/config': 'ready',
+  '/scm/inventory': 'ready',
+  '/scm/procurement': 'ready',
+  '/scm/replenishment': 'ready',
 };
 
 /**

@@ -189,6 +189,23 @@ const MACHINE_KEYS = new Set([
   'totalCarryingBaseMinor', // FX position summary F5 minor-units string
   'expectedMinor', // reconciliation discrepancy F5 minor-units string
   'actualMinor', // reconciliation discrepancy F5 minor-units string
+  // TASK-PC-FE-288 — scm domain fixtures (procurement PO · inventory-visibility ·
+  // demand-planning suggestions · demand-planning seed/config). Every value
+  // below is an id/code/enum/date/money-decimal value a parser or
+  // `masterRefLabel`/`StatusBadge`-like element reads — never free prose
+  // (ADR-MONO-050 D9 — cross-service identifiers are codes; `supplierCode` is
+  // the master's own `code`, mirrored from erp/wms's identical `code` rule).
+  'supplierCode', // PurchaseOrderResponse resolved supplier CODE (TASK-MONO-677)
+  'poNumber', // PurchaseOrderResponse business identifier (mirrors wms's orderNo/asnNo)
+  'totalAmount', // PurchaseOrderResponse F5 decimal-string amount
+  'sku', // InventoryVisibility SnapshotRow / SkuBreakdown SKU code (bare — distinct literal key from wms's `skuCode`)
+  'supplierSku', // PoLine supplier-side SKU code
+  'quantity', // PoLine / SnapshotRow F5 decimal-string or number quantity
+  'unitPrice', // PoLine F5 decimal-string unit price
+  'receivedQuantity', // PoLine F5 decimal-string received quantity
+  'staleness', // SnapshotRow / cross-node meta enum (FRESH | STALE | UNREACHABLE)
+  'stalenessStatus', // StalenessRow enum (FRESH | STALE | UNREACHABLE)
+  'nodeType', // NodeRow enum (WMS_WAREHOUSE | SUPPLIER | THIRD_PARTY_LOGISTICS | IN_TRANSIT)
   // TASK-PC-FE-287 — wms domain fixtures (admin read-model · outbound-service ·
   // logistics dispatch). Every value below is an id/code/enum/date a parser or
   // `StatusBadge`-like element reads — never free prose (mirrors ADR-MONO-050
