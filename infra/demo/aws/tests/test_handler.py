@@ -1156,6 +1156,66 @@ class SelectionReadyOnStatusTest(unittest.TestCase):
         # 🔵 비공허성 — 세계들이 두 값을 **다** 만들었는가. 전부 True 면 대조가 한쪽만 잰 것이다.
         self.assertEqual(seen, {True, False})
 
+    # -- TASK-MONO-701: 첫 발행 전 구간 -----------------------------------------
+    #
+    # 🔴🔴 기동 직후(헬스 미발행) None → 옛 해석기가 `running` 으로 번역해 배너가 없던
+    #    것이 이 티켓의 결함 그 자체다(2026-09-17 창 실측). 아래 칸들은 그 구간에서
+    #    False 가 나오는지, 그리고 상한을 넘으면 다시 None(옛 동작)으로 돌아가는지를 잰다.
+
+    def test_just_started_no_publish_at_all_is_false(self):
+        """AC-2 ① — 방금 켰고(30초 전) 이 세션에서 헬스가 아예 발행된 적이 없다."""
+        handler._write_selection({"store"})
+        FAKE_SSM.store[handler.STARTED_PARAM] = str(T0 - 30)
+        # 🔵 `/t/health` 를 아예 안 심는다 — "한 번도 발행 안 됨" 그 자체.
+        self.assertIs(self._status()["selection_ready"], False)
+
+    def test_previous_session_snapshot_that_still_looks_fresh_is_false_not_true(self):
+        """🔴🔴 stop→start 를 90초 안에 반복하면 지난 세션 스냅샷이 나이만으로는 신선해
+        보인다 — age 가 아니라 `published_at < started` 로 걸러야 한다(§ Edge Cases 표)."""
+        FAKE_SSM.store[handler.STARTED_PARAM] = str(T0 - 30)
+        # 지난 세션이 20초 전(= 이번 세션 시작보다 10초 앞서 발행)에 남긴, 전부 ready 인 스냅샷.
+        FAKE_SSM.store["/t/health"] = json.dumps({
+            "published_at": T0 - 40,
+            "domains": {"iam": {"state": "up"}, "ecommerce": {"state": "up"}},
+        })
+        handler._write_selection({"store"})
+        self.assertIs(self._status()["selection_ready"], False)
+
+    def test_dead_publisher_past_grace_reverts_to_none(self):
+        """AC-2 ② — 400초 전에 켰는데 이 세션에서 아직 발행이 없다 ⇒ 발행자가 죽었다고 보고
+        옛 동작(None)으로 되돌아간다. `FIRST_PUBLISH_GRACE_SECONDS`(300) 을 넘긴 값이다."""
+        self.assertGreater(400, handler.FIRST_PUBLISH_GRACE_SECONDS)
+        handler._write_selection({"store"})
+        FAKE_SSM.store[handler.STARTED_PARAM] = str(T0 - 400)
+        self.assertIsNone(self._status()["selection_ready"])
+
+    def test_old_session_fresh_publish_after_start_with_later_bundle_add_is_unaffected(self):
+        """오래 전에 켠 인스턴스라도, 이 세션 시작 **후** 발행된 신선한 스냅샷이면 이 판정이
+        끼어들지 않는다 — 나중에 묶음을 추가해도(부팅 중) 기존 로직 그대로 False/True."""
+        FAKE_SSM.store[handler.STARTED_PARAM] = str(T0 - 3600)
+        handler._write_selection({"store"})
+        # 시작(now-3600) **후**에 발행됐고 신선하다(age=0) — "이 세션의" 스냅샷.
+        self._health({"iam": "up", "ecommerce": "up"})
+        self.assertIs(self._status()["selection_ready"], True)
+        # 묶음을 나중에 추가한다 — 아직 안 뜬 상태(booting).
+        handler._write_selection({"store", "console"})
+        self._health({"iam": "up", "ecommerce": "up", "console": "partial"})
+        self.assertIs(self._status()["selection_ready"], False)
+
+    def test_started_param_unreadable_falls_back_to_todays_behaviour(self):
+        """`STARTED_PARAM` 이 없으면(=0, 오늘의 «못 읽음») 이 구별을 하지 않는다 —
+        헬스가 없으면 여전히 그냥 None(옛 동작), 오늘과 동일하다."""
+        handler._write_selection({"store"})
+        # STARTED_PARAM 을 아예 심지 않는다 — `_get` 이 기본값 0 을 준다.
+        self.assertIsNone(self._status()["selection_ready"])
+
+    def test_grace_boundary_now_minus_started_equals_grace_is_none(self):
+        """경계값 — `now - started == FIRST_PUBLISH_GRACE_SECONDS` 는 «안(<)» 이 아니라
+        상한을 넘은 쪽으로 떨어진다(None)."""
+        handler._write_selection({"store"})
+        FAKE_SSM.store[handler.STARTED_PARAM] = str(T0 - handler.FIRST_PUBLISH_GRACE_SECONDS)
+        self.assertIsNone(self._status()["selection_ready"])
+
 
 class RouterIsExactTest(unittest.TestCase):
     """🔴🔴 왜 이 클래스가 생겼는가.

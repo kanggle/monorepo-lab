@@ -51,6 +51,16 @@ LOCK_PARAM = os.environ.get("LOCK_PARAM", "/portfolio-demo/control-lock")
 #    복제되면 한 곳만 고쳐진다(가드 (z) 가 존재하는 이유가 그것이다). 필요하면 Lambda 콘솔
 #    env 로 덮을 수 있게 os.environ 은 열어 둔다.
 HEALTH_STALE_AFTER_SECONDS = int(os.environ.get("HEALTH_STALE_AFTER_SECONDS", "90"))
+# TASK-MONO-701 — 방금 켜서 헬스가 **이 세션에서** 아직 한 번도 발행되지 않은 구간을
+# `_selection_ready()` 의 판정 불가(None) 대신 False(「켜지는 중」)로 낸다. 상한을 넘으면
+# 다시 None 으로 떨어진다 — 발행자가 죽은 경우까지 영원히 False 로 붙들면 위의
+# HEALTH_STALE_AFTER_SECONDS 주석이 경고하는 것과 같은 모양(«영원히 켜지는 중»)이 된다.
+#
+# 근거: 2026-09-17 단일 표본에서 `/bundle/start` 호출 후 첫 헬스 발행까지 약 75초
+# (인스턴스 부팅 + demo-status.timer OnBootSec=60 + 타이머 오차) 걸렸다. 🔴 이것은
+# **측정 분포가 아니라 표본 하나**다 — 상수로 승격하지 말라던 경고(§ 티켓 Failure 2)를
+# 지키기 위해, 300 은 그 표본의 약 4배 여유일 뿐 실측 분포가 아니라고 여기 적는다.
+FIRST_PUBLISH_GRACE_SECONDS = int(os.environ.get("FIRST_PUBLISH_GRACE_SECONDS", "300"))
 IDLE_MINUTES = int(os.environ.get("IDLE_MINUTES", "20"))
 MAX_MINUTES = int(os.environ.get("MAX_RUNTIME_MINUTES", "180"))
 BUDGET_MINUTES = int(os.environ.get("MONTHLY_BUDGET_MINUTES", "600"))
@@ -738,9 +748,17 @@ def _selection_ready(state):
 
       True  — 인스턴스 running · 헬스 신선 · 선택 비어 있지 않음 · 선택 묶음 **전부** `ready`
       False — 위와 같은데 선택 묶음 중 하나라도 `ready` 가 아니다 ⇒ 「켜지는 중」
+              · (TASK-MONO-701) `STARTED_PARAM` 이 읽히고(>0) 기동 후
+                `FIRST_PUBLISH_GRACE_SECONDS` 안인데, 헬스가 **이 세션에서** 아직 한 번도
+                발행되지 않았다(헬스 자체가 없거나, 있어도 `published_at < started` — 지난
+                세션이 남긴 스냅샷) ⇒ 역시 「켜지는 중」
       None  — 판정 불가: 인스턴스가 running 이 아니다(그 사실은 `state` 가 이미 말한다) ·
               헬스가 stale · 선택이 비었다(부팅 폴백이 무엇을 띄웠는지 여기서 모른다) ·
-              어느 묶음이 `unknown` · 읽기 자체가 실패했다
+              어느 묶음이 `unknown` · 읽기 자체가 실패했다 ·
+              (TASK-MONO-701) 기동 후 `FIRST_PUBLISH_GRACE_SECONDS` 를 넘도록 이 세션의
+              헬스가 발행되지 않았다(발행자가 죽었다고 보고 옛 동작으로 되돌아간다) ·
+              `STARTED_PARAM` 을 못 읽거나 0(=terraform 초기값/센티널)이면 이 구별 자체를
+              하지 않는다(옛 동작 유지 — 헬스 나이만으로 판정)
 
     🔴🔴 **왜 None 을 False 로 뭉치지 않는가** — 해석기는 False 만 「켜지는 중」으로 번역하고
        None 은 **기존 동작**(running)으로 둔다. stale 을 False 로 내면 발행자가 죽은 멀쩡한
@@ -766,6 +784,21 @@ def _selection_ready(state):
         if not selected:
             return None
         snap, published_at = _parse_health(_get(HEALTH_PARAM))
+        # TASK-MONO-701 — `STARTED_PARAM` 을 읽는다. `_recently_started()` 와 같은 관용구:
+        # 파싱 실패는 예외가 아니라 «모른다»(0) 로 떨어뜨린다 — 그래야 아래 분기가 옛 동작으로
+        # 자연히 빠지고, 이 함수 전체가 None 으로 죽지 않는다(SSM 실패는 여전히 위 except 가 문다).
+        try:
+            started = int(_get(STARTED_PARAM, 0) or 0)
+        except (ValueError, TypeError):
+            started = 0
+        if started > 0 and (published_at is None or published_at < started):
+            # 헬스가 아예 없거나, 있어도 **이 세션 시작 전** 것이다(지난 세션이 남긴 스냅샷 —
+            # stop→start 를 90초 안에 반복하면 나이만으로는 신선해 보인다). age 로 재지 않고
+            # «이 세션에서 한 번이라도 발행됐는가» 로 가른다.
+            now = _now()
+            if 0 <= now - started < FIRST_PUBLISH_GRACE_SECONDS:
+                return False  # 방금 켰다 — 아직 첫 발행 전일 뿐, 「켜지는 중」이 맞다.
+            return None  # 상한을 넘었다 — 발행자가 죽었다고 보고 옛 동작(None)으로.
         age = None if published_at is None else max(0, _now() - published_at)
         if age is None or age > HEALTH_STALE_AFTER_SECONDS:
             return None
