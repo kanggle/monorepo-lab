@@ -36,11 +36,6 @@ export type {
   PublicCategory,
   PublicReview,
   StorePublicData,
-  ConsoleSampleData,
-  ConsoleSampleDomain,
-  ConsoleSampleTable,
-  ConsoleSampleColumn,
-  ConsoleSampleMetric,
   PublicDataByDataset,
   PublicDataset,
 } from './datasets';

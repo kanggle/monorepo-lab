@@ -235,7 +235,10 @@
         <h2><a class="open" data-surface data-domain="console" data-served="vercel" data-url="https://console.hubwang.com/" target="_blank" rel="noopener">운영자 콘솔</a></h2>
         <p class="desc">여러 도메인을 한 화면에서 운영하는 백오피스. 대시보드·주문·재고·조직·권한.</p>
         <dl>
-          <dt>로그인 없이</dt><dd>데모 둘러보기 화면(<code>/demo</code>) — 8개 도메인의 대시보드·표 샘플</dd>
+          <!-- TASK-MONO-686 — 둘러보기(`/demo`)가 은퇴하면서 익명 방문자는 이제
+               실제 콘솔 화면을 샘플 데이터로 본다(ADR-MONO-074). `/demo` 는 살아 있는
+               링크지만 은퇴 이후엔 이 화면들로 308 리다이렉트될 뿐이다. -->
+          <dt>로그인 없이</dt><dd>실제 콘솔 화면을 샘플 데이터로(«(샘플)» 표기 + 배너) — 대시보드·주문·재고·조직·권한 등 64개 화면</dd>
           <dt>로그인 후 <span class="needs-boot">· 데모 서버 켠 뒤</span></dt><dd>도메인 헬스 대시보드 · 이커머스/WMS/SCM/ERP/재무 운영 · IAM 테넌트·권한·감사 로그</dd>
           <dt>기동되는 서비스</dt><dd data-services>—</dd>
           <dt>데모 서버</dt><dd><span class="badge b-unknown" data-bundle-badge>… 확인 중</span></dd>

@@ -24,7 +24,7 @@ const result = await readPublicData();
 클라이언트들(론처 · 부팅 스크립트 · 발행자)이 이미 `infra/demo/` 에 산다.
 
 🔴 루트 `libs/` 가 아닌 이유는 **HARDSTOP-03** 이다 — 그 트리는 프로젝트 비종속이어야 하는데,
-이 패키지의 `datasets.ts` 는 아티스트·상품·콘솔이라는 **제품 개념**을 이름으로 든다.
+이 패키지의 `datasets.ts` 는 아티스트·상품이라는 **제품 개념**을 이름으로 든다.
 
 ---
 
@@ -99,7 +99,7 @@ node infra/demo/public-data/bin/build-bundled-snapshots.mjs --check  # 드리프
 ```bash
 # 최초 발행 — 백엔드 없이, 저장소의 시드를 그대로
 BLOB_READ_WRITE_TOKEN=… DEMO_PUBLIC_DATA_BASE_URL=https://xxx.public.blob.vercel-storage.com \
-  node infra/demo/public-data/bin/publish-public-data.mjs --dataset console-sample --seed
+  node infra/demo/public-data/bin/publish-public-data.mjs --dataset fan --seed
 
 # 백엔드가 떠 있을 때
 BLOB_READ_WRITE_TOKEN=… DEMO_PUBLIC_DATA_BASE_URL=… \

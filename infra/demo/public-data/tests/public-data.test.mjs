@@ -504,7 +504,7 @@ test('발행: 세대 파일이 실제로 판독 가능한 봉투다 (되읽기 �
 // 4. 번들 시드 — 배포되는 파일 자체를 시험한다
 // ===========================================================================
 
-for (const ds of ['fan', 'store', 'console-sample']) {
+for (const ds of ['fan', 'store']) {
   test(`번들 시드 ${ds}.json 이 계약을 지킨다`, async () => {
     const raw = JSON.parse(await readFile(join(HERE, '..', 'snapshots', `${ds}.json`), 'utf8'));
     const r = validateEnvelope(raw, { dataset: ds });

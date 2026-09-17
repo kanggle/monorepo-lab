@@ -10,7 +10,7 @@
 | Service Types | `frontend-app` (`console-web`) · `rest-api` (`console-bff`) |
 | IdP | IAM — OIDC **public client** (Auth Code + PKCE) · RFC 8693 token-exchange 로 테넌트 assume |
 | Hostname | `console.local` (Traefik, [ADR-MONO-001](../../docs/adr/ADR-MONO-001-port-prefix-scaling.md)) · 라이브 `console.hubwang.com` |
-| Status | **v1 운영 중** — `console-web` **68 페이지** · `console-bff` 가동 · CI 편입 완료 |
+| Status | **v1 운영 중** — `console-web` **66 페이지** · `console-bff` 가동 · CI 편입 완료 |
 
 ---
 
@@ -30,9 +30,10 @@
 
 ## Screenshots
 
-> 🔵 아래 셋은 전부 **로그인 후** 화면이다 — 콘솔의 공개 표면은 둘러보기(`/demo`) 뿐이고,
-> 나머지 64개 화면은 인증을 요구한다. 실서비스에서 열려면 `console.hubwang.com` 에
-> 로그인한 뒤 헤더에서 테넌트를 고른다.
+> 🔵 아래 셋은 전부 **로그인 후** 화면이다. 🔴 `TASK-MONO-686`(`ADR-MONO-074`) 이후 콘솔의
+> 공개 표면은 더 이상 별도 둘러보기(`/demo`, 은퇴)가 아니다 — 익명 방문자는 **같은 실제
+> 화면 64개**를 값만 샘플(«(샘플)» 표기 + 상시 배너)로 본다. 로그인하면 같은 주소에서
+> 실제 데이터가 보인다. `/demo`·`/demo/<domain>` 링크는 그 실제 화면으로 308 리다이렉트된다.
 
 <p align="center">
   <img src="docs/screenshots/01-console-ecommerce-products.jpg" width="900" alt="콘솔 — 이커머스 상품 운영"><br>
@@ -53,7 +54,7 @@
 
 ## Domain Coverage
 
-`console-web` 의 68 페이지 중 **64개가 콘솔 셸 안**에 있다(나머지는 둘러보기 2 · 온보딩 1 · 로그인 1).
+`console-web` 의 66 페이지 중 **64개가 콘솔 셸 안**에 있다(나머지는 온보딩 1 · 로그인 1).
 
 | 영역 | 화면 수 | 무엇을 하나 |
 |---|---|---|

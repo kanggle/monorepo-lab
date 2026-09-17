@@ -47,7 +47,6 @@ import {
   CATEGORY_NAMES,
 } from '../fixtures/raw-backend-responses.mjs';
 import { MEMBERSHIP_PLANS } from '../fixtures/membership-plans.mjs';
-import { CONSOLE_SAMPLE_DOMAINS } from '../fixtures/console-sample.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = join(HERE, '..', 'snapshots');
@@ -135,22 +134,7 @@ async function buildStore() {
   );
 }
 
-function buildConsoleSample() {
-  const data = { domains: CONSOLE_SAMPLE_DOMAINS };
-  return envelope(
-    'console-sample',
-    // 🔴 `authored` 다. 이 데이터셋에는 백엔드 추출 경로가 **없다**(그것이 설계다 —
-    //    콘솔은 정의상 실제 고객·주문·재무 데이터만 그리는 화면이라, 「잘 걸러서 일부만」
-    //    이라는 접근 자체가 위험하다). `datasets.ts` 의 console-sample 절 참조.
-    'authored',
-    'repo-authored',
-    data,
-    { domains: CONSOLE_SAMPLE_DOMAINS.length },
-    { domains: collectionStatusOf(true, CONSOLE_SAMPLE_DOMAINS) },
-  );
-}
-
-const BUILDERS = { fan: buildFan, store: buildStore, 'console-sample': buildConsoleSample };
+const BUILDERS = { fan: buildFan, store: buildStore };
 
 /**
  * 🔴🔴 **음성 대조군 검사.** 픽스처에 일부러 넣어 둔 «새면 안 되는 값» 들이 산출물에
@@ -201,40 +185,6 @@ function assertNoLeak(dataset, envelopeObj) {
       throw new Error(`[build-snapshots] '${dataset}' 산출물에 "userId" 필드가 있습니다 — 리뷰 작성자는 공개 계약에 없습니다.`);
     }
   }
-  // 🔴🔴 `console-sample` 은 **다른 것을 물어야 한다.**
-  //
-  // 초판은 세 데이터셋에 같은 검사를 걸었고, 그 순간 이 함수가 자기 비공허성 가드에
-  // 걸려 죽었다 — 옳게 죽었다. console-sample 에는 백엔드 픽스처가 **없고**(그것이 설계다),
-  // 없는 모집단에 대고 «누출 없음» 을 말하는 것은 공허하다.
-  //
-  // 🔴 그래서 하한을 내리지 않고 **축을 바꾼다.** 이 데이터셋에서 물어야 할 것은
-  //    «백엔드 값이 안 샜나» 가 아니라 **«백엔드에서 온 값이 애초에 없나»** 다:
-  //      (1) 봉투가 스스로 `authored` 라고 말하는가
-  //      (2) 다른 데이터셋의 실제 시드 식별자가 **한 개도** 안 들어 있는가
-  //          — 누군가 "실제 데이터를 조금만 가져다 쓰자" 를 하는 순간 여기가 문다.
-  if (dataset === 'console-sample') {
-    if (envelopeObj.source !== 'authored') {
-      throw new Error(
-        `[build-snapshots] console-sample 의 source 가 '${envelopeObj.source}' 입니다(기대 'authored').
-` +
-          `→ 이 데이터셋에 백엔드 추출 경로가 생겼다는 뜻입니다. 그것이 이 설계가 막는 것입니다.`,
-      );
-    }
-    const realIds = [
-      ...RAW_ARTISTS.map((a) => a.id),
-      ...RAW_ARTISTS.map((a) => a.realName).filter(Boolean),
-      ...RAW_PRODUCTS.map((p) => p.id),
-    ];
-    for (const needle of realIds) {
-      if (json.includes(needle)) {
-        throw new Error(
-          `[build-snapshots] console-sample 에 다른 데이터셋의 실제 시드 값이 있습니다: ${JSON.stringify(needle)}`,
-        );
-      }
-    }
-    return realIds.length;
-  }
-
   // 🔴 대조군의 대조군 — banned 가 비어 있으면 이 검사는 **아무것도 안 하면서 통과**한다.
   if (banned.length === 0) {
     throw new Error(
