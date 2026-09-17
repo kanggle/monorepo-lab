@@ -36,11 +36,21 @@ test.describe('샘플 방문자 — 실제 개요 (backend 미기동 · 미인�
   });
 
   test('🔴 pending 화면 → 셸은 서고 «이 화면의 샘플 데이터는 준비 중입니다»', async ({ page }) => {
-    await page.goto('/wms');
+    // TASK-PC-FE-287 — `/wms` is now `ready` (wms 실행 6/8), so this cell
+    // retargets to `/scm` (still `pending` — owned by TASK-PC-FE-288). The
+    // cell's SUBJECT (a pending screen's shell + notice) is unchanged; only
+    // the concrete route changed, because the ledger did.
+    // 🔴 note for the NEXT ticket (TASK-PC-FE-288): once scm's GETs also turn
+    // `ready`, NO screen will be `pending` and this cell will have nowhere to
+    // point. Do not solve that here — the fix is not "leave one screen
+    // artificially pending forever"; it is to re-home this assertion onto
+    // `SampleScreenNotice`'s own unit test (a synthetic `pending` ledger row
+    // fed directly to the component), not a real e2e route.
+    await page.goto('/scm');
     await expect(page.getByTestId('sample-visitor-banner')).toBeVisible();
     await expect(page.getByTestId('sample-screen-not-ready')).toHaveText(
       '이 화면의 샘플 데이터는 준비 중입니다',
     );
-    expect(new URL(page.url()).pathname).toBe('/wms');
+    expect(new URL(page.url()).pathname).toBe('/scm');
   });
 });

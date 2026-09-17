@@ -13,8 +13,8 @@
  * to hold every row), not from the fixture's own `totalElements`, so a fixture
  * whose meta and rows disagreed would not pass by agreeing with itself.
  *
- * 🔵 wms · scm cards are not listed yet — their domain fixtures do not exist.
- *    TASK-PC-FE-287 / 288 add their row here when they derive their card.
+ * 🔵 scm's card is not listed yet — its domain fixture does not exist.
+ *    TASK-PC-FE-288 adds its row here when it derives its card.
  */
 import { describe, it, expect } from 'vitest';
 import { sampleResponse, type SampleRequest } from '@/shared/sample/router';
@@ -92,5 +92,28 @@ describe('overview card = the list it summarises (through the router)', () => {
     expect(balances.data.length).toBeGreaterThan(0);
     expect(card.balance.amount).toBe(balances.data[0].ledger);
     expect(card.balance.currency).toBe(balances.data[0].currency);
+  });
+
+  it('WMS «총 재고 · 알림» (TASK-PC-FE-287 AC-8) = the SAME /wms/inventory query the console-bff adapter sends', async () => {
+    const card = (await overviewCard('wms')) as {
+      inventorySnapshot: { totalStockUnits: number; alertCount: number };
+    };
+    // `WmsInventoryReadAdapter.read()` calls this EXACT path — no page/size —
+    // so this is the identical query the real leg makes, not a convenient
+    // stand-in (TASK-PC-FE-287's AC-8 wording: "같은 경로를 … 물어 파생한다").
+    const list = (await body({
+      core: 'wms',
+      surface: 'wms',
+      path: '/api/v1/admin/dashboard/inventory',
+    })) as { content: { onHandQty: number; lowStockFlag: boolean }[] };
+    expect(list.content.length).toBeGreaterThan(0);
+    const totalStockUnits = list.content.reduce((sum, r) => sum + r.onHandQty, 0);
+    const alertCount = list.content.filter((r) => r.lowStockFlag).length;
+    // 🔴 not vacuous: the list must also hold a row that is NOT low-stock, or
+    //    "flagged" and "every row" could not be told apart.
+    expect(alertCount).toBeGreaterThan(0);
+    expect(list.content.length).toBeGreaterThan(alertCount);
+    expect(card.inventorySnapshot.totalStockUnits).toBe(totalStockUnits);
+    expect(card.inventorySnapshot.alertCount).toBe(alertCount);
   });
 });

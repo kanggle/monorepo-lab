@@ -233,10 +233,21 @@ describe('callWmsGateway (wms — NESTED envelope)', () => {
   });
 
   it('① pending GET → SAMPLE_NOT_READY survives the NESTED parser, fetch 0', async () => {
+    // TASK-PC-FE-287 — this suite's DoD is "wms 원장의 `pending` 0", so `wms`
+    // (this cell's original profile) is now `ready`, exactly as
+    // TASK-PC-FE-283/284's identical note on this describe block recorded for
+    // `accounts`/`ecommerce_order`. This cell tests the CORE's generic
+    // ready/pending BRANCH mechanics, not any one surface's content, so a
+    // `logPrefix` absent from the ledger entirely exercises the identical
+    // branch without depending on a surface staying unimplemented forever.
+    const NO_SUCH_SURFACE_PROFILE: WmsGatewayProfile = {
+      ...WMS_PROFILE,
+      logPrefix: 'no-such-surface',
+    };
     const err = await callWmsGateway(
       { method: 'GET', path: '/dashboard/alerts' },
       parse,
-      WMS_PROFILE,
+      NO_SUCH_SURFACE_PROFILE,
     ).catch((e) => e);
     expect((err as TestUnavailable).code).toBe(SAMPLE_NOT_READY);
     expect(fetchSpy).not.toHaveBeenCalled();

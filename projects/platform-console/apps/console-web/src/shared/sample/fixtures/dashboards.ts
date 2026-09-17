@@ -3,6 +3,7 @@ import { IAM_FIXTURE_HANDLERS } from './iam';
 import { ERP_FIXTURE_HANDLERS } from './erp';
 import { ECOMMERCE_FIXTURE_HANDLERS } from './ecommerce';
 import { FINANCE_FIXTURE_HANDLERS, SAMPLE_FINANCE_DEFAULT_ACCOUNT_ID } from './finance';
+import { WMS_FIXTURE_HANDLERS } from './wms';
 
 /**
  * TASK-PC-FE-285 (coordinator review) — an overview card's count is NOT typed
@@ -81,6 +82,51 @@ const FINANCE_BALANCE = (() => {
 })();
 
 /**
+ * TASK-PC-FE-287 AC-8 — the wms card asks the SAME query the console-bff
+ * `WmsInventoryReadAdapter` sends (`GET /api/v1/admin/dashboard/inventory`,
+ * no query params — the adapter's own `read()` forwards no page/size) of the
+ * SAME wms fixture handler the `/wms` overview and `/wms/inventory` screen
+ * are answered by. Before this, the card's numbers (총 재고 `48,210` · 알림 `3`)
+ * were hand-typed and had no relationship to any browsable inventory row —
+ * the same defect class 285's CORRECTION named for IAM/ERP/E-Commerce and 286
+ * closed for finance.
+ *
+ * 🔵 `WmsDataSchema` (`operator-overview-types.ts`) expects
+ * `{ inventorySnapshot: { totalStockUnits, alertCount } }`, but the real wire
+ * shape `WmsInventoryReadAdapter.read()` puts on the leg is the RAW read-model
+ * page (`{content, page}`) — there is no `inventorySnapshot` key anywhere in
+ * the real response. This is the SAME class of BFF-leg / FE-card shape
+ * mismatch 286 D2 found for finance (`TASK-PC-FE-295` already tracks the
+ * finance instance; this is a console-bff/BFF-composition concern out of a
+ * sample-fixture ticket's scope — no domain fixture can fix a real shape bug
+ * in production code). Reproducing the mismatch here would render the card
+ * EMPTY for every sample visitor, defeating ADR-MONO-074's point — so this
+ * fixture keeps the `WmsDataSchema`-shaped object the card actually parses,
+ * with its VALUES derived from the ONE query the real adapter makes: total
+ * stock = Σ `onHandQty` over the rows that query returns, alerts = the count
+ * of rows THAT SAME `/wms/inventory` screen flags `lowStockFlag` on (the only
+ * "alert" concept the inventory page itself renders — `WmsInventoryDataTable`
+ * `저재고` badge — `dashboard/alerts` is a SEPARATE producer table the adapter
+ * never calls, so a card built from it would not be "the same query").
+ */
+const WMS_INVENTORY_SNAPSHOT = (() => {
+  const path = '/api/v1/admin/dashboard/inventory';
+  const body = WMS_FIXTURE_HANDLERS['wms:wms']?.(path) as
+    | { content?: Array<{ onHandQty?: unknown; lowStockFlag?: unknown }> }
+    | undefined;
+  const rows = body?.content;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    throw new Error(`sample overview: no wms inventory rows for ${path}`);
+  }
+  const totalStockUnits = rows.reduce(
+    (sum, r) => sum + (typeof r.onHandQty === 'number' ? r.onHandQty : 0),
+    0,
+  );
+  const alertCount = rows.filter((r) => r.lowStockFlag === true).length;
+  return { totalStockUnits, alertCount };
+})();
+
+/**
  * Dashboard fixtures (R3ⓐ — the first screens made `ready`): the console-bff
  * operator overview (§ 2.4.9.1), domain health (§ 2.4.9.2) and the
  * notification aggregator inbox (ADR-MONO-043 §4).
@@ -101,7 +147,12 @@ export const SAMPLE_OPERATOR_OVERVIEW = {
     {
       domain: 'wms',
       status: 'ok',
-      data: { inventorySnapshot: { totalStockUnits: 48210, alertCount: 3 } },
+      data: {
+        inventorySnapshot: {
+          totalStockUnits: WMS_INVENTORY_SNAPSHOT.totalStockUnits,
+          alertCount: WMS_INVENTORY_SNAPSHOT.alertCount,
+        },
+      },
     },
     {
       domain: 'scm',
@@ -123,10 +174,9 @@ export const SAMPLE_OPERATOR_OVERVIEW = {
         accountId: SAMPLE_FINANCE_DEFAULT_ACCOUNT_ID,
       },
     },
-    // 🔵 wms (totalStockUnits/alertCount) and scm (nodes) are still typed
-    //    here — their domain fixtures do not exist yet. Each owning ticket
-    //    (TASK-PC-FE-287 wms · 288 scm) derives its card the same way and
-    //    adds its row to `sample-overview-cards-match-lists.test.ts`.
+    // 🔵 scm (nodes) is still typed here — its domain fixture does not exist
+    //    yet. TASK-PC-FE-288 derives its card the same way and adds its row
+    //    to `sample-overview-cards-match-lists.test.ts`.
     { domain: 'erp', status: 'ok', data: { meta: { totalElements: ERP_ACTIVE_DEPARTMENT_COUNT } } },
     { domain: 'ecommerce', status: 'ok', data: { totalElements: ECOMMERCE_PRODUCT_COUNT } },
   ],

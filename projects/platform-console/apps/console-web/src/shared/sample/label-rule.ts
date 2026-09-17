@@ -61,6 +61,18 @@ const HUMAN_READABLE_KEYS = new Set([
   // employee / job-grade / cost-center / business-partner / department-path
   // node / cost-center-ref / job-grade-ref all share that key).
   'title',
+  // TASK-PC-FE-287 — wms domain fixtures. `customerName`/`supplierName` are
+  // the admin read-model's OWN denormalized display names (OrderSummary §8 /
+  // AsnSummary §6 — "Denormalized [from PartnerRef] at projection time"), a
+  // person reads them the same way IAM's `email` or ERP's `name` is read.
+  // `reasonNote` is the free-text note on an inventory adjustment
+  // (`AdjustmentAudit.reason_note` — a person typed it, unlike the
+  // machine-coded sibling `reasonCode`). `message` is the alert log's
+  // human-readable description (`AlertLog` has no other display field).
+  'customerName',
+  'supplierName',
+  'reasonNote',
+  'message',
 ]);
 
 const MACHINE_KEYS = new Set([
@@ -177,6 +189,39 @@ const MACHINE_KEYS = new Set([
   'totalCarryingBaseMinor', // FX position summary F5 minor-units string
   'expectedMinor', // reconciliation discrepancy F5 minor-units string
   'actualMinor', // reconciliation discrepancy F5 minor-units string
+  // TASK-PC-FE-287 — wms domain fixtures (admin read-model · outbound-service ·
+  // logistics dispatch). Every value below is an id/code/enum/date a parser or
+  // `StatusBadge`-like element reads — never free prose (mirrors ADR-MONO-050
+  // D9 "cross-service identifiers are codes", already applied to erp/ecommerce).
+  'locationCode', // InventorySnapshot/LocationRef denormalized CODE (TASK-MONO-675 AC-3 field)
+  'skuCode', // InventorySnapshot/SkuRef/OutboundOrderLine denormalized CODE (TASK-MONO-675 AC-3 field)
+  'lotNo', // InventorySnapshot/LotRef denormalized lot number (TASK-MONO-675 AC-3 field)
+  'warehouseCode', // InventorySnapshot/AsnSummary/WarehouseRef denormalized CODE (TASK-MONO-675 AC-3 field)
+  'zoneCode', // ZoneRef CODE
+  'zoneType', // ZoneRef enum
+  'locationType', // LocationRef enum
+  'baseUom', // SkuRef enum (unit of measure)
+  'trackingType', // SkuRef enum (LOT | NONE)
+  'partnerCode', // PartnerRef CODE
+  'timezone', // WarehouseRef IANA timezone id
+  'alertType', // AlertLog enum (LOW_STOCK | ANOMALY)
+  'bucket', // AdjustmentAudit enum (which stock bucket changed)
+  'reasonCode', // AdjustmentAudit enum (machine reason code, sibling of human `reasonNote`)
+  'acknowledgedBy', // AlertLog actor id (who acknowledged) — mirrors erp's `revokedBy`/`resolvedBy`
+  'orderNo', // OrderSummary/OutboundOrder business identifier
+  'shipmentNo', // ShipmentSummary business identifier
+  'asnNo', // AsnSummary business identifier
+  'trackingNo', // ShipmentSummary/DispatchRef carrier tracking code
+  'carrierCode', // ShipmentSummary/DispatchRef carrier code
+  'sagaState', // OrderSummary/OutboundOrder enum (mirrors erp's read-model enums)
+  'state', // OutboundSaga enum (REQUESTED | RESERVED | … — the saga's own status key)
+  'requiredShipDate', // OrderSummary/OutboundOrder window bound (ISO date)
+  'expectedArriveDate', // AsnSummary window bound (ISO date)
+  'expiryDate', // LotRef window bound (ISO date)
+  'date', // ThroughputDaily day bucket (ISO date)
+  'topic', // projection-status Kafka topic name
+  'consumerGroup', // projection-status Kafka consumer-group id
+  'key', // Setting's own dot-notation key (machine-formatted, not a display label)
 ]);
 
 /** `*Id` (sourceId, accountId, nodeId, …) and `*At` (createdAt, asOf-like). */

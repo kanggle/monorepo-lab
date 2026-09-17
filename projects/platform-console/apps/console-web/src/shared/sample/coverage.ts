@@ -88,10 +88,25 @@ export const SURFACE_COVERAGE: readonly SurfaceCoverage[] = [
   { core: 'flat', surface: 'finance', status: 'ready', owner: FINANCE },
   { core: 'flat', surface: 'ledger', status: 'ready', owner: FINANCE },
 
-  // ── wms (`callWmsGateway`) ─────────────────────────────────────────────────
-  { core: 'wms', surface: 'wms', status: 'pending', owner: WMS },
-  { core: 'wms', surface: 'wms_outbound', status: 'pending', owner: WMS },
-  { core: 'wms', surface: 'wms_outbound_logistics', status: 'pending', owner: WMS },
+  // ── wms (`callWmsGateway`) — TASK-PC-FE-287 ─────────────────────────────────
+  { core: 'wms', surface: 'wms', status: 'ready', owner: WMS },
+  { core: 'wms', surface: 'wms_outbound', status: 'ready', owner: WMS },
+  // 🔴 TASK-PC-FE-287 — this row's `core` was `'wms'` since TASK-PC-FE-282,
+  // but `outbound-logistics-api.ts`'s `LOGISTICS_PROFILE` reaches this surface
+  // via `callScmGateway` → `callFlatEnvelopeGateway`, which asks
+  // `sampleGate({core: 'flat', surface: 'wms_outbound_logistics', …})` — NOT
+  // `core: 'wms'` (`callWmsGateway` is never in this call path at all). A
+  // `core: 'wms'` row can never match that request (`findSurfaceCoverage`
+  // compares BOTH fields), so this surface was structurally unable to become
+  // `ready` no matter what `status` said — every real call 503s forever. It
+  // went unnoticed at `pending` because "never matches" and "pending" both
+  // 503 identically; `sample-fixtures-schema-wms.test.ts`'s
+  // "core=flat, not core=wms" cell (bite-proven) is what catches a regression
+  // back to `'wms'` (`sample-coverage-ledger.test.ts`'s generic ledger↔router
+  // check cannot: it always calls `sampleResponse` with the row's OWN `core`
+  // field, so a self-consistently-wrong row still "promises what the router
+  // does" to itself).
+  { core: 'flat', surface: 'wms_outbound_logistics', status: 'ready', owner: WMS },
 
   // ── scm (`callScmGateway` → `callFlatEnvelopeGateway`) ─────────────────────
   { core: 'flat', surface: 'scm', status: 'pending', owner: SCM },
@@ -144,6 +159,10 @@ export const SURFACE_SAMPLE_PATH: Readonly<Record<string, string>> = {
   // TASK-PC-FE-286
   'flat:finance': '/api/finance/accounts/sample-account-0001/balances',
   'flat:ledger': '/api/finance/ledger/trial-balance',
+  // TASK-PC-FE-287
+  'wms:wms': '/api/v1/admin/dashboard/inventory?page=0&size=20',
+  'wms:wms_outbound': '/api/v1/outbound/orders?page=0&size=20',
+  'flat:wms_outbound_logistics': '/api/v1/logistics/dispatches/by-shipment/ship-sample-0001',
 };
 
 /**
@@ -223,12 +242,12 @@ export const SCREEN_COVERAGE: Readonly<Record<string, ScreenStatus>> = {
   '/ledger': 'ready',
 
   // wms — TASK-PC-FE-287
-  '/wms': 'pending',
-  '/wms/inbound': 'pending',
-  '/wms/inventory': 'pending',
-  '/wms/master': 'pending',
-  '/wms/operations': 'pending',
-  '/wms/outbound': 'pending',
+  '/wms': 'ready',
+  '/wms/inbound': 'ready',
+  '/wms/inventory': 'ready',
+  '/wms/master': 'ready',
+  '/wms/operations': 'ready',
+  '/wms/outbound': 'ready',
 
   // scm — TASK-PC-FE-288
   '/scm': 'pending',
