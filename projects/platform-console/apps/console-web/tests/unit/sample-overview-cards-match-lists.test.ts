@@ -13,11 +13,12 @@
  * to hold every row), not from the fixture's own `totalElements`, so a fixture
  * whose meta and rows disagreed would not pass by agreeing with itself.
  *
- * 🔵 wms · scm · finance cards are not listed yet — their domain fixtures do not
- *    exist. TASK-PC-FE-286 / 287 / 288 add their row here when they derive their card.
+ * 🔵 wms · scm cards are not listed yet — their domain fixtures do not exist.
+ *    TASK-PC-FE-287 / 288 add their row here when they derive their card.
  */
 import { describe, it, expect } from 'vitest';
 import { sampleResponse, type SampleRequest } from '@/shared/sample/router';
+import { SAMPLE_FINANCE_DEFAULT_ACCOUNT_ID } from '@/shared/sample/fixtures/finance';
 
 async function body(req: Omit<SampleRequest, 'method'>): Promise<Record<string, unknown>> {
   const res = sampleResponse({ ...req, method: 'GET' });
@@ -73,5 +74,23 @@ describe('overview card = the list it summarises (through the router)', () => {
     })) as { content: unknown[] };
     expect(list.content.length).toBeGreaterThan(0);
     expect(card.totalElements).toBe(list.content.length);
+  });
+
+  it('Finance «잔액» (TASK-PC-FE-286 AC-7) = the balance on /finance/accounts for the SAME account', async () => {
+    const card = (await overviewCard('finance')) as {
+      balance: { amount: string; currency: string };
+      accountId: string;
+    };
+    // Edge Case 1 — the account the card names is a REAL, browsable account
+    // (not just a number that happens to match).
+    expect(card.accountId).toBe(SAMPLE_FINANCE_DEFAULT_ACCOUNT_ID);
+    const balances = (await body({
+      core: 'flat',
+      surface: 'finance',
+      path: `/api/finance/accounts/${card.accountId}/balances`,
+    })) as { data: { currency: string; ledger: string }[] };
+    expect(balances.data.length).toBeGreaterThan(0);
+    expect(card.balance.amount).toBe(balances.data[0].ledger);
+    expect(card.balance.currency).toBe(balances.data[0].currency);
   });
 });

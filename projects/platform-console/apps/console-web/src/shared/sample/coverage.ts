@@ -84,9 +84,9 @@ export const SURFACE_COVERAGE: readonly SurfaceCoverage[] = [
   { core: 'flat', surface: 'erp_approval', status: 'ready', owner: ERP },
   { core: 'flat', surface: 'erp_delegation', status: 'ready', owner: ERP },
 
-  // ── finance + ledger (`callFlatEnvelopeGateway`) ───────────────────────────
-  { core: 'flat', surface: 'finance', status: 'pending', owner: FINANCE },
-  { core: 'flat', surface: 'ledger', status: 'pending', owner: FINANCE },
+  // ── finance + ledger (`callFlatEnvelopeGateway`) — TASK-PC-FE-286 ─────────
+  { core: 'flat', surface: 'finance', status: 'ready', owner: FINANCE },
+  { core: 'flat', surface: 'ledger', status: 'ready', owner: FINANCE },
 
   // ── wms (`callWmsGateway`) ─────────────────────────────────────────────────
   { core: 'wms', surface: 'wms', status: 'pending', owner: WMS },
@@ -141,6 +141,9 @@ export const SURFACE_SAMPLE_PATH: Readonly<Record<string, string>> = {
   'flat:erp': '/api/erp/masterdata/departments?page=0&size=20',
   'flat:erp_approval': '/api/erp/approval/requests?page=0&size=20',
   'flat:erp_delegation': '/api/erp/approval/delegations',
+  // TASK-PC-FE-286
+  'flat:finance': '/api/finance/accounts/sample-account-0001/balances',
+  'flat:ledger': '/api/finance/ledger/trial-balance',
 };
 
 /**
@@ -215,9 +218,9 @@ export const SCREEN_COVERAGE: Readonly<Record<string, ScreenStatus>> = {
   '/erp/orgview': 'ready',
 
   // finance + ledger — TASK-PC-FE-286
-  '/finance': 'pending',
-  '/finance/accounts': 'pending',
-  '/ledger': 'pending',
+  '/finance': 'ready',
+  '/finance/accounts': 'ready',
+  '/ledger': 'ready',
 
   // wms — TASK-PC-FE-287
   '/wms': 'pending',

@@ -8,6 +8,8 @@ import {
 import { IAM_FIXTURE_HANDLERS, IAM_FIXTURE_DOCUMENTS } from './iam';
 import { ECOMMERCE_FIXTURE_HANDLERS, ECOMMERCE_FIXTURE_DOCUMENTS } from './ecommerce';
 import { ERP_FIXTURE_HANDLERS, ERP_FIXTURE_DOCUMENTS } from './erp';
+import { FINANCE_FIXTURE_HANDLERS, FINANCE_FIXTURE_DOCUMENTS } from './finance';
+import { LEDGER_FIXTURE_HANDLERS, LEDGER_FIXTURE_DOCUMENTS } from './ledger';
 import type { FixtureNotFound } from '../router';
 
 /**
@@ -36,6 +38,8 @@ export const SAMPLE_FIXTURES: Readonly<Record<string, FixtureHandler>> = {
   ...IAM_FIXTURE_HANDLERS,
   ...ECOMMERCE_FIXTURE_HANDLERS,
   ...ERP_FIXTURE_HANDLERS,
+  ...FINANCE_FIXTURE_HANDLERS,
+  ...LEDGER_FIXTURE_HANDLERS,
 };
 
 /**
@@ -58,4 +62,6 @@ export const SAMPLE_FIXTURE_DOCUMENTS: Readonly<Record<string, unknown>> = {
   ...IAM_FIXTURE_DOCUMENTS,
   ...ECOMMERCE_FIXTURE_DOCUMENTS,
   ...ERP_FIXTURE_DOCUMENTS,
+  ...FINANCE_FIXTURE_DOCUMENTS,
+  ...LEDGER_FIXTURE_DOCUMENTS,
 };
