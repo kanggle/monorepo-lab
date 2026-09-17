@@ -8,7 +8,7 @@ TASK-MONO-696
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -388,3 +388,17 @@ console-bff 는 **한 개의** IAM OIDC access token 을 WMS·SCM·FINANCE·ERP�
 - [x] AC-0 ~ AC-6
 - [x] 계약서 · IdP 발급 · 게이트웨이 검증 세 곳이 **같은 말**을 한다(어느 쪽으로 맞췄는지는 AC-2 결정) — 🔵 **1단계 기준으로.** 계약서 rule 5 는 섀도 단계를 명시적으로 허용하고, 6 게이트웨이는 그 섀도로 검사한다. «불일치 → 403» 이 실제로 켜지는 것은 `TASK-MONO-697`.
 - [x] «설정돼 있는데 안 읽히는» `audiences:` 속성 0건
+
+## CORRECTION
+
+**2026-09-17 UTC close chore — 4차원 검증.**
+
+- (a) PR [#3879](https://github.com/kanggle/monorepo-lab/pull/3879)(결정 기록 · AC-0/1 · 스펙, `7cb1cab0f`)과 PR [#3885](https://github.com/kanggle/monorepo-lab/pull/3885)(1단계 SHADOW 구현, 헤드 `e99b4dd6a`) 모두 `state=MERGED`. #3885 머지 2026-09-17T03:42:31Z, 머지 커밋 `3c946e6c2`.
+- (b) `3c946e6c2` 는 `origin/main` 의 조상(머지 직후 tip).
+- (c) #3885 머지 전 롤업 SUCCESS 45 · SKIPPED 20 · **실패 0**. 게이트웨이 6곳을 담는 통합 잡(ecommerce A/B/C · inventory+inbound+gateway-service · scm · erp · fan · finance) 전부 SUCCESS, 그리고 이 PR 이 `ci.yml` 에 넣은 erp·finance `gateway-service:test`·`:check` 가 `Build & Test` 로그에서 **실제 실행**됐다. #3879 의 `aud` 발급 단언 4곳도 iam B 통합 잡에서 해당 메서드가 `PASSED`.
+  🔴 **CI 가 잰 트리 ≠ 머지된 트리**: #3885 CI 이후 main 에 #3886·#3887·#3884·#3888(console-web 샘플·태스크 문서)이 먼저 들어갔고 GitHub 이 최신화를 요구하지 않아 재실행 없이 머지됐다. 두 변경 파일 집합은 겹치지 않는다(이 PR = `libs/java-gateway`·6 게이트웨이·`ci.yml`·스펙). 🔵 `ci.yml` 의 main push 런은 2026-09-07 이후 없어 머지 뒤 main CI 로 합친 트리를 재확인할 수단이 없었다.
+- (d) AC 절을 열어 대조: AC-0~AC-6 · Definition of Done 3칸 전부 증거와 함께 닫혀 있다. «불일치 → 403» 의 **운영 적용**은 이 티켓의 AC 가 아니다 — 소유자 결정(2단계)에 따라 `TASK-MONO-697` 이 들고 있고, 그 착수 조건은 실측 불일치 0 이다.
+
+🔴 **이 티켓이 넘긴 것**(done/ 은 다시 읽히지 않으므로 여기 명시):
+- `TASK-MONO-697` — ENFORCE 전환 · 오류 코드 이름 `AUDIENCE_FORBIDDEN` 소유자 확정 · ⚪ 미측정 client 판정 · `infra/demo` override·워크플로를 SHADOW 가드가 안 보는 한계. 🔴 데모에서 섀도 불일치를 재려면 **AMI 재굽기가 먼저**다(현재 AMI `8cf474346`, 이 변경 없음).
+- `TASK-MONO-698` — 서비스 레벨 디코더 14 · console-bff · iam gateway.
