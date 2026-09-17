@@ -5,6 +5,7 @@ TASK-PC-FE-295
 # Title
 
 운영자 개요의 finance 카드가 console-bff 가 보내지 않는 모양을 읽는다 — 잔액이 있어도 «잔액 정보 없음»
+(🔴 범위 확장 2026-09-17: **WMS · SCM 카드도 같은 결함** — § Goal 끝 «범위 확장» 절)
 
 # Status
 
@@ -41,6 +42,23 @@ platform-console
 
 ⚪ **라이브 미확인** — 코드 판독이다. AC-0 이 먼저 실측한다.
 
+## 범위 확장 — WMS · SCM 카드 (조정자, 2026-09-17 UTC · `TASK-PC-FE-287` 리뷰)
+
+같은 원인(계약 § 2.4.9.1 이 카드 `data` 모양을 정의하지 않음 · bff 는 producer 본문을 그대로 싣는다)으로 **두 카드가 더** 어긋난다.
+조정자가 코드와 계약을 대조했다:
+
+| 카드 | bff 가 싣는 것 (어댑터 → producer 계약) | web 스키마가 읽는 것 | 로그인 운영자에게 보일 것 |
+|---|---|---|---|
+| finance «잔액 정보» | `FinanceBalanceReadAdapter` → `GET /api/finance/accounts/{id}/balances` = `{ data: [ {currency, ledger, available, held} ] }` (`finance-platform/.../account-api.md`) | `FinanceDataSchema` `{ balance, accountId }` | «잔액 정보 없음» |
+| **WMS «총 재고» · «알림»** | `WmsInventoryReadAdapter` → `GET /api/v1/admin/dashboard/inventory` = `{ content: [ {… availableQty, onHandQty, lowStockFlag …} ], page, sort }` (`wms-platform/specs/contracts/http/admin-service-api.md` § 1.1) | `WmsDataSchema` `{ inventorySnapshot: { totalStockUnits, alertCount } }` | 둘 다 `—` |
+| **SCM «스냅샷 노드 수»** | `ScmInventoryReadAdapter` → `GET /api/inventory-visibility/snapshot` = `{ data: { content: [ {nodeId, sku, quantity …} ], … }, meta: { warning } }` (`scm-platform/specs/contracts/http/inventory-visibility-api.md`) | `ScmDataSchema` `{ meta.warning, nodes[] }` | 노드 수 `—` (경고 문구는 보임) |
+
+🔵 나머지 셋은 **맞는다**(조정자 대조): IAM `totalElements` · ERP `meta.totalElements` · E-Commerce `totalElements` — producer 응답 최상위와 스키마가 같은 키.
+
+🔴 WMS 는 집계 의미도 정해야 한다 — producer 는 **행 목록(첫 페이지)** 을 주지 «총 재고 합» 이나 «알림 수» 를 주지 않는다. 한 페이지 합은 총계가 아니다.
+그래서 AC-1 의 갈래 판단에 **«카드가 무엇을 보여 줄 수 있는가»** 가 들어간다(예: 총계 대신 `page.totalElements` = 재고 행 수, 알림은 `lowStockOnly=true` 의 `totalElements` —
+그 경우 bff 레그 경로가 바뀐다). 숫자를 지어내는 쪽(한 페이지 합을 «총 재고» 로)은 택하지 않는다.
+
 ---
 
 # Scope
@@ -75,11 +93,19 @@ platform-console
       지금처럼 양쪽이 각자 다른 가짜 모양을 심으면 이 결함이 다시 초록으로 숨는다.
 - [ ] **AC-4 샘플 동반 이동** — 모양이 바뀌면 샘플 finance 카드 + `sample-overview-cards-match-lists.test.ts` finance 칸을 같은 PR 에서 옮기고 초록.
 - [ ] **AC-5 대조군** — 기본 계좌 **없는** 운영자(레그 short-circuit) 경로는 무변화.
+- [ ] **AC-6 (범위 확장) WMS · SCM 카드** — 위 AC-0 ~ AC-4 를 WMS · SCM 카드에도 똑같이 적용한다: 계약 모양으로 red-first 칸 → 계약 § 2.4.9.1 에
+      두 레그의 `data` 모양(과 WMS 의 **집계 의미**) → 한쪽 고침 → 양쪽이 같은 모양 한 벌을 쓰는 테스트 → 샘플 카드(`TASK-PC-FE-287` · `288` 이
+      지금 스키마 모양으로 파생해 둔 것) + `sample-overview-cards-match-lists.test.ts` 칸 동반 이동. 셋을 한 PR 로 할지 카드별로 나눌지는 구현자가 정해 적는다.
+- [ ] **AC-7 여섯 카드 전수 가드** — IAM · ERP · E-Commerce 까지 포함해, **레그마다 producer 계약 모양의 표본 한 벌**을 web 카드 파서에 넣었을 때
+      카드가 값을 그린다(`—` 나 «정보 없음» 이 아니다)는 칸 6개. 새 레그가 생기면 이 표에 칸이 없으면 빨개지게 한다. 이번 결함은 셋이 같은 원인으로
+      따로따로 숨어 있었다 — 카드별 수정만으로는 네 번째를 못 막는다.
 
 # Related Specs
 
 - `projects/platform-console/specs/contracts/console-integration-contract.md` § 2.4.9.1 (operator overview) · § 2.4.7 (finance)
 - `projects/finance-platform/specs/contracts/http/account-api.md` § `GET /api/finance/accounts/{id}/balances`
+- `projects/wms-platform/specs/contracts/http/admin-service-api.md` § 1.1 `GET /api/v1/admin/dashboard/inventory` (범위 확장)
+- `projects/scm-platform/specs/contracts/http/inventory-visibility-api.md` § `GET /api/inventory-visibility/snapshot` (범위 확장)
 - `projects/platform-console/specs/services/console-web/architecture.md` · `projects/platform-console/specs/services/console-bff/architecture.md`
 - `projects/platform-console/tasks/done/TASK-PC-FE-014-*` (finance Option (a) 활성화 — 이 레그를 켠 티켓)
 
