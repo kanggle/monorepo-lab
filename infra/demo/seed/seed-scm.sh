@@ -2,6 +2,7 @@
 # =============================================================================
 # infra/demo/seed/seed-scm.sh — scm 도메인 데모 데이터 (TASK-MONO-510)
 # =============================================================================
+# (TASK-MONO-695 AC-4 probe — comment-only change; this PR is closed without merging.)
 # 콘솔 SCM 섹션 6화면 중 데이터에 의존하는 4개를 표적으로 한다:
 #
 #   /scm/config        ← demand-planning 정책 + SKU-공급사 매핑
