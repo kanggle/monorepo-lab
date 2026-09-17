@@ -8,7 +8,7 @@ SCM 화면이 샘플로 선다 — 개요·조달·재고·보충 계획·보충
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -260,3 +260,36 @@ demand-planning-seed-proxy 전부)는 무수정 초록이다 — `scm-api.test.t
 `replenishment-state.test.ts` 는 grep 으로 모든 `it(` 셀이 항상 `ACCESS_COOKIE` 를 세팅함을 확인해
 애초에 빈 병(샘플) 경로에 도달하지 않는다(282 가 고칠 것이 없었던 파일) — `pnpm test` 최종 실행이 그
 안에 포함된 전체 스위트다.
+
+## CORRECTION — 닫기 판정 (조정자, 2026-09-17 UTC)
+
+머지 검증 4차원: (a) PR [#3893](https://github.com/kanggle/monorepo-lab/pull/3893) `state=MERGED` 2026-09-17T09:03:32Z ·
+(b) squash `5cc7569db` 가 `origin/main` 조상(머지 시점의 끝) · (c) 머지 전 롤업 **62 체크 · FAILURE 0**(`ea0c0e91c` 기준), 필수 4 + 프런트
+unit · E2E smoke · console-bff IT **실제 실행** · (d) 아래 표.
+
+| AC | 닫힘 | 증거 |
+|---|---|---|
+| AC-0 | ✅ | 표면 3 · GET 메서드 리터럴 10. ADR 의 10 과 수만 같고 단위가 다름 |
+| AC-1 | ✅ | 3 표면을 router 경유로 실제 zod 스키마에 파싱 |
+| AC-2 | ✅ | 라벨 가드가 scm 문서 순회 · 새 키 분류 |
+| AC-3 | ✅ | 발주의 공급사 = `supplierCode`·`supplierName`(UUID 원문 없음) · bite B1. **조정자 확인**: 두 필드는 `main` 의 `scm-platform/specs/contracts/http/procurement-api.md` § `PurchaseOrderResponse` 에 **있다**(`TASK-MONO-677` 구현 `e1ee8a98b` #3820 이 추가 — 티켓 파일은 `in-progress/` 지만 계약·구현은 머지됨) → 계약에 없는 필드를 지어내지 않았다 |
+| AC-4 | ✅ | SKU 하나를 일부러 미설정 → 설정 화면 404-as-empty · bite B3 |
+| AC-5 | ✅ | `X-Cache` 부재 → `readCacheHeader()` null |
+| AC-6 | ✅ | 제안 승인 POST → 403 `SAMPLE_READ_ONLY` → `messageForCode` |
+| AC-7 | ✅ | `e2e-smoke/sample-visitor-scm.spec.ts` · 로컬 24 passed · PR CI E2E smoke SUCCESS |
+| AC-8 | ✅ | SCM 카드 노드 id = `/scm/inventory` 스냅샷 행의 `nodeId` 집합, 이름 = 같은 픽스처의 노드 레지스트리(재입력 없음) · bite B2 |
+| DoD | ✅ | **원장 scm `pending` 0 — 그리고 원장 전체 `pending` 0.** 조정자가 `main`(`5cc7569db`) 의 `coverage.ts` 를 셌다: 표면 ready **33** · pending **0** / 화면 ready **58** · static **6** · pending **0** |
+
+🔵 **pending 이 0 이 되며 대상을 잃은 테스트** (조정자 diff 실측): smoke «pending 화면» 칸 삭제(`expect(` −3) → 새 `tests/unit/SampleScreenNotice.test.tsx`
+가 원장 조회를 주입해 pending=렌더 / ready·static=미렌더를 문다(bite B4). 화면 하나를 일부러 pending 으로 남기지 **않았다**. «pending → 503
+`SAMPLE_NOT_READY`» 약속은 원장에 없는 표면을 쓰는 `sample-mode-cores` 칸들이 계속 잰다 — 원장 가드의 `else` 분기는 모집단 0 이 되어 주석으로 표시했다.
+
+🔵 **에이전트가 남긴 ⚪ 하나 (결함 판정 아님)**: `/api/scm/nodes` 프록시 라우트를 부르는 클라이언트 훅이 없다(고아 라우트로 보임). 이 티켓 범위 밖이고
+동작에 영향이 없어 기록만 한다.
+
+🔴 **SCM 카드의 운영 경로 모양 불일치**(producer `{ data: { content }, meta }` ↔ web `nodes`)는 `TASK-PC-FE-295` 가 가진다(287 종료 PR #3891 에서 범위 확장).
+
+🔵 **시리즈 결과**: `ADR-MONO-074` 도메인 샘플 실행 283~288 전부 머지·닫힘. 루트 `TASK-MONO-686`(`/demo` 은퇴) 의 착수 게이트 «원장 `pending` 0» 이
+이 머지로 **충족**됐다(착수는 별도 결정).
+
+넘길 의무: 0건(295 는 이미 티켓 안에 기록).
