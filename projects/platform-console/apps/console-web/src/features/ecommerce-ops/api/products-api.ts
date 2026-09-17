@@ -144,14 +144,18 @@ export function getProductsSummary(): Promise<ProductAreaSummary> {
   );
 }
 
-/** 2 — GET /products/{id} (public detail read path — admin controller has no
- *  GET /{id}; contract row #2). Carries variants[] + images[]. */
+/** 2 — GET /admin/products/{id} (operator-plane detail; contract row #2).
+ *  Carries variants[] + images[] — the same shape as the public detail.
+ *  🔴 NOT the public `/products/{id}`: the ecommerce gateway admits
+ *  `ECOMMERCE_OPERATOR` on `/api/admin/**` only (the public product tree is
+ *  CUSTOMER-only), so the operator got the list and a 403 on its detail
+ *  (TASK-MONO-703). A test pins the ADMIN base. */
 export function getProduct(id: string): Promise<ProductDetail> {
   const env = getServerEnv();
   return callEcommerce(
     {
       method: 'GET',
-      base: env.ECOMMERCE_PUBLIC_BASE_URL,
+      base: env.ECOMMERCE_ADMIN_BASE_URL,
       path: `/products/${encodeURIComponent(id)}`,
     },
     (j) => ProductDetailSchema.parse(j),

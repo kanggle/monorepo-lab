@@ -24,7 +24,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *     parsed (NOT wms's nested `{ error: { code } }`);
  *   - 401 → ApiError(401); 403 → ApiError(403); 404/422/409 → ApiError inline;
  *     503/timeout → EcommerceUnavailableError (section degrades only);
- *   - detail (#2) uses the PUBLIC base; admin CRUD uses the ADMIN base.
+ *   - every product call, detail (#2) included, uses the ADMIN base
+ *     (TASK-MONO-703 moved the detail off the PUBLIC base — the gateway 403s
+ *     the operator there).
  */
 
 const cookieJar = new Map<string, string>();
@@ -199,13 +201,17 @@ describe('products-api — endpoint wiring + bodies (§ 2.4.10 #1-9)', () => {
     expect(u.searchParams.get('page')).toBe('2');
   });
 
-  it('2 detail — GET the PUBLIC base /products/{id} (admin controller has no GET /{id})', async () => {
+  it('2 detail — GET the ADMIN base /products/{id} (TASK-MONO-703: the public tree 403s the operator)', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(PRODUCT_DETAIL));
     vi.stubGlobal('fetch', fetchMock);
     const d = await getProduct('p-1');
     expect(d.variants[0].optionName).toBe('M');
-    const [url] = fetchMock.mock.calls[0];
-    expect(String(url)).toBe('http://ecommerce.local/api/products/p-1');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect((init as RequestInit).method).toBe('GET');
+    expect(String(url)).toBe('http://ecommerce.local/api/admin/products/p-1');
+    // Pin the regression explicitly: the public `/api/products/{id}` is closed to
+    // ECOMMERCE_OPERATOR at the ecommerce gateway (AccountTypeEnforcementFilter).
+    expect(new URL(String(url)).pathname.startsWith('/api/products/')).toBe(false);
   });
 
   it('3 register — POST admin /products with the producer RegisterProductRequest body', async () => {

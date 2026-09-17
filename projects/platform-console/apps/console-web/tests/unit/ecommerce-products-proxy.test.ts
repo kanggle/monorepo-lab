@@ -200,8 +200,9 @@ describe('POST /api/ecommerce/products (register) proxy', () => {
 // TASK-PC-FE-132 — the `useProduct` client hook refetches `GET /products/{id}`
 // (mount refetch + post-mutation invalidate). The detail route exported only
 // PATCH/DELETE, so the GET 405'd — surfacing as a stale/failed detail after a
-// stock adjust. The GET proxy reuses the server-side `getProduct` (public read
-// path), so a stock increase's post-success refetch now renders the new stock.
+// stock adjust. The GET proxy reuses the server-side `getProduct` (admin detail
+// path since TASK-MONO-703), so a stock increase's post-success refetch now
+// renders the new stock.
 const DETAIL = {
   id: 'p-1',
   name: 'Tee',
@@ -216,7 +217,7 @@ describe('GET /api/ecommerce/products/{id} (detail) proxy', () => {
     return new Request(`http://console.local/api/ecommerce/products/${id}`);
   }
 
-  it('returns 200 + ProductDetail, fetching the public read path with the domain-facing token', async () => {
+  it('returns 200 + ProductDetail, fetching the admin detail path with the domain-facing token', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(DETAIL));
@@ -231,8 +232,9 @@ describe('GET /api/ecommerce/products/{id} (detail) proxy', () => {
     expect(body.variants[0].stock).toBe(7);
 
     const [url, init] = fetchMock.mock.calls[0];
-    // public base (admin controller has no GET /{id}), NOT the admin base.
-    expect(String(url)).toBe('http://ecommerce.local/api/products/p-1');
+    // admin base (TASK-MONO-703), NOT the public base — the ecommerce gateway
+    // 403s ECOMMERCE_OPERATOR on the public product tree.
+    expect(String(url)).toBe('http://ecommerce.local/api/admin/products/p-1');
     const h = (init as RequestInit).headers as Record<string, string>;
     expect(h.Authorization).toBe('Bearer GAP-ACCESS');
     expect(h.Authorization).not.toContain('OP-MUST-NOT-USE');

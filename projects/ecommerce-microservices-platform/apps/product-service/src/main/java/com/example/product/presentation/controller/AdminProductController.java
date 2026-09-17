@@ -2,17 +2,22 @@ package com.example.product.presentation.controller;
 
 import com.example.common.summary.PeriodSummary;
 import com.example.product.application.dto.AdjustStockResult;
+import com.example.product.application.dto.ProductDetail;
 import com.example.product.application.dto.ProductListResult;
 import com.example.product.application.service.AdjustStockService;
 import com.example.product.application.service.DeleteProductService;
+import com.example.product.application.service.ProductImageService;
 import com.example.product.application.service.QueryProductService;
 import com.example.product.application.service.RegisterProductService;
 import com.example.product.application.service.UpdateProductService;
 import com.example.product.application.service.VariantManagementService;
 import com.example.product.domain.model.ProductStatus;
+import com.example.product.domain.port.MediaUrlResolver;
 import com.example.product.presentation.dto.AddVariantRequest;
 import com.example.product.presentation.dto.AdjustStockRequest;
 import com.example.product.presentation.dto.AdjustStockResponse;
+import com.example.product.presentation.dto.ImageResponse;
+import com.example.product.presentation.dto.ProductDetailResponse;
 import com.example.product.presentation.dto.ProductListResponse;
 import com.example.product.presentation.dto.RegisterProductRequest;
 import com.example.product.presentation.dto.RegisterProductResponse;
@@ -34,6 +39,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -50,6 +56,8 @@ public class AdminProductController {
     private final AdjustStockService adjustStockService;
     private final VariantManagementService variantManagementService;
     private final QueryProductService queryProductService;
+    private final ProductImageService productImageService;
+    private final MediaUrlResolver mediaUrlResolver;
 
     /**
      * Operator-plane tenant-scoped product list snapshot — the platform-console
@@ -113,6 +121,36 @@ public class AdminProductController {
     @GetMapping("/summary")
     public ResponseEntity<PeriodSummary> summary() {
         return ResponseEntity.ok(queryProductService.getPeriodSummary());
+    }
+
+    /**
+     * Operator-plane product detail (TASK-MONO-703) — the read behind the
+     * platform-console product detail and edit screens.
+     *
+     * <p>Query path and response are byte-identical to the public
+     * {@link ProductController#detail}: same {@link QueryProductService#findById}
+     * + {@link ProductImageService#getImages} reads, same
+     * {@link ProductDetailResponse}. It exists on the operator plane because the
+     * gateway admits {@code ECOMMERCE_OPERATOR} on {@code /api/admin/**} but not
+     * on the public product tree — the operator could list products here and
+     * then got a 403 opening one of them.
+     *
+     * <p>Authorization and tenant isolation are identical to {@link #list}:
+     * enforced at the ecommerce gateway ({@code roles ∋ ECOMMERCE_OPERATOR} +
+     * {@code tenant_id}); the {@code TenantContext} / repository
+     * {@code WHERE tenant_id} chokepoint makes another tenant's product a
+     * {@code 404 PRODUCT_NOT_FOUND}. The service applies no additional RBAC.
+     *
+     * <p>{@code "/{productId}"} does not shadow {@code "/summary"}: Spring ranks
+     * the literal pattern above the template, and {@code "summary"} is not a UUID.
+     */
+    @GetMapping("/{productId}")
+    public ProductDetailResponse detail(@PathVariable UUID productId) {
+        ProductDetail detail = queryProductService.findById(productId);
+        List<ImageResponse> images = productImageService.getImages(productId).stream()
+                .map(img -> ImageResponse.from(img, mediaUrlResolver.resolve(img.getObjectKey())))
+                .toList();
+        return ProductDetailResponse.from(detail, images);
     }
 
     /**
