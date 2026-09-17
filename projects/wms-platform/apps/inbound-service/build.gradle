@@ -71,6 +71,16 @@ tasks.named('bootJar') {
 // (repo-root infra/, outside this module). Gradle does not see that read, so without this
 // declaration an edit to the seed leaves `test` UP-TO-DATE / FROM-CACHE (org.gradle.caching=true)
 // and the check never re-runs — measured: a seed revert produced rc=0 with the task UP-TO-DATE.
+//
+// 🔴 That Gradle-side fix left a second, identical gap this task did not know about: ci.yml's
+// `wms` path filter was `projects/wms-platform/**` only, so a PR touching ONLY seed-scm.sh never
+// woke `Build & Test` at all — the seed-coupled test above could only go red on `main` after the
+// merge. The exact same shape had already been recorded as UNOWNED for iam's sibling seed
+// (auth-service/build.gradle, seed-fan.sh) before this task landed, unread.
+// → 2026-09-17: TASK-MONO-695 closed both. `infra/demo/seed/seed-scm.sh` is now an exact entry
+//   in ci.yml's `wms` filter, and `scripts/check-outside-module-input-filter-coverage.sh` (its
+//   own `changes`-gated CI job) asserts every outside-project `inputs.*` declaration in this
+//   repo stays covered by its project's filter, so this gap cannot silently reopen.
 tasks.withType(Test).configureEach {
     inputs.file(rootProject.file('infra/demo/seed/seed-scm.sh'))
             .withPathSensitivity(PathSensitivity.RELATIVE)

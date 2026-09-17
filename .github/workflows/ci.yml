@@ -361,6 +361,15 @@ jobs:
       # above: the fixture suite runs in under a minute, and the one job that tests the hooks
       # must not depend on the `code-changed` list continuing to name the hook file types.
       hooks: ${{ steps.filter.outputs.hooks }}
+      # TASK-MONO-695: raw filter, NOT AND-combined with `code-changed`, same footing as
+      # `ci-baseline` above — this guard watches ci.yml's own project filters plus every
+      # projects/**/build.gradle (apps/<m>, the project-level file, libs/<m>, tests/e2e)
+      # for outside-project `inputs.file/dir/files` declarations. AND-ing with
+      # `code-changed` would make the guard's own reachability
+      # revocable by a future edit to that list (TASK-MONO-360's reachability rule: a
+      # guard that a skip can switch off is a guard that reports green while seeing
+      # nothing).
+      outside-module-input-guard: ${{ steps.filter.outputs.outside-module-input-guard }}
       code-changed: ${{ steps.filter.outputs.code-changed }}
     steps:
       - uses: actions/checkout@v4
@@ -433,12 +442,27 @@ jobs:
             # `platform-console` below has followed it since TASK-PC-BE-001 — it was the one
             # filter that was not broken, which is why it read `false` while the other seven
             # read `true` on the same diff.
+            # TASK-MONO-695: 'projects/wms-platform/**' alone misses the outside-module
+            # Gradle test input inbound-service declares — inbound-service/build.gradle:75
+            # `inputs.file(rootProject.file('infra/demo/seed/seed-scm.sh'))` on
+            # ScmInboundExpectedDemoSeedShapeDltTest. A PR touching ONLY that script left
+            # `Build & Test` SKIPPED on the PR and the first red run was on `main` after
+            # merge (measured on PR #3246, before the seed-reading test existed). Exact
+            # file, not `infra/demo/**` (Failure Scenario 1 — that would wake wms on any
+            # demo README edit). `scripts/check-outside-module-input-filter-coverage.sh`
+            # keeps this in sync with the Gradle declaration.
             wms:
               - 'projects/wms-platform/**'
+              - 'infra/demo/seed/seed-scm.sh'
             ecommerce:
               - 'projects/ecommerce-microservices-platform/**'
+            # TASK-MONO-695: same shape as wms above — auth-service/build.gradle:112
+            # declares `inputs.file(rootProject.file('infra/demo/seed/seed-fan.sh'))` on
+            # FanArtistDemoSeedTest. This gap was recorded as UNOWNED in this same
+            # build.gradle file and in ADR-MONO-063:187 before this ticket closed it.
             iam:
               - 'projects/iam-platform/**'
+              - 'infra/demo/seed/seed-fan.sh'
             fan:
               - 'projects/fan-platform/**'
             scm:
@@ -944,6 +968,20 @@ jobs:
             ci-baseline:
               - '.github/workflows/**'
               - 'scripts/check-ci-baseline-reachable.sh'
+            # TASK-MONO-695: pure-positive (no negation — MONO-074/075 quirk rule). Every
+            # build.gradle under projects/** (apps/<m>, the project-level file whose
+            # `subprojects {}` applies to every module, libs/<m>, tests/e2e — not just
+            # apps/*/) can add a new `inputs.file/dir/files` declaration that reads
+            # outside its own project; ci.yml itself is where the per-project filter that
+            # must cover it lives; the guard script is the third leg of the same triangle.
+            # All three moving is how this drift re-arrives. Widened from `apps/*/` after
+            # a review pass found the guard's own population narrower than its claim —
+            # scanning only apps/*/ while claiming project-wide coverage was exactly the
+            # gap class this ticket exists to close, in the guard meant to close it.
+            outside-module-input-guard:
+              - 'projects/**/build.gradle'
+              - '.github/workflows/ci.yml'
+              - 'scripts/check-outside-module-input-filter-coverage.sh'
             # TASK-MONO-075: pure-positive enumeration of code-bearing file
             # extensions. `'some'` quantifier behaves intuitively here (no
             # negation → no quirk). markdown-only / docs-only / lifecycle-only
@@ -1036,6 +1074,39 @@ jobs:
 
       - name: Guard — settings.gradle <-> docs/project-overview.md
         run: bash scripts/check-service-map-drift.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-695 — outside-project Gradle test input filter coverage.
+  #
+  # A `build.gradle` under `projects/<p>/apps/<m>/` can declare
+  # `inputs.file(rootProject.file('...'))` on a path OUTSIDE `projects/<p>/**` (most
+  # often a repo-root `infra/demo/seed/*.sh` demo seed script) to fix Gradle's
+  # UP-TO-DATE caching blind spot for a test that reads that file by path. That
+  # declaration makes Gradle re-run the test when the seed changes — but it does
+  # nothing for ci.yml's PR path filter, which only wakes `Build & Test` on
+  # `projects/<p>/**`. A PR touching ONLY the outside file leaves the flag false,
+  # `Build & Test` SKIPPED, the PR merges green, and the seed-coupled test only
+  # runs — and can only go red — on the `main` push after merge (measured: PR #3246,
+  # `Build & Test` SKIPPED on the PR / success on the merge commit's `main` run).
+  #
+  # This job keeps the two declarations honest against each other: it parses
+  # ci.yml's own `filters:` block (never a hand-copied path list) and asserts every
+  # outside-project Gradle input is matched by that module's project flag filter.
+  # ---------------------------------------------------------------------------
+  outside-module-input-filter-coverage:
+    name: Outside-module Gradle input filter coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.outside-module-input-guard == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-outside-module-input-filter-coverage.sh
+
+      - name: Guard — outside-project Gradle test inputs are covered by ci.yml's project filter
+        run: bash scripts/check-outside-module-input-filter-coverage.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-443 — task-ID collision guard.
