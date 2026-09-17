@@ -200,55 +200,14 @@ export interface StorePublicData {
 }
 
 // ---------------------------------------------------------------------------
-// console-sample — 운영자 콘솔 둘러보기
-// ---------------------------------------------------------------------------
-
-/**
- * 🔴🔴 이 데이터셋은 **합성이다.** `source` 는 항상 `authored` 이고, 발행자에게 이것을
- *    백엔드에서 뽑는 경로가 **없다**(`extract.ts` 에 fan·store 추출기만 있다).
- *
- *    요구사항: *"실제 고객·주문·재무·계정 데이터를 공개 저장본으로 복사하지 않는다."*
- *    콘솔은 **정의상** 그런 데이터만 그리는 화면이므로, 「허용 목록을 잘 짜서 일부만 뽑는다」
- *    는 접근 자체가 위험하다 — 한 필드만 새면 그것이 실제 운영 데이터다.
- *    ⇒ 축을 바꾼다: 콘솔 샘플은 **백엔드에 원본이 없는 데이터**로 만든다.
- */
-export interface ConsoleSampleMetric {
-  label: string;
-  value: string;
-  hint: string;
-}
-
-export interface ConsoleSampleColumn {
-  key: string;
-  label: string;
-}
-
-export interface ConsoleSampleTable {
-  key: string;
-  title: string;
-  /** 이 화면이 실제로 무슨 일을 하는지 — 요구사항의 "각 화면의 기능 설명". */
-  description: string;
-  columns: ConsoleSampleColumn[];
-  rows: Array<Record<string, string | number>>;
-}
-
-export interface ConsoleSampleDomain {
-  key: string;
-  label: string;
-  description: string;
-  /** 실시간 콘솔에서 이 섹션의 경로. 둘러보기에서는 **링크가 아니라 안내**로 쓴다. */
-  liveHref: string;
-  metrics: ConsoleSampleMetric[];
-  tables: ConsoleSampleTable[];
-}
-
-export interface ConsoleSampleData {
-  domains: ConsoleSampleDomain[];
-}
-
-// ---------------------------------------------------------------------------
 // 데이터셋 ↔ 타입 매핑
 // ---------------------------------------------------------------------------
+//
+// 🔴 `console-sample` 은 `TASK-MONO-686` 이 은퇴시켰다(`ADR-MONO-074` 실행 8/8) — 콘솔의
+//    익명 표면은 이제 실제 화면 + 샘플 데이터(게이트웨이 코어 분기, `TASK-PC-FE-282`)이고,
+//    이 패키지가 먹이던 별도 둘러보기 UI(`(demo)` 그룹)가 없어졌다. 그 데이터셋의 타입·
+//    픽스처·스냅샷은 이 커밋에서 함께 지웠다 — 되살리려면 그 티켓의 § Implementation notes
+//    AC-2 매핑 표를 먼저 읽어라(도메인 키 → 실제 경로).
 //
 // 🔴 **런타임 검증은 여기 없다.** `validateDatasetData` 는 `contract.mjs` 에 있고, 그
 //    이유는 소비자가 둘이기 때문이다 — 판독자(이 TS 트리)와 발행자(node CLI, 빌드 단계
@@ -259,7 +218,6 @@ export interface ConsoleSampleData {
 export interface PublicDataByDataset {
   fan: FanPublicData;
   store: StorePublicData;
-  'console-sample': ConsoleSampleData;
 }
 
 /** 어느 화면의 공개 데이터인가. 데이터셋 하나 = Blob 접두사 하나 = 포인터 하나. */

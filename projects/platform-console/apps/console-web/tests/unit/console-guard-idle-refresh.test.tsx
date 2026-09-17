@@ -16,12 +16,12 @@
  * 리프레시 쿠키가 있으면 `GET /api/auth/refresh?redirect=…` 로 보낸다(레이아웃은 쿠키를
  * 못 쓰므로 갱신은 **다음 요청**인 라우트 핸들러가 한다).
  *
- * 🔵 형제 파일 `demo-tour-console-guard-regression.test.tsx` 는 **리프레시 쿠키가 없는**
+ * 🔵 형제 파일 `console-shell-sample-visitor-guard.test.tsx`(`TASK-MONO-686` 이전 이름
+ *    `demo-tour-console-guard-regression.test.tsx`)는 **리프레시 쿠키가 없는**
  *    미인증을 재고, 그 파일의 «가드 뒤 fetch 0» 핀(:94)은 «미인증 요청이 셸 안 코드에
  *    도달하지 않는다» 를 지킨다. 이 파일은 같은 모양의 목으로 **리프레시 쿠키가 있는**
  *    경우를 재고, 그 핀을 여기에도 똑같이 건다 — 가드 앞에 갱신 fetch 를 끼워 넣는 구현은
- *    여기서 빨개져야 한다. (둘째 파일로 뺀 이유: 형제 파일은 동시 진행 중인 다른 작업이
- *    만지는 demo-tour 묶음이라, 거기엔 손대지 않았다.)
+ *    여기서 빨개져야 한다.
  *
  * 🔴 로직 사본을 재지 않는다 — `@/app/(console)/layout` 을 import 해서 호출한다.
  *    `hasRefreshToken()` 도 목킹하지 않았다 — 진짜 함수가 아래 쿠키 저장소를 읽는다.

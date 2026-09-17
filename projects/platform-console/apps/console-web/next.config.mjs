@@ -38,6 +38,22 @@ const csp = [
   "form-action 'self'",
 ].join('; ');
 
+// TASK-MONO-686 (ADR-MONO-074 실행 8/8) — 은퇴한 콘솔 둘러보기(`/demo`)의 도메인 키 →
+// 실제 콘솔 경로 매핑. **손으로 지어내지 않았다** — 이 커밋이 함께 지운
+// `infra/demo/public-data/fixtures/console-sample.mjs` 의 `CONSOLE_SAMPLE_DOMAINS`
+// (`key` · `liveHref` 필드, 2026-09 작성)에서 그대로 옮겼다. 그 파일은 삭제됐으므로 이
+// 목록이 지금 그 사실의 유일한 정본이다 — `tests/unit/demo-tour-redirects.test.ts` 가
+// (a) 이 정본과 (b) 실제 `redirects()` 출력이 갈라지지 않는지를 짠다.
+export const DEMO_TOUR_DOMAIN_REDIRECTS = Object.freeze([
+  { domain: 'overview', destination: '/dashboards/overview' },
+  { domain: 'ecommerce', destination: '/ecommerce/orders' },
+  { domain: 'wms', destination: '/wms/inventory' },
+  { domain: 'scm', destination: '/scm/procurement' },
+  { domain: 'erp', destination: '/erp/approval' },
+  { domain: 'finance', destination: '/finance/accounts' },
+  { domain: 'iam', destination: '/iam' },
+]);
+
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
@@ -46,11 +62,11 @@ const nextConfig = {
   //    ADR-MONO-068 § D6 = B2 / TASK-MONO-614). 트랜스파일 대상으로 선언하지 않으면
   //    `next build` 가 그 패키지의 TS 를 파싱하지 못한다. 형제 둘(web-store·
   //    fan-platform-web)과 같은 선언이다.
-  // 🔴 `@demo/public-data` 도 같은 이유로 여기 있어야 한다 — TS 소스를 그대로 내보낸다
-  //    (`main: ./src/index.ts`). 이 앱에서 그것을 읽는 유일한 자리는 공개 둘러보기
-  //    (`src/app/(demo)/**` → `src/features/demo-tour/**`)이고, 그 화면은 백엔드·BFF·IAM 을
-  //    **부르지 않는다**. 선언을 빠뜨리면 `next build` 가 그 패키지의 TS 를 파싱하지 못한다.
-  transpilePackages: ['@demo/backend-resolver', '@demo/public-data'],
+  // 🔴 `@demo/public-data` 는 여기 없다 — `TASK-MONO-686` 이 이 앱의 유일한 소비 지점이던
+  //    공개 둘러보기(`src/app/(demo)/**` → `src/features/demo-tour/**`)를 통째로 지웠다.
+  //    이 앱에는 그 패키지를 임포트하는 코드가 더 이상 없다(package.json 의 `link:` 의존
+  //    자체는 lockfile 재생성 없이는 건드리지 않았다 — § Implementation notes 의 편차 참조).
+  transpilePackages: ['@demo/backend-resolver'],
   // TASK-PC-FE-135 — feature-barrel RSC client-reference First Load sweep.
   // The erp/ecommerce sections are multi-route: a single feature barrel
   // re-exports several 'use client' route-entry screens (+ leaves), so each
@@ -75,6 +91,25 @@ const nextConfig = {
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
         ],
       },
+    ];
+  },
+  // TASK-MONO-686 — 콘솔 둘러보기(`/demo`, `/demo/<domain>`)가 은퇴하면서 외부에 이미 퍼진
+  // 링크(포트폴리오·이력서·북마크)를 살려 둔다. 308(permanent) — 은퇴는 영구적인 사실이고,
+  // 검색엔진·브라우저 캐시가 새 주소를 정본으로 배우길 원한다.
+  //
+  // 🔴 각 도메인 키는 `DEMO_TOUR_DOMAIN_REDIRECTS` 위 정의를 그대로 쓴다(손으로 다시
+  // 적지 않는다 — 두 벌이면 한쪽만 고쳐진다).
+  // 🔴 모르는 `/demo/<x>` 도 404 가 아니라 **실제 개요 화면**으로 보낸다 — 방문자가 「이
+  // 링크는 죽었다」로 읽는 대신 살아 있는 콘솔에 착지해서 스스로 찾아갈 수 있게 한다
+  // (`:path*` 는 세그먼트 0개도 매칭하므로 이 한 줄이 맨살 `/demo` 도 함께 덮는다).
+  async redirects() {
+    return [
+      ...DEMO_TOUR_DOMAIN_REDIRECTS.map(({ domain, destination }) => ({
+        source: `/demo/${domain}`,
+        destination,
+        permanent: true,
+      })),
+      { source: '/demo/:path*', destination: '/dashboards/overview', permanent: true },
     ];
   },
 };

@@ -30,7 +30,7 @@
 export const PUBLIC_DATA_SCHEMA_VERSION = 1;
 
 /** 데이터셋 하나 = Blob 접두사 하나 = 포인터 하나. */
-export const PUBLIC_DATASETS = ['fan', 'store', 'console-sample'];
+export const PUBLIC_DATASETS = ['fan', 'store'];
 
 /** 봉투가 말하는 출처. 🔴 `bundled` 는 결함이 아니라 **선언된 상태**다. */
 export const PUBLIC_DATA_SOURCES = ['backend', 'bundled', 'authored'];
@@ -279,11 +279,6 @@ export function validateDatasetData(dataset, data) {
         return { ok: false, reason: `리뷰 '${String(r.id)}' 의 상품 '${String(r.productId)}' 이(가) 저장본에 없습니다` };
       }
     }
-    return { ok: true };
-  }
-
-  if (dataset === 'console-sample') {
-    if (!isArrayOfObjects(d.domains)) return { ok: false, reason: 'console-sample.domains 가 객체 배열이 아닙니다' };
     return { ok: true };
   }
 

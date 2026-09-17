@@ -13,7 +13,7 @@ import { test, expect } from '@playwright/test';
  *
  * 🔴 반쪽 세션(액세스만 / 운영자만) → `/login` 은 여기서 **측정되지 않는다**: smoke 는
  *    HttpOnly 세션 쿠키를 만들 수 없다(`root-redirect.spec.ts` 헤더). 그 축은 유닛
- *    테스트(`tests/unit/demo-tour-console-guard-regression.test.tsx`)가 잰다.
+ *    테스트(`tests/unit/console-shell-sample-visitor-guard.test.tsx`)가 잰다.
  */
 test.describe('(console) guard (backend 미기동)', () => {
   test('미인증 /operators → 샘플 셸에 머문다 + 로그인 링크가 목적지 보존', async ({ page }) => {

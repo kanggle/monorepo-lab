@@ -11,14 +11,15 @@
 //
 //   # 저장소의 번들 시드를 그대로 발행 (**최초 발행** — 백엔드가 아직 없을 때)
 //   BLOB_READ_WRITE_TOKEN=… DEMO_PUBLIC_DATA_BASE_URL=… \
-//     node …/publish-public-data.mjs --dataset console-sample --seed
+//     node …/publish-public-data.mjs --dataset fan --seed
 //
 //   # 로컬 디렉터리로 발행 (토큰 없이 **절차 자체**를 돌려 본다 — 시험·리허설)
 //   node …/publish-public-data.mjs --dataset store --seed --out /tmp/blob \
 //     --base-url https://example.invalid
 //
 // 플래그:
-//   --dataset <fan|store|console-sample>   필수
+//   --dataset <fan|store>   필수. 🔴 `console-sample` 은 `TASK-MONO-686` 이 은퇴시켰다
+//                           (콘솔 익명 표면은 이제 실제 화면 + 샘플 데이터다, ADR-MONO-074).
 //   --from <baseUrl>      백엔드 게이트웨이. 없으면 --seed 필수.
 //   --seed                백엔드 대신 저장소의 번들 시드를 발행한다.
 //   --out <dir>           Blob 대신 로컬 디렉터리에 쓴다(리허설).
@@ -108,14 +109,6 @@ function parseArgs(argv) {
 const args = parseArgs(process.argv.slice(2));
 if (!args.dataset || !PUBLIC_DATASETS.includes(args.dataset)) {
   die(`--dataset 은 ${PUBLIC_DATASETS.join(' | ')} 중 하나여야 합니다 (받은 값: ${args.dataset ?? '(없음)'})`);
-}
-// 🔴 `console-sample` 에는 **추출 경로가 없다**(설계다 — `datasets.ts` 의 그 절 참조).
-//    `--from` 을 주면 조용히 무시하지 않고 거부한다: 무시하면 «뽑았다고 믿는데 안 뽑힌»
-//    상태가 되고, 그 상태의 산출물은 시드와 같아 **구별되지 않는다.**
-if (args.dataset === 'console-sample' && args.from) {
-  die('console-sample 은 백엔드에서 추출하지 않습니다 — 합성 데이터셋입니다. --seed 를 쓰세요.\n' +
-      '  이유: 콘솔은 정의상 실제 고객·주문·재무 데이터만 그리는 화면이라, 한 필드만 새도 그것이\n' +
-      '  실제 운영 데이터입니다. 그래서 추출 경로 자체를 두지 않았습니다.');
 }
 if (!args.from && !args.seed) die('--from <baseUrl> 또는 --seed 중 하나가 필요합니다');
 if (args.from && args.seed) die('--from 과 --seed 는 함께 쓸 수 없습니다 (무엇을 발행하는지 모호해집니다)');
