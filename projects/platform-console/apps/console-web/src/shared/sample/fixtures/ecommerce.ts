@@ -144,11 +144,11 @@ function sellersFixture(path: string): unknown {
 
 // ===========================================================================
 // ecommerce (products slice — bare `ecommerce` logPrefix) — GET
-// /api/admin/products (+ /summary), GET /api/products/{id} (public detail)
+// /api/admin/products (+ /summary), GET /api/admin/products/{id} (detail —
+// TASK-MONO-703 moved it off the public tree, which the gateway closes to the operator)
 // ===========================================================================
 
 const PRODUCTS_ADMIN_PATH = '/api/admin/products';
-const PRODUCTS_PUBLIC_PATH = '/api/products';
 
 interface ProductVariantSeed {
   id: string;
@@ -245,8 +245,9 @@ function productsFixture(path: string): unknown {
     return paginateContent(rows.map(productSummary), page, size);
   }
 
-  // Public detail path (§ 2.4.10 #2 — the admin controller has no GET-by-id).
-  const detailMatch = pathname.match(new RegExp(`^${PRODUCTS_PUBLIC_PATH}/([^/]+)$`));
+  // Operator-plane detail path (§ 2.4.10 #2 — TASK-MONO-703). `/summary` is
+  // answered above, so it never reaches this template.
+  const detailMatch = pathname.match(new RegExp(`^${PRODUCTS_ADMIN_PATH}/([^/]+)$`));
   if (detailMatch) {
     const id = decodeURIComponent(detailMatch[1]);
     const found = ECOMMERCE_PRODUCTS.find((p) => p.id === id);

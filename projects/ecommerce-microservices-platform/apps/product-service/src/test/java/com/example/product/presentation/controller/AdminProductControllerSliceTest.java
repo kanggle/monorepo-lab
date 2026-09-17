@@ -3,6 +3,7 @@ package com.example.product.presentation.controller;
 import com.example.common.page.PageResult;
 import com.example.product.TestProductServiceApplication;
 import com.example.product.application.dto.AdjustStockResult;
+import com.example.product.application.dto.ProductDetail;
 import com.example.product.application.dto.ProductListResult;
 import com.example.product.application.dto.ProductSummary;
 import com.example.product.application.dto.VariantDetail;
@@ -18,6 +19,7 @@ import com.example.product.domain.exception.IdempotencyKeyConflictException;
 import com.example.product.domain.exception.IdempotencyKeyRequiredException;
 import com.example.product.domain.exception.ProductNotFoundException;
 import com.example.product.domain.exception.VariantNotFoundException;
+import com.example.product.domain.model.ProductImage;
 import com.example.product.domain.model.ProductStatus;
 import com.example.product.domain.port.MediaUrlResolver;
 import com.example.product.presentation.advice.GlobalExceptionHandler;
@@ -147,6 +149,55 @@ class AdminProductControllerSliceTest {
                 .andExpect(status().isOk());
 
         org.assertj.core.api.Assertions.assertThat(nameCaptor.getValue()).isEqualTo("셔츠");
+    }
+
+    // ─── GET /api/admin/products/{id} (operator-plane detail — TASK-MONO-703) ──
+
+    @Test
+    @DisplayName("GET /api/admin/products/{id} - X-User-Role 헤더 없이 200 + 상품·변형·이미지 반환 (게이트 위임, 공개 상세와 같은 모양)")
+    void detail_noRoleHeader_returns200WithVariantsAndImages() throws Exception {
+        UUID id = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+        UUID imageId = UUID.randomUUID();
+        ProductDetail detail = new ProductDetail(id, "상품", "설명", ProductStatus.ON_SALE, 10000L,
+                null, null, "seller-a1", List.of(new VariantDetail(variantId, "기본", 10, 0L)));
+        given(queryProductService.findById(id)).willReturn(detail);
+        ProductImage image = ProductImage.reconstitute(imageId, id, "products/a.jpg", 0, true,
+                java.time.Instant.parse("2026-09-17T00:00:00Z"));
+        given(productImageService.getImages(id)).willReturn(List.of(image));
+        given(mediaUrlResolver.resolve("products/a.jpg")).willReturn("https://cdn.example/products/a.jpg");
+
+        // No X-User-Role header — operator-plane read: authz is the gateway's
+        // roles ∋ ECOMMERCE_OPERATOR + tenant_id + WHERE tenant_id, not this controller.
+        mockMvc.perform(get("/api/admin/products/{id}", id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(id.toString()))
+                .andExpect(jsonPath("$.sellerId").value("seller-a1"))
+                .andExpect(jsonPath("$.variants[0].optionName").value("기본"))
+                .andExpect(jsonPath("$.images[0].url").value("https://cdn.example/products/a.jpg"));
+    }
+
+    @Test
+    @DisplayName("GET /api/admin/products/{id} - 없는 상품(다른 테넌트 상품 포함 — 저장소가 WHERE tenant_id 로 못 찾는다)이면 404 / PRODUCT_NOT_FOUND")
+    void detail_notFound_returns404() throws Exception {
+        UUID id = UUID.randomUUID();
+        given(queryProductService.findById(id)).willThrow(new ProductNotFoundException(id));
+
+        mockMvc.perform(get("/api/admin/products/{id}", id))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("GET /api/admin/products/summary - 상세 템플릿에 가려지지 않고 요약으로 간다")
+    void summary_isNotShadowedByDetailTemplate() throws Exception {
+        given(queryProductService.getPeriodSummary())
+                .willReturn(new com.example.common.summary.PeriodSummary(1L, 2L, 3L, 4L));
+
+        mockMvc.perform(get("/api/admin/products/summary"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(4));
+        org.mockito.Mockito.verify(queryProductService, org.mockito.Mockito.never()).findById(any());
     }
 
     // ─── POST /api/admin/products (operator-plane write — TASK-BE-366) ──

@@ -10,8 +10,9 @@ import type { StatusTone } from '@/shared/ui/StatusBadge';
  *
  * Authoritative producer contract (do NOT redefine — consume only):
  *   ecommerce `product-service`
- *   `AdminProductController` (`/api/admin/products/**`, BE-366 operator-plane)
- *   + the public `ProductController` detail read (`GET /api/products/{id}`).
+ *   `AdminProductController` (`/api/admin/products/**`, BE-366 operator-plane,
+ *   incl. the detail read `GET /api/admin/products/{id}` — TASK-MONO-703; same
+ *   `ProductDetailResponse` as the public `ProductController` detail).
  * Consumer obligation: `console-integration-contract.md` § 2.4.10
  * (#1–9 product endpoints; inherits the non-IAM domain credential/tenant/
  * envelope/resilience rules).

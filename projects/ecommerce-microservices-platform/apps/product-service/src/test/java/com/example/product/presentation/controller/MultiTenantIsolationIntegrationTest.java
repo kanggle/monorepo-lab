@@ -184,6 +184,24 @@ class MultiTenantIsolationIntegrationTest {
     }
 
     @Test
+    @DisplayName("operator-plane 상세(GET /api/admin/products/{id})도 테넌트 격리: B 컨텍스트는 404, A 컨텍스트는 200 (M6, TASK-MONO-703)")
+    void operatorPlaneDetail_crossTenant_returns404_sameTenantReturns200() throws Exception {
+        String idA = registerProduct(TENANT_A, "운영자평면 상세 격리 A");
+
+        // tenant B cannot see tenant A's product on the operator plane either — 404, not 403 (M3).
+        mockMvc.perform(get("/api/admin/products/{id}", idA).header(TENANT_HEADER, TENANT_B))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
+
+        // tenant A sees its own product, with the public detail's shape.
+        mockMvc.perform(get("/api/admin/products/{id}", idA).header(TENANT_HEADER, TENANT_A))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(idA))
+                .andExpect(jsonPath("$.variants[0].optionName").value("기본"))
+                .andExpect(jsonPath("$.images").isArray());
+    }
+
+    @Test
     @DisplayName("테넌트 B는 테넌트 A 상품을 변경할 수 없다 (404, A 데이터 불변)")
     void crossTenantWrite_cannotReachOtherTenantRow() throws Exception {
         String idA = registerProduct(TENANT_A, "변경 격리 A");

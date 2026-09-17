@@ -2860,7 +2860,7 @@ scope, no § 3 row — attestation count stays **16**).
   | # | Operation | Producer endpoint | Kind |
   |---|---|---|---|
   | 1 | list products | `GET /admin/products?categoryId&status&page&size` | read |
-  | 2 | product detail | `GET /admin/products/{id}` (public `/products/{id}` read path) | read |
+  | 2 | product detail | `GET /admin/products/{id}` (operator-plane detail, TASK-MONO-703 — NOT the public `/products/{id}`, which the gateway closes to `ECOMMERCE_OPERATOR`) | read |
   | 3 | **register product** | `POST /admin/products` | mutation |
   | 4 | **update product** | `PATCH /admin/products/{id}` | mutation |
   | 5 | **delete product** | `DELETE /admin/products/{id}` | mutation |

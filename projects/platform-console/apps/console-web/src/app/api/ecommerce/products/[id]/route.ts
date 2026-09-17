@@ -17,8 +17,9 @@ export const runtime = 'nodejs';
 
 /**
  * Same-origin ecommerce **product detail** read proxy
- * (console-integration-contract § 2.4.10 #2): `GET /products/{id}` (public read
- * path — the admin controller has no `GET /{id}`).
+ * (console-integration-contract § 2.4.10 #2): `GET /admin/products/{id}`
+ * (operator-plane detail — TASK-MONO-703; the public `/products/{id}` is closed
+ * to `ECOMMERCE_OPERATOR` at the ecommerce gateway).
  *
  * Used by the `useProduct` client hook: the server-rendered detail is seeded as
  * `initialData`, but a mount refetch (`staleTime: 0`) AND every post-mutation
