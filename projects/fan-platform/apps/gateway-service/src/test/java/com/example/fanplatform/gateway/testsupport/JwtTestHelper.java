@@ -33,6 +33,12 @@ public final class JwtTestHelper {
     public static final String SAS_ISSUER = "http://iam.local";
     /** Required tenant for the fan-platform gateway. */
     public static final String DEFAULT_TENANT_ID = "fan-platform";
+    /**
+     * The registered client id that really appears in {@code aud} on the tokens reaching this edge
+     * (the fan web app — TASK-MONO-696 AC-1). Minted by default so fixtures match production; pass
+     * {@code "aud"} in the additional claims to override it, or {@code "aud" → null} to omit it.
+     */
+    public static final String DEFAULT_AUDIENCE = "fan-platform-user-flow-client";
 
     private final RSAKey rsaJwk;
     private final RSASSASigner signer;
@@ -78,6 +84,7 @@ public final class JwtTestHelper {
                 .subject(subject)
                 .issuer(SAS_ISSUER)
                 .claim("tenant_id", tenantId)
+                .audience(List.of(DEFAULT_AUDIENCE))
                 .issueTime(Date.from(now))
                 .expirationTime(Date.from(now.plusSeconds(ttlSeconds)))
                 .jwtID(UUID.randomUUID().toString());

@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Objects;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import org.springframework.security.oauth2.jwt.JwtValidators;
@@ -51,22 +52,44 @@ public final class GatewayJwtDecoders {
     private GatewayJwtDecoders() {}
 
     /**
-     * The standard gateway validator chain, in order: token timestamps → issuer allowlist →
-     * the domain's tenant gate → Spring's defaults.
+     * The standard gateway validator chain: token timestamps → issuer allowlist → the domain's
+     * tenant gate → Spring's defaults, and — <strong>only once all of those pass</strong> — the
+     * audience allowlist ({@code jwt-standard-claims.md} § JWT Validation rule 5).
+     *
+     * <p><strong>The audience gate is a required parameter of a concrete type</strong>
+     * (TASK-MONO-696). The contract said "gateways reject a mismatched {@code aud}" for as long as
+     * it has existed, and no gateway did: a property configured an auto-configured decoder that
+     * every gateway replaces with its own. A check that lives in each gateway's wiring is a check
+     * a gateway can forget; one that is an argument of the only chain there is cannot be.
+     *
+     * <p><strong>Why the audience check runs last, and only on an otherwise-valid token.</strong>
+     * {@link DelegatingOAuth2TokenValidator} runs every delegate and collects every error. Were the
+     * audience gate simply another delegate, then (a) in shadow mode, expired, forged-issuer and
+     * cross-tenant tokens — already refused — would be counted as audience mismatches and inflate
+     * the very number the switch to rejection is conditioned on; and (b) in enforce mode, a token
+     * failing both issuer and audience would carry both errors and the entry point's 403 mapping
+     * would outrank the 401 that rule 4 (issuer) owes it. Sequencing keeps the rule order of the
+     * contract: an authentication failure stays 401, a cross-tenant token stays
+     * {@code TENANT_FORBIDDEN}, and the audience outcome is measured only on tokens that would
+     * otherwise have been admitted.
      *
      * @param allowedIssuers non-empty; {@link AllowedIssuersValidator} rejects an empty list
      *                       rather than degrading to "accept any issuer"
+     * @param audienceGate   this gateway's audience allowlist and mode — required
      * @param tenantGate     the domain's {@link TenantClaimValidator} — its policy, its call
      */
     public static OAuth2TokenValidator<Jwt> validatorChain(
-            List<String> allowedIssuers, OAuth2TokenValidator<Jwt> tenantGate) {
+            List<String> allowedIssuers,
+            AllowedAudiencesValidator audienceGate,
+            OAuth2TokenValidator<Jwt> tenantGate) {
+        Objects.requireNonNull(audienceGate, "audienceGate");
         Objects.requireNonNull(tenantGate, "tenantGate");
         List<OAuth2TokenValidator<Jwt>> validators = new ArrayList<>();
         validators.add(new JwtTimestampValidator());
         validators.add(new AllowedIssuersValidator(allowedIssuers));
         validators.add(tenantGate);
         validators.add(JwtValidators.createDefault());
-        return new DelegatingOAuth2TokenValidator<>(validators);
+        return new AudienceCheckedChain(new DelegatingOAuth2TokenValidator<>(validators), audienceGate);
     }
 
     /** A JWKS-backed reactive decoder wired to {@code validator}. */
@@ -91,5 +114,38 @@ public final class GatewayJwtDecoders {
             }
         }
         return out;
+    }
+
+    /**
+     * The base chain, then the audience gate if and only if the base chain passed. See
+     * {@link #validatorChain} for why the two are sequenced rather than delegated side by side.
+     */
+    public static final class AudienceCheckedChain implements OAuth2TokenValidator<Jwt> {
+
+        private final DelegatingOAuth2TokenValidator<Jwt> base;
+        private final AllowedAudiencesValidator audienceGate;
+
+        AudienceCheckedChain(DelegatingOAuth2TokenValidator<Jwt> base,
+                             AllowedAudiencesValidator audienceGate) {
+            this.base = base;
+            this.audienceGate = audienceGate;
+        }
+
+        @Override
+        public OAuth2TokenValidatorResult validate(Jwt token) {
+            OAuth2TokenValidatorResult result = base.validate(token);
+            if (result.hasErrors()) {
+                return result;
+            }
+            return audienceGate.validate(token);
+        }
+
+        public DelegatingOAuth2TokenValidator<Jwt> base() {
+            return base;
+        }
+
+        public AllowedAudiencesValidator audienceGate() {
+            return audienceGate;
+        }
     }
 }

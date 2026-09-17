@@ -142,6 +142,18 @@ erpplatform:
     # Same tenant the erp services' own ServiceLevelOAuth2Config requires. The gateway and the
     # service behind it must not disagree about which tokens are valid.
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:erp}
+    # TASK-MONO-696 — audience allowlist (platform/contracts/jwt-standard-claims.md § JWT
+    # Validation rule 5). `aud` is the CLIENT ID the token was issued to, not a platform name;
+    # a token is admitted iff its aud values intersect this list. Mandatory: absent or empty
+    # fails the boot. Values = the clients MEASURED to reach this edge (TASK-MONO-696 § AC-1 (b):
+    # the operator console). Clients whose reach could not be measured are deliberately NOT
+    # listed — in shadow mode their traffic shows up as a logged, counted mismatch, which is the
+    # measurement this phase exists for.
+    allowed-audiences: ${OIDC_ALLOWED_AUDIENCES:platform-console-web}
+    # SHADOW = log + count a mismatch, never reject (rollout phase 1). ENFORCE = 403
+    # AUDIENCE_FORBIDDEN. Switching is its own reviewed change, taken only once the measured
+    # mismatch count is zero; AudienceShippedConfigTest fails if this ships as anything but SHADOW.
+    audience-mode: ${OIDC_AUDIENCE_MODE:SHADOW}
 
 gateway:
   jwks:

@@ -2675,11 +2675,13 @@ jobs:
         :projects:finance-platform:libs:finance-common:check
         :projects:finance-platform:apps:account-service:check
         :projects:finance-platform:apps:ledger-service:check
+        :projects:finance-platform:apps:gateway-service:check
       GRADLE_TASKS_ERP: >-
         :projects:erp-platform:apps:masterdata-service:check
         :projects:erp-platform:apps:read-model-service:check
         :projects:erp-platform:apps:approval-service:check
         :projects:erp-platform:apps:notification-service:check
+        :projects:erp-platform:apps:gateway-service:check
       GRADLE_TASKS_CONSOLE: >-
         :projects:platform-console:apps:console-bff:check
 

@@ -63,7 +63,9 @@ public class SecurityConfig {
      * Distinguishes cross-tenant token misuse from generic authentication failures.
      * The per-domain {@code TenantClaimValidator} attaches the {@code tenant_mismatch}
      * error code (via {@link GatewayErrorCodes#TENANT_MISMATCH}); we surface that as
-     * 403 {@code TENANT_FORBIDDEN} instead of the default 401.
+     * 403 {@code TENANT_FORBIDDEN} instead of the default 401. An enforce-mode audience
+     * rejection ({@link GatewayErrorCodes#AUDIENCE_MISMATCH}) is likewise 403
+     * {@link GatewayErrorCodes#AUDIENCE_FORBIDDEN}.
      */
     private ServerAuthenticationEntryPoint unauthorizedEntryPoint(GatewayErrorHandler errorHandler) {
         return (exchange, ex) -> {
@@ -75,6 +77,16 @@ public class SecurityConfig {
                         : "Cross-tenant access denied";
                 return errorHandler.write(exchange, HttpStatus.FORBIDDEN,
                         "TENANT_FORBIDDEN", message);
+            }
+            // TASK-MONO-696 — an audience rejection (enforce mode only) is 403, not 401: the
+            // token is valid, and a fresh one from the same client would carry the same aud.
+            // The validator chain runs the audience gate only on an otherwise-valid token, so
+            // this code never shares the error list with an issuer/expiry/tenant error.
+            if (oauthError != null
+                    && GatewayErrorCodes.AUDIENCE_MISMATCH.equals(oauthError.getErrorCode())) {
+                return errorHandler.write(exchange, HttpStatus.FORBIDDEN,
+                        GatewayErrorCodes.AUDIENCE_FORBIDDEN,
+                        "This token's client is not admitted at this gateway");
             }
             return errorHandler.write(exchange, HttpStatus.UNAUTHORIZED,
                     "UNAUTHORIZED", "Authentication required");

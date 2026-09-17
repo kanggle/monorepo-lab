@@ -162,10 +162,17 @@ directly on the internal network (same isolation contract as scm/fan).
 - Decoder: `NimbusReactiveJwtDecoder` with `jwk-set-uri` at IAM (`/oauth2/jwks`).
 - Chain (assembled by the shared `GatewayJwtDecoders.validatorChain`, in order): timestamps →
   `AllowedIssuersValidator` (SAS issuer URL + legacy `iam` string, D2-b window) →
-  `TenantClaimValidator` (erp's gate, above) → Spring defaults.
+  `TenantClaimValidator` (erp's gate, above) → Spring defaults → **then**, only on a token those
+  passed, `AllowedAudiencesValidator` (TASK-MONO-696, `jwt-standard-claims.md` rule 5).
 - An **empty** issuer allowlist is a misconfiguration, not "accept any issuer":
   `AllowedIssuersValidator` refuses to be constructed from one, so a missing
   `erpplatform.oauth2.allowed-issuers` fails the boot.
+- Audience: `aud` (the issuing **client id**) ∩ `erpplatform.oauth2.allowed-audiences`
+  (shipped: `platform-console-web`, the client measured to reach this edge) ≠ ∅. Empty or absent
+  allowlist fails the boot. `erpplatform.oauth2.audience-mode` ships **SHADOW**: a mismatch is
+  logged (`gateway`, `jti`, `aud`) and counted on `gateway.jwt.audience{gateway,outcome}`, not
+  rejected. `ENFORCE` (403 `AUDIENCE_FORBIDDEN`, name still a contract proposal) is the separate
+  phase-2 change, taken after the measured mismatch count is zero.
 - Forwarded headers after successful validation: `X-User-Id` ← `sub`, `X-Actor-Id` ← `sub`,
   `X-User-Email` ← `email` (when present), `X-User-Role` ← `roles`/`role` (**always** — an
   empty value means "no authorized role" and must deny; an absent header would let a service

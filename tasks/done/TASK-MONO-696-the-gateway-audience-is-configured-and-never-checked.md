@@ -8,7 +8,7 @@ TASK-MONO-696
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -162,9 +162,12 @@ console-bff 는 **한 개의** IAM OIDC access token 을 WMS·SCM·FINANCE·ERP�
       - § 결정 대기 › **결정 (소유자, 2026-09-16 UTC) — AC-2** 표.
 - [x] **AC-3 스펙 먼저** — 결정이 계약서와 다르면 `platform/contracts/jwt-standard-claims.md`(`:46`, `:58`, `:130`, `:166`, 예제 `:219` 이하)와 `platform/service-types/identity-platform.md`(`:78`, `:225`, `:283`)를 **구현보다 먼저** 같은 PR 안에서 개정한다. 결정이 A 면 IdP 계약(`projects/iam-platform/specs/contracts/http/auth-api.md`)의 발급 `aud` 도.
       - **계약서는 이제 B 를 말한다.** 상세와 AC-4/5 가 맞춰야 할 목록: 아래 **§ AC-3 스펙 개정**. 결정이 A 가 아니므로 `auth-api.md` 는 건드리지 않았다.
-- [ ] **AC-4 집행 — 한 곳에서, 잊을 수 없게** — 검증은 `GatewayJwtDecoders.validatorChain`(또는 결정이 정한 공유 지점)에서 이루어지고, 게이트웨이가 audience 정책을 **생략할 수 없는** 시그니처여야 한다(선택지 C 제외). 6 게이트웨이 전부 적용. 죽은 `audiences:` 속성(ecommerce `application.yml:23`, wms `application.yml:24`, ecommerce `application-integration-test.yml:7`)은 삭제하거나 실제로 읽히게 한다 — **설정돼 있는데 안 읽히는 상태를 남기지 않는다**.
-- [ ] **AC-5 bite** — AC-0 의 칸이 결정에 맞게 뒤집힌다(C 면 뒤집히지 않고 이름·주석이 «검증하지 않는다» 를 말한다). 추가로 (iii) 결정이 허용하는 `aud` → 통과, (iv) 허용하지 않는 `aud` → 결정된 상태코드. 🔴 **테스트 헬퍼가 운영과 같은 `aud` 를 민팅**하도록 고친다 — 지금처럼 헬퍼가 `aud: ecommerce` 를 민팅하면 «플랫폼 이름을 요구» 하는 구현이 **테스트는 초록, 운영은 전량 거절**이 된다. 각 게이트웨이의 기존 스위트 초록.
-- [ ] **AC-6 후속 기안** — 서비스 레벨 디코더 14개 · console-bff · iam gateway 에 같은 원칙을 적용할지를 다루는 후속 티켓을 **이 티켓을 `done/` 으로 닫기 전에** 기안한다(또는 «적용하지 않는다» 는 결정을 사유와 함께 기록).
+- [x] **AC-4 집행 — 한 곳에서, 잊을 수 없게** — 검증은 `GatewayJwtDecoders.validatorChain`(또는 결정이 정한 공유 지점)에서 이루어지고, 게이트웨이가 audience 정책을 **생략할 수 없는** 시그니처여야 한다(선택지 C 제외). 6 게이트웨이 전부 적용. 죽은 `audiences:` 속성(ecommerce `application.yml:23`, wms `application.yml:24`, ecommerce `application-integration-test.yml:7`)은 삭제하거나 실제로 읽히게 한다 — **설정돼 있는데 안 읽히는 상태를 남기지 않는다**.
+      - **1단계(SHADOW) 집행 (2026-09-17 UTC).** 상세: 아래 **§ AC-4 집행**. 요지 — `validatorChain(allowedIssuers, AllowedAudiencesValidator audienceGate, tenantGate)`: 구체 타입의 **필수** 인자(2-인자 판 삭제) · 6 게이트웨이 전부 적용 · allowlist 빈/부재 = 기동 실패 · 출하 모드 6/6 `SHADOW` · 죽은 `audiences:` 3곳 삭제(잔존 0 — `projects/**` 에서 `^\s*audiences:` 는 `done/` 티켓 본문 2곳뿐).
+- [x] **AC-5 bite** — AC-0 의 칸이 결정에 맞게 뒤집힌다(C 면 뒤집히지 않고 이름·주석이 «검증하지 않는다» 를 말한다). 추가로 (iii) 결정이 허용하는 `aud` → 통과, (iv) 허용하지 않는 `aud` → 결정된 상태코드. 🔴 **테스트 헬퍼가 운영과 같은 `aud` 를 민팅**하도록 고친다 — 지금처럼 헬퍼가 `aud: ecommerce` 를 민팅하면 «플랫폼 이름을 요구» 하는 구현이 **테스트는 초록, 운영은 전량 거절**이 된다. 각 게이트웨이의 기존 스위트 초록.
+      - 상세: 아래 **§ AC-5 실측**. 요지 — 1단계라 AC-0 칸은 **상태코드가 아니라 단언이** 뒤집혔다(200 유지 + `mismatch_shadowed +1`). (iii)/(iv) 는 ENFORCE 를 **테스트 한정**으로 켠 실제 디코더 경로 칸(ecommerce 자체 entry point · 공유 entry point via wms)에서 403 `AUDIENCE_FORBIDDEN`. 헬퍼 6개 모두 운영 client id 민팅. lib + 6 게이트웨이 `check` **rc=0**. bite: 검증기를 항상-통과로 → lib 98칸 중 9 · ecommerce 147칸 중 5 · wms 60칸 중 5 빨강.
+- [x] **AC-6 후속 기안** — 서비스 레벨 디코더 14개 · console-bff · iam gateway 에 같은 원칙을 적용할지를 다루는 후속 티켓을 **이 티켓을 `done/` 으로 닫기 전에** 기안한다(또는 «적용하지 않는다» 는 결정을 사유와 함께 기록).
+      - `TASK-MONO-697`(2단계 — 6 게이트웨이 ENFORCE 전환, AC-0 = 실측 불일치 0 **및 분모 match > 0**, 읽을 곳 명시, `AUDIENCE_FORBIDDEN` 이름 확정 포함) · `TASK-MONO-698`(서비스 레벨 14 · console-bff · iam gateway — 측정 먼저, 결정은 소유자). 둘 다 `tasks/ready/`.
 
 ---
 
@@ -231,6 +234,97 @@ console-bff 는 **한 개의** IAM OIDC access token 을 WMS·SCM·FINANCE·ERP�
 7. 테스트 헬퍼는 **운영과 같은 `aud`(client id)** 를 민팅한다(`aud: ecommerce`/`wms` 금지).
 8. 죽은 `audiences:` 속성 처분(AC-4) — 계약서는 그 속성을 요구하지 않는다.
 
+# AC-4 집행 (2026-09-17 UTC) — 1단계 SHADOW
+
+## 공유 사슬 (`libs/java-gateway`, 프로젝트 이름·client id 없음 — HARDSTOP-03)
+
+| 조각 | 무엇 |
+|---|---|
+| `security/AllowedAudiencesValidator` (신규) | `new AllowedAudiencesValidator(String gateway, List<String> allowedAudiences, AudienceMode mode, MeterRegistry)`. 판정 = `jwt.getAudience()`(문자열/배열 → 목록) ∩ allowlist ≠ ∅. `aud` 없음 = 빈 집합 = 불일치. 대소문자 구분. **빈/null/공백뿐인 allowlist · 빈 gateway 이름 = `IllegalArgumentException`**(생성은 디코더 빈 안 → 기동 실패). SHADOW: 불일치 → `success()` + WARN `JWT audience not on allowlist: gateway={} mode={} jti={} aud={}`(값은 개행 제거·128자 절단) + 카운터. ENFORCE: 불일치 → `OAuth2Error("audience_mismatch")`. |
+| 메트릭 | `gateway.jwt.audience`(Prometheus `gateway_jwt_audience_total`) — 태그 **정확히** `gateway` · `outcome` ∈ {`match`, `mismatch_shadowed`, `mismatch_rejected`}. `aud` 값은 태그가 아니다(토큰에서 온 값 → 카디널리티를 client 등록자에게 넘김) — 로그에만. `match` 도 센다: 트래픽 0 에서의 «불일치 0» 은 측정이 아니다(`TASK-MONO-697` AC-0 의 분모). |
+| `security/AudienceMode` (신규) | `SHADOW` / `ENFORCE`, `parse()` 대소문자 무관. **기본값 없음** — null/빈/모르는 값 = `IllegalArgumentException`. |
+| `GatewayJwtDecoders.validatorChain(List<String> allowedIssuers, AllowedAudiencesValidator audienceGate, OAuth2TokenValidator<Jwt> tenantGate)` | 🔴 2-인자 판 **삭제**. `audienceGate` 는 구체 타입 필수(null = NPE) — 게이트웨이가 no-op 람다를 넘길 수 없다. 반환 `AudienceCheckedChain`: 기존 4단(timestamp → issuer → tenant → defaults) 을 먼저 돌리고 **오류가 없을 때만** audience 게이트. 이유 — `DelegatingOAuth2TokenValidator` 는 모든 위임자를 돌려 오류를 모은다: 나란히 두면 (a) 섀도에서 이미 거절된 토큰(만료·위조 issuer·교차 테넌트)이 불일치로 세어져 전환 조건 숫자를 부풀리고, (b) ENFORCE 에서 issuer+aud 둘 다 틀린 토큰이 403 매핑에 걸려 rule 4 의 401 을 덮는다. |
+| `GatewayErrorCodes.AUDIENCE_MISMATCH` = `"audience_mismatch"` · `AUDIENCE_FORBIDDEN` = `"AUDIENCE_FORBIDDEN"` | 🔴 **`AUDIENCE_FORBIDDEN` 은 계약서의 제안 이름 그대로다 — 소유자 확정 전.** 6 게이트웨이 모두 SHADOW 출하라 이 값은 아직 어떤 클라이언트에도 관측되지 않는다. 확정은 `TASK-MONO-697` AC-1. |
+| 공유 `config/SecurityConfig` entry point (wms/scm/erp/finance/fan) | 기존 사슬 훑기(`extractOAuth2Error`)가 찾은 오류 코드가 `audience_mismatch` 면 403 `AUDIENCE_FORBIDDEN`. |
+| testFixtures `ShippedAudienceConfig` (신규) | `shippedValue(key)` — 클래스패스 `application.yml` 을 **환경변수 무시**로 해석(`${VAR:default}` → default, default 없는 placeholder = 실패). `enforceOverrides(projectDir)` — 프로젝트의 `docker-compose*.yml`·`.env*` 에서 audience mode 를 ENFORCE 로 두는 줄. compose 파일 0개 = 실패(공허 방지). |
+
+## 게이트웨이별 출하 설정
+
+속성 키는 형제 `allowed-issuers` 와 같은 접두사, env 는 형제 `OIDC_ALLOWED_ISSUERS` 와 같은 모양: `<prefix>.oauth2.allowed-audiences: ${OIDC_ALLOWED_AUDIENCES:<목록>}` · `<prefix>.oauth2.audience-mode: ${OIDC_AUDIENCE_MODE:SHADOW}`. `OAuth2ResourceServerConfig` 생성자에 `@Value` **기본값 없는** 두 인자 + `MeterRegistry` 추가, `audienceGate()` 가 검증기를 만든다.
+
+| 게이트웨이 | prefix | `GATEWAY_NAME` (메트릭·로그) | 출하 allowlist | 출하 mode |
+|---|---|---|---|---|
+| ecommerce | `ecommerce` | `ecommerce` | `platform-console-web`, `ecommerce-web-store-client` | SHADOW |
+| wms | `wms` | `wms` | `platform-console-web` | SHADOW |
+| scm | `scmplatform` | `scm` | `platform-console-web` | SHADOW |
+| erp | `erpplatform` | `erp` | `platform-console-web` | SHADOW |
+| finance | `financeplatform` | `finance` | `platform-console-web` | SHADOW |
+| fan | `fanplatform` | `fan` | `fan-platform-user-flow-client` | SHADOW |
+
+🔴 **⚪ client 를 allowlist 에 넣지 않은 이유 (의도, 누락 아님).** § AC-1 (b) 의 ⚪ 칸(`ecommerce-admin-dashboard-client` · `wms-user-flow-client` · `wms-internal-services-client` · `scm-platform-internal-services-client` · `erp-`/`finance-platform-internal-services-client`)은 «안 온다» 가 아니라 «설정으로 대지 못했다» 였다. 1단계는 **거절하지 않으므로** 그 client 가 실제로 오면 로그·메트릭에 불일치로 나타난다 — 그것이 1단계가 존재하는 이유인 측정이다. 미리 넣으면 그 측정이 사라지고, 2단계에서 «실제로 오는가» 를 판정할 근거도 사라진다. 넣을지 말지는 `TASK-MONO-697` AC-0 이 섀도 로그로 판정한다.
+
+## 기동 실패와 SHADOW 전용 가드
+
+- **기동 실패** — (a) 키 부재: `@Value("${<prefix>.oauth2.allowed-audiences}")` 기본값 없음 → placeholder 해석 실패. (b) 빈 값(`OIDC_ALLOWED_AUDIENCES=` 포함): `AllowedAudiencesValidator` IAE. (c) mode 부재/모르는 값: placeholder 실패 / `AudienceMode.parse` IAE. 6 게이트웨이 `AudienceShippedConfigTest$StartupFailure` 가 `ApplicationContextRunner` 로 넷 다 실측(+ 대조군: 유효 설정이면 `ReactiveJwtDecoder` 단일 빈).
+  - 🔵 실측 중 발견: 맨 `ApplicationContextRunner` 에는 `PropertySourcesPlaceholderConfigurer` 가 없어 해석 불가 `${…}` 가 **자기 문자열 그대로 주입**된다 — 「키 부재」 칸이 한 원소짜리 allowlist 로 **엉뚱한 이유로 초록**이었다(첫 실행 rc=1 로 드러남). `PropertyPlaceholderAutoConfiguration` 추가 + 실패 메시지가 키 이름을 담는지 단언으로 고쳤다. 실제 부팅되는 게이트웨이는 그 자동 구성을 갖는다.
+- **SHADOW 전용 가드** — 게이트웨이마다 `AudienceShippedConfigTest$Shipped`: ① `shippedValue("<prefix>.oauth2.audience-mode") == "SHADOW"` ② allowlist 가 위 표와 정확히 같다 ③ 프로젝트 `docker-compose*.yml`·`.env*` 에 ENFORCE override 줄 0. 2단계 PR 은 이 기대값을 **의도적으로** 바꾼다. compose·.env 는 모듈 `src/` 밖이라 각 게이트웨이 `build.gradle` 에 `tasks.named('test') { inputs.files(…) }` 로 **Gradle 입력 선언**(최상위 파일만, 재귀 없음) — 안 하면 compose 만 바꾼 변경에 `test` 가 UP-TO-DATE 로 남는다(`TASK-MONO-683` 사각).
+  - 🔴 **가드 밖(기록):** `infra/demo/*.override.yml` · `.github/workflows/*` 의 env override 는 읽지 않는다. 프로젝트 밖 파일을 읽는 테스트는 Gradle 캐시와 프로젝트 PR 경로필터 **둘 다**에 안 보인다(`TASK-MONO-695`) — 처음엔 읽게 짰다가 그 이유로 뺐다. `TASK-MONO-697` Edge Cases 에 옮겨 적었다. 현재 그 파일들에 `AUDIENCE_MODE` 는 **0건**(grep).
+
+## 데모 / compose env
+
+- **변경 없음.** 출하 기본값이 `application.yml` 에 있어 env 를 안 주면 측정된 allowlist + SHADOW 로 뜬다. 6 게이트웨이의 compose(`projects/*/docker-compose*.yml`) · `infra/demo/demo.env` · `infra/demo/*.override.yml` · `tests/**` compose · `nightly-e2e.yml` 어디에도 `OIDC_ALLOWED_AUDIENCES` / `OIDC_AUDIENCE_MODE` 가 없다(grep 0) — 그래서 빈 값으로 덮어 기동이 깨질 경로도 없다. 데모 client id 도 기본값과 같다(`infra/demo` 에 `*CLIENT_ID` 설정 0 — `verify-demo-wrapper.sh` 주석만).
+- 🔵 일부러 env 이름을 generic(`OIDC_…`)으로 둔 대가: `demo.env` 가 그 이름을 **전역으로** 정의하고 compose 가 `${OIDC_ALLOWED_AUDIENCES:-…}` 로 전달하기 시작하면 6 게이트웨이가 한 목록을 공유하게 된다(`TASK-MONO-554` 의 `OIDC_ALLOWED_ISSUERS` 결함과 같은 모양). 지금은 전달하는 compose 가 없어 무해.
+
+## 스펙·문서
+
+- ecommerce `specs/integration/iam-integration.md` — 설정 블록의 `audiences: ecommerce` 삭제 + 새 키, 검증 규칙 4(섀도·기동 실패·메트릭), Error Responses 행(`aud` 불일치 → ENFORCE 에서만 403 `AUDIENCE_FORBIDDEN`, 이름 = 제안), Migration Path 행에 «설정만 되고 적용된 적 없음» 주석.
+- ecommerce gateway `overview.md`(2) · `dependencies.md` · `architecture.md`(2), wms `overview.md`, scm `overview.md` — 거짓이던 `aud=ecommerce`/`aud=wms-platform`/`aud=scm` 을 «`aud` ∩ client-id allowlist (섀도)» 로.
+- scm · fan · erp · finance gateway `architecture.md` § JWT Validation — audience 항목 추가.
+- `platform/**` 는 AC-3 에서 이미 개정 — 이 PR 에서 손대지 않았다.
+
+## CI
+
+- `libs/java-gateway`: `build-and-test` 의 `GRADLE_TASKS_CORE` 에 `:libs:java-gateway:check` **있음** — 공유 검증기 테스트는 CI 에서 돈다.
+- 🔴 **발견: erp · finance `gateway-service` 의 `:check`(= Docker 없는 `test`)가 어떤 CI 목록에도 없었다.** 두 모듈은 `integrationTest`(통합 잡)만 돌았다 — `TenantClaimValidatorTest` 등 기존 단위 테스트도, 이 PR 의 `AudienceShippedConfigTest`(SHADOW 가드)도 PR 에서 **한 번도 안 돈다**. `ci.yml` `GRADLE_TASKS_FINANCE` / `GRADLE_TASKS_ERP` 에 각 `:projects:<p>:apps:gateway-service:check` 추가. 로컬 두 `check` rc=0 확인 후 추가. (wms · ecommerce · scm · fan 은 `GRADLE_TASKS_CORE` 에 이미 있음.)
+
+# AC-5 실측 (2026-09-17 UTC)
+
+## 추가·변경한 칸
+
+| 스위트 | 칸 | 기대 |
+|---|---|---|
+| lib `AllowedAudiencesValidatorTest` (13) | 기동 실패 4(빈 · null/공백뿐 · 빈 gateway/null mode · 트림) · ENFORCE 5(허용 단일 · 배열 교집합 · 낯선 → `audience_mismatch`+`mismatch_rejected` · 없음 · 대소문자) · SHADOW 3(낯선/없음 → 통과+`mismatch_shadowed` · 허용 → `match`) · 메트릭 태그 = {gateway, outcome} 뿐 | 전부 초록 |
+| lib `AudienceModeTest` (2) · `GatewayErrorCodesTest` (+1 와이어 값 핀) | | 초록 |
+| lib `GatewayJwtDecodersTest` (7, 기존 5 개정 + 신규) | 사슬 구조(`AudienceCheckedChain` = base 4단 + 게이트) · audience 게이트 null = 실패 · 순서 4칸: ENFORCE 낯선 aud 만 → 오류 하나 · ENFORCE issuer+aud 틀림 → issuer 오류만(rejected 카운터 0) · SHADOW 테넌트 거절 토큰 → 카운터 0 · SHADOW 유효+낯선 → 통과+1 | 초록 |
+| ecommerce `SecurityConfigRealDecoderPathTest$AudienceShadowed` (AC-0 칸 뒤집기) | `noAudience_ecommerceTenant_passesInShadow_andIsCounted`(200 + `mismatch_shadowed +1`, match +0) · `foreignAudience_…_andIsCounted`(`aud=["wms"]` → 200 + 1) · 대조군 2(테넌트 빼면 403 `TENANT_FORBIDDEN`, audience 카운터 +0) · (iii) 허용 aud → 200 + `match +1` | 초록 |
+| ecommerce `SecurityConfigAudienceEnforceRealDecoderPathTest` (11, ENFORCE 테스트 한정) | 허용(web-store) 200 · 허용(console) 200 · 배열 교집합 200 · 낯선 aud → 403 `AUDIENCE_FORBIDDEN`(본문에 `UNAUTHORIZED` 없음, `mismatch_rejected +1`, `gateway_jwt_validation_failure_total{reason=audience_mismatch} +1`, `invalid +0`) · aud 없음 → 403 · 회귀 6: 만료(허용 aud) 401 · 만료+낯선 aud 401 · 서명 불일치 401 · 발급자 불일치+낯선 aud 401 · 토큰 없음 401 · 테넌트 불일치+낯선 aud → 403 `TENANT_FORBIDDEN`(rejected +0) | 초록 |
+| wms `SecurityConfigRealDecoderPathTest` (4, AC-0 칸 뒤집기) | aud 없음 → 200 + `mismatch_shadowed +1` · 대조군(테넌트 없음 → 403, +0) · 낯선 aud → 200 + 1 · 헬퍼 기본 aud → 200 + `match +1` | 초록 |
+| wms `SecurityConfigAudienceEnforceRealDecoderPathTest` (9, **공유 entry point**) | 허용 200 · 배열 200 · 낯선 → 403 `AUDIENCE_FORBIDDEN` (+1) · 없음 → 403 · 회귀 5: 만료 401 · 위조 서명 401 · 발급자 불일치 401 · 토큰 없음 401 · 테넌트 불일치 → 403 `TENANT_FORBIDDEN` | 초록 |
+| `AudienceShippedConfigTest` × 6 게이트웨이 (각 7) | 출하 3(SHADOW · allowlist 정확 · override 0) + 기동 실패 4(대조군 · 빈 · 키 부재 · mode 부재/모르는 값) | 초록 |
+| scm · fan `OAuth2ResourceServerConfigTest` | 사슬 구조 단언을 `AudienceCheckedChain` 으로 개정 + `audienceGate().mode() == SHADOW` | 초록 |
+
+## 헬퍼 — 운영과 같은 `aud`
+
+| 게이트웨이 | 변경 |
+|---|---|
+| ecommerce `JwtTestHelper` | `aud: ecommerce` 4곳 → 소비자 토큰 `WEB_STORE_CLIENT_ID`(`ecommerce-web-store-client`), 운영자 토큰 `CONSOLE_CLIENT_ID`(`platform-console-web`). compact `signToken` 은 여전히 `aud` 없음(없음 칸이 씀). `GatewayIntegrationTest` 만료 칸 `aud` 도. |
+| wms `JwtTestHelper` | `signToken` 기본 `aud = platform-console-web`(추가 클레임 `"aud"→null` 로 제거 가능), `signWmsOperatorToken` `aud: wms` → console. `JwtTestHelperTest` 의 `aud == "wms"` 핀 2곳 → `CONSOLE_CLIENT_ID`(첫 실행 rc=1 로 드러남 — 결함을 핀하던 셀). |
+| scm · erp · finance | `signToken` 기본 `DEFAULT_AUDIENCE = platform-console-web`. 워크로드 토큰은 **운영대로 자기 client id**: scm `signClientCredentialsToken`(기존 `scm-platform-internal-services-client` 유지) · erp `signClientCredentialsToken(clientId)` → `aud=clientId` · finance `signScopeOnlyToken` → `aud=subject`. 🔴 이 셋은 allowlist **밖**이다 — SHADOW 에선 무해, ENFORCE 에선 해당 IT 가 403 이 된다. 픽스처를 allowlist 값으로 바꿔 초록을 만들지 않았다(운영 토큰은 그 `aud` 를 안 가진다) — `TASK-MONO-697` AC-4 로 넘김. |
+| fan | `signToken` 기본 `DEFAULT_AUDIENCE = fan-platform-user-flow-client`. |
+
+## 명령과 rc (파이프 없이, 파일로 리다이렉트 후 `$?`)
+
+- 최종: `./gradlew --continue :libs:java-gateway:cleanTest :libs:java-gateway:check` + 6 게이트웨이 각 `:cleanTest :check` → **rc=0** (`cleanTest` 로 캐시 아님 — 7개 `:test` 태스크 실행 로그 확인). 집계(test-results XML): lib **98**/0 실패 · wms **60**/0 · scm **56**/0 · erp **33**/0 · finance **33**/0 · fan **48**/0 · ecommerce **147**/0 (skip 0 전부).
+- 🔴 `test` 는 `@Tag("integration")` 을 제외한다 — **Testcontainers IT 는 이 호스트에서 돌지 않았다**(Docker 꺼짐). 6 게이트웨이 `integrationTest` 는 CI 통합 잡이 권위. IT 는 `application.yml` 기본값(SHADOW)을 물려받으므로 audience 로 거절될 경로는 없다 — 다만 **실행 초록은 미측정**.
+
+## bite
+
+| bite | 방법 | 결과 | 복원 |
+|---|---|---|---|
+| ① 공유 검증기 무력화 | `AllowedAudiencesValidator.validate` 첫 줄에 `return success()` | lib `:test` **rc=1**, 98칸 중 **9** 실패(검증기 단위 7 + 사슬 순서 2) · ecommerce **rc=1**, 147칸 중 **5**(섀도 3 · enforce 2) · wms **rc=1**, 60칸 중 **5**(섀도 3 · enforce 2). 🔵 회귀 칸(401·TENANT_FORBIDDEN)은 초록 유지 — 검증기와 무관하므로 옳다. 🔵 섀도 칸이 빨개진 것은 **카운터 단언** 때문이다 — «200» 만 단언했다면 무력화된 검증기도 통과했다. | 편집 되돌림, `BITE-696` 문자열 grep 0 |
+| ② SHADOW 가드 — yml | fan `application.yml` 기본값 `SHADOW` → `ENFORCE` | fan `:test` **rc=1**, 48칸 중 1(`shipsShadow`) | sed 로 되돌림 |
+| ③ SHADOW 가드 — compose override | fan `docker-compose.yml` 끝에 `OIDC_AUDIENCE_MODE: ENFORCE` | Gradle 입력 선언 **전**: rc=1(1칸, 소스 변경으로 어차피 재실행). 입력 선언 **후** 재측정: 직전 실행 `:test UP-TO-DATE` → compose 한 줄만 추가 → `:test` **실행됨**, rc=1, `noDeploymentFileOverridesToEnforce` 1칸 | `git checkout --` (이 파일은 이 PR 의 변경 대상 아님), `git diff --quiet` rc=0 |
+
 ---
 
 # Related Specs
@@ -291,6 +385,20 @@ console-bff 는 **한 개의** IAM OIDC access token 을 WMS·SCM·FINANCE·ERP�
 
 # Definition of Done
 
-- [ ] AC-0 ~ AC-6
-- [ ] 계약서 · IdP 발급 · 게이트웨이 검증 세 곳이 **같은 말**을 한다(어느 쪽으로 맞췄는지는 AC-2 결정)
-- [ ] «설정돼 있는데 안 읽히는» `audiences:` 속성 0건
+- [x] AC-0 ~ AC-6
+- [x] 계약서 · IdP 발급 · 게이트웨이 검증 세 곳이 **같은 말**을 한다(어느 쪽으로 맞췄는지는 AC-2 결정) — 🔵 **1단계 기준으로.** 계약서 rule 5 는 섀도 단계를 명시적으로 허용하고, 6 게이트웨이는 그 섀도로 검사한다. «불일치 → 403» 이 실제로 켜지는 것은 `TASK-MONO-697`.
+- [x] «설정돼 있는데 안 읽히는» `audiences:` 속성 0건
+
+## CORRECTION
+
+**2026-09-17 UTC close chore — 4차원 검증.**
+
+- (a) PR [#3879](https://github.com/kanggle/monorepo-lab/pull/3879)(결정 기록 · AC-0/1 · 스펙, `7cb1cab0f`)과 PR [#3885](https://github.com/kanggle/monorepo-lab/pull/3885)(1단계 SHADOW 구현, 헤드 `e99b4dd6a`) 모두 `state=MERGED`. #3885 머지 2026-09-17T03:42:31Z, 머지 커밋 `3c946e6c2`.
+- (b) `3c946e6c2` 는 `origin/main` 의 조상(머지 직후 tip).
+- (c) #3885 머지 전 롤업 SUCCESS 45 · SKIPPED 20 · **실패 0**. 게이트웨이 6곳을 담는 통합 잡(ecommerce A/B/C · inventory+inbound+gateway-service · scm · erp · fan · finance) 전부 SUCCESS, 그리고 이 PR 이 `ci.yml` 에 넣은 erp·finance `gateway-service:test`·`:check` 가 `Build & Test` 로그에서 **실제 실행**됐다. #3879 의 `aud` 발급 단언 4곳도 iam B 통합 잡에서 해당 메서드가 `PASSED`.
+  🔴 **CI 가 잰 트리 ≠ 머지된 트리**: #3885 CI 이후 main 에 #3886·#3887·#3884·#3888(console-web 샘플·태스크 문서)이 먼저 들어갔고 GitHub 이 최신화를 요구하지 않아 재실행 없이 머지됐다. 두 변경 파일 집합은 겹치지 않는다(이 PR = `libs/java-gateway`·6 게이트웨이·`ci.yml`·스펙). 🔵 `ci.yml` 의 main push 런은 2026-09-07 이후 없어 머지 뒤 main CI 로 합친 트리를 재확인할 수단이 없었다.
+- (d) AC 절을 열어 대조: AC-0~AC-6 · Definition of Done 3칸 전부 증거와 함께 닫혀 있다. «불일치 → 403» 의 **운영 적용**은 이 티켓의 AC 가 아니다 — 소유자 결정(2단계)에 따라 `TASK-MONO-697` 이 들고 있고, 그 착수 조건은 실측 불일치 0 이다.
+
+🔴 **이 티켓이 넘긴 것**(done/ 은 다시 읽히지 않으므로 여기 명시):
+- `TASK-MONO-697` — ENFORCE 전환 · 오류 코드 이름 `AUDIENCE_FORBIDDEN` 소유자 확정 · ⚪ 미측정 client 판정 · `infra/demo` override·워크플로를 SHADOW 가드가 안 보는 한계. 🔴 데모에서 섀도 불일치를 재려면 **AMI 재굽기가 먼저**다(현재 AMI `8cf474346`, 이 변경 없음).
+- `TASK-MONO-698` — 서비스 레벨 디코더 14 · console-bff · iam gateway.

@@ -26,6 +26,17 @@ import java.util.UUID;
  */
 public final class JwtTestHelper {
 
+    /**
+     * The web-store's registered client id — what the identity-platform really puts in {@code aud}
+     * for a storefront token (TASK-MONO-696 AC-1). These fixtures used to mint {@code aud: ecommerce},
+     * a platform name no issuance path produces: any audience check that required it would have
+     * been green here and refused every real token.
+     */
+    public static final String WEB_STORE_CLIENT_ID = "ecommerce-web-store-client";
+
+    /** The operator console's registered client id — {@code aud} on console-issued tokens. */
+    public static final String CONSOLE_CLIENT_ID = "platform-console-web";
+
     private final RSAKey rsaJwk;
     private final RSASSASigner signer;
 
@@ -55,7 +66,7 @@ public final class JwtTestHelper {
     }
 
     /**
-     * Builds and signs a CONSUMER token with {@code aud: ecommerce},
+     * Builds and signs a CONSUMER token with {@code aud: ecommerce-web-store-client},
      * {@code account_type: CONSUMER}, {@code iss: https://test.local/issuer}
      * and {@code tenant_id: ecommerce}. Valid for 5 minutes.
      *
@@ -72,7 +83,7 @@ public final class JwtTestHelper {
                 .issueTime(Date.from(now))
                 .expirationTime(Date.from(now.plusSeconds(300)))
                 .jwtID(UUID.randomUUID().toString())
-                .audience(List.of("ecommerce"))
+                .audience(List.of(WEB_STORE_CLIENT_ID))
                 .claim("account_type", "CONSUMER")
                 .claim("tenant_id", "ecommerce")
                 .claim("email", subject + "@test.local");
@@ -83,7 +94,7 @@ public final class JwtTestHelper {
     }
 
     /**
-     * Builds and signs an OPERATOR token with {@code aud: ecommerce},
+     * Builds and signs an OPERATOR token with {@code aud: platform-console-web},
      * {@code account_type: OPERATOR}, {@code iss: https://test.local/issuer}
      * and {@code tenant_id: ecommerce}. Valid for 5 minutes.
      */
@@ -95,7 +106,7 @@ public final class JwtTestHelper {
                 .issueTime(Date.from(now))
                 .expirationTime(Date.from(now.plusSeconds(300)))
                 .jwtID(UUID.randomUUID().toString())
-                .audience(List.of("ecommerce"))
+                .audience(List.of(CONSOLE_CLIENT_ID))
                 .claim("account_type", "OPERATOR")
                 .claim("tenant_id", "ecommerce")
                 .claim("email", subject + "@test.local");
@@ -107,7 +118,7 @@ public final class JwtTestHelper {
 
     /**
      * Compact token builder — no audience claim. Useful for negative tests
-     * (wrong aud → 401) or unit tests that don't need account_type.
+     * (missing aud) or unit tests that don't need account_type.
      */
     public String signToken(String subject, String role, long ttlSeconds,
                             Map<String, Object> additionalClaims) {
@@ -129,7 +140,7 @@ public final class JwtTestHelper {
      * Builds and signs a CONSUMER token with explicit {@code iss} and
      * {@code tenant_id} claims so TASK-MONO-027 validators
      * (AllowedIssuersValidator + TenantClaimValidator) can be exercised
-     * end-to-end. Always carries {@code aud: ecommerce} and
+     * end-to-end. Always carries {@code aud: ecommerce-web-store-client} and
      * {@code account_type: CONSUMER}. Valid for 5 minutes.
      *
      * @param issuer    explicit {@code iss} claim value
@@ -165,7 +176,7 @@ public final class JwtTestHelper {
                 .issueTime(Date.from(now))
                 .expirationTime(Date.from(now.plusSeconds(300)))
                 .jwtID(UUID.randomUUID().toString())
-                .audience(List.of("ecommerce"))
+                .audience(List.of(WEB_STORE_CLIENT_ID))
                 .claim("account_type", "CONSUMER");
         if (tenantId != null) {
             claims.claim("tenant_id", tenantId);
@@ -178,7 +189,7 @@ public final class JwtTestHelper {
 
     /**
      * Builds and signs a CONSUMER token carrying the {@code CUSTOMER} role and an explicit
-     * {@code tenant_id} (issuer {@code https://test.local/issuer}, {@code aud: ecommerce}).
+     * {@code tenant_id} (issuer {@code https://test.local/issuer}, {@code aud: ecommerce-web-store-client}).
      * Unlike {@link #signTokenWithIssuerAndTenant(String, String)} this also sets the
      * {@code roles} claim, so the token passes {@code AccountTypeEnforcementFilter}'s
      * role-based admission (ADR-MONO-035 4b-2a — a storefront consumer must carry
@@ -205,7 +216,7 @@ public final class JwtTestHelper {
                 .issueTime(Date.from(now))
                 .expirationTime(Date.from(now.plusSeconds(300)))
                 .jwtID(UUID.randomUUID().toString())
-                .audience(List.of("ecommerce"))
+                .audience(List.of(WEB_STORE_CLIENT_ID))
                 .claim("account_type", "CONSUMER")
                 .claim("roles", List.of("CUSTOMER"))
                 .claim("entitled_domains", List.of("ecommerce"));

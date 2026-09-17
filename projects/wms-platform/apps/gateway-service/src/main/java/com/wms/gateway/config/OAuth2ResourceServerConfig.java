@@ -1,7 +1,10 @@
 package com.wms.gateway.config;
 
+import com.example.apigateway.security.AllowedAudiencesValidator;
+import com.example.apigateway.security.AudienceMode;
 import com.example.apigateway.security.GatewayJwtDecoders;
 import com.example.security.oauth2.TenantClaimValidator;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
@@ -25,9 +28,15 @@ import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 @Configuration
 public class OAuth2ResourceServerConfig {
 
+    /** Metric tag + log field for this edge's audience outcomes (TASK-MONO-696). */
+    static final String GATEWAY_NAME = "wms";
+
     private final String jwkSetUri;
     private final String allowedIssuersCsv;
     private final String requiredTenantId;
+    private final String allowedAudiencesCsv;
+    private final String audienceMode;
+    private final MeterRegistry meterRegistry;
 
     /**
      * Constructor injection rather than {@code @Value} fields, so {@link #tenantGate()} can
@@ -38,10 +47,16 @@ public class OAuth2ResourceServerConfig {
     public OAuth2ResourceServerConfig(
             @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}") String jwkSetUri,
             @Value("${wms.oauth2.allowed-issuers}") String allowedIssuersCsv,
-            @Value("${wms.oauth2.required-tenant-id:wms}") String requiredTenantId) {
+            @Value("${wms.oauth2.required-tenant-id:wms}") String requiredTenantId,
+            @Value("${wms.oauth2.allowed-audiences}") String allowedAudiencesCsv,
+            @Value("${wms.oauth2.audience-mode}") String audienceMode,
+            MeterRegistry meterRegistry) {
         this.jwkSetUri = jwkSetUri;
         this.allowedIssuersCsv = allowedIssuersCsv;
         this.requiredTenantId = requiredTenantId;
+        this.allowedAudiencesCsv = allowedAudiencesCsv;
+        this.audienceMode = audienceMode;
+        this.meterRegistry = meterRegistry;
     }
 
     @Bean
@@ -53,7 +68,19 @@ public class OAuth2ResourceServerConfig {
     @Bean
     public OAuth2TokenValidator<Jwt> jwtTokenValidator() {
         return GatewayJwtDecoders.validatorChain(
-                GatewayJwtDecoders.parseCsv(allowedIssuersCsv), tenantGate());
+                GatewayJwtDecoders.parseCsv(allowedIssuersCsv), audienceGate(), tenantGate());
+    }
+
+    /**
+     * This edge's audience allowlist and mode ({@code jwt-standard-claims.md} rule 5,
+     * TASK-MONO-696). Neither property has a {@code @Value} default, so an absent key fails the
+     * context; an empty allowlist or an unknown mode fails construction. Startup failure either
+     * way — never "accept any client".
+     */
+    public AllowedAudiencesValidator audienceGate() {
+        return new AllowedAudiencesValidator(GATEWAY_NAME,
+                GatewayJwtDecoders.parseCsv(allowedAudiencesCsv),
+                AudienceMode.parse(audienceMode), meterRegistry);
     }
 
     /**

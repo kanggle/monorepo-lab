@@ -19,7 +19,7 @@
 ## Responsibilities
 
 - **Single external entry point** — all `/api/v1/**` traffic for scm-platform routes through this service per [`platform/api-gateway-policy.md`](../../../../../platform/api-gateway-policy.md).
-- **JWT validation** — OAuth2 Resource Server against IAM JWKS; validates RS256 signature + `aud=scm` + `tenant_id=scm` (or SUPER_ADMIN `*` wildcard).
+- **JWT validation** — OAuth2 Resource Server against IAM JWKS; validates RS256 signature + `tenant_id=scm` (or SUPER_ADMIN `*` wildcard) + `aud` ∩ client-id allowlist (`scmplatform.oauth2.allowed-audiences`; shadow mode until TASK-MONO-696 phase 2).
 - **Tenant isolation** — cross-tenant tokens rejected at the edge with `403 TENANT_FORBIDDEN`. Fail-closed (misconfigured tokens → 403, never 500).
 - **Identity header pipeline** — `IdentityHeaderStripFilter` (highest precedence) strips client-supplied `X-Account-Id` / `X-Tenant-Id` / `X-Roles`; re-set from verified JWT claims.
 - **Rate limiting** — per `(account/client_id, route)`; keys project-prefixed (`rate:scm-platform:<route>:<id>`) to avoid cross-project Redis collisions; **fail-open** on Redis outage.

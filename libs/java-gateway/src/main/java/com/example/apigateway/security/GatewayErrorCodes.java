@@ -40,6 +40,25 @@ public final class GatewayErrorCodes {
      */
     public static final String TENANT_MISMATCH = TenantClaimValidator.ERROR_CODE_TENANT_MISMATCH;
 
+    /**
+     * Raised by {@link AllowedAudiencesValidator} in {@link AudienceMode#ENFORCE} when a token's
+     * {@code aud} shares no member with the gateway's audience allowlist. Mapped to 403
+     * {@link #AUDIENCE_FORBIDDEN} for the same reason as {@link #TENANT_MISMATCH}: the token is
+     * signature-valid, and re-authenticating cannot change the client it was issued to.
+     * (TASK-MONO-696; {@code jwt-standard-claims.md} § Error Handling.)
+     */
+    public static final String AUDIENCE_MISMATCH = AllowedAudiencesValidator.ERROR_CODE_AUDIENCE_MISMATCH;
+
+    /**
+     * The response error code for an audience rejection.
+     *
+     * <p><strong>Still a proposal.</strong> The contract names {@code AUDIENCE_FORBIDDEN} as a
+     * proposal parallel to {@code TENANT_FORBIDDEN} and leaves it to be settled by the change that
+     * turns rejection on. Every gateway ships in shadow mode, so no client can observe this value
+     * yet; confirming (or renaming) it is part of that switch.
+     */
+    public static final String AUDIENCE_FORBIDDEN = "AUDIENCE_FORBIDDEN";
+
     private GatewayErrorCodes() {
     }
 }

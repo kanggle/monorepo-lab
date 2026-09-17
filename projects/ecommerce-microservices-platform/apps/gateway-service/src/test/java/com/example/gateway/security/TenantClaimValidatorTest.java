@@ -30,7 +30,8 @@ class TenantClaimValidatorTest {
     // Built from the production wiring, not hand-constructed: change the gate in
     // OAuth2ResourceServerConfig#tenantGate and these assertions go red (TASK-MONO-356).
     private final TenantClaimValidator validator = new OAuth2ResourceServerConfig(
-            "http://iam.local/oauth2/jwks", "http://iam.local,iam", "ecommerce").tenantGate();
+            "http://iam.local/oauth2/jwks", "http://iam.local,iam", "ecommerce", "unused-client", "SHADOW",
+            new io.micrometer.core.instrument.simple.SimpleMeterRegistry()).tenantGate();
 
     // ---------------------------------------------------------------- admitted
 

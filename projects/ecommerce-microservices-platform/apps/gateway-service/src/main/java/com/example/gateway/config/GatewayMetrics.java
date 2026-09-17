@@ -10,10 +10,17 @@ public class GatewayMetrics {
     /** Reason tag for a cross-tenant / missing-tenant token rejection (TASK-BE-501). */
     public static final String REASON_TENANT_MISMATCH = "tenant_mismatch";
 
+    /**
+     * Reason tag for an enforce-mode audience rejection (TASK-MONO-696). Shadow-mode mismatches
+     * are not rejections and are counted by the shared validator on {@code gateway.jwt.audience}.
+     */
+    public static final String REASON_AUDIENCE_MISMATCH = "audience_mismatch";
+
     private final Counter jwtMissing;
     private final Counter jwtExpired;
     private final Counter jwtInvalid;
     private final Counter jwtTenantMismatch;
+    private final Counter jwtAudienceMismatch;
     private final MeterRegistry registry;
 
     public GatewayMetrics(MeterRegistry registry) {
@@ -41,6 +48,11 @@ public class GatewayMetrics {
                 .description("Total JWT validation failures by reason")
                 .tag("reason", REASON_TENANT_MISMATCH)
                 .register(registry);
+
+        this.jwtAudienceMismatch = Counter.builder("gateway_jwt_validation_failure_total")
+                .description("Total JWT validation failures by reason")
+                .tag("reason", REASON_AUDIENCE_MISMATCH)
+                .register(registry);
     }
 
     public void incrementJwtValidationFailure(String reason) {
@@ -48,6 +60,7 @@ public class GatewayMetrics {
             case "missing" -> jwtMissing.increment();
             case "expired" -> jwtExpired.increment();
             case REASON_TENANT_MISMATCH -> jwtTenantMismatch.increment();
+            case REASON_AUDIENCE_MISMATCH -> jwtAudienceMismatch.increment();
             default -> jwtInvalid.increment();
         }
     }

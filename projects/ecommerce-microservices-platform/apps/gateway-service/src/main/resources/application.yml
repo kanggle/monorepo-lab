@@ -20,7 +20,9 @@ spring:
           # name kept for backward compatibility with the e2e harness and
           # docker-compose envs predating TASK-MONO-027.
           jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:${OIDC_ISSUER_URL:http://localhost:8088}/oauth2/jwks}}
-          audiences: ecommerce
+          # TASK-MONO-696: no `audiences:` here. That key configures Boot's auto-configured
+          # decoder, which backs off for OAuth2ResourceServerConfig's own — it was never read.
+          # The audience check is `ecommerce.oauth2.allowed-audiences` below.
 
   data:
     redis:
@@ -235,3 +237,15 @@ ecommerce:
     # at the gateway with 403 (TENANT_FORBIDDEN). Single-tenant only — no
     # wildcard support; cross-tenant access is blocked by design.
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:ecommerce}
+    # TASK-MONO-696 — audience allowlist (platform/contracts/jwt-standard-claims.md § JWT
+    # Validation rule 5). `aud` is the CLIENT ID the token was issued to, not a platform name;
+    # a token is admitted iff its aud values intersect this list. Mandatory: absent or empty
+    # fails the boot. Values = the clients MEASURED to reach this edge (TASK-MONO-696 § AC-1 (b):
+    # the operator console and the web-store). Clients whose reach could not be measured are
+    # deliberately NOT listed — in shadow mode their traffic shows up as a logged, counted
+    # mismatch, which is the measurement this phase exists for.
+    allowed-audiences: ${OIDC_ALLOWED_AUDIENCES:platform-console-web,ecommerce-web-store-client}
+    # SHADOW = log + count a mismatch, never reject (rollout phase 1). ENFORCE = 403
+    # AUDIENCE_FORBIDDEN. Switching is its own reviewed change, taken only once the measured
+    # mismatch count is zero; AudienceShippedConfigTest fails if this ships as anything but SHADOW.
+    audience-mode: ${OIDC_AUDIENCE_MODE:SHADOW}

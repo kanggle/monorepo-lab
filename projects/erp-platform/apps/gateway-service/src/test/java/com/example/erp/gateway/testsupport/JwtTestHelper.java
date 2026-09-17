@@ -33,6 +33,12 @@ public final class JwtTestHelper {
     public static final String UNTRUSTED_ISSUER = "http://evil.example.com";
     /** Required tenant for the erp-platform gateway. */
     public static final String DEFAULT_TENANT_ID = "erp";
+    /**
+     * The registered client id that really appears in {@code aud} on the tokens reaching this edge
+     * (the operator console — TASK-MONO-696 AC-1). Minted by default so fixtures match production; pass
+     * {@code "aud"} in the additional claims to override it, or {@code "aud" → null} to omit it.
+     */
+    public static final String DEFAULT_AUDIENCE = "platform-console-web";
 
     private final RSAKey rsaJwk;
     private final RSASSASigner signer;
@@ -68,6 +74,7 @@ public final class JwtTestHelper {
                 .subject(subject)
                 .issuer(issuer)
                 .claim("tenant_id", tenantId)
+                .audience(List.of(DEFAULT_AUDIENCE))
                 .issueTime(Date.from(now))
                 .expirationTime(Date.from(now.plusSeconds(ttlSeconds)))
                 .jwtID(UUID.randomUUID().toString());
@@ -101,7 +108,9 @@ public final class JwtTestHelper {
      */
     public String signClientCredentialsToken(String clientId) {
         return signToken(SAS_ISSUER, clientId, null, DEFAULT_TENANT_ID, 300,
-                Map.of("azp", clientId, "scope", "erp.read erp.write"));
+                // aud = the client itself, as the identity-platform mints it (TASK-MONO-696 AC-1).
+                // Not on this edge's measured allowlist: a shadow-mode mismatch, by design.
+                Map.of("azp", clientId, "aud", List.of(clientId), "scope", "erp.read erp.write"));
     }
 
     /** Convenience: 5-minute valid SUPER_ADMIN platform-scope token ({@code tenant_id="*"}). */

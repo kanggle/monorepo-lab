@@ -11,6 +11,8 @@ import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jwt.Jwt;
 
+import com.example.apigateway.security.AudienceMode;
+import com.example.apigateway.security.GatewayJwtDecoders;
 import com.example.security.oauth2.AllowedIssuersValidator;
 import com.example.security.oauth2.TenantClaimValidator;
 
@@ -27,13 +29,17 @@ class OAuth2ResourceServerConfigTest {
         OAuth2ResourceServerConfig config = configWithDefaults();
         OAuth2TokenValidator<Jwt> validator = config.jwtTokenValidator();
 
-        assertThat(validator).isInstanceOf(DelegatingOAuth2TokenValidator.class);
+        assertThat(validator).isInstanceOf(GatewayJwtDecoders.AudienceCheckedChain.class);
+        GatewayJwtDecoders.AudienceCheckedChain chain = (GatewayJwtDecoders.AudienceCheckedChain) validator;
+        // TASK-MONO-696: the audience gate is part of the only chain there is.
+        assertThat(chain.audienceGate().mode()).isEqualTo(AudienceMode.SHADOW);
+        assertThat(chain.base()).isInstanceOf(DelegatingOAuth2TokenValidator.class);
         // Spring Security's DelegatingOAuth2TokenValidator stores its delegates
         // in a private final List<OAuth2TokenValidator<?>> tokenValidators field.
         // We reflectively inspect to assert presence of the two custom validators.
         @SuppressWarnings("unchecked")
         List<OAuth2TokenValidator<Jwt>> delegates =
-                (List<OAuth2TokenValidator<Jwt>>) readField(validator, "tokenValidators");
+                (List<OAuth2TokenValidator<Jwt>>) readField(chain.base(), "tokenValidators");
         assertThat(delegates).anyMatch(AllowedIssuersValidator.class::isInstance);
         assertThat(delegates).anyMatch(TenantClaimValidator.class::isInstance);
     }
@@ -127,7 +133,8 @@ class OAuth2ResourceServerConfigTest {
      */
     private static OAuth2ResourceServerConfig configWithDefaults() {
         return new OAuth2ResourceServerConfig(
-                "http://iam.local/oauth2/jwks", "http://iam.local", "fan-platform");
+                "http://iam.local/oauth2/jwks", "http://iam.local", "fan-platform",
+                "fan-platform-user-flow-client", "SHADOW", new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
     }
 
     private static Object readField(Object target, String name) throws Exception {

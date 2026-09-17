@@ -15,7 +15,7 @@
 
 | Source | Contract | Purpose |
 |---|---|---|
-| IAM (iam-platform) | OIDC RS256 / JWKS | Token signature validation + `aud=ecommerce` + `tenant_id=ecommerce` claim enforcement (see [`../../integration/iam-integration.md`](../../integration/iam-integration.md)) |
+| IAM (iam-platform) | OIDC RS256 / JWKS | Token signature validation + `aud` ∩ client-id allowlist (`ecommerce.oauth2.allowed-audiences`; shadow mode until TASK-MONO-696 phase 2) + `tenant_id=ecommerce` claim enforcement (see [`../../integration/iam-integration.md`](../../integration/iam-integration.md)) |
 
 ## Publishes To
 - None (gateway does not publish events or own APIs beyond proxied routes)
