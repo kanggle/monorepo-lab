@@ -8,7 +8,7 @@ Finance·원장 화면이 샘플로 선다 — 개요·계좌·원장(시산표�
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -252,3 +252,39 @@ finance/ledger 표면·픽스처·화면 코드와 겹치지 않는다(git diff 
 
 B1–B5 모두 단독 주입 → 실행 → 복원 순으로 개별 확인했다. `git diff` 로 복원 후 파일이 스테이지된
 버전과 바이트 단위로 동일함을 확인(잔여 변경 0). `grep -rn "BITE-" src tests e2e-smoke` = 0건.
+
+## CORRECTION — 닫기 판정 (조정자, 2026-09-17 UTC)
+
+머지 검증 4차원: (a) PR [#3886](https://github.com/kanggle/monorepo-lab/pull/3886) `state=MERGED` 2026-09-17T03:35:40Z ·
+(b) squash `c129d936f` 가 `origin/main` 조상(머지 시점의 끝) · (c) 머지 전 롤업 **62 체크 · FAILURE 0**(`4428fc5e6` 기준), 필수 4 + 프런트
+unit · E2E smoke · console-bff IT **실제 실행** · (d) 아래 표.
+
+| AC | 닫힘 | 증거 |
+|---|---|---|
+| AC-0 | ✅ | 표면 2 · GET 메서드 리터럴 15(finance 3 · ledger 12). ADR 의 15 와 수만 같고 단위가 다름 |
+| AC-1 | ✅ | 15 GET 을 router 경유로 실제 zod 스키마 12종에 파싱 |
+| AC-2 | ✅ | 사람이 읽는 필드가 사실상 `resolution.note` 하나(D1) — 기존 전역 규칙대로 접미 · bite B4 |
+| AC-3 | ✅ | router 로 화면 사이: 시산표 Σ차변 = Σ대변(680,000) · 계정 4종 각각 분개 합 = 계정 잔액 = 시산표 행(`it.each`) · bite B1 · B2 |
+| AC-4 | ✅ | KRW scale 0 + USD scale 2 · F5 minor-unit 문자열 · 규모 명백히 합성(수십만 원대) |
+| AC-5 | ✅ | 대사 해소 · FX 갱신 POST → 403 `SAMPLE_READ_ONLY` → `messageForCode` |
+| AC-6 | ✅ | `e2e-smoke/sample-visitor-ledger.spec.ts` · 로컬 23 passed · PR CI E2E smoke SUCCESS |
+| AC-7 | ✅ | 개요 finance 카드의 잔액·계좌를 `FinanceBalanceReadAdapter` 경로로 파생 · «카드 = 그 계좌 잔액» 가드 칸 · bite B3(`expected '1250000000' to be '100000'`) |
+| Edge 1 | ✅ | 샘플 레지스트리의 기본 계좌 = finance 픽스처 계좌, router 교차검증(D3 로 리터럴화) |
+| Edge 2 | ✅ | `TZ=UTC` 로 테스트 · 날짜 UTC |
+| DoD | ✅ | 원장 finance/ledger `pending` 0 · 기존 테스트 `expect(` 변경 0(가드 파일 칸 추가만, 조정자 diff 실측) |
+
+🔵 **조정자 대조 1 — 명세**: 에이전트는 계약을 «기존 코드 주석을 통해» 읽었다고 보고했다(파일 직접 인용 없음). 그래서 픽스처의 404 코드 6종
+(`ACCOUNT_NOT_FOUND` · `LEDGER_ACCOUNT_NOT_FOUND` · `JOURNAL_ENTRY_NOT_FOUND` · `ACCOUNTING_PERIOD_NOT_FOUND` · `RECONCILIATION_STATEMENT_NOT_FOUND`
+· `RECONCILIATION_DISCREPANCY_NOT_FOUND`)을 `projects/finance-platform/specs/contracts/http/{account,ledger,reconciliation}-api.md` 에서
+직접 찾았다 — **6/6 계약에 있음**, 콘솔 코드도 같은 코드를 쓴다.
+
+🔵 **조정자 대조 2 — 테스트**: 에이전트 최종 실행의 5칸 실패(3 파일 타임아웃)는 `main` 병합 트리의 조정자 `TZ=UTC` 전체 실행에서 **재현되지 않았다**
+(312 files / 3439 tests 전부 통과). 판정 권위는 PR CI Linux 러너(SUCCESS).
+
+🔴 **D2 는 이 티켓 밖의 실제 결함 후보로 조정자가 확인·기안했다** — `account-api.md` 의 잔액 응답 모양 `{ data: [ {currency, ledger, available, held} ] }`
+을 console-bff 가 그대로 싣고, web `FinanceDataSchema` 는 `{ balance, accountId }` 를 기대(전 필드 optional + passthrough ⇒ 파싱 통과 · `balance` 없음)
+⇒ 로그인 운영자의 첫 화면 finance 카드가 잔액이 있어도 «잔액 정보 없음» 일 것. 원인은 계약 § 2.4.9.1 이 카드 `data` 모양을 정의하지 않은 공백.
+⇒ **`TASK-PC-FE-295`**(#3887, `tasks/ready/`) — AC-0 red-first 실측 먼저. 🔴 그 티켓이 모양을 바꾸면 이 티켓의 샘플 finance 카드와 가드 칸도
+같은 PR 에서 옮긴다(그 티켓 AC-4 에 적어 둠).
+
+넘길 의무: D2 → `TASK-PC-FE-295`(티켓 안에 기록 완료). D3 의 순환 초기화 함정 → 287 · 288 지시서에 반영. 그 밖 0건.
