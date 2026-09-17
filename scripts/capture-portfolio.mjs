@@ -313,22 +313,55 @@ const DENIED_MARKERS = ['권한이 없습니다', '접근 권한', '테넌트를
 // 🔴 본문 문구 적중은 **판정에서 뺐지만 버리지 않는다** — 마커를 안 단 거부 화면이 새로 생기면
 //    요소 판정은 그것을 못 본다. 실패로 세지 않고 `deniedTextOnly` 로 남겨 **사람이 그림을 연다**
 //    (틀릴 때 일이 늘어나는 쪽으로 틀린다).
+//
+// 🔴🔴 **섹션 하나의 거부도 같은 접미사다** (TASK-MONO-702). 2026-09-17 창에서 `/wms/operations`
+//    가 `denied` 로 세어져 사진이 안 남았다 — 위 «운영 설정» 은 살아 있고 아래 «프로젝션 상태»
+//    섹션**만** `wms-operations-projection-forbidden` 이었다. 같은 모양이 `settlements-*-forbidden` ·
+//    `ledger` 패널 · `wms-asn-inspection` 등 수십 곳에 있어 **이름으로는 못 가른다**(`-card-` 에
+//    `-projection-` 을 더하는 식의 목록은 다음 모양이 또 샌다).
+// ⇒ **구조로 가른다**: 주 영역(`<main>`, 없으면 body)을 복제해 거부 요소 전부와 «본문이 아닌 것»
+//    (제목 · 링크 · 버튼 · 폼 컨트롤 · 탭/내비 · 화면에 안 그려지는 것)을 지우고 **남는 글자** 를 센다.
+//      남는 글자 0  → 거부 말고는 보여 줄 게 없다 = 페이지 거부(`denied`).
+//                    제목+거부+«목록으로» 화면, 섹션 둘 다 거부인 화면이 여기 온다.
+//      남는 글자 >0 → 거부 밖에 다른 본문(표 · 설명 · 다른 섹션의 «불러올 수 없음» 안내)이 있다
+//                    = 섹션 거부(`partial`) — 사진은 남기고 사람이 연다.
+//    🔵 틀리면 «사진을 남기는» 쪽으로 틀린다(`partial` 로 표시되니 큐레이션에서 걸러진다).
+//    🔵 대시보드 카드(`-card-`)는 남는 글자와 무관하게 계속 `partial` — 옛 판정을 바꾸지 않는다.
 const DENIAL_SUFFIXES = ['-permission-denied', '-not-eligible', '-forbidden'];
 
 // 🔴 이 함수는 **브라우저 안에서** 돈다(`page.evaluate`) — 바깥 변수를 닫아 쓰지 말고 인자로 받는다.
 function judgeDenialInPage({ suffixes, textMarkers }) {
   const sel = suffixes.map((s) => `[data-testid$="${s}"]`).join(',');
-  const page = [];
-  const partial = [];
+  const cards = [];
+  const others = [];
   for (const el of document.querySelectorAll(sel)) {
     const id = el.getAttribute('data-testid');
-    (/-card-/.test(id) ? partial : page).push(id);
+    (/-card-/.test(id) ? cards : others).push(id);
   }
+  // 거부 요소 밖에 남는 본문 글자 수 — 위 «구조로 가른다».
+  let residual = 0;
+  if (others.length) {
+    const root = document.querySelector('main') || document.body;
+    const clone = root ? root.cloneNode(true) : null;
+    if (clone) {
+      const notBody = [
+        sel,
+        'h1,h2,h3,h4,h5,h6',
+        'a,button,nav,[role="tablist"],[role="tab"]',
+        'form label,input,select,textarea,option',
+        'script,style,template,[hidden],[aria-hidden="true"],.sr-only',
+      ].join(',');
+      for (const el of clone.querySelectorAll(notBody)) el.remove();
+      residual = (clone.textContent || '').replace(/\s+/g, '').length;
+    }
+  }
+  const pageDenied = others.length > 0 && residual === 0;
   const text = document.body ? document.body.innerText : '';
   return {
-    denied: page.length > 0,
-    deniedBy: page,
-    partial,
+    denied: pageDenied,
+    deniedBy: pageDenied ? others : [],
+    partial: pageDenied ? cards : [...cards, ...others],
+    residual,
     textHits: textMarkers.filter((m) => text.includes(m)),
     chars: text.length,
   };
@@ -552,6 +585,22 @@ async function main() {
         html: '<section><div data-testid="operator-overview-card-erp-forbidden">이 도메인 조회 권한이 없습니다.</div><div>wms 12 · scm 4</div></section>' },
       { name: 'plain-screen', denied: false, partial: 0, textHit: false,
         html: '<table><tr><td>SKU-APPLE-001</td><td>12</td></tr></table>' },
+      // ── TASK-MONO-702: 섹션 거부 vs 페이지 거부(구조 술어). 콘솔 셸처럼 `<main>` 밖에 사이드바가 있다.
+      // ① 섹션 하나만 거부 + 다른 섹션은 표 — 2026-09-17 `/wms/operations` 의 모양(옛 규칙이면 denied)
+      { name: 'section-forbidden-beside-table', denied: false, partial: 1, textHit: true,
+        html: '<nav><a href="/wms">WMS</a></nav><main><section><h1>WMS 운영</h1><div><h2>운영 설정</h2><table><tr><td>allocation.strategy</td><td>FIFO</td></tr></table></div><div><h2>프로젝션 상태</h2><div role="status" data-testid="wms-operations-projection-forbidden">이 항목을 조회할 권한이 없습니다.</div></div></section></main>' },
+      // ② 섹션 거부 + 다른 섹션은 «불러올 수 없음» — 사진은 남긴다(degraded 는 따로 표시된다)
+      { name: 'section-forbidden-beside-degraded', denied: false, partial: 1, textHit: true,
+        html: '<main><section><h1>WMS 운영</h1><div><h2>운영 설정</h2><div role="status" data-testid="wms-operations-settings-degraded">wms 운영 설정을 일시적으로 불러올 수 없습니다.</div></div><div><h2>프로젝션 상태</h2><div role="status" data-testid="wms-operations-projection-forbidden">이 항목을 조회할 권한이 없습니다.</div></div></section></main>' },
+      // ③ 섹션 둘 다 거부 — 보여 줄 본문이 없다 = 사실상 페이지 거부
+      { name: 'every-section-forbidden', denied: true, partial: 0, textHit: true,
+        html: '<main><section><h1>WMS 운영</h1><div><h2>운영 설정</h2><div role="status" data-testid="wms-operations-settings-forbidden">이 항목을 조회할 권한이 없습니다.</div></div><div><h2>프로젝션 상태</h2><div role="status" data-testid="wms-operations-projection-forbidden">이 항목을 조회할 권한이 없습니다.</div></div></section></main>' },
+      // ④ 실제 콘솔의 페이지 거부 — 셸(사이드바·헤더) 안에서 제목 + 거부 + «목록으로»
+      { name: 'page-forbidden-in-shell', denied: true, partial: 0, textHit: true,
+        html: '<header><a href="/">Platform Console</a><button>테넌트</button></header><aside><nav><a href="/ecommerce/products">상품</a></nav></aside><main><div><section><h1>상품 상세</h1><div role="status" data-testid="product-forbidden">이 화면을 조회할 권한이 없습니다. (운영자 역할 확인이 필요합니다.)</div><a href="/ecommerce/products">목록으로</a></section></div></main>' },
+      // ⑤ 필터 폼 + 섹션 거부뿐 — 폼 글자는 본문이 아니다 = 페이지 거부
+      { name: 'filter-form-and-forbidden-only', denied: true, partial: 0, textHit: true,
+        html: '<main><section><h1>정산</h1><form><label>판매자 ID<input name="sellerId"></label><button type="submit">조회</button></form><div role="status" data-testid="settlements-accruals-forbidden">이 항목을 조회할 권한이 없습니다.</div></section></main>' },
     ];
     let bad = 0;
     for (const c of cases) {
@@ -711,9 +760,9 @@ async function main() {
   const textOnly = shots.filter((x) => x.deniedTextOnly);
   const partialDenied = shots.filter((x) => x.partialDenied);
   if (textOnly.length || partialDenied.length) {
-    console.log(`[portfolio] 👁 이미지를 열어 볼 것 — 거부 문구만 있음 ${textOnly.length} · 카드 일부 거부 ${partialDenied.length}`);
+    console.log(`[portfolio] 👁 이미지를 열어 볼 것 — 거부 문구만 있음 ${textOnly.length} · 일부(카드·섹션) 거부 ${partialDenied.length}`);
     for (const x of textOnly) console.log(`  [문구] ${x.route}  «${x.deniedTextOnly.join('» «')}»`);
-    for (const x of partialDenied) console.log(`  [카드] ${x.route}  ${x.partialDenied.join(', ')}`);
+    for (const x of partialDenied) console.log(`  [일부] ${x.route}  ${x.partialDenied.join(', ')}`);
   }
   console.log('[portfolio] manifest.json 기록');
 }
