@@ -97,6 +97,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 - `TASK-PC-FE-287-wms-screens-get-samples.md` — wms 7 화면 · GET 11 · 🔴 NESTED 에러 봉투라 코드 보존 확인 · 코드 칸 null 금지. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
 - `TASK-PC-FE-288-scm-screens-get-samples.md` — scm 6 화면 · GET 10 · 🔴 404-as-empty 센티널 경로 유지 · 공급사 UUID 표시 금지. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
 
+- `TASK-PC-FE-295-the-overview-finance-card-reads-a-shape-the-bff-never-sends.md` — 🔴 **로그인 운영자 경로의 결함 후보**(샘플 시리즈 무관, 286 리뷰에서 코드 판독으로 발견): console-bff 는 finance 레그에 잔액 응답 `{ data: [ {currency, ledger, available, held} ] }` 을 그대로 싣는데 web `FinanceDataSchema` 는 `{ balance, accountId }` 를 기대 → 잔액이 있어도 첫 화면 finance 카드가 «잔액 정보 없음». 원인은 계약 § 2.4.9.1 이 카드 `data` 모양을 정의하지 않은 공백. **AC-0 red-first 실측 먼저**(초록이면 구현 없이 닫음) → 계약 먼저 → 한쪽 고침(추천 ⓐ web 이 producer 모양을 읽음) → 양쪽이 같은 모양 한 벌을 쓰는 테스트. 분석=Opus 5 / 구현 권장=Sonnet 5.
 
 _(직전 착수)_ `TASK-PC-BE-015` — console-bff 의 spec-vs-reality resilience 갭 봉합. `architecture.md` § Resilience(D5.A)·`RestClientConfig` javadoc·계약 § 2.4.9 가 모두 "per-leg circuit-breaker keyed by `(domain, route)`" 를 단언하지만 `src/main` 에 resilience4j import 0건(타임아웃 쌍만 존재). `libs/java-common` 의 `ResilienceClientFactory` 를 **그대로 채택**해 13개 `(domain, route)` 레그 전부 CB+bounded retry 뒤로 이동하고, 죽어 있던 `circuit_open`/`CIRCUIT_OPEN` 분류를 실제 emitter 로 살린다(console-web zod `DEGRADED_REASONS` 는 이미 소비 준비 완료). 문서의 `libs/java-web` 인용도 오답(그 모듈엔 resilience 코드 0) → `libs/java-common` 정정. 분석=Opus 5 / 구현 권장=Opus.
 
