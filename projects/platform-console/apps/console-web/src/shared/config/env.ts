@@ -264,8 +264,8 @@ const ServerEnvSchema = z.object({
   ERP_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   /** ecommerce gateway ADMIN base for the product operator surface
    *  (TASK-PC-FE-081 / § 2.4.10). The product admin CRUD endpoints hang off
-   *  `${ECOMMERCE_ADMIN_BASE_URL}/products/...` (list / register / update /
-   *  delete / variants / stock) — request/response/error owned by ecommerce
+   *  `${ECOMMERCE_ADMIN_BASE_URL}/products/...` (list / detail / register /
+   *  update / delete / variants / stock) — request/response/error owned by ecommerce
    *  `AdminProductController` (authoritative, consumed only; BE-366
    *  operator-plane). The ecommerce gateway hostname is `ecommerce.local`;
    *  the admin path subtree is `/api/admin/**` (gateway
@@ -279,14 +279,14 @@ const ServerEnvSchema = z.object({
     .string()
     .url()
     .default('http://ecommerce.local/api/admin'),
-  /** ecommerce gateway PUBLIC base for the product DETAIL read
-   *  (TASK-PC-FE-081 / § 2.4.10 #2). `AdminProductController` has no
-   *  `GET /{id}` — the detail is the public `ProductController` read path
-   *  `${ECOMMERCE_PUBLIC_BASE_URL}/products/{id}` (contract row #2: "public
-   *  `/products/{id}` read path"). Same `ecommerce.local` gateway + same
-   *  domain-facing IAM OIDC token + same `tenant_id` JWT-claim isolation
-   *  (`TenantContextFilter` WHERE tenant_id chokepoint) as the admin base, on
-   *  the `/api/**` (non-admin) path prefix. */
+  /** ecommerce gateway PUBLIC base (`/api/**`, non-admin path prefix) for the
+   *  areas whose producers host their operator endpoints on the public tree
+   *  (promotions / shippings / notifications — the gateway's operator-on-public
+   *  exception). Same `ecommerce.local` gateway + same domain-facing IAM OIDC
+   *  token + same `tenant_id` JWT-claim isolation as the admin base.
+   *  🔴 NOT the product detail: the public product tree is CUSTOMER-only at the
+   *  gateway, so the detail moved to `${ECOMMERCE_ADMIN_BASE_URL}/products/{id}`
+   *  (TASK-MONO-703, § 2.4.10 #2). */
   ECOMMERCE_PUBLIC_BASE_URL: z
     .string()
     .url()

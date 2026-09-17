@@ -4,7 +4,7 @@
 Published HTTP API for product-service.
 All endpoints are accessible through gateway-service only.
 Public endpoints (`/api/products/**`) do not require authentication.
-All `/api/admin/products/**` endpoints — the operator-plane **read** `GET /api/admin/products` (TASK-MONO-243) and the **write** endpoints (POST/PATCH/DELETE) — are gated at the gateway by `roles ∋ ECOMMERCE_OPERATOR` + non-blank `tenant_id` (entitlement-trust). The platform-console operator obtains the `ECOMMERCE_OPERATOR` domain role via the ADR-MONO-035 4a assume-tenant derivation (ecommerce-entitled tenant → `ECOMMERCE_OPERATOR`); the service applies no additional ecommerce-local RBAC — the gateway is the single admission point. (ADR-MONO-035 4b removed the legacy `account_type=OPERATOR` gateway leg; `roles`-only admission is uniform across `/api/admin/**`.)
+All `/api/admin/products/**` endpoints — the operator-plane **reads** `GET /api/admin/products` (TASK-MONO-243) and `GET /api/admin/products/{productId}` (TASK-MONO-703) and the **write** endpoints (POST/PATCH/DELETE) — are gated at the gateway by `roles ∋ ECOMMERCE_OPERATOR` + non-blank `tenant_id` (entitlement-trust). The platform-console operator obtains the `ECOMMERCE_OPERATOR` domain role via the ADR-MONO-035 4a assume-tenant derivation (ecommerce-entitled tenant → `ECOMMERCE_OPERATOR`); the service applies no additional ecommerce-local RBAC — the gateway is the single admission point. (ADR-MONO-035 4b removed the legacy `account_type=OPERATOR` gateway leg; `roles`-only admission is uniform across `/api/admin/**`.)
 
 ---
 
@@ -149,6 +149,39 @@ If no images exist, the value from the manual `thumbnailUrl` field (set via PATC
 | Status | Code | Reason |
 |---|---|---|
 | 404 | PRODUCT_NOT_FOUND | Product with given ID does not exist |
+
+---
+
+### GET /api/admin/products/{productId}
+Operator-plane product detail. Added by **TASK-MONO-703**: the platform-console
+product detail and edit screens read the detail of a product the operator just
+opened from `GET /api/admin/products`, but the only detail read was the public
+`GET /api/products/{productId}`, and the gateway admits `ECOMMERCE_OPERATOR` on
+the public product tree **not at all** (the operator-on-public exception covers
+only promotions / shippings / notifications) — so the operator got the list and
+a 403 on its detail. This endpoint closes that gap on the operator plane
+instead of widening the public tree's admission.
+
+**Response 200** — byte-identical to `GET /api/products/{productId}` (same
+`ProductDetailResponse`: product fields + `images[]` + `variants[]`, same
+`thumbnailUrl` derivation, same `images` ordering). Same query path
+(`QueryProductService#findById` + `ProductImageService#getImages`).
+
+**Authorization**: identical to `GET /api/admin/products` — gateway
+`roles ∋ ECOMMERCE_OPERATOR` on `/api/admin/**` (or the SUPER_ADMIN wildcard
+read admission for GET/HEAD) + non-blank `tenant_id`; the service applies **no
+additional ecommerce-local RBAC**. **Read-only** (no mutation).
+
+**Tenant scoping**: identical to the sibling admin endpoints — the gateway
+injects the trusted `X-Tenant-Id`; the read goes through the repository
+`WHERE tenant_id` chokepoint (Step 2 / M6). A product belonging to another
+tenant is **404 `PRODUCT_NOT_FOUND`**, never 200 and never 403 (existence is
+hidden, M3).
+
+**Error responses**
+| Status | Code | Reason |
+|---|---|---|
+| 404 | PRODUCT_NOT_FOUND | Product with given ID does not exist, or exists in another tenant |
 
 ---
 

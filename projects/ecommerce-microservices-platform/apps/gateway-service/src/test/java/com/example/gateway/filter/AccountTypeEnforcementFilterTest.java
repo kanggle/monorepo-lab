@@ -99,6 +99,21 @@ class AccountTypeEnforcementFilterTest {
     }
 
     @Test
+    void adminProductDetail_operatorRole_passesThrough() {
+        // TASK-MONO-703 positive control: the operator reads a product detail on the admin
+        // tree (GET /api/admin/products/{uuid}), NOT on the public /api/products/{id} tree
+        // that nonOperatorPublicPath_adminRoleOnly_returns403 keeps closed to the operator.
+        MockServerWebExchange exchange =
+                exchangeFor(HttpMethod.GET, "/api/admin/products/b0000000-0000-0000-0000-000000000002");
+        CapturingChain chain = new CapturingChain();
+
+        run(exchange, chain, jwtWithRoles("ECOMMERCE_OPERATOR"));
+
+        assertThat(chain.called).as("ECOMMERCE_OPERATOR admitted on GET /api/admin/products/{id}").isTrue();
+        assertThat(exchange.getResponse().getStatusCode()).isNotEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
     void adminRoute_customerRoleOnly_returns403() {
         MockServerWebExchange exchange = exchangeFor("/api/admin/products/42");
         CapturingChain chain = new CapturingChain();

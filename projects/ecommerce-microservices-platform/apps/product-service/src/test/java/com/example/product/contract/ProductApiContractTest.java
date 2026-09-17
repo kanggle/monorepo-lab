@@ -144,6 +144,28 @@ class ProductApiContractTest {
                 SPEC_REF + " GET /api/products/{productId} 200 variants[]");
     }
 
+    // ─── GET /api/admin/products/{productId} — 200 (TASK-MONO-703) ─────
+
+    @Test
+    @DisplayName("GET /api/admin/products/{productId} 응답은 공개 상세와 같은 필드만 포함한다 (TASK-MONO-703)")
+    void getAdminProductDetail_response_containsSameFieldsAsPublicDetail() throws Exception {
+        UUID prodId = UUID.randomUUID();
+        UUID varId = UUID.randomUUID();
+        ProductDetail detail = new ProductDetail(prodId, "노트북", "상세 설명", ProductStatus.ON_SALE,
+                1000000L, null, List.of(new VariantDetail(varId, "기본", 100, 0L)));
+        given(queryProductService.findById(any())).willReturn(detail);
+
+        MvcResult result = mockMvc.perform(get("/api/admin/products/" + prodId))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JsonNode root = objectMapper.readTree(result.getResponse().getContentAsString());
+        assertFieldsMatch(root, Set.of("id", "name", "description", "status", "price", "categoryId", "thumbnailUrl", "sellerId", "images", "variants"),
+                SPEC_REF + " GET /api/admin/products/{productId} 200");
+        assertFieldsMatch(root.get("variants").get(0), Set.of("id", "optionName", "stock", "additionalPrice"),
+                SPEC_REF + " GET /api/admin/products/{productId} 200 variants[]");
+    }
+
     // ─── POST /api/admin/products — 201 ─────────────────────────────────
 
     @Test

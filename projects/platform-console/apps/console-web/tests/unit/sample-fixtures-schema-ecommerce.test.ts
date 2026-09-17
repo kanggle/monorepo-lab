@@ -97,17 +97,26 @@ describe('products (AC-1 / AC-4)', () => {
     expect(summary.month).toBeLessThanOrEqual(summary.total);
   });
 
-  it('AC-3 — a list id resolves in the (public-path) detail lookup', async () => {
+  it('AC-3 — a list id resolves in the (admin-path) detail lookup', async () => {
     const list = ProductListSchema.parse(await json(get('ecommerce', '/api/admin/products?page=0&size=20')));
     const first = list.content[0];
-    const detailRes = get('ecommerce', `/api/products/${first.id}`);
+    const detailRes = get('ecommerce', `/api/admin/products/${first.id}`);
     expect(detailRes.status).toBe(200);
     const detail = ProductDetailSchema.parse(await json(detailRes));
     expect(detail.id).toBe(first.id);
   });
 
+  it('TASK-MONO-703 — the detail is answered on the ADMIN path (where getProduct now asks), not the public one', async () => {
+    const list = ProductListSchema.parse(await json(get('ecommerce', '/api/admin/products?page=0&size=20')));
+    const first = list.content[0];
+    // The sample router must follow the real call: the public path is no longer a product-detail address.
+    expect(get('ecommerce', `/api/products/${first.id}`).status).not.toBe(200);
+    // `/summary` is not swallowed by the detail template.
+    ProductAreaSummarySchema.parse(await json(get('ecommerce', '/api/admin/products/summary')));
+  });
+
   it('AC-3 — an id absent from the fixture 404s with the real backend shape (FLAT envelope, PRODUCT_NOT_FOUND)', async () => {
-    const res = get('ecommerce', '/api/products/no-such-product');
+    const res = get('ecommerce', '/api/admin/products/no-such-product');
     expect(res.status).toBe(404);
     const body = (await json(res)) as { code?: string; message?: string; timestamp?: string };
     expect(body.code).toBe('PRODUCT_NOT_FOUND');
@@ -120,7 +129,7 @@ describe('products (AC-1 / AC-4)', () => {
     for (const row of list.content) {
       expect(row.thumbnailUrl).toBeNull();
       const detail = ProductDetailSchema.parse(
-        await json(get('ecommerce', `/api/products/${row.id}`)),
+        await json(get('ecommerce', `/api/admin/products/${row.id}`)),
       );
       expect(detail.thumbnailUrl).toBeNull();
       expect(detail.images).toEqual([]);
