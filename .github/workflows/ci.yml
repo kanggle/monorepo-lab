@@ -363,8 +363,9 @@ jobs:
       hooks: ${{ steps.filter.outputs.hooks }}
       # TASK-MONO-695: raw filter, NOT AND-combined with `code-changed`, same footing as
       # `ci-baseline` above — this guard watches ci.yml's own project filters plus every
-      # projects/*/apps/*/build.gradle for outside-project `inputs.file/dir/files`
-      # declarations. AND-ing with `code-changed` would make the guard's own reachability
+      # projects/**/build.gradle (apps/<m>, the project-level file, libs/<m>, tests/e2e)
+      # for outside-project `inputs.file/dir/files` declarations. AND-ing with
+      # `code-changed` would make the guard's own reachability
       # revocable by a future edit to that list (TASK-MONO-360's reachability rule: a
       # guard that a skip can switch off is a guard that reports green while seeing
       # nothing).
@@ -968,12 +969,17 @@ jobs:
               - '.github/workflows/**'
               - 'scripts/check-ci-baseline-reachable.sh'
             # TASK-MONO-695: pure-positive (no negation — MONO-074/075 quirk rule). Every
-            # build.gradle under projects/*/apps/*/ can add a new `inputs.file/dir/files`
-            # declaration that reads outside its own project; ci.yml itself is where the
-            # per-project filter that must cover it lives; the guard script is the third
-            # leg of the same triangle. All three moving is how this drift re-arrives.
+            # build.gradle under projects/** (apps/<m>, the project-level file whose
+            # `subprojects {}` applies to every module, libs/<m>, tests/e2e — not just
+            # apps/*/) can add a new `inputs.file/dir/files` declaration that reads
+            # outside its own project; ci.yml itself is where the per-project filter that
+            # must cover it lives; the guard script is the third leg of the same triangle.
+            # All three moving is how this drift re-arrives. Widened from `apps/*/` after
+            # a review pass found the guard's own population narrower than its claim —
+            # scanning only apps/*/ while claiming project-wide coverage was exactly the
+            # gap class this ticket exists to close, in the guard meant to close it.
             outside-module-input-guard:
-              - 'projects/*/apps/*/build.gradle'
+              - 'projects/**/build.gradle'
               - '.github/workflows/ci.yml'
               - 'scripts/check-outside-module-input-filter-coverage.sh'
             # TASK-MONO-075: pure-positive enumeration of code-bearing file

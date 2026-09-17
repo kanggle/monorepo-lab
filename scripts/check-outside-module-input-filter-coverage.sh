@@ -5,13 +5,28 @@
 # =============================================================================
 # WHAT THIS GUARDS
 #
-# A `build.gradle` under `projects/<p>/apps/<m>/` can declare
-# `inputs.(file|dir|files)(rootProject.file('...'))` on a path OUTSIDE
-# `projects/<p>/**` — most often a repo-root `infra/demo/seed/*.sh` demo seed
-# script a test reads by path — to fix Gradle's `UP-TO-DATE` / `FROM-CACHE`
-# blind spot: without the declaration, editing the seed leaves the test task
-# cached and green over exactly the drift it exists to catch (TASK-MONO-683
-# measured this: a seed revert produced rc=0 with `:test` UP-TO-DATE).
+# ANY `build.gradle` under `projects/<p>/**` — not just `projects/<p>/apps/<m>/`
+# — can declare `inputs.(file|dir|files)(rootProject.file('...'))` on a path
+# OUTSIDE `projects/<p>/**` — most often a repo-root `infra/demo/seed/*.sh`
+# demo seed script a test reads by path — to fix Gradle's `UP-TO-DATE` /
+# `FROM-CACHE` blind spot: without the declaration, editing the seed leaves
+# the test task cached and green over exactly the drift it exists to catch
+# (TASK-MONO-683 measured this: a seed revert produced rc=0 with `:test`
+# UP-TO-DATE). Besides `apps/<m>/build.gradle`, this repo has three other
+# shapes that carry the same risk and none of them are hypothetical:
+#   * `projects/<p>/build.gradle` — the project-level file whose `subprojects
+#     {}` block (see e.g. `projects/wms-platform/build.gradle`'s commented
+#     template) applies to EVERY module in the project at once, making it the
+#     single likeliest future spot for exactly this declaration.
+#   * `projects/<p>/libs/<m>/build.gradle` — project-scoped shared modules
+#     (CLAUDE.md § "Project-scoped shared modules"), e.g.
+#     `projects/finance-platform/libs/finance-common/build.gradle`.
+#   * `projects/<p>/tests/e2e/build.gradle` — the project's e2e module.
+# A review pass on this guard's first version (TASK-MONO-695) found it scanned
+# only `apps/*/build.gradle` while claiming (here, in AC-3, and in the ci.yml
+# filter gating this job) to cover the whole project — exactly the "population
+# hole" shape this ticket exists to close, self-inflicted. Fixed by scanning
+# `projects/**/build.gradle` instead — see PREDICATE below.
 #
 # That Gradle-side fix does nothing for `.github/workflows/ci.yml`'s PR path
 # filter, which wakes `Build & Test` on `projects/<p>/**` only. A PR touching
@@ -34,9 +49,24 @@
 #   * Inputs whose declared path is inside the declaring module's OWN project
 #     (`projects/<p>/**`) — the project-level PR filter already covers those by
 #     construction; that is population B's negative control (6 iam entries).
-#   * `nightly-e2e.yml`-only suites (`projects/*/tests/e2e/**`) — out of this
-#     ticket's scope (TASK-MONO-695 § Scope 제외); they are not gated by this
-#     `changes` job's project flags at all.
+#   * Repo-root `libs/**` and the repo-root `build.gradle` — deliberately OUT
+#     of population A, not an oversight: those two paths are not behind any
+#     `projects/<p>/**` project filter at all, so "which project's filter
+#     should cover this" does not have an answer for them. An outside-project
+#     input declared there would need the `libs` output flag instead — a
+#     separate axis this guard does not police (recorded as a known exclusion
+#     in TASK-MONO-695's task file, not silently dropped).
+#   * `nightly-e2e.yml`'s own trigger conditions — population A DOES scan
+#     `projects/<p>/tests/e2e/build.gradle` (widened by TASK-MONO-695's review
+#     fix, below), so an outside-project input declared there is still checked
+#     against ci.yml's PR filter for that project. That check is conservative
+#     rather than exact for this one shape: it does not verify that ci.yml's
+#     `Build & Test` job actually reaches the e2e module's task (it may not,
+#     since nightly e2e suites are normally invoked by a different workflow) —
+#     only that the filter WOULD wake `changes` if the input path changed.
+#     Catching an uncovered filter early is strictly safer than the alternative
+#     of not scanning the file at all, which is what TASK-MONO-695's review
+#     fix corrected.
 #   * Undeclared outside-module reads (a test that reads a path outside its
 #     module WITHOUT an `inputs.*` declaration at all) — TASK-MONO-695's AC-1 ②
 #     census found zero of those on the tree this guard was written against;
@@ -44,9 +74,13 @@
 #
 # PREDICATE (deliberately structural, not a proxy)
 #   population A = every `inputs.(file|dir|files)(rootProject.file('X'))` in a
-#                  `projects/*/apps/*/build.gradle`, where X does NOT start
-#                  with `projects/<owning-project>/` — i.e. the declared input
-#                  is OUTSIDE the project that owns the declaring build.gradle.
+#                  `projects/**/build.gradle` (every module shape: `apps/<m>`,
+#                  the project-level file, `libs/<m>`, `tests/e2e` — anything
+#                  under `projects/<p>/`, not `apps/` alone), where X does NOT
+#                  start with `projects/<owning-project>/` — i.e. the declared
+#                  input is OUTSIDE the project that owns the declaring
+#                  build.gradle. Repo-root `libs/**` and the repo-root
+#                  `build.gradle` are excluded (see above).
 #   population B = ci.yml's `changes` job `filters:` block, parsed structurally
 #                  (12-space-indented `key:` lines start a filter, 14-space
 #                  `- 'pattern'` lines belong to the CURRENT filter) — never a
@@ -77,7 +111,18 @@ usage: check-outside-module-input-filter-coverage.sh [--self-test]
 EOF
 }
 
-# build.gradle files under projects/*/apps/*/, repo-relative.
+# EVERY build.gradle under projects/**, repo-relative — not just apps/*/.
+#
+# TASK-MONO-695 review fix: the first version of this guard scanned only
+# `projects/*/apps/*/build.gradle`, which left an outside-project `inputs.*`
+# declared in a project-level `projects/<p>/build.gradle` (whose `subprojects
+# {}` applies to every module at once — the likeliest future spot), a
+# `projects/<p>/libs/<m>/build.gradle` (CLAUDE.md project-scoped shared
+# module), or a `projects/<p>/tests/e2e/build.gradle` completely invisible —
+# exactly the population hole this ticket exists to close, in the guard meant
+# to close it. `projects/**/build.gradle` deliberately does NOT include
+# repo-root `libs/**` or the repo-root `build.gradle` — see the header's
+# "WHAT THIS DOES NOT GUARD".
 #
 # `git ls-files` when `$root` is a real git work tree — this repo's guards read
 # the committed/staged index (CLAUDE.md § "Stage before you run a repo guard
@@ -88,9 +133,9 @@ EOF
 list_build_gradle_files() {
     local root="$1"
     if git -C "$root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-        git -C "$root" ls-files -- 'projects/*/apps/*/build.gradle' | sort
+        git -C "$root" ls-files -- 'projects/**/build.gradle' | sort
     else
-        (cd "$root" && find projects -path '*/apps/*/build.gradle' 2>/dev/null | sed 's#^\./##' | sort)
+        (cd "$root" && find projects -name build.gradle 2>/dev/null | sed 's#^\./##' | sort)
     fi
 }
 
@@ -303,8 +348,8 @@ self_test() {
     }
 
     # A minimal COPY of only the files this guard reads — every
-    # `projects/*/apps/*/build.gradle` (from the actual on-disk working tree,
-    # not a git object, so it sees this session's OWN uncommitted AC-2 fix) and
+    # `projects/**/build.gradle` (from the actual on-disk working tree, not a
+    # git object, so it sees this session's OWN uncommitted fixes) and
     # `.github/workflows/ci.yml`. Not a git repo: `list_build_gradle_files`
     # falls back to `find` when `$root` has no `.git`, matching a check-list
     # sibling (check-libs-ci-coverage.sh) that copies only settings.gradle +
@@ -318,7 +363,7 @@ self_test() {
             [[ -z "$rel" ]] && continue
             mkdir -p "$d/$(dirname "$rel")"
             cp "$ROOT/$rel" "$d/$rel"
-        done < <(git -C "$ROOT" ls-files -- 'projects/*/apps/*/build.gradle')
+        done < <(git -C "$ROOT" ls-files -- 'projects/**/build.gradle')
         echo "$d"
     }
 
@@ -388,8 +433,12 @@ self_test() {
         "$d/.github/workflows/ci.yml"
     local out
     out="$(run_check "$d" quiet 2>&1 || true)"
-    if printf '%s\n' "$out" | grep -q "inbound-service/build.gradle:75"; then
-        echo "  PASS  reverted wms filter line bites, names inbound-service/build.gradle:75"
+    # Line number NOT hardcoded — inbound-service/build.gradle's own header
+    # comment (AC-5) has already moved this once (75 -> 85); pin the file, not
+    # the line, or this case silently rots the next time that file gains a
+    # comment line above the declaration.
+    if printf '%s\n' "$out" | grep -qE "inbound-service/build\.gradle:[0-9]+: 'wms' filter does not cover infra/demo/seed/seed-scm\.sh"; then
+        echo "  PASS  reverted wms filter line bites, names inbound-service/build.gradle:<line>"
         pass=$((pass + 1))
     else
         echo "  FAIL  reverted wms filter line did not bite / did not name the module:line"
@@ -415,6 +464,63 @@ self_test() {
     sed -i "s#inputs.file(rootProject.file('infra/demo/seed/seed-fan.sh'))#inputs.file(rootProject.file('infra/demo/seed/seed-fan.sh'))\n    inputs.file(rootProject.file('infra/demo/seed/seed-finance.sh'))\n            .withPropertyName('newGapProbe')\n            .withPathSensitivity(PathSensitivity.RELATIVE)#" \
         "$d/projects/iam-platform/apps/auth-service/build.gradle"
     expect "new undeclared-in-filter outside input bites" 1 "$d"
+
+    # 6b. TASK-MONO-695 REVIEW FIX — the population hole this fix closes: an
+    #     outside-project input declared in a PROJECT-LEVEL `projects/<p>/
+    #     build.gradle` (the `subprojects {}` shape, not `apps/<m>/`). Appended
+    #     to scm-platform's project-level file, a project untouched by any
+    #     other case here, so this case cannot pass by accident of some other
+    #     case's state. Must bite, naming that exact file:line.
+    d="$(make_case projectlevelgap)"
+    cat >> "$d/projects/scm-platform/build.gradle" <<'GRADLE'
+
+subprojects {
+    tasks.matching { it.name == 'test' }.configureEach {
+        inputs.file(rootProject.file('infra/demo/seed/seed-project-level-probe.sh'))
+                .withPropertyName('projectLevelGapProbe')
+                .withPathSensitivity(PathSensitivity.RELATIVE)
+    }
+}
+GRADLE
+    out="$(run_check "$d" quiet 2>&1 || true)"
+    if printf '%s\n' "$out" | grep -q "scm-platform/build.gradle:[0-9]*: 'scm' filter does not cover infra/demo/seed/seed-project-level-probe.sh"; then
+        echo "  PASS  project-level (subprojects {}) outside input bites, names scm-platform/build.gradle:<line>"
+        pass=$((pass + 1))
+    else
+        echo "  FAIL  project-level outside input did not bite / did not name the file:line"
+        echo "$out" | sed 's/^/        /'
+        fail=$((fail + 1))
+    fi
+    expect "project-level outside input: rc != 0" 1 "$d"
+
+    # 6c. Same population hole, the `projects/<p>/tests/e2e/build.gradle`
+    #     shape. Appended to fan-platform's e2e module, independent of the
+    #     other cases. Must bite, naming that exact file:line.
+    d="$(make_case e2elevelgap)"
+    cat >> "$d/projects/fan-platform/tests/e2e/build.gradle" <<'GRADLE'
+
+tasks.matching { it.name == 'test' }.configureEach {
+    inputs.file(rootProject.file('infra/demo/seed/seed-e2e-level-probe.sh'))
+            .withPropertyName('e2eLevelGapProbe')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+}
+GRADLE
+    out="$(run_check "$d" quiet 2>&1 || true)"
+    if printf '%s\n' "$out" | grep -q "fan-platform/tests/e2e/build.gradle:[0-9]*: 'fan' filter does not cover infra/demo/seed/seed-e2e-level-probe.sh"; then
+        echo "  PASS  tests/e2e outside input bites, names fan-platform/tests/e2e/build.gradle:<line>"
+        pass=$((pass + 1))
+    else
+        echo "  FAIL  tests/e2e outside input did not bite / did not name the file:line"
+        echo "$out" | sed 's/^/        /'
+        fail=$((fail + 1))
+    fi
+    expect "tests/e2e outside input: rc != 0" 1 "$d"
+
+    # 6d. Positive control for 6b/6c: the existing wms (apps/*) and iam
+    #     (apps/*) cases from ①/② above must STILL pass after the population
+    #     widened — the fix must not have narrowed anything it already caught.
+    d="$(make_case posctl_after_widen)"
+    expect "wms/iam apps/* cases still pass after population widened" 0 "$d"
 
     # 7. Fail-closed: no build.gradle files at all.
     d="$(make_case no_gradle)"
