@@ -91,7 +91,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-**`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)은 루트 큐(`tasks/INDEX.md`)의 `review` 로 이동했다(2026-09-17 UTC)** — `infra/demo/public-data` 가 `projects/` 밖이라 루트 티켓이다, 이 파일에 더 남지 않는다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
+**`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
 
 - `TASK-PC-FE-295-the-overview-finance-card-reads-a-shape-the-bff-never-sends.md` — 🔴 **로그인 운영자 경로의 결함 후보**(샘플 시리즈 무관, 286 리뷰에서 코드 판독으로 발견): console-bff 는 finance 레그에 잔액 응답 `{ data: [ {currency, ledger, available, held} ] }` 을 그대로 싣는데 web `FinanceDataSchema` 는 `{ balance, accountId }` 를 기대 → 잔액이 있어도 첫 화면 finance 카드가 «잔액 정보 없음». 원인은 계약 § 2.4.9.1 이 카드 `data` 모양을 정의하지 않은 공백. **AC-0 red-first 실측 먼저**(초록이면 구현 없이 닫음) → 계약 먼저 → 한쪽 고침(추천 ⓐ web 이 producer 모양을 읽음) → 양쪽이 같은 모양 한 벌을 쓰는 테스트. 🔴 **범위 확장(287 리뷰): WMS «총 재고·알림» 과 SCM «스냅샷 노드 수» 도 같은 원인으로 `—`** 일 것(IAM·ERP·E-Commerce 셋은 맞음) — AC-6 두 카드 + AC-7 여섯 카드 전수 가드. 분석=Opus 5 / 구현 권장=Sonnet 5.
 
