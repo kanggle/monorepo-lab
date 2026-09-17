@@ -13,8 +13,6 @@
  * to hold every row), not from the fixture's own `totalElements`, so a fixture
  * whose meta and rows disagreed would not pass by agreeing with itself.
  *
- * 🔵 scm's card is not listed yet — its domain fixture does not exist.
- *    TASK-PC-FE-288 adds its row here when it derives its card.
  */
 import { describe, it, expect } from 'vitest';
 import { sampleResponse, type SampleRequest } from '@/shared/sample/router';
@@ -115,5 +113,34 @@ describe('overview card = the list it summarises (through the router)', () => {
     expect(list.content.length).toBeGreaterThan(alertCount);
     expect(card.inventorySnapshot.totalStockUnits).toBe(totalStockUnits);
     expect(card.inventorySnapshot.alertCount).toBe(alertCount);
+  });
+
+  it('SCM «스냅샷 노드 수» (TASK-PC-FE-288 AC-8) = the distinct nodes on /scm/inventory + names from the SAME node registry', async () => {
+    const card = (await overviewCard('scm')) as {
+      meta: { warning: string };
+      nodes: { nodeId: string; name: string }[];
+    };
+    const snapshot = (await body({
+      core: 'flat',
+      surface: 'scm',
+      path: '/api/v1/inventory-visibility/snapshot?page=0&size=100',
+    })) as { data: { content: { nodeId: string }[] }; meta: { warning: string } };
+    const distinctNodeIds = Array.from(new Set(snapshot.data.content.map((r) => r.nodeId))).sort();
+    // 🔴 not vacuous: the snapshot must span more than one node, or "the node
+    //    SET matches" could not be told apart from "a single node matches".
+    expect(distinctNodeIds.length).toBeGreaterThan(1);
+    expect(card.nodes.map((n) => n.nodeId).sort()).toEqual(distinctNodeIds);
+
+    const nodes = (await body({
+      core: 'flat',
+      surface: 'scm',
+      path: '/api/v1/inventory-visibility/nodes',
+    })) as { data: { id: string; name: string }[] };
+    for (const n of card.nodes) {
+      const match = nodes.data.find((x) => x.id === n.nodeId);
+      expect(match, `card node ${n.nodeId} must resolve on /nodes`).toBeDefined();
+      expect(n.name).toBe(match!.name);
+    }
+    expect(card.meta.warning).toBe(snapshot.meta.warning);
   });
 });

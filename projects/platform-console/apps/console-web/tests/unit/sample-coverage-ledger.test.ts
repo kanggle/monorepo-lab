@@ -101,6 +101,15 @@ describe('surface ledger ↔ source inventory', () => {
 });
 
 describe('the ledger promises what the router does', () => {
+  // 🔴 TASK-PC-FE-288 — every `SURFACE_COVERAGE` row is now `ready` (the LAST
+  //    domain ticket), so the `else` branch below (a real `pending` row → 503
+  //    `SAMPLE_NOT_READY`) is dead code in THIS `it.each` from here on — no
+  //    generated case takes it. The promise it used to prove is still covered
+  //    elsewhere: `sample-mode-cores.test.ts`'s per-core "① pending GET" cells
+  //    each ask a `logPrefix: 'no-such-surface'` profile (absent from the
+  //    ledger entirely), which `findSurfaceCoverage` resolves to `undefined` —
+  //    the SAME branch a real `pending` row took (283 D8's pattern, extended
+  //    by every domain ticket since, including this one's own scm-shim cell).
   it.each(SURFACE_COVERAGE.map((r) => [`${r.core}:${r.surface} (${r.status})`, r] as const))(
     '%s',
     async (_label, row) => {

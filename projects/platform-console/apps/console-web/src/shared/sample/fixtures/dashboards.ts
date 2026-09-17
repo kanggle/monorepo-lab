@@ -4,6 +4,7 @@ import { ERP_FIXTURE_HANDLERS } from './erp';
 import { ECOMMERCE_FIXTURE_HANDLERS } from './ecommerce';
 import { FINANCE_FIXTURE_HANDLERS, SAMPLE_FINANCE_DEFAULT_ACCOUNT_ID } from './finance';
 import { WMS_FIXTURE_HANDLERS } from './wms';
+import { SCM_FIXTURE_HANDLERS } from './scm';
 
 /**
  * TASK-PC-FE-285 (coordinator review) — an overview card's count is NOT typed
@@ -127,6 +128,73 @@ const WMS_INVENTORY_SNAPSHOT = (() => {
 })();
 
 /**
+ * TASK-PC-FE-288 AC-8 — the scm card's node set/names/warning are derived
+ * from THIS ticket's own `flat:scm` fixture handler answering the cross-node
+ * inventory-visibility snapshot query — the SAME data `/scm/inventory`
+ * renders (the snapshot table's «노드» column is each row's `nodeId`; the
+ * node NAMES come from the same fixture's `/nodes` registry, so a node id
+ * that appears in the snapshot is guaranteed to resolve there — AC-8's "노드
+ * 수·노드 id·이름이 `/scm/inventory` 의 노드와 같아야 한다").
+ *
+ * 🔵 the production composition leg (`ScmInventoryReadAdapter.read()`) calls
+ * the scm inventory-visibility PRODUCER directly — `GET
+ * /api/inventory-visibility/snapshot` (no `/v1`, no scm gateway; TASK-MONO-162
+ * topology note in that adapter's own docstring) — a DIFFERENT literal path
+ * than the one this console's OWN `scm-inventory-visibility-api.ts` sends
+ * through the scm gateway (`/api/v1/inventory-visibility/snapshot`), and its
+ * `data` shape (`{content,page,size,totalElements}` or a bare array) has no
+ * top-level `nodes` key at all — a pre-existing BFF-leg / FE-card
+ * (`ScmDataSchema`) shape mismatch (the SAME class of defect 286 D2 found for
+ * finance and 287 AC-8 found for wms; tracked by `TASK-PC-FE-295`, which the
+ * coordinator has extended to cover scm too — out of THIS ticket's scope, no
+ * domain fixture can fix a real shape bug in production code). Reproducing
+ * that raw shape here would render the card EMPTY for every sample visitor,
+ * defeating ADR-MONO-074's point — so this fixture keeps the
+ * `ScmDataSchema`-shaped object (`{meta:{warning}, nodes:[{nodeId,name}]}`)
+ * the card actually parses, with its VALUES derived from this ticket's own
+ * gateway-shaped snapshot query (the closest analogous "cross-node inventory"
+ * read this domain's sample world can answer).
+ */
+const SCM_OVERVIEW_NODES = (() => {
+  const path = '/api/v1/inventory-visibility/snapshot';
+  const snapshotBody = SCM_FIXTURE_HANDLERS['flat:scm']?.(path) as
+    | { data?: { content?: Array<{ nodeId?: unknown }> }; meta?: { warning?: unknown } }
+    | undefined;
+  const rows = snapshotBody?.data?.content;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    throw new Error(`sample overview: no scm snapshot rows for ${path}`);
+  }
+  const warning = snapshotBody?.meta?.warning;
+  if (typeof warning !== 'string') {
+    throw new Error(`sample overview: no scm S5 warning for ${path}`);
+  }
+  const nodeIds = Array.from(
+    new Set(rows.map((r) => r.nodeId).filter((id): id is string => typeof id === 'string')),
+  );
+  if (nodeIds.length < 2) {
+    // Not vacuous — a single-node world could not prove "node SET matches",
+    // only "a node matches" (287's identical discipline for its alertCount).
+    throw new Error('sample overview: scm snapshot must span 2+ nodes');
+  }
+  const nodesPath = '/api/v1/inventory-visibility/nodes';
+  const nodesBody = SCM_FIXTURE_HANDLERS['flat:scm']?.(nodesPath) as
+    | { data?: Array<{ id?: unknown; name?: unknown }> }
+    | undefined;
+  const nodeRows = nodesBody?.data;
+  if (!Array.isArray(nodeRows) || nodeRows.length === 0) {
+    throw new Error(`sample overview: no scm node rows for ${nodesPath}`);
+  }
+  const nodes = nodeIds.map((nodeId) => {
+    const found = nodeRows.find((n) => n.id === nodeId);
+    if (!found || typeof found.name !== 'string') {
+      throw new Error(`sample overview: scm node ${nodeId} does not resolve on ${nodesPath}`);
+    }
+    return { nodeId, name: found.name };
+  });
+  return { nodes, warning };
+})();
+
+/**
  * Dashboard fixtures (R3ⓐ — the first screens made `ready`): the console-bff
  * operator overview (§ 2.4.9.1), domain health (§ 2.4.9.2) and the
  * notification aggregator inbox (ADR-MONO-043 §4).
@@ -158,12 +226,8 @@ export const SAMPLE_OPERATOR_OVERVIEW = {
       domain: 'scm',
       status: 'ok',
       data: {
-        meta: { warning: 'Not for procurement decisions (S5) (샘플)' },
-        nodes: [
-          { nodeId: 'sample-node-01', name: '평택 물류센터 (샘플)' },
-          { nodeId: 'sample-node-02', name: '이천 물류센터 (샘플)' },
-          { nodeId: 'sample-node-03', name: '부산 항만창고 (샘플)' },
-        ],
+        meta: { warning: SCM_OVERVIEW_NODES.warning },
+        nodes: SCM_OVERVIEW_NODES.nodes,
       },
     },
     {
@@ -174,9 +238,6 @@ export const SAMPLE_OPERATOR_OVERVIEW = {
         accountId: SAMPLE_FINANCE_DEFAULT_ACCOUNT_ID,
       },
     },
-    // 🔵 scm (nodes) is still typed here — its domain fixture does not exist
-    //    yet. TASK-PC-FE-288 derives its card the same way and adds its row
-    //    to `sample-overview-cards-match-lists.test.ts`.
     { domain: 'erp', status: 'ok', data: { meta: { totalElements: ERP_ACTIVE_DEPARTMENT_COUNT } } },
     { domain: 'ecommerce', status: 'ok', data: { totalElements: ECOMMERCE_PRODUCT_COUNT } },
   ],
