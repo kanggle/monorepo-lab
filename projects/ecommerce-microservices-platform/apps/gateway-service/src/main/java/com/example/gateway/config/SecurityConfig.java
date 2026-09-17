@@ -1,5 +1,6 @@
 package com.example.gateway.config;
 
+import com.example.apigateway.security.GatewayErrorCodes;
 import com.example.security.oauth2.TenantClaimValidator;
 import com.example.web.dto.ErrorResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -122,6 +123,17 @@ public class SecurityConfig {
                 return writeErrorResponse(exchange, HttpStatus.FORBIDDEN,
                         ErrorResponse.of("TENANT_FORBIDDEN", message), objectMapper);
             }
+            // TASK-MONO-696 — audience rejection (enforce mode only). Same chain-walk, same
+            // reason: the token is valid, and a fresh one from the same client carries the same
+            // aud, so "re-authenticate" (401) would be the wrong instruction.
+            if (findInCauseChain(ex, GatewayErrorCodes.AUDIENCE_MISMATCH) != null) {
+                log.debug("Token audience not admitted at this gateway");
+                gatewayMetrics.incrementJwtValidationFailure(GatewayMetrics.REASON_AUDIENCE_MISMATCH);
+                return writeErrorResponse(exchange, HttpStatus.FORBIDDEN,
+                        ErrorResponse.of(GatewayErrorCodes.AUDIENCE_FORBIDDEN,
+                                "This token's client is not admitted at this gateway"),
+                        objectMapper);
+            }
             log.debug("JWT authentication failed: {}", ex.getMessage());
             gatewayMetrics.incrementJwtValidationFailure("invalid");
             return writeErrorResponse(exchange, HttpStatus.UNAUTHORIZED,
@@ -154,13 +166,23 @@ public class SecurityConfig {
      * ({@code invalid_issuer} is listed first) and 403 here.
      */
     private static OAuth2Error findTenantMismatch(Throwable ex) {
+        return findInCauseChain(ex, TenantClaimValidator.ERROR_CODE_TENANT_MISMATCH);
+    }
+
+    /**
+     * The chain-walk behind {@link #findTenantMismatch}, for any validator error code: returns
+     * the first {@link OAuth2Error} carrying {@code errorCode} in an
+     * {@link OAuth2AuthenticationException} frame or a {@link JwtValidationException}'s error
+     * list, or {@code null}. Guards against a self-cause loop.
+     */
+    private static OAuth2Error findInCauseChain(Throwable ex, String errorCode) {
         for (Throwable cur = ex; cur != null; cur = cur.getCause()) {
-            if (cur instanceof OAuth2AuthenticationException oauthEx && isTenantMismatch(oauthEx.getError())) {
+            if (cur instanceof OAuth2AuthenticationException oauthEx && hasCode(oauthEx.getError(), errorCode)) {
                 return oauthEx.getError();
             }
             if (cur instanceof JwtValidationException jve) {
                 for (OAuth2Error error : jve.getErrors()) {
-                    if (isTenantMismatch(error)) {
+                    if (hasCode(error, errorCode)) {
                         return error;
                     }
                 }
@@ -172,9 +194,8 @@ public class SecurityConfig {
         return null;
     }
 
-    private static boolean isTenantMismatch(OAuth2Error error) {
-        return error != null
-                && TenantClaimValidator.ERROR_CODE_TENANT_MISMATCH.equals(error.getErrorCode());
+    private static boolean hasCode(OAuth2Error error, String errorCode) {
+        return error != null && errorCode.equals(error.getErrorCode());
     }
 
     private ServerAccessDeniedHandler forbiddenHandler(ObjectMapper objectMapper) {

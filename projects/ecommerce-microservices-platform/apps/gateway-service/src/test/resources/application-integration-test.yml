@@ -1,15 +1,14 @@
 # 통합 테스트 프로파일: Rate Limiter 없이 라우트 설정 (다운스트림 불필요 경로 테스트용)
+# No issuer-uri override here: integration tests publish a MockWebServer-backed
+# JWKS document (see GatewayIntegrationTest.JwksMockServer) and set jwk-set-uri via
+# DynamicPropertySource. Setting issuer-uri would trigger
+# /.well-known/openid-configuration discovery against the mock server which does not
+# implement it.
+# TASK-MONO-696: the `spring.security.oauth2.resourceserver.jwt.audiences: ecommerce` that
+# used to sit here was removed — it configured Boot's auto-configured decoder, which backs
+# off for OAuth2ResourceServerConfig's own, so nothing ever read it. The audience check is
+# `ecommerce.oauth2.allowed-audiences` / `audience-mode`, inherited from application.yml.
 spring:
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          audiences: ecommerce
-          # No issuer-uri here: integration tests publish a MockWebServer-backed
-          # JWKS document (see GatewayIntegrationTest.JwksMockServer) and set
-          # jwk-set-uri via DynamicPropertySource. Setting issuer-uri would
-          # trigger /.well-known/openid-configuration discovery against the
-          # mock server which does not implement it.
 
   cloud:
     gateway:

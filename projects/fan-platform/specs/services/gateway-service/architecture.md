@@ -231,6 +231,13 @@ Per `platform/security-rules.md` and `projects/fan-platform/specs/integration/ia
 - Standard claims: `exp`, `nbf`, `iat` validated by `JwtTimestampValidator`.
 - Issuer: `AllowedIssuersValidator` — accepts both the SAS issuer URL and the
   legacy `"iam-platform"` string (D2-b deprecation window).
+- Audience (TASK-MONO-696, `jwt-standard-claims.md` rule 5): `AllowedAudiencesValidator`, run by
+  the shared chain only on a token every other check accepted — `aud` (the issuing **client
+  id**) ∩ `fanplatform.oauth2.allowed-audiences` (shipped: `fan-platform-user-flow-client`, the
+  fan web app's client — the operator console does not fan out to fan) ≠ ∅. Empty or absent
+  allowlist fails the boot. `fanplatform.oauth2.audience-mode` ships **SHADOW** (mismatch
+  logged + counted on `gateway.jwt.audience{gateway,outcome}`, not rejected); `ENFORCE` (403) is
+  the separate phase-2 change.
 - Tenant: `TenantClaimValidator` — only `tenant_id ∈ { fan-platform, * }`. The
   wildcard accommodates SUPER_ADMIN platform-scope tokens.
 - Forwarded headers after successful validation:

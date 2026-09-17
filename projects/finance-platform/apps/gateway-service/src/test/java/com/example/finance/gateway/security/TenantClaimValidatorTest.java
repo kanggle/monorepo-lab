@@ -28,7 +28,8 @@ class TenantClaimValidatorTest {
     // Built from the production wiring, not hand-constructed: change the gate in
     // OAuth2ResourceServerConfig#tenantGate and these assertions go red (TASK-MONO-357).
     private final TenantClaimValidator validator = new OAuth2ResourceServerConfig(
-            "http://iam.local/oauth2/jwks", "http://iam.local,iam", "finance").tenantGate();
+            "http://iam.local/oauth2/jwks", "http://iam.local,iam", "finance", "unused-client", "SHADOW",
+            new io.micrometer.core.instrument.simple.SimpleMeterRegistry()).tenantGate();
 
     // Delegates to the shared RS256 / 60s builder (TASK-MONO-429); only the claim-selection logic
     // is finance's, so it stays here while the token shape is shared.

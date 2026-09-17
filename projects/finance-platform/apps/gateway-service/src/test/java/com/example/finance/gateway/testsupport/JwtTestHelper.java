@@ -36,6 +36,12 @@ public final class JwtTestHelper {
     public static final String SAS_ISSUER = "http://iam.local";
     /** Required tenant for the finance-platform gateway ({@code required-tenant-id}). */
     public static final String DEFAULT_TENANT_ID = "finance";
+    /**
+     * The registered client id that really appears in {@code aud} on the tokens reaching this edge
+     * (the operator console — TASK-MONO-696 AC-1). Minted by default so fixtures match production; pass
+     * {@code "aud"} in the additional claims to override it, or {@code "aud" → null} to omit it.
+     */
+    public static final String DEFAULT_AUDIENCE = "platform-console-web";
 
     private final RSAKey rsaJwk;
     private final RSASSASigner signer;
@@ -71,6 +77,7 @@ public final class JwtTestHelper {
                 .subject(subject)
                 .issuer(issuer)
                 .claim("tenant_id", tenantId)
+                .audience(List.of(DEFAULT_AUDIENCE))
                 .issueTime(Date.from(now.minusSeconds(5)))
                 .expirationTime(Date.from(now.plusSeconds(ttlSeconds)))
                 .jwtID(UUID.randomUUID().toString());
@@ -103,7 +110,9 @@ public final class JwtTestHelper {
      */
     public String signScopeOnlyToken(String subject) {
         return signToken(SAS_ISSUER, subject, DEFAULT_TENANT_ID, 300,
-                Map.of("scope", "finance.read"));
+                // aud = the workload client itself, as the identity-platform mints it
+                // (TASK-MONO-696 AC-1). Not on the measured allowlist: a shadow-mode mismatch.
+                Map.of("scope", "finance.read", "aud", List.of(subject)));
     }
 
     /** Convenience: 5-minute SUPER_ADMIN platform-scope token ({@code tenant_id="*"}). */

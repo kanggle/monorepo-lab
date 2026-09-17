@@ -36,8 +36,16 @@ spring:
         jwt:
           issuer-uri: ${OIDC_ISSUER_URL}
           jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:${OIDC_ISSUER_URL}/oauth2/jwks}}
-          audiences: ecommerce
+
+ecommerce:
+  oauth2:
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL}}
+    required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:ecommerce}
+    allowed-audiences: ${OIDC_ALLOWED_AUDIENCES:platform-console-web,ecommerce-web-store-client}
+    audience-mode: ${OIDC_AUDIENCE_MODE:SHADOW}
 ```
+
+> TASK-MONO-696: 예전 이 자리의 `spring.security.oauth2.resourceserver.jwt.audiences: ecommerce` 는 **한 번도 읽히지 않았다** — Boot 자동 구성 디코더에만 적용되는데, 게이트웨이는 자체 디코더 빈(`OAuth2ResourceServerConfig`)을 쓰므로 자동 구성이 물러난다. 그리고 IdP 는 `aud` 에 플랫폼 이름이 아니라 **발급 client id** 를 넣는다(`platform/contracts/jwt-standard-claims.md` `aud` 행). 속성은 삭제됐고, audience 검사는 아래 `allowed-audiences` / `audience-mode` 로 공유 검증기 사슬에서 한다.
 
 `ecommerce.oauth2.allowed-issuers` 는 SAS issuer(`OIDC_ISSUER_URL`) 만 허용한다. D2-b deprecation 윈도우 (~2026-08-01) 동안 legacy `iam` issuer 도 함께 허용했으나, TASK-BE-398 이 그 문자열을 발급하던 유일한 경로(레거시 커스텀-JWT 플로우)를 제거했고 TASK-MONO-367 이 그 시점에 맞춰 수용 측(allowlist)에서도 제거했다(fleet-wide, 게이트웨이 7개 전부).
 
@@ -81,7 +89,7 @@ ecommerce 도메인의 세분화된 resource scope (`ecommerce.product.read`, `e
 1. **서명 검증** — IAM 의 JWKS 로 RS256 서명 검증 (Spring Security `NimbusJwtDecoder` 자동).
 2. **표준 클레임 검증** — `exp`, `nbf`, `iat` (`JwtTimestampValidator`).
 3. **Issuer 검증** — `AllowedIssuersValidator` 로 SAS issuer 만 허용 (TASK-MONO-367: legacy `iam` issuer 는 2026-08-01 일몰로 제거됨, TASK-BE-398 이 발행 측을 먼저 끊었다).
-4. **Audience 검증** — `audiences: ecommerce` 로 `aud` 클레임 검증 (Spring Security 자동).
+4. **Audience 검증 (TASK-MONO-696, 1단계 섀도)** — 공유 `GatewayJwtDecoders.validatorChain` 의 `AllowedAudiencesValidator` 가 `aud`(발급 client id, 문자열/배열) ∩ `ecommerce.oauth2.allowed-audiences`(`platform-console-web`, `ecommerce-web-store-client` — AC-1 실측 도달 client) ≠ ∅ 를 본다. 나머지 사슬(1–3, 5)을 통과한 토큰에만 평가한다. allowlist 빈/부재 = **기동 실패**. `audience-mode=SHADOW`(출하값): 불일치는 거절하지 않고 WARN 로그(`gateway`·`jti`·`aud`) + 메트릭 `gateway.jwt.audience{gateway,outcome}` 로 센다. `ENFORCE`(2단계, 별도 변경 — 실측 불일치 0 이후): 불일치 → 403.
 5. **Tenant 검증** — `TenantClaimValidator` (entitlement-trust, ADR-MONO-030 §2.4) 로 **임의 well-formed `tenant_id`** 를 수용; **blank/missing 만** `tenant_mismatch` → 403 `TENANT_FORBIDDEN`. (레거시 고정슬러그 `ecommerce` = dual-accept 윈도우의 default-tenant. 도메인간 격리는 다운스트림 row 필터로 집행 — 게이트가 아님.)
 6. **Role 강제** — `AccountTypeEnforcementFilter` (TASK-BE-131; ADR-MONO-035 4b-2a 로 roles-only 전환 — `account_type` OR-branch 제거) 가 `/api/admin/**` 경로에 `roles ∋ ECOMMERCE_OPERATOR` 강제, 그 외 인증 필요 경로에 `roles ∋ CUSTOMER` 강제.
    - **operator-on-public 예외 (TASK-BE-380)** — promotion-api.md / shipping-api.md / notification-api.md 는 *운영자(Admin)* 엔드포인트를 **public 경로 트리**(`/api/promotions`, `/api/shippings`, `/api/notifications`)에 두고 서비스단에서 `X-User-Role == ECOMMERCE_OPERATOR` 으로 게이팅한다(`/api/admin/**` 아님). 따라서 게이트웨이는 이 세 read 트리에 한해 `CUSTOMER` 와 `ECOMMERCE_OPERATOR` 을 **둘 다** 수용한다(엔드포인트별 operator/consumer 구분은 서비스가 집행). prefix-only `non-/api/admin → CONSUMER` 규칙이면 운영자가 서비스 도달 전에 403 되는 라이브 갭(platform-console PC-FE-086/088/089 흡수)을 해소. 그 외 public 트리(`/api/products`, `/api/orders`, `/api/search`, `/api/users` 등)는 종전대로 `CUSTOMER` 전용.
@@ -96,7 +104,7 @@ ecommerce 도메인의 세분화된 resource scope (`ecommerce.product.read`, `e
 |---|---|---|
 | Authorization 헤더 누락 / 만료 / 서명 불일치 | 401 | `UNAUTHORIZED` |
 | `iss` 가 allowed-issuers 미포함 | 401 | `UNAUTHORIZED` |
-| `aud` 가 `ecommerce` 아님 | 401 | `UNAUTHORIZED` |
+| `aud` ∩ `allowed-audiences` = ∅ (`aud` 없음 포함) — `audience-mode=ENFORCE` 일 때만 | 403 | `AUDIENCE_FORBIDDEN` (**이름은 계약서의 제안** — 2단계 전환 시 확정). 출하 모드 `SHADOW` 에서는 거절 없음(로그 + 메트릭) |
 | `tenant_id` blank / missing | 403 | `TENANT_FORBIDDEN` (entitlement-trust: 임의 well-formed `tenant_id` 는 통과) |
 | `/api/admin/**` 인데 `roles ∌ ECOMMERCE_OPERATOR` | 403 | `FORBIDDEN` (AccountTypeEnforcementFilter) |
 | 일반 경로인데 `roles ∌ CUSTOMER` (operator-on-public 트리 `/api/{promotions,shippings,notifications}` 에서는 `ECOMMERCE_OPERATOR` 도 통과 — TASK-BE-380) | 403 | `FORBIDDEN` (AccountTypeEnforcementFilter) |
@@ -124,7 +132,7 @@ ecommerce 는 standalone 시점에 자체 HS256 auth-service 를 운영했다. �
 
 | Stage | Task | 상태 |
 |---|---|---|
-| 1. ecommerce gateway HS256 → RS256/JWKS 전환 | TASK-BE-131 | ✅ done (PR 머지) — `aud=ecommerce`, `account_type/roles` 클레임 강제, AccountTypeEnforcementFilter, JwtHeaderEnrichmentFilter |
+| 1. ecommerce gateway HS256 → RS256/JWKS 전환 | TASK-BE-131 | ✅ done (PR 머지) — `aud=ecommerce`(🔵 TASK-MONO-696: 설정만 되고 적용된 적 없음 — 위 § Token 검증 규칙 4), `account_type/roles` 클레임 강제, AccountTypeEnforcementFilter, JwtHeaderEnrichmentFilter |
 | 2. ecommerce gateway 가 IAM 토큰을 받기 시작 (V0012 시드 + issuer/validators + compose env cutover) | TASK-MONO-027 | ✅ done |
 | 3. ecommerce auth-service 컴포넌트 제거 (compose / settings.gradle / k8s / .env) | TASK-BE-132 | ✅ done |
 | 4. web-store NextAuth (admin-dashboard RETIRED — TASK-MONO-259) → IAM authorize | TASK-FE-067 | ✅ done |

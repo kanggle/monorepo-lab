@@ -37,7 +37,8 @@ class JwtTestHelperTest {
                 .containsExactlyInAnyOrder("MASTER_WRITE", "MASTER_READ");
         assertThat(claims.getStringClaim("email")).isEqualTo("user-42@test.local");
         assertThat(claims.getStringClaim("account_type")).isEqualTo("OPERATOR");
-        assertThat(claims.getAudience()).containsExactly("wms");
+        // TASK-MONO-696: aud is the console client id the IdP really mints, not a platform name.
+        assertThat(claims.getAudience()).containsExactly(JwtTestHelper.CONSOLE_CLIENT_ID);
         // TASK-MONO-367 (2026-08-01 sunset, LANDED): the helper's default issuer is now the
         // SAS issuer, matching production post-sunset (the legacy `iam` issuer this helper
         // used to default to is retired — see JwtTestHelper#signLegacyIssuerToken).
@@ -53,7 +54,8 @@ class JwtTestHelperTest {
         assertThat(claims.getStringClaim("role")).isEqualTo("MASTER_READ");
         assertThat(claims.getStringListClaim("roles")).containsExactly("MASTER_READ");
         assertThat(claims.getStringClaim("account_type")).isEqualTo("OPERATOR");
-        assertThat(claims.getAudience()).containsExactly("wms");
+        // TASK-MONO-696: aud is the console client id the IdP really mints, not a platform name.
+        assertThat(claims.getAudience()).containsExactly(JwtTestHelper.CONSOLE_CLIENT_ID);
     }
 
     @Test
