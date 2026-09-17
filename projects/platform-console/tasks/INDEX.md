@@ -93,7 +93,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔴 **순서: 282 → 283~288 직렬**(샘플 등록부·원장 파일 공유 — 병렬 worktree 금지) → 루트 `TASK-MONO-686`(`/demo` 은퇴, ⏳).
 
-- `TASK-PC-FE-287-wms-screens-get-samples.md` — wms 7 화면 · GET 11 · 🔴 NESTED 에러 봉투라 코드 보존 확인 · 코드 칸 null 금지. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
 - `TASK-PC-FE-288-scm-screens-get-samples.md` — scm 6 화면 · GET 10 · 🔴 404-as-empty 센티널 경로 유지 · 공급사 UUID 표시 금지. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
 
 - `TASK-PC-FE-295-the-overview-finance-card-reads-a-shape-the-bff-never-sends.md` — 🔴 **로그인 운영자 경로의 결함 후보**(샘플 시리즈 무관, 286 리뷰에서 코드 판독으로 발견): console-bff 는 finance 레그에 잔액 응답 `{ data: [ {currency, ledger, available, held} ] }` 을 그대로 싣는데 web `FinanceDataSchema` 는 `{ balance, accountId }` 를 기대 → 잔액이 있어도 첫 화면 finance 카드가 «잔액 정보 없음». 원인은 계약 § 2.4.9.1 이 카드 `data` 모양을 정의하지 않은 공백. **AC-0 red-first 실측 먼저**(초록이면 구현 없이 닫음) → 계약 먼저 → 한쪽 고침(추천 ⓐ web 이 producer 모양을 읽음) → 양쪽이 같은 모양 한 벌을 쓰는 테스트. 분석=Opus 5 / 구현 권장=Sonnet 5.
@@ -123,6 +122,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 ## review
 
 - `TASK-PC-FE-286-finance-and-ledger-screens-get-samples.md` — finance·ledger 4 화면 · GET 15 · 🔴 차변 합 = 대변 합. impl 완료, 코디네이터 리뷰 대기. 분석=Opus 5 / 구현 권장=Sonnet 5.
+- `TASK-PC-FE-287-wms-screens-get-samples.md` — wms 6 화면 · GET 19(surface 3: `wms`·`wms_outbound`·`wms_outbound_logistics`) · 🔴 `wms_outbound_logistics` 의 `core` 가 282 부터 `'wms'`로 잘못 분류돼 있어 영원히 503 이던 결함을 `'flat'`로 수정(콘솔 코드 변경 없음, `coverage.ts` 전용) · 재고 코드(`locationCode`/`skuCode`/`lotNo`/`warehouseCode`) 마스터 픽스처와 router 로 교차검증(`TASK-MONO-675` 재현·은폐 둘 다 안 함) · 개요 WMS 카드(총 재고·알림) 파생. impl 완료, 코디네이터 리뷰 대기. 분석=Opus 5 / 구현 권장=Sonnet 5.
 
 ## done
 
