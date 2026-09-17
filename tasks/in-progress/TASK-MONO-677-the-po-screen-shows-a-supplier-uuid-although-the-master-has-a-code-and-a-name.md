@@ -107,8 +107,8 @@ in-progress
 
 ## AC-3 — 판정은 **화면**이다
 
-- [ ] 🔴 응답에 필드가 생긴 것으로 닫지 마라. 콘솔 `/scm/procurement` 의 「공급사」 칸에 **UUID 가 사라졌는가**가 판정이다. 🔵 `TASK-MONO-675` 가 배운 것: 필드가 있어도 값이 null 일 수 있다 — **값**을 봐라.
-- [ ] 🔴 이 칸은 **새 코드로 AMI 를 다시 구운 창**에서만 판정된다(데모 AMI 는 jar 를 구워 넣는다 — `TASK-MONO-667` 게이트 정정). 창이 없으면 ⚪ + 갈 곳(`TASK-MONO-672`).
+- [x] 🔴 응답에 필드가 생긴 것으로 닫지 마라. 콘솔 `/scm/procurement` 의 「공급사」 칸에 **UUID 가 사라졌는가**가 판정이다. 🔵 `TASK-MONO-675` 가 배운 것: 필드가 있어도 값이 null 일 수 있다 — **값**을 봐라.
+- [x] 🔴 이 칸은 **새 코드로 AMI 를 다시 구운 창**에서만 판정된다(데모 AMI 는 jar 를 구워 넣는다 — `TASK-MONO-667` 게이트 정정). 창이 없으면 ⚪ + 갈 곳(`TASK-MONO-672`).
 - [ ] 판정이 나면 scm README § Screenshots 의 보류 사유를 되돌려 준다.
 
 ## AC-4 — 가드
@@ -205,3 +205,10 @@ in-progress
   🔴 **기대값 갱신 (2026-09-16):** `TASK-MONO-683`(소유자 결정 ⓐ, PR #3860)이 머지되면 시드 공급사 코드는 **`SUP-001`** 이다(wms 코드와 정렬, 이름 `demo supplier` 는 그대로). 그 시드로 구운 AMI 의 신선 볼륨이면 기대값은 **`SUP-001 · demo supplier`** 다. 🔴 창에서 판정하기 전에 **구운 AMI 의 `RepoCommit` 이 683 머지 뒤인지** 먼저 확인하라 — 앞이면 옛 기대값 `SUP-DEMO-01` 이 맞다.
 - **AC-3** — 판정이 나면 scm README § Screenshots 보류 사유 되돌림.
 - 곁발견(범위 밖, 기록만): `scm-replenishment/components/ReplenishmentTable.tsx:104` 도 `supplierId` 를 원문으로 그린다(추천 행의 값은 D9 상 코드여야 하지만 시드는 UUID 를 넣는다 — 위 D9 결함과 같은 뿌리).
+
+---
+
+# 🔵 창 실측 — 2026-09-17 UTC · AMI `ami-0d30513151d07e163`(RepoCommit `b54296645`) · 창 08:50:37Z~10:08:16Z
+
+- **AC-3** 콘솔 `/scm/procurement`(테넌트 `demo-corp`) 「공급사」 칸: 발주 3건(CONFIRMED · ACKNOWLEDGED · DRAFT) **전부 `SUP-001 · demo supplier`** — UUID 없음. 이미지를 열어 확인. 🔵 코드가 `SUP-DEMO-01` 이 아니라 `SUP-001` 인 것은 `TASK-MONO-683`(결정 ⓐ)이 시드를 바꿨기 때문이다(§ AC-3 기대값 갱신 문단과 일치).
+- ⏳ 남은 칸: scm README § Screenshots 보류 사유 되돌리기(판정이 났으므로 이제 할 수 있다).

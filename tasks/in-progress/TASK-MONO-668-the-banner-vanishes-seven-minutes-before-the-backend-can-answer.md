@@ -369,3 +369,23 @@ if (status && status.state === 'running' && isPlausibleIpv4(status.ip)) { … } 
   주입(`DEMO_API_BASE=http://127.0.0.1:9`)은 언제나 `unavailable` 을 만들어서 `starting` 이 구워지는 세계를
   **만들 수 없다**. 넣으면 한 번도 물 기회가 없는 칸이 된다. 스토어 껍데기가 무조건 렌더이므로 어느 판정이든
   구워지려면 조건이 되돌아와야 하고, 그것은 기존 지문(`demo-backend-notice`)이 문다.
+
+---
+
+# 🔵 창 실측 — 2026-09-17 UTC · AMI `ami-0d30513151d07e163`(RepoCommit `b54296645`) · 인스턴스 `i-09fb4c2cb734cae4c` · 창 08:50:37Z~10:08:16Z · 9묶음 전부 명시 기동(`/bundle/start`, TASK-MONO-685 이후 꺼진 인스턴스는 요청한 묶음만 뜬다) · 소유자 승인 «b54296645, 상한 150분»
+
+표본 26개(약 15~35초 간격) — 매 표본마다 `GET /status` · `GET /bundles` · store `/api/demo/backend-state` 를 같은 순간에, 네 번째마다 세 앱 화면(store `/` · fan `/` · console `/login`)을 함께 읽었다.
+
+| 구간 (UTC) | `selection_ready` | 선택 묶음 | store backend-state | 세 앱 배너 |
+|---|---|---|---|---|
+| 08:50:58 ~ 08:51:34 | **`null`** | 전부 `unknown` (헬스 첫 발행 전) | **`running`** | 🔴 **셋 다 없음** |
+| 08:51:52 ~ 09:00:xx | `false` | `booting` → 순차 `ready` | `starting` | 🟢 08:52:27 · 08:54:39 · 08:56:38 · 08:58:06 · 08:59:34 에 **셋 다 «데모 서버가 켜지는 중입니다»**(`demo-backend-starting`) |
+| 09:01:02 | `true` | 9개 전부 `ready` | `running` | 🟢 셋 다 사라짐 |
+| 09:01:56 (대조군, +54초) | `true` | — | `running` | 🟢 셋 다 없음 |
+
+1. 🟢 **쌍 불일치 0** — `selection_ready=true` 와 «선택 묶음 전부 ready» 가 어긋난 표본이 없다.
+2. 🟢 backend-state: booting 동안 `starting`, 전부 ready 뒤 `running`.
+3. 🟢 세 앱이 같은 순간 같은 첫 문장. fan `(main)` 도 기동 중에 배너를 그렸다(프리렌더에 판정이 구워지는 증상은 관측 안 됨).
+4. 🟢 대조군: ready 뒤 첫 표본(09:01:02)에서 이미 세 배너가 사라졌다(15초 캐시 TTL 안).
+5. 🔵 `starting` 구간 셋째 표본 ≈ **9분 10초**(08:51:52 → 09:01:02).
+6. 🔴 **새로 본 틈** — 인스턴스 `running` 직후, 헬스가 **처음 발행되기 전 약 36~54초** 동안 `selection_ready=null` → 해석기가 옛 동작(`running`)으로 떨어져 **세 앱 모두 배너가 없었다.** 설계 표(§ Edge Cases «헬스 stale 도 null → running(옛 동작)»)가 **의도한** 동작이지만, 그 결과는 이 티켓이 없애려던 «켜졌다고 믿고 들어와 빈 화면» 과 같은 모양이다(짧을 뿐). 고칠지는 소유자 판단 — 이 티켓의 판정 술어(1~4)는 모두 통과했다.

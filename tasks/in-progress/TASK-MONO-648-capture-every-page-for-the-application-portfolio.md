@@ -182,7 +182,7 @@ monorepo
       **게이트 없는 숫자**였다 — 콘솔에 라우트가 추가될 때마다 이 문장이 재측정 없이
       낡는다(재측정은 AC-0 이 매번 다시 하게 한다, 숫자를 물려받지 마라).
 
-- [ ] 🔴🔴 **AC-1b (2026-09-15 추가 · `TASK-MONO-676` 이 되돌린 의무) — 판별자 수리.**
+- [x] 🔴🔴 **AC-1b (2026-09-15 추가 · `TASK-MONO-676` 이 되돌린 의무) — 판별자 수리.**
       🔵 산문이 아니라 **체크박스**로 둔다 — 큐가 아닌 곳에 적은 «다음 세션의 할 일» 은 사라진다.
       닫는 조건: 판정이 본문 텍스트가 아니라 거부 요소로 바뀌었고, 가이드 셋을 넣은 실행에서
       **오탐 0** + `/tenants` 를 넣은 실행에서 **거부 1** 이 둘 다 나온다(대조군 포함).
@@ -1104,3 +1104,22 @@ AMI `ami-058f6293d1408f91e`(`RepoCommit=8cf474346`) · 인스턴스 `i-027d6b396
 🔵 고르기를 위임받았고, 기준은 **데이터가 있는가 · 결함이 안 보이는가 · 그 도메인의 요지인가**
 셋이다. finance 는 위 이유로 **0장**을 골랐다(기준 첫째에서 전부 떨어진다). 🔴 이 칸(README 큐레이션)은
 **아직 닫지 않는다** — 위임은 받았지만 실을 수 있는 화면이 서비스당 3장이 안 되는 곳이 대부분이다.
+
+---
+
+# 🔵 창 실측 — 2026-09-17 UTC · AMI `ami-0d30513151d07e163`(RepoCommit `b54296645`) · 창 08:50:37Z~10:08:16Z
+
+`node scripts/capture-portfolio.mjs`(AC-1b 판별자가 들어간 판) 실행 3회 — 콘솔(로그인, `demo-corp`) · 콘솔(`DEMO_TENANT=ecommerce`) · store/fan(`--no-auth`). 출력은 세션 스크래치(커밋 안 함).
+
+| 실행 | 계획 | 찍음 | 실패 | 비고 |
+|---|---|---|---|---|
+| console · demo-corp | 69 | 56 | 13 | 거부 3(`/partnerships` · `/tenants` · `/wms/operations`) · 동적 미해결 10 · 빈값 13 · 저하 4 · 👁 문구만 4(가이드 셋 + `/iam/guide`) |
+| console · ecommerce | 69 | 51 | 18 | 동적 **4 해결**(`/ecommerce/promotions/[id]` · `…/edit` · `/ecommerce/sellers/[id]` · `/ecommerce/users/[id]`) · `/ecommerce/products/[id]`·`…/edit` = 거부 |
+| store (공개) | 22 | 5 | 17 | 전부 로그인 경로(고객 신원 필요) |
+| fan (공개) | 11 | 6 | 5 | 전부 로그인 경로 |
+
+- **AC-1b 닫는 조건** ✅ 가이드 셋을 넣은 실행에서 **거부 0**(👁 문구 플래그만) · `/tenants` **거부 1** — 대조군 `/wms/guide` 는 문구 플래그도 없음.
+- 🔴 **새로 본 판별자 틈 — 섹션 단위 거부를 페이지 거부로 센다.** `/wms/operations` 는 위 «운영 설정» 섹션이 «일시적으로 불러올 수 없습니다», 아래 «프로젝션 상태» 섹션**만** «권한 없음»(`wms-operations-projection-forbidden`)인데 `denied` 로 세어 **사진을 안 남겼다**(이미지를 따로 찍어 확인). AC-1b 는 `-card-` 만 부분 거부로 뺐다 — 섹션 마커는 같은 접미사를 쓴다. 🔵 반대로 `/ecommerce/products/[id]` 는 **진짜 페이지 거부**다(`product-forbidden`, `GET /api/ecommerce/products/{id}` = **403 `FORBIDDEN`**) — 🔴 목록은 열리는데 상세·편집만 막히는 **권한 비대칭**이라 별도 조사감.
+- 동적 경로: 콘솔 11개 중 **4개 촬영**(ecommerce 테넌트). 남은 7 = 목록이 비었음(주문·알림 템플릿·테넌트) · 부모 경로 404(`/ecommerce/settlements/periods`) · 위의 상품 거부. store/fan 동적 5개는 로그인 필요.
+- 저하 4(`/` · `/dashboards/overview` · `/dashboards/health` · `/onboarding`): «통합 개요를 일시적으로 불러올 수 없습니다» — `console-vercel.override.yml` 이 적은 알려진 한계(`console-bff` 공개 호스트 없음, `TASK-MONO-585`)와 같은 증상.
+- finance 화면은 빈값/저하 목록에 **없다**(이번 창엔 `console-finance` 를 켰다). 🔴 목록 판정일 뿐 이미지는 열지 않았다 — README 큐레이션 전에 열어라(이 티켓 § 정정 2026-09-15).

@@ -313,3 +313,10 @@ monorepo
 # 분석 / 구현 권장
 
 분석=Opus 5 / 구현 권장=**Opus** (두 서비스의 코드 공간 대조 + 계약·시드·표시 세 층)
+
+---
+
+# 🔵 창 실측 — 2026-09-17 UTC · AMI `ami-0d30513151d07e163`(RepoCommit `b54296645`) · 창 08:50:37Z~10:08:16Z
+
+- 🟢 **시드 수정이 런타임에 들어갔다**: `GET /api/scm/demand-planning/sku-supplier-map/SKU-APPLE-001` → `supplierId="SUP-001"`(코드, UUID 아님) · `defaultOrderQty=100`. 발주 화면 공급사 칸도 `SUP-001 · demo supplier`(`TASK-MONO-677` 기록).
+- ⚪ **AC-4 흐름(제안 승인 → 확정 → wms 입고 예정)은 이번 창에서도 관측 불가** — `GET /api/scm/demand-planning/suggestions` = **0건**. 정책 `SKU-APPLE-001` `reorderPoint=10` · `safetyStock=5` 인데 wms 가용재고 **85**(`/api/wms/inventory`) ⇒ 제안이 생길 조건이 아니다. 끝까지 보려면 재고를 재주문점 아래로 **인위로** 내려야 한다(출고·조정 쓰기) — 이 창의 승인 범위(측정) 밖이라 하지 않았다. 갈 곳은 그대로 `TASK-MONO-672` § 항목 5.
