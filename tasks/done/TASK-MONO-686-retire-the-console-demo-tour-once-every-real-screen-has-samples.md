@@ -8,7 +8,7 @@ TASK-MONO-686
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -209,3 +209,38 @@ BEFORE 는 이 워크트리를 `git stash push -u` 로 되돌린(분기점 `orig
 - **AC-6(머지 후 nightly 1회 확인)** — 코디네이터 몫(과업 지시가 그렇게 정했다).
 - **실제 Vercel 배포에서 `/demo` 308**(로컬 production build + e2e:smoke 까지만 쟀다) — 283~288 과 같은 한계.
 - 넘길 의무: 없음(다른 세션들의 진행 중 티켓에 아무것도 얹지 않았다 — 위 § 다른 세션과의 경계 참조).
+
+## CORRECTION — 닫기 판정 (조정자, 2026-09-17 UTC)
+
+🔴 위 AC 절의 AC-6 체크박스는 `[ ]` 로 남아 있다 — `review/` 파일은 동결이다. **체크박스가 아니라 아래 표가 판정이다.**
+
+머지 검증 4차원: (a) PR [#3895](https://github.com/kanggle/monorepo-lab/pull/3895) `state=MERGED` 2026-09-17T10:34:20Z ·
+(b) squash `e74191a74` 가 `origin/main` 조상(머지 시점의 끝) · (c) 머지 전 롤업 **62 체크 · FAILURE 0**(`4d60318ad` 기준 — 아래 수정 후),
+필수 4 + 프런트 unit · E2E smoke · console-bff IT · `Vercel build triggers` · `Demo wrapper smoke` **실제 실행** · (d) 아래 표.
+
+| AC | 닫힘 | 증거 |
+|---|---|---|
+| AC-0 | ✅ | 조정자가 착수 전 `origin/main` `4d273a826` 에서 실측(282~288 일곱 파일 `done/` · 원장 표면/화면 pending 0), 에이전트가 worktree 에서 재측정 일치 |
+| AC-1 | ✅ | 조정자 기준값(BEFORE: `demo-tour` 17 · `console-sample` 14 · 소비자 마커 2 · `'/demo` 5 · `"/demo` 3 파일) 대비 AFTER 남은 참조를 **한 줄씩 열어** 분류: 은퇴 설명 주석 · 새 308 테스트 · 「이전 이름」 역사 표기 · 동결 기록 — 살아 있는 코드/설정 0. 🔴 존재하지 않는 파일을 가리키던 주석 1곳(`next.config.mjs`: `demo-tour-redirects.test.ts` → 실제 `legacy-demo-tour-redirects.test.ts`)은 조정자가 고쳤다 |
+| AC-2 | ✅ | `/demo` · `/demo/overview` · 모르는 `/demo/<x>` → `/dashboards/overview`, `ecommerce/wms/scm/erp/finance/iam` → `/ecommerce/orders` · `/wms/inventory` · `/scm/procurement` · `/erp/approval` · `/finance/accounts` · `/iam`. 키는 삭제 직전 `console-sample.mjs` 에서 추출(손으로 안 적음). **조정자 대조**: 목적지 7곳 전부 샘플 원장의 실제 화면. 단위 테스트 + e2e-smoke(프로덕션 빌드) |
+| AC-3 | ✅ | `infra/demo/public-data`: `node --test` rc=0 · `build-bundled-snapshots --check` rc=0(조정자 재실행) · 발행 CLI 가 `--dataset console-sample` 을 거부 |
+| AC-4 | ✅ | `scripts/` 추가·삭제 없음 → 전수 실행 조건 미발생 |
+| AC-5 | ✅ | 조정자 재실행(최종 트리): lint rc=0 · tsc rc=0 · vitest **313 files / 3499 tests** 전부 통과(315/3518 에서 삭제한 둘러보기 테스트만큼 감소) · 에이전트: build rc=0 · e2e-smoke 22 passed · PR CI E2E smoke SUCCESS |
+| AC-6 | ✅ | 머지 커밋 `e74191a74` 의 `nightly-e2e.yml` push 런 [35211186289](https://github.com/kanggle/monorepo-lab/actions/runs/35211186289): `Platform Console E2E full-stack (Playwright + docker compose)` **success**, 런 전체 success |
+| DoD | ✅ | `(demo)` · `features/demo-tour` · `console-sample` 파일 0(조정자 `git ls-files` 실측) · `/demo/**` → 실제 화면 308 |
+
+🔴 **PR CI 가 잡은 결함 — 반쪽 은퇴** (머지 전 수정, 커밋 `4d60318ad`):
+에이전트가 `console-web/vercel-ignore.sh` 에서 `:/infra/demo/public-data` 트리거를 뺐다(근거: 둘러보기가 그 패키지를 읽던 유일한 자리). 그러나 D1 에 따라
+`package.json` 은 `@demo/public-data` 를 `link:` 로 **여전히 선언**한다. 선언된 로컬 의존이 트리거에 없으면 그 패키지만 바뀐 커밋의 배포가 **조용히 건너뛰어진다** —
+`scripts/check-vercel-build-triggers.sh` 칸 (12)가 CI 에서 물었다(자기시험의 «망가뜨리지 않은 사본은 통과» 칸이 rc=1). ⇒ 트리거를 되돌리고 주석의 근거를
+«의존 선언이 남아 있어서» 로 고쳤다(가드 rc=0 · 자기시험 전 칸 ok, 로컬). 의존 선언이 사라지는 날 트리거도 같이 뺀다.
+🔴 **조정자 자기 정정**: 로컬에서 **필수 가드 3종만** 돌리고 PR 본문에 «가드 통과» 라고 적었다 — 이 PR 이 건드린 경로(`vercel-ignore.sh`)를 직접 재는 비필수 가드를
+돌리지 않아 CI 가 먼저 잡았다.
+
+🔵 **남는 것**:
+- console-web 이 이제 **읽지 않는** `@demo/public-data` 의존(`package.json` `link:` · `Dockerfile` 복사 · compose) — 정리하면 lockfile · 이미지 빌드를 함께 건드린다(D1).
+  정리하는 날 `vercel-ignore.sh` 트리거도 함께 뺀다. 현재 비용은 그 패키지만 바뀐 커밋에서의 불필요한 콘솔 재배포뿐(안전한 방향).
+- 실제 Vercel 배포의 `/demo` 308 은 미측정(로컬 production build + smoke + nightly full-stack 까지).
+- `TASK-MONO-674`(다른 세션, in-progress)의 본문이 인용하는 `demo-tour-console-guard-regression.test.tsx` 는 `console-shell-sample-visitor-guard.test.tsx` 로 이름이 바뀌었다(내용 R100) — 그 티켓은 편집하지 않았다.
+
+🔵 **`ADR-MONO-074` 로드맵 완료**: 실행 1/8(282) · 2~7/8(283~288) · 8/8(이 티켓) 전부 done. 넘길 의무 0건.
