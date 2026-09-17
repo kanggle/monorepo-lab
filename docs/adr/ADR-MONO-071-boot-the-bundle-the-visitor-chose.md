@@ -172,14 +172,18 @@ iam 이 뜬 것도 진행으로 친다(`booting`) — 그 묶음을 위해 뜨�
 | `selection_ready` | 조건 | 해석기 상태 |
 |---|---|---|
 | `true` | running · 헬스 신선 · 선택 비어 있지 않음 · 선택 묶음 **전부** `ready` | `running` |
-| **`false`** | 위와 같은데 선택 묶음 중 하나라도 `ready` 아님 | **`starting`** |
-| `null` | 판정 불가 — running 아님 · 헬스 stale · 선택 빔 · 어느 묶음 `unknown` · SSM 읽기 실패 | 기존 동작(`running` / `unavailable`) |
+| **`false`** | 위와 같은데 선택 묶음 중 하나라도 `ready` 아님 · **또는**(`TASK-MONO-701`) running · 선택 비어 있지 않음 · 기동(`STARTED_PARAM`) 후 `FIRST_PUBLISH_GRACE_SECONDS`(300) 안인데 헬스가 **이 세션에서** 아직 발행되지 않음(없음, 또는 `published_at < started`) | **`starting`** |
+| `null` | 판정 불가 — running 아님 · 헬스 stale · 선택 빔 · 어느 묶음 `unknown` · SSM 읽기 실패 · (`TASK-MONO-701`) 기동 후 상한을 넘도록 이 세션의 헬스 미발행 | 기존 동작(`running` / `unavailable`) |
 | 필드 없음 | 옛 람다 | 기존 동작 |
 
 🔴 **판정 함수는 `/bundles` 와 같다**(`_bundle_state`). 두 엔드포인트가 따로 계산하면 론처와
 앱이 같은 순간에 다른 말을 한다.
 🔴 **`null` 은 `false` 가 아니다.** stale 을 `false` 로 내면 발행자만 죽은 멀쩡한 스택이 영구히
 «켜지는 중» 이 되고, `true` 로 내면 꺼진 스택을 «준비됨» 으로 그린다.
+🔵 **«방금 켜서 첫 발행 전» 은 stale 과 다르다**(`TASK-MONO-701`, 2026-09-17 소유자 결정 ⓐ). 둘을
+«이 세션에서 한 번이라도 발행됐는가»(`published_at` ≥ `STARTED_PARAM`)로 가르고, 첫 발행 전만
+상한(300초) 안에서 `false` 로 낸다 — 상한을 넘으면 위 규칙대로 `null`. 지난 세션의 스냅샷은 나이가
+신선해 보여도 이 판정에 안 쓴다(stop→start 가 90초 안이면 옛 `ready` 로 `true` 를 낼 수 있었다).
 🔴 **«전부» = 저장된 선택 전부**다. 대가(수용함): 자기 묶음이 `ready` 여도 다른 선택 묶음이
 `booting` 이면 `false` — 예컨대 스토어가 다 뜬 뒤 누가 `console-wms` 를 더하면 스토어도 그
 동안 «켜지는 중» 을 말한다. 틀리는 방향이 «아직» 쪽이라 보수적인 오차다.
