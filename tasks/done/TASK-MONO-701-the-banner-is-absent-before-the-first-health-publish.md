@@ -8,7 +8,7 @@ TASK-MONO-701
 
 # Status
 
-in-progress (2026-09-17 UTC — AC-0~2 닫힘, AC-3 은 람다 apply + 창 대기)
+done (2026-09-17 UTC — 창 판정 2026-09-17T16:35Z)
 
 # Owner
 
@@ -58,7 +58,7 @@ monorepo
 - [x] **AC-0 — 재측정.** `_selection_ready()` · 해석기의 `null` 처리 · `STARTED_PARAM`/헬스 발행 시각을 **그날의 코드**에서 읽고, 위 표의 줄 번호를 정정한다.
 - [x] **AC-1 — 갈래를 고른다 (🔴 소유자 결정).** 최소한 ⓐ 람다가 «기동 후 N초 안 + 헬스 발행 시각 < 기동 시각» 이면 `False` 를 낸다(N 상한 넘으면 다시 `None`) ⓑ 해석기가 `/status` 의 다른 필드로 가른다 ⓒ 그대로 둔다(40초는 수용) 를 비교해 추천과 함께 묻는다. 🔴 추천을 결정으로 적지 마라.
 - [x] **AC-2 — 두 방향 bite.** ① 방금 켠 인스턴스(헬스 미발행) → `starting` ② 발행이 N 초 넘게 멈춘 인스턴스 → `running`(옛 동작). 둘 다 테스트가 있고, 판정을 한쪽으로 되돌리면 반대 칸이 빨개진다.
-- [ ] **AC-3 — 창 판정.** 다음 창에서 668 과 같은 쌍 표본(`/status` · `/bundles` · backend-state · 세 앱 배너)으로 **첫 표본부터** `starting` 인지 본다. 창이 없으면 ⚪ + 갈 곳(`TASK-MONO-672`). 🔴 람다 변경이면 `terraform apply` 는 소유자 몫이다.
+- [x] **AC-3 — 창 판정.** 다음 창에서 668 과 같은 쌍 표본(`/status` · `/bundles` · backend-state · 세 앱 배너)으로 **첫 표본부터** `starting` 인지 본다. 창이 없으면 ⚪ + 갈 곳(`TASK-MONO-672`). 🔴 람다 변경이면 `terraform apply` 는 소유자 몫이다.
 
 ---
 
@@ -143,3 +143,31 @@ monorepo
 ## AC-3 — ⏳ 람다 apply + 창
 
 🔴 **이 PR 만으로는 라이브가 안 바뀐다** — 람다는 `archive_file` 로 굽고 `terraform apply` 는 소유자 몫이다. AMI 재굽기는 필요 없다(인스턴스 쪽 파일 무변경). 창 술어: 668 과 같은 쌍 표본(`/status` · `/bundles` · store backend-state · 세 앱 배너)을 `/bundle/start` **직후 첫 표본부터** 읽어 `selection_ready=false` · backend-state `starting` · 세 배너 «켜지는 중» 인지 본다. 창이 없으면 ⚪ + `TASK-MONO-672`.
+
+---
+
+# 🔵 창 실측 — 2026-09-17 UTC 둘째 창(시작 2026-09-17T16:34:55Z · 종료 17:21:02Z · 46분) · AMI `ami-02613b0378621b124`(RepoCommit `af0018aa6`, 12차 — 구조된 굽기, provenance operator-record) · 인스턴스 `i-07ddb6b41233f2673` · 묶음 `console console-ecommerce console-wms console-scm store fan` · 소유자 승인 «af0018aa6, 상한 100분»
+
+람다는 이 창 직전 소유자 `terraform apply`(저장 plan `tfplan-af0018aa6`: EC2 교체 + `aws_lambda_function.control` in-place, `source_code_hash` 변경)로 반영됐다. 표본기: `/bundle/start` **직전**부터 5초 간격(뒤에 20초) — `/status` · `/bundles`(선택 묶음) · store `/api/demo/backend-state` · 세 번째 표본마다 fan `/` · console `/login` 의 `data-testid="demo-backend-starting"` 개수(🔴 콘솔 본문은 저장하지 않았다). 표본 47개.
+
+| UTC | `selection_ready` | 선택 묶음 | store backend-state | fan · console 배너 |
+|---|---|---|---|---|
+| 16:34:53 (#1, 기동 요청 16:34:55 직전) | `null` (state=stopped) | selected | unavailable | — |
+| **16:35:06 (#2, +11초)** ~ 16:36:00 | **`false`** | **전부 `unknown` (헬스 첫 발행 전)** | **`starting`** | 16:35:23 둘 다 «켜지는 중» |
+| 16:36:07 (첫 헬스 발행, +72초) ~ 16:43:32 | `false` | requested → booting → 순차 ready | `starting` | 15회 표본 전부 둘 다 «켜지는 중» |
+| 16:43:58 (#47, +9분 3초) | `true` | 6개 전부 ready | `running` | — |
+| 16:44:30 (대조군) | — | — | `running` | fan 0 · console 0 (사라짐) |
+
+1. 🟢 **첫 running 표본부터 `false`** — 668 창(2026-09-17 08:50Z)에서 `null` → `running` 이던 «헬스 첫 발행 전» 구간(이번엔 16:35:06~16:36:00)이 `starting` 이 됐다. `null` 은 인스턴스가 꺼져 있던 #1 하나뿐.
+2. 🟢 첫 발행 +72초 — 구현 기록의 단일 표본(≈75초)과 같은 크기, 상한 300초 안.
+3. 🟢 `/status` ↔ `/bundles` 어긋남 0 (`true` 는 6묶음 전부 ready 인 표본에서만).
+4. 🔵 곁관찰: 첫 표본(#1)의 console 배너 개수 1 은 `/status` 를 읽은 뒤 기동 요청(16:34:55)이 끼어든 경합이다 — 같은 HTML 을 따로 받아 **렌더된 요소** `<div role="status" data-testid="demo-backend-starting">` 임을 확인했다(값 출력 없음).
+
+---
+
+# ✅ 닫음 — 2026-09-17 UTC (4차원 검증)
+
+- (a) impl PR [#3902](https://github.com/kanggle/monorepo-lab/pull/3902) `state=MERGED` 2026-09-17T15:08:21Z
+- (b) squash `e4d032eec` 가 `origin/main` 조상(rc=0)
+- (c) 머지된 PR 의 `statusCheckRollup` — SUCCESS 8 · SKIPPED 54 · **FAILURE 0**. 🔵 머지 뒤 **main** CI 런 35238255303 은 web-store `DemoBackendNotice.test.tsx` bite 칸 1/976 로 실패했으나 이 PR 은 web-store 를 안 건드렸고(diff: 람다·람다 테스트·ADR·티켓), 실패 잡만 재실행해 **success** — flake 로 판정(후속 후보로 보고).
+- (d) `# Acceptance Criteria` AC-0~AC-3 본문을 열어 읽음 — 전부 `[x]`. AC-3 동사 «첫 표본부터 `starting` 인지 본다» 는 위 표 #2 로 닫힘.

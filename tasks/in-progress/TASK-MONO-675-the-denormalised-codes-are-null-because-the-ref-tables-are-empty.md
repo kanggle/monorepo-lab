@@ -291,3 +291,20 @@ master-ref **소비자 클래스가 하나도 없다**(있는 것은 `MasterRefC
 - **AC-0 ②** `GET /api/wms/inventory` → 1행 `locationCode=WH01-A-01-01-01` · `skuCode=SKU-APPLE-001` · `warehouseCode=WH01` · `lotNo=null`(그 재고 행의 `lotId` 자체가 null) — 더는 null 이 아니다.
 - **AC-3** 콘솔 `/wms/inventory` 화면: 위치 칸 `WH01-A-01-01-01`, SKU 칸 `SKU-APPLE-001` (이미지를 열어 확인). **대조군** = 이 티켓 § 관측의 수정 전 API 응답(네 코드 전부 null).
 - ⚪ **AC-1 런타임 술어(토픽 오프셋 · admin 컨슈머 lag · `*.DLT`)는 못 쟀다** — 인스턴스 안에서 읽는 유일한 길인 `aws ssm send-command`(읽기 전용 스크립트)가 **자동 모드 분류기에 차단**됐다(2026-09-16 에 이어 두 번째). 우회하지 않았다. 🔵 다만 ref 가 **시드로** 찼고 형제 서비스와 같은 방식이 됐으므로, ⓐ 는 «원인» 에서 «해소된 원인» 으로 옮겨 갔다 — 오프셋 관측은 ⓐ/소비실패 구별을 **기록으로** 남기는 일로만 남는다.
+
+---
+
+# 🔵 창 실측 — 2026-09-17 UTC 둘째 창(시작 2026-09-17T16:34:55Z · 종료 17:21:02Z · 46분) · AMI `ami-02613b0378621b124`(RepoCommit `af0018aa6`, 12차 — 구조된 굽기, provenance operator-record) · 인스턴스 `i-07ddb6b41233f2673` · 묶음 `console console-ecommerce console-wms console-scm store fan` · 소유자 승인 «af0018aa6, 상한 100분» — AC-1 런타임 술어 (SSM 읽기 전용, 소유자가 실행)
+
+신선 볼륨(12차 AMI 로 교체된 인스턴스, admin `R__seed_dev_masterref.sql` 포함).
+
+| 술어 | 관측 | 읽는 법 |
+|---|---|---|
+| `wms.master.{warehouse,zone,location,sku,partner,lot}.v1` 끝 오프셋 | **6토픽 × 3파티션 전부 0** | 🟢 시드 행에 이벤트가 **없다** — ⓐ 의 핵심 술어 관측 |
+| admin 컨슈머 그룹 `wms-admin-service` 의 master 토픽 | 18파티션 전부 배정됨 · CURRENT-OFFSET `-` · LOG-END 0 | 구독은 살아 있고 읽을 것이 없다(ⓑ 기각 재확인 · ⓓ 해당 없음) |
+| admin ref 테이블 | `admin_warehouse_ref` 1 · `admin_zone_ref` 3 · `admin_location_ref` 3 · `admin_sku_ref` 3 · `admin_lot_ref` 1 · `admin_partner_ref` 3 | 🟢 AC-2 의 `R__seed_dev_masterref.sql`(14행)이 신선 볼륨에서 먹었다 |
+| master DLQ | 토픽은 `wms.master.*.v1.dlq` **6개 실재** | 🔴 **끝 오프셋을 못 쟀다** — 내 조회가 `DLT` 대문자만 걸렀고 master 쪽 이름은 소문자 `.dlq` 였다(«내 레코드의 이름은 그 코퍼스의 이름이 아니다»). 원천 토픽이 0 레코드라 소비 실패 레코드가 생길 수 없다는 것은 **추론**이지 관측이 아니다 |
+
+⇒ AC-1 은 **아직 체크하지 않는다** — 이 AC 가 «`*.DLT` 에 레코드가 있으면 소비 실패» 를 술어로 적었고 그 칸이 안 재졌다. 남은 일 = 다음 창에서 `kafka-get-offsets.sh --topic wms.master.<x>.v1.dlq` 6줄(읽기 전용).
+
+🔴 곁발견(이 티켓 범위 밖): `wms.outbound.shipping.confirmed.v1.DLT` 파티션 1 에 **레코드 1건**. 출고 확정 이벤트 하나가 어떤 소비자에서 실패했다 → **받는 티켓 = `tasks/ready/TASK-MONO-706-*`** (이 PR 에서 기안).

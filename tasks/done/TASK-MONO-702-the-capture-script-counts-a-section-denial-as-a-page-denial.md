@@ -8,7 +8,7 @@ TASK-MONO-702
 
 # Status
 
-in-progress (2026-09-17 UTC — AC-0~2 닫힘, AC-3 창 대기)
+done (2026-09-17 UTC — 창 판정 2026-09-17T16:44~16:52Z)
 
 # Owner
 
@@ -56,7 +56,7 @@ monorepo
 - [x] **AC-0 — 재측정.** `judgeDenialInPage()` 와 콘솔 `features/**` 의 섹션 단위 거부 마커를 그날의 코드에서 다시 센다(위 목록은 2026-09-17 표본). 🔴 `/wms/operations` 의 두 섹션이 지금도 그 모양인지 컴포넌트에서 확인한다.
 - [x] **AC-1 — 술어를 고른다.** 이름 규칙(`-card-` 같은 목록 늘리기)과 구조 규칙(렌더 트리) 중 무엇으로 가를지 근거와 함께 적는다. 🔴 «목록 하나 더» 는 다음 모양이 또 샌다 — 고르면 이유를 적어라. 스크립트만으로 못 가르면 콘솔 마커 변경이 필요하다는 사실과 선택지를 소유자에게 묻는다.
 - [x] **AC-2 — self-test bite.** 픽스처 ① 섹션 하나만 거부 + 나머지 본문 → `denied=false` · `partial≥1` ② 페이지 전체 거부 → `denied=true` ③ 기존 6칸 유지. 새 술어를 옛 규칙(`-card-` 만)으로 되돌리면 ① 이 빨개진다.
-- [ ] **AC-3 — 실전 판정.** 다음 창에서 `/wms/operations`(섹션 거부)가 사진으로 남고 `partialDenied` 로 표시되며, `/tenants` · `/ecommerce/products/[id]`(페이지 거부)는 여전히 `denied` 인지 본다. 창이 없으면 ⚪ + 갈 곳(`TASK-MONO-672`).
+- [x] **AC-3 — 실전 판정.** 다음 창에서 `/wms/operations`(섹션 거부)가 사진으로 남고 `partialDenied` 로 표시되며, `/tenants` · `/ecommerce/products/[id]`(페이지 거부)는 여전히 `denied` 인지 본다. 창이 없으면 ⚪ + 갈 곳(`TASK-MONO-672`).
 
 ---
 
@@ -132,3 +132,28 @@ monorepo
 ## AC-3 — ⏳ 창 대기
 
 다음 창에서 `/wms/operations`(테넌트 `demo-corp`)가 `ok` + `partialDenied` 로 사진이 남는지, `/tenants` · `/ecommerce/products/[id]`(테넌트 `ecommerce`)가 여전히 `denied` 인지 본다. 이 세션에 창이 없으면 ⚪ + `TASK-MONO-672`.
+
+---
+
+# 🔵 창 실측 — 2026-09-17 UTC 둘째 창(시작 2026-09-17T16:34:55Z · 종료 17:21:02Z · 46분) · AMI `ami-02613b0378621b124`(RepoCommit `af0018aa6`, 12차 — 구조된 굽기, provenance operator-record) · 인스턴스 `i-07ddb6b41233f2673` · 묶음 `console console-ecommerce console-wms console-scm store fan` · 소유자 승인 «af0018aa6, 상한 100분»
+
+`node scripts/capture-portfolio.mjs --app console`(이 PR 이 들어간 판) — 테넌트 `demo-corp`: 계획 67 · 찍음 55 · 실패 12.
+
+| 경로 | 결과 | 판정 |
+|---|---|---|
+| `/wms/operations` | 🟢 `ok` · `partialDenied: [wms-operations-projection-forbidden]` · `degraded: true` — 이미지를 열어 확인(위 «운영 설정» = 일시적으로 불러올 수 없음, 아래 «프로젝션 상태»만 «권한 없음») | 섹션 거부가 **사진으로 남았다** · Edge Case 3(거부+저하 둘 다 표시) 그대로 |
+| `/tenants` | `denied 200` | 🟢 페이지 거부 유지 |
+| `/partnerships` | `denied 200` | 🟢 페이지 거부 유지 |
+| `/ecommerce/products/[id]` | 🔵 **더 이상 거부가 아니다** — `TASK-MONO-703` 이 같은 AMI 로 고쳤다(그 티켓 § 창 실측). 그래서 이 칸의 «페이지 거부 대조군» 역할은 `/tenants` · `/partnerships` 가 대신한다 |
+
+- 🔵 곁관찰(설계대로): `/wms/operations` 는 제목 아래 **설명 문단**이 있어 두 섹션이 모두 거부돼도 남는 글자가 생긴다 ⇒ `partial`(사진 남김) 로 판정될 것이다 — 틀리는 방향이 «사람이 연다» 쪽이라 AC-1 이유 3 이 수용한 모양이다.
+- 🔴 테넌트 `ecommerce` 로 같은 스크립트를 돌린 실행은 **사전 점검에서 앱 전체를 건너뛰었다**(`/dashboards/overview` 가 «테넌트를 선택» 을 그림) — 스크립트의 `selectTenant` 가 **편도 전환**이라 생긴 일이다(왕복 전환이 필요하다는 기존 함정). 이 티켓의 술어와 무관 — 648 에 기록.
+
+---
+
+# ✅ 닫음 — 2026-09-17 UTC (4차원 검증)
+
+- (a) impl PR [#3900](https://github.com/kanggle/monorepo-lab/pull/3900) `state=MERGED` 2026-09-17T14:09:54Z
+- (b) squash `36519302f` 가 `origin/main` 조상(rc=0)
+- (c) 머지된 PR `statusCheckRollup` — SUCCESS 6 · SKIPPED 56 · **FAILURE 0** (main CI · Nightly E2E 도 success)
+- (d) AC-0~AC-3 본문을 열어 읽음 — 전부 `[x]`. AC-3 «사진으로 남고 partialDenied 로 표시 · 페이지 거부는 여전히 denied» 는 위 표로 닫힘.

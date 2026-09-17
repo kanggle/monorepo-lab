@@ -8,7 +8,7 @@ TASK-MONO-703
 
 # Status
 
-in-progress (2026-09-17 UTC — AC-0~2 닫힘, AC-3 은 AMI 재굽기 + 창 대기)
+done (2026-09-17 UTC — 창 판정 2026-09-17T16:55Z)
 
 # Owner
 
@@ -60,7 +60,7 @@ monorepo
 - [x] **AC-0 — 층을 지목한다.** 콘솔 `app/api/ecommerce/products/[id]/route.ts` → 게이트웨이 코어 → ecommerce 게이트웨이 → product-service 경로를 코드로 따라가고, **덮어쓰기 전의 원래 응답**(상태 · 코드)을 어디서 볼 수 있는지 찾는다. 로컬 재현(단위/슬라이스 테스트)으로 같은 403 을 만들 수 있으면 그것이 첫 판정이다. 🔴 창에서만 볼 수 있으면 그 사실과 술어를 적고 ⚪ + 갈 곳.
 - [x] **AC-1 — 요구 ↔ 보유 대조.** 상세가 요구하는 권한 키(또는 소유 검사)와, 목록이 요구하는 것을 **나란히** 적는다. 🔴 화면 문구는 키가 아니다(`TASK-MONO-676` 이 배운 것).
 - [x] **AC-2 — 결함/의도 판정 → (결함이면) 고친다, (의도면) 소유자에게 표시 방식을 묻는다.** bite: 고친 뒤 되돌리면 AC-0 의 재현 테스트가 403 으로 돌아간다.
-- [ ] **AC-3 — 창 판정.** 테넌트 `ecommerce` 로 `/ecommerce/products` → 상품 클릭 → 상세·편집이 열리는지(또는 의도된 표시인지) 이미지로 본다. 🔴 백엔드 변경이면 AMI 재굽기 뒤 창이어야 한다. 창이 없으면 ⚪ + 갈 곳(`TASK-MONO-672`).
+- [x] **AC-3 — 창 판정.** 테넌트 `ecommerce` 로 `/ecommerce/products` → 상품 클릭 → 상세·편집이 열리는지(또는 의도된 표시인지) 이미지로 본다. 🔴 백엔드 변경이면 AMI 재굽기 뒤 창이어야 한다. 창이 없으면 ⚪ + 갈 곳(`TASK-MONO-672`).
 
 ---
 
@@ -152,3 +152,28 @@ monorepo
 ## AC-3 — ⏳ AMI 재굽기 + 창
 
 🔴 백엔드(product-service jar) 변경이라 **이 PR 이 들어간 SHA 로 AMI 를 다시 구운 창**이어야 한다. 콘솔 쪽은 Vercel 배포. 창 술어: 테넌트 `ecommerce` 로 `/ecommerce/products` → 상품 링크 → 상세 · 편집이 열리는지(`product-forbidden` 없음) 이미지로 보고, **다른 상품 id 하나** 로도 연다(Edge Case 2). 창이 없으면 ⚪ + `TASK-MONO-672`.
+
+---
+
+# 🔵 창 실측 — 2026-09-17 UTC 둘째 창(시작 2026-09-17T16:34:55Z · 종료 17:21:02Z · 46분) · AMI `ami-02613b0378621b124`(RepoCommit `af0018aa6`, 12차 — 구조된 굽기, provenance operator-record) · 인스턴스 `i-07ddb6b41233f2673` · 묶음 `console console-ecommerce console-wms console-scm store fan` · 소유자 승인 «af0018aa6, 상한 100분»
+
+이 PR 의 SHA(`af0018aa6`)로 구운 AMI 이고 콘솔은 같은 커밋의 Vercel 배포(성공). 운영자 로그인 → `POST /api/tenant` **왕복**(`demo-corp` 200 → `ecommerce` 200, 셀렉트 값 `ecommerce` 확인) → `/ecommerce/products`(상세 링크 20개) → 첫째·마지막 상품의 상세·편집.
+
+| 상품 | 화면 | HTTP | h1 | 거부 요소 | `GET /api/ecommerce/products/{id}` |
+|---|---|---|---|---|---|
+| p1 = `b0000000-…-000000000002` (**지난 창에서 403 이던 바로 그 행**) | 상세 | 200 | 상품 상세 | 0 | **200** |
+| p1 | 편집 | 200 | 상품 수정 | 0 | 200 |
+| p2 = 목록 마지막(다른 id) | 상세 | 200 | 상품 상세 | 0 | 200 |
+| p2 | 편집 | 200 | 상품 수정 | 0 | 200 |
+
+- 🟢 이미지를 열어 확인: p1 상세에 상품명·상태·가격·옵션(variant) 표·옵션 추가·이미지·재고 조정까지 렌더 · p2 편집 폼(상품명·설명·가격·썸네일·상태) 렌더.
+- 🟢 Edge Case 2: 한 행이 아니라 **상품 상세 전반**이 열린다(둘째 id 로 확인).
+
+---
+
+# ✅ 닫음 — 2026-09-17 UTC (4차원 검증)
+
+- (a) impl PR [#3904](https://github.com/kanggle/monorepo-lab/pull/3904) `state=MERGED` 2026-09-17T15:21:33Z (🔵 #3903 은 같은 내용 — #3902 머지 뒤 INDEX 충돌을 rebase 로 풀고 force-push 대신 새 ref 로 대체하며 닫았다)
+- (b) squash `af0018aa6` 가 `origin/main` 조상(rc=0)
+- (c) 머지된 PR `statusCheckRollup` — SUCCESS 22 · SKIPPED 42 · **FAILURE 0** (ecommerce Integration A·B·C — product-service `integrationTest` 포함 — · console-bff · 프런트 단위 · E2E smoke 통과)
+- (d) AC-0~AC-3 본문을 열어 읽음 — 전부 `[x]`. AC-3 «AMI 재굽기 뒤 창에서 상세·편집이 열리는지 이미지로» 는 위 표 + 이미지로 닫힘.

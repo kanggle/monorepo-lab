@@ -2,7 +2,7 @@
 
 # Status
 
-in-progress
+done (2026-09-17 UTC)
 
 **Type:** TASK-MONO (monorepo-level — 콘솔 인증 경로 + IAM 토큰 수명)
 
@@ -301,3 +301,30 @@ AC-2(창에서의 런타임 판정)를 닫는 것이 아니다.
 | **로그아웃 뒤** | 09:23 | 09:24 | `/wms/inventory` — 🔵 **샘플 모드**(«샘플 데이터로 보는 실제 콘솔 화면입니다» · 테넌트 `sample` · 로그인 버튼 · 샘플 행 `SKU-BANANA-002` 등), 남은 콘솔 쿠키 = `console_last_tenant` 하나 | 🟢 실제 데이터가 새지 않는다(ADR-MONO-074 의 익명 방문자 경로) |
 
 🔴 훼손 쿠키 칸의 로그인 화면 이미지는 **열지 않았다**(콘솔 `/login` 은 본문에 데모 비밀번호를 보인다) — 판정은 최종 URL 로만 했다.
+
+---
+
+# 🔵 창 실측 — 2026-09-17 UTC 둘째 창(시작 2026-09-17T16:34:55Z · 종료 17:21:02Z · 46분) · AMI `ami-02613b0378621b124`(RepoCommit `af0018aa6`, 12차 — 구조된 굽기, provenance operator-record) · 인스턴스 `i-07ddb6b41233f2673` · 묶음 `console console-ecommerce console-wms console-scm store fan` · 소유자 승인 «af0018aa6, 상한 100분» — 항목 8 «id_token 쿠키가 갱신 뒤 다시 서는가»
+
+🔴 **답: 안 선다.**
+
+| UTC | 무엇 | 콘솔 쿠키(이름 · 남은 초 — 값은 기록 안 함) |
+|---|---|---|
+| 16:44:13 | 로그인(테넌트 기본) → `/ecommerce` | access 1787 · **id_token 1787** · operator 3588 · refresh 2591988 |
+| 16:44:13 ~ 17:15:13 | 페이지를 연 채 **31분 손대지 않음** | — |
+| 17:15:13 | 유휴 뒤(클릭 전) | operator 1728 · refresh 2590128 — access · **id_token 만료로 사라짐** |
+| 17:18:19 → 17:18:42 | 유휴 뒤 저장 상태로 새 브라우저 → `/wms` | 307 `/wms` → 307 `/api/auth/refresh` → 최종 `/wms`(h1 «WMS») · 갱신 뒤 access 1779 · operator 3580 · refresh 2591980 · **id_token 없음** |
+
+- 🔴 **측정 방식의 한계를 적는다**: 계획은 «같은 페이지에서 사이드바 링크 클릭(소프트 내비)» 이었는데, 17:15:13 의 클릭이 **내 스크립트의 셀렉터 결함**(`/ecommerce` 화면의 사이드바는 E-Commerce 하위 메뉴라 `/wms`·`/dashboards/overview` 링크가 없다)으로 **일어나지 않았다.** 그래서 유휴 뒤 저장해 둔 storageState(access·id 만료, operator·refresh 생존)로 새 컨텍스트를 열어 **페이지 이동**으로 갱신 경로를 탔다. 이 항목의 질문(«갱신 뒤 id_token 이 서는가»)은 이동 방식과 무관하게 갱신 응답이 정한다 — 소프트 내비 자체는 2026-09-17 창 표(T+30 링크 클릭 🟢)가 이미 쟀다.
+- 기전(코드): `console-web/src/shared/lib/session-refresh.ts:148-150` 은 **갱신 응답에 `id_token` 이 있을 때만** 쿠키를 다시 세운다(콜백 `app/api/auth/callback/route.ts:149` 과 같은 조건) ⇒ **IAM 의 refresh_token 그랜트 응답에 `id_token` 이 없다.**
+- 결과(이 티켓 `:182` 가 예고한 그대로): 로그인 30분 뒤부터 `console_id_token` 이 없다 ⇒ 로그아웃이 `id_token_hint` 없이 **로컬 로그아웃으로 폴백**(`app/api/auth/logout/route.ts:31-32,86`) — IdP 세션은 남는다. 표시 이름은 액세스 토큰으로 폴백(보이는 변화 없음).
+- ⇒ «잴 것» 이 «고칠지 정할 것» 이 됐다. 🔵 **받는 티켓 = `tasks/ready/TASK-MONO-705-*`** (이 PR 에서 기안).
+
+---
+
+# ✅ 닫음 — 2026-09-17 UTC (4차원 검증)
+
+- (a) impl PR [#3821](https://github.com/kanggle/monorepo-lab/pull/3821) `state=MERGED` 2026-09-15T11:44:02Z
+- (b) squash `41e58a311` 가 `origin/main` 조상(rc=0)
+- (c) 머지된 PR `statusCheckRollup` — SUCCESS 15 · SKIPPED 46 · **FAILURE 0**
+- (d) `# Acceptance Criteria` 본문 체크박스 전부 `[x]`(열어 읽음) · 본문 «창에서 잴 것» 1~8 중 1~7 은 2026-09-17 창 표로, 8 은 위 표로 측정됨. 남은 «미결» 은 없다 — 8 의 답이 낳은 결정은 `TASK-MONO-705` 가 들고 있다.
