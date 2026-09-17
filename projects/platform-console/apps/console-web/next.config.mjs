@@ -42,7 +42,7 @@ const csp = [
 // 실제 콘솔 경로 매핑. **손으로 지어내지 않았다** — 이 커밋이 함께 지운
 // `infra/demo/public-data/fixtures/console-sample.mjs` 의 `CONSOLE_SAMPLE_DOMAINS`
 // (`key` · `liveHref` 필드, 2026-09 작성)에서 그대로 옮겼다. 그 파일은 삭제됐으므로 이
-// 목록이 지금 그 사실의 유일한 정본이다 — `tests/unit/demo-tour-redirects.test.ts` 가
+// 목록이 지금 그 사실의 유일한 정본이다 — `tests/unit/legacy-demo-tour-redirects.test.ts` 가
 // (a) 이 정본과 (b) 실제 `redirects()` 출력이 갈라지지 않는지를 짠다.
 export const DEMO_TOUR_DOMAIN_REDIRECTS = Object.freeze([
   { domain: 'overview', destination: '/dashboards/overview' },
