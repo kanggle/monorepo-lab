@@ -8,7 +8,7 @@ TASK-MONO-668
 
 # Status
 
-in-progress
+done (2026-09-17 UTC)
 
 # Owner
 
@@ -389,3 +389,14 @@ if (status && status.state === 'running' && isPlausibleIpv4(status.ip)) { … } 
 4. 🟢 대조군: ready 뒤 첫 표본(09:01:02)에서 이미 세 배너가 사라졌다(15초 캐시 TTL 안).
 5. 🔵 `starting` 구간 셋째 표본 ≈ **9분 10초**(08:51:52 → 09:01:02).
 6. 🔴 **새로 본 틈** — 인스턴스 `running` 직후, 헬스가 **처음 발행되기 전 약 36~54초** 동안 `selection_ready=null` → 해석기가 옛 동작(`running`)으로 떨어져 **세 앱 모두 배너가 없었다.** 설계 표(§ Edge Cases «헬스 stale 도 null → running(옛 동작)»)가 **의도한** 동작이지만, 그 결과는 이 티켓이 없애려던 «켜졌다고 믿고 들어와 빈 화면» 과 같은 모양이다(짧을 뿐). 고칠지는 소유자 판단 — 이 티켓의 판정 술어(1~4)는 모두 통과했다.
+
+---
+
+# ✅ 닫음 — 2026-09-17 UTC (4차원 검증)
+
+- 🔴 **`:153` «ⓑ 가 넘겨받는 미결 — «전부» 의 정의» 는 풀렸는가** — 본문 전체를 대조했다: § Edge Cases 첫 행(`:213`)이 «기대를 뒤집고 **보수 쪽 오차로 수용**» 으로 닫았고, 수용한 대가를 이름으로 적었으며, 람다 `_selection_ready` docstring(««전부» 는 선택된 묶음 전부다 — 소유자 결정 ⓑ») 과 테스트 `test_one_ready_and_one_booting_is_false_the_accepted_conservative_cost`(`infra/demo/aws/tests/test_handler.py`, 실재 확인)가 같은 결정을 코드에 박았다. `:153` 이 요구한 «구현 PR 이 그것을 본문에 적는다» 가 충족됐다.
+- 위 § 창 실측 6번(헬스 첫 발행 전 공백)은 이 티켓의 술어 밖이고 **`TASK-MONO-701`** 이 받았다(소유자 결정 ⓐ, 2026-09-17).
+- (a) impl PR [#3819](https://github.com/kanggle/monorepo-lab/pull/3819) `state=MERGED` 2026-09-15T08:09:08Z
+- (b) squash `401f0ac3f` 가 `origin/main` 의 조상(rc=0)
+- (c) 머지된 PR 의 `statusCheckRollup` — SUCCESS 23 · SKIPPED 40 · **FAILURE 0**
+- (d) `# Acceptance Criteria` 본문 AC-0~AC-3 을 열어 읽음 — 전부 `[x]`. «라이브 쌍 관측» 을 요구한 닫는 판정(§ 창이 잴 것 1~4)은 2026-09-17 창 26표본에서 전부 통과(쌍 불일치 0 · backend-state `starting` · 세 앱 같은 첫 문장 · 대조군 소거). 본문의 ⚪ 셋(`:335-343`)은 «로컬에서 못 잰 것 + 권위=CI» 기록이고 #3819 의 CI 가 그 권위로 FAILURE 0 이었다.

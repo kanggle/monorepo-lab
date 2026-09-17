@@ -2,7 +2,7 @@
 
 # Status
 
-in-progress
+done (2026-09-17 UTC)
 
 **Type:** TASK-MONO (monorepo-level — 콘솔 권한 ↔ 데모 시드의 역할 부여)
 
@@ -99,7 +99,8 @@ in-progress
       🔴 ⇒ **«셋만 막혔다» 는 비대칭은 권한이 아니라 본문 텍스트의 비대칭이다** — 판정 술어가 «본문에 권한 거부 문구 없음»(`TASK-MONO-648:155`)이고, `scripts/capture-portfolio.mjs:297` 의 표지가 `['권한이 없습니다', '접근 권한', '테넌트를 선택', 'Forbidden', '403']` 다. wms 가이드만 그 낱말을 **안 쓴다**.
       🔵 교차 증거: `TASK-MONO-648:314` 는 다른 촬영에서 `/erp/guide` 를 눈으로 보고 **«📄 문서 페이지(5,521자)»** 로 적었다.
       🔴 **남은 틈**: 58×2 스윕을 돌린 **정확한 스크립트는 저장소에 없다**(`capture-portfolio.mjs` 는 앱당 한 번만 판정한다 — 648:340). 그리고 `/iam/guide` 에도 *"메뉴별 역할 접근 권한"* 캡션이 있는데 «열림» 으로 셌다 ⇒ 그 스윕의 표지 집합은 위와 **달랐을 수 있다**. ⇒ **판정 확정은 창에서 네 화면의 이미지를 열어서** 한다(AC-0).
-- [ ] 계정 쪽: `demo@demo.com` 이 그 테넌트에서 **실제로 가진** 권한 목록을 뽑아라.
+- [x] 계정 쪽: `demo@demo.com` 이 그 테넌트에서 **실제로 가진** 권한 목록을 뽑아라.
+      → 🟢 **2026-09-17 UTC 소유자 결정으로 닫음** — 선택창 라벨 원문 **「응답 코드 관측으로 닫기 (Recommended)」** (🔵 추천 표지는 내 것). 근거: 이 AC 가 판정에 쓰이는 질문은 «비는 자리가 키인가 스코프인가» 이고, 2026-09-17 창의 런타임 응답 `403 TENANT_SCOPE_DENIED`(키 부족 코드가 아님)가 그것을 관측으로 답했다(아래 § 창 실측). 목록 전체를 뽑아도 AC-2 결정(«/tenants=의도»)은 바뀌지 않는다. 🔴 포기한 것: «보유 권한 **목록**» 의 런타임 값은 저장소에 남지 않는다 — 권한 목록 자체가 판정 입력인 다음 티켓은 이것을 측정값으로 인용하지 말 것.
       🔵 시드 스크립트 선언이 아니라 **런타임 값**이어야 한다 — 이 저장소가 「선언 파일 grep ≠
       런타임 모집단」으로 여러 번 데인 축이다.
       → ⏳ **선언만 쟀다 — 런타임은 창에서.** 선언: `iam auth-service db/migration-dev/R__seed_demo_operator.sql:59,67` 운영자 `tenant_id='demo-corp'` · `:77-81` SUPER_ADMIN 을 **`demo-corp` 스코프로** 바인딩 · `V0024__seed_tenant_manage_permission.sql` 이 `tenant.manage` 를 SUPER_ADMIN 에. 🔴 ⇒ 선언상 **키는 가졌고 스코프가 `*` 가 아니다** — `/tenants` 403 이 두 테넌트 모두에서 났다는 관측과 **맞는다**. 런타임 확증 술어: 창에서 `GET /api/admin/tenants` 응답 코드가 `TENANT_SCOPE_DENIED` 인가(권한 부족 코드가 아니라).
@@ -182,3 +183,14 @@ in-progress
 
   가이드 이미지를 열어 확인(`/scm/guide`, ecommerce 테넌트 — 정상 문서 화면). ⇒ **가이드 셋은 열린다**(«판별자 오탐» 확정), `/tenants` 만 진짜 거부.
 - **AC-1 계정 쪽(부분)** 운영자 토큰으로 `GET https://auth.hubwang.com/api/admin/tenants?page=0&size=20` (`X-Tenant-Id: demo-corp`) → **403 `TENANT_SCOPE_DENIED`** — 권한 키 부족 코드가 아니라 **스코프** 거부. 선언 대조(`tenant.manage` 보유 · 스코프 `demo-corp`)와 맞는다. ⚪ «실제로 가진 권한 **목록**» 자체는 뽑지 않았다(응답 코드로만 판정).
+
+---
+
+# ✅ 닫음 — 2026-09-17 UTC (4차원 검증)
+
+- 위 ⚪ 는 소유자 결정으로 AC-1 계정 칸의 닫음이 됐다(§ AC-1 — «응답 코드 관측으로 닫기»).
+- (a) impl PR [#3816](https://github.com/kanggle/monorepo-lab/pull/3816)(675 시드 + 이 티켓의 판정을 648 에 되돌림) `state=MERGED` 2026-09-15T08:22:36Z
+- (b) squash `dabf5c107` 가 `origin/main` 의 조상(rc=0)
+- (c) 머지된 PR 의 `statusCheckRollup` — SUCCESS 13 · SKIPPED 48 · **FAILURE 0**
+- (d) `# Acceptance Criteria` 본문 AC-0~AC-3 을 열어 읽음 — 전부 `[x]`. AC-0 «두 테넌트로 다시 열어라» 는 2026-09-17 창 표(다섯 경로 × 두 테넌트)로, AC-1 화면 쪽 «키 이름» 은 코드 대조로, 계정 쪽은 런타임 응답 코드 + 소유자 결정으로, AC-2 «소유자에게 묻는다» 는 2026-09-15 선택창으로, AC-3 «648 에 되돌린다» 는 #3816 으로 닫힘. 권한 변경 0.
+- 🔵 판별자 수리 의무(648 에 등록)는 `TASK-MONO-648` AC-1b(#3857) 와 그 후속 `TASK-MONO-702` 가 들고 있다.
