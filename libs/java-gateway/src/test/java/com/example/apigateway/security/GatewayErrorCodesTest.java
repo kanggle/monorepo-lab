@@ -37,4 +37,14 @@ class GatewayErrorCodesTest {
         assertThat(GatewayErrorCodes.TENANT_MISMATCH)
                 .isEqualTo(TenantClaimValidator.ERROR_CODE_TENANT_MISMATCH);
     }
+
+    @Test
+    @DisplayName("TASK-MONO-696 — audience 코드: 매핑하는 쪽과 올리는 쪽이 같은 문자열, 와이어 값 고정")
+    void audienceMismatchWireValuesArePinned() {
+        assertThat(GatewayErrorCodes.AUDIENCE_MISMATCH)
+                .isEqualTo(AllowedAudiencesValidator.ERROR_CODE_AUDIENCE_MISMATCH)
+                .isEqualTo("audience_mismatch");
+        // Response code — still a contract PROPOSAL (jwt-standard-claims.md § Error Handling).
+        assertThat(GatewayErrorCodes.AUDIENCE_FORBIDDEN).isEqualTo("AUDIENCE_FORBIDDEN");
+    }
 }

@@ -53,6 +53,8 @@ dependencies {
 
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    // ShippedAudienceConfig — reads what application.yml ships for the audience check (TASK-MONO-696).
+    testImplementation testFixtures(project(':libs:java-gateway'))
     testImplementation 'io.projectreactor:reactor-test'
     testImplementation 'com.redis:testcontainers-redis:2.2.2'
     testImplementation 'org.testcontainers:junit-jupiter'
@@ -95,4 +97,15 @@ dependencyManagement {
         mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
         mavenBom "org.testcontainers:testcontainers-bom:1.21.3"
     }
+}
+
+// TASK-MONO-696 — AudienceShippedConfigTest scans this PROJECT's docker-compose*.yml / .env*
+// files for an audience-mode ENFORCE override. They live outside this module's src/, so without
+// this declaration an edit to them would leave `test` UP-TO-DATE and the guard cached green on
+// exactly the change it exists to catch (the TASK-MONO-683 blind spot). Top-level files only —
+// no recursive walk into the project's node_modules / build trees.
+tasks.named('test') {
+    inputs.files(files { file('../..').listFiles().findAll {
+        it.isFile() && ((it.name.startsWith('docker-compose') && it.name.endsWith('.yml')) || it.name.startsWith('.env'))
+    } }).withPropertyName('audienceModeDeploymentFiles').withPathSensitivity(PathSensitivity.RELATIVE)
 }

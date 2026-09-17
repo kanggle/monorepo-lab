@@ -158,6 +158,19 @@ scmplatform:
     # longer minted (TASK-BE-398) and no longer accepted here. SAS issuer only.
     allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://iam.local}}
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:scm}
+    # TASK-MONO-696 — audience allowlist (platform/contracts/jwt-standard-claims.md § JWT
+    # Validation rule 5). `aud` is the CLIENT ID the token was issued to, not a platform name;
+    # a token is admitted iff its aud values intersect this list. Mandatory: absent or empty
+    # fails the boot. Values = the clients MEASURED to reach this edge (TASK-MONO-696 § AC-1 (b):
+    # the operator console). Clients whose reach could not be measured — including this
+    # platform's internal client_credentials client — are deliberately NOT listed: in shadow
+    # mode their traffic shows up as a logged, counted mismatch, which is the measurement this
+    # phase exists for.
+    allowed-audiences: ${OIDC_ALLOWED_AUDIENCES:platform-console-web}
+    # SHADOW = log + count a mismatch, never reject (rollout phase 1). ENFORCE = 403
+    # AUDIENCE_FORBIDDEN. Switching is its own reviewed change, taken only once the measured
+    # mismatch count is zero; AudienceShippedConfigTest fails if this ships as anything but SHADOW.
+    audience-mode: ${OIDC_AUDIENCE_MODE:SHADOW}
 
 # JWKS startup probe — fails the gateway boot fast when GAP/IdP is unreachable
 # at startup, instead of waiting for the first protected request. Configured per

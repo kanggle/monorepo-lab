@@ -99,7 +99,7 @@ class GatewayIntegrationTest {
                 "user-123", null, -3600L,
                 java.util.Map.of(
                         "iat", java.util.Date.from(now.minusSeconds(7200)),
-                        "aud", List.of("ecommerce"),
+                        "aud", List.of(JwtTestHelper.WEB_STORE_CLIENT_ID),
                         "account_type", "CONSUMER",
                         "tenant_id", "ecommerce",
                         "email", "user@example.com"));
@@ -118,10 +118,12 @@ class GatewayIntegrationTest {
     void protectedRoute_noAudienceNoTenant_returns403TenantForbidden() {
         // TASK-BE-595: this cell was named "wrong audience → 401". It never measured audience.
         // The gateway's decoder is OAuth2ResourceServerConfig's own bean, so Boot's
-        // `spring.security.oauth2.resourceserver.jwt.audiences` property is not applied to it;
+        // `spring.security.oauth2.resourceserver.jwt.audiences` property was never applied to it;
         // measured 2026-09-16 on the real decoder path, the same token WITH tenant_id=ecommerce
         // and no aud is admitted (200). The only thing rejecting this token is the missing
-        // tenant_id — a tenant rejection, which is 403.
+        // tenant_id — a tenant rejection, which is 403. TASK-MONO-696 added the audience check,
+        // shipped in SHADOW mode (no rejection), and it runs only on tokens the rest of the chain
+        // accepted — so this cell stays TENANT_FORBIDDEN in either mode.
         String noAudToken = jwtHelper.signToken(
                 "user-123", "BUYER", 300L,
                 java.util.Map.of("account_type", "CONSUMER", "email", "user@example.com"));

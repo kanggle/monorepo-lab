@@ -60,7 +60,7 @@ Package organization follows package-by-layer.
 - This service must not contain business/domain logic
 - Filters must not call downstream services directly — routing is declarative via configuration
 - This service must not own persistent data (stateless gateway)
-- Security layer must not duplicate IAM (iam-platform) authorization rules — only validate RS256 signatures, `aud=ecommerce`, and `tenant_id=ecommerce` claims
+- Security layer must not duplicate IAM (iam-platform) authorization rules — only validate RS256 signatures, `aud` ∩ client-id allowlist (`ecommerce.oauth2.allowed-audiences`; shadow mode until TASK-MONO-696 phase 2), and `tenant_id=ecommerce` claims
 
 ## Boundary Rules
 - Filters handle cross-cutting concerns: authentication, logging, rate limiting
@@ -91,7 +91,7 @@ Realizes `rules/traits/multi-tenant.md` M7 at the gateway edge (M2 layer-1 home)
 
 ## Integration Rules
 - Routing targets must match published service URLs
-- JWT validation must follow the IAM OIDC token contract (RS256 via JWKS, `aud=ecommerce`, `tenant_id=ecommerce`); see [`../../integration/iam-integration.md`](../../integration/iam-integration.md)
+- JWT validation must follow the IAM OIDC token contract (RS256 via JWKS, `aud` ∩ client-id allowlist (`ecommerce.oauth2.allowed-audiences`; shadow mode until TASK-MONO-696 phase 2), `tenant_id=ecommerce`); see [`../../integration/iam-integration.md`](../../integration/iam-integration.md)
 - Rate limiting configuration must use Redis for distributed state
 - Shared libraries may be used only under shared-library policy
 

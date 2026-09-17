@@ -40,6 +40,13 @@ public final class JwtTestHelper {
     public static final String SAS_ISSUER = "http://localhost:8081";
     /** Required tenant for the WMS gateway (TASK-MONO-019). */
     public static final String DEFAULT_TENANT_ID = "wms";
+    /**
+     * The operator console's registered client id — what the identity-platform really puts in
+     * {@code aud} on the tokens that reach this edge (TASK-MONO-696 AC-1). Minted by default.
+     * These fixtures used to mint {@code aud: wms}, a platform name no issuance path produces.
+     * Pass {@code "aud" → null} in the additional claims to mint a token with no {@code aud}.
+     */
+    public static final String CONSOLE_CLIENT_ID = "platform-console-web";
 
     private final RSAKey rsaJwk;
     private final RSASSASigner signer;
@@ -108,6 +115,7 @@ public final class JwtTestHelper {
                 .subject(subject)
                 .issuer(issuer)
                 .claim("tenant_id", DEFAULT_TENANT_ID)
+                .audience(List.of(CONSOLE_CLIENT_ID))
                 .issueTime(Date.from(now))
                 .expirationTime(Date.from(now.plusSeconds(ttlSeconds)))
                 .jwtID(UUID.randomUUID().toString());
@@ -178,8 +186,9 @@ public final class JwtTestHelper {
     }
 
     /**
-     * Builds and signs an OPERATOR token with {@code aud: wms} and
-     * {@code account_type: OPERATOR} for WMS E2E testing. Valid for 5 minutes.
+     * Builds and signs an OPERATOR token with {@code aud: platform-console-web} (the console
+     * client, TASK-MONO-696) and {@code account_type: OPERATOR} for WMS E2E testing. Valid for
+     * 5 minutes.
      */
     public String signWmsOperatorToken(String subject, String primaryRole, List<String> roles) {
         Instant now = Instant.now();
@@ -190,7 +199,7 @@ public final class JwtTestHelper {
                 .issueTime(Date.from(now))
                 .expirationTime(Date.from(now.plusSeconds(300)))
                 .jwtID(UUID.randomUUID().toString())
-                .audience(List.of("wms"))
+                .audience(List.of(CONSOLE_CLIENT_ID))
                 .claim("account_type", "OPERATOR")
                 .claim("email", subject + "@test.local");
         if (primaryRole != null) {
@@ -214,7 +223,7 @@ public final class JwtTestHelper {
 
     /**
      * Convenience for tests that need a token carrying the canonical WMS
-     * master roles. Returns a token valid for 5 minutes with {@code aud: wms}
+     * master roles. Returns a token valid for 5 minutes with {@code aud: platform-console-web}
      * and {@code account_type: OPERATOR}.
      */
     public String signMasterWriteToken(String subject) {

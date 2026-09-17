@@ -212,6 +212,14 @@ Per `platform/security-rules.md` and
 - Standard claims: `exp`, `nbf`, `iat` validated by `JwtTimestampValidator`.
 - Issuer: `AllowedIssuersValidator` — accepts both the SAS issuer URL and the
   legacy `"iam-platform"` string (D2-b deprecation window).
+- Audience (TASK-MONO-696, `jwt-standard-claims.md` rule 5): `AllowedAudiencesValidator`, run by
+  the shared chain only on a token every other check accepted — `aud` (the issuing **client
+  id**) ∩ `scmplatform.oauth2.allowed-audiences` (shipped: `platform-console-web`, the client
+  measured to reach this edge; the internal `client_credentials` client is not listed because
+  its reach was not measured) ≠ ∅. Empty or absent allowlist fails the boot.
+  `scmplatform.oauth2.audience-mode` ships **SHADOW** (mismatch logged + counted on
+  `gateway.jwt.audience{gateway,outcome}`, not rejected); `ENFORCE` (403) is the separate
+  phase-2 change.
 - Tenant: `TenantClaimValidator` — **entitlement-trust dual-accept**
   (ADR-MONO-019 § D5). Accepts when the legacy slug `tenant_id ∈ { scm, * }`
   (`*` = SUPER_ADMIN platform-scope) **or** the IAM-signed `entitled_domains`
