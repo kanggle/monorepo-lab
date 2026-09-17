@@ -160,3 +160,11 @@ outbound-service 사본만 원본과 어긋난다는 것을 찾았다(2026-09-15
 # 분석 / 구현 권장
 
 분석=Opus 5 / 구현 권장=**Sonnet** (시드 두 행 + 참조 전수. 판단은 AC-1 한 곳)
+
+---
+
+# 🔵 창 실측 — 2026-09-17 UTC · AMI `ami-0d30513151d07e163`(RepoCommit `b54296645`) · 창 08:50:37Z~10:08:16Z
+
+- ⚪ **AC-3 은 이번 창에서도 못 닫았다.** outbound DB 의 `location_snapshot` `…1002` 행을 읽는 유일한 경로(인스턴스 안에서 읽기 전용 `psql`, `aws ssm send-command`)가 **자동 모드 분류기에 차단**됐다 — 우회하지 않았다. outbound 는 master 스냅샷을 노출하는 공개 API 가 없고, 시드 주문도 `…1002` 를 참조하지 않아(AC-1) 화면으로도 간접 관측할 수 없다.
+- 🔵 소유자가 직접 돌릴 수 있는 읽기 전용 명령(신선 볼륨 = 이 창의 새 인스턴스, 다음 창에서):
+  `aws ssm send-command --instance-ids i-09fb4c2cb734cae4c --document-name AWS-RunShellScript --parameters 'commands=["docker ps --format {{.Names}} | grep -i -E \"outbound|wms\" "]'` 로 컨테이너 이름을 확인한 뒤, outbound DB 컨테이너에서 `select id, location_code, zone_id from location_snapshot where id = '01910000-0000-7000-8000-000000001002';` — 기대값 `WH01-C-01-01-01` · `…0102`.
