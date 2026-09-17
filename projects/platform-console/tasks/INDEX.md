@@ -93,7 +93,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔴 **순서: 282 → 283~288 직렬**(샘플 등록부·원장 파일 공유 — 병렬 worktree 금지) → 루트 `TASK-MONO-686`(`/demo` 은퇴, ⏳).
 
-- `TASK-PC-FE-286-finance-and-ledger-screens-get-samples.md` — finance·ledger 4 화면 · GET 15 · 🔴 차변 합 = 대변 합. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
 - `TASK-PC-FE-287-wms-screens-get-samples.md` — wms 7 화면 · GET 11 · 🔴 NESTED 에러 봉투라 코드 보존 확인 · 코드 칸 null 금지. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
 - `TASK-PC-FE-288-scm-screens-get-samples.md` — scm 6 화면 · GET 10 · 🔴 404-as-empty 센티널 경로 유지 · 공급사 UUID 표시 금지. ⏳ 282 후. 분석=Opus 5 / 구현 권장=Sonnet 5.
 
@@ -121,9 +120,9 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## in-progress
 
-(empty)
-
 ## review
+
+- `TASK-PC-FE-286-finance-and-ledger-screens-get-samples.md` — finance·ledger 4 화면 · GET 15 · 🔴 차변 합 = 대변 합. impl 완료, 코디네이터 리뷰 대기. 분석=Opus 5 / 구현 권장=Sonnet 5.
 
 ## done
 

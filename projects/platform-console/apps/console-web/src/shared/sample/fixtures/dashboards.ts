@@ -2,6 +2,7 @@ import { SAMPLE_AS_OF } from '../codes';
 import { IAM_FIXTURE_HANDLERS } from './iam';
 import { ERP_FIXTURE_HANDLERS } from './erp';
 import { ECOMMERCE_FIXTURE_HANDLERS } from './ecommerce';
+import { FINANCE_FIXTURE_HANDLERS, SAMPLE_FINANCE_DEFAULT_ACCOUNT_ID } from './finance';
 
 /**
  * TASK-PC-FE-285 (coordinator review) — an overview card's count is NOT typed
@@ -45,6 +46,41 @@ const ECOMMERCE_PRODUCT_COUNT = countFrom(
 );
 
 /**
+ * TASK-PC-FE-286 AC-7 — the finance card asks the SAME query the console-bff
+ * `FinanceBalanceReadAdapter` sends (`GET /api/finance/accounts/{id}/balances`,
+ * § readBalances) of the SAME finance fixture handler the `/finance` overview
+ * and `/finance/accounts` screens are answered by. Before this, the card's
+ * balance (`1,250,000,000` KRW on `sample-account-0001`) was hand-typed and
+ * had no relationship to any browsable account — exactly the defect class
+ * this task's coordinator note (285's CORRECTION) flags for wms/scm too.
+ *
+ * 🔵 the production composition leg (`OperatorOverviewCompositionUseCase.
+ * callFinance`) passes `financePort.readBalances(...)`'s raw body straight
+ * through as the leg's `data` — i.e. the real wire shape is the balances
+ * envelope `{ data: [Balance], meta }`, NOT `{ balance, accountId }`.
+ * console-web's OWN `FinanceDataSchema` (`operator-overview-types.ts`)
+ * expects the latter — a pre-existing shape mismatch between the BFF leg and
+ * the FE card schema that is a console-bff/BFF-composition concern, out of
+ * this ticket's scope (no domain fixture can fix a real shape bug in
+ * production code). Reproducing that mismatch here would make the sample
+ * card render EMPTY for every visitor, which defeats ADR-MONO-074's entire
+ * point (a real, working page) — so this fixture keeps emitting the
+ * `FinanceDataSchema`-shaped object the card actually parses, with its VALUE
+ * derived from the query above (never re-typed).
+ */
+const FINANCE_BALANCE = (() => {
+  const path = `/api/finance/accounts/${SAMPLE_FINANCE_DEFAULT_ACCOUNT_ID}/balances`;
+  const body = FINANCE_FIXTURE_HANDLERS['flat:finance']?.(path) as
+    | { data?: Array<{ currency?: unknown; ledger?: unknown }> }
+    | undefined;
+  const row = body?.data?.[0];
+  if (!row || typeof row.ledger !== 'string' || typeof row.currency !== 'string') {
+    throw new Error(`sample overview: no finance balance for ${path}`);
+  }
+  return { amount: row.ledger, currency: row.currency };
+})();
+
+/**
  * Dashboard fixtures (R3ⓐ — the first screens made `ready`): the console-bff
  * operator overview (§ 2.4.9.1), domain health (§ 2.4.9.2) and the
  * notification aggregator inbox (ADR-MONO-043 §4).
@@ -83,14 +119,14 @@ export const SAMPLE_OPERATOR_OVERVIEW = {
       domain: 'finance',
       status: 'ok',
       data: {
-        balance: { amount: '1250000000', currency: 'KRW' },
-        accountId: 'sample-account-0001',
+        balance: { amount: FINANCE_BALANCE.amount, currency: FINANCE_BALANCE.currency },
+        accountId: SAMPLE_FINANCE_DEFAULT_ACCOUNT_ID,
       },
     },
-    // 🔵 wms (totalStockUnits/alertCount), scm (nodes) and finance (account) are
-    //    still typed here — their domain fixtures do not exist yet. Each owning
-    //    ticket (TASK-PC-FE-286 finance · 287 wms · 288 scm) derives its card the
-    //    same way and adds its row to `sample-overview-cards-match-lists.test.ts`.
+    // 🔵 wms (totalStockUnits/alertCount) and scm (nodes) are still typed
+    //    here — their domain fixtures do not exist yet. Each owning ticket
+    //    (TASK-PC-FE-287 wms · 288 scm) derives its card the same way and
+    //    adds its row to `sample-overview-cards-match-lists.test.ts`.
     { domain: 'erp', status: 'ok', data: { meta: { totalElements: ERP_ACTIVE_DEPARTMENT_COUNT } } },
     { domain: 'ecommerce', status: 'ok', data: { totalElements: ECOMMERCE_PRODUCT_COUNT } },
   ],

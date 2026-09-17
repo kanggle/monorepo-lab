@@ -137,6 +137,46 @@ const MACHINE_KEYS = new Set([
   'transition', // approval history discriminant ('submit' | 'approve' | …)
   'actor', // approval history actor id
   'at', // approval history entry timestamp (ISO-8601)
+  // TASK-PC-FE-286 — finance + ledger domain fixtures. Neither
+  // `AccountSchema`/`BalanceSchema`/`TransactionSchema` (finance) nor any
+  // ledger-types schema (trial balance / period / journal / account /
+  // reconciliation / fx) has a name/title/description/memo field — every
+  // string on these two surfaces is an id/code/enum/date/money value a
+  // parser, `StatusBadge` or `formatMoney` reads, never free prose typed or
+  // read by a person (confirmed by reading every schema under
+  // `shared/api/finance-accounts-types.ts` and `shared/api/ledger-types/`).
+  'kycLevel', // finance account enum (NONE | BASIC | FULL)
+  'ledger', // finance Balance minor-units string (F5 — like 'amount')
+  'available', // finance Balance minor-units string (F5)
+  'held', // finance Balance minor-units string (F5)
+  'ledgerAccountCode', // ledger chart-of-accounts CODE (ADR-MONO-050 D9)
+  'normalSide', // AccountBalance enum (DEBIT | CREDIT)
+  'balanceSide', // AccountBalance enum (DEBIT | CREDIT)
+  'direction', // JournalLine / AccountEntryLine enum (DEBIT | CREDIT)
+  'exchangeRate', // JournalLine F5 decimal-string provenance factor
+  'resolutionType', // reconciliation resolve enum (MATCHED_MANUALLY | WRITTEN_OFF | ACCEPTED)
+  // 🔵 NOT adding 'note' here — it is ALREADY in `HUMAN_READABLE_KEYS` above
+  // (the base/foundation set), which wins first in `findLabelViolations`'s
+  // check order regardless — so the reconciliation resolution's `note` takes
+  // the «(샘플)» suffix like any other human-readable field (`fixtures/ledger.ts`).
+  'closedBy', // accounting period actor id (who closed it)
+  'resolvedBy', // reconciliation resolution actor id
+  'statementDate', // reconciliation statement date (ISO-8601 DATE)
+  'externalRef', // reconciliation discrepancy/statement-match external system reference code
+  'statementLineExternalRef', // reconciliation statement match external system line reference code
+  'rate', // FX rate F5 decimal-string (never Number/parseFloat/parseInt)
+  'baseCurrency', // FX rate ISO-4217 code
+  'foreignCurrency', // FX rate ISO-4217 code
+  'base', // FX rate-history pair ISO-4217 code
+  'foreign', // FX rate-history pair ISO-4217 code
+  'originalForeignMinor', // FX position lot F5 minor-units string
+  'remainingForeignMinor', // FX position lot F5 minor-units string
+  'originalBaseMinor', // FX position lot F5 minor-units string
+  'carryingBaseMinor', // FX position lot F5 minor-units string
+  'totalRemainingForeignMinor', // FX position summary F5 minor-units string
+  'totalCarryingBaseMinor', // FX position summary F5 minor-units string
+  'expectedMinor', // reconciliation discrepancy F5 minor-units string
+  'actualMinor', // reconciliation discrepancy F5 minor-units string
 ]);
 
 /** `*Id` (sourceId, accountId, nodeId, …) and `*At` (createdAt, asOf-like). */
