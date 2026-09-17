@@ -2,7 +2,7 @@
 
 # Status
 
-in-progress
+done (2026-09-17 UTC)
 
 **Type:** TASK-MONO (monorepo-level — scm 생산자 응답 ↔ 콘솔 표시, 두 프로젝트)
 
@@ -109,7 +109,8 @@ in-progress
 
 - [x] 🔴 응답에 필드가 생긴 것으로 닫지 마라. 콘솔 `/scm/procurement` 의 「공급사」 칸에 **UUID 가 사라졌는가**가 판정이다. 🔵 `TASK-MONO-675` 가 배운 것: 필드가 있어도 값이 null 일 수 있다 — **값**을 봐라.
 - [x] 🔴 이 칸은 **새 코드로 AMI 를 다시 구운 창**에서만 판정된다(데모 AMI 는 jar 를 구워 넣는다 — `TASK-MONO-667` 게이트 정정). 창이 없으면 ⚪ + 갈 곳(`TASK-MONO-672`).
-- [ ] 판정이 나면 scm README § Screenshots 의 보류 사유를 되돌려 준다.
+- [x] 판정이 나면 scm README § Screenshots 의 보류 사유를 되돌려 준다.
+      → 2026-09-17 UTC 선택창으로 방식을 물었다(🔵 추천 표지는 내 것). 소유자 선택(라벨 원문): **「사유만 갱신, 사진 없음 (Recommended)」**. `projects/scm-platform/README.md` § Screenshots 사유를 «UUID 결함 → 677 이 고쳤고 창에서 `SUP-001 · demo supplier` 확인 → 사진은 `TASK-MONO-648` 큐레이션에서 고른다» 로 바꿨다. 이미지는 싣지 않았다.
 
 ## AC-4 — 가드
 
@@ -212,3 +213,14 @@ in-progress
 
 - **AC-3** 콘솔 `/scm/procurement`(테넌트 `demo-corp`) 「공급사」 칸: 발주 3건(CONFIRMED · ACKNOWLEDGED · DRAFT) **전부 `SUP-001 · demo supplier`** — UUID 없음. 이미지를 열어 확인. 🔵 코드가 `SUP-DEMO-01` 이 아니라 `SUP-001` 인 것은 `TASK-MONO-683`(결정 ⓐ)이 시드를 바꿨기 때문이다(§ AC-3 기대값 갱신 문단과 일치).
 - ⏳ 남은 칸: scm README § Screenshots 보류 사유 되돌리기(판정이 났으므로 이제 할 수 있다).
+
+---
+
+# ✅ 닫음 — 2026-09-17 UTC (4차원 검증)
+
+- 남은 칸(README 사유)은 이 close PR 에서 소유자 선택대로 처리했다(§ AC-3 셋째 칸).
+- (a) impl PR [#3820](https://github.com/kanggle/monorepo-lab/pull/3820) `state=MERGED` 2026-09-15T08:11:40Z
+- (b) squash `e1ee8a98b` 가 `origin/main` 의 조상(`git merge-base --is-ancestor` rc=0)
+- (c) 머지된 PR 의 `statusCheckRollup` — SUCCESS 20 · SKIPPED 41 · **FAILURE 0**
+- (d) `# Acceptance Criteria` 본문 AC-0~AC-4 를 열어 읽음 — 체크박스 전부 `[x]`, AC-3 의 동사 «화면에서 값을 본다» 는 2026-09-17 창의 이미지 판정(`SUP-001 · demo supplier`)으로, «README 사유를 되돌린다» 는 이 PR 로 닫힘. 본문의 ⏳ 는 위 «남은 칸» 한 줄뿐이고 이 PR 이 그것을 처리한다.
+- 🔵 범위 밖으로 남긴 것(기록만, 받는 곳 있음): `ReplenishmentTable.tsx:104` 의 원문 `supplierId` 와 시드 D9 어긋남 → `TASK-MONO-683`.
