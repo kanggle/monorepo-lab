@@ -8,7 +8,7 @@ WMS 화면이 샘플로 선다 — 개요·입고·재고·마스터·작업·�
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -296,3 +296,38 @@ B1–B5 모두 단독 주입 → 실행 → 복원 순으로 개별 확인했다
 클라이언트는 **한 줄도 안 바뀌었다**. 인증 운영자 경로 테스트(wms-api/wms-proxy/outbound-api/
 outbound-proxy/wms-*-state/outbound-* 전부)는 무수정 초록이며, `pnpm test` 최종 실행이 그 안에
 포함된 전체 스위트다.
+
+## CORRECTION — 닫기 판정 (조정자, 2026-09-17 UTC)
+
+머지 검증 4차원: (a) PR [#3890](https://github.com/kanggle/monorepo-lab/pull/3890) `state=MERGED` 2026-09-17T07:36:16Z ·
+(b) squash `367976d37` 가 `origin/main` 조상(머지 시점의 끝) · (c) 머지 전 롤업 **62 체크 · FAILURE 0**(`f7ff6dbf5` 기준), 필수 4 + 프런트
+unit · E2E smoke · console-bff IT **실제 실행** · (d) 아래 표.
+
+| AC | 닫힘 | 증거 |
+|---|---|---|
+| AC-0 | ✅ | 표면 3 · GET 메서드 리터럴 19(13+5+1). ADR 의 11 은 단위가 달라 비교하지 않음 |
+| AC-1 | ✅ | 19 GET 을 router 경유로 실제 zod 스키마에 파싱 |
+| AC-2 | ✅ | 라벨 가드가 wms 문서 3개 순회 · 기계 키 29 · 사람 키 4 분류와 사유 |
+| AC-3 | ✅ | 재고 행 코드 4종이 참조 표 배열에서 **읽혀** 들어가고(복제 리터럴 없음) router 로 `/dashboard/refs/{type}` 와 대조 · bite B1 |
+| AC-4 | ✅ | `wms`·`wms_outbound` NESTED / `wms_outbound_logistics` FLAT — 코드 보존을 코어까지 · bite B4 · B5 |
+| AC-5 | ✅ | 지연 헤더 부재 → `readWmsLagHeader()` null → `WmsLagHint` 미렌더 |
+| AC-6 | ✅ | 출고 확정 POST → 403 `SAMPLE_READ_ONLY` → `messageForCode` |
+| AC-7 | ✅ | `e2e-smoke/sample-visitor-wms.spec.ts` · 로컬 24 passed · PR CI E2E smoke SUCCESS |
+| AC-8 | ✅ | WMS 카드 `totalStockUnits`·`alertCount` 를 `WmsInventoryReadAdapter` 경로로 파생 · «카드 = 재고» 가드 칸 · bite B3 |
+| Edge | ✅ | outbound per-call baseUrl override — 같은 출하 조회가 `wms` · `wms_outbound` 두 표면에서 경로로 매칭(바이트 동일 행) |
+| DoD | ✅ | 원장 wms `pending` 0. 기존 테스트: `sample-mode-cores` 1칸 설정만(`expect(` ±0) · smoke 경로 리터럴 1줄(`'/wms'`→`'/scm'`, 주제 불변) |
+
+🔵 **조정자 확인 1 — 282 부터의 원장 버그는 실재했다**: `main`(`c129d936f`) 의 `coverage.ts` 는 `{ core: 'wms', surface: 'wms_outbound_logistics' }` 였고,
+`features/wms-outbound-ops/api/outbound-logistics-api.ts` 는 `callScmGateway`(flat 코어)를 쓴다 ⇒ `sampleGate({ core: 'flat', … })` 가 그 행을 영영 못 찾았다.
+282 의 원장 가드는 «행 자신의 core 로» router 를 부르므로 이 부류를 구조적으로 못 문다 — 에이전트가 전용 가드를 더했다(되돌리면 9칸 빨강).
+
+🔴 **조정자 확인 2 — 리뷰가 찾은 로그인 운영자 경로의 결함(이 티켓 범위 밖)**: 에이전트가 AC-8 을 하며 «WMS 카드도 286 D2 와 같은 모양 불일치» 라고
+적었다. 조정자가 대조했다 — `WmsInventoryReadAdapter` 는 `GET /api/v1/admin/dashboard/inventory` 본문(`{ content: [...], page, sort }`,
+`wms-platform/specs/contracts/http/admin-service-api.md` § 1.1)을 그대로 싣고, web `WmsDataSchema` 는 `inventorySnapshot.{totalStockUnits, alertCount}` 를 읽는다
+⇒ 로그인 운영자의 «총 재고»·«알림» 은 항상 `—` 일 것. **같은 방식으로 SCM 카드도 확인했다**(`{ data: { content }, meta }` ↔ `nodes`). IAM · ERP ·
+E-Commerce 셋은 키가 맞는다. ⇒ **`TASK-PC-FE-295` 범위를 finance · WMS · SCM 으로 넓혔다**(이 종료 PR 에서 — 그 티켓 § 범위 확장 · AC-6 · AC-7).
+🔴 WMS 는 모양뿐 아니라 **집계 의미**도 없다: producer 는 행 목록 첫 페이지를 주지 «총 재고 합» 을 주지 않는다 — 그 티켓에 적었다.
+
+🔵 에이전트가 첫 실행에서 자기가 띄운 백그라운드 테스트를 기다리다 턴을 끝냈다(커밋·푸시 전) — 조정자가 재개시켜 완료. 결과물에는 영향 없음.
+
+넘길 의무: WMS · SCM 카드의 운영 경로 결함 → `TASK-PC-FE-295`(티켓 안에 기록). «pending 화면» smoke 칸의 이사 → `TASK-PC-FE-288` 지시서에 반영. 그 밖 0건.
