@@ -5,6 +5,7 @@ import com.example.admin.infrastructure.security.BootstrapAuthenticationFilter;
 import com.example.admin.infrastructure.security.BootstrapTokenService;
 import com.example.admin.infrastructure.security.OperatorAuthenticationFilter;
 import com.example.security.jwt.JwtVerifier;
+import com.example.web.security.RequiredScopeValidator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,6 +17,9 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
@@ -24,7 +28,9 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * Admin-service security configuration.
@@ -56,6 +62,18 @@ public class SecurityConfig {
 
     @Value("${internal.api.jwt.issuer:http://localhost:8081}")
     private String internalJwtIssuer;
+
+    /**
+     * The workload scope that admits a token to {@code /internal/**} (TASK-MONO-716).
+     *
+     * <p>Same value, same property name, same class as the three sibling {@code /internal/**}
+     * decoders (account / auth / security — TASK-MONO-422, TASK-BE-514). The sameness is the
+     * point: when four chains discriminate on one axis, watching that one axis covers all four,
+     * and a fourth chain with a private axis has to be re-read every time someone asks what stops
+     * a user token here.
+     */
+    @Value("${internal.api.jwt.required-scope:internal.invoke}")
+    private String internalRequiredScope;
 
     private final Environment environment;
 
@@ -103,8 +121,40 @@ public class SecurityConfig {
     @Bean
     public JwtDecoder internalJwtDecoder() {
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(internalJwkSetUri).build();
-        decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(internalJwtIssuer));
+        decoder.setJwtValidator(internalTokenValidator());
         return decoder;
+    }
+
+    /**
+     * The validator chain enforced on {@code /internal/**} tokens: the issuer/timestamp default
+     * plus the {@code internal.invoke} workload discriminator (TASK-MONO-716).
+     *
+     * <p><b>Why the scope gate is not optional here.</b> Until MONO-716 this chain pinned the
+     * issuer and nothing else, and the chain's authorization gate is a bare
+     * {@code .requestMatchers("/internal/**").authenticated()}. The IAM issuer is <em>shared</em> —
+     * it mints operator browser access tokens from the same key as workload tokens — so
+     * "authenticated" admitted any token the IdP had ever issued, including an operator's own
+     * session token. Nothing else covered it: {@code @EnableMethodSecurity} is deliberately absent
+     * from this service, neither {@code /internal/**} controller carries
+     * {@code @RequiresPermission} (this service's only authorization path), and
+     * {@code InternalApiFilter} is non-terminal and never rejects. This method is the
+     * discriminator that was missing — the same one the three sibling services already use.
+     *
+     * <p>Package-private on purpose, copying the sibling shape: a test asserts the <em>actual</em>
+     * chain this class composes rather than a re-implementation of it. That matters more here than
+     * usual, because the {@code /internal/**} integration tests run under a profile where
+     * {@code InternalApiFilter} authenticates the request and <b>the decoder is never reached</b> —
+     * a green integration suite is not evidence that this gate works.
+     *
+     * <p>Rule 5 <i>Behind the edge</i> of {@code platform/contracts/jwt-standard-claims.md} is the
+     * contract this satisfies: a chain behind an edge does not need an audience allowlist, but it
+     * may not have <b>no</b> discriminator at all.
+     */
+    OAuth2TokenValidator<Jwt> internalTokenValidator() {
+        List<OAuth2TokenValidator<Jwt>> validators = new ArrayList<>();
+        validators.add(JwtValidators.createDefaultWithIssuer(internalJwtIssuer));
+        validators.add(new RequiredScopeValidator(internalRequiredScope));
+        return new DelegatingOAuth2TokenValidator<>(validators);
     }
 
     /**
