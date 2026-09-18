@@ -320,3 +320,9 @@ monorepo
 
 - 🟢 **시드 수정이 런타임에 들어갔다**: `GET /api/scm/demand-planning/sku-supplier-map/SKU-APPLE-001` → `supplierId="SUP-001"`(코드, UUID 아님) · `defaultOrderQty=100`. 발주 화면 공급사 칸도 `SUP-001 · demo supplier`(`TASK-MONO-677` 기록).
 - ⚪ **AC-4 흐름(제안 승인 → 확정 → wms 입고 예정)은 이번 창에서도 관측 불가** — `GET /api/scm/demand-planning/suggestions` = **0건**. 정책 `SKU-APPLE-001` `reorderPoint=10` · `safetyStock=5` 인데 wms 가용재고 **85**(`/api/wms/inventory`) ⇒ 제안이 생길 조건이 아니다. 끝까지 보려면 재고를 재주문점 아래로 **인위로** 내려야 한다(출고·조정 쓰기) — 이 창의 승인 범위(측정) 밖이라 하지 않았다. 갈 곳은 그대로 `TASK-MONO-672` § 항목 5.
+
+---
+
+# 🔵 창 메모 — 2026-09-17 UTC 둘째 창(시작 2026-09-17T16:34:55Z · 종료 17:21:02Z · 46분) · AMI `ami-02613b0378621b124`(RepoCommit `af0018aa6`, 12차 — 구조된 굽기, provenance operator-record) · 인스턴스 `i-07ddb6b41233f2673` · 묶음 `console console-ecommerce console-wms console-scm store fan` · 소유자 승인 «af0018aa6, 상한 100분»
+
+- AC-4(제안 승인 → 확정 → wms 인바운드 예정): 이 창에서도 **안 쟀다.** 제안이 0건인 이유(가용 85 > 재주문점 10)를 넘으려면 재고를 재주문점 아래로 내리는 **쓰기**가 필요한데, 소유자에게 물었고 선택은 **«쓰기 안 함»**(2026-09-17 선택창 라벨 원문 «쓰기 안 함 (Recommended)»). ⚪ 그대로 `TASK-MONO-672` § 항목 5.

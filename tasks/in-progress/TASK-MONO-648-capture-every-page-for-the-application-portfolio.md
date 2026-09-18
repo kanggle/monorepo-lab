@@ -1123,3 +1123,17 @@ AMI `ami-058f6293d1408f91e`(`RepoCommit=8cf474346`) · 인스턴스 `i-027d6b396
 - 동적 경로: 콘솔 11개 중 **4개 촬영**(ecommerce 테넌트). 남은 7 = 목록이 비었음(주문·알림 템플릿·테넌트) · 부모 경로 404(`/ecommerce/settlements/periods`) · 위의 상품 거부. store/fan 동적 5개는 로그인 필요.
 - 저하 4(`/` · `/dashboards/overview` · `/dashboards/health` · `/onboarding`): «통합 개요를 일시적으로 불러올 수 없습니다» — `console-vercel.override.yml` 이 적은 알려진 한계(`console-bff` 공개 호스트 없음, `TASK-MONO-585`)와 같은 증상.
 - finance 화면은 빈값/저하 목록에 **없다**(이번 창엔 `console-finance` 를 켰다). 🔴 목록 판정일 뿐 이미지는 열지 않았다 — README 큐레이션 전에 열어라(이 티켓 § 정정 2026-09-15).
+
+---
+
+# 🔵 창 실측 — 2026-09-17 UTC 둘째 창(시작 2026-09-17T16:34:55Z · 종료 17:21:02Z · 46분) · AMI `ami-02613b0378621b124`(RepoCommit `af0018aa6`, 12차 — 구조된 굽기, provenance operator-record) · 인스턴스 `i-07ddb6b41233f2673` · 묶음 `console console-ecommerce console-wms console-scm store fan` · 소유자 승인 «af0018aa6, 상한 100분»
+
+`node scripts/capture-portfolio.mjs --app console`(TASK-MONO-702 구조 술어가 들어간 판) — 출력은 세션 스크래치(커밋 안 함, 콘솔 `/login` 이미지는 비밀번호가 보이므로 **열지 않고 삭제**).
+
+| 실행 | 계획 | 찍음 | 실패 | 비고 |
+|---|---|---|---|---|
+| console · `demo-corp` | 67 | 55 | 12 | 거부 2(`/partnerships` · `/tenants`) · 동적 미해결 10 · 빈값 13 · 저하 10 · 👁 문구만 4(가이드 셋 + `/iam/guide`) · 일부 거부 1(`/wms/operations` — 702 가 사진으로 남겼다) |
+| console · `ecommerce` | 67 | **0** | 1(앱 전체) | 🔴 사전 점검이 «`/dashboards/overview` 가 «테넌트를 선택» 을 그린다» 로 앱을 건너뛰었다 |
+
+- 🔴 **ecommerce 실행 실패의 원인 = 스크립트의 편도 테넌트 전환.** `selectTenant()` 는 셀렉트에서 대상 테넌트를 한 번 고른다. 이 저장소가 이미 적은 함정(«같은 값 재선택은 no-op — **항상 왕복**»)을 스크립트는 안 따른다. 같은 창에서 `POST /api/tenant` 로 `demo-corp` → `ecommerce` 왕복한 뒤에는 셀렉트가 `ecommerce` 로 잡히고 상품 상세·편집까지 열렸다(TASK-MONO-703 § 창 실측). ⇒ 다음 창 전에 스크립트를 왕복으로 고쳐야 ecommerce 촬영이 된다(후속 후보).
+- 🔴 **README 큐레이션은 이번 창에서도 닫지 않는다** — demo-corp 55장은 12차 AMI(`af0018aa6`, 677·675·703 수정 포함)의 화면이라 **처음으로 큐레이션 입력으로 쓸 수 있는 촬영본**이지만, 저하 10 · 빈값 13 을 빼고 이미지를 열어 고르는 일은 창 밖에서 한다(소유자 결정 칸). ecommerce 쪽은 위 이유로 0장.

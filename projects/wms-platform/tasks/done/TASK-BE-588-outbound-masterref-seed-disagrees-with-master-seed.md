@@ -8,7 +8,7 @@ outbound-service 의 masterref 시드가 **master 원본과 다른 행을 둘** 
 
 # Status
 
-in-progress
+done (2026-09-17 UTC)
 
 # Owner
 
@@ -71,7 +71,7 @@ outbound-service 사본만 원본과 어긋난다는 것을 찾았다(2026-09-15
   - `admin-service` 시드의 "NOT REPRODUCED HERE" 주석(:251-266, 데이터 아닌 주석만)을 현재形으로 갱신 — 이 드리프트를 설명하던 산문이 고쳐진 뒤에도 남아 "여전히 다르다"고 잘못 증언하는 것을 막음(§A2 "한 사실이 두 절에 있으면 한쪽만 고쳐진다" 클래스).
   - 🔴 체크섬 변경 → 신선 볼륨: 새로 뜨는 Postgres 는 이 파일을 처음부터 고쳐진 내용으로 실행 → `…1002`/SKU 둘 다 즉시 올바름. 🔴 기존(이미 시드된) 볼륨: `R__` 은 체크섬이 바뀌어 재실행되지만 두 INSERT 모두 `ON CONFLICT (id) DO NOTHING` 이라 **이미 심긴 틀린 행은 재실행으로 안 고쳐진다** — `docker compose down -v` 로 볼륨을 지워야 한다. 단, 런타임 Kafka 컨슈머 경로(`MasterReadModelRepositoryImpl.upsertLocation`/`upsertSku`)는 `ON CONFLICT (id) DO UPDATE ... WHERE master_version < EXCLUDED.master_version` 라서 시드 행의 `master_version=0` 보다 큰 실제 `master.*` 이벤트가 오면 볼륨을 안 지워도 그 자리에서 고쳐진다(LWW 필드가 `last_event_at` 이 아니라 `master_version` 이라 시드의 오래된 타임스탬프와 무관하게 항상 이김 — Edge Case 표의 `last_event_at` 우려는 outbound 소비자 경로엔 해당 없음, admin-service 의 `last_event_at` LWW 와는 다른 메커니즘).
 
-- [ ] **AC-3 — 판정.** 🔴 **체크 해제(2026-09-16, 오케스트레이터):** AC 의 동사는 «outbound 의 master 스냅샷 **조회**(또는 DB)에서 같다» 이다. 아래는 파일 대조이지 조회가 아니므로 이 AC 를 닫지 못한다 — 신선 볼륨 허용은 «어느 볼륨에서 재나» 의 완화이지 «재지 않아도 된다» 가 아니다. ⚪ 갈 곳 = **다음 데모 창**(신선 볼륨: outbound DB `location_snapshot` 의 `…1002` 행 조회) — 이 티켓 자신이 받는다(in-progress 유지). 🔴 새 jar/시드가 AMI 에 들어간 뒤라야 의미가 있다.
+- [x] **AC-3 — 판정.** 🔴 **체크 해제(2026-09-16, 오케스트레이터):** AC 의 동사는 «outbound 의 master 스냅샷 **조회**(또는 DB)에서 같다» 이다. 아래는 파일 대조이지 조회가 아니므로 이 AC 를 닫지 못한다 — 신선 볼륨 허용은 «어느 볼륨에서 재나» 의 완화이지 «재지 않아도 된다» 가 아니다. ⚪ 갈 곳 = **다음 데모 창**(신선 볼륨: outbound DB `location_snapshot` 의 `…1002` 행 조회) — 이 티켓 자신이 받는다(in-progress 유지). 🔴 새 jar/시드가 AMI 에 들어간 뒤라야 의미가 있다.
   이전 기록: 신선 볼륨 기준(위 규칙대로 허용): `R__seed_dev_masterref.sql` 파일 내용 자체가 판정 대상 — 수정 후 `location_snapshot` 의 `…1002` 행은 `location_code='WH01-C-01-01-01'`, `zone_id='…0102'` 로 master 원본(`R__03_seed_dev_locations.sql:34-37`)과 완전히 같음. ⚪ **실측(살아있는 DB 조회)은 못 했다** — Docker/Testcontainers 미가용(아래 AC-3 검증 절 참고), 파일 비교와 Flyway `ON CONFLICT` 의미론 추론으로 대신함. 로컬 기존 볼륨 실측도 마찬가지로 ⚪.
 
 ---
@@ -168,3 +168,25 @@ outbound-service 사본만 원본과 어긋난다는 것을 찾았다(2026-09-15
 - ⚪ **AC-3 은 이번 창에서도 못 닫았다.** outbound DB 의 `location_snapshot` `…1002` 행을 읽는 유일한 경로(인스턴스 안에서 읽기 전용 `psql`, `aws ssm send-command`)가 **자동 모드 분류기에 차단**됐다 — 우회하지 않았다. outbound 는 master 스냅샷을 노출하는 공개 API 가 없고, 시드 주문도 `…1002` 를 참조하지 않아(AC-1) 화면으로도 간접 관측할 수 없다.
 - 🔵 소유자가 직접 돌릴 수 있는 읽기 전용 명령(신선 볼륨 = 이 창의 새 인스턴스, 다음 창에서):
   `aws ssm send-command --instance-ids i-09fb4c2cb734cae4c --document-name AWS-RunShellScript --parameters 'commands=["docker ps --format {{.Names}} | grep -i -E \"outbound|wms\" "]'` 로 컨테이너 이름을 확인한 뒤, outbound DB 컨테이너에서 `select id, location_code, zone_id from location_snapshot where id = '01910000-0000-7000-8000-000000001002';` — 기대값 `WH01-C-01-01-01` · `…0102`.
+
+---
+
+# 🔵 창 실측 — 2026-09-17 UTC 둘째 창(시작 2026-09-17T16:34:55Z · 종료 17:21:02Z · 46분) · AMI `ami-02613b0378621b124`(RepoCommit `af0018aa6`, 12차 — 구조된 굽기, provenance operator-record) · 인스턴스 `i-07ddb6b41233f2673` · 묶음 `console console-ecommerce console-wms console-scm store fan` · 소유자 승인 «af0018aa6, 상한 100분» — AC-3 조회
+
+신선 볼륨(12차 AMI 로 교체된 인스턴스 — 이 티켓의 시드가 들어간 뒤의 jar/시드). 인스턴스 안 읽기 전용 조회(SSM `AWS-RunShellScript`, 소유자가 실행):
+
+```
+docker exec wms-postgres psql -U postgres -d outbound_db -At -c "select id, location_code, zone_id from location_snapshot where id = '01910000-0000-7000-8000-000000001002';"
+01910000-0000-7000-8000-000000001002|WH01-C-01-01-01|01910000-0000-7000-8000-000000000102
+```
+
+🟢 master 원본(`R__03_seed_dev_locations.sql:34-37`)의 `WH01-C-01-01-01` · 존 `…0102` 와 **같다** — AC-3 의 동사 «조회에서 같다» 를 조회로 닫는다(2026-09-16 체크 해제 사유 해소).
+
+---
+
+# ✅ 닫음 — 2026-09-17 UTC (4차원 검증)
+
+- (a) impl PR [#3859](https://github.com/kanggle/monorepo-lab/pull/3859) `state=MERGED` 2026-09-16T13:04:55Z
+- (b) squash `1da127f3b` 가 `origin/main` 조상(rc=0)
+- (c) 머지된 PR `statusCheckRollup` — SUCCESS 11 · SKIPPED 50 · **FAILURE 0**
+- (d) `# Acceptance Criteria` 본문을 열어 읽음 — AC-3 이 마지막 빈 칸이었고 위 조회로 닫힘.
