@@ -78,6 +78,21 @@ dependencies {
 test {
     environment 'DOCKER_HOST', 'npipe:////./pipe/docker_engine_linux'
     jvmArgs '-Dapi.version=1.44'
+
+    // TASK-MONO-710 — `EcommerceOrderDemoSeedTest` opens a file OUTSIDE this module by path
+    // (`infra/demo/seed/seed-ecommerce.sh`), which is invisible to Gradle's up-to-date check.
+    // Without this declaration, a commit that edits ONLY the seed leaves `:test` UP-TO-DATE, so
+    // the guard does not run and the lane reports green over exactly the drift it was written to
+    // detect (measured twice already in this repo: TASK-MONO-512 in iam, TASK-MONO-683 in wms).
+    //
+    // The Gradle half alone is not enough: ci.yml's PR path filter must ALSO list this exact file
+    // under the `ecommerce` key, or a PR touching only the seed never wakes `Build & Test` and the
+    // first red run is on `main` after merge. `scripts/check-outside-module-input-filter-
+    // coverage.sh` (wired as its own `changes`-gated CI job) asserts the two stay in sync, so
+    // adding one without the other fails that job by name.
+    inputs.file(rootProject.file('infra/demo/seed/seed-ecommerce.sh'))
+            .withPropertyName('ecommerceDemoSeedScript')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 // Dedicated task that runs ONLY @Tag("integration") Testcontainers ITs (TASK-MONO-307).

@@ -454,8 +454,14 @@ jobs:
             wms:
               - 'projects/wms-platform/**'
               - 'infra/demo/seed/seed-scm.sh'
+            # TASK-MONO-710: third instance of the same shape — order-service/build.gradle
+            # declares `inputs.file(rootProject.file('infra/demo/seed/seed-ecommerce.sh'))` on
+            # EcommerceOrderDemoSeedTest, the offline sentinel for the demo order seed. Exact
+            # file, not `infra/demo/**` — that would wake the whole ecommerce lane on any demo
+            # README edit (MONO-695 Failure Scenario 1).
             ecommerce:
               - 'projects/ecommerce-microservices-platform/**'
+              - 'infra/demo/seed/seed-ecommerce.sh'
             # TASK-MONO-695: same shape as wms above — auth-service/build.gradle:112
             # declares `inputs.file(rootProject.file('infra/demo/seed/seed-fan.sh'))` on
             # FanArtistDemoSeedTest. This gap was recorded as UNOWNED in this same
