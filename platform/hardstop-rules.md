@@ -67,7 +67,7 @@ Rationale: [`docs/adr/ADR-MONO-006-lint-remediation-as-agent-context.md`](../doc
   1. If the work is new, author the task file in the correct `tasks/ready/` (root `tasks/ready/` for monorepo-level work per `tasks/INDEX.md`; `projects/<name>/tasks/ready/` for project-internal work) and land it via a spec PR before any impl commits.
   2. If the work is a fix to an already-merged task, create a new fix task in `ready/` referencing the original task ID in its Goal section (per `tasks/INDEX.md` § Review Rules).
   3. If unclear which lifecycle applies, consult `tasks/INDEX.md` § "When to Use Root vs Project Tasks" decision table.
-  4. If the frozen file's own STATE DECLARATION is now false (it says work is pending that has since been decided), append a correction section — a heading matching `## CORRECTION` at the END of the file, adding only, deleting nothing (TASK-MONO-591). A correction states what is true now; it never edits or removes what was recorded then. If instead you want to change an observation, you do not — that measurement is a fact about its own date.
+  4. If the frozen file's own STATE DECLARATION is now false (it says work is pending that has since been decided), append a correction section — a heading matching `## CORRECTION` at the END of the file (optionally preceded by a `---` section-separator on its own line, matching this repo's own section convention — TASK-MONO-692), adding only, deleting nothing (TASK-MONO-591). A correction states what is true now; it never edits or removes what was recorded then. If instead you want to change an observation, you do not — that measurement is a fact about its own date.
 [REFERENCE] CLAUDE.md § Task Rules + tasks/INDEX.md § Move Rules
 ```
 

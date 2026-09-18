@@ -189,11 +189,28 @@ try {
     # where comparing against a Korean literal is one codepage away from silently never
     # matching — and a predicate that never matches turns this into a permanent block with
     # no error to explain it. The prose after the anchor may be in any language.
+    #
+    # 🔴 TASK-MONO-692 — a `---` section-separator immediately before the heading is
+    # accepted. Every other section in this repo's task files is preceded by one (the
+    # convention runs through this very file's own [REMEDIATION] text once it lands in a
+    # task body), and this rule's own remediation #4 tells the agent to "append a
+    # correction section", which reads as "follow the file's existing section shape" —
+    # not as "omit the separator every sibling section uses". Rejecting exactly the shape
+    # the remediation implies made the append look forbidden instead of guided (observed
+    # twice in one session: TASK-PC-FE-282/289). The separator line is optional and, if
+    # present, must be alone on its own line — nothing else can hide between old_string
+    # and the heading, so this only widens the accepted SHAPE of the append, not what an
+    # append is allowed to contain.
     $isCorrectionAppend = $false
     if ($oldString -and $newString -and
         $newString.Length -gt $oldString.Length -and $newString.StartsWith($oldString)) {
         $appended = $newString.Substring($oldString.Length)
-        $firstContent = ($appended -split "`n" | Where-Object { $_.Trim() -ne '' } | Select-Object -First 1)
+        $appendedLines = @($appended -split "`n" | Where-Object { $_.Trim() -ne '' })
+        $headingIdx = 0
+        if ($appendedLines.Count -gt 0 -and $appendedLines[0].Trim() -match '^-{3,}$') {
+            $headingIdx = 1
+        }
+        $firstContent = if ($appendedLines.Count -gt $headingIdx) { $appendedLines[$headingIdx] } else { $null }
         if ($firstContent -and $firstContent.Trim() -match '^##\s+CORRECTION\b') {
             $isCorrectionAppend = $true
         }
@@ -220,7 +237,7 @@ try {
   1. If the work is new, author the task file in the correct ``tasks/ready/`` (root ``tasks/ready/`` for monorepo-level work per ``tasks/INDEX.md``; ``projects/<name>/tasks/ready/`` for project-internal work) and land it via a spec PR before any impl commits.
   2. If the work is a fix to an already-merged task, create a new fix task in ``ready/`` referencing the original task ID in its Goal section (per ``tasks/INDEX.md`` § Review Rules).
   3. If unclear which lifecycle applies, consult ``tasks/INDEX.md`` § "When to Use Root vs Project Tasks" decision table.
-  4. If the frozen file's own STATE DECLARATION is now false (it says work is pending that has since been decided), append a correction section — a heading matching ``## CORRECTION`` at the END of the file, adding only, deleting nothing (TASK-MONO-591). A correction states what is true now; it never edits or removes what was recorded then. If instead you want to change an observation, you do not — that measurement is a fact about its own date.
+  4. If the frozen file's own STATE DECLARATION is now false (it says work is pending that has since been decided), append a correction section — a heading matching ``## CORRECTION`` at the END of the file (optionally preceded by a ``---`` section-separator on its own line, matching this repo's own section convention — TASK-MONO-692), adding only, deleting nothing (TASK-MONO-591). A correction states what is true now; it never edits or removes what was recorded then. If instead you want to change an observation, you do not — that measurement is a fact about its own date.
 [REFERENCE] CLAUDE.md § Task Rules + tasks/INDEX.md § Move Rules
 "@
         Write-Block $stanza
