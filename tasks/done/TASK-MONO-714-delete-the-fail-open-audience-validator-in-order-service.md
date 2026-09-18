@@ -8,7 +8,7 @@ TASK-MONO-714
 
 # Status
 
-review (2026-09-18 UTC — AC-0 ~ AC-4 닫힘 · IT 판정은 CI 통합 잡)
+done (2026-09-18 UTC — AC-0 ~ AC-4 닫힘 · IT 판정은 CI 통합 잡)
 
 # Owner
 

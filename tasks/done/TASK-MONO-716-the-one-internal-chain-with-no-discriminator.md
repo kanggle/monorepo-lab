@@ -8,7 +8,7 @@ TASK-MONO-716
 
 # Status
 
-review (2026-09-18 UTC — AC-0 ~ AC-4 닫힘 · AC-1 의 ⚪ 는 계약서 명문화로 닫았다)
+done (2026-09-18 UTC — AC-0 ~ AC-4 닫힘 · AC-1 의 ⚪ 는 계약서 명문화로 닫았다)
 
 # Owner
 
