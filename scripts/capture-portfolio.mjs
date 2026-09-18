@@ -414,18 +414,40 @@ function judgeDenialInPage({ suffixes, textMarkers }) {
 const judgeDenial = (page) =>
   page.evaluate(judgeDenialInPage, { suffixes: DENIAL_SUFFIXES, textMarkers: DENIED_MARKERS });
 
+// 🔵 항해와 **판정**을 나눈다 — 판정만 따로 부를 수 있어야 `--self-test` 가 픽스처로
+//    이 배선을 물 수 있다. 붙여 두면 self-test 는 `judgeDegraded()` 의 사본을 재게 되고,
+//    「프로브가 그것을 부르는가」라는 이 티켓의 질문은 **아무도 안 묻는 채로** 남는다.
+async function judgeProbe(page, probePath) {
+  const j = await judgeDenial(page);
+  if (j.denied) {
+    return { ok: false, reason: `${probePath} 가 거부 요소 ${j.deniedBy.join(', ')} 를 그리고 있습니다 — 테넌트/권한이 안 잡혔습니다` };
+  }
+  // 🔵 프로브는 문구 적중도 **여전히 막는다.** 장별 판정과 다르게 두는 이유: 프로브 경로는
+  //    문서 페이지가 아닌 고정 대시보드라 «자기 설명 문구» 오탐의 모집단이 아니고, «테넌트를 먼저
+  //    선택하세요» 안내는 마커가 **없다**(`accounts/page.tsx` 등). 여기서 놓치면 앱 전체가 거짓 캡처다.
+  if (j.textHits.length) {
+    return { ok: false, reason: `${probePath} 가 «${j.textHits[0]}» 를 그리고 있습니다 — 테넌트/권한이 안 잡혔습니다` };
+  }
+
+  // --- TASK-MONO-711 ① — 사전 확인이 **저하도 본다** ------------------------
+  // 🔴🔴 **경고이지 중단이 아니다.** 저하를 `ok:false` 로 만들면 «저하를 일부러 찍는»
+  //    측정이 불가능해진다 — `TASK-MONO-707` AC-3 이 정확히 그것을 했다(재무를 내리고
+  //    `/ledger` 가 degraded 로 잡히는지 봤다). 그래서 `ok` 는 건드리지 않고 사실만 얹는다.
+  // 🔴 왜 필요한가: 2026-09-18 창에서 프로브가 `✔ 사전 확인 /dashboards/overview (본문 220자)`
+  //    를 찍고 통과했는데, **그 220자가 저하 문구 자체**였다. 프로브는 거부·빈값만 보고
+  //    저하를 안 봤고, 그래서 68장이 저하 화면 위에서 찍히고도 「정상」으로 보고됐다.
+  //    판정기(`judgeDegraded`)는 이미 있었다 — 프로브가 **안 부른 것**이 전부다.
+  const text = await page.evaluate(() => (document.body ? document.body.innerText : ''));
+  const d = await judgeDegraded(page, text);
+  return { ok: true, probePath, chars: j.chars, degraded: d.degraded, degradedBy: d.degradedBy };
+}
+
 async function sanityCheck(page, app, probePath) {
   const res = await page.goto(app.baseUrl + probePath, { waitUntil: 'domcontentloaded', timeout: 45000 });
   await page.waitForTimeout(2000);
   if (!res || res.status() !== 200) return { ok: false, reason: `${probePath} 가 ${res ? res.status() : '무응답'} 입니다` };
   if (/\/login(\?|$)/.test(page.url())) return { ok: false, reason: `${probePath} 가 로그인으로 튕겼습니다` };
-  const j = await judgeDenial(page);
-  if (j.denied) return { ok: false, reason: `${probePath} 가 거부 요소 ${j.deniedBy.join(', ')} 를 그리고 있습니다 — 테넌트/권한이 안 잡혔습니다` };
-  // 🔵 프로브는 문구 적중도 **여전히 막는다.** 장별 판정과 다르게 두는 이유: 프로브 경로는
-  //    문서 페이지가 아닌 고정 대시보드라 «자기 설명 문구» 오탐의 모집단이 아니고, «테넌트를 먼저
-  //    선택하세요» 안내는 마커가 **없다**(`accounts/page.tsx` 등). 여기서 놓치면 앱 전체가 거짓 캡처다.
-  if (j.textHits.length) return { ok: false, reason: `${probePath} 가 «${j.textHits[0]}» 를 그리고 있습니다 — 테넌트/권한이 안 잡혔습니다` };
-  return { ok: true, probePath, chars: j.chars };
+  return judgeProbe(page, probePath);
 }
 
 // -----------------------------------------------------------------------------
@@ -710,18 +732,53 @@ async function main() {
       if (!ok) bad++;
       console.log(`  ${ok ? '✔' : '✗'} ${c.name}  want=${JSON.stringify({ degraded: c.degraded, byCount: c.byCount })} got=${JSON.stringify(got)}`);
     }
+    // --- ③ 사전 확인이 저하를 **보는가** (TASK-MONO-711 ①) ---------------------
+    // 🔴 위 ②는 `judgeDegraded()` 를 **직접** 부른다 — 그래서 «프로브가 그것을 부르는가» 는
+    //    한 칸도 안 묻는다. 2026-09-18 창에서 프로브는 저하 화면을 `✔` 로 통과시켰고, 그때
+    //    `judgeDegraded()` 는 **이미 있었다.** 없던 것은 판정기가 아니라 **배선**이다.
+    // 🔴🔴 그래서 이 칸은 `ok` 와 `degraded` 를 **둘 다** 단언한다:
+    //      · `degraded` 만 보면 → 누가 저하를 `ok:false` 로 바꿔도 초록이다(= 측정을 막는다)
+    //      · `ok` 만 보면 → 배선을 떼어내도 초록이다(= 원래 결함 그대로)
+    const probeCases = [
+      { name: 'probe-degraded-marker', ok: true, degraded: true,
+        html: '<main><h1>운영자 통합 개요</h1><div data-testid="operator-overview-bff-unavailable">통합 개요를 일시적으로 불러올 수 없습니다.</div></main>' },
+      { name: 'probe-degraded-copy-only', ok: true, degraded: true,
+        html: '<main><h1>운영자 통합 개요</h1><p>통합 개요를 불러올 수 없습니다.</p></main>' },
+      { name: 'probe-healthy', ok: true, degraded: false,
+        html: '<main><h1>운영자 통합 개요</h1><table data-testid="overview-table"><tr><td>WMS</td><td>3</td></tr></table></main>' },
+      // 🔵 거부는 **여전히 막는다** — 저하를 통과시키는 것과 거부를 통과시키는 것은 다른 일이다.
+      { name: 'probe-denied-still-blocks', ok: false, degraded: null,
+        html: '<main><div data-testid="wms-overview-forbidden">권한이 없습니다</div></main>' },
+    ];
+    const probeBrowser = await chromium.launch();
+    const probePage = await probeBrowser.newPage();
+    for (const c of probeCases) {
+      await probePage.setContent(c.html);
+      const r = await judgeProbe(probePage, '/dashboards/overview');
+      const got = { ok: r.ok, degraded: r.ok ? !!r.degraded : null };
+      const okCell = got.ok === c.ok && got.degraded === c.degraded;
+      if (!okCell) bad++;
+      console.log(`  ${okCell ? '✔' : '✗'} ${c.name}  want=${JSON.stringify({ ok: c.ok, degraded: c.degraded })} got=${JSON.stringify(got)}`);
+    }
+    await probeBrowser.close();
+
     await browser.close();
     // 🔴 양성·음성이 **둘 다** 있어야 «0 오탐» 이 공허하지 않다 — 픽스처가 한쪽으로 쏠리면 멈춘다.
     const pos = cases.filter((c) => c.denied).length;
     const neg = cases.filter((c) => !c.denied).length;
     const degPos = degCases.filter((c) => c.degraded).length;
     const degNeg = degCases.filter((c) => !c.degraded).length;
-    if (!pos || !neg || !degPos || !degNeg) {
-      console.error(`[portfolio] ✗ self-test 픽스처가 공허합니다 (거부 ${pos}/${neg} · 저하 ${degPos}/${degNeg})`);
+    // 🔴 프로브 칸도 같은 하한을 받는다 — «저하를 보는» 칸과 «안 보는» 칸이 둘 다 있어야
+    //    «프로브가 저하를 본다» 가 공허하지 않다. 그리고 «거부는 여전히 막는다» 가 한 칸 필요하다.
+    const probeDeg = probeCases.filter((c) => c.degraded === true).length;
+    const probeClean = probeCases.filter((c) => c.degraded === false).length;
+    const probeBlocked = probeCases.filter((c) => c.ok === false).length;
+    if (!pos || !neg || !degPos || !degNeg || !probeDeg || !probeClean || !probeBlocked) {
+      console.error(`[portfolio] ✗ self-test 픽스처가 공허합니다 (거부 ${pos}/${neg} · 저하 ${degPos}/${degNeg} · 프로브 저하${probeDeg}/정상${probeClean}/차단${probeBlocked})`);
       process.exit(1);
     }
-    const total = cases.length + degCases.length;
-    console.log(`[portfolio] self-test ${total - bad}/${total} (거부 ${pos} · 비거부 ${neg} · 저하 ${degPos} · 비저하 ${degNeg})`);
+    const total = cases.length + degCases.length + probeCases.length;
+    console.log(`[portfolio] self-test ${total - bad}/${total} (거부 ${pos} · 비거부 ${neg} · 저하 ${degPos} · 비저하 ${degNeg} · 프로브 ${probeCases.length})`);
     process.exit(bad ? 1 : 0);
   }
 
@@ -738,6 +795,9 @@ async function main() {
   let page = await context.newPage();
   const shots = [];
   const failures = [];
+  // TASK-MONO-711 ① — 사전 확인의 결과를 매니페스트에 남긴다. 로그는 흘러가고,
+  // 「그때 프로브가 저하였나」는 나중에 큐레이션할 때 묻게 되는 질문이다.
+  const probes = [];
 
   for (const k of keys) {
     const app = APPS[k];
@@ -790,6 +850,17 @@ async function main() {
           continue;
         }
         console.log(`[portfolio] ✔ 사전 확인 ${s.probePath} (본문 ${s.chars}자)`);
+        // 🔴 TASK-MONO-711 ① — 저하면 **소리 내어 말한다.** 막지는 않는다.
+        //    이 줄이 없으면 저하 화면 위에서 앱 전량을 찍고도 로그가 «✔» 하나만 남는다.
+        if (s.degraded) {
+          console.warn(
+            `[portfolio] ⚠ 사전 확인 화면이 **저하 상태**입니다 — ${s.probePath}` +
+              (s.degradedBy.length ? ` (${s.degradedBy.join(', ')})` : ' (문구 적중)') +
+              `\n           찍기는 계속합니다. 🔵 이 앱의 장들을 큐레이션에 쓰기 전에 눈으로 확인하세요.`,
+          );
+        }
+        probes.push({ app: k, path: s.probePath, chars: s.chars,
+          degraded: !!s.degraded, ...(s.degradedBy?.length ? { degradedBy: s.degradedBy } : {}) });
       }
     }
 
@@ -832,6 +903,7 @@ async function main() {
     format: FORMAT,
     apps: Object.fromEntries(keys.map((k) => [k, { label: APPS[k].label, baseUrl: APPS[k].baseUrl }])),
     counts: { planned: totalStatic + totalDynamic, captured: shots.length, failed: failures.length },
+    probes,
     shots,
     failures,
   };

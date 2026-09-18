@@ -8,7 +8,7 @@ TASK-MONO-711
 
 # Status
 
-ready
+in-progress (2026-09-18 UTC — AC-0 게이트 통과 · AC-1 + AC-1b 닫힘 · ②③④ 남음)
 
 # Owner
 
@@ -114,14 +114,19 @@ return { overview: null, noTenant: false, unauthorized: false, bffUnavailable: t
 
 # Acceptance Criteria
 
-- [ ] **AC-0 — 착수 게이트: 이 티켓의 전제부터 다시 읽어라.** 🔴 첫 판이 «기록된 한계» 를
+- [x] **AC-0 — 착수 게이트: 이 티켓의 전제부터 다시 읽어라.** 🔴 첫 판이 «기록된 한계» 를
       «새 결함» 으로 읽고 무너졌다. 착수 시점에 ⓐ `console-vercel.override.yml` § 영향 레그와
       ⓑ `TASK-MONO-585` § 알려진 한계를 **열어서** 위 ①②③ 이 거기 **없는지** 다시 확인해라.
       있으면 그 칸을 지워라 — 남은 것으로 티켓을 다시 좁히는 것이 착수다.
-- [ ] **AC-1 — ① 사전점검.** `probe` 가 `judgeDegraded()` 를 부르고 저하면 경고를 찍는다.
+- [x] **AC-1 — ① 사전점검.** `probe` 가 `judgeDegraded()` 를 부르고 저하면 경고를 찍는다.
       🔴 **막지는 마라** — 저하를 **일부러** 찍는 측정이 있다(`TASK-MONO-707` AC-3 이 그랬다).
       경고 + 매니페스트 기록이지 중단이 아니다. **bite**: 저하 픽스처에서 경고가 안 나오면
       `--self-test` 가 빨개진다.
+- [x] **AC-1b — 🔴 그 bite 를 CI 가 돌린다 (착수 중에 추가한 칸).** AC-1 을 구현하면서
+      `capture-portfolio.mjs --self-test` 를 **어떤 워크플로도 부르지 않는다**는 것을 발견했다.
+      즉 `TASK-MONO-707` 이 만든 16칸은 **사람이 손으로 돌릴 때만** 빨개졌다. AC-1 의 «bite» 는
+      그 상태로는 요건을 만족하지 못한다 — 아무도 안 돌리는 가드는 없는 가드보다 나쁘다.
+      🔵 이 칸은 원래 Scope 에 없었다. 범위를 조용히 넓히지 않으려고 **칸으로 적고** 닫는다.
 - [ ] **AC-2 — ② 사유를 들고 다닌다.** `bffUnavailable` 옆에 원인 구분(최소:
       `transport` / `status:<code>` / `timeout`)을 남긴다. 🔴 **상시 켜진 신호를 구별 가능하게
       만드는 것이 목적**이지 화면을 예쁘게 하는 것이 아니다. 화면 문구는 그 다음 문제다.
@@ -172,3 +177,71 @@ return { overview: null, noTenant: false, unauthorized: false, bffUnavailable: t
 
 (분석=Opus 5 / 구현 권장=Sonnet — ①③ 은 한 파일씩이고 ②는 타입 하나 넓히는 일이다.
 🔴 단 AC-0 의 재확인은 **읽는 일이지 고치는 일이 아니다** — 거기서 티켓이 또 줄어들 수 있다)
+
+---
+
+# 🟢 AC-0 — 착수 게이트 결과 (2026-09-18 UTC)
+
+이 티켓 자신이 요구한 «그 두 문서를 열어서 ①②③ 이 거기 **없는지** 다시 확인해라» 를 돌렸다.
+
+| 문서 | ①②③ 이 있나 |
+|---|---|
+| `infra/demo/console-vercel.override.yml` (§ 영향 레그 · § 영구 열화) | **없다** (`probe`·`judgeDegraded`·catch-all·«부재» 어느 것도 0건) |
+| `TASK-MONO-585` § 알려진 한계 (26줄) | **없다** (같은 질의) |
+| 저장소 전체 «사전 확인» 소유자 | 이 티켓과 스크립트 자신뿐 |
+
+⇒ 셋 다 살아남았다. 🔵 그 문서들이 드는 것은 **기전**(BFF 가 닿지 않는다)이고, 이 티켓이 드는
+것은 그 기전이 남기는 **자국**이다 — 겹치지 않는다.
+
+# 🟢 AC-1 · AC-1b — ① 사전점검이 저하를 본다 (분석·구현=Opus 5)
+
+## 고친 것
+
+| 무엇 | 어떻게 |
+|---|---|
+| 판정부 분리 | `sanityCheck()` 에서 **판정만** `judgeProbe(page, probePath)` 로 뗐다. 🔵 붙여 두면 self-test 가 픽스처로 이 배선을 못 문다 — «판정기가 있나» 가 아니라 «프로브가 그것을 부르나» 가 이 티켓의 질문이다 |
+| 저하 판정 | `judgeProbe` 가 거부·문구 검사 뒤 `judgeDegraded(page, text)` 를 부르고 `degraded`·`degradedBy` 를 **결과에 얹는다** |
+| 🔴 막지 않는다 | `ok` 는 건드리지 않는다. 저하를 `ok:false` 로 만들면 «저하를 일부러 찍는» 측정이 불가능해진다 — `TASK-MONO-707` AC-3 이 정확히 그것을 했다(재무를 내리고 `/ledger` 가 degraded 로 잡히는지 봤다) |
+| 경고 | 호출부가 `⚠ 사전 확인 화면이 **저하 상태**입니다 — <경로> (<마커들>)` 를 찍고 «찍기는 계속합니다» 를 명시한다 |
+| 기록 | 매니페스트에 `probes: [{app, path, chars, degraded, degradedBy}]` — 로그는 흘러가고, «그때 프로브가 저하였나» 는 **나중에 큐레이션할 때** 묻게 되는 질문이다 |
+
+## self-test — **20/20** (기존 16 + 프로브 4), rc=0
+
+| 칸 | 기대 | 왜 |
+|---|---|---|
+| `probe-degraded-marker` | `ok:true · degraded:true` | 2026-09-18 창의 그 화면 |
+| `probe-degraded-copy-only` | `ok:true · degraded:true` | 마커 없이 문구만 (합집합의 다른 날개) |
+| `probe-healthy` | `ok:true · degraded:false` | 🔵 대조군 — 없으면 «항상 저하» 가 통과한다 |
+| `probe-denied-still-blocks` | `ok:false` | 🔴 **거부는 여전히 막는다** — 저하를 통과시키는 것과 거부를 통과시키는 것은 다른 일이다 |
+
+🔴 **각 칸이 `ok` 와 `degraded` 를 둘 다 단언한다.** 하나만 보면 한쪽 결함이 샌다:
+`degraded` 만 보면 누가 저하를 차단으로 바꿔도 초록이고, `ok` 만 보면 배선을 떼어내도 초록이다.
+🔵 공허성 하한도 넓혔다 — 프로브 칸은 «저하 ≥1 · 정상 ≥1 · 차단 ≥1» 이 아니면 멈춘다.
+
+## bite — 두 방향, **다른 모양으로** 물린다
+
+| 주입 (1건 단언 후) | 결과 |
+|---|---|
+| A `judgeProbe` 에서 `judgeDegraded` 호출 제거(= 결함 원상복구) | **18/20**, ✗ 두 칸이 `degraded:false` 로 |
+| B 저하면 `ok:false` 로 막게 함(= AC-1 이 금지한 방향) | **18/20**, ✗ 같은 두 칸이 `ok:false` 로 |
+
+🔵 A 와 B 가 **같은 칸을 다른 값으로** 틀리게 만든다 — 그래서 이 칸들은 «배선 없음» 과
+«과잉 차단» 을 구별한다. `probe-healthy`·`probe-denied-still-blocks` 는 양쪽에서 초록이다.
+
+## AC-1b — 🔴 그 bite 를 **아무도 안 돌리고 있었다**
+
+`grep -rn capture-portfolio .github/` → **0건**. `TASK-MONO-707` 은 CI 가 돈다고 주장한 적이
+없고(`TASK-MONO-648` 도 «손으로 돌린 증거» 로 적었다) — 즉 **거짓 주장은 없었지만 가드도 없었다.**
+⇒ `ci.yml` 의 `Frontend E2E smoke` 잡에 스텝을 더했다. 🔵 그 잡이 바로 위에서 **chromium 을
+설치**한다(self-test 는 실제 브라우저에 `setContent` 로 픽스처를 띄운다). 창도 백엔드도 필요 없다.
+🔴 Playwright 미설치면 스크립트가 `rc=3` 을 내는데, CI 에서 그것은 «고장이 아님» 이 아니라
+**이 잡의 배선이 깨진 것**이므로 빨간 것이 맞다 — 그 구별을 스텝 주석에 적었다.
+🔵 `scripts/check-required-check-names.sh` rc=0 — **잡이 아니라 스텝**을 더했으므로 등록된
+체크 이름 넷은 그대로다(잡 이름을 바꾸면 조용히 BLOCKED 가 된다는 그 함정을 건드리지 않았다).
+
+## ⚪ 안 한 것
+
+- **②③④ 는 안 건드렸다** — 다른 파일·다른 층이고, 이 티켓의 Failure 3 이 «한 덩어리로 고치려
+  한다» 를 막고 있다. 티켓은 `in-progress` 로 남는다.
+- self-test 는 **술어와 배선**을 재지 실제 콘솔이 그 마커를 다는지는 재지 않는다(그건 창이다).
+- 🔴 **새 CI 스텝이 실제로 도는 것은 이 PR 의 CI 가 처음이다** — 그 초록이 이 칸의 실전 판정이다.
