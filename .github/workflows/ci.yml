@@ -271,6 +271,12 @@ jobs:
       client-graph-origins: ${{ steps.filter.outputs.client-graph-origins }}
       fetch-resolution: ${{ steps.filter.outputs.fetch-resolution }}
       readme-screenshots: ${{ steps.filter.outputs.readme-screenshots }}
+      # TASK-MONO-648 AC-3: raw filter, NOT AND-combined with `code-changed`. The judge
+      # itself and the capture script are `.mjs`, which is not in the `code-changed`
+      # enumeration — AND-ing would switch the guard off on the diff that weakens it.
+      # 🔴 이 한 줄이 없으면 `needs.changes.outputs.capture-route-staleness` 가 **빈 값**이 되어
+      #    잡의 `if` 가 항상 거짓이 된다 — 배선이 없는데 초록으로 보인다(MONO-619/640 과 같은 함정).
+      capture-route-staleness: ${{ steps.filter.outputs.capture-route-staleness }}
       stage-contexts: ${{ steps.filter.outputs.stage-contexts }}
       # TASK-MONO-562: raw filter, NOT AND-combined with `code-changed`. Every arrival
       # path of this drift is non-code: a `vercel.json` losing its `ignoreCommand`, a
@@ -857,6 +863,20 @@ jobs:
               #    **그 문서만 고치는 커밋**에서 잡이 안 돌아 깨진 참조가 조용히 머지된다.
               - 'docs/portfolio.md'
               - 'scripts/check-readme-screenshots.mjs'
+            # TASK-MONO-648 AC-3: 포트폴리오 촬영본의 «낡음». 도착 경로가 셋이다 —
+            # ① 세 앱 중 하나에서 `page.tsx` 가 사라지거나 이름이 바뀐다(찍은 화면이 없어진다),
+            # ② `capture-portfolio.mjs` 의 `APPS`(appDir · probe)가 바뀐다,
+            # ③ 판정자 자신이 약해진다.
+            # 🔴 ① 이 이 가드의 **주 도착 경로**이고, 그것은 프런트 소스 편집으로 온다. 앱
+            #    디렉터리 줄이 없으면 «페이지를 지운 커밋» 에서 이 잡이 안 돌고, 촬영이 통째로
+            #    건너뛰어지는 회귀(probe 404 → 찍음 0)가 조용히 머지된다.
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            capture-route-staleness:
+              - 'projects/platform-console/apps/console-web/src/app/**'
+              - 'projects/ecommerce-microservices-platform/apps/web-store/src/app/**'
+              - 'projects/fan-platform/web/fan-platform-web/src/app/**'
+              - 'scripts/capture-portfolio.mjs'
+              - 'scripts/check-capture-route-staleness.mjs'
             # TASK-MONO-655: 다단계 Dockerfile 의 스테이지 대칭. 도착 경로는 둘 —
             # Dockerfile 자신, 그리고 판정자.
             stage-contexts:
@@ -1783,6 +1803,44 @@ jobs:
 
       - name: Guard — every referenced shot exists, and no shot is orphaned
         run: node scripts/check-readme-screenshots.mjs
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-648 AC-3 — 포트폴리오 촬영본의 낡음을 **날짜가 아니라 경로 실재**로 잰다.
+  #
+  # 🔴 왜 «매니페스트 대조» 가 여기 없나: 전량 촬영본은 `portfolio-captures/` 에 있고 그
+  #    디렉터리는 `.gitignore:106` 이 삼킨다(15–50MB · 저장소 밖에서 쓰는 자료). CI 에는
+  #    매니페스트가 **존재하지 않는다** ⇒ 매니페스트만 읽는 가드는 한 번도 못 돈다. 그리고
+  #    «아무도 안 돌리는 가드는 없는 가드보다 나쁘다» 는 것을 바로 직전에 치렀다
+  #    (`TASK-MONO-711` AC-1b). ⇒ 술어는 하나, 모집단은 둘로 갈랐다:
+  #      · 모드 A(여기서 도는 것) — `APPS` 의 appDir 실재 · 유도 라우트 비어 있지 않음 ·
+  #        **선언된 probe 가 유도 목록에 있는가**. 마지막이 날카로운 칸이다: 프로브가
+  #        사라지면 `sanityCheck()` 가 404 를 받아 **앱 전체를 건너뛰고**(찍음 0), 오늘
+  #        저장소에서 그것을 미리 볼 수 있는 것은 아무것도 없다.
+  #      · 모드 B(창/로컬) — `--manifest <경로>` 로 `shots[].path` 를 전부 대조.
+  # 🔵 self-test 는 임시 디렉터리에 **진짜 `page.tsx` 트리**를 세워 잰다 — 브라우저도 데모
+  #    백엔드도 필요 없다. 그래서 이 잡은 checkout + node 뿐이다.
+  # ---------------------------------------------------------------------------
+  capture-route-staleness:
+    name: Portfolio capture staleness (captured paths vs app/**/page.tsx)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      needs.changes.outputs.capture-route-staleness == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax (node --check)
+        run: |
+          node --check scripts/check-capture-route-staleness.mjs
+          node --check scripts/capture-portfolio.mjs
+
+      - name: Self-test the predicate (bites, and stays silent on route groups and [id])
+        run: node scripts/check-capture-route-staleness.mjs --self-test
+
+      - name: Guard — every app's route surface is intact and its probe still exists
+        run: node scripts/check-capture-route-staleness.mjs
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-562 — Vercel build triggers.

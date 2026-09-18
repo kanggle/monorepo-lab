@@ -486,13 +486,23 @@ AC-4 가 요구한 큐레이션 후보를 내려고 **19장 중 16장을 실제�
 
 ## AC-3 — 낡음을 무는 가드
 
-- [ ] 🔴 **날짜로 재지 마라.** 예약 트리거는 이 저장소가 이미 데인 함정이다.
-- [ ] 대신 **찍은 경로가 아직 실재하는가**를 문다: 매니페스트의 경로 ↔ `app/**/page.tsx`
+- [x] 🔴 **날짜로 재지 마라.** 예약 트리거는 이 저장소가 이미 데인 함정이다.
+      → 🟢 날짜를 **한 줄도 안 읽는다.** `scripts/check-capture-route-staleness.mjs` 에
+      `Date`·`mtime`·«N일» 이 없다(술어는 파일 실재 하나뿐). 아래 § 🟢 AC-3.
+- [x] 대신 **찍은 경로가 아직 실재하는가**를 문다: 매니페스트의 경로 ↔ `app/**/page.tsx`
       에서 유도한 라우트 목록. 페이지가 사라지면 빨개진다.
-- [ ] 🔴 **한계를 적어라**: 이 술어는 «페이지가 사라졌다» 만 잡고 «내용이 바뀌었다» 는 못
+      → 🟢 **술어 하나, 모집단 둘**로 지었다(모드 A = CI · 모드 B = `--manifest`).
+      🔴 매니페스트만 읽는 가드는 **CI 에서 한 번도 못 돈다** — 그 이유와 갈래는 아래 §.
+- [x] 🔴 **한계를 적어라**: 이 술어는 «페이지가 사라졌다» 만 잡고 «내용이 바뀌었다» 는 못
       잡는다. 그리고 인증 캡처는 **기동 창에서만** 재생성된다 — 즉 `TASK-MONO-639` 가 캡처에
       준 「다시 만들 수 있다」 성질이 **인증 캡처에서는 약해진다.** 그 사실을 남겨라.
-- [ ] **bite** + 대조군.
+      → 🟢 한계 **여섯 개**를 가드 파일 머리말과 아래 § 「한계」에 **둘 다** 적었다.
+      🔵 두 곳에 적은 것은 의도다 — 빨강을 보는 사람은 가드 파일을 열고, 큐레이션하는
+      사람은 티켓을 연다. 🔴 그러므로 **한쪽만 고치면 다른 쪽이 낡는다**(이 저장소가
+      이름 붙인 «한 사실이 두 절에 있으면 한쪽만 고쳐진다»). 고칠 땐 둘 다 고쳐라.
+- [x] **bite** + 대조군.
+      → 🟢 `--self-test` **20칸**(bite 12 · 대조군 8, rc=0) + 저장소 **실 트리 사본**에
+      진짜 `page.tsx` 를 지우고/이름 바꾼 **실주입 8칸**(rc=0). 아래 § 두 표.
 
 ## AC-4 — 산출물
 
@@ -1228,3 +1238,234 @@ AMI `ami-058f6293d1408f91e`(`RepoCommit=8cf474346`) · 인스턴스 `i-027d6b396
 **3개 앱 전량 · 서비스당 3–6장**이다. 남은 것: 콘솔 도메인별 · web-store · fan.
 🔵 그리고 §336(«랜딩을 대체할 4번째 장»)은 여전히 열려 있다 — 랜딩은 **영구히 후보가
 아니므로**(위 절) 대체는 선택이 아니라 요건이다.
+
+---
+
+# 🟢 AC-3 — 낡음을 무는 가드 (2026-09-18 UTC)
+
+🔴 **이 절은 AC-3 만 닫는다.** AC-2/AC-4 의 큐레이션은 소유자 결정 칸이고 손대지 않았다.
+
+산출물: **`scripts/check-capture-route-staleness.mjs`** (신규) ·
+`scripts/capture-portfolio.mjs` (export 3줄 + 진입점 판정) ·
+`.github/workflows/ci.yml` (필터 1 + outputs 1 + **새 잡 1**) ·
+`CLAUDE.md` · `platform/git-workflow-policy.md` (가드-수 문장 59 → 60).
+
+## 🔴🔴 AC-3 의 문장을 그대로 구현하면 **CI 에서 한 번도 안 돈다** — 그래서 모집단을 둘로 갈랐다
+
+AC-3 은 *"**매니페스트의** 경로 ↔ 유도한 라우트"* 라고 적었다. 그런데 매니페스트는
+`portfolio-captures/manifest.json` 이고 **`.gitignore:106` 이 그 디렉터리를 삼킨다** —
+이 티켓 § 「산출물이 어디 사는가」가 **의도적으로** 그렇게 정한 것이다(15–50MB).
+⇒ 매니페스트만 읽는 가드는 CI 에 입력이 없다. 그리고 *«아무도 안 돌리는 가드는 없는
+가드보다 나쁘다»* 를 이 저장소가 **바로 직전에** 치렀다(`TASK-MONO-711` AC-1b: 16칸짜리
+self-test 를 어떤 워크플로도 안 불렀다).
+
+**술어는 하나, 모집단은 둘이다.**
+
+| | 모드 A — 표면 | 모드 B — 매니페스트 |
+|---|---|---|
+| 호출 | 인자 없음 (**CI 가 매 PR 에서**) | `--manifest <경로>` (창/로컬) |
+| 입력 | `capture-portfolio.mjs` 의 `APPS` **뿐** | 매니페스트 + `APPS` |
+| 무는 것 ① | `appDir` 이 사라졌다 | `shots[].path` 에 대응하는 `page.tsx` 가 없다 |
+| 무는 것 ② | 유도 라우트가 **0개**다 | `shots[].app` 이 `APPS` 에 없는 앱이다 |
+| 무는 것 ③ | 🔴 **선언된 `probe` 가 유도 목록에 없다** | `shots` 가 **0개**다(= 결함 0 이 아니라 **측정 0**) |
+| 안 무는 것 | «이 사진이 아직 유효한가»(매니페스트가 CI 에 없다) | — |
+
+🔴 **모드 A ③ 이 날카로운 칸이다.** 오늘 콘솔의 프로브는 `/dashboards/overview` 이고,
+그 라우트가 이름만 바뀌어도 `sanityCheck()` 가 404 를 받아 **앱을 통째로 건너뛴다**
+(계획 67 · 찍음 **0**). 2026-09-17 둘째 창이 사유는 달라도 **증상은 그 모양**이었다
+(§ 창 실측 표). 🔵 지금 저장소에서 그 고장을 **미리** 볼 수 있는 것은 아무것도 없었다.
+
+## 🔴🔴 라우트 유도를 **다시 적지 않았다 — import 한다**
+
+`APPS` 와 `deriveRoutes()` 는 `capture-portfolio.mjs` 에서 온다. 앱 목록이나 route group
+제거 규칙을 가드에 상수로 옮겨 적으면 그 가드는 **자기 재진술**을 재게 되고, 그것이
+막으려는 결함 자체다. 저장소의 선례가 같은 문장을 이미 적어 두었다 —
+`projects/iam-platform/apps/auth-service/src/test/java/com/example/auth/demoseed/FanArtistDemoSeedTest.java`:
+*"A test that restated them as its own constants would verify the restatement — the exact
+failure mode it is here to prevent."*
+
+그러려면 두 가지가 필요했고, **둘 다 자기 칸으로 단언한다**:
+
+| 변경 | 왜 | 위험 | 그 위험을 무는 칸 |
+|---|---|---|---|
+| `export const APPS` · `export function deriveRoutes` | 가드가 정본을 읽는다 | — | — |
+| `deriveRoutes` 의 `join` → **`resolve`** | self-test 가 임시 트리에 **이 함수 자신**을 돌린다 | 저장소 세 앱은 상대 경로라 **동작 불변** | `W2` + `--list` 출력 대조 |
+| `main()` 을 **진입점일 때만** 부른다 | import 해도 촬영이 안 시작돼야 한다 | 🔴 판정을 좁히면 CLI 가 **아무 일도 안 하고 rc=0** | `W1`(import 는 조용) + `W2`(CLI 는 여전히 일한다) |
+
+🔵 이 파일 머리말의 *«로더를 공유 모듈로 빼지 마라»* 와 충돌하지 않는다 — 그 규칙은
+`capture-portfolio.mjs` 가 **형제를 import 하면** (z38) 의 한-파일 복사 bite 가 죽는다는
+것이고, 여기 방향은 **반대**다(가드 → 촬영 스크립트). 촬영 스크립트는 여전히 파일 하나로 돈다.
+
+## 🔴 비공허성 — 축을 **이름**으로 잡았지 수로 잡지 않았다
+
+이 저장소는 **줄어드는 모집단에 하한**을 걸어서 데였다. 라우트는 늘기도 줄기도 한다 —
+이 티켓만 해도 «102» 가 오늘 **100** 이다. ⇒ «라우트 ≥ N» 같은 수 하한을 **쓰지 않았다.**
+
+- 하한 ①: `probe` 경로가 유도 목록에 **있을 것** — **이름**이지 수가 아니다.
+- 하한 ②: `probe` 를 선언한 앱이 **최소 하나**. 🔴 이 모집단은 정상적으로 줄 수 없다 —
+  `probe` 를 지우면 `if (app.probe)` 가 사전 점검을 통째로 끄므로 **그 삭제 자체가 회귀**다.
+- 하한 ③: 앱당 유도 라우트 **0개가 아닐 것** — 0 이 되려면 `app/` 이 통째로 사라져야 하고
+  그러면 `APPS` 도 같이 고쳐야 한다. 조용히 0 으로 빠질 길이 없다.
+- 하한 ④(모드 B): `shots` 0개는 **초록이 아니다.** 촬영 0장 실행은 실제로 있었다
+  (2026-09-17 둘째 창 ecommerce: 67계획 · **0촬영**) — 그 매니페스트를 통과시키면 이 가드는
+  **가장 나쁜 실행에서만** 조용해진다. «결함 0» 과 «측정 0» 은 같은 종료코드를 쓰면 안 된다.
+
+## 🔴 한계 — **이 술어가 못 잡는 것** (가드 파일 머리말과 동일. 한쪽만 고치지 마라)
+
+1. **«페이지가 사라졌다» 만 잡고 «내용이 바뀌었다» 는 못 잡는다.** 이 티켓에 실사례가 있다 —
+   `/erp/masters` 가 참조 칸에 raw UUID 를 그렸는데 **글자는 가득 차 있어서** `empty` 도
+   `degraded` 도 아니었고 경로도 멀쩡했다(§477 · `TASK-PC-FE-276`). **이 가드는 그날도 초록이었다.**
+2. **«재생성 가능» 이 인증 캡처에서 약하다.** `TASK-MONO-639` 는 캡처에 «언제든 다시 만들 수
+   있다» 를 줬지만 그것은 공개 표면 이야기다. 콘솔의 보호 경로 64개는 **데모 기동 창**
+   (예산 · 소유자 승인 · AMI 재굽기 선행)이 있어야만 다시 찍힌다. ⇒ 🔴 **이 가드의 빨강은
+   «고치면 된다» 가 아니라 «창을 하나 써야 한다» 이다.** 그 사실을 모르면 빨강이 방치된다.
+3. **모드 A 는 «이 사진이 아직 유효한가» 를 못 묻는다** — CI 에 매니페스트가 없다(위 §).
+   모드 A 가 묻는 것은 더 좁다: «촬영이 애초에 돌 수 있는 표면인가».
+4. **«라우트 파일이 있다» 이지 «그 URL 이 200 이다» 가 아니다.** 권한 거부·리다이렉트·저하는
+   이 술어로 **초록**이다. 그쪽은 `capture-portfolio.mjs` 의 거부/저하 판정기가 창에서 잰다.
+5. **동적 경로는 모양만 맞춘다.** `/…/<uuid>/edit` 이 `[id]/edit` 에 맞는다는 것은 «라우트가
+   살아 있다» 이지 «그 uuid 의 엔티티가 아직 있다» 가 아니다. 후자는 백엔드가 떠야 안다.
+6. **유도 로직의 결함은 못 본다.** 유도를 import 하므로 그것이 틀리면 촬영과 가드가 **같은
+   방향으로** 틀린다. 🔵 일부러 그렇게 했다 — 사본을 두면 가드가 재는 것은 사본이다(위 §).
+
+## 🟢 bite + 대조군 ① — `--self-test` **20/20** (rc=0)
+
+픽스처는 임시 디렉터리에 **진짜 `page.tsx` 트리**를 세운다(문자열을 흉내내면 재는 것이
+`deriveRoutes()` 가 아니라 «내가 상상한 그 함수의 출력» 이 된다).
+
+| 칸 | 종류 | 무엇을 |
+|---|---|---|
+| `A1 control-surface-intact` | 대조군 | 멀쩡한 앱 → 문제 0 |
+| `A2 probe-route-removed` | **bite** | probe 의 `page.tsx` 만 삭제 → 빨강 |
+| `A3 app-dir-missing` | bite | 🔵 개수가 아니라 **사유 문장**으로 단언(«app 디렉터리가 없습니다») |
+| `A4 app-dir-with-no-pages` | bite | 유도 라우트 0 → 빨강 |
+| `A5 no-app-declares-a-probe` | bite | 🔴 `probe` 선언이 사라지면 **날카로운 칸이 공허**해진다 |
+| `B1 control-static-path-live` | 대조군 | 살아 있는 정적 경로 → 초록 |
+| `B2 manifest-path-whose-page-was-removed` | **bite** | 🔴 이 가드의 본론 |
+| `B3 route-group-path-not-stale` | **대조군** | 🔴🔴 `(console)` 은 URL 에 없다 — 순진한 구현이 깨지는 자리 |
+| `B4 dynamic-id-path-not-stale` | **대조군** | 🔴🔴 `/…/01a085a1-…/edit` ↔ `[id]/edit` — 여기서 틀리면 동적 장 **전부**가 오탐 |
+| `B5 catch-all-path-not-stale` | 대조군 | `/docs/a/b/c` ↔ `[...slug]` |
+| `B6 root-path-not-stale` | 대조군 | `/` |
+| `B7 query-and-trailing-slash-not-stale` | 대조군 | `/erp/masters/?asOf=…` |
+| `B8 parent-route-must-not-absorb-child` | bite | 🔴 접두사 일치로 구현하면 `/erp` 가 `/erp/masters` 를 삼킨다 |
+| `B9 dynamic-route-removed-is-stale` | bite | 🔴 «동적이면 무조건 통과» 구현을 거른다 |
+| `B10 unknown-app-key` | bite | 앱이 지워졌거나 키가 바뀌었다 |
+| `B11 empty-manifest-measures-nothing` | bite | «측정 0» ≠ «결함 0» |
+| `B12 not-a-manifest` | bite | `shots` 배열이 없다 |
+| `B13 api-route-is-not-a-page` | bite | `api/tenant/route.ts` 는 페이지가 아니다 |
+| `W1 import-does-not-run-the-capture` | bite | import 해도 `[portfolio]` 출력 0 · rc=0 |
+| `W2 cli-still-does-its-work` | **대조군** | `node capture-portfolio.mjs --list --app fan` 가 **여전히 일한다** |
+
+공허성 하한: bite·대조군이 **둘 다** 0 이 아니어야 한다(아니면 rc=1). 측정 `bite 12 · 대조군 8`.
+
+## 🟢 bite + 대조군 ② — **실 트리 실주입 8칸** (rc=0)
+
+🔴 self-test 는 **술어**를 재지 «저장소의 진짜 트리에서도 그런가» 를 재지 않는다.
+그래서 `console-web/src/app` 전체(**67 라우트**)를 스크래치로 복사해 **진짜 `page.tsx` 를
+지우고/이름 바꿨다.** (워크트리는 건드리지 않았다.)
+
+| # | 주입 | 결과 |
+|---|---|---|
+| ① | 없음(기준선) | 🟢 GREEN (표면 0 · 매니페스트 0) |
+| ② | `(console)/erp/masters/page.tsx` → `page.tsx.bak` | 🔴 **RED** — *"console /erp/masters (…jpg): 이 경로에 대응하는 page.tsx 가 더 이상 없습니다"* |
+| ③ | 되돌림 | 🟢 GREEN |
+| ④ | `(console)/dashboards/overview/` **삭제** | 🔴 **RED ×2** — 표면: *"사전 점검 경로 '/dashboards/overview' … sanityCheck() 가 404 를 받아 이 앱을 **통째로 건너뜁니다**(찍음 0)"* + 매니페스트 1건 |
+| ⑤ | 되돌림 | 🟢 GREEN |
+| ⑥ | **대조군** — route group `(console)` → `(operator)` | 🟢 GREEN (URL 이 안 바뀐다. 순진한 구현이면 **67장 전부 낡음**으로 보고한다) |
+| ⑦ | **대조군** — 동적 세그먼트 `[id]` → `[productId]` | 🟢 GREEN (구체 경로의 모양은 그대로다) |
+| ⑧ | 최종 복원 | 🟢 GREEN |
+
+🔵 ⑥⑦ 이 대조군인 이유: 둘 다 **실제로 일어나는 리팩터**이고, 둘 다 «찍은 화면은 그대로»
+다. 여기서 빨개지는 가드는 «낡음» 이 아니라 «디렉터리 이름이 바뀜» 을 재는 것이다.
+
+## 🟢 CLI 실측 (모드 B · 저장소 실 트리)
+
+| 실행 | rc | 출력 |
+|---|---|---|
+| 실재 경로 5장(정적 3 + 콘솔 `[id]/edit` 구체 + fan `/artists/a001`) | **0** | `shots 5개를 유도 라우트와 대조했습니다 (통과 5)` |
+| 위 + `/erp/master-data`(리네임 가정) + `app:'wms'` | **1** | 🔴 두 줄을 **이름을 대며** — «대응하는 page.tsx 가 더 이상 없습니다» · «모르는 앱 'wms'» |
+| 없는 매니페스트 경로 | **1** | «매니페스트가 없습니다» (🔴 «낡은 것이 없다» 로 읽히면 안 된다) |
+
+## 🟢 CI 배선 — **새 잡**(리네임 0)
+
+```
+jobs.capture-route-staleness
+  name: Portfolio capture staleness (captured paths vs app/**/page.tsx)
+  if:   needs.changes.outputs.capture-route-staleness == 'true'
+  steps: checkout · node --check ×2 · --self-test · 모드 A
+```
+
+- 🔴 **기존 잡 이름을 한 글자도 안 바꿨다** — `scripts/required-check-names.txt` 가 네 개의
+  context 문자열을 핀으로 박고 있고, 리네임은 그 PR 만 초록으로 머지된 뒤 `main` 을 영구
+  BLOCKED 로 만든다. `bash scripts/check-required-check-names.sh` → **rc=0**.
+- 필터(순수 positive, `code-changed` 와 AND 하지 **않음** — 판정자도 촬영 스크립트도 `.mjs`
+  라 `code-changed` 모집단 밖이다):
+  세 앱의 `src/app/**` · `scripts/capture-portfolio.mjs` · `scripts/check-capture-route-staleness.mjs`.
+  🔴 앱 디렉터리 줄이 **주 도착 경로**다 — 그게 없으면 «페이지를 지운 커밋» 에서 이 잡이 안 돈다.
+- 🔴 `outputs:` 에 한 줄(`capture-route-staleness: ${{ steps.filter.outputs… }}`)을 같이 넣었다.
+  그 줄이 없으면 `needs.changes.outputs.…` 가 빈 값이라 `if` 가 **항상 거짓**이고, 배선이
+  없는데 초록으로 보인다(`TASK-MONO-619`/`640` 이 적어 둔 함정).
+- `js-yaml` 로 파싱 검증: 잡 63개 · **중복 name 0** · 새 잡의 `if`/steps/필터 경로 5개 확인.
+
+## 🔴🔴 `scripts/` 에 파일을 더한 대가 — 전수 스윕이 그것을 냈다
+
+`TASK-MONO-650` 이 «관련 있어 보이는 가드 넷» 만 돌리고 밀었다가 `main` 이
+`Guard-count figure` 로 빨개졌다. **이번엔 전수로 돌렸고 정확히 그 가드가 물었다:**
+
+```
+measured: 22 of 60 scripts/ entries read git ls-files
+DRIFT: CLAUDE.md does not state "22 of the 60 …".  It currently says: 119:22 of the 59 `scripts/`
+DRIFT: platform/git-workflow-policy.md …          It currently says: 308:22 of the 59 guards under `scripts/`
+rc=1
+```
+
+🔵 **분자는 안 움직였다**(새 가드는 `ls-files` 를 안 읽는다) — 움직인 것은 **분모**다.
+가드의 처방대로 **산문 두 곳**을 고쳤다(`59` → `60`): `CLAUDE.md:119` ·
+`platform/git-workflow-policy.md:308`. 재실행 **rc=0**.
+
+## 모든 명령과 rc
+
+| 명령 | rc |
+|---|---|
+| `node --check scripts/capture-portfolio.mjs` | 0 |
+| `node --check scripts/check-capture-route-staleness.mjs` | 0 |
+| `node scripts/check-capture-route-staleness.mjs --self-test` | **0** (20/20) |
+| `node scripts/check-capture-route-staleness.mjs` (모드 A) | **0** (console 67/probe ✔ · store 22 · fan 11) |
+| `node … --manifest <실재 5장>` | 0 |
+| `node … --manifest <낡은 2건 포함>` | **1** (설계대로) |
+| `node … --manifest <없는 파일>` | **1** |
+| `node scripts/capture-portfolio.mjs --dry-run` | **3** (Playwright 미설치 — 이 워크트리엔 `node_modules` 가 없다. 고장이 아니다) |
+| `node scripts/capture-portfolio.mjs --self-test --from <console-web node_modules>` | **0** — 🔵 **기존 20칸이 그대로 통과**한다(export 편집이 아무것도 안 깼다는 대조군) |
+| `node scripts/capture-portfolio.mjs --list` | 0 (100 페이지 · 정적 85 · 동적 15) |
+| 실주입 하네스(실 트리 사본 8칸) | **0** |
+| `bash scripts/check-ls-files-guard-count.sh` (산문 고치기 **전**) | **1** |
+| `bash scripts/check-ls-files-guard-count.sh` (고친 **뒤**) | **0** |
+| `bash scripts/check-required-check-names.sh` | **0** |
+| **전수 스윕** — `scripts/check-*.sh` 35개 + `check-*.mjs` 5개 | **38× rc=0 · 2× rc=1** |
+
+### 🔴 스윕의 빨강 둘은 **이 변경과 무관**하다 — 사유를 대며 적는다
+
+| 가드 | rc | 사유 |
+|---|---|---|
+| `check-erp-single-tenant-ratchet.sh` | 1 | *"컨테이너 `erp-platform-mysql` 가 떠 있지 않습니다 … 이것은 SKIP 이 아니라 실패입니다"* — Docker 데몬이 이 호스트에 안 떠 있다. 🔵 가드가 **fail-closed 로 옳게** 죽은 것이다(«안 떴다» 를 «위반 없음» 으로 세지 않는다) |
+| `check-prerendered-demo-verdict.sh` | 1 | *"`DEMO_API_BASE` 가 비어 있습니다 … 공허한 통과"* — `next build` 산출물과 env 가 필요하다(CI 의 `frontend-checks` 가 그 env 를 준다) |
+
+🔵 **«무관» 을 주장으로 두지 않는다**: 두 스크립트를 열어 이 diff 의 파일
+(`CLAUDE.md` · `platform/git-workflow-policy.md` · `ci.yml` · `scripts/*.mjs`)을 **모집단으로
+읽는 곳이 없음**을 확인했다(`check-prerendered-demo-verdict.sh` 의 `ci.yml` 언급 3곳은 전부
+사람에게 주는 **안내 문구**다). 그리고 둘 다 실패 사유가 **자기 원인을 지목**한다.
+
+⚪ **스윕에서 일부러 안 돌린 것**: `scripts/` 의 나머지(`console-demo-up/down` ·
+`dev-setup` · `docker-cleanup` · `fed-e2e-up` · `observability/*` · `sync-portfolio` ·
+`extract-template` · `hook-prune-after-build` · `verify-template-readiness` ·
+`vercel-should-build` · `nightly-close-predicate.mjs` · `scan-client-bundle-origins.mjs`)는
+**가드가 아니라 실행 도구**다(스택을 올리거나 지우거나 force-push 한다). 🔴 «시간이 없어서»
+가 아니라 **돌리는 것 자체가 파괴적**이라서 안 돌렸다.
+
+## ⏳ AC-3 이 닫히면서 **넘기지 않는** 것
+
+- 모드 B 는 창/로컬 전용이다. 다음 촬영 창에서 매니페스트를 얻으면
+  `node scripts/check-capture-route-staleness.mjs --manifest <out>/manifest.json` 를 한 번
+  돌려라 — 🔵 그 한 줄이 창 밖에서 검증할 수 있는 유일한 형태의 «찍은 것 ↔ 지금 코드» 대조다.
+- 🔴 이 가드는 **AC-2/AC-4 의 큐레이션을 대신하지 않는다.** 한계 ①④ 가 그 이유이고,
+  §410 이 이미 적었다 — *"사람 눈을 대체하려 하지 마라. 표지의 목적은 후보를 **줄이는 것**"*.
