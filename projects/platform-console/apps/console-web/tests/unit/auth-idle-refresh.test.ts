@@ -366,3 +366,33 @@ describe('🔴 열린 리다이렉트 — `redirect` 는 공격자 손에 있다
     expect(url.searchParams.get('redirect')).toBeNull();
   });
 });
+
+describe('🔵 대조군 — 갱신 응답에 `id_token` 이 없을 때 (TASK-MONO-705 ⓐ)', () => {
+  // 🔴 이 자리에 «있으면 세운다» 칸을 새로 쓰려다 멈췄다 — **이미 있다**(위 674 칸이
+  //    `expect(cookieJar.get(ID_TOKEN_COOKIE)?.value).toBe('new.id')` 를 단언한다).
+  //    내가 못 찾은 이유는 `grep console_id_token tests/` 로 물었기 때문이다. 테스트는
+  //    리터럴이 아니라 **상수 `ID_TOKEN_COOKIE`** 를 쓴다 — 「무는 가드가 있나」에 grep 은
+  //    답하지 못한다. 실제로 없던 것은 **반대 방향** 한 칸뿐이고, 그것이 아래다.
+  //
+  // 🔵 왜 반대 방향이 필요한가. TASK-MONO-705 ⓐ 는 IAM 이 갱신 응답에 `id_token` 을
+  //    싣게 만든 변경이다. 그 뒤로 이 스위트의 픽스처는 **항상** `id_token` 을 갖게 되므로,
+  //    콘솔이 «응답에 없어도 무언가를 세운다» 로 망가져도 위 칸은 초록이다. 틀리는 방향이
+  //    «없는 값을 지어내는» 쪽이면 로그아웃이 쓰레기 `id_token_hint` 를 보낸다.
+
+  it('응답에 `id_token` 이 없으면 쿠키를 만들지 않는다 — 없는 값을 지어내지 않는다', async () => {
+    idleExpired();
+    stubFetch(() =>
+      json({
+        access_token: jwt({ tenant_id: 'demo-corp', sub: 'op-1' }),
+        token_type: 'Bearer',
+        expires_in: 1800,
+        refresh_token: 'rotated.ref',
+        // id_token 없음 — TASK-MONO-705 이전의 IAM 이 내던 바로 그 모양이다.
+      }),
+    );
+
+    await get('?redirect=%2Fecommerce');
+
+    expect(cookieJar.has(ID_TOKEN_COOKIE)).toBe(false);
+  });
+});

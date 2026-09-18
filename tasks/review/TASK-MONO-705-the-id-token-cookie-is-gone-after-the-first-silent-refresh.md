@@ -8,7 +8,7 @@ TASK-MONO-705
 
 # Status
 
-in-progress (2026-09-18 UTC — AC-0 · AC-3 닫힘 · AC-1 은 🔴 소유자 결정 대기)
+review (2026-09-18 UTC — AC-0~AC-3 전부 닫힘: 소유자가 ⓐ 를 골랐고 구현 + bite 완료)
 
 # Owner
 
@@ -57,8 +57,8 @@ monorepo
 # Acceptance Criteria
 
 - [x] **AC-0 — 재측정.** (1) IAM `refresh_token` 그랜트 응답에 `id_token` 필드가 있는가를 **응답 본문의 키 목록**으로 본다(값 출력 금지) — 로컬 IAM(Testcontainers/슬라이스)으로 재현되면 그것이 첫 판정, 안 되면 창. (2) 로그인 30분 뒤 로그아웃 → 같은 브라우저에서 «로그인» 을 누르면 IAM 폼이 다시 뜨는가(뜨면 IdP 세션이 끝난 것). 🔴 두 번째는 창이 필요하다 — 없으면 ⚪ + `TASK-MONO-672`.
-- [ ] **AC-1 — 갈래를 고른다 (🔴 소유자 결정).** 위 ⓐ/ⓑ/ⓒ 를 AC-0 결과와 함께 추천을 붙여 묻는다. 🔴 추천을 결정으로 적지 마라. ⓐ 는 IAM(다른 프로젝트) 설정 변경이라 계약·보안 축을 적는다.
-- [ ] **AC-2 — 고친다 + bite.** 테스트: «갱신 뒤에도 로그아웃이 `id_token_hint` 를 싣는다»(ⓐ/ⓑ) 또는 «로컬 폴백이 사유를 말한다»(ⓒ). 고친 것을 되돌리면 빨개진다.
+- [x] **AC-1 — 갈래를 고른다 (🔴 소유자 결정).** 위 ⓐ/ⓑ/ⓒ 를 AC-0 결과와 함께 추천을 붙여 묻는다. 🔴 추천을 결정으로 적지 마라. ⓐ 는 IAM(다른 프로젝트) 설정 변경이라 계약·보안 축을 적는다.
+- [x] **AC-2 — 고친다 + bite.** 테스트: «갱신 뒤에도 로그아웃이 `id_token_hint` 를 싣는다»(ⓐ/ⓑ) 또는 «로컬 폴백이 사유를 말한다»(ⓒ). 고친 것을 되돌리면 빨개진다.
 - [x] **AC-3 — 창 판정.** 로그인 → 31분 유휴(손대지 않은 세션) → 이동 → 로그아웃 → «로그인» 이 IAM 폼을 다시 띄우는가. 창이 없으면 ⚪ + `TASK-MONO-672`.
 
 ---
@@ -194,3 +194,91 @@ monorepo
 ⇒ 「`id_token` 은 없는데 IdP 세션은 살아 있는」 구간이 **30분에 묶이지 않는다.**
 🔵 이것은 위 표의 두 리셋 규칙에서 나온 **추론**이다 — 실측하려면 「콘솔 로그인 → 40분 뒤
 스토어 로그인 → 콘솔 로그아웃 → 콘솔 재로그인」 한 칸을 창에서 돌리면 된다(다음 창 후보).
+
+---
+
+# 🟢 AC-1 — 소유자 결정: **ⓐ** (2026-09-18 UTC)
+
+소유자가 위 창 실측(특히 «비밀번호 없이 재입장» 대조군)을 받고 **ⓐ — IAM 이 `refresh_token`
+그랜트 응답에 `id_token` 을 싣는다** 를 골랐다. ⓑ 는 «IAM 이 만료된 `id_token_hint` 를 받는가»
+라는 **미측정 전제** 위에 서 있었고, ⓒ 는 이제 «실측된 인증 결함을 문서로 덮는» 모양이었다.
+
+# 🟢 AC-2 — 구현 + bite (분석·구현=Opus 5)
+
+## 🔴 이것은 계약 변경이 아니라 **선언↔진실** 결함이었다
+
+`projects/iam-platform/specs/contracts/http/auth-api.md` § `POST /oauth2/token` 의 200 응답은
+**이미** `"id_token": "string (scope=openid 포함 시)"` 를 약속하고 있었다. 조건은 grant 종류가
+아니라 scope 인데, 커스텀 프로바이더가 **refresh 응답에서만** 그 필드를 비웠다. ⇒ 고칠 것은
+계약이 아니라 구현이고, 계약에는 **모호함을 없애는 주석**만 더했다(그 모호함이 이 결함을
+오래 살려 둔 자리다) + 🔵 `id_token` 이 **회전**한다는 사실(직전 값은 더 이상 유효한
+`id_token_hint` 가 아니다)을 RP 를 위해 명시했다.
+
+## 고친 자리 — `SasRefreshTokenAuthenticationProvider`
+
+| 무엇 | 어떻게 |
+|---|---|
+| 발급 | `authorizedScopes.contains(OidcScopes.OPENID)` 일 때만 `ID_TOKEN_TOKEN_TYPE` 컨텍스트로 생성 |
+| 컨텍스트 | **새 access/refresh 토큰이 이미 담긴** authorization 을 넘긴다(SAS 내장 프로바이더와 같은 순서 — ID 토큰 커스터마이저가 그것을 볼 수 있어야 한다) |
+| 🔴 저장 | `authorizationBuilder.token(idToken, …CLAIMS_METADATA…)` — **장식이 아니다.** `OidcLogoutAuthenticationProvider` 는 `findByToken(idTokenHint, ID_TOKEN)` 으로 authorization 을 찾는다. 나눠 주고 저장 안 하면 **로그아웃이 깨진다** — 이 티켓이 되살리려는 바로 그 기능이 |
+| 응답 | `additionalParameters` 에 `id_token`. openid 가 없으면 **빈 맵 그대로**(비-OIDC 클라이언트가 갑자기 받기 시작하면 안 된다) |
+| 실패 | 생성기가 `Jwt` 가 아닌 것을 내면 `server_error` 로 **소리 내어 죽는다** — 조용한 누락이 이 결함의 본체였다 |
+
+🔵 재료는 이미 있었다: `TenantClaimTokenCustomizer` 에 `isIdToken` + `REFRESH_TOKEN` 분기가,
+`DelegatingOAuth2TokenGenerator` 에 `JwtGenerator` 가 등록돼 있었다. 빠진 것은 **호출**뿐이었다.
+
+## bite — 🔴 **날개마다 따로 물린다** (`TASK-MONO-707` 이 가르친 규율)
+
+결함은 «ID 토큰이 없다» 하나가 아니라 **둘**이었고 각각 다른 것을 깬다(응답 없음 → 콘솔이
+쿠키를 못 세움 / 저장 없음 → 로그아웃이 authorization 을 못 찾음). 한 칸만 두면 «나눠 주지만
+아무도 로그아웃 못 하는 ID 토큰» 에 초록이 난다.
+
+| 주입(1건 단언 후) | 빨개진 칸 | 나머지 |
+|---|---|---|
+| A: `additionalParameters` → `Map.of()` | 응답 칸 **1개** | 저장 칸 초록 |
+| B: authorization 저장 줄 제거 | 저장 칸 **1개** | 응답 칸 초록 |
+| C: `openid` 게이트 제거(`if (true)`) | **대조군 1개** | 나머지 초록 |
+
+🔴 A·B 는 **첫 시도에서 주입이 0건**이었다 — 이 파일은 CRLF 인데 내 패턴이 LF 였다.
+«빨강이 안 나왔다» 가 아니라 «주입이 안 됐다» 였고, 주입 단언이 없었으면 «bite 가 안 문다»
+로 잘못 읽었을 자리다.
+
+## 콘솔 쪽 — 🔴 내가 «가드가 없다» 고 잘못 적었다
+
+IAM 이 발급해도 콘솔이 쿠키를 안 세우면 사용자에게 보이는 결함은 **똑같다**. 그래서
+`session-refresh.ts` 의 세 줄을 무는 칸을 새로 쓰려 했는데 — **이미 있었다**
+(`auth-idle-refresh.test.ts` 의 674 칸이 `ID_TOKEN_COOKIE` 값을 단언한다).
+🔴 **내가 못 찾은 이유는 `grep console_id_token tests/` 로 물었기 때문이다.** 테스트는
+리터럴이 아니라 **상수**를 쓴다 — 「무는 가드가 있나」에 grep 은 답하지 못한다. 중복 칸을
+지우고, **실제로 없던 것 둘**만 채웠다:
+
+| 새 칸 | 무엇을 지키나 | bite |
+|---|---|---|
+| `auth-idle-refresh` 대조군 | 응답에 `id_token` 이 **없으면** 쿠키를 만들지 않는다 — ⓐ 이후 픽스처가 항상 id_token 을 갖게 되므로 «없는 값을 지어내는» 방향은 아무도 안 본다 | `if (true)` 로 «항상 세운다» → 그 칸 1개 빨강 |
+| `logout.test.ts` | `id_token` 쿠키가 있으면 `/connect/logout` + `id_token_hint` + 정확한 `post_logout_redirect_uri` | `if (false)` 로 항상 로컬 폴백 → 그 칸 1개 빨강 |
+
+🔵 `logout.test.ts` 에는 **로컬 폴백 칸만** 있었다 — `logoutUrl` 이 영원히 로컬이어도 초록인
+상태였고, 실측된 피해가 정확히 그 방향이다.
+
+## 검증
+
+| 게이트 | 결과 |
+|---|---|
+| `:projects:iam-platform:apps:auth-service:test` (전체) | 🟢 BUILD SUCCESSFUL |
+| 프로바이더 스위트 | 🟢 10칸 |
+| `console-web` `pnpm test` (전체) | 🟢 **313 파일 / 3502 칸** |
+| `console-web` `npx tsc --noEmit` | 🟢 rc=0 |
+| bite 5종(IAM 3 · 콘솔 2) | 🟢 각각 **자기 칸만** 빨강, 주입 1건 단언 후 |
+
+## ⚪ 안 한 것 · 못 잰 것
+
+- **엔드포인트 응답 본문을 뜨지 않았다.** 위 판정은 단위 수준이다. 통합
+  (`PlatformConsoleOidcClientSeedIntegrationTest`)은 Docker 가 필요하고 이 호스트엔 없다 —
+  **CI 가 권위**다.
+- **창 재판정이 남았다**(AC-3 의 후속): 다음 데모 창에서 «로그인 → 31분 유휴 → 갱신 →
+  로그아웃 → 다시 로그인» 이 **IAM 폼**을 띄우는지, 그리고 그때 IdP 세션이 **살아 있었는지**를
+  같이 봐야 한다. 🔴 살아 있지 않으면 이번에도 판정이 교란된다 — 창 대조군은 위 § ② 의
+  «갓 로그인 + id_token 제거» 형태를 그대로 다시 쓴다. 🔵 이 재판정은 **백엔드 변경이므로
+  AMI 재굽기가 선행**한다.
+- `id_token` **회전 주기**가 콘솔 쿠키 `maxAge`(=`expires_in`)와 맞는지는 안 쟀다 —
+  콘솔은 access 토큰 수명을 그대로 쓴다. 갱신마다 새로 서므로 실질 문제는 없지만 관측은 아니다.

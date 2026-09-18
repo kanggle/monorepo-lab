@@ -20,6 +20,10 @@ import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
 import org.springframework.security.oauth2.core.OAuth2RefreshToken;
 import org.springframework.security.oauth2.core.OAuth2Token;
+import org.springframework.security.oauth2.core.oidc.OidcIdToken;
+import org.springframework.security.oauth2.core.oidc.OidcScopes;
+import org.springframework.security.oauth2.core.oidc.endpoint.OidcParameterNames;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
@@ -76,6 +80,17 @@ import java.util.Set;
 public class SasRefreshTokenAuthenticationProvider implements AuthenticationProvider {
 
     private static final String ACTOR_TYPE_SYSTEM = "SYSTEM";
+
+    /**
+     * Token type SAS uses for the OIDC ID token. It is not one of the
+     * {@link OAuth2TokenType} constants — SAS's own providers build it from
+     * {@link OidcParameterNames#ID_TOKEN}, and {@code JwtGenerator} /
+     * {@code TenantClaimTokenCustomizer} both branch on this exact string.
+     *
+     * <p>TASK-MONO-705 (owner decision ⓐ).
+     */
+    private static final OAuth2TokenType ID_TOKEN_TOKEN_TYPE =
+            new OAuth2TokenType(OidcParameterNames.ID_TOKEN);
 
     private final OAuth2AuthorizationService authorizationService;
     private final OAuth2TokenGenerator<? extends OAuth2Token> tokenGenerator;
@@ -274,10 +289,57 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
         //      runs without an active synchronization (e.g. unit-test contexts) so
         //      the static TSM never carries a stale flag into the next call on the
         //      same thread.
-        OAuth2Authorization updatedAuthorization = OAuth2Authorization.from(authorization)
+        OAuth2Authorization.Builder authorizationBuilder = OAuth2Authorization.from(authorization)
                 .token(sasAccessToken)
-                .token(newRefreshToken)
-                .build();
+                .token(newRefreshToken);
+
+        // --- Generate a new ID token when the authorization carries `openid` ---
+        //
+        // TASK-MONO-705 (owner decision ⓐ, 2026-09-18). This provider used to return
+        // `Map.of()` as additionalParameters, so the rotated response carried NO
+        // `id_token` — while `auth-api.md` § POST /oauth2/token already promised
+        // *"id_token: string (scope=openid 포함 시)"* for this endpoint. The console
+        // only re-sets its `console_id_token` cookie when the response contains one
+        // (`session-refresh.ts`), so ~30 minutes after login the cookie was simply
+        // gone, and every logout from then on fell back to a LOCAL logout with no
+        // `id_token_hint` — the IdP session survived it.
+        //
+        // 🔴 Measured, not assumed (2026-09-18 demo window): with the IdP session
+        // alive and only `console_id_token` removed, logging out and pressing
+        // "log in" again re-entered WITHOUT a password. See the ticket's control
+        // group — the 31-minute observation looked harmless only because the IAM
+        // browser session had expired on its own by then.
+        //
+        // This mirrors SAS's built-in OAuth2RefreshTokenAuthenticationProvider:
+        // the ID token is generated from a context that already sees the NEW access
+        // and refresh tokens, and it is stored ON the authorization. 🔴 Storing it
+        // is not cosmetic — `OidcLogoutAuthenticationProvider` resolves the
+        // authorization by `findByToken(idTokenHint, ID_TOKEN)`, so an ID token that
+        // is handed out but not stored would fail RP-initiated logout, which is the
+        // very thing this change exists to restore.
+        OidcIdToken idToken = null;
+        if (authorizedScopes.contains(OidcScopes.OPENID)) {
+            OAuth2TokenContext idTokenContext = contextBuilder
+                    .tokenType(ID_TOKEN_TOKEN_TYPE)
+                    .authorization(authorizationBuilder.build())
+                    .build();
+            OAuth2Token generatedIdToken = tokenGenerator.generate(idTokenContext);
+            if (!(generatedIdToken instanceof Jwt jwt)) {
+                // 🔴 Fail loudly rather than silently dropping the ID token again —
+                // a silent drop is exactly the defect this block repairs.
+                throw new OAuth2AuthenticationException(new OAuth2Error(
+                        OAuth2ErrorCodes.SERVER_ERROR,
+                        "The token generator failed to generate the ID token.",
+                        null));
+            }
+            idToken = new OidcIdToken(
+                    jwt.getTokenValue(), jwt.getIssuedAt(), jwt.getExpiresAt(), jwt.getClaims());
+            OidcIdToken issuedIdToken = idToken;
+            authorizationBuilder.token(issuedIdToken, metadata -> metadata.put(
+                    OAuth2Authorization.Token.CLAIMS_METADATA_NAME, issuedIdToken.getClaims()));
+        }
+
+        OAuth2Authorization updatedAuthorization = authorizationBuilder.build();
 
         // Wrap the dual-write (SAS save + domain persistRotation) in a programmatic
         // transaction so the JPA save() inside persistRotation() has an active
@@ -338,9 +400,16 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
             }
         });
 
+        // TASK-MONO-705 ⓐ: hand the ID token back on the response. Without `openid`
+        // in the authorized scopes there is nothing to hand back and the map stays
+        // empty — a non-OIDC client must not suddenly start receiving an ID token.
+        Map<String, Object> additionalParameters = idToken != null
+                ? Map.of(OidcParameterNames.ID_TOKEN, idToken.getTokenValue())
+                : Map.of();
+
         return new OAuth2AccessTokenAuthenticationToken(
                 registeredClient, clientPrincipal, sasAccessToken, newRefreshToken,
-                Map.of());
+                additionalParameters);
     }
 
     @Override
