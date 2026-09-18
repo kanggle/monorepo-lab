@@ -174,6 +174,39 @@ The console-web server route forwards **both** to the BFF on every call:
 - `Authorization: Bearer <iam-oidc-access-token>` (treated by Spring Security
   OAuth2 Resource Server as the inbound principal — RS256, JWKS = IAM, standard
   validation: issuer / audience / exp / sig).
+
+  🔴 **This line was not true until `TASK-MONO-712`.** It has claimed `audience`
+  since the service was written, and the `aud` check did not exist: the resource
+  server was configured with `issuer-uri` + `jwk-set-uri` and nothing else, so
+  what actually ran was signature / `iss` / `exp`. It is recorded here rather
+  than quietly corrected because the failure mode is the interesting part — a
+  spec that names a control nobody implemented reads, to every later audit, as
+  evidence that the control exists (`TASK-MONO-698` § AC-0 (d) found it by
+  reading the decoder chain, not this sentence).
+
+  **What runs now** (rule 5 of
+  [`jwt-standard-claims.md`](../../../../../platform/contracts/jwt-standard-claims.md)
+  § JWT Validation, at this edge — owner decision **E**, `TASK-MONO-698` § AC-3):
+
+  - The admitted client ids are `console-bff.security.allowed-audiences`,
+    shipped as the single measured value `platform-console-web`. `aud` is an
+    intersection, not an equality: a token naming several relying parties is
+    admitted if one of them is on the list, and a token with no `aud` is the
+    empty set and is refused.
+  - **Absent or empty allowlist = startup failure**, not a disabled check. This
+    is why the validator is a bean rather than Boot's
+    `spring.security.oauth2.resourceserver.jwt.audiences`, which registers no
+    validator at all for an empty list and would let the control vanish in
+    silence.
+  - A mismatch answers **403**, never 401. 401 would tell the console its session
+    expired; the console would refresh, and a refreshed token carries the same
+    client — an unescapable loop from a non-transient condition. The response
+    code today is the service's existing `PERMISSION_DENIED`;
+    `TASK-MONO-697` AC-1 settles whether the fleet-wide name becomes
+    `AUDIENCE_FORBIDDEN`.
+  - **No shadow phase here** (unlike the six domain gateways, which ship
+    `SHADOW`). Shadow exists to discover an unmeasured caller population; this
+    edge's population was measured instead — `TASK-MONO-712` § AC-0.
 - `X-Operator-Token: <rfc8693-operator-token>` (carried request-scoped, not
   parsed by the inbound auth filter; available to outbound clients via a
   request-scoped `OperatorCredentialContext` bean).

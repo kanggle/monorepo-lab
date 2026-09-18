@@ -1,5 +1,6 @@
 package com.example.scmplatform.gateway.config;
 
+import com.example.security.oauth2.AudienceMode;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.lang.reflect.Field;
@@ -11,7 +12,6 @@ import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jwt.Jwt;
 
-import com.example.apigateway.security.AudienceMode;
 import com.example.apigateway.security.GatewayJwtDecoders;
 import com.example.security.oauth2.AllowedIssuersValidator;
 import com.example.security.oauth2.TenantClaimValidator;

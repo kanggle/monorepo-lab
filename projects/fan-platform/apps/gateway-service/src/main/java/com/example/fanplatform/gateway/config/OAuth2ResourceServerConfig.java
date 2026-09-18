@@ -1,7 +1,7 @@
 package com.example.fanplatform.gateway.config;
 
-import com.example.apigateway.security.AllowedAudiencesValidator;
-import com.example.apigateway.security.AudienceMode;
+import com.example.security.oauth2.AudienceMode;
+import com.example.security.oauth2.AllowedAudiencesValidator;
 import com.example.apigateway.security.GatewayJwtDecoders;
 import com.example.apigateway.security.JwksHealthProbe;
 import com.example.security.oauth2.TenantClaimValidator;

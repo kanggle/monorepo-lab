@@ -46,6 +46,30 @@ import java.util.concurrent.TimeUnit;
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 public abstract class AbstractConsoleBffIntegrationTest {
 
+    /**
+     * The {@code aud} every token in this suite is minted with — {@code TASK-MONO-712} AC-4.
+     *
+     * <p>Until 712 all seven integration tests minted {@code aud = "console-bff"}: <em>this
+     * service's own name</em>. No token the identity platform can issue has ever carried it. The
+     * value that production tokens actually carry is the OIDC client console-web logs in with
+     * ({@code OIDC_CLIENT_ID}), and it is the same on both branches that reach this edge — the
+     * base login token and the assume-tenant token (measured in {@code TASK-MONO-712} § AC-0,
+     * pinned by {@code FormLoginIntegrationTest} and {@code AssumeTenantExchangeIntegrationTest}).
+     *
+     * <p>🔴 <strong>The direction of this fix matters more than its result.</strong> Once the edge
+     * rejects on {@code aud}, there were two ways to make these seven green: widen the allowlist to
+     * admit {@code console-bff}, or make the fixtures mint what production mints. They look
+     * identical from the test report and are opposites in production — the first ships an edge that
+     * admits a value no real client holds, and the suite would then be verifying a service name
+     * against a service name. {@code TASK-MONO-696} AC-5 forbids it, and {@code TASK-MONO-714}
+     * exists to delete an instance of exactly that mistake elsewhere. This constant is the second
+     * way.
+     *
+     * <p>🔵 One definition rather than seven literals, so a future change to the console's client
+     * id cannot land in six files and miss the seventh.
+     */
+    protected static final String PRODUCTION_AUDIENCE = "platform-console-web";
+
     /** MockWebServer that stubs the GAP JWKS endpoint. */
     @SuppressWarnings("resource")
     protected static final MockWebServer JWKS_SERVER = new MockWebServer();

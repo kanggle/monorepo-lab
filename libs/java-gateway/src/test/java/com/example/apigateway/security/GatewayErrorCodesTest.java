@@ -1,5 +1,6 @@
 package com.example.apigateway.security;
 
+import com.example.security.oauth2.AllowedAudiencesValidator;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.security.oauth2.TenantClaimValidator;

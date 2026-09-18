@@ -1,4 +1,4 @@
-package com.example.apigateway.security;
+package com.example.security.oauth2;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

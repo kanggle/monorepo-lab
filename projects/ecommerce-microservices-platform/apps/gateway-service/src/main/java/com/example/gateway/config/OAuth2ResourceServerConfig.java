@@ -1,8 +1,8 @@
 package com.example.gateway.config;
 
+import com.example.security.oauth2.AudienceMode;
+import com.example.security.oauth2.AllowedAudiencesValidator;
 import com.example.security.oauth2.AllowedIssuersValidator;
-import com.example.apigateway.security.AllowedAudiencesValidator;
-import com.example.apigateway.security.AudienceMode;
 import com.example.apigateway.security.GatewayJwtDecoders;
 import com.example.security.oauth2.TenantClaimValidator;
 import io.micrometer.core.instrument.MeterRegistry;

@@ -24,6 +24,24 @@ spring:
           issuer-uri: ${CONSOLE_BFF_IAM_ISSUER_URL:http://iam.local}
           jwk-set-uri: ${CONSOLE_BFF_JWK_SET_URI:${CONSOLE_BFF_IAM_ISSUER_URL:http://iam.local}/oauth2/jwks}
 
+# TASK-MONO-712 — rule 5 (jwt-standard-claims.md § JWT Validation) at this edge.
+#
+# The client ids admitted here. Deliberately NOT `spring.security…jwt.audiences`: Boot registers
+# no validator at all when that list is absent or empty, so the check would vanish silently
+# instead of failing the boot. This key feeds AllowedAudiencesValidator, whose constructor throws
+# on an empty list — delete the value below and console-bff does not start. That is what the
+# contract asks for ("an absent or empty allowlist is a startup failure"), and
+# InboundAudienceShippedConfigTest is what holds it.
+#
+# 🔴 One value, and it is measured rather than assumed (TASK-MONO-712 § AC-0): both tokens that
+# can reach this edge — the base login token, and the assume-tenant token console-web forwards
+# after a tenant switch — carry `platform-console-web`.
+# 🔴 Do NOT add `console-bff`. That is this service's own name; no production token carries it,
+# and admitting it would promote a service name into a credential value (TASK-MONO-696 AC-5).
+console-bff:
+  security:
+    allowed-audiences: ${CONSOLE_BFF_ALLOWED_AUDIENCES:platform-console-web}
+
 server:
   port: ${SERVER_PORT:8080}
   forward-headers-strategy: framework
