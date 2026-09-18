@@ -1,9 +1,9 @@
 package com.wms.gateway.config;
 
+import com.example.security.oauth2.AllowedAudiencesValidator;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.apigateway.config.SecurityConfig;
-import com.example.apigateway.security.AllowedAudiencesValidator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.gateway.testsupport.JwksMockServer;
 import com.wms.gateway.testsupport.JwtTestHelper;

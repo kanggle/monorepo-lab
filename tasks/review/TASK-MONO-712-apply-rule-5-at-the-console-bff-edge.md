@@ -8,7 +8,7 @@ TASK-MONO-712
 
 # Status
 
-in-progress (2026-09-18 UTC — AC-0 닫힘)
+review (2026-09-18 UTC — AC-0 ~ AC-5 닫힘 · AC-4 최종 판정은 CI 통합 잡)
 
 # Owner
 
@@ -59,13 +59,13 @@ monorepo
 # Acceptance Criteria
 
 - [x] **AC-0 (선행) — 인바운드 `aud` 모집단의 남은 ⚪ 를 닫는다.** `TASK-MONO-698` § AC-1 (c) 는 console-bff 의 호출자를 **«console-web 서버사이드 라우트 하나»** 로 **설정에서 확정**했지만, 그 토큰의 `aud` 값 자체는 🟠(IdP 프레임워크 기본값 + CI 권위 IT 단언)이고, **⚪ 가 한 칸 남아 있다**: `tests/federation-hardening-e2e/docker/docker-compose.federation-e2e.yml:740` 의 federation e2e 하네스가 같은 BFF 를 부르는데 **그 하네스가 민팅하는 `aud` 를 재지 않았다**. 🔴 **소유자 결정이 「섀도 없이 바로 거절」인 근거가 «모집단이 단일 client」 이므로, 그 근거는 측정으로 서 있어야 한다** — 이 칸을 닫기 전에 거절을 켜지 않는다. 판정이 «다른 값을 민팅한다» 로 나오면 (a) 그 값을 allowlist 에 넣을지 (b) 하네스를 고칠지는 **기록하고 진행**(픽스처를 초록으로 만들려고 allowlist 를 늘리지 않는다 — Failure Scenario 2).
-- [ ] **AC-1 — 기전 결정 + 그 결정을 테스트가 판정한다.** 🔴 *"속성 한 줄이면 된다"* 는 **절반만 참**이다(698 § AC-0 (d)): Boot 3.4.1 의 `spring.security.oauth2.resourceserver.jwt.audiences` 는 (i) 의미가 **교집합**이고 (ii) `aud == null` 을 **거절**하지만, (iii) **목록이 비거나 없으면 audience validator 를 아예 추가하지 않는다** — 즉 **조용히 검사가 사라진다**. 계약서 rule 5 의 *"an absent or empty allowlist is a **startup failure**"* 는 **속성만으로 만족되지 않는다.** 이 티켓은 둘 중 하나를 고르고 **이유를 적는다**: (a) 속성 + **출하값 핀 테스트**(게이트웨이의 `AudienceShippedConfigTest` 와 같은 형태 — 값이 지워지면 빨갛다), 또는 (b) **명시 `JwtDecoder` 빈** + 공유 `AllowedAudiencesValidator` 계열(빈 목록 = 기동 실패가 검증기 자체의 성질). 🔴 어느 쪽을 고르든 **«속성을 지웠을 때 빨개지는 칸»** 이 있어야 AC 가 닫힌다 — (iii) 의 실측을 이 트리의 Boot 판으로 **테스트가 재현**하는 것이 그 칸이다(698 의 근거 등급은 🟠 «프레임워크 지식이지 이 트리의 jar 을 읽은 것이 아니다»).
-- [ ] **AC-2 — 403.** 불일치가 **403** 으로 나간다(소유자 결정 항목 3). 🔴 디코더 사슬 안에서 난 audience 실패는 기본이 **401 `invalid_token`** 이므로, 게이트웨이가 하는 것과 같은 **예외 원인 사슬 걷기**가 필요하다. 401 이 나가는 칸이 하나라도 있으면 이 AC 는 안 닫힌다. 오류 코드 이름은 `TASK-MONO-697` AC-1 이 확정하는 이름을 따른다 — **그 확정 전이면 이 티켓에서 새 이름을 만들지 말고 697 을 기다리거나, 이름 없는 403 으로 낸다**(선택을 기록).
-- [ ] **AC-3 — 섀도 없음.** 소유자 결정 항목 2: console-bff 는 **섀도 단계 없이 바로 거절**이다. 🔵 이것은 비용 절약이기도 하다 — 698 § AC-1 (d) 가 *"Boot 속성만으로는 섀도가 불가능하다(모드도 메트릭도 로그도 없다)"* 를 실측했다. AC-0 이 모집단을 닫는 것이 섀도를 **대체**한다.
-- [ ] **AC-4 — IT 7개의 `aud` 픽스처 교정. 🔴 이걸 하기 전의 초록은 아무것도 증명하지 않는다.** 아래 7곳이 `aud = "console-bff"` — **서비스 이름**이고 운영 토큰은 그 값을 **절대 갖지 않는다**(운영은 console-web 의 OIDC client, `apps/console-web/.../env.ts:60` 기본값 `platform-console-web`):
+- [x] **AC-1 — 기전 결정 + 그 결정을 테스트가 판정한다.** 🔴 *"속성 한 줄이면 된다"* 는 **절반만 참**이다(698 § AC-0 (d)): Boot 3.4.1 의 `spring.security.oauth2.resourceserver.jwt.audiences` 는 (i) 의미가 **교집합**이고 (ii) `aud == null` 을 **거절**하지만, (iii) **목록이 비거나 없으면 audience validator 를 아예 추가하지 않는다** — 즉 **조용히 검사가 사라진다**. 계약서 rule 5 의 *"an absent or empty allowlist is a **startup failure**"* 는 **속성만으로 만족되지 않는다.** 이 티켓은 둘 중 하나를 고르고 **이유를 적는다**: (a) 속성 + **출하값 핀 테스트**(게이트웨이의 `AudienceShippedConfigTest` 와 같은 형태 — 값이 지워지면 빨갛다), 또는 (b) **명시 `JwtDecoder` 빈** + 공유 `AllowedAudiencesValidator` 계열(빈 목록 = 기동 실패가 검증기 자체의 성질). 🔴 어느 쪽을 고르든 **«속성을 지웠을 때 빨개지는 칸»** 이 있어야 AC 가 닫힌다 — (iii) 의 실측을 이 트리의 Boot 판으로 **테스트가 재현**하는 것이 그 칸이다(698 의 근거 등급은 🟠 «프레임워크 지식이지 이 트리의 jar 을 읽은 것이 아니다»).
+- [x] **AC-2 — 403.** 불일치가 **403** 으로 나간다(소유자 결정 항목 3). 🔴 디코더 사슬 안에서 난 audience 실패는 기본이 **401 `invalid_token`** 이므로, 게이트웨이가 하는 것과 같은 **예외 원인 사슬 걷기**가 필요하다. 401 이 나가는 칸이 하나라도 있으면 이 AC 는 안 닫힌다. 오류 코드 이름은 `TASK-MONO-697` AC-1 이 확정하는 이름을 따른다 — **그 확정 전이면 이 티켓에서 새 이름을 만들지 말고 697 을 기다리거나, 이름 없는 403 으로 낸다**(선택을 기록).
+- [x] **AC-3 — 섀도 없음.** 소유자 결정 항목 2: console-bff 는 **섀도 단계 없이 바로 거절**이다. 🔵 이것은 비용 절약이기도 하다 — 698 § AC-1 (d) 가 *"Boot 속성만으로는 섀도가 불가능하다(모드도 메트릭도 로그도 없다)"* 를 실측했다. AC-0 이 모집단을 닫는 것이 섀도를 **대체**한다.
+- [x] **AC-4 — IT 7개의 `aud` 픽스처 교정. 🔴 이걸 하기 전의 초록은 아무것도 증명하지 않는다.** 아래 7곳이 `aud = "console-bff"` — **서비스 이름**이고 운영 토큰은 그 값을 **절대 갖지 않는다**(운영은 console-web 의 OIDC client, `apps/console-web/.../env.ts:60` 기본값 `platform-console-web`):
   `ConsoleBffSmokeIntegrationTest:69` · `DomainHealthIntegrationTest:91` · `OperatorOverviewIntegrationTest:91` · `NotificationAggregatorIntegrationTest:79` · `CircuitBreakerIntegrationTest:101` · `CrossTenantDenyIntegrationTest:98` · `EntitlementPassThroughIntegrationTest:109`.
   🔴 **픽스처를 allowlist 값으로 «맞춰서» 초록을 만드는 것이 아니라, 픽스처가 운영과 같은 값을 민팅하도록 고치는 것이다** — 이 둘은 결과가 같아 보이지만 방향이 반대다(`TASK-MONO-696` AC-5 가 게이트웨이 헬퍼 6개에 대해 한 그 작업). allowlist 에 무엇을 넣을지는 **AC-0 의 측정**이 정한다.
-- [ ] **AC-5 — 검증.** `:projects:platform-console:apps:console-bff:check` rc=0(파이프 금지, rc 명시). Testcontainers IT 는 CI 가 권위. 🔴 **초록 자체는 AC-4 가 닫힌 뒤에만 의미가 있다** — AC-4 전의 초록은 «서비스 이름을 서비스 이름과 대조한 것» 이다.
+- [x] **AC-5 — 검증.** `:projects:platform-console:apps:console-bff:check` rc=0(파이프 금지, rc 명시). Testcontainers IT 는 CI 가 권위. 🔴 **초록 자체는 AC-4 가 닫힌 뒤에만 의미가 있다** — AC-4 전의 초록은 «서비스 이름을 서비스 이름과 대조한 것» 이다.
 
 # Related Specs
 
@@ -110,10 +110,10 @@ monorepo
 
 # Definition of Done
 
-- [ ] AC-0 ~ AC-5
-- [ ] console-bff 가 rule 5 의 «엣지» 로서 allowlist 를 선언하고, 불일치가 403 이며, allowlist 부재/공백이 **테스트에서 빨갛다**
-- [ ] IT 7개가 운영이 실제로 만드는 `aud` 를 민팅한다
-- [ ] 🔴 **착수 시 소유자 확인 1건**: 이 변경은 «배포된 서비스를 새로 규칙 아래로 넣는 것» 이라 `platform/service-types/identity-platform.md` § Change Rule 의 ADR 조항에 걸리는지 판단이 갈릴 수 있다(`TASK-MONO-698` § AC-3 「내가 결정하지 않은 것」). 계약서 개정은 698 PR 에서 **이미 선행**했다 — 남은 질문은 «ADR 을 별도로 낼 것인가» 뿐이고, 그 답을 이 파일에 적고 진행한다
+- [x] AC-0 ~ AC-5 (🔴 AC-4 의 최종 판정은 CI 통합 잡 — 로컬 IT 43칸은 Docker 부재로 전부 skipped)
+- [x] console-bff 가 rule 5 의 «엣지» 로서 allowlist 를 선언하고, 불일치가 403 이며, allowlist 부재/공백이 **테스트에서 빨갛다**
+- [x] IT 7개가 운영이 실제로 만드는 `aud` 를 민팅한다
+- [x] 🔴 **착수 시 소유자 확인 1건**: 이 변경은 «배포된 서비스를 새로 규칙 아래로 넣는 것» 이라 `platform/service-types/identity-platform.md` § Change Rule 의 ADR 조항에 걸리는지 판단이 갈릴 수 있다(`TASK-MONO-698` § AC-3 「내가 결정하지 않은 것」). 계약서 개정은 698 PR 에서 **이미 선행**했다 — 남은 질문은 «ADR 을 별도로 낼 것인가» 뿐이고, 그 답을 이 파일에 적고 진행한다
 
 ---
 
@@ -199,3 +199,116 @@ admin-service 가 민팅하는 운영자 토큰에는 **`aud` 클레임이 아�
 (`platform/architecture-decision-rule.md` § The ACCEPTED Gate), 내가 스스로 ACCEPT 할 수 없다.
 🔵 그리고 그 게이트 표 ①이 *"추천대로"* 를 **미지정**으로 명시하므로, 이 티켓을 여는 데 쓰인
 «추천대로 진행» 은 **ADR 수락이 아니다** — 애초에 제안된 ADR 이 없으므로 충돌도 없다.
+
+---
+
+# 🟢 AC-1 — 기전 결정: 명시 검증기 (b), 그리고 공유 라이브러리로 **옮겼다**
+
+## 결정
+
+**(b) 명시 `JwtDecoder` 빈 + 공유 `AllowedAudiencesValidator`.** 속성 판 (a) 은 **탈락**이다.
+
+근거는 티켓이 적어 둔 그대로이고, 이번에 **이 트리에서** 확인했다: Boot 의
+`spring.security.oauth2.resourceserver.jwt.audiences` 는 목록이 비면 **검증기를 아예 안 붙인다**.
+계약서 rule 5 가 요구하는 것은 «검사가 켜졌다» 가 아니라 **«꺼질 수 없다»** 이고, 속성은 그것을
+표현할 수 없다. 검증기는 생성자에서 throw 하므로 **빈 allowlist = 기동 실패**가 클래스의 성질이 된다.
+
+## 🔴 클래스를 어디에 두는가 — 소유자 선택 (2026-09-18)
+
+`AllowedAudiencesValidator` 는 `libs/java-gateway` 에 있었고 **console-bff 는 서블릿이라 그 모듈을
+볼 수 없다**(ADR-MONO-049 § D1 — WebFlux·SCG 가 런타임 클래스패스에 올라온다). 선택지를 소유자에게
+물었고 **«java-security 로 승격 (선례대로)»** 로 정해졌다.
+
+🔵 이것은 새 판단이 아니라 **이 저장소가 이미 같은 이유로 한 번 한 일**이다 —
+`TenantClaimValidator` 가 정확히 그 경로로 옮겨졌고(ADR-MONO-049 § D5-1), `GatewayErrorCodes` 의
+javadoc 이 그 사연을 *"the arrow reversed instead"* 로 적어 두었다. 이번에도 화살표는 같은 방향이다:
+상수의 정의는 `java-security` 에 있고 `GatewayErrorCodes.AUDIENCE_MISMATCH` 는 **가리키기만** 한다.
+
+| 옮긴 것 | 어디로 |
+|---|---|
+| `AllowedAudiencesValidator` · `AudienceMode` (+ 두 테스트) | `libs/java-security/.../oauth2/` |
+| `micrometer-core` | `libs/java-security/build.gradle` 에 `implementation` 추가 |
+
+🔵 **중립성 가드가 그 추가를 판정했다**: `assertClasspathNeutrality: OK — 26 artefacts … none
+servlet-bound, none reactive` (micrometer-core 는 서블릿도 리액티브도 아니다).
+
+🔴 **옮기면서 밟은 것 하나**: import 를 «추가» 만 하고 **옛 import 를 안 지웠다**. 6 게이트웨이가
+`cannot find symbol` 로 한 번 빨개졌다 — 같은 단순명이 두 패키지에서 들어오면 컴파일이 멈춘다.
+🔵 이것이 **왜 게이트웨이까지 돌려야 했는지**의 증거다: `java-gateway` 는 `java-security` 를
+`implementation` 으로 선언하므로 **게이트웨이의 컴파일 클래스패스로 전이되지 않고**, 그 모듈의
+build.gradle 이 그 사실을 이미 적어 두었다(6 게이트웨이는 각자 `java-security` 를 선언하고 있어서
+의존은 추가할 필요가 없었다 — 필요한 것은 import 정리뿐이었다).
+
+## bite — 두 방향이 **서로 다른 칸**을 문다
+
+| bite | 무엇을 했나 | 결과 |
+|---|---|---|
+| ① 배선 제거 | 디코더 사슬에서 `audienceValidator` 를 뺐다 | 실제디코더 **6칸 중 3칸 빨강**(거절 2 + 403 1) · 출하 2칸·기동 4칸은 **초록 유지** |
+| ② 출하값 오염 | `application.yml` 기본값을 `console-bff` 로 | 출하 **2칸 빨강** · 실제디코더 6칸·기동 4칸은 **초록 유지** |
+
+🔵 두 bite 가 **겹치지 않는 칸**을 무는 것이 요점이다. 한 bite 가 전부를 빨갛게 만들었다면 그것은
+«칸이 12개» 가 아니라 «칸이 사실상 1개» 라는 뜻이다. 통과 대조군 3칸(allowlist 안 aud · 배열 중
+하나 일치 · 서명 오류는 여전히 401)은 **양쪽 bite 에서 초록**이었다.
+
+# 🟢 AC-2 — 403, 그리고 401 이 남아 있는 칸
+
+불일치는 **403 `PERMISSION_DENIED`** 로 나간다. 디코더 사슬 안의 실패는 기본이 401
+`invalid_token` 이므로, `SecurityConfig.extractOAuth2Error` 의 **원인 사슬 걷기**(이미 있던 코드)가
+꺼낸 코드가 `audience_mismatch` 일 때만 상태를 바꾼다.
+
+🔴 **이름은 새로 만들지 않았다** — 소유자 선택은 **«console-bff 기존 `PERMISSION_DENIED` 재사용»**.
+계약서의 `AUDIENCE_FORBIDDEN` 은 아직 «proposal» 이고 `TASK-MONO-697` AC-1 이 확정을 소유한다.
+여기서 두 번째 이름을 만들면 나중에 rename 이 **두 번** 일어난다. 697 이 이름을 확정하면
+`SecurityConfig.onAuthenticationFailure` 의 그 줄이 console-bff 쪽 변경 지점이다.
+
+🔴 **«401 이 나가는 칸이 하나라도 있으면 안 닫힌다» 를 대조군으로 지켰다**: 서명이 틀린 토큰은
+**여전히 401** 이다. 이 칸이 없으면 «전부 403» 이라는 반대 결함이 안 보인다 — 만료·위조 토큰까지
+403 이 되면 콘솔이 갱신을 멈춘다.
+
+# 🟢 AC-3 — 섀도 없음
+
+`AudienceMode.ENFORCE` 로 출하한다. 🔵 섀도를 **생략한 것이 아니라 대체한 것**이다: 섀도의 목적은
+«모집단을 모른다» 를 메우는 것이고, 이 엣지의 모집단은 § AC-0 에서 **측정**됐다. 게다가 속성 판으로는
+섀도가 애초에 불가능했다(모드도 메트릭도 로그도 없다 — `TASK-MONO-698` § AC-1 (d)).
+
+# 🟢 AC-4 — IT 7개의 `aud` 픽스처 교정
+
+7곳 전부 `aud = "console-bff"` → **운영이 실제로 민팅하는 값**으로 고쳤다.
+
+🔴 **방향이 결과보다 중요하다.** 초록을 만드는 길은 둘이었다 — allowlist 에 `console-bff` 를 넣거나,
+픽스처가 운영과 같은 값을 민팅하게 하거나. 테스트 리포트에서는 구별되지 않고 운영에서는 정반대다.
+첫째 길은 **아무 클라이언트도 가질 수 없는 값을 admit 하는 엣지**를 출하하고, 그 뒤로 이 스위트는
+«서비스 이름을 서비스 이름과 대조» 하게 된다. 둘째 길로 갔다.
+
+🔵 리터럴을 7번 복제하는 대신 베이스 클래스에 **정의 하나**(`PRODUCTION_AUDIENCE`)를 두고 7곳이
+가리키게 했다 — 콘솔의 client id 가 바뀌는 날 여섯 곳만 고쳐지고 일곱째가 남는 사고를 막는다.
+
+# 🟡 AC-5 — 검증: 로컬에서 초록, 그리고 **로컬이 못 잰 것**
+
+**돌았고 rc=0 (파이프 없음, rc 명시):**
+
+| 대상 | rc | 비고 |
+|---|---|---|
+| `:projects:platform-console:apps:console-bff:check` | **0** | 새 스위트 **12칸 실행**(실패 0) |
+| `:libs:java-security:check` | **0** | 옮긴 스위트 **15칸 실행** + 중립성 가드 OK(26 아티팩트) |
+| `:libs:java-gateway:check` | **0** | |
+| 6 게이트웨이 `:check` (wms·ecommerce·fan·scm·finance·erp) | **0** | 이동이 건드린 전부 |
+
+🔴 **`:integrationTest` 는 rc=0 이었지만 아무것도 증명하지 않는다.** 결과 XML 을 열어 보니
+**43칸이 전부 `skipped`** 였다(`tests="12" skipped="12"` 꼴 7파일) — 이 호스트에 Docker 데몬이
+없어서(`docker info` rc=1) `DockerAvailableCondition` 이 전부 건너뛴다. 🔴 **rc=0 을 «IT 통과» 로
+읽었으면 AC-4 를 거짓으로 닫을 뻔했다.** 티켓이 *"Testcontainers IT 는 CI 가 권위"* 라고 적어 둔
+자리가 정확히 여기다 ⇒ **AC-4 의 최종 판정은 CI 통합 잡**이다.
+
+🔵 로컬에서 할 수 있는 만큼은 **정적으로** 좁혔다: 그 7파일은 각각 `JWTClaimsSet.Builder` **1개**에
+`.audience(...)` **1개**라 `aud` 없이 만들어지는 토큰이 없고, 남아 있는 401 기대 칸들은
+«Authorization 헤더 없음»(토큰 자체가 없다)과 «다운스트림 레그의 401»(아웃바운드)이라 이 변경과
+무관하다. 그래도 이것은 **논증이지 실행이 아니다** — CI 가 판정한다.
+
+# 🟢 스펙 — 거짓이던 한 줄을 참으로 만들었다
+
+`projects/platform-console/specs/services/console-bff/architecture.md` § Auth Flow 는 인바운드
+검증을 *"issuer / **audience** / exp / sig"* 라고 **서비스가 쓰인 날부터 주장하고 있었다**. `aud` 검사는
+없었다. 🔴 조용히 고치지 않고 **그 사실을 그 자리에 남겼다** — 통제를 이름만 적어 둔 스펙은 이후의
+모든 감사에게 «그 통제가 있다» 는 증거로 읽히기 때문이다. `TASK-MONO-698` § AC-0 (d) 가 그것을
+찾아낸 것도 이 문장을 읽어서가 아니라 **디코더 사슬을 읽어서**였다.

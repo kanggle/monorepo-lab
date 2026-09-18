@@ -1,8 +1,8 @@
 package com.example.gateway.config;
 
+import com.example.security.oauth2.AllowedAudiencesValidator;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.example.apigateway.security.AllowedAudiencesValidator;
 import com.example.gateway.testsupport.JwksMockServer;
 import com.example.gateway.testsupport.JwtTestHelper;
 import com.fasterxml.jackson.databind.ObjectMapper;

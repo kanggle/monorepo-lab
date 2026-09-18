@@ -35,6 +35,12 @@ dependencies {
     // `libs/java-gateway`.
     implementation 'com.fasterxml.jackson.core:jackson-databind'
     implementation 'org.slf4j:slf4j-api'
+    // Micrometer counters for the rule-5 audience outcome (AllowedAudiencesValidator,
+    // moved here by TASK-MONO-712 for the same reason TenantClaimValidator was —
+    // console-bff is a servlet edge and may not see libs/java-gateway).
+    // micrometer-core is framework-neutral: neither servlet nor reactive, so the
+    // assertClasspathNeutrality list below is unchanged and still passes.
+    implementation 'io.micrometer:micrometer-core'
 
     // Test
     testImplementation 'org.junit.jupiter:junit-jupiter'

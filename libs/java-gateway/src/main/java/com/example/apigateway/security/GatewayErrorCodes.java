@@ -1,5 +1,7 @@
 package com.example.apigateway.security;
 
+import com.example.security.oauth2.AudienceMode;
+import com.example.security.oauth2.AllowedAudiencesValidator;
 import com.example.security.oauth2.TenantClaimValidator;
 
 /**

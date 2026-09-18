@@ -106,7 +106,7 @@ class EntitlementPassThroughIntegrationTest extends AbstractConsoleBffIntegratio
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
                 .issuer("http://test-issuer")
                 .subject("op-user-ep")
-                .audience("console-bff")
+                .audience(PRODUCTION_AUDIENCE)
                 .expirationTime(new Date(System.currentTimeMillis() + 3_600_000))
                 .claim("tenant_id", CUSTOMER_TENANT)
                 .claim("entitled_domains", List.of("finance", "wms"))

@@ -88,7 +88,7 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
                 .issuer("http://test-issuer")
                 .subject("op-user-it")
-                .audience("console-bff")
+                .audience(PRODUCTION_AUDIENCE)
                 .expirationTime(new Date(System.currentTimeMillis() + 3_600_000))
                 .claim("tenant_id", "iam")
                 .build();

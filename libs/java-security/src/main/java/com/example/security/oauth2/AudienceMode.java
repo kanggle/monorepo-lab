@@ -1,4 +1,4 @@
-package com.example.apigateway.security;
+package com.example.security.oauth2;
 
 import java.util.Arrays;
 import java.util.Locale;

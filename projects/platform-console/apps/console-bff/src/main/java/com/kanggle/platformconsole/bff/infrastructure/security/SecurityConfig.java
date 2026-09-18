@@ -1,5 +1,6 @@
 package com.kanggle.platformconsole.bff.infrastructure.security;
 
+import com.example.security.oauth2.AllowedAudiencesValidator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -98,6 +99,24 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /**
+     * TASK-MONO-712 AC-2 — an audience rejection leaves as <strong>403</strong>, not the decoder's
+     * default 401.
+     *
+     * <p>The distinction is not cosmetic. A 401 tells the console "your session expired", and the
+     * console answers it by refreshing the token. Refreshing cannot change the <em>client</em> the
+     * token was issued to, so the refreshed token is rejected for the identical reason and the
+     * console refreshes again: a loop the operator cannot leave, from a condition that is not
+     * transient. 403 says what is true — the token is signature-valid and this edge does not admit
+     * the client that holds it (jwt-standard-claims.md § Error Handling; the six gateways map the
+     * same code the same way).
+     *
+     * <p>🔵 The response code is console-bff's existing {@code PERMISSION_DENIED}, not a new name.
+     * The contract's {@code AUDIENCE_FORBIDDEN} is still labelled a proposal there, and
+     * {@code TASK-MONO-697} AC-1 owns settling it; inventing a second name here would mean two
+     * renames later instead of one. When 697 fixes the name, this line is the console-bff side of
+     * that change.
+     */
     static void onAuthenticationFailure(HttpServletRequest request,
                                         HttpServletResponse response,
                                         org.springframework.security.core.AuthenticationException e)
@@ -107,8 +126,15 @@ public class SecurityConfig {
         String message = "Authentication required";
 
         OAuth2Error oauthError = extractOAuth2Error(e);
-        if (oauthError != null && oauthError.getDescription() != null) {
-            message = oauthError.getDescription();
+        if (oauthError != null) {
+            if (AllowedAudiencesValidator.ERROR_CODE_AUDIENCE_MISMATCH
+                    .equals(oauthError.getErrorCode())) {
+                code = "PERMISSION_DENIED";
+                status = HttpStatus.FORBIDDEN.value();
+            }
+            if (oauthError.getDescription() != null) {
+                message = oauthError.getDescription();
+            }
         }
         writeError(response, status, code, message);
     }
