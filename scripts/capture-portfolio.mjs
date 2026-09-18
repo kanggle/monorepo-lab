@@ -32,6 +32,23 @@
 //
 // 🔴 선행: AMI 재굽기. 구워진 AMI 가 `main` 보다 낡으면 **옛 데이터가 담긴 화면**이 찍힌다.
 //    TASK-MONO-648 AC-0 이 그것을 STOP 게이트로 걸어 두었다.
+//
+// =============================================================================
+// 🔵 이 파일은 **모듈로도 읽힌다** (TASK-MONO-648 AC-3)
+// =============================================================================
+// `scripts/check-capture-route-staleness.mjs` 가 `APPS` 와 `deriveRoutes()` 를 **import 한다.**
+// 🔴🔴 그 가드가 앱 목록이나 라우트 유도를 **자기 상수로 다시 적으면 그 재진술을 재게 된다** —
+//    이 저장소가 이름 붙인 함정이고(`FanArtistDemoSeedTest` 가 같은 문장을 적어 두었다),
+//    라우트 유도의 결함은 «가드는 초록인데 촬영은 404 를 찍는» 모양으로 온다.
+// 🔵 그래서 두 가지가 필요했다:
+//    ① `export` — 아래 `APPS` · `deriveRoutes`
+//    ② **import 해도 `main()` 이 안 돌아야 한다** — 파일 맨 아래의 진입점 판정이 그것이다.
+//       🔴 그 판정이 틀리면 `node scripts/capture-portfolio.mjs` 가 **아무 일도 안 하고 rc=0** 이
+//          된다. 가드의 `--self-test` 가 그 두 방향을 **둘 다** 단언한다(import 는 조용하고,
+//          CLI 는 여전히 일한다).
+// 🔵 위 § «로더를 공유 모듈로 빼지 마라» 와 충돌하지 않는다 — 그 규칙은 이 파일이 **형제를
+//    import 하면** (z38) 의 한-파일 복사 bite 가 죽는다는 것이고, 여기 방향은 **반대**다.
+//    이 파일은 여전히 파일 하나로 돌아간다.
 // =============================================================================
 
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -47,7 +64,7 @@ const REPO_ROOT = resolve(HERE, '..');
 // -----------------------------------------------------------------------------
 // 🔴 라우트 목록을 **손으로 적지 않는다.** 102개짜리 목록은 반드시 낡는다(TASK-MONO-648
 //    AC-1). `app/**/page.tsx` 에서 유도한다 — 파일이 곧 라우트인 것이 Next 의 규약이다.
-const APPS = {
+export const APPS = {
   console: {
     label: '운영자 콘솔',
     appDir: 'projects/platform-console/apps/console-web/src/app',
@@ -114,8 +131,13 @@ function fileToRoute(appDir, file) {
   return '/' + segs.join('/');
 }
 
-function deriveRoutes(app) {
-  const dir = join(REPO_ROOT, app.appDir);
+// 🔵 `resolve` 이지 `join` 이 아니다 — 상대 `appDir`(저장소의 세 앱)은 그대로 REPO_ROOT 아래로
+//    붙고, **절대 경로**를 주면 그 자리를 쓴다. 후자가 필요한 이유는 AC-3 가드의 `--self-test` 가
+//    임시 디렉터리에 가짜 `app/` 트리를 세워 **이 함수 자신**을 재기 때문이다(사본이 아니라).
+//    🔴 `join` 이면 임시 경로가 REPO_ROOT 뒤에 이어 붙어 «디렉터리가 없습니다» 로 죽는다.
+//    저장소의 세 앱에 대한 동작은 **한 글자도 안 바뀐다**(상대 경로는 join 과 같다).
+export function deriveRoutes(app) {
+  const dir = resolve(REPO_ROOT, app.appDir);
   if (!existsSync(dir)) return { error: `app 디렉터리가 없습니다: ${app.appDir}` };
   const routes = walkPages(dir).map((f) => fileToRoute(dir, f));
   const uniq = [...new Set(routes)].sort();
@@ -941,7 +963,27 @@ async function main() {
   console.log('[portfolio] manifest.json 기록');
 }
 
-main().catch((e) => {
-  console.error(`[portfolio] ✗ ${e && e.stack ? e.stack : e}`);
-  process.exit(1);
-});
+// -----------------------------------------------------------------------------
+// 진입점 판정 — 🔴🔴 «import 해도 안 돌아야 한다» 와 «CLI 는 여전히 돈다» 는 **둘 다** 요건이다
+// -----------------------------------------------------------------------------
+// 이 줄이 없으면 `check-capture-route-staleness.mjs` 가 이 파일을 import 하는 순간 촬영이
+// 시작된다(라우트를 유도하고 Playwright 를 찾고, 없으면 `process.exit(3)` — 가드가 남의
+// 종료코드로 죽는다). 반대로 판정을 **너무 좁게** 잡으면 CLI 가 아무 일도 안 하고 rc=0 이
+// 되는데, 이 저장소는 그 모양(«일을 하나도 안 하고 rc=0»)에 이미 데였다.
+// ⇒ 가드의 `--self-test` 가 두 방향을 각각 단언한다. 여기 주석만으로는 아무것도 안 지켜진다.
+const invokedAsScript = (() => {
+  try {
+    return !!process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
+  } catch {
+    // 🔵 판정할 수 없으면 **돌린다.** 틀리는 방향은 «조용히 아무것도 안 함» 이 아니라
+    //    «의도대로 촬영» 이어야 한다 — 전자는 초록으로 읽히고 후자는 눈에 보인다.
+    return true;
+  }
+})();
+
+if (invokedAsScript) {
+  main().catch((e) => {
+    console.error(`[portfolio] ✗ ${e && e.stack ? e.stack : e}`);
+    process.exit(1);
+  });
+}
