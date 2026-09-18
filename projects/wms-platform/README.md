@@ -12,26 +12,29 @@ Spring Boot 3 마이크로서비스 7개(master · inventory · inbound · outbo
 
 ## Screenshots
 
-> ⏳ **아직 싣지 않는다 — 누락이 아니라 보류다.**
->
-> 이 플랫폼의 화면은 운영자 콘솔(`platform-console`)이 그린다. 2026-09-11 에 데모에서 찍은
-> 캡처 7장을 검토했고 **싣지 않기로 했다.** 그 뒤 2026-09-12 에 새 코드로 AMI 를 다시 구운
-> 데모에서 **화면과 API 응답을 다시 쟀고**, 사유가 이렇게 바뀌었다:
->
-> - 🟢 **막힌 사가 — 해소.** 출고 주문 `SO-DEMO-0001` 이 `SHIPPED` 로 끝났다
->   (2026-09-11 에는 `STUCK_RECOVERY_FAILED` 였다).
-> - 🔴 **위치·SKU 를 이름으로 못 그린다 — 모양이 바뀌었다.** UUID 원문은 사라졌고
->   (콘솔이 id 폴백을 걷어냈다) 지금은 **「이름 확인 불가」**다. 원인은 콘솔이 아니다 —
->   재고 응답의 `locationCode`·`skuCode`·`warehouseCode` 가 **전부 `null`** 이고, 그 코드를
->   해석하는 master-ref 읽기 모델이 **5종 전부 0건**이다. 비정규화 코드(`TASK-MONO-659`)는
->   배포됐다 — **먹일 데이터가 없다.** 추적: `TASK-MONO-675`.
-> - 🔴 **데모 시드가 얇다** — 재고 1행 · 출고 주문 1건(그대로).
->
-> 🔵 **스크린샷은 광고다.** 코드가 아니라 데모 데이터의 문제이지만, 방문자는 그 구분을
-> 하지 않는다. `TASK-MONO-675` 가 닫혀 화면에 이름이 뜨고 시드가 두터워진 뒤 재촬영해서 싣는다.
->
-> 🔵 그때까지 이 프로젝트의 증거는 **아래 아키텍처 절과 이벤트 흐름 다이어그램**이다 —
-> 사가·아웃박스·2단계 예약은 스크린샷보다 그쪽이 더 정확하게 보여 준다.
+> 🔵 이 플랫폼의 화면은 운영자 콘솔(`platform-console`)이 그린다 — 아래 셋은 **로그인 후**
+> 화면이고, 2026-09-17 UTC 데모(AMI `af0018aa6`, 신선 볼륨)에서 촬영했다.
+> 🔴 두 번 보류했던 이유(2026-09-11 `STUCK_RECOVERY_FAILED` · 2026-09-12 「이름 확인 불가」)는
+> 각각 해소됐다: 사가는 `SHIPPED` 로 끝나고, 위치·SKU 는 코드로 읽힌다(`TASK-MONO-675`).
+> 🔵 데모 시드는 여전히 얇다 — 재고 1행 · 출고 주문 1건. 규모가 아니라 **흐름**을 보는 그림이다.
+
+<p align="center">
+  <img src="docs/screenshots/01-wms-inbound.jpg" width="900" alt="WMS 입고 — 입고예정(ASN) 목록과 검수"><br>
+  <em>입고 — 입고예정(ASN) <code>ASN-DEMO-0001</code> 이 <code>CREATED</code> 상태로 창고 <code>WH01</code> 에 서 있다. 공급처는 <strong>이름</strong>(<code>ACME Supplier Co.</code>)으로 그려진다 — 원문 id 가 아니다. 행의 「검수」가 입고 검수 상세로 들어가는 자리다</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/02-wms-inventory.jpg" width="900" alt="WMS 재고 — 위치·SKU 가 코드로 읽힌다"><br>
+  <em>재고 — 위치 <code>WH01-A-01-01-01</code> · SKU <code>SKU-APPLE-001</code> 이 <strong>코드</strong>로 읽힌다(가용 85 · 예약 10 · 보유 95). 🔵 이 한 줄이 <code>TASK-MONO-675</code> 가 고친 것이다: 이전에는 같은 칸이 「이름 확인 불가」였고, 원인은 화면이 아니라 <strong>master-ref 읽기 모델이 비어 있던 것</strong>이었다</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/03-wms-outbound.jpg" width="900" alt="WMS 출고 — 주문 saga 와 택배 행"><br>
+  <em>출고 — 주문 <code>SO-DEMO-0001</code> 의 상태와 <strong>saga 열이 나란히</strong> 있다(둘 다 <code>SHIPPED</code>). 아래는 출고 확정된 화물의 택배사·출고시각(<code>SHP-20260917-4125</code> · <code>DEMO-CARRIER</code>) — 피킹 → 패킹 → 출고 확정이 이벤트로 이어진 결과다. 🔴 2026-09-11 에는 이 saga 가 <code>STUCK_RECOVERY_FAILED</code> 였다</em>
+</p>
+
+> 🔵 사가·아웃박스·2단계 예약의 **구조**는 스크린샷보다 아래 아키텍처 절과 이벤트 흐름
+> 다이어그램이 정확하게 보여 준다 — 그림은 «실제로 돈다» 를 말하고, 그쪽이 «어떻게 도는가» 를 말한다.
 
 ---
 
