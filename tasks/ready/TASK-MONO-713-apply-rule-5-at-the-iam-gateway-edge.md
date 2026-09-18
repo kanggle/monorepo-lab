@@ -8,7 +8,7 @@ TASK-MONO-713
 
 # Status
 
-ready
+ready (🟡 2026-09-18 UTC — AC-0 측정 완료, 그 결과가 «모집단 0» 이라 AC-3 의 정지 조건에 따라 멈춤. allowlist 미작성, 코드 변경 0)
 
 # Owner
 
@@ -114,3 +114,96 @@ monorepo
 - [ ] iam gateway 가 **측정된 모집단에 근거한** allowlist 를 선언하고, 불일치가 403 이며, 빈 allowlist 는 기동 실패다
 - [ ] AC-0 의 판정표가 이 파일에 남아 있다(⚪ 가 남았다면 그 이유와 함께)
 - [ ] 🔴 **착수 시 소유자 확인 1건**: ADR 필요 여부 — `TASK-MONO-712` § Definition of Done 의 같은 줄과 동일한 질문이다(`TASK-MONO-698` § AC-3 「내가 결정하지 않은 것」)
+
+---
+
+# 🟡 AC-0 측정 (2026-09-18 UTC · 분석=Opus 5) — **여기서 멈춘다.** AC-3 의 정지 조건이다
+
+AC-3 은 *"측정이 「모집단을 못 댔다」로 끝나면 **여기서 멈추고** `ready/` 에 값·기간·출처를 덧붙인다"*
+라고 적는다. 그 상태에 도달했다 — 다만 **못 재서**가 아니라, **재고 나니 모집단이 비었기 때문**이다.
+이 파일은 `ready/` 에 남는다.
+
+## 출처 (전부 착수 시점 `origin/main` 의 설정·코드)
+
+`gateway-service/src/main/resources/application.yml` · `JwtAuthenticationFilter.java` ·
+`TokenValidator.java` · `console-web/src/shared/api/iam-gateway.ts` ·
+`console-bff/.../IamAccountsReadAdapter.java` · `infra/demo/demo.env` ·
+`platform-console/docker-compose.yml` · `product-service/application.yml`.
+
+## 1단계 — 이 엣지가 **검증하는** 경로를 먼저 확정했다
+
+`JwtAuthenticationFilter:82-84` 가 결정적이다: **`public-paths` 에 걸리면 인증을 통째로
+건너뛴다**(`return chain.filter(...)`). 그러므로 «엣지에 도착하는 것» 과 «`TokenValidator` 를
+지나는 것» 은 **다른 집합**이고, allowlist 는 후자에만 적용된다.
+
+`public-paths` 전수(12행):
+
+| 공개 | 비고 |
+|---|---|
+| `GET/POST:/oauth2/**` · `GET:/.well-known/openid-configuration` | 🟢 **AC-0 갈래 (1) 을 코드로 확정** — 브라우저 OIDC 왕복은 Bearer 도 없고 이 사슬도 안 탄다 |
+| `POST:/api/accounts/signup` · `POST:/api/auth/refresh` · `GET:/actuator/health` | |
+| 🔴 **`GET/POST/PUT/PATCH/DELETE:/api/admin/**` · `GET:/.well-known/admin/**`** | **다섯 동사 전부.** 그 자리의 주석이 이유를 적는다 — 운영자 토큰은 admin-service 가 **자기 RS256 키**로 민팅해(`iss=admin-service`) auth-service JWKS 로 검증 **불가**하고, 위임은 *"플랫폼 불변식"* 이며 **바꾸려면 ADR 이 선행**이다 |
+
+⇒ `TokenValidator` 가 실제로 도는 경로는 **넷**뿐이다:
+`/api/auth/**`(refresh 제외) · `/api/accounts/**`(signup 제외) · `/api/accounts/me/sessions**` ·
+`/internal/tenants/**`.
+
+## 2단계 — 그 넷에 **게이트웨이 경유로 설정된 호출자가 없다**
+
+| 갈래 | 판정 | 근거 |
+|---|---|---|
+| (1) 브라우저 OIDC 왕복 | 🟢 **모집단 밖** | `public-paths` (위) |
+| (2) **console-web → `/api/admin/**`** | 🟢 **모집단 밖** | 데모에서 `IAM_ADMIN_API_BASE=${IAM_PUBLIC_URL}` 로 **게이트웨이를 지나지만**, 그 경로가 **public** 이라 검증이 안 돈다. 🔴 자격도 `iam-gateway.ts:293` *"the `/api/admin/**` credential is the **EXCHANGED operator token** — never the IAM OIDC access token"* ⇒ **`aud` 클레임 자체가 없는 토큰**(`OperatorAccessTokenIssuer` 가 `sub`·`iss`·`jti`·`token_type`·`iat`·`exp` 만 민팅) |
+| (3) **console-bff IAM 레그** | 🟢 **모집단 밖** | `CONSOLE_BFF_OUTBOUND_IAM_BASE_URL=${IAM_PUBLIC_URL}` 로 게이트웨이를 지나지만, 치는 경로가 `IamAccountsReadAdapter:45` **`/api/admin/accounts`** — 역시 public. 자격도 운영자 토큰 |
+| (4) `/internal/tenants/**` | ⚪ **게이트웨이 경유 호출자 0** | 저장소의 유일한 호출자는 ecommerce `product-service` `AccountServiceSellerProvisioner` 인데, base URL 이 `${ACCOUNT_SERVICE_BASE_URL:http://localhost:8081}` 이고 **그 변수를 설정하는 compose/env 가 저장소에 하나도 없다** ⇒ 게이트웨이를 지나지 않는다 |
+| (5) `/api/auth/**` · `/api/accounts/**` 엔드유저 경로 | ⚪ **호출자 못 댐** | 프런트 전수에서 `iam.local` 의 그 경로를 Bearer 로 치는 코드를 못 찾았다. 🔴 **그러나 이것은 부재 증명이 아니다**(696 AC-1 (b) 규율) — «없다» 가 아니라 «설정에서 못 댔다» 로 적는다 |
+
+## ⇒ 판정: **allowlist 에 넣을 항목이 하나도 없다. 그러므로 쓰지 않았다**
+
+계약서 rule 5 의 allowlist 는 **비어 있을 수 없다**(빈 목록 = 기동 실패). 그런데 AC-4 는
+*"allowlist 의 각 항목 옆에 그 client 를 넣은 근거(AC-0 의 어느 줄인지)를 적는다. 🔴 「있을 법해서」
+넣은 항목이 하나라도 있으면 이 AC 는 안 닫힌다"* 라고 못박는다. **근거 있는 항목이 0개인데
+비어 있을 수 없는 목록**은 쓸 수 없다. 지어내면 AC-4 위반이고, 지어낸 값이 그대로 운영 거절
+기준이 된다.
+
+🔵 **이것은 실패가 아니라 결과다.** 이 측정이 드러낸 것은 «iam 엣지에 allowlist 를 어떻게 넣나» 가
+아니라 **«이 엣지의 검증 대상 표면에 오늘 클라이언트가 있는가»** 라는, 더 앞선 질문이다.
+
+## 🔴 소유자에게 되묻는 것 (698 § AC-3 항목 4 의 전제가 흔들린다)
+
+소유자 결정 **E** 는 «iam gateway 포함» 이었고, 그 근거는 «iam gateway 도 엣지다» 였다. 엣지인 것은
+맞다. 그런데 **그 엣지가 실제로 검증하는 표면에 도달하는 client 를 설정으로 댈 수 없다.** 선택지:
+
+- **ⓐ 창에서 재고 결정한다** — 데모 게이트웨이 로그/액추에이터로 그 넷에 실제 트래픽이 있는지 본다.
+  🔴 697 AC-0 의 **분모 규율**이 그대로 적용된다: 트래픽이 0 이면 «관측 0» 은 «부재» 가 아니다.
+  ⇒ `TASK-MONO-672`(창이 필요한 측정의 수령처)로 넘기는 것이 이 갈래다.
+- **ⓑ 범위를 좁힌다** — 「iam gateway 에 rule 5 적용」을 **`/internal/tenants/**` 한 경로**로 좁히고,
+  그 경로의 호출자(product-service)를 **게이트웨이 경유로 배선하는 것**을 선행으로 둔다. 🔵 지금은
+  그 호출자가 `localhost:8081` 기본값으로 떨어져 있어 **데모에서 동작하지 않을 가능성**이 있다(아래).
+- **ⓒ 적용 안 함으로 정정한다** — 계약서 *Implementation status* 에 «iam gateway 의 검증 표면에는
+  오늘 client 가 없으므로 allowlist 를 두지 않는다» 를 **측정과 함께** 적는다. 🔵 rule 5 가 요구하는
+  것은 «엣지는 allowlist 를 선언한다» 이고, **검증 자체를 안 하는 표면**은 그 규칙의 대상이 아니다
+  (`/api/admin/**` 위임은 이미 «플랫폼 불변식» 으로 ADR 게이트가 걸려 있다).
+
+🔴 **내 추천은 추천일 뿐이다** — ⓒ 가 가장 정직해 보이지만(측정이 그것을 가리킨다), 이것은
+698 의 소유자 결정을 **부분 정정**하는 것이라 소유자 결정이다.
+
+## 🔵 곁발견 둘 (이 티켓의 범위 밖 — 기록만)
+
+1. **`ACCOUNT_SERVICE_BASE_URL` 이 저장소 어디에서도 설정되지 않는다.** ecommerce
+   `product-service` 의 셀러 프로비저닝이 `http://localhost:8081` 기본값으로 떨어지는데, 그것은
+   컨테이너 자기 자신을 가리킨다 ⇒ **데모에서 이 경로가 동작하지 않을 가능성**이 있다. 🔴 이 호출은
+   **fail-soft** 라(ADR-MONO-042 D3) 실패가 조용하다 — 즉 «안 보이는 고장» 의 모양이다.
+   판정하려면 창이 필요하다.
+2. **698 § AC-1 (d) 의 «iam gateway 는 Micrometer 가 없어 섀도가 불가능» 은 부정확하다.**
+   `JwtAuthenticationFilter:57` 이 **`MeterRegistry` 를 주입받고 있다**(이미
+   `gateway_tenant_fallback_total` 을 쓴다). 섀도가 불가능한 이유는 «메트릭이 없어서» 가 아니라
+   `Rs256JwtVerifier` 가 `OAuth2TokenValidator` 가 아니어서 게이트웨이식 **모드 분기**가 없기
+   때문이다. 🔵 필터 층에서라면 섀도는 **가능**하다 — 위 ⓐ 를 고르면 그것이 수단이 된다.
+
+## 남는 상태
+
+- 이 티켓은 **`ready/` 에 남는다.** AC-0 은 «측정 완료 + 모집단 0» 으로 **답했고**, AC-1~AC-5 는
+  손대지 않았다(코드 변경 0).
+- 🔴 **allowlist 를 한 글자도 쓰지 않았다** — AC-0 이 닫히기 전에는 쓰지 않는다는 것이 이 티켓의
+  선행 조건이고, 닫힌 결과가 «쓸 항목이 없다» 였다.
