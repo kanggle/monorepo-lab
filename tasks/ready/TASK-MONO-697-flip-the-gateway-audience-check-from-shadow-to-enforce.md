@@ -107,3 +107,35 @@ monorepo
 
 - [ ] AC-0 ~ AC-5
 - [ ] 6 게이트웨이 출하 모드 = ENFORCE, 계약서의 오류 코드 이름이 제안이 아니라 확정
+
+---
+
+# 🔵 창 실측 — 2026-09-18 UTC 둘째 창 (07:57:15Z–08:16:26Z · **17분** / 상한 30분) · AMI `ami-02613b0378621b124`(`af0018aa6`) · 인스턴스 `i-07ddb6b41233f2673` · 묶음 7종(console · console-ecommerce · console-wms · console-scm · console-erp · console-finance · fan) · 소유자 승인 «창 30분, 683 쓰기 포함»
+
+## 2026-09-18 둘째 창 — AC-0 의 **분모는 만들었고**, 분자를 못 읽었다
+
+🔵 **먼저: 이 티켓에 재굽기가 필요 없다는 것이 확정됐다.** 1단계 섀도 게이트
+(`3c946e6c2`)가 **현재 핀 AMI(`af0018aa6`)의 조상**임을 `git merge-base --is-ancestor` 로
+확인했다 ⇒ 지금 떠 있는 데모가 이미 SHADOW 로 재고 있다.
+
+**분모(`outcome="match"` > 0)를 만들기 위해** 6 게이트웨이를 실제로 통과시켰다
+(08:11–08:12, 콘솔 로그인 + 테넌트 `demo-corp` 적용 후):
+
+| 게이트웨이 | 경로 | 응답 |
+|---|---|---|
+| ecommerce | `/ecommerce/products` | 200 |
+| wms | `/wms/inventory` · `/wms/master` | 200 · 200 |
+| scm | `/scm/procurement` · `/scm/inventory` | 200 · 200 |
+| erp | `/erp/masters` | 200 |
+| finance | `/ledger` · `/finance` | 200 · 200 |
+| iam | `/operators` | 200 |
+
+🔴 **`fan` 게이트웨이는 이 트래픽이 안 지난다** — 콘솔은 fan 도메인을 그리지 않는다.
+`fan` 묶음은 띄웠지만 fan 웹에 로그인하지 않았으므로 **fan 은 분모 0 = 미측정**이다.
+다음 창에서는 fan 웹 로그인을 한 번 넣어야 6/6 이 된다.
+
+🔴 **분자(`mismatch_shadowed` · WARN 로그)는 못 읽었다** — 컨테이너 안이라 SSM 이 필요하고,
+넘긴 명령의 출력이 이 세션 안에 돌아오지 않았다. ⇒ AC-0 은 열려 있다.
+🔵 **다음 창의 순서가 이것으로 정해졌다**: ① 트래픽(콘솔 9경로 + **fan 로그인**) → ② SSM 으로
+게이트웨이별 WARN 줄 수 + `/actuator/prometheus` 의 `gateway_jwt_audience_total`.
+명령 전문은 `TASK-MONO-672` 항목 6.

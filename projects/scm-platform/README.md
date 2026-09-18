@@ -17,18 +17,18 @@
 
 ## Screenshots
 
-> ⏳ **아직 싣지 않는다 — 막던 결함은 풀렸고, 남은 것은 사진 고르기다.**
+> 🔵 이 플랫폼의 화면은 **운영자 콘솔**(`platform-console`)이 그린다 — 이 서비스는 그 뒤의 API 다.
 >
-> 이 플랫폼의 화면은 운영자 콘솔(`platform-console`)이 그린다. 2026-09-11 · 09-12 에 찍은
-> `SCM 조달` 캡처는 발주 3건(`DRAFT` → `ACKNOWLEDGED` → `CONFIRMED`)의 상태 진행은 잘 보였지만
-> **「공급사」 칸이 UUID 원문**이라 싣지 않았다(스크린샷은 광고다 — 알려진 결함이 박힌 화면을
-> 거는 것은 그 결함을 광고하는 일이다).
->
-> 🟢 **그 결함은 고쳐졌다** (`TASK-MONO-677`): 발주 응답이 공급사 `supplierCode` · `supplierName`
-> 을 함께 싣는다. 2026-09-17 에 새 코드로 구운 데모에서 같은 화면을 열어 발주 3건 **모두
-> `SUP-001 · demo supplier`** 로 그려지는 것을 이미지로 확인했다.
->
-> ⏳ 어떤 화면을 몇 장 실을지는 포트폴리오 큐레이션(`TASK-MONO-648`)에서 고른다 — 그때 재촬영본으로 싣는다.
+> 🔴 **이 절은 오래 비어 있었고, 그 이유가 기록으로 남을 값이 있다.** 2026-09-11 · 09-12 캡처는
+> 발주 3건의 상태 진행은 잘 보였지만 **「공급사」 칸이 UUID 원문**이라 싣지 않았다 — 스크린샷은
+> 광고이고, 알려진 결함이 박힌 화면을 거는 것은 그 결함을 광고하는 일이다. `TASK-MONO-677` 이
+> 발주 응답에 `supplierCode`·`supplierName` 을 실어 고쳤고, 아래는 **그 뒤(2026-09-18 데모 창)**
+> 에 다시 찍은 것이다.
+
+<p align="center">
+  <img src="docs/screenshots/01-scm-procurement.jpg" width="900" alt="SCM 조달 — 발주(PO) 목록"><br>
+  <em>조달 — 발주(PO) 목록(읽기 전용). 상태가 <code>DRAFT</code> → <code>ACKNOWLEDGED</code> → <code>CONFIRMED</code> 로 갈리고, <strong>공급사 칸이 <code>SUP-001 · demo supplier</code></strong> 로 그려진다(<code>TASK-MONO-677</code> 이전에는 이 칸이 UUID 였다). 🔵 발주 <strong>쓰기</strong>는 콘솔 범위가 아니다 — 화면이 그렇게 말한다</em>
+</p>
 
 ---
 

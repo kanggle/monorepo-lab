@@ -93,3 +93,16 @@ wms.outbound.shipping.confirmed.v1.DLT:2:0
 # 분석 / 구현 권장
 
 분석=Opus 5 / 구현 권장=**Opus 5** (이벤트 소비 실패 원인 지목 · 사가 연관 가능성)
+
+---
+
+# 🔵 창 실측 — 2026-09-18 UTC 둘째 창 (07:57:15Z–08:16:26Z · **17분** / 상한 30분) · AMI `ami-02613b0378621b124`(`af0018aa6`) · 인스턴스 `i-07ddb6b41233f2673` · 묶음 7종(console · console-ecommerce · console-wms · console-scm · console-erp · console-finance · fan) · 소유자 승인 «창 30분, 683 쓰기 포함»
+
+## 2026-09-18 둘째 창 — 같은 SSM 묶음에 실어 넘겼다 (결과 미수령)
+
+AC-0 이 요구한 `kafka-console-consumer.sh --topic wms.outbound.shipping.confirmed.v1.DLT`
+(헤더 포함, `--max-messages 1`)를 `TASK-MONO-675` 의 오프셋 조회와 **한 명령으로 묶어**
+소유자에게 넘겼다. 🔴 이 세션 안에 출력이 돌아오지 않아 AC-0 은 열려 있다.
+
+🔵 **묶은 것이 옳았다** — 둘 다 같은 `wms-kafka` 컨테이너를 읽고, 창에서 가장 비싼 것은
+명령 자체가 아니라 **창을 여는 일**이다.

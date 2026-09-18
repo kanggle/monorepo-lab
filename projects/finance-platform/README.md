@@ -45,6 +45,11 @@
   <em>원장 운영 — 시산표(trial balance). 차변·대변과 <strong>기준통화 환산</strong>이 나란히 서고 <code>대차 일치 (in balance)</code> 를 화면이 직접 판정한다. 탭: 시산표 · 회계 기간 · 분개 · 대사 · 계정 · FX 포지션 로트 · FX 환율 피드</em>
 </p>
 
+<p align="center">
+  <img src="docs/screenshots/02-finance-overview.jpg" width="900" alt="Finance 개요 — 원장 집계와 기본계좌 스냅샷"><br>
+  <em>Finance 개요 — 원장 집계를 한 화면에서 판정한다: <code>시산표 균형</code> · 미마감 기간 <strong>0</strong> · 미해소 대사 차이 <strong>0</strong> · FX 피드 상태. 🔵 «기본계좌 스냅샷» 이 빈 것은 결함이 아니라 <strong>운영자 프로필에 기본 finance 계좌가 없는 상태</strong>이고, 화면이 그렇게 말한다</em>
+</p>
+
 ---
 
 ## Local Dev Quick Start
