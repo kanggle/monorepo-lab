@@ -9,7 +9,7 @@ TASK-PC-FE-295
 
 # Status
 
-review (2026-09-18 UTC — AC-0~AC-7 닫힘 · AC-0 ② 라이브 원문만 ⚪ 창 예산)
+done (2026-09-18 UTC — 4차원 검증 · impl PR #3937 squash `baca8c4ce`. AC-0~AC-7 닫힘 · AC-0 ② 라이브 원문만 ⚪ — 그 AC 자신이 «못 재면 ⚪ + 이유» 를 허용했다)
 
 # Owner
 
