@@ -205,6 +205,19 @@ grant_type=urn:ietf:params:oauth:grant-type:token-exchange
 }
 ```
 
+> 🔴 **`id_token` 은 `refresh_token` 그랜트에도 실린다** (TASK-MONO-705, 2026-09-18).
+> 조건은 grant 종류가 아니라 **authorization 의 scope 에 `openid` 가 있는가** 하나다. 위 줄은
+> 원래 그렇게 읽히도록 쓴 것인데, 커스텀 `SasRefreshTokenAuthenticationProvider` 가
+> **refresh 응답에서만 이 필드를 비우고 있었다** — 계약이 맞았고 구현이 갈라져 있었다. 그 결과
+> 콘솔의 `console_id_token` 쿠키가 로그인 30분 뒤 사라졌고, 그 뒤의 로그아웃은 `id_token_hint`
+> 없이 **로컬 폴백**으로 떨어져 **IdP 세션을 끝내지 못했다**(그 상태에서 «로그인» 을 누르면
+> 비밀번호 없이 재입장한다 — 2026-09-18 데모 창 대조군 실측).
+> 🔵 **회전된다**: refresh 마다 새 `id_token` 이 발급되고 authorization 에 저장되므로 **직전
+> `id_token` 은 더 이상 유효한 `id_token_hint` 가 아니다.** RP 는 매 갱신 응답의 값으로 갈아 끼워라.
+> 🔵 `nonce` 는 **우리가 넣지 않는다** — refresh 경로는 원래 인가 요청의 nonce 를 다시 싣지 않는다
+> (OIDC Core 12.2 가 그렇게 말한다). 🔴 이 줄은 **명세와 우리 코드 기준**이고 응답 본문을 떠서 확인한
+> 값이 아니다 — 필요하면 토큰 엔드포인트 응답을 직접 읽어 확인해라.
+
 **Token Claims** (access token + id token 공통):
 
 | Claim | 설명 |

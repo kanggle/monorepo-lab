@@ -24,6 +24,9 @@ import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
 import org.springframework.security.oauth2.core.OAuth2RefreshToken;
 import org.springframework.security.oauth2.core.OAuth2Token;
+import org.springframework.security.oauth2.core.oidc.OidcIdToken;
+import org.springframework.security.oauth2.core.oidc.endpoint.OidcParameterNames;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
@@ -336,8 +339,10 @@ class SasRefreshTokenAuthenticationProviderTest {
         when(generatedRefresh.getTokenValue()).thenReturn("new-refresh-opaque");
         when(generatedRefresh.getIssuedAt()).thenReturn(now);
         when(generatedRefresh.getExpiresAt()).thenReturn(now.plusSeconds(3600));
-        // access token generated first, refresh token second.
-        doReturn(generatedAccess, generatedRefresh).when(tokenGenerator).generate(any());
+        // access token first, refresh token second, ID token third (TASK-MONO-705 ⓐ —
+        // the authorization carries `openid`, so an ID token is now generated too).
+        doReturn(generatedAccess, generatedRefresh, buildIdTokenJwt("new-id-jwt", now))
+                .when(tokenGenerator).generate(any());
 
         // The rotation write path registers a TransactionSynchronization inside the
         // TransactionTemplate callback; with a mocked PlatformTransactionManager no real
@@ -356,7 +361,7 @@ class SasRefreshTokenAuthenticationProviderTest {
         // The ACCESS token must be generated from a context whose principal is the
         // stored resource owner (carrying account_id) — NOT the client principal.
         ArgumentCaptor<OAuth2TokenContext> ctxCaptor = ArgumentCaptor.forClass(OAuth2TokenContext.class);
-        verify(tokenGenerator, times(2)).generate(ctxCaptor.capture());
+        verify(tokenGenerator, times(3)).generate(ctxCaptor.capture());
         OAuth2TokenContext accessCtx = ctxCaptor.getAllValues().get(0);
         Authentication ctxPrincipal = accessCtx.getPrincipal();
 
@@ -369,6 +374,141 @@ class SasRefreshTokenAuthenticationProviderTest {
         assertThat(ctxDetails)
                 .as("the account identity that drives sub=account_id + roles must survive rotation")
                 .containsEntry("account_id", accountId);
+    }
+
+    // -----------------------------------------------------------------------
+    // TASK-MONO-705 ⓐ — the rotated response must carry an ID token
+    //
+    // 🔴 Why these three cells and not one. The defect was not "no ID token is
+    //    generated" — it was that the response and the stored authorization BOTH
+    //    lacked one, and each of those breaks a different thing:
+    //      · response missing   → the console never re-sets `console_id_token`
+    //      · store missing      → OidcLogoutAuthenticationProvider cannot resolve
+    //                             the authorization by `id_token_hint`
+    //    A test that only asserted the first would go green on a change that hands
+    //    out an ID token nobody can log out with.
+    // 🔵 The third cell is the control group: no `openid`, no ID token. Without it
+    //    "always attach an ID token" would pass the other two.
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("authenticate: openid authorization → response carries id_token "
+            + "(TASK-MONO-705 ⓐ — the console re-sets console_id_token from this)")
+    void authenticate_openidScope_returnsIdTokenInAdditionalParameters() {
+        RotationFixture f = rotate(Set.of("openid"), "issued-id-jwt");
+
+        assertThat(f.result.getAdditionalParameters())
+                .as("the refresh response must hand back an id_token — auth-api.md "
+                        + "§ POST /oauth2/token promises it whenever scope contains openid")
+                .containsEntry(OidcParameterNames.ID_TOKEN, "issued-id-jwt");
+    }
+
+    @Test
+    @DisplayName("authenticate: the new id_token is stored ON the authorization "
+            + "— RP-initiated logout resolves it with findByToken(hint, ID_TOKEN)")
+    void authenticate_openidScope_storesIdTokenOnAuthorization() {
+        RotationFixture f = rotate(Set.of("openid"), "issued-id-jwt");
+
+        ArgumentCaptor<OAuth2Authorization> saved = ArgumentCaptor.forClass(OAuth2Authorization.class);
+        verify(authorizationService).save(saved.capture());
+
+        // 🔴 `getToken(String)` looks up by token VALUE, not by type — the first draft
+        //    of this assertion passed "id_token" to it and got null from a correct
+        //    implementation. The type-keyed overload is the one that mirrors how the
+        //    authorization actually stores it.
+        OAuth2Authorization.Token<OidcIdToken> stored = saved.getValue().getToken(OidcIdToken.class);
+        assertThat(stored)
+                .as("an id_token handed out but not stored fails logout — which is the "
+                        + "very thing TASK-MONO-705 exists to restore")
+                .isNotNull();
+        assertThat(stored.getToken().getTokenValue()).isEqualTo("issued-id-jwt");
+    }
+
+    @Test
+    @DisplayName("authenticate: authorization WITHOUT openid → no id_token anywhere "
+            + "(control group — a non-OIDC client must not start receiving one)")
+    void authenticate_withoutOpenidScope_omitsIdToken() {
+        RotationFixture f = rotate(Set.of("profile"), null);
+
+        assertThat(f.result.getAdditionalParameters())
+                .as("no openid scope ⇒ nothing to hand back")
+                .doesNotContainKey(OidcParameterNames.ID_TOKEN);
+        // access + refresh only — the ID-token context must never be built.
+        verify(tokenGenerator, times(2)).generate(any());
+    }
+
+    /** Result + captured context of one rotation, so the three cells above stay short. */
+    private record RotationFixture(OAuth2AccessTokenAuthenticationToken result) {}
+
+    /**
+     * Drives one successful rotation.
+     *
+     * @param scopes    authorized scopes stored on the authorization
+     * @param idTokenValue value the generator returns for the ID token, or {@code null}
+     *                     to stub only the access + refresh tokens
+     */
+    private RotationFixture rotate(Set<String> scopes, String idTokenValue) {
+        RegisteredClient registeredClient = buildDemoSpaClient();
+        OAuth2ClientAuthenticationToken clientPrincipal = buildAuthenticatedClient(registeredClient);
+
+        String tokenValue = "rotated-rt-" + UUID.randomUUID();
+        OAuth2RefreshToken sasRt = new OAuth2RefreshToken(
+                tokenValue, Instant.now().minusSeconds(60), Instant.now().plusSeconds(3600));
+        OAuth2Authorization authorization = OAuth2Authorization.withRegisteredClient(registeredClient)
+                .id(UUID.randomUUID().toString())
+                .principalName("shopper@example.com")
+                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                .authorizedScopes(scopes)
+                .token(sasRt)
+                .build();
+
+        OAuth2RefreshTokenAuthenticationToken auth = mock(OAuth2RefreshTokenAuthenticationToken.class);
+        when(auth.getPrincipal()).thenReturn(clientPrincipal);
+        when(auth.getRefreshToken()).thenReturn(tokenValue);
+        when(authorizationService.findByToken(tokenValue, OAuth2TokenType.REFRESH_TOKEN))
+                .thenReturn(authorization);
+        when(refreshTokenRepository.findByJti(tokenValue)).thenReturn(Optional.empty());
+
+        Instant now = Instant.now();
+        OAuth2Token generatedAccess = mock(OAuth2Token.class);
+        when(generatedAccess.getTokenValue()).thenReturn("new-access-jwt");
+        when(generatedAccess.getIssuedAt()).thenReturn(now);
+        when(generatedAccess.getExpiresAt()).thenReturn(now.plusSeconds(300));
+        OAuth2Token generatedRefresh = mock(OAuth2Token.class);
+        when(generatedRefresh.getTokenValue()).thenReturn("new-refresh-opaque");
+        when(generatedRefresh.getIssuedAt()).thenReturn(now);
+        when(generatedRefresh.getExpiresAt()).thenReturn(now.plusSeconds(3600));
+
+        if (idTokenValue != null) {
+            doReturn(generatedAccess, generatedRefresh, buildIdTokenJwt(idTokenValue, now))
+                    .when(tokenGenerator).generate(any());
+        } else {
+            doReturn(generatedAccess, generatedRefresh).when(tokenGenerator).generate(any());
+        }
+
+        Authentication result;
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            result = provider.authenticate(auth);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+        return new RotationFixture((OAuth2AccessTokenAuthenticationToken) result);
+    }
+
+    /**
+     * A real {@link Jwt} — not a mock. The provider requires the generated ID token to
+     * be a {@code Jwt} (it reads the claim set to store alongside the token), so a bare
+     * {@code OAuth2Token} mock would exercise the failure branch instead of this one.
+     */
+    private static Jwt buildIdTokenJwt(String tokenValue, Instant now) {
+        return Jwt.withTokenValue(tokenValue)
+                .header("alg", "RS256")
+                .claim("sub", "01928c4a-7e9f-7c00-9a40-d2b1f5e8c500")
+                .claim("aud", List.of("demo-spa"))
+                .issuedAt(now)
+                .expiresAt(now.plusSeconds(1800))
+                .build();
     }
 
     // -----------------------------------------------------------------------
