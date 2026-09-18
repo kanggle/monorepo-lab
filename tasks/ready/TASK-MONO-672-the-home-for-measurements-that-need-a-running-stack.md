@@ -276,3 +276,17 @@ aws ssm get-command-invocation --region ap-northeast-2 \
 이유를 말한다 — 추천은 **wms 저재고 알림 / IVS 야간 스윕**에서만 생기고 신선 볼륨에는 그
 트리거가 없다. ⇒ **다음 창에서 그냥 다시 봐도 0건이다.** 이 항목을 열려면 먼저 ⓐ 시드가
 저재고를 만들거나 ⓑ 스윕을 수동 트리거해야 하고, **그 선행은 아직 아무 티켓도 안 들고 있다.**
+
+### 🔵 다음 창에서 **한 줄만** 확인할 것 (`TASK-MONO-711` ③ 이 남긴 확인 사살)
+
+`TASK-MONO-711` ③ 이 `/console` 의 도메인 상태 실패를 마커(`catalog-health-unavailable`)로
+드러냈다. 그 사슬의 마디는 단위 테스트로 각각 쟀지만 **촬영 매니페스트에서의 최종 판정**만
+창이 없어 못 쟀다. ⇒ 다음 촬영 후 매니페스트에서 한 줄:
+
+```bash
+node -e "const m=require('<manifest>.json');const s=m.shots.find(x=>x.path==='/console');console.log(s.degraded, s.degradedBy)"
+```
+
+기대: `true [ 'catalog-health-unavailable' ]`. 🔴 `false` 면 마커가 렌더되지 않은 것이므로
+**`TASK-MONO-711` 을 다시 열어라** — 단위 테스트가 초록인데 화면에 없으면 그 사이(빌드·배포·
+라우트)가 범인이다. 🔵 `true` 는 «화면이 나빠졌다» 가 아니라 «이전 «저하 아님» 이 오보였다» 다.
