@@ -8,7 +8,7 @@ TASK-MONO-711
 
 # Status
 
-in-progress (2026-09-18 UTC — AC-0 게이트 통과 · AC-1 + AC-1b 닫힘 · ②③④ 남음)
+in-progress (2026-09-18 UTC — AC-0 · AC-1 · AC-1b · AC-2 닫힘 · ③④ 남음)
 
 # Owner
 
@@ -127,7 +127,7 @@ return { overview: null, noTenant: false, unauthorized: false, bffUnavailable: t
       즉 `TASK-MONO-707` 이 만든 16칸은 **사람이 손으로 돌릴 때만** 빨개졌다. AC-1 의 «bite» 는
       그 상태로는 요건을 만족하지 못한다 — 아무도 안 돌리는 가드는 없는 가드보다 나쁘다.
       🔵 이 칸은 원래 Scope 에 없었다. 범위를 조용히 넓히지 않으려고 **칸으로 적고** 닫는다.
-- [ ] **AC-2 — ② 사유를 들고 다닌다.** `bffUnavailable` 옆에 원인 구분(최소:
+- [x] **AC-2 — ② 사유를 들고 다닌다.** `bffUnavailable` 옆에 원인 구분(최소:
       `transport` / `status:<code>` / `timeout`)을 남긴다. 🔴 **상시 켜진 신호를 구별 가능하게
       만드는 것이 목적**이지 화면을 예쁘게 하는 것이 아니다. 화면 문구는 그 다음 문제다.
       **bite**: 서로 다른 실패를 주입하면 서로 다른 사유가 나온다(같은 값이면 빨강).
@@ -245,3 +245,72 @@ return { overview: null, noTenant: false, unauthorized: false, bffUnavailable: t
   한다» 를 막고 있다. 티켓은 `in-progress` 로 남는다.
 - self-test 는 **술어와 배선**을 재지 실제 콘솔이 그 마커를 다는지는 재지 않는다(그건 창이다).
 - 🔴 **새 CI 스텝이 실제로 도는 것은 이 PR 의 CI 가 처음이다** — 그 초록이 이 칸의 실전 판정이다.
+
+---
+
+# 🟢 AC-2 — ② `bffUnavailable` 이 **사유를 들고 다닌다** (2026-09-18 UTC · 분석·구현=Opus 5)
+
+## 🔴 대상이 **두 파일**이었다
+
+착수해서 처음 안 것: 같은 catch-all 모양을 **두 기능이 복제**하고 있다 —
+`features/operator-overview/api/operator-overview-state.ts` 와
+`features/domain-health/api/domain-health-state.ts`. 한쪽만 고치면 이 저장소의
+«한 사실이 두 집을 갖는다» 축을 그대로 밟는다. ⇒ 분류기를 **공유 모듈 하나**로 두고
+둘이 같이 쓰게 했다: `shared/api/unavailable-cause.ts`.
+
+🔵 `domain-health-api.ts:55` 의 맨 `catch {}` 는 **건드리지 않았다** — JSON 파싱 방어이고
+기본값이 명시적이며 주석이 이유를 적어 뒀다. catch-all 문제가 아니다(모집단을 잘못 넓히지 않았다).
+
+## 분류
+
+| 갈래 | 언제 | 무엇을 싣나 |
+|---|---|---|
+| `status` | 응답은 왔는데 상태코드가 나쁘다 | `status` + `code` |
+| `transport` | **응답에 닿지도 못했다**(`fetch` 가 `TypeError`) | `name` |
+| `timeout` | `AbortError` / `TimeoutError` | `name` |
+| `unknown` | 위 어느 것도 아님 | `name` |
+
+🔴 **순서가 의미를 갖는다** — `ApiError` 를 먼저 본다. 그것만이 «응답을 받은» 경우이고,
+뒤집으면 `ApiError` 가 `unknown` 으로 샌다.
+🔵 `AbortError`/`TimeoutError` 는 환경마다 클래스가 달라 **이름**으로 가른다.
+🔵 성공하면 `unavailableCause` 는 `undefined` 다 — **없는 사유를 지어내지 않는다.**
+🔴 방문자에게 보이는 값이 아니다(서버 로그·진단용). 두 모듈이 `logger.warn` 한 줄을 남긴다.
+
+## 🔴 결함의 자리가 **테스트 안에** 그대로 있었다
+
+두 파일의 스위트가 각각 «502» 와 «네트워크 실패» 를 **이미 주입하고 있었는데**, 둘 다
+`expect(state.bffUnavailable).toBe(true)` 하나만 단언했다 — **서로 다른 세계가 같은 단언을
+만족**한다. 그것이 이 AC 가 말하는 «구별되지 않는다» 의 정확한 모양이고, 스위트가 그 상태를
+**증명하고 있었다.**
+
+| 넓힌/더한 칸 | 무엇을 문다 |
+|---|---|
+| 502 칸(개요·헬스) | 사유가 `{kind:'status', status:502, code:'BAD_GATEWAY'}` |
+| 네트워크 칸(개요·헬스) | 사유가 `transport` — «나빴다» 가 아니라 **«닿지도 못했다»** |
+| 🔴 **뭉개짐 칸(개요)** | 502 · transport · timeout 셋을 한 테스트에서 돌려 `kinds` 가 **셋 다 다른지** |
+| 🔴 뭉개짐 칸(헬스) | 같은 질문 — 공유 분류기가 **이쪽에도** 걸려 있는지 |
+| 🔵 대조군(개요) | 성공하면 `unavailableCause` 가 `undefined` |
+
+## bite
+
+`classifyUnavailable()` 맨 앞에 `return {kind:'unknown'}` 을 넣어 **사유를 하나로 뭉갰다**
+(주입 1건 단언 후) → 개요 스위트 **3칸 빨강**(502 · transport · 뭉개짐), 🔵 대조군은 **초록**.
+복원 후 전부 초록.
+
+## 검증
+
+| 게이트 | 결과 |
+|---|---|
+| `operator-overview-api.test.ts` | 🟢 18칸 |
+| `domain-health-api.test.ts` | 🟢 20칸 |
+| `console-web` 전체 (`pnpm test`) | 🟢 **313 파일 / 3505 칸** |
+| `npx tsc --noEmit` | 🟢 rc=0 |
+
+## ⚪ 안 한 것
+
+- **화면 문구는 그대로 두었다.** AC-2 가 «사유를 구별 가능하게 만드는 것이 목적이고 문구는
+  그 다음» 이라고 적어 뒀다. «일시적으로» 가 Vercel 에서 상시 거짓인 것은 여전하다.
+- **로그가 실제로 어디에 쌓이는지는 안 쟀다** — `logger` 는 stdout 으로 나가고, Vercel 쪽
+  수집 여부는 이 저장소에서 확인할 수 없다. 🔴 그래서 «이제 사유를 볼 수 있다» 고 적지 않는다.
+  볼 수 있게 된 것은 **상태 객체**이고, 그것을 읽는 첫 소비자는 ③ 이나 촬영 매니페스트다.
+- ③④ 는 다음이다.
