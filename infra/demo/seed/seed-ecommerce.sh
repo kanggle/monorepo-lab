@@ -4,12 +4,16 @@
 # =============================================================================
 # TASK-MONO-506 S3.
 #
-# 이 스크립트는 두 신원으로, **세 단계**로 일한다. 순서가 곧 도메인 규칙이다:
+# 이 스크립트는 두 신원으로, **다섯 단계**로 일한다. 순서가 곧 도메인 규칙이다:
 #
-#   1) 소비자 토큰 (ecommerce-web-store-client)  — 프로필 · 배송지 · 위시리스트
-#   2) 운영자 토큰 (platform-console-web → assume demo-corp)
+#   1) 소비자 토큰 (ecommerce-web-store-client)  — 프로필 · 배송지 · 위시리스트 ·
+#        **주문 5건(상태별) · 결제 · 취소**
+#   2) 운영자 토큰 (platform-console-web → assume ecommerce)
 #        — 셀러 · 수수료율 · 정산기간 · 알림 템플릿 · 프로모션/쿠폰 · **배송 진행**
 #   3) 소비자 토큰 다시 — **리뷰**
+#   4) 운영자 토큰 — **정산 기간 마감 + 지급 실행**(적립은 자동, 지급은 아니다)
+#   5) 운영자 토큰 — **사후조건 단언**(TASK-MONO-710 AC-3: 주문 ≥5 · 상태 ≥4종 ·
+#        배송 ≥2건. 경고가 아니라 `seed_fail` 이다)
 #
 # 🔴 3번이 2번 뒤에 오는 이유: review-service 는 `hasUserPurchasedProduct` 로
 # 구매를 검증하고, 그 술어는 `OrderStatus.DELIVERED` 만 인정한다(소스 확인).
@@ -31,6 +35,178 @@ GW="http://ecommerce.${DEMO_DOMAIN}"
 
 container_up ecommerce-gateway-service || { seed_log "게이트웨이 미기동 — 건너뜀"; exit 0; }
 wait_http "$GW/api/products" 240 || { seed_fail "게이트웨이가 240초 안에 응답하지 않습니다"; seed_summary; exit $?; }
+
+# =============================================================================
+# 주문 시드 도구 (TASK-MONO-710)
+# =============================================================================
+# 🔴 **왜 API 층인가 — 주문은 상태 기계다.**
+#
+# `orders` 에 `status='DELIVERED'` 를 직접 INSERT 하면 화면 다섯 장이 즉시 찬다.
+# 그리고 도메인은 거짓말을 한다: 아웃박스에 행이 없으므로 `OrderPlaced` ·
+# `OrderConfirmed` · `PaymentCompleted` 가 **한 건도 발행되지 않고**, 그 결과
+#   · shipping-service 는 배송 건을 만들지 않으며(배송 건은 `OrderConfirmed` 소비로 생긴다),
+#   · settlement-service 는 수수료를 적립하지 않고(적립은 `PaymentCompleted` 소비다 —
+#     `settlement-subscriptions.md`),
+#   · wms 는 그 주문을 아예 모른다.
+# 즉 **주문만 있고 배송·정산이 비는** 상태가 되는데, 그건 지금 상태보다 나쁘다.
+# 지금은 «데이터가 없다» 이고 그때는 «시스템이 고장 났다» 로 읽히기 때문이다.
+#
+# 이 논증은 새로 만든 것이 아니다 — 이 파일 맨 위가 **리뷰에 대해 같은 말**을 이미
+# 적어 뒀다("직접 INSERT 하면 데모가 «존재할 수 없는 상태» 를 보여준다"). 주문은
+# 그 논증의 한 층 아래일 뿐이다. `lib.sh` 는 그 정책을 코드로 강제한다(`dbexec` 는
+# `--why` 없이는 실행되지 않고, 가드 (y) 가 lib.sh 밖의 raw psql 을 막는다).
+# 🔴 그러므로 **주문에 `dbexec` 를 쓰지 마라.** 막힌 엔드포인트가 없다.
+#
+# 만들 수 있는 상태와 그 경로(계약서 대조 완료):
+#   PENDING    주문 생성만 하고 결제하지 않는다            (POST /api/orders)
+#   CANCELLED  주문 생성 후 소유자가 취소                  (POST /api/orders/{id}/cancel)
+#   CONFIRMED  결제 승인 → 재고 예약 → 사가가 확정          (POST /api/payments/confirm)
+#   SHIPPED    위 + 운영자가 배송을 SHIPPED 로 전이         (PUT /api/shippings/{id}/status)
+#   DELIVERED  위 + IN_TRANSIT → DELIVERED 까지 전이
+#
+# 🔴 `POST /api/admin/orders/{id}/status` 로는 SHIPPED·DELIVERED 를 만들 수 없다
+# (계약서: 400 INVALID_ORDER_REQUEST). 주문은 **배송의 되돌아오는 다리**로만 그 두
+# 상태에 간다(`ShippingStatusChanged` → order-service, ADR-MONO-022 §D7). 그래서
+# 시드는 주문 상태가 아니라 **배송**을 움직인다.
+#
+# 🔵 멱등: `POST /api/orders` 는 `Idempotency-Key` 를 받고, 같은 키 + 같은 사용자의
+# 재요청은 **원래 주문을 그대로** 돌려준다(중복 생성 없음 · `OrderPlaced` 재발행 없음).
+# 그래서 주문에는 `api_create_unless` 식 탐지 프로브가 필요 없다 — 계약이 직접 답한다.
+# 결제도 같다: 생성은 멱등(201, 부작용 없음)이고 재승인은 409 로 거절된다.
+#
+# 🔵 테넌트: 소비자 토큰에는 게이트웨이가 `ecommerce` 테넌트를 강제하므로 이 주문들은
+# 전부 `tenant_id='ecommerce'` 에 산다 — 아래 운영자 절이 assume 하는 바로 그 테넌트다.
+# =============================================================================
+
+# 결제 후 주문이 CONFIRMED 로 전파될 때까지의 상한(초). 사가가 Kafka 두 홉을 돈다.
+ORDER_WAIT_SECONDS=180
+
+ORDER_RECIPIENT='데모 구매자'
+ORDER_PHONE='010-1234-5678'
+ORDER_ZIP='06236'
+ORDER_ADDR1='서울특별시 강남구 테헤란로 1'
+ORDER_ADDR2='10층'
+
+ORDER_ID=""; ORDER_TOTAL=""; ORDER_LAST_STATUS=""
+SHIPPING_ID=""; SHIPPING_STATUS=""
+
+# order_place <슬롯> <상품id> — 상품 상세를 읽어 한 줄짜리 주문을 만든다.
+#   성공하면 ORDER_ID / ORDER_TOTAL 을 세팅한다.
+#
+# 🔴 필드 이름은 계약서(`order-api.md`)를 읽고 적는다. 배송지의 키는 `recipient` 이고
+# **`recipientName` 이 아니다** — 바로 옆 `/api/users/me/addresses` 는 `recipientName`
+# 이라 둘이 일부러 다르다. 계약서가 2026-08-15 까지 여기를 틀리게 적고 있었고
+# (TASK-BE-588), 그 예시로 만든 요청이 `400 VALIDATION_ERROR "recipient is required"`
+# 로 거절됐다. 체크아웃 화면도 이 자리에서 이름을 바꿔 싣는다.
+order_place() {
+  local slot="$1" pid="$2"
+  ORDER_ID=""; ORDER_TOTAL=""
+  if ! http GET "$GW/api/products/$pid"; then
+    seed_fail "주문 시드: 상품 상세 조회 실패 $pid (HTTP $SEED_LAST_STATUS)"
+    return 1
+  fi
+  local body="$SEED_LAST_BODY" name price seller vid opt add unit
+  # 🔵 `"name":` 는 `"optionName":` 과 겹치지 않는다(대문자 N) — 같은 이유로
+  #    `"price":` 는 `"additionalPrice":` 를 안 먹는다. 둘 다 head -1 이 문서 순서상
+  #    첫 변형의 값이므로 같은 객체에서 온다.
+  name="$(printf '%s' "$body" | grep -oE '"name":"[^"]*"' | head -1 | cut -d'"' -f4)"
+  price="$(printf '%s' "$body" | grep -oE '"price":[0-9]+' | head -1 | cut -d: -f2)"
+  seller="$(printf '%s' "$body" | grep -oE '"sellerId":"[^"]*"' | head -1 | cut -d'"' -f4)"
+  vid="$(printf '%s' "$body" | grep -oE '"variantId":"[0-9a-f-]{36}"' | head -1 | cut -d'"' -f4)"
+  opt="$(printf '%s' "$body" | grep -oE '"optionName":"[^"]*"' | head -1 | cut -d'"' -f4)"
+  add="$(printf '%s' "$body" | grep -oE '"additionalPrice":[0-9]+' | head -1 | cut -d: -f2)"
+  # 🔴 추출 0건을 실패로 센다(이 파일의 위시리스트 블록과 같은 이유 — 탐지식의 0건은
+  #    "없음" 이 아니라 식이 깨진 것이다).
+  if [ -z "$vid" ] || [ -z "$price" ]; then
+    seed_fail "주문 시드: 상품 $pid 에서 variantId/price 를 추출하지 못했습니다: ${body:0:200}"
+    return 1
+  fi
+  unit=$(( price + ${add:-0} ))
+
+  local item order_body attempt
+  item="{\"productId\":\"$pid\",\"variantId\":\"$vid\",\"productName\":\"$name\",\"optionName\":\"$opt\",\"quantity\":1,\"unitPrice\":$unit,\"sellerId\":\"${seller:-default}\"}"
+  order_body="{\"items\":[$item],\"shippingAddress\":{\"recipient\":\"$ORDER_RECIPIENT\",\"phone\":\"$ORDER_PHONE\",\"zipCode\":\"$ORDER_ZIP\",\"address1\":\"$ORDER_ADDR1\",\"address2\":\"$ORDER_ADDR2\"}}"
+
+  for attempt in 1 2 3; do
+    if http POST "$GW/api/orders" "$order_body" -H "Idempotency-Key: demo-seed-order-$slot"; then
+      ORDER_ID="$(printf '%s' "$SEED_LAST_BODY" | grep -oE '"orderId":"[0-9a-f-]{36}"' | head -1 | cut -d'"' -f4)"
+      ORDER_TOTAL="$(printf '%s' "$SEED_LAST_BODY" | grep -oE '"totalPrice":[0-9]+' | head -1 | cut -d: -f2)"
+      if [ -n "$ORDER_ID" ] && [ -n "$ORDER_TOTAL" ]; then
+        # 🔵 «생성/기존» 을 세지 않는다 — 멱등 재생도 201 이라 이 층에서는 둘을 가를 수
+        #    없고, 가른 척하면 요약이 거짓말을 한다. 이 시드의 판정은 맨 아래 사후조건이다.
+        seed_log "주문 $slot: $ORDER_ID (${name:-?} · ${ORDER_TOTAL}원)"
+        return 0
+      fi
+      seed_fail "주문 $slot 응답에서 orderId/totalPrice 를 읽지 못했습니다: ${SEED_LAST_BODY:0:200}"
+      return 1
+    fi
+    # 409 DUPLICATE_ORDER_REQUEST = 같은 키가 **아직 처리 중**이다. 재시도하면 원래
+    # 주문으로 수렴한다(계약서). 그 외는 재시도해도 같은 답이 온다.
+    [ "$SEED_LAST_STATUS" = "409" ] || break
+    sleep 3
+  done
+  seed_fail "주문 $slot 생성 실패 — HTTP $SEED_LAST_STATUS ${SEED_LAST_BODY:0:200}"
+  return 1
+}
+
+# order_pay <슬롯> <주문id> <금액> — PENDING 결제 생성 + 승인.
+#
+# 🔴 승인이 통과하려면 payment-service 가 `demo-pg` 프로파일이어야 한다(가짜인 것은
+# **돈뿐**이고 `PaymentEventPublisher` 는 진짜라 사가가 실제로 돈다). 데모 스택은
+# `demo.env` 의 `ECOMMERCE_PAYMENT_PROFILES=demo-pg` 로 그렇게 뜬다. 그 프로파일이
+# 빠지면 실제 Toss 어댑터가 붙어 502 PG_CONFIRM_FAILED 가 나고, 그때 이 줄이 실패로
+# 세어지는 것이 맞다 — 조용히 넘어가면 주문 셋이 PENDING 에 머문 채 화면만 반쯤 찬다.
+order_pay() {
+  local slot="$1" oid="$2" amt="$3"
+  if ! http POST "$GW/api/payments" "{\"orderId\":\"$oid\",\"amount\":$amt}"; then
+    case "$SEED_LAST_STATUS" in
+      409|422) : ;;  # 이미 결제 행이 있다 — 아래 승인으로 진행한다.
+      *) seed_fail "결제 생성 실패 (주문 $slot) — HTTP $SEED_LAST_STATUS ${SEED_LAST_BODY:0:200}"; return 1 ;;
+    esac
+  fi
+  if http POST "$GW/api/payments/confirm" \
+       "{\"paymentKey\":\"demo-seed-pay-$slot\",\"orderId\":\"$oid\",\"amount\":$amt}"; then
+    seed_log "결제 승인 (주문 $slot · ${amt}원)"
+    return 0
+  fi
+  case "$SEED_LAST_STATUS" in
+    409) seed_log "결제 이미 완료됨 (주문 $slot · HTTP 409) — 멱등 재실행" ; return 0 ;;
+    502) seed_fail "결제 승인이 PG 에서 거절됐습니다 (주문 $slot · HTTP 502). payment-service 프로파일에 demo-pg 가 있습니까? (demo.env ECOMMERCE_PAYMENT_PROFILES)"; return 1 ;;
+    *)   seed_fail "결제 승인 실패 (주문 $slot) — HTTP $SEED_LAST_STATUS ${SEED_LAST_BODY:0:200}"; return 1 ;;
+  esac
+}
+
+# order_wait_status <주문id> <허용 상태...> — 비동기 전파를 기다린다.
+order_wait_status() {
+  local oid="$1"; shift
+  local want=" $* " i s=""
+  for (( i=0; i<ORDER_WAIT_SECONDS; i+=5 )); do
+    if http GET "$GW/api/orders/$oid"; then
+      s="$(printf '%s' "$SEED_LAST_BODY" | grep -oE '"status":"[A-Z_]+"' | head -1 | cut -d'"' -f4)"
+      case "$want" in *" $s "*) ORDER_LAST_STATUS="$s"; return 0 ;; esac
+    fi
+    sleep 5
+  done
+  ORDER_LAST_STATUS="${s:-?}"
+  return 1
+}
+
+# shipping_of <주문id> — 배송 건이 생길 때까지 기다린다.
+#   배송 건은 `OrderConfirmed` 를 소비할 때 **자동으로** 만들어진다(계약서 Notes).
+#   🔴 이 조회는 **구매자 토큰으로** 해야 한다 — 아래 운영자 절의 주석 참조.
+shipping_of() {
+  local oid="$1" i
+  SHIPPING_ID=""; SHIPPING_STATUS=""
+  for (( i=0; i<120; i+=5 )); do
+    if http GET "$GW/api/shippings/orders/$oid"; then
+      SHIPPING_ID="$(printf '%s' "$SEED_LAST_BODY" | grep -oE '"shippingId":"[0-9a-f-]{36}"' | head -1 | cut -d'"' -f4)"
+      SHIPPING_STATUS="$(printf '%s' "$SEED_LAST_BODY" | grep -oE '"status":"[A-Z_]+"' | head -1 | cut -d'"' -f4)"
+      [ -n "$SHIPPING_ID" ] && return 0
+    fi
+    sleep 5
+  done
+  return 1
+}
 
 # -----------------------------------------------------------------------------
 # 0. 소비자 프로필 — 이 시드에서 **유일한** 직접-DB 항목
@@ -103,32 +279,110 @@ if [ -n "${CONSUMER_TOKEN:-}" ]; then
     seed_fail "상품 목록 조회 실패 (HTTP $SEED_LAST_STATUS) — 위시리스트를 시드할 수 없습니다"
   fi
 
-  # 배송을 진행시킬 주문 하나를 고른다(리뷰 자격의 전제). 주문이 없으면 배송도 없다 —
-  # 그건 결함이 아니라 "아직 아무도 사지 않았다" 이므로 경고만 남긴다.
-  if http GET "$GW/api/orders?size=1"; then
-    DELIVER_ORDER_ID="$(printf '%s' "$SEED_LAST_BODY" | grep -oE '"orderId":"[0-9a-f-]{36}"' | head -1 | cut -d'"' -f4)"
-    [ -n "$DELIVER_ORDER_ID" ] || DELIVER_ORDER_ID="$(printf '%s' "$SEED_LAST_BODY" | grep -oE '"id":"[0-9a-f-]{36}"' | head -1 | cut -d'"' -f4)"
+  # ---------------------------------------------------------------------------
+  # 주문 다섯 건 — 상태마다 하나씩 (TASK-MONO-710)
+  # ---------------------------------------------------------------------------
+  # 🔴 **여기 있던 것이 이 티켓의 결함이었다.** 이 자리에는 `GET /api/orders?size=1` 로
+  # **이미 있는 주문을 주워** 쓰고, 없으면
+  #     seed_warn "데모 계정의 주문이 없습니다 — 배송 진행과 리뷰 시드를 건너뜁니다"
+  # 한 줄을 남기고 지나가는 블록이 있었다. 시드는 주문을 **한 번도 만들지 않았다.**
+  #
+  # 🔴🔴 그리고 그 경고는 한 화면이 아니라 **세 갈래**를 지웠다. `SHIP_ID` 와
+  # `REVIEW_PRODUCT_ID` 가 저 `if` 안에서만 세팅되므로, 주문이 0건이면
+  #   · 아래 운영자 절의 **배송 진행**(PREPARING→…→DELIVERED)과
+  #   · 3절의 **리뷰**
+  # 가 **매 창 통째로 건너뛰어졌다.** 요약은 "실패 0" 이었다. 데모가 그 데이터 없이는
+  # 존재할 수 없는데 경고로 지나간 것 자체가 결함의 일부다(lib.sh 헤더: 시드는 실패하면
+  # 아무도 무시할 수 없다). 그래서 이제 **만들고, 맨 아래에서 단언한다.**
+  order_pids=""
+  if http GET "$GW/api/products?size=8"; then
+    order_pids="$(printf '%s' "$SEED_LAST_BODY" | grep -oE '"id":"[0-9a-f-]{36}"' | cut -d'"' -f4 | head -5)"
+  else
+    seed_fail "상품 목록 조회 실패 (HTTP $SEED_LAST_STATUS) — 주문을 시드할 수 없습니다"
   fi
-  if [ -n "$DELIVER_ORDER_ID" ] && http GET "$GW/api/orders/$DELIVER_ORDER_ID"; then
-    REVIEW_PRODUCT_ID="$(printf '%s' "$SEED_LAST_BODY" | grep -oE '"productId":"[0-9a-f-]{36}"' | head -1 | cut -d'"' -f4)"
-    REVIEW_PRODUCT_NAME="$(printf '%s' "$SEED_LAST_BODY" | grep -oE '"productName":"[^"]*"' | head -1 | cut -d'"' -f4)"
-    seed_log "리뷰 대상 후보: order=$DELIVER_ORDER_ID product=${REVIEW_PRODUCT_NAME:-?}"
+  order_pid_count="$(printf '%s\n' $order_pids | grep -c . || true)"
+  if [ "${order_pid_count:-0}" -lt 5 ]; then
+    seed_fail "주문 시드에 필요한 상품 5개를 모으지 못했습니다(추출 ${order_pid_count:-0} 건) — 카탈로그 시드(V8·V19)를 확인하십시오"
+  else
+    ORDER_SLOT_IDS=(); ORDER_SLOT_TOTALS=()
+    order_slot=0
+    for order_pid in $order_pids; do
+      order_slot=$((order_slot + 1))
+      if order_place "$order_slot" "$order_pid"; then
+        ORDER_SLOT_IDS[order_slot]="$ORDER_ID"
+        ORDER_SLOT_TOTALS[order_slot]="$ORDER_TOTAL"
+      fi
+    done
 
+    # 슬롯 1 → CANCELLED. 소유자 취소이고 운영자 취소가 아니다(둘 다 계약에 있지만
+    # 구매자 경로가 데모의 서사다).
+    if [ -n "${ORDER_SLOT_IDS[1]:-}" ]; then
+      if http POST "$GW/api/orders/${ORDER_SLOT_IDS[1]}/cancel" '{}'; then
+        seed_log "주문 1 취소 (CANCELLED)"
+      else
+        case "$SEED_LAST_STATUS" in
+          422) seed_log "주문 1 이미 취소됨 (HTTP 422 ORDER_CANNOT_BE_CANCELLED) — 멱등 재실행" ;;
+          *)   seed_fail "주문 1 취소 실패 — HTTP $SEED_LAST_STATUS ${SEED_LAST_BODY:0:200}" ;;
+        esac
+      fi
+    fi
+
+    # 슬롯 2 → PENDING. **아무것도 하지 않는 것이 이 슬롯의 일이다.**
+    # 🔴 그리고 이 상태는 **오래 못 간다**: order-service 의 `OrderStuckDetector` 가
+    # `PENDING AND payment_id IS NULL` 을 유예 1800초 뒤부터 60초마다 쓸고, 5회째에
+    # `CANCELLED(PAYMENT_TIMEOUT)` 으로 **자동 취소**한다(TASK-BE-435). 즉 시드 후
+    # 약 35분이 지나면 PENDING 행이 사라진다. 이건 결함이 아니라 도메인이고,
+    # 아래 사후조건이 «서로 다른 상태 ≥ 4» 를 재는 이유다(5가 아니라).
+    if [ -n "${ORDER_SLOT_IDS[2]:-}" ]; then
+      seed_log "주문 2 는 PENDING 으로 둔다 (결제하지 않음 — 약 35분 뒤 스택 감지기가 자동 취소한다)"
+    fi
+
+    # 슬롯 3·4·5 → 결제. 결제가 완료되면 재고 예약 사가가 주문을 CONFIRMED 로 올린다
+    # (`PaymentCompleted` + `OrderPlaced` 수렴 → 재고 차감 → `StockChanged(ORDER_RESERVED)`
+    #  → order-service 확정). 시드는 그 경로를 **밟는 것이지 흉내내지 않는다.**
+    for order_slot in 3 4 5; do
+      [ -n "${ORDER_SLOT_IDS[$order_slot]:-}" ] || continue
+      order_pay "$order_slot" "${ORDER_SLOT_IDS[$order_slot]}" "${ORDER_SLOT_TOTALS[$order_slot]}"
+    done
+    for order_slot in 3 4 5; do
+      [ -n "${ORDER_SLOT_IDS[$order_slot]:-}" ] || continue
+      if order_wait_status "${ORDER_SLOT_IDS[$order_slot]}" CONFIRMED SHIPPED DELIVERED; then
+        seed_log "주문 $order_slot → $ORDER_LAST_STATUS"
+      else
+        seed_fail "주문 $order_slot 이 결제 후 ${ORDER_WAIT_SECONDS}초 안에 CONFIRMED 로 가지 않았습니다 (마지막 상태 ${ORDER_LAST_STATUS:-?}) — 재고 예약 사가(product-service)나 Kafka 를 확인하십시오"
+      fi
+    done
+
+    # 배송 건 — 슬롯 4 는 **SHIPPED 에서 멈춘다**(그래야 주문 하나가 실제로 SHIPPED 에
+    # 앉는다), 슬롯 5 만 DELIVERED 까지 간다(리뷰 자격).
+    #
     # 🔴 배송 건 조회는 **여기서**, 소비자 토큰으로 한다.
     # `/api/shippings/orders/{orderId}` 는 `X-User-Id` 소유권을 검사하는 **구매자 전용**
     # 엔드포인트다 — 운영자 토큰으로 부르면 403 `ACCESS_DENIED "User does not have access to
     # this shipping record"` 다(실측). 첫 판은 이 조회를 운영자 블록에 두었고, `if` 가 거짓이
     # 되면서 **배송 진행 전체가 로그 한 줄 없이 통째로 건너뛰어졌다.** 상태 전이(PUT)는
     # 반대로 운영자 권한이 필요하므로, 조회와 전이의 신원이 서로 다르다.
-    if http GET "$GW/api/shippings/orders/$DELIVER_ORDER_ID"; then
-      SHIP_ID="$(printf '%s' "$SEED_LAST_BODY" | grep -oE '"shippingId":"[0-9a-f-]{36}"' | head -1 | cut -d'"' -f4)"
-      SHIP_STATUS="$(printf '%s' "$SEED_LAST_BODY" | grep -oE '"status":"[A-Z_]+"' | head -1 | cut -d'"' -f4)"
-      [ -n "$SHIP_ID" ] || seed_fail "배송 응답에서 shippingId 를 추출하지 못했습니다: ${SEED_LAST_BODY:0:160}"
-    else
-      seed_warn "주문 $DELIVER_ORDER_ID 의 배송 건 조회 실패 (HTTP $SEED_LAST_STATUS) — 배송 진행과 리뷰를 건너뜁니다"
+    if [ -n "${ORDER_SLOT_IDS[4]:-}" ]; then
+      if shipping_of "${ORDER_SLOT_IDS[4]}"; then
+        SHIP_ID_SHIPPED="$SHIPPING_ID"; SHIP_STATUS_SHIPPED="$SHIPPING_STATUS"
+      else
+        seed_fail "주문 4 의 배송 건이 생기지 않았습니다 (HTTP $SEED_LAST_STATUS) — 콘솔 「배송」 탭과 SHIPPED 주문이 비게 됩니다"
+      fi
     fi
-  else
-    seed_warn "데모 계정의 주문이 없습니다 — 배송 진행과 리뷰 시드를 건너뜁니다"
+
+    DELIVER_ORDER_ID="${ORDER_SLOT_IDS[5]:-}"
+    if [ -n "$DELIVER_ORDER_ID" ]; then
+      if shipping_of "$DELIVER_ORDER_ID"; then
+        SHIP_ID="$SHIPPING_ID"; SHIP_STATUS="$SHIPPING_STATUS"
+      else
+        seed_fail "주문 5 의 배송 건이 생기지 않았습니다 (HTTP $SEED_LAST_STATUS) — 배송 진행과 리뷰를 건너뜁니다"
+      fi
+      if http GET "$GW/api/orders/$DELIVER_ORDER_ID"; then
+        REVIEW_PRODUCT_ID="$(printf '%s' "$SEED_LAST_BODY" | grep -oE '"productId":"[0-9a-f-]{36}"' | head -1 | cut -d'"' -f4)"
+        REVIEW_PRODUCT_NAME="$(printf '%s' "$SEED_LAST_BODY" | grep -oE '"productName":"[^"]*"' | head -1 | cut -d'"' -f4)"
+        seed_log "리뷰 대상: order=$DELIVER_ORDER_ID product=${REVIEW_PRODUCT_NAME:-?}"
+      fi
+    fi
   fi
   SEED_TOKEN=""
 fi
@@ -173,6 +427,23 @@ fi
 api_create_unless '정산 기간(2026-01)' "$GW/api/admin/settlements/periods" '2026-01-01' \
   "$GW/api/admin/settlements/periods" \
   '{"from":"2026-01-01T00:00:00Z","to":"2026-02-01T00:00:00Z"}'
+
+# 🔴 위 기간은 **시드가 만드는 적립을 하나도 담지 못한다.** 적립(`commission_accrual`)은
+# `PaymentCompleted` 를 소비할 때 `occurredAt = 지금` 으로 찍히는데 저 창은 2026-01 이다.
+# 그래서 저 기간을 마감해 봐야 payout 이 0건이고, 콘솔 「정산 기간 지급 내역」
+# (`/ecommerce/settlements/periods/[id]`)은 여전히 빈다.
+#
+# ⇒ **지금을 담는 두 번째 기간**을 연다. 경계는 여전히 고정 리터럴이고(현재시각 기준
+# 이면 2회차가 새 기간을 또 연다), 앞 기간과 **겹치지 않게** 골랐다 —
+# `[2026-03-01, 2030-01-01)` 은 `[2026-01-01, 2026-02-01)` 과 교집합이 없다.
+# 🔴 겹침을 피하는 것이 중요한 이유: 계약서가 «겹치는 두 창을 둘 다 마감하면 교집합의
+# 적립이 **두 번 지급된다**» 를 **의도된 잔여 위험**으로 명시해 두었다(방어 코드 없음).
+# 시드가 그 모양을 데모에 구워 넣으면 안 된다.
+# 🔵 탐지 마커도 겹치지 않게 골랐다: `2026-02-01` 은 앞 기간의 `to` 값이라 마커로 쓰면
+# 항상 «이미 있음» 으로 읽혀 두 번째 기간이 영영 안 생긴다.
+api_create_unless '정산 기간(데모 · 2026-03~2030-01)' "$GW/api/admin/settlements/periods?size=50" '2026-03-01' \
+  "$GW/api/admin/settlements/periods" \
+  '{"from":"2026-03-01T00:00:00Z","to":"2030-01-01T00:00:00Z"}'
 
 # 알림 템플릿 — enum 이 권위다 (TemplateType: ORDER_PLACED · PAYMENT_COMPLETED ·
 # SHIPPING_STATUS_CHANGED / NotificationChannel: EMAIL · SMS — 소스 전수 확인).
@@ -224,15 +495,20 @@ fi
 # 배송 진행 — PREPARING → SHIPPED → IN_TRANSIT → DELIVERED.
 # 전이는 한 단계씩만 허용된다(ShippingStatus.ALLOWED_TRANSITIONS, 소스 확인) —
 # 곧바로 DELIVERED 를 쏘면 거절된다.
-if [ -n "${SHIP_ID:-}" ]; then
-  cur="${SHIP_STATUS:-}"
-  seed_log "배송 $SHIP_ID 현재 상태=$cur → DELIVERED 까지 진행"
+#
+# 🔵 TASK-MONO-710 에서 **함수로 바꿨다**(사본을 만들지 않았다). 배송 건이 이제 둘이고
+# 목적지가 서로 다르기 때문이다: 하나는 SHIPPED 에서 멈춰야 주문 하나가 실제로 SHIPPED
+# 상태에 앉고, 다른 하나만 DELIVERED 까지 간다(리뷰 자격). 같은 블록을 복사했다면 다음에
+# 전이 규칙이 바뀔 때 한쪽만 고쳐진다.
+ship_progress() {  # <배송id> <현재상태> <최종목표>
+  local sid="$1" cur="$2" final="$3" target body
+  seed_log "배송 $sid 현재 상태=$cur → $final 까지 진행"
   for target in SHIPPED IN_TRANSIT DELIVERED; do
-    [ "$cur" = "DELIVERED" ] && break
+    [ "$cur" = "$final" ] && break
     body="{\"status\":\"$target\""
     [ "$target" = "SHIPPED" ] && body="$body,\"trackingNumber\":\"DEMO-1234567890\",\"carrier\":\"CJ대한통운\""
     body="$body}"
-    if http PUT "$GW/api/shippings/$SHIP_ID/status" "$body"; then
+    if http PUT "$GW/api/shippings/$sid/status" "$body"; then
       cur="$target"; seed_log "  → $target"
     else
       case "$SEED_LAST_STATUS" in
@@ -253,7 +529,17 @@ if [ -n "${SHIP_ID:-}" ]; then
           seed_fail "배송 전이 실패 $target — HTTP $SEED_LAST_STATUS ${SEED_LAST_BODY:0:160}" ;;
       esac
     fi
+    [ "$cur" = "$final" ] && break
   done
+}
+
+if [ -n "${SHIP_ID_SHIPPED:-}" ]; then
+  ship_progress "$SHIP_ID_SHIPPED" "${SHIP_STATUS_SHIPPED:-}" SHIPPED
+else
+  seed_log "SHIPPED 에서 멈출 배송 건이 없습니다 — 주문 하나가 SHIPPED 상태에 앉지 못합니다"
+fi
+if [ -n "${SHIP_ID:-}" ]; then
+  ship_progress "$SHIP_ID" "${SHIP_STATUS:-}" DELIVERED
 else
   seed_log "진행할 배송 건이 없습니다 — 리뷰 자격(DELIVERED)을 만들지 않습니다"
 fi
@@ -299,6 +585,142 @@ if container_up ecommerce-minio; then
   seed_warn "ecommerce-minio 가 떠 있지만 상품 이미지 시드는 아직 구현되지 않았습니다(상품 카드는 V8 시드의 원격 thumbnailUrl 로 표시됩니다)"
 else
   seed_log "ecommerce-minio 미기동 — 상품 이미지 시드 대상 아님"
+fi
+
+# -----------------------------------------------------------------------------
+# 4. 운영자 토큰 — 정산 기간 마감 + 지급 실행 (TASK-MONO-710)
+# -----------------------------------------------------------------------------
+# 적립(`commission_accrual`)은 **자동이다** — `PaymentCompleted` 를 소비할 때 쌓인다
+# (`settlement-subscriptions.md`). 그래서 위에서 결제 셋을 승인한 것만으로 콘솔
+# 「정산」(`/ecommerce/settlements`)의 적립 표는 찬다.
+#
+# 🔴 **지급(`seller_payout`)은 자동이 아니다.** 기간을 **마감**해야 그 창의 적립이
+# 셀러별 payout 으로 접히고, 그때서야 `/ecommerce/settlements/periods/[id]` 가 내용을
+# 갖는다. 마감은 운영자 행위이므로 시드가 운영자로 밟는다.
+#
+# 🔵 멱등: 두 번째 마감은 409 `PERIOD_ALREADY_CLOSED`, 지급 실행은 `(periodId, sellerId)`
+# 로 멱등이라 이미 PAID 인 행은 건드리지 않는다(계약서).
+if [ -n "${OP_TOKEN:-}" ] && container_up ecommerce-settlement-service; then
+  SEED_TOKEN="$OP_TOKEN"
+
+  # 적립이 도착할 때까지 기다린다 — 결제 승인과 적립 사이에 Kafka 한 홉이 있다.
+  accrual_total=0
+  for (( i=0; i<120; i+=5 )); do
+    if http GET "$GW/api/admin/settlements/accruals?size=1"; then
+      accrual_total="$(printf '%s' "$SEED_LAST_BODY" | grep -oE '"totalElements":[0-9]+' | head -1 | cut -d: -f2)"
+      [ "${accrual_total:-0}" -gt 0 ] 2>/dev/null && break
+    fi
+    sleep 5
+  done
+  seed_log "정산 적립 ${accrual_total:-0} 건"
+
+  if [ "${accrual_total:-0}" -gt 0 ] 2>/dev/null; then
+    demo_period=""
+    if http GET "$GW/api/admin/settlements/periods?size=50"; then
+      # 🔴 기간 객체 **한 줄 안에서** id 와 상태를 같이 읽는다. 본문 전체 grep 이면
+      #    다른 기간의 id 와 이 기간의 상태가 섞인 «키메라 행» 이 만들어진다(lib.sh
+      #    `json_objects` 가 존재하는 바로 그 이유).
+      demo_period="$(json_objects "$SEED_LAST_BODY" | grep -F '2026-03-01' | head -1)"
+    fi
+    if [ -z "$demo_period" ]; then
+      seed_warn "데모 정산 기간(2026-03-01~)을 목록에서 찾지 못했습니다 — 지급 내역 화면이 빕니다"
+    else
+      period_id="$(printf '%s' "$demo_period" | grep -oE '"periodId":"[0-9a-f-]{36}"' | head -1 | cut -d'"' -f4)"
+      period_status="$(printf '%s' "$demo_period" | grep -oE '"status":"[A-Z]+"' | head -1 | cut -d'"' -f4)"
+      if [ -z "$period_id" ]; then
+        seed_warn "정산 기간 객체에서 periodId 를 추출하지 못했습니다: ${demo_period:0:160}"
+      else
+        if [ "$period_status" = "OPEN" ]; then
+          if http POST "$GW/api/admin/settlements/periods/$period_id/close" '{}'; then
+            seed_log "정산 기간 마감 ($period_id)"
+          else
+            case "$SEED_LAST_STATUS" in
+              409) seed_log "정산 기간 이미 마감됨 (HTTP 409)" ;;
+              *)   seed_fail "정산 기간 마감 실패 — HTTP $SEED_LAST_STATUS ${SEED_LAST_BODY:0:200}" ;;
+            esac
+          fi
+        else
+          seed_log "정산 기간 $period_id 는 이미 $period_status — 마감을 건너뜁니다"
+        fi
+
+        # 지급 실행은 **모의**다(합성 참조번호, 실제 송금 없음 — 계약서가 명시).
+        if http POST "$GW/api/admin/settlements/periods/$period_id/payouts/execute" '{}'; then
+          seed_log "정산 지급 실행 (모의 · $period_id)"
+        else
+          seed_warn "정산 지급 실행 실패 (HTTP $SEED_LAST_STATUS) — 지급 내역이 PENDING 으로 남습니다"
+        fi
+
+        if http GET "$GW/api/admin/settlements/periods/$period_id/payouts?size=20"; then
+          payout_total="$(printf '%s' "$SEED_LAST_BODY" | grep -oE '"totalElements":[0-9]+' | head -1 | cut -d: -f2)"
+          if [ "${payout_total:-0}" -gt 0 ] 2>/dev/null; then
+            seed_log "정산 지급 내역 ${payout_total} 건 (periodId=$period_id)"
+          else
+            seed_warn "정산 기간 $period_id 의 지급 내역이 0건입니다 — /ecommerce/settlements/periods/[id] 가 빕니다(적립이 이 창 밖입니까?)"
+          fi
+        fi
+      fi
+    fi
+  else
+    seed_warn "정산 적립이 0건입니다 — 결제가 settlement-service 까지 전파되지 않았습니다(/ecommerce/settlements 가 빕니다)"
+  fi
+  SEED_TOKEN=""
+elif [ -n "${OP_TOKEN:-}" ]; then
+  seed_warn "ecommerce-settlement-service 미기동 — 정산 적립/지급을 시드하지 않았습니다(콘솔 정산 탭이 빕니다)"
+fi
+
+# -----------------------------------------------------------------------------
+# 5. 사후조건 — **경고가 아니라 단언이다** (TASK-MONO-710 AC-3)
+# -----------------------------------------------------------------------------
+# 🔴 이 시드가 조용히 비는 것을 무는 술어는 **여기**다. 날짜로 재지 않는다 —
+# 방금 만든 것을 **다시 읽어서** 잰다.
+#
+# 🔴 읽는 쪽이 운영자 평면(`/api/admin/orders`)인 것이 중요하다. 구매자 평면으로 재면
+# «만들어졌다» 만 증명하고 «콘솔이 본다» 는 증명하지 못한다 — TASK-BE-576 이 정확히
+# 그 틈이었다(행은 `tenant_id=ecommerce`, 운영자는 `demo-corp` 를 assume). 콘솔이 읽는
+# 바로 그 엔드포인트로 재야 화면이 찬다는 뜻이 된다.
+#
+# 🔴 하한이 «상태 5종» 이 아니라 **4종**인 이유: PENDING 은 설계상 **한시적**이다
+# (`OrderStuckDetector` 가 ~35분 뒤 자동 취소). 5 를 요구하면 기존 볼륨에서 **성공이
+# 고장난다** — 이 저장소가 여러 번 밟은 함정이다. 4 는 «비지 않았다» 의 바닥이지
+# «정확히 몇 종인가» 라는 제품 사실이 아니다.
+if [ -n "${OP_TOKEN:-}" ]; then
+  SEED_TOKEN="$OP_TOKEN"
+
+  # 배송 → 주문 되돌아오는 다리(`ShippingStatusChanged`)는 비동기다. SHIPPED 가 주문에
+  # 반영될 때까지 잠깐 기다린다 — 안 기다리면 «아직 안 써짐» 을 «유실» 로 읽는다.
+  for (( i=0; i<120; i+=5 )); do
+    http GET "$GW/api/admin/orders?size=50" || break
+    printf '%s' "$SEED_LAST_BODY" | grep -q '"status":"SHIPPED"' && break
+    sleep 5
+  done
+
+  if http GET "$GW/api/admin/orders?size=50"; then
+    order_total="$(printf '%s' "$SEED_LAST_BODY" | grep -oE '"totalElements":[0-9]+' | head -1 | cut -d: -f2)"
+    order_states="$(printf '%s' "$SEED_LAST_BODY" | grep -oE '"status":"[A-Z_]+"' | cut -d'"' -f4 | sort -u)"
+    order_state_count="$(printf '%s\n' "$order_states" | grep -c . || true)"
+    seed_log "사후조건 — 운영자 평면 주문 ${order_total:-0} 건 · 서로 다른 상태 ${order_state_count:-0} 종 ($(printf '%s' "$order_states" | tr '\n' ' '))"
+
+    if [ "${order_total:-0}" -lt 5 ] 2>/dev/null; then
+      seed_fail "주문이 ${order_total:-0} 건입니다(하한 5) — /ecommerce/orders · orders/[id] 가 빕니다. 위 ✗ 줄에서 어느 단계가 끊겼는지 읽으십시오"
+    fi
+    if [ "${order_state_count:-0}" -lt 4 ] 2>/dev/null; then
+      seed_fail "주문 상태가 ${order_state_count:-0} 종입니다(하한 4: CANCELLED·CONFIRMED·SHIPPED·DELIVERED) — 실제 관측: $(printf '%s' "$order_states" | tr '\n' ' ')"
+    fi
+  else
+    seed_fail "사후조건: 운영자 평면 주문 목록 조회 실패 (HTTP $SEED_LAST_STATUS) — 콘솔 「주문」 탭도 같은 답을 받습니다"
+  fi
+
+  if http GET "$GW/api/shippings?size=1"; then
+    shipping_total="$(printf '%s' "$SEED_LAST_BODY" | grep -oE '"totalElements":[0-9]+' | head -1 | cut -d: -f2)"
+    seed_log "사후조건 — 배송 건 ${shipping_total:-0} 건"
+    if [ "${shipping_total:-0}" -lt 2 ] 2>/dev/null; then
+      seed_fail "배송 건이 ${shipping_total:-0} 건입니다(하한 2: SHIPPED 에서 멈춘 것 + DELIVERED 까지 간 것) — /ecommerce/shippings 가 빕니다"
+    fi
+  else
+    seed_fail "사후조건: 배송 목록 조회 실패 (HTTP $SEED_LAST_STATUS)"
+  fi
+
+  SEED_TOKEN=""
 fi
 
 seed_summary
