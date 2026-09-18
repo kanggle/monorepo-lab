@@ -48,150 +48,109 @@ const ECOMMERCE_PRODUCT_COUNT = countFrom(
 );
 
 /**
- * TASK-PC-FE-286 AC-7 — the finance card asks the SAME query the console-bff
- * `FinanceBalanceReadAdapter` sends (`GET /api/finance/accounts/{id}/balances`,
- * § readBalances) of the SAME finance fixture handler the `/finance` overview
- * and `/finance/accounts` screens are answered by. Before this, the card's
- * balance (`1,250,000,000` KRW on `sample-account-0001`) was hand-typed and
- * had no relationship to any browsable account — exactly the defect class
- * this task's coordinator note (285's CORRECTION) flags for wms/scm too.
+ * TASK-PC-FE-295 — the overview cards now carry the PRODUCER'S OWN response
+ * body, because that is what the real leg carries: console-bff's adapters
+ * (`FinanceBalanceReadAdapter`, `WmsInventoryReadAdapter`,
+ * `ScmInventoryReadAdapter`) load the producer body verbatim into
+ * `cards[i].data`, with no reshaping anywhere on the path.
  *
- * 🔵 the production composition leg (`OperatorOverviewCompositionUseCase.
- * callFinance`) passes `financePort.readBalances(...)`'s raw body straight
- * through as the leg's `data` — i.e. the real wire shape is the balances
- * envelope `{ data: [Balance], meta }`, NOT `{ balance, accountId }`.
- * console-web's OWN `FinanceDataSchema` (`operator-overview-types.ts`)
- * expects the latter — a pre-existing shape mismatch between the BFF leg and
- * the FE card schema that is a console-bff/BFF-composition concern, out of
- * this ticket's scope (no domain fixture can fix a real shape bug in
- * production code). Reproducing that mismatch here would make the sample
- * card render EMPTY for every visitor, which defeats ADR-MONO-074's entire
- * point (a real, working page) — so this fixture keeps emitting the
- * `FinanceDataSchema`-shaped object the card actually parses, with its VALUE
- * derived from the query above (never re-typed).
+ * 🔴🔴 Before 295 the three constants below deliberately emitted a DIFFERENT
+ * shape — the one `FinanceDataSchema` / `WmsDataSchema` / `ScmDataSchema` read
+ * — and each carried a comment saying so and calling the mismatch "out of
+ * scope". They were right that a sample fixture cannot fix a production shape
+ * bug; they were also, between them, the reason nothing went red: the sample
+ * world rendered a working card out of an invented shape while the logged-in
+ * operator got «잔액 정보 없음» and «—». 295 fixed the schemas against the
+ * producers, so the sample world can now hand the card exactly what the wire
+ * hands it, and any future divergence shows up HERE as a broken sample screen.
+ *
+ * Each body is taken from the SAME fixture handler answering the SAME query
+ * the real adapter sends, so a card's number and the list screen that number
+ * summarises cannot disagree (TASK-PC-FE-285's rule, unchanged).
  */
-const FINANCE_BALANCE = (() => {
+function legBody(
+  handler: ((path: string) => unknown) | undefined,
+  path: string,
+): Record<string, unknown> {
+  const body = handler?.(path);
+  if (!body || typeof body !== 'object') {
+    throw new Error(`sample overview: no body for ${path}`);
+  }
+  return body as Record<string, unknown>;
+}
+
+/**
+ * `GET /api/finance/accounts/{id}/balances` — `{ data: [ {currency, ledger,
+ * available, held} ], meta }`. The card reads `data[]` (F5: every money field
+ * stays a minor-units string and is never coerced).
+ */
+const FINANCE_BALANCES_BODY = (() => {
   const path = `/api/finance/accounts/${SAMPLE_FINANCE_DEFAULT_ACCOUNT_ID}/balances`;
-  const body = FINANCE_FIXTURE_HANDLERS['flat:finance']?.(path) as
-    | { data?: Array<{ currency?: unknown; ledger?: unknown }> }
-    | undefined;
-  const row = body?.data?.[0];
-  if (!row || typeof row.ledger !== 'string' || typeof row.currency !== 'string') {
-    throw new Error(`sample overview: no finance balance for ${path}`);
+  const body = legBody(FINANCE_FIXTURE_HANDLERS['flat:finance'], path);
+  const rows = body.data;
+  // Not vacuous: an empty `data[]` is the ONE honest "no balance" case, so a
+  // sample world that fell to it would prove the card can render nothing.
+  if (!Array.isArray(rows) || rows.length === 0) {
+    throw new Error(`sample overview: no finance balance rows for ${path}`);
   }
-  return { amount: row.ledger, currency: row.currency };
+  return body;
 })();
 
 /**
- * TASK-PC-FE-287 AC-8 — the wms card asks the SAME query the console-bff
- * `WmsInventoryReadAdapter` sends (`GET /api/v1/admin/dashboard/inventory`,
- * no query params — the adapter's own `read()` forwards no page/size) of the
- * SAME wms fixture handler the `/wms` overview and `/wms/inventory` screen
- * are answered by. Before this, the card's numbers (총 재고 `48,210` · 알림 `3`)
- * were hand-typed and had no relationship to any browsable inventory row —
- * the same defect class 285's CORRECTION named for IAM/ERP/E-Commerce and 286
- * closed for finance.
+ * `GET /api/v1/admin/dashboard/inventory` — the read-model page
+ * `{ content[], page: {number,size,totalElements,totalPages}, sort }`. The
+ * card reads `page.totalElements` = inventory snapshot ROW count.
  *
- * 🔵 `WmsDataSchema` (`operator-overview-types.ts`) expects
- * `{ inventorySnapshot: { totalStockUnits, alertCount } }`, but the real wire
- * shape `WmsInventoryReadAdapter.read()` puts on the leg is the RAW read-model
- * page (`{content, page}`) — there is no `inventorySnapshot` key anywhere in
- * the real response. This is the SAME class of BFF-leg / FE-card shape
- * mismatch 286 D2 found for finance (`TASK-PC-FE-295` already tracks the
- * finance instance; this is a console-bff/BFF-composition concern out of a
- * sample-fixture ticket's scope — no domain fixture can fix a real shape bug
- * in production code). Reproducing the mismatch here would render the card
- * EMPTY for every sample visitor, defeating ADR-MONO-074's point — so this
- * fixture keeps the `WmsDataSchema`-shaped object the card actually parses,
- * with its VALUES derived from the ONE query the real adapter makes: total
- * stock = Σ `onHandQty` over the rows that query returns, alerts = the count
- * of rows THAT SAME `/wms/inventory` screen flags `lowStockFlag` on (the only
- * "alert" concept the inventory page itself renders — `WmsInventoryDataTable`
- * `저재고` badge — `dashboard/alerts` is a SEPARATE producer table the adapter
- * never calls, so a card built from it would not be "the same query").
+ * 🔴 No stock-unit sum is derived here any more. The producer returns one
+ * page; summing it and calling the result «총 재고» is the fabricated total
+ * TASK-PC-FE-295 AC-6 rules out. The alert tile is gone for the same reason —
+ * an alert count needs a second query (`lowStockOnly=true`), i.e. a second
+ * outbound leg, which is a cost decision and not a rendering fix.
  */
-const WMS_INVENTORY_SNAPSHOT = (() => {
+const WMS_INVENTORY_BODY = (() => {
   const path = '/api/v1/admin/dashboard/inventory';
-  const body = WMS_FIXTURE_HANDLERS['wms:wms']?.(path) as
-    | { content?: Array<{ onHandQty?: unknown; lowStockFlag?: unknown }> }
-    | undefined;
-  const rows = body?.content;
-  if (!Array.isArray(rows) || rows.length === 0) {
-    throw new Error(`sample overview: no wms inventory rows for ${path}`);
+  const body = legBody(WMS_FIXTURE_HANDLERS['wms:wms'], path);
+  const page = body.page as { totalElements?: unknown } | undefined;
+  if (!page || typeof page.totalElements !== 'number' || page.totalElements <= 0) {
+    throw new Error(`sample overview: no wms page total for ${path}`);
   }
-  const totalStockUnits = rows.reduce(
-    (sum, r) => sum + (typeof r.onHandQty === 'number' ? r.onHandQty : 0),
-    0,
-  );
-  const alertCount = rows.filter((r) => r.lowStockFlag === true).length;
-  return { totalStockUnits, alertCount };
+  return body;
 })();
 
 /**
- * TASK-PC-FE-288 AC-8 — the scm card's node set/names/warning are derived
- * from THIS ticket's own `flat:scm` fixture handler answering the cross-node
- * inventory-visibility snapshot query — the SAME data `/scm/inventory`
- * renders (the snapshot table's «노드» column is each row's `nodeId`; the
- * node NAMES come from the same fixture's `/nodes` registry, so a node id
- * that appears in the snapshot is guaranteed to resolve there — AC-8's "노드
- * 수·노드 id·이름이 `/scm/inventory` 의 노드와 같아야 한다").
+ * `GET /api/v1/inventory-visibility/snapshot` — `{ data: { content[], page,
+ * size, totalElements, totalPages }, meta: { timestamp, warning, staleness } }`.
+ * The card reads `data.totalElements` = snapshot ROW count, plus the S5
+ * `meta.warning` hint.
  *
- * 🔵 the production composition leg (`ScmInventoryReadAdapter.read()`) calls
- * the scm inventory-visibility PRODUCER directly — `GET
- * /api/inventory-visibility/snapshot` (no `/v1`, no scm gateway; TASK-MONO-162
- * topology note in that adapter's own docstring) — a DIFFERENT literal path
- * than the one this console's OWN `scm-inventory-visibility-api.ts` sends
- * through the scm gateway (`/api/v1/inventory-visibility/snapshot`), and its
- * `data` shape (`{content,page,size,totalElements}` or a bare array) has no
- * top-level `nodes` key at all — a pre-existing BFF-leg / FE-card
- * (`ScmDataSchema`) shape mismatch (the SAME class of defect 286 D2 found for
- * finance and 287 AC-8 found for wms; tracked by `TASK-PC-FE-295`, which the
- * coordinator has extended to cover scm too — out of THIS ticket's scope, no
- * domain fixture can fix a real shape bug in production code). Reproducing
- * that raw shape here would render the card EMPTY for every sample visitor,
- * defeating ADR-MONO-074's point — so this fixture keeps the
- * `ScmDataSchema`-shaped object (`{meta:{warning}, nodes:[{nodeId,name}]}`)
- * the card actually parses, with its VALUES derived from this ticket's own
- * gateway-shaped snapshot query (the closest analogous "cross-node inventory"
- * read this domain's sample world can answer).
+ * 🔵 The literal path differs from the production leg's
+ * (`/api/inventory-visibility/snapshot`, direct-to-producer per
+ * TASK-MONO-162) because this console's own scm client goes through the scm
+ * gateway; the BODY SHAPE is the same envelope, which is what the card reads.
  */
-const SCM_OVERVIEW_NODES = (() => {
+const SCM_SNAPSHOT_BODY = (() => {
   const path = '/api/v1/inventory-visibility/snapshot';
-  const snapshotBody = SCM_FIXTURE_HANDLERS['flat:scm']?.(path) as
-    | { data?: { content?: Array<{ nodeId?: unknown }> }; meta?: { warning?: unknown } }
-    | undefined;
-  const rows = snapshotBody?.data?.content;
-  if (!Array.isArray(rows) || rows.length === 0) {
-    throw new Error(`sample overview: no scm snapshot rows for ${path}`);
+  const body = legBody(SCM_FIXTURE_HANDLERS['flat:scm'], path);
+  const data = body.data as { content?: unknown; totalElements?: unknown } | undefined;
+  const meta = body.meta as { warning?: unknown } | undefined;
+  if (!data || typeof data.totalElements !== 'number' || data.totalElements <= 0) {
+    throw new Error(`sample overview: no scm snapshot total for ${path}`);
   }
-  const warning = snapshotBody?.meta?.warning;
-  if (typeof warning !== 'string') {
+  if (typeof meta?.warning !== 'string') {
     throw new Error(`sample overview: no scm S5 warning for ${path}`);
   }
-  const nodeIds = Array.from(
-    new Set(rows.map((r) => r.nodeId).filter((id): id is string => typeof id === 'string')),
+  const rows = Array.isArray(data.content) ? data.content : [];
+  const nodeIds = new Set(
+    rows
+      .map((r) => (r as { nodeId?: unknown }).nodeId)
+      .filter((id): id is string => typeof id === 'string'),
   );
-  if (nodeIds.length < 2) {
-    // Not vacuous — a single-node world could not prove "node SET matches",
-    // only "a node matches" (287's identical discipline for its alertCount).
+  // Not vacuous: a single-node world could not tell "rows" from "nodes", and
+  // telling those two apart is exactly what 295 corrected on this card.
+  if (nodeIds.size < 2) {
     throw new Error('sample overview: scm snapshot must span 2+ nodes');
   }
-  const nodesPath = '/api/v1/inventory-visibility/nodes';
-  const nodesBody = SCM_FIXTURE_HANDLERS['flat:scm']?.(nodesPath) as
-    | { data?: Array<{ id?: unknown; name?: unknown }> }
-    | undefined;
-  const nodeRows = nodesBody?.data;
-  if (!Array.isArray(nodeRows) || nodeRows.length === 0) {
-    throw new Error(`sample overview: no scm node rows for ${nodesPath}`);
-  }
-  const nodes = nodeIds.map((nodeId) => {
-    const found = nodeRows.find((n) => n.id === nodeId);
-    if (!found || typeof found.name !== 'string') {
-      throw new Error(`sample overview: scm node ${nodeId} does not resolve on ${nodesPath}`);
-    }
-    return { nodeId, name: found.name };
-  });
-  return { nodes, warning };
+  return body;
 })();
 
 /**
@@ -212,32 +171,9 @@ export const SAMPLE_OPERATOR_OVERVIEW = {
   asOf: SAMPLE_AS_OF,
   cards: [
     { domain: 'iam', status: 'ok', data: { totalElements: IAM_ACCOUNT_COUNT } },
-    {
-      domain: 'wms',
-      status: 'ok',
-      data: {
-        inventorySnapshot: {
-          totalStockUnits: WMS_INVENTORY_SNAPSHOT.totalStockUnits,
-          alertCount: WMS_INVENTORY_SNAPSHOT.alertCount,
-        },
-      },
-    },
-    {
-      domain: 'scm',
-      status: 'ok',
-      data: {
-        meta: { warning: SCM_OVERVIEW_NODES.warning },
-        nodes: SCM_OVERVIEW_NODES.nodes,
-      },
-    },
-    {
-      domain: 'finance',
-      status: 'ok',
-      data: {
-        balance: { amount: FINANCE_BALANCE.amount, currency: FINANCE_BALANCE.currency },
-        accountId: SAMPLE_FINANCE_DEFAULT_ACCOUNT_ID,
-      },
-    },
+    { domain: 'wms', status: 'ok', data: WMS_INVENTORY_BODY },
+    { domain: 'scm', status: 'ok', data: SCM_SNAPSHOT_BODY },
+    { domain: 'finance', status: 'ok', data: FINANCE_BALANCES_BODY },
     { domain: 'erp', status: 'ok', data: { meta: { totalElements: ERP_ACTIVE_DEPARTMENT_COUNT } } },
     { domain: 'ecommerce', status: 'ok', data: { totalElements: ECOMMERCE_PRODUCT_COUNT } },
   ],

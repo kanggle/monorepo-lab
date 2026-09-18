@@ -2493,15 +2493,28 @@ calls the existing GETs verbatim.
 {
   "asOf": "2026-05-20T10:30:00Z",
   "cards": [
-    { "domain": "iam",       "status": "ok",         "data": { "accountCount": 12345 } },
-    { "domain": "wms",       "status": "ok",         "data": { "inventorySnapshot": { … } } },
+    { "domain": "iam",       "status": "ok",         "data": { "content": [ … ], "totalElements": 12345, "page": 0, "size": 1, "totalPages": 12345 } },
+    { "domain": "wms",       "status": "ok",         "data": { "content": [ … ], "page": { "number": 0, "size": 20, "totalElements": 438, "totalPages": 22 }, "sort": "lastEventAt,desc" } },
     { "domain": "scm",       "status": "degraded",   "reason": "DOWNSTREAM_ERROR" },
     { "domain": "finance",   "status": "forbidden",  "reason": "TENANT_FORBIDDEN" },
-    { "domain": "erp",       "status": "ok",         "data": { "activeDepartmentCount": 87 } },
-    { "domain": "ecommerce", "status": "ok",         "data": { "totalElements": 42 } }
+    { "domain": "erp",       "status": "ok",         "data": { "data": [ … ], "meta": { "page": 0, "size": 1, "totalElements": 87, "totalPages": 87, "timestamp": "…" } } },
+    { "domain": "ecommerce", "status": "ok",         "data": { "content": [ … ], "page": 0, "size": 1, "totalElements": 42, "totalPages": 42 } }
   ]
 }
 ```
+
+> 🔴🔴 **This example was wrong until TASK-PC-FE-295, and the wrongness shipped.**
+> It previously showed `data: { "accountCount": 12345 }` for iam,
+> `data: { "inventorySnapshot": { … } }` for wms and
+> `data: { "activeDepartmentCount": 87 }` for erp — **three shapes no producer
+> has ever emitted**. console-web's card schemas were written against this
+> example rather than against the producers, so `WmsDataSchema` read
+> `inventorySnapshot.totalStockUnits` and `FinanceDataSchema` read
+> `balance.amount`, and the cards rendered «—» / «잔액 정보 없음» for a logged-in
+> operator whose domains were healthy. The consumer implemented the contract
+> faithfully; the contract was the defect. **An illustrative body in this file
+> is normative for shape** — write it from the producer's controller/DTO, never
+> from what a card would find convenient.
 
 - `asOf`: composition request server-side timestamp (ISO-8601 UTC). Operators see "data as-of HH:MM:SS" in the UI.
 - `cards[]`: **exactly 6 entries** in **fixed order** `[iam, wms, scm, finance, erp, ecommerce]` (UI rendering ordering invariant; never reordered by status).
@@ -2509,6 +2522,51 @@ calls the existing GETs verbatim.
   - `ok` → `data` is the card's composed payload (domain-specific shape, declared per row in the producer endpoint above).
   - `degraded` → `reason` ∈ `{ "DOWNSTREAM_ERROR", "TIMEOUT", "CIRCUIT_OPEN" }`; `data` absent. Card renders "data unavailable, retry pending" placeholder.
   - `forbidden` → `reason` ∈ `{ "PERMISSION_DENIED", "TENANT_FORBIDDEN", "MISSING_PREREQUISITE" }` (last covers e.g. finance's `operatorDefaultAccountId` absent); `data` absent. Card renders "not available to your role / tenant" placeholder.
+##### `ok` card `data` shapes per leg (TASK-PC-FE-295)
+
+`data` on an `ok` card is **the producer's response body, verbatim** — the
+console-bff adapters return `Map<String, Object>` straight from the outbound
+call and `OperatorOverviewCompositionUseCase` puts it on the leg without
+reshaping. That is the contract, not an implementation detail: a consumer may
+rely on the producer's own documented shape, and a bff that started composing
+or renaming fields would break it.
+
+🔵 The shapes below are transcribed from each producer's controller + DTO (not
+from prose), and the same set lives as machine-readable sample bodies in
+[`fixtures/operator-overview-leg-bodies.json`](fixtures/operator-overview-leg-bodies.json),
+which **both** suites read — console-web's card census
+(`leg-body-contract.test.tsx`) and console-bff's pass-through test
+(`OperatorOverviewLegBodyContractTest`). Before 295 each side seeded its own
+invented body, so both were green while three cards were blank on screen.
+
+| # | Card | Producer body (the leg's `data`) | Field the card surfaces |
+|---|---|---|---|
+| 1 | iam | `{ content[], totalElements, page, size, totalPages }` | `totalElements` — account count |
+| 2 | wms | `{ content[], page: { number, size, totalElements, totalPages }, sort }` | `page.totalElements` — inventory snapshot **row** count |
+| 3 | scm | `{ data: { content[], page, size, totalElements, totalPages }, meta: { timestamp, warning, staleness } }` | `data.totalElements` — snapshot **row** count; `meta.warning` — the S5 hint (§ 2.4.6 invariant) |
+| 4 | finance | `{ data: [ { currency, ledger, available, held } ], meta }` — one row per currency, every money field a **minor-units string** (F5) | `data[]` non-empty ⇒ «잔액 조회 가능»; the currency chip only when there is exactly one row |
+| 5 | erp | `{ data: [], meta: { page, size, totalElements, totalPages, timestamp } }` | `meta.totalElements` — active department count |
+| 6 | ecommerce | `{ content[], page, size, totalElements, totalPages }` | `totalElements` — tenant product count |
+
+🔴 **Two cards are labelled «행 수», and that is the honest reading.** The wms
+and scm producers answer with **one page** of rows. A sum over that page
+(«총 재고») or a distinct-node count from it («노드 수») would present a
+page-local figure as a whole-set total, so the cards count rows — which is
+exactly what a page total can answer — and say so.
+
+🔴 **The wms alert count is deliberately absent.** It needs a second query
+(`lowStockOnly=true&size=1`), i.e. a second outbound leg on this route, which
+is a cost decision rather than a rendering fix. Until that decision is taken
+the card shows no alert tile; it previously showed a permanent «—», which reads
+as "zero alerts" rather than "never asked". Adding it means adding a row to the
+producer table above first.
+
+🔵 **Finance multi-currency**: the balances body carries one row per currency
+and no "account currency" field, so a multi-currency account gets the
+availability statement without a currency chip — picking whichever row came
+first would present a guess as a fact. An **empty** `data[]` is the one honest
+«잔액 정보 없음».
+
 - **All-down envelope**: every leg can return non-`ok` simultaneously — the route still emits `200` with all 6 cards in `degraded`/`forbidden` states. The route NEVER emits `503` / blanks the response (D5.A discipline; D5.B rejection re-affirmed).
 
 ##### Error envelope (composition-level errors, NOT per-leg)

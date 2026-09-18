@@ -91,9 +91,9 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-**`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
+(empty)
 
-- `TASK-PC-FE-295-the-overview-finance-card-reads-a-shape-the-bff-never-sends.md` — 🔴 **로그인 운영자 경로의 결함 후보**(샘플 시리즈 무관, 286 리뷰에서 코드 판독으로 발견): console-bff 는 finance 레그에 잔액 응답 `{ data: [ {currency, ledger, available, held} ] }` 을 그대로 싣는데 web `FinanceDataSchema` 는 `{ balance, accountId }` 를 기대 → 잔액이 있어도 첫 화면 finance 카드가 «잔액 정보 없음». 원인은 계약 § 2.4.9.1 이 카드 `data` 모양을 정의하지 않은 공백. **AC-0 red-first 실측 먼저**(초록이면 구현 없이 닫음) → 계약 먼저 → 한쪽 고침(추천 ⓐ web 이 producer 모양을 읽음) → 양쪽이 같은 모양 한 벌을 쓰는 테스트. 🔴 **범위 확장(287 리뷰): WMS «총 재고·알림» 과 SCM «스냅샷 노드 수» 도 같은 원인으로 `—`** 일 것(IAM·ERP·E-Commerce 셋은 맞음) — AC-6 두 카드 + AC-7 여섯 카드 전수 가드. 분석=Opus 5 / 구현 권장=Sonnet 5.
+**`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
 
 _(직전 착수)_ `TASK-PC-BE-015` — console-bff 의 spec-vs-reality resilience 갭 봉합. `architecture.md` § Resilience(D5.A)·`RestClientConfig` javadoc·계약 § 2.4.9 가 모두 "per-leg circuit-breaker keyed by `(domain, route)`" 를 단언하지만 `src/main` 에 resilience4j import 0건(타임아웃 쌍만 존재). `libs/java-common` 의 `ResilienceClientFactory` 를 **그대로 채택**해 13개 `(domain, route)` 레그 전부 CB+bounded retry 뒤로 이동하고, 죽어 있던 `circuit_open`/`CIRCUIT_OPEN` 분류를 실제 emitter 로 살린다(console-web zod `DEGRADED_REASONS` 는 이미 소비 준비 완료). 문서의 `libs/java-web` 인용도 오답(그 모듈엔 resilience 코드 0) → `libs/java-common` 정정. 분석=Opus 5 / 구현 권장=Opus.
 
@@ -117,7 +117,11 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## in-progress
 
+(empty)
+
 ## review
+
+- `TASK-PC-FE-295-the-overview-finance-card-reads-a-shape-the-bff-never-sends.md` — 🔴 **운영자 개요의 카드 셋이 producer 가 보내지 않는 모양을 읽는다** (IN-PROGRESS, 착수 2026-09-18 UTC). 🟢 **AC-0 실측 끝 — 결함은 실재한다**: red-first 전수 칸 **9칸 중 4 실패**(`finance` · `wms` · `scm`), 🔵 **대조군 `iam` · `erp` · `ecommerce` 는 초록** — 술어가 전부를 물지 않고 결함만 물었다. 🔴🔴 **티켓이 «계약의 공백» 이라 부른 것은 공백이 아니라 «틀린 기재»였다** — § 2.4.9.1 의 응답 예시 JSON 이 `accountCount`(iam) · `inventorySnapshot`(wms) · `activeDepartmentCount`(erp) 를 보여 줌으로써 **producer 가 보낸 적 없는 모양 셋을 가르치고 있었고**, `WmsDataSchema.inventorySnapshot` 의 출처가 바로 그 예시다. consumer 는 계약을 **충실히 구현했고 계약이 틀렸다**(iam·erp 가 멀지한 것은 스키마를 쓴 사람이 그 둘만 producer 를 확인했기 때문 ⇒ 전수 가드가 필요한 이유). 갈래 **ⓐ**(bff 무변경, web 이 producer 모양을 읽는다) — bff 는 이미 정직한 쪽이고, 가공은 계약을 하나 더 늘려 갈라지게 만든다. 🔴 **WMS 「총 재고」는 불가능하다** — producer 는 한 페이지를 주므로 Σ`onHandQty` 는 **페이지 지역 합을 총계로** 내놓는 지어낸 숫자다(샘플 픽스처 287 이 정확히 그 계산을 하고 있었다) ⇒ **「재고 행 수」= `page.totalElements`**, 알림 타일은 **제거**(정직하려면 `lowStockOnly=true` 두 번째 레그 호출이 필요한 **비용 결정** — 운영에선 지금껏 `—` 만 보였고 빈 타일은 «알림 0건» 으로 읽힌다). SCM 도 같은 이유로 「스냅샷 행 수」(행은 node×sku 이고 페이지에선 노드 수를 못 센다). 🔴 **AC-3 은 언어가 달라 공유 데이터 파일로 풀었다** — `specs/contracts/fixtures/operator-overview-leg-bodies.json` **한 벌**을 console-web(«카드가 그리는가»)과 console-bff(«그대로 가는가»)가 **같이 읽는다**; 둘 중 하나만으로는 못 막고 이번 결함이 그 사이로 빠져나갔다. bite=bff 가공 주입 시 **3칸 중 정확히 1칸** 빨강(대조군 2칸 초록). 게이트: vitest **3525칸**(skipped 0) · tsc · lint · console-bff **87칸**(skipped 0) 전부 rc=0 — 🔴 rc 가 아니라 **실행된 칸 수를 따로 셀다**. ⚪ 라이브 원문(AC-0 ②)은 창 예산(잔여 30분)으로 미확인. 분석=Opus 5 / 구현=Opus 5.
 
 ## done
 

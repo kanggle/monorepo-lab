@@ -178,6 +178,14 @@ const MACHINE_KEYS = new Set([
   'statementLineExternalRef', // reconciliation statement match external system line reference code
   'rate', // FX rate F5 decimal-string (never Number/parseFloat/parseInt)
   'baseCurrency', // FX rate ISO-4217 code
+  // TASK-PC-FE-295 — the operator-overview cards now carry the PRODUCER's own
+  // response body (see `shared/sample/fixtures/dashboards.ts`), so two keys
+  // that only ever existed inside a producer envelope reach this rule for the
+  // first time. Neither is prose: `sort` is the wms read-model's sort spec
+  // ('lastEventAt,desc') that `PageResponse` echoes back, and `timestamp` is
+  // the ISO-8601 stamp scm's / finance's `ApiEnvelope` puts in `meta`.
+  'sort', // wms PageResponse sort spec (field,direction)
+  'timestamp', // ApiEnvelope meta stamp (ISO-8601)
   'foreignCurrency', // FX rate ISO-4217 code
   'base', // FX rate-history pair ISO-4217 code
   'foreign', // FX rate-history pair ISO-4217 code

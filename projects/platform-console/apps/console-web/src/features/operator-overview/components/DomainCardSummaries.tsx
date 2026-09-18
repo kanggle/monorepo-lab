@@ -44,57 +44,46 @@ function GapSummary({ data }: { data: unknown }): ReactNode {
 }
 
 function WmsSummary({ data }: { data: unknown }): ReactNode {
+  // `page.totalElements` = the number of inventory snapshot ROWS the producer
+  // holds (location x sku x lot), read from the read-model page the leg
+  // already fetches. See `WmsDataSchema` for why this is rows and not stock
+  // units, and why there is no alert tile here any more.
   const parsed = WmsDataSchema.safeParse(data);
-  const snap =
-    parsed.success && parsed.data.inventorySnapshot
-      ? parsed.data.inventorySnapshot
+  const rows =
+    parsed.success && typeof parsed.data.page?.totalElements === 'number'
+      ? parsed.data.page.totalElements
       : null;
-  const stock =
-    snap && typeof snap.totalStockUnits === 'number'
-      ? snap.totalStockUnits
-      : null;
-  const alerts =
-    snap && typeof snap.alertCount === 'number' ? snap.alertCount : null;
   return (
-    <dl className="grid grid-cols-2 gap-4">
-      <div>
-        <dt className="text-sm text-muted-foreground">총 재고</dt>
-        <dd
-          className="text-2xl font-semibold tabular-nums text-foreground"
-          data-testid="operator-overview-card-wms-stock"
-        >
-          {stock === null ? '—' : stock.toLocaleString()}
-        </dd>
-      </div>
-      <div>
-        <dt className="text-sm text-muted-foreground">알림</dt>
-        <dd
-          className="text-2xl font-semibold tabular-nums text-foreground"
-          data-testid="operator-overview-card-wms-alerts"
-        >
-          {alerts === null ? '—' : alerts.toLocaleString()}
-        </dd>
-      </div>
+    <dl>
+      <dt className="text-sm text-muted-foreground">재고 행 수</dt>
+      <dd
+        className="text-2xl font-semibold tabular-nums text-foreground"
+        data-testid="operator-overview-card-wms-stock"
+      >
+        {rows === null ? '—' : rows.toLocaleString()}
+      </dd>
     </dl>
   );
 }
 
 function ScmSummary({ data }: { data: unknown }): ReactNode {
+  // `data.totalElements` = snapshot ROWS (node x sku), not distinct nodes —
+  // a page cannot answer "how many nodes" and the label says rows.
   const parsed = ScmDataSchema.safeParse(data);
   const warning = parsed.success ? parsed.data.meta?.warning : undefined;
-  const nodes =
-    parsed.success && Array.isArray(parsed.data.nodes)
-      ? parsed.data.nodes.length
+  const rows =
+    parsed.success && typeof parsed.data.data?.totalElements === 'number'
+      ? parsed.data.data.totalElements
       : null;
   return (
     <div className="space-y-2">
       <dl>
-        <dt className="text-sm text-muted-foreground">스냅샷 노드 수</dt>
+        <dt className="text-sm text-muted-foreground">스냅샷 행 수</dt>
         <dd
           className="text-2xl font-semibold tabular-nums text-foreground"
           data-testid="operator-overview-card-scm-nodes"
         >
-          {nodes === null ? '—' : nodes.toLocaleString()}
+          {rows === null ? '—' : rows.toLocaleString()}
         </dd>
       </dl>
       {warning ? (
@@ -111,16 +100,21 @@ function ScmSummary({ data }: { data: unknown }): ReactNode {
 }
 
 function FinanceSummary({ data }: { data: unknown }): ReactNode {
-  // F5: `amount` is a STRING (minor units). NEVER `Number()` /
-  // `parseFloat()` / `parseInt()` here. The MVP surfaces only the
-  // "balance available" status + the optional currency code; no
-  // numeric formatting / coercion. A producer-side balance change
-  // does not depend on a FE numeric round-trip.
+  // F5: every money field in a balance row is a STRING (minor units). NEVER
+  // `Number()` / `parseFloat()` / `parseInt()` here. The MVP surfaces only the
+  // "balance available" status + the currency code; no numeric formatting or
+  // coercion, so a producer-side balance change does not depend on a FE
+  // numeric round-trip.
   const parsed = FinanceDataSchema.safeParse(data);
-  const present = parsed.success && parsed.data.balance !== undefined;
+  const rows = parsed.success && parsed.data.data ? parsed.data.data : [];
+  const present = rows.length > 0;
+  // A single-currency account names its currency on the card. A multi-currency
+  // account has no single answer, and the producer body carries no "account
+  // currency" field to pick one by — so the chip is omitted rather than
+  // showing whichever row happened to come first.
   const currency =
-    parsed.success && typeof parsed.data.balance?.currency === 'string'
-      ? parsed.data.balance!.currency
+    rows.length === 1 && typeof rows[0].currency === 'string'
+      ? rows[0].currency
       : null;
   return (
     <dl>
