@@ -39,6 +39,7 @@ bash infra/demo/aws/packer/bake.sh
 #       거절당한다(TASK-MONO-628). bake.sh 가 굽을 커밋을 origin 에서 해석해 넘기고,
 #       굽기 뒤 AMI 태그에서 되읽어 deployed-ami.env 를 갱신한다.
 #    굽지 않고 전제만 확인: bash infra/demo/aws/packer/bake.sh --dry-run
+#    🔴 굽기가 중간에 죽었다면 아래 § "굽기가 AMI 등록 뒤에 죽었을 때" 를 먼저 읽을 것.
 
 # 2) 인프라 (EC2 + Lambda + API Gateway)
 cd ../terraform
@@ -155,6 +156,34 @@ md5 일치)을 냈다 — 유도가 아니라 관측이다.
    그 빨강은 실제 상태다 — 데모 호스트가 약속과 다른 것을 서빙하고 있다.
 4. **재굽기 뒤 `deployed-ami.env` 를 커밋한다.** `bake.sh` 가 AMI 태그에서 되읽어 써 준다.
    커밋하지 않으면 판정자는 계속 옛 세대를 기준으로 잰다.
+
+### 굽기가 **AMI 등록 뒤에** 죽었을 때 (TASK-MONO-709)
+
+2026-09-17 12차 굽기가 **37분 55초**에 `Waiting for AMI to become ready...` 에서
+`unexpected EOF` 로 죽었다. 그때 이미 끝나 있던 것: 2단계 HEAD 대조 · 인스턴스 안 정적
+검증 PASS · `CreateImage`. **안 된 것**: `RepoCommit` 태그(태그는 ready 뒤에 붙는다) ·
+핀 파일 · 빌더 정리. ⇒ 이미지는 **살아 있는데 아무도 그것이 어느 커밋인지 모르는** 상태다.
+
+```bash
+# 같은 실행 안에서 죽었으면 bake.sh 가 자동으로 구조를 시도한다(위 명령 그대로).
+# 이미 끝난(죽은) 굽기를 나중에 구조하려면:
+bash infra/demo/aws/packer/bake.sh --rescue-only --ref <굽던 브랜치>
+#   · 가장 최근 portfolio-demo-* AMI 를 찾아 available 을 기다렸다 태그 3종을 붙이고
+#   · deployed-ami.env 를 쓴다 — 🔴 provenance 는 **operator-record**
+#   · 고아(빌더 인스턴스 · packer SG · 키페어)는 **보고만** 한다(지우지 않는다)
+```
+
+🔴 **왜 `ami-tag` 가 아닌가.** 그 태그는 packer 가 «클론된 HEAD 와 대조해 통과한 값» 으로
+붙일 때만 이미지가 **스스로 한 말**이다. 구조 경로에서는 **사람(스크립트)이** 붙이므로
+출처가 다르고, `deployed-ami.env` 전체가 그 구별을 위해 있다. `check-ami-generation.sh` 는
+둘 다 받아들이되 `operator-record` 면 그 사실을 매번 찍는다.
+
+🔴 **구조가 손대지 않는 경우**: 후보가 여럿이거나, **다른 커밋**의 태그가 이미 붙어 있거나,
+AMI 가 `failed` 이면 **고르지 않고 멈춘다**. 그 판정은 AWS 없이 잴 수 있고
+(`bash infra/demo/aws/packer/bake.sh --self-test`, CI 가 PR 마다 돌린다) 7칸이다.
+
+🔵 고아를 지우는 순서: **인스턴스 종료 → 보안그룹 → 키페어**(인스턴스가 살아 있으면 SG 삭제가
+거부된다). 자동으로 지우지 않는 이유는 그 디스크가 «왜 죽었나» 의 유일한 증거일 수 있어서다.
 
 **누가 재는가**: [`check-ami-generation.sh`](check-ami-generation.sh).
 자가검사는 PR 마다(`ci.yml` → `Demo wrapper smoke`), 실판정은 매일 밤
