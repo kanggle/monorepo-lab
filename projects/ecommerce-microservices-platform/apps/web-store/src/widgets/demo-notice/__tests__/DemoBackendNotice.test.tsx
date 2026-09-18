@@ -29,11 +29,11 @@ import { render, screen, waitFor } from '@testing-library/react';
 const ORIGINAL_ENV = { ...process.env };
 
 beforeEach(() => {
-  // 🔴🔴 `vi.doMock` 등록은 `vi.resetModules()` 로 **안 지워진다.** § A 가 클라이언트
-  //    위젯을 상수 마커로 바꾸는데, 그것을 안 풀면 § B 의 동적 import 가 계속 그 마커를
-  //    받아 «탐침이 아예 안 돈다» — CI 에서 fetch 가 0회 호출로 잡혔다(2026-09-11).
-  //    🔵 순서가 중요하다: 먼저 unmock, 그다음 모듈 캐시 리셋.
-  vi.doUnmock('../DemoBackendNoticeClient');
+  // 🔵 이 파일은 이제 **클라이언트를 모킹하지 않는다** (TASK-MONO-708). 껍데기 축(§ A)은
+  //    `DemoBackendNoticeShell.test.tsx` 로 나갔고, 그쪽은 파일 최상단 `vi.mock` 으로 호이스팅한다.
+  //    🔴 한 파일이 같은 모듈을 «모킹했다 풀었다» 하는 구조가 2026-09-17 main CI 의 무작위
+  //    빨강(976 중 1)을 가능하게 한 모양이었다 — 그 구조를 없앴다.
+  vi.doUnmock('../DemoBackendNoticeClient'); // 남의 파일이 남긴 등록이 있어도 안전하게
   vi.resetModules();
   vi.unstubAllGlobals();
   delete process.env.DEMO_API_BASE;
@@ -43,57 +43,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.resetModules();
   process.env = { ...ORIGINAL_ENV };
-});
-
-// =============================================================================
-// § A — 껍데기는 판정하지 않는다  (AC-3 의 bite)
-// =============================================================================
-describe('DemoBackendNotice (서버 껍데기) — 판정을 굽지 않는다', () => {
-  /**
-   * 껍데기 **자신의** 출력만 재려고 클라이언트 자식을 상수 마커로 바꾼다.
-   * 🔵 이렇게 안 하면 자식의 탐침까지 같이 돌아, 무엇이 출력을 바꿨는지 못 가른다.
-   */
-  async function shellHtml(state: 'running' | 'stopped'): Promise<string> {
-    vi.resetModules();
-    process.env.DEMO_API_BASE = 'https://control.example';
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () =>
-          state === 'running' ? { state: 'running', ip: '13.125.1.2' } : { state: 'stopped' },
-      } as unknown as Response),
-    );
-    vi.doMock('../DemoBackendNoticeClient', () => ({
-      DemoBackendNoticeClient: () => <span data-testid="client-marker" />,
-    }));
-
-    const { DemoBackendNotice } = await import('../DemoBackendNotice');
-    // 🔵 `await` 는 sync 반환도 그대로 통과시킨다 — 옛 async 판과 새 sync 판을 **둘 다**
-    //    이 하네스로 잴 수 있어야 bite 가 성립한다.
-    const el = await DemoBackendNotice();
-    const { container } = render(<div data-testid="host">{el}</div>);
-    return container.innerHTML;
-  }
-
-  it('🔴🔴 bite — 백엔드가 켜져 있든 꺼져 있든 껍데기의 출력이 **같다**', async () => {
-    const up = await shellHtml('running');
-    const down = await shellHtml('stopped');
-
-    // 🔴 이것이 이 티켓의 핵심 단언이다. 옛 판(껍데기가 `resolveDemoBackendState()` 를
-    //    await 하고 조건부로 배너를 그리던 판)은 두 값이 **다르다** — 한쪽엔 배너 HTML 이
-    //    있고 한쪽엔 없다. 그 차이가 곧 «프리렌더 시점에 구워질 수 있는 값» 이다.
-    expect(down).toBe(up);
-
-    // 🔵 대조군 — 출력이 «같다» 가 «둘 다 비었다» 로 성립하면 안 된다.
-    expect(up).toContain('client-marker');
-  });
-
-  it('🔴 껍데기의 출력에 배너 문구가 **없다** — 판정은 여기서 안 내려진다', async () => {
-    const down = await shellHtml('stopped');
-    expect(down).not.toContain('데모 서버가 꺼져 있어');
-    expect(down).not.toContain('demo-backend-notice');
-  });
 });
 
 // =============================================================================
