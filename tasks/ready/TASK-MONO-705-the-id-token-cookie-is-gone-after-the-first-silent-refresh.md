@@ -93,3 +93,25 @@ monorepo
 # 분석 / 구현 권장
 
 분석=Opus 5 / 구현 권장=**Opus 5** (IAM 설정·보안 축 판단. 갈래가 ⓒ 면 Sonnet 5)
+
+---
+
+# 🔵 AC-0 (1) — 저장소 재측정 2026-09-17 UTC: **IAM 이 refresh 그랜트에서 id_token 을 만들지 않는다**
+
+창이 아니라 **코드로** 답이 나왔다(조사 에이전트 + 조정자 직접 확인):
+
+| 자리 | 읽은 것 |
+|---|---|
+| `projects/iam-platform/apps/auth-service/src/main/java/com/example/auth/infrastructure/oauth2/SasRefreshTokenAuthenticationProvider.java:341-343` | `return new OAuth2AccessTokenAuthenticationToken(registeredClient, clientPrincipal, sasAccessToken, newRefreshToken, Map.of());` — 마지막 인자가 additionalParameters 다. **빈 맵**이고, 파일 전체에 `id_token`/`IdToken` 언급이 **0건**(조정자가 `grep -c` 로 확인) |
+| 같은 파일 `:207`, `:228`, `:248` | 원 authorization 의 `authorizedScopes` 를 **그대로** 쓴다 — 어디서도 `openid` 를 깎지 않는다 |
+| `AuthorizationServerConfig.java` (tokenEndpoint 프로바이더 등록) | 이 커스텀 프로바이더가 **먼저** 등록돼 SAS 내장 refresh 프로바이더보다 우선 ⇒ 내장 경로의 id_token 발급은 **도달 불가** |
+| `V0015__seed_platform_console_oidc_client.sql` | 콘솔 클라이언트 scope 에 `openid` **있음**, grant 에 `refresh_token` 있음 |
+| `console-web/src/shared/lib/session-refresh.ts:104-107` | 콘솔 refresh 요청은 `grant_type`·`refresh_token`·`client_id` 만 보낸다 — **`scope` 파라미터를 안 보낸다** ⇒ 갈래 ⓑ(«콘솔이 openid 를 뺀다»)는 **기각** |
+| 같은 파일 `:137`, `:149-154` | 응답에 `id_token` 이 있으면 **반드시** 쿠키를 세운다 ⇒ 갈래 ⓒ(«받고도 저장 안 한다»)도 **기각** |
+
+⇒ **(a) IAM 이 발급하지 않는다** — 커스텀 프로바이더가 additionalParameters 를 비우기 때문이다. 🔵 고칠 자리는 한 곳이고 재료는 이미 있다: `TenantClaimTokenCustomizer` 에 `isIdToken` + REFRESH_TOKEN 분기가 이미 있고 `JwtGenerator` 도 등록돼 있다.
+
+🔴 **아직 안 잰 것**: ① 실제 토큰 엔드포인트 응답 본문(위는 «우리 코드가 안 만든다» 이지 «응답에 없다» 를 엔드포인트에서 읽은 것은 아니다 — 다만 창 실측에서 쿠키가 안 선 것이 그 증거다) ② 갈래 ⓑ 의 전제인 «IAM 이 **만료된** id_token_hint 를 받는가»(`TASK-PC-FE-033:87` 의 주장인데 출처가 없다) ③ AC-0 (2) «로그아웃 뒤 다시 로그인하면 IAM 폼이 뜨는가»(창 필요).
+
+🔵 **첫 판정을 만들 자리(AC-2 의 bite 후보)**: `PlatformConsoleOidcClientSeedIntegrationTest` 가 이미 콘솔 클라이언트로 같은 refresh 호출을 하면서 `access_token`/`refresh_token` 만 단언한다 — 거기에 `id_token` 키 존재 단언 한 줄이면 된다(🔴 Docker 필요 — 없으면 조용히 skip 되는 구조).
+🔴 **픽스처가 결함을 가리고 있다**: 콘솔 `tests/unit/auth-idle-refresh.test.ts:119` 의 IAM 성공 픽스처는 `id_token: 'new.id'` 를 **넣는다** — 현실에 없는 입력이라 그 스위트의 초록은 이 축에서 공허하다.

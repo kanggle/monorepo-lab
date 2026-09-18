@@ -34,6 +34,7 @@
 > 공개 표면은 더 이상 별도 둘러보기(`/demo`, 은퇴)가 아니다 — 익명 방문자는 **같은 실제
 > 화면 64개**를 값만 샘플(«(샘플)» 표기 + 상시 배너)로 본다. 로그인하면 같은 주소에서
 > 실제 데이터가 보인다. `/demo`·`/demo/<domain>` 링크는 그 실제 화면으로 308 리다이렉트된다.
+> 🔵 촬영 시점: 01 은 2026-09-11(테넌트 `ecommerce`), 02~04 는 **2026-09-17**(AMI `af0018aa6`).
 
 <p align="center">
   <img src="docs/screenshots/01-console-ecommerce-products.jpg" width="900" alt="콘솔 — 이커머스 상품 운영"><br>
@@ -48,6 +49,11 @@
 <p align="center">
   <img src="docs/screenshots/03-console-operators.jpg" width="900" alt="IAM 운영자 관리 — 등록·배정·수명주기"><br>
   <em>운영자 수명주기 — 등록(역할 다중선택 · <strong>break-glass 로컬 비번</strong>은 IdP 장애 대비 비상 경로다) · 테넌트 배정 · 상태 변경. 협력사가 <strong>자기 테넌트를 운영하면서</strong> 이 테넌트의 일부만 맡는 경우는 파트너십으로 가고, 관계를 끊으면 접근이 <strong>즉시 회수된다</strong>(cascade offboarding). 모든 변경은 사유를 받고 감사 기록에 남는다</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/04-console-permission-sets.jpg" width="900" alt="IAM 권한 세트 — 배정이 가리키는 권한 묶음"><br>
+  <em>권한 세트 — 배정(<code>operator_tenant_assignment</code>)의 <code>permissionSetId</code> 가 가리키는 묶음이다. 🔵 별도 테이블이 아니라 <strong><code>admin_roles</code> 를 재사용</strong>하고, 같은 데이터를 「권한」 화면과 <strong>다른 관점</strong>으로 보여 준다. 미지정(<code>NULL</code>)이면 배정은 좁혀지지 않고 <strong>운영자 본인의 role 을 그대로 상속</strong>한다 — 화면이 그 규칙을 직접 적어 둔다</em>
 </p>
 
 ---

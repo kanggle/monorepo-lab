@@ -1137,3 +1137,23 @@ AMI `ami-058f6293d1408f91e`(`RepoCommit=8cf474346`) · 인스턴스 `i-027d6b396
 
 - 🔴 **ecommerce 실행 실패의 원인 = 스크립트의 편도 테넌트 전환.** `selectTenant()` 는 셀렉트에서 대상 테넌트를 한 번 고른다. 이 저장소가 이미 적은 함정(«같은 값 재선택은 no-op — **항상 왕복**»)을 스크립트는 안 따른다. 같은 창에서 `POST /api/tenant` 로 `demo-corp` → `ecommerce` 왕복한 뒤에는 셀렉트가 `ecommerce` 로 잡히고 상품 상세·편집까지 열렸다(TASK-MONO-703 § 창 실측). ⇒ 다음 창 전에 스크립트를 왕복으로 고쳐야 ecommerce 촬영이 된다(후속 후보).
 - 🔴 **README 큐레이션은 이번 창에서도 닫지 않는다** — demo-corp 55장은 12차 AMI(`af0018aa6`, 677·675·703 수정 포함)의 화면이라 **처음으로 큐레이션 입력으로 쓸 수 있는 촬영본**이지만, 저하 10 · 빈값 13 을 빼고 이미지를 열어 고르는 일은 창 밖에서 한다(소유자 결정 칸). ecommerce 쪽은 위 이유로 0장.
+
+---
+
+# 🔵 README 큐레이션 — 2026-09-17 UTC (소유자 선택 «wms 3 + console 3 먼저»)
+
+2026-09-17 둘째 창의 촬영본(테넌트 `demo-corp` 55장, AMI `af0018aa6`)에서 **이미지를 열어** 골랐다 — 기준은 소유자가 준 셋(데이터가 있는가 · 결함이 안 보이는가 · 그 도메인의 요지인가).
+
+| README | 실은 장 | 왜 |
+|---|---|---|
+| `projects/wms-platform` (3장, § Screenshots 신설) | `/wms/inbound` · `/wms/inventory` · `/wms/outbound` | 입고 → 재고 → 출고가 한 줄로 보인다. 🟢 두 번 보류했던 사유가 이 창에서 둘 다 해소됐다 — saga `SHIPPED`(2026-09-11 `STUCK_RECOVERY_FAILED`) · 위치/SKU 가 **코드**로 읽힘(2026-09-12 «이름 확인 불가», `TASK-MONO-675`) |
+| `projects/platform-console` | 02·03 을 오늘 촬영본으로 **갱신**하고 `/permission-sets` 를 04 로 **추가** | 01(이커머스 상품, 2026-09-11 · 테넌트 `ecommerce`)은 이번 창에 다시 못 찍었다 — 촬영 스크립트의 편도 테넌트 전환(`TASK-MONO-707`) 때문 |
+
+**뺀 것과 이유**(전부 이미지를 열어서):
+- `/wms/master` — 로케이션 3건인데 「명칭」이 전부 `—`.
+- `/ledger` — 본문이 «시산표를 불러올 수 없습니다». 🔴 매니페스트에 `degraded` 플래그가 **없어서** 후보 목록에 올라왔다 ⇒ 판정 결함이고 `TASK-MONO-707` 이 받는다. 이 티켓의 § 정정(2026-09-15)이 말한 «열림 ≠ 쓸 만하다» 의 **세 번째 사례**다.
+- `scm-platform` — 쓸 만한 장이 `/scm/procurement`(공급사 `SUP-001 · demo supplier`) · `/scm` 개요 **둘뿐**이라 «서비스당 3~6장» 기준에 못 미친다 ⇒ 보류(소유자 선택). scm README 의 보류 사유는 `TASK-MONO-677` 이 이미 «결함 해소 · 사진은 648 에서» 로 고쳐 두었다.
+- `ecommerce` 도메인 화면 전부 — 이번 창 ecommerce 테넌트 촬영이 0장(위 707).
+- 가이드 6장 — 문서 화면이라 «동작하는 시스템» 을 안 보여 준다.
+
+⏳ **남은 칸**: ecommerce·scm·finance README. 🔴 게이트는 `TASK-MONO-707`(ecommerce 촬영을 막고 있다)이고, finance 는 `console-finance` 를 켠 창이 필요하다(`TASK-MONO-667`).
