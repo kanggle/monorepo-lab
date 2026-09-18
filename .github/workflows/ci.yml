@@ -2478,6 +2478,16 @@ jobs:
       - name: Bake wrapper dry-run (resolves the commit, checks the template's contract)
         run: bash infra/demo/aws/packer/bake.sh --dry-run
 
+      # TASK-MONO-709 — the rescue path (a bake that dies AFTER the AMI is
+      # registered, as the 12th bake did: `unexpected EOF` while waiting for the
+      # image) picks its branch with one predicate, and that predicate is the only
+      # part of the rescue that can be exercised without AWS. It decides whether to
+      # tag-and-pin, to keep hands off (already tagged / two candidates / a tag from
+      # a different commit), or to fail as before — so a wrong verdict here would
+      # either pin someone else's image or silently skip a rescue.
+      - name: Bake wrapper self-test (rescue verdict — no AWS)
+        run: bash infra/demo/aws/packer/bake.sh --self-test
+
       # TASK-MONO-520 AC-2 — shellcheck is deliberately NOT enabled here, and the
       # decision was measured rather than assumed. A one-shot non-gating step ran
       # it on this very job (run 31478823405) and reported, over all 16 scripts:
