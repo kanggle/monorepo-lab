@@ -8,7 +8,7 @@ TASK-MONO-708
 
 # Status
 
-review (2026-09-18 UTC — AC-0·AC-2·AC-3 닫힘 · AC-1 은 ⚪ «지목 못 함» 으로 사유와 함께 닫음)
+done (2026-09-18 UTC — 4차원 검증 · impl PR #3909 squash `319040f00`, 수확 PR #3934 squash `049645323`. AC-0·AC-2·AC-3 닫힘 · AC-1 은 ⚪ «지목 못 함» 으로 사유와 함께 닫음)
 
 # Owner
 
