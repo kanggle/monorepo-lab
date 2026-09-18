@@ -5,6 +5,24 @@ admin-service 내부 유지보수(one-time backfill 등) 엔드포인트. 운영
 **호출 방향**: 운영/배포 도구 (client) → admin-service (server)
 **노출 경로**: `/internal/admin/*`
 **인증**: `@Order(0)` `/internal/**` resource-server chain — GAP `client_credentials` Bearer JWT (fail-closed). dev/test/standalone 프로파일에서는 `InternalApiFilter` bypass. 공개 게이트웨이로 노출되지 않음(S2).
+**요구 scope (`TASK-MONO-716`)**: 토큰은 **`internal.invoke`** 를 실어야 한다. 없으면 401.
+
+> 🔴 **이 줄은 «강화» 가 아니라 «누락의 보정» 이다.** 716 이전 이 사슬의 유일한 검사는 issuer 였고,
+> IAM issuer 는 **운영자 브라우저 토큰과 워크로드 토큰을 같은 키로** 민팅한다. 즉 위 문장의
+> «GAP `client_credentials` Bearer JWT» 는 **계약서의 요구였을 뿐 집행되지 않았고**, 실제로는 IdP 가
+> 발급한 아무 토큰이나 통과했다. 이 서비스에는 그것을 메울 다른 층이 없다 —
+> `@EnableMethodSecurity` 가 의도적으로 부재하고, `/internal/**` 두 컨트롤러에
+> `@RequiresPermission`(이 서비스의 **유일한** 인가 축)이 **0건**이며, `InternalApiFilter` 는
+> non-terminal 이라 **거절하지 않는다**.
+>
+> 🔵 형제 셋(account · auth · security)은 **이미** 같은 scope 을 같은 이름의 속성으로 요구한다
+> (`TASK-MONO-422` / `TASK-BE-514`). 716 은 네 번째를 그 축에 맞춘 것이지 새 축을 만든 것이 아니다.
+>
+> 🔴 **호출 도구를 만드는 사람에게**: 위의 «운영/배포 도구» 는 이제 **`internal.invoke` 를 등록
+> scope 으로 가진 client** 로 토큰을 받아야 한다. 저장소가 시드하는 워크로드 client 중 그것을 가진
+> 것은 `V0019` 의 넷(`auth-service-client` · `account-service-client` · `admin-service-client` ·
+> `security-service-client`)이고, **다른 플랫폼의 워크로드 client(wms · scm · finance · erp 등)는
+> 이 scope 을 갖지 않으므로 401 이다.** 🔵 그것이 의도다 — 이 표면은 iam 내부용이다.
 
 ---
 
