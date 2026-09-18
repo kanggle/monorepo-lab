@@ -37,9 +37,11 @@
  * =============================================================================
  * 술어
  * =============================================================================
- * **닫는다** = 이슈 본문이 기억하는 «그때 빨갰던 잡» 이 **전부 이번 런에서 실제로 돌아
- * `success`** 였다. 그 외는 전부 **hold**:
+ * **닫는다** = ① **이 런의 ref 가 기본 브랜치(`refs/heads/main`)** 이고, ② 이슈 본문이
+ * 기억하는 «그때 빨갰던 잡» 이 **전부 이번 런에서 실제로 돌아 `success`** 였다. 그 외는
+ * 전부 **hold**:
  *
+ * - ref 가 `refs/heads/main` 이 아니다 → **안 잼** (TASK-MONO-692 의 본체 — 아래 참조)
  * - `skipped`      → 안 잼 (이 결함의 본체)
  * - `failure`/`cancelled` → 아직 빨강
  * - needs 에 **없다** → 이름이 바뀌었거나 잡이 사라졌다 ⇒ 안 잼
@@ -51,12 +53,25 @@
  * 에서** 확정된다 — 이슈가 최대 하루 더 열려 있는 것은 **설계이지 결함이 아니다.**
  *
  * =============================================================================
+ * TASK-MONO-692 — ref 축 (닫기 술어가 ref 를 안 봤다)
+ * =============================================================================
+ * 655 가 만든 원래 닫기 술어는 `needs` 만 보고 어느 ref 에서 그 결과가 나왔는지는
+ * 보지 않았다. 실측(2026-09-15 UTC, 이슈 #3846): 빨간 잡이 `main` `35bd9d293` 런에서
+ * 열렸고, 수정 브랜치의 `workflow_dispatch` 런(같은 잡, success)이 **머지되기 7분
+ * 전에** 그 이슈를 닫았다 — 닫힌 시점에 `main` 은 여전히 빨간 채였다.
+ *
+ * 🔵 브랜치 dispatch 자체는 막지 않는다(`project_nightly_only_spec_merges_green_then_
+ * main_reds` 규율 — 머지 전에 증명하는 것이 권장 행위다). 축은 **event 가 아니라
+ * ref** 다 — `main` 위에서의 `workflow_dispatch` 는 그 런이 잰 트리가 이미 `main` 이므로
+ * **닫아도 된다.**
+ *
+ * =============================================================================
  * 사용법
  * =============================================================================
- *     node scripts/nightly-close-predicate.mjs --needs '<json>' --prev 'a, b'
+ *     node scripts/nightly-close-predicate.mjs --needs '<json>' --prev 'a, b' --ref '<github.ref>'
  *       → stdout 에 `close` 또는 `hold` 한 줄. 사유는 stderr. exit 0.
  *     node scripts/nightly-close-predicate.mjs --self-test
- *       → 고정 입력으로 양방향 증명. 실패 시 exit 1.
+ *       → 고정 입력으로 양방향 증명(needs·ref 두 축 모두). 실패 시 exit 1.
  *
  * 🔵 **bash+jq 가 아니라 node 인 이유**: 이 저장소의 개발 호스트에 외부 `jq` 가 없어서
  * bash 판은 **로컬에서 self-test 를 못 돌린다**. 그러면 테스트가 워크플로 안에만 살고,
@@ -66,12 +81,15 @@
 
 /** @typedef {Record<string, {result?: string}>} Needs */
 
+const DEFAULT_BRANCH_REF = 'refs/heads/main';
+
 /**
  * @param {Needs} needs  워크플로의 `toJSON(needs)`
  * @param {string} prev  이슈 본문 첫 줄이 기억하는 빨간 잡 (`", "` 구분)
+ * @param {string} [ref] 이 런의 `github.ref` — 기본 브랜치가 아니면 무조건 hold (TASK-MONO-692)
  * @returns {{decision: 'close'|'hold', reasons: string[]}}
  */
-export function decide(needs, prev) {
+export function decide(needs, prev, ref) {
   const names = String(prev ?? '')
     .split(',')
     .map((s) => s.trim())
@@ -83,6 +101,19 @@ export function decide(needs, prev) {
       reasons: [
         '이슈가 기억하는 «빨간 잡» 을 못 읽었다 ⇒ 무엇이 회수돼야 하는지 모른다.',
         '  (본문 첫 줄이 `**빨간 잡**: a, b` 형태여야 한다 — 이 스크립트가 아니라 그 본문을 보라.)',
+      ],
+    };
+  }
+
+  // 🔴🔴 TASK-MONO-692 — ref 가 기본 브랜치가 아니면 needs 를 보기도 전에 hold. 이
+  // 이슈가 지키는 명제는 «main 이 초록이다» 이지 «어딘가에서 그 잡이 초록이었다» 가
+  // 아니다. event(`workflow_dispatch` vs `push`/`schedule`) 는 축이 아니다 — main 위의
+  // dispatch 는 통과시킨다.
+  if (ref !== DEFAULT_BRANCH_REF) {
+    return {
+      decision: 'hold',
+      reasons: [
+        `이 런의 ref 가 기본 브랜치가 아니다(\`${ref ?? '(없음)'}\`, 기대 \`${DEFAULT_BRANCH_REF}\`) ⇒ 이 런은 «main 이 초록인가» 를 말할 수 없다.`,
       ],
     };
   }
@@ -109,63 +140,91 @@ export function decide(needs, prev) {
     decision: hold ? 'hold' : 'close',
     reasons: hold
       ? ['그때 빨갰던 잡이 전부 회수됐다고 말할 수 없다:', ...reasons]
-      : ['그때 빨갰던 잡이 전부 이번 런에서 돌았고 success 다:', ...reasons],
+      : [`ref 는 기본 브랜치(\`${DEFAULT_BRANCH_REF}\`)이고, 그때 빨갰던 잡이 전부 이번 런에서 돌았고 success 다:`, ...reasons],
   };
 }
 
 // ---------------------------------------------------------------------------
-// self-test — 고정 입력, 양방향
+// self-test — 고정 입력, 양방향 (needs 축 + TASK-MONO-692 ref 축)
 // ---------------------------------------------------------------------------
 function selfTest() {
-  /** @type {[string, Needs, string, 'close'|'hold'][]} */
+  /** @type {[string, Needs, string, string, 'close'|'hold'][]} */
   const cases = [
     [
-      '(1) 그때 빨갰던 둘이 이번에 돌아서 success → close',
+      '(1) 그때 빨갰던 둘이 이번에 돌아서 success, ref=main → close',
       { a: { result: 'success' }, b: { result: 'success' } },
       'a, b',
+      DEFAULT_BRANCH_REF,
       'close',
     ],
     [
       '(2) 🔴 하나가 skipped → hold  (이슈 #3724 가 밟은 그 칸)',
       { a: { result: 'success' }, b: { result: 'skipped' } },
       'a, b',
+      DEFAULT_BRANCH_REF,
       'hold',
     ],
     [
       '(3) 아직 failure → hold',
       { a: { result: 'failure' } },
       'a',
+      DEFAULT_BRANCH_REF,
       'hold',
     ],
     [
       '(4) needs 에 이름이 없다(개명·삭제) → hold',
       { other: { result: 'success' } },
       'a',
+      DEFAULT_BRANCH_REF,
       'hold',
     ],
     [
       '(5) 🔵 대조군 — prev 밖의 잡이 skipped 인 것은 붙잡지 않는다 → close',
       { a: { result: 'success' }, unrelated: { result: 'skipped' } },
       'a',
+      DEFAULT_BRANCH_REF,
       'close',
     ],
     [
       '(6) prev 를 못 읽었다 → hold',
       { a: { result: 'success' } },
       '',
+      DEFAULT_BRANCH_REF,
       'hold',
     ],
     [
       '(7) 🔵 대조군 — 전부 success 면 여러 개여도 close (영구 hold 가 아니다)',
       { a: { result: 'success' }, b: { result: 'success' }, c: { result: 'success' } },
       'a, b, c',
+      DEFAULT_BRANCH_REF,
       'close',
+    ],
+    [
+      '(8) 🔴🔴 TASK-MONO-692 — 전부 success 인데 ref 가 수정 브랜치 → hold (실측 #3846 의 그 칸)',
+      { a: { result: 'success' } },
+      'a',
+      'refs/heads/task/pc-fe-289-fix',
+      'hold',
+    ],
+    [
+      '(9) 🔵 TASK-MONO-692 대조군 — 같은 needs/prev, ref 만 main → close (축=ref, event 아님)',
+      { a: { result: 'success' } },
+      'a',
+      DEFAULT_BRANCH_REF,
+      'close',
+    ],
+    [
+      '(10) 🔵 TASK-MONO-692 — ref 가 아예 없다(undefined) → hold (fail-closed)',
+      { a: { result: 'success' } },
+      'a',
+      undefined,
+      'hold',
     ],
   ];
 
   let failed = 0;
-  for (const [label, needs, prev, expected] of cases) {
-    const { decision } = decide(needs, prev);
+  for (const [label, needs, prev, ref, expected] of cases) {
+    const { decision } = decide(needs, prev, ref);
     if (decision === expected) {
       console.log(`  ok   ${label}`);
     } else {
@@ -176,9 +235,19 @@ function selfTest() {
 
   // 🔴 «양방향이 실제로 다르다» 를 따로 단언한다 — 전부 hold 를 내는 술어도 위 칸들
   //    중 일부는 통과시킨다. close 가 최소 한 번, hold 가 최소 한 번 나와야 한다.
-  const decisions = new Set(cases.map(([, n, p]) => decide(n, p).decision));
+  const decisions = new Set(cases.map(([, n, p, r]) => decide(n, p, r).decision));
   if (!(decisions.has('close') && decisions.has('hold'))) {
     console.error('  FAIL 술어가 한 방향만 낸다 — 판정기가 아니라 상수다.');
+    failed += 1;
+  }
+
+  // 🔴🔴 (8)/(9) 가 «축은 ref 다, event 가 아니다» 를 따로 증명한다 — needs/prev 를
+  //    고정하고 ref 만 바꿨는데 결정이 갈라져야 한다. 갈라지지 않으면 ref 축이
+  //    실제로는 안 물리는 것이다(장식).
+  const branchDecision = decide({ a: { result: 'success' } }, 'a', 'refs/heads/task/pc-fe-289-fix').decision;
+  const mainDecision = decide({ a: { result: 'success' } }, 'a', DEFAULT_BRANCH_REF).decision;
+  if (!(branchDecision === 'hold' && mainDecision === 'close')) {
+    console.error(`  FAIL ref 축이 needs/prev 고정 상태에서 결정을 가르지 못한다 (branch=${branchDecision}, main=${mainDecision})`);
     failed += 1;
   }
 
@@ -186,7 +255,7 @@ function selfTest() {
     console.error(`self-test 실패 ${failed}칸`);
     process.exit(1);
   }
-  console.log(`self-test ${cases.length}칸 + 양방향 대조 통과.`);
+  console.log(`self-test ${cases.length}칸 + needs 양방향 대조 + ref 양방향 대조 통과.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -201,8 +270,9 @@ function main() {
 
   const rawNeeds = arg('--needs');
   const prev = arg('--prev') ?? '';
+  const ref = arg('--ref');
   if (rawNeeds === undefined) {
-    console.error('사용법: --needs <json> --prev "<a, b>"   또는   --self-test');
+    console.error('사용법: --needs <json> --prev "<a, b>" --ref "<github.ref>"   또는   --self-test');
     process.exit(2);
   }
 
@@ -216,7 +286,7 @@ function main() {
     return;
   }
 
-  const { decision, reasons } = decide(needs, prev);
+  const { decision, reasons } = decide(needs, prev, ref);
   for (const line of reasons) console.error(line);
   console.log(decision);
 }

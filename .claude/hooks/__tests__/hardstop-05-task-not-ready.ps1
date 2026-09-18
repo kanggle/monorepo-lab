@@ -237,3 +237,42 @@ $closeChoreStillWorks = Invoke-Hook -HookName 'hardstop-detect.ps1' -Payload @{
 }
 Assert-Allowed -Output $closeChoreStillWorks
 "PASS: HARDSTOP-05 allow-5 (close chore Status move survives both new exceptions) — MONO-591"
+
+# ===== TASK-MONO-692: `---` separator before `## CORRECTION` =====
+#
+# The hook's own remediation #4 tells the agent to "append a correction section" at the
+# end of the file — which every other section in this repo's task files does preceded by
+# a `---` separator. Before this ticket the hook rejected exactly that shape (only a bare
+# `## CORRECTION` heading with no separator passed), so following the remediation's own
+# implied convention got the append blocked. Each cell below pairs the accepted append
+# with a REJECTED edit of the same general shape, so the widened predicate cannot also be
+# read as "any edit near a `---` now passes".
+
+# Allow: append is `---` + `## CORRECTION` — must be ACCEPTED.
+$r2SeparatorAllow = Invoke-Hook -HookName 'hardstop-detect.ps1' -Payload @{
+    tool_name  = 'Edit'
+    tool_input = @{
+        file_path  = $doneFile
+        old_string = $tailOld
+        new_string = "$tailOld`n`n---`n`n## CORRECTION (post-close, 2026-09-18 UTC)`n`nThe header said AC-0/2 were pending; they were decided on 09-15 (TASK-MONO-692)."
+    }
+    cwd = $repoRoot
+}
+Assert-Allowed -Output $r2SeparatorAllow
+"PASS: HARDSTOP-05 allow-6 (--- separator + ## CORRECTION append accepted) — MONO-692"
+
+# Reject: same `---` + `## CORRECTION` shape, but it is an EDIT (alters the original text)
+# rather than a pure append — the separator widening must not also widen R2 into a rewrite
+# channel. Mirrors positive-6 (r2Mutate) but with the separator present, so the separator
+# itself cannot be mistaken for what makes the mutate case pass.
+$r2SeparatorMutate = Invoke-Hook -HookName 'hardstop-detect.ps1' -Payload @{
+    tool_name  = 'Edit'
+    tool_input = @{
+        file_path  = $doneFile
+        old_string = $tailOld
+        new_string = "## AC-3`n`nOriginal closing text REWRITTEN.`n`n---`n`n## CORRECTION (post-close)`n`nappended too."
+    }
+    cwd = $repoRoot
+}
+Assert-Stanza -Output $r2SeparatorMutate -ExpectedId 'HARDSTOP-05' -ExpectedDecision 'block'
+"PASS: HARDSTOP-05 positive-8 (--- separator cannot rescue a mutate-shaped edit) — MONO-692"
