@@ -8,7 +8,7 @@ TASK-MONO-698
 
 # Status
 
-review (2026-09-18 UTC — AC-0 ~ AC-4 닫힘)
+done (2026-09-18 UTC — AC-0 ~ AC-4 닫힘)
 
 # Owner
 
