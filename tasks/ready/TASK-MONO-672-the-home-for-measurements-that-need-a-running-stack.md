@@ -290,3 +290,32 @@ node -e "const m=require('<manifest>.json');const s=m.shots.find(x=>x.path==='/c
 기대: `true [ 'catalog-health-unavailable' ]`. 🔴 `false` 면 마커가 렌더되지 않은 것이므로
 **`TASK-MONO-711` 을 다시 열어라** — 단위 테스트가 초록인데 화면에 없으면 그 사이(빌드·배포·
 라우트)가 범인이다. 🔵 `true` 는 «화면이 나빠졌다» 가 아니라 «이전 «저하 아님» 이 오보였다» 다.
+
+---
+
+## 항목 7 — `TASK-MONO-713` 이 넘긴 것: `ACCOUNT_SERVICE_BASE_URL` 이 **어디에도 설정되지 않는다** (2026-09-18 UTC 수령)
+
+`TASK-MONO-713` 의 AC-0 인바운드 모집단 측정 중 나온 **곁발견**이다. 713 의 범위 밖이지만 관측은
+진짜이고, **판정에 창이 필요해서** 여기로 왔다(713 은 `done/` 으로 닫히므로 거기 두면 안 읽힌다).
+
+**관측**: ecommerce `product-service` 의 셀러 프로비저닝
+(`AccountServiceSellerProvisioner` — `POST /internal/tenants/{t}/accounts` ·
+`…/identities:resolveOrCreate` · `PATCH …/accounts/{id}/status`)이 base URL 로
+`${ACCOUNT_SERVICE_BASE_URL:http://localhost:8081}` 을 읽는데, **그 환경변수를 설정하는
+compose / env / override 가 저장소에 하나도 없다**(`infra/**` · `projects/**` 전수).
+
+**왜 조용한가**: 이 호출은 **fail-soft** 다(ADR-MONO-042 D3 — account-service 가 응답하지 않아도
+셀러 등록 자체는 진행된다). ⇒ 실패해도 **아무 화면도 빨개지지 않는다**. 「안 보이는 고장」의 모양.
+
+🔴 **창에서 물을 것 (한 줄이면 된다)**: 데모에서 셀러를 하나 만들고 —
+
+1. `product-service` 로그에 그 프로비저닝 호출의 **결과**가 무엇으로 찍히는가(성공 / 타임아웃 /
+   connection refused). 🔵 `localhost:8081` 은 컨테이너 **자기 자신**이므로 refused 가 예상이지만,
+   **예상은 측정이 아니다**.
+2. `account_db` 에 그 셀러-운영자 계정 행이 **실제로 생겼는가**. 🔴 이쪽이 진짜 판정이다 — 로그가
+   조용해도 행이 없으면 고장이고, 행이 있으면 어딘가로 정상 도달하고 있다는 뜻이다.
+
+🔵 **결함으로 나오면 별도 티켓**이다(AC-2 규율). 이 항목은 «재라» 까지다.
+🔵 **곁가지**: 713 의 갈래 ⓑ(「`/internal/tenants/**` 로 좁혀 rule 5 적용」)를 언젠가 고르면
+**그 배선이 선행**이다 — 지금은 그 경로가 게이트웨이를 지나지 않기 때문이다. 즉 이 항목은
+713 의 면제가 만료되는 경로이기도 하다.
