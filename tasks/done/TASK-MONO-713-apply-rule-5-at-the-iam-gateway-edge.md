@@ -8,7 +8,7 @@ TASK-MONO-713
 
 # Status
 
-review (2026-09-18 UTC — 소유자 결정 ⓒ: iam 엣지는 «적용 안 함», 계약서 정정 완료)
+done (2026-09-18 UTC — 4차원 검증 · AC-0 PR #3931 squash `6880a5d0b`, 소유자 결정 ⓒ 집행 PR #3932 squash `266b23e2f`. 🔴 AC 체크박스는 미체크인 채로 둔다 — 처분의 정본은 § AC 처분 표다)
 
 # Owner
 
