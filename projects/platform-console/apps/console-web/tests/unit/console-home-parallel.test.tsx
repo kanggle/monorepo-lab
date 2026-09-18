@@ -23,12 +23,17 @@ vi.mock('@/features/catalog', () => ({
   getCatalog: () => getCatalog(),
   ServiceCatalog: ({
     healthByDomain,
+    healthState,
   }: {
     healthByDomain: Record<string, string>;
+    healthState?: string;
   }) => (
     <div
       data-testid="service-catalog"
       data-dots={Object.keys(healthByDomain).join(',')}
+      // TASK-MONO-711 ③ — «점이 없다» 와 «왜 없는지» 는 다른 값이다. 이 모의는
+      // 둘 다 내보내야 «점 0개 + 사유 없음» 이라는 옛 상태가 초록이 될 수 없다.
+      data-health-state={healthState}
     />
   ),
 }));
@@ -72,6 +77,8 @@ describe('ConsoleHomePage — parallel SSR fetch (TASK-PC-FE-117)', () => {
     const el = getByTestId('service-catalog');
     expect(el).toBeInTheDocument();
     expect(el).toHaveAttribute('data-dots', 'wms,finance');
+    // 대조군 — 성공 경로는 사유를 붙이지 않는다. 없으면 «항상 unavailable» 이 통과한다.
+    expect(el).toHaveAttribute('data-health-state', 'ok');
   });
 
   it('renders the catalog without dots when health degrades (null health)', async () => {
@@ -85,7 +92,47 @@ describe('ConsoleHomePage — parallel SSR fetch (TASK-PC-FE-117)', () => {
 
     const ui = await ConsoleHomePage();
     const { getByTestId } = render(ui);
-    expect(getByTestId('service-catalog')).toHaveAttribute('data-dots', '');
+    const el = getByTestId('service-catalog');
+    expect(el).toHaveAttribute('data-dots', '');
+    // 🔴 TASK-MONO-711 ③ — 점이 없는 것만으로는 부족하다. 실패는 **사유를 들고**
+    //    내려가야 화면이 그것을 마커로 그릴 수 있다. 이 단언이 없으면 「원소가
+    //    사라지는 것이 유일한 자국」이라는 옛 동작이 그대로 초록이다.
+    expect(el).toHaveAttribute('data-health-state', 'unavailable');
+  });
+
+  it('distinguishes «no active tenant» from a failed health leg (TASK-MONO-711 ③)', async () => {
+    getCatalog.mockResolvedValue({ products: [], degraded: false });
+    getDomainHealthState.mockResolvedValue({
+      health: null,
+      noTenant: true,
+      unauthorized: false,
+      bffUnavailable: false,
+    });
+
+    const ui = await ConsoleHomePage();
+    const { getByTestId } = render(ui);
+    const el = getByTestId('service-catalog');
+    expect(el).toHaveAttribute('data-dots', '');
+    // 🔵 둘 다 «점 0개» 지만 같은 값이면 안 된다 — 이 페이지에서 테넌트 미선택은
+    //    정상 상태이고, 저하로 세면 촬영이 정상 화면을 후보에서 뺀다.
+    expect(el).toHaveAttribute('data-health-state', 'no-tenant');
+  });
+
+  it('treats a 401 on the health leg as unavailable, not as «no tenant»', async () => {
+    getCatalog.mockResolvedValue({ products: [], degraded: false });
+    getDomainHealthState.mockResolvedValue({
+      health: null,
+      noTenant: false,
+      unauthorized: true,
+      bffUnavailable: false,
+    });
+
+    const ui = await ConsoleHomePage();
+    const { getByTestId } = render(ui);
+    expect(getByTestId('service-catalog')).toHaveAttribute(
+      'data-health-state',
+      'unavailable',
+    );
   });
 
   it('redirects to /login on catalog 401; the un-awaited health promise raises no unhandled rejection', async () => {
