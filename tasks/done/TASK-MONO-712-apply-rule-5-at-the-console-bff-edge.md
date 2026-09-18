@@ -8,7 +8,7 @@ TASK-MONO-712
 
 # Status
 
-review (2026-09-18 UTC — AC-0 ~ AC-5 닫힘 · AC-4 최종 판정은 CI 통합 잡)
+done (2026-09-18 UTC — AC-0 ~ AC-5 닫힘 · AC-4 를 CI 통합 잡이 43칸 PASSED 로 판정)
 
 # Owner
 
