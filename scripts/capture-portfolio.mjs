@@ -268,6 +268,13 @@ async function login(page, app) {
 // **쿠키**를 세팅한다(테넌트가 하나뿐이면 `data-testid="tenant-single"` 로 이미 정해져 있다).
 const TENANT = process.env.DEMO_TENANT || 'demo-corp';
 
+// 🔴🔴 **전환은 왕복이다** (TASK-MONO-707). 셀렉트가 이미 그 값이면 재선택은 **no-op** 이고
+//    `change` 가 안 나서 `/api/tenant` 도 안 불린다 ⇒ 쿠키가 안 서고, 화면은 «테넌트를 선택
+//    하세요» 를 그린다. 2026-09-17 창 실측: `DEMO_TENANT=ecommerce` 실행이 사전 점검에서
+//    앱 전체를 건너뛰었다(계획 67 · 찍음 **0**). 같은 창에서 `demo-corp` → `ecommerce` 로
+//    **왕복**하자 열렸다.
+// 🔵 그래서 판정을 «골랐다» 가 아니라 **«그 테넌트가 실제로 잡혔는가»** 로 바꾼다 —
+//    셀렉트 값을 되읽고, 안 맞으면 다른 테넌트를 경유해 한 번 더 시도한다.
 async function selectTenant(page, app) {
   await page.goto(app.baseUrl + '/console', { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(() => {});
   await page.waitForTimeout(2000);
@@ -278,19 +285,56 @@ async function selectTenant(page, app) {
   if (!(await sel.count())) {
     return { ok: false, reason: '테넌트 선택 UI 가 없습니다 — 마크업이 바뀌었거나 로그인이 안 됐습니다' };
   }
-  try {
-    await sel.selectOption({ value: TENANT });
-  } catch {
-    // 🔵 value 가 아니라 라벨일 수 있다. 한 번 더 시도하고, 그래도 안 되면 이름을 대며 실패한다.
-    try {
-      await sel.selectOption({ label: TENANT });
-    } catch (e) {
-      const opts = await sel.locator('option').allTextContents();
-      return { ok: false, reason: `테넌트 '${TENANT}' 를 못 골랐습니다. 후보: ${opts.join(' | ')}` };
-    }
+
+  const options = await sel.locator('option').evaluateAll((els) =>
+    els.map((e) => ({ value: e.value, label: (e.textContent || '').trim() })),
+  );
+  const target = options.find((o) => o.value === TENANT || o.label === TENANT);
+  if (!target) {
+    return { ok: false, reason: `테넌트 '${TENANT}' 가 셀렉트에 없습니다. 후보: ${options.map((o) => o.value).join(' | ')}` };
   }
-  await page.waitForTimeout(2500);
-  return { ok: true, how: 'select', tenant: TENANT };
+
+  const pick = async (value) => {
+    await sel.selectOption({ value }).catch(() => {});
+    await page.waitForTimeout(2500);
+  };
+
+  // 🔴🔴 **판정은 «골랐다» 가 아니라 «적용됐다» 다.** 셀렉트 값만 읽으면 «화면은 그 테넌트를
+  //    가리키는데 서버 쿠키는 안 섰다» 를 통과시킨다 — 2026-09-17 실패가 정확히 그 모양이었다
+  //    (사전 점검이 «테넌트를 선택» 을 그리는 화면을 봤다). 그래서 **한 장을 다시 열어**
+  //    셀렉트 값과 «테넌트를 선택» 안내의 부재를 **둘 다** 본다.
+  const applied = async () => {
+    await page.goto(app.baseUrl + '/dashboards/overview', { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(() => {});
+    await page.waitForTimeout(2000);
+    const value = await page.locator('[data-testid="tenant-select"]').inputValue().catch(() => '');
+    const body = await page.evaluate(() => (document.body ? document.body.innerText : '')).catch(() => '');
+    return { value, needsTenant: /테넌트를\s*선택/.test(body) };
+  };
+
+  await pick(target.value);
+  let seen = await applied();
+
+  if (seen.value !== target.value || seen.needsTenant) {
+    // 2차: **경유** — 다른 테넌트로 갔다가 돌아온다(같은 값 재선택은 no-op 이라 `change` 가 안 난다).
+    //    경유지가 없으면 그 사실 자체가 실패 사유다.
+    const detour = options.find((o) => o.value && o.value !== target.value);
+    if (!detour) {
+      return { ok: false, reason: `테넌트 '${TENANT}' 가 안 잡혔고 경유할 다른 테넌트도 없습니다(옵션 ${options.length}개)` };
+    }
+    await page.goto(app.baseUrl + '/console', { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(() => {});
+    await page.waitForTimeout(1500);
+    await pick(detour.value);
+    await pick(target.value);
+    seen = await applied();
+  }
+
+  if (seen.value !== target.value || seen.needsTenant) {
+    return {
+      ok: false,
+      reason: `테넌트 '${TENANT}' 가 끝내 적용되지 않았습니다 (셀렉트 '${seen.value}'${seen.needsTenant ? ' · 화면이 «테넌트를 선택» 을 그림' : ''}) — 왕복 전환까지 했습니다`,
+    };
+  }
+  return { ok: true, how: 'select', tenant: TENANT, roundTrip: true };
 }
 
 // 🔴🔴 로그인·테넌트 뒤에 **한 장을 시험 삼아 열어** 운영자 화면이 맞는지 본다.
@@ -447,7 +491,32 @@ async function resolveDynamic(page, app, route) {
 //    여기서 할 일은 «이 장은 큐레이션 후보가 아니다» 를 기계가 말하게 하는 것이다.
 // 🔴 실패로 세지 않는다 — 캡처는 **성공했다.** 빈 화면의 정직한 사진이다. 별도 범주로 센다.
 const EMPTY_RE = /표시할\s*[^.\n]{0,24}없습니다|(?:데이터|결과|항목|내역)[가이]?\s*없습니다|비어\s*있습니다/;
-const DEGRADED_RE = /일시적으로\s*불러올\s*수\s*없|잠시\s*후\s*다시\s*시도|오류가\s*발생/;
+// 🔴🔴 **문구만으로는 샌다** (TASK-MONO-707). 옛 정규식은 «**일시적으로** 불러올 수 없» 을
+//    요구했는데, `/ledger` 는 *"시산표를 불러올 수 없습니다"* 라 안 걸렸고 그 오류 화면이
+//    큐레이션 후보 목록에 «쓸 만한 화면» 으로 올라왔다(사람이 이미지를 열어서 걸렀다).
+//    2026-09-17 전수: 본문에 «불러올 수 없습니다» 를 쓰는 파일 **96** vs «일시적으로» **90**.
+const DEGRADED_RE = /불러올\s*수\s*없|잠시\s*후\s*다시\s*시도|오류가\s*발생/;
+// 🔵 그리고 문구에 **기대지 않는 두 번째 술어**를 둔다 — 저하 화면이 다는 `data-testid` 접미사.
+//    2026-09-17 전수(console-web/src): `-degraded` 96 · `-error` 62 · `-unavailable` 8 · `-stale` 3.
+//    🔴 접미사 하나만 보면 안 된다 — `/ledger` 의 마커는 `ledger-tb-unavailable` 이다(`-degraded` 아님).
+// 🔴 **합집합으로 센다**(요소 OR 문구). 저하 표시는 «실패» 가 아니라 «사람이 열어 보라» 는
+//    신호이고, 틀리는 방향이 «후보에서 빼는» 쪽이라야 포트폴리오에 오류 화면이 안 실린다.
+const DEGRADED_SUFFIXES = ['-degraded', '-error', '-unavailable', '-stale'];
+
+// 🔵 판정을 **한 함수**로 둔다 — `captureOne()` 과 `--self-test` 가 같은 코드를 쓰지 않으면
+//    픽스처는 술어가 아니라 «픽스처 안의 사본» 을 재게 된다(이 저장소가 이미 데인 축).
+async function judgeDegraded(page, text) {
+  const degradedBy = await page
+    .evaluate(
+      (sufs) =>
+        [...document.querySelectorAll(sufs.map((s) => `[data-testid$="${s}"]`).join(','))].map((e) =>
+          e.getAttribute('data-testid'),
+        ),
+      DEGRADED_SUFFIXES,
+    )
+    .catch(() => []);
+  return { degraded: DEGRADED_RE.test(text) || degradedBy.length > 0, degradedBy, textHit: DEGRADED_RE.test(text) };
+}
 
 // -----------------------------------------------------------------------------
 // 한 장 찍기
@@ -487,7 +556,7 @@ async function captureOne(page, app, appKey, route, path, outDir) {
       .evaluate(() => document.body.innerText.replace(/\s+/g, ' ').trim())
       .catch(() => '');
     const empty = EMPTY_RE.test(text);
-    const degraded = DEGRADED_RE.test(text);
+    const { degraded, degradedBy } = await judgeDegraded(page, text);
     return {
       route, path, file, ok: true, status, url,
       capturedAt: new Date().toISOString(),
@@ -495,6 +564,7 @@ async function captureOne(page, app, appKey, route, path, outDir) {
       head: text.slice(0, 180),
       ...(empty ? { empty: true } : {}),
       ...(degraded ? { degraded: true } : {}),
+      ...(degradedBy.length ? { degradedBy } : {}),
       ...(denial.partial.length ? { partialDenied: denial.partial } : {}),
       ...(denial.textHits.length ? { deniedTextOnly: denial.textHits } : {}),
     };
@@ -611,15 +681,47 @@ async function main() {
       if (!ok) bad++;
       console.log(`  ${ok ? '✔' : '✗'} ${c.name}  want=${JSON.stringify({ denied: c.denied, partial: c.partial, textHit: c.textHit })} got=${JSON.stringify(got)}`);
     }
+    // --- 저하 판정 (TASK-MONO-707) — 같은 `judgeDegraded()` 로 잰다 ---
+    const degCases = [
+      // ① 2026-09-17 실측이 놓친 모양: «일시적으로» 가 없는 «불러올 수 없습니다» + 마커는 `-unavailable`
+      { name: 'ledger-tb-unavailable', degraded: true, byCount: 1,
+        html: '<main><section><h1>Finance Ledger 운영</h1><div role="status" data-testid="ledger-tb-unavailable">시산표를 불러올 수 없습니다.</div></section></main>' },
+      // ② 마커만 있고 문구는 없는 화면 — 요소 술어가 잡아야 한다
+      { name: 'marker-only-no-copy', degraded: true, byCount: 1,
+        html: '<main><section><h1>WMS 개요</h1><div data-testid="wms-overview-count-degraded">—</div><table><tr><td>SKU-APPLE-001</td></tr></table></section></main>' },
+      // ③ 문구만 있고 마커는 없는 화면 — 문구 술어가 잡아야 한다(합집합의 반대쪽 날개)
+      { name: 'copy-only-no-marker', degraded: true, byCount: 0,
+        html: '<main><section><h1>통합 개요</h1><p>통합 개요를 일시적으로 불러올 수 없습니다. 잠시 후 다시 시도하세요.</p></section></main>' },
+      // ④ 🔴 **정규식 확장만** 무는 칸 — 마커가 없고, «일시적으로» 도 없는 «불러올 수 없습니다».
+      //    이 칸이 없으면 옛 정규식으로 되돌려도 ① 이 요소 술어에 걸려 초록이라 확장이 안 물린다
+      //    (처음 픽스처가 정확히 그랬다 — bite 가 그것을 드러냈다).
+      { name: 'copy-without-temporary-no-marker', degraded: true, byCount: 0,
+        html: '<main><section><h1>Finance Ledger 운영</h1><p>시산표를 불러올 수 없습니다.</p></section></main>' },
+      // ⑤ 대조군 — 멀쩡한 표. 저하도 마커도 없다
+      { name: 'healthy-table', degraded: false, byCount: 0,
+        html: '<main><section><h1>WMS 재고</h1><table data-testid="wms-inventory-table"><tr><td>WH01-A-01-01-01</td><td>SKU-APPLE-001</td><td>85</td></tr></table></section></main>' },
+    ];
+    for (const c of degCases) {
+      await page.setContent(c.html);
+      const text = await page.evaluate(() => document.body.innerText.replace(/\s+/g, ' ').trim());
+      const j = await judgeDegraded(page, text);
+      const got = { degraded: j.degraded, byCount: j.degradedBy.length };
+      const ok = got.degraded === c.degraded && got.byCount === c.byCount;
+      if (!ok) bad++;
+      console.log(`  ${ok ? '✔' : '✗'} ${c.name}  want=${JSON.stringify({ degraded: c.degraded, byCount: c.byCount })} got=${JSON.stringify(got)}`);
+    }
     await browser.close();
     // 🔴 양성·음성이 **둘 다** 있어야 «0 오탐» 이 공허하지 않다 — 픽스처가 한쪽으로 쏠리면 멈춘다.
     const pos = cases.filter((c) => c.denied).length;
     const neg = cases.filter((c) => !c.denied).length;
-    if (!pos || !neg) {
-      console.error(`[portfolio] ✗ self-test 픽스처가 공허합니다 (거부 ${pos} · 비거부 ${neg})`);
+    const degPos = degCases.filter((c) => c.degraded).length;
+    const degNeg = degCases.filter((c) => !c.degraded).length;
+    if (!pos || !neg || !degPos || !degNeg) {
+      console.error(`[portfolio] ✗ self-test 픽스처가 공허합니다 (거부 ${pos}/${neg} · 저하 ${degPos}/${degNeg})`);
       process.exit(1);
     }
-    console.log(`[portfolio] self-test ${cases.length - bad}/${cases.length} (거부 ${pos} · 비거부 ${neg})`);
+    const total = cases.length + degCases.length;
+    console.log(`[portfolio] self-test ${total - bad}/${total} (거부 ${pos} · 비거부 ${neg} · 저하 ${degPos} · 비저하 ${degNeg})`);
     process.exit(bad ? 1 : 0);
   }
 
