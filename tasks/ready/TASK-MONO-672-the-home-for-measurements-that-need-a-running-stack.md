@@ -217,3 +217,62 @@ monorepo
      이 칸은 ⓐ 의 «세션이 살아 있었는가» 를 세우는 **유효성 술어**로 쓴다)
 🔵 판정 술어는 «비밀번호 칸 개수» 가 **아니라** «`console_access_token` 이 다시 섰는가» 다 —
 705 에서 앞엣것으로 물었다가 정반대 판정을 찍었다.
+
+
+🔵 **2026-09-18 보강 — 유휴 31분이 필요 없다.** 그날 창에서 쓴 **주입 형태**로 3분이면 된다:
+갓 로그인 → `console_access_token` 만 지워 갱신을 강제 → 갱신 응답에 `id_token` 이 오는가 →
+`console_id_token` 쿠키가 **다시 서는가**. 유휴 31분은 «원래 결함을 재는» 방법이었지 수정 확인의
+방법이 아니다. 🔴 판정 술어는 «비밀번호 칸 개수» 가 **아니라** «세션 쿠키가 다시 섰는가» 다.
+
+## 🔴 다음 창 런북 (2026-09-18 갱신)
+
+2026-09-18 둘째 창(17분)이 **분모는 만들고 분자를 못 읽은** 채 끝났다. 원인은 하나다 —
+`aws ssm send-command` 가 자동 모드 분류기에 막혀 **소유자만 실행할 수 있고**, 그 출력이
+세션 안에 돌아오지 않았다. 다음 세션이 같은 것을 다시 유도하지 않도록 **명령 전문**을 여기 둔다.
+
+### 순서 (부팅 직후 ①, 트래픽 뒤 ②)
+
+**① 읽기 전용 — 675 · 706 을 한 번에** (wms 묶음이 `ready` 면 즉시)
+
+```bash
+aws ssm send-command --region ap-northeast-2 \
+  --instance-ids <INSTANCE_ID> \
+  --document-name AWS-RunShellScript \
+  --parameters 'commands=["echo == 675 master dlq ==","for t in warehouse zone location sku partner lot; do docker exec wms-kafka /opt/kafka/bin/kafka-get-offsets.sh --bootstrap-server localhost:9092 --topic wms.master.$t.v1.dlq; done","echo == 706 shipping DLT ==","docker exec wms-kafka /opt/kafka/bin/kafka-get-offsets.sh --bootstrap-server localhost:9092 --topic wms.outbound.shipping.confirmed.v1.DLT","echo == 706 record ==","docker exec wms-kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic wms.outbound.shipping.confirmed.v1.DLT --from-beginning --max-messages 1 --timeout-ms 15000 --property print.headers=true"]' \
+  --query 'Command.CommandId' --output text
+```
+
+**② 697 — 🔴 트래픽을 먼저 돌린 뒤에** (분모가 없으면 «불일치 0» 은 미측정이다)
+
+```bash
+aws ssm send-command --region ap-northeast-2 \
+  --instance-ids <INSTANCE_ID> \
+  --document-name AWS-RunShellScript \
+  --parameters 'commands=["for g in ecommerce wms scm erp finance fan; do c=$(docker ps --format {{.Names}} | grep -E \"^${g}.*gateway|gateway.*${g}\" | head -1); echo \"== $g -> ${c:-<컨테이너없음>}\"; [ -n \"$c\" ] || continue; echo -n \"  mismatch WARN 줄수: \"; docker logs \"$c\" 2>&1 | grep -c \"JWT audience not on allowlist\"; docker exec \"$c\" sh -lc \"curl -s localhost:8080/actuator/prometheus 2>/dev/null | grep gateway_jwt_audience_total || echo (prometheus 미노출)\"; done"]' \
+  --query 'Command.CommandId' --output text
+```
+
+출력 회수(둘 다):
+
+```bash
+aws ssm get-command-invocation --region ap-northeast-2 \
+  --instance-id <INSTANCE_ID> --command-id <CommandId> \
+  --query 'StandardOutputContent' --output text
+```
+
+### 🔴 다음 창에서 반드시 다르게 할 것 (2026-09-18 에 비싸게 배운 셋)
+
+1. **트래픽에 `fan` 을 넣어라.** 콘솔은 fan 도메인을 안 그린다 ⇒ 콘솔만 돌면 fan 게이트웨이는
+   **분모 0 = 미측정**이다. fan 웹 로그인 한 번이 필요하다.
+2. **일회용 측정 스크립트에도 «테넌트 적용» 판정을 복사해 넣어라.** `TASK-MONO-707` 이 고친
+   것은 `capture-portfolio.mjs` 이고, 그날 쓰는 임시 스크립트는 그 교훈을 **안 물려받는다**.
+   판정 = `셀렉트값 == 요구값 && «테넌트를 선택» 문구 부재`, 실패하면 다른 테넌트 **경유** 후 재시도.
+   2026-09-18 에 이 판정이 없어 한 측정을 통째로 버렸다.
+3. **부팅이 묶음 수에 비례한다.** 7묶음 = **14분**(6묶음은 8분). 상한을 정할 때 이것부터 빼라.
+
+### 🔴 항목 5(`TASK-MONO-683` AC-4)는 «측정» 이 아니라 «선행을 만드는 일» 이었다
+
+2026-09-18 창에서 `/scm/replenishment` 가 테넌트 적용 상태로 **보충 추천 0건**이었다. 화면이
+이유를 말한다 — 추천은 **wms 저재고 알림 / IVS 야간 스윕**에서만 생기고 신선 볼륨에는 그
+트리거가 없다. ⇒ **다음 창에서 그냥 다시 봐도 0건이다.** 이 항목을 열려면 먼저 ⓐ 시드가
+저재고를 만들거나 ⓑ 스윕을 수동 트리거해야 하고, **그 선행은 아직 아무 티켓도 안 들고 있다.**
