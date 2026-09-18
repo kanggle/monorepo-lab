@@ -50,10 +50,21 @@ describe('finance card — Option (a) activation render paths', () => {
     // finance leg payload verbatim; the existing FE-011 card render
     // surfaces only the "available" status + currency, never the raw
     // amount as a number (F5 money discipline).
+    // TASK-PC-FE-295: the leg's `data` IS the balances envelope the finance
+    // producer returns — `{ data: [ {currency, ledger, available, held} ],
+    // meta }`. This cell used to seed `{ balance: { amount, currency } }`,
+    // which no producer emits; it passed anyway because the card's schema read
+    // the same invented shape, so the two sides agreed with each other and
+    // with nothing else.
     const card: Card = {
       domain: 'finance',
       status: 'ok',
-      data: { balance: { amount: '9876500', currency: 'KRW' } },
+      data: {
+        data: [
+          { currency: 'KRW', ledger: '9876500', available: '9876500', held: '0' },
+        ],
+        meta: { timestamp: '2026-09-18T02:00:00Z' },
+      },
     };
     render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
       wrapper: wrapper(),
@@ -82,7 +93,10 @@ describe('finance card — Option (a) activation render paths', () => {
     const card: Card = {
       domain: 'finance',
       status: 'ok',
-      data: { balance: { amount: '1200', currency: 'USD' } },
+      data: {
+        data: [{ currency: 'USD', ledger: '1200', available: '1200', held: '0' }],
+        meta: {},
+      },
     };
     render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
       wrapper: wrapper(),

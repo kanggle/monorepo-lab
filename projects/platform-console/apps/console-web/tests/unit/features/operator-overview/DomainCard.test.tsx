@@ -86,12 +86,20 @@ describe('DomainCard — ok branch (per-domain summaries)', () => {
     },
   );
 
-  it('wms ok → renders stock + alerts', () => {
+  it('wms ok → renders the snapshot row count from the read-model page', () => {
+    // TASK-PC-FE-295: the producer body IS the read-model page
+    // (`PageResponse<InventorySnapshotResponse>`); the card reads
+    // `page.totalElements` = row count. It is not a stock-unit sum, and there
+    // is no alert tile — an alert count needs a second query the leg does not
+    // make. The old cell seeded `inventorySnapshot.{totalStockUnits,alertCount}`,
+    // keys the producer has never emitted.
     const card: Card = {
       domain: 'wms',
       status: 'ok',
       data: {
-        inventorySnapshot: { totalStockUnits: 99000, alertCount: 3 },
+        content: [{ skuCode: 'SKU-0001', onHandQty: 125, lowStockFlag: false }],
+        page: { number: 0, size: 20, totalElements: 438, totalPages: 22 },
+        sort: 'lastEventAt,desc',
       },
     };
     render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
@@ -99,19 +107,33 @@ describe('DomainCard — ok branch (per-domain summaries)', () => {
     });
     expect(
       screen.getByTestId('operator-overview-card-wms-stock'),
-    ).toHaveTextContent('99,000');
+    ).toHaveTextContent('438');
     expect(
-      screen.getByTestId('operator-overview-card-wms-alerts'),
-    ).toHaveTextContent('3');
+      screen.queryByTestId('operator-overview-card-wms-alerts'),
+    ).not.toBeInTheDocument();
   });
 
-  it('scm ok → renders node count + surfaces meta.warning when present (S5 hint)', () => {
+  it('scm ok → renders the snapshot row count + surfaces meta.warning (S5 hint)', () => {
+    // TASK-PC-FE-295: the producer body is `{ data: <page>, meta }`; the count
+    // comes from `data.totalElements` (rows, not distinct nodes — a page
+    // cannot answer "how many nodes"). The old cell seeded a top-level
+    // `nodes[]` the producer has never emitted, so only the warning resolved.
     const card: Card = {
       domain: 'scm',
       status: 'ok',
       data: {
-        nodes: [{}, {}, {}],
-        meta: { warning: 'Not for procurement decisions (S5)' },
+        data: {
+          content: [{ nodeId: 'NODE-SEOUL', sku: 'SKU-0001', quantity: 120 }],
+          page: 0,
+          size: 20,
+          totalElements: 57,
+          totalPages: 3,
+        },
+        meta: {
+          timestamp: '2026-09-18T02:00:00Z',
+          warning: 'Not for procurement decisions (S5)',
+          staleness: 'FRESH',
+        },
       },
     };
     render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
@@ -119,17 +141,27 @@ describe('DomainCard — ok branch (per-domain summaries)', () => {
     });
     expect(
       screen.getByTestId('operator-overview-card-scm-nodes'),
-    ).toHaveTextContent('3');
+    ).toHaveTextContent('57');
     expect(
       screen.getByTestId('operator-overview-card-scm-warning'),
     ).toHaveTextContent('S5');
   });
 
   it('finance ok → renders "balance available" + currency code WITHOUT numeric coercion (F5)', () => {
+    // TASK-PC-FE-295: the producer body is the balances envelope
+    // `{ data: [ {currency, ledger, available, held} ], meta }`. The old cell
+    // seeded `{ balance: { amount, currency } }` — a shape no finance producer
+    // emits — which is why this cell stayed green while the real card said
+    // «잔액 정보 없음».
     const card: Card = {
       domain: 'finance',
       status: 'ok',
-      data: { balance: { amount: '1234500', currency: 'KRW' } },
+      data: {
+        data: [
+          { currency: 'KRW', ledger: '1234500', available: '1234500', held: '0' },
+        ],
+        meta: { timestamp: '2026-09-18T02:00:00Z' },
+      },
     };
     render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
       wrapper: wrapper(),
@@ -149,6 +181,32 @@ describe('DomainCard — ok branch (per-domain summaries)', () => {
     ).not.toBeInTheDocument();
     expect(
       screen.queryByText('1234500'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('finance ok with several currencies → availability yes, currency chip omitted', () => {
+    // The producer body carries no "account currency" field, so a
+    // multi-currency account has no single answer for the chip. Showing
+    // whichever row came first would be a guess presented as a fact.
+    const card: Card = {
+      domain: 'finance',
+      status: 'ok',
+      data: {
+        data: [
+          { currency: 'KRW', ledger: '1000', available: '1000', held: '0' },
+          { currency: 'USD', ledger: '20', available: '20', held: '0' },
+        ],
+        meta: {},
+      },
+    };
+    render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
+      wrapper: wrapper(),
+    });
+    expect(
+      screen.getByTestId('operator-overview-card-finance-status'),
+    ).toHaveTextContent('잔액 조회 가능');
+    expect(
+      screen.queryByTestId('operator-overview-card-finance-currency'),
     ).not.toBeInTheDocument();
   });
 

@@ -165,15 +165,27 @@ export const GapDataSchema = z
 export type GapData = z.infer<typeof GapDataSchema>;
 
 // wms inventory snapshot — `GET /api/v1/admin/dashboard/inventory`.
-// The producer surfaces stock total + alert count; the snapshot fields
-// vary by producer schema version — only the optional summary numbers are
-// read defensively.
+// The producer body is the read-model page itself: `{ content[], page:
+// { number, size, totalElements, totalPages }, sort }`
+// (`InventoryDashboardController#list` -> `PageResponse<InventorySnapshotResponse>`).
+// The card surfaces `page.totalElements` = the number of inventory snapshot
+// ROWS (location x sku x lot), which is what a page total can honestly answer.
+//
+// 🔴 It is NOT a sum of stock units. The producer returns one page of rows, so
+// summing `onHandQty` over them would present a page-local figure as a global
+// total — TASK-PC-FE-295 AC-6 rules that out explicitly. An alert count is the
+// same problem: it needs a second query (`lowStockOnly=true&size=1`), i.e. a
+// second outbound leg, which is a cost decision rather than a rendering fix.
+//
+// 🔴🔴 Until TASK-PC-FE-295 this schema read `inventorySnapshot.totalStockUnits`
+// / `.alertCount` — keys no producer has ever emitted. They came from the
+// § 2.4.9.1 response-schema EXAMPLE, which illustrated an invented body. The
+// consumer implemented the contract faithfully and the contract was wrong.
 export const WmsDataSchema = z
   .object({
-    inventorySnapshot: z
+    page: z
       .object({
-        totalStockUnits: z.number().nonnegative().nullable().optional(),
-        alertCount: z.number().int().nonnegative().nullable().optional(),
+        totalElements: z.number().int().nonnegative().nullable().optional(),
       })
       .passthrough()
       .optional(),
@@ -183,38 +195,72 @@ export type WmsData = z.infer<typeof WmsDataSchema>;
 
 // scm inventory visibility — producer `GET /api/inventory-visibility/snapshot`
 // (the BFF leg path; FE consumes the BFF, not the producer — TASK-MONO-162).
-// Surfaces optional `meta.warning` (S5 "Not for procurement decisions"
-// non-blocking hint per § 2.4.6 invariant).
+// The producer body is `{ data: { content[], page, size, totalElements,
+// totalPages }, meta: { timestamp, warning, staleness } }`
+// (`InventoryVisibilityController#getSnapshot` cross-node branch ->
+// `ApiEnvelope.of(PageResponse<SnapshotResponse>, meta)`).
+//
+// The card surfaces `data.totalElements` = the number of snapshot ROWS, and
+// `meta.warning` (the S5 "Not for procurement decisions" non-blocking hint per
+// § 2.4.6 invariant).
+//
+// 🔴 A row is a node x sku snapshot, NOT a node — the count is rows, and the
+// card says so. Distinct nodes cannot be counted from a page either (the page
+// is not the whole set).
+//
+// 🔴🔴 Until TASK-PC-FE-295 this schema read a top-level `nodes[]` that the
+// producer has never emitted, so the count was always the "—" placeholder;
+// `meta.warning` was the one field that did resolve, which is why the card
+// looked partly alive.
 export const ScmDataSchema = z
   .object({
+    data: z
+      .object({
+        totalElements: z.number().int().nonnegative().nullable().optional(),
+      })
+      .passthrough()
+      .optional(),
     meta: z
       .object({
         warning: z.string().optional(),
       })
       .passthrough()
       .optional(),
-    nodes: z.array(z.unknown()).optional(),
-    skus: z.array(z.unknown()).optional(),
   })
   .passthrough();
 export type ScmData = z.infer<typeof ScmDataSchema>;
 
 // finance balance health — `GET /api/finance/accounts/{id}/balances`.
-// **F5 money discipline**: `amount` is a STRING (minor units); never
-// `Number(...)` / `parseFloat(...)` / `parseInt(...)`. The MVP card
-// surfaces only "balance available" framing — no numeric coercion.
-// `currency` is the ISO 4217 code (3-letter); both fields are optional
-// for the MVP (the card stays "ok" even if the producer's shape varies).
+// The producer body is `{ data: [ { currency, ledger, available, held } ],
+// meta }` (`AccountController#balances` ->
+// `ApiEnvelope.of(List<AccountResponse.BalanceResponse>)`) — one row per
+// currency the account holds.
+//
+// **F5 money discipline**: every money field is a STRING (minor units); never
+// `Number(...)` / `parseFloat(...)` / `parseInt(...)`. The MVP card surfaces
+// only "balance available" framing plus the currency code — no numeric
+// coercion, so none of these fields is typed as a number here either.
+//
+// 🔴🔴 Until TASK-PC-FE-295 this schema read `{ balance: { amount, currency } }`
+// — a shape the finance producer has never emitted. Because every field was
+// optional and the object passthrough, `safeParse` SUCCEEDED and `balance`
+// was simply `undefined`, so the card rendered «잔액 정보 없음» for an operator
+// whose account had money in it. A parse that cannot fail cannot report a
+// shape mismatch; the card's own emptiness was the only symptom.
 export const FinanceDataSchema = z
   .object({
-    balance: z
-      .object({
-        amount: z.string().optional(),
-        currency: z.string().optional(),
-      })
-      .passthrough()
+    data: z
+      .array(
+        z
+          .object({
+            currency: z.string().optional(),
+            ledger: z.string().optional(),
+            available: z.string().optional(),
+            held: z.string().optional(),
+          })
+          .passthrough(),
+      )
       .optional(),
-    accountId: z.string().optional(),
   })
   .passthrough();
 export type FinanceData = z.infer<typeof FinanceDataSchema>;

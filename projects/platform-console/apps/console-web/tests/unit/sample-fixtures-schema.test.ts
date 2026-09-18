@@ -56,12 +56,18 @@ describe('sample fixtures parse with the production schemas', () => {
         c.status === 'ok' ? c.data : undefined,
       ]),
     );
+    // TASK-PC-FE-295: the fields below are the ones each card actually reads
+    // out of the PRODUCER's body. 🔴 `.parse()` succeeding proves almost
+    // nothing on its own here — every one of these schemas is optional +
+    // passthrough, so it also accepts a body with none of these keys (that is
+    // exactly how the finance / wms / scm mismatch survived). The assertions
+    // are therefore on the VALUES, and the render-side proof is the AC-7
+    // census in `features/operator-overview/leg-body-contract.test.tsx`.
     expect(GapDataSchema.parse(byDomain.iam).totalElements).toBeTypeOf('number');
-    expect(WmsDataSchema.parse(byDomain.wms).inventorySnapshot?.totalStockUnits).toBeTypeOf(
-      'number',
-    );
-    expect(ScmDataSchema.parse(byDomain.scm).nodes?.length).toBeGreaterThan(0);
-    expect(FinanceDataSchema.parse(byDomain.finance).balance?.amount).toBeTypeOf('string');
+    expect(WmsDataSchema.parse(byDomain.wms).page?.totalElements).toBeTypeOf('number');
+    expect(ScmDataSchema.parse(byDomain.scm).data?.totalElements).toBeTypeOf('number');
+    expect(FinanceDataSchema.parse(byDomain.finance).data?.length).toBeGreaterThan(0);
+    expect(FinanceDataSchema.parse(byDomain.finance).data?.[0].ledger).toBeTypeOf('string');
     expect(ErpDataSchema.parse(byDomain.erp).meta?.totalElements).toBeTypeOf('number');
     expect(EcommerceDataSchema.parse(byDomain.ecommerce).totalElements).toBeTypeOf('number');
   });

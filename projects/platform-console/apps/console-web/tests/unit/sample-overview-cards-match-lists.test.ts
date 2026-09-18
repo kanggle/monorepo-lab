@@ -74,73 +74,73 @@ describe('overview card = the list it summarises (through the router)', () => {
     expect(card.totalElements).toBe(list.content.length);
   });
 
-  it('Finance «잔액» (TASK-PC-FE-286 AC-7) = the balance on /finance/accounts for the SAME account', async () => {
+  it('Finance «잔액» (286 AC-7 · 295) = the SAME balances body the console-bff leg carries', async () => {
+    // TASK-PC-FE-295: the card's `data` IS the producer's balances envelope,
+    // so "the card agrees with the list" is now an identity rather than a
+    // derivation — the card cannot drift from the query without the query
+    // itself changing. The previous version compared a hand-derived
+    // `{ balance: { amount, currency } }` against the same query; that
+    // comparison passed while the real card rendered «잔액 정보 없음».
     const card = (await overviewCard('finance')) as {
-      balance: { amount: string; currency: string };
-      accountId: string;
+      data: { currency: string; ledger: string }[];
     };
-    // Edge Case 1 — the account the card names is a REAL, browsable account
-    // (not just a number that happens to match).
-    expect(card.accountId).toBe(SAMPLE_FINANCE_DEFAULT_ACCOUNT_ID);
     const balances = (await body({
       core: 'flat',
       surface: 'finance',
-      path: `/api/finance/accounts/${card.accountId}/balances`,
+      path: `/api/finance/accounts/${SAMPLE_FINANCE_DEFAULT_ACCOUNT_ID}/balances`,
     })) as { data: { currency: string; ledger: string }[] };
     expect(balances.data.length).toBeGreaterThan(0);
-    expect(card.balance.amount).toBe(balances.data[0].ledger);
-    expect(card.balance.currency).toBe(balances.data[0].currency);
+    expect(card.data).toEqual(balances.data);
+    // F5: the money fields stay strings all the way to the card.
+    expect(typeof card.data[0].ledger).toBe('string');
   });
 
-  it('WMS «총 재고 · 알림» (TASK-PC-FE-287 AC-8) = the SAME /wms/inventory query the console-bff adapter sends', async () => {
-    const card = (await overviewCard('wms')) as {
-      inventorySnapshot: { totalStockUnits: number; alertCount: number };
-    };
+  it('WMS «재고 행 수» (287 AC-8 · 295) = page.totalElements of the SAME query the adapter sends', async () => {
     // `WmsInventoryReadAdapter.read()` calls this EXACT path — no page/size —
-    // so this is the identical query the real leg makes, not a convenient
-    // stand-in (TASK-PC-FE-287's AC-8 wording: "같은 경로를 … 물어 파생한다").
+    // so this is the identical query the real leg makes (287's AC-8 wording:
+    // "같은 경로를 … 물어 파생한다"), and 295 makes the card carry its body.
+    const card = (await overviewCard('wms')) as {
+      page: { totalElements: number };
+      content: unknown[];
+    };
     const list = (await body({
       core: 'wms',
       surface: 'wms',
       path: '/api/v1/admin/dashboard/inventory',
-    })) as { content: { onHandQty: number; lowStockFlag: boolean }[] };
-    expect(list.content.length).toBeGreaterThan(0);
-    const totalStockUnits = list.content.reduce((sum, r) => sum + r.onHandQty, 0);
-    const alertCount = list.content.filter((r) => r.lowStockFlag).length;
-    // 🔴 not vacuous: the list must also hold a row that is NOT low-stock, or
-    //    "flagged" and "every row" could not be told apart.
-    expect(alertCount).toBeGreaterThan(0);
-    expect(list.content.length).toBeGreaterThan(alertCount);
-    expect(card.inventorySnapshot.totalStockUnits).toBe(totalStockUnits);
-    expect(card.inventorySnapshot.alertCount).toBe(alertCount);
+    })) as { page: { totalElements: number }; content: { lowStockFlag: boolean }[] };
+    expect(list.page.totalElements).toBeGreaterThan(0);
+    expect(card.page.totalElements).toBe(list.page.totalElements);
+    // 🔴 not vacuous for the count's MEANING: the page must hold a low-stock
+    //    row and a non-low-stock row, so "rows" cannot be mistaken for
+    //    "alerts" — the tile that used to claim an alert count is gone
+    //    precisely because this query cannot answer it beyond one page.
+    const flagged = list.content.filter((r) => r.lowStockFlag).length;
+    expect(flagged).toBeGreaterThan(0);
+    expect(list.content.length).toBeGreaterThan(flagged);
+    expect(card.page.totalElements).not.toBe(flagged);
   });
 
-  it('SCM «스냅샷 노드 수» (TASK-PC-FE-288 AC-8) = the distinct nodes on /scm/inventory + names from the SAME node registry', async () => {
+  it('SCM «스냅샷 행 수» (288 AC-8 · 295) = data.totalElements + the S5 warning of the SAME snapshot', async () => {
     const card = (await overviewCard('scm')) as {
+      data: { content: { nodeId: string }[]; totalElements: number };
       meta: { warning: string };
-      nodes: { nodeId: string; name: string }[];
     };
     const snapshot = (await body({
       core: 'flat',
       surface: 'scm',
-      path: '/api/v1/inventory-visibility/snapshot?page=0&size=100',
-    })) as { data: { content: { nodeId: string }[] }; meta: { warning: string } };
-    const distinctNodeIds = Array.from(new Set(snapshot.data.content.map((r) => r.nodeId))).sort();
-    // 🔴 not vacuous: the snapshot must span more than one node, or "the node
-    //    SET matches" could not be told apart from "a single node matches".
-    expect(distinctNodeIds.length).toBeGreaterThan(1);
-    expect(card.nodes.map((n) => n.nodeId).sort()).toEqual(distinctNodeIds);
-
-    const nodes = (await body({
-      core: 'flat',
-      surface: 'scm',
-      path: '/api/v1/inventory-visibility/nodes',
-    })) as { data: { id: string; name: string }[] };
-    for (const n of card.nodes) {
-      const match = nodes.data.find((x) => x.id === n.nodeId);
-      expect(match, `card node ${n.nodeId} must resolve on /nodes`).toBeDefined();
-      expect(n.name).toBe(match!.name);
-    }
+      path: '/api/v1/inventory-visibility/snapshot',
+    })) as {
+      data: { content: { nodeId: string }[]; totalElements: number };
+      meta: { warning: string };
+    };
+    expect(snapshot.data.totalElements).toBeGreaterThan(0);
+    expect(card.data.totalElements).toBe(snapshot.data.totalElements);
     expect(card.meta.warning).toBe(snapshot.meta.warning);
+    // 🔴 not vacuous: the snapshot must span more than one node, so "rows" and
+    //    "distinct nodes" are different numbers — 295 relabelled this tile
+    //    because a page cannot answer the node question at all.
+    const distinctNodeIds = new Set(snapshot.data.content.map((r) => r.nodeId));
+    expect(distinctNodeIds.size).toBeGreaterThan(1);
+    expect(card.data.totalElements).not.toBe(distinctNodeIds.size);
   });
 });

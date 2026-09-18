@@ -1,0 +1,163 @@
+{
+  "$comment": [
+    "Normative producer-body samples for the six legs of",
+    "`console-integration-contract.md` § 2.4.9.1 (Operator Overview).",
+    "",
+    "WHY THIS FILE EXISTS (TASK-PC-FE-295): console-bff loads each producer's",
+    "response body VERBATIM into `cards[i].data`, but the two sides were tested",
+    "against different invented shapes — the bff slice seeded `Map.of(\"balance\", 0)`",
+    "and the web test seeded `{ balance: { amount, currency } }`, while the finance",
+    "producer actually emits `{ data: [ { currency, ledger, available, held } ] }`.",
+    "Both suites were green and the operator saw «잔액 정보 없음». Three of the six",
+    "cards were broken this way at once.",
+    "",
+    "So this is ONE set, consumed by BOTH suites:",
+    "  - console-web  : tests/unit/features/operator-overview/leg-body-contract.test.tsx",
+    "  - console-bff  : OperatorOverviewLegBodyContractTest",
+    "A card renderer that cannot read the body below is a DEFECT, not a fixture gap.",
+    "",
+    "Each `body` is the producer's 200 response, shaped from the producer's own",
+    "controller/DTO code (not from prose), with provenance in `sourceOfShape`."
+  ],
+  "legs": {
+    "iam": {
+      "producer": "GET /api/admin/accounts?page=0&size=1",
+      "sourceOfShape": "iam-platform admin-service AccountAdminController#search -> AccountServiceClient.AccountSearchResponse(content, totalElements, page, size, totalPages)",
+      "surfaced": "total account count",
+      "body": {
+        "content": [
+          {
+            "id": "acc-1",
+            "email": "operator@demo-corp.example",
+            "status": "ACTIVE"
+          }
+        ],
+        "totalElements": 12345,
+        "page": 0,
+        "size": 1,
+        "totalPages": 12345
+      }
+    },
+    "wms": {
+      "producer": "GET /api/v1/admin/dashboard/inventory",
+      "sourceOfShape": "wms-platform admin-service InventoryDashboardController#list -> PageResponse<InventorySnapshotResponse>(content, page{number,size,totalElements,totalPages}, sort)",
+      "surfaced": "inventory snapshot row count (page.totalElements) — NOT a sum of stock units; see § 2.4.9.1 leg data shapes",
+      "body": {
+        "content": [
+          {
+            "locationId": "11111111-1111-1111-1111-111111111111",
+            "skuId": "22222222-2222-2222-2222-222222222222",
+            "lotId": null,
+            "warehouseId": "33333333-3333-3333-3333-333333333333",
+            "warehouseCode": "WH-SEOUL",
+            "locationCode": "A-01-01",
+            "skuCode": "SKU-0001",
+            "lotNo": null,
+            "availableQty": 120,
+            "reservedQty": 5,
+            "damagedQty": 0,
+            "onHandQty": 125,
+            "lowStockFlag": false,
+            "lastAdjustedAt": "2026-09-17T02:00:00Z",
+            "lastEventAt": "2026-09-17T02:00:00Z",
+            "version": 7
+          }
+        ],
+        "page": {
+          "number": 0,
+          "size": 20,
+          "totalElements": 438,
+          "totalPages": 22
+        },
+        "sort": "lastEventAt,desc"
+      }
+    },
+    "scm": {
+      "producer": "GET /api/inventory-visibility/snapshot",
+      "sourceOfShape": "scm-platform inventory-visibility-service InventoryVisibilityController#getSnapshot (no nodeId branch) -> ApiEnvelope.of(PageResponse<SnapshotResponse>, meta) = { data: { content, page, size, totalElements, totalPages }, meta: { timestamp, warning, staleness } }",
+      "surfaced": "snapshot row count (data.totalElements) + the S5 meta.warning hint",
+      "body": {
+        "data": {
+          "content": [
+            {
+              "nodeId": "NODE-SEOUL",
+              "sku": "SKU-0001",
+              "quantity": 120
+            }
+          ],
+          "page": 0,
+          "size": 20,
+          "totalElements": 57,
+          "totalPages": 3
+        },
+        "meta": {
+          "timestamp": "2026-09-17T02:00:00Z",
+          "warning": "Not for procurement decisions (S5)",
+          "staleness": "FRESH"
+        }
+      }
+    },
+    "finance": {
+      "producer": "GET /api/finance/accounts/{id}/balances",
+      "sourceOfShape": "finance-platform account-service AccountController#balances -> ApiEnvelope.of(List<AccountResponse.BalanceResponse(currency, ledger, available, held)>) = { data: [ ... ], meta }",
+      "surfaced": "balance availability + currency (F5: every money field is a minor-units STRING and is never coerced)",
+      "body": {
+        "data": [
+          {
+            "currency": "KRW",
+            "ledger": "9876500",
+            "available": "9876500",
+            "held": "0"
+          }
+        ],
+        "meta": {
+          "timestamp": "2026-09-17T02:00:00Z"
+        }
+      }
+    },
+    "erp": {
+      "producer": "GET /api/erp/masterdata/departments?active=true&page=0&size=1",
+      "sourceOfShape": "erp-platform masterdata-service DepartmentController#list -> ApiEnvelope.ofList(data, page, size, totalElements, totalPages) = { data: [ ... ], meta: { page, size, totalElements, totalPages, timestamp } }",
+      "surfaced": "active department count (meta.totalElements)",
+      "body": {
+        "data": [
+          {
+            "id": "dept-1",
+            "code": "D-001",
+            "name": "운영팀",
+            "active": true
+          }
+        ],
+        "meta": {
+          "page": 0,
+          "size": 1,
+          "totalElements": 87,
+          "totalPages": 87,
+          "timestamp": "2026-09-17T02:00:00Z"
+        }
+      }
+    },
+    "ecommerce": {
+      "producer": "GET http://ecommerce.local/api/admin/products?page=0&size=1",
+      "sourceOfShape": "ecommerce product-service AdminProductController#list -> ProductListResponse(content, page, size, totalElements, totalPages)",
+      "surfaced": "tenant product count (totalElements)",
+      "body": {
+        "content": [
+          {
+            "id": "prod-1",
+            "name": "데모 상품",
+            "status": "ACTIVE",
+            "price": 19900,
+            "thumbnailUrl": null,
+            "categoryId": "cat-1",
+            "sellerId": "seller-1"
+          }
+        ],
+        "page": 0,
+        "size": 1,
+        "totalElements": 42,
+        "totalPages": 42
+      }
+    }
+  }
+}
