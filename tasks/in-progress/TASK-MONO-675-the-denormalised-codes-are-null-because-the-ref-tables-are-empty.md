@@ -308,3 +308,23 @@ master-ref **소비자 클래스가 하나도 없다**(있는 것은 `MasterRefC
 ⇒ AC-1 은 **아직 체크하지 않는다** — 이 AC 가 «`*.DLT` 에 레코드가 있으면 소비 실패» 를 술어로 적었고 그 칸이 안 재졌다. 남은 일 = 다음 창에서 `kafka-get-offsets.sh --topic wms.master.<x>.v1.dlq` 6줄(읽기 전용).
 
 🔴 곁발견(이 티켓 범위 밖): `wms.outbound.shipping.confirmed.v1.DLT` 파티션 1 에 **레코드 1건**. 출고 확정 이벤트 하나가 어떤 소비자에서 실패했다 → **받는 티켓 = `tasks/ready/TASK-MONO-706-*`** (이 PR 에서 기안).
+
+---
+
+# 🔵 창 실측 — 2026-09-18 UTC (03:58:15Z–04:48:28Z · 45분 · 상한 75분) · AMI `ami-02613b0378621b124`(`af0018aa6`) · 인스턴스 `i-07ddb6b41233f2673` · 묶음 `console console-ecommerce console-erp console-finance console-scm console-wms` · 소유자 승인 «창 75분, 667 finance 까지»
+
+## 2026-09-18 — AC-1 의 마지막 칸은 **또 못 쟀다**
+
+남은 일은 `kafka-get-offsets.sh --topic wms.master.<x>.v1.dlq` 6줄(읽기 전용)이었다.
+
+| 길 | 결과 |
+|---|---|
+| `aws ssm send-command` | 🔴 자동 모드 분류기가 막는 경로다(2026-09-16 · 09-17 에 이어 **세 번째**). 우회하지 않았다 — 소유자에게 정확한 명령을 넘겼고(`--instance-ids i-07ddb6b41233f2673`, `docker exec wms-kafka …`) 창 안에 실행되지 않았다 |
+| Kafka UI (`kafka.wms.hubwang.com`) | 🔴 바깥에서 도달하지 않는다. 🔵 «미노출» 로 **단정하지 않는다** — 이 호스트는 특정 호스트에서 TLS 가 깨지는 함정이 있어 «안 떠 있다» 와 «못 붙는다» 를 여기서 못 가른다. 확실한 것은 **이 경로로는 못 잰다** 는 것뿐이다. (데모 Traefik 이 이름을 붙이는 호스트는 `auth`·`console`·`fan`·`store` 넷이다) |
+
+⇒ AC-1 은 **여전히 체크하지 않는다.** 사유는 「우선순위에서 밀렸다」가 아니라 **「권한에 막혔다」**
+이고, 세 창 연속 같은 사유다. 🔵 그 반복 자체가 신호다 — 다음 창에서 이 한 줄을 먼저 돌려라
+(창의 다른 일과 **겹치지 않는다**: 부팅 직후 1분이면 끝난다).
+
+🔵 이 창에서 곁으로 확인된 것: `/scm/procurement` 의 공급사 코드가 정상이고(`TASK-MONO-677`),
+`/wms/*` 화면들이 `demo-corp` 에서 전부 `ok` 로 찍혔다 — ref 테이블이 시드로 찬 상태가 유지된다.

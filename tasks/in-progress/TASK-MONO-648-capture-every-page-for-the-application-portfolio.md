@@ -1157,3 +1157,51 @@ AMI `ami-058f6293d1408f91e`(`RepoCommit=8cf474346`) · 인스턴스 `i-027d6b396
 - 가이드 6장 — 문서 화면이라 «동작하는 시스템» 을 안 보여 준다.
 
 ⏳ **남은 칸**: ecommerce·scm·finance README. 🔴 게이트는 `TASK-MONO-707`(ecommerce 촬영을 막고 있다)이고, finance 는 `console-finance` 를 켠 창이 필요하다(`TASK-MONO-667`).
+
+---
+
+# 🔵 창 실측 — 2026-09-18 UTC (03:58:15Z–04:48:28Z · 45분 · 상한 75분) · AMI `ami-02613b0378621b124`(`af0018aa6`) · 인스턴스 `i-07ddb6b41233f2673` · 묶음 `console console-ecommerce console-erp console-finance console-scm console-wms` · 소유자 승인 «창 75분, 667 finance 까지»
+
+## 2026-09-18 — `ecommerce` 테넌트 재촬영이 되었다
+
+`TASK-MONO-707` 이 테넌트 판정을 «골랐다» 에서 «적용됐는가» 로 바꾼 뒤 처음 도는 창이다.
+
+| 실행 | 테넌트 | 계획 | 촬영 | 실패 | 동적 해결 |
+|---|---|---|---|---|---|
+| 04:08–04:14 | `ecommerce` | 67 | **56** | 11 | **6 / 10** |
+| 04:12–04:18 | `demo-corp` | 67 | 55 | 12 | **0 / 10** |
+
+🔴🔴 **동적 경로는 테넌트에 달려 있었다** — `demo-corp` 에서는 `/ecommerce/products` 목록 자체가
+비어 «따라갈 항목이 없습니다» 로 **10개 전부** 실패했다. AC-1 의 «동적 경로 16개» 칸을 `demo-corp`
+로만 재면 영원히 0 이다. 🔵 이것이 「이커머스 데이터는 `ecommerce` 테넌트에 있다」의 직접 증거다.
+
+### AC-2 §348 — `/ecommerce/*` 3장 재촬영: 🟢 **되었다**
+
+`ecommerce` 테넌트에서 `/ecommerce/*` **20장**이 저하 없이 찍혔다. 헤더의 테넌트 칸이 `ecommerce`
+로 보이는 것을 **이미지를 열어** 확인했다. 큐레이션 후보(열어 본 것):
+
+| 장 | 무엇이 보이는가 | 후보? |
+|---|---|---|
+| `/ecommerce/products` | 상품 **24건** · 상태/가격/작업 · 1/2페이지 | 🟢 강함 |
+| `/ecommerce/products/[id]` | `TASK-MONO-703` 의 admin 상세 — 옵션 4개(재고 40/60/50/20) · 재고 조정 | 🟢 강함 |
+| `/ecommerce/orders` · `/shippings` · `/settlements` | 🔴 **빈 목록** («표시할 주문이 없습니다») | ❌ — `TASK-MONO-710` |
+
+🔵 `/erp/masters` 재촬영(§351)도 이 창에서 했다. 🔴 단 `ecommerce` 판의 `/erp/*` 는 `console-erp`
+가 **아직 워밍업 중**(04:10:31 요청 → 04:12:16 ready)이라 저하로 찍혔다 — 쓸 장은 `demo-corp` 판이다.
+
+### 🔴 촬영이 「비행 중」을 찍는다 — 큐레이션 주의
+
+`/ecommerce/products/[id]` 첫 장에 «이미지를 불러오는 중…» 이 찍혔다. **결함이 아니다** — 따로
+재니 2초 안에 풀리고 `200 /api/ecommerce/products/{id}/images`(이미지 0건)였다. ⇒ 큐레이션할 때
+«…중» 이 보이는 장은 버려라. 저하 술어는 이것을 **안 잡는다**(옳다 — 저하가 아니다).
+
+### 🔴 랜딩이 저하다 — §336 의 이유가 생겼다
+
+`/` · `/dashboards/overview` · `/onboarding` 이 **두 실행 모두** `operator-overview-bff-unavailable`
+로 저하였다(묶음 여섯이 전부 ready 인데도). AC-2 §336 이 «`/dashboards/overview` 를 대체할 4번째
+장을 소유자가 고른다» 고 적어 둔 칸의 **근거**가 이것이다 ⇒ 받는 티켓 **`TASK-MONO-711`**(이 PR 에서 기안).
+
+### ⏳ 남은 것
+
+- AC-2/AC-4 의 **큐레이션은 여전히 소유자 결정**이다. 이 창은 후보를 늘렸을 뿐이다.
+- 주문 계열 다섯 장은 **`TASK-MONO-710`** 이 닫히기 전에는 못 싣는다.
