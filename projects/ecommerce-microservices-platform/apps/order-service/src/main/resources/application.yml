@@ -74,12 +74,13 @@ order:
     initial-delay-ms: ${ORDER_OUTBOX_INITIAL_DELAY_MS:5000}
   internal:
     # Resource-server validation for the gateway-excluded /api/internal/** route
-    # (TASK-BE-412): validates the inbound client_credentials Bearer JWT. JWKS / issuer /
-    # audience are env-overridable; audience is unset by default (pin per environment).
+    # (TASK-BE-412): validates the inbound client_credentials Bearer JWT. JWKS / issuer are
+    # env-overridable. 🔴 No audience key: TASK-MONO-714 deleted the validator that read one —
+    # nothing ever set it, and it passed on a blank expectation, so it was fail-open in production
+    # while looking configured. The sub pin (allowed-client-ids) measures the same axis fail-closed.
     oauth2:
       jwk-set-uri: ${ORDER_INTERNAL_OAUTH2_JWK_SET_URI:http://auth-service:8081/oauth2/jwks}
       issuer: ${ORDER_INTERNAL_OAUTH2_ISSUER:http://auth-service:8081}
-      audience: ${ORDER_INTERNAL_OAUTH2_AUDIENCE:}
   promotion-service:
     # TASK-INT-026: synchronous coupon apply at placement, plus a best-effort release when the
     # placement transaction does not commit. Internal network only — never through the gateway.

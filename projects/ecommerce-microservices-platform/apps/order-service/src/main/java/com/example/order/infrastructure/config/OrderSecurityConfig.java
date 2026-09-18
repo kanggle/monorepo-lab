@@ -37,8 +37,8 @@ import java.util.List;
  * <p>The single exception is the gateway-EXCLUDED internal route {@code /api/internal/**}
  * (TASK-BE-412): it is never fronted by the gateway, so it validates the inbound
  * {@code client_credentials} Bearer JWT itself as a resource server (JWKS signature +
- * {@code exp}/{@code nbf}/{@code iat} + issuer + audience + <b>system-client subject</b>),
- * <b>fail-closed</b> — a missing / expired / malformed / wrong-issuer / wrong-audience token,
+ * {@code exp}/{@code nbf}/{@code iat} + issuer + <b>system-client subject</b>),
+ * <b>fail-closed</b> — a missing / expired / malformed / wrong-issuer token,
  * <b>or a valid token whose {@code sub} is not an allow-listed internal client-id</b>
  * ({@link SystemClientSubjectValidator}, TASK-BE-505) → {@code 401 UNAUTHORIZED} and the sweep
  * never executes. The subject pin is required because the ecommerce issuer is shared with
@@ -46,7 +46,21 @@ import java.util.List;
  * credential from a user token. Mirrors the IAM account-service {@code /internal/**}
  * resource-server shape (TASK-BE-317/319b, product-to-account.md / BE-402 precedent): decoder
  * built directly from the JWKS URI (lazy fetch — startup is not coupled to auth-service
- * availability), issuer + audience + allowed client-ids pinned via env-overridable properties.
+ * availability), issuer + allowed client-ids pinned via env-overridable properties.
+ *
+ * <p><b>There is no audience check on this chain, and that is deliberate</b>
+ * ({@code TASK-MONO-714}, executing the owner decision in {@code TASK-MONO-698} § AC-3). This chain
+ * used to hold an {@code AudienceValidator} whose expected value came from
+ * {@code order.internal.oauth2.audience} — a property <b>nothing in this repository ever set</b>,
+ * and the validator returned success on a blank expectation. So in production it admitted every
+ * audience while reading, in review and in audit, exactly like a configured audience pin: a control
+ * that is present on the page and absent at runtime. It was <b>deleted</b> rather than made
+ * fail-closed because on a {@code client_credentials} token {@code sub} and {@code aud} are both
+ * the client id, so {@link SystemClientSubjectValidator} already measures that axis — fail-closed,
+ * and it is the validator this chain actually depends on. A second copy would judge the same
+ * question twice from two values free to drift apart. Why a resource server behind an edge keeps no
+ * allowlist of its own: {@code platform/contracts/jwt-standard-claims.md} § JWT Validation rule 5,
+ * <i>Behind the edge</i>.
  *
  * <p>Two chains, ordered so the {@code /api/internal/**}-scoped resource-server chain matches
  * first and the permissive chain catches everything else.
@@ -61,8 +75,6 @@ public class OrderSecurityConfig {
     @Value("${order.internal.oauth2.issuer:http://localhost:8081}")
     private String issuer;
 
-    @Value("${order.internal.oauth2.audience:}")
-    private String audience;
 
     /**
      * Comma-separated allow-list of {@code client_credentials} client-ids permitted on
@@ -77,7 +89,7 @@ public class OrderSecurityConfig {
      * {@code /api/internal/**}. Built from the JWKS URI directly (not OIDC discovery) so
      * startup is not coupled to auth-service availability — the JWKS is fetched lazily on
      * first verification. Validates signature plus timestamps ({@code exp}/{@code nbf}/{@code iat}),
-     * issuer, and (when configured) audience.
+     * issuer, and the system-client subject. No audience validator — see the class Javadoc.
      */
     @Bean
     public JwtDecoder internalJwtDecoder() {
@@ -85,7 +97,6 @@ public class OrderSecurityConfig {
         List<OAuth2TokenValidator<Jwt>> validators = new ArrayList<>();
         validators.add(new JwtTimestampValidator());
         validators.add(JwtValidators.createDefaultWithIssuer(issuer));
-        validators.add(new AudienceValidator(audience));
         // TASK-BE-505: pin the subject to the reserved internal system client(s). The
         // issuer is shared with ordinary CUSTOMER access tokens, so signature+issuer alone
         // does not distinguish a system credential — without this an ordinary token passes

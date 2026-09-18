@@ -39,9 +39,20 @@ import java.util.Set;
  * predicate, and it is a strictly stronger one, since a role set says what a caller may do and
  * this validator asks which caller it is.
  *
- * <p>Runs as a decoder-level {@link OAuth2TokenValidator} (alongside {@link AudienceValidator}),
- * so a wrong-subject token fails verification → {@code 401 UNAUTHORIZED} via the existing
- * {@code OrderSecurityConfig} entry point, matching the contract's fail-closed 401 framing.
+ * <p>Runs as a decoder-level {@link OAuth2TokenValidator}, so a wrong-subject token fails
+ * verification → {@code 401 UNAUTHORIZED} via the existing {@code OrderSecurityConfig} entry
+ * point, matching the contract's fail-closed 401 framing.
+ *
+ * <p>🔴 It used to run <i>alongside</i> an audience validator, and {@code TASK-MONO-714} deleted
+ * that one — so this class is now the <b>only</b> thing on this chain distinguishing a system
+ * credential from any other token the shared issuer mints. That is not a reduction: the deleted
+ * validator was fail-<b>open</b> in production (its expected value was never configured, and it
+ * passed on a blank expectation), and on a {@code client_credentials} token {@code aud} and
+ * {@code sub} are the same client id — so it could only ever have re-judged, from a second value,
+ * the question this class already answers. Weakening the {@code sub} pin, however, now removes the
+ * last discriminator; see {@code jwt-standard-claims.md} § JWT Validation rule 5,
+ * <i>Behind the edge</i>, which is explicit that a chain behind an edge must keep <b>some</b>
+ * discriminator.
  */
 public class SystemClientSubjectValidator implements OAuth2TokenValidator<Jwt> {
 

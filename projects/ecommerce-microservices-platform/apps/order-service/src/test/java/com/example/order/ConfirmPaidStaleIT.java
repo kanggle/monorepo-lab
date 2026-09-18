@@ -100,7 +100,6 @@ class ConfirmPaidStaleIT {
         registry.add("spring.datasource.password", postgres::getPassword);
         registry.add("order.internal.oauth2.jwk-set-uri", jwt::jwkSetUri);
         registry.add("order.internal.oauth2.issuer", () -> InternalJwtTestHelper.ISSUER);
-        registry.add("order.internal.oauth2.audience", () -> InternalJwtTestHelper.AUDIENCE);
     }
 
     @AfterAll
@@ -173,26 +172,29 @@ class ConfirmPaidStaleIT {
     void wrongIssuerBearer_returns401() {
         seedOrder("pay-1", OrderStatus.PENDING, 7200);
         String badToken = jwt.issueToken("ecommerce-internal-services-client",
-                "http://attacker", InternalJwtTestHelper.AUDIENCE, Duration.ofHours(1));
+                "http://attacker", InternalJwtTestHelper.SYSTEM_CLIENT_ID, Duration.ofHours(1));
 
         ResponseEntity<String> response = post(badToken, "{\"olderThanMinutes\":30,\"limit\":200}");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
-    @Test
-    @DisplayName("잘못된 audience 토큰 → 401")
-    void wrongAudienceBearer_returns401() {
-        String badToken = jwt.issueToken("ecommerce-internal-services-client",
-                InternalJwtTestHelper.ISSUER, "some-other-service", Duration.ofHours(1));
-
-        ResponseEntity<String> response = post(badToken, "{\"olderThanMinutes\":30,\"limit\":200}");
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-    }
+    // TASK-MONO-714 — a `wrongAudienceBearer_returns401` case used to sit here. It went with the
+    // audience validator, and it is worth saying why, because deleting a test usually means losing
+    // coverage and this one did not.
+    //
+    // It minted a foreign `aud` and asserted 401, and it was green — but only because this class
+    // switched the audience property on through @DynamicPropertySource. Production never set that
+    // property, and the validator returned success on a blank expectation, so the behaviour this
+    // case asserted DID NOT EXIST outside this file. It guarded a code path only the test could
+    // reach.
+    //
+    // What guards the endpoint is below, unchanged: the subject pin. On a client_credentials token
+    // `sub` and `aud` are both the client id, so that axis is still measured — fail-closed this
+    // time. The three cases that follow are the evidence the chain did not get weaker.
 
     // TASK-BE-505: the shared issuer means an ordinary CUSTOMER access token is signed by
-    // the same key and passes signature+issuer+audience. Before the subject pin it also
+    // the same key and passes signature+issuer. Before the subject pin it also
     // passed .authenticated() and RAN THE SWEEP. These two cases assert it now 401s and the
     // sweep never executes — the declared "system credential only" contract, enforced.
     @Test
@@ -202,7 +204,7 @@ class ConfirmPaidStaleIT {
         // A CUSTOMER access token shape: correct issuer + audience, unexpired, but sub is an
         // account UUID (not the reserved internal client-id).
         String customerToken = jwt.issueToken(java.util.UUID.randomUUID().toString(),
-                InternalJwtTestHelper.ISSUER, InternalJwtTestHelper.AUDIENCE, Duration.ofHours(1));
+                InternalJwtTestHelper.ISSUER, InternalJwtTestHelper.SYSTEM_CLIENT_ID, Duration.ofHours(1));
 
         ResponseEntity<String> response = post(customerToken, "{\"olderThanMinutes\":30,\"limit\":200}");
 
@@ -216,7 +218,7 @@ class ConfirmPaidStaleIT {
     @DisplayName("다른 클라이언트-id sub(타 플랫폼 시스템 토큰) → 401")
     void validButDifferentClientSubject_returns401() {
         String otherClientToken = jwt.issueToken("wms-internal-services-client",
-                InternalJwtTestHelper.ISSUER, InternalJwtTestHelper.AUDIENCE, Duration.ofHours(1));
+                InternalJwtTestHelper.ISSUER, InternalJwtTestHelper.SYSTEM_CLIENT_ID, Duration.ofHours(1));
 
         ResponseEntity<String> response = post(otherClientToken, "{\"olderThanMinutes\":30,\"limit\":200}");
 

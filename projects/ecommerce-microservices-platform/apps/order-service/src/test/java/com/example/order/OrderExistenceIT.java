@@ -79,7 +79,6 @@ class OrderExistenceIT {
         registry.add("spring.datasource.password", postgres::getPassword);
         registry.add("order.internal.oauth2.jwk-set-uri", jwt::jwkSetUri);
         registry.add("order.internal.oauth2.issuer", () -> InternalJwtTestHelper.ISSUER);
-        registry.add("order.internal.oauth2.audience", () -> InternalJwtTestHelper.AUDIENCE);
     }
 
     @AfterAll

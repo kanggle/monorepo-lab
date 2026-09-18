@@ -35,7 +35,7 @@ import java.util.UUID;
  * real GAP-issued one would — no special cases.
  *
  * <p>Mirrors the wms master-service {@code JwtTestHelper} (TASK-MONO-019). A wrong-issuer
- * or wrong-audience token can be minted via {@link #issueToken} to prove the fail-closed
+ * token can be minted via {@link #issueToken} to prove the fail-closed
  * validators.
  */
 public final class InternalJwtTestHelper implements AutoCloseable {
@@ -43,7 +43,20 @@ public final class InternalJwtTestHelper implements AutoCloseable {
     private static final String KEY_ID = "order-internal-test-key";
 
     public static final String ISSUER = "http://test-iam";
-    public static final String AUDIENCE = "order-service";
+    /**
+     * The reserved internal {@code client_credentials} client. On that grant the identity
+     * platform mints {@code sub} == {@code aud} == the client id, so one constant serves both
+     * positions and every token this helper issues looks like a production one.
+     *
+     * <p>🔴 It replaced an {@code AUDIENCE} constant that held <b>this service's own name</b>
+     * ({@code TASK-MONO-714}). No token the identity platform can mint has ever carried that value;
+     * it only ever "worked" because the same suite switched on — through
+     * {@code @DynamicPropertySource} — a validator that production left blank. The suite was
+     * checking a service name against a service name, on a code path production never ran.
+     * (The old value is described rather than quoted, so a census for it cannot match the very
+     * paragraph that records its removal.)
+     */
+    public static final String SYSTEM_CLIENT_ID = "ecommerce-internal-services-client";
 
     private final MockWebServer jwksServer;
     private final RSAPrivateKey privateKey;
@@ -87,9 +100,9 @@ public final class InternalJwtTestHelper implements AutoCloseable {
         return jwksServer.url("/oauth2/jwks").toString();
     }
 
-    /** A valid client_credentials token: configured issuer + audience, 1h TTL. */
+    /** A valid client_credentials token: configured issuer, production-shaped sub/aud, 1h TTL. */
     public String validToken() {
-        return issueToken("ecommerce-internal-services-client", ISSUER, AUDIENCE, Duration.ofHours(1));
+        return issueToken(SYSTEM_CLIENT_ID, ISSUER, SYSTEM_CLIENT_ID, Duration.ofHours(1));
     }
 
     public String issueToken(String subject, String issuer, String audience, Duration ttl) {
