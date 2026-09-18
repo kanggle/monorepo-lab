@@ -127,3 +127,42 @@ FAIL src/widgets/demo-notice/__tests__/DemoBackendNotice.test.tsx
 ## AC-3 — ⏳ CI
 
 머지 뒤 `Frontend unit tests` 잡이 초록이고, **다음 5런**에서 같은 칸의 실패가 없는지 본다. 🔴 날짜가 아니라 **런 수**로 센다. 🔵 그리고 이 티켓이 배운 것을 세어라 — 실패를 세려면 `gh run view`(마지막 시도)가 아니라 **시도(attempt)** 를 봐야 한다.
+
+---
+
+## 🔴 AC-3 정정 — «5런» 이 아니라 **«실행 5회»** 다 (2026-09-18 UTC)
+
+AC-3 은 이렇게 적혀 있다: *"머지 뒤 그 잡이 초록이고, 이후 main 런에서 같은 칸의 실패가
+없다(적어도 **다음 5런** — 🔴 «없다» 는 창 밖에서도 확인 가능하므로 날짜가 아니라 런 수로 센다)."*
+
+🔴 **날짜 대신 런을 센 것은 옳았는데, 런과 실행이 다르다.** `Frontend unit tests` 는 **경로
+게이팅** 잡이라 태스크 파일만 건드린 PR 에서는 `SKIPPED` 된다. 이 저장소의 머지는 대부분
+태스크를 건드리므로, «5런» 으로 세면 flake 에게 **기회를 2번만 주고** 닫게 된다.
+
+**실측 (708 머지 = `319040f00`, 2026-09-18T03:10Z 이후 main CI 런 전부):**
+
+| main 커밋 | `Frontend unit tests` |
+|---|---|
+| `42ec0d262` | 🟢 success |
+| `dbbe85f19` | ⚪ **skipped** (태스크 전용 PR) |
+| `28bb47056` | 🟢 success |
+| `a47aa32cd` | ⚪ **skipped** (태스크 전용 PR) |
+| `30e876bcb` | ⏳ (이 기록 시점에 도는 중) |
+
+⇒ **5런이 지났지만 실제 실행은 2회**다(둘 다 초록, 그 칸의 실패 0).
+
+**그러므로 AC-3 은 «실행 5회» 로 읽는다** — 건너뛴 런은 기회가 아니다. 현재 **2/5**.
+🔵 이 구별은 이 저장소가 이미 문서화한 축과 같다: *"Four are required, but on most PRs fewer
+than four actually run"* (`CLAUDE.md` § Task Rules · `TASK-MONO-601`). 같은 함정을 내가 쓴
+AC 에서 한 번 더 밟았다.
+
+🔵 세는 법(다음 사람용) — 🔴 `gh run list --commit <sha>` 는 **조용히 0행**을 내므로 쓰지 마라:
+
+```bash
+wf=$(gh api repos/kanggle/monorepo-lab/actions/workflows --jq '.workflows[]|select(.name=="CI")|.id')
+gh api "repos/kanggle/monorepo-lab/actions/workflows/$wf/runs?branch=main&per_page=10" \
+  --jq '.workflow_runs[] | "\(.created_at)\t\(.head_sha[0:9])\t\(.id)"'
+# 각 run id 로:
+gh api "repos/kanggle/monorepo-lab/actions/runs/<id>/jobs?per_page=100" \
+  --jq '.jobs[]|select(.name|startswith("Frontend unit tests"))|.conclusion'
+```
