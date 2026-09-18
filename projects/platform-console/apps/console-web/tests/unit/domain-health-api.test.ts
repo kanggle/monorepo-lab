@@ -336,4 +336,30 @@ describe('getDomainHealthState — discriminated server-side state', () => {
     const state = await getDomainHealthState();
     expect(state.bffUnavailable).toBe(true);
   });
+
+  // 🔴🔴 TASK-MONO-711 ② — 이 파일에도 위 두 칸이 **같은 단언**을 하고 있었다
+  //    (502 와 «닿지도 못했다» 가 구별되지 않는다). 개요 쪽만 고치면 이 사본이
+  //    혼자 뒤처진다 — 이 저장소의 «한 사실이 두 집을 갖는다» 축이다. 그래서 같은
+  //    칸을 여기에도 둔다. 🔵 분류기는 두 기능이 **한 모듈**(«shared/api/unavailable-cause»)
+  //    을 공유하므로, 이 칸은 그 배선이 이쪽에도 걸려 있는지를 문다.
+  it('🔴 서로 다른 실패는 서로 다른 사유를 낸다 — 개요 쪽과 같은 분류기를 쓴다', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse({ code: 'BAD_GATEWAY', message: 'x' }, 502)),
+    );
+    const bad = await getDomainHealthState();
+
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('network down')));
+    const down = await getDomainHealthState();
+
+    expect(bad.bffUnavailable).toBe(true);
+    expect(down.bffUnavailable).toBe(true);
+    expect(bad.unavailableCause).toEqual({
+      kind: 'status',
+      status: 502,
+      code: 'BAD_GATEWAY',
+    });
+    expect(down.unavailableCause?.kind).toBe('transport');
+    expect(bad.unavailableCause?.kind).not.toBe(down.unavailableCause?.kind);
+  });
 });

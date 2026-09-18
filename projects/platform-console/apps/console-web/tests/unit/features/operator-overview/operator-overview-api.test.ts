@@ -292,7 +292,7 @@ describe('getOperatorOverviewState — discriminated server-side state', () => {
     expect(state.unauthorized).toBe(true);
   });
 
-  it('502 BAD_GATEWAY → { bffUnavailable: true }', async () => {
+  it('502 BAD_GATEWAY → { bffUnavailable: true } + 사유가 status:502 다 (TASK-MONO-711 ②)', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -301,14 +301,56 @@ describe('getOperatorOverviewState — discriminated server-side state', () => {
     );
     const state = await getOperatorOverviewState();
     expect(state.bffUnavailable).toBe(true);
+    expect(state.unavailableCause).toEqual({
+      kind: 'status',
+      status: 502,
+      code: 'BAD_GATEWAY',
+    });
   });
 
-  it('network failure (fetch throws) → { bffUnavailable: true }', async () => {
+  it('network failure (fetch throws) → { bffUnavailable: true } + 사유가 transport 다 (TASK-MONO-711 ②)', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockRejectedValue(new TypeError('network down')),
     );
     const state = await getOperatorOverviewState();
     expect(state.bffUnavailable).toBe(true);
+    // 🔴 «응답이 나빴다» 가 아니라 «응답에 닿지도 못했다» — Vercel 콘솔이 상시 머무는 상태다.
+    expect(state.unavailableCause?.kind).toBe('transport');
+  });
+
+  // 🔴🔴 TASK-MONO-711 ② 의 본체. 위 두 칸은 각각 자기 사유를 단언하지만, 둘이
+  //    **서로 다른가** 는 아무도 안 묻는다 — 그리고 그것이 이 티켓의 질문이다.
+  //    «기록된 영구 한계» 와 «진짜 장애» 가 같은 값으로 나오면 신호가 죽는다.
+  //    이 칸은 누가 사유를 다시 하나로 뭉개면(예: 전부 'unknown') 빨개진다.
+  it('🔴 서로 다른 실패는 서로 다른 사유를 낸다 — 하나로 뭉개지지 않는다', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse({ code: 'BAD_GATEWAY', message: 'x' }, 502)),
+    );
+    const bad = await getOperatorOverviewState();
+
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('network down')));
+    const down = await getOperatorOverviewState();
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockRejectedValue(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+    );
+    const aborted = await getOperatorOverviewState();
+
+    // 셋 다 같은 플래그다 — 그 플래그만으로는 못 가른다는 것이 이 티켓의 전제다.
+    expect([bad, down, aborted].map((s) => s.bffUnavailable)).toEqual([true, true, true]);
+
+    const kinds = [bad, down, aborted].map((s) => s.unavailableCause?.kind);
+    expect(kinds).toEqual(['status', 'transport', 'timeout']);
+    expect(new Set(kinds).size).toBe(3);
+  });
+
+  it('🔵 대조군 — 성공하면 사유를 지어내지 않는다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(HAPPY_ENVELOPE)));
+    const state = await getOperatorOverviewState();
+    expect(state.bffUnavailable).toBe(false);
+    expect(state.unavailableCause).toBeUndefined();
   });
 });

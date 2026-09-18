@@ -1,4 +1,10 @@
 import { ApiError } from '@/shared/api/errors';
+import {
+  classifyUnavailable,
+  formatUnavailableCause,
+  type UnavailableCause,
+} from '@/shared/api/unavailable-cause';
+import { logger } from '@/shared/lib/logger';
 import { selfOrigin } from '@/shared/config/self-origin';
 import { fetchDomainHealth } from './domain-health-api';
 import type { DomainHealth } from './types';
@@ -38,6 +44,8 @@ export interface DomainHealthState {
   noTenant: boolean;
   unauthorized: boolean;
   bffUnavailable: boolean;
+  /** 🔴 TASK-MONO-711 ② — 왜 참인지. 개요 쪽과 **같은 타입**을 쓴다(두 집이 갈라지지 않게). */
+  unavailableCause?: UnavailableCause;
 }
 
 export async function getDomainHealthState(): Promise<DomainHealthState> {
@@ -80,11 +88,16 @@ export async function getDomainHealthState(): Promise<DomainHealthState> {
         };
       }
     }
+    const unavailableCause = classifyUnavailable(err);
+    logger.warn('domain_health_bff_unavailable', {
+      cause: formatUnavailableCause(unavailableCause),
+    });
     return {
       health: null,
       noTenant: false,
       unauthorized: false,
       bffUnavailable: true,
+      unavailableCause,
     };
   }
 }
