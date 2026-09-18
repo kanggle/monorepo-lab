@@ -58,7 +58,7 @@ Domain interface in `domain/service/`, implementation in `infrastructure/securit
 ```java
 // domain/service/TokenGenerator.java
 public interface TokenGenerator {
-    String generateAccessToken(Account account, String audience, String tenantId, String tenantType);
+    String generateAccessToken(Account account, String clientId, String tenantId, String tenantType);
     long accessTokenTtlSeconds();
 }
 ```
@@ -74,10 +74,11 @@ public class JwtTokenGenerator implements TokenGenerator {
     private final String issuer;
 
     @Override
-    public String generateAccessToken(Account account, String audience, String tenantId, String tenantType) {
+    public String generateAccessToken(Account account, String clientId, String tenantId, String tenantType) {
         Instant now = Instant.now();
-        // A token is scoped to ONE platform (`aud`) and carries ONLY that platform's roles.
-        List<String> roles = account.rolesFor(audience);   // never the account's full role set
+        // `aud` = the requesting client id, NOT a platform name. Roles are scoped by the
+        // platform that client belongs to — one client, one platform, that platform's roles only.
+        List<String> roles = account.rolesFor(platformOf(clientId));  // never the account's full role set
         return Jwts.builder()
             .header().keyId(keyId).and()
             .subject(account.getId().toString())
@@ -86,7 +87,7 @@ public class JwtTokenGenerator implements TokenGenerator {
             .claim("tenant_id", tenantId)                   // REQUIRED — TenantClaimValidator rejects a token missing it
             .claim("tenant_type", tenantType)               // REQUIRED — always minted alongside tenant_id
             .issuer(issuer)
-            .audience().add(audience).and()
+            .audience().add(clientId).and()
             .id(UUID.randomUUID().toString())               // `jti` - required for revocation
             .issuedAt(Date.from(now))
             .expiration(Date.from(now.plusSeconds(ttlSeconds)))
@@ -119,7 +120,7 @@ Per `platform/contracts/jwt-standard-claims.md` — this table is a summary, the
 | `tenant_type` | tenant kind | **Required, always minted alongside `tenant_id`.** Not itself edge-enforced; consumed downstream for tenant-kind branching |
 | `email` | account email | Injected as `X-User-Email` |
 | `iss` | issuer | Validated against the gateway's allow-list |
-| `aud` | **one** platform | A token is for exactly one platform and carries only that platform's roles |
+| `aud` | the requesting **client id** | 🔴 **Not** a platform name. One client belongs to one platform, so the token still carries only that platform's roles — but the claim holds the *client*, and an edge admits the token by intersecting its client allowlist ([`jwt-standard-claims.md`](../../../../platform/contracts/jwt-standard-claims.md) § Standard Claims `aud`) |
 | `iat` / `exp` | timestamps | Freshness / expiry |
 | `jti` | token id | Revocation |
 | `kid` (header) | signing key id | Lets verifiers pick the right JWKS key across rotation |
@@ -181,7 +182,7 @@ Rate-limit this route on the **authenticated principal** (`acct:<sub>`), not the
 
 - **Sign with RSA (RS256) and publish the public key via JWKS.** Never a shared symmetric secret.
 - **`roles` is an array**, and it is the sole authorization axis. No singular `role`. No `account_type`.
-- **One token = one `aud`**, carrying only that platform's roles.
+- **`aud` is the requesting client id, never a platform name.** One token names one client; the roles it carries are that client's platform's.
 - Never store raw refresh tokens — always SHA-256 hash.
 - Revoked tokens are tracked with a TTL so a token cannot be replayed inside its window.
 - The account-tokens index enables bulk invalidation on account deactivation.
@@ -197,7 +198,7 @@ Rate-limit this route on the **authenticated principal** (`acct:<sub>`), not the
 | **Issuing tokens from a non-IdP service** | You are a Resource Server. Verify with `libs/java-security`; the IdP issues |
 | **HMAC / `SecretKey` signing** | RS256 + JWKS. A symmetric secret cannot be verified by a gateway that does not hold it |
 | **Singular `role` claim** | `roles` array — one identity legitimately holds several roles (ADR-MONO-032) |
-| **Putting every role in every token** | Scope to the token's `aud`: only that platform's roles |
+| **Putting every role in every token** | Scope by the platform of the token's client (`aud`): only that platform's roles |
 | Missing `jti` / `kid` | `jti` makes revocation possible; `kid` makes key rotation possible |
 | Storing raw refresh tokens in Redis | Always hash with SHA-256 before storage |
 | No revoked-token tracking | Mark invalidated tokens as revoked with a TTL |

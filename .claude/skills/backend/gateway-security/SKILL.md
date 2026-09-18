@@ -44,7 +44,13 @@ add on top** (rule 6 — admission — is per-platform and the library cannot de
 2. **Require** a bearer token on non-public routes → `401` if missing.
 3. **Verify the signature** against the IdP's **JWKS** (RS256). Never a shared secret.
 4. **Validate the issuer** against the allow-list → `AllowedIssuersValidator`.
-5. **Validate `aud`** — reject a token minted for a different platform.
+5. **Validate `aud` (client allowlist)** — admit iff the token's `aud` values intersect this edge's
+   declared allowlist of **client ids**; a mismatch is `403`, not `401` (re-authenticating cannot
+   change the client a token was issued to). 🔴 `aud` is the client the token was issued to, **not**
+   a platform name. Declare the allowlist where the decoder is assembled and make an absent or empty
+   one a **startup failure** — a check that can be emptied is a check that can vanish in silence.
+   Full rule: [`jwt-standard-claims.md`](../../../../platform/contracts/jwt-standard-claims.md)
+   § JWT Validation rule 5.
 6. **Validate authorization (role admission)** — *"Admit iff the token carries ≥ 1 role valid for
    the requested surface; otherwise respond `403 Forbidden`."* **This is a positive check against
    a closed role set.**
