@@ -9,7 +9,7 @@ TASK-PC-FE-295
 
 # Status
 
-in-progress (2026-09-18 UTC — AC-0 실측 끝, 구현 진행)
+review (2026-09-18 UTC — AC-0~AC-7 닫힘 · AC-0 ② 라이브 원문만 ⚪ 창 예산)
 
 # Owner
 
