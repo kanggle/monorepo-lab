@@ -269,6 +269,7 @@ jobs:
       auth-forwarder: ${{ steps.filter.outputs.auth-forwarder }}
       demo-resolver-copies: ${{ steps.filter.outputs.demo-resolver-copies }}
       client-graph-origins: ${{ steps.filter.outputs.client-graph-origins }}
+      client-graph-server-only: ${{ steps.filter.outputs.client-graph-server-only }}
       fetch-resolution: ${{ steps.filter.outputs.fetch-resolution }}
       readme-screenshots: ${{ steps.filter.outputs.readme-screenshots }}
       # TASK-MONO-648 AC-3: raw filter, NOT AND-combined with `code-changed`. The judge
@@ -846,6 +847,19 @@ jobs:
               - '**/next.config.*'
               - 'infra/demo/backend-resolver/**'
               - 'scripts/check-client-graph-backend-origins.mjs'
+              # 🔴 공유 순회기 — 이것이 바뀌면 **두 가드가 다** 바뀐다(TASK-MONO-720 추출).
+              - 'scripts/client-graph.mjs'
+            # TASK-MONO-720 — 서버 전용 모듈이 클라이언트 번들로 새는가. 형제와 **같은 그래프,
+            # 다른 잎**이므로 트리거도 같다. 🔴 도착 경로가 넓은 이유도 같다: 임포트 한 줄이면
+            # 충분하고(그 한 줄은 **배럴**일 수도 있다), 그 줄은 어느 TS 파일에도 생길 수 있다.
+            client-graph-server-only:
+              - '**/src/**/*.ts'
+              - '**/src/**/*.tsx'
+              - '**/src/*.ts'
+              - '**/src/*.tsx'
+              - '**/next.config.*'
+              - 'scripts/check-client-graph-server-only.mjs'
+              - 'scripts/client-graph.mjs'
             # TASK-MONO-623 — 백엔드로 나가는 `fetch(` 가 해석기를 지나거나 사유를 선언하는가.
             # 🔴 도착 경로는 **어느 TS 파일이든**(새 게이트웨이 클라이언트 · 새 route handler)
             #    이고, 모집단은 `package.json` 의 의존 선언에서 파생한다 ⇒ 그 둘 다 트리거다.
@@ -1717,6 +1731,42 @@ jobs:
 
       - name: Guard — no backend origin literal is reachable from a client component
         run: node scripts/check-client-graph-backend-origins.mjs
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-720 — 서버 전용 모듈이 **클라이언트 번들로 새는 것**을 막는다.
+  #
+  # 🔴🔴 2026-09-22 에 실제로 밟았다: `OrdersScreen`('use client') → 위젯 **배럴** →
+  #    `DomainTenantGate` → `next/headers` ⇒ `next build` 가 깨졌다. 그때 초록이었던 것:
+  #    vitest **316파일·3552칸** · `tsc --noEmit` · `next lint`. 번들 경계를 묻는 것은
+  #    **번들러뿐**인데, 이 워크플로는 console-web 의 `next build` 를 돌리지 않는다(수 분).
+  #    ⇒ 로컬에서 안 잡았으면 **초록으로 머지됐다.**
+  #
+  # 🔵 형제(`client-graph-origins`)와 **같은 그래프, 다른 잎**이다 — 저쪽은 «브라우저가
+  #    백엔드 주소를 아는가», 이쪽은 «브라우저가 서버 전용 능력을 끌어오는가». 축이 다르면
+  #    처방이 다르므로 메시지를 합치지 않는다. 순회기는 `scripts/client-graph.mjs` 하나다.
+  # ---------------------------------------------------------------------------
+  client-graph-server-only:
+    name: Client graph server-only imports (the browser must not pull next/headers)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      needs.changes.outputs.client-graph-server-only == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax (node --check)
+        run: node --check scripts/client-graph.mjs
+
+      - name: Syntax (node --check)
+        run: node --check scripts/check-client-graph-server-only.mjs
+
+      - name: Self-test the predicate (bites through a BARREL, and stays silent where it must)
+        run: node scripts/check-client-graph-server-only.mjs --self-test
+
+      - name: Guard — no server-only module is reachable from a client component
+        run: node scripts/check-client-graph-server-only.mjs
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-623 / ADR-MONO-067 D2 — 백엔드로 나가는 fetch 는 런타임 해석을 지나거나,
