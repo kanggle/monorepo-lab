@@ -3,6 +3,7 @@ import {
   getOrdersSectionState,
   OrdersScreen,
 } from '@/features/ecommerce-ops';
+import { getTenantScope } from '@/widgets/domain-tenant-gate';
 import { resolveEcommerceEligibility } from '../products/_eligibility';
 
 export const dynamic = 'force-dynamic';
@@ -106,5 +107,15 @@ export default async function EcommerceOrdersPage() {
     );
   }
 
-  return <OrdersScreen orders={state.orders} />;
+  // TASK-MONO-719 (소유자 결정 ⓑ) — 목록이 0건일 때 «여기엔 없습니다» 를 말할 재료.
+  // 🔴 여기서 읽는다: 빈 목록은 클라이언트가, 테넌트 집합은 서버가 안다.
+  const { activeTenant, otherTenants } = await getTenantScope();
+
+  return (
+    <OrdersScreen
+      orders={state.orders}
+      activeTenant={activeTenant}
+      otherTenants={otherTenants}
+    />
+  );
 }

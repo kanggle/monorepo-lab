@@ -110,17 +110,54 @@ describe('TASK-MONO-718 — the assumed tenant must be one the section serves', 
     catalogResult = {
       degraded: false,
       products: [
-        { productKey: 'ecommerce', available: true, tenants: ['ecommerce'] },
+        // 🔴 2026-09-22 15차 창 실측값. 이전 판은 `['ecommerce']` 였는데 라이브는
+        //    그 모양을 내지 않는다 — `demo-corp` 는 ecommerce 에 **자격이 있다**.
+        { productKey: 'ecommerce', available: true, tenants: ['demo-corp', 'ecommerce'] },
       ],
     };
   });
 
-  it('🔴 assumed into a tenant the product does NOT serve → the mismatch notice, not an empty list', async () => {
-    // The measured failure (2026-09-22): `demo-corp` is assumed, the gateway
-    // answers 200 with zero rows because that tenant genuinely owns none, and
-    // the screen renders its ordinary «표시할 주문이 없습니다». Same instant,
-    // same URLs: tenant=ecommerce → 5/24/1/2, tenant=demo-corp → 0/0/0/0.
+  it('🔴🔴 TASK-MONO-719 — `demo-corp` does NOT trip this gate, because the registry SERVES it', async () => {
+    // 🔴 This cell used to assert the opposite, on a fixture of
+    // `tenants: ['ecommerce']`. The 2026-09-22 demo window measured the live
+    // registry and it does not produce that shape:
+    //     ecommerce -> [demo-corp, ecommerce]
+    // so `product.tenants.includes('demo-corp')` is TRUE and the notice can
+    // never render. The screen the operator actually saw was the ordinary
+    // «표시할 주문이 없습니다» — while tenant=ecommerce held 5 orders at the
+    // same instant, through the same URL.
+    //
+    // 🔵 The registry is not wrong: `demo-corp` IS entitled to the ecommerce
+    //    product (it carries the operator roles — TASK-BE-576). That the ROWS
+    //    live under `tenant_id=ecommerce` is a SEPARATE proposition. This gate
+    //    asks entitlement; the failure lives in data ownership.
+    // ⇒ TASK-MONO-719 owner decision ⓑ moves that case to `OtherTenantHint`,
+    //   beside the empty list. This cell pins that the gate stays out of it.
     assumedInto('demo-corp');
+    const out = await DomainTenantGate({
+      section: 'E-Commerce',
+      productKey: 'ecommerce',
+      children: child,
+    });
+    const html = renderToStaticMarkup(out);
+    expect(html).toContain('section-body');
+    expect(html).not.toContain('domain-tenant-mismatch');
+  });
+
+  it('🔴 a tenant the product genuinely does NOT serve → the mismatch notice (a shape the live system CAN produce)', async () => {
+    // Reachable because `selectableTenants()` is the union ACROSS products: a
+    // tenant registered only under scm is selectable, and walking into
+    // /ecommerce with it is exactly the case this notice was written for.
+    // 🔵 That is the honest scope of the 718 gate — it was never the case the
+    //    demo measured, and this fixture says which one it is.
+    catalogResult = {
+      degraded: false,
+      products: [
+        { productKey: 'ecommerce', available: true, tenants: ['demo-corp', 'ecommerce'] },
+        { productKey: 'scm', available: true, tenants: ['demo-corp', 'other-corp'] },
+      ],
+    };
+    assumedInto('other-corp');
     const out = await DomainTenantGate({
       section: 'E-Commerce',
       productKey: 'ecommerce',
@@ -131,7 +168,7 @@ describe('TASK-MONO-718 — the assumed tenant must be one the section serves', 
     expect(html).not.toContain('section-body');
     // It must NAME both sides — a notice that says only "wrong tenant" leaves
     // the operator to guess which one to switch to.
-    expect(html).toContain('demo-corp');
+    expect(html).toContain('other-corp');
     expect(html).toContain('ecommerce');
   });
 
