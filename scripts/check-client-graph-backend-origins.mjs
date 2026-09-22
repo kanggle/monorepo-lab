@@ -46,187 +46,61 @@
 //    그리고 번들러도 주석을 지우므로, 주석을 세는 것은 **틀린 것을 세는 것**이다.
 // =============================================================================
 
-import { execFileSync } from 'node:child_process';
-import { readFileSync, readdirSync, statSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
-import { join, dirname, sep } from 'node:path';
+import { readFileSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import {
+  repoRoot,
+  buildClientGraph,
+  stripComments,
+  isServerBoundary,
+} from './client-graph.mjs';
 
 const SELF_TEST = process.argv.includes('--self-test');
 const ROOT = process.env.CGBO_ROOT ?? repoRoot();
-
-function repoRoot() {
-  return execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
-}
-
-/** 트리의 파일 목록. `CGBO_ROOT` 로 합성 트리를 가리킬 때는 git 을 쓰지 않는다. */
-function listFiles(root) {
-  if (process.env.CGBO_ROOT) return walk(root, root);
-  return execFileSync('git', ['-C', root, 'ls-files'], { encoding: 'utf8', maxBuffer: 64 << 20 })
-    .split('\n')
-    .filter(Boolean);
-}
-
-function walk(dir, root, out = []) {
-  let entries;
-  try { entries = readdirSync(dir); } catch { return out; }
-  for (const e of entries) {
-    if (e === 'node_modules' || e === '.next' || e === '.git') continue;
-    const p = join(dir, e);
-    let st;
-    try { st = statSync(p); } catch { continue; }
-    if (st.isDirectory()) walk(p, root, out);
-    else out.push(p.slice(root.length + 1).split(sep).join('/'));
-  }
-  return out;
-}
+// 🔴 **호출마다** 본다 — 모듈 로드 시점에 굳히면 안 된다. self-test 는 케이스마다
+//    `CGBO_ROOT` 를 세팅하므로, 한 번 굳힌 값은 첫 케이스에서 이미 틀린다
+//    (증상: 합성 트리에서 `fatal: not a git repository`).
+const synthetic = () => !!process.env.CGBO_ROOT;
 
 // --- 술어 -------------------------------------------------------------------
+// 🔴 술어가 무엇을 «백엔드 오리진» 으로 보는가 — 그리고 무엇을 일부러 안 보는가
+//   문다 : `http(s)://<host>.local` · `http(s)://<host>.sslip.io`
+//   안 문다: `localhost[:port]` — 프런트 툴링·문서·테스트 URL 이 정당하게 쓴다.
+//          🔴 **선언된 공백**이다(산출물 스캐너는 `localhost` 도 backend 로 센다).
 const BACKEND_ORIGIN_RE = /https?:\/\/[A-Za-z0-9.\-]*\.(?:local|sslip\.io)(?=$|[:/?#'"`\s\\])/g;
 
-/** 문자열/정규식 안의 `//` 를 주석으로 오인하지 않게, 아주 보수적으로 지운다. */
-function stripComments(src) {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, '')            // 블록 주석
-    .replace(/(^|[\s({[,;=])\/\/[^\n]*/g, '$1'); // 줄 주석 (URL 의 `://` 는 앞이 `:` 라 안 걸린다)
-}
-
-const IMPORT_RE =
-  /(?:^|[\s;}])(?:import|export)\s[^;]*?from\s*['"]([^'"]+)['"]|(?:^|[^\w.])import\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
-
-const EXT_ORDER = ['.ts', '.tsx', '.js', '.jsx', '.mjs'];
-
-/**
- * 저장소 **상대** POSIX 경로끼리의 결합. 🔴 `path.resolve` 를 쓰면 안 된다 — 그것은
- * 결과를 **절대 경로**로 만들고, 그러면 `git ls-files` 가 준 상대 경로 집합과 영원히
- * 매치되지 않는다. 즉 상대 임포트(`../hooks/x`)가 **하나도 해석되지 않는데** 가드는
- * 조용히 초록이 된다.
- *
- * 🔴🔴 이것이 이 가드의 첫 판에서 실제로 일어났다 (2026-09-05, bite 테스트가 잡았다):
- * 착수 전 트리에 대고 돌렸을 때 console-web 이 `hits=0` 이었다 — 같은 커밋의 산출물에
- * 백엔드 URL 12개가 **있는데도**. 그 앱의 누출 경로가 전부 상대 임포트였기 때문이다.
- * ⇒ **가드는 무는지 확인하기 전까지 무는 것이 아니다.**
- */
-function joinRel(fromDir, spec) {
-  const parts = fromDir === '' ? [] : fromDir.split('/');
-  for (const seg of spec.split('/')) {
-    if (seg === '' || seg === '.') continue;
-    if (seg === '..') parts.pop();
-    else parts.push(seg);
-  }
-  return parts.join('/');
-}
-
-function resolveSpec(spec, fromFile, aliasBase, files) {
-  let base = null;
-  if (spec.startsWith('@/')) base = joinRel(aliasBase, spec.slice(2));
-  else if (spec.startsWith('./') || spec.startsWith('../')) {
-    const dir = fromFile.includes('/') ? fromFile.slice(0, fromFile.lastIndexOf('/')) : '';
-    base = joinRel(dir, spec);
-  } else if (spec === '@demo/backend-resolver') base = 'infra/demo/backend-resolver/src/index';
-  else return null; // node_modules / next builtins — 이 가드의 범위 밖
-  for (const ext of ['', ...EXT_ORDER, ...EXT_ORDER.map((e) => '/index' + e)]) {
-    if (files.has(base + ext)) return base + ext;
-  }
-  return null;
-}
-
-function hasTopDirective(src, name) {
-  // 파일 **맨 위**의 디렉티브만 본다. 함수 본문 안의 `'use server'` 는 모듈 경계가 아니다.
-  const head = src.slice(0, 400);
-  return new RegExp(`(^|\\n)\\s*['"]use ${name}['"]\\s*;?\\s*(\\n|$)`).test(head);
-}
-
-const isClientRoot = (src) => hasTopDirective(src, 'client');
-
-/**
- * 🔴🔴 `'use server'` 는 **클라이언트 그래프의 끝**이다 — 여기서 순회를 멈춘다.
- *
- * Server Action 모듈은 클라이언트 컴포넌트가 임포트해도 코드가 브라우저로 가지 않는다.
- * Next 가 그 임포트를 **참조 스텁**으로 바꾸고, 실제 본문은 서버에만 남는다(그래서
- * `'use server'` 모듈은 async 함수 외에는 내보낼 수 없다 — 값이 건너갈 길이 없다).
- *
- * 🔴 이 규칙이 없으면 이 가드는 **fan-platform-web 을 거짓으로 고발한다** (2026-09-05
- * 실측: `FollowButton`('use client') → `follow/api/actions.ts`('use server') →
- * `shared/config/env.ts` 로 `http://iam.local`·`http://fan-platform.local` 에 «닿는다»).
- * 그런데 fan 의 실제 산출물은 깨끗하다 — `TASK-MONO-586` 이 그것을 재서 랜딩했다.
- * ⇒ 남의 프로젝트를 못 고치게 만드는 거짓 빨강이었고, 술어가 번들러의 규칙 하나를
- *   빠뜨린 것이지 fan 이 틀린 것이 아니었다.
- */
-const isServerBoundary = (src) => hasTopDirective(src, 'server');
+// 🔵 그래프 순회기는 `client-graph.mjs` 가 소유한다 (TASK-MONO-720 추출).
+//    이 파일은 **판정만** 한다 — 그리고 그 판정이 형제 가드와 다른 축이다.
+//
+// 🔴 **모집단은 여전히 `git ls-files` 다** — 이제 그 호출이 공유 모듈 안에 있을 뿐이다.
+//    그러므로 **스테이지 전에 돌리면 다른 질문**이 된다(CLAUDE.md § 「가드를 돌리기 전에
+//    스테이지」). 🔴 이 문장을 지우지 마라: `check-ls-files-guard-count.sh` 의 분자는
+//    **텍스트로** 세므로, 추출하면서 이 문자열까지 잃으면 «참인 멤버가 더 좁은 술어에
+//    떨어지는» 상태가 된다 — 그 파일이 스스로 경고하는 바로 그 실패다.
 
 function run(root) {
-  const all = listFiles(root);
-  const files = new Set(all);
-  const apps = [
-    ...new Set(
-      all
-        .filter((f) => /(?:^|\/)next\.config\.[a-z]+$/.test(f))
-        .map((f) => f.replace(/(?:^|\/)next\.config\.[a-z]+$/, '') || '.'),
-    ),
-  ].sort();
+  const g = buildClientGraph(root, { synthetic: synthetic() });
+  const report = { apps: [], appsScanned: g.appsScanned, clientRoots: 0, reached: 0, bad: [] };
 
-  const report = { apps: [], appsScanned: apps.length, clientRoots: 0, reached: 0, bad: [] };
-
-  for (const app of apps) {
-    const appDir = app === '.' ? '' : app + '/';
-    const aliasBase = appDir + 'src';
-    const src = all.filter(
-      (f) =>
-        f.startsWith(appDir) &&
-        /\.(ts|tsx)$/.test(f) &&
-        !/(^|\/)(node_modules|\.next)\//.test(f) &&
-        !/(__tests__|\.test\.|\.spec\.)/.test(f),
-    );
-    const roots = [];
-    const text = new Map();
-    for (const f of src) {
-      let s;
-      try { s = readFileSync(join(root, f), 'utf8'); } catch { continue; }
-      text.set(f, s);
-      if (isClientRoot(s)) roots.push(f);
-    }
-
-    // --- 전이 닫힘 ----------------------------------------------------------
-    const seen = new Set(roots);
-    const queue = [...roots];
-    while (queue.length) {
-      const f = queue.shift();
-      let s = text.get(f);
-      if (s === undefined) {
-        try { s = readFileSync(join(root, f), 'utf8'); } catch { continue; }
-        text.set(f, s);
-      }
-      // 🔴 `'use server'` 모듈에서는 더 들어가지 않는다 — 위 `isServerBoundary` 참조.
-      //    (뿌리 자신이 `'use server'` 일 수는 없다: 뿌리는 `'use client'` 로 골랐다.)
-      if (isServerBoundary(s)) continue;
-      const body = stripComments(s);
-      IMPORT_RE.lastIndex = 0;
-      let m;
-      while ((m = IMPORT_RE.exec(body))) {
-        const spec = m[1] ?? m[2];
-        if (!spec) continue;
-        const target = resolveSpec(spec, f, aliasBase, files);
-        if (target && !seen.has(target)) { seen.add(target); queue.push(target); }
-      }
-    }
-
-    // --- 판정 ---------------------------------------------------------------
+  for (const a of g.apps) {
     const hits = [];
-    for (const f of seen) {
-      let s = text.get(f);
+    for (const f of a.reached) {
+      let s = a.text.get(f);
       if (s === undefined) {
         try { s = readFileSync(join(root, f), 'utf8'); } catch { continue; }
       }
-      // 🔴 `'use server'` 모듈의 본문은 브라우저로 안 간다 — 세지 않는다. (순회는 위에서
-      //    이미 멈췄지만, 이 모듈 자체는 `seen` 안에 있으므로 여기서도 걸러야 한다.)
+      // 🔴 `'use server'` 모듈의 본문은 브라우저로 안 간다 — 세지 않는다. (순회는
+      //    그래프 모듈에서 이미 멈췄지만, 그 모듈 자체는 `reached` 안에 있다.)
       if (isServerBoundary(s)) continue;
       const found = [...new Set(stripComments(s).match(BACKEND_ORIGIN_RE) ?? [])];
       if (found.length) hits.push({ file: f, origins: found });
     }
-
-    report.apps.push({ app, clientRoots: roots.length, reached: seen.size, hits: hits.length });
-    report.clientRoots += roots.length;
-    report.reached += seen.size;
-    for (const h of hits) report.bad.push({ app, ...h });
+    report.apps.push({
+      app: a.app, clientRoots: a.roots.length, reached: a.reached.length, hits: hits.length,
+    });
+    report.clientRoots += a.roots.length;
+    report.reached += a.reached.length;
+    for (const h of hits) report.bad.push({ app: a.app, ...h });
   }
   return report;
 }
