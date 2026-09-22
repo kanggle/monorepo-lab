@@ -244,8 +244,16 @@ publish_artist_post() { # <라벨> <저자 account_id> <visibility> <제목> <�
     SEED_EXISTING=$((SEED_EXISTING + 1)); seed_log "존재  $label"
     return 0
   fi
+  # 🔴🔴 `$extra` 를 **반드시** 싣는다. 2026-09-22 데모 창 실측 — 이 줄이 `$extra` 를 빼먹어
+  #    위에서 조립한 `mediaRefs` 가 요청에 **한 번도 실리지 않았다**. 신선 볼륨(13차 AMI)의
+  #    첫 부팅이 만든 글 18건을 피드로 읽으니 `"mediaRefs":[]` 가 **5건 전부**였다.
+  # 🔴 그래서 「제목 건너뛰기 때문에 사진이 안 붙는다 ⇒ 신선 볼륨이면 보인다」는 진단은
+  #    **틀렸다**. 건너뛰기는 실재하지만 원인이 아니었고, 빈 볼륨에서도 결과는 같았다
+  #    (`TASK-MONO-672` 항목 1 이 그 오진 위에서 재굽기를 기다리고 있었다).
+  # 🔵 producer 는 이 필드를 받는다 — `PublishPostRequest.mediaRefs`
+  #    (`@Size(max=MediaRefRules.MAX_COUNT)` · 원소마다 `@Pattern(HTTPS_URL)`).
   api_create "$label" "$GW/api/v1/community/posts" \
-    "{\"postType\":\"ARTIST_POST\",\"visibility\":\"$vis\",\"title\":\"$title\",\"body\":\"$body\"}"
+    "{\"postType\":\"ARTIST_POST\",\"visibility\":\"$vis\",\"title\":\"$title\",\"body\":\"$body\"$extra}"
 }
 
 # 아티스트로 로그인해 발행한다. 토큰의 sub 이 곧 `posts.author_account_id` 가 되므로

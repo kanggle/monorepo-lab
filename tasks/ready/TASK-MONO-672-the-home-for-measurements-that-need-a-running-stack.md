@@ -48,7 +48,7 @@ monorepo
 > 🔵 위 «빈 집» 절은 기안 당시의 상태다. 아래가 지금 들고 있는 것이다. 항목마다 **출처 티켓**과
 > **창만으로 풀리는가**를 적는다(Scope § 제외 · Edge Cases).
 
-## 항목 1 — `TASK-MONO-679`: `seed-fan.sh` 가 실제로 **사진 달린 공개 글**을 발행하는가 (2026-09-15 수령)
+## ✅ 항목 1 (닫힘 2026-09-22 — 판정 FAIL + 시드 고침) — `TASK-MONO-679`: `seed-fan.sh` 가 실제로 **사진 달린 공개 글**을 발행하는가 (2026-09-15 수령)
 
 - **무엇을 재나**: 데모 스택에서 로그인해 팔로우 피드(`/`)와 DB 글 상세를 열었을 때 공개 글 카드에 사진이 그려지는가.
   API 로는 `GET /api/v1/community/feed` 항목의 `mediaRefs` 가 비어 있지 않은가(PUBLIC 글) · 잠긴 항목은 `[]` 인가.
@@ -197,7 +197,7 @@ monorepo
 분석=Opus 5 / 구현 권장=**Sonnet** — 재는 일이다. 🔴 다만 AC-1 의 «창으로 풀리는가» 판정은
 기계적이지 않다(645 의 분개 8칸이 그 반례다).
 
-## 항목 6 — `TASK-MONO-705`: refresh 응답의 **본문 키 목록**과, 수정 후 **창 재판정** (2026-09-18 수령)
+## ✅ 항목 6 (닫힘 2026-09-22 — ①② 둘 다) — `TASK-MONO-705`: refresh 응답의 **본문 키 목록**과, 수정 후 **창 재판정** (2026-09-18 수령)
 
 `TASK-MONO-705` 가 `done` 으로 닫히면서 넘긴 둘이다. 🔴 **AMI 재굽기가 선행**한다 — 백엔드
 (`auth-service`) 변경이므로 현재 핀(`af0018aa6`)으로는 이 측정이 **옛 코드를 잰다**.
@@ -293,7 +293,7 @@ node -e "const m=require('<manifest>.json');const s=m.shots.find(x=>x.path==='/c
 
 ---
 
-## 항목 7 — `TASK-MONO-713` 이 넘긴 것: `ACCOUNT_SERVICE_BASE_URL` 이 **어디에도 설정되지 않는다** (2026-09-18 UTC 수령)
+## ✅ 항목 7 (닫힘 2026-09-22 — 결함 확정, 후속 티켓으로) — `TASK-MONO-713` 이 넘긴 것: `ACCOUNT_SERVICE_BASE_URL` 이 **어디에도 설정되지 않는다** (2026-09-18 UTC 수령)
 
 `TASK-MONO-713` 의 AC-0 인바운드 모집단 측정 중 나온 **곁발견**이다. 713 의 범위 밖이지만 관측은
 진짜이고, **판정에 창이 필요해서** 여기로 왔다(713 은 `done/` 으로 닫히므로 거기 두면 안 읽힌다).
@@ -681,3 +681,183 @@ platform-console-bff    Up 19 minutes (healthy)
 2. **OTLP 를 걷어낸 로그**: `docker logs --tail 400 <c> 2>&1 | grep -viE "otlp|4318|okhttp|opentelemetry" | tail -80`
 3. **항목 1 판정**: 호스트 안에서 `user_token` → `curl /api/community/feed` → PUBLIC 글의 `mediaRefs` 비어 있지 않은가 · 잠긴 항목은 `[]` 인가.
 4. `TASK-PC-FE-295` AC-0 ② 는 ①이 풀린 뒤에야 의미가 있다(카드가 값을 그리려면 레그가 살아야 한다).
+
+---
+
+# 🟢 14차 창 수확 — 항목 1·6·7 을 닫고, 오진 하나를 잡았다 (2026-09-22 UTC · 분석=Opus 5)
+
+**창**: 09:16:58Z 기동(8묶음) → 10:35Z `/stop`. **`used 1200 → 1232 / 1800`** ⇒ **568분 남음.**
+
+## 🔴🔴 먼저 — 이 티켓의 런북이 적은 「SSM 은 에이전트에게 막혀 있다」는 **낡았다**
+
+§ 다음 창 런북과 `TASK-MONO-706` AC-0 이 둘 다 *"명령은 소유자가 실행한다(SSM 은 에이전트에게
+막혀 있다)"* 라고 적는다. **이 세션에서 시도하니 통과했다** — `aws ssm send-command` 가
+`CommandId` 를 돌려줬고(`ff4cc0e2-…`), 이후 20여 번의 측정이 전부 에이전트 손으로 돌았다.
+
+🔵 이것이 이 저장소의 규율 그대로다 — **«막힌다» 는 표가 아니라 시도가 정한다.** 지난 창의
+수확이 죽은 이유가 이 한 줄이었고, 그 줄은 **측정이 아니라 기록된 기억**이었다.
+🔴 그러므로 어떤 티켓에서도 «SSM 이 막힌다» 를 ⚪ 의 **사유**로 적지 마라. 그 자리에서 한 번
+시도하고, 정말 막히면 그때 적어라.
+
+## 🟢 항목 1 (`TASK-MONO-679`) — 닫힌다. 판정은 **FAIL**, 그리고 **진단이 틀렸다**
+
+신선 볼륨(13차 AMI)의 첫 부팅이 만든 글 18건을 실제로 읽었다 —
+`GET /api/v1/community/feed` (호스트 안에서 `user_token` 으로 발급):
+
+| 술어 | 결과 |
+|---|---|
+| PUBLIC 글의 `mediaRefs` 가 비어 있지 않은가 | 🔴 **`[]` — 피드 5건 전부** |
+| 잠긴 항목은 `[]` 인가 | 🟢 **PASS** (`locked:true` + `title:null` + `bodyPreview:null`) |
+
+🔴🔴 **원인은 「제목 건너뛰기」가 아니다.** `seed-fan.sh` 의 `publish_artist_post` 는 6번째 인자로
+사진 배열을 **받고**(루미·노아의 PUBLIC 글에 2장씩) `extra=",\"mediaRefs\":$media"` 를 **조립까지**
+한다. 그런데 요청 본문이 그 변수를 **안 싣는다**:
+
+```bash
+api_create "$label" "$GW/api/v1/community/posts" \
+  "{\"postType\":…,\"visibility\":…,\"title\":…,\"body\":\"$body\"}"   # ← $extra 없음
+```
+
+⇒ **빈 볼륨에서도 결과는 같다.** 이 항목이 «재굽기가 선행» 이라고 적힌 근거
+(*"구워진 AMI 의 DB 에 사진 없는 글이 이미 있어서 건너뛴다"*)는 **오진**이었다. 건너뛰기는 실재
+하지만 사진이 없는 원인이 아니었고, 그래서 재굽기는 이 항목에 대해 **아무것도 사지 않았다.**
+
+🔵 **producer 는 그 필드를 받는다** — `PublishPostRequest.mediaRefs`
+(`@Size(max=MediaRefRules.MAX_COUNT)` · 원소마다 `@Pattern(HTTPS_URL)`). 즉 시드 한 줄이 전부다.
+
+**고침 + bite**: `$extra` 를 본문에 싣는다 ·
+`FanArtistDemoSeedTest#assembledMediaRefsReachTheRequestBody`(되돌리면 **rc=1**, 그 칸만 빨강 — 실측).
+⚪ **화면 판정은 다음 신선 부팅이다** — 이미 발행된 18건은 제목으로 건너뛰므로 이 창에서
+사진이 붙지 않는다(그 건너뛰기는 이제 진짜로 그 역할만 한다). 🔴 **이 한 줄만 남기고 항목 1 을
+닫는다** — 「사진이 실제로 그려지는가」는 아래 § 후속 항목으로 옮긴다.
+
+## 🟢 항목 6 (`TASK-MONO-705`) — ①② 둘 다 닫힘
+
+**① refresh 응답의 키 목록** (값 출력 없음, 키만):
+
+```
+authorization_code → access_token expires_in id_token refresh_token scope token_type
+refresh_token      → access_token expires_in id_token refresh_token scope token_type
+```
+
+🟢 **`id_token` 이 온다** — 705 의 수정이 의지하는 바로 그 사실이고, 그 티켓은 코드 독해로만
+답했던 자리다. 이제 **엔드포인트 본문**으로 답했다.
+
+**② 창 재판정** (`scripts` 밖의 일회용 Playwright 프로브, 판정 술어 = **쿠키**):
+
+```
+① 로그인 → console_access_token(830) · console_id_token(878) · console_refresh_token(128)
+② console_access_token 만 삭제
+③ /dashboards/overview → 200 · /login 으로 밀리지 않음
+   console_access_token  🟢 다시 섬(830)
+   console_refresh_token 🟢 **값 회전됨**   ← 갱신이 실제로 돌았다는 유효성 술어
+   console_id_token      🟢 그대로 서 있음
+```
+
+🔵 **refresh_token 의 회전이 대조군 노릇을 한다** — 「세션이 그냥 살아 있어서 통과한 것」이면
+회전이 일어날 이유가 없다. 705 가 «비밀번호 칸 개수» 로 물었다가 정반대 판정을 찍은 자리를
+쿠키로 물어 닫았다.
+
+## 🟢 항목 7 (`TASK-MONO-713` 인계) — 「안 보이는 고장」이 **관측됐다**
+
+```
+ACCOUNT_SERVICE_BASE_URL  → ecommerce-product-service 컨테이너 환경에 **없음**
+로그:
+  seller provisioning failed (fail-soft, seller stays PENDING) tenant=ecommerce seller=demo-seller:
+    I/O error on POST request for "http://localhost:8081/oauth2/token": Connection refused
+  seller left PENDING_PROVISIONING (IAM unavailable, retryable) tenant=ecommerce seller=demo-seller
+```
+
+- 술어 ①(로그에 무엇으로 찍히나) → **connection refused**. 티켓이 *"refused 가 예상이지만 예상은
+  측정이 아니다"* 라고 적은 그 자리를 실측으로 채웠다. 🔵 다만 refused 대상은 accounts 엔드포인트가
+  아니라 **IAM 토큰 엔드포인트**(`/oauth2/token`)다 — 프로비저닝은 **토큰도 못 받고** 죽는다.
+- 술어 ②(account_db 에 행이 생겼나) → **행 이전에 호출 자체가 없다.** 그리고 셀러는
+  `PENDING_PROVISIONING` 에 남는다(시드의 「셀러 활성화」는 **다른 경로**다).
+
+⇒ **결함 확정.** AC-2 규율대로 여기서 고치지 않고 **별도 티켓**으로 기안한다.
+
+## 🟡 항목 2 (`TASK-MONO-679` AC-0) — ① 은 성립, ②③ 은 항목 1 과 함께 다음 창
+
+`fan` 촬영 **11/11 · 실패 0**, `✔ /posts/[id] → /posts/01a0c825-…`(로그인 상태에서 상세가 열린다)
+⇒ ① 「게이트웨이 404 → 폴백」 경로는 **살아 있다**. ②(사진) 는 위 § 의 시드 수정이 실려야
+판정되고, ③(두 피드의 목록 일치)는 이 창에서 따로 안 쟀다 — ⚪.
+
+## ⚪ 항목 5 (`TASK-MONO-683` AC-4) — 열지 못했다, 그리고 **내 술어가 틀렸다**
+
+`/scm/replenishment` 은 촬영에서 **빈 목록**이다(런북이 이미 예고한 대로 — 추천은 wms 저재고
+알림/IVS 야간 스윕에서만 생기고 신선 볼륨엔 그 트리거가 없다). 🔴 API 로 분모를 세려 했으나
+**경로를 계약서에서 읽지 않고 세 개를 추측했고 셋 다 404** 였다 — 이 저장소가 이름 붙인 실패를
+그대로 밟았다. ⇒ 이 항목은 **여전히 ⚪ 이고, 남은 것은 「측정」이 아니라 「선행 만들기」** 라는
+런북의 판단이 유지된다.
+
+## ⚪ 항목 4 (`TASK-BE-595` AC-4) — 시도하지 않았다
+
+외부 테넌트 토큰을 **일부러** 만들어야 하는데, 이번 창은 그 설계를 하지 않았다. 🔵 다만 재료가
+하나 늘었다 — `operator_token <tenant>` 가 임의 테넌트로 **assume 을 시도**할 수 있음을 확인했고
+(`ecommerce`·`demo-corp` 둘 다 토큰 발급 성공), 엔타이틀먼트 없는 테넌트 이름만 고르면 된다.
+
+## 🔵 곁에서 닫힌 것들 (각 티켓에도 적었다)
+
+| 티켓 | 결과 |
+|---|---|
+| `TASK-MONO-675` AC-1 | 🟢 **ⓐ 확정** — `wms.master.*.v1` 6종 **전 파티션 오프셋 0** · `.dlq` 도 **0** ⇒ 「시드가 이벤트를 안 낸다」가 관측이 됐고 「소비 실패」(ⓓ)는 배제됐다 |
+| `TASK-MONO-706` AC-0 | 🟢 **실패 지점 지목** — `ShippingConfirmedConsumer.applyConfirm:148` · `IllegalArgumentException: … has no matching reservation line on reservation d987aea0-…` 🔴 그런데 **이벤트 페이로드의 `reservationId` 는 `01a0c831-fb7b-…`** 로 **다르다**(eventId 대조로 같은 이벤트 확인) |
+| `TASK-MONO-711` ③ | 🟢 **확인 사살 통과** — 매니페스트가 `/console degraded=true ["catalog-health-unavailable"]` (기대값과 동일). `/dashboards/health` 는 `domain-health-bff-unavailable` |
+| `TASK-MONO-648` | 🟢 **세 앱 촬영** — console 53 · store 21 · fan 11. 🔴 커밋하지 않는다(15–50MB) |
+| `TASK-MONO-697` | ⚪ **미측정 — 그리고 「불일치 0」이 아니다**(아래) |
+
+### 🔴 `TASK-MONO-697` — 왜 ⚪ 인가 (숫자를 0 으로 적지 마라)
+
+게이트웨이 7개 전부 `JWT audience not on allowlist` **0줄**이다. 그것을 「불일치 없음」으로 읽으면
+안 된다. 유효성 술어를 세워 봤다:
+
+- 컨테이너에 `curl` 은 **있다**(`/usr/bin/curl`) ⇒ 「도구가 없어서 못 읽었다」는 배제.
+- `actuator/prometheus` 에 `gateway_jwt_audience*` **없음**, `actuator/env` 는 **401**.
+- 배포 이미지는 **13차 굽기 산물**(`created=2026-09-22T06:55Z`)이고 `java-security.jar` 도 들어 있다.
+- 설정은 기본값으로 켜져 있어야 한다 — `allowed-audiences: ${OIDC_ALLOWED_AUDIENCES:platform-console-web}` ·
+  `audience-mode: ${OIDC_AUDIENCE_MODE:SHADOW}`.
+- **주입**: `aud=fan-platform-user-flow-client` 토큰(= wms 허용목록 밖)으로 wms 를 호출 → **403**,
+  그런데 경고는 **여전히 0줄**. 그리고 그 게이트웨이의 **WARN 총 줄 수도 0** 이다.
+
+⇒ 「검사가 돌고 전부 일치했다」와 「검사가 그 요청에 도달하지 못했다」를 **이 세션은 구별하지
+못한다**. 🔵 **다음 탐침**: 그 403 이 JWT 디코딩 **전**에 나는지 뒤에 나는지 가른다 — 콘솔 토큰이
+200 을 받는 경로에 같은 fan 토큰을 보내고, 게이트웨이가 INFO 액세스 로그를 내는지부터 확인한다.
+
+## 🔵 지난 창의 ⚪ 하나가 닫혔다 — 「ecommerce·wms·scm 이 비었다」
+
+세 도메인을 하나로 묶은 것이 틀렸다. **셋 다 원인이 다르다:**
+
+- **ecommerce** — 🟢 **원인 확정, 그리고 결함이 아니다.** 데이터는 **있다**. 시드는
+  `operator_token ecommerce` 로 쓰고, 콘솔 기본 세션은 `demo-corp` 다. 같은 순간·같은 URL 대조군:
+  `ecommerce` = orders 5 · products 24 · users 1 · sellers 2 / `demo-corp` = **전부 0**.
+  `DEMO_TENANT=ecommerce` 로 다시 찍으니 **21장 중 빈 장 0**. ⇒ 테넌트 불일치다(별도 티켓).
+### 🔴🔴 정정 — 테넌트 축은 **내가 발견한 것이 아니다**
+
+위를 처음 쓸 때 나는 이것을 「두 창에 걸친 ⚪ 를 푸는 새 발견」처럼 적었다. **아니다.**
+`TASK-MONO-648` 이 (2026-09-10 이전에) 이미 적어 두었다:
+
+> 🔴 `/ecommerce/*` 3장은 **테넌트 `ecommerce` 로 재촬영**한 뒤에만 승인 목록으로 확정한다.
+> 🔵 `demo-corp` 로 찍어서 「승인 목록대로 찍었다」고 적으면, 그 매니페스트는 **빈 표 세 장을
+> 승인된 것으로** 기록한다.
+
+🔴 이 저장소가 같은 실수를 이미 이름 붙였다(지난 창의 «새로 드러난 결함» 이 실은 645·711·648 에
+있던 것이었던 자리) — 그리고 **나는 그것을 한 창 만에 다시 밟았다.**
+
+🔵 **그래서 이번에 진짜로 새로운 것만 남기면 셋이다:**
+1. **수치 대조군** — 같은 순간·같은 URL 에서 `ecommerce` 5/24/1/2 대 `demo-corp` 0/0/0/0.
+   648 의 문장은 «빈 표가 된다» 였고, 이것은 **분자와 분모**다.
+2. **`TASK-MONO-710` AC-3 의 사후조건이 그 축에 대해 공허하다**는 것 — 648 의 노트는 촬영에
+   대한 것이었고, 시드의 자기검증이 같은 함정에 빠져 있다는 연결은 아무도 안 적었다.
+3. 이 티켓이 «ecommerce·wms·scm 이 비었다» 를 **한 덩어리 ⚪** 로 들고 있었다는 것 —
+   648 에 답이 반쯤 있었는데 **그 두 티켓이 서로를 안 봤다.**
+
+- **wms** — 🔵 **원래 비어 있지 않았다.** `/wms/inventory`·`/wms/inbound`·`/wms/outbound`·`/wms/master`
+  전부 데이터. 빈 것은 랜딩 `/wms` 한 장이다. ⇒ 지난 창의 요약이 **과장**이었다.
+- **scm** — `/scm/inventory`·`/scm/replenishment` 둘만 빈다. 후자는 **예상된 0건**(위 항목 5).
+
+🔴 그리고 **「개요·상태 카드의 저하」는 결함이 아니다** — `infra/demo/console-vercel.override.yml`
+이 그것을 **기록된 영구 한계**로 적고 있다: *"`console-bff` 는 공개 호스트명이 없고
+(`TASK-MONO-362` 가 그 Traefik 라우터를 일부러 없앴다), Vercel 콘솔은 그것을 못 부른다. 영향 레그
+셋뿐 — 운영 개요 합성 · 도메인 상태 합성 · 알림 인박스."* 실측이 그 문장과 정확히 맞는다:
+console-bff 는 `healthy` 인데 **09:25:23Z 서블릿 초기화 이후 요청 로그가 한 줄도 없다.**
+🔵 지난 창에서 내가 «console-bff 기동 실패» 를 의심했다가 반증당한 자리의 **진짜 답**이 이것이다.
