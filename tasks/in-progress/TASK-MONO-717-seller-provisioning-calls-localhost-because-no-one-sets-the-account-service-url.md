@@ -8,7 +8,7 @@ TASK-MONO-717
 
 # Status
 
-ready (2026-09-22 UTC — 🔴 **AC-0 수행 완료, 전제가 무너졌다**: 고칠 값은 `ACCOUNT_SERVICE_BASE_URL` 이 아니라 `IAM_TOKEN_URI` 가 먼저이고, 더 앞에 **`product-service-client` 가 IdP 에 없다** ⇒ 「배선 문제」가 아니라 **워크로드 클라이언트 등록 여부**가 소유자 결정. 🔵 역할이 아니라 스코프(`internal.invoke`)라 ADR 은 안 건드린다)
+in-progress (2026-09-23 UTC — 소유자 결정 **ⓐ 등록**. AC-0 이 밝힌 대로 고칠 것은 주소 둘 + **워크로드 클라이언트 등록**이고, 등록은 `WorkloadRoleCatalog` 에 **명시 항목**을 요구한다(그 테스트가 등호로 단언한다 — 「부재 = 아무도 안 봄」))
 
 # Owner
 
