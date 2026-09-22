@@ -82,6 +82,10 @@ class EcommerceOrderDemoSeedTest {
     private static final Pattern SHIP_PROGRESS_CALL = Pattern.compile(
             "^\\s*ship_progress\\s+\"[^\"]+\"\\s+\"[^\"]+\"\\s+([A-Z_]+)\\s*$", Pattern.MULTILINE);
 
+    /** {@code operator_token <tenant>} — every tenant this seed assumes, in file order. */
+    private static final Pattern OPERATOR_TOKEN_TENANT = Pattern.compile(
+            "operator_token ([a-z0-9-]+)");
+
     /** The single line that resolves a variant id out of the product-detail body: {@code vid="$(...)"} */
     private static final Pattern VID_EXTRACTION = Pattern.compile("^ *vid=.*$", Pattern.MULTILINE);
 
@@ -388,5 +392,42 @@ class EcommerceOrderDemoSeedTest {
                         + "cut at the array so the product's own leading id is not picked up. "
                         + "Extraction line was: %s", vidLine)
                 .contains("\"variants\":");
+    }
+
+    @Test
+    @DisplayName("the post-condition prints a tenant CONTRAST — it must not only re-read what it wrote")
+    void thePostConditionContrastsAgainstADifferentTenant() throws IOException {
+        String body = seed();
+
+        List<String> tenants = allMatches(OPERATOR_TOKEN_TENANT, body, 1);
+        assertThat(tenants)
+                .as("zero parsed `operator_token <tenant>` calls would make every assertion "
+                        + "below vacuously true")
+                .isNotEmpty();
+
+        // 🔴🔴 TASK-MONO-718 AC-2. The floors above are read back with the SAME token the
+        //    seed wrote with (`operator_token ecommerce`), so they are true by construction
+        //    and say nothing about the tenant an operator actually has selected. The
+        //    2026-09-22 window measured the cost of that blind spot — same instant, same
+        //    URLs: tenant=ecommerce → orders 5 / products 24 / users 1 / sellers 2, and
+        //    tenant=demo-corp → 0 / 0 / 0 / 0. The console was on `demo-corp`, nine of its
+        //    fourteen ecommerce screens rendered as empty lists, and this post-condition
+        //    was GREEN throughout.
+        //
+        // 🔵 The fix is not another floor — which tenant is "right" is TASK-MONO-718's owner
+        //    decision, and today's 0 is design (TASK-BE-576), not a defect. The seed prints
+        //    the contrast so a human reads the split instead of inheriting it.
+        assertThat(new java.util.HashSet<>(tenants))
+                .as("the seed must assume at least TWO distinct tenants: the one it writes "
+                        + "with, and a different one to contrast the post-condition against. "
+                        + "Parsed: %s — if they collapse to one, the post-condition is back to "
+                        + "re-reading what it wrote and the empty-console split becomes "
+                        + "invisible again.", tenants)
+                .hasSizeGreaterThan(1);
+
+        assertThat(body)
+                .as("the contrast must reach the OPERATOR PLANE the console reads — "
+                        + "contrasting on some other endpoint would measure a different thing")
+                .contains("테넌트 대조");
     }
 }

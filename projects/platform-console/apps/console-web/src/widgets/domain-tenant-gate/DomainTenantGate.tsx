@@ -1,6 +1,11 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { getAssumedToken, isSampleVisitor } from '@/shared/lib/session';
+import { getCatalog } from '@/features/catalog';
+import {
+  getActiveTenant,
+  getAssumedToken,
+  isSampleVisitor,
+} from '@/shared/lib/session';
 
 /**
  * Whether a domain section must ask the operator to pick a tenant first
@@ -24,16 +29,123 @@ export async function tenantSelectionRequired(): Promise<boolean> {
   return (await getAssumedToken()) === null;
 }
 
+/**
+ * Whether the ASSUMED tenant is one this section's product actually serves
+ * (TASK-MONO-718, owner decision ⓑ). Returns the tenants to switch to, or
+ * `null` when there is nothing to say.
+ *
+ * 🔴🔴 **The failure this closes.** `tenantSelectionRequired()` above only asks
+ * «is SOME tenant assumed?». A tenant can be assumed and still be the wrong one
+ * for this section — and then the gateway answers `200` with an EMPTY page,
+ * because it resolves the tenant from the JWT claim and that tenant genuinely
+ * owns no rows. The screen renders its ordinary «표시할 주문이 없습니다» and
+ * nothing anywhere reports a problem. Measured 2026-09-22 on the demo, same
+ * instant, same URLs:
+ *
+ *     tenant=ecommerce  → orders 5 · products 24 · users 1 · sellers 2
+ *     tenant=demo-corp  → 0 · 0 · 0 · 0
+ *
+ * The demo seed writes the back office under `ecommerce` on purpose
+ * (TASK-BE-576: `demo-corp` carries the ROLES, `ecommerce` is where the rows
+ * the storefront reads actually live, and the catalogue cannot move because
+ * its `tenant_id` is a producer-side default) — so «운영자가 그쪽으로 가야
+ * 한다», and this is the screen that says so.
+ *
+ * 🔵 **Judged by relation, never by a slug list** — the same discipline
+ * `active-tenant-default.ts` states for `selectableTenants()`: a hard-coded
+ * «ecommerce lives in `ecommerce`» would break silently on the next rename.
+ *
+ * 🔴 **Every uncertainty falls THROUGH to the section.** A degraded registry, a
+ * product that is absent, or a product with no tenants cannot prove a mismatch,
+ * and a gate that blocks on «I could not check» would turn a registry blip into
+ * a dead section. Only a positive answer — the product is present, it lists
+ * tenants, and the active one is not among them — renders the notice.
+ */
+async function tenantMismatch(
+  productKey: string,
+): Promise<{ active: string; expected: string[] } | null> {
+  const active = await getActiveTenant();
+  if (!active) return null; // the «select a tenant» gate above owns this case
+  try {
+    const catalog = await getCatalog();
+    if (catalog.degraded) return null;
+    const product = catalog.products.find((p) => p.productKey === productKey);
+    if (!product || product.tenants.length === 0) return null;
+    if (product.tenants.includes(active)) return null;
+    return { active, expected: product.tenants };
+  } catch {
+    // Cannot prove a mismatch from a failed registry — let the section render.
+    return null;
+  }
+}
+
 /** The domain-section layout gate — renders the section, or «테넌트를 선택하세요». */
 export async function DomainTenantGate({
   section,
+  productKey,
   children,
 }: {
   /** Display name of the section, as the sidebar shows it. */
   section: string;
+  /**
+   * Registry `productKey` of this section. OPTIONAL and opt-in: pass it and the
+   * gate also checks that the assumed tenant is one the product serves
+   * (TASK-MONO-718). Omit it and the gate behaves exactly as before.
+   *
+   * 🔵 Left off the other sections deliberately — TASK-MONO-718 § 제외 says the
+   *    measurement points at ecommerce alone (wms · scm · erp · finance all
+   *    rendered their data under `demo-corp` in the same window), and widening
+   *    it to «a shared problem» would be a claim nothing measured.
+   */
+  productKey?: string;
   children: ReactNode;
 }) {
-  if (!(await tenantSelectionRequired())) return <>{children}</>;
+  if (!(await tenantSelectionRequired())) {
+    const mismatch = productKey ? await tenantMismatch(productKey) : null;
+    if (!mismatch) return <>{children}</>;
+    return (
+      <section aria-labelledby="domain-tenant-mismatch-heading">
+        <h1
+          id="domain-tenant-mismatch-heading"
+          className="mb-6 text-2xl font-semibold"
+        >
+          {section}
+        </h1>
+        <div
+          role="status"
+          data-testid="domain-tenant-mismatch"
+          className="rounded-md border border-border bg-muted px-4 py-6 text-sm text-muted-foreground"
+        >
+          <p className="mb-2 font-medium text-foreground">
+            이 화면의 데이터는 다른 테넌트에 있습니다.
+          </p>
+          <p>
+            현재 활성 테넌트는 <code>{mismatch.active}</code> 인데, {section}{' '}
+            화면은{' '}
+            {mismatch.expected.map((t, i) => (
+              <span key={t}>
+                {i > 0 ? ', ' : ''}
+                <code>{t}</code>
+              </span>
+            ))}{' '}
+            테넌트의 데이터를 읽습니다. 상단의 테넌트 스위처에서 그 테넌트로
+            전환하면 이 화면이 채워집니다.
+          </p>
+          <p className="mt-2">
+            🔵 전환하지 않아도 화면은 열리지만 <b>목록이 비어 보입니다</b> —
+            데이터가 없는 것이 아니라 지금 테넌트가 그 데이터를 소유하지 않기
+            때문입니다.
+          </p>
+          <Link
+            href="/console"
+            className="mt-4 inline-block text-sm underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            카탈로그로 이동
+          </Link>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section aria-labelledby="domain-no-tenant-heading">

@@ -727,6 +727,42 @@ if [ -n "${OP_TOKEN:-}" ]; then
     seed_fail "사후조건: 배송 목록 조회 실패 (HTTP $SEED_LAST_STATUS)"
   fi
 
+  # ---------------------------------------------------------------------------
+  # 🔴🔴 테넌트 대조 — 이 사후조건이 **무엇을 증명하지 않는지** 를 출력에 적는다
+  #      (TASK-MONO-718 AC-2)
+  # ---------------------------------------------------------------------------
+  # 위 단언들은 `OP_TOKEN`(= `operator_token ecommerce`)으로 읽는다. 즉 **시드가 쓴
+  # 테넌트를 그대로 되읽는다** ⇒ 언제나 참이다. 그래서 § 2 의 주석이 적은
+  # *"콘솔이 읽는 바로 그 엔드포인트로 재야 화면이 찬다는 뜻이 된다"* 는 **엔드포인트에
+  # 대해서만** 맞고 **테넌트에 대해서는 공허하다.**
+  #
+  # 2026-09-22 데모 창이 그 대가를 실측했다 — 같은 순간·같은 URL:
+  #   tenant=ecommerce → orders 5 · products 24 · users 1 · sellers 2
+  #   tenant=demo-corp → 0 · 0 · 0 · 0
+  # 그때 콘솔 촬영은 `demo-corp` 였고 ecommerce 14장 중 **9장이 빈 목록**이었는데,
+  # 이 사후조건은 **초록이었다.**
+  #
+  # 🔵 그래서 고침은 «하한을 하나 더 두는 것» 이 아니라 **차이를 인쇄하는 것**이다
+  #    (티켓이 허용한 두 갈래 중 뒤엣것). 숫자로 단언하지 않는 이유: 어느 테넌트가
+  #    «옳은지» 는 TASK-MONO-718 의 소유자 결정이지 시드가 정할 일이 아니고,
+  #    지금 0 이라는 사실은 **결함이 아니라 설계**다(TASK-BE-576).
+  # 🔴 실패로 세지 않는다 — `seed_warn` 도 아니다. 이것은 **판정이 아니라 관측**이다.
+  if OTHER_TOKEN="$(operator_token demo-corp 2>/dev/null)" && [ -n "${OTHER_TOKEN:-}" ]; then
+    other_prev="$SEED_TOKEN"; SEED_TOKEN="$OTHER_TOKEN"
+    if http GET "$GW/api/admin/orders?size=1"; then
+      other_total="$(printf '%s' "$SEED_LAST_BODY" | grep -oE '"totalElements":[0-9]+' | head -1 | cut -d: -f2)"
+      seed_log "테넌트 대조 — 이 시드는 «ecommerce» 로 쓰고 읽었다(주문 ${order_total:-0} 건). 같은 URL 을 «demo-corp» 로 읽으면 ${other_total:-0} 건이다."
+      if [ "${other_total:-0}" = "0" ] 2>/dev/null; then
+        seed_log "  ⇒ 🔵 콘솔이 «demo-corp» 로 열려 있으면 E-Commerce 화면은 **비어 보인다**(설계 — TASK-BE-576). 콘솔은 그때 테넌트 안내를 보여야 한다(TASK-MONO-718 ⓑ)."
+      fi
+    else
+      seed_log "테넌트 대조 — «demo-corp» 조회가 HTTP $SEED_LAST_STATUS 로 답했다(대조만, 판정 아님)"
+    fi
+    SEED_TOKEN="$other_prev"
+  else
+    seed_log "테넌트 대조 — «demo-corp» 운영자 토큰을 못 받아 대조를 건너뛴다(판정 아님)"
+  fi
+
   SEED_TOKEN=""
 fi
 

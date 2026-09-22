@@ -18,6 +18,22 @@ vi.mock('next/headers', () => ({
   }),
 }));
 
+/**
+ * TASK-MONO-718 — the gate now also asks whether the ASSUMED tenant is one the
+ * section's product serves, so it needs the registry. `catalogResult` is what
+ * `getCatalog()` returns (or throws, when set to an Error).
+ */
+let catalogResult: unknown = {
+  degraded: false,
+  products: [{ productKey: 'ecommerce', available: true, tenants: ['ecommerce'] }],
+};
+vi.mock('@/features/catalog', () => ({
+  getCatalog: async () => {
+    if (catalogResult instanceof Error) throw catalogResult;
+    return catalogResult;
+  },
+}));
+
 import { renderToStaticMarkup } from 'react-dom/server';
 import { DomainTenantGate, tenantSelectionRequired } from '@/widgets/domain-tenant-gate';
 import {
@@ -77,6 +93,119 @@ describe('DomainTenantGate', () => {
     const out = await DomainTenantGate({ section: 'E-Commerce', children: child });
     expect(renderToStaticMarkup(out)).toContain('section-body');
     expect(renderToStaticMarkup(out)).not.toContain('domain-no-tenant');
+  });
+});
+
+describe('TASK-MONO-718 — the assumed tenant must be one the section serves', () => {
+  const child = <p data-testid="section-body">body</p>;
+
+  /** Logged in AND switched into `demo-corp` — the exact live state measured. */
+  function assumedInto(tenant: string) {
+    operatorSession();
+    cookieJar.set(TENANT_COOKIE, tenant);
+    cookieJar.set(ASSUMED_TOKEN_COOKIE, 'assumed');
+  }
+
+  beforeEach(() => {
+    catalogResult = {
+      degraded: false,
+      products: [
+        { productKey: 'ecommerce', available: true, tenants: ['ecommerce'] },
+      ],
+    };
+  });
+
+  it('🔴 assumed into a tenant the product does NOT serve → the mismatch notice, not an empty list', async () => {
+    // The measured failure (2026-09-22): `demo-corp` is assumed, the gateway
+    // answers 200 with zero rows because that tenant genuinely owns none, and
+    // the screen renders its ordinary «표시할 주문이 없습니다». Same instant,
+    // same URLs: tenant=ecommerce → 5/24/1/2, tenant=demo-corp → 0/0/0/0.
+    assumedInto('demo-corp');
+    const out = await DomainTenantGate({
+      section: 'E-Commerce',
+      productKey: 'ecommerce',
+      children: child,
+    });
+    const html = renderToStaticMarkup(out);
+    expect(html).toContain('domain-tenant-mismatch');
+    expect(html).not.toContain('section-body');
+    // It must NAME both sides — a notice that says only "wrong tenant" leaves
+    // the operator to guess which one to switch to.
+    expect(html).toContain('demo-corp');
+    expect(html).toContain('ecommerce');
+  });
+
+  it('control — assumed into a tenant the product DOES serve → the section renders', async () => {
+    assumedInto('ecommerce');
+    const out = await DomainTenantGate({
+      section: 'E-Commerce',
+      productKey: 'ecommerce',
+      children: child,
+    });
+    const html = renderToStaticMarkup(out);
+    expect(html).toContain('section-body');
+    expect(html).not.toContain('domain-tenant-mismatch');
+  });
+
+  it('🔵 opt-in — without productKey the gate behaves exactly as before', async () => {
+    // wms · scm · erp · finance all rendered their data under `demo-corp` in the
+    // same window, so TASK-MONO-718 § 제외 keeps them out. This cell pins that
+    // the widening is a per-section choice, not a side effect of the change.
+    assumedInto('demo-corp');
+    const out = await DomainTenantGate({ section: 'WMS', children: child });
+    expect(renderToStaticMarkup(out)).toContain('section-body');
+  });
+
+  it.each([
+    ['a degraded registry', { degraded: true, products: [] }],
+    ['a registry that throws', new Error('registry down')],
+    ['a product that is absent', { degraded: false, products: [] }],
+    [
+      'a product with no tenants',
+      {
+        degraded: false,
+        products: [{ productKey: 'ecommerce', available: true, tenants: [] }],
+      },
+    ],
+  ])(
+    '🔴 %s cannot prove a mismatch → the section renders (never block on "I could not check")',
+    async (_label, result) => {
+      // A gate that blocked here would turn a registry blip into a dead
+      // section — the opposite of what this notice is for.
+      assumedInto('demo-corp');
+      catalogResult = result;
+      const out = await DomainTenantGate({
+        section: 'E-Commerce',
+        productKey: 'ecommerce',
+        children: child,
+      });
+      const html = renderToStaticMarkup(out);
+      expect(html).toContain('section-body');
+      expect(html).not.toContain('domain-tenant-mismatch');
+    },
+  );
+
+  it('🔴 no tenant assumed at all → the ORIGINAL «select a tenant» gate still wins', async () => {
+    // Order matters: the mismatch notice must never pre-empt the case the
+    // 292 gate already owns, or the operator is told to switch tenants while
+    // having selected none.
+    operatorSession();
+    const out = await DomainTenantGate({
+      section: 'E-Commerce',
+      productKey: 'ecommerce',
+      children: child,
+    });
+    const html = renderToStaticMarkup(out);
+    expect(html).toContain('domain-no-tenant');
+    expect(html).not.toContain('domain-tenant-mismatch');
+  });
+
+  it('the ecommerce layout is the ONLY section that passes productKey', () => {
+    const CONSOLE = path.resolve(__dirname, '..', '..', 'src', 'app', '(console)');
+    const withKey = ['ecommerce', 'wms', 'scm', 'erp', 'finance', 'ledger'].filter(
+      (s) => /productKey=/.test(readFileSync(path.join(CONSOLE, s, 'layout.tsx'), 'utf8')),
+    );
+    expect(withKey).toEqual(['ecommerce']);
   });
 });
 
