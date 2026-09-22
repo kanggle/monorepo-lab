@@ -4,7 +4,7 @@ TASK-MONO-672
 
 # Status
 
-ready (2026-09-18 UTC — 항목 3 닫힘 · 예산 0분 소모 · 나머지는 재굽기·SSM 대기 · 🔴 «재굽기 준비 표» + 🟢 **`terraform plan` 실측**(교체 확정) — 항목 1·2②③ 가 기다리는 것은 새 AMI 가 아니라 **신선 볼륨**이고, 예산 1800 인상은 저장소에만 있고 **미배포**다(plan 파일까지 준비됨))
+ready (2026-09-18 UTC — 항목 3 닫힘 · 예산 0분 소모 · 나머지는 재굽기·SSM 대기 · 🔴 «재굽기 준비 표» + 🟢 **`terraform plan` 실측**(교체 확정) — 항목 1·2②③ 가 기다리는 것은 새 AMI 가 아니라 **신선 볼륨**이고, 🟢 **예산 1800 apply 완료(2026-09-22) ⇒ 630분 가용** · 🟢 **굽기 사전점검 전부 통과**(dry-run·self-test 7/7·packer validate) · 🔴 남은 게이트는 **굽기**만이다)
 
 # Title
 
@@ -535,3 +535,84 @@ Plan: 0 to add, 1 to change, 0 to destroy.
 
 - **인스턴스 볼륨에 실제로 옛 행이 있는지** — SSM 이 필요하고 이 세션에서 막힌다. § 3 의 진단은 티켓 기록 + 코드 + packer 주석으로 세운 것이지 볼륨을 연 것이 **아니다**. 🔵 다만 이제 «교체되면 볼륨이 빈다» 쪽은 측정됐으므로, 틀릴 수 있는 곳은 «지금 볼륨에 옛 행이 있다» 한 군데로 좁혀졌다.
 - **굽기 시간·비용.**
+
+---
+
+# 🟢 굽기 사전점검 — **돈을 쓰기 전에** 실패할 이유를 찾았다 (2026-09-22 UTC · 분석=Opus 5)
+
+굽기는 **~55분 + AWS 과금**이고 `bake.sh` 가 *"소유자가 명시적으로 지목했을 때만 돌려라. 에이전트가 스스로 시작하지 않는다"* 라고 못박았다 — **굽지 않았다.** 대신 **굽기 없이 확인 가능한 모든 관문**을 돌렸다.
+
+## 🟢 예산은 이제 문제가 아니다 (2026-09-22 apply 완료)
+
+| | 전 | 후 |
+|---|---|---|
+| `budget_minutes` | 1200 | **1800** |
+| `used_minutes` | 1170 | 1170 (그대로) |
+| **쓸 수 있는 분** | 30분 | 🟢 **630분** |
+
+소유자가 `terraform apply budget-1800.tfplan` 을 실행했다(`0 added, 1 changed, 0 destroyed`). 🔴 **그 plan 은 소진됐으므로 삭제했다** — 남겨 두면 다음 사람이 «아직 대기 중인 변경» 으로 읽는다. 🔴 그리고 그 apply 는 **인스턴스를 안 건드렸다**(Lambda 환경변수만) ⇒ **신선 볼륨은 아직 안 샀다.**
+
+🔵 `terraform apply` 는 **자동 모드 분류기에 막힌다**(2026-09-22 실측). 축은 «AWS 를 만지는가» 가 아니라 **«상태를 바꾸는가»** 다 — `plan`·`show`·`aws ec2 describe-*`·`sts get-caller-identity` 는 전부 통과한다. 🔴 같은 결과를 `aws lambda update-function-configuration` 으로 낼 수 있지만 **하면 안 된다**: 차단 의도를 우회하는 것이고, terraform 상태와 실물이 갈라져 **다음 apply 가 그 변경을 되돌린다**.
+
+## 관문 — 전부 통과
+
+| 관문 | 결과 |
+|---|---|
+| `bake.sh --dry-run` | **rc=0** · 굽을 커밋을 **origin 에서** `8a404a95a` 로 해석(로컬 아님) |
+| `bake.sh --self-test` | **7/7** — 구조 판정 술어 4종 |
+| `packer` 설치 | **v1.15.4** |
+| `packer init .` | **rc=0** |
+| `packer validate -var repo_ref=main -var repo_commit=8a404a95a… ` | **rc=0** — *"The configuration is valid."* |
+
+🔵 **`validate` 가 값싼 이유**: 12차 굽기는 **37분 55초**를 태운 뒤에야 죽었다. 템플릿·플러그인·변수 오류를 그 전에 잡는 유일한 관문이다.
+
+## 🟢 고아 빌더 없음 — 독립적으로 확인했다
+
+`terraform.tfvars` 는 12차의 고아 빌더(`i-054b8d179af391052`, c6i.4xlarge)·packer SG·키페어를 *"정리했다"* 고 **적어 두었다**. 🔴 그것은 기록이지 관측이 아니므로 직접 셌다:
+
+```
+aws ec2 describe-instances --filters "Name=instance-state-name,Values=running,pending,stopping,stopped"
+  → 인스턴스 1개: i-07ddb6b41233f2673 (portfolio-demo-host, r6i.2xlarge, stopped)
+```
+
+⇒ **떠 있는 빌더가 없다.** 5일치 c6i.4xlarge 요금이 새고 있지 않다.
+
+## 🔴 AMI 정리 — 「옛 이미지 prune」이 **지워선 안 되는 것**을 가리키고 있었다
+
+소유자 선호에 «재빌드 후 옛 이미지 prune» 이 있다. 그대로 적용하려다 **멈췄다**:
+
+| AMI | 커밋 | 상태 |
+|---|---|---|
+| `ami-02613b0378621b124` | `af0018aa6` (12차) | **배포본** (핀) |
+| `ami-0d30513151d07e163` | `b54296645` (11차) | 🟡 **롤백 경로로 의도적 유지** — `terraform.tfvars:90` 이 그렇게 적는다 |
+
+🔴 **`b54296645` 는 `af0018aa6` 의 조상**이라 «완전히 대체됨» 인데도 **지우면 안 된다** — 대체됐다는 것과 필요없다는 것은 다른 명제다. 🔵 10차(`ami-058f6293…`)는 **이미 목록에 없다**(prune 됨) ⇒ **정상 상태는 «배포본 + 롤백본» 2개**이고, 지금이 정확히 그 상태다.
+
+⇒ **13차를 구운 뒤의 prune 대상은 12차가 아니라 11차(`ami-0d30513151d07e163`)다.** 12차가 새 롤백본이 된다.
+
+## ⇒ 소유자가 실행할 것 (순서)
+
+```bash
+# 1) 굽는다 (~55분 · 과금)
+bash infra/demo/aws/packer/bake.sh
+#    성공하면 스크립트가 AMI 태그에서 되읽어 deployed-ami.env 를 다시 쓴다
+#    ⇒ provenance 가 operator-record → **ami-tag** 로 승격된다(12차는 수동 태그라 못 했다)
+# 🔴 굽기 뒤 deployed-ami.env 를 **커밋하는 것까지가 절차다**
+# 🔴 등록 뒤에 죽으면: bash infra/demo/aws/packer/bake.sh --rescue-only --ref main
+
+# 2) 새 AMI 로 plan 을 새로 뜬다 — 🔴 방금 쓴 budget plan 과 다르다
+cd infra/demo/aws/terraform
+terraform plan -var "ami_id=<새 AMI>" -out new-ami.tfplan
+#    plan 에서 `aws_instance.demo must be replaced` 를 **눈으로 확인**한다(신선 볼륨의 근거)
+
+# 3) apply — 인스턴스 교체 ⇒ 신선 볼륨
+terraform apply new-ami.tfplan
+
+# 4) 11차 AMI prune (12차가 새 롤백본이 된 뒤)
+```
+
+## ⚪ 사전점검이 **못 잰 것**
+
+- **스냅샷의 실제 과금 용량** — 각 AMI 가 100GB 볼륨을 스냅샷으로 들고 있지만 스냅샷은 증분·압축이라 청구량은 그보다 작다. 읽으려면 `ebs:ListSnapshotBlocks` 인데 **이 계정에 권한이 없다**(핀 파일이 이미 기록한 사실). ⇒ «100GB × 2» 를 비용으로 적지 않는다.
+- **굽기가 네트워크에서 죽을지** — 12차의 `unexpected EOF` 는 정적 검증이 못 잡는 종류다. 🔵 `TASK-MONO-709` 의 구조 경로가 그 대비이고 self-test 7/7 로 그 판정이 서 있음을 확인했다.
+- **인스턴스 볼륨에 옛 행이 실제로 있는지** — SSM 필요, 여전히 막힌다.
