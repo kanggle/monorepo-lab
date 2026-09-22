@@ -169,3 +169,109 @@ in-progress (2026-09-22 UTC — 소유자 결정 **ⓑ**)
 2. **레지스트리에서 `demo-corp` 를 뺀다** → 안내는 뜨지만 **운영자 권한이 같이 사라진다.**
    증상은 「안내가 뜬다」가 아니라 「5개 도메인이 전부 죽는다」다.
 3. **ⓐ 를 고르고 캐시를 안 둔다** → 도메인 화면 진입마다 테넌트 수만큼 토큰 교환 ⇒ 로그인 직후가 느려진다.
+
+---
+
+# 구현 기록 (2026-09-22 UTC · 소유자 결정 ⓑ)
+
+## 🔴 ⓑ 는 `DomainTenantGate` 안에 살 수 없다 — 기안 당시 § 포함이 틀렸다
+
+기안문의 § 포함은 *"`DomainTenantGate.tsx` 의 `tenantMismatch()` 술어"* 를 지목했다.
+구현하려고 열어 보니 그 자리가 **구조적으로 불가능**하다:
+
+- 게이트는 **섹션 레이아웃**에서 돈다 ⇒ `children` 보다 **먼저** 렌더된다.
+- ⓑ 의 조건은 *"목록이 0건이고"* 인데, 목록이 0건인지는 **그 children 이** 안다.
+
+⇒ 힌트는 **빈 목록이 그려지는 자리**에 살아야 한다. 게이트는 그 자리를 못 본다.
+
+🔵 그래서 § 포함을 «게이트의 술어» 에서 «빈 목록 옆» 으로 **옮겨 읽었다**. 기안문은
+고쳐 쓰지 않는다 — 기안 시점의 판단이 그랬다는 것이 기록이다.
+
+## 🔵 새 컨텍스트를 만들지 않았다
+
+빈 목록은 클라이언트가 알고(`OrdersScreen` 은 `'use client'`), 테넌트 집합은 서버가 안다.
+React Context 로 이으려다 **이 앱에 `createContext` 가 한 곳도 없다**는 것을 확인하고
+그만뒀다. 대신 **서버 페이지가 `getTenantScope()` 를 불러 prop 으로 내려보낸다** — 그
+페이지는 이미 서버 컴포넌트이고 `getCatalog()` 는 그 요청에서 이미 불린다.
+
+## 바뀐 것
+
+| 파일 | 무엇 |
+|---|---|
+| `widgets/domain-tenant-gate/OtherTenantHint.tsx` | **신규.** 빈 목록 **옆**에 붙는 힌트. 활성 테넌트가 없거나 전환할 다른 테넌트가 없으면 **아무것도 안 그린다** |
+| `widgets/domain-tenant-gate/tenant-scope.ts` | **신규.** 서버에서 `{ activeTenant, otherTenants }`. 🔴 모든 불확실(degraded·throw·제품 없음)은 **«힌트 없음»** 으로 떨어진다 |
+| `widgets/domain-tenant-gate/DomainTenantGate.tsx` | 주석 **정정** — «이 실패를 닫는다» 는 문단을 «닫지 못했다 + 왜» 로 바꾸고, 이 함수가 **여전히 정직하게 닫는 것**(제품이 정말 서비스하지 않는 테넌트)을 남겼다 |
+| `features/ecommerce-ops/components/OrdersScreen.tsx` | `activeTenant`·`otherTenants` **선택 prop**. 🔴 `order-empty` 를 **지우지 않고** 그 아래 한 줄을 붙인다 |
+| `app/(console)/ecommerce/orders/page.tsx` | `getTenantScope()` 를 불러 내려보낸다 |
+
+## 🔴 문구가 «데이터가 없습니다» 가 아닌 이유
+
+진짜로 어느 테넌트에도 0건일 수 있고 **그때도 이 힌트는 뜬다**(ⓑ 를 고른 대가이고,
+AC-0 표가 미리 적은 그 대가다). 그래서 단언하지 않는다 — «현재 테넌트 `X` **에는**
+없습니다 … `Y` 테넌트에 **있을 수 있습니다**». 틀릴 때 **운영자가 한 번 더 확인하는**
+쪽으로 틀린다.
+
+## 🔴 opt-in 범위 — 측정된 화면 하나
+
+2026-09-22 창이 판정한 것은 `/ecommerce/orders` 다. 나머지 ecommerce 화면(그리고 68개
+`-empty` 마커 전체)으로 넓히는 것은 **아무도 재지 않은 주장**이므로 하지 않았다 —
+`TASK-MONO-718` § 제외가 `productKey` 에 대해 세운 것과 같은 규율이다.
+🔵 그 경계를 **칸이 지킨다**: `other-tenant-hint.test.tsx` 의 마지막 칸이
+`getTenantScope` 를 부르는 ecommerce 라우트가 **정확히 `['orders']`** 임을 단언한다
+⇒ 넓히는 PR 은 그 기대값을 **함께** 고쳐야 하고, 조용히 번질 수 없다.
+
+---
+
+# AC 판정
+
+## AC-0 — ✅ 소유자 결정 **ⓑ** 확정 (2026-09-22 UTC)
+
+## AC-1 — ✅ 술어를 바꾸고 **라이브가 내는 모양**으로 쟀다
+
+- [x] 픽스처의 `tenants` 를 **실측값** `['demo-corp','ecommerce']` 로 바꿨다.
+- [x] 🔴 **그 픽스처에서 기존 코드가 빨개지는 것을 먼저 봤다** (AC-1 이 요구한 순서):
+
+```
+× TASK-MONO-718 > 🔴 assumed into a tenant the product does NOT serve → the mismatch notice
+  AssertionError: expected '<p data-testid="section-body">body</p>' to contain 'domain-tenant-mismatch'
+```
+
+  ⇒ 창에서 본 화면과 **글자 그대로 같은 실패**다. 픽스처가 문제였다는 증명.
+- [x] 그 칸을 **라이브가 만들 수 있는 입력**으로 고쳤다 — 제품 둘(`ecommerce`·`scm`)을 두고
+  `scm` 에만 있는 `other-corp` 로 들어가면 안내가 뜬다. `selectableTenants()` 가 **제품
+  건너 합집합**이므로 도달 가능한 경로다.
+- [x] 대조군: 데이터가 그 테넌트에 있는 경우 힌트가 **안 뜬다**(`otherTenants: []` → 빈 렌더).
+
+### 🔴 새 층의 bite — 양방향, 그리고 **되돌려서** 봤다
+
+```
+BITE A  힌트가 항상 null 을 돌려주게 함        →  2 failed | 12 passed   (rc=1)
+BITE B  서버가 otherTenants 를 항상 [] 로 냄   →  2 failed | 12 passed   (rc=1)
+복원 후                                        →  14 passed             (rc=0)
+```
+
+🔵 두 bite 가 **서로 다른 칸**을 문다 — A 는 렌더 층, B 는 서버 층. 한 방향만 봤으면
+«배선이 없어도 초록» 을 못 걸렀다.
+
+## AC-2 — ✅ 「못 확인함」은 여전히 통과다
+
+- [x] degraded 레지스트리 · 던지는 레지스트리 · 제품 없음 → **힌트만 침묵**하고 화면은 그대로.
+      718 이 세운 규칙을 바꾸지 않았다. (칸 3개, `it.each`)
+- [x] 🔵 방향이 다르다는 점을 적어 둔다: 718 의 규칙은 «막지 마라» 였고, 719 의 것은
+      «말하지 마라» 다. 둘 다 «못 확인했을 때 해로운 쪽으로 틀리지 않는다» 의 같은 얼굴이다.
+
+## AC-3 — ⏳ 창 판정은 `TASK-MONO-672` 로 넘긴다
+
+- [x] 🔴 단위 칸 초록으로 닫지 않는다 — **718 이 그렇게 닫혔고 창에서 FAIL 했다.**
+- [x] `TASK-MONO-672` 에 **항목 11** 로 넘겼다.
+
+---
+
+# 🔴 이 PR 이 **안 한 것** (의도적으로)
+
+- **다른 ecommerce 화면**(`products`·`sellers`·`users`·`shippings`·정산 …)에 배선하지 않았다.
+  창이 «14장 중 9장이 빈 목록» 을 봤으므로 넓힐 근거는 있으나, **어느 9장인지 내가 기록으로
+  갖고 있지 않다** ⇒ 목록을 지어내는 대신 측정된 한 장만 배선했다.
+- **68개 `-empty` 마커 전체**로의 일반화 — 이것은 디자인 결정이고 이 티켓의 권한 밖이다.
+- `DomainTenantGate.tenantMismatch()` **삭제** — 도달 가능하고 정직하게 닫는 케이스가 있다.
+  지우면 그 케이스가 조용히 사라진다.

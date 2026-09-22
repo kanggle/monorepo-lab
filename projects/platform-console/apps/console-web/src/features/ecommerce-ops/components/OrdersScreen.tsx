@@ -11,6 +11,7 @@ import {
   type OrderListParams,
 } from '../api/order-types';
 import { OrdersTable } from './OrdersTable';
+import { OtherTenantHint } from '@/widgets/domain-tenant-gate';
 
 /**
  * ecommerce order operations list section (TASK-PC-FE-083 — § 2.4.10 #15).
@@ -26,11 +27,18 @@ import { OrdersTable } from './OrdersTable';
 
 export interface OrdersScreenProps {
   orders: OrderList;
+  /**
+   * TASK-MONO-719 (소유자 결정 ⓑ) — 목록이 **0건일 때만** 쓰는 힌트 재료.
+   * 서버 페이지가 `getTenantScope()` 로 채워 내려보낸다. 안 넘기면 힌트는 안 뜬다
+   * (opt-in — 718 의 `productKey` 와 같은 규율: 재지 않은 화면까지 넓히지 않는다).
+   */
+  activeTenant?: string | null;
+  otherTenants?: readonly string[];
 }
 
 const STATUS_FILTER_OPTIONS = ['', ...ORDER_STATUS_VALUES] as const;
 
-export function OrdersScreen({ orders }: OrdersScreenProps) {
+export function OrdersScreen({ orders, activeTenant, otherTenants }: OrdersScreenProps) {
   const statusFid = useId();
 
   const [statusFilter, setStatusFilter] = useState('');
@@ -133,9 +141,18 @@ export function OrdersScreen({ orders }: OrdersScreenProps) {
           조회 중…
         </p>
       ) : rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground" data-testid="order-empty">
-          표시할 주문이 없습니다.
-        </p>
+        <div>
+          <p className="text-sm text-muted-foreground" data-testid="order-empty">
+            표시할 주문이 없습니다.
+          </p>
+          {/* 🔴 빈 목록을 **대체하지 않는다** — 그 아래 한 줄이다. 2026-09-22 창에서
+              운영자가 본 화면이 정확히 위 한 줄뿐이었고, 그것은 «데이터가 없다» 로
+              읽힌다(실제로는 `ecommerce` 테넌트에 5건이 있었다). */}
+          <OtherTenantHint
+            activeTenant={activeTenant ?? null}
+            otherTenants={otherTenants ?? []}
+          />
+        </div>
       ) : (
         <OrdersTable
           rows={rows}

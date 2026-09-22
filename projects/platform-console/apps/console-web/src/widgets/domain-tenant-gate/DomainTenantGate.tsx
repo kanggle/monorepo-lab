@@ -34,22 +34,35 @@ export async function tenantSelectionRequired(): Promise<boolean> {
  * (TASK-MONO-718, owner decision ⓑ). Returns the tenants to switch to, or
  * `null` when there is nothing to say.
  *
- * 🔴🔴 **The failure this closes.** `tenantSelectionRequired()` above only asks
- * «is SOME tenant assumed?». A tenant can be assumed and still be the wrong one
- * for this section — and then the gateway answers `200` with an EMPTY page,
- * because it resolves the tenant from the JWT claim and that tenant genuinely
- * owns no rows. The screen renders its ordinary «표시할 주문이 없습니다» and
- * nothing anywhere reports a problem. Measured 2026-09-22 on the demo, same
- * instant, same URLs:
+ * 🔴🔴 **CORRECTED 2026-09-22 (TASK-MONO-719) — this does NOT close the failure
+ * it was written for.** The paragraph that stood here said it did, on this
+ * evidence (same instant, same URLs, on the demo):
  *
  *     tenant=ecommerce  → orders 5 · products 24 · users 1 · sellers 2
  *     tenant=demo-corp  → 0 · 0 · 0 · 0
  *
- * The demo seed writes the back office under `ecommerce` on purpose
- * (TASK-BE-576: `demo-corp` carries the ROLES, `ecommerce` is where the rows
- * the storefront reads actually live, and the catalogue cannot move because
- * its `tenant_id` is a producer-side default) — so «운영자가 그쪽으로 가야
- * 한다», and this is the screen that says so.
+ * The 15th demo window then judged the shipped gate and it never rendered: the
+ * LIVE registry answers `ecommerce -> [demo-corp, ecommerce]`, so
+ * `product.tenants.includes('demo-corp')` is TRUE and this function always
+ * returns `null`. The operator still saw the plain «표시할 주문이 없습니다».
+ *
+ * 🔵 The registry is not wrong. `demo-corp` IS entitled to the ecommerce
+ * product — it carries the operator ROLES (TASK-BE-576). That the ROWS live
+ * under `tenant_id=ecommerce` is a SEPARATE proposition. **This function asks
+ * entitlement; the failure lives in data ownership**, and the two genuinely
+ * diverge here. The unit cells missed it because their fixture said
+ * `tenants: ['ecommerce']` — a shape the live system does not produce.
+ *
+ * ⇒ The measured case moved to `OtherTenantHint` (TASK-MONO-719, owner
+ *   decision ⓑ): beside an EMPTY list, when other tenants are selectable, say
+ *   so as a hint. **Do not re-add that claim here** — this function cannot see
+ *   whether a list came back empty; it runs in the layout, before the children.
+ *
+ * 🔵 **What this function DOES still close, honestly**: a tenant that the
+ * product genuinely does not serve. That is reachable, because
+ * `selectableTenants()` is the union ACROSS products — a tenant registered
+ * only under scm is selectable and can walk into /ecommerce. It was simply
+ * never the case the demo measured.
  *
  * 🔵 **Judged by relation, never by a slug list** — the same discipline
  * `active-tenant-default.ts` states for `selectableTenants()`: a hard-coded
