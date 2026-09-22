@@ -66,6 +66,14 @@ class EcommerceOrderDemoSeedTest {
     private static final Path ADMIN_STATUS_SERVICE = Path.of("src", "main", "java", "com", "example",
             "order", "application", "service", "AdminOrderStatusService.java");
 
+    /**
+     * Sibling source in this module — the order item DTO. It is the reason {@code variantId} is a
+     * real key <em>here</em>, and the reason reading the PRODUCT response for that same key is a
+     * bug rather than a typo: the two planes name the same concept differently on purpose.
+     */
+    private static final Path PLACE_ORDER_COMMAND = Path.of("src", "main", "java", "com", "example",
+            "order", "application", "dto", "PlaceOrderCommand.java");
+
     /** {@code order_wait_status "$x" CONFIRMED SHIPPED DELIVERED;} */
     private static final Pattern WAIT_STATUS_CALL = Pattern.compile(
             "^\\s*(?:if\\s+)?order_wait_status\\s+\"[^\"]+\"\\s+([A-Z_ ]+?)\\s*;", Pattern.MULTILINE);
@@ -73,6 +81,9 @@ class EcommerceOrderDemoSeedTest {
     /** {@code ship_progress "$SHIP_ID" "${SHIP_STATUS:-}" DELIVERED} */
     private static final Pattern SHIP_PROGRESS_CALL = Pattern.compile(
             "^\\s*ship_progress\\s+\"[^\"]+\"\\s+\"[^\"]+\"\\s+([A-Z_]+)\\s*$", Pattern.MULTILINE);
+
+    /** The single line that resolves a variant id out of the product-detail body: {@code vid="$(...)"} */
+    private static final Pattern VID_EXTRACTION = Pattern.compile("^ *vid=.*$", Pattern.MULTILINE);
 
     /** {@code ORDER_SLOT_IDS[4]} — only the literal indices; the loop-counter form is a variable. */
     private static final Pattern LITERAL_SLOT = Pattern.compile("ORDER_SLOT_IDS\\[(\\d+)\\]");
@@ -334,5 +345,48 @@ class EcommerceOrderDemoSeedTest {
                     .as("the '%s' floor must not be downgraded to seed_warn", var)
                     .doesNotContain("seed_warn");
         }
+    }
+
+    @Test
+    @DisplayName("the variant id is read out of the product response's variants[], not a variantId key")
+    void theVariantIdIsReadFromTheProductResponseShape() throws IOException {
+        String body = seed();
+
+        // The order plane really does call it `variantId` — that half is not in doubt, and this
+        // module owns the proof.
+        String placeOrder = Files.readString(PLACE_ORDER_COMMAND, StandardCharsets.UTF_8);
+        assertThat(placeOrder)
+                .as("if the order item DTO stopped carrying 'variantId', the seed's REQUEST body "
+                        + "below would be wrong too and this cell would be guarding a dead name")
+                .contains("String variantId");
+        assertThat(body)
+                .as("the seed must still SEND variantId in the order item — that is the order "
+                        + "plane's key (PlaceOrderCommand.OrderItemCommand)")
+                .contains("\\\"variantId\\\":\\\"$vid\\\"");
+
+        Matcher m = VID_EXTRACTION.matcher(body);
+        assertThat(m.find())
+                .as("could not find the 'vid=' extraction line at all — this cell would otherwise "
+                        + "pass vacuously over a seed that no longer resolves a variant")
+                .isTrue();
+        String vidLine = m.group(0);
+
+        // 🔴🔴 The measured failure (2026-09-22 demo window). The first version of that line read
+        //    grep -oE '"variantId":"[0-9a-f-]{36}"' — against `GET /api/products/{id}`, whose body
+        //    names the same concept `variants[].id`. The expression matched nothing on every one
+        //    of the five products, so `seed_fail` fired five times, NO order was ever created, and
+        //    the shipping + review + settlement seeds silently went with them. The run still
+        //    printed "실패 0" for the parts that did run, and five console screens stayed empty.
+        //    ⇒ the bug was searching someone else's corpus with my own name for the thing.
+        assertThat(vidLine)
+                .as("the variant id must NOT be looked up by the order plane's key name in the "
+                        + "PRODUCT response: `GET /api/products/{id}` has no 'variantId' key. "
+                        + "Extraction line was: %s", vidLine)
+                .doesNotContain("variantId");
+        assertThat(vidLine)
+                .as("the variant id must be taken from the product response's variants[] array — "
+                        + "cut at the array so the product's own leading id is not picked up. "
+                        + "Extraction line was: %s", vidLine)
+                .contains("\"variants\":");
     }
 }

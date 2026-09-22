@@ -8,7 +8,7 @@ TASK-MONO-710
 
 # Status
 
-in-progress (2026-09-18 UTC)
+review (2026-09-22 UTC)
 
 # Owner
 
@@ -82,7 +82,7 @@ monorepo
 - [x] **AC-1 — 층을 고른다.** SQL / API / 이벤트 중 하나. 🔴 **고른 이유에 «주문은 상태 기계다»
       가 답으로 들어가야 한다** — 어느 층이 그 불변식을 지키는지가 선택의 축이다.
       → **API.** 아래 § AC-1 참조.
-- [ ] ⏳ **AC-2 — 시드가 화면을 채운다.** 다음 창에서 `/ecommerce/orders` 가 «표시할 주문이 없습니다»
+- [x] 🟢 **AC-2 — 시드가 화면을 채운다.** 다음 창에서 `/ecommerce/orders` 가 «표시할 주문이 없습니다»
       가 아니고, `/ecommerce/orders/[id]` 의 **동적 해결이 성공**한다(촬영 매니페스트로 판정 —
       사람 눈이 아니라 스크립트의 `ok`).
       → **이 세션에서 닫을 수 없다.** 판정 도구가 **촬영 매니페스트**인데 데모 창이 없고, 시드는
@@ -350,3 +350,102 @@ monorepo
 # 분석 / 구현 권장
 
 (분석=Opus 5 / 구현 권장=Opus — 주문 상태 기계와 이벤트 경계를 건드리므로 단순 시드 추가가 아니다)
+
+
+---
+
+# 🟢 AC-2 판정 — 데모 창에서 닫았다 (2026-09-22 UTC · 분석=Opus 5)
+
+## 🔴 먼저: AC-2 는 «기다리면 되는 칸» 이 아니었다 — **시드가 고장나 있었다**
+
+재굽기로 신선 볼륨을 산 뒤 부팅 시드를 읽으니 주문 생성이 **다섯 번 다 실패**했다:
+
+```
+[seed:ecommerce] ✗ 주문 시드: 상품 b0000000-…-0002 에서 variantId/price 를 추출하지 못했습니다
+  (b0000000-…0003 · …0004 · …0005 · …0006 도 같은 줄)
+[seed:ecommerce] SHIPPED 에서 멈출 배송 건이 없습니다 — 주문 하나가 SHIPPED 상태에 앉지 못합니다
+[seed:ecommerce] 진행할 배송 건이 없습니다 — 리뷰 자격(DELIVERED)을 만들지 않습니다
+```
+
+🔵 **시드의 자기 보고는 옳았다** — `seed_fail` 이 다섯 번 울렸고 요약도 실패로 셌다. 이 티켓이
+AC-3 에서 만든 «조용히 비는 것을 무는» 층이 실제로 물었다. 무너진 것은 **추출식**이다.
+
+## 원인 — «내가 부르는 이름» 으로 «남의 코퍼스» 를 grep 했다
+
+| | 값 |
+|---|---|
+| 상품 상세가 주는 것 (`GET /api/products/{id}`, 실측) | `"variants":[{"id":"c0000000-…-0005","optionName":"28","stock":40,"additionalPrice":0}, …]` |
+| 시드가 찾던 것 (`seed-ecommerce.sh:115`) | `grep -oE '"variantId":"[0-9a-f-]{36}"'` |
+
+🔴 **`variantId` 라는 키는 상품 응답에 없다.** 그것은 **주문** 평면의 이름이고
+(`PlaceOrderCommand.OrderItemCommand.variantId`), 상품 평면에서 같은 개념은 `variants[].id` 다.
+두 이름이 **일부러 다른데** 한쪽 이름으로 다른 쪽을 읽었다.
+
+## 고침 + bite
+
+```bash
+vid="$(printf '%s' "$body" | sed -n 's/.*"variants":\[//p' | grep -oE '"id":"[0-9a-f-]{36}"' | head -1 | cut -d'"' -f4)"
+```
+
+- **bite**: `EcommerceOrderDemoSeedTest#theVariantIdIsReadFromTheProductResponseShape`
+  — 옛 줄로 되돌리면 **rc=1**, 그 칸만 빨강(실측). 고친 줄에서 **BUILD SUCCESSFUL**.
+- 🔵 그 칸은 모듈 **안**의 `PlaceOrderCommand.java` 도 읽어 «주문 평면은 진짜로 `variantId` 를
+  쓴다» 를 먼저 세운다 — 그래야 「이름이 다르다」가 단언이 되지 추측이 안 된다.
+
+## 🟢 고친 시드를 창에서 돌린 결과
+
+```
+[seed:ecommerce] 주문 1: e8ba8934… (슬림핏 데님 청바지 · 59000원)   … 주문 5 까지
+[seed:ecommerce] 주문 1 취소 (CANCELLED) · 주문 2 PENDING 유지 · 결제 승인 3건 → CONFIRMED
+[seed:ecommerce] 배송 … → SHIPPED · 배송 … → SHIPPED → IN_TRANSIT → DELIVERED
+[seed:ecommerce] 생성  리뷰(프리미엄 견과류 선물세트) · 정산 적립 3 건 → 마감 → 지급
+[seed:ecommerce] 사후조건 — 운영자 평면 주문 5 건 · 서로 다른 상태 5 종
+                 (CANCELLED CONFIRMED DELIVERED PENDING SHIPPED)
+[seed:ecommerce] 사후조건 — 배송 건 3 건
+```
+
+⇒ **AC-3 의 런타임 층(①)이 이 창에서 실제로 초록으로 발화했다.** 위 § 의 ⚪(*"런타임 게이트의
+bite 는 못 돌렸다"*)가 «돌렸다» 로 바뀐다 — 다만 그것은 **양성 발화**이고 음성(bite) 은 여전히 ⚪.
+
+## 🟢 AC-2 의 술어 — 촬영 매니페스트로 판정했다
+
+`node scripts/capture-portfolio.mjs --app console` (`DEMO_TENANT=ecommerce`):
+
+```
+✔ /ecommerce/orders            (textLen 726, empty=false)
+✔ /ecommerce/orders/[id] → /ecommerce/orders/9bce4a2b-109c-46ca-bcd2-f186257fd83d
+✔ /ecommerce/products/[id] · /ecommerce/products/[id]/edit
+✔ /ecommerce/promotions/[id] · /ecommerce/sellers/[id] · /ecommerce/users/[id]
+ecommerce 21장 중 빈 장 0
+```
+
+🔵 **동적 해결이 성공했다는 것이 곧 «목록에 따라갈 행이 있다»** 이다 — 사람 눈이 아니라
+스크립트의 `ok` 가 판정했다(AC-2 가 요구한 그대로). 스토어 쪽도 함께 열렸다:
+`store /my/orders/[id] → /my/orders/9bce4a2b-…` (21/22 촬영, 실패 1).
+
+## 🔴🔴 AC-3 정정 — 그 사후조건은 «콘솔이 본다» 를 **증명하지 않는다**
+
+AC-3 의 사후조건은 주석에 *"읽는 쪽이 운영자 평면(`/api/admin/orders`)인 것이 중요하다 … 콘솔이
+읽는 바로 그 엔드포인트로 재야 화면이 찬다는 뜻이 된다"* 라고 적는다. **엔드포인트는 맞는데
+테넌트가 다르다.** 시드는 `OP_TOKEN="$(operator_token ecommerce)"`(`:413`)로 **`ecommerce`**
+테넌트를 assume 하고, 촬영·기본 콘솔 세션은 **`demo-corp`** 다. 대조군 실측(같은 순간·같은 URL):
+
+| 테넌트 | `/api/admin/orders` | products | users | sellers |
+|---|---|---|---|---|
+| `ecommerce` | **5** | **24** | **1** | **2** |
+| `demo-corp` | **0** | **0** | **0** | **0** |
+
+🔴 **이 축 자체는 새 발견이 아니다** — `TASK-MONO-648` 이 이미 *"`/ecommerce/*` 3장은 테넌트 `ecommerce` 로 재촬영한 뒤에만 승인 목록으로 확정한다 … `demo-corp` 로 찍으면 그 매니페스트는 **빈 표 세 장을 승인된 것으로** 기록한다"* 라고 적어 두었다. 새로운 것은 **수치 대조군**과, **이 티켓의 사후조건이 같은 함정에 빠져 있다**는 연결이다(648 의 노트는 촬영에 대한 것이었다).
+
+⇒ 첫 촬영(테넌트 `demo-corp`)에서 ecommerce 14장 중 **9장이 빈 목록**이었고, 그것은 콘솔 결함도
+게이트웨이 결함도 아니다. 🔴 **그래서 이 사후조건은 그 화면에 대해 공허하다** — 시드가 쓴 테넌트를
+그대로 다시 읽으니 언제나 참이다. 🔵 이 어긋남은 이 티켓이 고칠 범위가 아니라 **선택**이다
+(시드를 `demo-corp` 로 옮길 것인가 · 콘솔의 ecommerce 화면이 `ecommerce` 테넌트를 기본으로 볼
+것인가 · 촬영이 도메인별 테넌트를 고를 것인가) ⇒ **별도 티켓으로 기안한다**(AC-2 규율:
+결함/결정은 여기서 처리하지 않는다).
+
+## ⚪ 여전히 안 잰 것
+
+- **AC-3 런타임 층의 bite**(주문 생성을 지우면 빨개지는가) — 양성 발화만 봤다.
+- `/ecommerce/notifications/templates/[id]/edit` — 목록이 비어 동적 해결 실패(템플릿 시드는 있으나
+  상세 링크가 없다). 이 티켓의 다섯 화면 밖이다.

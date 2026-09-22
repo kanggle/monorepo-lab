@@ -83,6 +83,13 @@ class FanArtistDemoSeedTest {
             "\\(\\s*'([a-z-]+)'\\s*,\\s*'([0-9a-f-]{36})'\\s*,\\s*'([A-Z][A-Z0-9_]*)'\\s*,\\s*NULL",
             Pattern.MULTILINE);
 
+    /**
+     * seed-fan.sh: the JSON body of the ARTIST_POST create call. Matched on the line that names
+     * {@code postType} so a body that was split or reordered still lands here.
+     */
+    private static final Pattern PUBLISH_POST_BODY = Pattern.compile(
+            "^.*postType.*ARTIST_POST.*$", Pattern.MULTILINE);
+
     /** seed-fan.sh: ARTIST_A="0199de80-..." */
     private static final Pattern SEED_ARTIST_ID = Pattern.compile(
             "^ARTIST_([A-F])=\"([0-9a-f-]{36})\"", Pattern.MULTILINE);
@@ -237,5 +244,47 @@ class FanArtistDemoSeedTest {
                         + "account AT that id. Break the equality and the demo splits in two: "
                         + "the artist logs in as one id while follows/posts point at another.")
                 .containsExactlyInAnyOrderElementsOf(demoSeedIds);
+    }
+
+    @Test
+    @DisplayName("publish_artist_post actually SENDS the mediaRefs it assembles")
+    void assembledMediaRefsReachTheRequestBody() throws IOException {
+        String seed = Files.readString(FAN_DEMO_SEED, StandardCharsets.UTF_8);
+
+        // Non-vacuity first: if no caller passes photos, everything below is guarding nothing.
+        assertThat(seed)
+                .as("at least one publish_artist_post call must pass a mediaRefs array, or this "
+                        + "cell is vacuous")
+                .contains("[\"https://");
+
+        assertThat(seed)
+                .as("the assembly must still key on the contract's field name (community-api.md "
+                        + "mediaRefs); renaming it here would silently drop the photos again")
+                .contains("mediaRefs");
+
+        List<String> publishBodies = new ArrayList<>();
+        Matcher m = PUBLISH_POST_BODY.matcher(seed);
+        while (m.find()) {
+            publishBodies.add(m.group(0));
+        }
+        assertThat(publishBodies)
+                .as("could not find the ARTIST_POST create body in seed-fan.sh — this cell would "
+                        + "otherwise pass over a seed that no longer publishes anything")
+                .isNotEmpty();
+
+        // 🔴🔴 The measured failure (2026-09-22 demo window). This line assembled `extra` from the
+        //    6th positional argument and then built the request body WITHOUT it. Two callers pass
+        //    two https photos each, the producer accepts the field
+        //    (PublishPostRequest.mediaRefs), and yet every post in the live feed came back with
+        //    "mediaRefs":[] — on a FRESH volume, which is what TASK-MONO-672 item 1 had been
+        //    waiting for. The blocker recorded in that ticket ("the title-keyed skip means you
+        //    need a rebake") was therefore a misdiagnosis: an empty volume produced the same
+        //    empty array, because the field never left this file.
+        for (String bodyLine : publishBodies) {
+            assertThat(bodyLine)
+                    .as("the ARTIST_POST request body must interpolate $extra — the variable that "
+                            + "carries mediaRefs. Body was: %s", bodyLine)
+                    .contains("$extra");
+        }
     }
 }

@@ -1477,3 +1477,62 @@ rc=1
   돌려라 — 🔵 그 한 줄이 창 밖에서 검증할 수 있는 유일한 형태의 «찍은 것 ↔ 지금 코드» 대조다.
 - 🔴 이 가드는 **AC-2/AC-4 의 큐레이션을 대신하지 않는다.** 한계 ①④ 가 그 이유이고,
   §410 이 이미 적었다 — *"사람 눈을 대체하려 하지 마라. 표지의 목적은 후보를 **줄이는 것**"*.
+
+
+---
+
+# 🟢 세 앱 전량 촬영 — 그리고 «테넌트 `ecommerce` 로 재촬영» 칸의 답 (2026-09-22 UTC · 분석=Opus 5)
+
+데모 창(09:16–10:35Z)에서 세 앱을 모두 찍었다. 🔴 **전량은 커밋하지 않는다**(이 티켓의 규약).
+
+| 앱 | 계획 | 찍음 | 실패 | 비고 |
+|---|---|---|---|---|
+| console (`DEMO_TENANT=demo-corp`) | 67 | 55 | 12 | ecommerce 14장 중 **9장 빈 목록** · 동적 9개 해결 실패 |
+| console (`DEMO_TENANT=ecommerce`) | 67 | 53 | 14 | **ecommerce 21장 전부 데이터 · 빈 장 0** |
+| store | 22 | 21 | 1 | `/orders/[id]` 만 미해결. 빈 장 = `/cart`·`/checkout`(장바구니를 시드하지 않는다) |
+| fan | 11 | 11 | 0 | `✔ /posts/[id]` · `✔ /artists/[id]` |
+
+## 🟢 이 티켓의 열린 칸 하나가 **관측으로 답을 얻었다**
+
+> 🔴 `/ecommerce/*` 3장은 **테넌트 `ecommerce` 로 재촬영**한 뒤에만 승인 목록으로 확정한다.
+> 🔵 `demo-corp` 로 찍어서 「승인 목록대로 찍었다」고 적으면, 그 매니페스트는 **빈 표 세 장을
+> 승인된 것으로** 기록한다.
+
+그 경고가 **정확했고, 이번에 수치가 붙었다.** 같은 순간·같은 URL(`/api/admin/*`, `?size=50`):
+
+| 테넌트 | orders | products | users | sellers |
+|---|---|---|---|---|
+| `ecommerce` | **5** | **24** | **1** | **2** |
+| `demo-corp` | **0** | **0** | **0** | **0** |
+
+⇒ 🔴 **`demo-corp` 촬영본은 ecommerce 장에 대해 승인 후보가 될 수 없다** — 「화면이 이렇게 생겼다」가
+아니라 「내가 남의 테넌트로 봤다」를 찍은 것이다. 🔵 그리고 **이 창에서 `ecommerce` 판을 실제로
+찍었다** ⇒ 그 칸의 선행이 충족됐다. 🔴 **다만 승인 목록 확정은 소유자 몫**이므로 체크하지 않는다.
+
+## 🔵 동적 경로 16개 — 이번에 해결된 것
+
+`✔ /ecommerce/orders/[id] · products/[id] · products/[id]/edit · promotions/[id] · promotions/[id]/edit ·
+sellers/[id] · users/[id]` · `store /my/orders/[id] · /products/[id]` · `fan /posts/[id] · /artists/[id]`.
+🔴 **남은 미해결**: `/ecommerce/notifications/templates/[id]/edit`(템플릿 목록에 상세 링크가 없다) ·
+`/ecommerce/settlements/periods/[id]`(부모 목록이 404) · `store /orders/[id]`.
+
+## 🔴 저하·거부로 찍힌 장 (「빈값」과 구별해서 적는다)
+
+```
+/console              degraded ["catalog-health-unavailable"]
+/login                degraded ["catalog-health-unavailable"]
+/dashboards/overview  degraded ["operator-overview-bff-unavailable"]
+/onboarding           degraded ["operator-overview-bff-unavailable"]
+/dashboards/health    degraded ["domain-health-bff-unavailable"]
+/erp/delegation       degraded ["delegation-error"]
+/wms/operations       degraded ["wms-operations-settings-degraded"]
+/partnerships /tenants  거부(200 인데 운영자 화면이 아님)
+```
+
+🔵 위 다섯 개의 `*-bff-unavailable` / `catalog-health-unavailable` 은 **결함이 아니라 기록된 영구
+한계**다 — `infra/demo/console-vercel.override.yml` 이 *"`console-bff` 는 공개 호스트명이 없고 Vercel
+콘솔은 그것을 못 부른다. 영향 레그 셋뿐"* 이라고 적는다. 실측이 그 문장과 맞는다: console-bff 는
+`healthy` 인데 서블릿 초기화(09:25:23Z) 이후 **요청 로그가 한 줄도 없다.**
+
+⚪ **안 한 것**: 승인 목록 확정(소유자) · `/erp/masters` 재촬영본의 UUID 여부 **눈 확인**
+(찍히긴 했다: 1646자, 저하 아님) · 용량 표.

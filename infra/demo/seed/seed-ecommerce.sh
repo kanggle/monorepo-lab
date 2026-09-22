@@ -112,7 +112,14 @@ order_place() {
   name="$(printf '%s' "$body" | grep -oE '"name":"[^"]*"' | head -1 | cut -d'"' -f4)"
   price="$(printf '%s' "$body" | grep -oE '"price":[0-9]+' | head -1 | cut -d: -f2)"
   seller="$(printf '%s' "$body" | grep -oE '"sellerId":"[^"]*"' | head -1 | cut -d'"' -f4)"
-  vid="$(printf '%s' "$body" | grep -oE '"variantId":"[0-9a-f-]{36}"' | head -1 | cut -d'"' -f4)"
+  # 🔴🔴 **상품 응답에 `variantId` 라는 키는 없다.** 그 이름은 **주문 API 가 받는** 이름이고
+  #    상품 상세에서 같은 개념은 `variants[].id` 다. 처음 이 줄은 `"variantId":"…"` 를 찾았고,
+  #    그 식은 어떤 상품에서도 0건이라 **주문이 한 건도 안 생겼다**(2026-09-22 데모 창 실측:
+  #    상품 5개 전부 `✗ 주문 시드: … variantId/price 를 추출하지 못했습니다`). ⇒ 「내가 부르는
+  #    이름」으로 「남의 코퍼스」를 grep 한 것이다. 🔵 `"variants":[` 뒤부터 잘라서 첫 `"id"` 를
+  #    잡는다 — 상품 자신의 `"id"` 는 그 앞에 있으므로 잘라내면 첫 변형의 것이 된다. 아래
+  #    `opt`·`add` 도 head -1 이라 **같은 첫 변형**에서 오고, `price` 는 최상위다.
+  vid="$(printf '%s' "$body" | sed -n 's/.*"variants":\[//p' | grep -oE '"id":"[0-9a-f-]{36}"' | head -1 | cut -d'"' -f4)"
   opt="$(printf '%s' "$body" | grep -oE '"optionName":"[^"]*"' | head -1 | cut -d'"' -f4)"
   add="$(printf '%s' "$body" | grep -oE '"additionalPrice":[0-9]+' | head -1 | cut -d: -f2)"
   # 🔴 추출 0건을 실패로 센다(이 파일의 위시리스트 블록과 같은 이유 — 탐지식의 0건은

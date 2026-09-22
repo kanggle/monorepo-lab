@@ -139,3 +139,29 @@ monorepo
 🔵 **다음 창의 순서가 이것으로 정해졌다**: ① 트래픽(콘솔 9경로 + **fan 로그인**) → ② SSM 으로
 게이트웨이별 WARN 줄 수 + `/actuator/prometheus` 의 `gateway_jwt_audience_total`.
 명령 전문은 `TASK-MONO-672` 항목 6.
+
+
+---
+
+# ⚪ 2026-09-22 데모 창 — **미측정이다. 「불일치 0」으로 읽지 마라** (분석=Opus 5)
+
+게이트웨이 7개 전부 `JWT audience not on allowlist` **0줄**이었다. 그 0 을 이 티켓의 전제
+(「섀도 모드가 돌고 있고 불일치가 없다」)로 쓰면 안 된다 — 유효성 술어를 세워 보니 갈리지 않는다:
+
+- 컨테이너에 `curl` 이 **있다**(`/usr/bin/curl`) ⇒ 「도구가 없어 못 읽었다」는 배제.
+- `actuator/prometheus` 에 `gateway_jwt_audience*` **없음** · `actuator/env` 는 **401**.
+- 배포 이미지는 13차 굽기 산물(`created 2026-09-22T06:55Z`)이고 `java-security.jar` 를 들고 있다.
+- 설정은 env 없이도 켜져 있어야 한다 — `allowed-audiences: ${OIDC_ALLOWED_AUDIENCES:platform-console-web}` ·
+  `audience-mode: ${OIDC_AUDIENCE_MODE:SHADOW}` (wms·scm·erp·finance·fan·ecommerce 6개 게이트웨이 모두).
+- 🔴 **주입 시험**: `aud=fan-platform-user-flow-client` 토큰(wms 허용목록 밖)으로 wms 를 호출 →
+  **403**, 경고는 **여전히 0줄**. 그 게이트웨이의 **WARN 총 줄 수도 0** 이다.
+
+⇒ 「검사가 돌고 전부 일치했다」와 「검사가 그 요청에 도달하지 못했다」를 **구별하지 못한다.**
+
+🔵 **다음 탐침 (순서대로)**: ① 그 403 이 JWT 디코딩 **전**인지 후인지 — 콘솔 토큰이 200 을 받는
+wms 경로를 먼저 찾고 거기에 fan 토큰을 보낸다(내가 쓴 `/api/wms/inventory` 는 콘솔 토큰으로도
+**404** 였다 ⇒ 경로부터 계약서에서 읽어라). ② 게이트웨이가 INFO 액세스 로그를 내는지 확인해
+**분모**를 세운다. ③ 그 뒤에야 「불일치 N」이 수치가 된다.
+
+🔴 **이 티켓을 「섀도에서 불일치가 없으니 enforce 로 넘겨도 된다」로 진행시키지 마라** — 그
+전제가 아직 측정되지 않았다.
