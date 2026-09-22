@@ -165,3 +165,79 @@ wms 경로를 먼저 찾고 거기에 fan 토큰을 보낸다(내가 쓴 `/api/w
 
 🔴 **이 티켓을 「섀도에서 불일치가 없으니 enforce 로 넘겨도 된다」로 진행시키지 마라** — 그
 전제가 아직 측정되지 않았다.
+
+---
+
+# 🔴🔴 2026-09-22 15차 창 — **위 ⚪ 절의 내 판정을 정정한다. 그리고 AC-0 은 여전히 열려 있다**
+
+## 정정 ① — *"`actuator/prometheus` 에 `gateway_jwt_audience*` 없음"* 은 **부재 판정이 아니었다**
+
+14차 창에서 나는 그렇게 적었다. 이번에 유효성 술어를 세워 다시 쟀다:
+
+```
+docker exec <gw> curl -s -o /dev/null -w '%{http_code}' localhost:8080/actuator/health      ->  200
+docker exec <gw> curl -s -o /tmp/m    -w '%{http_code}' localhost:8080/actuator/prometheus  ->  401
+                                                        (wms · ecommerce · scm 게이트웨이 셋 다)
+```
+
+⇒ 액추에이터는 **살아 있고**, 스크레이프 엔드포인트가 **401** 이다. 그때 내가 센 「0건」은
+**401 오류 본문을 grep 한 0건**이다 — 「메트릭이 없다」와 「못 읽었다」를 안 가른 것이고,
+이 저장소가 이름 붙인 «부재 판정에 대리지표 금지» 를 내가 다시 밟았다.
+
+🔴 **그러므로 이 티켓의 전제(「섀도가 돌고 불일치가 없다」)는 여전히 미측정이고, 그 이유가 바뀌었다.**
+
+## 정정 ② — *"경로부터 계약서에서 읽어라"* 는 내 지적이 맞았다. 읽으니 **200** 이다
+
+14차 창에서 내가 쓴 `/api/wms/inventory` 는 콘솔 토큰으로도 404 였다. 계약서
+(`projects/wms-platform/specs/contracts/http/admin-service-api.md` — Base path `/api/v1/admin`)에서
+읽은 경로로 다시 쟀다:
+
+```
+GET http://wms.<DEMO_DOMAIN>/api/v1/admin/dashboard/inventory?page=0&size=1
+  A) 콘솔 운영자 토큰 (aud="platform-console-web")   ->  200  {"content":[{"locationId":…}]}
+  C) 토큰 없음                                        ->  401  {"code":"UNAUTHORIZED"}
+  D) 쓰레기 토큰 ("Bearer not.a.jwt")                 ->  401  {"code":"UNAUTHORIZED"}
+```
+
+🔵 이로써 탐침 ①의 **전반부**가 닫힌다 — 「콘솔 토큰이 200 을 받는 wms 경로」가 확정됐다.
+🔵 C·D 가 401 인 것도 값이 있다: **토큰 없음과 파싱 불가가 같은 답**이므로, 14차 창에서 본
+「fan 토큰 → 403」은 **그 401 들과 다른 층**에서 났다는 뜻이다(적어도 디코딩은 지났다).
+
+⚪ **후반부(allowlist 밖 `aud` 토큰을 그 경로에 보내기)는 못 했다** — `fan-platform-user-flow-client`
+로 토큰을 만들려다 `{"error":"invalid_client"}` 로 막혔다. 🔴 사유를 «fan 클라이언트가 막혔다» 로
+적지 않는다: 리다이렉트 URI 후보를 저널의 등록 목록에서 뽑았는데 내가 집은 것이 `…local` 판이었고,
+**클라이언트 설정과 내 인자 중 어느 쪽 문제인지 안 갈렸다.**
+
+## 🔴🔴 정정 ③ — **분모는 로그로는 영영 못 센다**
+
+```
+docker logs wms-gateway-service  ->  3273 줄
+  'audience' 포함 줄              ->  0
+  'dashboard/inventory' 포함 줄   ->  0     (방금 200 을 받은 그 요청이다)
+```
+
+⇒ 게이트웨이는 **요청당 액세스 로그를 내지 않는다.** 그러므로 이 티켓 AC-0 이 요구하는
+*"분모 `outcome="match"` > 0"* 은 **로그를 세는 방법으로는 원리적으로 만족될 수 없다.**
+
+## ⇒ AC-0 의 상태와 **다음 탐침 하나**
+
+| 채널 | 상태 | 이유 |
+|---|---|---|
+| 분자 — `gateway_jwt_audience_total` | ⚪ 못 읽음 | `/actuator/prometheus` **401** |
+| 분모 — 액세스 로그 | 🔴 **원리적으로 없음** | 요청당 로그를 안 낸다 |
+
+🔵 **다음 탐침은 하나다**: 각 도메인 스택에 **`<domain>-prometheus` 컨테이너가 이미 떠 있고**
+그것은 게이트웨이를 스크레이프하도록 설정돼 있다 ⇒ 내가 401 로 막힌 바로 그 자격을 **그쪽이 갖고
+있다.** 다음 창에서:
+
+```bash
+docker exec wms-prometheus sh -lc \
+  "wget -qO- 'http://localhost:9090/api/v1/query?query=gateway_jwt_audience_total'"
+# 기대: {"status":"success","data":{"result":[ … {gateway,outcome} … ]}}
+#  🔴 result:[] 는 «불일치 0» 이 아니라 «메트릭이 아직 한 번도 발행되지 않았다» 다.
+#     그 둘을 가르려면 outcome="match" 시계열이 있어야 한다 — 그것이 이 티켓의 분모다.
+```
+
+🔴 **그 질의가 빈 결과를 내면 결론은 «섀도가 관측 불가능하게 출하됐다» 이고, 그것은 이 티켓이
+아니라 새 티켓(계측기를 노출하는 일)이다.** 「불일치 0」으로 읽고 ENFORCE 로 넘기지 마라 —
+`TASK-MONO-696` 2단계의 전환 조건은 **실측**이지 «빨간 게 안 보인다» 가 아니다.
