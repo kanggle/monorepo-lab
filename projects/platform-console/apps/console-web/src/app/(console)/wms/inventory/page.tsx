@@ -28,7 +28,23 @@ export const dynamic = 'force-dynamic';
  * `wms/outbound/page.tsx`: registryDegraded → notEligible → forbidden →
  * degraded → happy.
  */
-export default async function WmsInventoryPage() {
+export default async function WmsInventoryPage({
+  searchParams,
+}: {
+  /**
+   * TASK-PC-FE-296 (owner decision ⓒ) — `?lowStockOnly=true` seeds the
+   * screen's 저재고 filter. Read HERE (server) rather than with
+   * `useSearchParams` in the client container: this route is already
+   * `force-dynamic`, so there is no static-render boundary to suspend, and
+   * the seed then arrives with the first paint instead of after hydration.
+   */
+  searchParams?: Promise<{ lowStockOnly?: string }>;
+}) {
+  const sp = (await searchParams) ?? {};
+  // 🔵 Strict `=== 'true'`, mirroring `app/api/wms/inventory/route.ts:25`.
+  //    A looser truthiness test would make `?lowStockOnly=false` mean TRUE.
+  const initialLowStockOnly = sp.lowStockOnly === 'true';
+
   let eligible = false;
   let registryDegraded = false;
   try {
@@ -142,6 +158,7 @@ export default async function WmsInventoryPage() {
     <WmsInventoryScreen
       inventory={state.inventory}
       lagSeconds={state.lagSeconds}
+      initialLowStockOnly={initialLowStockOnly}
     />
   );
 }

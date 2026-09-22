@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 import {
   type Card,
   GapDataSchema,
@@ -54,15 +55,47 @@ function WmsSummary({ data }: { data: unknown }): ReactNode {
       ? parsed.data.page.totalElements
       : null;
   return (
-    <dl>
-      <dt className="text-sm text-muted-foreground">재고 행 수</dt>
-      <dd
-        className="text-2xl font-semibold tabular-nums text-foreground"
-        data-testid="operator-overview-card-wms-stock"
+    <div className="space-y-2">
+      <dl>
+        <dt className="text-sm text-muted-foreground">재고 행 수</dt>
+        <dd
+          className="text-2xl font-semibold tabular-nums text-foreground"
+          data-testid="operator-overview-card-wms-stock"
+        >
+          {rows === null ? '—' : rows.toLocaleString()}
+        </dd>
+      </dl>
+      {/*
+        TASK-PC-FE-296 — the owner's answer to "how does the operator see the
+        low-stock count?" is **ⓒ: a link, not a second leg call**.
+
+        🔴 Why not a number here. An alert count needs a SECOND producer query
+        (`lowStockOnly=true&size=1`), and AC-0 measured what that costs: the
+        composition fans out one slot PER DOMAIN (`EnumMap<DomainTarget, …>`),
+        so the second call cannot be a 7th parallel leg — it runs INSIDE the
+        wms leg body, sequentially, and the retry wraps the whole body. Worst
+        case goes 2+0.15+2 = 4.15s (survives the 5s COMPOSITION_TIMEOUT) →
+        (2+2)+0.15+(2+2) = 8.15s (does not). Exceeding it degrades the card to
+        TIMEOUT, i.e. paying for the alert count risks losing the stock-row
+        count that works today. The two calls would also share one circuit key
+        (WMS, operator-overview).
+
+        🔵 So this link costs zero calls, keeps the § 2.4.9.1 verbatim
+        invariant intact, and gives the operator the EXACT number rather than
+        the overview's approximation.
+
+        🔴 The href is only honest because `wms/inventory/page.tsx` now seeds
+        the filter from this param — before that the screen dropped it and
+        rendered the unfiltered list. Do not "simplify" either half alone.
+      */}
+      <Link
+        href="/wms/inventory?lowStockOnly=true"
+        data-testid="operator-overview-card-wms-lowstock-link"
+        className="inline-block text-sm underline underline-offset-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
       >
-        {rows === null ? '—' : rows.toLocaleString()}
-      </dd>
-    </dl>
+        저재고 재고 보기
+      </Link>
+    </div>
   );
 }
 

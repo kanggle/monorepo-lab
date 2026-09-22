@@ -175,6 +175,55 @@ describe('WmsInventoryScreen — extended filter submit & pagination', () => {
     expect(url.searchParams.get('lowStockOnly')).toBe('true');
   });
 
+  it('initialLowStockOnly seeds BOTH the checkbox and the query (the link actually filters)', async () => {
+    // TASK-PC-FE-296 (owner decision ⓒ) — the operator-overview wms card
+    // answers "how many are low on stock?" with a LINK to
+    // `/wms/inventory?lowStockOnly=true` instead of a second leg call.
+    //
+    // 🔴🔴 That link was a PROMISE THE SCREEN DID NOT KEEP. `app/api/wms/
+    //    inventory/route.ts` honours `lowStockOnly`, so the param looked
+    //    supported end-to-end — but this container seeded its filter state
+    //    from EMPTY_INV_FILTERS and never read the URL, so the link rendered
+    //    the UNFILTERED list with nothing reporting an error anywhere.
+    //
+    // 🔴 Both halves are asserted. Seeding only the checkbox would tick the
+    //    box over an unfiltered table — the screen would then be *claiming* a
+    //    filter it had not applied, which is worse than ignoring the param.
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ ...INVENTORY, content: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+    renderScreen({ initialLowStockOnly: true });
+
+    expect(screen.getByTestId('wms-inv-filter-lowstock')).toBeChecked();
+
+    // The seeded server page is UNFILTERED, so the screen must not reuse it:
+    // a filtered query has to go out on its own.
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const url = new URL(
+      String(fetchMock.mock.calls[0][0]),
+      'http://console.local',
+    );
+    expect(url.pathname).toContain('/api/wms/inventory');
+    expect(url.searchParams.get('lowStockOnly')).toBe('true');
+  });
+
+  it('without the seed the screen must NOT filter — and must not re-query at all', async () => {
+    // Control group for the cell above. Without it, a screen that hard-coded
+    // `lowStockOnly: true` would pass that test while breaking every operator
+    // who opens /wms/inventory normally. It also pins the seeded-page
+    // optimisation: an unfiltered first render reuses the server page and
+    // issues NO fetch.
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ ...INVENTORY, content: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+    renderScreen();
+
+    expect(screen.getByTestId('wms-inv-filter-lowstock')).not.toBeChecked();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('an empty/non-numeric minOnHand → the param is NOT sent (undefined)', async () => {
     const fetchMock = vi
       .fn()

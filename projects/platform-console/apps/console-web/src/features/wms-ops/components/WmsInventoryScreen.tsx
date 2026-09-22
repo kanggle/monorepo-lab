@@ -40,11 +40,32 @@ export interface WmsInventoryScreenProps {
   inventory: InventoryPage;
   /** NON-blocking eventual-consistency hint (seconds), or null. */
   lagSeconds: number | null;
+  /**
+   * TASK-PC-FE-296 (owner decision ⓒ) — seeds the 저재고 filter from the
+   * route's `?lowStockOnly=true`, so a link can land the operator ON the
+   * filtered list.
+   *
+   * 🔴🔴 **Before this prop the query param was silently dropped by the
+   * SCREEN.** `app/api/wms/inventory/route.ts` honours `lowStockOnly`, so the
+   * param looked supported end-to-end — but this container seeded its filter
+   * state from `EMPTY_INV_FILTERS` (`lowStockOnly: false`) and never read the
+   * URL. A link to `/wms/inventory?lowStockOnly=true` therefore rendered the
+   * UNFILTERED list, and nothing anywhere reported an error. 296 chose ⓒ
+   * ("link instead of a second leg call"); shipping that link without this
+   * prop would have shipped a promise the screen does not keep.
+   *
+   * 🔵 It seeds the INITIAL state only — it is not reactive. Once the
+   * operator edits the form, the form wins; the URL is a starting point, not
+   * a controller (contrast `useAsOf` in erp-ops, where the URL IS the single
+   * source of truth because every hook threads `asOf` to the producer).
+   */
+  initialLowStockOnly?: boolean;
 }
 
 export function WmsInventoryScreen({
   inventory,
   lagSeconds,
+  initialLowStockOnly = false,
 }: WmsInventoryScreenProps) {
   const whFid = useId();
   const skuFid = useId();
@@ -53,11 +74,18 @@ export function WmsInventoryScreen({
   const lotFid = useId();
   const minFid = useId();
 
-  const [invFilters, setInvFilters] =
-    useState<InvFilterState>(EMPTY_INV_FILTERS);
+  const [invFilters, setInvFilters] = useState<InvFilterState>({
+    ...EMPTY_INV_FILTERS,
+    lowStockOnly: initialLowStockOnly,
+  });
   const [invQuery, setInvQuery] = useState<InventoryQueryParams>({
     page: 0,
     size: inventory.page.size || WMS_DEFAULT_PAGE_SIZE,
+    // 🔴 Both halves must be seeded. Seeding only the checkbox would show a
+    //    ticked box over an UNFILTERED table until the operator pressed 조회 —
+    //    worse than not honouring the param at all, because the screen would
+    //    then be *claiming* a filter it had not applied.
+    lowStockOnly: initialLowStockOnly || undefined,
   });
 
   const invSeeded =
