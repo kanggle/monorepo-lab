@@ -8,7 +8,7 @@ TASK-MONO-717
 
 # Status
 
-ready (2026-09-22 UTC)
+ready (2026-09-22 UTC — 🔴 **AC-0 수행 완료, 전제가 무너졌다**: 고칠 값은 `ACCOUNT_SERVICE_BASE_URL` 이 아니라 `IAM_TOKEN_URI` 가 먼저이고, 더 앞에 **`product-service-client` 가 IdP 에 없다** ⇒ 「배선 문제」가 아니라 **워크로드 클라이언트 등록 여부**가 소유자 결정. 🔵 역할이 아니라 스코프(`internal.invoke`)라 ADR 은 안 건드린다)
 
 # Owner
 
@@ -127,3 +127,104 @@ refused 일 것이다»)이 **측정이 됐다.** 🔴 그리고 예상보다 �
 # 분석 / 구현 권장
 
 (분석=Opus 5 / 구현 권장=Sonnet — 배선과 기본값 문제이고 도메인 결정이 아니다. 단 AC-2 의 술어 설계는 Opus)
+
+---
+
+# 🔴🔴 AC-0 수행 결과 (2026-09-22 UTC) — **전제가 무너졌다. 이 티켓은 「배선 문제」가 아니다**
+
+AC-0 이 *"주소가 정말 둘인지 하나인지부터 읽어라"* 라고 했고, 읽으니 **셋 이상**이었다.
+
+## ① 실패하는 주소는 713 이 지목한 그것이 **아니다**
+
+`product-service/src/main/resources/application.yml` (실측):
+
+```yaml
+iam:
+  internal-client:
+    token-uri:     ${IAM_TOKEN_URI:http://localhost:8081/oauth2/token}   # ← 실패한 호출
+    client-id:     ${IAM_CLIENT_ID:product-service-client}
+    client-secret: ${IAM_CLIENT_SECRET:secret}
+  account-service:
+    base-url:      ${ACCOUNT_SERVICE_BASE_URL:http://localhost:8081}     # ← 713 이 지목
+```
+
+⇒ **`ACCOUNT_SERVICE_BASE_URL` 만 채웠으면 관측된 실패는 그대로였다.** 프로비저닝은 자격증명을
+얻는 단계에서 끝나므로 고쳐야 할 첫 값은 `IAM_TOKEN_URI` 다.
+
+🔵 713 이 **이름 자체는 맞았다** — `application.yml` 이 명시 플레이스홀더를 쓰므로 relaxed
+binding 문제는 없다(내가 한 번 의심했고, 근거가 없었다).
+
+## ② 「어디에서 설정되는가」 — 전수: **어디에서도 안 된다**
+
+`*.yml`·`*.yaml`·`*.env`·`*.sh`·`*.properties` 전수에서 네 값 모두 **오직 `application.yml` 의
+기본값**만 존재한다. 데모만 빠진 것이 아니라 **로컬·CI·운영 어디에도 없다.** (AC-0 둘째 칸 답)
+
+🔵 형제가 옳은 모양을 이미 갖고 있다 — fan `community-service`:
+`token-uri: ${IAM_TOKEN_URI:${OIDC_ISSUER_URL:http://iam.local}/oauth2/token}`
+(데모 체인이 `OIDC_ISSUER_URL` 을 채운다: `demo.env:80` → `IAM_PUBLIC_URL`).
+
+## ③ 🔴🔴 그런데 주소를 고쳐도 **안 된다** — 그 클라이언트가 IdP 에 없다
+
+`oauth_clients` 시드 **전수**(`projects/iam-platform/**/db/migration/*.sql`):
+
+```
+community-service-client · ecommerce-admin-dashboard-client · ecommerce-web-store-client
+fan-platform-user-flow-client · membership-service-client · platform-console-web
+scm-platform-internal-services-client · wms-internal-services-client · wms-user-flow-client
+V0019(워크로드): admin-service-client · auth-service-client · security-service-client · account-service-client
+```
+
+**`product-service-client` 가 없다.** ⇒ 주소를 고치면 실패가 `Connection refused` 에서
+**`invalid_client`** 로 옮겨갈 뿐이다. ⚠ batch-worker 의 기본값
+`ecommerce-internal-services-client` 도 **같은 상태**다.
+
+🔴 **그러므로 이 프로비저닝은 이 저장소에서 한 번도 동작한 적이 없다.** 데모 배선이 빠진 것이
+아니라 **호출자 자격이 만들어진 적이 없는 것**이다. 티켓 말미의 *"배선과 기본값 문제이고
+도메인 결정이 아니다"* 는 이 측정으로 **틀렸다**.
+
+## ④ 🔵 다만 내가 단정할 뻔한 것도 틀렸다 — **역할이 아니라 스코프다**
+
+account-service 의 `/internal/**` 게이트는 **`internal.invoke` 스코프**다
+(`IamTokenProviderConfig.INTERNAL_INVOKE_SCOPE`, TASK-BE-514/MONO-422).
+⇒ `WorkloadRoleCatalog`(ADR-MONO-061 ACCEPTED, *"admin-tier 를 주지 않는다"*)를 **건드리지
+않는다** — GRANTS 에 없는 클라이언트는 역할을 못 받고, 여기서는 그래도 된다.
+
+🔴 이 확인을 안 했으면 «ADR 개정 필요» 로 보고할 뻔했다. 그것은 **과장**이었을 것이다.
+
+## ⑤ 남는 진짜 구멍 하나 — 게이트웨이 라우트
+
+iam 게이트웨이는 `Path=/internal/tenants/**` **만** 라우트한다. 프로비저너의 네 호출 중
+
+| 호출 | 라우트 |
+|---|---|
+| `POST /internal/tenants/{t}/accounts` | 🟢 있다 |
+| `POST /internal/tenants/{t}/identities:resolveOrCreate` | 🟢 있다 |
+| `PATCH /internal/tenants/{t}/accounts/{a}/status` | 🟢 있다 |
+| `POST /internal/accounts/{a}/lock` | 🔴 **없다** |
+
+⇒ `ACCOUNT_SERVICE_BASE_URL` 을 게이트웨이 호스트로 주면 **셋은 되고 `lock` 은 404** 다.
+🔵 이것이 `TASK-MONO-713` 갈래 ⓑ 가 말한 바로 그 구멍이고, 이 티켓 § 제외가 별건으로 둔 것이다.
+
+---
+
+# ⇒ 🔴 소유자 결정이 필요하다 — 「다섯 번째 워크로드 클라이언트를 만드는가」
+
+선례는 완전하다(`V0019__seed_internal_service_workload_clients.sql`): `tenant_id='global-account-platform'` ·
+`tenant_type='INTERNAL'` · `scopes='["internal.invoke"]'` · `client_secret_hash` = 핀된 BCrypt("secret") ·
+운영은 `<SERVICE>_SERVICE_CLIENT_SECRET` 로 회전. **기계적으로는 마이그레이션 한 장이다.**
+
+🔴 **그런데 V0019 는 «왜 이 넷인가» 를 헤더에 열거한다.** 다섯 번째를 **조용히** 더하는 것은
+그 기록의 성격을 바꾼다 — 「/internal/** 을 부를 수 있는 주체」의 명단이기 때문이다.
+
+| 갈래 | 무엇을 한다 | 대가 |
+|---|---|---|
+| **ⓐ 등록한다** | `product-service-client` 를 V0019 모양으로 시드 + 데모 체인에 주소 둘 | 명단이 다섯이 된다. `lock` 은 여전히 404(별건) |
+| **ⓑ 기존 클라이언트를 재사용** | `ecommerce-*` 중 하나로 `IAM_CLIENT_ID` 를 덮는다 | 🔴 그 클라이언트들은 **user-flow** 용이고 `internal.invoke` 가 없다 ⇒ 결국 시드 변경이 필요하다 |
+| **ⓒ 프로비저닝을 끈다** | 설정이 없으면 **명시적으로 비활성**(WARN 대신 시작 시 1회 INFO) | 🔵 가장 정직하다 — 「한 번도 동작한 적 없다」는 사실과 일치한다. 🔴 그러나 기능을 포기하는 결정이다 |
+
+🔵 **추천: ⓐ.** 선례가 형식을 다 정해 뒀고, 스코프 게이트라 ADR 을 건드리지 않으며, ⓒ 는
+«fail-soft 로 이미 조용히 꺼져 있는 것» 을 공식화할 뿐 셀러가 `PENDING_PROVISIONING` 에 남는
+문제를 안 고친다. 🔴 **내 추천이지 소유자 선택이 아니다** — 명단에 이름을 더하는 일이다.
+
+🔴 그리고 **어느 갈래든 AC-1 의 판정(`account_db` 행이 생기는가)은 창이 있어야 한다** ⇒
+`TASK-MONO-672` 로 간다.
