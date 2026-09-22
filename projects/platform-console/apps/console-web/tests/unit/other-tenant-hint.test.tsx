@@ -159,6 +159,21 @@ describe('배선 — 힌트가 실제로 빈 목록 옆에 있다', () => {
     expect(src).toContain('otherTenants={otherTenants}');
   });
 
+  it('🔴🔴 클라이언트 화면은 위젯 **배럴**을 경유해 임포트하면 안 된다 (서버 전용이 번들에 딸려 온다)', () => {
+    // 2026-09-22 실측: 배럴 경유였을 때 `next build` 가 깨졌다 —
+    //   "You're importing a component that needs next/headers"
+    //   trace: session.ts → DomainTenantGate.tsx → index.ts → OrdersScreen.tsx
+    // 🔴 vitest 는 번들 경계를 세우지 않으므로 **단위 칸 전부가 초록인 채** 깨진다.
+    //    그래서 이 칸이 소스 문자열로 무는 것이지, 동작으로 물 수 있는 종류가 아니다.
+    const src = readFileSync(
+      path.join(SRC, 'features', 'ecommerce-ops', 'components', 'OrdersScreen.tsx'),
+      'utf8',
+    );
+    expect(src).toContain("'use client'");
+    expect(src).toContain("@/widgets/domain-tenant-gate/OtherTenantHint");
+    expect(src).not.toMatch(/from '@\/widgets\/domain-tenant-gate'/);
+  });
+
   it('🔵 opt-in 임을 고정한다 — 719 는 **측정된 화면 하나**에만 배선했다', () => {
     // 2026-09-22 창이 잰 것은 /ecommerce/orders 다. 나머지 화면으로 넓히는 것은
     // «아무도 재지 않은 주장» 이므로 별도 결정이고, 이 칸이 그 경계를 지킨다.

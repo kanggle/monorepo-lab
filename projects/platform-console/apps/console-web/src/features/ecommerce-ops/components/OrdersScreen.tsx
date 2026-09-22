@@ -11,7 +11,12 @@ import {
   type OrderListParams,
 } from '../api/order-types';
 import { OrdersTable } from './OrdersTable';
-import { OtherTenantHint } from '@/widgets/domain-tenant-gate';
+// 🔴🔴 **배럴로 부르지 마라.** `@/widgets/domain-tenant-gate` 는 `DomainTenantGate` 도
+//    내보내고 그것은 `next/headers` 를 쓰는 **서버 전용**이다. 이 파일은 `'use client'`
+//    이므로 배럴 경유 임포트는 서버 코드를 클라이언트 번들로 끌어와 **빌드를 깨뜨린다**
+//    (2026-09-22 실측: `You're importing a component that needs "next/headers"`).
+//    🔵 단위 테스트는 이것을 못 잡는다 — vitest 는 번들 경계를 세우지 않는다.
+import { OtherTenantHint } from '@/widgets/domain-tenant-gate/OtherTenantHint';
 
 /**
  * ecommerce order operations list section (TASK-PC-FE-083 — § 2.4.10 #15).
