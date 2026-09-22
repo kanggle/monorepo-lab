@@ -113,6 +113,41 @@ describe('DomainCard — ok branch (per-domain summaries)', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('wms ok → answers the low-stock question with a LINK, not a second call', () => {
+    // TASK-PC-FE-296 — owner decision ⓒ. AC-0 measured why a number here is
+    // not free: the second producer query (`lowStockOnly=true&size=1`) cannot
+    // be a 7th parallel leg (the fan-out is keyed per DOMAIN), so it runs
+    // sequentially inside the wms leg body with the retry wrapping BOTH calls
+    // — worst case 8.15s against a 5s COMPOSITION_TIMEOUT. Paying for the
+    // alert count therefore risks losing the row count that works today.
+    //
+    // 🔴 The href is asserted VERBATIM on purpose. `wms/inventory/page.tsx`
+    //    seeds its 저재고 filter from exactly `?lowStockOnly=true`
+    //    (strict `=== 'true'`, mirroring the proxy route). Drift either side
+    //    and the link lands on the UNFILTERED list — which is what the screen
+    //    did before 296, silently and with no error anywhere.
+    const card: Card = {
+      domain: 'wms',
+      status: 'ok',
+      data: {
+        content: [],
+        page: { number: 0, size: 20, totalElements: 438, totalPages: 22 },
+      },
+    };
+    render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
+      wrapper: wrapper(),
+    });
+    const link = screen.getByTestId(
+      'operator-overview-card-wms-lowstock-link',
+    );
+    expect(link).toHaveAttribute('href', '/wms/inventory?lowStockOnly=true');
+    // The row count must SURVIVE the addition — ⓒ was chosen precisely so
+    // that the tile which works today is not put at risk.
+    expect(
+      screen.getByTestId('operator-overview-card-wms-stock'),
+    ).toHaveTextContent('438');
+  });
+
   it('scm ok → renders the snapshot row count + surfaces meta.warning (S5 hint)', () => {
     // TASK-PC-FE-295: the producer body is `{ data: <page>, meta }`; the count
     // comes from `data.totalElements` (rows, not distinct nodes — a page

@@ -2554,12 +2554,38 @@ and scm producers answer with **one page** of rows. A sum over that page
 page-local figure as a whole-set total, so the cards count rows — which is
 exactly what a page total can answer — and say so.
 
-🔴 **The wms alert count is deliberately absent.** It needs a second query
-(`lowStockOnly=true&size=1`), i.e. a second outbound leg on this route, which
-is a cost decision rather than a rendering fix. Until that decision is taken
-the card shows no alert tile; it previously showed a permanent «—», which reads
-as "zero alerts" rather than "never asked". Adding it means adding a row to the
-producer table above first.
+🟢 **The wms alert count is absent BY DECISION — this is settled, not pending**
+(owner, 2026-09-22, `TASK-PC-FE-296` AC-1 ⓒ). It needs a second query
+(`lowStockOnly=true&size=1`), i.e. a second call on this route, and AC-0
+measured what that costs rather than estimating it:
+
+- the composition fans out **one slot per domain**
+  (`EnumMap<DomainTarget, Supplier<CompositionLeg>>`), so the second call
+  **cannot be a 7th parallel leg** — it would run sequentially inside the wms
+  leg body;
+- `Resilience4jLegResilienceAdapter` wraps the **whole leg body** in the retry,
+  so the retry would repeat **both** calls: worst case moves from
+  `2 + 0.15 + 2 = 4.15s` (survives the 5s `COMPOSITION_TIMEOUT`) to
+  `(2+2) + 0.15 + (2+2) = 8.15s` (does not);
+- exceeding it degrades the card to `TIMEOUT`, so paying for the alert count
+  **risks losing the 재고 행 수 tile that works today**;
+- both calls would also share **one** circuit key `(WMS, operator-overview)`.
+
+⇒ the card shows **no alert tile and no number**; it answers the question with a
+**link** to `/wms/inventory?lowStockOnly=true`, where the operator sees the
+exact count instead of the overview's approximation. 🔵 Zero calls, so the
+verbatim invariant below stays intact for all six legs.
+
+🔴 **Do not reopen this as "the card is missing a metric".** If a future
+change makes a second call affordable (a raised `COMPOSITION_TIMEOUT` is a
+six-leg shared budget, not a wms decision), it needs a new owner decision and a
+row in the producer table above — not a rendering fix.
+
+🔴 **The link is only honest because the destination honours the param.**
+`wms/inventory/page.tsx` seeds its 저재고 filter from `?lowStockOnly=true`
+(strict `=== 'true'`). Before `TASK-PC-FE-296` the proxy route honoured that
+param but the **screen dropped it**, so such a link would have landed on the
+unfiltered list with nothing reporting an error.
 
 🔵 **Finance multi-currency**: the balances body carries one row per currency
 and no "account currency" field, so a multi-currency account gets the
