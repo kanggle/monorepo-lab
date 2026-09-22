@@ -8,7 +8,7 @@ TASK-MONO-719
 
 # Status
 
-in-progress (2026-09-22 UTC — 소유자 결정 **ⓑ**)
+review (2026-09-22 UTC — 소유자 결정 **ⓑ** 구현 · 🔴 AC-3(창 판정)은 `TASK-MONO-672` 항목 11)
 
 # Owner
 
@@ -275,3 +275,45 @@ BITE B  서버가 otherTenants 를 항상 [] 로 냄   →  2 failed | 12 passed
 - **68개 `-empty` 마커 전체**로의 일반화 — 이것은 디자인 결정이고 이 티켓의 권한 밖이다.
 - `DomainTenantGate.tenantMismatch()` **삭제** — 도달 가능하고 정직하게 닫는 케이스가 있다.
   지우면 그 케이스가 조용히 사라진다.
+
+---
+
+# 🔴🔴 게이트 하나가 잡은 것 — **단위 칸 3552개가 전부 초록인 채 빌드가 깨졌다**
+
+`next build` 가 이렇게 죽었다:
+
+```
+Error: You're importing a component that needs "next/headers". That only works
+       in a Server Component ...
+  import trace:
+    session.ts → DomainTenantGate.tsx → index.ts(배럴) → OrdersScreen.tsx
+```
+
+`OrdersScreen` 은 `'use client'` 인데 **위젯 배럴**로 `OtherTenantHint` 를 불렀고, 그 배럴은
+**서버 전용** `DomainTenantGate` 도 내보낸다 ⇒ 서버 코드가 클라이언트 번들로 딸려 왔다.
+
+🔴 **vitest 는 이것을 못 잡는다** — 번들 경계를 세우지 않으므로 단위 칸은 **전부 초록**이었다
+(316파일 · **3552칸** 통과, 타입체크 rc=0, 린트 경고 0). 이 저장소가 이름 붙인 «가드가 **없는**
+한 지점이 결함 자리» 그대로다.
+
+고침은 **직접 임포트**(`@/widgets/domain-tenant-gate/OtherTenantHint`)이고, 회귀는
+`other-tenant-hint.test.tsx` 의 칸이 **소스 문자열로** 문다 — 동작으로 물 수 있는 종류가 아니다.
+🔵 bite 확인: 배럴로 되돌리면 그 칸만 **1 failed | 14 passed**.
+
+---
+
+# 게이트 기록 (전부 이 트리에서 실행)
+
+| 게이트 | 결과 |
+|---|---|
+| `vitest run` (console-web 전체) | 🟢 **316 files · 3552 tests passed** (rc=0, 1034s) |
+| `tsc --noEmit` | 🟢 rc=0 |
+| `next lint` | 🟢 **No ESLint warnings or errors** |
+| `next build` | 🔴 **rc=1 → 고침 → 🟢 rc=0** (66/66 static pages) |
+| bite A (힌트가 null) | 🟢 2 failed — 문다 |
+| bite B (서버가 `[]`) | 🟢 2 failed — 문다 |
+| bite C (배럴로 되돌림) | 🟢 1 failed — 문다 |
+
+🔴 **로컬 초록은 CI 초록이 아니다.** 여기서 안 돌린 것: 통합(Testcontainers) · e2e ·
+`nightly-e2e`. 이 변경은 라우트·testid 를 **추가만** 하므로 프런트 e2e 가 볼 수 있다
+⇒ 머지 뒤 다음 nightly 를 한 번 확인한다(`platform/git-workflow-policy.md` § post-merge nightly).
