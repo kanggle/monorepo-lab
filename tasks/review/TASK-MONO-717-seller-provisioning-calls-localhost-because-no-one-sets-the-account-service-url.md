@@ -416,3 +416,72 @@ Flyway 가 부팅 때 돈다), 오류는 이 파일을 가리키지만 원인은
 `Could not resolve all files for configuration ':projects:fan-platform:tests:e2e:testCompileClasspath'`
 였다 — **의존성 해소 실패**이고 내 변경과의 연결이 안 보인다. 🔴 그러나 «무관하다» 를
 **지금 단언하지 않는다**: 다음 런에서 같은 잡이 어떻게 나오는지로 판정한다.
+
+---
+
+## CORRECTION (2026-09-23 UTC · 16차 창 실측) — 🔴 **AC-1 판정 FAIL. 내가 고른 주소가 틀렸다**
+
+`review/` 는 frozen 이므로 본문을 고치지 않고 덧붙인다. 🔴 그리고 **`done/` 으로 옮기지
+않는다** — 4차원 (d) 가 그렇게 시킨다(«(d) 만 실패하면 파일을 옮기지 말고 CORRECTION 을 붙여라»).
+
+## 🟢 맞았던 것 둘 — 둘 다 라이브에서 확증됐다
+
+```
+등록 전  product-service-client 로 토큰  →  401 {"error":"invalid_client"}
+등록 후  같은 요청                        →  200
+```
+⇒ **AC-0 의 「등록 자체가 없다」가 저장소 판정이 아니라 라이브 사실이었다.**
+
+```
+scope 생략(지금 구워진 이미지의 동작) →  토큰의 scope 클레임 **비어 있음**
+scope=internal.invoke 명시 요청        →  "scope":["internal.invoke"]
+```
+⇒ 🔴 **「생략하면 서버가 등록된 스코프를 전부 준다」는 거짓이었다.** 나는 그 기본에 기대지
+않는 쪽을 골랐고 이유를 *"아무 데도 안 적힌 서버 측 기본값에 달린다"* 로 적었는데, 실제로는
+**그 기본이 아예 없었다** ⇒ `IamTokenProviderConfig` 의 명시 요청은 **방어가 아니라 필수**였다.
+
+## 🔴🔴 틀렸던 것 — `ACCOUNT_SERVICE_BASE_URL` 을 **iam 게이트웨이**로 준 것
+
+```
+게이트웨이 경유 POST /internal/tenants/ecommerce/identities:resolveOrCreate
+   (스코프를 실은 토큰으로도)  →  403 {"code":"TENANT_SCOPE_DENIED",
+                                     "message":"path tenantId does not match token claim"}
+product-service → account-service 직접                     →  000 (연결 자체가 안 됨)
+```
+
+**기전**(소스에서 읽었다):
+- `gateway-service` 의 `JwtAuthenticationFilter` 가 *"strips spoofed X-Tenant-Id … and injects
+  verified headers"* — 즉 **검증된 토큰의 `tenant_id` 로 그 헤더를 넣는다.**
+- account-service 의 `TenantScopeGuard` 는 *"If `X-Tenant-Id` is absent … validation is
+  skipped — the gateway's mTLS / shared-token layer is trusted"* 이고, **있으면** 경로의
+  `{tenantId}` 와 같아야 한다.
+- 이 자격의 테넌트는 `global-account-platform`(V0019 모양)이고 경로는 `ecommerce` ⇒ **영원히 불일치.**
+
+⇒ **게이트웨이 경유로는 이 호출이 성립할 수 없다.** 원래 기본값이 게이트웨이가 아니라
+**서비스 주소**(`localhost:8081` 류)였던 것이 그 설계의 흔적이었고, 나는 그것을 «설정이 빠진
+것» 으로만 읽고 게이트웨이로 바꿨다.
+
+**그런데 직접 경로도 지금은 없다** (네트워크 실측):
+```
+ecommerce-product-service  →  ecommerce_ecommerce-net
+iam-account-service-1      →  iam_iam-e2e · traefik-net      ⇒ 공유 네트워크 없음
+```
+
+## 🔵 그리고 V0019 의 헤더 문장이 **낡았다**
+
+> *"The receiving resource servers (account/security) validate signature + issuer only and do
+> NOT pin tenant (they serve all tenants), so the tenant claim is informational here."*
+
+게이트웨이+가드 쌍이 **핀한다**(게이트웨이 경유 호출에 한해). 나는 V0036 의 테넌트를 고를 때
+그 문장을 인용했고, 그 인용이 이 FAIL 의 절반이다. 🔴 **내 티켓이 인용한 문서를 열어 봤지만
+그 문서가 낡았는지는 안 쟀다** — 이 저장소가 이름 붙인 함정의 한 변종이다.
+
+## ⇒ 남은 것은 **결정**이고, 새 티켓으로 간다 → `TASK-MONO-721`
+
+세 갈래 다 «누가 어느 테넌트에 프로비저닝할 수 있는가» 를 건드린다(즉 배선이 아니다).
+
+## 🔵 정리 상태
+
+프로브가 손으로 넣은 `oauth_clients` 행은 **지웠다**(남은 행 0). Flyway 가 모르는 행이고,
+남겨 둬도 프로비저닝은 여전히 실패하므로 이득이 0 이고 드리프트만 남는다.
+🔵 창은 **소유자가 켠 것**이라 끄지 않았다. 이 측정이 쓴 예산은 **약 5분**(1348 → 1353).
