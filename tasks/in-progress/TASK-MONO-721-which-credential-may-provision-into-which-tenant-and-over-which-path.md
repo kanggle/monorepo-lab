@@ -8,7 +8,7 @@ TASK-MONO-721
 
 # Status
 
-ready (2026-09-23 UTC)
+in-progress (2026-09-23 UTC — AC-0 소유자 결정 **ⓑ** · 🔴 구현은 `ADR-MONO-076` ACCEPT 까지 PAUSE)
 
 # Owner
 
