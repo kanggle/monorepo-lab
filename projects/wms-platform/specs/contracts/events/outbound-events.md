@@ -560,7 +560,10 @@ Consumer expectations:
 
 - `inventory-service` (`ShippingConfirmedConsumer`): calls
   `ConfirmReservationUseCase` per line, consuming reserved quantities. Publishes
-  `inventory.confirmed` with `reservationId` and `sagaId`.
+  `inventory.confirmed` with `reservationId` and `sagaId`. Maps each line to its
+  reservation line by `(skuId, lotId)`, falling back to the sku's single any-lot
+  reservation line when a concrete lot was bound at picking — rule in
+  `inventory-events.md` §C4 (TASK-MONO-706).
 - scm `logistics-service`: consumes the event to dispatch the carrier
   (multimodal / 3PL-ready), per ADR-MONO-053 §D8. Independent of the outbound
   saga completion path.
