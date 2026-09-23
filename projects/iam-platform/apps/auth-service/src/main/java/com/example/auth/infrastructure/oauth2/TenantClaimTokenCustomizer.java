@@ -198,11 +198,22 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
         } else if (AuthorizationGrantType.AUTHORIZATION_CODE.equals(grantType)) {
             customizeForAuthorizationCode(context);
         } else if (AuthorizationGrantType.TOKEN_EXCHANGE.equals(grantType)) {
-            // TASK-BE-327 (ADR-MONO-020 D2+D3): assume-tenant exchange. The
-            // selected tenant + tenant_type are carried on the token context by
-            // AssumeTenantAuthenticationProvider; inject them + the SELECTED
-            // tenant's entitled_domains (D3, least-privilege, fail-soft).
-            customizeForAssumeTenant(context);
+            // TASK-MONO-721 (ADR-MONO-076 D4): two shapes share this grant type, and they are
+            // told apart by the RESOLVED GRANT's Java type rather than by a flag. A workload
+            // assumed token must not acquire the trappings of an identity (no entitled_domains,
+            // no derived roles, no org_scope, and `sub` stays the client) — expressing that as
+            // "skip four things when a flag is set" would leave the NEXT derivation added to
+            // the operator branch applying to workloads by default, silently.
+            if (context.getAuthorizationGrant()
+                    instanceof WorkloadAssumeTenantAuthenticationToken workloadGrant) {
+                customizeForWorkloadAssumeTenant(context, workloadGrant);
+            } else {
+                // TASK-BE-327 (ADR-MONO-020 D2+D3): assume-tenant exchange. The
+                // selected tenant + tenant_type are carried on the token context by
+                // AssumeTenantAuthenticationProvider; inject them + the SELECTED
+                // tenant's entitled_domains (D3, least-privilege, fail-soft).
+                customizeForAssumeTenant(context);
+            }
         } else if (AuthorizationGrantType.REFRESH_TOKEN.equals(grantType)) {
             // TASK-BE-274 cycle 3: SasRefreshTokenAuthenticationProvider generates a
             // brand-new JWT for the rotated access token using a fresh TokenContext whose
@@ -539,6 +550,62 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
      * context attributes, so a blank value here is a wiring bug — reject rather
      * than mint a tenant-less token (auth-service fails closed on missing tenant).
      */
+    /**
+     * TASK-MONO-721 (ADR-MONO-076 D1/D4) — a <b>workload</b> assumed token.
+     *
+     * <p>Injects {@code tenant_id} and {@code tenant_type} and <b>nothing else</b>. That is the
+     * whole method, and the shortness is the point: the tenant claim is the only thing this
+     * exchange exists to change.
+     *
+     * <p>🔴 What it deliberately does NOT do, each of which the operator branch below does:
+     * <ul>
+     *   <li><b>No {@code sub} alignment.</b> {@code sub} stays the client. A workload is not an
+     *       identity, and every gateway maps {@code X-User-Id <- sub} — aligning it would put a
+     *       machine credential into the seat of a person in six services' logs and audit rows.</li>
+     *   <li><b>No {@code org_scope}.</b> That claim describes the department subtree an operator
+     *       may act under, derived from an assignment. A workload has no assignment, and the
+     *       operator branch's null-means-{@code ["*"]} default would hand it the <em>whole
+     *       tenant</em> — a net-zero default for operators is a silent widening here.</li>
+     *   <li><b>No {@code entitled_domains} and no derived {@code roles}.</b> Those come from the
+     *       selected tenant's entitlement subscriptions (TASK-BE-376's
+     *       {@code OperatorRoleDerivation}). Deriving a workload's authority from the tenant it
+     *       is acting on would mean the target decides the caller's power, which inverts
+     *       ADR-MONO-061's per-client enumeration. A workload's roles remain whatever
+     *       {@link WorkloadRoleCatalog} grants on the {@code client_credentials} axis — today,
+     *       for the one enumerated client, none.</li>
+     *   <li><b>No delegated-scope cap.</b> Cross-org partnership reach is a fact about an
+     *       operator's assignment; there is no such fact here to confine.</li>
+     * </ul>
+     *
+     * <p>🔵 None of that is enforced by an {@code if} — it is enforced by the grant type. This
+     * method cannot reach those derivations because
+     * {@link WorkloadAssumeTenantAuthenticationToken} does not carry the fields they read.
+     */
+    private void customizeForWorkloadAssumeTenant(JwtEncodingContext context,
+                                                  WorkloadAssumeTenantAuthenticationToken grant) {
+        String selectedTenantId = grant.getSelectedTenantId();
+        String selectedTenantType = grant.getSelectedTenantType();
+
+        if (selectedTenantId == null || selectedTenantId.isBlank()
+                || selectedTenantType == null || selectedTenantType.isBlank()) {
+            log.error("SECURITY: workload assume-tenant token issued without selected tenant "
+                    + "context. clientId={}, tenant_id={}, tenant_type={}",
+                    grant.getClientId(), selectedTenantId, selectedTenantType);
+            throw new IllegalStateException(
+                    "selected tenant_id/tenant_type is required for workload assume-tenant "
+                            + "issuance (fail-closed)");
+        }
+
+        context.getClaims()
+                .claim("tenant_id", selectedTenantId)
+                .claim("tenant_type", selectedTenantType);
+
+        log.debug("TenantClaimTokenCustomizer: workload assume-tenant — clientId={} "
+                        + "tenant_id={} tenant_type={} (no org_scope, no entitled_domains, "
+                        + "no derived roles, sub unchanged)",
+                grant.getClientId(), selectedTenantId, selectedTenantType);
+    }
+
     private void customizeForAssumeTenant(JwtEncodingContext context) {
         // The selected tenant is carried on the authorizationGrant (the
         // AssumeTenantAuthenticationToken), which JwtGenerator copies verbatim into
