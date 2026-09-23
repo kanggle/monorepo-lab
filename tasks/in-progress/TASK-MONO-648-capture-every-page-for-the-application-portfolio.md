@@ -510,8 +510,8 @@ AC-4 가 요구한 큐레이션 후보를 내려고 **19장 중 16장을 실제�
       먼저 읽어라** — `bin/` 한 줄이 필수 생성기를 삼킨 적이 있다.
       → 🟢 `portfolio-captures/2026-09-22/{console-demo-corp,console-ecommerce,store,fan}` —
       `.gitignore:106` 이 이미 덮는다(**안 건드렸다**). 아래 § 🟢 AC-4.
-- [ ] README 용 큐레이션을 **어느 것으로 할지 소유자에게 물어라.** 서비스당 3–6장.
-      → 🟡 후보 표를 올렸다(아래 § 🟢 AC-4) — **물었고 답 대기**.
+- [x] README 용 큐레이션을 **어느 것으로 할지 소유자에게 물어라.** 서비스당 3–6장.
+      → 🟢 2026-09-23 소유자 선택 · 배선 완료(아래 § 🟢 README 큐레이션 — 2026-09-23).
 - [x] 촬영 목록·성공/실패·용량을 **표로** 남긴다. → 🟢 아래 § 🟢 AC-4.
 
 ---
@@ -1611,3 +1611,41 @@ sellers/[id] · users/[id]` · `store /my/orders/[id] · /products/[id]` · `fan
 ⏳ **소유자 결정 대기**: 위 표에서 서비스별로 고르기(또는 fan 을 도구 수리 뒤 재촬영까지 미루기).
 결정되면 선택본만 커밋 위치로 옮기고 README 에 배선한다 — 🔴 `site/thumbnails/` 로 가는 장은
 `(z37)` 이 `capture-shots.mjs` SHOTS ↔ `index.html` SHOTS ↔ 파일을 **한 커밋으로** 요구한다(위 § 참고).
+→ 🔵 답을 받았다 — 아래 §.
+
+---
+
+# 🟢 README 큐레이션 — 2026-09-23 UTC (소유자 선택)
+
+## 🔴 고르기 전에 ⚪ 를 전부 **열었다**
+
+후보 표의 ⚪ 여섯 장을 전부 열어 ✅ 로 바꾼 뒤에 물었다. 연 결과 새로 나온 것:
+
+- 🔴 **팬 멤버십의 가격이 한 화면 안에서 서로 모순이다** — 위 카드 «월 7,900원 / 월 17,900원»,
+  아래 «요금제» 절 «4,900원 / 12,900원». 🔴 **이미 README 에 실린 `04-fan-membership.jpg` 도 같은
+  화면**이다(캡션이 인용하는 `-₩7,636 → ₩10,264` 가 그 장에 있다). 이번엔 안 건드렸다 — 소유자에게 보고.
+- 🔵 팬 **아티스트 상세**는 포스트 사진이 **렌더됐다**(첫 뷰포트 안). 팬 홈의 빈 상자는 **아래쪽**
+  이미지만이다 ⇒ § 🟢 AC-4 의 lazy-load 가설을 **지지**한다(판정은 아직 아니다).
+- `/permission-sets` 설명에 ADR 번호가 렌더된다 — 🔵 콘솔 README 02 캡션이 그것을 **의도된 특징**으로
+  소개하므로 결함으로 세지 않는다. `/erp/masters` 의 `(TASK-PC-FE-048)` 은 **티켓** 번호라 결이 다르다.
+
+## 선택과 배선
+
+| 소유자 선택 | 촬영본 (09-22) | 실린 곳 |
+|---|---|---|
+| console `/ecommerce/products` | `console-ecommerce` | `platform-console` **01 교체** |
+| console `/operators` | `console-demo-corp` | `platform-console` **03 교체** |
+| console `/ecommerce/orders` | `console-ecommerce` | `platform-console` **05 추가** |
+| console `/erp/masters` | `console-demo-corp` | `platform-console` **06 추가** + `erp-platform` **02 교체**(같은 장) |
+| store `/products` | `store` | `ecommerce-microservices-platform` **09 교체** |
+| store `/products/[id]` | `store` | 같은 README **11 추가** |
+| store `/my/orders/[id]` | `store` | 같은 README **12 추가** |
+| fan `/artists/[id]` | `fan` | `fan-platform` **03 교체** |
+
+🔵 **지우지 않은 것**: 고르지 않은 기존 장(콘솔 02·04, 스토어 01~04·10, 팬 01·02·04, ERP 01·03)은
+**그대로 뒀다** — 선택은 «무엇을 싣나» 였지 «무엇을 빼나» 가 아니었다. 빼려면 따로 지시를 받는다.
+🔵 캡션: 새 장 넷에 캡션을 쓰고, 교체한 장은 **캡션이 여전히 참인지** 이미지로 대조했다(01 의
+«`demo-corp` 로 열면 빈 목록» = § 🟢 AC-4 표의 orders/products **0** 과 일치). 🔴 처음 쓴 주문 상세
+캡션에 «배송 완료는 WMS 출고가 이벤트로 밀어 올린 결과» 를 넣었다가 **뺐다** — 잰 적 없는 인과다.
+🔴 `site/thumbnails/`(론처)는 **안 건드렸다** — 이 선택은 README 용이고, 론처는 (z37) 삼중 대조가
+걸린 별도 결정이다.

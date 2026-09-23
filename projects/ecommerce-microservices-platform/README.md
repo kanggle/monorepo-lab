@@ -84,7 +84,7 @@
 
 ### 라이브 데모 (`store.hubwang.com`)
 
-> 🔵 위 넷은 **로컬 풀스택**에서 찍은 것이고(결제 연동 포함), 아래 둘은 **지금 열리는 데모**다.
+> 🔵 위 넷은 **로컬 풀스택**에서 찍은 것이고(결제 연동 포함), 아래는 **지금 열리는 데모**다(09·11·12 는 2026-09-22 촬영).
 > 🔴 데모의 로그인 후 기능(장바구니·주문)은 데모 서버를 켠 뒤에 열린다 — 공개 카탈로그는 **로그인 없이** 열린다.
 
 <p align="center">
@@ -95,6 +95,16 @@
 <p align="center">
   <img src="docs/screenshots/10-store-wishlist.jpg" width="900" alt="마이페이지 — 위시리스트"><br>
   <em>마이페이지 — 위시리스트(담은 시각까지). 좌측이 프로필·주문내역·리뷰·쿠폰·배송지·알림으로 이어지는 고객 자기관리 표면이다</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/11-store-product-detail.jpg" width="900" alt="상품 상세 — 옵션과 리뷰"><br>
+  <em>상품 상세 — 옵션 선택 전에는 주문 버튼이 잠긴다 · 평점 분포와 리뷰. 표시 가격은 안내이고 재고·판매 가능 여부는 주문 단계에서 확인된다</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/12-store-order-detail.jpg" width="900" alt="주문 상세 — 배송 추적과 결제"><br>
+  <em>주문 상세 — 배송 추적 4단계(상품 준비중 → 배송 완료) · 택배사와 운송장 · 결제 상태. 연락처는 마스킹된다</em>
 </p>
 
 ### Observability

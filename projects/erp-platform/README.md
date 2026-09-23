@@ -44,7 +44,7 @@ v2 deferred (아직 미구현): `permission-service`(권한 매트릭스/데이�
 
 <p align="center">
   <img src="docs/screenshots/02-erp-masters.jpg" width="900" alt="ERP 마스터 — 부서·직원·직급·비용센터·거래처"><br>
-  <em>마스터 5종 — 유효기간(effective-dating)이 행마다 붙고, <code>asOf</code> 로 과거 시점 상태를 조회한다</em>
+  <em>마스터 5종 — 유효기간(effective-dating)이 행마다 붙고, <code>asOf</code> 로 과거 시점 상태를 조회한다 (2026-09-22 촬영)</em>
 </p>
 
 <p align="center">
