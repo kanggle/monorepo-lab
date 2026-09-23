@@ -8,7 +8,7 @@ TASK-MONO-719
 
 # Status
 
-review (2026-09-22 UTC — 소유자 결정 **ⓑ** 구현 · 🔴 AC-3(창 판정)은 `TASK-MONO-672` 항목 11)
+done (2026-09-23 UTC — 4차원 검증 · impl PR #3953 squash `be1a05d0a` · 🟢 AC-3 은 `TASK-MONO-672` **항목 11 이 16차 창에서 PASS** 로 닫았다)
 
 # Owner
 
@@ -317,3 +317,78 @@ Error: You're importing a component that needs "next/headers". That only works
 🔴 **로컬 초록은 CI 초록이 아니다.** 여기서 안 돌린 것: 통합(Testcontainers) · e2e ·
 `nightly-e2e`. 이 변경은 라우트·testid 를 **추가만** 하므로 프런트 e2e 가 볼 수 있다
 ⇒ 머지 뒤 다음 nightly 를 한 번 확인한다(`platform/git-workflow-policy.md` § post-merge nightly).
+
+---
+
+## CORRECTION (2026-09-23 UTC · close chore 의 4차원 검증이 붙인다)
+
+`done/` 은 frozen 이므로 본문을 고치지 않고 **덧붙이기만** 한다.
+
+### ① AC-3 이 닫혔다 — 판정은 **이 파일이 아니라 `TASK-MONO-672` 항목 11** 에 있다
+
+위 § AC 판정의 `AC-3 — ⏳` 는 **머지 당시의 사실**이고 지금은 낡았다. 16차 창(2026-09-23,
+squash `444f0a8d0`)이 그 항목을 받아 **PASS** 로 닫았다.
+
+```
+demo-corp /ecommerce/orders
+    order-empty        →  있음
+    other-tenant-hint  →  **있음**, 양쪽 이름(demo-corp · ecommerce) 모두
+    표 행              →  0
+
+대조군 ①  ecommerce 로 전환             →  힌트 **사라지고** 5행   (빈 분기에만 산다)
+대조군 ②  demo-corp /wms/inventory (0행) →  힌트 **없음**          (배선된 한 장에만)
+```
+
+🔵 **대조군 ②가 이 판정의 핵심이다** — wms 도 0행인데 힌트가 없다 ⇒ 「목록이 비면 아무 데나
+뜬다」가 아니라 **opt-in 경계가 화면에서 지켜진다**. 그리고 이 자리는 `TASK-MONO-718` 이
+**FAIL 했던 바로 그 자리**(같은 테넌트·같은 URL)다.
+
+🔴 **이 티켓이 「단위 초록으로 닫지 마라」를 지킨 것이 결과로 확인됐다** — 718 은 단위 10칸
+초록으로 `done/` 에 갔다가 창에서 FAIL 했고, 719 는 창 판정을 기다렸다가 PASS 로 닫힌다.
+
+### ② `# Acceptance Criteria` 절의 상자 **7개가 전부 `[ ]` 인 채로 들어왔다**
+
+판정은 아래 § AC 판정에 전부 적혀 있지만, **그 절만 열어 본 사람은 «아무것도 안 했다» 로
+읽는다.** 이 저장소가 이름 붙인 **«한 사실이 두 절에 있으면 한쪽만 고쳐진다»** 이고,
+🔴 **이 세션에서 `TASK-MONO-710` · `TASK-MONO-720` 이 같은 자리에서 같은 이유로 걸렸다 —
+세 번째다.** 723 이후로는 `ready → review` 이동 **같은 커밋에서** 찍는다(717 에 적용했다).
+
+`done/` 은 frozen 이므로 상자를 찍지 않고 대응표만 남긴다:
+
+| `# Acceptance Criteria` 의 상자 | 실제 판정 | 어디에 적혀 있나 |
+|---|---|---|
+| AC-0 「어느 근거로 판정할지 먼저 정한다」 | ✅ 소유자 결정 **ⓑ** | § AC 판정 · AC-0 |
+| AC-0 「추천은 ⓑ」 | ✅ 추천대로 확정 | 같은 곳 |
+| AC-1 「픽스처를 실측값으로」 | ✅ `['demo-corp','ecommerce']` | § AC 판정 · AC-1 |
+| AC-1 「지금 코드가 빨개지는 것을 먼저 본다」 | ✅ bite 확인 (718 칸이 창과 **같은 문구**로 실패) | 같은 곳 |
+| AC-1 「대조군: 데이터가 있으면 안 뜬다」 | ✅ `otherTenants: []` → 빈 렌더 | 같은 곳 |
+| AC-2 「못 확인함은 화면을 막지 않는다」 | ✅ 칸 3개 (`it.each`) | § AC 판정 · AC-2 |
+| AC-3 「단위 초록으로 닫지 마라 — 창으로 판정」 | ✅ 672 항목 11 → **PASS** | 위 ① |
+
+### ③ 이 티켓이 스스로 요구한 **post-merge nightly** — 돌았고 초록이다
+
+본문 § 게이트 기록의 마지막 문장이 *「머지 뒤 다음 nightly 를 한 번 확인한다」* 를 남겼다.
+확인했다:
+
+```
+nightly-e2e  push  main  be1a05d0a  completed/success   (2026-09-22T14:34:02Z)
+                                      ↑ 이 티켓의 스쿼시 커밋 자신
+```
+
+🔵 바로 앞 커밋 `c68429733` 의 런은 `Web-store GAP logout e2e` 하나가 **failure** 였는데,
+**그 잡이 이 티켓의 런에서 success** 로 돌아왔고 이후 6개 런에서 계속 success 다 ⇒ 회수됐다
+(«main tip 초록 ≠ 그 사이 빨강이 회수됨» 을 잡으로 직접 확인한 것이지 tip 으로 추정한 것이 아니다).
+
+🔴🔴 **그런데 이 ③을 하마터면 「nightly 가 2주째 안 돈다」로 적을 뻔했다.**
+
+```
+gh run list --workflow nightly-e2e.yml --branch main --limit 6
+   →  전부 2026-09-07 행.  ⇒ 「09-07 이후 한 번도 안 돌았다」로 읽힌다
+gh run list --workflow 271321928 --limit 15          (id 로, 브랜치 필터 없이)
+   →  09-22 · 09-23 의 push/schedule 런이 가득
+```
+
+워크플로는 `active` 이고 `push: branches: [main]` 도 걸려 있었으므로 첫 답은 **선언과 모순**
+이었다 — 그 모순이 재측정의 근거였다. 이 저장소가 이미 이름 붙인 함정
+(«`run list` 의 작은 `--limit` 이 옛 런을 맨 위에 얹는다»)의 한 변종이고,
+🔴 **0건을 「없음」으로 읽지 않는다**는 규칙이 여기서 한 번 더 값을 했다.
