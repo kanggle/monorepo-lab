@@ -1,14 +1,15 @@
 # ADR-MONO-076 — 워크로드 자격이 «어느 테넌트로» 행동할 수 있는가
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 **Date:** 2026-09-23
 **주관 티켓:** `TASK-MONO-721` (AC-0 = 갈래 **ⓑ**, 소유자 결정 2026-09-23)
 **선행 실측:** `TASK-MONO-717` § CORRECTION · `TASK-MONO-672` 항목 12 (16차 데모 창, 2026-09-23)
 **관련 결정:** [`ADR-MONO-061`](ADR-MONO-061-workload-token-authorization-plane.md) (워크로드 토큰의 **role** 축 — 이 ADR 은 그 옆에 **tenant** 축을 놓는다) · [`ADR-MONO-020`](ADR-MONO-020-operator-multitenant-assignment.md) (assume-tenant 교환) · [`ADR-MONO-042`](ADR-MONO-042-ecommerce-seller-onboarding-iam-provisioning.md) (셀러 온보딩)
 
-> 🔴 **이 ADR 은 PROPOSED 다.** `TASK-MONO-721` 의 AC-1·AC-2 구현은 소유자의 정확형
-> (`ADR-MONO-076 ACCEPTED` + 갈래 letter)이 도착할 때까지 **PAUSE** 한다.
-> 규정: [`platform/architecture-decision-rule.md`](../../platform/architecture-decision-rule.md) § The ACCEPTED Gate.
+> 🟢 **ACCEPTED — 갈래 D** (2026-09-23, 소유자 정확형 `ADR-MONO-076 ACCEPTED — D`).
+> 이름 · `ACCEPTED` · **갈래 letter** 세 요건이 모두 도착했다.
+> 🔴 **라이더는 공급되지 않았다** — 그 처리는 § 라이더 대조 (ACCEPT 시점) 에 있다.
+> `TASK-MONO-721` 의 AC-1·AC-2 구현이 **풀렸다.**
 
 ---
 
@@ -88,9 +89,9 @@ V0020__add_token_exchange_grant_to_platform_console.sql  (grant 는 클라이언
 
 ## Decision
 
-> 🔴 **아직 결정되지 않았다.** 아래 D1~D6 은 갈래 **D** 가 ACCEPT 될 경우의 결정문이다.
-> 다른 갈래가 선택되면 이 절은 그 갈래로 다시 쓰인다(ACCEPT 는 *finalise* 이지 *re-decide* 가 아니므로,
-> 갈래가 바뀌면 그것은 새 제안이다).
+> 🟢 **결정됐다 — 갈래 D** (ACCEPTED 2026-09-23). 아래 D1~D6 이 구속력을 갖는다.
+> 🔵 **본문은 발행 이후 한 바이트도 안 바뀌었다** — ACCEPT 는 *finalise* 이지 *re-decide* 가
+> 아니다(D5-3 의 정정은 ACCEPT **전** PROPOSED 상태에서 했고 § History 에 적혀 있다).
 
 ### D1 — 워크로드는 **교환으로** 대상 테넌트를 얻는다. 두 판정기는 한 줄도 안 바뀐다
 
@@ -279,3 +280,52 @@ assume-tenant 의 운영자 분기는 선택된 테넌트의 entitled domains �
   § Alternatives 는 **한 바이트도 안 바꿨다.**
   🔵 **PROPOSED 이므로 고칠 수 있다** — ACCEPT 는 *finalise* 이지 *re-decide* 가 아니고,
   ACCEPT 뒤였다면 이 줄은 정정이 아니라 **새 제안**이어야 했다.
+- **2026-09-23 — ACCEPTED, 갈래 D.** 소유자 정확형 **`ADR-MONO-076 ACCEPTED — D`**.
+  세 요건(이름 · `ACCEPTED` · **갈래 letter**)이 모두 도착했다. 🔴 **라이더는 공급되지 않았다**
+  ⇒ 아래 § 라이더 대조. § Decision · § Alternatives 는 **한 바이트도 안 바꿨다.**
+
+---
+
+## 라이더 대조 (ACCEPT 시점, 2026-09-23) — 🔴 **반사가 아니라 대조로 했다**
+
+규정([`architecture-decision-rule.md`](../../platform/architecture-decision-rule.md) § Riders)의
+술어를 R1~R6 각각에 적용했다: ***"이 옵션을 그 질문에 답하지 않고 고를 수 있는가?"***
+— 없으면 **질문이 선택 안에 있고 라이더가 아니다**. 🔵 *"「없음」도 출력이다."*
+
+| # | D 를 고르는 데 이 답이 **필요했나** | 판정 | 처리 |
+|---|---|---|---|
+| **R1** 허용 테넌트 = `["ecommerce","demo-corp"]` | **아니다** — D 는 «클라이언트별 카탈로그» 만 정한다 | 🔴 **진짜 라이더 · 미결** | `TASK-MONO-721` **AC-5** 로 승격(한 줄로 뒤집기 가능) |
+| **R2** `internal.invoke` scope 게이팅 | **그렇다** — § Context 가 `ADR-MONO-061` 의 세 제약을 *"전제로 삼는다(그러므로 이 셋은 갈래가 아니다)"* 라고 선언했고 그 둘째가 이것이다 | 🔵 **선택 안에 있다 — 라이더 아님** | 그대로 구속 |
+| **R3** 단명 · refresh 없음 | **그렇다** — **D1 본문**이 *"`tenant_id = <대상 테넌트>` 인 **단명 토큰**"* 이라고 적었다 | 🔵 **선택 안에 있다** | 그대로 구속 |
+| **R4** 카탈로그는 auth-service 안 | **그렇다** — **D2 본문**이 *"`WorkloadRoleCatalog` **옆에** 형제 카탈로그를 둔다"* 라고 적었다 | 🔵 **선택 안에 있다** | 그대로 구속 |
+| **R5** `WorkloadRoleCatalogTest` 인구조사(17/11/6) 불변 | 아니다 — 그리고 **배선이 없다** | 🟠 **구현 AC** (*"A predicate with no wiring is not a rider; it is an implementation AC"*) | `TASK-MONO-721` **AC-6** 으로 승격 |
+| **R6** 실패 응답 `invalid_grant` | **아니다** — 오류 코드는 D 와 독립이다. 🔴 그러나 **AC-1 대조군의 기대값을 바꾼다** | 🔴 **진짜 라이더 · 미결** | `TASK-MONO-721` **AC-7** 로 승격 |
+
+### 🔴 대조가 **내 라이더 표의 결함**을 드러냈다
+
+R2 · R3 · R4 는 **라이더가 아니었다** — 이 ADR **자신의 본문이 이미 구속**하고 있었다
+(§ Context 의 전제 선언 · D1 의 「단명 토큰」 · D2 의 「`WorkloadRoleCatalog` 옆」).
+그것을 「내 선택이니 뒤집을 수 있다」로 적은 것은 **과다 계상**이었고, 그대로 뒀다면
+소유자에게 **이미 결정된 것을 결정하라고 내미는** 셈이었다.
+🔵 규정이 *"reflex 가 아니라 comparison"* 이라고 쓴 이유가 여기서 보인다 — 반사로 「라이더 여섯」
+이라고 셌으면 셋을 잘못 열어 둘 뻔했다.
+
+### ACCEPT 가 인가하는 것 / 하지 않는 것
+
+**인가한다**: `TASK-MONO-721` 이 D1~D6 범위에서 AC-1·AC-2 를 구현하는 것.
+**인가하지 않는다**: `product-service-client` 외 다른 워크로드 클라이언트로의 테넌트 부여 ·
+운영자 assume-tenant 경로의 변경 · `ADR-MONO-061` role 축의 재해석 · 다른 ADR 의 재해석.
+각각 별도 task 다(HARDSTOP-09).
+
+### 🔵 ACCEPT 가 만든 **새 의무는 없다** — 확인하고 적는다
+
+이 저장소의 함정 하나는 *"ACCEPT 후 티켓 기안은 아무도 안 한다(산문엔 게이트가 없다)"* 이므로,
+**이 자리에서** § Outstanding follow-ups 셋을 대조했다:
+
+| 후속 | 집이 있나 |
+|---|---|
+| `V0019` 바이트 정정(D5-3) | ✅ **`TASK-MONO-722`** (`tasks/ready/`, 조건 게이트) |
+| `POST /internal/accounts/{a}/lock` 라우트 부재 | ✅ **`TASK-MONO-713`** ⓑ 소관 |
+| 다른 워크로드 클라이언트의 테넌트 부여 | 🔵 **티켓이 필요 없다** — 카탈로그의 **부재**(= «아무도 안 봤다»)가 fail-closed 기본값이고, 그것이 의도된 상태다. 새 클라이언트가 필요해지는 날 그 티켓이 생긴다 |
+
+⇒ **새로 기안할 티켓 0건.** 승격된 R1·R5·R6 은 새 티켓이 아니라 `TASK-MONO-721` 의 AC 다.
