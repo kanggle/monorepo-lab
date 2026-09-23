@@ -8,7 +8,7 @@ TASK-MONO-723
 
 # Status
 
-review (2026-09-23 UTC)
+done (2026-09-23 UTC)
 
 # Owner
 
