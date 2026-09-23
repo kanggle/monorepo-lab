@@ -7,8 +7,17 @@
 -- ADR-MONO-042 (D2/D4/D5) 가 셀러 등록 시 셀러-운영자 계정을 account-service 의
 -- /internal/** 로 프로비저닝하도록 정했고, product-service 는 그 호출을
 -- `AccountServiceSellerProvisioner` 로 구현하면서 client_credentials 자격을
--- `${IAM_CLIENT_ID:product-service-client}` 로 **가정**했다. 그런데 그 client_id 는
+-- `IAM_CLIENT_ID`(기본값 `product-service-client`)로 **가정**했다. 그런데 그 client_id 는
 -- 어느 시드에도 등록된 적이 없다.
+--
+-- 🔴🔴 **이 줄에 `$`+`{…}` 플레이스홀더 문법을 쓰지 마라 — 주석 안이어도 안 된다.**
+--    Flyway 는 마이그레이션 텍스트 **전체**에 치환을 돌리고, 주석을 예외로 두지 않는다.
+--    첫 판이 그 문법으로 설정 이름을 인용했다가 CI 가 이렇게 죽었다(2026-09-23 실측):
+--      Unable to parse statement in V0036__… at line 4 col 1.
+--      No value provided for placeholder: <그 이름>
+--    ⇒ **설명 문구가 런타임을 깨뜨렸다.** iam 의 모든 통합 테스트가 컨텍스트 로드에서
+--    실패했고(auth-service 의 Flyway 가 부팅 때 돈다) 증상은 이 파일을 가리켰지만 원인은
+--    SQL 이 아니라 **주석**이었다. 🔵 형제 V0019 에는 이 문법이 0건이다.
 --
 -- 🔴 이것은 추론이 아니라 실측이다 (TASK-MONO-672 § 14차 창 · TASK-MONO-717 § AC-0):
 --
