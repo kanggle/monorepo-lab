@@ -200,6 +200,11 @@ jobs:
       #    마이그레이션은 .sql 이고, 코드 게이트가 그것을 걸러내면 이 결함을 낼 수
       #    있는 PR 에서 매번 건너뛴다(task-ids 가 같은 이유로 AND 를 안 한다).
       migrations: ${{ steps.filter.outputs.migrations }}
+      # TASK-MONO-723 — 못 푸는 Flyway 플레이스홀더. 🔴 같은 이유로 `code-changed`
+      #    와 AND 하지 않는다. 그리고 이 결함은 그 이유가 한 겹 더 강하다:
+      #    **두 번 다 .sql 파일의 «주석 한 줄»이 전부였다.** 코드 게이트로 거르면
+      #    실제 발생 두 건이 모두 건너뛰어진다.
+      flyway-placeholders: ${{ steps.filter.outputs.flyway-placeholders }}
       # TASK-MONO-451: raw filter, NOT AND-combined with `code-changed`. Every
       # instance of the drift this guard exists to catch (BE-535, BE-536, BE-539,
       # 2026-07-20) arrived in a close-chore PR that touched nothing but `.md`
@@ -534,6 +539,24 @@ jobs:
             migrations:
               - '**/db/migration/**'
               - 'scripts/check-flyway-version-collision.sh'
+            # TASK-MONO-723: an unresolvable Flyway placeholder in a migration.
+            # 🔴 Deliberately NOT reusing `migrations` above. That filter names
+            # `db/migration/` only, and this defect arrives in any directory
+            # Flyway parses — `db/migration-dev/`, `db/migration-h2/`, `db/seed/`
+            # and the test-resource fixtures included. A new `db/<kind>/` should
+            # arrive already covered, so the pattern names the resources root
+            # rather than a list of kinds that nobody re-checks against the tree
+            # (which is exactly how TASK-MONO-531 found 8 unexamined files).
+            # 🔴 The application*.yml files are a trigger too, and that is not
+            # symmetry for its own sake: they are where a placeholder's VALUE is
+            # declared, so DELETING one turns a passing migration into a failing
+            # one without any migration file changing.
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            flyway-placeholders:
+              - '**/src/main/resources/db/**'
+              - '**/src/test/resources/db/**'
+              - '**/src/main/resources/application*'
+              - 'scripts/check-flyway-unresolvable-placeholder.sh'
             task-ids:
               - 'tasks/ready/**'
               - 'tasks/review/**'
@@ -1221,6 +1244,56 @@ jobs:
 
       - name: Guard — no duplicate Flyway version within one migration directory
         run: bash scripts/check-flyway-version-collision.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-723 — 마이그레이션 안의 «못 푸는» Flyway 플레이스홀더.
+  #
+  # 🔴 **두 번 밟아서 만든 가드다.** `V0036`(TASK-MONO-717)은 설정 키를 인용하다가,
+  # `V0037`(TASK-MONO-721)은 🔴🔴 **「그 문법을 쓰지 마라」는 경고문이 그 문법으로
+  # 쓰여** 있었다 — 산문의 생략부호가 그대로 플레이스홀더 «이름» 이 됐다.
+  # 717 은 «플레이스홀더는 정당한 기능이다» 로 가드를 안 만들었고 그때는 관측이
+  # 1회였다. 지금은 2회이고 두 번째는 **그 함정을 아는 사람이** 밟았다 ⇒
+  # 「알면 피한다」가 반증됐다(면제는 두 번째 발생에서 회수한다).
+  #
+  # 🔴🔴 그 신호는 «주석 한 줄» 로 **안 보인다**. 2026-09-23 CI 가 낸 화면은
+  # `CredentialJpaRepositoryTest` 8칸 FAILED · `DeviceSessionJpaRepositoryTest`
+  # 4칸 FAILED · `E2E (fan-platform)` 컨테이너 미기동 — **세 잡, 한 원인**이고
+  # fan-platform 은 **자기와 무관한** 이유로 빨갛다(iam auth-service 를 띄운다).
+  # 주석이라는 유일한 단서는 `PlaceholderReplacingReader` 스택 4단계 아래뿐이다.
+  #
+  # 🔴 그리고 **로컬은 구조적으로 못 잡는다**(실측 2026-09-23): 개발 호스트에서
+  # `CredentialJpaRepositoryTest` 는 `tests="8" skipped="8"` 이다(Docker 차단).
+  # ⇒ `:auth-service:test` 초록은 **마이그레이션을 한 번도 파싱하지 않은 초록**이다.
+  # 이 잡이 그 간극을 메우고, DB 없이 파일만 보고 1분 안에 파일·줄·이름을 찍는다.
+  #
+  # 🔵 플레이스홀더 **사용**은 막지 않는다 — 값이 설정된 것은 통과한다. 막는 것은
+  # 값을 주는 곳이 아무 데도 없는 것뿐이다.
+  # ---------------------------------------------------------------------------
+  flyway-unresolvable-placeholder:
+    name: Flyway placeholder with no value (comments included)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    # 🔴 TASK-MONO-671 의 사본 가드 규칙: fork 에서 skip 되면 required context 가
+    #    영구 pending 이 되므로 repository 를 못박는다. 이 잡은 required 가 아니다.
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      needs.changes.outputs.flyway-placeholders == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-flyway-unresolvable-placeholder.sh
+
+      # 🔴 자기시험을 **본검사보다 먼저** 돌린다. 이 가드의 초록은 「위반이 0건」과
+      #    「글롭이 어긋나 아무것도 못 봤다」가 같은 모양이고, 오늘 이 저장소의
+      #    플레이스홀더 사용은 실제로 0건이다 — 즉 본검사만으로는 가드가 죽었는지
+      #    살았는지 구별할 수 없다. 자기시험 7칸이 그 구별을 맡는다.
+      - name: Self-test — the guard bites, and does not bite what it must not
+        run: bash scripts/check-flyway-unresolvable-placeholder.sh --self-test
+
+      - name: Guard — every Flyway placeholder resolves
+        run: bash scripts/check-flyway-unresolvable-placeholder.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-451 — INDEX queue listing / queue directory drift guard.

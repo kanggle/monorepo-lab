@@ -75,6 +75,21 @@ for home in "${HOMES[@]}"; do
       echo "         (no \"N of the M \`scripts/\`\" figure found at all)"
     fail=1
   fi
+  # TASK-MONO-723: the SECOND figure in the same passage — "Three of those
+  # <READERS> are `main`'s required checks". It was not gated, and by 2026-09-23
+  # it had drifted in both homes AND the two homes disagreed with each other:
+  # CLAUDE.md said 22, git-workflow-policy.md said 20, and the measured value was
+  # 25. Nothing could notice, because the check above matches only the first
+  # figure and a passing grep on one sentence says nothing about the next one.
+  # This is the repository's own rule twice over — a figure nothing can falsify
+  # drifts, and one fact living in two clauses gets fixed in one of them.
+  if ! grep -q "of those ${READERS} " "$home"; then
+    echo "DRIFT: $home does not state \"… of those ${READERS} …\"."
+    echo "       It currently says:"
+    grep -n -oE 'of (those|the) [0-9]+ are' "$home" | sed 's/^/         /' || \
+      echo "         (no \"of those N are\" figure found at all)"
+    fail=1
+  fi
 done
 
 if [ "$SELF_TEST" = "1" ]; then
