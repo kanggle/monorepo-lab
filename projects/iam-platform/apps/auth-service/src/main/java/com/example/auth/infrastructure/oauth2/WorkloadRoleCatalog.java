@@ -104,17 +104,21 @@ final class WorkloadRoleCatalog {
      * Every registered {@code client_credentials} client, mapping each scope that carries a
      * role grant to the roles it carries.
      *
-     * <p>All ten are listed, empty maps included. An empty map here means "measured, and the
-     * answer is none"; an <em>absent</em> client means nobody looked. The distinction is the
-     * point of enumerating clients that get nothing — and it is why the completeness test
+     * <p>All eleven are listed, empty maps included. An empty map here means "measured, and
+     * the answer is none"; an <em>absent</em> client means nobody looked. The distinction is
+     * the point of enumerating clients that get nothing — and it is why the completeness test
      * compares this key set against the Flyway seeds rather than against itself.
      *
      * <p>Population recounted from the auth-service migrations at statement level
-     * (2026-08-13): 16 registered clients, <b>10</b> with the {@code client_credentials}
-     * grant and 6 without. {@code membership-service-client} was revoked by V0029 and is
-     * therefore not here. The count corrects TASK-MONO-514's earlier "12 cc / 4 non-cc", which
-     * also recorded {@code wms-user-flow-client} as a cc client — V0010 seeds it
-     * {@code ["authorization_code","refresh_token"]}.
+     * (2026-09-23, after V0036): <b>17</b> registered clients, <b>11</b> with the
+     * {@code client_credentials} grant and 6 without. {@code membership-service-client} was
+     * revoked by V0029 and is therefore not here. 🔴 The figure is not carried forward by
+     * hand — {@code WorkloadRoleCatalogTest} parses the migrations and asserts it, so a seed
+     * that lands without a line here fails rather than drifting.
+     *
+     * <p>The 2026-08-13 recount (16 / 10 / 6) corrected TASK-MONO-514's earlier "12 cc /
+     * 4 non-cc", which also recorded {@code wms-user-flow-client} as a cc client — V0010
+     * seeds it {@code ["authorization_code","refresh_token"]}.
      */
     private static final Map<String, Map<String, List<String>>> GRANTS = Map.ofEntries(
             // --- wms (tenant: wms) ---
@@ -143,6 +147,22 @@ final class WorkloadRoleCatalog {
             Map.entry("auth-service-client", Map.of()),
             Map.entry("security-service-client", Map.of()),
             Map.entry("account-service-client", Map.of()),
+
+            // --- ecommerce product-service (tenant: global-account-platform) ---
+            // TASK-MONO-717 (owner decision ⓐ), seeded by V0036. The fifth caller of
+            // /internal/** and the first one outside iam-platform itself.
+            //
+            // Measured, and the answer is none. Its one call path is account-service's
+            // /internal/tenants/** (seller-operator provisioning, ADR-MONO-042 D2/D4/D5),
+            // which gates on the internal.invoke SCOPE — pinned by account-service's
+            // internalTokenValidator() (TASK-BE-514) — never on roles. A role here would
+            // widen an ecommerce workload credential onto domain surfaces it has no
+            // business reaching, which is exactly what this map's empty default prevents.
+            //
+            // 🔴 It is registered under global-account-platform, not ecommerce: a seller
+            //    may be registered in any tenant and the call carries the target tenant in
+            //    the PATH (/internal/tenants/{tenantId}/…), not in the credential.
+            Map.entry("product-service-client", Map.of()),
 
             // --- fan-platform (tenant: fan-platform) ---
             // community-service calls membership/artist read surfaces with the account.read /

@@ -25,11 +25,21 @@ import java.time.Duration;
  *       indefinitely.</li>
  * </ul>
  *
- * <p>product-service's IAM token endpoint has no registered OAuth2 {@code scope} — its token
- * request body has always been {@code grant_type=client_credentials} only (no {@code scope}
- * parameter). The shared class's {@code scope} constructor argument is passed as {@code null}
- * here, which it treats as "omit the {@code scope} parameter entirely", preserving this
- * service's pre-existing request shape byte-for-byte.
+ * <p><b>TASK-MONO-717 (owner decision ⓐ) — the scope is now requested explicitly.</b> This
+ * paragraph used to say the token endpoint had "no registered OAuth2 {@code scope}", and that
+ * {@code null} preserved the request shape "byte-for-byte". That shape had never worked:
+ * {@code product-service-client} was not registered in the IdP at all (measured — the
+ * provisioning call has never succeeded in this repository), so there was no shape worth
+ * preserving. V0036 registers it with {@code ["internal.invoke"]}, and account-service PINS
+ * that scope on {@code /internal/**} via {@code internalTokenValidator()} (TASK-BE-514) — a
+ * token without it is refused even though its signature and issuer are valid.
+ *
+ * <p>🔴 It is requested rather than left to the server's default. Spring Authorization Server
+ * grants every registered scope when a {@code client_credentials} request omits {@code scope},
+ * so omitting it would <em>probably</em> also work — but then this service's token contents
+ * would depend on a server-side default that nothing here states, and the next scope added to
+ * the registration would silently widen this token. account-service's sibling config requests
+ * {@code internal.invoke} by name for the same reason.
  *
  * <p>Timeout config keys ({@code iam.internal-client.connect-timeout-ms} /
  * {@code read-timeout-ms}) are new — the local copy this class replaces had none. Defaults to
@@ -42,6 +52,12 @@ import java.time.Duration;
 @Configuration
 class IamTokenProviderConfig {
 
+    /**
+     * The workload scope {@code /internal/**} demands (TASK-BE-514, seeded to this client by
+     * {@code V0036}). 🔴 Not decoration — account-service refuses a GAP JWT that lacks it.
+     */
+    private static final String INTERNAL_INVOKE_SCOPE = "internal.invoke";
+
     @Bean
     IamClientCredentialsTokenProvider iamClientCredentialsTokenProvider(
             @Value("${iam.internal-client.token-uri:http://localhost:8081/oauth2/token}") String tokenUri,
@@ -53,7 +69,7 @@ class IamTokenProviderConfig {
                 tokenUri,
                 clientId,
                 clientSecret,
-                null, // no registered scope for product-service's IAM token endpoint
+                INTERNAL_INVOKE_SCOPE,
                 Duration.ofMillis(connectTimeoutMs),
                 Duration.ofMillis(readTimeoutMs));
     }
