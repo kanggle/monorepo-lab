@@ -568,15 +568,27 @@ the BE-431 forward-leg fix):
 |---|---|---|---|
 | `reservationId` | UUID | no | Equals outbound `PickingRequest.id`; used as inventory's `pickingRequestId` (1:1) to find the reservation to confirm. The producer does **not** send `pickingRequestId` |
 | `lines[].skuId` | UUID | no | Natural key (with `lotId`) the consumer maps to the owning `ReservationLine` to obtain its private `reservationLineId` — the producer cannot know inventory's row PK |
-| `lines[].lotId` | UUID | yes | |
+| `lines[].lotId` | UUID | yes | The lot actually shipped (producer §7 — bound at picking confirmation). May be concrete even when the reservation line is any-lot (`lotId` NULL); see the matching rule below |
 | `lines[].qtyConfirmed` | int | no | EA. The producer field is `qtyConfirmed`, **not** `shippedQuantity` |
 | `orderNo` / `orderId` / `sagaId` / `shipment*` / `warehouseId` / `shippedAt` / `carrierCode` | — | — | Additive / unused by inventory; ignored |
 
 > ⚠️ The producer carries domain identity only; the consumer
 > (`ShippingConfirmedConsumer`) reads top-level `reservationId` as the `pickingRequestId`
-> and **resolves each shipped line to its `ReservationLine` by `(skuId, lotId)`** to build the
+> and **resolves each shipped line to its `ReservationLine`** to build the
 > `ConfirmReservationCommand`. A line with no matching reservation line is a hard error (not a
 > silent no-op).
+
+**Line matching rule** (`ShippingConfirmedConsumer.matchLine`, TASK-MONO-706):
+
+1. **Exact** — the reservation line with the same `(skuId, lotId)` (NULL equals NULL).
+2. **Any-lot fallback** — only when (1) found nothing **and** the shipped `lotId` is non-null:
+   the sku's reservation line with `lotId` NULL, **if exactly one exists**. Rationale: §C2 reserves
+   a NULL `lotId` as "any available lot" against rows with `lot_id IS NULL`, and the producer
+   binds the physical lot only at picking confirmation (`outbound-events.md` §5 / §7), so a
+   concrete shipped lot on an any-lot reservation line is the normal flow, not a mismatch.
+3. Otherwise → hard error. In particular, **concrete-lot substitution** (reserved lot A, shipped
+   lot B) and **two or more** any-lot lines of the same sku are *not* resolved by guessing — either
+   would silently decrement the wrong inventory row.
 
 Effect: calls `ConfirmReservationUseCase`. Each `qtyConfirmed` must equal `ReservationLine.quantity`
 exactly (v1 no partial shipments). Publishes `inventory.confirmed`.

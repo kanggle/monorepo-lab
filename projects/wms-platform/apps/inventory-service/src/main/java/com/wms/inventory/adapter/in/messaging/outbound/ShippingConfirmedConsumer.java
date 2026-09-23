@@ -142,9 +142,7 @@ public class ShippingConfirmedConsumer {
             UUID skuId = UUID.fromString(line.get("skuId").asText());
             UUID lotId = line.hasNonNull("lotId") ? UUID.fromString(line.get("lotId").asText()) : null;
             int shipped = line.get("qtyConfirmed").asInt();
-            ReservationLine match = reservation.lines().stream()
-                    .filter(rl -> rl.skuId().equals(skuId) && Objects.equals(rl.lotId(), lotId))
-                    .findFirst()
+            ReservationLine match = matchLine(reservation, skuId, lotId)
                     .orElseThrow(() -> new IllegalArgumentException(
                             "shipping.confirmed line (skuId=" + skuId + ", lotId=" + lotId
                                     + ") has no matching reservation line on reservation " + reservation.id()));
@@ -158,5 +156,26 @@ public class ShippingConfirmedConsumer {
             log.warn("Shipping confirm race on reservation {}: {}",
                     reservation.id(), e.getMessage());
         }
+    }
+
+    /**
+     * Resolve a shipped line to its {@link ReservationLine} (inventory-events.md §C4):
+     * exact {@code (skuId, lotId)} first; otherwise, when the shipped line names a concrete lot,
+     * the sku's <em>single</em> any-lot line ({@code lotId} NULL). An any-lot reservation binds
+     * its physical lot only at picking confirmation, so the shipped lot legitimately differs from
+     * the reserved NULL (TASK-MONO-706). Concrete-lot substitution (reserved A, shipped B) and an
+     * ambiguous any-lot match stay unmatched → hard error, never a guess.
+     */
+    private static Optional<ReservationLine> matchLine(Reservation reservation, UUID skuId, UUID lotId) {
+        Optional<ReservationLine> exact = reservation.lines().stream()
+                .filter(rl -> rl.skuId().equals(skuId) && Objects.equals(rl.lotId(), lotId))
+                .findFirst();
+        if (exact.isPresent() || lotId == null) {
+            return exact;
+        }
+        List<ReservationLine> anyLot = reservation.lines().stream()
+                .filter(rl -> rl.skuId().equals(skuId) && rl.lotId() == null)
+                .toList();
+        return anyLot.size() == 1 ? Optional.of(anyLot.get(0)) : Optional.empty();
     }
 }

@@ -138,6 +138,72 @@ class ShippingConfirmedConsumerTest {
         assertThat(confirm.captured).isNull();
     }
 
+    // ---- TASK-MONO-706: any-lot reservation, operator binds the physical lot at confirmation ---
+
+    @Test
+    @DisplayName("MONO-706: shipped concrete lot maps to the sku's single any-lot (lotId NULL) reservation line")
+    void concreteShippedLotMapsToAnyLotReservationLine() {
+        // The demo's exact shape: LOT-tracked SKU received with lotNo only (row lot_id NULL),
+        // reserved any-lot, and the operator picks the physical lot at picking confirmation.
+        UUID reservationId = UUID.randomUUID();
+        UUID skuId = UUID.randomUUID();
+        UUID shippedLot = UUID.randomUUID();
+        ReservationLine anyLotLine = reservationLine(reservationId, skuId, null, 10);
+        seedReserved(reservationId, anyLotLine);
+
+        consumer.handle(realShippingConfirmed(reservationId, line(skuId, shippedLot, 10)), "key");
+
+        assertThat(confirm.captured).isNotNull();
+        assertThat(confirm.captured.lines()).hasSize(1);
+        assertThat(confirm.captured.lines().get(0).reservationLineId()).isEqualTo(anyLotLine.id());
+        assertThat(confirm.captured.lines().get(0).shippedQuantity()).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("MONO-706: an exact (skuId, lotId) line wins over an any-lot line of the same sku")
+    void exactLotMatchWinsOverAnyLotLine() {
+        UUID reservationId = UUID.randomUUID();
+        UUID skuId = UUID.randomUUID();
+        UUID lotId = UUID.randomUUID();
+        ReservationLine anyLotLine = reservationLine(reservationId, skuId, null, 4);
+        ReservationLine exactLine = reservationLine(reservationId, skuId, lotId, 4);
+        seedReserved(reservationId, anyLotLine, exactLine);
+
+        consumer.handle(realShippingConfirmed(reservationId, line(skuId, lotId, 4)), "key");
+
+        assertThat(confirm.captured.lines().get(0).reservationLineId()).isEqualTo(exactLine.id());
+    }
+
+    @Test
+    @DisplayName("MONO-706: concrete-lot substitution (reserved lot A, shipped lot B) stays a hard error")
+    void concreteLotSubstitutionStillThrows() {
+        UUID reservationId = UUID.randomUUID();
+        UUID skuId = UUID.randomUUID();
+        seedReserved(reservationId, reservationLine(reservationId, skuId, UUID.randomUUID(), 5));
+
+        assertThatThrownBy(() -> consumer.handle(
+                realShippingConfirmed(reservationId, line(skuId, UUID.randomUUID(), 5)), "key"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("no matching reservation line");
+        assertThat(confirm.captured).isNull();
+    }
+
+    @Test
+    @DisplayName("MONO-706: two any-lot lines of the same sku are ambiguous → hard error, not a guess")
+    void ambiguousAnyLotLinesThrow() {
+        UUID reservationId = UUID.randomUUID();
+        UUID skuId = UUID.randomUUID();
+        seedReserved(reservationId,
+                reservationLine(reservationId, skuId, null, 5),
+                reservationLine(reservationId, skuId, null, 5));
+
+        assertThatThrownBy(() -> consumer.handle(
+                realShippingConfirmed(reservationId, line(skuId, UUID.randomUUID(), 5)), "key"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("no matching reservation line");
+        assertThat(confirm.captured).isNull();
+    }
+
     // ---- AC-5: duplicate eventId → dedupe ignores (confirm once) ------------------------------
 
     @Test

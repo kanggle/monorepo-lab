@@ -8,7 +8,7 @@ TASK-MONO-706
 
 # Status
 
-ready
+review (2026-09-23 UTC — AC-2 닫힘: 소유자 결정 **ⓐ any-lot 폴백** 구현 · 🔴 AC-1·AC-3 은 창 판정(재굽기 뒤 신선 부팅) — 단위 초록으로 닫지 않는다)
 
 # Owner
 
@@ -58,7 +58,7 @@ wms.outbound.shipping.confirmed.v1.DLT:2:0
 
 - [x] 🟢 **AC-0 — 실패 지점을 관측으로 지목.** 창에서(읽기 전용) `kafka-console-consumer.sh --topic wms.outbound.shipping.confirmed.v1.DLT --from-beginning --property print.headers=true --max-messages 5` 로 헤더(`kafka_dlt-original-consumer-group` · `kafka_dlt-exception-fqcn` · `kafka_dlt-exception-message` 등)를 읽는다. 🔴 페이로드에 개인정보가 없는지 먼저 보고, 티켓에는 헤더와 키 목록만 적는다. 🔴 명령은 소유자가 실행한다(SSM 은 에이전트에게 막혀 있다). 창이 없으면 ⚪ + `TASK-MONO-672`.
 - [ ] **AC-1 — 재현성.** 다음 신선 부팅에서도 같은 DLT 레코드가 생기는가(오프셋 다시 조회). 한 번뿐이면 경합, 매번이면 시드/코드.
-- [ ] **AC-2 — 결함/의도 판정 → (결함이면) 고친다 + bite, (의도면) 소유자에게 묻는다.** 로컬 재현(IT)이 되면 그것으로 bite.
+- [x] 🟢 **AC-2 — 결함/의도 판정 → (결함이면) 고친다 + bite, (의도면) 소유자에게 묻는다.** 로컬 재현(IT)이 되면 그것으로 bite. → **결함**(계약 두 개의 충돌) · 소유자 결정 ⓐ · 아래 § AC-2.
 - [ ] **AC-3 — 창 판정.** 고친 AMI 의 신선 부팅에서 그 DLT 끝 오프셋이 전 파티션 0 이고, 출고 화면에 `STUCK_*` 가 없는지 본다. 창이 없으면 ⚪ + `TASK-MONO-672`.
 
 ---
@@ -171,3 +171,71 @@ kafka_dlt-exception-message     : Listener method '…ShippingConfirmedConsumer.
 
 - `applyConfirm` 이 예약을 **무엇으로 조회하는지**(코드 독해) — 창 없이 가능하다. AC-2 의 입구.
 - 로컬 IT 재현(AC-2 의 bite).
+
+---
+
+# 🟢 AC-2 — 결함이다: 계약 두 개가 서로를 부정한다 (2026-09-23 UTC · 창 없음 · 분석=Opus 5.5)
+
+## 🔴 먼저, 위 § AC-0 의 가설 «예약을 잘못 고른다» 는 **거짓이었다**
+
+id 가 둘인 것은 정상 매핑이다. 페이로드 `reservationId` 는 outbound `PickingRequest.id` 이고
+컨슈머는 그것으로 `findByPickingRequestId` 를 한다(`ShippingConfirmedConsumer.java:119-120`).
+예외 메시지가 찍는 것은 inventory 자신의 PK `reservation.id()` 이고, 그 PK 는
+`ReserveStockService.java:269` 의 `UUID.randomUUID()` — **v4 꼴이 그 지문이다.**
+⇒ 컨슈머는 **맞는 예약**을 찾았다. 🔵 «v7 ≠ v4» 는 두 id 공간의 차이를 잰 것이지 오선택의 증거가 아니었다.
+
+## 기전 (코드와 시드로 추적 — 전부 저장소 안)
+
+1. 시드는 LOT 추적 SKU 를 `lotNo` 만 주고 입고한다(`infra/demo/seed/seed-wms.sh:66-67,186` — 계약 §2.2 *"lot reconciled later"*) ⇒ 재고 행 `lot_id` **NULL**.
+2. 출고 주문 라인 `lotId: null`(`seed-wms.sh:264`) ⇒ `inventory-events.md` §C2 *"Null = any available lot (matches rows with `lot_id IS NULL`)"* ⇒ 예약 라인 `lotId` **NULL**.
+3. 피킹 확정에서 운영자가 실물 lot `…601`(`L-20260418-A`)을 고른다(`seed-wms.sh:289,337-341` — 시드 주석이 이 설계를 그대로 적는다).
+4. 출하 확정 페이로드 `lotId=…601` → `ShippingConfirmedConsumer.java:146` 의 `Objects.equals(NULL, …601)` = false → `IllegalArgumentException` → DLT.
+
+⇒ **신선 부팅마다 결정론적**이다(경합 아님) — § AC-1 의 두 표본(12차·13차, 서로 다른 AMI·볼륨)과 일치한다.
+
+## 계약 충돌 (HARDSTOP-06 으로 멈추고 소유자에게 물었다)
+
+- 생산자 `outbound-events.md` §5 *"Actual lot picked; may differ from planned if operator substituted"* · §7 *"Actual lot that was shipped (from `PickingConfirmation`)"*.
+- 소비자 `inventory-events.md` §C4 *"resolves each shipped line … by `(skuId, lotId)` … no matching reservation line is a hard error"*.
+- ⇒ 생산자가 허용하는 정상 흐름(any-lot 예약 → 확정 시 lot 지정)을 소비자 계약이 **영구히 DLT 로** 보낸다.
+
+## 소유자 결정 — **ⓐ** (2026-09-23 UTC)
+
+| | 규칙 | 결과 |
+|---|---|---|
+| **ⓐ 채택** | 정확 `(skuId, lotId)` 먼저 → 없고 출하 lot 이 non-null 이면 **그 sku 의 any-lot(NULL) 라인이 정확히 하나일 때** 그것 | 이 DLT 해소. 구체 lot 대체(A→B)·모호(any-lot 둘 이상)는 여전히 hard error |
+| ⓑ 기각 | sku 유일하면 lot 무시 | 대체 시 **다른 lot 행**을 조용히 차감 |
+| ⓒ 기각 | 시드만 고침 | 생산자 계약이 허용하는 흐름이 운영에서 계속 DLT — 결함을 숨긴다 |
+
+## 구현
+
+- **계약 먼저**: `inventory-events.md` §C4 에 **Line matching rule** 3단(정확 → any-lot 폴백 → hard error) + `lines[].lotId` 설명. `outbound-events.md` §7 소비자 기대에 한 줄 포인터.
+- `ShippingConfirmedConsumer.matchLine` — 위 규칙 그대로. 🔴 폴백은 **출하 lot 이 non-null 일 때만** 연다(NULL→NULL 은 정확 매칭이 이미 처리).
+
+## bite — 단위 테스트로 (IT 는 안 썼다, 이유 아래)
+
+`ShippingConfirmedConsumerTest` 에 4칸 추가, **고치기 전 트리**에서 돌렸다:
+
+| 칸 | 고치기 전 | 고친 뒤 |
+|---|---|---|
+| 데모 모양(예약 lot NULL · 출하 lot 지정) → 그 라인으로 확정 | 🔴 **FAIL**(유일한 실패, `10 tests completed, 1 failed`) | 🟢 |
+| 정확 매칭이 any-lot 라인보다 우선 | 🟢 | 🟢 |
+| 구체 lot 대체(A→B) → hard error 유지 | 🟢 | 🟢 |
+| any-lot 라인 둘 → hard error(추측 안 함) | 🟢 | 🟢 |
+
+🔵 초록 셋은 **경계를 핀**하는 칸이다 — 폴백이 넓어지면(ⓑ 쪽으로) 빨개진다. inventory-service 전체 `test` rc=0 · **248 tests / 0 failures / 0 errors / 0 skipped**(결과 XML 41개 합산).
+
+🔴 **IT 를 안 쓴 이유**: 이 컨슈머에는 기존 IT 가 **0개**이고(테스트 트리 grep — 단위 테스트 하나뿐), 결함은 DB·Kafka 가 아니라 **매칭 술어 한 줄**에 있다. 단위 테스트가 실제 `OutboundEventParser` 로 **생산자 와이어 모양 그대로**를 먹이므로 기전을 전부 덮는다. ⇒ 남는 미측정은 «실제 시드 흐름 끝에서 DLT 가 0 인가» 이고 그것은 **AC-3(창)** 이 잰다.
+
+## 🟡 AC-1 에 더한 것
+
+기전이 코드로 확정됐으므로 «매번이면 시드/코드» 의 답은 **코드**다. 다만 AC-1 이 요구한 관측(다음 신선 부팅의 오프셋)은 **고친 AMI** 에서는 «재현되지 않음» 으로만 나온다 ⇒ AC-1 과 AC-3 은 같은 창에서 **한 조회**로 닫힌다(고친 AMI 의 신선 부팅에서 DLT 끝 오프셋 전 파티션 0).
+
+## 🔴 AC-3 에 얹을 관측 하나 (가설 — 추론으로 묶지 마라)
+
+이 DLT 는 `inventory.confirmed` 가 **영영 안 나간다**는 뜻이다 ⇒ 출고 사가가 `SHIPPED` 에 머문다 ⇒ 계약 §7 의 스위퍼(`SHIPPED` 5분 초과 재발행)가 돈다. `TASK-MONO-667` 의 `STUCK_RECOVERY_FAILED` 가 **이 사슬의 끝**일 수 있다. 🔴 이것은 **가설**이다 — AC-3 이 이미 «출고 화면에 `STUCK_*` 가 없는가» 를 보므로, 고친 AMI 에서 그것이 사라지면 관측으로 연결되고, 남으면 **다른 뿌리**다.
+
+## 후속
+
+- 구체 lot 대체(예약 lot A → 운영자가 B 를 집음)는 생산자 계약이 허용하는데 여전히 hard error → DLT 다. ⓐ 가 **의도적으로 남긴** 구멍이고 정책(어느 재고 행을 차감하나)은 이 티켓 범위 밖 ⇒ **`TASK-MONO-724`** 로 기안.
+- 🔴 **재굽기 묶음에 넣어라** — 이 수정이 이미지에 없으면 다음 창은 옛 코드를 잰다(`TASK-MONO-672` 의 재굽기 표).
