@@ -24,6 +24,8 @@ import org.springframework.security.oauth2.server.authorization.token.DefaultOAu
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenContext;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -98,6 +100,17 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
         RegisteredClient registeredClient = clientPrincipal.getRegisteredClient();
         if (registeredClient == null) {
             throw new OAuth2AuthenticationException(OAuth2ErrorCodes.INVALID_CLIENT);
+        }
+
+        // TASK-MONO-721 (ADR-MONO-076 — 갈래 D): a WORKLOAD credential takes a different
+        // branch. It has no account and no operator assignment, so the fail-closed gate below
+        // (admin-service) is the wrong question for it; its gate is WorkloadTenantCatalog.
+        // 🔴 Enumeration in that catalog is what selects the branch, and a client that is
+        // absent keeps exactly the behaviour it had before this ticket: it falls through to
+        // the operator path and is denied there, because a client id is not an assigned
+        // operator. Both refuse — this branch refuses for a reason the catalog records.
+        if (WorkloadTenantCatalog.isWorkloadExchangeClient(registeredClient.getClientId())) {
+            return authenticateWorkload(exchange, clientPrincipal, registeredClient);
         }
 
         // --- 1. Validate the subject token (auth-service's own JWKS) — fail-closed. ---
@@ -214,6 +227,146 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
         // No refresh token for the assumed token (short-lived, re-minted per selection).
         return new OAuth2AccessTokenAuthenticationToken(
                 registeredClient, clientPrincipal, accessToken, null, Map.of());
+    }
+
+    /**
+     * TASK-MONO-721 (ADR-MONO-076 D1/D2/D4) — the <b>workload</b> assume-tenant branch.
+     *
+     * <p>Reached only for a client enumerated in {@link WorkloadTenantCatalog}. A client that is
+     * absent falls through to the operator branch above, where the fail-closed assignment gate
+     * denies it (a client id is not an assigned operator) — so both paths refuse, and the
+     * difference is only which one records the reason.
+     *
+     * <p>🔴 It does <b>not</b> call {@link OperatorAssignmentPort}. A workload has no operator
+     * assignment; asking admin-service about one would be asking the wrong question and would
+     * couple a machine-to-machine path to a service it has no business depending on.
+     *
+     * <p>Four gates, each fail-closed, in this order:
+     * <ol>
+     *   <li><b>The subject token is valid</b> — decoded with this service's own JWKS, the same
+     *       decoder the operator branch uses.</li>
+     *   <li><b>The subject token belongs to the presenting client</b> — its {@code aud} must
+     *       contain this client id. 🔴 This gate is what stops client A presenting client B's
+     *       token to borrow B's granted scopes: without it, gate 3 would read a scope set that
+     *       was never granted to A. {@code jwt-standard-claims.md} guarantees the binding
+     *       ("{@code aud} — the client id of the registered client the token was issued to — on
+     *       every grant, {@code client_credentials} included"), so this reads a contract rather
+     *       than a convention.</li>
+     *   <li><b>The request carries a scope the client is registered for</b> — the minted token
+     *       carries the <em>intersection</em>, not the client's full registered set. This is
+     *       ADR-MONO-061's second constraint carried onto the tenant axis by ADR-MONO-076
+     *       § Context: the registration must not decide the token, the request does. 🔴 Note the
+     *       difference from the operator branch above, which deliberately mints the client's
+     *       REGISTERED scopes (TASK-BE-336, a different decision for a different principal).</li>
+     *   <li><b>The target tenant is one this client may assume</b> — {@link WorkloadTenantCatalog}.
+     *       An enumerated client asking for a tenant outside its set is refused HERE, at the
+     *       issuer, with {@code invalid_grant}: no token is minted. TASK-MONO-721 AC-1's control
+     *       measures exactly this, and AC-7 fixes the shape of the refusal.</li>
+     * </ol>
+     */
+    private Authentication authenticateWorkload(AssumeTenantAuthenticationToken exchange,
+                                                OAuth2ClientAuthenticationToken clientPrincipal,
+                                                RegisteredClient registeredClient) {
+        String clientId = registeredClient.getClientId();
+        String selectedTenantId = exchange.getSelectedTenantId();
+
+        // --- 1. Subject token validity (this service's own JWKS) — fail-closed. ---
+        Jwt subjectJwt;
+        try {
+            subjectJwt = subjectTokenDecoder.decode(exchange.getSubjectToken());
+        } catch (JwtException e) {
+            log.debug("assume-tenant(workload): subject_token validation failed (fail-closed): {}",
+                    e.toString());
+            throw invalidGrant("subject_token is invalid");
+        }
+
+        // --- 2. The subject token was issued TO this client. ---
+        List<String> audience = subjectJwt.getAudience();
+        if (audience == null || !audience.contains(clientId)) {
+            log.warn("SECURITY: assume-tenant(workload) subject_token does not belong to the "
+                    + "presenting client. clientId={}, aud={}", clientId, audience);
+            throw invalidGrant("subject_token was not issued to this client");
+        }
+
+        // --- 3. The request's granted scopes, intersected with the registration. ---
+        Set<String> grantedScopes = intersectScopes(subjectJwt, registeredClient);
+        if (grantedScopes.isEmpty()) {
+            log.debug("assume-tenant(workload): no registered scope on the subject token. "
+                    + "clientId={}", clientId);
+            throw invalidGrant("subject_token carries no scope this client is registered for");
+        }
+
+        // --- 4. May this client assume that tenant? ---
+        if (!WorkloadTenantCatalog.mayAssume(clientId, selectedTenantId)) {
+            log.warn("SECURITY: assume-tenant(workload) refused — clientId={} may not assume "
+                    + "tenant={} (assumable={})",
+                    clientId, selectedTenantId, WorkloadTenantCatalog.assumableTenants(clientId));
+            throw invalidGrant("client is not permitted to assume the requested tenant");
+        }
+
+        // --- 5. Mint. A DIFFERENT grant type, so the operator derivations are unreachable. ---
+        WorkloadAssumeTenantAuthenticationToken resolvedGrant =
+                new WorkloadAssumeTenantAuthenticationToken(
+                        clientPrincipal, clientId, selectedTenantId, CUSTOMER_TENANT_TYPE);
+
+        OAuth2TokenContext accessTokenContext = DefaultOAuth2TokenContext.builder()
+                .registeredClient(registeredClient)
+                .principal(clientPrincipal)
+                .authorizationServerContext(AuthorizationServerContextHolder.getContext())
+                .authorizedScopes(grantedScopes)
+                .tokenType(OAuth2TokenType.ACCESS_TOKEN)
+                .authorizationGrantType(AuthorizationGrantType.TOKEN_EXCHANGE)
+                .authorizationGrant(resolvedGrant)
+                .build();
+
+        OAuth2Token generated = tokenGenerator.generate(accessTokenContext);
+        if (generated == null) {
+            throw new OAuth2AuthenticationException(OAuth2ErrorCodes.SERVER_ERROR);
+        }
+
+        OAuth2AccessToken accessToken = new OAuth2AccessToken(
+                OAuth2AccessToken.TokenType.BEARER,
+                generated.getTokenValue(),
+                generated.getIssuedAt(),
+                generated.getExpiresAt(),
+                grantedScopes);
+
+        log.debug("assume-tenant(workload): minted for clientId={} tenant={} scopes={}",
+                clientId, selectedTenantId, grantedScopes);
+
+        // No refresh token — same as the operator path (ADR-MONO-020 § 3.1), and
+        // ADR-MONO-076 keeps it that way: a long-lived assumed workload token would
+        // make a catalog change take effect only after it expired.
+        return new OAuth2AccessTokenAuthenticationToken(
+                registeredClient, clientPrincipal, accessToken, null, Map.of());
+    }
+
+    /**
+     * The scopes on the subject token that this client is actually registered for.
+     *
+     * <p>RFC 6749 puts {@code scope} on the wire as a space-delimited string; this issuer mints
+     * it as a JSON array. 🔴 Both shapes are read — a reader that handles only one returns an
+     * empty set for the other, and an empty set here means {@code invalid_grant}, so the wrong
+     * shape would look exactly like "the caller asked for nothing".
+     */
+    private static Set<String> intersectScopes(Jwt subjectJwt, RegisteredClient registeredClient) {
+        Set<String> onToken = new java.util.LinkedHashSet<>();
+        Object raw = subjectJwt.getClaim("scope");
+        if (raw instanceof Collection<?> list) {
+            for (Object o : list) {
+                if (o != null && !o.toString().isBlank()) {
+                    onToken.add(o.toString());
+                }
+            }
+        } else if (raw != null) {
+            for (String s : raw.toString().split("\\s+")) {
+                if (!s.isBlank()) {
+                    onToken.add(s);
+                }
+            }
+        }
+        onToken.retainAll(registeredClient.getScopes());
+        return onToken;
     }
 
     @Override

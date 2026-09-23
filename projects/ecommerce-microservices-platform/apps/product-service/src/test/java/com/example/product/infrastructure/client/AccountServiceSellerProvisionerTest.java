@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.containing;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalToJson;
 import static com.github.tomakehurst.wiremock.client.WireMock.matching;
 import static com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath;
@@ -22,6 +23,8 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @DisplayName("AccountServiceSellerProvisioner 단위 테스트 (ADR-MONO-042 D2/D3/D4/D5 — fail-soft)")
@@ -29,6 +32,7 @@ class AccountServiceSellerProvisionerTest {
 
     private WireMockServer wireMock;
     private AccountServiceSellerProvisioner provisioner;
+    private TenantScopedIamTokenProvider tenantTokenProvider;
 
     @BeforeEach
     void setUp() {
@@ -36,8 +40,14 @@ class AccountServiceSellerProvisionerTest {
         wireMock.start();
         IamClientCredentialsTokenProvider tokenProvider = mock(IamClientCredentialsTokenProvider.class);
         when(tokenProvider.currentBearer()).thenReturn("test-jwt");
+        // 🔴 TASK-MONO-721 (ADR-MONO-076 D1): the two providers yield DIFFERENT tokens, and the
+        // difference is the ticket. Calls whose path names a tenant must carry the EXCHANGED
+        // one; the base credential is refused on that surface by construction. The distinct
+        // literals are what let the cells below tell which one was used.
+        tenantTokenProvider = mock(TenantScopedIamTokenProvider.class);
+        when(tenantTokenProvider.bearerFor("tenant-a")).thenReturn("test-jwt-tenant-a");
         provisioner = new AccountServiceSellerProvisioner(
-                wireMock.baseUrl(), 3000, 5000, "SELLER", tokenProvider);
+                wireMock.baseUrl(), 3000, 5000, "SELLER", tokenProvider, tenantTokenProvider);
     }
 
     @AfterEach
@@ -66,6 +76,50 @@ class AccountServiceSellerProvisionerTest {
         assertThat(result.identityId()).isEqualTo("id-1");
         // the account mint carried the SELLER role + a Bearer JWT
         wireMock.verify(postRequestedFor(urlPathEqualTo("/internal/tenants/tenant-a/accounts")));
+    }
+
+    @Test
+    @DisplayName("🔴 TASK-MONO-721 — 경로에 테넌트가 있는 호출은 **교환 토큰**을 싣는다 (기본 자격이 아니라)")
+    void tenantPathCallsCarryTheExchangedBearer() {
+        // ADR-MONO-076 D1. This is the wiring verdict: the same method could compile, pass
+        // every other cell, and still send the base credential — which /internal/tenants/**
+        // refuses by construction. The two stubbed literals are what make that visible.
+        wireMock.stubFor(post(urlPathEqualTo("/internal/tenants/tenant-a/accounts"))
+                .willReturn(aResponse().withStatus(201)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"accountId\":\"acct-1\",\"tenantId\":\"tenant-a\","
+                                + "\"email\":\"seller+tenant-a+seller-1@marketplace.local\","
+                                + "\"status\":\"ACTIVE\",\"roles\":[\"SELLER\"]}")));
+        wireMock.stubFor(post(urlPathEqualTo("/internal/tenants/tenant-a/identities:resolveOrCreate"))
+                .willReturn(aResponse().withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"identityId\":\"id-1\",\"outcome\":\"CREATED\"}")));
+
+        provisioner.provision("tenant-a", "seller-1", "Seller One");
+
+        wireMock.verify(postRequestedFor(urlPathEqualTo("/internal/tenants/tenant-a/accounts"))
+                .withHeader("Authorization", equalTo("Bearer test-jwt-tenant-a")));
+        wireMock.verify(postRequestedFor(
+                urlPathEqualTo("/internal/tenants/tenant-a/identities:resolveOrCreate"))
+                .withHeader("Authorization", equalTo("Bearer test-jwt-tenant-a")));
+        // 🔵 And the exchange was asked for THIS tenant — a provider that ignored its argument
+        // and returned one global token would pass the two assertions above.
+        verify(tenantTokenProvider, atLeastOnce()).bearerFor("tenant-a");
+    }
+
+    @Test
+    @DisplayName("🔵 대조군 — 경로에 테넌트가 **없는** lock 호출은 기본 자격 그대로다")
+    void tenantlessPathKeepsTheBaseCredential() {
+        // /internal/accounts/{id}/lock names no tenant, so the tenant-scope rule does not apply
+        // and exchanging would be work with no reason. 🔴 Without this cell, "switch everything
+        // to the exchanged token" would look equally correct.
+        wireMock.stubFor(post(urlPathEqualTo("/internal/accounts/acct-1/lock"))
+                .willReturn(aResponse().withStatus(200)));
+
+        provisioner.lockAccount("tenant-a", "acct-1");
+
+        wireMock.verify(postRequestedFor(urlPathEqualTo("/internal/accounts/acct-1/lock"))
+                .withHeader("Authorization", equalTo("Bearer test-jwt")));
     }
 
     @Test

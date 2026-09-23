@@ -51,10 +51,15 @@ class AccountServiceSellerProvisionerTimeoutTest {
     void hungAccountService_provisionFailsFastWithinConfiguredReadTimeout() {
         IamClientCredentialsTokenProvider tokenProvider = mock(IamClientCredentialsTokenProvider.class);
         when(tokenProvider.currentBearer()).thenReturn("test-jwt");
+        // TASK-MONO-721: the tenant-path call now carries an exchanged token. The exchange
+        // itself is stubbed here — this cell is about the DOWNSTREAM read timeout, and a real
+        // exchange would add a second network hop that is not what it measures.
+        TenantScopedIamTokenProvider tenantTokenProvider = mock(TenantScopedIamTokenProvider.class);
+        when(tenantTokenProvider.bearerFor("tenant-a")).thenReturn("test-jwt-tenant-a");
 
-        // configured read timeout is 300ms; the stub delays 5s, far beyond that bound.
+        // configured read timeout is 300ms; the stub delays 5s, far beyond that bound
         AccountServiceSellerProvisioner provisioner = new AccountServiceSellerProvisioner(
-                wireMock.baseUrl(), 2000, 300, "SELLER", tokenProvider);
+                wireMock.baseUrl(), 2000, 300, "SELLER", tokenProvider, tenantTokenProvider);
 
         wireMock.stubFor(post(urlPathEqualTo("/internal/tenants/tenant-a/accounts"))
                 .willReturn(aResponse().withFixedDelay(5000).withStatus(201)));
