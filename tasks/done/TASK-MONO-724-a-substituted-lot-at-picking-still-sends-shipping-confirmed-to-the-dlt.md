@@ -8,7 +8,7 @@ TASK-MONO-724
 
 # Status
 
-review (2026-09-23 UTC — AC-0~AC-3 전부 닫힘: 대체는 도달 가능했다(측정) → 소유자 ① → 피킹 확정에서 거절(`LOT_SUBSTITUTION_NOT_ALLOWED`) · 창 판정 없음)
+done (2026-09-23 UTC — AC-0~AC-3 전부 닫힘: 대체는 도달 가능했다(측정) → 소유자 ① → 피킹 확정에서 거절(`LOT_SUBSTITUTION_NOT_ALLOWED`) · 창 판정 없음)
 
 # Owner
 
