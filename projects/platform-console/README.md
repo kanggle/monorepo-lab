@@ -30,11 +30,11 @@
 
 ## Screenshots
 
-> 🔵 아래 셋은 전부 **로그인 후** 화면이다. 🔴 `TASK-MONO-686`(`ADR-MONO-074`) 이후 콘솔의
+> 🔵 아래는 전부 **로그인 후** 화면이다. 🔴 `TASK-MONO-686`(`ADR-MONO-074`) 이후 콘솔의
 > 공개 표면은 더 이상 별도 둘러보기(`/demo`, 은퇴)가 아니다 — 익명 방문자는 **같은 실제
 > 화면 64개**를 값만 샘플(«(샘플)» 표기 + 상시 배너)로 본다. 로그인하면 같은 주소에서
 > 실제 데이터가 보인다. `/demo`·`/demo/<domain>` 링크는 그 실제 화면으로 308 리다이렉트된다.
-> 🔵 촬영 시점: 01 은 2026-09-11(테넌트 `ecommerce`), 02~04 는 **2026-09-17**(AMI `af0018aa6`).
+> 🔵 촬영 시점: 01·03·05·06 은 **2026-09-22**(01·05 테넌트 `ecommerce`, 03·06 테넌트 `demo-corp`), 02·04 는 2026-09-17(AMI `af0018aa6`).
 
 <p align="center">
   <img src="docs/screenshots/01-console-ecommerce-products.jpg" width="900" alt="콘솔 — 이커머스 상품 운영"><br>
@@ -54,6 +54,16 @@
 <p align="center">
   <img src="docs/screenshots/04-console-permission-sets.jpg" width="900" alt="IAM 권한 세트 — 배정이 가리키는 권한 묶음"><br>
   <em>권한 세트 — 배정(<code>operator_tenant_assignment</code>)의 <code>permissionSetId</code> 가 가리키는 묶음이다. 🔵 별도 테이블이 아니라 <strong><code>admin_roles</code> 를 재사용</strong>하고, 같은 데이터를 「권한」 화면과 <strong>다른 관점</strong>으로 보여 준다. 미지정(<code>NULL</code>)이면 배정은 좁혀지지 않고 <strong>운영자 본인의 role 을 그대로 상속</strong>한다 — 화면이 그 규칙을 직접 적어 둔다</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/05-console-ecommerce-orders.jpg" width="900" alt="콘솔 — 이커머스 주문 운영"><br>
+  <em>이커머스 주문 — 시드 주문 5건이 <code>PENDING</code> · <code>CONFIRMED</code> · <code>SHIPPED</code> · <code>DELIVERED</code> · <code>CANCELLED</code> 다섯 상태에 하나씩 놓여 있다. 01 과 같은 테넌트(<code>ecommerce</code>)에서만 보인다</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/06-console-erp-masters.jpg" width="900" alt="콘솔 — ERP 마스터 5종"><br>
+  <em>ERP 마스터 — 같은 콘솔이 테넌트 <code>demo-corp</code> 로 ERP 도메인을 그린다. 부서·직원·직급·비용센터·거래처 5종, 행마다 유효기간이 붙고 상위 부서는 <code>DEPT-HQ · 본사</code> 처럼 <strong>코드·이름</strong>으로 읽힌다</em>
 </p>
 
 ---

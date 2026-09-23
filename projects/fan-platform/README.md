@@ -28,7 +28,7 @@ AI-assisted 풀스택 포트폴리오 — 엔터테인먼트 회사 (HYBE / SM /
 
 ## Screenshots
 
-> 🔵 아래 셋은 **로그인 없이** 열리고, 멤버십 화면은 **로그인 후**다.
+> 🔵 아래 셋은 **로그인 없이** 열리고, 멤버십 화면은 **로그인 후**다. 03 은 2026-09-22 촬영(포스트 사진까지 렌더된 판).
 
 <p align="center">
   <img src="docs/screenshots/04-fan-membership.jpg" width="900" alt="멤버십 — 티어와 일할 계산"><br>
