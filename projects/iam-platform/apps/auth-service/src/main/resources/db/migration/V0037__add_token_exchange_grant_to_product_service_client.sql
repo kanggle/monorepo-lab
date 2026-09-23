@@ -44,9 +44,17 @@
 --    The byte-level fix to V0019 is gated on a fresh volume: TASK-MONO-722.
 -- ---------------------------------------------------------------------------
 --
--- 🔴 Do NOT write ${...} anywhere in this file, comments included. Flyway
---    substitutes placeholders inside comments too, and an unresolvable one
---    fails the migration at context load (measured on V0036, TASK-MONO-717).
+-- 🔴 Never write Flyway placeholder syntax -- a dollar sign followed by a braced
+--    name -- anywhere in a migration, COMMENTS INCLUDED. Flyway substitutes
+--    placeholders inside comments too, and an unresolvable one fails the migration
+--    at context load, which reads as "every repository slice test is broken"
+--    rather than as a comment problem (measured on V0036, TASK-MONO-717).
+--
+-- 🔴🔴 This paragraph's FIRST version was itself the violation: it spelled the
+--    sequence out in the act of forbidding it, and CI went red on exactly the
+--    failure it was warning about. Describe the syntax; do not write it.
+--    (The repo has a name for this: a discriminator that matches its own
+--    documentation.)
 
 UPDATE oauth_clients
 SET authorization_grant_types = JSON_ARRAY_APPEND(
