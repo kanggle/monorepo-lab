@@ -622,3 +622,63 @@ test('시드: 리뷰의 음성 대조군(작성자 · 범위 밖 별점 · 숨�
   for (const needle of banned) assert.ok(!store.includes(needle), `시드에 '${String(needle).slice(0, 40)}' 가 있다`);
   assert.ok(!store.includes('"userId"'));
 });
+
+// =============================================================================
+// TASK-MONO-725 — 공개 요금제 안내가 **가입 카드와 같은 상품**을 말하는가
+// =============================================================================
+// 같은 `/membership` 화면이 위(가입 카드)에서 7,900 / 17,900, 아래(이 안내)에서 4,900 / 12,900 을
+// 보였다. 안내 fixture 는 백엔드 가격이 정해진 지 6주 뒤에 **아무것도 대조하지 않고** 쓰였다.
+// ⇒ 정본 두 파일을 **직접 읽어** 대조한다: 가격 = `MembershipPricing.java`(청구액),
+//   이름·혜택 = `SubscribePanel.tsx` 의 `TIERS`. 복사본(숫자 리터럴)을 여기 두면 그것이 셋째
+//   출처가 되어 같은 드리프트를 다시 만든다.
+const REPO_ROOT = join(HERE, '..', '..', '..', '..');
+const PRICING_JAVA = join(REPO_ROOT, 'projects', 'fan-platform', 'apps', 'membership-service', 'src', 'main',
+  'java', 'com', 'example', 'fanplatform', 'membership', 'domain', 'pricing', 'MembershipPricing.java');
+const SUBSCRIBE_PANEL = join(REPO_ROOT, 'projects', 'fan-platform', 'web', 'fan-platform-web', 'src',
+  'features', 'membership', 'ui', 'SubscribePanel.tsx');
+
+function parseBackendPrices(java) {
+  const out = {};
+  for (const m of java.matchAll(/\b(MEMBERS_ONLY|PREMIUM)_MONTHLY_MINOR\s*=\s*([\d_]+)L\s*;/g)) {
+    out[m[1]] = Number(m[2].replaceAll('_', ''));
+  }
+  return out;
+}
+
+function parseSubscribeTiers(tsx) {
+  const out = {};
+  const re = /tier:\s*'([A-Z_]+)',\s*name:\s*'([^']+)',\s*price:\s*'([^']+)',\s*perks:\s*\[([^\]]*)\]/g;
+  for (const m of tsx.matchAll(re)) {
+    out[m[1]] = {
+      name: m[2],
+      price: m[3],
+      perks: [...m[4].matchAll(/'([^']+)'/g)].map((p) => p[1]),
+    };
+  }
+  return out;
+}
+
+test('725: 공개 요금제 안내의 가격 = 백엔드 청구액 (MembershipPricing.java)', async () => {
+  const { MEMBERSHIP_PLANS } = await import('../fixtures/membership-plans.mjs');
+  const prices = parseBackendPrices(await readFile(PRICING_JAVA, 'utf8'));
+  // 🔴 비공허성: 파서가 아무것도 못 읽으면 «대조할 것이 없어서 초록» 이 된다.
+  assert.deepEqual(Object.keys(prices).sort(), ['MEMBERS_ONLY', 'PREMIUM'], 'MembershipPricing 상수를 못 읽었다 — 파서가 낡았다');
+  assert.equal(MEMBERSHIP_PLANS.length, 2);
+  for (const plan of MEMBERSHIP_PLANS) {
+    assert.equal(plan.priceKrw, prices[plan.tier],
+      `${plan.tier}: 공개 안내 ${plan.priceKrw} ≠ 백엔드 청구액 ${prices[plan.tier]} — 방문자가 안내 가격을 보고 들어와 다른 금액을 결제한다`);
+  }
+});
+
+test('725: 공개 요금제 안내의 이름·혜택·가격 문구 = 가입 카드 (SubscribePanel.tsx TIERS)', async () => {
+  const { MEMBERSHIP_PLANS } = await import('../fixtures/membership-plans.mjs');
+  const tiers = parseSubscribeTiers(await readFile(SUBSCRIBE_PANEL, 'utf8'));
+  assert.deepEqual(Object.keys(tiers).sort(), ['MEMBERS_ONLY', 'PREMIUM'], 'SubscribePanel TIERS 를 못 읽었다 — 파서가 낡았다');
+  for (const plan of MEMBERSHIP_PLANS) {
+    const card = tiers[plan.tier];
+    assert.equal(plan.name, card.name, `${plan.tier}: 이름이 가입 카드와 다르다`);
+    assert.deepEqual(plan.benefits, card.perks, `${plan.tier}: 혜택이 가입 카드와 다르다`);
+    // 가입 카드의 표시 문구(«월 7,900원»)도 같은 숫자여야 한다 — 두 정본끼리도 어긋날 수 있다.
+    assert.equal(card.price, `월 ${plan.priceKrw.toLocaleString('ko-KR')}원`, `${plan.tier}: 가입 카드 표시 가격이 청구액과 다르다`);
+  }
+});

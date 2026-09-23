@@ -284,10 +284,14 @@ describe('/membership (공개 소개) — 세션 없이', () => {
     await renderPage(MembershipPage({ searchParams: Promise.resolve({}) }));
 
     expect(screen.getAllByTestId('public-membership-plan')).toHaveLength(2);
-    expect(screen.getByText('멤버스')).toBeInTheDocument();
+    // TASK-MONO-725: 공개 안내는 가입 카드(`SubscribePanel` TIERS)·백엔드 청구액과 같은 상품을 말한다.
+    expect(screen.getByText('멤버스 전용')).toBeInTheDocument();
     expect(screen.getByText('프리미엄')).toBeInTheDocument();
-    expect(screen.getByText(/4,900원/)).toBeInTheDocument();
-    expect(screen.getByText(/멤버십 전용 게시물 열람/)).toBeInTheDocument();
+    // 🔴 앵커 필수 — `/7,900원/` 은 «17,900원» 에도 걸려 다중 매치가 된다.
+    expect(screen.getByText(/^7,900원/)).toBeInTheDocument();
+    expect(screen.getByText(/^17,900원/)).toBeInTheDocument();
+    expect(screen.queryByText(/4,900원|12,900원/)).toBeNull();
+    expect(screen.getByText(/멤버 전용 포스트 열람/)).toBeInTheDocument();
     // 🔴 `note` — 이 문장이 없으면 화면이 «지금 이 가격에 가입된다» 를 주장하게 된다.
     expect(screen.getAllByText(/실제 가입·결제는 로그인 후 진행되며/).length).toBe(2);
   });

@@ -28,12 +28,9 @@ AI-assisted 풀스택 포트폴리오 — 엔터테인먼트 회사 (HYBE / SM /
 
 ## Screenshots
 
-> 🔵 아래 셋은 **로그인 없이** 열리고, 멤버십 화면은 **로그인 후**다. 03 은 2026-09-22 촬영(포스트 사진까지 렌더된 판).
-
-<p align="center">
-  <img src="docs/screenshots/04-fan-membership.jpg" width="900" alt="멤버십 — 티어와 일할 계산"><br>
-  <em>멤버십 — 현재 구독 상태 · 자동 갱신 등록 · 두 티어. 업그레이드는 <strong>잔여 크레딧을 일할로 정산</strong>해서 이번 결제액을 다시 계산한다 (<code>-₩7,636 → ₩10,264</code>). 결제는 데모용 모의 PG 다</em>
-</p>
+> 🔵 아래 셋은 **로그인 없이** 열린다. 03 은 2026-09-22 촬영(포스트 사진까지 렌더된 판).
+> 🔴 멤버십 화면(구 04)은 **내렸다** — 그 장의 위·아래 절이 서로 다른 가격을 보였다(`TASK-MONO-725`).
+> 고친 판이 배포된 뒤 다시 찍어 싣는다.
 
 <p align="center">
   <img src="docs/screenshots/01-fan-feed.jpg" width="900" alt="피드 — 멤버십 게이팅"><br>

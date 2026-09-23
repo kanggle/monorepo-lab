@@ -64,8 +64,8 @@ Elasticsearch 상품 검색 · MinIO 업로드 · 셀러 정산.
 쌓는 알림 인박스.
 
 <p align="center">
-  <img src="../projects/fan-platform/docs/screenshots/04-fan-membership.jpg" width="820" alt="팬 플랫폼 멤버십"><br>
-  <em>멤버십 — 업그레이드가 <strong>잔여 크레딧을 일할로 정산</strong>해 이번 결제액을 다시 계산한다</em>
+  <img src="../projects/fan-platform/docs/screenshots/03-fan-artist-profile.jpg" width="820" alt="팬 플랫폼 아티스트 프로필"><br>
+  <em>아티스트 프로필 — 팔로잉 상태와 포스트. <strong>멤버 전용</strong> 글은 제목만 보이고 본문 자리에 가입 안내가 선다(게이팅은 응답에서 걸린다)</em>
 </p>
 
 ### IAM — [`projects/iam-platform`](../projects/iam-platform/)
