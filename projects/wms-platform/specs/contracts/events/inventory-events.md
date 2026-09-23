@@ -588,7 +588,9 @@ the BE-431 forward-leg fix):
    concrete shipped lot on an any-lot reservation line is the normal flow, not a mismatch.
 3. Otherwise → hard error. In particular, **concrete-lot substitution** (reserved lot A, shipped
    lot B) and **two or more** any-lot lines of the same sku are *not* resolved by guessing — either
-   would silently decrement the wrong inventory row.
+   would silently decrement the wrong inventory row. 🔵 Since TASK-MONO-724 the producer rejects
+   concrete-lot substitution at pick confirmation (`LOT_SUBSTITUTION_NOT_ALLOWED`), so A→B should
+   no longer reach this consumer; the hard error stays as defence in depth.
 
 Effect: calls `ConfirmReservationUseCase`. Each `qtyConfirmed` must equal `ReservationLine.quantity`
 exactly (v1 no partial shipments). Publishes `inventory.confirmed`.

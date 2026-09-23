@@ -225,6 +225,7 @@ Owned by `outbound-service`. See `rules/domains/wms.md` and
 | PICKING_REQUEST_NOT_FOUND | 404 | Picking request (assignment from order to picker) does not exist |
 | PICKING_QUANTITY_EXCEEDED | 422 | Picked quantity exceeds ordered quantity |
 | PICKING_INCOMPLETE | 422 | Packing attempted before picking is complete |
+| LOT_SUBSTITUTION_NOT_ALLOWED | 422 | Pick confirmation names a lot different from the order line's planned concrete lot — v1 has no re-reservation step, so the substituted lot could not be matched to the reserved stock downstream |
 | PACKING_UNIT_NOT_FOUND | 404 | Packing unit (carton/pallet) does not exist for the given id or order |
 | PACKING_INCOMPLETE | 422 | Shipping attempted before packing is complete |
 | SHIPMENT_NOT_FOUND | 404 | Shipment record does not exist for the given id or order |
