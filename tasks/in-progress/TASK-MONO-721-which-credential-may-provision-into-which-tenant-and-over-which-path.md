@@ -8,7 +8,7 @@ TASK-MONO-721
 
 # Status
 
-in-progress (2026-09-23 UTC — AC-0 소유자 결정 **ⓑ** · 🔴 구현은 `ADR-MONO-076` ACCEPT 까지 PAUSE)
+in-progress (2026-09-23 UTC — AC-0 소유자 결정 **ⓑ** · 🟢 **`ADR-MONO-076` ACCEPTED — 갈래 D** (소유자 정확형) ⇒ AC-1·AC-2 **구현 개시** · AC-5·6·7 은 **승격된 라이더**)
 
 # Owner
 
@@ -131,6 +131,12 @@ iam-account-service-1      →  iam_iam-e2e · traefik-net        (공유 네트
 
 ## AC-3 — 🔴 `V0019` 헤더 정정
 
+> 🔴🔴 **재정의됨 — `ADR-MONO-076` § D5.** 이 AC 를 **글자 그대로 하면 안 된다**: `V0019` 는
+> 적용된 마이그레이션이고 Flyway 체크섬은 **주석까지** 포함하므로, 바이트를 고치면 **기존 볼륨을
+> 가진 DB 가 기동에서 죽는다**(그리고 CI 는 빈 볼륨이라 영원히 못 잡는다). D5 가 정한 대체:
+> ① 계약 문서(`jwt-standard-claims.md`) 개정 ② **새 `V0037` 헤더**에 정정을 싣기 —
+> **이 둘은 이 티켓이 한다.** ③ `V0019` 바이트 정정은 **`TASK-MONO-722`** 가 조건 게이트로 든다.
+
 - [ ] *"do NOT pin tenant … informational here"* 문장을 실측에 맞게 고친다. 🔵 그 문장이
       `TASK-MONO-717` 을 틀린 선택으로 이끌었다 — 고치지 않으면 다음 사람도 같은 인용을 한다.
 
@@ -139,6 +145,41 @@ iam-account-service-1      →  iam_iam-e2e · traefik-net        (공유 네트
 - [ ] 🔴 단위·통합 초록으로 닫지 마라. `TASK-MONO-672` 로 항목을 넘긴다 —
       `TASK-MONO-718`(단위 초록 → 창 FAIL)과 `TASK-MONO-717`(로컬 초록 → 창 FAIL)이
       **연속 두 번** 그것을 보여 줬다.
+
+## AC-5 — 🔴 **승격된 라이더 R1 (미결)**: `product-service-client` 가 assume 할 수 있는 테넌트 집합
+
+> 🔵 `ADR-MONO-076` 은 **갈래 D**(교환)와 **클라이언트별 카탈로그**만 정했다. *어느* 테넌트냐는
+> 그 선택 밖이므로 plain ACCEPT 가 **확정하지도 기각하지도 않았다**
+> (`architecture-decision-rule.md` § Riders: *"Rider absent → record it as still open and promote it
+> to an acceptance criterion … phrased so the owner can reverse it in one line"*).
+
+- [ ] 기본값은 **`["ecommerce", "demo-corp"]`** 로 구현한다 — `ecommerce` 는 실제 셀러 테넌트이고,
+      `demo-corp` 는 데모의 기본 테넌트로서 이 티켓 § Edge Cases 가 *"셀러가 `demo-corp` 에서
+      등록되는 경우 — 데모의 기본 테넌트다"* 라고 지목한다.
+- [ ] 🔵 **소유자가 한 줄로 뒤집을 수 있다**: *"AC-5 는 `["ecommerce"]` 만"*. 그러면 데모 경로는
+      계속 실패하지만 그것은 **실패하는 것이 맞는 상태**가 된다 — 정당한 선택이다.
+- [ ] 🔴 무엇을 골랐든 **AC-1 의 대조군은 그대로다** — 집합에 **없는** 테넌트(`wms`)는 거절돼야 한다.
+
+## AC-6 — 🟠 **승격된 R5 (구현 AC)**: `ADR-MONO-061` 의 인구조사를 흔들지 않는다
+
+> *"A predicate with no wiring is not a rider; it is an implementation AC."*
+
+- [ ] `WorkloadRoleCatalogTest` 의 인구조사 칸(**17 / cc 11 / browser 6**)이 **그대로 초록**이어야 한다.
+      🔴 이 ADR 은 **role 축을 안 바꾼다.** 그 숫자가 움직이면 061 의 fail-closed 기본값을 재는
+      계측기가 흔들린 것이고, 그것은 이 티켓이 **범위를 넘었다는 신호**다.
+- [ ] 🔵 새 테넌트 카탈로그는 **자기 인구조사 칸**을 따로 갖는다.
+      🔴 다만 «줄어드는 모집단에 하한» 이 되지 않게, 그 칸은 **수를 고정하지 말고**
+      «열거되지 않은 클라이언트는 아무 테넌트도 못 받는다» 를 물어라.
+
+## AC-7 — 🔴 **승격된 라이더 R6 (미결)**: 거절이 **어디서 어떤 모양으로** 나는가
+
+- [ ] 카탈로그에 없는 테넌트를 assume 하려 하면 **교환 자체가 거절**된다 — `invalid_grant`.
+      🔴 오늘의 `403 TENANT_SCOPE_DENIED` 와는 **다른 자리·다른 코드**다(게이트웨이가 아니라 발급자).
+- [ ] 🔵 **소유자가 한 줄로 뒤집을 수 있다**: *"AC-7 은 `invalid_scope`"* 또는 *"게이트웨이 거절을 유지"*.
+      🔴 뒤집으면 **AC-1 대조군의 기대값도 같이 바뀐다** — 그래서 이것이 산문 각주가 아니라 AC 다.
+- [ ] 🔴 그리고 **거절 사유가 갈려야 한다**: 「카탈로그에 없다」·「scope 가 없다」·「grant 가 없다」가
+      **같은 응답으로 뭉개지면** AC-1 의 대조군이 무엇을 증명했는지 말할 수 없다.
+
 
 ---
 
