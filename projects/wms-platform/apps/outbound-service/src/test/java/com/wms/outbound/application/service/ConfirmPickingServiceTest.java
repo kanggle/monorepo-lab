@@ -14,6 +14,7 @@ import com.wms.outbound.application.service.fakes.FakePickingConfirmationPersist
 import com.wms.outbound.application.service.fakes.FakePickingPersistencePort;
 import com.wms.outbound.application.service.fakes.FakeSagaPersistencePort;
 import com.wms.outbound.domain.exception.LotRequiredException;
+import com.wms.outbound.domain.exception.LotSubstitutionNotAllowedException;
 import com.wms.outbound.domain.exception.PickingIncompleteException;
 import com.wms.outbound.domain.exception.StateTransitionInvalidException;
 import com.wms.outbound.domain.model.Order;
@@ -162,6 +163,88 @@ class ConfirmPickingServiceTest {
         assertThatThrownBy(() -> service.confirm(cmd))
                 .isInstanceOf(LotRequiredException.class);
         assertThat(outboxWriter.published).isEmpty();
+    }
+
+    /**
+     * TASK-MONO-724 — 계획 lot 이 구체(A)인 라인을 다른 구체 lot(B)으로 확정하면 <b>거절</b>한다.
+     * 🔴 AC-0 에서 이 칸은 «받아들여진다» 를 고정한 측정이었다(그때 통과 = 대체 도달 가능).
+     * 소유자 결정 ① 로 <b>의도적으로</b> 뒤집었다: inventory 는 A 를 예약했고
+     * {@code ConfirmShippingService} 는 출하 lot 을 이 확정에서 가져오므로, B 가 통과하면
+     * {@code shipping.confirmed} 가 B 를 싣고 inventory 가 매칭하지 못해 DLT 로 간다(§C4, 706).
+     */
+    @Test
+    void concreteLotSubstitution_isRejected_andNothingIsWritten() {
+        UUID lotSkuId = lotTrackedSku();
+        UUID plannedLot = UUID.randomUUID();
+        UUID pickedLot = UUID.randomUUID();
+        seedLotPlannedOrder(lotSkuId, plannedLot);
+
+        assertThatThrownBy(() -> service.confirm(lotConfirm(lotSkuId, pickedLot)))
+                .isInstanceOf(LotSubstitutionNotAllowedException.class)
+                .satisfies(e -> assertThat(((LotSubstitutionNotAllowedException) e).errorCode())
+                        .isEqualTo("LOT_SUBSTITUTION_NOT_ALLOWED"));
+        assertThat(outboxWriter.published).isEmpty();
+        assertThat(pickingConfirmationPersistence.saveCalls).isZero();
+        assertThat(orderPersistence.findById(orderId).orElseThrow().getStatus())
+                .isEqualTo(OrderStatus.PICKING);
+    }
+
+    /** 경계 핀: 계획 lot 과 <b>같은</b> lot 으로 확정하면 통과한다. */
+    @Test
+    void confirmingThePlannedLot_isAccepted() {
+        UUID lotSkuId = lotTrackedSku();
+        UUID plannedLot = UUID.randomUUID();
+        seedLotPlannedOrder(lotSkuId, plannedLot);
+
+        PickingConfirmationResult result = service.confirm(lotConfirm(lotSkuId, plannedLot));
+
+        assertThat(result.orderStatus()).isEqualTo(OrderStatus.PICKED.name());
+        assertThat(result.lines()).singleElement()
+                .satisfies(l -> assertThat(l.lotId()).isEqualTo(plannedLot));
+    }
+
+    /**
+     * 경계 핀: 계획 lot 이 NULL(any-lot)이면 대체가 아니다 — 운영자가 여기서 실물 lot 을 정하고
+     * 통과한다. 🔴 데모 시드의 흐름이 정확히 이것이다(TASK-MONO-706) — 이 칸이 빨개지면 데모가 멈춘다.
+     */
+    @Test
+    void anyLotOrderLine_acceptsTheOperatorBoundLot() {
+        UUID lotSkuId = lotTrackedSku();
+        UUID boundLot = UUID.randomUUID();
+        seedLotPlannedOrder(lotSkuId, null);
+
+        PickingConfirmationResult result = service.confirm(lotConfirm(lotSkuId, boundLot));
+
+        assertThat(result.orderStatus()).isEqualTo(OrderStatus.PICKED.name());
+        assertThat(result.lines()).singleElement()
+                .satisfies(l -> assertThat(l.lotId()).isEqualTo(boundLot));
+    }
+
+    private UUID lotTrackedSku() {
+        UUID lotSkuId = UUID.randomUUID();
+        masterReadModel.addSku(lotSkuId, "SKU-LOT",
+                SkuSnapshot.TrackingType.LOT, SkuSnapshot.Status.ACTIVE);
+        return lotSkuId;
+    }
+
+    private void seedLotPlannedOrder(UUID lotSkuId, UUID plannedLot) {
+        orderPersistence.save(new Order(orderId, "ORD-1", OrderSource.MANUAL,
+                partnerId, warehouseId, null, null, OrderStatus.PICKING,
+                0L, T0, "creator", T0, "creator",
+                List.of(new OrderLine(orderLineId, orderId, 1, lotSkuId, null, plannedLot, 50))));
+        pickingPersistence.save(new PickingRequest(
+                pickingRequestId, orderId, sagaId, warehouseId,
+                PickingRequestStatus.SUBMITTED, 0L, T0, T0,
+                List.of(new PickingRequestLine(UUID.randomUUID(), pickingRequestId, orderLineId,
+                        lotSkuId, plannedLot, locationId, 50))));
+        seedSaga(SagaStatus.RESERVED);
+    }
+
+    private ConfirmPickingCommand lotConfirm(UUID lotSkuId, UUID confirmedLot) {
+        return new ConfirmPickingCommand(
+                orderId, null,
+                List.of(new ConfirmPickingLineCommand(orderLineId, lotSkuId, confirmedLot, locationId, 50)),
+                "user-1", Set.of("ROLE_OUTBOUND_WRITE"));
     }
 
     // ------------------------------------------------------------------

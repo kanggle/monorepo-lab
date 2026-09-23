@@ -402,7 +402,7 @@ Partition key: `sagaId`
 | `confirmedAt` | ISO-8601 UTC | no | |
 | `lines[].orderLineId` | UUID | no | |
 | `lines[].skuId` | UUID | no | |
-| `lines[].lotId` | UUID | yes | Actual lot picked; may differ from planned if operator substituted |
+| `lines[].lotId` | UUID | yes | Actual lot picked. Equals the planned lot when the order line named one (substitution is rejected at confirmation — `LOT_SUBSTITUTION_NOT_ALLOWED`, TASK-MONO-724); the operator-bound physical lot when the order line was any-lot |
 | `lines[].actualLocationId` | UUID | no | Where goods were actually picked from |
 | `lines[].qtyConfirmed` | int | no | EA |
 
@@ -410,8 +410,8 @@ Consumer expectations:
 
 - `admin-service`: updates operator task board (picking complete); projects
   per-order picking accuracy metrics
-- `notification-service`: optional alert on lot substitutions
-  (`lines[].lotId` differs from order line's `lotId`)
+- `notification-service`: (none in v1 — lot substitution is rejected at
+  confirmation, TASK-MONO-724, so there is no substitution to alert on)
 
 ### 6. `outbound.packing.completed`
 
