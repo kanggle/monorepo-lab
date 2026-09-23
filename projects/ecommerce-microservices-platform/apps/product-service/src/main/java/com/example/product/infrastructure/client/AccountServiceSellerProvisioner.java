@@ -70,6 +70,18 @@ public class AccountServiceSellerProvisioner implements SellerAccountProvisioner
 
     private final RestClient restClient;
     private final IamClientCredentialsTokenProvider tokenProvider;
+    /**
+     * TASK-MONO-721 (ADR-MONO-076 — 갈래 D): the bearer for calls whose PATH names a tenant.
+     *
+     * <p>🔴 The two providers are not interchangeable and the difference is the whole ticket.
+     * {@code tokenProvider} yields this service's own credential ({@code tenant_id =
+     * global-account-platform}); every {@code /internal/tenants/{tenantId}/**} call made with it
+     * is refused by construction, because that surface treats {@code tenant_id == path tenant} as
+     * the authorization decision. This one exchanges that credential for a token minted FOR the
+     * target tenant, against a per-client catalog in the IdP.
+     */
+    private final TenantScopedIamTokenProvider tenantTokenProvider;
+
     private final String sellerRole;
 
     /**
@@ -85,9 +97,11 @@ public class AccountServiceSellerProvisioner implements SellerAccountProvisioner
             @Value("${iam.downstream.connect-timeout-ms:3000}") int connectTimeoutMs,
             @Value("${iam.downstream.read-timeout-ms:10000}") int readTimeoutMs,
             @Value("${iam.seller.role:SELLER}") String sellerRole,
-            IamClientCredentialsTokenProvider tokenProvider) {
+            IamClientCredentialsTokenProvider tokenProvider,
+            TenantScopedIamTokenProvider tenantTokenProvider) {
         this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs);
         this.tokenProvider = tokenProvider;
+        this.tenantTokenProvider = tenantTokenProvider;
         this.sellerRole = sellerRole;
     }
 
@@ -129,6 +143,9 @@ public class AccountServiceSellerProvisioner implements SellerAccountProvisioner
                     .uri("/internal/accounts/{accountId}/lock", accountId)
                     .headers(h -> {
                         h.add("Idempotency-Key", UUID.randomUUID().toString());
+                        // 🔵 NO tenant in this path (/internal/accounts/{id}/lock), so the
+                        // tenant-scope rule does not apply and the base credential is correct.
+                        // ADR-MONO-076 changes only the calls that name a tenant in the path.
                         h.setBearerAuth(tokenProvider.currentBearer());
                         h.setContentType(MediaType.APPLICATION_JSON);
                     })
@@ -161,7 +178,7 @@ public class AccountServiceSellerProvisioner implements SellerAccountProvisioner
                     .uri("/internal/tenants/{tenantId}/accounts/{accountId}/status", tenantId, accountId)
                     .headers(h -> {
                         h.add("X-Tenant-Id", tenantId);
-                        h.setBearerAuth(tokenProvider.currentBearer());
+                        h.setBearerAuth(tenantTokenProvider.bearerFor(tenantId));
                         h.setContentType(MediaType.APPLICATION_JSON);
                     })
                     .body(body)
@@ -189,7 +206,7 @@ public class AccountServiceSellerProvisioner implements SellerAccountProvisioner
                 .uri("/internal/tenants/{tenantId}/accounts", tenantId)
                 .headers(h -> {
                     h.add("X-Tenant-Id", tenantId);
-                    h.setBearerAuth(tokenProvider.currentBearer());
+                    h.setBearerAuth(tenantTokenProvider.bearerFor(tenantId));
                     h.setContentType(MediaType.APPLICATION_JSON);
                 })
                 .body(body)
@@ -211,7 +228,7 @@ public class AccountServiceSellerProvisioner implements SellerAccountProvisioner
                     .uri("/internal/tenants/{tenantId}/identities:resolveOrCreate", tenantId)
                     .headers(h -> {
                         h.add("X-Tenant-Id", tenantId);
-                        h.setBearerAuth(tokenProvider.currentBearer());
+                        h.setBearerAuth(tenantTokenProvider.bearerFor(tenantId));
                         h.setContentType(MediaType.APPLICATION_JSON);
                     })
                     .body(body)

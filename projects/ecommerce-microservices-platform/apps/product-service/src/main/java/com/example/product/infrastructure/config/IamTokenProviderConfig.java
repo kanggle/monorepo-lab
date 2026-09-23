@@ -1,9 +1,12 @@
 package com.example.product.infrastructure.config;
 
+import com.example.product.infrastructure.client.TenantScopedIamTokenProvider;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.web.client.RestClient;
 
 import java.time.Duration;
 
@@ -72,5 +75,36 @@ class IamTokenProviderConfig {
                 INTERNAL_INVOKE_SCOPE,
                 Duration.ofMillis(connectTimeoutMs),
                 Duration.ofMillis(readTimeoutMs));
+    }
+
+    /**
+     * TASK-MONO-721 (ADR-MONO-076 — 갈래 D): the tenant-scoped bearer the provisioning calls
+     * actually need.
+     *
+     * <p>The bean above yields this service's own credential, whose {@code tenant_id} is
+     * {@code global-account-platform} — and {@code /internal/tenants/{tenantId}/**} makes
+     * {@code tenant_id == path tenant} the authorization decision, so that token is refused by
+     * construction for every tenant but its own. This bean exchanges it (RFC 8693) for one
+     * minted for the target tenant.
+     *
+     * <p>🔴 Same timeouts as the token bean, and deliberately so: this call goes to the same
+     * endpoint on the same host, and a second hop with no timeout would reintroduce exactly the
+     * hang TASK-BE-568 removed from the first one.
+     */
+    @Bean
+    TenantScopedIamTokenProvider tenantScopedIamTokenProvider(
+            IamClientCredentialsTokenProvider baseTokenProvider,
+            @Value("${iam.internal-client.token-uri:http://localhost:8081/oauth2/token}") String tokenUri,
+            @Value("${iam.internal-client.client-id:product-service-client}") String clientId,
+            @Value("${iam.internal-client.client-secret:secret}") String clientSecret,
+            @Value("${iam.internal-client.connect-timeout-ms:5000}") long connectTimeoutMs,
+            @Value("${iam.internal-client.read-timeout-ms:5000}") long readTimeoutMs) {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
+        factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
+        RestClient tokenClient = RestClient.builder().requestFactory(factory).build();
+        return new TenantScopedIamTokenProvider(
+                baseTokenProvider, tokenClient, tokenUri, clientId, clientSecret,
+                INTERNAL_INVOKE_SCOPE);
     }
 }
