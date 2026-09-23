@@ -268,6 +268,7 @@ jobs:
       # TASK-MONO-610: 넷째 Vercel 프로젝트(auth-forwarder)의 빌드 축. 순수 positive.
       auth-forwarder: ${{ steps.filter.outputs.auth-forwarder }}
       demo-resolver-copies: ${{ steps.filter.outputs.demo-resolver-copies }}
+      internal-caller-addresses: ${{ steps.filter.outputs.internal-caller-addresses }}
       client-graph-origins: ${{ steps.filter.outputs.client-graph-origins }}
       client-graph-server-only: ${{ steps.filter.outputs.client-graph-server-only }}
       fetch-resolution: ${{ steps.filter.outputs.fetch-resolution }}
@@ -814,6 +815,13 @@ jobs:
               #    유일한 빌드 게이트가 되고, 그것은 머지 **뒤**에 돈다.
               - 'infra/demo/auth-forwarder/**'
               - 'infra/demo/backend-resolver/**'
+            # TASK-MONO-717 — GAP-internal 호출자의 주소가 compose 에 **선언돼 있는가**.
+            # 🔴 트리거는 compose 와 가드 자신이다: 값이 사라지는 사건은 그 둘에서만 온다.
+            #    (application.yml 의 기본값이 바뀌는 것은 다른 축이고 이 가드는 그것을 안 본다.)
+            internal-caller-addresses:
+              - 'projects/*/docker-compose.yml'
+              - 'infra/demo/demo.env'
+              - 'scripts/check-internal-caller-addresses.sh'
             demo-resolver-copies:
               # 🔴🔴 **도달성을 술어의 모집단에 맞춘다** (TASK-MONO-614, 2026-09-02).
               # TASK-MONO-613 이 가드의 모집단을 «어떤 `src/` 아래의 TS 든» 으로 넓히고
@@ -1680,6 +1688,26 @@ jobs:
   # 🔵 오늘 실제 대상은 0개다(단계 2 미착수). 그래서 라이브 실행은 아무것도 증명하지 않고,
   #    self-test 가 합성 트리로 물기를 증명한다 — 그것이 이 잡의 본체다.
   # ---------------------------------------------------------------------------
+  internal-caller-addresses:
+    name: Internal caller addresses (a missing setting must not fall back to localhost)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      needs.changes.outputs.internal-caller-addresses == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-internal-caller-addresses.sh
+
+      - name: Self-test the predicate (bites on a tree whose setting is gone)
+        run: bash scripts/check-internal-caller-addresses.sh --self-test
+
+      - name: Guard — every GAP-internal caller declares its addresses
+        run: bash scripts/check-internal-caller-addresses.sh
+
   demo-resolver-copies:
     name: Demo resolver copies (the second one is a decision, not a copy)
     runs-on: ubuntu-latest

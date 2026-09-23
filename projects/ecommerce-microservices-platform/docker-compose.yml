@@ -692,6 +692,17 @@ services:
       - S3_ENDPOINT=http://minio:9000
       - S3_BUCKET_PRODUCT_IMAGES=firstproject-local-product-images
       - CDN_BASE_URL=http://localhost:9000
+      # TASK-MONO-717 (소유자 결정 ⓐ) — 셀러-운영자 프로비저닝(ADR-MONO-042 D2/D4/D5)이
+      # 부르는 두 주소. 🔴 기본값이 `localhost` 였고 **아무도 덮지 않아** 컨테이너가
+      # 자기 자신을 불렀다(실측: `Connection refused`, 부팅 시드마다 네 줄).
+      #
+      # 🔴🔴 **둘은 같은 호스트가 아니다.** 토큰은 auth-service 가, `/internal/tenants/**`
+      #    는 **iam 게이트웨이**가 답한다. 데모에서 `OIDC_ISSUER_URL` 은 auth 쪽
+      #    공개 호스트이므로 여기서 파생시키면 accounts 호출이 404 가 된다.
+      #    ⇒ 둘을 **따로** 둔다. 데모 체인은 `infra/demo/demo.env` 가 채운다.
+      # 🔵 리터럴 IP 를 박지 않는다 — 데모 IP 는 부팅마다 바뀐다.
+      - IAM_TOKEN_URI=${IAM_TOKEN_URI:-http://iam.local/oauth2/token}
+      - ACCOUNT_SERVICE_BASE_URL=${ACCOUNT_SERVICE_BASE_URL:-http://iam.local}
     expose:
       - "8082"
     deploy:

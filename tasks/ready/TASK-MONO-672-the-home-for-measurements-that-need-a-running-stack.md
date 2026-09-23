@@ -157,6 +157,23 @@ monorepo
   719 의 칸들은 bite 를 양방향으로 봤지만, **화면에 뜨는가는 여전히 창만 답한다.**
 - 출처: `tasks/…/TASK-MONO-719-…` § AC-3.
 
+
+## 항목 12 — `TASK-MONO-717` AC-1: 셀러 프로비저닝이 **실제로 성공하는가** (2026-09-23 수령)
+
+- **무엇을 재나** (순서대로, 🔴 앞 칸이 안 되면 뒤는 «측정 불가» 로 적는다):
+  ① `ecommerce-product-service` 로그에 `seller provisioning failed` / `seller left
+     PENDING_PROVISIONING` 두 WARN 이 **사라졌는가**.
+  ② 🔴 **그러나 로그 침묵은 판정이 아니다** — `account_db` 에 그 셀러-운영자 계정 **행이 생겼는가**,
+     그리고 셀러가 `PENDING_PROVISIONING` 에서 **벗어났는가**. 이것이 티켓이 못박은 술어다.
+- 🔴 **창의 첫 질문은 배선이 아니라 도달성이다**: `http://iam.${DEMO_DOMAIN}` 이 **ecommerce
+  컨테이너 안에서** 해소되는가. 시드 스크립트는 **호스트에서** 그 주소를 쓰므로 그것이
+  컨테이너 안의 증거는 아니다. 안 되면 갈래는 컨테이너 이름/공유 네트워크다.
+- **대조군**: 토큰 단계와 accounts 단계를 **갈라서** 본다 — 401/`invalid_client` 면 등록·비밀 문제,
+  404 면 **게이트웨이 라우트** 문제(`/internal/accounts/{a}/lock` 은 지금도 라우트가 없다).
+- 🔴 **재굽기가 선행이다** — V0036(Flyway) · compose · `demo.env` 가 전부 **구워지는 표면**이다.
+  stop/start 로는 안 온다(15차 창이 실측한 그 사실).
+- 출처: `tasks/…/TASK-MONO-717-…` § AC-1.
+
 ---
 
 # Goal
