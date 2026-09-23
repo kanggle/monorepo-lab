@@ -8,7 +8,7 @@ TASK-MONO-721
 
 # Status
 
-ready (2026-09-23 UTC)
+in-progress (2026-09-23 UTC — AC-0 소유자 결정 **ⓑ** · 🔴 구현은 `ADR-MONO-076` ACCEPT 까지 PAUSE)
 
 # Owner
 
@@ -167,3 +167,83 @@ iam-account-service-1      →  iam_iam-e2e · traefik-net        (공유 네트
 2. **ⓐ 를 고르고 신뢰 경계 변경을 기록하지 않는다** → 다음 감사가 «게이트웨이가 모든 내부 호출을
    본다» 를 전제로 읽는다.
 3. **V0019 헤더를 안 고친다** → 다음 사람이 같은 문장을 인용해 같은 선택을 한다(717 이 그랬다).
+
+---
+
+# 진행 기록 (2026-09-23 UTC)
+
+## ✅ AC-0 — 소유자 결정 **ⓑ**
+
+소유자 응답: *"추천대로 진행"* (2026-09-23). 내 추천은 갈래 **ⓑ** 하나였고 다른 후보를 제시하지
+않았으므로 지시 대상이 유일하다. 🔵 **그 말이 무엇을 골랐는지는 적어 둔다** — ⓑ 는
+「게이트웨이 파일을 고친다」가 아니라 **«규칙을 인가 평면에 둔다»** 를 고른 것이다
+(ⓐ 의 네트워크도 아니고, ⓒ 의 테넌트마다 늘어나는 자격도 아니다).
+
+🔴 **그리고 이것은 ADR 을 ACCEPT 하지 않는다.**
+[`platform/architecture-decision-rule.md`](../../platform/architecture-decision-rule.md)
+§ The ACCEPTED Gate 가 *"A bare 「진행」/「proceed」… does **NOT** accept an ADR, even when it replies
+directly to the message that proposed it"* 라고 못 박는다. AC-1·AC-2 는 **PAUSE**.
+
+## 🔴🔴 기안 중에 **AC-0 표가 몰랐던 네 번째 모양**이 나왔다
+
+세 갈래(ⓐ·ⓑ·ⓒ)는 **«토큰의 테넌트는 발급 시점에 고정된다»** 는 **공유 전제** 위에 있었다.
+그 전제를 깨는 기전이 이 저장소에 **이미 구현돼 있다**:
+
+```
+AssumeTenantAuthenticationProvider          RFC 8693 token-exchange (ADR-MONO-020)
+AssumeTenantAuthenticationConverter          — subject_token 검증 → 게이트 → tenant_id 재발급
+V0020__add_token_exchange_grant_to_platform_console.sql   — grant 는 클라이언트별 부여
+```
+
+🔵 **다만 「이미 있으니 그냥 쓰면 된다」가 아니다.** 지금은 **운영자 신원 전용**이다 — 게이트가
+`OperatorAssignmentPort.resolveAssignment`(admin-service 의 **배정 조회**, fail-closed)이고
+워크로드에는 계정도 배정도 없다. 갈래 D 는 그 기전에 **워크로드 분기와 그 분기의 게이트를
+새로 만드는 것**이고, 그 비용은 ADR 의 표에 적었다.
+
+⇒ [`ADR-MONO-076`](../../docs/adr/ADR-MONO-076-which-workload-credential-may-act-on-which-tenant.md)
+을 **PROPOSED** 로 기안했다. 갈래 **A**(새 클레임) · **B**(게이트웨이 설정) ·
+**C**(수신 측 카탈로그) · **D**(교환을 워크로드로 확장, **추천**).
+
+🔵 **D 를 추천하는 한 문장**: A·B·C 는 전부 판정기(게이트웨이 / `TenantScopeGuard` / 둘 다)를
+고치는데, 이 표면의 규칙은 *"tenant-scoping 이 곧 인가"* 이므로 **그 규칙을 느슨하게 하지 않고**
+요구를 만족시키는 갈래가 있으면 그쪽이 낫다. D 는 두 판정기를 **한 줄도** 안 건드린다.
+
+## 🔴 기각한 것 — `tenant_id: *` 와일드카드 (다음 사람이 반드시 다시 발견한다)
+
+계약에 이미 있다: *"`*` is the SUPER_ADMIN platform-scope wildcard, admitted only by gateways that
+opt in"*. `product-service-client` 에 `*` 를 주면 **오늘 당장 통과한다.**
+🔴 그리고 그것이 이 티켓 § Failure Scenarios **1 번 그 자체**다. 싸고, 즉시 작동하고,
+되돌리기 어렵다. ADR § Alternatives 에 기각 사유를 남겼다.
+
+## 🔴🔴 AC-3 은 **지금 그대로 하면 안 된다** — 실측으로 확인
+
+AC-3 은 `V0019` 헤더의 낡은 문장을 고치라고 한다. **문장이 거짓인 것은 맞다.**
+그러나 **그 파일의 바이트를 고치면 기존 볼륨을 가진 DB 가 기동에서 죽는다**:
+
+| 잰 것 | 값 |
+|---|---|
+| `V0019` 가 이미 적용된 마이그레이션인가 | ✅ (auth-service `db/migration`) |
+| Flyway 체크섬이 **주석**을 포함하는가 | ✅ 파일 전체 |
+| auth-service 가 `validateOnMigrate` 를 끄는가 | 🔴 **안 끈다** — `application.yml`·`application-e2e.yml` 어디에도 없다 ⇒ 기본값(참) |
+| 데모 인스턴스의 볼륨이 stop/start 를 건너 사는가 | ✅ (15차 창에서 실측) |
+| CI 가 이것을 잡을 수 있는가 | 🔴 **영원히 못 잡는다** — CI 는 언제나 **빈 볼륨** |
+
+🔵 **이 저장소는 같은 부류를 이미 한 번 밟고 문서로 남겼다** —
+[`projects/iam-platform/docs/flyway-dev-seed-migrations.md`](../../projects/iam-platform/docs/flyway-dev-seed-migrations.md)
+§ 1~2: *"a dev-only seed broke production-shaped startup for every developer with an existing
+volume, and **nothing in CI could ever have caught it**."*
+
+⇒ ADR **D5** 가 대안을 정한다: 정정은 **계약 문서**와 **새 `V0037` 헤더**로 가고,
+`V0019` 의 바이트 수정은 **신선 볼륨 게이트**에 묶어 `TASK-MONO-672` 가 항목으로 든다.
+🔵 **D5 는 갈래와 무관하게 참이다** — A·B·C 를 골라도 같은 방식으로 죽는다.
+
+## ⏸️ 지금 막혀 있는 것
+
+| AC | 상태 |
+|---|---|
+| AC-0 | ✅ **ⓑ** 확정 |
+| AC-1 · AC-2 | ⏸️ `ADR-MONO-076` **ACCEPT 대기** (정확형 = ADR 이름 + `ACCEPTED` + **갈래 letter**) |
+| AC-3 | 🔴 **재정의됨** — ADR D5 로 이관(바이트 수정 금지, 신선 볼륨 게이트) |
+| AC-4 | ⏸️ 구현 뒤 `TASK-MONO-672` 로 |
+
+🔴 **이 PR 은 코드를 한 줄도 바꾸지 않는다.** ADR ACCEPT 전 구현은 HARDSTOP-09 다.
