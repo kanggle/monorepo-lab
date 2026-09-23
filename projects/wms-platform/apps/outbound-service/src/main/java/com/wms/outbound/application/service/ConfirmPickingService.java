@@ -16,6 +16,7 @@ import com.wms.outbound.application.result.PickingConfirmationResult;
 import com.wms.outbound.application.saga.OutboundSagaCoordinator;
 import com.wms.outbound.domain.event.PickingCompletedEvent;
 import com.wms.outbound.domain.exception.LotRequiredException;
+import com.wms.outbound.domain.exception.LotSubstitutionNotAllowedException;
 import com.wms.outbound.domain.exception.OrderNotFoundException;
 import com.wms.outbound.domain.exception.PickingIncompleteException;
 import com.wms.outbound.domain.exception.PickingRequestNotFoundException;
@@ -255,6 +256,12 @@ public class ConfirmPickingService implements ConfirmPickingUseCase {
             SkuSnapshot sku = masterReadModel.findSku(cl.skuId()).orElse(null);
             if (sku != null && sku.requiresLot() && cl.lotId() == null) {
                 throw new LotRequiredException(cl.skuId());
+            }
+            // No lot substitution (TASK-MONO-724): a concrete planned lot is what inventory
+            // reserved, and nothing downstream can absorb a different one. A null planned lot
+            // is any-lot — the operator binds the physical lot here.
+            if (ol.getLotId() != null && !ol.getLotId().equals(cl.lotId())) {
+                throw new LotSubstitutionNotAllowedException(ol.getId(), ol.getLotId(), cl.lotId());
             }
         }
     }

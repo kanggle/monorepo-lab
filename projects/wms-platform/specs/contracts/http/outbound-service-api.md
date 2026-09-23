@@ -147,6 +147,7 @@ Domain error → HTTP status mapping:
 | `PARTNER_INVALID_TYPE` | 422 | Customer partner is not `ACTIVE` or `partner_type ∉ {CUSTOMER, BOTH}` |
 | `SKU_INACTIVE` | 422 | SKU snapshot is `INACTIVE` in MasterReadModel |
 | `LOT_REQUIRED` | 422 | LOT-tracked SKU order line missing `lot_id` (or `lot_no` at pick confirmation) |
+| `LOT_SUBSTITUTION_NOT_ALLOWED` | 422 | Pick confirmation `lotId` differs from the order line's planned concrete `lot_id` (v1 has no re-reservation; TASK-MONO-724) |
 | `WAREHOUSE_MISMATCH` | 422 | Order lines belong to different warehouses (v1: single-warehouse only) |
 | `STATE_TRANSITION_INVALID` | 422 | Requested state transition not allowed from current order or saga state |
 | `CONFLICT` | 409 | Optimistic lock version mismatch |
@@ -440,9 +441,21 @@ Operator confirms physical pick execution. Allowed only when the saga is in
 state `RESERVED` (inventory has confirmed the reservation). In v1 all lines
 are confirmed in one call (per-line confirmation is v2).
 
-For LOT-tracked SKUs, `lotId` on each confirmation line is required. The
-confirmed `lotId` may differ from the `PickingRequestLine.lotId` if the
-operator substituted (allowed and logged).
+For LOT-tracked SKUs, `lotId` on each confirmation line is required.
+**Lot substitution is not allowed** (TASK-MONO-724): when the order line was
+planned with a concrete lot (`OrderLine.lot_id` non-null), the confirmed
+`lotId` must equal it, else `LOT_SUBSTITUTION_NOT_ALLOWED` (422). When the
+order line was planned any-lot (`lot_id` null), the operator binds the
+physical lot here and any lot is accepted.
+
+> Why: inventory reserved the planned lot's row. A substituted lot would ride
+> `outbound.shipping.confirmed` (§7 takes its lot from this confirmation) and
+> the inventory consumer cannot match it to the reservation
+> (`inventory-events.md` §C4) — the event goes to the DLT and the saga never
+> completes. Substitution needs a re-reservation step that v1 does not have;
+> the operator cancels and re-orders instead. (Previously this section said
+> substitution was "allowed and logged"; nothing logged it and nothing
+> downstream could absorb it.)
 
 Request:
 
@@ -469,7 +482,8 @@ Validation:
 - `lines[].orderLineId`: required UUID; must belong to the parent order.
 - `lines[].skuId`: required UUID; must match the `OrderLine.sku_id`.
 - `lines[].lotId`: required for LOT-tracked SKUs (`LOT_REQUIRED`); null for
-  non-LOT-tracked SKUs.
+  non-LOT-tracked SKUs. Must equal `OrderLine.lot_id` when that is non-null
+  (`LOT_SUBSTITUTION_NOT_ALLOWED`).
 - `lines[].actualLocationId`: required UUID; must resolve to `ACTIVE` Location
   in the same warehouse.
 - `lines[].qtyConfirmed`: required, > 0, must equal `order_line.qty_ordered`
@@ -503,8 +517,8 @@ Response `201`:
 Side-effect: outbox `outbound.picking.completed` (§5)
 
 Errors: `PICKING_REQUEST_NOT_FOUND` (404), `STATE_TRANSITION_INVALID` (422),
-`LOT_REQUIRED` (422), `VALIDATION_ERROR` (400), `CONFLICT` (409),
-`DUPLICATE_REQUEST` (409).
+`LOT_REQUIRED` (422), `LOT_SUBSTITUTION_NOT_ALLOWED` (422),
+`VALIDATION_ERROR` (400), `CONFLICT` (409), `DUPLICATE_REQUEST` (409).
 
 ### 2.4 GET `/api/v1/outbound/orders/{id}/picking-requests` — List Picking Requests for Order
 

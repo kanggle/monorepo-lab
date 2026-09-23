@@ -155,7 +155,7 @@ state transition. Failing a guard throws a domain exception, NOT
 | `(none) → RECEIVED` | LOT-tracked SKU lines with explicit `lot_id` resolve to ACTIVE non-EXPIRED Lot | `LOT_REQUIRED` (422) when missing; `LOT_INVALID` (422) when stale |
 | `(none) → RECEIVED` | At least one OrderLine | `VALIDATION_ERROR` (422) |
 | `RECEIVED → PICKING` | At least one OrderLine and `customer_partner_id` still ACTIVE | `VALIDATION_ERROR` (should not trigger — validated at receive) |
-| `PICKING → PICKED` | One PickingConfirmation per OrderLine; `qty_confirmed == qty_ordered` for each line; LOT supplied for LOT-tracked SKUs | `PICKING_QUANTITY_MISMATCH`, `LOT_REQUIRED`, or `PICKING_INCOMPLETE` (422) |
+| `PICKING → PICKED` | One PickingConfirmation per OrderLine; `qty_confirmed == qty_ordered` for each line; LOT supplied for LOT-tracked SKUs; confirmed lot equals the order line's planned lot when that is non-null (TASK-MONO-724) | `PICKING_QUANTITY_MISMATCH`, `LOT_REQUIRED`, `LOT_SUBSTITUTION_NOT_ALLOWED`, or `PICKING_INCOMPLETE` (422) |
 | `PICKED → PACKING` | (none — implicit on first PackingUnit creation) | — |
 | `PACKING → PACKED` | For each `order_line`: `sum(packing_unit_line.qty) == order_line.qty_ordered`; all PackingUnits are SEALED | `PACKING_INCOMPLETE` (422) |
 | `PACKED → SHIPPED` | (no OrderLine count guard — already ensured at PACKED). `actorId` has role `OUTBOUND_WRITE` or `OUTBOUND_ADMIN` | `FORBIDDEN` (403) — checked at application layer |
@@ -223,6 +223,7 @@ Compensation Paths.
 | `SkuInactiveException` | 422 | `SKU_INACTIVE` |
 | `WarehouseMismatchException` | 422 | `WAREHOUSE_MISMATCH` |
 | `LotRequiredException` | 422 | `LOT_REQUIRED` |
+| `LotSubstitutionNotAllowedException` | 422 | `LOT_SUBSTITUTION_NOT_ALLOWED` |
 | `OrderNoDuplicateException` | 409 | `ORDER_NO_DUPLICATE` |
 | `OptimisticLockingFailureException` | 409 | `CONFLICT` |
 | `OrderNotFoundException` | 404 | `ORDER_NOT_FOUND` |
