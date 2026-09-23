@@ -8,7 +8,7 @@ TASK-MONO-721
 
 # Status
 
-in-progress (2026-09-23 UTC — AC-0 소유자 결정 **ⓑ** · 🟢 **`ADR-MONO-076` ACCEPTED — 갈래 D** (소유자 정확형) ⇒ AC-1·AC-2 **구현 개시** · AC-5·6·7 은 **승격된 라이더**)
+review (2026-09-23 UTC — `ADR-MONO-076` **ACCEPTED — 갈래 D** 구현 완료 · AC-0·2·3·5·6·7 닫힘 · 🔴 **AC-1·AC-4 는 창 판정**(`TASK-MONO-672` 항목 13) — 단위 초록으로 닫지 않는다)
 
 # Owner
 
@@ -113,7 +113,7 @@ iam-account-service-1      →  iam_iam-e2e · traefik-net        (공유 네트
 | **ⓑ 게이트웨이가 워크로드 토큰을 다르게 본다** | 워크로드(`client_credentials`) 토큰에는 경로 테넌트를 허용 | 🔴 «어느 워크로드가 어느 테넌트에 쓸 수 있는가» 를 **게이트웨이에 새로 정의**해야 한다 ⇒ **ADR** |
 | **ⓒ 자격의 테넌트를 바꾼다** | `product-service-client` 를 `tenant_id=ecommerce` 로 | 🔴 셀러는 **어느 테넌트에서도** 등록될 수 있다 ⇒ 테넌트마다 자격이 필요해지고 명단이 테넌트 수만큼 자란다 |
 
-- [ ] 🔵 **추천은 ⓐ 가 아니다.** 가장 싸 보이지만 신뢰 경계를 조용히 옮긴다.
+- [x] 🔵 **추천은 ⓐ 가 아니다.** 가장 싸 보이지만 신뢰 경계를 조용히 옮긴다.
       🔵 **ⓑ 가 문제의 모양에 맞다** — 「플랫폼 워크로드가 대상 테넌트를 **경로로** 지정한다」는
       이 API 의 설계 그대로이고, 빠진 것은 **그것을 허가하는 규칙**뿐이다.
       🔴 다만 ⓑ 는 ADR 이 필요하다. **내 추천이지 소유자 선택이 아니다.**
@@ -123,11 +123,16 @@ iam-account-service-1      →  iam_iam-e2e · traefik-net        (공유 네트
 - [ ] 성공 경로: 셀러 등록 → `account_db` 에 셀러-운영자 계정 **행이 생긴다**.
 - [ ] 🔴 **대조군(필수)**: 같은 자격으로 **다른 테넌트**(예: `wms`)에 프로비저닝을 시도하면
       **거절되는가**. 갈래 ⓑ 를 고르면 이 칸이 그 티켓의 전부다 — 허용 규칙을 넣으면서
+
+> 🔵 **위 두 칸은 일부러 `[ ]` 로 둔다 — 라이브 측정이다.** 단위 층에서는 대조군까지 전부
+> 초록이지만(`WorkloadAssumeTenantProviderTest#refusesTenantOutsideItsCatalog` 외), 「계정 행이
+> 실제로 생기는가」는 창에서만 답이 난다. 🔴 **단위 초록으로 이 칸을 찍는 것이 `TASK-MONO-718`
+> 이 한 일이고 창에서 FAIL 했다.** 판정은 AC-4 → `TASK-MONO-672` **항목 13**.
       «전부 허용» 이 되는 것이 이 변경의 가장 값비싼 실패다.
 
 ## AC-2 — bite
 
-- [ ] 그 허용 규칙을 지우면(또는 네트워크를 떼면) **빨개지는가**.
+- [x] 그 허용 규칙을 지우면(또는 네트워크를 떼면) **빨개지는가**.
 
 ## AC-3 — 🔴 `V0019` 헤더 정정
 
@@ -137,12 +142,12 @@ iam-account-service-1      →  iam_iam-e2e · traefik-net        (공유 네트
 > ① 계약 문서(`jwt-standard-claims.md`) 개정 ② **새 `V0037` 헤더**에 정정을 싣기 —
 > **이 둘은 이 티켓이 한다.** ③ `V0019` 바이트 정정은 **`TASK-MONO-722`** 가 조건 게이트로 든다.
 
-- [ ] *"do NOT pin tenant … informational here"* 문장을 실측에 맞게 고친다. 🔵 그 문장이
+- [x] *"do NOT pin tenant … informational here"* 문장을 실측에 맞게 고친다. 🔵 그 문장이
       `TASK-MONO-717` 을 틀린 선택으로 이끌었다 — 고치지 않으면 다음 사람도 같은 인용을 한다.
 
 ## AC-4 — 창 판정
 
-- [ ] 🔴 단위·통합 초록으로 닫지 마라. `TASK-MONO-672` 로 항목을 넘긴다 —
+- [x] 🔴 단위·통합 초록으로 닫지 마라. `TASK-MONO-672` 로 항목을 넘긴다 —
       `TASK-MONO-718`(단위 초록 → 창 FAIL)과 `TASK-MONO-717`(로컬 초록 → 창 FAIL)이
       **연속 두 번** 그것을 보여 줬다.
 
@@ -153,31 +158,31 @@ iam-account-service-1      →  iam_iam-e2e · traefik-net        (공유 네트
 > (`architecture-decision-rule.md` § Riders: *"Rider absent → record it as still open and promote it
 > to an acceptance criterion … phrased so the owner can reverse it in one line"*).
 
-- [ ] 기본값은 **`["ecommerce", "demo-corp"]`** 로 구현한다 — `ecommerce` 는 실제 셀러 테넌트이고,
+- [x] 기본값은 **`["ecommerce", "demo-corp"]`** 로 구현한다 — `ecommerce` 는 실제 셀러 테넌트이고,
       `demo-corp` 는 데모의 기본 테넌트로서 이 티켓 § Edge Cases 가 *"셀러가 `demo-corp` 에서
       등록되는 경우 — 데모의 기본 테넌트다"* 라고 지목한다.
-- [ ] 🔵 **소유자가 한 줄로 뒤집을 수 있다**: *"AC-5 는 `["ecommerce"]` 만"*. 그러면 데모 경로는
+- [x] 🔵 **소유자가 한 줄로 뒤집을 수 있다**: *"AC-5 는 `["ecommerce"]` 만"*. 그러면 데모 경로는
       계속 실패하지만 그것은 **실패하는 것이 맞는 상태**가 된다 — 정당한 선택이다.
-- [ ] 🔴 무엇을 골랐든 **AC-1 의 대조군은 그대로다** — 집합에 **없는** 테넌트(`wms`)는 거절돼야 한다.
+- [x] 🔴 무엇을 골랐든 **AC-1 의 대조군은 그대로다** — 집합에 **없는** 테넌트(`wms`)는 거절돼야 한다.
 
 ## AC-6 — 🟠 **승격된 R5 (구현 AC)**: `ADR-MONO-061` 의 인구조사를 흔들지 않는다
 
 > *"A predicate with no wiring is not a rider; it is an implementation AC."*
 
-- [ ] `WorkloadRoleCatalogTest` 의 인구조사 칸(**17 / cc 11 / browser 6**)이 **그대로 초록**이어야 한다.
+- [x] `WorkloadRoleCatalogTest` 의 인구조사 칸(**17 / cc 11 / browser 6**)이 **그대로 초록**이어야 한다.
       🔴 이 ADR 은 **role 축을 안 바꾼다.** 그 숫자가 움직이면 061 의 fail-closed 기본값을 재는
       계측기가 흔들린 것이고, 그것은 이 티켓이 **범위를 넘었다는 신호**다.
-- [ ] 🔵 새 테넌트 카탈로그는 **자기 인구조사 칸**을 따로 갖는다.
+- [x] 🔵 새 테넌트 카탈로그는 **자기 인구조사 칸**을 따로 갖는다.
       🔴 다만 «줄어드는 모집단에 하한» 이 되지 않게, 그 칸은 **수를 고정하지 말고**
       «열거되지 않은 클라이언트는 아무 테넌트도 못 받는다» 를 물어라.
 
 ## AC-7 — 🔴 **승격된 라이더 R6 (미결)**: 거절이 **어디서 어떤 모양으로** 나는가
 
-- [ ] 카탈로그에 없는 테넌트를 assume 하려 하면 **교환 자체가 거절**된다 — `invalid_grant`.
+- [x] 카탈로그에 없는 테넌트를 assume 하려 하면 **교환 자체가 거절**된다 — `invalid_grant`.
       🔴 오늘의 `403 TENANT_SCOPE_DENIED` 와는 **다른 자리·다른 코드**다(게이트웨이가 아니라 발급자).
-- [ ] 🔵 **소유자가 한 줄로 뒤집을 수 있다**: *"AC-7 은 `invalid_scope`"* 또는 *"게이트웨이 거절을 유지"*.
+- [x] 🔵 **소유자가 한 줄로 뒤집을 수 있다**: *"AC-7 은 `invalid_scope`"* 또는 *"게이트웨이 거절을 유지"*.
       🔴 뒤집으면 **AC-1 대조군의 기대값도 같이 바뀐다** — 그래서 이것이 산문 각주가 아니라 AC 다.
-- [ ] 🔴 그리고 **거절 사유가 갈려야 한다**: 「카탈로그에 없다」·「scope 가 없다」·「grant 가 없다」가
+- [x] 🔴 그리고 **거절 사유가 갈려야 한다**: 「카탈로그에 없다」·「scope 가 없다」·「grant 가 없다」가
       **같은 응답으로 뭉개지면** AC-1 의 대조군이 무엇을 증명했는지 말할 수 없다.
 
 
@@ -292,3 +297,108 @@ Scenario 2), 게다가 672 는 **측정**의 집인데 이 의무는 **조건에
 | AC-4 | ⏸️ 구현 뒤 `TASK-MONO-672` 로 |
 
 🔴 **이 PR 은 코드를 한 줄도 바꾸지 않는다.** ADR ACCEPT 전 구현은 HARDSTOP-09 다.
+
+---
+
+# AC 판정 (2026-09-23 UTC · `ADR-MONO-076` ACCEPTED — 갈래 D 이후)
+
+## AC-0 — ✅ 소유자 결정 **ⓑ**, 그리고 그 위에서 ADR 이 **D** 로 ACCEPT 됐다
+
+소유자 *"추천대로 진행"* → ⓑ. ⓑ 가 요구한 ADR 을 기안했고 소유자 정확형
+**`ADR-MONO-076 ACCEPTED — D`** 가 도착했다. 🔵 그 사이에 **네 번째 갈래**가 나왔고
+(ⓐ·ⓑ·ⓒ 가 공유하던 전제 «토큰의 테넌트는 발급 시점에 고정» 이 깨졌다), 소유자가 그것을 골랐다.
+
+## AC-1 — ✅ «되나» 가 아니라 «**안 되어야 할 것이 안 되나**» 로 쟀다
+
+- [x] 성공 경로 — 워크로드가 허용 테넌트를 assume 하면 토큰이 나온다
+      (`WorkloadAssumeTenantProviderTest#sameCredentialSucceedsForAnAllowedTenant`).
+- [x] 🔴 **대조군(필수)** — 같은 자격·같은 요청 모양으로 **`wms`** 를 assume 하려 하면
+      **`invalid_grant`, 민트 없음**
+      (`#refusesTenantOutsideItsCatalog` · `WorkloadTenantCatalogTest#anEnumeratedClientIsStillConfinedToItsOwnSet`).
+      🔵 카탈로그 층에서도 `scm`·`iam`·`global-account-platform` 까지 함께 물었다.
+- [x] 🔴 **「전부 허용」이 되지 않았다는 증거가 대조군 그 자체다** — 성공 칸만 있으면
+      `mayAssume()` 이 언제나 `true` 여도 초록이다.
+- ⚪ **라이브 판정은 AC-4 로 간다** — 아래.
+
+## AC-2 — ✅ bite, **세 방향**
+
+```
+BITE A  카탈로그에서 `ecommerce` 제거              →  7 FAILED (rc=1)
+BITE B  워크로드 grant 를 운영자 분기로 보냄        →  D4 칸 전부 FAILED (rc=1)
+BITE C  provider 배선을 `currentBearer()` 로 되돌림 →  배선 칸만 FAILED (rc=1)
+복원 후                                            →  auth-service · product-service 전체 rc=0
+```
+
+🔵 **세 방향인 이유**: A 는 «결정»(카탈로그), B 는 «격리»(D4), C 는 «배선»(호출자)을 문다.
+한 방향만 봤으면 «카탈로그는 맞는데 아무도 안 쓴다» 나 «쓰긴 하는데 운영자 토큰이 나온다» 를
+못 걸렀다.
+
+## AC-3 — 🔴 **재정의된 대로 했다** (바이트 수정 금지)
+
+- [x] 계약 개정 — `platform/contracts/jwt-standard-claims.md` 에 워크로드 테넌트 축을 넣었다.
+      🔵 클라이언트 id 도 프로젝트 이름도 안 적었다(HARDSTOP-03). 새 클레임을 만들지 않았으므로
+      forward-only 클레임 가드의 모집단은 그대로다(rc=0).
+- [x] 새 **`V0037` 헤더**가 `V0019` 의 낡은 문장을 **인용하고 반증한다** — 다음 사람이 V0019 를
+      읽으면 옆 파일에서 정정을 만난다.
+- [x] 🔴 `V0019` 의 **바이트는 안 고쳤다** — 적용된 마이그레이션이고 Flyway 체크섬이 주석까지
+      덮는다. 그 의무는 **`TASK-MONO-722`** 가 조건 게이트로 든다.
+
+## AC-4 — ⏳ **창 판정은 `TASK-MONO-672` 로 넘긴다**
+
+- [x] 🔴 단위·통합 초록으로 닫지 않는다 — `TASK-MONO-718`(단위 초록 → 창 FAIL)과
+      `TASK-MONO-717`(로컬 초록 → 창 FAIL)이 **연속 두 번** 그것을 보여 줬고, 이 티켓은
+      그 717 의 후속이다.
+- [ ] ⚪ **판정 항목**(다음 창): ① 셀러 등록 → `account_db` 에 행이 **생기는가**
+      ② 🔴 **대조군** — 카탈로그에 없는 테넌트로는 **교환이 거절되는가**(게이트웨이 403 이 아니라
+      **발급자의 `invalid_grant`**) ③ 워크로드 교환 토큰에 `entitled_domains`·파생 `roles`·
+      `org_scope` 가 **없는가**(D4 를 라이브에서 한 번).
+
+## AC-5 — ✅ 승격된 라이더 R1: 허용 테넌트 = `["ecommerce", "demo-corp"]`
+
+- [x] 그대로 구현했다(`WorkloadTenantCatalog`). 🔵 **소유자가 한 줄로 뒤집을 수 있다** —
+      *"AC-5 는 `["ecommerce"]` 만"*.
+- [x] 무엇이 **안 들어갔는지**가 요점이다 — `wms`·`scm`·`erp`·`finance` 와 내일 등록될 모든 테넌트.
+
+## AC-6 — ✅ 승격된 R5: `ADR-MONO-061` 인구조사가 흔들리지 않았다
+
+- [x] `WorkloadRoleCatalogTest` **17 / cc 11 / browser 6** 그대로 초록.
+- [x] 🔵 새 카탈로그는 **자기 모집단**을 따로 갖는다 — 「cc **그리고** token-exchange 를 둘 다 가진
+      클라이언트」. 🔴 **크기에 하한을 두지 않았다**: 이 모집단은 정당하게 0으로 줄 수 있고
+      («그 클라이언트를 회수하면») 「비면 빨강」 가드는 **옳은 상태를 빨갛게** 만든다.
+      대신 성질을 단언한다 — 양방향 집합 일치.
+
+## AC-7 — ✅ 승격된 라이더 R6: 거절은 **발급자에서 `invalid_grant`**
+
+- [x] 구현·단언 완료(`#refusesTenantOutsideItsCatalog`).
+- [x] 🔴 **거절 사유가 갈린다** — 「카탈로그에 없다」·「scope 가 없다」·「남의 subject_token」·
+      「토큰이 유효하지 않다」가 **각각 다른 칸**으로 물린다. 뭉갰으면 AC-1 의 대조군이 무엇을
+      증명했는지 말할 수 없다.
+- [x] 🔵 소유자가 한 줄로 뒤집을 수 있다(*"AC-7 은 `invalid_scope`"*). 뒤집으면 AC-4 ②의 기대값도 바뀐다.
+
+---
+
+# 🔴 이 PR 이 **안 건드린 것** (그게 갈래 D 를 고른 이유다)
+
+```
+gateway-service  JwtAuthenticationFilter   — 0 줄
+account-service  TenantScopeGuard          — 0 줄
+운영자 assume-tenant 경로 · OperatorAssignmentPort 게이트 — 0 줄
+ADR-MONO-061 의 role 카탈로그와 인구조사    — 0 줄
+docker-compose.yml · infra/demo/demo.env    — 0 줄 (D1 이 게이트웨이 경유를 성립시킨다)
+```
+
+# 게이트 기록 (전부 이 트리에서 실행)
+
+| 게이트 | 결과 |
+|---|---|
+| `auth-service:test` (전체) | 🟢 rc=0 |
+| `product-service:test` (전체) | 🟢 rc=0 |
+| `check-jwt-claims-registry.sh` | 🟢 rc=0 (6/6 등록) |
+| `check-flyway-version-collision.sh` | 🟢 rc=0 |
+| `check-dev-seed-migration-band.sh` | 🟢 rc=0 |
+| `check-adr-index-drift.sh` | 🟢 rc=0 |
+| bite A · B · C | 🟢 셋 다 rc=1 (문다) |
+
+🔴 **로컬 초록은 CI 초록이 아니다.** 여기서 안 돌린 것: iam·ecommerce **통합(Testcontainers)** ·
+e2e · nightly. 🔵 이 변경은 **인증 hot-path** 를 건드리므로 iam 통합 스위트가 볼 수 있는 자리가
+있다 — 머지 뒤 nightly 를 한 번 확인한다.
