@@ -72,6 +72,9 @@
     .bstart { font-size: .84rem; padding: 9px 13px; background: #8883; }
     /* 🔴 손가락은 **켜진 버튼에만** 준다. 잠긴 버튼은 아래 :disabled 가 되돌린다. */
     .bstart.on { background: #16a34a; color: #fff; cursor: pointer; }
+    /* TASK-MONO-729 — 「데모 서버 끄기」. 켜기(초록)와 **다른 색**이어야 한다 — 같은 자리의 같은 색
+       버튼이 뜻만 바뀌면 방문자는 켜려다 끈다. */
+    .bstart.stop { background: #444; color: #fff; cursor: pointer; }
     .bstart:disabled { cursor: default; }
     /* TASK-MONO-636 — 카드가 «왜 못 하는지» 를 말하는 자리.
        🔴 안내를 `#bmsg` 에만 두면 그 문구는 `bundleStart()` 안에서만 채워지고, 그 함수는
@@ -101,6 +104,19 @@
     .b-stale { background: #dc26262e; color: #dc2626; }
     .b-unknown { background: #8882; opacity: .7; }
     .b-tour { background: #2563eb2e; color: #2563eb; }
+    /* TASK-MONO-729 — 🔵 종료 중. 기동 중(노랑)과 갈라야 방문자가 «켜지는 중» 으로 안 읽는다. */
+    .b-stopping { background: #2563eb2e; color: #2563eb; }
+
+    /* TASK-MONO-729 (b) — 전체 집계 배지. 🔴 카드 배지와 **다른 줄**이다: 예전에는 EC2 가 running
+       이면 한 줄로 「✅ 실행 중」이었고, 묶음 하나만 떠 있어도 «전부 쓸 수 있다» 로 읽혔다. */
+    .agg { margin-top: 22px; font-size: .9rem; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .agg .badge { font-size: .84rem; }
+    /* TASK-MONO-729 (d) — 카드 구획. 콘솔은 비즈니스 화면이 아니라 그것들을 **운영하는 도구**다. */
+    .sgroup { grid-column: 1 / -1; font-size: .92rem; font-weight: 600; margin: 8px 0 -6px; opacity: .8; }
+    .sgroup.platform { border-top: 1px solid #8884; padding-top: 18px; margin-top: 10px; }
+    .scard.platform { border-style: dashed; }
+    .scard h2 .sub { font-size: .8rem; font-weight: 400; opacity: .7; margin-left: 6px; }
+    .dgroup { font-size: .8rem; opacity: .65; margin: 14px 0 2px; }
 
     /* 고급 영역 — 도메인별 제어 + 전체 시작. 🔴 기본 행동에서 제외됐다(§ details). */
     details.adv { margin-top: 28px; }
@@ -151,7 +167,7 @@
     세 화면은 <strong>지금 바로, 로그인 없이</strong> 둘러볼 수 있습니다 — 서버를 켜지 않아도 됩니다.
     글쓰기·주문·운영 같은 <strong>로그인 후 기능</strong>이 필요할 때만 해당 카드의 「데모 서버 켜기」로 서버를 켜세요
     (필요한 서비스만 기동합니다 · 8개 전부를 올릴 때가 <strong>약 10분</strong>, 묶음 하나는 그보다 짧습니다).
-    20분간 활동이 없으면 자동으로 종료됩니다.
+    다 쓴 뒤에는 같은 자리의 「데모 서버 끄기」로 그 묶음만 끌 수 있고, 20분간 활동이 없으면 자동으로 종료됩니다.
   </p>
 
   <!--
@@ -206,7 +222,7 @@
           링크 클릭이 서버 기동을 겸하지 않게 한다."*
        그래서 카드 안에 **서로 다른 두 컨트롤**이 있다:
          · `data-surface` 를 단 **제목 앵커** → 언제나 정적 Vercel 주소로 이동
-         · `<button data-bundle-start>`      → 그 묶음의 백엔드만 기동
+         · `<button data-bundle-act>`        → 그 묶음의 백엔드만 기동(또는, 켜져 있으면 그 묶음만 종료 — TASK-MONO-729)
        한 요소가 둘을 겸하면 «둘러보러 눌렀는데 EC2 가 켜졌다» 가 되고, 그것은 요금이
        걸린 부작용이다. **겸하지 않는다는 사실이 마크업의 모양으로 강제된다.**
 
@@ -228,28 +244,15 @@
     🔵 `data-bundle` 은 `/bundles` 응답의 키이고, 그 키의 정본은 `projects.sh` 의
        `BUNDLES` 다(Lambda 의 사본과 가드 (z32)가 대조한다).
   -->
+  <!--
+    TASK-MONO-729 (b) — **전체 집계 배지.** 카드 배지를 모아서 말한다 — 두 번째 목록을 두지 않는다.
+    🔴 값은 카드 상태표(BLABEL)의 «집계 범주» 열에서 파생된다(aggregateOf). 「모두 사용 가능」은
+       **모든 카드가 사용 가능일 때만** 뜬다 — 일부만 켜졌을 때 그 문구가 뜨는 것이 이 티켓의 결함이었다.
+  -->
+  <div class="agg">데모 서버 전체 <span class="badge b-unknown" data-agg-badge>🔵 상태 확인 중…</span></div>
   <div id="surfaces">
-    <article class="scard" data-bundle="console">
-      <div class="shots" data-shots data-shots-note="🔒 로그인 후 화면"></div>
-      <div class="body">
-        <h2><a class="open" data-surface data-domain="console" data-served="vercel" data-url="https://console.hubwang.com/" target="_blank" rel="noopener">운영자 콘솔</a></h2>
-        <p class="desc">여러 도메인을 한 화면에서 운영하는 백오피스. 대시보드·주문·재고·조직·권한.</p>
-        <dl>
-          <!-- TASK-MONO-686 — 둘러보기(`/demo`)가 은퇴하면서 익명 방문자는 이제
-               실제 콘솔 화면을 샘플 데이터로 본다(ADR-MONO-074). `/demo` 는 살아 있는
-               링크지만 은퇴 이후엔 이 화면들로 308 리다이렉트될 뿐이다. -->
-          <dt>로그인 없이</dt><dd>실제 콘솔 화면을 샘플 데이터로(«(샘플)» 표기 + 배너) — 대시보드·주문·재고·조직·권한 등 64개 화면</dd>
-          <dt>로그인 후 <span class="needs-boot">· 데모 서버 켠 뒤</span></dt><dd>도메인 헬스 대시보드 · 이커머스/WMS/SCM/ERP/재무 운영 · IAM 테넌트·권한·감사 로그</dd>
-          <dt>기동되는 서비스</dt><dd data-services>—</dd>
-          <dt>데모 서버</dt><dd><span class="badge b-unknown" data-bundle-badge>… 확인 중</span></dd>
-        </dl>
-        <!-- TASK-MONO-636 — 기동이 왜 안 되는지를 **버튼을 안 눌러도** 읽는 자리. 비면 안 그려진다. -->
-        <div class="bnote" data-bundle-note></div>
-        <div class="acts">
-          <button class="bstart" data-bundle-start type="button">데모 서버 켜기</button>
-        </div>
-      </div>
-    </article>
+    <!-- TASK-MONO-729 (d) — 구획 제목. 🔴 판정 속성(표면·묶음)을 달지 않는다 — 판정 모집단이 아니다. -->
+    <h3 class="sgroup">서비스 화면</h3>
     <article class="scard" data-bundle="store">
       <div class="shots" data-shots></div>
       <div class="body">
@@ -259,12 +262,13 @@
           <dt>로그인 없이</dt><dd>홈 · 상품 목록/상세 · 검색 · 카테고리 · 필터 · 정렬</dd>
           <dt>로그인 후 <span class="needs-boot">· 데모 서버 켠 뒤</span></dt><dd>장바구니 · 주문 · 결제 · 위시리스트 · 마이페이지(주문내역·리뷰·쿠폰)</dd>
           <dt>기동되는 서비스</dt><dd data-services>—</dd>
-          <dt>데모 서버</dt><dd><span class="badge b-unknown" data-bundle-badge>… 확인 중</span></dd>
+          <dt>필요한 공용 서비스</dt><dd data-deps>—</dd>
+          <dt>데모 서버</dt><dd><span class="badge b-unknown" data-bundle-badge>🔵 상태 확인 중…</span></dd>
         </dl>
         <!-- TASK-MONO-636 — 기동이 왜 안 되는지를 **버튼을 안 눌러도** 읽는 자리. 비면 안 그려진다. -->
         <div class="bnote" data-bundle-note></div>
         <div class="acts">
-          <button class="bstart" data-bundle-start type="button">데모 서버 켜기</button>
+          <button class="bstart" data-bundle-act type="button" disabled>상태 확인 중…</button>
         </div>
       </div>
     </article>
@@ -277,12 +281,39 @@
           <dt>로그인 없이</dt><dd>공개 피드 · 아티스트 목록/프로필 · 게시물 상세 · 멤버십 소개</dd>
           <dt>로그인 후 <span class="needs-boot">· 데모 서버 켠 뒤</span></dt><dd>글쓰기 · 댓글 · 팔로우 · 멤버십 가입/내역 · 알림</dd>
           <dt>기동되는 서비스</dt><dd data-services>—</dd>
-          <dt>데모 서버</dt><dd><span class="badge b-unknown" data-bundle-badge>… 확인 중</span></dd>
+          <dt>필요한 공용 서비스</dt><dd data-deps>—</dd>
+          <dt>데모 서버</dt><dd><span class="badge b-unknown" data-bundle-badge>🔵 상태 확인 중…</span></dd>
         </dl>
         <!-- TASK-MONO-636 — 기동이 왜 안 되는지를 **버튼을 안 눌러도** 읽는 자리. 비면 안 그려진다. -->
         <div class="bnote" data-bundle-note></div>
         <div class="acts">
-          <button class="bstart" data-bundle-start type="button">데모 서버 켜기</button>
+          <button class="bstart" data-bundle-act type="button" disabled>상태 확인 중…</button>
+        </div>
+      </div>
+    </article>
+    <!-- TASK-MONO-729 (d) — 콘솔은 **비즈니스 도메인이 아니라** 그것들(이커머스·WMS·SCM·재무·ERP)을
+         한 화면에서 운영하는 플랫폼 도구다. 같은 줄에 두면 «다섯 도메인 중 하나» 로 읽힌다 ⇒ 구획을 가른다.
+         🔵 카드 순서를 옮겨도 부팅 판정은 안 바뀐다 — demo-up.sh 는 행의 **선언**만 읽고 순서를 안 본다. -->
+    <h3 class="sgroup platform">운영 도구</h3>
+    <article class="scard platform" data-bundle="console">
+      <div class="shots" data-shots data-shots-note="🔒 로그인 후 화면"></div>
+      <div class="body">
+        <h2><a class="open" data-surface data-domain="console" data-served="vercel" data-url="https://console.hubwang.com/" target="_blank" rel="noopener">Platform Console</a><span class="sub">운영 콘솔</span></h2>
+        <p class="desc">여러 도메인을 한 화면에서 운영하는 백오피스. 대시보드·주문·재고·조직·권한.</p>
+        <dl>
+          <!-- TASK-MONO-686 — 둘러보기(`/demo`)가 은퇴하면서 익명 방문자는 이제
+               실제 콘솔 화면을 샘플 데이터로 본다(ADR-MONO-074). `/demo` 는 살아 있는
+               링크지만 은퇴 이후엔 이 화면들로 308 리다이렉트될 뿐이다. -->
+          <dt>로그인 없이</dt><dd>실제 콘솔 화면을 샘플 데이터로(«(샘플)» 표기 + 배너) — 대시보드·주문·재고·조직·권한 등 64개 화면</dd>
+          <dt>로그인 후 <span class="needs-boot">· 데모 서버 켠 뒤</span></dt><dd>도메인 헬스 대시보드 · 이커머스/WMS/SCM/ERP/재무 운영 · IAM 테넌트·권한·감사 로그</dd>
+          <dt>기동되는 서비스</dt><dd data-services>—</dd>
+          <dt>필요한 공용 서비스</dt><dd data-deps>—</dd>
+          <dt>데모 서버</dt><dd><span class="badge b-unknown" data-bundle-badge>🔵 상태 확인 중…</span></dd>
+        </dl>
+        <!-- TASK-MONO-636 — 기동이 왜 안 되는지를 **버튼을 안 눌러도** 읽는 자리. 비면 안 그려진다. -->
+        <div class="bnote" data-bundle-note></div>
+        <div class="acts">
+          <button class="bstart" data-bundle-act type="button" disabled>상태 확인 중…</button>
         </div>
       </div>
     </article>
@@ -547,7 +578,10 @@
         stopped: "🟢 대기 중 — 카드의 「데모 서버 켜기」를 누르세요",
         pending: "🟡 인스턴스 기동 중…",
         starting: "🟡 서비스 웜업 중… (고른 묶음만 올라옵니다)",
-        running: "✅ 실행 중",
+        // 🔴 TASK-MONO-729 — 예전 문구는 「✅ 실행 중」 한 마디였고, 묶음 하나만 떠 있어도 «전부
+        //    쓸 수 있다» 로 읽혔다. 이 줄이 말하는 것은 **인스턴스** 하나다. 무엇을 쓸 수 있는지는
+        //    카드 배지와 그 위의 전체 집계 배지가 말한다.
+        running: "✅ 인스턴스 실행 중 — 무엇을 쓸 수 있는지는 카드 배지를 보세요",
         stopping: "🔻 종료 중…",
       }[state] || state;
       $("msg").textContent = usage
@@ -579,29 +613,55 @@
     //    흉내 내려면 `querySelectorAll` 이 셀렉터를 분기해야 하며 그렇게 똑똑해진 스텁이
     //    바로 «실물보다 관대한 대역» 이라는 것이다.
     // GUARD-Z34-BEGIN — (z34) 가 이 구간을 **실행해서** 「사유를 말하는가」를 대조한다.
+    // 🔴🔴 TASK-MONO-729 — **카드 표시 행렬.** 상태 이름(키)은 서버(`_bundle_state`)의 값이라
+    //    바꾸지 않는다. 바뀌는 것은 그 값에 매핑되는 **표시**뿐이다(소유자 확정 매트릭스):
+    //      꺼짐 ⚪ · 기동 중 🟡 · 사용 가능 🟢 · 종료 중 🔵 · 확인 실패 🔴 (+ 첫 응답 전 🔵 상태 확인 중…)
+    //    열: [배지, 배지 클래스, **집계 범주**]. 🔴 집계 범주는 전체 배지(aggregateOf)가 읽는
+    //    **유일한** 출처다 — 전체 배지를 두 번째 목록으로 계산하면 한쪽만 고쳐진다(Failure 2).
     const BLABEL = {
-      ready:     ["🟢 사용 가능", "b-up"],
-      booting:   ["🟡 기동 중…", "b-partial"],
-      requested: ["🟡 요청됨 — 기동 대기", "b-partial"],
-      // 🔴🔴 TASK-MONO-653 — `selected` 는 `requested` 에서 갈라낸 값이다. 뜻은
-      //    «저장된 선택에 있다. 그리고 아무것도 안 뜨고 있다» 이므로 배지는 «꺼짐» 쪽이고
-      //    (`b-down`), 선택돼 있다는 사실은 참이므로 함께 말한다. `requested` 와 같은
-      //    노랑을 쓰면 방문자는 다시 «뜨는 중» 으로 읽는다 — 그것이 이 결함이었다.
-      selected:  ["⚪ 꺼짐 — 선택됨", "b-down"],
-      partial:   ["🟠 일부만 실행 중", "b-partial"],
-      stopping:  ["🔻 종료 중", "b-down"],
-      waiting:   ["⚪ 꺼짐", "b-down"],
-      unknown:   ["🔴 확인 불가", "b-stale"],
+      ready:     ["🟢 사용 가능", "b-up", "ready"],
+      booting:   ["🟡 기동 중…", "b-partial", "boot"],
+      // 🔵 `requested` 는 «인스턴스가 떴거나 켜지는 중인데 이 묶음이 아직» 이다(653 이 가른 뒤).
+      //    방문자에게는 «기동 중» 과 같은 사실이므로 같은 말을 쓴다 — 예전 「요청됨 — 기동 대기」는
+      //    서버 내부의 구분을 방문자에게 떠넘겼다.
+      requested: ["🟡 기동 중…", "b-partial", "boot"],
+      // 🔴🔴 TASK-MONO-653 — `selected` 는 `requested` 에서 갈라낸 값이다. 뜻은 «저장된 선택에
+      //    있다. 그리고 아무것도 안 뜨고 있다» 이므로 배지는 **꺼짐**이다. 노랑을 쓰면 방문자는
+      //    다시 «뜨는 중» 으로 읽는다 — 그것이 653 의 결함이었다(가드 (z39) 가 두 배지를 가른다).
+      // 🔵 TASK-MONO-729 — 「— 선택됨」 꼬리를 뺐다. 685 이후 선택은 **다음 기동 때 비워지는**
+      //    지난 세션의 기록이라, 방문자가 할 수 있는 일과 무관한 말이었다.
+      selected:  ["⚪ 꺼짐", "b-down", "off"],
+      // 🔵 `partial` = 선택 안 된 묶음인데 **자기 도메인이 일부만** 떠 있다(다른 묶음이 켰거나
+      //    내려가는 중). 매트릭스에 칸이 없는 값이라 뜻 그대로 말하고, 집계에서는 «아직 다 안 섰다»
+      //    쪽(기동 중)으로 센다 — «꺼짐» 으로 세면 전체 배지가 떠 있는 것을 안 보인다고 말한다.
+      partial:   ["🟠 일부만 실행 중", "b-partial", "boot"],
+      stopping:  ["🔵 종료 중…", "b-stopping", "stop"],
+      waiting:   ["⚪ 꺼짐", "b-down", "off"],
+      unknown:   ["🔴 확인 실패", "b-stale", "err"],
     };
+    // 첫 응답 전 — 🔴 «아직 안 물어봤다» 는 BLABEL 의 어느 값도 아니다(서버가 준 적 없는 상태).
+    const B_PENDING = ["🔵 상태 확인 중…", "b-unknown"];
+
     // 🔴 «시작» 을 누를 수 있는 상태와 아닌 상태를 **명시**한다. 기동 중에 또 누르면
     //    중복 요청이 되고(서버가 멱등이지만) 방문자는 «안 먹혔다» 로 읽는다.
-    // 🔵 `unknown` 을 startable 에 넣는다 — «확인 불가» 일 때 버튼을 잠그면, 헬스 발행이
+    // 🔴🔴 `selected` 도 여기 있다(TASK-MONO-653). 선택돼 있다는 사실 하나로 버튼이 영구히
+    //    잠기고 있었고, 남은 유일한 길이 «전체 스택» 이었다. 🔴 `requested` 는 **여전히 여기
+    //    없다**: 그 값은 «인스턴스가 떴거나 켜지는 중인데 이 묶음이 아직» 만 뜻하고, 그때 여는
+    //    것이 중복 요청이다.
+    // 🔵 `unknown` 을 startable 에 넣는다 — «확인 실패» 일 때 버튼을 잠그면, 헬스 발행이
     //    끊긴 동안 방문자가 **아무것도 못 한다.** 모르는 것은 «못 한다» 가 아니다.
-    // 🔴🔴 `selected` 도 여기 있다(TASK-MONO-653). 그것이 이 티켓의 전부다 — 선택돼
-    //    있다는 사실 하나로 버튼이 영구히 잠기고 있었고, 남은 유일한 길이 «전체 스택»
-    //    이었다. 🔴 `requested` 는 **여전히 여기 없다**: 그 값은 이제 «인스턴스가 떴거나
-    //    켜지는 중인데 이 묶음이 아직» 만 뜻하고, 그때 여는 것이 중복 요청이다.
+    //    (`handler.py` `_bundle_state` 독스트링이 같은 판단을 적고 있다.)
+    // 🔴🔴 TASK-MONO-729 리뷰 — 이 줄을 한 번 뺐다가 **되돌렸다.** 소유자 매트릭스의 잠금 요구는
+    //    **전이 상태**(기동 중…/종료 중…)의 더블클릭 방지였고, 「🔴 확인 실패」는 전이가 아니다.
+    //    잠그면 기능 회귀다. 🔵 `/bundles` 자체를 못 받은 경우는 여전히 잠긴다 — 그때는
+    //    `info === null` 이라 아래 renderCards 의 `startable` 조건(origin/main 과 같은 식)이 막는다.
+    //    가드 (z39) bite-6 이 «info 가 있는 unknown 에서 켜기가 열린다» 를 핀한다.
     const B_STARTABLE = new Set(["waiting", "selected", "partial", "unknown"]);
+    // TASK-MONO-729 (e) — 「끄기」를 누를 수 있는 상태. 🔴 `ready` 하나뿐이다: 기동 중인 묶음을
+    //    끄는 것은 매트릭스에 없고(「기동 중…」은 잠금), 서버가 이미 `stopping` 이면 중복이다.
+    const B_STOPPABLE = new Set(["ready"]);
+    // 전이 중(잠긴) 상태의 버튼 문구 — 매트릭스의 「기동 중…」·「종료 중…」.
+    const B_BUSY = { booting: "기동 중…", requested: "기동 중…", stopping: "종료 중…" };
 
     // 🔴🔴 배포 창을 건넌다 (TASK-MONO-653). 이 파일은 **머지로** 나가고(Vercel, 분 단위)
     //    람다는 **`terraform apply`** 로 나간다(소유자 승인). 순서를 어떻게 잡아도 이 파일이
@@ -624,6 +684,121 @@
       return "selected";
     }
     let lastBundles = null;
+    // TASK-MONO-729 — `/bundles` 가 함께 주는 헬스 신선도. 「확인 실패」의 **원인**을 상세 줄에서
+    //    가르는 데만 쓴다(배지는 하나로 통일 — 매트릭스가 허용한 것).
+    let lastHealth = null;
+
+    // =======================================================================
+    // TASK-MONO-729 — 누른 뒤 서버가 따라올 때까지의 **전이 표시** (더블클릭 방지)
+    // =======================================================================
+    // 🔴🔴 서버에는 «이 묶음 하나가 내려가는 중» 이라는 값이 **없다.** `/bundle/stop` 을 받으면
+    //    선택에서 빼고 인스턴스에 demo-down 을 보낼 뿐이고, 도메인이 실제로 내려갈 때까지
+    //    `_bundle_state` 는 계속 `ready`(그다음 `partial`)를 준다. 그 사이 카드가 「데모 서버
+    //    끄기」를 다시 열면 방문자는 «안 먹혔다» 로 읽고 또 누른다 — 매트릭스의 「종료 중…
+    //    (disabled)」이 그것을 막으라는 요구다. 기동도 같다: 응답이 오기 전의 몇 초가 비어 있다.
+    // ⇒ 누른 순간 **이 화면만** 전이 상태를 들고, 서버가 «끝났다» 쪽 값을 줄 때 버린다.
+    // 🔴 상한을 둔다(B_TRANSIT_MS). 서버가 영영 안 따라오면(명령 유실 등) 카드가 영구히 잠긴다 —
+    //    상한이 지나면 **서버 값으로 돌아간다**(모르는 쪽이 아니라 서버가 아는 쪽으로 떨어진다).
+    //    🔴 3분은 **실측이 아니다.** 묶음 하나를 내리는 데 걸리는 시간은 아직 잰 적이 없다 —
+    //    짧으면 잠깐 버튼이 다시 열릴 뿐이고(중복 요청, 서버는 멱등), 길면 잠금이 길어질 뿐이다.
+    const B_TRANSIT_MS = 180000;
+    let bundleTransit = {};
+    // 전이를 끝낼 서버 값 — 「그 동작이 반영됐다」 또는 「더 중요한 사실이 생겼다(종료·오류)」.
+    const B_TRANSIT_DONE = {
+      booting:  new Set(["requested", "booting", "ready", "stopping", "unknown"]),
+      stopping: new Set(["waiting", "selected", "stopping", "unknown"]),
+    };
+    function markTransit(key, st) { bundleTransit[key] = { st: st, at: Date.now() }; }  // GUARD-Z39-BITE4
+    function clearTransit(key) { delete bundleTransit[key]; }
+    function cardStateOf(key, info) {
+      const st = bundleStateOf(info);
+      const t = bundleTransit[key];
+      if (!t) return st;
+      if (info === null || B_TRANSIT_DONE[t.st].has(st) || Date.now() - t.at > B_TRANSIT_MS) {
+        clearTransit(key);
+        return st;
+      }
+      return t.st;
+    }
+
+    // =======================================================================
+    // TASK-MONO-729 (c) — 카드별 의존성 고지: «필요한 공용 서비스»
+    // =======================================================================
+    // 🔴🔴 **두 번째 사본을 두지 않는다.** «모든 도메인은 iam 에 하드 의존한다» 는 사실의 정본은
+    //    `projects.sh` 의 `DEPS` 이고, 람다의 `BUNDLE_REQUIRED_DOMAINS` 가 그것을 편 결과를
+    //    `/bundles` 의 `domains` 로 준다(두 표가 같은지는 가드 (z42) 가 묶음마다 대조한다).
+    //    이 화면은 그 응답에서 **파생만** 한다: 공용 서비스 = «모든 묶음이 필요로 하는 도메인»
+    //    (`domains` 의 교집합). 여기에 "iam" 을 적으면 DEPS 가 바뀌는 날 이 화면만 낡는다.
+    // 🔵 묶음이 둘 미만이면 교집합은 «그 묶음 자신» 이 되어 뜻이 없다 — 빈 목록을 준다.
+    function sharedDomainsOf(bundles) {
+      const lists = bundles ? Object.keys(bundles).map((k) => (bundles[k] && bundles[k].domains) || []) : [];
+      if (lists.length < 2) return [];
+      return lists[0].filter((d) => lists.every((l) => l.indexOf(d) >= 0));  // GUARD-Z41-BITE2
+    }
+    // 🔵 괄호 안 문장은 인스턴스 쪽 잔류 가드(`demo-down.sh`)의 동작이다 — 이 카드를 꺼도 다른
+    //    묶음이 쓰는 공용 서비스는 내려가지 않는다. UI 가 따로 막지 않는 이유가 그것이다.
+    function depsText(info, shared) {
+      const s = (info.domains || []).filter((d) => shared.indexOf(d) >= 0);
+      return s.length
+        ? s.join(" · ") + " (이미 실행 중이면 그대로 씁니다 · 이 카드를 꺼도 다른 서버가 쓰는 동안은 유지)"
+        : "없음";
+    }
+
+    // =======================================================================
+    // TASK-MONO-729 (b) — 전체 집계 배지
+    // =======================================================================
+    // 🔴 입력은 카드마다의 **집계 범주**(BLABEL 의 셋째 열)뿐이다. 새 목록을 만들지 않는다.
+    // 🔴🔴 판정 기준(티켓): 「모두 사용 가능」이 **일부만 켜진 상태에서 뜨는 경우 0건.** 그래서
+    //    그 값은 «전부가 ready» 일 때만 나오고, 하나라도 ready 면 「일부 서버 사용 가능」이다.
+    // 우선순위: 오류 > 종료 중 > 사용 가능(전부/일부) > 기동 중 > 꺼짐. (각 칸 안에서 «전부» 가 «일부» 보다 먼저)
+    //    🔵 «일부 사용 가능 + 나머지 기동 중» 은 매트릭스가 「일부 서버 사용 가능」으로 정했다 —
+    //       방문자에게 먼저 필요한 사실이 «지금 쓸 수 있는 것이 있다» 이기 때문이다.
+    const B_AGG = {
+      pending:   ["🔵 상태 확인 중…", "b-unknown"],
+      allErr:    ["🔴 확인 실패", "b-stale"],
+      err:       ["🔴 일부 오류", "b-stale"],
+      // 🔵 「모두 …」 두 값(allStop·allBoot)은 매트릭스에 없는 칸이다 — 전부가 종료/기동 중일 때
+      //    「일부 …」라고 하면 거짓이라 보탰다(인스턴스 전체 종료 때 실제로 그렇게 된다).
+      allStop:   ["🔵 모두 종료 중", "b-stopping"],
+      stop:      ["🔵 일부 종료 중", "b-stopping"],
+      allReady:  ["🟢 모두 사용 가능", "b-up"],
+      someReady: ["🟢 일부 서버 사용 가능", "b-up"],
+      allBoot:   ["🟡 모두 기동 중", "b-partial"],
+      boot:      ["🟡 일부 기동 중", "b-partial"],
+      off:       ["⚪ 모두 꺼짐", "b-down"],
+    };
+    function aggregateOf(cats) {
+      const n = cats.length;
+      const has = (c) => cats.indexOf(c) >= 0;
+      const all = (c) => n > 0 && cats.every((x) => x === c);
+      if (!n || has("pending")) return "pending";
+      if (all("err")) return "allErr";
+      if (has("err")) return "err";
+      if (all("stop")) return "allStop";
+      if (has("stop")) return "stop";
+      if (all("ready")) return "allReady";  // GUARD-Z41-BITE
+      if (has("ready")) return "someReady";
+      if (all("boot")) return "allBoot";
+      if (has("boot")) return "boot";
+      return "off";
+    }
+    function renderAggregate(cats) {
+      const el = document.querySelector("[data-agg-badge]");
+      if (!el) return;
+      const [text, cls] = B_AGG[aggregateOf(cats)];
+      el.className = "badge " + cls;
+      el.textContent = text;
+    }
+
+    // 「확인 실패」의 두 원인 중 **헬스 정체** 쪽 상세 줄. `/bundles` 실패 쪽은 아래 B_ERR 가 말한다.
+    function unknownNote() {
+      const h = lastHealth || {};
+      if (h.stale) {
+        const age = (h.age == null) ? "발행 기록 없음" : ("마지막 발행 " + h.age + "초 전");
+        return "데모 서버의 헬스 정보가 갱신되지 않아 상태를 판정할 수 없습니다 (" + age + ") — 제어 API 는 응답하고 있고, 이 화면은 자동으로 다시 확인합니다.";
+      }
+      return "서버가 이 묶음의 상태를 판정하지 못했습니다 — 이 화면은 자동으로 다시 확인합니다.";
+    }
 
     // 🔴🔴 TASK-MONO-636 — «아직 안 물어봤다» 와 «물어봤는데 못 받았다» 는 **다른 값**이다.
     //    `null` = 미측정(첫 폴링 전) · 문자열 = 부재/장애 판정. 예전 코드는 둘을
@@ -680,33 +855,42 @@
     }
 
     function renderCards() {
+      // TASK-MONO-729 (c) — 공용 서비스는 **응답 전체**에서 한 번 계산한다(카드마다 같은 값).
+      const shared = sharedDomainsOf(lastBundles);
+      const cats = [];
       for (const card of document.querySelectorAll("[data-bundle]")) {
         const key = card.dataset.bundle;
         const info = (lastBundles && lastBundles[key]) || null;
         const badge = card.querySelector("[data-bundle-badge]");
-        const btn = card.querySelector("[data-bundle-start]");
+        const btn = card.querySelector("[data-bundle-act]");
         const svc = card.querySelector("[data-services]");
+        const deps = card.querySelector("[data-deps]");
         const note = card.querySelector("[data-bundle-note]");
 
         // 🔵 «기동되는 서비스 목록» 은 **서버가 말한다**(`/bundles` 의 domains). 마크업에
         //    적으면 projects.sh 의 DEPS 가 바뀌는 날 이 페이지만 낡는다 — 그리고 그 거짓은
         //    «무엇이 켜지는지» 라는, 방문자가 확인할 수 없는 축에 앉는다.
         if (svc) svc.textContent = info ? info.domains.join(" · ") : "—";
+        if (deps) deps.textContent = info ? depsText(info, shared) : "—";
 
         // 🔴 «아직 안 물어봤다» 가 참인 것은 첫 응답 전까지뿐이다. 그 뒤로는 **답이 있거나
         //    사유가 있다.** 배지가 이 셋을 구별하지 못하면 화면은 다시 말을 잃는다.
         const pending = CONTROL_OK && info === null && bundlesErr === null;
-        const st = bundleStateOf(info);
-        const [text, cls] = BLABEL[st];
+        const st = cardStateOf(key, info);
+        const [text, cls, cat] = BLABEL[st];
+        cats.push(pending ? "pending" : cat);
         if (badge) {
-          badge.className = "badge " + (pending ? "b-unknown" : cls);
-          badge.textContent = pending ? "… 확인 중" : text;
+          badge.className = "badge " + (pending ? B_PENDING[1] : cls);
+          badge.textContent = pending ? B_PENDING[0] : text;
         }
         if (note) {
-          // 🔴 사유는 **버튼을 안 눌러도** 여기 있다. `#bmsg` 는 `bundleStart()` 안에서만
-          //    채워지는데 그 함수는 버튼을 눌러야 돌고, 이 상황에서 버튼은 잠겨 있다.
-          // 🔵 `#bmsg` 를 여기서 건드리지 않는 이유: 그 칸은 기동 요청의 응답을 들고 있고,
+          // 🔴 사유는 **버튼을 안 눌러도** 여기 있다. `#bmsg` 는 버튼을 눌러야 채워지고,
+          //    이 상황에서 버튼은 잠겨 있다.
+          // 🔵 `#bmsg` 를 여기서 건드리지 않는 이유: 그 칸은 요청의 응답을 들고 있고,
           //    1.5초 뒤 폴링이 renderCards() 를 부르므로 여기서 쓰면 그 답을 지운다.
+          // 🔴🔴 TASK-MONO-729 — 「확인 실패」의 **두 원인을 상세 줄에서 가른다**: `/bundles` 를
+          //    못 받았다(B_ERR — 제어 경로의 문제) ≠ 받았는데 헬스가 멈췄다(unknownNote — 데모
+          //    서버 쪽 문제). 배지는 같아도 할 일이 다르다.
           note.textContent = bundlesErr
             ? B_ERR[bundlesErr] + B_ERR_TAIL + " (" + bundleFallback(card) + ")"
             : !CONTROL_OK
@@ -715,23 +899,75 @@
               //    모호한 말로 바꾸면 방문자도 운영자도 할 일을 모른다(AC-2).
               : bundleBlocked
                 ? bundleBlocked.message + B_ERR_TAIL
-                : "";
+                : (info !== null && st === "unknown")
+                  ? unknownNote()
+                  : "";
         }
         if (btn) {
           // 🔴 사유를 말한다고 **버튼을 열지는 않는다.** 열면 눌러서 404 를 받고 «눌렀는데
           //    아무 일도 안 남» 이 된다 — 지금보다 나쁘다. 「보이게 하는 것」과 「눌리게
           //    하는 것」은 다른 축이다(AC-2).
-          // 🔴 TASK-MONO-647 — `bundleBlocked` 는 여기서도 물어야 한다. 사유를 note 에만
-          //    적고 버튼을 열어 두면 방문자는 그것을 누르고 409 를 받는다 — 「눌렀는데 아무
-          //    일도 안 남」은 지금보다 나쁘다(바로 위 주석이 404 에 대해 말한 것과 같은 축).
+          // 🔴 TASK-MONO-647 — `bundleBlocked` 는 기동에서 물어야 한다. 사유를 note 에만
+          //    적고 버튼을 열어 두면 방문자는 그것을 누르고 409 를 받는다.
+          //    🔵 끄기는 그 거절과 무관하다 — 구세대 AMI 가 모르는 것은 **묶음 기동**이고,
+          //       `/bundle/stop` 이 보내는 `demo-down.sh <도메인>` 은 그 전부터 있던 동작이다.
           const startable = CONTROL_OK && info !== null && !bundleBlocked && B_STARTABLE.has(st);
-          btn.disabled = !startable;
-          btn.className = "bstart" + (startable ? " on" : "");
-          btn.textContent = st === "ready" ? "데모 서버 켜짐"
-            : (st === "booting" || st === "requested") ? "기동 중…"
+          const stoppable = CONTROL_OK && info !== null && B_STOPPABLE.has(st);
+          btn.disabled = !(startable || stoppable);
+          // 🔴🔴 TASK-MONO-729 (e) — 버튼 하나가 두 동작을 한다. **무엇을 할지는 여기서만 정한다**
+          //    (`data-mode`) — 클릭 처리기는 이 값을 읽어 넘길 뿐이다. 두 곳에서 정하면 배지는
+          //    「사용 가능」인데 누르면 켜기가 나가는(또는 그 반대) 상태가 생긴다.
+          btn.dataset.mode = startable ? "start" : stoppable ? "stop" : "";
+          btn.className = "bstart" + (startable ? " on" : stoppable ? " stop" : "");
+          // 🔵 «다른 방문자가 쓰고 있을 수 있다» 는 **툴팁으로만** 말한다(소유자 결정: 남의 묶음
+          //    끄기를 막지 않는다). 카드 본문에 적으면 사유 칸(note)과 섞이고, 그 칸이 비어 있어야
+          //    «문제 없음» 이라는 약속(가드 (z34))이 깨진다.
+          btn.title = stoppable ? "이 묶음만 내립니다 — 다른 방문자가 쓰고 있을 수 있습니다" : "";
+          btn.textContent = pending ? "상태 확인 중…"
+            : stoppable ? "데모 서버 끄기"
+            : B_BUSY[st] ? B_BUSY[st]
+            // 🔵 `/bundles` 를 못 받아 잠긴 unknown 만 이 문구다. 응답이 있는 unknown(헬스 정체)은
+            //    켜기가 열려 있으므로 아래 「데모 서버 켜기」로 떨어진다.
+            : (st === "unknown" && !startable) ? "상태 확인 실패"
             : "데모 서버 켜기";
         }
       }
+      renderAggregate(cats);
+    }
+
+    // =======================================================================
+    // TASK-MONO-729 (e) — 카드 버튼의 동작. 켜기 = `/bundle/start`, 끄기 = `/bundle/stop`.
+    // =======================================================================
+    // 🔴🔴 **끄기는 그 묶음 한정 `/bundle/stop` 이다 — `/stop`(EC2 전체) 이 아니다**(티켓 Failure 1).
+    //    `/stop` 은 인스턴스를 멈춰 **다른 방문자의 묶음까지** 내린다. 그 버튼은 고급 영역의
+    //    「데모 종료 (EC2 정지)」 하나뿐이다. 경로는 이 표에만 있고, 가드 (z39) 가 이 함수를
+    //    **실행해서** 어느 경로로 무엇을 보냈는지 대조한다.
+    const B_ACT_PATH = { start: "/bundle/start", stop: "/bundle/stop" };
+    async function bundleAct(name, mode) {
+      const path = B_ACT_PATH[mode];
+      if (!path) return;
+      const verb = (mode === "stop") ? "종료" : "기동";
+      // 🔴 응답을 기다리기 **전에** 잠근다 — 요청이 날아가는 동안이 더블클릭의 창이다.
+      markTransit(name, (mode === "stop") ? "stopping" : "booting");
+      renderCards();
+      bundleMsg(name + " " + verb + " 요청 중…");
+      let res;
+      try {
+        res = await api(path, "POST", { bundles: [name] });
+      } catch (e) {
+        // 🔴 요청이 안 나갔으면 전이 표시를 **버린다** — 들고 있으면 3분간 거짓 「… 중」이다.
+        clearTransit(name);
+        renderCards();
+        bundleMsg(name + " " + verb + " 요청이 제어 API 에 닿지 못했습니다 — 잠시 후 다시 눌러 주세요.");
+        return;
+      }
+      // 거절(409·429·503 등)이면 아무 일도 안 일어났다 — 같은 이유로 전이 표시를 버린다.
+      if (!res.ok) clearTransit(name);
+      const body = res.body || {};
+      bundleMsg(body.message || (res.ok ? name + " " + verb + " 요청됨" : "실패 (" + res.status + ")"));
+      renderCards();
+      // 🔵 링크는 건드리지 않는다 — 기동·종료 중에도 **둘러보기는 계속된다.**
+      schedulePoll();
     }
 
     async function pollBundles() {
@@ -781,26 +1017,26 @@
       bundleBlocked = (r.body && r.body.bundle_boot_supported === false)
         ? (r.body.bundle_boot_blocked || { message: "지금은 묶음 기동을 사용할 수 없습니다." })
         : null;
+      // TASK-MONO-729 — 「확인 실패」의 원인(헬스 정체)을 상세 줄에서 말하려고 함께 보관한다.
+      lastHealth = { stale: !!(r.body && r.body.health_stale), age: r.body ? r.body.health_age_seconds : null };
       bundlesErr = null; lastBundles = b; renderCards();
     }
     // GUARD-Z34-END
 
-    async function bundleStart(name) {
-      // 🔴 요구사항의 순서를 그대로 구현한다: ① 필요한 서비스와 현재 상태 확인 →
-      //    ② **사용자 버튼 클릭**으로 기동 요청 → ③ 준비 완료 후 로그인 → ④ 원래 경로 복귀.
-      //    ②가 여기다. 링크 클릭이 이 함수를 부르지 않는다는 것이 카드 마크업의 요점이다.
-      $("bmsg").textContent = `${name} 기동 요청 중…`;
-      const { ok, status, body } = await api("/bundle/start", "POST", { bundles: [name] });
-      $("bmsg").textContent = body.message || (ok ? `${name} 기동 요청됨` : `실패 (${status})`);
-      // 🔵 기동 중에도 **둘러보기는 계속된다** — 이 함수는 링크를 건드리지 않는다.
-      setTimeout(pollBundles, 1500);
-      setTimeout(poll, 1500);
-    }
+    // 🔵 bundleAct() 가 GUARD-Z34 구간 안에 있어서 가드가 그것을 **실행**한다. 그 구간 밖의 두
+    //    가지 — 응답 문구를 쓰는 칸, 다시 묻는 타이머 — 는 여기서 준다(가드는 자기 대역을 준다).
+    function bundleMsg(text) { $("bmsg").textContent = text; }
+    function schedulePoll() { setTimeout(pollBundles, 1500); setTimeout(poll, 1500); }
 
+    // 🔴 요구사항의 순서를 그대로 구현한다: ① 필요한 서비스와 현재 상태 확인 →
+    //    ② **사용자 버튼 클릭**으로 기동 요청 → ③ 준비 완료 후 로그인 → ④ 원래 경로 복귀.
+    //    ②가 여기다. 링크 클릭이 이 경로를 타지 않는다는 것이 카드 마크업의 요점이다.
+    // 🔴 무엇을 할지(켜기/끄기)는 renderCards() 가 적어 둔 `data-mode` 가 정한다 — 여기서 상태를
+    //    다시 판정하지 않는다(두 곳에서 정하면 갈라진다).
     document.getElementById("surfaces").addEventListener("click", (e) => {
-      const btn = e.target.closest("[data-bundle-start]");
+      const btn = e.target.closest("[data-bundle-act]");
       if (!btn || btn.disabled) return;
-      bundleStart(btn.closest("[data-bundle]").dataset.bundle);
+      bundleAct(btn.closest("[data-bundle]").dataset.bundle, btn.dataset.mode);
     });
 
     function startHeartbeat() {
@@ -837,13 +1073,29 @@
       stale: ["🔴 응답 없음", "b-stale"],
     };
 
+    // 🔴 TASK-MONO-729 (d) — console 은 **비즈니스 도메인이 아니다.** 다섯 도메인(이커머스·WMS·
+    //    SCM·재무·ERP)을 한 화면에서 운영하는 플랫폼 도구이고, 같은 목록에 섞어 두면 «여섯 번째
+    //    도메인» 으로 읽힌다. 그래서 **표기와 구획만** 가른다 — 버튼·동작·DOMAINS 는 그대로다
+    //    (고급 영역의 제어는 이 티켓의 범위 밖).
+    // 🔵 구획은 DOMAINS 에서 **파생**한다: 비즈니스 다섯 + 운영 도구 + 나머지. 목록을 셋으로 다시
+    //    적으면 DOMAINS 에 도메인이 늘 때 그 행이 조용히 사라진다 — 나머지 칸이 그것을 받는다.
+    const DOMAIN_BUSINESS = new Set(["ecommerce", "wms", "scm", "finance", "erp"]);
+    const DOMAIN_PLATFORM = new Set(["console"]);
+    const DOMAIN_LABEL = { console: "Platform Console (운영 콘솔)" };
     function buildDomainRows() {
-      $("dlist").innerHTML = DOMAINS.map((d) => `
+      const row = (d) => `
         <div class="drow" data-domain="${d}">
-          <span class="dname">${d}</span>
+          <span class="dname">${DOMAIN_LABEL[d] || d}</span>
           <span class="badge b-unknown" data-badge>… 확인 중</span>
           <button class="dbtn down" data-act data-mode="start">시작</button>
-        </div>`).join("");
+        </div>`;
+      const groups = [
+        ["비즈니스 도메인", DOMAINS.filter((d) => DOMAIN_BUSINESS.has(d))],
+        ["공용 서비스 · 기타", DOMAINS.filter((d) => !DOMAIN_BUSINESS.has(d) && !DOMAIN_PLATFORM.has(d))],
+        ["운영 도구", DOMAINS.filter((d) => DOMAIN_PLATFORM.has(d))],
+      ];
+      $("dlist").innerHTML = groups.filter(([, ds]) => ds.length)
+        .map(([title, ds]) => `<div class="dgroup">${title}</div>` + ds.map(row).join("")).join("");
     }
 
     function renderDomains(snap) {
