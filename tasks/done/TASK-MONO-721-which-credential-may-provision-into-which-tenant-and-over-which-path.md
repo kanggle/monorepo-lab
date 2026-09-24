@@ -8,7 +8,7 @@ TASK-MONO-721
 
 # Status
 
-review (2026-09-23 UTC — `ADR-MONO-076` **ACCEPTED — 갈래 D** 구현 완료 · AC-0·2·3·5·6·7 닫힘 · 🔴 **AC-1·AC-4 는 창 판정**(`TASK-MONO-672` 항목 13) — 단위 초록으로 닫지 않는다)
+done (2026-09-24 UTC — 4차원 검증 · impl PR #3968 squash `a76065373` · 14차 AMI 창 판정으로 마지막 AC 닫힘) ‖ 직전: review (2026-09-23 UTC — `ADR-MONO-076` **ACCEPTED — 갈래 D** 구현 완료 · AC-0·2·3·5·6·7 닫힘 · 🔴 **AC-1·AC-4 는 창 판정**(`TASK-MONO-672` 항목 13) — 단위 초록으로 닫지 않는다)
 
 # Owner
 
