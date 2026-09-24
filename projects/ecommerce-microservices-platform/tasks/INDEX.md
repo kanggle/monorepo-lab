@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-- `TASK-BE-598-quay-minio-is-closed-too.md` — 🔴 **READY (2026-09-24 UTC)** `quay.io/minio` 도 익명 pull 401(manifest 실측·대조군 200) — BE-591 의 우회로가 끊겼다. `Demo wrapper smoke` 칸 (h) 빨강의 원인. 🔴 **다음 AMI 재굽기 전에 먼저**(726·BE-596·BE-597·730 이 재굽기 대기). 대체 출처 실측 선정, 제품 교체면 소유자 결정. 분석=Opus 5.5 / 구현 권장=Opus 5.5.
+_(없음)_
 
 _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DONE. `../../../tasks/done/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
 
@@ -87,7 +87,7 @@ _(없음)_
 
 ## review
 
-(empty)
+- `TASK-BE-598-quay-minio-is-closed-too.md` — 🟡 **REVIEW (2026-09-24 UTC)** `quay.io/minio` 익명 401 재확인(대조군 200) → 같은 MinIO 릴리스의 **Bitnami 빌드 `docker.io/bitnamilegacy/minio` + `minio-client`, 다이제스트 고정**으로 4곳 교체(제품·버전 무변경, 바이너리 릴리스 타임스탬프 실측). 이미지 차이 흡수: compose minio `entrypoint`·`user: "0:0"`, k8s `command`·`MC_CONFIG_DIR`. 로컬 `verify-demo-wrapper.sh` rc=0·칸 (h) 17/17. 🔴 **AC-3(기동·버킷·업로드) 열림** — 로컬 Docker 없음, 나이틀리 web-store full-stack 은 머지 후 `main` 에서만 돌고 minio-init 결과는 단언 안 함. 🔴 `bitnamilegacy` = «갱신 안 됨» 아카이브. AMI 굽기는 pull 하므로(`demo-ami.pkr.hcl:381`) 재굽기 전 선행. 분석=Opus 5.5 / 구현=Opus 5.5.
 
 ## done
 
