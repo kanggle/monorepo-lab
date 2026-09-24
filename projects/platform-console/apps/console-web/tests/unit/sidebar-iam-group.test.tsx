@@ -27,16 +27,18 @@ describe('sidebar IAM parent group (TASK-PC-FE-060)', () => {
     expect(screen.queryByTestId('nav-operators')).toBeNull();
   });
 
-  it('clicking IAM drills in: reveals the 8-item workforce plane (개요/가이드/운영자 관리/운영자 그룹/테넌트/권한/권한 세트/감사·보안) and pins IAM at the top (TASK-PC-FE-225)', () => {
+  it('clicking IAM drills in: reveals the 8-item workforce plane (가이드/개요/운영자 관리/운영자 그룹/테넌트/권한/권한 세트/감사·보안) and pins IAM at the top (TASK-PC-FE-225)', () => {
     render(<ConsoleSidebarNav />);
     fireEvent.click(screen.getByTestId('nav-iam'));
 
-    // 개요 (TASK-PC-FE-180) — the LIVE overview snapshot, first child.
+    // 개요 (TASK-PC-FE-180) — the LIVE overview snapshot, SECOND child since
+    // TASK-PC-FE-297 (가이드 → 개요 in every domain).
     expect(screen.getByTestId('nav-iam-overview')).toHaveAttribute(
       'href',
       '/iam',
     );
-    // 가이드 (TASK-PC-FE-180) — the relocated static RBAC guide, second child.
+    // 가이드 (TASK-PC-FE-180) — the relocated static RBAC guide, FIRST child
+    // since TASK-PC-FE-297.
     expect(screen.getByTestId('nav-iam-guide')).toHaveAttribute(
       'href',
       '/iam/guide',

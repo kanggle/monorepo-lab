@@ -186,6 +186,7 @@ export const SCREEN_COVERAGE: Readonly<Record<string, ScreenStatus>> = {
   '/dashboards/health': 'ready',
 
   // static — no backend call
+  '/guide': 'static', // TASK-PC-FE-298 — 전역 가이드
   '/iam/guide': 'static',
   '/wms/guide': 'static',
   '/scm/guide': 'static',

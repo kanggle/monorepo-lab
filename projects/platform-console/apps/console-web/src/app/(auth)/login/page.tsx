@@ -39,7 +39,7 @@ const GENERIC_ERROR =
  * Login entry (IAM OIDC Auth Code + PKCE). Server component — no client JS,
  * minimal first-load (perf budget: /login 180 KB). The actual PKCE generation
  * + redirect happens in the `/api/auth/login` route handler; this page only
- * renders the "Sign in with GAP" link and any returned error.
+ * renders the "IAM 로그인" link and any returned error.
  *
  * If already authenticated, skip straight to the console — **단, 강제 재로그인으로
  * 꺾여 온 경우는 예외다** (아래).
@@ -120,7 +120,7 @@ export default async function LoginPage({
           data-testid="iam-login"
           className="mt-6 inline-flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
-          IAM 계정으로 로그인
+          IAM 로그인
         </Link>
 
         <p className="mt-4 text-center text-xs text-muted-foreground">

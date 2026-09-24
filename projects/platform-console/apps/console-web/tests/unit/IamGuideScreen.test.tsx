@@ -12,6 +12,7 @@ import {
   AUTH_PLANES,
 } from '@/features/iam-guide/data';
 import { runAxe } from '../a11y/axe-helper';
+import { expectDomainGuideTabs } from '../helpers/domain-guide-tabs';
 
 /**
  * IAM 가이드 화면 (TASK-PC-FE-163, 재구성 TASK-PC-FE-238) — 순수 정적 참조 화면.
@@ -307,5 +308,26 @@ describe('IamGuideScreen', () => {
     const { container } = render(<IamGuideScreen />);
     const violations = await runAxe(container);
     expect(violations).toEqual([]);
+  });
+});
+
+// TASK-PC-FE-298 — the existing sections are MOVED (not rewritten) into the 8
+// standard guide tabs; each section id must now live inside the expected panel.
+describe('IamGuideScreen — 8 standard guide tabs (TASK-PC-FE-298)', () => {
+  it('organises the existing sections into the 8 standard tabs', () => {
+    render(<IamGuideScreen />);
+    expectDomainGuideTabs('iam-guide', {
+      terms: [
+        'iam-guide-concepts',
+        'iam-guide-glossary'
+      ],
+      usage: [
+        'iam-guide-recipes',
+        'iam-guide-usage'
+      ],
+      permissions: [
+        'iam-guide-reference'
+      ]
+    });
   });
 });

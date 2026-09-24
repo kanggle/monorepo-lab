@@ -70,12 +70,15 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-FAN-FE-024-login-page-top-navbar.md` — **READY (2026-09-24 UTC)** 2026-09-24 포트폴리오 UX 전수조사(소유자 승인) 실행 티켓 — 팬 로그인 페이지(로고+카드뿐, `Header` import 없음)에 팬 자신의 서버 컴포넌트 `Header`(피드/아티스트/멤버십, zero-gateway 불변식)를 재사용해 상단 내비게이션을 추가. **스토어의 클라이언트 컴포넌트 헤더(햄버거 상태)는 이식 금지** — 익명 방문자 게이트웨이 호출 0회 불변식을 깬다. `TASK-MONO-728`(같은 파일의 버튼 문구 변경)에 의존 — 직렬 진행. 분석=Opus 5.5 / 구현 권장=Sonnet 5.
+(empty)
 
 ## in-progress
 
+(empty)
 
 ## review
+
+- `TASK-FAN-FE-024-login-page-top-navbar.md` — 🟢 **REVIEW (2026-09-24 UTC) — 팬 로그인 페이지에 자기 서버 컴포넌트 `Header` 재사용, AC-1~AC-5 닫힘.** 신설 `(auth)/layout.tsx` 가 기존 `widgets/header/Header.tsx` 를 그대로 렌더(스토어의 클라이언트 헤더는 이식하지 않음, zero-gateway 불변식 유지). 신규 유닛 테스트 3건(`(auth)/__tests__/layout.test.tsx`) — 헤더 렌더 확인 + fetch 0회 단언 + 소스 배선 확인(async Server Component 를 jsdom `render()` 로 못 그리는 제약을 `login-page.test.tsx` 와 같은 방식으로 우회, `server-only` 임포트 모듈 3개만 저장소 기존 관행대로 `vi.mock`). 기존 로그인 테스트(유닛 36/36·e2e 텍스트) 무영향 확인. 브라우저로 데스크톱 1280px·모바일 400px 확인 — `flex-wrap` 두 줄 접힘, 카드와 겹침 없음. typecheck/lint/build rc=0. `TASK-MONO-728`과 같은 worktree에서 728→024 순서로 직렬 진행, 겹치지 않는 파일이라 병합 충돌 0건. 분석=Opus 5.5 / 구현=Sonnet 5.
 
 
 

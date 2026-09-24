@@ -7,13 +7,13 @@ import { ConsoleSidebarNav } from '@/shared/ui/ConsoleSidebarNav';
 /**
  * Regression (TASK-PC-FE-222 AC-1): the `/wms/inbound` surface is an
  * additive in-console NAV destination — the FOURTH wms surface (after
- * 개요/가이드/재고/출고). It must NOT disturb the data-driven catalog
+ * 가이드/개요/재고/출고 — 가이드-first since TASK-PC-FE-297). It must NOT disturb the data-driven catalog
  * routing: `iam.baseRoute` still resolves to `/accounts`, and a non-IAM
  * product (incl. `wms`) keeps its registry `baseRoute`. Mirrors
  * `outbound-nav.test.tsx` / `wms-guide-nav.test.tsx` — same WMS drill-in
  * parent machinery (TASK-PC-FE-059).
  *
- * 입고 is inserted BETWEEN 가이드 and 재고 (물류 흐름 입고→재고→출고 —
+ * 입고 is inserted BETWEEN 개요 and 재고 (물류 흐름 입고→재고→출고 —
  * task § Scope item 7); this suite pins the order and asserts the addition
  * does NOT disturb the existing 재고/출고 longest-prefix active behaviour.
  */
@@ -48,7 +48,7 @@ describe('wms 입고 nav — additive, does not disturb the catalog routing (TAS
     expect(resolveConsoleRoute(wms)).toBe('/wms');
   });
 
-  it('the new /wms/inbound nav item renders and resolves, ordered between 가이드 and 재고', () => {
+  it('the new /wms/inbound nav item renders and resolves, ordered between 개요 and 재고', () => {
     mockPath = '/wms/inbound';
     render(<ConsoleSidebarNav />);
     const link = screen.getByTestId('nav-wms-inbound');

@@ -11,5 +11,5 @@ test('/login 페이지가 200 으로 렌더되고 GAP 로그인 버튼이 노출
   expect(response?.status()).toBe(200);
   await expect(page.getByRole('heading', { name: '로그인' })).toBeVisible();
   await expect(page.getByTestId('oidc-signin')).toBeVisible();
-  await expect(page.getByTestId('oidc-signin')).toHaveText(/GAP 로 로그인/);
+  await expect(page.getByTestId('oidc-signin')).toHaveText(/GAP로 로그인/);
 });

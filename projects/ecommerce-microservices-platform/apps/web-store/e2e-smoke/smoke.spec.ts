@@ -23,7 +23,7 @@ test.describe('웹스토어 smoke (백엔드 없음)', () => {
   test('/login 페이지가 렌더링되고 GAP 로그인 트리거 버튼이 노출된다', async ({ page }) => {
     await page.goto('/login');
     await expect(page.getByRole('heading', { name: '로그인' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Global Account 로 로그인' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Global Account로 로그인' })).toBeVisible();
   });
 
   test('비로그인 상태에서 /cart 접근 시 /login 으로 리다이렉트된다', async ({ page }) => {

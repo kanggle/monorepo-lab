@@ -83,8 +83,8 @@ export interface ConsoleScreen {
 }
 
 /**
- * Finance 콘솔 4개 화면(TASK-PC-FE-229 정석 정렬 후: 개요 → 가이드 → 계좌 →
- * 원장). `/finance`(개요)는 계좌 목록/검색이 없는 finance v1 의 정직한 제약을
+ * Finance 콘솔 4개 화면(TASK-PC-FE-229 정석 정렬 후, TASK-PC-FE-297 가이드-먼저:
+ * 가이드 → 개요 → 계좌 → 원장). `/finance`(개요)는 계좌 목록/검색이 없는 finance v1 의 정직한 제약을
  * 지키기 위해 원장의 browsable read(시산표·기간·대사·FX)와 운영자 본인의
  * 기본계좌 **단건** 스냅샷만 집계한다 — cross-account 집계나 synthetic ₩
  * 합산은 절대 하지 않는다.

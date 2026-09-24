@@ -205,7 +205,7 @@ const DEMO_PASSWORD = process.env.DEMO_PASSWORD || '';
 
 // 🔴🔴 **앱의 `/login` 에는 아이디·비밀번호 폼이 없다.** 2026-09-09 실측:
 //    console `/login` → input 0개 · button 0개 · 링크 `/api/auth/login?redirect=%2F` 하나
-//    fan     `/login` → 「GAP 로 로그인」 버튼(서버 액션) 하나
+//    fan     `/login` → 「GAP로 로그인」 버튼(서버 액션) 하나
 //    ⇒ 로그인은 **IAM 호스트로의 OIDC 리다이렉트**(Authorization Code + PKCE)이고,
 //      실제 폼은 IAM 의 `auth-service` 가 그린다. 그 마크업은 리포에 있다(실측):
 //        templates/login.html → input[type=email]#username[name=username]
@@ -225,9 +225,9 @@ async function login(page, app) {
   // --- ① OIDC 입구를 눌러 IAM 으로 간다 -------------------------------------
   // 🔵 두 모양을 다 받는다: 링크(console)와 버튼(fan). 하나로 박으면 앱이 늘 때 죽는다.
   // 🔴 세 앱이 **셋 다 다른 모양**이다(2026-09-09 실측):
-  //    console  a[href="/api/auth/login?..."]  "IAM 계정으로 로그인"
-  //    fan      button[type=submit]            "GAP 로 로그인"          (Next 서버 액션)
-  //    store    button[type=button]            "Global Account 로 로그인"  ← type 이 submit 이 아니다
+  //    console  a[href="/api/auth/login?..."]  "IAM 로그인"
+  //    fan      button[type=submit]            "GAP로 로그인"          (Next 서버 액션)
+  //    store    button[type=button]            "Global Account로 로그인"  ← type 이 submit 이 아니다
   //    ⇒ `button[type="submit"]` 만 쓰면 **store 를 놓친다**. 텍스트로도 잡는다.
   const entry = 'a[href*="/api/auth/login"], a[href*="/oauth2/authorization"], button:has-text("로그인")';
   const hasEntry = await page.locator(entry).count();

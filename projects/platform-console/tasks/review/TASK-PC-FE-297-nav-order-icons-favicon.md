@@ -8,7 +8,7 @@ TASK-PC-FE-297
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -102,3 +102,32 @@ frontend
 - 순서만 바꾸고 설명 주석을 갱신하지 않으면 다음 세션이 주석을 근거로 다시 되돌린다(왕복 재발) — AC-1이 이를 막는다.
 - `testid`를 실수로 바꾸면 26개 nav 테스트가 전부 깨진다.
 - 새 아이콘 라이브러리를 무심코 추가하면 번들 크기 증가 + `package.json` 리뷰 부담 — 반드시 먼저 기존 의존성을 확인한다.
+
+---
+
+# Implementation Record (2026-09-24 UTC)
+
+> 구현=Opus 5.5(서브에이전트). worktree `ml-wt-b-297`, 브랜치 `feat/pc-fe-297-nav-guide`. 298 과 같은 PR(별도 커밋).
+
+## 변경 파일
+
+- `src/shared/ui/console-nav-config.ts` — 6개 도메인 children 순서를 가이드 → 개요로 뒤집음. 옛 순서를 정당화하던 인접 주석 6곳(IAM · WMS · SCM · Finance · ERP · E-Commerce)을 **같은 커밋에서** 가이드-먼저 근거(2026-09-24 소유자 결정, ADR-MONO-074 샘플 방문자가 먼저 읽는 화면)로 다시 씀. testid·href 무변경. `NavIconName` 타입 + 모든 노드에 **필수** `icon` 필드(타입 검사기가 아이콘 없는 항목 추가를 막는다).
+- `src/shared/ui/console-nav-icons.tsx` (신규) — 손으로 쓴 인라인 SVG 36종, `aria-hidden`. `package.json` 에 아이콘 라이브러리 **없음을 확인**하고 의존성 추가 0.
+- `src/shared/ui/ConsoleSidebarNav.tsx` — 아이콘 렌더 · 그룹 제목 하위화 · 접힌 드릴의 부모 활성 표시 · `navPathFor` 별칭 적용.
+- `src/shared/ui/console-nav-matching.ts` — `NAV_ROUTE_ALIASES` + `navPathFor()`.
+- `src/app/icon.svg` · `src/app/apple-icon.tsx` · `src/app/manifest.ts` (신규) — Next.js 메타데이터 파일 컨벤션.
+- 테스트: `tests/unit/sidebar-nav-order-icons.test.tsx` (신규 13케이스), `sidebar-drilldown.test.tsx`(Finance·ERP 순서 단언 2건 **의도적으로** 갱신), `console-nav-matching.test.ts`(타입 필드), 주석만: `wms-guide-nav` · `scm-guide-nav` · `ecommerce-guide-nav` · `inbound-nav` · `operations-nav` · `master-nav` · `sidebar-iam-group` 테스트, `finance-guide/data.ts` · `erp-guide/data.ts` 의 화면 순서 주석.
+
+## AC 별 판정
+
+- **AC-1** ✅ — 6개 드릴 전부 `children[0]=가이드, children[1]=개요` (신규 테스트가 config 와 렌더 DOM 양쪽에서 단언). 인접 주석 갱신.
+- **AC-2** ✅ — 모든 항목(최상위 링크·드릴 부모·드릴 자식)에 아이콘 1개(`svg[data-nav-icon]`, 테스트가 개수=1 단언). 그룹 제목: `text-xs font-medium uppercase tracking-wider` → `text-[11px] font-normal text-muted-foreground/70` — 요소는 그대로 `<p>`(heading 이 아니었고 지금도 아님, 접근성 트리 무변). 브라우저 스크린샷 확인.
+- **AC-3** ✅ — **재현 스텝**: `/wms/outbound` 딥링크 → 드릴 자동 열림 → 고정된 WMS(부모) 클릭으로 접기 → 이전엔 최상위 목록의 WMS 버튼에 아무 표시도 없었다(`ConsoleSidebarNav.tsx` 옛 :158-175 는 부모 버튼에 무조건 `text-muted-foreground` 만 줬다). **after DOM**(프로덕션 빌드, 브라우저 실측): `aria-current="true"` · `data-active="true"` · `bg-accent font-medium text-foreground`. `aria-current="page"` 가 아니라 `"true"` 인 이유: 버튼은 페이지가 아니다 — «현재 항목이 이 안에 있다» 를 뜻하는 값. 다른 부모에는 붙지 않음(테스트 단언). before 스크린샷은 찍지 않았다 — before 상태는 옛 코드 줄로 인용했다.
+- **AC-4** ✅ — `/dashboards/health` 는 `navPathFor` 별칭으로 **개요**(`/dashboards/overview`)에 매칭(브라우저 실측 `nav-dashboards[aria-current=page]`). 항목을 추가하지 않고 매칭 규칙을 조정한 이유: `TASK-PC-FE-068` 이 «도메인 상태는 최상위 항목이 아니다» 로 결정했고 `domain-health-nav.test.tsx` 가 nav config 에 `'/dashboards/health'` 리터럴이 없음을 단언한다 — 별칭은 `console-nav-matching.ts` 에 두어 그 결정을 보존. **`/account` 는 의도적 미매칭** — 근거: 로그인한 운영자 **자신의** 계정 설정이며 상단 계정 메뉴(`AccountMenu.tsx` → `/account`)에서 들어오는 화면이다(`account/page.tsx` 헤더 «Reached from the top-bar account menu», AWS/GCP 도 계정 설정을 사이드바가 아닌 계정 메뉴에 둔다). 사이드바의 어느 섹션도 그 부모가 아니므로 무엇을 켜든 거짓 «현재 위치» 가 된다. 테스트가 `/account` 에서 `aria-current` 0개를 단언.
+- **AC-5** ✅ — 프로덕션 빌드의 `<head>`: `link[rel=icon] /icon.svg (image/svg+xml)`, `link[rel=apple-touch-icon] /apple-icon (image/png, 200)`, `link[rel=manifest] /manifest.webmanifest` → `200 application/manifest+json`, JSON 파싱 성공(name/short_name/start_url/display/icons 2개). 흰 배경·어두운 배경(#202124) 양쪽에 64px·16px 로 렌더해 가독 확인 — 검은 타일은 밝은 탭에서, `#52525b` 테두리와 흰 글리프는 어두운 탭에서 윤곽을 만든다.
+  - 🔵 **티켓 문구와의 차이**: 사이드바 아이콘은 「흰색」 리터럴이 아니라 `stroke="currentColor"` 다. 콘솔 테마 기본값은 `system`(`ThemeProvider.tsx`)이라 라이트 테마 사이드바는 흰 바탕이고, 리터럴 `#fff` 는 거기서 **안 보인다**. `currentColor` 는 다크 테마에서 흰색, 라이트 테마에서 글자색으로 그려진다(두 테마 스크린샷 확인). 파비콘/앱 아이콘은 티켓대로 검은 배경 + 흰 아이콘.
+- **AC-6** ✅ — nav 관련 유닛 스위트 29파일/175케이스 초록(신규 포함). testid 무변경 — DOM 순서만 바뀜. `aria-current="page"` 규칙(최장 일치)·aria-label·키보드(네이티브 `<a>`/`<button>`) 회귀 없음. 순서를 핀하던 단언은 `sidebar-drilldown.test.tsx` 의 Finance·ERP 2건뿐이었고 둘 다 의도적으로 뒤집었다.
+- **AC-7** ✅ — `tsc --noEmit` rc=0 · `next lint` rc=0 · `next build` rc=0(경고 1건은 기존 `@opentelemetry/winston-transport` — 무관) · 전체 vitest: 317파일 중 9파일/12케이스가 **5s 타임아웃**으로 빨갛게 나왔고(같은 호스트에서 다른 에이전트의 프런트 스위트가 병렬 실행 중), 그 9파일을 `--minWorkers=1 --maxWorkers=1` 로 직렬 재실행하자 85/85 초록 — 전부 타임아웃 지문이었고 단언 실패 0. 브라우저: 1280px 다크/라이트 + 400px 다크/라이트, 샘플 방문자(쿠키 없음)로 `/console` 200.
+  - 400px 에서 사이드바는 **원래부터** `hidden md:block`(`(console)/layout.tsx`)이라 렌더되지 않는다 — 아이콘으로 인한 줄바꿈/겹침이 생길 자리가 없다(모바일 드로어는 기존 deferred). 데스크톱 폭에서는 라벨에 `truncate` 를 걸어 긴 라벨(`보충 계획 설정`)도 한 줄 유지.
+  - 브라우저 확인 뒤 한 가지를 바꿨다: `dashboard`(개요) 글리프가 `catalog`(카탈로그)의 네 칸 격자와 거의 같아 보여 **게이지 글리프로 교체**. 그 뒤 판은 298 커밋의 최종 빌드·스크린샷이 확인한다.
+- **AC-8** ✅(기록만) — `node scripts/check-capture-route-staleness.mjs` rc=0 (`console 라우트 67 probe /dashboards/overview ✔`). 저장소 README 들에 사이드바 스크린샷 캡션은 없다(`README.md` · 프로젝트/앱 README 이미지 링크 0건). 사이드바가 찍힌 촬영물은 론처 썸네일 `infra/demo/aws/site/thumbnails/console-1-erp-masters.jpg` · `console-2-ecommerce-products.jpg` 이고, 이 변경으로 **시각적으로 낡았다**(아이콘 없음, 옛 그룹 제목 스타일). 티켓 범위 밖이므로 재촬영하지 않고 여기 기록만 남긴다.

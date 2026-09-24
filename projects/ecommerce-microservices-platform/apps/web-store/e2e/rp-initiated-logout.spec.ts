@@ -49,7 +49,7 @@ test.describe('RP-initiated OIDC logout (GAP end_session)', () => {
 
     // 5. Re-login: click the GAP button again.
     await page.goto('/login');
-    await page.getByRole('button', { name: 'Global Account 로 로그인' }).click();
+    await page.getByRole('button', { name: 'Global Account로 로그인' }).click();
 
     // 6. THE assertion: the IdP session was terminated, so GAP re-renders its
     //    credential form (Spring-default #username) instead of silently

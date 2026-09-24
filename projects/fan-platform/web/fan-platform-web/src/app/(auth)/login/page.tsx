@@ -20,7 +20,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   // 있으면 여기로 떨어진다) 그 경우는 아래 데모 분기가 먼저 가로챈다 — 이 문구는
   // 데모가 **켜져 있는데도** Configuration 이 난 경우, 즉 진짜 설정 결함용이다.
   Configuration:
-    'IAM 인증 서버에 연결할 수 없습니다. 문제가 계속되면 관리자에게 문의해주세요.',
+    'GAP 인증 서버에 연결할 수 없습니다. 문제가 계속되면 관리자에게 문의해주세요.',
   AccessDenied: '이 계정으로는 로그인할 수 없습니다. 접근 권한을 확인해주세요.',
   Verification: '로그인 링크가 만료되었거나 이미 사용되었습니다. 다시 시도해주세요.',
 };
@@ -112,7 +112,7 @@ export default async function LoginPage({
       <section className="w-full rounded-xl border border-ink-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-ink-900">로그인</h2>
         <p className="mt-1 text-sm text-ink-600">
-          IAM 으로 안전하게 로그인합니다.
+          GAP으로 안전하게 로그인합니다.
         </p>
 
         {/* 🔴 상호배타 — 데모가 꺼져 있으면 그 사실만 말한다 (AC-2/AC-3). 색은 형제
@@ -158,7 +158,7 @@ export default async function LoginPage({
           }}
         >
           <Button type="submit" size="lg" className="w-full" data-testid="oidc-signin">
-            GAP 로 로그인
+            GAP로 로그인
           </Button>
         </form>
 
