@@ -104,8 +104,8 @@ export interface ConsoleScreen {
 }
 
 /**
- * ERP 콘솔 6개 화면(TASK-PC-FE-232 정석 정렬 후: 개요 → 가이드 → 마스터 →
- * 통합 조회 → 결재함 → 위임).
+ * ERP 콘솔 6개 화면(TASK-PC-FE-232 정석 정렬 후, TASK-PC-FE-297 가이드-먼저:
+ * 가이드 → 개요 → 마스터 → 통합 조회 → 결재함 → 위임).
  */
 export const CONSOLE_SCREENS: ConsoleScreen[] = [
   {

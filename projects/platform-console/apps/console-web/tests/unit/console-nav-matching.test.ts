@@ -44,9 +44,9 @@ describe('matchesRoute', () => {
 
 describe('activeHref', () => {
   const leaves: NavLeaf[] = [
-    { href: '/wms', label: '개요', testid: 't-overview' },
-    { href: '/wms/outbound', label: '출고', testid: 't-outbound' },
-    { href: '/wms/inventory', label: '재고', testid: 't-inventory' },
+    { href: '/wms', label: '개요', testid: 't-overview', icon: 'overview' },
+    { href: '/wms/outbound', label: '출고', testid: 't-outbound', icon: 'outbound' },
+    { href: '/wms/inventory', label: '재고', testid: 't-inventory', icon: 'package' },
   ];
 
   it('returns the single exact match', () => {

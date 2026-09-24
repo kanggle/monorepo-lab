@@ -4,8 +4,8 @@ import { ConsoleSidebarNav } from '@/shared/ui/ConsoleSidebarNav';
 
 /**
  * TASK-PC-FE-184 — the E-Commerce drill gains a 가이드 child (static 도메인 서비스·
- * 주문·배송·… reference), placed between 개요 and 상품 (mirroring IAM/WMS's
- * 개요 → 가이드 order). Same drill machinery as FE-059; these cases mirror the WMS
+ * 주문·배송·… reference), now placed FIRST, before 개요 (TASK-PC-FE-297 — all
+ * domains 가이드 → 개요). Same drill machinery as FE-059; these cases mirror the WMS
  * guide-nav suite. The addition must NOT disturb the existing longest-prefix
  * active behaviour on the deeper ecommerce child routes.
  */
@@ -25,7 +25,7 @@ describe('ecommerce 가이드 nav (TASK-PC-FE-184)', () => {
     fireEvent.click(screen.getByTestId('nav-ecommerce'));
     const guide = screen.getByTestId('nav-ecommerce-guide');
     expect(guide).toHaveAttribute('href', '/ecommerce/guide');
-    // Ordered between 개요 and 상품.
+    // 가이드 → 개요 → 상품 (TASK-PC-FE-297; order pinned in sidebar-nav-order-icons.test).
     expect(screen.getByTestId('nav-ecommerce-ops')).toHaveAttribute(
       'href',
       '/ecommerce',

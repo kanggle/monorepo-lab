@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Platform Console">
+  <!-- TASK-PC-FE-297: black tile + white console glyph. The #52525b edge keeps
+       the tile's outline visible on a dark tab strip; on a light tab strip the
+       black tile itself carries the contrast. -->
+  <rect x="1" y="1" width="62" height="62" rx="14" fill="#000" stroke="#52525b" stroke-width="2"/>
+  <rect x="12" y="15" width="40" height="34" rx="5" fill="none" stroke="#fff" stroke-width="4"/>
+  <path d="M12 24h40" stroke="#fff" stroke-width="4"/>
+  <path d="m20 32 6 5-6 5M30 42h12" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

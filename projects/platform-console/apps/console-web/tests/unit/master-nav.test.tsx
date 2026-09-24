@@ -7,7 +7,7 @@ import { ConsoleSidebarNav } from '@/shared/ui/ConsoleSidebarNav';
 /**
  * Regression (TASK-PC-FE-223 AC-1): the `/wms/master` surface is an
  * additive in-console NAV destination — the FIFTH wms surface (after
- * 개요/가이드/입고/재고/출고). It must NOT disturb the data-driven catalog
+ * 가이드/개요/입고/재고/출고 — 가이드-first since TASK-PC-FE-297). It must NOT disturb the data-driven catalog
  * routing: `iam.baseRoute` still resolves to `/accounts`, and a non-IAM
  * product (incl. `wms`) keeps its registry `baseRoute`. Mirrors
  * `inbound-nav.test.tsx` — same WMS drill-in parent machinery

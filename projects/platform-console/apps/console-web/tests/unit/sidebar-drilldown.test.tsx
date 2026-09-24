@@ -36,7 +36,7 @@ describe('sidebar drill-in (TASK-PC-FE-059)', () => {
     expect(scm).not.toHaveAttribute('href');
     expect(screen.queryByTestId('nav-scm-ops')).toBeNull();
     expect(screen.queryByTestId('nav-scm-replenishment')).toBeNull();
-    // Finance is ALSO a drill parent (개요 + 가이드 + 계좌 + 원장,
+    // Finance is ALSO a drill parent (가이드 + 개요 + 계좌 + 원장,
     // TASK-PC-FE-078, children realigned TASK-PC-FE-229) — a toggle
     // button, not a link, with its submenus collapsed until opened.
     const finance = screen.getByTestId('nav-finance');
@@ -220,10 +220,10 @@ describe('sidebar drill-in (TASK-PC-FE-059)', () => {
   });
 
   // --- Finance drill parent (TASK-PC-FE-078; children realigned
-  // TASK-PC-FE-229 — 개요 → 가이드 → 계좌 → 원장) — mirrors the WMS tests
+  // TASK-PC-FE-229, reordered TASK-PC-FE-297 — 가이드 → 개요 → 계좌 → 원장) — mirrors the WMS tests
   // above.
 
-  it('clicking Finance drills in: reveals 개요 + 가이드 + 계좌 + 원장 with their destinations, in order', () => {
+  it('clicking Finance drills in: reveals 가이드 + 개요 + 계좌 + 원장 with their destinations, in order', () => {
     render(<ConsoleSidebarNav />);
     fireEvent.click(screen.getByTestId('nav-finance'));
 
@@ -246,13 +246,14 @@ describe('sidebar drill-in (TASK-PC-FE-059)', () => {
       'data-testid',
       'nav-finance',
     );
-    // Order: 개요 → 가이드 → 계좌 → 원장.
+    // Order: 가이드 → 개요 → 계좌 → 원장 (TASK-PC-FE-297 — owner decision
+    // 2026-09-24 UTC reversed the TASK-PC-FE-229 개요 → 가이드 order on purpose).
     const links = Array.from(nav.querySelectorAll('a')).map((a) =>
       a.getAttribute('data-testid'),
     );
     expect(links).toEqual([
-      'nav-finance-overview',
       'nav-finance-guide',
+      'nav-finance-overview',
       'nav-finance-accounts',
       'nav-ledger',
     ]);
@@ -324,7 +325,7 @@ describe('sidebar drill-in (TASK-PC-FE-059)', () => {
  * TASK-PC-FE-076 — ERP becomes the SECOND drill parent (after WMS): the
  * single dense `/erp` page is split into section routes. TASK-PC-FE-232 —
  * 정석(orthodox) 파리티 정렬: children reordered to 개요 → 가이드 → 마스터 →
- * 통합 조회 → 결재함 → 위임 (마스터 relocated from the domain root `/erp` to
+ * 통합 조회 → 결재함 → 위임; TASK-PC-FE-297 then put 가이드 before 개요 (마스터 relocated from the domain root `/erp` to
  * `/erp/masters`; `/erp` is now the 개요 landing, mirroring the Finance
  * TASK-PC-FE-229 suite below). Same drill machinery as FE-059 — these
  * cases mirror the WMS/Finance suites.
@@ -343,7 +344,7 @@ describe('sidebar drill-in — ERP parent (TASK-PC-FE-076; children realigned TA
     expect(screen.queryByTestId('nav-erp-delegation')).toBeNull();
   });
 
-  it('clicking ERP drills in: pins ERP at top and reveals 개요/가이드/마스터/통합 조회/결재함/위임, in order', () => {
+  it('clicking ERP drills in: pins ERP at top and reveals 가이드/개요/마스터/통합 조회/결재함/위임, in order', () => {
     render(<ConsoleSidebarNav />);
     fireEvent.click(screen.getByTestId('nav-erp'));
 
@@ -375,13 +376,14 @@ describe('sidebar drill-in — ERP parent (TASK-PC-FE-076; children realigned TA
     const nav = screen.getByRole('navigation');
     const firstControl = nav.querySelector('a,button');
     expect(firstControl).toHaveAttribute('data-testid', 'nav-erp');
-    // Order: 개요 → 가이드 → 마스터 → 통합 조회 → 결재함 → 위임.
+    // Order: 가이드 → 개요 → 마스터 → 통합 조회 → 결재함 → 위임 (TASK-PC-FE-297
+    // reversed the TASK-PC-FE-232 개요 → 가이드 order on purpose).
     const links = Array.from(nav.querySelectorAll('a')).map((a) =>
       a.getAttribute('data-testid'),
     );
     expect(links).toEqual([
-      'nav-erp-overview',
       'nav-erp-guide',
+      'nav-erp-overview',
       'nav-erp-masters',
       'nav-erp-orgview',
       'nav-erp-approval',
