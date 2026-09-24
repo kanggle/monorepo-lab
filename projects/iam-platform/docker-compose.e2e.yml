@@ -250,6 +250,10 @@ services:
       # TASK-BE-319a: INTERNAL_SERVICE_TOKEN removed. security-service no longer accepts the static
       # X-Internal-Token on /internal/** (GAP JWT only); its outbound calls to account-service already
       # use a GAP client_credentials Bearer JWT (BE-318), so no static token is needed either side.
+      # TASK-MONO-727: auto-lock target (POST /internal/accounts/{id}/lock). The code default was
+      # http://localhost:8081 — this container listens on 8084, so every auto-lock was refused and
+      # surfaced only as security_auto_lock_failures_total. Same value admin-service uses below.
+      ACCOUNT_SERVICE_BASE_URL: http://account-service:8082
     # TASK-BE-045: last in the startup chain (auth -> account -> admin -> security).
     depends_on:
       mysql: { condition: service_healthy }

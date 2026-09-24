@@ -42,10 +42,18 @@ SELF_TEST=0
 #   · order-service — **받는 쪽**. `/api/internal/**` 체인이 그 토큰을 검증하는 JWKS·issuer.
 #                     호출자는 아니지만 «설정이 없으면 코드 기본값으로 떨어져 조용히 401» 이라는
 #                     같은 결함을 갖는다(기본값 `auth-service:8081` 은 ecommerce 망에서 미해소).
+#
+# TASK-MONO-727 — 데모 조합 전수조사(`${VAR:http…}` 기본값 × compose 미전달)에서 확인된 둘:
+#   · batch-worker `PRODUCT_SERVICE_BASE_URL` — SearchIndexConsistencyJob, 기본 `:8081`(product 는 8082)
+#   · security-service `ACCOUNT_SERVICE_BASE_URL` — 자동 잠금, 기본 `localhost:8081`(자기는 8084).
+#     🔵 iam 의 이 서비스는 **e2e compose 에만** 정의된다(데모 조합 = base + e2e + 오버레이).
+# 🔴 전수조사 술어 자체를 가드로 옮기지 않았다 — relaxed binding 오탐(admin-service)이 있어
+#    «걸림» 이 결함이 아니다. 이 목록은 사람이 확인한 호출자만 든다.
 CALLERS=(
   "projects/ecommerce-microservices-platform/docker-compose.yml|product-service|IAM_TOKEN_URI ACCOUNT_SERVICE_BASE_URL"
-  "projects/ecommerce-microservices-platform/docker-compose.yml|batch-worker|IAM_TOKEN_URI ORDER_SERVICE_BASE_URL"
+  "projects/ecommerce-microservices-platform/docker-compose.yml|batch-worker|IAM_TOKEN_URI ORDER_SERVICE_BASE_URL PRODUCT_SERVICE_BASE_URL"
   "projects/ecommerce-microservices-platform/docker-compose.yml|order-service|ORDER_INTERNAL_OAUTH2_JWK_SET_URI ORDER_INTERNAL_OAUTH2_ISSUER"
+  "projects/iam-platform/docker-compose.e2e.yml|security-service|ACCOUNT_SERVICE_BASE_URL"
 )
 
 judge() {

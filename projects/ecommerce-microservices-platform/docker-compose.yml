@@ -928,6 +928,9 @@ services:
       #    의 포트 — order-service 는 8086). 형제 서비스는 `ORDER_SERVICE_URL=…:8086` 을 쓴다.
       - IAM_TOKEN_URI=${IAM_TOKEN_URI:-http://iam.local/oauth2/token}
       - ORDER_SERVICE_BASE_URL=http://order-service:8086
+      # TASK-MONO-727 — SearchIndexConsistencyJob 의 GET /api/products(공개). 코드 기본값 `:8081` 은
+      # 아무것도 없는 포트다(product-service 는 8082). 이 서비스 주소 넷 중 셋째로 틀린 기본값.
+      - PRODUCT_SERVICE_BASE_URL=http://product-service:8082
     expose:
       - "8088"
     deploy:
