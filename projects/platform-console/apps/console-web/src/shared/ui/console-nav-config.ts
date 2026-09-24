@@ -76,6 +76,11 @@ export function isParent(node: NavNode): node is NavParent {
 export const GROUPS: NavGroup[] = [
   {
     items: [
+      // 전역 가이드(/guide — TASK-PC-FE-298): 콘솔 전체의 아키텍처·서비스·서버
+      // 구성·전체 메뉴·권한/테스트 계정·업무 흐름·기동/종료. 도메인 드릴과 같은
+      // 「가이드 → 개요」 원칙(TASK-PC-FE-297)을 1뎁스에도 적용해 맨 앞에 둔다.
+      // 정적 화면이라 샘플 방문자(ADR-MONO-074)도 백엔드 호출 없이 읽는다.
+      { href: '/guide', label: '가이드', testid: 'nav-global-guide', icon: 'guide' },
       { href: '/dashboards/overview', label: '개요', testid: 'nav-dashboards', icon: 'dashboard' },
       // 도메인 상태(/dashboards/health) is NOT a top-level entry (TASK-PC-FE-068)
       // — it is reached only from the 개요 page's "도메인 상태 요약" card

@@ -10,6 +10,7 @@ import {
   SUPPLIER_FIELDS,
 } from '@/features/scm-guide/data';
 import { runAxe } from '../a11y/axe-helper';
+import { expectDomainGuideTabs } from '../helpers/domain-guide-tabs';
 
 /**
  * SCM 가이드 화면 (TASK-PC-FE-188) — 순수 정적 참조 화면. scm-platform 도메인
@@ -144,5 +145,33 @@ describe('ScmGuideScreen', () => {
     const { container } = render(<ScmGuideScreen />);
     const violations = await runAxe(container);
     expect(violations).toEqual([]);
+  });
+});
+
+// TASK-PC-FE-298 — the existing sections are MOVED (not rewritten) into the 8
+// standard guide tabs; each section id must now live inside the expected panel.
+describe('ScmGuideScreen — 8 standard guide tabs (TASK-PC-FE-298)', () => {
+  it('organises the existing sections into the 8 standard tabs', () => {
+    render(<ScmGuideScreen />);
+    expectDomainGuideTabs('scm-guide', {
+      terms: [
+        'scm-guide-visibility',
+        'scm-guide-glossary'
+      ],
+      usage: [
+        'scm-guide-recipes',
+        'scm-guide-config'
+      ],
+      flows: [
+        'scm-guide-procurement',
+        'scm-guide-replenishment'
+      ],
+      permissions: [
+        'scm-guide-roles'
+      ],
+      services: [
+        'scm-guide-services'
+      ]
+    });
   });
 });

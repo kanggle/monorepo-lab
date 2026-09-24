@@ -8,6 +8,7 @@ import {
   KYC_LEVELS,
 } from '@/features/finance-guide/data';
 import { runAxe } from '../a11y/axe-helper';
+import { expectDomainGuideTabs } from '../helpers/domain-guide-tabs';
 
 /**
  * Finance 가이드 화면 (TASK-PC-FE-229) — 순수 정적 참조 화면. finance-platform
@@ -96,5 +97,30 @@ describe('FinanceGuideScreen', () => {
     const { container } = render(<FinanceGuideScreen />);
     const violations = await runAxe(container);
     expect(violations).toEqual([]);
+  });
+});
+
+// TASK-PC-FE-298 — the existing sections are MOVED (not rewritten) into the 8
+// standard guide tabs; each section id must now live inside the expected panel.
+describe('FinanceGuideScreen — 8 standard guide tabs (TASK-PC-FE-298)', () => {
+  it('organises the existing sections into the 8 standard tabs', () => {
+    render(<FinanceGuideScreen />);
+    expectDomainGuideTabs('finance-guide', {
+      terms: [
+        'finance-guide-account-states',
+        'finance-guide-kyc',
+        'finance-guide-concepts',
+        'finance-guide-glossary'
+      ],
+      usage: [
+        'finance-guide-screens'
+      ],
+      flows: [
+        'finance-guide-recipes'
+      ],
+      services: [
+        'finance-guide-services'
+      ]
+    });
   });
 });

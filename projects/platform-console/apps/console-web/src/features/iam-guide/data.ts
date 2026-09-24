@@ -420,6 +420,10 @@ export const PERMISSION_KEYS: PermissionKey[] = [
     key: 'org.manage',
     desc: '조직 노드(회사) 트리를 만들고 관리하며, 노드의 엔타이틀먼트 상한(ceiling)을 정하고, 노드에 ORG_ADMIN 을 배정합니다. 상한은 하위 테넌트가 쓸 수 있는 도메인을 좁히기만 할 뿐 부여하지 않습니다.',
   },
+  {
+    key: 'group.manage',
+    desc: '운영자 그룹을 만들고 멤버를 관리하며, 역할·테넌트 배정을 그룹 멤버 전원에게 한 번에 부여합니다(조회에도 필요).',
+  },
 ];
 
 /** admin-console RBAC seed role (rbac.md § Seed Roles). */
@@ -464,6 +468,9 @@ export const SEED_ROLES: SeedRole[] = [
       // ADR-MONO-047 D5: SUPER_ADMIN 은 org.manage 를 추가로 얻어 ROOT 노드 생성
       // 유일 주체가 된다(rbac.md § Seed Matrix). PC-FE-238 당시 누락되었던 키.
       'org.manage',
+      // ADR-MONO-046 D6 (rbac.md:90, § Seed Matrix :114) — TASK-PC-FE-298 이 권한·기능
+      // 매핑 표를 rbac.md 와 대조하다 이 화면에서 빠져 있던 것을 찾았다.
+      'group.manage',
     ],
     elevated: true,
   },
@@ -506,6 +513,7 @@ export const SEED_ROLES: SeedRole[] = [
       'operator.manage',
       'tenant.admin.delegate',
       'partnership.manage',
+      'group.manage', // rbac.md:94 (ADR-MONO-046 D6) — TASK-PC-FE-298
     ],
   },
   {
@@ -522,7 +530,12 @@ export const SEED_ROLES: SeedRole[] = [
     scope: 'org-node',
     intent:
       '한 회사(조직 노드) 아래 모든 서비스 테넌트의 운영자를 관리하고, 노드 트리와 상한을 다룹니다. 구독과 파트너십은 다루지 못합니다 — 그래서 TENANT_ADMIN 을 세울 수 없습니다.',
-    permissions: ['org.manage', 'operator.manage', 'tenant.admin.delegate'],
+    permissions: [
+      'org.manage',
+      'operator.manage',
+      'tenant.admin.delegate',
+      'group.manage', // rbac.md:96 (ADR-MONO-046 D6) — TASK-PC-FE-298
+    ],
   },
 ];
 
