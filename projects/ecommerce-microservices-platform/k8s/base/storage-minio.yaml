@@ -56,9 +56,14 @@ spec:
           type: RuntimeDefault
       containers:
         - name: minio
-          # TASK-BE-591: Docker Hub 가 minio/* 익명 pull 을 닫았다. compose 와 같은 사유·같은 태그.
-          image: quay.io/minio/minio:RELEASE.2024-10-13T13-34-11Z
+          # TASK-BE-591 → TASK-BE-598: Docker Hub 에 이어 quay.io/minio 도 익명 pull 을 닫았다.
+          # compose 와 같은 출처·같은 MinIO 릴리스(Bitnami 빌드, 다이제스트 고정). 이 이미지의
+          # ENTRYPOINT 는 Bitnami 셸 스크립트라 `server …` 를 그대로 exec 하려 든다 — 그래서
+          # command 로 minio 바이너리를 직접 지정하고 args 는 예전 그대로 둔다.
+          image: docker.io/bitnamilegacy/minio:2024.10.13-debian-12-r1@sha256:faf554135d50ff8b382f79df7795e080726cb2d6f4ce7f056d733a6437546f6a
           imagePullPolicy: IfNotPresent
+          command:
+            - /opt/bitnami/minio/bin/minio
           args:
             - server
             - /data
@@ -164,8 +169,9 @@ spec:
           type: RuntimeDefault
       containers:
         - name: mc
-          # TASK-BE-591: 위 minio 와 같은 사유.
-          image: quay.io/minio/mc:RELEASE.2024-10-08T09-37-26Z
+          # TASK-BE-591 → TASK-BE-598: 위 minio 와 같은 사유·같은 출처(같은 mc 릴리스).
+          # command 가 /bin/sh 라 Bitnami ENTRYPOINT 는 안 돈다. mc 는 이미지 PATH 에 있다.
+          image: docker.io/bitnamilegacy/minio-client:2024.10.8-debian-12-r1@sha256:c3e82110529b30658cdcdf6414619fe901c2ec820eba973bda936cdcb4c6193c
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -186,6 +192,10 @@ spec:
                   key: STORAGE_S3_SECRET_KEY
             - name: PRODUCT_IMAGES_BUCKET
               value: "firstproject-dev-product-images"
+            # TASK-BE-598: 이 이미지는 HOME=/ 이고 설정 디렉터리 /.mc 는 root 그룹(0:0 775)만
+            # 쓸 수 있다. 여기 Job 은 1000:1000 으로 돌므로 mc 설정을 /tmp(1777) 로 보낸다.
+            - name: MC_CONFIG_DIR
+              value: "/tmp/.mc"
           command:
             - /bin/sh
             - -c

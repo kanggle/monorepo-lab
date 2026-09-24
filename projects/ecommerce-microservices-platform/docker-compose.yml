@@ -180,11 +180,21 @@ services:
   # specs/platform/object-storage-policy.md
   # ──────────────────────────────────────────────
   minio:
-    # TASK-BE-591: Docker Hub 가 minio/* 익명 pull 을 닫았다(레포 전체 401 — `latest` 도).
-    # quay.io 는 MinIO 자신의 레지스트리이고 **같은 태그**가 익명으로 열려 있다. 태그는 안 바꾼다.
-    image: quay.io/minio/minio:RELEASE.2024-10-13T13-34-11Z
+    # TASK-BE-591: Docker Hub 가 minio/* 익명 pull 을 닫았다 → quay.io/minio 로 옮겼다.
+    # TASK-BE-598: 2026-09-24 에 quay.io/minio 도 닫혔다(레포 전체 401). MinIO 자신의 배포처는
+    # 이제 전부 닫혀 있다(dl.min.io 바이너리도 410). 그래서 **같은 MinIO 릴리스**를 Bitnami
+    # (Broadcom) 가 소스에서 빌드해 둔 판으로 옮긴다 — `bitnamilegacy` 는 «더 이상 갱신 안 됨»
+    # 아카이브라 다이제스트로 고정한다. 바이너리에 2024-10-13T13:34:11Z 가 박혀 있다(실측).
+    # 이 이미지는 ENTRYPOINT 가 Bitnami 셸 스크립트이고 USER 1001 이다 — 그래서
+    #   · entrypoint 를 minio 바이너리로 직접 지정해 `command` 를 예전 그대로 쓴다.
+    #   · user 를 root 로 둔다. 이전 공식 이미지가 root 였고, 기존 minio-data 볼륨(root 소유)을
+    #     그대로 읽고 써야 한다. 1001 로 두면 새 볼륨(/data 는 이미지에 없어 root 755)에도 못 쓴다.
+    # 🔴 레지스트리 한 곳 의존은 또 끊길 수 있다 — infra/demo/verify-demo-wrapper.sh 칸 (h) 가 잡는다.
+    image: docker.io/bitnamilegacy/minio:2024.10.13-debian-12-r1@sha256:faf554135d50ff8b382f79df7795e080726cb2d6f4ce7f056d733a6437546f6a
     container_name: ecommerce-minio
     restart: unless-stopped
+    user: "0:0"
+    entrypoint: ["/opt/bitnami/minio/bin/minio"]
     command: server /data --console-address ":9001"
     environment:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
@@ -213,8 +223,11 @@ services:
   # 1회 실행 후 종료(oneshot). restart 정책 "no" 유지.
   # ──────────────────────────────────────────────
   minio-init:
-    # TASK-BE-591: 위 minio 와 같은 사유 — `minio/mc` 도 Hub 에서 401 이다.
-    image: quay.io/minio/mc:RELEASE.2024-10-08T09-37-26Z
+    # TASK-BE-591 → TASK-BE-598: 위 minio 와 같은 사유·같은 출처. 같은 mc 릴리스(2024-10-08T09:37:26Z).
+    # entrypoint 는 아래에서 /bin/sh 로 덮으므로 Bitnami 스크립트는 안 돈다. mc 는 이미지 PATH
+    # (/opt/bitnami/minio-client/bin)에 있고, 기본 USER 1001:0 · HOME=/ 에서 설정 디렉터리 /.mc 가
+    # root 그룹 쓰기 가능(0:0 775)이라 `mc alias set` 이 쓸 수 있다.
+    image: docker.io/bitnamilegacy/minio-client:2024.10.8-debian-12-r1@sha256:c3e82110529b30658cdcdf6414619fe901c2ec820eba973bda936cdcb4c6193c
     container_name: ecommerce-minio-init
     restart: "no"
     depends_on:
