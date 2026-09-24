@@ -8,7 +8,7 @@ TASK-MONO-725
 
 # Status
 
-review (2026-09-23 UTC — AC-0~AC-4 닫힘 · 🔴 AC-5(라이브 발행)는 소유자 · AC-6(재촬영)은 창)
+done (2026-09-24 UTC — 4차원 검증 · impl PR #3974 squash `be31b4eae` · 14차 AMI 창 판정으로 마지막 AC 닫힘) ‖ 직전: review (2026-09-23 UTC — AC-0~AC-4 닫힘 · 🔴 AC-5(라이브 발행)는 소유자 · AC-6(재촬영)은 창)
 
 # Owner
 

@@ -8,7 +8,7 @@ TASK-MONO-706
 
 # Status
 
-review (2026-09-23 UTC — AC-2 닫힘: 소유자 결정 **ⓐ any-lot 폴백** 구현 · 🔴 AC-1·AC-3 은 창 판정(재굽기 뒤 신선 부팅) — 단위 초록으로 닫지 않는다)
+done (2026-09-24 UTC — 4차원 검증 · impl PR #3971 squash `bb7c13847` · 14차 AMI 창 판정으로 마지막 AC 닫힘) ‖ 직전: review (2026-09-23 UTC — AC-2 닫힘: 소유자 결정 **ⓐ any-lot 폴백** 구현 · 🔴 AC-1·AC-3 은 창 판정(재굽기 뒤 신선 부팅) — 단위 초록으로 닫지 않는다)
 
 # Owner
 
