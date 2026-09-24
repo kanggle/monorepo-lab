@@ -22,6 +22,7 @@ public class FakeMasterReadModelPort implements MasterReadModelPort {
     private final Map<UUID, WarehouseSnapshot> warehouses = new HashMap<>();
     private final Map<String, WarehouseSnapshot> warehousesByCode = new HashMap<>();
     private final Map<UUID, LotSnapshot> lots = new HashMap<>();
+    private final Map<UUID, LocationSnapshot> locations = new HashMap<>();
 
     public PartnerSnapshot addPartner(UUID id, String code,
                                       PartnerSnapshot.PartnerType type,
@@ -64,9 +65,18 @@ public class FakeMasterReadModelPort implements MasterReadModelPort {
         return Optional.empty();
     }
 
+    /** TASK-BE-596: a registered location; unregistered ids still resolve to empty. */
+    public LocationSnapshot addLocation(UUID id, String code, UUID warehouseId,
+                                        LocationSnapshot.Status status) {
+        LocationSnapshot s = new LocationSnapshot(id, code, warehouseId, UUID.randomUUID(),
+                LocationSnapshot.LocationType.STORAGE, status, Instant.EPOCH, 1L);
+        locations.put(id, s);
+        return s;
+    }
+
     @Override
     public Optional<LocationSnapshot> findLocation(UUID id) {
-        return Optional.empty();
+        return Optional.ofNullable(locations.get(id));
     }
 
     @Override

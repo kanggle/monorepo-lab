@@ -9,6 +9,7 @@ import com.wms.outbound.application.port.in.ConfirmPackingUseCase;
 import com.wms.outbound.application.port.in.CreatePackingUnitUseCase;
 import com.wms.outbound.application.port.in.SealPackingUnitUseCase;
 import com.wms.outbound.application.port.out.CallerScopeProvider;
+import com.wms.outbound.application.port.out.MasterReadModelPort;
 import com.wms.outbound.application.port.out.OrderPersistencePort;
 import com.wms.outbound.application.port.out.OutboxWriterPort;
 import com.wms.outbound.application.port.out.PackingPersistencePort;
@@ -18,6 +19,8 @@ import com.wms.outbound.application.result.PackingUnitLineResult;
 import com.wms.outbound.application.result.PackingUnitResult;
 import com.wms.outbound.application.saga.OutboundSagaCoordinator;
 import com.wms.outbound.domain.event.PackingCompletedEvent;
+import com.wms.outbound.domain.exception.LotRequiredException;
+import com.wms.outbound.domain.exception.OrderLineMismatchException;
 import com.wms.outbound.domain.exception.OrderNotFoundException;
 import com.wms.outbound.domain.exception.PackingIncompleteException;
 import com.wms.outbound.domain.exception.PackingUnitNotFoundException;
@@ -30,9 +33,11 @@ import com.wms.outbound.domain.model.PackingType;
 import com.wms.outbound.domain.model.PackingUnit;
 import com.wms.outbound.domain.model.PackingUnitLine;
 import com.wms.outbound.domain.model.PackingUnitStatus;
+import com.wms.outbound.domain.model.masterref.SkuSnapshot;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -67,6 +72,7 @@ public class PackingService implements CreatePackingUnitUseCase,
     private final SagaPersistencePort sagaPersistence;
     private final OutboundSagaCoordinator sagaCoordinator;
     private final OutboxWriterPort outboxWriter;
+    private final MasterReadModelPort masterReadModel;
     private final CallerScopeProvider callerScopeProvider;
     private final Clock clock;
 
@@ -75,6 +81,7 @@ public class PackingService implements CreatePackingUnitUseCase,
                           SagaPersistencePort sagaPersistence,
                           OutboundSagaCoordinator sagaCoordinator,
                           OutboxWriterPort outboxWriter,
+                          MasterReadModelPort masterReadModel,
                           CallerScopeProvider callerScopeProvider,
                           Clock clock) {
         this.orderPersistence = orderPersistence;
@@ -82,8 +89,35 @@ public class PackingService implements CreatePackingUnitUseCase,
         this.sagaPersistence = sagaPersistence;
         this.sagaCoordinator = sagaCoordinator;
         this.outboxWriter = outboxWriter;
+        this.masterReadModel = masterReadModel;
         this.callerScopeProvider = callerScopeProvider;
         this.clock = clock;
+    }
+
+    /**
+     * Contract §3.1 (TASK-BE-596): each line names one of this order's lines, carries that
+     * line's SKU, and supplies a lot when that SKU is LOT-tracked — judged by the order
+     * line's SKU, never the request's.
+     */
+    private void validateLines(List<CreatePackingUnitLineCommand> lines, Order order) {
+        Map<UUID, OrderLine> orderLinesById = new HashMap<>();
+        for (OrderLine ol : order.getLines()) {
+            orderLinesById.put(ol.getId(), ol);
+        }
+        for (CreatePackingUnitLineCommand cl : lines) {
+            OrderLine ol = orderLinesById.get(cl.orderLineId());
+            if (ol == null) {
+                throw new OrderLineMismatchException(cl.orderLineId(), "not a line of order " + order.getId());
+            }
+            if (!ol.getSkuId().equals(cl.skuId())) {
+                throw new OrderLineMismatchException(ol.getId(),
+                        "skuId expected=" + ol.getSkuId() + " actual=" + cl.skuId());
+            }
+            SkuSnapshot sku = masterReadModel.findSku(ol.getSkuId()).orElse(null);
+            if (sku != null && sku.requiresLot() && cl.lotId() == null) {
+                throw new LotRequiredException(ol.getSkuId());
+            }
+        }
     }
 
     // ------------------------------------------------------------------
@@ -101,13 +135,18 @@ public class PackingService implements CreatePackingUnitUseCase,
         // Cross-tenant guard (TASK-MONO-304).
         callerScopeProvider.current().requireOrderAccess(order.getTenantId(), order.getId());
 
+        if (order.getStatus() != OrderStatus.PICKED && order.getStatus() != OrderStatus.PACKING) {
+            throw new StateTransitionInvalidException(order.getStatus().name(), OrderStatus.PACKING.name());
+        }
+        // Validate BEFORE the implicit PICKED → PACKING transition below, so a rejected
+        // request leaves the order where it was (TASK-BE-596).
+        validateLines(command.lines(), order);
+
         // Implicit startPacking on first unit creation when Order is PICKED.
         if (order.getStatus() == OrderStatus.PICKED) {
             Instant now = clock.instant();
             order.startPacking(now, command.actorId());
             orderPersistence.save(order);
-        } else if (order.getStatus() != OrderStatus.PACKING) {
-            throw new StateTransitionInvalidException(order.getStatus().name(), OrderStatus.PACKING.name());
         }
 
         Instant now = clock.instant();

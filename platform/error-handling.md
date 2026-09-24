@@ -191,7 +191,7 @@ Owned by `inbound-service`. See `rules/domains/wms.md` and
 | PARTNER_INVALID_TYPE | 422 | Supplier resolved by `supplierPartnerId/Code` is not `ACTIVE` and of `partner_type ∈ {SUPPLIER, BOTH}` |
 | LOT_REQUIRED | 422 | LOT-tracked SKU received without `lotId` or `lotNo` at inspection |
 | SKU_INACTIVE | 422 | Referenced SKU exists but is not `ACTIVE` (cannot be received or putaway). Cross-service: also emitted by `outbound-service` during picking. |
-| LOCATION_INACTIVE | 422 | Putaway target location is not `ACTIVE` (deactivated by ops or under maintenance) |
+| LOCATION_INACTIVE | 422 | Putaway target location is not `ACTIVE` (deactivated by ops or under maintenance) (cross-service: also emitted by `outbound-service` for a pick confirmation's `actualLocationId` — same semantic) |
 | WEBHOOK_SIGNATURE_INVALID | 401 | ERP webhook HMAC signature missing, malformed, or mismatched |
 | WEBHOOK_TIMESTAMP_INVALID | 401 | ERP webhook `X-Erp-Timestamp` header missing, unparseable, or outside the ±5-minute window |
 | WEBHOOK_REPLAY_DETECTED | 401 | Reserved for future webhook-source replay protection (not used in v1; v1 returns 200 `ignored_duplicate` for repeat `X-Erp-Event-Id`) |
@@ -226,6 +226,7 @@ Owned by `outbound-service`. See `rules/domains/wms.md` and
 | PICKING_QUANTITY_EXCEEDED | 422 | Picked quantity exceeds ordered quantity |
 | PICKING_INCOMPLETE | 422 | Packing attempted before picking is complete |
 | LOT_SUBSTITUTION_NOT_ALLOWED | 422 | Pick confirmation names a lot different from the order line's planned concrete lot — v1 has no re-reservation step, so the substituted lot could not be matched to the reserved stock downstream |
+| ORDER_LINE_MISMATCH | 422 | A pick-confirmation or packing line does not describe the order line it names — the line is not one of the order's, or its SKU is not that line's SKU |
 | PACKING_UNIT_NOT_FOUND | 404 | Packing unit (carton/pallet) does not exist for the given id or order |
 | PACKING_INCOMPLETE | 422 | Shipping attempted before packing is complete |
 | SHIPMENT_NOT_FOUND | 404 | Shipment record does not exist for the given id or order |

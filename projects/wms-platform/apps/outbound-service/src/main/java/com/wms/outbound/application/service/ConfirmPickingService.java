@@ -15,11 +15,14 @@ import com.wms.outbound.application.result.PickingConfirmationLineResult;
 import com.wms.outbound.application.result.PickingConfirmationResult;
 import com.wms.outbound.application.saga.OutboundSagaCoordinator;
 import com.wms.outbound.domain.event.PickingCompletedEvent;
+import com.wms.outbound.domain.exception.LocationInactiveException;
 import com.wms.outbound.domain.exception.LotRequiredException;
 import com.wms.outbound.domain.exception.LotSubstitutionNotAllowedException;
+import com.wms.outbound.domain.exception.OrderLineMismatchException;
 import com.wms.outbound.domain.exception.OrderNotFoundException;
 import com.wms.outbound.domain.exception.PickingIncompleteException;
 import com.wms.outbound.domain.exception.PickingRequestNotFoundException;
+import com.wms.outbound.domain.exception.WarehouseMismatchException;
 import com.wms.outbound.domain.model.Order;
 import com.wms.outbound.domain.model.OrderLine;
 import com.wms.outbound.domain.model.OutboundSaga;
@@ -100,7 +103,7 @@ public class ConfirmPickingService implements ConfirmPickingUseCase {
         for (OrderLine ol : agg.order().getLines()) {
             orderLinesById.put(ol.getId(), ol);
         }
-        validateLines(command.lines(), orderLinesById);
+        validateLines(command.lines(), orderLinesById, agg.order().getWarehouseId());
 
         // Build the PickingConfirmation aggregate (append-only).
         PickingConfirmation confirmation = buildConfirmation(
@@ -232,7 +235,8 @@ public class ConfirmPickingService implements ConfirmPickingUseCase {
     }
 
     private void validateLines(List<ConfirmPickingLineCommand> lines,
-                               Map<UUID, OrderLine> orderLinesById) {
+                               Map<UUID, OrderLine> orderLinesById,
+                               UUID orderWarehouseId) {
         if (lines == null || lines.isEmpty()) {
             throw new PickingIncompleteException("no lines");
         }
@@ -252,10 +256,17 @@ public class ConfirmPickingService implements ConfirmPickingUseCase {
                                 + " expected=" + ol.getQtyOrdered()
                                 + " actual=" + cl.qtyConfirmed());
             }
-            // LOT requirement: SKU snapshot must declare tracking type.
-            SkuSnapshot sku = masterReadModel.findSku(cl.skuId()).orElse(null);
+            // The line must describe the order line it names (TASK-BE-596) — otherwise the
+            // request's SKU is stored on the confirmation and published on picking.completed.
+            if (!ol.getSkuId().equals(cl.skuId())) {
+                throw new OrderLineMismatchException(ol.getId(),
+                        "skuId expected=" + ol.getSkuId() + " actual=" + cl.skuId());
+            }
+            // LOT requirement is judged by the ORDER LINE's SKU, never the request's: judging
+            // by the request let a non-LOT SKU name skip LOT_REQUIRED (TASK-BE-596).
+            SkuSnapshot sku = masterReadModel.findSku(ol.getSkuId()).orElse(null);
             if (sku != null && sku.requiresLot() && cl.lotId() == null) {
-                throw new LotRequiredException(cl.skuId());
+                throw new LotRequiredException(ol.getSkuId());
             }
             // No lot substitution (TASK-MONO-724): a concrete planned lot is what inventory
             // reserved, and nothing downstream can absorb a different one. A null planned lot
@@ -263,6 +274,19 @@ public class ConfirmPickingService implements ConfirmPickingUseCase {
             if (ol.getLotId() != null && !ol.getLotId().equals(cl.lotId())) {
                 throw new LotSubstitutionNotAllowedException(ol.getId(), ol.getLotId(), cl.lotId());
             }
+            // actualLocationId: ACTIVE and in the order's warehouse. Checked only when the
+            // read-model knows the location — same stance as the SKU lookup above, so a
+            // snapshot that has not synced yet does not stop picking (owner decision, BE-596).
+            masterReadModel.findLocation(cl.actualLocationId()).ifPresent(loc -> {
+                if (!loc.warehouseId().equals(orderWarehouseId)) {
+                    throw new WarehouseMismatchException("actualLocationId=" + loc.id()
+                            + " is in warehouse " + loc.warehouseId()
+                            + ", order is in " + orderWarehouseId);
+                }
+                if (!loc.isActive()) {
+                    throw new LocationInactiveException(loc.id());
+                }
+            });
         }
     }
 

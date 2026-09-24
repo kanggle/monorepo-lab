@@ -10,10 +10,14 @@ import com.wms.outbound.application.command.SealPackingUnitCommand;
 import com.wms.outbound.application.result.OrderResult;
 import com.wms.outbound.application.result.PackingUnitResult;
 import com.wms.outbound.application.saga.OutboundSagaCoordinator;
+import com.wms.outbound.application.service.fakes.FakeMasterReadModelPort;
 import com.wms.outbound.application.service.fakes.FakeOrderPersistencePort;
 import com.wms.outbound.application.service.fakes.FakeOutboxWriterPort;
 import com.wms.outbound.application.service.fakes.FakePackingPersistencePort;
 import com.wms.outbound.application.service.fakes.FakeSagaPersistencePort;
+import com.wms.outbound.domain.exception.LotRequiredException;
+import com.wms.outbound.domain.exception.OrderLineMismatchException;
+import com.wms.outbound.domain.exception.OutboundDomainException;
 import com.wms.outbound.domain.exception.PackingIncompleteException;
 import com.wms.outbound.domain.exception.StateTransitionInvalidException;
 import com.wms.outbound.domain.model.Order;
@@ -26,6 +30,7 @@ import com.wms.outbound.domain.model.PackingUnit;
 import com.wms.outbound.domain.model.PackingUnitLine;
 import com.wms.outbound.domain.model.PackingUnitStatus;
 import com.wms.outbound.domain.model.SagaStatus;
+import com.wms.outbound.domain.model.masterref.SkuSnapshot;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -44,6 +49,7 @@ class PackingServiceTest {
     private FakePackingPersistencePort packingPersistence;
     private FakeSagaPersistencePort sagaPersistence;
     private FakeOutboxWriterPort outboxWriter;
+    private FakeMasterReadModelPort masterReadModel;
     private OutboundSagaCoordinator coordinator;
     private PackingService service;
 
@@ -60,9 +66,10 @@ class PackingServiceTest {
         packingPersistence = new FakePackingPersistencePort();
         sagaPersistence = new FakeSagaPersistencePort();
         outboxWriter = new FakeOutboxWriterPort();
+        masterReadModel = new FakeMasterReadModelPort();
         coordinator = new OutboundSagaCoordinator(sagaPersistence, orderPersistence, outboxWriter, fixedClock);
         service = new PackingService(orderPersistence, packingPersistence,
-                sagaPersistence, coordinator, outboxWriter,
+                sagaPersistence, coordinator, outboxWriter, masterReadModel,
                 new com.wms.outbound.application.service.fakes.FakeCallerScopeProvider(),
                 fixedClock);
 
@@ -274,6 +281,68 @@ class PackingServiceTest {
         assertThat(sagaPersistence.findById(sagaId).orElseThrow().status())
                 .isEqualTo(SagaStatus.PICKING_CONFIRMED);
         assertThat(outboxWriter.countByType("outbound.packing.completed")).isEqualTo(0);
+    }
+
+    // ------------------------------------------------------------------
+    //  TASK-BE-596 — 계약 §3.1: orderLineId 는 이 주문의 것, skuId 는 그 주문 라인의 것
+    //  🔴 AC-0 에서 거절 칸들은 고치기 전 트리에서 빨갛다(요청 라인이 그대로 박스가 됐다).
+    // ------------------------------------------------------------------
+
+    @Test
+    void orderLineIdFromAnotherOrder_isRejected_andNoUnitIsCreated() {
+        seedOrder(OrderStatus.PICKED, 50);
+        seedSaga(SagaStatus.PICKING_CONFIRMED);
+
+        assertPackingRejected(new CreatePackingUnitLineCommand(UUID.randomUUID(), skuId, null, 50),
+                OrderLineMismatchException.class, "ORDER_LINE_MISMATCH");
+    }
+
+    @Test
+    void skuThatIsNotTheOrderLinesSku_isRejected_andNoUnitIsCreated() {
+        seedOrder(OrderStatus.PICKED, 50);
+        seedSaga(SagaStatus.PICKING_CONFIRMED);
+
+        assertPackingRejected(new CreatePackingUnitLineCommand(orderLineId, UUID.randomUUID(), null, 50),
+                OrderLineMismatchException.class, "ORDER_LINE_MISMATCH");
+    }
+
+    /** 계약 §3.1 624행: LOT 추적 SKU 의 패킹 라인은 lotId 가 있어야 한다 — 판정은 주문 라인의 SKU 로. */
+    @Test
+    void lotTrackedLineWithoutLot_isRejected_andNoUnitIsCreated() {
+        masterReadModel.addSku(skuId, "SKU-LOT", SkuSnapshot.TrackingType.LOT, SkuSnapshot.Status.ACTIVE);
+        seedOrder(OrderStatus.PICKED, 50);
+        seedSaga(SagaStatus.PICKING_CONFIRMED);
+
+        assertPackingRejected(new CreatePackingUnitLineCommand(orderLineId, skuId, null, 50),
+                LotRequiredException.class, "LOT_REQUIRED");
+    }
+
+    /** 대조군: LOT 추적 SKU 라도 lotId 를 주면 통과한다. */
+    @Test
+    void lotTrackedLineWithLot_isAccepted() {
+        masterReadModel.addSku(skuId, "SKU-LOT", SkuSnapshot.TrackingType.LOT, SkuSnapshot.Status.ACTIVE);
+        seedOrder(OrderStatus.PICKED, 50);
+        seedSaga(SagaStatus.PICKING_CONFIRMED);
+
+        PackingUnitResult result = service.create(new CreatePackingUnitCommand(
+                orderId, "BOX-001", "BOX", null, null, null, null, null,
+                List.of(new CreatePackingUnitLineCommand(orderLineId, skuId, UUID.randomUUID(), 50)),
+                "user-1", Set.of("ROLE_OUTBOUND_WRITE")));
+
+        assertThat(result.orderStatus()).isEqualTo(OrderStatus.PACKING.name());
+    }
+
+    private void assertPackingRejected(CreatePackingUnitLineCommand line,
+                                       Class<? extends RuntimeException> type, String code) {
+        CreatePackingUnitCommand cmd = new CreatePackingUnitCommand(
+                orderId, "BOX-001", "BOX", null, null, null, null, null,
+                List.of(line), "user-1", Set.of("ROLE_OUTBOUND_WRITE"));
+        assertThatThrownBy(() -> service.create(cmd))
+                .isInstanceOf(type)
+                .satisfies(e -> assertThat(((OutboundDomainException) e).errorCode()).isEqualTo(code));
+        assertThat(packingPersistence.count()).isZero();
+        assertThat(orderPersistence.findById(orderId).orElseThrow().getStatus())
+                .isEqualTo(OrderStatus.PICKED);
     }
 
     // ------------------------------------------------------------------

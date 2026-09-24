@@ -13,10 +13,14 @@ import com.wms.outbound.application.service.fakes.FakeOutboxWriterPort;
 import com.wms.outbound.application.service.fakes.FakePickingConfirmationPersistencePort;
 import com.wms.outbound.application.service.fakes.FakePickingPersistencePort;
 import com.wms.outbound.application.service.fakes.FakeSagaPersistencePort;
+import com.wms.outbound.domain.exception.LocationInactiveException;
 import com.wms.outbound.domain.exception.LotRequiredException;
 import com.wms.outbound.domain.exception.LotSubstitutionNotAllowedException;
+import com.wms.outbound.domain.exception.OrderLineMismatchException;
+import com.wms.outbound.domain.exception.OutboundDomainException;
 import com.wms.outbound.domain.exception.PickingIncompleteException;
 import com.wms.outbound.domain.exception.StateTransitionInvalidException;
+import com.wms.outbound.domain.exception.WarehouseMismatchException;
 import com.wms.outbound.domain.model.Order;
 import com.wms.outbound.domain.model.OrderLine;
 import com.wms.outbound.domain.model.OrderSource;
@@ -218,6 +222,100 @@ class ConfirmPickingServiceTest {
         assertThat(result.orderStatus()).isEqualTo(OrderStatus.PICKED.name());
         assertThat(result.lines()).singleElement()
                 .satisfies(l -> assertThat(l.lotId()).isEqualTo(boundLot));
+    }
+
+    // ------------------------------------------------------------------
+    //  TASK-BE-596 — 계약 §2.3: skuId 는 주문 라인의 것, actualLocationId 는 ACTIVE·같은 창고
+    //  🔴 AC-0 에서 아래 거절 칸들은 고치기 전 트리에서 빨갛다(요청 값이 그대로 저장·발행됐다).
+    //  오류 코드는 AC-1 소유자 결정: 새 ORDER_LINE_MISMATCH(422) · 위치는 기존 WAREHOUSE_MISMATCH / LOCATION_INACTIVE.
+    // ------------------------------------------------------------------
+
+    @Test
+    void skuThatIsNotTheOrderLinesSku_isRejected_andNothingIsWritten() {
+        UUID otherSku = UUID.randomUUID();
+        masterReadModel.addSku(otherSku, "SKU-OTHER",
+                SkuSnapshot.TrackingType.NONE, SkuSnapshot.Status.ACTIVE);
+        seedOrderInPicking(50);
+        seedPickingRequest(50);
+        seedSaga(SagaStatus.RESERVED);
+
+        assertRejectedAndNothingWritten(new ConfirmPickingLineCommand(
+                orderLineId, otherSku, null, locationId, 50),
+                OrderLineMismatchException.class, "ORDER_LINE_MISMATCH");
+    }
+
+    /**
+     * 🔴 가장 나쁜 모양: 주문 라인은 LOT 추적인데 요청에 <b>비LOT SKU</b> 를 적으면, LOT 필수 판정이
+     * 요청 SKU 로 찾기 때문에 {@code LOT_REQUIRED} 가 걸리지 않았다.
+     */
+    @Test
+    void lotRequirement_isNotBypassedByNamingANonLotSku() {
+        UUID lotSkuId = lotTrackedSku();
+        seedLotPlannedOrder(lotSkuId, null);
+
+        // The SKU mismatch is caught first; what matters is that nothing gets through.
+        // The LOT judgement itself now reads the order line's SKU (ConfirmPickingService).
+        assertRejectedAndNothingWritten(new ConfirmPickingLineCommand(
+                orderLineId, skuId /* NONE-tracked */, null /* no lot */, locationId, 50),
+                OrderLineMismatchException.class, "ORDER_LINE_MISMATCH");
+    }
+
+    @Test
+    void locationInAnotherWarehouse_isRejected_andNothingIsWritten() {
+        masterReadModel.addLocation(locationId, "OTHER-WH-A-01", UUID.randomUUID(),
+                com.wms.outbound.domain.model.masterref.LocationSnapshot.Status.ACTIVE);
+        seedOrderInPicking(50);
+        seedPickingRequest(50);
+        seedSaga(SagaStatus.RESERVED);
+
+        assertRejectedAndNothingWritten(new ConfirmPickingLineCommand(
+                orderLineId, skuId, null, locationId, 50),
+                WarehouseMismatchException.class, "WAREHOUSE_MISMATCH");
+    }
+
+    @Test
+    void inactiveLocation_isRejected_andNothingIsWritten() {
+        masterReadModel.addLocation(locationId, "WH-A-01", warehouseId,
+                com.wms.outbound.domain.model.masterref.LocationSnapshot.Status.INACTIVE);
+        seedOrderInPicking(50);
+        seedPickingRequest(50);
+        seedSaga(SagaStatus.RESERVED);
+
+        assertRejectedAndNothingWritten(new ConfirmPickingLineCommand(
+                orderLineId, skuId, null, locationId, 50),
+                LocationInactiveException.class, "LOCATION_INACTIVE");
+    }
+
+    /** 대조군: 등록된 ACTIVE·같은 창고 위치 + 주문 라인의 SKU 는 통과한다(«전부 거절» 이 아님). */
+    @Test
+    void matchingSkuAndActiveLocationInTheSameWarehouse_isAccepted() {
+        masterReadModel.addLocation(locationId, "WH-A-01", warehouseId,
+                com.wms.outbound.domain.model.masterref.LocationSnapshot.Status.ACTIVE);
+        seedOrderInPicking(50);
+        seedPickingRequest(50);
+        seedSaga(SagaStatus.RESERVED);
+
+        PickingConfirmationResult result = service.confirm(new ConfirmPickingCommand(
+                orderId, null,
+                List.of(new ConfirmPickingLineCommand(orderLineId, skuId, null, locationId, 50)),
+                "user-1", Set.of("ROLE_OUTBOUND_WRITE")));
+
+        assertThat(result.orderStatus()).isEqualTo(OrderStatus.PICKED.name());
+        assertThat(result.lines()).singleElement()
+                .satisfies(l -> assertThat(l.skuId()).isEqualTo(skuId));
+    }
+
+    private void assertRejectedAndNothingWritten(ConfirmPickingLineCommand line,
+                                                 Class<? extends RuntimeException> type, String code) {
+        ConfirmPickingCommand cmd = new ConfirmPickingCommand(
+                orderId, null, List.of(line), "user-1", Set.of("ROLE_OUTBOUND_WRITE"));
+        assertThatThrownBy(() -> service.confirm(cmd))
+                .isInstanceOf(type)
+                .satisfies(e -> assertThat(((OutboundDomainException) e).errorCode()).isEqualTo(code));
+        assertThat(outboxWriter.published).isEmpty();
+        assertThat(pickingConfirmationPersistence.saveCalls).isZero();
+        assertThat(orderPersistence.findById(orderId).orElseThrow().getStatus())
+                .isEqualTo(OrderStatus.PICKING);
     }
 
     private UUID lotTrackedSku() {

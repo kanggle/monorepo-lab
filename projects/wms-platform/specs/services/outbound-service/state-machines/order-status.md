@@ -155,8 +155,8 @@ state transition. Failing a guard throws a domain exception, NOT
 | `(none) → RECEIVED` | LOT-tracked SKU lines with explicit `lot_id` resolve to ACTIVE non-EXPIRED Lot | `LOT_REQUIRED` (422) when missing; `LOT_INVALID` (422) when stale |
 | `(none) → RECEIVED` | At least one OrderLine | `VALIDATION_ERROR` (422) |
 | `RECEIVED → PICKING` | At least one OrderLine and `customer_partner_id` still ACTIVE | `VALIDATION_ERROR` (should not trigger — validated at receive) |
-| `PICKING → PICKED` | One PickingConfirmation per OrderLine; `qty_confirmed == qty_ordered` for each line; LOT supplied for LOT-tracked SKUs; confirmed lot equals the order line's planned lot when that is non-null (TASK-MONO-724) | `PICKING_QUANTITY_MISMATCH`, `LOT_REQUIRED`, `LOT_SUBSTITUTION_NOT_ALLOWED`, or `PICKING_INCOMPLETE` (422) |
-| `PICKED → PACKING` | (none — implicit on first PackingUnit creation) | — |
+| `PICKING → PICKED` | One PickingConfirmation per OrderLine; `qty_confirmed == qty_ordered` for each line; LOT supplied for LOT-tracked SKUs; confirmed lot equals the order line's planned lot when that is non-null (TASK-MONO-724); each line's `skuId` equals its order line's SKU, and a read-model-known `actualLocationId` is ACTIVE and in the order's warehouse (TASK-BE-596) | `PICKING_QUANTITY_MISMATCH`, `LOT_REQUIRED`, `LOT_SUBSTITUTION_NOT_ALLOWED`, `ORDER_LINE_MISMATCH`, `LOCATION_INACTIVE`, `WAREHOUSE_MISMATCH`, or `PICKING_INCOMPLETE` (422) |
+| `PICKED → PACKING` | Implicit on first PackingUnit creation — after that unit's lines are validated (each names a line of this order with its SKU; lot present for LOT-tracked SKUs; TASK-BE-596) | `ORDER_LINE_MISMATCH`, `LOT_REQUIRED` (422) — the order stays `PICKED` |
 | `PACKING → PACKED` | For each `order_line`: `sum(packing_unit_line.qty) == order_line.qty_ordered`; all PackingUnits are SEALED | `PACKING_INCOMPLETE` (422) |
 | `PACKED → SHIPPED` | (no OrderLine count guard — already ensured at PACKED). `actorId` has role `OUTBOUND_WRITE` or `OUTBOUND_ADMIN` | `FORBIDDEN` (403) — checked at application layer |
 | `* → CANCELLED` | `from ∈ {RECEIVED, PICKING, PICKED, PACKING, PACKED}`. `actorId` has role `OUTBOUND_ADMIN` | `ORDER_ALREADY_SHIPPED` (422) for cancel-from-SHIPPED; `STATE_TRANSITION_INVALID` for cancel-from-CANCELLED/BACKORDERED; `FORBIDDEN` (403) for missing role |
@@ -224,6 +224,8 @@ Compensation Paths.
 | `WarehouseMismatchException` | 422 | `WAREHOUSE_MISMATCH` |
 | `LotRequiredException` | 422 | `LOT_REQUIRED` |
 | `LotSubstitutionNotAllowedException` | 422 | `LOT_SUBSTITUTION_NOT_ALLOWED` |
+| `OrderLineMismatchException` | 422 | `ORDER_LINE_MISMATCH` |
+| `LocationInactiveException` | 422 | `LOCATION_INACTIVE` |
 | `OrderNoDuplicateException` | 409 | `ORDER_NO_DUPLICATE` |
 | `OptimisticLockingFailureException` | 409 | `CONFLICT` |
 | `OrderNotFoundException` | 404 | `ORDER_NOT_FOUND` |

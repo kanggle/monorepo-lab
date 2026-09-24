@@ -188,6 +188,34 @@ class ConfirmShippingServiceTest {
         assertThat(confirmed.tenantId()).isNull();
     }
 
+    /**
+     * TASK-BE-596 핀: {@code shipping.confirmed} 의 skuId 는 <b>주문 라인</b>에서 온다 — 피킹 확정
+     * 라인이 다른 SKU 를 적고 있어도(BE-596 이전 트리에서는 그런 행이 저장될 수 있었다) 재고로 가는
+     * 이벤트는 주문의 SKU 를 싣는다. «재고는 안전하다» 를 산문이 아니라 단언으로 둔다.
+     */
+    @Test
+    void shippingConfirmedCarriesTheOrderLinesSku_notThePickConfirmationsSku() {
+        seedOrder(OrderStatus.PACKED);
+        seedPickingArtifacts();
+        UUID strayPickedSku = UUID.randomUUID();
+        pickingConfirmationPersistence.save(new PickingConfirmation(
+                pickingConfirmationId, pickingRequestId, orderId, "user-1", T0, null,
+                List.of(new PickingConfirmationLine(UUID.randomUUID(), pickingConfirmationId,
+                        orderLineId, strayPickedSku, null, locationId, 50))));
+        seedPackedUnit();
+        seedSaga(SagaStatus.PACKING_CONFIRMED);
+
+        service.confirm(new ConfirmShippingCommand(
+                orderId, 0L, "CJ", "user-1", Set.of("ROLE_OUTBOUND_WRITE")));
+
+        com.wms.outbound.domain.event.ShippingConfirmedEvent confirmed =
+                (com.wms.outbound.domain.event.ShippingConfirmedEvent) outboxWriter.published.stream()
+                        .filter(e -> e.eventType().equals("outbound.shipping.confirmed"))
+                        .findFirst().orElseThrow();
+        assertThat(confirmed.lines()).singleElement()
+                .satisfies(l -> assertThat(l.skuId()).isEqualTo(skuId).isNotEqualTo(strayPickedSku));
+    }
+
     // ------------------------------------------------------------------
     //  helpers
     // ------------------------------------------------------------------
