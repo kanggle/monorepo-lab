@@ -7,11 +7,13 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -23,6 +25,9 @@ import java.util.Base64;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * TASK-BE-576 (and retroactively TASK-BE-571) — the portfolio demo operator's seed
@@ -55,6 +60,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * more dangerous direction.
  */
 @SpringBootTest
+@AutoConfigureMockMvc
 @Testcontainers
 @ActiveProfiles("test")
 @Tag("integration")
@@ -74,11 +80,12 @@ class DemoOperatorSeedIntegrationTest extends AbstractIntegrationTest {
      */
     private static final String DEMO_OIDC_SUBJECT = "0199de70-0000-7000-8000-00000000ad03";
 
+    static OperatorJwtTestFixture jwt;
     static String signingKeyPem;
 
     @BeforeAll
     static void setupShared() throws IOException {
-        OperatorJwtTestFixture jwt = new OperatorJwtTestFixture();
+        jwt = new OperatorJwtTestFixture();
         java.security.PrivateKey pk = extractPrivateKey(jwt);
         signingKeyPem = "-----BEGIN PRIVATE KEY-----\n"
                 + Base64.getMimeEncoder(64, "\n".getBytes()).encodeToString(pk.getEncoded())
@@ -163,5 +170,82 @@ class DemoOperatorSeedIntegrationTest extends AbstractIntegrationTest {
         // If a future change starts minting per-tenant role grants here, this assertion is
         // where that shows up rather than in a widened production surface.
         assertThat(grants).containsExactly("SUPER_ADMIN|demo-corp");
+    }
+
+    // ---------------------------------------------------------------------------------
+    // TASK-BE-597 — the restricted demo operator (R__seed_demo_viewer_operator.sql) and
+    // the one deliberate 403 of the SUPER_ADMIN demo operator.
+    // ---------------------------------------------------------------------------------
+
+    /** == the viewer's `iam`-tenant credential account_id (auth-service migration-dev). */
+    private static final String VIEWER_OIDC_SUBJECT = "0199de70-0000-7000-8000-00000000ad05";
+
+    @Autowired
+    MockMvc mockMvc;
+
+    private static String bearer(String operatorId) {
+        return "Bearer " + jwt.operatorToken(operatorId);
+    }
+
+    @Test
+    @DisplayName("seed: demo-viewer exists, ACTIVE, home tenant demo-viewer (unregistered), with its own login's oidc_subject")
+    void viewerOperatorSeeded() {
+        List<String> rows = jdbcTemplate.queryForList("""
+                SELECT CONCAT_WS('|', tenant_id, email, status, oidc_subject)
+                  FROM admin_operators WHERE operator_id = 'demo-viewer'
+                """, String.class);
+
+        // Home tenant must NOT be demo-corp: the home tenant is assumable
+        // (TenantScopeResolver home ∪ assignments), and demo-corp would derive all five
+        // domain OPERATOR roles — write access, the opposite of a restricted account.
+        assertThat(rows).containsExactly("demo-viewer|viewer@demo.com|ACTIVE|" + VIEWER_OIDC_SUBJECT);
+    }
+
+    @Test
+    @DisplayName("seed: demo-viewer holds NO role and NO tenant assignment — minimal by construction")
+    void viewerHasNoRoleAndNoAssignment() {
+        Integer roles = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM admin_operator_roles g
+                  JOIN admin_operators o ON o.id = g.operator_id
+                 WHERE o.operator_id = 'demo-viewer'
+                """, Integer.class);
+        Integer assignments = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM operator_tenant_assignment a
+                  JOIN admin_operators o ON o.id = a.operator_id
+                 WHERE o.operator_id = 'demo-viewer'
+                """, Integer.class);
+
+        assertThat(roles).as("any role row widens the account that exists to show 403").isZero();
+        assertThat(assignments).as("any assignment makes a tenant assumable → domain roles").isZero();
+    }
+
+    @Test
+    @DisplayName("demo-viewer is an authenticated operator: GET /api/admin/me → 200 with an empty role list")
+    void viewerAuthenticates() throws Exception {
+        mockMvc.perform(get("/api/admin/me").header("Authorization", bearer("demo-viewer")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles").isEmpty());
+    }
+
+    @Test
+    @DisplayName("demo-viewer gets 403 PERMISSION_DENIED on gated screens' reads (operators, audit, roles, tenants)")
+    void viewerIsDeniedOnGatedReads() throws Exception {
+        for (String path : List.of("/api/admin/operators", "/api/admin/audit",
+                "/api/admin/roles", "/api/admin/tenants")) {
+            mockMvc.perform(get(path).header("Authorization", bearer("demo-viewer")))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        }
+    }
+
+    @Test
+    @DisplayName("demo-operator (SUPER_ADMIN) gets 403 on GET /api/admin/partnerships — ADR-MONO-045 D2-C/D3-A, kept by owner decision")
+    void superAdminDemoOperatorIsDeniedPartnerships() throws Exception {
+        // rbac.md:72,:120 — the platform is not a party to a partnership between two
+        // customer tenants. Owner decision 2026-09-24 (TASK-BE-597 option ①): keep it as
+        // the demonstrable boundary. If this turns 200, a SUPER_ADMIN grant was added.
+        mockMvc.perform(get("/api/admin/partnerships").header("Authorization", bearer("demo-operator")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
     }
 }

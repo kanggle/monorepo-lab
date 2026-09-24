@@ -8,7 +8,7 @@ TASK-BE-597
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -156,3 +156,69 @@ In Scope 첫 항목은 "`partnership.manage` 자체에는 이 파일에 같은 �
 
 - AC-0 — ✅ 판정 기록(위). 결론 = STOP, 소유자 확인 대기.
 - AC-1 ~ AC-6 — ⚪ 미착수(AC-0 STOP 게이트). 권한·시드·rbac.md·론처·매핑 표 변경 0건.
+
+---
+
+## 소유자 결정 (2026-09-24 UTC, 부모 세션 경유) — 범위·AC 개정
+
+1. **`/partnerships` 는 demo-operator 에게 403 으로 둔다 — 선택지 ① 현행 유지.** SUPER_ADMIN 정의 · `rbac.md` 의 partnership 의미 · ADR-MONO-045 는 바꾸지 않는다.
+   - 🔴 **이 티켓의 전제가 틀렸다는 것을 기록한다**: In Scope 첫 항목의 "`partnership.manage` 자체에는 … 명시적 문장이 없다"는 사실이 아니다. 근거 = `rbac.md:72`(§ Permission Keys) · `rbac.md:120`(§ Seed Matrix 주석, "의도적") · ADR-MONO-045 **D2-C**(:68, SUPER_ADMIN 중개 기각) · **D3-A**(:74, "SUPER_ADMIN stays net-zero"). 스펙 탄생 커밋 `cbdf91e3a`(#2222) 부터 있었다.
+   - 소유자는 이 경계를 **시연 가능한 403** 으로 남기기로 했다.
+2. **무권한 계정 진행.** 로그인·셸 진입은 되고 게이트된 화면에서 권한 부족 403 을 받는 최소 역할을 고르고 그 선택을 기록한다.
+
+### 개정된 AC (원 AC 를 대체한다 — 원문은 위에 그대로 둔다)
+
+- **AC-1′** — 콘솔의 모든 nav 라우트에서 demo-operator 토큰의 GET 이 200 이다. **단 `/partnerships` 는 제외 — ADR-MONO-045 에 따라 403 이 정답이다.**
+- **AC-3′** — 역할 카탈로그를 바꾸지 않는다(소유자 ①). 따라서 `rbac.md` 변경 없음이 정답이다.
+- AC-2 · AC-4 · AC-5 · AC-6 — 원문 그대로.
+
+---
+
+## Implementation Record (2026-09-24 UTC)
+
+### 무권한 계정 설계 — 세 가지 선택과 그 근거
+
+| 선택 | 값 | 근거 (실측·코드) |
+|---|---|---|
+| 역할 | **없음** (`admin_operator_roles` 0행) | 로그인에 역할이 필요 없다: `TokenExchangeService.java:81-102` 는 oidc_subject 매칭 + `status='ACTIVE'` 만 본다. 콘솔 셸의 레지스트리(`ConsoleRegistryController.java:26-31,42`)에도 `@RequiresPermission` 이 없다. `SUPPORT_READONLY` 는 기각 — `account.read`·`audit.read`·`security.event.read` 로 `/accounts`(소비자 계정 데이터)·`/audit`(감사 추적)를 **연다**. 역할이 없으면 권한 합집합이 공집합이라 모든 `@RequiresPermission` 엔드포인트가 403 `PERMISSION_DENIED`(rbac.md § Permission Evaluation Algorithm step 4) — 더 많은 화면에서 403 을 보이면서 데이터는 0. |
+| 홈 테넌트 | **`demo-viewer`** (account-service 에 **미등록**) | 홈 테넌트는 assume 가능하다: `OperatorAssignmentCheckUseCase.java:127-136`(effective scope = assignment ∪ home). 홈을 `demo-corp` 로 두면 assume 시 5개 도메인 OPERATOR 롤(쓰기 포함)이 파생된다 — 최소가 아니다. 미등록 슬러그는 `ConsoleRegistryUseCase.java:83-85,158-198` 의 ACTIVE 테넌트 교집합에서 빠져 모든 제품의 `tenants` 가 `[]` → 스위처 미렌더(`TenantSwitcher.tsx:58`) → 도메인 섹션은 «테넌트를 먼저 선택하세요»(`DomainTenantGate.tsx:163-186`). |
+| 테넌트 배정 | **없음** (`operator_tenant_assignment` 0행) | 위와 같은 이유. |
+
+- **403 을 받는 화면(코드로 판정)**: `/iam`(카드 3종 전부), `/operators`, `/operator-groups`, `/org-hierarchy`, `/tenants`, `/permissions`, `/permission-sets`, `/audit`, `/accounts`, `/subscriptions`, `/partnerships` — `permission-map.ts` 의 `admin`/`admin-per-card` 행 전부. 셸·`/console`·`/dashboards/overview`·가이드는 열린다(`public`/`operator` 게이트).
+- 🔴 **알려진 한계(수정 안 함, 기록)**: 공개 데모에서 이 계정의 제한은 변조 불가능하지 않다. ① `demo@demo.com`(SUPER_ADMIN, 공개 자격증명)이 이 운영자에게 아무 역할이나 부여할 수 있다. ② 셀프 온보딩 DTO(`OnboardOrganizationRequest.java:23`)는 패턴만 검사하고 예약어 목록은 검사하지 않으므로, 방문자가 슬러그 `demo-viewer` 로 조직을 만들면 그 TENANT_ADMIN 이 된다. R__ 재적용은 둘 다 되돌리지 못한다(체크섬이 바뀔 때만 재실행, INSERT 는 삭제하지 않음). ①이 이미 모든 데모 행에 존재하는 경로라 ②를 막아도 얻는 것이 작다고 판단 — 막으려면 account-service 에 `demo-viewer` 를 `SUSPENDED` 로 등록하는 시드 한 줄이면 된다(슬러그 선점 + 레지스트리 제외 유지).
+
+### 변경 파일
+
+- `projects/iam-platform/apps/admin-service/src/main/resources/db/migration-dev/R__seed_demo_viewer_operator.sql` (신규) — `admin_operators` 1행만. **별도 파일인 이유**: `DemoSecondOperatorSeedTest` 가 `R__seed_demo_operator.sql` 의 운영자를 **정확히 2명(demo-corp)** 으로 단언한다(ERP 직무분리 쌍, TASK-MONO-519) — 그 명제는 여전히 참이어야 한다.
+- `projects/iam-platform/apps/auth-service/src/main/resources/db/migration-dev/R__seed_demo_viewer_operator_credential.sql` (신규) — `iam` 테넌트 자격증명 1행(`viewer@demo.com` / `Demo1234!` / account_id `…ad05`).
+- `projects/iam-platform/apps/auth-service/src/test/java/com/example/auth/demoseed/DemoViewerOperatorSeedTest.java` (신규, 4케이스) — `iam` 단일행·이메일/계정ID 비충돌(대조군 = 형제 4행을 읽는지) · 해시 검증 · 링크 키 일치 · 역할/배정 없음 + 홈≠demo-corp(대조군 = 주석 제거 전 원문엔 두 테이블명이 **있다**).
+- `projects/iam-platform/apps/auth-service/build.gradle` — admin-service 뷰어 시드를 `test` 입력으로 선언(형제와 같은 UP-TO-DATE 맹점).
+- `projects/iam-platform/apps/admin-service/src/test/java/com/example/admin/integration/DemoOperatorSeedIntegrationTest.java` — 5케이스 추가: 뷰어 행 · 역할/배정 0 · `GET /api/admin/me` 200 + `roles=[]` · `GET /api/admin/{operators,audit,roles,tenants}` 403 `PERMISSION_DENIED` · **demo-operator 의 `GET /api/admin/partnerships` 403**(소유자 ① 을 핀으로).
+- **안 바꾼 것**: `rbac.md`(카탈로그 불변, AC-3′), SUPER_ADMIN 시드, `R__seed_demo_operator.sql`, 론처 `index.html`, z11, `DemoLoginCredentials.tsx`, `permission-map.ts`(아래).
+
+### `permission-map.ts` 를 안 바꾼 이유
+
+그 표의 «테스트 계정 접근» 열은 `DEMO_TEST_ACCOUNT`(= demo-operator) 하나로 계산되고, demo-operator 의 역할·배정은 이번에 바뀌지 않았다. `/partnerships` 행의 `mismatch`(:390-391) 는 이미 «SUPER_ADMIN 도 이 키가 없다 … 데모 계정은 이 화면에서 403» 이라고 말해 소유자 ① 과 일치한다. 뷰어를 두 번째 열로 넣는 것은 화면 기능 추가라 이 티켓 범위 밖. → 콘솔 파일 무변경, 드리프트 테스트 실행 불요.
+
+### AC-4 — 론처·z11 에 뷰어를 **아직** 넣지 않았다 (의도적 보류)
+
+- 측정 근거: `infra/demo/aws/README.md:93-97` — 론처 `index.html` 은 **머지 = 배포**(Vercel, 분 단위)이고, 앱 소스(마이그레이션 SQL 포함)는 **AMI 에 구워져 있어 재굽기 전까지 데모에 없다.** 지금 론처에 `viewer@demo.com` 을 적으면, 재굽기 전까지 방문자가 그 계정으로 로그인하면 실패한다(자격증명 행이 없음 → 로그인 실패, 또는 operator 행이 없음 → `operator_exchange_unavailable`). 같은 README § 「이 계약을 바꾸는 PR 이 함께 할 일」(:132-158)이 말하는 두 속도 배포 문제 그 자체다.
+- z11 의 짝 구조: z11(`verify-demo-wrapper.sh:2159-2229`)은 **단일 계정**을 세 사본(론처 `id="c-email"` · `seed/lib.sh` `user_token()` 기본값 · `DemoLoginCredentials.tsx` `DEMO_LOGIN_EMAIL`)으로 대조하며, 권위는 «부팅마다 실제로 로그인에 쓰이는» `lib.sh` 다. 뷰어는 시드 스크립트가 쓰지 않으므로 그 살아 있는 출처가 없다 — 넣는다면 권위를 auth-service 자격증명 시드의 이메일 **컬럼 값**(주석이 아닌 실제 값)으로 잡는 새 대조가 필요하다.
+- 기존 demo@demo.com 짝은 건드리지 않았다(z11 무변경).
+- ⇒ **후속(부모가 기안)**: 재굽기 후 론처에 뷰어 행(`id="c-viewer-email"`) + z11 에 «론처 뷰어 이메일 ↔ `R__seed_demo_viewer_operator_credential.sql` 이메일 컬럼» 대조 + 대조군. 루트 `tasks/` 티켓(경로 = `infra/demo/**`). ID 는 동시 세션 충돌을 피하려고 여기서 잡지 않았다.
+
+### AC-6 — 재굽기 판정: ✅ **필요** (측정)
+
+- 두 시드는 `src/main/resources/db/migration-dev/` 아래 = 앱 소스. `infra/demo/aws/README.md:87-97`: packer 가 bake 때 `git clone --depth 1 --branch main`, `demo-boot.sh` 는 부팅 시 `git pull` 을 **하지 않는다** → «앱 소스(Java/TS) … AMI 에 구워져 있다 → ✅ 재굽기 필요».
+- 현재 AMI: `infra/demo/aws/deployed-ami.env` → `REPO_COMMIT=f1da21800`(2026-09-24T04:29:55Z bake, provenance `ami-tag`) — 이 브랜치의 변경을 담을 수 없다.
+- 재굽기 뒤 반영 경로: 두 파일 모두 **새 R__** 라 기존 EBS 볼륨에서도 다음 부팅의 Flyway 가 적용한다(repeatable 은 히스토리 행이 없으면 적용; 버전 순서 무관). admin-service 는 `db/migration-dev` 를 기본 프로필에서 로드(`R__seed_demo_operator.sql:1-3,17-21` — 같은 디렉터리의 demo-operator 가 데모에서 실제로 로그인된다), auth-service 는 `e2e` 프로필 오버레이로 로드(형제 `R__seed_demo_second_operator_credential.sql:1-7` 와 동일 경로).
+
+### AC 상태
+
+- AC-0 — ✅ (위 판정 + 소유자 결정 ①).
+- AC-1′ — ⚪ **라이브 미측정** (유료 데모 미기동 지시 + 이 호스트 Docker 미기동). 코드 판정: demo-operator(SUPER_ADMIN)는 `permission-map.ts` 의 모든 `admin` 행 키를 보유(`/partnerships` 제외), 도메인 행은 demo-corp 5개 구독으로 열림 — 이번 변경은 demo-operator 를 건드리지 않으므로 기존 상태와 동일. `/partnerships` 403 은 IT 로 핀. **다음 데모 창 절차**: 재굽기된 AMI 로 기동 → 콘솔에 `demo@demo.com` 로그인 → 테넌트 `demo-corp` 선택 → nav 의 모든 항목을 차례로 열어 HTTP 상태를 브라우저 DevTools(또는 콘솔 BFF 로그)로 기록 — 기대값 = `/partnerships` 403, 나머지 200(이커머스 목록은 `ecommerce` 테넌트에서 비지 않음).
+- AC-2 — 🟡 **IT 작성·컴파일 완료, 실행 ⚪**(Docker 없음): `DemoOperatorSeedIntegrationTest#viewerIsDeniedOnGatedReads` 가 뷰어 토큰으로 `GET /api/admin/{operators,audit,roles,tenants}` → 403 `PERMISSION_DENIED` 를 단언. 재현 스텝(라이브): 재굽기 후 콘솔에 `viewer@demo.com` / `Demo1234!` 로그인 → `/operators` 열기 → 권한 부족(403) 확인 · `/dashboards/overview` 는 열림.
+- AC-3′ — ✅ 카탈로그 불변, `rbac.md` 무변경.
+- AC-4 — ⚪ **의도적 보류**(위) — 론처·z11 무변경이므로 기존 z11 은 그대로 통과해야 한다(아래 명령).
+- AC-5 — 🟡 유닛 ✅ `DemoViewerOperatorSeedTest` 4/4(+ bite: 링크 키 `…ad05→…ad06` 변조 시 1건 실패, 원복 후 통과 — admin 파일만 바꿨는데 재실행됨 = gradle 입력 배선도 확인), IT ⚪(Docker).
+- AC-6 — ✅ 재굽기 필요(측정 근거 위).
