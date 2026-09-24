@@ -32,6 +32,7 @@ import { ConsoleSidebarNav } from '@/shared/ui/ConsoleSidebarNav';
 import { ApiError } from '@/shared/api/errors';
 import { DemoBackendNotice } from '@/widgets/demo-notice/DemoBackendNotice';
 import { DemoHeartbeat } from '@/widgets/demo-heartbeat/DemoHeartbeat';
+import { BfcacheGuard } from '@/widgets/bfcache-guard/BfcacheGuard';
 import { SampleVisitorBanner } from '@/widgets/sample-visitor/SampleVisitorBanner';
 import { SampleScreenNotice } from '@/widgets/sample-visitor/SampleScreenNotice';
 
@@ -228,6 +229,11 @@ export default async function ConsoleLayout({
               (마운트 지점만 믿지 않는다: 라우트 핸들러가 서버에서 세션을 다시 확인한다 —
               `api/demo/heartbeat/route.ts`.) */}
           <DemoHeartbeat />
+          {/* TASK-PC-FE-299 AC-3/AC-5 — bfcache 로 복귀했을 때(뒤로가기) 이 셸을 다시
+              서버에 태운다. 같은 이유로 **로그인한 운영자에게만** 마운트한다 — 샘플
+              방문자는 애초에 세션 쿠키가 없으므로 강제로 태워도 no-op 이고, 그 왕복은
+              ADR-MONO-074 가 지키려는 캐싱 이점만 깎는다. 상세: `BfcacheGuard.tsx`. */}
+          <BfcacheGuard />
         </>
       )}
       <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
