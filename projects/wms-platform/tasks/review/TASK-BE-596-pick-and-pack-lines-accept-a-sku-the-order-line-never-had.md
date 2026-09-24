@@ -8,7 +8,7 @@ TASK-BE-596
 
 # Status
 
-ready (2026-09-24 UTC — 기안. `TASK-MONO-724` 구현 중 곁발견, 창 없이 정적으로 측정함)
+review (2026-09-24 UTC — AC-0 bite · AC-1 소유자 결정 · AC-2 구현 완료. 🔴 데모 창 판정은 없다 — 이 변경은 신선 부팅의 시드 흐름을 **읽어서** 안전을 확인했다(아래))
 
 # Owner
 
@@ -117,3 +117,58 @@ if (sku != null && sku.requiresLot() && cl.lotId() == null) throw new LotRequire
 1. 🔴 **LOT 판정을 요청 SKU 로 둔 채 skuId 대조만 넣는다** → 대조가 먼저 걸러 주긴 하지만, 두 검증의 순서가 바뀌는 날 우회가 돌아온다. 판정 SKU 는 **주문 라인** 것이어야 한다.
 2. **시드를 안 읽고 머지한다** → 다음 신선 부팅에서 wms 시드가 피킹에서 멈추고 `TASK-MONO-706` 의 PASS 가 조용히 무효가 된다.
 3. **«출하가 안전하니 급하지 않다» 로 닫는다** → 투영(admin)과 피킹 기록이 사실과 다른 SKU 를 말하는 상태가 남는다. 그것도 결함이다.
+
+---
+
+# 구현 기록 (2026-09-24 UTC · 분석=Opus 5.5)
+
+## AC-0 — ✅ bite, 고치기 전 트리에서
+
+새 칸 11개(피킹 5 · 패킹 2 → 구현 뒤 4 · 출하 핀 1)를 **고치기 전 트리**에서 돌렸다:
+
+```
+29 tests completed, 6 failed
+ConfirmPickingServiceTest  12 · 실패 4 — sku 불일치 · LOT 우회 · 다른 창고 위치 · 비ACTIVE 위치
+PackingServiceTest         11 · 실패 2 — 남의 orderLineId · sku 불일치
+ConfirmShippingServiceTest  6 · 실패 0 — 출하 핀(주문 라인 SKU)은 고치기 전에도 초록 = «재고는 안전» 이 사실
+```
+
+🔵 실패 사유는 여섯 칸 모두 *"Expecting code to raise a throwable"* — 예외가 **안 났다**는 것이지 다른 이유로 깨진 것이 아니다. 대조군(맞는 SKU + ACTIVE·같은 창고 위치)은 초록.
+
+## AC-1 — ✅ 소유자 결정 (2026-09-24)
+
+| 질문 | 결정 |
+|---|---|
+| 오류 코드 | **새 422 `ORDER_LINE_MISMATCH`** (Recommended 채택) |
+| 위치 스냅샷이 없을 때 | **있을 때만 검사** — SKU 조회와 같은 결, read-model 지연이 피킹을 멈추지 않게 |
+| 패킹 LOT | **이번에 넣는다** — `PackingService` 에 `MasterReadModelPort` 주입 |
+
+위치 쪽은 새 코드를 만들지 않았다 — 레지스트리에 이미 같은 의미의 코드가 있다: `WAREHOUSE_MISMATCH`(outbound 가 이미 방출) · `LOCATION_INACTIVE`(inbound putaway 의 것, «cross-service» 로 outbound 추가).
+
+## AC-2 — ✅ 고쳤다
+
+- **계약 먼저**: `outbound-service-api.md` 오류표 2행 추가 + `WAREHOUSE_MISMATCH` 설명 확장 · §2.3/§3.1 Validation·Errors · `order-status.md` 가드표·예외표 · `platform/error-handling.md` 2곳.
+- `ConfirmPickingService.validateLines`: skuId 대조 → LOT 판정을 **주문 라인의 SKU** 로 → (기존) lot 대체 → 위치(있으면 같은 창고 · ACTIVE).
+- `PackingService.create`: 상태 확인 → **라인 검증** → 그 뒤에야 `PICKED → PACKING`. 🔴 원래 코드는 라인을 보기 **전에** 주문을 PACKING 으로 저장했다 — 칸이 «거절되면 주문은 PICKED 그대로» 를 단언해 그 순서를 강제한다.
+- 새 예외 `OrderLineMismatchException`(`ORDER_LINE_MISMATCH`) · `LocationInactiveException`(`LOCATION_INACTIVE`). 핸들러는 «기본 422» 라 표 수정이 필요 없다.
+- AC-0 칸의 단언을 `RuntimeException` → **정확한 예외 + errorCode** 로 좁혔다. 패킹 LOT 칸 2개(거절 · 대조군) 추가.
+
+## 🔴 데모 시드가 멈추지 않는가 (Failure Scenario 2)
+
+`infra/demo/seed/seed-wms.sh` 를 읽었다: 피킹(339–342행)·패킹(346–348행) 모두 `skuId` = 주문 라인과 같은 `$SKU_ID`, `actualLocationId` = **피킹 요청이 돌려준** `locationId`(예약된 실제 위치), `lotId` = 실물 lot. ⇒ 새 검증 셋 다 통과하는 모양이다. 🔴 **창에서 재지는 않았다** — 다음 신선 부팅에서 wms 시드 `실패 0` 과 `TASK-MONO-706` 의 사가 `COMPLETED` 가 그 판정이다.
+
+## ⚪ 한 칸은 격리해서 물 수 없다 — 정직하게 적는다
+
+«LOT 판정을 주문 라인 SKU 로» 는 **SKU 대조 뒤에** 있으므로, 대조를 통과한 요청에서는 `cl.skuId() == ol.getSkuId()` 이고 두 판정이 **같은 값**을 본다. 즉 그 줄을 옛 모양으로 되돌려도 **빨개지는 칸이 없다**(심층 방어). `lotRequirement_isNotBypassedByNamingANonLotSku` 는 «우회가 안 된다» 를 결과로 물 뿐, 어느 줄이 막았는지는 가르지 못한다(실제로는 SKU 대조가 먼저 막는다). Failure Scenario 1 이 경고한 «순서가 바뀌는 날» 에 대비한 줄이다.
+
+## 게이트 기록
+
+| 게이트 | 결과 |
+|---|---|
+| `outbound-service:test` 전체 | 🟢 rc=0 · **299 tests · 0 fail · 0 error · 4 skip**(skip 은 기존 칸, XML 합산) |
+| 새 칸(피킹 12 · 패킹 13 · 출하 6) | 🟢 전부 초록 |
+| `check-domain-error-code-registry.sh` | 🟢 rc=0 (150 코드) |
+| `check-error-code-registry.sh` | 🟢 rc=0 — 🔴 **그러나 이 초록은 증거가 아니다.** bite: 레지스트리에서 `ORDER_LINE_MISMATCH` 행을 지워도 **rc=0**. 가드는 `super("CODE", …)` / `ErrorResponse.of("CODE"` 만 수집하고, wms outbound 예외는 전부 `errorCode()` **재정의** 모양이라 이 계열 전체가 가드 밖이다(가드 헤더의 «SOUND, NOT COMPLETE» 선언된 공백). 레지스트리 등록은 손으로 했다 |
+| 필수 3종 | 🟢 rc=0 (스테이지 후) |
+
+🔴 **여기서 안 돌린 것**: outbound 통합(Testcontainers) · e2e · 데모 창.

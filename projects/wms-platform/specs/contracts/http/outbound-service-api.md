@@ -148,7 +148,9 @@ Domain error → HTTP status mapping:
 | `SKU_INACTIVE` | 422 | SKU snapshot is `INACTIVE` in MasterReadModel |
 | `LOT_REQUIRED` | 422 | LOT-tracked SKU order line missing `lot_id` (or `lot_no` at pick confirmation) |
 | `LOT_SUBSTITUTION_NOT_ALLOWED` | 422 | Pick confirmation `lotId` differs from the order line's planned concrete `lot_id` (v1 has no re-reservation; TASK-MONO-724) |
-| `WAREHOUSE_MISMATCH` | 422 | Order lines belong to different warehouses (v1: single-warehouse only) |
+| `ORDER_LINE_MISMATCH` | 422 | A pick-confirmation or packing line does not describe the order line it names: `orderLineId` is not a line of this order (packing), or `skuId` ≠ `OrderLine.sku_id` (TASK-BE-596) |
+| `LOCATION_INACTIVE` | 422 | Pick confirmation `actualLocationId` resolves to a Location that is not `ACTIVE` (shared with inbound putaway; TASK-BE-596) |
+| `WAREHOUSE_MISMATCH` | 422 | Order lines belong to different warehouses (v1: single-warehouse only); or a pick confirmation's `actualLocationId` is in a different warehouse than the order (TASK-BE-596) |
 | `STATE_TRANSITION_INVALID` | 422 | Requested state transition not allowed from current order or saga state |
 | `CONFLICT` | 409 | Optimistic lock version mismatch |
 | `DUPLICATE_REQUEST` | 409 | Same `Idempotency-Key`, different body hash |
@@ -480,12 +482,17 @@ Validation:
 - `lines`: required; must include all `orderLineId`s for this order. Length
   must equal the order's `OrderLine` count.
 - `lines[].orderLineId`: required UUID; must belong to the parent order.
-- `lines[].skuId`: required UUID; must match the `OrderLine.sku_id`.
-- `lines[].lotId`: required for LOT-tracked SKUs (`LOT_REQUIRED`); null for
+- `lines[].skuId`: required UUID; must match the `OrderLine.sku_id`
+  (`ORDER_LINE_MISMATCH`).
+- `lines[].lotId`: required for LOT-tracked SKUs (`LOT_REQUIRED`) — LOT-tracked
+  is judged by the **order line's** SKU, not the request's; null for
   non-LOT-tracked SKUs. Must equal `OrderLine.lot_id` when that is non-null
   (`LOT_SUBSTITUTION_NOT_ALLOWED`).
-- `lines[].actualLocationId`: required UUID; must resolve to `ACTIVE` Location
-  in the same warehouse.
+- `lines[].actualLocationId`: required UUID; when the Location is known to the
+  local MasterReadModel it must be `ACTIVE` (`LOCATION_INACTIVE`) and in the
+  order's warehouse (`WAREHOUSE_MISMATCH`). A Location the read-model has not
+  synced yet is accepted — the same stance the SKU lookup takes, so read-model
+  lag does not stop picking (TASK-BE-596).
 - `lines[].qtyConfirmed`: required, > 0, must equal `order_line.qty_ordered`
   (v1 no short-pick).
 
@@ -518,6 +525,7 @@ Side-effect: outbox `outbound.picking.completed` (§5)
 
 Errors: `PICKING_REQUEST_NOT_FOUND` (404), `STATE_TRANSITION_INVALID` (422),
 `LOT_REQUIRED` (422), `LOT_SUBSTITUTION_NOT_ALLOWED` (422),
+`ORDER_LINE_MISMATCH` (422), `LOCATION_INACTIVE` (422), `WAREHOUSE_MISMATCH` (422),
 `VALIDATION_ERROR` (400), `CONFLICT` (409), `DUPLICATE_REQUEST` (409).
 
 ### 2.4 GET `/api/v1/outbound/orders/{id}/picking-requests` — List Picking Requests for Order
@@ -619,9 +627,14 @@ Validation:
   all three should be provided (advisory warning in v1).
 - `notes`: optional, ≤ 500 chars.
 - `lines`: required, ≥ 1 element.
-- `lines[].orderLineId`: required UUID; must belong to this order.
-- `lines[].skuId`: required UUID; must match the `OrderLine.sku_id`.
-- `lines[].lotId`: optional; for LOT-tracked SKUs must be provided.
+- `lines[].orderLineId`: required UUID; must belong to this order
+  (`ORDER_LINE_MISMATCH`).
+- `lines[].skuId`: required UUID; must match the `OrderLine.sku_id`
+  (`ORDER_LINE_MISMATCH`).
+- `lines[].lotId`: optional; for LOT-tracked SKUs (judged by the order line's
+  SKU) must be provided (`LOT_REQUIRED`).
+- Lines are validated **before** the implicit `PICKED → PACKING` transition, so
+  a rejected request leaves the order where it was (TASK-BE-596).
 - `lines[].qty`: required, > 0.
 
 Note: Sum of `lines[].qty` across all PackingUnits for a given `orderLineId`
@@ -659,6 +672,7 @@ Response `201`:
 ```
 
 Errors: `ORDER_NOT_FOUND` (404), `STATE_TRANSITION_INVALID` (422),
+`ORDER_LINE_MISMATCH` (422), `LOT_REQUIRED` (422),
 `VALIDATION_ERROR` (400), `DUPLICATE_REQUEST` (409).
 
 ### 3.2 PATCH `/api/v1/outbound/packing-units/{id}` — Seal Packing Unit
