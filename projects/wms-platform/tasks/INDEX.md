@@ -71,7 +71,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-BE-596-pick-and-pack-lines-accept-a-sku-the-order-line-never-had.md` — **READY** (2026-09-24 UTC · `TASK-MONO-724` 곁발견). 계약 §2.3·§3.1 의 «`skuId` must match `OrderLine.sku_id`» 를 아무도 검사하지 않는다 — 피킹 확정은 skuId·location 해소 0, 패킹은 소속·SKU·LOT 0. 🔴 LOT 필수 판정이 **요청의** SKU 로 찾아 다른 SKU 를 적으면 `LOT_REQUIRED` 가 우회된다. 출하 확정은 주문 라인 SKU 를 써서 재고는 안전 — 피해는 기록·투영. AC-0 = bite 먼저 · AC-1 = 오류 코드 소유자 결정. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 <details><summary>직전 점유 (2026-08-13~14, `TASK-BE-583` — 지금 done/)</summary>
 
