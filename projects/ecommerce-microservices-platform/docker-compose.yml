@@ -827,6 +827,12 @@ services:
       - OTEL_METRICS_EXPORTER=none
       - OTEL_LOGS_EXPORTER=none
       - SPRING_PROFILES_ACTIVE=prod
+      # TASK-MONO-726 — /api/internal/** 가 워크로드 토큰을 검증하는 두 값(받는 쪽).
+      # 🔴 코드 기본값은 `http://auth-service:8081` 이었고 **아무도 덮지 않았다** — 그 이름은
+      #    ecommerce 네트워크에서 해소되지 않고(JWKS fetch 불가), 실제 토큰의 iss 와도 다르다.
+      #    ⇒ batch-worker 가 토큰을 받아 와도 여기서 401 이었다. 데모 체인은 demo.env 가 채운다.
+      - ORDER_INTERNAL_OAUTH2_JWK_SET_URI=${ORDER_INTERNAL_OAUTH2_JWK_SET_URI:-http://iam.local/oauth2/jwks}
+      - ORDER_INTERNAL_OAUTH2_ISSUER=${ORDER_INTERNAL_OAUTH2_ISSUER:-http://iam.local}
     expose:
       - "8086"
     deploy:
@@ -916,6 +922,12 @@ services:
       - OTEL_METRICS_EXPORTER=none
       - OTEL_LOGS_EXPORTER=none
       - SPRING_PROFILES_ACTIVE=prod
+      # TASK-MONO-726 — 두 잡(stale-paid 확정 · 고아 쿠폰)이 order-service /api/internal/orders/**
+      # 를 부르는 경로(보내는 쪽). 🔴 코드 기본값이 둘 다 틀렸고 아무도 덮지 않았다:
+      #    토큰 주소 `http://iam-service:8081`(그런 호스트 없음) · order 주소 `:8082`(product-service
+      #    의 포트 — order-service 는 8086). 형제 서비스는 `ORDER_SERVICE_URL=…:8086` 을 쓴다.
+      - IAM_TOKEN_URI=${IAM_TOKEN_URI:-http://iam.local/oauth2/token}
+      - ORDER_SERVICE_BASE_URL=http://order-service:8086
     expose:
       - "8088"
     deploy:
