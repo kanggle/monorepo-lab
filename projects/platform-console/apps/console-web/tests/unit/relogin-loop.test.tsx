@@ -26,6 +26,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SESSION_EXPIRED, RE_LOGIN_PATH } from '@/shared/lib/re-login';
 
 const redirectMock = vi.fn();
@@ -58,10 +59,21 @@ vi.mock('@/widgets/demo-credentials/DemoLoginCredentials', () => ({
   DemoLoginCredentials: () => null,
 }));
 
+// TASK-PC-FE-299 AC-5 — a forced re-login (`?error=session_expired`) mounts
+// `ForcedReLoginCacheReset`, which reads `useQueryClient()`; without a real
+// provider here (this suite never exercised the App Router's root-layout
+// `QueryClientProvider`) every `error: SESSION_EXPIRED` render throws.
 async function renderLogin(sp: { error?: string; redirect?: string } = {}) {
   const { default: LoginPage } = await import('@/app/(auth)/login/page');
   const el = await LoginPage({ searchParams: Promise.resolve(sp) });
-  render(<div data-testid="host">{el}</div>);
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={qc}>
+      <div data-testid="host">{el}</div>
+    </QueryClientProvider>,
+  );
 }
 
 beforeEach(() => {

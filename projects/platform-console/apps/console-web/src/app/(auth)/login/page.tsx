@@ -3,8 +3,10 @@ import { isAuthenticated } from '@/shared/lib/session';
 import { SESSION_EXPIRED } from '@/shared/lib/re-login';
 import { sanitizeReturnPath } from '@/shared/lib/return-path';
 import { redirect } from 'next/navigation';
+import { resolveDemoBackendState } from '@/shared/config/demo-backend';
 import { DemoBackendNotice } from '@/widgets/demo-notice/DemoBackendNotice';
 import { DemoLoginCredentials } from '@/widgets/demo-credentials/DemoLoginCredentials';
+import { ForcedReLoginCacheReset } from '@/widgets/forced-relogin-cache-reset/ForcedReLoginCacheReset';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,9 +29,23 @@ const ERROR_MESSAGES: Record<string, string> = {
     '인증 서버 일시 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
   // TASK-PC-FE-278 — 백엔드가 `401` 을 내서 **강제 재로그인**으로 꺾인 경우.
   // 🔴 이 코드는 `(console)` 아래 53개 지점이 붙이는 마커다({@link SESSION_EXPIRED}).
+  // 🔴 TASK-PC-FE-299 AC-4 — 이 기본 문구는 **원인 불명**(일반 세션 만료) 또는 데모
+  //    판정 자체가 불가능한 경우("판정 불가" — `resolveDemoBackendState` 헤더 참조)에 쓴다.
+  //    데모 종료가 **실제 신호로 확인된** 경우는 아래 `SESSION_EXPIRED_DEMO_DOWN` 이
+  //    대신한다 — 이 값은 그 대체가 없을 때만 렌더된다(코드 참조).
   [SESSION_EXPIRED]:
     '세션이 만료되어 로그아웃되었습니다. 다시 로그인해주세요.',
 };
+
+/**
+ * TASK-PC-FE-299 AC-4 — `SESSION_EXPIRED` 변형: 데모 백엔드 종료가 **실제 신호로
+ * 확인된** 경우에만 쓴다. 판정은 `DemoBackendNotice` 가 쓰는 것과 **같은 함수**
+ * ({@link resolveDemoBackendState}) 의 `'unavailable'` 결과 하나뿐이다 — 추측 배지를
+ * 달지 않는다(Goal 문단의 요구). `'starting'`(켜지는 중 — "종료" 라는 말은 거짓이
+ * 된다) 과 `'not-demo'`/`'running'`/판정 불가는 전부 위 기본 문구로 남는다.
+ */
+const SESSION_EXPIRED_DEMO_DOWN =
+  '데모 서버가 종료되어 다시 로그인해야 합니다. 데모 시작 페이지에서 서버를 켠 뒤(약 10분) 다시 로그인해주세요.';
 
 /** Generic fallback message shown for any unrecognised error code. */
 const GENERIC_ERROR =
@@ -81,10 +97,21 @@ export default async function LoginPage({
   const forcedReLogin = sp.error === SESSION_EXPIRED;
   if (!forcedReLogin && (await isAuthenticated())) redirect('/console');
 
+  // TASK-PC-FE-299 AC-4 — a demo-shutdown logout gets a distinct message
+  // ONLY when a real signal confirms it (same resolver `DemoBackendNotice`
+  // uses, below). Never guessed: `resolveDemoBackendState()` reads the
+  // control-plane `/status` this request; every other outcome ('starting' —
+  // instance is coming up, not down; 'running' — a genuine session expiry;
+  // 'not-demo' — no control plane to ask) keeps the generic message.
+  const demoShutdownLogout =
+    forcedReLogin && (await resolveDemoBackendState()) === 'unavailable';
+
   // Gap C (F5): unknown codes must never render silent (null → visible fallback).
-  const error = sp.error
-    ? (ERROR_MESSAGES[sp.error] ?? GENERIC_ERROR)
-    : null;
+  const error = demoShutdownLogout
+    ? SESSION_EXPIRED_DEMO_DOWN
+    : sp.error
+      ? (ERROR_MESSAGES[sp.error] ?? GENERIC_ERROR)
+      : null;
   // Same-site sanitise via the shared predicate the login route also uses —
   // page and route must never diverge on "is this redirect safe?" (PC-FE-253).
   const next = sanitizeReturnPath(sp.redirect);
@@ -97,6 +124,10 @@ export default async function LoginPage({
           없으면 방문자는 그 실패를 앱의 고장으로 읽는다. 데모가 아닌 배포에서는
           아무것도 렌더하지 않는다(위젯의 `not-demo` 분기). */}
       <DemoBackendNotice />
+      {/* TASK-PC-FE-299 AC-5 — only on a FORCED re-login landing (the marker,
+          never a plain /login visit). See the widget's header for why this is
+          the one client-memory surface a forced logout doesn't already clear. */}
+      {forcedReLogin ? <ForcedReLoginCacheReset /> : null}
       <div className="w-full max-w-sm rounded-lg border border-border bg-background p-8">
         <h1 className="text-xl font-semibold text-foreground">
           Platform Console

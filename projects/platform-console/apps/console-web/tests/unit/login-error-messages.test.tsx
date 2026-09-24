@@ -40,6 +40,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SESSION_EXPIRED } from '@/shared/lib/re-login';
@@ -105,10 +106,25 @@ const EXPECTED: Record<string, string> = {
 /** 알 수 없는 코드가 받는 문장. */
 const GENERIC = '로그인 중 오류가 발생했습니다. 다시 시도해주세요.';
 
+// TASK-PC-FE-299 AC-5 — a forced re-login (`?error=session_expired`) mounts
+// `ForcedReLoginCacheReset`, which reads `useQueryClient()`. This suite never
+// exercised the App Router `QueryClientProvider` (root layout only), so
+// without this wrapper every `error: SESSION_EXPIRED` render throws.
+function renderHost(el: React.ReactNode) {
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={qc}>
+      <div data-testid="host">{el}</div>
+    </QueryClientProvider>,
+  );
+}
+
 async function renderLogin(sp: { error?: string; redirect?: string } = {}) {
   const { default: LoginPage } = await import('@/app/(auth)/login/page');
   const el = await LoginPage({ searchParams: Promise.resolve(sp) });
-  render(<div data-testid="host">{el}</div>);
+  renderHost(el);
 }
 
 /** 렌더된 경고의 텍스트(없으면 null). 페이지가 이미 다는 `role="alert"` 로 잡는다. */

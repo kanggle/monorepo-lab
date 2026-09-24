@@ -91,9 +91,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-PC-FE-299-session-end-after-demo-shutdown.md` — **READY (2026-09-24 UTC)** 실행 티켓 — 인증된 콘솔 HTML에 `Cache-Control: no-store`(정적/샘플 페이지 제외) + bfcache 뒤로가기 시 잔존 데이터 노출 방지(`pageshow`/`persisted` 감지) + 데모종료↔세션만료 원인 구분 로그인 문구(실제 신호 기반, 추측 금지) + 강제 로그아웃 시 클라 잔존 상태(테넌트·드릴·유저정보) 정리 + `DemoBackendNotice.tsx` 의 ADR-MONO-074 이전 낡은 주석("66개 화면은 가드 뒤") 정정. AC-2(유효 세션 새로고침이 로그아웃되면 안 됨)가 가장 깨지기 쉬운 회귀 축. 분석=Opus 5.5 / 구현 권장=Sonnet 5.
-
-(그 외 없음)
+_(없음)_
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
 
@@ -123,6 +121,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
+- `TASK-PC-FE-299-session-end-after-demo-shutdown.md` — **REVIEW (2026-09-24 UTC)** 데모 종료/세션 만료 뒤 잔존 표면 5개 정리. AC-1 캐시 헤더는 `next.config.mjs` 가 아니라 `src/middleware.ts`(인증 라우트만 같은 path 공유 문제 — path-only `headers()` 로는 구분 불가) — 🔴🔴 실측: `(console)` 는 이미 `force-dynamic` 이라 Next 가 **모든 방문자**(샘플 포함)에게 자동 `no-store` 류 헤더를 이미 얹고 있었다(티켓의 "정적 캐싱 문제 아님" 전제가 곧 이 사실). AC-3(bfcache) = `pageshow`/`persisted` 감지 → `location.reload()`(헤더만으론 최신 Chromium 의 bfcache 진입을 못 막는다), 인증 셸에만 마운트. AC-4 = `resolveDemoBackendState()`(`DemoBackendNotice` 와 동일 함수) 의 `'unavailable'` 만 데모 종료 문구로 대체, `starting`/`running`/`not-demo` 는 전부 기존 문구 유지(2종 분리로 단순화, 근거 기록). AC-5 = grep 결과 localStorage/sessionStorage 사용 0건(세션은 쿠키 전용이 하드 룰) — 유일한 실재 잔존 표면은 루트 레이아웃에 걸린 `QueryClient`(TanStack Query 캐시)가 인앱 401 리다이렉트에도 안 죽는 것 → 강제 재로그인 착지에서만 `queryClient.clear()`. AC-6 = `DemoBackendNotice.tsx` 낡은 주석("66개 중 1개 익명") 정정. `relogin-marker.test.ts`(보호 대상) 미변경, 4/4 통과. 전체 vitest 323파일/3609테스트 rc=0 · tsc/lint/build rc=0 · Playwright 3시나리오(AC-2/AC-4/AC-3+5) 실브라우저 PASS. 분석=Opus 5.5 / 구현=Sonnet 5.
 - `TASK-PC-FE-298-global-guide-permission-feature-mapping.md` — **REVIEW (2026-09-24 UTC)** 전역 1뎁스「가이드」(`/guide`, 7탭, 정적·샘플 방문자 열람) + 도메인 가이드 6개 공용 8탭(기존 섹션 이동, 목차→탭) + **권한·기능 매핑 표**(`shared/guide/permission-map.ts` — nav leaf 48개 전부, 메뉴명/비로그인/테스트계정 열은 파생, 행마다 인용) + 드리프트 가드(nav↔표 양방향 · 인용 경로 실재 · 키 존재 — bite RED→GREEN 확인; 권한 코드 최신성은 못 잡음). 「권한」/「권한 세트」 operator.manage 불일치 기록. 부수 발견: IAM 가이드가 `group.manage` 를 빠뜨리고 있었다(수정). impl PR 은 297 과 동반.
 - `TASK-PC-FE-297-nav-order-icons-favicon.md` — **REVIEW (2026-09-24 UTC)** 6도메인 2뎁스 「가이드→개요」(인접 주석 6곳 동시 갱신) · 사이드바 인라인 SVG 아이콘(의존성 0, `icon` 필수 필드) · 그룹 제목 하위화(`<p>` 유지) · 접힌 드릴 부모 활성(`aria-current="true"`) · `/dashboards/health`→개요 별칭(`/account` 의도적 미매칭, 근거 기록) · `icon.svg`/`apple-icon`/`manifest`. 아이콘은 「흰색」 리터럴 대신 `currentColor`(라이트 테마 가독 — 기록). 론처 썸네일 2장이 시각적으로 낡음(기록만). impl PR 은 298 과 동반.
 
