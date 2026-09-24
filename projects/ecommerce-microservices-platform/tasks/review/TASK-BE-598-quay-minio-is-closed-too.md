@@ -229,3 +229,21 @@ AMI 가 죽었다(Failure Scenario 2 가 실재). 현 배포 AMI 는 이미 두 
 - 🔴 칸 (h) 는 **태그 존재**를 잰다 — 레포가 공개된 채 옛 태그만 지워지는 경우도 잡지만, `--require-coverage` 없는 PR 실행에서
   레이트리밋으로 전부 skip 되면 아무것도 안 잰다(MONO-359). 나이틀리가 그 공백을 메운다.
 - 근본 처방(사내 미러 / pull-through 캐시 / 소스에서 직접 굽기)은 여전히 **비용이 드는 소유자 결정**이라 여기 안 끼웠다.
+
+---
+
+## CORRECTION (2026-09-24 UTC) — AC-3 의 절반이 나이틀리로 판정됐다
+
+위 구현 기록은 AC-3 을 «런타임 미관측» 으로 남겼다. 머지(`6ea6b57d7`, #4008) 뒤 나이틀리 런 `36014153545` 가
+**conclusion=success** 로 끝났고, `Frontend E2E full-stack (web-store, Playwright + docker compose)`(job `107683315766`)
+로그에서 직접 읽었다:
+
+| 칸 | 판정 | 로그 |
+|---|---|---|
+| 새 이미지 pull | 🟢 | `minio Pulled` · `minio-init Pulled` |
+| minio 기동 | 🟢 | `Container ecommerce-minio Healthy` |
+| 그 스택 위 e2e | 🟢 | `12 passed` · 같은 런의 `Demo compose image liveness` success |
+| **minio-init 버킷 생성** | ⚪ **여전히 미관측** | `minio-init Started` 뒤 종료 코드·`mc` 출력이 로그에 **없다** — 위 § 의 예측 그대로 |
+
+⇒ AC-3 은 **닫히지 않는다.** 남은 것 = minio-init 종료 코드 0 + `mc ls` 로 버킷 존재(대조군 포함) — 다음 재굽기 부팅 또는
+Docker 호스트에서. 🔵 13:10Z 이후 나이틀리 빨강 3회(minio `unauthorized`)는 이 런으로 회복됐다.
