@@ -648,15 +648,15 @@
     //    잠기고 있었고, 남은 유일한 길이 «전체 스택» 이었다. 🔴 `requested` 는 **여전히 여기
     //    없다**: 그 값은 «인스턴스가 떴거나 켜지는 중인데 이 묶음이 아직» 만 뜻하고, 그때 여는
     //    것이 중복 요청이다.
-    // 🔴🔴 TASK-MONO-729 — **`unknown` 을 뺐다(소유자 매트릭스: 「확인 실패」는 잠금).** 예전 판단은
-    //    «모르는 것은 못 한다가 아니다» 였다. 매트릭스가 그것을 뒤집은 이유: 서버가 `unknown` 을
-    //    주는 것은 **인스턴스가 running 인데 헬스가 90초 넘게 멈춘** 때뿐이고(`_bundle_state`),
-    //    그때 기동을 눌러도 이미 떠 있는 인스턴스에 SSM 명령이 한 번 더 갈 뿐 방문자가 볼 변화가
-    //    없다. 끄기도 같은 이유로 잠근다 — 무엇이 떠 있는지 모르는 채로 내리지 않는다.
-    //    ⚠ `handler.py` 의 `_bundle_state` 독스트링이 아직 «론처의 unknown 이 startable 인 것과
-    //       같은 이유» 라고 적고 있다. 람다 코드를 이 티켓에서 안 건드리므로(배포에 apply 필요)
-    //       그 한 줄은 낡은 채 남는다 — 동작과 무관한 주석이다.
-    const B_STARTABLE = new Set(["waiting", "selected", "partial"]);
+    // 🔵 `unknown` 을 startable 에 넣는다 — «확인 실패» 일 때 버튼을 잠그면, 헬스 발행이
+    //    끊긴 동안 방문자가 **아무것도 못 한다.** 모르는 것은 «못 한다» 가 아니다.
+    //    (`handler.py` `_bundle_state` 독스트링이 같은 판단을 적고 있다.)
+    // 🔴🔴 TASK-MONO-729 리뷰 — 이 줄을 한 번 뺐다가 **되돌렸다.** 소유자 매트릭스의 잠금 요구는
+    //    **전이 상태**(기동 중…/종료 중…)의 더블클릭 방지였고, 「🔴 확인 실패」는 전이가 아니다.
+    //    잠그면 기능 회귀다. 🔵 `/bundles` 자체를 못 받은 경우는 여전히 잠긴다 — 그때는
+    //    `info === null` 이라 아래 renderCards 의 `startable` 조건(origin/main 과 같은 식)이 막는다.
+    //    가드 (z39) bite-6 이 «info 가 있는 unknown 에서 켜기가 열린다» 를 핀한다.
+    const B_STARTABLE = new Set(["waiting", "selected", "partial", "unknown"]);
     // TASK-MONO-729 (e) — 「끄기」를 누를 수 있는 상태. 🔴 `ready` 하나뿐이다: 기동 중인 묶음을
     //    끄는 것은 매트릭스에 없고(「기동 중…」은 잠금), 서버가 이미 `stopping` 이면 중복이다.
     const B_STOPPABLE = new Set(["ready"]);
@@ -926,7 +926,9 @@
           btn.textContent = pending ? "상태 확인 중…"
             : stoppable ? "데모 서버 끄기"
             : B_BUSY[st] ? B_BUSY[st]
-            : st === "unknown" ? "상태 확인 실패"
+            // 🔵 `/bundles` 를 못 받아 잠긴 unknown 만 이 문구다. 응답이 있는 unknown(헬스 정체)은
+            //    켜기가 열려 있으므로 아래 「데모 서버 켜기」로 떨어진다.
+            : (st === "unknown" && !startable) ? "상태 확인 실패"
             : "데모 서버 켜기";
         }
       }

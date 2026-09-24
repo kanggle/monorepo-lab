@@ -134,23 +134,23 @@ e) **방문자용 "끄기" 버튼** — 카드가 `ready`(사용 가능) 상태�
 | (z34) (+BITE/BITE3 앵커) | `/bundles` 404·5xx·차단 때 카드가 사유를 말하는가(GUARD-Z34 구간 실행) | 대역: 버튼 셀렉터 `data-bundle-start`→`data-bundle-act`, `data-deps` 칸, 집계 배지 `querySelector` 추가(그 셀렉터만 — 모르는 셀렉터는 여전히 죽음). 미측정 문구 상수 `… 확인 중`→`🔵 상태 확인 중…`. 스냅샷에 **버튼 모드** 필드 추가. `ready 면 잠김` 단언을 `ready 면 열림 + 모드=stop` 으로 **뒤집고**(목적인 «중복 켜기 금지» 는 모드로 유지), `waiting 모드=start` 단언 추가. BITE/BITE3 앵커 줄 무변경, bite 3칸 그대로 문다 |
 | (z35) | 카드 구조(링크 1·제목 앵커·로그인 전/후·캐러셀 자리) + 캐러셀 실행 | 무변경·통과(콘솔 제목 `Platform Console` 도 `<h2><a …data-surface` 모양 유지) |
 | (z37) | 캐러셀 참조 ↔ 캡처 파일 ↔ `capture-shots.mjs` | 무변경·통과(SHOTS 안 건드림 — 캡처 alt 의 「운영자 콘솔」은 그래서 남음) |
-| (z39) | 묶음 버튼이 상태마다 옳게 눌리는가 + 배포 창 정규화 | **넓힘**: 기대 열이 «열림/잠김» → **«무엇이 열렸나(start/stop/locked)»**. 상태 8→10(stopping·partial 추가), 전이 6칸 추가(끄기 누름→종료 중 잠금·서버 반영→해제·거절→해제·켜기 누름→기동 중 잠금·상한 만료→서버 값·모드 없음→요청 0), 요청 경로·본문 대조. 기대값 **두 개 뒤집힘**(소유자 매트릭스): ready 잠김→끄기, unknown 열림→잠금. bite 3→6(전이 표시 제거·끄기=/stop·확인 실패에서 켜기 추가; 기존 bite-1 의 sed 리터럴은 `B_STARTABLE` 새 모양에 맞춤) |
+| (z39) | 묶음 버튼이 상태마다 옳게 눌리는가 + 배포 창 정규화 | **넓힘**: 기대 열이 «열림/잠김» → **«무엇이 열렸나(start/stop/locked)»**. 상태 8→11(stopping·partial·running+unknown 추가), 전이 6칸 추가(끄기 누름→종료 중 잠금·서버 반영→해제·거절→해제·켜기 누름→기동 중 잠금·상한 만료→서버 값·모드 없음→요청 0), 요청 경로·본문 대조. 기대값 **하나 뒤집힘**(소유자 매트릭스): ready 잠김→끄기. unknown 은 **열림 유지**(§ CORRECTION). bite 3→6(전이 표시 제거·끄기=/stop·**확인 실패에서 켜기 잠금** 추가) |
 | (z16) | 정적 칸이 `--live` 게이트에 갇히지 않았나 | 새 칸 (z41)(z42) 는 게이트 위 정적 구간 — 전체 실행에서 통과 |
 | (z25) | 파이프 뒤 `grep -q` 금지 | 새 코드는 파이프 뒤에 `grepq` 사용 — 통과 |
 | **(z41) 신설** | 전체 집계 배지·의존성 고지가 카드 상태/응답에서 파생되는가 + 「확인 실패」두 원인의 사유 구별 | 집계 11칸 + **전 조합 512건 스윕**(«모두 사용 가능» ⇔ 전부 ready, 어긋남 0) · 의존성 응답 3벌 · bite 3칸 |
 | **(z42) 신설** | 람다 `BUNDLE_REQUIRED_DOMAINS`(ast 로 식 평가) = `projects.sh` `resolve_bundles`(실행) | 묶음 9개 전부 일치 · bite 2칸(람다에서 iam 제거 · DEPS 에 의존 추가) |
 
-약화 0건: 삭제된 단언 없음. 뒤집힌 단언 3개(z34 store·z39 S6·z39 S8)는 기대값 변경이고 각각 더 강한 형태(모드까지)로 남았다.
+약화 0건: 삭제된 단언 없음. 뒤집힌 단언 2개(z34 store·z39 S6)는 기대값 변경이고 각각 더 강한 형태(모드까지)로 남았다.
 
 ## 구현 (`infra/demo/aws/site/index.html`)
 
-- (a) `BLABEL` 을 `[배지, 클래스, 집계 범주]` 한 표로. 꺼짐 ⚪(waiting·selected) · 기동 중 🟡(booting·requested) · 사용 가능 🟢 · 종료 중 🔵 · 확인 실패 🔴(unknown) · 첫 응답 전 🔵 상태 확인 중…(`B_PENDING`). `partial` 은 매트릭스에 칸이 없어 「🟠 일부만 실행 중」 그대로 두고 켜기 가능, 집계에서는 기동 중으로 셈. 「확인 실패」 상세 줄: `/bundles` 실패 = 기존 `B_ERR` 문구, 헬스 정체 = `unknownNote()`(서버가 준 `health_age_seconds` 를 읽음).
+- (a) `BLABEL` 을 `[배지, 클래스, 집계 범주]` 한 표로. 꺼짐 ⚪(waiting·selected) · 기동 중 🟡(booting·requested) · 사용 가능 🟢 · 종료 중 🔵 · 확인 실패 🔴(unknown — 배지·사유는 🔴, 켜기는 **열림**: § CORRECTION) · 첫 응답 전 🔵 상태 확인 중…(`B_PENDING`). `partial` 은 매트릭스에 칸이 없어 「🟠 일부만 실행 중」 그대로 두고 켜기 가능, 집계에서는 기동 중으로 셈. 「확인 실패」 상세 줄: `/bundles` 실패 = 기존 `B_ERR` 문구, 헬스 정체 = `unknownNote()`(서버가 준 `health_age_seconds` 를 읽음).
 - (a) 더블클릭 방지: `bundleTransit` — 누른 순간 이 화면만 「기동 중…/종료 중…」 을 들고, 서버가 끝난 쪽 값을 주면 버림. 거절·네트워크 실패면 즉시 버림. 상한 `B_TRANSIT_MS`=180초(🔴 실측 아님 — 묶음 하나 종료 소요는 잰 적 없음).
 - (b) `#aggbadge` → `[data-agg-badge]` 한 줄, 값은 카드별 집계 범주에서 `aggregateOf()` 로만 파생. 매트릭스 6값 + 보탠 3값(`🔵 상태 확인 중…` · `🔴 확인 실패`(전부 오류) · `🔵 모두 종료 중` · `🟡 모두 기동 중` — 전부가 그 상태일 때 「일부」라고 하면 거짓이라). EC2 줄의 「✅ 실행 중」 → 「✅ 인스턴스 실행 중 — 무엇을 쓸 수 있는지는 카드 배지를 보세요」.
 - (c) 카드마다 `필요한 공용 서비스` (`data-deps`) — `/bundles` 의 `domains` **교집합**(모든 묶음이 필요로 하는 도메인)에서 파생. 페이지에 `iam` 리터럴 없음. 원장 일치는 (z42).
 - (d) 콘솔 카드 제목 `Platform Console` + 「운영 콘솔」 부제, 구획(「서비스 화면」/「운영 도구」, 점선 테두리)으로 분리하고 카드를 뒤로 옮김. 고급 영역 도메인 목록은 표기·구획만(비즈니스 5 / 공용·기타 / 운영 도구 = Platform Console (운영 콘솔)) — 버튼·동작 무변경.
 - (e) 버튼 `data-bundle-act` 하나가 `data-mode`(renderCards 만 정함)로 켜기=`/bundle/start`·끄기=`/bundle/stop`(`B_ACT_PATH`). 끄기는 `ready` 에서만, 구세대 AMI 거절(`bundleBlocked`)과 무관하게 열림(demo-down 은 옛 동작). 「다른 방문자가 쓰고 있을 수 있다」는 **툴팁으로만** — 카드 사유 칸(note)은 비어 있어야 «문제 없음» 이라는 (z34) 약속을 지키기 위해.
-- `handler.py` **무변경** ⇒ 이 PR 은 `terraform apply` 불필요(Vercel 머지 배포만). ⚠ `handler.py` `_bundle_state` 독스트링의 «론처의 unknown 이 startable 인 것과 같은 이유» 한 줄이 이제 낡았다 — 동작 무관 주석이라 apply 를 부르지 않으려고 남김.
+- `handler.py` **무변경** ⇒ 이 PR 은 `terraform apply` 불필요(Vercel 머지 배포만). `_bundle_state` 독스트링의 «론처의 unknown 이 startable 인 것과 같은 이유» 는 CORRECTION 뒤 다시 참이다.
 
 ## 검증
 
@@ -159,7 +159,7 @@ e) **방문자용 "끄기" 버튼** — 카드가 `ready`(사용 가능) 상태�
 - AC-2 bite 실측(주입 확인 후 판정 출력):
   - (z39) bite-4 전이 표시 제거 → `[T1_STOP_CLICK] store 버튼이 stop 입니다 (기대 locked)`
   - (z39) bite-5 끄기=/stop → `[T1_STOP_CLICK] 끄기가 /stop 로 나갔습니다 — 그 묶음 한정 /bundle/stop 이어야 합니다`
-  - (z39) bite-6 unknown 재개방 → `[S8_UNKNOWN] store 버튼이 start 입니다 (기대 locked)`
+  - (z39) bite-6 (CORRECTION 후) unknown 을 startable 에서 뺌 → `[S8_UNKNOWN] store 버튼이 locked 입니다 (기대 start)` · `[S11_UNKNOWN_RUN] store 버튼이 locked 입니다 (기대 start)` (카드 3장 × 2칸 = 6줄)
   - (z41) bite-1 하나라도 ready=전부 → `[ONE_READY] 전체 배지가 «전부 사용 가능» 과 같은 문구입니다 … 🟢 모두 사용 가능`
   - (z41) bite-2 공용 사본 `["iam"]` → `[D2] 응답에서 공용 도메인이 늘었는데 fan 의 고지가 안 따라옵니다`
   - (z41) bite-3 헬스 사유 삭제 → `[헬스 정체] 카드가 사유를 한 마디도 말하지 않습니다`
@@ -172,3 +172,11 @@ e) **방문자용 "끄기" 버튼** — 카드가 `ready`(사용 가능) 상태�
 
 - 실제 제어 API·EC2 에 대고 켜기/끄기 — 비용 때문에 의도적으로 안 함. 묶음 하나 종료 실소요(전이 상한 180초의 근거)는 미측정.
 - 실제 Vercel 서빙본 — 머지 후 `check-launcher-fresh.sh` 로 확인할 일.
+
+## CORRECTION (2026-09-24 UTC, PR #3998 리뷰)
+
+- **첫 구현이 `unknown`(🔴 확인 실패)에서 켜기 버튼을 잠갔다 — 리뷰가 되돌렸다.** 소유자 매트릭스의 잠금 요구는 **전이 상태**(기동 중… / 종료 중…)의 더블클릭 방지였고, 「확인 실패」는 전이가 아니다. 기존 설계 판단(index.html 의 «모르는 것은 «못 한다» 가 아니다» · `handler.py` `_bundle_state` 독스트링)대로, 잠그면 헬스 발행이 끊긴 동안 방문자가 아무것도 못 한다 — 기능 회귀였다.
+- 되돌린 것: `B_STARTABLE` 에 `unknown` 복귀 + 근거 주석 복원. 배지 「🔴 확인 실패」와 원인 상세 줄은 그대로, 버튼은 「데모 서버 켜기」(열림).
+- origin/main 과의 동등성: 켜기 조건식은 main 과 **글자 그대로 같다** — `CONTROL_OK && info !== null && !bundleBlocked && B_STARTABLE.has(st)`(main:727 · 현재 renderCards), `B_STARTABLE` 도 main 과 같은 4원소. 그래서 `/bundles` 를 못 받은 경로(`info === null`)는 main 처럼 잠기고((z34) 7개 오류 시나리오가 잠김을 단언, rc=0), 문구만 「상태 확인 실패」다. 응답이 있는 unknown 만 열린다.
+- 가드: (z39) S8 기대 locked→start, **S11(running + unknown = 헬스 정체의 실제 자리) 추가**, bite-6 을 반대로 — unknown 을 빼면 S8·S11 이 빨개진다(위 실측). `handler.py` 무변경 유지.
+- 따라서 PR 본문·첫 보고의 «deviation 1(unknown 잠금)» 은 **철회**됐다.

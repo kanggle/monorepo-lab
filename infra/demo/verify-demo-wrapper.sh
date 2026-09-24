@@ -3640,8 +3640,9 @@ ok "카드 ${z34_got}장 × 9시나리오(미측정·404·5xx·제어API전멸·
 #    열렸나»(start/stop)** 로 넓어졌고, 두 가지가 더해졌다:
 #      · 전이 표시 — 누른 뒤 서버가 따라올 때까지 「… 중」으로 잠그는가(더블클릭 방지)
 #      · 요청 경로 — 끄기가 EC2 전체 `/stop` 이 아니라 **그 카드 하나의** `/bundle/stop` 인가
-#    옛 단언 두 개가 **뒤집혔다**(소유자 매트릭스): ready 는 잠김→끄기, unknown 은 열림→잠김.
-#    둘 다 기대값이 바뀐 것이지 칸이 빠진 것이 아니다. unknown 잠금은 bite-6 이, 끄기 경로는
+#    옛 단언 하나가 **뒤집혔다**(소유자 매트릭스): ready 는 잠김→끄기. 🔴 unknown 은 **여전히 열림**
+#    이다 — 한 번 잠갔다가 리뷰에서 되돌렸다(«모르는 것은 «못 한다» 가 아니다», 잠금 요구는 전이
+#    상태만의 것). 그래서 unknown 을 running+헬스 정체(S11)로 한 칸 더 잰다. unknown 열림은 bite-6 이, 끄기 경로는
 #    bite-5 가, 전이 표시는 bite-4 가 «되돌리면 문다» 를 증명한다.
 # =============================================================================
 echo "[verify] (z39) 묶음 버튼(켜기·끄기)이 상태마다 옳게 눌리는가 (TASK-MONO-653 · 729)"
@@ -3762,9 +3763,12 @@ var SCENES = [
   ["S5_OLD_STOPPED",  "stopped",  "requested", "start"],
   ["S6_READY",        "running",  "ready",     "stop"],
   ["S7_BOOTING",      "running",  "booting",   "locked"],
-  ["S8_UNKNOWN",      "stopped",  "unknown",   "locked"],
+  ["S8_UNKNOWN",      "stopped",  "unknown",   "start"],
   ["S9_STOPPING",     "stopping", "stopping",  "locked"],
-  ["S10_PARTIAL",     "running",  "partial",   "start"]
+  ["S10_PARTIAL",     "running",  "partial",   "start"],
+  // 🔴 서버가 unknown 을 실제로 주는 자리 — 인스턴스 running + 헬스 90초 정체. 이때 잠기면 방문자는
+  //    헬스 발행이 끊긴 동안 아무것도 못 한다(TASK-MONO-729 리뷰가 되돌린 회귀).
+  ["S11_UNKNOWN_RUN", "running",  "unknown",   "start"]
 ];
 
 async function scene(key, ec2, st, want) {
@@ -3848,7 +3852,7 @@ z39_verdict() {  # $1 = 드라이버 출력 → 사유(여러 줄) 또는 빈 �
     END {
       # ── 비-공허성. 🔴 하한의 대상은 «판정된 (시나리오 × 카드) 수» 다 — 카드가 0장이면
       #    루프가 아무것도 안 훑으면서 언제나 초록이다.
-      if (nscene != 16) print "시나리오가 " nscene "개입니다(기대 16개: 상태 10 + 전이 6) — 드라이버가 행렬을 다 안 돌았습니다"
+      if (nscene != 17) print "시나리오가 " nscene "개입니다(기대 17개: 상태 11 + 전이 6) — 드라이버가 행렬을 다 안 돌았습니다"
       ncards = 0
       for (i = 1; i <= nscene; i++) { k = order[i]; if (ncards == 0) ncards = cnt[k]; else if (cnt[k] != ncards) print "[" k "] 카드 " cnt[k] "장 (다른 칸은 " ncards "장) — 칸마다 모집단이 다릅니다" }
       if (ncards < 1) print "카드가 0장입니다 — 드라이버가 **빈 모집단**을 돌았습니다"
@@ -3906,7 +3910,7 @@ z39_bite() {  # $1 = 이름  $2 = 변형본  $3 = 안 물었을 때의 설명
 
 # (bite-1) `selected` 를 startable 에서 뺀다 = TASK-MONO-653 **이전** 상태.
 z39_b1="$z39_dir/bite1.js"
-sed 's|new Set(\["waiting", "selected", "partial"\])|new Set(["waiting", "partial"])|' "$z39_src" > "$z39_b1"
+sed 's|new Set(\["waiting", "selected", "partial", "unknown"\])|new Set(["waiting", "partial", "unknown"])|' "$z39_src" > "$z39_b1"
 z39_bite "bite-1" "$z39_b1" "653 이전 상태(선택됨이면 켜기 잠김)를 되살렸는데"
 
 # (bite-2) 배포 창 규칙을 죽인다 — 정규화가 원값을 그대로 돌려준다.
@@ -3940,14 +3944,14 @@ grep -qF 'stop: "/stop" }' "$z39_b5" \
   || z39_die "(z39) bite-5 주입 실패 — B_ACT_PATH 의 stop 경로가 안 바뀌었습니다."
 z39_bite "bite-5" "$z39_b5" "끄기를 EC2 전체 /stop 으로 돌렸는데"
 
-# (bite-6) TASK-MONO-729 — `unknown`(확인 실패)을 다시 startable 에 넣는다 = 이 티켓 **이전** 상태.
-#          소유자 매트릭스는 「확인 실패」에서 버튼을 잠근다.
+# (bite-6) TASK-MONO-729 리뷰 — `unknown`(확인 실패)을 startable 에서 **뺀다** = 리뷰가 되돌린 회귀.
+#          헬스 발행이 끊긴 동안 방문자가 아무것도 못 하게 된다. S8·S11 이 물어야 한다.
 z39_b6="$z39_dir/bite6.js"
-sed 's|new Set(\["waiting", "selected", "partial"\])|new Set(["waiting", "selected", "partial", "unknown"])|' "$z39_src" > "$z39_b6"
-z39_bite "bite-6" "$z39_b6" "확인 실패(unknown)에서 켜기를 다시 열었는데"
+sed 's|new Set(\["waiting", "selected", "partial", "unknown"\])|new Set(["waiting", "selected", "partial"])|' "$z39_src" > "$z39_b6"
+z39_bite "bite-6" "$z39_b6" "확인 실패(unknown)에서 켜기를 잠갔는데"
 
 rm -rf "$z39_dir"
-ok "카드 ${z39_n}장 × 10상태(선택됨+stopped · requested+pending · requested+running · waiting · **옛서버 requested+stopped** · ready=**끄기** · booting · unknown=**잠금** · stopping · partial) + 전이 6칸(끄기 누름→종료 중 잠금 · 서버 반영→해제 · 거절→해제 · 켜기 누름→기동 중 잠금 · 상한 만료→서버 값 · 모드 없음→요청 0) 를 **실행 대조** — 버튼 모드 + 요청 경로(끄기=/bundle/stop·켜기=/bundle/start·그 카드 하나) + 배지가 «선택됨»≠«기동 중» · 배포 창에서 같은 화면 · 네 상태 배지 구별 · bite 6칸(653 이전 · 창 규칙 죽이기 · 틀린 고침 · **전이 표시 제거 · 끄기=/stop · 확인 실패에서 켜기**)"
+ok "카드 ${z39_n}장 × 11상태(선택됨+stopped · requested+pending · requested+running · waiting · **옛서버 requested+stopped** · ready=**끄기** · booting · unknown=**켜기**(stopped · running+헬스 정체 둘 다) · stopping · partial) + 전이 6칸(끄기 누름→종료 중 잠금 · 서버 반영→해제 · 거절→해제 · 켜기 누름→기동 중 잠금 · 상한 만료→서버 값 · 모드 없음→요청 0) 를 **실행 대조** — 버튼 모드 + 요청 경로(끄기=/bundle/stop·켜기=/bundle/start·그 카드 하나) + 배지가 «선택됨»≠«기동 중» · 배포 창에서 같은 화면 · 네 상태 배지 구별 · bite 6칸(653 이전 · 창 규칙 죽이기 · 틀린 고침 · **전이 표시 제거 · 끄기=/stop · 확인 실패에서 켜기 잠금**)"
 
 
 # =============================================================================
