@@ -124,3 +124,21 @@ ready (2026-09-24 UTC — 기안. `TASK-MONO-717` 을 `done/` 으로 닫기 **�
 ## AC-0 ① — ⏳ 창 필요 (변동 없음)
 
 정적으로 확인한 것만: iam 게이트웨이 내부 라우트는 `Path=/internal/tenants/**` 하나(`gateway-service/src/main/resources/application.yml:61`) ⇒ `lockAccount` 의 `/internal/accounts/{a}/lock` 은 **라우트 없음**. 판정(결과 상태 `accounts.status`)은 셀러 정지를 일으켜야 하므로 창/로컬 compose.
+
+## AC-0 ② 추가 — 🔴 **받는 쪽도 두 군데서 끊겨 있다**, 그리고 내 전제 하나가 틀렸다 (2026-09-24 UTC · 창 없음)
+
+🔴 **정정**: 같은 날 세션 요약에서 «batch-worker 를 고치려면 ADR-MONO-076 에 따라 이 client 가 assume 할 테넌트부터 정해야 한다» 고 적었다. **아니다.** order-service `OrderSecurityConfig` 의 `/api/internal/**` 체인은 서명 · 시각 · **issuer** · **`sub` 허용목록**(TASK-BE-505)만 본다 — **테넌트 클레임을 안 읽는다.** 717/721 이 부딪힌 것은 iam 게이트웨이 + `TenantScopeGuard` 쌍이었고, 이 경로에는 그 쌍이 없다. ⇒ 721 식 테넌트 assume 은 **필요 없다.**
+
+그 대신 받는 쪽 설정이 비어 있다 — 에코머스 `docker-compose.yml` 의 order-service 블록에 `ORDER_INTERNAL_OAUTH2_*` **0개**:
+
+| 층 | 코드 기본값 (`order-service/application.yml:82–83`) | 실제 | 결과 |
+|---|---|---|---|
+| 🔴 ④ JWKS | `http://auth-service:8081/oauth2/jwks` | `auth-service` 는 iam 프로젝트 네트워크의 컨테이너(`iam-auth-service-1`) — ecommerce 네트워크에서 그 이름은 해소되지 않는다(717 이 측정한 «공유 네트워크 없음») | 서명 검증 불가 → 401 |
+| 🔴 ⑤ issuer | `http://auth-service:8081` | 2026-09-24 창에서 디코드한 실제 cc 토큰 `iss` = **`https://auth.hubwang.com`** (721 § AC-4 ③ 원문) | issuer 불일치 → 401 |
+
+⇒ **다섯 겹**이다: 보내는 쪽 ①등록 ②토큰주소 ③order 포트 + 받는 쪽 ④JWKS ⑤issuer. 🔴 앞 셋만 고치면 이 경로는 **401 로** 죽는다 — 그리고 잡은 `log.error` 만 남기므로 «고쳤는데 여전히 조용히 실패» 가 된다.
+
+🔵 **갈래 (소유자 결정용 — 아직 결정 아님)**:
+- 등록(①)은 **자격증명 하나를 새로 만드는 일**이다 — 보안 표면. scope·허용 grant·secret 출처를 정해야 한다(717 의 `product-service-client` 등록이 선례: `V0036`).
+- ②~⑤ 는 배선이다. 🔴 717 AC-2 의 가드(`check-internal-caller-addresses.sh`)가 무는 모양(«설정 없으면 코드 기본값») 그대로이고, 기본값이 `localhost` 가 아니라 **없는 호스트/틀린 포트/틀린 issuer** 라는 것만 다르다 — 가드의 호출자·수신자 목록 확장이 같은 PR 에 들어가야 재발을 문다.
+- 판정은 결과 상태: 데모에서 결제 뒤 PAID 에 머무는 주문이 `older-than-minutes`(30) 뒤 CONFIRMED 로 넘어가는가.
