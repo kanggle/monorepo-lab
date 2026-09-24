@@ -70,6 +70,8 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
+- `TASK-FAN-FE-024-login-page-top-navbar.md` — **READY (2026-09-24 UTC)** 2026-09-24 포트폴리오 UX 전수조사(소유자 승인) 실행 티켓 — 팬 로그인 페이지(로고+카드뿐, `Header` import 없음)에 팬 자신의 서버 컴포넌트 `Header`(피드/아티스트/멤버십, zero-gateway 불변식)를 재사용해 상단 내비게이션을 추가. **스토어의 클라이언트 컴포넌트 헤더(햄버거 상태)는 이식 금지** — 익명 방문자 게이트웨이 호출 0회 불변식을 깬다. `TASK-MONO-728`(같은 파일의 버튼 문구 변경)에 의존 — 직렬 진행. 분석=Opus 5.5 / 구현 권장=Sonnet 5.
+
 ## in-progress
 
 
