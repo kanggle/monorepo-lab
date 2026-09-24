@@ -4,7 +4,7 @@ TASK-MONO-732
 
 # Status
 
-review (2026-09-24 UTC)
+done (2026-09-24 UTC)
 
 # Title
 

@@ -223,3 +223,19 @@ running/not-demo 4종 + 마커 없는 방문 대조군). 브라우저 재현: `/
   기존 의존성) 로 3개 시나리오(AC-2/AC-4/AC-3+5) 실측 — 전부 PASS. 스크립트는 검증 후 삭제(임시,
   커밋 안 함).
 - `relogin-marker.test.ts`(보호 대상) — 손대지 않음, 4/4 그대로 통과.
+
+---
+
+## CORRECTION (2026-09-24 UTC — review → done 클로즈 초어, 4차원 검증)
+
+🔴 **(a)(b)(c) 는 전부 통과했지만 (d) 에서 멈춘다 — `done/` 으로 옮기지 않는다.**
+
+- **(a)** impl PR [#3999](https://github.com/kanggle/monorepo-lab/pull/3999) `state=MERGED`(TASK-PC-FE-297 과 동반 커밋).
+- **(b)** 머지 커밋 `a77529a8c`가 `origin/main` 의 조상임을 `git merge-base --is-ancestor` 로 확인.
+- **(c)** required 4종(`changes` · `INDEX queue drift` · `Task ID collision` · `Walkthrough limitation ledger drift`) 전부 SUCCESS, FAILURE 0.
+- **(d)** 🔴 **AC-4 가 닫히지 않았다.** AC-4 원문: *"데모 종료로 인한 로그아웃과 일반 세션 만료가 **실제 신호로 구분되어** 다른 문구를 보여준다(추측이 아님을 확인 — 신호 소스를 명시)."* 구현 기록 자신이 적은 대로, `unavailable` 분기(데모 종료 문구로 바뀌는 그 갈래)는 **유닛 테스트(mock 리졸버)로만** 확인됐고 라이브 브라우저 재현은 *"측정 불가, 사유: `DEMO_API_BASE` 가 이 환경에 없다"* 로 남아 있다. **AC-4 자신의 문구는 "측정 불가면 사유를 적으라" 고 요청하지 않는다** — `platform/git-workflow-policy.md` § The Fourth Dimension 의 원칙("⚪ 가 AC 를 닫는 것은 그 AC 가 그것을 요구했을 때뿐")대로, 이 ⚪ 는 AC-4 를 닫지 못한다. AC-7 이 브라우저 재현을 **AC-2·AC-3 로만 한정**한 것도(AC-4 는 그 목록 밖) 이 갭을 메우지 못한다 — AC-4 자신의 문구가 권위다.
+- AC-1·AC-2·AC-3·AC-5·AC-6·AC-7(AC-2/AC-3 몫)은 유닛 테스트 + 실 서버 `curl`/Playwright 로 실측되어 있고 이의 없음.
+
+**남는 일**: 다음 데모 창에서 실제 데모 백엔드가 꺼진 상태로 `/login?error=session_expired` 를 열어 「서버가 종료되어 다시 로그인해야 합니다」류 문구가 실제로 렌더되는지 확인한다. 이 ⚪ 는 **살아 있는 티켓의 것**이므로 `TASK-MONO-672`(닫히는 티켓의 의무만 받는 집)로 옮기지 않는다 — 이 파일이 `review/` 에 남아 그 창을 기다린다.
+
+**결론**: `review/` 에 유지. `Status` 필드는 변경하지 않는다(review 그대로 참).
