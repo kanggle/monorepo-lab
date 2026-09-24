@@ -32,6 +32,6 @@ test.describe('cross-tenant role 가드 (web-store)', () => {
 
     // The bounce lands on /login with the mismatch code, and no session was established.
     await expect(page).toHaveURL(/\/login\?.*error=account_type_mismatch/);
-    await expect(page.getByRole('button', { name: 'Global Account 로 로그인' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Global Account로 로그인' })).toBeVisible();
   });
 });

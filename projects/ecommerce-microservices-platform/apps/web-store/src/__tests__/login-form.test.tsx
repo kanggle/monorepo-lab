@@ -35,7 +35,7 @@ describe('LoginForm (GAP)', () => {
 
   it('GAP 로그인 버튼을 표시한다', () => {
     renderLoginForm();
-    expect(screen.getByRole('button', { name: 'Global Account 로 로그인' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Global Account로 로그인' })).toBeInTheDocument();
   });
 
   it('회원가입 링크를 표시한다', () => {
@@ -47,7 +47,7 @@ describe('LoginForm (GAP)', () => {
     const user = userEvent.setup();
     renderLoginForm();
 
-    await user.click(screen.getByRole('button', { name: 'Global Account 로 로그인' }));
+    await user.click(screen.getByRole('button', { name: 'Global Account로 로그인' }));
 
     await waitFor(() => {
       expect(mockSignIn).toHaveBeenCalledWith('iam', { callbackUrl: '/' });
@@ -59,7 +59,7 @@ describe('LoginForm (GAP)', () => {
 
     const user = userEvent.setup();
     renderLoginForm();
-    await user.click(screen.getByRole('button', { name: 'Global Account 로 로그인' }));
+    await user.click(screen.getByRole('button', { name: 'Global Account로 로그인' }));
 
     await waitFor(() => {
       expect(mockSignIn).toHaveBeenCalledWith('iam', { callbackUrl: '/products/p1' });
@@ -70,7 +70,7 @@ describe('LoginForm (GAP)', () => {
     mockSearchParams.value = new URLSearchParams('from=https%3A%2F%2Fevil.com');
     const user = userEvent.setup();
     renderLoginForm();
-    await user.click(screen.getByRole('button', { name: 'Global Account 로 로그인' }));
+    await user.click(screen.getByRole('button', { name: 'Global Account로 로그인' }));
 
     await waitFor(() => {
       expect(mockSignIn).toHaveBeenCalledWith('iam', { callbackUrl: '/' });

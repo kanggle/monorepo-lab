@@ -113,7 +113,7 @@ export function LoginForm() {
       )}
 
       <p style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--space-6)' }}>
-        Global Account 로 로그인하여 쇼핑을 계속하세요.
+        Global Account로 로그인하여 쇼핑을 계속하세요.
       </p>
 
       <button
@@ -123,7 +123,7 @@ export function LoginForm() {
         style={{ width: '100%' }}
         disabled={disabled}
       >
-        {disabled ? '이동 중...' : 'Global Account 로 로그인'}
+        {disabled ? '이동 중...' : 'Global Account로 로그인'}
       </button>
 
       <p className="auth-footer" style={{ marginTop: 'var(--space-6)' }}>
