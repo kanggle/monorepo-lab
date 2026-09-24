@@ -4,7 +4,7 @@ TASK-MONO-726
 
 # Status
 
-ready (2026-09-24 UTC — 기안. `TASK-MONO-717` 을 `done/` 으로 닫기 **전에** 그 티켓 AC-3 이 남긴 잔여 두 건의 집이 필요해 만들었다)
+review (2026-09-24 UTC — ② 고침(보내는 쪽 셋 + 받는 쪽 둘 + IdP 등록 V0038, 소유자 승인) · AC-2 가드 확장. 🔴 창 판정 둘(① lock 라우트 · ② PAID→CONFIRMED 결과 상태)은 `TASK-MONO-672` 항목 14 로 넘겼다)
 
 # Title
 
@@ -142,3 +142,55 @@ ready (2026-09-24 UTC — 기안. `TASK-MONO-717` 을 `done/` 으로 닫기 **�
 - 등록(①)은 **자격증명 하나를 새로 만드는 일**이다 — 보안 표면. scope·허용 grant·secret 출처를 정해야 한다(717 의 `product-service-client` 등록이 선례: `V0036`).
 - ②~⑤ 는 배선이다. 🔴 717 AC-2 의 가드(`check-internal-caller-addresses.sh`)가 무는 모양(«설정 없으면 코드 기본값») 그대로이고, 기본값이 `localhost` 가 아니라 **없는 호스트/틀린 포트/틀린 issuer** 라는 것만 다르다 — 가드의 호출자·수신자 목록 확장이 같은 PR 에 들어가야 재발을 문다.
 - 판정은 결과 상태: 데모에서 결제 뒤 PAID 에 머무는 주문이 `older-than-minutes`(30) 뒤 CONFIRMED 로 넘어가는가.
+
+---
+
+# 구현 기록 (2026-09-24 UTC · 분석=Opus 5.5)
+
+## 소유자 결정
+
+«추천대로 진행» — **`ecommerce-internal-services-client` 의 IdP 등록을 승인**하고 다섯 곳을 한 PR 로.
+🔵 등록은 새 권한을 만드는 것이 아니다: order-service 는 이미 `/api/internal/**` 에서 **정확히 이 client id 하나**만 받도록 핀돼 있었다(TASK-BE-505). 설계가 비워 둔 자리를 채운 것이다.
+
+## AC-1 — ② 를 고쳤다 (다섯 겹)
+
+| # | 층 | 고침 |
+|---|---|---|
+| ① | IdP 등록 | `auth-service` **`V0038__seed_ecommerce_internal_services_client.sql`** — V0036 과 같은 모양(`client_credentials` 하나 · `internal.invoke` · `global-account-platform`/`INTERNAL` · 공유 BCrypt "secret"). `WorkloadRoleCatalog` 에 **빈 맵**으로 명시 + `WorkloadRoleCatalogTest` 인구 17/11/6 → **18/12/6** |
+| ② | 보내는 쪽 토큰 주소 | 에코머스 compose batch-worker `IAM_TOKEN_URI=${IAM_TOKEN_URI:-http://iam.local/oauth2/token}` — 데모는 기존 `demo.env` 의 값을 그대로 받는다 |
+| ③ | 보내는 쪽 order 주소 | batch-worker `ORDER_SERVICE_BASE_URL=http://order-service:8086`. 🔵 틀린 기본값 `:8082` 는 **product-service 의 포트**였다 |
+| ④ | 받는 쪽 JWKS | order-service `ORDER_INTERNAL_OAUTH2_JWK_SET_URI` — 로컬 `http://iam.local/oauth2/jwks`, 데모 `http://iam.${DEMO_DOMAIN}/oauth2/jwks`(같은 망의 product-service 가 09-24 창에서 그 호스트의 `/oauth2/token` 에 **실제로 도달**) |
+| ⑤ | 받는 쪽 issuer | order-service `ORDER_INTERNAL_OAUTH2_ISSUER` — 로컬 `http://iam.local`, 데모 `${IAM_PUBLIC_URL}`(= 실제 토큰 iss `https://auth.hubwang.com`) |
+
+🔵 **테넌트 assume 은 넣지 않았다** — 이 경로엔 테넌트 핀이 없다(§ AC-0 ② 추가의 정정).
+
+## AC-2 — ✅ 가드 확장 + bite
+
+`scripts/check-internal-caller-addresses.sh` 의 목록 1 → **3행**(batch-worker 보내는 쪽 · order-service 받는 쪽). 둘 다 «실제로 부르는가/받는가» 를 코드로 확인하고 넣었다(파일 헤더 규칙).
+
+```
+real run                                   → checked=6 · rc=0
+bite: batch-worker ORDER_SERVICE_BASE_URL 삭제   → rc=1 · DRIFT § batch-worker
+bite: order-service ORDER_INTERNAL_OAUTH2_ISSUER 삭제 → rc=1 · DRIFT § order-service
+복원                                        → rc=0
+```
+
+🔴 **self-test 가 한 번 깨졌고 그 모양을 적는다**: 픽스처에는 product-service 블록 하나뿐인데 목록이 셋으로 자라자 새 두 서비스가 `MISSING` 이 돼 (a)「있다 → 통과」가 실패했다. self-test 는 **술어**(블록 자르기 · 키 존재 · 비공허성)를 재는 것이지 목록을 재는 것이 아니므로, self-test 안에서 **자기 목록 한 행**으로 돌게 했다. ⇒ 목록이 자라도 술어 시험이 오염되지 않는다.
+
+## 게이트 기록
+
+| 게이트 | 결과 |
+|---|---|
+| `auth-service:test` 전체 | 🟢 rc=0 · **724 tests · 0 fail · 0 error · 28 skip**(XML 합산, skip 은 기존) |
+| `WorkloadRoleCatalogTest` bite | 🟢 카탈로그 새 줄 삭제 → **9칸 중 1 FAILED**(rc=1) → 복원 초록 |
+| `check-internal-caller-addresses.sh` | 🟢 self-test 3칸 · 실제 6키 · 새 두 행 bite 각각 rc=1 |
+| `check-flyway-version-collision.sh` · `check-dev-seed-migration-band.sh` · `check-flyway-unresolvable-placeholder.sh` | 🟢 rc=0 (359 마이그레이션, 플레이스홀더 0) |
+| `infra/demo/verify-demo-wrapper.sh` (정적) | 🟢 rc=0 — demo.env 에 두 키를 더한 뒤 |
+| 필수 3종 | 🟢 rc=0 (스테이지 후) |
+
+🔴 **안 돌린 것**: ecommerce·iam 통합(Testcontainers) · e2e · **데모 창**. 🔴🔴 그리고 무엇보다 — **이 경로가 실제로 PAID 주문을 CONFIRMED 로 넘기는지는 안 쟀다.** 717·718·721 이 연속으로 보인 대로 배선은 고침이 아니다. ⇒ `TASK-MONO-672` 항목 14.
+
+## ⏳ 창으로 넘긴 것 → `TASK-MONO-672` 항목 14
+
+- ② 결과 상태: 신선 볼륨(재굽기 필요 — V0038 과 compose 가 구워지는 표면)에서 batch-worker 로그에 `StalePaidOrderConfirmationJob FAILED` 가 **없고**, 결제 뒤 PAID 인 주문이 30분 뒤 CONFIRMED 로 넘어가는가.
+- ① `lockAccount` 의 `/internal/accounts/{a}/lock` — 셀러 정지를 일으켜 `accounts.status` 로 판정(§ AC-0 ①, 변동 없음).

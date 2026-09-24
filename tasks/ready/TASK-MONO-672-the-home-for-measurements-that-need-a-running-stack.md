@@ -208,6 +208,16 @@ monorepo
   `review/` 이고 이 항목을 넘기며 닫히는 경로다 — **721 이 닫히지 않고 살아남으면 이 항목은
   721 로 되돌려야 한다**(의무 이중 보유 금지). 항목 5 가 683 에서 밟은 그 조건과 같다.
 
+## 항목 14 — `TASK-MONO-726`: batch-worker → order-service `/api/internal/**` 가 **실제로 성립하는가** · `lockAccount` 라우트 (2026-09-24 수령)
+
+- **무엇을 재나** (둘, 🔴 앞 칸이 안 되면 뒤 칸은 «측정 불가»):
+  ① 🔴 **결과 상태** — 결제 뒤 PAID 인 주문이 `batch.jobs.stale-paid-order-confirmation.older-than-minutes`(30) 뒤 **CONFIRMED** 로 넘어가는가.
+     보조: batch-worker 로그에 `StalePaidOrderConfirmationJob FAILED` 가 없는가(🔴 로그 침묵은 판정이 아니다).
+     대조군: 토큰 단계와 호출 단계를 갈라 본다 — `invalid_client`=등록 · 연결 실패=주소 · order-service **401**=JWKS/issuer.
+  ② `lockAccount` → `POST /internal/accounts/{a}/lock` — 셀러를 정지시켜 `account_db.accounts.status` 가 바뀌는가(iam 게이트웨이에 라우트가 없음은 정적으로 확인됨 — `TASK-MONO-726` § AC-0 ①).
+- 🔵 **무엇을 기다리나 — 재굽기다.** `V0038`(Flyway) · ecommerce compose · `demo.env` 가 전부 구워지는 표면이다(compose·demo.env 는 SSM 패치로도 되지만 V0038 은 이미지 안).
+- 출처: `tasks/…/TASK-MONO-726-…` § 구현 기록. 🔴 **Failure Scenario 2 대조**: 726 은 수령 시점에 `review/` — **726 이 닫히지 않고 살아남으면 이 항목은 726 으로 되돌린다**(의무 이중 보유 금지).
+
 ---
 
 # Goal

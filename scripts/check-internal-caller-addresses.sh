@@ -34,8 +34,18 @@ SELF_TEST=0
 # (compose 파일, 서비스 이름) — 그 서비스가 GAP-internal 호출자다.
 # 🔴 목록을 넓힐 때는 **그 서비스가 실제로 /internal/** 을 부르는지** 확인하고 넣어라.
 #    부르지도 않는 서비스에 설정을 요구하면 이 가드는 소음이 되고, 소음은 꺼진다.
+#
+# TASK-MONO-726 — 두 행을 더했다. 🔵 둘 다 «실제로 부르는가» 를 코드로 확인하고 넣었다:
+#   · batch-worker  — 보내는 쪽. `OrderServiceClient` 가 order-service `/api/internal/orders/**`
+#                     를 워크로드 토큰으로 부른다(두 잡, 기본 enabled). 코드 기본값은 localhost
+#                     가 아니라 **없는 호스트(iam-service)·틀린 포트(8082)** 였다 — 모양은 같다.
+#   · order-service — **받는 쪽**. `/api/internal/**` 체인이 그 토큰을 검증하는 JWKS·issuer.
+#                     호출자는 아니지만 «설정이 없으면 코드 기본값으로 떨어져 조용히 401» 이라는
+#                     같은 결함을 갖는다(기본값 `auth-service:8081` 은 ecommerce 망에서 미해소).
 CALLERS=(
   "projects/ecommerce-microservices-platform/docker-compose.yml|product-service|IAM_TOKEN_URI ACCOUNT_SERVICE_BASE_URL"
+  "projects/ecommerce-microservices-platform/docker-compose.yml|batch-worker|IAM_TOKEN_URI ORDER_SERVICE_BASE_URL"
+  "projects/ecommerce-microservices-platform/docker-compose.yml|order-service|ORDER_INTERNAL_OAUTH2_JWK_SET_URI ORDER_INTERNAL_OAUTH2_ISSUER"
 )
 
 judge() {
@@ -63,9 +73,9 @@ judge() {
       checked=$((checked + 1))
       if ! printf '%s' "$block" | grep -q "$k"; then
         echo "DRIFT: $file § $svc 에 '$k' 가 없습니다."
-        echo "       ⇒ 그 서비스는 application.yml 의 기본값(localhost)으로 떨어지고,"
-        echo "          그 호출은 fail-soft 라 **아무 화면도 빨개지지 않습니다**."
-        echo "          (TASK-MONO-717 — 2026-09-22 데모 창에서 실측된 상태)"
+        echo "       ⇒ 그 서비스는 application.yml 의 코드 기본값(localhost · 없는 호스트 · 틀린 포트)으로"
+        echo "          떨어지고, 그 호출은 fail-soft(또는 잡의 log.error)라 **아무 화면도 빨개지지 않습니다**."
+        echo "          (TASK-MONO-717 · TASK-MONO-726 — 데모 창과 코드로 실측된 상태)"
         fail=1
       fi
     done
@@ -84,6 +94,12 @@ if [ "$SELF_TEST" = "1" ]; then
   trap 'rm -rf "$tmp"' EXIT
   d="$tmp/projects/ecommerce-microservices-platform"
   mkdir -p "$d"
+  # 🔵 self-test 는 **술어**를 잰다(블록 자르기 · 키 존재 · 비공허성) — 실제 목록이 아니다.
+  #    그래서 자기 목록 한 행으로 돈다(TASK-MONO-726: 목록이 셋으로 자라자 픽스처에 없는 두
+  #    서비스가 MISSING 이 돼 (a) 가 깨졌다 — 목록의 크기가 술어 시험을 오염시키면 안 된다).
+  CALLERS=(
+    "projects/ecommerce-microservices-platform/docker-compose.yml|product-service|IAM_TOKEN_URI ACCOUNT_SERVICE_BASE_URL"
+  )
 
   # (a) 두 키가 있다 → 통과
   cat > "$d/docker-compose.yml" <<'YML'

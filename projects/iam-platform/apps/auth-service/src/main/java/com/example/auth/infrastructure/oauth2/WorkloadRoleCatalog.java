@@ -104,13 +104,13 @@ final class WorkloadRoleCatalog {
      * Every registered {@code client_credentials} client, mapping each scope that carries a
      * role grant to the roles it carries.
      *
-     * <p>All eleven are listed, empty maps included. An empty map here means "measured, and
+     * <p>All twelve are listed, empty maps included. An empty map here means "measured, and
      * the answer is none"; an <em>absent</em> client means nobody looked. The distinction is
      * the point of enumerating clients that get nothing — and it is why the completeness test
      * compares this key set against the Flyway seeds rather than against itself.
      *
      * <p>Population recounted from the auth-service migrations at statement level
-     * (2026-09-23, after V0036): <b>17</b> registered clients, <b>11</b> with the
+     * (2026-09-24, after V0038): <b>18</b> registered clients, <b>12</b> with the
      * {@code client_credentials} grant and 6 without. {@code membership-service-client} was
      * revoked by V0029 and is therefore not here. 🔴 The figure is not carried forward by
      * hand — {@code WorkloadRoleCatalogTest} parses the migrations and asserts it, so a seed
@@ -163,6 +163,13 @@ final class WorkloadRoleCatalog {
             //    may be registered in any tenant and the call carries the target tenant in
             //    the PATH (/internal/tenants/{tenantId}/…), not in the credential.
             Map.entry("product-service-client", Map.of()),
+
+            // --- ecommerce batch-worker (tenant: global-account-platform) ---
+            // TASK-MONO-726 (owner approval 2026-09-24), seeded by V0038. Its call path is
+            // order-service's /api/internal/orders/** (confirm-paid-stale · existence), which
+            // pins the token's sub to this exact client id (TASK-BE-505) and reads neither
+            // roles nor a tenant claim. Measured, and the answer is none.
+            Map.entry("ecommerce-internal-services-client", Map.of()),
 
             // --- fan-platform (tenant: fan-platform) ---
             // community-service calls membership/artist read surfaces with the account.read /
