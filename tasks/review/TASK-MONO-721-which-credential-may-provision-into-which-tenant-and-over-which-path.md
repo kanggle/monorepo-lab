@@ -402,3 +402,40 @@ docker-compose.yml · infra/demo/demo.env    — 0 줄 (D1 이 게이트웨이 �
 🔴 **로컬 초록은 CI 초록이 아니다.** 여기서 안 돌린 것: iam·ecommerce **통합(Testcontainers)** ·
 e2e · nightly. 🔵 이 변경은 **인증 hot-path** 를 건드리므로 iam 통합 스위트가 볼 수 있는 자리가
 있다 — 머지 뒤 nightly 를 한 번 확인한다.
+
+---
+
+# 🟢 AC-4 — 창 판정 PASS, 셋 다 (2026-09-24 UTC · 14차 AMI `ami-03789993d93a320c1` · RepoCommit `f1da21800` · 신선 볼륨)
+
+## ① 셀러 등록 → `account_db` 에 행이 **생겼다**
+
+부팅 시드 `생성 셀러(demo-seller)` → product-service 로그
+`seller provisioned/reconciled tenant=ecommerce seller=demo-seller status=ACTIVE` (05:48:49Z).
+
+```
+product_db.sellers   ecommerce | demo-seller | ACTIVE | account_id=a864a1a5-… | identity_id=2f241adc-…
+account_db.accounts  id=a864a1a5-… | identity_id=2f241adc-… | tenant_id=ecommerce | status=ACTIVE
+                     email=seller+ecommerce+demo-seller@marketplace.local
+account_db.account_roles  ecommerce | a864a1a5-… | SELLER | granted_by=product-service
+```
+
+🔵 판정은 로그가 아니라 **양쪽 DB 의 행**이다(717 이 못박은 술어). 두 서비스의 id 가 서로를 가리킨다.
+
+## ② 🔴 대조군 — `wms` 는 **발급자에서 `invalid_grant`**
+
+같은 자격(`product-service-client`)·같은 요청 모양(RFC 8693 `audience`)으로:
+
+| audience | 결과 |
+|---|---|
+| `ecommerce` | **200** — `tenant_id=ecommerce` |
+| `demo-corp` | **200** — `tenant_id=demo-corp` (AC-5 의 두 번째 허용 테넌트) |
+| `wms` | **400** `{"error":"invalid_grant","error_description":"client is not permitted to assume the requested tenant"}` |
+
+⇒ 게이트웨이 403 이 아니라 **토큰 엔드포인트의 거절**이다 — 배선이 교환을 거친다는 증거이고, 성공 칸 둘과 함께 «전부 허용» 이 아님을 보인다.
+
+## ③ D4 — 교환 토큰에 운영자 파생 클레임이 **없다**
+
+교환 토큰(ecommerce) 전체 클레임: `tenant_id` · `sub=product-service-client` · `aud=product-service-client` · `scope=["internal.invoke"]` · `iss` · `tenant_type=B2B_ENTERPRISE` · `nbf/exp/iat/jti`.
+`entitled_domains` · `roles` · `org_scope` **없음**, `sub` 는 **클라이언트**. (기준 cc 토큰은 `tenant_id=global-account-platform` · `tenant_type=INTERNAL`.)
+
+⇒ **AC-0~AC-7 전부 닫힘.** 🔵 이 판정이 `TASK-MONO-717` AC-1 의 FAIL 도 함께 푼다(같은 행이 그 술어다).

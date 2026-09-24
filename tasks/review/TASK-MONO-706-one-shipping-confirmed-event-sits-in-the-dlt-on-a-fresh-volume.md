@@ -239,3 +239,27 @@ id 가 둘인 것은 정상 매핑이다. 페이로드 `reservationId` 는 outbo
 
 - 구체 lot 대체(예약 lot A → 운영자가 B 를 집음)는 생산자 계약이 허용하는데 여전히 hard error → DLT 다. ⓐ 가 **의도적으로 남긴** 구멍이고 정책(어느 재고 행을 차감하나)은 이 티켓 범위 밖 ⇒ **`TASK-MONO-724`** 로 기안.
 - 🔴 **재굽기 묶음에 넣어라** — 이 수정이 이미지에 없으면 다음 창은 옛 코드를 잰다(`TASK-MONO-672` 의 재굽기 표).
+
+---
+
+# 🟢 AC-1 · AC-3 — 창 판정 PASS (2026-09-24 UTC · 14차 AMI `ami-03789993d93a320c1` · RepoCommit `f1da21800` · 신선 볼륨)
+
+인스턴스 교체(`terraform apply`, `i-008d1ac1ce23665ad`) 뒤 첫 부팅. wms 묶음은 05:5xZ 에 추가 기동, 시드가 `SO-DEMO-0001` 을 출고까지 몰았다(`outbound_order.status=SHIPPED` 05:57:10Z).
+
+```
+wms.outbound.shipping.confirmed.v1      : 0:1  1:0  2:0        ← 원본 1건 (13차와 같다)
+wms.outbound.shipping.confirmed.v1.DLT  : 토픽 없음            ← DLT 로 보낸 적이 한 번도 없다
+wms.outbound.shipping.confirmed.v1.dlq  : 0:0
+컨슈머 그룹 wms-inventory-service       : p0 cur=1 end=1 lag=0  ← «안 물었다» 가 아니라 «소비했다»
+wms.inventory.confirmed.v1              : 0:0  1:1  2:0        ← 13차엔 영영 안 나갔던 그 이벤트
+outbound_saga                           : COMPLETED 1건 (05:57:11Z) · STUCK_* 0
+```
+
+- 🔴 **철자 대조**: 토픽 목록을 `--list` 로 직접 읽었다 — `.dlq`(소문자)는 있고 `.DLT`(대문자)는 **존재하지 않는다**. 0 을 «안 물었다» 로 읽지 않도록 컨슈머 오프셋을 함께 봤다.
+- `SKU-APPLE-001` 재고 행(lot NULL)은 `available_qty=85`, `updated_by=system:shipping-confirmed-consumer` — ⓐ 의 any-lot 폴백 라인이 실제로 차감됐다.
+
+## 🔵 AC-3 의 가설(667)에 대한 관측
+
+STUCK_* 가 **없다** — 사가가 `COMPLETED` 로 끝나 스위퍼가 잡을 `SHIPPED` 행이 없다. ⇒ 가설 «667 의 `STUCK_RECOVERY_FAILED` 가 이 DLT 사슬의 끝» 과 **관측이 일치**한다(고친 AMI 에서 사라졌다). 🔴 이것은 한 번의 신선 부팅 표본이고, 667 의 원 관측(2026-09-11)을 재현한 것은 아니다 — 667 쪽에서 «같은 뿌리» 로 닫을지는 그 티켓의 판정이다.
+
+⇒ **AC-0~AC-3 전부 닫힘.**
