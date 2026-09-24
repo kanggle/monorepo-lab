@@ -222,9 +222,46 @@ monorepo
 
 - **무엇을 재나** (둘, 서로 독립):
   ① ecommerce batch-worker `SearchIndexConsistencyJob` — 로그에 product-service 연결 실패가 없고 잡이 완료를 기록하는가(예전엔 `:8081` 로 매번 실패).
-  ② iam security-service 자동 잠금 — 의심 로그인(탐지 규칙을 넘기는 시도)을 일으켜 `account_db.accounts.status` 가 **LOCKED** 가 되는가. 보조: `security_auto_lock_failures_total` 이 늘지 않는가. 🔴 로그 침묵은 판정이 아니다. 401 이 나오면 주소가 아니라 토큰 축(별건).
+  ② iam security-service 자동 잠금 — ~~의심 로그인(탐지 규칙을 넘기는 시도)을 일으켜~~ 🔴 **토큰 재사용 이벤트를 넣어**(아래 § 창 전제 — 의심 로그인으로는 못 일으킨다) `account_db.accounts.status` 가 **LOCKED** 가 되는가. 보조: `security_auto_lock_failures_total` 이 늘지 않는가. 🔴 로그 침묵은 판정이 아니다. 401 이 나오면 주소가 아니라 토큰 축(별건).
 - 🔵 **재굽기 불필요** — 둘 다 compose 변경(클론)이라 SSM 으로 `git pull` 후 두 컨테이너만 재생성하면 된다(`TASK-MONO-726` 항목 14 와 달리 이미지 안의 변경이 없다).
 - 출처: `tasks/…/TASK-MONO-727-…` § 구현 기록. 🔴 **Failure Scenario 2 대조**: 727 은 수령 시점에 `review/` — **727 이 닫히지 않고 살아남으면 이 항목은 727 로 되돌린다.**
+
+### 🔴 창 전제 — 창을 열기 전에 저장소에서 확인한 두 사실 (2026-09-24 UTC · 창 없음)
+
+**① 은 03:00 UTC 를 걸친 창에서만 잴 수 있다.**
+`SearchIndexConsistencyScheduler.runConsistencyCheck` 는 `@Scheduled(cron = "0 0 3 * * *")` — **하루 한 번
+03:00 UTC**(= 12:00 KST)에만 돈다. cron 은 어노테이션 리터럴이라 속성으로 못 바꾸고, `SearchIndexConsistencyJob`
+을 부르는 곳도 이 스케줄러 하나뿐이다(수동 트리거 없음). ⇒ 03:00 을 안 걸친 창에서 볼 수 있는 것은 «주소가 닿는가»
+(배선)뿐이고 그것은 이 항목이 요구한 판정이 아니다. 🔵 **권장 창 = 02:45–03:15 UTC** — 웜업(약 10분 30초) 뒤
+03:00 전에 두 컨테이너를 재생성하고 ② 를 먼저 잰 뒤, 03:00 에 ① 의 로그를 본다. ShedLock 행
+(`batch-search-index-consistency-check`)의 `locked_at` 도 03:00 실행의 증거로 같이 읽는다.
+
+**② 는 «의심 로그인» 으로는 일으킬 수 없다 — 토큰 재사용 이벤트로 잰다.**
+- 🔴 **브라우저 폼 로그인은 로그인 이벤트를 하나도 내지 않는다.** 유일한 비밀번호 경로인
+  `CredentialAuthenticationProvider`(auth-service) 의 클래스 주석이 그렇게 적는다 — `LoginUseCase` 의 rate-limit ·
+  `auth.login.*` 발행 · 디바이스 세션은 JSON `/api/auth/login` 의 몫이었고 그 엔드포인트는 BE-398 에서 제거됐다.
+  `TASK-BE-309` 는 이것을 «추후 enhancement (별 task)» 로 남겼고, 🔴 **그 별 task 는 이번 grep 에서 찾지 못했다**
+  (iam `tasks/**/*.md` — 부재 판정이 아니라 «이 검색으로는 못 찾음»). ⇒ security-service 의 VELOCITY ·
+  DEVICE_CHANGE · GEO 규칙은 데모에서 **입력을 받을 길이 없다**. 이 항목의 판정 범위 밖이지만 기록한다.
+- 설령 이벤트가 나와도 VELOCITY 로는 못 닿는다: 점수 80(AUTO_LOCK)은 **계정이 식별된** 실패 10회/1시간이 필요한데,
+  `LoginUseCase` 는 5회째부터 요청을 막고(`auth.login.max-failure-count:5`, 창 900초) 그 뒤의 `RATE_LIMITED` 이벤트는
+  `accountId=null` 이라 규칙이 무시한다.
+- ⇒ **`TokenReuseRule`**(고정 점수 100 → 곧바로 `AccountServiceClient.lock`)로 잰다. 인스턴스 안에서:
+  1. 일회용 계정 — account-service 공개 `POST /api/accounts/signup`(테넌트 헤더 없음 → `fan-platform`)을 컨테이너 IP 로.
+     🔴 **데모 계정을 잠그지 마라** — 방문자·촬영이 쓰는 계정이다.
+  2. iam Kafka 에 `auth.token.reuse.detected` 봉투 하나: `eventId`(uuid) · `eventType="auth.token.reuse.detected"` ·
+     `occurredAt` · `tenantId` · `payload{accountId, tenantId, timestamp}` (`AbstractAuthEventConsumer` 는 `tenantId`
+     가 없으면 DLQ 로 보낸다).
+  3. 판정 = `account_db.accounts.status` 가 **LOCKED**. 보조 = security-service 로그의 `Auto-lock` WARN 부재 ·
+     `security_auto_lock_failures_total` 불변. 401 이면 주소가 아니라 토큰 축(별건).
+  - ⚪ **이 방법이 재지 않는 구간**: auth-service 가 실제 리프레시 재사용에서 그 이벤트를 내는 앞 구간
+    (`SasRefreshTokenAuthenticationProvider`). 727 이 고친 것은 security-service → account-service 주소뿐이므로
+    판정에는 충분하지만, 판정문에 «합성 이벤트로 쟀다» 를 적어라.
+- 🔴 **`git pull` 은 726 의 compose 변경도 같이 올린다** — batch-worker 를 재생성하면 726 의 order-service 주소·토큰
+  환경값도 그 컨테이너에 들어간다(V0038 은 이미지 안이라 여전히 없다). ⇒ 그 창의 batch-worker 로그에 `StalePaidOrder…`
+  토큰 실패(`invalid_client`)가 보이면 **726 의 예상된 미완**이지 727 의 회귀가 아니다.
+- 🔴 **창 제어 API 호출이 자동 모드 분류기에 막혔다**(2026-09-24 09:00Z — 읽기 전용 `GET /status` 가 «Exfil Scouting»).
+  다음 창은 허용 규칙을 먼저 세우거나 소유자가 명령을 직접 실행해야 한다.
 
 ---
 
