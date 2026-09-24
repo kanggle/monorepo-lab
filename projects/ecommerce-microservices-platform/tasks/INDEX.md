@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-_(없음)_
+- `TASK-BE-598-quay-minio-is-closed-too.md` — 🔴 **READY (2026-09-24 UTC)** `quay.io/minio` 도 익명 pull 401(manifest 실측·대조군 200) — BE-591 의 우회로가 끊겼다. `Demo wrapper smoke` 칸 (h) 빨강의 원인. 🔴 **다음 AMI 재굽기 전에 먼저**(726·BE-596·BE-597·730 이 재굽기 대기). 대체 출처 실측 선정, 제품 교체면 소유자 결정. 분석=Opus 5.5 / 구현 권장=Opus 5.5.
 
 _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DONE. `../../../tasks/done/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
 
