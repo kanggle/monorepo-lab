@@ -8,7 +8,7 @@ TASK-MONO-728
 
 # Status
 
-review (2026-09-24 UTC — AC-1~AC-7 닫힘)
+done (2026-09-24 UTC — AC-1~AC-7 닫힘)
 
 # Owner
 
