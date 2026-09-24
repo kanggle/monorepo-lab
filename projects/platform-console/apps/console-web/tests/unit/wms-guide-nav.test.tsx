@@ -4,7 +4,7 @@ import { ConsoleSidebarNav } from '@/shared/ui/ConsoleSidebarNav';
 
 /**
  * TASK-PC-FE-183 — the WMS drill gains a 가이드 child (static 재고·출고 reference),
- * placed between 개요 and 재고 (mirroring IAM's 개요 → 가이드 order). Same drill
+ * now placed FIRST, before 개요 (TASK-PC-FE-297 — all domains 가이드 → 개요). Same drill
  * machinery as FE-059; these cases mirror the WMS suite in sidebar-drilldown.test.
  * The addition must NOT disturb the existing 출고 longest-prefix active behaviour.
  */
@@ -24,7 +24,7 @@ describe('wms 가이드 nav (TASK-PC-FE-183)', () => {
     fireEvent.click(screen.getByTestId('nav-wms'));
     const guide = screen.getByTestId('nav-wms-guide');
     expect(guide).toHaveAttribute('href', '/wms/guide');
-    // Ordered between 개요 and 재고.
+    // 가이드 → 개요 → … → 재고 (TASK-PC-FE-297; order pinned in sidebar-nav-order-icons.test).
     expect(screen.getByTestId('nav-wms-ops')).toHaveAttribute('href', '/wms');
     expect(screen.getByTestId('nav-wms-inventory')).toHaveAttribute(
       'href',

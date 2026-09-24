@@ -10,6 +10,7 @@ import {
   DELEGATION_SCOPES,
 } from '@/features/erp-guide/data';
 import { runAxe } from '../a11y/axe-helper';
+import { expectDomainGuideTabs } from '../helpers/domain-guide-tabs';
 
 /**
  * ERP 가이드 화면 (TASK-PC-FE-232) — 순수 정적 참조 화면. erp-platform
@@ -136,5 +137,32 @@ describe('ErpGuideScreen', () => {
     const { container } = render(<ErpGuideScreen />);
     const violations = await runAxe(container);
     expect(violations).toEqual([]);
+  });
+});
+
+// TASK-PC-FE-298 — the existing sections are MOVED (not rewritten) into the 8
+// standard guide tabs; each section id must now live inside the expected panel.
+describe('ErpGuideScreen — 8 standard guide tabs (TASK-PC-FE-298)', () => {
+  it('organises the existing sections into the 8 standard tabs', () => {
+    render(<ErpGuideScreen />);
+    expectDomainGuideTabs('erp-guide', {
+      terms: [
+        'erp-guide-master-states',
+        'erp-guide-employment-states',
+        'erp-guide-concepts',
+        'erp-guide-glossary'
+      ],
+      usage: [
+        'erp-guide-screens'
+      ],
+      flows: [
+        'erp-guide-recipes',
+        'erp-guide-approval-states',
+        'erp-guide-delegation-scopes'
+      ],
+      services: [
+        'erp-guide-services'
+      ]
+    });
   });
 });

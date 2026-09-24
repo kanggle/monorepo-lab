@@ -13,6 +13,7 @@ import {
   WMS_ROLES,
 } from '@/features/wms-guide/data';
 import { runAxe } from '../a11y/axe-helper';
+import { expectDomainGuideTabs } from '../helpers/domain-guide-tabs';
 
 /**
  * WMS 가이드 화면 (TASK-PC-FE-183) — 순수 정적 참조 화면. 재고(수량 버킷·예약
@@ -44,19 +45,16 @@ describe('WmsGuideScreen', () => {
     expect(link).toHaveAttribute('href', '/iam/guide');
   });
 
-  it('renders the in-page TOC with a link per existing section id (TASK-PC-FE-255)', () => {
+  // TASK-PC-FE-298 — the PC-FE-255 in-page TOC is replaced by the 8 standard
+  // tabs; the same section ids must still exist, now inside the right panel.
+  it('organises the existing sections into the 8 standard guide tabs (TASK-PC-FE-298)', () => {
     render(<WmsGuideScreen />);
-    const toc = screen.getByTestId('guide-toc');
-    for (const id of [
-      'wms-guide-inventory',
-      'wms-guide-outbound',
-      'wms-guide-roles',
-    ]) {
-      const link = within(toc).getByTestId(`guide-toc-${id}`);
-      expect(link.getAttribute('href')).toBe(`#${id}`);
-      // The linked section id must actually exist on the page — no drift.
-      expect(document.getElementById(id)).not.toBeNull();
-    }
+    expectDomainGuideTabs('wms-guide', {
+      terms: ['wms-guide-inventory', 'wms-guide-glossary'],
+      usage: ['wms-guide-recipes'],
+      flows: ['wms-guide-outbound'],
+      permissions: ['wms-guide-roles'],
+    });
   });
 
   it('renders the order-state flow diagram above the order-state table (TASK-PC-FE-255)', () => {

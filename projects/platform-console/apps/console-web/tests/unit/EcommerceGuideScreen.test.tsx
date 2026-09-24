@@ -18,6 +18,7 @@ import {
   ECOMMERCE_RECIPES,
 } from '@/features/ecommerce-guide/data';
 import { runAxe } from '../a11y/axe-helper';
+import { expectDomainGuideTabs } from '../helpers/domain-guide-tabs';
 
 /**
  * E-Commerce 가이드 화면 (TASK-PC-FE-184) — 순수 정적 참조 화면. 도메인 서비스
@@ -258,5 +259,37 @@ describe('EcommerceGuideScreen', () => {
     const { container } = render(<EcommerceGuideScreen />);
     const violations = await runAxe(container);
     expect(violations).toEqual([]);
+  });
+});
+
+// TASK-PC-FE-298 — the existing sections are MOVED (not rewritten) into the 8
+// standard guide tabs; each section id must now live inside the expected panel.
+describe('EcommerceGuideScreen — 8 standard guide tabs (TASK-PC-FE-298)', () => {
+  it('organises the existing sections into the 8 standard tabs', () => {
+    render(<EcommerceGuideScreen />);
+    expectDomainGuideTabs('ecommerce-guide', {
+      terms: [
+        'ecommerce-guide-product',
+        'ecommerce-guide-promotion',
+        'ecommerce-guide-seller',
+        'ecommerce-guide-user',
+        'ecommerce-guide-notification',
+        'ecommerce-guide-glossary'
+      ],
+      usage: [
+        'ecommerce-guide-recipes'
+      ],
+      flows: [
+        'ecommerce-guide-order',
+        'ecommerce-guide-payment',
+        'ecommerce-guide-shipping'
+      ],
+      permissions: [
+        'ecommerce-guide-roles'
+      ],
+      services: [
+        'ecommerce-guide-services'
+      ]
+    });
   });
 });

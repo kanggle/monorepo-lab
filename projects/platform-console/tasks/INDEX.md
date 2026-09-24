@@ -91,8 +91,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-PC-FE-297-nav-order-icons-favicon.md` — **READY (2026-09-24 UTC)** 2026-09-24 포트폴리오 UX 전수조사(소유자 승인) 실행 티켓 — 콘솔 6도메인 2뎁스 순서를 「개요→가이드」에서 **「가이드→개요」**로 전환(인접 설명 주석도 함께 갱신 — 지금 순서가 의도적 설계였다고 적힌 주석이 있음), 사이드바 항목별 아이콘 + 그룹 헤딩 시각적 종속, 드릴다운 접힘 시 활성 표시 공백 수리, `/dashboards/health`·`/account` 매칭 처리, 파비콘/앱 아이콘 신설(`public/`엔 지금 `.gitkeep`뿐). **`TASK-PC-FE-298` 의 선행**(같은 파일 `console-nav-config.ts`, 직렬 진행). 분석=Opus 5.5 / 구현 권장=Sonnet 5.
-- `TASK-PC-FE-298-global-guide-permission-feature-mapping.md` — **READY (2026-09-24 UTC)** 실행 티켓 — 전역 1뎁스「가이드」메뉴(7탭: 아키텍처/서비스구성/서버구성/전체메뉴/권한·테스트계정/업무흐름/기동종료) + 도메인 가이드 6개 각 8탭 확장(기존 콘텐츠 재사용) + **모든 nav 항목을 커버하는 권한·기능 매핑 표**(소스=`console-nav-config.ts`+`rbac.md`+컨트롤러 어노테이션, nav 항목 누락 시 실패하는 드리프트 테스트) + 샘플 방문자(ADR-MONO-074) 열람 가능. **`TASK-PC-FE-297` 에 의존**(같은 파일, 297 먼저). 분석=Opus 5.5 / 구현 권장=Opus 5.5.
 - `TASK-PC-FE-299-session-end-after-demo-shutdown.md` — **READY (2026-09-24 UTC)** 실행 티켓 — 인증된 콘솔 HTML에 `Cache-Control: no-store`(정적/샘플 페이지 제외) + bfcache 뒤로가기 시 잔존 데이터 노출 방지(`pageshow`/`persisted` 감지) + 데모종료↔세션만료 원인 구분 로그인 문구(실제 신호 기반, 추측 금지) + 강제 로그아웃 시 클라 잔존 상태(테넌트·드릴·유저정보) 정리 + `DemoBackendNotice.tsx` 의 ADR-MONO-074 이전 낡은 주석("66개 화면은 가드 뒤") 정정. AC-2(유효 세션 새로고침이 로그아웃되면 안 됨)가 가장 깨지기 쉬운 회귀 축. 분석=Opus 5.5 / 구현 권장=Sonnet 5.
 
 (그 외 없음)
@@ -125,6 +123,8 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
+- `TASK-PC-FE-298-global-guide-permission-feature-mapping.md` — **REVIEW (2026-09-24 UTC)** 전역 1뎁스「가이드」(`/guide`, 7탭, 정적·샘플 방문자 열람) + 도메인 가이드 6개 공용 8탭(기존 섹션 이동, 목차→탭) + **권한·기능 매핑 표**(`shared/guide/permission-map.ts` — nav leaf 48개 전부, 메뉴명/비로그인/테스트계정 열은 파생, 행마다 인용) + 드리프트 가드(nav↔표 양방향 · 인용 경로 실재 · 키 존재 — bite RED→GREEN 확인; 권한 코드 최신성은 못 잡음). 「권한」/「권한 세트」 operator.manage 불일치 기록. 부수 발견: IAM 가이드가 `group.manage` 를 빠뜨리고 있었다(수정). impl PR 은 297 과 동반.
+- `TASK-PC-FE-297-nav-order-icons-favicon.md` — **REVIEW (2026-09-24 UTC)** 6도메인 2뎁스 「가이드→개요」(인접 주석 6곳 동시 갱신) · 사이드바 인라인 SVG 아이콘(의존성 0, `icon` 필수 필드) · 그룹 제목 하위화(`<p>` 유지) · 접힌 드릴 부모 활성(`aria-current="true"`) · `/dashboards/health`→개요 별칭(`/account` 의도적 미매칭, 근거 기록) · `icon.svg`/`apple-icon`/`manifest`. 아이콘은 「흰색」 리터럴 대신 `currentColor`(라이트 테마 가독 — 기록). 론처 썸네일 2장이 시각적으로 낡음(기록만). impl PR 은 298 과 동반.
 
 ## done
 
