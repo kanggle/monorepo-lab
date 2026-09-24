@@ -76,8 +76,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-597-demo-account-read-coverage-and-restricted-account.md` — **READY (2026-09-24 UTC)** 2026-09-24 포트폴리오 UX 전수조사(소유자 승인) 실행 티켓 — 데모 계정(`demo-operator`)에 부족한 **읽기** 권한 보강(콘솔 전 메뉴 200) + 무권한 테스트 계정(`viewer@demo.com`) 신설(403 시연용). 🔴 **AC-0 먼저** — `rbac.md` Seed Matrix 는 `SUPER_ADMIN` 이 `partnership.manage` 를 보유하지 않음을 보이고, 바로 옆 행(`tenant.admin.delegate`)엔 제외 사유가 명시돼 있는데 `partnership.manage` 자체엔 같은 명시 문장이 없다 — 구조적 이유인지 분리된 보안 결정인지 재확인 후, 후자면 STOP·소유자 확인. 론처 자격 정보 표시 + (z11) 가드 동기화, 재굽기 필요 여부 실측 기록. 권한 카탈로그 변경은 분류기 게이트 축(CLAUDE.md § Classifier gating) — 시도 1회, 막히면 소유자에게 패치 전달. 분석=Opus 5.5 / 구현 권장=Opus 5.5.
-
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
 
@@ -114,7 +112,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-(empty)
+- `TASK-BE-597-demo-account-read-coverage-and-restricted-account.md` — **IN-PROGRESS (2026-09-24 UTC)** 데모 계정 읽기 권한 보강 + 무권한 테스트 계정. AC-0 판정 = `partnership.manage` 의 SUPER_ADMIN 제외는 문서화된 의도(`rbac.md:72,:120` · ADR-MONO-045 D2-C/D3-A) → 소유자 결정 ① 현행 유지(`/partnerships` 403 = 시연 가능한 경계). 무권한 계정(`viewer@demo.com`) 진행.
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 
