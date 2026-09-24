@@ -8,7 +8,7 @@ TASK-BE-596
 
 # Status
 
-review (2026-09-24 UTC — AC-0 bite · AC-1 소유자 결정 · AC-2 구현 완료. 🔴 데모 창 판정은 없다 — 이 변경은 신선 부팅의 시드 흐름을 **읽어서** 안전을 확인했다(아래))
+done (2026-09-24 UTC — 4차원 검증 · impl PR #3987 squash `a349f0acd` · CI 35/35 pass, outbound 통합 포함) ‖ 직전: review (2026-09-24 UTC — AC-0 bite · AC-1 소유자 결정 · AC-2 구현 완료. 🔴 데모 창 판정은 없다 — 이 변경은 신선 부팅의 시드 흐름을 **읽어서** 안전을 확인했다(아래))
 
 # Owner
 
