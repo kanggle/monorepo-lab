@@ -97,3 +97,30 @@ ready (2026-09-24 UTC — 기안. `TASK-MONO-717` 을 `done/` 으로 닫기 **�
 1. 🔴 **재지 않고 게이트웨이에 `/internal/accounts/**` 라우트를 연다** → 717 이 밟은 그 모양이다(게이트웨이 경유는 `TenantScopeGuard` 와 부딪힐 수 있다 — 717 § CORRECTION 의 403 `TENANT_SCOPE_DENIED`). 라우트가 답인지부터 잰다.
 2. 🔴 **②를 「IdP 에 없으니 등록」 으로 닫는다** → 쓰지 않는 자격이 명단에 생긴다. 717 AC-3 이 이미 경고했다.
 3. **717 을 done 으로 옮기면서 이 두 줄을 그 파일에만 남긴다** → 이 티켓이 없었을 때의 상태. 이 티켓의 존재 이유다.
+
+---
+
+# 측정 기록
+
+## AC-0 ② — 🔴 batch-worker 는 그 client 를 **쓴다**, 그리고 그 경로는 **세 군데서 동시에 끊겨 있다** (2026-09-24 UTC · 창 없음 · 정적 측정)
+
+🔵 먼저 정정: 이 티켓 § Goal 은 ②를 «`/internal/**`(iam) 호출자» 처럼 적었다. 아니다 — batch-worker 가 그 자격으로 부르는 곳은 **order-service 의 `/api/internal/orders/**`** 다.
+
+| 층 | 저장소가 말하는 것 | 결과 |
+|---|---|---|
+| 호출 | `OrderServiceClient` — `POST /api/internal/orders/confirm-paid-stale`(`StalePaidOrderConfirmationJob`) · `POST /api/internal/orders/existence`(`OrphanCouponReleaseJob`) — 둘 다 `IamClientCredentialsTokenProvider` 로 bearer 를 붙인다 | **쓴다** ⇒ «안 쓰면 등록하지 않는다» 갈래는 닫혔다 |
+| 수신 | order-service `OrderSecurityConfig` — `/api/internal/**` 는 resource-server 체인, `sub` 가 `order.internal.oauth2.allowed-client-ids`(기본 **`ecommerce-internal-services-client`**)여야 통과 (TASK-BE-505) | 그 client 의 토큰만 받는다 |
+| 🔴 ① IdP 등록 | `projects/iam-platform/apps/auth-service/src/main/resources/db/**` 에 그 client_id **0건** | 토큰 발급 불가(`invalid_client` 예상 — 717 이 product-service 에서 본 모양) |
+| 🔴 ② 토큰 주소 | batch-worker `application.yml:89` 기본 `http://iam-service:8081/oauth2/token` · 에코머스 `docker-compose.yml` batch-worker 블록(900–938행)에 `IAM_TOKEN_URI` **없음**. `infra/demo/demo.env:91` 의 `IAM_TOKEN_URI` 는 compose 가 그 키를 **선언한 서비스에만** 들어간다 | `iam-service` 호스트는 어느 compose 에도 없다 ⇒ 연결 실패 |
+| 🔴 ③ order-service 주소 | batch-worker `application.yml:81` 기본 `http://order-service:8082` · compose 에 `ORDER_SERVICE_BASE_URL` **없음**. order-service 는 `SERVER_PORT=8086`(compose 823행 · `application.yml` `port: 8086`), 형제 서비스들은 `ORDER_SERVICE_URL=http://order-service:8086` | **포트가 틀렸다** |
+
+⇒ 🔴 **셋 중 하나만 고치면 다음 것에서 죽는다.** 717 이 product-service 에서 «주소 → 등록 → 테넌트» 순으로 한 겹씩 벗겨 낸 모양과 같다 — 이번엔 **세 겹이 처음부터 보인다.**
+⇒ 두 잡은 `log.error("StalePaidOrderConfirmationJob FAILED …")` 로 **로그에는 남지만** 아무 화면도 빨개지지 않는다(717 의 축 그대로). `enabled` 기본값은 둘 다 `true`.
+
+🔵 **아직 안 잰 것 (창 또는 로컬 compose)**: 실제 로그에 그 FAILED 줄이 주기적으로 찍히는가 · 그 결과로 PAID 에 머무는 주문이 데모에 있는가(결과 상태). 🔴 로그 침묵이 판정이 아니듯 **로그 발화도 결과 상태가 아니다** — 판정은 `orders` 테이블의 PAID 체류 건수다.
+
+🔵 **가드와의 관계**: `scripts/check-internal-caller-addresses.sh` 가 717 AC-2 로 «설정이 없으면 조용히 localhost» 를 문다 — 호출자 목록이 한 줄(product-service)이라 **batch-worker 는 그 가드 밖**이다. ②·③ 은 정확히 그 가드가 무는 모양(설정 부재 → 코드 기본값)이고, 기본값이 `localhost` 가 아니라 **존재하지 않는 호스트/틀린 포트**라는 것만 다르다. ⇒ AC-2 에서 목록에 넣을 근거가 이 측정이다(파일 헤더 규칙 «실제로 부르는가» 충족).
+
+## AC-0 ① — ⏳ 창 필요 (변동 없음)
+
+정적으로 확인한 것만: iam 게이트웨이 내부 라우트는 `Path=/internal/tenants/**` 하나(`gateway-service/src/main/resources/application.yml:61`) ⇒ `lockAccount` 의 `/internal/accounts/{a}/lock` 은 **라우트 없음**. 판정(결과 상태 `accounts.status`)은 셀러 정지를 일으켜야 하므로 창/로컬 compose.
