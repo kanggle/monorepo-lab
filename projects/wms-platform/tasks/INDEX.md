@@ -89,9 +89,11 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## review
 
-- `TASK-BE-596-pick-and-pack-lines-accept-a-sku-the-order-line-never-had.md` — **REVIEW** (2026-09-24 UTC). 피킹 확정·패킹 라인이 주문 라인에 없는 SKU 를 받던 것을 막았다 — 새 422 `ORDER_LINE_MISMATCH` · 위치는 `WAREHOUSE_MISMATCH`/`LOCATION_INACTIVE`(스냅샷 있을 때만) · LOT 판정은 주문 라인 SKU 로 · 패킹은 검증 뒤에 `PICKED → PACKING`. AC-0 bite 6/29 빨강 → 구현 뒤 299/0. 🔴 `check-error-code-registry.sh` 는 outbound 의 `errorCode()` 모양을 못 본다(bite rc=0) — 레지스트리는 손 등록. 창 판정 없음(시드는 읽어서 확인).
+(empty)
 
 ## done
+
+- `TASK-BE-596-pick-and-pack-lines-accept-a-sku-the-order-line-never-had.md` — **✅ DONE (2026-09-24 UTC, 4차원 검증 — impl PR [#3987](https://github.com/kanggle/monorepo-lab/pull/3987) squash `a349f0acd`; CI 35/35 pass)** 피킹·패킹 라인이 주문 라인에 없는 SKU 를 받던 것을 막았다 — 새 422 `ORDER_LINE_MISMATCH` · 위치는 `WAREHOUSE_MISMATCH`/`LOCATION_INACTIVE`(스냅샷 있을 때만) · LOT 판정은 주문 라인 SKU · 패킹은 검증 뒤 `PICKED → PACKING`. 🔴 `check-error-code-registry.sh` 는 outbound `errorCode()` 모양을 못 본다(손 등록). 창 판정 없음 — 다음 신선 부팅의 wms 시드 `실패 0` 이 그 판정.
 
 - `TASK-BE-588-outbound-masterref-seed-disagrees-with-master-seed.md` — **✅ DONE (2026-09-17 UTC, 4차원 검증 — impl PR [#3859](https://github.com/kanggle/monorepo-lab/pull/3859) squash `1da127f3b`; `state=MERGED` · main 조상 · FAILURE 0 · AC 본문 열어 읽음)** — outbound `R__seed_dev_masterref.sql` 의 로케이션 `…1002` 를 master 원본(`WH01-C-01-01-01` · 존 `…0102`)과 맞췄다. AC-3 은 2026-09-17 둘째 데모 창(12차 AMI `af0018aa6`, 신선 볼륨)에서 **조회**로 닫음: outbound DB `location_snapshot` `…1002` = `WH01-C-01-01-01|…0102`.
 
