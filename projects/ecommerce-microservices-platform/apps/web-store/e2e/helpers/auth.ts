@@ -8,7 +8,7 @@ import { expect, type Page } from '@playwright/test';
  * ecommerce auth-service has been retired. Authentication now flows through:
  *
  *   1. Click "로그인" → `/login`
- *   2. Click "Global Account 로 로그인" → NextAuth `/api/auth/signin/iam`
+ *   2. Click "Global Account로 로그인" → NextAuth `/api/auth/signin/iam`
  *   3. Browser is redirected to GAP `/oauth2/authorize?...&prompt=...`
  *   4. GAP renders signup-or-login page → user submits credentials
  *   5. GAP `/oauth2/callback` → web-store `/api/auth/callback/iam`
@@ -87,7 +87,7 @@ export async function loginAsSeededConsumer(
   user: TestUser = SEEDED_CONSUMER,
 ): Promise<void> {
   await page.goto('/login');
-  const trigger = page.getByRole('button', { name: 'Global Account 로 로그인' });
+  const trigger = page.getByRole('button', { name: 'Global Account로 로그인' });
   await expect(trigger).toBeEnabled();
   await trigger.click();
   await fillGapCredentialForm(page, user);
@@ -129,7 +129,7 @@ export async function loginAndExpectRoleGuardRejection(
   user: TestUser = SEEDED_CROSS_TENANT_PRINCIPAL,
 ): Promise<void> {
   await page.goto('/login');
-  const trigger = page.getByRole('button', { name: 'Global Account 로 로그인' });
+  const trigger = page.getByRole('button', { name: 'Global Account로 로그인' });
   await expect(trigger).toBeEnabled();
   await trigger.click();
   await fillGapCredentialForm(page, user);

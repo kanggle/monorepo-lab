@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test';
  *
  * After TASK-FE-067, redirect is enforced server-side via NextAuth middleware
  * (`src/middleware.ts`) — protected pages return 307 to /login?from=...
- * The login page itself surfaces a "Global Account 로 로그인" button (no more
+ * The login page itself surfaces a "Global Account로 로그인" button (no more
  * email/password form on web-store side).
  */
 test.describe('인증 필요 라우트 보호 (NextAuth + GAP)', () => {
@@ -23,7 +23,7 @@ test.describe('인증 필요 라우트 보호 (NextAuth + GAP)', () => {
       await page.waitForURL('**/login**', { timeout: 10_000 });
       await expect(page.getByRole('heading', { name: '로그인' })).toBeVisible();
       // GAP 로그인 트리거 버튼이 보여야 한다 — 자체 email/password form 은 더 이상 없다.
-      await expect(page.getByRole('button', { name: 'Global Account 로 로그인' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Global Account로 로그인' })).toBeVisible();
     });
   }
 

@@ -8,7 +8,7 @@ TASK-MONO-728
 
 # Status
 
-ready
+review (2026-09-24 UTC — AC-1~AC-7 닫힘)
 
 # Owner
 
@@ -86,3 +86,57 @@ monorepo
 - 콘솔 버튼의 `data-testid="iam-login"` 을 실수로 바꾸면 그 testid를 참조하는 e2e/유닛 테스트가 전부 깨진다 — 문자열만 바꾸고 속성은 건드리지 않는다.
 - 재그렙을 소스 코드로만 한정하고 README/캡션을 빠뜨리면 AC-5가 거짓 초록이 된다.
 - 세 앱의 테스트/빌드를 파이프(`| tail` 등)로 가려 읽으면 실패가 조용히 통과로 보고될 수 있다(이 호스트에서 반복 관측된 함정) — 각 게이트를 독립 statement로 실행하고 종료 코드를 직접 확인한다.
+
+---
+
+# 구현 기록 (2026-09-24 UTC · 분석=Opus 5.5 · 구현=Sonnet 5)
+
+## AC-1·AC-2 — ✅ 콘솔
+
+- `page.tsx:123` 버튼 문구 `IAM 계정으로 로그인` → `IAM 로그인`. `data-testid="iam-login"` 무변경(속성 자체를 건드리지 않았다). `:12` 에러 메시지 무변경.
+- `:42` JSDoc `renders the "Sign in with GAP" link` → `renders the "IAM 로그인" link`.
+
+## AC-3 — ✅ 팬
+
+- `(auth)/login/page.tsx:161` 버튼 `GAP 로 로그인` → `GAP로 로그인`.
+- `e2e-smoke/login.spec.ts:14` 정규식 `/GAP 로 로그인/` → `/GAP로 로그인/`. `__tests__/login-page.test.tsx` 는 이 문자열을 단언하지 않아(testid 기반) 무변경.
+
+## AC-4 — ✅ 스토어
+
+- `LoginForm.tsx:116` 안내문 `Global Account 로 로그인하여 쇼핑을 계속하세요.` → `Global Account로 로그인하여 쇼핑을 계속하세요.`
+- `LoginForm.tsx:126` 버튼(템플릿 리터럴 안) `Global Account 로 로그인` → `Global Account로 로그인`.
+- `__tests__/login-form.test.tsx:38,50,62,73` 네 단언 갱신, 통과.
+
+## AC-5 — ✅ 저장소 전체 재그렙 — 렌더 텍스트 기준 0건
+
+옛 표기 세 문자열(`IAM 계정으로 로그인` · `GAP 로 로그인` · `Global Account 로 로그인`)을 저장소 전체에서 재그렙했다. 위 6개 소스/테스트 파일 수정 후 **남은 매치는 전부 렌더되지 않는 문서/메타 파일**이다:
+
+| 파일 | 성격 | 처리 |
+|---|---|---|
+| `tasks/ready(→in-progress)/TASK-MONO-728-…md` 본문 · `tasks/INDEX.md` 728 행 | 이 티켓 자신의 "before→after" 설명 | 그대로 둠(서술이지 렌더 UI 아님) |
+| `projects/fan-platform/tasks/ready(→in-progress)/TASK-FAN-FE-024-…md` | 선행 관계 설명("728 이 먼저 고친다") | 그대로 둠 |
+| `projects/platform-console/tasks/done/TASK-PC-FE-021-…md` · `projects/ecommerce-microservices-platform/tasks/done/TASK-FE-097-…md` · `projects/iam-platform/tasks/done/TASK-BE-396-…md` | `done/` — 동결, 편집 금지(CLAUDE.md) | 미수정 |
+| `knowledge/incidents/2026-05-05-ci-regression.md` | 과거 사건 기록(그 시점 실제 문구의 정확한 인용) | 미수정 — 역사적 기록을 "지금 문구"로 덮어쓰면 사건 기록이 거짓이 된다 |
+| `projects/iam-platform/specs/features/oauth-social-login.md` · `projects/iam-platform/docs/adr/ADR-006-external-idp-login-sas-integration.md` | 세 앱 범위 밖(iam-platform 프로젝트 자신의 스펙/ADR 산문, Related Specs 목록 밖) | 미수정 — 발견 사실만 기록 |
+
+**세 앱 코드 + 테스트 + `scripts/capture-portfolio.mjs`(론처 캡처 스크립트 주석 3곳 — 렌더 UI는 아니지만 스크립트가 실제로 매칭하는 문자열을 문서화한 주석이라 함께 정정) = 렌더 대상 옛 표기 0건.** README 스크린샷 캡션·`infra/demo/aws/site/index.html`은 재그렙했으나 매치 0건(기안 당시 지목한 후보 위치들이 애초에 이 세 문자열을 포함하지 않았다).
+
+`scripts/capture-portfolio.mjs` 는 텍스트 정확 매칭이 아니라 `button:has-text("로그인")` 일반 셀렉터를 쓰므로 문구 변경으로 기능이 깨지지 않는다(주석만 낡아 있었다).
+
+## AC-6 — ✅ 세 앱 개별 게이트(파이프 없이, 각 statement 종료 코드 직접 확인)
+
+| 앱 | typecheck | lint | unit test | build |
+|---|---|---|---|---|
+| 콘솔(console-web) | `pnpm exec tsc --noEmit` rc=0 | `pnpm run lint` rc=0 | `pnpm run test` — 최초 rc=1(316개 중 14파일·19건 실패, 전부 로그인과 무관한 화면— Ledger/Approval/Delegation/Wms/Operators/Accounts/Tenants/CreateOrganizationForm 등). **격리 재실행으로 재현**: 같은 14파일을 단독/소그룹으로 재실행 → 전부 rc=0(114/114 + 67/67). 전체 스위트 동시부하(451초, `userEvent` 타이밍)로 인한 환경 flake로 판정 — 실패 파일 중 로그인 페이지(`login-error-messages.test.tsx`·`relogin-loop.test.tsx`)는 전체 스위트에서도 처음부터 초록(16/16, 7/7) | `pnpm run build` rc=0 |
+| 팬(fan-platform-web) | `pnpm exec tsc --noEmit` rc=0 | `pnpm run lint` rc=0 | `pnpm run test` rc=0 (36 files / 305 tests, 최초 1건 신규 테스트 파일이 `server-only` 해석 실패로 낙제 → 저장소 관행(`vi.mock` 으로 `server-only` 임포트 모듈만 교체)으로 고쳐 rc=0) | `pnpm run build` rc=0 (`/login` 라우트 생성 확인) |
+| 스토어(web-store) | `pnpm exec tsc --noEmit` rc=0 | `pnpm run lint` rc=0 | ⚪ **로컬 실행 불가 — 호스트 환경 한계(기존 관측)**: vitest 4.1.0 이 이 호스트 Node 24 에서 `ERR_PACKAGE_IMPORT_NOT_DEFINED "#module-evaluator"` 로 기동 자체가 안 된다(코드 문제 아님 — CI 는 Node 20 이라 통과). typecheck(전체 `**/*.ts` 포함 e2e)와 lint 로 로컬에서 낼 수 있는 판정은 다 냈다. 권위는 CI `frontend-unit-tests`(Node 20) — PR 오픈 후 그 결과를 확인할 것 | `pnpm run build` — `✓ Compiled successfully` · `✓ Generating static pages (23/23)` **이후**, `output:'standalone'` 트레이스 복사 단계에서 Windows 전용 `EPERM: symlink` 로 rc=1(기존 관측된 이 호스트 한계 — 이 저장소의 `next.config.ts` 가 항상 `output:'standalone'` 이고 CI(Linux)는 통과). 컴파일·정적 페이지 생성(로그인 포함) 자체는 성공을 확인했다 |
+
+## AC-7 — ✅ 브라우저로 세 앱 로그인 화면 확인(로컬 `next dev`, 데스크톱 1280px + 모바일 ~400px)
+
+- 콘솔 `/login`: 버튼 "IAM 로그인" 렌더 확인(스크린샷).
+- 팬 `(auth)/login`: 버튼 "GAP로 로그인" 렌더 확인(스크린샷) — `TASK-FAN-FE-024` 의 헤더 추가와 겹쳐서 같은 화면에서 함께 확인(순서대로 진행했으므로).
+- 스토어 로그인 폼: 안내문 "Global Account로 로그인하여 쇼핑을 계속하세요." + 버튼 "Global Account로 로그인" 렌더 확인(스크린샷). 🔵 최초 시도에서 화면이 완전히 빈 채로 렌더됐다 — 원인은 이 worktree에 `.env.local` 이 없어(신규 worktree 관행적 결함) `NEXTAUTH_SECRET` 미설정 → `useSession()` 이 `loading` 상태에서 안 풀려 `LoginPageContent` 가 계속 `null` 을 반환했다. `.env.local.example` 을 복사하고 `NEXTAUTH_SECRET` 만 채워 재기동해 해결(코드 결함 아님, `.env.local` 은 gitignore 대상이라 커밋되지 않았다).
+
+## 편차 없음
+
+티켓의 리터럴 AC를 벗어난 변경은 없다. 스코프 밖으로 명시된 항목(코드 식별자·IAM Thymeleaf 공유 페이지·공유 로그인 폼 패키지·로그인 로직)은 전부 무변경.

@@ -158,7 +158,7 @@ export default async function LoginPage({
           }}
         >
           <Button type="submit" size="lg" className="w-full" data-testid="oidc-signin">
-            GAP 로 로그인
+            GAP로 로그인
           </Button>
         </form>
 
