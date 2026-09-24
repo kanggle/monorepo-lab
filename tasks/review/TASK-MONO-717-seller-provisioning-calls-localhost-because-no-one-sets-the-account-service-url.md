@@ -485,3 +485,16 @@ iam-account-service-1      →  iam_iam-e2e · traefik-net      ⇒ 공유 네�
 프로브가 손으로 넣은 `oauth_clients` 행은 **지웠다**(남은 행 0). Flyway 가 모르는 행이고,
 남겨 둬도 프로비저닝은 여전히 실패하므로 이득이 0 이고 드리프트만 남는다.
 🔵 창은 **소유자가 켠 것**이라 끄지 않았다. 이 측정이 쓴 예산은 **약 5분**(1348 → 1353).
+
+---
+
+## CORRECTION (2026-09-24 UTC · 14차 AMI 창) — 🟢 **AC-1 PASS** (`TASK-MONO-721` 갈래 D 이후)
+
+위 CORRECTION 의 FAIL 은 `TASK-MONO-721`(ADR-MONO-076 D — 워크로드 테넌트 assume)이 풀었고, 14차 AMI 의 신선 볼륨에서 이 티켓의 술어 그대로 쟀다:
+
+- 셀러 `demo-seller` 가 `PENDING_PROVISIONING` 을 **벗어났다** → `ACTIVE`, `account_id`/`identity_id` 채워짐.
+- `account_db.accounts` 에 그 셀러-운영자 행(`tenant_id=ecommerce`) + `account_roles` 에 `SELLER`.
+- product-service 로그에 `seller provisioning failed` / `seller left PENDING_PROVISIONING` **없음**, 대신 `seller provisioned/reconciled … status=ACTIVE`.
+- 🔵 첫 질문(«`iam.${DEMO_DOMAIN}` 이 ecommerce 컨테이너 **안에서** 해소되는가»)의 답: 컨테이너 env 는 `IAM_TOKEN_URI=http://iam.16-184-8-191.sslip.io/oauth2/token` · `ACCOUNT_SERVICE_BASE_URL=http://iam.16-184-8-191.sslip.io` 이고 그 경로로 프로비저닝이 **성공했다** ⇒ 해소된다.
+
+상세 증거: `TASK-MONO-721` § AC-4 창 판정. ⇒ **AC-0~AC-3 전부 닫힘.**
