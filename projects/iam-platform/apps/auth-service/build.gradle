@@ -120,6 +120,11 @@ tasks.named('test') {
     inputs.file(rootProject.file('projects/iam-platform/apps/admin-service/src/main/resources/db/migration-dev/R__seed_demo_operator.sql'))
             .withPropertyName('demoOperatorSeed')
             .withPathSensitivity(PathSensitivity.RELATIVE)
+    // TASK-BE-597: DemoViewerOperatorSeedTest pins the restricted operator's link key and
+    // its "no role / no assignment" shape against this sibling file — same blind spot.
+    inputs.file(rootProject.file('projects/iam-platform/apps/admin-service/src/main/resources/db/migration-dev/R__seed_demo_viewer_operator.sql'))
+            .withPropertyName('demoViewerOperatorSeed')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 // TASK-BE-581 — same blind spot, different task. OAuthClientTenantReferenceIntegrationTest
