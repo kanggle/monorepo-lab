@@ -218,6 +218,14 @@ monorepo
 - 🔵 **무엇을 기다리나 — 재굽기다.** `V0038`(Flyway) · ecommerce compose · `demo.env` 가 전부 구워지는 표면이다(compose·demo.env 는 SSM 패치로도 되지만 V0038 은 이미지 안).
 - 출처: `tasks/…/TASK-MONO-726-…` § 구현 기록. 🔴 **Failure Scenario 2 대조**: 726 은 수령 시점에 `review/` — **726 이 닫히지 않고 살아남으면 이 항목은 726 으로 되돌린다**(의무 이중 보유 금지).
 
+## 항목 15 — `TASK-MONO-727` AC-3: 두 주소 고침이 **결과 상태로** 성립하는가 (2026-09-24 수령)
+
+- **무엇을 재나** (둘, 서로 독립):
+  ① ecommerce batch-worker `SearchIndexConsistencyJob` — 로그에 product-service 연결 실패가 없고 잡이 완료를 기록하는가(예전엔 `:8081` 로 매번 실패).
+  ② iam security-service 자동 잠금 — 의심 로그인(탐지 규칙을 넘기는 시도)을 일으켜 `account_db.accounts.status` 가 **LOCKED** 가 되는가. 보조: `security_auto_lock_failures_total` 이 늘지 않는가. 🔴 로그 침묵은 판정이 아니다. 401 이 나오면 주소가 아니라 토큰 축(별건).
+- 🔵 **재굽기 불필요** — 둘 다 compose 변경(클론)이라 SSM 으로 `git pull` 후 두 컨테이너만 재생성하면 된다(`TASK-MONO-726` 항목 14 와 달리 이미지 안의 변경이 없다).
+- 출처: `tasks/…/TASK-MONO-727-…` § 구현 기록. 🔴 **Failure Scenario 2 대조**: 727 은 수령 시점에 `review/` — **727 이 닫히지 않고 살아남으면 이 항목은 727 로 되돌린다.**
+
 ---
 
 # Goal

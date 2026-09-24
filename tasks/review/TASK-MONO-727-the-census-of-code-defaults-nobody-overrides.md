@@ -4,7 +4,7 @@ TASK-MONO-727
 
 # Status
 
-ready (2026-09-24 UTC — 기안 + 전수조사 기록. `TASK-MONO-726` 의 형제 찾기에서 결함 **둘**이 나왔다)
+review (2026-09-24 UTC — AC-1 · AC-2 닫힘. 🔴 AC-3(결과 상태)은 창 — `TASK-MONO-672` 항목 15)
 
 # Title
 
@@ -112,3 +112,45 @@ monorepo
 1. **전수조사 술어를 그대로 가드로 만든다** → admin-service 같은 relaxed-binding 오탐이 빨강이 되고, 소음 가드는 꺼진다.
 2. **값을 추측한다**(예: security-service 를 iam 게이트웨이로) → 717 이 밟은 그 모양(게이트웨이 경유 = 다른 규칙). 형제 값을 쓴다.
 3. **배선을 고쳤다고 닫는다** → 717·718·721 이 연속으로 보인 대로 배선은 판정이 아니다. AC-3 이 창.
+
+---
+
+# 구현 기록 (2026-09-24 UTC · 분석=Opus 5.5)
+
+## AC-1 — ✅ 형제 값으로 실었다
+
+| # | 파일 | 추가 |
+|---|---|---|
+| ① | 에코머스 `docker-compose.yml` § batch-worker | `PRODUCT_SERVICE_BASE_URL=http://product-service:8082` (product-service `expose`/`SERVER_PORT` = 8082) |
+| ② | iam `docker-compose.e2e.yml` § security-service | `ACCOUNT_SERVICE_BASE_URL: http://account-service:8082` (같은 파일 admin-service 의 `ACCOUNT_SERVICE_URL` 과 같은 값) |
+
+## AC-2 — ✅ 가드 +2키 · bite
+
+`check-internal-caller-addresses.sh`: batch-worker 행에 `PRODUCT_SERVICE_BASE_URL` 추가, security-service 행 신설(iam **e2e** compose — 이 서비스가 정의된 유일한 파일).
+
+```
+self-test 3칸 통과 · real checked=8 rc=0
+bite batch-worker PRODUCT_SERVICE_BASE_URL 삭제      → rc=1 · DRIFT § batch-worker
+bite security-service ACCOUNT_SERVICE_BASE_URL 삭제  → rc=1 · DRIFT § security-service
+복원 → rc=0 (스테이지와 차이 0)
+```
+
+## 🔵 전수조사를 고친 트리에서 다시 쟀다 — 그리고 한 번 틀린 트리를 쟀다
+
+- 고친 트리: **56건 · 수상 45건**, 두 결함이 목록에서 사라짐. main 트리 58 · 47 과 정확히 2씩 차이 ⇒ 대조군.
+- 🔴 **첫 재측정은 main 체크아웃을 쟀다** — 스크립트의 `ROOT` 를 sed 로 바꾸려 했는데 역슬래시 이스케이프가 맞지 않아 치환이 **조용히 0건**이었고, 출력에 두 결함이 «그대로» 나왔다. `ROOT` 줄을 출력해 보고서야 알았다(이 저장소가 이름 붙인 «하네스가 어느 트리를 재는지 먼저 확정» 함정). Python 으로 치환하고 `assert count==1` 을 걸어 다시 쟀다.
+
+## 게이트 기록
+
+| 게이트 | 결과 |
+|---|---|
+| 두 compose YAML 파싱 | 🟢 |
+| `check-internal-caller-addresses.sh` | 🟢 self-test · 실제 8키 · 새 두 키 bite |
+| `infra/demo/verify-demo-wrapper.sh` (정적) | 🟢 rc=0 (정적 검증 PASS) |
+| 필수 3종 | 🟢 rc=0 (스테이지 후) |
+
+🔴 **안 돌린 것**: 통합 · e2e · 데모 창. 코드 변경은 없다(설정만).
+
+## ⏳ AC-3 → `TASK-MONO-672` 항목 15
+
+① 검색 색인 정합성 잡이 연결 실패 없이 완료를 기록하는가 · ② 의심 로그인을 일으켜 `account_db.accounts.status` 가 LOCKED 가 되는가. 🔵 **재굽기 불필요** — 둘 다 compose(클론) 변경이라 SSM 으로 `git pull` + 두 컨테이너 재생성이면 창에 올라간다.
