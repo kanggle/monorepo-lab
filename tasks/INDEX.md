@@ -207,7 +207,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## in-progress
-- `TASK-MONO-729-launcher-status-and-visitor-stop-control.md` — **IN-PROGRESS (2026-09-24 UTC)** 실행 티켓 ② — 론처 카드별 상태/버튼 매트릭스 정리(꺼짐/기동 중/사용 가능/종료 중/확인 중/확인 실패) + 번들별 배지를 전체 EC2 집계 배지와 분리(「일부만 켜짐」이 「전체 사용 가능」으로 안 보이게) + 카드별 의존성 고지(단일 원장 파생, 하드코딩 금지) + 콘솔을「Platform Console」로 표기 분리 + **방문자용 개별 번들 「끄기」버튼 신설**(`handler.py` 의 기존 `/bundle/stop` 배선). AC-0 = `verify-demo-wrapper.sh` 의 z14/z34/z35/z37/z39 등 이 표면을 핀하는 가드 전수 나열 후 같은 PR에서 갱신(약화 금지). 라이브 start/stop 클릭은 비용 때문에 금지 — 스텁-DOM/Playwright 로 대체. `handler.py` 를 고치면 배포에 소유자의 `terraform apply` 필요. 분석=Opus 5.5 / 구현 권장=Opus 5.5.
 
 
 
@@ -226,6 +225,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## review
+- `TASK-MONO-729-launcher-status-and-visitor-stop-control.md` — 🟢 **론처 카드 상태 매트릭스·전체 집계 배지·의존성 고지·Platform Console 구획·방문자용 「데모 서버 끄기」(`/bundle/stop`)** (REVIEW, 2026-09-24 UTC). 가드 (z34)(z39) 갱신(약화 0, 뒤집힌 기대값 3개는 모드까지 대조) + (z41) 집계·의존성(전 조합 512건 스윕) + (z42) 람다 BUNDLE_REQUIRED_DOMAINS = projects.sh resolve_bundles 신설, bite 실측. 스텁 API + Playwright 로 8상태·클릭 경로 확인(실 API 호출 0). `handler.py` 무변경 ⇒ terraform apply 불필요.
 - `TASK-MONO-727-the-census-of-code-defaults-nobody-overrides.md` — 🔴 **«설정 없음 → 코드 기본값» 전수조사의 결함 둘을 고쳤다** (REVIEW, 2026-09-24 UTC). ① batch-worker `PRODUCT_SERVICE_BASE_URL=…:8082` ② iam security-service `ACCOUNT_SERVICE_BASE_URL=http://account-service:8082`(자동 잠금). 가드 +2키, 각 bite rc=1. 고친 트리 재측정 56/45(main 58/47 — 정확히 2 차이). 🔴 AC-3(결과 상태)은 창 — `TASK-MONO-672` 항목 15, **재굽기 불필요**(compose 만).
 - `TASK-MONO-726-two-internal-callers-717-left-without-a-home.md` — 🔴 **batch-worker → order-service `/api/internal/**` 가 다섯 겹으로 끊겨 있던 것을 잇는다** (REVIEW, 2026-09-24 UTC · 소유자 승인: IdP 등록). 보내는 쪽(IdP 등록 `V0038` · 토큰 주소 · order 포트 8082→8086) + 받는 쪽(JWKS · issuer). 테넌트 assume 불필요(이 경로엔 테넌트 핀 없음). `check-internal-caller-addresses.sh` 목록 1→3행, 두 행 bite rc=1. auth-service 724/0 · `WorkloadRoleCatalogTest` 18/12/6. 🔴 창 판정 둘(PAID→CONFIRMED 결과 상태 · lock 라우트)은 `TASK-MONO-672` 항목 14.
 

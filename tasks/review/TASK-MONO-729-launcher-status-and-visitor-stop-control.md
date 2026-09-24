@@ -8,7 +8,7 @@ TASK-MONO-729
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -116,3 +116,59 @@ e) **방문자용 "끄기" 버튼** — 카드가 `ready`(사용 가능) 상태�
 
 - `handler.py` 변경은 최소화하고, 바꿨다면 **왜 정적/스텁 검증만으로 충분하지 않았는지**와 **배포에 필요한 소유자 조치(`terraform apply`)**를 AC 결과 섹션에 명시한다.
 - 카드 상태 매트릭스는 기존 `BLABEL`/`B_EC2`/`B_DOM` 객체를 확장하는 방향으로 구현하고, 상태 이름 자체(`ready`/`booting`/... )는 API 응답이 이미 쓰는 값이므로 바꾸지 않는다 — 바뀌는 것은 그 값에 매핑되는 **표시 텍스트/버튼**뿐이다.
+
+
+---
+
+# Implementation Record (2026-09-24 UTC)
+
+## AC-0 — 이 표면을 핀하는 가드 전수와 각각의 이동 (편집 전 목록)
+
+| 가드 | 역할(한 줄) | 이번 변경으로 어떻게 움직였나 |
+|---|---|---|
+| (t) | `demoHost()`(GUARD-T-ANCHOR) 가 `demo-boot.sh` 와 같은 도메인을 만드는가 | 무변경(해당 줄 안 건드림) — 통과 |
+| (z11) | 론처의 로그인 계정이 시드 값과 같은가 | 무변경 — 통과 |
+| (z14) | `[data-surface]` 링크 판정 + `#surfaces` 가시성(GUARD-Z14 구간 실행) | 구간 안 변경은 `render()` 의 running 문구 1줄뿐(「✅ 인스턴스 실행 중 — …」). 가드는 문구를 단언하지 않음 — 무변경·통과. 카드 순서 이동(콘솔을 뒤로)은 `data-surface` 선언을 안 바꿈 |
+| (z15) | 부팅 판정이 HTTP 표면을 보는가(`<div id="smsg"></div>` 줄에 행 주입) | 그 줄 그대로 유지 — 무변경·통과 |
+| (z32) | `projects.sh` ↔ `handler.py` 묶음 **키** 대조 + 카드 `data-bundle` 실재 | 무변경·통과. 🔴 값(하드 의존 iam)은 안 본다는 것을 확인 → 새 (z42) 가 메운다 |
+| (z34) (+BITE/BITE3 앵커) | `/bundles` 404·5xx·차단 때 카드가 사유를 말하는가(GUARD-Z34 구간 실행) | 대역: 버튼 셀렉터 `data-bundle-start`→`data-bundle-act`, `data-deps` 칸, 집계 배지 `querySelector` 추가(그 셀렉터만 — 모르는 셀렉터는 여전히 죽음). 미측정 문구 상수 `… 확인 중`→`🔵 상태 확인 중…`. 스냅샷에 **버튼 모드** 필드 추가. `ready 면 잠김` 단언을 `ready 면 열림 + 모드=stop` 으로 **뒤집고**(목적인 «중복 켜기 금지» 는 모드로 유지), `waiting 모드=start` 단언 추가. BITE/BITE3 앵커 줄 무변경, bite 3칸 그대로 문다 |
+| (z35) | 카드 구조(링크 1·제목 앵커·로그인 전/후·캐러셀 자리) + 캐러셀 실행 | 무변경·통과(콘솔 제목 `Platform Console` 도 `<h2><a …data-surface` 모양 유지) |
+| (z37) | 캐러셀 참조 ↔ 캡처 파일 ↔ `capture-shots.mjs` | 무변경·통과(SHOTS 안 건드림 — 캡처 alt 의 「운영자 콘솔」은 그래서 남음) |
+| (z39) | 묶음 버튼이 상태마다 옳게 눌리는가 + 배포 창 정규화 | **넓힘**: 기대 열이 «열림/잠김» → **«무엇이 열렸나(start/stop/locked)»**. 상태 8→10(stopping·partial 추가), 전이 6칸 추가(끄기 누름→종료 중 잠금·서버 반영→해제·거절→해제·켜기 누름→기동 중 잠금·상한 만료→서버 값·모드 없음→요청 0), 요청 경로·본문 대조. 기대값 **두 개 뒤집힘**(소유자 매트릭스): ready 잠김→끄기, unknown 열림→잠금. bite 3→6(전이 표시 제거·끄기=/stop·확인 실패에서 켜기 추가; 기존 bite-1 의 sed 리터럴은 `B_STARTABLE` 새 모양에 맞춤) |
+| (z16) | 정적 칸이 `--live` 게이트에 갇히지 않았나 | 새 칸 (z41)(z42) 는 게이트 위 정적 구간 — 전체 실행에서 통과 |
+| (z25) | 파이프 뒤 `grep -q` 금지 | 새 코드는 파이프 뒤에 `grepq` 사용 — 통과 |
+| **(z41) 신설** | 전체 집계 배지·의존성 고지가 카드 상태/응답에서 파생되는가 + 「확인 실패」두 원인의 사유 구별 | 집계 11칸 + **전 조합 512건 스윕**(«모두 사용 가능» ⇔ 전부 ready, 어긋남 0) · 의존성 응답 3벌 · bite 3칸 |
+| **(z42) 신설** | 람다 `BUNDLE_REQUIRED_DOMAINS`(ast 로 식 평가) = `projects.sh` `resolve_bundles`(실행) | 묶음 9개 전부 일치 · bite 2칸(람다에서 iam 제거 · DEPS 에 의존 추가) |
+
+약화 0건: 삭제된 단언 없음. 뒤집힌 단언 3개(z34 store·z39 S6·z39 S8)는 기대값 변경이고 각각 더 강한 형태(모드까지)로 남았다.
+
+## 구현 (`infra/demo/aws/site/index.html`)
+
+- (a) `BLABEL` 을 `[배지, 클래스, 집계 범주]` 한 표로. 꺼짐 ⚪(waiting·selected) · 기동 중 🟡(booting·requested) · 사용 가능 🟢 · 종료 중 🔵 · 확인 실패 🔴(unknown) · 첫 응답 전 🔵 상태 확인 중…(`B_PENDING`). `partial` 은 매트릭스에 칸이 없어 「🟠 일부만 실행 중」 그대로 두고 켜기 가능, 집계에서는 기동 중으로 셈. 「확인 실패」 상세 줄: `/bundles` 실패 = 기존 `B_ERR` 문구, 헬스 정체 = `unknownNote()`(서버가 준 `health_age_seconds` 를 읽음).
+- (a) 더블클릭 방지: `bundleTransit` — 누른 순간 이 화면만 「기동 중…/종료 중…」 을 들고, 서버가 끝난 쪽 값을 주면 버림. 거절·네트워크 실패면 즉시 버림. 상한 `B_TRANSIT_MS`=180초(🔴 실측 아님 — 묶음 하나 종료 소요는 잰 적 없음).
+- (b) `#aggbadge` → `[data-agg-badge]` 한 줄, 값은 카드별 집계 범주에서 `aggregateOf()` 로만 파생. 매트릭스 6값 + 보탠 3값(`🔵 상태 확인 중…` · `🔴 확인 실패`(전부 오류) · `🔵 모두 종료 중` · `🟡 모두 기동 중` — 전부가 그 상태일 때 「일부」라고 하면 거짓이라). EC2 줄의 「✅ 실행 중」 → 「✅ 인스턴스 실행 중 — 무엇을 쓸 수 있는지는 카드 배지를 보세요」.
+- (c) 카드마다 `필요한 공용 서비스` (`data-deps`) — `/bundles` 의 `domains` **교집합**(모든 묶음이 필요로 하는 도메인)에서 파생. 페이지에 `iam` 리터럴 없음. 원장 일치는 (z42).
+- (d) 콘솔 카드 제목 `Platform Console` + 「운영 콘솔」 부제, 구획(「서비스 화면」/「운영 도구」, 점선 테두리)으로 분리하고 카드를 뒤로 옮김. 고급 영역 도메인 목록은 표기·구획만(비즈니스 5 / 공용·기타 / 운영 도구 = Platform Console (운영 콘솔)) — 버튼·동작 무변경.
+- (e) 버튼 `data-bundle-act` 하나가 `data-mode`(renderCards 만 정함)로 켜기=`/bundle/start`·끄기=`/bundle/stop`(`B_ACT_PATH`). 끄기는 `ready` 에서만, 구세대 AMI 거절(`bundleBlocked`)과 무관하게 열림(demo-down 은 옛 동작). 「다른 방문자가 쓰고 있을 수 있다」는 **툴팁으로만** — 카드 사유 칸(note)은 비어 있어야 «문제 없음» 이라는 (z34) 약속을 지키기 위해.
+- `handler.py` **무변경** ⇒ 이 PR 은 `terraform apply` 불필요(Vercel 머지 배포만). ⚠ `handler.py` `_bundle_state` 독스트링의 «론처의 unknown 이 startable 인 것과 같은 이유» 한 줄이 이제 낡았다 — 동작 무관 주석이라 apply 를 부르지 않으려고 남김.
+
+## 검증
+
+- `bash infra/demo/verify-demo-wrapper.sh` (정적, 전체, 스테이지 후) — **rc=0**, ok 90줄, FAIL 0, 마지막 줄 「정적 검증 PASS」. (z41)(z42) 포함.
+- 구간 단독 실행: (z34) rc=0 · (z39) rc=0 · (z40)(z41)(z42) rc=0 · (t)(z11)(z14)~(z15) rc=0 · (z25) rc=0.
+- AC-2 bite 실측(주입 확인 후 판정 출력):
+  - (z39) bite-4 전이 표시 제거 → `[T1_STOP_CLICK] store 버튼이 stop 입니다 (기대 locked)`
+  - (z39) bite-5 끄기=/stop → `[T1_STOP_CLICK] 끄기가 /stop 로 나갔습니다 — 그 묶음 한정 /bundle/stop 이어야 합니다`
+  - (z39) bite-6 unknown 재개방 → `[S8_UNKNOWN] store 버튼이 start 입니다 (기대 locked)`
+  - (z41) bite-1 하나라도 ready=전부 → `[ONE_READY] 전체 배지가 «전부 사용 가능» 과 같은 문구입니다 … 🟢 모두 사용 가능`
+  - (z41) bite-2 공용 사본 `["iam"]` → `[D2] 응답에서 공용 도메인이 늘었는데 fan 의 고지가 안 따라옵니다`
+  - (z41) bite-3 헬스 사유 삭제 → `[헬스 정체] 카드가 사유를 한 마디도 말하지 않습니다`
+  - (z42) 람다 iam 제거 → `< console-ecommerce|ecommerce` · DEPS[fan]+=wms → `> fan|fan iam wms`
+- AC-3/4/6 — 로컬 스텁 API(`DEMO_API_BASE`=로컬 서버, 실 제어 API 호출 0건) + Playwright(chromium), 1280/400px 스크린샷 8장면 × 2. 8개 서버 상태 전부 관측: pending(첫 응답 전)·waiting·selected→⚪ 꺼짐/켜기 · booting·requested→🟡 기동 중…/잠김 · ready→🟢 사용 가능/끄기 · partial→🟠/켜기 · stopping→🔵 종료 중…/잠김 · unknown(헬스 245초 정체)→🔴 확인 실패/잠김+«마지막 발행 245초 전» · `/bundles` 404→🔴 확인 실패/잠김+배포 안 됨 사유. 집계: 모두 꺼짐 / **store 만 ready → 「🟢 일부 서버 사용 가능」** / 전부 ready → 「🟢 모두 사용 가능」. 클릭: store 「데모 서버 끄기」 두 번 클릭 → POST 정확히 1건 `/bundle/stop {"bundles":["store"]}`, `/stop` 0건, 즉시 「종료 중…」 잠금, 1.5초 재폴링 뒤(서버 여전히 ready)에도 잠금 유지.
+- AC-5 — (z42) 가 묶음 9개 전부 `BUNDLE_REQUIRED_DOMAINS` = `resolve_bundles` 대조; (z41) 이 «응답이 바뀌면 고지가 따라 바뀐다»(원장에 없는 `z41-shared` 가 나타나고, 공용이 없으면 iam 이 사라짐)로 사본 아님을 실행 증명.
+- AC-7 — `handler.py` 무변경, 소유자 `terraform apply` **불필요**.
+
+## 측정하지 못한 것
+
+- 실제 제어 API·EC2 에 대고 켜기/끄기 — 비용 때문에 의도적으로 안 함. 묶음 하나 종료 실소요(전이 상한 180초의 근거)는 미측정.
+- 실제 Vercel 서빙본 — 머지 후 `check-launcher-fresh.sh` 로 확인할 일.

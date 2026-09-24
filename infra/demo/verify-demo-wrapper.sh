@@ -3348,10 +3348,13 @@ function mkEl(ds) {
   return { textContent: "", className: "", disabled: false, dataset: ds || {}, style: {} };
 }
 function mkCard(bundle, domain) {
+  // 🔵 TASK-MONO-729 — 버튼이 `data-bundle-act` 로 이름이 바뀌었고(켜기·끄기 둘 다 한다),
+  //    카드에 «필요한 공용 서비스» 칸(`data-deps`)이 생겼다. 대역도 **정확히 그만큼** 넓힌다.
   var kids = {
     "[data-bundle-badge]": mkEl(),
-    "[data-bundle-start]": mkEl(),
+    "[data-bundle-act]":   mkEl(),
     "[data-services]":     mkEl(),
+    "[data-deps]":         mkEl(),
     "[data-bundle-note]":  mkEl(),
     "[data-surface]":      mkEl({ domain: domain })
   };
@@ -3366,10 +3369,17 @@ function mkCard(bundle, domain) {
 }
 var CARDS = process.env.Z34_CARDS.trim().split("\n")
   .map(function (l) { var p = l.split("|"); return mkCard(p[0], p[1]); });
+// 🔵 TASK-MONO-729 — renderCards() 가 끝에서 **전체 집계 배지** 하나를 갱신한다. 그 원소만
+//    준다 — 다른 셀렉터는 여전히 죽인다(관대한 대역 금지).
+var AGG = mkEl();
 global.document = {
   querySelectorAll: function (sel) {
     if (sel !== "[data-bundle]") throw new Error("대역 밖 셀렉터: " + sel);
     return CARDS;
+  },
+  querySelector: function (sel) {
+    if (sel !== "[data-agg-badge]") throw new Error("대역 밖 셀렉터: " + sel);
+    return AGG;
   }
 };
 global.CONTROL_OK = true;
@@ -3394,11 +3404,15 @@ global.api = async function (path) {
 
 function snap() {
   return CARDS.map(function (c) {
+    var btn = c._kids["[data-bundle-act]"];
     return [c.dataset.bundle,
             c._kids["[data-surface]"].dataset.domain,
             c._kids["[data-bundle-badge]"].textContent,
-            c._kids["[data-bundle-start]"].disabled ? "locked" : "open",
-            c._kids["[data-bundle-note]"].textContent].join("~");
+            btn.disabled ? "locked" : "open",
+            c._kids["[data-bundle-note]"].textContent,
+            // TASK-MONO-729 — 열린 버튼이 **무엇을 하는가**(start/stop). 열렸다는 사실만으로는
+            //    「사용 가능」 카드에서 켜기가 열린 것(중복 요청)과 끄기가 열린 것을 못 가른다.
+            btn.disabled ? "-" : (btn.dataset.mode || "?")].join("~");
   }).join(" ;; ");
 }
 
@@ -3455,7 +3469,9 @@ z34_verdict() {  # $1 = 드라이버 출력 → 사유(여러 줄) 또는 빈 �
   printf '%s\n' "$1" | awk '
     BEGIN {
       FS = "|"
-      PEND = "… 확인 중"
+      # 🔵 TASK-MONO-729 — 첫 응답 전 문구가 «… 확인 중» → «🔵 상태 확인 중…» 로 바뀌었다(소유자
+      #    매트릭스). 축은 그대로다: 이 문구는 **PRE 에만** 있어야 하고 다른 칸에 남으면 빨강이다.
+      PEND = "🔵 상태 확인 중…"
       ne = split("E404 E500 ENET ESTAT5 EROUTE SHAPE E404R", ek, " ")
       nb = 0
     }
@@ -3465,9 +3481,9 @@ z34_verdict() {  # $1 = 드라이버 출력 → 사유(여러 줄) 또는 빈 �
       cnt[key] = n
       for (i = 1; i <= n; i++) {
         m = split(r[i], f, "~")
-        if (m < 5) { print "출력 [" key "] 의 레코드 필드가 " m "개입니다(기대 5개): " r[i]; continue }
+        if (m < 6) { print "출력 [" key "] 의 레코드 필드가 " m "개입니다(기대 6개): " r[i]; continue }
         b = f[1]
-        dom[key, b] = f[2]; badge[key, b] = f[3]; lock[key, b] = f[4]; note[key, b] = f[5]
+        dom[key, b] = f[2]; badge[key, b] = f[3]; lock[key, b] = f[4]; note[key, b] = f[5]; mode[key, b] = f[6]
         if (!(b in seenb)) { seenb[b] = 1; bl[++nb] = b }
       }
     }
@@ -3507,7 +3523,12 @@ z34_verdict() {  # $1 = 드라이버 출력 → 사유(여러 줄) 또는 빈 �
       }
       # ── 버튼이 열리는 것은 **정상 응답에서만**이고, 상태에 따라 갈린다
       if (lock["OK", "console"] != "open") print "[OK] waiting 인 console 버튼이 잠겨 있습니다 — 정상 응답에서도 못 누르면 이 페이지의 목적이 사라집니다"
-      if (lock["OK", "store"] != "locked") print "[OK] 이미 ready 인 store 버튼이 열려 있습니다"
+      if (mode["OK", "console"] != "start") print "[OK] waiting 인 console 버튼이 켜기가 아닙니다: " mode["OK", "console"]
+      # 🔴🔴 TASK-MONO-729 (e) — ready 카드의 버튼은 이제 **열려 있고, 그것은 끄기다.** 예전 단언
+      #    («ready 면 잠겨 있다»)의 목적은 «이미 켜진 것을 또 켜는 중복 요청» 을 막는 것이었고, 그
+      #    목적은 **모드**로 그대로 지킨다: ready 에서 열린 버튼이 켜기면 여전히 빨강이다.
+      if (lock["OK", "store"] != "open") print "[OK] ready 인 store 에 「데모 서버 끄기」가 없습니다 — 방문자가 그 묶음만 내릴 길이 없습니다"
+      if (mode["OK", "store"] != "stop") print "[OK] ready 인 store 버튼이 끄기가 아닙니다(" mode["OK", "store"] ") — 이미 켜진 묶음을 또 켜는 중복 요청이 됩니다"
       if (lock["OK", "fan"] != "locked") print "[OK] 기동 중인 fan 버튼이 열려 있습니다 — 중복 요청이 됩니다"
     }
   '
@@ -3594,7 +3615,7 @@ z34_o3="$(z34_run "$z34_b3")" \
     $'\n'"→ «제어 API 가 죽었다» 와 «그 경로만 못 닿는다» 를 가르는 축이 죽어 있습니다. 출력:"$'\n'"$z34_o3"
 
 rm -rf "$z34_dir"
-ok "카드 ${z34_got}장 × 9시나리오(미측정·404·5xx·제어API전멸·status503·**status200+경로차단**·모양불명·404+EC2running·정상) 를 **실행 대조** — 배지·사유·버튼잠금 + 404≠5xx · 5xx=타임아웃 · 경로차단≠전멸 · «잠시 후» 금지 · 폴백이 /status 를 읽음 · bite 3칸(조기반환 되살리기 · 문구 뭉개기 · 두 상태 뭉개기)"
+ok "카드 ${z34_got}장 × 9시나리오(미측정·404·5xx·제어API전멸·status503·**status200+경로차단**·모양불명·404+EC2running·정상) 를 **실행 대조** — 배지·사유·버튼잠금 + 404≠5xx · 5xx=타임아웃 · 경로차단≠전멸 · «잠시 후» 금지 · 폴백이 /status 를 읽음 · 정상 응답에서 ready=끄기·waiting=켜기(모드 대조, TASK-MONO-729) · bite 3칸(조기반환 되살리기 · 문구 뭉개기 · 두 상태 뭉개기)"
 
 # =============================================================================
 # (z39) 묶음 시작 버튼이 **상태마다 옳게 눌리는가** — TASK-MONO-653
@@ -3613,8 +3634,17 @@ ok "카드 ${z34_got}장 × 9시나리오(미측정·404·5xx·제어API전멸·
 # 🔴 **판정은 grep 이 아니라 실행 비교다**(AC-3). 상태값을 넣고 `renderCards()` 를 실제로
 #    돌려 **버튼이 눌리는가**를 읽는다. `B_STARTABLE` 에 문자열이 있나 보는 것으로는
 #    `bundleStateOf` 의 정규화가 통째로 죽어도 초록이다.
+#
+# 🔴🔴 TASK-MONO-729 — 버튼이 **두 동작**을 한다: 사용 가능(ready)이면 「데모 서버 끄기」로 그
+#    묶음 한정 `/bundle/stop` 을 부른다. 그래서 이 칸이 재는 것이 «잠겼나/열렸나» 에서 **«무엇이
+#    열렸나»(start/stop)** 로 넓어졌고, 두 가지가 더해졌다:
+#      · 전이 표시 — 누른 뒤 서버가 따라올 때까지 「… 중」으로 잠그는가(더블클릭 방지)
+#      · 요청 경로 — 끄기가 EC2 전체 `/stop` 이 아니라 **그 카드 하나의** `/bundle/stop` 인가
+#    옛 단언 두 개가 **뒤집혔다**(소유자 매트릭스): ready 는 잠김→끄기, unknown 은 열림→잠김.
+#    둘 다 기대값이 바뀐 것이지 칸이 빠진 것이 아니다. unknown 잠금은 bite-6 이, 끄기 경로는
+#    bite-5 가, 전이 표시는 bite-4 가 «되돌리면 문다» 를 증명한다.
 # =============================================================================
-echo "[verify] (z39) 묶음 시작 버튼이 상태마다 옳게 눌리는가 (TASK-MONO-653)"
+echo "[verify] (z39) 묶음 버튼(켜기·끄기)이 상태마다 옳게 눌리는가 (TASK-MONO-653 · 729)"
 z39_site="$ROOT/infra/demo/aws/site/index.html"
 [ -f "$z39_site" ] || fail "(z39) index.html 이 없습니다: $z39_site"
 
@@ -3632,7 +3662,8 @@ z39_src="$z39_dir/region.js"
 sed -n "$(( z39_b + 1 )),$(( z39_e - 1 ))p" "$z39_site" > "$z39_src"
 
 # 구간이 이 칸이 재려는 것을 실제로 담고 있는가 — 이름이 바뀌면 여기서 먼저 죽는다.
-for z39_need in 'function renderCards(' 'function bundleStateOf(' 'const B_STARTABLE'; do
+for z39_need in 'function renderCards(' 'function bundleStateOf(' 'const B_STARTABLE' \
+                'const B_STOPPABLE' 'function cardStateOf(' 'async function bundleAct(' 'function markTransit('; do
   grep -qF "$z39_need" "$z39_src" \
     || z39_die "(z39) GUARD-Z34 구간이 '$z39_need' 를 포함하지 않습니다 — 구간이 좁아졌거나 이름이 바뀌었습니다."
 done
@@ -3657,11 +3688,13 @@ z39_mk() {   # $1 = 구간 소스   $2 = 만들 js 파일
 // --- (z39) 상태 행렬 대역 ---------------------------------------------------
 // 🔴 모르는 셀렉터/경로는 **죽인다.** 조용히 null 을 주는 대역은 실물보다 관대해지고,
 //    그런 대역 위의 초록은 아무것도 뜻하지 않는다.
-function mkEl(ds) { return { textContent: "", className: "", disabled: false, dataset: ds || {}, style: {} }; }
+// 🔵 TASK-MONO-729 — 버튼이 `data-bundle-act`(켜기·끄기)가 됐고 카드에 `data-deps` 가 생겼다.
+//    renderCards() 는 끝에서 전체 집계 배지 하나를 `document.querySelector` 로 갱신한다.
+function mkEl(ds) { return { textContent: "", className: "", disabled: false, dataset: ds || {}, style: {}, title: "" }; }
 function mkCard(bundle, domain) {
   var kids = {
-    "[data-bundle-badge]": mkEl(), "[data-bundle-start]": mkEl(),
-    "[data-services]": mkEl(), "[data-bundle-note]": mkEl(),
+    "[data-bundle-badge]": mkEl(), "[data-bundle-act]": mkEl(),
+    "[data-services]": mkEl(), "[data-deps]": mkEl(), "[data-bundle-note]": mkEl(),
     "[data-surface]": mkEl({ domain: domain })
   };
   return { dataset: { bundle: bundle }, _kids: kids,
@@ -3669,17 +3702,38 @@ function mkCard(bundle, domain) {
 }
 var CARDS = process.env.Z39_CARDS.trim().split("\n")
   .map(function (l) { var p = l.split("|"); return mkCard(p[0], p[1]); });
-global.document = { querySelectorAll: function (sel) {
-  if (sel !== "[data-bundle]") throw new Error("대역 밖 셀렉터: " + sel);
-  return CARDS;
-} };
+var AGG = mkEl();
+global.document = {
+  querySelectorAll: function (sel) {
+    if (sel !== "[data-bundle]") throw new Error("대역 밖 셀렉터: " + sel);
+    return CARDS;
+  },
+  querySelector: function (sel) {
+    if (sel !== "[data-agg-badge]") throw new Error("대역 밖 셀렉터: " + sel);
+    return AGG;
+  }
+};
 global.CONTROL_OK = true;
 global.lastSnap = {};
 global.lastStale = false;
 global.lastState = null;
 
+// 구간 밖에서 주는 두 가지(응답 문구 칸 · 다시 묻는 타이머)를 대역이 준다 — 기록만 한다.
+function bundleMsg(t) { MSGS.push(t); }
+function schedulePoll() { POLLS++; }
+var MSGS = [], POLLS = 0;
+
 var BSTATE = null;
-global.api = async function (path) {
+var POST_OK = true;
+var POSTS = [];   // [scene, path, bundles.join(",")]
+var SCENE_KEY = "";
+global.api = async function (path, method, payload) {
+  if (method === "POST") {
+    // 🔴 POST 는 **어떤 경로든** 받아서 기록한다 — 거기서 죽이면 «/stop 을 불렀다» 가
+    //    «대역이 죽었다» 로 보고되어 사유가 흐려진다. 판정은 기록을 읽는 술어가 한다.
+    POSTS.push([SCENE_KEY, path, ((payload && payload.bundles) || []).join(",")]);
+    return { ok: POST_OK, status: POST_OK ? 200 : 409, body: { message: "stub" } };
+  }
   if (path === "/status") return { ok: true, status: 200, body: {} };
   if (path !== "/bundles") throw new Error("대역 밖 경로: " + path);
   var out = {};
@@ -3689,32 +3743,69 @@ global.api = async function (path) {
 
 function snap() {
   return CARDS.map(function (c) {
+    var b = c._kids["[data-bundle-act]"];
     return [c.dataset.bundle,
             c._kids["[data-bundle-badge]"].textContent,
-            c._kids["[data-bundle-start]"].disabled ? "locked" : "open"].join("~");
+            b.disabled ? "locked" : (b.dataset.mode || "?")].join("~");
   }).join(" ;; ");
 }
 
-// 시나리오: 키 | EC2 상태 | 서버가 준 묶음 상태 | 기대하는 버튼
+// 시나리오: 키 | EC2 상태 | 서버가 준 묶음 상태 | 기대하는 버튼(locked · start · stop)
+// 🔴 TASK-MONO-729 — 기대 열이 «열림/잠김» 에서 **«무엇이 열렸나»** 로 바뀌었다. ready 는 이제
+//    끄기가 열리고(S6), unknown 은 잠긴다(S8, 소유자 매트릭스 「확인 실패」). 칸은 줄지 않았고
+//    둘이 늘었다(S9 종료 중 · S10 일부 실행).
 var SCENES = [
-  ["S1_SEL_STOPPED",  "stopped", "selected",  "open"],
-  ["S2_REQ_PENDING",  "pending", "requested", "locked"],
-  ["S3_REQ_RUNNING",  "running", "requested", "locked"],
-  ["S4_WAIT_STOPPED", "stopped", "waiting",   "open"],
-  ["S5_OLD_STOPPED",  "stopped", "requested", "open"],
-  ["S6_READY",        "running", "ready",     "locked"],
-  ["S7_BOOTING",      "running", "booting",   "locked"],
-  ["S8_UNKNOWN",      "stopped", "unknown",   "open"]
+  ["S1_SEL_STOPPED",  "stopped",  "selected",  "start"],
+  ["S2_REQ_PENDING",  "pending",  "requested", "locked"],
+  ["S3_REQ_RUNNING",  "running",  "requested", "locked"],
+  ["S4_WAIT_STOPPED", "stopped",  "waiting",   "start"],
+  ["S5_OLD_STOPPED",  "stopped",  "requested", "start"],
+  ["S6_READY",        "running",  "ready",     "stop"],
+  ["S7_BOOTING",      "running",  "booting",   "locked"],
+  ["S8_UNKNOWN",      "stopped",  "unknown",   "locked"],
+  ["S9_STOPPING",     "stopping", "stopping",  "locked"],
+  ["S10_PARTIAL",     "running",  "partial",   "start"]
 ];
 
+async function scene(key, ec2, st, want) {
+  SCENE_KEY = key; global.lastState = ec2; BSTATE = st;
+  await pollBundles();
+  console.log(key + "|" + want + "|" + snap());
+}
+async function clickAll(key, mode) {
+  SCENE_KEY = key;
+  for (var i = 0; i < CARDS.length; i++) await bundleAct(CARDS[i].dataset.bundle, mode);
+}
+
 async function main() {
-  for (var i = 0; i < SCENES.length; i++) {
-    var s = SCENES[i];
-    global.lastState = s[1];
-    BSTATE = s[2];
-    await pollBundles();
-    console.log(s[0] + "|" + s[3] + "|" + snap());
-  }
+  for (var i = 0; i < SCENES.length; i++) await scene.apply(null, SCENES[i]);
+
+  // ── 전이 표시 (TASK-MONO-729 — 더블클릭 방지) ─────────────────────────────
+  // T1: ready 에서 끄기를 누른다. 서버는 **아직 ready** 를 준다(실물도 그렇다 — 서버에는
+  //     «묶음 하나가 내려가는 중» 값이 없다). 버튼은 잠겨야 하고 배지는 «종료 중» 이어야 한다.
+  global.lastState = "running"; BSTATE = "ready"; await pollBundles();
+  await clickAll("T1_STOP_CLICK", "stop");
+  await scene("T1_STOP_CLICK", "running", "ready", "locked");
+  // T2: 서버가 따라왔다(꺼짐) → 전이 표시를 버리고 켜기가 다시 열린다.
+  await scene("T2_STOP_DONE", "running", "waiting", "start");
+  // T3: 끄기 요청이 **거절**됐다(409) → 아무 일도 안 일어났으므로 끄기가 다시 열린다.
+  global.lastState = "running"; BSTATE = "ready"; await pollBundles();
+  POST_OK = false;
+  await clickAll("T3_STOP_REJECTED", "stop");
+  POST_OK = true;
+  await scene("T3_STOP_REJECTED", "running", "ready", "stop");
+  // T4: 꺼진 묶음에서 켜기를 누른다. 응답 뒤에도 서버가 아직 waiting 이면 «기동 중» 으로 잠긴다.
+  global.lastState = "running"; BSTATE = "waiting"; await pollBundles();
+  await clickAll("T4_START_CLICK", "start");
+  await scene("T4_START_CLICK", "running", "waiting", "locked");
+  // T5: 서버가 끝내 안 따라오면 상한 뒤에 **서버 값으로** 돌아간다(영구 잠금 금지).
+  Object.keys(bundleTransit).forEach(function (k) { bundleTransit[k].at = Date.now() - B_TRANSIT_MS - 1; });
+  await scene("T5_TRANSIT_EXPIRED", "running", "waiting", "start");
+  // T6: 잠긴 버튼의 모드는 "" 다 — 그 값으로 불려도 **아무 요청도 안 나간다.**
+  await clickAll("T6_NO_MODE", "");
+  await scene("T6_NO_MODE", "running", "waiting", "start");
+
+  POSTS.forEach(function (p) { console.log("POST|" + p[0] + "|" + p[1] + "|" + p[2]); });
 }
 main().catch(function (e) { console.error(String((e && e.stack) || e)); process.exit(1); });
 Z39DRV
@@ -3724,13 +3815,24 @@ Z39DRV
 z39_run() { z39_mk "$1" "$z39_dir/drv.js"; Z39_CARDS="$z39_cards" node "$z39_dir/drv.js" 2>&1; }
 
 # ---------------------------------------------------------------------------
-# 판정 술어 — 한 번의 awk 패스 (실물 1 + bite 3, 총 네 번 쓴다)
+# 판정 술어 — 한 번의 awk 패스 (실물 1 + bite 6, 총 일곱 번 쓴다)
 # 🔴 항목마다 서브셸을 띄우지 않는다 — 이 호스트의 msys 는 fork 를 소진하고, 그때 rc 는
 #    0 이 아닌데 FAIL 은 한 줄도 안 나와 «통과했다» 처럼 보인다.
 # ---------------------------------------------------------------------------
 z39_verdict() {  # $1 = 드라이버 출력 → 사유(여러 줄) 또는 빈 문자열
   printf '%s\n' "$1" | awk '
-    BEGIN { FS = "|"; judged = 0; nscene = 0 }
+    BEGIN { FS = "|"; judged = 0; nscene = 0; npost = 0 }
+    $1 == "POST" {
+      npost++; pc[$2]++
+      pcards[$2] = pcards[$2] " " $4
+      if (($2 == "T1_STOP_CLICK" || $2 == "T3_STOP_REJECTED") && $3 != "/bundle/stop")
+        print "[" $2 "] 끄기가 " $3 " 로 나갔습니다 — 그 묶음 한정 /bundle/stop 이어야 합니다(/stop 은 EC2 전체를 멈춰 **남의 묶음까지** 내립니다)"
+      if ($2 == "T4_START_CLICK" && $3 != "/bundle/start")
+        print "[" $2 "] 켜기가 " $3 " 로 나갔습니다 — /bundle/start 여야 합니다"
+      if (index($4, ",") != 0 || $4 == "")
+        print "[" $2 "] 요청 본문의 묶음이 «" $4 "» 입니다 — 누른 카드 **하나**여야 합니다"
+      next
+    }
     {
       key = $1; want = $2
       n = split($3, r, / ;; /)
@@ -3739,38 +3841,39 @@ z39_verdict() {  # $1 = 드라이버 출력 → 사유(여러 줄) 또는 빈 �
         m = split(r[i], f, "~")
         if (m < 3) { print "출력 [" key "] 의 레코드 필드가 " m "개입니다(기대 3개): " r[i]; continue }
         judged++
-        badge[key, f[1]] = f[2]
+        badge[key, f[1]] = f[2]; cards[f[1]] = 1
         if (f[3] != want) print "[" key "] " f[1] " 버튼이 " f[3] " 입니다 (기대 " want ")"
       }
     }
     END {
       # ── 비-공허성. 🔴 하한의 대상은 «판정된 (시나리오 × 카드) 수» 다 — 카드가 0장이면
       #    루프가 아무것도 안 훑으면서 언제나 초록이다.
-      if (nscene != 8) print "시나리오가 " nscene "개입니다(기대 8개) — 드라이버가 행렬을 다 안 돌았습니다"
+      if (nscene != 16) print "시나리오가 " nscene "개입니다(기대 16개: 상태 10 + 전이 6) — 드라이버가 행렬을 다 안 돌았습니다"
       ncards = 0
       for (i = 1; i <= nscene; i++) { k = order[i]; if (ncards == 0) ncards = cnt[k]; else if (cnt[k] != ncards) print "[" k "] 카드 " cnt[k] "장 (다른 칸은 " ncards "장) — 칸마다 모집단이 다릅니다" }
       if (ncards < 1) print "카드가 0장입니다 — 드라이버가 **빈 모집단**을 돌았습니다"
       else if (judged != nscene * ncards) print "판정 " judged "건 (기대 " nscene * ncards "건) — 일부 레코드를 못 읽었습니다"
+      # ── 요청 수 — 누른 만큼 나가고(T1·T3·T4 = 카드 수), 모드가 없으면 0 이어야 한다(T6).
+      if (pc["T1_STOP_CLICK"] != ncards) print "[T1] 끄기 요청이 " pc["T1_STOP_CLICK"] + 0 "건입니다(기대 " ncards "건)"
+      if (pc["T3_STOP_REJECTED"] != ncards) print "[T3] 끄기 요청이 " pc["T3_STOP_REJECTED"] + 0 "건입니다(기대 " ncards "건)"
+      if (pc["T4_START_CLICK"] != ncards) print "[T4] 켜기 요청이 " pc["T4_START_CLICK"] + 0 "건입니다(기대 " ncards "건)"
+      if (pc["T6_NO_MODE"] + 0 != 0) print "[T6] 모드가 없는 버튼에서 요청이 " pc["T6_NO_MODE"] "건 나갔습니다 — 잠긴 버튼이 무언가를 합니다"
       # ── 배지도 두 사실을 갈라야 한다. 버튼만 갈리고 배지가 같으면 방문자는
       #    여전히 «뜨는 중» 을 읽고, 열린 버튼을 «이상하다» 로 읽는다.
-      for (i = 1; i <= nscene; i++) {
-        k = order[i]
-        if (k == "S1_SEL_STOPPED") s1 = k
-        if (k == "S3_REQ_RUNNING") s3 = k
-        if (k == "S5_OLD_STOPPED") s5 = k
-      }
-      if (s1 != "" && s3 != "") {
-        for (kk in badge) {
-          split(kk, pp, SUBSEP)
-          if (pp[1] == s1) { if (badge[s1, pp[2]] == badge[s3, pp[2]]) print "[" pp[2] "] «선택됨(꺼짐)» 과 «정말 기동 중» 의 배지 문구가 같습니다 — 버튼만 갈리고 화면은 여전히 한 사실만 말합니다: " badge[s1, pp[2]] }
-        }
-      }
-      # ── 배포 창: 옛 서버(requested) + 인스턴스 stopped 는 «선택됨» 과 **같은 화면**이어야 한다.
-      if (s1 != "" && s5 != "") {
-        for (kk in badge) {
-          split(kk, pp, SUBSEP)
-          if (pp[1] == s5) { if (badge[s5, pp[2]] != badge[s1, pp[2]]) print "[" pp[2] "] 옛 서버 값(requested)+stopped 가 «선택됨» 과 다른 화면입니다 — 람다 배포 전 창에서 방문자가 보는 것이 다릅니다: " badge[s5, pp[2]] " vs " badge[s1, pp[2]] }
-        }
+      for (c in cards) {
+        if (seen["S1_SEL_STOPPED"] && seen["S3_REQ_RUNNING"] && badge["S1_SEL_STOPPED", c] == badge["S3_REQ_RUNNING", c])
+          print "[" c "] «선택됨(꺼짐)» 과 «정말 기동 중» 의 배지 문구가 같습니다 — 버튼만 갈리고 화면은 여전히 한 사실만 말합니다: " badge["S1_SEL_STOPPED", c]
+        # ── 배포 창: 옛 서버(requested) + 인스턴스 stopped 는 «선택됨» 과 **같은 화면**이어야 한다.
+        if (seen["S1_SEL_STOPPED"] && seen["S5_OLD_STOPPED"] && badge["S5_OLD_STOPPED", c] != badge["S1_SEL_STOPPED", c])
+          print "[" c "] 옛 서버 값(requested)+stopped 가 «선택됨» 과 다른 화면입니다 — 람다 배포 전 창에서 방문자가 보는 것이 다릅니다: " badge["S5_OLD_STOPPED", c] " vs " badge["S1_SEL_STOPPED", c]
+        # ── TASK-MONO-729 — 누른 뒤의 배지는 서버가 그 상태를 줄 때와 **같은 말**이어야 한다.
+        #    (문구를 여기 적지 않는다 — 두 실행 출력을 서로 비교한다. 산문 grep 은 자기 문서에 걸린다.)
+        if (badge["T1_STOP_CLICK", c] != badge["S9_STOPPING", c])
+          print "[" c "] 끄기를 누른 뒤의 배지가 «종료 중» 이 아닙니다: " badge["T1_STOP_CLICK", c] " (서버가 종료 중일 때: " badge["S9_STOPPING", c] ")"
+        if (badge["T4_START_CLICK", c] != badge["S7_BOOTING", c])
+          print "[" c "] 켜기를 누른 뒤의 배지가 «기동 중» 이 아닙니다: " badge["T4_START_CLICK", c] " (서버가 기동 중일 때: " badge["S7_BOOTING", c] ")"
+        if (badge["S6_READY", c] == badge["S9_STOPPING", c] || badge["S7_BOOTING", c] == badge["S9_STOPPING", c] || badge["S4_WAIT_STOPPED", c] == badge["S6_READY", c])
+          print "[" c "] 꺼짐·기동 중·사용 가능·종료 중 중 두 배지가 같은 문구입니다 — 매트릭스의 네 상태가 화면에서 갈리지 않습니다"
       }
     }
   '
@@ -3782,57 +3885,69 @@ z39_verdict() {  # $1 = 드라이버 출력 → 사유(여러 줄) 또는 빈 �
 z39_out="$(z39_run "$z39_src")" \
   || z39_die "(z39) 상태 행렬 실행 실패:"$'\n'"$z39_out"
 z39_bad="$(z39_verdict "$z39_out")"
-[ -z "$z39_bad" ] || z39_die "(z39) 묶음 시작 버튼이 상태에 맞게 눌리지 않습니다:"$'\n'"$z39_bad"\
-  $'\n'"→ 방문자가 «필요한 것만 골라 켠다» 경로를 잃고, 남는 길은 가장 비싼 길뿐입니다."\
+[ -z "$z39_bad" ] || z39_die "(z39) 묶음 버튼이 상태에 맞게 눌리지 않습니다:"$'\n'"$z39_bad"\
+  $'\n'"→ 방문자가 «필요한 것만 골라 켜고 끈다» 경로를 잃습니다."\
   $'\n'"   드라이버 출력:"$'\n'"$z39_out"
 
 # ---------------------------------------------------------------------------
 # bite — 결함을 되살려서 이 술어가 무는지 본다 (주입 → 실행 → 판정 순으로 단언한다)
 # 🔴 변형이 문법을 깨면 node 가 죽고, 그 빨강은 «가드가 물었다» 가 아니다.
 # ---------------------------------------------------------------------------
+z39_bite() {  # $1 = 이름  $2 = 변형본  $3 = 안 물었을 때의 설명
+  local o
+  if cmp -s "$z39_src" "$2"; then
+    z39_die "(z39) $1 주입 실패 — 구간이 하나도 안 바뀌었습니다(모양이 바뀌었습니까?)."
+  fi
+  o="$(z39_run "$2")" \
+    || z39_die "(z39) $1 실행 실패 — 변형이 문법을 깬 것이므로 이 빨강은 가드가 문 것이 아닙니다:"$'\n'"$o"
+  [ -n "$(z39_verdict "$o")" ] \
+    || z39_die "(z39) $1 — $3 가드가 **안 물었습니다.**"$'\n'"출력:"$'\n'"$o"
+}
 
-# (bite-1) `selected` 를 startable 에서 뺀다 = 이 티켓 **이전** 상태.
+# (bite-1) `selected` 를 startable 에서 뺀다 = TASK-MONO-653 **이전** 상태.
 z39_b1="$z39_dir/bite1.js"
-sed 's|new Set(\["waiting", "selected", "partial", "unknown"\])|new Set(["waiting", "partial", "unknown"])|' "$z39_src" > "$z39_b1"
-if cmp -s "$z39_src" "$z39_b1"; then
-  z39_die "(z39) bite-1 주입 실패 — B_STARTABLE 리터럴이 안 바뀌었습니다(모양이 바뀌었습니까?)."
-fi
-z39_o1="$(z39_run "$z39_b1")" \
-  || z39_die "(z39) bite-1 실행 실패 — 변형이 문법을 깬 것이므로 이 빨강은 가드가 문 것이 아닙니다:"$'\n'"$z39_o1"
-[ -n "$(z39_verdict "$z39_o1")" ] \
-  || z39_die "(z39) bite-1 — 653 이전 상태를 되살렸는데 가드가 **안 물었습니다.**"$'\n'"출력:"$'\n'"$z39_o1"
+sed 's|new Set(\["waiting", "selected", "partial"\])|new Set(["waiting", "partial"])|' "$z39_src" > "$z39_b1"
+z39_bite "bite-1" "$z39_b1" "653 이전 상태(선택됨이면 켜기 잠김)를 되살렸는데"
 
 # (bite-2) 배포 창 규칙을 죽인다 — 정규화가 원값을 그대로 돌려준다.
-#          이러면 람다가 apply 되기 전까지 버튼은 계속 잠긴 채다(Failure 3).
+#          이러면 람다가 apply 되기 전까지 버튼은 계속 잠긴 채다(653 Failure 3).
 z39_b2="$z39_dir/bite2.js"
 sed 's|^      if (raw !== "requested") return raw;|      return raw;|' "$z39_src" > "$z39_b2"
-if cmp -s "$z39_src" "$z39_b2"; then
-  z39_die "(z39) bite-2 주입 실패 — bundleStateOf 의 첫 갈래가 안 바뀌었습니다."
-fi
-z39_o2="$(z39_run "$z39_b2")" \
-  || z39_die "(z39) bite-2 실행 실패 — 변형이 문법을 깬 것이므로 이 빨강은 가드가 문 것이 아닙니다:"$'\n'"$z39_o2"
-[ -n "$(z39_verdict "$z39_o2")" ] \
-  || z39_die "(z39) bite-2 — 배포 창 규칙을 죽였는데 가드가 **안 물었습니다.**"\
-    $'\n'"→ 람다가 apply 되기 전 창에서 버튼이 계속 죽어 있어도 초록입니다. 출력:"$'\n'"$z39_o2"
+z39_bite "bite-2" "$z39_b2" "배포 창 규칙을 죽였는데"
 
-# (bite-3) 🔴🔴 **틀린 고침을 주입한다** — 이 티켓의 Failure 2 다. 인스턴스 상태를 안 보고
+# (bite-3) 🔴🔴 **틀린 고침을 주입한다** — 653 의 Failure 2 다. 인스턴스 상태를 안 보고
 #          `requested` 를 무조건 열어 준다. (가) 는 고쳐지지만 (나) 에서 중복 요청이 된다.
-#          이 칸이 없으면 «그냥 B_STARTABLE 에 requested 를 더하는» 구현이 초록으로 통과한다.
 z39_b3="$z39_dir/bite3.js"
 sed 's|^      if (lastState === null .*$|      if (false) return raw;|' "$z39_src" > "$z39_b3"
-if cmp -s "$z39_src" "$z39_b3"; then
-  z39_die "(z39) bite-3 주입 실패 — bundleStateOf 의 pending/running 제외 줄이 안 바뀌었습니다."
-fi
 grep -qF 'if (false) return raw;' "$z39_b3" \
   || z39_die "(z39) bite-3 주입 실패 — 무력화한 줄이 들어가지 않았습니다."
-z39_o3="$(z39_run "$z39_b3")" \
-  || z39_die "(z39) bite-3 실행 실패 — 변형이 문법을 깬 것이므로 이 빨강은 가드가 문 것이 아닙니다:"$'\n'"$z39_o3"
-[ -n "$(z39_verdict "$z39_o3")" ] \
-  || z39_die "(z39) bite-3 — 인스턴스 상태를 안 보고 requested 를 전부 열었는데 가드가 **안 물었습니다.**"\
-    $'\n'"→ 이 티켓의 Failure 2 («B_STARTABLE 에 requested 를 그냥 더한다»)가 통과합니다. 출력:"$'\n'"$z39_o3"
+z39_bite "bite-3" "$z39_b3" "인스턴스 상태를 안 보고 requested 를 전부 열었는데"
+
+# (bite-4) TASK-MONO-729 — 전이 표시를 없앤다. 끄기를 누른 뒤 서버가 아직 ready 를 주는 동안
+#          버튼이 다시 「데모 서버 끄기」로 열린다 = 더블클릭 방지가 죽은 상태.
+z39_m4="$(grep -c 'GUARD-Z39-BITE4$' "$z39_src" || true)"
+[ "$z39_m4" = "1" ] || z39_die "(z39) bite-4 앵커(GUARD-Z39-BITE4)가 ${z39_m4}개입니다(기대 1개)."
+z39_b4="$z39_dir/bite4.js"
+sed 's|^.*GUARD-Z39-BITE4$|    function markTransit(key, st) {}|' "$z39_src" > "$z39_b4"
+grep -qF 'function markTransit(key, st) {}' "$z39_b4" \
+  || z39_die "(z39) bite-4 주입 실패 — 무력화한 markTransit 이 들어가지 않았습니다."
+z39_bite "bite-4" "$z39_b4" "누른 뒤의 전이 표시를 없앴는데(더블클릭 방지 사망)"
+
+# (bite-5) TASK-MONO-729 Failure 1 — 끄기가 **EC2 전체** `/stop` 을 부른다.
+z39_b5="$z39_dir/bite5.js"
+sed 's|stop: "/bundle/stop" }|stop: "/stop" }|' "$z39_src" > "$z39_b5"
+grep -qF 'stop: "/stop" }' "$z39_b5" \
+  || z39_die "(z39) bite-5 주입 실패 — B_ACT_PATH 의 stop 경로가 안 바뀌었습니다."
+z39_bite "bite-5" "$z39_b5" "끄기를 EC2 전체 /stop 으로 돌렸는데"
+
+# (bite-6) TASK-MONO-729 — `unknown`(확인 실패)을 다시 startable 에 넣는다 = 이 티켓 **이전** 상태.
+#          소유자 매트릭스는 「확인 실패」에서 버튼을 잠근다.
+z39_b6="$z39_dir/bite6.js"
+sed 's|new Set(\["waiting", "selected", "partial"\])|new Set(["waiting", "selected", "partial", "unknown"])|' "$z39_src" > "$z39_b6"
+z39_bite "bite-6" "$z39_b6" "확인 실패(unknown)에서 켜기를 다시 열었는데"
 
 rm -rf "$z39_dir"
-ok "카드 ${z39_n}장 × 8상태(선택됨+stopped · requested+pending · requested+running · waiting · **옛서버 requested+stopped** · ready · booting · unknown) 를 **실행 대조** — 버튼 잠금 + 배지가 «선택됨»≠«기동 중» + 배포 창에서 같은 화면 · bite 3칸(653 이전 되살리기 · 창 규칙 죽이기 · **틀린 고침(requested 를 무조건 열기)**)"
+ok "카드 ${z39_n}장 × 10상태(선택됨+stopped · requested+pending · requested+running · waiting · **옛서버 requested+stopped** · ready=**끄기** · booting · unknown=**잠금** · stopping · partial) + 전이 6칸(끄기 누름→종료 중 잠금 · 서버 반영→해제 · 거절→해제 · 켜기 누름→기동 중 잠금 · 상한 만료→서버 값 · 모드 없음→요청 0) 를 **실행 대조** — 버튼 모드 + 요청 경로(끄기=/bundle/stop·켜기=/bundle/start·그 카드 하나) + 배지가 «선택됨»≠«기동 중» · 배포 창에서 같은 화면 · 네 상태 배지 구별 · bite 6칸(653 이전 · 창 규칙 죽이기 · 틀린 고침 · **전이 표시 제거 · 끄기=/stop · 확인 실패에서 켜기**)"
 
 
 # =============================================================================
@@ -4137,6 +4252,316 @@ grep -q '_bundle_capability()' "$z40_b3" \
 
 rm -rf "$z40_dir"
 ok "(z40) 세대 판정 **5상태 자기완결 대조**(임시 이력 base→feature→later 를 직접 세워서: 경계값 yes · 구세대 no · 신세대 yes · 없는커밋 unknown · 핀 결손 unknown, json 은 전부 rc=0) + 거절이 선택·기동보다 앞 + start(전체)는 대조군으로 안 막힘 + terraform 배선 · bite 3칸(임계 무력화 · 모르면 허용 · 거절을 뒤로 이동) · 실제 핀 = $z40_real"
+
+# =============================================================================
+# (z41) 전체 집계 배지·카드 의존성 고지가 **카드 상태에서 파생되는가** — TASK-MONO-729
+# =============================================================================
+# 🔴🔴 결함 (b): 전체 배지가 EC2 상태 하나로 「✅ 실행 중」이었다 — 묶음 하나만 떠 있어도
+#    «전부 쓸 수 있다» 로 읽혔다. 판정 기준(티켓): **「모두 사용 가능」류 문구가 일부만 켜진
+#    상태에서 뜨는 경우 0건.** 그래서 이 칸은 대표 몇 칸이 아니라 **카드 상태의 전 조합**
+#    (서버 상태 8종 ^ 카드 수)을 돌려 «전부 ready ⇔ 그 문구» 를 센다.
+# 🔴🔴 결함 (c): 카드별 «필요한 공용 서비스» 가 **두 번째 사본**이면 DEPS 가 바뀌는 날 이
+#    화면만 낡는다. 그래서 «응답이 바뀌면 문구가 따라 바뀌는가» 를 **다른 응답 세 벌**로 잰다
+#    (원장이 그대로 · 공용 도메인이 하나 늘어남 · 공용 도메인이 없음). 하드코딩은 셋째에서 문다.
+#    원장 자체(`/bundles` 의 domains ↔ `projects.sh` DEPS)의 일치는 (z42) 가 잰다.
+# 🔴 결함 (a) 의 한 칸: 「확인 실패」의 **두 원인**(/bundles 실패 · 헬스 정체)이 상세 줄에서
+#    갈리는가. 배지는 하나로 통일해도 된다(매트릭스) — 그래서 배지가 아니라 **사유**를 비교한다.
+#
+# 🔵 (z39) 와 같은 구간(GUARD-Z34)을 **실행**한다. 문구를 이 파일에 적지 않는다 — 두 실행
+#    출력을 서로 비교한다(산문 grep 은 index.html 의 설명 주석에 걸린다: (z12)·(z14) 가 밟았다).
+echo "[verify] (z41) 전체 집계 배지·의존성 고지가 카드 상태에서 파생되는가 (TASK-MONO-729)"
+z41_site="$ROOT/infra/demo/aws/site/index.html"
+[ -f "$z41_site" ] || fail "(z41) index.html 이 없습니다: $z41_site"
+z41_dir="$(mktemp -d)"
+z41_die() { rm -rf "$z41_dir"; fail "$@"; }
+
+z41_b="$(grep -n 'GUARD-Z34-BEGIN' "$z41_site" | head -1 | cut -d: -f1)"
+z41_e="$(grep -n 'GUARD-Z34-END'   "$z41_site" | head -1 | cut -d: -f1)"
+{ [ -n "$z41_b" ] && [ -n "$z41_e" ] && [ "$z41_e" -gt "$z41_b" ]; } \
+  || z41_die "(z41) index.html 에서 GUARD-Z34 앵커 구간을 찾지 못했습니다 — **가드가 공허합니다.**"
+z41_src="$z41_dir/region.js"
+sed -n "$(( z41_b + 1 )),$(( z41_e - 1 ))p" "$z41_site" > "$z41_src"
+for z41_need in 'function aggregateOf(' 'function renderAggregate(' 'function sharedDomainsOf(' 'function depsText(' 'function unknownNote('; do
+  grep -qF "$z41_need" "$z41_src" \
+    || z41_die "(z41) GUARD-Z34 구간이 '$z41_need' 를 포함하지 않습니다 — 구간이 좁아졌거나 이름이 바뀌었습니다."
+done
+
+# 카드 모집단 — (z34)·(z39) 와 같은 추출. 🔴 집계는 카드 **둘 이상**이어야 «일부» 가 성립한다.
+z41_cards="$(awk '
+  match($0, /data-bundle="[a-z0-9-]+"/) {
+    cur = substr($0, RSTART + 13, RLENGTH - 14); next
+  }
+  cur != "" && /data-surface/ && match($0, /data-domain="[a-z0-9-]+"/) {
+    print cur "|" substr($0, RSTART + 13, RLENGTH - 14); cur = ""
+  }
+' "$z41_site")"
+z41_n="$(printf '%s\n' "$z41_cards" | grep -c . || true)"
+[ "$z41_n" -ge 2 ] || z41_die "(z41) 카드가 ${z41_n}장입니다 — «일부만 켜짐» 은 카드 둘 이상에서만 성립하므로 이 칸이 공허해집니다."
+
+z41_mk() {   # $1 = 구간 소스   $2 = 만들 js 파일
+  { cat "$1"; cat <<'Z41DRV'
+// --- (z41) 집계·의존성 대역 --------------------------------------------------
+// 🔴 모르는 셀렉터/경로는 죽인다(관대한 대역 금지). (z39) 와 같은 모양.
+function mkEl(ds) { return { textContent: "", className: "", disabled: false, dataset: ds || {}, style: {}, title: "" }; }
+function mkCard(bundle, domain) {
+  var kids = {
+    "[data-bundle-badge]": mkEl(), "[data-bundle-act]": mkEl(),
+    "[data-services]": mkEl(), "[data-deps]": mkEl(), "[data-bundle-note]": mkEl(),
+    "[data-surface]": mkEl({ domain: domain })
+  };
+  return { dataset: { bundle: bundle }, _kids: kids,
+    querySelector: function (sel) { if (!(sel in kids)) throw new Error("대역 밖 셀렉터: " + sel); return kids[sel]; } };
+}
+var CARDS = process.env.Z41_CARDS.trim().split("\n")
+  .map(function (l) { var p = l.split("|"); return mkCard(p[0], p[1]); });
+var AGG = mkEl();
+global.document = {
+  querySelectorAll: function (sel) { if (sel !== "[data-bundle]") throw new Error("대역 밖 셀렉터: " + sel); return CARDS; },
+  querySelector: function (sel) { if (sel !== "[data-agg-badge]") throw new Error("대역 밖 셀렉터: " + sel); return AGG; }
+};
+global.CONTROL_OK = true;
+global.lastSnap = {};
+global.lastStale = false;
+global.lastState = "running";
+function bundleMsg(t) {}
+function schedulePoll() {}
+
+var RESP = null;   // /bundles 가 줄 것: { ok, status, body }
+global.api = async function (path, method) {
+  if (method === "POST") throw new Error("대역 밖 요청: POST " + path);
+  if (path === "/status") return { ok: true, status: 200, body: {} };
+  if (path !== "/bundles") throw new Error("대역 밖 경로: " + path);
+  return RESP;
+};
+function own(c) { return c._kids["[data-surface]"].dataset.domain; }
+// 카드마다 상태를 주고, 도메인은 «자기 도메인 + 공용» 으로 준다. 🔵 카드가 아닌 묶음(애드온)을
+// 하나 섞는다 — 실제 응답도 카드 수보다 묶음이 많고, 공용 판정은 **응답 전체**에서 해야 한다.
+function body(states, shared, extra) {
+  var b = {};
+  CARDS.forEach(function (c, i) { b[c.dataset.bundle] = { state: states[i], domains: [own(c)].concat(shared) }; });
+  b["z41-addon"] = { state: "waiting", domains: ["z41-other"].concat(extra || shared) };
+  return b;
+}
+async function put(states, opts) {
+  opts = opts || {};
+  RESP = { ok: true, status: 200, body: { bundles: body(states, opts.shared || ["iam"], opts.extra),
+           health_stale: !!opts.stale, health_age_seconds: opts.age == null ? null : opts.age } };
+  await pollBundles();
+}
+function fill(first, rest) { return CARDS.map(function (_, i) { return i === 0 ? first : rest; }); }
+
+async function main() {
+  var N = CARDS.length;
+  var agg = function (k) { console.log("AGG|" + k + "|" + AGG.textContent + "|" + AGG.className); };
+
+  renderCards(); agg("PRE");
+  CARDS.forEach(function (c) { console.log("DEP|PRE|" + c.dataset.bundle + "|" + own(c) + "|" + c._kids["[data-deps]"].textContent); });
+
+  await put(fill("ready", "ready"));        agg("ALL_READY");
+  await put(fill("ready", "waiting"));      agg("ONE_READY");
+  var rb = CARDS.map(function (_, i) { return i === 0 ? "ready" : i === 1 ? "booting" : "waiting"; });
+  await put(rb);                             agg("READY_BOOT");
+  await put(fill("waiting", "waiting"));    agg("ALL_OFF");
+  await put(fill("booting", "waiting"));    agg("BOOT");
+  await put(fill("stopping", "ready"));     agg("STOP");
+  await put(fill("stopping", "stopping"));  agg("ALL_STOP");
+  await put(fill("booting", "booting"));    agg("ALL_BOOT");
+  await put(fill("unknown", "ready"), { stale: true, age: 321 }); agg("ERR");
+  var c0 = CARDS[0];
+  console.log("NOTE|STALE|" + c0._kids["[data-bundle-badge]"].textContent + "|" + c0._kids["[data-bundle-note]"].textContent);
+  RESP = { ok: false, status: 404, body: { message: "Not Found" } };
+  await pollBundles();                       agg("ALL_ERR");
+  console.log("NOTE|FETCH|" + c0._kids["[data-bundle-badge]"].textContent + "|" + c0._kids["[data-bundle-note]"].textContent);
+
+  // ── 전 조합 스윕 — 「모두 사용 가능」 문구 ⇔ 전부 ready. 그 문구는 ALL_READY 칸의 **실행 출력**.
+  var STATES = ["waiting", "selected", "requested", "booting", "ready", "partial", "stopping", "unknown"];
+  var allText = null;
+  await put(fill("ready", "ready")); allText = AGG.textContent;
+  var combos = 0, bad = 0, sample = "";
+  var total = Math.pow(STATES.length, N);
+  for (var x = 0; x < total; x++) {
+    var st = [], y = x;
+    for (var j = 0; j < N; j++) { st.push(STATES[y % STATES.length]); y = Math.floor(y / STATES.length); }
+    await put(st);
+    combos++;
+    var allReady = st.every(function (s) { return s === "ready"; });
+    if ((AGG.textContent === allText) !== allReady) { bad++; if (!sample) sample = st.join(",") + " → " + AGG.textContent; }
+  }
+  console.log("SWEEP|" + combos + "|" + total + "|" + bad + "|" + sample);
+
+  // ── 의존성 고지 — 응답 세 벌. 🔵 D2 의 "z41-shared" 는 원장에 없는 이름이다: 문구가 **응답을
+  //    읽는다면** 그것이 나오고, 어디엔가 적혀 있다면 안 나온다.
+  await put(fill("waiting", "waiting"), { shared: ["iam"] });
+  CARDS.forEach(function (c) { console.log("DEP|D1|" + c.dataset.bundle + "|" + own(c) + "|" + c._kids["[data-deps]"].textContent); });
+  await put(fill("waiting", "waiting"), { shared: ["iam", "z41-shared"] });
+  CARDS.forEach(function (c) { console.log("DEP|D2|" + c.dataset.bundle + "|" + own(c) + "|" + c._kids["[data-deps]"].textContent); });
+  // D3: 애드온만 iam 이 없다 → 모든 묶음이 공유하는 도메인이 **없다**.
+  await put(fill("waiting", "waiting"), { shared: ["iam"], extra: [] });
+  CARDS.forEach(function (c) { console.log("DEP|D3|" + c.dataset.bundle + "|" + own(c) + "|" + c._kids["[data-deps]"].textContent); });
+}
+main().catch(function (e) { console.error(String((e && e.stack) || e)); process.exit(1); });
+Z41DRV
+  } > "$2"
+}
+z41_run() { z41_mk "$1" "$z41_dir/drv.js"; Z41_CARDS="$z41_cards" node "$z41_dir/drv.js" 2>&1; }
+
+z41_verdict() {  # $1 = 드라이버 출력 → 사유(여러 줄) 또는 빈 문자열
+  printf '%s\n' "$1" | awk -v ncards="$z41_n" '
+    BEGIN { FS = "|"; nagg = 0; nsweep = 0 }
+    $1 == "AGG"   { agg[$2] = $3; nagg++; next }
+    $1 == "NOTE"  { nb[$2] = $3; nn[$2] = $4; next }
+    $1 == "SWEEP" { nsweep++; sc = $2; st = $3; sb = $4; ss = $5; next }
+    $1 == "DEP"   { dk = $2; dcnt[dk]++; dep[dk, $3] = $5; odom[$3] = $4; dcards[$3] = 1; next }
+    END {
+      split("PRE ALL_READY ONE_READY READY_BOOT ALL_OFF BOOT STOP ALL_STOP ALL_BOOT ERR ALL_ERR", K, " ")
+      for (i = 1; i <= 11; i++) if (!(K[i] in agg)) print "집계 칸 [" K[i] "] 이 출력에 없습니다 — 드라이버가 다 안 돌았습니다"
+      if (nagg != 11) print "집계 칸이 " nagg "개입니다(기대 11개)"
+      # ── 판정 기준: 「모두 사용 가능」 문구(= ALL_READY 의 출력)는 **다른 어느 칸에도** 없다.
+      for (i = 1; i <= 11; i++) if (K[i] != "ALL_READY" && agg[K[i]] == agg["ALL_READY"])
+        print "[" K[i] "] 전체 배지가 «전부 사용 가능» 과 같은 문구입니다 — 일부만 켜졌는데 전부로 읽힙니다: " agg[K[i]]
+      # ── 매트릭스: 일부 사용 가능 + 나머지 기동 중 = 「일부 서버 사용 가능」(ONE_READY 와 같은 말).
+      if (agg["READY_BOOT"] != agg["ONE_READY"]) print "[READY_BOOT] 일부 사용 가능+기동 중이 «일부 서버 사용 가능» 과 다릅니다: " agg["READY_BOOT"] " vs " agg["ONE_READY"]
+      # ── 열 집계 값은 서로 달라야 한다(같으면 방문자가 두 상태를 못 가른다).
+      split("PRE ALL_READY ONE_READY ALL_OFF BOOT STOP ALL_STOP ALL_BOOT ERR ALL_ERR", D, " ")
+      for (i = 1; i <= 10; i++) for (j = i + 1; j <= 10; j++) if (agg[D[i]] == agg[D[j]])
+        print "[" D[i] "]·[" D[j] "] 전체 배지가 같은 문구입니다: " agg[D[i]]
+      # ── 전 조합 스윕
+      if (nsweep != 1) print "전 조합 스윕 출력이 " nsweep "줄입니다(기대 1줄)"
+      else {
+        if (sc != st || sc < 64) print "전 조합 스윕이 " sc "/" st " 조합만 돌았습니다 — 모집단이 비었거나 잘렸습니다"
+        if (sb != 0) print "전 조합 " sc " 중 " sb "건에서 «전부 사용 가능» ⇔ «전부 ready» 가 어긋납니다. 예: " ss
+      }
+      # ── 「확인 실패」의 두 원인이 상세 줄에서 갈리는가
+      if (nn["STALE"] == "") print "[헬스 정체] 카드가 사유를 한 마디도 말하지 않습니다 — «확인 실패» 의 원인이 안 보입니다"
+      if (nn["FETCH"] == "") print "[/bundles 실패] 카드가 사유를 한 마디도 말하지 않습니다"
+      if (nn["STALE"] != "" && nn["STALE"] == nn["FETCH"]) print "헬스 정체와 /bundles 실패의 사유가 같습니다 — 원인이 다른데(데모 서버 쪽 ≠ 제어 경로) 한 문장입니다"
+      if (index(nn["STALE"], "321") == 0) print "[헬스 정체] 사유가 서버가 준 나이(321초)를 안 읽었습니다 — 상수를 찍고 있습니다: " nn["STALE"]
+      # ── 의존성 고지
+      for (c in dcards) {
+        if (index(dep["PRE", c], "iam") != 0) print "[PRE] " c " 가 응답도 받기 전에 공용 서비스(iam)를 말합니다 — 마크업에 사본이 있습니다: " dep["PRE", c]
+        if (index(dep["D1", c], "iam") == 0) print "[D1] " c " 의 공용 서비스 고지에 iam 이 없습니다: " dep["D1", c]
+        if (index(dep["D1", c], odom[c]) != 0) print "[D1] " c " 의 공용 서비스 고지가 자기 도메인(" odom[c] ")을 공용으로 말합니다: " dep["D1", c]
+        if (index(dep["D2", c], "z41-shared") == 0) print "[D2] 응답에서 공용 도메인이 늘었는데 " c " 의 고지가 안 따라옵니다 — 응답이 아니라 사본을 읽습니다: " dep["D2", c]
+        if (index(dep["D3", c], "iam") != 0) print "[D3] 모든 묶음이 공유하는 도메인이 없는데 " c " 가 iam 을 공용으로 말합니다 — 사본을 읽습니다: " dep["D3", c]
+      }
+      nc = 0; for (c in dcards) nc++
+      if (nc != ncards) print "의존성 고지를 " nc "장에서만 읽었습니다(카드 " ncards "장)"
+      split("PRE D1 D2 D3", Q, " ")
+      for (i = 1; i <= 4; i++) if (dcnt[Q[i]] != ncards) print "[" Q[i] "] 의존성 레코드가 " dcnt[Q[i]] + 0 "건입니다(기대 " ncards "건)"
+    }
+  '
+}
+
+z41_out="$(z41_run "$z41_src")" || z41_die "(z41) 집계·의존성 실행 실패:"$'\n'"$z41_out"
+z41_bad="$(z41_verdict "$z41_out")"
+[ -z "$z41_bad" ] || z41_die "(z41) 전체 배지 또는 의존성 고지가 카드 상태·응답에서 파생되지 않습니다:"$'\n'"$z41_bad"\
+  $'\n'"   드라이버 출력:"$'\n'"$z41_out"
+
+z41_bite() {  # $1 = 이름  $2 = 변형본  $3 = 설명
+  local o
+  if cmp -s "$z41_src" "$2"; then z41_die "(z41) $1 주입 실패 — 구간이 하나도 안 바뀌었습니다."; fi
+  o="$(z41_run "$2")" \
+    || z41_die "(z41) $1 실행 실패 — 변형이 문법을 깬 것이므로 이 빨강은 가드가 문 것이 아닙니다:"$'\n'"$o"
+  [ -n "$(z41_verdict "$o")" ] || z41_die "(z41) $1 — $3 가드가 **안 물었습니다.**"$'\n'"출력:"$'\n'"$o"
+}
+# (bite-1) 이 티켓의 결함 그대로 — 하나라도 ready 면 「모두 사용 가능」.
+# 🔴 `GUARD-Z41-BITE` 는 `GUARD-Z41-BITE2` 의 접두사다 — 줄 끝(`$`)으로 고정한다.
+z41_m1="$(grep -c 'GUARD-Z41-BITE$' "$z41_src" || true)"
+[ "$z41_m1" = "1" ] || z41_die "(z41) bite-1 앵커(GUARD-Z41-BITE)가 ${z41_m1}개입니다(기대 1개)."
+z41_b1="$z41_dir/bite1.js"
+sed 's|^.*GUARD-Z41-BITE$|      if (has("ready")) return "allReady";|' "$z41_src" > "$z41_b1"
+grep -qF 'if (has("ready")) return "allReady";' "$z41_b1" || z41_die "(z41) bite-1 주입 실패 — 뭉갠 줄이 들어가지 않았습니다."
+z41_bite "bite-1" "$z41_b1" "하나라도 ready 면 «모두 사용 가능» 으로 되돌렸는데"
+# (bite-2) 공용 서비스를 **두 번째 사본**으로 적는다 — 티켓 (c) 가 금지한 바로 그것.
+z41_m2="$(grep -c 'GUARD-Z41-BITE2$' "$z41_src" || true)"
+[ "$z41_m2" = "1" ] || z41_die "(z41) bite-2 앵커(GUARD-Z41-BITE2)가 ${z41_m2}개입니다(기대 1개)."
+z41_b2="$z41_dir/bite2.js"
+sed 's|^.*GUARD-Z41-BITE2$|      return ["iam"];|' "$z41_src" > "$z41_b2"
+grep -qF 'return ["iam"];' "$z41_b2" || z41_die "(z41) bite-2 주입 실패 — 하드코딩 줄이 들어가지 않았습니다."
+z41_bite "bite-2" "$z41_b2" "공용 서비스를 [\"iam\"] 사본으로 바꿨는데"
+# (bite-3) 헬스 정체의 사유를 지운다 — «확인 실패» 가 원인을 말하지 않는 화면.
+z41_b3="$z41_dir/bite3.js"
+sed 's|? unknownNote()|? ""|' "$z41_src" > "$z41_b3"
+z41_bite "bite-3" "$z41_b3" "헬스 정체의 사유를 지웠는데"
+
+rm -rf "$z41_dir"
+ok "(z41) 카드 ${z41_n}장 — 전체 배지 11칸(첫 응답 전·전부·하나·하나+기동·꺼짐·기동·종료·전부종료·전부기동·오류·전부오류) + **전 조합 $(( 8 ** z41_n ))건 스윕**(«모두 사용 가능» ⇔ 전부 ready, 어긋남 0) · 의존성 고지 응답 3벌(원장·공용 늘어남·공용 없음) + 응답 전 사본 없음 · «확인 실패» 두 원인의 사유 구별 · bite 3칸(하나라도 ready=전부 · 공용 사본 하드코딩 · 헬스 정체 사유 삭제)"
+
+# =============================================================================
+# (z42) 카드 의존성 고지의 원장 — `/bundles` 의 domains 가 `projects.sh` DEPS 와 같은가
+# =============================================================================
+# 🔴🔴 (z41) 은 «화면이 응답에서 파생되는가» 만 잰다. 응답의 `domains` 는 람다의
+#    `BUNDLE_REQUIRED_DOMAINS` 이고, 그 표는 하드 의존(iam)을 **`| {"iam"}` 한 조각으로 다시
+#    적는다** — 정본(`projects.sh` 의 DEPS + resolve_bundles)과 두 벌이다. (z32) 는 두 집의
+#    **키**만 대조하므로 이 값이 갈라져도 초록이다. 그 틈이 이 칸이다.
+# 🔵 방법: 부팅 셸이 실제로 쓰는 `resolve_bundles <묶음>` 을 **실행**하고(이 스크립트가 이미
+#    projects.sh 를 source 했다), 람다 쪽은 handler.py 를 **ast 로 읽어** BUNDLES·BUNDLE_ADDONS 를
+#    리터럴로 꺼낸 뒤 `BUNDLE_REQUIRED_DOMAINS` 의 **식 그 자체**를 평가한다. 🔴 handler 를 import
+#    하지 않는다 — boto3 가 없고 import 시점에 `boto3.client()` 를 부른다((z32) 머리말).
+echo "[verify] (z42) 카드 의존성 고지의 원장 — 람다 BUNDLE_REQUIRED_DOMAINS 가 projects.sh DEPS 와 같은가 (TASK-MONO-729)"
+z42_py_src="$ROOT/infra/demo/aws/terraform/lambda/handler.py"
+[ -f "$z42_py_src" ] || fail "(z42) handler.py 가 없습니다: $z42_py_src"
+[ -n "${z40_py:-}" ] || fail "(z42) 파이썬 인터프리터가 정해지지 않았습니다 — (z40) 이 고른 값을 씁니다(같은 사실을 두 곳에서 고르지 않는다)."
+z42_dir="$(mktemp -d)"
+z42_die() { rm -rf "$z42_dir"; fail "$@"; }
+cat > "$z42_dir/req.py" <<'Z42PY'
+import ast, sys
+src = open(sys.argv[1], encoding="utf-8").read()
+tree = ast.parse(src)
+env, expr = {}, None
+for n in tree.body:
+    if isinstance(n, ast.Assign) and len(n.targets) == 1 and isinstance(n.targets[0], ast.Name):
+        name = n.targets[0].id
+        if name in ("BUNDLES", "BUNDLE_ADDONS"):
+            env[name] = ast.literal_eval(n.value)
+        elif name == "BUNDLE_REQUIRED_DOMAINS":
+            expr = n.value
+if set(env) != {"BUNDLES", "BUNDLE_ADDONS"} or expr is None:
+    print("EXTRACT-FAIL " + ",".join(sorted(env)) + (" expr" if expr is not None else ""))
+    sys.exit(0)
+g = {"__builtins__": {"set": set, "tuple": tuple, "sorted": sorted, "list": list}}
+g.update(env)
+req = eval(compile(ast.Expression(expr), "handler.py", "eval"), g)
+for k in sorted(req):
+    print(k + "|" + " ".join(sorted(req[k])))
+Z42PY
+z42_lambda() { "$z40_py" "$z42_dir/req.py" "$1" 2>&1 | tr -d '\r'; }
+# 셸 쪽: 부팅이 실제로 푸는 집합. 🔴 묶음 이름은 projects.sh 의 **두 표 전부**에서 온다.
+z42_shell() {
+  local n
+  for n in $(printf '%s\n' "${!BUNDLES[@]}" "${!BUNDLE_ADDONS[@]}" | sort); do
+    printf '%s|%s\n' "$n" "$(resolve_bundles "$n" | sort | tr '\n' ' ' | sed 's/ $//')"
+  done
+}
+z42_cmp() {  # $1 = 람다 출력  $2 = 셸 출력 → 차이(빈 문자열이면 같음)
+  if printf '%s\n' "$1" | grepq '^EXTRACT-FAIL'; then printf '추출 실패: %s\n' "$1"; return; fi
+  diff <(printf '%s\n' "$1" | sort) <(printf '%s\n' "$2" | sort) | sed -n 's/^[<>] /&/p' || true
+}
+z42_l="$(z42_lambda "$z42_py_src")" || z42_die "(z42) 람다 표 평가 실행 실패:"$'\n'"$z42_l"
+z42_s="$(z42_shell)"
+z42_nl="$(printf '%s\n' "$z42_l" | grep -c '|' || true)"
+z42_ns="$(printf '%s\n' "$z42_s" | grep -c '|' || true)"
+{ [ "$z42_nl" -ge 3 ] && [ "$z42_ns" -ge 3 ]; } \
+  || z42_die "(z42) 묶음을 람다 ${z42_nl}개 · 셸 ${z42_ns}개밖에 못 뽑았습니다 — 추출이 깨졌습니다(0건을 «같다» 로 읽지 않습니다)."$'\n'"$z42_l"
+z42_d="$(z42_cmp "$z42_l" "$z42_s")"
+[ -z "$z42_d" ] || z42_die "(z42) 람다가 방문자에게 말하는 «필요한 서비스» 가 부팅이 실제로 올리는 것과 다릅니다:"\
+  $'\n'"$z42_d"$'\n'"  (< 람다 BUNDLE_REQUIRED_DOMAINS · > projects.sh resolve_bundles)"\
+  $'\n'"→ 카드의 «필요한 공용 서비스» 는 람다 쪽을 그대로 보여 줍니다. 한쪽만 고치면 화면이 거짓을 말합니다."
+# bite — 람다 쪽 하드 의존 조각을 지운다(= DEPS 와 갈라진 사본). 🔴 주입부터 단언한다.
+z42_b1="$z42_dir/handler-bite.py"
+sed 's/set(doms) | {"iam"}/set(doms)/' "$z42_py_src" > "$z42_b1"
+if cmp -s "$z42_py_src" "$z42_b1"; then z42_die "(z42) bite 주입 실패 — handler.py 의 하드 의존 조각 모양이 바뀌었습니다."; fi
+z42_lb="$(z42_lambda "$z42_b1")" || z42_die "(z42) bite 실행 실패:"$'\n'"$z42_lb"
+[ "$(printf '%s\n' "$z42_lb" | grep -c '|' || true)" = "$z42_nl" ] \
+  || z42_die "(z42) bite 실행 실패 — 변형본에서 묶음 수가 달라졌습니다(주입이 추출을 깼습니다):"$'\n'"$z42_lb"
+[ -n "$(z42_cmp "$z42_lb" "$z42_s")" ] \
+  || z42_die "(z42) bite — 람다에서 iam 을 뺐는데 가드가 **안 물었습니다.**"
+# bite (반대편) — 셸 쪽 DEPS 에 원장 밖 의존을 하나 더한다. 🔴 셸은 서브셸에서 바꾼다(본 실행 오염 금지).
+z42_sb="$( DEPS[fan]="iam wms"; z42_shell )"
+[ "$z42_sb" != "$z42_s" ] || z42_die "(z42) bite(셸) 주입 실패 — DEPS 를 바꿨는데 resolve_bundles 출력이 같습니다."
+[ -n "$(z42_cmp "$z42_l" "$z42_sb")" ] || z42_die "(z42) bite(셸) — DEPS 에 의존을 더했는데 가드가 **안 물었습니다.**"
+rm -rf "$z42_dir"
+ok "(z42) 묶음 ${z42_ns}개 — 람다 BUNDLE_REQUIRED_DOMAINS(식 평가) = projects.sh resolve_bundles(실행) · bite 2칸(람다에서 iam 제거 · DEPS 에 의존 추가)"
 
 
 # =============================================================================
