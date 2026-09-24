@@ -131,7 +131,7 @@ describe('/login — 데모가 켜지는 중일 때 (TASK-MONO-668)', () => {
     await renderLogin({ error: 'Configuration' });
 
     expect(screen.queryByTestId('login-demo-starting')).toBeNull();
-    expect(screen.getByTestId('login-error')).toHaveTextContent('IAM 인증 서버에 연결할 수 없습니다');
+    expect(screen.getByTestId('login-error')).toHaveTextContent('GAP 인증 서버에 연결할 수 없습니다');
   });
 });
 
@@ -146,7 +146,7 @@ describe('/login — 코드별 문구와 fallback (AC-1)', () => {
     await renderLogin({ error: 'Configuration' });
 
     const alert = screen.getByTestId('login-error');
-    expect(alert).toHaveTextContent('IAM 인증 서버에 연결할 수 없습니다');
+    expect(alert).toHaveTextContent('GAP 인증 서버에 연결할 수 없습니다');
     // 🔴 데모 문구가 진짜 결함을 **가리지 않는다**.
     expect(screen.queryByTestId('login-demo-off')).toBeNull();
   });
@@ -184,7 +184,7 @@ describe('/login — 데모가 아닌 배포 (AC-4)', () => {
     expect(screen.queryByTestId('login-demo-off')).toBeNull();
     // 코드별 문구는 정상 동작해야 한다 — 데모가 아니어도 실패는 설명돼야 한다.
     expect(screen.getByTestId('login-error')).toHaveTextContent(
-      'IAM 인증 서버에 연결할 수 없습니다',
+      'GAP 인증 서버에 연결할 수 없습니다',
     );
     expectPageStillRendered();
   });
