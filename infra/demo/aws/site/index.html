@@ -29,11 +29,11 @@
        🔴 `#surfaces` 는 **그대로 남는다** — 이름도, 역할(방문자 화면 링크의 컨테이너)도.
           `render()` 안의 `surfacesVisible()` 이 이 id 의 display 를 정하고, 가드 (z14)가
           그 축을 여섯 상태에서 실행 대조한다. 카드 그리드로 바뀐 것은 **레이아웃뿐**이다.
-       🔴 데스크톱 3열 / 모바일 1열. `auto-fit` 대신 명시적 미디어쿼리를 쓴다 — 카드가
-          셋으로 고정돼 있고, `auto-fit` 은 넓은 화면에서 2열+1열로 흐트러진다.
+       🔵 TASK-MONO-732 — 카드는 모든 폭에서 **1열로 세로로 쌓인다**(소유자 스케치). 데스크톱에서는
+          카드 **안**이 가로가 된다(왼쪽 스크린샷 · 오른쪽 설명) — 아래 732 미디어쿼리.
+          (그 전: 634 의 데스크톱 3열 → 731 의 한 줄 3열. 소유자가 원한 것은 «카드 안의 가로» 였다.)
        ----------------------------------------------------------------------- */
     #surfaces { display: none; gap: 18px; margin-top: 26px; grid-template-columns: 1fr; }
-    @media (min-width: 860px) { #surfaces { grid-template-columns: repeat(3, 1fr); } }
     .scard { border: 1px solid #8883; border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
     /* TASK-MONO-637 — 이미지 자리가 캐러셀이 된다. 🔴 오늘 이미지는 **0장**이고
        (`thumbnails/` 가 저장소에 없다) 실캡처는 TASK-MONO-639 가 넣는다. 그래서 이
@@ -115,15 +115,20 @@
     .sgroup { grid-column: 1 / -1; font-size: .92rem; font-weight: 600; margin: 8px 0 -6px; opacity: .8; }
     .sgroup.platform { border-top: 1px solid #8884; padding-top: 18px; margin-top: 10px; }
     .scard.platform { border-style: dashed; }
-    /* TASK-MONO-731 — 데스크톱에서는 세 카드를 **한 줄**에 둔다(소유자 요청). 줄 전체를 차지하던
-       구획 제목을 그 열의 머리로 옮긴다: 「서비스 화면」= 1·2열, 「운영 도구」= 3열.
-       🔵 콘솔이 «업무 도메인 중 하나» 로 읽히지 않게 하는 구분(729 (d))은 열 머리 + 점선 테두리로 남긴다.
+    /* TASK-MONO-732 — 소유자 스케치: 카드는 세로로 쌓고, 카드 **안**을 가로로 나눈다
+       (왼쪽 좁은 칸 = 스크린샷 캐러셀, 오른쪽 넓은 칸 = 제목·설명·상태·버튼).
+       731 의 «세 카드 한 줄» 은 요청을 잘못 읽은 것이라 되돌린다 — 구획 제목도 다시 줄 전체.
        🔵 CSS 만 바꾼다 — DOM 순서·판정 속성(data-surface·data-bundle)은 그대로라 부팅 판정과 가드는 무관하다.
-       모바일(1열)은 위 규칙 그대로 세로로 쌓는다. */
+       🔵 넓어진 설명 칸에서 dl 을 «라벨 | 값» 두 열로 편다 — 세로로 길어지지 않게.
+       모바일(<860px)은 기존 그대로 스크린샷 위 · 설명 아래. */
     @media (min-width: 860px) {
-      .sgroup { grid-column: 1 / span 2; grid-row: 1; }
-      .sgroup.platform { grid-column: 3; grid-row: 1; border-top: 0; padding-top: 0; margin-top: 8px; }
-      #surfaces > .scard { grid-row: 2; }
+      .scard { flex-direction: row; }
+      .scard > .shots { flex: 0 0 34%; aspect-ratio: auto; min-height: 240px; }
+      /* 좁은 칸에 cover 로 채우면 가운데 기준으로 잘려 화면의 왼쪽(로고·내비)이 사라진다 ⇒ 왼쪽 위 기준. */
+      .scard > .shots .shots-shot { object-position: left top; }
+      .scard > .body { flex: 1; min-width: 0; }
+      .scard dl { display: grid; grid-template-columns: max-content 1fr; column-gap: 16px; }
+      .scard dd { margin: 7px 0 0; }
     }
     .scard h2 .sub { font-size: .8rem; font-weight: 400; opacity: .7; margin-left: 6px; }
     .dgroup { font-size: .8rem; opacity: .65; margin: 14px 0 2px; }
@@ -303,8 +308,8 @@
     </article>
     <!-- TASK-MONO-729 (d) — 콘솔은 **비즈니스 도메인이 아니라** 그것들(이커머스·WMS·SCM·재무·ERP)을
          한 화면에서 운영하는 플랫폼 도구다. 같은 줄에 두면 «다섯 도메인 중 하나» 로 읽힌다 ⇒ 구획을 가른다.
-         🔵 TASK-MONO-731 — 데스크톱에서는 소유자 요청으로 **같은 줄**에 둔다. 구분은 줄이 아니라 열 머리
-         「운영 도구」 + 점선 테두리가 맡는다(CSS `.sgroup` 미디어쿼리).
+         🔵 TASK-MONO-732 — 카드는 세로로 쌓이고 카드 안이 가로다(731 의 «한 줄 3열» 은 되돌렸다).
+         구분은 다시 줄 전체 구획 제목 「운영 도구」 + 점선 테두리가 맡는다.
          🔵 카드 순서를 옮겨도 부팅 판정은 안 바뀐다 — demo-up.sh 는 행의 **선언**만 읽고 순서를 안 본다. -->
     <h3 class="sgroup platform">운영 도구</h3>
     <article class="scard platform" data-bundle="console">
