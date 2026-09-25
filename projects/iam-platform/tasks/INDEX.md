@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-BE-599-form-login-emits-no-login-events-so-detection-rules-starve.md` — 🔴 **브라우저 폼 로그인이 `auth.login.*` 을 하나도 내지 않는다** (READY, 2026-09-25 UTC · `TASK-BE-309` 가 «별 task» 로 미룬 것, 활성 큐에 후속 없음). BE-398 뒤 유일한 비밀번호 경로(`CredentialAuthenticationProvider`)가 발행기를 안 부르고, 부르던 `LoginUseCase` 는 호출자 0 ⇒ VELOCITY · DEVICE_CHANGE · GEO_ANOMALY 입력 없음. 계약 문서는 여전히 활성으로 적음. **AC-0 = 소유자 결정**(ⓐ 이벤트만 · ⓑ rate-limit — 사용자 동작 변화 · ⓒ 디바이스 세션), AC-1 문서 정정은 결정 전 착수 가능. AC-3 결과 상태 판정 · AC-4 프록시 IP 함정. 분석=Opus 5.5 / 구현 권장=Opus 5.5.
 
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
