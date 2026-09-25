@@ -24,6 +24,28 @@ spring:
 
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9093}
+    consumer:
+      # TASK-BE-601: auth-service's first consumer — account.locked → revoke the account's
+      # sessions (AccountLockedConsumer, group "auth-service-account-locked", independent of
+      # security-service's group so both receive every lock).
+      #
+      # auto-offset-reset=earliest. It only applies when the group has no committed offset:
+      # the first start after this ships, or a committed offset that expired while the
+      # service was down. "latest" would skip every lock published in that window — a locked
+      # account keeping its sessions — and platform/service-types/event-consumer.md forbids
+      # it ("Auto-resetting consumer offset to latest on startup"). The accepted cost is the
+      # safe direction: on the first start, the locks still in the topic's retention (7 days
+      # in the compose files) are replayed, so an account locked and since UNLOCKED in that
+      # window loses its current sessions once and signs in again.
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      # TASK-BE-601: Micrometer observation on the listener — per-listener processed/failed
+      # timers (spring.kafka.listener, tag error) and trace continuation from the record's
+      # traceparent header when the producer sent one.
+      observation-enabled: true
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer

@@ -1,5 +1,6 @@
 package com.example.auth.application;
 
+import com.example.auth.application.port.OAuthAuthorizationRevocationPort;
 import com.example.auth.application.port.TokenGeneratorPort;
 import com.example.auth.domain.credentials.Credential;
 import com.example.auth.domain.repository.AccessTokenInvalidationStore;
@@ -42,6 +43,7 @@ class ForceLogoutUseCaseTest {
     @Mock private AccessTokenInvalidationStore accessTokenInvalidationStore;
     @Mock private TokenGeneratorPort tokenGeneratorPort;
     @Mock private CredentialRepository credentialRepository;
+    @Mock private OAuthAuthorizationRevocationPort oAuthAuthorizationRevocationPort;
 
     @InjectMocks
     private ForceLogoutUseCase useCase;
@@ -70,6 +72,40 @@ class ForceLogoutUseCaseTest {
         assertThat(instantCaptor.getValue()).isEqualTo(result.revokedAt());
     }
 
+    // ── TASK-BE-601 SAS sessions ────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("BE-601: SAS 인가 저장소의 refresh 도 폐기한다 — 카운트는 레거시 + SAS 합")
+    void execute_alsoRevokesSasAuthorizations() {
+        given(refreshTokenRepository.revokeAllByAccountId(ACCOUNT_ID)).willReturn(0);
+        given(oAuthAuthorizationRevocationPort.revokeActiveRefreshTokens(ACCOUNT_ID)).willReturn(2);
+        given(tokenGeneratorPort.refreshTokenTtlSeconds()).willReturn(REFRESH_TTL);
+        given(tokenGeneratorPort.accessTokenTtlSeconds()).willReturn(ACCESS_TTL);
+
+        ForceLogoutUseCase.Result result = useCase.execute(ACCOUNT_ID);
+
+        // Before BE-601 this was 0 for every browser (SAS) session: the legacy revoke is keyed
+        // by account id, the SAS rows by the login email.
+        assertThat(result.revokedTokenCount()).isEqualTo(2);
+        InOrder order = inOrder(refreshTokenRepository, oAuthAuthorizationRevocationPort, bulkInvalidationStore);
+        order.verify(refreshTokenRepository).revokeAllByAccountId(ACCOUNT_ID);
+        order.verify(oAuthAuthorizationRevocationPort).revokeActiveRefreshTokens(ACCOUNT_ID);
+        order.verify(bulkInvalidationStore).invalidateAll(ACCOUNT_ID, REFRESH_TTL);
+    }
+
+    @Test
+    @DisplayName("BE-601: SAS 폐기 실패는 삼키지 않는다 — 예외가 호출자(트랜잭션)로 올라간다")
+    void execute_sasRevokeFailure_propagates() {
+        given(refreshTokenRepository.revokeAllByAccountId(ACCOUNT_ID)).willReturn(0);
+        given(oAuthAuthorizationRevocationPort.revokeActiveRefreshTokens(ACCOUNT_ID))
+                .willThrow(new IllegalStateException("db down"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> useCase.execute(ACCOUNT_ID))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("db down");
+        verifyNoInteractions(bulkInvalidationStore, accessTokenInvalidationStore);
+    }
+
     // ── TASK-BE-468 tenant confinement ──────────────────────────────────────────
 
     @Test
@@ -83,7 +119,8 @@ class ForceLogoutUseCaseTest {
 
         assertThat(result.revokedTokenCount()).isZero();
         verify(refreshTokenRepository, never()).revokeAllByAccountId(ACCOUNT_ID);
-        verifyNoInteractions(bulkInvalidationStore, accessTokenInvalidationStore, tokenGeneratorPort);
+        verifyNoInteractions(bulkInvalidationStore, accessTokenInvalidationStore, tokenGeneratorPort,
+                oAuthAuthorizationRevocationPort);
     }
 
     @Test
