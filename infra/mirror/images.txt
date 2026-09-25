@@ -1,0 +1,6 @@
+# Images mirrored to GHCR by .github/workflows/mirror-images.yml (TASK-MONO-734).
+# Format: <source ref with @sha256 digest> <destination repo:tag>
+# The destination keeps the source digest byte-for-byte; the workflow fails if it does not.
+# Source refs are copied from the compose file, never typed by hand.
+docker.io/bitnamilegacy/minio:2024.10.13-debian-12-r1@sha256:faf554135d50ff8b382f79df7795e080726cb2d6f4ce7f056d733a6437546f6a ghcr.io/kanggle/mirror-minio:2024.10.13-debian-12-r1
+docker.io/bitnamilegacy/minio-client:2024.10.8-debian-12-r1@sha256:c3e82110529b30658cdcdf6414619fe901c2ec820eba973bda936cdcb4c6193c ghcr.io/kanggle/mirror-minio-client:2024.10.8-debian-12-r1
