@@ -234,3 +234,20 @@ curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' -b "$J2" -c "$J2" \
 두 단계. 1단계는 기전, 2단계가 판정이다.
 1. **기전 (로컬 가능)** — 오버레이가 켜는 설정이 실제로 켜졌는가: `docker inspect <auth-service 컨테이너> --format '{{range .Config.Env}}{{println .}}{{end}}' | grep FORWARD` → `SERVER_FORWARD_HEADERS_STRATEGY=FRAMEWORK` 기대. 켜졌다면 네트워크 **안에서** XFF 를 실어 보내 본다: `docker exec <같은 네트워크의 curl 가능한 컨테이너> …` 로 R1 의 성공 로그인을 `-H 'X-Forwarded-For: 198.51.100.9'` 와 함께 → `login_history.ip_masked` 가 `198.51.*.*` 면 필터가 동작한다. 🔴 이것은 «헤더를 읽는다» 의 증명이지 «Traefik 이 맞는 값을 넣는다» 의 증명이 아니다.
 2. **판정 (라이브)** — 데모 공개 주소로 **서로 다른 두 네트워크**(예: 유선 + 휴대폰 핫스팟)에서 각각 성공 로그인 1회 → `SELECT ip_masked, occurred_at FROM security_db.login_history WHERE account_id='<ACCOUNT_ID>' AND outcome='SUCCESS' ORDER BY occurred_at DESC LIMIT 2;` **PASS = 두 행의 `ip_masked` 가 서로 다르고, 둘 다 Docker/사설 대역(`172.16-31.*`, `10.*`, `192.168.*`)이 아니다.** 둘 다 같은 사설 주소면 FAIL(프록시 주소가 찍힌다) — 그때 원인 후보는 오버레이 미적용 · Traefik 앞의 또 다른 프록시 · Traefik `forwardedHeaders` 설정.
+
+---
+
+## CORRECTION (2026-09-25 UTC)
+
+🔴 **위 «값의 하한: `DetectionThresholds` 는 `<= 0` 을 기동 시 거부하고 타입은 `int` — 1,000,000 은 범위 안» 은 거짓이었다.**
+`security-service/…/infrastructure/config/DetectionProperties.java:64` 가 `velocity.threshold` 에 `@Min(1) @Max(10_000)` 을 건다.
+데모 오버레이의 `DETECT_VELOCITY_THRESHOLD: "1000000"` 은 상한을 넘어 **security-service 가 기동에 실패**했다 — 15차 AMI
+(`ami-004f04b67daf40b89`, 2026-09-25) 첫 부팅에서 `APPLICATION FAILED TO START … Property: security.detection.velocity.threshold
+… must be less than or equal to 10000` 재시작 루프(restarts=14)를 실측.
+
+- **지금 사실**: 오버레이 값은 **`"10000"`**(허용 상한 — 1시간에 1만 번이라 데모에선 사실상 미발화). 저장소 수정은 같은 날
+  `fix(demo)` PR, 라이브 인스턴스(`i-09f10c696375ba99b`)의 클론은 SSM 으로 같은 값으로 고쳐 security-service 재생성 →
+  **running · healthy · restarts=0** 확인.
+- 위 런북·본문의 «1,000,000» 은 모두 **10000** 으로 읽어라(판정 술어는 불변 — `VelocityRule` 은 임계 비교 전에 카운터를 올린다).
+- 🔵 왜 못 잡았나: 값 검증을 «타입 범위» 로 추론하고 바인딩 제약(`@Max`)을 읽지 않았다. 데모 오버레이 값은 단위 테스트·CI(e2e compose 는
+  이 오버레이를 안 쓴다)가 **어디서도 기동시켜 보지 않는다** — 첫 부팅이 첫 판정이었다.
