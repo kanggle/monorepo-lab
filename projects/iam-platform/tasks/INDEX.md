@@ -76,6 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
+- `TASK-BE-603-refresh-mirror-row-stores-email-as-account-id.md` — 🔴 **갱신 토큰 미러 행의 `account_id` 에 이메일이 들어간다** (READY, 2026-09-25 UTC · `TASK-BE-601` IT 가 CI 에서 처음 드러냄). `VARCHAR(36)` 에 principal(=이메일) ⇒ **36자 넘는 이메일 사용자는 토큰 갱신 불가**(발급 때 INSERT 는 삼켜지고 첫 refresh 에서 실패) · `accountId` 폐기가 SAS 행을 못 맞힘 · `auth.token.refreshed` 에 이메일(PII). **소유자 결정 = ⓑ 미러 행에 계정 UUID**(칸 확장 기각). AC-0 기존 행 처리 · 이벤트 소비자 영향. 🔵 데모 계정은 이메일이 짧아 안 걸린다 — 데모 초록은 부재 증거가 아니다. 분석=Opus 5.5 / 구현 권장=Opus 5.5.
 - `TASK-BE-602-social-login-needs-the-accounts-real-tenant.md` — **소셜 로그인은 계정의 실제 테넌트를 모른다** (READY, 2026-09-25 UTC · BE-599 · BE-600 후속을 한 티켓으로 — 소유자 결정). 스토어(ecommerce) 소셜 계정은 잠겨도 소셜로 들어오고(상태 조회가 fan-platform 으로 읽어 404 → 검사 생략), 소셜 로그인은 `auth.login.*` 을 못 낸다(시작 client 테넌트는 BE-507 이전 계정과 어긋날 수 있음). **AC-0 = 테넌트 출처 소유자 결정.** 404 를 거부로 바꾸면 스토어 소셜 전면 차단 — 금지. 분석=Opus 5.5 / 구현 권장=Opus 5.5.
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
